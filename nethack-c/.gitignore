@@ -1,0 +1,11 @@
+# Built artifacts of build-recorder.sh — not checked in.
+# Everything (source tree + installed binary + data) lives under recorder/
+recorder/
+*.bak
+
+# Upstream NetHack source. In the public contest repo this is a git
+# submodule. Inside the maud monorepo we drop a symlink here pointing
+# at maud/nethack-c/upstream to avoid a second clone. Either way we
+# don't track contents.
+upstream/
+upstream

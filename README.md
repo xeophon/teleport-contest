@@ -1,0 +1,424 @@
+# The Teleport Coding Challenge
+
+*A guide to porting the Mazes of Menace from C to JavaScript, for
+adventurers traveling with a small swarm of LLM coding assistants.*
+
+NetHack is one of the longest-lived and most peculiar open source
+programs ever written. After 46 years of continuous development —
+tracing its lineage from Rogue (1980) to Hack (1982) to NetHack —
+v5.0 just shipped: the first major version bump since 3.0 in 1989.
+That's 442,901 lines of C and Lua to port. The dungeon is deep and
+the corridors twist.
+
+Your task, should you choose to accept it, is to fork this repository
+and produce a JavaScript implementation whose external behavior is
+*indistinguishable* from upstream NetHack 5.0. Bit-exact. Same PRNG
+sequence, same terminal output, frame for frame, byte for byte, all
+the way down to which random newt corpse you trip over on Dlvl 3.
+
+You may use any tools you can muster: AI agents, hand-coding,
+transpilers, monks chanting in caves. The contest's hypothesis is
+that **the magic is in the LLM methods, not the code itself**. If
+your method works, sharing the code costs you nothing. If it doesn't,
+no one was going to copy your code anyway.
+
+*You feel deep wisdom for a moment. You hear bubbling water somewhere
+in the distance.* Let's begin.
+
+## How
+
+1. **Fork this repo.** It's a playable NetHack skeleton with the PRNG
+   and terminal already wired up. The `js/` directory contains the
+   game logic — almost none of it, in fact. That's the point.
+2. **Read the C.** The full NetHack 5.0 source lives upstream at
+   [NetHack/NetHack](https://github.com/NetHack/NetHack) (tag
+   `NetHack-5.0.0_Release`, also pulled in here as a submodule at
+   `nethack-c/upstream/`). Read it. Implement the equivalent in
+   `js/`. Faithfully — including its bugs, its quirks, and its
+   forty-six years of accumulated tradition.
+3. **Push.** GitHub Actions on your fork scores you on every push
+   against 44 public sessions — fast feedback in your own Actions
+   minutes. Every six hours, the official judge re-scores the
+   latest commit on every fork against all 88 sessions (44 public
+   and 44 held-out) and updates the leaderboard.
+4. **Climb.** Both up the leaderboard, and metaphorically toward
+   the Amulet of Yendor. Mostly the leaderboard.
+
+## Quick start
+
+```bash
+gh repo fork davidbau/teleport-contest --clone --remote
+cd teleport-contest
+git submodule update --init    # pulls in nethack-c/upstream
+
+# Play the skeleton in your browser
+python3 -m http.server 8000
+# then open http://localhost:8000/
+
+# Score locally against all 44 public sessions
+bash frozen/score.sh
+```
+
+Out of the box, the skeleton scores partial credit on
+`seed8000-tourist-starter` — its `fastforward.js` replay nails most
+of the early-game PRNG and the first dozen-or-so screens. That's
+your hello world: getting it from "partial" to "full pass," and
+then taking on the other 87 sessions.
+
+## What's in this repo
+
+Three things, layered like the Dungeons of Doom themselves.
+
+### 1. A skeleton port of NetHack 5.0
+
+A minimal JavaScript implementation that runs through the first short
+tourist game (`seed8000-tourist-starter`) far enough to render a few
+recognizable screens. It does NOT pass that session yet — chargen is
+unimplemented, and the skeleton "fakes" the early game by replaying a
+hardcoded sequence of PRNG draws read out of the recorded session
+(see `js/fastforward.js`). It's enough scaffolding to see the engine
+move; it's not enough to score. Treat it as the surface layer:
+gentle, well-mapped, populated almost entirely with grid bugs. You
+will have to dig.
+
+**Where the code lives:**
+
+```
+js/
+├── jsmain.js          ← contest entry point; exports runSegment
+├── isaac64.js         ← FROZEN: canonical PRNG engine. Don't touch.
+├── terminal.js        ← FROZEN: 24×80 grid + serialize(). Don't touch.
+├── rng.js             ← PRNG wrappers (rn2, rnd, d, …). Edit freely.
+├── fastforward.js     ← Hardcoded RNG-replay scaffolding for seed8000.
+│                        A trap to escape — see below.
+├── nethack.js         ← top-level NetHack class. Mostly a stub.
+├── const.js           ← 2,000+ constants imported from upstream headers.
+├── allmain.js         ← the move loop. Currently very polite.
+├── cmd.js             ← command dispatch. Knows about ~5 commands.
+├── display.js         ← screen rendering. Renders some things.
+├── mklev.js           ← level generation. Almost entirely unwritten.
+├── input.js           ← input handling. Partially wired.
+└── …
+```
+
+**Run it locally:**
+
+```bash
+python3 -m http.server 8000   # any static server works
+open http://localhost:8000/
+```
+
+There's no chargen prompt yet — the skeleton skips straight into the
+game with a hardcoded character because `js/fastforward.js` replays
+the PRNG calls that real chargen would produce. You'll see a small
+room and a tourist. Move around a few squares. Watch your
+`js/jsmain.js` get exercised in real time.
+
+**A brief tour:** start in `js/jsmain.js` to see the contest API
+entry point, then follow the call chain into `js/nethack.js` →
+`js/allmain.js` → `js/cmd.js`. The actual game logic to fill in is
+mostly under `js/mklev.js`, `js/cmd.js`, and a long list of files that
+don't exist yet but need to (`js/mon.js`, `js/dog.js`, `js/spell.js`,
+etc. — a complete NetHack port has on the order of 80 source files).
+
+**About `fastforward.js`:** it's a hardcoded list of `rn2(N)` calls
+that fakes the RNG sequence for `seed8000` only. It will never
+generalize and it will never pass a held-out session. The path
+forward is to delete its entries one at a time, replacing each with
+the real C function port that produces those calls naturally.
+
+The skeleton is "what works without porting much." Everything beyond
+is yours to build. *Be careful, ahead.*
+
+### 2. Patches to make C NetHack deterministic
+
+Your goal is to clone the behavior of NetHack 5.0 exactly. But for
+the contest to score that, the C side has to produce the same output
+every time it runs — not depend on the system clock, not depend on
+the libc's `qsort` tie-breaking, not write straight to ncurses where
+nothing is captured. So this repo includes a patched build of NetHack
+5.0 that introduces two new environment variables you can pin:
+
+- **`NETHACK_SEED`** — seeds the PRNG. Same seed → same dungeon, same
+  monsters, same loot.
+- **`NETHACK_FIXED_DATETIME`** — sets the date and time of play
+  (format `YYYYMMDDHHMMSS`). NetHack uses the wall clock for moon
+  phase, hire dates, shopkeeper greetings, and the Friday-the-13th
+  luck penalty; pinning the datetime makes all of these reproducible.
+
+Plus changes to log every PRNG call (so you can see what C consumed
+and in what order), to capture the 24×80 terminal as a deterministic
+stream (not curses), and to swap in a stable sort. Eight patches total.
+
+The C source is organized like this:
+
+```
+nethack-c/
+├── upstream/                   ← git submodule pinned to NetHack 5.0.0_Release
+│                                 (clean upstream from github.com/NetHack/NetHack)
+├── patches/                    ← the eight deterministic-build patches:
+│   ├── 001-deterministic-runtime.patch        — NETHACK_SEED + NETHACK_FIXED_DATETIME
+│   ├── 002-deterministic-qsort.patch          — stable sort
+│   ├── 003-rng-log-core.patch                 — log core PRNG calls
+│   ├── 004-rng-log-lua-context.patch          — tag Lua-side PRNG calls
+│   ├── 005-rng-display-logging.patch          — log the display PRNG (hallucination)
+│   └── 006-008-nomux-*.patch                  — capture 24×80 terminal stream
+├── build-recorder.sh           ← clones submodule, applies patches, builds binary
+├── macosx-minimal              ← macOS hints file (upstream doesn't ship one)
+├── README.md                   ← deeper notes on each patch
+└── recorder/                   ← gitignored — built source tree + binary appears here
+```
+
+Yes, NetHack has **three independent PRNG contexts** — core gameplay,
+Lua-script (for special levels), and display (for hallucination
+effects). Patches 003-005 instrument all three. Your JS port has to
+reproduce all three, in the right order, with the right values. PRNG
+parity is the foundation: a single off-by-one RNG call cascades through
+the entire dungeon and nothing else can match. But getting the random
+numbers right doesn't get you the screens — that's a separate, harder
+problem. The screens are where most of NetHack actually lives: the
+message line, the map draws, the inventory menus, the prompts, the
+cursor dance, the forty-six years of accumulated terminal handling.
+Most contestants' time will be spent there.
+
+**Build the recorder:**
+
+```bash
+git submodule update --init nethack-c/upstream
+bash nethack-c/build-recorder.sh
+```
+
+This clones the submodule (NetHack 5.0.0_Release source from
+github.com/NetHack/NetHack), applies the eight patches into
+`nethack-c/recorder/`, and builds the binary at
+`nethack-c/recorder/install/games/lib/nethackdir/nethack`. The
+`recorder/` directory is gitignored — it's built artifact, not source.
+
+You do NOT need to do this to enter the contest. The 44 sessions in
+`sessions/` were recorded with this build and ship ready to score
+against. Build the recorder only if you want to record your own
+debugging sessions or generate supplemental coverage (see
+`PROMPT.md` Parts 2 and 4).
+
+Requires: `clang` (not gcc — see below), `make`, `bison`, `flex`.
+
+**Why clang specifically:** C's argument evaluation order is
+officially undefined. In practice, gcc evaluates right-to-left and
+clang evaluates left-to-right. A single innocent line like
+`d(rn2(5), rn2(3))` consumes RNG calls in opposite orders depending
+on the compiler — completely scrambling the entire PRNG sequence.
+We pin to clang so the recorder's behavior is reproducible across
+machines, and the JS port (which evaluates left-to-right) can match
+it. *If you build with gcc, your dungeon will look correct but every
+random number will be wrong. You sense the presence of an unfortunate
+compiler.*
+
+### 3. A pile of recorded delvings to score against
+
+Forty-four recorded sessions live in `sessions/` as `*.session.json`.
+Each is a complete game (or a chain of games) played from chargen to
+wherever it ended, with the PRNG sequence and screen output of the C
+recorder captured at every input boundary. They are the standard
+against which your port is measured: same input, same output, or you
+fail.
+
+**Run them locally:**
+
+```bash
+bash frozen/score.sh                             # score all 44
+node frozen/ps_test_runner.mjs sessions/seed8000-tourist-starter.session.json
+                                                 # score one
+```
+
+You'll get a report like:
+
+```
+seed8000-tourist-starter        PASS  RNG: 22/22       Screen: 23/23
+seed0007-rogue-snake-swamp      FAIL  RNG: 391/3706 (10.5%)   div@392
+…
+```
+
+**Scoring is per-step, not per-session.** The 44 public sessions
+contain **10,902 input boundaries** between them; each boundary is a
+"step" the recorder captured. For every step, two independent points
+are scored:
+
+- **PRNG point** — every PRNG call your code made between this step
+  and the previous one matches C's recorded sequence in order.
+- **Screen point** — the rendered 24×80 cell grid at this step
+  matches the recorded one in character, color, attribute, AND
+  cursor position.
+
+So every step contributes up to 2 points, capped at 21,804 across the
+public corpus. A session that diverges at step 50 still gives you 50
+PRNG points and 50 screen points; you don't have to pass the whole
+session to score.
+
+**Your real score uses the held-out pool too.** The judge — running
+privately, every six hours — re-scores your fork against all 88
+sessions: the 44 public ones above PLUS 44 held-out sessions you
+never see (10,631 more steps, 21,262 more potential points; **43,066
+total**). Held-out sessions are how the contest distinguishes
+"hardcoded the test cases" from "actually ported NetHack." They
+exercise the same engine the public sessions do, but with different
+seeds, different roles, different divergences. A faithful port scores
+well on both pools.
+
+If top scores cluster too tightly to distinguish the strongest
+entrants, additional and harder held-out sessions will be added over
+the summer (see `docs/PHASES.md`). Plan accordingly.
+
+**The 6-hour cron:** the judge auto-discovers every fork of
+`davidbau/teleport-contest` on GitHub. When you push to your fork,
+the next cron firing (within six hours) will pick up your latest
+commit and score it. Your row on the leaderboard at
+[mazesofmenace.ai](https://mazesofmenace.ai/leaderboard/) updates
+shortly after.
+
+You don't need to do anything special to "submit." Forking and pushing
+is the entire protocol. There is no application form, no submission
+button, no email to send. The dungeon notices when you arrive.
+
+*Welcome to NetHack. Good luck, and have fun.*
+
+## The Teleport Contest
+
+### Scoring API
+
+Your fork must export `runSegment(input, prevGame=null)` from
+`js/jsmain.js`. The full contract is in [`docs/API.md`](docs/API.md);
+the short version is that for each game segment, you receive a seed,
+a datetime, an `OPTIONS=…` rc-text blob, and a string of keys. You
+return an object whose `getScreens()`, `getRngLog()`, and
+`getCursors()` methods can be read back at the end. The recorded
+ground truth is never passed in. You can't peek at the answer key.
+You have to actually port the game.
+
+Two channels are scored, both required:
+
+- **P (PRNG):** every `rn2`/`rnd`/`d`/`rn1`/`rne`/`rnz`/`rnl` call
+  must return the same value in the same order as C.
+- **S (Screen):** the 24×80 terminal output at each input boundary
+  must match C's display, byte-for-byte (after a small charset and
+  SGR canonicalization that forgives the terminal's many ways of
+  saying "draw a space").
+
+**Scoring is per-step.** Each step (input boundary) earns up to two
+points: one PRNG point if the call sequence between this step and the
+previous one matches C's recorded calls in order, and one screen point
+if the captured 24×80 grid matches in character + color + attribute +
+cursor position. The 44 public sessions contain 10,902 steps (max
+21,804 points). The 44 held-out pool adds 10,631 more steps (max
+21,262 more), for a global maximum of 43,066 points across both
+pools combined.
+
+### What's frozen
+
+Two files in your fork are overlaid from the canonical copy before
+every scoring run:
+
+| File | Why frozen |
+|---|---|
+| `js/isaac64.js` | The canonical PRNG. Frozen so every contestant draws from the same number stream the C recorder did, and per-call results align bit-for-bit. |
+| `js/terminal.js` | The canonical 24×80 grid. Defines what counts as "the screen" — which is itself a non-trivial question once you start thinking about it. |
+
+That is the entire fixed surface. Everything else in `js/` —
+including `jsmain.js`, `rng.js`, `display.js`, `const.js` — is yours
+to edit, replace, or restructure. Burn the skeleton down and
+rebuild it if that helps you. (Many roles have done so. Few have
+ascended.)
+
+### Rules
+
+- **Any approach is allowed.** LLM agents, manual coding, hybrid,
+  transpilers, the aforementioned chanting monks — whatever produces
+  the right output. The two-phase design specifically rewards
+  generalization, so handcrafted solutions face strong headwind in
+  Phase 2.
+- **Submissions must be JavaScript.** ES6 modules, runnable in
+  Node 22+ and modern Chrome. No build step required. No native
+  addons.
+- **Frozen files cannot be modified.** The judge overlays them on
+  every scoring run, so editing them locally only fools your local
+  score, not the leaderboard.
+- **Sandboxed scoring.** Your code runs in a Node child process with
+  `--permission` and a minimal `--allow-fs-read` whitelist: no file
+  writes, no network sockets, no `child_process`, no native addons.
+  Don't try to escape the sandbox. The dungeon has lived through
+  better attempts than yours.
+- **Public source code.** All forks are public on GitHub. Anyone can
+  read your code, your prompts, your agent harness. That's by design.
+  If your method is so good it produces winning code, sharing the
+  code doesn't compromise your method. If you'd rather not show your
+  work in public, this isn't your contest.
+
+### Two phases
+
+This is a journey in two parts.
+
+**Phase 1 — Foundation.** Deadline Sunday Nov 29, 2026 (00:00 UTC,
+the Sunday after US Thanksgiving). A standard parity contest against
+NetHack 5.0. Top 10 teams by score qualify for Phase 2. Everyone
+else is welcome to keep submitting after the deadline, but only the
+top 10 compete in the second phase.
+
+**Phase 2 — Generalization.** Target announced Nov 30; deadline
+Dec 31, 2026 (00:00 UTC). The judges pick a "5.1" — a slightly newer
+C codebase, perhaps a real upstream release, perhaps a designated
+post-5.0 commit, perhaps a small judge-curated patch set. Your Phase
+2 score is parity against 5.1, **divided by** a penalty proportional
+to how much you changed your `js/` from your Phase 1 submission.
+
+The point: hand-tuned ports get crushed by 5.1 because they overfit
+to the exact 5.0 code paths. Methods that generalize win. Or, in
+NetHack terms: the player who memorized the layout of the Castle
+does not necessarily survive Gehennom.
+
+Full mechanics in [`docs/PHASES.md`](docs/PHASES.md).
+
+## Prizes
+
+- **Top 10 from Phase 1** — qualification for Phase 2 and a
+  spotlight on the leaderboard.
+- **Phase 2 winner** — highest combined parity-divided-by-diff score
+  against the 5.1 target. Bragging rights, durable place on the
+  leaderboard, and the satisfaction of having ported NetHack twice.
+- **Best Method award** — judged separately on the quality and
+  reproducibility of your team's writeup. You don't need to win
+  Phase 2 outright to win the method prize. The contest's long-term
+  value is the techniques people share, not the ranking.
+- **Spotlights** — throughout both phases, judges may spotlight any
+  team's pipeline writeup on the leaderboard. Write up your agent
+  harness, your prompts, your evaluation loop, the parts that
+  surprised you, the parts you would do differently — link from your
+  fork's README and we'll feature the most interesting ones.
+
+## Leaderboard
+
+**[mazesofmenace.ai](https://mazesofmenace.ai/)**
+
+Updates every six hours. Public scores recompute on every push;
+held-out scores update when the cron fires. The official upstream
+skeleton is included as a baseline reference, currently scoring
+0/88 — the floor from which everyone climbs. (For now.)
+
+## Questions
+
+Open an issue on this repo, or check the docs:
+
+- [`docs/API.md`](docs/API.md) — the full `runSegment` contract,
+  scoring mechanics, screen comparator, sandbox details
+- [`docs/PHASES.md`](docs/PHASES.md) — two-phase mechanics,
+  diff-penalty formula, summer-escalation policy
+- [`nethack-c/README.md`](nethack-c/README.md) — building the
+  recorder, the env-var protocol, what each patch does
+
+---
+
+*You die...*
+
+Just kidding. Nobody dies in this contest. The worst that happens is
+the leaderboard says 0/88 for a while. That's also where everyone
+starts.
+
+*Welcome to NetHack.*
