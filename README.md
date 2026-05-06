@@ -341,9 +341,11 @@ ascended.)
   the right output. The two-phase design specifically rewards
   generalization, so handcrafted solutions face strong headwind in
   Phase 2.
-- **Submissions must be JavaScript.** ES6 modules, runnable in
-  Node 22+ and modern Chrome. No build step required. No native
-  addons.
+- **Submissions must be plain JavaScript.** ES6 modules, runnable
+  as-is in both Node 22+ and modern Chrome. No build step required.
+  No WASM, no internet or filesystem or threads, no native addons.
+  Persistent state goes through the frozen `js/storage.js` VFS;
+  everything else stays in-process.
 - **Frozen files cannot be modified.** The judge overlays them on
   every scoring run, so editing them locally only fools your local
   score, not the leaderboard.
