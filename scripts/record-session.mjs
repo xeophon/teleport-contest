@@ -478,7 +478,19 @@ async function recordSegment({
         resolveDone(reason);
     };
 
+    // Buffer of 'anim' markers received between consecutive 'input'
+    // markers.  When the next input marker closes a step, the buffered
+    // anim screens are attached to that step as `animation_frames`,
+    // preserving order and step-attribution without any in-stream events.
+    let pendingAnimFrames = [];
     const onMarker = async (m) => {
+        if (m.kind === 'anim') {
+            pendingAnimFrames.push({
+                screen: encodeScreenAnsiRle(payloadToLines(m.payload)),
+                cursor: [m.cx, m.cy, 1],
+            });
+            return;
+        }
         if (m.kind !== 'input') return;
         if (steps.length >= expectedSteps) {
             // We have everything we need; tear down.
@@ -490,7 +502,12 @@ async function recordSegment({
             const rng = await readRngDelta();
             const stepIdx = m.seq - 1;
             const key = stepIdx === 0 ? null : moves[stepIdx - 1] ?? null;
-            steps.push({ key, rng, screen, cursor: [m.cx, m.cy, 1] });
+            const step = { key, rng, screen, cursor: [m.cx, m.cy, 1] };
+            if (pendingAnimFrames.length) {
+                step.animation_frames = pendingAnimFrames;
+                pendingAnimFrames = [];
+            }
+            steps.push(step);
 
             if (steps.length >= expectedSteps) {
                 finish('expected steps reached');
