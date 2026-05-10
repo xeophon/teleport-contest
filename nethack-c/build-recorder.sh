@@ -131,6 +131,12 @@ cp -f lib/lua-5.4.8/src/liblua.a lib/lua/liblua-5.4.8.a
 # --- Step 5: build NetHack ---
 echo "[step 5] Building NetHack (parallel -j$NPROC)..."
 cd "$RECORDER_DIR"
+# Pin BUILD_DATE in the recorder banner. With REPRODUCIBLE_BUILD
+# enabled (patch 008), util/makedefs reads SOURCE_DATE_EPOCH and
+# uses it as the build clock. 1777723200 = Sat May  2 12:00:00 2026
+# UTC = NetHack 5.0.0 release. Override with TELEPORT_BUILD_EPOCH if
+# you need a different pin.
+export SOURCE_DATE_EPOCH="${TELEPORT_BUILD_EPOCH:-1777723200}"
 make -j"$NPROC" SYSCFLAGS="$LUA_SYSCFLAGS" >/dev/null
 make install >/dev/null
 echo

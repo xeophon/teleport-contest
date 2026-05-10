@@ -39,11 +39,12 @@ Final Phase 1 leaderboard is announced Nov 30. Top 10 invited to
 continue. (Everyone else can keep submitting after Phase 1 closes,
 but only the top 10 compete in Phase 2.)
 
-## Phase 2 — Generalization
+## Phase 2 — Maintainability
 
 | | |
 |---|---|
-| **Target** | "5.1" — chosen by judges Nov 30. Could be: a real upstream NetHack release after 5.0; a designated post-5.0 commit on the upstream master; or a specific patch set the judges curate. |
+| **Target** | A "NetHack 5.1" goal of the judges' design, announced Nov 30. Intentionally open-ended — it might be a real upstream release after 5.0, a curated set of post-5.0 commits, a feature retrofit the judges design, or some combination. The only commitment is that it will be a real change you have to absorb in `js/`. |
+| **What this measures** | The maintainability of your Phase 1 codebase. Because the diff is anchored to your Phase 1 freeze tag, the architecture and readability you ship at the end of Phase 1 directly determine your Phase 2 ceiling. Submissions with a clean, well-factored, easy-to-modify codebase have a strong advantage; sprawling or unreadable submissions need a much larger diff to retarget. |
 | **Diff penalty formula** | Announced Nov 30. Likely shape: `final_score = ps_score / (1 + lines_changed_in_js / N)`, where `N` is tuned for fairness. Comment-only changes don't count; `frozen/` doesn't count. |
 | **Open** | Nov 30, 2026 (target announcement) |
 | **Deadline** | Dec 31, 2026, 00:00 UTC |
@@ -56,9 +57,17 @@ The judge runs `git diff phase1/<your-tag> HEAD -- 'js/**' \
   --numstat` and sums added + deleted lines. Whitespace-only and
 comment-only changes are normalized out.
 
-A team that re-runs their LLM pipeline on 5.1 and gets a small
-diff will out-score a team that hand-tweaks dozens of files to
-match.
+A team whose Phase 1 codebase has clean module boundaries and
+self-explanatory naming will be able to retarget with a small diff
+— sometimes by re-running their LLM pipeline on 5.1, sometimes by
+hand-editing a handful of files. A team whose Phase 1 codebase is a
+tangle of monolithic files and hand-tuned constants will need to
+rewrite far more to match 5.1, and the diff penalty will weigh
+heavily on the result.
+
+This is why we frame Phase 2 as a **maintainability contest**. The
+Phase 2 leaderboard rewards code that was designed for change — and
+the design lock-in happens at the Phase 1 freeze.
 
 ### Final ranking
 
@@ -85,19 +94,25 @@ the code doesn't compromise your method.
 If you'd rather not show your work in public, this isn't your
 contest.
 
-## What if 5.1 doesn't ship?
+## What "5.1" might look like
 
-Plan A: real upstream 5.1 by Nov 30 → that's the target.
+The target is intentionally open-ended. The judges can pick the
+shape that best tests maintainability given the state of upstream
+NetHack on Nov 30. Some examples of what 5.1 could be:
 
-Plan B: judges designate a specific upstream commit after 5.0 as the
-"5.1 surrogate" — real C-source changes, just not branded as a
-release.
+- A real upstream NetHack release after 5.0 (if one ships in time).
+- A designated post-5.0 commit on the upstream master.
+- A curated set of upstream commits or backported patches.
+- A feature retrofit the judges design specifically — for example,
+  adding a new monster class, a new command, or modifying an
+  existing subsystem to match a slightly different specification.
+- Some combination of the above.
 
-Plan C: judges hand-curate a small patch set (rename a function,
-swap a constant, change one RNG call site) and apply it on top of
-5.0. Most artificial, but always available as a backstop.
-
-Decision happens Nov 30 alongside the target announcement.
+Whatever the shape, the change will be a *real* one — large enough
+that no submission can match it without modifying `js/`, but
+described precisely enough that there is one correct target to
+score against. The judges will publish the full target spec on
+Nov 30 along with the new session corpus.
 
 ## Eligibility & conduct
 

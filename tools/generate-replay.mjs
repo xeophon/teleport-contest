@@ -86,7 +86,10 @@ function rngToken(entry) {
 }
 
 function rngScript(step) {
-    return (step.rng || []).map(rngToken).join(' ');
+    return (step.rng || [])
+        .filter(entry => /^(?:rn2|rnd|rn1|rnl|rne|rnz|d)\(/.test(entry))
+        .map(rngToken)
+        .join(' ');
 }
 
 const [sessionArg, prefix, startText, outputArg] = process.argv.slice(2);
