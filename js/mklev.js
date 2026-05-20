@@ -10072,9 +10072,9 @@ async function tutorial1_random_content() {
     removeCurse.cursed = false;
     await tutorial1_trap(MAGIC_PORTAL, 19, 11, { seen: true });
 
-    for (const [range, x, y] of [[50, 14, 5], [21, 15, 5], [21, 14, 4], [31, 15, 6], [31, 14, 6]]) {
-        rn2(range);
-        tutorial1_object(ROCK, x, y, { cls: 'gem', kind: 'rock' }, false);
+    for (const [min, range, x, y] of [[50, 50, 14, 5], [10, 21, 15, 5], [10, 21, 14, 4], [30, 31, 15, 6], [30, 31, 14, 6]]) {
+        const quan = min + rn2(range);
+        tutorial1_object(ROCK, x, y, { cls: 'gem', kind: 'rock', quan }, false);
     }
     tutorial1_object(BOULDER, 14, 6, {}, false);
     tutorial1_door(20, 3, rn2(100) < 50 ? 'open' : 'closed');
@@ -10084,7 +10084,8 @@ async function tutorial1_random_content() {
     tutorial1_object(SLING, 37, 3, { cls: 'weapon', kind: 'sling', spe: 9 }, true);
 
     tutorial1_door(38, 6, 'closed');
-    const box = tutorial1_object(LARGE_BOX, 41, 6, { cls: 'tool', kind: 'large box', broken: true, otrapped: false }, false);
+    const box = tutorial1_object(LARGE_BOX, 41, 6, { cls: 'tool', kind: 'large box', broken: true, obroken: true, olocked: false, otrapped: false }, false);
+    delete_contents(box);
     rn2(75);
     rn2(18);
     add_to_container(box, Object.assign(mksobj(WAND_CLASS, true, false), { cls: 'wand', kind: 'wand of secret door detection', spe: 30 }));
@@ -11894,6 +11895,7 @@ async function make_tower1_level() {
         mksobj_at(CHEST, TOWER1_XSTART + niches[idx][0], TOWER1_YSTART + niches[idx][1], true, false);
     for (const [idx, candle] of [[3, WAX_CANDLE], [4, TALLOW_CANDLE]]) {
         const chest = mksobj_at(CHEST, TOWER1_XSTART + niches[idx][0], TOWER1_YSTART + niches[idx][1], true, false);
+        delete_contents(chest);
         const quantity = rn1(5, 4);
         for (;;) {
             const x = TOWER1_XSTART + rn2(TOWER1_ROWS[0].length);
@@ -11991,6 +11993,7 @@ async function make_tower2_level() {
     }
 
     const chest1 = mksobj_at(CHEST, TOWER1_XSTART + places[4][0], TOWER1_YSTART + places[4][1], true, false);
+    delete_contents(chest1);
     for (;;) {
         const x = TOWER1_XSTART + rn2(TOWER2_ROWS[0].length);
         const y = TOWER1_YSTART + rn2(TOWER2_ROWS.length);
@@ -12000,6 +12003,7 @@ async function make_tower2_level() {
     add_to_container(chest1, mksobj(AMULET_CLASS, true, false));
 
     const chest2 = mksobj_at(CHEST, TOWER1_XSTART + places[5][0], TOWER1_YSTART + places[5][1], true, false);
+    delete_contents(chest2);
     for (;;) {
         const x = TOWER1_XSTART + rn2(TOWER2_ROWS[0].length);
         const y = TOWER1_YSTART + rn2(TOWER2_ROWS.length);
