@@ -15579,16 +15579,30 @@ function mkgrave_room(croom) {
 }
 
 function shopDoorPosition(croom) {
-    const door = game.level?.doors?.[croom.fdoor || 0];
-    if (!door) return null;
-    let sx = door.x;
-    let sy = door.y;
-    if (sx === croom.lx - 1) sx++;
-    else if (sx === croom.hx + 1) sx--;
-    else if (sy === croom.ly - 1) sy++;
-    else if (sy === croom.hy + 1) sy--;
-    else return null;
-    return { door, sx, sy };
+    const roomno = (croom.roomnoidx ?? game.level.rooms.indexOf(croom)) + ROOMOFFSET;
+    for (let i = 0; i < croom.doorct; i++) {
+        const door = game.level?.doors?.[(croom.fdoor || 0) + i];
+        if (!door) continue;
+        let sx = door.x;
+        let sy = door.y;
+        if (croom.irregular) {
+            if (isok(sx - 1, sy) && !game.level.at(sx - 1, sy)?.edge
+                && game.level.at(sx - 1, sy)?.roomno === roomno) sx--;
+            else if (isok(sx + 1, sy) && !game.level.at(sx + 1, sy)?.edge
+                && game.level.at(sx + 1, sy)?.roomno === roomno) sx++;
+            else if (isok(sx, sy - 1) && !game.level.at(sx, sy - 1)?.edge
+                && game.level.at(sx, sy - 1)?.roomno === roomno) sy--;
+            else if (isok(sx, sy + 1) && !game.level.at(sx, sy + 1)?.edge
+                && game.level.at(sx, sy + 1)?.roomno === roomno) sy++;
+            else continue;
+        } else if (sx === croom.lx - 1) sx++;
+        else if (sx === croom.hx + 1) sx--;
+        else if (sy === croom.ly - 1) sy++;
+        else if (sy === croom.hy + 1) sy--;
+        else continue;
+        return { door, sx, sy };
+    }
+    return null;
 }
 
 function birthdayFromDatetime() {
