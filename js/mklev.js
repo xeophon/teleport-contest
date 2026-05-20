@@ -30,7 +30,7 @@ import {
     COCKNEST, ANTHOLE, VAULT, TEMPLE, THEMEROOM, ROOMOFFSET, MAXNROFROOMS, SHARED, SHARED_PLUS, SHOPBASE,
     SDOOR, SCORR, IRONBARS, FOUNTAIN, SINK, THRONE, ALTAR, GRAVE,
     DIR_N, DIR_S, DIR_E, DIR_W, DIR_180,
-    IS_WALL, IS_STWALL, IS_DOOR, IS_OBSTRUCTED, IS_FURNITURE, IS_POOL,
+    IS_WALL, IS_STWALL, IS_DOOR, IS_ROOM, IS_OBSTRUCTED, IS_FURNITURE, IS_POOL,
     ACCESSIBLE, IN_SIGHT,
     SPACE_POS, ZAP_POS, isok, W_NORTH, W_SOUTH, W_EAST, W_WEST, W_NONDIGGABLE, W_NONPASSWALL, FILL_NORMAL,
     ICE, MOAT, POOL, WATER, LAVAPOOL, LAVAWALL, DBWALL, DRAWBRIDGE_UP, TREE, CLOUD,
@@ -15760,7 +15760,7 @@ function stockRoomGoodpos(croom, door, sx, sy) {
         || (sx === croom.hx && door.x === sx + 1)
         || (sy === croom.ly && door.y === sy - 1)
         || (sy === croom.hy && door.y === sy + 1)) return false;
-    return loc?.typ === ROOM;
+    return !!loc && IS_ROOM(loc.typ);
 }
 
 function getShopItem(shopIndex) {
