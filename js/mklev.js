@@ -15732,6 +15732,7 @@ async function shkinit(shopIndex, croom) {
     shk.mpeaceful = 1;
     set_malign(shk);
     shk.msleeping = 0;
+    shk.mtrapseen = ~0;
     shk.shk = { x: spot.sx, y: spot.sy };
     shk.shd = { x: spot.door.x, y: spot.door.y };
     shk.shoproom = (croom.roomnoidx ?? game.level.rooms.indexOf(croom)) + ROOMOFFSET;
