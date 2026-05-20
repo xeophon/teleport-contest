@@ -13661,7 +13661,6 @@ function wallify_map(x1, y1, x2, y2) {
 function mkmap_finish(fgTyp, bgTyp, lit, walled, joined) {
     if (walled) {
         wallify_map(1, 0, COLNO - 1, ROWNO - 1);
-        wallification(1, 0, COLNO - 1, ROWNO - 1);
     }
     if (lit) {
         for (let x = 1; x < COLNO; x++)
@@ -13833,6 +13832,7 @@ async function make_minefill_level() {
     if (is_branchlev() && !g.made_branch)
         place_lregion(0, 0, 0, 0, 0, 0, 0, 0, LR_BRANCH, null);
 
+    wallification(1, 0, COLNO - 1, ROWNO - 1);
     g._level_populated = true;
 }
 
