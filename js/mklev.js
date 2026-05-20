@@ -4723,6 +4723,129 @@ function makemon_goodpos(ptr, x, y) {
     return !boulder || !!ptr.throwsRocks;
 }
 
+function monster_at(x, y) {
+    return (game.level?.monsters || []).find(mon => mon.mx === x && mon.my === y) || null;
+}
+
+function mayPasswallLoc(loc) {
+    return !!loc && !(IS_STWALL(loc.typ) && (loc.wall_info & W_NONPASSWALL));
+}
+
+function rlocGoodpos(mon, x, y, checkScary = false) {
+    const loc = game.level?.at(x, y);
+    if (!loc) return false;
+    if (game.u?.ux === x && game.u?.uy === y) return false;
+    const occupant = monster_at(x, y);
+    if (occupant && occupant !== mon) return false;
+
+    const ptr = mon?.data || {};
+    if (IS_POOL(loc.typ)) {
+        return !!(ptr.swimmer || ptr.inAir);
+    } else if (ptr.mlet === ';' && rn2(13)) {
+        return false;
+    } else if (loc.typ === LAVAPOOL || loc.typ === LAVAWALL) {
+        return !!(ptr.inAir || ptr.likesLava);
+    }
+    if (ptr.passWalls && mayPasswallLoc(loc)) return true;
+    if ((ptr.amorphous || ptr.name === 'fog cloud') && loc.typ === DOOR
+        && (loc.doormask & (D_CLOSED | D_LOCKED))) return true;
+    if (checkScary && rlocGoodposScary(ptr, x, y)) return false;
+    if (!ACCESSIBLE(loc.typ)) return false;
+    const boulder = game.level?.objects?.some(obj => obj.otyp === BOULDER && obj.ox === x && obj.oy === y);
+    return !boulder || !!ptr.throwsRocks;
+}
+
+function rlocGoodposScary(ptr, x, y) {
+    if (ptr.mlet === '@' || ptr.mlet === 'A' || ptr.name === 'minotaur') return false;
+    if ((game.level?.objects || []).some(obj => obj.otyp === SCR_SCARE_MONSTER && obj.ox === x && obj.oy === y))
+        return true;
+    if (game.inhell) return false;
+    return (game.level?.engravings || []).some(engr =>
+        engr.x === x && engr.y === y && /Elbereth/.test(engr.text || ''));
+}
+
+function rlocPosOk(mon, x, y) {
+    if (!rlocGoodpos(mon, x, y, true)) return false;
+    const currentRoomno = game.level?.at(mon.mx, mon.my)?.roomno ?? 0;
+    const targetRoomno = game.level?.at(x, y)?.roomno ?? 0;
+    if (mon.isshk && inside_shop(mon.mx, mon.my) && targetRoomno !== mon.shoproom)
+        return false;
+    if (mon.ispriest && mon.shrine?.room && currentRoomno === mon.shrine.room
+        && targetRoomno !== mon.shrine.room)
+        return false;
+    return true;
+}
+
+function collectRlocCoords(mon) {
+    const coords = [];
+    const ptr = mon?.data || {};
+    const skipInaccessible = !ptr.passWalls;
+    const cx = Math.trunc(COLNO / 2);
+    const cy = Math.trunc(ROWNO / 2);
+    const rowrange = cy < Math.trunc(ROWNO / 2) ? ROWNO - 1 - cy : cy;
+    const colrange = cx < Math.trunc(COLNO / 2) ? COLNO - 1 - cx : cx;
+    const maxradius = Math.max(rowrange, colrange);
+
+    for (let radius = 0; radius <= maxradius; radius++) {
+        const lox = cx - radius, hix = cx + radius;
+        const loy = cy - radius, hiy = cy + radius;
+        for (let y = Math.max(loy, 0); y <= hiy; y++) {
+            if (y > ROWNO - 1) break;
+            for (let x = Math.max(lox, 1); x <= hix; x++) {
+                if (x > COLNO - 1) break;
+                if (x !== lox && x !== hix && y !== loy && y !== hiy) continue;
+                if (monster_at(x, y)) continue;
+                const loc = game.level?.at(x, y);
+                if (skipInaccessible && !ZAP_POS(loc?.typ)) continue;
+                coords.push({ x, y });
+            }
+        }
+    }
+    return coords;
+}
+
+function rlocToCoreNoMsg(mon, x, y) {
+    if (x === mon.mx && y === mon.my && monster_at(x, y) === mon) return;
+    const tailCount = Array.isArray(mon.wormSegments) ? mon.wormSegments.length : 0;
+    mon.mtrack = [];
+    mon.mx = x;
+    mon.my = y;
+    if (tailCount) placeLongWormTailRandomly(mon, x, y, tailCount);
+}
+
+function rlocNoMsg(mon) {
+    if (!mon?.mx) return false;
+    for (let trycount = 0; trycount < 50; trycount++) {
+        const x = rnd(COLNO - 1);
+        const y = rn2(ROWNO);
+        if (rlocPosOk(mon, x, y)) {
+            rlocToCoreNoMsg(mon, x, y);
+            return true;
+        }
+    }
+
+    const coords = collectRlocCoords(mon);
+    let backup = null;
+    for (let i = 0; i < coords.length; i++) {
+        const j = rn2(coords.length - i);
+        if (j > 0) {
+            const swap = coords[i];
+            coords[i] = coords[i + j];
+            coords[i + j] = swap;
+        }
+        const { x, y } = coords[i];
+        if (rlocPosOk(mon, x, y)) {
+            rlocToCoreNoMsg(mon, x, y);
+            return true;
+        }
+        if (!backup && rlocGoodpos(mon, x, y, false))
+            backup = { x, y };
+    }
+    if (!backup) return false;
+    rlocToCoreNoMsg(mon, backup.x, backup.y);
+    return true;
+}
+
 function placeLongWormTailRandomly(mon, x, y, segmentCount) {
     const segments = [];
     let ox = x;
@@ -15726,6 +15849,8 @@ function assignShopkeeperName(shk, shopIndex) {
 async function shkinit(shopIndex, croom) {
     const spot = shopDoorPosition(croom);
     if (!spot) return null;
+    const occupant = monster_at(spot.sx, spot.sy);
+    if (occupant) rlocNoMsg(occupant);
     const shk = await makemon(SHOPKEEPER, spot.sx, spot.sy, MM_NOGRP);
     if (!shk) return null;
     shk.isshk = true;
