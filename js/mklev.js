@@ -9054,12 +9054,13 @@ async function make_sanctum_level() {
         const dir = (i + si) & 7;
         const px = sanctumX(18 + xdir[dir]);
         const py = sanctumY(8 + ydir[dir]);
-        if (makemon_goodpos(HIGH_CLERIC, px, py)) {
+        if (priestGoodLocation(HIGH_CLERIC, px, py)) {
             priestX = px;
             priestY = py;
             break;
         }
     }
+    relocatePriestSpotOccupant(priestX, priestY);
     const priest = await makemon(HIGH_CLERIC, priestX, priestY, MM_NOGRP);
     if (priest) {
         initPriestMonster(priest);
@@ -9198,6 +9199,7 @@ async function make_valley_level() {
         altar.altarmask = 0;
     }
     rn2(8);
+    relocatePriestSpotOccupant(valleyX(2), valleyY(9));
     const priest = await makemon(ALIGNED_CLERIC, valleyX(2), valleyY(9), MM_NOGRP);
     if (priest) {
         initPriestMonster(priest);
@@ -10616,6 +10618,17 @@ function initPriestMonster(priest, shrine = null) {
     set_malign(priest);
 }
 
+function relocatePriestSpotOccupant(x, y) {
+    const occupant = monster_at(x, y);
+    if (occupant) rlocNoMsg(occupant);
+}
+
+function priestGoodLocation(_ptr, x, y) {
+    const loc = game.level?.at(x, y);
+    if (!loc || !SPACE_POS(loc.typ)) return false;
+    return !(game.level?.objects || []).some(obj => obj.otyp === BOULDER && obj.ox === x && obj.oy === y);
+}
+
 async function minetn5AltarShrine(x, y) {
     const ax = minetn5X(x), ay = minetn5Y(y);
     const loc = game.level.at(ax, ay);
@@ -10632,9 +10645,9 @@ async function minetn5AltarShrine(x, y) {
     for (let i = 0; i < 8; i++) {
         const dir = (i + si) & 7;
         const nx = ax + xdir[dir], ny = ay + ydir[dir];
-        const nloc = game.level.at(nx, ny);
-        if (nloc && SPACE_POS(nloc.typ)) { px = nx; py = ny; break; }
+        if (priestGoodLocation(ALIGNED_CLERIC, nx, ny)) { px = nx; py = ny; break; }
     }
+    relocatePriestSpotOccupant(px, py);
     const priest = await makemon(ALIGNED_CLERIC, px, py, MM_NOGRP);
     if (!priest) return;
     initPriestMonster(priest, { room: temple.roomnoidx + ROOMOFFSET, align, x: ax, y: ay });
@@ -10867,9 +10880,9 @@ async function splevAltarShrine(croom, x, y) {
     for (let i = 0; i < 8; i++) {
         const dir = (i + si) & 7;
         const nx = pos.x + xdir[dir], ny = pos.y + ydir[dir];
-        const nloc = game.level.at(nx, ny);
-        if (nloc && SPACE_POS(nloc.typ)) { px = nx; py = ny; break; }
+        if (priestGoodLocation(ALIGNED_CLERIC, nx, ny)) { px = nx; py = ny; break; }
     }
+    relocatePriestSpotOccupant(px, py);
     const priest = await makemon(ALIGNED_CLERIC, px, py, MM_NOGRP);
     if (!priest) return;
     loc.flags |= AM_SHRINE;
@@ -13122,9 +13135,9 @@ async function makelevel() {
                         const dir = (i + si) & 7;
                         const nx = ax + xdir[dir], ny = ay + ydir[dir];
                         const nloc = g.level.at(nx, ny);
-                        const occupiedSpot = g.level.monsters?.some(mon => mon.mx === nx && mon.my === ny);
-                        if (nloc && SPACE_POS(nloc.typ) && !occupiedSpot) { px = nx; py = ny; break; }
+                        if (nloc && priestGoodLocation(ALIGNED_CLERIC, nx, ny)) { px = nx; py = ny; break; }
                     }
+                    relocatePriestSpotOccupant(px, py);
                     const priest = await makemon(ALIGNED_CLERIC, px, py, MM_NOGRP);
                     if (priest) {
                         initPriestMonster(priest, {
