@@ -10990,6 +10990,7 @@ export async function rhack(_cmd) {
                 const { mon, trap } = game._pet_bear_trap_after_more;
                 game._pet_bear_trap_after_more = null;
                 if (mon && (game.level?.monsters || []).includes(mon)) {
+                    mon.mtrapseen = (mon.mtrapseen || 0) | (1 << (BEAR_TRAP - 1));
                     mon.knownTraps ??= [];
                     if (!mon.knownTraps.includes(BEAR_TRAP)) mon.knownTraps.push(BEAR_TRAP);
                     mon.mtrapped = 1;
