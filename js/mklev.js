@@ -11723,6 +11723,7 @@ async function make_minetn4_level() {
 async function make_minetn6_level() {
     const g = game;
     clear_level_structures();
+    rn2(2); // minetn-6.lua initial solidfill level_init omitted lit.
     g.level.flags.is_maze_lev = true;
     g.level.flags.rndmongen = true;
     g.level.flags.has_town = true;
