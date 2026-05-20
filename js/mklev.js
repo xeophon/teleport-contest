@@ -15730,6 +15730,7 @@ async function shkinit(shopIndex, croom) {
     if (!shk) return null;
     shk.isshk = true;
     shk.mpeaceful = 1;
+    set_malign(shk);
     shk.msleeping = 0;
     shk.shk = { x: spot.sx, y: spot.sy };
     shk.shd = { x: spot.door.x, y: spot.door.y };
