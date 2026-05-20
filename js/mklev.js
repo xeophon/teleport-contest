@@ -10998,6 +10998,109 @@ function splevStair(croom, up) {
     mkstairs(pos.x, pos.y, up, croom);
 }
 
+async function make_minetn2_level() {
+    const g = game;
+    clear_level_structures();
+    g.level.flags.is_maze_lev = false;
+    g.level.flags.rndmongen = true;
+    g.level.flags.has_town = true;
+
+    await splevBuildRoom({
+        rtype: OROOM, lit: 1, x: 3, y: 3,
+        xalign: SPLEV_CENTER, yalign: SPLEV_CENTER, w: 31, h: 15,
+    }, null, async outer => {
+        splevFeature(outer, FOUNTAIN, 17, 5);
+        splevFeature(outer, FOUNTAIN, 13, 8);
+
+        if (rn2(100) < 75)
+            await splevBuildRoom({ rtype: OROOM, x: 2, y: 0, w: 2, h: 2 }, outer,
+                room => splevDoor(room, 'closed', W_WEST));
+        if (rn2(100) < 75)
+            await splevBuildRoom({ rtype: OROOM, lit: 0, x: 5, y: 0, w: 2, h: 2 }, outer,
+                room => splevDoor(room, 'closed', W_SOUTH));
+        if (rn2(100) < 75)
+            await splevBuildRoom({ rtype: OROOM, x: 8, y: 0, w: 2, h: 2 }, outer,
+                room => splevDoor(room, 'closed', W_EAST));
+        if (rn2(100) < 75)
+            await splevBuildRoom({ rtype: OROOM, lit: 1, x: 16, y: 0, w: 2, h: 2 }, outer,
+                room => splevDoor(room, 'closed', W_WEST));
+        if (rn2(100) < 75)
+            await splevBuildRoom({ rtype: OROOM, lit: 0, x: 19, y: 0, w: 2, h: 2 }, outer,
+                room => splevDoor(room, 'closed', W_SOUTH));
+        if (rn2(100) < 75)
+            await splevBuildRoom({ rtype: OROOM, x: 22, y: 0, w: 2, h: 2 }, outer, async room => {
+                splevDoor(room, 'closed', W_SOUTH);
+                await splevMonster(room, 'gnome');
+            });
+        if (rn2(100) < 75)
+            await splevBuildRoom({ rtype: OROOM, lit: 0, x: 25, y: 0, w: 2, h: 2 }, outer,
+                room => splevDoor(room, 'closed', W_EAST));
+        if (rn2(100) < 75)
+            await splevBuildRoom({ rtype: OROOM, lit: 1, x: 2, y: 5, w: 2, h: 2 }, outer,
+                room => splevDoor(room, 'closed', W_NORTH));
+        if (rn2(100) < 75)
+            await splevBuildRoom({ rtype: OROOM, lit: 1, x: 5, y: 5, w: 2, h: 2 }, outer,
+                room => splevDoor(room, 'closed', W_SOUTH));
+        if (rn2(100) < 75)
+            await splevBuildRoom({ rtype: OROOM, x: 8, y: 5, w: 2, h: 2 }, outer, async room => {
+                splevDoor(room, 'locked', W_NORTH);
+                await splevMonster(room, 'gnome');
+            });
+
+        await splevBuildRoom({ rtype: SHOPBASE, chance: 90, lit: 1, x: 2, y: 10, w: 4, h: 3 }, outer,
+            room => splevDoor(room, 'closed', W_WEST));
+        await splevBuildRoom({ rtype: TOOLSHOP, chance: 90, lit: 1, x: 23, y: 10, w: 4, h: 3 }, outer,
+            room => splevDoor(room, 'closed', W_EAST));
+        await splevBuildRoom({ rtype: FOODSHOP, chance: 90, lit: 1, x: 24, y: 5, w: 3, h: 4 }, outer,
+            room => splevDoor(room, 'closed', W_NORTH));
+        await splevBuildRoom({ rtype: CANDLESHOP, lit: 1, x: 11, y: 10, w: 4, h: 3 }, outer,
+            room => splevDoor(room, 'closed', W_EAST));
+
+        if (rn2(100) < 75)
+            await splevBuildRoom({ rtype: OROOM, lit: 0, x: 7, y: 10, w: 3, h: 3 }, outer, async room => {
+                splevDoor(room, 'locked', W_NORTH);
+                await splevMonster(room, 'gnome');
+            });
+
+        await splevBuildRoom({ rtype: TEMPLE, lit: 1, x: 19, y: 5, w: 4, h: 4 }, outer, async room => {
+            splevDoor(room, 'closed', W_NORTH);
+            await splevAltarShrine(room, 2, 2);
+            await splevMonster(room, 'gnomish wizard');
+            await splevMonster(room, 'gnomish wizard');
+        });
+
+        if (rn2(100) < 75)
+            await splevBuildRoom({ rtype: OROOM, lit: 1, x: 18, y: 10, w: 4, h: 3 }, outer, async room => {
+                splevDoor(room, 'locked', W_WEST);
+                await splevMonster(room, 'gnome lord');
+            });
+
+        for (let i = 0; i < 4; i++) await splevMonster(outer, 'watchman', 1);
+        await splevMonster(outer, 'watch captain', 1);
+    });
+
+    await splevBuildRoom({ rtype: OROOM }, null, room => splevStair(room, true));
+    await splevBuildRoom({ rtype: OROOM }, null, async room => {
+        splevStair(room, false);
+        await splevTrap(room);
+        await splevMonster(room, 'gnome');
+        await splevMonster(room, 'gnome');
+    });
+    await splevBuildRoom({ rtype: OROOM }, null, room => splevMonster(room, 'dwarf'));
+    await splevBuildRoom({ rtype: OROOM }, null, async room => {
+        await splevTrap(room);
+        await splevMonster(room, 'gnome');
+    });
+
+    await makecorridors();
+    wallification(1, 0, COLNO - 1, ROWNO - 1);
+    flipSpecialLevelRnd(1, 0, COLNO - 1, ROWNO - 1);
+    recount_level_features();
+    level_finalize_topology({ mineralizeLevel: false });
+    for (let i = 0; i < g.level.nroom; i++) await fill_special_room(g.level.rooms[i]);
+    g._level_populated = true;
+}
+
 async function make_minetn3_level() {
     const g = game;
     clear_level_structures();
@@ -11181,6 +11284,12 @@ async function make_minetn_level(special = null) {
     alignPick = rn2(2);
     [align[1], align[alignPick]] = [align[alignPick], align[1]];
     g.splev_align = align;
+
+    if (variant === 2) {
+        await make_minetn2_level();
+        g.in_mklev = false;
+        return;
+    }
 
     if (variant === 3) {
         await make_minetn3_level();
