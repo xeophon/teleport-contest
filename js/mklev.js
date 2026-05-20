@@ -10854,8 +10854,9 @@ async function splevMonster(croom, name, peaceful = null) {
     let ptr;
     let gender = null;
     if (name.length === 1) {
+        gender = 0;
         inducedAlign80();
-        ptr = mkclassAligned(name);
+        ptr = mkclassAligned(name, false, null, true);
     } else {
         gender = name === 'gnome lord' ? 0 : rn2(2);
         if (name === 'watchman') ptr = WATCHMAN;
