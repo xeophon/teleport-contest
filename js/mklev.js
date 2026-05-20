@@ -3830,27 +3830,50 @@ function curse(otmp) {
 function uncurse(otmp) { if (otmp) otmp.cursed = false; }
 function delete_contents(otmp) { if (otmp) otmp.contents = []; }
 function weight(otmp) { return otmp?.owt || 1; }
+function sameStackableObject(existing, otmp) {
+    const sameCorpse = otmp.otyp !== CORPSE && otmp.otyp !== EGG && otmp.otyp !== TIN
+        || existing.corpsenm?.name === otmp.corpsenm?.name;
+    return existing.otyp === otmp.otyp
+        && existing.cursed === otmp.cursed
+        && existing.blessed === otmp.blessed
+        && (existing.spe || 0) === (otmp.spe || 0)
+        && existing.kind === otmp.kind
+        && existing.scrollIndex === otmp.scrollIndex
+        && existing.potionIndex === otmp.potionIndex
+        && existing.spellbookIndex === otmp.spellbookIndex
+        && existing.gemDescription === otmp.gemDescription
+        && sameCorpse;
+}
 function add_to_container(container, otmp) {
     if (!container || !otmp) return null;
     container.contents ??= [];
     for (const existing of container.contents) {
-        const sameCorpse = otmp.otyp !== CORPSE && otmp.otyp !== EGG && otmp.otyp !== TIN
-            || existing.corpsenm?.name === otmp.corpsenm?.name;
-        if (existing.otyp !== otmp.otyp
-            || existing.cursed !== otmp.cursed
-            || existing.blessed !== otmp.blessed
-            || (existing.spe || 0) !== (otmp.spe || 0)
-            || existing.kind !== otmp.kind
-            || existing.scrollIndex !== otmp.scrollIndex
-            || existing.potionIndex !== otmp.potionIndex
-            || existing.spellbookIndex !== otmp.spellbookIndex
-            || existing.gemDescription !== otmp.gemDescription
-            || !sameCorpse) continue;
+        if (!sameStackableObject(existing, otmp)) continue;
         existing.quan = (existing.quan || 1) + (otmp.quan || 1);
         return existing;
     }
     container.contents.unshift(otmp);
     otmp.contained = true;
+    return otmp;
+}
+function floorObjectCanStack(otmp) {
+    const otyp = otmp?.otyp;
+    return otyp === GOLD_PIECE || otyp === ROCK || otyp === GEM_CLASS || otyp === RUBY || otyp === TOUCHSTONE
+        || otyp === FOOD_CLASS || otyp === SCROLL_CLASS || otyp === POTION_CLASS || otyp === SPBOOK_no_NOVEL
+        || (otyp >= 230 && otyp < 300)
+        || otyp === WAX_CANDLE || otyp === TALLOW_CANDLE
+        || SPECIFIC_FOOD_INFO.has(otyp);
+}
+function stack_floor_object(otmp) {
+    if (!otmp || !game.level || !floorObjectCanStack(otmp)) return otmp;
+    for (const existing of game.level.objects || []) {
+        if (existing === otmp || existing.ox !== otmp.ox || existing.oy !== otmp.oy) continue;
+        if (!sameStackableObject(existing, otmp)) continue;
+        existing.quan = (existing.quan || 1) + (otmp.quan || 1);
+        const idx = game.level.objects.indexOf(otmp);
+        if (idx >= 0) game.level.objects.splice(idx, 1);
+        return existing;
+    }
     return otmp;
 }
 function sobj_at(otyp, x, y) {
@@ -10310,14 +10333,14 @@ function minend2Object(oclass, x = null, y = null) {
     const pos = x == null ? minend2DryLocation() : { x: minend2X(x), y: minend2Y(y) };
     const obj = pos ? mkobj_at(oclass, pos.x, pos.y, true) : null;
     if (obj && (oclass === POTION_CLASS || obj.otyp === POTION_CLASS || (obj.otyp >= 230 && obj.otyp < 270))) obj._appearance_color = null;
-    return obj;
+    return stack_floor_object(obj);
 }
 
 function minend2SpecificObject(otyp, x, y, props = {}) {
     const obj = mksobj_at(otyp, minend2X(x), minend2Y(y), true, false);
     if (obj) Object.assign(obj, props);
     if (otyp >= 230 && otyp < 270 && obj) obj._appearance_color = null;
-    return obj;
+    return stack_floor_object(obj);
 }
 
 async function minend2Monster(name) {
@@ -12370,10 +12393,10 @@ async function make_medusa_level() {
 
     for (let i = 0; i < 8; i++) {
         const pos = medusaDryLocation();
-        mkobj_at(RANDOM_CLASS, pos.x, pos.y, true);
+        stack_floor_object(mkobj_at(RANDOM_CLASS, pos.x, pos.y, true));
     }
-    mksobj_at(SCR_BLANK_PAPER, medusaX(48), medusaY(18), true, true);
-    mksobj_at(SCR_BLANK_PAPER, medusaX(48), medusaY(18), true, true);
+    stack_floor_object(mksobj_at(SCR_BLANK_PAPER, medusaX(48), medusaY(18), true, true));
+    stack_floor_object(mksobj_at(SCR_BLANK_PAPER, medusaX(48), medusaY(18), true, true));
 
     for (const typ of [RUST_TRAP, RUST_TRAP, SQKY_BOARD, SQKY_BOARD]) {
         const pos = medusaDryLocation();
