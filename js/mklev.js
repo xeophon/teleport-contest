@@ -44,7 +44,7 @@ import {
     WM_C_OUTER, WM_C_INNER,
     WM_X_TL, WM_X_TR, WM_X_BL, WM_X_BR, WM_X_TLBR, WM_X_BLTR,
     ROT_AGE, TAINT_AGE,
-    In_mines,
+    In_mines, DUNGEON_ALIGN_BY_DNUM,
 } from './const.js';
 
 // Object/class constants (normally from objects.js, not in contest template)
@@ -9068,11 +9068,11 @@ async function make_sanctum_level() {
         game._mongets_target = priest;
         mongets(AMULET_CLASS);
         game._mongets_target = previousMongetsTarget;
-    }
-    for (let cnt = rn1(3, 2); cnt > 0; cnt--) mkobj(SPBOOK_no_NOVEL, false);
-    if (rn2(2)) {
-        const robe = null;
-        if (robe) curse(robe);
+        givePriestSpellbooks(priest);
+        if (rn2(2)) {
+            const robe = null;
+            if (robe) curse(robe);
+        }
     }
 
     for (const [x, y] of SANCTUM_FIRE_TRAPS) {
@@ -9203,11 +9203,11 @@ async function make_valley_level() {
     const priest = await makemon(ALIGNED_CLERIC, valleyX(2), valleyY(9), MM_NOGRP);
     if (priest) {
         initPriestMonster(priest);
-    }
-    for (let cnt = rn1(3, 2); cnt > 0; cnt--) mkobj(SPBOOK_no_NOVEL, false);
-    if (rn2(2)) {
-        const robe = null;
-        if (robe) curse(robe);
+        givePriestSpellbooks(priest);
+        if (rn2(2)) {
+            const robe = null;
+            if (robe) curse(robe);
+        }
     }
     g.level.flags.has_temple = true;
     if (temple) temple.needfill = 2;
@@ -9740,8 +9740,13 @@ function oracleSubroomNodoor(lx, ly, hx, hy) {
 }
 
 function inducedAlign80() {
-    if (rn2(100) < 80) return game.u?.ualign?.type ?? A_NEUTRAL;
-    return [A_LAWFUL, A_NEUTRAL, A_CHAOTIC][rn2(3)];
+    const specialAlign = game._special_level_align;
+    if (specialAlign != null && specialAlign !== A_NONE && rn2(100) < 80)
+        return specialAlign;
+    const dungeonAlign = DUNGEON_ALIGN_BY_DNUM[game.u?.uz?.dnum] ?? A_NONE;
+    if (dungeonAlign !== A_NONE && rn2(100) < 80)
+        return dungeonAlign;
+    return rn2(3) - 1;
 }
 
 function oracleRoomRandomLoc(lx, ly, hx, hy, sublx, subly, subhx, subhy) {
@@ -10618,6 +10623,17 @@ function initPriestMonster(priest, shrine = null) {
     set_malign(priest);
 }
 
+function givePriestSpellbooks(priest) {
+    if (!priest) return;
+    for (let cnt = rn1(3, 2); cnt > 0; cnt--) {
+        const book = mkobj(SPBOOK_no_NOVEL, false);
+        if (book) {
+            priest.minvent = [book, ...(priest.minvent || [])];
+            priest.hasInventory = true;
+        }
+    }
+}
+
 function relocatePriestSpotOccupant(x, y) {
     const occupant = monster_at(x, y);
     if (occupant) rlocNoMsg(occupant);
@@ -10651,7 +10667,7 @@ async function minetn5AltarShrine(x, y) {
     const priest = await makemon(ALIGNED_CLERIC, px, py, MM_NOGRP);
     if (!priest) return;
     initPriestMonster(priest, { room: temple.roomnoidx + ROOMOFFSET, align, x: ax, y: ay });
-    for (let cnt = rn1(3, 2); cnt > 0; cnt--) mkobj(SPBOOK_no_NOVEL, false);
+    givePriestSpellbooks(priest);
     rn2(2);
 }
 
@@ -10819,13 +10835,12 @@ function splevRoomLocation(croom) {
 
 function splevFreeRoomLocation(croom) {
     let pos = splevRoomLocation(croom);
+    if (!pos) return null;
     if (game.level.at(pos.x, pos.y)?.typ === ROOM) return pos;
     for (let trycnt = 0; trycnt <= 100; trycnt++) {
-        pos = { x: -1, y: -1 };
-        if (pos.x < 0) pos.x = rn2(croom.hx - croom.lx + 1);
-        if (pos.y < 0) pos.y = rn2(croom.hy - croom.ly + 1);
-        pos.x += croom.lx;
-        pos.y += croom.ly;
+        const candidate = { x: 0, y: 0 };
+        if (!somexy(croom, candidate)) break;
+        pos = candidate;
         if (game.level.at(pos.x, pos.y)?.typ === ROOM) return pos;
     }
     return pos;
@@ -10839,14 +10854,14 @@ async function splevMonster(croom, name, peaceful = null) {
     let ptr;
     let gender = null;
     if (name.length === 1) {
-        rn2(3);
+        inducedAlign80();
         ptr = mkclassAligned(name);
     } else {
         gender = name === 'gnome lord' ? 0 : rn2(2);
         if (name === 'watchman') ptr = WATCHMAN;
         else if (name === 'watch captain') ptr = WATCH_CAPTAIN;
         else ptr = monsterByRndName(RANDOM_MONSTER_ALIASES.get(name) || name);
-        rn2(3);
+        inducedAlign80();
     }
     const raceAdj = game.urace?.adj;
     const yourRace = (raceAdj === 'dwarven' && ptr?.name === 'dwarf')
@@ -10887,13 +10902,14 @@ async function splevAltarShrine(croom, x, y) {
     if (!priest) return;
     loc.flags |= AM_SHRINE;
     initPriestMonster(priest, { room: croom.roomnoidx + ROOMOFFSET, align, x: pos.x, y: pos.y });
-    for (let cnt = rn1(3, 2); cnt > 0; cnt--) mkobj(SPBOOK_no_NOVEL, false);
+    givePriestSpellbooks(priest);
     rn2(2);
     game.level.flags.has_temple = true;
 }
 
 async function splevTrap(croom) {
     const pos = splevFreeRoomLocation(croom);
+    if (!pos) return;
     let kind = specialRndtrap();
     const trap = await maketrap(pos.x, pos.y, kind);
     kind = trap ? trap.ttyp : NO_TRAP;
@@ -12448,7 +12464,7 @@ function sokobanDryLocation(rows, avoidBoulders = true) {
 
 async function make_sokoban_boulder_mimic(rows) {
     rn2(2); // find_montype() random gender for "giant mimic".
-    rn2(3); // induced_align() for default special-level monster alignment.
+    inducedAlign80();
     const pos = sokobanDryLocation(rows);
     const mon = await makemon(GIANT_MIMIC, pos.x, pos.y, 0);
     if (!mon) return null;
@@ -13146,7 +13162,7 @@ async function makelevel() {
                             x: ax,
                             y: ay,
                         });
-                        for (let cnt = rn1(3, 2); cnt > 0; cnt--) mkobj(SPBOOK_no_NOVEL, false);
+                        givePriestSpellbooks(priest);
                         rn2(2);
                     }
                     if (loc) loc.flags |= AM_SHRINE;
@@ -14088,7 +14104,7 @@ function themeroom_ghost_adventurer_rng(rows, startX, startY) {
 
     const loc = candidates[rn2(candidates.length)];
     rn2(2); // find_montype("ghost") chooses a gender before makemon.
-    rn2(3); // default special-level monster alignment.
+    inducedAlign80();
 
     const difficulty = level_difficulty();
     const heroLevel = game.u?.ulevel || 1;
