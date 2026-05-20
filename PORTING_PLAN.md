@@ -676,9 +676,12 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   light monsters learn and avoid the still-armed mine instead of detonating it.
   The extra pre-Minertown `rn2(2)` burn was also removed; `minetn` now consumes
   only the Lua `align` shuffle (`rn2(3)`, `rn2(2)`) before `build_room()`.
-  Seed0014 now reaches screen 668 with RNG matched through 52048/59178; the next
-  divergence is the missing C-faithful `dat/minetn-3.lua` room/corridor/shop
-  generation before stair-fall damage.
+  Seed0014 now reaches screen 668 with RNG matched through 52048/59178.
+- The active `dat/minetn-3.lua` path is the C-shaped room/subroom builder in
+  `make_minetn3_level()`, including `des.room`, shop chance, temple, random
+  corridors, and special-room filling. A stale unused box-drawing `MINETN3_ROWS`
+  sketch was removed so future work does not treat non-upstream map data as
+  authoritative for NetHack 5.0.
 - Bones handling is now only a C-shaped VFS presence check and wizard prompt
   flow. The real bones map/object/monster loader remains a future porting
   target, so the old seed5006 public-session pass is intentionally gone.
