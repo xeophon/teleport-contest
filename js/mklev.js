@@ -6694,7 +6694,7 @@ async function make_arc_fill_level(rooms) {
         }
     }
 
-    makecorridors();
+    await makecorridors();
     wallification(1, 0, COLNO - 1, ROWNO - 1);
     flipSpecialLevelRnd(1, 0, COLNO - 1, ROWNO - 1);
     recount_level_features();
@@ -9953,7 +9953,7 @@ export async function make_oracle_level() {
         await oracleRoomTrap(croom);
         await oracleRoomMonster(croom);
     }
-    makecorridors();
+    await makecorridors();
 
     wallification(1, 0, COLNO - 1, ROWNO - 1);
     recount_level_features();
@@ -11025,7 +11025,7 @@ async function make_minetn3_level() {
         await splevMonster(room, 'gnome');
     });
 
-    makecorridors();
+    await makecorridors();
     wallification(1, 0, COLNO - 1, ROWNO - 1);
     flipSpecialLevelRnd(1, 0, COLNO - 1, ROWNO - 1);
     recount_level_features();
@@ -11105,7 +11105,7 @@ async function make_minetn4_level() {
         await splevMonster(room, 'gnome');
     });
 
-    makecorridors();
+    await makecorridors();
     wallification(1, 0, COLNO - 1, ROWNO - 1);
     flipSpecialLevelRnd();
     recount_level_features();
@@ -13044,7 +13044,7 @@ async function makelevel() {
     const branchp = is_branchlev();
     let roomThreshold = branchp ? 4 : 3;
 
-    makecorridors();
+    await makecorridors();
     await make_niches();
 
     // Vault creation (simplified for contest)
@@ -13256,13 +13256,13 @@ function rogueJoin(x1, y1, x2, y2, horiz) {
     for (let y = Math.min(middle, y2); y <= Math.max(middle, y2); y++) rogueCorrCell(x2, y);
 }
 
-function rogueDoor(x, y, room) {
-    dodoor(x, y, room);
+async function rogueDoor(x, y, room) {
+    await dodoor(x, y, room);
     const loc = game.level.at(x, y);
     if (loc) loc.doormask = D_NODOOR;
 }
 
-function roguecorr(grid, x, y, dir) {
+async function roguecorr(grid, x, y, dir) {
     let fromx, fromy, tox, toy;
     if (dir === XL_DOWN) {
         const here = rogueCell(grid, x, y);
@@ -13273,7 +13273,7 @@ function roguecorr(grid, x, y, dir) {
         } else {
             fromx = here.rlx + rn2(here.dx) + 1 + 26 * x;
             fromy = here.rly + here.dy + 7 * y;
-            rogueDoor(fromx, fromy, game.level.rooms[here.nroom]);
+            await rogueDoor(fromx, fromy, game.level.rooms[here.nroom]);
             fromy++;
         }
         y++;
@@ -13285,7 +13285,7 @@ function roguecorr(grid, x, y, dir) {
         } else {
             tox = target.rlx + rn2(target.dx) + 1 + 26 * x;
             toy = target.rly - 1 + 7 * y;
-            rogueDoor(tox, toy, game.level.rooms[target.nroom]);
+            await rogueDoor(tox, toy, game.level.rooms[target.nroom]);
             toy--;
         }
         rogueJoin(fromx, fromy, tox, toy, false);
@@ -13300,7 +13300,7 @@ function roguecorr(grid, x, y, dir) {
     } else {
         fromx = here.rlx + here.dx + 1 + 26 * x;
         fromy = here.rly + rn2(here.dy) + 7 * y;
-        rogueDoor(fromx, fromy, game.level.rooms[here.nroom]);
+        await rogueDoor(fromx, fromy, game.level.rooms[here.nroom]);
         fromx++;
     }
     x++;
@@ -13312,7 +13312,7 @@ function roguecorr(grid, x, y, dir) {
     } else {
         tox = target.rlx - 1 + 1 + 26 * x;
         toy = target.rly + rn2(target.dy) + 7 * y;
-        rogueDoor(tox, toy, game.level.rooms[target.nroom]);
+        await rogueDoor(tox, toy, game.level.rooms[target.nroom]);
         tox--;
     }
     rogueJoin(fromx, fromy, tox, toy, true);
@@ -13354,7 +13354,7 @@ function miniwalk(grid, x, y) {
     }
 }
 
-function makeroguerooms() {
+async function makeroguerooms() {
     const grid = Array.from({ length: 3 }, () => Array.from({ length: 3 }, () => ({
         real: false, rlx: 0, rly: 0, dx: 0, dy: 0, doortable: 0, nroom: -1,
     })));
@@ -13393,8 +13393,8 @@ function makeroguerooms() {
     for (let y = 0; y < 3; y++) {
         for (let x = 0; x < 3; x++) {
             const cell = rogueCell(grid, x, y);
-            if (cell.doortable & XL_DOWN) roguecorr(grid, x, y, XL_DOWN);
-            if (cell.doortable & XL_RIGHT) roguecorr(grid, x, y, XL_RIGHT);
+            if (cell.doortable & XL_DOWN) await roguecorr(grid, x, y, XL_DOWN);
+            if (cell.doortable & XL_RIGHT) await roguecorr(grid, x, y, XL_RIGHT);
         }
     }
 }
@@ -13456,7 +13456,7 @@ async function makerogueghost() {
 
 async function make_rogue_level() {
     game.level.flags.rogue_level = true;
-    makeroguerooms();
+    await makeroguerooms();
     await makerogueghost();
     sort_rooms();
     await generate_stairs();
@@ -14217,7 +14217,7 @@ async function apply_themeroom_fill(fill, croom, rows = null, startX = 0, startY
             rn2(3);
             const mimic = mkclassMimic();
             const pos = {};
-            const mon = somexyspace(croom, pos) ? await makemon(mimic, pos.x, pos.y, 0) : null;
+            const mon = mimic && somexyspace(croom, pos) ? await makemon(mimic, pos.x, pos.y, 0) : null;
             if (mon) {
                 mon.appearObj = CHEST;
                 mon.appearGlyph = '(';
@@ -15045,7 +15045,7 @@ function dig_corridor(org, dest, npoints_out, nxcor, ftyp, btyp) {
 }
 
 // C ref: mklev.c dosdoor()
-function dosdoor(x, y, aroom, type) {
+async function dosdoor(x, y, aroom, type) {
     const map = game.level;
     const loc = map.at(x, y);
     if (!loc) return;
@@ -15066,6 +15066,8 @@ function dosdoor(x, y, aroom, type) {
         if (loc.doormask & D_TRAPPED) {
             if (level_difficulty() >= 9 && !rn2(5)) {
                 loc.doormask = D_NODOOR;
+                const ptr = mkclassMimic();
+                if (ptr) await makemon(ptr, x, y, 0);
             }
         }
     } else {
@@ -15077,8 +15079,8 @@ function dosdoor(x, y, aroom, type) {
     add_door(x, y, aroom);
 }
 
-function dodoor(x, y, aroom) {
-    dosdoor(x, y, aroom, maybe_sdoor(8) ? SDOOR : DOOR);
+async function dodoor(x, y, aroom) {
+    await dosdoor(x, y, aroom, maybe_sdoor(8) ? SDOOR : DOOR);
 }
 
 function add_door(x, y, aroom) {
@@ -15129,7 +15131,7 @@ function okdoor(x, y) {
 }
 
 // C ref: mklev.c join()
-function join(a, b, nxcor) {
+async function join(a, b, nxcor) {
     const g = game;
     const croom = g.level.rooms[a];
     const troom = g.level.rooms[b];
@@ -15167,29 +15169,29 @@ function join(a, b, nxcor) {
     const ftyp = CORR;
     const dig_result = dig_corridor(org, dest, npoints, nxcor, ftyp, STONE);
     if ((npoints.v > 0) && (okdoor(xx, yy) || !nxcor))
-        dodoor(xx, yy, croom);
+        await dodoor(xx, yy, croom);
     if (!dig_result) return;
     if (okdoor(tt.x, tt.y) || !nxcor)
-        dodoor(tt.x, tt.y, troom);
+        await dodoor(tt.x, tt.y, troom);
     if (g.smeq[a] < g.smeq[b]) g.smeq[b] = g.smeq[a];
     else g.smeq[a] = g.smeq[b];
 }
 
 // C ref: mklev.c makecorridors()
-function makecorridors() {
+async function makecorridors() {
     const g = game;
     let any = true;
     for (let i = 0; i < g.level.nroom; i++) g.smeq[i] = i;
     for (let a = 0; a < g.level.nroom - 1; a++) {
-        join(a, a + 1, false);
+        await join(a, a + 1, false);
         if (!rn2(50)) break;
     }
     for (let a = 0; a < g.level.nroom - 2; a++)
-        if (g.smeq[a] !== g.smeq[a + 2]) join(a, a + 2, false);
+        if (g.smeq[a] !== g.smeq[a + 2]) await join(a, a + 2, false);
     for (let a = 0; any && a < g.level.nroom; a++) {
         any = false;
         for (let b = 0; b < g.level.nroom; b++)
-            if (g.smeq[a] !== g.smeq[b]) { join(a, b, false); any = true; }
+            if (g.smeq[a] !== g.smeq[b]) { await join(a, b, false); any = true; }
     }
     if (g.level.nroom > 2) {
         const count = rn2(g.level.nroom) + 4;
@@ -15197,7 +15199,7 @@ function makecorridors() {
             let a = rn2(g.level.nroom);
             let b = rn2(g.level.nroom - 2);
             if (b >= a) b += 2;
-            join(a, b, true);
+            await join(a, b, true);
         }
     }
 }
@@ -15413,11 +15415,11 @@ async function makeniche(trap_type) {
                     wipe_engr_at(xx, yy - dy, 5, false);
                 }
             }
-            dosdoor(xx, yy, aroom, SDOOR);
+            await dosdoor(xx, yy, aroom, SDOOR);
         } else {
             rm.typ = CORR;
             if (rn2(7)) {
-                dosdoor(xx, yy, aroom, rn2(5) ? SDOOR : DOOR);
+                await dosdoor(xx, yy, aroom, rn2(5) ? SDOOR : DOOR);
             } else {
                 const loc = g.level.at(xx, yy);
                 if (!rn2(5) && loc && IS_WALL(loc.typ)) {
@@ -15962,57 +15964,20 @@ function mkveggy_at(sx, sy) {
 
 function mimicAttacksFor(name) {
     const sides = name === 'giant mimic' ? 6 : 4;
-    const attacks = [{ dice: 3, sides, verb: 'hits', aatyp: 'claw', adtyp: 'stck' }];
+    const attacks = [{
+        dice: 3,
+        sides,
+        verb: 'hits',
+        aatyp: 'claw',
+        adtyp: name === 'small mimic' ? 'phys' : 'stck',
+    }];
     if (name === 'giant mimic')
         attacks.push({ dice: 3, sides, verb: 'hits again', aatyp: 'claw', adtyp: 'stck' });
     return attacks;
 }
 
 function mkclassMimic() {
-    const mimics = [
-        { name: 'small mimic', freq: 2, difficulty: 8, glyph: 'm', color: CLR_BROWN, mlevel: 7 },
-        { name: 'large mimic', freq: 1, difficulty: 9, glyph: 'm', color: CLR_RED, mlevel: 8 },
-        { name: 'giant mimic', freq: 1, difficulty: 11, glyph: 'm', color: CLR_MAGENTA, mlevel: 9 },
-    ];
-    const maxmlev = level_difficulty() >> 1;
-    const choices = [];
-    let total = 0;
-    for (let i = 0; i < mimics.length; i++) {
-        const mimic = mimics[i];
-        rn2(9);
-        if (total && mimic.difficulty > maxmlev && mimic.difficulty > mimics[i - 1].difficulty && rn2(2)) break;
-        let adj = mimic.mlevel;
-        const levelDiff = level_difficulty() - adj;
-        if (levelDiff < 0) adj--;
-        else adj += Math.trunc(levelDiff / 5);
-        const heroDiff = (game.u?.ulevel || 1) - mimic.mlevel;
-        if (heroDiff > 0) adj += Math.trunc(heroDiff / 4);
-        adj = Math.max(0, Math.min(Math.trunc(3 * mimic.mlevel / 2), adj));
-        const weight = mimic.freq + 1 - (adj > (game.u?.ulevel || 1) * 2);
-        if (weight > 0) {
-            total += weight;
-            choices.push({ mimic, adj, total });
-        }
-    }
-    const pick = rnd(total);
-    const choice = choices.find(item => pick <= item.total) || choices[0];
-    const attacks = mimicAttacksFor(choice.mimic.name);
-    return {
-        name: choice.mimic.name,
-        mlet: S_MIMIC,
-        glyph: 'm',
-        color: choice.mimic.color,
-        mlevel: choice.mimic.mlevel,
-        mac: 7,
-        hpLevel: choice.adj,
-        mmove: 3,
-        neuter: false,
-        mindless: true,
-        weight: 1,
-        alwaysHostile: true,
-        attack: attacks[0],
-        attacks,
-    };
+    return mkclassAligned('m');
 }
 
 async function mkshobj_at(shopIndex, sx, sy, specialStock = false) {
@@ -16025,8 +15990,11 @@ async function mkshobj_at(shopIndex, sx, sy, specialStock = false) {
     }
     if (rn2(100) < depth_of_level(game.u?.uz)
         && !game.level?.monsters?.some(mon => mon.mx === sx && mon.my === sy)) {
-        const mimic = await makemon(mkclassMimic(), sx, sy, 0);
-        if (mimic) return;
+        const ptr = mkclassMimic();
+        if (ptr) {
+            const mimic = await makemon(ptr, sx, sy, 0);
+            if (mimic) return;
+        }
     }
     const atype = getShopItem(shopIndex);
     if (atype === VEGETARIAN_CLASS) mkveggy_at(sx, sy);
