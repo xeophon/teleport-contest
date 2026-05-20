@@ -11352,6 +11352,7 @@ async function make_minetn1_level() {
     g.level.flags.is_maze_lev = true;
     g.level.flags.rndmongen = true;
     g.level.flags.has_town = true;
+    splevMinesLevelInit(ROOM, STONE);
 
     for (let y = 0; y < MINETN1_ROWS.length; y++) {
         const row = MINETN1_ROWS[y];
@@ -11727,6 +11728,7 @@ async function make_minetn6_level() {
     g.level.flags.has_town = true;
     g.level.flags.has_shop = true;
     g.level.flags.has_temple = true;
+    splevMinesLevelInit(ROOM, HWALL, { lit: 1 });
 
     for (let y = 0; y < MINETN6_ROWS.length; y++) {
         const row = MINETN6_ROWS[y];
@@ -13674,6 +13676,18 @@ function mkmap_finish(fgTyp, bgTyp, lit, walled, joined) {
         game.level.flags.is_maze_lev = false;
         game.level.flags.is_cavernous_lev = true;
     }
+}
+
+function splevMinesLevelInit(fgTyp, bgTyp, options = {}) {
+    const joined = options.joined ?? true;
+    const walled = options.walled ?? true;
+    const lit = options.lit == null ? rn2(2) : options.lit;
+
+    mkmap_init(bgTyp, fgTyp);
+    mkmap_smooth(bgTyp, fgTyp);
+    if (joined)
+        mkmap_join(bgTyp, fgTyp);
+    mkmap_finish(fgTyp, bgTyp, lit, walled, joined);
 }
 
 function minefill_ok_location(x, y) {
