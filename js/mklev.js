@@ -2811,6 +2811,24 @@ const RANDOM_MAZE_DY = [-1, 0, 1, 0];
 function castleX(x) { return CASTLE_XSTART + x; }
 function castleY(y) { return CASTLE_YSTART + y; }
 
+function castleRandomDryLocation() {
+    const good = (x, y) => {
+        const loc = game.level?.at(x, y);
+        return !!loc && SPACE_POS(loc.typ) && !sobj_at(BOULDER, x, y);
+    };
+    for (let tryct = 0; tryct < 100; tryct++) {
+        const x = castleX(rn2(CASTLE_ROWS[0].length));
+        const y = castleY(rn2(CASTLE_ROWS.length));
+        if (good(x, y)) return { x, y };
+    }
+    for (let x = 0; x < CASTLE_ROWS[0].length; x++)
+        for (let y = 0; y < CASTLE_ROWS.length; y++) {
+            const ax = castleX(x), ay = castleY(y);
+            if (good(ax, ay)) return { x: ax, y: ay };
+        }
+    return null;
+}
+
 const BIGRM_RANDOM_MONSTERS = [
     { name: 'giant bat', mlet: 'bat', mlevel: 2, mac: 7, mmove: 22, genoFreq: 2, maligntyp: 0, hostile: true, neuter: false },
     { name: 'bugbear', mlet: 'humanoid', mlevel: 3, mmove: 9, genoFreq: 1, maligntyp: -6, hostile: true, neuter: false },
@@ -3803,6 +3821,7 @@ function mkgold(amount, x, y) {
 
 function dealloc_obj(otmp) { /* stub */ }
 function curse(otmp) { if (otmp) otmp.cursed = true; }
+function delete_contents(otmp) { if (otmp) otmp.contents = []; }
 function weight(otmp) { return otmp?.owt || 1; }
 function add_to_container(container, otmp) {
     if (!container || !otmp) return null;
@@ -9332,16 +9351,13 @@ export async function make_castle_level() {
     const chest = mksobj_at(CHEST, towerX, towerY, true, false);
     chest.olocked = true;
     chest.otrapped = false;
+    delete_contents(chest);
     for (const otyp of [WAN_WISHING, POT_GAIN_LEVEL]) {
-        for (let tryct = 0; tryct < 100; tryct++) {
-            const x = castleX(rn2(CASTLE_ROWS[0].length));
-            const y = castleY(rn2(CASTLE_ROWS.length));
-            if (g.level.at(x, y)?.typ === ROOM) break;
-        }
+        castleRandomDryLocation();
         add_to_container(chest, mksobj(otyp, true, false));
     }
     const scare = mksobj_at(SCR_SCARE_MONSTER, towerX, towerY, true, false);
-    scare.cursed = true;
+    Object.assign(scare, { blessed: false, cursed: true });
     mksobj_at(CHEST, castleX(37), castleY(8), true, false);
 
     for (const [x, y] of [[40, 8], [44, 8], [48, 8], [52, 8], [55, 8]]) {
