@@ -39,6 +39,10 @@ function extractRngCalls(rngArray) {
     return (rngArray || []).filter(isRngCall);
 }
 
+function appendAll(target, source) {
+    for (const item of source || []) target.push(item);
+}
+
 // Strip caller annotations and JS index prefix so plain "rn2(N)=M"
 // comparisons work regardless of how richly the source was annotated.
 function normalizeRng(entry) {
@@ -278,7 +282,7 @@ async function runSession(sessionPath) {
     const cAnimByStep = [];
     for (const seg of segments) {
         for (const step of seg.steps || []) {
-            cRng.push(...extractRngCalls(step.rng));
+            appendAll(cRng, extractRngCalls(step.rng));
             if (step.screen) {
                 cScreens.push(step.screen);
                 cCursors.push(Array.isArray(step.cursor) ? step.cursor : null);
@@ -317,11 +321,11 @@ async function runSession(sessionPath) {
             const segRng = (segGame.getRngLog?.() || []).map(e =>
                 typeof e === 'string' ? e.replace(/^\d+\s+/, '') : String(e)
             ).filter(isRngCall);
-            jsRng.push(...segRng);
-            jsScreens.push(...(segGame.getScreens?.() || []));
-            jsCursors.push(...(segGame.getCursors?.() || []));
+            appendAll(jsRng, segRng);
+            appendAll(jsScreens, segGame.getScreens?.());
+            appendAll(jsCursors, segGame.getCursors?.());
             if (typeof segGame.getAnimationFramesByStep === 'function') {
-                jsAnimByStep.push(...segGame.getAnimationFramesByStep());
+                appendAll(jsAnimByStep, segGame.getAnimationFramesByStep());
             }
             lastGame = segGame;
         }

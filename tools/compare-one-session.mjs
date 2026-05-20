@@ -126,10 +126,28 @@ async function main() {
     const segments = normalizeSession(sessionData).segments;
     const cScreens = flattenScreens(segments);
 
+    const storage = new Map();
+    const storageHandle = {
+        getItem(k) { return storage.has(k) ? storage.get(k) : null; },
+        setItem(k, v) { storage.set(k, String(v)); },
+        removeItem(k) { storage.delete(k); },
+        get length() { return storage.size; },
+        key(i) {
+            let n = 0;
+            for (const k of storage.keys()) {
+                if (n === i) return k;
+                n++;
+            }
+            return null;
+        },
+    };
+
     let game = null;
-    for (const segment of segments)
-        game = await runSegment(replayInputFor(segment), game);
-    const jsScreens = game.getScreens() || [];
+    const jsScreens = [];
+    for (const segment of segments) {
+        game = await runSegment({ ...replayInputFor(segment), storage: storageHandle });
+        jsScreens.push(...(game.getScreens() || []));
+    }
 
     let index = indexArg == null ? -1 : Number(indexArg);
     if (index < 0) {

@@ -75,11 +75,11 @@ bash frozen/set-category.sh <CATEGORY>
 bash frozen/score.sh
 ```
 
-Out of the box, the skeleton scores partial credit on
-`seed8000-tourist-starter` — its `fastforward.js` replay nails most
-of the early-game PRNG and the first dozen-or-so screens. That's
-your hello world: getting it from "partial" to "full pass," and
-then taking on the other 87 sessions.
+This fork is being refactored toward a real JavaScript port. Public
+sessions are useful for local divergence analysis, but recorded screen
+and RNG answers should not be embedded in runtime code. The public
+score may drop while replay scaffolding is removed and replaced with
+real C-to-JS subsystem ports.
 
 ## What's in this repo
 
@@ -87,15 +87,11 @@ Three things, layered like the Dungeons of Doom themselves.
 
 ### 1. A skeleton port of NetHack 5.0
 
-A minimal JavaScript implementation that runs through the first short
-tourist game (`seed8000-tourist-starter`) far enough to render a few
-recognizable screens. It does NOT pass that session yet — chargen is
-unimplemented, and the skeleton "fakes" the early game by replaying a
-hardcoded sequence of PRNG draws read out of the recorded session
-(see `js/fastforward.js`). It's enough scaffolding to see the engine
-move; it's not enough to score. Treat it as the surface layer:
-gentle, well-mapped, populated almost entirely with grid bugs. You
-will have to dig.
+A JavaScript implementation that ports NetHack behavior subsystem by
+subsystem. It is incomplete, but the runtime path should be driven by
+game state and the NetHack PRNG rather than public-session answer
+tables. Treat public sessions as tests and debugging data, not as
+source material for generated replay code.
 
 **Where the code lives:**
 
@@ -106,8 +102,6 @@ js/
 ├── terminal.js        ← FROZEN: 24×80 grid + serialize(). Don't touch.
 ├── storage.js         ← FROZEN: VFS for save/restore + bones. Don't touch.
 ├── rng.js             ← PRNG wrappers (rn2, rnd, d, …). Edit freely.
-├── fastforward.js     ← Hardcoded RNG-replay scaffolding for seed8000.
-│                        A trap to escape — see below.
 ├── nethack.js         ← top-level NetHack class. Mostly a stub.
 ├── const.js           ← 2,000+ constants imported from upstream headers.
 ├── allmain.js         ← the move loop. Currently very polite.
@@ -125,11 +119,8 @@ python3 -m http.server 8000   # any static server works
 open http://localhost:8000/
 ```
 
-There's no chargen prompt yet — the skeleton skips straight into the
-game with a hardcoded character because `js/fastforward.js` replays
-the PRNG calls that real chargen would produce. You'll see a small
-room and a tourist. Move around a few squares. Watch your
-`js/jsmain.js` get exercised in real time.
+The port is still partial. Start from `js/jsmain.js`, run sessions
+locally, and compare against the C reference when a subsystem diverges.
 
 **A brief tour:** start in `js/jsmain.js` to see the contest API
 entry point, then follow the call chain into `js/nethack.js` →
@@ -138,11 +129,9 @@ mostly under `js/mklev.js`, `js/cmd.js`, and a long list of files that
 don't exist yet but need to (`js/mon.js`, `js/dog.js`, `js/spell.js`,
 etc. — a complete NetHack port has on the order of 80 source files).
 
-**About `fastforward.js`:** it's a hardcoded list of `rn2(N)` calls
-that fakes the RNG sequence for `seed8000` only. It will never
-generalize and it will never pass a held-out session. The path
-forward is to delete its entries one at a time, replacing each with
-the real C function port that produces those calls naturally.
+**About replay code:** generated seed/session replay modules and the
+old fast-forward path are not part of the runtime port. Replace missing
+behavior with the corresponding C logic, data tables, and PRNG calls.
 
 The skeleton is "what works without porting much." Everything beyond
 is yours to build. *Be careful, ahead.*

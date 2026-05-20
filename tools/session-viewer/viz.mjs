@@ -21,8 +21,7 @@ const status = (msg, cls = '') => {
 // --- Hash state -----------------------------------------------------------
 // Persist UI state in location.hash (#session=NAME&step=N) so a refresh
 // or a copy-paste link lands on the same session and step. The session
-// part matches a substring of the dropdown's display name (so the user
-// can write "#session=4500" and it picks up "seed4500-knight-...").
+// part matches a substring of the dropdown's display name.
 function readHash() {
     const out = {};
     const h = (location.hash || '').replace(/^#/, '');
@@ -434,9 +433,8 @@ function buildFlatAligned() {
 // Non-uniform x-axis: each step's width is sqrt(calls+1)-scaled, then
 // capped at MAX_STEP_FRACTION of the total. Caps redistribute their
 // trimmed area proportionally to non-capped steps. The cap ensures one
-// pathological step (e.g. seed8000's chargen with ~3000 PRNG calls)
-// doesn't crowd out all the other steps; sqrt keeps a "denser steps
-// look denser" signal under the cap.
+// pathological step with many PRNG calls doesn't crowd out all the other
+// steps; sqrt keeps a "denser steps look denser" signal under the cap.
 const MAX_STEP_FRACTION = 0.25;
 function computeStepWidths() {
     const ranges = CURRENT_ALIGNED.stepRanges;
