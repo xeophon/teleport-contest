@@ -10701,11 +10701,7 @@ async function splevAltarShrine(croom, x, y) {
 
 async function splevTrap(croom) {
     const pos = splevFreeRoomLocation(croom);
-    let kind = NO_TRAP;
-    do { kind = traptype_rnd(); } while (kind === NO_TRAP);
-    const dungeon = game.dungeons?.[game.u?.uz?.dnum ?? 0];
-    const canFallThru = (game.u?.uz?.dlevel ?? 1) < (dungeon?.num_dunlevs ?? 1);
-    if (is_hole(kind) && !canFallThru) kind = ROCKTRAP;
+    let kind = specialRndtrap();
     const trap = await maketrap(pos.x, pos.y, kind);
     kind = trap ? trap.ttyp : NO_TRAP;
     if (kind === WEB) await makemon(monsterByRndName('giant spider'), pos.x, pos.y, 0);
