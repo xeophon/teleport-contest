@@ -9062,9 +9062,7 @@ async function make_sanctum_level() {
     }
     const priest = await makemon(HIGH_CLERIC, priestX, priestY, MM_NOGRP);
     if (priest) {
-        priest.mpeaceful = 1;
-        priest.ispriest = 1;
-        priest.msleeping = 0;
+        initPriestMonster(priest);
         const previousMongetsTarget = game._mongets_target;
         game._mongets_target = priest;
         mongets(AMULET_CLASS);
@@ -9202,9 +9200,7 @@ async function make_valley_level() {
     rn2(8);
     const priest = await makemon(ALIGNED_CLERIC, valleyX(2), valleyY(9), MM_NOGRP);
     if (priest) {
-        priest.mpeaceful = 1;
-        priest.ispriest = 1;
-        priest.msleeping = 0;
+        initPriestMonster(priest);
     }
     for (let cnt = rn1(3, 2); cnt > 0; cnt--) mkobj(SPBOOK_no_NOVEL, false);
     if (rn2(2)) {
@@ -10609,6 +10605,17 @@ async function minetn5Monster(name, x = null, y = null, peaceful = null) {
     return mon;
 }
 
+function initPriestMonster(priest, shrine = null) {
+    if (!priest) return;
+    if (shrine) priest.shrine = shrine;
+    priest.mtrapseen = ~0;
+    priest.mpeaceful = 1;
+    priest.ispriest = 1;
+    priest.isminion = 0;
+    priest.msleeping = 0;
+    set_malign(priest);
+}
+
 async function minetn5AltarShrine(x, y) {
     const ax = minetn5X(x), ay = minetn5Y(y);
     const loc = game.level.at(ax, ay);
@@ -10630,10 +10637,7 @@ async function minetn5AltarShrine(x, y) {
     }
     const priest = await makemon(ALIGNED_CLERIC, px, py, MM_NOGRP);
     if (!priest) return;
-    priest.mpeaceful = 1;
-    priest.ispriest = 1;
-    priest.msleeping = 0;
-    priest.shrine = { room: temple.roomnoidx + ROOMOFFSET, align, x: ax, y: ay };
+    initPriestMonster(priest, { room: temple.roomnoidx + ROOMOFFSET, align, x: ax, y: ay });
     for (let cnt = rn1(3, 2); cnt > 0; cnt--) mkobj(SPBOOK_no_NOVEL, false);
     rn2(2);
 }
@@ -10869,10 +10873,7 @@ async function splevAltarShrine(croom, x, y) {
     const priest = await makemon(ALIGNED_CLERIC, px, py, MM_NOGRP);
     if (!priest) return;
     loc.flags |= AM_SHRINE;
-    priest.mpeaceful = 1;
-    priest.ispriest = 1;
-    priest.msleeping = 0;
-    priest.shrine = { room: croom.roomnoidx + ROOMOFFSET, align, x: pos.x, y: pos.y };
+    initPriestMonster(priest, { room: croom.roomnoidx + ROOMOFFSET, align, x: pos.x, y: pos.y });
     for (let cnt = rn1(3, 2); cnt > 0; cnt--) mkobj(SPBOOK_no_NOVEL, false);
     rn2(2);
     game.level.flags.has_temple = true;
@@ -13126,15 +13127,12 @@ async function makelevel() {
                     }
                     const priest = await makemon(ALIGNED_CLERIC, px, py, MM_NOGRP);
                     if (priest) {
-                        priest.mpeaceful = 1;
-                        priest.ispriest = 1;
-                        priest.msleeping = 0;
-                        priest.shrine = {
+                        initPriestMonster(priest, {
                             room: (room.roomnoidx ?? g.level.rooms.indexOf(room)) + ROOMOFFSET,
                             align: loc ? Amask2align(loc.flags) : A_NEUTRAL,
                             x: ax,
                             y: ay,
-                        };
+                        });
                         for (let cnt = rn1(3, 2); cnt > 0; cnt--) mkobj(SPBOOK_no_NOVEL, false);
                         rn2(2);
                     }
