@@ -15965,10 +15965,8 @@ function mkclassMimic() {
 async function mkshobj_at(shopIndex, sx, sy, specialStock = false) {
     const shopName = SHOP_TYPES[shopIndex]?.name;
     if (specialStock && (shopName === 'rare books' || shopName === 'second-hand bookstore')) {
-        const novel = mksobj(SPBOOK_no_NOVEL, false, false);
-        rn2(41);
+        const novel = mksobj_at(SPBOOK_no_NOVEL, sx, sy, false, false);
         Object.assign(novel, { kind: 'novel', cls: 'spellbook', glyph: '+', color: CLR_BRIGHT_BLUE });
-        place_object(novel, sx, sy);
         game._tribute_bookstock = true;
         return;
     }
