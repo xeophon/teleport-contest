@@ -14927,6 +14927,10 @@ function add_door(x, y, aroom) {
         if (!broom || broom.hx <= 0 || broom === aroom || !(broom.doorct > 0)) continue;
         if ((broom.fdoor ?? 0) >= aroom.fdoor) broom.fdoor++;
     }
+    for (const broom of g.level.subrooms || []) {
+        if (!broom || broom.hx <= 0 || broom === aroom || !(broom.doorct > 0)) continue;
+        if ((broom.fdoor ?? 0) >= aroom.fdoor) broom.fdoor++;
+    }
     g.level.doors[aroom.fdoor] = { x, y };
     g.level.doorindex++;
 }
