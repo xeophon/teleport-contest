@@ -44,6 +44,7 @@ import {
     WM_C_OUTER, WM_C_INNER,
     WM_X_TL, WM_X_TR, WM_X_BL, WM_X_BR, WM_X_TLBR, WM_X_BLTR,
     ROT_AGE, TAINT_AGE,
+    In_mines,
 } from './const.js';
 
 // Object/class constants (normally from objects.js, not in contest template)
@@ -15605,6 +15606,15 @@ function birthdayFromDatetime() {
 
 function assignShopkeeperName(shk, shopIndex) {
     let names = SHOPKEEPER_NAME_LISTS[shopIndex] || GENERAL_SHOPKEEPER_NAMES;
+    if (names === LIGHT_SHOPKEEPER_NAMES
+        && In_mines(game.u?.uz)
+        && game.level?.flags?.has_town) {
+        shk.female = 0;
+        shk.shkRawName = '+Izchak';
+        shk.personalName = true;
+        shk.shknam = 'Izchak';
+        return;
+    }
     const nseed = Math.trunc(birthdayFromDatetime() / 257);
     const ledger = (game.dungeons?.[game.u?.uz?.dnum ?? 0]?.ledger_start || 0) + (game.u?.uz?.dlevel || 1);
     let nameWanted = (shk.m_id || 0) + ledger + (nseed % 13) - (nseed % 5);
