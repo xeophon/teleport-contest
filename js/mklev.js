@@ -1445,7 +1445,7 @@ export const SHOP_TYPES = [
     { name: 'antique weapons outlet', prob: 5, iprobs: [[90, WEAPON_CLASS], [10, ARMOR_CLASS]] },
     { name: 'delicatessen', prob: 5, iprobs: [[83, FOOD_CLASS], [5, -POT_FRUIT_JUICE], [4, -POT_BOOZE], [5, -POT_WATER], [3, -ICE_BOX]] },
     { name: 'jewelers', prob: 3, iprobs: [[85, RING_CLASS], [10, GEM_CLASS], [5, AMULET_CLASS]] },
-    { name: 'quality apparel and accessories', prob: 3, iprobs: [[90, WAND_CLASS], [5, ARMOR_CLASS], [5, ARMOR_CLASS]] },
+    { name: 'quality apparel and accessories', prob: 3, iprobs: [[90, WAND_CLASS], [5, -LEATHER_GLOVES], [5, -ELVEN_CLOAK]] },
     { name: 'hardware store', prob: 3, iprobs: [[100, TOOL_CLASS]] },
     { name: 'rare books', prob: 3, iprobs: [[90, SPBOOK_CLASS], [10, SCROLL_CLASS]] },
     { name: 'health food store', prob: 2, iprobs: [[70, VEGETARIAN_CLASS], [20, -POT_FRUIT_JUICE], [4, -POT_HEALING], [3, -POT_FULL_HEALING], [2, -SCR_FOOD_DETECTION], [1, -LUMP_OF_ROYAL_JELLY]] },
