@@ -10980,8 +10980,8 @@ async function make_minetn3_level() {
     wallification(1, 0, COLNO - 1, ROWNO - 1);
     flipSpecialLevelRnd(1, 0, COLNO - 1, ROWNO - 1);
     recount_level_features();
-    for (let i = 0; i < g.level.nroom; i++) await fill_special_room(g.level.rooms[i]);
     level_finalize_topology({ mineralizeLevel: false });
+    for (let i = 0; i < g.level.nroom; i++) await fill_special_room(g.level.rooms[i]);
     g._level_populated = true;
 }
 
@@ -11060,8 +11060,8 @@ async function make_minetn4_level() {
     wallification(1, 0, COLNO - 1, ROWNO - 1);
     flipSpecialLevelRnd();
     recount_level_features();
-    for (let i = 0; i < g.level.nroom; i++) await fill_special_room(g.level.rooms[i]);
     level_finalize_topology({ mineralizeLevel: false });
+    for (let i = 0; i < g.level.nroom; i++) await fill_special_room(g.level.rooms[i]);
     g._level_populated = true;
 }
 
@@ -11218,10 +11218,10 @@ async function make_minetn_level(special = null) {
         MINETN5_XSTART + MINETN5_ROWS[0].length - 1,
         MINETN5_YSTART + MINETN5_ROWS.length - 1);
     recount_level_features();
+    level_finalize_topology({ mineralizeLevel: false });
     for (const croom of g.level.rooms || []) {
         if (croom?.hx > 0) await fill_special_room(croom);
     }
-    level_finalize_topology({ mineralizeLevel: false });
     g.in_mklev = false;
 }
 
