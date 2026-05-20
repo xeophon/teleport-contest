@@ -4108,11 +4108,13 @@ function monsterFromRndMeta(row) {
     if (name === 'warhorse') ptr.mac = 4;
     if (name === 'small mimic' || name === 'large mimic') {
         ptr.mac = 7;
-        ptr.attack = { dice: 3, sides: 4, verb: 'hits' };
+        ptr.attacks = mimicAttacksFor(name);
+        ptr.attack = ptr.attacks[0];
     }
     if (name === 'giant mimic') {
         ptr.mac = 7;
-        ptr.attack = { dice: 3, sides: 6, verb: 'hits' };
+        ptr.attacks = mimicAttacksFor(name);
+        ptr.attack = ptr.attacks[0];
     }
     ptr.dwarf = name.includes('dwarf');
     ptr.elf = name.includes('elf') || name.includes('elven') || name.includes('Elven') || name.includes('Woodland-elf')
@@ -15958,6 +15960,14 @@ function mkveggy_at(sx, sy) {
     if (obj?.otyp === TIN) obj.spe = 1;
 }
 
+function mimicAttacksFor(name) {
+    const sides = name === 'giant mimic' ? 6 : 4;
+    const attacks = [{ dice: 3, sides, verb: 'hits', aatyp: 'claw', adtyp: 'stck' }];
+    if (name === 'giant mimic')
+        attacks.push({ dice: 3, sides, verb: 'hits again', aatyp: 'claw', adtyp: 'stck' });
+    return attacks;
+}
+
 function mkclassMimic() {
     const mimics = [
         { name: 'small mimic', freq: 2, difficulty: 8, glyph: 'm', color: CLR_BROWN, mlevel: 7 },
@@ -15986,9 +15996,7 @@ function mkclassMimic() {
     }
     const pick = rnd(total);
     const choice = choices.find(item => pick <= item.total) || choices[0];
-    const mimicAttack = choice.mimic.name === 'giant mimic'
-        ? { dice: 3, sides: 6, verb: 'hits' }
-        : { dice: 3, sides: 4, verb: 'hits' };
+    const attacks = mimicAttacksFor(choice.mimic.name);
     return {
         name: choice.mimic.name,
         mlet: S_MIMIC,
@@ -16002,7 +16010,8 @@ function mkclassMimic() {
         mindless: true,
         weight: 1,
         alwaysHostile: true,
-        attack: mimicAttack,
+        attack: attacks[0],
+        attacks,
     };
 }
 
