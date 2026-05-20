@@ -5939,6 +5939,20 @@ function in_rooms(x, y, typewanted) {
     return found;
 }
 
+function inside_shop(x, y) {
+    const loc = game.level?.at(x, y);
+    const roomno = loc?.roomno ?? 0;
+    const room = roomByRoomno(roomno);
+    if (roomno < ROOMOFFSET || loc?.edge || !room || room.rtype < SHOPBASE) return 0;
+    return roomno;
+}
+
+function isCurrentSpecialLevel() {
+    const uz = game.u?.uz;
+    return !!uz && (game.specialLevels || [])
+        .some(level => level.dnum === uz.dnum && level.dlevel === uz.dlevel);
+}
+
 // ============================================================
 // Core mklev functions (ported from main project's mklev.js)
 // ============================================================
@@ -15841,10 +15855,23 @@ async function mkshobj_at(shopIndex, sx, sy, specialStock = false) {
 async function stock_room(shopIndex, croom) {
     const spot = await shkinit(shopIndex, croom);
     if (!spot) return;
-    const doorLoc = game.level?.at(spot.door.x, spot.door.y);
+    const firstDoor = game.level?.doors?.[croom.fdoor || 0];
+    const doorLoc = firstDoor ? game.level?.at(firstDoor.x, firstDoor.y) : null;
     if (doorLoc?.doormask === D_NODOOR) doorLoc.doormask = D_ISOPEN;
     if (doorLoc?.typ === SDOOR) doorLoc.typ = DOOR;
     if (doorLoc?.doormask & D_TRAPPED) doorLoc.doormask = D_LOCKED;
+    if (firstDoor && doorLoc?.doormask === D_LOCKED) {
+        let m = firstDoor.x;
+        let n = firstDoor.y;
+        if (inside_shop(firstDoor.x + 1, firstDoor.y)) m--;
+        else if (inside_shop(firstDoor.x - 1, firstDoor.y)) m++;
+        if (inside_shop(firstDoor.x, firstDoor.y + 1)) n--;
+        else if (inside_shop(firstDoor.x, firstDoor.y - 1)) n++;
+        make_engr_at(m, n, 'Closed for inventory', null, 0, DUST);
+        const signLoc = game.level?.at(m, n);
+        if (signLoc && signLoc.typ !== CORR && signLoc.typ !== ROOM)
+            signLoc.typ = (isCurrentSpecialLevel() || in_rooms(m, n, 0).length) ? ROOM : CORR;
+    }
     const stockSpots = [];
     for (let sx = croom.lx; sx <= croom.hx; sx++)
         for (let sy = croom.ly; sy <= croom.hy; sy++)
