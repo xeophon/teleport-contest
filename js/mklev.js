@@ -3876,6 +3876,11 @@ function stack_floor_object(otmp) {
     }
     return otmp;
 }
+function setMonsterPeaceful(mon, peaceful) {
+    if (!mon || peaceful == null) return;
+    mon.mpeaceful = peaceful ? 1 : 0;
+    set_malign(mon);
+}
 function sobj_at(otyp, x, y) {
     return game.level?.objects?.find(obj => obj.otyp === otyp && obj.ox === x && obj.oy === y) || null;
 }
@@ -10058,7 +10063,10 @@ async function tutorial1_monster(mon, x, y, opts = {}) {
     if (opts.alignRoll) rn2(3);
     const pos = tutorial1_xy(x, y);
     const created = await makemon(mon, pos.x, pos.y, MM_NOGRP);
-    if (created) Object.assign(created, { waiting: true, mpeaceful: opts.peaceful ?? created.mpeaceful });
+    if (created) {
+        created.waiting = true;
+        setMonsterPeaceful(created, opts.peaceful);
+    }
     return created;
 }
 
@@ -10657,7 +10665,7 @@ async function minetn5Monster(name, x = null, y = null, peaceful = null) {
     const mon = await makemon(ptr, pos.x, pos.y, 0);
     if (!mon) return null;
     if (gender != null) mon.female = !!gender;
-    if (peaceful != null) mon.mpeaceful = peaceful ? 1 : 0;
+    setMonsterPeaceful(mon, peaceful);
     return mon;
 }
 
@@ -10944,7 +10952,7 @@ async function splevMonster(croom, name, peaceful = null) {
     const mon = await makemon(monData, pos.x, pos.y, 0);
     if (!mon) return null;
     if (gender != null) mon.female = !!gender;
-    if (peaceful != null) mon.mpeaceful = peaceful ? 1 : 0;
+    setMonsterPeaceful(mon, peaceful);
     mon.msleeping = 0;
     return mon;
 }
