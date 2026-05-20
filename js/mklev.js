@@ -3013,20 +3013,16 @@ export function next_ident() {
 
 // C ref: mkobj.c blessorcurse
 function blessorcurse(otmp, chance = 4) {
+    if (!otmp || otmp.blessed || otmp.cursed) return;
     if (!rn2(chance)) {
         const blessed = rn2(2);
-        if (otmp) {
-            otmp.cursed = !blessed;
-            otmp.blessed = !!blessed;
-        }
+        if (blessed) bless(otmp);
+        else curse(otmp);
     }
 }
 
 function blessorcurseChance(otmp, chance) {
-    if (!rn2(chance) && otmp) {
-        if (!rn2(2)) otmp.cursed = true;
-        else otmp.blessed = true;
-    }
+    blessorcurse(otmp, chance);
 }
 
 function mkobj_erosion_rolls(otmp) {
@@ -3820,7 +3816,18 @@ function mkgold(amount, x, y) {
 }
 
 function dealloc_obj(otmp) { /* stub */ }
-function curse(otmp) { if (otmp) otmp.cursed = true; }
+function bless(otmp) {
+    if (!otmp || otmp.otyp === GOLD_PIECE) return;
+    otmp.cursed = false;
+    otmp.blessed = true;
+}
+function unbless(otmp) { if (otmp) otmp.blessed = false; }
+function curse(otmp) {
+    if (!otmp || otmp.otyp === GOLD_PIECE) return;
+    otmp.blessed = false;
+    otmp.cursed = true;
+}
+function uncurse(otmp) { if (otmp) otmp.cursed = false; }
 function delete_contents(otmp) { if (otmp) otmp.contents = []; }
 function weight(otmp) { return otmp?.owt || 1; }
 function add_to_container(container, otmp) {
