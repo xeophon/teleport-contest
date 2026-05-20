@@ -10833,6 +10833,22 @@ function splevRoomLocation(croom) {
     return null;
 }
 
+function splevStairLocation(croom) {
+    const pos = { x: 0, y: 0 };
+    const goodStairLoc = (x, y) => {
+        const typ = game.level.at(x, y)?.typ;
+        return typ === ROOM || typ === CORR || typ === ICE;
+    };
+    for (let cpt = 0; cpt < 100; cpt++) {
+        somexy(croom, pos);
+        if (goodStairLoc(pos.x, pos.y)) return { x: pos.x, y: pos.y };
+    }
+    for (let x = croom.lx; x <= croom.hx; x++)
+        for (let y = croom.ly; y <= croom.hy; y++)
+            if (goodStairLoc(x, y)) return { x, y };
+    return null;
+}
+
 function splevFreeRoomLocation(croom) {
     let pos = splevRoomLocation(croom);
     if (!pos) return null;
@@ -10843,7 +10859,7 @@ function splevFreeRoomLocation(croom) {
         pos = candidate;
         if (game.level.at(pos.x, pos.y)?.typ === ROOM) return pos;
     }
-    return pos;
+    return null;
 }
 
 function splevSpecificLocation(croom, x, y) {
@@ -10927,7 +10943,7 @@ async function splevTrap(croom) {
 }
 
 function splevStair(croom, up) {
-    const pos = splevRoomLocation(croom);
+    const pos = splevStairLocation(croom);
     if (!pos) return;
     game.level.traps = (game.level.traps || []).filter(trap => trap.tx !== pos.x || trap.ty !== pos.y);
     mkstairs(pos.x, pos.y, up, croom);
@@ -16000,8 +16016,8 @@ async function mkshobj_at(shopIndex, sx, sy, specialStock = false) {
     }
     if (rn2(100) < depth_of_level(game.u?.uz)
         && !game.level?.monsters?.some(mon => mon.mx === sx && mon.my === sy)) {
-        await makemon(mkclassMimic(), sx, sy, 0);
-        return;
+        const mimic = await makemon(mkclassMimic(), sx, sy, 0);
+        if (mimic) return;
     }
     const atype = getShopItem(shopIndex);
     if (atype === VEGETARIAN_CLASS) mkveggy_at(sx, sy);
