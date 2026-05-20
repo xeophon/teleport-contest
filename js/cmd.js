@@ -5,7 +5,7 @@ import { game } from './gstate.js';
 import { nhgetch } from './input.js';
 import { bot, cls, docrt, flush_screen, newsym, pline, refreshHallucinatedMap, show_glyph_cell, strengthString } from './display.js';
 import { couldsee, vision_recalc, vision_reset } from './vision.js';
-import { RANDOM_MONSTER_BY_NAME, SHOP_TYPES, enextoMonsterSpot, make_tutorial1_level, makemon, mkcorpstat, mklev, mkobj_at, mksobj, monsterByRndName, next_ident, potionIndexForRoll, rndmonnum, scrollIndexForRoll, syncDungeonContext, u_on_dnstairs, u_on_rndspot, u_on_upstairs, wipe_engr_at, dropMonsterInventory, l_nhcore_init, getrumor, getbogusmon, level_difficulty, set_malign, somexyspace } from './mklev.js';
+import { RANDOM_MONSTER_BY_NAME, SHOP_TYPES, enextoMonsterSpot, make_tutorial1_level, makemon, makeArtifactWishObject, mkcorpstat, mklev, mkobj_at, mksobj, monsterByRndName, nameObjectAsArtifact, next_ident, potionIndexForRoll, rndmonnum, scrollIndexForRoll, syncDungeonContext, u_on_dnstairs, u_on_rndspot, u_on_upstairs, wipe_engr_at, dropMonsterInventory, l_nhcore_init, getrumor, getbogusmon, level_difficulty, set_malign, somexyspace } from './mklev.js';
 import { ACCESSIBLE, A_CHA, A_CON, A_DEX, A_INT, A_MAX, A_STR, A_WIS, ALTAR, BC_BALL, BC_CHAIN, BEAR_TRAP, BLCORNER, BOLT_LIM, BRCORNER, CLOUD, COLNO, CORR, DOOR, BURN, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, DUST, ENGRAVE, ENGR_BLOOD, FOUNTAIN, GRAVE, HEADSTONE, HWALL, ICE, IN_SIGHT, IS_OBSTRUCTED, IS_POOL, IS_ROOM, IS_WALL, LADDER, LAVAPOOL, LAVAWALL, MAGIC_PORTAL, MARK, MOAT, NORMAL_SPEED, OVERLOADED, P_BASIC, P_UNSKILLED, POOL, ROLLING_BOULDER_TRAP, ROOM, ROOMOFFSET, ROWNO, SCORR, SDOOR, SHOPBASE, SINK, STAIRS, STONE, TDWALL, TEMPLE, THRONE, TLCORNER, TRCORNER, TREE, TUWALL, VAULT, VWALL, WAND_BACKFIRE_CHANCE, WATER, ZAP_POS } from './const.js';
 import { d, rn1, rn2, rn2_on_display_rng, rnd, rnl, rnz } from './rng.js';
 import { CLR_BLACK, CLR_BLUE, CLR_BRIGHT_BLUE, CLR_BRIGHT_CYAN, CLR_BRIGHT_GREEN, CLR_BROWN, CLR_CYAN, CLR_GRAY, CLR_GREEN, CLR_MAGENTA, CLR_ORANGE, CLR_RED, CLR_YELLOW, CLR_WHITE, NO_COLOR } from './terminal.js';
@@ -5029,24 +5029,8 @@ function godsNoticeWish() {
 }
 
 function wishedObjectFromName(lowerName) {
-    const artifact = lowerName === 'mjollnir' || lowerName === 'war hammer named mjollnir'
-        ? { base: 'war hammer', name: 'Mjollnir' }
-        : lowerName === 'grayswandir' || lowerName === 'silver saber named grayswandir'
-            ? { base: 'silver saber', name: 'Grayswandir' }
-            : null;
-	    if (artifact) {
-	        const otmp = mksobj(artifact.base === 'silver saber' ? SILVER_SABER : WEAPON_CLASS, true, false);
-	        game._artifact_count = (game._artifact_count || 0) + 1;
-	        rn2(Math.max(1, game._artifact_count || 1));
-	        return Object.assign(otmp, {
-            cls: 'weapon',
-            glyph: ')',
-            kind: `${artifact.base} named ${artifact.name}`,
-            actualKind: artifact.base,
-            artifact: artifact.name,
-            wishedfor: true,
-        });
-    }
+    const artifact = makeArtifactWishObject(lowerName);
+    if (artifact) return artifact;
 
     const baseObject = WISH_BASE_OBJECTS.get(lowerName);
     if (baseObject) {
@@ -5254,6 +5238,7 @@ function dataPagerLines(name, page) {
 export function pickupObjectName(obj) {
     if (obj.otyp === GOLD_PIECE || obj.cls === 'coin' || obj.glyph === '$')
         return (obj.quan || 1) > 1 ? 'gold pieces' : 'gold piece';
+    if (obj.artifact && obj.kind) return obj.kind;
     if (obj.otyp === 'corpse' || obj.otyp === CORPSE) return `${obj.corpsenm?.name || 'monster'} corpse`;
     if ((obj.kind === 'statue' || obj.otyp === STATUE) && obj.corpsenm?.name) return `statue of a ${obj.corpsenm.name}`;
     if (obj.otyp === LARGE_BOX) return 'large box';
@@ -14613,15 +14598,19 @@ export async function rhack(_cmd) {
             if (item && text) {
                 const currentLine = String(item.line || `${item.letter || '?'} - ${inventoryItemName(item)}`);
                 const status = currentLine.match(/(\s+\([^)]+\))$/)?.[1] || '';
-                const baseName = inventoryItemName(item).replace(/ named .*$/, '');
-                const baseKind = String(item.actualKind || item.kind || baseName)
-                    .replace(/^(?:an? |the )/, '')
-                    .replace(/^(?:blessed |uncursed |cursed )/, '')
-                    .replace(/^[+-]\d+ /, '')
-                    .replace(/ named .*$/, '');
-                item.actualKind = item.actualKind || baseKind;
-                item.kind = `${baseKind} named ${text}`;
-                item.line = `${item.letter || '?'} - ${baseName} named ${text}${status}`;
+                if (nameObjectAsArtifact(item, text)) {
+                    item.line = `${item.letter || '?'} - ${pickupObjectName(item)}${status}`;
+                } else {
+                    const baseName = inventoryItemName(item).replace(/ named .*$/, '');
+                    const baseKind = String(item.actualKind || item.kind || baseName)
+                        .replace(/^(?:an? |the )/, '')
+                        .replace(/^(?:blessed |uncursed |cursed )/, '')
+                        .replace(/^[+-]\d+ /, '')
+                        .replace(/ named .*$/, '');
+                    item.actualKind = item.actualKind || baseKind;
+                    item.kind = `${baseKind} named ${text}`;
+                    item.line = `${item.letter || '?'} - ${baseName} named ${text}${status}`;
+                }
             }
             game._name_inventory_item = null;
             game._name_inventory_text = '';
@@ -17107,7 +17096,7 @@ export async function rhack(_cmd) {
                 : `${game.u?.uhandedness || 'right'} hand`;
             item.alternate = false;
             item.line = isWeapon ? `${ch} - ${baseName} (weapon in ${hand})` : `${ch} - ${baseName} (wielded)`;
-            game._wielded_mjollnir = item.kind === 'mjollnir' || /Mjollnir/.test(baseName);
+            game._wielded_mjollnir = item.artifact === 'Mjollnir' || item.kind === 'mjollnir' || /Mjollnir/.test(baseName);
             await setMessage(`${item.line}.`);
             game._command_mode = null;
             game.context.move = 1;

@@ -82,9 +82,16 @@ const SHORT_SWORD = 10031;
 const DWARVISH_SHORT_SWORD = 10103;
 const BROADSWORD = 10032;
 const LONG_SWORD = 10033;
+const RUNESWORD = 10120;
 const POLEARM = 10034;
 const BATTLE_AXE = 10053;
 const DWARVISH_MATTOCK = 10104;
+const WAR_HAMMER = 10121;
+const ELVEN_BROADSWORD = 10122;
+const ELVEN_DAGGER = 10123;
+const MORNING_STAR = 10124;
+const KATANA = 10125;
+const TSURUGI = 10126;
 const CLUB = 10054;
 const RANSEUR = 10055;
 const PARTISAN = 10056;
@@ -143,6 +150,10 @@ const EXPENSIVE_CAMERA = 10082;
 const STETHOSCOPE = 10083;
 const MAGIC_MARKER = 10084;
 const CRYSTAL_BALL = 10088;
+const LUCKSTONE = 10127;
+const LENSES = 10128;
+const CREDIT_CARD = 10129;
+const AMULET_OF_ESP = 10130;
 const GRAY_DRAGON_SCALE_MAIL = 10085;
 const SILVER_DRAGON_SCALE_MAIL = 10086;
 const SPEED_BOOTS = 10087;
@@ -403,10 +414,12 @@ const WEAPON_ROLL_KINDS = [
 
 const SPECIFIC_WEAPONS = new Set([
     DAGGER, BOW, CROSSBOW, KNIFE, SLING, ORCISH_DAGGER, SCIMITAR,
+    RUNESWORD, WAR_HAMMER, ELVEN_BROADSWORD, ELVEN_DAGGER,
     ATHAME, QUARTERSTAFF,
     SPEAR, DWARVISH_SPEAR, TRIDENT, STILETTO, SHORT_SWORD, DWARVISH_SHORT_SWORD, BROADSWORD, LONG_SWORD, POLEARM,
     BATTLE_AXE, CLUB, RANSEUR, PARTISAN, GLAIVE, SPETUM, TWO_HANDED_SWORD,
     LUCERN_HAMMER, AKLYS, FLAIL, MACE, SILVER_MACE, SILVER_SABER, BULLWHIP,
+    MORNING_STAR, KATANA, TSURUGI,
     AXE, DWARVISH_MATTOCK,
 ]);
 
@@ -1309,6 +1322,7 @@ const LEATHER_GLOVES = 10050;
 const LEATHER_CLOAK = 10051;
 const CLOAK_OF_DISPLACEMENT = 10111;
 const GAUNTLETS_OF_POWER = 10112;
+const HELM_OF_BRILLIANCE = 10131;
 const BUGLE = 10052;
 const LEATHER_JACKET = 10077;
 const FEDORA = 10078;
@@ -1331,7 +1345,7 @@ const SPECIFIC_ARMOR = new Set([
     STUDDED_LEATHER_ARMOR, LEATHER_ARMOR, HELMET, DENTED_POT, SMALL_SHIELD,
     LARGE_SHIELD, LOW_BOOTS, HIGH_BOOTS, LEATHER_GLOVES, LEATHER_CLOAK,
     ROBE, CLOAK_OF_PROTECTION, CLOAK_OF_MAGIC_RESISTANCE, CLOAK_OF_DISPLACEMENT,
-    SHIELD_OF_REFLECTION, GAUNTLETS_OF_POWER,
+    SHIELD_OF_REFLECTION, GAUNTLETS_OF_POWER, HELM_OF_BRILLIANCE,
     LEATHER_JACKET, FEDORA, ELVEN_MITHRIL_COAT, DWARVISH_CLOAK, ELVEN_CLOAK,
     IRON_SHOES, DWARVISH_ROUNDSHIELD, DWARVISH_IRON_HELM, DWARVISH_MITHRIL_COAT,
     GRAY_DRAGON_SCALE_MAIL, SILVER_DRAGON_SCALE_MAIL, SPEED_BOOTS, ORCISH_HELM,
@@ -1363,6 +1377,49 @@ const ARMOR_AC_BONUS = new Map([
     [SHIELD_OF_REFLECTION, 2], [LEATHER_JACKET, 1], [FEDORA, 0],
     [ELVEN_CLOAK, 1],
 ]);
+const ARTIFACT_DEFS = Object.freeze([
+    { name: 'Excalibur', otyp: LONG_SWORD, cls: 'weapon', glyph: ')', base: 'long sword', questArtifact: false },
+    { name: 'Stormbringer', otyp: RUNESWORD, cls: 'weapon', glyph: ')', base: 'runesword', questArtifact: false },
+    { name: 'Mjollnir', otyp: WAR_HAMMER, cls: 'weapon', glyph: ')', base: 'war hammer', questArtifact: false },
+    { name: 'Cleaver', otyp: BATTLE_AXE, cls: 'weapon', glyph: ')', base: 'battle-axe', questArtifact: false },
+    { name: 'Grimtooth', otyp: ORCISH_DAGGER, cls: 'weapon', glyph: ')', base: 'orcish dagger', questArtifact: false },
+    { name: 'Orcrist', otyp: ELVEN_BROADSWORD, cls: 'weapon', glyph: ')', base: 'elven broadsword', questArtifact: false, nameable: true },
+    { name: 'Sting', otyp: ELVEN_DAGGER, cls: 'weapon', glyph: ')', base: 'elven dagger', questArtifact: false, nameable: true },
+    { name: 'Magicbane', otyp: ATHAME, cls: 'weapon', glyph: ')', base: 'athame', questArtifact: false },
+    { name: 'Frost Brand', otyp: LONG_SWORD, cls: 'weapon', glyph: ')', base: 'long sword', questArtifact: false },
+    { name: 'Fire Brand', otyp: LONG_SWORD, cls: 'weapon', glyph: ')', base: 'long sword', questArtifact: false },
+    { name: 'Dragonbane', otyp: BROADSWORD, cls: 'weapon', glyph: ')', base: 'broadsword', questArtifact: false },
+    { name: 'Demonbane', otyp: SILVER_MACE, cls: 'weapon', glyph: ')', base: 'silver mace', questArtifact: false },
+    { name: 'Werebane', otyp: SILVER_SABER, cls: 'weapon', glyph: ')', base: 'silver saber', questArtifact: false },
+    { name: 'Grayswandir', otyp: SILVER_SABER, cls: 'weapon', glyph: ')', base: 'silver saber', questArtifact: false },
+    { name: 'Giantslayer', otyp: LONG_SWORD, cls: 'weapon', glyph: ')', base: 'long sword', questArtifact: false },
+    { name: 'Ogresmasher', otyp: WAR_HAMMER, cls: 'weapon', glyph: ')', base: 'war hammer', questArtifact: false },
+    { name: 'Trollsbane', otyp: MORNING_STAR, cls: 'weapon', glyph: ')', base: 'morning star', questArtifact: false },
+    { name: 'Vorpal Blade', otyp: LONG_SWORD, cls: 'weapon', glyph: ')', base: 'long sword', questArtifact: false },
+    { name: 'Snickersnee', otyp: KATANA, cls: 'weapon', glyph: ')', base: 'katana', questArtifact: false },
+    { name: 'Sunsword', otyp: LONG_SWORD, cls: 'weapon', glyph: ')', base: 'long sword', questArtifact: false },
+    { name: 'The Orb of Detection', otyp: CRYSTAL_BALL, cls: 'tool', glyph: '(', base: 'crystal ball', questArtifact: true, questRole: 'Archeologist' },
+    { name: 'The Heart of Ahriman', otyp: LUCKSTONE, cls: 'gem', glyph: '*', base: 'luckstone', questArtifact: true, questRole: 'Barbarian' },
+    { name: 'The Sceptre of Might', otyp: MACE, cls: 'weapon', glyph: ')', base: 'mace', questArtifact: true, questRole: 'Caveman' },
+    { name: 'The Staff of Aesculapius', otyp: QUARTERSTAFF, cls: 'weapon', glyph: ')', base: 'quarterstaff', questArtifact: true, questRole: 'Healer' },
+    { name: 'The Magic Mirror of Merlin', otyp: MIRROR, cls: 'tool', glyph: '(', base: 'mirror', questArtifact: true, questRole: 'Knight' },
+    { name: 'The Eyes of the Overworld', otyp: LENSES, cls: 'tool', glyph: '(', base: 'lenses', questArtifact: true, questRole: 'Monk' },
+    { name: 'The Mitre of Holiness', otyp: HELM_OF_BRILLIANCE, cls: 'armor', glyph: '[', base: 'helm of brilliance', questArtifact: true, questRole: 'Priest' },
+    { name: 'The Longbow of Diana', otyp: BOW, cls: 'weapon', glyph: ')', base: 'bow', questArtifact: true, questRole: 'Ranger' },
+    { name: 'The Master Key of Thievery', otyp: SKELETON_KEY, cls: 'tool', glyph: '(', base: 'skeleton key', questArtifact: true, questRole: 'Rogue' },
+    { name: 'The Tsurugi of Muramasa', otyp: TSURUGI, cls: 'weapon', glyph: ')', base: 'tsurugi', questArtifact: true, questRole: 'Samurai' },
+    { name: 'The Platinum Yendorian Express Card', otyp: CREDIT_CARD, cls: 'tool', glyph: '(', base: 'credit card', questArtifact: true, questRole: 'Tourist' },
+    { name: 'The Orb of Fate', otyp: CRYSTAL_BALL, cls: 'tool', glyph: '(', base: 'crystal ball', questArtifact: true, questRole: 'Valkyrie' },
+    { name: 'The Eye of the Aethiopica', otyp: AMULET_OF_ESP, cls: 'amulet', glyph: '"', base: 'amulet of ESP', questArtifact: true, questRole: 'Wizard' },
+]);
+function artifactKey(name) {
+    return String(name || '')
+        .trim()
+        .replace(/^(?:an?|the)\s+/i, '')
+        .toLowerCase()
+        .replace(/[ -]+/g, '');
+}
+const ARTIFACTS_BY_KEY = new Map(ARTIFACT_DEFS.map(def => [artifactKey(def.name), def]));
 const BRASS_LANTERN = 226;
 const OIL_LAMP = 227;
 const MAGIC_LAMP = 228;
@@ -3088,14 +3145,92 @@ function maybeMkArtifact(otmp, artifactKey, chanceBase) {
     if (!eligible.length) return;
 
     const artifact = eligible[rn2(eligible.length)];
-    existing.push(artifact.name);
-    game._artifact_count = (game._artifact_count || 0) + 1;
+    recordArtifactExistence(artifact.name);
     otmp.artifact = artifact.name;
 
     if (artifact.genSpe) {
         const spe = (otmp.spe || 0) + artifact.genSpe;
         if (spe >= -10 && spe < 10) otmp.spe = spe;
     }
+}
+
+export function artifactDefinitionForName(name) {
+    return ARTIFACTS_BY_KEY.get(artifactKey(name)) || null;
+}
+
+function artifactDefinitionForWishName(name) {
+    const text = String(name || '').trim();
+    const named = text.match(/^(.*?)\s+named\s+(.+)$/i);
+    if (!named) return artifactDefinitionForName(text);
+    const def = artifactDefinitionForName(named[2]);
+    if (!def) return null;
+    return artifactKey(named[1]) === artifactKey(def.base) ? def : null;
+}
+
+export function artifactExists(name) {
+    return Array.isArray(game._artifacts_exist) && game._artifacts_exist.includes(name);
+}
+
+export function nartifact_exist() {
+    return Math.max(game._artifact_count || 0, Array.isArray(game._artifacts_exist) ? game._artifacts_exist.length : 0);
+}
+
+export function recordArtifactExistence(name) {
+    game._artifacts_exist = Array.isArray(game._artifacts_exist) ? game._artifacts_exist : [];
+    if (!game._artifacts_exist.includes(name)) game._artifacts_exist.push(name);
+    game._artifact_count = Math.max(game._artifact_count || 0, game._artifacts_exist.length);
+}
+
+function isCurrentRoleQuestArtifact(def) {
+    return !!def?.questRole && def.questRole === (game._startup_role || game.urole?.name?.m);
+}
+
+function artifactBaseFields(def) {
+    return {
+        otyp: def.otyp,
+        cls: def.cls,
+        glyph: def.glyph,
+        kind: def.base,
+        actualKind: def.base,
+        known: true,
+    };
+}
+
+function applyArtifactFields(otmp, def, extra = {}) {
+    Object.assign(otmp, artifactBaseFields(def), {
+        kind: `${def.base} named ${def.name}`,
+        artifact: def.name,
+    }, extra);
+    recordArtifactExistence(def.name);
+    return otmp;
+}
+
+export function makeArtifactWishObject(name) {
+    const def = artifactDefinitionForWishName(name);
+    if (!def) return null;
+    const otmp = mksobj(def.otyp, true, false);
+    if (artifactExists(def.name)) {
+        Object.assign(otmp, artifactBaseFields(def), { wishedfor: true });
+        return otmp;
+    }
+    applyArtifactFields(otmp, def, { wishedfor: true });
+    if (!isCurrentRoleQuestArtifact(def)) rn2(Math.max(1, nartifact_exist()));
+    return otmp;
+}
+
+function artifactObjectBaseName(obj) {
+    const explicit = String(obj?.actualKind || obj?.kind || '').replace(/ named .+$/i, '');
+    if (explicit) return explicit;
+    const def = ARTIFACT_DEFS.find(candidate => candidate.otyp === obj?.otyp);
+    return def?.base || '';
+}
+
+export function nameObjectAsArtifact(obj, name) {
+    const def = artifactDefinitionForName(name);
+    if (!obj || !def || !def.nameable || artifactExists(def.name) || (obj.quan || 1) > 1) return false;
+    if (artifactKey(artifactObjectBaseName(obj)) !== artifactKey(def.base)) return false;
+    applyArtifactFields(obj, def);
+    return true;
 }
 
 // C ref: mkobj.c mksobj — create a specific object
@@ -3574,14 +3709,17 @@ function object_display(otmp) {
     if (otyp === CROSSBOW_BOLT || otyp === DAGGER || otyp === CROSSBOW
         || otyp === PICK_AXE || otyp === DART || otyp === KNIFE
         || otyp === SLING || otyp === TRIDENT || otyp === BULLWHIP
+        || otyp === RUNESWORD || otyp === WAR_HAMMER
+        || otyp === ELVEN_BROADSWORD || otyp === ELVEN_DAGGER
         || otyp === LUCERN_HAMMER || otyp === AKLYS || otyp === SILVER_MACE
-        || otyp === ATHAME || otyp === QUARTERSTAFF)
+        || otyp === ATHAME || otyp === QUARTERSTAFF
+        || otyp === MORNING_STAR || otyp === KATANA || otyp === TSURUGI)
         return { glyph: ')', color: displayColor ?? CLR_CYAN };
     if (otyp === ARMOR_CLASS || SPECIFIC_ARMOR.has(otyp))
         return { glyph: '[', color: displayColor ?? otmp._armor_color ?? SPECIFIC_ARMOR_COLORS.get(otyp) ?? NO_COLOR };
     if (otyp === RING_CLASS || otyp === RIN_LEVITATION)
         return { glyph: '=', color: RING_APPEARANCE_COLORS.get(game._object_descriptions?.rings?.[(otmp.ringRoll || 1) - 1]) ?? CLR_WHITE };
-    if (otyp === AMULET_CLASS) return { glyph: '"', color: CLR_CYAN };
+    if (otyp === AMULET_CLASS || otyp === AMULET_OF_ESP) return { glyph: '"', color: CLR_CYAN };
     if (otyp === CORPSE) {
         const corpseColors = {
             orc: CLR_RED, dwarf: CLR_RED, gnome: CLR_BROWN, human: CLR_WHITE, elf: CLR_WHITE,
@@ -3618,7 +3756,8 @@ function object_display(otmp) {
         return { glyph: '(', color: displayColor ?? CLR_YELLOW };
     if (otyp === CRYSTAL_BALL) return { glyph: '(', color: displayColor ?? CLR_BRIGHT_CYAN };
     if (otyp === TOOL_CLASS || otyp === TIN_WHISTLE || otyp === TALLOW_CANDLE || otyp === WAX_CANDLE
-        || otyp === EXPENSIVE_CAMERA || otyp === MIRROR || otyp === STETHOSCOPE || otyp === MAGIC_MARKER || otyp === BELL)
+        || otyp === EXPENSIVE_CAMERA || otyp === MIRROR || otyp === STETHOSCOPE || otyp === MAGIC_MARKER || otyp === BELL
+        || otyp === LENSES || otyp === CREDIT_CARD || otyp === SKELETON_KEY)
         return { glyph: '(', color: displayColor ?? CLR_MAGENTA };
     if (otyp === BOULDER) return { glyph: '`', color: NO_COLOR };
     if (otyp === STATUE) {
@@ -3629,7 +3768,7 @@ function object_display(otmp) {
         };
         return { glyph: otmp.corpsenm?.glyph || statueGlyphs[otmp.corpsenm?.mlet] || '`', color: CLR_WHITE };
     }
-    if (otyp === GEM_CLASS || otyp === RUBY || otyp === ROCK) return { glyph: '*', color: displayColor ?? NO_COLOR };
+    if (otyp === GEM_CLASS || otyp === RUBY || otyp === ROCK || otyp === LUCKSTONE) return { glyph: '*', color: displayColor ?? NO_COLOR };
     return { glyph: '?', color: NO_COLOR };
 }
 

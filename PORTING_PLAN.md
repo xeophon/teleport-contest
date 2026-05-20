@@ -655,6 +655,11 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   object probability roll before `mksobj()`, so wished tools, food, armor, and
   wands keep later object and monster RNG aligned without a wish-specific trace
   ladder.
+- Exact artifact wishes now use an `artilist.h`-derived artifact table and the
+  C `artifact_name()`/`oname()` shape instead of a private Mjollnir/Grayswandir
+  branch. Artifact existence is registered through shared helpers, duplicate
+  wishes return the base object, and the C `rn2(nartifact_exist())` abuse roll
+  is consumed for non-current-role artifacts even on the current debug wish path.
 - Wizard `#polyself` rehumanization no longer restores fixed public-looking HP,
   energy, and AC values. The interim `newman()` path now derives human-form
   stats from the saved live base form while preserving the current C-shaped RNG
