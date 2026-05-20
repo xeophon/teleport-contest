@@ -2325,6 +2325,37 @@ const VLAD_THE_IMPALER = { name: 'Vlad the Impaler', mlet: 'vlad', glyph: 'V', c
 const VAMPIRE_LORD = { name: 'vampire lord', mlet: 'V', glyph: 'V', color: CLR_BLUE, mlevel: 12, mmove: 14, difficulty: 14, maligntyp: -9, skipFindGender: true, vampireLeader: true, strong: true, nasty: true, noCorpse: true, inAir: true, alwaysHostile: true };
 const VAMPIRE_LADY = { name: 'vampire leader', mlet: 'V', glyph: 'V', color: CLR_BLUE, mlevel: 12, difficulty: 14, maligntyp: -9 };
 
+const MINETN1_XSTART = 21;
+const MINETN1_YSTART = 1;
+const MINETN1_ROWS = [
+    '.....................................',
+    '.----------------F------------------.',
+    '.|.................................|.',
+    '.|.-------------......------------.|.',
+    '.|.|...|...|...|......|..|...|...|.|.',
+    '.F.|...|...|...|......|..|...|...|.|.',
+    '.|.|...|...|...|......|..|...|...|.F.',
+    '.|.|...|...|----......------------.|.',
+    '.|.---------.......................|.',
+    '.|.................................|.',
+    '.|.---------.....--...--...........|.',
+    '.|.|...|...|----.|.....|.---------.|.',
+    '.|.|...|...|...|.|.....|.|..|....|.|.',
+    '.|.|...|...|...|.|.....|.|..|....|.|.',
+    '.|.|...|...|...|.|.....|.|..|....|.|.',
+    '.|.-------------.-------.---------.|.',
+    '.|.................................F.',
+    '.-----------F------------F----------.',
+    '.....................................',
+];
+const MINETN1_RANDOM_DOORS = [
+    [5, 8], [9, 8], [13, 7], [22, 5], [27, 7], [31, 7],
+    [5, 10], [9, 10], [15, 13], [25, 13], [31, 11],
+];
+const MINETN1_BODY_PLACES = [
+    [5, 4], [9, 5], [13, 4], [26, 4], [31, 5],
+    [30, 14], [5, 14], [10, 13], [26, 14], [27, 13],
+];
 const MINETN5_XSTART = 3;
 const MINETN5_YSTART = 0;
 const MINETN5_ROWS = [
@@ -10608,6 +10639,153 @@ async function make_minend_level(special = null) {
     g.in_mklev = false;
 }
 
+function minetn1X(x) { return MINETN1_XSTART + x; }
+function minetn1Y(y) { return MINETN1_YSTART + y; }
+function minetn1At(x, y) { return game.level.at(minetn1X(x), minetn1Y(y)); }
+
+function minetn1SetTerrain(x, y, ch) {
+    const loc = minetn1At(x, y);
+    if (!loc) return;
+    loc.flags = 0;
+    loc.roomno = 0;
+    loc.edge = 0;
+    loc.lit = false;
+    loc.waslit = false;
+    loc.horizontal = ch !== '|';
+    loc.doormask = 0;
+    loc.typ = SPECIAL_TERRAIN[ch] ?? STONE;
+}
+
+function minetn1LightRegion(lx, ly, hx, hy, lit) {
+    for (let y = Math.max(0, ly - 1); y <= Math.min(MINETN1_ROWS.length - 1, hy + 1); y++)
+        for (let x = Math.max(0, lx - 1); x <= Math.min(MINETN1_ROWS[0].length - 1, hx + 1); x++) {
+            const loc = minetn1At(x, y);
+            if (loc && loc.typ !== STONE) loc.lit = !!lit;
+        }
+}
+
+function minetn1SetDoorOrientation(ax, ay) {
+    const wallOrDoor = loc => !!loc && (IS_WALL(loc.typ) || IS_DOOR(loc.typ) || loc.typ === SDOOR);
+    const wleft = wallOrDoor(game.level.at(ax - 1, ay));
+    const wright = wallOrDoor(game.level.at(ax + 1, ay));
+    const wup = wallOrDoor(game.level.at(ax, ay - 1));
+    const wdown = wallOrDoor(game.level.at(ax, ay + 1));
+    const loc = game.level.at(ax, ay);
+    if (loc) loc.horizontal = (wleft || wright) && !(wup && wdown) ? 1 : 0;
+}
+
+function minetn1Door(state, x, y) {
+    const ax = minetn1X(x), ay = minetn1Y(y);
+    const loc = game.level.at(ax, ay);
+    if (!loc) return;
+    if (!IS_DOOR(loc.typ) && loc.typ !== SDOOR) loc.typ = DOOR;
+    loc.doormask = state === 'locked' ? D_LOCKED
+        : state === 'open' ? D_ISOPEN
+            : state === 'nodoor' ? D_NODOOR
+                : state === 'broken' ? D_BROKEN
+                    : state === 'random' ? [D_NODOOR, D_BROKEN, D_ISOPEN, D_CLOSED, D_LOCKED][rn2(5)]
+                        : D_CLOSED;
+    minetn1SetDoorOrientation(ax, ay);
+}
+
+function minetn1DryLocation() {
+    const width = MINETN1_ROWS[0].length;
+    const height = MINETN1_ROWS.length;
+    for (let cpt = 0; cpt < 100; cpt++) {
+        const x = minetn1X(rn2(width));
+        const y = minetn1Y(rn2(height));
+        const loc = game.level.at(x, y);
+        const boulder = game.level.objects?.some(obj => obj.otyp === BOULDER && obj.ox === x && obj.oy === y);
+        if (loc && SPACE_POS(loc.typ) && !boulder) return { x, y };
+    }
+    for (let x = 0; x < width; x++)
+        for (let y = 0; y < height; y++) {
+            const ax = minetn1X(x), ay = minetn1Y(y);
+            const loc = game.level.at(ax, ay);
+            const boulder = game.level.objects?.some(obj => obj.otyp === BOULDER && obj.ox === ax && obj.oy === ay);
+            if (loc && SPACE_POS(loc.typ) && !boulder) return { x: ax, y: ay };
+        }
+    return { x: minetn1X(0), y: minetn1Y(0) };
+}
+
+function minetn1LocalPoint(point) {
+    return { x: minetn1X(point[0]), y: minetn1Y(point[1]) };
+}
+
+function minetn1Object(otyp, pos, opts = {}) {
+    const obj = mksobj_at(otyp, pos.x, pos.y, true, false);
+    if (!obj) return null;
+    if (opts.quantity != null) obj.quan = opts.quantity;
+    if (opts.spe != null) obj.spe = opts.spe;
+    if (opts.buc === 'uncursed') {
+        obj.blessed = false;
+        obj.cursed = false;
+    }
+    Object.assign(obj, opts.display || {}, object_display(obj));
+    return stack_floor_object(obj);
+}
+
+function minetn1Corpse(name, pos = null) {
+    pos ??= minetn1DryLocation();
+    const pm = name === 'shopkeeper' ? SHOPKEEPER
+        : name === 'watchman' ? WATCHMAN
+            : name === 'watch captain' ? WATCH_CAPTAIN
+                : name === 'aligned cleric' ? ALIGNED_CLERIC
+                    : monsterByRndName(name) || { name, neuter: false };
+    const corpse = mkcorpstat(CORPSE, null, pm, pos.x, pos.y, 8);
+    if (corpse && !corpse._corpse_restart_consumed) rnz(game.in_mklev ? 25 : 10);
+    return stack_floor_object(corpse);
+}
+
+function minetn1FloodSelection(x, y) {
+    const start = minetn1At(x, y);
+    if (!start) return [];
+    const typ = start.typ;
+    const stack = [[x, y]];
+    const seen = new Set();
+    const selected = [];
+    while (stack.length) {
+        const [cx, cy] = stack.pop();
+        const key = `${cx},${cy}`;
+        if (seen.has(key) || cx < 0 || cy < 0 || cy >= MINETN1_ROWS.length || cx >= MINETN1_ROWS[0].length)
+            continue;
+        seen.add(key);
+        const loc = minetn1At(cx, cy);
+        if (!loc || loc.typ !== typ) continue;
+        selected.push({ x: minetn1X(cx), y: minetn1Y(cy), lx: cx, ly: cy });
+        stack.push([cx + 1, cy], [cx - 1, cy], [cx, cy + 1], [cx, cy - 1]);
+    }
+    selected.sort((a, b) => a.lx - b.lx || a.ly - b.ly);
+    return selected;
+}
+
+function minetn1AreaIntersection(selection, lx, ly, hx, hy) {
+    return selection.filter(pos => pos.lx >= lx && pos.lx <= hx && pos.ly >= ly && pos.ly <= hy);
+}
+
+function minetn1RndCoord(selection, remove = false) {
+    if (!selection.length) return minetn1DryLocation();
+    const idx = rn2(selection.length);
+    const [pos] = remove ? selection.splice(idx, 1) : [selection[idx]];
+    return { x: pos.x, y: pos.y };
+}
+
+async function minetn1Monster(name, pos = null, peaceful = 0, levAdj = 0) {
+    const ptr = monsterByRndName(name);
+    if (!ptr) return null;
+    let spot = pos || minetn1DryLocation();
+    if (game.level.monsters?.some(mon => mon.mx === spot.x && mon.my === spot.y)) {
+        const next = enextoMonsterSpot(spot.x, spot.y, ptr);
+        if (!next) return null;
+        spot = next;
+    }
+    const mon = await makemon(ptr, spot.x, spot.y, 0);
+    if (!mon) return null;
+    if (levAdj) mon.m_lev = Math.max(0, (mon.m_lev || 0) + levAdj);
+    setMonsterPeaceful(mon, peaceful);
+    return mon;
+}
+
 function minetn5X(x) { return MINETN5_XSTART + x; }
 function minetn5Y(y) { return MINETN5_YSTART + y; }
 function minetn5At(x, y) { return game.level.at(minetn5X(x), minetn5Y(y)); }
@@ -11168,6 +11346,113 @@ function splevStair(croom, up) {
     mkstairs(pos.x, pos.y, up, croom);
 }
 
+async function make_minetn1_level() {
+    const g = game;
+    clear_level_structures();
+    g.level.flags.is_maze_lev = true;
+    g.level.flags.rndmongen = true;
+    g.level.flags.has_town = true;
+
+    for (let y = 0; y < MINETN1_ROWS.length; y++) {
+        const row = MINETN1_ROWS[y];
+        for (let x = 0; x < row.length; x++) minetn1SetTerrain(x, y, row[x]);
+    }
+
+    minetn1LightRegion(1, 1, 35, 17, true);
+    place_lregion(1, 3, 21, 19, minetn1X(0), minetn1Y(1), minetn1X(36), minetn1Y(17), LR_UPSTAIR, null);
+    place_lregion(57, 3, 75, 19, minetn1X(0), minetn1Y(1), minetn1X(36), minetn1Y(17), LR_DOWNSTAIR, null);
+
+    minetn1At(16, 9).typ = FOUNTAIN;
+    minetn1At(25, 9).typ = FOUNTAIN;
+    const altar = minetn1At(20, 13);
+    if (altar) {
+        altar.typ = ALTAR;
+        altar.flags = Align2amask(A_NONE);
+    }
+
+    for (const [x, y] of MINETN1_RANDOM_DOORS) minetn1Door('random', x, y);
+    replace_special_terrain(minetn1X(7), minetn1Y(4), 5, 3, VWALL, ROOM, 18);
+    replace_special_terrain(minetn1X(25), minetn1Y(4), 5, 3, VWALL, ROOM, 18);
+    replace_special_terrain(minetn1X(7), minetn1Y(12), 5, 3, VWALL, ROOM, 18);
+    replace_special_terrain(minetn1X(28), minetn1Y(12), 1, 3, VWALL, ROOM, 33);
+
+    const place = MINETN1_BODY_PLACES.map(point => [...point]);
+    for (let i = place.length; i >= 2; i--) {
+        const j = rn2(i);
+        [place[i - 1], place[j]] = [place[j], place[i - 1]];
+    }
+
+    minetn1Corpse('aligned cleric', { x: minetn1X(20), y: minetn1Y(12) });
+    for (let i = 0; i < 5; i++) minetn1Corpse('shopkeeper', minetn1LocalPoint(place[i]));
+    for (let i = 0; i < 4; i++) minetn1Corpse('watchman');
+    minetn1Corpse('watch captain');
+
+    for (let i = 0, count = rn1(10, 10); i < count; i++) {
+        if (rn2(100) < 90) minetn1Object(BOULDER, minetn1DryLocation());
+        minetn1Object(ROCK, minetn1DryLocation());
+    }
+
+    minetn1Object(WAX_CANDLE, minetn1LocalPoint(place[3]), {
+        quantity: rn1(2, 1), display: { cls: 'tool', kind: 'wax candle', plural: 'wax candles' },
+    });
+    minetn1Object(WAX_CANDLE, minetn1LocalPoint(place[0]), {
+        quantity: rn1(3, 2), display: { cls: 'tool', kind: 'wax candle', plural: 'wax candles' },
+    });
+    minetn1Object(WAX_CANDLE, minetn1LocalPoint(place[1]), {
+        quantity: rn1(2, 1), display: { cls: 'tool', kind: 'wax candle', plural: 'wax candles' },
+    });
+    minetn1Object(TALLOW_CANDLE, minetn1LocalPoint(place[2]), {
+        quantity: rn1(3, 1), display: { cls: 'tool', kind: 'tallow candle', plural: 'tallow candles' },
+    });
+    minetn1Object(TALLOW_CANDLE, minetn1LocalPoint(place[1]), {
+        quantity: rn1(2, 1), display: { cls: 'tool', kind: 'tallow candle', plural: 'tallow candles' },
+    });
+    minetn1Object(TALLOW_CANDLE, minetn1LocalPoint(place[3]), {
+        quantity: rn1(2, 1), display: { cls: 'tool', kind: 'tallow candle', plural: 'tallow candles' },
+    });
+
+    minetn1Object(OIL_LAMP, minetn1LocalPoint(place[1]), { display: { cls: 'tool', kind: 'oil lamp' } });
+    minetn1Object(WAN_STRIKING, minetn1LocalPoint(place[0]), {
+        buc: 'uncursed', spe: 0, display: { cls: 'wand', kind: 'wand of striking' },
+    });
+    minetn1Object(WAN_STRIKING, minetn1LocalPoint(place[2]), {
+        buc: 'uncursed', spe: 0, display: { cls: 'wand', kind: 'wand of striking' },
+    });
+    minetn1Object(WAN_STRIKING, minetn1LocalPoint(place[3]), {
+        buc: 'uncursed', spe: 0, display: { cls: 'wand', kind: 'wand of striking' },
+    });
+    minetn1Object(WAN_MAGIC_MISSILE, minetn1LocalPoint(place[3]), {
+        buc: 'uncursed', spe: 0, display: { cls: 'wand', kind: 'wand of magic missile' },
+    });
+    minetn1Object(WAN_MAGIC_MISSILE, minetn1LocalPoint(place[4]), {
+        buc: 'uncursed', spe: 0, display: { cls: 'wand', kind: 'wand of magic missile' },
+    });
+
+    const inside = minetn1FloodSelection(18, 8);
+    const nearTemple = minetn1AreaIntersection(inside, 17, 8, 23, 14);
+    for (let i = 0, count = rn1(11, 5); i < count; i++) {
+        if (rn2(100) < 50) {
+            await minetn1Monster('orc-captain', minetn1RndCoord(inside, true), 0);
+        } else if (rn2(100) < 80) {
+            await minetn1Monster('Uruk-hai', minetn1RndCoord(inside, true), 0);
+        } else {
+            await minetn1Monster('Mordor orc', minetn1RndCoord(inside, true), 0);
+        }
+    }
+    for (let i = 1, count = rn1(6, 1); i <= count; i++)
+        await minetn1Monster('orc shaman', minetn1RndCoord(nearTemple, false), 0, i === 1 ? 3 : 0);
+    for (let i = 0, count = rn1(10, 10); i < count; i++)
+        await minetn1Monster(rn2(100) < 90 ? 'hill orc' : 'goblin', null, 0);
+
+    wallification(1, 0, COLNO - 1, ROWNO - 1);
+    flipSpecialLevelRnd(MINETN1_XSTART, MINETN1_YSTART,
+        MINETN1_XSTART + MINETN1_ROWS[0].length - 1,
+        MINETN1_YSTART + MINETN1_ROWS.length - 1);
+    recount_level_features();
+    level_finalize_topology({ mineralizeLevel: false });
+    g._level_populated = true;
+}
+
 async function make_minetn2_level() {
     const g = game;
     clear_level_structures();
@@ -11649,6 +11934,12 @@ async function make_minetn_level(special = null) {
     alignPick = rn2(2);
     [align[1], align[alignPick]] = [align[alignPick], align[1]];
     g.splev_align = align;
+
+    if (variant === 1) {
+        await make_minetn1_level();
+        g.in_mklev = false;
+        return;
+    }
 
     if (variant === 2) {
         await make_minetn2_level();
