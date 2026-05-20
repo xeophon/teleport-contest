@@ -2363,6 +2363,30 @@ const MINETN5_RANDOM_MONSTERS = [
     ['gnome lord'], ['gnome lord'],
     ['dwarf'], ['dwarf'], ['dwarf'],
 ];
+const MINETN6_XSTART = 21;
+const MINETN6_YSTART = 1;
+const MINETN6_ROWS = [
+    'x--------xxxxxxxxxxx-------------------x',
+    'x------xxxxxxxxxxxxxx-----------------xx',
+    '.-----................----------------.x',
+    '.|...|................|...|..|...|...|..',
+    '.|...+..--+--.........|...|..|...|...|..',
+    '.|...|..|...|..-----..|...|..|-+---+--..',
+    '.-----..|...|--|...|..--+---+-.........x',
+    '........|...|..|...+.............-----.x',
+    '........-----..|...|......--+-...|...|..',
+    'x----...|...|+------..{...|..|...+...|..',
+    'x|..+...|...|.............|..|...|...|..',
+    '.|..|...|...|-+-.....---+-------------.x',
+    '.----...--+--..|..-+-|..................',
+    '...|........|..|..|..|----....--------.x',
+    '...|..T.....----..|..|...+....|......|..',
+    '...|-....{........|..|...|....+......|x.',
+    '...--..-....T.....--------....|......|x.',
+    '.......--.....................----------',
+    '.xxxx-----xxxxxxxxxxxxxxxxxx------------',
+    'xxxx-------xxxxxxxxxxxxxxx--------------',
+];
 const MINETN3_ROWS = [
     '',
     '',
@@ -10728,6 +10752,143 @@ async function minetn5AltarShrine(x, y) {
     rn2(2);
 }
 
+function minetn6X(x) { return MINETN6_XSTART + x; }
+function minetn6Y(y) { return MINETN6_YSTART + y; }
+function minetn6At(x, y) { return game.level.at(minetn6X(x), minetn6Y(y)); }
+
+function minetn6SetTerrain(x, y, ch) {
+    const loc = minetn6At(x, y);
+    if (!loc) return;
+    loc.flags = 0;
+    loc.roomno = 0;
+    loc.edge = 0;
+    loc.lit = false;
+    loc.waslit = false;
+    loc.horizontal = ch !== '|';
+    loc.doormask = 0;
+    if (ch === '+') {
+        loc.typ = DOOR;
+        loc.doormask = D_NODOOR;
+    } else {
+        loc.typ = ch === 'x' ? STONE : SPECIAL_TERRAIN[ch] ?? STONE;
+    }
+}
+
+function minetn6LightRegion(lx, ly, hx, hy, lit) {
+    for (let y = ly; y <= hy; y++)
+        for (let x = lx; x <= hx; x++) {
+            const loc = minetn6At(x, y);
+            if (loc && loc.typ !== STONE) loc.lit = !!lit;
+        }
+}
+
+function minetn6DryLocation() {
+    const width = MINETN6_ROWS[0].length;
+    const height = MINETN6_ROWS.length;
+    for (let cpt = 0; cpt < 100; cpt++) {
+        const x = minetn6X(rn2(width));
+        const y = minetn6Y(rn2(height));
+        const loc = game.level.at(x, y);
+        const boulder = game.level.objects?.some(obj => obj.otyp === BOULDER && obj.ox === x && obj.oy === y);
+        if (loc && SPACE_POS(loc.typ) && !boulder) return { x, y };
+    }
+    for (let y = 0; y < height; y++)
+        for (let x = 0; x < width; x++) {
+            const ax = minetn6X(x), ay = minetn6Y(y);
+            const loc = game.level.at(ax, ay);
+            const boulder = game.level.objects?.some(obj => obj.otyp === BOULDER && obj.ox === ax && obj.oy === ay);
+            if (loc && SPACE_POS(loc.typ) && !boulder) return { x: ax, y: ay };
+        }
+    return null;
+}
+
+function minetn6AddRoom(lx, ly, hx, hy, rtype, lit) {
+    const actualType = rtype === FOODSHOP && game._startup_role === 'Monk' ? FODDERSHOP : rtype;
+    add_room(minetn6X(lx), minetn6Y(ly), minetn6X(hx), minetn6Y(hy), lit, actualType, true);
+    const room = game.level.rooms[game.level.nroom - 1];
+    room.needfill = FILL_NORMAL;
+    room.needjoining = false;
+    topologize(room);
+    if (actualType >= SHOPBASE) game.level.flags.has_shop = true;
+    if (actualType === TEMPLE) game.level.flags.has_temple = true;
+    return room;
+}
+
+function minetn6Door(state, x, y) {
+    const ax = minetn6X(x), ay = minetn6Y(y);
+    const loc = game.level.at(ax, ay);
+    if (!loc) return;
+    loc.typ = DOOR;
+    loc.doormask = state === 'locked' ? D_LOCKED
+        : state === 'open' ? D_ISOPEN
+            : state === 'nodoor' ? D_NODOOR
+                : state === 'broken' ? D_BROKEN
+                    : state === 'random' ? [D_NODOOR, D_BROKEN, D_ISOPEN, D_CLOSED, D_LOCKED][rn2(5)]
+                        : D_CLOSED;
+    const left = game.level.at(ax - 1, ay);
+    loc.horizontal = !!(left && (IS_WALL(left.typ) || left.horizontal));
+    for (const room of game.level.rooms || []) {
+        if (!room || room.hx <= 0) continue;
+        const vertical = ay >= room.ly && ay <= room.hy && (ax === room.lx - 1 || ax === room.hx + 1);
+        const horizontal = ax >= room.lx && ax <= room.hx && (ay === room.ly - 1 || ay === room.hy + 1);
+        if (vertical || horizontal) add_door(ax, ay, room);
+    }
+}
+
+async function minetn6Monster(name, x = null, y = null, peaceful = null) {
+    let ptr;
+    let gender = null;
+    if (name.length === 1) {
+        rn2(3);
+        ptr = mkclassAligned(name);
+    } else {
+        gender = name === 'gnome lord' ? 0 : rn2(2);
+        if (name === 'watchman') ptr = WATCHMAN;
+        else if (name === 'watch captain') ptr = WATCH_CAPTAIN;
+        else ptr = monsterByRndName(RANDOM_MONSTER_ALIASES.get(name) || name);
+        rn2(3);
+    }
+    if (!ptr) return null;
+
+    let pos = x == null ? minetn6DryLocation() : { x: minetn6X(x), y: minetn6Y(y) };
+    if (!pos) return null;
+    if (game.level.monsters?.some(mon => mon.mx === pos.x && mon.my === pos.y)) {
+        pos = enextoMonsterSpot(pos.x, pos.y, ptr);
+        if (!pos) return null;
+    }
+    const mon = await makemon(ptr, pos.x, pos.y, 0);
+    if (!mon) return null;
+    if (gender != null) mon.female = !!gender;
+    setMonsterPeaceful(mon, peaceful);
+    return mon;
+}
+
+async function minetn6AltarShrine(x, y) {
+    const ax = minetn6X(x), ay = minetn6Y(y);
+    const loc = game.level.at(ax, ay);
+    if (!loc) return;
+    const align = game.splev_align?.[0] ?? A_NEUTRAL;
+    loc.typ = ALTAR;
+    loc.flags = Align2amask(align) | AM_SHRINE;
+
+    const temple = game.level.rooms?.find(room =>
+        room?.rtype === TEMPLE && ax >= room.lx && ax <= room.hx && ay >= room.ly && ay <= room.hy);
+    if (!temple) return;
+    const si = rn2(8);
+    let px = ax, py = ay;
+    for (let i = 0; i < 8; i++) {
+        const dir = (i + si) & 7;
+        const nx = ax + xdir[dir], ny = ay + ydir[dir];
+        if (priestGoodLocation(ALIGNED_CLERIC, nx, ny)) { px = nx; py = ny; break; }
+    }
+    relocatePriestSpotOccupant(px, py);
+    const priest = await makemon(ALIGNED_CLERIC, px, py, MM_NOGRP);
+    if (!priest) return;
+    initPriestMonster(priest, { room: temple.roomnoidx + ROOMOFFSET, align, x: ax, y: ay });
+    givePriestSpellbooks(priest);
+    rn2(2);
+}
+
 function splevRoomType(rtype) {
     return rtype === FOODSHOP && game._startup_role === 'Monk' ? FODDERSHOP : rtype;
 }
@@ -11272,6 +11433,83 @@ async function make_minetn4_level() {
     g._level_populated = true;
 }
 
+async function make_minetn6_level() {
+    const g = game;
+    clear_level_structures();
+    g.level.flags.is_maze_lev = true;
+    g.level.flags.rndmongen = true;
+    g.level.flags.has_town = true;
+    g.level.flags.has_shop = true;
+    g.level.flags.has_temple = true;
+
+    for (let y = 0; y < MINETN6_ROWS.length; y++) {
+        const row = MINETN6_ROWS[y];
+        for (let x = 0; x < row.length; x++) minetn6SetTerrain(x, y, row[x]);
+    }
+    minetn6LightRegion(0, 0, 39, 19, true);
+
+    place_lregion(1, 3, 21, 19, minetn6X(1), minetn6Y(0), minetn6X(39), minetn6Y(18), LR_UPSTAIR, null);
+    place_lregion(60, 3, 75, 19, minetn6X(0), minetn6Y(0), minetn6X(38), minetn6Y(18), LR_DOWNSTAIR, null);
+
+    minetn6LightRegion(13, 7, 14, 8, false);
+    minetn6AddRoom(9, 9, 11, 11, CANDLESHOP, 1);
+    minetn6AddRoom(16, 6, 18, 8, TOOLSHOP, 1);
+    minetn6AddRoom(23, 3, 25, 5, SHOPBASE, 1);
+    minetn6AddRoom(22, 14, 24, 15, FOODSHOP, 1);
+    minetn6AddRoom(31, 14, 36, 16, TEMPLE, 1);
+    await minetn6AltarShrine(35, 15);
+
+    minetn6Door('closed', 5, 4);
+    minetn6Door('locked', 4, 10);
+    minetn6Door('closed', 10, 4);
+    minetn6Door('closed', 10, 12);
+    minetn6Door('locked', 13, 9);
+    minetn6Door('locked', 14, 11);
+    minetn6Door('closed', 19, 7);
+    minetn6Door('closed', 19, 12);
+    minetn6Door('closed', 24, 6);
+    minetn6Door('closed', 24, 11);
+    minetn6Door('closed', 25, 14);
+    minetn6Door('closed', 28, 6);
+    minetn6Door('locked', 28, 8);
+    minetn6Door('closed', 30, 15);
+    minetn6Door('closed', 31, 5);
+    minetn6Door('closed', 35, 5);
+    minetn6Door('closed', 33, 9);
+
+    for (let i = 0; i < 6; i++) await minetn6Monster('gnome');
+    await minetn6Monster('gnome', 14, 8);
+    await minetn6Monster('gnome lord', 14, 7);
+    await minetn6Monster('gnome', 27, 10);
+    await minetn6Monster('gnome lord');
+    await minetn6Monster('gnome lord');
+    for (let i = 0; i < 3; i++) await minetn6Monster('dwarf');
+    await minetn6Monster('dwarf', null, null, 1);
+    await minetn6Monster('dwarf', null, null, 1);
+    await minetn6Monster('gnome', null, null, 1);
+    await minetn6Monster('gnome', null, null, 1);
+    await minetn6Monster('hobbit', null, null, 1);
+    await minetn6Monster('goblin', null, null, 1);
+    await minetn6Monster('kobold', null, null, 1);
+    await minetn6Monster('dog', null, null, 1);
+    await minetn6Monster('watchman', null, null, 1);
+    await minetn6Monster('watchman', null, null, 1);
+    await minetn6Monster('watchman', null, null, 1);
+    await minetn6Monster('watch captain', null, null, 1);
+    await minetn6Monster('watch captain', null, null, 1);
+
+    wallification(1, 0, COLNO - 1, ROWNO - 1);
+    flipSpecialLevelRnd(MINETN6_XSTART, MINETN6_YSTART,
+        MINETN6_XSTART + MINETN6_ROWS[0].length - 1,
+        MINETN6_YSTART + MINETN6_ROWS.length - 1);
+    recount_level_features();
+    level_finalize_topology({ mineralizeLevel: false });
+    for (const croom of g.level.rooms || []) {
+        if (croom?.hx > 0) await fill_special_room(croom);
+    }
+    g._level_populated = true;
+}
+
 async function make_minetn_level(special = null) {
     const g = game;
     if (await getbones()) return;
@@ -11307,6 +11545,12 @@ async function make_minetn_level(special = null) {
 
     if (variant === 4) {
         await make_minetn4_level();
+        g.in_mklev = false;
+        return;
+    }
+
+    if (variant === 6) {
+        await make_minetn6_level();
         g.in_mklev = false;
         return;
     }
