@@ -15660,7 +15660,7 @@ async function shkinit(shopIndex, croom) {
     shk.msleeping = 0;
     shk.shk = { x: spot.sx, y: spot.sy };
     shk.shd = { x: spot.door.x, y: spot.door.y };
-    shk.shoproom = game.level.rooms.indexOf(croom) + ROOMOFFSET;
+    shk.shoproom = (croom.roomnoidx ?? game.level.rooms.indexOf(croom)) + ROOMOFFSET;
     shk.shoptype = SHOPBASE + shopIndex;
     shk.visitct = 0;
     croom.resident = shk;
@@ -15801,7 +15801,7 @@ async function stock_room(shopIndex, croom) {
         await mkshobj_at(shopIndex, sx, sy, stockCount === specialSpot);
     }
     if (game.level?.flags?.orcus_level) {
-        const roomno = game.level.rooms.indexOf(croom) + ROOMOFFSET;
+        const roomno = (croom.roomnoidx ?? game.level.rooms.indexOf(croom)) + ROOMOFFSET;
         for (const mon of game.level.monsters || [])
             if ((mon.isshk || mon.shopkeeper || mon.data?.shopkeeper) && mon.shoproom === roomno)
                 for (const obj of mon.minvent || [])
