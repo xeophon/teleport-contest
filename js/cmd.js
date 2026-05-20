@@ -5519,12 +5519,19 @@ function shopObjectNameKnown(obj) {
     return true;
 }
 
+function levelRoomByRoomno(roomno) {
+    if (roomno < ROOMOFFSET) return null;
+    const idx = roomno - ROOMOFFSET;
+    return game.level?.rooms?.[idx]
+        || (game.level?.subrooms || []).find(room => room?.roomnoidx === idx)
+        || null;
+}
+
 function shopItemPrice(obj, x = game.u?.ux, y = game.u?.uy) {
     if (!obj || obj.otyp === GOLD_PIECE || obj.cls === 'coin' || obj.glyph === '$') return null;
     const loc = game.level?.at(x, y);
     const roomno = loc?.roomno || 0;
-    if (roomno < ROOMOFFSET) return null;
-    const room = game.level?.rooms?.[roomno - ROOMOFFSET];
+    const room = levelRoomByRoomno(roomno);
     if (!room || room.rtype < SHOPBASE) return null;
     const shkp = room.resident || (game.level?.monsters || [])
         .find(mon => mon.isshk && mon.shoproom === roomno);
@@ -8111,7 +8118,7 @@ async function moveHero(dx, dy) {
     const continuingTravel = !!game._travel_keys?.length;
     const oldRoomno = oldLoc?.roomno || 0;
     const newRoomno = target?.roomno || 0;
-    const shopRoom = newRoomno >= ROOMOFFSET ? game.level?.rooms?.[newRoomno - ROOMOFFSET] : null;
+    const shopRoom = levelRoomByRoomno(newRoomno);
     if (!continuingTravel && shopRoom?.rtype >= SHOPBASE && oldRoomno !== newRoomno) {
         const shkp = shopRoom.resident || (game.level?.monsters || [])
             .find(mon => mon.isshk && mon.shoproom === newRoomno);
@@ -19849,7 +19856,7 @@ export async function rhack(_cmd) {
             if (shopPrice > 0) {
                 const loc = game.level?.at(game.u?.ux, game.u?.uy);
                 const roomno = loc?.roomno || 0;
-                const room = roomno >= ROOMOFFSET ? game.level?.rooms?.[roomno - ROOMOFFSET] : null;
+                const room = levelRoomByRoomno(roomno);
                 shopkeeperForPrice = room?.resident || (game.level?.monsters || [])
                     .find(mon => mon.isshk && mon.shoproom === roomno);
             }
@@ -20161,7 +20168,7 @@ export async function rhack(_cmd) {
         const adjacent = shopkeepers.filter(mon => Math.max(Math.abs(mon.mx - ux), Math.abs(mon.my - uy)) <= 1);
         const loc = game.level?.at(ux, uy);
         const roomno = loc?.roomno || 0;
-        const room = roomno >= ROOMOFFSET ? game.level?.rooms?.[roomno - ROOMOFFSET] : null;
+        const room = levelRoomByRoomno(roomno);
         const resident = room?.resident || shopkeepers.find(mon => mon.shoproom === roomno);
         const shkp = adjacent.length === 1 ? adjacent[0] : resident || (shopkeepers.length === 1 ? shopkeepers[0] : null);
         if (!shkp) {

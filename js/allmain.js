@@ -59,6 +59,15 @@ const DEFAULT_DOG_NAMES = {
     Ranger: 'Sirius',
     Samurai: 'Hachi',
 };
+
+function levelRoomByRoomno(roomno) {
+    if (roomno < ROOMOFFSET) return null;
+    const idx = roomno - ROOMOFFSET;
+    return game.level?.rooms?.[idx]
+        || (game.level?.subrooms || []).find(room => room?.roomnoidx === idx)
+        || null;
+}
+
 const FEMALE_ROLE_NAMES = {
     Caveman: 'Cavewoman',
     Priest: 'Priestess',
@@ -5817,7 +5826,7 @@ function monsterSearchItemGoal(mon) {
             if (!clearPath(mon.mx, mon.my, x, y)) continue;
 
             const roomno = game.level?.at(x, y)?.roomno || 0;
-            const room = roomno >= ROOMOFFSET ? game.level?.rooms?.[roomno - ROOMOFFSET] : null;
+            const room = levelRoomByRoomno(roomno);
             const costlySpot = (room?.rtype || 0) >= SHOPBASE;
             const stack = [...objects].reverse()
                 .filter(obj => obj.ox === x && obj.oy === y && !obj.transientProjectile);
