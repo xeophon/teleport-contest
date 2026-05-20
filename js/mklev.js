@@ -27,7 +27,7 @@ import {
     CROSSWALL, TUWALL, TDWALL, TLWALL, TRWALL,
     D_NODOOR, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_TRAPPED,
     OROOM, COURT, SWAMP, BEEHIVE, MORGUE, BARRACKS, ZOO, LEPREHALL,
-    COCKNEST, ANTHOLE, VAULT, TEMPLE, THEMEROOM, ROOMOFFSET, MAXNROFROOMS, SHARED, SHOPBASE,
+    COCKNEST, ANTHOLE, VAULT, TEMPLE, THEMEROOM, ROOMOFFSET, MAXNROFROOMS, SHARED, SHARED_PLUS, SHOPBASE,
     SDOOR, SCORR, IRONBARS, FOUNTAIN, SINK, THRONE, ALTAR, GRAVE,
     DIR_N, DIR_S, DIR_E, DIR_W, DIR_180,
     IS_WALL, IS_STWALL, IS_DOOR, IS_OBSTRUCTED, IS_FURNITURE, IS_POOL,
@@ -5895,8 +5895,49 @@ function wipeout_text(text, cnt) {
     return chars.join('');
 }
 
-// in_rooms stub
-function in_rooms(x, y, rtype) { return []; }
+// C ref: hack.c in_rooms()
+function roomByRoomno(roomno) {
+    if (roomno < ROOMOFFSET) return null;
+    const idx = roomno - ROOMOFFSET;
+    return game.level?.rooms?.[idx]
+        || (game.level?.subrooms || []).find(room => room?.roomnoidx === idx)
+        || null;
+}
+
+function roomMatchesType(roomno, typewanted) {
+    if (roomno < ROOMOFFSET) return false;
+    if (!typewanted) return true;
+    const room = roomByRoomno(roomno);
+    if (!room) return false;
+    return room.rtype === typewanted
+        || (typewanted === SHOPBASE && room.rtype >= SHOPBASE);
+}
+
+function in_rooms(x, y, typewanted) {
+    const loc = game.level?.at(x, y);
+    const roomno = loc?.roomno ?? 0;
+    if (roomno >= ROOMOFFSET)
+        return roomMatchesType(roomno, typewanted) ? [roomno] : [];
+    if (roomno !== SHARED && roomno !== SHARED_PLUS) return [];
+
+    const found = [];
+    const step = roomno === SHARED ? 2 : 1;
+    const minX = Math.max(0, x - 1);
+    const maxX = Math.min(COLNO - 1, x + 1);
+    const minY = Math.max(0, y - 1);
+    const maxY = Math.min(ROWNO - 1, y + 1);
+    for (let nx = minX; nx <= maxX; nx += step) {
+        for (let ny = minY; ny <= maxY; ny += step) {
+            const adjRoomno = game.level?.at(nx, ny)?.roomno ?? 0;
+            if (adjRoomno >= ROOMOFFSET
+                && !found.includes(adjRoomno)
+                && roomMatchesType(adjRoomno, typewanted)) {
+                found.push(adjRoomno);
+            }
+        }
+    }
+    return found;
+}
 
 // ============================================================
 // Core mklev functions (ported from main project's mklev.js)
@@ -14825,7 +14866,7 @@ function dosdoor(x, y, aroom, type) {
     const map = game.level;
     const loc = map.at(x, y);
     if (!loc) return;
-    const shdoor = in_rooms(x, y, 0).length > 0;
+    const shdoor = in_rooms(x, y, SHOPBASE).length > 0;
     if (!IS_WALL(loc.typ)) type = DOOR;
     loc.typ = type;
     if (type === DOOR) {
