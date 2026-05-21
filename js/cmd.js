@@ -945,14 +945,15 @@ const WAND_NAME_TO_INDEX = new Map([
     ['sleep', 22], ['death', 23], ['lightning', 24],
 ]);
 const WAND_WISH_NAMEDESC_BOUNDS = new Map([
-    ['light', 96], ['secret door detection', 51], ['enlightenment', 16], ['create monster', 51],
-    ['wishing', 6], ['stasis', 46], ['nothing', 26], ['striking', 31], ['make invisible', 46],
-    ['slow monster', 51], ['speed monster', 51], ['undead turning', 51], ['polymorph', 46],
-    ['cancellation', 46], ['teleportation', 46], ['opening', 31], ['locking', 31],
-    ['probing', 31], ['digging', 41], ['magic missile', 51], ['fire', 41], ['cold', 41],
-    ['sleep', 51], ['death', 6], ['lightning', 41],
+    ['light', 95], ['secret door detection', 50], ['enlightenment', 15], ['create monster', 50],
+    ['wishing', 5], ['stasis', 45], ['nothing', 25], ['striking', 30], ['make invisible', 45],
+    ['slow monster', 50], ['speed monster', 50], ['undead turning', 50], ['polymorph', 45],
+    ['cancellation', 45], ['teleportation', 45], ['opening', 30], ['locking', 30],
+    ['probing', 30], ['digging', 40], ['magic missile', 50], ['fire', 40], ['cold', 40],
+    ['sleep', 50], ['death', 5], ['lightning', 40],
 ]);
 const IDENTIFIED_WAND_NAMES = [...WAND_NAME_TO_INDEX.keys()];
+const SPE_LIM = 99;
 
 function moveloopPreambleOnce() {
     if (game._moveloop_preamble_done) return;
@@ -5107,6 +5108,19 @@ function godsNoticeWish() {
     game.u.ublesscnt = (game.u.ublesscnt || 0) + rn2(100) + 50;
 }
 
+function capWishSpe(spe) {
+    const sign = spe < 0 ? -1 : 1;
+    return sign * Math.min(Math.abs(spe), SPE_LIM);
+}
+
+function wishedSpeForItem(item, spe) {
+    if ((item?.cls === 'wand' || item?.otyp === WAND_CLASS) && !game.flags?.debug) {
+        if (spe < 0) return Math.max(spe, -1);
+        return Math.min(spe, item.spe ?? spe);
+    }
+    return spe;
+}
+
 function wishedObjectFromName(lowerName) {
     const artifact = makeArtifactWishObject(lowerName, { wizardMode: !!game.flags?.debug });
     if (artifact) return artifact;
@@ -5119,21 +5133,35 @@ function wishedObjectFromName(lowerName) {
         return Object.assign(otmp, baseObject, { wishedfor: true });
     }
 
-    const wandWish = lowerName.match(/^wand of ([a-z ]+?)(?:\s+\(0:(\d+)\))?$/);
+    const wandWish = lowerName.match(/^wand of ([a-z ]+?)(?:\s+\((?:(\d+):)?(\d+)\))?$/);
     if (wandWish && WAND_NAME_TO_INDEX.has(wandWish[1])) {
         const wand = wandWish[1];
+        const wandIndex = WAND_NAME_TO_INDEX.get(wand);
         rn2(WAND_WISH_NAMEDESC_BOUNDS.get(wand));
-        game._mkobj_wand_index = WAND_NAME_TO_INDEX.get(wand);
+        game._mkobj_wand_index = wandIndex;
         const otmp = mksobj(WAND_CLASS, true, false);
+        let spe = wandWish[3] ? capWishSpe(Number(wandWish[3])) : otmp.spe;
+        let recharged = wandWish[2] ? Math.min(Number(wandWish[2]), 7) : 0;
+        let ignoreRequestedSpe = false;
+        if (wand === 'wishing' && !game.flags?.debug) {
+            spe = rn2(10) ? -1 : 0;
+            recharged = 1;
+            ignoreRequestedSpe = true;
+        } else if (!game.flags?.debug) {
+            spe = wishedSpeForItem(otmp, spe);
+        }
         return Object.assign(otmp, {
             cls: 'wand',
             glyph: '/',
             kind: wand,
             wand,
-            wandIndex: WAND_NAME_TO_INDEX.get(wand),
-            spe: wandWish[2] ? Number(wandWish[2]) : otmp.spe,
+            wandIndex,
+            spe,
+            recharged,
             known: false,
             wishedfor: true,
+            _wish_ignore_requested_spe: ignoreRequestedSpe,
+            _wish_spe_from_suffix: wandWish[3] != null,
         });
     }
 
@@ -16188,7 +16216,7 @@ export async function rhack(_cmd) {
                 }
                 const spe = wishedName.match(/^([+-]\d+)\s+/);
                 if (spe) {
-                    wishedSpe = Number(spe[1]);
+                    wishedSpe = capWishSpe(Number(spe[1]));
                     wishedName = wishedName.slice(spe[0].length);
                     continue;
                 }
@@ -16236,7 +16264,10 @@ export async function rhack(_cmd) {
                 item.cursed = true;
                 item.blessed = false;
             }
-            if (wishedSpe !== undefined) item.spe = wishedSpe;
+            if (wishedSpe !== undefined && !item._wish_ignore_requested_spe && !item._wish_spe_from_suffix)
+                item.spe = wishedSpeForItem(item, wishedSpe);
+            delete item._wish_ignore_requested_spe;
+            delete item._wish_spe_from_suffix;
             if (wishedQuan > 1) item.quan = wishedQuan;
             const visibleName = game.u?.blind && item.cls === 'potion' ? 'potion'
                 : game.u?.blind && item.cls === 'ring' ? 'ring'

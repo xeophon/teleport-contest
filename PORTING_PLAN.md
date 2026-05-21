@@ -702,6 +702,13 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   prompt, and wrested wands turn to dust after the wish result. Fixed
   `WAN_WISHING` objects also carry wand metadata so level-placed wishing wands
   reach the same command path.
+- Exact wishes for another wand of wishing now model the C `readobjnam()`
+  anti-abuse rule: non-wizard wishes ignore requested charges, consume the
+  `rn2(10)` roll, set the new wand to `spe = -1` 90% of the time or `0`
+  otherwise, and force the recharge count to `1`. The wand parser also accepts
+  C's `(spe)` and `(recharged:spe)` charge suffix forms for exact wand wishes,
+  caps requested wand charges against generated charges outside wizard mode,
+  and consumes `rnd_otyp_by_namedesc()`'s exact object-probability roll.
 
 Next concrete target:
 
