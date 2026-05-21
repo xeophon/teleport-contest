@@ -713,6 +713,11 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   `cursed`/`unholy` always curse, `blessed`/`holy` and `uncursed` become cursed
   under negative Luck outside wizard mode, and an explicit negative enchantment
   curses the wished object when no BUC prefix overrides it.
+- Wished non-BUC qualifiers now cover a first C `readobjnam_preparse()` slice:
+  leading `greased`, `poisoned`, erosion/proofing words, and `wet`/`moist`
+  are stripped before object lookup; wished weapons and armor clear random
+  erosion, apply material-shaped erosion/proofing, poison eligible missiles
+  or age poisoned food, and preserve C's `wet`/`moist` RNG consumption.
 
 Next concrete target:
 

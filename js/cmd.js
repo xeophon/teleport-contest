@@ -694,6 +694,14 @@ const BAG_PUT_CLASS_TYPES = [
 ];
 const INVENTORY_LETTERS = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
 const APPLY_WEAPON_NAME_RE = /pick-axe|mattock|\baxe\b|bullwhip|lance|polearm|poleaxe|bardiche|bec de corbin|bill-guisarme|fauchard|glaive|guisarme|halberd|lucern hammer|partisan|ranseur|spetum|voulge|snickersnee/;
+const WISH_PROOF_QUALIFIER_RE = /^(rustproof|erodeproof|corrodeproof|fixed|fireproof|rotproof|tempered|crackproof)\s+/i;
+const WISH_PRIMARY_EROSION_RE = /^(rusty|rusted|burnt|burned|cracked)\s+/i;
+const WISH_SECONDARY_EROSION_RE = /^(corroded|rotted)\s+/i;
+const POISONABLE_WISH_WEAPONS = new Set([
+    'arrow', 'arrows', 'elven arrow', 'elven arrows', 'orcish arrow', 'orcish arrows',
+    'silver arrow', 'silver arrows', 'ya', 'crossbow bolt', 'crossbow bolts',
+    'dart', 'darts', 'shuriken', 'throwing star', 'throwing stars',
+]);
 const WISH_BASE_OBJECTS = new Map([
     ['dart', { otyp: DART, cls: 'weapon', glyph: ')', kind: 'dart', plural: 'darts' }],
     ['darts', { otyp: DART, cls: 'weapon', glyph: ')', kind: 'dart', plural: 'darts' }],
@@ -4135,13 +4143,17 @@ function inventoryLetterMenu(letters) {
 }
 
 function erosionPrefix(item) {
-    const level = item.oeroded || 0;
-    if (!level) return '';
-    const kind = String(item.kind || pickupObjectName(item)).toLowerCase();
-    const damage = kind.includes('leather') ? 'burnt' : 'rusty';
-    if (level === 1) return `${damage} `;
-    if (level === 2) return `very ${damage} `;
-    return `thoroughly ${damage} `;
+    const profile = wishedDamageProfile(item);
+    const pieces = [];
+    if (item.greased) pieces.push('greased');
+    const primary = Math.min(3, item.oeroded || 0);
+    const secondary = Math.min(3, item.oeroded2 || 0);
+    if (primary && profile.primaryWord)
+        pieces.push(`${primary === 2 ? 'very ' : primary === 3 ? 'thoroughly ' : ''}${profile.primaryWord}`);
+    if (secondary && profile.secondaryWord)
+        pieces.push(`${secondary === 2 ? 'very ' : secondary === 3 ? 'thoroughly ' : ''}${profile.secondaryWord}`);
+    if (item.oerodeproof && profile.proofWord) pieces.push(profile.proofWord);
+    return pieces.length ? `${pieces.join(' ')} ` : '';
 }
 
 function dipItemDescription(item, shortened = false) {
@@ -5136,6 +5148,82 @@ function applyWishedBuc(item, { wishedBlessed, wishedUncursed, wishedCursed, neg
         item.cursed = true;
         item.blessed = false;
     }
+}
+
+function objectKindKey(item) {
+    return String(item?.actualKind || item?.kind || item?.spellName || item?.wand || item?.gemDescription || '').toLowerCase();
+}
+
+function itemClassKey(item) {
+    return item?.cls || (item?.otyp === DART ? 'weapon'
+        : item?.otyp === ARMOR_CLASS ? 'armor'
+            : item?.otyp === WEAPON_CLASS ? 'weapon'
+                : item?.otyp === FOOD_CLASS ? 'food'
+                    : '');
+}
+
+function wishedDamageProfile(item) {
+    const kind = objectKindKey(item);
+    const cls = itemClassKey(item);
+    const weapon = cls === 'weapon' || item?.glyph === ')';
+    const armor = cls === 'armor' || item?.glyph === '[';
+    const ballOrChain = item?.otyp === HEAVY_IRON_BALL || item?.otyp === IRON_CHAIN || cls === 'ball' || cls === 'chain';
+    const weptool = cls === 'tool' && APPLY_WEAPON_NAME_RE.test(kind);
+    const erosionMatters = weapon || armor || ballOrChain || weptool;
+    if (!erosionMatters) return { erosionMatters: false };
+
+    const excludedMetal = /\b(?:silver|gold|mithril|platinum|gem|stone|crystal ball|shield of reflection)\b/.test(kind);
+    const glassArmor = armor && /\b(?:crystal plate mail|helm of brilliance|crystal helmet)\b/.test(kind);
+    const dragonHide = armor && /\bdragon (?:scales|scale mail|hide)\b/.test(kind);
+    const copperLike = /\b(?:copper|bronze)\b/.test(kind);
+    const ironLike = !excludedMetal && !glassArmor && !copperLike && !dragonHide && (ballOrChain || kind.includes('iron')
+        || /\b(?:plate mail|splint mail|banded mail|ring mail|chain mail|scale mail|large shield|roundshield|gauntlets|helm|helmet|dented pot|shoes|sword|saber|dagger|knife|axe|mace|hammer|flail|morning star|pick-axe|mattock|spear|trident|lance|polearm|dart)\b/.test(kind));
+    const flammableLike = !glassArmor && !ironLike && !copperLike && !excludedMetal
+        && /\b(?:leather|cloth|cloak|robe|shirt|boots|gloves|wooden|small shield|bow|crossbow|arrow|club|quarterstaff|aklys|bullwhip|sling)\b/.test(kind);
+    const rustprone = ironLike;
+    const crackable = glassArmor;
+    const corrodeable = ironLike || copperLike;
+    const flammable = flammableLike;
+    const rottable = flammableLike || dragonHide;
+    const damageable = rustprone || crackable || corrodeable || flammable || rottable;
+
+    return {
+        erosionMatters,
+        primary: rustprone || crackable || flammable,
+        secondary: corrodeable || rottable,
+        damageable,
+        primaryWord: rustprone ? 'rusty' : crackable ? 'cracked' : flammable ? 'burnt' : '',
+        secondaryWord: corrodeable ? 'corroded' : rottable ? 'rotted' : '',
+        proofWord: rustprone ? 'rustproof' : corrodeable ? 'corrodeproof'
+            : flammable ? 'fireproof' : crackable ? 'tempered'
+                : rottable ? 'rotproof' : '',
+    };
+}
+
+function wishedPoisonable(item) {
+    const kind = objectKindKey(item);
+    return item?.artifact === 'Grimtooth' || POISONABLE_WISH_WEAPONS.has(kind);
+}
+
+function applyWishedQualifiers(item, qualifiers) {
+    if (!item) return;
+    const profile = wishedDamageProfile(item);
+    if (profile.erosionMatters) {
+        item.oeroded = 0;
+        item.oeroded2 = 0;
+        if (qualifiers.eroded && profile.primary)
+            item.oeroded = Math.min(3, qualifiers.eroded);
+        if (qualifiers.eroded2 && profile.secondary)
+            item.oeroded2 = Math.min(3, qualifiers.eroded2);
+        if (qualifiers.erodeproof && profile.damageable)
+            item.oerodeproof = ((game.u?.uluck || 0) + (game.u?.moreluck || 0)) >= 0 || !!game.flags?.debug;
+    }
+    if (qualifiers.greased) item.greased = true;
+    if (qualifiers.poisoned) {
+        if (wishedPoisonable(item)) item.opoisoned = ((game.u?.uluck || 0) + (game.u?.moreluck || 0)) >= 0;
+        else if (itemClassKey(item) === 'food') item.age = 1;
+    }
+    if (qualifiers.wetness && objectKindKey(item) === 'towel') item.wetness = qualifiers.wetness;
 }
 
 function wishedObjectFromName(lowerName) {
@@ -6257,7 +6345,8 @@ function normalInventoryLine(item) {
         const showSpe = item.known === true || item.wielded || item.alternate || lineShowsSpe;
         const enchantment = showSpe ? `${spe >= 0 ? '+' : ''}${spe} ` : '';
         const buc = item.blessed || item.cursed ? blessedState : '';
-        phrase = quan > 1 ? `${quan} ${buc}${enchantment}${name}` : `${buc}${enchantment}${name}`;
+        const erosion = erosionPrefix(item);
+        phrase = quan > 1 ? `${quan} ${buc}${erosion}${enchantment}${name}` : `${buc}${erosion}${enchantment}${name}`;
         if (item.wielded) {
             const hand = /quarterstaff|two-handed sword|battle-axe/.test(kind) ? 'hands' : `${game.u?.uhandedness || 'right'} hand`;
             suffix = ` (weapon in ${hand})`;
@@ -16225,6 +16314,15 @@ export async function rhack(_cmd) {
             let wishedQuan = 1;
             let wishedSpe;
             let wishedSpeNegative = false;
+            const wishedQualifiers = {
+                greased: false,
+                poisoned: false,
+                erodeproof: false,
+                eroded: 0,
+                eroded2: 0,
+                wetness: 0,
+            };
+            let wishedErosionIntensity = 0;
             for (;;) {
                 const buc = wishedName.match(/^(blessed|holy|uncursed|cursed|unholy)\s+/i);
                 if (buc) {
@@ -16240,6 +16338,55 @@ export async function rhack(_cmd) {
                     wishedSpeNegative = spe[1].startsWith('-');
                     wishedSpe = capWishSpe(Number(spe[1]));
                     wishedName = wishedName.slice(spe[0].length);
+                    continue;
+                }
+                const proof = wishedName.match(WISH_PROOF_QUALIFIER_RE);
+                if (proof) {
+                    wishedQualifiers.erodeproof = true;
+                    wishedName = wishedName.slice(proof[0].length);
+                    continue;
+                }
+                const lit = wishedName.match(/^(?:lit|burning|unlit|extinguished)\s+/i);
+                if (lit) {
+                    wishedName = wishedName.slice(lit[0].length);
+                    continue;
+                }
+                const wet = wishedName.match(/^(wet|moist)\s+/i);
+                if (wet) {
+                    wishedQualifiers.wetness = wet[1].toLowerCase() === 'wet' ? 3 + rn2(3) : rnd(2);
+                    wishedName = wishedName.slice(wet[0].length);
+                    continue;
+                }
+                const poisoned = wishedName.match(/^poisoned\s+/i);
+                if (poisoned) {
+                    wishedQualifiers.poisoned = true;
+                    wishedName = wishedName.slice(poisoned[0].length);
+                    continue;
+                }
+                const greased = wishedName.match(/^greased\s+/i);
+                if (greased) {
+                    wishedQualifiers.greased = true;
+                    wishedName = wishedName.slice(greased[0].length);
+                    continue;
+                }
+                const intense = wishedName.match(/^(very|thoroughly)\s+/i);
+                if (intense) {
+                    wishedErosionIntensity = intense[1].toLowerCase() === 'very' ? 1 : 2;
+                    wishedName = wishedName.slice(intense[0].length);
+                    continue;
+                }
+                const primaryErosion = wishedName.match(WISH_PRIMARY_EROSION_RE);
+                if (primaryErosion) {
+                    wishedQualifiers.eroded = 1 + wishedErosionIntensity;
+                    wishedErosionIntensity = 0;
+                    wishedName = wishedName.slice(primaryErosion[0].length);
+                    continue;
+                }
+                const secondaryErosion = wishedName.match(WISH_SECONDARY_EROSION_RE);
+                if (secondaryErosion) {
+                    wishedQualifiers.eroded2 = 1 + wishedErosionIntensity;
+                    wishedErosionIntensity = 0;
+                    wishedName = wishedName.slice(secondaryErosion[0].length);
                     continue;
                 }
                 const quan = wishedName.match(/^(\d+)\s+/);
@@ -16286,16 +16433,18 @@ export async function rhack(_cmd) {
                 wishedCursed,
                 negativeSpe: wishedSpeNegative,
             });
+            applyWishedQualifiers(item, wishedQualifiers);
             delete item._wish_ignore_requested_spe;
             delete item._wish_spe_from_suffix;
             if (wishedQuan > 1) item.quan = wishedQuan;
             const visibleName = game.u?.blind && item.cls === 'potion' ? 'potion'
                 : game.u?.blind && item.cls === 'ring' ? 'ring'
                     : game.u?.blind && item.cls === 'wand' ? 'wand'
-                    : pickupObjectName(item);
+                    : `${erosionPrefix(item)}${pickupObjectName(item)}`;
+            const displayQuan = item.quan || wishedQuan;
             const article = /^(?:.* )?(?:boots|gloves)$/.test(visibleName) ? 'a pair of'
                 : /^[aeiou]/i.test(visibleName) ? 'an' : 'a';
-            item.line = `${letter} - ${wishedQuan > 1 ? `${wishedQuan} ${visibleName}` : `${article} ${visibleName}`}`;
+            item.line = `${letter} - ${displayQuan > 1 ? `${displayQuan} ${visibleName}` : `${article} ${visibleName}`}`;
             game.inventory ??= [];
             game.inventory.push(item);
             game._pet_food_scan_inventory = game.inventory;
