@@ -5687,11 +5687,11 @@ function applyWishedQualifiers(item, qualifiers) {
     applyWishedContainerState(item, qualifiers);
 }
 
-function applyWishedQuantity(item, wishedQuan) {
+function applyWishedQuantity(item, wishedQuan, forceQuantity = false) {
     if (isTinObject(item)) {
         if (game.flags?.debug || wishedQuan < rnd(6))
             item.quan = wishedQuan;
-    } else if (wishedQuan > 1) {
+    } else if (wishedQuan > 1 || forceQuantity) {
         item.quan = wishedQuan;
     }
 }
@@ -5727,6 +5727,32 @@ function wishedLabelKey(text) {
 function parseWishedScrollLabel(name) {
     const match = String(name || '').trim().match(/^scrolls?\s+labell?ed\s+(.+)$/i);
     return match ? unquoteWishedText(match[1]) : '';
+}
+
+function normalizeWishedGroupPhrase(name, quantity) {
+    const match = String(name || '').match(/^(pair|pairs|set|sets)\s+of\s+/i);
+    if (!match) return { name, quantity, matched: false };
+    const objectName = String(name).slice(match[0].length);
+    const nonStackingPairObject = /\b(?:boots|gloves|lenses)\b/i.test(objectName);
+    let wishedQuantity = quantity;
+    const group = match[1].toLowerCase();
+    if (nonStackingPairObject) wishedQuantity = 1;
+    else if (group === 'pair') wishedQuantity *= 2;
+    else if (!nonStackingPairObject && group === 'pairs' && quantity > 1) wishedQuantity *= 2;
+    return {
+        name: objectName,
+        quantity: wishedQuantity,
+        matched: true,
+    };
+}
+
+function applyWishedPluralQuantity(name, quantity) {
+    if (quantity !== 1) return quantity;
+    const lowerName = String(name || '').trim().toLowerCase();
+    const baseObject = WISH_BASE_OBJECTS.get(lowerName);
+    if (baseObject?.plural && lowerName === baseObject.plural) return 2;
+    if (lowerName === 'fortune cookies') return 2;
+    return quantity;
 }
 
 function applyWishedInstanceName(item, name) {
@@ -16905,13 +16931,15 @@ export async function rhack(_cmd) {
                 await setWishResultMessage('Nothing fitting that wish appears.');
                 return;
             }
-            let wishedName = wishText.replace(/^(?:a|an|the)\s+/i, '');
+            let wishedName = wishText;
             let wishedBlessed = false;
             let wishedUncursed = false;
             let wishedCursed = false;
             let wishedQuan = 1;
             let wishedSpe;
             let wishedSpeNegative = false;
+            const leadingArticle = wishedName.match(/^(a|an|the)\s+/i);
+            if (leadingArticle) wishedName = wishedName.slice(leadingArticle[0].length);
             const wishedQualifiers = {
                 greased: false,
                 poisoned: false,
@@ -17042,6 +17070,11 @@ export async function rhack(_cmd) {
                 wishedQualifiers.lightState = 1;
                 wishedName = wishedName.slice(0, litSuffix.index);
             }
+            const groupedWish = normalizeWishedGroupPhrase(wishedName, wishedQuan);
+            wishedName = groupedWish.name;
+            wishedQuan = groupedWish.quantity;
+            const wishedQuanForced = groupedWish.matched;
+            wishedQuan = applyWishedPluralQuantity(wishedName, wishedQuan);
             const lowerName = wishedName.trim().toLowerCase();
             if (!lowerName || lowerName === 'nothing' || lowerName === 'nil' || lowerName === 'none') {
                 await setWishResultMessage('Nothing fitting that wish appears.');
@@ -17082,7 +17115,7 @@ export async function rhack(_cmd) {
                 negativeSpe: wishedSpeNegative,
             });
             applyWishedQualifiers(item, wishedQualifiers);
-            applyWishedQuantity(item, wishedQuan);
+            applyWishedQuantity(item, wishedQuan, wishedQuanForced);
             applyWishedTinVariety(item);
             delete item._wish_ignore_requested_spe;
             delete item._wish_spe_from_suffix;

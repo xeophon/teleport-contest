@@ -671,6 +671,11 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   as object-name metadata for display. The same slice also resolves wished
   `scroll labeled ...` and `scroll labelled "..."` phrases through the current
   shuffled scroll labels before creating the exact scroll object.
+- Wished pair/set wrapper phrases now follow the C `readobjnam()` lookup shape:
+  leading `pair of`, `pairs of`, `set of`, and `sets of` are stripped before
+  object lookup, pair phrasing adjusts small stack counts for mergeable exact
+  wishes, and canonical pair equipment such as boots, gloves, and lenses keeps
+  its single-object quantity instead of becoming `pair of pair of ...`.
 - Wizard `#polyself` rehumanization no longer restores fixed public-looking HP,
   energy, and AC values. The interim `newman()` path now derives human-form
   stats from the saved live base form while preserving the current C-shaped RNG
