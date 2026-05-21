@@ -5121,6 +5121,23 @@ function wishedSpeForItem(item, spe) {
     return spe;
 }
 
+function applyWishedBuc(item, { wishedBlessed, wishedUncursed, wishedCursed, negativeSpe }) {
+    const badLuck = ((game.u?.uluck || 0) + (game.u?.moreluck || 0)) < 0 && !game.flags?.debug;
+    if (wishedCursed) {
+        item.cursed = true;
+        item.blessed = false;
+    } else if (wishedUncursed) {
+        item.blessed = false;
+        item.cursed = badLuck;
+    } else if (wishedBlessed) {
+        item.blessed = !badLuck;
+        item.cursed = badLuck;
+    } else if (negativeSpe) {
+        item.cursed = true;
+        item.blessed = false;
+    }
+}
+
 function wishedObjectFromName(lowerName) {
     const artifact = makeArtifactWishObject(lowerName, { wizardMode: !!game.flags?.debug });
     if (artifact) return artifact;
@@ -16203,19 +16220,24 @@ export async function rhack(_cmd) {
             }
             let wishedName = wishText.replace(/^(?:a|an|the)\s+/i, '');
             let wishedBlessed = false;
+            let wishedUncursed = false;
             let wishedCursed = false;
             let wishedQuan = 1;
             let wishedSpe;
+            let wishedSpeNegative = false;
             for (;;) {
-                const buc = wishedName.match(/^(blessed|uncursed|cursed)\s+/i);
+                const buc = wishedName.match(/^(blessed|holy|uncursed|cursed|unholy)\s+/i);
                 if (buc) {
-                    wishedBlessed = buc[1].toLowerCase() === 'blessed';
-                    wishedCursed = buc[1].toLowerCase() === 'cursed';
+                    const state = buc[1].toLowerCase();
+                    wishedBlessed = state === 'blessed' || state === 'holy';
+                    wishedUncursed = state === 'uncursed';
+                    wishedCursed = state === 'cursed' || state === 'unholy';
                     wishedName = wishedName.slice(buc[0].length);
                     continue;
                 }
                 const spe = wishedName.match(/^([+-]\d+)\s+/);
                 if (spe) {
+                    wishedSpeNegative = spe[1].startsWith('-');
                     wishedSpe = capWishSpe(Number(spe[1]));
                     wishedName = wishedName.slice(spe[0].length);
                     continue;
@@ -16256,16 +16278,14 @@ export async function rhack(_cmd) {
                 return;
             }
             if (item._artifact_wish_name) wishedQuan = 1;
-            if (wishedBlessed) {
-                item.blessed = true;
-                item.cursed = false;
-            }
-            if (wishedCursed) {
-                item.cursed = true;
-                item.blessed = false;
-            }
             if (wishedSpe !== undefined && !item._wish_ignore_requested_spe && !item._wish_spe_from_suffix)
                 item.spe = wishedSpeForItem(item, wishedSpe);
+            applyWishedBuc(item, {
+                wishedBlessed,
+                wishedUncursed,
+                wishedCursed,
+                negativeSpe: wishedSpeNegative,
+            });
             delete item._wish_ignore_requested_spe;
             delete item._wish_spe_from_suffix;
             if (wishedQuan > 1) item.quan = wishedQuan;

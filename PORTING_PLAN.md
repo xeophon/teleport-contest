@@ -709,6 +709,10 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   C's `(spe)` and `(recharged:spe)` charge suffix forms for exact wand wishes,
   caps requested wand charges against generated charges outside wizard mode,
   and consumes `rnd_otyp_by_namedesc()`'s exact object-probability roll.
+- Wish BUC prefixes now follow the C `readobjnam()` luck gate for exact wishes:
+  `cursed`/`unholy` always curse, `blessed`/`holy` and `uncursed` become cursed
+  under negative Luck outside wizard mode, and an explicit negative enchantment
+  curses the wished object when no BUC prefix overrides it.
 
 Next concrete target:
 
