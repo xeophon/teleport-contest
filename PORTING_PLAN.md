@@ -720,6 +720,11 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   or age poisoned food, preserve C's `wet`/`moist` RNG consumption, and keep
   `lit`/`burning` state for wished lamps, lanterns, candles, and potions of
   oil, including C's `(lit)` suffix form and persisted fuel-age thresholds.
+- Wished tins now use the C `readobjnam()` tin path instead of generic food:
+  plain `tin`, `spinach`, `tin of spinach`, and `tin of <monster> meat` create
+  actual tin objects, `empty` and `trapped`/`untrapped` apply to tins, and
+  wished tin quantities follow C's normal `cnt < rnd(6)` gate outside wizard
+  mode.
 - Wished container state prefixes now cover the C `readobjnam()` object slice
   for `locked`, `unlocked`, `broken`, `trapped`, `untrapped`, and `empty`:
   boxes keep normal generated contents and lock/trap RNG before final state

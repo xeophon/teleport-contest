@@ -469,6 +469,7 @@ const STATUE = 472;
 const FLINT_STONE = 473;
 const HEAVY_IRON_BALL = 474;
 const IRON_CHAIN = 475;
+const TIN = 10004;
 const RANDOM_CLASS = 0;
 const WEAPON_CLASS = 1;
 const ARMOR_CLASS = 2;
@@ -703,6 +704,11 @@ const WISH_LOCK_QUALIFIER_RE = /^(locked|unlocked|broken)\s+/i;
 const WISH_PROOF_QUALIFIER_RE = /^(rustproof|erodeproof|corrodeproof|fixed|fireproof|rotproof|tempered|crackproof)\s+/i;
 const WISH_PRIMARY_EROSION_RE = /^(rusty|rusted|burnt|burned|cracked)\s+/i;
 const WISH_SECONDARY_EROSION_RE = /^(corroded|rotted)\s+/i;
+const TIN_VARIETY_TEXTS = [
+    'rotten', 'homemade', 'soup made from', 'french fried', 'pickled',
+    'boiled', 'smoked', 'dried', 'deep fried', 'szechuan', 'broiled',
+    'stir fried', 'sauteed', 'candied', 'pureed',
+];
 const FOOD_NUTRITION = new Map([
     ['tripe ration', 200],
     ['egg', 80],
@@ -5358,6 +5364,124 @@ function isWishedFoodName(lowerName) {
         || lowerName.endsWith(' cookies');
 }
 
+function tinMeatName(monsterName) {
+    return monsterName === 'lichen' ? monsterName : `${monsterName} meat`;
+}
+
+function pluralTinName(name) {
+    if (name.startsWith('empty tin')) return name.replace(/^empty tin/, 'empty tins');
+    return name.replace(/\btin\b/, 'tins');
+}
+
+function tinNameWithVariety(monsterName, varietyIndex = null) {
+    const meat = tinMeatName(monsterName);
+    if (varietyIndex == null) return `tin of ${meat}`;
+    const variety = TIN_VARIETY_TEXTS[varietyIndex] || '';
+    if (variety === 'rotten' || variety === 'homemade')
+        return `${variety} tin of ${meat}`;
+    return `tin of ${variety} ${meat}`;
+}
+
+function setTinDisplayName(item, name) {
+    item.singular = name;
+    item.plural = pluralTinName(name);
+}
+
+function setTinEmpty(item) {
+    item.corpsenm = null;
+    item.spe = 0;
+    item.kind = 'empty tin';
+    item.actualKind = 'tin';
+    item.emptyTin = true;
+    setTinDisplayName(item, 'empty tin');
+}
+
+function setTinSpinach(item) {
+    item.corpsenm = null;
+    item.spe = 1;
+    item.kind = 'tin:spinach';
+    item.actualKind = 'tin';
+    item.emptyTin = false;
+    setTinDisplayName(item, 'tin of spinach');
+}
+
+function setTinMonster(item, monster, varietyIndex = null) {
+    const name = monster?.name || String(monster || '');
+    if (!name) return;
+    item.corpsenm = monster;
+    item.spe = varietyIndex == null ? 0 : -(varietyIndex + 1);
+    item.kind = `tin:${name}`;
+    item.actualKind = 'tin';
+    item.emptyTin = false;
+    setTinDisplayName(item, tinNameWithVariety(name, varietyIndex));
+}
+
+function isTinObject(item) {
+    const kind = String(item?.kind || '').toLowerCase();
+    return item?.otyp === TIN || kind === 'tin' || kind === 'empty tin'
+        || kind.startsWith('tin:');
+}
+
+function tinObjectName(item) {
+    if (item?.singular) return (item.quan || 1) > 1 ? item.plural || pluralTinName(item.singular) : item.singular;
+    if (item?.emptyTin || item?.kind === 'empty tin') return (item.quan || 1) > 1 ? 'empty tins' : 'empty tin';
+    return (item?.quan || 1) > 1 ? 'tins' : 'tin';
+}
+
+function parseWishedTinName(lowerName) {
+    if (lowerName === 'spinach') return { content: 'spinach' };
+    if (lowerName === 'tin' || lowerName === 'tins') return { content: 'plain' };
+
+    const tinOf = lowerName.match(/(?:^| )tins?\s+of\s+(.+)$/);
+    if (!tinOf) return null;
+
+    let rest = tinOf[1].trim().replace(/^(?:a|an|the)\s+/, '');
+    if (rest === 'spinach') return { content: 'spinach' };
+
+    let varietyIndex = null;
+    for (let i = 0; i < TIN_VARIETY_TEXTS.length; ++i) {
+        const prefix = `${TIN_VARIETY_TEXTS[i]} `;
+        if (rest.startsWith(prefix)) {
+            varietyIndex = i;
+            rest = rest.slice(prefix.length);
+            break;
+        }
+    }
+
+    const monsterName = rest.replace(/\s+meat$/, '').replace(/^(?:a|an|the)\s+/, '');
+    const monster = monsterByRndName(monsterName);
+    if (!monster || monster.noCorpse) return { content: 'plain', varietyIndex };
+    return { content: 'monster', monster, varietyIndex };
+}
+
+function makeWishedTinObject(tinWish) {
+    const otmp = mksobj(TIN, true, false);
+    Object.assign(otmp, {
+        cls: 'food',
+        glyph: '%',
+        kind: 'tin',
+        actualKind: 'tin',
+        singular: 'tin',
+        plural: 'tins',
+        wishedfor: true,
+        _wish_ignore_requested_spe: true,
+    });
+    otmp.spe = 0;
+
+    if (tinWish?.content === 'spinach') {
+        setTinSpinach(otmp);
+        otmp._wish_tin_explicit_content = true;
+    } else if (tinWish?.content === 'monster') {
+        setTinMonster(otmp, tinWish.monster);
+        otmp._wish_tin_explicit_content = true;
+        if (tinWish.varietyIndex != null)
+            otmp._wish_tin_requested_variety = tinWish.varietyIndex;
+    } else if (tinWish?.varietyIndex != null) {
+        otmp._wish_tin_requested_variety = tinWish.varietyIndex;
+    }
+    return otmp;
+}
+
 function isBlankScrollItem(item) {
     return item?.otyp === SCR_BLANK_PAPER || item?.kind === 'blank paper'
         || item?.actualKind === 'scroll of blank paper';
@@ -5385,8 +5509,11 @@ function isWishedContainerObject(item) {
 function applyWishedContainerState(item, qualifiers) {
     if (!item) return;
     const box = isBoxObject(item);
-    if (qualifiers.trappedState && box)
+    const tin = isTinObject(item);
+    if (qualifiers.trappedState && (box || tin))
         item.otrapped = qualifiers.trappedState === 1;
+    if (qualifiers.empty && tin && !item._wish_tin_explicit_content)
+        setTinEmpty(item);
     if (qualifiers.empty && isWishedContainerObject(item))
         item.contents = [];
     if (!box || !qualifiers.lockState) return;
@@ -5479,9 +5606,30 @@ function applyWishedQualifiers(item, qualifiers) {
     applyWishedContainerState(item, qualifiers);
 }
 
+function applyWishedQuantity(item, wishedQuan) {
+    if (isTinObject(item)) {
+        if (game.flags?.debug || wishedQuan < rnd(6))
+            item.quan = wishedQuan;
+    } else if (wishedQuan > 1) {
+        item.quan = wishedQuan;
+    }
+}
+
+function applyWishedTinVariety(item) {
+    if (!isTinObject(item) || item._wish_tin_requested_variety == null) return;
+    const varietyIndex = item._wish_tin_requested_variety;
+    if (game.flags?.debug || rn2(4)) {
+        if (item.corpsenm?.name) setTinMonster(item, item.corpsenm, varietyIndex);
+        else item.spe = -(varietyIndex + 1);
+    }
+}
+
 function wishedObjectFromName(lowerName, qualifiers = {}) {
     const artifact = makeArtifactWishObject(lowerName, { wizardMode: !!game.flags?.debug });
     if (artifact) return artifact;
+
+    const tinWish = parseWishedTinName(lowerName);
+    if (tinWish) return makeWishedTinObject(tinWish);
 
     const baseObject = WISH_BASE_OBJECTS.get(lowerName);
     if (baseObject) {
@@ -5716,6 +5864,7 @@ export function pickupObjectName(obj) {
     if (obj.artifact) return artifactObjectName(obj) || obj.kind;
     if (obj.otyp === 'corpse' || obj.otyp === CORPSE) return `${obj.corpsenm?.name || 'monster'} corpse`;
     if ((obj.kind === 'statue' || obj.otyp === STATUE) && obj.corpsenm?.name) return `statue of a ${obj.corpsenm.name}`;
+    if (isTinObject(obj)) return tinObjectName(obj);
     if (obj.otyp === LARGE_BOX) return 'large box';
     if (obj.otyp === CHEST) return 'chest';
     if (obj.otyp === ICE_BOX) return 'ice box';
@@ -16778,9 +16927,12 @@ export async function rhack(_cmd) {
                 negativeSpe: wishedSpeNegative,
             });
             applyWishedQualifiers(item, wishedQualifiers);
+            applyWishedQuantity(item, wishedQuan);
+            applyWishedTinVariety(item);
             delete item._wish_ignore_requested_spe;
             delete item._wish_spe_from_suffix;
-            if (wishedQuan > 1) item.quan = wishedQuan;
+            delete item._wish_tin_explicit_content;
+            delete item._wish_tin_requested_variety;
             const visibleName = game.u?.blind && item.cls === 'potion' ? 'potion'
                 : game.u?.blind && item.cls === 'ring' ? 'ring'
                     : game.u?.blind && item.cls === 'wand' ? 'wand'
