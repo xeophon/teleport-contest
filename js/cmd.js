@@ -484,6 +484,7 @@ const POT_WATER = 253;
 const WAND_CLASS = 10;
 const SPBOOK_NO_NOVEL = 11;
 const TOOL_CLASS = 12;
+const BOOK_OF_THE_DEAD = 10097;
 const GEM_CLASS = 14;
 const AMULET_CLASS = 15;
 const OBJECT_CLASS_GLYPHS = {
@@ -501,6 +502,7 @@ const OBJECT_CLASS_GLYPHS = {
 };
 const DART = 353;
 const BELL = 358;
+const CANDELABRUM_OF_INVOCATION = 10076;
 const ORCISH_DAGGER = 10020;
 const DAGGER = 10023;
 const SILVER_SABER = 10062;
@@ -769,6 +771,11 @@ const WISH_BASE_OBJECTS = new Map([
     ['grey dragon scale mail', { otyp: GRAY_DRAGON_SCALE_MAIL, cls: 'armor', glyph: '[', kind: 'gray dragon scale mail', actualKind: 'gray dragon scale mail' }],
     ['silver dragon scale mail', { otyp: SILVER_DRAGON_SCALE_MAIL, cls: 'armor', glyph: '[', kind: 'silver dragon scale mail', actualKind: 'silver dragon scale mail' }],
     ['speed boots', { otyp: SPEED_BOOTS, cls: 'armor', glyph: '[', kind: 'speed boots', actualKind: 'speed boots', known: false }],
+]);
+const WIZARD_ONLY_WISH_NAMEDESC_BOUNDS = new Map([
+    ['bell of opening', 1],
+    ['book of the dead', 1],
+    ['candelabrum of invocation', 1],
 ]);
 const WISH_BASE_NAMEDESC_BOUNDS = new Map([
     ['dart', 61], ['darts', 61], ['dagger', 31], ['daggers', 31],
@@ -5349,6 +5356,80 @@ function makeBlankSpellbookWishObject() {
     });
 }
 
+function makeFakeAmuletOfYendorWishObject() {
+    const otmp = mksobj(AMULET_CLASS, true, false);
+    return Object.assign(otmp, {
+        cls: 'amulet',
+        glyph: '"',
+        kind: 'Amulet of Yendor',
+        actualKind: 'cheap plastic imitation of the Amulet of Yendor',
+        appearance: 'Amulet of Yendor',
+        known: false,
+        fakeAmuletOfYendor: true,
+        wishedfor: true,
+    });
+}
+
+function makeOrdinaryBellWishObject() {
+    const otmp = mksobj(BELL, true, false);
+    return Object.assign(otmp, {
+        cls: 'tool',
+        glyph: '(',
+        kind: 'bell',
+        actualKind: 'bell',
+        wishedfor: true,
+    });
+}
+
+function makeCandleFromCandelabrumWishObject() {
+    const candleType = rnd(25) <= 20 ? TALLOW_CANDLE : WAX_CANDLE;
+    const wax = candleType === WAX_CANDLE;
+    const otmp = mksobj(candleType, true, false);
+    return Object.assign(otmp, {
+        cls: 'tool',
+        glyph: '(',
+        kind: wax ? 'wax candle' : 'tallow candle',
+        plural: wax ? 'wax candles' : 'tallow candles',
+        age: wax ? 400 : 200,
+        wishedfor: true,
+    });
+}
+
+function makeOilLampFromMagicLampWishObject() {
+    const otmp = mksobj(OIL_LAMP, true, false);
+    return Object.assign(otmp, {
+        cls: 'tool',
+        glyph: '(',
+        kind: 'oil lamp',
+        actualKind: 'oil lamp',
+        wishedfor: true,
+    });
+}
+
+function substituteNonWizardSpecialWish(lowerName) {
+    if (game.flags?.debug) return null;
+    if (/\bamulet of yendor\b/.test(lowerName)) {
+        return makeFakeAmuletOfYendorWishObject();
+    }
+    if (lowerName === 'candelabrum of invocation') {
+        rn2(WIZARD_ONLY_WISH_NAMEDESC_BOUNDS.get(lowerName));
+        return makeCandleFromCandelabrumWishObject();
+    }
+    if (lowerName === 'bell of opening') {
+        rn2(WIZARD_ONLY_WISH_NAMEDESC_BOUNDS.get(lowerName));
+        return makeOrdinaryBellWishObject();
+    }
+    if (lowerName === 'book of the dead') {
+        rn2(WIZARD_ONLY_WISH_NAMEDESC_BOUNDS.get(lowerName));
+        return makeBlankSpellbookWishObject();
+    }
+    if (lowerName === 'magic lamp') {
+        rn2(WISH_BASE_NAMEDESC_BOUNDS.get(lowerName));
+        return makeOilLampFromMagicLampWishObject();
+    }
+    return null;
+}
+
 function makeAmbiguousBlankPaperWishObject() {
     return rn2(48) < 29 ? makeBlankScrollWishObject() : makeBlankSpellbookWishObject();
 }
@@ -5630,6 +5711,9 @@ function wishedObjectFromName(lowerName, qualifiers = {}) {
 
     const tinWish = parseWishedTinName(lowerName);
     if (tinWish) return makeWishedTinObject(tinWish);
+
+    const specialSubstitution = substituteNonWizardSpecialWish(lowerName);
+    if (specialSubstitution) return specialSubstitution;
 
     const baseObject = WISH_BASE_OBJECTS.get(lowerName);
     if (baseObject) {
@@ -5945,6 +6029,7 @@ export function pickupObjectName(obj) {
             return `${game._object_descriptions?.rings?.[(obj.ringRoll || 1) - 1] || 'ruby'} ring`;
         return obj.kind;
     }
+    if (obj.fakeAmuletOfYendor) return obj.known ? obj.actualKind : 'Amulet of Yendor';
     if (obj.otyp === AMULET_CLASS || obj.cls === 'amulet') {
         if (obj.known === false || !obj.kind) {
             const appearance = obj.appearance || game._object_descriptions?.amulets?.[obj.amuletIndex] || 'amulet';

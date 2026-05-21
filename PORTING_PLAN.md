@@ -725,6 +725,11 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   actual tin objects, `empty` and `trapped`/`untrapped` apply to tins, and
   wished tin quantities follow C's normal `cnt < rnd(6)` gate outside wizard
   mode.
+- Non-wizard exact wishes now model C's special-object substitutions for
+  wizard-only objects: `magic lamp` becomes an oil lamp, `bell of opening`
+  becomes an ordinary bell, `book of the dead` becomes a blank spellbook,
+  `candelabrum of invocation` becomes a weighted tallow/wax candle, and the
+  Amulet of Yendor wish produces the fake amulet object.
 - Wished container state prefixes now cover the C `readobjnam()` object slice
   for `locked`, `unlocked`, `broken`, `trapped`, `untrapped`, and `empty`:
   boxes keep normal generated contents and lock/trap RNG before final state
