@@ -723,6 +723,12 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   boxes keep normal generated contents and lock/trap RNG before final state
   overrides, broken boxes clear traps, empty supported containers drop generated
   contents, and the wish line does not reveal lock/trap/content knowledge bits.
+- Wished blank/diluted/partly-eaten qualifiers now cover another
+  `readobjnam_preparse()` slice: `blank`/`unlabeled`/`unlabelled` map generic
+  scroll and spellbook wishes to blank paper objects, `diluted` persists only
+  on non-water potions, and `partly eaten` food stores `oeaten` only when the
+  C object nutrition is greater than 1. Blank scrolls and spellbooks also use
+  their C read messages instead of falling through as magical scrolls/books.
 
 Next concrete target:
 

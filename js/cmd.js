@@ -478,6 +478,7 @@ const SCROLL_CLASS = 8;
 const SCR_ENCHANT_ARMOR = 277;
 const SCR_BLANK_PAPER = 293;
 const POTION_CLASS = 9;
+const POT_WATER = 253;
 const WAND_CLASS = 10;
 const SPBOOK_NO_NOVEL = 11;
 const TOOL_CLASS = 12;
@@ -698,6 +699,31 @@ const WISH_LOCK_QUALIFIER_RE = /^(locked|unlocked|broken)\s+/i;
 const WISH_PROOF_QUALIFIER_RE = /^(rustproof|erodeproof|corrodeproof|fixed|fireproof|rotproof|tempered|crackproof)\s+/i;
 const WISH_PRIMARY_EROSION_RE = /^(rusty|rusted|burnt|burned|cracked)\s+/i;
 const WISH_SECONDARY_EROSION_RE = /^(corroded|rotted)\s+/i;
+const FOOD_NUTRITION = new Map([
+    ['tripe ration', 200],
+    ['egg', 80],
+    ['eucalyptus leaf', 1],
+    ['apple', 50],
+    ['orange', 80],
+    ['pear', 50],
+    ['melon', 100],
+    ['banana', 80],
+    ['carrot', 50],
+    ['sprig of wolfsbane', 40],
+    ['clove of garlic', 40],
+    ['slime mold', 250],
+    ['lump of royal jelly', 200],
+    ['cream pie', 100],
+    ['candy bar', 100],
+    ['fortune cookie', 40],
+    ['pancake', 200],
+    ['lembas wafer', 800],
+    ['cram ration', 600],
+    ['food ration', 800],
+    ['k-ration', 400],
+    ['c-ration', 300],
+    ['tin', 0],
+]);
 const POISONABLE_WISH_WEAPONS = new Set([
     'arrow', 'arrows', 'elven arrow', 'elven arrows', 'orcish arrow', 'orcish arrows',
     'silver arrow', 'silver arrows', 'ya', 'crossbow bolt', 'crossbow bolts',
@@ -5163,6 +5189,102 @@ function itemClassKey(item) {
                     : '');
 }
 
+function isPotionObject(item) {
+    return item?.cls === 'potion' || item?.otyp === POTION_CLASS || item?.otyp === POT_WATER;
+}
+
+function isWaterPotion(item) {
+    if (!isPotionObject(item)) return false;
+    const kind = objectKindKey(item).replace(/^potion of /, '');
+    return item?.otyp === POT_WATER || kind === 'water' || kind === 'holy water' || kind === 'unholy water';
+}
+
+function maybeDilutedPotionName(obj, name) {
+    if (!obj?.odiluted || isWaterPotion(obj) || name.startsWith('diluted ')) return name;
+    return `diluted ${name}`;
+}
+
+function foodObjectNutrition(item) {
+    if (!item) return 0;
+    if (item.otyp === 'corpse' || item.otyp === CORPSE || /\bcorpse$/.test(objectKindKey(item))) {
+        const corpseName = item.corpsenm?.name || objectKindKey(item).replace(/\s+corpse$/, '');
+        return CORPSE_NUTRITION.get(corpseName) || 0;
+    }
+    const kind = objectKindKey(item).replace(/^partly eaten /, '');
+    if (kind.startsWith('tin:')) return 0;
+    return FOOD_NUTRITION.get(kind) ?? 0;
+}
+
+function consumeOeaten(item, amount) {
+    if (!item?.oeaten) return;
+    if (amount > 0) item.oeaten = Math.floor(item.oeaten / (2 ** amount));
+    else item.oeaten -= amount;
+    if (item.oeaten <= 0) item.oeaten = 1;
+}
+
+function applyWishedPartlyEaten(item) {
+    if (!(item?.cls === 'food' || item?.otyp === FOOD_CLASS || item?.otyp === 'corpse' || item?.otyp === CORPSE)) return;
+    const nutrition = foodObjectNutrition(item);
+    if (nutrition <= 1) return;
+    item.oeaten = nutrition;
+    consumeOeaten(item, 1);
+}
+
+function maybePartlyEatenFoodName(obj, name) {
+    if (!(obj?.oeaten > 0) || name.startsWith('partly eaten ')) return name;
+    return `partly eaten ${name}`;
+}
+
+function makeBlankScrollWishObject() {
+    const otmp = mksobj(SCR_BLANK_PAPER, true, false);
+    return Object.assign(otmp, {
+        cls: 'scroll',
+        glyph: '?',
+        kind: 'blank paper',
+        known: false,
+        wishedfor: true,
+    });
+}
+
+function makeBlankSpellbookWishObject() {
+    const otmp = mksobj(SPBOOK_NO_NOVEL, true, false);
+    return Object.assign(otmp, {
+        cls: 'spellbook',
+        glyph: '+',
+        kind: 'spellbook of blank paper',
+        spellName: '',
+        appearance: 'plain',
+        known: false,
+        wishedfor: true,
+    });
+}
+
+function makeAmbiguousBlankPaperWishObject() {
+    return rn2(48) < 29 ? makeBlankScrollWishObject() : makeBlankSpellbookWishObject();
+}
+
+function isWishedFoodName(lowerName) {
+    return FOOD_NUTRITION.has(lowerName)
+        || lowerName === 'food'
+        || lowerName === 'ration'
+        || lowerName === 'rations'
+        || lowerName === 'corpse'
+        || lowerName.endsWith(' corpse')
+        || lowerName.endsWith(' cookie')
+        || lowerName.endsWith(' cookies');
+}
+
+function isBlankScrollItem(item) {
+    return item?.otyp === SCR_BLANK_PAPER || item?.kind === 'blank paper'
+        || item?.actualKind === 'scroll of blank paper';
+}
+
+function isBlankSpellbookItem(item) {
+    if (!(item?.cls === 'spellbook' || item?.otyp === SPBOOK_NO_NOVEL)) return false;
+    const name = item.spellName || item.spell?.name || String(item.kind || '').replace(/^spellbook(?: of)? /, '');
+    return name === 'blank paper' || (!name && item.appearance === 'plain');
+}
+
 function isBoxObject(item) {
     const kind = objectKindKey(item);
     return item?.otyp === LARGE_BOX || item?.otyp === CHEST
@@ -5260,6 +5382,10 @@ function applyWishedQualifiers(item, qualifiers) {
             item.oerodeproof = ((game.u?.uluck || 0) + (game.u?.moreluck || 0)) >= 0 || !!game.flags?.debug;
     }
     if (qualifiers.greased) item.greased = true;
+    if (qualifiers.diluted && isPotionObject(item) && !isWaterPotion(item))
+        item.odiluted = true;
+    if (qualifiers.halfeaten)
+        applyWishedPartlyEaten(item);
     if (qualifiers.poisoned) {
         if (wishedPoisonable(item)) item.opoisoned = ((game.u?.uluck || 0) + (game.u?.moreluck || 0)) >= 0;
         else if (itemClassKey(item) === 'food') item.age = 1;
@@ -5268,7 +5394,7 @@ function applyWishedQualifiers(item, qualifiers) {
     applyWishedContainerState(item, qualifiers);
 }
 
-function wishedObjectFromName(lowerName) {
+function wishedObjectFromName(lowerName, qualifiers = {}) {
     const artifact = makeArtifactWishObject(lowerName, { wizardMode: !!game.flags?.debug });
     if (artifact) return artifact;
 
@@ -5356,18 +5482,22 @@ function wishedObjectFromName(lowerName) {
         });
     }
 
+    if (qualifiers.unlabeled && lowerName === 'paper')
+        return makeAmbiguousBlankPaperWishObject();
+
     if (/potion|juice|water/.test(lowerName)) {
         const potionName = lowerName.replace(/^potion(?: of)?\s+/, '');
+        const waterPotion = lowerName === 'water' || potionName === 'water';
         const potionIndex = IDENTIFIED_POTION_NAMES.indexOf(potionName);
         if (potionIndex >= 0) rn2(POTION_WISH_PROBS[potionIndex] + 1);
-        const otmp = mksobj(potionIndex >= 0 ? POTION_WISH_BASE + potionIndex : POTION_CLASS, true, false);
+        const otmp = mksobj(waterPotion ? POT_WATER : potionIndex >= 0 ? POTION_WISH_BASE + potionIndex : POTION_CLASS, true, false);
         const appearance = potionIndex >= 0 ? game._object_descriptions?.potions?.[potionIndex]?.description : '';
         return Object.assign(otmp, {
             cls: 'potion',
             glyph: '!',
-            kind: appearance ? `${appearance} potion` : lowerName,
-            actualKind: potionIndex >= 0 ? `potion of ${potionName}` : lowerName,
-            potionIndex,
+            kind: waterPotion ? 'water' : appearance ? `${appearance} potion` : lowerName,
+            actualKind: waterPotion ? 'potion of water' : potionIndex >= 0 ? `potion of ${potionName}` : lowerName,
+            potionIndex: waterPotion ? null : potionIndex,
             known: false,
             wishedfor: true,
         });
@@ -5375,6 +5505,8 @@ function wishedObjectFromName(lowerName) {
 
     if (lowerName.includes('scroll')) {
         const scrollName = lowerName.replace(/^scrolls?(?: of)?\s+/, '');
+        if ((qualifiers.unlabeled && /^scrolls?$/.test(lowerName)) || scrollName === 'blank paper')
+            return makeBlankScrollWishObject();
         const scrollIndex = IDENTIFIED_SCROLL_NAMES.indexOf(scrollName);
         const mailScroll = scrollName === 'mail';
         if (mailScroll) rn2(1);
@@ -5395,6 +5527,8 @@ function wishedObjectFromName(lowerName) {
 
     if (/spellbook|book/.test(lowerName)) {
         const spellName = lowerName.replace(/^spellbook(?: of)?\s+/, '');
+        if ((qualifiers.unlabeled && lowerName === 'spellbook') || spellName === 'blank paper')
+            return makeBlankSpellbookWishObject();
         const spellbookNames = Object.keys(SPELLBOOK_LEVELS);
         const spellbookIndex = spellbookNames.indexOf(spellName);
         const namedescBound = WISH_SPELLBOOK_NAMEDESC_BOUNDS.get(spellName);
@@ -5427,7 +5561,7 @@ function wishedObjectFromName(lowerName) {
         });
     }
 
-    if (/ration|apple|orange|pie|food|tin|corpse|cookie/.test(lowerName)) {
+    if (isWishedFoodName(lowerName)) {
         const namedescBound = WISH_FOOD_NAMEDESC_BOUNDS.get(lowerName);
         if (namedescBound) rn2(namedescBound);
         const otmp = mksobj(FOOD_CLASS, true, false);
@@ -5527,7 +5661,7 @@ export function pickupObjectName(obj) {
     }
     if (obj.otyp === POTION_CLASS || obj.cls === 'potion') {
         if ((obj.quan || 1) > 1 && obj.plural) return obj.plural;
-        if (obj.kind?.startsWith?.('potion:')) return obj.singular || `potion of ${obj.kind.slice(7)}`;
+        if (obj.kind?.startsWith?.('potion:')) return maybeDilutedPotionName(obj, obj.singular || `potion of ${obj.kind.slice(7)}`);
         const rawKind = String(obj.kind || '').replace(/^potion of /, '');
         if (rawKind === 'water' && (obj.blessed || obj.cursed)) {
             const kind = obj.blessed ? 'holy water' : 'unholy water';
@@ -5535,13 +5669,13 @@ export function pickupObjectName(obj) {
         }
         if (obj.kind === 'holy water' || obj.kind === 'unholy water')
             return (obj.quan || 1) > 1 ? `potions of ${obj.kind}` : `potion of ${obj.kind}`;
-        if (obj.kind?.endsWith?.(' potion')) return obj.kind;
+        if (obj.kind?.endsWith?.(' potion')) return maybeDilutedPotionName(obj, obj.kind);
         if (obj.kind) {
             const name = obj.kind.replace(/^potion of /, '');
-            return (obj.quan || 1) > 1 ? `potions of ${name}` : `potion of ${name}`;
+            return maybeDilutedPotionName(obj, (obj.quan || 1) > 1 ? `potions of ${name}` : `potion of ${name}`);
         }
         const appearance = game._object_descriptions?.potions?.[obj.potionIndex]?.description || 'clear';
-        return `${appearance} potion`;
+        return maybeDilutedPotionName(obj, `${appearance} potion`);
     }
     if (obj.otyp === WAND_CLASS || obj.cls === 'wand') {
         if (obj.known === false) {
@@ -5611,14 +5745,14 @@ export function pickupObjectName(obj) {
         const buc = game._startup_role === 'Priest' || obj.bknown
             ? obj.cursed ? 'cursed ' : obj.blessed ? 'blessed ' : ''
             : '';
-        if ((obj.quan || 1) > 1 && obj.plural) return obj.plural;
-        if ((obj.quan || 1) > 1 && obj.kind === 'food ration') return `${buc}food rations`;
-        if ((obj.quan || 1) > 1 && obj.kind === 'cram ration') return `${buc}cram rations`;
-        if (obj.kind === 'tripe') return `${buc}${(obj.quan || 1) > 1 ? 'tripe rations' : 'tripe ration'}`;
-        if (obj.kind?.startsWith?.('tin:')) return `${buc}${obj.singular || 'tin'}`;
-        if (obj.kind) return `${buc}${obj.kind}`;
-        if ((obj.foodRoll || 1000) <= 140) return `${buc}tripe ration`;
-        return `${buc}food ration`;
+        if ((obj.quan || 1) > 1 && obj.plural) return `${buc}${maybePartlyEatenFoodName(obj, obj.plural)}`;
+        if ((obj.quan || 1) > 1 && obj.kind === 'food ration') return `${buc}${maybePartlyEatenFoodName(obj, 'food rations')}`;
+        if ((obj.quan || 1) > 1 && obj.kind === 'cram ration') return `${buc}${maybePartlyEatenFoodName(obj, 'cram rations')}`;
+        if (obj.kind === 'tripe') return `${buc}${maybePartlyEatenFoodName(obj, (obj.quan || 1) > 1 ? 'tripe rations' : 'tripe ration')}`;
+        if (obj.kind?.startsWith?.('tin:')) return `${buc}${maybePartlyEatenFoodName(obj, obj.singular || 'tin')}`;
+        if (obj.kind) return `${buc}${maybePartlyEatenFoodName(obj, obj.kind)}`;
+        if ((obj.foodRoll || 1000) <= 140) return `${buc}${maybePartlyEatenFoodName(obj, 'tripe ration')}`;
+        return `${buc}${maybePartlyEatenFoodName(obj, 'food ration')}`;
     }
     if (obj.otyp === GEM_CLASS) {
         const name = obj.gemDescription || 'white gem';
@@ -6302,7 +6436,10 @@ function identifiedInventoryLine(item) {
         const raw = String(item.actualKind || item.kind || '').replace(/^potion:/, '').replace(/^potion of /, '') || 'water';
         if (raw === 'water' && item.blessed) phrase = 'potion of holy water';
         else if (raw === 'water' && item.cursed) phrase = 'potion of unholy water';
-        else phrase = `${buc} ${quan > 1 ? 'potions' : 'potion'} of ${raw}`;
+        else {
+            const diluted = item.odiluted && !isWaterPotion(item) ? 'diluted ' : '';
+            phrase = `${buc} ${diluted}${quan > 1 ? 'potions' : 'potion'} of ${raw}`;
+        }
     } else if (cls === 'ring') {
         const roll = item.ringRoll || item.roll || 0;
         const ring = roll ? `ring of ${IDENTIFIED_RING_NAMES[roll - 1]}` : String(item.kind || 'ring');
@@ -13826,6 +13963,18 @@ export async function rhack(_cmd) {
                         ? IDENTIFIED_SCROLL_NAMES[(game._object_descriptions?.scrolls || []).indexOf(item.kind.slice(15))] || ''
                         : '';
         const isScroll = item && (item.cls === 'scroll' || item.otyp === SCROLL_CLASS);
+        if (isScroll && isBlankScrollItem(item)) {
+            item.known = true;
+            item.actualKind = 'scroll of blank paper';
+            item.kind = 'blank paper';
+            item.line = normalInventoryLine({ ...item, line: '' });
+            await setMessage(game.u?.blind
+                ? "You don't remember there being any magic words on this scroll."
+                : 'This scroll seems to be blank.');
+            game._command_mode = null;
+            game.context.move = 1;
+            return;
+        }
         if (isScroll && (scrollName === 'destroy armor' || item.scrollIndex === 1)) {
             removeInventoryItem(item);
             rn2(19);
@@ -14152,6 +14301,16 @@ export async function rhack(_cmd) {
             return;
         }
         if (item?.cls === 'spellbook') {
+            if (isBlankSpellbookItem(item)) {
+                item.known = true;
+                item.kind = 'spellbook of blank paper';
+                item.spellName = '';
+                item.line = normalInventoryLine({ ...item, line: '' });
+                await setMessage('This spellbook is all blank.');
+                game._command_mode = null;
+                game.context.move = 1;
+                return;
+            }
             const name = item.spellName || item.spell?.name || String(item.kind || '').replace(/^spellbook(?: of)? /, '');
             const knownSpell = (game._known_spells || []).some(spell =>
                 (spell.name || spell.spellName || spell.spell?.name) === name);
@@ -16366,6 +16525,9 @@ export async function rhack(_cmd) {
                 lockState: '',
                 trappedState: 0,
                 empty: false,
+                diluted: false,
+                halfeaten: false,
+                unlabeled: false,
             };
             let wishedErosionIntensity = 0;
             for (;;) {
@@ -16413,6 +16575,24 @@ export async function rhack(_cmd) {
                 if (wet) {
                     wishedQualifiers.wetness = wet[1].toLowerCase() === 'wet' ? 3 + rn2(3) : rnd(2);
                     wishedName = wishedName.slice(wet[0].length);
+                    continue;
+                }
+                const unlabeled = wishedName.match(/^(?:unlabeled|unlabelled|blank)\s+/i);
+                if (unlabeled) {
+                    wishedQualifiers.unlabeled = true;
+                    wishedName = wishedName.slice(unlabeled[0].length);
+                    continue;
+                }
+                const halfeaten = wishedName.match(/^(?:partly|partially)\s+eaten\s+/i);
+                if (halfeaten) {
+                    wishedQualifiers.halfeaten = true;
+                    wishedName = wishedName.slice(halfeaten[0].length);
+                    continue;
+                }
+                const diluted = wishedName.match(/^diluted\s+/i);
+                if (diluted) {
+                    wishedQualifiers.diluted = true;
+                    wishedName = wishedName.slice(diluted[0].length);
                     continue;
                 }
                 const poisoned = wishedName.match(/^poisoned\s+/i);
@@ -16483,7 +16663,7 @@ export async function rhack(_cmd) {
                 && !(game.inventory || []).some(invItem => invItem.letter === 'n')) {
                 letter = nextInventoryLetter();
             }
-            const item = Object.assign({ letter, quan: 1 }, wishedObjectFromName(lowerName));
+            const item = Object.assign({ letter, quan: 1 }, wishedObjectFromName(lowerName, wishedQualifiers));
             if (item._wish_disappeared) {
                 await setWishResultMessage(item._wish_disappear_message);
                 return;
