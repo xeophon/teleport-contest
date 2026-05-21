@@ -866,6 +866,12 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   through the wish parser; and reading scrolls of confuse monster or scare
   monster now applies C-shaped hero glow/confusion, monster resistance, fear,
   and reverse-fear state changes.
+- Scroll detection effects now cover the next C `read.c`/`detect.c` slice:
+  reading scrolls of gold detection or food detection consumes the scroll,
+  routes confused/cursed gold detection into trap detection, makes cursed or
+  confused food detection look for potions, marks detected floor and
+  monster-carried objects in the map memory, preserves the key C messages and
+  Wisdom exercise calls, and grants blessed food-detection edibility sensing.
 
 Next concrete target:
 

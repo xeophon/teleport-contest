@@ -6402,6 +6402,207 @@ function isBlankSpellbookItem(item) {
     return name === 'blank paper' || (!name && item.appearance === 'plain');
 }
 
+function learnScrollByName(scrollName, item, scrollIndex = null) {
+    const discoveryName = `scroll of ${scrollName}`;
+    learnObjectScore('Scrolls', discoveryName);
+    const rawLabel = String(item?.kind || '');
+    const label = rawLabel.startsWith('scroll labeled ')
+        ? rawLabel.replace(/^scroll labeled /, '')
+        : scrollIndex != null ? game._object_descriptions?.scrolls?.[scrollIndex] : '';
+    game._discoveries ??= [];
+    const discovery = game._discoveries.find(entry => entry.section === 'Scrolls' && entry.name === discoveryName);
+    const text = label ? `${discoveryName} (${label})` : discoveryName;
+    if (discovery) {
+        discovery.known = true;
+        discovery.text = text;
+    } else {
+        game._discoveries.push({
+            section: 'Scrolls',
+            name: discoveryName,
+            text,
+            starred: false,
+            known: true,
+        });
+    }
+}
+
+function containedObjectMatching(obj, predicate, seen = new Set()) {
+    if (!obj || seen.has(obj)) return null;
+    seen.add(obj);
+    if (predicate(obj)) return obj;
+    for (const child of obj.contents || obj.cobj || []) {
+        const found = containedObjectMatching(child, predicate, seen);
+        if (found) return found;
+    }
+    return null;
+}
+
+function isGoldObject(item, includeGoldMaterial = false) {
+    if (!item) return false;
+    if (item.otyp === GOLD_PIECE || item.cls === 'coin' || item.glyph === '$') return true;
+    if (!includeGoldMaterial) return false;
+    const name = String(item.kind || item.actualKind || item.name || '').toLowerCase();
+    return /\bgold(?:en)?\b/.test(name);
+}
+
+function isFoodObject(item) {
+    return item?.cls === 'food' || item?.otyp === FOOD_CLASS
+        || item?.otyp === 'corpse' || item?.otyp === CORPSE
+        || item?.otyp === EGG || item?.otyp === TIN || item?.glyph === '%';
+}
+
+function detectedObjectGlyph(item) {
+    if (isGoldObject(item)) return { ch: '$', color: CLR_YELLOW, dec: false };
+    if (isPotionObject(item) || item?.glyph === '!') return { ch: '!', color: item._appearance_color ?? item.color ?? NO_COLOR, dec: false };
+    if (isFoodObject(item)) return { ch: '%', color: item.color ?? item._display_color ?? NO_COLOR, dec: false };
+    if (item?.cls === 'scroll' || item?.glyph === '?') return { ch: '?', color: CLR_WHITE, dec: false };
+    if (item?.cls === 'spellbook' || item?.glyph === '+') return { ch: '+', color: item.color ?? NO_COLOR, dec: false };
+    return { ch: item?.glyph || '?', color: item?.color ?? NO_COLOR, dec: false };
+}
+
+function markDetectedGlyph(target, x, y) {
+    const loc = game.level?.at(x, y);
+    if (!loc) return;
+    const glyph = detectedObjectGlyph(target);
+    loc.remembered_glyph = { ch: glyph.ch, color: glyph.color, dec: glyph.dec };
+    loc.waslit = true;
+    show_glyph_cell(x, y, glyph.ch, glyph.color, glyph.dec);
+}
+
+function collectDetectedObjects(predicate) {
+    const found = { here: [], remote: [] };
+    const ux = game.u?.ux ?? -1;
+    const uy = game.u?.uy ?? -1;
+    for (const obj of game.level?.objects || []) {
+        if (obj.hidden || obj.transientProjectile || obj.ox == null || obj.oy == null) continue;
+        const target = containedObjectMatching(obj, predicate);
+        if (!target) continue;
+        target.seen = true;
+        target.dknown = true;
+        target._hide_until_seen = false;
+        const entry = { target, x: obj.ox, y: obj.oy };
+        if (obj.ox === ux && obj.oy === uy) found.here.push(entry);
+        else found.remote.push(entry);
+    }
+    for (const mon of game.level?.monsters || []) {
+        if (!mon || mon.dead || mon.mhp <= 0 || mon.mx == null || mon.my == null) continue;
+        const target = containedObjectMatching({ contents: mon.minvent || [] }, predicate);
+        if (!target) continue;
+        const entry = { target, x: mon.mx, y: mon.my, monster: mon };
+        if (mon.mx === ux && mon.my === uy) found.here.push(entry);
+        else found.remote.push(entry);
+    }
+    return found;
+}
+
+function markDetectedObjects(entries) {
+    for (const entry of entries) markDetectedGlyph(entry.target, entry.x, entry.y);
+    if (entries.length && game.u?.ux != null) newsym(game.u.ux, game.u.uy);
+}
+
+function carriedGoldInInventory() {
+    if ((game._goldCount || 0) > 0) return true;
+    return (game.inventory || []).some(item => isGoldObject(item) || containedObjectMatching(item, isGoldObject));
+}
+
+function detectTrapsFromGoldDetection(item) {
+    const ux = game.u?.ux ?? -1;
+    const uy = game.u?.uy ?? -1;
+    const remote = [];
+    let here = false;
+    for (const trap of game.level?.traps || []) {
+        if (!trap) continue;
+        if (trap.tx === ux && trap.ty === uy) here = true;
+        else remote.push(trap);
+    }
+    if (remote.length) {
+        for (const trap of remote) {
+            if (item.cursed) {
+                rnd(10);
+                markDetectedGlyph({ otyp: GOLD_PIECE, glyph: '$', color: CLR_YELLOW }, trap.tx, trap.ty);
+            } else {
+                trap.tseen = true;
+                const loc = game.level?.at(trap.tx, trap.ty);
+                if (loc) {
+                    loc.remembered_glyph = { ch: '^', color: CLR_BROWN, dec: false };
+                    loc.waslit = true;
+                }
+                show_glyph_cell(trap.tx, trap.ty, '^', CLR_BROWN, false);
+            }
+        }
+        newsym(ux, uy);
+        return { detected: true, known: false, message: item.cursed ? 'You feel very greedy.' : 'You feel entrapped.', more: true };
+    }
+    if (here) return { detected: true, known: false, message: 'Your toes itch.', more: false };
+    return { detected: false, known: false, message: 'Your toes stop itching.', more: false };
+}
+
+function goldDetectionScrollEffect(item) {
+    if (heroIsConfused() || item.cursed) return detectTrapsFromGoldDetection(item);
+
+    const includeGoldMaterial = !!item.blessed;
+    const goldPredicate = obj => isGoldObject(obj, includeGoldMaterial);
+    const found = collectDetectedObjects(goldPredicate);
+    for (const mon of game.level?.monsters || []) {
+        if (!mon || mon.dead || mon.mhp <= 0 || mon.mx == null || mon.my == null) continue;
+        const name = String(mon.data?.name || mon.name || '').toLowerCase();
+        if (!mon.hasGold && name !== 'gold golem') continue;
+        const entry = { target: { otyp: GOLD_PIECE, glyph: '$', color: CLR_YELLOW }, x: mon.mx, y: mon.my, monster: mon };
+        if (mon.mx === (game.u?.ux ?? -1) && mon.my === (game.u?.uy ?? -1)) found.here.push(entry);
+        else found.remote.push(entry);
+    }
+
+    if (found.remote.length) {
+        for (const entry of found.remote)
+            if (entry.monster && isGoldObject(entry.target)) rnd(10);
+        markDetectedObjects(found.remote);
+        exerciseAttribute(A_WIS, true);
+        return { detected: true, known: true, message: 'You feel very greedy, and sense gold!', more: true };
+    }
+    if (found.here.length)
+        return { detected: true, known: true, message: 'You notice some gold between your feet.', more: false };
+    if (String(polyselfForm()?.name || '').toLowerCase() === 'gold golem')
+        return { detected: false, known: false, message: 'You feel like a million zorkmids!', more: false };
+    if (carriedGoldInInventory())
+        return { detected: false, known: false, message: 'You feel worried about your future financial situation.', more: false };
+    return { detected: false, known: false, message: 'You feel materially poor.', more: false };
+}
+
+function foodDetectionScrollEffect(item) {
+    const confused = heroIsConfused() || item.cursed;
+    const predicate = confused ? obj => isPotionObject(obj) || obj?.glyph === '!' : isFoodObject;
+    const what = confused ? 'something' : 'food';
+    const found = collectDetectedObjects(predicate);
+    if (found.remote.length) {
+        markDetectedObjects(found.remote);
+        let message;
+        if (item.blessed) {
+            message = `Your nose ${game.u?.uedibility ? 'continues' : 'starts'} to tingle and you smell ${what}.`;
+            if (game.u) game.u.uedibility = 1;
+        } else {
+            message = `Your nose tingles and you smell ${what}.`;
+        }
+        exerciseAttribute(A_WIS, true);
+        return { detected: true, known: true, message, more: true };
+    }
+    if (found.here.length) {
+        const messages = [`You smell ${what} nearby.`];
+        if (item.blessed) {
+            if (!game.u?.uedibility) messages.push('Your nose starts to tingle.');
+            if (game.u) game.u.uedibility = 1;
+        }
+        return { detected: true, known: true, message: messages.join('  '), more: false };
+    }
+    const tingle = item.blessed && !game.u?.uedibility;
+    if (tingle && game.u) game.u.uedibility = 1;
+    return {
+        detected: false,
+        known: false,
+        message: `Your nose twitches${tingle ? ' then starts to tingle' : ''}.`,
+        more: false,
+    };
+}
+
 function confuseMonsterScrollEffect(item) {
     const confused = heroIsConfused();
     const nonHuman = !!game.u?._polyself_form && game.u._polyself_form.mlet !== 'human';
@@ -15784,6 +15985,36 @@ export async function rhack(_cmd) {
             game._queued_message_process_time_after_more = 1;
 	            game._read_scroll_exercise_after_more = 1;
             await setMessage('As you read the scroll, it disappears.', true);
+            game._command_mode = null;
+            game.context.move = 1;
+            return;
+        }
+        if (isScroll && (scrollName === 'gold detection' || item.scrollIndex === 11)) {
+            const confusedReading = heroIsConfused();
+            removeInventoryItem(item);
+            rn2(19);
+            const result = goldDetectionScrollEffect(item);
+            if (result.known) learnScrollByName('gold detection', item, 11);
+            const messages = ['As you read the scroll, it disappears.'];
+            if (confusedReading)
+                messages.push(game.u?.hallucinating ? 'Being so trippy, you screw up...' : 'Being confused, you mispronounce the magic words...');
+            if (result.message) messages.push(result.message);
+            await setMessage(messages.join('  '), result.more || confusedReading);
+            game._command_mode = null;
+            game.context.move = 1;
+            return;
+        }
+        if (isScroll && (scrollName === 'food detection' || item.scrollIndex === 12)) {
+            const confusedReading = heroIsConfused();
+            removeInventoryItem(item);
+            rn2(19);
+            const result = foodDetectionScrollEffect(item);
+            if (result.known) learnScrollByName('food detection', item, 12);
+            const messages = ['As you read the scroll, it disappears.'];
+            if (confusedReading)
+                messages.push(game.u?.hallucinating ? 'Being so trippy, you screw up...' : 'Being confused, you mispronounce the magic words...');
+            if (result.message) messages.push(result.message);
+            await setMessage(messages.join('  '), result.more || confusedReading);
             game._command_mode = null;
             game.context.move = 1;
             return;
