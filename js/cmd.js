@@ -6,7 +6,7 @@ import { nhgetch } from './input.js';
 import { bot, cls, docrt, flush_screen, newsym, pline, refreshHallucinatedMap, show_glyph_cell, strengthString } from './display.js';
 import { couldsee, vision_recalc, vision_reset } from './vision.js';
 import { RANDOM_MONSTER_BY_NAME, SHOP_TYPES, artifactObjectName, enextoMonsterSpot, make_tutorial1_level, makemon, makeArtifactWishObject, mkcorpstat, mklev, mkobj_at, mksobj, monsterByRndName, nameObjectAsArtifact, next_ident, potionIndexForRoll, rndmonnum, scrollIndexForRoll, syncDungeonContext, u_on_dnstairs, u_on_rndspot, u_on_upstairs, wipe_engr_at, dropMonsterInventory, l_nhcore_init, getrumor, getbogusmon, level_difficulty, set_malign, somexyspace } from './mklev.js';
-import { ACCESSIBLE, A_CHA, A_CON, A_DEX, A_INT, A_MAX, A_STR, A_WIS, ALTAR, BC_BALL, BC_CHAIN, BEAR_TRAP, BLCORNER, BOLT_LIM, BRCORNER, CLOUD, COLNO, CORPSTAT_FEMALE, CORPSTAT_GENDER, CORPSTAT_HISTORIC, CORPSTAT_MALE, CORPSTAT_NEUTER, CORR, DOOR, BURN, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, DUST, ENGRAVE, ENGR_BLOOD, FOUNTAIN, GRAVE, HEADSTONE, HWALL, ICE, IN_SIGHT, IS_AIR, IS_OBSTRUCTED, IS_POOL, IS_ROOM, IS_WALL, In_endgame, In_quest, Is_earthlevel, Is_rogue_level, LADDER, LAVAPOOL, LAVAWALL, MAGIC_PORTAL, MARK, MOAT, NORMAL_SPEED, OVERLOADED, P_BASIC, P_UNSKILLED, POOL, ROLLING_BOULDER_TRAP, ROOM, ROT_AGE, ROOMOFFSET, ROWNO, SCORR, SDOOR, SHOPBASE, SINK, STAIRS, STONE, TDWALL, TEMPLE, THRONE, TLCORNER, TRCORNER, TREE, TUWALL, VAULT, VWALL, WAND_BACKFIRE_CHANCE, WATER, ZAP_POS } from './const.js';
+import { ACCESSIBLE, A_CHA, A_CON, A_DEX, A_INT, A_MAX, A_STR, A_WIS, ALTAR, BC_BALL, BC_CHAIN, BEAR_TRAP, BLCORNER, BOLT_LIM, BRCORNER, CLOUD, COLNO, CORPSTAT_FEMALE, CORPSTAT_GENDER, CORPSTAT_HISTORIC, CORPSTAT_MALE, CORPSTAT_NEUTER, CORR, DOOR, BURN, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, DUST, ENGRAVE, ENGR_BLOOD, FOUNTAIN, GRAVE, HEADSTONE, HWALL, ICE, IN_SIGHT, IS_AIR, IS_OBSTRUCTED, IS_POOL, IS_ROOM, IS_WALL, In_endgame, In_quest, Is_earthlevel, Is_rogue_level, LADDER, LAVAPOOL, LAVAWALL, MAGIC_PORTAL, MARK, MM_NOMSG, NO_MINVENT, NORMAL_SPEED, OVERLOADED, P_BASIC, P_UNSKILLED, POOL, ROLLING_BOULDER_TRAP, ROOM, ROT_AGE, ROOMOFFSET, ROWNO, SCORR, SDOOR, SHOPBASE, SINK, STAIRS, STONE, TDWALL, TEMPLE, THRONE, TLCORNER, TRCORNER, TREE, TUWALL, VAULT, VWALL, WAND_BACKFIRE_CHANCE, WATER, ZAP_POS } from './const.js';
 import { d, rn1, rn2, rn2_on_display_rng, rnd, rnl, rnz } from './rng.js';
 import { CLR_BLACK, CLR_BLUE, CLR_BRIGHT_BLUE, CLR_BRIGHT_CYAN, CLR_BRIGHT_GREEN, CLR_BROWN, CLR_CYAN, CLR_GRAY, CLR_GREEN, CLR_MAGENTA, CLR_ORANGE, CLR_RED, CLR_YELLOW, CLR_WHITE, NO_COLOR } from './terminal.js';
 import { vfsDeleteFile, vfsReadFile, vfsWriteFile } from './storage.js';
@@ -6643,6 +6643,292 @@ function scrollReadMessages(confusedReading) {
     return messages;
 }
 
+const GENOCIDE_MAX_TRIES = 5;
+
+function normalizeGenocideName(name) {
+    let lower = String(name || '').trim().toLowerCase();
+    lower = lower.replace(/^['"]|['"]$/g, '').replace(/^(?:a|an|the) /, '').replace(/\s+/g, ' ');
+    const irregular = {
+        dwarves: 'dwarf',
+        elves: 'elf',
+        fungi: 'fungus',
+        men: 'human',
+        humans: 'human',
+        bees: 'bee',
+        vortices: 'vortex',
+        liches: 'lich',
+    }[lower];
+    if (irregular) return irregular;
+    if (lower.endsWith('ies')) return `${lower.slice(0, -3)}y`;
+    if (lower.endsWith('ves')) return `${lower.slice(0, -3)}f`;
+    if (lower.endsWith('ses') || lower.endsWith('xes') || lower.endsWith('zes')
+        || lower.endsWith('ches') || lower.endsWith('shes'))
+        return lower.slice(0, -2);
+    if (lower.endsWith('s') && !lower.endsWith('ss')) return lower.slice(0, -1);
+    return lower;
+}
+
+function pluralizeMonsterName(name) {
+    const lower = String(name || '').toLowerCase();
+    if (lower === 'human') return 'humans';
+    if (lower === 'dwarf') return 'dwarves';
+    if (lower === 'elf') return 'elves';
+    if (lower === 'fungus') return 'fungi';
+    if (lower.endsWith('y')) return `${name.slice(0, -1)}ies`;
+    if (/(?:s|x|z|ch|sh)$/i.test(name)) return `${name}es`;
+    return `${name}s`;
+}
+
+function genocideMonsterCatalog() {
+    const entries = [];
+    const seen = new Set();
+    const add = data => {
+        if (!data?.name || seen.has(data.name)) return;
+        seen.add(data.name);
+        entries.push(data);
+    };
+    for (const row of RNDMONST_COMMON_MONSTERS) add(monsterByRndName(row[0]) || {
+        name: row[0],
+        glyph: row[1],
+        mlet: row[1],
+        difficulty: row[4],
+        genoFreq: row[6],
+    });
+    for (const data of RANDOM_MONSTER_BY_NAME.values()) add(data);
+    return entries;
+}
+
+function genocideMonsterByName(name) {
+    const wanted = normalizeGenocideName(name);
+    if (!wanted) return null;
+    for (const data of genocideMonsterCatalog()) {
+        const candidates = [
+            data.name,
+            data.name?.replace(/-/g, ' '),
+            pluralizeMonsterName(data.name || ''),
+        ].map(normalizeGenocideName);
+        if (candidates.includes(wanted)) return data;
+    }
+    return null;
+}
+
+function genocidedMonsterNames() {
+    return [...new Set(game._genocided_monsters || [])].sort((a, b) => a.localeCompare(b));
+}
+
+function isMonsterGenocidedName(name) {
+    return genocidedMonsterNames().includes(name);
+}
+
+function markMonsterGenocided(name) {
+    if (!name) return;
+    game._genocided_monsters ??= [];
+    if (!game._genocided_monsters.includes(name)) game._genocided_monsters.push(name);
+}
+
+function genocideListLines() {
+    const names = genocidedMonsterNames();
+    if (!names.length) return [[0, 41, 'You have never genocided any monsters.'], [1, 40, '--More--']];
+    const rows = [[0, 34, 'Genocided monster types:']];
+    let row = 1;
+    for (const name of names)
+        rows.push([row++, 41, pluralizeMonsterName(name)]);
+    rows.push([Math.min(row, 23), 40, '--More--']);
+    return rows.slice(0, 24);
+}
+
+function killGenocidedMonsters() {
+    const names = new Set(genocidedMonsterNames());
+    if (!names.size) return;
+    const cleanLevel = level => {
+        if (!level?.monsters) return;
+        for (const mon of [...level.monsters]) {
+            const name = mon.data?.name || mon.name;
+            const base = mon.chamBase || mon.vampBase;
+            if (!names.has(name) && !names.has(base)) continue;
+            if (level === game.level) dropMonsterInventory(mon);
+            level.monsters = level.monsters.filter(other => other !== mon);
+            if (level === game.level) newsym(mon.mx, mon.my);
+        }
+    };
+    cleanLevel(game.level);
+    if (game._saved_levels instanceof Map) {
+        for (const saved of game._saved_levels.values())
+            cleanLevel(saved.level);
+    }
+}
+
+function heroGenocideTargetName() {
+    const role = game.urole?.name?.[game.flags?.female ? 'f' : 'm'] || game.urole?.name?.m || game._startup_role || 'adventurer';
+    return String(role || 'adventurer').toLowerCase();
+}
+
+function isHeroGenocideTarget(name) {
+    const lower = normalizeGenocideName(name);
+    const role = normalizeGenocideName(heroGenocideTargetName());
+    const race = normalizeGenocideName(game._startup_race || game.urace?.noun || game.urace?.adj || '');
+    const raceAdj = normalizeGenocideName(game.urace?.adj || '');
+    return !!lower && (lower === role || lower === race || lower === raceAdj
+        || (raceAdj === 'human' && lower === 'human'));
+}
+
+function finishHeroGenocide(messages, cause = 'scroll of genocide') {
+    messages.push('You die...');
+    if (game.u) game.u.uhp = 0;
+    game._death_cause = cause;
+}
+
+function genocideMonsterType(data, messages, { killPlayer = false, cause = 'scroll of genocide' } = {}) {
+    const name = data?.name || heroGenocideTargetName();
+    markMonsterGenocided(name);
+    game._chronicle_genocide_count = (game._chronicle_genocide_count || 0) + 1;
+    messages.push(`Wiped out all ${pluralizeMonsterName(name)}.`);
+    killGenocidedMonsters();
+    if (killPlayer) finishHeroGenocide(messages, cause);
+}
+
+async function createCursedGenocideMonsters(data, messages) {
+    if (!data || data.unique || data.nemesis || isMonsterGenocidedName(data.name)) {
+        messages.push('Nothing happens.');
+        return;
+    }
+    let cnt = 0;
+    for (let i = rn1(3, 4); i > 0; i--) {
+        const mon = await makemon(data, game.u?.ux || 0, game.u?.uy || 0, NO_MINVENT | MM_NOMSG);
+        if (!mon) break;
+        cnt++;
+    }
+    messages.push(cnt ? `Sent in ${cnt > 1 ? `some ${pluralizeMonsterName(data.name)}` : /^[aeiou]/i.test(data.name) ? `an ${data.name}` : `a ${data.name}`}.` : 'Nothing happens.');
+}
+
+function genocideClassFromInput(input) {
+    const trimmed = String(input || '').trim();
+    if (trimmed.length === 1) return trimmed;
+    const lower = normalizeGenocideName(trimmed);
+    const namedClass = GENOCIDE_MONSTER_CLASS_NAMES.get(lower);
+    if (namedClass) return namedClass;
+    const data = genocideMonsterByName(trimmed);
+    return data?.glyph || data?.mlet || null;
+}
+
+function genocideClassMembers(cls) {
+    return genocideMonsterCatalog().filter(data =>
+        data.glyph === cls || data.mlet === cls || data.mlet?.[0] === cls);
+}
+
+function genocidePrompt(pending) {
+    return pending.classMode
+        ? 'What class of monsters do you want to genocide?'
+        : 'What type of monster do you want to genocide?';
+}
+
+function genocideRetryHint(pending) {
+    return pending.classMode
+        ? " [enter the symbol or name representing a class, or '?']"
+        : " [enter the name of a type of monster, or '?']";
+}
+
+async function endGenocidePrompt(messages = [], more = false) {
+    game._genocide_pending = null;
+    game._genocide_input = '';
+    game._command_mode = null;
+    game.context.move = 1;
+    if (messages.length) await setMessage(messages.join('  '), more);
+    else {
+        game._pending_message = '';
+        game._message_more = 0;
+    }
+}
+
+async function retryGenocidePrompt(pending, message) {
+    pending.tries = (pending.tries || 0) + 1;
+    game._genocide_input = '';
+    if (pending.tries >= GENOCIDE_MAX_TRIES) {
+        const messages = [];
+        if (message) messages.push(message);
+        if (pending.cursed && !pending.classMode)
+            await createCursedGenocideMonsters(rndmonnum(), messages);
+        else
+            messages.push("That's enough tries!");
+        await endGenocidePrompt(messages, messages.length > 1);
+        return;
+    }
+    game._genocide_pending = pending;
+    game._command_mode = 'genocideText';
+    game.context.move = 0;
+    await setMessage(`${message}  ${genocidePrompt(pending)}${genocideRetryHint(pending)}`);
+}
+
+async function finishGenocideInput(raw) {
+    const pending = game._genocide_pending;
+    if (!pending) return;
+    const input = String(raw || '').trim();
+    const messages = [...(pending.messages || [])];
+
+    if (!input) {
+        await retryGenocidePrompt(pending, pending.classMode
+            ? "Type letter (or punctuation) or name used for a class of monsters or 'none'."
+            : "Type the name of a type of monster or 'none'.");
+        return;
+    }
+    if (input === '\x1b' || ['none', "'none'", 'nothing'].includes(input.toLowerCase())) {
+        if (pending.cursed) {
+            await createCursedGenocideMonsters(rndmonnum(), messages);
+            await endGenocidePrompt(messages, messages.length > 1);
+            return;
+        }
+        await endGenocidePrompt();
+        return;
+    }
+    if (input === '?' || input === "'?'") {
+        game._genocide_input = '';
+        setOverlay(genocideListLines(), 24, false, 39);
+        game._command_mode = 'genocideHelp';
+        return;
+    }
+    if (pending.classMode) {
+        const cls = genocideClassFromInput(input);
+        const members = cls ? genocideClassMembers(cls) : [];
+        if (!members.length) {
+            await retryGenocidePrompt(pending, `That ${input.length === 1 ? 'symbol' : 'response'} does not represent any monster.`);
+            return;
+        }
+        let wiped = 0;
+        for (const data of members) {
+            if (isMonsterGenocidedName(data.name) || data.unique || data.nemesis) continue;
+            genocideMonsterType(data, messages);
+            wiped++;
+        }
+        if (!wiped) messages.push('All such monsters are already nonexistent.');
+        if (cls === '@' || members.some(data => isHeroGenocideTarget(data.name)))
+            finishHeroGenocide(messages);
+        await endGenocidePrompt(messages, true);
+        return;
+    }
+
+    const data = genocideMonsterByName(input);
+    if (!data) {
+        await retryGenocidePrompt(pending, 'Such creatures do not exist in this world.');
+        return;
+    }
+    if (isMonsterGenocidedName(data.name)) {
+        await retryGenocidePrompt(pending, 'Such creatures no longer exist in this world.');
+        return;
+    }
+    if (pending.cursed) {
+        await createCursedGenocideMonsters(data, messages);
+        await endGenocidePrompt(messages, messages.length > 1);
+        return;
+    }
+    const killPlayer = isHeroGenocideTarget(input);
+    if (data.unique || data.nemesis) {
+        await retryGenocidePrompt(pending, `You aren't permitted to genocide ${data.unique ? `the ${data.name}` : pluralizeMonsterName(data.name)}.`);
+        return;
+    }
+    genocideMonsterType(data, messages, { killPlayer });
+    await endGenocidePrompt(messages, true);
+}
+
 function fireScrollReadMessages(confusedReading) {
     const messages = [game.u?.blind ? 'You pronounce the formula on the scroll.' : 'You read the scroll.'];
     if (confusedReading)
@@ -9340,6 +9626,7 @@ function deathAttributesPage2() {
 function deathConductLines() {
     const rows = [[0, 41, 'Voluntary challenges:']];
     let row = 1;
+    const genocideCount = genocidedMonsterNames().length;
     rows.push(
         [row++, 42, 'Character rerolling was not enabled.'],
         [row++, 42, 'You went without food.'],
@@ -9349,7 +9636,9 @@ function deathConductLines() {
     if (!game._chronicle_first_kill) rows.push([row++, 42, 'You were a pacifist.']);
     rows.push(
         [row++, 42, 'You were illiterate.'],
-        [row++, 42, 'You never genocided any monsters.'],
+        [row++, 42, genocideCount
+            ? `You genocided ${genocideCount} type${genocideCount === 1 ? '' : 's'} of monster${genocideCount === 1 ? '' : 's'}.`
+            : 'You never genocided any monsters.'],
         [row++, 42, 'You never polymorphed an object.'],
         [row++, 42, 'You never changed form.'],
         [row++, 42, 'You used no wishes.'],
@@ -9374,6 +9663,23 @@ const IDENTIFIED_SCROLL_NAMES = [
     'magic mapping', 'amnesia', 'fire', 'earth', 'punishment', 'charging',
     'stinking cloud',
 ];
+const GENOCIDE_MONSTER_CLASS_NAMES = new Map([
+    ['ant', 'a'], ['blob', 'b'], ['cockatrice', 'c'], ['dog', 'd'],
+    ['eye', 'e'], ['feline', 'f'], ['gnome', 'G'], ['gremlin', 'g'],
+    ['humanoid', 'h'], ['imp', 'i'], ['jelly', 'j'], ['kobold', 'k'],
+    ['leprechaun', 'l'], ['mimic', 'm'], ['nymph', 'n'], ['orc', 'o'],
+    ['piercer', 'p'], ['quadruped', 'q'], ['rodent', 'r'], ['spider', 's'],
+    ['trapper', 't'], ['unicorn', 'u'], ['vortex', 'v'], ['worm', 'w'],
+    ['xan', 'x'], ['light', 'y'], ['zruty', 'z'], ['angel', 'A'],
+    ['bat', 'B'], ['centaur', 'C'], ['dragon', 'D'], ['elemental', 'E'],
+    ['fungus', 'F'], ['giant', 'H'], ['jabberwock', 'J'], ['kop', 'K'],
+    ['lich', 'L'], ['mummy', 'M'], ['naga', 'N'], ['ogre', 'O'],
+    ['pudding', 'P'], ['quantum mechanic', 'Q'], ['rust monster', 'R'],
+    ['snake', 'S'], ['troll', 'T'], ['umber hulk', 'U'], ['vampire', 'V'],
+    ['wraith', 'W'], ['xorn', 'X'], ['apelike creature', 'Y'],
+    ['zombie', 'Z'], ['human', '@'], ['demon', '&'], ['eel', ';'],
+    ['ghost', ' '],
+]);
 const SCROLL_WISH_PROBS = [
     63, 45, 53, 35, 65, 80, 45, 15, 15, 90, 55, 33, 25, 180, 45, 35,
     30, 18, 15, 15, 15,
@@ -17117,6 +17423,36 @@ export async function rhack(_cmd) {
         return;
     }
 
+    if (game._command_mode === 'genocideText') {
+        if (ch === '\r' || ch === '\n') {
+            await finishGenocideInput(game._genocide_input || '');
+            return;
+        }
+        if (ch === '\x1b') {
+            await finishGenocideInput('\x1b');
+            return;
+        }
+        const code = typeof key === 'number' ? key : ch.charCodeAt(0);
+        if (code === 8 || code === 127 || ch === '\x7f') game._genocide_input = (game._genocide_input || '').slice(0, -1);
+        else if (code >= 32) game._genocide_input = `${game._genocide_input || ''}${ch}`;
+        const pending = game._genocide_pending || {};
+        const text = game._genocide_input || '';
+        await setMessage(`${genocidePrompt(pending)}${text ? ` ${text}` : ''}`);
+        return;
+    }
+
+    if (game._command_mode === 'genocideHelp') {
+        if (ch === '\x1b' || ch === ' ' || ch === '\r' || ch === '\n') {
+            game._overlay_lines = null;
+            game._overlay_hide_status = 0;
+            game._command_mode = 'genocideText';
+            game._genocide_input = '';
+            const pending = game._genocide_pending || {};
+            await setMessage(`${genocidePrompt(pending)}${genocideRetryHint(pending)}`);
+        }
+        return;
+    }
+
     if (game._command_mode === 'readInvalidMore') {
         if (ch === ' ' || ch === '\x1b' || ch === '\r' || ch === '\n') {
             const letters = inventoryLetters(item => item.cls === 'scroll' || item.cls === 'spellbook' || item.otyp === SCROLL_CLASS) || 'gh';
@@ -17324,6 +17660,44 @@ export async function rhack(_cmd) {
             await setMessage(messages.join('  '), true);
             game._command_mode = null;
             game.context.move = 1;
+            return;
+        }
+        if (isScroll && (scrollName === 'genocide' || item.scrollIndex === 8)) {
+            const confusedReading = heroIsConfused();
+            const alreadyKnown = scrollDiscoveryKnown('genocide');
+            const messages = scrollReadMessages(confusedReading);
+            removeInventoryItem(item);
+            rn2(19);
+            if (!alreadyKnown) {
+                messages.push('You have found a scroll of genocide!');
+                learnScrollByName('genocide', item, 8);
+            }
+            if (confusedReading && !item.blessed) {
+                const target = genocideMonsterByName(heroGenocideTargetName()) || {
+                    name: heroGenocideTargetName(),
+                    glyph: '@',
+                    mlet: '@',
+                    mlevel: game.u?.ulevel || 1,
+                    hpLevel: game.u?.ulevel || 1,
+                    mmove: NORMAL_SPEED,
+                    maligntyp: 0,
+                };
+                if (item.cursed) await createCursedGenocideMonsters(target, messages);
+                else genocideMonsterType(target, messages, { killPlayer: true, cause: 'genocidal confusion' });
+                await setMessage(messages.join('  '), true);
+                game._command_mode = null;
+                game.context.move = 1;
+                return;
+            }
+            game._genocide_pending = {
+                messages,
+                cursed: !!item.cursed,
+                classMode: !!item.blessed,
+            };
+            game._genocide_input = '';
+            await setMessage([...messages, genocidePrompt(game._genocide_pending)].join('  '), false);
+            game._command_mode = 'genocideText';
+            game.context.move = 0;
             return;
         }
         if (isScroll && (scrollName === 'gold detection' || item.scrollIndex === 11)) {
@@ -21402,6 +21776,7 @@ export async function rhack(_cmd) {
             if (command === 'conduct') {
                 const rows = [[0, 40, 'Voluntary challenges:']];
                 let row = 1;
+                const genocideCount = genocidedMonsterNames().length;
                 rows.push([row++, 41, 'Character rerolling was not enabled.']);
                 rows.push([row++, 41, 'You have gone without food.']);
                 if (!game._chronicle_rejected_atheism)
@@ -21412,7 +21787,9 @@ export async function rhack(_cmd) {
                     rows.push([row++, 41, 'You have been a pacifist.']);
                 rows.push(
                     [row++, 41, 'You have been illiterate.'],
-                    [row++, 41, 'You have never genocided any monsters.'],
+                    [row++, 41, genocideCount
+                        ? `You have genocided ${genocideCount} type${genocideCount === 1 ? '' : 's'} of monster${genocideCount === 1 ? '' : 's'}.`
+                        : 'You have never genocided any monsters.'],
                     [row++, 41, 'You have never polymorphed an object.'],
                     [row++, 41, 'You have never changed form.'],
                     [row++, 41, 'You have used no wishes.'],
@@ -21429,8 +21806,16 @@ export async function rhack(_cmd) {
                 return;
             }
             if (command === 'genocided') {
-                await setMessage('No creatures have been genocided.');
-                game._command_mode = null;
+                const names = genocidedMonsterNames();
+                if (!names.length) {
+                    await setMessage('No creatures have been genocided.');
+                    game._command_mode = null;
+                }
+                else {
+                    const lines = genocideListLines();
+                    setOverlay(lines, Math.max(...lines.map(([row]) => row)) + 1, false, 39);
+                    game._command_mode = 'simpleOverlay';
+                }
                 return;
             }
             if (command === 'adjust') {

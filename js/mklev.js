@@ -4565,6 +4565,10 @@ export function monsterByRndName(name) {
     return row ? monsterFromRndMeta(row) : RANDOM_MONSTER_BY_NAME.get(name);
 }
 
+function monsterNameGenocided(name) {
+    return !!name && (game._genocided_monsters || []).includes(name);
+}
+
 export function pickNasty(difcap) {
     let ptr = monsterByRndName(NASTY_MONSTER_NAMES[rn2(NASTY_MONSTER_NAMES.length)]);
     if (ptr?.difficulty >= difcap) ptr = monsterByRndName(ptr.name === 'arch-lich' ? 'master lich' : ptr.name === 'master mind flayer' ? 'mind flayer' : ptr.name);
@@ -4590,6 +4594,7 @@ function mkclassAligned(glyph, skipZeroFreqCutoff = false, rowOverride = null, i
     for (let i = 0; i < rows.length; i++) {
         const row = rows[i];
         const flags = row[7];
+        if (monsterNameGenocided(row[0])) continue;
         const applyHellFilter = rn2(9) || glyph === 'L';
         if (applyHellFilter && ((game.inhell && flags.includes('O')) || (!game.inhell && flags.includes('!')))) continue;
         if ((!includeNoGen && flags.includes('N')) || flags.includes('U')) continue;
@@ -4618,6 +4623,7 @@ function rndmonstCReservoir(minDifficulty, maxDifficulty) {
     for (const row of RNDMONST_COMMON_MONSTERS) {
         const difficulty = row[4];
         if (difficulty < minDifficulty || difficulty > maxDifficulty) continue;
+        if (monsterNameGenocided(row[0])) continue;
         const maligntyp = row[5];
         const flags = row[7];
         if (flags.includes('N') || flags.includes('U')) continue;
@@ -4648,6 +4654,7 @@ function rndmonst_adj(minadj = 0, maxadj = 0) {
         let totalweight = 0;
         let selected = null;
         for (const [name, weight] of DIFFICULTY_1_TO_5_MONSTERS) {
+            if (monsterNameGenocided(name)) continue;
             totalweight += weight;
             if (rn2(totalweight) < weight) {
                 const lookup = RANDOM_MONSTER_ALIASES.get(name) || name;
@@ -4665,6 +4672,7 @@ function rndmonst_adj(minadj = 0, maxadj = 0) {
         let selected = null;
         for (let i = 0; i < MIDGAME_COMMON_MONSTERS.length; i++) {
             const [name, weight, attrs = {}] = MIDGAME_COMMON_MONSTERS[i];
+            if (monsterNameGenocided(name)) continue;
             const base = monsterByRndName(name) || { name, ...MONSTER_VISUALS.get(name) };
             totalweight += weight;
             const mlevel = MIDGAME_COMMON_MONSTER_LEVELS[i];
@@ -4677,6 +4685,7 @@ function rndmonst_adj(minadj = 0, maxadj = 0) {
         let selected = null;
         for (let i = 0; i < MIDGAME_COMMON_MONSTERS.length; i++) {
             const [name, weight, attrs = {}] = MIDGAME_COMMON_MONSTERS[i];
+            if (monsterNameGenocided(name)) continue;
             const base = monsterByRndName(name) || { name, ...MONSTER_VISUALS.get(name) };
             const mlevel = MIDGAME_COMMON_MONSTER_LEVELS[i];
             if (!mlevel && name !== 'bat') continue;
@@ -4690,12 +4699,15 @@ function rndmonst_adj(minadj = 0, maxadj = 0) {
         let totalweight = 0;
         let selected = null;
         for (const ptr of SOKOBAN_ZOO_MONSTERS) {
+            if (monsterNameGenocided(ptr.name)) continue;
             totalweight += ptr.weight;
             if (rn2(totalweight) < ptr.weight) selected = { ...(monsterByRndName(ptr.name) || {}), ...ptr };
         }
         return selected;
     }
-    return rndmonstCReservoir(minDifficulty, maxDifficulty) || LEVEL_ONE_COMMON_MONSTERS[0];
+    return rndmonstCReservoir(minDifficulty, maxDifficulty)
+        || LEVEL_ONE_COMMON_MONSTERS.find(ptr => !monsterNameGenocided(ptr.name))
+        || null;
 }
 
 export function rndmonnum() {
@@ -5647,6 +5659,7 @@ export async function makemon(mdat, x, y, mmflags) {
         }
     }
     if (!ptr) return null;
+    if (monsterNameGenocided(ptr.name)) return null;
     const skipRandomItemRolls = !!game._makemon_skip_random_item_rolls_once;
     game._makemon_skip_random_item_rolls_once = false;
 
@@ -5749,6 +5762,7 @@ export async function makemon(mdat, x, y, mmflags) {
             allowMinvent = false;
         }
     }
+    if (monsterNameGenocided(ptr.name)) return null;
     if (ptr.nemesis && allowMinvent) {
         const bell = mksobj(BELL, true, false);
         bell.spe = 3;

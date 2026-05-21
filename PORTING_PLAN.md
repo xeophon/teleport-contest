@@ -912,6 +912,14 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   B/U/C readings create 25/15/5-square poison gas clouds with matching damage,
   and dynamic gas regions now render, block vision, tick poison damage, halve
   strong clouds on expiry, and keep fog-cloud maintenance behavior.
+- Scroll of genocide now has a C-shaped first read slice: unknown scrolls
+  identify before prompting, single-type and blessed class prompts support
+  retries, `none`, and `?` listing, cursed readings summon instead of marking
+  genocide and still get the no-free-pass random summon on decline, confused
+  uncursed readings self-genocide with the C death cause while cursed+confused
+  summons the hero type, live/current saved-level monsters are culled when their
+  type is marked, `#genocided` and conduct report the persistent genocide list,
+  and random `makemon()` selection now skips marked species.
 
 Next concrete target:
 
