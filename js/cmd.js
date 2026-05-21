@@ -5164,6 +5164,13 @@ function addHeroConfusion(turns) {
     addHeroStatusSuffix('Conf');
 }
 
+function addHeroStun(turns) {
+    if (!game.u || turns <= 0) return;
+    game.u._stunTimeout = (game.u._stunTimeout || 0) + turns;
+    game.u.stunned = true;
+    addHeroStatusSuffix('Stun');
+}
+
 function clearHeroConfusion() {
     if (!game.u) return;
     game.u._confusionTimeout = 0;
@@ -8063,6 +8070,42 @@ function armorSlot(item) {
     return '';
 }
 
+function isWornArmorItem(item) {
+    return (item?.cls === 'armor' || item?.glyph === '[' || item?.otyp === ARMOR_CLASS)
+        && (item.worn || item.owornmask || item.line?.includes('being worn'));
+}
+
+function wornArmorItemsBySlotOrder(slots) {
+    const wornArmor = (game.inventory || []).filter(isWornArmorItem);
+    const used = new Set();
+    const ordered = [];
+    for (const slot of slots) {
+        const item = wornArmor.find(candidate => !used.has(candidate) && armorSlot(candidate) === slot);
+        if (item) {
+            used.add(item);
+            ordered.push(item);
+        }
+    }
+    return ordered;
+}
+
+function countWornArmor() {
+    return (game.inventory || []).filter(isWornArmorItem).length;
+}
+
+function someArmorTarget() {
+    const wornArmor = (game.inventory || []).filter(isWornArmorItem);
+    let target = wornArmor.find(item => armorSlot(item) === 'cloak')
+        || wornArmor.find(item => armorSlot(item) === 'body')
+        || wornArmor.find(item => armorSlot(item) === 'shirt')
+        || null;
+    for (const slot of ['helm', 'gloves', 'boots', 'shield']) {
+        const item = wornArmor.find(candidate => armorSlot(candidate) === slot);
+        if (item && (!target || !rn2(4))) target = item;
+    }
+    return target;
+}
+
 function someEnchantArmorTarget() {
     const wornArmor = (game.inventory || []).filter(item =>
         item.cls === 'armor' && (item.worn || item.line?.includes('being worn')));
@@ -8082,6 +8125,11 @@ function wornArmorAcValue(item) {
     return base + (item.spe ?? 0) - Math.min(item.oeroded || 0, base);
 }
 
+function wornArmorAcValueGreatestErosion(item) {
+    const base = ARMOR_AC_BONUS[armorKind(item)] ?? 0;
+    return base + (item.spe ?? 0) - Math.min(Math.max(item.oeroded || 0, item.oeroded2 || 0), base);
+}
+
 function updateArmorLine(item) {
     item.line = normalInventoryLine({ ...item, line: '' });
 }
@@ -8094,6 +8142,295 @@ function updateReflectionFromInventory() {
         return kind === 'silver dragon scale mail' || kind === 'shield of reflection'
             || item.amuletIndex === 7 || kind === 'amulet of reflection';
     });
+}
+
+function updateWornArmorAcAfterChange(armor, oldAc) {
+    if (game.u && isWornArmorItem(armor)) game.u.uac = (game.u.uac ?? 10) + oldAc - wornArmorAcValueGreatestErosion(armor);
+    updateArmorLine(armor);
+}
+
+function destroyWornArmorItem(armor) {
+    const oldAc = wornArmorAcValueGreatestErosion(armor);
+    if (game.u && isWornArmorItem(armor)) game.u.uac = (game.u.uac ?? 10) + oldAc;
+    updateGauntletsOfPowerStrength(armorKind(armor), false);
+    removeInventoryItem(armor, armor.quan || 1);
+    updateReflectionFromInventory();
+}
+
+function armorGlowMessage(armor, color) {
+    const subject = armorSubject(armor);
+    if (game.u?.blind)
+        return `${subject} ${armorVerb(armor, 'vibrates', 'vibrate')} for a moment.`;
+    return `${subject} ${armorVerb(armor, 'glows', 'glow')} ${color} for a moment.`;
+}
+
+function destroyArmorErosionType(armor) {
+    const profile = wishedDamageProfile(armor);
+    if (!profile.erosionMatters || !profile.damageable) return null;
+    if (profile.primaryWord === 'burnt') return { field: 'oeroded', action: 'smoulder' };
+    if (profile.primaryWord === 'rusty') return { field: 'oeroded', action: 'rust' };
+    if (profile.primaryWord === 'cracked') return { field: 'oeroded', action: 'crack', shatters: true };
+    if (profile.secondaryWord === 'rotted') return { field: 'oeroded2', action: 'rot' };
+    if (profile.secondaryWord === 'corroded') return { field: 'oeroded2', action: 'corrode' };
+    return null;
+}
+
+function erosionVerb(armor, action) {
+    const plural = {
+        smoulder: 'smoulder',
+        rust: 'rust',
+        rot: 'rot',
+        corrode: 'corrode',
+        crack: 'crack',
+    }[action] || action;
+    const singular = {
+        smoulder: 'smoulders',
+        rust: 'rusts',
+        rot: 'rots',
+        corrode: 'corrodes',
+        crack: 'cracks',
+    }[action] || `${action}s`;
+    return armorVerb(armor, singular, plural);
+}
+
+function erodeDestroyArmor(armor, messages) {
+    const erosion = destroyArmorErosionType(armor);
+    if (!erosion || armor.oerodeproof) return false;
+    if (armor.blessed && !rnl(4)) return false;
+
+    const current = Math.min(3, armor[erosion.field] || 0);
+    const name = armorMessageName(armor);
+    if (current < 3) {
+        const adverb = current + 1 === 3 ? ' completely' : current ? ' further' : '';
+        messages.push(`Your ${name} ${erosionVerb(armor, erosion.action)}${adverb}!`);
+        const oldAc = wornArmorAcValueGreatestErosion(armor);
+        armor[erosion.field] = current + 1;
+        updateWornArmorAcAfterChange(armor, oldAc);
+        return true;
+    }
+
+    messages.push(erosion.shatters
+        ? `Your ${name} shatters!`
+        : `Your ${name} ${erosionVerb(armor, erosion.action)} away!`);
+    destroyWornArmorItem(armor);
+    return 'destroyed';
+}
+
+function destroyArm(messages) {
+    const armors = wornArmorItemsBySlotOrder(['body', 'cloak', 'helm', 'shield', 'gloves', 'boots', 'shirt']);
+    if (!armors.length) return false;
+
+    const hits = rn2(4) + 1;
+    let result = false;
+    for (let i = 0; i < hits; i++) {
+        const armor = armors[rn2(armors.length)];
+        if (!armor || !(game.inventory || []).includes(armor)) continue;
+        const erosion = erodeDestroyArmor(armor, messages);
+        if (erosion) result = true;
+        if (erosion === 'destroyed') break;
+    }
+    return result;
+}
+
+function legacyDestroyArm(messages) {
+    const wornArmor = (game.inventory || []).filter(item =>
+        item.cls === 'armor' && (item.worn || item.line?.includes('being worn')));
+    if (!wornArmor.length) return { changed: false, uacDelta: 0 };
+    const hits = rn2(4) + 1;
+    let result = false;
+    let uacDelta = 0;
+    for (let i = 0; i < hits; i++) {
+        const armor = wornArmor[rn2(wornArmor.length)];
+        if (!armor || !(game.inventory || []).includes(armor)) continue;
+        const armorBase = ARMOR_AC_BONUS[String(armor.kind || '').toLowerCase()] ?? 0;
+        if (!armorBase || (armor.oeroded || 0) >= armorBase) continue;
+        const oldAc = wornArmorAcValue(armor);
+        armor.oeroded = (armor.oeroded || 0) + 1;
+        armor.bknown = true;
+        uacDelta += oldAc - wornArmorAcValue(armor);
+        updateArmorLine(armor);
+        const name = pickupObjectName(armor);
+        messages.push(armor.oeroded === 1
+            ? `Your ${name} smoulders!`
+            : `Your ${name} smoulders further!`);
+        result = true;
+    }
+    return { changed: result, uacDelta };
+}
+
+function armorSimpleSlotName(armor) {
+    const name = armorMessageName(armor);
+    const kind = armorKind(armor);
+    switch (armorSlot(armor)) {
+    case 'cloak':
+        if (kind.includes('robe')) return 'robe';
+        if (kind.includes('apron')) return 'apron';
+        if (kind.includes('smock')) return 'smock';
+        if (kind.includes('wrapping')) return 'wrapping';
+        return 'cloak';
+    case 'body':
+        return name;
+    case 'shirt':
+        return 'shirt';
+    case 'helm':
+        return /\b(?:hat|fedora|cornuthaum|cap)\b/.test(kind) ? 'hat' : 'helm';
+    case 'gloves':
+        return 'gloves';
+    case 'boots':
+        return 'boots';
+    case 'shield':
+        return 'shield';
+    default:
+        return name;
+    }
+}
+
+function disintegrateArmorMessage(armor) {
+    const simple = armorSimpleSlotName(armor);
+    switch (armorSlot(armor)) {
+    case 'cloak':
+        return `Your ${simple} crumbles and turns to dust!`;
+    case 'body':
+        return `Your ${simple} ${armorNameIsPlural(simple) ? 'turn' : 'turns'} to dust and ${armorNameIsPlural(simple) ? 'fall' : 'falls'} to the floor!`;
+    case 'shirt':
+        return `Your ${simple} crumbles into tiny threads and falls apart!`;
+    case 'helm':
+        return `Your ${simple} turns to dust and is blown away!`;
+    case 'gloves':
+        return `Your ${simple} vanish!`;
+    case 'boots':
+        return `Your ${simple} disintegrate!`;
+    case 'shield':
+        return `Your ${simple} crumbles away!`;
+    default:
+        return `Your ${simple} turns to dust!`;
+    }
+}
+
+function armorResistsDisintegration(armor) {
+    if (armor.invocation || armor.riderCorpse) return true;
+    const chance = rn2(100);
+    return chance < (armor.artifact || armor.oartifact ? 90 : 0);
+}
+
+function maybeDisintegrateArmor(armor, target, state, key = 'resisted') {
+    if (!armor || (target && target !== armor)) return null;
+    const resisted = armorResistsDisintegration(armor);
+    state[key] = resisted;
+    return resisted ? null : armor;
+}
+
+function disintegrateArm(target, messages) {
+    const bySlot = Object.fromEntries(wornArmorItemsBySlotOrder([
+        'cloak', 'body', 'shirt', 'helm', 'gloves', 'boots', 'shield',
+    ]).map(armor => [armorSlot(armor), armor]));
+    const state = {};
+    let armor = maybeDisintegrateArmor(bySlot.cloak, target, state, 'resistedCloak');
+    if (!armor && !state.resistedCloak)
+        armor = maybeDisintegrateArmor(bySlot.body, target, state, 'resistedSuit');
+    if (!armor && !state.resistedCloak && !state.resistedSuit)
+        armor = maybeDisintegrateArmor(bySlot.shirt, target, state);
+    if (!armor) armor = maybeDisintegrateArmor(bySlot.helm, target, state);
+    if (!armor) armor = maybeDisintegrateArmor(bySlot.gloves, target, state);
+    if (!armor) armor = maybeDisintegrateArmor(bySlot.boots, target, state);
+    if (!armor) armor = maybeDisintegrateArmor(bySlot.shield, target, state);
+    if (!armor) return false;
+
+    if (armor.lamplit || armor.burning) {
+        armor.lamplit = false;
+        armor.burning = false;
+        delete armor._burnTimer;
+        delete armor.litRadius;
+    }
+    messages.push(disintegrateArmorMessage(armor));
+    destroyWornArmorItem(armor);
+    return true;
+}
+
+function disintegrateCursedArmor(messages) {
+    const armors = wornArmorItemsBySlotOrder(['body', 'cloak', 'helm', 'shield', 'gloves', 'boots', 'shirt'])
+        .filter(armor => armor.cursed);
+    if (!armors.length) return false;
+    return disintegrateArm(armors[rn2(armors.length)], messages);
+}
+
+function destroyArmorPromptLetters() {
+    return inventoryLetters(isWornArmorItem) || '*';
+}
+
+function destroyArmorPromptText() {
+    return `What do you want to destroy? [${getobjPromptLetters(destroyArmorPromptLetters())} or ?*]`;
+}
+
+function destroyArmorConfusedEffect(scroll, target, messages) {
+    if (!target) {
+        messages.push('Your bones itch.');
+        exerciseAttribute(A_STR, false);
+        exerciseAttribute(A_CON, false);
+        return { learned: false, more: messages.length > 1 };
+    }
+    messages.push(armorGlowMessage(target, 'purple'));
+    target.oerodeproof = !!scroll.cursed;
+    updateArmorLine(target);
+    return { learned: false, more: messages.length > 1 };
+}
+
+function destroyArmorCursedCursedEffect(target, messages) {
+    messages.push(`${armorSubject(target)} ${armorVerb(target, 'vibrates', 'vibrate')}.`);
+    if ((target.spe ?? 0) >= -6) {
+        const oldAc = wornArmorAcValueGreatestErosion(target);
+        target.spe = (target.spe ?? 0) - 1;
+        updateWornArmorAcAfterChange(target, oldAc);
+    } else {
+        updateArmorLine(target);
+    }
+    addHeroStun(rn1(10, 10));
+    return { learned: false, more: messages.length > 1 };
+}
+
+function destroyArmorScrollEffect(scroll, messages) {
+    const target = someArmorTarget();
+    if (heroIsConfused()) return destroyArmorConfusedEffect(scroll, target, messages);
+
+    if (scroll.cursed) {
+        if (target?.cursed) return destroyArmorCursedCursedEffect(target, messages);
+        return { learned: disintegrateArm(target, messages), more: messages.length > 1 };
+    }
+
+    if (target && scroll.blessed && countWornArmor() > 1)
+        return { learned: true, more: messages.length > 1, prompt: true, target };
+
+    if (scroll.blessed && disintegrateCursedArmor(messages))
+        return { learned: true, more: messages.length > 1 };
+
+    const legacy = !scroll.blessed;
+    const legacyResult = legacy ? legacyDestroyArm(messages) : null;
+    const destroyed = legacy ? legacyResult.changed : destroyArm(messages);
+    if (!destroyed) {
+        messages.push('Your skin itches.');
+        exerciseAttribute(A_STR, false);
+        exerciseAttribute(A_CON, false);
+        return { learned: false, more: messages.length > 1, skipCall: legacy, legacy, uacDelta: legacyResult?.uacDelta || 0 };
+    }
+    return { learned: !legacy, more: messages.length > 1, skipCall: legacy, legacy, uacDelta: legacyResult?.uacDelta || 0 };
+}
+
+async function finishDestroyArmorSelection(selectedArmor = null) {
+    const pending = game._destroy_armor_scroll || {};
+    const target = selectedArmor || pending.target || null;
+    const messages = [];
+    game._destroy_armor_scroll = null;
+    game._command_mode = null;
+    game._overlay_lines = null;
+    game._overlay_hide_status = 0;
+    game.context.move = 1;
+    if (target) disintegrateArm(target, messages);
+    if (messages.length) await setMessage(messages.join('  '), messages.length > 1);
+    else {
+        game._pending_message = '';
+        game._message_more = 0;
+        game._keep_pending_message = 1;
+    }
 }
 
 function isSpecialEnchantArmor(item) {
@@ -13196,6 +13533,59 @@ export async function rhack(_cmd) {
         return;
     }
 
+    if (game._command_mode === 'destroyArmorInvalidMore') {
+        if (ch === '\x1b') {
+            await finishDestroyArmorSelection();
+            return;
+        }
+        if (ch === ' ' || ch === '\r' || ch === '\n') {
+            await setMessage(destroyArmorPromptText());
+            game._command_mode = 'destroyArmorObject';
+            return;
+        }
+        game._keep_pending_message = 1;
+        return;
+    }
+
+    if (game._command_mode === 'destroyArmorInventoryOverlay') {
+        game._overlay_lines = null;
+        game._overlay_hide_status = 0;
+        if (ch === ' ' || ch === '\x1b' || ch === '\r' || ch === '\n') {
+            await setMessage(destroyArmorPromptText());
+            game._command_mode = 'destroyArmorObject';
+            return;
+        }
+        if (!(game.inventory || []).some(invItem => invItem.letter === ch && isWornArmorItem(invItem))) {
+            game._keep_pending_message = 1;
+            return;
+        }
+        game._command_mode = 'destroyArmorObject';
+    }
+
+    if (game._command_mode === 'destroyArmorObject') {
+        if (!game._destroy_armor_scroll) {
+            game._command_mode = null;
+            return;
+        }
+        if (ch === '?' || ch === '*') {
+            setOverlay(inventoryOverlayLines(0, false, isWornArmorItem), 24, true);
+            game._command_mode = 'destroyArmorInventoryOverlay';
+            return;
+        }
+        if (ch === ' ' || ch === '\x1b') {
+            await finishDestroyArmorSelection();
+            return;
+        }
+        const item = (game.inventory || []).find(invItem => invItem.letter === ch);
+        if (!item || !isWornArmorItem(item)) {
+            await setMessage("You aren't wearing that.", true);
+            game._command_mode = 'destroyArmorInvalidMore';
+            return;
+        }
+        await finishDestroyArmorSelection(item);
+        return;
+    }
+
     if (game._command_mode === 'pickupShopQuote') {
         if (ch !== ' ' && ch !== '\x1b' && ch !== '\r' && ch !== '\n') {
             game._keep_pending_message = 1;
@@ -17922,41 +18312,49 @@ export async function rhack(_cmd) {
             return;
         }
         if (isScroll && (scrollName === 'destroy armor' || item.scrollIndex === 1)) {
+            const confusedReading = heroIsConfused();
+            const alreadyKnown = scrollDiscoveryKnown('destroy armor')
+                || item.known === true
+                || item.actualKind === 'scroll of destroy armor'
+                || item.kind === 'destroy armor'
+                || item.kind === 'scroll of destroy armor';
+            const callLabel = scrollCallLabel(item, 1);
+            const messages = scrollDisappearMessages(confusedReading);
             removeInventoryItem(item);
             rn2(19);
-            const wornArmor = (game.inventory || []).filter(invItem =>
-                invItem.cls === 'armor' && (invItem.worn || invItem.line?.includes('being worn')));
-            const hits = rn2(4) + 1;
-            const messages = [];
-            let uacDelta = 0;
-            for (let i = 0; i < hits && wornArmor.length; i++) {
-                const armor = wornArmor[rn2(wornArmor.length)];
-                const armorBase = ARMOR_AC_BONUS[String(armor.kind || '').toLowerCase()] ?? 0;
-                if (!armorBase || (armor.oeroded || 0) >= armorBase) continue;
-                const oldArmorBonus = armorBase + (armor.spe ?? 0) - Math.min(armor.oeroded || 0, armorBase);
-                armor.oeroded = (armor.oeroded || 0) + 1;
-                armor.bknown = true;
-                const newArmorBonus = armorBase + (armor.spe ?? 0) - Math.min(armor.oeroded || 0, armorBase);
-                uacDelta += oldArmorBonus - newArmorBonus;
-                armor.line = normalInventoryLine({ ...armor, line: '' });
-                const name = pickupObjectName(armor);
-                messages.push(armor.oeroded === 1
-                    ? `Your ${name} smoulders!`
-                    : `Your ${name} smoulders further!`);
+            const result = destroyArmorScrollEffect(item, messages);
+            if (result.prompt) {
+                if (!alreadyKnown) messages.push('This is a scroll of destroy armor!');
+                learnScrollByName('destroy armor', item, 1);
+                messages.push(destroyArmorPromptText());
+                game._destroy_armor_scroll = { target: result.target };
+                await setMessage(messages.join('  '), false);
+                game._command_mode = 'destroyArmorObject';
+                game.context.move = 0;
+                return;
             }
-            if (!messages.length) messages.push('Your skin itches.');
-            if (messages.length > 1) {
-                game._queued_message_after_more = messages.slice(1).join('  ');
-                game._queued_message_process_time_after_more = 1;
-                game._destroy_armor_uac_delta_after_more = uacDelta;
-                game._read_scroll_exercise_after_more = 1;
-                game._destroy_armor_clear_resume_after_more = 1;
-            } else if (game.u) {
-                game.u.uac = (game.u.uac ?? 10) + uacDelta;
+            if (result.learned) learnScrollByName('destroy armor', item, 1);
+            if (result.legacy) {
+                const effectMessages = messages.slice(1);
+                if (effectMessages.length > 1) {
+                    game._queued_message_after_more = effectMessages.slice(1).join('  ');
+                    game._queued_message_process_time_after_more = 1;
+                    game._destroy_armor_uac_delta_after_more = result.uacDelta || 0;
+                    game._read_scroll_exercise_after_more = 1;
+                    game._destroy_armor_clear_resume_after_more = 1;
+                } else if (game.u) {
+                    game.u.uac = (game.u.uac ?? 10) + (result.uacDelta || 0);
+                }
+                await setMessage(`${messages[0]}  ${effectMessages[0] || 'Your skin itches.'}`, true);
+                game._command_mode = null;
+                game.context.move = 1;
+                return;
             }
-            await setMessage(`As you read the scroll, it disappears.  ${messages[0]}`, true);
-            game._command_mode = null;
-            game.context.move = 1;
+            const shouldCall = !result.skipCall && !alreadyKnown && !result.learned;
+            await setMessage(messages.join('  '), result.more || confusedReading || shouldCall);
+            game._command_mode = shouldCall ? 'callScrollAfterMore' : null;
+            if (shouldCall) game._call_scroll_label = callLabel;
+            game.context.move = shouldCall ? 0 : 1;
             return;
         }
         if (isScroll && (scrollName === 'confuse monster' || item.scrollIndex === 2)) {

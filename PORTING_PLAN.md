@@ -888,6 +888,11 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   confused readings toggle erodeproofing and repair erosion, normal readings
   handle blessed/cursed enchantment math, over-enchant evaporation, AC deltas,
   warning vibration messages, and dragon scales hardening into scale mail.
+- Scroll of destroy armor now follows the key C read branches: confused
+  readings toggle worn-armor proofing or use the no-armor itch path, cursed
+  readings disintegrate selected armor or penalize already-cursed armor,
+  blessed readings prefer cursed worn armor and can prompt for a worn target,
+  and the existing uncursed erosion timing remains score-compatible.
 - Scroll of enchant weapon now follows the C `seffect_enchant_weapon()` and
   `chwepon()` split more closely: only the primary wielded item is affected,
   confused readings proof or strip proofing and repair erosion, no-weapon cases
@@ -951,8 +956,9 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   `Array.prototype.toSorted()`: the JS `mkclass` metadata path now uses an
   explicit copied difficulty sort that preserves equal-difficulty order, matching
   the C `mongen_order` intent while allowing the local Node 18 scorer to reach
-  real monster-generation parity failures instead of crashing. The current
-  public score is `28/44`, with the former `toSorted` hard failures now running.
+  real monster-generation parity failures instead of crashing. The latest
+  verified public score is `27/44`, with the former `toSorted` hard failures
+  now running.
 
 Next concrete target:
 
