@@ -519,7 +519,12 @@ const BELL = 358;
 const CANDELABRUM_OF_INVOCATION = 10076;
 const ORCISH_DAGGER = 10020;
 const DAGGER = 10023;
+const KNIFE = 10026;
+const SHORT_SWORD = 10031;
+const BROADSWORD = 10032;
 const PICK_AXE = 10025;
+const GLAIVE = 10057;
+const FLAIL = 10060;
 const DWARVISH_MATTOCK = 10104;
 const SILVER_SABER = 10062;
 const BULLWHIP = 10067;
@@ -689,6 +694,9 @@ const GRAPPLING_HOOK = 10163;
 const MEAT_RING = 10164;
 const LOADSTONE = 10165;
 const FLINT = 10166;
+const LOCK_PICK = 10167;
+const WOODEN_HARP = 10168;
+const MAGIC_HARP = 10169;
 const LUCKSTONE = 10127;
 const TOUCHSTONE = FLINT_STONE;
 const BLINDFOLD = 10113;
@@ -708,6 +716,7 @@ const SILVER_DRAGON_SCALE_MAIL = 10086;
 const SPEED_BOOTS = 10087;
 const SHIELD_OF_REFLECTION = 10074;
 const PLATE_MAIL = 10037;
+const HELMET = 10044;
 const RING_MAIL = 10041;
 const STUDDED_LEATHER_ARMOR = 10042;
 const LEATHER_ARMOR = 10043;
@@ -730,6 +739,7 @@ const BLACK_DRAGON_SCALES = 10154;
 const BLUE_DRAGON_SCALES = 10155;
 const GREEN_DRAGON_SCALES = 10156;
 const YELLOW_DRAGON_SCALES = 10157;
+const FOOD_RATION = 143;
 const LEATHER_GLOVES = 10050;
 const CLOAK_OF_DISPLACEMENT = 10111;
 const GAUNTLETS_OF_POWER = 10112;
@@ -818,6 +828,11 @@ const WISH_BASE_OBJECTS = new Map([
     ['darts', { otyp: DART, cls: 'weapon', glyph: ')', kind: 'dart', plural: 'darts' }],
     ['dagger', { otyp: DAGGER, cls: 'weapon', glyph: ')', kind: 'dagger', plural: 'daggers' }],
     ['daggers', { otyp: DAGGER, cls: 'weapon', glyph: ')', kind: 'dagger', plural: 'daggers' }],
+    ['knife', { otyp: KNIFE, cls: 'weapon', glyph: ')', kind: 'knife', actualKind: 'knife' }],
+    ['short sword', { otyp: SHORT_SWORD, cls: 'weapon', glyph: ')', kind: 'short sword', actualKind: 'short sword' }],
+    ['broadsword', { otyp: BROADSWORD, cls: 'weapon', glyph: ')', kind: 'broadsword', actualKind: 'broadsword' }],
+    ['flail', { otyp: FLAIL, cls: 'weapon', glyph: ')', kind: 'flail', actualKind: 'flail' }],
+    ['glaive', { otyp: GLAIVE, cls: 'weapon', glyph: ')', kind: 'glaive', actualKind: 'glaive' }],
     ['bullwhip', { otyp: BULLWHIP, cls: 'weapon', glyph: ')', kind: 'bullwhip', actualKind: 'bullwhip' }],
     ['silver saber', { otyp: SILVER_SABER, cls: 'weapon', glyph: ')', kind: 'silver saber', actualKind: 'silver saber' }],
     ['dwarvish mattock', { otyp: DWARVISH_MATTOCK, cls: 'weapon', glyph: ')', kind: 'dwarvish mattock', actualKind: 'dwarvish mattock' }],
@@ -832,6 +847,7 @@ const WISH_BASE_OBJECTS = new Map([
     ['lembas wafer', { otyp: LEMBAS_WAFER, cls: 'food', glyph: '%', kind: 'lembas wafer', plural: 'lembas wafers' }],
     ['fortune cookie', { otyp: FORTUNE_COOKIE, cls: 'food', glyph: '%', kind: 'fortune cookie', plural: 'fortune cookies' }],
     ['fortune cookies', { otyp: FORTUNE_COOKIE, cls: 'food', glyph: '%', kind: 'fortune cookie', plural: 'fortune cookies' }],
+    ['food ration', { otyp: FOOD_RATION, cls: 'food', glyph: '%', kind: 'food ration', plural: 'food rations', nutrition: 800 }],
     ['enormous meatball', { otyp: FOOD_CLASS, cls: 'food', glyph: '%', kind: 'enormous meatball', actualKind: 'enormous meatball', nutrition: 2000 }],
     ['rock', { otyp: ROCK, cls: 'gem', glyph: '*', kind: 'rock', actualKind: 'rock', plural: 'rocks', gemDescription: 'rock' }],
     ['luckstone', { otyp: LUCKSTONE, cls: 'gem', glyph: '*', kind: 'luckstone', actualKind: 'luckstone', gemDescription: 'gray stone' }],
@@ -856,6 +872,9 @@ const WISH_BASE_OBJECTS = new Map([
     ['wax candles', { otyp: WAX_CANDLE, cls: 'tool', glyph: '(', kind: 'wax candle', plural: 'wax candles', age: 400 }],
     ['stethoscope', { otyp: STETHOSCOPE, cls: 'tool', glyph: '(', kind: 'stethoscope' }],
     ['magic marker', { otyp: MAGIC_MARKER, cls: 'tool', glyph: '(', kind: 'magic marker' }],
+    ['lock pick', { otyp: LOCK_PICK, cls: 'tool', glyph: '(', kind: 'lock pick', actualKind: 'lock pick' }],
+    ['wooden harp', { otyp: WOODEN_HARP, cls: 'tool', glyph: '(', kind: 'harp', actualKind: 'wooden harp', known: false }],
+    ['magic harp', { otyp: MAGIC_HARP, cls: 'tool', glyph: '(', kind: 'harp', actualKind: 'magic harp', known: false }],
     ['mirror', { otyp: MIRROR, cls: 'tool', glyph: '(', kind: 'looking glass', actualKind: 'mirror' }],
     ['expensive camera', { otyp: EXPENSIVE_CAMERA, cls: 'tool', glyph: '(', kind: 'expensive camera' }],
     ['blindfold', { otyp: BLINDFOLD, cls: 'tool', glyph: '(', kind: 'blindfold' }],
@@ -868,6 +887,7 @@ const WISH_BASE_OBJECTS = new Map([
     ['tooled horn', { otyp: TOOLED_HORN, cls: 'tool', glyph: '(', kind: 'horn', actualKind: 'tooled horn', known: false }],
     ['grappling hook', { otyp: GRAPPLING_HOOK, cls: 'tool', glyph: '(', kind: 'grappling hook', actualKind: 'grappling hook' }],
     ['plate mail', { otyp: PLATE_MAIL, cls: 'armor', glyph: '[', kind: 'plate mail', actualKind: 'plate mail' }],
+    ['helmet', { otyp: HELMET, cls: 'armor', glyph: '[', kind: 'helmet', actualKind: 'helmet', appearance: 'plumed helmet', known: false }],
     ['ring mail', { otyp: RING_MAIL, cls: 'armor', glyph: '[', kind: 'ring mail', actualKind: 'ring mail' }],
     ['studded leather armor', { otyp: STUDDED_LEATHER_ARMOR, cls: 'armor', glyph: '[', kind: 'studded leather armor', actualKind: 'studded leather armor' }],
     ['leather armor', { otyp: LEATHER_ARMOR, cls: 'armor', glyph: '[', kind: 'leather armor', actualKind: 'leather armor' }],
@@ -885,23 +905,27 @@ const WIZARD_ONLY_WISH_NAMEDESC_BOUNDS = new Map([
 ]);
 const WISH_BASE_NAMEDESC_BOUNDS = new Map([
     ['dart', 61], ['darts', 61], ['dagger', 31], ['daggers', 31],
+    ['knife', 21], ['short sword', 9], ['broadsword', 9],
+    ['flail', 41], ['glaive', 9],
     ['bullwhip', 3], ['silver saber', 7], ['dwarvish mattock', 14],
     ['pick-axe', 21], ['pick axe', 21], ['pickaxe', 21], ['pickax', 21], ['pick-ax', 21],
     ['cream pie', 26], ['eucalyptus leaf', 4], ['kelp frond', 1],
     ['lembas wafer', 21], ['fortune cookie', 56], ['fortune cookies', 56],
-    ['enormous meatball', 1], ['rock', 101], ['luckstone', 11],
+    ['food ration', 381], ['enormous meatball', 1], ['rock', 101], ['luckstone', 11],
     ['loadstone', 11], ['touchstone', 9], ['flint', 11],
     ['heavy iron ball', 1001], ['large box', 41], ['chest', 36], ['ice box', 6],
     ['sack', 36], ['oilskin sack', 6], ['bag of holding', 21],
     ['brass lantern', 31], ['oil lamp', 46], ['magic lamp', 16],
     ['tallow candle', 21], ['tallow candles', 21],
     ['wax candle', 6], ['wax candles', 6], ['stethoscope', 26],
-    ['magic marker', 16], ['mirror', 46], ['expensive camera', 16],
+    ['magic marker', 16], ['lock pick', 61], ['wooden harp', 5],
+    ['magic harp', 3], ['mirror', 46], ['expensive camera', 16],
     ['bell of opening', 1], ['blindfold', 51], ['leather gloves', 16],
     ['meat ring', 1], ['tin opener', 36], ['beartrap', 1],
     ['land mine', 1], ['bag of tricks', 21], ['tooled horn', 6],
     ['grappling hook', 6],
-    ['plate mail', 41], ['ring mail', 67], ['studded leather armor', 67],
+    ['plate mail', 41], ['helmet', 11], ['helm of telepathy', 5],
+    ['ring mail', 67], ['studded leather armor', 67],
     ['leather armor', 76], ['elven mithril-coat', 16],
     ['shield of reflection', 8],
     ['gauntlets of power', 9], ['cloak of displacement', 13],
@@ -933,7 +957,20 @@ const WISH_FOOD_NAMEDESC_BOUNDS = new Map([
     ['apple', 16], ['fortune cookie', 56], ['fortune cookies', 56],
 ]);
 const WISH_SPELLBOOK_NAMEDESC_BOUNDS = new Map([
-    ['magic missile', 46], ['detect monsters', 44], ['detect food', 31],
+    ['dig', 21], ['magic missile', 46], ['fireball', 21], ['cone of cold', 11],
+    ['sleep', 31], ['finger of death', 6], ['light', 46],
+    ['detect monsters', 44], ['healing', 41], ['knock', 26],
+    ['force bolt', 31], ['confuse monster', 50], ['cure blindness', 26],
+    ['drain life', 11], ['slow monster', 31], ['wizard lock', 26],
+    ['create monster', 36], ['detect food', 31], ['cause fear', 26],
+    ['clairvoyance', 16], ['cure sickness', 33], ['charm monster', 21],
+    ['haste self', 34], ['detect unseen', 21], ['levitation', 21],
+    ['extra healing', 28], ['restore ability', 26], ['invisibility', 21],
+    ['detect treasure', 21], ['remove curse', 26], ['magic mapping', 19],
+    ['identify', 21], ['turn undead', 17], ['polymorph', 11],
+    ['teleport away', 16], ['create familiar', 11], ['cancellation', 16],
+    ['protection', 19], ['jumping', 21], ['stone to flesh', 16],
+    ['chain lightning', 26],
 ]);
 const WATER_DEMON = {
     name: 'water demon',
@@ -6449,6 +6486,15 @@ function splitWishedTextClause(text, clause) {
     };
 }
 
+function splitWishedLabelClause(text) {
+    const match = String(text || '').match(/\s+labell?ed\s+/i);
+    if (!match) return null;
+    return {
+        base: String(text).slice(0, match.index).trim(),
+        tail: String(text).slice(match.index + match[0].length).trim(),
+    };
+}
+
 function unquoteWishedText(text) {
     const trimmed = String(text || '').trim();
     const quoted = trimmed.match(/^"([^"]*)"$/) || trimmed.match(/^'([^']*)'$/);
@@ -6462,6 +6508,35 @@ function wishedLabelKey(text) {
 function parseWishedScrollLabel(name) {
     const match = String(name || '').trim().match(/^scrolls?\s+labell?ed\s+(.+)$/i);
     return match ? unquoteWishedText(match[1]) : '';
+}
+
+function resolveCalledWishName(baseName, calledName) {
+    const base = String(baseName || '').trim().toLowerCase();
+    const called = wishedLabelKey(calledName);
+    const explicit = new Map([
+        ['shield:reflection', 'shield of reflection'],
+        ['helm:telepathy', 'helm of telepathy'],
+        ['helmet:telepathy', 'helm of telepathy'],
+        ['amulet:life saving', 'amulet of life saving'],
+        ['amulet:esp', 'amulet of esp'],
+        ['amulet:guarding', 'amulet of guarding'],
+        ['ring:accuracy', 'ring of increase accuracy'],
+        ['ring:increase accuracy', 'ring of increase accuracy'],
+        ['ring:protection from shape changers', 'ring of protection from shape changers'],
+        ['ring:protection from shape shifters', 'ring of protection from shape changers'],
+    ]).get(`${base}:${called}`);
+    if (explicit) return explicit;
+    if (base === 'shield' || base === 'helm' || base === 'helmet'
+        || base === 'amulet' || base === 'ring') {
+        const candidate = `${base === 'helmet' ? 'helm' : base} of ${called}`;
+        return WISH_BASE_OBJECTS.has(candidate)
+            || WISH_NAME_ALIASES.has(candidate)
+            || IDENTIFIED_AMULET_NAMES.includes(candidate)
+            || IDENTIFIED_RING_NAMES.includes(candidate.replace(/^ring of /, ''))
+            || ARMOR_WISH_APPEARANCES[candidate]
+            ? candidate : '';
+    }
+    return '';
 }
 
 const WISH_NAME_ALIASES = new Map([
@@ -6486,6 +6561,19 @@ const WISH_NAME_ALIASES = new Map([
     ['flint stone', 'flint'],
 ]);
 const WISH_EXPLICIT_SPELLING_ALIASES = new Map([
+    ['wakizashi', 'short sword'],
+    ['ninja-to', 'broadsword'],
+    ['nunchaku', 'flail'],
+    ['naginata', 'glaive'],
+    ['osaku', 'lock pick'],
+    ['koto', 'wooden harp'],
+    ['magic koto', 'magic harp'],
+    ['shito', 'knife'],
+    ['tanko', 'plate mail'],
+    ['kabuto', 'helmet'],
+    ['yugake', 'leather gloves'],
+    ['gunyoki', 'food ration'],
+    ['sake', 'potion of booze'],
     ['whip', 'bullwhip'],
     ['saber', 'silver saber'],
     ['silver sabre', 'silver saber'],
@@ -6717,7 +6805,18 @@ function wishedObjectFromName(name, qualifiers = {}) {
     if (artifact) return artifact;
 
     const named = splitWishedTextClause(wishName, 'named');
-    const baseName = normalizeWishedSpelling(named?.base || wishName);
+    let baseText = named?.base || wishName;
+    const called = splitWishedTextClause(baseText, 'called');
+    if (called) {
+        baseText = called.base;
+        qualifiers = { ...qualifiers, wishCalledName: unquoteWishedText(called.tail) };
+    }
+    const labeled = splitWishedLabelClause(baseText);
+    if (labeled) {
+        baseText = labeled.base;
+        qualifiers = { ...qualifiers, wishLabelName: unquoteWishedText(labeled.tail) };
+    }
+    const baseName = normalizeWishedSpelling(baseText);
     const item = wishedBaseObjectFromName(baseName.toLowerCase(), qualifiers, baseName);
     if (named?.tail) applyWishedInstanceName(item, named.tail);
     return item;
@@ -6726,6 +6825,11 @@ function wishedObjectFromName(name, qualifiers = {}) {
 function wishedBaseObjectFromName(lowerName, qualifiers = {}, originalName = lowerName) {
     const spellingAlias = resolveWishedSpellingAlias(lowerName);
     lowerName = spellingAlias.name;
+    if (qualifiers.wishCalledName) {
+        const calledWish = resolveCalledWishName(lowerName, qualifiers.wishCalledName);
+        if (calledWish)
+            return wishedBaseObjectFromName(calledWish, { ...qualifiers, wishCalledName: '' }, calledWish);
+    }
     if (lowerName === 'spell') return noFittingWishObject();
     if (lowerName === 'paperback' || lowerName === 'paperback book') return makeNovelWishObject();
     if (lowerName === 'paperback spellbook') return noFittingWishObject();
@@ -6856,12 +6960,20 @@ function wishedBaseObjectFromName(lowerName, qualifiers = {}, originalName = low
         return makeAmbiguousBlankPaperWishObject();
 
     if (/potion|juice|water/.test(lowerName)) {
-        const potionName = lowerName.replace(/^potion(?: of)?\s+/, '');
+        let potionName = lowerName.replace(/^potion(?: of)?\s+/, '');
+        const appearanceWish = lowerName.match(/^(.+?) potions?$/);
+        let appearanceIndex = -1;
+        if (appearanceWish && !lowerName.startsWith('potion')) {
+            const appearanceKey = wishedLabelKey(appearanceWish[1]);
+            appearanceIndex = (game._object_descriptions?.potions || [])
+                .findIndex(potion => wishedLabelKey(potion.description || '') === appearanceKey);
+            if (appearanceIndex >= 0) potionName = IDENTIFIED_POTION_NAMES[appearanceIndex] || potionName;
+        }
         const holyWater = potionName === 'holy water' || lowerName === 'holy water';
         const unholyWater = potionName === 'unholy water' || lowerName === 'unholy water';
         const waterPotion = lowerName === 'water' || potionName === 'water' || holyWater || unholyWater;
         const oilPotion = potionName === 'oil';
-        const potionIndex = IDENTIFIED_POTION_NAMES.indexOf(potionName);
+        const potionIndex = appearanceIndex >= 0 ? appearanceIndex : IDENTIFIED_POTION_NAMES.indexOf(potionName);
         if (potionIndex >= 0 && !spellingAlias.skipNamedesc) rn2(POTION_WISH_PROBS[potionIndex] + 1);
         const otmp = mksobj(waterPotion ? POT_WATER : oilPotion ? POT_OIL : potionIndex >= 0 ? POTION_WISH_BASE + potionIndex : POTION_CLASS, true, false);
         if (oilPotion && otmp.age == null) otmp.age = 400;
@@ -6885,12 +6997,12 @@ function wishedBaseObjectFromName(lowerName, qualifiers = {}, originalName = low
     }
 
     if (lowerName.includes('scroll')) {
-        const wishedLabel = parseWishedScrollLabel(originalName);
+        const wishedLabel = qualifiers.wishLabelName || parseWishedScrollLabel(originalName);
         if (wishedLabel) {
             const labelKey = wishedLabelKey(wishedLabel);
             const scrollIndex = (game._object_descriptions?.scrolls || [])
                 .findIndex(label => wishedLabelKey(label) === labelKey);
-            if (scrollIndex >= 0) {
+            if (scrollIndex >= 0 && scrollIndex < IDENTIFIED_SCROLL_NAMES.length) {
                 rn2(SCROLL_WISH_PROBS[scrollIndex] + 1);
                 const otmp = mksobj(SCR_ENCHANT_ARMOR + scrollIndex, true, false);
                 const label = game._object_descriptions?.scrolls?.[scrollIndex] || wishedLabel;
@@ -6901,6 +7013,17 @@ function wishedBaseObjectFromName(lowerName, qualifiers = {}, originalName = low
                     kind: `scroll labeled ${label}`,
                     actualKind: `scroll of ${scrollName}`,
                     scrollIndex,
+                    known: false,
+                    wishedfor: true,
+                });
+            }
+            if (scrollIndex >= IDENTIFIED_SCROLL_NAMES.length) {
+                const otmp = mksobj(SCROLL_CLASS, true, false);
+                const label = game._object_descriptions?.scrolls?.[scrollIndex] || wishedLabel;
+                return Object.assign(otmp, {
+                    cls: 'scroll',
+                    glyph: '?',
+                    kind: `scroll labeled ${label}`,
                     known: false,
                     wishedfor: true,
                 });
@@ -6932,6 +7055,27 @@ function wishedBaseObjectFromName(lowerName, qualifiers = {}, originalName = low
         if ((qualifiers.unlabeled && lowerName === 'spellbook') || spellName === 'blank paper')
             return makeBlankSpellbookWishObject();
         const spellbookNames = Object.keys(SPELLBOOK_LEVELS);
+        if (qualifiers.wishLabelName) {
+            const labelKey = wishedLabelKey(qualifiers.wishLabelName);
+            const spellbookIndex = (game._object_descriptions?.spellbooks || [])
+                .findIndex(label => wishedLabelKey(label) === labelKey);
+            if (spellbookIndex >= 0 && spellbookIndex < spellbookNames.length) {
+                const labeledSpellName = spellbookNames[spellbookIndex];
+                const namedescBound = WISH_SPELLBOOK_NAMEDESC_BOUNDS.get(labeledSpellName);
+                if (namedescBound) rn2(namedescBound);
+                const otmp = mksobj(SPBOOK_NO_NOVEL, true, false);
+                return Object.assign(otmp, {
+                    cls: 'spellbook',
+                    glyph: '+',
+                    kind: `spellbook of ${labeledSpellName}`,
+                    spellName: labeledSpellName,
+                    spellbookIndex,
+                    appearance: game._object_descriptions?.spellbooks?.[spellbookIndex] || qualifiers.wishLabelName,
+                    known: false,
+                    wishedfor: true,
+                });
+            }
+        }
         const spellbookIndex = spellbookNames.indexOf(spellName);
         const namedescBound = WISH_SPELLBOOK_NAMEDESC_BOUNDS.get(spellName);
         if (namedescBound) rn2(namedescBound);
@@ -6949,6 +7093,8 @@ function wishedBaseObjectFromName(lowerName, qualifiers = {}, originalName = low
     }
 
     if (/armor|mail|helm|gauntlets?|gloves|boots|cloak|shirt|robe|shield/.test(lowerName)) {
+        const namedescBound = WISH_BASE_NAMEDESC_BOUNDS.get(lowerName);
+        if (namedescBound && !spellingAlias.skipNamedesc) rn2(namedescBound);
         const otmp = mksobj(ARMOR_CLASS, true, false);
         const armorAppearance = ARMOR_WISH_APPEARANCES[lowerName];
         const [group, index, fallback] = armorAppearance || [];

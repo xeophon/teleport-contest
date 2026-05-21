@@ -848,6 +848,15 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   color-description wishes such as `red gem` and `orange gem`. Generated and
   wished real-gem display names also keep C's `stone` suffix for turquoise,
   citrine, aquamarine, amber, topaz, and jet.
+- Another `readobjnam()` postparse slice now handles Japanese item aliases,
+  called-description exact wishes, and labeled/labelled appearance lookup:
+  Samurai names such as `wakizashi`, `nunchaku`, `kabuto`, `gunyoki`, and
+  `sake` route to their C canonical objects, `shield called reflection`,
+  `helm called telepathy`, `amulet called life saving`, and ring called-name
+  wishes resolve through namedesc rules, potion and spellbook appearances can
+  be wished by their shuffled descriptions, and scroll labels that map beyond
+  the currently ported scroll table fall back to labeled generic scrolls
+  instead of corrupting the RNG path.
 
 Next concrete target:
 
