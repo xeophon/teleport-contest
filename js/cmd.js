@@ -1164,6 +1164,7 @@ const WAND_WISH_NAMEDESC_BOUNDS = new Map([
     ['sleep', 50], ['death', 5], ['lightning', 40],
 ]);
 const IDENTIFIED_WAND_NAMES = [...WAND_NAME_TO_INDEX.keys()];
+const NO_DIRECTION_WAND_NAMES = new Set(['light', 'secret door detection', 'enlightenment', 'create monster', 'wishing', 'stasis']);
 const SPE_LIM = 99;
 
 function moveloopPreambleOnce() {
@@ -6634,6 +6635,318 @@ function scrollReadMessages(confusedReading) {
     return messages;
 }
 
+function scrollDiscoveryKnown(scrollName) {
+    const discoveryName = `scroll of ${scrollName}`;
+    return (game._discoveries || [])
+        .some(entry => entry.section === 'Scrolls' && entry.name === discoveryName && entry.known !== false);
+}
+
+function wandTypeName(item) {
+    return String(item?.wand
+        || (item?.wandIndex != null ? IDENTIFIED_WAND_NAMES[item.wandIndex] : '')
+        || item?.actualKind
+        || item?.kind
+        || '')
+        .toLowerCase()
+        .replace(/^wand of /, '');
+}
+
+function chargingObjectSubject(item) {
+    return `Your ${pickupObjectName(item)}`;
+}
+
+function updateChargedItemLine(item) {
+    if (!item || !(game.inventory || []).includes(item)) return;
+    if (isWandItem(item)) refreshWandLine(item);
+    else item.line = normalInventoryLine({ ...item, line: '' });
+}
+
+function chargeGlowMessage(item, color = '', feeble = false) {
+    const verb = game.u?.blind ? 'vibrates' : 'glows';
+    if (feeble && (!color || game.u?.blind))
+        return `${chargingObjectSubject(item)} feebly ${verb} for a moment.`;
+    if (!color || game.u?.blind)
+        return `${chargingObjectSubject(item)} ${feeble ? 'feebly ' : ''}${verb} briefly.`;
+    return `${chargingObjectSubject(item)} ${feeble ? 'feebly ' : ''}${verb} ${color} for a moment.`;
+}
+
+function stripCharges(item) {
+    const spe = item?.spe ?? 0;
+    if (item?.blessed || spe <= 0) return ['Nothing happens.'];
+    item.spe = 0;
+    if (isWandItem(item)) item.charges = 0;
+    if (isLampObject(item)) item.age = 0;
+    updateChargedItemLine(item);
+    return [`${chargingObjectSubject(item)} vibrates briefly.`];
+}
+
+function wandRechargeLimit(item) {
+    const name = wandTypeName(item);
+    if (name === 'wishing' || isWishingWand(item)) return 1;
+    return NO_DIRECTION_WAND_NAMES.has(name) ? 15 : 8;
+}
+
+function wandExplosionDieSides(item) {
+    const name = wandTypeName(item);
+    if (name === 'wishing' || isWishingWand(item)) return 12;
+    if (['cancellation', 'death', 'polymorph', 'undead turning'].includes(name)) return 10;
+    if (['cold', 'fire', 'lightning', 'magic missile'].includes(name)) return 8;
+    if (name === 'nothing') return 4;
+    return 6;
+}
+
+function explodeChargingWand(item, chg) {
+    const name = pickupObjectName(item);
+    const dice = Math.max(2, (item.spe ?? 0) + chg);
+    const damage = d(dice, wandExplosionDieSides(item));
+    removeInventoryItem(item);
+    exerciseAttribute(A_STR, false);
+    const messages = [`Your ${name} vibrates violently and explodes!`];
+    if (game.u) {
+        game.u.uhp = Math.max(0, (game.u.uhp || 0) - damage);
+        if ((game.u.uhp || 0) <= 0) {
+            game._death_cause = 'killed by an exploding wand';
+            messages.push('You die...');
+        }
+    }
+    return { messages, more: messages.length > 1, consumed: true };
+}
+
+function rechargeWand(item, curseBless) {
+    const limit = wandRechargeLimit(item);
+    if ((item.spe ?? item.charges) === -1) setWandCharges(item, 0);
+    const rechargeCount = item.recharged || 0;
+    if (rechargeCount > 0
+        && ((wandTypeName(item) === 'wishing' || isWishingWand(item)) || rechargeCount ** 3 > rn2(343))) {
+        return explodeChargingWand(item, rnd(limit));
+    }
+
+    item.recharged = rechargeCount + 1;
+    if (curseBless < 0) return { messages: stripCharges(item), more: false };
+
+    let target = limit === 1 ? 1 : rn1(5, limit + 1 - 5);
+    if (curseBless <= 0) target = rnd(target);
+    const charges = wandCharges(item);
+    setWandCharges(item, charges < target ? target : charges + 1);
+    updateChargedItemLine(item);
+    if (limit === 1) return { messages: [chargeGlowMessage(item, 'blue', true)], more: false };
+    if (wandCharges(item) >= limit) return { messages: [chargeGlowMessage(item, 'blue')], more: false };
+    return { messages: [chargeGlowMessage(item)], more: false };
+}
+
+function isChargeableRing(item) {
+    if (!(item?.cls === 'ring' || item?.otyp === RING_CLASS || item?.glyph === '=')) return false;
+    if (item.charged) return true;
+    const roll = item.ringRoll || item.roll || 0;
+    if (roll >= 1 && roll <= 6) return true;
+    const name = objectKindKey(item).replace(/^ring of /, '');
+    return ['adornment', 'gain strength', 'gain constitution', 'increase accuracy', 'increase damage', 'protection'].includes(name);
+}
+
+function rechargeRing(item, curseBless) {
+    if (!isChargeableRing(item)) return { messages: ['You have a feeling of loss.'], more: false };
+    const oldSpe = item.spe ?? 0;
+    const adjustment = curseBless > 0 ? rnd(3) : curseBless < 0 ? -rnd(2) : 1;
+    if (oldSpe > rn2(7) || oldSpe <= -5) {
+        const name = pickupObjectName(item);
+        const damage = rnd(Math.max(1, 3 * Math.abs(oldSpe)));
+        removeInventoryItem(item);
+        const messages = [`Your ${name} pulsates momentarily, then explodes!`];
+        if (game.u) {
+            game.u.uhp = Math.max(0, (game.u.uhp || 0) - damage);
+            if ((game.u.uhp || 0) <= 0) {
+                game._death_cause = 'killed by an exploding ring';
+                messages.push('You die...');
+            }
+        }
+        return { messages, more: messages.length > 1 };
+    }
+    item.spe = capWishSpe(oldSpe + adjustment);
+    updateChargedItemLine(item);
+    const direction = curseBless < 0 ? 'counterclockwise' : 'clockwise';
+    return { messages: [`${chargingObjectSubject(item)} spins ${direction} for a moment.`], more: false };
+}
+
+function toolChargeKind(item) {
+    const key = objectKindKey(item).replace(/^the /, '');
+    if (key === 'silver bell') return 'bell of opening';
+    return key;
+}
+
+function isWeaponTool(item) {
+    const kind = toolChargeKind(item);
+    return item?.cls === 'tool' && ['pick-axe', 'grappling hook', 'unicorn horn'].includes(kind);
+}
+
+const RECHARGEABLE_TOOL_KINDS = new Set([
+    'bell of opening', 'magic marker', 'tinning kit', 'expensive camera', 'oil lamp',
+    'brass lantern', 'crystal ball', 'horn of plenty', 'bag of tricks', 'can of grease',
+    'magic flute', 'magic harp', 'frost horn', 'fire horn', 'drum of earthquake',
+]);
+
+const CHARGED_TOOL_KINDS = new Set([
+    'bell of opening', 'magic marker', 'tinning kit', 'expensive camera', 'crystal ball',
+    'horn of plenty', 'bag of tricks', 'can of grease', 'magic flute', 'magic harp',
+    'frost horn', 'fire horn', 'drum of earthquake',
+]);
+
+function isRechargeableTool(item) {
+    if (!(item?.cls === 'tool' || item?.otyp === TOOL_CLASS || item?.glyph === '(')) return false;
+    return RECHARGEABLE_TOOL_KINDS.has(toolChargeKind(item));
+}
+
+function isChargePromptSuggested(item) {
+    if (!item?.letter) return false;
+    if (isWandItem(item)) return true;
+    if (isChargeableRing(item) && (item.known || item.dknown || item.bknown)) return true;
+    if (!(item.cls === 'tool' || item.otyp === TOOL_CLASS || item.glyph === '(')) return false;
+    const kind = toolChargeKind(item);
+    if (kind === 'oil lamp' || kind === 'brass lantern') return true;
+    if (kind === 'magic lamp' && item.known === false) return true;
+    return isRechargeableTool(item) && (item.known || item.dknown || item.bknown || item.tool === 'charges' || item.tool === 'magicMarker');
+}
+
+function chargePromptLetters() {
+    return inventoryLetters(isChargePromptSuggested) || '*';
+}
+
+function chargePromptText() {
+    return `What do you want to charge? [${getobjPromptLetters(chargePromptLetters())} or ?*]`;
+}
+
+function rechargeMarkerCameraOrKit(item, curseBless, oldRecharged) {
+    if (curseBless < 0) return stripCharges(item);
+    const kind = toolChargeKind(item);
+    if (kind === 'magic marker' && oldRecharged) {
+        item.recharged = 1;
+        return [(item.spe ?? 0) < 3 ? 'Your marker seems permanently dried out.' : 'Nothing happens.'];
+    }
+    const spe = item.spe ?? 0;
+    if (curseBless > 0) {
+        const amount = rn1(16, 15);
+        if (spe + amount <= 50) item.spe = 50;
+        else if (spe + amount <= 75) item.spe = 75;
+        else item.spe = Math.min(127, spe + amount);
+        item.spe = capWishSpe(item.spe);
+        updateChargedItemLine(item);
+        return [chargeGlowMessage(item, 'blue')];
+    }
+    const amount = rn1(11, 10);
+    item.spe = spe + amount <= 50 ? 50 : Math.min(SPE_LIM, spe + amount);
+    updateChargedItemLine(item);
+    return [chargeGlowMessage(item, 'white')];
+}
+
+function rechargeLamp(item, curseBless) {
+    const messages = [];
+    if (curseBless < 0) {
+        messages.push(...stripCharges(item));
+        if (item.lamplit || item.burning) {
+            item.lamplit = false;
+            item.burning = false;
+            delete item._burnTimer;
+            delete item.litRadius;
+            if (!game.u?.blind) messages.push(`${chargingObjectSubject(item)} goes out!`);
+        }
+        updateChargedItemLine(item);
+        return messages;
+    }
+    item.spe = 1;
+    if (curseBless > 0) {
+        item.age = 1500;
+        updateChargedItemLine(item);
+        return [chargeGlowMessage(item, 'blue')];
+    }
+    item.age = Math.min(1500, (item.age ?? 0) + 750);
+    updateChargedItemLine(item);
+    return [chargeGlowMessage(item)];
+}
+
+function rechargeCrystalBall(item, curseBless) {
+    if ((item.spe ?? 0) === -1) item.spe = 0;
+    if (curseBless < 0) {
+        item.cursed = true;
+        item.blessed = false;
+        item.spe = 0;
+        updateChargedItemLine(item);
+        return [chargeGlowMessage(item, 'black')];
+    }
+    if (curseBless > 0) {
+        item.spe = 7;
+        item.blessed = true;
+        item.cursed = false;
+        updateChargedItemLine(item);
+        return [chargeGlowMessage(item, 'light blue')];
+    }
+    if ((item.spe ?? 0) < 7 || item.cursed) {
+        item.spe = Math.min(7, (item.spe ?? 0) + rnd(2));
+        item.cursed = false;
+        updateChargedItemLine(item);
+        return [chargeGlowMessage(item)];
+    }
+    return ['Nothing happens.'];
+}
+
+function rechargeGreaseBagOrHorn(item, curseBless) {
+    if (curseBless < 0) return stripCharges(item);
+    const spe = item.spe ?? 0;
+    if (curseBless > 0) {
+        item.spe = Math.min(50, spe + (spe <= 10 ? rn1(10, 6) : rn1(5, 6)));
+        updateChargedItemLine(item);
+        return [chargeGlowMessage(item, 'blue')];
+    }
+    item.spe = Math.min(50, spe + rn1(5, 2));
+    updateChargedItemLine(item);
+    return [chargeGlowMessage(item)];
+}
+
+function rechargeInstrument(item, curseBless) {
+    if (curseBless < 0) return stripCharges(item);
+    if (curseBless > 0) {
+        item.spe = Math.min(20, (item.spe ?? 0) + d(2, 4));
+        updateChargedItemLine(item);
+        return [chargeGlowMessage(item, 'blue')];
+    }
+    item.spe = Math.min(20, (item.spe ?? 0) + rnd(4));
+    updateChargedItemLine(item);
+    return [chargeGlowMessage(item)];
+}
+
+function rechargeTool(item, curseBless) {
+    const kind = toolChargeKind(item);
+    const oldRecharged = item.recharged || 0;
+    if (CHARGED_TOOL_KINDS.has(kind) && oldRecharged < 7) item.recharged = oldRecharged + 1;
+
+    if (kind === 'bell of opening') {
+        if (curseBless < 0) return { messages: stripCharges(item), more: false };
+        const amount = curseBless > 0 ? rnd(3) : 1;
+        item.spe = Math.min(5, (item.spe ?? 0) + amount);
+        updateChargedItemLine(item);
+        return { messages: [], more: false };
+    }
+    if (kind === 'magic marker' || kind === 'tinning kit' || kind === 'expensive camera')
+        return { messages: rechargeMarkerCameraOrKit(item, curseBless, oldRecharged), more: false };
+    if (kind === 'oil lamp' || kind === 'brass lantern')
+        return { messages: rechargeLamp(item, curseBless), more: false };
+    if (kind === 'crystal ball')
+        return { messages: rechargeCrystalBall(item, curseBless), more: false };
+    if (kind === 'horn of plenty' || kind === 'bag of tricks' || kind === 'can of grease')
+        return { messages: rechargeGreaseBagOrHorn(item, curseBless), more: false };
+    if (kind === 'magic flute' || kind === 'magic harp' || kind === 'frost horn' || kind === 'fire horn' || kind === 'drum of earthquake')
+        return { messages: rechargeInstrument(item, curseBless), more: false };
+    return { messages: ['You have a feeling of loss.'], more: false };
+}
+
+function rechargeItem(item, curseBless) {
+    if (isWandItem(item)) return rechargeWand(item, curseBless);
+    if (item?.cls === 'ring' || item?.otyp === RING_CLASS || item?.glyph === '=')
+        return rechargeRing(item, curseBless);
+    if (isWeaponTool(item)) return { messages: ['That is a silly thing to charge.'], more: true, retry: true };
+    if (item?.cls === 'tool' || item?.otyp === TOOL_CLASS || item?.glyph === '(')
+        return rechargeTool(item, curseBless);
+    return { messages: ['You have a feeling of loss.'], more: false };
+}
+
 function armorKind(item) {
     return String(item?.actualKind || item?.kind || pickupObjectName(item)).toLowerCase();
 }
@@ -11913,6 +12226,7 @@ export async function rhack(_cmd) {
 	        && !(game._running_continuation && game._process_time_with_more)
         && game._command_mode !== 'eatInvalidMore'
         && game._command_mode !== 'readInvalidMore'
+        && game._command_mode !== 'chargeInvalidMore'
         && game._command_mode !== 'readInventoryMore'
         && game._command_mode !== 'throwInvalidMore'
         && game._command_mode !== 'wieldInvalidMore'
@@ -13887,6 +14201,7 @@ export async function rhack(_cmd) {
         ch === ' ' && game._pending_message && game._message_more
         && game._command_mode !== 'eatInvalidMore'
         && game._command_mode !== 'readInvalidMore'
+        && game._command_mode !== 'chargeInvalidMore'
         && game._command_mode !== 'readInventoryMore'
         && game._command_mode !== 'throwInvalidMore'
         && game._command_mode !== 'wieldInvalidMore'
@@ -16220,6 +16535,81 @@ export async function rhack(_cmd) {
         return;
     }
 
+    if (game._command_mode === 'chargeInvalidMore') {
+        if (ch === '\x1b') {
+            game._charging_scroll = null;
+            await setMessage('Never mind.');
+            game._command_mode = null;
+            game.context.move = 1;
+            return;
+        }
+        if (ch === ' ' || ch === '\r' || ch === '\n') {
+            await setMessage(chargePromptText());
+            game._command_mode = 'chargeObject';
+            return;
+        }
+        game._keep_pending_message = 1;
+        return;
+    }
+
+    if (game._command_mode === 'chargeInventoryOverlay') {
+        game._overlay_lines = null;
+        game._overlay_hide_status = 0;
+        if (ch === ' ' || ch === '\x1b' || ch === '\r' || ch === '\n') {
+            await setMessage(chargePromptText());
+            game._command_mode = 'chargeObject';
+            return;
+        }
+        if (!(game.inventory || []).some(invItem => invItem.letter === ch)) {
+            game._keep_pending_message = 1;
+            return;
+        }
+        game._command_mode = 'chargeObject';
+    }
+
+    if (game._command_mode === 'chargeObject') {
+        const charge = game._charging_scroll;
+        if (!charge) {
+            game._command_mode = null;
+            return;
+        }
+        if (ch === ' ' || ch === '\x1b') {
+            game._charging_scroll = null;
+            await setMessage('Never mind.');
+            game._command_mode = null;
+            game.context.move = 1;
+            return;
+        }
+        if (ch === '?' || ch === '*') {
+            setOverlay(inventoryOverlayLines(), 24, true);
+            game._command_mode = 'chargeInventoryOverlay';
+            return;
+        }
+        const item = (game.inventory || []).find(invItem => invItem.letter === ch);
+        if (!item) {
+            await setMessage("You don't have that object.", true);
+            game._command_mode = 'chargeInvalidMore';
+            return;
+        }
+        const result = rechargeItem(item, charge.curseBless || 0);
+        if (result.retry) {
+            await setMessage(result.messages.join('  '), true);
+            game._command_mode = 'chargeInvalidMore';
+            return;
+        }
+        game._charging_scroll = null;
+        game._command_mode = null;
+        game.context.move = 1;
+        const message = (result.messages || []).filter(Boolean).join('  ');
+        if (message) await setMessage(message, !!result.more);
+        else {
+            game._pending_message = '';
+            game._message_more = 0;
+            game._keep_pending_message = 1;
+        }
+        return;
+    }
+
     if (game._command_mode === 'readInvalidMore') {
         if (ch === ' ' || ch === '\x1b' || ch === '\r' || ch === '\n') {
             const letters = inventoryLetters(item => item.cls === 'scroll' || item.cls === 'spellbook' || item.otyp === SCROLL_CLASS) || 'gh';
@@ -16624,6 +17014,43 @@ export async function rhack(_cmd) {
             game._punishment_after_more = { cursed: !!item.cursed };
             await setMessage('As you read the scroll, it disappears.', true);
             game._command_mode = null;
+            game.context.move = 0;
+            return;
+        }
+        if (isScroll && (scrollName === 'charging' || item.scrollIndex === 19)) {
+            const confusedReading = heroIsConfused();
+            const messages = scrollReadMessages(confusedReading);
+            if (confusedReading) {
+                removeInventoryItem(item);
+                rn2(19);
+                if (item.cursed) {
+                    if (game.u) game.u.uen = 0;
+                    messages.push('You feel discharged.');
+                } else {
+                    if (game.u) {
+                        game.u.uen = (game.u.uen || 0) + d(item.blessed ? 6 : 4, 4);
+                        if (game.u.uen > (game.u.uenmax || 0)) game.u.uenmax = game.u.uen;
+                        else game.u.uen = game.u.uenmax || game.u.uen;
+                    }
+                    messages.push('You feel charged up!');
+                }
+                await setMessage(messages.join('  '), true);
+                game._command_mode = null;
+                game.context.move = 1;
+                return;
+            }
+
+            const alreadyKnown = scrollDiscoveryKnown('charging');
+            removeInventoryItem(item);
+            rn2(19);
+            if (!alreadyKnown) {
+                messages.push('This is a charging scroll.');
+                learnScrollByName('charging', item, 19);
+            }
+            game._charging_scroll = { curseBless: item.cursed ? -1 : item.blessed ? 1 : 0 };
+            messages.push(chargePromptText());
+            await setMessage(messages.join('  '), false);
+            game._command_mode = 'chargeObject';
             game.context.move = 0;
             return;
         }

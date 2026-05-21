@@ -888,6 +888,11 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   confused readings toggle erodeproofing and repair erosion, normal readings
   handle blessed/cursed enchantment math, over-enchant evaporation, AC deltas,
   warning vibration messages, and dragon scales hardening into scale mail.
+- Scroll of charging now follows the C read flow: confused readings affect spell
+  energy directly without identifying the scroll, normal readings identify and
+  consume the scroll before prompting for a target, and the recharge path covers
+  wands, chargeable rings, lamps, markers/cameras/kits, crystal balls, the Bell
+  of Opening, and the charged horn/instrument/grease/bag tool families.
 
 Next concrete target:
 
