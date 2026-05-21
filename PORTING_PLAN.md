@@ -906,6 +906,12 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   confused readings create stacks of rocks, Sokoban readings apply the luck
   penalty, boulder drops can affect monsters and liquids, and the scroll is only
   identified when the gated earth effect actually occurs.
+- Scroll of stinking cloud now follows the C read flow: unknown scrolls identify
+  before prompting, known scrolls include "stinking" in the target prompt,
+  cancel and invalid targets consume the scroll without creating a cloud,
+  B/U/C readings create 25/15/5-square poison gas clouds with matching damage,
+  and dynamic gas regions now render, block vision, tick poison damage, halve
+  strong clouds on expiry, and keep fog-cloud maintenance behavior.
 
 Next concrete target:
 

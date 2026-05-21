@@ -17,6 +17,7 @@ import { prepareVaultGuardEscort } from './vault.js';
 import { clearMonsterTrack, updateMonsterTrack } from './montrack.js';
 import { datFileLines as bundledDatFileLines } from './dat_files.js';
 import { advanceFireBreathRay, finishHeroTargetedBreath, fireBreathDamageHero, fireBreathDamageMonster, fireBreathZapHits } from './fire_breath.js';
+import { createGasCloud } from './region.js';
 
 const DIR_DX = { h: -1, l: 1, j: 0, k: 0, y: -1, u: 1, b: -1, n: 1 };
 const DIR_DY = { h: 0, l: 0, j: 1, k: -1, y: -1, u: -1, b: 1, n: 1 };
@@ -6976,6 +6977,14 @@ function canCenterFireScroll(x, y) {
     const ux = game.u?.ux ?? 0;
     const uy = game.u?.uy ?? 0;
     return couldsee(x, y) && (x - ux) ** 2 + (y - uy) ** 2 < 32;
+}
+
+function heroInsideGasCloud() {
+    const ux = game.u?.ux ?? -1;
+    const uy = game.u?.uy ?? -1;
+    return (game.level?.regions || []).some(reg =>
+        reg.type === 'gas_cloud' && reg.visible !== false
+        && reg.coords?.some(coord => coord.x === ux && coord.y === uy));
 }
 
 function fireScrollMonsterName(mon) {
@@ -17056,6 +17065,58 @@ export async function rhack(_cmd) {
         return;
     }
 
+    if (game._command_mode === 'stinkingCloudCenter') {
+        const pending = game._stinking_cloud_pending;
+        if (!pending) {
+            game._command_mode = null;
+            return;
+        }
+        const ux = game.u?.ux ?? 0;
+        const uy = game.u?.uy ?? 0;
+        let x = game._stinking_cloud_cursor?.x ?? ux;
+        let y = game._stinking_cloud_cursor?.y ?? uy;
+        const dir = movementDirection(ch);
+        if (dir) {
+            x = Math.max(1, Math.min(COLNO - 1, x + dir.dx));
+            y = Math.max(0, Math.min(ROWNO - 1, y + dir.dy));
+            game._stinking_cloud_cursor = { x, y };
+            game._cursor_override = [x - 1, y + 1];
+            const description = fireScrollTargetDescription(x, y);
+            await setMessage(canCenterFireScroll(x, y) ? description : `${description} (invalid target)`);
+            return;
+        }
+        if (!(ch === '.' || ch === ' ' || ch === '\x1b' || ch === '\r' || ch === '\n')) {
+            game._keep_pending_message = 1;
+            return;
+        }
+        game._stinking_cloud_pending = null;
+        game._stinking_cloud_cursor = null;
+        game._cursor_override = null;
+        game._command_mode = null;
+        game.context.move = 1;
+        if (ch === '\x1b') {
+            await setMessage('Never mind.');
+            return;
+        }
+        if (!canCenterFireScroll(x, y)) {
+            await setMessage(game.u?.hallucinating
+                ? 'Ugh... someone cut the cheese.'
+                : 'The scroll crumbles with a whiff of rotten eggs.');
+            return;
+        }
+        const wasInside = heroInsideGasCloud();
+        const region = createGasCloud(x, y, pending.cloudsize, pending.damage);
+        if (region) region.heroFault = true;
+        const enveloped = !wasInside && region?.coords?.some(coord => coord.x === ux && coord.y === uy);
+        if (enveloped) await setMessage('You are enveloped in a cloud of noxious gas!');
+        else {
+            game._pending_message = '';
+            game._message_more = 0;
+            game._keep_pending_message = 1;
+        }
+        return;
+    }
+
     if (game._command_mode === 'readInvalidMore') {
         if (ch === ' ' || ch === '\x1b' || ch === '\r' || ch === '\n') {
             const letters = inventoryLetters(item => item.cls === 'scroll' || item.cls === 'spellbook' || item.otyp === SCROLL_CLASS) || 'gh';
@@ -17603,6 +17664,29 @@ export async function rhack(_cmd) {
             await setMessage(messages.join('  '), result.more || confusedReading);
             game._command_mode = null;
             game.context.move = 1;
+            return;
+        }
+        if (isScroll && (scrollName === 'stinking cloud' || item.scrollIndex === 20)) {
+            const confusedReading = heroIsConfused();
+            const alreadyKnown = scrollDiscoveryKnown('stinking cloud');
+            const messages = scrollReadMessages(confusedReading);
+            const cval = item.blessed ? 1 : item.cursed ? -1 : 0;
+            removeInventoryItem(item);
+            rn2(19);
+            if (!alreadyKnown) {
+                messages.push('You have found a scroll of stinking cloud!');
+                learnScrollByName('stinking cloud', item, 20);
+            }
+            messages.push(`Where do you want to center the ${alreadyKnown ? 'stinking ' : ''}cloud?`);
+            game._stinking_cloud_pending = {
+                cloudsize: 15 + 10 * cval,
+                damage: 8 + 4 * cval,
+            };
+            game._stinking_cloud_cursor = { x: game.u?.ux || 0, y: game.u?.uy || 0 };
+            game._cursor_override = [(game.u?.ux || 0) - 1, (game.u?.uy || 0) + 1];
+            await setMessage(messages.join('  '), false);
+            game._command_mode = 'stinkingCloudCenter';
+            game.context.move = 0;
             return;
         }
         if (isScroll && (scrollName === 'light' || item.scrollIndex === 9)) {

@@ -7911,20 +7911,136 @@ export async function newgame() {
     if (g.flags?.legacy !== false) l_nhcore_init();
 }
 
-function advanceRegions(g) {
+function regionContains(reg, x, y) {
+    return reg?.coords?.some(coord => coord.x === x && coord.y === y);
+}
+
+function reportGasCloudDissipation(g, reg) {
+    if (reg?.type !== 'gas_cloud') return;
+    const ux = g.u?.ux ?? -1;
+    const uy = g.u?.uy ?? -1;
+    if (regionContains(reg, ux, uy)) {
+        addToplineMessage('The gas cloud around you dissipates.');
+        return;
+    }
+    const visibleCount = (reg.coords || []).filter(coord =>
+        g.viz_array?.[coord.y]?.[coord.x] & IN_SIGHT).length;
+    if (visibleCount) addToplineMessage(`You see ${visibleCount === 1 ? 'a' : 'some'} gas cloud${visibleCount === 1 ? '' : 's'} dissipate.`);
+}
+
+function gasCloudWakeNearby(x, y) {
+    for (const mon of game.level?.monsters || []) {
+        if (!mon.msleeping) continue;
+        const dx = (mon.mx || 0) - x;
+        const dy = (mon.my || 0) - y;
+        if (dx * dx + dy * dy <= 4) mon.msleeping = 0;
+    }
+}
+
+function heroGasCloudImmune(g) {
+    const magicalBreathing = (g.inventory || []).some(item =>
+        item.worn && (item.actualKind === 'amulet of magical breathing'
+            || item.kind === 'amulet of magical breathing'));
+    const form = g.u?._polyself_base || {};
+    return !!(g.u?.uinvulnerable || g.u?.underwater || g.u?.uunderwater
+        || magicalBreathing || form.breathless || form.nonliving);
+}
+
+function monsterGasCloudImmune(mon) {
+    const data = mon?.data || {};
+    return !!(data.breathless || data.nonliving || data.name === 'fog cloud'
+        || data.name?.endsWith(' golem') || data.mlet === 'W'
+        || data.mlet === 'Z' || data.mlet === 'M' || data.mlet === "'");
+}
+
+function monsterPoisonResistant(mon) {
+    const data = mon?.data || {};
+    return !!(mon?.poisonResistance || data.resistsPoison || data.poisonResistance);
+}
+
+function applyHeroGasCloud(g, reg) {
+    if ((reg.damage || 0) < 1 || !regionContains(reg, g.u?.ux, g.u?.uy)) return;
+    if (heroGasCloudImmune(g)) return;
+    if (!g.u?.blind) {
+        addToplineMessage('Your eyes sting.');
+        g.u.blind = true;
+        g.u._blindTimeout = Math.max(g.u._blindTimeout || 0, 1);
+    }
+    if (g.u?.poisonResistance) {
+        addToplineMessage('You cough!');
+        gasCloudWakeNearby(g.u.ux, g.u.uy);
+        return;
+    }
+    addToplineMessage('Something is burning your lungs!');
+    addToplineMessage('You cough and spit blood!');
+    gasCloudWakeNearby(g.u.ux, g.u.uy);
+    g.u.uhp = Math.max(0, (g.u.uhp || 0) - (rnd(reg.damage || 1) + 5));
+    if ((g.u.uhp || 0) <= 0) {
+        g._death_cause = 'killed by a gas cloud';
+        addToplineMessage('You die...');
+    }
+}
+
+function applyMonsterGasCloud(g, reg, mon) {
+    if ((reg.damage || 0) < 1 || !regionContains(reg, mon.mx, mon.my)) return false;
+    if (monsterGasCloudImmune(mon)) return false;
+    const data = mon.data || {};
+    const nearby = (mon.mx - (g.u?.ux || 0)) ** 2 + (mon.my - (g.u?.uy || 0)) ** 2 < 8;
+    if (!data.silent && (couldSeeCoord(mon.mx, mon.my) || nearby))
+        addToplineMessage(`${monsterDisplayName(mon)} coughs!`);
+    gasCloudWakeNearby(mon.mx, mon.my);
+    if (reg.heroFault) {
+        mon.mpeaceful = 0;
+        mon.mtame = 0;
+        mon.pet = false;
+    }
+    if (!data.noeyes && mon.mcansee !== false) {
+        mon.mblinded = Math.max(mon.mblinded || 0, 1);
+        mon.mcansee = false;
+    }
+    if (monsterPoisonResistant(mon)) return false;
+    mon.mhp = (mon.mhp || 1) - (rnd(reg.damage || 1) + 5);
+    if ((mon.mhp || 0) > 0) return false;
+    if (couldSeeCoord(mon.mx, mon.my)) addToplineMessage(`${monsterDisplayName(mon)} is killed!`);
+    recordVanquished(mon, !!reg.heroFault);
+    dropMonsterInventory(mon);
+    g.level.monsters = (g.level?.monsters || []).filter(other => other !== mon);
+    newsym(mon.mx, mon.my);
+    return true;
+}
+
+function applyGasCloudEffects(g, reg) {
+    applyHeroGasCloud(g, reg);
+    for (const mon of [...(g.level?.monsters || [])])
+        applyMonsterGasCloud(g, reg, mon);
+}
+
+export function advanceRegions(g) {
     if (!g.level?.regions?.length) return;
     const regionCount = g.level.regions.length;
-    g.level.regions = g.level.regions.filter(reg => reg.ttl !== 0);
+    g.level.regions = g.level.regions.filter(reg => {
+        if (reg.ttl !== 0) return true;
+        if (reg.type === 'gas_cloud' && (reg.damage || 0) >= 5) {
+            reg.damage = Math.trunc((reg.damage || 0) / 2);
+            reg.ttl = 2;
+            return true;
+        }
+        reportGasCloudDissipation(g, reg);
+        return false;
+    });
     if (g.level.regions.length !== regionCount) {
         vision_reset();
         g.vision_full_recalc = 1;
     }
     for (const reg of g.level.regions) {
         if (reg.ttl > 0) reg.ttl--;
-        if (reg.type === 'gas_cloud' && reg.ttl < 20
-            && (g.level?.monsters || []).some(mon => mon.data?.name === 'fog cloud'
-                && reg.coords?.some(coord => coord.x === mon.mx && coord.y === mon.my)))
-            reg.ttl += 5;
+        if (reg.type === 'gas_cloud') {
+            applyGasCloudEffects(g, reg);
+            if (reg.ttl < 20
+                && (g.level?.monsters || []).some(mon => mon.data?.name === 'fog cloud'
+                    && regionContains(reg, mon.mx, mon.my)))
+                reg.ttl += 5;
+        }
     }
 }
 
