@@ -478,6 +478,7 @@ const SCROLL_CLASS = 8;
 const SCR_ENCHANT_ARMOR = 277;
 const SCR_BLANK_PAPER = 293;
 const POTION_CLASS = 9;
+const POT_OIL = 252;
 const POT_WATER = 253;
 const WAND_CLASS = 10;
 const SPBOOK_NO_NOVEL = 11;
@@ -656,6 +657,7 @@ const CHEST = 215;
 const SACK = 217;
 const OILSKIN_SACK = 218;
 const BAG_OF_HOLDING = 219;
+const BRASS_LANTERN = 226;
 const OIL_LAMP = 227;
 const MAGIC_LAMP = 228;
 const BLINDFOLD = 10113;
@@ -664,6 +666,8 @@ const CREAM_PIE = 10081;
 const EXPENSIVE_CAMERA = 10082;
 const STETHOSCOPE = 10083;
 const MAGIC_MARKER = 10084;
+const TALLOW_CANDLE = 370;
+const WAX_CANDLE = 371;
 const GRAY_DRAGON_SCALE_MAIL = 10085;
 const SILVER_DRAGON_SCALE_MAIL = 10086;
 const SPEED_BOOTS = 10087;
@@ -741,8 +745,11 @@ const WISH_BASE_OBJECTS = new Map([
     ['sack', { otyp: SACK, cls: 'tool', glyph: '(', kind: 'sack' }],
     ['oilskin sack', { otyp: OILSKIN_SACK, cls: 'tool', glyph: '(', kind: 'oilskin sack' }],
     ['bag of holding', { otyp: BAG_OF_HOLDING, cls: 'tool', glyph: '(', kind: 'bag of holding' }],
+    ['brass lantern', { otyp: BRASS_LANTERN, cls: 'tool', glyph: '(', kind: 'brass lantern', actualKind: 'brass lantern' }],
     ['oil lamp', { otyp: OIL_LAMP, cls: 'tool', glyph: '(', kind: 'oil lamp' }],
     ['magic lamp', { otyp: MAGIC_LAMP, cls: 'tool', glyph: '(', kind: 'magic lamp' }],
+    ['tallow candle', { otyp: TALLOW_CANDLE, cls: 'tool', glyph: '(', kind: 'tallow candle', plural: 'tallow candles', age: 200 }],
+    ['wax candle', { otyp: WAX_CANDLE, cls: 'tool', glyph: '(', kind: 'wax candle', plural: 'wax candles', age: 400 }],
     ['stethoscope', { otyp: STETHOSCOPE, cls: 'tool', glyph: '(', kind: 'stethoscope' }],
     ['magic marker', { otyp: MAGIC_MARKER, cls: 'tool', glyph: '(', kind: 'magic marker' }],
     ['mirror', { otyp: MIRROR, cls: 'tool', glyph: '(', kind: 'looking glass', actualKind: 'mirror' }],
@@ -761,7 +768,8 @@ const WISH_BASE_NAMEDESC_BOUNDS = new Map([
     ['dart', 61], ['darts', 61], ['dagger', 31], ['daggers', 31],
     ['cream pie', 26], ['large box', 41], ['chest', 36], ['ice box', 6],
     ['sack', 36], ['oilskin sack', 6], ['bag of holding', 21],
-    ['oil lamp', 46], ['magic lamp', 16], ['stethoscope', 26],
+    ['brass lantern', 31], ['oil lamp', 46], ['magic lamp', 16],
+    ['tallow candle', 21], ['wax candle', 6], ['stethoscope', 26],
     ['magic marker', 16], ['mirror', 46], ['expensive camera', 16],
     ['bell of opening', 1], ['blindfold', 51], ['leather gloves', 16],
     ['gauntlets of power', 9], ['cloak of displacement', 13],
@@ -5199,9 +5207,85 @@ function isWaterPotion(item) {
     return item?.otyp === POT_WATER || kind === 'water' || kind === 'holy water' || kind === 'unholy water';
 }
 
+function isPotionOfOil(item) {
+    if (!isPotionObject(item)) return false;
+    return item?.otyp === POT_OIL || item?.potionIndex === 24
+        || objectKindKey(item).replace(/^potion of /, '') === 'oil';
+}
+
 function maybeDilutedPotionName(obj, name) {
     if (!obj?.odiluted || isWaterPotion(obj) || name.startsWith('diluted ')) return name;
     return `diluted ${name}`;
+}
+
+function isCandleObject(item) {
+    const kind = objectKindKey(item);
+    return item?.otyp === TALLOW_CANDLE || item?.otyp === WAX_CANDLE
+        || kind === 'tallow candle' || kind === 'wax candle';
+}
+
+function isLampObject(item) {
+    const kind = objectKindKey(item);
+    return item?.otyp === OIL_LAMP || item?.otyp === MAGIC_LAMP || item?.otyp === BRASS_LANTERN
+        || kind === 'oil lamp' || kind === 'magic lamp' || kind === 'brass lantern';
+}
+
+function isWishedLightSource(item) {
+    return isLampObject(item) || isCandleObject(item) || isPotionOfOil(item);
+}
+
+function candleDefaultAge(item) {
+    return item?.otyp === WAX_CANDLE || objectKindKey(item) === 'wax candle' ? 400 : 200;
+}
+
+function applyBurnAgeThreshold(item, thresholds) {
+    const age = item.age ?? thresholds[0];
+    for (const threshold of thresholds) {
+        if (age > threshold) {
+            item._burnTimer = age - threshold;
+            item.age = threshold;
+            return;
+        }
+    }
+    if (age > 0) {
+        item._burnTimer = age;
+        item.age = 0;
+    }
+}
+
+function beginWishedBurn(item) {
+    item.lamplit = true;
+    item.burning = true;
+    if (isPotionOfOil(item)) {
+        const age = item.age ?? 400;
+        item._burnTimer = item.odiluted ? Math.trunc(age * 3 / 4) : age;
+        item.age = 0;
+        item.litRadius = 1;
+    } else if (item.otyp === MAGIC_LAMP || objectKindKey(item) === 'magic lamp') {
+        delete item._burnTimer;
+    } else if (isCandleObject(item)) {
+        if (item.age == null) item.age = candleDefaultAge(item);
+        applyBurnAgeThreshold(item, [75, 15, 0]);
+    } else {
+        if (item.age == null) item.age = 1500;
+        applyBurnAgeThreshold(item, [150, 100, 50, 25, 0]);
+    }
+}
+
+function applyWishedLightState(item, state) {
+    if (!isWishedLightSource(item) || state == null) return;
+    if (state) beginWishedBurn(item);
+    else {
+        item.lamplit = false;
+        item.burning = false;
+        delete item._burnTimer;
+        delete item.litRadius;
+    }
+}
+
+function maybeLitObjectName(obj, name) {
+    if (!(obj?.lamplit || obj?.burning) || name.endsWith(' (lit)')) return name;
+    return `${name} (lit)`;
 }
 
 function foodObjectNutrition(item) {
@@ -5384,6 +5468,7 @@ function applyWishedQualifiers(item, qualifiers) {
     if (qualifiers.greased) item.greased = true;
     if (qualifiers.diluted && isPotionObject(item) && !isWaterPotion(item))
         item.odiluted = true;
+    applyWishedLightState(item, qualifiers.lightState);
     if (qualifiers.halfeaten)
         applyWishedPartlyEaten(item);
     if (qualifiers.poisoned) {
@@ -5488,9 +5573,11 @@ function wishedObjectFromName(lowerName, qualifiers = {}) {
     if (/potion|juice|water/.test(lowerName)) {
         const potionName = lowerName.replace(/^potion(?: of)?\s+/, '');
         const waterPotion = lowerName === 'water' || potionName === 'water';
+        const oilPotion = potionName === 'oil';
         const potionIndex = IDENTIFIED_POTION_NAMES.indexOf(potionName);
         if (potionIndex >= 0) rn2(POTION_WISH_PROBS[potionIndex] + 1);
-        const otmp = mksobj(waterPotion ? POT_WATER : potionIndex >= 0 ? POTION_WISH_BASE + potionIndex : POTION_CLASS, true, false);
+        const otmp = mksobj(waterPotion ? POT_WATER : oilPotion ? POT_OIL : potionIndex >= 0 ? POTION_WISH_BASE + potionIndex : POTION_CLASS, true, false);
+        if (oilPotion && otmp.age == null) otmp.age = 400;
         const appearance = potionIndex >= 0 ? game._object_descriptions?.potions?.[potionIndex]?.description : '';
         return Object.assign(otmp, {
             cls: 'potion',
@@ -5633,7 +5720,12 @@ export function pickupObjectName(obj) {
     if (obj.otyp === CHEST) return 'chest';
     if (obj.otyp === ICE_BOX) return 'ice box';
     if (BAG_OBJECT_TYPES.has(obj.otyp)) return obj.contents?.length || !obj.cknown ? 'bag' : 'empty bag';
-    if (obj.otyp === OIL_LAMP || obj.otyp === MAGIC_LAMP) return 'lamp';
+    if (obj.otyp === OIL_LAMP || obj.otyp === MAGIC_LAMP) return maybeLitObjectName(obj, 'lamp');
+    if (obj.otyp === BRASS_LANTERN) return maybeLitObjectName(obj, 'brass lantern');
+    if (obj.otyp === TALLOW_CANDLE || obj.otyp === WAX_CANDLE) {
+        const name = obj.kind || (obj.otyp === WAX_CANDLE ? 'wax candle' : 'tallow candle');
+        return maybeLitObjectName(obj, (obj.quan || 1) > 1 ? obj.plural || `${name}s` : name);
+    }
     if (obj.otyp === SCROLL_CLASS || obj.cls === 'scroll') {
         if ((obj.quan || 1) > 1 && obj.plural) return obj.plural;
         const blankScroll = obj.otyp === SCR_BLANK_PAPER || obj.scrollIndex === 21
@@ -5661,7 +5753,7 @@ export function pickupObjectName(obj) {
     }
     if (obj.otyp === POTION_CLASS || obj.cls === 'potion') {
         if ((obj.quan || 1) > 1 && obj.plural) return obj.plural;
-        if (obj.kind?.startsWith?.('potion:')) return maybeDilutedPotionName(obj, obj.singular || `potion of ${obj.kind.slice(7)}`);
+        if (obj.kind?.startsWith?.('potion:')) return maybeLitObjectName(obj, maybeDilutedPotionName(obj, obj.singular || `potion of ${obj.kind.slice(7)}`));
         const rawKind = String(obj.kind || '').replace(/^potion of /, '');
         if (rawKind === 'water' && (obj.blessed || obj.cursed)) {
             const kind = obj.blessed ? 'holy water' : 'unholy water';
@@ -5669,13 +5761,13 @@ export function pickupObjectName(obj) {
         }
         if (obj.kind === 'holy water' || obj.kind === 'unholy water')
             return (obj.quan || 1) > 1 ? `potions of ${obj.kind}` : `potion of ${obj.kind}`;
-        if (obj.kind?.endsWith?.(' potion')) return maybeDilutedPotionName(obj, obj.kind);
+        if (obj.kind?.endsWith?.(' potion')) return maybeLitObjectName(obj, maybeDilutedPotionName(obj, obj.kind));
         if (obj.kind) {
             const name = obj.kind.replace(/^potion of /, '');
-            return maybeDilutedPotionName(obj, (obj.quan || 1) > 1 ? `potions of ${name}` : `potion of ${name}`);
+            return maybeLitObjectName(obj, maybeDilutedPotionName(obj, (obj.quan || 1) > 1 ? `potions of ${name}` : `potion of ${name}`));
         }
         const appearance = game._object_descriptions?.potions?.[obj.potionIndex]?.description || 'clear';
-        return maybeDilutedPotionName(obj, `${appearance} potion`);
+        return maybeLitObjectName(obj, maybeDilutedPotionName(obj, `${appearance} potion`));
     }
     if (obj.otyp === WAND_CLASS || obj.cls === 'wand') {
         if (obj.known === false) {
@@ -6439,6 +6531,7 @@ function identifiedInventoryLine(item) {
         else {
             const diluted = item.odiluted && !isWaterPotion(item) ? 'diluted ' : '';
             phrase = `${buc} ${diluted}${quan > 1 ? 'potions' : 'potion'} of ${raw}`;
+            phrase = maybeLitObjectName(item, phrase);
         }
     } else if (cls === 'ring') {
         const roll = item.ringRoll || item.roll || 0;
@@ -16528,6 +16621,7 @@ export async function rhack(_cmd) {
                 diluted: false,
                 halfeaten: false,
                 unlabeled: false,
+                lightState: null,
             };
             let wishedErosionIntensity = 0;
             for (;;) {
@@ -16568,6 +16662,7 @@ export async function rhack(_cmd) {
                 }
                 const lit = wishedName.match(/^(?:lit|burning|unlit|extinguished)\s+/i);
                 if (lit) {
+                    wishedQualifiers.lightState = /^(?:lit|burning)/i.test(lit[0]) ? 1 : 0;
                     wishedName = wishedName.slice(lit[0].length);
                     continue;
                 }
@@ -16637,6 +16732,11 @@ export async function rhack(_cmd) {
                 if (!quan) break;
                 wishedQuan = Number(quan[1]);
                 wishedName = wishedName.slice(quan[0].length);
+            }
+            const litSuffix = wishedName.match(/\s*\(lit\)\s*$/i);
+            if (litSuffix) {
+                wishedQualifiers.lightState = 1;
+                wishedName = wishedName.slice(0, litSuffix.index);
             }
             const lowerName = wishedName.trim().toLowerCase();
             if (!lowerName || lowerName === 'nothing' || lowerName === 'nil' || lowerName === 'none') {

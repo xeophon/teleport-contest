@@ -717,7 +717,9 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   leading `greased`, `poisoned`, erosion/proofing words, and `wet`/`moist`
   are stripped before object lookup; wished weapons and armor clear random
   erosion, apply material-shaped erosion/proofing, poison eligible missiles
-  or age poisoned food, and preserve C's `wet`/`moist` RNG consumption.
+  or age poisoned food, preserve C's `wet`/`moist` RNG consumption, and keep
+  `lit`/`burning` state for wished lamps, lanterns, candles, and potions of
+  oil, including C's `(lit)` suffix form and persisted fuel-age thresholds.
 - Wished container state prefixes now cover the C `readobjnam()` object slice
   for `locked`, `unlocked`, `broken`, `trapped`, `untrapped`, and `empty`:
   boxes keep normal generated contents and lock/trap RNG before final state
