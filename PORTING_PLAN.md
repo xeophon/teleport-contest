@@ -883,6 +883,11 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   spells intact when blessed, clears felt ball-and-chain memory and monster
   ever-seen memory, preserves the Maud/hallucination messages, and no longer
   treats amnesia as the scroll exempt from fire inventory destruction.
+- Scroll of enchant armor now routes through a C-shaped read effect: worn armor
+  is selected with `some_armor()` priority and `rn2(4)` replacement checks,
+  confused readings toggle erodeproofing and repair erosion, normal readings
+  handle blessed/cursed enchantment math, over-enchant evaporation, AC deltas,
+  warning vibration messages, and dragon scales hardening into scale mail.
 
 Next concrete target:
 

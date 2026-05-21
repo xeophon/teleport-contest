@@ -2095,6 +2095,30 @@ const ARMOR_WISH_APPEARANCES = {
     'fumble boots': ['boots', 5, 'riding boots'],
     'levitation boots': ['boots', 6, 'snow boots'],
 };
+const MAGICAL_ARMOR_KINDS = new Set([
+    'cloak of displacement', 'cloak of invisibility', 'cloak of magic resistance',
+    'cloak of protection', 'helm of brilliance', 'helm of caution',
+    'helm of opposite alignment', 'helm of telepathy', 'dunce cap',
+    'gauntlets of dexterity', 'gauntlets of fumbling', 'gauntlets of power',
+    'jumping boots', 'fumble boots', 'levitation boots', 'speed boots',
+    'water walking boots', 'shield of reflection',
+    'gray dragon scale mail', 'gold dragon scale mail', 'silver dragon scale mail',
+    'red dragon scale mail', 'white dragon scale mail', 'orange dragon scale mail',
+    'black dragon scale mail', 'blue dragon scale mail', 'green dragon scale mail',
+    'yellow dragon scale mail',
+]);
+const DRAGON_SCALE_MAIL_BY_SCALES = new Map([
+    ['gray dragon scales', 'gray dragon scale mail'],
+    ['gold dragon scales', 'gold dragon scale mail'],
+    ['silver dragon scales', 'silver dragon scale mail'],
+    ['red dragon scales', 'red dragon scale mail'],
+    ['white dragon scales', 'white dragon scale mail'],
+    ['orange dragon scales', 'orange dragon scale mail'],
+    ['black dragon scales', 'black dragon scale mail'],
+    ['blue dragon scales', 'blue dragon scale mail'],
+    ['green dragon scales', 'green dragon scale mail'],
+    ['yellow dragon scales', 'yellow dragon scale mail'],
+]);
 
 export function updateGauntletsOfPowerStrength(kind, worn) {
     if (kind !== 'gauntlets of power' || !game.u?.acurr?.a) return;
@@ -6608,6 +6632,216 @@ function scrollReadMessages(confusedReading) {
     if (confusedReading)
         messages.push(game.u?.hallucinating ? 'Being so trippy, you screw up...' : 'Being confused, you mispronounce the magic words...');
     return messages;
+}
+
+function armorKind(item) {
+    return String(item?.actualKind || item?.kind || pickupObjectName(item)).toLowerCase();
+}
+
+function armorMessageName(item) {
+    return pickupObjectName(item).replace(/^pair of /, '');
+}
+
+function armorNameIsPlural(name) {
+    return /\b(?:boots|shoes|gloves|gauntlets|scales)\b/i.test(name) && !/\bmail\b/i.test(name);
+}
+
+function armorVerb(item, singular, plural) {
+    return armorNameIsPlural(armorMessageName(item)) ? plural : singular;
+}
+
+function armorSubject(item) {
+    return `Your ${armorMessageName(item)}`;
+}
+
+function armorSlot(item) {
+    const name = armorKind(item);
+    if (/\b(?:cloak|robe|mantelet|pall|cape|cope|cloth|smock|apron)\b/.test(name)) return 'cloak';
+    if (/\b(?:mail|armor|jacket|dragon scales?)\b/.test(name)) return 'body';
+    if (/\bshirt\b/.test(name)) return 'shirt';
+    if (/\b(?:helm|helmet|hat|fedora|cornuthaum|cap|pot)\b/.test(name)) return 'helm';
+    if (/\b(?:gloves|gauntlets)\b/.test(name)) return 'gloves';
+    if (/\b(?:boots|shoes)\b/.test(name)) return 'boots';
+    if (/\bshield\b/.test(name)) return 'shield';
+    return '';
+}
+
+function someEnchantArmorTarget() {
+    const wornArmor = (game.inventory || []).filter(item =>
+        item.cls === 'armor' && (item.worn || item.line?.includes('being worn')));
+    let target = wornArmor.find(item => armorSlot(item) === 'cloak')
+        || wornArmor.find(item => armorSlot(item) === 'body')
+        || wornArmor.find(item => armorSlot(item) === 'shirt')
+        || null;
+    for (const slot of ['helm', 'gloves', 'boots', 'shield']) {
+        const item = wornArmor.find(candidate => armorSlot(candidate) === slot);
+        if (item && (!target || !rn2(4))) target = item;
+    }
+    return target;
+}
+
+function wornArmorAcValue(item) {
+    const base = ARMOR_AC_BONUS[armorKind(item)] ?? 0;
+    return base + (item.spe ?? 0) - Math.min(item.oeroded || 0, base);
+}
+
+function updateArmorLine(item) {
+    item.line = normalInventoryLine({ ...item, line: '' });
+}
+
+function updateReflectionFromInventory() {
+    if (!game.u) return;
+    game.u.reflecting = (game.inventory || []).some(item => {
+        if (!(item.worn || item.line?.includes('being worn'))) return false;
+        const kind = armorKind(item);
+        return kind === 'silver dragon scale mail' || kind === 'shield of reflection'
+            || item.amuletIndex === 7 || kind === 'amulet of reflection';
+    });
+}
+
+function isSpecialEnchantArmor(item) {
+    const kind = armorKind(item);
+    return kind.includes('elven') || ((game.urole?.name?.m || game._startup_role) === 'Wizard' && kind === 'cornuthaum');
+}
+
+function isEnchantMagicalArmor(item) {
+    return !!item.magic || MAGICAL_ARMOR_KINDS.has(armorKind(item));
+}
+
+function enchantArmorColorWord(item, cursed, blind) {
+    if (blind) return '';
+    const kind = armorKind(item);
+    if (cursed && (kind === 'black dragon scale mail' || kind === 'black dragon scales')) return '';
+    if (!cursed && (kind === 'silver dragon scale mail' || kind === 'silver dragon scales' || kind === 'shield of reflection')) return '';
+    return cursed ? ' black' : ' silver';
+}
+
+function enchantArmorConfusedEffect(item, armor) {
+    const messages = [];
+    const subject = armorSubject(armor);
+    const oldErodeproof = !!armor.oerodeproof;
+    const newErodeproof = !item.cursed;
+    if (game.u?.blind) {
+        armor.rknown = false;
+        messages.push(`${subject} ${armorVerb(armor, 'feels', 'feel')} warm for a moment.`);
+    } else {
+        armor.rknown = true;
+        messages.push(`${subject} ${armorVerb(armor, 'is', 'are')} covered by a ${item.cursed ? 'mottled black glow' : `shimmering golden ${armorSlot(armor) === 'shield' ? 'layer' : 'shield'}`}!`);
+    }
+    const oldAc = wornArmorAcValue(armor);
+    if (newErodeproof && ((armor.oeroded || 0) || (armor.oeroded2 || 0))) {
+        armor.oeroded = 0;
+        armor.oeroded2 = 0;
+        if (game.u) game.u.uac = (game.u.uac ?? 10) + oldAc - wornArmorAcValue(armor);
+        messages.push(`${subject} ${armorVerb(armor, game.u?.blind ? 'feels' : 'looks', game.u?.blind ? 'feel' : 'look')} as good as new!`);
+    }
+    armor.oerodeproof = newErodeproof;
+    if (oldErodeproof && !newErodeproof) armor.rknown = true;
+    updateArmorLine(armor);
+    return { messages, known: false };
+}
+
+function transformDragonScales(armor, blessed) {
+    const oldAc = wornArmorAcValue(armor);
+    const oldName = armorMessageName(armor);
+    const mail = DRAGON_SCALE_MAIL_BY_SCALES.get(armorKind(armor));
+    const spec = DRAGON_ARMOR_BY_COLOR.get(mail.replace(/ dragon scale mail$/, ''));
+    armor.kind = mail;
+    armor.actualKind = mail;
+    if (spec) {
+        armor.otyp = spec.mailOtyp;
+        armor.color = spec.color;
+        armor._display_color = spec.color;
+    }
+    armor.dragonArmor = true;
+    armor.dragonArmorKind = 'mail';
+    armor.noArticle = false;
+    armor.owt = 40;
+    if (blessed) {
+        armor.spe = capWishSpe((armor.spe ?? 0) + 1);
+        armor.blessed = true;
+        armor.cursed = false;
+    } else if (armor.cursed) {
+        armor.cursed = false;
+    }
+    armor.known = true;
+    updateArmorLine(armor);
+    if (game.u) game.u.uac = (game.u.uac ?? 10) + oldAc - wornArmorAcValue(armor);
+    updateReflectionFromInventory();
+    return `Your ${oldName} ${armorVerb({ ...armor, kind: oldName, actualKind: oldName }, 'merges', 'merge')} and ${armorVerb({ ...armor, kind: oldName, actualKind: oldName }, 'hardens', 'harden')}!`;
+}
+
+function enchantArmorScrollEffect(item) {
+    const armor = someEnchantArmorTarget();
+    if (!armor) {
+        exerciseAttribute(A_CON, !item.cursed);
+        exerciseAttribute(A_STR, !item.cursed);
+        return {
+            messages: [game.u?.blind ? 'Your skin feels warm for a moment.' : 'Your skin glows then fades.'],
+            known: false,
+        };
+    }
+    if (heroIsConfused()) return enchantArmorConfusedEffect(item, armor);
+
+    const specialArmor = isSpecialEnchantArmor(armor);
+    let s = item.cursed ? -(armor.spe ?? 0) : (armor.spe ?? 0);
+    if (s > (specialArmor ? 5 : 3) && rn2(s)) {
+        const subject = armorSubject(armor);
+        const color = enchantArmorColorWord(armor, item.cursed, game.u?.blind);
+        const oldAc = wornArmorAcValue(armor);
+        if (game.u) game.u.uac = (game.u.uac ?? 10) + oldAc;
+        removeInventoryItem(armor);
+        updateReflectionFromInventory();
+        return {
+            messages: [`${subject} violently ${armorVerb(armor, game.u?.blind ? 'vibrates' : 'glows', game.u?.blind ? 'vibrate' : 'glow')}${color} for a while, then ${armorVerb(armor, 'evaporates', 'evaporate')}.`],
+            known: !!armor.known,
+        };
+    }
+    if (s < -100) s = -100;
+    s = Math.trunc((4 - s) / 2);
+    if (specialArmor) s++;
+    if (!isEnchantMagicalArmor(armor)) s++;
+    if (item.blessed) s++;
+    if (s <= 0) {
+        s = 0;
+        if ((armor.spe ?? 0) > 0 && !rn2(armor.spe)) s = 1;
+    } else {
+        s = rnd(s);
+    }
+    if (s > 11) s = 11;
+    if (item.cursed) s = -s;
+
+    if (s >= 0 && DRAGON_SCALE_MAIL_BY_SCALES.has(armorKind(armor))) {
+        return { messages: [transformDragonScales(armor, item.blessed)], known: true };
+    }
+
+    const messages = [];
+    const color = enchantArmorColorWord(armor, item.cursed, game.u?.blind);
+    messages.push(`${armorSubject(armor)} ${s === 0 ? 'violently ' : ''}${armorVerb(armor, game.u?.blind ? 'vibrates' : 'glows', game.u?.blind ? 'vibrate' : 'glow')}${color} for a ${s * s > 1 ? 'while' : 'moment'}.`);
+
+    if (item.cursed) {
+        armor.cursed = true;
+        armor.blessed = false;
+    } else if (item.blessed) {
+        armor.blessed = true;
+        armor.cursed = false;
+    } else if (armor.cursed) {
+        armor.cursed = false;
+    }
+
+    if (s) {
+        const oldAc = wornArmorAcValue(armor);
+        const oldSpe = armor.spe ?? 0;
+        armor.spe = capWishSpe(oldSpe + s);
+        s = armor.spe - oldSpe;
+        if (s && game.u) game.u.uac = (game.u.uac ?? 10) + oldAc - wornArmorAcValue(armor);
+        armor.known = true;
+    }
+    updateArmorLine(armor);
+    if ((armor.spe ?? 0) > (specialArmor ? 5 : 3) && (specialArmor || !rn2(7))) {
+        messages.push(`${armorSubject(armor)} suddenly ${armorVerb(armor, 'vibrates', 'vibrate')} ${game.u?.blind ? 'again' : 'unexpectedly'}.`);
+    }
+    return { messages, known: !!armor.known };
 }
 
 function loseAmnesiaSpells() {
@@ -16051,6 +16285,19 @@ export async function rhack(_cmd) {
             await setMessage(game.u?.blind
                 ? "You don't remember there being any magic words on this scroll."
                 : 'This scroll seems to be blank.');
+            game._command_mode = null;
+            game.context.move = 1;
+            return;
+        }
+        if (isScroll && (scrollName === 'enchant armor' || item.scrollIndex === 0)) {
+            const confusedReading = heroIsConfused();
+            removeInventoryItem(item);
+            rn2(19);
+            const result = enchantArmorScrollEffect(item);
+            if (result.known) learnScrollByName('enchant armor', item, 0);
+            const messages = scrollReadMessages(confusedReading);
+            messages.push(...result.messages);
+            await setMessage(messages.join('  '), true);
             game._command_mode = null;
             game.context.move = 1;
             return;
