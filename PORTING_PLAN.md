@@ -893,6 +893,13 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   consume the scroll before prompting for a target, and the recharge path covers
   wands, chargeable rings, lamps, markers/cameras/kits, crystal balls, the Bell
   of Opening, and the charged horn/instrument/grease/bag tool families.
+- Scroll of fire now follows the C read flow: it uses the scroll-specific read
+  text without the generic disappearance message, rolls B/U/C damage before
+  consumption, identifies unknown scrolls even for confused readings, handles
+  the terminal confused hand-burn/warmth effects, prompts blessed readings for a
+  `getpos`-style explosion center, and resolves the fiery 3x3 tower against
+  monsters, monster inventory, hero inventory, fire resistance, cold weakness,
+  and scroll-class magic resistance.
 
 Next concrete target:
 

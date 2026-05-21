@@ -4702,6 +4702,13 @@ function fireDamageInventory(origDamage, forceDestroyItems = false, rollIgniteIt
         } else {
             message = `${subject} ${plural ? 'catch fire and burn' : 'catches fire and burns'}!`;
             removeInventoryItem(item, destroyed);
+            if (!game.u?.fireResistance) {
+                event.damage = 1;
+                damage += 1;
+                deathCause = cls === 'spellbook'
+                    ? 'killed by burning book'
+                    : plural ? 'killed by burning scrolls' : 'killed by burning scroll';
+            }
         }
         if (!joinedArmorMessage && messages.length === 1 && armor.message) {
             messages[0] = `${messages[0]}  ${message}`;
@@ -6635,6 +6642,13 @@ function scrollReadMessages(confusedReading) {
     return messages;
 }
 
+function fireScrollReadMessages(confusedReading) {
+    const messages = [game.u?.blind ? 'You pronounce the formula on the scroll.' : 'You read the scroll.'];
+    if (confusedReading)
+        messages.push(game.u?.hallucinating ? 'Being so trippy, you screw up...' : 'Being confused, you mispronounce the magic words...');
+    return messages;
+}
+
 function scrollDiscoveryKnown(scrollName) {
     const discoveryName = `scroll of ${scrollName}`;
     return (game._discoveries || [])
@@ -6945,6 +6959,172 @@ function rechargeItem(item, curseBless) {
     if (item?.cls === 'tool' || item?.otyp === TOOL_CLASS || item?.glyph === '(')
         return rechargeTool(item, curseBless);
     return { messages: ['You have a feeling of loss.'], more: false };
+}
+
+function fireScrollDamage(item) {
+    const cval = item?.blessed ? 1 : item?.cursed ? -1 : 0;
+    return Math.trunc((2 * (rn1(3, 3) + 2 * cval) + 1) / 3);
+}
+
+function canCenterFireScroll(x, y) {
+    if (x == null || y == null || x < 1 || x >= COLNO || y < 0 || y >= ROWNO) return false;
+    const loc = game.level?.at(x, y);
+    if (loc) {
+        const accessible = ACCESSIBLE(loc.typ) || IS_POOL(loc.typ) || loc.typ === LAVAPOOL || loc.typ === LAVAWALL;
+        if (!accessible) return false;
+    }
+    const ux = game.u?.ux ?? 0;
+    const uy = game.u?.uy ?? 0;
+    return couldsee(x, y) && (x - ux) ** 2 + (y - uy) ** 2 < 32;
+}
+
+function fireScrollMonsterName(mon) {
+    if (mon?.givenName) return mon.givenName;
+    if (mon?.isshk && mon.shknam) return mon.shknam;
+    return `The ${mon?.data?.name || mon?.name || 'monster'}`;
+}
+
+function fireScrollTargetDescription(x, y) {
+    if (x === game.u?.ux && y === game.u?.uy) return heroFarlookDescription();
+    const mon = (game.level?.monsters || []).find(item => item.mx === x && item.my === y);
+    if (mon) return fireScrollMonsterName(mon).replace(/^The /, 'the ');
+    const object = (game.level?.objects || []).find(obj =>
+        !obj.hidden && !obj.transientProjectile && obj.ox === x && obj.oy === y);
+    if (object) return pickupObjectPhrase(object);
+    const loc = game.level?.at(x, y);
+    if (!loc || (!loc.seenv && !loc.remembered_glyph && loc.disp_ch === ' ')) return 'unexplored area';
+    if (loc.typ === DOOR) return doorDescription(loc);
+    if (loc.typ === CORR) return 'corridor';
+    if (loc.typ === ROOM || loc.typ === STAIRS) return 'floor of a room';
+    if (IS_POOL(loc.typ)) return 'pool of water';
+    if (loc.typ === LAVAPOOL) return 'molten lava';
+    if (loc.typ === LAVAWALL) return 'lava wall';
+    if (loc.typ && loc.typ < DOOR) return 'wall';
+    return 'unexplored area';
+}
+
+function heroIsDeaf() {
+    return (game.u?._statusSuffix || '').includes('Deaf') || (game.u?._deafTimeout || 0) > 0;
+}
+
+function fireDestroyableInventoryClass(item) {
+    const cls = item?.cls || '';
+    if (cls === 'potion' || cls === 'scroll' || cls === 'spellbook') return cls;
+    const name = String(item?.actualKind || item?.kind || item?.line || '').toLowerCase();
+    if (name.includes('potion')) return 'potion';
+    if (name.includes('scroll')) return 'scroll';
+    if (name.includes('spellbook')) return 'spellbook';
+    return '';
+}
+
+function fireInventoryItemImmune(item, cls) {
+    const name = String(item?.actualKind || item?.kind || item?.line || '').toLowerCase();
+    if (cls === 'scroll' && (item?.scrollIndex === 16 || /\bscroll of fire\b/.test(name))) return true;
+    if (cls === 'spellbook' && (/\bfireball\b/.test(name) || /\bbook of the dead\b/.test(name))) return true;
+    return !!item?.artifact || !!item?.oartifact || (item?.in_use && (item?.quan || 1) === 1);
+}
+
+function monsterFireInventoryDamage(mon, origDamage, messages, visible) {
+    let limit = Math.trunc(origDamage / 5);
+    if (origDamage % 5 > rn2(5)) limit++;
+    if (limit < 1) return 0;
+    limit = Math.min(20, limit);
+
+    const selected = [];
+    let eligible = 0;
+    for (const item of [...(mon?.minvent || [])]) {
+        const cls = fireDestroyableInventoryClass(item);
+        if (!cls || fireInventoryItemImmune(item, cls)) continue;
+        const i = eligible < limit ? eligible : rn2(eligible);
+        eligible++;
+        if (i < limit) selected[i] = item;
+    }
+
+    let damage = 0;
+    const owner = fireScrollMonsterName(mon).replace(/^The /, 'the ');
+    const possessive = owner.endsWith('s') ? `${owner}'` : `${owner}'s`;
+    const resistsFire = !!(mon?.fireResistance || mon?.data?.resistsFire);
+    for (const item of selected.filter(Boolean)) {
+        const cls = fireDestroyableInventoryClass(item);
+        const quan = item.quan || 1;
+        const itemDamage = cls === 'potion' ? rnd(6) : resistsFire ? 0 : 1;
+        let destroyed = 0;
+        for (let i = 0; i < quan; i++)
+            if (!rn2(3)) destroyed++;
+        if (!destroyed) continue;
+
+        if (visible) {
+            const plural = destroyed > 1;
+            const itemName = pickupObjectName({ ...item, line: '', quan: plural ? Math.max(2, quan) : 1 });
+            const subject = destroyed === 1 && quan === 1 ? `${sentenceCase(possessive)} ${itemName}`
+                : destroyed === 1 ? `One of ${possessive} ${itemName}`
+                    : destroyed < quan ? `Some of ${possessive} ${itemName}`
+                        : quan === 2 ? `Both of ${possessive} ${itemName}`
+                            : `All of ${possessive} ${itemName}`;
+            const verb = cls === 'potion'
+                ? plural ? 'boil and explode' : 'boils and explodes'
+                : plural ? 'catch fire and burn' : 'catches fire and burns';
+            messages.push(`${subject} ${verb}!`);
+        }
+        const remaining = quan - destroyed;
+        if (remaining > 0) item.quan = remaining;
+        else mon.minvent = (mon.minvent || []).filter(other => other !== item);
+        damage += itemDamage;
+    }
+    return damage;
+}
+
+function resolveFireScrollExplosion(cx, cy, dam, messages = []) {
+    const ux = game.u?.ux ?? -99;
+    const uy = game.u?.uy ?? -99;
+    const underwater = !!(game.u?.underwater || game.u?.uunderwater);
+    if (underwater) {
+        messages.push('The water around you vaporizes violently!');
+    } else if (cx === ux && cy === uy) {
+        messages.push('The scroll erupts in a tower of flame!');
+    }
+    if (!heroIsDeaf()) messages.push('Boom!');
+
+    for (const mon of [...(game.level?.monsters || [])]) {
+        if (!mon || mon.dead || (mon.mhp ?? 1) <= 0 || Math.abs((mon.mx ?? -99) - cx) > 1 || Math.abs((mon.my ?? -99) - cy) > 1)
+            continue;
+        const visible = !game.u?.blind && (game.viz_array?.[mon.my]?.[mon.mx] & IN_SIGHT);
+        const name = fireScrollMonsterName(mon);
+        if (visible) messages.push(`${name} is caught in the tower of flame!`);
+        const itemDamage = monsterFireInventoryDamage(mon, dam, messages, visible);
+        let damage = 0;
+        if (!(mon.fireResistance || mon.data?.resistsFire)) {
+            damage = dam;
+            if (monsterResistsEffect(mon, 9)) {
+                if (visible) messages.push(`${name} resists the tower of flame!`);
+                damage = Math.trunc((damage + 1) / 2);
+            }
+            if (mon.coldResistance || mon.data?.resistsCold || mon.data?.coldResistance) damage *= 2;
+        }
+        damage += itemDamage;
+        mon.mhp = (mon.mhp || 1) - damage;
+        if ((mon.mhp || 0) <= 0) {
+            dropMonsterInventory(mon);
+            game.level.monsters = (game.level?.monsters || []).filter(other => other !== mon);
+            recordVanquished(mon, true);
+            newsym(mon.mx, mon.my);
+            if (visible) messages.push(`You kill the ${mon.data?.name || mon.name || 'monster'}!`);
+        }
+    }
+
+    if (Math.abs(ux - cx) <= 1 && Math.abs(uy - cy) <= 1) {
+        const fireInventory = fireDamageInventory(dam, true);
+        messages.push(...fireInventory.messages);
+        const damage = (game.u?.fireResistance ? 0 : dam) + fireInventory.damage;
+        if (damage && game.u) game.u.uhp = Math.max(0, (game.u.uhp || 0) - damage);
+        if ((game.u?.uhp || 0) <= 0) {
+            game._death_cause = fireInventory.deathCause || 'killed by a tower of flame';
+            messages.push('You die...');
+        }
+        exerciseAttribute(A_STR, false);
+    }
+
+    return { messages, more: messages.length > 1 || (game.u?.uhp || 1) <= 0 };
 }
 
 function armorKind(item) {
@@ -16610,6 +16790,48 @@ export async function rhack(_cmd) {
         return;
     }
 
+    if (game._command_mode === 'fireScrollCenter') {
+        const pending = game._fire_scroll_pending;
+        if (!pending) {
+            game._command_mode = null;
+            return;
+        }
+        const ux = game.u?.ux ?? 0;
+        const uy = game.u?.uy ?? 0;
+        let x = game._fire_scroll_cursor?.x ?? ux;
+        let y = game._fire_scroll_cursor?.y ?? uy;
+        const dir = movementDirection(ch);
+        if (dir) {
+            x = Math.max(1, Math.min(COLNO - 1, x + dir.dx));
+            y = Math.max(0, Math.min(ROWNO - 1, y + dir.dy));
+            game._fire_scroll_cursor = { x, y };
+            game._cursor_override = [x - 1, y + 1];
+            const description = fireScrollTargetDescription(x, y);
+            await setMessage(canCenterFireScroll(x, y) ? description : `${description} (invalid target)`);
+            return;
+        }
+        if (!(ch === '.' || ch === ' ' || ch === '\x1b' || ch === '\r' || ch === '\n')) {
+            game._keep_pending_message = 1;
+            return;
+        }
+        if (ch === '\x1b') {
+            x = ux;
+            y = uy;
+        }
+        if (!canCenterFireScroll(x, y)) {
+            x = ux;
+            y = uy;
+        }
+        game._fire_scroll_pending = null;
+        game._fire_scroll_cursor = null;
+        game._cursor_override = null;
+        const result = resolveFireScrollExplosion(x, y, pending.damage, pending.messages || []);
+        await setMessage(result.messages.join('  '), result.more);
+        game._command_mode = null;
+        game.context.move = 1;
+        return;
+    }
+
     if (game._command_mode === 'readInvalidMore') {
         if (ch === ' ' || ch === '\x1b' || ch === '\r' || ch === '\n') {
             const letters = inventoryLetters(item => item.cls === 'scroll' || item.cls === 'spellbook' || item.otyp === SCROLL_CLASS) || 'gh';
@@ -17091,6 +17313,57 @@ export async function rhack(_cmd) {
             const messages = scrollReadMessages(confusedReading);
             messages.push(amnesiaScrollEffect(item));
             await setMessage(messages.join('  '), true);
+            game._command_mode = null;
+            game.context.move = 1;
+            return;
+        }
+        if (isScroll && (scrollName === 'fire' || item.scrollIndex === 16)) {
+            const confusedReading = heroIsConfused();
+            const alreadyKnown = scrollDiscoveryKnown('fire');
+            let damage = fireScrollDamage(item);
+            const messages = fireScrollReadMessages(confusedReading);
+            removeInventoryItem(item);
+            rn2(19);
+            if (!alreadyKnown) learnScrollByName('fire', item, 16);
+
+            if (confusedReading) {
+                if (game.u?.underwater || game.u?.uunderwater) {
+                    messages.push('A little water around you vaporizes.');
+                } else if (game.u?.fireResistance) {
+                    messages.push(game.u?.blind
+                        ? 'You feel a pleasant warmth in your hands.'
+                        : 'Oh, look, what a pretty fire in your hands.');
+                } else {
+                    messages.push('The scroll catches fire and you burn your hands.');
+                    if (game.u) {
+                        game.u.uhp = Math.max(0, (game.u.uhp || 0) - 1);
+                        if ((game.u.uhp || 0) <= 0) {
+                            game._death_cause = 'killed by a scroll of fire';
+                            messages.push('You die...');
+                        }
+                    }
+                }
+                await setMessage(messages.join('  '), true);
+                game._command_mode = null;
+                game.context.move = 1;
+                return;
+            }
+
+            if (item.blessed) {
+                if (!alreadyKnown) messages.push('This is a scroll of fire!');
+                damage *= 5;
+                messages.push('Where do you want to center the explosion?');
+                game._fire_scroll_pending = { damage, messages };
+                game._fire_scroll_cursor = { x: game.u?.ux || 0, y: game.u?.uy || 0 };
+                game._cursor_override = [(game.u?.ux || 0) - 1, (game.u?.uy || 0) + 1];
+                await setMessage(messages.join('  '), false);
+                game._command_mode = 'fireScrollCenter';
+                game.context.move = 0;
+                return;
+            }
+
+            const result = resolveFireScrollExplosion(game.u?.ux || 0, game.u?.uy || 0, damage, messages);
+            await setMessage(result.messages.join('  '), result.more);
             game._command_mode = null;
             game.context.move = 1;
             return;
