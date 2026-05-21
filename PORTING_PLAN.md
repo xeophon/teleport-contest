@@ -965,6 +965,11 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   without learning unknown magic-mapping scrolls, blessed mapping reveals secret
   doors, and cursed non-confused mapping uses the C `rn2(7)` sparse reveal plus
   detail-loss message.
+- Spellbook reading now respects the C `read.c` blind prelude for ordinary
+  spellbooks and unseen scroll labels without spending a turn or consuming the
+  item, and confused spellbook study follows the `spell.c` `confused_book()`
+  first-line/tear split with study-time helplessness. Spellbook `trycall()`
+  prompting remains future work.
 - Monster-class row ordering no longer depends on Node 22's
   `Array.prototype.toSorted()`: the JS `mkclass` metadata path now uses an
   explicit copied difficulty sort that preserves equal-difficulty order, matching

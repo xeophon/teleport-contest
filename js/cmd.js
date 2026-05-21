@@ -6635,6 +6635,24 @@ function isBlankSpellbookItem(item) {
     return name === 'blank paper' || (!name && item.appearance === 'plain');
 }
 
+function isBookOfTheDeadItem(item) {
+    const text = [
+        item?.kind,
+        item?.actualKind,
+        item?.artifact,
+        item?.name,
+        item?.otyp,
+    ].filter(Boolean).join(' ').toLowerCase();
+    return text.includes('book of the dead');
+}
+
+function readBlindBlockMessage(item, isScroll) {
+    if (!game.u?.blind || isBookOfTheDeadItem(item)) return '';
+    if (item?.cls === 'spellbook') return 'Being blind, you cannot read the mystic runes.';
+    if (isScroll && item?.dknown === false) return 'Being blind, you cannot read the formula on the scroll.';
+    return '';
+}
+
 function learnScrollByName(scrollName, item, scrollIndex = null) {
     const discoveryName = `scroll of ${scrollName}`;
     learnObjectScore('Scrolls', discoveryName);
@@ -18567,6 +18585,13 @@ export async function rhack(_cmd) {
                         ? IDENTIFIED_SCROLL_NAMES[(game._object_descriptions?.scrolls || []).indexOf(item.kind.slice(15))] || ''
                         : '';
         const isScroll = item && (item.cls === 'scroll' || item.otyp === SCROLL_CLASS);
+        const blindBlock = readBlindBlockMessage(item, isScroll);
+        if (blindBlock) {
+            await setMessage(blindBlock);
+            game._command_mode = null;
+            game.context.move = 0;
+            return;
+        }
         if (isScroll && isBlankScrollItem(item)) {
             item.known = true;
             item.actualKind = 'scroll of blank paper';
@@ -19147,6 +19172,22 @@ export async function rhack(_cmd) {
                 game._helpless_time = Math.max(game._helpless_time || 0, studyDelay);
                 game._wake_message = 'You can move again.';
                 await setMessage(message);
+                game._command_mode = null;
+                game.context.move = studyDelay;
+                return;
+            }
+            if (heroIsConfused()) {
+                const messages = [];
+                if (!isBookOfTheDeadItem(item) && !rn2(3)) {
+                    messages.push('Being confused you have difficulties in controlling your actions.');
+                    removeInventoryItem(item);
+                    messages.push('You accidentally tear the spellbook to pieces.');
+                } else {
+                    messages.push('You find yourself reading the first line over and over again.');
+                }
+                game._helpless_time = Math.max(game._helpless_time || 0, studyDelay);
+                game._wake_message = 'You can move again.';
+                await setMessage(messages.join('  '), messages.length > 1);
                 game._command_mode = null;
                 game.context.move = studyDelay;
                 return;
