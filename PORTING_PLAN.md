@@ -751,6 +751,11 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   wishes still downgrade real Yendor requests to the fake amulet, and wizard
   wishes can create the real Amulet marker instead of falling through as a
   generic amulet name.
+- Wished `historic` prefixes now cover the C statue bit for `readobjnam()`:
+  wished statues are created as statue objects, `historic` sets
+  `CORPSTAT_HISTORIC` in `spe`, and the visible adjective is shown only for
+  Archeologists. Existing Oracle centaur statues now also carry the C bit
+  instead of only an ad hoc marker.
 - Wished container state prefixes now cover the C `readobjnam()` object slice
   for `locked`, `unlocked`, `broken`, `trapped`, `untrapped`, and `empty`:
   boxes keep normal generated contents and lock/trap RNG before final state

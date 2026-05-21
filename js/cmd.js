@@ -6,7 +6,7 @@ import { nhgetch } from './input.js';
 import { bot, cls, docrt, flush_screen, newsym, pline, refreshHallucinatedMap, show_glyph_cell, strengthString } from './display.js';
 import { couldsee, vision_recalc, vision_reset } from './vision.js';
 import { RANDOM_MONSTER_BY_NAME, SHOP_TYPES, artifactObjectName, enextoMonsterSpot, make_tutorial1_level, makemon, makeArtifactWishObject, mkcorpstat, mklev, mkobj_at, mksobj, monsterByRndName, nameObjectAsArtifact, next_ident, potionIndexForRoll, rndmonnum, scrollIndexForRoll, syncDungeonContext, u_on_dnstairs, u_on_rndspot, u_on_upstairs, wipe_engr_at, dropMonsterInventory, l_nhcore_init, getrumor, getbogusmon, level_difficulty, set_malign, somexyspace } from './mklev.js';
-import { ACCESSIBLE, A_CHA, A_CON, A_DEX, A_INT, A_MAX, A_STR, A_WIS, ALTAR, BC_BALL, BC_CHAIN, BEAR_TRAP, BLCORNER, BOLT_LIM, BRCORNER, CLOUD, COLNO, CORR, DOOR, BURN, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, DUST, ENGRAVE, ENGR_BLOOD, FOUNTAIN, GRAVE, HEADSTONE, HWALL, ICE, IN_SIGHT, IS_OBSTRUCTED, IS_POOL, IS_ROOM, IS_WALL, LADDER, LAVAPOOL, LAVAWALL, MAGIC_PORTAL, MARK, MOAT, NORMAL_SPEED, OVERLOADED, P_BASIC, P_UNSKILLED, POOL, ROLLING_BOULDER_TRAP, ROOM, ROOMOFFSET, ROWNO, SCORR, SDOOR, SHOPBASE, SINK, STAIRS, STONE, TDWALL, TEMPLE, THRONE, TLCORNER, TRCORNER, TREE, TUWALL, VAULT, VWALL, WAND_BACKFIRE_CHANCE, WATER, ZAP_POS } from './const.js';
+import { ACCESSIBLE, A_CHA, A_CON, A_DEX, A_INT, A_MAX, A_STR, A_WIS, ALTAR, BC_BALL, BC_CHAIN, BEAR_TRAP, BLCORNER, BOLT_LIM, BRCORNER, CLOUD, COLNO, CORPSTAT_FEMALE, CORPSTAT_HISTORIC, CORPSTAT_MALE, CORPSTAT_NEUTER, CORR, DOOR, BURN, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, DUST, ENGRAVE, ENGR_BLOOD, FOUNTAIN, GRAVE, HEADSTONE, HWALL, ICE, IN_SIGHT, IS_OBSTRUCTED, IS_POOL, IS_ROOM, IS_WALL, LADDER, LAVAPOOL, LAVAWALL, MAGIC_PORTAL, MARK, MOAT, NORMAL_SPEED, OVERLOADED, P_BASIC, P_UNSKILLED, POOL, ROLLING_BOULDER_TRAP, ROOM, ROOMOFFSET, ROWNO, SCORR, SDOOR, SHOPBASE, SINK, STAIRS, STONE, TDWALL, TEMPLE, THRONE, TLCORNER, TRCORNER, TREE, TUWALL, VAULT, VWALL, WAND_BACKFIRE_CHANCE, WATER, ZAP_POS } from './const.js';
 import { d, rn1, rn2, rn2_on_display_rng, rnd, rnl, rnz } from './rng.js';
 import { CLR_BLACK, CLR_BLUE, CLR_BRIGHT_BLUE, CLR_BRIGHT_CYAN, CLR_BRIGHT_GREEN, CLR_BROWN, CLR_CYAN, CLR_GRAY, CLR_GREEN, CLR_MAGENTA, CLR_ORANGE, CLR_RED, CLR_YELLOW, CLR_WHITE, NO_COLOR } from './terminal.js';
 import { vfsDeleteFile, vfsReadFile, vfsWriteFile } from './storage.js';
@@ -5402,6 +5402,39 @@ function makeAmuletOfYendorWishObject(lowerName, qualifiers = {}) {
     return makeRealAmuletOfYendorWishObject();
 }
 
+function wishedCorpstatSpe(monster) {
+    if (monster?.neuter) return CORPSTAT_NEUTER;
+    if (monster?.female) return CORPSTAT_FEMALE;
+    if (monster?.male) return CORPSTAT_MALE;
+    return rn2(2) ? CORPSTAT_FEMALE : CORPSTAT_MALE;
+}
+
+function parseWishedStatueName(lowerName) {
+    const match = String(lowerName || '').trim().match(/^statue(?:\s+of(?:\s+(?:a|an|the))?\s+(.+))?$/);
+    if (!match) return null;
+    return { monsterName: String(match[1] || '').trim() };
+}
+
+function makeWishedStatueObject(statueWish, qualifiers = {}) {
+    const monsterName = String(statueWish?.monsterName || '').trim();
+    const monster = monsterName ? monsterByRndName(monsterName) || RANDOM_MONSTER_BY_NAME.get(monsterName) : null;
+    if (monsterName && !monster) return null;
+    const otmp = mksobj(STATUE, true, false);
+    if (monster) {
+        otmp.corpsenm = monster;
+        otmp.spe = wishedCorpstatSpe(monster);
+    }
+    if (qualifiers.historic) {
+        otmp.spe = (otmp.spe || 0) | CORPSTAT_HISTORIC;
+    }
+    return Object.assign(otmp, {
+        cls: 'rock',
+        glyph: '`',
+        kind: 'statue',
+        wishedfor: true,
+    });
+}
+
 function makeOrdinaryBellWishObject() {
     const otmp = mksobj(BELL, true, false);
     return Object.assign(otmp, {
@@ -5818,6 +5851,12 @@ function wishedBaseObjectFromName(lowerName, qualifiers = {}, originalName = low
     const yendorAmulet = makeAmuletOfYendorWishObject(lowerName, qualifiers);
     if (yendorAmulet) return yendorAmulet;
 
+    const statueWish = parseWishedStatueName(lowerName);
+    if (statueWish) {
+        const statue = makeWishedStatueObject(statueWish, qualifiers);
+        if (statue) return statue;
+    }
+
     const specialSubstitution = substituteNonWizardSpecialWish(lowerName);
     if (specialSubstitution) return specialSubstitution;
 
@@ -6078,11 +6117,15 @@ function maybeWishedInstanceName(obj, baseName) {
 
 export function pickupObjectName(obj) {
     const named = name => maybeWishedInstanceName(obj, name);
+    const archeologist = (game.urole?.name?.m || game._startup_role) === 'Archeologist';
     if (obj.otyp === GOLD_PIECE || obj.cls === 'coin' || obj.glyph === '$')
         return (obj.quan || 1) > 1 ? 'gold pieces' : 'gold piece';
     if (obj.artifact) return artifactObjectName(obj) || obj.kind;
     if (obj.otyp === 'corpse' || obj.otyp === CORPSE) return `${obj.corpsenm?.name || 'monster'} corpse`;
-    if ((obj.kind === 'statue' || obj.otyp === STATUE) && obj.corpsenm?.name) return `statue of a ${obj.corpsenm.name}`;
+    if ((obj.kind === 'statue' || obj.otyp === STATUE) && obj.corpsenm?.name) {
+        const historic = archeologist && (((obj.spe || 0) & CORPSTAT_HISTORIC) || obj.historic);
+        return `${historic ? 'historic ' : ''}statue of a ${obj.corpsenm.name}`;
+    }
     if (isTinObject(obj)) return named(tinObjectName(obj));
     if (obj.otyp === LARGE_BOX) return named('large box');
     if (obj.otyp === CHEST) return named('chest');
@@ -16993,6 +17036,7 @@ export async function rhack(_cmd) {
                 empty: false,
                 diluted: false,
                 halfeaten: false,
+                historic: false,
                 unlabeled: false,
                 lightState: null,
                 realAmulet: false,
@@ -17069,6 +17113,12 @@ export async function rhack(_cmd) {
                 if (halfeaten) {
                     wishedQualifiers.halfeaten = true;
                     wishedName = wishedName.slice(halfeaten[0].length);
+                    continue;
+                }
+                const historic = wishedName.match(/^historic\s+/i);
+                if (historic) {
+                    wishedQualifiers.historic = true;
+                    wishedName = wishedName.slice(historic[0].length);
                     continue;
                 }
                 const diluted = wishedName.match(/^diluted\s+/i);

@@ -37,7 +37,7 @@ import {
     A_NONE, A_LAWFUL, A_NEUTRAL, A_CHAOTIC, AM_SHRINE, AM_SANCTUM, Align2amask, Amask2align,
     FOODSHOP, RINGSHOP, WANDSHOP, TOOLSHOP, BOOKSHOP, FODDERSHOP, CANDLESHOP,
     MM_NOGRP, MM_ANGRY, MM_NONAME, MM_NOCOUNTBIRTH, MM_NOMSG, MM_ADJACENTOK, MM_NOTAIL,
-    CORPSTAT_FEMALE, CORPSTAT_MALE, CORPSTAT_NEUTER,
+    CORPSTAT_FEMALE, CORPSTAT_MALE, CORPSTAT_NEUTER, CORPSTAT_HISTORIC,
     LR_DOWNSTAIR, LR_UPSTAIR, LR_TELE, LR_UPTELE, LR_DOWNTELE, LR_BRANCH,
     WM_MASK, WM_W_LEFT, WM_W_RIGHT, WM_W_TOP, WM_W_BOTTOM,
     WM_T_LONG, WM_T_BL, WM_T_BR,
@@ -9933,6 +9933,7 @@ function oracleCentaurStatue(x, y) {
     const centaur = oracleCentaurMontype();
     const statue = mksobj(STATUE, true, false);
     statue.corpsenm = centaur;
+    statue.spe = (statue.spe || 0) | CORPSTAT_HISTORIC;
     statue.historic = true;
     return place_object(statue, x, y);
 }
