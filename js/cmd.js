@@ -694,6 +694,7 @@ const BAG_PUT_CLASS_TYPES = [
 ];
 const INVENTORY_LETTERS = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
 const APPLY_WEAPON_NAME_RE = /pick-axe|mattock|\baxe\b|bullwhip|lance|polearm|poleaxe|bardiche|bec de corbin|bill-guisarme|fauchard|glaive|guisarme|halberd|lucern hammer|partisan|ranseur|spetum|voulge|snickersnee/;
+const WISH_LOCK_QUALIFIER_RE = /^(locked|unlocked|broken)\s+/i;
 const WISH_PROOF_QUALIFIER_RE = /^(rustproof|erodeproof|corrodeproof|fixed|fireproof|rotproof|tempered|crackproof)\s+/i;
 const WISH_PRIMARY_EROSION_RE = /^(rusty|rusted|burnt|burned|cracked)\s+/i;
 const WISH_SECONDARY_EROSION_RE = /^(corroded|rotted)\s+/i;
@@ -5162,6 +5163,46 @@ function itemClassKey(item) {
                     : '');
 }
 
+function isBoxObject(item) {
+    const kind = objectKindKey(item);
+    return item?.otyp === LARGE_BOX || item?.otyp === CHEST
+        || kind === 'large box' || kind === 'chest';
+}
+
+function isWishedContainerObject(item) {
+    const kind = objectKindKey(item);
+    return isBoxObject(item) || item?.otyp === ICE_BOX || BAG_OBJECT_TYPES.has(item?.otyp)
+        || kind === 'ice box' || kind === 'sack' || kind === 'oilskin sack'
+        || kind === 'bag of holding';
+}
+
+function applyWishedContainerState(item, qualifiers) {
+    if (!item) return;
+    const box = isBoxObject(item);
+    if (qualifiers.trappedState && box)
+        item.otrapped = qualifiers.trappedState === 1;
+    if (qualifiers.empty && isWishedContainerObject(item))
+        item.contents = [];
+    if (!box || !qualifiers.lockState) return;
+    if (qualifiers.lockState === 'locked') {
+        item.olocked = true;
+        item.locked = true;
+        item.obroken = false;
+        item.broken = false;
+    } else if (qualifiers.lockState === 'unlocked') {
+        item.olocked = false;
+        item.locked = false;
+        item.obroken = false;
+        item.broken = false;
+    } else if (qualifiers.lockState === 'broken') {
+        item.olocked = false;
+        item.locked = false;
+        item.obroken = true;
+        item.broken = true;
+        item.otrapped = false;
+    }
+}
+
 function wishedDamageProfile(item) {
     const kind = objectKindKey(item);
     const cls = itemClassKey(item);
@@ -5224,6 +5265,7 @@ function applyWishedQualifiers(item, qualifiers) {
         else if (itemClassKey(item) === 'food') item.age = 1;
     }
     if (qualifiers.wetness && objectKindKey(item) === 'towel') item.wetness = qualifiers.wetness;
+    applyWishedContainerState(item, qualifiers);
 }
 
 function wishedObjectFromName(lowerName) {
@@ -16321,6 +16363,9 @@ export async function rhack(_cmd) {
                 eroded: 0,
                 eroded2: 0,
                 wetness: 0,
+                lockState: '',
+                trappedState: 0,
+                empty: false,
             };
             let wishedErosionIntensity = 0;
             for (;;) {
@@ -16338,6 +16383,19 @@ export async function rhack(_cmd) {
                     wishedSpeNegative = spe[1].startsWith('-');
                     wishedSpe = capWishSpe(Number(spe[1]));
                     wishedName = wishedName.slice(spe[0].length);
+                    continue;
+                }
+                const trapped = wishedName.match(/^(trapped|untrapped)\s+/i);
+                if (trapped) {
+                    const state = trapped[1].toLowerCase();
+                    wishedQualifiers.trappedState = state === 'untrapped' ? 2 : game.flags?.debug ? 1 : 0;
+                    wishedName = wishedName.slice(trapped[0].length);
+                    continue;
+                }
+                const lockState = wishedName.match(WISH_LOCK_QUALIFIER_RE);
+                if (lockState) {
+                    wishedQualifiers.lockState = lockState[1].toLowerCase();
+                    wishedName = wishedName.slice(lockState[0].length);
                     continue;
                 }
                 const proof = wishedName.match(WISH_PROOF_QUALIFIER_RE);
@@ -16387,6 +16445,12 @@ export async function rhack(_cmd) {
                     wishedQualifiers.eroded2 = 1 + wishedErosionIntensity;
                     wishedErosionIntensity = 0;
                     wishedName = wishedName.slice(secondaryErosion[0].length);
+                    continue;
+                }
+                const empty = wishedName.match(/^empty\s+/i);
+                if (empty) {
+                    wishedQualifiers.empty = true;
+                    wishedName = wishedName.slice(empty[0].length);
                     continue;
                 }
                 const quan = wishedName.match(/^(\d+)\s+/);
