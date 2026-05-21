@@ -957,6 +957,14 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   disorientation, control, and safe same-level placement handling, while cursed
   or confused scrolls use level-teleport blocking, random-depth selection, and
   controlled level prompts with the scroll discovery/calling timing preserved.
+- Scrolls of identify and magic mapping now cover more of the C
+  `seffect_identify()`/`seffect_magic_mapping()` edge flow: confused identify
+  scrolls and unknown cursed identify scrolls only identify themselves,
+  inventory-empty readings avoid the identify-pack RNG, identified inventory
+  marking is shared, no-map levels produce the crazy-lines confusion path
+  without learning unknown magic-mapping scrolls, blessed mapping reveals secret
+  doors, and cursed non-confused mapping uses the C `rn2(7)` sparse reveal plus
+  detail-loss message.
 - Monster-class row ordering no longer depends on Node 22's
   `Array.prototype.toSorted()`: the JS `mkclass` metadata path now uses an
   explicit copied difficulty sort that preserves equal-difficulty order, matching

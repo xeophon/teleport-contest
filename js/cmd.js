@@ -4959,7 +4959,7 @@ export function finishForceLock(force) {
     return true;
 }
 
-function revealLevelMap() {
+function revealLevelMap({ confusedMap = false, revealSecretDoors = false } = {}) {
     for (const obj of game.level?.objects || []) {
         if (obj.otyp === BOULDER && !obj.seen && !(game.viz_array?.[obj.oy]?.[obj.ox] & IN_SIGHT))
             obj._hide_until_seen = true;
@@ -4967,8 +4967,16 @@ function revealLevelMap() {
     game._revealing_level_map = 1;
     for (let y = 0; y < ROWNO; y++) {
         for (let x = 1; x < COLNO; x++) {
+            if (confusedMap && rn2(7)) continue;
             const loc = game.level?.at(x, y);
             if (!loc || loc.typ === STONE) continue;
+            if (revealSecretDoors && loc.typ === SDOOR) {
+                loc.typ = DOOR;
+                const mask = loc.doormask || 0;
+                loc.doormask = Is_rogue_level(game.u?.uz)
+                    ? D_NODOOR
+                    : (mask & D_LOCKED) ? mask : (mask | D_CLOSED);
+            }
             if (loc.typ === SCORR) loc.typ = CORR;
             loc.waslit = true;
             loc.seenv = 0xff;
@@ -5337,6 +5345,10 @@ function removeHeroStatusSuffix(status) {
 
 function heroIsConfused() {
     return (game.u?._statusSuffix || '').includes('Conf') || (game.u?._confusionTimeout || 0) > 0;
+}
+
+function heroIsHallucinating() {
+    return !!game.u?.hallucinating || (game.u?._statusSuffix || '').includes('Hallu');
 }
 
 function addHeroConfusion(turns) {
@@ -6825,7 +6837,7 @@ function foodDetectionScrollEffect(item) {
 }
 
 function removeCurseFeelingMessage(confused) {
-    if (game.u?.hallucinating)
+    if (heroIsHallucinating())
         return confused ? 'You feel the power of the Force against you!' : 'You feel in touch with the Universal Oneness.';
     return confused ? 'You feel like you need some help.' : 'You feel like someone is helping you.';
 }
@@ -6883,7 +6895,7 @@ function removeCurseScrollEffect(item) {
     const confused = heroIsConfused();
     const messages = [item.cursed ? 'You read the scroll.' : 'As you read the scroll, it disappears.'];
     if (confused)
-        messages.push(game.u?.hallucinating ? 'Being so trippy, you screw up...' : 'Being confused, you mispronounce the magic words...');
+        messages.push(heroIsHallucinating() ? 'Being so trippy, you screw up...' : 'Being confused, you mispronounce the magic words...');
     messages.push(removeCurseFeelingMessage(confused));
 
     let learned = false;
@@ -6913,7 +6925,7 @@ function removeCurseScrollEffect(item) {
 function scrollReadMessages(confusedReading) {
     const messages = ['As you read the scroll, it disappears.'];
     if (confusedReading)
-        messages.push(game.u?.hallucinating ? 'Being so trippy, you screw up...' : 'Being confused, you mispronounce the magic words...');
+        messages.push(heroIsHallucinating() ? 'Being so trippy, you screw up...' : 'Being confused, you mispronounce the magic words...');
     return messages;
 }
 
@@ -7206,7 +7218,7 @@ async function finishGenocideInput(raw) {
 function fireScrollReadMessages(confusedReading) {
     const messages = [game.u?.blind ? 'You pronounce the formula on the scroll.' : 'You read the scroll.'];
     if (confusedReading)
-        messages.push(game.u?.hallucinating ? 'Being so trippy, you screw up...' : 'Being confused, you mispronounce the magic words...');
+        messages.push(heroIsHallucinating() ? 'Being so trippy, you screw up...' : 'Being confused, you mispronounce the magic words...');
     return messages;
 }
 
@@ -7228,7 +7240,7 @@ function scrollDisappearMessages(confusedReading) {
         ? 'As you pronounce the formula on it, the scroll disappears.'
         : 'As you read the scroll, it disappears.'];
     if (confusedReading)
-        messages.push(game.u?.hallucinating ? 'Being so trippy, you screw up...' : 'Being confused, you mispronounce the magic words...');
+        messages.push(heroIsHallucinating() ? 'Being so trippy, you screw up...' : 'Being confused, you mispronounce the magic words...');
     return messages;
 }
 
@@ -10776,6 +10788,59 @@ function identifiedInventoryLine(item) {
         ? `${quan} ${phrase}`
         : `${/^[aeiou]/i.test(phrase) ? 'an' : 'a'} ${phrase}`;
     return `${letter} - ${amount}${suffix}`;
+}
+
+function identifyInventoryItem(item) {
+    if (!item) return;
+    item.known = true;
+    item.bknown = true;
+    item.rknown = true;
+    item.cknown = true;
+    item.lknown = true;
+    if (item.cls === 'scroll' || item.otyp === SCROLL_CLASS) {
+        const raw = item.actualKind?.replace(/^scroll of /, '')
+            || (item.scrollIndex != null ? IDENTIFIED_SCROLL_NAMES[item.scrollIndex] : '')
+            || String(item.kind || '').replace(/^scrolls? of /, '').replace(/^scroll:/, '');
+        if (raw) {
+            item.kind = raw;
+            item.actualKind = `scroll of ${raw}`;
+        }
+    } else if (item.cls === 'spellbook') {
+        const raw = item.spellName || item.spell?.name
+            || String(item.kind || '').replace(/^spellbook(?: of)? /, '');
+        if (raw) {
+            item.spellName = raw;
+            item.kind = `spellbook of ${raw}`;
+        }
+    } else if (item.cls === 'potion' || item.otyp === POTION_CLASS) {
+        const raw = item.actualKind?.replace(/^potion of /, '')
+            || (item.potionIndex != null ? IDENTIFIED_POTION_NAMES[item.potionIndex] : '')
+            || String(item.kind || '').replace(/^potion(?: of)? /, '');
+        if (raw) item.actualKind = `potion of ${raw}`;
+    } else if (item.cls === 'ring' || item.otyp === RING_CLASS) {
+        const raw = item.actualKind?.replace(/^ring of /, '')
+            || (item.ringRoll ? IDENTIFIED_RING_NAMES[item.ringRoll - 1] : '')
+            || String(item.kind || '').replace(/^ring of /, '');
+        if (raw) item.kind = `ring of ${raw}`;
+    } else if (item.cls === 'wand' || item.otyp === WAND_CLASS) {
+        item.chargeKnown = true;
+    }
+    item.line = identifiedInventoryLine(item);
+}
+
+function unidentifiedInventoryItems() {
+    return (game.inventory || []).filter(invItem => {
+        if (invItem.cls === 'scroll' || invItem.otyp === SCROLL_CLASS)
+            return !invItem.known || !invItem.bknown;
+        if (invItem.cls === 'spellbook') return !invItem.known || !invItem.bknown;
+        if (invItem.cls === 'potion' || invItem.otyp === POTION_CLASS)
+            return !invItem.known || !invItem.bknown;
+        if (invItem.cls === 'ring' || invItem.otyp === RING_CLASS)
+            return !invItem.known || !invItem.bknown;
+        if (invItem.cls === 'wand' || invItem.otyp === WAND_CLASS)
+            return !invItem.known || !invItem.chargeKnown;
+        return false;
+    });
 }
 
 function normalInventoryLine(item) {
@@ -18679,7 +18744,7 @@ export async function rhack(_cmd) {
             if (result.known) learnScrollByName('gold detection', item, 11);
             const messages = ['As you read the scroll, it disappears.'];
             if (confusedReading)
-                messages.push(game.u?.hallucinating ? 'Being so trippy, you screw up...' : 'Being confused, you mispronounce the magic words...');
+                messages.push(heroIsHallucinating() ? 'Being so trippy, you screw up...' : 'Being confused, you mispronounce the magic words...');
             if (result.message) messages.push(result.message);
             await setMessage(messages.join('  '), result.more || confusedReading);
             game._command_mode = null;
@@ -18694,7 +18759,7 @@ export async function rhack(_cmd) {
             if (result.known) learnScrollByName('food detection', item, 12);
             const messages = ['As you read the scroll, it disappears.'];
             if (confusedReading)
-                messages.push(game.u?.hallucinating ? 'Being so trippy, you screw up...' : 'Being confused, you mispronounce the magic words...');
+                messages.push(heroIsHallucinating() ? 'Being so trippy, you screw up...' : 'Being confused, you mispronounce the magic words...');
             if (result.message) messages.push(result.message);
             await setMessage(messages.join('  '), result.more || confusedReading);
             game._command_mode = null;
@@ -18702,83 +18767,46 @@ export async function rhack(_cmd) {
             return;
         }
         if (isScroll && (scrollName === 'identify' || item.actualKind === 'scroll of identify' || item.scrollIndex === 13)) {
-            const alreadyKnown = (game._discoveries || [])
-                .some(entry => entry.section === 'Scrolls' && entry.name === 'scroll of identify' && entry.known !== false);
+            const confusedReading = heroIsConfused();
+            const alreadyKnown = scrollDiscoveryKnown('identify')
+                || item.known === true
+                || item.actualKind === 'scroll of identify'
+                || item.kind === 'identify'
+                || item.kind === 'scroll of identify';
             const blessed = !!item.blessed;
             const cursed = !!item.cursed;
+            const messages = scrollDisappearMessages(confusedReading);
             removeInventoryItem(item);
             rn2(19);
-            rn2(19);
+            if (confusedReading || (cursed && !alreadyKnown)) {
+                messages.push('You identify this as an identify scroll.');
+            } else if (!alreadyKnown) {
+                messages.push('This is an identify scroll.');
+            }
             if (!alreadyKnown) {
-                learnObjectScore('Scrolls', 'scroll of identify');
-                const label = game._object_descriptions?.scrolls?.[13];
-                game._discoveries ??= [];
-                const discovery = game._discoveries.find(entry => entry.section === 'Scrolls' && entry.name === 'scroll of identify');
-                if (discovery) {
-                    discovery.text = label ? `scroll of identify (${label})` : 'scroll of identify';
-                    discovery.known = true;
-                    discovery.starred = false;
-                } else {
-                    game._discoveries.push({
-                        section: 'Scrolls',
-                        name: 'scroll of identify',
-                        text: label ? `scroll of identify (${label})` : 'scroll of identify',
-                        starred: false,
-                        known: true,
-                    });
-                }
+                learnScrollByName('identify', item, 13);
+            }
+            if (confusedReading || (cursed && !alreadyKnown)) {
+                await setMessage(messages.join('  '), true);
+                game._command_mode = null;
+                game.context.move = 1;
+                return;
+            }
+            if (!(game.inventory || []).length) {
+                messages.push("You're not carrying anything else to be identified.");
+                await setMessage(messages.join('  '), true);
+                game._command_mode = null;
+                game.context.move = 1;
+                return;
             }
             let identifyLimit = 1;
             if (blessed || (!cursed && !rn2(5))) {
                 identifyLimit = rn2(5);
                 if (identifyLimit === 1 && blessed && (game.u?.uluck || 0) > 0) identifyLimit++;
             }
-            const unidentified = (game.inventory || []).filter(invItem => {
-                if (invItem.cls === 'scroll' || invItem.otyp === SCROLL_CLASS)
-                    return !invItem.known || !invItem.bknown;
-                if (invItem.cls === 'spellbook') return !invItem.known || !invItem.bknown;
-                if (invItem.cls === 'potion' || invItem.otyp === POTION_CLASS)
-                    return !invItem.known || !invItem.bknown;
-                if (invItem.cls === 'ring' || invItem.otyp === RING_CLASS)
-                    return !invItem.known || !invItem.bknown;
-                if (invItem.cls === 'wand' || invItem.otyp === WAND_CLASS)
-                    return !invItem.known;
-                return false;
-            });
+            const unidentified = unidentifiedInventoryItems();
             const identified = identifyLimit ? unidentified.slice(0, identifyLimit) : unidentified;
-            for (const invItem of identified) {
-                invItem.known = true;
-                invItem.bknown = true;
-                if (invItem.cls === 'scroll' || invItem.otyp === SCROLL_CLASS) {
-                    const raw = invItem.actualKind?.replace(/^scroll of /, '')
-                        || (invItem.scrollIndex != null ? IDENTIFIED_SCROLL_NAMES[invItem.scrollIndex] : '')
-                        || String(invItem.kind || '').replace(/^scrolls? of /, '').replace(/^scroll:/, '');
-                    if (raw) {
-                        invItem.kind = raw;
-                        invItem.actualKind = `scroll of ${raw}`;
-                    }
-                } else if (invItem.cls === 'spellbook') {
-                    const raw = invItem.spellName || invItem.spell?.name
-                        || String(invItem.kind || '').replace(/^spellbook(?: of)? /, '');
-                    if (raw) {
-                        invItem.spellName = raw;
-                        invItem.kind = `spellbook of ${raw}`;
-                    }
-                } else if (invItem.cls === 'potion' || invItem.otyp === POTION_CLASS) {
-                    const raw = invItem.actualKind?.replace(/^potion of /, '')
-                        || (invItem.potionIndex != null ? IDENTIFIED_POTION_NAMES[invItem.potionIndex] : '')
-                        || String(invItem.kind || '').replace(/^potion(?: of)? /, '');
-                    if (raw) invItem.actualKind = `potion of ${raw}`;
-                } else if (invItem.cls === 'ring' || invItem.otyp === RING_CLASS) {
-                    const raw = invItem.actualKind?.replace(/^ring of /, '')
-                        || (invItem.ringRoll ? IDENTIFIED_RING_NAMES[invItem.ringRoll - 1] : '')
-                        || String(invItem.kind || '').replace(/^ring of /, '');
-                    if (raw) invItem.kind = `ring of ${raw}`;
-                } else if (invItem.cls === 'wand' || invItem.otyp === WAND_CLASS) {
-                    invItem.chargeKnown = true;
-                }
-                invItem.line = identifiedInventoryLine(invItem);
-            }
+            for (const invItem of identified) identifyInventoryItem(invItem);
             if (identified.length) {
                 game._queued_messages_after_more = identified.map((invItem, index) => ({
                     text: `${invItem.line}.`,
@@ -18787,7 +18815,7 @@ export async function rhack(_cmd) {
             } else {
                 game._topline_after_more = `You have already identified ${alreadyKnown ? 'all' : 'the rest'} of your possessions.`;
             }
-            await setMessage(`As you read the scroll, it disappears.${alreadyKnown ? '' : '  This is an identify scroll.'}`, true);
+            await setMessage(messages.join('  '), true);
             game._command_mode = null;
             game.context.move = 1;
             return;
@@ -18921,11 +18949,34 @@ export async function rhack(_cmd) {
             return;
         }
         if (isScroll && (scrollName === 'magic mapping' || item.scrollIndex === 14 || (item.roll >= 800 && item.roll <= 844))) {
+            const confusedReading = heroIsConfused();
+            const alreadyKnown = scrollDiscoveryKnown('magic mapping')
+                || item.known === true
+                || item.actualKind === 'scroll of magic mapping'
+                || item.kind === 'magic mapping'
+                || item.kind === 'scroll of magic mapping';
+            const callLabel = scrollCallLabel(item, 14);
+            const messages = scrollDisappearMessages(confusedReading);
             removeInventoryItem(item);
             rn2(19);
+            if (game.level?.flags?.nommap) {
+                messages.push('Your mind is filled with crazy lines!');
+                messages.push(heroIsHallucinating() ? 'Wow!  Modern art.' : 'Your head spins in bewilderment.');
+                addHeroConfusion(rnd(30));
+                const shouldCall = !alreadyKnown;
+                await setMessage(messages.join('  '), true);
+                game._command_mode = shouldCall ? 'callScrollAfterMore' : null;
+                if (shouldCall) game._call_scroll_label = callLabel;
+                game.context.move = shouldCall ? 0 : 1;
+                return;
+            }
+            learnScrollByName('magic mapping', item, 14);
+            messages.push('A map coalesces in your mind!');
+            const cursedMap = item.cursed && !confusedReading;
+            revealLevelMap({ confusedMap: cursedMap, revealSecretDoors: !!item.blessed });
             rn2(19);
-            revealLevelMap();
-            await setMessage('As you read the scroll, it disappears.  A map coalesces in your mind!');
+            if (cursedMap) messages.push("Unfortunately, you can't grasp the details.");
+            await setMessage(messages.join('  '), confusedReading || cursedMap);
             game._command_mode = null;
             game.context.move = 1;
             return;
