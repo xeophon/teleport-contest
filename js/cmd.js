@@ -5464,6 +5464,13 @@ function monsterIndefiniteName(name) {
     return `${/^[aeiou]/i.test(monsterName) ? 'an' : 'a'} ${monsterName}`;
 }
 
+function noFittingWishObject() {
+    return {
+        _wish_disappeared: true,
+        _wish_disappear_message: 'Nothing fitting that wish appears.',
+    };
+}
+
 function parseWishedStatueName(lowerName, qualifiers = {}) {
     const match = String(lowerName || '').trim().match(/^statue(?:\s+of(?:\s+(?:a|an|the))?\s+(.+))?$/);
     if (!match) return null;
@@ -5496,6 +5503,50 @@ function makeWishedStatueObject(statueWish, qualifiers = {}) {
         cls: 'rock',
         glyph: '`',
         kind: 'statue',
+        wishedfor: true,
+    });
+}
+
+function parseWishedFigurineName(lowerName, qualifiers = {}) {
+    const name = String(lowerName || '').trim();
+    let match = name.match(/^figurines?(?:\s+of(?:\s+(?:a|an|the))?\s+(.+))?$/);
+    if (!match) match = name.match(/^(.+)\s+figurines?$/);
+    if (!match) return null;
+    const gendered = stripWishedMonsterGenderPrefix(match[1] || '');
+    return {
+        monsterName: gendered.name,
+        requestedGender: gendered.gender || qualifiers.monsterGender || null,
+        exact: !!gendered.name,
+    };
+}
+
+function canWishedFigurineUseMonster(monster) {
+    if (!monster || monster.unique || monster.name === 'mail daemon') return false;
+    const human = monster.mlet === '@' || monster.glyph === '@';
+    return !human || monster.wereHuman;
+}
+
+function makeWishedFigurineObject(figurineWish, qualifiers = {}) {
+    const resolved = resolveWishedCorpstatMonsterName(
+        figurineWish?.monsterName,
+        figurineWish?.requestedGender || qualifiers.monsterGender || null,
+    );
+    const monster = resolved.monsterName
+        ? monsterByRndName(resolved.monsterName) || RANDOM_MONSTER_BY_NAME.get(resolved.monsterName)
+        : null;
+    if (figurineWish?.exact && !monster) return noFittingWishObject();
+    game._mkobj_tool_roll = WISH_TOOL_ROLLS.get('figurine');
+    const otmp = mksobj(TOOL_CLASS, true, false);
+    if (monster) {
+        otmp.spe = wishedCorpstatSpe(monster, resolved.requestedGender);
+        if (canWishedFigurineUseMonster(monster)) otmp.corpsenm = monster;
+    }
+    return Object.assign(otmp, {
+        cls: 'tool',
+        glyph: '(',
+        kind: 'figurine',
+        actualKind: 'figurine',
+        known: true,
         wishedfor: true,
     });
 }
@@ -5922,6 +5973,9 @@ function wishedBaseObjectFromName(lowerName, qualifiers = {}, originalName = low
         if (statue) return statue;
     }
 
+    const figurineWish = parseWishedFigurineName(lowerName, qualifiers);
+    if (figurineWish) return makeWishedFigurineObject(figurineWish, qualifiers);
+
     const specialSubstitution = substituteNonWizardSpecialWish(lowerName);
     if (specialSubstitution) return specialSubstitution;
 
@@ -6191,6 +6245,8 @@ export function pickupObjectName(obj) {
         const historic = archeologist && (((obj.spe || 0) & CORPSTAT_HISTORIC) || obj.historic);
         return `${historic ? 'historic ' : ''}statue of ${monsterIndefiniteName(corpstatDisplayMonsterName(obj))}`;
     }
+    if ((obj.kind === 'figurine' || obj.actualKind === 'figurine') && obj.corpsenm?.name)
+        return named(`figurine of ${monsterIndefiniteName(corpstatDisplayMonsterName(obj))}`);
     if (isTinObject(obj)) return named(tinObjectName(obj));
     if (obj.otyp === LARGE_BOX) return named('large box');
     if (obj.otyp === CHEST) return named('chest');

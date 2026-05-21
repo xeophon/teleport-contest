@@ -761,8 +761,14 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   `statue of [a|an|the]`, exact statue wishes store the C corpse/statue gender
   bits in `spe`, gendered monster names such as `gnome king` and `gnome queen`
   resolve to their neutral monster type, and statue names display through the
-  stored gender bits. Corpse and figurine exact wishes remain separate future
-  work.
+  stored gender bits. Corpse exact wishes remain separate future work.
+- Exact wished figurines now use the C `readobjnam()` figurine path instead
+  of falling through as generic tools: `figurine of <monster>` and
+  `<monster> figurine` create initialized figurines first, then apply
+  requested `corpsenm`/gender bits when C's non-unique and non-human-or-were
+  restrictions allow it. Random figurines also display as
+  `figurine of a/an <monster>` via the stored `corpsenm` and gender bits.
+  Applying figurines and their transform timers remain future work.
 - Wished container state prefixes now cover the C `readobjnam()` object slice
   for `locked`, `unlocked`, `broken`, `trapped`, `untrapped`, and `empty`:
   boxes keep normal generated contents and lock/trap RNG before final state
