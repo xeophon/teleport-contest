@@ -872,6 +872,12 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   confused food detection look for potions, marks detected floor and
   monster-carried objects in the map memory, preserves the key C messages and
   Wisdom exercise calls, and grants blessed food-detection edibility sensing.
+- Scrolls of create monster and taming now follow their C effect shape:
+  create monster uses the C count formula, including cursed/confused extra
+  monsters and confused acid blobs, then creates monsters through the normal
+  `makemon()` path; taming scans the C radius, handles cursed anger,
+  resistance, peaceful/tame/flee/sleep state updates, visible result messages,
+  and initializes the pet extension when a monster becomes tame.
 
 Next concrete target:
 

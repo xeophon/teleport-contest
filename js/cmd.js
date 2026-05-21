@@ -6603,6 +6603,132 @@ function foodDetectionScrollEffect(item) {
     };
 }
 
+function scrollReadMessages(confusedReading) {
+    const messages = ['As you read the scroll, it disappears.'];
+    if (confusedReading)
+        messages.push(game.u?.hallucinating ? 'Being so trippy, you screw up...' : 'Being confused, you mispronounce the magic words...');
+    return messages;
+}
+
+async function createMonsterScrollEffect(item) {
+    const confused = heroIsConfused();
+    const count = 1 + ((confused || item.cursed) ? 12 : 0)
+        + ((item.blessed || rn2(73)) ? 0 : rnd(4));
+    const fixedMonster = confused ? monsterByRndName('acid blob') : null;
+    let known = false;
+    for (let i = 0; i < count; i++) {
+        const mon = await makemon(fixedMonster, game.u?.ux || 0, game.u?.uy || 0, 0);
+        if (!mon) continue;
+        newsym(mon.mx, mon.my);
+        if (couldsee(mon.mx, mon.my) && !mon.mundetected) known = true;
+    }
+    if (known) learnScrollByName('create monster', item, 6);
+    return known;
+}
+
+function visibleMonsterForScroll(mon) {
+    return !!mon && !mon.dead && (mon.mhp ?? 1) > 0
+        && !mon.mundetected && (!mon.minvis || game.u?.seeInvisible) && couldsee(mon.mx, mon.my);
+}
+
+function ensurePetExtension(mon) {
+    mon.mextra ??= {};
+    mon.mextra.edog ??= {
+        apport: 3,
+        hungrytime: Math.max(game.moves || 1, 1) + 1000,
+        dropdist: 10000,
+        whistletime: 0,
+        ogoal: { x: 0, y: 0 },
+    };
+}
+
+function baseScrollTameness(mon) {
+    const name = String(mon.data?.name || mon.name || '').toLowerCase();
+    const mlet = mon.data?.mlet || mon.mlet;
+    return mlet === 'dog' || mlet === 'feline' || mlet === 'unicorn'
+        || ['little dog', 'dog', 'large dog', 'kitten', 'housecat', 'large cat', 'pony', 'horse', 'warhorse'].includes(name)
+        ? 10 : 5;
+}
+
+function tameMonsterWithScroll(mon, item) {
+    const wasTame = mon.mtame || 0;
+    const wasPeaceful = !!(mon.mpeaceful || mon.pet);
+    if (item.cursed) {
+        mon.mpeaceful = 0;
+        mon.pet = false;
+        mon.mtame = 0;
+        set_malign(mon);
+        return wasPeaceful ? -1 : 0;
+    }
+
+    if (!mon.isshk && monsterResistsEffect(mon, 9)) return 0;
+    if (mon.mfrozen) mon.mfrozen = Math.trunc((mon.mfrozen + 1) / 2);
+    if (mon.msleeping) mon.msleeping = 0;
+    const monsterName = String(mon.data?.name || mon.name || '').toLowerCase();
+    if (monsterName === 'wizard of yendor' || monsterName === 'medusa' || mon.data?.wantsArtifact)
+        return 0;
+
+    mon.mpeaceful = 1;
+    mon.mflee = 0;
+    mon.mfleetim = 0;
+    clearMonsterTrack(mon);
+    set_malign(mon);
+
+    if ((mon.mtame || 0) && mon.mtame < 10) {
+        if (mon.mtame < rnd(10)) mon.mtame++;
+        if (item.blessed) mon.mtame = Math.min(10, mon.mtame + 2);
+        return (mon.mtame || 0) !== wasTame ? 1 : 0;
+    }
+    if (mon.isshk || mon.isgd || mon.ispriest || mon.isminion
+        || mon.data?.isHuman || mon.data?.human || mon.data?.demon || mon.data?.covetous
+        || mon.mcanmove === false)
+        return !wasPeaceful && mon.mpeaceful ? 1 : 0;
+
+    mon.pet = true;
+    mon.mtame = Math.max(mon.mtame || 0, baseScrollTameness(mon));
+    mon.mpeaceful = 1;
+    ensurePetExtension(mon);
+    newsym(mon.mx, mon.my);
+    return (!wasPeaceful || wasTame !== mon.mtame) ? 1 : 0;
+}
+
+function tamingScrollEffect(item) {
+    const confused = heroIsConfused();
+    const radius = confused ? 5 : 1;
+    let candidates = 0;
+    let results = 0;
+    let visibleResults = 0;
+    const seen = new Set();
+    const candidatesList = [];
+    for (const mon of game.level?.monsters || []) {
+        if (!mon || mon.dead || (mon.mhp ?? 1) <= 0 || mon.mx == null || mon.my == null) continue;
+        if (Math.max(Math.abs(mon.mx - (game.u?.ux || 0)), Math.abs(mon.my - (game.u?.uy || 0))) > radius) continue;
+        if (seen.has(mon)) continue;
+        seen.add(mon);
+        candidatesList.push(mon);
+    }
+    if (game.u?.usteed && !seen.has(game.u.usteed)) {
+        seen.add(game.u.usteed);
+        candidatesList.push(game.u.usteed);
+    }
+
+    for (const mon of candidatesList) {
+        candidates++;
+        const res = tameMonsterWithScroll(mon, item);
+        results += res;
+        if (visibleMonsterForScroll(mon)) visibleResults += res;
+    }
+
+    if (!results) {
+        return { message: `Nothing interesting ${candidates ? 'seems to happen' : 'happens'}.`, known: false };
+    }
+    if (visibleResults > 0) learnScrollByName('taming', item, 7);
+    return {
+        message: `The neighborhood ${visibleResults ? 'is' : 'seems'} ${results < 0 ? 'un' : ''}friendlier.`,
+        known: visibleResults > 0,
+    };
+}
+
 function confuseMonsterScrollEffect(item) {
     const confused = heroIsConfused();
     const nonHuman = !!game.u?._polyself_form && game.u._polyself_form.mlet !== 'human';
@@ -15985,6 +16111,28 @@ export async function rhack(_cmd) {
             game._queued_message_process_time_after_more = 1;
 	            game._read_scroll_exercise_after_more = 1;
             await setMessage('As you read the scroll, it disappears.', true);
+            game._command_mode = null;
+            game.context.move = 1;
+            return;
+        }
+        if (isScroll && (scrollName === 'create monster' || item.scrollIndex === 6)) {
+            const confusedReading = heroIsConfused();
+            removeInventoryItem(item);
+            rn2(19);
+            await createMonsterScrollEffect(item);
+            await setMessage(scrollReadMessages(confusedReading).join('  '), confusedReading);
+            game._command_mode = null;
+            game.context.move = 1;
+            return;
+        }
+        if (isScroll && (scrollName === 'taming' || item.scrollIndex === 7)) {
+            const confusedReading = heroIsConfused();
+            removeInventoryItem(item);
+            rn2(19);
+            const result = tamingScrollEffect(item);
+            const messages = scrollReadMessages(confusedReading);
+            messages.push(result.message);
+            await setMessage(messages.join('  '), true);
             game._command_mode = null;
             game.context.move = 1;
             return;
