@@ -6,7 +6,7 @@ import { nhgetch } from './input.js';
 import { bot, cls, docrt, flush_screen, newsym, pline, refreshHallucinatedMap, show_glyph_cell, strengthString } from './display.js';
 import { couldsee, vision_recalc, vision_reset } from './vision.js';
 import { RANDOM_MONSTER_BY_NAME, SHOP_TYPES, artifactObjectName, enextoMonsterSpot, make_tutorial1_level, makemon, makeArtifactWishObject, mkcorpstat, mklev, mkobj_at, mksobj, monsterByRndName, nameObjectAsArtifact, next_ident, potionIndexForRoll, rndmonnum, scrollIndexForRoll, syncDungeonContext, u_on_dnstairs, u_on_rndspot, u_on_upstairs, wipe_engr_at, dropMonsterInventory, l_nhcore_init, getrumor, getbogusmon, level_difficulty, set_malign, somexyspace } from './mklev.js';
-import { ACCESSIBLE, A_CHA, A_CON, A_DEX, A_INT, A_MAX, A_STR, A_WIS, ALTAR, BC_BALL, BC_CHAIN, BEAR_TRAP, BLCORNER, BOLT_LIM, BRCORNER, CLOUD, COLNO, CORPSTAT_FEMALE, CORPSTAT_GENDER, CORPSTAT_HISTORIC, CORPSTAT_MALE, CORPSTAT_NEUTER, CORR, DOOR, BURN, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, DUST, ENGRAVE, ENGR_BLOOD, FOUNTAIN, GRAVE, HEADSTONE, HWALL, ICE, IN_SIGHT, IS_AIR, IS_OBSTRUCTED, IS_POOL, IS_ROOM, IS_WALL, In_endgame, In_quest, Is_earthlevel, Is_rogue_level, Is_waterlevel, LADDER, LAVAPOOL, LAVAWALL, MAGIC_PORTAL, MARK, MM_EDOG, MM_NOMSG, MOAT, NO_MINVENT, NORMAL_SPEED, OVERLOADED, P_BASIC, P_UNSKILLED, POOL, ROLLING_BOULDER_TRAP, ROOM, ROT_AGE, ROOMOFFSET, ROWNO, SCORR, SDOOR, SHOPBASE, SINK, STAIRS, STONE, TDWALL, TEMPLE, THRONE, TLCORNER, TRCORNER, TREE, TUWALL, VAULT, VWALL, WAND_BACKFIRE_CHANCE, WATER, WT_IRON_BALL_BASE, WT_IRON_BALL_INCR, ZAP_POS } from './const.js';
+import { ACCESSIBLE, A_CHA, A_CON, A_DEX, A_INT, A_MAX, A_STR, A_WIS, ALTAR, BC_BALL, BC_CHAIN, BEAR_TRAP, BLCORNER, BOLT_LIM, BRCORNER, CLOUD, COLNO, CORPSTAT_FEMALE, CORPSTAT_GENDER, CORPSTAT_HISTORIC, CORPSTAT_MALE, CORPSTAT_NEUTER, CORR, DOOR, BURN, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, DUST, ENGRAVE, ENGR_BLOOD, FOUNTAIN, GRAVE, HEADSTONE, HWALL, ICE, IN_SIGHT, IS_AIR, IS_OBSTRUCTED, IS_POOL, IS_ROOM, IS_WALL, In_endgame, In_quest, In_sokoban, Is_earthlevel, Is_rogue_level, Is_waterlevel, LADDER, LAVAPOOL, LAVAWALL, MAGIC_PORTAL, MARK, MM_EDOG, MM_NOMSG, MOAT, NO_MINVENT, NORMAL_SPEED, OVERLOADED, P_BASIC, P_UNSKILLED, POOL, ROLLING_BOULDER_TRAP, ROOM, ROT_AGE, ROOMOFFSET, ROWNO, SCORR, SDOOR, SHOPBASE, SINK, STAIRS, STONE, TDWALL, TEMPLE, THRONE, TLCORNER, TRCORNER, TREE, TUWALL, VAULT, VWALL, WAND_BACKFIRE_CHANCE, WATER, WT_IRON_BALL_BASE, WT_IRON_BALL_INCR, ZAP_POS } from './const.js';
 import { d, rn1, rn2, rn2_on_display_rng, rnd, rnl, rnz } from './rng.js';
 import { CLR_BLACK, CLR_BLUE, CLR_BRIGHT_BLUE, CLR_BRIGHT_CYAN, CLR_BRIGHT_GREEN, CLR_BROWN, CLR_CYAN, CLR_GRAY, CLR_GREEN, CLR_MAGENTA, CLR_ORANGE, CLR_RED, CLR_YELLOW, CLR_WHITE, NO_COLOR } from './terminal.js';
 import { vfsDeleteFile, vfsReadFile, vfsWriteFile } from './storage.js';
@@ -1196,6 +1196,187 @@ function arrivalNearbyCoords(cx, cy, maxRadius = 3) {
         }
     }
     return coords;
+}
+
+function heroHasTeleportControl() {
+    if (game.u?.teleportControl) return true;
+    return (game.inventory || []).some(item => item.worn
+        && (item.actualKind === 'ring of teleport control'
+            || item.kind === 'ring of teleport control'
+            || item.ringRoll === 23));
+}
+
+function heroIsStunned() {
+    return !!(game.u?.stunned || game.u?._stunTimeout || (game.u?._statusSuffix || '').includes('Stun'));
+}
+
+function heroHasAmuletOfYendor() {
+    return !!(game.u?.uhave?.amulet || (game.inventory || []).some(item =>
+        item.realAmuletOfYendor || String(item.actualKind || item.kind || '').toLowerCase() === 'amulet of yendor'));
+}
+
+function heroOnWizardTowerLevel() {
+    return !!(game.level?.flags?.wizard_tower_level || game.level?.wizardTowerBounds);
+}
+
+function heroNoTeleportLevel() {
+    const flags = game.level?.flags || {};
+    return !!(flags.noteleport
+        || flags.demon_court_noteleport
+        || (flags.stasis_until != null && flags.stasis_until >= (game.moves || 0)));
+}
+
+function singleLevelBranch(level = game.u?.uz) {
+    const dungeon = game.dungeons?.[level?.dnum ?? 0];
+    return !!dungeon && (dungeon.num_dunlevs || 1) <= 1;
+}
+
+function randomTeleportDepth() {
+    const current = game.u?.uz || { dnum: 0, dlevel: 1 };
+    const dungeon = game.dungeons?.[current.dnum];
+    const curDepth = depth_of_level(current);
+    if (!rn2(5) || singleLevelBranch(current) || In_endgame(current)) return curDepth;
+
+    let minDepth;
+    let maxDepth;
+    if (In_quest(current)) {
+        minDepth = dungeon?.depth_start ?? curDepth;
+        maxDepth = minDepth + (dungeon?.num_dunlevs ?? 1) - 1;
+    } else {
+        minDepth = 1;
+        maxDepth = (dungeon?.depth_start ?? 1) + (dungeon?.num_dunlevs ?? curDepth) - 1;
+        if ((game.dungeons?.[current.dnum]?.name === 'Gehennom' || game.level?.flags?.gehennom)
+            && !game.u?.uevent?.invoked)
+            maxDepth = Math.max(minDepth, maxDepth - 1);
+    }
+
+    let nlev = rn2(Math.max(1, curDepth + 3 - minDepth)) + minDepth;
+    if (nlev >= curDepth) nlev++;
+    if (nlev > maxDepth) {
+        nlev = maxDepth;
+        if (curDepth >= maxDepth) nlev -= rnd(3);
+    }
+    if (nlev < minDepth) {
+        nlev = minDepth;
+        if (nlev === curDepth) {
+            nlev += rnd(3);
+            if (nlev > maxDepth) nlev = maxDepth;
+        }
+    }
+    return nlev;
+}
+
+function sameLevelTeleportTrapAt(x, y) {
+    return (game.level?.traps || []).find(trap => trap.tx === x && trap.ty === y);
+}
+
+function sameLevelTeleportOk(x, y, trapok = false) {
+    const loc = game.level?.at(x, y);
+    if (!loc) return false;
+    if (!trapok && sameLevelTeleportTrapAt(x, y)) return false;
+    if (!ACCESSIBLE(loc.typ)) return false;
+    if (loc.typ === DOOR && (loc.doormask & (D_CLOSED | D_LOCKED))) return false;
+    if ((game.level?.monsters || []).some(mon => mon.mx === x && mon.my === y)) return false;
+    if ((game.level?.objects || []).some(obj =>
+        obj.otyp === BOULDER && !obj.hidden && !obj.transientProjectile && obj.ox === x && obj.oy === y))
+        return false;
+    return true;
+}
+
+function collectSameLevelTeleportCoords(cx, cy) {
+    const coords = [];
+    const rowrange = cy < ROWNO / 2 ? ROWNO - 1 - cy : cy;
+    const colrange = cx < COLNO / 2 ? COLNO - 1 - cx : cx;
+    const maxRadius = Math.max(rowrange, colrange);
+    let passStart = 0;
+    let passCount = 0;
+    for (let radius = 1; radius <= maxRadius; radius++) {
+        const newpass = (radius % 2) !== 0;
+        const passend = (radius % 2) === 0 || radius === maxRadius;
+        if (newpass) {
+            passStart = coords.length;
+            passCount = 0;
+        }
+        const lox = cx - radius, hix = cx + radius;
+        const loy = cy - radius, hiy = cy + radius;
+        for (let y = Math.max(loy, 0); y <= hiy && y < ROWNO; y++)
+            for (let x = Math.max(lox, 1); x <= hix && x < COLNO; x++) {
+                if (x !== lox && x !== hix && y !== loy && y !== hiy) continue;
+                if ((game.level?.monsters || []).some(mon => mon.mx === x && mon.my === y)) continue;
+                const loc = game.level?.at(x, y);
+                if (!loc || !ZAP_POS(loc.typ)) continue;
+                coords.push({ x, y });
+                passCount++;
+            }
+        if (passend) {
+            for (let pass = passStart, n = passCount; n > 1; pass++, n--) {
+                const k = rn2(n);
+                if (k) [coords[pass], coords[pass + k]] = [coords[pass + k], coords[pass]];
+            }
+        }
+    }
+    return coords;
+}
+
+function teleportHeroSameLevel(x, y) {
+    const oldX = game.u?.ux || 0;
+    const oldY = game.u?.uy || 0;
+    const oldBallX = game.u?.uball?.ox;
+    const oldBallY = game.u?.uball?.oy;
+    const oldChainX = game.u?.uchain?.ox;
+    const oldChainY = game.u?.uchain?.oy;
+    if (game.u) {
+        game.u.ux0 = oldX;
+        game.u.uy0 = oldY;
+        game.u.ux = x;
+        game.u.uy = y;
+    }
+    if (game.u?.usteed) {
+        game.u.usteed.mx = x;
+        game.u.usteed.my = y;
+    }
+    if (game.u?.uball) {
+        game.u.uball.ox = x;
+        game.u.uball.oy = y;
+    }
+    if (game.u?.uchain) {
+        game.u.uchain.ox = x;
+        game.u.uchain.oy = y;
+    }
+    newsym(oldX, oldY);
+    if (oldBallX != null && oldBallY != null) newsym(oldBallX, oldBallY);
+    if (oldChainX != null && oldChainY != null) newsym(oldChainX, oldChainY);
+    newsym(x, y);
+    vision_recalc(0);
+    return `You materialize in ${x === oldX && y === oldY ? 'the same' : 'a different'} location!`;
+}
+
+function safeTeleportHeroSameLevel() {
+    for (let tcnt = 0; tcnt < 40; tcnt++) {
+        const x = rnd(COLNO - 1);
+        const y = rn2(ROWNO);
+        if (sameLevelTeleportOk(x, y, false))
+            return teleportHeroSameLevel(x, y);
+    }
+
+    let backup = null;
+    for (const pos of collectSameLevelTeleportCoords(game.u?.ux || 0, game.u?.uy || 0)) {
+        if (sameLevelTeleportOk(pos.x, pos.y, false))
+            return teleportHeroSameLevel(pos.x, pos.y);
+        if (!backup && sameLevelTeleportTrapAt(pos.x, pos.y) && sameLevelTeleportOk(pos.x, pos.y, true))
+            backup = pos;
+    }
+    return backup ? teleportHeroSameLevel(backup.x, backup.y) : '';
+}
+
+function startControlledTeleportPrompt() {
+    game._farlook_x = game.u?.ux || 0;
+    game._farlook_y = game.u?.uy || 0;
+    game._teleport_cursor_position_mode = 0;
+    game._teleport_dot_described = 0;
+    game._cursor_override = null;
+    game._teleport_from_scroll = 1;
+    game._command_mode = 'teleportCursor';
 }
 
 function resolveArrivalCollision(mon) {
@@ -7049,6 +7230,46 @@ function scrollDisappearMessages(confusedReading) {
     if (confusedReading)
         messages.push(game.u?.hallucinating ? 'Being so trippy, you screw up...' : 'Being confused, you mispronounce the magic words...');
     return messages;
+}
+
+function teleportationScrollEffect(item, messages) {
+    const confused = heroIsConfused();
+    const wizard = !!game.flags?.debug;
+    if (confused || item.cursed) {
+        if ((heroHasAmuletOfYendor() || In_endgame(game.u?.uz) || In_sokoban(game.u?.uz)) && !wizard) {
+            messages.push('You feel very disoriented for a moment.');
+            return { learned: true, more: messages.length > 1 };
+        }
+        if ((heroHasTeleportControl() && !heroIsStunned()) || wizard)
+            return { learned: true, promptLevel: true, confusedPrompt: confused, more: true };
+
+        const targetDepth = randomTeleportDepth();
+        if (targetDepth === depth_of_level(game.u?.uz || { dnum: 0, dlevel: 1 })) {
+            messages.push('You shudder for a moment.');
+            return { learned: true, more: messages.length > 1 };
+        }
+        game._deferred_level_goto = {
+            targetLevel: levelTeleportNumericTarget(targetDepth),
+            options: { levelTeleport: true },
+        };
+        return { learned: true, more: messages.length > 1 };
+    }
+
+    if (heroNoTeleportLevel() && !wizard) {
+        messages.push('A mysterious force prevents you from teleporting!');
+        return { learned: true, more: messages.length > 1 };
+    }
+
+    if ((heroHasAmuletOfYendor() || heroOnWizardTowerLevel()) && !rn2(3)) {
+        messages.push('You feel disoriented for a moment.');
+        return { learned: false, more: messages.length > 1 };
+    }
+
+    if (((heroHasTeleportControl() || item.blessed) && !heroIsStunned()) || wizard)
+        return { learned: true, promptSameLevel: true, more: true };
+
+    const materialize = safeTeleportHeroSameLevel();
+    return { learned: true, materialize, more: messages.length > 1 };
 }
 
 function lightScrollNoOpLevel() {
@@ -15445,9 +15666,16 @@ export async function rhack(_cmd) {
             if (game._read_confused_teleport_prompt_after_more) {
                 game._read_confused_teleport_prompt_after_more = 0;
                 game._level_teleport_text = '';
-                game._level_teleport_confused_scroll = 1;
+                game._level_teleport_confused_scroll = game._read_level_teleport_confused_prompt ? 1 : 0;
+                game._read_level_teleport_confused_prompt = 0;
                 await setMessage('To what level do you want to teleport?');
                 game._command_mode = 'levelTeleportText';
+                return;
+            }
+            if (game._read_teleport_cursor_prompt_after_more) {
+                game._read_teleport_cursor_prompt_after_more = 0;
+                startControlledTeleportPrompt();
+                await setMessage('Where do you want to be teleported?');
                 return;
             }
             if (game._pet_message_resume) {
@@ -15784,27 +16012,15 @@ export async function rhack(_cmd) {
         game._command_mode = null;
 
         const currentDepth = depth_of_level(game.u?.uz || { dnum: 0, dlevel: 1 });
-        const dungeon = game.dungeons?.[game.u?.uz?.dnum ?? 0];
-        const minDepth = dungeon?.depth_start ?? 1;
-        const maxDepth = dungeon ? dungeon.depth_start + dungeon.num_dunlevs - 1 : currentDepth + 3;
-        let targetDepth = currentDepth;
-        if (rn2(5)) {
-            targetDepth = rn2(currentDepth + 3 - minDepth) + minDepth;
-            if (targetDepth >= currentDepth) targetDepth++;
-            if (targetDepth > maxDepth) targetDepth = maxDepth;
-            if (targetDepth < minDepth) targetDepth = minDepth;
-        }
+        const targetDepth = randomTeleportDepth();
         if (targetDepth === currentDepth) {
             await setMessage('You shudder for a moment.');
             game.context.move = 1;
             return;
         }
 
-        rn2(19);
-        const targetDungeon = game.u?.uz?.dnum ?? 0;
-        const targetLevel = targetDepth - (game.dungeons?.[targetDungeon]?.depth_start ?? 1) + 1;
         game._deferred_level_goto = {
-            targetLevel: { dnum: targetDungeon, dlevel: targetLevel },
+            targetLevel: levelTeleportNumericTarget(targetDepth),
             options: { levelTeleport: true },
         };
         game.context.move = 1;
@@ -18577,49 +18793,40 @@ export async function rhack(_cmd) {
             return;
         }
         if (isScroll && (scrollName === 'teleportation' || item.scrollIndex === 10)) {
-            learnObjectScore('Scrolls', 'scroll of teleportation');
-            if ((game.u?._statusSuffix || '').includes('Conf') || item.cursed) {
-                removeInventoryItem(item);
-                game._read_scroll_exercise_after_more = 1;
-                game._queued_message_after_more = (game.u?._statusSuffix || '').includes('Conf')
-                    ? 'Being confused, you mispronounce the magic words...'
-                    : 'You feel disoriented.';
-                game._queued_message_more_after_more = 1;
-                game._read_confused_teleport_prompt_after_more = 1;
-                await setMessage('As you read the scroll, it disappears.', true);
-                game._command_mode = null;
-                return;
-            }
-            const oldX = game.u?.ux || 0;
-            const oldY = game.u?.uy || 0;
+            const confusedReading = heroIsConfused();
+            const alreadyKnown = scrollDiscoveryKnown('teleportation')
+                || item.known === true
+                || item.actualKind === 'scroll of teleportation'
+                || item.kind === 'teleportation'
+                || item.kind === 'scroll of teleportation';
+            const callLabel = scrollCallLabel(item, 10);
+            const messages = scrollDisappearMessages(confusedReading);
             removeInventoryItem(item);
             rn2(19);
-            rn2(19);
-            let teleported = false;
-            for (let tcnt = 0; tcnt < 40; tcnt++) {
-                const x = rnd(COLNO - 1);
-                const y = rn2(ROWNO);
-                const loc = game.level?.at(x, y);
-                const trap = game.level?.traps?.some(item => item.tx === x && item.ty === y);
-                const monster = game.level?.monsters?.some(mon => mon.mx === x && mon.my === y);
-                const boulder = game.level?.objects?.some(obj => obj.otyp === BOULDER && obj.ox === x && obj.oy === y);
-                if (!trap && loc && ACCESSIBLE(loc.typ) && !monster && !boulder) {
-                    game.u.ux0 = oldX;
-                    game.u.uy0 = oldY;
-                    game.u.ux = x;
-                    game.u.uy = y;
-                    teleported = true;
-                    break;
-                }
+            if (!confusedReading && !item.cursed) rn2(19);
+            const result = teleportationScrollEffect(item, messages);
+            if (result.learned) learnScrollByName('teleportation', item, 10);
+            if (result.promptLevel) {
+                game._read_confused_teleport_prompt_after_more = 1;
+                game._read_level_teleport_confused_prompt = result.confusedPrompt ? 1 : 0;
+                await setMessage(messages.join('  '), true);
+                game._command_mode = null;
+                game.context.move = 0;
+                return;
             }
-            if (!teleported) u_on_rndspot(false);
-            newsym(oldX, oldY);
-            newsym(game.u.ux, game.u.uy);
-            vision_recalc(0);
-            game._topline_after_more = 'You materialize in a different location!';
-            await setMessage('As you read the scroll, it disappears.', true);
-            game._command_mode = null;
-            game.context.move = 1;
+            if (result.promptSameLevel) {
+                game._read_teleport_cursor_prompt_after_more = 1;
+                await setMessage(messages.join('  '), true);
+                game._command_mode = null;
+                game.context.move = 0;
+                return;
+            }
+            if (result.materialize) game._topline_after_more = result.materialize;
+            const shouldCall = !alreadyKnown && !result.learned;
+            await setMessage(messages.join('  '), result.more || !!result.materialize || shouldCall);
+            game._command_mode = shouldCall ? 'callScrollAfterMore' : null;
+            if (shouldCall) game._call_scroll_label = callLabel;
+            game.context.move = shouldCall ? 0 : 1;
             return;
         }
         if (isScroll && (scrollName === 'punishment' || item.scrollIndex === 18)) {
@@ -21982,16 +22189,45 @@ export async function rhack(_cmd) {
     }
 
     if (game._command_mode === 'levelTeleportText') {
-        if (game._level_teleport_confused_scroll && rnl(5)) {
+        if (ch === '\x1b') {
             game._level_teleport_confused_scroll = 0;
             game._level_teleport_text = '';
-            game._command_mode = 'confusedLevelTeleportOopsMore';
             game._deferred_level_goto = null;
-            await setMessage('Oops...', true);
+            game._pending_message = '';
+            game._message_more = 0;
+            game._command_mode = null;
+            game.context.move = 1;
             return;
         }
         if (ch === '\r' || ch === '\n') {
-            const target = Number.parseInt(game._level_teleport_text || '', 10);
+            const text = game._level_teleport_text || '';
+            if (text.trim() === '*') {
+                const currentDepth = depth_of_level(game.u?.uz || { dnum: 0, dlevel: 1 });
+                const targetDepth = randomTeleportDepth();
+                game._level_teleport_text = '';
+                game._level_teleport_confused_scroll = 0;
+                game._command_mode = null;
+                if (targetDepth === currentDepth) {
+                    await setMessage('You shudder for a moment.');
+                    game.context.move = 1;
+                    return;
+                }
+                game._deferred_level_goto = {
+                    targetLevel: levelTeleportNumericTarget(targetDepth),
+                    options: { levelTeleport: true },
+                };
+                game.context.move = 1;
+                return;
+            }
+            if (game._level_teleport_confused_scroll && rnl(5)) {
+                game._level_teleport_confused_scroll = 0;
+                game._level_teleport_text = '';
+                game._command_mode = 'confusedLevelTeleportOopsMore';
+                game._deferred_level_goto = null;
+                await setMessage('Oops...', true);
+                return;
+            }
+            const target = Number.parseInt(text, 10);
             if (target) {
                 if (questDownBlocked() && target > (game.u?.uz?.dlevel || 0)) {
                     game._level_teleport_text = '';
@@ -23017,6 +23253,7 @@ export async function rhack(_cmd) {
             game._message_more = 0;
             game._command_mode = null;
             game._teleport_cursor_position_mode = 0;
+            game._teleport_from_scroll = 0;
             game.context.move = 1;
             game._process_command_time_now = 1;
             return;
@@ -23180,6 +23417,15 @@ export async function rhack(_cmd) {
                 await docrt();
                 game._teleport_dot_described = 0;
                 game._command_mode = null;
+                if (game._teleport_from_scroll) {
+                    game._teleport_from_scroll = 0;
+                    game._teleport_cursor_position_mode = 0;
+                    game._cursor_override = null;
+                    game._teleport_geometric_online_once = 1;
+                    await setMessage(`You materialize in ${targetX === oldX && targetY === oldY ? 'the same' : 'a different'} location!`);
+                    game.context.move = 1;
+                    return;
+                }
                 const up = game.level?.upstair?.x === targetX && game.level?.upstair?.y === targetY;
                 const down = game.level?.dnstair?.x === targetX && game.level?.dnstair?.y === targetY;
                 const label = up || down ? `staircase ${up ? 'up' : 'down'}`
@@ -23280,8 +23526,12 @@ export async function rhack(_cmd) {
                 game._teleport_cursor_position_mode = 0;
                 game._cursor_override = null;
                 game._command_mode = null;
-                game.context.move = 0;
+                const teleportFromScroll = !!game._teleport_from_scroll;
+                game._teleport_from_scroll = 0;
+                game.context.move = teleportFromScroll ? 1 : 0;
                 if (!selectedValid) {
+                    if (teleportFromScroll)
+                        game._topline_after_more = `You materialize in ${landingX === oldX && landingY === oldY ? 'the same' : 'a different'} location!`;
                     const attachedObjects = [game.u?.uchain, game.u?.uball].filter(obj =>
                         obj && !obj.hidden && obj.ox === landingX && obj.oy === landingY);
                     if (attachedObjects.length > 1) {
@@ -23302,7 +23552,9 @@ export async function rhack(_cmd) {
                     await setMessage('Sorry...', true);
                     return;
                 }
-                await setMessage('');
+                await setMessage(teleportFromScroll
+                    ? `You materialize in ${landingX === oldX && landingY === oldY ? 'the same' : 'a different'} location!`
+                    : '');
                 return;
             }
             const up = game.level?.upstair?.x === targetX && game.level?.upstair?.y === targetY;

@@ -952,6 +952,11 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   swallow cases only give feedback, cursed readings snuff carried lights and
   darken the visible area, Rogue rooms use room-wide lighting, and confused
   readings create tame cancelled yellow or black lights.
+- Scroll of teleportation now uses the C `seffect_teleportation()` split:
+  ordinary scrolls route through `scrolltele()`-style no-teleport,
+  disorientation, control, and safe same-level placement handling, while cursed
+  or confused scrolls use level-teleport blocking, random-depth selection, and
+  controlled level prompts with the scroll discovery/calling timing preserved.
 - Monster-class row ordering no longer depends on Node 22's
   `Array.prototype.toSorted()`: the JS `mkclass` metadata path now uses an
   explicit copied difficulty sort that preserves equal-difficulty order, matching
