@@ -776,8 +776,17 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   Gendered corpse names display from `spe`, lichen/lizard wishes clear the rot
   timer, impossible no-corpse monsters keep the initialized random corpse, and
   unknown exact corpse monsters produce the normal no-fitting wish message.
-  Full corpse eating, zombifying, pudding-glob substitution, and generic
-  `set_corpsenm()` parity remain future work.
+  Full corpse eating, zombifying, and generic `set_corpsenm()` parity remain
+  future work.
+- Exact wished globs now cover the C `readobjnam()` pudding/glob slice:
+  `glob`, `globs`, `glob(s) of <monster>`, `<monster> glob(s)`, and pudding
+  or gray-ooze corpse wishes create known glob food objects with the matching
+  `corpsenm`. Size prefixes adjust stored weight and visible names, plural or
+  numeric glob wishes scale weight while keeping `quan` at 1, invalid living
+  monster globs use the normal no-fitting wish message, and unknown monster
+  names fall back to C's random gray-ooze/brown-pudding/green-slime glob
+  selection. Full glob shrink timer processing, glob merging, and glob eating
+  side effects remain future work.
 - Exact wished eggs now use the C `readobjnam()` egg path instead of generic
   food fallback: `egg`, `eggs`, `egg of <monster>`, and `<monster> egg`
   create initialized egg objects first, then apply a local `can_be_hatched()`

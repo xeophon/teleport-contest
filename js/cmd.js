@@ -471,6 +471,18 @@ const HEAVY_IRON_BALL = 474;
 const IRON_CHAIN = 475;
 const EGG = 10001;
 const TIN = 10004;
+const GLOB_OF_GRAY_OOZE = 10180;
+const GLOB_OF_BROWN_PUDDING = 10181;
+const GLOB_OF_GREEN_SLIME = 10182;
+const GLOB_OF_BLACK_PUDDING = 10183;
+const GLOB_TYPES = new Map([
+    ['gray ooze', { otyp: GLOB_OF_GRAY_OOZE, name: 'glob of gray ooze', color: CLR_GRAY }],
+    ['brown pudding', { otyp: GLOB_OF_BROWN_PUDDING, name: 'glob of brown pudding', color: CLR_BROWN }],
+    ['green slime', { otyp: GLOB_OF_GREEN_SLIME, name: 'glob of green slime', color: CLR_GREEN }],
+    ['black pudding', { otyp: GLOB_OF_BLACK_PUDDING, name: 'glob of black pudding', color: CLR_BLACK }],
+]);
+GLOB_TYPES.set('grey ooze', GLOB_TYPES.get('gray ooze'));
+const RANDOM_GLOB_MONSTER_NAMES = ['gray ooze', 'brown pudding', 'green slime'];
 const RANDOM_CLASS = 0;
 const WEAPON_CLASS = 1;
 const ARMOR_CLASS = 2;
@@ -5313,6 +5325,7 @@ function maybeLitObjectName(obj, name) {
 
 function foodObjectNutrition(item) {
     if (!item) return 0;
+    if (item.globby) return item.owt || 20;
     if (item.otyp === 'corpse' || item.otyp === CORPSE || /\bcorpse$/.test(objectKindKey(item))) {
         const corpseName = item.corpsenm?.name || objectKindKey(item).replace(/\s+corpse$/, '');
         return CORPSE_NUTRITION.get(corpseName) || 0;
@@ -5356,6 +5369,19 @@ function eggObjectName(obj) {
         if (!plural && obj.spe === 1) name = `${name} (laid by you)`;
     }
     return `${buc}${maybePartlyEatenFoodName(obj, name)}`;
+}
+
+function globSizePrefix(obj) {
+    const weight = obj?.owt ?? 20;
+    return weight <= 100 ? 'small'
+        : weight <= 300 ? 'medium'
+            : weight <= 500 ? 'large'
+                : 'very large';
+}
+
+function globObjectName(obj) {
+    const name = obj?.globName || obj?.kind || 'glob';
+    return maybePartlyEatenFoodName(obj, `${globSizePrefix(obj)} ${name}`);
 }
 
 function makeBlankScrollWishObject() {
@@ -5588,6 +5614,98 @@ function parseWishedCorpseName(lowerName, qualifiers = {}) {
     };
 }
 
+function parseWishedGlobName(lowerName, qualifiers = {}) {
+    let name = String(lowerName || '').trim();
+    let size = qualifiers.globSize || 0;
+    const sizeMatch = name.match(/^(small|medium|large|very large)\s+(.+)$/);
+    if (sizeMatch) {
+        size = sizeMatch[1] === 'small' ? 1
+            : sizeMatch[1] === 'medium' ? 2
+                : sizeMatch[1] === 'large' ? 3 : 4;
+        name = sizeMatch[2].trim();
+    }
+    const bareMatch = name.match(/^globs?$/);
+    const ofMatch = name.match(/^globs?\s+of\s+(.+)$/);
+    const suffixMatch = name.match(/^(.+)\s+globs?$/);
+    if (!bareMatch && !ofMatch && !suffixMatch) return null;
+    const monsterText = (ofMatch?.[1] || suffixMatch?.[1] || '').replace(/^(?:a|an|the)\s+/, '').trim();
+    const plural = /\bglobs\b/.test(name);
+    return {
+        monsterName: monsterText,
+        size,
+        exact: !!monsterText,
+        defaultCount: plural ? 2 : 0,
+    };
+}
+
+function globTypeForMonsterName(monsterName) {
+    const lowerName = String(monsterName || '').trim().toLowerCase();
+    if (!lowerName) {
+        const index = rn1(RANDOM_GLOB_MONSTER_NAMES.length, 0);
+        return GLOB_TYPES.get(RANDOM_GLOB_MONSTER_NAMES[index]);
+    }
+    if (GLOB_TYPES.has(lowerName)) return GLOB_TYPES.get(lowerName);
+    const monster = monsterByRndName(lowerName) || RANDOM_MONSTER_BY_NAME.get(lowerName);
+    if (!monster) {
+        const index = rn1(RANDOM_GLOB_MONSTER_NAMES.length, 0);
+        return GLOB_TYPES.get(RANDOM_GLOB_MONSTER_NAMES[index]);
+    }
+    return GLOB_TYPES.get(monster.name) || GLOB_TYPES.get(lowerName) || null;
+}
+
+function globSizeWeight(size = 0) {
+    if (size <= 1) return 20;
+    return 20 + (5 + (size - 2) * 10) * 20;
+}
+
+function applyWishedGlobQuantity(item, wishedQuan) {
+    if (!item?.globby) return;
+    let count = Math.max(wishedQuan || 0, item._wish_glob_default_count || 0);
+    if (count <= 1) return;
+    let maxCount = rn1(5, 2);
+    const size = item._wish_glob_size || 0;
+    if (maxCount > 6 - size) maxCount = 6 - size;
+    if (count > maxCount && !game.flags?.debug) count = maxCount;
+    item.owt = (item.owt || 20) * count;
+    if (item.oeaten) {
+        item.oeaten = item.owt;
+        consumeOeaten(item, 1);
+    }
+}
+
+function makeWishedGlobObject(globWish = {}) {
+    const globType = globTypeForMonsterName(globWish.monsterName);
+    if (!globType) return noFittingWishObject();
+    const id = next_ident();
+    const shrinkDelay = 25 + rn2(5) - 2;
+    const size = globWish.size || 0;
+    const monsterName = globType.name.replace(/^glob of /, '');
+    return {
+        id,
+        otyp: globType.otyp,
+        cls: 'food',
+        glyph: '%',
+        color: globType.color,
+        _display_color: globType.color,
+        kind: globType.name,
+        actualKind: globType.name,
+        singular: globType.name,
+        globName: globType.name,
+        globby: true,
+        known: true,
+        dknown: true,
+        quan: 1,
+        owt: globSizeWeight(size),
+        corpsenm: monsterByRndName(monsterName)
+            || RANDOM_MONSTER_BY_NAME.get(monsterName)
+            || { name: monsterName, neuter: true },
+        globShrinkTurn: (game.moves || 1) + shrinkDelay,
+        _wish_glob_size: size,
+        _wish_glob_default_count: globWish.defaultCount || 0,
+        wishedfor: true,
+    };
+}
+
 function wishedCorpseOverrideMonster(monster) {
     if (!monster) return null;
     if (monster.name === 'long worm tail')
@@ -5625,10 +5743,14 @@ function makeWishedCorpseObject(corpseWish, qualifiers = {}) {
         corpseWish?.monsterName,
         corpseWish?.requestedGender || qualifiers.monsterGender || null,
     );
+    if (resolved.monsterName && GLOB_TYPES.has(resolved.monsterName))
+        return makeWishedGlobObject({ monsterName: resolved.monsterName });
     const monster = resolved.monsterName
         ? monsterByRndName(resolved.monsterName) || RANDOM_MONSTER_BY_NAME.get(resolved.monsterName)
         : null;
     if (corpseWish?.exact && !monster) return noFittingWishObject();
+    if (monster && GLOB_TYPES.has(monster.name))
+        return makeWishedGlobObject({ monsterName: monster.name });
 
     const otmp = mksobj(CORPSE, true, false);
     if (monster) {
@@ -6067,7 +6189,9 @@ function applyWishedQualifiers(item, qualifiers) {
 }
 
 function applyWishedQuantity(item, wishedQuan, forceQuantity = false) {
-    if (isTinObject(item)) {
+    if (item?.globby) {
+        applyWishedGlobQuantity(item, wishedQuan);
+    } else if (isTinObject(item)) {
         if (game.flags?.debug || wishedQuan < rnd(6))
             item.quan = wishedQuan;
     } else if (wishedQuan > 1 || forceQuantity) {
@@ -6176,6 +6300,9 @@ function wishedBaseObjectFromName(lowerName, qualifiers = {}, originalName = low
 
     const corpseWish = parseWishedCorpseName(lowerName, qualifiers);
     if (corpseWish) return makeWishedCorpseObject(corpseWish, qualifiers);
+
+    const globWish = parseWishedGlobName(lowerName, qualifiers);
+    if (globWish) return makeWishedGlobObject(globWish);
 
     const eggWish = parseWishedEggName(lowerName, qualifiers);
     if (eggWish) return makeWishedEggObject(eggWish, qualifiers);
@@ -6446,6 +6573,7 @@ export function pickupObjectName(obj) {
     if (obj.artifact) return artifactObjectName(obj) || obj.kind;
     if (obj.otyp === 'corpse' || obj.otyp === CORPSE) return corpseObjectName(obj);
     if (obj.otyp === EGG) return named(eggObjectName(obj));
+    if (obj.globby) return named(globObjectName(obj));
     if ((obj.kind === 'statue' || obj.otyp === STATUE) && obj.corpsenm?.name) {
         const historic = archeologist && (((obj.spe || 0) & CORPSTAT_HISTORIC) || obj.historic);
         return `${historic ? 'historic ' : ''}statue of ${monsterIndefiniteName(corpstatDisplayMonsterName(obj))}`;
@@ -17446,6 +17574,15 @@ export async function rhack(_cmd) {
                     wishedName = wishedName.slice(historic[0].length);
                     continue;
                 }
+                const globSize = wishedName.match(/^(small|medium|large|very large)\s+/i);
+                if (globSize && /\bglobs?\b/i.test(wishedName.slice(globSize[0].length))) {
+                    const size = globSize[1].toLowerCase();
+                    wishedQualifiers.globSize = size === 'small' ? 1
+                        : size === 'medium' ? 2
+                            : size === 'large' ? 3 : 4;
+                    wishedName = wishedName.slice(globSize[0].length);
+                    continue;
+                }
                 const monsterGender = wishedName.match(/^(female|male|neuter)\s+/i);
                 if (monsterGender) {
                     wishedQualifiers.monsterGender = monsterGender[1].toLowerCase();
@@ -17557,6 +17694,8 @@ export async function rhack(_cmd) {
             delete item._wish_spe_from_suffix;
             delete item._wish_tin_explicit_content;
             delete item._wish_tin_requested_variety;
+            delete item._wish_glob_size;
+            delete item._wish_glob_default_count;
             const visibleName = game.u?.blind && item.cls === 'potion' ? 'potion'
                 : game.u?.blind && item.cls === 'ring' ? 'ring'
                     : game.u?.blind && item.cls === 'wand' ? 'wand'
@@ -17571,6 +17710,10 @@ export async function rhack(_cmd) {
             game._pet_food_scan_inventory = game.inventory;
             let carriedWeight = Math.trunc(((game._goldCount || 0) + 50) / 100);
             for (const invItem of game.inventory || []) {
+                if (invItem.globby) {
+                    carriedWeight += (invItem.owt ?? 20) * (invItem.quan || 1);
+                    continue;
+                }
                 if (invItem.otyp === 'corpse' || invItem.otyp === CORPSE) {
                     const corpseName = invItem.corpsenm?.name || objectKindKey(invItem).replace(/\s+corpses?$/, '');
                     carriedWeight += (CORPSE_WEIGHTS.get(corpseName) ?? invItem.owt ?? 1) * (invItem.quan || 1);
