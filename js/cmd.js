@@ -851,7 +851,9 @@ const WISH_BASE_OBJECTS = new Map([
     ['oil lamp', { otyp: OIL_LAMP, cls: 'tool', glyph: '(', kind: 'oil lamp' }],
     ['magic lamp', { otyp: MAGIC_LAMP, cls: 'tool', glyph: '(', kind: 'magic lamp' }],
     ['tallow candle', { otyp: TALLOW_CANDLE, cls: 'tool', glyph: '(', kind: 'tallow candle', plural: 'tallow candles', age: 200 }],
+    ['tallow candles', { otyp: TALLOW_CANDLE, cls: 'tool', glyph: '(', kind: 'tallow candle', plural: 'tallow candles', age: 200 }],
     ['wax candle', { otyp: WAX_CANDLE, cls: 'tool', glyph: '(', kind: 'wax candle', plural: 'wax candles', age: 400 }],
+    ['wax candles', { otyp: WAX_CANDLE, cls: 'tool', glyph: '(', kind: 'wax candle', plural: 'wax candles', age: 400 }],
     ['stethoscope', { otyp: STETHOSCOPE, cls: 'tool', glyph: '(', kind: 'stethoscope' }],
     ['magic marker', { otyp: MAGIC_MARKER, cls: 'tool', glyph: '(', kind: 'magic marker' }],
     ['mirror', { otyp: MIRROR, cls: 'tool', glyph: '(', kind: 'looking glass', actualKind: 'mirror' }],
@@ -892,7 +894,8 @@ const WISH_BASE_NAMEDESC_BOUNDS = new Map([
     ['heavy iron ball', 1001], ['large box', 41], ['chest', 36], ['ice box', 6],
     ['sack', 36], ['oilskin sack', 6], ['bag of holding', 21],
     ['brass lantern', 31], ['oil lamp', 46], ['magic lamp', 16],
-    ['tallow candle', 21], ['wax candle', 6], ['stethoscope', 26],
+    ['tallow candle', 21], ['tallow candles', 21],
+    ['wax candle', 6], ['wax candles', 6], ['stethoscope', 26],
     ['magic marker', 16], ['mirror', 46], ['expensive camera', 16],
     ['bell of opening', 1], ['blindfold', 51], ['leather gloves', 16],
     ['meat ring', 1], ['tin opener', 36], ['beartrap', 1],
@@ -5565,6 +5568,20 @@ function makeBlankSpellbookWishObject() {
     });
 }
 
+function makeNovelWishObject() {
+    const otmp = mksobj(SPBOOK_NO_NOVEL, true, false);
+    return Object.assign(otmp, {
+        cls: 'spellbook',
+        glyph: '+',
+        kind: 'novel',
+        actualKind: 'novel',
+        spellName: '',
+        appearance: '',
+        known: false,
+        wishedfor: true,
+    });
+}
+
 function makeFakeAmuletOfYendorWishObject() {
     const otmp = mksobj(AMULET_CLASS, true, false);
     return Object.assign(otmp, {
@@ -5623,6 +5640,21 @@ for (const [neutral, names] of GENDERED_CORPSTAT_MONSTER_NAMES) {
     GENDERED_CORPSTAT_MONSTER_ALIASES.set(names.neutral.toLowerCase(), { monsterName: neutral, gender: null });
     GENDERED_CORPSTAT_MONSTER_ALIASES.set(names.male.toLowerCase(), { monsterName: neutral, gender: 'male' });
     GENDERED_CORPSTAT_MONSTER_ALIASES.set(names.female.toLowerCase(), { monsterName: neutral, gender: 'female' });
+}
+const RANDOM_MONSTER_BY_LOWER_NAME = new Map(
+    [...RANDOM_MONSTER_BY_NAME.entries()].map(([name, data]) => [String(name).toLowerCase(), data]),
+);
+
+function wishedMonsterByName(name) {
+    const raw = String(name || '').trim();
+    if (!raw) return null;
+    const lower = raw.toLowerCase();
+    if (lower === 'elf') return { name: 'elf', weight: 800, mlet: '@', glyph: '@', color: CLR_BRIGHT_GREEN, neuter: false, elf: true };
+    return monsterByRndName(raw)
+        || RANDOM_MONSTER_BY_NAME.get(raw)
+        || RANDOM_MONSTER_BY_LOWER_NAME.get(lower)
+        || RANDOM_MONSTER_BY_LOWER_NAME.get(lower.replace(/\s+/g, '-'))
+        || null;
 }
 
 function stripWishedMonsterGenderPrefix(name) {
@@ -5693,9 +5725,7 @@ function makeWishedStatueObject(statueWish, qualifiers = {}) {
         statueWish?.monsterName,
         statueWish?.requestedGender || qualifiers.monsterGender || null,
     );
-    const monster = resolved.monsterName
-        ? monsterByRndName(resolved.monsterName) || RANDOM_MONSTER_BY_NAME.get(resolved.monsterName)
-        : null;
+    const monster = resolved.monsterName ? wishedMonsterByName(resolved.monsterName) : null;
     if (resolved.monsterName && !monster) return null;
     const otmp = mksobj(STATUE, true, false);
     if (monster) {
@@ -5738,9 +5768,7 @@ function makeWishedFigurineObject(figurineWish, qualifiers = {}) {
         figurineWish?.monsterName,
         figurineWish?.requestedGender || qualifiers.monsterGender || null,
     );
-    const monster = resolved.monsterName
-        ? monsterByRndName(resolved.monsterName) || RANDOM_MONSTER_BY_NAME.get(resolved.monsterName)
-        : null;
+    const monster = resolved.monsterName ? wishedMonsterByName(resolved.monsterName) : null;
     if (figurineWish?.exact && !monster) return noFittingWishObject();
     game._mkobj_tool_roll = WISH_TOOL_ROLLS.get('figurine');
     const otmp = mksobj(TOOL_CLASS, true, false);
@@ -5802,7 +5830,7 @@ function globTypeForMonsterName(monsterName) {
         return GLOB_TYPES.get(RANDOM_GLOB_MONSTER_NAMES[index]);
     }
     if (GLOB_TYPES.has(lowerName)) return GLOB_TYPES.get(lowerName);
-    const monster = monsterByRndName(lowerName) || RANDOM_MONSTER_BY_NAME.get(lowerName);
+    const monster = wishedMonsterByName(lowerName);
     if (!monster) {
         const index = rn1(RANDOM_GLOB_MONSTER_NAMES.length, 0);
         return GLOB_TYPES.get(RANDOM_GLOB_MONSTER_NAMES[index]);
@@ -5853,9 +5881,7 @@ function makeWishedGlobObject(globWish = {}) {
         dknown: true,
         quan: 1,
         owt: globSizeWeight(size),
-        corpsenm: monsterByRndName(monsterName)
-            || RANDOM_MONSTER_BY_NAME.get(monsterName)
-            || { name: monsterName, neuter: true },
+        corpsenm: wishedMonsterByName(monsterName) || { name: monsterName, neuter: true },
         globShrinkTurn: (game.moves || 1) + shrinkDelay,
         _wish_glob_size: size,
         _wish_glob_default_count: globWish.defaultCount || 0,
@@ -5911,9 +5937,9 @@ function makeWishedDragonArmorObject(dragonWish = {}) {
 function wishedCorpseOverrideMonster(monster) {
     if (!monster) return null;
     if (monster.name === 'long worm tail')
-        return monsterByRndName('long worm') || RANDOM_MONSTER_BY_NAME.get('long worm') || monster;
+        return wishedMonsterByName('long worm') || monster;
     if (monster.guardian)
-        return monsterByRndName('human') || RANDOM_MONSTER_BY_NAME.get('human') || monster;
+        return wishedMonsterByName('human') || monster;
     if (monster.unique && !game.flags?.debug) return null;
     if (monster.noCorpse) return null;
     return monster;
@@ -5947,9 +5973,7 @@ function makeWishedCorpseObject(corpseWish, qualifiers = {}) {
     );
     if (resolved.monsterName && GLOB_TYPES.has(resolved.monsterName))
         return makeWishedGlobObject({ monsterName: resolved.monsterName });
-    const monster = resolved.monsterName
-        ? monsterByRndName(resolved.monsterName) || RANDOM_MONSTER_BY_NAME.get(resolved.monsterName)
-        : null;
+    const monster = resolved.monsterName ? wishedMonsterByName(resolved.monsterName) : null;
     if (corpseWish?.exact && !monster) return noFittingWishObject();
     if (monster && GLOB_TYPES.has(monster.name))
         return makeWishedGlobObject({ monsterName: monster.name });
@@ -6013,8 +6037,8 @@ function lookupWishedEggMonster(name) {
     const lowerName = String(name || '').trim().toLowerCase();
     if (!lowerName) return null;
     if (lowerName === 'scorpius')
-        return monsterByRndName('scorpion') || RANDOM_MONSTER_BY_NAME.get('scorpion') || null;
-    return monsterByRndName(lowerName) || RANDOM_MONSTER_BY_NAME.get(lowerName) || null;
+        return wishedMonsterByName('scorpion');
+    return wishedMonsterByName(lowerName);
 }
 
 function grownWishedEggMonster(monster) {
@@ -6024,7 +6048,7 @@ function grownWishedEggMonster(monster) {
         || GROWNUP_MONSTERS.get(name)
         || null;
     return grownName
-        ? monsterByRndName(grownName) || RANDOM_MONSTER_BY_NAME.get(grownName) || monster
+        ? wishedMonsterByName(grownName) || monster
         : monster;
 }
 
@@ -6388,6 +6412,8 @@ function applyWishedQualifiers(item, qualifiers) {
         if (wishedPoisonable(item)) item.opoisoned = ((game.u?.uluck || 0) + (game.u?.moreluck || 0)) >= 0;
         else if (itemClassKey(item) === 'food') item.age = 1;
     }
+    if (qualifiers.zombifying && (item.otyp === CORPSE || /\bcorpse$/.test(objectKindKey(item))))
+        item.zombifying = true;
     if (qualifiers.wetness && objectKindKey(item) === 'towel') item.wetness = qualifiers.wetness;
     applyWishedContainerState(item, qualifiers);
 }
@@ -6535,6 +6561,120 @@ function makeWishedGrayStoneObject(lowerName) {
     });
 }
 
+const WISH_GEM_COLORS = new Map([
+    ['white', CLR_WHITE],
+    ['blue', CLR_BLUE],
+    ['red', CLR_RED],
+    ['yellowish brown', CLR_BROWN],
+    ['orange', CLR_ORANGE],
+    ['yellow', CLR_YELLOW],
+    ['black', CLR_BLACK],
+    ['green', CLR_GREEN],
+    ['violet', CLR_MAGENTA],
+]);
+const WISH_REAL_GEMS = [
+    { name: 'dilithium crystal', description: 'white', prob: 2, displayName: 'dilithium crystal' },
+    { name: 'diamond', description: 'white', prob: 3, displayName: 'diamond' },
+    { name: 'ruby', description: 'red', prob: 4, displayName: 'ruby' },
+    { name: 'jacinth', description: 'orange', prob: 3, displayName: 'jacinth stone' },
+    { name: 'sapphire', description: 'blue', prob: 4, displayName: 'sapphire' },
+    { name: 'black opal', description: 'black', prob: 3, displayName: 'black opal' },
+    { name: 'emerald', description: 'green', prob: 5, displayName: 'emerald' },
+    { name: 'turquoise', description: 'green', prob: 6, displayName: 'turquoise stone' },
+    { name: 'citrine', description: 'yellow', prob: 4, displayName: 'citrine stone' },
+    { name: 'aquamarine', description: 'green', prob: 6, displayName: 'aquamarine stone' },
+    { name: 'amber', description: 'yellowish brown', prob: 8, displayName: 'amber stone' },
+    { name: 'topaz', description: 'yellowish brown', prob: 10, displayName: 'topaz stone' },
+    { name: 'jet', description: 'black', prob: 6, displayName: 'jet stone' },
+    { name: 'opal', description: 'white', prob: 12, displayName: 'opal' },
+    { name: 'chrysoberyl', description: 'yellow', prob: 8, displayName: 'chrysoberyl stone' },
+    { name: 'garnet', description: 'red', prob: 12, displayName: 'garnet stone' },
+    { name: 'amethyst', description: 'violet', prob: 14, displayName: 'amethyst stone' },
+    { name: 'jasper', description: 'red', prob: 15, displayName: 'jasper stone' },
+    { name: 'fluorite', description: 'violet', prob: 15, displayName: 'fluorite stone' },
+    { name: 'obsidian', description: 'black', prob: 9, displayName: 'obsidian stone' },
+    { name: 'agate', description: 'orange', prob: 12, displayName: 'agate stone' },
+    { name: 'jade', description: 'green', prob: 10, displayName: 'jade stone' },
+];
+const WISH_GLASS_GEMS = [
+    { name: 'worthless piece of white glass', description: 'white', prob: 77, displayName: 'worthless piece of white glass' },
+    { name: 'worthless piece of blue glass', description: 'blue', prob: 77, displayName: 'worthless piece of blue glass' },
+    { name: 'worthless piece of red glass', description: 'red', prob: 77, displayName: 'worthless piece of red glass' },
+    { name: 'worthless piece of yellowish brown glass', description: 'yellowish brown', prob: 77, displayName: 'worthless piece of yellowish brown glass' },
+    { name: 'worthless piece of orange glass', description: 'orange', prob: 76, displayName: 'worthless piece of orange glass' },
+    { name: 'worthless piece of yellow glass', description: 'yellow', prob: 77, displayName: 'worthless piece of yellow glass' },
+    { name: 'worthless piece of black glass', description: 'black', prob: 76, displayName: 'worthless piece of black glass' },
+    { name: 'worthless piece of green glass', description: 'green', prob: 77, displayName: 'worthless piece of green glass' },
+    { name: 'worthless piece of violet glass', description: 'violet', prob: 77, displayName: 'worthless piece of violet glass' },
+];
+const WISH_GEMS = [...WISH_REAL_GEMS, ...WISH_GLASS_GEMS];
+const WISH_GEMS_BY_DISPLAY = new Map();
+for (const gem of WISH_GEMS) {
+    WISH_GEMS_BY_DISPLAY.set(gem.name, gem);
+    WISH_GEMS_BY_DISPLAY.set(gem.displayName, gem);
+}
+
+function wishedGemObject(spec, { description = spec?.description || '', consumeNamedesc = true } = {}) {
+    if (!spec) return null;
+    if (consumeNamedesc) rn2(spec.prob + 1);
+    const otmp = mksobj(GEM_CLASS, false, false);
+    const display = spec.displayName || spec.name;
+    const color = WISH_GEM_COLORS.get(spec.description) ?? NO_COLOR;
+    return Object.assign(otmp, {
+        cls: 'gem',
+        glyph: '*',
+        kind: display,
+        actualKind: display,
+        gemDescription: description ? `${description} gem` : display,
+        color,
+        _display_color: color,
+        wishedfor: true,
+    });
+}
+
+function weightedWishedGem(candidates) {
+    const total = candidates.reduce((sum, gem) => sum + gem.prob + 1, 0);
+    let roll = rn2(total);
+    for (const gem of candidates) {
+        roll -= gem.prob + 1;
+        if (roll < 0) return gem;
+    }
+    return candidates[0] || null;
+}
+
+function canonicalWishedGlassName(lowerName) {
+    if (lowerName === 'looking glass') return '';
+    let name = String(lowerName || '').trim();
+    if (name === 'glass') {
+        const gem = WISH_GLASS_GEMS[rn2(WISH_GLASS_GEMS.length)];
+        return gem?.name || '';
+    }
+    if (!name.endsWith(' glass')) return '';
+    name = name.replace(/^worthless\s+/, '');
+    name = name.replace(/^pieces?\s+of\s+/, '');
+    name = name.replace(/^colou?red\s+/, '');
+    if (name === 'glass') {
+        const gem = WISH_GLASS_GEMS[rn2(WISH_GLASS_GEMS.length)];
+        return gem?.name || '';
+    }
+    return `worthless piece of ${name}`;
+}
+
+function makeWishedGemObject(lowerName) {
+    let name = String(lowerName || '').trim().replace(/^worthless pieces of /, 'worthless piece of ');
+    const suffix = name.match(/^(.+?)\s+(?:gems?|stones?)$/);
+    if (suffix) {
+        const description = suffix[1].trim();
+        const candidates = WISH_GEMS.filter(gem => gem.description === description || gem.name === description || gem.displayName === description);
+        if (candidates.length) return wishedGemObject(weightedWishedGem(candidates), { description, consumeNamedesc: false });
+    }
+    const glassName = canonicalWishedGlassName(name);
+    if (glassName) name = glassName;
+    const exact = WISH_GEMS_BY_DISPLAY.get(name);
+    if (exact) return wishedGemObject(exact);
+    return null;
+}
+
 function normalizeWishedGroupPhrase(name, quantity) {
     const match = String(name || '').match(/^(pair|pairs|set|sets)\s+of\s+/i);
     if (!match) return { name, quantity, matched: false };
@@ -6557,6 +6697,8 @@ function applyWishedPluralQuantity(name, quantity) {
     const lowerName = String(name || '').trim().toLowerCase();
     const baseObject = WISH_BASE_OBJECTS.get(lowerName);
     if (baseObject?.plural && lowerName === baseObject.plural) return 2;
+    if (/^(?:worthless\s+)?pieces\s+of\s+.+\s+glass$/.test(lowerName)) return 2;
+    if (/\bgems$/.test(lowerName) || /\bstones$/.test(lowerName)) return 2;
     if (lowerName === 'fortune cookies') return 2;
     return quantity;
 }
@@ -6585,6 +6727,8 @@ function wishedBaseObjectFromName(lowerName, qualifiers = {}, originalName = low
     const spellingAlias = resolveWishedSpellingAlias(lowerName);
     lowerName = spellingAlias.name;
     if (lowerName === 'spell') return noFittingWishObject();
+    if (lowerName === 'paperback' || lowerName === 'paperback book') return makeNovelWishObject();
+    if (lowerName === 'paperback spellbook') return noFittingWishObject();
 
     const tinWish = parseWishedTinName(lowerName);
     if (tinWish) return makeWishedTinObject(tinWish);
@@ -6618,6 +6762,9 @@ function wishedBaseObjectFromName(lowerName, qualifiers = {}, originalName = low
 
     const grayStoneWish = makeWishedGrayStoneObject(lowerName);
     if (grayStoneWish) return grayStoneWish;
+
+    const gemWish = makeWishedGemObject(lowerName);
+    if (gemWish) return gemWish;
 
     const baseObject = WISH_BASE_OBJECTS.get(lowerName);
     if (baseObject) {
@@ -6710,13 +6857,22 @@ function wishedBaseObjectFromName(lowerName, qualifiers = {}, originalName = low
 
     if (/potion|juice|water/.test(lowerName)) {
         const potionName = lowerName.replace(/^potion(?: of)?\s+/, '');
-        const waterPotion = lowerName === 'water' || potionName === 'water';
+        const holyWater = potionName === 'holy water' || lowerName === 'holy water';
+        const unholyWater = potionName === 'unholy water' || lowerName === 'unholy water';
+        const waterPotion = lowerName === 'water' || potionName === 'water' || holyWater || unholyWater;
         const oilPotion = potionName === 'oil';
         const potionIndex = IDENTIFIED_POTION_NAMES.indexOf(potionName);
         if (potionIndex >= 0 && !spellingAlias.skipNamedesc) rn2(POTION_WISH_PROBS[potionIndex] + 1);
         const otmp = mksobj(waterPotion ? POT_WATER : oilPotion ? POT_OIL : potionIndex >= 0 ? POTION_WISH_BASE + potionIndex : POTION_CLASS, true, false);
         if (oilPotion && otmp.age == null) otmp.age = 400;
         const appearance = potionIndex >= 0 ? game._object_descriptions?.potions?.[potionIndex]?.description : '';
+        if (holyWater) {
+            otmp.blessed = true;
+            otmp.cursed = false;
+        } else if (unholyWater) {
+            otmp.blessed = false;
+            otmp.cursed = true;
+        }
         return Object.assign(otmp, {
             cls: 'potion',
             glyph: '!',
@@ -7637,9 +7793,9 @@ const BAD_AMULET_NAMES = new Set([
 ]);
 const IDENTIFIED_GEM_NAMES = [
     [2, 'dilithium crystal'], [5, 'diamond'], [9, 'ruby'], [12, 'jacinth stone'],
-    [16, 'sapphire'], [19, 'black opal'], [24, 'emerald'], [30, 'turquoise'],
-    [34, 'citrine'], [40, 'aquamarine'], [48, 'amber'], [58, 'topaz'],
-    [64, 'jet'], [76, 'opal'], [84, 'chrysoberyl stone'], [96, 'garnet stone'],
+    [16, 'sapphire'], [19, 'black opal'], [24, 'emerald'], [30, 'turquoise stone'],
+    [34, 'citrine stone'], [40, 'aquamarine stone'], [48, 'amber stone'], [58, 'topaz stone'],
+    [64, 'jet stone'], [76, 'opal'], [84, 'chrysoberyl stone'], [96, 'garnet stone'],
     [110, 'amethyst stone'], [125, 'jasper stone'], [140, 'fluorite stone'],
     [149, 'obsidian stone'], [161, 'agate stone'], [171, 'jade stone'],
     [248, 'worthless piece of white glass'], [325, 'worthless piece of blue glass'],
@@ -17788,8 +17944,12 @@ export async function rhack(_cmd) {
             let wishedQuan = 1;
             let wishedSpe;
             let wishedSpeNegative = false;
+            let wishedQuanForced = false;
             const leadingArticle = wishedName.match(/^(a|an|the)\s+/i);
-            if (leadingArticle) wishedName = wishedName.slice(leadingArticle[0].length);
+            if (leadingArticle) {
+                if (leadingArticle[1].toLowerCase() !== 'the') wishedQuanForced = true;
+                wishedName = wishedName.slice(leadingArticle[0].length);
+            }
             const wishedQualifiers = {
                 greased: false,
                 poisoned: false,
@@ -17808,6 +17968,7 @@ export async function rhack(_cmd) {
                 realAmulet: false,
                 fakeAmulet: false,
                 monsterGender: null,
+                zombifying: false,
             };
             let wishedErosionIntensity = 0;
             for (;;) {
@@ -17921,6 +18082,12 @@ export async function rhack(_cmd) {
                     wishedName = wishedName.slice(greased[0].length);
                     continue;
                 }
+                const zombifying = wishedName.match(/^zombifying\s+/i);
+                if (zombifying) {
+                    wishedQualifiers.zombifying = true;
+                    wishedName = wishedName.slice(zombifying[0].length);
+                    continue;
+                }
                 const intense = wishedName.match(/^(very|thoroughly)\s+/i);
                 if (intense) {
                     wishedErosionIntensity = intense[1].toLowerCase() === 'very' ? 1 : 2;
@@ -17950,24 +18117,33 @@ export async function rhack(_cmd) {
                 const quan = wishedName.match(/^(\d+)\s+/);
                 if (!quan) break;
                 wishedQuan = Number(quan[1]);
+                wishedQuanForced = true;
                 wishedName = wishedName.slice(quan[0].length);
             }
             const litSuffix = wishedName.match(/\s*\(lit\)\s*$/i);
             if (litSuffix) {
                 wishedQualifiers.lightState = 1;
                 wishedName = wishedName.slice(0, litSuffix.index);
+            } else if (!/^wand of\b/i.test(wishedName)) {
+                const chargeSuffix = wishedName.match(/\s*\((-?\d+)\)\s*$/);
+                if (chargeSuffix) {
+                    const charge = Number(chargeSuffix[1]);
+                    wishedSpeNegative = charge < 0;
+                    wishedSpe = capWishSpe(Math.abs(charge));
+                    wishedName = wishedName.slice(0, chargeSuffix.index);
+                }
             }
             const groupedWish = normalizeWishedGroupPhrase(wishedName, wishedQuan);
             wishedName = groupedWish.name;
             wishedQuan = groupedWish.quantity;
-            const wishedQuanForced = groupedWish.matched;
+            wishedQuanForced = wishedQuanForced || groupedWish.matched;
             wishedQuan = applyWishedPluralQuantity(wishedName, wishedQuan);
             const lowerName = wishedName.trim().toLowerCase();
             if (!lowerName || lowerName === 'nothing' || lowerName === 'nil' || lowerName === 'none') {
                 await setWishResultMessage('Nothing fitting that wish appears.');
                 return;
             }
-            if (/^(?:gold(?: pieces?)?|coins?)$/.test(lowerName)) {
+            if (/^(?:gold(?: pieces?)?|coins?|zorkmids?|money|\$)$/.test(lowerName)) {
                 next_ident();
                 godsNoticeWish();
                 game._goldCount = (game._goldCount || 0) + wishedQuan;

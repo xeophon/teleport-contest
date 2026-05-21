@@ -838,6 +838,16 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   and the huge-meat aliases; `protection from shape shifters`; `box`; and
   stone aliases. Gray/grey stone wishes now use C's 10/10/8/10 weighted
   luckstone/loadstone/touchstone/flint range.
+- Another upstream `testwish.lua`/`objnam.c` slice now follows C-shaped wish
+  parsing: explicit singular quantity such as `a rock`, `zorkmid` gold
+  wording, parenthesized non-wand `spe` like `magic marker (11)`,
+  `potion of holy water`/`potion of unholy water`, plural candle wishes with
+  lit/extinguished state, paperback novel wishes, `zombifying` corpse prefix
+  stripping, case-insensitive/hyphen-tolerant wished corpse/statue monster
+  lookup, and the gem/glass postparse path for exact glass and weighted
+  color-description wishes such as `red gem` and `orange gem`. Generated and
+  wished real-gem display names also keep C's `stone` suffix for turquoise,
+  citrine, aquamarine, amber, topaz, and jet.
 
 Next concrete target:
 

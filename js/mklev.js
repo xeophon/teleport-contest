@@ -303,8 +303,9 @@ const REAL_GEM_PROBS = [
 ];
 const REAL_GEM_NAMES = [
     'dilithium crystal', 'diamond', 'ruby', 'jacinth stone', 'sapphire',
-    'black opal', 'emerald', 'turquoise', 'citrine', 'aquamarine', 'amber',
-    'topaz', 'jet', 'opal', 'chrysoberyl stone', 'garnet stone',
+    'black opal', 'emerald', 'turquoise stone', 'citrine stone',
+    'aquamarine stone', 'amber stone', 'topaz stone', 'jet stone',
+    'opal', 'chrysoberyl stone', 'garnet stone',
     'amethyst stone', 'jasper stone', 'fluorite stone', 'obsidian stone',
     'agate stone', 'jade stone',
 ];
