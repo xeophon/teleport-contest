@@ -469,6 +469,7 @@ const STATUE = 472;
 const FLINT_STONE = 473;
 const HEAVY_IRON_BALL = 474;
 const IRON_CHAIN = 475;
+const EGG = 10001;
 const TIN = 10004;
 const RANDOM_CLASS = 0;
 const WEAPON_CLASS = 1;
@@ -753,6 +754,8 @@ const WISH_BASE_OBJECTS = new Map([
     ['pickax', { otyp: PICK_AXE, cls: 'tool', glyph: '(', kind: 'pick-axe' }],
     ['pick-ax', { otyp: PICK_AXE, cls: 'tool', glyph: '(', kind: 'pick-axe' }],
     ['cream pie', { otyp: CREAM_PIE, cls: 'food', glyph: '%', kind: 'cream pie' }],
+    ['egg', { otyp: EGG, cls: 'food', glyph: '%', kind: 'egg', plural: 'eggs' }],
+    ['eggs', { otyp: EGG, cls: 'food', glyph: '%', kind: 'egg', plural: 'eggs' }],
     ['large box', { otyp: LARGE_BOX, cls: 'tool', glyph: '(', kind: 'large box' }],
     ['chest', { otyp: CHEST, cls: 'tool', glyph: '(', kind: 'chest' }],
     ['ice box', { otyp: ICE_BOX, cls: 'tool', glyph: '(', kind: 'ice box' }],
@@ -5339,6 +5342,22 @@ function maybePartlyEatenFoodName(obj, name) {
     return `partly eaten ${name}`;
 }
 
+function foodBucPrefix(obj) {
+    if (!(game._startup_role === 'Priest' || obj?.bknown)) return '';
+    return obj?.cursed ? 'cursed ' : obj?.blessed ? 'blessed ' : '';
+}
+
+function eggObjectName(obj) {
+    const buc = foodBucPrefix(obj);
+    const plural = (obj?.quan || 1) > 1;
+    let name = plural ? 'eggs' : 'egg';
+    if (obj?.corpsenm?.name && (obj.known || obj.eggKnown)) {
+        name = `${obj.corpsenm.name} ${plural ? 'eggs' : 'egg'}`;
+        if (!plural && obj.spe === 1) name = `${name} (laid by you)`;
+    }
+    return `${buc}${maybePartlyEatenFoodName(obj, name)}`;
+}
+
 function makeBlankScrollWishObject() {
     const otmp = mksobj(SCR_BLANK_PAPER, true, false);
     return Object.assign(otmp, {
@@ -5626,6 +5645,109 @@ function makeWishedCorpseObject(corpseWish, qualifiers = {}) {
         wishedfor: true,
     });
     finishWishedCorpseDisplay(otmp);
+    return otmp;
+}
+
+const EGG_GROWNUP_MONSTER_NAMES = new Map([
+    ['baby gray dragon', 'gray dragon'],
+    ['baby gold dragon', 'gold dragon'],
+    ['baby silver dragon', 'silver dragon'],
+    ['baby red dragon', 'red dragon'],
+    ['baby white dragon', 'white dragon'],
+    ['baby orange dragon', 'orange dragon'],
+    ['baby black dragon', 'black dragon'],
+    ['baby blue dragon', 'blue dragon'],
+    ['baby green dragon', 'green dragon'],
+    ['baby yellow dragon', 'yellow dragon'],
+    ['red naga hatchling', 'red naga'],
+    ['black naga hatchling', 'black naga'],
+    ['golden naga hatchling', 'golden naga'],
+    ['guardian naga hatchling', 'guardian naga'],
+    ['baby crocodile', 'crocodile'],
+]);
+
+function parseWishedEggName(lowerName, qualifiers = {}) {
+    const name = String(lowerName || '').trim();
+    let match = name.match(/^eggs?(?:\s+of(?:\s+(?:a|an|the))?\s+(.+))?$/);
+    const plural = /^eggs\b/.test(name);
+    let prefixPlural = false;
+    if (!match) {
+        match = name.match(/^(.+)\s+eggs?$/);
+        prefixPlural = /\seggs$/.test(name);
+    }
+    if (!match) return null;
+    const gendered = stripWishedMonsterGenderPrefix(match[1] || '');
+    return {
+        monsterName: gendered.name,
+        requestedGender: gendered.gender || qualifiers.monsterGender || null,
+        exact: !!gendered.name,
+        plural: plural || prefixPlural,
+    };
+}
+
+function lookupWishedEggMonster(name) {
+    const lowerName = String(name || '').trim().toLowerCase();
+    if (!lowerName) return null;
+    if (lowerName === 'scorpius')
+        return monsterByRndName('scorpion') || RANDOM_MONSTER_BY_NAME.get('scorpion') || null;
+    return monsterByRndName(lowerName) || RANDOM_MONSTER_BY_NAME.get(lowerName) || null;
+}
+
+function grownWishedEggMonster(monster) {
+    if (!monster?.name) return monster;
+    const name = monster.name;
+    const grownName = EGG_GROWNUP_MONSTER_NAMES.get(name)
+        || GROWNUP_MONSTERS.get(name)
+        || null;
+    return grownName
+        ? monsterByRndName(grownName) || RANDOM_MONSTER_BY_NAME.get(grownName) || monster
+        : monster;
+}
+
+function canWishedEggBeHatched(monster) {
+    const eggMonster = grownWishedEggMonster(monster);
+    const name = eggMonster?.name || '';
+    if (!name) return null;
+    if (name === 'killer bee' || name === 'gargoyle') return eggMonster;
+    if (!eggMonster.oviparous) return null;
+    const breederEgg = !rn2(77);
+    if ((name === 'queen bee' || name === 'winged gargoyle') && !breederEgg)
+        return null;
+    return eggMonster;
+}
+
+function consumeWishedEggHatchTimer(otmp) {
+    for (let i = 151; i <= 200; i++) {
+        if (rnd(i) > 150) {
+            otmp.eggHatchTurn = (game.moves || 1) + i;
+            break;
+        }
+    }
+    otmp._egg_hatch_consumed = true;
+}
+
+function makeWishedEggObject(eggWish, qualifiers = {}) {
+    const resolved = resolveWishedCorpstatMonsterName(
+        eggWish?.monsterName,
+        eggWish?.requestedGender || qualifiers.monsterGender || null,
+    );
+    const monster = resolved.monsterName ? lookupWishedEggMonster(resolved.monsterName) : null;
+    if (eggWish?.exact && !monster) return noFittingWishObject();
+
+    const otmp = mksobj(EGG, true, false);
+    const hadHatchTimer = !!otmp.corpsenm;
+    const eggMonster = monster ? canWishedEggBeHatched(monster) : otmp.corpsenm;
+    otmp.corpsenm = eggMonster || null;
+    if (eggMonster && !hadHatchTimer) consumeWishedEggHatchTimer(otmp);
+    Object.assign(otmp, {
+        cls: 'food',
+        glyph: '%',
+        kind: 'egg',
+        singular: 'egg',
+        plural: 'eggs',
+        wishedfor: true,
+    });
+    if (eggWish?.plural) otmp.quan = Math.max(2, otmp.quan || 1);
     return otmp;
 }
 
@@ -6055,6 +6177,9 @@ function wishedBaseObjectFromName(lowerName, qualifiers = {}, originalName = low
     const corpseWish = parseWishedCorpseName(lowerName, qualifiers);
     if (corpseWish) return makeWishedCorpseObject(corpseWish, qualifiers);
 
+    const eggWish = parseWishedEggName(lowerName, qualifiers);
+    if (eggWish) return makeWishedEggObject(eggWish, qualifiers);
+
     const specialSubstitution = substituteNonWizardSpecialWish(lowerName);
     if (specialSubstitution) return specialSubstitution;
 
@@ -6320,6 +6445,7 @@ export function pickupObjectName(obj) {
         return (obj.quan || 1) > 1 ? 'gold pieces' : 'gold piece';
     if (obj.artifact) return artifactObjectName(obj) || obj.kind;
     if (obj.otyp === 'corpse' || obj.otyp === CORPSE) return corpseObjectName(obj);
+    if (obj.otyp === EGG) return named(eggObjectName(obj));
     if ((obj.kind === 'statue' || obj.otyp === STATUE) && obj.corpsenm?.name) {
         const historic = archeologist && (((obj.spe || 0) & CORPSTAT_HISTORIC) || obj.historic);
         return `${historic ? 'historic ' : ''}statue of ${monsterIndefiniteName(corpstatDisplayMonsterName(obj))}`;
@@ -6447,9 +6573,7 @@ export function pickupObjectName(obj) {
         }
     }
     if (obj.otyp === FOOD_CLASS || obj.cls === 'food') {
-        const buc = game._startup_role === 'Priest' || obj.bknown
-            ? obj.cursed ? 'cursed ' : obj.blessed ? 'blessed ' : ''
-            : '';
+        const buc = foodBucPrefix(obj);
         if ((obj.quan || 1) > 1 && obj.plural) return named(`${buc}${maybePartlyEatenFoodName(obj, obj.plural)}`);
         if ((obj.quan || 1) > 1 && obj.kind === 'food ration') return named(`${buc}${maybePartlyEatenFoodName(obj, 'food rations')}`);
         if ((obj.quan || 1) > 1 && obj.kind === 'cram ration') return named(`${buc}${maybePartlyEatenFoodName(obj, 'cram rations')}`);

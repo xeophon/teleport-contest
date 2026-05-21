@@ -778,6 +778,14 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   unknown exact corpse monsters produce the normal no-fitting wish message.
   Full corpse eating, zombifying, pudding-glob substitution, and generic
   `set_corpsenm()` parity remain future work.
+- Exact wished eggs now use the C `readobjnam()` egg path instead of generic
+  food fallback: `egg`, `eggs`, `egg of <monster>`, and `<monster> egg`
+  create initialized egg objects first, then apply a local `can_be_hatched()`
+  equivalent for killer bees, gargoyles, oviparous monsters, queen bee and
+  winged gargoyle breeder rolls, and baby-to-adult egg names. Non-hatchable
+  monsters produce generic eggs, unknown exact monsters produce the no-fitting
+  wish message, and egg names stay generic unless the egg type is known.
+  Full hatch timeout processing and egg eating side effects remain future work.
 - Wished container state prefixes now cover the C `readobjnam()` object slice
   for `locked`, `unlocked`, `broken`, `trapped`, `untrapped`, and `empty`:
   boxes keep normal generated contents and lock/trap RNG before final state
