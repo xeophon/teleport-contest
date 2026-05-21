@@ -806,6 +806,13 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   on non-water potions, and `partly eaten` food stores `oeaten` only when the
   C object nutrition is greater than 1. Blank scrolls and spellbooks also use
   their C read messages instead of falling through as magical scrolls/books.
+- Wished dragon gear now follows the C `readobjnam()` dragon-order mapping:
+  all compiled NetHack 5.0 colors support `<color> dragon scales`,
+  `<color> dragon scale mail`, `grey` aliases, and `dragon scale armor` mail
+  aliases, while bare `dragon scales` and `dragon scale mail` choose randomly
+  from the C range. The objects keep armor identity, dragon-hide weight/color,
+  scale/scalemail AC, shop cost, pet/load weight, single-object quantity, and
+  plural scale display/wear lines.
 
 Next concrete target:
 

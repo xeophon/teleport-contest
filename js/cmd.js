@@ -688,6 +688,24 @@ const WAX_CANDLE = 371;
 const GRAY_DRAGON_SCALE_MAIL = 10085;
 const SILVER_DRAGON_SCALE_MAIL = 10086;
 const SPEED_BOOTS = 10087;
+const GOLD_DRAGON_SCALE_MAIL = 10140;
+const RED_DRAGON_SCALE_MAIL = 10141;
+const WHITE_DRAGON_SCALE_MAIL = 10142;
+const ORANGE_DRAGON_SCALE_MAIL = 10143;
+const BLACK_DRAGON_SCALE_MAIL = 10144;
+const BLUE_DRAGON_SCALE_MAIL = 10145;
+const GREEN_DRAGON_SCALE_MAIL = 10146;
+const YELLOW_DRAGON_SCALE_MAIL = 10147;
+const GRAY_DRAGON_SCALES = 10148;
+const GOLD_DRAGON_SCALES = 10149;
+const SILVER_DRAGON_SCALES = 10150;
+const RED_DRAGON_SCALES = 10151;
+const WHITE_DRAGON_SCALES = 10152;
+const ORANGE_DRAGON_SCALES = 10153;
+const BLACK_DRAGON_SCALES = 10154;
+const BLUE_DRAGON_SCALES = 10155;
+const GREEN_DRAGON_SCALES = 10156;
+const YELLOW_DRAGON_SCALES = 10157;
 const LEATHER_GLOVES = 10050;
 const CLOAK_OF_DISPLACEMENT = 10111;
 const GAUNTLETS_OF_POWER = 10112;
@@ -755,6 +773,22 @@ const POISONABLE_WISH_WEAPONS = new Set([
     'silver arrow', 'silver arrows', 'ya', 'crossbow bolt', 'crossbow bolts',
     'dart', 'darts', 'shuriken', 'throwing star', 'throwing stars',
 ]);
+const DRAGON_ARMOR_SPECS = [
+    { colorName: 'gray', aliases: ['gray', 'grey'], color: CLR_GRAY, mailOtyp: GRAY_DRAGON_SCALE_MAIL, scalesOtyp: GRAY_DRAGON_SCALES },
+    { colorName: 'gold', aliases: ['gold'], color: CLR_YELLOW, mailOtyp: GOLD_DRAGON_SCALE_MAIL, scalesOtyp: GOLD_DRAGON_SCALES },
+    { colorName: 'silver', aliases: ['silver'], color: CLR_BRIGHT_CYAN, mailOtyp: SILVER_DRAGON_SCALE_MAIL, scalesOtyp: SILVER_DRAGON_SCALES },
+    { colorName: 'red', aliases: ['red'], color: CLR_RED, mailOtyp: RED_DRAGON_SCALE_MAIL, scalesOtyp: RED_DRAGON_SCALES },
+    { colorName: 'white', aliases: ['white'], color: CLR_WHITE, mailOtyp: WHITE_DRAGON_SCALE_MAIL, scalesOtyp: WHITE_DRAGON_SCALES },
+    { colorName: 'orange', aliases: ['orange'], color: CLR_ORANGE, mailOtyp: ORANGE_DRAGON_SCALE_MAIL, scalesOtyp: ORANGE_DRAGON_SCALES },
+    { colorName: 'black', aliases: ['black'], color: CLR_BLACK, mailOtyp: BLACK_DRAGON_SCALE_MAIL, scalesOtyp: BLACK_DRAGON_SCALES },
+    { colorName: 'blue', aliases: ['blue'], color: CLR_BLUE, mailOtyp: BLUE_DRAGON_SCALE_MAIL, scalesOtyp: BLUE_DRAGON_SCALES },
+    { colorName: 'green', aliases: ['green'], color: CLR_GREEN, mailOtyp: GREEN_DRAGON_SCALE_MAIL, scalesOtyp: GREEN_DRAGON_SCALES },
+    { colorName: 'yellow', aliases: ['yellow'], color: CLR_YELLOW, mailOtyp: YELLOW_DRAGON_SCALE_MAIL, scalesOtyp: YELLOW_DRAGON_SCALES },
+];
+const DRAGON_ARMOR_BY_COLOR = new Map();
+for (const spec of DRAGON_ARMOR_SPECS)
+    for (const alias of spec.aliases) DRAGON_ARMOR_BY_COLOR.set(alias, spec);
+
 const WISH_BASE_OBJECTS = new Map([
     ['dart', { otyp: DART, cls: 'weapon', glyph: ')', kind: 'dart', plural: 'darts' }],
     ['darts', { otyp: DART, cls: 'weapon', glyph: ')', kind: 'dart', plural: 'darts' }],
@@ -788,9 +822,6 @@ const WISH_BASE_OBJECTS = new Map([
     ['leather gloves', { otyp: LEATHER_GLOVES, cls: 'armor', glyph: '[', kind: 'leather gloves', actualKind: 'leather gloves', known: false }],
     ['gauntlets of power', { otyp: GAUNTLETS_OF_POWER, cls: 'armor', glyph: '[', kind: 'gauntlets of power', actualKind: 'gauntlets of power', known: false }],
     ['cloak of displacement', { otyp: CLOAK_OF_DISPLACEMENT, cls: 'armor', glyph: '[', kind: 'cloak of displacement', actualKind: 'cloak of displacement', known: false }],
-    ['gray dragon scale mail', { otyp: GRAY_DRAGON_SCALE_MAIL, cls: 'armor', glyph: '[', kind: 'gray dragon scale mail', actualKind: 'gray dragon scale mail' }],
-    ['grey dragon scale mail', { otyp: GRAY_DRAGON_SCALE_MAIL, cls: 'armor', glyph: '[', kind: 'gray dragon scale mail', actualKind: 'gray dragon scale mail' }],
-    ['silver dragon scale mail', { otyp: SILVER_DRAGON_SCALE_MAIL, cls: 'armor', glyph: '[', kind: 'silver dragon scale mail', actualKind: 'silver dragon scale mail' }],
     ['speed boots', { otyp: SPEED_BOOTS, cls: 'armor', glyph: '[', kind: 'speed boots', actualKind: 'speed boots', known: false }],
 ]);
 const WIZARD_ONLY_WISH_NAMEDESC_BOUNDS = new Map([
@@ -808,8 +839,7 @@ const WISH_BASE_NAMEDESC_BOUNDS = new Map([
     ['magic marker', 16], ['mirror', 46], ['expensive camera', 16],
     ['bell of opening', 1], ['blindfold', 51], ['leather gloves', 16],
     ['gauntlets of power', 9], ['cloak of displacement', 13],
-    ['gray dragon scale mail', 67], ['grey dragon scale mail', 67],
-    ['silver dragon scale mail', 2], ['speed boots', 13],
+    ['speed boots', 13],
 ]);
 const WISH_TOOL_ROLLS = new Map([
     ['lamp', 415], ['lenses', 510], ['blindfold', 560], ['towel', 610],
@@ -1766,7 +1796,25 @@ const ARMOR_AC_BONUS = {
     'orcish chain mail': 4,
     'chain mail': 5,
     'gray dragon scale mail': 9,
+    'gold dragon scale mail': 9,
     'silver dragon scale mail': 9,
+    'red dragon scale mail': 9,
+    'white dragon scale mail': 9,
+    'orange dragon scale mail': 9,
+    'black dragon scale mail': 9,
+    'blue dragon scale mail': 9,
+    'green dragon scale mail': 9,
+    'yellow dragon scale mail': 9,
+    'gray dragon scales': 3,
+    'gold dragon scales': 3,
+    'silver dragon scales': 3,
+    'red dragon scales': 3,
+    'white dragon scales': 3,
+    'orange dragon scales': 3,
+    'black dragon scales': 3,
+    'blue dragon scales': 3,
+    'green dragon scales': 3,
+    'yellow dragon scales': 3,
     'studded leather armor': 3,
     'banded mail': 6,
     'splint mail': 6,
@@ -1862,7 +1910,25 @@ const ARMOR_WEAR_DELAY = {
     'ring mail': 5,
     'orcish ring mail': 5,
     'gray dragon scale mail': 5,
+    'gold dragon scale mail': 5,
     'silver dragon scale mail': 5,
+    'red dragon scale mail': 5,
+    'white dragon scale mail': 5,
+    'orange dragon scale mail': 5,
+    'black dragon scale mail': 5,
+    'blue dragon scale mail': 5,
+    'green dragon scale mail': 5,
+    'yellow dragon scale mail': 5,
+    'gray dragon scales': 5,
+    'gold dragon scales': 5,
+    'silver dragon scales': 5,
+    'red dragon scales': 5,
+    'white dragon scales': 5,
+    'orange dragon scales': 5,
+    'black dragon scales': 5,
+    'blue dragon scales': 5,
+    'green dragon scales': 5,
+    'yellow dragon scales': 5,
     'leather armor': 3,
     'studded leather armor': 3,
     'dwarvish mithril-coat': 1,
@@ -1985,6 +2051,25 @@ const OBJECT_WEIGHTS = {
     'elven shield': 40,
     'fedora': 3,
     'gray dragon scale mail': 40,
+    'gold dragon scale mail': 40,
+    'silver dragon scale mail': 40,
+    'red dragon scale mail': 40,
+    'white dragon scale mail': 40,
+    'orange dragon scale mail': 40,
+    'black dragon scale mail': 40,
+    'blue dragon scale mail': 40,
+    'green dragon scale mail': 40,
+    'yellow dragon scale mail': 40,
+    'gray dragon scales': 40,
+    'gold dragon scales': 40,
+    'silver dragon scales': 40,
+    'red dragon scales': 40,
+    'white dragon scales': 40,
+    'orange dragon scales': 40,
+    'black dragon scales': 40,
+    'blue dragon scales': 40,
+    'green dragon scales': 40,
+    'yellow dragon scales': 40,
     'helmet': 30,
     'high boots': 20,
     'iron shoes': 50,
@@ -2004,7 +2089,6 @@ const OBJECT_WEIGHTS = {
     'ring mail': 250,
     'scale mail': 250,
     'shield of reflection': 50,
-    'silver dragon scale mail': 40,
     'small shield': 30,
     'speed boots': 20,
     'splint mail': 400,
@@ -2137,6 +2221,16 @@ const SHOP_OBJECT_COSTS = {
     'blue dragon scale mail': 900,
     'green dragon scale mail': 900,
     'yellow dragon scale mail': 900,
+    'gray dragon scales': 700,
+    'gold dragon scales': 500,
+    'silver dragon scales': 700,
+    'red dragon scales': 500,
+    'white dragon scales': 500,
+    'orange dragon scales': 500,
+    'black dragon scales': 700,
+    'blue dragon scales': 500,
+    'green dragon scales': 500,
+    'yellow dragon scales': 500,
     'plate mail': 600,
     'crystal plate mail': 820,
     'bronze plate mail': 400,
@@ -5706,6 +5800,51 @@ function makeWishedGlobObject(globWish = {}) {
     };
 }
 
+function parseWishedDragonArmorName(lowerName) {
+    const name = String(lowerName || '').trim().replace(/\s+/g, ' ');
+    let match = name.match(/^dragon (scales|scale mail|scale armor)$/);
+    if (match) {
+        return {
+            type: match[1] === 'scales' ? 'scales' : 'mail',
+            random: true,
+            armorAlias: match[1] === 'scale armor',
+        };
+    }
+    match = name.match(/^(gray|grey|gold|silver|red|white|orange|black|blue|green|yellow) dragon (scales|scale mail|scale armor)$/);
+    if (!match) return null;
+    return {
+        type: match[2] === 'scales' ? 'scales' : 'mail',
+        spec: DRAGON_ARMOR_BY_COLOR.get(match[1]),
+        armorAlias: match[2] === 'scale armor',
+    };
+}
+
+function makeWishedDragonArmorObject(dragonWish = {}) {
+    const spec = dragonWish.random
+        ? DRAGON_ARMOR_SPECS[rn1(DRAGON_ARMOR_SPECS.length, 0)]
+        : dragonWish.spec;
+    if (!spec) return null;
+    const mail = dragonWish.type === 'mail';
+    if (mail && !dragonWish.random)
+        rn2(dragonWish.armorAlias ? 1 : 67);
+    const kind = `${spec.colorName} dragon ${mail ? 'scale mail' : 'scales'}`;
+    const otmp = mksobj(mail ? spec.mailOtyp : spec.scalesOtyp, true, false);
+    return Object.assign(otmp, {
+        cls: 'armor',
+        glyph: '[',
+        kind,
+        actualKind: kind,
+        color: spec.color,
+        _display_color: spec.color,
+        owt: 40,
+        dragonArmor: true,
+        dragonArmorKind: mail ? 'mail' : 'scales',
+        noArticle: !mail,
+        known: true,
+        wishedfor: true,
+    });
+}
+
 function wishedCorpseOverrideMonster(monster) {
     if (!monster) return null;
     if (monster.name === 'long worm tail')
@@ -6191,6 +6330,8 @@ function applyWishedQualifiers(item, qualifiers) {
 function applyWishedQuantity(item, wishedQuan, forceQuantity = false) {
     if (item?.globby) {
         applyWishedGlobQuantity(item, wishedQuan);
+    } else if (item?.dragonArmor) {
+        item.quan = 1;
     } else if (isTinObject(item)) {
         if (game.flags?.debug || wishedQuan < rnd(6))
             item.quan = wishedQuan;
@@ -6309,6 +6450,9 @@ function wishedBaseObjectFromName(lowerName, qualifiers = {}, originalName = low
 
     const specialSubstitution = substituteNonWizardSpecialWish(lowerName);
     if (specialSubstitution) return specialSubstitution;
+
+    const dragonArmorWish = parseWishedDragonArmorName(lowerName);
+    if (dragonArmorWish) return makeWishedDragonArmorObject(dragonArmorWish);
 
     const baseObject = WISH_BASE_OBJECTS.get(lowerName);
     if (baseObject) {
@@ -6775,6 +6919,7 @@ function pickupObjectPhrase(obj) {
     }
     if (count > 1) return `${count} ${name}`;
     if (obj.unique) return `the ${name}`;
+    if (obj.noArticle) return name;
     if (name.endsWith('boots') || name.endsWith('shoes') || name.endsWith('gloves') || name.startsWith('gauntlets'))
         return `a pair of ${name}`;
     const article = /^[aeiou]/i.test(name) || name === 'orcish helm' ? 'an' : 'a';
@@ -13634,9 +13779,10 @@ export async function rhack(_cmd) {
                 .replace(/^[a-zA-Z] - /, '')
                 .replace(/ \((?:being worn|weapon|alternate weapon).*$/, '');
             const spe = `${(item.spe ?? 0) >= 0 ? '+' : ''}${item.spe ?? 0}`;
+            const bareName = baseName.replace(/^(an?|the) /, '');
             const wornName = /[+-]\d/.test(baseName)
                 ? baseName
-                : `a ${spe} ${baseName.replace(/^(an?|the) /, '')}`;
+                : item.noArticle ? `${spe} ${bareName}` : `a ${spe} ${bareName}`;
             const acBonus = (ARMOR_AC_BONUS[String(item.kind || '').toLowerCase()] ?? 0) + (item.spe ?? 0);
             const kind = String(item.kind || '').toLowerCase();
             const delay = ARMOR_WEAR_DELAY[kind] || (/dragon scales?/.test(kind) ? 5 : 0);
@@ -14070,9 +14216,10 @@ export async function rhack(_cmd) {
                 .replace(/^[a-zA-Z] - /, '')
                 .replace(/ \((?:being worn|weapon|alternate weapon).*$/, '');
             const spe = `${(armor.spe ?? 0) >= 0 ? '+' : ''}${armor.spe ?? 0}`;
+            const bareName = baseName.replace(/^(an?|the) /, '');
             const wornName = /[+-]\d/.test(baseName)
                 ? baseName
-                : `a ${spe} ${baseName.replace(/^(an?|the) /, '')}`;
+                : armor.noArticle ? `${spe} ${bareName}` : `a ${spe} ${bareName}`;
             const acBonus = (ARMOR_AC_BONUS[String(armor.kind || '').toLowerCase()] ?? 0) + (armor.spe ?? 0);
             const kind = String(armor.kind || '').toLowerCase();
             const delay = ARMOR_WEAR_DELAY[kind] || (/dragon scales?/.test(kind) ? 5 : 0);
@@ -17702,9 +17849,10 @@ export async function rhack(_cmd) {
                     : `${erosionPrefix(item)}${pickupObjectName(item)}`;
             const displayQuan = item.quan || wishedQuan;
             const article = item.unique ? 'the'
+                : item.noArticle ? ''
                 : /^(?:.* )?(?:boots|gloves)$/.test(visibleName) ? 'a pair of'
                 : /^[aeiou]/i.test(visibleName) ? 'an' : 'a';
-            item.line = `${letter} - ${displayQuan > 1 ? `${displayQuan} ${visibleName}` : `${article} ${visibleName}`}`;
+            item.line = `${letter} - ${displayQuan > 1 ? `${displayQuan} ${visibleName}` : article ? `${article} ${visibleName}` : visibleName}`;
             game.inventory ??= [];
             game.inventory.push(item);
             game._pet_food_scan_inventory = game.inventory;
