@@ -813,6 +813,16 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   from the C range. The objects keep armor identity, dragon-hide weight/color,
   scale/scalemail AC, shop cost, pet/load weight, single-object quantity, and
   plural scale display/wear lines.
+- Wished alternate spellings now cover another `readobjnam()` slice from
+  upstream `testwish.lua`: scroll/spellbook `detect food` versus
+  `food detection`, plain `destroy armor`/`enchant weapon` scroll names,
+  `speedboots` and `boots of speed`, `plate armor`, ring accuracy aliases,
+  common food aliases, trap/tool aliases, and explicit `spellings[]` entries
+  such as `lantern`, `marker`, `camera`, `smooth shield`, `silver shield`,
+  giant/ogre-power gauntlets, and `elven chain mail`. Exact wished base armor
+  now uses specific armor object ids for ring mail, studded/leather armor,
+  plate mail, shield of reflection, and elven mithril-coat instead of the
+  generic armor fallback.
 
 Next concrete target:
 
