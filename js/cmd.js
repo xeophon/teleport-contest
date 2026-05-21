@@ -6,7 +6,7 @@ import { nhgetch } from './input.js';
 import { bot, cls, docrt, flush_screen, newsym, pline, refreshHallucinatedMap, show_glyph_cell, strengthString } from './display.js';
 import { couldsee, vision_recalc, vision_reset } from './vision.js';
 import { RANDOM_MONSTER_BY_NAME, SHOP_TYPES, artifactObjectName, enextoMonsterSpot, make_tutorial1_level, makemon, makeArtifactWishObject, mkcorpstat, mklev, mkobj_at, mksobj, monsterByRndName, nameObjectAsArtifact, next_ident, potionIndexForRoll, rndmonnum, scrollIndexForRoll, syncDungeonContext, u_on_dnstairs, u_on_rndspot, u_on_upstairs, wipe_engr_at, dropMonsterInventory, l_nhcore_init, getrumor, getbogusmon, level_difficulty, set_malign, somexyspace } from './mklev.js';
-import { ACCESSIBLE, A_CHA, A_CON, A_DEX, A_INT, A_MAX, A_STR, A_WIS, ALTAR, BC_BALL, BC_CHAIN, BEAR_TRAP, BLCORNER, BOLT_LIM, BRCORNER, CLOUD, COLNO, CORPSTAT_FEMALE, CORPSTAT_GENDER, CORPSTAT_HISTORIC, CORPSTAT_MALE, CORPSTAT_NEUTER, CORR, DOOR, BURN, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, DUST, ENGRAVE, ENGR_BLOOD, FOUNTAIN, GRAVE, HEADSTONE, HWALL, ICE, IN_SIGHT, IS_AIR, IS_OBSTRUCTED, IS_POOL, IS_ROOM, IS_WALL, In_endgame, In_quest, Is_earthlevel, Is_rogue_level, LADDER, LAVAPOOL, LAVAWALL, MAGIC_PORTAL, MARK, MM_NOMSG, NO_MINVENT, NORMAL_SPEED, OVERLOADED, P_BASIC, P_UNSKILLED, POOL, ROLLING_BOULDER_TRAP, ROOM, ROT_AGE, ROOMOFFSET, ROWNO, SCORR, SDOOR, SHOPBASE, SINK, STAIRS, STONE, TDWALL, TEMPLE, THRONE, TLCORNER, TRCORNER, TREE, TUWALL, VAULT, VWALL, WAND_BACKFIRE_CHANCE, WATER, ZAP_POS } from './const.js';
+import { ACCESSIBLE, A_CHA, A_CON, A_DEX, A_INT, A_MAX, A_STR, A_WIS, ALTAR, BC_BALL, BC_CHAIN, BEAR_TRAP, BLCORNER, BOLT_LIM, BRCORNER, CLOUD, COLNO, CORPSTAT_FEMALE, CORPSTAT_GENDER, CORPSTAT_HISTORIC, CORPSTAT_MALE, CORPSTAT_NEUTER, CORR, DOOR, BURN, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, DUST, ENGRAVE, ENGR_BLOOD, FOUNTAIN, GRAVE, HEADSTONE, HWALL, ICE, IN_SIGHT, IS_AIR, IS_OBSTRUCTED, IS_POOL, IS_ROOM, IS_WALL, In_endgame, In_quest, Is_earthlevel, Is_rogue_level, LADDER, LAVAPOOL, LAVAWALL, MAGIC_PORTAL, MARK, MM_NOMSG, MOAT, NO_MINVENT, NORMAL_SPEED, OVERLOADED, P_BASIC, P_UNSKILLED, POOL, ROLLING_BOULDER_TRAP, ROOM, ROT_AGE, ROOMOFFSET, ROWNO, SCORR, SDOOR, SHOPBASE, SINK, STAIRS, STONE, TDWALL, TEMPLE, THRONE, TLCORNER, TRCORNER, TREE, TUWALL, VAULT, VWALL, WAND_BACKFIRE_CHANCE, WATER, WT_IRON_BALL_BASE, WT_IRON_BALL_INCR, ZAP_POS } from './const.js';
 import { d, rn1, rn2, rn2_on_display_rng, rnd, rnl, rnz } from './rng.js';
 import { CLR_BLACK, CLR_BLUE, CLR_BRIGHT_BLUE, CLR_BRIGHT_CYAN, CLR_BRIGHT_GREEN, CLR_BROWN, CLR_CYAN, CLR_GRAY, CLR_GREEN, CLR_MAGENTA, CLR_ORANGE, CLR_RED, CLR_YELLOW, CLR_WHITE, NO_COLOR } from './terminal.js';
 import { vfsDeleteFile, vfsReadFile, vfsWriteFile } from './storage.js';
@@ -13115,7 +13115,7 @@ export async function rhack(_cmd) {
                 if (game._punishment_heavier_after_more) {
                     const punishment = game._punishment_heavier_after_more;
                     game._punishment_heavier_after_more = null;
-                    if (game.u?.uball) game.u.uball.owt = (game.u.uball.owt || 480) + 160 * (1 + (punishment.cursed ? 1 : 0));
+                    if (game.u?.uball) game.u.uball.owt = (game.u.uball.owt || WT_IRON_BALL_BASE) + WT_IRON_BALL_INCR * (1 + (punishment.cursed ? 1 : 0));
                     game._pending_message = 'Your iron ball gets heavier.';
                     game._message_more = 0;
                     game._keep_pending_message = 1;
@@ -13151,6 +13151,7 @@ export async function rhack(_cmd) {
                             actualKind: kind,
                             glyph,
                             color: CLR_CYAN,
+                            owt: otyp === IRON_CHAIN ? 120 : WT_IRON_BALL_BASE,
                             ox: game.u?.ux || 0,
                             oy: game.u?.uy || 0,
                             bknown: true,
@@ -17868,32 +17869,24 @@ export async function rhack(_cmd) {
             return;
         }
         if (isScroll && (scrollName === 'punishment' || item.scrollIndex === 18)) {
-            const rawLabel = String(item.kind || '');
-            const label = rawLabel.startsWith('scroll labeled ')
-                ? rawLabel.replace(/^scroll labeled /, '')
-                : game._object_descriptions?.scrolls?.[18];
-            game._discoveries ??= [];
-            const discovery = game._discoveries.find(entry => entry.section === 'Scrolls' && entry.name === 'scroll of punishment');
-            if (discovery) {
-                discovery.known = true;
-                discovery.text = label ? `scroll of punishment (${label})` : 'scroll of punishment';
-            } else {
-                game._discoveries.push({
-                    section: 'Scrolls',
-                    name: 'scroll of punishment',
-                    text: label ? `scroll of punishment (${label})` : 'scroll of punishment',
-                    starred: false,
-                    known: true,
-                });
-            }
+            const confusedReading = heroIsConfused();
+            const messages = scrollReadMessages(confusedReading);
             item.kind = 'punishment';
             item.actualKind = 'scroll of punishment';
             item.known = true;
             item.line = '';
             removeInventoryItem(item);
             rn2(19);
+            learnScrollByName('punishment', item, 18);
+            if (confusedReading || item.blessed) {
+                messages.push('You feel guilty.');
+                await setMessage(messages.join('  '), true);
+                game._command_mode = null;
+                game.context.move = 1;
+                return;
+            }
             game._punishment_after_more = { cursed: !!item.cursed };
-            await setMessage('As you read the scroll, it disappears.', true);
+            await setMessage(messages.join('  '), true);
             game._command_mode = null;
             game.context.move = 0;
             return;

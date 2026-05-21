@@ -906,6 +906,12 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   confused readings create stacks of rocks, Sokoban readings apply the luck
   penalty, boulder drops can affect monsters and liquids, and the scroll is only
   identified when the gated earth effect actually occurs.
+- Scroll of punishment now follows the key C `seffect_punishment()` split:
+  the scroll always identifies and consumes, blessed or confused readings only
+  make the hero feel guilty, confused cursed readings do not punish, and
+  already-punished cursed readings use the C iron-ball weight increment. The
+  command terrain paths also import the C `MOAT` terrain constant instead of
+  crashing when moat descriptions or movement checks are reached.
 - Scroll of stinking cloud now follows the C read flow: unknown scrolls identify
   before prompting, known scrolls include "stinking" in the target prompt,
   cancel and invalid targets consume the scroll without creating a cloud,
