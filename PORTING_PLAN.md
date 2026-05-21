@@ -933,6 +933,12 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   summons the hero type, live/current saved-level monsters are culled when their
   type is marked, `#genocided` and conduct report the persistent genocide list,
   and random `makemon()` selection now skips marked species.
+- Scroll of light now follows the C `seffect_light()`/`litroom()` split more
+  closely: sighted ordinary readings identify, blind ordinary readings can fall
+  through to the scroll-calling prompt, blessed scrolls use radius 9, water and
+  swallow cases only give feedback, cursed readings snuff carried lights and
+  darken the visible area, Rogue rooms use room-wide lighting, and confused
+  readings create tame cancelled yellow or black lights.
 - Monster-class row ordering no longer depends on Node 22's
   `Array.prototype.toSorted()`: the JS `mkclass` metadata path now uses an
   explicit copied difficulty sort that preserves equal-difficulty order, matching

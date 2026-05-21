@@ -6,7 +6,7 @@ import { nhgetch } from './input.js';
 import { bot, cls, docrt, flush_screen, newsym, pline, refreshHallucinatedMap, show_glyph_cell, strengthString } from './display.js';
 import { couldsee, vision_recalc, vision_reset } from './vision.js';
 import { RANDOM_MONSTER_BY_NAME, SHOP_TYPES, artifactObjectName, enextoMonsterSpot, make_tutorial1_level, makemon, makeArtifactWishObject, mkcorpstat, mklev, mkobj_at, mksobj, monsterByRndName, nameObjectAsArtifact, next_ident, potionIndexForRoll, rndmonnum, scrollIndexForRoll, syncDungeonContext, u_on_dnstairs, u_on_rndspot, u_on_upstairs, wipe_engr_at, dropMonsterInventory, l_nhcore_init, getrumor, getbogusmon, level_difficulty, set_malign, somexyspace } from './mklev.js';
-import { ACCESSIBLE, A_CHA, A_CON, A_DEX, A_INT, A_MAX, A_STR, A_WIS, ALTAR, BC_BALL, BC_CHAIN, BEAR_TRAP, BLCORNER, BOLT_LIM, BRCORNER, CLOUD, COLNO, CORPSTAT_FEMALE, CORPSTAT_GENDER, CORPSTAT_HISTORIC, CORPSTAT_MALE, CORPSTAT_NEUTER, CORR, DOOR, BURN, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, DUST, ENGRAVE, ENGR_BLOOD, FOUNTAIN, GRAVE, HEADSTONE, HWALL, ICE, IN_SIGHT, IS_AIR, IS_OBSTRUCTED, IS_POOL, IS_ROOM, IS_WALL, In_endgame, In_quest, Is_earthlevel, Is_rogue_level, LADDER, LAVAPOOL, LAVAWALL, MAGIC_PORTAL, MARK, MM_NOMSG, MOAT, NO_MINVENT, NORMAL_SPEED, OVERLOADED, P_BASIC, P_UNSKILLED, POOL, ROLLING_BOULDER_TRAP, ROOM, ROT_AGE, ROOMOFFSET, ROWNO, SCORR, SDOOR, SHOPBASE, SINK, STAIRS, STONE, TDWALL, TEMPLE, THRONE, TLCORNER, TRCORNER, TREE, TUWALL, VAULT, VWALL, WAND_BACKFIRE_CHANCE, WATER, WT_IRON_BALL_BASE, WT_IRON_BALL_INCR, ZAP_POS } from './const.js';
+import { ACCESSIBLE, A_CHA, A_CON, A_DEX, A_INT, A_MAX, A_STR, A_WIS, ALTAR, BC_BALL, BC_CHAIN, BEAR_TRAP, BLCORNER, BOLT_LIM, BRCORNER, CLOUD, COLNO, CORPSTAT_FEMALE, CORPSTAT_GENDER, CORPSTAT_HISTORIC, CORPSTAT_MALE, CORPSTAT_NEUTER, CORR, DOOR, BURN, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, DUST, ENGRAVE, ENGR_BLOOD, FOUNTAIN, GRAVE, HEADSTONE, HWALL, ICE, IN_SIGHT, IS_AIR, IS_OBSTRUCTED, IS_POOL, IS_ROOM, IS_WALL, In_endgame, In_quest, Is_earthlevel, Is_rogue_level, Is_waterlevel, LADDER, LAVAPOOL, LAVAWALL, MAGIC_PORTAL, MARK, MM_EDOG, MM_NOMSG, MOAT, NO_MINVENT, NORMAL_SPEED, OVERLOADED, P_BASIC, P_UNSKILLED, POOL, ROLLING_BOULDER_TRAP, ROOM, ROT_AGE, ROOMOFFSET, ROWNO, SCORR, SDOOR, SHOPBASE, SINK, STAIRS, STONE, TDWALL, TEMPLE, THRONE, TLCORNER, TRCORNER, TREE, TUWALL, VAULT, VWALL, WAND_BACKFIRE_CHANCE, WATER, WT_IRON_BALL_BASE, WT_IRON_BALL_INCR, ZAP_POS } from './const.js';
 import { d, rn1, rn2, rn2_on_display_rng, rnd, rnl, rnz } from './rng.js';
 import { CLR_BLACK, CLR_BLUE, CLR_BRIGHT_BLUE, CLR_BRIGHT_CYAN, CLR_BRIGHT_GREEN, CLR_BROWN, CLR_CYAN, CLR_GRAY, CLR_GREEN, CLR_MAGENTA, CLR_ORANGE, CLR_RED, CLR_YELLOW, CLR_WHITE, NO_COLOR } from './terminal.js';
 import { vfsDeleteFile, vfsReadFile, vfsWriteFile } from './storage.js';
@@ -7026,6 +7026,135 @@ function scrollDiscoveryKnown(scrollName) {
     const discoveryName = `scroll of ${scrollName}`;
     return (game._discoveries || [])
         .some(entry => entry.section === 'Scrolls' && entry.name === discoveryName && entry.known !== false);
+}
+
+function scrollCallLabel(item, scrollIndex, fallback = 'ZELGO MER') {
+    const kind = String(item?.kind || '');
+    if (kind.startsWith('scroll labeled '))
+        return kind.replace(/^scroll labeled /, '') || fallback;
+    return game._object_descriptions?.scrolls?.[scrollIndex] || fallback;
+}
+
+function lightScrollReadMessages(confusedReading) {
+    const messages = [game.u?.blind
+        ? 'As you pronounce the formula on it, the scroll disappears.'
+        : 'As you read the scroll, it disappears.'];
+    if (confusedReading)
+        messages.push(game.u?.hallucinating ? 'Being so trippy, you screw up...' : 'Being confused, you mispronounce the magic words...');
+    return messages;
+}
+
+function lightScrollNoOpLevel() {
+    return !!(game.u?.uswallow || game.u?.underwater || game.u?.uunderwater || Is_waterlevel(game.u?.uz));
+}
+
+function setLightScrollCell(x, y, on) {
+    const loc = game.level?.at(x, y);
+    if (!loc) return false;
+    loc.lit = !!on;
+    loc.waslit = !!on;
+    if (on) loc._litScrollWhite = true;
+    else delete loc._litScrollWhite;
+    newsym(x, y);
+    return true;
+}
+
+function applyLightScrollArea(on, item) {
+    const ux = game.u?.ux || 0;
+    const uy = game.u?.uy || 0;
+    const rogueLevel = Is_rogue_level(game.u?.uz) || game.level?.flags?.rogue_level;
+    if (rogueLevel) {
+        const room = levelRoomByRoomno(game.level?.at(ux, uy)?.roomno || 0);
+        if (!room) return;
+        for (let x = Math.max(1, (room.lx ?? ux) - 1); x <= Math.min(COLNO - 1, (room.hx ?? ux) + 1); x++)
+            for (let y = Math.max(0, (room.ly ?? uy) - 1); y <= Math.min(ROWNO - 1, (room.hy ?? uy) + 1); y++)
+                setLightScrollCell(x, y, on);
+        room.rlit = on ? 1 : 0;
+        return;
+    }
+
+    const radius = item.blessed ? 9 : 5;
+    const radius2 = radius * radius;
+    for (let y = Math.max(0, uy - radius); y <= Math.min(ROWNO - 1, uy + radius); y++) {
+        for (let x = Math.max(1, ux - radius); x <= Math.min(COLNO - 1, ux + radius); x++) {
+            if ((x - ux) ** 2 + (y - uy) ** 2 > radius2) continue;
+            if (!couldsee(x, y)) continue;
+            setLightScrollCell(x, y, on);
+        }
+    }
+}
+
+function snuffCarriedLightsForScroll(messages) {
+    for (const obj of game.inventory || []) {
+        if (!(obj.lamplit || obj.burning)) continue;
+        obj.lamplit = false;
+        obj.burning = false;
+        delete obj._burnTimer;
+        delete obj.litRadius;
+        updateChargedItemLine(obj);
+        if (!game.u?.blind) messages.push(`${chargingObjectSubject(obj)} goes out!`);
+    }
+}
+
+function lightScrollLitroom(on, item, messages) {
+    const blind = !!game.u?.blind;
+    const noOp = lightScrollNoOpLevel();
+    if (!on) {
+        snuffCarriedLightsForScroll(messages);
+        if (!blind)
+            messages.push(game.u?.uswallow ? 'It seems even darker in here than before.' : 'You are surrounded by darkness!');
+    } else if (!blind) {
+        if (game.u?.uswallow && game.u?.ustuck)
+            messages.push(`${fireScrollMonsterName(game.u.ustuck)} is lit.`);
+        else if (!(Is_rogue_level(game.u?.uz) || game.level?.flags?.rogue_level) || game.level?.at(game.u?.ux || 0, game.u?.uy || 0)?.typ !== CORR)
+            messages.push(`A lit field ${noOp ? 'briefly ' : ''}surrounds you!`);
+    }
+
+    if (noOp) return;
+    applyLightScrollArea(on, item);
+    vision_recalc(0);
+    game.vision_full_recalc = 1;
+}
+
+function lightScrollMonsterVisible(mon) {
+    return !!mon && !game.u?.blind && !mon.mundetected
+        && (!mon.minvis || game.u?.seeInvisible)
+        && !!(game.viz_array?.[mon.my]?.[mon.mx] & IN_SIGHT);
+}
+
+async function createConfusedLightScrollMonsters(item, messages) {
+    const data = monsterByRndName(item.cursed ? 'black light' : 'yellow light');
+    if (!data) {
+        messages.push('Tiny lights sparkle in the air momentarily.');
+        return false;
+    }
+    const created = [];
+    const count = rn1(2, 3) + (item.blessed ? 2 : 0);
+    for (let i = 0; i < count; i++) {
+        const mon = await makemon(data, game.u?.ux || 0, game.u?.uy || 0, MM_EDOG | NO_MINVENT | MM_NOMSG);
+        if (!mon) continue;
+        mon.pet = true;
+        mon.mtame = Math.max(mon.mtame || 0, baseScrollTameness(mon));
+        mon.mpeaceful = 1;
+        mon.msleeping = 0;
+        mon.mcan = true;
+        ensurePetExtension(mon);
+        created.push(mon);
+        newsym(mon.mx, mon.my);
+    }
+    if (created.length) vision_recalc(0);
+    const sawLights = created.some(lightScrollMonsterVisible);
+    if (sawLights) messages.push('Lights appear all around you!');
+    return sawLights;
+}
+
+async function lightScrollEffect(item, messages) {
+    if (heroIsConfused()) {
+        return { learned: await createConfusedLightScrollMonsters(item, messages) };
+    }
+    const learned = !game.u?.blind;
+    lightScrollLitroom(!item.cursed, item, messages);
+    return { learned };
 }
 
 function wandTypeName(item) {
@@ -18155,44 +18284,23 @@ export async function rhack(_cmd) {
             return;
         }
         if (isScroll && (scrollName === 'light' || item.scrollIndex === 9)) {
-            const label = String(item.kind || '').replace(/^scroll labeled /, '')
-                || game._object_descriptions?.scrolls?.[9];
-            game._discoveries ??= [];
-            const discovery = game._discoveries.find(entry => entry.section === 'Scrolls' && entry.name === 'scroll of light');
-            if (discovery) {
-                discovery.known = true;
-                discovery.text = label ? `scroll of light (${label})` : 'scroll of light';
-            } else {
-                game._discoveries.push({
-                    section: 'Scrolls',
-                    name: 'scroll of light',
-                    text: label ? `scroll of light (${label})` : 'scroll of light',
-                    starred: false,
-                    known: true,
-                });
-            }
+            const confusedReading = heroIsConfused();
+            const alreadyKnown = scrollDiscoveryKnown('light')
+                || item.known === true
+                || item.actualKind === 'scroll of light'
+                || item.kind === 'light'
+                || item.kind === 'scroll of light';
+            const callLabel = scrollCallLabel(item, 9);
+            const messages = lightScrollReadMessages(confusedReading);
             removeInventoryItem(item);
             rn2(19);
-            rn2(19);
-            learnObjectScore('Scrolls', 'scroll of light');
-            for (let y = Math.max(0, (game.u?.uy || 0) - 5); y <= Math.min(ROWNO - 1, (game.u?.uy || 0) + 5); y++) {
-                for (let x = Math.max(1, (game.u?.ux || 0) - 5); x <= Math.min(COLNO - 1, (game.u?.ux || 0) + 5); x++) {
-                    if ((x - (game.u?.ux || 0)) ** 2 + (y - (game.u?.uy || 0)) ** 2 > 25) continue;
-                    if (!couldsee(x, y)) continue;
-                    const loc = game.level?.at(x, y);
-                    if (!loc || loc.typ === STONE) continue;
-                    loc.lit = !item.cursed;
-                    loc.waslit = !item.cursed;
-                    loc._litScrollWhite = !item.cursed;
-                    newsym(x, y);
-                }
-            }
-            vision_recalc();
-            await setMessage(item.cursed
-                ? 'As you read the scroll, it disappears.  You are surrounded by darkness!'
-                : 'As you read the scroll, it disappears.  A lit field surrounds you!');
-            game._command_mode = null;
-            game.context.move = 1;
+            const result = await lightScrollEffect(item, messages);
+            if (result.learned) learnScrollByName('light', item, 9);
+            const shouldCall = !alreadyKnown && !result.learned;
+            await setMessage(messages.join('  '), confusedReading || shouldCall);
+            game._command_mode = shouldCall ? 'callScrollAfterMore' : null;
+            if (shouldCall) game._call_scroll_label = callLabel;
+            game.context.move = shouldCall ? 0 : 1;
             return;
         }
         if (item?.cls === 'spellbook') {
