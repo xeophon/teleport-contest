@@ -660,6 +660,11 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   branch. Artifact existence is registered through shared helpers, duplicate
   wishes return the base object, and the C `rn2(nartifact_exist())` abuse roll
   is consumed for non-current-role artifacts even on the current debug wish path.
+  The helper also models the non-wizard disappearance result and C's artifact
+  object-name display quirk which downcases `The` after `named`. Artifact
+  display now derives from the artifact field, artifact wishes clamp quantity
+  to one, cached inventory lines no longer override artifact names, and
+  `#name` refuses to rename existing artifacts.
 - Wizard `#polyself` rehumanization no longer restores fixed public-looking HP,
   energy, and AC values. The interim `newman()` path now derives human-form
   stats from the saved live base form while preserving the current C-shaped RNG

@@ -3181,6 +3181,15 @@ export function recordArtifactExistence(name) {
     game._artifact_count = Math.max(game._artifact_count || 0, game._artifacts_exist.length);
 }
 
+function clearArtifactExistence(name) {
+    if (!Array.isArray(game._artifacts_exist)) {
+        game._artifact_count = 0;
+        return;
+    }
+    game._artifacts_exist = game._artifacts_exist.filter(artifact => artifact !== name);
+    game._artifact_count = game._artifacts_exist.length;
+}
+
 function isCurrentRoleQuestArtifact(def) {
     return !!def?.questRole && def.questRole === (game._startup_role || game.urole?.name?.m);
 }
@@ -3198,36 +3207,57 @@ function artifactBaseFields(def) {
 
 function applyArtifactFields(otmp, def, extra = {}) {
     Object.assign(otmp, artifactBaseFields(def), {
-        kind: `${def.base} named ${def.name}`,
+        kind: artifactObjectNameForDef(def),
         artifact: def.name,
     }, extra);
     recordArtifactExistence(def.name);
     return otmp;
 }
 
-export function makeArtifactWishObject(name) {
+function artifactObjectNameForDef(def) {
+    if (!def) return '';
+    return `${def.base} named ${def.name.replace(/^The /, 'the ')}`;
+}
+
+export function artifactObjectName(obj) {
+    const def = ARTIFACT_DEFS.find(candidate => candidate.name === obj?.artifact);
+    return def ? artifactObjectNameForDef(def) : (obj?.kind || '');
+}
+
+export function makeArtifactWishObject(name, options = {}) {
     const def = artifactDefinitionForWishName(name);
     if (!def) return null;
+    const wizardMode = options.wizardMode ?? !!game.flags?.debug;
     const otmp = mksobj(def.otyp, true, false);
     if (artifactExists(def.name)) {
-        Object.assign(otmp, artifactBaseFields(def), { wishedfor: true });
+        Object.assign(otmp, artifactBaseFields(def), { wishedfor: true, _artifact_wish_name: true });
         return otmp;
     }
-    applyArtifactFields(otmp, def, { wishedfor: true });
-    if (!isCurrentRoleQuestArtifact(def)) rn2(Math.max(1, nartifact_exist()));
+    applyArtifactFields(otmp, def, { wishedfor: true, _artifact_wish_name: true });
+    const abuseBlocked = isCurrentRoleQuestArtifact(def)
+        || rn2(Math.max(1, nartifact_exist())) > 1;
+    if (abuseBlocked && !wizardMode) {
+        clearArtifactExistence(def.name);
+        return {
+            _wish_disappeared: true,
+            _artifact_wish_name: true,
+            _wish_disappear_message: 'For a moment, you feel something in your hands, but it disappears!',
+        };
+    }
     return otmp;
 }
 
 function artifactObjectBaseName(obj) {
-    const explicit = String(obj?.actualKind || obj?.kind || '').replace(/ named .+$/i, '');
-    if (explicit) return explicit;
+    const actual = String(obj?.actualKind || '').replace(/ named .+$/i, '');
+    if (actual) return actual;
     const def = ARTIFACT_DEFS.find(candidate => candidate.otyp === obj?.otyp);
-    return def?.base || '';
+    if (def?.base) return def.base;
+    return String(obj?.kind || '').replace(/ named .+$/i, '');
 }
 
 export function nameObjectAsArtifact(obj, name) {
     const def = artifactDefinitionForName(name);
-    if (!obj || !def || !def.nameable || artifactExists(def.name) || (obj.quan || 1) > 1) return false;
+    if (!obj || obj.artifact || !def || !def.nameable || artifactExists(def.name) || (obj.quan || 1) > 1) return false;
     if (artifactKey(artifactObjectBaseName(obj)) !== artifactKey(def.base)) return false;
     applyArtifactFields(obj, def);
     return true;
