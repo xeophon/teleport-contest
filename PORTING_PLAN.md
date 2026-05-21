@@ -665,6 +665,12 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   display now derives from the artifact field, artifact wishes clamp quantity
   to one, cached inventory lines no longer override artifact names, and
   `#name` refuses to rename existing artifacts.
+- Wished object instance names now keep the C `readobjnam_postparse1()` ordering:
+  full `base named Artifact` phrases are offered to the artifact path first,
+  then ordinary ` named ` clauses are stripped from the lookup name and stored
+  as object-name metadata for display. The same slice also resolves wished
+  `scroll labeled ...` and `scroll labelled "..."` phrases through the current
+  shuffled scroll labels before creating the exact scroll object.
 - Wizard `#polyself` rehumanization no longer restores fixed public-looking HP,
   energy, and AC values. The interim `newman()` path now derives human-form
   stats from the saved live base form while preserving the current C-shaped RNG

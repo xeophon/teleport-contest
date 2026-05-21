@@ -5705,10 +5705,51 @@ function applyWishedTinVariety(item) {
     }
 }
 
-function wishedObjectFromName(lowerName, qualifiers = {}) {
-    const artifact = makeArtifactWishObject(lowerName, { wizardMode: !!game.flags?.debug });
+function splitWishedTextClause(text, clause) {
+    const match = String(text || '').match(new RegExp(`\\s+${clause}\\s+`, 'i'));
+    if (!match) return null;
+    return {
+        base: String(text).slice(0, match.index).trim(),
+        tail: String(text).slice(match.index + match[0].length).trim(),
+    };
+}
+
+function unquoteWishedText(text) {
+    const trimmed = String(text || '').trim();
+    const quoted = trimmed.match(/^"([^"]*)"$/) || trimmed.match(/^'([^']*)'$/);
+    return (quoted ? quoted[1] : trimmed).trim();
+}
+
+function wishedLabelKey(text) {
+    return unquoteWishedText(text).toLowerCase().replace(/\s+/g, ' ');
+}
+
+function parseWishedScrollLabel(name) {
+    const match = String(name || '').trim().match(/^scrolls?\s+labell?ed\s+(.+)$/i);
+    return match ? unquoteWishedText(match[1]) : '';
+}
+
+function applyWishedInstanceName(item, name) {
+    const objectName = String(name || '').trim();
+    if (!item || !objectName || item.artifact) return;
+    item.oname = objectName;
+    item._wish_object_name = objectName;
+}
+
+function wishedObjectFromName(name, qualifiers = {}) {
+    const wishName = String(name || '').trim();
+    const lowerWishName = wishName.toLowerCase();
+    const artifact = makeArtifactWishObject(lowerWishName, { wizardMode: !!game.flags?.debug });
     if (artifact) return artifact;
 
+    const named = splitWishedTextClause(wishName, 'named');
+    const baseName = named?.base || wishName;
+    const item = wishedBaseObjectFromName(baseName.toLowerCase(), qualifiers, baseName);
+    if (named?.tail) applyWishedInstanceName(item, named.tail);
+    return item;
+}
+
+function wishedBaseObjectFromName(lowerName, qualifiers = {}, originalName = lowerName) {
     const tinWish = parseWishedTinName(lowerName);
     if (tinWish) return makeWishedTinObject(tinWish);
 
@@ -5823,6 +5864,27 @@ function wishedObjectFromName(lowerName, qualifiers = {}) {
     }
 
     if (lowerName.includes('scroll')) {
+        const wishedLabel = parseWishedScrollLabel(originalName);
+        if (wishedLabel) {
+            const labelKey = wishedLabelKey(wishedLabel);
+            const scrollIndex = (game._object_descriptions?.scrolls || [])
+                .findIndex(label => wishedLabelKey(label) === labelKey);
+            if (scrollIndex >= 0) {
+                rn2(SCROLL_WISH_PROBS[scrollIndex] + 1);
+                const otmp = mksobj(SCR_ENCHANT_ARMOR + scrollIndex, true, false);
+                const label = game._object_descriptions?.scrolls?.[scrollIndex] || wishedLabel;
+                const scrollName = IDENTIFIED_SCROLL_NAMES[scrollIndex];
+                return Object.assign(otmp, {
+                    cls: 'scroll',
+                    glyph: '?',
+                    kind: `scroll labeled ${label}`,
+                    actualKind: `scroll of ${scrollName}`,
+                    scrollIndex,
+                    known: false,
+                    wishedfor: true,
+                });
+            }
+        }
         const scrollName = lowerName.replace(/^scrolls?(?: of)?\s+/, '');
         if ((qualifiers.unlabeled && /^scrolls?$/.test(lowerName)) || scrollName === 'blank paper')
             return makeBlankScrollWishObject();
@@ -5942,100 +6004,108 @@ function dataPagerLines(name, page) {
     return rows;
 }
 
+function maybeWishedInstanceName(obj, baseName) {
+    const objectName = String(obj?._wish_object_name || '').trim();
+    const name = String(baseName || '');
+    if (!objectName || obj?.artifact || / named .+$/i.test(name)) return name;
+    return `${name} named ${objectName}`;
+}
+
 export function pickupObjectName(obj) {
+    const named = name => maybeWishedInstanceName(obj, name);
     if (obj.otyp === GOLD_PIECE || obj.cls === 'coin' || obj.glyph === '$')
         return (obj.quan || 1) > 1 ? 'gold pieces' : 'gold piece';
     if (obj.artifact) return artifactObjectName(obj) || obj.kind;
     if (obj.otyp === 'corpse' || obj.otyp === CORPSE) return `${obj.corpsenm?.name || 'monster'} corpse`;
     if ((obj.kind === 'statue' || obj.otyp === STATUE) && obj.corpsenm?.name) return `statue of a ${obj.corpsenm.name}`;
-    if (isTinObject(obj)) return tinObjectName(obj);
-    if (obj.otyp === LARGE_BOX) return 'large box';
-    if (obj.otyp === CHEST) return 'chest';
-    if (obj.otyp === ICE_BOX) return 'ice box';
-    if (BAG_OBJECT_TYPES.has(obj.otyp)) return obj.contents?.length || !obj.cknown ? 'bag' : 'empty bag';
-    if (obj.otyp === OIL_LAMP || obj.otyp === MAGIC_LAMP) return maybeLitObjectName(obj, 'lamp');
-    if (obj.otyp === BRASS_LANTERN) return maybeLitObjectName(obj, 'brass lantern');
+    if (isTinObject(obj)) return named(tinObjectName(obj));
+    if (obj.otyp === LARGE_BOX) return named('large box');
+    if (obj.otyp === CHEST) return named('chest');
+    if (obj.otyp === ICE_BOX) return named('ice box');
+    if (BAG_OBJECT_TYPES.has(obj.otyp)) return named(obj.contents?.length || !obj.cknown ? 'bag' : 'empty bag');
+    if (obj.otyp === OIL_LAMP || obj.otyp === MAGIC_LAMP) return named(maybeLitObjectName(obj, 'lamp'));
+    if (obj.otyp === BRASS_LANTERN) return named(maybeLitObjectName(obj, 'brass lantern'));
     if (obj.otyp === TALLOW_CANDLE || obj.otyp === WAX_CANDLE) {
         const name = obj.kind || (obj.otyp === WAX_CANDLE ? 'wax candle' : 'tallow candle');
-        return maybeLitObjectName(obj, (obj.quan || 1) > 1 ? obj.plural || `${name}s` : name);
+        return named(maybeLitObjectName(obj, (obj.quan || 1) > 1 ? obj.plural || `${name}s` : name));
     }
     if (obj.otyp === SCROLL_CLASS || obj.cls === 'scroll') {
-        if ((obj.quan || 1) > 1 && obj.plural) return obj.plural;
+        if ((obj.quan || 1) > 1 && obj.plural) return named(obj.plural);
         const blankScroll = obj.otyp === SCR_BLANK_PAPER || obj.scrollIndex === 21
             || obj.kind === 'blank paper' || (obj.scrollIndex == null && !obj.kind);
         if (blankScroll) {
             if (obj.known === true || obj.actualKind === 'scroll of blank paper')
-                return (obj.quan || 1) > 1 ? 'scrolls of blank paper' : 'scroll of blank paper';
-            return (obj.quan || 1) > 1 ? 'unlabeled scrolls' : 'unlabeled scroll';
+                return named((obj.quan || 1) > 1 ? 'scrolls of blank paper' : 'scroll of blank paper');
+            return named((obj.quan || 1) > 1 ? 'unlabeled scrolls' : 'unlabeled scroll');
         }
         if (obj.kind?.startsWith?.('scroll:')) {
             const name = obj.kind.slice(7);
-            return (obj.quan || 1) > 1 ? `scrolls of ${name}` : obj.singular || `scroll of ${name}`;
+            return named((obj.quan || 1) > 1 ? `scrolls of ${name}` : obj.singular || `scroll of ${name}`);
         }
         if (obj.kind?.startsWith?.('scroll labeled ')) {
             const label = obj.kind.slice('scroll labeled '.length);
-            return (obj.quan || 1) > 1 ? `scrolls labeled ${label}` : obj.kind;
+            return named((obj.quan || 1) > 1 ? `scrolls labeled ${label}` : obj.kind);
         }
-        if (obj.kind === 'stamped scroll') return (obj.quan || 1) > 1 ? 'stamped scrolls' : obj.kind;
+        if (obj.kind === 'stamped scroll') return named((obj.quan || 1) > 1 ? 'stamped scrolls' : obj.kind);
         if (obj.kind) {
             const name = obj.kind.replace(/^scroll of /, '');
-            return (obj.quan || 1) > 1 ? `scrolls of ${name}` : `scroll of ${name}`;
+            return named((obj.quan || 1) > 1 ? `scrolls of ${name}` : `scroll of ${name}`);
         }
         const label = game._object_descriptions?.scrolls?.[obj.scrollIndex] || 'ZELGO MER';
-        return (obj.quan || 1) > 1 ? `scrolls labeled ${label}` : `scroll labeled ${label}`;
+        return named((obj.quan || 1) > 1 ? `scrolls labeled ${label}` : `scroll labeled ${label}`);
     }
     if (obj.otyp === POTION_CLASS || obj.cls === 'potion') {
-        if ((obj.quan || 1) > 1 && obj.plural) return obj.plural;
-        if (obj.kind?.startsWith?.('potion:')) return maybeLitObjectName(obj, maybeDilutedPotionName(obj, obj.singular || `potion of ${obj.kind.slice(7)}`));
+        if ((obj.quan || 1) > 1 && obj.plural) return named(obj.plural);
+        if (obj.kind?.startsWith?.('potion:')) return named(maybeLitObjectName(obj, maybeDilutedPotionName(obj, obj.singular || `potion of ${obj.kind.slice(7)}`)));
         const rawKind = String(obj.kind || '').replace(/^potion of /, '');
         if (rawKind === 'water' && (obj.blessed || obj.cursed)) {
             const kind = obj.blessed ? 'holy water' : 'unholy water';
-            return (obj.quan || 1) > 1 ? `potions of ${kind}` : `potion of ${kind}`;
+            return named((obj.quan || 1) > 1 ? `potions of ${kind}` : `potion of ${kind}`);
         }
         if (obj.kind === 'holy water' || obj.kind === 'unholy water')
-            return (obj.quan || 1) > 1 ? `potions of ${obj.kind}` : `potion of ${obj.kind}`;
-        if (obj.kind?.endsWith?.(' potion')) return maybeLitObjectName(obj, maybeDilutedPotionName(obj, obj.kind));
+            return named((obj.quan || 1) > 1 ? `potions of ${obj.kind}` : `potion of ${obj.kind}`);
+        if (obj.kind?.endsWith?.(' potion')) return named(maybeLitObjectName(obj, maybeDilutedPotionName(obj, obj.kind)));
         if (obj.kind) {
             const name = obj.kind.replace(/^potion of /, '');
-            return maybeLitObjectName(obj, maybeDilutedPotionName(obj, (obj.quan || 1) > 1 ? `potions of ${name}` : `potion of ${name}`));
+            return named(maybeLitObjectName(obj, maybeDilutedPotionName(obj, (obj.quan || 1) > 1 ? `potions of ${name}` : `potion of ${name}`)));
         }
         const appearance = game._object_descriptions?.potions?.[obj.potionIndex]?.description || 'clear';
-        return maybeLitObjectName(obj, maybeDilutedPotionName(obj, `${appearance} potion`));
+        return named(maybeLitObjectName(obj, maybeDilutedPotionName(obj, `${appearance} potion`)));
     }
     if (obj.otyp === WAND_CLASS || obj.cls === 'wand') {
         if (obj.known === false) {
             const appearance = game._object_descriptions?.wands?.[obj.wandIndex]?.description;
-            return appearance ? `${appearance} wand` : 'wand';
+            return named(appearance ? `${appearance} wand` : 'wand');
         }
-        if (obj.wand === 'sleep' || obj.wandIndex === 22) return 'wand of sleep';
-        if (obj.kind && obj.kind !== 'sleep') return obj.kind.startsWith('wand') ? obj.kind : `wand of ${obj.kind}`;
+        if (obj.wand === 'sleep' || obj.wandIndex === 22) return named('wand of sleep');
+        if (obj.kind && obj.kind !== 'sleep') return named(obj.kind.startsWith('wand') ? obj.kind : `wand of ${obj.kind}`);
         const appearance = game._object_descriptions?.wands?.[obj.wandIndex]?.description;
-        return appearance ? `${appearance} wand` : 'wand';
+        return named(appearance ? `${appearance} wand` : 'wand');
     }
     if (obj.cls === 'spellbook' || obj.otyp === SPBOOK_NO_NOVEL || obj.otyp === SPE_HEALING) {
-        if ((obj.quan || 1) > 1 && obj.plural) return obj.plural;
+        if ((obj.quan || 1) > 1 && obj.plural) return named(obj.plural);
         const name = obj.spellName || obj.spell?.name || String(obj.kind || '').replace(/^spellbook(?: of)? /, '');
         if (obj.known === false || (obj.otyp === SPE_HEALING && !obj.cls) || (obj.otyp === SPBOOK_NO_NOVEL && !name)) {
             const appearance = obj.appearance || game._object_descriptions?.spellbooks?.[
                 obj.spellbookIndex ?? HEALING_SPELLBOOK_APPEARANCE_INDEX
             ];
-            if (appearance) return `${appearance} spellbook`;
+            if (appearance) return named(`${appearance} spellbook`);
         }
-        if (!name) return 'spellbook';
-        return (obj.quan || 1) > 1 ? `spellbooks of ${name}` : `spellbook of ${name}`;
+        if (!name) return named('spellbook');
+        return named((obj.quan || 1) > 1 ? `spellbooks of ${name}` : `spellbook of ${name}`);
     }
     if (obj.glyph === '=' || obj.cls === 'ring') {
         if (typeof obj.kind !== 'string')
-            return `${game._object_descriptions?.rings?.[(obj.ringRoll || 1) - 1] || 'ruby'} ring`;
-        return obj.kind;
+            return named(`${game._object_descriptions?.rings?.[(obj.ringRoll || 1) - 1] || 'ruby'} ring`);
+        return named(obj.kind);
     }
     if (obj.fakeAmuletOfYendor) return obj.known ? obj.actualKind : 'Amulet of Yendor';
     if (obj.otyp === AMULET_CLASS || obj.cls === 'amulet') {
         if (obj.known === false || !obj.kind) {
             const appearance = obj.appearance || game._object_descriptions?.amulets?.[obj.amuletIndex] || 'amulet';
-            return `${appearance} amulet`;
+            return named(`${appearance} amulet`);
         }
-        return obj.kind || 'amulet';
+        return named(obj.kind || 'amulet');
     }
     if (obj.cls === 'armor') {
         const kind = String(obj.actualKind || obj.kind || '').toLowerCase();
@@ -6049,43 +6119,43 @@ export function pickupObjectName(obj) {
             });
         if (!typeKnown && (obj.appearance || armorAppearance)) {
             const [group, index, fallback] = armorAppearance || [];
-            return obj.appearance || game._object_descriptions?.[group]?.[index] || fallback;
+            return named(obj.appearance || game._object_descriptions?.[group]?.[index] || fallback);
         }
-        return obj.kind || 'armor';
+        return named(obj.kind || 'armor');
     }
-    if (obj.otyp === MIRROR) return 'looking glass';
+    if (obj.otyp === MIRROR) return named('looking glass');
     if (obj.otyp === DART || obj.kind === 'dart') {
         const poisoned = obj.opoisoned ? 'poisoned ' : '';
-        return (obj.quan || 1) > 1 ? `${poisoned}darts` : `${poisoned}dart`;
+        return named((obj.quan || 1) > 1 ? `${poisoned}darts` : `${poisoned}dart`);
     }
     if (obj.cls === 'weapon' || obj.otyp === WEAPON_CLASS || obj.glyph === ')') {
         const kind = String(obj.actualKind || obj.kind || '').toLowerCase();
         if (kind === 'orcish dagger' || obj.otyp === ORCISH_DAGGER) {
             const known = obj.known === true || (game._discoveries || [])
                 .some(entry => entry.section === 'Weapons' && entry.name === 'orcish dagger' && entry.starred);
-            if (known) return (obj.quan || 1) > 1 ? 'orcish daggers' : 'orcish dagger';
-            return (obj.quan || 1) > 1 ? 'crude daggers' : 'crude dagger';
+            if (known) return named((obj.quan || 1) > 1 ? 'orcish daggers' : 'orcish dagger');
+            return named((obj.quan || 1) > 1 ? 'crude daggers' : 'crude dagger');
         }
     }
     if (obj.otyp === FOOD_CLASS || obj.cls === 'food') {
         const buc = game._startup_role === 'Priest' || obj.bknown
             ? obj.cursed ? 'cursed ' : obj.blessed ? 'blessed ' : ''
             : '';
-        if ((obj.quan || 1) > 1 && obj.plural) return `${buc}${maybePartlyEatenFoodName(obj, obj.plural)}`;
-        if ((obj.quan || 1) > 1 && obj.kind === 'food ration') return `${buc}${maybePartlyEatenFoodName(obj, 'food rations')}`;
-        if ((obj.quan || 1) > 1 && obj.kind === 'cram ration') return `${buc}${maybePartlyEatenFoodName(obj, 'cram rations')}`;
-        if (obj.kind === 'tripe') return `${buc}${maybePartlyEatenFoodName(obj, (obj.quan || 1) > 1 ? 'tripe rations' : 'tripe ration')}`;
-        if (obj.kind?.startsWith?.('tin:')) return `${buc}${maybePartlyEatenFoodName(obj, obj.singular || 'tin')}`;
-        if (obj.kind) return `${buc}${maybePartlyEatenFoodName(obj, obj.kind)}`;
-        if ((obj.foodRoll || 1000) <= 140) return `${buc}${maybePartlyEatenFoodName(obj, 'tripe ration')}`;
-        return `${buc}${maybePartlyEatenFoodName(obj, 'food ration')}`;
+        if ((obj.quan || 1) > 1 && obj.plural) return named(`${buc}${maybePartlyEatenFoodName(obj, obj.plural)}`);
+        if ((obj.quan || 1) > 1 && obj.kind === 'food ration') return named(`${buc}${maybePartlyEatenFoodName(obj, 'food rations')}`);
+        if ((obj.quan || 1) > 1 && obj.kind === 'cram ration') return named(`${buc}${maybePartlyEatenFoodName(obj, 'cram rations')}`);
+        if (obj.kind === 'tripe') return named(`${buc}${maybePartlyEatenFoodName(obj, (obj.quan || 1) > 1 ? 'tripe rations' : 'tripe ration')}`);
+        if (obj.kind?.startsWith?.('tin:')) return named(`${buc}${maybePartlyEatenFoodName(obj, obj.singular || 'tin')}`);
+        if (obj.kind) return named(`${buc}${maybePartlyEatenFoodName(obj, obj.kind)}`);
+        if ((obj.foodRoll || 1000) <= 140) return named(`${buc}${maybePartlyEatenFoodName(obj, 'tripe ration')}`);
+        return named(`${buc}${maybePartlyEatenFoodName(obj, 'food ration')}`);
     }
     if (obj.otyp === GEM_CLASS) {
         const name = obj.gemDescription || 'white gem';
-        return (obj.quan || 1) > 1 ? `${name}s` : name;
+        return named((obj.quan || 1) > 1 ? `${name}s` : name);
     }
-    if ((obj.quan || 1) > 1 && obj.plural) return obj.plural;
-    return obj.kind || (obj.otyp != null ? String(obj.otyp) : 'object');
+    if ((obj.quan || 1) > 1 && obj.plural) return named(obj.plural);
+    return named(obj.kind || (obj.otyp != null ? String(obj.otyp) : 'object'));
 }
 
 function containerSortRank(item) {
@@ -16997,7 +17067,7 @@ export async function rhack(_cmd) {
                 && !(game.inventory || []).some(invItem => invItem.letter === 'n')) {
                 letter = nextInventoryLetter();
             }
-            const item = Object.assign({ letter, quan: 1 }, wishedObjectFromName(lowerName, wishedQualifiers));
+            const item = Object.assign({ letter, quan: 1 }, wishedObjectFromName(wishedName.trim(), wishedQualifiers));
             if (item._wish_disappeared) {
                 await setWishResultMessage(item._wish_disappear_message);
                 return;
