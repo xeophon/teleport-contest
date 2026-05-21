@@ -65,6 +65,84 @@ function isWandItem(item) {
     return item?.cls === 'wand' || item?.glyph === '/' || item?.wandIndex != null
         || item?.kind === 'wand of sleep' || item?.kind === 'sleep';
 }
+const WISHING_WAND_INDEX = 4;
+const WAND_WREST_CHANCE = 121;
+
+function isWishingWand(item) {
+    const wand = String(item?.wand || '').toLowerCase();
+    const kind = String(item?.kind || '').toLowerCase();
+    const actualKind = String(item?.actualKind || '').toLowerCase();
+    return item?.wandIndex === WISHING_WAND_INDEX
+        || wand === 'wishing'
+        || kind === 'wishing'
+        || kind === 'wand of wishing'
+        || actualKind === 'wishing'
+        || actualKind === 'wand of wishing';
+}
+
+function wandCharges(item) {
+    return item?.spe ?? item?.charges ?? 0;
+}
+
+function setWandCharges(item, charges) {
+    item.spe = charges;
+    item.charges = charges;
+}
+
+function refreshWandLine(item) {
+    if (/\(0:\d+\)/.test(String(item.line || ''))) item.chargeKnown = true;
+    item.line = normalInventoryLine({ ...item, line: '' });
+}
+
+function setKnownWandLine(item, wand) {
+    item.cls = 'wand';
+    item.glyph = '/';
+    item.wand = wand;
+    item.kind = wand;
+    item.wandIndex = WAND_NAME_TO_INDEX.get(wand);
+    item.known = true;
+    refreshWandLine(item);
+}
+
+function zappableWand(item) {
+    const charges = wandCharges(item);
+    if (charges < 0) return { zapped: false, dust: true };
+    if (charges === 0) {
+        if (rn2(WAND_WREST_CHANCE)) return { zapped: false };
+        setWandCharges(item, -1);
+        return { zapped: true, wrested: true };
+    }
+    setWandCharges(item, charges - 1);
+    return { zapped: true };
+}
+
+function dustWand(item) {
+    const name = pickupObjectName(item);
+    removeInventoryItem(item);
+    return `The ${name} turns to dust.`;
+}
+
+async function beginWishPrompt({ moveCost = 0, dustItem = null, message = 'For what do you wish?' } = {}) {
+    game._wish_text = '';
+    game._wish_move_cost = moveCost;
+    game._wish_dust_item = dustItem;
+    await setMessage(message);
+    game._command_mode = 'wizardWish';
+}
+
+async function setWishResultMessage(message, more = false) {
+    const moveCost = game._wish_move_cost || 0;
+    const dustItem = game._wish_dust_item || null;
+    game._wish_move_cost = 0;
+    game._wish_dust_item = null;
+    game.context.move = moveCost;
+    let text = message;
+    if (dustItem && (game.inventory || []).includes(dustItem)) {
+        const dustMessage = dustWand(dustItem);
+        text = text ? `${text}  ${dustMessage}` : dustMessage;
+    }
+    await setMessage(text, more);
+}
 const GROWNUP_MONSTERS = new Map([
     ['chickatrice', 'cockatrice'],
     ['little dog', 'dog'],
@@ -12821,6 +12899,50 @@ export async function rhack(_cmd) {
             || item?.kind === 'wand of secret door detection'
             || item?.wandIndex === 1
             || (item?.cls === 'wand' && item.roll > 95 && item.roll <= 145);
+        if (item && isWishingWand(item)) {
+            const chargeUse = zappableWand(item);
+            if (!chargeUse.zapped) {
+                const messages = ['Nothing happens.'];
+                if (chargeUse.dust && (game.inventory || []).includes(item))
+                    messages.push(dustWand(item));
+                await setMessage(messages.join('  '));
+                game._command_mode = null;
+                game.context.move = 1;
+                return;
+            }
+            refreshWandLine(item);
+            const wrestMessage = chargeUse.wrested ? 'You wrest one last charge from the worn-out wand.' : '';
+            if (item.cursed && !rn2(WAND_BACKFIRE_CHANCE)) {
+                const damage = d(wandCharges(item) + 2, 6);
+                if (game.u) game.u.uhp = Math.max(0, (game.u.uhp || 0) - damage);
+                const name = pickupObjectName(item);
+                game.inventory = (game.inventory || []).filter(invItem => invItem !== item);
+                await setMessage(`${wrestMessage ? `${wrestMessage}  ` : ''}The ${name} suddenly explodes!`);
+                game._command_mode = null;
+                game.context.move = 1;
+                return;
+            }
+            const luck = (game.u?.uluck || 0) + (game.u?.moreluck || 0);
+            if (luck + rn2(5) < 0) {
+                const messages = [];
+                if (wrestMessage) messages.push(wrestMessage);
+                messages.push('Unfortunately, nothing happens.');
+                if (wandCharges(item) < 0 && (game.inventory || []).includes(item))
+                    messages.push(dustWand(item));
+                else refreshWandLine(item);
+                await setMessage(messages.join('  '));
+                game._command_mode = null;
+                game.context.move = 1;
+                return;
+            }
+            setKnownWandLine(item, 'wishing');
+            await beginWishPrompt({
+                moveCost: 1,
+                dustItem: wandCharges(item) < 0 ? item : null,
+                message: wrestMessage ? `${wrestMessage}  For what do you wish?` : 'For what do you wish?',
+            });
+            return;
+        }
         if (item?.cursed && !rn2(WAND_BACKFIRE_CHANCE)) {
             const damage = d((item.spe ?? item.charges ?? 0) + 2, 6);
             if (game.u) game.u.uhp = Math.max(0, (game.u.uhp || 0) - damage);
@@ -13290,17 +13412,22 @@ export async function rhack(_cmd) {
                 rn2(19);
                 item.known = true;
                 item.kind = 'digging';
-                item.line = `${item.letter} - a wand of digging`;
-            }
-            for (let step = 1; step < 8; step++) {
-                const x = (game.u?.ux || 0) + dir.dx * step;
-                const y = (game.u?.uy || 0) + dir.dy * step;
-                const loc = game.level?.at(x, y);
-                if (loc && IS_OBSTRUCTED(loc.typ)) {
-                    loc.typ = ROOM;
-                    newsym(x, y);
-                    break;
+                item.line = `${item.letter} - a wand of digging${wandChargeSuffix(item)}`;
+                for (let step = 1; step < 8; step++) {
+                    const x = (game.u?.ux || 0) + dir.dx * step;
+                    const y = (game.u?.uy || 0) + dir.dy * step;
+                    const loc = game.level?.at(x, y);
+                    if (loc && IS_OBSTRUCTED(loc.typ)) {
+                        loc.typ = ROOM;
+                        newsym(x, y);
+                        break;
+                    }
                 }
+                await setMessage('');
+                game._keep_pending_message = 0;
+                game._command_mode = null;
+                game.context.move = 1;
+                return;
             }
             await setMessage('');
             game._keep_pending_message = 0;
@@ -13939,9 +14066,7 @@ export async function rhack(_cmd) {
     }
 
     if (ch === '\x17' && game.flags?.debug && !game._command_mode) {
-        await setMessage('For what do you wish?');
-        game._wish_text = '';
-        game._command_mode = 'wizardWish';
+        await beginWishPrompt();
         return;
     }
 
@@ -16044,9 +16169,8 @@ export async function rhack(_cmd) {
             const wish = wishText.toLowerCase();
             game._wish_text = '';
             game._command_mode = null;
-            game.context.move = 0;
             if (!wish) {
-                await setMessage('Nothing fitting that wish appears.');
+                await setWishResultMessage('Nothing fitting that wish appears.');
                 return;
             }
             let wishedName = wishText.replace(/^(?:a|an|the)\s+/i, '');
@@ -16075,7 +16199,7 @@ export async function rhack(_cmd) {
             }
             const lowerName = wishedName.trim().toLowerCase();
             if (!lowerName || lowerName === 'nothing' || lowerName === 'nil' || lowerName === 'none') {
-                await setMessage('Nothing fitting that wish appears.');
+                await setWishResultMessage('Nothing fitting that wish appears.');
                 return;
             }
             if (/^(?:gold(?: pieces?)?|coins?)$/.test(lowerName)) {
@@ -16090,7 +16214,7 @@ export async function rhack(_cmd) {
                 }
                 else game.inventory.push({ letter: '$', cls: 'coin', otyp: GOLD_PIECE, glyph: '$', quan: game._goldCount });
                 game._pet_food_scan_inventory = game.inventory;
-                await setMessage(`$ - ${wishedQuan} gold piece${wishedQuan === 1 ? '' : 's'}.`);
+                await setWishResultMessage(`$ - ${wishedQuan} gold piece${wishedQuan === 1 ? '' : 's'}.`);
                 return;
             }
             let letter = nextInventoryLetter();
@@ -16100,7 +16224,7 @@ export async function rhack(_cmd) {
             }
             const item = Object.assign({ letter, quan: 1 }, wishedObjectFromName(lowerName));
             if (item._wish_disappeared) {
-                await setMessage(item._wish_disappear_message);
+                await setWishResultMessage(item._wish_disappear_message);
                 return;
             }
             if (item._artifact_wish_name) wishedQuan = 1;
@@ -16140,11 +16264,11 @@ export async function rhack(_cmd) {
                 game._burden_after_more = 1;
                 game._queued_message_after_more = 'Your movements are slowed slightly because of your load.';
                 game._wish_notice_after_more = 1;
-                await setMessage(`${item.line}.`, true);
+                await setWishResultMessage(`${item.line}.`, true);
                 return;
             }
             godsNoticeWish();
-            await setMessage(`${item.line}.`);
+            await setWishResultMessage(`${item.line}.`);
             return;
         }
         if (key === 8 || key === 127) game._wish_text = (game._wish_text || '').slice(0, -1);
@@ -17436,9 +17560,7 @@ export async function rhack(_cmd) {
                 return;
             }
             if (command === 'wizwish' && game.flags?.debug) {
-                await setMessage('For what do you wish?');
-                game._wish_text = '';
-                game._command_mode = 'wizardWish';
+                await beginWishPrompt();
                 return;
             }
 	            if (command === 'wizgenesis' && game.flags?.debug) {

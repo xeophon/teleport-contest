@@ -695,6 +695,13 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
 - Bones handling is now only a C-shaped VFS presence check and wizard prompt
   flow. The real bones map/object/monster loader remains a future porting
   target, so the old seed5006 public-session pass is intentionally gone.
+- Ordinary wand-of-wishing zaps now use the C `NODIR` path instead of the
+  generic direction prompt: charges are checked/decremented before cursed
+  backfire, zero-charge wrest attempts use `rn2(121)`, negative luck can fail
+  with `Unfortunately, nothing happens.`, successful zaps reuse the live wish
+  prompt, and wrested wands turn to dust after the wish result. Fixed
+  `WAN_WISHING` objects also carry wand metadata so level-placed wishing wands
+  reach the same command path.
 
 Next concrete target:
 

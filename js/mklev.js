@@ -3556,6 +3556,7 @@ function mksobj_init(otmp, otyp, artif) {
         }
         if (roll > 975) mkobj_erosion_rolls();
     } else if (otyp === WAN_WISHING) {
+        Object.assign(otmp, { cls: 'wand', glyph: '/', kind: 'wishing', wand: 'wishing', wandIndex: 4, known: false });
         otmp.spe = 1;
         blessorcurse(otmp, 17);
     } else if (otyp === WAND_CLASS || otyp === WAN_DIGGING || otyp === WAN_STRIKING
@@ -3707,6 +3708,7 @@ export function potionIndexForRoll(roll) {
 
 function wandIndexForObject(otmp) {
     if (otmp.wandIndex != null) return otmp.wandIndex;
+    if (otmp.otyp === WAN_WISHING) return 4;
     if (otmp.otyp === WAN_STRIKING) return 7;
     if (otmp.otyp === WAN_LIGHT) return 0;
     if (otmp.otyp === WAN_MAKE_INVISIBLE) return 8;
@@ -3776,7 +3778,7 @@ function object_display(otmp) {
         || otyp === WAN_MAGIC_MISSILE || otyp === WAN_TELEPORTATION
         || otyp === WAN_CREATE_MONSTER || otyp === WAN_MAKE_INVISIBLE
         || otyp === WAN_SPEED_MONSTER || otyp === WAN_POLYMORPH || otyp === WAN_NOTHING
-        || otyp === WAN_LIGHT)
+        || otyp === WAN_LIGHT || otyp === WAN_WISHING)
         return { glyph: '/', color: wandColor(otmp) };
     if (otyp === SPBOOK_no_NOVEL || (otyp >= SPE_HEALING && otyp < ARROW)) return { glyph: '+', color: otmp.color ?? NO_COLOR };
     if (otyp === CHEST || otyp === LARGE_BOX || otyp === ICE_BOX || otyp === SACK
@@ -4707,6 +4709,7 @@ function mongets(otyp, erodes = true) {
     else if (otyp === WAN_SPEED_MONSTER) Object.assign(otmp, { cls: 'wand', kind: 'speed monster', wandIndex: 10 });
     else if (otyp === WAN_POLYMORPH) Object.assign(otmp, { cls: 'wand', kind: 'polymorph', wandIndex: 12 });
     else if (otyp === WAN_NOTHING) Object.assign(otmp, { cls: 'wand', kind: 'nothing' });
+    else if (otyp === WAN_WISHING) Object.assign(otmp, { cls: 'wand', glyph: '/', kind: 'wishing', wand: 'wishing', wandIndex: 4, known: false });
     if (game._mongets_target) {
         game._mongets_target.minvent = [otmp, ...(game._mongets_target.minvent || [])];
         game._mongets_target.hasInventory = true;
