@@ -3747,7 +3747,7 @@ export function scrollIndexForRoll(roll) {
         remaining -= SCROLL_PROBS[i];
         if (remaining <= 0) return i;
     }
-    return null;
+    return SCROLL_PROBS.length; // SCR_BLANK_PAPER
 }
 
 export function potionIndexForRoll(roll) {

@@ -857,6 +857,15 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   be wished by their shuffled descriptions, and scroll labels that map beyond
   the currently ported scroll table fall back to labeled generic scrolls
   instead of corrupting the RNG path.
+- Scroll identity and the first missing read effects moved closer to C:
+  exact scroll wishes now use explicit `scrollIndex` identity instead of
+  fragile `SCR_ENCHANT_ARMOR + index` arithmetic, so `scroll of fire` no
+  longer collides with blank paper; random scroll generation now returns the
+  upstream blank-paper slot for the final 28/1000 probability; `blank`,
+  `unlabeled`, and detect-gold/detect-food scroll spelling variants resolve
+  through the wish parser; and reading scrolls of confuse monster or scare
+  monster now applies C-shaped hero glow/confusion, monster resistance, fear,
+  and reverse-fear state changes.
 
 Next concrete target:
 

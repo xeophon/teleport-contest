@@ -5108,6 +5108,54 @@ async function setMessage(msg, more = false) {
     if (msg !== 'You are caught in a bear trap.') game._last_trapmove_message = '';
 }
 
+function addHeroStatusSuffix(status) {
+    if (!game.u) return;
+    const parts = String(game.u._statusSuffix || '').trim().split(/\s+/).filter(Boolean);
+    if (!parts.includes(status)) parts.push(status);
+    game.u._statusSuffix = parts.length ? ` ${parts.join(' ')}` : '';
+}
+
+function removeHeroStatusSuffix(status) {
+    if (!game.u) return;
+    const parts = String(game.u._statusSuffix || '').trim().split(/\s+/).filter(part => part !== status);
+    game.u._statusSuffix = parts.length ? ` ${parts.join(' ')}` : '';
+}
+
+function heroIsConfused() {
+    return (game.u?._statusSuffix || '').includes('Conf') || (game.u?._confusionTimeout || 0) > 0;
+}
+
+function addHeroConfusion(turns) {
+    if (!game.u || turns <= 0) return;
+    game.u._confusionTimeout = (game.u._confusionTimeout || 0) + turns;
+    addHeroStatusSuffix('Conf');
+}
+
+function clearHeroConfusion() {
+    if (!game.u) return;
+    game.u._confusionTimeout = 0;
+    removeHeroStatusSuffix('Conf');
+}
+
+function sentenceCase(text) {
+    const value = String(text || '');
+    return value ? value[0].toUpperCase() + value.slice(1) : value;
+}
+
+function monsterResistanceLevel(mon) {
+    const level = mon?.m_lev ?? mon?.mlevel ?? mon?.data?.mlevel ?? mon?.data?.hpLevel ?? 1;
+    return Math.max(1, Math.min(50, level || 1));
+}
+
+function monsterMagicResistance(mon) {
+    return mon?.mr ?? mon?.data?.mr ?? mon?.data?.mresists ?? 0;
+}
+
+function monsterResistsEffect(mon, attackLevel) {
+    const bound = Math.max(1, 100 + attackLevel - monsterResistanceLevel(mon));
+    return rn2(bound) < monsterMagicResistance(mon);
+}
+
 export function loseExperienceLevel() {
     const u = game.u;
     if (!u) return;
@@ -5587,6 +5635,21 @@ function makeBlankScrollWishObject() {
         cls: 'scroll',
         glyph: '?',
         kind: 'blank paper',
+        known: false,
+        wishedfor: true,
+    });
+}
+
+function makeWishedKnownScrollObject(scrollIndex, wishedLabel = '') {
+    const scrollName = IDENTIFIED_SCROLL_NAMES[scrollIndex];
+    const label = game._object_descriptions?.scrolls?.[scrollIndex] || wishedLabel || 'ZELGO MER';
+    const otmp = mksobj(SCROLL_CLASS, true, false);
+    return Object.assign(otmp, {
+        cls: 'scroll',
+        glyph: '?',
+        kind: `scroll labeled ${label}`,
+        actualKind: `scroll of ${scrollName}`,
+        scrollIndex,
         known: false,
         wishedfor: true,
     });
@@ -6329,13 +6392,87 @@ function makeWishedTinObject(tinWish) {
 
 function isBlankScrollItem(item) {
     return item?.otyp === SCR_BLANK_PAPER || item?.kind === 'blank paper'
-        || item?.actualKind === 'scroll of blank paper';
+        || item?.actualKind === 'scroll of blank paper'
+        || item?.scrollIndex === IDENTIFIED_SCROLL_NAMES.length;
 }
 
 function isBlankSpellbookItem(item) {
     if (!(item?.cls === 'spellbook' || item?.otyp === SPBOOK_NO_NOVEL)) return false;
     const name = item.spellName || item.spell?.name || String(item.kind || '').replace(/^spellbook(?: of)? /, '');
     return name === 'blank paper' || (!name && item.appearance === 'plain');
+}
+
+function confuseMonsterScrollEffect(item) {
+    const confused = heroIsConfused();
+    const nonHuman = !!game.u?._polyself_form && game.u._polyself_form.mlet !== 'human';
+    if (item.cursed || nonHuman) {
+        const wasConfused = confused;
+        addHeroConfusion(rnd(100));
+        return wasConfused ? '' : 'You feel confused.';
+    }
+    if (confused) {
+        if (item.blessed) {
+            clearHeroConfusion();
+            return 'A red glow surrounds your head.';
+        }
+        addHeroConfusion(rnd(100));
+        return 'Your hands begin to glow purple.';
+    }
+    let increment = 3;
+    const existing = game.u?.umconf || 0;
+    let message;
+    if (item.blessed) {
+        message = `Your hands glow ${existing ? 'an even more' : 'a'} brilliant red.`;
+        increment += rn1(8, 2);
+    } else {
+        message = existing
+            ? 'The red glow of your hands intensifies.'
+            : 'Your hands begin to glow red.';
+        increment += rnd(2);
+    }
+    if (existing >= 40) increment = 1;
+    if (game.u) {
+        game.u.umconf = existing + increment;
+        addHeroStatusSuffix('Glow');
+    }
+    return message;
+}
+
+function scareMonsterScrollEffect(item) {
+    const confused = heroIsConfused();
+    const reverse = confused || item.cursed;
+    let visibleUntame = 0;
+    for (const mon of game.level?.monsters || []) {
+        if (!mon || mon.dead || mon.mhp <= 0 || !couldsee(mon.mx, mon.my)) continue;
+        if (reverse) {
+            mon.mflee = 0;
+            mon.mfrozen = 0;
+            mon.msleeping = 0;
+            mon.mcanmove = 1;
+        } else if (!monsterResistsEffect(mon, 9)) {
+            mon.mflee = 1;
+            mon.mfleetim = 0;
+            clearMonsterTrack(mon);
+        }
+        if (!mon.mtame && !mon.pet) visibleUntame++;
+    }
+    return `You hear ${reverse ? 'sad wailing' : 'maniacal laughter'} ${visibleUntame ? 'close by' : 'in the distance'}.`;
+}
+
+function applyConfuseMonsterOnHit(mon, messages, targetPhrase) {
+    if (!game.u?.umconf || mon?.mconf) return;
+    const handsMessage = game.u.umconf === 1
+        ? 'Your hands stop glowing red.'
+        : 'Your hands no longer glow so brightly red.';
+    messages.push(handsMessage);
+    game.u.umconf--;
+    if (!game.u.umconf) removeHeroStatusSuffix('Glow');
+    const attackLevel = game.u?.ulevel || 1;
+    if (!monsterResistsEffect(mon, attackLevel)) {
+        mon.mconf = 1;
+        if (couldsee(mon.mx, mon.my))
+            messages.push(`${sentenceCase(targetPhrase)} appears confused.`);
+    }
 }
 
 function isBoxObject(item) {
@@ -6544,6 +6681,12 @@ const WISH_NAME_ALIASES = new Map([
     ['boots of speed', 'speed boots'],
     ['plate armor', 'plate mail'],
     ['scroll of detect food', 'scroll of food detection'],
+    ['detect food scroll', 'scroll of food detection'],
+    ['scroll of detect gold', 'scroll of gold detection'],
+    ['detect gold scroll', 'scroll of gold detection'],
+    ['blank scroll', 'scroll of blank paper'],
+    ['unlabeled scroll', 'scroll of blank paper'],
+    ['unlabelled scroll', 'scroll of blank paper'],
     ['spellbook of food detection', 'spellbook of detect food'],
     ['destroy armor', 'scroll of destroy armor'],
     ['enchant weapon', 'scroll of enchant weapon'],
@@ -7004,18 +7147,7 @@ function wishedBaseObjectFromName(lowerName, qualifiers = {}, originalName = low
                 .findIndex(label => wishedLabelKey(label) === labelKey);
             if (scrollIndex >= 0 && scrollIndex < IDENTIFIED_SCROLL_NAMES.length) {
                 rn2(SCROLL_WISH_PROBS[scrollIndex] + 1);
-                const otmp = mksobj(SCR_ENCHANT_ARMOR + scrollIndex, true, false);
-                const label = game._object_descriptions?.scrolls?.[scrollIndex] || wishedLabel;
-                const scrollName = IDENTIFIED_SCROLL_NAMES[scrollIndex];
-                return Object.assign(otmp, {
-                    cls: 'scroll',
-                    glyph: '?',
-                    kind: `scroll labeled ${label}`,
-                    actualKind: `scroll of ${scrollName}`,
-                    scrollIndex,
-                    known: false,
-                    wishedfor: true,
-                });
+                return makeWishedKnownScrollObject(scrollIndex, wishedLabel);
             }
             if (scrollIndex >= IDENTIFIED_SCROLL_NAMES.length) {
                 const otmp = mksobj(SCROLL_CLASS, true, false);
@@ -7036,14 +7168,14 @@ function wishedBaseObjectFromName(lowerName, qualifiers = {}, originalName = low
         const mailScroll = scrollName === 'mail';
         if (mailScroll) rn2(1);
         else if (scrollIndex >= 0 && !spellingAlias.skipNamedesc) rn2(SCROLL_WISH_PROBS[scrollIndex] + 1);
-        const otyp = scrollIndex >= 0 ? SCR_ENCHANT_ARMOR + scrollIndex : SCROLL_CLASS;
-        const otmp = mksobj(otyp, !mailScroll, false);
+        if (scrollIndex >= 0) return makeWishedKnownScrollObject(scrollIndex);
+        const otmp = mksobj(SCROLL_CLASS, !mailScroll, false);
         const label = game._object_descriptions?.scrolls?.[scrollIndex] || 'ZELGO MER';
         return Object.assign(otmp, {
             cls: 'scroll',
             glyph: '?',
-            kind: scrollName === 'mail' ? 'stamped scroll' : scrollIndex >= 0 ? `scroll labeled ${label}` : lowerName,
-            actualKind: scrollIndex >= 0 ? `scroll of ${scrollName}` : lowerName,
+            kind: scrollName === 'mail' ? 'stamped scroll' : lowerName,
+            actualKind: lowerName,
             scrollIndex,
             known: false,
             wishedfor: true,
@@ -9341,6 +9473,7 @@ async function moveHero(dx, dy) {
             const hitPhrase = game.flags?.verbose === false ? 'it' : targetPhrase;
             const hitPunctuation = game.flags?.verbose === false || swallowedMove ? '.' : damage > 4 ? '!' : '.';
             messages.push(`You hit ${hitPhrase}${hitPunctuation}`);
+            applyConfuseMonsterOnHit(mon, messages, targetPhrase);
             if (attackIndex === 0) {
                 if (attackWeapon && damage > 1 && !twoWeaponActive) {
                     rn2(3);
@@ -15584,6 +15717,24 @@ export async function rhack(_cmd) {
                 game.u.uac = (game.u.uac ?? 10) + uacDelta;
             }
             await setMessage(`As you read the scroll, it disappears.  ${messages[0]}`, true);
+            game._command_mode = null;
+            game.context.move = 1;
+            return;
+        }
+        if (isScroll && (scrollName === 'confuse monster' || item.scrollIndex === 2)) {
+            removeInventoryItem(item);
+            rn2(19);
+            const effectMessage = confuseMonsterScrollEffect(item);
+            await setMessage(`As you read the scroll, it disappears.${effectMessage ? `  ${effectMessage}` : ''}`, true);
+            game._command_mode = null;
+            game.context.move = 1;
+            return;
+        }
+        if (isScroll && (scrollName === 'scare monster' || item.scrollIndex === 3)) {
+            removeInventoryItem(item);
+            rn2(19);
+            const effectMessage = scareMonsterScrollEffect(item);
+            await setMessage(`As you read the scroll, it disappears.  ${effectMessage}`, true);
             game._command_mode = null;
             game.context.move = 1;
             return;
