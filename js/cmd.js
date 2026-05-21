@@ -6636,6 +6636,92 @@ function foodDetectionScrollEffect(item) {
     };
 }
 
+function removeCurseFeelingMessage(confused) {
+    if (game.u?.hallucinating)
+        return confused ? 'You feel the power of the Force against you!' : 'You feel in touch with the Universal Oneness.';
+    return confused ? 'You feel like you need some help.' : 'You feel like someone is helping you.';
+}
+
+function refreshInventoryLineAfterBucChange(item) {
+    if (!item || !(game.inventory || []).includes(item) || item.cls === 'coin' || item.otyp === GOLD_PIECE) return;
+    item.line = normalInventoryLine({ ...item, line: '' });
+}
+
+function removeCurseBlessOrCurse(item) {
+    if (!item || item.blessed || item.cursed || item.cls === 'coin' || item.otyp === GOLD_PIECE) return false;
+    if (rn2(2)) return false;
+    if (rn2(2)) {
+        item.blessed = true;
+        item.cursed = false;
+    } else {
+        item.blessed = false;
+        item.cursed = true;
+    }
+    return true;
+}
+
+function removeCurseActiveTarget(item) {
+    if (!item || item.cls === 'coin' || item.otyp === GOLD_PIECE || item.glyph === '$') return false;
+    const line = String(item.line || '');
+    if (item.otyp === LOADSTONE || String(item.kind || '').toLowerCase() === 'loadstone') return true;
+    if (String(item.kind || '').toLowerCase() === 'leash' && item.leashmon) return true;
+    if (item.worn || item.wielded || /being worn|weapon in|on (?:left|right) hand/.test(line)) return true;
+    if ((item.alternate || line.includes('alternate weapon')) && game._twoweapon) return true;
+    if ((item.quivered || /at the ready|in quiver/.test(line)) && isProjectileItem(item)) return true;
+    return false;
+}
+
+function unpunishHero() {
+    if (!game.u || !(game.u.uball || game.u.uchain || game.u.upunished || game._punished)) return;
+    const chain = game.u.uchain;
+    const ball = game.u.uball;
+    if (game.level?.objects && chain)
+        game.level.objects = game.level.objects.filter(obj => obj !== chain);
+    if (ball) {
+        ball.worn = false;
+        ball.ox = ball.ox ?? game.u.ux ?? 0;
+        ball.oy = ball.oy ?? game.u.uy ?? 0;
+        if (game.level?.objects && !game.level.objects.includes(ball))
+            game.level.objects.push(ball);
+    }
+    game.u.uchain = null;
+    game.u.uball = null;
+    game.u.upunished = false;
+    game._punished = 0;
+    newsym(game.u.ux || 0, game.u.uy || 0);
+}
+
+function removeCurseScrollEffect(item) {
+    const confused = heroIsConfused();
+    const messages = [item.cursed ? 'You read the scroll.' : 'As you read the scroll, it disappears.'];
+    if (confused)
+        messages.push(game.u?.hallucinating ? 'Being so trippy, you screw up...' : 'Being confused, you mispronounce the magic words...');
+    messages.push(removeCurseFeelingMessage(confused));
+
+    let learned = false;
+    let disintegrates = false;
+    if (!item.cursed) {
+        for (const obj of game.inventory || []) {
+            if (obj.cls === 'coin' || obj.otyp === GOLD_PIECE || obj.glyph === '$') continue;
+            const selected = item.blessed || removeCurseActiveTarget(obj);
+            if (!selected) continue;
+            if (confused) {
+                removeCurseBlessOrCurse(obj);
+                obj.bknown = false;
+                refreshInventoryLineAfterBucChange(obj);
+            } else if (obj.cursed) {
+                if (obj.bknown === true) learned = true;
+                obj.cursed = false;
+                refreshInventoryLineAfterBucChange(obj);
+            }
+        }
+    } else {
+        disintegrates = true;
+    }
+    if (!confused) unpunishHero();
+    return { messages, learned, disintegrates };
+}
+
 function scrollReadMessages(confusedReading) {
     const messages = ['As you read the scroll, it disappears.'];
     if (confusedReading)
@@ -17929,22 +18015,34 @@ export async function rhack(_cmd) {
             return;
         }
         if (isScroll && (scrollName === 'remove curse' || item.scrollIndex === 4)) {
+            const alreadyKnown = scrollDiscoveryKnown('remove curse')
+                || item.known === true
+                || item.actualKind === 'scroll of remove curse'
+                || item.kind === 'remove curse'
+                || item.kind === 'scroll of remove curse';
+            const callLabel = String(item.kind || '').startsWith('scroll labeled ')
+                ? String(item.kind || '').replace(/^scroll labeled /, '')
+                : game._object_descriptions?.scrolls?.[4] || 'XOR OTA';
             rn2(19);
-            learnObjectScore('Scrolls', 'scroll of remove curse');
             removeInventoryItem(item);
+            const result = removeCurseScrollEffect(item);
+            if (result.learned) learnScrollByName('remove curse', item, 4);
             let callAfterDisintegrates = false;
-            if (item.cursed) {
+            const shouldCall = !alreadyKnown && !result.learned;
+            if (result.disintegrates) {
                 game._queued_message_after_more = 'The scroll disintegrates.';
                 game._queued_message_more_after_more = 1;
-                if (!item.actualKind && !item.known) {
-                    game._call_scroll_label = String(item.kind || '').replace(/^scroll labeled /, '') || 'XOR OTA';
+                if (shouldCall) {
+                    game._call_scroll_label = callLabel;
                     game._call_scroll_after_queued_more = 1;
                     callAfterDisintegrates = true;
                 }
             }
-            await setMessage(`You read the scroll.  You feel ${game.u?.hallucinating ? 'in touch with the Universal Oneness.' : 'like someone is helping you.'}`, true);
-            game._command_mode = null;
+            await setMessage(result.messages.join('  '), true);
+            game._command_mode = shouldCall && !result.disintegrates ? 'callScrollAfterMore' : null;
+            if (shouldCall && !result.disintegrates) game._call_scroll_label = callLabel;
             game.context.move = callAfterDisintegrates ? 0 : 1;
+            if (shouldCall && !result.disintegrates) game.context.move = 0;
             return;
         }
         if (isScroll && (scrollName === 'magic mapping' || item.scrollIndex === 14 || (item.roll >= 800 && item.roll <= 844))) {

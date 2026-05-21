@@ -912,6 +912,13 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   already-punished cursed readings use the C iron-ball weight increment. The
   command terrain paths also import the C `MOAT` terrain constant instead of
   crashing when moat descriptions or movement checks are reached.
+- Scroll of remove curse now applies the C `seffect_remove_curse()` inventory
+  scope instead of only printing the feeling message: blessed scrolls affect all
+  carried non-coin objects, ordinary scrolls affect worn/active items plus
+  loadstones, confused readings use the C `blessorcurse(obj, 2)` behavior and
+  clear BUC knowledge, cursed scrolls only disintegrate, punishment is removed
+  when not confused, and the scroll is only identified when it uncurses an
+  already-known cursed item.
 - Scroll of stinking cloud now follows the C read flow: unknown scrolls identify
   before prompting, known scrolls include "stinking" in the target prompt,
   cancel and invalid targets consume the scroll without creating a cloud,
