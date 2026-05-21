@@ -830,6 +830,14 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   C namedesc probability roll, explicit `spellings[]` aliases skip it, and
   wished bags of tricks get C-style random charges with `empty` wishes
   zeroing those charges.
+- The remaining simple `objnam.c` `spellings[]` aliases now route to canonical
+  wished objects instead of generic fallbacks: weapon aliases such as `whip`,
+  `saber`, `silver sabre`, `iron ball`, and `mattock`; amulet/helm aliases;
+  `potion of sleep`, `scroll of recharging`, and bare `recharging`; food
+  shortcuts such as `kelp`, `eucalyptus`, `lembas`, `tripe`, `cookie`, `pie`,
+  and the huge-meat aliases; `protection from shape shifters`; `box`; and
+  stone aliases. Gray/grey stone wishes now use C's 10/10/8/10 weighted
+  luckstone/loadstone/touchstone/flint range.
 
 Next concrete target:
 

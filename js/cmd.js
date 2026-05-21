@@ -469,6 +469,7 @@ const STATUE = 472;
 const FLINT_STONE = 473;
 const HEAVY_IRON_BALL = 474;
 const IRON_CHAIN = 475;
+const ROCK = 467;
 const EGG = 10001;
 const TIN = 10004;
 const GLOB_OF_GRAY_OOZE = 10180;
@@ -519,7 +520,9 @@ const CANDELABRUM_OF_INVOCATION = 10076;
 const ORCISH_DAGGER = 10020;
 const DAGGER = 10023;
 const PICK_AXE = 10025;
+const DWARVISH_MATTOCK = 10104;
 const SILVER_SABER = 10062;
+const BULLWHIP = 10067;
 const SPE_HEALING = 327;
 const HEALING_SPELLBOOK_APPEARANCE_INDEX = 8;
 const SPELLBOOK_LEVELS = {
@@ -684,9 +687,17 @@ const BEARTRAP = 10161;
 const TOOLED_HORN = 10162;
 const GRAPPLING_HOOK = 10163;
 const MEAT_RING = 10164;
+const LOADSTONE = 10165;
+const FLINT = 10166;
+const LUCKSTONE = 10127;
+const TOUCHSTONE = FLINT_STONE;
 const BLINDFOLD = 10113;
 const MIRROR = 10006;
 const CREAM_PIE = 10081;
+const KELP_FROND = 172;
+const EUCALYPTUS_LEAF = 11000;
+const LEMBAS_WAFER = 146;
+const FORTUNE_COOKIE = 11010;
 const EXPENSIVE_CAMERA = 10082;
 const STETHOSCOPE = 10083;
 const MAGIC_MARKER = 10084;
@@ -807,12 +818,27 @@ const WISH_BASE_OBJECTS = new Map([
     ['darts', { otyp: DART, cls: 'weapon', glyph: ')', kind: 'dart', plural: 'darts' }],
     ['dagger', { otyp: DAGGER, cls: 'weapon', glyph: ')', kind: 'dagger', plural: 'daggers' }],
     ['daggers', { otyp: DAGGER, cls: 'weapon', glyph: ')', kind: 'dagger', plural: 'daggers' }],
+    ['bullwhip', { otyp: BULLWHIP, cls: 'weapon', glyph: ')', kind: 'bullwhip', actualKind: 'bullwhip' }],
+    ['silver saber', { otyp: SILVER_SABER, cls: 'weapon', glyph: ')', kind: 'silver saber', actualKind: 'silver saber' }],
+    ['dwarvish mattock', { otyp: DWARVISH_MATTOCK, cls: 'weapon', glyph: ')', kind: 'dwarvish mattock', actualKind: 'dwarvish mattock' }],
     ['pick-axe', { otyp: PICK_AXE, cls: 'tool', glyph: '(', kind: 'pick-axe' }],
     ['pick axe', { otyp: PICK_AXE, cls: 'tool', glyph: '(', kind: 'pick-axe' }],
     ['pickaxe', { otyp: PICK_AXE, cls: 'tool', glyph: '(', kind: 'pick-axe' }],
     ['pickax', { otyp: PICK_AXE, cls: 'tool', glyph: '(', kind: 'pick-axe' }],
     ['pick-ax', { otyp: PICK_AXE, cls: 'tool', glyph: '(', kind: 'pick-axe' }],
     ['cream pie', { otyp: CREAM_PIE, cls: 'food', glyph: '%', kind: 'cream pie' }],
+    ['eucalyptus leaf', { otyp: EUCALYPTUS_LEAF, cls: 'food', glyph: '%', kind: 'eucalyptus leaf', plural: 'eucalyptus leaves' }],
+    ['kelp frond', { otyp: KELP_FROND, cls: 'food', glyph: '%', kind: 'kelp frond' }],
+    ['lembas wafer', { otyp: LEMBAS_WAFER, cls: 'food', glyph: '%', kind: 'lembas wafer', plural: 'lembas wafers' }],
+    ['fortune cookie', { otyp: FORTUNE_COOKIE, cls: 'food', glyph: '%', kind: 'fortune cookie', plural: 'fortune cookies' }],
+    ['fortune cookies', { otyp: FORTUNE_COOKIE, cls: 'food', glyph: '%', kind: 'fortune cookie', plural: 'fortune cookies' }],
+    ['enormous meatball', { otyp: FOOD_CLASS, cls: 'food', glyph: '%', kind: 'enormous meatball', actualKind: 'enormous meatball', nutrition: 2000 }],
+    ['rock', { otyp: ROCK, cls: 'gem', glyph: '*', kind: 'rock', actualKind: 'rock', plural: 'rocks', gemDescription: 'rock' }],
+    ['luckstone', { otyp: LUCKSTONE, cls: 'gem', glyph: '*', kind: 'luckstone', actualKind: 'luckstone', gemDescription: 'gray stone' }],
+    ['loadstone', { otyp: LOADSTONE, cls: 'gem', glyph: '*', kind: 'loadstone', actualKind: 'loadstone', gemDescription: 'gray stone' }],
+    ['touchstone', { otyp: TOUCHSTONE, cls: 'gem', glyph: '*', kind: 'touchstone', actualKind: 'touchstone', gemDescription: 'gray stone' }],
+    ['flint', { otyp: FLINT, cls: 'gem', glyph: '*', kind: 'flint', actualKind: 'flint', gemDescription: 'gray stone' }],
+    ['heavy iron ball', { otyp: HEAVY_IRON_BALL, cls: 'ball', glyph: '0', kind: 'heavy iron ball', actualKind: 'heavy iron ball' }],
     ['egg', { otyp: EGG, cls: 'food', glyph: '%', kind: 'egg', plural: 'eggs' }],
     ['eggs', { otyp: EGG, cls: 'food', glyph: '%', kind: 'egg', plural: 'eggs' }],
     ['large box', { otyp: LARGE_BOX, cls: 'tool', glyph: '(', kind: 'large box' }],
@@ -857,8 +883,13 @@ const WIZARD_ONLY_WISH_NAMEDESC_BOUNDS = new Map([
 ]);
 const WISH_BASE_NAMEDESC_BOUNDS = new Map([
     ['dart', 61], ['darts', 61], ['dagger', 31], ['daggers', 31],
+    ['bullwhip', 3], ['silver saber', 7], ['dwarvish mattock', 14],
     ['pick-axe', 21], ['pick axe', 21], ['pickaxe', 21], ['pickax', 21], ['pick-ax', 21],
-    ['cream pie', 26], ['large box', 41], ['chest', 36], ['ice box', 6],
+    ['cream pie', 26], ['eucalyptus leaf', 4], ['kelp frond', 1],
+    ['lembas wafer', 21], ['fortune cookie', 56], ['fortune cookies', 56],
+    ['enormous meatball', 1], ['rock', 101], ['luckstone', 11],
+    ['loadstone', 11], ['touchstone', 9], ['flint', 11],
+    ['heavy iron ball', 1001], ['large box', 41], ['chest', 36], ['ice box', 6],
     ['sack', 36], ['oilskin sack', 6], ['bag of holding', 21],
     ['brass lantern', 31], ['oil lamp', 46], ['magic lamp', 16],
     ['tallow candle', 21], ['wax candle', 6], ['stethoscope', 26],
@@ -6425,8 +6456,33 @@ const WISH_NAME_ALIASES = new Map([
     ['royal jelly', 'lump of royal jelly'],
     ['can', 'tin'],
     ['gloves of power', 'gauntlets of power'],
+    ['ring of protection from shape shifters', 'ring of protection from shape changers'],
+    ['flint stone', 'flint'],
 ]);
 const WISH_EXPLICIT_SPELLING_ALIASES = new Map([
+    ['whip', 'bullwhip'],
+    ['saber', 'silver saber'],
+    ['silver sabre', 'silver saber'],
+    ['iron ball', 'heavy iron ball'],
+    ['mattock', 'dwarvish mattock'],
+    ['amulet of poison resistance', 'amulet versus poison'],
+    ['amulet of protection', 'amulet of guarding'],
+    ['amulet of telepathy', 'amulet of esp'],
+    ['helm of esp', 'helm of telepathy'],
+    ['potion of sleep', 'potion of sleeping'],
+    ['scroll of recharging', 'scroll of charging'],
+    ['recharging', 'scroll of charging'],
+    ['stone', 'rock'],
+    ['tee shirt', 't-shirt'],
+    ['t shirt', 't-shirt'],
+    ['kelp', 'kelp frond'],
+    ['eucalyptus', 'eucalyptus leaf'],
+    ['lembas', 'lembas wafer'],
+    ['tripe', 'tripe ration'],
+    ['cookie', 'fortune cookie'],
+    ['pie', 'cream pie'],
+    ['huge meatball', 'enormous meatball'],
+    ['huge chunk of meat', 'enormous meatball'],
     ['lantern', 'brass lantern'],
     ['camera', 'expensive camera'],
     ['marker', 'magic marker'],
@@ -6442,6 +6498,12 @@ const WISH_EXPLICIT_SPELLING_ALIASES = new Map([
     ['gloves of ogre power', 'gauntlets of power'],
     ['gloves of giant strength', 'gauntlets of power'],
     ['elven chain mail', 'elven mithril-coat'],
+    ['protection from shape shifters', 'ring of protection from shape changers'],
+    ['box', 'large box'],
+    ['luck stone', 'luckstone'],
+    ['load stone', 'loadstone'],
+    ['touch stone', 'touchstone'],
+    ['flintstone', 'flint'],
 ]);
 
 function normalizeWishedSpelling(name) {
@@ -6453,6 +6515,24 @@ function resolveWishedSpellingAlias(lowerName) {
     const explicit = WISH_EXPLICIT_SPELLING_ALIASES.get(normalized);
     if (explicit) return { name: explicit, skipNamedesc: true };
     return { name: WISH_NAME_ALIASES.get(normalized) || normalized, skipNamedesc: false };
+}
+
+function makeWishedGrayStoneObject(lowerName) {
+    if (lowerName !== 'gray stone' && lowerName !== 'grey stone') return null;
+    const roll = rnd(38);
+    const name = roll <= 10 ? 'luckstone'
+        : roll <= 20 ? 'loadstone'
+            : roll <= 28 ? 'touchstone'
+                : 'flint';
+    const baseObject = WISH_BASE_OBJECTS.get(name);
+    const otmp = mksobj(baseObject.otyp, true, false);
+    return Object.assign(otmp, baseObject, {
+        kind: 'gray stone',
+        actualKind: name,
+        gemDescription: 'gray stone',
+        _display_color: CLR_GRAY,
+        wishedfor: true,
+    });
 }
 
 function normalizeWishedGroupPhrase(name, quantity) {
@@ -6536,6 +6616,9 @@ function wishedBaseObjectFromName(lowerName, qualifiers = {}, originalName = low
     const dragonArmorWish = parseWishedDragonArmorName(lowerName);
     if (dragonArmorWish) return makeWishedDragonArmorObject(dragonArmorWish);
 
+    const grayStoneWish = makeWishedGrayStoneObject(lowerName);
+    if (grayStoneWish) return grayStoneWish;
+
     const baseObject = WISH_BASE_OBJECTS.get(lowerName);
     if (baseObject) {
         const namedescBound = WISH_BASE_NAMEDESC_BOUNDS.get(lowerName);
@@ -6582,7 +6665,7 @@ function wishedBaseObjectFromName(lowerName, qualifiers = {}, originalName = low
         const ringName = lowerName.replace(/^ring of /, '');
         const ringIndex = IDENTIFIED_RING_NAMES.indexOf(ringName);
         if (ringIndex >= 0) {
-            rn2(2);
+            if (!spellingAlias.skipNamedesc) rn2(2);
             game._mkobj_ring_roll = ringIndex + 1;
         }
         const otmp = mksobj(RING_CLASS, true, false);
@@ -6601,7 +6684,7 @@ function wishedBaseObjectFromName(lowerName, qualifiers = {}, originalName = low
     if (lowerName.includes('amulet')) {
         const amuletIndex = IDENTIFIED_AMULET_NAMES.indexOf(lowerName);
         const namedescBound = WISH_AMULET_NAMEDESC_BOUNDS.get(lowerName);
-        if (namedescBound) rn2(namedescBound);
+        if (namedescBound && !spellingAlias.skipNamedesc) rn2(namedescBound);
         game._mkobj_bad_amulet = BAD_AMULET_NAMES.has(lowerName);
         const otmp = mksobj(AMULET_CLASS, true, false);
         const appearance = amuletIndex >= 0 ? game._object_descriptions?.amulets?.[amuletIndex] : '';
@@ -6630,7 +6713,7 @@ function wishedBaseObjectFromName(lowerName, qualifiers = {}, originalName = low
         const waterPotion = lowerName === 'water' || potionName === 'water';
         const oilPotion = potionName === 'oil';
         const potionIndex = IDENTIFIED_POTION_NAMES.indexOf(potionName);
-        if (potionIndex >= 0) rn2(POTION_WISH_PROBS[potionIndex] + 1);
+        if (potionIndex >= 0 && !spellingAlias.skipNamedesc) rn2(POTION_WISH_PROBS[potionIndex] + 1);
         const otmp = mksobj(waterPotion ? POT_WATER : oilPotion ? POT_OIL : potionIndex >= 0 ? POTION_WISH_BASE + potionIndex : POTION_CLASS, true, false);
         if (oilPotion && otmp.age == null) otmp.age = 400;
         const appearance = potionIndex >= 0 ? game._object_descriptions?.potions?.[potionIndex]?.description : '';
@@ -6673,7 +6756,7 @@ function wishedBaseObjectFromName(lowerName, qualifiers = {}, originalName = low
         const scrollIndex = IDENTIFIED_SCROLL_NAMES.indexOf(scrollName);
         const mailScroll = scrollName === 'mail';
         if (mailScroll) rn2(1);
-        else if (scrollIndex >= 0) rn2(SCROLL_WISH_PROBS[scrollIndex] + 1);
+        else if (scrollIndex >= 0 && !spellingAlias.skipNamedesc) rn2(SCROLL_WISH_PROBS[scrollIndex] + 1);
         const otyp = scrollIndex >= 0 ? SCR_ENCHANT_ARMOR + scrollIndex : SCROLL_CLASS;
         const otmp = mksobj(otyp, !mailScroll, false);
         const label = game._object_descriptions?.scrolls?.[scrollIndex] || 'ZELGO MER';
