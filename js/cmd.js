@@ -505,6 +505,7 @@ const BELL = 358;
 const CANDELABRUM_OF_INVOCATION = 10076;
 const ORCISH_DAGGER = 10020;
 const DAGGER = 10023;
+const PICK_AXE = 10025;
 const SILVER_SABER = 10062;
 const SPE_HEALING = 327;
 const HEALING_SPELLBOOK_APPEARANCE_INDEX = 8;
@@ -746,6 +747,11 @@ const WISH_BASE_OBJECTS = new Map([
     ['darts', { otyp: DART, cls: 'weapon', glyph: ')', kind: 'dart', plural: 'darts' }],
     ['dagger', { otyp: DAGGER, cls: 'weapon', glyph: ')', kind: 'dagger', plural: 'daggers' }],
     ['daggers', { otyp: DAGGER, cls: 'weapon', glyph: ')', kind: 'dagger', plural: 'daggers' }],
+    ['pick-axe', { otyp: PICK_AXE, cls: 'tool', glyph: '(', kind: 'pick-axe' }],
+    ['pick axe', { otyp: PICK_AXE, cls: 'tool', glyph: '(', kind: 'pick-axe' }],
+    ['pickaxe', { otyp: PICK_AXE, cls: 'tool', glyph: '(', kind: 'pick-axe' }],
+    ['pickax', { otyp: PICK_AXE, cls: 'tool', glyph: '(', kind: 'pick-axe' }],
+    ['pick-ax', { otyp: PICK_AXE, cls: 'tool', glyph: '(', kind: 'pick-axe' }],
     ['cream pie', { otyp: CREAM_PIE, cls: 'food', glyph: '%', kind: 'cream pie' }],
     ['large box', { otyp: LARGE_BOX, cls: 'tool', glyph: '(', kind: 'large box' }],
     ['chest', { otyp: CHEST, cls: 'tool', glyph: '(', kind: 'chest' }],
@@ -779,6 +785,7 @@ const WIZARD_ONLY_WISH_NAMEDESC_BOUNDS = new Map([
 ]);
 const WISH_BASE_NAMEDESC_BOUNDS = new Map([
     ['dart', 61], ['darts', 61], ['dagger', 31], ['daggers', 31],
+    ['pick-axe', 21], ['pick axe', 21], ['pickaxe', 21], ['pickax', 21], ['pick-ax', 21],
     ['cream pie', 26], ['large box', 41], ['chest', 36], ['ice box', 6],
     ['sack', 36], ['oilskin sack', 6], ['bag of holding', 21],
     ['brass lantern', 31], ['oil lamp', 46], ['magic lamp', 16],
@@ -5729,6 +5736,10 @@ function parseWishedScrollLabel(name) {
     return match ? unquoteWishedText(match[1]) : '';
 }
 
+function normalizeWishedSpelling(name) {
+    return String(name || '').replace(/armour/ig, match => match[0] === 'A' ? 'Armor' : 'armor');
+}
+
 function normalizeWishedGroupPhrase(name, quantity) {
     const match = String(name || '').match(/^(pair|pairs|set|sets)\s+of\s+/i);
     if (!match) return { name, quantity, matched: false };
@@ -5769,7 +5780,7 @@ function wishedObjectFromName(name, qualifiers = {}) {
     if (artifact) return artifact;
 
     const named = splitWishedTextClause(wishName, 'named');
-    const baseName = named?.base || wishName;
+    const baseName = normalizeWishedSpelling(named?.base || wishName);
     const item = wishedBaseObjectFromName(baseName.toLowerCase(), qualifiers, baseName);
     if (named?.tail) applyWishedInstanceName(item, named.tail);
     return item;

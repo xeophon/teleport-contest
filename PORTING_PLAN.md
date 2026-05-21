@@ -676,6 +676,11 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   object lookup, pair phrasing adjusts small stack counts for mergeable exact
   wishes, and canonical pair equipment such as boots, gloves, and lenses keeps
   its single-object quantity instead of becoming `pair of pair of ...`.
+- Wished spelling aliases now cover a small C `objnam.c` spelling slice:
+  `pick-axe`/`pick axe`/`pickaxe`/`pickax`/`pick-ax` resolve to the canonical
+  pick-axe tool, and British `armour` is rewritten to `armor` before object
+  lookup, matching the upstream alternate-spelling pass without broadening to
+  route-specific aliases.
 - Wizard `#polyself` rehumanization no longer restores fixed public-looking HP,
   energy, and AC values. The interim `newman()` path now derives human-form
   stats from the saved live base form while preserving the current C-shaped RNG
