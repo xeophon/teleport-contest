@@ -4575,13 +4575,21 @@ export function pickNasty(difcap) {
     return ptr;
 }
 
+function monsterRowsByDifficulty(rows) {
+    return rows
+        .map((row, index) => ({ row, index }))
+        .sort((a, b) => (a.row[4] - b.row[4]) || (a.index - b.index))
+        .map(entry => entry.row);
+}
+
 function mkclassRows(glyph) {
     let rows = RNDMONST_COMMON_MONSTERS.filter(row => row[1] === glyph);
     const names = new Set(rows.map(row => row[0]));
-    if (glyph === 'H') return [MKCLASS_EXTRA_ROWS.H[0], ...rows, MKCLASS_EXTRA_ROWS.H[1]].toSorted((a, b) => a[4] - b[4]);
+    if (glyph === 'H')
+        return monsterRowsByDifficulty([MKCLASS_EXTRA_ROWS.H[0], ...rows, MKCLASS_EXTRA_ROWS.H[1]]);
     for (const row of MKCLASS_EXTRA_ROWS[glyph] || [])
         if (!names.has(row[0])) rows.push(row);
-    return rows.toSorted((a, b) => a[4] - b[4]);
+    return monsterRowsByDifficulty(rows);
 }
 
 function mkclassAligned(glyph, skipZeroFreqCutoff = false, rowOverride = null, includeNoGen = false) {

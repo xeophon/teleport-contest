@@ -926,6 +926,12 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   summons the hero type, live/current saved-level monsters are culled when their
   type is marked, `#genocided` and conduct report the persistent genocide list,
   and random `makemon()` selection now skips marked species.
+- Monster-class row ordering no longer depends on Node 22's
+  `Array.prototype.toSorted()`: the JS `mkclass` metadata path now uses an
+  explicit copied difficulty sort that preserves equal-difficulty order, matching
+  the C `mongen_order` intent while allowing the local Node 18 scorer to reach
+  real monster-generation parity failures instead of crashing. The current
+  public score is `28/44`, with the former `toSorted` hard failures now running.
 
 Next concrete target:
 
