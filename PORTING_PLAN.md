@@ -900,6 +900,12 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   `getpos`-style explosion center, and resolves the fiery 3x3 tower against
   monsters, monster inventory, hero inventory, fire resistance, cold weakness,
   and scroll-class magic resistance.
+- Scroll of earth now follows the C read flow for ceiling-bearing levels:
+  ordinary readings create surrounding boulders before the hero hit, blessed
+  readings create only the surrounding drops, cursed readings hit only the hero,
+  confused readings create stacks of rocks, Sokoban readings apply the luck
+  penalty, boulder drops can affect monsters and liquids, and the scroll is only
+  identified when the gated earth effect actually occurs.
 
 Next concrete target:
 

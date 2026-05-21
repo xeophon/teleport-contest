@@ -6,7 +6,7 @@ import { nhgetch } from './input.js';
 import { bot, cls, docrt, flush_screen, newsym, pline, refreshHallucinatedMap, show_glyph_cell, strengthString } from './display.js';
 import { couldsee, vision_recalc, vision_reset } from './vision.js';
 import { RANDOM_MONSTER_BY_NAME, SHOP_TYPES, artifactObjectName, enextoMonsterSpot, make_tutorial1_level, makemon, makeArtifactWishObject, mkcorpstat, mklev, mkobj_at, mksobj, monsterByRndName, nameObjectAsArtifact, next_ident, potionIndexForRoll, rndmonnum, scrollIndexForRoll, syncDungeonContext, u_on_dnstairs, u_on_rndspot, u_on_upstairs, wipe_engr_at, dropMonsterInventory, l_nhcore_init, getrumor, getbogusmon, level_difficulty, set_malign, somexyspace } from './mklev.js';
-import { ACCESSIBLE, A_CHA, A_CON, A_DEX, A_INT, A_MAX, A_STR, A_WIS, ALTAR, BC_BALL, BC_CHAIN, BEAR_TRAP, BLCORNER, BOLT_LIM, BRCORNER, CLOUD, COLNO, CORPSTAT_FEMALE, CORPSTAT_GENDER, CORPSTAT_HISTORIC, CORPSTAT_MALE, CORPSTAT_NEUTER, CORR, DOOR, BURN, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, DUST, ENGRAVE, ENGR_BLOOD, FOUNTAIN, GRAVE, HEADSTONE, HWALL, ICE, IN_SIGHT, IS_OBSTRUCTED, IS_POOL, IS_ROOM, IS_WALL, LADDER, LAVAPOOL, LAVAWALL, MAGIC_PORTAL, MARK, MOAT, NORMAL_SPEED, OVERLOADED, P_BASIC, P_UNSKILLED, POOL, ROLLING_BOULDER_TRAP, ROOM, ROT_AGE, ROOMOFFSET, ROWNO, SCORR, SDOOR, SHOPBASE, SINK, STAIRS, STONE, TDWALL, TEMPLE, THRONE, TLCORNER, TRCORNER, TREE, TUWALL, VAULT, VWALL, WAND_BACKFIRE_CHANCE, WATER, ZAP_POS } from './const.js';
+import { ACCESSIBLE, A_CHA, A_CON, A_DEX, A_INT, A_MAX, A_STR, A_WIS, ALTAR, BC_BALL, BC_CHAIN, BEAR_TRAP, BLCORNER, BOLT_LIM, BRCORNER, CLOUD, COLNO, CORPSTAT_FEMALE, CORPSTAT_GENDER, CORPSTAT_HISTORIC, CORPSTAT_MALE, CORPSTAT_NEUTER, CORR, DOOR, BURN, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, DUST, ENGRAVE, ENGR_BLOOD, FOUNTAIN, GRAVE, HEADSTONE, HWALL, ICE, IN_SIGHT, IS_AIR, IS_OBSTRUCTED, IS_POOL, IS_ROOM, IS_WALL, In_endgame, In_quest, Is_earthlevel, Is_rogue_level, LADDER, LAVAPOOL, LAVAWALL, MAGIC_PORTAL, MARK, MOAT, NORMAL_SPEED, OVERLOADED, P_BASIC, P_UNSKILLED, POOL, ROLLING_BOULDER_TRAP, ROOM, ROT_AGE, ROOMOFFSET, ROWNO, SCORR, SDOOR, SHOPBASE, SINK, STAIRS, STONE, TDWALL, TEMPLE, THRONE, TLCORNER, TRCORNER, TREE, TUWALL, VAULT, VWALL, WAND_BACKFIRE_CHANCE, WATER, ZAP_POS } from './const.js';
 import { d, rn1, rn2, rn2_on_display_rng, rnd, rnl, rnz } from './rng.js';
 import { CLR_BLACK, CLR_BLUE, CLR_BRIGHT_BLUE, CLR_BRIGHT_CYAN, CLR_BRIGHT_GREEN, CLR_BROWN, CLR_CYAN, CLR_GRAY, CLR_GREEN, CLR_MAGENTA, CLR_ORANGE, CLR_RED, CLR_YELLOW, CLR_WHITE, NO_COLOR } from './terminal.js';
 import { vfsDeleteFile, vfsReadFile, vfsWriteFile } from './storage.js';
@@ -7125,6 +7125,230 @@ function resolveFireScrollExplosion(cx, cy, dam, messages = []) {
     }
 
     return { messages, more: messages.length > 1 || (game.u?.uhp || 1) <= 0 };
+}
+
+function earthScrollHasEffect() {
+    const uz = game.u?.uz;
+    if (Is_rogue_level(uz)) return false;
+    if (In_endgame(uz) && !Is_earthlevel(uz)) return false;
+    return true;
+}
+
+function earthCeilingMessage(item) {
+    const around = item?.blessed ? 'around' : 'above';
+    if (game.u?.uswallow) return 'You hear rumbling.';
+    if (In_quest(game.u?.uz)) {
+        return item?.blessed
+            ? 'Avalanches of boulders materialize around you!'
+            : 'An avalanche of boulders materializes above you!';
+    }
+    return `The ceiling rumbles ${around} you!`;
+}
+
+function applySokobanGuilt() {
+    if (!game.level?.flags?.sokoban_rules || !game.u) return;
+    game.u.uconduct ??= {};
+    game.u.uconduct.sokocheat = (game.u.uconduct.sokocheat || 0) + 1;
+    game.u.uluck = (game.u.uluck || 0) - 1;
+}
+
+function makeEarthDropObject(confused) {
+    const obj = mksobj(confused ? ROCK : BOULDER, false, false);
+    obj.cls = 'rock';
+    obj.kind = confused ? 'rock' : 'boulder';
+    obj.glyph = confused ? '*' : '`';
+    obj.color = NO_COLOR;
+    if (confused) {
+        obj.quan = rn1(5, 2);
+        obj.plural = 'rocks';
+    } else {
+        obj.quan = 1;
+    }
+    return obj;
+}
+
+function earthDropObjectPhrase(obj) {
+    const quan = obj?.quan || 1;
+    if (obj?.otyp === BOULDER) return 'a boulder';
+    return quan === 1 ? 'a rock' : `${quan} rocks`;
+}
+
+function earthPlaceObject(obj, x, y) {
+    if (!obj || !game.level) return false;
+    Object.assign(obj, { ox: x, oy: y });
+    game.level.objects ??= [];
+    game.level.objects.push(obj);
+    newsym(x, y);
+    return true;
+}
+
+function earthVisibleSquare(x, y) {
+    return !game.u?.blind && !!(game.viz_array?.[y]?.[x] & IN_SIGHT);
+}
+
+function earthWaterBodyName(loc) {
+    if (loc?.typ === LAVAPOOL || loc?.typ === LAVAWALL) return 'lava';
+    if (loc?.typ === MOAT) return 'moat';
+    return 'water';
+}
+
+function earthFloorEffects(obj, x, y, messages) {
+    const loc = game.level?.at(x, y);
+    if (!loc || obj?.otyp !== BOULDER) return false;
+    if (!(IS_POOL(loc.typ) || loc.typ === LAVAPOOL || loc.typ === LAVAWALL)) return false;
+    const lava = loc.typ === LAVAPOOL || loc.typ === LAVAWALL;
+    const chance = rn2(10);
+    const fillsUp = lava ? chance === 0 : chance !== 0;
+    const body = earthWaterBodyName(loc);
+    if (fillsUp) loc.typ = ROOM;
+    if (!game.u?.uinwater) {
+        if (earthVisibleSquare(x, y)) {
+            messages.push(`There is a large splash as the boulder ${fillsUp ? 'fills' : 'falls into'} the ${body}.`);
+        } else if (!heroIsDeaf()) {
+            messages.push(`You hear a${lava ? ' sizzling' : ''} splash.`);
+        }
+    }
+    if (!fillsUp && earthVisibleSquare(x, y)) messages.push('It sinks without a trace!');
+    newsym(x, y);
+    return true;
+}
+
+function earthTargetIsSolid(target) {
+    const data = target?.data || target || {};
+    return !(target?.passWalls || target?.noncorporeal || target?.unsolid
+        || data.passWalls || data.noncorporeal || data.unsolid
+        || data.amorphous || data.name === 'fog cloud');
+}
+
+function earthObjectDamage(obj, target) {
+    const quan = obj?.quan || 1;
+    const base = obj?.otyp === BOULDER ? rnd(20) : rnd(3);
+    const data = target?.data || target || {};
+    if (data.thickSkinned || data.scaled || data.name === 'shade') return 0;
+    return base * quan;
+}
+
+function wornEarthHelmet() {
+    return (game.inventory || []).find(item =>
+        item.cls === 'armor' && (item.worn || item.line?.includes('being worn')) && armorSlot(item) === 'helm');
+}
+
+function monsterEarthHelmet(mon) {
+    return (mon?.minvent || []).find(item =>
+        item.cls === 'armor' && (item.worn || item.owornmask || item.line?.includes('being worn')) && armorSlot(item) === 'helm');
+}
+
+function hardEarthHelmet(item) {
+    const name = armorKind(item);
+    return armorSlot(item) === 'helm' && !/\b(?:elven leather helm|leather hat|fedora|cornuthaum|dunce cap)\b/.test(name);
+}
+
+function dropEarthObjectOnHero(confused, helmetProtects, messages) {
+    if (game.u?.uswallow) return dropEarthObjectOnMonster(game.u.ux, game.u.uy, confused, messages);
+    const obj = makeEarthDropObject(confused);
+    const solidHero = earthTargetIsSolid({ ...game.u, data: polyselfForm() || {} });
+    let damage = 0;
+    if (solidHero) {
+        messages.push(`You are hit by ${earthDropObjectPhrase(obj)}!`);
+        damage = earthObjectDamage(obj, { data: polyselfForm() || {} });
+        const helmet = wornEarthHelmet();
+        if (helmet && helmetProtects) {
+            if (hardEarthHelmet(helmet)) {
+                messages.push('Fortunately, you are wearing a hard helmet.');
+                if (damage > 2) damage = 2;
+            } else {
+                messages.push(`Your ${pickupObjectName(helmet)} does not protect you.`);
+            }
+        }
+    }
+    if (!earthFloorEffects(obj, game.u?.ux || 0, game.u?.uy || 0, messages))
+        earthPlaceObject(obj, game.u?.ux || 0, game.u?.uy || 0);
+    if (damage && game.u) {
+        game.u.uhp = Math.max(0, (game.u.uhp || 0) - damage);
+        if ((game.u.uhp || 0) <= 0) {
+            game._death_cause = 'killed by a scroll of earth';
+            messages.push('You die...');
+        }
+    }
+    return true;
+}
+
+function dropEarthObjectOnMonster(x, y, confused, messages) {
+    const obj = makeEarthDropObject(confused);
+    const mon = (game.level?.monsters || []).find(mtmp => mtmp.mx === x && mtmp.my === y && !mtmp.dead);
+    const visible = mon && earthVisibleSquare(x, y);
+    if (mon && earthTargetIsSolid(mon)) {
+        const name = fireScrollMonsterName(mon);
+        if (visible) messages.push(`${name} is hit by ${earthDropObjectPhrase(obj)}!`);
+        let damage = earthObjectDamage(obj, mon);
+        const helmet = monsterEarthHelmet(mon);
+        if (helmet) {
+            if (hardEarthHelmet(helmet)) {
+                if (visible) messages.push(`Fortunately, ${name.replace(/^The /, 'the ')} is wearing a hard helmet.`);
+                else if (!heroIsDeaf()) messages.push('You hear a clanging sound.');
+                if (damage > 2) damage = 2;
+            } else if (visible) {
+                messages.push(`${name}'s ${pickupObjectName(helmet)} does not protect it.`);
+            }
+        }
+        mon.mhp = (mon.mhp || 1) - damage;
+        if ((mon.mhp || 0) <= 0) {
+            dropMonsterInventory(mon);
+            game.level.monsters = (game.level?.monsters || []).filter(other => other !== mon);
+            recordVanquished(mon, true);
+            newsym(x, y);
+            if (visible) messages.push(`You kill the ${mon.data?.name || mon.name || 'monster'}!`);
+        } else {
+            mon.msleeping = 0;
+            mon.mpeaceful = false;
+        }
+    }
+    if (!earthFloorEffects(obj, x, y, messages)) earthPlaceObject(obj, x, y);
+    return true;
+}
+
+function earthDropEligibleSquare(x, y) {
+    if (x == null || y == null || x < 1 || x >= COLNO || y < 0 || y >= ROWNO) return false;
+    const loc = game.level?.at(x, y);
+    if (!loc) return false;
+    if (loc.typ === DOOR && (loc.doormask & (D_CLOSED | D_LOCKED))) return false;
+    return !IS_OBSTRUCTED(loc.typ) && !IS_AIR(loc.typ);
+}
+
+function earthScrollEffect(item) {
+    const messages = [];
+    let known = false;
+    let changedVision = false;
+    if (earthScrollHasEffect()) {
+        messages.push(earthCeilingMessage(item));
+        known = true;
+        applySokobanGuilt();
+        let nboulders = 0;
+        const ux = game.u?.ux || 0;
+        const uy = game.u?.uy || 0;
+        if (!item?.cursed) {
+            for (let x = ux - 1; x <= ux + 1; x++) {
+                for (let y = uy - 1; y <= uy + 1; y++) {
+                    if (x === ux && y === uy) continue;
+                    if (!earthDropEligibleSquare(x, y)) continue;
+                    if (dropEarthObjectOnMonster(x, y, heroIsConfused(), messages)) {
+                        nboulders++;
+                        changedVision = true;
+                    }
+                }
+            }
+        }
+        if (!item?.blessed) {
+            if (dropEarthObjectOnHero(heroIsConfused(), !item?.cursed, messages)) changedVision = true;
+        } else if (!nboulders) {
+            messages.push('But nothing else happens.');
+        }
+    }
+    if (changedVision) {
+        vision_reset();
+        vision_recalc(0);
+    }
+    return { messages, known, more: messages.length > 1 || (game.u?.uhp || 1) <= 0 };
 }
 
 function armorKind(item) {
@@ -17364,6 +17588,19 @@ export async function rhack(_cmd) {
 
             const result = resolveFireScrollExplosion(game.u?.ux || 0, game.u?.uy || 0, damage, messages);
             await setMessage(result.messages.join('  '), result.more);
+            game._command_mode = null;
+            game.context.move = 1;
+            return;
+        }
+        if (isScroll && (scrollName === 'earth' || item.scrollIndex === 17)) {
+            const confusedReading = heroIsConfused();
+            removeInventoryItem(item);
+            rn2(19);
+            const messages = scrollReadMessages(confusedReading);
+            const result = earthScrollEffect(item);
+            if (result.known) learnScrollByName('earth', item, 17);
+            messages.push(...result.messages);
+            await setMessage(messages.join('  '), result.more || confusedReading);
             game._command_mode = null;
             game.context.move = 1;
             return;
