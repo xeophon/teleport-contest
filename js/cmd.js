@@ -6,7 +6,7 @@ import { nhgetch } from './input.js';
 import { bot, cls, docrt, flush_screen, newsym, pline, refreshHallucinatedMap, show_glyph_cell, strengthString } from './display.js';
 import { couldsee, vision_recalc, vision_reset } from './vision.js';
 import { RANDOM_MONSTER_BY_NAME, SHOP_TYPES, artifactObjectName, enextoMonsterSpot, make_tutorial1_level, makemon, makeArtifactWishObject, mkcorpstat, mklev, mkobj_at, mksobj, monsterByRndName, nameObjectAsArtifact, next_ident, potionIndexForRoll, rndmonnum, scrollIndexForRoll, syncDungeonContext, u_on_dnstairs, u_on_rndspot, u_on_upstairs, wipe_engr_at, dropMonsterInventory, l_nhcore_init, getrumor, getbogusmon, level_difficulty, set_malign, somexyspace } from './mklev.js';
-import { ACCESSIBLE, A_CHA, A_CON, A_DEX, A_INT, A_MAX, A_STR, A_WIS, ALTAR, BC_BALL, BC_CHAIN, BEAR_TRAP, BLCORNER, BOLT_LIM, BRCORNER, CLOUD, COLNO, CORPSTAT_FEMALE, CORPSTAT_GENDER, CORPSTAT_HISTORIC, CORPSTAT_MALE, CORPSTAT_NEUTER, CORR, DOOR, BURN, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, DUST, ENGRAVE, ENGR_BLOOD, FOUNTAIN, GRAVE, HEADSTONE, HWALL, ICE, IN_SIGHT, IS_OBSTRUCTED, IS_POOL, IS_ROOM, IS_WALL, LADDER, LAVAPOOL, LAVAWALL, MAGIC_PORTAL, MARK, MOAT, NORMAL_SPEED, OVERLOADED, P_BASIC, P_UNSKILLED, POOL, ROLLING_BOULDER_TRAP, ROOM, ROOMOFFSET, ROWNO, SCORR, SDOOR, SHOPBASE, SINK, STAIRS, STONE, TDWALL, TEMPLE, THRONE, TLCORNER, TRCORNER, TREE, TUWALL, VAULT, VWALL, WAND_BACKFIRE_CHANCE, WATER, ZAP_POS } from './const.js';
+import { ACCESSIBLE, A_CHA, A_CON, A_DEX, A_INT, A_MAX, A_STR, A_WIS, ALTAR, BC_BALL, BC_CHAIN, BEAR_TRAP, BLCORNER, BOLT_LIM, BRCORNER, CLOUD, COLNO, CORPSTAT_FEMALE, CORPSTAT_GENDER, CORPSTAT_HISTORIC, CORPSTAT_MALE, CORPSTAT_NEUTER, CORR, DOOR, BURN, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, DUST, ENGRAVE, ENGR_BLOOD, FOUNTAIN, GRAVE, HEADSTONE, HWALL, ICE, IN_SIGHT, IS_OBSTRUCTED, IS_POOL, IS_ROOM, IS_WALL, LADDER, LAVAPOOL, LAVAWALL, MAGIC_PORTAL, MARK, MOAT, NORMAL_SPEED, OVERLOADED, P_BASIC, P_UNSKILLED, POOL, ROLLING_BOULDER_TRAP, ROOM, ROT_AGE, ROOMOFFSET, ROWNO, SCORR, SDOOR, SHOPBASE, SINK, STAIRS, STONE, TDWALL, TEMPLE, THRONE, TLCORNER, TRCORNER, TREE, TUWALL, VAULT, VWALL, WAND_BACKFIRE_CHANCE, WATER, ZAP_POS } from './const.js';
 import { d, rn1, rn2, rn2_on_display_rng, rnd, rnl, rnz } from './rng.js';
 import { CLR_BLACK, CLR_BLUE, CLR_BRIGHT_BLUE, CLR_BRIGHT_CYAN, CLR_BRIGHT_GREEN, CLR_BROWN, CLR_CYAN, CLR_GRAY, CLR_GREEN, CLR_MAGENTA, CLR_ORANGE, CLR_RED, CLR_YELLOW, CLR_WHITE, NO_COLOR } from './terminal.js';
 import { vfsDeleteFile, vfsReadFile, vfsWriteFile } from './storage.js';
@@ -5459,6 +5459,11 @@ function corpstatDisplayMonsterName(obj) {
     return genderNames.neutral;
 }
 
+function corpseObjectName(obj) {
+    const monsterName = corpstatDisplayMonsterName(obj);
+    return `${monsterName} ${(obj?.quan || 1) > 1 ? 'corpses' : 'corpse'}`;
+}
+
 function monsterIndefiniteName(name) {
     const monsterName = String(name || 'monster');
     return `${/^[aeiou]/i.test(monsterName) ? 'an' : 'a'} ${monsterName}`;
@@ -5551,6 +5556,79 @@ function makeWishedFigurineObject(figurineWish, qualifiers = {}) {
     });
 }
 
+function parseWishedCorpseName(lowerName, qualifiers = {}) {
+    const name = String(lowerName || '').trim();
+    let match = name.match(/^corpses?(?:\s+of(?:\s+(?:a|an|the))?\s+(.+))?$/);
+    if (!match) match = name.match(/^(.+)\s+corpses?$/);
+    if (!match) return null;
+    const gendered = stripWishedMonsterGenderPrefix(match[1] || '');
+    return {
+        monsterName: gendered.name,
+        requestedGender: gendered.gender || qualifiers.monsterGender || null,
+        exact: !!gendered.name,
+    };
+}
+
+function wishedCorpseOverrideMonster(monster) {
+    if (!monster) return null;
+    if (monster.name === 'long worm tail')
+        return monsterByRndName('long worm') || RANDOM_MONSTER_BY_NAME.get('long worm') || monster;
+    if (monster.guardian)
+        return monsterByRndName('human') || RANDOM_MONSTER_BY_NAME.get('human') || monster;
+    if (monster.unique && !game.flags?.debug) return null;
+    if (monster.noCorpse) return null;
+    return monster;
+}
+
+function restartWishedCorpseTimeout(otmp) {
+    const corpseName = otmp?.corpsenm?.name || '';
+    if (!corpseName) return;
+    if (corpseName === 'lichen' || corpseName === 'lizard') {
+        delete otmp.rotAwayTurn;
+        return;
+    }
+    const rotAdjust = game.in_mklev ? 25 : 10;
+    otmp.rotAwayTurn = (game.moves || 1) + ROT_AGE + rnz(rotAdjust) - rotAdjust;
+    otmp._corpse_restart_consumed = true;
+}
+
+function finishWishedCorpseDisplay(otmp) {
+    const corpseName = otmp?.corpsenm?.name || 'monster';
+    otmp.kind = `${corpseName} corpse`;
+    otmp.actualKind = `${corpseName} corpse`;
+    otmp.singular = `${corpseName} corpse`;
+    otmp.plural = `${corpseName} corpses`;
+    if (CORPSE_WEIGHTS.has(corpseName)) otmp.owt = CORPSE_WEIGHTS.get(corpseName);
+}
+
+function makeWishedCorpseObject(corpseWish, qualifiers = {}) {
+    const resolved = resolveWishedCorpstatMonsterName(
+        corpseWish?.monsterName,
+        corpseWish?.requestedGender || qualifiers.monsterGender || null,
+    );
+    const monster = resolved.monsterName
+        ? monsterByRndName(resolved.monsterName) || RANDOM_MONSTER_BY_NAME.get(resolved.monsterName)
+        : null;
+    if (corpseWish?.exact && !monster) return noFittingWishObject();
+
+    const otmp = mksobj(CORPSE, true, false);
+    if (monster) {
+        otmp.spe = wishedCorpstatSpe(monster, resolved.requestedGender);
+        const corpseMonster = wishedCorpseOverrideMonster(monster);
+        if (corpseMonster) {
+            otmp.corpsenm = corpseMonster;
+            restartWishedCorpseTimeout(otmp);
+        }
+    }
+    Object.assign(otmp, {
+        cls: 'food',
+        glyph: '%',
+        wishedfor: true,
+    });
+    finishWishedCorpseDisplay(otmp);
+    return otmp;
+}
+
 function makeOrdinaryBellWishObject() {
     const otmp = mksobj(BELL, true, false);
     return Object.assign(otmp, {
@@ -5620,8 +5698,6 @@ function isWishedFoodName(lowerName) {
         || lowerName === 'food'
         || lowerName === 'ration'
         || lowerName === 'rations'
-        || lowerName === 'corpse'
-        || lowerName.endsWith(' corpse')
         || lowerName.endsWith(' cookie')
         || lowerName.endsWith(' cookies');
 }
@@ -5976,6 +6052,9 @@ function wishedBaseObjectFromName(lowerName, qualifiers = {}, originalName = low
     const figurineWish = parseWishedFigurineName(lowerName, qualifiers);
     if (figurineWish) return makeWishedFigurineObject(figurineWish, qualifiers);
 
+    const corpseWish = parseWishedCorpseName(lowerName, qualifiers);
+    if (corpseWish) return makeWishedCorpseObject(corpseWish, qualifiers);
+
     const specialSubstitution = substituteNonWizardSpecialWish(lowerName);
     if (specialSubstitution) return specialSubstitution;
 
@@ -6240,7 +6319,7 @@ export function pickupObjectName(obj) {
     if (obj.otyp === GOLD_PIECE || obj.cls === 'coin' || obj.glyph === '$')
         return (obj.quan || 1) > 1 ? 'gold pieces' : 'gold piece';
     if (obj.artifact) return artifactObjectName(obj) || obj.kind;
-    if (obj.otyp === 'corpse' || obj.otyp === CORPSE) return `${obj.corpsenm?.name || 'monster'} corpse`;
+    if (obj.otyp === 'corpse' || obj.otyp === CORPSE) return corpseObjectName(obj);
     if ((obj.kind === 'statue' || obj.otyp === STATUE) && obj.corpsenm?.name) {
         const historic = archeologist && (((obj.spe || 0) & CORPSTAT_HISTORIC) || obj.historic);
         return `${historic ? 'historic ' : ''}statue of ${monsterIndefiniteName(corpstatDisplayMonsterName(obj))}`;
@@ -9344,7 +9423,7 @@ async function moveHero(dx, dy) {
         }
     }
     if ((objHere?.otyp === 'corpse' || objHere?.otyp === CORPSE) && objHere.corpsenm?.name)
-        objHereMessage = `${featurePrefix}You see here a ${objHere.corpsenm.name} corpse${priceSuffix}.`;
+        objHereMessage = `${featurePrefix}You see here a ${pickupObjectName(objHere)}${priceSuffix}.`;
     else if (objHere?.kind === 'dart' && (objHere.quan || 1) > 1)
         objHereMessage = `${featurePrefix}You see here ${objHere.quan} darts${priceSuffix}.`;
     else if (objHere?.kind === 'sling')
@@ -10660,7 +10739,7 @@ export async function rhack(_cmd) {
                 for (let i = 0; i < objects.length; i++) {
                     const obj = objects[i];
                     const name = (obj.otyp === 'corpse' || obj.otyp === CORPSE)
-                        ? `${obj.corpsenm?.name || 'monster'} corpse`
+                        ? pickupObjectName(obj)
                         : obj.otyp === ICE_BOX ? 'ice box'
                         : BAG_OBJECT_TYPES.has(obj.otyp) ? 'bag'
                         : pickupObjectName(obj);
@@ -17368,6 +17447,11 @@ export async function rhack(_cmd) {
             game._pet_food_scan_inventory = game.inventory;
             let carriedWeight = Math.trunc(((game._goldCount || 0) + 50) / 100);
             for (const invItem of game.inventory || []) {
+                if (invItem.otyp === 'corpse' || invItem.otyp === CORPSE) {
+                    const corpseName = invItem.corpsenm?.name || objectKindKey(invItem).replace(/\s+corpses?$/, '');
+                    carriedWeight += (CORPSE_WEIGHTS.get(corpseName) ?? invItem.owt ?? 1) * (invItem.quan || 1);
+                    continue;
+                }
                 const kind = String(invItem.kind || invItem.actualKind || invItem.spellName || invItem.spell?.name || '').toLowerCase();
                 const cls = invItem.cls || (invItem.otyp === RING_CLASS ? 'ring'
                     : invItem.otyp === SCROLL_CLASS ? 'scroll'
@@ -21074,18 +21158,19 @@ export async function rhack(_cmd) {
             return;
         }
         if (objectHere?.otyp === 'corpse') {
+            const corpseName = pickupObjectName({ ...objectHere, quan: 1 });
             const letter = nextInventoryLetter();
             game.inventory = [...(game.inventory || []), {
                 ...objectHere,
                 cls: 'food',
                 letter,
                 quan: 1,
-                kind: `${objectHere.corpsenm?.name || 'monster'} corpse`,
+                kind: corpseName,
             }];
             game._pet_food_scan_inventory = game.inventory;
             game.level.objects = (game.level.objects || []).filter(obj => obj !== objectHere);
             newsym(game.u?.ux || 0, game.u?.uy || 0);
-            await setMessage(`${letter} - a ${objectHere.corpsenm?.name || 'monster'} corpse.`);
+            await setMessage(`${letter} - a ${corpseName}.`);
             game.context.move = 1;
             return;
         }
@@ -21725,7 +21810,7 @@ export async function rhack(_cmd) {
                 const obj = objects[i];
                 const amount = (() => {
                     const name = (obj.otyp === 'corpse' || obj.otyp === CORPSE)
-                        ? `${obj.corpsenm?.name || 'monster'} corpse`
+                        ? pickupObjectName(obj)
                         : obj.otyp === ICE_BOX ? 'ice box'
                         : BAG_OBJECT_TYPES.has(obj.otyp) ? 'bag'
                         : pickupObjectName(obj);
