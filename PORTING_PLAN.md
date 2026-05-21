@@ -823,6 +823,13 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   now uses specific armor object ids for ring mail, studded/leather armor,
   plate mail, shield of reflection, and elven mithril-coat instead of the
   generic armor fallback.
+- Exact wished tool/food aliases now carry stable specific object identities
+  instead of the generic `TOOL_CLASS`/`FOOD_CLASS` ids for `meat ring`,
+  `tin opener`/`can opener`, `beartrap`, `land mine`, `bag of tricks`,
+  `tooled horn`, and `grappling hook` aliases. Canonical names consume the
+  C namedesc probability roll, explicit `spellings[]` aliases skip it, and
+  wished bags of tricks get C-style random charges with `empty` wishes
+  zeroing those charges.
 
 Next concrete target:
 

@@ -677,6 +677,13 @@ const BAG_OF_HOLDING = 219;
 const BRASS_LANTERN = 226;
 const OIL_LAMP = 227;
 const MAGIC_LAMP = 228;
+const BAG_OF_TRICKS = 10158;
+const TIN_OPENER = 10159;
+const LAND_MINE = 10160;
+const BEARTRAP = 10161;
+const TOOLED_HORN = 10162;
+const GRAPPLING_HOOK = 10163;
+const MEAT_RING = 10164;
 const BLINDFOLD = 10113;
 const MIRROR = 10006;
 const CREAM_PIE = 10081;
@@ -825,11 +832,13 @@ const WISH_BASE_OBJECTS = new Map([
     ['expensive camera', { otyp: EXPENSIVE_CAMERA, cls: 'tool', glyph: '(', kind: 'expensive camera' }],
     ['blindfold', { otyp: BLINDFOLD, cls: 'tool', glyph: '(', kind: 'blindfold' }],
     ['bell of opening', { otyp: BELL, cls: 'tool', glyph: '(', kind: 'silver bell', actualKind: 'bell of opening', known: false }],
-    ['meat ring', { otyp: FOOD_CLASS, cls: 'food', glyph: '%', kind: 'meat ring', actualKind: 'meat ring', nutrition: 5, quan: 1 }],
-    ['beartrap', { otyp: TOOL_CLASS, cls: 'tool', glyph: '(', kind: 'beartrap', actualKind: 'beartrap' }],
-    ['land mine', { otyp: TOOL_CLASS, cls: 'tool', glyph: '(', kind: 'land mine', actualKind: 'land mine' }],
-    ['bag of tricks', { otyp: TOOL_CLASS, cls: 'tool', glyph: '(', kind: 'bag of tricks', actualKind: 'bag of tricks' }],
-    ['grappling hook', { otyp: TOOL_CLASS, cls: 'tool', glyph: '(', kind: 'grappling hook', actualKind: 'grappling hook' }],
+    ['meat ring', { otyp: MEAT_RING, cls: 'food', glyph: '%', kind: 'meat ring', actualKind: 'meat ring', nutrition: 5, quan: 1 }],
+    ['tin opener', { otyp: TIN_OPENER, cls: 'tool', glyph: '(', kind: 'tin opener', actualKind: 'tin opener' }],
+    ['beartrap', { otyp: BEARTRAP, cls: 'tool', glyph: '(', kind: 'beartrap', actualKind: 'beartrap' }],
+    ['land mine', { otyp: LAND_MINE, cls: 'tool', glyph: '(', kind: 'land mine', actualKind: 'land mine' }],
+    ['bag of tricks', { otyp: BAG_OF_TRICKS, cls: 'tool', glyph: '(', kind: 'bag of tricks', actualKind: 'bag of tricks', wishSpeRn1: [18, 3] }],
+    ['tooled horn', { otyp: TOOLED_HORN, cls: 'tool', glyph: '(', kind: 'horn', actualKind: 'tooled horn', known: false }],
+    ['grappling hook', { otyp: GRAPPLING_HOOK, cls: 'tool', glyph: '(', kind: 'grappling hook', actualKind: 'grappling hook' }],
     ['plate mail', { otyp: PLATE_MAIL, cls: 'armor', glyph: '[', kind: 'plate mail', actualKind: 'plate mail' }],
     ['ring mail', { otyp: RING_MAIL, cls: 'armor', glyph: '[', kind: 'ring mail', actualKind: 'ring mail' }],
     ['studded leather armor', { otyp: STUDDED_LEATHER_ARMOR, cls: 'armor', glyph: '[', kind: 'studded leather armor', actualKind: 'studded leather armor' }],
@@ -855,6 +864,9 @@ const WISH_BASE_NAMEDESC_BOUNDS = new Map([
     ['tallow candle', 21], ['wax candle', 6], ['stethoscope', 26],
     ['magic marker', 16], ['mirror', 46], ['expensive camera', 16],
     ['bell of opening', 1], ['blindfold', 51], ['leather gloves', 16],
+    ['meat ring', 1], ['tin opener', 36], ['beartrap', 1],
+    ['land mine', 1], ['bag of tricks', 21], ['tooled horn', 6],
+    ['grappling hook', 6],
     ['plate mail', 41], ['ring mail', 67], ['studded leather armor', 67],
     ['leather armor', 76], ['elven mithril-coat', 16],
     ['shield of reflection', 8],
@@ -6255,6 +6267,8 @@ function applyWishedContainerState(item, qualifiers) {
         item.otrapped = qualifiers.trappedState === 1;
     if (qualifiers.empty && tin && !item._wish_tin_explicit_content)
         setTinEmpty(item);
+    if (qualifiers.empty && objectKindKey(item) === 'bag of tricks')
+        item.spe = 0;
     if (qualifiers.empty && isWishedContainerObject(item))
         item.contents = [];
     if (!box || !qualifiers.lockState) return;
@@ -6410,17 +6424,17 @@ const WISH_NAME_ALIASES = new Map([
     ['garlic', 'clove of garlic'],
     ['royal jelly', 'lump of royal jelly'],
     ['can', 'tin'],
-    ['can opener', 'tin opener'],
-    ['hook', 'grappling hook'],
-    ['grappling iron', 'grappling hook'],
-    ['grapnel', 'grappling hook'],
-    ['grapple', 'grappling hook'],
     ['gloves of power', 'gauntlets of power'],
 ]);
 const WISH_EXPLICIT_SPELLING_ALIASES = new Map([
     ['lantern', 'brass lantern'],
     ['camera', 'expensive camera'],
     ['marker', 'magic marker'],
+    ['can opener', 'tin opener'],
+    ['hook', 'grappling hook'],
+    ['grappling iron', 'grappling hook'],
+    ['grapnel', 'grappling hook'],
+    ['grapple', 'grappling hook'],
     ['smooth shield', 'shield of reflection'],
     ['silver shield', 'shield of reflection'],
     ['gauntlets of ogre power', 'gauntlets of power'],
@@ -6526,8 +6540,10 @@ function wishedBaseObjectFromName(lowerName, qualifiers = {}, originalName = low
     if (baseObject) {
         const namedescBound = WISH_BASE_NAMEDESC_BOUNDS.get(lowerName);
         if (namedescBound && !spellingAlias.skipNamedesc) rn2(namedescBound);
+        const { wishSpeRn1, ...baseFields } = baseObject;
         const otmp = mksobj(baseObject.otyp, true, false);
-        return Object.assign(otmp, baseObject, { wishedfor: true });
+        if (wishSpeRn1) otmp.spe = rn1(wishSpeRn1[0], wishSpeRn1[1]);
+        return Object.assign(otmp, baseFields, { wishedfor: true });
     }
 
     const wandWish = lowerName.match(/^wand of ([a-z ]+?)(?:\s+\((?:(\d+):)?(\d+)\))?$/);
