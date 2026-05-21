@@ -888,6 +888,14 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   confused readings toggle erodeproofing and repair erosion, normal readings
   handle blessed/cursed enchantment math, over-enchant evaporation, AC deltas,
   warning vibration messages, and dragon scales hardening into scale mail.
+- Scroll of enchant weapon now follows the C `seffect_enchant_weapon()` and
+  `chwepon()` split more closely: only the primary wielded item is affected,
+  confused readings proof or strip proofing and repair erosion, no-weapon cases
+  use the hands/tin-opener strange-feeling path, B/U/C amount math is applied
+  before `chwepon()` side effects, worm teeth and crysknives transform, soft
+  over-enchant limits can evaporate the wielded stack, Magicbane and
+  elven/artifact vibration clues are emitted, and scroll discovery is no longer
+  granted up front.
 - Scroll of charging now follows the C read flow: confused readings affect spell
   energy directly without identifying the scroll, normal readings identify and
   consume the scroll before prompting for a target, and the recharge path covers

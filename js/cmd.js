@@ -7035,7 +7035,7 @@ function scrollCallLabel(item, scrollIndex, fallback = 'ZELGO MER') {
     return game._object_descriptions?.scrolls?.[scrollIndex] || fallback;
 }
 
-function lightScrollReadMessages(confusedReading) {
+function scrollDisappearMessages(confusedReading) {
     const messages = [game.u?.blind
         ? 'As you pronounce the formula on it, the scroll disappears.'
         : 'As you read the scroll, it disappears.'];
@@ -7155,6 +7155,176 @@ async function lightScrollEffect(item, messages) {
     const learned = !game.u?.blind;
     lightScrollLitroom(!item.cursed, item, messages);
     return { learned };
+}
+
+function primaryWieldedItem() {
+    return (game.inventory || []).find(item =>
+        item?.wielded || item?.line?.includes('weapon in') || item?.line?.includes('(wielded)')) || null;
+}
+
+function enchantWeaponName(item) {
+    return pickupObjectName(item).replace(/^pair of /, '');
+}
+
+function enchantWeaponSubject(item) {
+    return `Your ${enchantWeaponName(item)}`;
+}
+
+function enchantWeaponVerb(item, singular, plural) {
+    const name = enchantWeaponName(item);
+    return (item?.quan || 1) > 1 || /\b(?:boots|shoes|gloves|gauntlets|darts|arrows|daggers|knives|spears|rocks|stones|shuriken)\b/i.test(name)
+        ? plural
+        : singular;
+}
+
+function refreshEnchantWeaponLine(item) {
+    if (!item || !(game.inventory || []).includes(item)) return;
+    item.line = normalInventoryLine({ ...item, line: '' });
+}
+
+function enchantWeaponIsWeaponLike(item) {
+    return !!item && (item.cls === 'weapon' || item.otyp === WEAPON_CLASS || item.glyph === ')' || isWeaponTool(item));
+}
+
+function enchantWeaponWillWeld(item) {
+    if (!item?.cursed) return false;
+    if (enchantWeaponIsWeaponLike(item)) return true;
+    return objectKindKey(item) === 'tin opener';
+}
+
+function enchantWeaponAmount(scroll, target) {
+    if (scroll.cursed) return -1;
+    if (!target) return 1;
+    const spe = target.spe ?? 0;
+    if (spe >= 9) return rn2(spe) === 0 ? 1 : 0;
+    if (scroll.blessed) return rnd(3 - Math.trunc(spe / 3));
+    return 1;
+}
+
+function enchantWeaponConfusedEffect(scroll, messages) {
+    const target = primaryWieldedItem();
+    const profile = wishedDamageProfile(target);
+    if (!target || !profile.erosionMatters || target.cls === 'armor' || target.glyph === '[') return null;
+
+    const newErodeproof = !scroll.cursed;
+    if (game.u?.blind) {
+        target.rknown = false;
+        messages.push('Your weapon feels warm for a moment.');
+    } else {
+        target.rknown = true;
+        messages.push(`${enchantWeaponSubject(target)} ${enchantWeaponVerb(target, 'is', 'are')} covered by a ${scroll.cursed ? 'mottled purple glow' : 'shimmering golden shield'}!`);
+    }
+    if (newErodeproof && (target.oeroded || target.oeroded2)) {
+        target.oeroded = 0;
+        target.oeroded2 = 0;
+        messages.push(`${enchantWeaponSubject(target)} ${enchantWeaponVerb(target, game.u?.blind ? 'feels' : 'looks', game.u?.blind ? 'feel' : 'look')} as good as new!`);
+    }
+    target.oerodeproof = newErodeproof;
+    refreshEnchantWeaponLine(target);
+    return { learned: false, more: messages.length > 1 };
+}
+
+function transformWormToCrysknife(target, messages) {
+    const multiple = (target.quan || 1) > 1;
+    messages.push(`${enchantWeaponSubject(target)} ${multiple ? 'fuse, and become' : 'is'} much sharper now.`);
+    target.kind = 'crysknife';
+    target.actualKind = 'crysknife';
+    target.quan = 1;
+    target.oerodeproof = false;
+    target.cursed = false;
+    refreshEnchantWeaponLine(target);
+    return { learned: true, more: false };
+}
+
+function transformCrysknifeToWormTooth(scroll, target, messages) {
+    const multiple = (target.quan || 1) > 1;
+    messages.push(`${enchantWeaponSubject(target)} ${multiple ? 'fuse, and become' : 'is'} much duller now.`);
+    target.kind = 'worm tooth';
+    target.actualKind = 'worm tooth';
+    target.quan = 1;
+    target.oerodeproof = false;
+    refreshEnchantWeaponLine(target);
+    return { learned: scroll.bknown === true, more: false };
+}
+
+function removeWieldedWeapon(target) {
+    removeInventoryItem(target, target.quan || 1);
+    if (target.wielded) game._wielded_mjollnir = false;
+}
+
+function enchantWeaponScrollChwepon(scroll, amount, messages) {
+    const target = primaryWieldedItem();
+    if (!enchantWeaponIsWeaponLike(target)) {
+        if (amount >= 0 && target && enchantWeaponWillWeld(target)) {
+            if (game.u?.blind) messages.push(`Your ${game.u?.uhandedness || 'right'} hand tingles.`);
+            else {
+                messages.push(`${enchantWeaponSubject(target)} ${enchantWeaponVerb(target, 'glows', 'glow')} with an amber aura.`);
+                target.bknown = !game.u?.hallucinating;
+            }
+            target.cursed = false;
+            refreshEnchantWeaponLine(target);
+        } else {
+            messages.push(`Your hands ${amount >= 0 ? 'twitch' : 'itch'}.`);
+        }
+        exerciseAttribute(A_DEX, amount >= 0);
+        return { learned: false, more: false };
+    }
+
+    const kind = objectKindKey(target);
+    if (kind === 'worm tooth' && amount >= 0)
+        return transformWormToCrysknife(target, messages);
+    if (kind === 'crysknife' && amount < 0)
+        return transformCrysknifeToWormTooth(scroll, target, messages);
+
+    const color = amount < 0 ? 'black' : 'blue';
+    if (amount < 0 && target.artifact && target.oname && String(target.oname).toLowerCase() === String(target.artifact).toLowerCase()) {
+        if (!game.u?.blind) messages.push(`${enchantWeaponSubject(target)} faintly ${enchantWeaponVerb(target, 'glows', 'glow')} ${color}.`);
+        return { learned: false, more: false };
+    }
+
+    const spe = target.spe ?? 0;
+    if (((spe > 5 && amount >= 0) || (spe < -5 && amount < 0)) && rn2(3)) {
+        if (game.u?.blind)
+            messages.push(`${enchantWeaponSubject(target)} ${enchantWeaponVerb(target, 'evaporates', 'evaporate')}.`);
+        else
+            messages.push(`${enchantWeaponSubject(target)} violently ${enchantWeaponVerb(target, 'glows', 'glow')} ${color} for a while and then ${enchantWeaponVerb(target, 'evaporates', 'evaporate')}.`);
+        removeWieldedWeapon(target);
+        return { learned: false, more: true };
+    }
+
+    let learned = false;
+    if (!game.u?.blind) {
+        const glow = amount === 0 ? 'violently glows' : 'glows';
+        const time = amount * amount === 1 ? 'moment' : 'while';
+        messages.push(`${enchantWeaponSubject(target)} ${glow} ${color} for a ${time}.`);
+        learned = target.known === true && (amount > 0 || (amount < 0 && scroll.bknown === true));
+    }
+
+    target.spe = capWishSpe(spe + amount);
+    if (amount > 0 && target.cursed) target.cursed = false;
+    refreshEnchantWeaponLine(target);
+
+    if (target.artifact === 'Magicbane' && target.spe >= 0)
+        messages.push(`Your right hand ${amount > 1 && target.spe > 1 ? 'flinches' : 'itches'}!`);
+    if (target.spe > 5 && (/^elven\b/.test(kind) || target.artifact || !rn2(7)))
+        messages.push(`${enchantWeaponSubject(target)} suddenly ${enchantWeaponVerb(target, 'vibrates', 'vibrate')} unexpectedly.`);
+    return { learned, more: messages.length > 1 };
+}
+
+function enchantWeaponScrollEffect(scroll, messages) {
+    if (heroIsConfused()) {
+        const confusedResult = enchantWeaponConfusedEffect(scroll, messages);
+        if (confusedResult) return confusedResult;
+    }
+    const target = primaryWieldedItem();
+    const amount = enchantWeaponAmount(scroll, target);
+    const result = enchantWeaponScrollChwepon(scroll, amount, messages);
+    const finalTarget = primaryWieldedItem();
+    if (finalTarget) {
+        finalTarget.spe = capWishSpe(finalTarget.spe ?? 0);
+        refreshEnchantWeaponLine(finalTarget);
+    }
+    return result;
 }
 
 function wandTypeName(item) {
@@ -17808,52 +17978,23 @@ export async function rhack(_cmd) {
             return;
         }
         if (isScroll && (scrollName === 'enchant weapon' || item.scrollIndex === 5)) {
-            const label = String(item.kind || '').replace(/^scroll labeled /, '')
-                || game._object_descriptions?.scrolls?.[5];
-            game._discoveries ??= [];
-            const discovery = game._discoveries.find(entry => entry.section === 'Scrolls' && entry.name === 'scroll of enchant weapon');
-            if (discovery) {
-                discovery.known = true;
-                discovery.text = label ? `scroll of enchant weapon (${label})` : 'scroll of enchant weapon';
-            } else {
-                game._discoveries.push({
-                    section: 'Scrolls',
-                    name: 'scroll of enchant weapon',
-                    text: label ? `scroll of enchant weapon (${label})` : 'scroll of enchant weapon',
-                    starred: false,
-                    known: true,
-                });
-            }
+            const confusedReading = heroIsConfused();
+            const alreadyKnown = scrollDiscoveryKnown('enchant weapon')
+                || item.known === true
+                || item.actualKind === 'scroll of enchant weapon'
+                || item.kind === 'enchant weapon'
+                || item.kind === 'scroll of enchant weapon';
+            const callLabel = scrollCallLabel(item, 5);
+            const messages = scrollDisappearMessages(confusedReading);
             removeInventoryItem(item);
             rn2(19);
-            const weapon = (game.inventory || []).find(invItem =>
-                invItem.wielded || invItem.line?.includes('weapon in') || invItem.cls === 'weapon');
-            if (weapon) {
-                const spe = weapon.spe ?? 0;
-                const amount = item.cursed ? -1
-                    : spe >= 9 ? (rn2(spe) === 0 ? 1 : 0)
-                        : item.blessed ? rnd(3 - Math.trunc(spe / 3)) : 1;
-                weapon.spe = spe + amount;
-                const name = pickupObjectName(weapon);
-                const enchantment = `${weapon.spe >= 0 ? '+' : ''}${weapon.spe}`;
-                const article = /^[aeiou]/.test(enchantment) ? 'an' : 'a';
-                const hand = /quarterstaff|two-handed sword|battle-axe/.test(String(weapon.kind || '').toLowerCase())
-                    ? 'hands'
-                    : `${game.u?.uhandedness || 'right'} hand`;
-                weapon.line = `${weapon.letter || '?'} - ${article} ${enchantment} ${name} (weapon in ${hand})`;
-                const glow = amount === 0 ? 'violently glows' : 'glows';
-                const color = amount < 0 ? 'black' : 'blue';
-                const time = amount * amount === 1 ? 'moment' : 'while';
-                game._queued_message_after_more = `Your ${name} ${glow} ${color} for a ${time}.`;
-            } else {
-                game._queued_message_after_more = `Your hands ${item.cursed ? 'itch' : 'twitch'}.`;
-            }
-	            game._queued_message_more_after_more = 0;
-            game._queued_message_process_time_after_more = 1;
-	            game._read_scroll_exercise_after_more = 1;
-            await setMessage('As you read the scroll, it disappears.', true);
-            game._command_mode = null;
-            game.context.move = 1;
+            const result = enchantWeaponScrollEffect(item, messages);
+            if (result.learned) learnScrollByName('enchant weapon', item, 5);
+            const shouldCall = !alreadyKnown && !result.learned;
+            await setMessage(messages.join('  '), result.more || confusedReading || shouldCall);
+            game._command_mode = shouldCall ? 'callScrollAfterMore' : null;
+            if (shouldCall) game._call_scroll_label = callLabel;
+            game.context.move = shouldCall ? 0 : 1;
             return;
         }
         if (isScroll && (scrollName === 'create monster' || item.scrollIndex === 6)) {
@@ -18291,7 +18432,7 @@ export async function rhack(_cmd) {
                 || item.kind === 'light'
                 || item.kind === 'scroll of light';
             const callLabel = scrollCallLabel(item, 9);
-            const messages = lightScrollReadMessages(confusedReading);
+            const messages = scrollDisappearMessages(confusedReading);
             removeInventoryItem(item);
             rn2(19);
             const result = await lightScrollEffect(item, messages);
