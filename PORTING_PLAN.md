@@ -878,6 +878,11 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   `makemon()` path; taming scans the C radius, handles cursed anger,
   resistance, peaceful/tame/flee/sleep state updates, visible result messages,
   and initializes the pet extension when a monster becomes tame.
+- Scroll of amnesia now has a C-shaped read effect: it identifies and consumes
+  the scroll, uses the C spell-loss selection for non-blessed readings, leaves
+  spells intact when blessed, clears felt ball-and-chain memory and monster
+  ever-seen memory, preserves the Maud/hallucination messages, and no longer
+  treats amnesia as the scroll exempt from fire inventory destruction.
 
 Next concrete target:
 

@@ -4632,7 +4632,7 @@ function fireDamageInventory(origDamage, forceDestroyItems = false, rollIgniteIt
         if (item.artifact || (item.in_use && (item.quan || 1) === 1)) continue;
         if (cls !== 'potion' && cls !== 'scroll' && cls !== 'spellbook') continue;
         const itemName = String(item.actualKind || item.kind || inventoryItemName(item));
-        if (cls === 'scroll' && (item.scrollIndex === 15 || /scroll of fire\b/i.test(itemName))) continue;
+        if (cls === 'scroll' && (item.scrollIndex === 16 || /scroll of fire\b/i.test(itemName))) continue;
         if (cls === 'spellbook' && /(?:spellbook of )?fireball|Book of the Dead/i.test(itemName)) continue;
         const i = eligible < limit ? eligible : rn2(eligible);
         eligible++;
@@ -6608,6 +6608,51 @@ function scrollReadMessages(confusedReading) {
     if (confusedReading)
         messages.push(game.u?.hallucinating ? 'Being so trippy, you screw up...' : 'Being confused, you mispronounce the magic words...');
     return messages;
+}
+
+function loseAmnesiaSpells() {
+    const spells = game._known_spells || [];
+    const n = spells.length;
+    let nzap = rn2(n + 1);
+    if (heroIsConfused()) {
+        const confusedZap = rn2(n + 1);
+        if (confusedZap > nzap) nzap = confusedZap;
+    }
+    if (nzap > 1 && !rnl(7)) nzap = rnd(nzap);
+    if (!nzap) return;
+
+    const kept = [];
+    for (let i = 0; i < n; i++) {
+        if (nzap > 0 && rn2(n - i) < nzap) {
+            exerciseAttribute(A_WIS, false);
+            nzap--;
+        } else {
+            kept.push(spells[i]);
+        }
+    }
+    game._known_spells = kept;
+}
+
+function amnesiaScrollEffect(item) {
+    if (!item.blessed) loseAmnesiaSpells();
+    rnd(item.blessed ? 3 : 5);
+    if (game.u && (game.u.upunished || game._punished)) game.u._bcFelt = 0;
+    for (const mon of game.level?.monsters || []) {
+        if (mon !== game.u?.usteed && mon !== game.u?.ustuck) mon.meverseen = 0;
+    }
+    if (game.u?.hallucinating) {
+        exerciseAttribute(A_WIS, false);
+        return 'Your mind releases itself from mundane concerns.';
+    }
+    if (/^maud/i.test(game.plname || '')) {
+        exerciseAttribute(A_WIS, false);
+        return 'As your mind turns inward on itself, you forget everything else.';
+    }
+    const message = rn2(2)
+        ? 'Who was that Maud person anyway?'
+        : 'Thinking of Maud you forget everything else.';
+    exerciseAttribute(A_WIS, false);
+    return message;
 }
 
 async function createMonsterScrollEffect(item) {
@@ -16360,6 +16405,18 @@ export async function rhack(_cmd) {
             rn2(19);
             revealLevelMap();
             await setMessage('As you read the scroll, it disappears.  A map coalesces in your mind!');
+            game._command_mode = null;
+            game.context.move = 1;
+            return;
+        }
+        if (isScroll && (scrollName === 'amnesia' || item.scrollIndex === 15)) {
+            const confusedReading = heroIsConfused();
+            learnScrollByName('amnesia', item, 15);
+            removeInventoryItem(item);
+            rn2(19);
+            const messages = scrollReadMessages(confusedReading);
+            messages.push(amnesiaScrollEffect(item));
+            await setMessage(messages.join('  '), true);
             game._command_mode = null;
             game.context.move = 1;
             return;
