@@ -5373,8 +5373,33 @@ function makeFakeAmuletOfYendorWishObject() {
         appearance: 'Amulet of Yendor',
         known: false,
         fakeAmuletOfYendor: true,
+        unique: true,
         wishedfor: true,
     });
+}
+
+function makeRealAmuletOfYendorWishObject() {
+    const otmp = mksobj(AMULET_CLASS, true, false);
+    return Object.assign(otmp, {
+        cls: 'amulet',
+        glyph: '"',
+        kind: 'Amulet of Yendor',
+        actualKind: 'Amulet of Yendor',
+        appearance: 'Amulet of Yendor',
+        known: true,
+        realAmuletOfYendor: true,
+        unique: true,
+        wishedfor: true,
+    });
+}
+
+function makeAmuletOfYendorWishObject(lowerName, qualifiers = {}) {
+    const name = String(lowerName || '').trim();
+    if (!/\bamulet of yendor\b/.test(name)) return null;
+    const fakeNamePrefix = /^(?:cheap|plastic|imitation)\b/.test(name);
+    if (qualifiers.fakeAmulet || fakeNamePrefix || !game.flags?.debug)
+        return makeFakeAmuletOfYendorWishObject();
+    return makeRealAmuletOfYendorWishObject();
 }
 
 function makeOrdinaryBellWishObject() {
@@ -5790,6 +5815,9 @@ function wishedBaseObjectFromName(lowerName, qualifiers = {}, originalName = low
     const tinWish = parseWishedTinName(lowerName);
     if (tinWish) return makeWishedTinObject(tinWish);
 
+    const yendorAmulet = makeAmuletOfYendorWishObject(lowerName, qualifiers);
+    if (yendorAmulet) return yendorAmulet;
+
     const specialSubstitution = substituteNonWizardSpecialWish(lowerName);
     if (specialSubstitution) return specialSubstitution;
 
@@ -6137,6 +6165,7 @@ export function pickupObjectName(obj) {
         return named(obj.kind);
     }
     if (obj.fakeAmuletOfYendor) return obj.known ? obj.actualKind : 'Amulet of Yendor';
+    if (obj.realAmuletOfYendor) return 'Amulet of Yendor';
     if (obj.otyp === AMULET_CLASS || obj.cls === 'amulet') {
         if (obj.known === false || !obj.kind) {
             const appearance = obj.appearance || game._object_descriptions?.amulets?.[obj.amuletIndex] || 'amulet';
@@ -6250,6 +6279,7 @@ function pickupObjectPhrase(obj) {
         return `${article} ${spe}${name}`;
     }
     if (count > 1) return `${count} ${name}`;
+    if (obj.unique) return `the ${name}`;
     if (name.endsWith('boots') || name.endsWith('shoes') || name.endsWith('gloves') || name.startsWith('gauntlets'))
         return `a pair of ${name}`;
     const article = /^[aeiou]/i.test(name) || name === 'orcish helm' ? 'an' : 'a';
@@ -16965,6 +16995,8 @@ export async function rhack(_cmd) {
                 halfeaten: false,
                 unlabeled: false,
                 lightState: null,
+                realAmulet: false,
+                fakeAmulet: false,
             };
             let wishedErosionIntensity = 0;
             for (;;) {
@@ -16982,6 +17014,18 @@ export async function rhack(_cmd) {
                     wishedSpeNegative = spe[1].startsWith('-');
                     wishedSpe = capWishSpe(Number(spe[1]));
                     wishedName = wishedName.slice(spe[0].length);
+                    continue;
+                }
+                const amuletReality = wishedName.match(/^(real|fake)\s+/i);
+                if (amuletReality) {
+                    const state = amuletReality[1].toLowerCase();
+                    if (state === 'fake') {
+                        wishedQualifiers.fakeAmulet = true;
+                        wishedQualifiers.realAmulet = false;
+                    } else {
+                        wishedQualifiers.realAmulet = true;
+                    }
+                    wishedName = wishedName.slice(amuletReality[0].length);
                     continue;
                 }
                 const trapped = wishedName.match(/^(trapped|untrapped)\s+/i);
@@ -17137,7 +17181,8 @@ export async function rhack(_cmd) {
                     : game.u?.blind && item.cls === 'wand' ? 'wand'
                     : `${erosionPrefix(item)}${pickupObjectName(item)}`;
             const displayQuan = item.quan || wishedQuan;
-            const article = /^(?:.* )?(?:boots|gloves)$/.test(visibleName) ? 'a pair of'
+            const article = item.unique ? 'the'
+                : /^(?:.* )?(?:boots|gloves)$/.test(visibleName) ? 'a pair of'
                 : /^[aeiou]/i.test(visibleName) ? 'an' : 'a';
             item.line = `${letter} - ${displayQuan > 1 ? `${displayQuan} ${visibleName}` : `${article} ${visibleName}`}`;
             game.inventory ??= [];
