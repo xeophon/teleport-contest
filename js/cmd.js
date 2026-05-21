@@ -6,7 +6,7 @@ import { nhgetch } from './input.js';
 import { bot, cls, docrt, flush_screen, newsym, pline, refreshHallucinatedMap, show_glyph_cell, strengthString } from './display.js';
 import { couldsee, vision_recalc, vision_reset } from './vision.js';
 import { RANDOM_MONSTER_BY_NAME, SHOP_TYPES, artifactObjectName, enextoMonsterSpot, make_tutorial1_level, makemon, makeArtifactWishObject, mkcorpstat, mklev, mkobj_at, mksobj, monsterByRndName, nameObjectAsArtifact, next_ident, potionIndexForRoll, rndmonnum, scrollIndexForRoll, syncDungeonContext, u_on_dnstairs, u_on_rndspot, u_on_upstairs, wipe_engr_at, dropMonsterInventory, l_nhcore_init, getrumor, getbogusmon, level_difficulty, set_malign, somexyspace } from './mklev.js';
-import { ACCESSIBLE, A_CHA, A_CON, A_DEX, A_INT, A_MAX, A_STR, A_WIS, ALTAR, BC_BALL, BC_CHAIN, BEAR_TRAP, BLCORNER, BOLT_LIM, BRCORNER, CLOUD, COLNO, CORPSTAT_FEMALE, CORPSTAT_HISTORIC, CORPSTAT_MALE, CORPSTAT_NEUTER, CORR, DOOR, BURN, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, DUST, ENGRAVE, ENGR_BLOOD, FOUNTAIN, GRAVE, HEADSTONE, HWALL, ICE, IN_SIGHT, IS_OBSTRUCTED, IS_POOL, IS_ROOM, IS_WALL, LADDER, LAVAPOOL, LAVAWALL, MAGIC_PORTAL, MARK, MOAT, NORMAL_SPEED, OVERLOADED, P_BASIC, P_UNSKILLED, POOL, ROLLING_BOULDER_TRAP, ROOM, ROOMOFFSET, ROWNO, SCORR, SDOOR, SHOPBASE, SINK, STAIRS, STONE, TDWALL, TEMPLE, THRONE, TLCORNER, TRCORNER, TREE, TUWALL, VAULT, VWALL, WAND_BACKFIRE_CHANCE, WATER, ZAP_POS } from './const.js';
+import { ACCESSIBLE, A_CHA, A_CON, A_DEX, A_INT, A_MAX, A_STR, A_WIS, ALTAR, BC_BALL, BC_CHAIN, BEAR_TRAP, BLCORNER, BOLT_LIM, BRCORNER, CLOUD, COLNO, CORPSTAT_FEMALE, CORPSTAT_GENDER, CORPSTAT_HISTORIC, CORPSTAT_MALE, CORPSTAT_NEUTER, CORR, DOOR, BURN, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, DUST, ENGRAVE, ENGR_BLOOD, FOUNTAIN, GRAVE, HEADSTONE, HWALL, ICE, IN_SIGHT, IS_OBSTRUCTED, IS_POOL, IS_ROOM, IS_WALL, LADDER, LAVAPOOL, LAVAWALL, MAGIC_PORTAL, MARK, MOAT, NORMAL_SPEED, OVERLOADED, P_BASIC, P_UNSKILLED, POOL, ROLLING_BOULDER_TRAP, ROOM, ROOMOFFSET, ROWNO, SCORR, SDOOR, SHOPBASE, SINK, STAIRS, STONE, TDWALL, TEMPLE, THRONE, TLCORNER, TRCORNER, TREE, TUWALL, VAULT, VWALL, WAND_BACKFIRE_CHANCE, WATER, ZAP_POS } from './const.js';
 import { d, rn1, rn2, rn2_on_display_rng, rnd, rnl, rnz } from './rng.js';
 import { CLR_BLACK, CLR_BLUE, CLR_BRIGHT_BLUE, CLR_BRIGHT_CYAN, CLR_BRIGHT_GREEN, CLR_BROWN, CLR_CYAN, CLR_GRAY, CLR_GREEN, CLR_MAGENTA, CLR_ORANGE, CLR_RED, CLR_YELLOW, CLR_WHITE, NO_COLOR } from './terminal.js';
 import { vfsDeleteFile, vfsReadFile, vfsWriteFile } from './storage.js';
@@ -5402,27 +5402,92 @@ function makeAmuletOfYendorWishObject(lowerName, qualifiers = {}) {
     return makeRealAmuletOfYendorWishObject();
 }
 
-function wishedCorpstatSpe(monster) {
-    if (monster?.neuter) return CORPSTAT_NEUTER;
-    if (monster?.female) return CORPSTAT_FEMALE;
-    if (monster?.male) return CORPSTAT_MALE;
-    return rn2(2) ? CORPSTAT_FEMALE : CORPSTAT_MALE;
+const GENDERED_CORPSTAT_MONSTER_NAMES = new Map([
+    ['dwarf leader', { male: 'dwarf lord', female: 'dwarf lady', neutral: 'dwarf leader' }],
+    ['dwarf ruler', { male: 'dwarf king', female: 'dwarf queen', neutral: 'dwarf ruler' }],
+    ['kobold leader', { male: 'kobold lord', female: 'kobold lady', neutral: 'kobold leader' }],
+    ['gnome leader', { male: 'gnome lord', female: 'gnome lady', neutral: 'gnome leader' }],
+    ['gnome ruler', { male: 'gnome king', female: 'gnome queen', neutral: 'gnome ruler' }],
+    ['ogre leader', { male: 'ogre lord', female: 'ogre lady', neutral: 'ogre leader' }],
+    ['ogre tyrant', { male: 'ogre king', female: 'ogre queen', neutral: 'ogre tyrant' }],
+    ['vampire leader', { male: 'vampire lord', female: 'vampire lady', neutral: 'vampire leader' }],
+    ['elf-noble', { male: 'elf-lord', female: 'elf-lady', neutral: 'elf-noble' }],
+    ['elven monarch', { male: 'Elvenking', female: 'Elvenqueen', neutral: 'elven monarch' }],
+    ['amorous demon', { male: 'incubus', female: 'succubus', neutral: 'amorous demon' }],
+]);
+
+const GENDERED_CORPSTAT_MONSTER_ALIASES = new Map();
+for (const [neutral, names] of GENDERED_CORPSTAT_MONSTER_NAMES) {
+    GENDERED_CORPSTAT_MONSTER_ALIASES.set(names.neutral.toLowerCase(), { monsterName: neutral, gender: null });
+    GENDERED_CORPSTAT_MONSTER_ALIASES.set(names.male.toLowerCase(), { monsterName: neutral, gender: 'male' });
+    GENDERED_CORPSTAT_MONSTER_ALIASES.set(names.female.toLowerCase(), { monsterName: neutral, gender: 'female' });
 }
 
-function parseWishedStatueName(lowerName) {
+function stripWishedMonsterGenderPrefix(name) {
+    const trimmed = String(name || '').trim();
+    const match = trimmed.match(/^(female|male|neuter)\s+(.+)$/i);
+    if (!match) return { name: trimmed, gender: null };
+    return { name: match[2].trim(), gender: match[1].toLowerCase() };
+}
+
+function resolveWishedCorpstatMonsterName(monsterName, requestedGender = null) {
+    const lowerName = String(monsterName || '').trim().toLowerCase();
+    const alias = GENDERED_CORPSTAT_MONSTER_ALIASES.get(lowerName);
+    if (!alias) return { monsterName: lowerName, requestedGender };
+    return {
+        monsterName: alias.monsterName,
+        requestedGender: alias.gender || requestedGender,
+    };
+}
+
+function wishedCorpstatSpe(monster, requestedGender = null) {
+    if (monster?.neuter) return CORPSTAT_NEUTER;
+    if (requestedGender === 'female' && !monster?.male) return CORPSTAT_FEMALE;
+    if (requestedGender === 'male' && !monster?.female) return CORPSTAT_MALE;
+    if (monster?.female) return CORPSTAT_FEMALE;
+    if (monster?.male) return CORPSTAT_MALE;
+    return rn2(2) ? CORPSTAT_MALE : CORPSTAT_FEMALE;
+}
+
+function corpstatDisplayMonsterName(obj) {
+    const baseName = String(obj?.corpsenm?.name || 'monster');
+    const genderNames = GENDERED_CORPSTAT_MONSTER_NAMES.get(baseName.toLowerCase());
+    if (!genderNames) return baseName;
+    const gender = (obj.spe || 0) & CORPSTAT_GENDER;
+    if (gender === CORPSTAT_FEMALE) return genderNames.female;
+    if (gender === CORPSTAT_MALE) return genderNames.male;
+    return genderNames.neutral;
+}
+
+function monsterIndefiniteName(name) {
+    const monsterName = String(name || 'monster');
+    return `${/^[aeiou]/i.test(monsterName) ? 'an' : 'a'} ${monsterName}`;
+}
+
+function parseWishedStatueName(lowerName, qualifiers = {}) {
     const match = String(lowerName || '').trim().match(/^statue(?:\s+of(?:\s+(?:a|an|the))?\s+(.+))?$/);
     if (!match) return null;
-    return { monsterName: String(match[1] || '').trim() };
+    const gendered = stripWishedMonsterGenderPrefix(match[1] || '');
+    return {
+        monsterName: gendered.name,
+        requestedGender: gendered.gender || qualifiers.monsterGender || null,
+    };
 }
 
 function makeWishedStatueObject(statueWish, qualifiers = {}) {
-    const monsterName = String(statueWish?.monsterName || '').trim();
-    const monster = monsterName ? monsterByRndName(monsterName) || RANDOM_MONSTER_BY_NAME.get(monsterName) : null;
-    if (monsterName && !monster) return null;
+    const resolved = resolveWishedCorpstatMonsterName(
+        statueWish?.monsterName,
+        statueWish?.requestedGender || qualifiers.monsterGender || null,
+    );
+    const monster = resolved.monsterName
+        ? monsterByRndName(resolved.monsterName) || RANDOM_MONSTER_BY_NAME.get(resolved.monsterName)
+        : null;
+    if (resolved.monsterName && !monster) return null;
     const otmp = mksobj(STATUE, true, false);
     if (monster) {
         otmp.corpsenm = monster;
-        otmp.spe = wishedCorpstatSpe(monster);
+        otmp.spe = wishedCorpstatSpe(monster, resolved.requestedGender);
+        if (monster.verysmall) delete otmp.contents;
     }
     if (qualifiers.historic) {
         otmp.spe = (otmp.spe || 0) | CORPSTAT_HISTORIC;
@@ -5851,7 +5916,7 @@ function wishedBaseObjectFromName(lowerName, qualifiers = {}, originalName = low
     const yendorAmulet = makeAmuletOfYendorWishObject(lowerName, qualifiers);
     if (yendorAmulet) return yendorAmulet;
 
-    const statueWish = parseWishedStatueName(lowerName);
+    const statueWish = parseWishedStatueName(lowerName, qualifiers);
     if (statueWish) {
         const statue = makeWishedStatueObject(statueWish, qualifiers);
         if (statue) return statue;
@@ -6124,7 +6189,7 @@ export function pickupObjectName(obj) {
     if (obj.otyp === 'corpse' || obj.otyp === CORPSE) return `${obj.corpsenm?.name || 'monster'} corpse`;
     if ((obj.kind === 'statue' || obj.otyp === STATUE) && obj.corpsenm?.name) {
         const historic = archeologist && (((obj.spe || 0) & CORPSTAT_HISTORIC) || obj.historic);
-        return `${historic ? 'historic ' : ''}statue of a ${obj.corpsenm.name}`;
+        return `${historic ? 'historic ' : ''}statue of ${monsterIndefiniteName(corpstatDisplayMonsterName(obj))}`;
     }
     if (isTinObject(obj)) return named(tinObjectName(obj));
     if (obj.otyp === LARGE_BOX) return named('large box');
@@ -9246,7 +9311,7 @@ async function moveHero(dx, dy) {
     else if (objHere?.kind === 'chest' || objHere?.otyp === CHEST)
         objHereMessage = `${featurePrefix}You see here a ${objHere.lknown && (objHere.locked || objHere.olocked) ? 'locked ' : ''}chest${priceSuffix}.`;
     else if ((objHere?.kind === 'statue' || objHere?.otyp === STATUE) && objHere.corpsenm?.name)
-        objHereMessage = `${featurePrefix}You see here a statue of a ${objHere.corpsenm.name}${priceSuffix}.`;
+        objHereMessage = `${featurePrefix}You see here a ${pickupObjectName(objHere)}${priceSuffix}.`;
     else if (objHere)
         objHereMessage = `${featurePrefix}You see here ${pickupObjectPhrase(objHere)}${priceSuffix}.`;
     else if (ballHere)
@@ -17041,6 +17106,7 @@ export async function rhack(_cmd) {
                 lightState: null,
                 realAmulet: false,
                 fakeAmulet: false,
+                monsterGender: null,
             };
             let wishedErosionIntensity = 0;
             for (;;) {
@@ -17119,6 +17185,12 @@ export async function rhack(_cmd) {
                 if (historic) {
                     wishedQualifiers.historic = true;
                     wishedName = wishedName.slice(historic[0].length);
+                    continue;
+                }
+                const monsterGender = wishedName.match(/^(female|male|neuter)\s+/i);
+                if (monsterGender) {
+                    wishedQualifiers.monsterGender = monsterGender[1].toLowerCase();
+                    wishedName = wishedName.slice(monsterGender[0].length);
                     continue;
                 }
                 const diluted = wishedName.match(/^diluted\s+/i);

@@ -756,6 +756,13 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   `CORPSTAT_HISTORIC` in `spe`, and the visible adjective is shown only for
   Archeologists. Existing Oracle centaur statues now also carry the C bit
   instead of only an ad hoc marker.
+- Wished statue gender prefixes now cover the matching C `readobjnam()` slice:
+  `female`/`male`/`neuter` can appear before `statue` or after
+  `statue of [a|an|the]`, exact statue wishes store the C corpse/statue gender
+  bits in `spe`, gendered monster names such as `gnome king` and `gnome queen`
+  resolve to their neutral monster type, and statue names display through the
+  stored gender bits. Corpse and figurine exact wishes remain separate future
+  work.
 - Wished container state prefixes now cover the C `readobjnam()` object slice
   for `locked`, `unlocked`, `broken`, `trapped`, `untrapped`, and `empty`:
   boxes keep normal generated contents and lock/trap RNG before final state
