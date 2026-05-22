@@ -1314,6 +1314,18 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   extra track entry gives `seed0012-monk-vault-escort` full parity:
   `13878/13878` RNG calls and `308/308` screens. `npm run score` improved to
   `34/44`.
+- The `seed0360` speed-boots dressing frontier now follows C's delayed
+  occupation display/timing more closely. `unmul()` prints the armor
+  `nomovemsg`, clears it, then calls `Boots_on()`; the tty topline can append
+  `You feel yourself speed up.` without immediately showing a visible
+  `--More--` when the combined text fits. The early armor-tail after-more path
+  now resumes with one pending time slice like the later armor resume path,
+  instead of running two slices before the combined finish/speed message. This
+  advances `seed0360-wizard-world-tour` from the visible speed-boots pager gap
+  at screen 137 to the next map-layout divergence at screen 173, and improves
+  the focused harness from `3386/120639` RNG calls and `181/833` screens to
+  `37947/120639` RNG calls and `211/833` screens. The full public smoke remains
+  `34/44`.
 
 Next concrete target:
 

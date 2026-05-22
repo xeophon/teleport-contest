@@ -18123,7 +18123,7 @@ export async function rhack(_cmd) {
                     game._pet_message_resume = 0;
                     game._monster_resume_index = 0;
                     game._armor_tail_after_more = 1;
-                    game._pending_time_passed = Math.max(game._pending_time_passed || 0, 2);
+                    game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
                     game.context.move = 0;
                     game._process_command_time_now = 1;
                     game._process_time_with_more = 1;
