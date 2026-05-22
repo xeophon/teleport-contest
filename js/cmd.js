@@ -22325,6 +22325,7 @@ export async function rhack(_cmd) {
             }
             if (!alreadyKnown) {
                 learnScrollByName('identify', item, 13);
+                exerciseAttribute(A_WIS, true);
             }
             if (confusedReading || (cursed && !alreadyKnown)) {
                 await setMessage(messages.join('  '), true);

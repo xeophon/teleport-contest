@@ -1387,6 +1387,16 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   for `seed0030-ten-diverse-deaths` is now complete: `105529/105529` RNG calls,
   `1953/1953` screens, and `1953/1953` cursors. The full public smoke improves
   to `37/44`.
+- The first `seed0014` identify-scroll split now matches C's discovery credit.
+  `read.c:seffects()` exercises Wisdom once for a magic scroll, then
+  `learnscrolltyp(SCR_IDENTIFY)` calls `makeknown()`/`discover_object()` with
+  hero credit, which performs a second Wisdom exercise before the identify
+  count `rn2(5)`. JS already had the first roll but learned identify without
+  the second exercise, shifting the pet move immediately after the scroll.
+  Adding the missing discovery exercise advances the focused harness from the
+  early screen-24 dog-position mismatch to the later armor/topline frontier:
+  `36747/59178` RNG calls and `592/714` screens. `seed0030` remains fully
+  passing, and the full public smoke remains `37/44`.
 
 Next concrete target:
 
