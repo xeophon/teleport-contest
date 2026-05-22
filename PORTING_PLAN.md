@@ -844,9 +844,13 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   bones are actually saved, embed the hero inventory in that statue, and skip
   the ordinary death ghost. Petrifying eggs now also honor the C
   `poly_when_stoned()` escape for current non-stone golem forms by immediately
-  polymorphing into a stone golem instead of starting the timeout. Full egg
-  knowledge UI, royal jelly/`#sit` provenance, exact rotten partially-eaten
-  nutrition, exact tin-opening occupation exceptions, and complete
+  polymorphing into a stone golem instead of starting the timeout. Rotten
+  one-turn non-corpse foods and generic rotten eggs now use C-style `oeaten`
+  handling: carried/floor stacks split to one touched item, sleep leaves the
+  same kind with half nutrition remaining, and uninterrupted eating grants
+  only the remaining nutrition. Full egg knowledge UI, royal jelly/`#sit`
+  provenance, multi-turn `victual`/per-bite nutrition for rations, corpses,
+  and other long meals, exact tin-opening occupation exceptions, and complete
   extinction/vitals semantics remain future work.
 - Wished container state prefixes now cover the C `readobjnam()` object slice
   for `locked`, `unlocked`, `broken`, `trapped`, `untrapped`, and `empty`:

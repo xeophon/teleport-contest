@@ -804,6 +804,7 @@ const FOOD_NUTRITION = new Map([
     ['c-ration', 300],
     ['tin', 0],
 ]);
+const ROTTABLE_NON_CORPSE_FOODS = new Set(['apple', 'carrot', 'pear', 'melon', 'orange', 'banana', 'kelp frond']);
 const POISONABLE_WISH_WEAPONS = new Set([
     'arrow', 'arrows', 'elven arrow', 'elven arrows', 'orcish arrow', 'orcish arrows',
     'silver arrow', 'silver arrows', 'ya', 'crossbow bolt', 'crossbow bolts',
@@ -5839,11 +5840,69 @@ function foodObjectNutrition(item) {
     return FOOD_NUTRITION.get(kind) ?? 0;
 }
 
+function addHeroNutrition(nutrition) {
+    if (!game.u || nutrition <= 0) return;
+    game.u.uhunger = (game.u.uhunger ?? 900) + nutrition;
+    game.u._statusSuffix = (game.u._statusSuffix || '')
+        .replace(/ Satiated| Hungry| Weak| Fainting| Fainted/g, '');
+    if (game.u.uhunger > 1000) game.u._statusSuffix = `${game.u._statusSuffix || ''} Satiated`;
+}
+
+function remainingFoodNutrition(item) {
+    if (item?.oeaten > 0) return item.oeaten;
+    return foodObjectNutrition(item);
+}
+
+function ensureFoodOeaten(item) {
+    if (!item) return 0;
+    if (!(item.oeaten > 0)) item.oeaten = foodObjectNutrition(item);
+    return item.oeaten || 0;
+}
+
 function consumeOeaten(item, amount) {
     if (!item?.oeaten) return;
     if (amount > 0) item.oeaten = Math.floor(item.oeaten / (2 ** amount));
-    else item.oeaten -= amount;
+    else if (amount < 0) item.oeaten += amount;
     if (item.oeaten <= 0) item.oeaten = 1;
+}
+
+function refreshInventoryObjectLine(item) {
+    if (item) item.line = normalInventoryLine({ ...item, line: '' });
+}
+
+function touchInventoryFood(item) {
+    if (!item) return item;
+    if ((item.quan || 1) <= 1) {
+        ensureFoodOeaten(item);
+        return item;
+    }
+    const id = next_ident();
+    const split = { ...item, id, letter: nextInventoryLetter(), quan: 1, line: '' };
+    delete split.oeaten;
+    item.quan--;
+    refreshInventoryObjectLine(item);
+    ensureFoodOeaten(split);
+    refreshInventoryObjectLine(split);
+    game.inventory.push(split);
+    return split;
+}
+
+function touchFloorFood(item) {
+    if (!item) return item;
+    if ((item.quan || 1) > 1) {
+        const rest = { ...item, id: next_ident(), quan: (item.quan || 1) - 1 };
+        delete rest.oeaten;
+        item.quan = 1;
+        game.level.objects ??= [];
+        game.level.objects.push(rest);
+    }
+    ensureFoodOeaten(item);
+    newsym(item.ox, item.oy);
+    return item;
+}
+
+function touchEatenFood(item, floorObject = false) {
+    return floorObject ? touchFloorFood(item) : touchInventoryFood(item);
 }
 
 function applyWishedPartlyEaten(item) {
@@ -11489,9 +11548,69 @@ function isStaleEggItem(item) {
 function shouldUseGenericRottenEggPath(item) {
     if (!isEggItem(item)) return false;
     if (item.age == null) item.age = game.moves || 1;
-    if (item.cursed || item.orotten) return true;
+    if (item.cursed) return true;
     const ageLimit = item.blessed ? 50 : 30;
-    return (game.moves || 1) - item.age > ageLimit && !rn2(7);
+    return (game.moves || 1) - item.age > ageLimit && (item.orotten || !rn2(7));
+}
+
+function shouldUseGenericRottenFoodPath(item) {
+    if (!item || isEggItem(item) || isCorpseItem(item) || itemKindText(item) === 'fortune cookie') return false;
+    const kind = itemKindText(item).replace(/^partly eaten /, '');
+    if (!ROTTABLE_NON_CORPSE_FOODS.has(kind)) return false;
+    if (item.age == null) item.age = game.moves || 1;
+    if (item.cursed) return true;
+    const ageLimit = item.blessed ? 50 : 30;
+    return (game.moves || 1) - item.age > ageLimit && (item.orotten || !rn2(7));
+}
+
+function rottenFoodEffect() {
+    let rottenSleepDuration = 0;
+    let message = 'Blecch!  Rotten food!';
+    if (!rn2(4)) {
+        const confusionDuration = d(2, 4);
+        if (game.u) game.u._confusionTimeout = (game.u._confusionTimeout || 0) + confusionDuration;
+    } else if (!game.u?.blind && !rn2(4)) {
+        d(2, 10);
+        if (game.u) game.u.blind = true;
+        message += '  Everything suddenly goes dark.';
+    } else if (!rn2(3)) {
+        rottenSleepDuration = rnd(10);
+        game._helpless_time = Math.max(game._helpless_time || 0, rottenSleepDuration);
+        game._sleeping_time = Math.max(game._sleeping_time || 0, rottenSleepDuration + 1);
+        game._wake_message = 'You are conscious again.';
+        game._hear_again_after_wake = 1;
+        message += '  The world spins and goes dark.';
+    }
+    return { message, rottenSleepDuration };
+}
+
+function partialRottenFood(item, floorObject = false) {
+    const touched = touchEatenFood(item, floorObject);
+    if (!touched) return touched;
+    touched.orotten = true;
+    consumeOeaten(touched, 1);
+    if (!floorObject) refreshInventoryObjectLine(touched);
+    else newsym(touched.ox, touched.oy);
+    return touched;
+}
+
+function consumeTouchedFood(item, floorObject = false) {
+    if (floorObject) consumeOneFloorObject(item);
+    else removeInventoryItem(item);
+}
+
+async function eatRottenNonCorpseFood(item, floorObject = false) {
+    const { message, rottenSleepDuration } = rottenFoodEffect();
+    const touched = partialRottenFood(item, floorObject);
+    if (!rottenSleepDuration) {
+        addHeroNutrition(remainingFoodNutrition(touched));
+        consumeTouchedFood(touched, floorObject);
+    }
+    game._pet_food_scan_inventory = game.inventory || [];
+    await setMessage(message, true);
+    game._process_time_with_more = 1;
+    game._command_mode = null;
+    game.context.move = rottenSleepDuration ? rottenSleepDuration + 1 : 1;
 }
 
 function addHeroVomiting(turns) {
@@ -11565,25 +11684,14 @@ function consumeOneEatenFood(item, floorObject = false) {
 }
 
 async function eatRottenEgg(item, floorObject = false) {
-    let rottenSleepDuration = 0;
-    let message = 'Blecch!  Rotten food!';
-    if (!rn2(4)) {
-        const confusionDuration = d(2, 4);
-        if (game.u) game.u._confusionTimeout = (game.u._confusionTimeout || 0) + confusionDuration;
-    } else if (!game.u?.blind && !rn2(4)) {
-        d(2, 10);
-        if (game.u) game.u.blind = true;
-        message += '  Everything suddenly goes dark.';
-    } else if (!rn2(3)) {
-        rottenSleepDuration = rnd(10);
-        game._helpless_time = Math.max(game._helpless_time || 0, rottenSleepDuration);
-        game._sleeping_time = Math.max(game._sleeping_time || 0, rottenSleepDuration + 1);
-        game._wake_message = 'You are conscious again.';
-        game._hear_again_after_wake = 1;
-        message += '  The world spins and goes dark.';
+    const { message, rottenSleepDuration } = rottenFoodEffect();
+    const touched = partialRottenFood(item, floorObject);
+    let petrificationMessage = '';
+    if (!rottenSleepDuration) {
+        addHeroNutrition(remainingFoodNutrition(touched));
+        consumeTouchedFood(touched, floorObject);
+        petrificationMessage = startPetrifyingEggStoning(touched);
     }
-    consumeOneEatenFood(item, floorObject);
-    const petrificationMessage = startPetrifyingEggStoning(item);
     await setMessage(appendPetrificationMessage(message, petrificationMessage), true);
     game._process_time_with_more = 1;
     game._command_mode = null;
@@ -11600,6 +11708,7 @@ async function eatPyroliskEgg(item, floorObject = false) {
 
 async function eatStaleEgg(item, floorObject = false) {
     addHeroVomiting(d(10, 4));
+    if (item.oeaten > 0) addHeroNutrition(item.oeaten);
     consumeOneEatenFood(item, floorObject);
     const petrificationMessage = startPetrifyingEggStoning(item);
     await setMessage(appendPetrificationMessage('Ugh.  Rotten egg.', petrificationMessage));
@@ -25058,55 +25167,12 @@ export async function rhack(_cmd) {
                 game._queued_message_more_after_more = 1;
                 game._fortune_cookie_rumor_after_more = rumor || 'This cookie is devoid of wisdom.';
             }
-            if ((item.quan || 1) > 1) {
-                next_ident();
-            }
-            const rottableFood = ['apple', 'carrot', 'pear', 'melon', 'orange', 'banana', 'kelp frond'].includes(item.kind);
-            if (!fortuneCookie && rottableFood && (game.moves || 1) - (item.age || 1) > 30 && !rn2(7)) {
-                let rottenSleepDuration = 0;
-                let message = 'Blecch!  Rotten food!';
-                if (!rn2(4)) {
-                    const confusionDuration = d(2, 4);
-                    if (game.u) game.u._confusionTimeout = (game.u._confusionTimeout || 0) + confusionDuration;
-                } else if (!game.u?.blind && !rn2(4)) {
-                    d(2, 10);
-                    if (game.u) game.u.blind = true;
-                    message += '  Everything suddenly goes dark.';
-	                } else if (!rn2(3)) {
-	                    rottenSleepDuration = rnd(10);
-	                    game._helpless_time = Math.max(game._helpless_time || 0, rottenSleepDuration);
-	                    game._sleeping_time = Math.max(game._sleeping_time || 0, rottenSleepDuration + 1);
-	                    game._wake_message = 'You are conscious again.';
-	                    game._hear_again_after_wake = 1;
-	                    message += '  The world spins and goes dark.';
-	                }
-                if ((item.quan || 1) > 1) {
-                    item.quan--;
-                    item.line = `${item.letter} - ${item.quan} uncursed ${item.kind}s`;
-                    const letters = new Set((game.inventory || []).map(invItem => invItem.letter));
-                    const letter = letters.has('m')
-                        ? 'abcdefghijklmnopqrstuvwxyz'.split('').find(candidate => !letters.has(candidate)) || '?'
-                        : 'm';
-                    const partlyEaten = `${item.blessed ? 'blessed' : item.cursed ? 'cursed' : 'uncursed'} partly eaten ${item.kind}`;
-                    const article = /^[aeiou]/i.test(partlyEaten) ? 'an' : 'a';
-                    game.inventory.push({
-                        ...item,
-                        letter,
-                        quan: 1,
-                        kind: `partly eaten ${item.kind}`,
-                        bknown: true,
-                        line: `${letter} - ${article} ${partlyEaten}`,
-                    });
-                } else {
-                    removeInventoryItem(item);
-                }
-                game._pet_food_scan_inventory = game.inventory || [];
-                await setMessage(message, true);
-                game._process_time_with_more = 1;
-                game._command_mode = null;
-                game.context.move = rottenSleepDuration ? rottenSleepDuration + 1 : 1;
+            if (shouldUseGenericRottenFoodPath(item)) {
+                await eatRottenNonCorpseFood(item);
                 return;
             }
+            if ((item.quan || 1) > 1) next_ident();
+            if (item.oeaten > 0) addHeroNutrition(item.oeaten);
             removeInventoryItem(item);
             game._pet_food_scan_inventory = game.inventory || [];
             const petrificationMessage = startPetrifyingEggStoning(item);
@@ -25266,6 +25332,11 @@ export async function rhack(_cmd) {
                 await eatStaleEgg(food, true);
                 return;
             }
+            if (shouldUseGenericRottenFoodPath(food)) {
+                await eatRottenNonCorpseFood(food, true);
+                return;
+            }
+            if (food.oeaten > 0) addHeroNutrition(food.oeaten);
             consumeOneFloorObject(food);
             const petrificationMessage = startPetrifyingEggStoning(food);
             await setMessage(appendPetrificationMessage(`This ${name} is delicious!`, petrificationMessage));
