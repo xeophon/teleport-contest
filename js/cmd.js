@@ -16090,13 +16090,6 @@ async function moveHero(dx, dy) {
     if (steppedTrap?.ttyp === TELEP_TRAP) {
         game.u.ux0 = newx;
         game.u.uy0 = newy;
-        const wearingStealthRing = (game.inventory || []).some(item => item.cls === 'ring' && item.worn
-            && ((item.ringRoll || item.roll) === 9 || item.actualKind === 'ring of stealth'));
-        if (!wearingStealthRing) {
-            game._utrack ??= [];
-            game._utrack.push({ x: newx, y: newy });
-            if (game._utrack.length > 100) game._utrack.shift();
-        }
         let teleportedToVault = false;
         if (steppedTrap.once) {
             game.level.traps = (game.level.traps || []).filter(trap => trap !== steppedTrap);

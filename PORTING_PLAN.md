@@ -1305,6 +1305,15 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   split in that session is the pet movement branch at step 245 after
   `rn2(4)=2 @ dog_goal(dogmove.c:575)`, where C enters `dog_move.c:1257`
   before JS's current random-neighbor path.
+- The `seed0012` pet branch is now closed by matching C teleport-track
+  accounting. `tele_trap()` only calls `settrack()` for fixed-destination
+  teleport traps; the one-shot vault branch deletes the trap and calls
+  `vault_tele()` without adding the pre-teleport square to `utrack`. JS had
+  recorded that stale vault square, so the pet followed it through
+  `gettrack()` and consumed `dog_move()` RNG out of order. Removing that
+  extra track entry gives `seed0012-monk-vault-escort` full parity:
+  `13878/13878` RNG calls and `308/308` screens. `npm run score` improved to
+  `34/44`.
 
 Next concrete target:
 
@@ -1323,9 +1332,6 @@ Next concrete target:
   probability accounting, scroll `makeknown()` exercise, multi-`pline()`
   scroll message ordering, and fire-ray `destroy_items()` timing before
   widening the same C-grounded fixes to other sessions.
-- `seed0012-monk-vault-escort` now needs a C-grounded `dogmove.c` pass: after
-  the fixed container display, the first flat divergence is a pet movement
-  branch around `dog_goal()`/`dog_move()` rather than a container view issue.
 - The next narrow `#sit` trap slice should deepen the remaining
   `trap.c:trapeffect_*()` details now that deferred level-changing traps are
   live: floor-object `impact_drop()` effects for holes/trapdoors, positive
