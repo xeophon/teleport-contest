@@ -5789,6 +5789,8 @@ async function finishMonsterTurnTail() {
             const occupation = game._armor_wear_occupation;
             game._armor_wear_occupation = null;
             let message = 'You finish your dressing maneuver.';
+            if (game._topline_after_more && !game._pending_message && !game._message_more)
+                game._topline_after_more = '';
             const item = occupationItem;
             if (occupation.action === 'takeoff') {
                 message = `You finish taking off your ${occupation.simpleName || pickupObjectName(item || {})}.`;

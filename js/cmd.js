@@ -5,7 +5,7 @@ import { game } from './gstate.js';
 import { nhgetch } from './input.js';
 import { bot, cls, docrt, flush_screen, newsym, pline, refreshHallucinatedMap, show_glyph_cell, strengthString } from './display.js';
 import { couldsee, vision_recalc, vision_reset } from './vision.js';
-import { RANDOM_MONSTER_BY_NAME, SHOP_TYPES, artifactObjectName, enextoMonsterSpot, make_tutorial1_level, makemon, makeArtifactWishObject, mkcorpstat, mklev, mkobj_at, mksobj, monsterByRndName, morgueMonster, nameObjectAsArtifact, next_ident, potionIndexForRoll, rndmonnum, scrollIndexForRoll, syncDungeonContext, u_on_dnstairs, u_on_rndspot, u_on_upstairs, wipe_engr_at, dropMonsterInventory, l_nhcore_init, getrumor, getbogusmon, level_difficulty, set_malign, somexyspace } from './mklev.js';
+import { RANDOM_MONSTER_BY_NAME, SHOP_TYPES, artifactDefinitionForName, artifactObjectName, enextoMonsterSpot, make_tutorial1_level, makemon, makeArtifactWishObject, mkcorpstat, mklev, mkobj_at, mksobj, monsterByRndName, morgueMonster, nameObjectAsArtifact, next_ident, potionIndexForRoll, rndmonnum, scrollIndexForRoll, syncDungeonContext, u_on_dnstairs, u_on_rndspot, u_on_upstairs, wipe_engr_at, dropMonsterInventory, l_nhcore_init, getrumor, getbogusmon, level_difficulty, set_malign, somexyspace } from './mklev.js';
 import { ACCESSIBLE, A_CHA, A_CON, A_DEX, A_INT, A_MAX, A_STR, A_WIS, ALTAR, BC_BALL, BC_CHAIN, BEAR_TRAP, BLCORNER, BOLT_LIM, BRCORNER, CLOUD, COLNO, CORPSTAT_FEMALE, CORPSTAT_GENDER, CORPSTAT_HISTORIC, CORPSTAT_MALE, CORPSTAT_NEUTER, CORR, DOOR, BURN, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, DUST, ENGRAVE, ENGR_BLOOD, FOUNTAIN, GRAVE, HEADSTONE, HWALL, ICE, IN_SIGHT, IS_AIR, IS_OBSTRUCTED, IS_POOL, IS_ROOM, IS_WALL, In_endgame, In_quest, In_sokoban, Is_airlevel, Is_botlevel, Is_earthlevel, Is_rogue_level, Is_stronghold, Is_waterlevel, LADDER, LAVAPOOL, LAVAWALL, MAGIC_PORTAL, MARK, MAX_EGG_HATCH_TIME, MM_EDOG, MM_NOCOUNTBIRTH, MM_NOMSG, MM_NOWAIT, MOAT, NO_MINVENT, NORMAL_SPEED, OVERLOADED, P_BASIC, P_UNSKILLED, PIT, POOL, ROLLING_BOULDER_TRAP, ROOM, ROT_AGE, ROOMOFFSET, ROWNO, SCORR, SDOOR, SHOPBASE, SINK, SPIKED_PIT, STAIRS, STONE, TDWALL, TEMPLE, THRONE, TLCORNER, TRCORNER, TREE, TT_BEARTRAP, TT_BURIEDBALL, TT_INFLOOR, TT_LAVA, TT_PIT, TT_WEB, TUWALL, VAULT, VIBRATING_SQUARE, VWALL, WAND_BACKFIRE_CHANCE, WATER, WEB, WT_IRON_BALL_BASE, WT_IRON_BALL_INCR, ZAP_POS } from './const.js';
 import { d, rn1, rn2, rn2_on_display_rng, rnd, rnl, rnz } from './rng.js';
 import { CLR_BLACK, CLR_BLUE, CLR_BRIGHT_BLUE, CLR_BRIGHT_CYAN, CLR_BRIGHT_GREEN, CLR_BROWN, CLR_CYAN, CLR_GRAY, CLR_GREEN, CLR_MAGENTA, CLR_ORANGE, CLR_RED, CLR_YELLOW, CLR_WHITE, NO_COLOR } from './terminal.js';
@@ -5075,6 +5075,18 @@ export function inventoryItemName(item) {
     return String(item.line || `${item.letter || '?'} - ${item.quan > 1 ? `${item.quan} ` : ''}${pickupObjectName(item)}`)
         .replace(/^[a-zA-Z$] - /, '')
         .replace(/ \((?:weapon|wielded|alternate weapon|being worn|at the ready|in quiver|on .* hand).*$/, '');
+}
+
+const ARTIFACT_ALIGN_TYPE = { lawful: 1, neutral: 0, chaotic: -1 };
+
+function touchArtifactForWield(item) {
+    const def = artifactDefinitionForName(item?.artifact);
+    if (!def?.restricted || def.alignment == null || def.alignment === 'none') return;
+    const artifactAlign = ARTIFACT_ALIGN_TYPE[def.alignment];
+    if (artifactAlign == null) return;
+    const heroAlign = game.u?.ualign?.type ?? 0;
+    const alignRecord = game.u?.ualign?.record ?? 0;
+    if (artifactAlign !== heroAlign || alignRecord < 0) rn2(4);
 }
 
 function isProjectileItem(item) {
@@ -25997,6 +26009,7 @@ export async function rhack(_cmd) {
                 game._command_mode = null;
                 return;
             }
+            touchArtifactForWield(item);
             const previousWielded = (game.inventory || []).find(invItem => invItem !== item
                 && (invItem.wielded || invItem.line?.includes('weapon in') || invItem.line?.includes('(wielded)')));
             if (previousWielded) {

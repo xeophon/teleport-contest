@@ -1444,7 +1444,7 @@ const ARTIFACT_DEFS = Object.freeze([
     { name: 'Dragonbane', otyp: BROADSWORD, cls: 'weapon', glyph: ')', base: 'broadsword', questArtifact: false },
     { name: 'Demonbane', otyp: SILVER_MACE, cls: 'weapon', glyph: ')', base: 'silver mace', questArtifact: false },
     { name: 'Werebane', otyp: SILVER_SABER, cls: 'weapon', glyph: ')', base: 'silver saber', questArtifact: false },
-    { name: 'Grayswandir', otyp: SILVER_SABER, cls: 'weapon', glyph: ')', base: 'silver saber', questArtifact: false },
+    { name: 'Grayswandir', otyp: SILVER_SABER, cls: 'weapon', glyph: ')', base: 'silver saber', questArtifact: false, restricted: true, alignment: 'lawful' },
     { name: 'Giantslayer', otyp: LONG_SWORD, cls: 'weapon', glyph: ')', base: 'long sword', questArtifact: false },
     { name: 'Ogresmasher', otyp: WAR_HAMMER, cls: 'weapon', glyph: ')', base: 'war hammer', questArtifact: false },
     { name: 'Trollsbane', otyp: MORNING_STAR, cls: 'weapon', glyph: ')', base: 'morning star', questArtifact: false },
