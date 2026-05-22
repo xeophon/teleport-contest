@@ -17612,7 +17612,8 @@ export async function rhack(_cmd) {
 	                    game._bear_trap_exercise_after_more = 0;
 	                    rn2(2);
 	                }
-	                if (game._nymph_steal_after_more?.theftMessage === game._pending_message) {
+	                if (game._nymph_steal_after_more?.theftMessage === game._pending_message
+	                    && game._nymph_steal_after_more?.theftMessage !== game._nymph_steal_after_more?.removeMessage) {
 	                    const mon = game._nymph_steal_after_more.mon;
 	                    game._nymph_steal_after_more = null;
 	                    game._pending_message = '';
@@ -18991,7 +18992,7 @@ export async function rhack(_cmd) {
                 return;
             }
             if (game._queued_message_after_more) {
-                const next = game._queued_message_after_more;
+                let next = game._queued_message_after_more;
                 const nextMoreLine = game._queued_message_more_line_after_more || '';
                 game._queued_message_after_more = '';
                 game._queued_message_more_line_after_more = '';
@@ -19173,6 +19174,46 @@ export async function rhack(_cmd) {
                         if (occupation.kind === 'speed boots' && game.u) game.u.veryfast = false;
                         updateGauntletsOfPowerStrength(occupation.kind, false);
                         updateWornDisplacement();
+                    }
+                }
+                if (game._nymph_steal_after_more?.stolenMessage === next) {
+                    const mon = game._nymph_steal_after_more.mon;
+                    game._nymph_steal_after_more = null;
+                    if (mon && (game.level?.monsters || []).includes(mon)) {
+                        const demonCourtRestricted = game.level?.flags?.demon_court_noteleport
+                            && !mon.data?.demonLord && !mon.data?.demonPrince;
+                        if ((game.level?.flags?.noteleport || demonCourtRestricted)
+                            && !game.u?.blind && !mon.minvis && couldsee(mon.mx, mon.my)) {
+                            const monName = mon.givenName || `the ${mon.data?.name || 'creature'}`;
+                            rn2(3);
+                            rn2(6);
+                            next = `${next}  A mysterious force prevents ${monName} from teleporting!`;
+                        } else {
+                            const oldX = mon.mx, oldY = mon.my;
+                            for (let trycount = 0; trycount < 50; trycount++) {
+                                const x = rnd(COLNO - 1), y = rn2(ROWNO);
+                                const loc = game.level?.at(x, y);
+                                const occupied = (game.level?.monsters || [])
+                                    .some(other => other !== mon && other.mx === x && other.my === y);
+                                const boulder = (game.level?.objects || [])
+                                    .some(obj => obj.otyp === BOULDER && obj.ox === x && obj.oy === y);
+                                const onHero = game.u?.ux === x && game.u?.uy === y;
+                                const badPool = IS_POOL(loc?.typ) && !mon.data?.swimmer;
+                                if (!loc || !ACCESSIBLE(loc.typ) || occupied || boulder || onHero || badPool) continue;
+                                mon.mx = x;
+                                mon.my = y;
+                                clearMonsterTrack(mon);
+                                mon.mux = game.u?.ux ?? x;
+                                mon.muy = game.u?.uy ?? y;
+                                newsym(oldX, oldY);
+                                newsym(x, y);
+                                break;
+                            }
+                            rn2(3);
+                            rn2(6);
+                            const monName = mon.givenName || `The ${mon.data?.name || 'creature'}`;
+                            next = `${next}  ${monName} vanishes!`;
+                        }
                     }
                 }
                 if (next === 'You die...' || next === 'You die.') prepareDeathBones();
@@ -20766,15 +20807,8 @@ export async function rhack(_cmd) {
         if (kind === 'speed boots' && game.u) game.u.veryfast = false;
         updateGauntletsOfPowerStrength(kind, false);
         updateWornDisplacement();
-        if (/shield/.test(kind)) {
-            game._pending_message = game._take_off_prompt || game._pending_message || '';
-            game._keep_pending_message = 1;
-        } else {
-            await setMessage(`You were wearing ${baseName}.`);
-        }
-        game._resume_time_after_more = 0;
-        game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
-        game.context.move = 0;
+        await setMessage(`You were wearing ${baseName}.`);
+        game.context.move = 1;
         return;
     }
 

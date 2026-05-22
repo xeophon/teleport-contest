@@ -1397,6 +1397,20 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   early screen-24 dog-position mismatch to the later armor/topline frontier:
   `36747/59178` RNG calls and `592/714` screens. `seed0030` remains fully
   passing, and the full public smoke remains `37/44`.
+- The next `seed0014` prompt frontier now follows C's immediate armor removal
+  and worn-item theft message order. Prompt-selected shield takeoff goes
+  through `do_wear.c:armoroff()`/`off_msg()`, so JS now prints `You were
+  wearing ...` and consumes the turn instead of preserving the `take off`
+  prompt. Nymph theft of worn gear now stages like `steal.c`: first
+  `worn_item_removal()`, then `She stole ...`, then the `rloc(..., RLOC_MSG)`
+  vanish text and teleport RNG. Focused screen parity advances from `592/714`
+  to `595/714`, with RNG still `36747/59178`; `seed0030` remains fully passing
+  and the full public smoke remains `37/44`. The current seed0014 frontier is
+  a peaceful dwarf/tunneler movement-state drift at screen 595: C consumes
+  `rn2(8)` in `m_move(monmove.c:1970)` before `mdig_tunnel()`, while JS has
+  only seven random-wander candidates because its local positions have already
+  drifted. Do not paper over that later `rnd(12)` until the earlier movement
+  state is aligned.
 
 Next concrete target:
 

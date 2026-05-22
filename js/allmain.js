@@ -3941,7 +3941,7 @@ async function processMonsterTurns() {
 		                                                : '';
 		                                    const thief = mon.female ? 'She' : subject;
 		                                    const stolenMessage = `${removeMessage ? thief : subject} stole ${stolenName}.`;
-		                                    const theftMessage = removeMessage ? `${removeMessage}  ${stolenMessage}` : stolenMessage;
+		                                    const theftMessage = removeMessage || stolenMessage;
 		                                    game._nymph_steal_after_more = {
 		                                        mon, itemLetter: stolen.letter, item: stolen, removeMessage, stolenMessage, theftMessage,
 		                                    };
@@ -3950,6 +3950,8 @@ async function processMonsterTurns() {
 		                                    mon.mavenge = 1;
 		                                    clearMonsterTrack(mon);
 		                                    game._topline_after_more = theftMessage;
+		                                    if (removeMessage)
+		                                        game._queued_message_after_topline_more = stolenMessage;
 		                                    game._topline_more_after_more = 1;
 		                                    game._message_more = 1;
 		                                    game._process_time_with_more = 0;
