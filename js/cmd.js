@@ -662,21 +662,43 @@ const SPELL_CATEGORIES = {
     'chain lightning': 'attack',
 };
 const POTION_WISH_BASE = 230;
+const ARROW_TRAP = 1;
 const TELEP_TRAP = 15;
 const DART_TRAP = 2;
+const ROCKTRAP = 3;
+const SQKY_BOARD = 4;
+const LANDMINE = 6;
+const SLP_GAS_TRAP = 8;
 const RUST_TRAP = 9;
+const FIRE_TRAP = 10;
+const HOLE = 13;
+const TRAPDOOR = 14;
+const LEVEL_TELEP = 16;
 const MAGIC_TRAP = 20;
+const ANTI_MAGIC = 21;
+const POLY_TRAP = 22;
 const TRAP_NAMES = {
+    1: 'arrow trap',
     2: 'dart trap',
+    3: 'falling rock trap',
     4: 'squeaky board',
     5: 'bear trap',
+    6: 'land mine',
     7: 'rolling boulder trap',
+    8: 'sleeping gas trap',
     9: 'rust trap',
+    10: 'fire trap',
     11: 'pit',
     12: 'spiked pit',
+    13: 'hole',
+    14: 'trap door',
     15: 'teleportation trap',
+    16: 'level teleporter',
     17: 'magic portal',
     20: 'magic trap',
+    21: 'anti-magic field',
+    22: 'polymorph trap',
+    23: 'vibrating square',
 };
 const LARGE_BOX = 214;
 const ICE_BOX = 216;
@@ -12273,22 +12295,317 @@ async function sitWhileAlreadyTrapped(trap) {
     return true;
 }
 
+function deleteTrap(trap) {
+    game.level.traps = (game.level?.traps || []).filter(item => item !== trap);
+    newsym(game.u?.ux || 0, game.u?.uy || 0);
+}
+
+function sitTrapArticleName(trap) {
+    const name = TRAP_NAMES[trap?.ttyp] || 'trap';
+    if (trap?.madeby_u) return `your ${name}`;
+    return `${/^[aeiou]/i.test(name) ? 'an' : 'a'} ${name}`;
+}
+
+function sitTrapEscapeAllowed(trap) {
+    return ![ANTI_MAGIC, MAGIC_PORTAL, VIBRATING_SQUARE].includes(trap?.ttyp);
+}
+
+function sitTrapNote(trap) {
+    const notes = [
+        'C note', 'D flat', 'D note', 'E flat', 'E note', 'F note',
+        'F sharp', 'G note', 'G sharp', 'A note', 'B flat', 'B note',
+    ];
+    const note = notes[trap?.tnote] || notes[0];
+    return `${/^[aeiou]/i.test(note) ? 'an' : 'a'} ${note}`;
+}
+
+function placeSitTrapProjectile(projectile) {
+    game.level.objects ??= [];
+    game.level.objects.push({
+        quan: 1,
+        blessed: false,
+        cursed: false,
+        ox: game.u?.ux || 0,
+        oy: game.u?.uy || 0,
+        ...projectile,
+    });
+    newsym(game.u?.ux || 0, game.u?.uy || 0);
+}
+
+function sitProjectileTrapMessage(trap, prefix, alreadySeen, spec) {
+    if (trap.once && alreadySeen && !rn2(15)) {
+        deleteTrap(trap);
+        return `${prefix}  ${spec.emptyMessage}`;
+    }
+    trap.once = true;
+    trap.tseen = true;
+    const projectile = { ...spec.projectile };
+    if (spec.poisonable) projectile.opoisoned = !rn2(6);
+    const damage = spec.damage();
+    const roll = rnd(20);
+    const misses = (game.u?.uac || 0) + spec.toHit <= roll;
+    if (misses) {
+        placeSitTrapProjectile(projectile);
+        const almost = (game.u?.uac || 0) + spec.toHit > roll - 2;
+        const missText = almost ? `You are almost hit by ${spec.article}.` : `${spec.subject} misses you.`;
+        return `${prefix}  ${spec.shootsMessage}  ${missText}`;
+    }
+    if (game.u) game.u.uhp = Math.max(0, (game.u.uhp || 1) - damage);
+    let hitText = `You are hit by ${spec.article}.`;
+    if (projectile.opoisoned && !heroHasPoisonResistance()) {
+        if (game.u?.acurr?.a) game.u.acurr.a[A_CON] = Math.max(3, (game.u.acurr.a[A_CON] || 10) - 1);
+        hitText += `  The ${spec.name} was poisoned!`;
+    }
+    return `${prefix}  ${spec.shootsMessage}  ${hitText}`;
+}
+
+function sitRockTrapMessage(trap, prefix, alreadySeen) {
+    if (trap.once && alreadySeen && !rn2(15)) {
+        deleteTrap(trap);
+        return `${prefix}  A trap door in the ceiling opens, but nothing falls out!`;
+    }
+    trap.once = true;
+    trap.tseen = true;
+    const damage = d(2, 6);
+    placeSitTrapProjectile({ otyp: ROCK, cls: 'gem', kind: 'rock', singular: 'rock', plural: 'rocks', glyph: '*' });
+    if (game.u) game.u.uhp = Math.max(0, (game.u.uhp || 1) - damage);
+    exerciseAttribute(A_STR, false);
+    return `${prefix}  A trap door in the ceiling opens and a rock falls on your head!`;
+}
+
+function sitSqueakyBoardMessage(trap, prefix) {
+    trap.tseen = true;
+    if (heroIsDeaf()) return `${prefix}  A board beneath you vibrates.`;
+    return `${prefix}  A board beneath you squeaks ${sitTrapNote(trap)} loudly.`;
+}
+
+function sitSleepGasMessage(trap, prefix) {
+    trap.tseen = true;
+    if (game.u?.sleepResistance || polyselfForm()?.breathless) {
+        return `${prefix}  You are enveloped in a cloud of gas!`;
+    }
+    const duration = rnd(25);
+    game._helpless_time = Math.max(game._helpless_time || 0, duration);
+    game._sleeping_time = Math.max(game._sleeping_time || 0, duration + 1);
+    return `${prefix}  A cloud of gas puts you to sleep!`;
+}
+
+function sitRustTrapMessage(trap, prefix) {
+    trap.tseen = true;
+    switch (rn2(5)) {
+    case 0:
+        return `${prefix}  A gush of water hits you on the head!`;
+    case 1:
+        return `${prefix}  A gush of water hits your left arm!`;
+    case 2:
+        return `${prefix}  A gush of water hits your right arm!`;
+    default:
+        return `${prefix}  A gush of water hits you!`;
+    }
+}
+
+function sitFireTrapMessage(trap, prefix) {
+    trap.tseen = true;
+    const origDamage = d(2, 4);
+    const messages = [`${prefix}  A tower of flame erupts from the floor!`];
+    let damage = 0;
+    if (game.u?.fireResistance) {
+        damage = rn2(2);
+        if (!damage) messages.push('You are uninjured.');
+    } else {
+        damage = d(2, 4);
+        const hpLoss = rn2(Math.min(game.u?.uhpmax || 1, damage + 1));
+        if (game.u) {
+            game.u.uhpmax = Math.max(1, (game.u.uhpmax || 1) - hpLoss);
+            game.u.uhp = Math.min(game.u.uhp || 1, game.u.uhpmax);
+        }
+    }
+    const inventoryFire = fireDamageInventory(origDamage);
+    messages.push(...inventoryFire.messages);
+    damage += inventoryFire.damage;
+    if (game.u) game.u.uhp = Math.max(0, (game.u.uhp || 1) - damage);
+    if ((game.u?.uhp || 0) <= 0) game._death_cause = inventoryFire.deathCause || 'killed by a tower of flame';
+    return messages.join('  ');
+}
+
+function sitTeleportTrapMessage(trap, prefix) {
+    trap.tseen = true;
+    if (heroHasAntimagic() || In_endgame(game.u?.uz)) {
+        return `${prefix}  You feel a wrenching sensation.`;
+    }
+    if (trap.once) deleteTrap(trap);
+    const materialize = safeTeleportHeroSameLevel();
+    return [prefix, materialize || 'You shudder for a moment.'].join('  ');
+}
+
+function sitAntiMagicTrapMessage(trap, prefix) {
+    trap.tseen = true;
+    const messages = [prefix];
+    if (heroHasAntimagic()) {
+        const damage = rnd(4);
+        const hp = game.u?.uhp || 1;
+        if (game.u) game.u.uhp = Math.max(0, (game.u.uhp || 1) - damage);
+        messages.push(`You feel ${damage >= hp ? 'unbearably torpid!' : damage >= hp / 4 ? 'very lethargic.' : 'sluggish.'}`);
+    }
+    let drain = d(2, 6);
+    const halfDrain = rnd(Math.max(1, Math.trunc(drain / 2)));
+    let exclaim = false;
+    if ((game.u?.uenmax || 0) > drain) {
+        game.u.uenmax -= halfDrain;
+        drain -= halfDrain;
+        exclaim = true;
+    }
+    if ((game.u?.uenmax || 0) < 1) {
+        if (game.u) {
+            game.u.uen = 0;
+            game.u.uenmax = 0;
+        }
+        messages.push('You feel momentarily lethargic.');
+    } else {
+        if (drain > ((game.u?.uen || 0) + (game.u?.uenmax || 0)) / 3) drain = rnd(drain);
+        if (game.u) {
+            exclaim = exclaim || drain > (game.u.uen || 0);
+            game.u.uen = (game.u.uen || 0) - drain;
+            if (game.u.uen < 0) {
+                game.u.uenmax = Math.max(0, (game.u.uenmax || 0) - rnd(-game.u.uen));
+                game.u.uen = 0;
+            } else if (game.u.uen > game.u.uenmax) {
+                game.u.uen = game.u.uenmax;
+            }
+        }
+        messages.push(`You feel your magical energy drain away${exclaim ? '!' : '.'}`);
+    }
+    return messages.join('  ');
+}
+
+function sitPolyTrapMessage(trap, prefix) {
+    trap.tseen = true;
+    const messages = [`${prefix}  You trigger a polymorph trap!`];
+    if (heroHasAntimagic() || heroHasUnchanging()) {
+        messages.push('You feel momentarily different.');
+        return messages.join('  ');
+    }
+    deleteTrap(trap);
+    const form = rndmonnum();
+    const result = becomeMonster(form?.name || 'newt');
+    messages.push(result?.message || 'You feel a change coming over you.');
+    if (result?.more) game._topline_after_more = result.more === true ? game._topline_after_more : result.more;
+    return messages.join('  ');
+}
+
+function sitLandmineMessage(trap, prefix) {
+    const damage = rnd(16);
+    const mineName = sitTrapArticleName(trap);
+    trap.tseen = true;
+    trap.ttyp = PIT;
+    trap.madeby_u = false;
+    if (game.u) {
+        game.u.uhp = Math.max(0, (game.u.uhp || 1) - damage);
+        game.u._woundedLegTurns = Math.max(game.u._woundedLegTurns || 0, rn1(35, 41), rn1(35, 41));
+        game.u.utrap = rn1(6, 2);
+        game.u.utraptype = 'pit';
+    }
+    exerciseAttribute(A_DEX, false);
+    newsym(game.u?.ux || 0, game.u?.uy || 0);
+    return `${prefix}  KAABLAMM!!!  You triggered ${mineName}!  You fall into a pit!`;
+}
+
+function sitRollingBoulderMessage(trap, prefix) {
+    trap.tseen = true;
+    const start = trap.launch;
+    const end = trap.launch2;
+    const boulder = (game.level?.objects || []).find(obj =>
+        !obj.transientProjectile && obj.otyp === BOULDER && obj.ox === start?.x && obj.oy === start?.y);
+    let released = false;
+    if (boulder && end) {
+        boulder.ox = end.x;
+        boulder.oy = end.y;
+        released = true;
+        vision_reset();
+        vision_recalc(0);
+        newsym(start.x, start.y);
+        newsym(end.x, end.y);
+    }
+    return `${prefix}  Click!  You trigger a rolling boulder trap!  ${released ? 'A boulder misses you.' : 'Fortunately for you, no boulder was released.'}`;
+}
+
 async function sitTriggerTrap(trap) {
     if (!trap) return false;
     if (await sitWhileAlreadyTrapped(trap)) return true;
-    trap.tseen = true;
     const prefix = game.u?.flying ? 'You land.' : 'You sit down.';
+    const alreadySeen = !!trap.tseen;
+    if (alreadySeen && sitTrapEscapeAllowed(trap) && !rn2(5)) {
+        await finishSitMessage(`${prefix}  You escape ${sitTrapArticleName(trap)}.`);
+        return true;
+    }
+    if (trap.ttyp === ARROW_TRAP) {
+        await finishSitMessage(sitProjectileTrapMessage(trap, prefix, alreadySeen, {
+            name: 'arrow',
+            subject: 'An arrow',
+            article: 'an arrow',
+            shootsMessage: 'An arrow shoots out at you!',
+            emptyMessage: 'You hear a loud click!',
+            toHit: 8,
+            damage: () => rnd(6),
+            projectile: { cls: 'weapon', kind: 'arrow', singular: 'arrow', plural: 'arrows', glyph: ')' },
+        }));
+        return true;
+    }
+    if (trap.ttyp === DART_TRAP) {
+        await finishSitMessage(sitProjectileTrapMessage(trap, prefix, alreadySeen, {
+            name: 'little dart',
+            subject: 'A little dart',
+            article: 'a little dart',
+            shootsMessage: 'A little dart shoots out at you!',
+            emptyMessage: 'You hear a soft click.',
+            toHit: 7,
+            damage: () => rnd(3),
+            poisonable: true,
+            projectile: { otyp: DART, cls: 'weapon', kind: 'dart', singular: 'dart', plural: 'darts', glyph: ')', color: CLR_CYAN },
+        }));
+        return true;
+    }
+    if (trap.ttyp === ROCKTRAP) {
+        await finishSitMessage(sitRockTrapMessage(trap, prefix, alreadySeen));
+        return true;
+    }
+    if (trap.ttyp === SQKY_BOARD) {
+        await finishSitMessage(sitSqueakyBoardMessage(trap, prefix));
+        return true;
+    }
     if (trap.ttyp === BEAR_TRAP) {
+        trap.tseen = true;
         const damage = d(2, 4);
         if (game.u) {
             game.u.uhp = Math.max(0, (game.u.uhp || 1) - damage);
-            game.u.utrap = rn2(4) + 4;
+            game.u.utrap = rn1(4, 4);
             game.u.utraptype = 'beartrap';
         }
         await finishSitMessage(`${prefix}  A bear trap closes on your foot!`);
         return true;
     }
+    if (trap.ttyp === LANDMINE) {
+        await finishSitMessage(sitLandmineMessage(trap, prefix));
+        return true;
+    }
+    if (trap.ttyp === ROLLING_BOULDER_TRAP) {
+        await finishSitMessage(sitRollingBoulderMessage(trap, prefix));
+        return true;
+    }
+    if (trap.ttyp === SLP_GAS_TRAP) {
+        await finishSitMessage(sitSleepGasMessage(trap, prefix));
+        return true;
+    }
+    if (trap.ttyp === RUST_TRAP) {
+        await finishSitMessage(sitRustTrapMessage(trap, prefix));
+        return true;
+    }
+    if (trap.ttyp === FIRE_TRAP) {
+        await finishSitMessage(sitFireTrapMessage(trap, prefix), { more: true });
+        return true;
+    }
     if (trap.ttyp === PIT || trap.ttyp === SPIKED_PIT) {
+        trap.tseen = true;
         if (game.u) {
             game.u.utrap = rn1(6, 2);
             game.u.utraptype = 'pit';
@@ -12297,15 +12614,36 @@ async function sitTriggerTrap(trap) {
         await finishSitMessage(`${prefix}  You fall into ${trap.ttyp === SPIKED_PIT ? 'a spiked pit' : 'a pit'}!`);
         return true;
     }
+    if (trap.ttyp === HOLE || trap.ttyp === TRAPDOOR) {
+        trap.tseen = true;
+        await finishSitMessage(`${prefix}  A trap door opens up under you!`);
+        return true;
+    }
+    if (trap.ttyp === TELEP_TRAP) {
+        await finishSitMessage(sitTeleportTrapMessage(trap, prefix), { more: true });
+        return true;
+    }
+    if (trap.ttyp === LEVEL_TELEP) {
+        trap.tseen = true;
+        await finishSitMessage(`${prefix}  You shudder for a moment.`);
+        return true;
+    }
+    if (trap.ttyp === MAGIC_PORTAL) {
+        trap.tseen = true;
+        await finishSitMessage(`${prefix}  You feel dizzy for a moment, but the sensation passes.`);
+        return true;
+    }
     if (trap.ttyp === WEB) {
+        trap.tseen = true;
         if (game.u) {
             game.u.utrap = rn1(6, 6);
             game.u.utraptype = 'web';
         }
-        await finishSitMessage(`${prefix}  You are caught in a spider web!`);
+        await finishSitMessage(`${prefix}  You are caught by a spider web!`);
         return true;
     }
     if (trap.ttyp === MAGIC_TRAP) {
+        trap.tseen = true;
         const result = magicTrapResult(trap);
         const messages = [prefix];
         if (result.message) messages.push(result.message);
@@ -12313,6 +12651,20 @@ async function sitTriggerTrap(trap) {
         await finishSitMessage(messages.join('  '), { more: result.more || !!result.afterMore });
         return true;
     }
+    if (trap.ttyp === ANTI_MAGIC) {
+        await finishSitMessage(sitAntiMagicTrapMessage(trap, prefix));
+        return true;
+    }
+    if (trap.ttyp === POLY_TRAP) {
+        await finishSitMessage(sitPolyTrapMessage(trap, prefix), { more: !!game._topline_after_more });
+        return true;
+    }
+    if (trap.ttyp === VIBRATING_SQUARE) {
+        trap.tseen = true;
+        await finishSitMessage(`${prefix}  You feel a strange vibration beneath you.`);
+        return true;
+    }
+    trap.tseen = true;
     await finishSitMessage(prefix);
     return true;
 }

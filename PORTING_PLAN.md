@@ -864,15 +864,22 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   `dosit()` ordering: object sitting stays before traps, common trap sitting
   can trigger or worsen traps, water/sink/altar/grave/stairs/ladder/lava/ice
   terrain messages happen before egg-laying, and thrones no longer fall through
-  to floor or egg behavior. Eating tins and applying tin openers now route
+  to floor or egg behavior. Fresh `#sit` trap dispatch now preserves the
+  `dotrap(VIASITTING)` prefix/seen-escape ordering and covers arrow, dart,
+  falling rock, squeaky board, sleep gas, rust, fire, teleport, anti-magic,
+  polymorph, land mine, rolling boulder, and vibrating-square effects instead
+  of falling through to a prefix-only no-op. Eating tins and applying tin
+  openers now route
   through a C-shaped `start_tin()`/`opentin()` slice: opener/no-opener/blessed
   timing, slippery-finger drops, delayed opening occupation, trapped tins,
   empty tins, spinach tins, monster tins, rotten/greasy variety effects, and
   the `Eat it?` prompt no longer fall through as ordinary one-turn food. Full
-  egg knowledge UI, complete throne random effects, full `dotrap(VIASITTING)`
-  parity, multi-turn `victual`/per-bite nutrition for rations, corpses, and
-  other long meals, full tin corpse side effects/shop billing/conduct detail,
-  and complete extinction/vitals semantics remain future work.
+  egg knowledge UI, complete throne random effects, deeper `dotrap(VIASITTING)`
+  details for holes/trapdoors/level portals, web strength timing, rust/fire
+  item destruction, rock helmet/pass-through details, multi-turn
+  `victual`/per-bite nutrition for rations, corpses, and other long meals,
+  full tin corpse side effects/shop billing/conduct detail, and complete
+  extinction/vitals semantics remain future work.
 - Wished container state prefixes now cover the C `readobjnam()` object slice
   for `locked`, `unlocked`, `broken`, `trapped`, `untrapped`, and `empty`:
   boxes keep normal generated contents and lock/trap RNG before final state
@@ -1093,11 +1100,11 @@ Next concrete target:
   semantics, C special-level room/corridor/shop filling for `minetn-3.lua`, and
   full `eat.c`, `sp_lev.c`, `mkobj.c`, `makemon.c`, `uhitm.c`, and
   `dogmove.c` behavior.
-- The next narrow `#sit` trap slice should follow `sit.c:dosit()` into
-  `trap.c:dotrap()`/`trapeffect_selector()`: emit `You sit down.` or `You
-  land.` before dispatch, preserve seen-trap escape RNG before effect-specific
-  RNG, and replace the current unsupported-trap prefix-only fallback in
-  `sitTriggerTrap()`.
+- The next narrow `#sit` trap slice should deepen the remaining
+  `trap.c:trapeffect_*()` details now that prefix-only fallback is gone:
+  real hole/trapdoor/level-teleport movement, web strength timing and removal,
+  rust/fire item erosion/destruction, rock helmet/pass-through handling, and
+  shared helpers with the movement trap path where that lowers divergence.
 - Use `sessions/*.session.json` to locate divergences, but keep fixes in real
   mechanics. A score recovery is only valid when it falls out of those
   mechanics.
