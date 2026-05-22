@@ -6654,6 +6654,192 @@ function readBlindBlockMessage(item, isScroll) {
     return '';
 }
 
+function heroHasAntimagic() {
+    if (game.u?.magicResistance || game.u?.antimagic) return true;
+    return (game.inventory || []).some(item => {
+        if (!(item.worn || item.line?.includes('being worn'))) return false;
+        return /cloak of magic resistance|gray dragon scale mail/i
+            .test(String(item.kind || item.actualKind || item.line || ''));
+    });
+}
+
+function heroHasPoisonResistance() {
+    if (game.u?.poisonResistance) return true;
+    return (game.inventory || []).some(item => {
+        if (!(item.worn || item.line?.includes('being worn'))) return false;
+        return /amulet (?:versus|of) poison|poison resistance/i
+            .test(String(item.kind || item.actualKind || item.line || ''));
+    });
+}
+
+function wornGlovesItem() {
+    return (game.inventory || []).find(item => isWornArmorItem(item) && armorSlot(item) === 'gloves') || null;
+}
+
+function makeHeroBlindedFromBook(messages) {
+    const duration = rn1(100, 250);
+    if (!game.u) return;
+    const wasBlind = !!game.u.blind;
+    game.u._blindTimeout = (game.u._blindTimeout || 0) + duration;
+    game.u.blind = true;
+    if (!wasBlind) {
+        messages.push(heroIsHallucinating()
+            ? 'Oh, bummer!  Everything is dark!  Help!'
+            : 'A cloud of darkness falls upon you.');
+    }
+}
+
+function takeGoldFromHeroForBook(messages) {
+    const hadGold = (game._goldCount || 0) > 0
+        || (game.inventory || []).some(item => item.cls === 'coin' || item.otyp === GOLD_PIECE || item.letter === '$');
+    if (!hadGold) {
+        messages.push('You feel a strange sensation.');
+        return;
+    }
+    game._goldCount = 0;
+    game._just_picked_gold = 0;
+    game.inventory = (game.inventory || []).filter(item =>
+        !(item.cls === 'coin' || item.otyp === GOLD_PIECE || item.letter === '$'));
+    game._pet_food_scan_inventory = game.inventory;
+    messages.push('You notice you have no gold!');
+}
+
+function corrodeGlovesFromBook(gloves, messages) {
+    const kind = armorKind(gloves);
+    const corrodeable = /\b(?:gauntlets of power|iron|metal|copper|bronze)\b/.test(kind);
+    if (!corrodeable) {
+        messages.push('Your gloves are not affected by the corrosion.');
+        return;
+    }
+    if (gloves.oerodeproof) {
+        gloves.rknown = true;
+        messages.push('Somehow, your gloves are not affected by the corrosion.');
+        updateArmorLine(gloves);
+        return;
+    }
+    if (gloves.blessed && !rnl(4)) {
+        messages.push('Somehow, your gloves are not affected by the corrosion.');
+        return;
+    }
+    const current = Math.min(3, gloves.oeroded2 || 0);
+    if (current >= 3) return;
+    const adverb = current + 1 === 3 ? ' completely' : current ? ' further' : '';
+    messages.push(`Your gloves ${erosionVerb(gloves, 'corrode')}${adverb}!`);
+    const oldAc = wornArmorAcValueGreatestErosion(gloves);
+    gloves.oeroded2 = current + 1;
+    gloves.bknown = true;
+    updateWornArmorAcAfterChange(gloves, oldAc);
+}
+
+function poisonHeroFromSpellbook(messages) {
+    messages.push('The book was coated with contact poison!');
+    const gloves = wornGlovesItem();
+    if (gloves) {
+        corrodeGlovesFromBook(gloves, messages);
+        return { dead: false };
+    }
+
+    const resisted = heroHasPoisonResistance();
+    const strLoss = resisted ? rn1(2, 1) : rn1(4, 3);
+    const damage = rnd(resisted ? 6 : 10);
+    if (game.u?.acurr?.a) {
+        game.u.acurr.a[A_STR] = Math.max(3, (game.u.acurr.a[A_STR] ?? 10) - strLoss);
+        messages.push('You feel weaker.');
+    }
+    if (game.u) {
+        game.u.uhp = Math.max(0, (game.u.uhp || 0) - damage);
+        if ((game.u.uhp || 0) <= 0) {
+            game._death_cause = 'killed by a contact-poisoned spellbook';
+            messages.push('You die...');
+            return { dead: true };
+        }
+    }
+    exerciseAttribute(A_STR, false);
+    return { dead: false };
+}
+
+function aggravateMonstersFromBook() {
+    for (const mon of game.level?.monsters || []) {
+        mon.msleeping = 0;
+        if (mon.mcanmove === false && !rn2(5)) {
+            mon.mfrozen = 0;
+            mon.mcanmove = true;
+        }
+    }
+}
+
+function rndcurseFromBook(messages) {
+    if (heroHasAntimagic()) messages.push('A magical shield surrounds you!');
+    messages.push('You feel a malignant aura surround you.');
+    const candidates = (game.inventory || [])
+        .filter(item => !(item.cls === 'coin' || item.otyp === GOLD_PIECE || item.letter === '$'));
+    let count = rnd(heroHasAntimagic() ? 3 : 6);
+    while (count-- > 0 && candidates.length) {
+        const item = candidates[rnd(candidates.length) - 1];
+        if (item?.cursed) continue;
+        if (item.blessed) item.blessed = false;
+        else item.cursed = true;
+        item.bknown = true;
+        item.line = normalInventoryLine({ ...item, line: '' });
+    }
+}
+
+function cursedBookStudyEffect(level) {
+    const messages = [];
+    let gone = false;
+    let dead = false;
+    switch (rn2(level)) {
+    case 0: {
+        messages.push('You feel a wrenching sensation.');
+        if (game.level?.at && game.u) {
+            const teleportMessage = safeTeleportHeroSameLevel();
+            if (teleportMessage) messages.push(teleportMessage);
+        }
+        break;
+    }
+    case 1:
+        messages.push('You feel threatened.');
+        aggravateMonstersFromBook();
+        break;
+    case 2:
+        makeHeroBlindedFromBook(messages);
+        break;
+    case 3:
+        takeGoldFromHeroForBook(messages);
+        break;
+    case 4:
+        messages.push('These runes were just too much to comprehend.');
+        addHeroConfusion(rn1(7, 16));
+        break;
+    case 5: {
+        const result = poisonHeroFromSpellbook(messages);
+        dead = !!result.dead;
+        break;
+    }
+    case 6:
+        gone = true;
+        if (heroHasAntimagic()) {
+            messages.push('The book radiates explosive energy, but you are unharmed!');
+        } else {
+            messages.push('As you read the book, it radiates explosive energy in your face!');
+            const damage = 2 * rnd(10) + 5;
+            if (game.u) {
+                game.u.uhp = Math.max(0, (game.u.uhp || 0) - damage);
+                if ((game.u.uhp || 0) <= 0) {
+                    game._death_cause = 'killed by an exploding rune';
+                    messages.push('You die...');
+                    dead = true;
+                }
+            }
+        }
+        break;
+    default:
+        rndcurseFromBook(messages);
+        break;
+    }
+    return { messages, gone, dead, more: messages.length > 1 || dead };
+}
+
 function articleFor(noun) {
     const text = String(noun || '').trim();
     if (!text) return 'a thing';
@@ -19299,29 +19485,18 @@ export async function rhack(_cmd) {
             const readAbility = (stats[3] ?? 10) + 4 + Math.trunc((game.u?.ulevel || 1) / 2) - 2 * level;
             const tooHard = !bookOfDead && (item.cursed || (!item.blessed && rnd(20) > readAbility));
             if (tooHard) {
-                let message = 'These runes were just too much to comprehend.';
-                const effect = rn2(level);
-                if (effect === 0) message = 'You feel a wrenching sensation.';
-                else if (effect === 1) {
-                    message = 'You feel threatened.';
-                    for (const mon of game.level?.monsters || []) {
-                        mon.msleeping = 0;
-                        if (mon.mcanmove === false && !rn2(5)) {
-                            mon.mfrozen = 0;
-                            mon.mcanmove = true;
-                        }
-                    }
-                } else if (effect === 2) message = 'You are blinded!';
+                const result = cursedBookStudyEffect(level);
+                const messages = [...result.messages];
                 let shouldCall = false;
-                if (!rn2(3)) {
+                if (result.gone || !rn2(3)) {
                     shouldCall = shouldTryCallSpellbook(item, name);
                     if (shouldCall) prepareSpellbookTryCall(item, studyDelay);
                     removeInventoryItem(item);
-                    message += '  The spellbook crumbles to dust!';
+                    if (!result.gone) messages.push('The spellbook crumbles to dust!');
                 }
                 game._helpless_time = Math.max(game._helpless_time || 0, studyDelay);
                 game._wake_message = 'You can move again.';
-                await setMessage(message, shouldCall);
+                await setMessage(messages.join('  '), shouldCall || result.more || messages.length > 1);
                 game._command_mode = shouldCall ? 'callSpellbookAfterMore' : null;
                 game.context.move = shouldCall ? 0 : studyDelay;
                 return;

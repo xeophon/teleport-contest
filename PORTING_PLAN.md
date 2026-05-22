@@ -978,6 +978,12 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   with the C `recite` wording, identifies as the Book rather than a generic
   spell, and reaches a first `deadbook()` message slice. Full invocation,
   undead, and relic interactions remain future work.
+- Cursed and too-hard spellbook study now covers the remaining C
+  `cursed_book()` outcomes: same-level teleport feedback, monster
+  aggravation, blindness, gold loss, confusion, contact poison with worn-glove
+  corrosion, and explosive rune damage. The explosion branch now consumes the
+  spellbook immediately and skips the caller's separate crumble roll, matching
+  the C return-value split.
 - Monster-class row ordering no longer depends on Node 22's
   `Array.prototype.toSorted()`: the JS `mkclass` metadata path now uses an
   explicit copied difficulty sort that preserves equal-difficulty order, matching
