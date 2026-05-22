@@ -1161,6 +1161,13 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   real monster-generation parity failures instead of crashing. The latest
   verified public score is `27/44`, with the former `toSorted` hard failures
   now running.
+- Artifact inventory display now follows the same C `xname()` -> `doname()`
+  article path as ordinary inventory lines: `silver saber named Grayswandir`
+  remains the bare object name, while the inventory/wield line contributes
+  `a` before appending `(weapon in right hand)`. This advances
+  `seed0361-archeologist-tour` from the Grayswandir wield line to the next
+  delayed-occupation frontier, where C prints `You finish your dressing
+  maneuver.` and advances the pet turn after armor wearing completes.
 
 Next concrete target:
 
@@ -1173,6 +1180,10 @@ Next concrete target:
   semantics, C special-level room/corridor/shop filling for `minetn-3.lua`, and
   full `eat.c`, `sp_lev.c`, `mkobj.c`, `makemon.c`, `uhitm.c`, and
   `dogmove.c` behavior.
+- The next narrow inventory/turn-timing slice should port the delayed
+  armor-wearing occupation finish path that emits `You finish your dressing
+  maneuver.` before the following input and still lets normal monster/pet
+  movement consume the turn.
 - The next narrow `#sit` trap slice should deepen the remaining
   `trap.c:trapeffect_*()` details now that deferred level-changing traps are
   live: floor-object `impact_drop()` effects for holes/trapdoors, positive

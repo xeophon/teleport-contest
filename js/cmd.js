@@ -5064,7 +5064,14 @@ export function inventoryLetterRank(item) {
 }
 
 export function inventoryItemName(item) {
-    if (item?.artifact) return artifactObjectName(item);
+    if (item?.artifact) {
+        if (item.line) {
+            return String(item.line)
+                .replace(/^[a-zA-Z$] - /, '')
+                .replace(/ \((?:weapon|wielded|alternate weapon|being worn|at the ready|in quiver|on .* hand).*$/, '');
+        }
+        return pickupObjectPhrase(item);
+    }
     return String(item.line || `${item.letter || '?'} - ${item.quan > 1 ? `${item.quan} ` : ''}${pickupObjectName(item)}`)
         .replace(/^[a-zA-Z$] - /, '')
         .replace(/ \((?:weapon|wielded|alternate weapon|being worn|at the ready|in quiver|on .* hand).*$/, '');
