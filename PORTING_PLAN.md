@@ -777,10 +777,16 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   timers on pickup/wish creation, due timers use pack-adjacent/floor placement
   and retry blocked locations after `rnd(5000)`, and transformed figurines are
   removed from inventory/floor/monster inventory with C-like visible messages.
-  Full `carry_obj_effects()` coverage for every inventory path, BUC-change
-  timer stop/start hooks, limited-extinction dust handling, liquid/mimic
-  message edge cases, and exact one-of-stack semantics outside inventory remain
-  future work.
+  BUC-changing inventory effects now update carried figurine timers in the C
+  `bless()`/`curse()`/`uncurse()` shape: remove curse, confused remove curse
+  `blessorcurse()`, cursed-book random cursing, and fountain curse/uncurse
+  effects, including the direct holy-water conversion branch, stop timers when
+  figurines become blessed or uncursed and attach a
+  fresh `rnd(9000)+200` timer when they become cursed. Full
+  `carry_obj_effects()` coverage for every inventory path, timer stopping when
+  timed figurines leave inventory, limited-extinction dust handling,
+  liquid/mimic message edge cases, and exact one-of-stack semantics outside
+  inventory remain future work.
 - Exact wished corpses now use the C `readobjnam()` corpse shape instead of
   generic food fallback: `corpse`, `corpse of <monster>`, and
   `<monster> corpse` create initialized corpse objects first, then apply

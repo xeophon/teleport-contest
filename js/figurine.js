@@ -37,6 +37,16 @@ export function maybeAttachCarriedFigurineTimeout(figurine) {
     return attachFigurineTransformTimeout(figurine);
 }
 
+export function syncCarriedFigurineTransformTimer(figurine) {
+    if (!isFigurineObject(figurine)) return false;
+    if (!figurine.cursed || figurine.blessed || !figurine.corpsenm
+        || (game._genocided_monsters || []).includes(figurine.corpsenm.name)) {
+        stopFigurineTransformTimeout(figurine);
+        return false;
+    }
+    return attachFigurineTransformTimeout(figurine);
+}
+
 export function figurineLocationCheck(figurine, x, y) {
     if (!isok(x, y)) return { ok: false, message: 'You cannot put the figurine there.' };
     const loc = game.level?.at?.(x, y);

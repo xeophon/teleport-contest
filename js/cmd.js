@@ -18,7 +18,7 @@ import { clearMonsterTrack, updateMonsterTrack } from './montrack.js';
 import { datFileLines as bundledDatFileLines } from './dat_files.js';
 import { advanceFireBreathRay, finishHeroTargetedBreath, fireBreathDamageHero, fireBreathDamageMonster, fireBreathZapHits } from './fire_breath.js';
 import { createGasCloud } from './region.js';
-import { figurineLocationCheck, isFigurineObject, makeFigurineFamiliar, maybeAttachCarriedFigurineTimeout, stopFigurineTransformTimeout } from './figurine.js';
+import { figurineLocationCheck, isFigurineObject, makeFigurineFamiliar, maybeAttachCarriedFigurineTimeout, stopFigurineTransformTimeout, syncCarriedFigurineTransformTimer } from './figurine.js';
 
 const DIR_DX = { h: -1, l: 1, j: 0, k: 0, y: -1, u: 1, b: -1, n: 1 };
 const DIR_DY = { h: 0, l: 0, j: 1, k: -1, y: -1, u: -1, b: 1, n: 1 };
@@ -6790,6 +6790,7 @@ function rndcurseFromBook(messages) {
         if (item?.cursed) continue;
         if (item.blessed) item.blessed = false;
         else item.cursed = true;
+        syncCarriedFigurineTransformTimer(item);
         item.bknown = true;
         item.line = normalInventoryLine({ ...item, line: '' });
     }
@@ -7145,6 +7146,7 @@ function removeCurseBlessOrCurse(item) {
         item.blessed = false;
         item.cursed = true;
     }
+    syncCarriedFigurineTransformTimer(item);
     return true;
 }
 
@@ -7200,6 +7202,7 @@ function removeCurseScrollEffect(item) {
             } else if (obj.cursed) {
                 if (obj.bknown === true) learned = true;
                 obj.cursed = false;
+                syncCarriedFigurineTransformTimer(obj);
                 refreshInventoryLineAfterBucChange(obj);
             }
         }
@@ -23142,14 +23145,15 @@ export async function rhack(_cmd) {
                 let fountainMore = false;
 
                 if (game._dip_object === 'e') fountainMessage = 'Nothing seems to happen.';
-                else if (game._dip_object === 'd') {
-                    const water = (game.inventory || []).find(item => item.letter === 'd');
+                else if (game._dip_object === 'd' && isWaterPotion(item)) {
+                    const water = item;
                     if (water) {
                         water.kind = 'unholy water';
                         water.plural = 'potions of unholy water';
                         water.blessed = false;
                         water.cursed = true;
                         water.line = 'd - 4 potions of unholy water';
+                        syncCarriedFigurineTransformTimer(water);
                     }
                     game._keep_pending_message = 1;
                 } else if (fate === 22) {
@@ -23169,11 +23173,13 @@ export async function rhack(_cmd) {
                     if (item?.cls !== 'coin') {
                         item.cursed = true;
                         item.blessed = false;
+                        syncCarriedFigurineTransformTimer(item);
                     }
                     game._keep_pending_message = 1;
                 } else if (fate >= 17 && fate <= 20) {
                     if (item?.cursed) {
                         item.cursed = false;
+                        syncCarriedFigurineTransformTimer(item);
                         fountainMessage = 'The water glows for a moment.';
                     } else {
                         fountainMessage = 'A feeling of loss comes over you.';
