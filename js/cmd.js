@@ -5487,13 +5487,15 @@ function fireDamageInventory(origDamage, forceDestroyItems = false, rollIgniteIt
     const joinState = { joinedArmorMessage: false };
     let destroyItems = false;
     let igniteItems = false;
+    let rollIgniteAfterDestroy = false;
     if (forceDestroyItems) {
         destroyItems = true;
         igniteItems = true;
     } else if (rollIgniteItems) {
         if (!armor.bodyHit) return { messages, events, damage: 0, deathCause: '' };
         destroyItems = !rn2(3);
-        igniteItems = !rn2(3);
+        if (destroyItems) rollIgniteAfterDestroy = true;
+        else igniteItems = !rn2(3);
     } else if (armor.bodyHit || rn2(3)) {
         destroyItems = true;
         igniteItems = true;
@@ -5511,6 +5513,7 @@ function fireDamageInventory(origDamage, forceDestroyItems = false, rollIgniteIt
     let limit = Math.trunc(origDamage / 5);
     if (origDamage % 5 > rn2(5)) limit++;
     if (limit < 1) {
+        if (rollIgniteAfterDestroy) igniteItems = !rn2(3);
         if (igniteItems) igniteFireInventoryItems(messages, events, armor, joinState);
         return { messages, events, damage, deathCause };
     }
@@ -5570,6 +5573,7 @@ function fireDamageInventory(origDamage, forceDestroyItems = false, rollIgniteIt
         }
         addFireInventoryMessage(messages, events, message, event, armor, joinState);
     }
+    if (rollIgniteAfterDestroy) igniteItems = !rn2(3);
     if (igniteItems) igniteFireInventoryItems(messages, events, armor, joinState);
     return { messages, events, damage, deathCause };
 }

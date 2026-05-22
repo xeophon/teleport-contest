@@ -465,7 +465,7 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
 - Runtime public-session replay code and generated answer modules have been
   removed from `js/` and `tools/`.
 - Public sessions are divergence fixtures only. The current full public smoke
-  reports `35/44` while the runtime is rebuilt from C behavior.
+  reports `33/44` while the runtime is rebuilt from C behavior.
 - The active cleanup direction is to remove remaining route-specific shims and
   replace them with C-derived subsystems, not to restore exact public-session
   parity by matching recorded seeds.
@@ -1284,6 +1284,17 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   remains a display-only options-help config-path mismatch with full
   `3018/3018` RNG alignment; do not hardcode the recorder's absolute
   `$HOME/.nethackrc` path into runtime behavior.
+- The wizard coverage fire-ray tail is now closed through C-shaped fire
+  inventory timing. `zhitu()` rolls the `destroy_items()` chance, runs the full
+  destruction selection/damage/message path, then rolls the independent
+  `ignite_items()` chance; JS no longer consumes that second `rn2(3)` before
+  the `destroy_items()` reservoir selection. The zero-limit return still rolls
+  the deferred ignite chance, matching C's call shape. The remaining tail
+  display gap was a generic pager issue: one-attack monsters that happen to use
+  the `data.attacks` table, such as small mimics, no longer force a
+  multi-attack `--More--` after a nonlethal single hit. `seed5002` now passes
+  with `12167/12167` RNG calls and `410/410` screens. `npm run score` improved
+  to `33/44`.
 
 Next concrete target:
 
@@ -1299,9 +1310,13 @@ Next concrete target:
 - The Archeologist tour, exact-wand wish tails, and healer scroll tail are now
   closed; use them as regression guards for artifact wishing, restored-level
   Sokoban return, discovery menus, wizard enlightenment, C `readobjnam()`
-  probability accounting, scroll `makeknown()` exercise, and multi-`pline()`
-  scroll message ordering before widening the same C-grounded fixes to other
-  sessions.
+  probability accounting, scroll `makeknown()` exercise, multi-`pline()`
+  scroll message ordering, and fire-ray `destroy_items()` timing before
+  widening the same C-grounded fixes to other sessions.
+- `seed0012-monk-vault-escort` has a narrow first visible gap in ice-box
+  contents display: C sorts container loot by singular `loot_xname()` and lets
+  `doname_with_price()` format stack quantities, while JS currently sorts by
+  already-plural display names and manually appends another `s`.
 - The next narrow `#sit` trap slice should deepen the remaining
   `trap.c:trapeffect_*()` details now that deferred level-changing traps are
   live: floor-object `impact_drop()` effects for holes/trapdoors, positive

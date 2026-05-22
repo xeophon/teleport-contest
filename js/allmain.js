@@ -3571,7 +3571,8 @@ async function processMonsterTurns() {
                                 game._monster_resume_somebody_can_move = somebodyCanMove;
                                 return false;
                             }
-                            if (showedAttack && !game._message_more && !stoppedCountedRepeat && !pendingHeroMeleeMessage) {
+                            if (showedAttack && data.attacks.length > 1
+                                && !game._message_more && !stoppedCountedRepeat && !pendingHeroMeleeMessage) {
                                 game._message_more = 1;
                                 game._process_time_with_more = 0;
                                 game._monster_resume_index = monIndex + 1;
