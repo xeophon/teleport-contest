@@ -15404,7 +15404,7 @@ async function moveHero(dx, dy) {
             + luckHitBonus + (game.u?.ulevel || 1) + bareHandHitBonus
             + targetStunnedBonus + targetFleeingBonus + targetSleepingBonus + targetImmobileBonus
             + trappedPenalty;
-        if (wokeFromSleep) mon.msleeping = 0;
+        let wokeByHit = false;
 
         if (!game.u?.uinvulnerable) {
             if (game.u) game.u.uhunger = (game.u.uhunger ?? 900) - 1;
@@ -15468,6 +15468,10 @@ async function moveHero(dx, dy) {
             }
 
             if (attackIndex === 0) exerciseAttribute(A_DEX, true);
+            if (wokeFromSleep && mon.msleeping) {
+                mon.msleeping = 0;
+                wokeByHit = true;
+            }
             if (attackWeapon && !game._chronicle_first_weapon_hit) {
                 game._chronicle_entries ??= [];
                 game._chronicle_entries.push({ turn: game.moves || 1, text: `hit with a wielded weapon (${weaponName || 'weapon'}) for the first time` });
@@ -15546,7 +15550,7 @@ async function moveHero(dx, dy) {
         }
 
         if (!killed) {
-            if (wokeFromSleep) messages.push(`The ${name} wakes up!`);
+            if (wokeByHit) messages.push(`The ${name} wakes up!`);
             if (deferSleepingTwoWeapon) {
                 game._queued_messages_after_more ??= [];
                 game._queued_messages_after_more.unshift({
@@ -15567,7 +15571,7 @@ async function moveHero(dx, dy) {
                     mon._distfleeck_done_after_anger = 1;
                 }
             }
-	            await setMessage(messages.join('  '), peacefulShopkeeper || wokeFromSleep);
+	            await setMessage(messages.join('  '), peacefulShopkeeper || wokeByHit);
             if (continuePeacefulShopkeeperTurn) {
                 game._continue_monsters_after_more = 1;
                 game._process_time_with_more = 1;

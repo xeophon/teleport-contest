@@ -1373,6 +1373,20 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   and the immediate jackal counterattack on the same topline. Focused parity
   improves from `88619/105529` RNG calls and `1642/1953` screens to
   `88770/105529` RNG calls and `1644/1953` screens.
+- The next `seed0030` pass closes the session. C spends already-stored monster
+  movement before allocating the next movement round, so JS now resumes
+  monsters that already have a full movement slice even when
+  `_monster_turns_started` was cleared by a prompt boundary. The swap-with-pet
+  `--More--` case now resumes the pending time debit before continuing the
+  monster tail, matching C after `You swap places with Hachi.  Hachi misses
+  the jackal.` Search-revealed secret corridors rebuild vision immediately so
+  nearby invisible-hero monster AI sees the newly opened line of sight before
+  choosing a move. The gas-spore explosion residue overlay no longer leaks a
+  target monster glyph into normal movement after all messages are gone, and
+  hero melee only wakes a sleeping target after an actual hit. Focused parity
+  for `seed0030-ten-diverse-deaths` is now complete: `105529/105529` RNG calls,
+  `1953/1953` screens, and `1953/1953` cursors. The full public smoke improves
+  to `37/44`.
 
 Next concrete target:
 

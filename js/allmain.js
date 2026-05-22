@@ -2801,7 +2801,9 @@ async function processMonsterTurns() {
         newsym(deadPet.mx, deadPet.my);
     }
 
-	    if (game._monster_turns_started && !finishingQueuedDeadTurn) {
+	    const storedMonsterMovementReady = mons.some(mon =>
+	        (game.level?.monsters || []).includes(mon) && (mon.movement || 0) >= NORMAL_SPEED);
+	    if ((game._monster_turns_started || storedMonsterMovementReady) && !finishingQueuedDeadTurn) {
 	        do {
 		            let swallowedEngulferActed = false;
 		            if ((!startIndex || stopAfterPickupResume) && !resumingSameMonster) somebodyCanMove = false;
@@ -8779,6 +8781,7 @@ export async function moveloop_core() {
             if (found) {
                 rn2(19);
                 let foundMessage = 'You find a hidden door.';
+                let revealedSecretTerrain = false;
                 for (const { x, y, loc } of searchTargets) {
                     if (loc.typ === SDOOR) {
                         let doorMask = loc.doormask & ~(D_BROKEN | D_ISOPEN | D_CLOSED);
@@ -8789,7 +8792,12 @@ export async function moveloop_core() {
                         loc.typ = CORR;
                         foundMessage = 'You find a hidden passage.';
                     }
+                    revealedSecretTerrain = true;
                     newsym(x, y);
+                }
+                if (revealedSecretTerrain) {
+                    vision_reset();
+                    vision_recalc(0);
                 }
                 await pline(foundMessage);
                 g._keep_pending_message = 1;
@@ -9154,7 +9162,8 @@ export async function moveloop_core() {
             else if (g._suppress_more_time_once > 0) g._suppress_more_time_once--;
             else if (!g._pet_message_resume && !completedTurnTailMore) g._pending_time_passed++;
             g._turn_tail_topline_more = 0;
-            g._resume_time_after_more = completedTurnTailMore ? 0 : 1;
+            const swapMoreBeforeTimeDebit = /^You swap places with\b/.test(g._pending_message || '');
+            g._resume_time_after_more = completedTurnTailMore || swapMoreBeforeTimeDebit ? 0 : 1;
             const combatMore = /\b(?:bites|hits|misses|stings|kicks|is killed)\b/.test(g._pending_message || '');
             if (combatMore && g._pending_time_passed && !g._more_prompt_hunger_done) {
                 if (g.u) g.u.uhunger = (g.u.uhunger ?? 900) - 1;
@@ -9486,6 +9495,18 @@ export async function moveloop_core() {
             g._gas_spore_residue_x = mon.mx;
             g._gas_spore_residue_y = mon.my;
         }
+    }
+    if (g._preserve_gas_spore_residue && g._gas_spore_residue_active
+        && !g._pending_message && !g._message_more && !g._queued_message_after_more
+        && !g._queued_messages_after_more?.length) {
+        const mon = g._gas_spore_residue_mon;
+        if (mon && (g.level?.monsters || []).includes(mon)) newsym(mon.mx, mon.my);
+        g._preserve_gas_spore_residue = 0;
+        g._gas_spore_residue_active = 0;
+        g._gas_spore_residue_moved = 0;
+        g._gas_spore_residue_was_visible = 0;
+        g._gas_spore_residue_frames = 0;
+        g._gas_spore_residue_mon = null;
     }
     if (g._preserve_gas_spore_residue && g._gas_spore_residue_active) {
         const mon = g._gas_spore_residue_mon;
