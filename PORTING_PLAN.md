@@ -1441,6 +1441,22 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   `59178/59178` RNG calls, `714/714` screens, and `714/714` cursors.
   Regression guards `seed0007`, `seed0030`, and `seed0361` remain fully
   passing, and the full public smoke improves to `38/44`.
+- The `seed4500` wizard-coverage path now follows C through several early
+  debug-command and object-identification frontiers. Wizard Ctrl-T uses C's
+  `getpos()` shape: if the getpos tutorial tip is pending, the teleport prompt
+  still has an initial `--More--`; with `!tutorial`, it enters the cursor prompt
+  immediately, matching the Knight coverage rcfile without regressing
+  `seed0361`. Exact-name spellbook wishes keep their internal spell type but no
+  longer identify the type, so `doname()`-style inventory text uses the shuffled
+  cover (`dark brown spellbook`) until learned. Exact-name identify-scroll
+  wishes likewise no longer count `actualKind` as global discovery, so reading
+  the scroll prints `This is an identify scroll.` and then learns it. Visible
+  cobra venom now records the encountered `splash of venom` discovery, and
+  non-corpse food receives a C-like creation age so old starting apples can take
+  the rotten-food branch; the stack split now happens before rotten side-effect
+  RNG, matching `touchfood()`/`rottenfood()` ordering. Focused seed4500 parity
+  advances from the Ctrl-T prompt at screen 134 to a later stale status-line
+  turn display at screen 528 (`T:98` vs C's stale `T:97` after carrot eating).
 
 Next concrete target:
 
@@ -1468,6 +1484,10 @@ Next concrete target:
   escaped-game disclosure/score polish, remaining fire `burnarmor()`
   material/protection and floor-object burning details, and any remaining
   movement trap sharing where that lowers divergence.
+- For `seed4500`, the next narrow slice is display-status caching rather than
+  food mechanics: C has processed the carrot-eating turn RNG but has not
+  redrawn the time field yet. Avoid changing turn accounting to make that
+  screen pass; model when the bottom line is refreshed.
 - Use `sessions/*.session.json` to locate divergences, but keep fixes in real
   mechanics. A score recovery is only valid when it falls out of those
   mechanics.

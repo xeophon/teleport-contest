@@ -3355,7 +3355,14 @@ export function mksobj(otyp, init, artif) {
     const specificFood = SPECIFIC_FOOD_INFO.get(otyp);
     if (specificFood) {
         const [singular, plural, color] = specificFood;
-        Object.assign(otmp, { cls: 'food', kind: singular, singular, plural, _display_color: color });
+        Object.assign(otmp, {
+            cls: 'food',
+            kind: singular,
+            singular,
+            plural,
+            _display_color: color,
+            age: otmp.age ?? Math.max(game.moves || 0, 1),
+        });
     }
     if (otyp === CORPSE) {
         if (!otmp.corpsenm) {
