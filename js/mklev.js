@@ -2992,6 +2992,23 @@ const BIGRM_RANDOM_MONSTER_TOTAL = BIGRM_RANDOM_MONSTERS.reduce((sum, mon) => su
 
 function is_hole(t) { return t === HOLE || t === TRAPDOOR; }
 function is_pit(t) { return t === PIT || t === SPIKED_PIT; }
+function canHideUnderObjAt(x, y) {
+    const loc = game.level?.at(x, y);
+    if (!loc || IS_POOL(loc.typ) || loc.typ === LAVAPOOL || loc.typ === LAVAWALL) return false;
+    const trap = (game.level?.traps || []).find(item => item.tx === x && item.ty === y);
+    if (trap && !is_pit(trap.ttyp)) return false;
+
+    const stack = (game.level?.objects || [])
+        .filter(obj => !obj.hidden && !obj.transientProjectile && obj.ox === x && obj.oy === y)
+        .reverse();
+    let coins = 0;
+    for (const obj of stack) {
+        if (obj.otyp !== GOLD_PIECE && obj.cls !== 'coin' && obj.cls !== COIN_CLASS) return true;
+        coins += obj.quan || 1;
+        if (coins >= 10) return true;
+    }
+    return false;
+}
 
 // Stairway list management
 function stairway_add(x, y, up, isladder, dest) {
@@ -5548,7 +5565,7 @@ function m_initweap(ptr) {
     }
 }
 
-function set_mimic_sym_rng(mon) {
+export function set_mimic_sym_rng(mon) {
     if (mon.data?.mlet !== S_MIMIC) return;
 
     const loc = game.level?.at(mon.mx, mon.my);
@@ -5838,7 +5855,7 @@ export async function makemon(mdat, x, y, mmflags) {
 
     if (game.in_mklev && (ptr.mlet === S_SPIDER || ptr.mlet === S_SNAKE) && x && y) {
         mkobj_at(RANDOM_CLASS, x, y, true);
-        if (ptr.hidesUnder) mon.mundetected = true;
+        if (ptr.hidesUnder) mon.mundetected = canHideUnderObjAt(x, y);
     }
     if (game.in_mklev && ptr.mlet === ';') mon.mundetected = true;
     if (ptr.mlet === S_NYMPH) {
@@ -7149,11 +7166,8 @@ async function make_arc_goal_level() {
             loc.horizontal = ch !== '|';
             loc.lit = true;
             loc.waslit = false;
-            const horizontalWallDoor = ch === '+' && row[x - 1] === '-' && row[x + 1] === '-';
-            loc.typ = horizontalWallDoor
-                ? HWALL
-                : ch === '+'
-                    ? DOOR
+            loc.typ = ch === '+'
+                ? DOOR
                 : ch === 'S'
                     ? SDOOR
                     : SPECIAL_TERRAIN[ch] ?? STONE;

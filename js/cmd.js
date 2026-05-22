@@ -5,8 +5,8 @@ import { game } from './gstate.js';
 import { nhgetch } from './input.js';
 import { bot, cls, docrt, flush_screen, newsym, pline, refreshHallucinatedMap, show_glyph_cell, strengthString } from './display.js';
 import { couldsee, vision_recalc, vision_reset } from './vision.js';
-import { RANDOM_MONSTER_BY_NAME, SHOP_TYPES, artifactDefinitionForName, artifactObjectName, enextoMonsterSpot, make_tutorial1_level, makemon, makeArtifactWishObject, mkcorpstat, mklev, mkobj_at, mksobj, monsterByRndName, morgueMonster, nameObjectAsArtifact, next_ident, potionIndexForRoll, rndmonnum, scrollIndexForRoll, syncDungeonContext, u_on_dnstairs, u_on_rndspot, u_on_upstairs, wipe_engr_at, dropMonsterInventory, l_nhcore_init, getrumor, getbogusmon, level_difficulty, set_malign, somexyspace } from './mklev.js';
-import { ACCESSIBLE, A_CHA, A_CON, A_DEX, A_INT, A_MAX, A_STR, A_WIS, ALTAR, BC_BALL, BC_CHAIN, BEAR_TRAP, BLCORNER, BOLT_LIM, BRCORNER, CLOUD, COLNO, CORPSTAT_FEMALE, CORPSTAT_GENDER, CORPSTAT_HISTORIC, CORPSTAT_MALE, CORPSTAT_NEUTER, CORR, DOOR, BURN, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, DUST, ENGRAVE, ENGR_BLOOD, FOUNTAIN, GRAVE, HEADSTONE, HWALL, ICE, IN_SIGHT, IS_AIR, IS_OBSTRUCTED, IS_POOL, IS_ROOM, IS_WALL, In_endgame, In_quest, In_sokoban, Is_airlevel, Is_botlevel, Is_earthlevel, Is_rogue_level, Is_stronghold, Is_waterlevel, LADDER, LAVAPOOL, LAVAWALL, MAGIC_PORTAL, MARK, MAX_EGG_HATCH_TIME, MM_EDOG, MM_NOCOUNTBIRTH, MM_NOMSG, MM_NOWAIT, MOAT, NO_MINVENT, NORMAL_SPEED, OVERLOADED, P_BASIC, P_UNSKILLED, PIT, POOL, ROLLING_BOULDER_TRAP, ROOM, ROT_AGE, ROOMOFFSET, ROWNO, SCORR, SDOOR, SHOPBASE, SINK, SPIKED_PIT, STAIRS, STONE, TDWALL, TEMPLE, THRONE, TLCORNER, TRCORNER, TREE, TT_BEARTRAP, TT_BURIEDBALL, TT_INFLOOR, TT_LAVA, TT_PIT, TT_WEB, TUWALL, VAULT, VIBRATING_SQUARE, VWALL, WAND_BACKFIRE_CHANCE, WATER, WEB, WT_IRON_BALL_BASE, WT_IRON_BALL_INCR, ZAP_POS } from './const.js';
+import { RANDOM_MONSTER_BY_NAME, SHOP_TYPES, artifactDefinitionForName, artifactObjectName, enextoMonsterSpot, make_tutorial1_level, makemon, makeArtifactWishObject, mkcorpstat, mklev, mkobj_at, mksobj, monsterByRndName, morgueMonster, nameObjectAsArtifact, next_ident, potionIndexForRoll, rndmonnum, scrollIndexForRoll, set_mimic_sym_rng, syncDungeonContext, u_on_dnstairs, u_on_rndspot, u_on_upstairs, wipe_engr_at, dropMonsterInventory, l_nhcore_init, getrumor, getbogusmon, level_difficulty, set_malign, somexyspace } from './mklev.js';
+import { ACCESSIBLE, A_CHA, A_CON, A_DEX, A_INT, A_MAX, A_STR, A_WIS, ALTAR, BC_BALL, BC_CHAIN, BEAR_TRAP, BLCORNER, BOLT_LIM, BRCORNER, CLOUD, COLNO, CORPSTAT_FEMALE, CORPSTAT_GENDER, CORPSTAT_HISTORIC, CORPSTAT_MALE, CORPSTAT_NEUTER, CORR, DOOR, BURN, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, DUST, ENGRAVE, ENGR_BLOOD, FOUNTAIN, GRAVE, HEADSTONE, HWALL, ICE, IN_SIGHT, IS_AIR, IS_OBSTRUCTED, IS_POOL, IS_ROOM, IS_WALL, In_endgame, In_quest, In_sokoban, Is_airlevel, Is_botlevel, Is_earthlevel, Is_rogue_level, Is_stronghold, Is_waterlevel, LADDER, LAVAPOOL, LAVAWALL, MAGIC_PORTAL, MARK, MAX_EGG_HATCH_TIME, MM_EDOG, MM_NOCOUNTBIRTH, MM_NOMSG, MM_NOWAIT, MOAT, M_AP_TYPE, NO_MINVENT, NORMAL_SPEED, OVERLOADED, P_BASIC, P_UNSKILLED, PIT, POOL, ROLLING_BOULDER_TRAP, ROOM, ROT_AGE, ROOMOFFSET, ROWNO, SCORR, SDOOR, SHOPBASE, SINK, SPIKED_PIT, STAIRS, STONE, TDWALL, TEMPLE, THRONE, TLCORNER, TRCORNER, TREE, TT_BEARTRAP, TT_BURIEDBALL, TT_INFLOOR, TT_LAVA, TT_PIT, TT_WEB, TUWALL, VAULT, VIBRATING_SQUARE, VWALL, WAND_BACKFIRE_CHANCE, WATER, WEB, WT_IRON_BALL_BASE, WT_IRON_BALL_INCR, ZAP_POS } from './const.js';
 import { d, rn1, rn2, rn2_on_display_rng, rnd, rnl, rnz } from './rng.js';
 import { CLR_BLACK, CLR_BLUE, CLR_BRIGHT_BLUE, CLR_BRIGHT_CYAN, CLR_BRIGHT_GREEN, CLR_BROWN, CLR_CYAN, CLR_GRAY, CLR_GREEN, CLR_MAGENTA, CLR_ORANGE, CLR_RED, CLR_YELLOW, CLR_WHITE, NO_COLOR } from './terminal.js';
 import { vfsDeleteFile, vfsReadFile, vfsWriteFile } from './storage.js';
@@ -1833,6 +1833,78 @@ function showQuestPager(msgid, mode = 'questIntroMore') {
     return true;
 }
 
+function queueQuestPline(msgid, more = true) {
+    const text = questPagerText(msgid);
+    if (!text) return false;
+    game._queued_message_after_more = game._queued_message_after_more
+        ? `${game._queued_message_after_more}  ${text}`
+        : text;
+    if (more) game._queued_message_more_after_more = 1;
+    return true;
+}
+
+function showQuestPline(msgid, more = false) {
+    const text = questPagerText(msgid);
+    if (!text) return false;
+    game._overlay_lines = null;
+    game._overlay_hide_status = 0;
+    game._pending_message = text;
+    game._message_more = more ? 1 : 0;
+    game._keep_pending_message = 1;
+    game._command_mode = null;
+    return true;
+}
+
+function currentObjectHereMessage() {
+    const x = game.u?.ux || 0;
+    const y = game.u?.uy || 0;
+    const objectsHere = (game.level?.objects || [])
+        .filter(obj => !obj.hidden && !obj.transientProjectile
+            && obj !== game.u?.uball && obj !== game.u?.uchain
+            && obj.ox === x && obj.oy === y && obj.otyp !== BOULDER);
+    const goldHere = objectsHere.find(obj => obj.otyp === GOLD_PIECE || obj.glyph === '$');
+    if (goldHere) {
+        const amount = goldHere.quan || 1;
+        return `You see here ${amount} gold piece${amount === 1 ? '' : 's'}.`;
+    }
+    const objHere = objectsHere[0];
+    if (objHere?.kind === 'chest' || objHere?.otyp === CHEST)
+        return `You see here a ${objHere.lknown && (objHere.locked || objHere.olocked) ? 'locked ' : ''}chest.`;
+    if (objHere) return `You see here ${pickupObjectPhrase(objHere)}.`;
+    const ballHere = game.u?.uball?.ox === x && game.u?.uball?.oy === y ? game.u.uball : null;
+    if (ballHere) return `You see here ${pickupObjectPhrase(ballHere)}.`;
+    return '';
+}
+
+function restoredLevelHiderNeedsRestrap(mon) {
+    if (!mon || mon.mcan || mon.mundetected || mon.appearObj != null || mon.appearGlyph || M_AP_TYPE(mon))
+        return false;
+    const name = mon.data?.name || '';
+    const mlet = mon.data?.mlet || '';
+    return mlet === 'mimic'
+        || name === 'lurker above'
+        || name === 'trapper'
+        || name === 'rock piercer'
+        || name === 'iron piercer'
+        || name === 'glass piercer';
+}
+
+function restoredLevelMonsterCatchup(monsters, elapsed) {
+    if (elapsed <= 0) return;
+    const restoreOrder = [...(monsters || [])].reverse();
+    for (const mon of restoreOrder) {
+        if (elapsed <= rnd(10)) continue;
+        if (!restoredLevelHiderNeedsRestrap(mon)) continue;
+        if (rn2(3)) continue;
+        if (mon.data?.mlet === 'mimic') {
+            if (!mon.msleeping && !mon.mfrozen) set_mimic_sym_rng(mon);
+        } else {
+            mon.mundetected = true;
+            newsym(mon.mx, mon.my);
+        }
+    }
+}
+
 function queueQuestArrival(targetLevel, fromLevel, targetIsNew, showNow = false) {
     const pager = showNow ? showQuestPager : queueQuestPager;
     const kind = questLevelKind(targetLevel);
@@ -1877,7 +1949,9 @@ function queueQuestArrival(targetLevel, fromLevel, targetIsNew, showNow = false)
         return pager('goal_first');
     }
     if ((game.quest_status.made_goal || 0) < 7) game.quest_status.made_goal = (game.quest_status.made_goal || 1) + 1;
-    return pager('goal_next');
+    const queuedGoal = showNow ? showQuestPline('goal_next') : queueQuestPline('goal_next', true);
+    if (queuedGoal && !showNow) game._quest_arrival_look_here_after_more = 1;
+    return queuedGoal;
 }
 
 async function continueQuestLeaderTalkAfterIntro() {
@@ -2076,8 +2150,7 @@ export async function finishLevelTeleport(targetLevel, options = {}) {
         game.stairs = savedTarget.stairs;
         game._utrack = [...(savedTarget.utrack || [])];
         const elapsed = (game.moves || 1) - (savedTarget.moves || game.moves || 1);
-        if (elapsed > 0)
-            for (const mon of game.level?.monsters || []) rnd(10);
+        restoredLevelMonsterCatchup(game.level?.monsters || [], elapsed);
         if (game.level?.flags?.sokoban_rules) {
             const boulders = new Set((game.level.objects || [])
                 .filter(obj => obj.otyp === BOULDER)
@@ -16320,7 +16393,7 @@ async function moveHero(dx, dy) {
     else if (objHere?.otyp === WAND_CLASS || objHere?.cls === 'wand')
         objHereMessage = `${featurePrefix}You see here a ${pickupObjectName(objHere)}${priceSuffix}.`;
     else if (objHere?.otyp === FOOD_CLASS || objHere?.cls === 'food')
-        objHereMessage = `${featurePrefix}You see here a ${pickupObjectName(objHere)}${priceSuffix}.`;
+        objHereMessage = `${featurePrefix}You see here ${pickupObjectPhrase(objHere)}${priceSuffix}.`;
     else if (objHere?.kind === 'chest' || objHere?.otyp === CHEST)
         objHereMessage = `${featurePrefix}You see here a ${objHere.lknown && (objHere.locked || objHere.olocked) ? 'locked ' : ''}chest${priceSuffix}.`;
     else if ((objHere?.kind === 'statue' || objHere?.otyp === STATUE) && objHere.corpsenm?.name)
@@ -19067,6 +19140,17 @@ export async function rhack(_cmd) {
                 game.context.move = game._pending_time_passed ? 0 : 1;
                 game._process_command_time_now = 1;
                 return;
+            }
+            if (game._quest_arrival_look_here_after_more) {
+                game._quest_arrival_look_here_after_more = 0;
+                const message = currentObjectHereMessage();
+                game._pending_message = '';
+                game._message_more = 0;
+                game._keep_pending_message = 0;
+                if (message) {
+                    await setMessage(message);
+                    return;
+                }
             }
             const welcome = game._welcome_message;
             game._pending_message = '';

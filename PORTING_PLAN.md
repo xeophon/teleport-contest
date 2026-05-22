@@ -1237,6 +1237,19 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   `npm run score` remains `27/44`, with `seed0361` improved to `334/366`
   screens and `53760/53865` RNG calls. Flat RNG still first differs later at
   screen 352 where C consumes `rn2(3) @ restrap(mon.c:4667)`.
+- The Arc-goal and restored-level frontier is now closed through the Sokoban
+  return: raw Arc-goal `+` map glyphs now become C `DOOR`/`D_NODOOR` terrain
+  instead of horizontal wall tiles, mklev-created snake/spider hiders only set
+  `mundetected` when C `hideunder()` would allow hiding under a real object
+  stack, repeat Quest goal `qt_pager()` text uses one-line `pline()` delivery
+  and then runs the deferred `look_here()` object message, and restored-level
+  monster catch-up now spends C's per-monster `rnd(10)` plus `restrap()`
+  `rn2(3)` calls for undisguised hiders. Focused `seed0361-archeologist-tour`
+  screens 317, 339-340, 343-344, and 352 now match. Full compare first differs
+  at screen 354 on the inventory window: C centers the menu further right and
+  shows less-known weapon lines. `npm run score` remains `27/44`, with
+  `seed0361` now fully RNG-aligned at `53865/53865` calls and `362/366`
+  matching screens.
 
 Next concrete target:
 
@@ -1249,12 +1262,10 @@ Next concrete target:
   semantics, C special-level room/corridor/shop filling for `minetn-3.lua`, and
   full `eat.c`, `sp_lev.c`, `mkobj.c`, `makemon.c`, `uhitm.c`, and
   `dogmove.c` behavior.
-- The next narrow Archeologist tour slice should inspect the screen 317
-  Arc-goal display-only frontier after wizard level teleport to Quest Home 5:
-  generation and RNG remain aligned, but C's initial view reveals one extra
-  floor/wall pair below the hero. After that, inspect the screen 352 flat RNG
-  frontier where restored level loading in C calls `restrap(mon.c:4667)`
-  between `restore.c:getlev()` `rnd(10)` draws.
+- The next narrow Archeologist tour slice should inspect the screen 354
+  inventory window frontier after returning to Sokoban: RNG is fully aligned,
+  but C's inventory menu is centered further right and the weapon knowledge
+  lines omit JS's extra blessing/enchantment/alternate-weapon annotations.
 - The next narrow `#sit` trap slice should deepen the remaining
   `trap.c:trapeffect_*()` details now that deferred level-changing traps are
   live: floor-object `impact_drop()` effects for holes/trapdoors, positive
