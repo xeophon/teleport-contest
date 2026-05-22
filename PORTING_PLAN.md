@@ -890,8 +890,9 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   empty tins, spinach tins, monster tins, rotten/greasy variety effects, and
   the `Eat it?` prompt no longer fall through as ordinary one-turn food. Full
   egg knowledge UI, complete throne random effects, deeper `dotrap(VIASITTING)`
-  edge details for fall blockers/destination special cases/controlled level
-  teleports, remaining fire burnarmor/material and floor-object edge cases, and multi-turn
+  edge details for floor-object falling side effects, negative/invalid
+  level-teleport destinations, remaining fire burnarmor/material and
+  floor-object edge cases, and multi-turn
   `victual`/per-bite nutrition for rations, corpses, and other long meals,
   full tin corpse side effects/shop billing/conduct detail, and complete
   extinction/vitals semantics remain future work.
@@ -912,6 +913,16 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   Ordinary movement onto a fire trap now also routes through the same hero fire
   trap resolver as `#sit`, so trap discovery, HP damage, inventory damage, and
   ignition no longer diverge between those two paths.
+- `#sit` hole/trapdoor handling now follows more of C `fall_through()`: Castle
+  trapdoors route to the Valley/Hell branch, bottom/hardfloor/invocation levels
+  decline to activate impossible falling traps, blind levitation has the early
+  no-message return, Sokoban holes use the air-current inescapable path, flying
+  Sokoban falls avoid falling damage, and huge/clinger/ceiling forms block
+  ordinary falls. Level teleporter sitting now preserves the C
+  follow-up after `level_tele()`, including centered/oriented/disoriented
+  messages and confusion side effects after Amulet/Sokoban blocks, same-depth
+  random results, controlled numeric/menu targets, `*`, confused `Oops...`, and
+  cancellation.
 - Wished container state prefixes now cover the C `readobjnam()` object slice
   for `locked`, `unlocked`, `broken`, `trapped`, `untrapped`, and `empty`:
   boxes keep normal generated contents and lock/trap RNG before final state
@@ -1134,8 +1145,8 @@ Next concrete target:
   `dogmove.c` behavior.
 - The next narrow `#sit` trap slice should deepen the remaining
   `trap.c:trapeffect_*()` details now that deferred level-changing traps are
-  live: full hole/trapdoor blockers and stronghold/Hell destination handling,
-  controlled level-teleport post-prompt messages, remaining fire `burnarmor()`
+  live: floor-object `impact_drop()` effects for holes/trapdoors, negative and
+  invalid controlled level-teleport destinations, remaining fire `burnarmor()`
   material/protection and floor-object burning details, and shared helpers with
   the movement trap path where that lowers divergence.
 - Use `sessions/*.session.json` to locate divergences, but keep fixes in real

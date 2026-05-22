@@ -6,7 +6,7 @@ import { nhgetch } from './input.js';
 import { bot, cls, docrt, flush_screen, newsym, pline, refreshHallucinatedMap, show_glyph_cell, strengthString } from './display.js';
 import { couldsee, vision_recalc, vision_reset } from './vision.js';
 import { RANDOM_MONSTER_BY_NAME, SHOP_TYPES, artifactObjectName, enextoMonsterSpot, make_tutorial1_level, makemon, makeArtifactWishObject, mkcorpstat, mklev, mkobj_at, mksobj, monsterByRndName, morgueMonster, nameObjectAsArtifact, next_ident, potionIndexForRoll, rndmonnum, scrollIndexForRoll, syncDungeonContext, u_on_dnstairs, u_on_rndspot, u_on_upstairs, wipe_engr_at, dropMonsterInventory, l_nhcore_init, getrumor, getbogusmon, level_difficulty, set_malign, somexyspace } from './mklev.js';
-import { ACCESSIBLE, A_CHA, A_CON, A_DEX, A_INT, A_MAX, A_STR, A_WIS, ALTAR, BC_BALL, BC_CHAIN, BEAR_TRAP, BLCORNER, BOLT_LIM, BRCORNER, CLOUD, COLNO, CORPSTAT_FEMALE, CORPSTAT_GENDER, CORPSTAT_HISTORIC, CORPSTAT_MALE, CORPSTAT_NEUTER, CORR, DOOR, BURN, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, DUST, ENGRAVE, ENGR_BLOOD, FOUNTAIN, GRAVE, HEADSTONE, HWALL, ICE, IN_SIGHT, IS_AIR, IS_OBSTRUCTED, IS_POOL, IS_ROOM, IS_WALL, In_endgame, In_quest, In_sokoban, Is_earthlevel, Is_rogue_level, Is_waterlevel, LADDER, LAVAPOOL, LAVAWALL, MAGIC_PORTAL, MARK, MAX_EGG_HATCH_TIME, MM_EDOG, MM_NOCOUNTBIRTH, MM_NOMSG, MM_NOWAIT, MOAT, NO_MINVENT, NORMAL_SPEED, OVERLOADED, P_BASIC, P_UNSKILLED, PIT, POOL, ROLLING_BOULDER_TRAP, ROOM, ROT_AGE, ROOMOFFSET, ROWNO, SCORR, SDOOR, SHOPBASE, SINK, SPIKED_PIT, STAIRS, STONE, TDWALL, TEMPLE, THRONE, TLCORNER, TRCORNER, TREE, TT_BEARTRAP, TT_BURIEDBALL, TT_INFLOOR, TT_LAVA, TT_PIT, TT_WEB, TUWALL, VAULT, VIBRATING_SQUARE, VWALL, WAND_BACKFIRE_CHANCE, WATER, WEB, WT_IRON_BALL_BASE, WT_IRON_BALL_INCR, ZAP_POS } from './const.js';
+import { ACCESSIBLE, A_CHA, A_CON, A_DEX, A_INT, A_MAX, A_STR, A_WIS, ALTAR, BC_BALL, BC_CHAIN, BEAR_TRAP, BLCORNER, BOLT_LIM, BRCORNER, CLOUD, COLNO, CORPSTAT_FEMALE, CORPSTAT_GENDER, CORPSTAT_HISTORIC, CORPSTAT_MALE, CORPSTAT_NEUTER, CORR, DOOR, BURN, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, DUST, ENGRAVE, ENGR_BLOOD, FOUNTAIN, GRAVE, HEADSTONE, HWALL, ICE, IN_SIGHT, IS_AIR, IS_OBSTRUCTED, IS_POOL, IS_ROOM, IS_WALL, In_endgame, In_quest, In_sokoban, Is_botlevel, Is_earthlevel, Is_rogue_level, Is_stronghold, Is_waterlevel, LADDER, LAVAPOOL, LAVAWALL, MAGIC_PORTAL, MARK, MAX_EGG_HATCH_TIME, MM_EDOG, MM_NOCOUNTBIRTH, MM_NOMSG, MM_NOWAIT, MOAT, NO_MINVENT, NORMAL_SPEED, OVERLOADED, P_BASIC, P_UNSKILLED, PIT, POOL, ROLLING_BOULDER_TRAP, ROOM, ROT_AGE, ROOMOFFSET, ROWNO, SCORR, SDOOR, SHOPBASE, SINK, SPIKED_PIT, STAIRS, STONE, TDWALL, TEMPLE, THRONE, TLCORNER, TRCORNER, TREE, TT_BEARTRAP, TT_BURIEDBALL, TT_INFLOOR, TT_LAVA, TT_PIT, TT_WEB, TUWALL, VAULT, VIBRATING_SQUARE, VWALL, WAND_BACKFIRE_CHANCE, WATER, WEB, WT_IRON_BALL_BASE, WT_IRON_BALL_INCR, ZAP_POS } from './const.js';
 import { d, rn1, rn2, rn2_on_display_rng, rnd, rnl, rnz } from './rng.js';
 import { CLR_BLACK, CLR_BLUE, CLR_BRIGHT_BLUE, CLR_BRIGHT_CYAN, CLR_BRIGHT_GREEN, CLR_BROWN, CLR_CYAN, CLR_GRAY, CLR_GREEN, CLR_MAGENTA, CLR_ORANGE, CLR_RED, CLR_YELLOW, CLR_WHITE, NO_COLOR } from './terminal.js';
 import { vfsDeleteFile, vfsReadFile, vfsWriteFile } from './storage.js';
@@ -1735,8 +1735,11 @@ export async function finishLevelTeleport(targetLevel, options = {}) {
     game._overlay_hide_status = 0;
     const fromLevel = { dnum: game.u?.uz?.dnum ?? 0, dlevel: game.u?.uz?.dlevel ?? 1 };
     if (fromLevel.dnum === targetLevel.dnum && fromLevel.dlevel === targetLevel.dlevel) {
-        game._pending_message = '';
-        game._message_more = 0;
+        if (options.postMessage) await setMessage(options.postMessage, !!options.arrivalMore);
+        else {
+            game._pending_message = '';
+            game._message_more = 0;
+        }
         game._command_mode = null;
         return true;
     }
@@ -1865,11 +1868,13 @@ export async function finishLevelTeleport(targetLevel, options = {}) {
     await bot();
 	await flush_screen(1);
     if (options.falling) {
-        const dist = Math.max(1, depth_of_level(targetLevel) - depth_of_level(fromLevel));
-        const damage = d(dist, 6);
-        if (game.u) {
-            game.u.uhp = Math.max(0, (game.u.uhp || 1) - damage);
-            if (game.u.uhp <= 0) game._death_cause = 'falling down a mine shaft';
+        if (options.fallingDamage !== false) {
+            const dist = Math.max(1, depth_of_level(targetLevel) - depth_of_level(fromLevel));
+            const damage = d(dist, 6);
+            if (game.u) {
+                game.u.uhp = Math.max(0, (game.u.uhp || 1) - damage);
+                if (game.u.uhp <= 0) game._death_cause = 'falling down a mine shaft';
+            }
         }
         const fallMessage = [options.preMessage, options.arrivalMessage, options.postMessage]
             .filter(Boolean).join('  ');
@@ -12491,6 +12496,26 @@ function sameDungeonLevel(a, b) {
     return !!a && !!b && a.dnum === b.dnum && a.dlevel === b.dlevel;
 }
 
+function invocationLevel(level = game.u?.uz) {
+    if (!level) return false;
+    const dungeon = game.dungeons?.[level.dnum];
+    return game.dungeons?.[level.dnum]?.name === 'Gehennom'
+        && (level.dlevel ?? 0) === Math.max(1, (dungeon?.num_dunlevs ?? 1) - 1);
+}
+
+function canDigDownFromLevel(level = game.u?.uz) {
+    return !!level && !game.level?.flags?.hardfloor
+        && !Is_botlevel(level) && !invocationLevel(level);
+}
+
+function canFallThroughLevel(level = game.u?.uz) {
+    return canDigDownFromLevel(level) || Is_stronghold(level);
+}
+
+function findHellTargetLevel() {
+    return specialLevel('valley') || branchLevel(1) || null;
+}
+
 function clampDungeonLevel(level) {
     if (!level) return null;
     const current = game.u?.uz || { dnum: 0, dlevel: 1 };
@@ -12549,6 +12574,7 @@ function sitWebTrapMessage(trap, prefix) {
 
 function sitFallTargetLevel(trap) {
     const current = game.u?.uz || { dnum: 0, dlevel: 1 };
+    if (Is_stronghold(current)) return findHellTargetLevel();
     const rawTarget = trap?.dst || { dnum: current.dnum, dlevel: current.dlevel + 1 };
     const target = clampDungeonLevel(rawTarget);
     return sameDungeonLevel(target, current) ? null : target;
@@ -12556,21 +12582,67 @@ function sitFallTargetLevel(trap) {
 
 function sitFallThroughTrapResult(trap, prefix) {
     trap.tseen = true;
-    const messages = [prefix, trap.ttyp === TRAPDOOR
-        ? 'A trap door opens up under you!'
-        : "There's a gaping hole under you!"];
+    const current = game.u?.uz || { dnum: 0, dlevel: 1 };
+    if ((game.u?.blind || game.u?.Blind) && game.u?.levitating && !In_sokoban(current))
+        return { message: prefix, more: false };
+    if (!canFallThroughLevel(current))
+        return { message: prefix, more: false };
+
+    const sokobanFall = In_sokoban(current) && canFallThroughLevel(current);
+    const messages = sokobanFall
+        ? [prefix, `Air currents pull you down into ${trap.madeby_u ? 'your' : 'a'} ${trap.ttyp === TRAPDOOR ? 'trap door' : 'hole'}!`]
+        : [prefix, trap.ttyp === TRAPDOOR
+            ? 'A trap door opens up under you!'
+            : "There's a gaping hole under you!"];
     const target = sitFallTargetLevel(trap);
-    if (!target || game.u?.levitating || game.u?.flying || game.u?.ustuck) {
+    const form = polyselfForm() || {};
+    if (!target) {
         messages.push("You don't fall in.");
         return { message: messages.join('  '), more: false };
     }
-    const dist = Math.max(1, depth_of_level(target) - depth_of_level(game.u?.uz || { dnum: 0, dlevel: 1 }));
+    if (!sokobanFall && (form.huge || form.msize === 'huge' || form.size === 'huge')) {
+        messages.push("You don't fit through.");
+        return { message: messages.join('  '), more: false };
+    }
+    if (!sokobanFall && (game.u?.levitating || game.u?.flying || game.u?.ustuck
+        || form.clinger || (form.ceilingHider && game.u?.uundetected))) {
+        messages.push("You don't fall in.");
+        return { message: messages.join('  '), more: false };
+    }
+    const dist = Math.max(1, depth_of_level(target) - depth_of_level(current));
     if (dist > 1) {
         const depth = dist > 3 ? 'very deep ' : dist > 2 ? 'deep ' : '';
         messages.push(`You fall down a ${depth}shaft!`);
     }
-    scheduleSitLevelChange(target, { falling: true, arrivalMessage: '' });
+    scheduleSitLevelChange(target, {
+        falling: true,
+        fallingDamage: !game.u?.flying,
+        arrivalMessage: '',
+    });
     return { message: messages.join('  '), more: true };
+}
+
+function levelTeleportTrapFollowupMessage() {
+    if (heroIsHallucinating() || heroHasTeleportControl())
+        return `You briefly feel ${heroIsHallucinating() ? 'oriented' : 'centered'}.`;
+    const evenMore = heroIsConfused();
+    addHeroConfusion(3);
+    return `You feel ${evenMore ? 'even more ' : ''}disoriented.`;
+}
+
+function consumePendingLevelTeleportTrapFollowup() {
+    if (!game._level_teleport_trap_followup) return '';
+    game._level_teleport_trap_followup = 0;
+    return levelTeleportTrapFollowupMessage();
+}
+
+function levelTeleportOptionsWithTrapFollowup(options = {}) {
+    const postMessage = consumePendingLevelTeleportTrapFollowup();
+    if (!postMessage) return options;
+    return {
+        ...options,
+        postMessage: options.postMessage ? `${options.postMessage}  ${postMessage}` : postMessage,
+    };
 }
 
 function sitLevelTeleportTrapResult(trap, prefix) {
@@ -12583,29 +12655,25 @@ function sitLevelTeleportTrapResult(trap, prefix) {
     deleteTrap(trap);
     if (heroHasAmuletOfYendor() || In_sokoban(game.u?.uz)) {
         messages.push('You feel very disoriented for a moment.');
+        messages.push(levelTeleportTrapFollowupMessage());
         return { message: messages.join('  '), more: false };
     }
     if (heroHasTeleportControl() && !heroIsStunned()) {
+        game._level_teleport_trap_followup = 1;
         game._read_confused_teleport_prompt_after_more = 1;
-        game._read_level_teleport_confused_prompt = 0;
+        game._read_level_teleport_confused_prompt = heroIsConfused() ? 1 : 0;
         return { message: messages.join('  '), more: true };
     }
     const currentDepth = depth_of_level(game.u?.uz || { dnum: 0, dlevel: 1 });
     const targetDepth = randomTeleportDepth();
     if (targetDepth === currentDepth) {
         messages.push('You shudder for a moment.');
+        messages.push(levelTeleportTrapFollowupMessage());
         return { message: messages.join('  '), more: false };
-    }
-    let postMessage = '';
-    if (heroHasTeleportControl()) postMessage = 'You briefly feel centered.';
-    else if (heroIsHallucinating()) postMessage = 'You briefly feel oriented.';
-    else {
-        postMessage = 'You feel disoriented.';
-        addHeroConfusion(3);
     }
     scheduleSitLevelChange(levelTeleportNumericTarget(targetDepth), {
         levelTeleport: true,
-        postMessage,
+        postMessage: levelTeleportTrapFollowupMessage(),
     });
     return { message: messages.join('  '), more: true };
 }
@@ -13097,8 +13165,10 @@ async function sitTriggerTrap(trap) {
     if (!trap) return false;
     if (await sitWhileAlreadyTrapped(trap)) return true;
     const prefix = game.u?.flying ? 'You land.' : 'You sit down.';
-    const alreadySeen = !!trap.tseen;
-    if (alreadySeen && sitTrapEscapeAllowed(trap) && !rn2(5)) {
+    const alreadySeen = trap.ttyp === HOLE || !!trap.tseen;
+    const sokobanInescapable = In_sokoban(game.u?.uz)
+        && [PIT, SPIKED_PIT, HOLE, TRAPDOOR].includes(trap.ttyp);
+    if (alreadySeen && !sokobanInescapable && sitTrapEscapeAllowed(trap) && !rn2(5)) {
         await finishSitMessage(`${prefix}  You escape ${sitTrapArticleName(trap)}.`);
         return true;
     }
@@ -18887,14 +18957,15 @@ export async function rhack(_cmd) {
         const currentDepth = depth_of_level(game.u?.uz || { dnum: 0, dlevel: 1 });
         const targetDepth = randomTeleportDepth();
         if (targetDepth === currentDepth) {
-            await setMessage('You shudder for a moment.');
+            const followup = consumePendingLevelTeleportTrapFollowup();
+            await setMessage(['You shudder for a moment.', followup].filter(Boolean).join('  '));
             game.context.move = 1;
             return;
         }
 
         game._deferred_level_goto = {
             targetLevel: levelTeleportNumericTarget(targetDepth),
-            options: { levelTeleport: true },
+            options: levelTeleportOptionsWithTrapFollowup({ levelTeleport: true }),
         };
         game.context.move = 1;
         return;
@@ -25134,8 +25205,12 @@ export async function rhack(_cmd) {
             game._level_teleport_confused_scroll = 0;
             game._level_teleport_text = '';
             game._deferred_level_goto = null;
-            game._pending_message = '';
-            game._message_more = 0;
+            const followup = consumePendingLevelTeleportTrapFollowup();
+            if (followup) await setMessage(followup);
+            else {
+                game._pending_message = '';
+                game._message_more = 0;
+            }
             game._command_mode = null;
             game.context.move = 1;
             return;
@@ -25149,13 +25224,15 @@ export async function rhack(_cmd) {
                 game._level_teleport_confused_scroll = 0;
                 game._command_mode = null;
                 if (targetDepth === currentDepth) {
-                    await setMessage('You shudder for a moment.');
+                    const followup = consumePendingLevelTeleportTrapFollowup();
+                    await setMessage(['You shudder for a moment.', followup].filter(Boolean).join('  '));
                     game.context.move = 1;
                     return;
                 }
+                const options = levelTeleportOptionsWithTrapFollowup({ levelTeleport: true });
                 game._deferred_level_goto = {
                     targetLevel: levelTeleportNumericTarget(targetDepth),
-                    options: { levelTeleport: true },
+                    options,
                 };
                 game.context.move = 1;
                 return;
@@ -25173,12 +25250,13 @@ export async function rhack(_cmd) {
                 if (questDownBlocked() && target > (game.u?.uz?.dlevel || 0)) {
                     game._level_teleport_text = '';
                     game._level_teleport_confused_scroll = 0;
+                    game._level_teleport_trap_followup = 0;
                     await setMessage('A mysterious force prevents you from descending.');
                     game._command_mode = null;
                     return;
                 }
                 const targetLevel = levelTeleportNumericTarget(target);
-                await finishLevelTeleport(targetLevel, { preHalluRefresh: true });
+                await finishLevelTeleport(targetLevel, levelTeleportOptionsWithTrapFollowup({ preHalluRefresh: true }));
                 if (game._command_mode === 'levelTeleportText') game._command_mode = null;
                 return;
             }
@@ -25198,7 +25276,10 @@ export async function rhack(_cmd) {
             game._command_mode = 'levelTeleportMenu2';
             return;
         }
-        await finishLevelTeleport(levelTeleportMenuTarget(ch), { preHalluRefresh: true });
+        const targetLevel = levelTeleportMenuTarget(ch);
+        await finishLevelTeleport(targetLevel, targetLevel
+            ? levelTeleportOptionsWithTrapFollowup({ preHalluRefresh: true })
+            : { preHalluRefresh: true });
         if (game._command_mode === 'levelTeleportMenu') game._command_mode = null;
         return;
     }
@@ -25209,6 +25290,7 @@ export async function rhack(_cmd) {
             game._overlay_hide_status = 0;
             game._pending_message = '';
             game._message_more = 0;
+            game._level_teleport_trap_followup = 0;
             await docrt();
             game._command_mode = null;
             return;
@@ -25216,12 +25298,16 @@ export async function rhack(_cmd) {
         if (['z', 'A'].includes(ch) && questDownBlocked()) {
             game._overlay_lines = null;
             game._overlay_hide_status = 0;
+            game._level_teleport_trap_followup = 0;
             await docrt();
             await setMessage('A mysterious force prevents you from descending.');
             game._command_mode = null;
             return;
         }
-        await finishLevelTeleport(levelTeleportMenuTarget(ch, true), { boulderMessage: ch === 'B', preHalluRefresh: true });
+        const targetLevel = levelTeleportMenuTarget(ch, true);
+        await finishLevelTeleport(targetLevel, targetLevel
+            ? levelTeleportOptionsWithTrapFollowup({ boulderMessage: ch === 'B', preHalluRefresh: true })
+            : { boulderMessage: ch === 'B', preHalluRefresh: true });
         if (game._command_mode === 'levelTeleportMenu2') game._command_mode = null;
         return;
     }
