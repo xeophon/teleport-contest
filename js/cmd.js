@@ -1483,6 +1483,13 @@ function startControlledTeleportPrompt() {
     game._command_mode = 'teleportCursor';
 }
 
+async function showControlledTeleportCursorPrompt() {
+    await setMessage("(For instructions type a '?')  Move cursor to the desired position:");
+    game._farlook_x = game.u?.ux || 0;
+    game._farlook_y = game.u?.uy || 0;
+    game._command_mode = 'teleportCursor';
+}
+
 function resolveArrivalCollision(mon) {
     if (!mon || mon.mx !== game.u?.ux || mon.my !== game.u?.uy) return;
     const open = pos => {
@@ -1881,7 +1888,8 @@ export function maybeQueueQuestLeaderTalk(mon) {
     game.quest_status ??= {};
     mon.questTalked = true;
     game.quest_status.met_leader = true;
-    if (!queueQuestPager(game.quest_status.met_leader_once ? 'leader_next' : 'leader_first', 'questLeaderIntroMore'))
+    const pager = game._pending_message && game._message_more ? queueQuestPager : showQuestPager;
+    if (!pager(game.quest_status.met_leader_once ? 'leader_next' : 'leader_first', 'questLeaderIntroMore'))
         return false;
     game.quest_status.met_leader_once = true;
     return true;
@@ -26092,11 +26100,12 @@ export async function rhack(_cmd) {
     }
 
     if (ch === '\x14' && game.flags?.debug && !game._command_mode && !(game._pending_message && game._message_more)) {
-        await setMessage('Where do you want to be teleported?');
-        game._farlook_x = game.u?.ux || 0;
-        game._farlook_y = game.u?.uy || 0;
+        await setMessage('Where do you want to be teleported?', true);
         game._teleport_cursor_position_mode = 0;
-        game._command_mode = 'teleportCursor';
+        game._teleport_dot_described = 0;
+        game._teleport_from_scroll = 0;
+        game._cursor_override = null;
+        game._command_mode = 'teleportIntroMore';
         return;
     }
 
@@ -26606,9 +26615,13 @@ export async function rhack(_cmd) {
         if (ch === ' ' || ch === '\x1b' || ch === '\r' || ch === '\n') {
             game._pending_message = '';
             game._message_more = 0;
-            setOverlay(TRAVEL_TIP_LINES, 9, false, 9);
-            game._getpos_tip_seen = 1;
-            game._command_mode = 'teleportTip';
+            if (!game._getpos_tip_seen && game.flags?.tutorial !== false) {
+                setOverlay(TRAVEL_TIP_LINES, 9, false, 9);
+                game._getpos_tip_seen = 1;
+                game._command_mode = 'teleportTip';
+                return;
+            }
+            await showControlledTeleportCursorPrompt();
             return;
         }
         game._keep_pending_message = 1;
@@ -26619,10 +26632,7 @@ export async function rhack(_cmd) {
         if (ch === ' ' || ch === '\x1b' || ch === '\r' || ch === '\n') {
             game._overlay_lines = null;
             game._overlay_hide_status = 0;
-            await setMessage("(For instructions type a '?')  Move cursor to the desired position:");
-            game._farlook_x = game.u?.ux || 0;
-            game._farlook_y = game.u?.uy || 0;
-            game._command_mode = 'teleportCursor';
+            await showControlledTeleportCursorPrompt();
         }
         return;
     }
@@ -26897,7 +26907,7 @@ export async function rhack(_cmd) {
                     game._teleport_cursor_position_mode = 0;
                     game._cursor_override = null;
                     game._teleport_geometric_online_once = 1;
-                    await setMessage(`You materialize in ${targetX === oldX && targetY === oldY ? 'the same' : 'a different'} location!`);
+                    await setMessage(`You materialize in ${targetX === oldX && targetY === oldY ? 'the same' : 'a different'} location!`, true);
                     game.context.move = 1;
                     return;
                 }
@@ -27001,12 +27011,11 @@ export async function rhack(_cmd) {
                 game._teleport_cursor_position_mode = 0;
                 game._cursor_override = null;
                 game._command_mode = null;
-                const teleportFromScroll = !!game._teleport_from_scroll;
                 game._teleport_from_scroll = 0;
-                game.context.move = teleportFromScroll ? 1 : 0;
+                game.context.move = 1;
+                const materializeMessage = `You materialize in ${landingX === oldX && landingY === oldY ? 'the same' : 'a different'} location!`;
                 if (!selectedValid) {
-                    if (teleportFromScroll)
-                        game._topline_after_more = `You materialize in ${landingX === oldX && landingY === oldY ? 'the same' : 'a different'} location!`;
+                    game._topline_after_more = materializeMessage;
                     const attachedObjects = [game.u?.uchain, game.u?.uball].filter(obj =>
                         obj && !obj.hidden && obj.ox === landingX && obj.oy === landingY);
                     if (attachedObjects.length > 1) {
@@ -27027,9 +27036,7 @@ export async function rhack(_cmd) {
                     await setMessage('Sorry...', true);
                     return;
                 }
-                await setMessage(teleportFromScroll
-                    ? `You materialize in ${landingX === oldX && landingY === oldY ? 'the same' : 'a different'} location!`
-                    : '');
+                await setMessage(materializeMessage, true);
                 return;
             }
             const up = game.level?.upstair?.x === targetX && game.level?.upstair?.y === targetY;

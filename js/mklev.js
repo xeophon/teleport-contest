@@ -6862,7 +6862,7 @@ async function make_arc_strt_level() {
     for (const [glyph, x, y] of ARC_SIEGE_MONSTERS) await arcClassMonster(glyph, x, y);
 
     wallification(1, 0, COLNO - 1, ROWNO - 1);
-    flipSpecialLevelRnd(1, 0, COLNO - 1, ARC_YSTART + ARC_HEIGHT - 1);
+    flipSpecialLevelRnd(1, 0, COLNO - 1, ARC_YSTART + ARC_HEIGHT - 1, true);
     recount_level_features();
     rn2(1);
     rn2(1);

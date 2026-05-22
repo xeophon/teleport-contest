@@ -1174,6 +1174,17 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   non-active `_topline_after_more` text no longer hides the armor
   `nomovemsg`. `seed0361-archeologist-tour` now reaches the later controlled
   level-teleport redraw/map-layout gap at screen 147.
+- The Quest Home controlled-teleport slice now matches several C paths:
+  Arc-strt uses explicit vertical flip bounds like the Wizard quest start so
+  the top map row is not flipped with a padding row; wizard-mode same-level
+  teleport enters `getpos()` through the C prompt/`--More--`/tip sequence;
+  controlled same-level teleport always prints the verbose
+  `You materialize in ... location!` line and consumes a turn; and quest
+  leader talk can fire immediately from a waiting leader before it moves.
+  `seed0361-archeologist-tour` now reaches the later ordinary `Dlvl:14`
+  map-generation/restoration mismatch at screen 185. The latest verified
+  public score remains `27/44`, with `seed0361` advancing from screen metric
+  `168/366` to `206/366`.
 
 Next concrete target:
 
@@ -1186,10 +1197,11 @@ Next concrete target:
   semantics, C special-level room/corridor/shop filling for `minetn-3.lua`, and
   full `eat.c`, `sp_lev.c`, `mkobj.c`, `makemon.c`, `uhitm.c`, and
   `dogmove.c` behavior.
-- The next narrow Archeologist tour slice should inspect the controlled
-  level-teleport redraw/map-layout divergence now exposed at screen 147, where
-  the destination level display is vertically shifted/different after
-  `You materialize on a different level!`.
+- The next narrow Archeologist tour slice should inspect the new screen 185
+  `Dlvl:14` mismatch after the quest-leader rejection flow: C restores/renders
+  a small room around the hero while JS shows the Quest Home local map area,
+  suggesting a remaining level teleport destination restoration or ordinary
+  level-generation/display-state gap after leaving Quest Home.
 - The next narrow `#sit` trap slice should deepen the remaining
   `trap.c:trapeffect_*()` details now that deferred level-changing traps are
   live: floor-object `impact_drop()` effects for holes/trapdoors, positive
