@@ -606,9 +606,9 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   topline starts with `You start bashing it with your`.
 - Starting spell power now uses the C `num_spells() && uenmax < 5` condition
   for the delayed startup power floor, instead of a Monk/Healer-only patch.
-- Search safety repeat suppression now uses explicit `cmd_safety_prevention()`
-  style state instead of comparing the rendered `You already found a monster`
-  warning text.
+- Search/wait safety repeat suppression now mirrors `cmd_safety_prevention()`
+  with explicit counters, the `safe_wait` gate, and last-emitted `Norep` state
+  instead of comparing rendered safety-warning text.
 - Pet inventory drops during rotten-food eating now use an explicit eating
   message state instead of parsing the `Blecch!  Rotten food!` top-line text.
 - Shopkeeper names now use the C `shknam.c` name lists and `nameshk()` selection

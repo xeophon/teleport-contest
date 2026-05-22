@@ -18069,7 +18069,7 @@ export async function rhack(_cmd) {
 	                    game._command_mode = 'deathDieMore';
 	                    if (attack.currentMove) game._death_current_move = 1;
 	                    if (game.u) {
-	                        game._death_status_hp_before_zero = attack.holdStatusHp ? game.u.uhp : null;
+	                        game._death_status_hp_before_zero = attack.holdStatusHp && !game._death_taker ? game.u.uhp : null;
 	                        game.u.uhp = 0;
 	                    }
 	                    const deathMessage = game._death_taker
@@ -18108,6 +18108,7 @@ export async function rhack(_cmd) {
                     game._run_steps_remaining = 0;
                     game._command_mode = 'deathDieMore';
                     game._death_current_move = 1;
+                    game._death_status_hp_before_zero = null;
                     prepareDeathBones();
                     await setMessage(deathTaker
                         ? `You die...  ${deathTaker} takes all your possessions.`
@@ -29647,13 +29648,15 @@ export async function rhack(_cmd) {
         if (nearbyMonster) {
             game.context.move = 0;
             game._counted_repeat_interruptible = 0;
-            const waitMessage = game._safe_wait_advice_seen
-                ? 'Are you waiting to get hit?'
-                : "Are you waiting to get hit?  Use 'm' prefix to force a no-op (to rest).";
-            game._safe_wait_advice_seen = 1;
-            await setMessage(waitMessage);
+            const cmdassist = game.flags?.cmdassist ?? FULL_OPTION_DEFAULTS.cmdassist;
+            const waitMessage = cmdassist || !(game._did_nothing_flag || 0)
+                ? "Are you waiting to get hit?  Use 'm' prefix to force a no-op (to rest)."
+                : 'Are you waiting to get hit?';
+            if (!cmdassist) game._did_nothing_flag = (game._did_nothing_flag || 0) + 1;
+            if (game._last_pline_message !== waitMessage) await setMessage(waitMessage);
             return;
         }
+        game._did_nothing_flag = 0;
         return;
     }
 
@@ -29665,7 +29668,8 @@ export async function rhack(_cmd) {
         const countMessage = game._count_prefix ? `Count: ${game._count_prefix}` : '';
         const forcedSearch = !!game._move_nopick_prefix;
         game._forced_search_this_turn = forcedSearch ? 1 : 0;
-        const nearbyMonster = !game.u?.blind && !count && !forcedSearch && (game.level?.monsters || []).some(mon =>
+        const nearbyMonster = (game.flags?.safe_wait ?? FULL_OPTION_DEFAULTS.safe_wait)
+            && !game.u?.blind && !count && !forcedSearch && (game.level?.monsters || []).some(mon =>
             !mon.pet && !mon.mpeaceful
             && Math.max(Math.abs(mon.mx - (game.u?.ux || 0)), Math.abs(mon.my - (game.u?.uy || 0))) <= 1
         );
@@ -29673,12 +29677,16 @@ export async function rhack(_cmd) {
         game._request_menu_prefix = 0;
         if (nearbyMonster) {
             game._count_prefix = '';
-            const message = "You already found a monster.  Use 'm' prefix to force another search.";
-            if (game._pending_message_is_search_safety_warning || game._search_safety_warning_active) {
-                game._pending_message = 'You already found a monster.';
+            const cmdassist = game.flags?.cmdassist ?? FULL_OPTION_DEFAULTS.cmdassist;
+            const message = cmdassist || !(game._already_found_flag || 0)
+                ? "You already found a monster.  Use 'm' prefix to force another search."
+                : 'You already found a monster.';
+            if (!cmdassist) game._already_found_flag = (game._already_found_flag || 0) + 1;
+            if (game._last_pline_message === message) {
                 game._pending_message_is_search_safety_warning = 0;
                 game._message_more = 0;
-                game._search_safety_warning_active = 0;
+                game._search_safety_warning_active = 1;
+                game._clear_search_safety_message_next_flush = 0;
                 return;
             }
             await setMessage(message);
@@ -29689,6 +29697,7 @@ export async function rhack(_cmd) {
             return;
         }
         game._search_safety_warning_active = 0;
+        game._already_found_flag = 0;
         if (countMessage && game._pending_message === countMessage) {
             game._pending_message = '';
             game._message_more = 0;
