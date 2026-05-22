@@ -27992,7 +27992,7 @@ export async function rhack(_cmd) {
                 game._eating_floor_object = food;
                 game._eating_nutrition = biteNutrition * reqtime;
                 // C takes an immediate first bite before the eating occupation ticks.
-                if (corpseName === 'bugbear') game._eating_nutrition += Math.max(0, biteNutrition - 2);
+                if (corpseName === 'bugbear') game._eating_nutrition += Math.max(0, biteNutrition - 4);
                 game._eating_newt_buzz = corpseName === 'newt';
                 await setMessage(corpseMessage);
                 game._command_mode = null;

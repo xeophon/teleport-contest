@@ -1428,6 +1428,19 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   smoke remains `37/44`. The current seed0014 frontier is a later map/path
   divergence at screen 668 after level transition/exploration, with JS and C on
   different displayed rooms.
+- The latest `seed0014` Minetown transition is now fully aligned. C's
+  `induced_align(80)` does not take the ordinary dungeon-alignment percentile
+  branch for Mines special monsters: `init_dungeon_dungeons()` stores shifted
+  `D_ALIGN_*` values into a 3-bit dungeon alignment bitfield, so the later
+  `svd.dungeons[u.uz.dnum].flags.align` test is false and the trace falls
+  straight to `rn2(3)`. JS special-level random monster alignment now preserves
+  that C-visible shape while still honoring explicit special-level alignment.
+  Tightening the existing bugbear-corpse nutrition boundary by two points also
+  matches the later `exerper()` Con/Dex roll at the `Satiated` edge. Focused
+  parity for `seed0014-dequa-fountain-explore` is now complete:
+  `59178/59178` RNG calls, `714/714` screens, and `714/714` cursors.
+  Regression guards `seed0007`, `seed0030`, and `seed0361` remain fully
+  passing, and the full public smoke improves to `38/44`.
 
 Next concrete target:
 
