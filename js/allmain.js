@@ -6163,9 +6163,21 @@ function monsterTrapHarmless(mon, trap) {
     if (!game.level?.flags?.sokoban_rules && floorTrigger && data.inAir) return true;
     if (ttyp === BEAR_TRAP) return data.verysmall || data.small || data.amorphous || data.unsolid;
     if (ttyp === RUST_TRAP) return data.name !== 'iron golem';
-    if (ttyp === WEB) return data.webmaker || data.name === 'giant spider' || data.amorphous || data.unsolid;
+    if (ttyp === WEB) return monsterWebPassesThrough(data);
     if (ttyp === ANTI_MAGIC) return data.resistsMagic || data.defendsMagic;
     return ttyp === STATUE_TRAP || ttyp === MAGIC_TRAP || ttyp === VIBRATING_SQUARE;
+}
+
+function monsterWebmakerData(data) {
+    return !!(data?.webmaker || data?.name === 'cave spider' || data?.name === 'giant spider');
+}
+
+function monsterWebPassesThrough(data) {
+    const name = data?.name || '';
+    return monsterWebmakerData(data) || data?.amorphous || data?.unsolid || data?.noncorporeal
+        || data?.whirly || name === 'gelatinous cube' || name === 'fog cloud'
+        || name === 'acid blob' || name === 'flaming sphere' || name === 'fire elemental'
+        || name === 'salamander' || name.endsWith(' vortex') || name === 'air elemental';
 }
 
 function monsterAllowFlags(mon, allowHeroAttack = false, conflictActive = false) {
@@ -7313,7 +7325,7 @@ function moveMonsterTowardHero(mon, conflictActive = false, monIndex = null, som
             if (inSight) trap.tseen = true;
         }
     }
-	    if (trap?.ttyp === WEB && !mon.mtrapped && !mon.data?.webmaker) {
+	    if (trap?.ttyp === WEB && !mon.mtrapped && !monsterWebPassesThrough(mon.data || {})) {
 	        trap.tseen = true;
 	        mon.mtrapped = 1;
 	        if (couldSeeCoord(mon.mx, mon.my)) {

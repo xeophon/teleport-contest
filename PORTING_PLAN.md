@@ -877,7 +877,12 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   teleport-control prompts, and add the C disorientation follow-up for
   uncontrolled teleports. Magic portals now activate rather than no-op,
   schedule portal-arrival level changes, and add the short stun/dizzy
-  feedback. Eating tins and applying tin
+  feedback. Falling rock traps now handle hard helmets, soft-helmet
+  non-protection, and pass-rocks polyself forms, and web traps now apply the C
+  early exits for cave/giant spider forms, flaming/acidic web destruction, and
+  amorphous/whirly/unsolid flow-through before consuming strength-timer RNG.
+  Monster web handling also shares those pass-through exemptions for ordinary
+  movement. Eating tins and applying tin
   openers now route
   through a C-shaped `start_tin()`/`opentin()` slice: opener/no-opener/blessed
   timing, slippery-finger drops, delayed opening occupation, trapped tins,
@@ -885,7 +890,7 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   the `Eat it?` prompt no longer fall through as ordinary one-turn food. Full
   egg knowledge UI, complete throne random effects, deeper `dotrap(VIASITTING)`
   edge details for fall blockers/destination special cases/controlled level
-  teleports, rust/fire item destruction, rock helmet/pass-through details,
+  teleports, rust/fire item destruction, monster web destruction messages, and
   multi-turn
   `victual`/per-bite nutrition for rations, corpses, and other long meals,
   full tin corpse side effects/shop billing/conduct detail, and complete
@@ -1114,9 +1119,8 @@ Next concrete target:
   `trap.c:trapeffect_*()` details now that deferred level-changing traps are
   live: full hole/trapdoor blockers and stronghold/Hell destination handling,
   controlled level-teleport post-prompt messages, rust/fire item
-  erosion/destruction, rock helmet/pass-through handling, webmaker/pass-through
-  web cases, and shared helpers with the movement trap path where that lowers
-  divergence.
+  erosion/destruction, monster web destruction messages, and shared helpers
+  with the movement trap path where that lowers divergence.
 - Use `sessions/*.session.json` to locate divergences, but keep fixes in real
   mechanics. A score recovery is only valid when it falls out of those
   mechanics.

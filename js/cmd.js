@@ -12355,6 +12355,45 @@ function sitTrapNote(trap) {
     return `${/^[aeiou]/i.test(note) ? 'an' : 'a'} ${note}`;
 }
 
+function articleForName(name) {
+    return `${/^[aeiou]/i.test(name) ? 'an' : 'a'} ${name}`;
+}
+
+const WEBMAKER_FORM_NAMES = new Set(['cave spider', 'giant spider']);
+const WEB_FLAMING_FORM_NAMES = new Set(['fire vortex', 'flaming sphere', 'fire elemental', 'salamander']);
+const WEB_ACIDIC_FORM_NAMES = new Set(['acid blob', 'gelatinous cube']);
+const WEB_WHIRLY_FORM_NAMES = new Set(['fog cloud', 'dust vortex', 'ice vortex', 'energy vortex', 'steam vortex', 'fire vortex', 'air elemental']);
+
+function polyselfFormName() {
+    return String(polyselfForm()?.name || '').toLowerCase();
+}
+
+function heroPassesRocks() {
+    const form = polyselfForm();
+    return !!(form?.passWalls && !form?.unsolid && !form?.noncorporeal);
+}
+
+function heroWebmakerForm() {
+    const form = polyselfForm();
+    const name = polyselfFormName();
+    return !!(form?.webmaker || WEBMAKER_FORM_NAMES.has(name));
+}
+
+function heroWebDestructionVerb() {
+    const form = polyselfForm();
+    const name = polyselfFormName();
+    if (form?.flaming || WEB_FLAMING_FORM_NAMES.has(name)) return 'burn';
+    if (form?.acidic || WEB_ACIDIC_FORM_NAMES.has(name)) return 'dissolve';
+    return '';
+}
+
+function heroFlowsThroughWeb() {
+    const form = polyselfForm();
+    const name = polyselfFormName();
+    return !!(form?.amorphous || form?.whirly || form?.unsolid || form?.noncorporeal
+        || WEB_WHIRLY_FORM_NAMES.has(name) || name === 'gelatinous cube');
+}
+
 function sameDungeonLevel(a, b) {
     return !!a && !!b && a.dnum === b.dnum && a.dlevel === b.dlevel;
 }
@@ -12394,6 +12433,15 @@ function webTrapTimeFromStrength() {
 
 function sitWebTrapMessage(trap, prefix) {
     trap.tseen = true;
+    const webName = trap.madeby_u ? 'your spider web' : 'a spider web';
+    const destroyVerb = heroWebDestructionVerb();
+    if (destroyVerb) {
+        deleteTrap(trap);
+        return `${prefix}  You ${destroyVerb} ${webName}!`;
+    }
+    if (heroFlowsThroughWeb()) return `${prefix}  You flow through ${webName}.`;
+    if (heroWebmakerForm())
+        return `${prefix}  ${trap.madeby_u ? 'You take a walk on your web.' : 'There is a spider web here.'}`;
     const tim = webTrapTimeFromStrength();
     if (game.u) {
         game.u.utrap = tim;
@@ -12491,16 +12539,18 @@ function sitMagicPortalResult(trap, prefix) {
 }
 
 function placeSitTrapProjectile(projectile) {
-    game.level.objects ??= [];
-    game.level.objects.push({
+    const obj = {
         quan: 1,
         blessed: false,
         cursed: false,
         ox: game.u?.ux || 0,
         oy: game.u?.uy || 0,
         ...projectile,
-    });
+    };
+    game.level.objects ??= [];
+    game.level.objects.push(obj);
     newsym(game.u?.ux || 0, game.u?.uy || 0);
+    return obj;
 }
 
 function sitProjectileTrapMessage(trap, prefix, alreadySeen, spec) {
@@ -12537,11 +12587,34 @@ function sitRockTrapMessage(trap, prefix, alreadySeen) {
     }
     trap.once = true;
     trap.tseen = true;
-    const damage = d(2, 6);
+    let damage = d(2, 6);
+    let harmless = false;
+    const messages = [`${prefix}  A trap door in the ceiling opens and a rock falls on your head!`];
     placeSitTrapProjectile({ otyp: ROCK, cls: 'gem', kind: 'rock', singular: 'rock', plural: 'rocks', glyph: '*' });
-    if (game.u) game.u.uhp = Math.max(0, (game.u.uhp || 1) - damage);
-    exerciseAttribute(A_STR, false);
-    return `${prefix}  A trap door in the ceiling opens and a rock falls on your head!`;
+    const helmet = wornEarthHelmet();
+    if (helmet) {
+        if (heroPassesRocks()) {
+            const simple = /\b(?:hat|fedora|cornuthaum|cap)\b/.test(armorKind(helmet)) ? 'hat' : 'helm';
+            messages.push(`Unfortunately, you are wearing ${articleForName(simple)}.`);
+            damage = 2;
+        } else if (hardEarthHelmet(helmet)) {
+            messages.push('Fortunately, you are wearing a hard helmet.');
+            damage = 2;
+        } else if (game.flags?.verbose !== false) {
+            messages.push(`Your ${pickupObjectName(helmet)} does not protect you.`);
+        }
+    } else if (heroPassesRocks()) {
+        messages.push('It passes harmlessly through you.');
+        harmless = true;
+    }
+    if (!harmless) {
+        if (game.u) {
+            game.u.uhp = Math.max(0, (game.u.uhp || 1) - damage);
+            if ((game.u.uhp || 0) <= 0) game._death_cause = 'falling rock';
+        }
+        exerciseAttribute(A_STR, false);
+    }
+    return messages.join('  ');
 }
 
 function sitSqueakyBoardMessage(trap, prefix) {
