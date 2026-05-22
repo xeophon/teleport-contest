@@ -48,6 +48,7 @@ const RACE_CANONICAL = new Map(Object.keys(RACE_STATE).map(name => [name.toLower
 const ALIGN_CANONICAL = new Map(Object.keys(ALIGN_TYPE).map(name => [name.toLowerCase(), name]));
 const GENDER_CANONICAL = new Map(['male', 'female'].map(name => [name, name]));
 const EGG = 10001;
+const LUMP_OF_ROYAL_JELLY = 10089;
 const STONED_TEXTS = [
     'You are slowing down.',
     'Your limbs are stiffening.',
@@ -1656,6 +1657,9 @@ function dogFood(mon, obj) {
     }
     if (obj.otyp === FOOD_CLASS || obj.cls === 'food' || obj.foodRoll) {
         const kind = String(obj.kind || '');
+        if ((obj.otyp === LUMP_OF_ROYAL_JELLY || kind === 'lump of royal jelly')
+            && petName === 'killer bee')
+            return levelHasQueenBee() ? TABU : DOGFOOD;
         if (obj.kind === 'tin' || String(obj.kind || '').startsWith('tin:')) return MANFOOD;
         if (foodRoll <= 140 || kind === 'tripe' || kind === 'tripe ration') return carnivore ? DOGFOOD : MANFOOD;
         if (obj.kind === 'egg') return carnivore ? CADAVER : MANFOOD;
@@ -1667,6 +1671,78 @@ function dogFood(mon, obj) {
         return herbivore ? ACCFOOD : MANFOOD;
     }
     return obj.cursed ? UNDEF : APPORT;
+}
+
+function isRoyalJellyObject(obj) {
+    return obj?.otyp === LUMP_OF_ROYAL_JELLY
+        || String(obj?.kind || obj?.actualKind || '').toLowerCase() === 'lump of royal jelly';
+}
+
+function levelHasQueenBee(except = null) {
+    return (game.level?.monsters || []).some(mon =>
+        mon !== except && (mon.mhp == null || mon.mhp > 0) && mon.data?.name === 'queen bee');
+}
+
+function consumeOneFloorObject(obj) {
+    if (!obj || !game.level) return;
+    if ((obj.quan || 1) > 1) {
+        next_ident();
+        obj.quan--;
+    } else {
+        game.level.objects = (game.level.objects || []).filter(other => other !== obj);
+    }
+    newsym(obj.ox, obj.oy);
+}
+
+function maybeKillerBeeEatRoyalJelly(mon) {
+    if (!mon || mon.data?.name !== 'killer bee') return false;
+    const jelly = (game.level?.objects || []).find(obj =>
+        !obj.hidden && !obj.transientProjectile
+        && obj.ox === mon.mx && obj.oy === mon.my
+        && isRoyalJellyObject(obj));
+    if (!jelly || levelHasQueenBee(mon)) return false;
+
+    const visible = !game.u?.blind && !mon.minvis && !mon.mundetected && couldSeeCoord(mon.mx, mon.my);
+    const subject = mon.pet
+        ? mon.givenName || `Your ${mon.data?.name || 'pet'}`
+        : monsterDisplayName(mon);
+    if (visible) {
+        const name = `${jelly.bknown ? (jelly.blessed ? 'blessed ' : jelly.cursed ? 'cursed ' : 'uncursed ') : ''}lump of royal jelly`;
+        addToplineMessage(`${subject} eats a ${name}.`);
+    }
+
+    if (mon.pet) {
+        const edog = mon.mextra?.edog;
+        if (edog) edog.hungrytime = Math.max(edog.hungrytime || 0, game.moves || 1) + 200;
+        mon.mtame = Math.min(20, (mon.mtame || 10) + 1);
+        game._pet_skip_post_move_roll = 1;
+    }
+    const delay = jelly.blessed ? 3 : jelly.cursed ? 7 : 5;
+    consumeOneFloorObject(jelly);
+
+    const queenData = monsterByRndName('queen bee') || RANDOM_MONSTER_BY_NAME.get('queen bee');
+    if ((game._genocided_monsters || []).includes('queen bee') || !queenData) {
+        if (visible) addToplineMessage(`As ${subject.replace(/^The /, 'the ')} grows up into a queen bee, she dies!`);
+        recordVanquished(mon, false);
+        game.level.monsters = (game.level?.monsters || []).filter(other => other !== mon);
+        newsym(mon.mx, mon.my);
+        return true;
+    }
+
+    const queenLevel = queenData.mlevel ?? 9;
+    if ((mon.m_lev ?? mon.data?.mlevel ?? 1) < queenLevel - 1) mon.m_lev = queenLevel - 1;
+    const hpIncrease = rnd(8);
+    mon.mhpmax = (mon.mhpmax || mon.mhp || 1) + hpIncrease;
+    mon.mhp = (mon.mhp || 1) + hpIncrease;
+    mon.m_lev = Math.min(50, (mon.m_lev ?? queenLevel - 1) + 1);
+    if (visible) addToplineMessage(`${subject} grows up into a queen bee.`);
+    mon.data = { ...queenData, hpLevel: mon.m_lev };
+    mon.female = true;
+    mon.mfrozen = delay;
+    mon.mcanmove = false;
+    mon._skip_mfrozen_decrement = 1;
+    newsym(mon.mx, mon.my);
+    return true;
 }
 
 function addToplineMessage(msg) {
@@ -3149,6 +3225,14 @@ async function processMonsterTurns() {
                     }
                 }
                 if (resumedAfterPreturn) resumeAfterPreturn = false;
+                if (!resumingPetInventory && !resumedAfterPreturn && maybeKillerBeeEatRoyalJelly(mon)) {
+                    if (game._message_more && !game._process_time_with_more) {
+                        game._monster_resume_index = monIndex + 1;
+                        game._monster_resume_somebody_can_move = somebodyCanMove;
+                        return false;
+                    }
+                    continue;
+                }
                 if (mon.pet) {
                     if (resumingPetInventory) {
                         game._pet_inventory_resume = null;
@@ -5168,7 +5252,8 @@ async function processMonsterTurns() {
 
     for (const mon of mons) {
         if (!liveMons.has(mon)) continue;
-        if (mon.mfrozen && !--mon.mfrozen) mon.mcanmove = true;
+        if (mon._skip_mfrozen_decrement) mon._skip_mfrozen_decrement = 0;
+        else if (mon.mfrozen && !--mon.mfrozen) mon.mcanmove = true;
         if (mon.mspec_used) mon.mspec_used--;
         let mmove = mon.data?.mmove ?? NORMAL_SPEED;
         if (mon.mspeed === 'fast') mmove = Math.trunc((4 * mmove + 2) / 3);
@@ -7318,6 +7403,7 @@ function movePet(mon, resumeAfterInventory = false, conflictActive = false) {
         const hereFood = dogFood(mon, hereObj);
         if ((hereFood <= CADAVER || (edog.mhpmax_penalty && hereFood === ACCFOOD))
             && monsterCanReachItem(mon, hereObj.ox, hereObj.oy)) {
+            if (isRoyalJellyObject(hereObj) && maybeKillerBeeEatRoyalJelly(mon)) return;
             const petName = mon.givenName || `Your ${mon.saddled ? 'saddled ' : ''}${mon.data?.name || 'pet'}`;
             const corpseName = hereObj.corpsenm?.name;
             const foodName = (hereObj.otyp === 'corpse' || hereObj.otyp === CORPSE)
@@ -8164,6 +8250,7 @@ function movePet(mon, resumeAfterInventory = false, conflictActive = false) {
         if (!(reluctantObject && mon.saddled)) newsym(mon.mx, mon.my);
         const eatenObj = eatObject;
         if (eatenObj) {
+            if (isRoyalJellyObject(eatenObj) && maybeKillerBeeEatRoyalJelly(mon)) return;
             const petName = mon.givenName || `Your ${mon.saddled ? 'saddled ' : ''}${mon.data?.name || 'pet'}`;
             const corpseName = eatenObj.corpsenm?.name;
             const foodName = (eatenObj.otyp === 'corpse' || eatenObj.otyp === CORPSE)

@@ -11692,6 +11692,81 @@ async function eatRoyalJelly(item, floorObject = false) {
     await finishRoyalJellyEating(item, floorObject, `This ${name} is delicious!`);
 }
 
+function royalJellyRubTargetLetters() {
+    return inventoryLetters(item => isEggItem(item));
+}
+
+function royalJellyRubPrompt() {
+    const letters = royalJellyRubTargetLetters();
+    return `What do you want to rub the royal jelly on? [${getobjPromptLetters(letters)} or ?*]`;
+}
+
+function rubObjectLetters() {
+    return inventoryLetters(item => {
+        const name = inventoryItemName(item).toLowerCase();
+        return name.includes('lamp') || isRoyalJelly(item);
+    });
+}
+
+function rubObjectPrompt() {
+    return `What do you want to rub? [${getobjPromptLetters(rubObjectLetters())} or ?*]`;
+}
+
+async function beginRoyalJellyRub(item) {
+    game._royal_jelly_rub_letter = item?.letter || '';
+    await setMessage(royalJellyRubPrompt());
+    game._command_mode = 'rubRoyalJellyTarget';
+}
+
+function eggQuiverVerb(egg) {
+    return (egg?.quan || 1) > 1 ? 'quiver' : 'quivers';
+}
+
+function attachEggHatchTimer(item) {
+    if (!isEggItem(item) || !item.corpsenm?.name || item.eggHatchTurn) return false;
+    for (let i = 151; i <= 200; i++) {
+        if (rnd(i) > 150) {
+            item.eggHatchTurn = (game.moves || 1) + i;
+            item._egg_hatch_seq = game._egg_hatch_timer_seq = (game._egg_hatch_timer_seq || 0) + 1;
+            break;
+        }
+    }
+    item._egg_hatch_consumed = true;
+    return !!item.eggHatchTurn;
+}
+
+async function rubRoyalJellyOnEgg(jelly, egg) {
+    const oldName = egg?.corpsenm?.name || '';
+    const smearName = pickupObjectName(egg);
+    if (oldName === 'killer bee')
+        egg.corpsenm = monsterByRndName('queen bee') || RANDOM_MONSTER_BY_NAME.get('queen bee') || { name: 'queen bee', oviparous: true, female: true };
+    const changedType = (egg?.corpsenm?.name || '') !== oldName;
+    const effectName = pickupObjectName(egg);
+    const messages = [`You smear royal jelly all over ${smearName}.`];
+
+    if (jelly?.cursed) {
+        if (egg.eggHatchTurn || changedType) messages.push(`The ${effectName} ${eggQuiverVerb(egg)} feebly.`);
+        else messages.push('Nothing seems to happen.');
+        delete egg.eggHatchTurn;
+        delete egg._egg_hatch_seq;
+    } else {
+        const wasTimed = !!egg.eggHatchTurn;
+        if (egg.corpsenm?.name && !egg.eggHatchTurn) attachEggHatchTimer(egg);
+        if (jelly?.blessed && !egg.spe) egg.spe = 2;
+        if ((egg.eggHatchTurn && !wasTimed) || egg.spe === 2 || changedType)
+            messages.push(`The ${effectName} ${eggQuiverVerb(egg)} briefly.`);
+        else messages.push('Nothing seems to happen.');
+    }
+
+    consumeOneInventoryFood(jelly);
+    refreshInventoryObjectLine(egg);
+    game._royal_jelly_rub_letter = '';
+    game._pet_food_scan_inventory = game.inventory || [];
+    await setMessage(messages.join('  '), true);
+    game._command_mode = null;
+    game.context.move = 1;
+}
+
 function eggMonsterFromHeroPolyself() {
     const form = polyselfForm();
     if (!form?.oviparous) return null;
@@ -21883,6 +21958,7 @@ export async function rhack(_cmd) {
                 return invItem.cls === 'tool' || invItem.cls === 'wand' || invItem.kind === 'wand of sleep'
                     || invItem.otyp === WAND_CLASS || invItem.cls === 'spellbook'
                     || invItem.section === 'Tools' || /lamp|camera|card|bag|sack|cream pie/.test(name)
+                    || isRoyalJelly(invItem)
                     || (invItem.cls === 'weapon' && APPLY_WEAPON_NAME_RE.test(name));
             }).sort((a, b) => {
                 const section = item => item.cls === 'spellbook' ? 'Spellbooks'
@@ -21919,6 +21995,7 @@ export async function rhack(_cmd) {
                 return invItem.cls === 'tool' || invItem.cls === 'wand' || invItem.kind === 'wand of sleep'
                     || invItem.otyp === WAND_CLASS || invItem.cls === 'spellbook'
                     || invItem.section === 'Tools' || /lamp|camera|card|bag|sack|cream pie/.test(name)
+                    || isRoyalJelly(invItem)
                     || (invItem.cls === 'weapon' && APPLY_WEAPON_NAME_RE.test(name));
             });
             game._topline_after_more = `What do you want to use or apply? [${getobjPromptLetters(applyLetters)} or ?*]`;
@@ -21940,6 +22017,10 @@ export async function rhack(_cmd) {
             game._cream_pie_after_more_letter = item.letter;
             game._topline_after_more = "You can't see through all the sticky goop on your face.";
             await setMessage('You immerse your face in the cream pie.', true);
+            return;
+        }
+        if (isRoyalJelly(item)) {
+            await beginRoyalJellyRub(item);
             return;
         }
         if (['armor', 'weapon', 'amulet', 'ring', 'gem', 'food'].includes(item.cls)) {
@@ -22886,9 +22967,56 @@ export async function rhack(_cmd) {
         return;
     }
 
+    if (game._command_mode === 'rubRoyalJellyTarget') {
+        if (ch === '\x1b' || ch === ' ' || ch === '\r' || ch === '\n') {
+            game._royal_jelly_rub_letter = '';
+            game._command_mode = null;
+            await setMessage('Never mind.');
+            return;
+        }
+        if (ch === '?' || ch === '*') {
+            const eggs = (game.inventory || []).filter(item => isEggItem(item));
+            const rows = eggs.map((item, index) => [index, 40, ` ${normalInventoryLine(item)}`.padEnd(40, ' ')]);
+            rows.push([rows.length, 40, ' (end)'.padEnd(40, ' ')]);
+            setOverlay(rows, 2, false, 0);
+            return;
+        }
+        const jelly = (game.inventory || []).find(item => item.letter === game._royal_jelly_rub_letter && isRoyalJelly(item));
+        if (!jelly) {
+            game._royal_jelly_rub_letter = '';
+            game._command_mode = null;
+            await setMessage("You don't have that object.");
+            return;
+        }
+        const egg = (game.inventory || []).find(item => item.letter === ch && isEggItem(item));
+        if (!egg) {
+            game._topline_after_more = royalJellyRubPrompt();
+            await setMessage("You don't have that object.", true);
+            return;
+        }
+        await rubRoyalJellyOnEgg(jelly, egg);
+        return;
+    }
+
     if (game._command_mode === 'rubObject') {
-        if (ch === 'n') {
-            const lamp = (game.inventory || []).find(item => item.letter === ch);
+        if (ch === '?' || ch === '*') {
+            const rubItems = (game.inventory || []).filter(item => {
+                const name = inventoryItemName(item).toLowerCase();
+                return name.includes('lamp') || isRoyalJelly(item);
+            });
+            const rows = rubItems.map((item, index) => [index, 40, ` ${normalInventoryLine(item)}`.padEnd(40, ' ')]);
+            rows.push([rows.length, 40, ' (end)'.padEnd(40, ' ')]);
+            setOverlay(rows, 2, false, 0);
+            return;
+        }
+        const item = (game.inventory || []).find(invItem => invItem.letter === ch);
+        if (item && isRoyalJelly(item)) {
+            await beginRoyalJellyRub(item);
+            return;
+        }
+        const name = item ? inventoryItemName(item).toLowerCase() : '';
+        if (item && name.includes('lamp')) {
+            const lamp = item;
             for (const invItem of game.inventory || []) {
                 if (invItem.wielded || invItem.line?.includes('weapon in')) {
                     invItem.line = `${invItem.letter || '?'} - ${inventoryItemName(invItem)}`;
@@ -22905,7 +23033,7 @@ export async function rhack(_cmd) {
             game._command_mode = null;
             return;
         }
-        await setMessage('What do you want to rub? [n or ?*]');
+        await setMessage(rubObjectPrompt());
         return;
     }
 
@@ -24320,7 +24448,7 @@ export async function rhack(_cmd) {
                 return;
             }
             if (command === 'rub') {
-                await setMessage('What do you want to rub? [n or ?*]');
+                await setMessage(rubObjectPrompt());
                 game._command_mode = 'rubObject';
                 return;
             }
@@ -26444,6 +26572,7 @@ export async function rhack(_cmd) {
             return item.cls === 'tool' || item.cls === 'wand' || item.kind === 'wand of sleep'
                 || item.otyp === WAND_CLASS || item.cls === 'spellbook'
                 || item.section === 'Tools' || /lamp|camera|card|bag|sack|cream pie/.test(name)
+                || isRoyalJelly(item)
                 || (item.cls === 'weapon' && APPLY_WEAPON_NAME_RE.test(name));
         });
         if (!letters) {

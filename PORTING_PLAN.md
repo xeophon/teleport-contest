@@ -851,9 +851,12 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   only the remaining nutrition. Royal jelly now uses its canonical object type
   for special creation and wishes, can rot through the generic food path, and
   applies its C eating side effects for strength, HP, wounded legs, cursed
-  poisoning, and killer-bee-to-queen polymorph. `#sit` by oviparous polyself
-  forms now lays a known egg marked as laid by the hero and spends egg
-  nutrition. Full egg knowledge UI, royal-jelly rubbing/bee consumption, full
+  poisoning, and killer-bee-to-queen polymorph. Royal jelly can now be applied
+  or rubbed onto inventory eggs for C-style killer-bee egg conversion, hatch
+  timer setup/cancellation, blessed fertility, and cursed quivering, and
+  same-square killer bees now eat floor royal jelly only when no queen bee is
+  present. `#sit` by oviparous polyself forms now lays a known egg marked as
+  laid by the hero and spends egg nutrition. Full egg knowledge UI, full
   `#sit` terrain/trap/throne coverage, multi-turn `victual`/per-bite nutrition
   for rations, corpses, and other long meals, exact tin-opening occupation
   exceptions, and complete extinction/vitals semantics remain future work.
