@@ -544,6 +544,10 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   setup path modeled on `u_init.c`, including random food quantities and
   optional tin opener/leash/towel/magic marker selection. The hand-built
   Tourist inventory/menu caches and item-letter maps were removed.
+- Starting inventory race substitutions now also run after random object
+  creation, matching `u_init.c:ini_inv_obj_substitution()`: random extra food
+  such as orc `cram ration`/`lembas wafer` now becomes `tripe ration` and can
+  merge into the existing starting tripe stack.
 - Quivered inventory suffixes now follow the C `objnam.c` categories, so bow
   ammunition stays `in quiver`, small non-bow items use `in quiver pouch`, and
   darts/non-ammo weapons are `at the ready`.
@@ -1080,8 +1084,8 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
 
 Next concrete target:
 
-- Continue porting the broad C systems that many sessions share: `u_init`
-  inventory/equipment setup, object data, level generation, command parsing,
+- Continue porting the broad C systems that many sessions share: remaining
+  `u_init` inventory/equipment setup, object data, level generation, command parsing,
   movement, monster and pet turns, display/window behavior, and save/restore.
 - High-value outstanding gaps include real bones map/object/monster loading,
   full generic wishing/`readobjnam()` handling, artifact creation/naming, C
@@ -1089,6 +1093,11 @@ Next concrete target:
   semantics, C special-level room/corridor/shop filling for `minetn-3.lua`, and
   full `eat.c`, `sp_lev.c`, `mkobj.c`, `makemon.c`, `uhitm.c`, and
   `dogmove.c` behavior.
+- The next narrow `#sit` trap slice should follow `sit.c:dosit()` into
+  `trap.c:dotrap()`/`trapeffect_selector()`: emit `You sit down.` or `You
+  land.` before dispatch, preserve seen-trap escape RNG before effect-specific
+  RNG, and replace the current unsupported-trap prefix-only fallback in
+  `sitTriggerTrap()`.
 - Use `sessions/*.session.json` to locate divergences, but keep fixes in real
   mechanics. A score recovery is only valid when it falls out of those
   mechanics.

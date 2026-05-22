@@ -284,6 +284,15 @@ const RACE_INVENTORY_SUBS = {
     },
 };
 
+function applyRaceInventorySubstitution(obj, raceName) {
+    const substitution = RACE_INVENTORY_SUBS[raceName]?.[obj?.kind];
+    if (!substitution) return obj;
+    const hadSingular = obj.singular !== undefined;
+    Object.assign(obj, substitution);
+    if (hadSingular && substitution.kind) obj.singular = substitution.singular || substitution.kind;
+    return obj;
+}
+
 const OPTIONAL_INVENTORY = {
     Tinopener: [{ cls: 'tool', kind: 'tin opener', blessed: false }],
     Lamp: [{ cls: 'tool', kind: 'oil lamp', tool: 'lamp', spe: 1, blessed: false }],
@@ -1128,6 +1137,7 @@ function initSpecificObject(item) {
 
 function initInventoryObject(item, state, recordInventory = true, stackQuan = 1) {
     const obj = item.random ? initRandomObject(item.cls, state) : initSpecificObject(item);
+    applyRaceInventorySubstitution(obj, state.raceName);
     if ((obj.cls === 'weapon' || obj.cls === 'armor' || obj.kind === 'pick-axe') && obj.spe == null) obj.spe = 0;
     if (obj.cls === 'weapon' || obj.cls === 'armor' || obj.kind === 'pick-axe') obj.known = true;
     if (item.blessed !== undefined) {
@@ -1225,7 +1235,7 @@ function iniInv(items, state) {
 }
 
 function initializeRoleInventory(roleName, raceName) {
-    const state = { roleName, gotSpell1: false, inventory: [], knownSpells: [], nextLetter: 'a'.charCodeAt(0) };
+    const state = { roleName, raceName, gotSpell1: false, inventory: [], knownSpells: [], nextLetter: 'a'.charCodeAt(0) };
     game._discoveries = [];
     const substitutions = RACE_INVENTORY_SUBS[raceName] || {};
     const roleInventory = items => items.map(item =>
