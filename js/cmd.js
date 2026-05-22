@@ -11452,6 +11452,27 @@ function containerSortRank(item) {
     return 4;
 }
 
+function containerLootSortKey(item) {
+    return pickupObjectName({ ...item, quan: 1 }).toLowerCase();
+}
+
+function compareContainerLootItems(a, b) {
+    return containerSortRank(a) - containerSortRank(b)
+        || containerLootSortKey(a).localeCompare(containerLootSortKey(b));
+}
+
+function containerObjectPhrase(obj) {
+    const count = obj.quan || 1;
+    const name = pickupObjectName(obj);
+    if (count > 1) return `${count} ${name}`;
+    if (obj.unique) return `the ${name}`;
+    if (obj.noArticle) return name;
+    if (name.endsWith('boots') || name.endsWith('shoes') || name.endsWith('gloves') || name.startsWith('gauntlets'))
+        return `a pair of ${name}`;
+    const article = /^[aeiou]/i.test(name) || name === 'orcish helm' ? 'an' : 'a';
+    return `${article} ${name}`;
+}
+
 function objectBucCategory(item) {
     if (item.otyp === GOLD_PIECE || item.cls === 'coin' || item.glyph === '$')
         return game.flags?.goldX ? 'unknown' : 'uncursed';
@@ -25472,15 +25493,12 @@ export async function rhack(_cmd) {
         if (ch === ':') {
             const iceBox = game.level?.objects?.find(obj =>
                 obj.otyp === ICE_BOX && obj.ox === game.u?.ux && obj.oy === game.u?.uy);
+            if (iceBox) iceBox.cknown = true;
             const rows = [[0, 41, 'Contents of the ice box:']];
             let row = 2;
-            const contents = [...(iceBox?.contents || [])].sort((a, b) =>
-                pickupObjectName(a).localeCompare(pickupObjectName(b)));
+            const contents = [...(iceBox?.contents || [])].sort(compareContainerLootItems);
             for (const item of contents) {
-                const count = item.quan || 1;
-                const name = pickupObjectName(item);
-                const pluralName = name.endsWith(' corpse') ? name.replace(/ corpse$/, ' corpses') : `${name}s`;
-                rows.push([row++, 43, count > 1 ? `${count} ${pluralName}` : `a ${name}`]);
+                rows.push([row++, 43, containerObjectPhrase(item)]);
                 if (row >= 23) break;
             }
             if (row === 2) rows.push([row++, 43, 'The ice box is empty.']);
@@ -25527,17 +25545,9 @@ export async function rhack(_cmd) {
             container.cknown = true;
             const rows = [[0, 41, `Contents of the ${name}:`]];
             let row = 2;
-            const contents = [...(container.contents || [])].sort((a, b) =>
-                containerSortRank(a) - containerSortRank(b) || pickupObjectName(a).localeCompare(pickupObjectName(b)));
+            const contents = [...(container.contents || [])].sort(compareContainerLootItems);
             for (const item of contents) {
-                if (item.otyp === GOLD_PIECE || item.cls === 'coin' || item.glyph === '$') {
-                    const count = item.quan || 1;
-                    rows.push([row++, 43, `${count} gold piece${count === 1 ? '' : 's'}`]);
-                    continue;
-                }
-                const objectName = pickupObjectName(item);
-                const article = /^[aeiou]/i.test(objectName) ? 'an' : 'a';
-                rows.push([row++, 43, `${article} ${objectName}`]);
+                rows.push([row++, 43, containerObjectPhrase(item)]);
             }
             rows.push([row, 41, '--More--']);
             setOverlay(rows, Math.max(11, row + 1));
@@ -25552,8 +25562,7 @@ export async function rhack(_cmd) {
                     [3, 27, '(ignored unless some other choices are also picked)'],
                 ];
                 const seen = new Set();
-                const contents = [...(container.contents || [])].sort((a, b) =>
-                    containerSortRank(a) - containerSortRank(b) || pickupObjectName(a).localeCompare(pickupObjectName(b)));
+                const contents = [...(container.contents || [])].sort(compareContainerLootItems);
                 for (const item of contents) {
                     let label = 'Other Items';
                     if (item.otyp === GOLD_PIECE || item.cls === 'coin' || item.glyph === '$') label = 'Coins';
@@ -25684,8 +25693,7 @@ export async function rhack(_cmd) {
                     ? new Set(typeEntries.map(entry => entry.label))
                     : new Set(typeEntries.filter(entry => selected.has(entry.letter)).map(entry => entry.label));
                 const entries = [];
-                const contents = [...(container.contents || [])].sort((a, b) =>
-                    containerSortRank(a) - containerSortRank(b) || pickupObjectName(a).localeCompare(pickupObjectName(b)));
+                const contents = [...(container.contents || [])].sort(compareContainerLootItems);
                 for (const item of contents) {
                     let label = 'Other Items';
                     if (item.otyp === GOLD_PIECE || item.cls === 'coin' || item.glyph === '$') label = 'Coins';

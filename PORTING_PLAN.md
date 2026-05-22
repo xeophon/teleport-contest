@@ -1295,6 +1295,16 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   multi-attack `--More--` after a nonlethal single hit. `seed5002` now passes
   with `12167/12167` RNG calls and `410/410` screens. `npm run score` improved
   to `33/44`.
+- Container contents display now follows the C `container_contents()` shape for
+  the next `seed0012` frontier: inspecting an ice box marks contents known,
+  container sort keys ignore quantity like `loot_xname()`/`cxname_singular()`,
+  and the row text uses stack-aware `doname()`-style phrases instead of
+  manually appending plural suffixes. This fixes the ice-box `jackal corpsess`
+  display and moves `seed0012-monk-vault-escort` from `282/308` to `283/308`
+  matching screens. The full public smoke remains `33/44`; the next flat RNG
+  split in that session is the pet movement branch at step 245 after
+  `rn2(4)=2 @ dog_goal(dogmove.c:575)`, where C enters `dog_move.c:1257`
+  before JS's current random-neighbor path.
 
 Next concrete target:
 
@@ -1313,10 +1323,9 @@ Next concrete target:
   probability accounting, scroll `makeknown()` exercise, multi-`pline()`
   scroll message ordering, and fire-ray `destroy_items()` timing before
   widening the same C-grounded fixes to other sessions.
-- `seed0012-monk-vault-escort` has a narrow first visible gap in ice-box
-  contents display: C sorts container loot by singular `loot_xname()` and lets
-  `doname_with_price()` format stack quantities, while JS currently sorts by
-  already-plural display names and manually appends another `s`.
+- `seed0012-monk-vault-escort` now needs a C-grounded `dogmove.c` pass: after
+  the fixed container display, the first flat divergence is a pet movement
+  branch around `dog_goal()`/`dog_move()` rather than a container view issue.
 - The next narrow `#sit` trap slice should deepen the remaining
   `trap.c:trapeffect_*()` details now that deferred level-changing traps are
   live: floor-object `impact_drop()` effects for holes/trapdoors, positive
