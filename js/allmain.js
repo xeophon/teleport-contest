@@ -3,7 +3,7 @@
 
 import { game } from './gstate.js';
 import { mklev, l_nhcore_init, u_on_upstairs, makemon, mkcorpstat, mksobj, wipe_engr_at, dropMonsterInventory, wandIndexForRoll, scrollIndexForRoll, potionIndexForRoll, RANDOM_MONSTER_BY_NAME, adjustedMonsterLevel, monsterByRndName, monster_hp, rndmonnum, syncDungeonContext, next_ident, set_malign, enextoMonsterSpot, getbogusmon, pickNasty } from './mklev.js';
-import { rhack, pickupObjectName, inventoryItemName, inventoryLetterRank, recordVanquished, finishForceLock, loseExperienceLevel, finishLevelTeleport, maybeQueueQuestLeaderTalk, monsterGrowUp, processSpellbookStudyOccupation, refreshSwallowOverlay, travelPathKeys, updateGauntletsOfPowerStrength } from './cmd.js';
+import { rhack, pickupObjectName, inventoryItemName, inventoryLetterRank, recordVanquished, finishForceLock, loseExperienceLevel, finishLevelTeleport, maybeQueueQuestLeaderTalk, monsterGrowUp, processSpellbookStudyOccupation, refreshSwallowOverlay, travelPathKeys, updateGauntletsOfPowerStrength, consumeLifeSavingAmulet } from './cmd.js';
 import { docrt, cls, bot, flush_screen, pline, newsym, refreshHallucinatedMap, show_glyph_cell } from './display.js';
 import { vision_recalc, vision_reset, init_vision_globals, cansee, couldsee, view_from } from './vision.js';
 import { init_objects } from './o_init.js';
@@ -1841,6 +1841,34 @@ function armHeroDeathMore(message = 'You die...') {
     game._resume_time_after_more = 0;
     game._turn_tail_topline_more = 1;
     game._command_mode = 'deathDieMore';
+}
+
+function armHeroLifeSavingMore(message = '') {
+    const lifesavingMessage = message
+        || `But wait...  Your medallion ${game.u?.blind ? 'feels warm' : 'begins to glow'}!`;
+    const messages = [];
+    if (game._pending_message) messages.push(game._pending_message);
+    if (game._topline_after_more && !messages.includes(game._topline_after_more))
+        messages.push(game._topline_after_more);
+    messages.push(lifesavingMessage);
+    game._pending_message = messages.join('  ');
+    game._topline_after_more = '';
+    game._message_more = 1;
+    game._message_more_line = '';
+    game._process_time_with_more = 0;
+    game._keep_pending_message = 1;
+    game._pending_time_passed = 0;
+    if (game.context) game.context.move = 0;
+    game._process_command_time_now = 0;
+    game._run_steps_remaining = 0;
+    game._running_continuation = 0;
+    game._initial_run_command = 0;
+    game._travel_keys = [];
+    game._deferred_monster_turn_tail = 0;
+    game._continue_monsters_after_more = 0;
+    game._resume_time_after_more = 0;
+    game._turn_tail_topline_more = 1;
+    game._command_mode = 'lifeSavingMore';
 }
 
 function heroWearingSpeedBoots() {
@@ -5592,6 +5620,10 @@ async function finishMonsterTurnTail() {
             game.u.uhp = 0;
             game._death_cause = `petrified by ${articleFor(killer)} ${killer}`;
             game._death_current_move = 1;
+            if (consumeLifeSavingAmulet({ clearStoning: true })) {
+                armHeroLifeSavingMore();
+                return false;
+            }
             armHeroDeathMore();
             return false;
         }

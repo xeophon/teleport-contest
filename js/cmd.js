@@ -4771,6 +4771,17 @@ function removeInventoryItem(item, amount = 1) {
     game._pet_food_scan_inventory = game.inventory;
 }
 
+export function consumeLifeSavingAmulet({ clearStoning = false } = {}) {
+    const lifesaving = (game.inventory || []).find(item =>
+        item.worn && String(item.kind || item.actualKind || item.line || '').includes('life saving'));
+    if (!lifesaving) return false;
+    rn2(19);
+    removeInventoryItem(lifesaving);
+    game._life_saving_refresh_con = 1;
+    if (clearStoning) game._life_saving_clear_stoning = 1;
+    return true;
+}
+
 function stopCarriedFigurineTimerOnLeave(item) {
     if (isFigurineObject(item)) stopFigurineTransformTimeout(item);
 }
@@ -14247,15 +14258,34 @@ export async function rhack(_cmd) {
 
     if (game._command_mode === 'lifeSavingMore') {
         if (ch === ' ' || ch === '\x1b' || ch === '\r' || ch === '\n') {
-            game._pending_message = 'You feel much better!';
+            const stoningLifeSaved = !!game._life_saving_clear_stoning;
+            game._pending_message = stoningLifeSaved
+                ? 'You feel much better!  The medallion crumbles to dust!'
+                : 'You feel much better!';
             game._pending_explore_lifesaving_message = 0;
             game._message_more = 0;
             game._keep_pending_message = 1;
             game._command_mode = null;
-            if (game.u) game.u.uhp = game.u.uhpmax || 1;
+            if (!stoningLifeSaved && game.u) game.u.uhp = game.u.uhpmax || 1;
+            if (stoningLifeSaved) {
+                game._life_saving_clear_stoning = 0;
+                if (game.u) {
+                    game.u._stonedTimeout = 0;
+                    game.u._stonedKiller = '';
+                }
+                removeHeroStatusSuffix('Stone');
+                game._death_cause = '';
+                game._death_current_move = 0;
+                game._death_status_hp_before_zero = null;
+            }
             if (game._life_saving_refresh_con && game.u?.acurr?.a)
                 game.u.acurr.a[4] = Math.max(3, game.u.acurr.a[4] - 1);
             game._life_saving_refresh_con = 0;
+            if (stoningLifeSaved && game.u) {
+                const con = game.u.acurr?.a?.[A_CON] ?? 10;
+                const givehp = 50 + 10 * Math.trunc(con / 2);
+                game.u.uhp = Math.min(game.u.uhpmax || 1, givehp);
+            }
             game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
             game._suppress_monster_attack_messages = 1;
         }

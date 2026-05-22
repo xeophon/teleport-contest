@@ -838,11 +838,12 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   temporary speed, run/repeat and occupation interruption, forced immobility,
   wounded-leg cleanup, deaf padding, vomiting cleanup, and sliming cleanup.
   The final statue tick enters the JS death flow with a petrification-formatted
-  egg killer while keeping `Stone` visible. Full egg knowledge UI, royal
-  jelly/`#sit` provenance, exact rotten partially-eaten nutrition, stoning
-  life-saving/statue-bones/poly-into-stone-golem parity, exact tin-opening
-  occupation exceptions, and complete extinction/vitals semantics remain
-  future work.
+  egg killer while keeping `Stone` visible, and worn amulets of life saving
+  now interrupt that timeout death, crumble away, restore the hero, and clear
+  stoning afterward. Full egg knowledge UI, royal jelly/`#sit` provenance,
+  exact rotten partially-eaten nutrition, stoning statue-bones/poly-into-
+  stone-golem parity, exact tin-opening occupation exceptions, and complete
+  extinction/vitals semantics remain future work.
 - Wished container state prefixes now cover the C `readobjnam()` object slice
   for `locked`, `unlocked`, `broken`, `trapped`, `untrapped`, and `empty`:
   boxes keep normal generated contents and lock/trap RNG before final state
