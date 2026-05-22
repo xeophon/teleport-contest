@@ -2651,7 +2651,7 @@ const WIZ_SIEGE_MONSTERS = [
 function wizX(x) { return WIZ_XSTART + x; }
 function wizY(y) { return WIZ_YSTART + y; }
 
-const ARC_LOCA_XSTART = 2;
+const ARC_LOCA_XSTART = 3;
 const ARC_LOCA_YSTART = 1;
 const ARC_LOCA_ROWS = [
     '............................................................................',
@@ -6104,11 +6104,7 @@ async function maketrap(x, y, typ) {
         const statue = mksobj_at(STATUE, x, y, false, false);
         statue.contents = [];
         statue.corpsenm = ptr;
-        const objectCount = game.level?.objects?.length ?? 0;
         const mon = await makemon(ptr, 0, 0, MM_NOGRP);
-        if (game._arc_loca_level_generation && mon?.mundetected)
-            for (const obj of game.level.objects.slice(objectCount))
-                if (obj.ox === mon.mx && obj.oy === mon.my) obj.ox--;
         if (mon) {
             game.level.monsters = game.level.monsters.filter(candidate => candidate !== mon);
             for (const obj of mon.minvent || []) add_to_container(statue, obj);
@@ -7285,11 +7281,11 @@ async function make_arc_loca_level() {
     }
 
     for (let i = 0; i < 15; i++) {
-        const pos = arcLocaRandomDryLocation(true);
+        const pos = arcLocaRandomDryLocation();
         mkobj_at(RANDOM_CLASS, pos.x, pos.y, true);
     }
     for (let i = 0; i < 4; i++) {
-        const pos = arcLocaRandomDryLocation(true);
+        const pos = arcLocaRandomDryLocation();
         make_engr_at(pos.x, pos.y, 'X marks the spot.', true, 0, ENGRAVE);
     }
     for (const [kind, x, y] of ARC_LOCA_TRAPS) {

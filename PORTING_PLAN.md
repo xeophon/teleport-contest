@@ -1225,6 +1225,18 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   alignment issue, and flat RNG first differs later at screen 352 where C
   consumes `rn2(3) @ restrap(mon.c:4667)` before JS's next restored-level
   `rnd(10)`.
+- The Quest locate level coordinate frontier now follows the C Lua loader more
+  closely: `Arc-loca.lua`'s centered `des.map` string starts at x=3, not x=2,
+  and hidden snake/spider objects created by statue traps no longer get an
+  Arc-loca-only x decrement before the final special-level flip. Random
+  Arc-loca objects and engravings now use the ordinary C `DRY` placement rule
+  instead of the trap/stair rejection used by trap creation. Focused
+  `seed0361-archeologist-tour` screens 307-308 now match. Full display compare
+  first differs at screen 317 on Arc-goal visibility after teleporting to Home
+  5: C shows one extra floor at level (41,13) and a vertical wall at (40,14).
+  `npm run score` remains `27/44`, with `seed0361` improved to `334/366`
+  screens and `53760/53865` RNG calls. Flat RNG still first differs later at
+  screen 352 where C consumes `rn2(3) @ restrap(mon.c:4667)`.
 
 Next concrete target:
 
@@ -1237,12 +1249,12 @@ Next concrete target:
   semantics, C special-level room/corridor/shop filling for `minetn-3.lua`, and
   full `eat.c`, `sp_lev.c`, `mkobj.c`, `makemon.c`, `uhitm.c`, and
   `dogmove.c` behavior.
-- The next narrow Archeologist tour slice should inspect the screen 307
-  display-only frontier after wizard level teleport to Quest Home 3: JS renders
-  the map one column left of C while the top line/status and later RNG remain
-  aligned. After that, inspect the screen 352 flat RNG frontier where restored
-  level loading in C calls `restrap(mon.c:4667)` between `restore.c:getlev()`
-  `rnd(10)` draws.
+- The next narrow Archeologist tour slice should inspect the screen 317
+  Arc-goal display-only frontier after wizard level teleport to Quest Home 5:
+  generation and RNG remain aligned, but C's initial view reveals one extra
+  floor/wall pair below the hero. After that, inspect the screen 352 flat RNG
+  frontier where restored level loading in C calls `restrap(mon.c:4667)`
+  between `restore.c:getlev()` `rnd(10)` draws.
 - The next narrow `#sit` trap slice should deepen the remaining
   `trap.c:trapeffect_*()` details now that deferred level-changing traps are
   live: floor-object `impact_drop()` effects for holes/trapdoors, positive
