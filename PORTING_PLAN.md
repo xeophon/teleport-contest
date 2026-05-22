@@ -848,10 +848,15 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   one-turn non-corpse foods and generic rotten eggs now use C-style `oeaten`
   handling: carried/floor stacks split to one touched item, sleep leaves the
   same kind with half nutrition remaining, and uninterrupted eating grants
-  only the remaining nutrition. Full egg knowledge UI, royal jelly/`#sit`
-  provenance, multi-turn `victual`/per-bite nutrition for rations, corpses,
-  and other long meals, exact tin-opening occupation exceptions, and complete
-  extinction/vitals semantics remain future work.
+  only the remaining nutrition. Royal jelly now uses its canonical object type
+  for special creation and wishes, can rot through the generic food path, and
+  applies its C eating side effects for strength, HP, wounded legs, cursed
+  poisoning, and killer-bee-to-queen polymorph. `#sit` by oviparous polyself
+  forms now lays a known egg marked as laid by the hero and spends egg
+  nutrition. Full egg knowledge UI, royal-jelly rubbing/bee consumption, full
+  `#sit` terrain/trap/throne coverage, multi-turn `victual`/per-bite nutrition
+  for rations, corpses, and other long meals, exact tin-opening occupation
+  exceptions, and complete extinction/vitals semantics remain future work.
 - Wished container state prefixes now cover the C `readobjnam()` object slice
   for `locked`, `unlocked`, `broken`, `trapped`, `untrapped`, and `empty`:
   boxes keep normal generated contents and lock/trap RNG before final state

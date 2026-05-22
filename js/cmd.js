@@ -704,6 +704,7 @@ const TOUCHSTONE = FLINT_STONE;
 const BLINDFOLD = 10113;
 const MIRROR = 10006;
 const CREAM_PIE = 10081;
+const LUMP_OF_ROYAL_JELLY = 10089;
 const KELP_FROND = 172;
 const EUCALYPTUS_LEAF = 11000;
 const LEMBAS_WAFER = 146;
@@ -804,7 +805,7 @@ const FOOD_NUTRITION = new Map([
     ['c-ration', 300],
     ['tin', 0],
 ]);
-const ROTTABLE_NON_CORPSE_FOODS = new Set(['apple', 'carrot', 'pear', 'melon', 'orange', 'banana', 'kelp frond']);
+const ROTTABLE_NON_CORPSE_FOODS = new Set(['apple', 'carrot', 'pear', 'melon', 'orange', 'banana', 'kelp frond', 'lump of royal jelly']);
 const POISONABLE_WISH_WEAPONS = new Set([
     'arrow', 'arrows', 'elven arrow', 'elven arrows', 'orcish arrow', 'orcish arrows',
     'silver arrow', 'silver arrows', 'ya', 'crossbow bolt', 'crossbow bolts',
@@ -845,6 +846,7 @@ const WISH_BASE_OBJECTS = new Map([
     ['pickax', { otyp: PICK_AXE, cls: 'tool', glyph: '(', kind: 'pick-axe' }],
     ['pick-ax', { otyp: PICK_AXE, cls: 'tool', glyph: '(', kind: 'pick-axe' }],
     ['cream pie', { otyp: CREAM_PIE, cls: 'food', glyph: '%', kind: 'cream pie' }],
+    ['lump of royal jelly', { otyp: LUMP_OF_ROYAL_JELLY, cls: 'food', glyph: '%', kind: 'lump of royal jelly', singular: 'lump of royal jelly', plural: 'lumps of royal jelly' }],
     ['eucalyptus leaf', { otyp: EUCALYPTUS_LEAF, cls: 'food', glyph: '%', kind: 'eucalyptus leaf', plural: 'eucalyptus leaves' }],
     ['kelp frond', { otyp: KELP_FROND, cls: 'food', glyph: '%', kind: 'kelp frond' }],
     ['lembas wafer', { otyp: LEMBAS_WAFER, cls: 'food', glyph: '%', kind: 'lembas wafer', plural: 'lembas wafers' }],
@@ -912,7 +914,7 @@ const WISH_BASE_NAMEDESC_BOUNDS = new Map([
     ['flail', 41], ['glaive', 9],
     ['bullwhip', 3], ['silver saber', 7], ['dwarvish mattock', 14],
     ['pick-axe', 21], ['pick axe', 21], ['pickaxe', 21], ['pickax', 21], ['pick-ax', 21],
-    ['cream pie', 26], ['eucalyptus leaf', 4], ['kelp frond', 1],
+    ['cream pie', 26], ['lump of royal jelly', 1], ['eucalyptus leaf', 4], ['kelp frond', 1],
     ['lembas wafer', 21], ['fortune cookie', 56], ['fortune cookies', 56],
     ['food ration', 381], ['enormous meatball', 1], ['rock', 101], ['luckstone', 11],
     ['loadstone', 11], ['touchstone', 9], ['flint', 11],
@@ -11596,13 +11598,164 @@ function partialRottenFood(item, floorObject = false) {
 
 function consumeTouchedFood(item, floorObject = false) {
     if (floorObject) consumeOneFloorObject(item);
-    else removeInventoryItem(item);
+    else consumeOneInventoryFood(item);
+}
+
+function isRoyalJelly(item) {
+    return item?.otyp === LUMP_OF_ROYAL_JELLY || objectKindKey(item).replace(/^partly eaten /, '') === 'lump of royal jelly';
+}
+
+function heroHasUnchanging() {
+    return !!game.u?.unchanging || (game.inventory || []).some(item =>
+        item.worn && /amulet of unchanging|unchanging/i.test(String(item.kind || item.actualKind || item.line || '')));
+}
+
+function adjustHeroStrengthFromRoyalJelly(cursed) {
+    const stats = game.u?.acurr?.a;
+    if (!stats) return '';
+    const before = stats[A_STR] ?? 10;
+    const after = Math.max(3, Math.min(125, before + (cursed ? -1 : 1)));
+    stats[A_STR] = after;
+    if (!cursed && game.u?.amax?.a) game.u.amax.a[A_STR] = Math.max(game.u.amax.a[A_STR] || after, after);
+    if (after === before) return '';
+    return cursed ? 'You feel weak!' : 'You feel strong!';
+}
+
+function healWoundedLegsFromRoyalJelly() {
+    if (!game.u) return;
+    if (game.u._woundedDexPenalty && game.u.acurr?.a)
+        game.u.acurr.a[A_DEX] = (game.u.acurr.a[A_DEX] || 9) + 1;
+    game.u._woundedDexPenalty = 0;
+    game.u._woundedLegTurns = 0;
+    game.u._woundedLegSide = '';
+}
+
+function royalJellyPostEffects(item) {
+    if (game.u?._polyself_form?.name === 'killer bee' && !heroHasUnchanging()) {
+        const result = becomeMonster('queen bee');
+        return { messages: result?.message ? [result.message] : [], died: false };
+    }
+
+    const messages = [];
+    const strengthMessage = adjustHeroStrengthFromRoyalJelly(!!item?.cursed);
+    if (strengthMessage) messages.push(strengthMessage);
+
+    if (game.u) {
+        const hpDelta = rnd(20);
+        if (item?.cursed) game.u.uhp = (game.u.uhp || 0) - hpDelta;
+        else game.u.uhp = (game.u.uhp || 0) + hpDelta;
+        if ((game.u.uhp || 0) > (game.u.uhpmax || 1)) {
+            if (!rn2(17)) game.u.uhpmax = (game.u.uhpmax || 1) + 1;
+            game.u.uhp = game.u.uhpmax || 1;
+        } else if ((game.u.uhp || 0) <= 0) {
+            game._death_cause = 'poisoned by a rotten lump of royal jelly';
+            return { messages, died: true };
+        }
+    }
+
+    if (!item?.cursed) healWoundedLegsFromRoyalJelly();
+    return { messages, died: false };
+}
+
+async function finishRoyalJellyEating(item, floorObject, baseMessage, { more = false, processTimeWithMore = 0 } = {}) {
+    addHeroNutrition(remainingFoodNutrition(item));
+    consumeTouchedFood(item, floorObject);
+    game._pet_food_scan_inventory = game.inventory || [];
+    const result = royalJellyPostEffects(item);
+    const message = [baseMessage, ...result.messages].filter(Boolean).join('  ');
+    if (result.died) {
+        if (consumeLifeSavingAmulet()) {
+            if (game.u) game.u.uhp = 0;
+            game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
+            game._command_mode = 'lifeSavingMore';
+            await setMessage(`${message}  You die...  But wait...  Your medallion begins to glow!`, true);
+            return;
+        }
+        if (game.u) game.u.uhp = 0;
+        game._pending_time_passed = 0;
+        game.context.move = 0;
+        game._process_command_time_now = 0;
+        game._run_steps_remaining = 0;
+        game._command_mode = 'deathDieMore';
+        prepareDeathBones();
+        await setMessage(`${message}  You die...`, true);
+        return;
+    }
+    await setMessage(message, more);
+    if (processTimeWithMore) game._process_time_with_more = processTimeWithMore;
+    game._command_mode = null;
+    game.context.move = 1;
+}
+
+async function eatRoyalJelly(item, floorObject = false) {
+    const name = pickupObjectName({ ...(item || {}), quan: 1 });
+    await finishRoyalJellyEating(item, floorObject, `This ${name} is delicious!`);
+}
+
+function eggMonsterFromHeroPolyself() {
+    const form = polyselfForm();
+    if (!form?.oviparous) return null;
+    let name = form.name || '';
+    if (!name) return null;
+    const breederEgg = !rn2(77);
+    if (!breederEgg && name === 'queen bee') name = 'killer bee';
+    else if (!breederEgg && name === 'winged gargoyle') name = 'gargoyle';
+    return monsterByRndName(name) || RANDOM_MONSTER_BY_NAME.get(name) || form;
+}
+
+function createHeroLaidEgg() {
+    const eggMonster = eggMonsterFromHeroPolyself();
+    const egg = mksobj(EGG, false, false);
+    Object.assign(egg, {
+        cls: 'food',
+        glyph: '%',
+        color: CLR_WHITE,
+        kind: 'egg',
+        singular: 'egg',
+        plural: 'eggs',
+        quan: 1,
+        spe: 1,
+        known: true,
+        dknown: true,
+        eggKnown: true,
+        corpsenm: eggMonster,
+        ox: game.u?.ux || 0,
+        oy: game.u?.uy || 0,
+    });
+    if (eggMonster) consumeWishedEggHatchTimer(egg);
+    game.level.objects ??= [];
+    game.level.objects.push(egg);
+    newsym(egg.ox, egg.oy);
+    return egg;
+}
+
+async function sitLayEgg() {
+    if (!game.flags?.female) {
+        await setMessage("Males can't lay eggs!");
+        game._command_mode = null;
+        return true;
+    }
+    if ((game.u?.uhunger || 0) < (FOOD_NUTRITION.get('egg') || 80)) {
+        await setMessage("You don't have enough energy to lay an egg.");
+        game._command_mode = null;
+        return true;
+    }
+    createHeroLaidEgg();
+    if (game.u) game.u.uhunger = Math.max(0, (game.u.uhunger || 0) - (FOOD_NUTRITION.get('egg') || 80));
+    await setMessage('You lay an egg.');
+    game._command_mode = null;
+    game.context.move = 1;
+    return true;
 }
 
 async function eatRottenNonCorpseFood(item, floorObject = false) {
     const { message, rottenSleepDuration } = rottenFoodEffect();
     const touched = partialRottenFood(item, floorObject);
     if (!rottenSleepDuration) {
+        if (isRoyalJelly(touched)) {
+            await finishRoyalJellyEating(touched, floorObject, message, { more: true, processTimeWithMore: 1 });
+            return;
+        }
         addHeroNutrition(remainingFoodNutrition(touched));
         consumeTouchedFood(touched, floorObject);
     }
@@ -23856,6 +24009,7 @@ export async function rhack(_cmd) {
                     return;
                 }
                 const loc = game.level?.at(game.u?.ux || 0, game.u?.uy || 0);
+                if (polyselfForm()?.oviparous && await sitLayEgg()) return;
                 await setMessage(`Having fun sitting on the ${loc?.typ === FOUNTAIN ? 'fountain' : 'floor'}?`);
                 game._command_mode = null;
                 game.context.move = 1;
@@ -25171,6 +25325,10 @@ export async function rhack(_cmd) {
                 await eatRottenNonCorpseFood(item);
                 return;
             }
+            if (isRoyalJelly(item)) {
+                await eatRoyalJelly(item);
+                return;
+            }
             if ((item.quan || 1) > 1) next_ident();
             if (item.oeaten > 0) addHeroNutrition(item.oeaten);
             removeInventoryItem(item);
@@ -25334,6 +25492,10 @@ export async function rhack(_cmd) {
             }
             if (shouldUseGenericRottenFoodPath(food)) {
                 await eatRottenNonCorpseFood(food, true);
+                return;
+            }
+            if (isRoyalJelly(food)) {
+                await eatRoyalJelly(food, true);
                 return;
             }
             if (food.oeaten > 0) addHeroNutrition(food.oeaten);
