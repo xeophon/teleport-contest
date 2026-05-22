@@ -6,7 +6,7 @@ import { nhgetch } from './input.js';
 import { bot, cls, docrt, flush_screen, newsym, pline, refreshHallucinatedMap, show_glyph_cell, strengthString } from './display.js';
 import { couldsee, vision_recalc, vision_reset } from './vision.js';
 import { RANDOM_MONSTER_BY_NAME, SHOP_TYPES, artifactObjectName, enextoMonsterSpot, make_tutorial1_level, makemon, makeArtifactWishObject, mkcorpstat, mklev, mkobj_at, mksobj, monsterByRndName, morgueMonster, nameObjectAsArtifact, next_ident, potionIndexForRoll, rndmonnum, scrollIndexForRoll, syncDungeonContext, u_on_dnstairs, u_on_rndspot, u_on_upstairs, wipe_engr_at, dropMonsterInventory, l_nhcore_init, getrumor, getbogusmon, level_difficulty, set_malign, somexyspace } from './mklev.js';
-import { ACCESSIBLE, A_CHA, A_CON, A_DEX, A_INT, A_MAX, A_STR, A_WIS, ALTAR, BC_BALL, BC_CHAIN, BEAR_TRAP, BLCORNER, BOLT_LIM, BRCORNER, CLOUD, COLNO, CORPSTAT_FEMALE, CORPSTAT_GENDER, CORPSTAT_HISTORIC, CORPSTAT_MALE, CORPSTAT_NEUTER, CORR, DOOR, BURN, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, DUST, ENGRAVE, ENGR_BLOOD, FOUNTAIN, GRAVE, HEADSTONE, HWALL, ICE, IN_SIGHT, IS_AIR, IS_OBSTRUCTED, IS_POOL, IS_ROOM, IS_WALL, In_endgame, In_quest, In_sokoban, Is_botlevel, Is_earthlevel, Is_rogue_level, Is_stronghold, Is_waterlevel, LADDER, LAVAPOOL, LAVAWALL, MAGIC_PORTAL, MARK, MAX_EGG_HATCH_TIME, MM_EDOG, MM_NOCOUNTBIRTH, MM_NOMSG, MM_NOWAIT, MOAT, NO_MINVENT, NORMAL_SPEED, OVERLOADED, P_BASIC, P_UNSKILLED, PIT, POOL, ROLLING_BOULDER_TRAP, ROOM, ROT_AGE, ROOMOFFSET, ROWNO, SCORR, SDOOR, SHOPBASE, SINK, SPIKED_PIT, STAIRS, STONE, TDWALL, TEMPLE, THRONE, TLCORNER, TRCORNER, TREE, TT_BEARTRAP, TT_BURIEDBALL, TT_INFLOOR, TT_LAVA, TT_PIT, TT_WEB, TUWALL, VAULT, VIBRATING_SQUARE, VWALL, WAND_BACKFIRE_CHANCE, WATER, WEB, WT_IRON_BALL_BASE, WT_IRON_BALL_INCR, ZAP_POS } from './const.js';
+import { ACCESSIBLE, A_CHA, A_CON, A_DEX, A_INT, A_MAX, A_STR, A_WIS, ALTAR, BC_BALL, BC_CHAIN, BEAR_TRAP, BLCORNER, BOLT_LIM, BRCORNER, CLOUD, COLNO, CORPSTAT_FEMALE, CORPSTAT_GENDER, CORPSTAT_HISTORIC, CORPSTAT_MALE, CORPSTAT_NEUTER, CORR, DOOR, BURN, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, DUST, ENGRAVE, ENGR_BLOOD, FOUNTAIN, GRAVE, HEADSTONE, HWALL, ICE, IN_SIGHT, IS_AIR, IS_OBSTRUCTED, IS_POOL, IS_ROOM, IS_WALL, In_endgame, In_quest, In_sokoban, Is_airlevel, Is_botlevel, Is_earthlevel, Is_rogue_level, Is_stronghold, Is_waterlevel, LADDER, LAVAPOOL, LAVAWALL, MAGIC_PORTAL, MARK, MAX_EGG_HATCH_TIME, MM_EDOG, MM_NOCOUNTBIRTH, MM_NOMSG, MM_NOWAIT, MOAT, NO_MINVENT, NORMAL_SPEED, OVERLOADED, P_BASIC, P_UNSKILLED, PIT, POOL, ROLLING_BOULDER_TRAP, ROOM, ROT_AGE, ROOMOFFSET, ROWNO, SCORR, SDOOR, SHOPBASE, SINK, SPIKED_PIT, STAIRS, STONE, TDWALL, TEMPLE, THRONE, TLCORNER, TRCORNER, TREE, TT_BEARTRAP, TT_BURIEDBALL, TT_INFLOOR, TT_LAVA, TT_PIT, TT_WEB, TUWALL, VAULT, VIBRATING_SQUARE, VWALL, WAND_BACKFIRE_CHANCE, WATER, WEB, WT_IRON_BALL_BASE, WT_IRON_BALL_INCR, ZAP_POS } from './const.js';
 import { d, rn1, rn2, rn2_on_display_rng, rnd, rnl, rnz } from './rng.js';
 import { CLR_BLACK, CLR_BLUE, CLR_BRIGHT_BLUE, CLR_BRIGHT_CYAN, CLR_BRIGHT_GREEN, CLR_BROWN, CLR_CYAN, CLR_GRAY, CLR_GREEN, CLR_MAGENTA, CLR_ORANGE, CLR_RED, CLR_YELLOW, CLR_WHITE, NO_COLOR } from './terminal.js';
 import { vfsDeleteFile, vfsReadFile, vfsWriteFile } from './storage.js';
@@ -1541,6 +1541,21 @@ function heavenVoiceMessage() {
     return `The voice of ${god} rings out:  "Thou art early, but we'll admit thee."`;
 }
 
+async function finishEndgameNegativeLevelTeleport(target) {
+    clearLevelTeleportTextPrompt();
+    game._command_mode = null;
+    const current = game.u?.uz || { dnum: 0, dlevel: 1 };
+    const levelLimit = Math.max(1, game.dungeons?.[current.dnum]?.num_dunlevs ?? current.dlevel);
+    if (target <= -levelLimit) {
+        await setMessage("You can't get there from here.");
+        return;
+    }
+    await finishLevelTeleport(
+        { dnum: current.dnum, dlevel: levelLimit + target },
+        { suppressMaterialize: true, endgameLevelTeleport: true },
+    );
+}
+
 async function finishNegativeLevelTeleport(target) {
     clearLevelTeleportTextPrompt();
     game._command_mode = null;
@@ -1568,21 +1583,23 @@ async function finishNegativeLevelTeleport(target) {
     }
 
     if (target > -10 && (game.u?.levitating || game.u?.flying)) {
-        game._escaped_from_dungeon = 1;
         const followup = consumePendingLevelTeleportTrapFollowup();
         if (followup) messages.push(followup);
-        await setMessage(messages.join('  '), !!followup);
-        game.context.move = 1;
+        await beginEscapedGame(messages);
         return;
     }
 
     if (consumeLifeSavingAmulet()) {
         if (game.u) game.u.uhp = 0;
+        game._life_saving_level_teleport_escape_message = 'You find yourself back on the surface.';
         game._command_mode = 'lifeSavingMore';
-        await setMessage(`${messages.join('  ')}  You die...  But wait...  Your medallion begins to glow!`, true);
+        await setMessage(`${messages.join('  ')}  But wait...  Your medallion begins to glow!`, true);
         return;
     }
 
+    game._death_no_bones = 1;
+    game._death_outside_dungeon = target <= -10 ? 'heaven' : 'surface';
+    game._death_negative_level_teleport_escape_message = 'You find yourself back on the surface.';
     if (game.u) game.u.uhp = 0;
     game._pending_time_passed = 0;
     game.context.move = 0;
@@ -1591,6 +1608,21 @@ async function finishNegativeLevelTeleport(target) {
     game._command_mode = 'deathDieMore';
     prepareDeathBones();
     await setMessage(`${messages.join('  ')}  You die...`, true);
+}
+
+async function beginEscapedGame(messages) {
+    game._escaped_from_dungeon = 1;
+    game._escaped_game = 1;
+    game._quit_game = 0;
+    game._death_cause = 'escaped';
+    game._death_moves ||= game.moves || 1;
+    game._pending_time_passed = 0;
+    game.context.move = 0;
+    game._process_command_time_now = 0;
+    game._run_steps_remaining = 0;
+    game._deferred_level_goto = null;
+    game._command_mode = 'escapedMore';
+    await setMessage((messages || []).filter(Boolean).join('  '), true);
 }
 
 async function finishNowhereLevelTeleport() {
@@ -2178,7 +2210,8 @@ export async function finishLevelTeleport(targetLevel, options = {}) {
                 { text: 'You enter what seems to be an older, more primitive world.', more: false },
             ];
         }
-        let arrivalMessage = onBoulder
+        let arrivalMessage = options.suppressMaterialize ? ''
+            : onBoulder
             ? 'You materialize on a different level!  You see here a boulder.'
             : 'You materialize on a different level!';
         let arrivalMore = lowerWizardTowerArrival
@@ -2228,13 +2261,17 @@ export async function finishLevelTeleport(targetLevel, options = {}) {
                 arrivalMore = false;
             }
         }
+        if (options.endgameLevelTeleport && targetIsNew && Is_airlevel(targetLevel)) {
+            arrivalMessage = 'What a strange feeling!  You notice that there is no gravity here.';
+            arrivalMore = true;
+        }
         if (postArrivalTemperatureMessage) {
             if (arrivalMore)
                 game._queued_message_after_more = game._queued_message_after_more
                     ? `${game._queued_message_after_more}  ${postArrivalTemperatureMessage}`
                     : postArrivalTemperatureMessage;
             else
-                arrivalMessage += `  ${postArrivalTemperatureMessage}`;
+                arrivalMessage = arrivalMessage ? `${arrivalMessage}  ${postArrivalTemperatureMessage}` : postArrivalTemperatureMessage;
         }
         if (targetAnnotation) {
             const annotationMessage = `You remember this level as ${targetAnnotation}.`;
@@ -11368,10 +11405,12 @@ function deathSummary() {
         ac: game.u?.uac ?? 10,
         turns: game._death_moves || game.moves || 1,
         exp: game.u?.uexp || 0,
+        outsideDungeon: game._death_outside_dungeon || '',
     };
 }
 
 function canMakeBones() {
+    if (game._death_no_bones) return false;
     if (game.flags?.bones === false) return false;
     const uz = game.u?.uz;
     const dungeon = game.dungeons?.[uz?.dnum ?? 0];
@@ -14352,6 +14391,10 @@ function deathGraveLines() {
         .padStart(Math.floor((18 + goldText.length) / 2))
         .padEnd(18);
     const deathVerb = dsum.cause.startsWith('burned by') ? 'burned' : 'died';
+    const summaryVerb = dsum.outsideDungeon === 'heaven' ? 'passed away' : deathVerb;
+    const summaryPlace = dsum.outsideDungeon
+        ? 'beyond the confines of the dungeon'
+        : `in ${dsum.dungeon} on dungeon level ${dsum.depth}`;
     return [
         [1, 23, '----------'],
         [2, 22, '/          \\'],
@@ -14369,9 +14412,26 @@ function deathGraveLines() {
         [14, 17, '*|     *  *  *      | *'],
         [15, 8, '_________)/\\\\_//(\\/(/\\)/\\//\\/|_)_______'],
         [18, 0, `${farewell} ${dsum.name} the ${dsum.role}...`],
-        [20, 0, `You ${deathVerb} in ${dsum.dungeon} on dungeon level ${dsum.depth} with ${dsum.score} point${dsum.score === 1 ? '' : 's'},`],
+        [20, 0, `You ${summaryVerb} ${summaryPlace} with ${dsum.score} point${dsum.score === 1 ? '' : 's'},`],
         [21, 0, `and ${dsum.gold} piece${dsum.gold === 1 ? '' : 's'} of gold, after ${dsum.turns} moves.`],
         [22, 0, `You were level ${dsum.level} with a maximum of ${dsum.hpmax} hit points when you ${deathVerb}.`],
+        [23, 0, '--More--'],
+    ];
+}
+
+function escapedSummaryLines() {
+    const dsum = deathSummary();
+    const farewell = {
+        Knight: 'Fare thee well',
+        Samurai: 'Sayonara',
+        Tourist: 'Aloha',
+        Valkyrie: 'Velkommen',
+    }[dsum.role] || 'Goodbye';
+    return [
+        [0, 0, `${farewell} ${dsum.name} the ${dsum.role}...`],
+        [2, 0, `You escaped from the dungeon with ${dsum.score} point${dsum.score === 1 ? '' : 's'},`],
+        [3, 0, `and ${dsum.gold} piece${dsum.gold === 1 ? '' : 's'} of gold, after ${dsum.turns} moves.`],
+        [4, 0, `You were level ${dsum.level} with a maximum of ${dsum.hpmax} hit points when you escaped.`],
         [23, 0, '--More--'],
     ];
 }
@@ -14394,7 +14454,7 @@ function deathScoreLines() {
         maxlvl: dsum.maxlvl,
         hp: dsum.hp,
         hpmax: dsum.hpmax,
-        cause: game._quit_game ? 'quit' : dsum.cause,
+        cause: game._escaped_game ? 'escaped' : game._quit_game ? 'quit' : dsum.cause,
     };
     let entries = JSON.parse(vfsReadFile('/record') || '[]');
     const unrankedCurrent = current.score <= 0;
@@ -14431,12 +14491,17 @@ function deathScoreLines() {
         const scoreCause = entry.cause.replace(/; the /g, ', the ');
         const rankText = rank ? String(rank).padStart(3) : '   ';
         const points = entry.score || (entry.cause === 'quit' ? 0 : dsum.exp || 0);
-        const outcome = entry.cause === 'quit' ? 'quit' : 'died';
-        let line = `${rankText} ${String(points).padStart(10)}  ${name} ${outcome} in ${entry.dungeon}`;
-        line += ` on level ${entry.depth}`;
-        if (entry.depth !== entry.maxlvl) line += ` [max ${entry.maxlvl}]`;
-        if (entry.cause === 'quit') line += '.';
-        else line += `.  ${scoreCause[0].toUpperCase()}${scoreCause.slice(1)}.`;
+        let line = `${rankText} ${String(points).padStart(10)}  ${name} `;
+        if (entry.cause === 'escaped') {
+            line += `escaped the dungeon [max level ${entry.maxlvl ?? entry.depth}].`;
+        } else {
+            const outcome = entry.cause === 'quit' ? 'quit' : 'died';
+            line += `${outcome} in ${entry.dungeon}`;
+            line += ` on level ${entry.depth}`;
+            if (entry.depth !== entry.maxlvl) line += ` [max ${entry.maxlvl}]`;
+            if (entry.cause === 'quit') line += '.';
+            else line += `.  ${scoreCause[0].toUpperCase()}${scoreCause.slice(1)}.`;
+        }
 
         const wrapped = [];
         const wrapCol = COLNO - 10;
@@ -16457,9 +16522,11 @@ export async function rhack(_cmd) {
     if (game._command_mode === 'lifeSavingMore') {
         if (ch === ' ' || ch === '\x1b' || ch === '\r' || ch === '\n') {
             const stoningLifeSaved = !!game._life_saving_clear_stoning;
-            game._pending_message = stoningLifeSaved
+            const levelTeleportEscape = !!game._life_saving_level_teleport_escape_message;
+            const lifeSavingMessage = stoningLifeSaved || levelTeleportEscape
                 ? 'You feel much better!  The medallion crumbles to dust!'
                 : 'You feel much better!';
+            game._pending_message = lifeSavingMessage;
             game._pending_explore_lifesaving_message = 0;
             game._message_more = 0;
             game._keep_pending_message = 1;
@@ -16484,6 +16551,14 @@ export async function rhack(_cmd) {
                 const con = game.u.acurr?.a?.[A_CON] ?? 10;
                 const givehp = 50 + 10 * Math.trunc(con / 2);
                 game.u.uhp = Math.min(game.u.uhpmax || 1, givehp);
+            }
+            if (levelTeleportEscape) {
+                const escapeMessage = game._life_saving_level_teleport_escape_message;
+                game._life_saving_level_teleport_escape_message = '';
+                game._keep_pending_message = 0;
+                game._death_cause = '';
+                await beginEscapedGame([lifeSavingMessage, escapeMessage]);
+                return;
             }
             game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
             game._suppress_monster_attack_messages = 1;
@@ -17112,6 +17187,7 @@ export async function rhack(_cmd) {
         && game._command_mode !== 'iceBoxContents'
         && game._command_mode !== 'floorContainerContents'
         && game._command_mode !== 'confusedLevelTeleportOopsMore'
+        && game._command_mode !== 'escapedMore'
         && game._command_mode !== 'ponySecondAttackMore'
         && game._command_mode !== 'ponyDamageMore'
         && game._command_mode !== 'deathSlipMore'
@@ -19103,6 +19179,7 @@ export async function rhack(_cmd) {
         && game._command_mode !== 'levelChangeMore'
         && game._command_mode !== 'messageWait'
         && game._command_mode !== 'confusedLevelTeleportOopsMore'
+        && game._command_mode !== 'escapedMore'
         && game._command_mode !== 'ponySecondAttackMore'
         && game._command_mode !== 'ponyDamageMore'
         && game._command_mode !== 'deathSlipMore'
@@ -19187,6 +19264,32 @@ export async function rhack(_cmd) {
             options: levelTeleportOptionsWithTrapFollowup({ levelTeleport: true }),
         };
         game.context.move = 1;
+        return;
+    }
+
+    if (game._command_mode === 'escapedMore') {
+        if (ch === ' ' || ch === '\x1b' || ch === '\r' || ch === '\n') {
+            game._pending_message = '';
+            game._message_more = 0;
+            setOverlay(escapedSummaryLines(), 24, true);
+            game._command_mode = 'escapedSummaryMore';
+            return;
+        }
+        game._keep_pending_message = 1;
+        return;
+    }
+
+    if (game._command_mode === 'escapedSummaryMore') {
+        if (ch === ' ' || ch === '\x1b' || ch === '\r' || ch === '\n') {
+            const scoreRows = deathScoreLines();
+            setOverlay(scoreRows, 24, true);
+            game._overlay_cursor = [0, Math.min(23, Math.max(...scoreRows.map(([row]) => row)) + 1)];
+            game._command_mode = 'dead';
+            game.program_state ??= {};
+            game.program_state.gameover = true;
+            return;
+        }
+        game._keep_pending_message = 1;
         return;
     }
 
@@ -19532,6 +19635,14 @@ export async function rhack(_cmd) {
             game._death_cause = '';
             game._death_bones_body = '';
             game._wizard_survived_death = 1;
+            if (game._death_negative_level_teleport_escape_message) {
+                const escapeMessage = game._death_negative_level_teleport_escape_message;
+                game._death_negative_level_teleport_escape_message = '';
+                game._death_outside_dungeon = '';
+                game._death_no_bones = 0;
+                await beginEscapedGame(["OK, so you don't die.", escapeMessage]);
+                return;
+            }
             await setMessage("OK, so you don't die.");
             if (game._deferred_raven_blind_after_more) {
                 const ravenAttack = game._deferred_raven_blind_after_more;
@@ -25462,6 +25573,10 @@ export async function rhack(_cmd) {
                     return;
                 }
                 if (target < 0) {
+                    if (In_endgame(game.u?.uz)) {
+                        await finishEndgameNegativeLevelTeleport(target);
+                        return;
+                    }
                     await finishNegativeLevelTeleport(target);
                     return;
                 }
