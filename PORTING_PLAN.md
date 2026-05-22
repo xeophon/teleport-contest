@@ -868,15 +868,25 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   `dotrap(VIASITTING)` prefix/seen-escape ordering and covers arrow, dart,
   falling rock, squeaky board, sleep gas, rust, fire, teleport, anti-magic,
   polymorph, land mine, rolling boulder, and vibrating-square effects instead
-  of falling through to a prefix-only no-op. Eating tins and applying tin
+  of falling through to a prefix-only no-op. Web sitting now uses the C
+  strength-dependent entanglement timer and deletes the web for very high
+  strength, while hole/trapdoor sitting schedules a falling level transition
+  through the existing saved-level path with C-shaped opening/deep-shaft
+  messages. `#sit` level teleporters now delete the trap before ordinary
+  non-endgame level-teleport resolution, honor Amulet/Sokoban blocking, queue
+  teleport-control prompts, and add the C disorientation follow-up for
+  uncontrolled teleports. Magic portals now activate rather than no-op,
+  schedule portal-arrival level changes, and add the short stun/dizzy
+  feedback. Eating tins and applying tin
   openers now route
   through a C-shaped `start_tin()`/`opentin()` slice: opener/no-opener/blessed
   timing, slippery-finger drops, delayed opening occupation, trapped tins,
   empty tins, spinach tins, monster tins, rotten/greasy variety effects, and
   the `Eat it?` prompt no longer fall through as ordinary one-turn food. Full
   egg knowledge UI, complete throne random effects, deeper `dotrap(VIASITTING)`
-  details for holes/trapdoors/level portals, web strength timing, rust/fire
-  item destruction, rock helmet/pass-through details, multi-turn
+  edge details for fall blockers/destination special cases/controlled level
+  teleports, rust/fire item destruction, rock helmet/pass-through details,
+  multi-turn
   `victual`/per-bite nutrition for rations, corpses, and other long meals,
   full tin corpse side effects/shop billing/conduct detail, and complete
   extinction/vitals semantics remain future work.
@@ -1101,10 +1111,12 @@ Next concrete target:
   full `eat.c`, `sp_lev.c`, `mkobj.c`, `makemon.c`, `uhitm.c`, and
   `dogmove.c` behavior.
 - The next narrow `#sit` trap slice should deepen the remaining
-  `trap.c:trapeffect_*()` details now that prefix-only fallback is gone:
-  real hole/trapdoor/level-teleport movement, web strength timing and removal,
-  rust/fire item erosion/destruction, rock helmet/pass-through handling, and
-  shared helpers with the movement trap path where that lowers divergence.
+  `trap.c:trapeffect_*()` details now that deferred level-changing traps are
+  live: full hole/trapdoor blockers and stronghold/Hell destination handling,
+  controlled level-teleport post-prompt messages, rust/fire item
+  erosion/destruction, rock helmet/pass-through handling, webmaker/pass-through
+  web cases, and shared helpers with the movement trap path where that lowers
+  divergence.
 - Use `sessions/*.session.json` to locate divergences, but keep fixes in real
   mechanics. A score recovery is only valid when it falls out of those
   mechanics.
