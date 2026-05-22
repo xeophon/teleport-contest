@@ -1326,6 +1326,17 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   the focused harness from `3386/120639` RNG calls and `181/833` screens to
   `37947/120639` RNG calls and `211/833` screens. The full public smoke remains
   `34/44`.
+- The `seed5006` blindfold/sewer-rat combat slice now clears stale invisible
+  memory before monster-to-hero attacks when the monster is actually in sight.
+  C's `mhitm.c:missmm()` supplies the pending `The kitten misses the sewer rat.`
+  message, and `mhitu.c:hitmsg()` then names the visible sewer rat and uses its
+  `AT_BITE` verb for `The sewer rat bites!`. JS had treated the rat's old
+  `map_invisible` marker from the blindfolded attack as a hidden/bullwhip
+  attack after the blindfold came off, forcing `It hits!` and the wrong hidden
+  attack shape. The focused harness advances from the sewer-rat line at screen
+  126 to the confused-scroll pager at screen 161, improving `seed5006` from
+  `8469/13923` RNG calls and `131/249` screens to `8637/13923` RNG calls and
+  `167/249` screens. The full public smoke remains `34/44`.
 
 Next concrete target:
 
