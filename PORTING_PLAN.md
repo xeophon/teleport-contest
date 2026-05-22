@@ -1348,6 +1348,15 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   map/bones frontier at screen 165; focused screen parity improves from
   `167/249` to `170/249` while RNG remains `8637/13923`. The full public smoke
   remains `34/44`.
+- The `seed5006` confused level-arrival and wizard bones tail now close out
+  fully. The confused `Oops...` continuation consumes the C Wisdom exercise
+  roll after the random target depth and before the deferred level generation
+  path, which realigns `getbones()`/`makelevel()` and the arrival map. Wizard
+  death confirmation now creates the named corpse before the `Save bones?`
+  prompt, matching `end.c:really_done()` before an existing bones file can ask
+  for replacement. `seed5006-tourist-stress-disaster` now has full focused
+  parity: `13923/13923` RNG calls, `249/249` screens, and `249/249` cursors.
+  The full public smoke improves to `35/44`.
 
 Next concrete target:
 
@@ -1360,12 +1369,14 @@ Next concrete target:
   semantics, C special-level room/corridor/shop filling for `minetn-3.lua`, and
   full `eat.c`, `sp_lev.c`, `mkobj.c`, `makemon.c`, `uhitm.c`, and
   `dogmove.c` behavior.
-- The Archeologist tour, exact-wand wish tails, and healer scroll tail are now
-  closed; use them as regression guards for artifact wishing, restored-level
-  Sokoban return, discovery menus, wizard enlightenment, C `readobjnam()`
-  probability accounting, scroll `makeknown()` exercise, multi-`pline()`
-  scroll message ordering, and fire-ray `destroy_items()` timing before
-  widening the same C-grounded fixes to other sessions.
+- The Archeologist tour, exact-wand wish tails, healer scroll tail, and
+  tourist disaster path are now closed; use them as regression guards for
+  artifact wishing, restored-level Sokoban return, discovery menus, wizard
+  enlightenment, C `readobjnam()` probability accounting, scroll
+  `makeknown()` exercise, multi-`pline()` scroll message ordering, confused
+  level teleportation, bones replacement prompts, and fire-ray
+  `destroy_items()` timing before widening the same C-grounded fixes to other
+  sessions.
 - The next narrow `#sit` trap slice should deepen the remaining
   `trap.c:trapeffect_*()` details now that deferred level-changing traps are
   live: floor-object `impact_drop()` effects for holes/trapdoors, positive

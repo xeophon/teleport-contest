@@ -19608,6 +19608,7 @@ export async function rhack(_cmd) {
             return;
         }
 
+        rn2(19);
         game._deferred_level_goto = {
             targetLevel: levelTeleportNumericTarget(targetDepth),
             options: levelTeleportOptionsWithTrapFollowup({ levelTeleport: true }),
@@ -19971,6 +19972,7 @@ export async function rhack(_cmd) {
             game._death_moves = game.moves || 1;
             game._bones_ok = canMakeBones();
             if (game._bones_ok) {
+                createDeathBonesRemains();
                 await setMessage('Save bones? [yn] (n)');
                 game._command_mode = 'deathBonesPrompt';
                 return;
