@@ -782,11 +782,14 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   `blessorcurse()`, cursed-book random cursing, and fountain curse/uncurse
   effects, including the direct holy-water conversion branch, stop timers when
   figurines become blessed or uncursed and attach a
-  fresh `rnd(9000)+200` timer when they become cursed. Full
-  `carry_obj_effects()` coverage for every inventory path, timer stopping when
-  timed figurines leave inventory, limited-extinction dust handling,
-  liquid/mimic message edge cases, and exact one-of-stack semantics outside
-  inventory remain future work.
+  fresh `rnd(9000)+200` timer when they become cursed. Hero-inventory egress
+  now follows the C `freeinv()` timer-stop shape for drop, throw, container
+  insertion, forced equipment drops, steal handoff, and death/bones floor
+  clones; monster-inventory drops intentionally keep any existing object timer,
+  matching C `OBJ_MINVENT` extraction. Full `carry_obj_effects()` coverage for
+  every inventory path, limited-extinction dust handling, liquid/mimic message
+  edge cases, and exact one-of-stack semantics outside inventory remain future
+  work.
 - Exact wished corpses now use the C `readobjnam()` corpse shape instead of
   generic food fallback: `corpse`, `corpse of <monster>`, and
   `<monster> corpse` create initialized corpse objects first, then apply

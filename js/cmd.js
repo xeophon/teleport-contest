@@ -4763,12 +4763,16 @@ function removeInventoryItem(item, amount = 1) {
         item.quan = remaining;
         item.line = normalInventoryLine({ ...item, line: '' });
     } else {
-        if (isFigurineObject(item)) stopFigurineTransformTimeout(item);
+        stopCarriedFigurineTimerOnLeave(item);
         game.inventory = (game.inventory || []).filter(other => other !== item);
     }
     if (wasWornSpeedBoots && game.u) game.u.veryfast = false;
     updateWornDisplacement();
     game._pet_food_scan_inventory = game.inventory;
+}
+
+function stopCarriedFigurineTimerOnLeave(item) {
+    if (isFigurineObject(item)) stopFigurineTransformTimeout(item);
 }
 
 function wornArmorFireSlot(item) {
@@ -15579,6 +15583,7 @@ export async function rhack(_cmd) {
                             glyph: '[',
                             color: cloak.color ?? CLR_BROWN,
                         };
+                        stopCarriedFigurineTimerOnLeave(dropped);
                         removeInventoryItem(cloak);
                         game.level?.objects?.push(dropped);
                         if (game.u) game.u.uac = (game.u.uac ?? 10) + 1;
@@ -15598,6 +15603,7 @@ export async function rhack(_cmd) {
                             glyph: tool.glyph || '(',
                             color: tool.color ?? NO_COLOR,
                         };
+                        stopCarriedFigurineTimerOnLeave(dropped);
                         removeInventoryItem(tool);
                         game.level?.objects?.push(dropped);
                         newsym(dropped.ox, dropped.oy);
@@ -15625,6 +15631,8 @@ export async function rhack(_cmd) {
 	                            delete stolen.alternate;
 	                            stolen.letter = game._nymph_steal_after_more.itemLetter;
 	                            stolen.wasStolen = true;
+                            stopCarriedFigurineTimerOnLeave(stolen);
+                            maybeAttachCarriedFigurineTimeout(stolen);
 	                            mon.minvent = [stolen, ...(mon.minvent || [])];
 	                        }
                         removeInventoryItem(item);
@@ -15648,8 +15656,10 @@ export async function rhack(_cmd) {
                             glyph: item.glyph || ')',
                             color: item.color ?? NO_COLOR,
                         };
+                        stopCarriedFigurineTimerOnLeave(dropped);
                         removeInventoryItem(item);
                         if (action.whereTo === 3 && action.mon) {
+                            maybeAttachCarriedFigurineTimeout(dropped);
                             action.mon.minvent = [dropped, ...(action.mon.minvent || [])];
                         } else {
                             dropped.ox = action.whereTo === 1 ? action.mon?.mx : game.u?.ux || 0;
@@ -15955,6 +15965,7 @@ export async function rhack(_cmd) {
                         glyph: item.cls === 'armor' ? '[' : item.glyph || ')',
                         color: item.color ?? (item.cls === 'armor' ? CLR_BROWN : CLR_CYAN),
                     };
+                    stopCarriedFigurineTimerOnLeave(dropped);
                     removeInventoryItem(item);
                     game.level?.objects?.push(dropped);
                 }
@@ -21859,6 +21870,7 @@ export async function rhack(_cmd) {
                         }
                         messages.push(`You put ${gold} gold piece${gold === 1 ? '' : 's'} into the bag.`);
                     } else {
+                        stopCarriedFigurineTimerOnLeave(selectedEntry.item);
                         game.inventory = (game.inventory || []).filter(item => item !== selectedEntry.item);
                         updateWornDisplacement();
                         bag.contents.push(selectedEntry.item);
@@ -21906,6 +21918,7 @@ export async function rhack(_cmd) {
         }
         const item = (game.inventory || []).find(invItem => invItem.letter === ch && invItem !== bag);
         if (item) {
+            stopCarriedFigurineTimerOnLeave(item);
             game.inventory = (game.inventory || []).filter(invItem => invItem !== item);
             updateWornDisplacement();
             bag.contents.push(item);
@@ -22354,6 +22367,7 @@ export async function rhack(_cmd) {
         }
         const item = (game.inventory || []).find(invItem => invItem.letter === ch);
         if (item) {
+            stopCarriedFigurineTimerOnLeave(item);
             game.inventory = (game.inventory || []).filter(invItem => invItem !== item);
             updateWornDisplacement();
             game._pet_food_scan_inventory = game.inventory;
@@ -25609,6 +25623,7 @@ export async function rhack(_cmd) {
             glyph: item.cls === 'food' ? '%' : item.glyph || (item.cls === 'gem' ? '*' : ')'),
             color: item.cls === 'food' ? CLR_ORANGE : item.color || (item.cls === 'gem' ? CLR_GRAY : CLR_CYAN),
         };
+        stopCarriedFigurineTimerOnLeave(thrownObject);
 	        const existingStack = (game.level?.objects || []).find(obj => !obj.transientProjectile
 	            && obj.ox === ox && obj.oy === oy && obj.cls === thrownObject.cls
 	            && obj.kind === thrownObject.kind && obj.otyp === thrownObject.otyp);
