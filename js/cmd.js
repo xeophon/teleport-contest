@@ -12496,7 +12496,7 @@ async function moveHero(dx, dy) {
             const spellbookInfo = pickedObject.otyp === SPE_HEALING
                 ? { cls: 'spellbook', spellName: 'healing', spell: { name: 'healing', level: 1, skill: 'healing' }, known: false, bknown: false }
                 : {};
-            game.inventory = [...(game.inventory || []), {
+            const pickedItem = {
                 ...pickedObject,
                 ...spellbookInfo,
                 cls: pickedObject.cls || spellbookInfo.cls || (pickedObject.otyp === DART ? 'weapon'
@@ -12511,7 +12511,9 @@ async function moveHero(dx, dy) {
                 letter,
                 kind: pickedObject.kind || pickupObjectName({ ...pickedObject, quan: 1 }),
                 line: `${letter} - ${amount}`,
-            }];
+            };
+            game.inventory = [...(game.inventory || []), pickedItem];
+            maybeAttachCarriedFigurineTimeout(pickedItem);
             game.level.objects = (game.level.objects || []).filter(obj => obj !== pickedObject);
             game._pet_food_scan_inventory = game.inventory;
             newsym(newx, newy);
@@ -13578,7 +13580,7 @@ async function moveHero(dx, dy) {
         const spellbookInfo = pickedObject.otyp === SPE_HEALING
             ? { cls: 'spellbook', spellName: 'healing', spell: { name: 'healing', level: 1, skill: 'healing' }, known: false, bknown: false }
             : {};
-        game.inventory = [...(game.inventory || []), {
+        const pickedItem = {
             ...pickedObject,
             ...spellbookInfo,
             cls: pickedObject.cls || spellbookInfo.cls || (pickedObject.otyp === DART ? 'weapon'
@@ -13595,7 +13597,9 @@ async function moveHero(dx, dy) {
             letter,
             kind: pickedObject.kind || pickupObjectName({ ...pickedObject, quan: 1 }),
             line: `${letter} - ${amount}`,
-        }];
+        };
+        game.inventory = [...(game.inventory || []), pickedItem];
+        maybeAttachCarriedFigurineTimeout(pickedItem);
         game.level.objects = (game.level.objects || []).filter(obj => obj !== pickedObject);
         game._pet_food_scan_inventory = game.inventory;
         newsym(newx, newy);
@@ -14186,7 +14190,7 @@ export async function rhack(_cmd) {
                     ? obj.letter
                     : nextInventoryLetter();
                 const amount = pickupObjectPhrase(obj);
-                game.inventory = [...(game.inventory || []), {
+                const pickedItem = {
                     ...obj,
                     cls: obj.cls || (obj.otyp === DART ? 'weapon'
                         : obj.otyp === GEM_CLASS ? 'gem'
@@ -14199,7 +14203,9 @@ export async function rhack(_cmd) {
                     letter,
                     kind: obj.kind || pickupObjectName({ ...obj, quan: 1 }),
                     line: `${letter} - ${amount}`,
-                }];
+                };
+                game.inventory = [...(game.inventory || []), pickedItem];
+                maybeAttachCarriedFigurineTimeout(pickedItem);
                 messages.push(`${letter} - ${amount}.`);
             }
             game._pet_food_scan_inventory = game.inventory;
@@ -21980,6 +21986,7 @@ export async function rhack(_cmd) {
                 } else {
                     bag.contents = (bag.contents || []).filter(content => content !== taken.item);
                     game.inventory = [...(game.inventory || []), taken.item];
+                    maybeAttachCarriedFigurineTimeout(taken.item);
                     await setMessage(`${taken.item.line || `${taken.item.letter || '?'} - ${inventoryItemName(taken.item)}`}.`);
                 }
                 game.context.move = 1;
@@ -22017,6 +22024,7 @@ export async function rhack(_cmd) {
         } else if (item) {
             bag.contents = bag.contents.filter(content => content !== item);
             game.inventory = [...(game.inventory || []), item];
+            maybeAttachCarriedFigurineTimeout(item);
             await setMessage(`${item.line || `${item.letter || '?'} - ${inventoryItemName(item)}`}.`);
             game.context.move = 1;
         }
@@ -22929,7 +22937,7 @@ export async function rhack(_cmd) {
                 }
                 const letter = nextInventoryLetter();
                 const amount = pickupObjectPhrase(obj);
-                game.inventory = [...(game.inventory || []), {
+                const pickedItem = {
                     ...obj,
                     cls: obj.cls || (obj.otyp === GEM_CLASS ? 'gem'
                         : obj.otyp === SCROLL_CLASS ? 'scroll'
@@ -22937,7 +22945,9 @@ export async function rhack(_cmd) {
                     letter,
                     kind: obj.kind || pickupObjectName({ ...obj, quan: 1 }),
                     line: `${letter} - ${amount}`,
-                }];
+                };
+                game.inventory = [...(game.inventory || []), pickedItem];
+                maybeAttachCarriedFigurineTimeout(pickedItem);
                 messages.push(`${letter} - ${amount}.`);
             }
             if (container) container.contents = (container.contents || []).filter(item => !picked.some(entry => entry.item === item));

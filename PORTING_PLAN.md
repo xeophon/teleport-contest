@@ -786,10 +786,12 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   now follows the C `freeinv()` timer-stop shape for drop, throw, container
   insertion, forced equipment drops, steal handoff, and death/bones floor
   clones; monster-inventory drops intentionally keep any existing object timer,
-  matching C `OBJ_MINVENT` extraction. Full `carry_obj_effects()` coverage for
-  every inventory path, limited-extinction dust handling, liquid/mimic message
-  edge cases, and exact one-of-stack semantics outside inventory remain future
-  work.
+  matching C `OBJ_MINVENT` extraction. Hero-inventory entry now has broader
+  C `addinv()`/`carry_obj_effects()` coverage: movement autopickup, pet-swap
+  autopickup, multi-object pickup menus, carried-bag takeout, and floor-container
+  takeout start/restart cursed figurine timers after the object is in inventory.
+  Remaining gaps are limited-extinction dust handling, liquid/mimic message edge
+  cases, and exact one-of-stack semantics outside inventory.
 - Exact wished corpses now use the C `readobjnam()` corpse shape instead of
   generic food fallback: `corpse`, `corpse of <monster>`, and
   `<monster> corpse` create initialized corpse objects first, then apply
