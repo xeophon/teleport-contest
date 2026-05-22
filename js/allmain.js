@@ -16,6 +16,7 @@ import { DISPLAY_MONSTER_GLYPHS, DISPLAY_MONSTER_HALLU_NAMES } from './monster_d
 import { clearMonsterTrack, updateMonsterTrack } from './montrack.js';
 import { createGasCloud } from './region.js';
 import { advanceFireBreathRay, finishHeroTargetedBreath, fireBreathDamageMonster, fireBreathZapHits } from './fire_breath.js';
+import { attachFigurineTransformTimeout, figurineLocationCheck, isFigurineObject, makeFigurineFamiliar, stopFigurineTransformTimeout } from './figurine.js';
 
 const ROLE_STATE = {
     Archeologist: { rank: 'Digger', hpBase: 11, enBase: 1, enRnd: 0, ac: 0, initRecord: 10, attrBase: [7, 10, 10, 7, 7, 7], attrDist: [20, 20, 20, 10, 20, 10] },
@@ -2175,6 +2176,93 @@ async function processEggHatchTimeouts(g) {
     }
 }
 
+function figurineTransformLocation(entry) {
+    if (entry.source === 'inventory') return { x: game.u?.ux || 0, y: game.u?.uy || 0 };
+    if (entry.source === 'minvent') return { x: entry.carrier?.mx || 0, y: entry.carrier?.my || 0 };
+    return { x: entry.figurine.ox || 0, y: entry.figurine.oy || 0 };
+}
+
+function dueFigurineEntries(g) {
+    const entries = [];
+    for (const figurine of [...(g.inventory || [])]) {
+        if (isFigurineObject(figurine) && figurine.figurineTransformTurn && figurine.figurineTransformTurn <= g.moves)
+            entries.push({ figurine, source: 'inventory' });
+    }
+    for (const figurine of [...(g.level?.objects || [])]) {
+        if (isFigurineObject(figurine) && figurine.figurineTransformTurn && figurine.figurineTransformTurn <= g.moves)
+            entries.push({ figurine, source: 'floor' });
+    }
+    for (const carrier of [...(g.level?.monsters || [])]) {
+        for (const figurine of [...(carrier.minvent || [])]) {
+            if (isFigurineObject(figurine) && figurine.figurineTransformTurn && figurine.figurineTransformTurn <= g.moves)
+                entries.push({ figurine, source: 'minvent', carrier });
+        }
+    }
+    return entries.sort((a, b) => ((a.figurine.figurineTransformTurn || 0) - (b.figurine.figurineTransformTurn || 0))
+        || ((b.figurine._figurine_transform_seq || 0) - (a.figurine._figurine_transform_seq || 0)));
+}
+
+function removeTransformedFigurine(entry) {
+    const figurine = entry.figurine;
+    stopFigurineTransformTimeout(figurine);
+    if (entry.source === 'inventory') {
+        if ((figurine.quan || 1) > 1) {
+            figurine.quan = (figurine.quan || 1) - 1;
+            const name = pickupObjectName({ ...figurine, quan: 1 });
+            figurine.line = `${figurine.letter || '?'} - ${figurine.quan} ${name}`;
+        } else {
+            game.inventory = (game.inventory || []).filter(item => item !== figurine);
+        }
+        game._pet_food_scan_inventory = game.inventory;
+    } else if (entry.source === 'floor') {
+        game.level.objects = (game.level?.objects || []).filter(obj => obj !== figurine);
+        newsym(figurine.ox, figurine.oy);
+    } else if (entry.source === 'minvent' && entry.carrier) {
+        entry.carrier.minvent = (entry.carrier.minvent || []).filter(obj => obj !== figurine);
+        entry.carrier.hasInventory = !!entry.carrier.minvent.length;
+    }
+}
+
+function reportFigurineTransform(entry, mon, x, y, silent) {
+    if (!mon || (silent && entry.source !== 'inventory')) return;
+    const article = hatchedMonsterArticle(mon, false);
+    if (entry.source === 'inventory') {
+        if (game.u?.blind || mon.minvis) addToplineMessage('You feel something drop from your pack!');
+        else addToplineMessage(`You see ${article} drop out of your pack!`);
+    } else if (entry.source === 'floor') {
+        if (cansee(x, y)) addToplineMessage(`You see a figurine transform into ${article}!`);
+    } else if (entry.source === 'minvent') {
+        if (cansee(x, y))
+            addToplineMessage(`You see ${article} drop out of ${monsterDisplayName(entry.carrier)}'s pack!`);
+    }
+}
+
+async function processFigurineTransformTimeouts(g) {
+    for (const entry of dueFigurineEntries(g)) {
+        const figurine = entry.figurine;
+        const timeout = figurine.figurineTransformTurn;
+        stopFigurineTransformTimeout(figurine);
+        let { x, y } = figurineTransformLocation(entry);
+        if (entry.source === 'inventory' || entry.source === 'minvent') {
+            const spot = enextoMonsterSpot(x, y, figurine.corpsenm || {});
+            if (!spot) {
+                attachFigurineTransformTimeout(figurine, rnd(5000));
+                continue;
+            }
+            x = spot.x;
+            y = spot.y;
+        }
+        const check = figurineLocationCheck(figurine, x, y);
+        if (!check.ok) {
+            attachFigurineTransformTimeout(figurine, rnd(5000));
+            continue;
+        }
+        const result = await makeFigurineFamiliar(figurine, x, y, { quietly: true });
+        removeTransformedFigurine(entry);
+        reportFigurineTransform(entry, result.mon, x, y, timeout !== g.moves);
+    }
+}
+
 async function afterMoveTurn(g, includeHeroTime = true) {
     const rottenObjects = (g.level?.objects || []).filter(obj => obj.rotAwayTurn && obj.rotAwayTurn <= g.moves);
     if (rottenObjects.length) {
@@ -2182,6 +2270,7 @@ async function afterMoveTurn(g, includeHeroTime = true) {
         for (const obj of rottenObjects) newsym(obj.ox, obj.oy);
     }
     await processEggHatchTimeouts(g);
+    await processFigurineTransformTimeouts(g);
     if (includeHeroTime && g.moves >= (g.context.seer_turn || 0))
         g.context.seer_turn = g.moves + rn2(31) + 15;
 }

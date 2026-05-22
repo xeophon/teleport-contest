@@ -18,6 +18,7 @@ import { clearMonsterTrack, updateMonsterTrack } from './montrack.js';
 import { datFileLines as bundledDatFileLines } from './dat_files.js';
 import { advanceFireBreathRay, finishHeroTargetedBreath, fireBreathDamageHero, fireBreathDamageMonster, fireBreathZapHits } from './fire_breath.js';
 import { createGasCloud } from './region.js';
+import { figurineLocationCheck, isFigurineObject, makeFigurineFamiliar, maybeAttachCarriedFigurineTimeout, stopFigurineTransformTimeout } from './figurine.js';
 
 const DIR_DX = { h: -1, l: 1, j: 0, k: 0, y: -1, u: 1, b: -1, n: 1 };
 const DIR_DY = { h: 0, l: 0, j: 1, k: -1, y: -1, u: -1, b: 1, n: 1 };
@@ -4762,6 +4763,7 @@ function removeInventoryItem(item, amount = 1) {
         item.quan = remaining;
         item.line = normalInventoryLine({ ...item, line: '' });
     } else {
+        if (isFigurineObject(item)) stopFigurineTransformTimeout(item);
         game.inventory = (game.inventory || []).filter(other => other !== item);
     }
     if (wasWornSpeedBoots && game.u) game.u.veryfast = false;
@@ -5001,6 +5003,14 @@ function movementDirection(ch) {
     const lower = ch.toLowerCase();
     if (!(lower in DIR_DX)) return null;
     return { dx: DIR_DX[lower], dy: DIR_DY[lower] };
+}
+
+function figurineApplyDirection(ch) {
+    if (ch === '.') return { dx: 0, dy: 0, dz: 0 };
+    if (ch === '<') return { dx: 0, dy: 0, dz: -1 };
+    if (ch === '>') return { dx: 0, dy: 0, dz: 1 };
+    const dir = movementDirection(ch);
+    return dir ? { ...dir, dz: 0 } : null;
 }
 
 function doorDescription(loc) {
@@ -21423,6 +21433,12 @@ export async function rhack(_cmd) {
         }
         const name = inventoryItemName(item).toLowerCase();
         game._command_mode = null;
+        if (isFigurineObject(item)) {
+            game._apply_figurine_letter = item.letter;
+            await setMessage('In what direction?');
+            game._command_mode = 'applyFigurineDirection';
+            return;
+        }
         if (name.includes('cream pie')) {
             rnd(25);
             game.u.blind = 1;
@@ -22266,6 +22282,7 @@ export async function rhack(_cmd) {
             item.line = `${letter} - ${displayQuan > 1 ? `${displayQuan} ${visibleName}` : article ? `${article} ${visibleName}` : visibleName}`;
             game.inventory ??= [];
             game.inventory.push(item);
+            maybeAttachCarriedFigurineTimeout(item);
             game._pet_food_scan_inventory = game.inventory;
             let carriedWeight = Math.trunc(((game._goldCount || 0) + 50) / 100);
             for (const invItem of game.inventory || []) {
@@ -22473,6 +22490,39 @@ export async function rhack(_cmd) {
             return;
         }
         await setMessage(`You ${game.u?.ublind ? 'feel' : 'see'} no door there.`);
+        game.context.move = 1;
+        return;
+    }
+
+    if (game._command_mode === 'applyFigurineDirection') {
+        const item = (game.inventory || []).find(invItem => invItem.letter === game._apply_figurine_letter);
+        game._command_mode = null;
+        game._apply_figurine_letter = null;
+        if (ch === ' ' || ch === '\x1b' || ch === '\r' || ch === '\n') {
+            await setMessage('Never mind.');
+            return;
+        }
+        if (!item || !isFigurineObject(item)) return;
+        const dir = figurineApplyDirection(ch);
+        if (!dir) return;
+        const tx = (game.u?.ux || 0) + dir.dx;
+        const ty = (game.u?.uy || 0) + dir.dy;
+        const check = figurineLocationCheck(item, tx, ty);
+        if (!check.ok) {
+            await setMessage(check.message);
+            game.context.move = 1;
+            return;
+        }
+        const action = (dir.dx || dir.dy) ? 'set the figurine beside you'
+            : dir.dz < 0 ? 'toss the figurine into the air'
+                : (Is_waterlevel(game.u?.uz) || IS_POOL(game.level?.at(tx, ty)?.typ))
+                    ? 'release the figurine'
+                    : 'set the figurine on the ground';
+        const prefix = `You ${action} and it ${game.u?.ublind ? 'supposedly ' : ''}transforms.`;
+        const result = await makeFigurineFamiliar(item, tx, ty, { quietly: false });
+        const extra = [result.message].filter(Boolean).join('  ');
+        removeInventoryItem(item);
+        await setMessage(extra ? `${prefix}  ${extra}` : prefix);
         game.context.move = 1;
         return;
     }
@@ -26124,7 +26174,7 @@ export async function rhack(_cmd) {
                 : objectHere.wasStolen && objectHere.letter
                 ? objectHere.letter
                 : nextInventoryLetter();
-            game.inventory = [...(game.inventory || []), {
+            const pickedItem = {
                 ...objectHere,
                 letter,
                 kind: objectHere.kind || name,
@@ -26132,7 +26182,9 @@ export async function rhack(_cmd) {
                 unpaid: shopPrice > 0,
                 unpaidPrice: shopPrice > 0 ? shopPrice : undefined,
                 line: `${letter} - ${amount}${unpaidSuffix}`,
-            }];
+            };
+            game.inventory = [...(game.inventory || []), pickedItem];
+            maybeAttachCarriedFigurineTimeout(pickedItem);
             if (shopkeeperForPrice) shopkeeperForPrice.billct = Math.max(shopkeeperForPrice.billct || 0, 1);
             game._pet_food_scan_inventory = game.inventory;
             game.level.objects = (game.level.objects || []).filter(obj => obj !== objectHere);

@@ -768,7 +768,19 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   requested `corpsenm`/gender bits when C's non-unique and non-human-or-were
   restrictions allow it. Random figurines also display as
   `figurine of a/an <monster>` via the stored `corpsenm` and gender bits.
-  Applying figurines and their transform timers remain future work.
+  Applying figurines now follows a first C-shaped `use_figurine()` slice:
+  the command prompts for a direction, applies the rock/tree/boulder placement
+  checks, consumes the figurine, creates the stored monster through `makemon()`
+  with no initial inventory, and applies the blessed/uncursed/cursed
+  `rn2(10)` tame/ordinary/hostile split with pet extension setup when tame.
+  Cursed carried figurines now attach delayed `rnd(9000)+200` transform
+  timers on pickup/wish creation, due timers use pack-adjacent/floor placement
+  and retry blocked locations after `rnd(5000)`, and transformed figurines are
+  removed from inventory/floor/monster inventory with C-like visible messages.
+  Full `carry_obj_effects()` coverage for every inventory path, BUC-change
+  timer stop/start hooks, limited-extinction dust handling, liquid/mimic
+  message edge cases, and exact one-of-stack semantics outside inventory remain
+  future work.
 - Exact wished corpses now use the C `readobjnam()` corpse shape instead of
   generic food fallback: `corpse`, `corpse of <monster>`, and
   `<monster> corpse` create initialized corpse objects first, then apply
