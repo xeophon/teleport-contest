@@ -2662,6 +2662,10 @@ async function processMonsterTurns() {
     const pickupResumeStartIndex = startIndex;
     let resumingSameMonster = !!game._monster_resume_same_index;
     let resumeAfterPreturn = !!game._monster_resume_after_preturn;
+    const wrapAfterCombatResume = resumingSameMonster && resumeAfterPreturn
+        && !!game._attack_resume_after_more;
+    if (wrapAfterCombatResume) game._attack_resume_after_more = 0;
+    let wrappedAfterCombatResume = false;
     const stopAfterPickupResume = !!game._pickup_resume_stop_after_monsters;
     const continueAfterMore = !!game._continue_monsters_after_more;
     const finishingQueuedDeadTurn = !!game._clear_pending_time_after_queued_dead_turn && continueAfterMore;
@@ -5202,7 +5206,13 @@ async function processMonsterTurns() {
             }
             startIndex = 0;
             resumingSameMonster = false;
-            if ((game.u?.umovement ?? 0) >= NORMAL_SPEED) break;
+            if ((game.u?.umovement ?? 0) >= NORMAL_SPEED) {
+                if (wrapAfterCombatResume && somebodyCanMove && !wrappedAfterCombatResume) {
+                    wrappedAfterCombatResume = true;
+                } else {
+                    break;
+                }
+            }
         } while (somebodyCanMove);
     }
 

@@ -1365,6 +1365,14 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   without changing any RNG. `seed2200-wizard-quaff-zap-read` now passes with
   `3018/3018` RNG calls and `230/230` screens. The full public smoke improves
   to `36/44`.
+- The `seed0030` pet-combat `--More--` continuation now allows C's mid-turn
+  monster pass to wrap once after a resumed monster-to-hero attack. C's
+  `dogmove.c` can leave a tame monster with another movement slice before the
+  prompt returns; JS had stopped as soon as the hero had movement, showing only
+  `The jackal bites!`. The resumed combat now appends `Hachi bites the jackal.`
+  and the immediate jackal counterattack on the same topline. Focused parity
+  improves from `88619/105529` RNG calls and `1642/1953` screens to
+  `88770/105529` RNG calls and `1644/1953` screens.
 
 Next concrete target:
 
