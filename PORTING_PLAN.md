@@ -1174,6 +1174,12 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   non-active `_topline_after_more` text no longer hides the armor
   `nomovemsg`. `seed0361-archeologist-tour` now reaches the later controlled
   level-teleport redraw/map-layout gap at screen 147.
+- Wished artifacts now also pass through the same `touch_artifact()` alignment
+  check at the C `hold_another_object()` boundary before the wish timeout roll:
+  wishing for Grayswandir as a neutral hero consumes the missing `rn2(4)` before
+  `u.ublesscnt += rn1(100, 50)`. This closes the early flat RNG gap in
+  `seed0361-archeologist-tour`; the remaining first flat divergence is now the
+  Quest-expulsion turn ordering near screen 187.
 - The Quest Home controlled-teleport slice now matches several C paths:
   Arc-strt uses explicit vertical flip bounds like the Wizard quest start so
   the top map row is not flipped with a padding row; wizard-mode same-level
@@ -1206,8 +1212,9 @@ Next concrete target:
   closed-door open attempt after Quest expulsion: C's `doopen_indir()` consumes
   `rnl(20)=12` and prints `The door resists!`, while JS reaches the same
   visible room/closed door but consumes a different global RNG value and opens
-  it. The broad root cause is still an older flat-stream divergence, so avoid
-  hard-coding this public door outcome.
+  it. After the wished-artifact touch fix, the broad root cause is the
+  Quest-expulsion turn-order lag: C processes the post-expulsion monster turn
+  in the arrival slice while JS processes it one input boundary later.
 - The next narrow `#sit` trap slice should deepen the remaining
   `trap.c:trapeffect_*()` details now that deferred level-changing traps are
   live: floor-object `impact_drop()` effects for holes/trapdoors, positive

@@ -5089,7 +5089,7 @@ export function inventoryItemName(item) {
 
 const ARTIFACT_ALIGN_TYPE = { lawful: 1, neutral: 0, chaotic: -1 };
 
-function touchArtifactForWield(item) {
+function touchArtifact(item) {
     const def = artifactDefinitionForName(item?.artifact);
     if (!def?.restricted || def.alignment == null || def.alignment === 'none') return;
     const artifactAlign = ARTIFACT_ALIGN_TYPE[def.alignment];
@@ -5097,6 +5097,10 @@ function touchArtifactForWield(item) {
     const heroAlign = game.u?.ualign?.type ?? 0;
     const alignRecord = game.u?.ualign?.record ?? 0;
     if (artifactAlign !== heroAlign || alignRecord < 0) rn2(4);
+}
+
+function touchArtifactForWield(item) {
+    touchArtifact(item);
 }
 
 function isProjectileItem(item) {
@@ -24867,6 +24871,7 @@ export async function rhack(_cmd) {
                 return;
             }
             if (item._artifact_wish_name) wishedQuan = 1;
+            if (item.artifact) touchArtifact(item);
             if (wishedSpe !== undefined && !item._wish_ignore_requested_spe && !item._wish_spe_from_suffix)
                 item.spe = wishedSpeForItem(item, wishedSpe);
             applyWishedBuc(item, {
