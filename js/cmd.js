@@ -1008,6 +1008,7 @@ const WATER_MOCCASIN = {
 };
 const POLYSELF_EXTRA_FORMS = new Map([
     ['red dragon', { name: 'red dragon', mlet: 'D', glyph: 'D', color: CLR_RED, mlevel: 15, hpLevel: 15, mmove: 9, strong: true, inAir: true, nohands: true }],
+    ['stone golem', { name: 'stone golem', mlet: "'", glyph: "'", color: CLR_GRAY, mlevel: 14, hpLevel: 14, mmove: 6, mac: 5, strong: true, neuter: true, noCorpse: true, fixedHp: 100, stoneResistance: true }],
 ]);
 const SPEED_AT_SEVEN_ROLES = new Set(['Barbarian', 'Caveman', 'Knight', 'Valkyrie']);
 const ROLE_LEVEL_ABILITIES = {
@@ -5646,8 +5647,8 @@ function becomeMonster(name) {
     if (form.neuter !== true) rn2(10);
     rn2(500);
     const hpLevel = form.hpLevel ?? form.mlevel;
-    const hp = form.name.includes('dragon') && hpLevel ? 4 * hpLevel + d(hpLevel, 4)
-        : hpLevel ? d(hpLevel, 8) : rnd(4);
+    const hp = form.fixedHp ?? (form.name.includes('dragon') && hpLevel ? 4 * hpLevel + d(hpLevel, 4)
+        : hpLevel ? d(hpLevel, 8) : rnd(4));
     const glyph = form.glyph || (form.mlet?.length === 1 ? form.mlet : form.name[0]);
     game.u.uhp = Math.max(1, hp);
     game.u.uhpmax = Math.max(1, hp);
@@ -11512,13 +11513,45 @@ function consumeOneFloorObject(obj) {
     newsym(obj.ox, obj.oy);
 }
 
+function heroPolyselfResistsStoning() {
+    const form = game.u?._polyself_form;
+    return !!form && (form.stoneResistance || form.name === 'stone golem');
+}
+
+function heroPolyselfCanBecomeStoneGolem() {
+    const form = game.u?._polyself_form;
+    if (!form || form.name === 'stone golem' || isMonsterGenocidedName('stone golem')) return false;
+    return form.mlet === "'" || form.glyph === "'";
+}
+
+function maybeTurnPolyselfIntoStoneGolem() {
+    if (!heroPolyselfCanBecomeStoneGolem()) return '';
+    const result = becomeMonster('stone golem');
+    if (!result) return '';
+    if (game.u) {
+        game.u._stonedTimeout = 0;
+        game.u._stonedKiller = '';
+    }
+    removeHeroStatusSuffix('Stone');
+    newsym(game.u?.ux || 0, game.u?.uy || 0);
+    return result.message || 'You turn into a stone golem!';
+}
+
+function appendPetrificationMessage(message, extra) {
+    return extra ? `${message}  ${extra}` : message;
+}
+
 function startPetrifyingEggStoning(item) {
-    if (!isPetrifyingEgg(item) || !game.u || game.u.stoneResistance || (game.u._stonedTimeout || 0) > 0)
-        return;
+    if (!isPetrifyingEgg(item) || !game.u || game.u.stoneResistance
+        || heroPolyselfResistsStoning() || (game.u._stonedTimeout || 0) > 0)
+        return '';
+    const polyselfMessage = maybeTurnPolyselfIntoStoneGolem();
+    if (polyselfMessage) return polyselfMessage;
     const monsterName = item.corpsenm?.name || 'cockatrice';
     game.u._stonedTimeout = 5;
     game.u._stonedKiller = `${monsterName} egg`;
     addHeroStatusSuffix('Stone');
+    return '';
 }
 
 function consumeOneInventoryFood(item) {
@@ -11550,8 +11583,8 @@ async function eatRottenEgg(item, floorObject = false) {
         message += '  The world spins and goes dark.';
     }
     consumeOneEatenFood(item, floorObject);
-    startPetrifyingEggStoning(item);
-    await setMessage(message, true);
+    const petrificationMessage = startPetrifyingEggStoning(item);
+    await setMessage(appendPetrificationMessage(message, petrificationMessage), true);
     game._process_time_with_more = 1;
     game._command_mode = null;
     game.context.move = rottenSleepDuration ? rottenSleepDuration + 1 : 1;
@@ -11568,8 +11601,8 @@ async function eatPyroliskEgg(item, floorObject = false) {
 async function eatStaleEgg(item, floorObject = false) {
     addHeroVomiting(d(10, 4));
     consumeOneEatenFood(item, floorObject);
-    startPetrifyingEggStoning(item);
-    await setMessage('Ugh.  Rotten egg.');
+    const petrificationMessage = startPetrifyingEggStoning(item);
+    await setMessage(appendPetrificationMessage('Ugh.  Rotten egg.', petrificationMessage));
     game._command_mode = null;
     game.context.move = 1;
 }
@@ -25076,11 +25109,11 @@ export async function rhack(_cmd) {
             }
             removeInventoryItem(item);
             game._pet_food_scan_inventory = game.inventory || [];
-            startPetrifyingEggStoning(item);
+            const petrificationMessage = startPetrifyingEggStoning(item);
             const eatMessage = item.kind === 'apple'
                 ? 'Delicious!  Must be a Macintosh!'
                 : `This ${name} is delicious!`;
-            await setMessage(eatMessage, fortuneCookie);
+            await setMessage(appendPetrificationMessage(eatMessage, petrificationMessage), fortuneCookie);
             game._command_mode = null;
             game.context.move = 1;
             return;
@@ -25234,8 +25267,8 @@ export async function rhack(_cmd) {
                 return;
             }
             consumeOneFloorObject(food);
-            startPetrifyingEggStoning(food);
-            await setMessage(`This ${name} is delicious!`);
+            const petrificationMessage = startPetrifyingEggStoning(food);
+            await setMessage(appendPetrificationMessage(`This ${name} is delicious!`, petrificationMessage));
             game._command_mode = null;
             game.context.move = 1;
             return;

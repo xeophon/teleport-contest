@@ -842,9 +842,11 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   now interrupt that timeout death, crumble away, restore the hero, and clear
   stoning afterward. Stoning bones now create the named hero statue only when
   bones are actually saved, embed the hero inventory in that statue, and skip
-  the ordinary death ghost. Full egg knowledge UI, royal jelly/`#sit`
-  provenance, exact rotten partially-eaten nutrition, poly-into-stone-golem
-  parity, exact tin-opening occupation exceptions, and complete
+  the ordinary death ghost. Petrifying eggs now also honor the C
+  `poly_when_stoned()` escape for current non-stone golem forms by immediately
+  polymorphing into a stone golem instead of starting the timeout. Full egg
+  knowledge UI, royal jelly/`#sit` provenance, exact rotten partially-eaten
+  nutrition, exact tin-opening occupation exceptions, and complete
   extinction/vitals semantics remain future work.
 - Wished container state prefixes now cover the C `readobjnam()` object slice
   for `locked`, `unlocked`, `broken`, `trapped`, `untrapped`, and `empty`:
