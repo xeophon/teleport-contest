@@ -856,10 +856,15 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   timer setup/cancellation, blessed fertility, and cursed quivering, and
   same-square killer bees now eat floor royal jelly only when no queen bee is
   present. `#sit` by oviparous polyself forms now lays a known egg marked as
-  laid by the hero and spends egg nutrition. Full egg knowledge UI, full
-  `#sit` terrain/trap/throne coverage, multi-turn `victual`/per-bite nutrition
-  for rations, corpses, and other long meals, exact tin-opening occupation
-  exceptions, and complete extinction/vitals semantics remain future work.
+  laid by the hero and spends egg nutrition. `#sit` now follows more of C
+  `dosit()` ordering: object sitting stays before traps, common trap sitting
+  can trigger or worsen traps, water/sink/altar/grave/stairs/ladder/lava/ice
+  terrain messages happen before egg-laying, and thrones no longer fall through
+  to floor or egg behavior. Full egg knowledge UI, complete throne random
+  effects, full `dotrap(VIASITTING)` parity, multi-turn `victual`/per-bite
+  nutrition for rations, corpses, and other long meals, exact tin-opening
+  occupation exceptions, and complete extinction/vitals semantics remain future
+  work.
 - Wished container state prefixes now cover the C `readobjnam()` object slice
   for `locked`, `unlocked`, `broken`, `trapped`, `untrapped`, and `empty`:
   boxes keep normal generated contents and lock/trap RNG before final state

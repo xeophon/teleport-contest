@@ -6,7 +6,7 @@ import { nhgetch } from './input.js';
 import { bot, cls, docrt, flush_screen, newsym, pline, refreshHallucinatedMap, show_glyph_cell, strengthString } from './display.js';
 import { couldsee, vision_recalc, vision_reset } from './vision.js';
 import { RANDOM_MONSTER_BY_NAME, SHOP_TYPES, artifactObjectName, enextoMonsterSpot, make_tutorial1_level, makemon, makeArtifactWishObject, mkcorpstat, mklev, mkobj_at, mksobj, monsterByRndName, morgueMonster, nameObjectAsArtifact, next_ident, potionIndexForRoll, rndmonnum, scrollIndexForRoll, syncDungeonContext, u_on_dnstairs, u_on_rndspot, u_on_upstairs, wipe_engr_at, dropMonsterInventory, l_nhcore_init, getrumor, getbogusmon, level_difficulty, set_malign, somexyspace } from './mklev.js';
-import { ACCESSIBLE, A_CHA, A_CON, A_DEX, A_INT, A_MAX, A_STR, A_WIS, ALTAR, BC_BALL, BC_CHAIN, BEAR_TRAP, BLCORNER, BOLT_LIM, BRCORNER, CLOUD, COLNO, CORPSTAT_FEMALE, CORPSTAT_GENDER, CORPSTAT_HISTORIC, CORPSTAT_MALE, CORPSTAT_NEUTER, CORR, DOOR, BURN, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, DUST, ENGRAVE, ENGR_BLOOD, FOUNTAIN, GRAVE, HEADSTONE, HWALL, ICE, IN_SIGHT, IS_AIR, IS_OBSTRUCTED, IS_POOL, IS_ROOM, IS_WALL, In_endgame, In_quest, In_sokoban, Is_earthlevel, Is_rogue_level, Is_waterlevel, LADDER, LAVAPOOL, LAVAWALL, MAGIC_PORTAL, MARK, MAX_EGG_HATCH_TIME, MM_EDOG, MM_NOCOUNTBIRTH, MM_NOMSG, MM_NOWAIT, MOAT, NO_MINVENT, NORMAL_SPEED, OVERLOADED, P_BASIC, P_UNSKILLED, POOL, ROLLING_BOULDER_TRAP, ROOM, ROT_AGE, ROOMOFFSET, ROWNO, SCORR, SDOOR, SHOPBASE, SINK, STAIRS, STONE, TDWALL, TEMPLE, THRONE, TLCORNER, TRCORNER, TREE, TUWALL, VAULT, VIBRATING_SQUARE, VWALL, WAND_BACKFIRE_CHANCE, WATER, WT_IRON_BALL_BASE, WT_IRON_BALL_INCR, ZAP_POS } from './const.js';
+import { ACCESSIBLE, A_CHA, A_CON, A_DEX, A_INT, A_MAX, A_STR, A_WIS, ALTAR, BC_BALL, BC_CHAIN, BEAR_TRAP, BLCORNER, BOLT_LIM, BRCORNER, CLOUD, COLNO, CORPSTAT_FEMALE, CORPSTAT_GENDER, CORPSTAT_HISTORIC, CORPSTAT_MALE, CORPSTAT_NEUTER, CORR, DOOR, BURN, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, DUST, ENGRAVE, ENGR_BLOOD, FOUNTAIN, GRAVE, HEADSTONE, HWALL, ICE, IN_SIGHT, IS_AIR, IS_OBSTRUCTED, IS_POOL, IS_ROOM, IS_WALL, In_endgame, In_quest, In_sokoban, Is_earthlevel, Is_rogue_level, Is_waterlevel, LADDER, LAVAPOOL, LAVAWALL, MAGIC_PORTAL, MARK, MAX_EGG_HATCH_TIME, MM_EDOG, MM_NOCOUNTBIRTH, MM_NOMSG, MM_NOWAIT, MOAT, NO_MINVENT, NORMAL_SPEED, OVERLOADED, P_BASIC, P_UNSKILLED, PIT, POOL, ROLLING_BOULDER_TRAP, ROOM, ROT_AGE, ROOMOFFSET, ROWNO, SCORR, SDOOR, SHOPBASE, SINK, SPIKED_PIT, STAIRS, STONE, TDWALL, TEMPLE, THRONE, TLCORNER, TRCORNER, TREE, TT_BEARTRAP, TT_BURIEDBALL, TT_INFLOOR, TT_LAVA, TT_PIT, TT_WEB, TUWALL, VAULT, VIBRATING_SQUARE, VWALL, WAND_BACKFIRE_CHANCE, WATER, WEB, WT_IRON_BALL_BASE, WT_IRON_BALL_INCR, ZAP_POS } from './const.js';
 import { d, rn1, rn2, rn2_on_display_rng, rnd, rnl, rnz } from './rng.js';
 import { CLR_BLACK, CLR_BLUE, CLR_BRIGHT_BLUE, CLR_BRIGHT_CYAN, CLR_BRIGHT_GREEN, CLR_BROWN, CLR_CYAN, CLR_GRAY, CLR_GREEN, CLR_MAGENTA, CLR_ORANGE, CLR_RED, CLR_YELLOW, CLR_WHITE, NO_COLOR } from './terminal.js';
 import { vfsDeleteFile, vfsReadFile, vfsWriteFile } from './storage.js';
@@ -11804,6 +11804,11 @@ function createHeroLaidEgg() {
     return egg;
 }
 
+function heroPolyselfEggsInWater() {
+    const form = polyselfForm();
+    return !!form?.oviparous && (form.mlet === ';' || form.glyph === ';') && !!form.swimmer;
+}
+
 async function sitLayEgg() {
     if (!game.flags?.female) {
         await setMessage("Males can't lay eggs!");
@@ -11815,12 +11820,263 @@ async function sitLayEgg() {
         game._command_mode = null;
         return true;
     }
+    if (heroPolyselfEggsInWater()) {
+        if (!(game.u?.underwater || game.u?.uunderwater || Is_waterlevel(game.u?.uz))) {
+            await setMessage('A splash tetra you are not.');
+            game._command_mode = null;
+            return true;
+        }
+        const formName = polyselfForm()?.name || '';
+        if (formName === 'giant eel' || formName === 'electric eel') {
+            await setMessage('You yearn for the Sargasso Sea.');
+            game._command_mode = null;
+            return true;
+        }
+    }
     createHeroLaidEgg();
     if (game.u) game.u.uhunger = Math.max(0, (game.u.uhunger || 0) - (FOOD_NUTRITION.get('egg') || 80));
-    await setMessage('You lay an egg.');
+    await setMessage(heroPolyselfEggsInWater() ? 'You spawn an egg.' : 'You lay an egg.');
     game._command_mode = null;
     game.context.move = 1;
     return true;
+}
+
+function sitSurfaceName(loc) {
+    if (!loc) return 'floor';
+    if (loc.typ === FOUNTAIN) return 'fountain';
+    if (loc.typ === ICE) return 'ice';
+    if (loc.typ === TREE) return 'tree';
+    if (loc.typ === LAVAPOOL || loc.typ === LAVAWALL) return 'lava';
+    if (IS_POOL(loc.typ) || loc.typ === WATER || loc.typ === MOAT) return 'water';
+    return 'floor';
+}
+
+function heroCanReachFloorForSit() {
+    if (game.u?.uswallow) return { ok: false, message: 'There are no seats in here!' };
+    if (game.u?.levitating && !Is_waterlevel(game.u?.uz)) return { ok: false, message: 'You tumble in place.' };
+    return { ok: true, message: '' };
+}
+
+function finishSitMessage(message, { move = true, more = false } = {}) {
+    game._command_mode = null;
+    if (move) game.context.move = 1;
+    return setMessage(message, more);
+}
+
+function floorObjectForSitting() {
+    return (game.level?.objects || []).find(obj =>
+        !obj.hidden && !obj.transientProjectile
+        && obj.ox === game.u?.ux && obj.oy === game.u?.uy && obj.otyp !== BOULDER);
+}
+
+async function sitOnFloorObject(obj) {
+    const messages = [];
+    const kind = objectKindKey(obj);
+    const form = polyselfForm() || {};
+    const corpse = obj.otyp === 'corpse' || obj.otyp === CORPSE;
+    const objectName = corpse ? 'corpse' : pickupObjectName(obj);
+    if ((form.mlet === 'D' || form.glyph === 'D') && (obj.cls === 'coin' || obj.glyph === '$')) {
+        const floorGold = obj.quan || 0;
+        const meager = floorGold + (game._goldCount || 0) < (game.u?.ulevel || 1) * 1000;
+        messages.push(`You coil up around your ${meager ? 'meager ' : ''}hoard.`);
+    } else if (kind === 'towel') {
+        messages.push("It's probably not a good time for a picnic...");
+    } else {
+        messages.push(form.slithy ? `You coil up around the ${objectName}.` : `You sit on the ${objectName}.`);
+        if (corpse && obj.corpsenm?.amorphous) {
+            messages.push("It's squishy...");
+        } else if (obj.otyp === CREAM_PIE || kind === 'cream pie') {
+            if (!heroIsDeaf()) messages.push('Squelch!');
+            game.level.objects = (game.level?.objects || []).filter(other => other !== obj);
+            newsym(obj.ox, obj.oy);
+        } else if (!isBoxObject(obj) && obj.otyp !== ICE_BOX && kind !== 'towel'
+            && !/\b(?:cloth|cloak|robe|shirt|smock|apron|blanket)\b/.test(kind)) {
+            messages.push("It's not very comfortable...");
+        }
+    }
+    await finishSitMessage(messages.join('  '));
+    return true;
+}
+
+function sitTrapState() {
+    const type = game.u?.utraptype;
+    if (type === TT_BEARTRAP || type === 'beartrap') return 'beartrap';
+    if (type === TT_PIT || type === 'pit') return 'pit';
+    if (type === TT_WEB || type === 'web') return 'web';
+    if (type === TT_LAVA || type === 'lava') return 'lava';
+    if (type === TT_INFLOOR || type === 'infloor') return 'infloor';
+    if (type === TT_BURIEDBALL || type === 'buriedball') return 'buriedball';
+    return '';
+}
+
+async function sitWhileAlreadyTrapped(trap) {
+    const trapped = sitTrapState();
+    if (!trapped || !(game.u?.utrap > 0)) return false;
+    let message = '';
+    if (trapped === 'beartrap') {
+        game.u.utrap++;
+        message = "You can't sit down with your foot in the bear trap.";
+    } else if (trapped === 'pit') {
+        if (trap?.ttyp === SPIKED_PIT) {
+            message = 'You sit down on a spike.  Ouch!';
+            if (game.u) game.u.uhp = Math.max(0, (game.u.uhp || 1) - 1);
+            exerciseAttribute(A_STR, false);
+        } else {
+            message = 'You sit down in the pit.';
+        }
+        game.u.utrap += rn2(5);
+    } else if (trapped === 'web') {
+        game.u.utrap += rn1(10, 5);
+        message = 'You sit in the spider web and get entangled further!';
+    } else if (trapped === 'lava') {
+        game.u.utrap += rnd(4);
+        if (game.u) game.u.uhp = Math.max(0, (game.u.uhp || 1) - d(2, 10));
+        message = 'You sit in the lava!';
+    } else {
+        game.u.utrap++;
+        message = "You can't maneuver to sit!";
+    }
+    exerciseAttribute(A_WIS, false);
+    await finishSitMessage(message);
+    return true;
+}
+
+async function sitTriggerTrap(trap) {
+    if (!trap) return false;
+    if (await sitWhileAlreadyTrapped(trap)) return true;
+    trap.tseen = true;
+    const prefix = game.u?.flying ? 'You land.' : 'You sit down.';
+    if (trap.ttyp === BEAR_TRAP) {
+        const damage = d(2, 4);
+        if (game.u) {
+            game.u.uhp = Math.max(0, (game.u.uhp || 1) - damage);
+            game.u.utrap = rn2(4) + 4;
+            game.u.utraptype = 'beartrap';
+        }
+        await finishSitMessage(`${prefix}  A bear trap closes on your foot!`);
+        return true;
+    }
+    if (trap.ttyp === PIT || trap.ttyp === SPIKED_PIT) {
+        if (game.u) {
+            game.u.utrap = rn1(6, 2);
+            game.u.utraptype = 'pit';
+            game.u.uhp = Math.max(0, (game.u.uhp || 1) - rnd(trap.ttyp === SPIKED_PIT ? 10 : 6));
+        }
+        await finishSitMessage(`${prefix}  You fall into ${trap.ttyp === SPIKED_PIT ? 'a spiked pit' : 'a pit'}!`);
+        return true;
+    }
+    if (trap.ttyp === WEB) {
+        if (game.u) {
+            game.u.utrap = rn1(6, 6);
+            game.u.utraptype = 'web';
+        }
+        await finishSitMessage(`${prefix}  You are caught in a spider web!`);
+        return true;
+    }
+    if (trap.ttyp === MAGIC_TRAP) {
+        const result = magicTrapResult(trap);
+        const messages = [prefix];
+        if (result.message) messages.push(result.message);
+        if (result.afterMore) game._topline_after_more = result.afterMore;
+        await finishSitMessage(messages.join('  '), { more: result.more || !!result.afterMore });
+        return true;
+    }
+    await finishSitMessage(prefix);
+    return true;
+}
+
+async function sitOnTerrain(loc) {
+    const typ = loc?.typ;
+    const waterEggs = heroPolyselfEggsInWater();
+    if ((game.u?.underwater || game.u?.uunderwater || Is_waterlevel(game.u?.uz)) && !waterEggs) {
+        await finishSitMessage(Is_waterlevel(game.u?.uz)
+            ? 'There are no cushions floating nearby.'
+            : 'You sit down on the muddy bottom.');
+        return true;
+    }
+    if ((IS_POOL(typ) || typ === WATER || typ === MOAT) && !waterEggs) {
+        rn2(10);
+        rn2(10);
+        await finishSitMessage('You sit in the water.');
+        return true;
+    }
+    if (typ === SINK) {
+        const rump = polyselfForm()?.humanoid === false || polyselfForm()?.mlet === ';' ? 'underside' : 'rump';
+        await finishSitMessage(`You sit on the sink.  Your ${rump} gets wet.`);
+        return true;
+    }
+    if (typ === ALTAR) {
+        await finishSitMessage('You sit on the altar.  A voice whispers: "Thou shalt pay, infidel!"', { more: true });
+        return true;
+    }
+    if (typ === GRAVE) {
+        await finishSitMessage('You sit on the grave.');
+        return true;
+    }
+    if (typ === STAIRS) {
+        await finishSitMessage('You sit on the stairs.');
+        return true;
+    }
+    if (typ === LADDER) {
+        await finishSitMessage('You sit on the ladder.');
+        return true;
+    }
+    if (typ === LAVAPOOL || typ === LAVAWALL) {
+        const messages = ['You sit on the lava.'];
+        if (game.u?._statusSuffix?.includes('Slimed')) {
+            game.u._statusSuffix = game.u._statusSuffix.replace(/ Slimed/g, '');
+            game.u.slimed = false;
+        }
+        if (polyselfForm()?.likesLava || game.u?.likesLava) {
+            messages.push('The lava feels warm.');
+        } else {
+            messages.push('The lava burns you!');
+            if (game.u) game.u.uhp = Math.max(0, (game.u.uhp || 1) - d(game.u.fireResistance ? 2 : 10, 10));
+        }
+        await finishSitMessage(messages.join('  '), { more: messages.length > 1 });
+        return true;
+    }
+    if (typ === ICE) {
+        const messages = ['You sit on the ice.'];
+        if (!game.u?.coldResistance) messages.push('The ice feels cold.');
+        await finishSitMessage(messages.join('  '));
+        return true;
+    }
+    if (typ === THRONE) {
+        await finishSitMessage('You sit on the opulent throne.  You feel somehow out of place...', { more: true });
+        return true;
+    }
+    return false;
+}
+
+async function doSitCommand() {
+    if (game.u?.usteed) {
+        const steedName = game.u.usteed.givenName || `the ${game.u.usteed.data?.name || 'steed'}`;
+        await finishSitMessage(`You are already sitting on ${steedName}.`, { move: false });
+        return;
+    }
+    if (game.u?.uundetected && polyselfForm()?.ceilingHider) game.u.uundetected = 0;
+
+    const reach = heroCanReachFloorForSit();
+    if (!reach.ok) {
+        await finishSitMessage(reach.message, { move: false });
+        return;
+    }
+
+    const ux = game.u?.ux || 0;
+    const uy = game.u?.uy || 0;
+    const loc = game.level?.at(ux, uy);
+    const trap = (game.level?.traps || []).find(item => item.tx === ux && item.ty === uy);
+    const objectHere = floorObjectForSitting();
+    if (objectHere) {
+        await sitOnFloorObject(objectHere);
+        return;
+    }
+    if (await sitWhileAlreadyTrapped(trap)) return;
+    if (trap && await sitTriggerTrap(trap)) return;
+    if (await sitOnTerrain(loc)) return;
+    if (polyselfForm()?.oviparous && await sitLayEgg()) return;
+    await finishSitMessage(`Having fun sitting on the ${sitSurfaceName(loc)}?`);
 }
 
 async function eatRottenNonCorpseFood(item, floorObject = false) {
@@ -24123,24 +24379,7 @@ export async function rhack(_cmd) {
                 return;
             }
             if (command === 'sit') {
-                const objectHere = (game.level?.objects || []).find(obj =>
-                    !obj.hidden && !obj.transientProjectile
-                    && obj.ox === game.u?.ux && obj.oy === game.u?.uy && obj.otyp !== BOULDER);
-                if (objectHere) {
-                    const corpse = objectHere.otyp === 'corpse' || objectHere.otyp === CORPSE;
-                    const box = objectHere.kind === 'chest' || objectHere.otyp === CHEST
-                        || objectHere.kind === 'large box' || objectHere.otyp === LARGE_BOX || objectHere.otyp === ICE_BOX;
-                    const name = corpse ? 'corpse' : pickupObjectName(objectHere);
-                    await setMessage(`You sit on the ${name}.${box ? '' : "  It's not very comfortable..."}`);
-                    game._command_mode = null;
-                    game.context.move = 1;
-                    return;
-                }
-                const loc = game.level?.at(game.u?.ux || 0, game.u?.uy || 0);
-                if (polyselfForm()?.oviparous && await sitLayEgg()) return;
-                await setMessage(`Having fun sitting on the ${loc?.typ === FOUNTAIN ? 'fountain' : 'floor'}?`);
-                game._command_mode = null;
-                game.context.move = 1;
+                await doSitCommand();
                 return;
             }
             if (command === 'dip') {
