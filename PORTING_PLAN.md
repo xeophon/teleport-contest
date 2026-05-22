@@ -834,11 +834,15 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   generic rotten-food path before `fprefx()`, pyrolisk eggs are consumed before
   a `d(3,6)` fireball centered on the hero, and cockatrice/chickatrice/Medusa
   eggs start a five-turn stoning timeout unless the hero has stoning
-  resistance; the final statue tick now enters the JS death flow with a
-  petrification-formatted egg killer while keeping `Stone` visible. Full egg
-  knowledge UI, royal jelly/`#sit` provenance, exact rotten partially-eaten
-  nutrition, stoning life-saving/statue-bones/poly-into-stone-golem parity,
-  and complete extinction/vitals semantics remain future work.
+  resistance; stoning dialogue now applies the pre-death C side effects for
+  temporary speed, run/repeat and occupation interruption, forced immobility,
+  wounded-leg cleanup, deaf padding, vomiting cleanup, and sliming cleanup.
+  The final statue tick enters the JS death flow with a petrification-formatted
+  egg killer while keeping `Stone` visible. Full egg knowledge UI, royal
+  jelly/`#sit` provenance, exact rotten partially-eaten nutrition, stoning
+  life-saving/statue-bones/poly-into-stone-golem parity, exact tin-opening
+  occupation exceptions, and complete extinction/vitals semantics remain
+  future work.
 - Wished container state prefixes now cover the C `readobjnam()` object slice
   for `locked`, `unlocked`, `broken`, `trapped`, `untrapped`, and `empty`:
   boxes keep normal generated contents and lock/trap RNG before final state

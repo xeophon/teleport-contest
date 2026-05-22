@@ -1843,6 +1843,101 @@ function armHeroDeathMore(message = 'You die...') {
     game._command_mode = 'deathDieMore';
 }
 
+function heroWearingSpeedBoots() {
+    return (game.inventory || []).some(item =>
+        item.worn && String(item.kind || item.actualKind || item.line || '').includes('speed boots'));
+}
+
+function interruptPositiveMultiForStoning() {
+    game._run_steps_remaining = 0;
+    game._running_continuation = 0;
+    game._initial_run_command = 0;
+    game._run_steps_after_more = 0;
+    game._travel_keys = [];
+    game._travel_dynamic_target = null;
+    game._search_pending_count = 0;
+    game._counted_repeat_interruptible = 0;
+}
+
+function stopStoningOccupations() {
+    game._eating_turns_remaining = 0;
+    game._eating_finish_message = '';
+    game._eating_floor_object = null;
+    game._eating_floor_object_pending_useup = null;
+    game._eating_nutrition = 0;
+    game._eating_newt_buzz = 0;
+    game._pending_rotten_food_eating_message = 0;
+    game._armor_wear_occupation = null;
+    game._armor_takeoff_after_more = null;
+    game._armor_finish_after_more = 0;
+    game._force_lock_occupation = null;
+    game._force_lock_continue_time = 0;
+    game._force_lock_finish_after_more = null;
+    game._pending_force_lock_start_message = 0;
+    game._pick_lock_occupation = null;
+    game._pick_lock_continue_time = 0;
+    game._spellbook_study_occupation = null;
+    game._spellbook_finish_after_topline_more = null;
+    game._prayer_occupation = 0;
+    game._prayer_pending_done = 0;
+    game._pending_prayer_finish_message = 0;
+    game._prayer_process_time_now = 0;
+    game._prayer_debug_pleased = 0;
+    game._prayer_split_finish_message = 0;
+    game._prayer_split_waiting_for_time = 0;
+    game._prayer_split_remaining_time = 0;
+    game._prayer_nearby_trouble = 0;
+    if (game.u) game.u.uinvulnerable = false;
+    interruptPositiveMultiForStoning();
+}
+
+function silentlyHealHeroWoundedLegsForStoning() {
+    if (!game.u || game.u.usteed || !(game.u._woundedLegTurns || 0)) return;
+    game.u._woundedLegTurns = 0;
+    game.u._woundedLegSide = '';
+    if (game.u._woundedDexPenalty && game.u.acurr?.a) {
+        game.u.acurr.a[A_DEX]++;
+        game.u._woundedDexPenalty = 0;
+    }
+    game.u._statusSuffix = (game.u._statusSuffix || '').replace(' Burdened', '');
+}
+
+function applyStoningDialogueSideEffects(timeout) {
+    if (!game.u) return;
+    switch (timeout) {
+    case 5:
+        game.u._veryfastTimeout = 0;
+        if (!heroWearingSpeedBoots()) game.u.veryfast = false;
+        interruptPositiveMultiForStoning();
+        break;
+    case 4:
+        stopStoningOccupations();
+        break;
+    case 3:
+        stopStoningOccupations();
+        game._helpless_time = Math.max(game._helpless_time || 0, 4);
+        game._sleeping_time = 0;
+        game._wake_message = 'You can move again.';
+        game._stoning_multi_reason = 'getting stoned';
+        game._pending_time_passed = Math.max(game._pending_time_passed || 0, 3);
+        game._process_command_time_now = 1;
+        silentlyHealHeroWoundedLegsForStoning();
+        break;
+    case 2:
+        if ((game.u._deafTimeout || 0) > 0 && game.u._deafTimeout < 5)
+            game.u._deafTimeout = 5;
+        game.u._vomitingTimeout = 0;
+        game.u.vomiting = false;
+        removeHeroStatusSuffix('Vom');
+        game.u._slimingTimeout = 0;
+        game.u.sliming = false;
+        removeHeroStatusSuffix('Slime');
+        break;
+    default:
+        break;
+    }
+}
+
 function processAttributeExercise() {
     const u = game.u;
     if (!u) return;
@@ -5484,21 +5579,12 @@ async function finishMonsterTurnTail() {
                 : 'You feel less confused now.');
         }
     }
-    if ((game.u?._vomitingTimeout || 0) > 0) {
-        addHeroStatusSuffix('Vom');
-        game.u.vomiting = true;
-        game.u._vomitingTimeout--;
-        if (!game.u._vomitingTimeout) {
-            game.u.vomiting = false;
-            removeHeroStatusSuffix('Vom');
-            addToplineMessage('You vomit!');
-        }
-    }
     if ((game.u?._stonedTimeout || 0) > 0) {
         addHeroStatusSuffix('Stone');
         const timeout = game.u._stonedTimeout;
         const message = STONED_TEXTS[5 - timeout];
         if (message) addToplineMessage(message);
+        applyStoningDialogueSideEffects(timeout);
         exerciseAttribute(A_DEX, false);
         game.u._stonedTimeout--;
         if (!game.u._stonedTimeout) {
@@ -5508,6 +5594,16 @@ async function finishMonsterTurnTail() {
             game._death_current_move = 1;
             armHeroDeathMore();
             return false;
+        }
+    }
+    if ((game.u?._vomitingTimeout || 0) > 0) {
+        addHeroStatusSuffix('Vom');
+        game.u.vomiting = true;
+        game.u._vomitingTimeout--;
+        if (!game.u._vomitingTimeout) {
+            game.u.vomiting = false;
+            removeHeroStatusSuffix('Vom');
+            addToplineMessage('You vomit!');
         }
     }
     if ((game.u?._deafTimeout || 0) > 0) {
