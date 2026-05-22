@@ -794,7 +794,13 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   winged gargoyle breeder rolls, and baby-to-adult egg names. Non-hatchable
   monsters produce generic eggs, unknown exact monsters produce the no-fitting
   wish message, and egg names stay generic unless the egg type is known.
-  Full hatch timeout processing and egg eating side effects remain future work.
+  Generic hatch timers now get real state: typed eggs store hatch turns and
+  timer sequence order, due top-level inventory/floor/monster-carried eggs
+  hatch after turn advancement, adult eggs spawn baby/hatchling forms, owned
+  carried eggs tame with C-like tameness, remaining stacks get short `rnd(12)`
+  re-timers, and timed eggs no longer merge during pickup. Full egg knowledge
+  UI, royal jelly/`#sit` provenance, stale egg eating, and complete
+  extinction/vitals semantics remain future work.
 - Wished container state prefixes now cover the C `readobjnam()` object slice
   for `locked`, `unlocked`, `broken`, `trapped`, `untrapped`, and `empty`:
   boxes keep normal generated contents and lock/trap RNG before final state
@@ -994,8 +1000,8 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   raise-dead ordering through the adversary attempt, top-level carried
   corpse/egg unturning, and `mkundead()`-style nearby undead/floor-corpse
   effects. Deeper revive edge cases such as containers, shop billing, active
-  ghost recorporealization, `cant_revive()` substitutions, and generic egg
-  hatch timeout processing remain future work.
+  ghost recorporealization, and `cant_revive()` substitutions remain future
+  work.
 - Monster-class row ordering no longer depends on Node 22's
   `Array.prototype.toSorted()`: the JS `mkclass` metadata path now uses an
   explicit copied difficulty sort that preserves equal-difficulty order, matching

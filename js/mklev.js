@@ -4147,8 +4147,14 @@ function t_at(x, y) {
 // set_corpsenm stub
 function set_corpsenm(otmp, pm) {
     if (otmp?.otyp === EGG && otmp.corpsenm) {
-        for (let i = 151; i <= 200; i++)
-            if (rnd(i) > 150) break;
+        for (let i = 151; i <= 200; i++) {
+            if (rnd(i) > 150) {
+                otmp.eggHatchTurn = (game.moves || 1) + i;
+                otmp._egg_hatch_consumed = true;
+                otmp._egg_hatch_seq = game._egg_hatch_timer_seq = (game._egg_hatch_timer_seq || 0) + 1;
+                break;
+            }
+        }
     }
 }
 

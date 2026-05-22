@@ -6401,6 +6401,7 @@ function consumeWishedEggHatchTimer(otmp) {
     for (let i = 151; i <= 200; i++) {
         if (rnd(i) > 150) {
             otmp.eggHatchTurn = (game.moves || 1) + i;
+            otmp._egg_hatch_seq = game._egg_hatch_timer_seq = (game._egg_hatch_timer_seq || 0) + 1;
             break;
         }
     }
@@ -11406,6 +11407,7 @@ function deadbookAttachEggHatchTimer(item) {
     for (let i = 151; i <= 200; i++) {
         if (rnd(i) > 150) {
             item.eggHatchTurn = (game.moves || 1) + i;
+            item._egg_hatch_seq = game._egg_hatch_timer_seq = (game._egg_hatch_timer_seq || 0) + 1;
             break;
         }
     }
@@ -26085,6 +26087,7 @@ export async function rhack(_cmd) {
             const existingFood = (objectHere.otyp === FOOD_CLASS || objectHere.cls === 'food')
                 && (game.inventory || []).find(item =>
                     item.cls === 'food' && !item.worn && !item.wielded
+                    && !(isEggItem(item) || isEggItem(objectHere))
                     && pickupObjectName({ ...item, quan: 1 }) === name);
             if (existingFood) {
                 const pickedKnown = objectHere.bknown === true;
