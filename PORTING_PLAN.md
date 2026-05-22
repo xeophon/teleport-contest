@@ -970,6 +970,14 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   item, and confused spellbook study follows the `spell.c` `confused_book()`
   first-line/tear split with study-time helplessness. Spellbook `trycall()`
   prompting remains future work.
+- Unknown spellbooks destroyed by confused tearing or too-hard/cursed
+  crumbling now follow the C `trycall()` shape: the destruction message pauses,
+  prompts for a type call using the live spellbook appearance, records the call
+  in discoveries, and only then charges the stored study time. The Book of the
+  Dead is also kept out of ordinary cursed/too-hard spellbook failure, starts
+  with the C `recite` wording, identifies as the Book rather than a generic
+  spell, and reaches a first `deadbook()` message slice. Full invocation,
+  undead, and relic interactions remain future work.
 - Monster-class row ordering no longer depends on Node 22's
   `Array.prototype.toSorted()`: the JS `mkclass` metadata path now uses an
   explicit copied difficulty sort that preserves equal-difficulty order, matching

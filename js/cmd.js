@@ -6636,6 +6636,7 @@ function isBlankSpellbookItem(item) {
 }
 
 function isBookOfTheDeadItem(item) {
+    if (item?.otyp === BOOK_OF_THE_DEAD) return true;
     const text = [
         item?.kind,
         item?.actualKind,
@@ -6651,6 +6652,78 @@ function readBlindBlockMessage(item, isScroll) {
     if (item?.cls === 'spellbook') return 'Being blind, you cannot read the mystic runes.';
     if (isScroll && item?.dknown === false) return 'Being blind, you cannot read the formula on the scroll.';
     return '';
+}
+
+function articleFor(noun) {
+    const text = String(noun || '').trim();
+    if (!text) return 'a thing';
+    if (/^(?:the|a|an)\b/i.test(text)) return text;
+    return `${/^[aeiou]/i.test(text) ? 'an' : 'a'} ${text}`;
+}
+
+function spellbookCallAppearance(item) {
+    return item?.appearance || game._object_descriptions?.spellbooks?.[item?.spellbookIndex] || '';
+}
+
+function spellbookCallKey(item) {
+    return spellbookCallAppearance(item) || String(item?.spellbookIndex ?? item?.spellName ?? item?.kind ?? 'spellbook');
+}
+
+function spellbookDiscoveryKnown(name) {
+    const discoveryName = `spellbook of ${name}`;
+    return (game._discoveries || []).some(entry =>
+        entry.section === 'Spellbooks'
+        && entry.name === discoveryName
+        && entry.known !== false);
+}
+
+function shouldTryCallSpellbook(item, name) {
+    if (!item || isBookOfTheDeadItem(item) || item.dknown === false) return false;
+    if (item.known === true || spellbookDiscoveryKnown(name)) return false;
+    return !game._called_spellbooks?.[spellbookCallKey(item)];
+}
+
+function prepareSpellbookTryCall(item, moveCost) {
+    const appearance = spellbookCallAppearance(item);
+    const noun = appearance ? `${appearance} spellbook` : 'spellbook';
+    game._call_spellbook_prompt_noun = noun;
+    game._call_spellbook_appearance = appearance;
+    game._call_spellbook_key = spellbookCallKey(item);
+    game._call_spellbook_move_cost = moveCost;
+    game._call_spellbook_text = '';
+}
+
+function clearSpellbookTryCall() {
+    game._call_spellbook_prompt_noun = '';
+    game._call_spellbook_appearance = '';
+    game._call_spellbook_key = '';
+    game._call_spellbook_text = '';
+    const moveCost = game._call_spellbook_move_cost || 0;
+    game._call_spellbook_move_cost = 0;
+    return moveCost;
+}
+
+function recordCalledSpellbook(name) {
+    const call = String(name || '').trim();
+    if (!call) return;
+    const appearance = game._call_spellbook_appearance || '';
+    const key = game._call_spellbook_key || appearance || 'spellbook';
+    game._called_spellbooks ??= {};
+    game._called_spellbooks[key] = call;
+    game._discoveries ??= [];
+    const discoveryName = `spellbook called ${call}`;
+    const text = appearance ? `${discoveryName} (${appearance})` : discoveryName;
+    const existing = game._discoveries.find(entry =>
+        entry.section === 'Spellbooks'
+        && (entry.name === discoveryName || (appearance && String(entry.text || '').endsWith(`(${appearance})`))));
+    if (existing) {
+        existing.name = discoveryName;
+        existing.text = text;
+        existing.starred = false;
+        existing.known = true;
+    } else {
+        game._discoveries.push({ section: 'Spellbooks', name: discoveryName, text, starred: false, known: true });
+    }
 }
 
 function learnScrollByName(scrollName, item, scrollIndex = null) {
@@ -9980,7 +10053,8 @@ export function pickupObjectName(obj) {
         const appearance = game._object_descriptions?.wands?.[obj.wandIndex]?.description;
         return named(appearance ? `${appearance} wand` : 'wand');
     }
-    if (obj.cls === 'spellbook' || obj.otyp === SPBOOK_NO_NOVEL || obj.otyp === SPE_HEALING) {
+    if (obj.cls === 'spellbook' || obj.otyp === SPBOOK_NO_NOVEL || obj.otyp === SPE_HEALING || obj.otyp === BOOK_OF_THE_DEAD) {
+        if (isBookOfTheDeadItem(obj)) return named('Book of the Dead');
         if ((obj.quan || 1) > 1 && obj.plural) return named(obj.plural);
         const name = obj.spellName || obj.spell?.name || String(obj.kind || '').replace(/^spellbook(?: of)? /, '');
         if (obj.known === false || (obj.otyp === SPE_HEALING && !obj.cls) || (obj.otyp === SPBOOK_NO_NOVEL && !name)) {
@@ -10963,6 +11037,34 @@ function setTurnTailMessage(message) {
     game._keep_pending_message = 1;
 }
 
+function bookOfTheDeadStudyMessage(item) {
+    if (item) {
+        item.known = true;
+        item.bknown = true;
+        item.kind = 'Book of the Dead';
+        item.actualKind = 'Book of the Dead';
+        item.line = normalInventoryLine({ ...item, line: '' });
+    }
+
+    const messages = ['You turn the pages of the Book of the Dead...'];
+    if (item?.cursed) {
+        messages.push('You raised the dead!');
+    } else if (!item?.blessed) {
+        switch (rn2(3)) {
+        case 0:
+            messages.push('Your ancestors are annoyed with you!');
+            break;
+        case 1:
+            messages.push('The headstones in the cemetery begin to move!');
+            break;
+        default:
+            messages.push('Oh my!  Your name appears in the book!');
+            break;
+        }
+    }
+    return messages.join('  ');
+}
+
 export function processSpellbookStudyOccupation() {
     const study = game._spellbook_study_occupation;
     if (!study) return;
@@ -10978,6 +11080,12 @@ export function processSpellbookStudyOccupation() {
         (spell.name || spell.spellName || spell.spell?.name) === name);
 
     exerciseAttribute(A_WIS, true);
+    if (study.bookOfDead || isBookOfTheDeadItem(item)) {
+        setTurnTailMessage(bookOfTheDeadStudyMessage(item));
+        game._pending_time_passed = Math.max(game._pending_time_passed || 0, 2);
+        return;
+    }
+
     let message;
     if (knownSpell) {
         message = `Your knowledge of the "${name}" spell is keener.`;
@@ -13834,6 +13942,43 @@ export async function rhack(_cmd) {
         else if (key >= 32) game._call_scroll_text = `${game._call_scroll_text || ''}${ch}`;
         const text = game._call_scroll_text || '';
         await setMessage(`Call a scroll labeled ${game._call_scroll_label || 'ZELGO MER'}:${text ? ` ${text}` : ''}`);
+        return;
+    }
+
+    if (game._command_mode === 'callSpellbookAfterMore') {
+        if (ch === ' ' || ch === '\x1b' || ch === '\r' || ch === '\n') {
+            game._pending_message = '';
+            game._message_more = 0;
+            game._call_spellbook_text = '';
+            await setMessage(`Call ${articleFor(game._call_spellbook_prompt_noun || 'spellbook')}:`);
+            game._command_mode = 'callSpellbookText';
+        }
+        return;
+    }
+
+    if (game._command_mode === 'callSpellbookText') {
+        if (ch === '\r' || ch === '\n') {
+            recordCalledSpellbook(game._call_spellbook_text || '');
+            const moveCost = clearSpellbookTryCall();
+            game._pending_message = '';
+            game._message_more = 0;
+            game._command_mode = null;
+            game.context.move = moveCost;
+            return;
+        }
+        if (ch === '\x1b') {
+            const moveCost = clearSpellbookTryCall();
+            game._pending_message = '';
+            game._message_more = 0;
+            game._command_mode = null;
+            game.context.move = moveCost;
+            return;
+        }
+        const code = typeof key === 'number' ? key : ch.charCodeAt(0);
+        if (code === 8 || code === 127) game._call_spellbook_text = (game._call_spellbook_text || '').slice(0, -1);
+        else if (code >= 32) game._call_spellbook_text = `${game._call_spellbook_text || ''}${ch}`;
+        const text = game._call_spellbook_text || '';
+        await setMessage(`Call ${articleFor(game._call_spellbook_prompt_noun || 'spellbook')}:${text ? ` ${text}` : ''}`);
         return;
     }
 
@@ -19125,7 +19270,7 @@ export async function rhack(_cmd) {
             game.context.move = shouldCall ? 0 : 1;
             return;
         }
-        if (item?.cls === 'spellbook') {
+        if (item?.cls === 'spellbook' || item?.otyp === BOOK_OF_THE_DEAD) {
             if (isBlankSpellbookItem(item)) {
                 item.known = true;
                 item.kind = 'spellbook of blank paper';
@@ -19136,21 +19281,23 @@ export async function rhack(_cmd) {
                 game.context.move = 1;
                 return;
             }
-            const name = item.spellName || item.spell?.name || String(item.kind || '').replace(/^spellbook(?: of)? /, '');
+            const bookOfDead = isBookOfTheDeadItem(item);
+            const name = bookOfDead ? 'Book of the Dead'
+                : item.spellName || item.spell?.name || String(item.kind || '').replace(/^spellbook(?: of)? /, '');
             const knownSpell = (game._known_spells || []).some(spell =>
-                (spell.name || spell.spellName || spell.spell?.name) === name);
+                !bookOfDead && (spell.name || spell.spellName || spell.spell?.name) === name);
             if (knownSpell) {
                 await setMessage(`You know "${name || 'healing'}" quite well already.`, true);
                 game._command_mode = 'readRepeatMore';
                 return;
             }
-            const level = SPELLBOOK_LEVELS[name] || item.level || item.spell?.level || 1;
-            const baseDelay = SPELLBOOK_DELAYS[name] || 1;
+            const level = bookOfDead ? 7 : (SPELLBOOK_LEVELS[name] || item.level || item.spell?.level || 1);
+            const baseDelay = bookOfDead ? 20 : (SPELLBOOK_DELAYS[name] || 1);
             const studyDelay = level <= 2 ? baseDelay : level <= 4 ? (level - 1) * baseDelay
                 : level <= 6 ? level * baseDelay : 8 * baseDelay;
             const stats = game.u?.acurr?.a || [];
             const readAbility = (stats[3] ?? 10) + 4 + Math.trunc((game.u?.ulevel || 1) / 2) - 2 * level;
-            const tooHard = item.cursed || (!item.blessed && rnd(20) > readAbility);
+            const tooHard = !bookOfDead && (item.cursed || (!item.blessed && rnd(20) > readAbility));
             if (tooHard) {
                 let message = 'These runes were just too much to comprehend.';
                 const effect = rn2(level);
@@ -19165,21 +19312,27 @@ export async function rhack(_cmd) {
                         }
                     }
                 } else if (effect === 2) message = 'You are blinded!';
+                let shouldCall = false;
                 if (!rn2(3)) {
+                    shouldCall = shouldTryCallSpellbook(item, name);
+                    if (shouldCall) prepareSpellbookTryCall(item, studyDelay);
                     removeInventoryItem(item);
                     message += '  The spellbook crumbles to dust!';
                 }
                 game._helpless_time = Math.max(game._helpless_time || 0, studyDelay);
                 game._wake_message = 'You can move again.';
-                await setMessage(message);
-                game._command_mode = null;
-                game.context.move = studyDelay;
+                await setMessage(message, shouldCall);
+                game._command_mode = shouldCall ? 'callSpellbookAfterMore' : null;
+                game.context.move = shouldCall ? 0 : studyDelay;
                 return;
             }
             if (heroIsConfused()) {
                 const messages = [];
+                let shouldCall = false;
                 if (!isBookOfTheDeadItem(item) && !rn2(3)) {
                     messages.push('Being confused you have difficulties in controlling your actions.');
+                    shouldCall = shouldTryCallSpellbook(item, name);
+                    if (shouldCall) prepareSpellbookTryCall(item, studyDelay);
                     removeInventoryItem(item);
                     messages.push('You accidentally tear the spellbook to pieces.');
                 } else {
@@ -19187,9 +19340,9 @@ export async function rhack(_cmd) {
                 }
                 game._helpless_time = Math.max(game._helpless_time || 0, studyDelay);
                 game._wake_message = 'You can move again.';
-                await setMessage(messages.join('  '), messages.length > 1);
-                game._command_mode = null;
-                game.context.move = studyDelay;
+                await setMessage(messages.join('  '), messages.length > 1 || shouldCall);
+                game._command_mode = shouldCall ? 'callSpellbookAfterMore' : null;
+                game.context.move = shouldCall ? 0 : studyDelay;
                 return;
             }
             game._spellbook_study_occupation = {
@@ -19197,9 +19350,10 @@ export async function rhack(_cmd) {
                 name,
                 level,
                 skill: item.spell?.skill || SPELL_CATEGORIES[name] || 'enchantment',
+                bookOfDead,
                 turns: Math.max(1, studyDelay - 1),
             };
-            await setMessage('You begin to memorize the runes.');
+            await setMessage(`You begin to ${bookOfDead ? 'recite' : 'memorize'} the runes.`);
             game._command_mode = null;
             game.context.move = studyDelay + 1;
             return;
