@@ -5624,6 +5624,7 @@ async function finishMonsterTurnTail() {
                 armHeroLifeSavingMore();
                 return false;
             }
+            game._death_bones_body = 'statue';
             armHeroDeathMore();
             return false;
         }

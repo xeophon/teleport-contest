@@ -10233,7 +10233,7 @@ function dataPagerLines(name, page) {
 }
 
 function maybeWishedInstanceName(obj, baseName) {
-    const objectName = String(obj?._wish_object_name || '').trim();
+    const objectName = String(obj?._wish_object_name || obj?.oname || '').trim();
     const name = String(baseName || '');
     if (!objectName || obj?.artifact || / named .+$/i.test(name)) return name;
     return `${name} named ${objectName}`;
@@ -10250,7 +10250,7 @@ export function pickupObjectName(obj) {
     if (obj.globby) return named(globObjectName(obj));
     if ((obj.kind === 'statue' || obj.otyp === STATUE) && obj.corpsenm?.name) {
         const historic = archeologist && (((obj.spe || 0) & CORPSTAT_HISTORIC) || obj.historic);
-        return `${historic ? 'historic ' : ''}statue of ${monsterIndefiniteName(corpstatDisplayMonsterName(obj))}`;
+        return named(`${historic ? 'historic ' : ''}statue of ${monsterIndefiniteName(corpstatDisplayMonsterName(obj))}`);
     }
     if ((obj.kind === 'figurine' || obj.actualKind === 'figurine') && obj.corpsenm?.name)
         return named(`figurine of ${monsterIndefiniteName(corpstatDisplayMonsterName(obj))}`);
@@ -10687,32 +10687,47 @@ function canMakeBones() {
     return !game.flags?.explore;
 }
 
-function prepareDeathBones() {
-    if (game.flags?.debug || game._death_bones_prepared) return;
-    game._death_bones_prepared = 1;
-    game._bones_ok = canMakeBones();
+function deathBonesLeavesStatue() {
+    return game._death_bones_body === 'statue';
 }
 
-function saveDeathBonesIfNeeded() {
-    if (!game._bones_ok || game._death_bones_saved || game.flags?.debug) return;
-    game._death_bones_saved = 1;
+function heroDeathStatueMonsterData() {
+    if (game.u?._polyself_form) return { ...game.u._polyself_form };
+    const roleName = String(game.urole?.name?.m || game._startup_role || 'tourist').toLowerCase();
+    return { name: roleName, glyph: '@', mlet: 'human', neuter: false };
+}
 
-    const uz = game.u?.uz || { dnum: 0, dlevel: 1 };
-    const bonesPath = `/bones/${uz.dnum}:${uz.dlevel}`;
-    if (vfsReadFile(bonesPath) !== null) return;
-
-    if (!game._death_corpse_created && game.u) {
-        const raceName = game._startup_race || game.urace?.adj || 'human';
-        const corpse = mkcorpstat(CORPSE, null, DEATH_CORPSE_BY_RACE[raceName] || DEATH_CORPSE_BY_RACE.human, game.u.ux, game.u.uy, 8);
-        corpse.oname = game.plname || 'wizard';
-        game._death_corpse_created = 1;
+function createDeathBonesRemains() {
+    if (game._death_corpse_created || !game.u) return;
+    const leavesStatue = deathBonesLeavesStatue();
+    const pm = leavesStatue
+        ? heroDeathStatueMonsterData()
+        : DEATH_CORPSE_BY_RACE[game._startup_race || game.urace?.adj || 'human'] || DEATH_CORPSE_BY_RACE.human;
+    const remains = mkcorpstat(leavesStatue ? STATUE : CORPSE, null, pm, game.u.ux, game.u.uy, leavesStatue ? 0 : 8);
+    remains.oname = game.plname || 'wizard';
+    remains._death_remains = leavesStatue ? 'statue' : 'corpse';
+    if (leavesStatue) {
+        remains.kind = 'statue';
+        remains.spe = (remains.spe || 0) & ~CORPSTAT_GENDER;
+        remains.contents = [];
     }
+    game._death_corpse_created = 1;
+}
+
+function curseDeathBonesInventory() {
     for (const item of game.inventory || []) {
         if (rn2(5)) {
             item.cursed = true;
             item.blessed = false;
         }
         rn2(8);
+    }
+}
+
+function createDeathBonesGhost() {
+    if (deathBonesLeavesStatue()) {
+        delete game._bones_ghost;
+        return;
     }
     const ghostId = next_ident();
     const ghostHp = d(9, 8);
@@ -10748,6 +10763,25 @@ function saveDeathBonesIfNeeded() {
         female: !!game.flags?.female,
         givenName: game.plname || 'wizard',
     };
+}
+
+function prepareDeathBones() {
+    if (game.flags?.debug || game._death_bones_prepared) return;
+    game._death_bones_prepared = 1;
+    game._bones_ok = canMakeBones();
+}
+
+function saveDeathBonesIfNeeded() {
+    if (!game._bones_ok || game._death_bones_saved || game.flags?.debug) return;
+    game._death_bones_saved = 1;
+
+    const uz = game.u?.uz || { dnum: 0, dlevel: 1 };
+    const bonesPath = `/bones/${uz.dnum}:${uz.dlevel}`;
+    if (vfsReadFile(bonesPath) !== null) return;
+
+    createDeathBonesRemains();
+    curseDeathBonesInventory();
+    createDeathBonesGhost();
     vfsWriteFile(bonesPath, encodeBonesLevel());
 }
 
@@ -14275,6 +14309,7 @@ export async function rhack(_cmd) {
                 }
                 removeHeroStatusSuffix('Stone');
                 game._death_cause = '';
+                game._death_bones_body = '';
                 game._death_current_move = 0;
                 game._death_status_hp_before_zero = null;
             }
@@ -17198,47 +17233,9 @@ export async function rhack(_cmd) {
                 }
                 game._death_bones_replace_confirmed = 0;
                 delete game._death_bones_replace_path;
-                for (const item of game.inventory || []) {
-                    if (rn2(5)) {
-                        item.cursed = true;
-                        item.blessed = false;
-                    }
-                    rn2(8);
-                }
-                const ghostId = next_ident();
-                const ghostHp = d(9, 8);
-                rn2(2);
-                rn2(50);
-                rn2(100);
-                rn2(100);
-                game._bones_ghost = {
-                    id: ghostId,
-                    mx: game.u?.ux || 0,
-                    my: game.u?.uy || 0,
-                    data: {
-                        name: 'ghost',
-                        glyph: ' ',
-                        mlet: 'ghost',
-                        mlevel: 10,
-                        mac: -5,
-                        mmove: 3,
-                        difficulty: 13,
-                        maligntyp: -5,
-                        color: CLR_GRAY,
-                        passWalls: true,
-                        noCorpse: true,
-                        undead: true,
-                    },
-                    glyph: ' ',
-                    color: CLR_GRAY,
-                    m_lev: game.u?.ulevel || 1,
-                    mhp: game.u?.uhpmax || ghostHp,
-                    mhpmax: game.u?.uhpmax || ghostHp,
-                    msleeping: 1,
-                    mpeaceful: 0,
-                    female: !!game.flags?.female,
-                    givenName: game.plname || 'wizard',
-                };
+                createDeathBonesRemains();
+                curseDeathBonesInventory();
+                createDeathBonesGhost();
                 vfsWriteFile(bonesPath, encodeBonesLevel());
             }
             setOverlay(deathGraveLines(), 24, true);
@@ -17352,12 +17349,6 @@ export async function rhack(_cmd) {
             game._death_moves = game.moves || 1;
             game._bones_ok = canMakeBones();
             if (game._bones_ok) {
-                if (!game._death_corpse_created && game.u) {
-                    const raceName = game._startup_race || game.urace?.adj || 'human';
-                    const corpse = mkcorpstat(CORPSE, null, DEATH_CORPSE_BY_RACE[raceName] || DEATH_CORPSE_BY_RACE.human, game.u.ux, game.u.uy, 8);
-                    corpse.oname = game.plname || 'wizard';
-                    game._death_corpse_created = 1;
-                }
                 await setMessage('Save bones? [yn] (n)');
                 game._command_mode = 'deathBonesPrompt';
                 return;
@@ -17369,6 +17360,7 @@ export async function rhack(_cmd) {
         if (ch === 'n' || ch === ' ' || ch === '\x1b' || ch === '\r' || ch === '\n') {
             game.u.uhp = game.u.uhpmax || 1;
             game._death_cause = '';
+            game._death_bones_body = '';
             game._wizard_survived_death = 1;
             await setMessage("OK, so you don't die.");
             if (game._deferred_raven_blind_after_more) {
