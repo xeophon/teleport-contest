@@ -1768,11 +1768,11 @@ function questDownBlocked() {
     return questLevelKind() === 'start' && !okToQuest();
 }
 
-function questPagerRows(msgid) {
+function questPagerText(msgid) {
     const roleName = game.urole?.name?.m || game._startup_role || '';
     const info = QUEST_ROLE_DATA[roleName];
     const raw = info?.texts?.[msgid] || (msgid === 'goal_alt' ? info?.texts?.goal_next : '');
-    if (!raw) return null;
+    if (!raw) return '';
     l_nhcore_init();
     const rankIndex = level => level <= 2 ? 0 : level <= 30 ? Math.trunc((level + 2) / 4) : 8;
     const rank = info.ranks[Math.min(rankIndex(game.u?.ulevel || 1), info.ranks.length - 1)];
@@ -1804,6 +1804,12 @@ function questPagerRows(msgid) {
     let text = raw.trimEnd();
     for (const [pattern, replacement] of replacements)
         text = text.split(pattern).join(replacement);
+    return text;
+}
+
+function questPagerRows(msgid) {
+    const text = questPagerText(msgid);
+    if (!text) return null;
     const rows = text.split('\n').slice(0, 23).map((line, row) => [row, 0, line]);
     rows.push([23, 0, '--More--']);
     return rows;
@@ -1839,6 +1845,24 @@ function queueQuestArrival(targetLevel, fromLevel, targetIsNew, showNow = false)
             return pager('firsttime');
         }
         if (!fromAbove) return false;
+        if ((game.quest_status.not_ready || 0) <= 2) {
+            const text = questPagerText('nexttime');
+            if (!text) return false;
+            if (showNow) {
+                game._overlay_lines = null;
+                game._overlay_hide_status = 0;
+                game._pending_message = text;
+                game._message_more = 0;
+                game._keep_pending_message = 1;
+                game._command_mode = null;
+            } else {
+                game._queued_message_after_more = game._queued_message_after_more
+                    ? `${game._queued_message_after_more}  ${text}`
+                    : text;
+                game._queued_message_more_after_more = 0;
+            }
+            return true;
+        }
         return pager((game.quest_status.not_ready || 0) <= 2 ? 'nexttime' : 'othertime');
     }
     if (kind === 'locate') {
@@ -15327,7 +15351,6 @@ async function moveHero(dx, dy) {
         }
 
         if (!killed) {
-            if (!peacefulShopkeeper) mon._pre_distfleeck_ac_after_hero_attack = 1;
             if (wokeFromSleep) messages.push(`The ${name} wakes up!`);
             if (deferSleepingTwoWeapon) {
                 game._queued_messages_after_more ??= [];
@@ -29525,11 +29548,6 @@ export async function rhack(_cmd) {
             await setMessage(details[0], true);
             return;
         }
-        const currentSpecial = game.specialLevels?.find(level =>
-            level.dnum === game.u?.uz?.dnum && level.dlevel === game.u?.uz?.dlevel);
-        if (!details.length && (game.level?.flags?.minend1_level
-            || currentSpecial?.name === 'soko1' || currentSpecial?.name === 'soko3'))
-            game._clear_pending_message_only_once = 1;
         await setMessage(details.length ? details[0] : 'You see no objects here.', !!engraving);
         return;
     }

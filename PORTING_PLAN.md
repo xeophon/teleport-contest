@@ -1211,6 +1211,20 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   differs at screen 261 on HP, and flat RNG first differs at screen 240 on a
   missing `rnd(4)`. The latest public score remains `27/44`, with the seed0361
   scorer metric improved to `266/366` screens and `22647/53865` RNG calls.
+- The no-move monster attack frontier now follows C `monmove.c`/`mhitu.c`
+  more directly: the route-shaped `_pre_distfleeck_ac_after_hero_attack`
+  marker was removed, and post-`m_move()` monsters that did not move but are
+  hostile, in bolt range, non-near, and able to attack now consume the C
+  `AC_VALUE(u.uac)` roll before continuing. The `:` look command no longer
+  marks special-level "You see no objects here." messages as command-swallowing
+  clear-only messages, so wizard `^V` level teleport prompts process on the
+  same input as C. Repeat Quest Home arrival text now uses the C `qt_pager()`
+  one-line `pline` behavior instead of opening a text-window overlay. Focused
+  `seed0361-archeologist-tour` screens 237-241 and 277-286 match; the full
+  display compare first differs at screen 307 on a one-column Quest Home 3 map
+  alignment issue, and flat RNG first differs later at screen 352 where C
+  consumes `rn2(3) @ restrap(mon.c:4667)` before JS's next restored-level
+  `rnd(10)`.
 
 Next concrete target:
 
@@ -1223,12 +1237,12 @@ Next concrete target:
   semantics, C special-level room/corridor/shop filling for `minetn-3.lua`, and
   full `eat.c`, `sp_lev.c`, `mkobj.c`, `makemon.c`, `uhitm.c`, and
   `dogmove.c` behavior.
-- The next narrow Archeologist tour slice should inspect the screen 240 flat
-  RNG frontier in the Gnomish Mines monster loop: C consumes `rnd(4)` from
-  `mattacku(mhitu.c:709)` before the next JS post-move `rn2(5)`, while the
-  visible screens remain aligned until the HP-only mismatch at screen 261. This
-  likely needs deeper `monmove.c` status/scared/range2 parity rather than a
-  display-side fix.
+- The next narrow Archeologist tour slice should inspect the screen 307
+  display-only frontier after wizard level teleport to Quest Home 3: JS renders
+  the map one column left of C while the top line/status and later RNG remain
+  aligned. After that, inspect the screen 352 flat RNG frontier where restored
+  level loading in C calls `restrap(mon.c:4667)` between `restore.c:getlev()`
+  `rnd(10)` draws.
 - The next narrow `#sit` trap slice should deepen the remaining
   `trap.c:trapeffect_*()` details now that deferred level-changing traps are
   live: floor-object `impact_drop()` effects for holes/trapdoors, positive

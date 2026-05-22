@@ -3033,14 +3033,7 @@ async function processMonsterTurns() {
 		                        }
                     if (!mon.mfleetim && (mon.mhpmax == null || mon.mhp == null || mon.mhp >= mon.mhpmax) && !rn2(25)) mon.mflee = 0;
                     }
-                    if (!distfleeckDoneAfterAnger) {
-                        if (mon._pre_distfleeck_ac_after_hero_attack) {
-                            mon._pre_distfleeck_ac_after_hero_attack = 0;
-                            const targetAc = game.u?.uac ?? 10;
-                            if (targetAc < 0) rnd(-targetAc);
-                        }
-                        rn2(5);
-                    }
+                    if (!distfleeckDoneAfterAnger) rn2(5);
 	                    if (!mon.pet && !mon.mpeaceful && !mon.data?.mindless && !mon.data?.nohands && !(mon.m_seenres & M_SEEN_MAGR)) {
                         const targetX = mon.mux ?? game.u?.ux ?? mon.mx;
                         const targetY = mon.muy ?? game.u?.uy ?? mon.my;
@@ -4594,7 +4587,7 @@ async function processMonsterTurns() {
                         continue;
                     }
                     if ((game.level?.monsters || []).includes(mon)) {
-                        const postMoveDistFleeValue = postMoveDistFleeRoll ? null : rn2(5);
+                        if (!postMoveDistFleeRoll) rn2(5);
                         const postMoveTargetX = mon.mux ?? game.u?.ux ?? mon.mx;
                         const postMoveTargetY = mon.muy ?? game.u?.uy ?? mon.my;
                         const postMoveDist2 = (mon.mx - postMoveTargetX) ** 2 + (mon.my - postMoveTargetY) ** 2;
@@ -4603,7 +4596,7 @@ async function processMonsterTurns() {
                         const postMoveNearby = postMoveDist2 < 3 && !postMoveGridBugDiagonal;
                         if (!movedByMonster && !moveEndedTurn && !mon.mpeaceful && !mon.mflee
                             && !noStandardAttack && postMoveDist2 <= BOLT_LIM * BOLT_LIM
-                            && !postMoveNearby && postMoveDistFleeValue === 0 && (game.u?.uhp || 0) > 0) {
+                            && !postMoveNearby && (game.u?.uhp || 0) > 0) {
                             const targetAc = game.u?.uac ?? 10;
                             if (targetAc < 0) rnd(-targetAc);
                             continue;
