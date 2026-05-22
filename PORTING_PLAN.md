@@ -790,8 +790,12 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   C `addinv()`/`carry_obj_effects()` coverage: movement autopickup, pet-swap
   autopickup, multi-object pickup menus, carried-bag takeout, and floor-container
   takeout start/restart cursed figurine timers after the object is in inventory.
-  Remaining gaps are limited-extinction dust handling, liquid/mimic message edge
-  cases, and exact one-of-stack semantics outside inventory.
+  Limited-birth extinction now tracks the C Nazgul/erinys `mbirth_limit()`
+  counts, suppresses those species for random creation after the limit, and
+  makes already-extinct Nazgul/erinys figurines turn into a pile of dust while
+  leaving ordinary extinct species eligible for explicit figurine creation.
+  Remaining gaps are liquid/mimic message edge cases and exact one-of-stack
+  semantics outside inventory.
 - Exact wished corpses now use the C `readobjnam()` corpse shape instead of
   generic food fallback: `corpse`, `corpse of <monster>`, and
   `<monster> corpse` create initialized corpse objects first, then apply
