@@ -891,10 +891,18 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   the `Eat it?` prompt no longer fall through as ordinary one-turn food. Full
   egg knowledge UI, complete throne random effects, deeper `dotrap(VIASITTING)`
   edge details for fall blockers/destination special cases/controlled level
-  teleports, rust/fire item destruction, and multi-turn
+  teleports, remaining fire inventory eligibility/ignite edge cases, and multi-turn
   `victual`/per-bite nutrition for rations, corpses, and other long meals,
   full tin corpse side effects/shop billing/conduct detail, and complete
   extinction/vitals semantics remain future work.
+- `#sit` rust traps now apply C-shaped `water_damage(..., TRUE)` targeting:
+  head/left-arm/right-arm/body rolls hit the corresponding worn armor,
+  wielded/two-weapon/bimanual weapon, glove, torso, and lit carried-object
+  paths; rust erosion refreshes inventory and worn AC, grease can protect or
+  wash off, and wielded scrolls, spellbooks, and potions can blank, dilute, or
+  explode. Fire trap inventory handling now follows the C `burnarmor()` gating
+  more closely by forcing item destruction after a torso hit and otherwise
+  using the missing 2-in-3 fallback when a non-body armor hit occurs.
 - Wished container state prefixes now cover the C `readobjnam()` object slice
   for `locked`, `unlocked`, `broken`, `trapped`, `untrapped`, and `empty`:
   boxes keep normal generated contents and lock/trap RNG before final state
@@ -1118,9 +1126,9 @@ Next concrete target:
 - The next narrow `#sit` trap slice should deepen the remaining
   `trap.c:trapeffect_*()` details now that deferred level-changing traps are
   live: full hole/trapdoor blockers and stronghold/Hell destination handling,
-  controlled level-teleport post-prompt messages, rust/fire item
-  erosion/destruction, and shared helpers with the movement trap path where
-  that lowers divergence.
+  controlled level-teleport post-prompt messages, remaining fire inventory
+  eligibility/ignite details, and shared helpers with the movement trap path
+  where that lowers divergence.
 - Use `sessions/*.session.json` to locate divergences, but keep fixes in real
   mechanics. A score recovery is only valid when it falls out of those
   mechanics.

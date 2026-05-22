@@ -4901,8 +4901,7 @@ function fireDamageInventory(origDamage, forceDestroyItems = false, rollIgniteIt
     const armor = burnWornArmorFromFire();
     if (armor.message) messages.push(armor.message);
     let joinedArmorMessage = false;
-    if (!armor.bodyHit) return { messages, events, damage: 0, deathCause: '' };
-    const destroyItems = forceDestroyItems || !rn2(3);
+    const destroyItems = forceDestroyItems || armor.bodyHit || rn2(3);
     if (!destroyItems) {
         if (rollIgniteItems) rn2(3);
         return { messages, events, damage: 0, deathCause: '' };
@@ -12634,18 +12633,241 @@ function sitSleepGasMessage(trap, prefix) {
     return `${prefix}  A cloud of gas puts you to sleep!`;
 }
 
+function rustTrapWornArmor(slot) {
+    return wornArmorItemsBySlotOrder([slot])[0] || null;
+}
+
+function rustTrapTorsoArmor() {
+    return wornArmorItemsBySlotOrder(['cloak', 'body', 'shirt'])[0] || null;
+}
+
+function rustTrapPrimaryWeapon() {
+    return (game.inventory || []).find(item => {
+        const line = item.line || '';
+        return item.wielded || /\b(?:weapon|wielded) in (?:right hand|hands)\b/.test(line)
+            || line.includes('(wielded)');
+    }) || null;
+}
+
+function rustTrapSecondaryWeapon(primary) {
+    return (game.inventory || []).find(item => {
+        if (item === primary) return false;
+        const line = item.line || '';
+        return item.alternate || /\b(?:alternate weapon|(?:weapon|wielded) in left hand)\b/.test(line);
+    }) || null;
+}
+
+function rustTrapBimanualWeapon(item) {
+    if (!item) return false;
+    const name = `${objectKindKey(item)} ${inventoryItemName(item)}`.toLowerCase();
+    return /\b(?:quarterstaff|two-handed sword|battle-axe|dwarvish mattock|tsurugi)\b/.test(name);
+}
+
+function rustTrapArmorName(armor) {
+    const slot = armorSlot(armor);
+    const kind = armorKind(armor);
+    if (slot === 'helm') return hardEarthHelmet(armor) ? 'helm' : 'hat';
+    if (slot === 'shield') return 'shield';
+    if (slot === 'gloves') return kind.includes('gauntlets') ? 'gauntlets' : 'gloves';
+    if (slot === 'cloak') return armorSimpleSlotName(armor);
+    if (slot === 'shirt') return 'shirt';
+    if (slot === 'body') {
+        if (/dragon scales?\b/.test(kind)) return kind.includes('mail') ? 'dragon mail' : 'dragon scales';
+        if (kind.endsWith(' mail')) return 'mail';
+        if (kind.endsWith(' jacket')) return 'jacket';
+        return 'suit';
+    }
+    return armorMessageName(armor);
+}
+
+function rustTrapObjectName(item, override = '') {
+    if (override) return override;
+    if (isWornArmorItem(item)) return rustTrapArmorName(item);
+    return pickupObjectName(item).replace(/^pair of /, '');
+}
+
+function rustTrapNameVerb(name, singular, plural) {
+    return /\b(?:boots|shoes|gloves|gauntlets|scales|arrows|darts|bolts)\b/i.test(name)
+        && !/\bmail\b/i.test(name) ? plural : singular;
+}
+
+function rustTrapItemClass(item) {
+    return item?.cls || (item?.otyp === SCROLL_CLASS || item?.glyph === '?' ? 'scroll'
+        : item?.otyp === POTION_CLASS || item?.otyp === POT_WATER || item?.glyph === '!' ? 'potion'
+            : item?.otyp === SPBOOK_NO_NOVEL || item?.otyp === SPE_HEALING || item?.glyph === '+' ? 'spellbook'
+                : '');
+}
+
+function updateRustTrapItemLine(item, oldAc = null) {
+    if (isWornArmorItem(item)) {
+        if (oldAc != null) updateWornArmorAcAfterChange(item, oldAc);
+        else updateArmorLine(item);
+    } else {
+        item.line = normalInventoryLine({ ...item, line: '' });
+    }
+}
+
+function rustTrapSplashLitItem(item, messages) {
+    if (!(item?.lamplit || item?.burning)) return false;
+    const name = pickupObjectName(item).replace(/ \(lit\)$/, '');
+    if (item.otyp === BRASS_LANTERN || objectKindKey(item) === 'brass lantern') {
+        const heard = !heroIsDeaf();
+        const seen = !game.u?.blind;
+        if (heard || seen)
+            messages.push(`Your ${name} ${heard ? 'crackles' : ''}${heard && seen ? ' and ' : ''}${seen ? 'flickers' : ''}.`);
+        return false;
+    }
+    item.lamplit = false;
+    item.burning = false;
+    delete item._burnTimer;
+    delete item.litRadius;
+    updateRustTrapItemLine(item);
+    messages.push(`Your ${name} ${rustTrapNameVerb(name, 'goes', 'go')} out!`);
+    return true;
+}
+
+function rustTrapSplashLitInventory(messages) {
+    const primary = rustTrapPrimaryWeapon();
+    const secondary = rustTrapSecondaryWeapon(primary);
+    for (const item of game.inventory || []) {
+        if (item === primary) continue;
+        if (game._twoweapon && item === secondary) continue;
+        rustTrapSplashLitItem(item, messages);
+    }
+}
+
+function rustTrapIsAcidPotion(item) {
+    const kind = objectKindKey(item).replace(/^potion of /, '');
+    return item?.potionIndex === 23 || kind === 'acid';
+}
+
+function rustTrapDestroyAcidPotion(item, messages, name, described = false) {
+    const plural = (item.quan || 1) > 1;
+    messages.push(described
+        ? `The potion${plural ? 's' : ''} ${plural ? 'explode' : 'explodes'}!`
+        : `Your ${name} ${rustTrapNameVerb(name, 'explodes', 'explode')}!`);
+    removeInventoryItem(item, item.quan || 1);
+}
+
+function rustTrapWaterDamageReadable(item, messages, cls, name) {
+    if (cls === 'scroll') {
+        if (isBlankScrollItem(item)) return false;
+        messages.push(`Your ${name} ${rustTrapNameVerb(name, 'fades', 'fade')}.`);
+        item.otyp = SCR_BLANK_PAPER;
+        item.kind = 'blank paper';
+        item.actualKind = '';
+        item.known = false;
+        item.scrollIndex = IDENTIFIED_SCROLL_NAMES.length;
+        item.spe = 0;
+        updateRustTrapItemLine(item);
+        return true;
+    }
+    if (cls !== 'spellbook' || isBookOfTheDeadItem(item) || isBlankSpellbookItem(item)) return false;
+    messages.push(`Your ${name} ${rustTrapNameVerb(name, 'fades', 'fade')}.`);
+    item.kind = 'spellbook of blank paper';
+    item.actualKind = '';
+    item.spellName = '';
+    item.spell = null;
+    item.known = false;
+    updateRustTrapItemLine(item);
+    return true;
+}
+
+function rustTrapWaterDamagePotion(item, messages, name) {
+    if (rustTrapIsAcidPotion(item)) {
+        rustTrapDestroyAcidPotion(item, messages, name);
+        return true;
+    }
+    if (isWaterPotion(item)) return false;
+    messages.push(`Your ${name} ${rustTrapNameVerb(name, 'dilutes', 'dilute')}${item.odiluted ? ' further' : ''}.`);
+    if (item.odiluted) {
+        item.otyp = POT_WATER;
+        item.kind = 'water';
+        item.actualKind = '';
+        item.blessed = false;
+        item.cursed = false;
+        item.odiluted = false;
+        item.known = false;
+    } else {
+        item.odiluted = true;
+    }
+    updateRustTrapItemLine(item);
+    return true;
+}
+
+function rustTrapWaterDamageItem(item, messages, nameOverride = '') {
+    if (!item) return false;
+    if (rustTrapSplashLitItem(item, messages)) return true;
+
+    const name = rustTrapObjectName(item, nameOverride);
+    if (item.greased) {
+        if (!rn2(2)) {
+            item.greased = false;
+            updateRustTrapItemLine(item);
+            messages.push(`The grease on your ${name} washes off.`);
+        }
+        if (!item.greased && rustTrapItemClass(item) === 'potion' && rustTrapIsAcidPotion(item))
+            rustTrapDestroyAcidPotion(item, messages, name, true);
+        return true;
+    }
+
+    const cls = rustTrapItemClass(item);
+    if ((cls === 'scroll' || cls === 'spellbook') && rustTrapWaterDamageReadable(item, messages, cls, name))
+        return true;
+    if (cls === 'potion' && rustTrapWaterDamagePotion(item, messages, name)) return true;
+
+    const profile = wishedDamageProfile(item);
+    if (!profile.erosionMatters || profile.primaryWord !== 'rusty') return false;
+    if (item.oerodeproof) {
+        if (!item.rknown && game.flags?.verbose !== false)
+            messages.push(`Somehow, your ${name} ${rustTrapNameVerb(name, 'is', 'are')} not affected by the oxidation.`);
+        item.rknown = true;
+        updateRustTrapItemLine(item);
+        return false;
+    }
+    if (item.blessed && !rnl(4)) return false;
+
+    const current = Math.min(3, item.oeroded || 0);
+    if (current >= 3) return false;
+    const oldAc = isWornArmorItem(item) ? wornArmorAcValueGreatestErosion(item) : null;
+    item.oeroded = current + 1;
+    updateRustTrapItemLine(item, oldAc);
+    const adverb = item.oeroded === 3 ? ' completely' : current ? ' further' : '';
+    messages.push(`Your ${name} ${rustTrapNameVerb(name, 'rusts', 'rust')}${adverb}!`);
+    return true;
+}
+
 function sitRustTrapMessage(trap, prefix) {
     trap.tseen = true;
+    const messages = [];
     switch (rn2(5)) {
     case 0:
-        return `${prefix}  A gush of water hits you on the head!`;
+        messages.push(`${prefix}  A gush of water hits you on the head!`);
+        rustTrapWaterDamageItem(rustTrapWornArmor('helm'), messages);
+        break;
     case 1:
-        return `${prefix}  A gush of water hits your left arm!`;
+        messages.push(`${prefix}  A gush of water hits your left arm!`);
+        if (!rustTrapWaterDamageItem(rustTrapWornArmor('shield'), messages, 'shield')) {
+            const primary = rustTrapPrimaryWeapon();
+            if (game._twoweapon)
+                rustTrapWaterDamageItem(rustTrapSecondaryWeapon(primary), messages);
+            else if (rustTrapBimanualWeapon(primary))
+                rustTrapWaterDamageItem(primary, messages);
+            rustTrapWaterDamageItem(rustTrapWornArmor('gloves'), messages);
+        }
+        break;
     case 2:
-        return `${prefix}  A gush of water hits your right arm!`;
+        messages.push(`${prefix}  A gush of water hits your right arm!`);
+        rustTrapWaterDamageItem(rustTrapPrimaryWeapon(), messages);
+        rustTrapWaterDamageItem(rustTrapWornArmor('gloves'), messages);
+        break;
     default:
-        return `${prefix}  A gush of water hits you!`;
+        messages.push(`${prefix}  A gush of water hits you!`);
+        rustTrapSplashLitInventory(messages);
+        rustTrapWaterDamageItem(rustTrapTorsoArmor(), messages);
+        break;
     }
+    return messages.join('  ');
 }
 
 function sitFireTrapMessage(trap, prefix) {
