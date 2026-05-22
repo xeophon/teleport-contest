@@ -780,6 +780,11 @@ const TIN_VARIETY_TEXTS = [
     'boiled', 'smoked', 'dried', 'deep fried', 'szechuan', 'broiled',
     'stir fried', 'sauteed', 'candied', 'pureed',
 ];
+const TIN_VARIETY_NUTRITION = [-50, 50, 20, 40, 40, 50, 50, 55, 60, 70, 80, 80, 95, 100, 500];
+const TIN_GREASY_VARIETIES = new Set([3, 8, 11]);
+const ROTTEN_TIN = 0;
+const HOMEMADE_TIN = 1;
+const SPINACH_TIN = -1;
 const FOOD_NUTRITION = new Map([
     ['tripe ration', 200],
     ['egg', 80],
@@ -6651,10 +6656,337 @@ function isTinObject(item) {
         || kind.startsWith('tin:');
 }
 
+function isTinOpenerObject(item) {
+    return item?.otyp === TIN_OPENER || objectKindKey(item) === 'tin opener'
+        || String(item?.actualKind || '').toLowerCase() === 'tin opener';
+}
+
 function tinObjectName(item) {
     if (item?.singular) return (item.quan || 1) > 1 ? item.plural || pluralTinName(item.singular) : item.singular;
     if (item?.emptyTin || item?.kind === 'empty tin') return (item.quan || 1) > 1 ? 'empty tins' : 'empty tin';
     return (item?.quan || 1) > 1 ? 'tins' : 'tin';
+}
+
+function tinVariety(item, display = false) {
+    let r;
+    if (item?.spe === 1 || objectKindKey(item) === 'tin:spinach') r = SPINACH_TIN;
+    else if (item?.cursed) r = ROTTEN_TIN;
+    else if ((item?.spe || 0) < 0) r = -item.spe - 1;
+    else r = rn2(TIN_VARIETY_TEXTS.length);
+    if (!display && r === HOMEMADE_TIN && !item?.blessed && !rn2(7)) r = ROTTEN_TIN;
+    return r;
+}
+
+function wieldedItem() {
+    return (game.inventory || []).find(item =>
+        item.wielded || item.line?.includes('weapon in') || item.line?.includes('(wielded)')) || null;
+}
+
+function tinOpenerDelayWeapon() {
+    const weapon = wieldedItem();
+    const kind = objectKindKey(weapon);
+    if (!weapon) return { weapon: null, delay: null, message: null, instantMessage: null };
+    if (isTinOpenerObject(weapon)) {
+        const range = weapon.cursed ? 3 : !weapon.blessed ? 2 : 1;
+        return {
+            weapon,
+            delay: rn2(range),
+            message: `Using ${inventoryItemName(weapon)} you try to open the tin.`,
+            instantMessage: 'You easily open the tin.',
+        };
+    }
+    if (weapon.otyp === DAGGER || weapon.otyp === ORCISH_DAGGER || weapon.otyp === KNIFE
+        || /\b(?:dagger|knife|athame|stiletto|crysknife)\b/.test(kind)) {
+        return {
+            weapon,
+            delay: 3,
+            message: `Using ${inventoryItemName(weapon)} you try to open the tin.`,
+            instantMessage: null,
+        };
+    }
+    if (weapon.otyp === PICK_AXE || /\b(?:pick-axe|pick axe|pickaxe|axe|battle-axe)\b/.test(kind)) {
+        return {
+            weapon,
+            delay: 6,
+            message: `Using ${inventoryItemName(weapon)} you try to open the tin.`,
+            instantMessage: null,
+        };
+    }
+    return { weapon, delay: null, message: null, instantMessage: null };
+}
+
+function consumeTinObject(tin, floorObject = false) {
+    if (floorObject) consumeOneFloorObject(tin);
+    else consumeOneInventoryFood(tin);
+    game._tin_opening_occupation = null;
+}
+
+function tinContentName(tin) {
+    const monster = tin?.corpsenm;
+    if (!monster?.name) return 'monster';
+    return monster.name;
+}
+
+function tinSmellName(tin) {
+    const name = tinContentName(tin);
+    if (name === 'cockatrice' || name === 'chickatrice') return 'chicken';
+    return pluralizeMonsterName(name);
+}
+
+function applyTinMonsterSideEffects(tin) {
+    const name = tinContentName(tin);
+    if (name === 'newt' && (rn2(3) || 3 * (game.u?.uen || 0) <= 2 * (game.u?.uenmax || 0))) {
+        const oldEnergy = game.u?.uen || 0;
+        if (game.u) game.u.uen = oldEnergy + rnd(3);
+        if ((game.u?.uen || 0) > (game.u?.uenmax || 0)) {
+            if (!rn2(3) && game.u) game.u.uenmax = (game.u.uenmax || 0) + 1;
+            if (game.u) game.u.uen = game.u.uenmax || 0;
+        }
+        return (game.u?.uen || 0) !== oldEnergy ? 'You feel a mild buzz.' : '';
+    }
+    return '';
+}
+
+function tinTrapDamage() {
+    const difficulty = Math.max(1, level_difficulty());
+    const sides = 5 + (difficulty < 5 ? difficulty : 2 + Math.trunc(difficulty / 2));
+    return rnd(sides);
+}
+
+async function explodeTinTrap(tin, floorObject = false) {
+    const damage = tinTrapDamage();
+    if (game.u) {
+        game.u.uhp = Math.max(0, (game.u.uhp || 1) - damage);
+        game.u._stunTimeout = (game.u._stunTimeout || 0) + damage;
+        addHeroStatusSuffix('Stun');
+    }
+    exerciseAttribute(A_STR, false);
+    consumeTinObject(tin, floorObject);
+    await setMessage('KABOOM!!  The tin was booby-trapped!', true);
+    game._command_mode = null;
+    game.context.move = 1;
+}
+
+async function finishTinContents(tin, floorObject = false, eat = true, knownVariety = null) {
+    if (!eat) {
+        consumeTinObject(tin, floorObject);
+        await setMessage('You discard the open tin.');
+        game._command_mode = null;
+        game.context.move = 1;
+        return;
+    }
+
+    const r = knownVariety == null ? tinVariety(tin, false) : knownVariety;
+    const messages = [];
+    if (r === SPINACH_TIN) {
+        if (tin.cursed) messages.push('It contains some decaying green substance.');
+        else {
+            messages.push('It contains spinach.');
+            messages.push(`This makes you feel like ${game.u?.fixedAbilities ? (game.flags?.female ? 'Olive Oyl' : 'Bluto') : 'Popeye'}!`);
+            tin.known = true;
+        }
+        if (game.u?.acurr?.a && !game.u.fixedAbilities) {
+            const before = game.u.acurr.a[A_STR] ?? 10;
+            const after = Math.min(118, before + 1);
+            game.u.acurr.a[A_STR] = after;
+            if (game.u.amax?.a) game.u.amax.a[A_STR] = Math.max(game.u.amax.a[A_STR] || after, after);
+        }
+        const nutrition = tin.blessed ? 600 : !tin.cursed ? 400 + rnd(200) : 200 + rnd(400);
+        addHeroNutrition(nutrition);
+        consumeTinObject(tin, floorObject);
+        await setMessage(messages.join('  '), messages.length > 1);
+        game._command_mode = null;
+        game.context.move = 1;
+        return;
+    }
+
+    if (!tin.corpsenm?.name || tin.emptyTin || objectKindKey(tin) === 'empty tin') {
+        tin.known = true;
+        consumeTinObject(tin, floorObject);
+        await setMessage("It turns out to be empty.");
+        game._command_mode = null;
+        game.context.move = 1;
+        return;
+    }
+
+    const varietyText = TIN_VARIETY_TEXTS[r] || '';
+    const monsterName = tinContentName(tin);
+    messages.push(`You consume ${varietyText} ${monsterName}.`);
+    const sideEffect = applyTinMonsterSideEffects(tin);
+    if (sideEffect) messages.push(sideEffect);
+    tin.known = true;
+    if ((TIN_VARIETY_NUTRITION[r] || 0) < 0) {
+        addHeroVomiting(rn1(15, 10));
+    } else {
+        let nutrition = TIN_VARIETY_NUTRITION[r] || 0;
+        if (r === HOMEMADE_TIN)
+            nutrition = Math.min(nutrition, CORPSE_NUTRITION.get(monsterName) || nutrition);
+        addHeroNutrition(nutrition);
+    }
+    if (TIN_GREASY_VARIETIES.has(r)) {
+        const already = game.u?._glibTimeout || 0;
+        if (game.u) game.u._glibTimeout = already + rn1(11, 5);
+        messages.push(`Eating ${varietyText} food made your ${wornGlovesItem() ? 'gloves' : 'fingers'} ${already ? 'even more' : 'very'} slippery.`);
+    }
+    consumeTinObject(tin, floorObject);
+    await setMessage(messages.join('  '), messages.length > 1);
+    game._command_mode = null;
+    game.context.move = 1;
+}
+
+async function consumeOpenedTin(tin, floorObject = false, openMessage = 'You succeed in opening the tin.') {
+    if (!tin) return false;
+    const r = tinVariety(tin, false);
+    if (tin.otrapped || (tin.cursed && r !== HOMEMADE_TIN && !rn2(8))) {
+        await explodeTinTrap(tin, floorObject);
+        return true;
+    }
+
+    if (!tin.corpsenm?.name && r !== SPINACH_TIN) {
+        consumeTinObject(tin, floorObject);
+        await setMessage(`${openMessage}  It turns out to be empty.`, true);
+        game._command_mode = null;
+        game.context.move = 1;
+        return true;
+    }
+
+    const contents = r === SPINACH_TIN ? 'spinach' : tinSmellName(tin);
+    const first = r === SPINACH_TIN
+        ? `${openMessage}  ${tin.cursed ? 'It contains some decaying green substance.' : 'It contains spinach.'}`
+        : `${openMessage}  It smells like ${contents}.`;
+    game._tin_opened_pending = { tin, floorObject, variety: r };
+    await setMessage(`${first}  Eat it? [yn] (n)`, true);
+    game._command_mode = 'tinEatConfirm';
+    game.context.move = 1;
+    return true;
+}
+
+export function processTinOpeningOccupation() {
+    const occ = game._tin_opening_occupation;
+    if (!occ) return null;
+    const tin = occ.tin;
+    if (!tin) {
+        game._tin_opening_occupation = null;
+        return null;
+    }
+    if (occ.floorObject && (!game.level?.objects?.includes(tin)
+        || tin.ox !== game.u?.ux || tin.oy !== game.u?.uy || !heroCanReachFloorForSit().ok)) {
+        game._tin_opening_occupation = null;
+        return null;
+    }
+    if (!occ.floorObject && !(game.inventory || []).includes(tin)) {
+        game._tin_opening_occupation = null;
+        return null;
+    }
+    occ.usedtime ||= 0;
+    if (occ.usedtime++ >= 50) {
+        game._tin_opening_occupation = null;
+        return { message: 'You give up your attempt to open the tin.' };
+    }
+    if (occ.usedtime < occ.reqtime) return null;
+    game._tin_opening_occupation = null;
+    return { finish: { tin, floorObject: !!occ.floorObject } };
+}
+
+export async function finishTinOpeningOccupation(pending) {
+    const info = pending || game._tin_finish_after_turn;
+    game._tin_finish_after_turn = null;
+    if (!info?.tin) return false;
+    return consumeOpenedTin(info.tin, !!info.floorObject, 'You succeed in opening the tin.');
+}
+
+async function startTinOpening(tin, floorObject = false) {
+    if (!tin) return false;
+    const form = polyselfForm();
+    let message = '';
+    let delay = null;
+    let instantMessage = null;
+    if (form?.metallivorous || game.u?.metallivorous) {
+        message = 'You bite right into the metal tin...';
+        delay = 0;
+    } else if (polyselfNoHands() || form?.verysmall) {
+        await setMessage('You cannot handle the tin properly to open it.');
+        game._command_mode = null;
+        game.context.move = 1;
+        return true;
+    } else if (tin.blessed) {
+        delay = isTinOpenerObject(wieldedItem()) && wieldedItem()?.blessed ? 0 : rn2(2);
+        if (!delay) message = 'The tin opens like magic!';
+        else message = 'The tin seems easy to open.';
+    } else {
+        const opener = tinOpenerDelayWeapon();
+        if (opener.delay != null) {
+            delay = opener.delay;
+            message = opener.message;
+            instantMessage = opener.instantMessage;
+        } else {
+            message = 'It is not so easy to open this tin.';
+            if (game.u?._glibTimeout || game.u?.glib || (game.u?._statusSuffix || '').includes('Slippery')) {
+                const slip = `The tin slips from your ${wornGlovesItem() ? 'gloves' : 'fingers'}.`;
+                if (!floorObject) {
+                    if ((tin.quan || 1) > 1) {
+                        tin.quan--;
+                        refreshInventoryObjectLine(tin);
+                    } else {
+                        game.inventory = (game.inventory || []).filter(item => item !== tin);
+                    }
+                    tin = { ...tin, id: next_ident(), quan: 1, ox: game.u?.ux || 0, oy: game.u?.uy || 0 };
+                    game.level.objects ??= [];
+                    game.level.objects.push(tin);
+                    newsym(tin.ox, tin.oy);
+                }
+                await setMessage(`${message}  ${slip}`, true);
+                game._command_mode = null;
+                game.context.move = 1;
+                return true;
+            }
+            const dex = game.u?.acurr?.a?.[A_DEX] ?? 10;
+            const str = game.u?.acurr?.a?.[A_STR] ?? 10;
+            delay = rn1(1 + Math.trunc(500 / Math.max(1, dex + str)), 10);
+        }
+    }
+
+    if (!delay) {
+        await consumeOpenedTin(tin, floorObject, instantMessage || message || 'You succeed in opening the tin.');
+        return true;
+    }
+    game._tin_opening_occupation = { tin, floorObject, reqtime: delay, usedtime: 0 };
+    await setMessage(message);
+    game._command_mode = null;
+    game.context.move = 1;
+    return true;
+}
+
+function wieldTinOpenerForUse(opener) {
+    if (!opener || opener.wielded || opener.line?.includes('(wielded)') || opener.line?.includes('weapon in')) return;
+    const previous = wieldedItem();
+    if (previous && previous !== opener) {
+        previous.wielded = false;
+        previous.alternate = true;
+        previous.line = `${previous.letter || '?'} - ${inventoryItemName(previous)} (alternate weapon${(previous.quan || 1) > 1 ? 's' : ''}; not wielded)`;
+    }
+    opener.wielded = true;
+    opener.alternate = false;
+    opener.line = `${opener.letter || '?'} - ${inventoryItemName(opener)} (wielded)`;
+}
+
+async function beginTinOpenerUse(opener) {
+    const tins = (game.inventory || []).filter(isTinObject);
+    if (!tins.length) {
+        await setMessage('You have no tin to open.');
+        game._command_mode = null;
+        return true;
+    }
+    wieldTinOpenerForUse(opener);
+    if (tins.length === 1) {
+        await startTinOpening(tins[0], false);
+        return true;
+    }
+    const letters = tins.map(item => item.letter).filter(Boolean).join('');
+    await setMessage(`What do you want to open? [${getobjPromptLetters(letters)} or ?*]`);
+    game._tin_opener_letter = opener?.letter || '';
+    game._command_mode = 'tinOpenerObject';
+    return true;
 }
 
 function parseWishedTinName(lowerName) {
@@ -15557,6 +15889,7 @@ export async function rhack(_cmd) {
         && game._command_mode !== 'readInventoryMore'
         && game._command_mode !== 'throwInvalidMore'
         && game._command_mode !== 'wieldInvalidMore'
+        && game._command_mode !== 'tinEatConfirm'
         && game._command_mode !== 'takeOffInvalidMore'
         && game._command_mode !== 'markerWriteInvalidMore'
         && game._command_mode !== 'engraveToolMore'
@@ -17533,6 +17866,11 @@ export async function rhack(_cmd) {
                 game._process_command_time_now = 1;
                 game._process_time_with_more = 1;
             }
+            if (game._tin_opening_occupation) {
+                game.context.move = 1;
+                game._process_command_time_now = 1;
+                game._process_time_with_more = 1;
+            }
             return;
         }
         game._keep_pending_message = 1;
@@ -17547,6 +17885,7 @@ export async function rhack(_cmd) {
         && game._command_mode !== 'readInventoryMore'
         && game._command_mode !== 'throwInvalidMore'
         && game._command_mode !== 'wieldInvalidMore'
+        && game._command_mode !== 'tinEatConfirm'
         && game._command_mode !== 'takeOffInvalidMore'
         && game._command_mode !== 'markerWriteInvalidMore'
         && game._command_mode !== 'engraveToolMore'
@@ -22279,6 +22618,10 @@ export async function rhack(_cmd) {
             await beginRoyalJellyRub(item);
             return;
         }
+        if (isTinOpenerObject(item)) {
+            await beginTinOpenerUse(item);
+            return;
+        }
         if (['armor', 'weapon', 'amulet', 'ring', 'gem', 'food'].includes(item.cls)) {
             await setMessage("Sorry, I don't know how to use that.");
             return;
@@ -25617,6 +25960,41 @@ export async function rhack(_cmd) {
         return;
     }
 
+    if (game._command_mode === 'tinEatConfirm') {
+        const pending = game._tin_opened_pending;
+        if (ch === 'y') {
+            game._tin_opened_pending = null;
+            await finishTinContents(pending?.tin, !!pending?.floorObject, true, pending?.variety);
+            return;
+        }
+        if (ch === 'q' || ch === '\x1b' || ch === 'n' || ch === ' ' || ch === '\r' || ch === '\n') {
+            game._tin_opened_pending = null;
+            await finishTinContents(pending?.tin, !!pending?.floorObject, false, pending?.variety);
+            return;
+        }
+        game._keep_pending_message = 1;
+        return;
+    }
+
+    if (game._command_mode === 'tinOpenerObject') {
+        if (ch === '\x1b' || ch === ' ' || ch === '\r' || ch === '\n') {
+            await setMessage('Never mind.');
+            game._command_mode = null;
+            game._tin_opener_letter = '';
+            return;
+        }
+        const item = (game.inventory || []).find(invItem => invItem.letter === ch);
+        if (item && isTinObject(item)) {
+            game._tin_opener_letter = '';
+            await startTinOpening(item, false);
+            return;
+        }
+        const letters = (game.inventory || []).filter(isTinObject).map(invItem => invItem.letter).filter(Boolean).join('');
+        await setMessage("You don't have that object.", true);
+        game._topline_after_more = `What do you want to open? [${getobjPromptLetters(letters)} or ?*]`;
+        return;
+    }
+
     if (game._command_mode === 'eatInvalidMore') {
         if (ch === ' ' || ch === '\x1b' || ch === '\r' || ch === '\n') {
             await setMessage(eatingPrompt());
@@ -25643,6 +26021,10 @@ export async function rhack(_cmd) {
             const name = item.singular || pickupObjectName({ ...item, quan: 1 });
             const fortuneCookie = item.kind === 'fortune cookie';
             const corpse = item.otyp === 'corpse' || item.otyp === CORPSE;
+            if (isTinObject(item)) {
+                await startTinOpening(item, false);
+                return;
+            }
             if (corpse) {
                 const corpseName = item.corpsenm?.name || 'monster';
                 if (corpseName === 'lichen') {
@@ -25726,6 +26108,10 @@ export async function rhack(_cmd) {
             const oldCorpse = floorCorpse && food?.oldCorpse;
             const name = pickupObjectName({ ...(food || {}), quan: 1 });
             game._eat_floor_object = null;
+            if (isTinObject(food)) {
+                await startTinOpening(food, true);
+                return;
+            }
             if ((food?.otyp === 'corpse' || food?.otyp === CORPSE) && food?.corpsenm?.name === 'lichen') {
                 rn2(10);
                 game._eating_turns_remaining = 4;

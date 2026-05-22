@@ -3,7 +3,7 @@
 
 import { game } from './gstate.js';
 import { mklev, l_nhcore_init, u_on_upstairs, makemon, mkcorpstat, mksobj, wipe_engr_at, dropMonsterInventory, wandIndexForRoll, scrollIndexForRoll, potionIndexForRoll, RANDOM_MONSTER_BY_NAME, adjustedMonsterLevel, monsterByRndName, monster_hp, rndmonnum, syncDungeonContext, next_ident, set_malign, enextoMonsterSpot, getbogusmon, pickNasty } from './mklev.js';
-import { rhack, pickupObjectName, inventoryItemName, inventoryLetterRank, recordVanquished, finishForceLock, loseExperienceLevel, finishLevelTeleport, maybeQueueQuestLeaderTalk, monsterGrowUp, processSpellbookStudyOccupation, refreshSwallowOverlay, travelPathKeys, updateGauntletsOfPowerStrength, consumeLifeSavingAmulet } from './cmd.js';
+import { rhack, pickupObjectName, inventoryItemName, inventoryLetterRank, recordVanquished, finishForceLock, loseExperienceLevel, finishLevelTeleport, maybeQueueQuestLeaderTalk, monsterGrowUp, processSpellbookStudyOccupation, processTinOpeningOccupation, finishTinOpeningOccupation, refreshSwallowOverlay, travelPathKeys, updateGauntletsOfPowerStrength, consumeLifeSavingAmulet } from './cmd.js';
 import { docrt, cls, bot, flush_screen, pline, newsym, refreshHallucinatedMap, show_glyph_cell } from './display.js';
 import { vision_recalc, vision_reset, init_vision_globals, cansee, couldsee, view_from } from './vision.js';
 import { init_objects } from './o_init.js';
@@ -1980,6 +1980,9 @@ function stopStoningOccupations() {
     game._pending_force_lock_start_message = 0;
     game._pick_lock_occupation = null;
     game._pick_lock_continue_time = 0;
+    game._tin_opening_occupation = null;
+    game._tin_finish_after_turn = null;
+    game._tin_opened_pending = null;
     game._spellbook_study_occupation = null;
     game._spellbook_finish_after_topline_more = null;
     game._prayer_occupation = 0;
@@ -2101,7 +2104,8 @@ function processAttributeExercise() {
     game.context.next_attrib_check ??= 600;
     if (turn < game.context.next_attrib_check) return;
     if (game._helpless_time || game._armor_wear_occupation || game._eating_turns_remaining
-        || game._force_lock_occupation || game._pick_lock_occupation || game._prayer_occupation) return;
+        || game._force_lock_occupation || game._pick_lock_occupation || game._tin_opening_occupation
+        || game._prayer_occupation) return;
     if (game._fumble_turn_message_pending || game._pending_fumble_turn_message
         || game._last_fumble_turn_message) {
         game._fumble_delayed_exerchk = 1;
@@ -2268,6 +2272,17 @@ function processPickLockOccupation() {
     rn2(19);
     if (addToplineMessage(`You succeed in ${pick.action}.`))
         game._pick_lock_continue_time = 1;
+}
+
+async function processTinOpeningTurn() {
+    const result = processTinOpeningOccupation();
+    if (!result) return;
+    if (result.message) {
+        addToplineMessage(result.message);
+        return;
+    }
+    if (result.finish)
+        await finishTinOpeningOccupation(result.finish);
 }
 
 const HATCHLING_BY_EGG_MONSTER = new Map([
@@ -3407,7 +3422,8 @@ async function processMonsterTurns() {
                         const targetAc = game.u?.uac ?? 10;
                         let acValue = targetAc;
                         const occupationToHitBonus = game._armor_wear_occupation || game._eating_turns_remaining
-                            || game._force_lock_occupation || game._pick_lock_occupation || game._prayer_occupation ? 4 : 0;
+                            || game._force_lock_occupation || game._pick_lock_occupation || game._tin_opening_occupation
+                            || game._prayer_occupation ? 4 : 0;
                         const attackLevel = mon.m_lev ?? data.hpLevel ?? data.mlevel ?? 0;
 		                        let toHit = Math.max(1, acValue + 10 + attackLevel
                                 + occupationToHitBonus
@@ -5434,6 +5450,7 @@ async function finishMonsterTurnTail() {
             && !game._eating_turns_remaining
             && !game._force_lock_occupation
             && !game._pick_lock_occupation
+            && !game._tin_opening_occupation
             && !game._prayer_occupation
             && !game._helpless_time;
         if (canAutoSearch && game.u?.searching && !game.level?.flags?.noautosearch) {
@@ -8652,8 +8669,10 @@ export async function moveloop_core() {
 
         const earlyForceLock = g._force_lock_occupation && !g._process_time_with_more;
         const earlyPickLock = g._pick_lock_occupation && !g._process_time_with_more;
+        const earlyTinOpening = g._tin_opening_occupation && !g._process_time_with_more;
         if (earlyForceLock) processForceLockOccupation();
         if (earlyPickLock) processPickLockOccupation();
+        if (earlyTinOpening) await processTinOpeningTurn();
 
         if (g._eating_turns_remaining > 0 && !(g._pending_message && g._message_more && g._process_time_with_more)) {
             g._eating_turns_remaining--;
@@ -8939,6 +8958,7 @@ export async function moveloop_core() {
         }
         if (!earlyForceLock) processForceLockOccupation();
         if (!earlyPickLock) processPickLockOccupation();
+        if (!earlyTinOpening) await processTinOpeningTurn();
         if (g._force_lock_continue_time) {
             g._force_lock_continue_time = 0;
             g._pending_time_passed = Math.max(g._pending_time_passed || 0, 1);
@@ -8949,6 +8969,8 @@ export async function moveloop_core() {
             g._pending_time_passed = Math.max(g._pending_time_passed || 0, 1);
             g._continue_monsters_after_more = 1;
         }
+        if (g._tin_opening_occupation && !g._message_more)
+            g._pending_time_passed = Math.max(g._pending_time_passed || 0, 1);
         if (!earlyForceLock
             && g._force_lock_occupation
             && g._process_time_with_more
@@ -8993,7 +9015,8 @@ export async function moveloop_core() {
 	                || g._continue_monsters_after_more
 	                || g._deferred_monster_turn_tail
 	                || g._force_lock_occupation
-                    || g._pick_lock_occupation;
+                    || g._pick_lock_occupation
+                    || g._tin_opening_occupation;
             const completedTurnTailMore = g._turn_tail_topline_more && !moreNeedsTimeResume;
             if (g._armor_finish_after_more) g._armor_finish_after_more = 0;
             else if (g._suppress_more_time_once > 0) g._suppress_more_time_once--;
