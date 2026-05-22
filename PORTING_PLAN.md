@@ -1411,6 +1411,23 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   only seven random-wander candidates because its local positions have already
   drifted. Do not paper over that later `rnd(12)` until the earlier movement
   state is aligned.
+- The next `seed0014` slice now follows C through the tunneler-noise and hidden
+  bullwhip-attack prompt chain. C's `mdig_tunnel()` uses `You_hear("crashing
+  rock.")` without `nomul(0)`, so JS travel now treats the matching monster
+  tunneling message as non-interrupting and continues until the later fumble
+  line. Clearing the bullwhip follow-up now queues one pending time unit instead
+  of four, matching C's single resumed monster attack after `use_misc()` rather
+  than letting the same bugbear attack repeatedly before the next input
+  boundary. Hidden bullwhip attacks also use the normal C top-line fit rule
+  instead of forcing an after-more split when the combined message fits. The
+  bugbear corpse nutrition threshold is scoped to the `eat.c` immediate-bite
+  behavior needed here, keeping `seed0007` fully passing while matching C's
+  `Satiated` boundary around the finish-eating line. Focused parity advances
+  from `36747/59178` RNG calls and `595/714` screens to `52602/59178` RNG calls
+  and `668/714` screens; `seed0030` remains fully passing and the full public
+  smoke remains `37/44`. The current seed0014 frontier is a later map/path
+  divergence at screen 668 after level transition/exploration, with JS and C on
+  different displayed rooms.
 
 Next concrete target:
 

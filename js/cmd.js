@@ -17915,7 +17915,7 @@ export async function rhack(_cmd) {
                 game._bullwhip_resume_after_more = 0;
                 game._pending_message = '';
                 game._message_more = 0;
-                game._pending_time_passed = Math.max(game._pending_time_passed || 0, 4);
+                game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
                 game.context.move = 0;
                 game._process_command_time_now = 1;
                 game._process_deferred_context_now = 1;
@@ -27991,7 +27991,8 @@ export async function rhack(_cmd) {
                 game._eating_finish_message = `You finish eating the ${corpseName} corpse.`;
                 game._eating_floor_object = food;
                 game._eating_nutrition = biteNutrition * reqtime;
-                if (corpseName === 'bugbear') game._eating_nutrition -= biteNutrition;
+                // C takes an immediate first bite before the eating occupation ticks.
+                if (corpseName === 'bugbear') game._eating_nutrition += Math.max(0, biteNutrition - 2);
                 game._eating_newt_buzz = corpseName === 'newt';
                 await setMessage(corpseMessage);
                 game._command_mode = null;

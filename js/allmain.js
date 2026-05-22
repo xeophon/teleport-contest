@@ -3997,9 +3997,7 @@ async function processMonsterTurns() {
                                 }
 			                            const width = game.nhDisplay?.cols || 80;
 			                            const attackFits = pendingBeforeAttack.length + attackMessage.length + 3 < width - 8;
-                            const forceHiddenAfterMore = bullwhipHiddenAttack && pendingBeforeAttack
-	                                && game._message_more && game._process_time_with_more;
-			                            if (pendingBeforeAttack && (!attackFits || forceHiddenAfterMore)) {
+			                            if (pendingBeforeAttack && !attackFits) {
 	                                game._topline_after_more = attackMessage;
 		                                game._topline_more_after_more = 0;
 	                                game._attack_resume_after_more = 1;
@@ -4539,7 +4537,9 @@ async function processMonsterTurns() {
                             const wasWall = IS_WALL(digLoc.typ);
                             const wasTree = IS_TREE(digLoc.typ);
                             if ((wasWall || hiddenCavernWall) && !rn2(5)) {
-                                addToplineMessage('You hear crashing rock.');
+                                const shown = addToplineMessage('You hear crashing rock.');
+                                if (shown && !game._message_more)
+                                    game._travel_noninterrupting_message = game._pending_message;
                             }
                             if (wasWall && !hiddenCavernWall) {
                                 if (game.level?.flags?.is_maze_lev) {
@@ -9254,13 +9254,18 @@ export async function moveloop_core() {
                 && (g.u?.ux || 0) === g._travel_previous_target.x
                 && (g.u?.uy || 0) === g._travel_previous_target.y)
                 g._travel_previous_target = null;
-            const nonInterruptingTravelMessage = g._travel_dynamic_target
-                && /^A mysterious force prevents .* from teleporting!$/.test(g._pending_message || '');
+            const nonInterruptingTravelMessage = (g._travel_dynamic_target
+                && /^A mysterious force prevents .* from teleporting!$/.test(g._pending_message || ''))
+                || (g._travel_noninterrupting_message
+                    && g._pending_message === g._travel_noninterrupting_message);
             if (g._pending_message && !g._message_more && !nonInterruptingTravelMessage) {
                 g._travel_keys = [];
                 g._travel_dynamic_target = null;
+                g._travel_noninterrupting_message = '';
                 break;
             }
+            if (!g._pending_message || g._pending_message !== g._travel_noninterrupting_message)
+                g._travel_noninterrupting_message = '';
             if (g.context?.move) {
                 g._pending_time_passed += g.context.move;
                 g.context.move = 0;
