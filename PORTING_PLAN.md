@@ -1337,6 +1337,17 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   126 to the confused-scroll pager at screen 161, improving `seed5006` from
   `8469/13923` RNG calls and `131/249` screens to `8637/13923` RNG calls and
   `167/249` screens. The full public smoke remains `34/44`.
+- The next `seed5006` confused teleportation-scroll pager now follows C's
+  `doread()` pre-effect message order. `read.c` prints the disappearance line,
+  then prints the confused `mispronounce` line, and only then calls
+  `seffects()`; tty `update_topl()` refuses to append those two lines on an
+  80-column topline, so the Wisdom exercise happens on the confused-message
+  slice before the level-teleport prompt. JS now queues that second preamble
+  line and defers the `rn2(19)` exercise until it is displayed. `seed5006`
+  now matches through the level-teleport prompt and reaches the level-arrival
+  map/bones frontier at screen 165; focused screen parity improves from
+  `167/249` to `170/249` while RNG remains `8637/13923`. The full public smoke
+  remains `34/44`.
 
 Next concrete target:
 

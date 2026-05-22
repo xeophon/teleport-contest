@@ -22354,6 +22354,7 @@ export async function rhack(_cmd) {
         }
         if (isScroll && (scrollName === 'teleportation' || item.scrollIndex === 10)) {
             const confusedReading = heroIsConfused();
+            const debugWizard = !!game.flags?.debug;
             const alreadyKnown = scrollDiscoveryKnown('teleportation')
                 || item.known === true
                 || item.actualKind === 'scroll of teleportation'
@@ -22362,14 +22363,24 @@ export async function rhack(_cmd) {
             const callLabel = scrollCallLabel(item, 10);
             const messages = scrollDisappearMessages(confusedReading);
             removeInventoryItem(item);
-            rn2(19);
+            const deferConfusedPromptExercise = confusedReading
+                && !((heroHasAmuletOfYendor() || In_endgame(game.u?.uz) || In_sokoban(game.u?.uz)) && !debugWizard)
+                && ((heroHasTeleportControl() && !heroIsStunned()) || debugWizard);
+            if (!deferConfusedPromptExercise) rn2(19);
             if (!confusedReading && !item.cursed) rn2(19);
             const result = teleportationScrollEffect(item, messages);
             if (result.learned) learnScrollByName('teleportation', item, 10);
             if (result.promptLevel) {
                 game._read_confused_teleport_prompt_after_more = 1;
                 game._read_level_teleport_confused_prompt = result.confusedPrompt ? 1 : 0;
-                await setMessage(messages.join('  '), true);
+                if (deferConfusedPromptExercise && messages.length > 1) {
+                    game._queued_message_after_more = messages[1];
+                    game._queued_message_more_after_more = 1;
+                    game._read_scroll_exercise_after_more = 1;
+                    await setMessage(messages[0], true);
+                } else {
+                    await setMessage(messages.join('  '), true);
+                }
                 game._command_mode = null;
                 game.context.move = 0;
                 return;
