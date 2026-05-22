@@ -891,7 +891,7 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   the `Eat it?` prompt no longer fall through as ordinary one-turn food. Full
   egg knowledge UI, complete throne random effects, deeper `dotrap(VIASITTING)`
   edge details for fall blockers/destination special cases/controlled level
-  teleports, remaining fire inventory eligibility/ignite edge cases, and multi-turn
+  teleports, remaining fire burnarmor/material and floor-object edge cases, and multi-turn
   `victual`/per-bite nutrition for rations, corpses, and other long meals,
   full tin corpse side effects/shop billing/conduct detail, and complete
   extinction/vitals semantics remain future work.
@@ -903,6 +903,15 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   explode. Fire trap inventory handling now follows the C `burnarmor()` gating
   more closely by forcing item destruction after a torso hit and otherwise
   using the missing 2-in-3 fallback when a non-body armor hit occurs.
+- Fire inventory damage now shares C-shaped `destroy_items(AD_FIRE)` details
+  for hero and monster inventory: scrolls of fire and spellbooks of fireball
+  remain immune, the Book of the Dead can be selected and prints its dark-red
+  glow without being destroyed, green slime globs boil/explode with weight-based
+  damage, and item ignition now actually lights eligible lamps/candles/oil
+  after trap/explosion/self-zap fire instead of only consuming placeholder RNG.
+  Ordinary movement onto a fire trap now also routes through the same hero fire
+  trap resolver as `#sit`, so trap discovery, HP damage, inventory damage, and
+  ignition no longer diverge between those two paths.
 - Wished container state prefixes now cover the C `readobjnam()` object slice
   for `locked`, `unlocked`, `broken`, `trapped`, `untrapped`, and `empty`:
   boxes keep normal generated contents and lock/trap RNG before final state
@@ -1126,9 +1135,9 @@ Next concrete target:
 - The next narrow `#sit` trap slice should deepen the remaining
   `trap.c:trapeffect_*()` details now that deferred level-changing traps are
   live: full hole/trapdoor blockers and stronghold/Hell destination handling,
-  controlled level-teleport post-prompt messages, remaining fire inventory
-  eligibility/ignite details, and shared helpers with the movement trap path
-  where that lowers divergence.
+  controlled level-teleport post-prompt messages, remaining fire `burnarmor()`
+  material/protection and floor-object burning details, and shared helpers with
+  the movement trap path where that lowers divergence.
 - Use `sessions/*.session.json` to locate divergences, but keep fixes in real
   mechanics. A score recovery is only valid when it falls out of those
   mechanics.

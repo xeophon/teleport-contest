@@ -4895,46 +4895,147 @@ function burnWornArmorFromFire() {
     }
 }
 
+function fireInventoryNameVerb(name, singular, plural) {
+    return /\b(?:boots|shoes|gloves|gauntlets|scales|arrows|darts|bolts|candles|scrolls|potions|globs)\b/i.test(name)
+        && !/\bmail\b/i.test(name) ? plural : singular;
+}
+
+function addFireInventoryMessage(messages, events, text, event, armor, joinState) {
+    if (!joinState.joinedArmorMessage && messages.length === 1 && armor.message) {
+        messages[0] = `${messages[0]}  ${text}`;
+        events.push({ ...event, text: messages[0] });
+        joinState.joinedArmorMessage = true;
+        return;
+    }
+    messages.push(text);
+    events.push({ ...event, text });
+}
+
+function isGreenSlimeGlobItem(item) {
+    return item?.otyp === GLOB_OF_GREEN_SLIME
+        || (item?.globby && /\bgreen slime\b/i.test(objectKindKey(item) || pickupObjectName(item)));
+}
+
+function fireInventoryItemDamage(item, cls) {
+    if (cls === 'potion') return rnd(6);
+    if (cls === 'slime') return Math.trunc(((item.owt || 20) + 19) / 20);
+    return game.u?.fireResistance ? 0 : 1;
+}
+
+function fireInventoryDeathCause(cls, item, plural) {
+    if (cls === 'slime') return plural
+        ? 'killed by exploding globs of slime'
+        : 'killed by an exploding glob of slime';
+    if (cls === 'potion') {
+        const oil = isPotionOfOil(item);
+        return oil
+            ? plural ? 'killed by exploding potions' : 'killed by exploding potion'
+            : plural ? 'killed by boiling potions' : 'killed by boiling potion';
+    }
+    if (cls === 'spellbook') return 'killed by burning book';
+    return plural ? 'killed by burning scrolls' : 'killed by burning scroll';
+}
+
+function fireInventoryDestroyVerb(cls, item, plural) {
+    if (cls === 'potion' && isPotionOfOil(item))
+        return plural ? 'ignite and explode' : 'ignites and explodes';
+    if (cls === 'potion' || cls === 'slime')
+        return plural ? 'boil and explode' : 'boils and explodes';
+    return plural ? 'catch fire and burn' : 'catches fire and burns';
+}
+
+function fireItemCanCatchLight(item) {
+    if (!item || item.lamplit || item.burning || item.in_use) return false;
+    const kind = objectKindKey(item);
+    if (item.otyp === BRASS_LANTERN || kind === 'brass lantern') return false;
+    if (isPotionOfOil(item)) return (item.age ?? 400) !== 0;
+    if (item.otyp === OIL_LAMP || kind === 'oil lamp') return (item.age ?? 1500) !== 0;
+    if (item.otyp === MAGIC_LAMP || kind === 'magic lamp') return (item.spe ?? 1) > 0;
+    if (isCandleObject(item)) return (item.age ?? candleDefaultAge(item)) !== 0;
+    if (item.otyp === CANDELABRUM_OF_INVOCATION || kind === 'candelabrum of invocation')
+        return (item.spe ?? 0) > 0 && !item.cursed;
+    return false;
+}
+
+function maybeIgniteFireItem(item, messages, events, armor, joinState) {
+    if (!fireItemCanCatchLight(item)) return false;
+    const kind = objectKindKey(item);
+    if ((item.otyp === OIL_LAMP || item.otyp === MAGIC_LAMP || kind === 'oil lamp' || kind === 'magic lamp')
+        && item.cursed && !rn2(2))
+        return false;
+    const name = pickupObjectName({ ...item, line: '' });
+    const message = game.u?.blind
+        ? `Your ${name} ${fireInventoryNameVerb(name, 'feels', 'feel')} warm.`
+        : `Your ${name} ${fireInventoryNameVerb(name, 'catches', 'catch')} light!`;
+    beginWishedBurn(item);
+    item.line = normalInventoryLine({ ...item, line: '' });
+    addFireInventoryMessage(messages, events, message, { damage: 0 }, armor, joinState);
+    return true;
+}
+
+function igniteFireInventoryItems(messages, events, armor, joinState) {
+    for (const item of [...(game.inventory || [])])
+        maybeIgniteFireItem(item, messages, events, armor, joinState);
+}
+
 function fireDamageInventory(origDamage, forceDestroyItems = false, rollIgniteItems = false) {
     const messages = [];
     const events = [];
     const armor = burnWornArmorFromFire();
     if (armor.message) messages.push(armor.message);
-    let joinedArmorMessage = false;
-    const destroyItems = forceDestroyItems || armor.bodyHit || rn2(3);
-    if (!destroyItems) {
-        if (rollIgniteItems) rn2(3);
+    const joinState = { joinedArmorMessage: false };
+    let destroyItems = false;
+    let igniteItems = false;
+    if (forceDestroyItems) {
+        destroyItems = true;
+        igniteItems = true;
+    } else if (rollIgniteItems) {
+        if (!armor.bodyHit) return { messages, events, damage: 0, deathCause: '' };
+        destroyItems = !rn2(3);
+        igniteItems = !rn2(3);
+    } else if (armor.bodyHit || rn2(3)) {
+        destroyItems = true;
+        igniteItems = true;
+    } else {
         return { messages, events, damage: 0, deathCause: '' };
+    }
+
+    let damage = 0;
+    let deathCause = '';
+    if (!destroyItems) {
+        if (igniteItems) igniteFireInventoryItems(messages, events, armor, joinState);
+        return { messages, events, damage, deathCause };
     }
 
     let limit = Math.trunc(origDamage / 5);
     if (origDamage % 5 > rn2(5)) limit++;
     if (limit < 1) {
-        if (rollIgniteItems) rn2(3);
-        return { messages, events, damage: 0, deathCause: '' };
+        if (igniteItems) igniteFireInventoryItems(messages, events, armor, joinState);
+        return { messages, events, damage, deathCause };
     }
     limit = Math.min(20, limit);
 
     const selected = [];
     let eligible = 0;
     for (const item of [...(game.inventory || [])]) {
-        const cls = item.cls || (item.otyp === POTION_CLASS ? 'potion' : item.otyp === SCROLL_CLASS ? 'scroll' : '');
-        if (item.artifact || (item.in_use && (item.quan || 1) === 1)) continue;
-        if (cls !== 'potion' && cls !== 'scroll' && cls !== 'spellbook') continue;
-        const itemName = String(item.actualKind || item.kind || inventoryItemName(item));
-        if (cls === 'scroll' && (item.scrollIndex === 16 || /scroll of fire\b/i.test(itemName))) continue;
-        if (cls === 'spellbook' && /(?:spellbook of )?fireball|Book of the Dead/i.test(itemName)) continue;
+        const cls = fireDestroyableInventoryClass(item);
+        if (!cls || fireInventoryItemImmune(item, cls)) continue;
         const i = eligible < limit ? eligible : rn2(eligible);
         eligible++;
         if (i < limit) selected[i] = item;
     }
 
-    let damage = 0;
-    let deathCause = '';
     for (const item of selected.filter(Boolean)) {
-        const cls = item.cls || (item.otyp === POTION_CLASS ? 'potion' : item.otyp === SCROLL_CLASS ? 'scroll' : '');
+        const cls = fireDestroyableInventoryClass(item);
+        if (cls === 'spellbook' && isBookOfTheDeadItem(item)) {
+            if (!game.u?.blind)
+                addFireInventoryMessage(messages, events,
+                    'The Book of the Dead glows a strange dark red, but remains intact.',
+                    { damage: 0 }, armor, joinState);
+            continue;
+        }
         const quan = item.quan || 1;
-        const itemDamage = cls === 'potion' ? rnd(6) : 0;
+        const itemDamage = fireInventoryItemDamage(item, cls);
         let destroyed = 0;
         for (let i = 0; i < quan; i++)
             if (!rn2(3)) destroyed++;
@@ -4948,45 +5049,27 @@ function fireDamageInventory(origDamage, forceDestroyItems = false, rollIgniteIt
                 : destroyed < quan ? `Some of your ${name}`
                     : quan === 2 ? `Both of your ${name}`
                         : `All of your ${name}`;
-        let message = '';
         const event = { text: '', damage: 0 };
-        if (cls === 'potion') {
-            const oil = item.potionIndex === 24 || /\boil\b/i.test(item.actualKind || item.kind || inventoryItemName(item));
-            message = `${subject} ${oil
-                ? plural ? 'ignite and explode' : 'ignites and explodes'
-                : plural ? 'boil and explode' : 'boils and explodes'}!`;
+        const message = `${subject} ${fireInventoryDestroyVerb(cls, item, plural)}!`;
+        if (cls === 'potion' || cls === 'slime') {
             event.damage = itemDamage;
-            if (item.potionIndex === 8 || /invisibility/i.test(item.actualKind || item.kind || inventoryItemName(item)))
+            if (cls === 'potion' && (item.potionIndex === 8 || /invisibility/i.test(item.actualKind || item.kind || inventoryItemName(item))))
                 event.breatheMessage = "For an instant you couldn't see yourself!";
             damage += itemDamage;
-            deathCause = oil
-                ? plural ? 'killed by exploding potions' : 'killed by exploding potion'
-                : plural ? 'killed by boiling potions' : 'killed by boiling potion';
+            deathCause = fireInventoryDeathCause(cls, item, plural);
             removeInventoryItem(item, destroyed);
-            rn2(2);
+            if (cls === 'potion') rn2(2);
         } else {
-            message = `${subject} ${plural ? 'catch fire and burn' : 'catches fire and burns'}!`;
             removeInventoryItem(item, destroyed);
             if (!game.u?.fireResistance) {
                 event.damage = 1;
                 damage += 1;
-                deathCause = cls === 'spellbook'
-                    ? 'killed by burning book'
-                    : plural ? 'killed by burning scrolls' : 'killed by burning scroll';
+                deathCause = fireInventoryDeathCause(cls, item, plural);
             }
         }
-        if (!joinedArmorMessage && messages.length === 1 && armor.message) {
-            messages[0] = `${messages[0]}  ${message}`;
-            event.text = messages[0];
-            joinedArmorMessage = true;
-        }
-        else {
-            messages.push(message);
-            event.text = message;
-        }
-        events.push(event);
+        addFireInventoryMessage(messages, events, message, event, armor, joinState);
     }
-    if (rollIgniteItems) rn2(3);
+    if (igniteItems) igniteFireInventoryItems(messages, events, armor, joinState);
     return { messages, events, damage, deathCause };
 }
 
@@ -8685,20 +8768,27 @@ function heroIsDeaf() {
 }
 
 function fireDestroyableInventoryClass(item) {
-    const cls = item?.cls || '';
+    if (isGreenSlimeGlobItem(item)) return 'slime';
+    const cls = item?.cls || (item?.otyp === POTION_CLASS || item?.otyp === POT_WATER || item?.otyp === POT_OIL || item?.glyph === '!' ? 'potion'
+        : item?.otyp === SCROLL_CLASS || item?.glyph === '?' ? 'scroll'
+            : item?.otyp === SPBOOK_NO_NOVEL || item?.otyp === SPE_HEALING || item?.otyp === BOOK_OF_THE_DEAD || item?.glyph === '+'
+                ? 'spellbook'
+                : '');
     if (cls === 'potion' || cls === 'scroll' || cls === 'spellbook') return cls;
     const name = String(item?.actualKind || item?.kind || item?.line || '').toLowerCase();
+    if (/\bglob of green slime\b/.test(name)) return 'slime';
     if (name.includes('potion')) return 'potion';
     if (name.includes('scroll')) return 'scroll';
-    if (name.includes('spellbook')) return 'spellbook';
+    if (name.includes('spellbook') || name.includes('book of the dead')) return 'spellbook';
     return '';
 }
 
 function fireInventoryItemImmune(item, cls) {
     const name = String(item?.actualKind || item?.kind || item?.line || '').toLowerCase();
+    if (item?.artifact || item?.oartifact || (item?.in_use && (item?.quan || 1) === 1)) return true;
     if (cls === 'scroll' && (item?.scrollIndex === 16 || /\bscroll of fire\b/.test(name))) return true;
-    if (cls === 'spellbook' && (/\bfireball\b/.test(name) || /\bbook of the dead\b/.test(name))) return true;
-    return !!item?.artifact || !!item?.oartifact || (item?.in_use && (item?.quan || 1) === 1);
+    if (cls === 'spellbook' && /\bfireball\b/.test(name)) return true;
+    return false;
 }
 
 function monsterFireInventoryDamage(mon, origDamage, messages, visible) {
@@ -8723,8 +8813,14 @@ function monsterFireInventoryDamage(mon, origDamage, messages, visible) {
     const resistsFire = !!(mon?.fireResistance || mon?.data?.resistsFire);
     for (const item of selected.filter(Boolean)) {
         const cls = fireDestroyableInventoryClass(item);
+        if (cls === 'spellbook' && isBookOfTheDeadItem(item)) {
+            if (visible) messages.push('The Book of the Dead glows a strange dark red, but remains intact.');
+            continue;
+        }
         const quan = item.quan || 1;
-        const itemDamage = cls === 'potion' ? rnd(6) : resistsFire ? 0 : 1;
+        const itemDamage = cls === 'potion' ? rnd(6)
+            : cls === 'slime' ? Math.trunc(((item.owt || 20) + 19) / 20)
+                : resistsFire ? 0 : 1;
         let destroyed = 0;
         for (let i = 0; i < quan; i++)
             if (!rn2(3)) destroyed++;
@@ -8738,9 +8834,7 @@ function monsterFireInventoryDamage(mon, origDamage, messages, visible) {
                     : destroyed < quan ? `Some of ${possessive} ${itemName}`
                         : quan === 2 ? `Both of ${possessive} ${itemName}`
                             : `All of ${possessive} ${itemName}`;
-            const verb = cls === 'potion'
-                ? plural ? 'boil and explode' : 'boils and explodes'
-                : plural ? 'catch fire and burn' : 'catches fire and burns';
+            const verb = fireInventoryDestroyVerb(cls, item, plural);
             messages.push(`${subject} ${verb}!`);
         }
         const remaining = quan - destroyed;
@@ -12870,10 +12964,10 @@ function sitRustTrapMessage(trap, prefix) {
     return messages.join('  ');
 }
 
-function sitFireTrapMessage(trap, prefix) {
+function heroFireTrapMessage(trap, prefix = '') {
     trap.tseen = true;
     const origDamage = d(2, 4);
-    const messages = [`${prefix}  A tower of flame erupts from the floor!`];
+    const messages = [prefix ? `${prefix}  A tower of flame erupts from the floor!` : 'A tower of flame erupts from the floor!'];
     let damage = 0;
     if (game.u?.fireResistance) {
         damage = rn2(2);
@@ -12892,6 +12986,10 @@ function sitFireTrapMessage(trap, prefix) {
     if (game.u) game.u.uhp = Math.max(0, (game.u.uhp || 1) - damage);
     if ((game.u?.uhp || 0) <= 0) game._death_cause = inventoryFire.deathCause || 'killed by a tower of flame';
     return messages.join('  ');
+}
+
+function sitFireTrapMessage(trap, prefix) {
+    return heroFireTrapMessage(trap, prefix);
 }
 
 function sitTeleportTrapMessage(trap, prefix) {
@@ -15355,6 +15453,10 @@ async function moveHero(dx, dy) {
         steppedTrap.tseen = true;
         rn2(5);
         await setMessage('A gush of water hits you!');
+        return;
+    }
+    if (steppedTrap?.ttyp === FIRE_TRAP) {
+        await setMessage(heroFireTrapMessage(steppedTrap), true);
         return;
     }
     if (steppedTrap?.ttyp === ROLLING_BOULDER_TRAP) {
