@@ -1357,6 +1357,14 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   for replacement. `seed5006-tourist-stress-disaster` now has full focused
   parity: `13923/13923` RNG calls, `249/249` screens, and `249/249` cursors.
   The full public smoke improves to `35/44`.
+- The `seed2200` options-help tail now follows C `option_help()`'s generated
+  intro. C substitutes `get_configfile()` into the `OPTIONS=<options>` line at
+  run time; in the recorder harness that line wraps before the absolute
+  config path, shifting every later help page by one row. JS now uses the same
+  two-line intro captured by the harness, so the option-help pager aligns
+  without changing any RNG. `seed2200-wizard-quaff-zap-read` now passes with
+  `3018/3018` RNG calls and `230/230` screens. The full public smoke improves
+  to `36/44`.
 
 Next concrete target:
 
@@ -1369,14 +1377,14 @@ Next concrete target:
   semantics, C special-level room/corridor/shop filling for `minetn-3.lua`, and
   full `eat.c`, `sp_lev.c`, `mkobj.c`, `makemon.c`, `uhitm.c`, and
   `dogmove.c` behavior.
-- The Archeologist tour, exact-wand wish tails, healer scroll tail, and
-  tourist disaster path are now closed; use them as regression guards for
-  artifact wishing, restored-level Sokoban return, discovery menus, wizard
-  enlightenment, C `readobjnam()` probability accounting, scroll
-  `makeknown()` exercise, multi-`pline()` scroll message ordering, confused
-  level teleportation, bones replacement prompts, and fire-ray
-  `destroy_items()` timing before widening the same C-grounded fixes to other
-  sessions.
+- The Archeologist tour, exact-wand wish tails, healer scroll tail, tourist
+  disaster path, and wizard quaff/zap/read option-help path are now closed;
+  use them as regression guards for artifact wishing, restored-level Sokoban
+  return, discovery menus, wizard enlightenment, C `readobjnam()` probability
+  accounting, scroll `makeknown()` exercise, multi-`pline()` scroll message
+  ordering, confused level teleportation, bones replacement prompts, generated
+  help-window paging, and fire-ray `destroy_items()` timing before widening
+  the same C-grounded fixes to other sessions.
 - The next narrow `#sit` trap slice should deepen the remaining
   `trap.c:trapeffect_*()` details now that deferred level-changing traps are
   live: floor-object `impact_drop()` effects for holes/trapdoors, positive
