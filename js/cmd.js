@@ -1261,12 +1261,12 @@ const WAND_NAME_TO_INDEX = new Map([
     ['sleep', 22], ['death', 23], ['lightning', 24],
 ]);
 const WAND_WISH_NAMEDESC_BOUNDS = new Map([
-    ['light', 95], ['secret door detection', 50], ['enlightenment', 15], ['create monster', 50],
-    ['wishing', 5], ['stasis', 45], ['nothing', 25], ['striking', 30], ['make invisible', 45],
-    ['slow monster', 50], ['speed monster', 50], ['undead turning', 50], ['polymorph', 45],
-    ['cancellation', 45], ['teleportation', 45], ['opening', 30], ['locking', 30],
-    ['probing', 30], ['digging', 40], ['magic missile', 50], ['fire', 40], ['cold', 40],
-    ['sleep', 50], ['death', 5], ['lightning', 40],
+    ['light', 96], ['secret door detection', 51], ['enlightenment', 16], ['create monster', 51],
+    ['wishing', 6], ['stasis', 46], ['nothing', 26], ['striking', 31], ['make invisible', 46],
+    ['slow monster', 51], ['speed monster', 51], ['undead turning', 51], ['polymorph', 46],
+    ['cancellation', 46], ['teleportation', 46], ['opening', 31], ['locking', 31],
+    ['probing', 31], ['digging', 41], ['magic missile', 51], ['fire', 41], ['cold', 41],
+    ['sleep', 51], ['death', 6], ['lightning', 41],
 ]);
 const IDENTIFIED_WAND_NAMES = [...WAND_NAME_TO_INDEX.keys()];
 const NO_DIRECTION_WAND_NAMES = new Set(['light', 'secret door detection', 'enlightenment', 'create monster', 'wishing', 'stasis']);

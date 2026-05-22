@@ -1262,6 +1262,17 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   frontiers include the early healer reflection drummer divergence at screen
   97, the Dequa fountain/explore divergence at screen 35, wizard world-tour
   branch generation at screen 181, and larger Quest/coverage suites.
+- Exact wand wishes now use C `rnd_otyp_by_namedesc()` bounds: `objnam.c`
+  adds `xtra_prob == 1` to each matching object probability before the
+  `rn2(maxprob)` roll, so JS namedesc rolls for `wand of digging`,
+  `polymorph`, `teleportation`, and the rest now use `oc_prob + 1`. This closes
+  the one-call RNG tails in `seed0116-wizard-wear-shop` and
+  `seed0398-wizard-wandpoly-pile`, while keeping
+  `seed0108-wizard-extcmd-wishlist` passing. `npm run score` improved to
+  `31/44`; remaining broad frontiers include the early healer reflection
+  drummer divergence at screen 97, the Dequa fountain/explore divergence at
+  screen 35, wizard world-tour branch generation at screen 181, and larger
+  Quest/coverage suites.
 
 Next concrete target:
 
@@ -1274,9 +1285,10 @@ Next concrete target:
   semantics, C special-level room/corridor/shop filling for `minetn-3.lua`, and
   full `eat.c`, `sp_lev.c`, `mkobj.c`, `makemon.c`, `uhitm.c`, and
   `dogmove.c` behavior.
-- The Archeologist tour is now closed; use it as a regression guard for
-  artifact wishing, restored-level Sokoban return, discovery menus, and wizard
-  enlightenment before widening the same C-grounded fixes to other sessions.
+- The Archeologist tour and exact-wand wish tails are now closed; use them as
+  regression guards for artifact wishing, restored-level Sokoban return,
+  discovery menus, wizard enlightenment, and C `readobjnam()` probability
+  accounting before widening the same C-grounded fixes to other sessions.
 - The next narrow `#sit` trap slice should deepen the remaining
   `trap.c:trapeffect_*()` details now that deferred level-changing traps are
   live: floor-object `impact_drop()` effects for holes/trapdoors, positive
