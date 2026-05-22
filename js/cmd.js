@@ -15327,6 +15327,7 @@ async function moveHero(dx, dy) {
         }
 
         if (!killed) {
+            if (!peacefulShopkeeper) mon._pre_distfleeck_ac_after_hero_attack = 1;
             if (wokeFromSleep) messages.push(`The ${name} wakes up!`);
             if (deferSleepingTwoWeapon) {
                 game._queued_messages_after_more ??= [];
@@ -16723,7 +16724,10 @@ export async function rhack(_cmd) {
             await finishLevelTeleport(branchLevel(game.u?.uz?.dnum ?? -1) || { dnum: 0, dlevel: 14 }, { portalArrival: true });
             game._pending_message = '';
             game._message_more = 0;
-            game.context.move = 1;
+            game._resume_time_after_more = 0;
+            game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
+            game.context.move = 0;
+            game._process_deferred_context_now = 1;
             game._command_mode = null;
         }
         return;

@@ -1196,6 +1196,21 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   `27/44`; the focused first screen mismatch is later, while the aggregate
   `seed0361` scorer metric is `197/366` because later divergent frames still
   dominate the count.
+- The next Archeologist tour pass closed the Quest-expulsion and early Gnomish
+  Mines monster-turn gap with C-derived paths: portal arrival now clears the
+  stale `--More--` time resume state and drains the deferred post-expulsion
+  turn immediately like `moveloop_core()`, special rare-book/second-hand
+  bookstore stock consumes the `SPE_NOVEL` title `rn2(41)`, monsters with no
+  legal move can still use defensive healing potions via the `find_defensive()`
+  / `use_defensive()` path, already-fast monsters are no longer barred from
+  healing potion use, hero melee marks the target for the C `mattacku()`
+  `AC_VALUE(u.uac)` draw before the next `distfleeck()`, and no-move in-range
+  non-near monsters consume the same post-`m_move()` `mattacku()` AC roll when
+  the recalculated `distfleeck()` branch allows it. `seed0361-archeologist-tour`
+  now matches focused screens 203, 236, and 237-240; full display compare first
+  differs at screen 261 on HP, and flat RNG first differs at screen 240 on a
+  missing `rnd(4)`. The latest public score remains `27/44`, with the seed0361
+  scorer metric improved to `266/366` screens and `22647/53865` RNG calls.
 
 Next concrete target:
 
@@ -1208,13 +1223,12 @@ Next concrete target:
   semantics, C special-level room/corridor/shop filling for `minetn-3.lua`, and
   full `eat.c`, `sp_lev.c`, `mkobj.c`, `makemon.c`, `uhitm.c`, and
   `dogmove.c` behavior.
-- The next narrow Archeologist tour slice should inspect the screen 188
-  closed-door open attempt after Quest expulsion: C's `doopen_indir()` consumes
-  `rnl(20)=12` and prints `The door resists!`, while JS reaches the same
-  visible room/closed door but consumes a different global RNG value and opens
-  it. After the wished-artifact touch fix, the broad root cause is the
-  Quest-expulsion turn-order lag: C processes the post-expulsion monster turn
-  in the arrival slice while JS processes it one input boundary later.
+- The next narrow Archeologist tour slice should inspect the screen 240 flat
+  RNG frontier in the Gnomish Mines monster loop: C consumes `rnd(4)` from
+  `mattacku(mhitu.c:709)` before the next JS post-move `rn2(5)`, while the
+  visible screens remain aligned until the HP-only mismatch at screen 261. This
+  likely needs deeper `monmove.c` status/scared/range2 parity rather than a
+  display-side fix.
 - The next narrow `#sit` trap slice should deepen the remaining
   `trap.c:trapeffect_*()` details now that deferred level-changing traps are
   live: floor-object `impact_drop()` effects for holes/trapdoors, positive
