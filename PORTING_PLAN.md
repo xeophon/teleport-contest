@@ -990,9 +990,12 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   square readings handle cursed-book, missing-relic, cursed-relic, amiss, and
   primed Bell/Candelabrum success branches, successful invocation opens the
   downward stair and sets `invoked`/`udemigod`/`udg_cnt`, blessed readings
-  pacify or tame visible undead, and cursed/amiss readings perform the first
-  raise-dead adversary slice. Full `mkundead()` and carried corpse/egg revival
-  remain future work.
+  pacify or tame visible undead, and cursed/amiss readings now follow the C
+  raise-dead ordering through the adversary attempt, top-level carried
+  corpse/egg unturning, and `mkundead()`-style nearby undead/floor-corpse
+  effects. Deeper revive edge cases such as containers, shop billing, active
+  ghost recorporealization, `cant_revive()` substitutions, and generic egg
+  hatch timeout processing remain future work.
 - Monster-class row ordering no longer depends on Node 22's
   `Array.prototype.toSorted()`: the JS `mkclass` metadata path now uses an
   explicit copied difficulty sort that preserves equal-difficulty order, matching

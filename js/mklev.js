@@ -8894,7 +8894,7 @@ async function valleyMonster(name) {
     return makemon(ptr, loc.x, loc.y, 0);
 }
 
-function valleyMorgueMonster() {
+export function morgueMonster() {
     const roll = rn2(100);
     const hd = rn2(level_difficulty());
     if (hd > 10 && roll < 10 && game.inhell) {
@@ -8910,6 +8910,10 @@ function valleyMorgueMonster() {
     if (roll < 20) return GHOST;
     if (roll < 40) return valleyMonsterData('wraith');
     return mkclassAligned('Z', true);
+}
+
+function valleyMorgueMonster() {
+    return morgueMonster();
 }
 
 async function make_asmodeus_level() {

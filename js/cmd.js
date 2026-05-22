@@ -5,8 +5,8 @@ import { game } from './gstate.js';
 import { nhgetch } from './input.js';
 import { bot, cls, docrt, flush_screen, newsym, pline, refreshHallucinatedMap, show_glyph_cell, strengthString } from './display.js';
 import { couldsee, vision_recalc, vision_reset } from './vision.js';
-import { RANDOM_MONSTER_BY_NAME, SHOP_TYPES, artifactObjectName, enextoMonsterSpot, make_tutorial1_level, makemon, makeArtifactWishObject, mkcorpstat, mklev, mkobj_at, mksobj, monsterByRndName, nameObjectAsArtifact, next_ident, potionIndexForRoll, rndmonnum, scrollIndexForRoll, syncDungeonContext, u_on_dnstairs, u_on_rndspot, u_on_upstairs, wipe_engr_at, dropMonsterInventory, l_nhcore_init, getrumor, getbogusmon, level_difficulty, set_malign, somexyspace } from './mklev.js';
-import { ACCESSIBLE, A_CHA, A_CON, A_DEX, A_INT, A_MAX, A_STR, A_WIS, ALTAR, BC_BALL, BC_CHAIN, BEAR_TRAP, BLCORNER, BOLT_LIM, BRCORNER, CLOUD, COLNO, CORPSTAT_FEMALE, CORPSTAT_GENDER, CORPSTAT_HISTORIC, CORPSTAT_MALE, CORPSTAT_NEUTER, CORR, DOOR, BURN, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, DUST, ENGRAVE, ENGR_BLOOD, FOUNTAIN, GRAVE, HEADSTONE, HWALL, ICE, IN_SIGHT, IS_AIR, IS_OBSTRUCTED, IS_POOL, IS_ROOM, IS_WALL, In_endgame, In_quest, In_sokoban, Is_earthlevel, Is_rogue_level, Is_waterlevel, LADDER, LAVAPOOL, LAVAWALL, MAGIC_PORTAL, MARK, MM_EDOG, MM_NOMSG, MOAT, NO_MINVENT, NORMAL_SPEED, OVERLOADED, P_BASIC, P_UNSKILLED, POOL, ROLLING_BOULDER_TRAP, ROOM, ROT_AGE, ROOMOFFSET, ROWNO, SCORR, SDOOR, SHOPBASE, SINK, STAIRS, STONE, TDWALL, TEMPLE, THRONE, TLCORNER, TRCORNER, TREE, TUWALL, VAULT, VIBRATING_SQUARE, VWALL, WAND_BACKFIRE_CHANCE, WATER, WT_IRON_BALL_BASE, WT_IRON_BALL_INCR, ZAP_POS } from './const.js';
+import { RANDOM_MONSTER_BY_NAME, SHOP_TYPES, artifactObjectName, enextoMonsterSpot, make_tutorial1_level, makemon, makeArtifactWishObject, mkcorpstat, mklev, mkobj_at, mksobj, monsterByRndName, morgueMonster, nameObjectAsArtifact, next_ident, potionIndexForRoll, rndmonnum, scrollIndexForRoll, syncDungeonContext, u_on_dnstairs, u_on_rndspot, u_on_upstairs, wipe_engr_at, dropMonsterInventory, l_nhcore_init, getrumor, getbogusmon, level_difficulty, set_malign, somexyspace } from './mklev.js';
+import { ACCESSIBLE, A_CHA, A_CON, A_DEX, A_INT, A_MAX, A_STR, A_WIS, ALTAR, BC_BALL, BC_CHAIN, BEAR_TRAP, BLCORNER, BOLT_LIM, BRCORNER, CLOUD, COLNO, CORPSTAT_FEMALE, CORPSTAT_GENDER, CORPSTAT_HISTORIC, CORPSTAT_MALE, CORPSTAT_NEUTER, CORR, DOOR, BURN, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, DUST, ENGRAVE, ENGR_BLOOD, FOUNTAIN, GRAVE, HEADSTONE, HWALL, ICE, IN_SIGHT, IS_AIR, IS_OBSTRUCTED, IS_POOL, IS_ROOM, IS_WALL, In_endgame, In_quest, In_sokoban, Is_earthlevel, Is_rogue_level, Is_waterlevel, LADDER, LAVAPOOL, LAVAWALL, MAGIC_PORTAL, MARK, MM_EDOG, MM_NOCOUNTBIRTH, MM_NOMSG, MM_NOWAIT, MOAT, NO_MINVENT, NORMAL_SPEED, OVERLOADED, P_BASIC, P_UNSKILLED, POOL, ROLLING_BOULDER_TRAP, ROOM, ROT_AGE, ROOMOFFSET, ROWNO, SCORR, SDOOR, SHOPBASE, SINK, STAIRS, STONE, TDWALL, TEMPLE, THRONE, TLCORNER, TRCORNER, TREE, TUWALL, VAULT, VIBRATING_SQUARE, VWALL, WAND_BACKFIRE_CHANCE, WATER, WT_IRON_BALL_BASE, WT_IRON_BALL_INCR, ZAP_POS } from './const.js';
 import { d, rn1, rn2, rn2_on_display_rng, rnd, rnl, rnz } from './rng.js';
 import { CLR_BLACK, CLR_BLUE, CLR_BRIGHT_BLUE, CLR_BRIGHT_CYAN, CLR_BRIGHT_GREEN, CLR_BROWN, CLR_CYAN, CLR_GRAY, CLR_GREEN, CLR_MAGENTA, CLR_ORANGE, CLR_RED, CLR_YELLOW, CLR_WHITE, NO_COLOR } from './terminal.js';
 import { vfsDeleteFile, vfsReadFile, vfsWriteFile } from './storage.js';
@@ -11346,7 +11346,149 @@ function pacifyUndeadForDeadbook() {
     }
 }
 
+function isCorpseItem(item) {
+    return item?.otyp === CORPSE || item?.otyp === 'corpse';
+}
+
+function isEggItem(item) {
+    return item?.otyp === EGG || itemKindText(item) === 'egg';
+}
+
+function deadbookCorpseMonster(item) {
+    const name = item?.corpsenm?.name || '';
+    if (!name) return null;
+    const found = monsterByRndName(name);
+    if (found) return found;
+    const humanoid = DEATH_CORPSE_BY_RACE[name] || ['human', 'elf', 'dwarf', 'gnome', 'orc'].includes(name);
+    if (humanoid) return { name, mlet: '@', glyph: '@', color: CLR_WHITE, mlevel: 0, mmove: 12, maligntyp: 0, neuter: false };
+    return item.corpsenm;
+}
+
+function isDeadbookNonlivingData(data) {
+    const mlet = data?.mlet || data?.glyph;
+    return !!data?.nonliving || mlet === 'W' || mlet === 'M' || mlet === 'Z' || mlet === "'";
+}
+
+function deadbookCorpseNoun(item, oneOf = false) {
+    const corpseName = item?.corpsenm?.name || 'monster';
+    return `${corpseName} corpse${oneOf ? 's' : ''}`;
+}
+
+function deadbookCarriedCorpseGlowMessage(item, oneOf = false) {
+    const prefix = oneOf ? 'One of your ' : 'Your ';
+    return `${prefix}${deadbookCorpseNoun(item, oneOf)} glows iridescently.`;
+}
+
+function deadbookRevivalMessage(mon) {
+    const verb = isDeadbookNonlivingData(mon?.data) ? 'reanimates' : 'comes alive';
+    return `It suddenly ${verb}!`;
+}
+
+function removeDeadbookRevivedItem(item, source) {
+    if (!item) return;
+    if ((item.quan || 1) > 1) {
+        item.quan--;
+        item.line = normalInventoryLine({ ...item, line: '' });
+        return;
+    }
+    if (source === 'inventory') {
+        game.inventory = (game.inventory || []).filter(invItem => invItem !== item);
+        game._pet_food_scan_inventory = game.inventory;
+    } else if (source === 'floor') {
+        game.level.objects = (game.level?.objects || []).filter(obj => obj !== item);
+        newsym(item.ox, item.oy);
+    }
+}
+
+function deadbookAttachEggHatchTimer(item) {
+    if (!isEggItem(item) || !item.corpsenm?.name || item.eggHatchTurn) return false;
+    if ((game._genocided_monsters || []).includes(item.corpsenm.name)) return false;
+    for (let i = 151; i <= 200; i++) {
+        if (rnd(i) > 150) {
+            item.eggHatchTurn = (game.moves || 1) + i;
+            break;
+        }
+    }
+    item._egg_hatch_consumed = true;
+    return !!item.eggHatchTurn;
+}
+
+async function reviveDeadbookCorpseItem(item, source) {
+    if (!isCorpseItem(item)) return null;
+    const data = deadbookCorpseMonster(item);
+    if (!data?.name) return null;
+    const x = item.ox || game.u?.ux || 0;
+    const y = item.oy || game.u?.uy || 0;
+    const flags = NO_MINVENT | MM_NOWAIT | MM_NOMSG | MM_NOCOUNTBIRTH;
+    const mon = await makemon(data, x, y, flags);
+    if (!mon) return null;
+
+    if ((item.spe & CORPSTAT_GENDER) === CORPSTAT_MALE) mon.female = false;
+    else if ((item.spe & CORPSTAT_GENDER) === CORPSTAT_FEMALE) mon.female = true;
+    mon.mrevived = 1;
+    mon.mundetected = 0;
+    removeDeadbookRevivedItem(item, source);
+    newsym(mon.mx, mon.my);
+    return mon;
+}
+
+async function unturnDeadHeroInventoryFromBook() {
+    const messages = [];
+    let revived = 0;
+    for (const item of [...(game.inventory || [])]) {
+        if (isEggItem(item)) deadbookAttachEggHatchTimer(item);
+        if (!isCorpseItem(item)) continue;
+
+        const oneOf = (item.quan || 1) > 1;
+        const mon = await reviveDeadbookCorpseItem(item, 'inventory');
+        if (!mon) continue;
+        revived++;
+        messages.push(deadbookCarriedCorpseGlowMessage(item, oneOf));
+        messages.push(deadbookRevivalMessage(mon));
+    }
+    if (revived) game._deadbook_unturned_inventory = (game._deadbook_unturned_inventory || 0) + revived;
+    return messages;
+}
+
+function deadbookFloorCorpseAt(x, y) {
+    return (game.level?.objects || []).find(obj => isCorpseItem(obj) && obj.ox === x && obj.oy === y) || null;
+}
+
+async function mkundeadFromBook() {
+    const x = game.u?.ux || 0;
+    const y = game.u?.uy || 0;
+    const count = Math.trunc((level_difficulty() + 1) / 10) + rnd(5);
+    let spawned = 0;
+    let revived = 0;
+
+    for (let i = 0; i < count; i++) {
+        const data = morgueMonster();
+        if (!data) continue;
+        const spot = enextoMonsterSpot(x, y, data);
+        if (!spot) continue;
+
+        const corpse = deadbookFloorCorpseAt(spot.x, spot.y);
+        if (corpse && await reviveDeadbookCorpseItem(corpse, 'floor')) {
+            revived++;
+            continue;
+        }
+
+        const mon = await makemon(data, spot.x, spot.y, NO_MINVENT);
+        if (mon) {
+            spawned++;
+            newsym(mon.mx, mon.my);
+        }
+    }
+
+    game.level ??= {};
+    game.level.flags ??= {};
+    game.level.flags.graveyard = true;
+    game._deadbook_mkundead_spawned = (game._deadbook_mkundead_spawned || 0) + spawned;
+    game._deadbook_mkundead_revived = (game._deadbook_mkundead_revived || 0) + revived;
+}
+
 async function raiseDeadFromBook() {
+    const messages = [];
     if (!rn2(3)) {
         const masterLich = monsterByRndName('master lich');
         const nalfeshnee = monsterByRndName('nalfeshnee');
@@ -11357,9 +11499,13 @@ async function raiseDeadFromBook() {
             mon.pet = false;
             mon.mtame = 0;
             set_malign(mon);
+            newsym(mon.mx, mon.my);
         }
     }
+    messages.push(...await unturnDeadHeroInventoryFromBook());
+    await mkundeadFromBook();
     game._deadbook_raise_dead_pending = 1;
+    return messages;
 }
 
 async function bookOfTheDeadStudyMessage(item) {
@@ -11408,10 +11554,10 @@ async function bookOfTheDeadStudyMessage(item) {
 
         messages.push('You have a feeling that something is amiss...');
         messages.push('You raised the dead!');
-        await raiseDeadFromBook();
+        messages.push(...await raiseDeadFromBook());
     } else if (item?.cursed) {
         messages.push('You raised the dead!');
-        await raiseDeadFromBook();
+        messages.push(...await raiseDeadFromBook());
     } else if (item?.blessed) {
         pacifyUndeadForDeadbook();
     } else if (!item?.blessed) {
