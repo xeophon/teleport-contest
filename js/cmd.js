@@ -8342,6 +8342,56 @@ function resolveFireScrollExplosion(cx, cy, dam, messages = []) {
     return { messages, more: messages.length > 1 || (game.u?.uhp || 1) <= 0 };
 }
 
+function resolvePyroliskEggExplosion(cx, cy, dam) {
+    const messages = [];
+    const ux = game.u?.ux ?? -99;
+    const uy = game.u?.uy ?? -99;
+    if (!heroIsDeaf()) messages.push('Boom!');
+
+    for (const mon of [...(game.level?.monsters || [])]) {
+        if (!mon || mon.dead || (mon.mhp ?? 1) <= 0 || Math.abs((mon.mx ?? -99) - cx) > 1 || Math.abs((mon.my ?? -99) - cy) > 1)
+            continue;
+        const visible = !game.u?.blind && (game.viz_array?.[mon.my]?.[mon.mx] & IN_SIGHT);
+        const name = fireScrollMonsterName(mon);
+        if (visible) messages.push(`${name} is caught in the fireball!`);
+        const itemDamage = monsterFireInventoryDamage(mon, dam, messages, visible);
+        let damage = 0;
+        if (!(mon.fireResistance || mon.data?.resistsFire)) {
+            damage = dam;
+            if (monsterResistsEffect(mon, 9)) {
+                if (visible) messages.push(`${name} resists the fireball!`);
+                damage = Math.trunc((damage + 1) / 2);
+            }
+            if (mon.coldResistance || mon.data?.resistsCold || mon.data?.coldResistance) damage *= 2;
+        }
+        damage += itemDamage;
+        mon.mhp = (mon.mhp || 1) - damage;
+        if ((mon.mhp || 0) <= 0) {
+            dropMonsterInventory(mon);
+            game.level.monsters = (game.level?.monsters || []).filter(other => other !== mon);
+            recordVanquished(mon, true);
+            newsym(mon.mx, mon.my);
+            if (visible) messages.push(`You kill the ${mon.data?.name || mon.name || 'monster'}!`);
+        }
+    }
+
+    if (Math.abs(ux - cx) <= 1 && Math.abs(uy - cy) <= 1) {
+        messages.push('You are caught in the fireball!');
+        const fireInventory = fireDamageInventory(dam, true);
+        messages.push(...fireInventory.messages);
+        const damage = (game.u?.fireResistance ? 0 : dam) + fireInventory.damage;
+        if (damage && game.u) game.u.uhp = Math.max(0, (game.u.uhp || 0) - damage);
+        if ((game.u?.uhp || 0) <= 0) {
+            game._death_cause = fireInventory.deathCause || 'killed by a fireball';
+            messages.push('It is fatal.');
+            messages.push('You die...');
+        }
+        exerciseAttribute(A_STR, false);
+    }
+
+    return { messages, more: messages.length > 1 || (game.u?.uhp || 1) <= 0 };
+}
+
 function earthScrollHasEffect() {
     const uz = game.u?.uz;
     if (Is_rogue_level(uz)) return false;
@@ -11372,10 +11422,30 @@ function isEggItem(item) {
     return item?.otyp === EGG || itemKindText(item) === 'egg';
 }
 
+function eggMonsterName(item) {
+    return String(item?.corpsenm?.name || '').toLowerCase();
+}
+
+function isPyroliskEgg(item) {
+    return isEggItem(item) && eggMonsterName(item) === 'pyrolisk';
+}
+
+function isPetrifyingEgg(item) {
+    return isEggItem(item) && ['chickatrice', 'cockatrice', 'medusa'].includes(eggMonsterName(item));
+}
+
 function isStaleEggItem(item) {
     if (!isEggItem(item)) return false;
     if (item.age == null) item.age = game.moves || 1;
     return (game.moves || 1) - item.age > 2 * MAX_EGG_HATCH_TIME;
+}
+
+function shouldUseGenericRottenEggPath(item) {
+    if (!isEggItem(item)) return false;
+    if (item.age == null) item.age = game.moves || 1;
+    if (item.cursed || item.orotten) return true;
+    const ageLimit = item.blessed ? 50 : 30;
+    return (game.moves || 1) - item.age > ageLimit && !rn2(7);
 }
 
 function addHeroVomiting(turns) {
@@ -11397,13 +11467,63 @@ function consumeOneFloorObject(obj) {
     newsym(obj.ox, obj.oy);
 }
 
+function startPetrifyingEggStoning(item) {
+    if (!isPetrifyingEgg(item) || !game.u || game.u.stoneResistance || (game.u._stonedTimeout || 0) > 0)
+        return;
+    const monsterName = item.corpsenm?.name || 'cockatrice';
+    game.u._stonedTimeout = 5;
+    game.u._stonedKiller = `${monsterName} egg`;
+    addHeroStatusSuffix('Stone');
+}
+
+function consumeOneInventoryFood(item) {
+    if ((item?.quan || 1) > 1) next_ident();
+    removeInventoryItem(item);
+}
+
+function consumeOneEatenFood(item, floorObject = false) {
+    if (floorObject) consumeOneFloorObject(item);
+    else consumeOneInventoryFood(item);
+}
+
+async function eatRottenEgg(item, floorObject = false) {
+    let rottenSleepDuration = 0;
+    let message = 'Blecch!  Rotten food!';
+    if (!rn2(4)) {
+        const confusionDuration = d(2, 4);
+        if (game.u) game.u._confusionTimeout = (game.u._confusionTimeout || 0) + confusionDuration;
+    } else if (!game.u?.blind && !rn2(4)) {
+        d(2, 10);
+        if (game.u) game.u.blind = true;
+        message += '  Everything suddenly goes dark.';
+    } else if (!rn2(3)) {
+        rottenSleepDuration = rnd(10);
+        game._helpless_time = Math.max(game._helpless_time || 0, rottenSleepDuration);
+        game._sleeping_time = Math.max(game._sleeping_time || 0, rottenSleepDuration + 1);
+        game._wake_message = 'You are conscious again.';
+        game._hear_again_after_wake = 1;
+        message += '  The world spins and goes dark.';
+    }
+    consumeOneEatenFood(item, floorObject);
+    startPetrifyingEggStoning(item);
+    await setMessage(message, true);
+    game._process_time_with_more = 1;
+    game._command_mode = null;
+    game.context.move = rottenSleepDuration ? rottenSleepDuration + 1 : 1;
+}
+
+async function eatPyroliskEgg(item, floorObject = false) {
+    consumeOneEatenFood(item, floorObject);
+    const result = resolvePyroliskEggExplosion(game.u?.ux || 0, game.u?.uy || 0, d(3, 6));
+    await setMessage(result.messages.join('  '), result.more);
+    game._command_mode = null;
+    game.context.move = 1;
+}
+
 async function eatStaleEgg(item, floorObject = false) {
     addHeroVomiting(d(10, 4));
-    if (floorObject) consumeOneFloorObject(item);
-    else {
-        if ((item?.quan || 1) > 1) next_ident();
-        removeInventoryItem(item);
-    }
+    consumeOneEatenFood(item, floorObject);
+    startPetrifyingEggStoning(item);
     await setMessage('Ugh.  Rotten egg.');
     game._command_mode = null;
     game.context.move = 1;
@@ -24865,6 +24985,14 @@ export async function rhack(_cmd) {
                 game.context.move = 9;
                 return;
             }
+            if (shouldUseGenericRottenEggPath(item)) {
+                await eatRottenEgg(item);
+                return;
+            }
+            if (isPyroliskEgg(item)) {
+                await eatPyroliskEgg(item);
+                return;
+            }
             if (isStaleEggItem(item)) {
                 await eatStaleEgg(item);
                 return;
@@ -24926,6 +25054,7 @@ export async function rhack(_cmd) {
             }
             removeInventoryItem(item);
             game._pet_food_scan_inventory = game.inventory || [];
+            startPetrifyingEggStoning(item);
             const eatMessage = item.kind === 'apple'
                 ? 'Delicious!  Must be a Macintosh!'
                 : `This ${name} is delicious!`;
@@ -25070,11 +25199,20 @@ export async function rhack(_cmd) {
                 game.context.move = game._eating_turns_remaining;
                 return;
             }
+            if (shouldUseGenericRottenEggPath(food)) {
+                await eatRottenEgg(food, true);
+                return;
+            }
+            if (isPyroliskEgg(food)) {
+                await eatPyroliskEgg(food, true);
+                return;
+            }
             if (isStaleEggItem(food)) {
                 await eatStaleEgg(food, true);
                 return;
             }
             consumeOneFloorObject(food);
+            startPetrifyingEggStoning(food);
             await setMessage(`This ${name} is delicious!`);
             game._command_mode = null;
             game.context.move = 1;

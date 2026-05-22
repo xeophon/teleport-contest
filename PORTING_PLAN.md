@@ -829,10 +829,14 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   carry C-style creation age through ordinary object creation and starting
   food creation, and eating an egg older than `2*MAX_EGG_HATCH_TIME` consumes
   one inventory/floor egg, preserves floor-stack remainders, prints the C
-  stale-egg message, and starts a vomiting timeout. Full egg knowledge UI,
-  royal jelly/`#sit` provenance, generic rotten-food preemption for old eggs,
-  pyrolisk/petrifying egg eating effects, and complete extinction/vitals
-  semantics remain future work.
+  stale-egg message, and starts a vomiting timeout. Remaining egg-eating
+  effects now follow the C ordering more closely: cursed/old eggs take the
+  generic rotten-food path before `fprefx()`, pyrolisk eggs are consumed before
+  a `d(3,6)` fireball centered on the hero, and cockatrice/chickatrice/Medusa
+  eggs start a minimal five-turn stoning timeout unless the hero has stoning
+  resistance. Full egg knowledge UI, royal jelly/`#sit` provenance, exact
+  rotten partially-eaten nutrition, complete stoning/poly-into-stone-golem
+  timeout parity, and complete extinction/vitals semantics remain future work.
 - Wished container state prefixes now cover the C `readobjnam()` object slice
   for `locked`, `unlocked`, `broken`, `trapped`, `untrapped`, and `empty`:
   boxes keep normal generated contents and lock/trap RNG before final state

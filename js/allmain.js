@@ -48,6 +48,13 @@ const RACE_CANONICAL = new Map(Object.keys(RACE_STATE).map(name => [name.toLower
 const ALIGN_CANONICAL = new Map(Object.keys(ALIGN_TYPE).map(name => [name.toLowerCase(), name]));
 const GENDER_CANONICAL = new Map(['male', 'female'].map(name => [name, name]));
 const EGG = 10001;
+const STONED_TEXTS = [
+    'You are slowing down.',
+    'Your limbs are stiffening.',
+    'Your limbs have turned to stone.',
+    'You have turned to stone.',
+    'You are a statue.',
+];
 const ROLE_PET = {
     Caveman: 'dog',
     Knight: 'pony',
@@ -1804,6 +1811,10 @@ function removeHeroStatusSuffix(status) {
     if (!game.u) return;
     const parts = String(game.u._statusSuffix || '').trim().split(/\s+/).filter(part => part !== status);
     game.u._statusSuffix = parts.length ? ` ${parts.join(' ')}` : '';
+}
+
+function articleFor(name) {
+    return /^[aeiou]/i.test(String(name || '')) ? 'an' : 'a';
 }
 
 function processAttributeExercise() {
@@ -5455,6 +5466,21 @@ async function finishMonsterTurnTail() {
             game.u.vomiting = false;
             removeHeroStatusSuffix('Vom');
             addToplineMessage('You vomit!');
+        }
+    }
+    if ((game.u?._stonedTimeout || 0) > 0) {
+        addHeroStatusSuffix('Stone');
+        const timeout = game.u._stonedTimeout;
+        const message = STONED_TEXTS[5 - timeout];
+        if (message) addToplineMessage(message);
+        exerciseAttribute(A_DEX, false);
+        game.u._stonedTimeout--;
+        if (!game.u._stonedTimeout) {
+            const killer = game.u._stonedKiller || 'cockatrice egg';
+            game.u.uhp = 0;
+            game._death_cause = `killed by ${articleFor(killer)} ${killer}`;
+            game._death_current_move = 1;
+            removeHeroStatusSuffix('Stone');
         }
     }
     if ((game.u?._deafTimeout || 0) > 0) {
