@@ -1817,6 +1817,32 @@ function articleFor(name) {
     return /^[aeiou]/i.test(String(name || '')) ? 'an' : 'a';
 }
 
+function armHeroDeathMore(message = 'You die...') {
+    const messages = [];
+    if (game._pending_message) messages.push(game._pending_message);
+    if (game._topline_after_more && !messages.includes(game._topline_after_more))
+        messages.push(game._topline_after_more);
+    messages.push(message);
+    game._pending_message = messages.join('  ');
+    game._topline_after_more = '';
+    game._message_more = 1;
+    game._message_more_line = '';
+    game._process_time_with_more = 0;
+    game._keep_pending_message = 1;
+    game._pending_time_passed = 0;
+    if (game.context) game.context.move = 0;
+    game._process_command_time_now = 0;
+    game._run_steps_remaining = 0;
+    game._running_continuation = 0;
+    game._initial_run_command = 0;
+    game._travel_keys = [];
+    game._deferred_monster_turn_tail = 0;
+    game._continue_monsters_after_more = 0;
+    game._resume_time_after_more = 0;
+    game._turn_tail_topline_more = 1;
+    game._command_mode = 'deathDieMore';
+}
+
 function processAttributeExercise() {
     const u = game.u;
     if (!u) return;
@@ -5478,9 +5504,10 @@ async function finishMonsterTurnTail() {
         if (!game.u._stonedTimeout) {
             const killer = game.u._stonedKiller || 'cockatrice egg';
             game.u.uhp = 0;
-            game._death_cause = `killed by ${articleFor(killer)} ${killer}`;
+            game._death_cause = `petrified by ${articleFor(killer)} ${killer}`;
             game._death_current_move = 1;
-            removeHeroStatusSuffix('Stone');
+            armHeroDeathMore();
+            return false;
         }
     }
     if ((game.u?._deafTimeout || 0) > 0) {
@@ -8358,11 +8385,15 @@ export async function moveloop_core() {
         if (armorTailOnly) g._armor_tail_after_more = 0;
         if (g._deferred_monster_turn_tail && !(g._pending_message && g._message_more)) {
             g._deferred_monster_turn_tail = 0;
-            await finishMonsterTurnTail();
+            const tailResult = await finishMonsterTurnTail();
             g.moves = (g.moves || 1) + 1;
             await afterMoveTurn(g);
             g.u.umoved = false;
             if (g.u?.ublesscnt) g.u.ublesscnt--;
+            if (tailResult === false && g._command_mode === 'deathDieMore') {
+                g._pending_time_passed = 0;
+                break;
+            }
             advanceRegions(g);
             g._pending_time_passed = Math.max(0, (g._pending_time_passed || 0) - 1);
             turnAdvanced = true;
