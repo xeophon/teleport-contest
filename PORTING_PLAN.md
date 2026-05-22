@@ -1273,6 +1273,17 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   drummer divergence at screen 97, the Dequa fountain/explore divergence at
   screen 35, wizard world-tour branch generation at screen 181, and larger
   Quest/coverage suites.
+- The healer reflection/drummer scroll tail is now closed by matching C's
+  scroll-discovery accounting and message ordering. `seffects()` spends the
+  initial magic-scroll Wisdom exercise, `learnscroll()`/`makeknown()` credits a
+  second Wisdom exercise only when the scroll type becomes newly known, and
+  `chwepon()` prints the enchant-weapon glow as a separate `pline()` after the
+  disappearance message's `--More--` boundary. The `seed0002` healer drummer
+  session now passes with `27158/27158` RNG calls and `595/595` screens.
+  `npm run score` improved to `32/44`. `seed2200-wizard-quaff-zap-read`
+  remains a display-only options-help config-path mismatch with full
+  `3018/3018` RNG alignment; do not hardcode the recorder's absolute
+  `$HOME/.nethackrc` path into runtime behavior.
 
 Next concrete target:
 
@@ -1285,10 +1296,12 @@ Next concrete target:
   semantics, C special-level room/corridor/shop filling for `minetn-3.lua`, and
   full `eat.c`, `sp_lev.c`, `mkobj.c`, `makemon.c`, `uhitm.c`, and
   `dogmove.c` behavior.
-- The Archeologist tour and exact-wand wish tails are now closed; use them as
-  regression guards for artifact wishing, restored-level Sokoban return,
-  discovery menus, wizard enlightenment, and C `readobjnam()` probability
-  accounting before widening the same C-grounded fixes to other sessions.
+- The Archeologist tour, exact-wand wish tails, and healer scroll tail are now
+  closed; use them as regression guards for artifact wishing, restored-level
+  Sokoban return, discovery menus, wizard enlightenment, C `readobjnam()`
+  probability accounting, scroll `makeknown()` exercise, and multi-`pline()`
+  scroll message ordering before widening the same C-grounded fixes to other
+  sessions.
 - The next narrow `#sit` trap slice should deepen the remaining
   `trap.c:trapeffect_*()` details now that deferred level-changing traps are
   live: floor-object `impact_drop()` effects for holes/trapdoors, positive

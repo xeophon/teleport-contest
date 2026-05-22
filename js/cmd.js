@@ -22172,7 +22172,17 @@ export async function rhack(_cmd) {
             removeInventoryItem(item);
             rn2(19);
             const result = enchantWeaponScrollEffect(item, messages);
+            const learnedScroll = result.learned && !alreadyKnown;
             if (result.learned) learnScrollByName('enchant weapon', item, 5);
+            if (learnedScroll && messages.length === 2) {
+                game._queued_message_after_more = messages[1];
+                game._queued_message_process_time_after_more = 1;
+                game._read_scroll_exercise_after_more = 1;
+                await setMessage(messages[0], true);
+                game._command_mode = null;
+                game.context.move = 0;
+                return;
+            }
             const shouldCall = !alreadyKnown && !result.learned;
             await setMessage(messages.join('  '), result.more || confusedReading || shouldCall);
             game._command_mode = shouldCall ? 'callScrollAfterMore' : null;
@@ -22596,7 +22606,9 @@ export async function rhack(_cmd) {
             removeInventoryItem(item);
             rn2(19);
             const result = await lightScrollEffect(item, messages);
+            const learnedScroll = result.learned && !alreadyKnown;
             if (result.learned) learnScrollByName('light', item, 9);
+            if (learnedScroll) exerciseAttribute(A_WIS, true);
             const shouldCall = !alreadyKnown && !result.learned;
             await setMessage(messages.join('  '), confusedReading || shouldCall);
             game._command_mode = shouldCall ? 'callScrollAfterMore' : null;
