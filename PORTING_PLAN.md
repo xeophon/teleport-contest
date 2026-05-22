@@ -946,6 +946,13 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   the beyond-the-confines final location. The Endgame negative-number exception
   now remains a relative Endgame destination instead of using the outside-dungeon
   path when the JS state has reached the Planes.
+- Controlled positive level-teleport input inside the Quest now follows the
+  C status-line-relative `Home N` interpretation instead of treating the number
+  as an absolute dungeon depth, while random/trap level teleports still use
+  absolute depths. The same slice adds the Barbarian Quest pager text and the
+  simple quest-token replacements needed for the public Barbarian quest tour,
+  and fixes Quest goal fallback detection to use the actual quest bottom rather
+  than assuming a five-level branch.
 - Wished container state prefixes now cover the C `readobjnam()` object slice
   for `locked`, `unlocked`, `broken`, `trapped`, `untrapped`, and `empty`:
   boxes keep normal generated contents and lock/trap RNG before final state
@@ -1169,7 +1176,7 @@ Next concrete target:
 - The next narrow `#sit` trap slice should deepen the remaining
   `trap.c:trapeffect_*()` details now that deferred level-changing traps are
   live: floor-object `impact_drop()` effects for holes/trapdoors, positive
-  Quest level-teleport input's status-line-relative destination mapping,
+  Quest text/level-generation gaps beyond the Barbarian pager text,
   escaped-game disclosure/score polish, remaining fire `burnarmor()`
   material/protection and floor-object burning details, and any remaining
   movement trap sharing where that lowers divergence.

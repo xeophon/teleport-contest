@@ -377,6 +377,77 @@ close this college.
             "May the wisdom of %d be your guide."`,
         },
     },
+    Barbarian: {
+        filecode: 'Bar',
+        homebase: 'the Camp of the Duali Tribe',
+        intermed: 'the Duali Oasis',
+        leader: 'Pelias',
+        nemesis: 'Thoth Amon',
+        guardian: 'chieftain',
+        artifact: 'the Heart of Ahriman',
+        artifactShort: 'Heart of Ahriman',
+        ranks: ['Plunderer', 'Pillager', 'Bandit', 'Brigand', 'Raider', 'Reaver', 'Slayer', 'Chieftain', 'Conqueror'],
+        texts: {
+            firsttime: `Warily you scan your surroundings, all of your senses alert for signs
+of possible danger.  Off in the distance, you can %x the familiar shapes
+of %H.
+
+But why, you think, should %l be there?
+
+Suddenly, the hairs on your neck stand on end as you detect the aura of
+evil magic in the air.
+
+Without thought, you ready your weapon, and mutter under your breath:
+
+    "By %d, there will be blood spilt today."`,
+            nexttime: `Once again, you near %H.  You know that %l
+will be waiting.`,
+            othertime: `Again, and you think possibly for the last time, you approach
+%H.`,
+            locate_first: `The scent of water comes to you in the desert breeze.  You know that
+you have located %i.`,
+            locate_next: 'Yet again you have a chance to infiltrate %i.',
+            goal_first: `The hairs on the nape of your neck lift as you sense an energy in the
+very air around you.  You fight down a primordial panic that seeks to
+make you turn and run.  This is surely the lair of %n.`,
+            goal_next: 'Yet again you feel the air around you heavy with malevolent magical energy.',
+            leader_first: `"Ah, %p.  You have returned at last.  The world is in dire
+need of your help.  There is a great quest you must undertake.
+
+"But first, I must see if you are ready to take on such a challenge."`,
+            leader_next: '"%p, you are back.  Are you ready now for the challenge?"',
+            badalign: `"%pC!  You have wandered from the path of the %a!
+If you attempt to overcome %n in this state, he will surely
+enslave your soul.  Your only hope, and ours, lies in your purification.
+Go forth, and return when you feel ready."`,
+            badlevel: `"%p, I fear that you are as yet too inexperienced to face
+%n.  Only %Ra with the help of %d could ever hope to
+defeat %ni."`,
+            assignquest: `"The world is in great need of your assistance, %p.
+
+"About six months ago, I learned that a mysterious sorcerer, known
+as %n, had begun to gather a large group of cutthroats and brigands
+about %ni.
+
+"At about the same time, these people you once rode with \`liberated' a
+potent magical talisman, %o, from a Turanian caravan.
+
+"%nC and %nj Black Horde swept down upon %i and defeated
+the people there, driving them out into the desert.  He has taken
+%o, and seeks to bend it to %nj will.  I detected the
+subtle changes in the currents of fate, and joined these people.
+Then I sent forth a summons for you.
+
+"If %n can bend %o to %nj will, he will become
+almost indestructible.  He will then be able to enslave the minds of
+men across the world.  You are the only hope.  The gods smile upon you,
+and with %d behind you, you alone can defeat %n.
+
+"You must go to %i.  From there, you can track down
+%n, defeat %ni, and return %o to us.  Only
+then will the world be safe."`,
+        },
+    },
     Knight: {
         filecode: 'Kni',
         homebase: 'Camelot Castle',
@@ -1473,6 +1544,13 @@ function levelTeleportNumericTarget(depth) {
     return { dnum, dlevel: depth - (dungeon?.depth_start ?? 1) + 1 };
 }
 
+function levelTeleportPromptTargetDepth(target) {
+    const current = game.u?.uz ?? { dnum: 0, dlevel: 1 };
+    if (target > 0 && In_quest(current))
+        return target + (game.dungeons?.[current.dnum]?.depth_start ?? 1) - 1;
+    return target;
+}
+
 function levelTeleportPromptQuestion() {
     const suffix = (game._level_teleport_try_count || 0) >= 1
         ? ` [type a number${game.flags?.debug ? ', name, or ? for a menu' : ' or name'}]`
@@ -1659,13 +1737,14 @@ function currentLevelMarker(level) {
 
 function questLevelKind(level = game.u?.uz) {
     if (!level || game.dungeons?.[level.dnum]?.name !== 'The Quest') return null;
+    const dungeon = game.dungeons?.[level.dnum];
     const special = game.specialLevels?.find(slev => slev.dnum === level.dnum && slev.dlevel === level.dlevel);
     if (special?.name === 'x-strt') return 'start';
     if (special?.name === 'x-loca') return 'locate';
     if (special?.name === 'x-goal') return 'goal';
     if (level.dlevel === 1) return 'start';
     if (level.dlevel === 3) return 'locate';
-    if (level.dlevel === 5) return 'goal';
+    if (level.dlevel === (dungeon?.num_dunlevs ?? 5)) return 'goal';
     return 'fill';
 }
 
@@ -1696,14 +1775,22 @@ function questPagerRows(msgid) {
     const player = game.plname || 'Hero';
     const cap = text => `${text.charAt(0).toUpperCase()}${text.slice(1)}`;
     const article = text => /^(?:the|a|an)\b/i.test(text) ? text : `${/^[aeiou]/i.test(text) ? 'an' : 'a'} ${text}`;
+    const roleClass = roleName || 'Adventurer';
+    const malePronouns = { h: 'he', H: 'He', i: 'him', I: 'Him', j: 'his', J: 'His' };
     const replacements = [
+        ['%nh', malePronouns.h], ['%nH', malePronouns.H], ['%ni', malePronouns.i],
+        ['%nI', malePronouns.I], ['%nj', malePronouns.j], ['%nJ', malePronouns.J],
+        ['%lh', malePronouns.h], ['%lH', malePronouns.H], ['%li', malePronouns.i],
+        ['%lI', malePronouns.I], ['%lj', malePronouns.j], ['%lJ', malePronouns.J],
+        ['%oh', 'it'], ['%oH', 'It'], ['%oi', 'it'], ['%oI', 'It'], ['%oj', 'its'], ['%oJ', 'Its'],
+        ['%ca', article(roleClass)], ['%cA', cap(article(roleClass))], ['%cP', `${roleClass}s`], ['%c', roleClass],
+        ['%x', game.u?.blind ? 'sense' : 'see'], ['%Z', 'The Dungeons of Doom'],
         ['%pC', cap(player)], ['%ra', article(rank)], ['%RC', cap(minRank)],
         ['%R', minRank], ['%r', rank], ['%ns', `${info.nemesis}'s`],
         ['%nC', cap(info.nemesis)], ['%na', article(info.nemesis)],
-        ['%ni', info.nemesis], ['%n', info.nemesis], ['%O', `the ${info.artifactShort}`],
+        ['%n', info.nemesis], ['%O', `the ${info.artifactShort}`],
         ['%oC', cap(info.artifact)], ['%o', info.artifact], ['%l', info.leader],
         ['%i', info.intermed], ['%gP', `${info.guardian}s`], ['%g', info.guardian],
-        ['%oh', 'it'],
         ['%H', info.homebase], ['%d', deity], ['%a', alignName], ['%p', player],
     ];
     let text = raw.trimEnd();
@@ -2185,7 +2272,6 @@ export async function finishLevelTeleport(targetLevel, options = {}) {
     } else {
         const onBoulder = options.boulderMessage
             && game.level?.objects?.some(obj => obj.otyp === BOULDER && obj.ox === game.u?.ux && obj.oy === game.u?.uy);
-        const questHome = questLevelKind(targetLevel) === 'start';
         const questArrival = queueQuestArrival(targetLevel, fromLevel, targetIsNew);
         if (enteringValley) {
             game.u.uevent ??= {};
@@ -2216,7 +2302,6 @@ export async function finishLevelTeleport(targetLevel, options = {}) {
             : 'You materialize on a different level!';
         let arrivalMore = lowerWizardTowerArrival
 	            || enteringValley || enteringRogue || questArrival
-            || (!!savedTarget && questHome)
             || promptedBones
             || !!targetAnnotation;
         let familiarMessage = '';
@@ -25572,6 +25657,14 @@ export async function rhack(_cmd) {
                     game._command_mode = null;
                     return;
                 }
+                if (target > 0 && singleLevelBranch(game.u?.uz)) {
+                    clearLevelTeleportTextPrompt();
+                    game._command_mode = null;
+                    const followup = consumePendingLevelTeleportTrapFollowup();
+                    await setMessage(['You shudder for a moment.', followup].filter(Boolean).join('  '));
+                    game.context.move = 1;
+                    return;
+                }
                 if (target < 0) {
                     if (In_endgame(game.u?.uz)) {
                         await finishEndgameNegativeLevelTeleport(target);
@@ -25586,7 +25679,7 @@ export async function rhack(_cmd) {
                     game._command_mode = 'levelTeleportNowhereConfirm';
                     return;
                 }
-                const targetLevel = levelTeleportNumericTarget(target);
+                const targetLevel = levelTeleportNumericTarget(levelTeleportPromptTargetDepth(target));
                 await finishLevelTeleport(targetLevel, levelTeleportOptionsWithTrapFollowup({ preHalluRefresh: true }));
                 if (game._command_mode === 'levelTeleportText') game._command_mode = null;
                 return;
