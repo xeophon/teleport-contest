@@ -825,9 +825,14 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   timer sequence order, due top-level inventory/floor/monster-carried eggs
   hatch after turn advancement, adult eggs spawn baby/hatchling forms, owned
   carried eggs tame with C-like tameness, remaining stacks get short `rnd(12)`
-  re-timers, and timed eggs no longer merge during pickup. Full egg knowledge
-  UI, royal jelly/`#sit` provenance, stale egg eating, and complete
-  extinction/vitals semantics remain future work.
+  re-timers, and timed eggs no longer merge during pickup. Egg objects now
+  carry C-style creation age through ordinary object creation and starting
+  food creation, and eating an egg older than `2*MAX_EGG_HATCH_TIME` consumes
+  one inventory/floor egg, preserves floor-stack remainders, prints the C
+  stale-egg message, and starts a vomiting timeout. Full egg knowledge UI,
+  royal jelly/`#sit` provenance, generic rotten-food preemption for old eggs,
+  pyrolisk/petrifying egg eating effects, and complete extinction/vitals
+  semantics remain future work.
 - Wished container state prefixes now cover the C `readobjnam()` object slice
   for `locked`, `unlocked`, `broken`, `trapped`, `untrapped`, and `empty`:
   boxes keep normal generated contents and lock/trap RNG before final state

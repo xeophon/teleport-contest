@@ -47,6 +47,7 @@ const ROLE_CANONICAL = new Map(Object.keys(ROLE_STATE).map(name => [name.toLower
 const RACE_CANONICAL = new Map(Object.keys(RACE_STATE).map(name => [name.toLowerCase(), name]));
 const ALIGN_CANONICAL = new Map(Object.keys(ALIGN_TYPE).map(name => [name.toLowerCase(), name]));
 const GENDER_CANONICAL = new Map(['male', 'female'].map(name => [name, name]));
+const EGG = 10001;
 const ROLE_PET = {
     Caveman: 'dog',
     Knight: 'pony',
@@ -907,6 +908,9 @@ function initFoodFromRoll(roll) {
         rn2(12);
         obj._createdQuan = rn2(6) ? 1 : 2;
     } else if (roll > 140 && roll <= 225) {
+        obj.otyp = EGG;
+        obj.glyph = '%';
+        obj.age = game.moves || 1;
         let hatchableEgg = false;
         if (!rn2(3)) {
             for (let tryct = 200; tryct > 0; tryct--) {
@@ -1789,6 +1793,19 @@ function exerciseAttribute(attr, increase) {
     else u._aexe[attr] -= rn2(2);
 }
 
+function addHeroStatusSuffix(status) {
+    if (!game.u) return;
+    const parts = String(game.u._statusSuffix || '').trim().split(/\s+/).filter(Boolean);
+    if (!parts.includes(status)) parts.push(status);
+    game.u._statusSuffix = parts.length ? ` ${parts.join(' ')}` : '';
+}
+
+function removeHeroStatusSuffix(status) {
+    if (!game.u) return;
+    const parts = String(game.u._statusSuffix || '').trim().split(/\s+/).filter(part => part !== status);
+    game.u._statusSuffix = parts.length ? ` ${parts.join(' ')}` : '';
+}
+
 function processAttributeExercise() {
     const u = game.u;
     if (!u) return;
@@ -2016,8 +2033,6 @@ function processPickLockOccupation() {
     if (addToplineMessage(`You succeed in ${pick.action}.`))
         game._pick_lock_continue_time = 1;
 }
-
-const EGG = 10001;
 
 const HATCHLING_BY_EGG_MONSTER = new Map([
     ['cockatrice', 'chickatrice'],
@@ -5430,6 +5445,16 @@ async function finishMonsterTurnTail() {
             addToplineMessage((game.u?._statusSuffix || '').includes('Hallu')
                 ? 'You feel less trippy now.'
                 : 'You feel less confused now.');
+        }
+    }
+    if ((game.u?._vomitingTimeout || 0) > 0) {
+        addHeroStatusSuffix('Vom');
+        game.u.vomiting = true;
+        game.u._vomitingTimeout--;
+        if (!game.u._vomitingTimeout) {
+            game.u.vomiting = false;
+            removeHeroStatusSuffix('Vom');
+            addToplineMessage('You vomit!');
         }
     }
     if ((game.u?._deafTimeout || 0) > 0) {

@@ -3364,6 +3364,7 @@ export function mksobj(otyp, init, artif) {
             : otmp.corpsenm.male ? CORPSTAT_MALE
             : rn2(2) ? CORPSTAT_FEMALE : CORPSTAT_MALE;
     } else if (otyp === EGG) {
+        otmp.age = game.moves || 1;
         set_corpsenm(otmp, otmp.corpsenm);
     }
     return otmp;

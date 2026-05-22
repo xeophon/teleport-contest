@@ -6,7 +6,7 @@ import { nhgetch } from './input.js';
 import { bot, cls, docrt, flush_screen, newsym, pline, refreshHallucinatedMap, show_glyph_cell, strengthString } from './display.js';
 import { couldsee, vision_recalc, vision_reset } from './vision.js';
 import { RANDOM_MONSTER_BY_NAME, SHOP_TYPES, artifactObjectName, enextoMonsterSpot, make_tutorial1_level, makemon, makeArtifactWishObject, mkcorpstat, mklev, mkobj_at, mksobj, monsterByRndName, morgueMonster, nameObjectAsArtifact, next_ident, potionIndexForRoll, rndmonnum, scrollIndexForRoll, syncDungeonContext, u_on_dnstairs, u_on_rndspot, u_on_upstairs, wipe_engr_at, dropMonsterInventory, l_nhcore_init, getrumor, getbogusmon, level_difficulty, set_malign, somexyspace } from './mklev.js';
-import { ACCESSIBLE, A_CHA, A_CON, A_DEX, A_INT, A_MAX, A_STR, A_WIS, ALTAR, BC_BALL, BC_CHAIN, BEAR_TRAP, BLCORNER, BOLT_LIM, BRCORNER, CLOUD, COLNO, CORPSTAT_FEMALE, CORPSTAT_GENDER, CORPSTAT_HISTORIC, CORPSTAT_MALE, CORPSTAT_NEUTER, CORR, DOOR, BURN, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, DUST, ENGRAVE, ENGR_BLOOD, FOUNTAIN, GRAVE, HEADSTONE, HWALL, ICE, IN_SIGHT, IS_AIR, IS_OBSTRUCTED, IS_POOL, IS_ROOM, IS_WALL, In_endgame, In_quest, In_sokoban, Is_earthlevel, Is_rogue_level, Is_waterlevel, LADDER, LAVAPOOL, LAVAWALL, MAGIC_PORTAL, MARK, MM_EDOG, MM_NOCOUNTBIRTH, MM_NOMSG, MM_NOWAIT, MOAT, NO_MINVENT, NORMAL_SPEED, OVERLOADED, P_BASIC, P_UNSKILLED, POOL, ROLLING_BOULDER_TRAP, ROOM, ROT_AGE, ROOMOFFSET, ROWNO, SCORR, SDOOR, SHOPBASE, SINK, STAIRS, STONE, TDWALL, TEMPLE, THRONE, TLCORNER, TRCORNER, TREE, TUWALL, VAULT, VIBRATING_SQUARE, VWALL, WAND_BACKFIRE_CHANCE, WATER, WT_IRON_BALL_BASE, WT_IRON_BALL_INCR, ZAP_POS } from './const.js';
+import { ACCESSIBLE, A_CHA, A_CON, A_DEX, A_INT, A_MAX, A_STR, A_WIS, ALTAR, BC_BALL, BC_CHAIN, BEAR_TRAP, BLCORNER, BOLT_LIM, BRCORNER, CLOUD, COLNO, CORPSTAT_FEMALE, CORPSTAT_GENDER, CORPSTAT_HISTORIC, CORPSTAT_MALE, CORPSTAT_NEUTER, CORR, DOOR, BURN, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, DUST, ENGRAVE, ENGR_BLOOD, FOUNTAIN, GRAVE, HEADSTONE, HWALL, ICE, IN_SIGHT, IS_AIR, IS_OBSTRUCTED, IS_POOL, IS_ROOM, IS_WALL, In_endgame, In_quest, In_sokoban, Is_earthlevel, Is_rogue_level, Is_waterlevel, LADDER, LAVAPOOL, LAVAWALL, MAGIC_PORTAL, MARK, MAX_EGG_HATCH_TIME, MM_EDOG, MM_NOCOUNTBIRTH, MM_NOMSG, MM_NOWAIT, MOAT, NO_MINVENT, NORMAL_SPEED, OVERLOADED, P_BASIC, P_UNSKILLED, POOL, ROLLING_BOULDER_TRAP, ROOM, ROT_AGE, ROOMOFFSET, ROWNO, SCORR, SDOOR, SHOPBASE, SINK, STAIRS, STONE, TDWALL, TEMPLE, THRONE, TLCORNER, TRCORNER, TREE, TUWALL, VAULT, VIBRATING_SQUARE, VWALL, WAND_BACKFIRE_CHANCE, WATER, WT_IRON_BALL_BASE, WT_IRON_BALL_INCR, ZAP_POS } from './const.js';
 import { d, rn1, rn2, rn2_on_display_rng, rnd, rnl, rnz } from './rng.js';
 import { CLR_BLACK, CLR_BLUE, CLR_BRIGHT_BLUE, CLR_BRIGHT_CYAN, CLR_BRIGHT_GREEN, CLR_BROWN, CLR_CYAN, CLR_GRAY, CLR_GREEN, CLR_MAGENTA, CLR_ORANGE, CLR_RED, CLR_YELLOW, CLR_WHITE, NO_COLOR } from './terminal.js';
 import { vfsDeleteFile, vfsReadFile, vfsWriteFile } from './storage.js';
@@ -11370,6 +11370,43 @@ function isCorpseItem(item) {
 
 function isEggItem(item) {
     return item?.otyp === EGG || itemKindText(item) === 'egg';
+}
+
+function isStaleEggItem(item) {
+    if (!isEggItem(item)) return false;
+    if (item.age == null) item.age = game.moves || 1;
+    return (game.moves || 1) - item.age > 2 * MAX_EGG_HATCH_TIME;
+}
+
+function addHeroVomiting(turns) {
+    if (!game.u || turns <= 0) return;
+    game.u._vomitingTimeout = (game.u._vomitingTimeout || 0) + turns;
+    game.u.vomiting = true;
+    addHeroStatusSuffix('Vom');
+}
+
+function consumeOneFloorObject(obj) {
+    if (!obj || !game.level) return;
+    if ((obj.quan || 1) > 1) {
+        next_ident();
+        obj.quan--;
+        newsym(obj.ox, obj.oy);
+        return;
+    }
+    game.level.objects = (game.level.objects || []).filter(other => other !== obj);
+    newsym(obj.ox, obj.oy);
+}
+
+async function eatStaleEgg(item, floorObject = false) {
+    addHeroVomiting(d(10, 4));
+    if (floorObject) consumeOneFloorObject(item);
+    else {
+        if ((item?.quan || 1) > 1) next_ident();
+        removeInventoryItem(item);
+    }
+    await setMessage('Ugh.  Rotten egg.');
+    game._command_mode = null;
+    game.context.move = 1;
 }
 
 function deadbookCorpseMonster(item) {
@@ -24828,6 +24865,10 @@ export async function rhack(_cmd) {
                 game.context.move = 9;
                 return;
             }
+            if (isStaleEggItem(item)) {
+                await eatStaleEgg(item);
+                return;
+            }
             if (fortuneCookie) {
                 const rumor = getrumor(false).replace(/^\[cookie\]\s*/, '');
                 game._queued_message_after_more = 'This cookie has a scrap of paper inside.  It reads:';
@@ -24908,12 +24949,7 @@ export async function rhack(_cmd) {
             const food = game._eat_floor_object;
             const floorCorpse = food?.otyp === 'corpse' || food?.otyp === CORPSE;
             const oldCorpse = floorCorpse && food?.oldCorpse;
-            const keepCorpseWhileEating = floorCorpse && !oldCorpse;
-            if (food && !oldCorpse && !keepCorpseWhileEating) {
-                game.level.objects = (game.level.objects || []).filter(obj => obj !== food);
-                newsym(food.ox, food.oy);
-            }
-            const name = pickupObjectName(food || {});
+            const name = pickupObjectName({ ...(food || {}), quan: 1 });
             game._eat_floor_object = null;
             if ((food?.otyp === 'corpse' || food?.otyp === CORPSE) && food?.corpsenm?.name === 'lichen') {
                 rn2(10);
@@ -25034,6 +25070,11 @@ export async function rhack(_cmd) {
                 game.context.move = game._eating_turns_remaining;
                 return;
             }
+            if (isStaleEggItem(food)) {
+                await eatStaleEgg(food, true);
+                return;
+            }
+            consumeOneFloorObject(food);
             await setMessage(`This ${name} is delicious!`);
             game._command_mode = null;
             game.context.move = 1;
