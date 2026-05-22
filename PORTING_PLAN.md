@@ -923,6 +923,13 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   messages and confusion side effects after Amulet/Sokoban blocks, same-depth
   random results, controlled numeric/menu targets, `*`, confused `Oops...`, and
   cancellation.
+- Ordinary movement onto hole/trapdoor, level teleporter, and magic portal
+  traps now shares the same deferred level-change helpers as `#sit` while
+  keeping C movement-specific messages: air/levitation can pass over seen
+  floor-trigger traps, seen non-Sokoban traps can use the generic escape roll,
+  level teleporters say "step onto" and honor non-intentional Antimagic
+  blocking, and magic portals activate instead of falling through to ordinary
+  pickup/feature handling.
 - Wished container state prefixes now cover the C `readobjnam()` object slice
   for `locked`, `unlocked`, `broken`, `trapped`, `untrapped`, and `empty`:
   boxes keep normal generated contents and lock/trap RNG before final state
@@ -1147,8 +1154,8 @@ Next concrete target:
   `trap.c:trapeffect_*()` details now that deferred level-changing traps are
   live: floor-object `impact_drop()` effects for holes/trapdoors, negative and
   invalid controlled level-teleport destinations, remaining fire `burnarmor()`
-  material/protection and floor-object burning details, and shared helpers with
-  the movement trap path where that lowers divergence.
+  material/protection and floor-object burning details, and any remaining
+  movement trap sharing where that lowers divergence.
 - Use `sessions/*.session.json` to locate divergences, but keep fixes in real
   mechanics. A score recovery is only valid when it falls out of those
   mechanics.

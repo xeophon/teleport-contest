@@ -12440,6 +12440,10 @@ function sitTrapArticleName(trap) {
     return `${/^[aeiou]/i.test(name) ? 'an' : 'a'} ${name}`;
 }
 
+function trapMessage(...parts) {
+    return parts.filter(Boolean).join('  ');
+}
+
 function sitTrapEscapeAllowed(trap) {
     return ![ANTI_MAGIC, MAGIC_PORTAL, VIBRATING_SQUARE].includes(trap?.ttyp);
 }
@@ -12598,16 +12602,16 @@ function sitFallThroughTrapResult(trap, prefix) {
     const form = polyselfForm() || {};
     if (!target) {
         messages.push("You don't fall in.");
-        return { message: messages.join('  '), more: false };
+        return { message: trapMessage(...messages), more: false };
     }
     if (!sokobanFall && (form.huge || form.msize === 'huge' || form.size === 'huge')) {
         messages.push("You don't fit through.");
-        return { message: messages.join('  '), more: false };
+        return { message: trapMessage(...messages), more: false };
     }
     if (!sokobanFall && (game.u?.levitating || game.u?.flying || game.u?.ustuck
         || form.clinger || (form.ceilingHider && game.u?.uundetected))) {
         messages.push("You don't fall in.");
-        return { message: messages.join('  '), more: false };
+        return { message: trapMessage(...messages), more: false };
     }
     const dist = Math.max(1, depth_of_level(target) - depth_of_level(current));
     if (dist > 1) {
@@ -12619,7 +12623,7 @@ function sitFallThroughTrapResult(trap, prefix) {
         fallingDamage: !game.u?.flying,
         arrivalMessage: '',
     });
-    return { message: messages.join('  '), more: true };
+    return { message: trapMessage(...messages), more: true };
 }
 
 function levelTeleportTrapFollowupMessage() {
@@ -12645,50 +12649,59 @@ function levelTeleportOptionsWithTrapFollowup(options = {}) {
     };
 }
 
-function sitLevelTeleportTrapResult(trap, prefix) {
+function levelTeleportTrapResult(trap, prefix, intentional = false) {
     trap.tseen = true;
-    const messages = [`${prefix}  You trigger a level teleport trap!`];
+    const verb = intentional ? 'trigger' : `${game.u?.flying ? 'fly' : game.u?.levitating ? 'float' : 'step'} onto`;
+    const messages = [prefix, `You ${verb} a level teleport trap!`];
+    if (heroHasAntimagic() && !intentional) {
+        messages.push('You feel a wrenching sensation.');
+        return { message: trapMessage(...messages), more: false };
+    }
     if (In_endgame(game.u?.uz)) {
         messages.push('You feel a wrenching sensation.');
-        return { message: messages.join('  '), more: false };
+        return { message: trapMessage(...messages), more: false };
     }
     deleteTrap(trap);
     if (heroHasAmuletOfYendor() || In_sokoban(game.u?.uz)) {
         messages.push('You feel very disoriented for a moment.');
         messages.push(levelTeleportTrapFollowupMessage());
-        return { message: messages.join('  '), more: false };
+        return { message: trapMessage(...messages), more: false };
     }
     if (heroHasTeleportControl() && !heroIsStunned()) {
         game._level_teleport_trap_followup = 1;
         game._read_confused_teleport_prompt_after_more = 1;
         game._read_level_teleport_confused_prompt = heroIsConfused() ? 1 : 0;
-        return { message: messages.join('  '), more: true };
+        return { message: trapMessage(...messages), more: true };
     }
     const currentDepth = depth_of_level(game.u?.uz || { dnum: 0, dlevel: 1 });
     const targetDepth = randomTeleportDepth();
     if (targetDepth === currentDepth) {
         messages.push('You shudder for a moment.');
         messages.push(levelTeleportTrapFollowupMessage());
-        return { message: messages.join('  '), more: false };
+        return { message: trapMessage(...messages), more: false };
     }
     scheduleSitLevelChange(levelTeleportNumericTarget(targetDepth), {
         levelTeleport: true,
         postMessage: levelTeleportTrapFollowupMessage(),
     });
-    return { message: messages.join('  '), more: true };
+    return { message: trapMessage(...messages), more: true };
+}
+
+function sitLevelTeleportTrapResult(trap, prefix) {
+    return levelTeleportTrapResult(trap, prefix, true);
 }
 
 function sitMagicPortalResult(trap, prefix) {
     trap.tseen = true;
-    const messages = [`${prefix}  You activated a magic portal!`];
+    const messages = [prefix, 'You activated a magic portal!'];
     if (In_endgame(game.u?.uz) && !heroHasAmuletOfYendor()) {
         messages.push('You feel dizzy for a moment, but nothing happens...');
-        return { message: messages.join('  '), more: false };
+        return { message: trapMessage(...messages), more: false };
     }
     const target = clampDungeonLevel(trap.dst);
     if (!target || sameDungeonLevel(target, game.u?.uz)) {
         messages.push('You shudder for a moment.');
-        return { message: messages.join('  '), more: false };
+        return { message: trapMessage(...messages), more: false };
     }
     const alreadyStunned = heroIsStunned();
     addHeroStun(3);
@@ -12696,7 +12709,51 @@ function sitMagicPortalResult(trap, prefix) {
         portalArrival: true,
         preMessage: alreadyStunned ? 'You feel dizzier.' : 'You feel slightly dizzy.',
     });
-    return { message: messages.join('  '), more: true };
+    return { message: trapMessage(...messages), more: true };
+}
+
+function movementTrapLocomotion() {
+    if (game.u?.flying) return 'fly';
+    if (game.u?.levitating) return 'float';
+    return 'step';
+}
+
+function movementTrapAlreadySeen(trap) {
+    return trap?.ttyp === HOLE || !!trap?.tseen;
+}
+
+function movementTrapEscapeMessage(trap) {
+    return `You escape ${sitTrapArticleName(trap)}.`;
+}
+
+function movementOverFloorTrapMessage(trap) {
+    return `You ${movementTrapLocomotion()} over ${sitTrapArticleName(trap)}.`;
+}
+
+function movementTransportTrapResult(trap) {
+    if (!trap) return null;
+    const alreadySeen = movementTrapAlreadySeen(trap);
+    const sokobanInescapable = In_sokoban(game.u?.uz)
+        && [PIT, SPIKED_PIT, HOLE, TRAPDOOR].includes(trap.ttyp);
+
+    if ((trap.ttyp === HOLE || trap.ttyp === TRAPDOOR) && !sokobanInescapable
+        && (game.u?.levitating || game.u?.flying)) {
+        return {
+            message: alreadySeen ? movementOverFloorTrapMessage(trap) : '',
+            more: false,
+        };
+    }
+
+    if (alreadySeen && !sokobanInescapable && sitTrapEscapeAllowed(trap) && !rn2(5))
+        return { message: movementTrapEscapeMessage(trap), more: false };
+
+    if (trap.ttyp === HOLE || trap.ttyp === TRAPDOOR)
+        return sitFallThroughTrapResult(trap, '');
+    if (trap.ttyp === LEVEL_TELEP)
+        return levelTeleportTrapResult(trap, '', false);
+    if (trap.ttyp === MAGIC_PORTAL)
+        return sitMagicPortalResult(trap, '');
+    return null;
 }
 
 function placeSitTrapProjectile(projectile) {
@@ -15464,6 +15521,22 @@ async function moveHero(dx, dy) {
         await setMessage(msg, true);
         game.context.move = 1;
         return;
+    }
+    if ([HOLE, TRAPDOOR, LEVEL_TELEP, MAGIC_PORTAL].includes(steppedTrap?.ttyp)) {
+        const result = movementTransportTrapResult(steppedTrap);
+        if (result) {
+            game._run_steps_remaining = 0;
+            game._run_stop_now = 1;
+            game._travel_keys = [];
+            game._travel_dynamic_target = null;
+            if (result.message) await setMessage(result.message, result.more);
+            else {
+                game._pending_message = '';
+                game._message_more = 0;
+                game._keep_pending_message = 0;
+            }
+            return;
+        }
     }
     if (steppedTrap?.ttyp === TELEP_TRAP) {
         game.u.ux0 = newx;
