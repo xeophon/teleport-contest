@@ -1473,6 +1473,154 @@ function levelTeleportNumericTarget(depth) {
     return { dnum, dlevel: depth - (dungeon?.depth_start ?? 1) + 1 };
 }
 
+function levelTeleportPromptQuestion() {
+    const suffix = (game._level_teleport_try_count || 0) >= 1
+        ? ` [type a number${game.flags?.debug ? ', name, or ? for a menu' : ' or name'}]`
+        : '';
+    const text = game._level_teleport_text || '';
+    return `To what level do you want to teleport?${suffix}${text ? ` ${text}` : ''}`;
+}
+
+async function beginLevelTeleportTextPrompt() {
+    game._level_teleport_text = '';
+    game._level_teleport_try_count = 0;
+    await setMessage(levelTeleportPromptQuestion());
+    game._command_mode = 'levelTeleportText';
+}
+
+function clearLevelTeleportTextPrompt() {
+    game._level_teleport_text = '';
+    game._level_teleport_confused_scroll = 0;
+    game._level_teleport_try_count = 0;
+}
+
+function cAtoiLikeLevel(text) {
+    const value = Number.parseInt(text, 10);
+    const raw = String(text || '');
+    const first = raw[0] || '';
+    const second = raw[1] || '';
+    const hasNumericPrefix = /\d/.test(first) || (first === '-' && /\d/.test(second));
+    return { value, hasNumericPrefix };
+}
+
+async function randomLevelTeleportFromPrompt() {
+    const currentDepth = depth_of_level(game.u?.uz || { dnum: 0, dlevel: 1 });
+    const targetDepth = randomTeleportDepth();
+    clearLevelTeleportTextPrompt();
+    game._command_mode = null;
+    if (targetDepth === currentDepth) {
+        const followup = consumePendingLevelTeleportTrapFollowup();
+        await setMessage(['You shudder for a moment.', followup].filter(Boolean).join('  '));
+        game.context.move = 1;
+        return;
+    }
+    const options = levelTeleportOptionsWithTrapFollowup({ levelTeleport: true });
+    game._deferred_level_goto = {
+        targetLevel: levelTeleportNumericTarget(targetDepth),
+        options,
+    };
+    game.context.move = 1;
+}
+
+async function retryInvalidLevelTeleportPrompt() {
+    const completedTries = (game._level_teleport_try_count || 0) + 1;
+    if (completedTries >= 10) {
+        await randomLevelTeleportFromPrompt();
+        return;
+    }
+    game._level_teleport_text = '';
+    game._level_teleport_try_count = completedTries;
+    await setMessage(levelTeleportPromptQuestion());
+}
+
+function heavenVoiceMessage() {
+    const role = game.urole?.name?.m || game._startup_role || 'Archeologist';
+    const align = game.u?.ualign?.type ?? 0;
+    const gods = GODS_BY_ROLE[role] || GODS_BY_ROLE.Archeologist;
+    const god = gods[align > 0 ? 0 : align < 0 ? 2 : 1] || 'your god';
+    return `The voice of ${god} rings out:  "Thou art early, but we'll admit thee."`;
+}
+
+async function finishNegativeLevelTeleport(target) {
+    clearLevelTeleportTextPrompt();
+    game._command_mode = null;
+
+    const messages = [];
+    if (target <= -10) {
+        messages.push('You arrive in heaven.');
+        messages.push(heavenVoiceMessage());
+        game._death_cause = 'went to heaven prematurely';
+    } else if (target === -9) {
+        messages.push('You feel deliriously happy.');
+        messages.push("(In fact, you're on Cloud 9!)");
+    } else {
+        messages.push('You are now high above the clouds...');
+    }
+
+    if (target > -10 && game.u?.levitating) {
+        messages.push('You float gently down to earth.');
+    } else if (target > -10 && game.u?.flying) {
+        messages.push('You fly down to the ground.');
+    } else if (target > -10) {
+        messages.push("Unfortunately, you don't know how to fly.");
+        messages.push('You plummet a few thousand feet to your death.');
+        game._death_cause = `teleported out of the dungeon and fell to ${game.flags?.female ? 'her' : 'his'} death`;
+    }
+
+    if (target > -10 && (game.u?.levitating || game.u?.flying)) {
+        game._escaped_from_dungeon = 1;
+        const followup = consumePendingLevelTeleportTrapFollowup();
+        if (followup) messages.push(followup);
+        await setMessage(messages.join('  '), !!followup);
+        game.context.move = 1;
+        return;
+    }
+
+    if (consumeLifeSavingAmulet()) {
+        if (game.u) game.u.uhp = 0;
+        game._command_mode = 'lifeSavingMore';
+        await setMessage(`${messages.join('  ')}  You die...  But wait...  Your medallion begins to glow!`, true);
+        return;
+    }
+
+    if (game.u) game.u.uhp = 0;
+    game._pending_time_passed = 0;
+    game.context.move = 0;
+    game._process_command_time_now = 0;
+    game._run_steps_remaining = 0;
+    game._command_mode = 'deathDieMore';
+    prepareDeathBones();
+    await setMessage(`${messages.join('  ')}  You die...`, true);
+}
+
+async function finishNowhereLevelTeleport() {
+    clearLevelTeleportTextPrompt();
+    game._command_mode = null;
+    const messages = [
+        `You ${polyselfForm()?.silent ? 'writhe' : 'scream'} in agony as your body begins to warp...`,
+        'You cease to exist.',
+    ];
+    if ((game.inventory || []).length)
+        messages.push('Your possessions land on the floor with a thud.');
+    game._death_cause = 'committed suicide';
+
+    if (consumeLifeSavingAmulet()) {
+        if (game.u) game.u.uhp = 0;
+        game._command_mode = 'lifeSavingMore';
+        await setMessage(`${messages.join('  ')}  You die...  But wait...  Your medallion begins to glow!`, true);
+        return;
+    }
+
+    if (game.u) game.u.uhp = 0;
+    game._pending_time_passed = 0;
+    game.context.move = 0;
+    game._process_command_time_now = 0;
+    game._run_steps_remaining = 0;
+    game._command_mode = 'deathDieMore';
+    prepareDeathBones();
+    await setMessage(`${messages.join('  ')}  You die...`, true);
+}
+
 function currentLevelMarker(level) {
     return level && game.u?.uz?.dnum === level.dnum && game.u?.uz?.dlevel === level.dlevel ? '*' : ' ';
 }
@@ -18675,11 +18823,9 @@ export async function rhack(_cmd) {
             }
             if (game._read_confused_teleport_prompt_after_more) {
                 game._read_confused_teleport_prompt_after_more = 0;
-                game._level_teleport_text = '';
                 game._level_teleport_confused_scroll = game._read_level_teleport_confused_prompt ? 1 : 0;
                 game._read_level_teleport_confused_prompt = 0;
-                await setMessage('To what level do you want to teleport?');
-                game._command_mode = 'levelTeleportText';
+                await beginLevelTeleportTextPrompt();
                 return;
             }
             if (game._read_teleport_cursor_prompt_after_more) {
@@ -25275,8 +25421,7 @@ export async function rhack(_cmd) {
 
     if (game._command_mode === 'levelTeleportText') {
         if (ch === '\x1b') {
-            game._level_teleport_confused_scroll = 0;
-            game._level_teleport_text = '';
+            clearLevelTeleportTextPrompt();
             game._deferred_level_goto = null;
             const followup = consumePendingLevelTeleportTrapFollowup();
             if (followup) await setMessage(followup);
@@ -25291,41 +25436,39 @@ export async function rhack(_cmd) {
         if (ch === '\r' || ch === '\n') {
             const text = game._level_teleport_text || '';
             if (text.trim() === '*') {
-                const currentDepth = depth_of_level(game.u?.uz || { dnum: 0, dlevel: 1 });
-                const targetDepth = randomTeleportDepth();
-                game._level_teleport_text = '';
-                game._level_teleport_confused_scroll = 0;
-                game._command_mode = null;
-                if (targetDepth === currentDepth) {
-                    const followup = consumePendingLevelTeleportTrapFollowup();
-                    await setMessage(['You shudder for a moment.', followup].filter(Boolean).join('  '));
-                    game.context.move = 1;
-                    return;
-                }
-                const options = levelTeleportOptionsWithTrapFollowup({ levelTeleport: true });
-                game._deferred_level_goto = {
-                    targetLevel: levelTeleportNumericTarget(targetDepth),
-                    options,
-                };
-                game.context.move = 1;
+                await randomLevelTeleportFromPrompt();
                 return;
             }
             if (game._level_teleport_confused_scroll && rnl(5)) {
-                game._level_teleport_confused_scroll = 0;
-                game._level_teleport_text = '';
+                clearLevelTeleportTextPrompt();
                 game._command_mode = 'confusedLevelTeleportOopsMore';
                 game._deferred_level_goto = null;
                 await setMessage('Oops...', true);
                 return;
             }
-            const target = Number.parseInt(text, 10);
-            if (target) {
+            if (game.flags?.debug && text.trim() === '?') {
+                clearLevelTeleportTextPrompt();
+                setOverlay(levelTeleportMenuLines(), 24, true);
+                game._command_mode = 'levelTeleportMenu';
+                return;
+            }
+            const { value: target, hasNumericPrefix } = cAtoiLikeLevel(text);
+            if (target || hasNumericPrefix) {
                 if (questDownBlocked() && target > (game.u?.uz?.dlevel || 0)) {
-                    game._level_teleport_text = '';
-                    game._level_teleport_confused_scroll = 0;
+                    clearLevelTeleportTextPrompt();
                     game._level_teleport_trap_followup = 0;
                     await setMessage('A mysterious force prevents you from descending.');
                     game._command_mode = null;
+                    return;
+                }
+                if (target < 0) {
+                    await finishNegativeLevelTeleport(target);
+                    return;
+                }
+                if (target === 0) {
+                    clearLevelTeleportTextPrompt();
+                    await setMessage('Go to Nowhere.  Are you sure? [yn] (n)');
+                    game._command_mode = 'levelTeleportNowhereConfirm';
                     return;
                 }
                 const targetLevel = levelTeleportNumericTarget(target);
@@ -25333,13 +25476,31 @@ export async function rhack(_cmd) {
                 if (game._command_mode === 'levelTeleportText') game._command_mode = null;
                 return;
             }
-            game._level_teleport_confused_scroll = 0;
-            setOverlay(levelTeleportMenuLines(), 24, true);
-            game._command_mode = 'levelTeleportMenu';
+            await retryInvalidLevelTeleportPrompt();
             return;
         }
         if (key >= 32) game._level_teleport_text = `${game._level_teleport_text || ''}${ch}`;
-        await setMessage(`To what level do you want to teleport?${game._level_teleport_text ? ` ${game._level_teleport_text}` : ''}`);
+        await setMessage(levelTeleportPromptQuestion());
+        return;
+    }
+
+    if (game._command_mode === 'levelTeleportNowhereConfirm') {
+        if (ch === 'y') {
+            await finishNowhereLevelTeleport();
+            return;
+        }
+        if (ch === 'n' || ch === ' ' || ch === '\x1b' || ch === '\r' || ch === '\n' || ch === 'q') {
+            const followup = consumePendingLevelTeleportTrapFollowup();
+            if (followup) await setMessage(followup);
+            else {
+                game._pending_message = '';
+                game._message_more = 0;
+            }
+            game._command_mode = null;
+            game.context.move = 1;
+            return;
+        }
+        game._keep_pending_message = 1;
         return;
     }
 
@@ -25697,9 +25858,8 @@ export async function rhack(_cmd) {
     }
 
     if (ch === '\x16' && game.flags?.debug && !game._command_mode && !(game._pending_message && game._message_more)) {
-        await setMessage('To what level do you want to teleport?');
-        game._level_teleport_text = '';
-        game._command_mode = 'levelTeleportText';
+        game._level_teleport_confused_scroll = 0;
+        await beginLevelTeleportTextPrompt();
         return;
     }
 
