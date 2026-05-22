@@ -3272,7 +3272,7 @@ function artifactBaseFields(def) {
         glyph: def.glyph,
         kind: def.base,
         actualKind: def.base,
-        known: true,
+        dknown: true,
     };
 }
 

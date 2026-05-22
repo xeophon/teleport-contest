@@ -389,6 +389,7 @@ const PET_OBJECT_WEIGHTS = {
     'shield of reflection': 50,
     helmet: 30,
     'leather gloves': 10,
+    'silver saber': 40,
     dart: 1,
     darts: 1,
     scalpel: 5,
@@ -396,6 +397,7 @@ const PET_OBJECT_WEIGHTS = {
     apple: 2,
     rock: 10,
     'tinning kit': 100,
+    touchstone: 10,
 };
 const PET_CLASS_WEIGHTS = { armor: 150, weapon: 30, tool: 10, food: 20, potion: 20, scroll: 5, spellbook: 50, wand: 7, ring: 3, gem: 1 };
 
@@ -408,6 +410,21 @@ function objectWeight(obj) {
     if (obj.otyp === CHEST || obj.kind === 'chest') return 600;
     const kind = String(obj.kind || obj.actualKind || '').replace(/^scroll labeled /, '').replace(/^potion of /, '');
     return PET_OBJECT_WEIGHTS[kind] ?? PET_CLASS_WEIGHTS[obj.cls] ?? 1;
+}
+
+function heroWearsNutritionAmulet() {
+    return (game.inventory || []).some(item => {
+        if (!item.worn) return false;
+        if (!(item.cls === 'amulet' || item.amuletIndex != null || item.glyph === '"')) return false;
+        const name = String(item.actualKind || item.kind || '').toLowerCase();
+        return !name.includes('cheap plastic imitation');
+    });
+}
+
+function applyAccessoryHunger(accessorytime) {
+    if (!game.u) return;
+    if (accessorytime === 8 && heroWearsNutritionAmulet())
+        game.u.uhunger = (game.u.uhunger ?? 900) - 1;
 }
 
 const TOURIST_FOODS = [
@@ -569,7 +586,7 @@ const TOOL_DISCOVERY = {
     'oil lamp': { section: 'Tools', name: 'oil lamp', appearance: 'lamp' },
 };
 const GEM_DISCOVERY = {
-    touchstone: { section: 'Gems/Stones', name: 'touchstone', appearance: 'gray stone' },
+    touchstone: { section: 'Gems/Stones', name: 'touchstone', appearance: 'gray' },
     'flint stone': { section: 'Gems/Stones', name: 'flint stone', appearance: 'gray' },
 };
 
@@ -5506,8 +5523,11 @@ async function finishMonsterTurnTail() {
 
     if (sleepingHunger) rn2(10);
     if (!game._prayer_occupation || !game._prayer_debug_pleased) {
-        rn2(20);
-        if (game.u) game.u.uhunger = (game.u.uhunger ?? 900) - 1;
+        const accessorytime = rn2(20);
+        if (game.u) {
+            game.u.uhunger = (game.u.uhunger ?? 900) - 1;
+            applyAccessoryHunger(accessorytime);
+        }
     }
     if (pendingVaultRoom) {
         let guardX = null, guardY = null;

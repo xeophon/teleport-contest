@@ -1250,6 +1250,18 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   shows less-known weapon lines. `npm run score` remains `27/44`, with
   `seed0361` now fully RNG-aligned at `53865/53865` calls and `362/366`
   matching screens.
+- The Archeologist tour inventory/discovery/enlightenment tail is now closed:
+  artifact wishing/discovery now leaves weapon enchantment unknown until C
+  would reveal it, `flags.pushweapon` controls whether an old primary weapon
+  becomes the alternate weapon, observed nearby objects populate `\`
+  discoveries in C packorder sections, and wizard enlightenment now reports
+  C skill names, piousness, artifact/role/experience/reflection attributes,
+  C object weights, same-level teleport nutrition, and worn-amulet accessory
+  hunger. `seed0361-archeologist-tour` now passes with `53865/53865` RNG calls
+  and `366/366` screens. `npm run score` improved to `29/44`; remaining broad
+  frontiers include the early healer reflection drummer divergence at screen
+  97, the Dequa fountain/explore divergence at screen 35, wizard world-tour
+  branch generation at screen 181, and larger Quest/coverage suites.
 
 Next concrete target:
 
@@ -1262,10 +1274,9 @@ Next concrete target:
   semantics, C special-level room/corridor/shop filling for `minetn-3.lua`, and
   full `eat.c`, `sp_lev.c`, `mkobj.c`, `makemon.c`, `uhitm.c`, and
   `dogmove.c` behavior.
-- The next narrow Archeologist tour slice should inspect the screen 354
-  inventory window frontier after returning to Sokoban: RNG is fully aligned,
-  but C's inventory menu is centered further right and the weapon knowledge
-  lines omit JS's extra blessing/enchantment/alternate-weapon annotations.
+- The Archeologist tour is now closed; use it as a regression guard for
+  artifact wishing, restored-level Sokoban return, discovery menus, and wizard
+  enlightenment before widening the same C-grounded fixes to other sessions.
 - The next narrow `#sit` trap slice should deepen the remaining
   `trap.c:trapeffect_*()` details now that deferred level-changing traps are
   live: floor-object `impact_drop()` effects for holes/trapdoors, positive
