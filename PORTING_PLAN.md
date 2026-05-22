@@ -1181,10 +1181,15 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   controlled same-level teleport always prints the verbose
   `You materialize in ... location!` line and consumes a turn; and quest
   leader talk can fire immediately from a waiting leader before it moves.
-  `seed0361-archeologist-tour` now reaches the later ordinary `Dlvl:14`
-  map-generation/restoration mismatch at screen 185. The latest verified
-  public score remains `27/44`, with `seed0361` advancing from screen metric
-  `168/366` to `206/366`.
+- Quest rejection now follows more of C `leader_speaks()`: each quest pager
+  consumes the `nhlib.lua` alignment shuffle, the wizard-only `adjust?`
+  prompt no longer processes a stale monster turn, and bad-level/bad-align
+  rejection exercises Wisdom before expulsion. `seed0361-archeologist-tour`
+  now matches the ordinary `Dlvl:14` arrival map and reaches the next door
+  opening RNG mismatch at screen 188. The latest verified public score remains
+  `27/44`; the focused first screen mismatch is later, while the aggregate
+  `seed0361` scorer metric is `197/366` because later divergent frames still
+  dominate the count.
 
 Next concrete target:
 
@@ -1197,11 +1202,12 @@ Next concrete target:
   semantics, C special-level room/corridor/shop filling for `minetn-3.lua`, and
   full `eat.c`, `sp_lev.c`, `mkobj.c`, `makemon.c`, `uhitm.c`, and
   `dogmove.c` behavior.
-- The next narrow Archeologist tour slice should inspect the new screen 185
-  `Dlvl:14` mismatch after the quest-leader rejection flow: C restores/renders
-  a small room around the hero while JS shows the Quest Home local map area,
-  suggesting a remaining level teleport destination restoration or ordinary
-  level-generation/display-state gap after leaving Quest Home.
+- The next narrow Archeologist tour slice should inspect the screen 188
+  closed-door open attempt after Quest expulsion: C's `doopen_indir()` consumes
+  `rnl(20)=12` and prints `The door resists!`, while JS reaches the same
+  visible room/closed door but consumes a different global RNG value and opens
+  it. The broad root cause is still an older flat-stream divergence, so avoid
+  hard-coding this public door outcome.
 - The next narrow `#sit` trap slice should deepen the remaining
   `trap.c:trapeffect_*()` details now that deferred level-changing traps are
   live: floor-object `impact_drop()` effects for holes/trapdoors, positive

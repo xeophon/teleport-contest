@@ -1773,6 +1773,7 @@ function questPagerRows(msgid) {
     const info = QUEST_ROLE_DATA[roleName];
     const raw = info?.texts?.[msgid] || (msgid === 'goal_alt' ? info?.texts?.goal_next : '');
     if (!raw) return null;
+    l_nhcore_init();
     const rankIndex = level => level <= 2 ? 0 : level <= 30 ? Math.trunc((level + 2) / 4) : 8;
     const rank = info.ranks[Math.min(rankIndex(game.u?.ulevel || 1), info.ranks.length - 1)];
     const minRank = info.ranks[Math.min(rankIndex(MIN_QUEST_LEVEL), info.ranks.length - 1)];
@@ -1833,7 +1834,6 @@ function queueQuestArrival(targetLevel, fromLevel, targetIsNew, showNow = false)
     game.quest_status ??= {};
     const fromAbove = fromLevel.dnum !== targetLevel.dnum || fromLevel.dlevel < targetLevel.dlevel;
     if (kind === 'start') {
-        l_nhcore_init();
         if (!game.quest_status.first_start) {
             game.quest_status.first_start = true;
             return pager('firsttime');
@@ -1859,6 +1859,7 @@ function queueQuestArrival(targetLevel, fromLevel, targetIsNew, showNow = false)
 async function continueQuestLeaderTalkAfterIntro() {
     game.quest_status ??= {};
     if ((game.u?.ulevel || 1) < MIN_QUEST_LEVEL) {
+        game._quest_reject_exercise_wis = 1;
         showQuestPager('badlevel', 'questLeaderRejectMore');
         return;
     }
@@ -1873,6 +1874,7 @@ async function continueQuestLeaderTalkAfterIntro() {
     }
     if (!pure) {
         game.quest_status.not_ready = 1;
+        game._quest_reject_exercise_wis = 1;
         showQuestPager('badalign', 'questLeaderRejectMore');
         return;
     }
@@ -16682,6 +16684,7 @@ export async function rhack(_cmd) {
         if (ch === ' ' || ch === '\x1b' || ch === '\r' || ch === '\n') {
             game._pending_message = '';
             game._message_more = 0;
+            game._pending_time_passed = 0;
             await setMessage('adjust?');
             game._command_mode = 'questLeaderAdjust';
         }
@@ -16697,6 +16700,7 @@ export async function rhack(_cmd) {
         } else {
             game.quest_status ??= {};
             game.quest_status.not_ready = 1;
+            game._quest_reject_exercise_wis = 1;
             showQuestPager('badalign', 'questLeaderRejectMore');
         }
         return;
@@ -16708,6 +16712,10 @@ export async function rhack(_cmd) {
             game._overlay_hide_status = 0;
             game._pending_message = '';
             game._message_more = 0;
+            if (game._quest_reject_exercise_wis) {
+                game._quest_reject_exercise_wis = 0;
+                exerciseAttribute(A_WIS, true);
+            }
             await finishLevelTeleport(branchLevel(game.u?.uz?.dnum ?? -1) || { dnum: 0, dlevel: 14 }, { portalArrival: true });
             game._pending_message = '';
             game._message_more = 0;
