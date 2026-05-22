@@ -4843,7 +4843,7 @@ async function processMonsterTurns() {
 	        game._deferred_monster_turn_tail = 1;
 	        return 'defer-tail';
 	    }
-	    const result = finishMonsterTurnTail();
+	    const result = await finishMonsterTurnTail();
 	    game._swallow_cold_more_allows_tail = 0;
         if (result === true && game._counted_repeat_finish_monsters_once) {
             game._counted_repeat_finish_monsters_once = 0;
@@ -4852,7 +4852,7 @@ async function processMonsterTurns() {
 	    return result;
 	}
 
-function finishMonsterTurnTail() {
+async function finishMonsterTurnTail() {
     const resumeAfterSounds = !!game._resume_monster_turn_tail_after_sounds;
     game._resume_monster_turn_tail_after_sounds = 0;
     let sleepingHunger = false;
@@ -5293,7 +5293,7 @@ function finishMonsterTurnTail() {
             game.u._fumblingTimeout = timeout;
         }
     }
-    processSpellbookStudyOccupation();
+    await processSpellbookStudyOccupation();
     if (game._ball_drag_subtract_after_forced_tail) {
         game._ball_drag_subtract_after_forced_tail = 0;
         if (game.u) game.u.umovement = Math.max(0, (game.u.umovement || 0) - NORMAL_SPEED);
@@ -5310,7 +5310,7 @@ function finishMonsterTurnTail() {
             game._force_monster_turn_tail_once = 1;
             game._ball_drag_subtract_after_forced_tail = 1;
         }
-        return processMonsterTurns();
+        return await processMonsterTurns();
     }
     if (armBallDragForceTail) {
         game._force_monster_turn_tail_once = 1;
@@ -8058,7 +8058,7 @@ export async function moveloop_core() {
         if (armorTailOnly) g._armor_tail_after_more = 0;
         if (g._deferred_monster_turn_tail && !(g._pending_message && g._message_more)) {
             g._deferred_monster_turn_tail = 0;
-            finishMonsterTurnTail();
+            await finishMonsterTurnTail();
             g.moves = (g.moves || 1) + 1;
             afterMoveTurn(g);
             g.u.umoved = false;

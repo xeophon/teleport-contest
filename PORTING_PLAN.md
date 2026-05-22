@@ -984,6 +984,15 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   corrosion, and explosive rune damage. The explosion branch now consumes the
   spellbook immediately and skips the caller's separate crumble roll, matching
   the C return-value split.
+- The Book of the Dead finish path now follows more of C `deadbook()`: confused
+  readings still consume the `rn2(3)` tear-roll but cannot destroy the Book,
+  completion marks the Book known without changing BUC knowledge, invocation
+  square readings handle cursed-book, missing-relic, cursed-relic, amiss, and
+  primed Bell/Candelabrum success branches, successful invocation opens the
+  downward stair and sets `invoked`/`udemigod`/`udg_cnt`, blessed readings
+  pacify or tame visible undead, and cursed/amiss readings perform the first
+  raise-dead adversary slice. Full `mkundead()` and carried corpse/egg revival
+  remain future work.
 - Monster-class row ordering no longer depends on Node 22's
   `Array.prototype.toSorted()`: the JS `mkclass` metadata path now uses an
   explicit copied difficulty sort that preserves equal-difficulty order, matching

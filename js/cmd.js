@@ -6,7 +6,7 @@ import { nhgetch } from './input.js';
 import { bot, cls, docrt, flush_screen, newsym, pline, refreshHallucinatedMap, show_glyph_cell, strengthString } from './display.js';
 import { couldsee, vision_recalc, vision_reset } from './vision.js';
 import { RANDOM_MONSTER_BY_NAME, SHOP_TYPES, artifactObjectName, enextoMonsterSpot, make_tutorial1_level, makemon, makeArtifactWishObject, mkcorpstat, mklev, mkobj_at, mksobj, monsterByRndName, nameObjectAsArtifact, next_ident, potionIndexForRoll, rndmonnum, scrollIndexForRoll, syncDungeonContext, u_on_dnstairs, u_on_rndspot, u_on_upstairs, wipe_engr_at, dropMonsterInventory, l_nhcore_init, getrumor, getbogusmon, level_difficulty, set_malign, somexyspace } from './mklev.js';
-import { ACCESSIBLE, A_CHA, A_CON, A_DEX, A_INT, A_MAX, A_STR, A_WIS, ALTAR, BC_BALL, BC_CHAIN, BEAR_TRAP, BLCORNER, BOLT_LIM, BRCORNER, CLOUD, COLNO, CORPSTAT_FEMALE, CORPSTAT_GENDER, CORPSTAT_HISTORIC, CORPSTAT_MALE, CORPSTAT_NEUTER, CORR, DOOR, BURN, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, DUST, ENGRAVE, ENGR_BLOOD, FOUNTAIN, GRAVE, HEADSTONE, HWALL, ICE, IN_SIGHT, IS_AIR, IS_OBSTRUCTED, IS_POOL, IS_ROOM, IS_WALL, In_endgame, In_quest, In_sokoban, Is_earthlevel, Is_rogue_level, Is_waterlevel, LADDER, LAVAPOOL, LAVAWALL, MAGIC_PORTAL, MARK, MM_EDOG, MM_NOMSG, MOAT, NO_MINVENT, NORMAL_SPEED, OVERLOADED, P_BASIC, P_UNSKILLED, POOL, ROLLING_BOULDER_TRAP, ROOM, ROT_AGE, ROOMOFFSET, ROWNO, SCORR, SDOOR, SHOPBASE, SINK, STAIRS, STONE, TDWALL, TEMPLE, THRONE, TLCORNER, TRCORNER, TREE, TUWALL, VAULT, VWALL, WAND_BACKFIRE_CHANCE, WATER, WT_IRON_BALL_BASE, WT_IRON_BALL_INCR, ZAP_POS } from './const.js';
+import { ACCESSIBLE, A_CHA, A_CON, A_DEX, A_INT, A_MAX, A_STR, A_WIS, ALTAR, BC_BALL, BC_CHAIN, BEAR_TRAP, BLCORNER, BOLT_LIM, BRCORNER, CLOUD, COLNO, CORPSTAT_FEMALE, CORPSTAT_GENDER, CORPSTAT_HISTORIC, CORPSTAT_MALE, CORPSTAT_NEUTER, CORR, DOOR, BURN, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, DUST, ENGRAVE, ENGR_BLOOD, FOUNTAIN, GRAVE, HEADSTONE, HWALL, ICE, IN_SIGHT, IS_AIR, IS_OBSTRUCTED, IS_POOL, IS_ROOM, IS_WALL, In_endgame, In_quest, In_sokoban, Is_earthlevel, Is_rogue_level, Is_waterlevel, LADDER, LAVAPOOL, LAVAWALL, MAGIC_PORTAL, MARK, MM_EDOG, MM_NOMSG, MOAT, NO_MINVENT, NORMAL_SPEED, OVERLOADED, P_BASIC, P_UNSKILLED, POOL, ROLLING_BOULDER_TRAP, ROOM, ROT_AGE, ROOMOFFSET, ROWNO, SCORR, SDOOR, SHOPBASE, SINK, STAIRS, STONE, TDWALL, TEMPLE, THRONE, TLCORNER, TRCORNER, TREE, TUWALL, VAULT, VIBRATING_SQUARE, VWALL, WAND_BACKFIRE_CHANCE, WATER, WT_IRON_BALL_BASE, WT_IRON_BALL_INCR, ZAP_POS } from './const.js';
 import { d, rn1, rn2, rn2_on_display_rng, rnd, rnl, rnz } from './rng.js';
 import { CLR_BLACK, CLR_BLUE, CLR_BRIGHT_BLUE, CLR_BRIGHT_CYAN, CLR_BRIGHT_GREEN, CLR_BROWN, CLR_CYAN, CLR_GRAY, CLR_GREEN, CLR_MAGENTA, CLR_ORANGE, CLR_RED, CLR_YELLOW, CLR_WHITE, NO_COLOR } from './terminal.js';
 import { vfsDeleteFile, vfsReadFile, vfsWriteFile } from './storage.js';
@@ -11223,18 +11223,197 @@ function setTurnTailMessage(message) {
     game._keep_pending_message = 1;
 }
 
-function bookOfTheDeadStudyMessage(item) {
+function itemKindText(item) {
+    return String(item?.actualKind || item?.kind || item?.artifact || item?.name || '').toLowerCase();
+}
+
+function isBellOfOpeningItem(item) {
+    const text = itemKindText(item);
+    return text === 'bell of opening' || item?.otyp === BELL && text === 'silver bell';
+}
+
+function isCandelabrumOfInvocationItem(item) {
+    return item?.otyp === CANDELABRUM_OF_INVOCATION || itemKindText(item) === 'candelabrum of invocation';
+}
+
+function heroOnStairs() {
+    const x = game.u?.ux;
+    const y = game.u?.uy;
+    if (x == null || y == null) return false;
+    const loc = game.level?.at?.(x, y);
+    if (loc?.typ === STAIRS || loc?.typ === LADDER || loc?.ladder) return true;
+    return (game.level?.dnstair?.x === x && game.level?.dnstair?.y === y)
+        || (game.level?.upstair?.x === x && game.level?.upstair?.y === y);
+}
+
+function heroOnInvocationSquare() {
+    if (heroOnStairs()) return false;
+    const x = game.u?.ux;
+    const y = game.u?.uy;
+    if (x == null || y == null) return false;
+    const inv = game.level?.invocationPosition || game.level?.inv_pos;
+    if (inv?.x === x && inv?.y === y) return true;
+    return (game.level?.traps || []).some(trap =>
+        trap && trap.tx === x && trap.ty === y && trap.ttyp === VIBRATING_SQUARE);
+}
+
+function inventoryInvocationItems() {
+    const inventory = game.inventory || [];
+    const bell = inventory.find(isBellOfOpeningItem) || null;
+    const candelabrum = inventory.find(isCandelabrumOfInvocationItem) || null;
+    return { bell, candelabrum };
+}
+
+function bellRecentlyRungForInvocation(bell) {
+    if (!bell) return false;
+    const age = bell.age ?? bell.invocationAge ?? bell._invocation_rung_turn;
+    return age != null && (game.moves || 0) - age < 5;
+}
+
+function candelabrumPrimedForInvocation(candelabrum) {
+    return !!candelabrum && (candelabrum.spe ?? 0) === 7 && !!(candelabrum.lamplit || candelabrum.burning);
+}
+
+function performInvocationArea(messages) {
+    messages.push('The floor shakes violently under you!');
+    const x = game.u?.ux;
+    const y = game.u?.uy;
+    if (x == null || y == null) return;
+
+    let wallNearby = false;
+    for (let dx = -6; dx <= 6 && !wallNearby; dx++) {
+        for (let dy = -5; dy <= 5; dy++) {
+            const loc = game.level?.at?.(x + dx, y + dy);
+            if (loc && IS_WALL(loc.typ)) {
+                wallNearby = true;
+                break;
+            }
+        }
+    }
+    if (wallNearby) messages.push('The walls around you begin to bend and crumble!');
+
+    game.level.traps = (game.level?.traps || []).filter(trap =>
+        !(trap.tx === x && trap.ty === y && trap.ttyp === VIBRATING_SQUARE));
+    const loc = game.level?.at?.(x, y);
+    if (loc) {
+        loc.typ = STAIRS;
+        loc.ladder = 2;
+    }
+    if (game.level) game.level.dnstair = { x, y };
+    newsym(x, y);
+    messages.push('You are standing at the top of a stairwell leading down!');
+}
+
+function deadbookCanSeeMonster(mon) {
+    if (!mon || mon.dead || (mon.mhp ?? 1) <= 0 || mon.mx == null || mon.my == null) return false;
+    if (!game.viz_array) return true;
+    return couldsee(mon.mx, mon.my);
+}
+
+function isDeadbookUndead(mon) {
+    const data = mon?.data || {};
+    const name = String(data.name || mon?.name || '').toLowerCase();
+    const mlet = data.mlet || mon?.mlet || data.glyph || mon?.glyph;
+    return mlet === 'L' || mlet === 'M' || mlet === 'V' || mlet === 'W' || mlet === 'Z'
+        || mlet === "'" || mlet === 'ghost' || data.vampshifter
+        || /\b(?:ghost|shade|lich|mummy|zombie|vampire|wraith|nazgul|skeleton|ghoul)\b/.test(name);
+}
+
+function pacifyUndeadForDeadbook() {
+    for (const mon of game.level?.monsters || []) {
+        if (!isDeadbookUndead(mon) || !deadbookCanSeeMonster(mon)) continue;
+        mon.mpeaceful = 1;
+        const mal = mon.data?.maligntyp || 0;
+        const align = game.u?.ualign?.type || 0;
+        const close = Math.max(Math.abs((mon.mx || 0) - (game.u?.ux || 0)),
+            Math.abs((mon.my || 0) - (game.u?.uy || 0))) < 4;
+        if (Math.sign(mal) === Math.sign(align) && close) {
+            if (mon.mtame || mon.pet) mon.mtame = Math.min(20, (mon.mtame || 0) + 1);
+            else {
+                mon.pet = true;
+                mon.mtame = 10;
+                ensurePetExtension(mon);
+            }
+            mon.mflee = 0;
+            mon.mfleetim = 0;
+        } else {
+            mon.mflee = 1;
+            mon.mfleetim = 0;
+            clearMonsterTrack(mon);
+        }
+        set_malign(mon);
+        newsym(mon.mx, mon.my);
+    }
+}
+
+async function raiseDeadFromBook() {
+    if (!rn2(3)) {
+        const masterLich = monsterByRndName('master lich');
+        const nalfeshnee = monsterByRndName('nalfeshnee');
+        const mon = (masterLich && await makemon(masterLich, game.u?.ux || 0, game.u?.uy || 0, NO_MINVENT))
+            || (nalfeshnee && await makemon(nalfeshnee, game.u?.ux || 0, game.u?.uy || 0, NO_MINVENT));
+        if (mon) {
+            mon.mpeaceful = 0;
+            mon.pet = false;
+            mon.mtame = 0;
+            set_malign(mon);
+        }
+    }
+    game._deadbook_raise_dead_pending = 1;
+}
+
+async function bookOfTheDeadStudyMessage(item) {
     if (item) {
         item.known = true;
-        item.bknown = true;
         item.kind = 'Book of the Dead';
         item.actualKind = 'Book of the Dead';
         item.line = normalInventoryLine({ ...item, line: '' });
     }
 
     const messages = ['You turn the pages of the Book of the Dead...'];
-    if (item?.cursed) {
+    if (heroOnInvocationSquare()) {
+        const { bell, candelabrum } = inventoryInvocationItems();
+        if (item?.cursed) {
+            messages.push(game.u?.blind
+                ? 'The Book seems to be ignoring you!'
+                : "The runes appear scrambled.  You can't read them!");
+            return messages.join('  ');
+        }
+        if (!bell || !candelabrum) {
+            messages.push('A chill runs down your spine.');
+            if (!bell) messages.push('You hear a faint chime...');
+            if (!candelabrum) messages.push("Vlad's doppelganger is amused.");
+            return messages.join('  ');
+        }
+
+        const candelabrumPrimed = candelabrumPrimedForInvocation(candelabrum);
+        const bellPrimed = bellRecentlyRungForInvocation(bell);
+        const relicCursed = (candelabrumPrimed && candelabrum.cursed) || (bellPrimed && bell.cursed);
+        if (relicCursed) {
+            messages.push('The invocation fails!');
+            messages.push('At least one of your relics is cursed...');
+            return messages.join('  ');
+        }
+        if (candelabrumPrimed && bellPrimed) {
+            const soon = d(2, 6);
+            performInvocationArea(messages);
+            game.u.uevent ??= {};
+            game.u.uevent.invoked = 1;
+            game.u.uevent.udemigod = 1;
+            if (!game.u.udg_cnt || game.u.udg_cnt > soon) game.u.udg_cnt = soon;
+            game._chronicle_entries ??= [];
+            game._chronicle_entries.push({ turn: game.moves || 1, text: 'performed the invocation ritual' });
+            return messages.join('  ');
+        }
+
+        messages.push('You have a feeling that something is amiss...');
         messages.push('You raised the dead!');
+        await raiseDeadFromBook();
+    } else if (item?.cursed) {
+        messages.push('You raised the dead!');
+        await raiseDeadFromBook();
+    } else if (item?.blessed) {
+        pacifyUndeadForDeadbook();
     } else if (!item?.blessed) {
         switch (rn2(3)) {
         case 0:
@@ -11251,7 +11430,7 @@ function bookOfTheDeadStudyMessage(item) {
     return messages.join('  ');
 }
 
-export function processSpellbookStudyOccupation() {
+export async function processSpellbookStudyOccupation() {
     const study = game._spellbook_study_occupation;
     if (!study) return;
     if (study.turns > 0) {
@@ -11267,7 +11446,7 @@ export function processSpellbookStudyOccupation() {
 
     exerciseAttribute(A_WIS, true);
     if (study.bookOfDead || isBookOfTheDeadItem(item)) {
-        setTurnTailMessage(bookOfTheDeadStudyMessage(item));
+        setTurnTailMessage(await bookOfTheDeadStudyMessage(item));
         game._pending_time_passed = Math.max(game._pending_time_passed || 0, 2);
         return;
     }
@@ -19504,7 +19683,7 @@ export async function rhack(_cmd) {
             if (heroIsConfused()) {
                 const messages = [];
                 let shouldCall = false;
-                if (!isBookOfTheDeadItem(item) && !rn2(3)) {
+                if (!rn2(3) && !isBookOfTheDeadItem(item)) {
                     messages.push('Being confused you have difficulties in controlling your actions.');
                     shouldCall = shouldTryCallSpellbook(item, name);
                     if (shouldCall) prepareSpellbookTryCall(item, studyDelay);
