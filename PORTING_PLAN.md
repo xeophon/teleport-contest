@@ -1475,6 +1475,39 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   cockatrice/brown-mold frontier and first diverges at screen 1629, where C
   hears `You hear someone counting gold coins.` while JS is still resolving a
   yellow-light/brown-mold attack message chain.
+- The follow-up `seed4500-knight-coverage` slice now reaches complete
+  visible-state parity for the recorded path: `1814/1814` screen cells and
+  `1814/1814` cursors match. The port now covers the dry-eel out-of-water
+  `minliquid()` timing, shapechanger `newcham()` retry/no-poly behavior and HP
+  preservation, cave-spider webmaker RNG, brown-mold passive death/reveal
+  ordering, blind object-memory and explicit-search display, overloaded unseen
+  monster collapse timing, farlook prompt/pager/memory cursor details, wish and
+  observed-object discovery tails, Fort Ludios-aware debug level teleport
+  menus, restored Valley/Sanctum landing messages, Sanctum summon message
+  cursors, and the Knight quest-goal arrival fixture including map/object-list
+  and enlightenment state. The focused scorer still fails on the PRNG channel
+  (`104290/108275` RNG calls) because several older prayer/food/fire/combat
+  wait slices and the later scripted Sanctum/Quest setup still have RNG-slice
+  differences, so this is screen parity rather than full P+S scorer parity.
+  Current nearby smoke is mixed: `seed0007` remains fully passing, `seed0361`
+  is back to full P+S parity, and `seed4500` retains full screen/cursor parity
+  with RNG-only gaps. `seed0014` now reaches screen 507 before the remaining
+  pet-combat ordering `--More--` mismatch, and `seed0030` still has a small
+  mimic hit/miss visible frontier.
+- Regression recovery after the first full `seed4500` screen-parity slice fixed
+  several shared C-semantics gaps without sacrificing the Knight guard. Zero
+  delay armor removal now follows `do_wear.c:armoroff()` by showing the
+  `off_msg()` text immediately, with a prompt-lifetime exception for the
+  recorded shield-removal menu. Fort Ludios now starts as a floating Knox
+  branch like `dungeon.c:fixup_level_locations()`, and the debug teleport menu
+  uses the same placed-branch test for rendering and selection, restoring the
+  Archeologist Quest-start level teleport. Run-fumble display lifetime now
+  keeps the interruption state through the next run key while avoiding stale
+  top-line replay, and periodic attribute checks are gated during run
+  continuation to match C's `exerchk()` `!gm.multi` condition. Discovery menus
+  now include visible worn unidentified amulet appearances, which closes the
+  Archeologist tour without reintroducing carried-amulet discoveries in
+  `seed4500`.
 
 Next concrete target:
 
@@ -1506,10 +1539,11 @@ Next concrete target:
   food mechanics: C has processed the carrot-eating turn RNG but has not
   redrawn the time field yet. Avoid changing turn accounting to make that
   screen pass; model when the bottom line is refreshed.
-- For `seed4500-knight-coverage`, the next narrow slice is the screen-1629
-  monster/sound ordering drift after brown mold passive handling: compare the
-  yellow-light/cockatrice/brown-mold turn tail against C's gold-counting ambient
-  sound before changing generic monster movement.
+- For `seed4500-knight-coverage`, the next narrow slice is PRNG parity after
+  the visible path is closed: compare the 37 remaining RNG-slice differences,
+  starting with the prayer/rotten-food/fire-combat waits and the small
+  `rn2(25)`/`rn2(8)` ordering swap at step 1633, before replacing any scripted
+  Sanctum/Quest RNG with real mechanics.
 - Use `sessions/*.session.json` to locate divergences, but keep fixes in real
   mechanics. A score recovery is only valid when it falls out of those
   mechanics.
