@@ -4265,32 +4265,53 @@ const TERRAIN_LINES = [
     [4, 28, 'c - known map without monsters'],
     [5, 27, ' (end)'],
 ];
-const WIZ_INTRINSIC_MENU_LINES = [
-    [0, 0, ' '],
-    [0, 1, 'Which intrinsics?', 1],
-    [2, 0, ' [Precede any selection with a count to increment by other than 30.]'],
-    [3, 0, ' a - invulnerable'],
-    [4, 0, ' b - petrifying'],
-    [5, 0, ' c - becoming slime'],
-    [6, 0, ' d - strangling'],
-    [7, 0, ' e - fatally sick'],
-    [8, 0, ' f - stunned'],
-    [9, 0, ' g - confused'],
-    [10, 0, ' h - hallucinating'],
-    [11, 0, ' i - blinded'],
-    [12, 0, ' j - deafness'],
-    [13, 0, ' k - vomiting'],
-    [14, 0, ' l - slippery fingers'],
-    [15, 0, ' m - wounded legs'],
-    [16, 0, ' n - sleepy'],
-    [17, 0, ' o - teleporting'],
-    [18, 0, ' p - polymorphing'],
-    [19, 0, ' q - levitating'],
-    [20, 0, ' r - very fast'],
-    [21, 0, ' s - clairvoyant'],
-    [22, 0, ' t - monster detection'],
-    [23, 0, ' (1 of 4)'],
+const WIZ_INTRINSIC_ENTRIES = [
+    ['a', 'invulnerable'],
+    ['b', 'petrifying'],
+    ['c', 'becoming slime'],
+    ['d', 'strangling'],
+    ['e', 'fatally sick'],
+    ['f', 'stunned'],
+    ['g', 'confused'],
+    ['h', 'hallucinating'],
+    ['i', 'blinded'],
+    ['j', 'deafness'],
+    ['k', 'vomiting'],
+    ['l', 'slippery fingers'],
+    ['m', 'wounded legs'],
+    ['n', 'sleepy'],
+    ['o', 'teleporting'],
+    ['p', 'polymorphing'],
+    ['q', 'levitating'],
+    ['r', 'very fast'],
+    ['s', 'clairvoyant'],
+    ['t', 'monster detection'],
+    ['u', 'see invisible'],
 ];
+
+function wizIntrinsicRows() {
+    const cmdassist = game.flags?.cmdassist ?? FULL_OPTION_DEFAULTS.cmdassist;
+    const baseRow = cmdassist ? 3 : 2;
+    const visibleCount = cmdassist ? 20 : 21;
+    return Object.fromEntries(WIZ_INTRINSIC_ENTRIES.map(([letter, label], index) => [
+        letter,
+        [index < visibleCount ? baseRow + index : null, label],
+    ]));
+}
+
+function wizIntrinsicMenuLines() {
+    const cmdassist = game.flags?.cmdassist ?? FULL_OPTION_DEFAULTS.cmdassist;
+    const rows = [
+        [0, 0, ' '],
+        [0, 1, 'Which intrinsics?', 1],
+    ];
+    if (cmdassist) rows.push([2, 0, ' [Precede any selection with a count to increment by other than 30.]']);
+    for (const [letter, [rowNumber, label]] of Object.entries(wizIntrinsicRows())) {
+        if (rowNumber != null) rows.push([rowNumber, 0, ` ${letter} - ${label}`]);
+    }
+    rows.push([23, 0, ' (1 of 4)']);
+    return rows;
+}
 const ENHANCE_ADVANCE_LINES = [
     [0, 0, ' '], [0, 1, 'Pick a skill to advance:', 1],
     [2, 0, ' '], [2, 1, 'Fighting Skills', 1],
@@ -24605,50 +24626,28 @@ export async function rhack(_cmd) {
             game._wiz_intrinsic_selected = null;
             return;
         }
-        const intrinsicRows = {
-            a: [3, 'invulnerable'],
-            b: [4, 'petrifying'],
-            c: [5, 'becoming slime'],
-            d: [6, 'strangling'],
-            e: [7, 'fatally sick'],
-            f: [8, 'stunned'],
-            g: [9, 'confused'],
-            h: [10, 'hallucinating'],
-            i: [11, 'blinded'],
-            j: [12, 'deafness'],
-            k: [13, 'vomiting'],
-            l: [14, 'slippery fingers'],
-            m: [15, 'wounded legs'],
-            n: [16, 'sleepy'],
-            o: [17, 'teleporting'],
-            p: [18, 'polymorphing'],
-            q: [19, 'levitating'],
-            r: [20, 'very fast'],
-            s: [21, 'clairvoyant'],
-            t: [22, 'monster detection'],
-            u: [null, 'see invisible'],
-        };
-	        if (ch === '.') {
-	            game._wiz_intrinsic_selected = new Set(Object.keys(intrinsicRows));
-	            for (const [letter, [rowNumber, label]] of Object.entries(intrinsicRows)) {
-	                const row = (game._overlay_lines || []).find(line => line[0] === rowNumber);
-	                const timeout = letter === 'i' ? game.u?._blindTimeout || 0 : 0;
-	                const text = timeout ? `${label.padEnd(27)} [${timeout}]` : label;
-	                if (row) row[2] = ` ${letter} + ${text}`;
-	            }
-	            return;
-	        }
+        const intrinsicRows = wizIntrinsicRows();
+        if (ch === '.') {
+            game._wiz_intrinsic_selected = new Set(Object.keys(intrinsicRows));
+            for (const [letter, [rowNumber, label]] of Object.entries(intrinsicRows)) {
+                const row = (game._overlay_lines || []).find(line => line[0] === rowNumber);
+                const timeout = letter === 'i' ? game.u?._blindTimeout || 0 : 0;
+                const text = timeout ? `${label.padEnd(27)} [${timeout}]` : label;
+                if (row) row[2] = ` ${letter} + ${text}`;
+            }
+            return;
+        }
         if (intrinsicRows[ch]) {
             game._wiz_intrinsic_selected ??= new Set();
             if (game._wiz_intrinsic_selected.has(ch)) game._wiz_intrinsic_selected.delete(ch);
-	            else game._wiz_intrinsic_selected.add(ch);
-	            const [rowNumber, label] = intrinsicRows[ch];
-	            const row = (game._overlay_lines || []).find(line => line[0] === rowNumber);
-	            const timeout = ch === 'i' ? game.u?._blindTimeout || 0 : 0;
-	            const text = timeout ? `${label.padEnd(27)} [${timeout}]` : label;
-	            if (row) row[2] = ` ${ch} ${game._wiz_intrinsic_selected.has(ch) ? '+' : '-'} ${text}`;
-	            return;
-	        }
+            else game._wiz_intrinsic_selected.add(ch);
+            const [rowNumber, label] = intrinsicRows[ch];
+            const row = (game._overlay_lines || []).find(line => line[0] === rowNumber);
+            const timeout = ch === 'i' ? game.u?._blindTimeout || 0 : 0;
+            const text = timeout ? `${label.padEnd(27)} [${timeout}]` : label;
+            if (row) row[2] = ` ${ch} ${game._wiz_intrinsic_selected.has(ch) ? '+' : '-'} ${text}`;
+            return;
+        }
         if (ch === '\r' || ch === '\n') {
             const selected = game._wiz_intrinsic_selected || new Set();
             game._command_mode = null;
@@ -27716,9 +27715,10 @@ export async function rhack(_cmd) {
 	                return;
 	            }
             if (command === 'wizintrinsic' && game.flags?.debug) {
-                const lines = WIZ_INTRINSIC_MENU_LINES.map(line => [...line]);
+                const lines = wizIntrinsicMenuLines().map(line => [...line]);
                 if (game.u?._blindTimeout) {
-                    const row = lines.find(line => line[0] === 10);
+                    const [rowNumber] = wizIntrinsicRows().i;
+                    const row = lines.find(line => line[0] === rowNumber);
                     if (row) row[2] = ` i - ${'blinded'.padEnd(27)} [${game.u._blindTimeout}]`;
                 }
                 setOverlay(lines, 24, true);
