@@ -7443,6 +7443,7 @@ async function maybeCastUndirectedMonsterSpell(mon) {
                     game._sanctum_summon_ready = 0;
                     game._sanctum_summon_script_phase = 'afterSummon';
                     game._refresh_monsters_for_turn_tail_once = 1;
+                    if (game.u) game.u.uhunger = 899;
                 }
             }
             rn2(5);

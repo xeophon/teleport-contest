@@ -1865,6 +1865,15 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   step 1784 after turn-tail hunger: C's periodic exercise uses `rn2(19)` while
   JS uses `rn2(2)`, then the stream immediately realigns through
   `moveloop_core()` before the scripted follow-up combat diverges again.
+- The Sanctum summon handoff now also applies the existing hunger catch-up
+  before the turn-tail `exerchk()` point instead of waiting until the later
+  scripted xan phase. This matches C's `exerper()` classification for the
+  summon turn (`NOT_HUNGRY`, `exercise(A_CON, TRUE)`, `rn2(19)`) and improves
+  focused `seed4500-knight-coverage` to RNG `107406/108275` with screens and
+  cursors still `1814/1814`; full `npm run score` remains `39/44`. The next
+  frontier is now the old scripted post-summon combat: C starts step 1785 with
+  real turn-tail and `uhitm.c`/`mhitu.c` attack RNG, while JS consumes no RNG
+  until the later level-teleport script resumes.
 
 Next concrete target:
 
@@ -1901,13 +1910,12 @@ Next concrete target:
   screen pass; model when the bottom line is refreshed.
 - For `seed4500-knight-coverage`, the visible path remains closed
   (`1814/1814` screens), but PRNG is still short of exact. The current first
-  flat prefix mismatch appears at global RNG 107401 on step 1784 (`j`): after
-  the C-shaped summon and turn-tail movement allocation, C's `exerchk()` path
-  calls `exercise()` with an increasing attribute roll (`rn2(19)`), while JS
-  takes a decreasing exercise roll (`rn2(2)`). Continue by grounding periodic
-  exercise/status timing in `attrib.c`/`allmain.c`, then replace the remaining
-  hard-coded post-summon combat script with real `uhitm.c`/`mhitu.c` attack
-  ordering.
+  flat prefix mismatch appears at global RNG 107403 on step 1785 (`k`): after
+  the C-shaped summon and turn-tail exercise/hunger ordering, C processes real
+  hero and monster attack RNG while JS still uses the hard-coded
+  `afterSummon`/`silverMore`/death-prompt script. Continue by replacing that
+  script with real `uhitm.c`/`mhitu.c` attack ordering, preserving the already
+  closed visible screens.
 - Use `sessions/*.session.json` to locate divergences, but keep fixes in real
   mechanics. A score recovery is only valid when it falls out of those
   mechanics.
