@@ -1777,6 +1777,22 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   monster movement. A standalone Valley shrine-metadata probe moved the prefix
   later but worsened the focused RNG count, so continue there by porting the
   full priest special-movement ordering rather than only attaching metadata.
+- The Valley priest slice now gives the manually-built Valley and Sanctum
+  priests real shrine metadata, including unaligned shrine altar flags, and
+  routes only those special-level priests through a C-shaped `pri_move()`
+  candidate path using `mfndpos()`/`monsterAllowFlags()`. Existing generated
+  temple priests stay on the prior tuned branch, which preserves the closed
+  `seed0361` and `seed0014` guards. Focused `seed4500-knight-coverage` remains
+  `1814/1814` screens and improves from RNG `105059/108275` to
+  `105173/108275`; full `npm run score` remains `39/44`. The current first
+  flat mismatch is global RNG 104684 on step 1742 (` `), offset 211: C has the
+  Valley priest's `pri_move(priest.c:194-195)` `rn2(3)`/`rn2(3)` pair aligned,
+  then expects a second `distfleeck(monmove.c:538)` before the next generic
+  movement while JS reaches that next movement roll. A local priest tail-roll
+  probe moves the prefix to the later vampire/magic-trap turn-loop mismatch
+  (around offset 232) but lowers the focused aggregate, so the next fix should
+  integrate C's common post-`m_move()`/`dochugw()` `distfleeck` scheduling
+  rather than adding an isolated priest roll.
 
 Next concrete target:
 
@@ -1813,13 +1829,13 @@ Next concrete target:
   screen pass; model when the bottom line is refreshed.
 - For `seed4500-knight-coverage`, the visible path remains closed
   (`1814/1814` screens), but PRNG is still short of exact. The current first
-  flat prefix mismatch appears at global RNG 104681 on step 1742 (` `): C has
-  `rn2(3)`/`rn2(3)` from `pri_move(priest.c:194-195)` for the Valley aligned
-  cleric's altar-milling goal, then continues generic monster movement. JS
-  currently reaches generic movement without the same priest-special ordering.
-  Continue from C `priest.c:pri_move()` and `monmove.c:move_special()`, since
-  the terminal output is already exact and metadata-only changes can lower the
-  aggregate RNG metric even if they move the first prefix forward.
+  flat prefix mismatch appears at global RNG 104684 on step 1742 (` `): the
+  Valley priest's altar-milling rolls now match, but C performs another
+  `distfleeck(monmove.c:538)` before the next monster's generic movement. Do
+  not repair this with a special priest-only padding roll; the tail-roll probe
+  showed the later frontier is broader monster turn-loop/vampire shapeshift
+  scheduling after a magic-trap movement, and the aggregate RNG count gets
+  worse. Continue from C `dochugw()`/`m_move()` postmove scheduling.
 - Use `sessions/*.session.json` to locate divergences, but keep fixes in real
   mechanics. A score recovery is only valid when it falls out of those
   mechanics.

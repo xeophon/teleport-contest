@@ -10372,7 +10372,8 @@ async function make_sanctum_level() {
     const altar = g.level.at(sanctumX(18), sanctumY(8));
     if (altar) {
         altar.typ = ALTAR;
-        altar.altarmask = AM_SANCTUM;
+        altar.flags = Align2amask(A_NONE) | AM_SHRINE | AM_SANCTUM;
+        altar.altarmask = altar.flags;
     }
 
     const secretWall = rn2(4);
@@ -10412,7 +10413,13 @@ async function make_sanctum_level() {
     relocatePriestSpotOccupant(priestX, priestY);
     const priest = await makemon(HIGH_CLERIC, priestX, priestY, MM_NOGRP);
     if (priest) {
-        initPriestMonster(priest);
+        initPriestMonster(priest, {
+            room: ROOMOFFSET,
+            align: A_NONE,
+            x: sanctumX(18),
+            y: sanctumY(8),
+            specialLevel: true,
+        });
         const previousMongetsTarget = game._mongets_target;
         game._mongets_target = priest;
         mongets(AMULET_CLASS);
@@ -10545,13 +10552,20 @@ async function make_valley_level() {
     const altar = g.level.at(valleyX(3), valleyY(10));
     if (altar) {
         altar.typ = ALTAR;
-        altar.altarmask = 0;
+        altar.flags = Align2amask(A_NONE) | AM_SHRINE;
+        altar.altarmask = altar.flags;
     }
     rn2(8);
     relocatePriestSpotOccupant(valleyX(2), valleyY(9));
     const priest = await makemon(ALIGNED_CLERIC, valleyX(2), valleyY(9), MM_NOGRP);
     if (priest) {
-        initPriestMonster(priest);
+        initPriestMonster(priest, {
+            room: (temple?.roomnoidx ?? 0) + ROOMOFFSET,
+            align: A_NONE,
+            x: valleyX(3),
+            y: valleyY(10),
+            specialLevel: true,
+        });
         givePriestSpellbooks(priest);
         if (rn2(2)) {
             const robe = null;

@@ -4462,47 +4462,51 @@ async function processMonsterTurns() {
                         const inHisShop = mon.isshk && game.level?.at(oldx, oldy)?.roomno === mon.shoproom;
                         const inHisTemple = mon.ispriest && mon.shrine
                             && game.level?.at(oldx, oldy)?.roomno === mon.shrine.room;
+                        const cShapedPriestMove = mon.ispriest && mon.shrine?.specialLevel;
+                        // C pri_move() returns -1 outside the priest's own temple.
+                        const priestLetsGenericMove = cShapedPriestMove && !inHisTemple;
 
-                        if (inHisTemple) {
-                            goalX = mon.shrine.x + rn1(3, -1);
-                            goalY = mon.shrine.y + rn1(3, -1);
-                            avoid = true;
-                        } else if (mon.isshk && mon.mpeaceful) {
-                            const satdoor = oldx === goalX && oldy === goalY;
-                            if (game.u?.invisible || game.u?.usteed) {
+                        if (!priestLetsGenericMove) {
+                            if (inHisTemple) {
+                                goalX = mon.shrine.x + rn1(3, -1);
+                                goalY = mon.shrine.y + rn1(3, -1);
+                                avoid = true;
+                            } else if (mon.isshk && mon.mpeaceful) {
+                                const satdoor = oldx === goalX && oldy === goalY;
+                                if (game.u?.invisible || game.u?.usteed) {
+                                    avoid = false;
+                                } else {
+                                    uondoor = heroX === mon.shd?.x && heroY === mon.shd?.y;
+                                    if (uondoor) avoid = true;
+                                    else {
+                                        const heroInShop = game.level?.at(heroX, heroY)?.roomno === mon.shoproom;
+                                        avoid = heroInShop && (heroX - goalX) ** 2 + (heroY - goalY) ** 2 > 8;
+                                    }
+                                    const onlineHero = oldx === heroX || oldy === heroY
+                                        || Math.abs(oldx - heroX) === Math.abs(oldy - heroY);
+                                    if (((!(mon.robbed || mon.billct || mon.debit)) || avoid)
+                                        && (oldx - goalX) ** 2 + (oldy - goalY) ** 2 < 3) {
+                                        const farLineOnly = satdoor && !avoid && oldy === heroY
+                                            && !(mon.robbed || mon.billct || mon.debit)
+                                            && (oldx - heroX) ** 2 + (oldy - heroY) ** 2 > 8;
+                                        const autoTravelFarLine = farLineOnly
+                                            && (game._travel_keys?.length || game._travel_finish_message || game._travel_keep_message);
+                                        if (!onlineHero || autoTravelFarLine) {
+                                            rn2(5);
+                                            continue;
+                                        }
+                                        if (satdoor) {
+                                            appr = 0;
+                                            goalX = 0;
+                                            goalY = 0;
+                                        }
+                                    }
+                                }
+                            } else if (!mon.mpeaceful) {
+                                goalX = heroX;
+                                goalY = heroY;
                                 avoid = false;
-                            } else {
-                                uondoor = heroX === mon.shd?.x && heroY === mon.shd?.y;
-                                if (uondoor) avoid = true;
-                                else {
-                                    const heroInShop = game.level?.at(heroX, heroY)?.roomno === mon.shoproom;
-                                    avoid = heroInShop && (heroX - goalX) ** 2 + (heroY - goalY) ** 2 > 8;
-                                }
-                                const onlineHero = oldx === heroX || oldy === heroY
-                                    || Math.abs(oldx - heroX) === Math.abs(oldy - heroY);
-                                if (((!(mon.robbed || mon.billct || mon.debit)) || avoid)
-                                    && (oldx - goalX) ** 2 + (oldy - goalY) ** 2 < 3) {
-                                    const farLineOnly = satdoor && !avoid && oldy === heroY
-                                        && !(mon.robbed || mon.billct || mon.debit)
-                                        && (oldx - heroX) ** 2 + (oldy - heroY) ** 2 > 8;
-                                    const autoTravelFarLine = farLineOnly
-                                        && (game._travel_keys?.length || game._travel_finish_message || game._travel_keep_message);
-                                    if (!onlineHero || autoTravelFarLine) {
-                                        rn2(5);
-                                        continue;
-                                    }
-                                    if (satdoor) {
-                                        appr = 0;
-                                        goalX = 0;
-                                        goalY = 0;
-                                    }
-                                }
                             }
-                        } else if (!mon.mpeaceful) {
-                            goalX = heroX;
-                            goalY = heroY;
-                            avoid = false;
-                        }
 
                         if (mon.mconf) {
                             avoid = false;
@@ -4522,25 +4526,32 @@ async function processMonsterTurns() {
                             let choice = null;
                             let choiceInfo = 0;
                             let chcnt = 0;
-                            const targetX = mon.mux ?? heroX;
-                            const targetY = mon.muy ?? heroY;
-                            const positions = [];
-                            for (let nx = Math.max(1, oldx - 1); nx <= Math.min(COLNO - 1, oldx + 1); nx++) {
-                                for (let ny = Math.max(0, oldy - 1); ny <= Math.min(ROWNO - 1, oldy + 1); ny++) {
-                                    if (nx === oldx && ny === oldy) continue;
-                                    const loc = game.level?.at(nx, ny);
-                                    if (!loc || IS_OBSTRUCTED(loc.typ)) continue;
-                                    if (loc.typ === DOOR && (loc.doormask & (D_CLOSED | D_LOCKED))) continue;
-                                    if (nx !== oldx && ny !== oldy
-                                        && ((game.level?.at(oldx, oldy)?.typ === DOOR && (game.level.at(oldx, oldy).doormask & ~D_BROKEN))
-                                            || (loc.typ === DOOR && (loc.doormask & ~D_BROKEN)))) continue;
-                                    const occupant = game.level?.monsters?.find(other => other !== mon && other.mx === nx && other.my === ny);
-                                    if (occupant || (nx === heroX && ny === heroY)) continue;
+                            let positions;
+                            if (cShapedPriestMove) {
+                                positions = mfndpos(mon, monsterAllowFlags(mon, false, conflictActive))
+                                    .map(pos => ({ ...pos, loc: game.level?.at(pos.x, pos.y) }))
+                                    .filter(pos => pos.loc);
+                            } else {
+                                const targetX = mon.mux ?? heroX;
+                                const targetY = mon.muy ?? heroY;
+                                positions = [];
+                                for (let nx = Math.max(1, oldx - 1); nx <= Math.min(COLNO - 1, oldx + 1); nx++) {
+                                    for (let ny = Math.max(0, oldy - 1); ny <= Math.min(ROWNO - 1, oldy + 1); ny++) {
+                                        if (nx === oldx && ny === oldy) continue;
+                                        const loc = game.level?.at(nx, ny);
+                                        if (!loc || IS_OBSTRUCTED(loc.typ)) continue;
+                                        if (loc.typ === DOOR && (loc.doormask & (D_CLOSED | D_LOCKED))) continue;
+                                        if (nx !== oldx && ny !== oldy
+                                            && ((game.level?.at(oldx, oldy)?.typ === DOOR && (game.level.at(oldx, oldy).doormask & ~D_BROKEN))
+                                                || (loc.typ === DOOR && (loc.doormask & ~D_BROKEN)))) continue;
+                                        const occupant = game.level?.monsters?.find(other => other !== mon && other.mx === nx && other.my === ny);
+                                        if (occupant || (nx === heroX && ny === heroY)) continue;
 
-                                    let info = 0;
-                                    if (nx === targetX || ny === targetY
-                                        || Math.abs(nx - targetX) === Math.abs(ny - targetY)) info |= NOTONL;
-                                    positions.push({ x: nx, y: ny, loc, info });
+                                        let info = 0;
+                                        if (nx === targetX || ny === targetY
+                                            || Math.abs(nx - targetX) === Math.abs(ny - targetY)) info |= NOTONL;
+                                        positions.push({ x: nx, y: ny, loc, info });
+                                    }
                                 }
                             }
                             if (mon.isshk && avoid && uondoor
@@ -4581,8 +4592,9 @@ async function processMonsterTurns() {
                                 newsym(mon.mx, mon.my);
                             }
                         }
-                        rn2(5);
+                        if (!cShapedPriestMove) rn2(5);
                         continue;
+                        }
                     }
                     if ((mon.data?.name === 'watchman' || mon.data?.name === 'watch captain')
                         && mon.mpeaceful && mon.mcansee !== false) {
