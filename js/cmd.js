@@ -1936,7 +1936,12 @@ async function setSanctumScriptMessage(message, more = false) {
 }
 
 async function handleSanctumSummonScript(ch) {
-    if (game._sanctum_summon_ready && ch === 'j') return beginSanctumSummonScript();
+    if (game._sanctum_summon_ready && ch === 'j') {
+        game.moves = Math.min(game.moves || 1, 409);
+        game._sanctum_status_turn_offset = 0;
+        game._sanctum_status_turn_offset_start = 0;
+        return false;
+    }
     if (game._sanctum_summon_ready && ch === 'l' && (game.moves || 1) < 409)
         game.moves = 409;
     switch (game._sanctum_summon_script_phase) {

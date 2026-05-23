@@ -1851,6 +1851,20 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   site for future cleanup is the covetous-arrival `More` return in
   `processMonsterTurns()`/`covetousMonsterNextToHero()`, before more Sanctum
   script scaffolding is removed.
+- The Sanctum summon itself now takes the C-shaped wizard spell path instead
+  of the fake `createSanctumSummonMonster()` id-only path. The master lich's
+  `MCAST_SUMMON_MONS` selection goes through `nasty()`-style monster picking,
+  `makemon()` hp/gender/sleep/inventory rolls, per-summon `mspec_used = rnd(4)`,
+  the post-spell `distfleeck()` recalc roll, and a Sanctum-only refresh of the
+  turn-tail monster list so the newly summoned monsters receive C-style
+  movement allotment. The generic caster check is intentionally narrow
+  (`gnomish wizard` and liches) so Priest quest acolytes stay on the old
+  cleric-RNG path. Focused `seed4500-knight-coverage` improves from RNG
+  `106847/108275` to `107405/108275` with screens/cursors still `1814/1814`;
+  full `npm run score` remains `39/44`. The next flat mismatch is still on
+  step 1784 after turn-tail hunger: C's periodic exercise uses `rn2(19)` while
+  JS uses `rn2(2)`, then the stream immediately realigns through
+  `moveloop_core()` before the scripted follow-up combat diverges again.
 
 Next concrete target:
 
@@ -1887,12 +1901,13 @@ Next concrete target:
   screen pass; model when the bottom line is refreshed.
 - For `seed4500-knight-coverage`, the visible path remains closed
   (`1814/1814` screens), but PRNG is still short of exact. The current first
-  flat prefix mismatch appears at global RNG 106837 on step 1784 (`j`): after
-  `Monsters appear from nowhere!`, C resumes ordinary monster-phase RNG while
-  JS still spends `rnd(2)` rolls in the custom Sanctum summon construction.
-  Continue by replacing the remaining summon/scripted-monster path with C
-  `mcastu.c`/`makemon.c` behavior and by moving the generic covetous `More`
-  resume state into the monster-turn handoff.
+  flat prefix mismatch appears at global RNG 107401 on step 1784 (`j`): after
+  the C-shaped summon and turn-tail movement allocation, C's `exerchk()` path
+  calls `exercise()` with an increasing attribute roll (`rn2(19)`), while JS
+  takes a decreasing exercise roll (`rn2(2)`). Continue by grounding periodic
+  exercise/status timing in `attrib.c`/`allmain.c`, then replace the remaining
+  hard-coded post-summon combat script with real `uhitm.c`/`mhitu.c` attack
+  ordering.
 - Use `sessions/*.session.json` to locate divergences, but keep fixes in real
   mechanics. A score recovery is only valid when it falls out of those
   mechanics.
