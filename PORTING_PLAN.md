@@ -1806,6 +1806,20 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   slice, while JS continues through ordinary monster movement, so continue from
   the monster stepping on or triggering that fire trap rather than adding more
   padding rolls.
+- The fire-trap frontier now has a real monster-side `FIRE_TRAP` postmove
+  effect and C-shaped special-level roamers. `moveMonsterTowardHero()` handles
+  direct monster fire traps with C's `d(2,4)`, max-HP erosion, `burnarmor()`
+  slot loop, and `destroy_items()` limit/item-destruction rolls, while Sanctum
+  and Priest locate noalign aligned clerics now follow `sp_lev.c`'s
+  `mk_roamer()` path by being minions that know all traps. Focused
+  `seed4500-knight-coverage` improves from RNG `106334/108275` to
+  `106470/108275` with screens still `1814/1814`; full `npm run score`
+  remains `39/44`. The next first flat mismatch is still on step 1757, now at
+  global RNG 106462: C starts the next monster-turn `distfleeck()`/movement
+  chain, while JS fires the existing Sanctum spell queue
+  (`rn2(23)`, `rn2(230)`, `d(12,6)`) on message dismissal. Continue by
+  replacing that scripted queue with the real C monster spell/message ordering,
+  not by padding around it.
 
 Next concrete target:
 
@@ -1842,11 +1856,11 @@ Next concrete target:
   screen pass; model when the bottom line is refreshed.
 - For `seed4500-knight-coverage`, the visible path remains closed
   (`1814/1814` screens), but PRNG is still short of exact. The current first
-  flat prefix mismatch appears at global RNG 106309 on step 1757 (` `): C has
-  just run master-lich covetous tactics and ghost line probes, then reaches
-  `trapeffect_fire_trap()` while JS continues through ordinary monster
-  movement. Continue by finding why C has a monster stepping on or triggering
-  that fire trap at this point.
+  flat prefix mismatch appears at global RNG 106462 on step 1757 (` `): C has
+  completed the monster fire-trap slice and starts the next monster-turn
+  `distfleeck()`/movement chain, while JS fires the existing Sanctum spell
+  queue (`rn2(23)`, `rn2(230)`, `d(12,6)`) while dismissing the previous
+  message. Continue from C monster spell/message ordering in Sanctum.
 - Use `sessions/*.session.json` to locate divergences, but keep fixes in real
   mechanics. A score recovery is only valid when it falls out of those
   mechanics.

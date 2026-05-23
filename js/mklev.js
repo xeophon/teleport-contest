@@ -7749,7 +7749,7 @@ async function priLocaAltarShrine(x, y, temple) {
 async function priLocaAlignedCleric(x, y) {
     rn2(2);
     const mon = await makemon(ALIGNED_CLERIC, priLocaX(x), priLocaY(y), 0);
-    if (mon) setMonsterPeaceful(mon, false);
+    if (mon) initRoamerMonster(mon, A_NONE, false);
     return mon;
 }
 
@@ -10472,7 +10472,7 @@ async function make_sanctum_level() {
     for (const [x, y] of SANCTUM_CLERICS) {
         rn2(2);
         const mon = await makemon(ALIGNED_CLERIC, sanctumX(x), sanctumY(y), 0);
-        if (mon) mon.mpeaceful = 0;
+        if (mon) initRoamerMonster(mon, A_NONE, false);
     }
     for (const glyph of ['L', 'L', 'V', 'V', 'V']) {
         rn2(3);
@@ -12165,6 +12165,18 @@ function initPriestMonster(priest, shrine = null) {
     priest.isminion = 0;
     priest.msleeping = 0;
     set_malign(priest);
+}
+
+function initRoamerMonster(mon, align, peaceful) {
+    if (!mon) return;
+    mon.min_align = align;
+    mon.renegade = Math.sign(align) === Math.sign(game.u?.ualign?.type ?? A_NEUTRAL) && !peaceful;
+    mon.ispriest = 0;
+    mon.isminion = 1;
+    mon.mtrapseen = ~0;
+    mon.mpeaceful = peaceful ? 1 : 0;
+    mon.msleeping = 0;
+    set_malign(mon);
 }
 
 function givePriestSpellbooks(priest) {

@@ -6714,6 +6714,142 @@ function monsterTrapHarmless(mon, trap) {
     return ttyp === STATUE_TRAP || ttyp === MAGIC_TRAP || ttyp === VIBRATING_SQUARE;
 }
 
+function monsterFireTrapArmorSlot(mon, slot) {
+    const inventory = mon.minvent || [];
+    const matches = {
+        helm: item => /helm|helmet|hat|pot/.test(String(item.kind || item.actualKind || '').toLowerCase()),
+        cloak: item => /cloak|robe|smock|wrapping/.test(String(item.kind || item.actualKind || '').toLowerCase()),
+        body: item => SUIT_ARMOR_PATTERN.test(String(item.kind || item.actualKind || '').toLowerCase()),
+        shirt: item => /shirt/.test(String(item.kind || item.actualKind || '').toLowerCase()),
+        shield: item => /shield/.test(String(item.kind || item.actualKind || '').toLowerCase()),
+        gloves: item => /glove|gauntlet/.test(String(item.kind || item.actualKind || '').toLowerCase()),
+        boots: item => /boot|shoe/.test(String(item.kind || item.actualKind || '').toLowerCase()),
+    }[slot];
+    const item = inventory.find(candidate => candidate.cls === 'armor'
+        && (candidate.worn || candidate.owornmask) && matches?.(candidate));
+    if (!item || item.oerodeproof) return false;
+    const kind = String(item.kind || item.actualKind || '').toLowerCase();
+    const burnable = /leather|cloth|cloak|robe|shirt|glove|boot|shoe|wood|shield|wrapping|smock/.test(kind);
+    if (!burnable) return false;
+    item.oeroded = Math.min(3, (item.oeroded || 0) + 1);
+    return true;
+}
+
+function monsterBurnArmor(mon) {
+    const towel = (mon.minvent || []).find(item => String(item.kind || '').toLowerCase() === 'towel' && (item.spe || 0) > 0);
+    if (towel) towel.spe = Math.max(0, (towel.spe || 0) - rn2((towel.spe || 0) + 1));
+
+    for (;;) {
+        switch (rn2(5)) {
+        case 0:
+            if (!monsterFireTrapArmorSlot(mon, 'helm')) continue;
+            break;
+        case 1:
+            monsterFireTrapArmorSlot(mon, 'cloak')
+                || monsterFireTrapArmorSlot(mon, 'body')
+                || monsterFireTrapArmorSlot(mon, 'shirt');
+            return true;
+        case 2:
+            if (!monsterFireTrapArmorSlot(mon, 'shield')) continue;
+            break;
+        case 3:
+            if (!monsterFireTrapArmorSlot(mon, 'gloves')) continue;
+            break;
+        case 4:
+            if (!monsterFireTrapArmorSlot(mon, 'boots')) continue;
+            break;
+        }
+        break;
+    }
+    return false;
+}
+
+function monsterFireDestroyableItem(item) {
+    if (!item || item.artifact || item.oartifact || (item.in_use && (item.quan || 1) === 1)) return false;
+    const cls = item.cls || '';
+    const kind = String(item.kind || item.actualKind || '').toLowerCase();
+    if (kind === 'fire' || kind === 'fireball' || kind === 'book of the dead') return false;
+    return cls === 'potion' || cls === 'scroll' || cls === 'spellbook'
+        || kind === 'glob of green slime';
+}
+
+function monsterDestroyItemsByFire(mon, damage) {
+    let limit = Math.trunc(damage / 5);
+    if (damage % 5 > rn2(5)) limit++;
+    if (limit < 1) return 0;
+
+    const selected = [];
+    let eligible = 0;
+    for (const item of mon.minvent || []) {
+        if (!monsterFireDestroyableItem(item)) continue;
+        const index = eligible < limit ? eligible : rn2(eligible);
+        eligible++;
+        if (index < limit) selected[index] = item;
+    }
+    let extraDamage = 0;
+    for (const item of selected) {
+        if (!item) continue;
+        const quantity = Math.max(1, item.quan || 1);
+        let destroyed = 0;
+        for (let i = 0; i < quantity; i++) {
+            if (!rn2(3)) destroyed++;
+        }
+        if (!destroyed) continue;
+        if (item.cls === 'potion') extraDamage += rnd(6);
+        mon.minvent = (mon.minvent || []).filter(candidate => candidate !== item);
+    }
+    return extraDamage;
+}
+
+function killMonsterInFireTrap(mon) {
+    recordVanquished(mon, false);
+    dropMonsterInventory(mon);
+    game.level.monsters = (game.level?.monsters || []).filter(other => other !== mon);
+    mon.movement = 0;
+    newsym(mon.mx, mon.my);
+}
+
+function monsterFireTrapEffect(mon, trap) {
+    monsterTriggerTrap(mon, trap);
+    const origDamage = d(2, 4);
+    const visibleMonster = !game.u?.blind && couldSeeCoord(mon.mx, mon.my) && !mon.minvis && !mon.mundetected;
+    const visibleTrap = couldSeeCoord(trap.tx, trap.ty);
+    if (visibleMonster) {
+        addToplineMessage(`A tower of flame erupts from the floor under ${monsterDisplayName(mon).replace(/^The /, 'the ')}!`);
+    } else if (visibleTrap) {
+        addToplineMessage('You see a tower of flame erupt from the floor!');
+    }
+
+    if (!mon.data?.resistsFire) {
+        let damage = origDamage;
+        const name = mon.data?.name || '';
+        if (name === 'paper golem') damage = Math.max(damage, mon.mhpmax || damage);
+        else if (name === 'straw golem') damage = Math.max(damage, Math.trunc((mon.mhpmax || damage) / 2));
+        else if (name === 'wood golem') damage = Math.max(damage, Math.trunc((mon.mhpmax || damage) / 4));
+        else if (name === 'leather golem') damage = Math.max(damage, Math.trunc((mon.mhpmax || damage) / 8));
+
+        mon.mhp = (mon.mhp || 1) - damage;
+        if ((mon.mhp || 0) <= 0) {
+            killMonsterInFireTrap(mon);
+            return true;
+        }
+        const maxLoss = rn2(damage + 1);
+        mon.mhpmax = Math.max(1, (mon.mhpmax || mon.mhp || 1) - maxLoss);
+        mon.mhp = Math.min(mon.mhp || 1, mon.mhpmax);
+    }
+
+    if (monsterBurnArmor(mon) || rn2(3)) {
+        const extraDamage = monsterDestroyItemsByFire(mon, origDamage);
+        mon.mhp = (mon.mhp || 1) - extraDamage;
+        if ((mon.mhp || 0) <= 0) {
+            killMonsterInFireTrap(mon);
+            return true;
+        }
+    }
+    if (visibleTrap) trap.tseen = true;
+    return false;
+}
+
 function monsterWebmakerData(data) {
     return !!(data?.webmaker || data?.name === 'cave spider' || data?.name === 'giant spider');
 }
@@ -7718,6 +7854,10 @@ function moveMonsterTowardHero(mon, conflictActive = false, monIndex = null, som
             trap.tseen = true;
             addToplineMessage(`${monsterDisplayName(mon)} suddenly falls asleep!`);
         }
+    }
+    if (trap?.ttyp === FIRE_TRAP && !monsterTrapHarmless(mon, trap)) {
+        if (monsterKnowsTrap(mon, trap.ttyp) && rn2(4)) return done();
+        if (monsterFireTrapEffect(mon, trap)) return done();
     }
     if (trap?.ttyp === ROCKTRAP && !monsterTrapHarmless(mon, trap)) {
         if (trap.once && trap.tseen && !rn2(15)) {
