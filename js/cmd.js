@@ -12692,9 +12692,11 @@ function conductAchievementRows(startRow, col) {
 }
 
 function liveConductLines() {
-    const rows = [[0, 34, 'Voluntary challenges:']];
     const conduct = game.u?.uconduct || {};
-    const textCol = 35;
+    const wizard = !!game.flags?.debug;
+    const headerCol = wizard ? 34 : 40;
+    const textCol = headerCol + 1;
+    const rows = [[0, headerCol, 'Voluntary challenges:']];
     let row = 1;
     const genocideCount = genocidedMonsterNames().length;
     rows.push([row++, textCol, 'Character rerolling was not enabled.']);
@@ -12705,38 +12707,42 @@ function liveConductLines() {
         rows.push([row++, textCol, 'You have gone without food.']);
     }
     if (!game._chronicle_rejected_atheism) rows.push([row++, textCol, 'You have been an atheist.']);
-    if (conduct.weaphit > 0)
-        rows.push([row++, textCol, `You have hit with a wielded weapon ${conduct.weaphit} time${conduct.weaphit === 1 ? '' : 's'}.`]);
-    else rows.push([row++, textCol, 'You have never hit with a wielded weapon.']);
+    if (conduct.weaphit > 0) {
+        if (wizard) {
+            rows.push([row++, textCol, `You have hit with a wielded weapon ${conduct.weaphit} time${conduct.weaphit === 1 ? '' : 's'}.`]);
+        }
+    } else rows.push([row++, textCol, 'You have never hit with a wielded weapon.']);
     if (!game._chronicle_first_kill) rows.push([row++, textCol, 'You have been a pacifist.']);
-    if (conduct.literate > 0)
-        rows.push([row++, textCol, `You have read items or engraved ${conduct.literate} time${conduct.literate === 1 ? '' : 's'}.`]);
-    else rows.push([row++, textCol, 'You have been illiterate.']);
-    rows.push([row++, textCol, conduct.pets
-        ? `You have had ${conduct.pets} pet${conduct.pets === 1 ? '' : 's'}.`
-        : 'You have never had a pet.']);
+    if (conduct.literate > 0) {
+        if (wizard) {
+            rows.push([row++, textCol, `You have read items or engraved ${conduct.literate} time${conduct.literate === 1 ? '' : 's'}.`]);
+        }
+    } else rows.push([row++, textCol, 'You have been illiterate.']);
+    if (conduct.pets) {
+        if (wizard) rows.push([row++, textCol, `You have had ${conduct.pets} pet${conduct.pets === 1 ? '' : 's'}.`]);
+    } else rows.push([row++, textCol, 'You have never had a pet.']);
     rows.push([row++, textCol, genocideCount
         ? `You have genocided ${genocideCount} type${genocideCount === 1 ? '' : 's'} of monster${genocideCount === 1 ? '' : 's'}.`
         : 'You have never genocided any monsters.']);
-    rows.push([row++, textCol, conduct.polypiles
-        ? `You have polymorphed ${conduct.polypiles} item${conduct.polypiles === 1 ? '' : 's'}.`
-        : 'You have never polymorphed an object.']);
-    rows.push([row++, textCol, conduct.polyselfs
-        ? `You have changed form ${conduct.polyselfs} time${conduct.polyselfs === 1 ? '' : 's'}.`
-        : 'You have never changed form.']);
-    rows.push([row++, textCol, conduct.wishes
-        ? `You have used ${conduct.wishes} wish${conduct.wishes === 1 ? '' : 'es'}.`
-        : 'You have used no wishes.']);
-    if (!conduct.wisharti) rows.push([row++, textCol, "You haven't wished for any artifacts."]);
+    if (conduct.polypiles) {
+        if (wizard) rows.push([row++, textCol, `You have polymorphed ${conduct.polypiles} item${conduct.polypiles === 1 ? '' : 's'}.`]);
+    } else rows.push([row++, textCol, 'You have never polymorphed an object.']);
+    if (conduct.polyselfs) {
+        if (wizard) rows.push([row++, textCol, `You have changed form ${conduct.polyselfs} time${conduct.polyselfs === 1 ? '' : 's'}.`]);
+    } else rows.push([row++, textCol, 'You have never changed form.']);
+    if (conduct.wishes) {
+        rows.push([row++, textCol, `You have used ${conduct.wishes} wish${conduct.wishes === 1 ? '' : 'es'}.`]);
+        if (!conduct.wisharti) rows.push([row++, textCol, "You haven't wished for any artifacts."]);
+    } else rows.push([row++, textCol, 'You have used no wishes.']);
     const achievementHeaderRow = row + 1;
     const achievements = conductAchievementRows(achievementHeaderRow + 1, textCol);
     if (achievements.length) {
         row = achievementHeaderRow;
-        rows.push([row++, 34, 'Achievements:']);
+        rows.push([row++, headerCol, 'Achievements:']);
         rows.push(...achievements);
         row = Math.max(...rows.map(([line]) => line)) + 1;
     }
-    rows.push([Math.min(row, 20), 34, '--More--']);
+    rows.push([Math.min(row, 20), headerCol, '--More--']);
     return rows.filter(([line]) => line <= 20);
 }
 
@@ -27440,6 +27446,7 @@ export async function rhack(_cmd) {
             if (command === 'p' && !game.flags?.debug) command = 'pray';
             if (['tu', 'tur'].includes(command)) command = 'turn';
             if (['d', 'di'].includes(command)) command = 'dip';
+            if (command === 's' && !game.flags?.debug) command = 'sit';
             if (command === 'si') command = 'sit';
             if (command === 'cha') command = 'chat';
             if (game.flags?.debug && command.startsWith('wizw') && 'wizwhere'.startsWith(command))
@@ -27548,7 +27555,9 @@ export async function rhack(_cmd) {
             }
             if (command === 'conduct') {
                 const rows = liveConductLines();
-                setOverlay(rows, 21, false, 33);
+                const wizardConduct = !!game.flags?.debug;
+                const clearRows = wizardConduct ? 21 : Math.max(...rows.map(([row]) => row)) + 1;
+                setOverlay(rows, clearRows, false, wizardConduct ? 33 : 39);
                 game._command_mode = 'simpleOverlay';
                 return;
             }
@@ -27857,7 +27866,7 @@ export async function rhack(_cmd) {
                     : ['u', 'un', 'unt', 'untr', 'untra'].includes(partial) ? 'untrap'
                     : (partial === 'p' && !game.flags?.debug) || ['pr', 'pra'].includes(partial) ? 'pray'
                         : ['e', 'en', 'enh', 'enha', 'enhan', 'enhanc'].includes(partial) ? 'enhance'
-                    : partial === 'si' ? 'sit'
+                    : (partial === 's' && !game.flags?.debug) || partial === 'si' ? 'sit'
                         : ['d', 'di'].includes(partial) ? 'dip'
                             : ['of', 'off', 'offe', 'offer'].includes(partial) ? 'offer'
                                 : ['ov', 'ove', 'over', 'overv', 'overvi', 'overvie', 'overview'].includes(partial) ? 'overview'

@@ -1549,6 +1549,16 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   by the Knight coverage path. This closes `seed0004-feeding-pony` and
   `seed0105-valk-chat-lamp-ration`, keeps `seed4500` screen parity, and moves
   the public scorer to `33/44`.
+- The extended-command sweep now follows tty autocomplete and live conduct
+  display more closely. In normal play, `#s` uniquely matches autocomplete
+  command `sit`, so JS now displays `# sit` immediately while keeping the
+  cursor after the typed prefix; wizard/debug play still leaves `# s` ambiguous
+  because `stats` is also available. Live `#conduct` now omits positive broken
+  conduct counters outside wizard mode and uses C's ordinary text-window
+  columns for the short non-wizard page while preserving the existing debug
+  layout. This closes `seed0106-priest-extcmd-sweep` and
+  `seed0107-samurai-twoweapon-enhance`, keeps `seed4500` visible parity, and
+  moves the public scorer to `35/44`.
 
 Next concrete target:
 
