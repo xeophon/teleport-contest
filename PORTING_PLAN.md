@@ -1924,6 +1924,15 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   the same three failing sessions. Focused `seed0373-barbarian-quest-tour`
   advances to RNG `4602/35386`, screen `63/124`; the next Barbarian gap is the
   filler/locate/goal special levels.
+- Barbarian Quest locate and filler generation are now C/Lua-shaped through
+  `Bar-loca.lua`, `Bar-fila.lua`, and `Bar-filb.lua`: the locate map, regions,
+  doors, fixed/random traps, objects, ogres/trolls, full-bounds flip behavior,
+  kelp finalization, mines filler setup, quest-biased random monsters, and
+  special-level occupied-square monster relocation are now ported. Full
+  `npm run score` remains `41/44`, with the same three failing sessions.
+  Focused `seed0373-barbarian-quest-tour` advances to RNG `21473/35386`,
+  screen `72/124`. The next seed0373 frontier is later random/group monster
+  placement after the visible level-teleport menu is already matching.
 
 Next concrete target:
 

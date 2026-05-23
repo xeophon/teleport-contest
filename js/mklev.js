@@ -2750,6 +2750,89 @@ const BAR_CHIEFTAINS = [
     [14, 5], [14, 9], [16, 5], [16, 9],
 ];
 const BAR_EELS = [[36, 1], [37, 9], [39, 15]];
+const BAR_LOCA_ROWS = [
+    '..........PPP.........................................',
+    '...........PP..........................................        .......',
+    '..........PP...........-----..........------------------     ..........',
+    '...........PP..........+...|..........|....S...........|..  ............',
+    '..........PPP..........|...|..........|-----...........|...  .............',
+    '...........PPP.........-----..........+....+...........|...  .............',
+    '..........PPPPPPPPP...................+....+...........S.................',
+    '........PPPPPPPPPPPPP.........-----...|-----...........|................',
+    '......PPPPPPPPPPPPPP..P.......+...|...|....S...........|          ...',
+    '.....PPPPPPP......P..PPPP.....|...|...------------------..         ...',
+    '....PPPPPPP.........PPPPPP....-----........................      ........',
+    '...PPPPPPP..........PPPPPPP..................................   ..........',
+    '....PPPPPPP........PPPPPPP....................................  ..........',
+    '.....PPPPP........PPPPPPP.........-----........................   ........',
+    '......PPP..PPPPPPPPPPPP...........+...|.........................    .....',
+    '..........PPPPPPPPPPP.............|...|.........................     ....',
+    '..........PPPPPPPPP...............-----.........................       .',
+    '..............PPP.................................................',
+    '...............PP....................................................',
+    '................PPP...................................................',
+].map(row => row.padEnd(BAR_WIDTH, ' '));
+const BAR_LOCA_REGIONS = [
+    [0, 0, 75, 19, true],
+    [24, 3, 26, 4, false],
+    [31, 8, 33, 9, false],
+    [35, 14, 37, 15, false],
+    [39, 3, 54, 8, true],
+    [56, 0, 75, 8, false],
+    [64, 9, 75, 16, false],
+];
+const BAR_LOCA_DOORS = [
+    [D_ISOPEN, 23, 3],
+    [D_ISOPEN, 30, 8],
+    [D_ISOPEN, 34, 14],
+    [D_LOCKED, 38, 5],
+    [D_LOCKED, 38, 6],
+    [D_CLOSED, 43, 3],
+    [D_CLOSED, 43, 5],
+    [D_CLOSED, 43, 6],
+    [D_CLOSED, 43, 8],
+    [D_LOCKED, 55, 6],
+];
+const BAR_LOCA_OBJECTS = [
+    [42, 3], [42, 3], [42, 3],
+    [41, 3], [41, 3], [41, 3], [41, 3],
+    [41, 8], [41, 8],
+    [42, 8], [42, 8], [42, 8],
+    [71, 13], [71, 13], [71, 13],
+];
+const BAR_LOCA_FIXED_TRAPS = [
+    [SPIKED_PIT, 10, 13],
+    [SPIKED_PIT, 21, 7],
+    [SPIKED_PIT, 67, 8],
+    [SPIKED_PIT, 68, 9],
+];
+const BAR_LOCA_MONSTERS = [
+    ['ogre', 12, 9], ['ogre', 18, 11],
+    ['ogre', 45, 5], ['ogre', 45, 6], ['ogre', 47, 5], ['ogre', 46, 5],
+    ['ogre', 56, 3], ['ogre', 56, 4], ['ogre', 56, 5], ['ogre', 56, 6],
+    ['ogre', 57, 3], ['ogre', 57, 4], ['ogre', 57, 5], ['ogre', 57, 6],
+    ['ogre'], ['ogre'], ['ogre'], ['O'], ['T'],
+    ['rock troll', 46, 6], ['rock troll', 47, 6],
+    ['rock troll', 56, 7], ['rock troll', 57, 7], ['rock troll', 70, 13],
+    ['rock troll'], ['rock troll'], ['T'],
+];
+const BAR_FILL_A = {
+    bg: ROOM,
+    walled: false,
+    objects: 8,
+    traps: 4,
+    monsters: ['ogre', 'ogre', 'O', 'rock troll'],
+};
+const BAR_FILL_B = {
+    bg: STONE,
+    walled: true,
+    objects: 11,
+    traps: 4,
+    monsters: [
+        'ogre', 'ogre', 'ogre', 'ogre', 'ogre', 'ogre', 'ogre',
+        'O', 'rock troll', 'rock troll', 'rock troll', 'T',
+    ],
+};
 
 function barX(x) { return BAR_XSTART + x; }
 function barY(y) { return BAR_YSTART + y; }
@@ -2978,6 +3061,10 @@ const QUEST_LEVEL_BUILDERS = {
     Barbarian: {
         special: {
             'x-strt': make_bar_strt_level,
+            'x-loca': make_bar_loca_level,
+        },
+        fill(level) {
+            return make_bar_fill_level(level < 3 ? BAR_FILL_A : BAR_FILL_B);
         },
     },
     Knight: {
@@ -5045,11 +5132,26 @@ function priestQuestRandomMonsterType() {
     return mkclassAligned('W');
 }
 
+function barbarianQuestRandomMonsterType() {
+    if (rn2(5)) {
+        if (rn2(5) && !monsterNameGenocided('ogre'))
+            return monsterByRndName('ogre');
+        return mkclassAligned('O');
+    }
+    if (rn2(5) && !monsterNameGenocided('troll'))
+        return monsterByRndName('troll');
+    return mkclassAligned('T');
+}
+
 function rndmonst_adj(minadj = 0, maxadj = 0) {
     if (game.dungeons?.[game.u?.uz?.dnum]?.name === 'The Quest' && rn2(7)) {
         const roleName = game.urole?.name?.m || game._startup_role;
         if (roleName === 'Priest') {
             const ptr = priestQuestRandomMonsterType();
+            if (ptr) return ptr;
+        }
+        if (roleName === 'Barbarian') {
+            const ptr = barbarianQuestRandomMonsterType();
             if (ptr) return ptr;
         }
         if (roleName === 'Archeologist') {
@@ -7299,6 +7401,263 @@ function barInventoryObject(mon, otyp, spe, fields = {}) {
     Object.assign(obj, object_display(obj), fields);
     mon.minvent = [obj, ...(mon.minvent || [])];
     mon.hasInventory = true;
+}
+
+function barFillDryLocation(okay = null) {
+    const good = (x, y) => {
+        const loc = game.level?.at(x, y);
+        const boulder = game.level?.objects?.some(obj => obj.otyp === BOULDER && obj.ox === x && obj.oy === y);
+        return loc && SPACE_POS(loc.typ) && !boulder && (!okay || okay(loc));
+    };
+    for (let tryct = 0; tryct < 100; tryct++) {
+        const x = 1 + rn2(COLNO - 1);
+        const y = rn2(ROWNO);
+        if (good(x, y)) return { x, y };
+    }
+    for (let x = 1; x < COLNO; x++)
+        for (let y = 0; y < ROWNO; y++)
+            if (good(x, y)) return { x, y };
+    return { x: COLNO - 1, y: ROWNO - 1 };
+}
+
+function barFillStair(up) {
+    const pos = barFillDryLocation(loc => loc.typ === ROOM || loc.typ === CORR || loc.typ === ICE);
+    const trap = t_at(pos.x, pos.y);
+    if (trap) game.level.traps = (game.level.traps || []).filter(item => item !== trap);
+    mkstairs(pos.x, pos.y, up, null);
+}
+
+function barFillObject() {
+    const pos = barFillDryLocation();
+    mkobj_at(RANDOM_CLASS, pos.x, pos.y, true);
+}
+
+async function barFillTrap() {
+    let pos, trycnt = 0;
+    do {
+        pos = barFillDryLocation();
+        const typ = game.level.at(pos.x, pos.y)?.typ;
+        if (typ !== STAIRS && typ !== LADDER) break;
+    } while (++trycnt <= 100);
+    if (trycnt > 100) return;
+
+    let kind;
+    do { kind = traptype_rnd(); } while (kind === NO_TRAP);
+    const dungeon = game.dungeons?.[game.u?.uz?.dnum ?? 0];
+    const canFallThru = (game.u?.uz?.dlevel ?? 1) < (dungeon?.num_dunlevs ?? 1);
+    if (is_hole(kind) && !canFallThru) kind = ROCKTRAP;
+
+    const trap = await maketrap(pos.x, pos.y, kind);
+    kind = trap ? trap.ttyp : NO_TRAP;
+    if (kind === WEB) await makemon(monsterByRndName('giant spider'), pos.x, pos.y, 0);
+    if (game.in_mklev && kind !== NO_TRAP
+        && level_difficulty() <= rnd(4)
+        && kind !== SQKY_BOARD && kind !== RUST_TRAP
+        && !(kind === ROLLING_BOULDER_TRAP && trap.launch?.x === trap.tx && trap.launch?.y === trap.ty)
+        && !is_pit(kind) && (kind < HOLE || kind === MAGIC_TRAP)) {
+        if (kind === LANDMINE) { trap.ttyp = PIT; trap.tseen = true; }
+        mktrap_victim(trap);
+    }
+}
+
+async function barFillMonster(name) {
+    let ptr;
+    if (name.length === 1) {
+        arcInducedAlign();
+        ptr = mkclassAligned(name, false, null, true);
+    } else {
+        rn2(2);
+        arcInducedAlign();
+        ptr = monsterByRndName(name);
+    }
+    const pos = barFillDryLocation();
+    const prevRelocate = game._makemon_relocate_occupied_once;
+    game._makemon_relocate_occupied_once = true;
+    const mon = ptr ? await makemon(ptr, pos.x, pos.y, 0) : null;
+    game._makemon_relocate_occupied_once = prevRelocate;
+    if (mon) {
+        mon.mpeaceful = 0;
+        set_malign(mon);
+    }
+}
+
+function barLocaLoadMap() {
+    const g = game;
+    const solidLit = !!rn2(2);
+    for (let x = 1; x < COLNO; x++)
+        for (let y = 0; y < ROWNO; y++) {
+            const loc = g.level.at(x, y);
+            loc.typ = STONE;
+            loc.lit = solidLit;
+            loc.waslit = false;
+            loc.flags = 0;
+            loc.roomno = 0;
+            loc.edge = 0;
+            loc.doormask = D_NODOOR;
+            loc.horizontal = false;
+        }
+
+    for (let y = 0; y < BAR_LOCA_ROWS.length; y++) {
+        const row = BAR_LOCA_ROWS[y];
+        for (let x = 0; x < row.length; x++) {
+            const loc = g.level.at(barX(x), barY(y));
+            const ch = row[x];
+            loc.flags = 0;
+            loc.roomno = 0;
+            loc.edge = 0;
+            loc.doormask = D_NODOOR;
+            loc.horizontal = ch !== '|';
+            loc.lit = solidLit;
+            loc.waslit = false;
+            if (ch === '+') {
+                loc.typ = DOOR;
+                loc.doormask = D_CLOSED;
+            } else if (ch === 'S') {
+                loc.typ = SDOOR;
+                loc.doormask = D_CLOSED;
+            } else {
+                loc.typ = SPECIAL_TERRAIN[ch] ?? STONE;
+            }
+        }
+    }
+
+    for (const [lx, ly, hx, hy, lit] of BAR_LOCA_REGIONS)
+        for (let x = lx; x <= hx; x++)
+            for (let y = ly; y <= hy; y++) {
+                const loc = g.level.at(barX(x), barY(y));
+                if (loc) loc.lit = lit;
+            }
+}
+
+function barLocaObject(x, y) {
+    mkobj_at(RANDOM_CLASS, barX(x), barY(y), true);
+}
+
+function barLocaDryLocation(okay = null) {
+    const good = (x, y) => {
+        const loc = game.level?.at(x, y);
+        const boulder = game.level?.objects?.some(obj => obj.otyp === BOULDER && obj.ox === x && obj.oy === y);
+        return loc && SPACE_POS(loc.typ) && !boulder && (!okay || okay(loc));
+    };
+    for (let tryct = 0; tryct < 100; tryct++) {
+        const x = barX(rn2(BAR_WIDTH));
+        const y = barY(rn2(BAR_HEIGHT));
+        if (good(x, y)) return { x, y };
+    }
+    for (let x = 0; x < BAR_WIDTH; x++)
+        for (let y = 0; y < BAR_HEIGHT; y++) {
+            const loc = { x: barX(x), y: barY(y) };
+            if (good(loc.x, loc.y)) return loc;
+        }
+    return { x: barX(0), y: barY(0) };
+}
+
+async function barLocaTrap(kind, x = null, y = null) {
+    let pos;
+    if (x == null || y == null) {
+        let trycnt = 0;
+        do {
+            pos = barLocaDryLocation();
+            const typ = game.level.at(pos.x, pos.y)?.typ;
+            if (typ !== STAIRS && typ !== LADDER) break;
+        } while (++trycnt <= 100);
+        if (trycnt > 100) return;
+        do { kind = traptype_rnd(); } while (kind === NO_TRAP);
+        const dungeon = game.dungeons?.[game.u?.uz?.dnum ?? 0];
+        const canFallThru = !game.level?.flags?.hardfloor
+            && (game.u?.uz?.dlevel ?? 1) < (dungeon?.num_dunlevs ?? 1);
+        if (is_hole(kind) && !canFallThru) kind = ROCKTRAP;
+    } else {
+        pos = { x: barX(x), y: barY(y) };
+    }
+
+    const trap = await maketrap(pos.x, pos.y, kind);
+    if (trap?.ttyp === WEB) await makemon(monsterByRndName('giant spider'), pos.x, pos.y, 0);
+    arcLocaMaybeTrapVictim(trap);
+}
+
+async function barLocaMonster(name, x = null, y = null) {
+    let ptr;
+    let fixedFemale = null;
+    if (name.length === 1) {
+        arcInducedAlign();
+        ptr = mkclassAligned(name, false, null, true);
+        fixedFemale = false;
+    } else {
+        fixedFemale = !!rn2(2);
+        arcInducedAlign();
+        ptr = monsterByRndName(name);
+    }
+    const pos = x == null || y == null ? barLocaDryLocation() : { x: barX(x), y: barY(y) };
+    if (!ptr) return null;
+    const prevRelocate = game._makemon_relocate_occupied_once;
+    game._makemon_relocate_occupied_once = true;
+    const mon = await makemon(ptr, pos.x, pos.y, 0);
+    game._makemon_relocate_occupied_once = prevRelocate;
+    if (mon) {
+        if (fixedFemale != null) mon.female = fixedFemale;
+        mon.mpeaceful = 0;
+        set_malign(mon);
+    }
+    return mon;
+}
+
+async function make_bar_loca_level() {
+    const g = game;
+    if (await getbones()) return;
+    g.in_mklev = true;
+
+    oinit();
+    clear_level_structures();
+    g.level.flags.is_maze_lev = true;
+    g.level.flags.hardfloor = true;
+    l_nhcore_init();
+    barLocaLoadMap();
+
+    for (const [mask, x, y] of BAR_LOCA_DOORS) {
+        const loc = g.level.at(barX(x), barY(y));
+        if (loc) {
+            if (!IS_DOOR(loc.typ) && loc.typ !== SDOOR) loc.typ = DOOR;
+            loc.doormask = mask;
+        }
+    }
+    mkstairs(barX(5), barY(2), true, null);
+    mkstairs(barX(70), barY(13), false, null);
+
+    for (const [x, y] of BAR_LOCA_OBJECTS) barLocaObject(x, y);
+    for (const [kind, x, y] of BAR_LOCA_FIXED_TRAPS) await barLocaTrap(kind, x, y);
+    for (let i = 0; i < 4; i++) await barLocaTrap(null);
+    for (const [name, x, y] of BAR_LOCA_MONSTERS) await barLocaMonster(name, x, y);
+
+    wallification(1, 0, COLNO - 1, ROWNO - 1);
+    flipSpecialLevelRnd(1, 0, COLNO - 1, ROWNO - 1, true);
+    recount_level_features();
+    level_finalize_topology({ mineralizeLevel: false, mineralizeKelp: true });
+}
+
+async function make_bar_fill_level(spec) {
+    const g = game;
+    if (await getbones()) return;
+    g.in_mklev = true;
+
+    oinit();
+    clear_level_structures();
+    l_nhcore_init();
+
+    rn2(2); // Bar-fil*.lua initial solidfill level_init has random lit.
+    g.level.flags.is_maze_lev = true;
+    splevMinesLevelInit(ROOM, spec.bg, { lit: 0, walled: spec.walled, joined: true });
+
+    barFillStair(true);
+    barFillStair(false);
+    for (let i = 0; i < spec.objects; i++) barFillObject();
+    for (let i = 0; i < spec.traps; i++) await barFillTrap();
+    for (const name of spec.monsters) await barFillMonster(name);
+
+    wallification(1, 0, COLNO - 1, ROWNO - 1);
+    recount_level_features();
+    level_finalize_topology();
+    g.in_mklev = false;
 }
 
 async function make_bar_strt_level() {
