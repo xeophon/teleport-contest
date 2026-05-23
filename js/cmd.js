@@ -23898,10 +23898,21 @@ export async function rhack(_cmd) {
         if (ch === '/') {
             game._overlay_lines = null;
             game._overlay_hide_status = 0;
-            await setMessage('Pick a monster, object or location.');
-            game._command_mode = 'farlookCursor';
+            const getposTipSeen = game._farlook_tip_seen || game._travel_tip_seen
+                || game._jump_tip_seen || game._getpos_tip_seen;
+            game._farlook_tip_after_intro = game.flags?.verbose === false ? 1 : 0;
+            game._farlook_quick = 0;
             game._farlook_x = game.u?.ux || 0;
             game._farlook_y = game.u?.uy || 0;
+            if (game.flags?.verbose === false && getposTipSeen) {
+                await setMessage('Pick a monster, object or location.');
+                game._command_mode = 'farlookCursor';
+                return;
+            }
+            await setMessage(game.flags?.verbose === false
+                ? 'Pick a monster, object or location.'
+                : 'Please move the cursor to a monster, object or location.', true);
+            game._command_mode = 'farlookIntroMore';
             return;
         }
         if (ch === '?') {
@@ -24316,7 +24327,7 @@ export async function rhack(_cmd) {
                 game._farlook_more_info = 'branch staircase up';
                 await setMessage('<        a staircase up or a branch staircase up (branch staircase up)', true);
             } else if (loc?.typ === CORR) {
-                await setMessage('#        can be many things (corridor)');
+                await setMessage('#        can be many things (corridor)', !game._farlook_quick);
             } else if (loc?.typ === STONE) {
                 await setMessage('         can be many things (stone)');
             } else if (loc?.typ && loc.typ < DOOR) {
@@ -30667,6 +30678,7 @@ export async function rhack(_cmd) {
     if (ch === ';') {
         game._farlook_x = game.u?.ux || 0;
         game._farlook_y = game.u?.uy || 0;
+        game._farlook_quick = 1;
         const getposTipSeen = game._farlook_tip_seen || game._travel_tip_seen
             || game._jump_tip_seen || game._getpos_tip_seen;
         if (!getposTipSeen) {

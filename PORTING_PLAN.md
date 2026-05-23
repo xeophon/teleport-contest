@@ -1571,6 +1571,16 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   (`seed0002`, `seed0004`, `seed0007`, `seed0014`, `seed0030`, `seed0105`,
   `seed0106`, `seed0107`, `seed0361`, `seed4500`, `seed5006`) matched, and
   moves the public scorer to `36/44`.
+- The `/` farlook menu now follows C `do_look()`/`getpos()` pager sequencing.
+  Choosing the map target prints the verbose `Please move the cursor...`
+  prompt with `--More--`, then shows the first-use `TIP_GETPOS` text, then the
+  `(For instructions type a '?')` and `Move cursor...` prompts in the same
+  order as tty. The short `Pick...` no-more path remains for `!verbose`
+  already-tipped lookups and `;` quick-look now tracks quick mode so corridor
+  descriptions do not trigger help-file `--More--` prompts. This closes
+  `seed2200-wizard-quaff-zap-read` completely (`230/230` screens, RNG
+  `3018/3018`), keeps seed4500 visible parity (`1814/1814` screens, still
+  RNG-only failing), and moves the public scorer to `37/44`.
 
 Next concrete target:
 
