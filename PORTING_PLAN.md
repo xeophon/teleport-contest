@@ -1747,6 +1747,20 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   (`324/324` screens, RNG `50125/50125`), `seed0361-archeologist-tour`,
   `seed0106-priest-extcmd-sweep`, and `seed4500-knight-coverage` still match
   every visible screen, and the full public scorer is now `39/44`.
+- The Knight coverage RNG-only follow-up keeps the visible path closed while
+  preserving C's monster-turn resume order after a deferred passive cold kill.
+  When the cave spider dies while dismissing the passive-damage `--More--`,
+  the stored reversed-monster resume index is now adjusted before the dead
+  monster is filtered from `level.monsters`, so the resumed turn continues with
+  the ice vortex rather than skipping ahead to the shopkeeper. Focused
+  `seed4500-knight-coverage` remains `1814/1814` screens and improves from
+  RNG `102776/108275` to `104298/108275`; full `npm run score` remains
+  `39/44`. The next first flat RNG mismatch is now global RNG 104217 at step
+  1658 (`s`), where C's successful search calls
+  `exercise(A_WIS, TRUE)` before monster turns. A direct search-exercise port
+  exposed a later visible turn-count divergence, so continue there from the
+  surrounding C search/monster-turn scheduling rather than adding the RNG call
+  in isolation.
 
 Next concrete target:
 
@@ -1783,11 +1797,12 @@ Next concrete target:
   screen pass; model when the bottom line is refreshed.
 - For `seed4500-knight-coverage`, the visible path remains closed
   (`1814/1814` screens), but PRNG is still short of exact. The current first
-  per-step slice mismatch is step 292 (`y`), where JS has 19 RNG calls and C
-  has 18; the first flat prefix mismatch later appears at global RNG 102776,
-  where C enters `m_lined_up()` with `rn2(25)` while JS has an extra `rn2(5)`.
-  Continue from the real C movement/monster-ranged-attack timing instead of
-  changing screen rendering, since the terminal output is already exact.
+  flat prefix mismatch appears at global RNG 104217 on step 1658 (`s`): C has
+  `rn2(19) @ exercise(attrib.c:509)` for finding an unseen monster, then
+  monster-turn RNG; JS currently enters the monster turn directly. Continue
+  from C `detect.c:mfind0()` plus the surrounding turn scheduling, since the
+  terminal output is already exact and a standalone exercise RNG call regresses
+  the visible turn counter later in the session.
 - Use `sessions/*.session.json` to locate divergences, but keep fixes in real
   mechanics. A score recovery is only valid when it falls out of those
   mechanics.

@@ -63,6 +63,14 @@ function polyselfNoHands() {
     return !!polyselfForm()?.nohands;
 }
 
+function adjustedMonsterResumeIndexForRemoval(mon, resumeIndex) {
+    if (!resumeIndex || !mon || !game.level?.monsters) return resumeIndex;
+    const reverseIndex = [...game.level.monsters].reverse().indexOf(mon);
+    if (reverseIndex >= 0 && reverseIndex < resumeIndex)
+        return resumeIndex - 1;
+    return resumeIndex;
+}
+
 function monsterHasOlfaction(data = {}) {
     const name = String(data.name || '').toLowerCase();
     const mlet = data.mlet ?? data.glyph ?? '';
@@ -19882,6 +19890,10 @@ export async function rhack(_cmd) {
 	                                loc.map_invisible = false;
                                 loc.remembered_glyph = null;
 	                            }
+	                            if (passive.resumeIndex != null)
+	                                passive.resumeIndex = adjustedMonsterResumeIndexForRemoval(mon, passive.resumeIndex);
+	                            else
+	                                game._monster_resume_index = adjustedMonsterResumeIndexForRemoval(mon, game._monster_resume_index || 0);
 	                            game.level.monsters = (game.level?.monsters || []).filter(other => other !== mon);
 	                            const unseenBlindDrops = game.u?.blind
 	                                ? (game.level?.objects || []).filter(obj =>
