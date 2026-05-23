@@ -465,7 +465,7 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
 - Runtime public-session replay code and generated answer modules have been
   removed from `js/` and `tools/`.
 - Public sessions are divergence fixtures only. The current full public smoke
-  reports `39/44` while the runtime is rebuilt from C behavior.
+  reports `41/44` while the runtime is rebuilt from C behavior.
 - The active cleanup direction is to remove remaining route-specific shims and
   replace them with C-derived subsystems, not to restore exact public-session
   parity by matching recorded seeds.
@@ -1901,6 +1901,15 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   `40/44`; remaining failures are `seed0030-ten-diverse-deaths` (screen-only),
   `seed0360-wizard-world-tour`, `seed0373-barbarian-quest-tour`, and
   `seed0383-wizard-hallucinate` (screen-only).
+- Nearby generic object observation now mirrors C's `u_on_newpos()` /
+  `see_nearby_objects()` flow for ordinary hero movement. Newly observed
+  gems/glass keep their real object color, including `CLR_WHITE`, in both the
+  glyph builder and the final `drawGrid()` render path instead of collapsing
+  white to `NO_COLOR`. Focused `seed0030-ten-diverse-deaths` is fully closed:
+  RNG `105529/105529`, screens/cursors `1953/1953`. Full `npm run score` is now
+  `41/44`; remaining failures are `seed0360-wizard-world-tour`,
+  `seed0373-barbarian-quest-tour`, and `seed0383-wizard-hallucinate`
+  (screen-only, exact RNG).
 
 Next concrete target:
 
@@ -1913,10 +1922,11 @@ Next concrete target:
   semantics, C special-level room/corridor/shop filling for `minetn-3.lua`, and
   full `eat.c`, `sp_lev.c`, `mkobj.c`, `makemon.c`, `uhitm.c`, and
   `dogmove.c` behavior.
-- `seed0367-priest-quest-tour` and `seed4500-knight-coverage` are closed and
-  should stay in the focused guard set for Priest/Knight quest generation,
-  Vlad tower generation, observed discovery accounting, Sokoban random-object
-  display, level-follower arrival, and enlightenment wording.
+- `seed0030-ten-diverse-deaths`, `seed0367-priest-quest-tour`, and
+  `seed4500-knight-coverage` are closed and should stay in the focused guard
+  set for nearby object observation, Priest/Knight quest generation, Vlad tower
+  generation, observed discovery accounting, Sokoban random-object display,
+  level-follower arrival, and enlightenment wording.
 - The Archeologist tour, exact-wand wish tails, healer scroll tail, tourist
   disaster path, and wizard quaff/zap/read option-help path are now closed;
   use them as regression guards for artifact wishing, restored-level Sokoban
