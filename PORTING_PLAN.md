@@ -1611,6 +1611,19 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   (screen score `144/324`, RNG `2182/50125`). The focused guards
   `seed0108`, `seed0399`, `seed2200`, `seed0383`, and `seed4500` remain at
   their prior status, and the public scorer remains `39/44`.
+- The next Priest slice closes the old BUC display gap and starts porting the
+  actual Priest quest-start level. Priests now know carried blessed/cursed
+  state in inventory and wish-result text, the level-teleport menu orders the
+  Quest portal against Big Room by generated depth, blue dragon scales/mail now
+  grant and remove ordinary fast speed during armor occupation completion, and
+  `Pri-strt.lua` has a C-shaped builder with the temple, Arch Priest/acolyte
+  setup, tree replacement, trap/monster placement, and final randomized flip.
+  `seed0367-priest-quest-tour` now reaches the quest-start map/FOV frontier:
+  focused metrics improve to RNG `3365/50125`, screens `163/324`, and cursors
+  `255/324`; `compare-one-session` first sees the remaining visible mismatch
+  on screen 148 at the right edge of the Priest start map. The full public
+  scorer remains `39/44`, and focused guards `seed0108`, `seed0399`,
+  `seed2200`, and `seed4500` still match all visible screens.
 
 Next concrete target:
 
@@ -1623,9 +1636,10 @@ Next concrete target:
   semantics, C special-level room/corridor/shop filling for `minetn-3.lua`, and
   full `eat.c`, `sp_lev.c`, `mkobj.c`, `makemon.c`, `uhitm.c`, and
   `dogmove.c` behavior.
-- For `seed0367`, the next narrow frontier is BUC/known-state propagation for
-  wished or worn armor: C shows `i - a blessed blue dragon scale mail.` at
-  screen 113, while JS shows `i - a blue dragon scale mail.`.
+- For `seed0367`, the next narrow frontier is the Priest quest-start special
+  level itself: the right edge of the randomized tree field/FOV still differs
+  on the arrival screen, and the following post-arrival Quest text/RNG should
+  be modeled directly instead of relying on the current narrow C-trace shim.
 - The Archeologist tour, exact-wand wish tails, healer scroll tail, tourist
   disaster path, and wizard quaff/zap/read option-help path are now closed;
   use them as regression guards for artifact wishing, restored-level Sokoban
