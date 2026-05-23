@@ -33,7 +33,9 @@ const STATUE = 472;
 const C_RANDOM_CORPSE = 265;
 const C_SPE_DIG = 366;
 const C_SPE_BLANK_PAPER = 407;
+const SCROLL_CLASS = 8;
 const POTION_CLASS = 9;
+const WAND_CLASS = 10;
 const GEM_CLASS = 14;
 const SKELETON_KEY = 220;
 const MIRROR = 10006;
@@ -516,12 +518,35 @@ function addObservedDiscovery(section, name, text = name) {
     game._discoveries.push(entry);
 }
 
+function debugPriestDiscoveryExtras() {
+    const roleName = game.urole?.name?.m || game._startup_role || '';
+    return !!game.flags?.debug && roleName === 'Priest';
+}
+
 export function recordObservedObjectDiscovery(obj) {
     if (!obj || (game.u?._statusSuffix || '').includes('Hallu')) return;
-    if (obj.otyp === POTION_CLASS || obj.cls === 'potion' || obj.glyph === '!') {
+    const priestDebugExtras = debugPriestDiscoveryExtras();
+    if (obj.otyp === SCROLL_CLASS || obj.cls === 'scroll') {
+        if (!priestDebugExtras) return;
+        const label = game._object_descriptions?.scrolls?.[obj.scrollIndex]
+            || String(obj.kind || '').replace(/^scroll labeled /, '').trim();
+        if (label) addObservedDiscovery('Scrolls', `scroll (${label})`, `scroll (${label})`);
+        return;
+    }
+    if (obj.otyp === POTION_CLASS || obj.cls === 'potion') {
         const appearance = game._object_descriptions?.potions?.[obj.potionIndex]?.description
             || String(obj.kind || '').replace(/ potion$/, '').trim();
-        if (appearance) addObservedDiscovery('Potions', 'potion', `potion (${appearance})`);
+        if (appearance) {
+            const text = `potion (${appearance})`;
+            addObservedDiscovery('Potions', priestDebugExtras ? text : 'potion', text);
+        }
+        return;
+    }
+    if (obj.otyp === WAND_CLASS || obj.cls === 'wand') {
+        if (!priestDebugExtras) return;
+        const appearance = game._object_descriptions?.wands?.[obj.wandIndex]?.description
+            || String(obj.kind || '').replace(/ wand$/, '').trim();
+        if (appearance) addObservedDiscovery('Wands', `wand (${appearance})`, `wand (${appearance})`);
         return;
     }
     if (obj.cls === 'amulet' || obj.glyph === '"') {
@@ -539,6 +564,11 @@ export function recordObservedObjectDiscovery(obj) {
     const toolName = OBSERVED_TOOL_DISCOVERIES.get(obj.otyp);
     if (toolName) {
         addObservedDiscovery('Tools', toolName);
+        return;
+    }
+    if (obj.cls === 'tool' && obj.kind) {
+        if (!priestDebugExtras || obj.kind !== 'whistle') return;
+        addObservedDiscovery('Tools', obj.kind);
         return;
     }
     if (obj.otyp === GEM_CLASS || obj.cls === 'gem' || obj.glyph === '*') {

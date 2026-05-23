@@ -204,7 +204,7 @@ const ROLE_INVENTORY = {
         { cls: 'armor', kind: 'small shield', bknown: false },
         { cls: 'potion', kind: 'holy water', plural: 'potions of holy water', min: 4, max: 4, blessed: true, bknown: true },
         { cls: 'food', kind: 'clove of garlic', plural: 'cloves of garlic', min: 1, max: 1, blessed: false, bknown: false },
-        { cls: 'food', kind: 'sprig of wolfsbane', blessed: false, bknown: false },
+        { cls: 'food', kind: 'sprig of wolfsbane', plural: 'sprigs of wolfsbane', blessed: false, bknown: false },
         { cls: 'spellbook', random: true, min: 2, max: 2, bknown: false },
     ],
     Ranger: [

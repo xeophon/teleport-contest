@@ -6,7 +6,7 @@ import { nhgetch } from './input.js';
 import { bot, cls, docrt, flush_screen, newsym, pline, recordObservedObjectDiscovery, refreshHallucinatedMap, show_glyph_cell, strengthString } from './display.js';
 import { couldsee, vision_recalc, vision_reset } from './vision.js';
 import { RANDOM_MONSTER_BY_NAME, SHOP_TYPES, artifactDefinitionForName, artifactObjectName, enextoMonsterSpot, make_tutorial1_level, makemon, makeArtifactWishObject, mkcorpstat, mklev, mkobj_at, mksobj, monsterByRndName, morgueMonster, nameObjectAsArtifact, next_ident, potionIndexForRoll, rndmonnum, scrollIndexForRoll, set_mimic_sym_rng, syncDungeonContext, u_on_dnstairs, u_on_rndspot, u_on_upstairs, wipe_engr_at, dropMonsterInventory, l_nhcore_init, getrumor, getbogusmon, level_difficulty, set_malign, somexyspace } from './mklev.js';
-import { ACCESSIBLE, A_CHA, A_CON, A_DEX, A_INT, A_MAX, A_STR, A_WIS, ALTAR, AM_SHRINE, Amask2align, BC_BALL, BC_CHAIN, BEAR_TRAP, BLCORNER, BOLT_LIM, BRCORNER, CLOUD, COLNO, CORPSTAT_FEMALE, CORPSTAT_GENDER, CORPSTAT_HISTORIC, CORPSTAT_MALE, CORPSTAT_NEUTER, CORR, DOOR, BURN, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, DUST, ENGRAVE, ENGR_BLOOD, FOUNTAIN, GRAVE, HEADSTONE, HWALL, ICE, IN_SIGHT, IS_AIR, IS_OBSTRUCTED, IS_POOL, IS_ROOM, IS_TREE, IS_WALL, In_endgame, In_quest, In_sokoban, Is_airlevel, Is_botlevel, Is_earthlevel, Is_rogue_level, Is_stronghold, Is_waterlevel, LADDER, LAVAPOOL, LAVAWALL, MAGIC_PORTAL, MARK, MAX_EGG_HATCH_TIME, MM_EDOG, MM_NOCOUNTBIRTH, MM_NOMSG, MM_NOWAIT, MOAT, M_AP_TYPE, NO_MINVENT, NORMAL_SPEED, OVERLOADED, P_BASIC, P_UNSKILLED, PIT, POOL, ROLLING_BOULDER_TRAP, ROOM, ROT_AGE, ROOMOFFSET, ROWNO, SCORR, SDOOR, SHOPBASE, SINK, SPIKED_PIT, STAIRS, STONE, TDWALL, TEMPLE, THRONE, TLCORNER, TRCORNER, TREE, TT_BEARTRAP, TT_BURIEDBALL, TT_INFLOOR, TT_LAVA, TT_PIT, TT_WEB, TUWALL, VAULT, VIBRATING_SQUARE, VWALL, WAND_BACKFIRE_CHANCE, WATER, WEB, WT_IRON_BALL_BASE, WT_IRON_BALL_INCR, W_NONDIGGABLE, ZAP_POS } from './const.js';
+import { ACCESSIBLE, A_CHA, A_CON, A_DEX, A_INT, A_MAX, A_STR, A_WIS, ALTAR, AM_SHRINE, Amask2align, BC_BALL, BC_CHAIN, BEAR_TRAP, BLCORNER, BOLT_LIM, BRCORNER, CLOUD, COLNO, CORPSTAT_FEMALE, CORPSTAT_GENDER, CORPSTAT_HISTORIC, CORPSTAT_MALE, CORPSTAT_NEUTER, CORR, DOOR, BURN, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, DUST, ENGRAVE, ENGR_BLOOD, FOUNTAIN, GRAVE, HEADSTONE, HWALL, ICE, IN_SIGHT, IS_AIR, IS_OBSTRUCTED, IS_POOL, IS_ROOM, IS_TREE, IS_WALL, In_endgame, In_quest, In_sokoban, Is_airlevel, Is_botlevel, Is_earthlevel, Is_rogue_level, Is_stronghold, Is_waterlevel, LADDER, LAVAPOOL, LAVAWALL, MAGIC_PORTAL, MARK, MAX_EGG_HATCH_TIME, MM_EDOG, MM_NOCOUNTBIRTH, MM_NOMSG, MM_NOWAIT, MOAT, MORGUE, M_AP_TYPE, NO_MINVENT, NORMAL_SPEED, OVERLOADED, P_BASIC, P_UNSKILLED, PIT, POOL, ROLLING_BOULDER_TRAP, ROOM, ROT_AGE, ROOMOFFSET, ROWNO, SCORR, SDOOR, SHOPBASE, SINK, SPIKED_PIT, STAIRS, STONE, TDWALL, TEMPLE, THRONE, TLCORNER, TRCORNER, TREE, TT_BEARTRAP, TT_BURIEDBALL, TT_INFLOOR, TT_LAVA, TT_PIT, TT_WEB, TUWALL, VAULT, VIBRATING_SQUARE, VWALL, WAND_BACKFIRE_CHANCE, WATER, WEB, WT_IRON_BALL_BASE, WT_IRON_BALL_INCR, W_NONDIGGABLE, ZAP_POS } from './const.js';
 import { d, rn1, rn2, rn2_on_display_rng, rnd, rnl, rnz } from './rng.js';
 import { CLR_BLACK, CLR_BLUE, CLR_BRIGHT_BLUE, CLR_BRIGHT_CYAN, CLR_BRIGHT_GREEN, CLR_BROWN, CLR_CYAN, CLR_GRAY, CLR_GREEN, CLR_MAGENTA, CLR_ORANGE, CLR_RED, CLR_YELLOW, CLR_WHITE, NO_COLOR } from './terminal.js';
 import { vfsDeleteFile, vfsReadFile, vfsWriteFile } from './storage.js';
@@ -3170,6 +3170,7 @@ export async function finishLevelTeleport(targetLevel, options = {}) {
         }
         const arrivalRoomno = game.level?.at(game.u?.ux || 0, game.u?.uy || 0)?.roomno || 0;
         const templeEntry = prepareUntendedTempleEntry(arrivalRoomno);
+        const roomEntryText = specialRoomEntryText(arrivalRoomno);
         if (templeEntry) {
             if (templeEntry.text && arrivalMore) {
                 queueMessageAfterMore(templeEntry.text);
@@ -3181,6 +3182,16 @@ export async function finishLevelTeleport(targetLevel, options = {}) {
                     if (arrivalMore) queueMessageAfterMore(templeText);
                     else arrivalMessage = arrivalMessage ? `${arrivalMessage}  ${templeText}` : templeText;
                 }
+            }
+        }
+        if (roomEntryText) {
+            if (arrivalMore) {
+                if (game._queued_message_after_more && game._queued_message_more_after_more)
+                    game._queued_room_entry_after_queued_more = roomEntryText;
+                else
+                    queueMessageAfterMore(roomEntryText);
+            } else {
+                arrivalMessage = arrivalMessage ? `${arrivalMessage}  ${roomEntryText}` : roomEntryText;
             }
         }
         if (arrivalMore && tendedTemplePriest(arrivalRoomno))
@@ -3551,6 +3562,7 @@ const OBJECT_WEIGHTS = {
     'food ration': 20,
     'fortune cookie': 1,
     'fortune cookies': 1,
+    'sprig of wolfsbane': 1,
     'grappling hook': 30,
     'hammer': 50,
     'lamp': 20,
@@ -5174,8 +5186,12 @@ function buildGenericAttributesPage2Rows() {
         : stats[2] !== peaks[2] ? `${stats[2]} (current; peak:${peaks[2]})` : stats[2];
     const charisma = attrLimits[5] ? `${stats[5]} (current; limit:${attrLimits[5]})` : stats[5];
     const roleName = game.urole?.name?.m || game._startup_role || '';
-    const weapon = (game.inventory || []).find(item => item.wielded || item.line?.includes('weapon in'))
+    const wieldedItem = (game.inventory || []).find(item =>
+        item.wielded || item.line?.includes('(wielded)') || item.line?.includes('weapon in'))
         || (game.inventory || []).find(item => item.line?.includes('weapon;'));
+    const weapon = wieldedItem && (wieldedItem.cls === 'weapon' || wieldedItem.otyp === WEAPON_CLASS || wieldedItem.glyph === ')')
+        ? wieldedItem : null;
+    const nonWeaponWielded = wieldedItem && !weapon ? wieldedItem : null;
     const weaponName = enlightenmentWeaponName(weapon, roleName);
     const weaponArticle = weaponName && /^[aeiou]/i.test(weaponName) ? 'an' : 'a';
     let carriedWeight = Math.trunc(((game._goldCount || 0) + 50) / 100);
@@ -5246,10 +5262,18 @@ function buildGenericAttributesPage2Rows() {
     } else {
         const emptyHanded = roleName === 'Monk' ? '  You are empty handed.' : '  You are bare handed.';
         const bareSkill = roleName === 'Monk' ? '  You have basic skill with martial arts.' : '  You are unskilled in bare handed combat.';
-        rows.push(
-            [row++, 0, weaponName ? `  You are wielding ${weaponArticle} ${weaponName}.` : emptyHanded],
-            [row++, 0, weaponName ? enlightenmentWeaponSkillLine(weaponName, roleName) : bareSkill],
-        );
+        if (nonWeaponWielded) {
+            const wieldedName = nonWeaponWielded.cls === 'spellbook'
+                ? 'spellbook'
+                : simpleEquipmentName(nonWeaponWielded) || pickupObjectName(nonWeaponWielded);
+            const wieldedArticle = /^[aeiou]/i.test(wieldedName) ? 'an' : 'a';
+            rows.push([row++, 0, `  You are wielding ${wieldedArticle} ${wieldedName}.`]);
+        } else {
+            rows.push(
+                [row++, 0, weaponName ? `  You are wielding ${weaponArticle} ${weaponName}.` : emptyHanded],
+                [row++, 0, weaponName ? enlightenmentWeaponSkillLine(weaponName, roleName) : bareSkill],
+            );
+        }
     }
     const wornArmor = (game.inventory || []).some(item => item.cls === 'armor' && item.worn);
     if (!wornArmor) rows.push([row++, 0, "  You aren't wearing any armor."]);
@@ -5276,6 +5300,21 @@ function buildGenericAttributesPage2Rows() {
             rows.push([row++, 0, `  You are magic-protected because of your ${pickupObjectName(magicResistanceSource)}.`]);
         if ((game.inventory || []).some(item => item.wielded && item.artifact === 'Grayswandir'))
             rows.push([row++, 0, '  You resist hallucinations because of Grayswandir.']);
+        if (game.u?.fireResistance)
+            rows.push([row++, 0, '  You are fire resistant because of your experience.']);
+        const blueDragonArmor = (game.inventory || []).find(item =>
+            isWornInventoryItem(item) && isBlueDragonArmorKind(String(item.kind || item.actualKind || '').toLowerCase()));
+        if (blueDragonArmor) {
+            rows.push([row++, 0, `  You are shock resistant because of your ${simpleEquipmentName(blueDragonArmor)}.`]);
+            rows.push([row++, 0, `  Your items are protected from electric shocks by your ${blueDragonArmor.dragonArmorKind === 'mail' ? 'dragon mail' : 'dragon scales'}.`]);
+        }
+        const telepathyAmulet = (game.inventory || []).find(item =>
+            isWornInventoryItem(item) && item.cls === 'amulet'
+            && (item.amuletIndex === 0 || /amulet of (?:esp|telepathy)/i.test(String(item.kind || item.actualKind || ''))));
+        if (telepathyAmulet) {
+            const appearance = telepathyAmulet.appearance || game._object_descriptions?.amulets?.[telepathyAmulet.amuletIndex];
+            rows.push([row++, 0, `  You are telepathic because of your ${appearance ? `${appearance} amulet` : simpleEquipmentName(telepathyAmulet)}.`]);
+        }
         if (game.u?.warning) rows.push([row++, 0, '  You are warned because of your experience.']);
         if (game.u?.searching)
             rows.push([row++, 0, `  You have automatic searching ${enlightenmentSourceForSearching(roleName)}.`]);
@@ -5287,8 +5326,12 @@ function buildGenericAttributesPage2Rows() {
         if (teleportControlRing) rows.push([row++, 0, `  You have teleport control because of your ${pickupObjectName(teleportControlRing)}.`]);
         if (magicNegation > 0) rows.push([row++, 0, '  You are warded.']);
         if (roleName === 'Knight' || game.u?.jumping) rows.push([row++, 0, '  You can jump intrinsically.']);
-        if (game.u?.fast || game.u?.veryfast)
-            rows.push([row++, 0, `  You are ${game.u?.veryfast ? 'very fast' : 'fast'} ${enlightenmentSourceForSpeed(roleName)}.`]);
+        if (game.u?.fast || game.u?.veryfast) {
+            const speedSource = game.u?._blueDragonFast || (game.inventory || []).some(item =>
+                isWornInventoryItem(item) && String(item.kind || item.actualKind || '').toLowerCase() === 'speed boots')
+                ? 'because of worn equipment' : enlightenmentSourceForSpeed(roleName);
+            rows.push([row++, 0, `  You are ${game.u?.veryfast ? 'very fast' : 'fast'} ${speedSource}.`]);
+        }
         const reflectionSource = wornReflectionSource();
         if (game.u?.reflecting || reflectionSource)
             rows.push([row++, 0, `  You have reflection because of your ${simpleEquipmentName(reflectionSource) || 'worn equipment'}.`]);
@@ -12511,6 +12554,13 @@ function queueMessageAfterMore(text, more = false, { blockTimeUntilClear = false
         : text;
     if (more) game._queued_message_more_after_more = 1;
     if (blockTimeUntilClear) game._queued_message_blocks_time_after_more = 1;
+}
+
+function specialRoomEntryText(roomno) {
+    const room = levelRoomByRoomno(roomno);
+    if (!room) return '';
+    if (room.rtype === MORGUE) return 'You have an uncanny feeling...';
+    return '';
 }
 
 function tendedTemplePriest(roomno) {
@@ -20642,7 +20692,17 @@ export async function rhack(_cmd) {
                     }
                 }
                 if (next === 'You die...' || next === 'You die.') prepareDeathBones();
-	                await setMessage(next, queuedMore);
+                await setMessage(next, queuedMore);
+                if (game._queued_room_entry_after_queued_more) {
+                    const roomEntryText = game._queued_room_entry_after_queued_more;
+                    game._queued_room_entry_after_queued_more = '';
+                    if (queuedMore) {
+                        game._queued_messages_after_more ??= [];
+                        game._queued_messages_after_more.unshift({ text: roomEntryText, more: false });
+                    } else {
+                        game._queued_message_after_more = roomEntryText;
+                    }
+                }
                 if (blockTimeUntilClear && !queuedMore) {
                     game._pending_message_blocks_time = 1;
                     game._clear_pending_message_only_once = 1;
@@ -29415,7 +29475,7 @@ export async function rhack(_cmd) {
             }
             recordFoodConduct(item);
             if (item.kind === 'clove of garlic') scareNearbyOlfactoryMonstersWithGarlic();
-            if (item.oeaten > 0) addHeroNutrition(item.oeaten);
+            addHeroNutrition(item.oeaten > 0 ? item.oeaten : foodObjectNutrition(item));
             removeInventoryItem(item);
             game._pet_food_scan_inventory = game.inventory || [];
             const petrificationMessage = startPetrifyingEggStoning(item);
@@ -29583,7 +29643,7 @@ export async function rhack(_cmd) {
                 await eatRoyalJelly(food, true);
                 return;
             }
-            if (food.oeaten > 0) addHeroNutrition(food.oeaten);
+            addHeroNutrition(food.oeaten > 0 ? food.oeaten : foodObjectNutrition(food));
             recordFoodConduct(food);
             if (food?.kind === 'clove of garlic') scareNearbyOlfactoryMonstersWithGarlic();
             consumeOneFloorObject(food);

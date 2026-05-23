@@ -1731,6 +1731,22 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   `303/324`. Guard sessions `seed0361-archeologist-tour`,
   `seed0106-priest-extcmd-sweep`, and `seed4500-knight-coverage` still match
   all visible screens. The current full public scorer reports `38/44`.
+- The Priest tower and late-tour tail are now closed end to end. `tower1.lua`
+  now follows C's hostile vampire/Vlad handling closely enough to avoid the
+  old `peace_minded()` RNG drift, including ordinary vampire class monsters
+  and the scripted vampire-leader brides. The Vlad tower random Sokoban object
+  reveal, Quest-to-morgue arrival message ordering, Priest wolfsbane plural,
+  wolfsbane weight/nutrition, spellbook-wielded enlightenment wording, blue
+  dragon mail resistance/electric protection lines, amulet ESP source text,
+  and very-fast worn-equipment wording now match the recorded C screens.
+  Discovery recording was tightened to avoid treating every debug-visible map
+  scroll/tool as C `oc_encountered`: the Priest debug tour records the
+  observed scroll labels, unique potion appearances, tin wand, and whistle
+  needed by C, while the Archeologist and Knight guards keep their narrower
+  discovery lists. `seed0367-priest-quest-tour` is now a full pass
+  (`324/324` screens, RNG `50125/50125`), `seed0361-archeologist-tour`,
+  `seed0106-priest-extcmd-sweep`, and `seed4500-knight-coverage` still match
+  every visible screen, and the full public scorer is now `39/44`.
 
 Next concrete target:
 
@@ -1743,12 +1759,9 @@ Next concrete target:
   semantics, C special-level room/corridor/shop filling for `minetn-3.lua`, and
   full `eat.c`, `sp_lev.c`, `mkobj.c`, `makemon.c`, `uhitm.c`, and
   `dogmove.c` behavior.
-- For `seed0367`, the next narrow frontier is screen 278 after choosing `G`
-  from the level-teleport menu. The previous boundaries at screens 253/254,
-  261, 263, 266/267, and 273 are exact; the remaining visible drift is the
-  wizard-tower/fakewiz special-level map layout after that teleport target is
-  selected. Compare C `sp_lev.c`, `mklev.c`, and the JS special-level dispatch
-  before touching generic monster movement or display code.
+- `seed0367-priest-quest-tour` is closed and should stay in the focused guard
+  set for Priest quest generation, Vlad tower generation, observed discovery
+  accounting, Sokoban random-object display, and enlightenment wording.
 - The Archeologist tour, exact-wand wish tails, healer scroll tail, tourist
   disaster path, and wizard quaff/zap/read option-help path are now closed;
   use them as regression guards for artifact wishing, restored-level Sokoban
@@ -1768,11 +1781,13 @@ Next concrete target:
   food mechanics: C has processed the carrot-eating turn RNG but has not
   redrawn the time field yet. Avoid changing turn accounting to make that
   screen pass; model when the bottom line is refreshed.
-- For `seed4500-knight-coverage`, the next narrow slice is PRNG parity after
-  the visible path is closed: compare the 37 remaining RNG-slice differences,
-  starting with the prayer/rotten-food/fire-combat waits and the small
-  `rn2(25)`/`rn2(8)` ordering swap at step 1633, before replacing any scripted
-  Sanctum/Quest RNG with real mechanics.
+- For `seed4500-knight-coverage`, the visible path remains closed
+  (`1814/1814` screens), but PRNG is still short of exact. The current first
+  per-step slice mismatch is step 292 (`y`), where JS has 19 RNG calls and C
+  has 18; the first flat prefix mismatch later appears at global RNG 102776,
+  where C enters `m_lined_up()` with `rn2(25)` while JS has an extra `rn2(5)`.
+  Continue from the real C movement/monster-ranged-attack timing instead of
+  changing screen rendering, since the terminal output is already exact.
 - Use `sessions/*.session.json` to locate divergences, but keep fixes in real
   mechanics. A score recovery is only valid when it falls out of those
   mechanics.
