@@ -1581,6 +1581,18 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   `seed2200-wizard-quaff-zap-read` completely (`230/230` screens, RNG
   `3018/3018`), keeps seed4500 visible parity (`1814/1814` screens, still
   RNG-only failing), and moves the public scorer to `37/44`.
+- The wizard hallucination action path now closes with real wish/object
+  semantics rather than a text-only workaround. Exact-name spellbook wishes
+  still create an object whose type is unknown by the wish itself; JS now shows
+  the actual spellbook name only when that type is already in the discovery
+  list, matching C's `readobjnam()`/`observe_object()` split and Wizard
+  `skill_based_spellbook_id()` pre-knowledge for low-level attack books such as
+  magic missile. Exact `magic harp` wishes also now run the specific
+  `MAGIC_HARP` charged-tool init path (`spe = 4 + rn2(5)`), matching
+  `mksobj_init()` for magical instruments and recovering the PRNG stream after
+  the wish. This closes `seed0399-wizard-hallu-actions` completely
+  (`532/532` screens, RNG `11409/11409`) and moves the public scorer to
+  `38/44`.
 
 Next concrete target:
 

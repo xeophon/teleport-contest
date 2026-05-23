@@ -11777,7 +11777,7 @@ function wishedBaseObjectFromName(lowerName, qualifiers = {}, originalName = low
                     spellName: labeledSpellName,
                     spellbookIndex,
                     appearance: game._object_descriptions?.spellbooks?.[spellbookIndex] || qualifiers.wishLabelName,
-                    known: false,
+                    known: spellbookDiscoveryKnown(labeledSpellName),
                     wishedfor: true,
                 });
             }
@@ -11793,7 +11793,7 @@ function wishedBaseObjectFromName(lowerName, qualifiers = {}, originalName = low
             spellName: spellbookIndex >= 0 ? spellName : '',
             spellbookIndex,
             appearance: spellbookIndex >= 0 ? game._object_descriptions?.spellbooks?.[spellbookIndex] : '',
-            known: false,
+            known: spellbookIndex >= 0 && spellbookDiscoveryKnown(spellName),
             wishedfor: true,
         });
     }
@@ -11967,7 +11967,8 @@ export function pickupObjectName(obj) {
         if (isBookOfTheDeadItem(obj)) return named('Book of the Dead');
         if ((obj.quan || 1) > 1 && obj.plural) return named(obj.plural);
         const name = obj.spellName || obj.spell?.name || String(obj.kind || '').replace(/^spellbook(?: of)? /, '');
-        if (obj.known === false || (obj.otyp === SPE_HEALING && !obj.cls) || (obj.otyp === SPBOOK_NO_NOVEL && !name)) {
+        const typeKnown = obj.known === true || spellbookDiscoveryKnown(name);
+        if (!typeKnown || (obj.otyp === SPE_HEALING && !obj.cls) || (obj.otyp === SPBOOK_NO_NOVEL && !name)) {
             const appearance = obj.appearance || game._object_descriptions?.spellbooks?.[
                 obj.spellbookIndex ?? HEALING_SPELLBOOK_APPEARANCE_INDEX
             ];
