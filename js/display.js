@@ -661,6 +661,14 @@ function objectGlyph(obj) {
         const fallbackColor = MONSTER_COLORS[obj.corpsenm?.name] ?? NO_COLOR;
         return { ch: '%', color: storedColor == null || storedColor === NO_COLOR ? fallbackColor : storedColor, dec: false };
     }
+    if (obj.otyp === STATUE) {
+        const data = obj.corpsenm || {};
+        return {
+            ch: data.glyph || data.mlet?.[0] || obj.glyph || '`',
+            color: obj.color ?? data.color ?? MONSTER_COLORS[data.name] ?? CLR_WHITE,
+            dec: false,
+        };
+    }
     const revealPotionColor = obj.dknown;
     if (obj.glyph === '!' && obj._appearance_color != null && revealPotionColor)
         return { ch: '!', color: glyphColor(obj._appearance_color), dec: false };

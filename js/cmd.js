@@ -337,6 +337,14 @@ function dryupFountainAt(x = game.u?.ux || 0, y = game.u?.uy || 0) {
 
 const MIN_QUEST_LEVEL = 14;
 const MIN_QUEST_ALIGN = 20;
+const QUEST_COMMON_TEXTS = {
+    quest_portal: `You receive a faint telepathic message from %l:
+Your help is urgently needed at %H!
+Look for a ...ic transporter.
+You couldn't quite make out that last message.`,
+    quest_portal_again: 'You again sense %l pleading for help.',
+    quest_portal_demand: 'You again sense %l demanding your attendance.',
+};
 const QUEST_ROLE_DATA = {
     Archeologist: {
         filecode: 'Arc',
@@ -2152,7 +2160,8 @@ function questDownBlocked() {
 function questPagerText(msgid) {
     const roleName = game.urole?.name?.m || game._startup_role || '';
     const info = QUEST_ROLE_DATA[roleName];
-    const raw = info?.texts?.[msgid] || (msgid === 'goal_alt' ? info?.texts?.goal_next : '');
+    const raw = info?.texts?.[msgid] || QUEST_COMMON_TEXTS[msgid]
+        || (msgid === 'goal_alt' ? info?.texts?.goal_next : '');
     if (!raw) return '';
     l_nhcore_init();
     const rankIndex = level => level <= 2 ? 0 : level <= 30 ? Math.trunc((level + 2) / 4) : 8;
@@ -2338,6 +2347,37 @@ function queueQuestArrival(targetLevel, fromLevel, targetIsNew, showNow = false)
     const queuedGoal = showNow ? showQuestPline('goal_next') : queueQuestPline('goal_next', true);
     if (queuedGoal && !showNow) game._quest_arrival_look_here_after_more = 1;
     return queuedGoal;
+}
+
+function atDungeonEntrance(level, dungeonName) {
+    const dnum = game.dungeons?.findIndex(dungeon => dungeon?.name === dungeonName) ?? -1;
+    if (dnum < 0 || !level) return false;
+    return (game.branches || []).some(branch =>
+        branch.end2?.dnum === dnum
+        && branch.end1?.dnum === level.dnum
+        && branch.end1?.dlevel === level.dlevel);
+}
+
+function queueQuestPortalCall(targetLevel, fromLevel) {
+    if (!targetLevel || !fromLevel) return false;
+    if (game.dungeons?.[fromLevel.dnum]?.name === 'The Quest') return false;
+    if (!atDungeonEntrance(targetLevel, 'The Quest')) return false;
+    const quest = game.quest_status ??= {};
+    if (quest.qcompleted || quest.qexpelled || quest.got_thanks || quest.killed_leader) return false;
+    const msgid = !quest.qcalled
+        ? 'quest_portal'
+        : (game.urole?.name?.m || game._startup_role) === 'Rogue'
+        ? 'quest_portal_demand'
+        : 'quest_portal_again';
+    if (!quest.qcalled) quest.qcalled = 1;
+    const text = questPagerText(msgid);
+    if (!text) return false;
+    const lines = text.split('\n').filter(line => line.length);
+    if (!lines.length) return false;
+    game._queued_messages_after_more ??= [];
+    for (let i = 0; i < lines.length; i++)
+        game._queued_messages_after_more.push({ text: lines[i], more: i < lines.length - 1 });
+    return true;
 }
 
 async function continueQuestLeaderTalkAfterIntro() {
@@ -3002,6 +3042,7 @@ export async function finishLevelTeleport(targetLevel, options = {}) {
         const onBoulder = options.boulderMessage
             && game.level?.objects?.some(obj => obj.otyp === BOULDER && obj.ox === game.u?.ux && obj.oy === game.u?.uy);
         const questArrival = queueQuestArrival(targetLevel, fromLevel, targetIsNew);
+        const questPortalCall = queueQuestPortalCall(targetLevel, fromLevel);
         if (enteringValley) {
             game.u.uevent ??= {};
             game.u.uevent.gehennom_entered = 1;
@@ -3031,7 +3072,7 @@ export async function finishLevelTeleport(targetLevel, options = {}) {
             : 'You materialize on a different level!';
         const questStartArrival = targetSpecial?.name === 'x-strt';
         let arrivalMore = lowerWizardTowerArrival
-            || enteringValley || enteringRogue || questArrival || questStartArrival
+            || enteringValley || enteringRogue || questArrival || questPortalCall || questStartArrival
             || promptedBones
             || !!targetAnnotation;
         let familiarMessage = '';
@@ -6702,6 +6743,7 @@ async function setMessage(msg, more = false) {
     }
     const runningMessage = game._pending_message
         && (game._running_continuation || game._initial_run_command || game._run_steps_remaining > 0);
+    if (!runningMessage) game._pending_message_blocks_time = 0;
     if (runningMessage) {
         const width = game.nhDisplay?.cols || 80;
         const queueAfterSwap = /^You swap places with /.test(game._pending_message)
@@ -17704,6 +17746,7 @@ export async function rhack(_cmd) {
             }
         }
         game._pending_message = '';
+        game._pending_message_blocks_time = 0;
         game._pending_explore_lifesaving_message = 0;
         game._pending_message_is_search_safety_warning = 0;
         game._clear_search_safety_message_next_flush = 0;

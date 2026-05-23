@@ -1630,6 +1630,27 @@ const BIGRM2_MAP = [
     '---------------------------------------------------------------------------',
 ];
 
+const BIGRM3_MAP = [
+    '---------------------------------------------------------------------------',
+    '|.|.|.|.|.|.|.|.|.|.|.|.|.|.|.|.|.|.|.|.|.|.|.|.|.|.|.|.|.|.|.|.|.|.|.|.|.|',
+    '|.........................................................................|',
+    '|.........................................................................|',
+    '|.........................................................................|',
+    '|..............---.......................................---..............|',
+    '|...............|.........................................|...............|',
+    '|.....|.|.|.|.|---|.|.|.|.|...................|.|.|.|.|.|---|.|.|.|.|.....|',
+    '|.....|--------   --------|...................|----------   --------|.....|',
+    '|.....|.|.|.|.|---|.|.|.|.|...................|.|.|.|.|.|---|.|.|.|.|.....|',
+    '|...............|.........................................|...............|',
+    '|..............---.......................................---..............|',
+    '|.........................................................................|',
+    '|.........................................................................|',
+    '|.........................................................................|',
+    '|.........................................................................|',
+    '|.|.|.|.|.|.|.|.|.|.|.|.|.|.|.|.|.|.|.|.|.|.|.|.|.|.|.|.|.|.|.|.|.|.|.|.|.|',
+    '---------------------------------------------------------------------------',
+];
+
 const BIGRM4_MAP = [
     '-----------                                                     -----------',
     '|.........|                                                     |.........|',
@@ -1740,12 +1761,20 @@ const BIGRM12_MAP = [
 
 const BIGRM_MAPS = {
     2: BIGRM2_MAP,
+    3: BIGRM3_MAP,
     4: BIGRM4_MAP,
     7: BIGRM7_MAP,
     8: BIGRM8_MAP,
     9: BIGRM9_MAP,
     12: BIGRM12_MAP,
 };
+
+const BIGRM3_MONSTER_COORDS = [
+    [1, 1], [13, 1], [25, 1], [37, 1], [49, 1], [61, 1], [73, 1],
+    [7, 7], [13, 7], [25, 7], [37, 7], [49, 7], [61, 7], [67, 7],
+    [7, 9], [13, 9], [25, 9], [37, 9], [49, 9], [61, 9], [67, 9],
+    [1, 16], [13, 16], [25, 16], [37, 16], [49, 16], [61, 16], [73, 16],
+];
 
 const BIGRM8_WIDTH = 75;
 const BIGRM8_HEIGHT = 18;
@@ -2926,6 +2955,28 @@ function arcGoalY(y) { return ARC_GOAL_YSTART + y; }
 
 const MEDUSA_XSTART = 3;
 const MEDUSA_YSTART = 1;
+const MEDUSA1_ROWS = [
+    '}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}',
+    '}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}',
+    '}}.}}}}}..}}}}}......}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}....}}}...}}}}}',
+    '}...}}.....}}}}}....}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}...............}',
+    '}....}}}}}}}}}}....}}}..}}}}}}}}}}}.......}}}}}}}}}}}}}}}}..}}.....}}}...}}',
+    '}....}}}}}}}}.....}}}}..}}}}}}.................}}}}}}}}}}}.}}}}.....}}...}}',
+    '}....}}}}}}}}}}}}.}}}}.}}}}}}.-----------------.}}}}}}}}}}}}}}}}}.........}',
+    '}....}}}}}}}}}}}}}}}}}}.}}}...|...............S...}}}}}}}}}}}}}}}}}}}....}}',
+    '}.....}.}}....}}}}}}}}}.}}....--------+--------....}}}}}}..}}}}}}}}}}}...}}',
+    '}......}}}}..}}}}}}}}}}}}}........|.......|........}}}}}....}}}}}}}}}}}}}}}',
+    '}.....}}}}}}}}}}}}}}}}}}}}........|.......|........}}}}}...}}}}}}}}}.}}}}}}',
+    '}.....}}}}}}}}}}}}}}}}}}}}....--------+--------....}}}}}}.}.}}}}}}}}}}}}}}}',
+    '}......}}}}}}}}}}}}}}}}}}}}...S...............|...}}}}}}}}}}}}}}}}}.}}}}}}}',
+    '}.......}}}}}}}..}}}}}}}}}}}}.-----------------.}}}}}}}}}}}}}}}}}....}}}}}}',
+    '}........}}.}}....}}}}}}}}}}}}.................}}}}}..}}}}}}}}}.......}}}}}',
+    '}.......}}}}}}}......}}}}}}}}}}}}}}.......}}}}}}}}}.....}}}}}}...}}..}}}}}}',
+    '}.....}}}}}}}}}}}.....}}}}}}}}}}}}}}}}}}}}}}.}}}}}}}..}}}}}}}}}}....}}}}}}}',
+    '}}..}}}}}}}}}}}}}....}}}}}}}}}}}}}}}}}}}}}}...}}..}}}}}}}.}}.}}}}..}}}}}}}}',
+    '}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}',
+    '}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}',
+];
 const MEDUSA3_ROWS = [
     '}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}',
     '}}}}}}}}}}.}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}.}}}}}}}}}}}}}}}}}}}}}}}}}}}}',
@@ -2948,6 +2999,8 @@ const MEDUSA3_ROWS = [
     '}}}}}}}}}}}..}}}}}}}}}}}}}}}.}}}}}}}}}}}}}}}}}T..T}}}}}}}}}}}}}}}}}}}}}}}}}}',
     '}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}',
 ];
+const MEDUSA1_WIDTH = MEDUSA1_ROWS[0].length;
+const MEDUSA1_HEIGHT = MEDUSA1_ROWS.length;
 const MEDUSA_WIDTH = MEDUSA3_ROWS[0].length;
 const MEDUSA_HEIGHT = MEDUSA3_ROWS.length;
 
@@ -4353,8 +4406,12 @@ export function adjustedMonsterLevel(ptr) {
 }
 
 function monsterAlignShift(maligntyp) {
+    const moves = game.moves || 1;
     const special = game.specialLevels?.find(level =>
         level.dnum === game.u?.uz?.dnum && level.dlevel === game.u?.uz?.dlevel);
+    game._align_shift_oldmoves = moves;
+    game._align_shift_has_special = !!special;
+    game._align_shift_special_align = special ? (game._special_level_align ?? A_NONE) : null;
     const align = special ? game._special_level_align : null;
     if (align === A_LAWFUL) return Math.trunc((maligntyp + 20) / 8);
     if (align === A_NEUTRAL) return Math.trunc((20 - Math.abs(maligntyp)) / 4);
@@ -6021,7 +6078,7 @@ export async function makemon(mdat, x, y, mmflags) {
         mkobj_at(RANDOM_CLASS, x, y, true);
         if (ptr.hidesUnder) mon.mundetected = canHideUnderObjAt(x, y);
     }
-    if (game.in_mklev && ptr.mlet === ';') mon.mundetected = true;
+    if (game.in_mklev && ptr.mlet === ';') mon.mundetected = !!IS_POOL(game.level?.at(x, y)?.typ);
     if (ptr.mlet === S_NYMPH) {
         if (rn2(5)) mon.msleeping = 1;
     }
@@ -10686,6 +10743,19 @@ export async function make_bigrm8_level() {
     } else if (variant === 7) {
         const terrain = ['L', 'T', '{', '.'][rn2(4)];
         replace_special_terrain(xstart, ystart, width, height, LAVAPOOL, SPECIAL_TERRAIN[terrain] ?? ROOM);
+    } else if (variant === 3) {
+        if (rn2(100) < 66) {
+            const terrain = ['F', 'T', 'W', 'Z'][rn2(4)];
+            const toTyp = SPECIAL_TERRAIN[terrain] ?? ROOM;
+            for (let y = 0; y < height; y++) {
+                const row = rows[y].padEnd(width, ' ');
+                for (let x = 1; x < width - 1; x++) {
+                    if (row[x - 1] !== '.' || row[x + 1] !== '.') continue;
+                    const loc = g.level.at(xstart + x, ystart + y);
+                    if (loc && (loc.typ === HWALL || loc.typ === VWALL)) loc.typ = toTyp;
+                }
+            }
+        }
     } else if (variant === 12) {
         if (rn2(100) < 20) {
             if (rn2(100) < 50)
@@ -10782,16 +10852,23 @@ export async function make_bigrm8_level() {
         if (kind === WEB) await makemon(monsterByRndName('giant spider'), loc.x, loc.y, 0);
         rnd(4);
     }
-    for (let i = 0; i < 28; i++) {
-        rn2(3);
-        let loc = bigrm8RandomLocation(bigrmDryTyp);
-        if (g.level.monsters?.some(mon => mon.mx === loc.x && mon.my === loc.y)) {
-            const spot = enextoMonsterSpot(loc.x, loc.y);
-            if (spot) loc = { ...loc, x: spot.x, y: spot.y, preX: spot.x, preY: spot.y };
+    if (variant === 3) {
+        for (const [mx, my] of BIGRM3_MONSTER_COORDS) {
+            rn2(3);
+            await makemon(null, xstart + mx, ystart + my, 0);
         }
-        g._bigrm_preflip_location = loc;
-        await makemon(null, loc.x, loc.y, 0);
-        g._bigrm_preflip_location = null;
+    } else {
+        for (let i = 0; i < 28; i++) {
+            rn2(3);
+            let loc = bigrm8RandomLocation(bigrmDryTyp);
+            if (g.level.monsters?.some(mon => mon.mx === loc.x && mon.my === loc.y)) {
+                const spot = enextoMonsterSpot(loc.x, loc.y);
+                if (spot) loc = { ...loc, x: spot.x, y: spot.y, preX: spot.x, preY: spot.y };
+            }
+            g._bigrm_preflip_location = loc;
+            await makemon(null, loc.x, loc.y, 0);
+            g._bigrm_preflip_location = null;
+        }
     }
 
     wallification(1, 0, COLNO - 1, ROWNO - 1);
@@ -10862,6 +10939,8 @@ export async function make_bigrm8_level() {
             wallification(1, 0, COLNO - 1, ROWNO - 1);
         }
     }
+    if (is_branchlev() && !g.made_branch)
+        place_lregion(0, 0, 0, 0, 0, 0, 0, 0, LR_BRANCH, null);
     recount_level_features();
     level_finalize_topology();
     g._bigrm_location_rows = null;
@@ -14081,6 +14160,33 @@ function medusaDryLocation() {
     return medusaRandomLocation(loc => SPACE_POS(loc.typ));
 }
 
+function medusa1RandomLocation(okay) {
+    for (let tryct = 0; tryct < 100; tryct++) {
+        const x = medusaX(rn2(MEDUSA1_WIDTH));
+        const y = medusaY(rn2(MEDUSA1_HEIGHT));
+        const loc = game.level.at(x, y);
+        if (loc && okay(loc, x, y)) return { x, y };
+    }
+    for (let lx = 0; lx < MEDUSA1_WIDTH; lx++)
+        for (let ly = 0; ly < MEDUSA1_HEIGHT; ly++) {
+            const x = medusaX(lx);
+            const y = medusaY(ly);
+            const loc = game.level.at(x, y);
+            if (loc && okay(loc, x, y)) return { x, y };
+        }
+    return { x: medusaX(0), y: medusaY(0) };
+}
+
+function medusa1DryLocation() {
+    return medusa1RandomLocation(loc => SPACE_POS(loc.typ));
+}
+
+function medusa1MonsterLocation(ptr) {
+    if (ptr?.inAir) return medusa1RandomLocation(loc => SPACE_POS(loc.typ) || IS_POOL(loc.typ) || loc.typ === LAVAPOOL);
+    if (ptr?.swimmer) return medusa1RandomLocation(loc => IS_POOL(loc.typ));
+    return medusa1DryLocation();
+}
+
 function medusaMonsterLocation(ptr) {
     if (ptr.inAir) return medusaRandomLocation(loc => SPACE_POS(loc.typ) || IS_POOL(loc.typ) || loc.typ === LAVAPOOL);
     if (ptr.swimmer) return medusaRandomLocation(loc => IS_POOL(loc.typ));
@@ -14089,7 +14195,7 @@ function medusaMonsterLocation(ptr) {
 
 function medusaDoor(state, x, y) {
     const loc = game.level.at(medusaX(x), medusaY(y));
-    loc.typ = DOOR;
+    if (loc.typ !== SDOOR) loc.typ = DOOR;
     loc.doormask = state === 'locked' ? D_LOCKED
         : state === 'random' ? [D_NODOOR, D_BROKEN, D_ISOPEN, D_CLOSED, D_LOCKED][rn2(5)]
             : D_CLOSED;
@@ -14135,9 +14241,9 @@ function medusaToptenStatue(x, y) {
     return statue;
 }
 
-function medusaFlipRooms(flips) {
-    const flipX = x => MEDUSA_XSTART + MEDUSA_WIDTH - 1 - (x - MEDUSA_XSTART);
-    const flipY = y => MEDUSA_YSTART + MEDUSA_HEIGHT - 1 - (y - MEDUSA_YSTART);
+function medusaFlipRooms(flips, width = MEDUSA_WIDTH, height = MEDUSA_HEIGHT) {
+    const flipX = x => MEDUSA_XSTART + width - 1 - (x - MEDUSA_XSTART);
+    const flipY = y => MEDUSA_YSTART + height - 1 - (y - MEDUSA_YSTART);
     for (const room of game.level.rooms || []) {
         if (!room || room.hx < 0) continue;
         if (flips.flipVertical) {
@@ -14149,9 +14255,9 @@ function medusaFlipRooms(flips) {
     }
 }
 
-function medusaFlipRegion(region, flips) {
-    const flipX = x => MEDUSA_XSTART + MEDUSA_WIDTH - 1 - (x - MEDUSA_XSTART);
-    const flipY = y => MEDUSA_YSTART + MEDUSA_HEIGHT - 1 - (y - MEDUSA_YSTART);
+function medusaFlipRegion(region, flips, width = MEDUSA_WIDTH, height = MEDUSA_HEIGHT) {
+    const flipX = x => MEDUSA_XSTART + width - 1 - (x - MEDUSA_XSTART);
+    const flipY = y => MEDUSA_YSTART + height - 1 - (y - MEDUSA_YSTART);
     let [lx, ly, hx, hy] = region;
     if (flips.flipVertical) [ly, hy] = [flipY(hy), flipY(ly)];
     if (flips.flipHorizontal) [lx, hx] = [flipX(hx), flipX(lx)];
@@ -14191,21 +14297,183 @@ async function medusaMonster(ptr, opts = {}) {
     return makemon(ptr, pos.x, pos.y, opts.angry ? MM_ANGRY : 0);
 }
 
+async function medusa1Monster(ptr, opts = {}) {
+    if (opts.findGender) rn2(2);
+    medusaInducedAlign();
+    const monPtr = opts.classGlyph ? mkclassAligned(opts.classGlyph) : ptr;
+    const pos = opts.x == null
+        ? (monPtr ? medusa1MonsterLocation(monPtr) : medusa1DryLocation())
+        : { x: medusaX(opts.x), y: medusaY(opts.y) };
+    const mon = await makemon(monPtr, pos.x, pos.y, opts.angry ? MM_ANGRY : 0);
+    if (mon && opts.asleep) mon.msleeping = 1;
+    return mon;
+}
+
+async function make_medusa1_level() {
+    const g = game;
+    for (let y = 0; y < MEDUSA1_ROWS.length; y++) {
+        const row = MEDUSA1_ROWS[y];
+        for (let x = 0; x < row.length; x++) {
+            const loc = g.level.at(medusaX(x), medusaY(y));
+            const ch = row[x];
+            loc.flags = 0;
+            loc.roomno = 0;
+            loc.edge = 0;
+            loc.lit = false;
+            loc.waslit = false;
+            loc.doormask = D_NODOOR;
+            loc.horizontal = ch !== '|';
+            if (ch === '+') {
+                loc.typ = DOOR;
+                loc.doormask = D_CLOSED;
+            } else if (ch === 'S') {
+                loc.typ = SDOOR;
+                loc.doormask = D_CLOSED;
+            } else {
+                loc.typ = SPECIAL_TERRAIN[ch] ?? STONE;
+            }
+        }
+    }
+
+    medusaSetLit(0, 0, 74, 19, true);
+    medusaSetLit(31, 7, 45, 7, false);
+    add_room(medusaX(35), medusaY(9), medusaX(41), medusaY(10), false, OROOM, true);
+    medusaSetLit(35, 9, 41, 10, false);
+    medusaSetLit(31, 12, 45, 12, false);
+    g.level.dndest = { lx: medusaX(1), ly: medusaY(1), hx: medusaX(5), hy: medusaY(17), nlx: 0, nly: 0, nhx: 0, nhy: 0 };
+    g.level.updest = { lx: medusaX(26), ly: medusaY(4), hx: medusaX(50), hy: medusaY(15), nlx: 0, nly: 0, nhx: 0, nhy: 0 };
+
+    mkstairs(medusaX(5), medusaY(14), true, null);
+    mkstairs(medusaX(36), medusaY(10), false, null);
+    medusaDoor('closed', 46, 7);
+    medusaDoor('locked', 38, 8);
+    medusaDoor('locked', 38, 11);
+    medusaDoor('closed', 30, 12);
+
+    for (let x = 30; x <= 46; x++)
+        for (let y = 6; y <= 13; y++) {
+            const loc = g.level.at(medusaX(x), medusaY(y));
+            if (loc) loc.wall_info = (loc.wall_info || 0) | W_NONDIGGABLE;
+        }
+
+    const perseus = mksobj_at(STATUE, medusaX(36), medusaY(10), true, false);
+    perseus.contents = [];
+    perseus.corpsenm = KNIGHT_MON;
+    perseus.spe = CORPSTAT_MALE | CORPSTAT_HISTORIC;
+    Object.assign(perseus, object_display(perseus));
+    if (rn2(100) < 75) {
+        medusa1DryLocation();
+        game._mkobj_armor_erosion = { primary: false, secondary: false };
+        const shield = mksobj(SHIELD_OF_REFLECTION, true, true);
+        Object.assign(shield, { cursed: true, blessed: false, spe: 0 });
+        add_to_container(perseus, shield);
+    }
+    if (rn2(100) < 25) {
+        medusa1DryLocation();
+        const boots = mksobj(LOW_BOOTS, true, true);
+        boots.spe = 0;
+        add_to_container(perseus, boots);
+    }
+    if (rn2(100) < 50) {
+        medusa1DryLocation();
+        const scimitar = mksobj(SCIMITAR, true, true);
+        Object.assign(scimitar, { blessed: true, cursed: false, spe: 2 });
+        add_to_container(perseus, scimitar);
+    }
+    if (rn2(100) < 50) {
+        medusa1DryLocation();
+        add_to_container(perseus, mksobj(SACK, true, true));
+    }
+
+    for (let i = 0; i < 7; i++) {
+        const pos = medusa1DryLocation();
+        await medusaRandomStatue(pos.x, pos.y);
+    }
+    for (let i = 0; i < 8; i++) {
+        const pos = medusa1DryLocation();
+        stack_floor_object(mkobj_at(RANDOM_CLASS, pos.x, pos.y, true));
+    }
+
+    for (let i = 0; i < 5; i++) {
+        const pos = medusa1DryLocation();
+        let kind;
+        do { kind = traptype_rnd(); } while (kind === NO_TRAP);
+        await maketrap(pos.x, pos.y, kind);
+        rnd(4);
+    }
+    await maketrap(medusaX(38), medusaY(7), SQKY_BOARD);
+    rnd(4);
+    await maketrap(medusaX(38), medusaY(12), SQKY_BOARD);
+    rnd(4);
+
+    await medusa1Monster(MEDUSA_MON, { x: 36, y: 10, asleep: true });
+    await medusa1Monster(GIANT_EEL, { x: 11, y: 6, findGender: true });
+    await medusa1Monster(GIANT_EEL, { x: 23, y: 13, findGender: true });
+    await medusa1Monster(GIANT_EEL, { x: 29, y: 2, findGender: true });
+    await medusa1Monster(JELLYFISH, { x: 2, y: 2, findGender: true });
+    await medusa1Monster(JELLYFISH, { x: 0, y: 8, findGender: true });
+    await medusa1Monster(JELLYFISH, { x: 4, y: 18, findGender: true });
+    await medusa1Monster(monsterByRndName('water troll'), { x: 51, y: 3, findGender: true });
+    await medusa1Monster(monsterByRndName('water troll'), { x: 64, y: 11, findGender: true });
+    await medusa1Monster(null, { x: 38, y: 7, classGlyph: 'S' });
+    await medusa1Monster(null, { x: 38, y: 12, classGlyph: 'S' });
+    for (let i = 0; i < 10; i++)
+        await medusa1Monster(null);
+
+    const flips = { flipVertical: !!rn2(2), flipHorizontal: !!rn2(2) };
+    if (flips.flipVertical || flips.flipHorizontal) {
+        flip_sokoban_layout({ x: MEDUSA_XSTART, y: MEDUSA_YSTART }, MEDUSA1_WIDTH, MEDUSA1_HEIGHT, flips);
+        medusaFlipRooms(flips, MEDUSA1_WIDTH, MEDUSA1_HEIGHT);
+    }
+    const branchRegion = medusaFlipRegion([medusaX(1), medusaY(0), medusaX(79), medusaY(20)],
+        flips, MEDUSA1_WIDTH, MEDUSA1_HEIGHT);
+    const branchExclude = medusaFlipRegion([medusaX(30), medusaY(6), medusaX(46), medusaY(13)],
+        flips, MEDUSA1_WIDTH, MEDUSA1_HEIGHT);
+    place_lregion(...branchRegion, ...branchExclude, LR_BRANCH, null);
+
+    const firstRoom = g.level.rooms[0];
+    for (let tryct = rnd(4); tryct; tryct--) {
+        medusaToptenStatue(somex(firstRoom), somey(firstRoom));
+    }
+    if (rn2(2)) {
+        medusaToptenStatue(somex(firstRoom), somey(firstRoom));
+    } else {
+        mkcorpstat(STATUE, null, null, somex(firstRoom), somey(firstRoom), 0);
+    }
+
+    wallification(MEDUSA_XSTART - 1, MEDUSA_YSTART - 1,
+        MEDUSA_XSTART + MEDUSA1_WIDTH, MEDUSA_YSTART + MEDUSA1_HEIGHT);
+    recount_level_features();
+    level_finalize_topology({ mineralizeLevel: false, mineralizeKelp: true });
+}
+
+function medusaLevelAlignForRndmonst() {
+    if (game._align_shift_oldmoves === (game.moves || 1)) {
+        if (game._align_shift_has_special) return game._align_shift_special_align ?? A_NONE;
+        return A_NONE;
+    }
+    return A_CHAOTIC;
+}
+
 async function make_medusa_level() {
     const g = game;
     if (await getbones()) return;
     g.in_mklev = true;
-    g._special_level_align = A_CHAOTIC;
+    g._special_level_align = medusaLevelAlignForRndmonst();
 
     clear_level_structures();
     g.level.flags.is_maze_lev = true;
     g.level.flags.noteleport = true;
     g.level.flags.shortsighted = true;
 
-    rnd(4);
+    const variant = rnd(4);
     rn2(3);
     rn2(2);
     rn2(2);
+    if (variant === 1) {
+        await make_medusa1_level();
+        return;
+    }
 
     for (let y = 0; y < MEDUSA3_ROWS.length; y++) {
         const row = MEDUSA3_ROWS[y];

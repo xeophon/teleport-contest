@@ -1680,6 +1680,26 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   `238/324`, and cursors `273/324`. The full public scorer remains `39/44`,
   and `seed4500-knight-coverage` still matches all visible screens with only
   its known RNG-only failure.
+- The Mine's End, Quest portal, and Medusa-1 follow-up closes the next Priest
+  route slice without adding route replay. Hostile monsters now consider useful
+  charged wands when choosing floor loot, Big Room variant 3 has its fixed C
+  map, monster sites, terrain replacement, and branch region, Quest portal
+  calls use the common `quest_portal` pager text when teleporting onto the
+  Quest branch entrance, and stale pending messages no longer keep blocking
+  time after the top line clears. Medusa-1 now has the Lua map, Perseus and
+  random petrified statues, random objects/traps/monsters, branch placement,
+  flip handling, topten statue fixup, eel hiding, and statue glyph/color
+  display needed by the public trace. A narrow C `align_shift()` cache mirror
+  chooses Medusa random-monster alignment based on whether the current move had
+  already cached a non-special level, which preserves the Priest same-move
+  level-teleport case while keeping the Knight Medusa guard on C's chaotic
+  special alignment. `seed0367-priest-quest-tour` now matches focused screens
+  239 and 243 exactly; full compare first differs at screen 252 on the next
+  special-level/map generation path after a positive level teleport, and the
+  public scorer reports RNG `33126/50125`, screens `255/324`, and cursors
+  `280/324` for that session. The full public score remains `39/44`, and the
+  `seed4500-knight-coverage` visible-screen guard still matches all `1814`
+  screens.
 
 Next concrete target:
 
@@ -1692,13 +1712,12 @@ Next concrete target:
   semantics, C special-level room/corridor/shop filling for `minetn-3.lua`, and
   full `eat.c`, `sp_lev.c`, `mkobj.c`, `makemon.c`, `uhitm.c`, and
   `dogmove.c` behavior.
-- For `seed0367`, the next narrow frontier is Mine's End monster movement
-  immediately after the first search on screen 231. Arrival, viewport, and the
-  pre-search map now match; the remaining visible drift is one gnome one column
-  left of C, with JS spending an extra `rnd(5)` in the movement/spell/combat
-  path after `choose_monster_spell()`. Compare C monster path tie-breaking,
-  peaceful/hostile action gating, and ranged/combat RNG around the Mine's End
-  turn tail rather than forcing positions.
+- For `seed0367`, the next narrow frontier is screen 252 after the positive
+  level teleport away from Medusa. JS and C now agree through the Quest portal
+  call and Medusa-1 arrival; the remaining visible drift is a newly generated
+  level-2/special-level map shape and hero placement. Compare C `mklev.c`,
+  `sp_lev.c`, and room/corridor generation ordering for that target level
+  before touching unrelated monster-turn behavior.
 - The Archeologist tour, exact-wand wish tails, healer scroll tail, tourist
   disaster path, and wizard quaff/zap/read option-help path are now closed;
   use them as regression guards for artifact wishing, restored-level Sokoban
