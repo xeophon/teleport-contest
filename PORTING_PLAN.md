@@ -1529,6 +1529,18 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   parity now also closes the earlier `seed0030` small-mimic branch, and
   `seed0007`, `seed0030`, `seed0361`, and `seed4500` all match their recorded
   visible screens.
+- The healer reflection/drummer path is back to full visible parity after a
+  real C timing/discovery cleanup. C runs the ready periodic `exerchk()` test
+  on the final movement slice of a capital run once `gm.multi` has dropped to
+  zero; JS now allows that final run-tail check instead of deferring it to the
+  next prompt, preventing the spurious strength gain at screen 454. Quaffing a
+  yellow potion of paralysis now also follows `dopotion()`/`makeknown()` more
+  closely by replacing the observed `potion (yellow)` discovery with the known
+  `potion of paralysis (yellow)` entry. `seed0002-healer-reflection-drummer`
+  now matches all `595/595` screens again, and focused guards `seed0007`,
+  `seed0014`, `seed0015`, `seed0030`, `seed0361`, and `seed4500` remain fully
+  matched for visible screens. The public scorer moves from the clean-HEAD
+  `30/44` baseline to `31/44` by recovering `seed0002`.
 
 Next concrete target:
 

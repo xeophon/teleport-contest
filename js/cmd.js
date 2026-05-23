@@ -13075,6 +13075,11 @@ function recordKnownPotionDiscovery(item, potionName) {
         || String(item?.kind || '').replace(/ potion$/, '');
     const text = appearance ? `${discoveryName} (${appearance})` : discoveryName;
     game._discoveries ??= [];
+    if (appearance) {
+        const observedText = `potion (${appearance})`;
+        game._discoveries = game._discoveries.filter(entry =>
+            !(entry.section === 'Potions' && entry.name === 'potion' && entry.text === observedText));
+    }
     const existing = game._discoveries.find(entry => entry.section === 'Potions' && entry.name === discoveryName);
     if (existing) {
         existing.text = text;
@@ -21840,17 +21845,7 @@ export async function rhack(_cmd) {
             const hasFreeAction = (game.inventory || []).some(invItem =>
                 invItem.worn && (invItem.actualKind === 'ring of free action' || invItem.ringRoll === 20));
             learnObjectScore('Potions', 'potion of paralysis');
-            game._discoveries ??= [];
-            if (!game._discoveries.some(entry => entry.section === 'Potions' && entry.name === 'potion of paralysis')) {
-                const appearance = game._object_descriptions?.potions?.[item.potionIndex]?.description
-                    || String(item.kind || '').replace(/ potion$/, '');
-                game._discoveries.push({
-                    section: 'Potions',
-                    name: 'potion of paralysis',
-                    text: appearance ? `potion of paralysis (${appearance})` : 'potion of paralysis',
-                    starred: false,
-                });
-            }
+            recordKnownPotionDiscovery(item, 'paralysis');
             if (hasFreeAction) {
                 await setMessage('You stiffen momentarily.');
                 game.context.move = 1;

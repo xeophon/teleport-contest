@@ -2146,7 +2146,8 @@ function processAttributeExercise() {
     game.context ??= {};
     game.context.next_attrib_check ??= 600;
     if (turn < game.context.next_attrib_check) return;
-    if (game._running_continuation || game._initial_run_command || (game._run_steps_remaining || 0) > 0)
+    if ((game._running_continuation || game._initial_run_command)
+        && (game._run_steps_remaining || 0) > 0)
         return;
     if (game._helpless_time || game._armor_wear_occupation || game._eating_turns_remaining
         || game._force_lock_occupation || game._pick_lock_occupation || game._tin_opening_occupation
