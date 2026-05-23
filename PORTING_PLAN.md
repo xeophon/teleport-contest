@@ -1910,6 +1910,13 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   `41/44`; remaining failures are `seed0360-wizard-world-tour`,
   `seed0373-barbarian-quest-tour`, and `seed0383-wizard-hallucinate`
   (screen-only, exact RNG).
+- Level-teleport arrival movement no longer has a JS-only very-fast boost for
+  Mines' End or Orcus arrivals; movement is reset in the C-shaped arrival path
+  and the plain materialization line can defer the next movement context
+  processing to the following command. Full `npm run score` remains `41/44`,
+  with the same three failing sessions. Focused `seed0360-wizard-world-tour`
+  advances to RNG `60574/120639`, screen `292/833`; focused
+  `seed0373-barbarian-quest-tour` advances to screen `60/124`.
 
 Next concrete target:
 

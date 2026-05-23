@@ -3167,6 +3167,7 @@ export async function finishLevelTeleport(targetLevel, options = {}) {
             : onBoulder
             ? 'You materialize on a different level!  You see here a boulder.'
             : 'You materialize on a different level!';
+        let arrivalStartsWithMaterialization = !options.suppressMaterialize;
         const questStartArrival = targetSpecial?.name === 'x-strt'
             && game.dungeons?.[fromLevel.dnum]?.name !== 'The Quest';
         let arrivalMore = lowerWizardTowerArrival
@@ -3240,9 +3241,12 @@ export async function finishLevelTeleport(targetLevel, options = {}) {
         if (options.arrivalMessage != null) {
             arrivalMessage = options.arrivalMessage;
             arrivalMore = !!options.arrivalMore;
+            arrivalStartsWithMaterialization = false;
         }
-        if (options.preMessage)
+        if (options.preMessage) {
             arrivalMessage = arrivalMessage ? `${options.preMessage}  ${arrivalMessage}` : options.preMessage;
+            arrivalStartsWithMaterialization = false;
+        }
         if (options.postMessage) {
             if (arrivalMore)
                 game._queued_message_after_more = game._queued_message_after_more
@@ -3289,22 +3293,30 @@ export async function finishLevelTeleport(targetLevel, options = {}) {
         }
         if (arrivalMore && tendedTemplePriest(arrivalRoomno))
             game._queued_priest_intone_after_more = arrivalRoomno;
+        game._pending_message_is_level_teleport_materialization = 0;
+        game._pending_message_is_level_teleport_temperature_arrival = 0;
         await setMessage(arrivalMessage, arrivalMore);
+        if (!arrivalMore && !game._message_more && arrivalStartsWithMaterialization) {
+            game._pending_message_is_level_teleport_materialization = 1;
+            if (postArrivalTemperatureMessage)
+                game._pending_message_is_level_teleport_temperature_arrival = 1;
+        }
+        if (!arrivalMore && postArrivalTemperatureMessage)
+            game._level_teleport_reset_movement_after_arrival = 1;
         resetMovementAfterArrival = arrivalMore && !lowerWizardTowerArrival;
     }
     const keepTowerMovement = !resetMovementAfterArrival
         && (targetSpecial?.name?.startsWith('tower') || lowerWizardTowerArrival)
         && (game.u?.umovement || 0) > NORMAL_SPEED;
-    if (game.u?.veryfast && (
-        targetSpecial?.name === 'minetn'
-        || targetSpecial?.name === 'orcus'
-    ))
-        game.u.umovement = NORMAL_SPEED * 2;
-    else if (!keepTowerMovement && !preserveMovement)
+    const resetLevelTeleportMovementAfterArrival = !!game._level_teleport_reset_movement_after_arrival;
+    game._level_teleport_reset_movement_after_arrival = 0;
+    if (!keepTowerMovement && (!preserveMovement || resetLevelTeleportMovementAfterArrival))
         game.u.umovement = NORMAL_SPEED;
     game._ignore_safe_wait_once = 1;
     if (questLevelKind(targetLevel) === 'start')
         game._skip_periodic_exercise_once = 1;
+    if (game._pending_message_is_level_teleport_materialization)
+        game._level_teleport_arrival_process_next_move = 1;
     return true;
 }
 const ARMOR_AC_BONUS = {
@@ -17882,6 +17894,10 @@ export async function rhack(_cmd) {
     game._forced_search_this_turn = 0;
     if (ch !== 's') game._search_safety_warning_active = 0;
     if (ch !== '.') game._safe_wait_repeat_suppressed = 0;
+    const processLevelTeleportArrivalMoveNow = !!game._level_teleport_arrival_process_next_move;
+    game._level_teleport_arrival_process_next_move = 0;
+    if (processLevelTeleportArrivalMoveNow && movementDirection(ch))
+        game._process_deferred_context_now = 1;
     const requestMenuPrefix = !!game._request_menu_prefix && ch !== 'm';
     if (ch !== 'm') game._request_menu_prefix = 0;
     const role = game.urole?.name?.m;
@@ -17911,6 +17927,8 @@ export async function rhack(_cmd) {
         game._pending_message_blocks_time = 0;
         game._pending_explore_lifesaving_message = 0;
         game._pending_message_is_search_safety_warning = 0;
+        game._pending_message_is_level_teleport_materialization = 0;
+        game._pending_message_is_level_teleport_temperature_arrival = 0;
         game._pending_rotten_food_eating_message = 0;
         game._keep_pending_message = 0;
         game._hide_pending_message_once = 0;
@@ -17936,6 +17954,8 @@ export async function rhack(_cmd) {
         && game._pending_message && !game._message_more
         && !/^[1-9]$/.test(ch) && !preservePendingForKey) {
         const clearedPendingMessage = game._pending_message;
+        const clearedLevelTeleportMaterialization = !!game._pending_message_is_level_teleport_materialization;
+        const clearedLevelTeleportTemperatureArrival = !!game._pending_message_is_level_teleport_temperature_arrival;
         if (game._deferred_gold_count_after_message != null) {
             game._goldCount = game._deferred_gold_count_after_message;
             game._deferred_gold_count_after_message = null;
@@ -17949,6 +17969,8 @@ export async function rhack(_cmd) {
         game._pending_message_blocks_time = 0;
         game._pending_explore_lifesaving_message = 0;
         game._pending_message_is_search_safety_warning = 0;
+        game._pending_message_is_level_teleport_materialization = 0;
+        game._pending_message_is_level_teleport_temperature_arrival = 0;
         game._clear_search_safety_message_next_flush = 0;
         game._pending_rotten_food_eating_message = 0;
         game._keep_pending_message = 0;
@@ -17965,7 +17987,9 @@ export async function rhack(_cmd) {
             game._safe_wait_repeat_suppressed = 1;
             return;
         }
-        if (ch === '.' && /^You materialize on a different level!  (?:The heat .* gone|You are out of the cold\.)/.test(String(clearedPendingMessage)))
+        if (clearedLevelTeleportMaterialization && movementDirection(ch))
+            game._process_deferred_context_now = 1;
+        if (ch === '.' && clearedLevelTeleportTemperatureArrival)
             return;
     }
 
