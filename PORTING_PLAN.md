@@ -1889,6 +1889,18 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   scripted bridge; the durable cleanup is to move these attack profiles and
   More-boundary side effects into the generic `mattacku()`/`hitmu()` path and
   then delete the Sanctum-only combat phases.
+- Knight quest goal generation is now a real special-level builder rather than
+  a post-teleport display scaffold. The port registers Knight `x-goal`, loads
+  the `Kni-goal.lua` map layout, places Ixoth, the Magic Mirror of Merlin,
+  fixed/random objects, traps, quasits, jellies, class monsters, flip-level
+  rolls, and kelp finalization in C/Lua order. Level followers also now carry
+  the C `M2_STALK` semantics, so the adjacent Olog-hai arrives through the
+  normal `mon_arrive()`/`collect_coords()` RNG path instead of being fabricated
+  on the destination level. Focused `seed4500-knight-coverage` is fully closed:
+  RNG `108275/108275`, screens/cursors `1814/1814`. Full `npm run score` is now
+  `40/44`; remaining failures are `seed0030-ten-diverse-deaths` (screen-only),
+  `seed0360-wizard-world-tour`, `seed0373-barbarian-quest-tour`, and
+  `seed0383-wizard-hallucinate` (screen-only).
 
 Next concrete target:
 
@@ -1901,9 +1913,10 @@ Next concrete target:
   semantics, C special-level room/corridor/shop filling for `minetn-3.lua`, and
   full `eat.c`, `sp_lev.c`, `mkobj.c`, `makemon.c`, `uhitm.c`, and
   `dogmove.c` behavior.
-- `seed0367-priest-quest-tour` is closed and should stay in the focused guard
-  set for Priest quest generation, Vlad tower generation, observed discovery
-  accounting, Sokoban random-object display, and enlightenment wording.
+- `seed0367-priest-quest-tour` and `seed4500-knight-coverage` are closed and
+  should stay in the focused guard set for Priest/Knight quest generation,
+  Vlad tower generation, observed discovery accounting, Sokoban random-object
+  display, level-follower arrival, and enlightenment wording.
 - The Archeologist tour, exact-wand wish tails, healer scroll tail, tourist
   disaster path, and wizard quaff/zap/read option-help path are now closed;
   use them as regression guards for artifact wishing, restored-level Sokoban
@@ -1923,14 +1936,6 @@ Next concrete target:
   food mechanics: C has processed the carrot-eating turn RNG but has not
   redrawn the time field yet. Avoid changing turn accounting to make that
   screen pass; model when the bottom line is refreshed.
-- For `seed4500-knight-coverage`, the visible path remains closed
-  (`1814/1814` screens), but PRNG is still short of exact. The current first
-  flat prefix mismatch appears at global RNG 107403 on step 1785 (`k`): after
-  the C-shaped summon and turn-tail exercise/hunger ordering, C processes real
-  hero and monster attack RNG while JS still uses the hard-coded
-  `afterSummon`/`silverMore`/death-prompt script. Continue by replacing that
-  script with real `uhitm.c`/`mhitu.c` attack ordering, preserving the already
-  closed visible screens.
 - Use `sessions/*.session.json` to locate divergences, but keep fixes in real
   mechanics. A score recovery is only valid when it falls out of those
   mechanics.

@@ -504,6 +504,23 @@ const WANDERER_MONSTERS = new Set([
     'Keystone Kop', 'Kop Sergeant', 'Kop Lieutenant', 'Kop Kaptain',
     'ghoul', 'skeleton', 'shade',
 ]);
+export const STALKER_MONSTERS = new Set([
+    'gremlin', 'manes', 'homunculus', 'imp', 'lemure', 'quasit', 'tengu',
+    'lurker above', 'trapper', 'couatl', 'Aleax', 'Angel', 'ki-rin', 'Archon',
+    'stalker', 'troll', 'ice troll', 'rock troll', 'water troll', 'Olog-hai',
+    'vampire', 'vampire mage', 'Vlad the Impaler', 'barrow wight', 'wraith',
+    'Nazgul', 'kobold zombie', 'gnome zombie', 'orc zombie', 'dwarf zombie',
+    'elf zombie', 'human zombie', 'ettin zombie', 'giant zombie',
+    'soldier', 'sergeant', 'lieutenant', 'captain', 'watchman', 'watch captain',
+    'Croesus', 'ghost', 'shade', 'water demon', 'horned devil', 'erinys',
+    'barbed devil', 'marilith', 'vrock', 'hezrou', 'bone devil', 'ice devil',
+    'nalfeshnee', 'pit fiend', 'sandestin', 'balrog', 'Juiblex', 'Yeenoghu',
+    'Orcus', 'Geryon', 'Dispater', 'Baalzebub', 'Asmodeus', 'Demogorgon',
+    'Death', 'Pestilence', 'Famine', 'mail daemon', 'djinni', 'salamander',
+    'Minion of Huhetotl', 'Thoth Amon', 'Chromatic Dragon', 'Goblin King',
+    'Cyclops', 'Ixoth', 'Master Kaen', 'Nalzok', 'Scorpius',
+    'Master Assassin', 'Ashikaga Takauji', 'Lord Surtur', 'Dark One',
+]);
 const ANIMAL_GLYPHS = new Set(['a', 'B', 'c', 'd', 'f', 'q', 'r', 's', 'u', 'x', 'Y']);
 const TUNNEL_MONSTERS = new Set(['dwarf', 'dwarf leader', 'dwarf ruler', 'rock mole', 'umber hulk']);
 const NEED_PICK_MONSTERS = new Set(['dwarf', 'dwarf leader', 'dwarf ruler']);
@@ -773,6 +790,7 @@ const MINION_OF_HUHETOTL = { name: 'Minion of Huhetotl', mlet: '&', glyph: '&', 
 const ARCH_PRIEST = { name: 'Arch Priest', mlet: '@', glyph: '@', color: CLR_WHITE, mlevel: 25, hpLevel: 24, difficulty: 30, mmove: 15, maligntyp: 0, male: true, strong: true, armed: true, priest: true, randomInventory: true, alwaysPeaceful: true, magic: true, waiting: true };
 const ACOLYTE = { name: 'acolyte', mlet: '@', glyph: '@', color: CLR_WHITE, mlevel: 5, hpLevel: 7, difficulty: 8, mmove: 12, maligntyp: 0, strong: true, armed: true, spellcaster: true, guardian: true, randomInventory: true, alwaysPeaceful: true };
 const NALZOK = { name: 'Nalzok', mlet: '&', glyph: '&', color: CLR_ORANGE, mlevel: 16, hpLevel: 17, difficulty: 23, mmove: 12, mac: -2, maligntyp: -127, male: true, demon: true, inAir: true, seeInvisible: true, strong: true, nasty: true, armed: true, randomInventory: true, alwaysHostile: true, waiting: true, nemesis: true, noCorpse: true };
+const IXOTH = { name: 'Ixoth', mlet: 'D', glyph: 'D', color: CLR_RED, mlevel: 15, hpLevel: 15, difficulty: 22, mmove: 12, maligntyp: -14, male: true, strong: true, nasty: true, nohands: true, seeInvisible: true, resistsFire: true, alwaysHostile: true, waiting: true, nemesis: true, likesGold: true, likesGems: true, likesMagic: true };
 
 const SOKOBAN_ZOO_MONSTERS = [
     { name: 'giant ant', weight: 3, mlevel: 2, hpLevel: 3, mlet: 'a', glyph: 'a', color: 3, neuter: false, smallGroup: true, oviparous: true },
@@ -2905,6 +2923,11 @@ const QUEST_LEVEL_BUILDERS = {
             return make_arc_fill_level(level < 3 ? ARC_FILL_A_ROOMS : ARC_FILL_B_ROOMS);
         },
     },
+    Knight: {
+        special: {
+            'x-goal': make_kni_goal_level,
+        },
+    },
     Wizard: {
         special: {
             'x-strt': make_wiz_strt_level,
@@ -2921,6 +2944,39 @@ const QUEST_LEVEL_BUILDERS = {
         },
     },
 };
+const KNI_GOAL_ROWS = [
+    '....PPPP..PPP..                                                             ',
+    '.PPPPP...PP..     ..........     .................................          ',
+    '..PPPPP...P..    ...........    ...................................         ',
+    '..PPP.......   ...........    ......................................        ',
+    '...PPP.......    .........     ...............   .....................      ',
+    '...........    ............    ............     ......................      ',
+    '............   .............      .......     .....................         ',
+    '..............................            .........................         ',
+    '...............................   ..................................        ',
+    '.............................    ....................................       ',
+    '.........    ......................................................         ',
+    '.....PP...    .....................................................         ',
+    '.....PPP....    ....................................................        ',
+    '......PPP....   ..............   ....................................       ',
+    '.......PPP....  .............    .....................................      ',
+    '........PP...    ............    ......................................     ',
+    '...PPP........     ..........     ..................................        ',
+    '..PPPPP........     ..........     ..............................           ',
+    '....PPPPP......       .........     ..........................              ',
+    '.......PPPP...                                                              ',
+];
+const KNI_GOAL_XSTART = 3;
+const KNI_GOAL_YSTART = 1;
+const KNI_GOAL_WIDTH = KNI_GOAL_ROWS[0].length;
+const KNI_GOAL_HEIGHT = KNI_GOAL_ROWS.length;
+const KNI_GOAL_FIXED_OBJECTS = [
+    [33, 1], [33, 2], [33, 3], [33, 4], [33, 5],
+    [34, 1], [34, 2], [34, 3], [34, 4], [34, 5],
+    [35, 1], [35, 2], [35, 3], [35, 4], [35, 5],
+];
+const KNI_GOAL_FIXED_TRAPS = [[13, 7], [12, 8], [12, 9]];
+
 const ARC_GOAL_ROWS = [
     '                                                                            ',
     '                                  ---------                                 ',
@@ -4539,6 +4595,7 @@ function monsterFromRndMeta(row) {
         covetous: name === 'Vlad the Impaler' || name === 'master lich' || name === 'arch-lich',
         hidesUnder: HIDES_UNDER_MONSTERS.has(name),
         wanderer: WANDERER_MONSTERS.has(name),
+        stalk: STALKER_MONSTERS.has(name),
         alwaysHostile: flags.includes('X') || glyph === 'V' || name === 'vampire leader',
         alwaysPeaceful: flags.includes('P'),
         resistsFire: FIRE_RESISTANT_MONSTERS.has(name),
@@ -4791,6 +4848,7 @@ function specialMonsterByName(name) {
     if (name === 'kraken') return KRAKEN;
     if (name === 'jellyfish') return JELLYFISH;
     if (name === 'shark') return SHARK;
+    if (name === 'Ixoth') return IXOTH;
     return null;
 }
 
@@ -7545,6 +7603,210 @@ async function make_pri_goal_level() {
     flipSpecialLevelRnd(1, 0, COLNO - 1, ROWNO - 1, true);
     recount_level_features();
     level_finalize_topology({ mineralizeLevel: false });
+    g.in_mklev = false;
+}
+
+function kniGoalX(x) { return KNI_GOAL_XSTART + x; }
+function kniGoalY(y) { return KNI_GOAL_YSTART + y; }
+
+function kniGoalClearLocation(loc, typ, lit = false) {
+    if (!loc) return;
+    loc.typ = typ;
+    loc.flags = 0;
+    loc.roomno = 0;
+    loc.edge = 0;
+    loc.doormask = D_NODOOR;
+    loc.horizontal = false;
+    loc.lit = !!lit;
+    loc.waslit = false;
+    loc.wall_info = 0;
+    loc.seenv = 0;
+    loc.lastseentyp = null;
+    loc.lastseendoormask = null;
+    loc.lastseenwall_info = null;
+    loc.remembered_glyph = null;
+}
+
+function kniGoalSetLit(lx, ly, hx, hy, lit, grow = false) {
+    const x1 = Math.max(0, kniGoalX(lx) - (grow ? 1 : 0));
+    const y1 = Math.max(0, kniGoalY(ly) - (grow ? 1 : 0));
+    const x2 = Math.min(COLNO - 1, kniGoalX(hx) + (grow ? 1 : 0));
+    const y2 = Math.min(ROWNO - 1, kniGoalY(hy) + (grow ? 1 : 0));
+    for (let x = x1; x <= x2; x++)
+        for (let y = y1; y <= y2; y++) {
+            const loc = game.level?.at(x, y);
+            if (loc) loc.lit = !!lit || loc.typ === LAVAPOOL;
+        }
+}
+
+function kniGoalSetNondiggable(lx, ly, hx, hy) {
+    for (let x = kniGoalX(lx); x <= kniGoalX(hx); x++)
+        for (let y = kniGoalY(ly); y <= kniGoalY(hy); y++) {
+            const loc = game.level?.at(x, y);
+            if (loc && (IS_STWALL(loc.typ) || loc.typ === TREE || loc.typ === IRONBARS))
+                loc.wall_info = (loc.wall_info || 0) | W_NONDIGGABLE;
+        }
+}
+
+function kniGoalLoadMap() {
+    const g = game;
+    const solidLit = rn2(2);
+    for (let x = 2; x <= COLNO - 2; x++)
+        for (let y = 0; y < ROWNO; y++)
+            kniGoalClearLocation(g.level.at(x, y), STONE, solidLit);
+
+    g.level.flags.is_maze_lev = true;
+    g.level._object_list_col = 40;
+
+    for (let y = 0; y < KNI_GOAL_ROWS.length; y++) {
+        const row = KNI_GOAL_ROWS[y];
+        for (let x = 0; x < row.length; x++) {
+            const ch = row[x];
+            const loc = g.level.at(kniGoalX(x), kniGoalY(y));
+            kniGoalClearLocation(loc, SPECIAL_TERRAIN[ch] ?? STONE, false);
+        }
+    }
+
+    kniGoalSetLit(0, 0, 14, 19, true, true);
+    kniGoalSetLit(15, 0, 75, 19, false, false);
+    mkstairs(kniGoalX(3), kniGoalY(8), true, null);
+    kniGoalSetNondiggable(0, 0, 75, 19);
+}
+
+function kniGoalDryLocationOkay(x, y) {
+    const loc = game.level?.at(x, y);
+    if (!loc || !SPACE_POS(loc.typ)) return false;
+    return !(game.level?.objects || []).some(obj => obj.otyp === BOULDER && obj.ox === x && obj.oy === y);
+}
+
+function kniGoalRandomDryLocation({ rejectStairs = false } = {}) {
+    for (let tryct = 0; tryct < 100; tryct++) {
+        const x = kniGoalX(rn2(KNI_GOAL_WIDTH));
+        const y = kniGoalY(rn2(KNI_GOAL_HEIGHT));
+        const loc = game.level?.at(x, y);
+        if (!kniGoalDryLocationOkay(x, y)) continue;
+        if (rejectStairs && loc?.typ === STAIRS) continue;
+        return { x, y };
+    }
+    for (let x = 0; x < KNI_GOAL_WIDTH; x++)
+        for (let y = 0; y < KNI_GOAL_HEIGHT; y++) {
+            const ax = kniGoalX(x), ay = kniGoalY(y);
+            const loc = game.level?.at(ax, ay);
+            if (kniGoalDryLocationOkay(ax, ay) && (!rejectStairs || loc?.typ !== STAIRS))
+                return { x: ax, y: ay };
+        }
+    return { x: kniGoalX(0), y: kniGoalY(0) };
+}
+
+function kniGoalArtifactMirror() {
+    const def = artifactDefinitionForName('The Magic Mirror of Merlin');
+    const mirror = mksobj_at(MIRROR, kniGoalX(50), kniGoalY(6), true, false);
+    if (def) applyArtifactFields(mirror, def);
+    Object.assign(mirror, {
+        spe: 0,
+        blessed: true,
+        cursed: false,
+        cls: 'tool',
+        actualKind: 'mirror',
+    }, object_display(mirror));
+    return mirror;
+}
+
+function kniGoalObject(x = null, y = null) {
+    const loc = x == null ? kniGoalRandomDryLocation() : { x: kniGoalX(x), y: kniGoalY(y) };
+    return mkobj_at(RANDOM_CLASS, loc.x, loc.y, true);
+}
+
+function kniGoalMaybeTrapVictim(trap) {
+    const kind = trap?.ttyp ?? NO_TRAP;
+    const lvl = level_difficulty();
+    if (game.in_mklev && kind !== NO_TRAP
+        && lvl <= rnd(4)
+        && kind !== SQKY_BOARD && kind !== RUST_TRAP
+        && !(kind === ROLLING_BOULDER_TRAP && trap.launch?.x === trap.tx && trap.launch?.y === trap.ty)
+        && !is_pit(kind) && (kind < HOLE || kind === MAGIC_TRAP)) {
+        if (kind === LANDMINE) {
+            trap.ttyp = PIT;
+            trap.tseen = true;
+        }
+        mktrap_victim(trap);
+    }
+}
+
+async function kniGoalTrap(kind = null, x = null, y = null) {
+    let loc;
+    do {
+        loc = x == null ? kniGoalRandomDryLocation({ rejectStairs: true }) : { x: kniGoalX(x), y: kniGoalY(y) };
+    } while (x == null && game.level?.at(loc.x, loc.y)?.typ === STAIRS);
+
+    let trapKind = kind;
+    if (trapKind == null) {
+        do { trapKind = traptype_rnd(); } while (trapKind === NO_TRAP);
+        const dungeon = game.dungeons?.[game.u?.uz?.dnum ?? 0];
+        const canFallThru = (game.u?.uz?.dlevel ?? 1) < (dungeon?.num_dunlevs ?? 1);
+        if (is_hole(trapKind) && !canFallThru) trapKind = ROCKTRAP;
+    }
+
+    const trap = await maketrap(loc.x, loc.y, trapKind);
+    if (trap?.ttyp === WEB) await makemon(monsterByRndName('giant spider'), loc.x, loc.y, 0);
+    kniGoalMaybeTrapVictim(trap);
+    return trap;
+}
+
+async function kniGoalMonster(ptr, { x = null, y = null, consumeFindGender = false, alreadyAligned = false } = {}) {
+    if (!ptr) return null;
+    const forcedFemale = consumeFindGender ? rn2(2) : null;
+    if (!alreadyAligned) arcInducedAlign();
+    let loc = x == null ? kniGoalRandomDryLocation() : { x: kniGoalX(x), y: kniGoalY(y) };
+    if (game.level?.monsters?.some(mon => mon.mx === loc.x && mon.my === loc.y)) {
+        const spot = enextoMonsterSpot(loc.x, loc.y, ptr);
+        if (!spot) return null;
+        loc = spot;
+    }
+    const mon = await makemon(ptr, loc.x, loc.y, 0);
+    if (mon) {
+        if (forcedFemale != null) mon.female = forcedFemale;
+        mon.mpeaceful = 0;
+        set_malign(mon);
+    }
+    return mon;
+}
+
+async function kniGoalClassMonster(glyph) {
+    arcInducedAlign();
+    const ptr = mkclassAligned(glyph);
+    if (!ptr) return null;
+    return kniGoalMonster(ptr, { alreadyAligned: true });
+}
+
+async function make_kni_goal_level() {
+    const g = game;
+    if (await getbones()) return;
+    g.in_mklev = true;
+
+    oinit();
+    clear_level_structures();
+
+    l_nhcore_init();
+    kniGoalLoadMap();
+
+    kniGoalArtifactMirror();
+    for (const [x, y] of KNI_GOAL_FIXED_OBJECTS) kniGoalObject(x, y);
+    for (let i = 0; i < 6; i++) kniGoalObject();
+
+    for (const [x, y] of KNI_GOAL_FIXED_TRAPS) await kniGoalTrap(SPIKED_PIT, x, y);
+    for (let i = 0; i < 5; i++) await kniGoalTrap();
+
+    await kniGoalMonster(IXOTH, { x: 50, y: 6 });
+    for (let i = 0; i < 16; i++) await kniGoalMonster(monsterByRndName('quasit'), { consumeFindGender: true });
+    for (let i = 0; i < 2; i++) await kniGoalClassMonster('i');
+    for (let i = 0; i < 8; i++) await kniGoalMonster(monsterByRndName('ochre jelly'), { consumeFindGender: true });
+    await kniGoalClassMonster('j');
+
+    wallification(1, 0, COLNO - 1, ROWNO - 1);
+    flipSpecialLevelRnd();
+    recount_level_features();
+    level_finalize_topology({ mineralizeLevel: false, mineralizeKelp: true });
     g.in_mklev = false;
 }
 
