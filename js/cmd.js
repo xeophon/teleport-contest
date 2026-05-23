@@ -2450,6 +2450,32 @@ function levelTeleportMenuTarget(ch, page2 = false) {
     return entries[index]?.level;
 }
 
+function monsterHasAmuletOfYendor(mon) {
+    return (mon?.minvent || []).some(item =>
+        item.realAmuletOfYendor
+        || String(item.actualKind || item.kind || '').toLowerCase() === 'amulet of yendor');
+}
+
+function followsHeroAcrossLevels(mon) {
+    if (!mon) return false;
+    if (mon.pet || mon.mtame) return true;
+    if (mon.iswiz) return !monsterHasAmuletOfYendor(mon);
+    if (mon.isshk || mon.data?.shopkeeper) return true;
+    if (mon.data?.mercenary || mon.data?.stalk || mon.data?.name === 'stalker')
+        return !mon.mflee || heroHasAmuletOfYendor();
+    return false;
+}
+
+function levelChangeFollowerNearHero(mon) {
+    if (!followsHeroAcrossLevels(mon)) return false;
+    const dx = (mon.mx || 0) - (game.u?.ux || 0);
+    const dy = (mon.my || 0) - (game.u?.uy || 0);
+    if (dx * dx + dy * dy >= 3) return false;
+    if (mon.msleeping || mon.mfrozen || mon.mcanmove === false) return false;
+    if (mon.waiting || mon.mstrategy === 'waitforu') return false;
+    return true;
+}
+
 function placeFollowerAfterLevelChange(follower, first = false) {
     if (!follower) return;
     const nextToHero = rn2(follower.mtame ? 10 : follower.mpeaceful ? 5 : 2);
@@ -2688,8 +2714,7 @@ export async function finishLevelTeleport(targetLevel, options = {}) {
     const wasInWizardTower = !!game.level?.flags?.wizard_tower_level && !!towerBounds
         && game.u.ux >= towerBounds.lx && game.u.ux <= towerBounds.hx
         && game.u.uy >= towerBounds.ly && game.u.uy <= towerBounds.hy;
-    const carriedPet = game.level?.monsters?.find(mon => (mon.pet || mon.mtame)
-        && (mon.mx - game.u.ux) ** 2 + (mon.my - game.u.uy) ** 2 < 3);
+    const carriedPet = game.level?.monsters?.find(levelChangeFollowerNearHero);
     const ballAndChain = [game.u?.uball, game.u?.uchain].filter(Boolean);
     removeCarriedPunishmentObjects(ballAndChain);
     rememberObjectsAtHero();
@@ -3115,13 +3140,12 @@ export async function finishLevelTeleport(targetLevel, options = {}) {
         await setMessage(arrivalMessage, arrivalMore);
         resetMovementAfterArrival = arrivalMore && !lowerWizardTowerArrival;
     }
-    const minend = specialLevel('minend');
     const keepTowerMovement = !resetMovementAfterArrival
         && (targetSpecial?.name?.startsWith('tower') || lowerWizardTowerArrival)
         && (game.u?.umovement || 0) > NORMAL_SPEED;
     if (game.u?.veryfast && (
-        targetSpecial?.name === 'orcus'
-        || (minend && minend.dnum === targetLevel.dnum && minend.dlevel === targetLevel.dlevel)
+        targetSpecial?.name === 'minetn'
+        || targetSpecial?.name === 'orcus'
     ))
         game.u.umovement = NORMAL_SPEED * 2;
     else if (!keepTowerMovement)

@@ -1665,6 +1665,21 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   and retains only its known RNG-only failure after restoring C special-level
   `G_NOGEN` class-monster handling for Valley `Z` rolls and C role-level
   intrinsic speed thresholds for slow-down messaging.
+- The follow-up Priest slice closes the locate-level arrival and adds the
+  Priest quest goal builder. Pri-loca morgue door metadata and `fill_zoo()`
+  door-edge eligibility now match the C room layout, and blind telepathy
+  display renders raw sensed monsters through the warning/blanking path
+  instead of hiding them behind ordinary visibility. `Pri-goal.lua` now has a
+  C-shaped lava cavern builder with the Mitre of Holiness placement, Nalzok,
+  zombies/wraiths, object/trap placement, partial `mkmap` smoothing, and
+  always-lit lava memory. Level-change followers now include nearby C-like
+  level followers, and the speed-turn tail keeps the Minetown very-fast
+  movement quantum while letting Mine's End spend movement immediately after
+  arrival. This closes focused `seed0367-priest-quest-tour` screens 203, 209,
+  224, 229, and 230; focused metrics improve to RNG `20235/50125`, screens
+  `238/324`, and cursors `273/324`. The full public scorer remains `39/44`,
+  and `seed4500-knight-coverage` still matches all visible screens with only
+  its known RNG-only failure.
 
 Next concrete target:
 
@@ -1677,14 +1692,13 @@ Next concrete target:
   semantics, C special-level room/corridor/shop filling for `minetn-3.lua`, and
   full `eat.c`, `sp_lev.c`, `mkobj.c`, `makemon.c`, `uhitm.c`, and
   `dogmove.c` behavior.
-- For `seed0367`, the next narrow frontier is Priest locate morgue/grave
-  filling and the random landing/viewport on screen 203. Compare C `mkroom.c`
-  `fill_zoo(MORGUE)`, `make_grave()`, trap occupancy, and overlapping special
-  regions for Pri-loca around the first late drift (`rn2(24075)` vs the next
-  C `morguemon()` roll). Avoid forcing the arrival coordinates; the assignment
-  turn and most locate-level generation are now close enough that the remaining
-  mismatch should come from room topology, trap/grave eligibility, or fill
-  iteration semantics.
+- For `seed0367`, the next narrow frontier is Mine's End monster movement
+  immediately after the first search on screen 231. Arrival, viewport, and the
+  pre-search map now match; the remaining visible drift is one gnome one column
+  left of C, with JS spending an extra `rnd(5)` in the movement/spell/combat
+  path after `choose_monster_spell()`. Compare C monster path tie-breaking,
+  peaceful/hostile action gating, and ranged/combat RNG around the Mine's End
+  turn tail rather than forcing positions.
 - The Archeologist tour, exact-wand wish tails, healer scroll tail, tourist
   disaster path, and wizard quaff/zap/read option-help path are now closed;
   use them as regression guards for artifact wishing, restored-level Sokoban
