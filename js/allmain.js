@@ -4430,15 +4430,17 @@ async function processMonsterTurns() {
                                 }
                                 const onlineHero = oldx === heroX || oldy === heroY
                                     || Math.abs(oldx - heroX) === Math.abs(oldy - heroY);
-                            if (((!(mon.robbed || mon.billct || mon.debit)) || avoid)
-                                && (oldx - goalX) ** 2 + (oldy - goalY) ** 2 < 3) {
-                                const farLineOnly = satdoor && !avoid && oldy === heroY
-                                    && !(mon.robbed || mon.billct || mon.debit)
-                                    && (oldx - heroX) ** 2 + (oldy - heroY) ** 2 > 8;
-                                if (!onlineHero || farLineOnly) {
-                                    rn2(5);
-                                    continue;
-                                }
+                                if (((!(mon.robbed || mon.billct || mon.debit)) || avoid)
+                                    && (oldx - goalX) ** 2 + (oldy - goalY) ** 2 < 3) {
+                                    const farLineOnly = satdoor && !avoid && oldy === heroY
+                                        && !(mon.robbed || mon.billct || mon.debit)
+                                        && (oldx - heroX) ** 2 + (oldy - heroY) ** 2 > 8;
+                                    const autoTravelFarLine = farLineOnly
+                                        && (game._travel_keys?.length || game._travel_finish_message || game._travel_keep_message);
+                                    if (!onlineHero || autoTravelFarLine) {
+                                        rn2(5);
+                                        continue;
+                                    }
                                     if (satdoor) {
                                         appr = 0;
                                         goalX = 0;
@@ -9738,9 +9740,12 @@ export async function moveloop_core() {
         g._keep_pending_message = 1;
     }
     if (g._travel_finish_message && !(g._travel_keys?.length)) {
-        await pline(g._travel_finish_message);
+        const message = g._travel_finish_message;
         g._travel_finish_message = '';
-        g._keep_pending_message = 1;
+        if (!g._pending_message && !g._message_more) {
+            await pline(message);
+            g._keep_pending_message = 1;
+        }
     }
     if (g._prayer_energy_before_time != null && !g._pending_time_passed) {
         const energy = Math.min(g.u?.uenmax ?? Infinity, g._prayer_energy_before_time + 1);
@@ -9944,7 +9949,11 @@ export async function moveloop_core() {
     const combinedRunFumbleNoise = g._last_fumble_from_run && !g._message_more
         && g._last_fumble_turn_message
         && (g._pending_message || '').startsWith(`${g._last_fumble_turn_message}  You hear some noises`);
-    if (combinedRunFumbleNoise) {
+    const combinedRunFumbleMessage = g._last_fumble_from_run && !g._message_more
+        && g._last_fumble_turn_message
+        && g._pending_message !== g._last_fumble_turn_message
+        && (g._pending_message || '').includes(g._last_fumble_turn_message);
+    if (combinedRunFumbleNoise || combinedRunFumbleMessage) {
         g._last_fumble_turn_message = '';
         g._last_fumble_from_run = 0;
         g._last_fumble_keep_flushes = 0;

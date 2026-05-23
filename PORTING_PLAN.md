@@ -1518,6 +1518,17 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   lifetime case. Focused guards remain stable: `seed0007`, `seed0361`, and
   `seed4500` match all visible screens, while `seed0030` is unchanged at the
   known small-mimic hit/miss frontier.
+- The follow-up `seed0014` fumble slice closes the recorded Dequa fountain path:
+  `714/714` screens now match. The C-critical change is peaceful shopkeeper
+  satdoor movement: far lined-up shopkeepers now enter the `move_special()`
+  candidate RNG path for normal movement and running, while retaining the
+  previous far-line shortcut only during active JS auto-travel to avoid
+  perturbing the known travel scheduler guard. Travel-finish labels no longer
+  overwrite a later fumble topline, and run-fumble sticky state is cleared once
+  a different deferred or combined topline has already displayed it. Focused
+  parity now also closes the earlier `seed0030` small-mimic branch, and
+  `seed0007`, `seed0030`, `seed0361`, and `seed4500` all match their recorded
+  visible screens.
 
 Next concrete target:
 

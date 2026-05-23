@@ -19299,12 +19299,20 @@ export async function rhack(_cmd) {
 	                    const toplineFumbleMessageRoll = game._topline_after_more_fumble_message_roll || 0;
 	                    let toplineAfterMore = game._topline_after_more;
 	                    const pendingPetMiss = pendingBeforeTopline.match(/(The [^.]+ misses the [^.]+\.)$/);
-	                    if (game._pet_message_resume?.kind === 'miss' && pendingPetMiss?.[1] === toplineAfterMore) {
-	                        toplineAfterMore = `${pendingPetMiss[1]}  ${toplineAfterMore}`;
-	                        game._resume_time_after_more = 0;
-	                    }
-					                game._pending_message = toplineAfterMore;
-					                game._topline_after_more = '';
+		                    if (game._pet_message_resume?.kind === 'miss' && pendingPetMiss?.[1] === toplineAfterMore) {
+		                        toplineAfterMore = `${pendingPetMiss[1]}  ${toplineAfterMore}`;
+		                        game._resume_time_after_more = 0;
+		                    }
+                    if (game._last_fumble_from_run && game._last_fumble_turn_message
+                        && toplineAfterMore && !toplineHadFumbleTurnMessage
+                        && toplineAfterMore !== game._last_fumble_turn_message
+                        && !toplineAfterMore.startsWith(`${game._last_fumble_turn_message}  `)) {
+                        game._last_fumble_turn_message = '';
+                        game._last_fumble_from_run = 0;
+                        game._last_fumble_keep_flushes = 0;
+                    }
+						                game._pending_message = toplineAfterMore;
+						                game._topline_after_more = '';
                 if (game._brown_mold_passive_after_more) {
                     const passive = game._brown_mold_passive_after_more;
                     game._brown_mold_passive_after_more = null;
