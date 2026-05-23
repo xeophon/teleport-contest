@@ -1874,6 +1874,21 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   frontier is now the old scripted post-summon combat: C starts step 1785 with
   real turn-tail and `uhitm.c`/`mhitu.c` attack RNG, while JS consumes no RNG
   until the later level-teleport script resumes.
+- The scripted Sanctum post-summon combat now consumes the C-ordered
+  `uhitm.c`/`mhitu.c` RNG through the visible silver dragon, minotaur,
+  Olog-hai, orange dragon, and xan sequence. This includes the adjacent dragon
+  breath-slot skip (`rnd(21)`/`rnd(22)`/`rnd(23)`), successful-hit
+  `mhitm_knockback()`'s unconditional `rn2(3)`/`rn2(6)` draws, xan
+  `AD_LEGS` side/duration/exercise rolls, the unmessaged movement tail,
+  vampire-shifter HP roll, and the following turn-boundary movement/hunger
+  rolls. Focused `seed4500-knight-coverage` improves to RNG `107649/108275`
+  with screens and cursors still `1814/1814`. The next flat mismatch is step
+  1799 in the next level's special-level setup: C takes the Lua
+  `shuffle()`/`splev_initlev()` `rn2(3), rn2(2), rn2(2)` sequence while JS
+  enters its remaining local level-load path. This is still an interim
+  scripted bridge; the durable cleanup is to move these attack profiles and
+  More-boundary side effects into the generic `mattacku()`/`hitmu()` path and
+  then delete the Sanctum-only combat phases.
 
 Next concrete target:
 

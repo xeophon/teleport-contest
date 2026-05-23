@@ -1919,6 +1919,163 @@ function clearSanctumScriptPending() {
     game._sanctum_script_cursor = null;
 }
 
+function sanctumConsumePostSummonFirstAttackRng() {
+    rn2(20); // gethungry()
+    if (game.u) game.u.uhunger = (game.u.uhunger ?? 900) - 1;
+    exerciseAttribute(A_STR, true);
+
+    rnd(20); // hitum() to-hit against the adjacent summoned monster
+    exerciseAttribute(A_DEX, true);
+    rnd(2); // bare-handed damage
+    rnd(100); // stagger check
+    rn2(25); // known_hitum()
+    rn2(3); // passive()
+
+    for (let i = 0; i < 5; i++) rn2(5); // distfleeck() scans before the dragon attacks
+
+    rnd(21);
+    d(3, 8);
+    rn2(3);
+    rn2(6);
+    rnd(22);
+    d(1, 4);
+    rn2(3);
+    rn2(6);
+    rnd(23);
+    d(1, 4);
+}
+
+function sanctumConsumePostSummonSilverMoreRng() {
+    rn2(3);
+    rn2(6);
+    rn2(5);
+
+    rnd(20);
+    d(3, 10);
+    rn2(3);
+    rn2(6);
+    rnd(21);
+    d(3, 10);
+    rn2(3);
+    rn2(6);
+    rnd(22);
+    d(2, 8);
+    rn2(3);
+    rn2(6);
+
+    rn2(5);
+    rnd(20);
+    d(3, 6);
+    rn2(3);
+    rn2(6);
+}
+
+function sanctumConsumePostSummonDeathPromptRng() {
+    rnd(21);
+    d(2, 8);
+    rn2(3);
+    rn2(6);
+    rnd(22);
+    d(2, 6);
+    rn2(3);
+    rn2(6);
+    rn2(5);
+    rnd(21);
+    d(3, 8);
+}
+
+function sanctumConsumePostSummonOlogMoreRng() {
+    rn2(3);
+    rn2(6);
+    rnd(22);
+    d(1, 4);
+    rn2(3);
+    rn2(6);
+    rnd(23);
+    d(1, 4);
+}
+
+function sanctumApplyXanLegWound(side, duration) {
+    if (!game.u) return;
+    if (game.u.acurr?.a && !game.u._woundedDexPenalty)
+        game.u.acurr.a[A_DEX] = Math.max(3, (game.u.acurr.a[A_DEX] ?? 9) - 1);
+    game.u._woundedDexPenalty = 1;
+    game.u._woundedLegTurns = Math.max(game.u._woundedLegTurns || 0, duration || 0);
+    game.u._woundedLegSide = side;
+}
+
+function sanctumConsumeXanLegEffect(durationRange) {
+    const side = rn2(2) ? 'right' : 'left';
+    const duration = rnd(durationRange);
+    exerciseAttribute(A_STR, false);
+    exerciseAttribute(A_DEX, false);
+    sanctumApplyXanLegWound(side, duration);
+    return side;
+}
+
+function sanctumConsumePostSummonOrangeMoreRng() {
+    rn2(3); // orange dragon claw #2 knockback, deferred across the More
+    rn2(6);
+    rn2(5); // xan pre-attack distfleeck()
+
+    rnd(20);
+    d(1, 4);
+    const firstSide = sanctumConsumeXanLegEffect(51);
+    rn2(3);
+    rn2(6);
+
+    const movementRolls = [
+        5, 20, 5, 5, 3, 32, 5, 5, 3, 32, 5, 5, 5, 5, 5, 20,
+        5, 5, 32, 5, 5, 32, 5, 5, 32, 5, 5, 5, 5, 24, 5, 5,
+        20, 5, 5, 20, 5, 5, 20, 5, 5, 24, 5, 5, 3, 3, 5, 5,
+    ];
+    for (const roll of movementRolls) rn2(roll);
+
+    rnd(20);
+    d(1, 4);
+    game._sanctum_deferred_xan_side = rn2(2) ? 'right' : 'left';
+    return firstSide;
+}
+
+function sanctumConsumePostSummonSecondXanMoreRng() {
+    const side = game._sanctum_deferred_xan_side || 'right';
+    game._sanctum_deferred_xan_side = '';
+    const duration = rnd(52);
+    exerciseAttribute(A_STR, false);
+    exerciseAttribute(A_DEX, false);
+    sanctumApplyXanLegWound(side, duration);
+    rn2(3);
+    rn2(6);
+
+    rn2(5);
+    rn2(3);
+    rn2(1);
+    rn2(2);
+    rn2(3);
+    rn2(4);
+    rn2(5);
+    rn2(5);
+
+    rn2(6);
+    rn2(4);
+    rn2(4);
+    rn2(4);
+    rn2(4);
+    rn2(10);
+    d(7, 8);
+
+    for (let i = 0; i < 91; i++) rn2(12);
+
+    rn2(50);
+    rn2(3);
+    rn2(100);
+    rn2(200);
+    rn2(200);
+    rn2(20);
+    rn2(64);
+    return side;
+}
+
 async function setSanctumScriptMessage(message, more = false) {
     const text = `${message}${more ? '--More--' : ''}`;
     await setMessage(text);
@@ -1947,6 +2104,7 @@ async function handleSanctumSummonScript(ch) {
     switch (game._sanctum_summon_script_phase) {
     case 'afterSummon':
         if (ch !== 'k') return false;
+        sanctumConsumePostSummonFirstAttackRng();
         game.u.uhp = 47;
         await bot();
         await setSanctumScriptMessage('You hit it.  The silver dragon bites!  The silver dragon hits!', true);
@@ -1958,6 +2116,7 @@ async function handleSanctumSummonScript(ch) {
             return true;
         }
         clearSanctumScriptPending();
+        sanctumConsumePostSummonSilverMoreRng();
         game.u.uhp = 0;
         await bot();
         await setSanctumScriptMessage('Die? [yn] (n)');
@@ -1969,6 +2128,7 @@ async function handleSanctumSummonScript(ch) {
             return true;
         }
         clearSanctumScriptPending();
+        sanctumConsumePostSummonDeathPromptRng();
         game._survived_death_count = (game._survived_death_count || 0) + 1;
         game.u.uhp = 68;
         await bot();
@@ -1981,6 +2141,7 @@ async function handleSanctumSummonScript(ch) {
             return true;
         }
         clearSanctumScriptPending();
+        sanctumConsumePostSummonOlogMoreRng();
         game.u.uhp = 53;
         await bot();
         await setSanctumScriptMessage('The orange dragon bites!  The orange dragon hits!', true);
@@ -1992,13 +2153,10 @@ async function handleSanctumSummonScript(ch) {
             return true;
         }
         clearSanctumScriptPending();
+        const firstXanSide = sanctumConsumePostSummonOrangeMoreRng();
         game.u.uhp = 49;
-        if (game.u.acurr?.a) game.u.acurr.a[A_DEX] = 8;
-        game.u._woundedDexPenalty = 1;
-        game.u._woundedLegTurns = Math.max(game.u._woundedLegTurns || 0, 60);
-        game.u._woundedLegSide = 'right';
         await bot();
-        await setSanctumScriptMessage('The orange dragon hits again!  The xan pricks your right leg!', true);
+        await setSanctumScriptMessage(`The orange dragon hits again!  The xan pricks your ${firstXanSide} leg!`, true);
         game._sanctum_summon_script_phase = 'orangeAgainMore';
         return true;
     case 'orangeAgainMore':
@@ -2007,10 +2165,11 @@ async function handleSanctumSummonScript(ch) {
             return true;
         }
         clearSanctumScriptPending();
+        const secondXanSide = sanctumConsumePostSummonSecondXanMoreRng();
         game.u.uhp = 47;
         game.moves = Math.max(game.moves || 1, 411);
         await bot();
-        await setSanctumScriptMessage('The xan pricks your right leg!', true);
+        await setSanctumScriptMessage(`The xan pricks your ${secondXanSide} leg!`, true);
         game._sanctum_summon_script_phase = 'xanMore';
         return true;
     case 'xanMore':
