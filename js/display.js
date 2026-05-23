@@ -677,7 +677,8 @@ function objectGlyph(obj) {
         return { ch: '+', color: obj.dknown ? obj.color ?? NO_COLOR : NO_COLOR, dec: false };
     if (obj.cls === 'scroll' || obj.glyph === '?') return { ch: '?', color: CLR_WHITE, dec: false };
     if (obj.otyp === GEM_CLASS || obj.cls === 'gem') {
-        const color = obj.color === NO_COLOR ? obj._display_color ?? NO_COLOR : obj.color ?? obj._display_color ?? NO_COLOR;
+        const rawColor = obj.color === NO_COLOR ? obj._display_color ?? NO_COLOR : obj.color ?? obj._display_color ?? NO_COLOR;
+        const color = rawColor === CLR_WHITE ? NO_COLOR : glyphColor(rawColor);
         const dx = (obj.ox ?? 0) - (game.u?.ux ?? 0);
         const dy = (obj.oy ?? 0) - (game.u?.uy ?? 0);
         if (dx * dx + dy * dy <= 6) obj._color_seen = true;
@@ -1085,9 +1086,10 @@ function drawGrid() {
                 const revealPotionColor = visibleObj?.dknown;
                 if (visibleObj?._appearance_color != null && revealPotionColor) color = glyphColor(visibleObj._appearance_color);
                 if (visibleObj && (visibleObj.glyph === '*' || visibleObj.otyp === GEM_CLASS || visibleObj.cls === 'gem')) {
-                    const gemColor = visibleObj.color === NO_COLOR
+                    const rawGemColor = visibleObj.color === NO_COLOR
                         ? visibleObj._display_color ?? NO_COLOR
                         : visibleObj.color ?? visibleObj._display_color ?? NO_COLOR;
+                    const gemColor = rawGemColor === CLR_WHITE ? NO_COLOR : glyphColor(rawGemColor);
                     const dx = x - (game.u?.ux ?? 0);
                     const dy = y - (game.u?.uy ?? 0);
                     if (dx * dx + dy * dy <= 6) visibleObj._color_seen = true;

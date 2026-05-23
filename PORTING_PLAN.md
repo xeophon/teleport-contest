@@ -1712,6 +1712,25 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   charges the next search turn, while JS spends the C turn-tail RNG one input
   early and moves the visible wraith on the search. The full public score
   remains `39/44`.
+- The Priest follow-up closes the Home 2 movement boundary and several later
+  quest-route mismatches. Wizard/debug level teleports now preserve
+  `u.umovement`, matching C `wiz_level_tele()` returning `ECMD_OK`, so focused
+  `seed0367` screens 253/254 line up with C turn scheduling. Tended temple
+  entry now follows `priest.c:intemple()` across the arrival/intone more
+  boundary, including the `d(10,500)`, `d(10,100)`, and `d(10,20)` timers,
+  shrine/alignment wording, and the screen 261 top-line order. Explicit search
+  now probes adjacent unseen traps with C's `rnl(8)` chance and Wisdom
+  exercise, fixing the screen 263 RNG boundary and the later trap-door find
+  message. Priest filler generation now selects `Pri-filb.lua` for the later
+  filler level, fixing Home 5 generation at screen 266, and gem display maps
+  white/gray/black gems to the default tty color while preserving non-white
+  colored gems. Focused `seed0367` screens 253, 254, 261, 263, 266, 267, and
+  273 are exact; the full session now first differs at screen 278 on the
+  wizard-tower/fakewiz map layout after choosing `G` from the level-teleport
+  menu, with metrics RNG `38149/50125`, screens `283/324`, and cursors
+  `303/324`. Guard sessions `seed0361-archeologist-tour`,
+  `seed0106-priest-extcmd-sweep`, and `seed4500-knight-coverage` still match
+  all visible screens. The current full public scorer reports `38/44`.
 
 Next concrete target:
 
@@ -1724,11 +1743,12 @@ Next concrete target:
   semantics, C special-level room/corridor/shop filling for `minetn-3.lua`, and
   full `eat.c`, `sp_lev.c`, `mkobj.c`, `makemon.c`, `uhitm.c`, and
   `dogmove.c` behavior.
-- For `seed0367`, the next narrow frontier is screen 254 after the Home 2
-  arrival and one `b` movement. The map generation and screen 253 are exact;
-  the remaining drift is very-fast movement/turn-tail scheduling across the
-  arrival message boundary. Compare C `allmain.c` movement quantum handling
-  and JS pending-message/time accounting before changing monster movement.
+- For `seed0367`, the next narrow frontier is screen 278 after choosing `G`
+  from the level-teleport menu. The previous boundaries at screens 253/254,
+  261, 263, 266/267, and 273 are exact; the remaining visible drift is the
+  wizard-tower/fakewiz special-level map layout after that teleport target is
+  selected. Compare C `sp_lev.c`, `mklev.c`, and the JS special-level dispatch
+  before touching generic monster movement or display code.
 - The Archeologist tour, exact-wand wish tails, healer scroll tail, tourist
   disaster path, and wizard quaff/zap/read option-help path are now closed;
   use them as regression guards for artifact wishing, restored-level Sokoban

@@ -2878,12 +2878,20 @@ const ARC_FILL_B_ROOMS = [
     ['object', 'object', 'trap', 'S'],
     ['object', 'trap', 'S'],
 ];
-const PRI_FILL_ROOMS = [
+const PRI_FILL_A_ROOMS = [
     { type: OROOM, contents: ['up', 'object', 'human zombie'] },
     { type: OROOM, contents: ['object', 'object'] },
     { type: OROOM, contents: ['object', 'trap', 'object', 'human zombie'] },
     { type: MORGUE, contents: ['down', 'object', 'trap'] },
     { type: OROOM, contents: ['object', 'object', 'trap', 'wraith'] },
+    { type: MORGUE, contents: ['object', 'trap'] },
+];
+const PRI_FILL_B_ROOMS = [
+    { type: OROOM, contents: ['up', 'object', 'human zombie', 'wraith'] },
+    { type: MORGUE, contents: ['object', 'object', 'object'] },
+    { type: OROOM, contents: ['object', 'trap', 'object', 'human zombie', 'wraith'] },
+    { type: MORGUE, contents: ['down', 'object', 'object', 'trap'] },
+    { type: OROOM, contents: ['object', 'object', 'trap', 'human zombie', 'wraith'] },
     { type: MORGUE, contents: ['object', 'trap'] },
 ];
 const QUEST_LEVEL_BUILDERS = {
@@ -2908,8 +2916,8 @@ const QUEST_LEVEL_BUILDERS = {
             'x-loca': make_pri_loca_level,
             'x-goal': make_pri_goal_level,
         },
-        fill() {
-            return make_pri_fill_level();
+        fill(level) {
+            return make_pri_fill_level(level < 3 ? PRI_FILL_A_ROOMS : PRI_FILL_B_ROOMS);
         },
     },
 };
@@ -7794,7 +7802,7 @@ async function make_pri_loca_level() {
             loc.edge = 0;
             loc.doormask = D_NODOOR;
             loc.horizontal = ch !== '|';
-            loc.lit = false;
+            loc.lit = true;
             loc.waslit = false;
             if (ch === '+') {
                 loc.typ = DOOR;
@@ -7970,7 +7978,7 @@ async function priFillRoomMonster(croom, name) {
     if (ptr) await makemon(ptr, pos.x, pos.y, 0);
 }
 
-async function make_pri_fill_level() {
+async function make_pri_fill_level(rooms) {
     const g = game;
     if (await getbones()) return;
     g.in_mklev = true;
@@ -7980,7 +7988,7 @@ async function make_pri_fill_level() {
     rn2(3);
     rn2(2);
 
-    for (const spec of PRI_FILL_ROOMS) {
+    for (const spec of rooms) {
         const croom = arcFillBuildRoom(spec.type);
         if (!croom) continue;
         for (const item of spec.contents) {
