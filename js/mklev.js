@@ -83,6 +83,7 @@ const DWARVISH_SHORT_SWORD = 10103;
 const BROADSWORD = 10032;
 const LONG_SWORD = 10033;
 const RUNESWORD = 10120;
+const CHAIN_MAIL = 10158;
 const POLEARM = 10034;
 const BATTLE_AXE = 10053;
 const DWARVISH_MATTOCK = 10104;
@@ -784,6 +785,8 @@ const KNIGHT_MON = { name: 'knight', mlet: '@', glyph: '@', color: NO_COLOR, mle
 const SHARK = { name: 'shark', mlet: ';', glyph: ';', color: CLR_GRAY, mlevel: 7, hpLevel: 10, difficulty: 9, mmove: 12, maligntyp: 0, swimmer: true, oviparous: true, nohands: true, hostile: true, alwaysHostile: true };
 const LORD_CARNARVON = { name: 'Lord Carnarvon', mlet: '@', glyph: '@', color: CLR_MAGENTA, mlevel: 20, hpLevel: 19, difficulty: 24, mmove: 15, maligntyp: 3, male: true, strong: true, armed: true, randomInventory: true, alwaysPeaceful: true, tunnel: true, needPick: true, waiting: true };
 const STUDENT = { name: 'student', mlet: '@', glyph: '@', color: CLR_WHITE, mlevel: 5, hpLevel: 7, difficulty: 7, mmove: 12, maligntyp: 3, strong: true, armed: true, guardian: true, randomInventory: true, alwaysPeaceful: true, tunnel: true, needPick: true };
+const PELIAS = { name: 'Pelias', mlet: '@', glyph: '@', color: CLR_MAGENTA, mlevel: 20, hpLevel: 19, difficulty: 24, mmove: 15, maligntyp: 0, male: true, strong: true, armed: true, randomInventory: true, alwaysPeaceful: true, poisonResistance: true, waiting: true };
+const CHIEFTAIN = { name: 'chieftain', mlet: '@', glyph: '@', color: CLR_WHITE, mlevel: 5, hpLevel: 7, difficulty: 7, mmove: 12, maligntyp: 0, strong: true, armed: true, guardian: true, randomInventory: true, alwaysPeaceful: true, poisonResistance: true };
 const NEFERET_THE_GREEN = { name: 'Neferet the Green', mlet: '@', glyph: '@', color: CLR_GREEN, mlevel: 20, hpLevel: 19, difficulty: 25, mmove: 15, maligntyp: 0, female: true, strong: true, armed: true, randomInventory: true, alwaysPeaceful: true, msound: 'leader', waiting: true };
 const APPRENTICE = { name: 'apprentice', mlet: '@', glyph: '@', color: CLR_WHITE, mlevel: 5, hpLevel: 7, difficulty: 8, mmove: 12, maligntyp: 0, strong: true, armed: true, spellcaster: true, guardian: true, randomInventory: true, alwaysPeaceful: true };
 const MINION_OF_HUHETOTL = { name: 'Minion of Huhetotl', mlet: '&', glyph: '&', color: CLR_ORANGE, mlevel: 16, hpLevel: 17, difficulty: 23, mmove: 12, maligntyp: -14, neuter: true, demon: true, inAir: true, strong: true, nasty: true, armed: true, randomInventory: true, alwaysHostile: true, waiting: true, nemesis: true, noCorpse: true };
@@ -1385,7 +1388,7 @@ const SPECIFIC_ARMOR = new Set([
     PLATE_MAIL, CRYSTAL_PLATE_MAIL, SPLINT_MAIL, BANDED_MAIL, RING_MAIL,
     STUDDED_LEATHER_ARMOR, LEATHER_ARMOR, HELMET, DENTED_POT, SMALL_SHIELD,
     LARGE_SHIELD, LOW_BOOTS, HIGH_BOOTS, LEATHER_GLOVES, LEATHER_CLOAK,
-    ROBE, CLOAK_OF_PROTECTION, CLOAK_OF_MAGIC_RESISTANCE, CLOAK_OF_DISPLACEMENT,
+    ROBE, CHAIN_MAIL, CLOAK_OF_PROTECTION, CLOAK_OF_MAGIC_RESISTANCE, CLOAK_OF_DISPLACEMENT,
     SHIELD_OF_REFLECTION, GAUNTLETS_OF_POWER, HELM_OF_BRILLIANCE,
     LEATHER_JACKET, FEDORA, ELVEN_MITHRIL_COAT, DWARVISH_CLOAK, ELVEN_CLOAK,
     IRON_SHOES, DWARVISH_ROUNDSHIELD, DWARVISH_IRON_HELM, DWARVISH_MITHRIL_COAT,
@@ -2702,6 +2705,55 @@ const WIZ_SIEGE_MONSTERS = [
 function wizX(x) { return WIZ_XSTART + x; }
 function wizY(y) { return WIZ_YSTART + y; }
 
+const BAR_XSTART = 3;
+const BAR_YSTART = 0;
+const BAR_ROWS = [
+    '..................................PP........................................',
+    '...................................PP.......................................',
+    '...................................PP.......................................',
+    '....................................PP......................................',
+    '........--------------......-----....PPP....................................',
+    '........|...S........|......+...|...PPP.....................................',
+    '........|----........|......|...|....PP.....................................',
+    '........|.\\..........+......-----...........................................',
+    '........|----........|...............PP.....................................',
+    '........|...S........|...-----.......PPP....................................',
+    '........--------------...+...|......PPPPP...................................',
+    '.........................|...|.......PPP....................................',
+    '...-----......-----......-----........PP....................................',
+    '...|...+......|...+..--+--.............PP...................................',
+    '...|...|......|...|..|...|..............PP..................................',
+    '...-----......-----..|...|.............PPPP.................................',
+    '.....................-----............PP..PP................................',
+    '.....................................PP...PP................................',
+    '....................................PP...PP.................................',
+    '....................................PP....PP................................',
+];
+const BAR_WIDTH = BAR_ROWS[0].length;
+const BAR_HEIGHT = BAR_ROWS.length;
+const BAR_UNLIT_REGIONS = [
+    [9, 5, 11, 5], [9, 9, 11, 9],
+];
+const BAR_LIT_REGIONS = [
+    [9, 7, 11, 7], [13, 5, 20, 9], [29, 5, 31, 6],
+    [26, 10, 28, 11], [4, 13, 6, 14], [15, 13, 17, 14],
+    [22, 14, 24, 15],
+];
+const BAR_DOORS = [
+    [D_LOCKED, 12, 5], [D_LOCKED, 12, 9],
+    [D_CLOSED, 21, 7],
+    [D_ISOPEN, 7, 13], [D_ISOPEN, 18, 13], [D_ISOPEN, 23, 13],
+    [D_ISOPEN, 25, 10], [D_ISOPEN, 28, 5],
+];
+const BAR_CHIEFTAINS = [
+    [10, 5], [10, 9], [11, 5], [11, 9],
+    [14, 5], [14, 9], [16, 5], [16, 9],
+];
+const BAR_EELS = [[36, 1], [37, 9], [39, 15]];
+
+function barX(x) { return BAR_XSTART + x; }
+function barY(y) { return BAR_YSTART + y; }
+
 const PRI_ROWS = [
     '............................................................................',
     '............................................................................',
@@ -2921,6 +2973,11 @@ const QUEST_LEVEL_BUILDERS = {
         },
         fill(level) {
             return make_arc_fill_level(level < 3 ? ARC_FILL_A_ROOMS : ARC_FILL_B_ROOMS);
+        },
+    },
+    Barbarian: {
+        special: {
+            'x-strt': make_bar_strt_level,
         },
     },
     Knight: {
@@ -5100,6 +5157,10 @@ function mongets(otyp, erodes = true) {
     else if (otyp === DWARVISH_ROUNDSHIELD) Object.assign(otmp, { cls: 'armor', kind: 'dwarvish roundshield', appearance: 'large round shield' });
     else if (otyp === DWARVISH_IRON_HELM) Object.assign(otmp, { cls: 'armor', kind: 'dwarvish iron helm', appearance: 'hard hat' });
     else if (otyp === DWARVISH_MITHRIL_COAT) Object.assign(otmp, { cls: 'armor', kind: 'dwarvish mithril-coat' });
+    else if (otyp === CHAIN_MAIL) Object.assign(otmp, { cls: 'armor', kind: 'chain mail' });
+    else if (otyp === LEATHER_ARMOR) Object.assign(otmp, { cls: 'armor', kind: 'leather armor' });
+    else if (otyp === LOW_BOOTS) Object.assign(otmp, { cls: 'armor', kind: 'low boots' });
+    else if (otyp === HIGH_BOOTS) Object.assign(otmp, { cls: 'armor', kind: 'high boots' });
     else if (otyp === LEATHER_JACKET) Object.assign(otmp, { cls: 'armor', kind: 'leather jacket' });
     else if (otyp === FEDORA) Object.assign(otmp, { cls: 'armor', kind: 'fedora' });
     else if (otyp === ORCISH_DAGGER) Object.assign(otmp, { cls: 'weapon', kind: 'orcish dagger' });
@@ -5109,6 +5170,8 @@ function mongets(otyp, erodes = true) {
     else if (otyp === QUARTERSTAFF) Object.assign(otmp, { cls: 'weapon', kind: 'quarterstaff', appearance: 'staff' });
     else if (otyp === AXE) Object.assign(otmp, { cls: 'weapon', kind: 'axe' });
     else if (otyp === SPEAR) Object.assign(otmp, { cls: 'weapon', kind: 'spear' });
+    else if (otyp === SHORT_SWORD) Object.assign(otmp, { cls: 'weapon', kind: 'short sword' });
+    else if (otyp === LONG_SWORD) Object.assign(otmp, { cls: 'weapon', kind: 'long sword' });
     else if (otyp === DWARVISH_SPEAR) Object.assign(otmp, { cls: 'weapon', kind: 'dwarvish spear' });
     else if (otyp === DWARVISH_SHORT_SWORD) Object.assign(otmp, { cls: 'weapon', kind: 'dwarvish short sword' });
     else if (otyp === DWARVISH_MATTOCK) Object.assign(otmp, { cls: 'weapon', kind: 'dwarvish mattock' });
@@ -5623,6 +5686,15 @@ function m_initweap(ptr) {
         if (game._mongets_target) {
             game._mongets_target.minvent = [otmp, ...(game._mongets_target.minvent || [])];
             game._mongets_target.hasInventory = true;
+        }
+    } else if (ptr.guardian && ptr.name === 'chieftain') {
+        mongets(rn2(3) ? LONG_SWORD : SHORT_SWORD);
+        mongets(rn2(3) ? CHAIN_MAIL : LEATHER_ARMOR);
+        if (rn2(2)) mongets(rn2(2) ? LOW_BOOTS : HIGH_BOOTS);
+        if (!rn2(3)) mongets(LEATHER_CLOAK);
+        if (!rn2(3)) {
+            mongets(BOW);
+            m_initthrow(ARROW, 12);
         }
     } else if (ptr.guardian && (ptr.name === 'student' || ptr.name === 'apprentice' || ptr.name === 'acolyte')) {
         if (rn2(2)) mongets(rn2(3) ? DAGGER : KNIFE);
@@ -7089,6 +7161,255 @@ async function wizRandomTrap() {
         if (kind === LANDMINE) { trap.ttyp = PIT; trap.tseen = true; }
         mktrap_victim(trap);
     }
+}
+
+function barMapKey(x, y) { return `${x},${y}`; }
+
+function barSelectionBounds(selection) {
+    let lx = COLNO, ly = ROWNO, hx = 0, hy = 0;
+    for (const item of selection) {
+        const [x, y] = item.split(',').map(Number);
+        lx = Math.min(lx, x);
+        ly = Math.min(ly, y);
+        hx = Math.max(hx, x);
+        hy = Math.max(hy, y);
+    }
+    return selection.size ? { lx, ly, hx, hy } : { lx: 0, ly: 0, hx: 0, hy: 0 };
+}
+
+function barRndCoord(selection, remove = false) {
+    if (!selection.size) return barRandomDryLocation(true);
+    const { lx, ly, hx, hy } = barSelectionBounds(selection);
+    const pick = rn2(selection.size);
+    let idx = 0;
+    for (let x = lx; x <= hx; x++)
+        for (let y = ly; y <= hy; y++) {
+            const key = barMapKey(x, y);
+            if (!selection.has(key)) continue;
+            if (idx === pick) {
+                if (remove) selection.delete(key);
+                return { x, y };
+            }
+            idx++;
+        }
+    return { x: -1, y: -1 };
+}
+
+function barFloodfillSelection(x, y) {
+    const target = game.level?.at(x, y)?.typ;
+    const selection = new Set();
+    if (target == null) return selection;
+    const stack = [{ x, y }];
+    const queued = new Set([barMapKey(x, y)]);
+    while (stack.length) {
+        const cur = stack.pop();
+        selection.add(barMapKey(cur.x, cur.y));
+        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+            const nx = cur.x + dx, ny = cur.y + dy;
+            const key = barMapKey(nx, ny);
+            if (nx < 1 || nx >= COLNO || ny < 0 || ny >= ROWNO
+                || queued.has(key) || game.level?.at(nx, ny)?.typ !== target) continue;
+            queued.add(key);
+            stack.push({ x: nx, y: ny });
+        }
+    }
+    return selection;
+}
+
+function barAreaIntersection(selection, lx, ly, hx, hy) {
+    const result = new Set();
+    const ax1 = barX(lx), ay1 = barY(ly), ax2 = barX(hx), ay2 = barY(hy);
+    for (const item of selection) {
+        const [x, y] = item.split(',').map(Number);
+        if (x >= ax1 && x <= ax2 && y >= ay1 && y <= ay2) result.add(item);
+    }
+    return result;
+}
+
+function barRandLine(selection, x1, y1, x2, y2, rough, rec = 12) {
+    if (rec < 1 || (x2 === x1 && y2 === y1)) return;
+    rough = Math.min(rough, Math.max(Math.abs(x2 - x1), Math.abs(y2 - y1)));
+    let mx, my;
+    if (rough < 2) {
+        mx = Math.trunc((x1 + x2) / 2);
+        my = Math.trunc((y1 + y2) / 2);
+    } else {
+        do {
+            const dx = rn2(rough) - Math.trunc(rough / 2);
+            const dy = rn2(rough) - Math.trunc(rough / 2);
+            mx = Math.trunc((x1 + x2) / 2) + dx;
+            my = Math.trunc((y1 + y2) / 2) + dy;
+        } while (mx > BAR_WIDTH - 1 || mx < 0 || my < 0 || my > BAR_HEIGHT - 1);
+    }
+    selection.add(barMapKey(barX(mx), barY(my)));
+    const nextRough = Math.trunc((rough * 2) / 3);
+    barRandLine(selection, x1, y1, mx, my, nextRough, rec - 1);
+    barRandLine(selection, mx, my, x2, y2, nextRough, rec - 1);
+    selection.add(barMapKey(barX(x2), barY(y2)));
+}
+
+function barReplaceTerrain(x1, y1, x2, y2, fromTyp, toTyp, chance) {
+    const lx = barX(x1), hx = barX(x2), ly = barY(y1), hy = barY(y2);
+    for (let x = Math.max(1, lx); x <= Math.min(COLNO - 1, hx); x++)
+        for (let y = Math.max(0, ly); y <= Math.min(ROWNO - 1, hy); y++) {
+            const loc = game.level.at(x, y);
+            if (loc?.typ === fromTyp && rn2(100) < chance) loc.typ = toTyp;
+        }
+}
+
+function barRandomDryLocation(rejectStairs = false) {
+    const good = (x, y) => {
+        const loc = game.level?.at(x, y);
+        const boulder = game.level?.objects?.some(obj => obj.otyp === BOULDER && obj.ox === x && obj.oy === y);
+        const occupied = game.level?.monsters?.some(mon => mon.mx === x && mon.my === y);
+        return loc && SPACE_POS(loc.typ) && !boulder && !occupied && !t_at(x, y)
+            && (!rejectStairs || (loc.typ !== STAIRS && loc.typ !== LADDER));
+    };
+    for (let tryct = 0; tryct < 100; tryct++) {
+        const x = barX(rn2(BAR_WIDTH));
+        const y = barY(rn2(BAR_HEIGHT));
+        if (good(x, y)) return { x, y };
+    }
+    for (let x = 0; x < BAR_WIDTH; x++)
+        for (let y = 0; y < BAR_HEIGHT; y++) {
+            const loc = { x: barX(x), y: barY(y) };
+            if (good(loc.x, loc.y)) return loc;
+        }
+    return { x: barX(0), y: barY(0) };
+}
+
+async function barNamedMonster(ptrOrName, x, y, peaceful = null, findMontypeRoll = true) {
+    if (findMontypeRoll) rn2(2);
+    arcInducedAlign();
+    const ptr = typeof ptrOrName === 'string'
+        ? (ptrOrName === 'giant eel' ? GIANT_EEL : monsterByRndName(ptrOrName))
+        : ptrOrName;
+    const mon = ptr ? await makemon(ptr, barX(x), barY(y), 0) : null;
+    if (mon && peaceful === false) {
+        mon.mpeaceful = 0;
+        set_malign(mon);
+    }
+    return mon;
+}
+
+function barInventoryObject(mon, otyp, spe, fields = {}) {
+    barRandomDryLocation();
+    const obj = mksobj(otyp, true, true);
+    obj.spe = spe;
+    Object.assign(obj, object_display(obj), fields);
+    mon.minvent = [obj, ...(mon.minvent || [])];
+    mon.hasInventory = true;
+}
+
+async function make_bar_strt_level() {
+    const g = game;
+    if (await getbones()) return;
+    g.in_mklev = true;
+
+    oinit();
+    clear_level_structures();
+    g.level.flags.is_maze_lev = true;
+    g.level.flags.noteleport = true;
+    g.level.flags.hardfloor = true;
+
+    rn2(3);
+    rn2(2);
+    rn2(2);
+
+    for (let y = 0; y < BAR_HEIGHT; y++) {
+        const row = BAR_ROWS[y];
+        for (let x = 0; x < row.length; x++) {
+            const loc = g.level.at(barX(x), barY(y));
+            const ch = row[x];
+            loc.flags = 0;
+            loc.roomno = 0;
+            loc.edge = 0;
+            loc.doormask = D_NODOOR;
+            loc.horizontal = ch !== '|';
+            loc.lit = true;
+            loc.waslit = false;
+            if (ch === '+') {
+                loc.typ = DOOR;
+                loc.doormask = D_CLOSED;
+            } else if (ch === 'S') {
+                loc.typ = SDOOR;
+                loc.doormask = D_CLOSED;
+            } else if (ch === '\\') {
+                loc.typ = THRONE;
+            } else {
+                loc.typ = SPECIAL_TERRAIN[ch] ?? STONE;
+            }
+            loc.wall_info = (loc.wall_info || 0) | W_NONDIGGABLE;
+        }
+    }
+    barReplaceTerrain(37, 0, 59, 19, ROOM, TREE, 5);
+    barReplaceTerrain(60, 0, 64, 19, ROOM, TREE, 10);
+    barReplaceTerrain(65, 0, 75, 19, ROOM, TREE, 20);
+    const path = new Set();
+    barRandLine(path, 37, 7, 62, 2, 7);
+    for (const item of path) {
+        const [x, y] = item.split(',').map(Number);
+        const loc = g.level.at(x, y);
+        if (loc) loc.typ = ROOM;
+    }
+    const portalLoc = g.level.at(barX(62), barY(2));
+    if (portalLoc) portalLoc.typ = ROOM;
+
+    for (const [lx, ly, hx, hy] of BAR_UNLIT_REGIONS)
+        for (let x = lx; x <= hx; x++)
+            for (let y = ly; y <= hy; y++) {
+                const loc = g.level.at(barX(x), barY(y));
+                if (loc) loc.lit = false;
+            }
+    for (const [lx, ly, hx, hy] of BAR_LIT_REGIONS)
+        for (let x = lx; x <= hx; x++)
+            for (let y = ly; y <= hy; y++) {
+                const loc = g.level.at(barX(x), barY(y));
+                if (loc) loc.lit = true;
+            }
+
+    mkstairs(barX(9), barY(9), false, null);
+    g.level.branch_region = { x: barX(62), y: barY(2) };
+    place_branch(is_branchlev(), barX(62), barY(2));
+    for (const [mask, x, y] of BAR_DOORS) {
+        const loc = g.level.at(barX(x), barY(y));
+        if (loc) {
+            if (!IS_DOOR(loc.typ) && loc.typ !== SDOOR) loc.typ = DOOR;
+            loc.doormask = mask;
+        }
+    }
+
+    const leader = await barNamedMonster(PELIAS, 10, 7, null, false);
+    if (leader) {
+        barInventoryObject(leader, RUNESWORD, 5, { cls: 'weapon', kind: 'runesword' });
+        barInventoryObject(leader, CHAIN_MAIL, 5, { cls: 'armor', kind: 'chain mail' });
+    }
+    mksobj_at(CHEST, barX(9), barY(5), true, true);
+    for (const [x, y] of BAR_CHIEFTAINS) await barNamedMonster(CHIEFTAIN, x, y);
+    await maketrap(barX(37), barY(7), SPIKED_PIT);
+    rnd(4);
+    for (const [x, y] of BAR_EELS) await barNamedMonster('giant eel', x, y);
+
+    let ogrelocs = barFloodfillSelection(barX(37), barY(7));
+    ogrelocs = barAreaIntersection(ogrelocs, 40, 3, 45, 20);
+    for (let i = 0; i < 12; i++) {
+        const loc = barRndCoord(ogrelocs, true);
+        rn2(2);
+        arcInducedAlign();
+        const mon = await makemon(monsterByRndName('ogre'), loc.x, loc.y, 0);
+        if (mon) {
+            mon.mpeaceful = 0;
+            set_malign(mon);
+        }
+    }
+
+    wallification(1, 0, COLNO - 1, BAR_YSTART + BAR_HEIGHT - 1);
+    flipSpecialLevelRnd(1, 0, COLNO - 1, BAR_YSTART + BAR_HEIGHT - 1, true);
+    recount_level_features();
+    rn2(1);
+    rn2(1);
+    level_finalize_topology();
+    g.in_mklev = false;
 }
 
 async function make_arc_strt_level() {

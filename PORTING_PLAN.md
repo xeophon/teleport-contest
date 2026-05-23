@@ -1917,6 +1917,13 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   with the same three failing sessions. Focused `seed0360-wizard-world-tour`
   advances to RNG `60574/120639`, screen `292/833`; focused
   `seed0373-barbarian-quest-tour` advances to screen `60/124`.
+- Barbarian Quest home generation now has a C-shaped `Bar-strt.lua` special
+  level builder with the fixed map, forest/path selection, doors, branch,
+  Pelias inventory, chieftains, eels, spiked pit, ogre siege placement, and
+  chieftain guardian equipment RNG. Full `npm run score` remains `41/44`, with
+  the same three failing sessions. Focused `seed0373-barbarian-quest-tour`
+  advances to RNG `4602/35386`, screen `63/124`; the next Barbarian gap is the
+  filler/locate/goal special levels.
 
 Next concrete target:
 
