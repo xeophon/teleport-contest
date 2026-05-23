@@ -1761,6 +1761,22 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   exposed a later visible turn-count divergence, so continue there from the
   surrounding C search/monster-turn scheduling rather than adding the RNG call
   in isolation.
+- The next Knight coverage RNG slice ports that C search path and the adjacent
+  shapechange ordering without reopening screens. `searchFindMonster()` now
+  exercises Wisdom before mapping/printing an unseen monster, matching
+  `detect.c:mfind0()`, and the old JS-only overloaded-collapse extra move for
+  mapped invisible squares was removed so the real search/monster-turn RNG no
+  longer advances the visible turn counter one step too far. Vampire shifters
+  now also consume `mgender_from_permonst()`'s non-neuter `rn2(10)` even when
+  the target form is a vampire, while still suppressing the gender flip as C
+  does for controlled vampire shapechange. Focused
+  `seed4500-knight-coverage` remains `1814/1814` screens and improves to RNG
+  `105059/108275`; full `npm run score` remains `39/44`. The new first flat
+  mismatch is global RNG 104681 on step 1742 (` `), where C runs the Valley
+  aligned cleric through `pri_move()` altar-milling rolls before generic
+  monster movement. A standalone Valley shrine-metadata probe moved the prefix
+  later but worsened the focused RNG count, so continue there by porting the
+  full priest special-movement ordering rather than only attaching metadata.
 
 Next concrete target:
 
@@ -1797,12 +1813,13 @@ Next concrete target:
   screen pass; model when the bottom line is refreshed.
 - For `seed4500-knight-coverage`, the visible path remains closed
   (`1814/1814` screens), but PRNG is still short of exact. The current first
-  flat prefix mismatch appears at global RNG 104217 on step 1658 (`s`): C has
-  `rn2(19) @ exercise(attrib.c:509)` for finding an unseen monster, then
-  monster-turn RNG; JS currently enters the monster turn directly. Continue
-  from C `detect.c:mfind0()` plus the surrounding turn scheduling, since the
-  terminal output is already exact and a standalone exercise RNG call regresses
-  the visible turn counter later in the session.
+  flat prefix mismatch appears at global RNG 104681 on step 1742 (` `): C has
+  `rn2(3)`/`rn2(3)` from `pri_move(priest.c:194-195)` for the Valley aligned
+  cleric's altar-milling goal, then continues generic monster movement. JS
+  currently reaches generic movement without the same priest-special ordering.
+  Continue from C `priest.c:pri_move()` and `monmove.c:move_special()`, since
+  the terminal output is already exact and metadata-only changes can lower the
+  aggregate RNG metric even if they move the first prefix forward.
 - Use `sessions/*.session.json` to locate divergences, but keep fixes in real
   mechanics. A score recovery is only valid when it falls out of those
   mechanics.

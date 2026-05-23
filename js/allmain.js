@@ -2698,7 +2698,9 @@ function maybeShapeshiftVampire(mon) {
 
     const oldHp = mon.mhp || 1;
     const oldMax = mon.mhpmax || oldHp;
-    if (!target.neuter && target.mlet !== 'V') rn2(10);
+    if (target.male) mon.female = false;
+    else if (target.female) mon.female = true;
+    else if (!target.neuter) rn2(10);
     const newLevel = adjustedMonsterLevel(target);
     const newMax = monster_hp(target, newLevel);
     mon.mhp = Math.max(1, Math.min(newMax, Math.trunc((oldHp * newMax) / oldMax)));
@@ -6285,6 +6287,7 @@ async function searchFindMonster(mon) {
     newsym(mon.mx, mon.my);
     if (!foundSomething) return 0;
     if (!searchCanSpotMonster(mon) && loc?.map_invisible) return -1;
+    exerciseAttribute(A_WIS, true);
     if (!searchCanSpotMonster(mon)) {
         if (loc) loc.map_invisible = true;
         newsym(mon.mx, mon.my);
@@ -9991,11 +9994,7 @@ export async function moveloop_core() {
         g._keep_pending_message = 1;
         g._replayed_stale_fumble_message = 1;
     }
-    if (g._collapse_extra_moves_without_monsters && !g._pending_time_passed) {
-        g.moves = (g.moves || 1) + g._collapse_extra_moves_without_monsters;
-        g._collapse_extra_moves_without_monsters = 0;
-    }
-		    await bot();
+	    await bot();
     if (g._map_redraw_pending || g._pet_map_redraw_pending) {
         const skipPetRedraw = !g._map_redraw_pending
             && g._pet_map_redraw_pending
