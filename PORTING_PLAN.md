@@ -1559,6 +1559,18 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   layout. This closes `seed0106-priest-extcmd-sweep` and
   `seed0107-samurai-twoweapon-enhance`, keeps `seed4500` visible parity, and
   moves the public scorer to `35/44`.
+- Silent drop prompt display now matches tty topline behavior. C's
+  `getobj("drop", ...)` prompt is written through `yn_function()` without
+  clearing the physical tty row after the answer; when `drop()` emits no
+  follow-up message, notably under `OPTIONS=!verbose`, the old prompt remains
+  visible until the next real topline replaces it. JS now preserves that stale
+  drop prompt for silent drops, suppresses generic `You drop ...` messages
+  under `!verbose`, and marks the prompt so monster-turn messages replace it
+  instead of appending to it. This closes `seed0398-wizard-wandpoly-pile`
+  (`87/87` screens, RNG `3026/3026`), keeps the focused visible guards
+  (`seed0002`, `seed0004`, `seed0007`, `seed0014`, `seed0030`, `seed0105`,
+  `seed0106`, `seed0107`, `seed0361`, `seed4500`, `seed5006`) matched, and
+  moves the public scorer to `36/44`.
 
 Next concrete target:
 

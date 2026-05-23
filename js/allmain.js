@@ -1790,6 +1790,11 @@ function maybeKillerBeeEatRoyalJelly(mon) {
 
 function addToplineMessage(msg) {
     let text = String(msg || '');
+    if (game._silent_drop_prompt_message) {
+        if (game._pending_message === game._silent_drop_prompt_message && !game._message_more)
+            game._pending_message = '';
+        game._silent_drop_prompt_message = '';
+    }
     if (!game._pending_message && game._pending_fumble_turn_message
         && game._last_fumble_turn_message && text !== game._last_fumble_turn_message
         && (game.moves || 0) - (game._last_fumble_turn_move ?? -99) <= 2) {

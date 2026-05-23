@@ -6446,6 +6446,11 @@ async function rideDirection(ch) {
 
 async function setMessage(msg, more = false) {
     const text = String(msg || '');
+    if (game._silent_drop_prompt_message) {
+        if (game._pending_message === game._silent_drop_prompt_message && !game._message_more)
+            game._pending_message = '';
+        game._silent_drop_prompt_message = '';
+    }
     const runningMessage = game._pending_message
         && (game._running_continuation || game._initial_run_command || game._run_steps_remaining > 0);
     if (runningMessage) {
@@ -26253,6 +26258,11 @@ export async function rhack(_cmd) {
     }
 
     if (game._command_mode === 'dropObject') {
+        const preserveSilentDropPrompt = () => {
+            game._pending_message = game._drop_prompt || '';
+            game._silent_drop_prompt_message = game._pending_message;
+            game._keep_pending_message = game._pending_message ? 1 : 0;
+        };
         if (ch === ' ' || ch === '\r' || ch === '\n' || ch === '\x1b') {
             await setMessage('Never mind.');
             game._command_mode = null;
@@ -26274,7 +26284,11 @@ export async function rhack(_cmd) {
             const guard = (game.level?.monsters || []).find(mon => mon.isgd || mon.data?.name === 'guard');
             if (guard) prepareVaultGuardEscort(guard);
             newsym(game.u?.ux || 0, game.u?.uy || 0);
-            await setMessage(`You drop ${amount} gold piece${amount === 1 ? '' : 's'}.`);
+            if (game.flags?.verbose === false) {
+                preserveSilentDropPrompt();
+            } else {
+                await setMessage(`You drop ${amount} gold piece${amount === 1 ? '' : 's'}.`);
+            }
             game.context.move = 1;
             game._command_mode = null;
             return;
@@ -26307,10 +26321,13 @@ export async function rhack(_cmd) {
             game._message_more = 0;
             game.context.move = 1;
             if (item.cls === 'weapon' || item.kind === 'chest') {
-                await setMessage(`You drop ${inventoryItemName(item)}.`);
+                if (game.flags?.verbose === false) {
+                    preserveSilentDropPrompt();
+                } else {
+                    await setMessage(`You drop ${inventoryItemName(item)}.`);
+                }
             } else {
-                game._pending_message = '';
-                game._keep_pending_message = 0;
+                preserveSilentDropPrompt();
             }
             game._command_mode = null;
             return;
