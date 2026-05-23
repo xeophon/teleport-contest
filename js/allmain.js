@@ -3155,6 +3155,9 @@ async function processMonsterTurns() {
 		                        }
                     if (!mon.mfleetim && (mon.mhpmax == null || mon.mhp == null || mon.mhp >= mon.mhpmax) && !rn2(25)) mon.mflee = 0;
                     }
+                    if (!distfleeckDoneAfterAnger && mon.data?.covetous) {
+                        rn2(mon.mflee ? 33 : 5);
+                    }
                     if (!distfleeckDoneAfterAnger) rn2(5);
 	                    if (!mon.pet && !mon.mpeaceful && !mon.data?.mindless && !mon.data?.nohands && !(mon.m_seenres & M_SEEN_MAGR)) {
                         const targetX = mon.mux ?? game.u?.ux ?? mon.mx;
@@ -4592,7 +4595,7 @@ async function processMonsterTurns() {
                                 newsym(mon.mx, mon.my);
                             }
                         }
-                        if (!cShapedPriestMove) rn2(5);
+                        rn2(5);
                         continue;
                         }
                     }
@@ -4873,6 +4876,15 @@ async function processMonsterTurns() {
                         const postMoveGridBugDiagonal = mon.data?.name === 'grid bug'
                             && mon.mx !== postMoveTargetX && mon.my !== postMoveTargetY;
                         const postMoveNearby = postMoveDist2 < 3 && !postMoveGridBugDiagonal;
+                        const ghostChecksOffensiveLine = mon.data?.name === 'ghost'
+                            && !moveEndedTurn && !postMoveNearby && monsterWouldCheckOffensiveLine(mon)
+                            && ((movedByMonster
+                                    && !monsterHasDistanceAttackAvailable(mon)
+                                    && !monsterHasWeaponAttack(mon))
+                                || (!movedByMonster && !noStandardAttack));
+                        if (ghostChecksOffensiveLine) {
+                            monsterLinedUp(mon, postMoveTargetX, postMoveTargetY);
+                        }
                         if (!movedByMonster && !moveEndedTurn && !mon.mpeaceful && !mon.mflee
                             && !noStandardAttack && postMoveDist2 <= BOLT_LIM * BOLT_LIM
                             && !postMoveNearby && (game.u?.uhp || 0) > 0) {
@@ -6419,6 +6431,35 @@ function hideSeaMonsterUnderWater(mon) {
 
 function monsterUsesPostMoveHide(mon) {
     return !!(mon.data?.hidesUnder || mon.data?.mlet === ';');
+}
+
+function monsterHasDistanceAttackAvailable(mon) {
+    const data = mon.data || {};
+    const attacks = Array.isArray(data.attacks)
+        ? data.attacks
+        : data.attack ? [data.attack] : [];
+    return attacks.some(attack => ['brea', 'breath', 'spit', 'magc'].includes(attack.aatyp))
+        || data.spellcaster || data.magic || data.priest || data.name === 'gnomish wizard'
+        || INNATE_RANGED_ATTACK_MONSTERS.has(data.name);
+}
+
+function monsterHasWeaponAttack(mon) {
+    const data = mon.data || {};
+    if (data.armed) return true;
+    const attacks = Array.isArray(data.attacks)
+        ? data.attacks
+        : data.attack ? [data.attack] : [];
+    return attacks.some(attack => attack.aatyp === 'weap');
+}
+
+function monsterWouldCheckOffensiveLine(mon) {
+    const data = mon.data || {};
+    if (mon.mpeaceful || data.animal || data.mindless || data.nohands) return false;
+    if (game.u?.uswallow) return false;
+    const ux = game.u?.ux || 0;
+    const uy = game.u?.uy || 0;
+    if (scaryObjectAt(mon, ux, uy) || scaryEngravingAt(mon, ux, uy)) return false;
+    return true;
 }
 
 function disturbSleepingMonster(mon) {

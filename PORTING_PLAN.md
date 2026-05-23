@@ -1793,6 +1793,19 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   (around offset 232) but lowers the focused aggregate, so the next fix should
   integrate C's common post-`m_move()`/`dochugw()` `distfleeck` scheduling
   rather than adding an isolated priest roll.
+- The next Knight coverage slice ports more of that shared monster-turn
+  scheduling without reopening the visible path. Gehennom native bats now get
+  C's `makemon.c` speed boost, special-level priests always take the common
+  postmove `distfleeck()` roll after `pri_move()`, ghosts take the C-shaped
+  `find_offensive()`/`lined_up()` probe in postmove attack checks, and
+  covetous monsters take the `wizard.c:tactics()` random strategy roll before
+  the generic flee check. Focused `seed4500-knight-coverage` improves from RNG
+  `105173/108275` to `106334/108275` with screens still `1814/1814`; full
+  `npm run score` remains `39/44`. The new first flat mismatch is step 1757:
+  C reaches `trapeffect_fire_trap()` after the master lich/covetous movement
+  slice, while JS continues through ordinary monster movement, so continue from
+  the monster stepping on or triggering that fire trap rather than adding more
+  padding rolls.
 
 Next concrete target:
 
@@ -1829,13 +1842,11 @@ Next concrete target:
   screen pass; model when the bottom line is refreshed.
 - For `seed4500-knight-coverage`, the visible path remains closed
   (`1814/1814` screens), but PRNG is still short of exact. The current first
-  flat prefix mismatch appears at global RNG 104684 on step 1742 (` `): the
-  Valley priest's altar-milling rolls now match, but C performs another
-  `distfleeck(monmove.c:538)` before the next monster's generic movement. Do
-  not repair this with a special priest-only padding roll; the tail-roll probe
-  showed the later frontier is broader monster turn-loop/vampire shapeshift
-  scheduling after a magic-trap movement, and the aggregate RNG count gets
-  worse. Continue from C `dochugw()`/`m_move()` postmove scheduling.
+  flat prefix mismatch appears at global RNG 106309 on step 1757 (` `): C has
+  just run master-lich covetous tactics and ghost line probes, then reaches
+  `trapeffect_fire_trap()` while JS continues through ordinary monster
+  movement. Continue by finding why C has a monster stepping on or triggering
+  that fire trap at this point.
 - Use `sessions/*.session.json` to locate divergences, but keep fixes in real
   mechanics. A score recovery is only valid when it falls out of those
   mechanics.

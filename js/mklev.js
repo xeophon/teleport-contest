@@ -5344,6 +5344,16 @@ function makemon_goodpos(ptr, x, y) {
     return !boulder || !!ptr.throwsRocks;
 }
 
+function nativeBatMonster(ptr) {
+    return ptr?.name === 'bat' || ptr?.name === 'giant bat' || ptr?.name === 'vampire bat';
+}
+
+function currentLevelInHell() {
+    return !!game.inhell
+        || game.dungeons?.[game.u?.uz?.dnum]?.name === 'Gehennom'
+        || !!game.level?.flags?.gehennom;
+}
+
 function monster_at(x, y) {
     return (game.level?.monsters || []).find(mon => mon.mx === x && mon.my === y) || null;
 }
@@ -6088,6 +6098,7 @@ export async function makemon(mdat, x, y, mmflags) {
     }
     mon.mpeaceful = (mmflags & MM_ANGRY) ? 0 : peaceMinded(peacefulPtr);
     set_malign(mon);
+    if (currentLevelInHell() && nativeBatMonster(peacefulPtr)) mon.mspeed = 'fast';
     game.level?.monsters?.push(mon);
     const previousMongetsTarget = game._mongets_target;
     game._mongets_target = mon;
