@@ -63,6 +63,31 @@ function polyselfNoHands() {
     return !!polyselfForm()?.nohands;
 }
 
+function monsterHasOlfaction(data = {}) {
+    const name = String(data.name || '').toLowerCase();
+    const mlet = data.mlet ?? data.glyph ?? '';
+    if (name.endsWith(' golem')) return false;
+    if (['e', 'j', 'P', 'b', 'v', 'E', 'F', 'y'].includes(mlet)) return false;
+    if (['eye', 'jelly', 'pudding', 'blob', 'vortex', 'elemental', 'fungus', 'light'].includes(mlet)) return false;
+    if (/sphere$/.test(name)) return false;
+    return true;
+}
+
+function scareNearbyOlfactoryMonstersWithGarlic() {
+    const form = polyselfForm();
+    if (form?.undead) return;
+    const ux = game.u?.ux ?? 0;
+    const uy = game.u?.uy ?? 0;
+    for (const mon of game.level?.monsters || []) {
+        const dx = (mon.mx ?? 0) - ux;
+        const dy = (mon.my ?? 0) - uy;
+        if (dx * dx + dy * dy >= 7 || !monsterHasOlfaction(mon.data)) continue;
+        mon.mflee = 1;
+        mon.mfleetim = 0;
+        clearMonsterTrack(mon);
+    }
+}
+
 function isWandItem(item) {
     return item?.cls === 'wand' || item?.glyph === '/' || item?.wandIndex != null
         || item?.kind === 'wand of sleep' || item?.kind === 'sleep';
@@ -19336,8 +19361,9 @@ export async function rhack(_cmd) {
 	                    const toplineFumbleStartedMessage = !!game._topline_after_more_fumble_turn_message_starts;
 	                    const toplineFumbleMessageRoll = game._topline_after_more_fumble_message_roll || 0;
 	                    let toplineAfterMore = game._topline_after_more;
-	                    const pendingPetMiss = pendingBeforeTopline.match(/(The [^.]+ misses the [^.]+\.)$/);
-		                    if (game._pet_message_resume?.kind === 'miss' && pendingPetMiss?.[1] === toplineAfterMore) {
+	                    const pendingPetMiss = pendingBeforeTopline.match(/(The ([^.]+) misses the [^.]+\.)$/);
+		                    if (game._pet_message_resume?.kind === 'miss' && pendingPetMiss?.[1] === toplineAfterMore
+		                        && pendingBeforeTopline.startsWith(`The ${pendingPetMiss[2]} `)) {
 		                        toplineAfterMore = `${pendingPetMiss[1]}  ${toplineAfterMore}`;
 		                        game._resume_time_after_more = 0;
 		                    }
@@ -28927,6 +28953,7 @@ export async function rhack(_cmd) {
                 clearPretouchedFood(item);
             }
             recordFoodConduct(item);
+            if (item.kind === 'clove of garlic') scareNearbyOlfactoryMonstersWithGarlic();
             if (item.oeaten > 0) addHeroNutrition(item.oeaten);
             removeInventoryItem(item);
             game._pet_food_scan_inventory = game.inventory || [];
@@ -29097,6 +29124,7 @@ export async function rhack(_cmd) {
             }
             if (food.oeaten > 0) addHeroNutrition(food.oeaten);
             recordFoodConduct(food);
+            if (food?.kind === 'clove of garlic') scareNearbyOlfactoryMonstersWithGarlic();
             consumeOneFloorObject(food);
             const petrificationMessage = startPetrifyingEggStoning(food);
             await setMessage(appendPetrificationMessage(`This ${name} is delicious!`, petrificationMessage));

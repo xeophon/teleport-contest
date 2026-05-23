@@ -1603,6 +1603,14 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   `39/44`. The remaining `seed0383-wizard-hallucinate` frontier is still a
   display-only post-expel hallucination redraw/order mismatch; core RNG is
   matched there.
+- Garlic eating now applies C's `garlic_breath()` side effect: nearby monsters
+  with olfaction get untimed `mflee` and have their movement track cleared.
+  This restores the pre-pet fleeing/courage RNG that C spends after the Priest
+  eats a clove of garlic, so `seed0367-priest-quest-tour` now reaches the later
+  inventory display frontier instead of the kitten/kobold hit-roll mismatch
+  (screen score `144/324`, RNG `2182/50125`). The focused guards
+  `seed0108`, `seed0399`, `seed2200`, `seed0383`, and `seed4500` remain at
+  their prior status, and the public scorer remains `39/44`.
 
 Next concrete target:
 
@@ -1615,6 +1623,9 @@ Next concrete target:
   semantics, C special-level room/corridor/shop filling for `minetn-3.lua`, and
   full `eat.c`, `sp_lev.c`, `mkobj.c`, `makemon.c`, `uhitm.c`, and
   `dogmove.c` behavior.
+- For `seed0367`, the next narrow frontier is BUC/known-state propagation for
+  wished or worn armor: C shows `i - a blessed blue dragon scale mail.` at
+  screen 113, while JS shows `i - a blue dragon scale mail.`.
 - The Archeologist tour, exact-wand wish tails, healer scroll tail, tourist
   disaster path, and wizard quaff/zap/read option-help path are now closed;
   use them as regression guards for artifact wishing, restored-level Sokoban
