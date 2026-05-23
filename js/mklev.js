@@ -11,6 +11,7 @@ import { nhgetch } from './input.js';
 import { docrt, flush_screen, pline } from './display.js';
 import { vfsDeleteFile, vfsReadFile } from './storage.js';
 import { restoreBonesLevel } from './save.js';
+import { createGasCloud } from './region.js';
 import { rn2, rn2_on_display_rng, rnd, rn1, d, rne, rnz } from './rng.js';
 import {
     CLR_BLACK, CLR_BLUE, CLR_BRIGHT_BLUE, CLR_BRIGHT_CYAN, CLR_BRIGHT_GREEN,
@@ -36,7 +37,7 @@ import {
     ICE, MOAT, POOL, WATER, LAVAPOOL, LAVAWALL, DBWALL, DRAWBRIDGE_UP, TREE, CLOUD,
     A_NONE, A_LAWFUL, A_NEUTRAL, A_CHAOTIC, AM_SHRINE, AM_SANCTUM, Align2amask, Amask2align,
     FOODSHOP, RINGSHOP, WANDSHOP, TOOLSHOP, BOOKSHOP, FODDERSHOP, CANDLESHOP,
-    MM_NOGRP, MM_ANGRY, MM_NONAME, MM_NOCOUNTBIRTH, MM_NOMSG, MM_ADJACENTOK, MM_NOTAIL,
+    MM_NOGRP, MM_ANGRY, MM_NONAME, MM_NOCOUNTBIRTH, MM_NOMSG, MM_ADJACENTOK, MM_NOTAIL, MM_NOWAIT,
     CORPSTAT_FEMALE, CORPSTAT_MALE, CORPSTAT_NEUTER, CORPSTAT_HISTORIC,
     LR_DOWNSTAIR, LR_UPSTAIR, LR_TELE, LR_UPTELE, LR_DOWNTELE, LR_BRANCH,
     WM_MASK, WM_W_LEFT, WM_W_RIGHT, WM_W_TOP, WM_W_BOTTOM,
@@ -44,7 +45,7 @@ import {
     WM_C_OUTER, WM_C_INNER,
     WM_X_TL, WM_X_TR, WM_X_BL, WM_X_BR, WM_X_TLBR, WM_X_BLTR,
     ROT_AGE, TAINT_AGE,
-    In_mines,
+    In_endgame, In_mines, Is_firelevel,
 } from './const.js';
 
 // Object/class constants (normally from objects.js, not in contest template)
@@ -3540,6 +3541,11 @@ function oinit() { /* no-op for contest */ }
 // level_difficulty stub
 export function level_difficulty() {
     const uz = game.u?.uz;
+    if (In_endgame(uz)) {
+        const sanctum = game.sanctum_level || game.specialLevels?.find(level => level?.name === 'sanctum');
+        const sanctumDepth = sanctum ? depth_of_level(sanctum) : 51;
+        return sanctumDepth + Math.trunc((game.u?.ulevel || 1) / 2);
+    }
     const dungeon = game.dungeons?.[uz?.dnum];
     if (dungeon?.name === 'Sokoban' || dungeon?.name === "Vlad's Tower") {
         const dlevel = uz?.dlevel ?? 1;
@@ -4207,7 +4213,7 @@ function potionColor(otmp) {
     return color === CLR_BLACK ? NO_COLOR : color;
 }
 
-function object_display(otmp) {
+export function object_display(otmp) {
     const otyp = otmp?.otyp;
     const displayColor = otmp?._display_color;
     if (otyp === GOLD_PIECE) return { glyph: '$', color: CLR_YELLOW };
@@ -4291,7 +4297,7 @@ function mksobj_at(otyp, x, y, init, artif) {
     return place_object(mksobj(otyp, init, artif), x, y);
 }
 
-function mkobj(oclass, artif) {
+export function mkobj(oclass, artif) {
     if (oclass === RANDOM_CLASS) {
         let tprob = rnd(100);
         const probs = game.level?.flags?.rogue_level
@@ -5232,7 +5238,7 @@ export function monster_hp(ptr, hpLevel = ptr.hpLevel ?? adjustedMonsterLevel(pt
     if ((ptr.mlevel || 0) > 49) return 2 * (ptr.mlevel - 6);
     if (ptr.name?.endsWith(' golem')) return ptr.hpLevel || 1;
     if (ptr.glyph === 'D' && !ptr.name?.startsWith('baby '))
-        return 4 * hpLevel + d(hpLevel, 4);
+        return In_endgame(game.u?.uz) ? (8 * hpLevel) : (4 * hpLevel + d(hpLevel, 4));
     const hp = hpLevel ? d(hpLevel, 8) : rnd(4);
     return hp === (hpLevel || 1) ? hp + 1 : hp;
 }
@@ -5557,7 +5563,7 @@ function makemon_goodpos(ptr, x, y) {
     const preflip = game._bigrm_preflip_location;
     if (preflip && game.u?.ux === preflip.preX && game.u?.uy === preflip.preY) return false;
     if (game.u?.ux === x && game.u?.uy === y) return false;
-    if (game.level?.monsters?.some(mon => mon.mx === x && mon.my === y)) return false;
+    if (monster_at(x, y)) return false;
     if (IS_POOL(loc.typ)) return !!(ptr.swimmer || ptr.inAir);
     if (loc.typ === LAVAPOOL || loc.typ === LAVAWALL) return !!(ptr.inAir || ptr.likesLava);
     if (loc.typ === DOOR && (loc.doormask & (D_CLOSED | D_LOCKED))
@@ -5578,7 +5584,11 @@ function currentLevelInHell() {
 }
 
 function monster_at(x, y) {
-    return (game.level?.monsters || []).find(mon => mon.mx === x && mon.my === y) || null;
+    return (game.level?.monsters || []).find(mon => {
+        if (mon.mx === x && mon.my === y) return true;
+        return Array.isArray(mon.wormSegments)
+            && mon.wormSegments.some(seg => seg.x === x && seg.y === y);
+    }) || null;
 }
 
 function mayPasswallLoc(loc) {
@@ -5702,6 +5712,7 @@ function rlocNoMsg(mon) {
 
 function placeLongWormTailRandomly(mon, x, y, segmentCount) {
     const segments = [];
+    mon.wormSegments = [];
     let ox = x;
     let oy = y;
     for (let seg = 0; seg < segmentCount; seg++) {
@@ -6074,10 +6085,10 @@ export function set_mimic_sym_rng(mon) {
         && game.level?.flags?.has_town;
     if (game.level?.flags?.is_maze_lev && !inMinesTown && !game.level?.flags?.sokoban_rules && rn2(2)) {
         mon.appearObj = STATUE;
-        const display = object_display({ otyp: STATUE });
+        const statueMon = rndmonnum();
+        const display = object_display({ otyp: STATUE, corpsenm: statueMon });
         mon.appearGlyph = display.glyph;
         mon.appearColor = display.color;
-        rndmonnum();
         return;
     }
     if ((loc?.roomno ?? 0) < ROOMOFFSET && !trap) {
@@ -6178,7 +6189,7 @@ export async function makemon(mdat, x, y, mmflags) {
         }
     }
 
-    const spotHasMonster = x && y && game.level?.monsters?.some(mon => mon.mx === x && mon.my === y);
+    const spotHasMonster = x && y && !!monster_at(x, y);
     const spotHasHero = x && y && game.u?.ux === x && game.u?.uy === y;
     if (spotHasHero && !game.in_mklev) {
         const spot = enextoMonsterSpot(x, y, mdat);
@@ -6322,7 +6333,8 @@ export async function makemon(mdat, x, y, mmflags) {
         mon.hasInventory = true;
     }
     const normalDemon = ptr.demon && !ptr.demonLord && !ptr.demonPrince;
-    if (game.in_mklev && (normalDemon || ptr.name === 'giant eel' || ptr.name === 'long worm' || ptr.name === 'wumpus') && rn2(5))
+    if (game.in_mklev && !game.u?.uhave?.amulet
+        && (normalDemon || ptr.name === 'giant eel' || ptr.name === 'long worm' || ptr.name === 'wumpus') && rn2(5))
         mon.msleeping = 1;
     if (ptr.name === 'stalker' || ptr.name === 'black light') {
         mon.perminvis = true;
@@ -6365,6 +6377,7 @@ export async function makemon(mdat, x, y, mmflags) {
         let groupX = preflip?.preX ?? x;
         let groupY = preflip?.preY ?? y;
         while (cnt--) {
+            if (peaceMinded(ptr)) continue;
             const coords = [];
             for (let radius = 1; radius <= 3; radius++) {
                 const passStart = coords.length;
@@ -6545,6 +6558,18 @@ export async function makemon(mdat, x, y, mmflags) {
     }
 
     game._mongets_target = previousMongetsTarget;
+    return mon;
+}
+
+export async function resurrectWizardOfYendor() {
+    const mon = await makemon(WIZARD_OF_YENDOR, game.u?.ux || 0, game.u?.uy || 0, MM_NOWAIT);
+    if (!mon) return null;
+    mon.iswiz = true;
+    mon.mrevived = 1;
+    mon.mpeaceful = 0;
+    mon.pet = false;
+    mon.mtame = 0;
+    set_malign(mon);
     return mon;
 }
 
@@ -7112,6 +7137,10 @@ export async function mklev() {
     }
     if (special?.name === 'orcus') {
         await make_orcus_level();
+        return;
+    }
+    if (special?.name === 'fire') {
+        await make_fire_level();
         return;
     }
     const questBuilder = QUEST_LEVEL_BUILDERS[g.urole?.name?.m || g._startup_role || ''];
@@ -11038,6 +11067,223 @@ async function make_juiblex_level() {
     level_finalize_topology({ mineralizeLevel: false, mineralizeKelp: true });
 }
 
+const FIRE_ROWS = [
+    'LL.............LL..............L...LL.........LL.................LL...........L',
+    'LL....LLLLLLLL............L...L.............LL....LLL.......................LL.',
+    'L....LL...................L......................LLLL................LL........',
+    '.....L.............LLLL...LL....LL...............LLLLL.............LLL.........',
+    '.L.LLLL..............LL....L.....LLL......L........LLLL....LL........LLL......L',
+    'LL..........LLLL...LLLL...LLL....LLL......L........LLLL....LL........LLL......L',
+    'LL........LLLLLLL...LL.....L......L......LL.........LL......LL........LL...L...',
+    'L.........LL..LLL..LL......LL......LLLL..L.........LL......LLL............LL...',
+    '......L..LL....LLLLL.................LLLLLLL.......L......LL............LLLLLL.',
+    '......L..L.....LL.LLLL.......L............L........LLLLL.LL......LL.........LL.',
+    '......LL........L...LL......LL.............LLL.....L...LLL.......LLL.........L.',
+    '.L.....LLLLLL........L.......LLL.............L....LL...L.LLL......LLLLLLL......',
+    'LL..........LLLL............LL.L.............L....L...LL.........LLL..LLL......',
+    '.L...........................LLLLL...........LL...L...L........LLLL..LLLLLL...L',
+    '.L.....LLLL.............LL....LL.......LLL...LL.......L..LLL....LLLLLLL.......L',
+    '.........LLL.........LLLLLLLLLLL......LLLLL...L...........LL...LL...LL........',
+    '...........LL.......LL.........LL.......LLL....L..LLL....LL.........LL........',
+    '............LLLLLLLLL...........LL....LLL.......LLLLL.....LL........LL.........',
+    '.LL...............L.............LLLLLL............LL...LLLL.........LL.......L.',
+    'LL.....L..........................LL....................LL..................LLL',
+    'L.....LLL......................LLLLL.........L.........LLLLLLLL..............LL',
+];
+const FIRE_MONSTERS = [
+    ['red dragon'], ['balrog'], ['fire elemental', true], ['fire elemental', true],
+    ['fire vortex'], ['hell hound'], ['fire giant'], ['barbed devil'],
+    ['hell hound'], ['stone golem'], ['pit fiend'], ['fire elemental', true],
+    ['fire elemental', true], ['hell hound'], ['fire elemental', true],
+    ['fire elemental', true], ['scorpion'], ['fire giant'], ['hell hound'],
+    ['dust vortex'], ['fire vortex'], ['fire elemental', true],
+    ['fire elemental', true], ['fire elemental', true], ['hell hound'],
+    ['fire elemental', true], ['stone golem'], ['pit viper'], ['pit viper'],
+    ['fire vortex'], ['fire elemental', true], ['fire elemental', true],
+    ['fire giant'], ['fire elemental', true], ['fire vortex'], ['fire vortex'],
+    ['pit fiend'], ['fire elemental', true], ['pit viper'], ['salamander', true],
+    ['salamander', true], ['minotaur'], ['salamander', true], ['steam vortex'],
+    ['salamander', true], ['salamander', true], ['fire giant'], ['barbed devil'],
+    ['fire elemental', true], ['fire vortex'], ['fire elemental', true],
+    ['fire elemental', true], ['hell hound'], ['fire giant'], ['pit fiend'],
+    ['fire elemental', true], ['fire elemental', true], ['barbed devil'],
+    ['salamander', true], ['steam vortex'], ['salamander', true], ['salamander', true],
+];
+
+function fireX(x) { return x + 1; }
+
+function fireLoadMap(lit) {
+    for (let y = 0; y < FIRE_ROWS.length; y++) {
+        const row = FIRE_ROWS[y];
+        for (let x = 0; x < 79; x++) {
+            const loc = game.level.at(fireX(x), y);
+            if (!loc) continue;
+            const ch = row[x] || ' ';
+            loc.typ = SPECIAL_TERRAIN[ch] ?? STONE;
+            loc.flags = 0;
+            loc.doormask = 0;
+            loc.roomno = 0;
+            loc.edge = 0;
+            loc.lit = lit;
+        }
+    }
+}
+
+function fireLocation(kind = 'dry', ptr = null) {
+    for (;;) {
+        const x = fireX(rn2(79));
+        const y = rn2(21);
+        const loc = game.level.at(x, y);
+        if (!loc || monster_at(x, y) || sobj_at(BOULDER, x, y)) continue;
+        if (kind === 'trap' && t_at(x, y)) continue;
+        if (kind === 'monster' && ptr) {
+            if (makemon_goodpos(ptr, x, y)) return { x, y };
+            continue;
+        }
+        if (SPACE_POS(loc.typ)) return { x, y };
+    }
+}
+
+const FIRE_DRY = 0x01;
+const FIRE_WET = 0x02;
+const FIRE_HOT = 0x04;
+const FIRE_SOLID = 0x08;
+
+function fireLocationOkByHumidity(x, y, humidity) {
+    const loc = game.level.at(x, y);
+    if (!loc) return false;
+    const boulder = sobj_at(BOULDER, x, y);
+    if ((humidity & FIRE_SOLID) && IS_OBSTRUCTED(loc.typ)) return true;
+    if ((humidity & FIRE_DRY) && SPACE_POS(loc.typ) && (!boulder || (humidity & FIRE_SOLID))) return true;
+    if ((humidity & FIRE_WET) && IS_POOL(loc.typ)) return true;
+    if ((humidity & FIRE_HOT) && (loc.typ === LAVAPOOL || loc.typ === LAVAWALL)) return true;
+    return false;
+}
+
+function fireLocationByHumidity(humidity) {
+    for (let cpt = 0; cpt < 100; cpt++) {
+        const x = fireX(rn2(79));
+        const y = rn2(21);
+        if (fireLocationOkByHumidity(x, y, humidity)) return { x, y };
+    }
+    for (let x = 0; x < 79; x++)
+        for (let y = 0; y < 21; y++) {
+            const loc = { x: fireX(x), y };
+            if (fireLocationOkByHumidity(loc.x, loc.y, humidity)) return loc;
+        }
+    return null;
+}
+
+function fireMonsterHumidity(ptr) {
+    let humidity = FIRE_DRY;
+    if (ptr?.swimmer || ptr?.amphibious || ptr?.mlet === ';') humidity = FIRE_WET;
+    if (ptr?.inAir) humidity |= FIRE_HOT | FIRE_WET;
+    if (ptr?.passWalls || ptr?.noncorporeal) humidity |= FIRE_SOLID;
+    if (ptr?.likesLava) humidity |= FIRE_HOT;
+    return humidity;
+}
+
+function fireMonsterLocation(ptr) {
+    const humidity = fireMonsterHumidity(ptr);
+    let loc = fireLocationByHumidity(humidity);
+    if (!loc && (humidity & FIRE_WET) && !(humidity & (FIRE_DRY | FIRE_HOT | FIRE_SOLID)))
+        loc = fireLocationByHumidity(humidity);
+    if (!loc && !(humidity & FIRE_DRY)) loc = fireLocationByHumidity(humidity | FIRE_DRY);
+    return loc || fireLocation('monster', ptr);
+}
+
+export function fumaroles() {
+    let nmax = rn2(3);
+    let sizemin = 5;
+    let heard = false;
+    let loud = false;
+
+    if (Is_firelevel(game.u?.uz)) {
+        nmax++;
+        sizemin += 5;
+    }
+    if ((game.level?.flags?.temperature ?? 0) > 0) {
+        nmax++;
+        sizemin += 5;
+    }
+
+    for (let n = nmax; n > 0; n--) {
+        const x = rn1(COLNO - 4, 3);
+        const y = rn1(ROWNO - 4, 3);
+        const loc = game.level?.at(x, y);
+        if (loc?.typ !== LAVAPOOL) continue;
+
+        createGasCloud(x, y, rn1(10, sizemin), rn1(10, 5));
+        heard = true;
+        const dx = x - (game.u?.ux || 0);
+        const dy = y - (game.u?.uy || 0);
+        if (dx * dx + dy * dy < 15) loud = true;
+    }
+
+    if (heard && !(game.u?._deafTimeout > 0 || (game.u?._statusSuffix || '').includes('Deaf'))) {
+        const msg = `You hear a ${loud ? 'loud ' : ''}whoosh!`;
+        if (!game._pending_message) game._pending_message = msg;
+    }
+}
+
+async function fireMonster(name, forceHostile = false) {
+    const ptr = monsterByRndName(name);
+    if (!ptr) return null;
+    let specifiedFemale = ptr.female ? true : ptr.male ? false : null;
+    if (!ptr.male && !ptr.female && !ptr.skipFindGender) specifiedFemale = !!rn2(2);
+    rn2(3);
+    let loc = fireMonsterLocation(ptr);
+    if (monster_at(loc.x, loc.y)) {
+        const spot = enextoMonsterSpot(loc.x, loc.y, ptr);
+        if (spot) loc = spot;
+    }
+    const mon = await makemon(ptr, loc.x, loc.y, 0);
+    if (mon && specifiedFemale != null) mon.female = specifiedFemale;
+    if (mon && forceHostile) {
+        mon.mpeaceful = 0;
+        set_malign(mon);
+    }
+    return mon;
+}
+
+async function make_fire_level() {
+    const g = game;
+    if (await getbones()) return;
+    g.in_mklev = true;
+
+    oinit();
+    clear_level_structures();
+    g.level.flags.is_maze_lev = true;
+    g.level.flags.noteleport = true;
+    g.level.flags.hardfloor = true;
+    g.level.flags.shortsighted = true;
+    g.level.flags.temperature = 1;
+    g.level.flags.fumaroles = true;
+    g.level.dndest = { lx: fireX(71), ly: 16, hx: fireX(71), hy: 16, nlx: 0, nly: 0, nhx: 0, nhy: 0 };
+
+    l_nhcore_init();
+    fireLoadMap(!!rn2(2));
+
+    for (let i = 0; i < 40; i++) {
+        const loc = fireLocation('trap');
+        rnd(4);
+        await maketrap(loc.x, loc.y, FIRE_TRAP);
+    }
+    for (const [name, hostile] of FIRE_MONSTERS)
+        await fireMonster(name, !!hostile);
+    for (let i = 0; i < 5; i++) {
+        const loc = fireLocation('object');
+        mksobj_at(BOULDER, loc.x, loc.y, true, false);
+    }
+    flipSpecialLevelRnd(1, 0, 79, 20, true);
+    rn2(79); // Fire -> Water portal levregion x placement.
+    rn2(20); // Fire -> Water portal levregion y placement.
+
+    recount_level_features();
+    level_finalize_topology({ mineralizeLevel: false });
+    g.in_mklev = false;
+}
+
 async function valleyFillMorgue(croom) {
     const roomno = croom.roomnoidx + ROOMOFFSET;
     for (let x = croom.lx; x <= croom.hx; x++)
@@ -11903,7 +12149,7 @@ export async function make_bigrm8_level() {
     const allowsFinalFlip = variant === 7 || variant === 8 || variant === 12;
     const finalFlipVertical = (variant === 7 || variant === 8) ? rn2(2) : 0;
     const finalFlipHorizontal = allowsFinalFlip ? rn2(2) : 0;
-    const flipContentVertical = variant === 8 ? (flipVertical || finalFlipVertical) : finalFlipVertical;
+    const flipContentVertical = variant === 8 ? (flipVertical !== !!finalFlipVertical) : finalFlipVertical;
     const flipContentHorizontal = allowsFinalFlip && finalFlipHorizontal;
     if (flipContentVertical || flipContentHorizontal) {
         const flipPoint = point => {
@@ -11911,7 +12157,7 @@ export async function make_bigrm8_level() {
             if (flipContentVertical) point.y = ystart + height - 1 - (point.y - ystart);
             if (flipContentHorizontal) point.x = xstart + width - 1 - (point.x - xstart);
         };
-        const flipTerrainWithContent = variant === 7 || variant === 12;
+        const flipTerrainWithContent = variant === 7 || variant === 8 || variant === 12;
         if (flipTerrainWithContent) {
             const refs = new Map();
             for (let x = xstart; x < xstart + width; x++)

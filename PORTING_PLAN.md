@@ -1933,6 +1933,14 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   Focused `seed0373-barbarian-quest-tour` advances to RNG `21473/35386`,
   screen `72/124`. The next seed0373 frontier is later random/group monster
   placement after the visible level-teleport menu is already matching.
+- The Barbarian tour now reaches the Elemental Planes menu path with C-shaped
+  Fire-plane generation and endgame arrival side effects: the third wizard
+  level-teleport menu page, automatic Amulet prerequisite, Fire special level
+  map/traps/monsters/boulders/fumaroles/flip/portal RNG, revived Wizard of
+  Yendor confrontation, and blank Amulet wish all match through the wish result.
+  Guard sessions still pass, and focused `seed0373-barbarian-quest-tour`
+  advances to RNG `32481/35386`, screen `81/124`. The next seed0373 frontier is
+  the unported Plane of Air special level and its bubble movement RNG.
 
 Next concrete target:
 
