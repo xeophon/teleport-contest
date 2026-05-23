@@ -2878,6 +2878,14 @@ const ARC_FILL_B_ROOMS = [
     ['object', 'object', 'trap', 'S'],
     ['object', 'trap', 'S'],
 ];
+const PRI_FILL_ROOMS = [
+    { type: OROOM, contents: ['up', 'object', 'human zombie'] },
+    { type: OROOM, contents: ['object', 'object'] },
+    { type: OROOM, contents: ['object', 'trap', 'object', 'human zombie'] },
+    { type: MORGUE, contents: ['down', 'object', 'trap'] },
+    { type: OROOM, contents: ['object', 'object', 'trap', 'wraith'] },
+    { type: MORGUE, contents: ['object', 'trap'] },
+];
 const QUEST_LEVEL_BUILDERS = {
     Archeologist: {
         special: {
@@ -2899,6 +2907,9 @@ const QUEST_LEVEL_BUILDERS = {
             'x-strt': make_pri_strt_level,
             'x-loca': make_pri_loca_level,
             'x-goal': make_pri_goal_level,
+        },
+        fill() {
+            return make_pri_fill_level();
         },
     },
 };
@@ -7899,9 +7910,9 @@ function arcLocaMonsterLocation(ptr) {
     return { x: arcLocaX(0), y: arcLocaY(0) };
 }
 
-function arcFillBuildRoom() {
+function arcFillBuildRoom(rtype = OROOM) {
     rn2(100);
-    if (!create_room(-1, -1, -1, -1, -1, -1, OROOM, -1)) return null;
+    if (!create_room(-1, -1, -1, -1, -1, -1, rtype, -1)) return null;
     const croom = game.level.rooms[game.level.nroom - 1];
     topologize(croom);
     croom.needfill = FILL_NORMAL;
@@ -7947,6 +7958,47 @@ async function make_arc_fill_level(rooms) {
     await makecorridors();
     wallification(1, 0, COLNO - 1, ROWNO - 1);
     flipSpecialLevelRnd(1, 0, COLNO - 1, ROWNO - 1);
+    recount_level_features();
+    level_finalize_topology();
+}
+
+async function priFillRoomMonster(croom, name) {
+    rn2(2);
+    inducedAlign80();
+    const ptr = monsterByRndName(name);
+    const pos = oracleRoomDryLoc(croom);
+    if (ptr) await makemon(ptr, pos.x, pos.y, 0);
+}
+
+async function make_pri_fill_level() {
+    const g = game;
+    if (await getbones()) return;
+    g.in_mklev = true;
+
+    oinit();
+    clear_level_structures();
+    rn2(3);
+    rn2(2);
+
+    for (const spec of PRI_FILL_ROOMS) {
+        const croom = arcFillBuildRoom(spec.type);
+        if (!croom) continue;
+        for (const item of spec.contents) {
+            if (item === 'up') oracleRoomStair(croom, true);
+            else if (item === 'down') oracleRoomStair(croom, false);
+            else if (item === 'object') oracleRoomObject(croom);
+            else if (item === 'trap') await oracleRoomTrap(croom);
+            else await priFillRoomMonster(croom, item);
+        }
+    }
+
+    await makecorridors();
+    wallification(1, 0, COLNO - 1, ROWNO - 1);
+    flipSpecialLevelRnd(1, 0, COLNO - 1, ROWNO - 1);
+    for (const croom of g.level.rooms || []) {
+        if (!croom || croom.hx <= 0) continue;
+        await fill_special_room(croom);
+    }
     recount_level_features();
     level_finalize_topology();
 }

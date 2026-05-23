@@ -1700,6 +1700,18 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   `280/324` for that session. The full public score remains `39/44`, and the
   `seed4500-knight-coverage` visible-screen guard still matches all `1814`
   screens.
+- The next Priest filler-level slice ports `Pri-fila.lua` instead of letting
+  Priest Quest filler levels fall through to generic `makelevel()`. Home 2 now
+  builds the six C special-level rooms with the scripted up/down stairs,
+  objects, traps, human zombies, wraith, morgue room types, random corridors,
+  final flip, and morgue `fill_special_room()` pass. This makes screen 252
+  exact, including all `2153/2153` RNG calls in that level-generation slice.
+  Full `seed0367-priest-quest-tour` improves to RNG `35592/50125`, screens
+  `256/324`, and cursors `281/324`, with first visible mismatch at screen
+  254: C spends no RNG for the very-fast `b` movement after arrival, then
+  charges the next search turn, while JS spends the C turn-tail RNG one input
+  early and moves the visible wraith on the search. The full public score
+  remains `39/44`.
 
 Next concrete target:
 
@@ -1712,12 +1724,11 @@ Next concrete target:
   semantics, C special-level room/corridor/shop filling for `minetn-3.lua`, and
   full `eat.c`, `sp_lev.c`, `mkobj.c`, `makemon.c`, `uhitm.c`, and
   `dogmove.c` behavior.
-- For `seed0367`, the next narrow frontier is screen 252 after the positive
-  level teleport away from Medusa. JS and C now agree through the Quest portal
-  call and Medusa-1 arrival; the remaining visible drift is a newly generated
-  level-2/special-level map shape and hero placement. Compare C `mklev.c`,
-  `sp_lev.c`, and room/corridor generation ordering for that target level
-  before touching unrelated monster-turn behavior.
+- For `seed0367`, the next narrow frontier is screen 254 after the Home 2
+  arrival and one `b` movement. The map generation and screen 253 are exact;
+  the remaining drift is very-fast movement/turn-tail scheduling across the
+  arrival message boundary. Compare C `allmain.c` movement quantum handling
+  and JS pending-message/time accounting before changing monster movement.
 - The Archeologist tour, exact-wand wish tails, healer scroll tail, tourist
   disaster path, and wizard quaff/zap/read option-help path are now closed;
   use them as regression guards for artifact wishing, restored-level Sokoban
