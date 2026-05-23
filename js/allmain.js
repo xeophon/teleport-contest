@@ -2165,7 +2165,10 @@ function processAttributeExercise() {
         + (game._travel_dynamic_target?.allowBlockedTarget ? 1 : 0);
     const turn = (game._travel_dynamic_target ? (game.moves || 1) : (game.moves || 1) + 1)
         + exerciseTurnOffset;
-    const skipPeriodicExercise = !!game._skip_periodic_exercise_once;
+    const skipPeriodicExerciseTurn = game._skip_periodic_exercise_turn || 0;
+    const skipPeriodicExerciseAtTurn = !!skipPeriodicExerciseTurn && turn === skipPeriodicExerciseTurn;
+    if (skipPeriodicExerciseAtTurn) game._skip_periodic_exercise_turn = 0;
+    const skipPeriodicExercise = !!game._skip_periodic_exercise_once || skipPeriodicExerciseAtTurn;
     const duplicatePeriodicExercise = game._last_periodic_exercise_turn === turn;
     game._skip_periodic_exercise_once = 0;
     if (!skipPeriodicExercise && !duplicatePeriodicExercise && !(turn % 10)) {

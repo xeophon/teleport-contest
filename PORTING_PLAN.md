@@ -1833,6 +1833,24 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   the next monster phase with `distfleeck()`/movement ordering while JS takes a
   different movement branch. Continue by grounding that post-rehumanize monster
   phase in `monmove.c` rather than adding replay padding.
+- The Sanctum spellcaster More handoff now preserves the C `movemon()` resume
+  shape through the post-rehumanize `encumber_msg()` boundary. C keeps the
+  stack-local monster scan live while `pline()`/tty `more()` waits, with the
+  caster's movement already debited and later monsters still pending; the JS
+  spell queue now records the adjacent master lich's reversed monster index and
+  resumes after that caster with the saved `somebody_can_move` state. The same
+  slice defers the premature periodic exercise/status turn boundary until the
+  summon script begins, matching C's displayed `T:409`/`T:410` transition
+  without reopening visible screens. Focused `seed4500-knight-coverage`
+  improves from RNG `106670/108275` to `106847/108275` and keeps
+  screens/cursors at `1814/1814`; full `npm run score` remains `39/44`. The
+  next first flat mismatch is global RNG 106837 on step 1784, immediately
+  after `Monsters appear from nowhere!`: C enters the next monster phase with
+  `rn2(5)`, `rn2(20)`, while JS still enters the custom Sanctum summon monster
+  creation path and consumes `rnd(2)` object-id rolls. The more general repair
+  site for future cleanup is the covetous-arrival `More` return in
+  `processMonsterTurns()`/`covetousMonsterNextToHero()`, before more Sanctum
+  script scaffolding is removed.
 
 Next concrete target:
 
@@ -1869,10 +1887,12 @@ Next concrete target:
   screen pass; model when the bottom line is refreshed.
 - For `seed4500-knight-coverage`, the visible path remains closed
   (`1814/1814` screens), but PRNG is still short of exact. The current first
-  flat prefix mismatch appears at global RNG 106540 on step 1764 (`ESC`): C's
-  post-rehumanize monster phase takes another `distfleeck()`-first path, while
-  JS branches into a different movement sequence. Continue from C
-  `monmove.c` ordering for that resumed phase.
+  flat prefix mismatch appears at global RNG 106837 on step 1784 (`j`): after
+  `Monsters appear from nowhere!`, C resumes ordinary monster-phase RNG while
+  JS still spends `rnd(2)` rolls in the custom Sanctum summon construction.
+  Continue by replacing the remaining summon/scripted-monster path with C
+  `mcastu.c`/`makemon.c` behavior and by moving the generic covetous `More`
+  resume state into the monster-turn handoff.
 - Use `sessions/*.session.json` to locate divergences, but keep fixes in real
   mechanics. A score recovery is only valid when it falls out of those
   mechanics.
