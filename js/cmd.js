@@ -4268,27 +4268,27 @@ const TERRAIN_LINES = [
 const WIZ_INTRINSIC_MENU_LINES = [
     [0, 0, ' '],
     [0, 1, 'Which intrinsics?', 1],
-    [2, 0, ' a - invulnerable'],
-    [3, 0, ' b - petrifying'],
-    [4, 0, ' c - becoming slime'],
-    [5, 0, ' d - strangling'],
-    [6, 0, ' e - fatally sick'],
-    [7, 0, ' f - stunned'],
-    [8, 0, ' g - confused'],
-    [9, 0, ' h - hallucinating'],
-    [10, 0, ' i - blinded'],
-    [11, 0, ' j - deafness'],
-    [12, 0, ' k - vomiting'],
-    [13, 0, ' l - slippery fingers'],
-    [14, 0, ' m - wounded legs'],
-    [15, 0, ' n - sleepy'],
-    [16, 0, ' o - teleporting'],
-    [17, 0, ' p - polymorphing'],
-    [18, 0, ' q - levitating'],
-    [19, 0, ' r - very fast'],
-    [20, 0, ' s - clairvoyant'],
-    [21, 0, ' t - monster detection'],
-    [22, 0, ' u - see invisible'],
+    [2, 0, ' [Precede any selection with a count to increment by other than 30.]'],
+    [3, 0, ' a - invulnerable'],
+    [4, 0, ' b - petrifying'],
+    [5, 0, ' c - becoming slime'],
+    [6, 0, ' d - strangling'],
+    [7, 0, ' e - fatally sick'],
+    [8, 0, ' f - stunned'],
+    [9, 0, ' g - confused'],
+    [10, 0, ' h - hallucinating'],
+    [11, 0, ' i - blinded'],
+    [12, 0, ' j - deafness'],
+    [13, 0, ' k - vomiting'],
+    [14, 0, ' l - slippery fingers'],
+    [15, 0, ' m - wounded legs'],
+    [16, 0, ' n - sleepy'],
+    [17, 0, ' o - teleporting'],
+    [18, 0, ' p - polymorphing'],
+    [19, 0, ' q - levitating'],
+    [20, 0, ' r - very fast'],
+    [21, 0, ' s - clairvoyant'],
+    [22, 0, ' t - monster detection'],
     [23, 0, ' (1 of 4)'],
 ];
 const ENHANCE_ADVANCE_LINES = [
@@ -16083,7 +16083,7 @@ async function moveHero(dx, dy) {
         const hiddenTarget = !!game.level?.at(newx, newy)?.map_invisible;
         const targetSpotted = !game.u?.blind && !mon.mundetected
             && (!mon.minvis || game.u?.seeInvisible) && couldsee(newx, newy);
-        if (!hiddenTarget && !targetSpotted && game._force_fight_target !== mon) {
+        if (!swallowedMove && !hiddenTarget && !targetSpotted && game._force_fight_target !== mon) {
             const loc = game.level?.at(newx, newy);
             if (loc) {
                 loc.map_invisible = true;
@@ -18278,8 +18278,8 @@ export async function rhack(_cmd) {
         return;
     }
 
-	    if (
-	        game._pending_message && game._message_more
+    if (
+        game._pending_message && game._message_more
 	        && !(game._running_continuation && game._process_time_with_more)
         && game._command_mode !== 'eatInvalidMore'
         && game._command_mode !== 'readInvalidMore'
@@ -20003,11 +20003,14 @@ export async function rhack(_cmd) {
                         const staleTrackHasObject = staleTrack && (game.level?.objects || []).some(obj =>
                             !obj.hidden && !obj.transientProjectile
                             && obj.ox === staleTrack.x && obj.oy === staleTrack.y);
+                        const staleTrackHasMonster = staleTrack && (game.level?.monsters || []).some(other =>
+                            other !== killer && !other.dead && (other.mhp == null || other.mhp > 0)
+                            && other.mx === staleTrack.x && other.my === staleTrack.y);
                         const staleTrackDiagonal = staleTrack
                             && Math.abs(staleTrack.x - killer.mx) === 1
                             && Math.abs(staleTrack.y - killer.my) === 1;
                         newsym(mon.mx, mon.my);
-                        if (data.name !== 'lichen' && staleTrackDiagonal && !staleTrackHasObject) {
+                        if (data.name !== 'lichen' && staleTrackDiagonal && !staleTrackHasObject && !staleTrackHasMonster) {
                             killer._hide_for_queued_kill_more = 1;
                             newsym(killer.mx, killer.my);
                             const hiddenLoc = game.level?.at(killer.mx, killer.my);
@@ -20369,13 +20372,18 @@ export async function rhack(_cmd) {
 	                    game.u.ustuck = null;
 	                    game._swallow_overlay_active = 0;
 		                    game._swallow_overlay_before_command = null;
-		                    game._overlay_lines = null;
-		                    game._overlay_hide_status = 0;
-		                    game._overlay_hide_status_only = 0;
-		                    vision_recalc(0);
-		                    game._display_hallucinated_redraw = 1;
-		                    await docrt();
-		                    mon.mspec_used = rnd(2);
+			                    game._overlay_lines = null;
+			                    game._overlay_hide_status = 0;
+			                    game._overlay_hide_status_only = 0;
+			                    vision_recalc(0);
+			                    game._display_hallucinated_redraw = 1;
+			                    game._docrt_seen_monsters_only = 1;
+			                    try {
+			                        await docrt();
+			                    } finally {
+			                        game._docrt_seen_monsters_only = 0;
+			                    }
+			                    mon.mspec_used = rnd(2);
 		                    const spot = enextoMonsterSpot(mon.mx, mon.my, mon.data || {});
 		                    if (spot) {
 		                        newsym(mon.mx, mon.my);
@@ -20385,7 +20393,7 @@ export async function rhack(_cmd) {
 		                    }
 		                    newsym(heroX, heroY);
 		                    newsym(game.u.ux, game.u.uy);
-		                    game._hallu_refresh_after_expel = 1;
+		                    game._hallu_display_after_expel = 1;
 		                    game._simple_swallow_expel_prompt = 0;
 		                    game._display_hallucinated_redraw = 0;
 			                }
@@ -24598,27 +24606,27 @@ export async function rhack(_cmd) {
             return;
         }
         const intrinsicRows = {
-            a: [2, 'invulnerable'],
-            b: [3, 'petrifying'],
-            c: [4, 'becoming slime'],
-            d: [5, 'strangling'],
-            e: [6, 'fatally sick'],
-            f: [7, 'stunned'],
-            g: [8, 'confused'],
-            h: [9, 'hallucinating'],
-            i: [10, 'blinded'],
-            j: [11, 'deafness'],
-            k: [12, 'vomiting'],
-            l: [13, 'slippery fingers'],
-            m: [14, 'wounded legs'],
-            n: [15, 'sleepy'],
-            o: [16, 'teleporting'],
-            p: [17, 'polymorphing'],
-            q: [18, 'levitating'],
-            r: [19, 'very fast'],
-            s: [20, 'clairvoyant'],
-            t: [21, 'monster detection'],
-            u: [22, 'see invisible'],
+            a: [3, 'invulnerable'],
+            b: [4, 'petrifying'],
+            c: [5, 'becoming slime'],
+            d: [6, 'strangling'],
+            e: [7, 'fatally sick'],
+            f: [8, 'stunned'],
+            g: [9, 'confused'],
+            h: [10, 'hallucinating'],
+            i: [11, 'blinded'],
+            j: [12, 'deafness'],
+            k: [13, 'vomiting'],
+            l: [14, 'slippery fingers'],
+            m: [15, 'wounded legs'],
+            n: [16, 'sleepy'],
+            o: [17, 'teleporting'],
+            p: [18, 'polymorphing'],
+            q: [19, 'levitating'],
+            r: [20, 'very fast'],
+            s: [21, 'clairvoyant'],
+            t: [22, 'monster detection'],
+            u: [null, 'see invisible'],
         };
 	        if (ch === '.') {
 	            game._wiz_intrinsic_selected = new Set(Object.keys(intrinsicRows));
@@ -24676,6 +24684,7 @@ export async function rhack(_cmd) {
             if (messages.length) {
                 await setMessage(messages.join('  '), true);
                 game._command_mode = 'wizIntrinsicMore';
+                game._clear_wiz_intrinsic_more_after_capture = 1;
             }
         }
         return;
@@ -24687,11 +24696,8 @@ export async function rhack(_cmd) {
             game._pending_message = '';
             game._message_more = 0;
             game._keep_pending_message = 0;
-            if (ch === ' ') {
-                await rhack(ch);
-                return;
-            }
-            if (game._swallow_overlay_active && game.u?.uswallow) refreshSwallowOverlay(false);
+            if (game._pending_message && game._swallow_overlay_active && game.u?.uswallow) refreshSwallowOverlay(false);
+            await flush_screen(1);
             return;
         }
         game._command_mode = null;
