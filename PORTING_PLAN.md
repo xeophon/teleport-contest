@@ -1541,6 +1541,14 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   `seed0014`, `seed0015`, `seed0030`, `seed0361`, and `seed4500` remain fully
   matched for visible screens. The public scorer moves from the clean-HEAD
   `30/44` baseline to `31/44` by recovering `seed0002`.
+- Two small getobj prompt tails are now closed without changing RNG. C's
+  inventory `getobj("eat", ...)` prints `Never mind.` when a non-blind eat
+  prompt is canceled with space or escape after the invalid-object `--More--`
+  chain; JS previously left the `What do you want to eat?` prompt on the
+  topline. Blind eat prompts keep the older prompt-preserving behavior needed
+  by the Knight coverage path. This closes `seed0004-feeding-pony` and
+  `seed0105-valk-chat-lamp-ration`, keeps `seed4500` screen parity, and moves
+  the public scorer to `33/44`.
 
 Next concrete target:
 

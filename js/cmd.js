@@ -28781,14 +28781,21 @@ export async function rhack(_cmd) {
     }
 
     if (game._command_mode === 'eatObject') {
-        if (ch === '\x1b' || ch === '\r' || ch === '\n') {
+        if (ch === '\x1b') {
+            game._command_mode = null;
+            if (game.u?.blind || (game.u?._statusSuffix || '').includes('Blind')) game._keep_pending_message = 1;
+            else await setMessage('Never mind.');
+            return;
+        }
+        if (ch === '\r' || ch === '\n') {
             game._command_mode = null;
             game._keep_pending_message = 1;
             return;
         }
         if (ch === ' ') {
             game._command_mode = null;
-            game._keep_pending_message = 1;
+            if (game.u?.blind || (game.u?._statusSuffix || '').includes('Blind')) game._keep_pending_message = 1;
+            else await setMessage('Never mind.');
             return;
         }
         const item = (game.inventory || []).find(invItem => invItem.letter === ch);
