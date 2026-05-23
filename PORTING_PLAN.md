@@ -1593,6 +1593,16 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   the wish. This closes `seed0399-wizard-hallu-actions` completely
   (`532/532` screens, RNG `11409/11409`) and moves the public scorer to
   `38/44`.
+- The polymorphed-hero missile line check now follows C `m_lined_up()`: the
+  `Upolyd` concealment roll can hide the hero, but a visible polyself hero
+  still has to pass the ordinary geometric `linedup()` test. JS had returned
+  success immediately after the concealment branch, so a nearby goblin skipped
+  C's hostile item-search path and chose the wrong movement square. Keeping the
+  geometry check closes `seed0108-wizard-extcmd-wishlist` completely
+  (`303/303` screens, RNG `16958/16958`) and moves the public scorer to
+  `39/44`. The remaining `seed0383-wizard-hallucinate` frontier is still a
+  display-only post-expel hallucination redraw/order mismatch; core RNG is
+  matched there.
 
 Next concrete target:
 
