@@ -20396,8 +20396,15 @@ export async function rhack(_cmd) {
 			                    game._overlay_lines = null;
 			                    game._overlay_hide_status = 0;
 			                    game._overlay_hide_status_only = 0;
-			                    vision_recalc(0);
 			                    game._display_hallucinated_redraw = 1;
+			                    vision_recalc(2);
+			                    game._docrt_redraw_memory_only = 1;
+			                    try {
+			                        await docrt();
+			                    } finally {
+			                        game._docrt_redraw_memory_only = 0;
+			                    }
+			                    vision_recalc(0);
 			                    game._docrt_seen_monsters_only = 1;
 			                    try {
 			                        await docrt();

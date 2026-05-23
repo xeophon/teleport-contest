@@ -646,6 +646,15 @@ export function newsym(x, y) {
     const loc = game.level?.at(x, y);
     if (!loc) return;
 
+    if (game.u?.uswallow) {
+        if (game.u.ux === x && game.u.uy === y
+            && (!game.u.invisible || game.u.seeInvisible || game.u.blind)) {
+            show_glyph_cell(x, y, game.u._glyph || '@',
+                isRogueLevel() ? NO_COLOR : (game.u._glyphColor ?? CLR_WHITE), false);
+        }
+        return;
+    }
+
     const canSee = !!(game.viz_array?.[y]?.[x] & COULD_SEE);
     const visible = !!(game.viz_array?.[y]?.[x] & IN_SIGHT);
     if (visible) {
@@ -884,8 +893,11 @@ function redrawRememberedMap() {
 
 export async function docrt() {
     if (!game.level) return;
-    if (game._docrt_seen_monsters_only) {
+    if (game._docrt_redraw_memory_only) {
         redrawRememberedMap();
+        return;
+    }
+    if (game._docrt_seen_monsters_only) {
         refreshSeenMonsterMap();
         return;
     }
