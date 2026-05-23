@@ -6394,7 +6394,6 @@ function monsterLinedUp(mon, targetX, targetY) {
         const apType = game.u._apType || 'monster';
         const concealed = game.u.uundetected || (apType !== 'nothing' && apType !== 'monster');
         if (roll && concealed) return false;
-        return true;
     }
 
     const dx = targetX - mon.mx;
