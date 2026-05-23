@@ -1913,6 +1913,28 @@ function monsterDisplayName(mon, hallucinate = false, bareBogus = false) {
     return mon.givenName || `The ${name}`;
 }
 
+function covetousMonsterNextToHero(mon) {
+    const spot = enextoMonsterSpot(game.u?.ux || 0, game.u?.uy || 0, mon.data || {});
+    if (!spot) return false;
+    const oldX = mon.mx;
+    const oldY = mon.my;
+    mon.mx = spot.x;
+    mon.my = spot.y;
+    mon.mux = game.u?.ux ?? spot.x;
+    mon.muy = game.u?.uy ?? spot.y;
+    clearMonsterTrack(mon);
+    newsym(oldX, oldY);
+    newsym(spot.x, spot.y);
+
+    const dist = (spot.x - (game.u?.ux || 0)) ** 2 + (spot.y - (game.u?.uy || 0)) ** 2;
+    const where = dist <= 2 ? ' next to you' : dist <= BOLT_LIM * BOLT_LIM ? ' close by' : '';
+    const subject = game.u?.blind || mon.minvis ? 'It' : monsterDisplayName(mon);
+    const verb = game.u?.blind ? 'arrives' : 'appears';
+    const shown = addToplineMessage(`${subject} suddenly ${verb}${where}!`);
+    if (!shown && game._message_more) game._topline_more_after_more = 1;
+    return true;
+}
+
 function exerciseAttribute(attr, increase) {
     const u = game.u;
     if (!u || attr === A_INT || attr === A_CHA) return;
@@ -3156,7 +3178,11 @@ async function processMonsterTurns() {
                     if (!mon.mfleetim && (mon.mhpmax == null || mon.mhp == null || mon.mhp >= mon.mhpmax) && !rn2(25)) mon.mflee = 0;
                     }
                     if (!distfleeckDoneAfterAnger && mon.data?.covetous) {
-                        rn2(mon.mflee ? 33 : 5);
+                        const tacticsRoll = rn2(mon.mflee ? 33 : 5);
+                        if (!tacticsRoll) {
+                            covetousMonsterNextToHero(mon);
+                            if (game._message_more && !game._process_time_with_more) return false;
+                        }
                     }
                     if (!distfleeckDoneAfterAnger) rn2(5);
 	                    if (!mon.pet && !mon.mpeaceful && !mon.data?.mindless && !mon.data?.nohands && !(mon.m_seenres & M_SEEN_MAGR)) {
@@ -5503,6 +5529,11 @@ async function processMonsterTurns() {
     const forceTurnTailDespiteMove = !!game._force_monster_turn_tail_despite_move;
     if (!somebodyCanMove || forceTurnTailDespiteMove) game._force_monster_turn_tail_once = 0;
     game._force_monster_turn_tail_despite_move = 0;
+    const continuedUnderVisibleMore = continueAfterMore && game._message_more && game._process_time_with_more;
+    if (continuedUnderVisibleMore && !forceTurnTail && !forceTurnTailDespiteMove) {
+        game._process_time_with_more = 0;
+        return false;
+    }
     if ((somebodyCanMove && !forceTurnTailDespiteMove) || (!forceTurnTail && !continueAfterMore
         && (game.u?.umovement ?? 0) >= NORMAL_SPEED)) {
         return false;
@@ -6813,7 +6844,7 @@ function monsterFireTrapEffect(mon, trap) {
     monsterTriggerTrap(mon, trap);
     const origDamage = d(2, 4);
     const visibleMonster = !game.u?.blind && couldSeeCoord(mon.mx, mon.my) && !mon.minvis && !mon.mundetected;
-    const visibleTrap = couldSeeCoord(trap.tx, trap.ty);
+    const visibleTrap = !game.u?.blind && couldSeeCoord(trap.tx, trap.ty);
     if (visibleMonster) {
         addToplineMessage(`A tower of flame erupts from the floor under ${monsterDisplayName(mon).replace(/^The /, 'the ')}!`);
     } else if (visibleTrap) {

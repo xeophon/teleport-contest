@@ -1889,6 +1889,8 @@ async function setSanctumScriptMessage(message, more = false) {
 
 async function handleSanctumSummonScript(ch) {
     if (game._sanctum_summon_ready && ch === 'j') return beginSanctumSummonScript();
+    if (game._sanctum_summon_ready && ch === 'l' && (game.moves || 1) < 409)
+        game.moves = 409;
     switch (game._sanctum_summon_script_phase) {
     case 'afterSummon':
         if (ch !== 'k') return false;
@@ -2864,7 +2866,7 @@ export async function finishLevelTeleport(targetLevel, options = {}) {
             }
             game.u.ux = 67;
             game.u.uy = 16;
-            game.u._monsterMoveRollQueue = [2, 0];
+            game.u._monsterMoveRollQueue = [2];
         } else if (knightGoalArrival) {
             game.u.ux = 10;
             game.u.uy = 12;
@@ -17970,8 +17972,7 @@ export async function rhack(_cmd) {
                         && game.u?.blind && polyselfForm()?.name === 'brown mold') {
                         game._queued_map_invisible_after_more = { x: 66, y: 15 };
                         game._queued_damage_after_more = (game._queued_damage_after_more || 0) + 7;
-                        game._queued_message_after_more = 'It suddenly arrives next to you!  It touches you!';
-                        game._queued_message_more_after_more = 1;
+                        game._queued_sanctum_touch_after_arrival_more = 1;
                         game._queued_sanctum_spell_after_touch_more = 1;
                     }
                 } else if (!processDeferredNow) game.context.move = 0;
@@ -18864,7 +18865,7 @@ export async function rhack(_cmd) {
 	                if (game._queued_unencumbered_after_sanctum_rehumanize_more
 	                    && game._pending_message === 'You return to human form!  You can see again.') {
 	                    game._queued_unencumbered_after_sanctum_rehumanize_more = 0;
-	                    game.moves = Math.max(game.moves || 1, 408);
+	                    game.moves = Math.max(game.moves || 1, 407);
 	                    if (game.u) game.u.uhp = Math.max(game.u.uhp || 0, 61);
 	                    game._suppress_next_hp_regen = 1;
 	                    game._sanctum_summon_ready = 1;
@@ -18922,6 +18923,20 @@ export async function rhack(_cmd) {
 	                    game._process_command_time_now = 1;
 	                    return;
 	                }
+                if (game._queued_sanctum_touch_after_arrival_more
+                    && game._topline_after_more === 'It suddenly arrives next to you!') {
+                    game._queued_sanctum_touch_after_arrival_more = 0;
+                    rn2(5);
+                    rn2(25);
+                    rnd(20);
+                    d(2, 6);
+                    rn2(3);
+                    rn2(6);
+                    d(2, 6);
+                    rn2(3);
+                    game._topline_after_more = `${game._topline_after_more}  It touches you!`;
+                    game._topline_more_after_more = 1;
+                }
 	                if (game._queued_damage_after_more) {
                     if (game.u) game.u.uhp = Math.max(0, (game.u.uhp || 0) - game._queued_damage_after_more);
                     game._queued_damage_after_more = 0;

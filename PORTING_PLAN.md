@@ -1820,6 +1820,19 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   (`rn2(23)`, `rn2(230)`, `d(12,6)`) on message dismissal. Continue by
   replacing that scripted queue with the real C monster spell/message ordering,
   not by padding around it.
+- The Sanctum covetous-arrival handoff is now C-shaped through the visible
+  path. Covetous monster tactics can take the real `mnexto()` route via
+  `enexto()` ring shuffles, blind arrival queues the next More prompt, the
+  brown-mold touch handoff consumes the C attack/passive RNG before the
+  existing spell More, and the Sanctum summon script's local status catch-ups
+  were adjusted to match C's displayed turn timing. Focused
+  `seed4500-knight-coverage` improves from RNG `106470/108275` to
+  `106670/108275` and keeps screens/cursors at `1814/1814`; full
+  `npm run score` remains `39/44`. The next first flat mismatch is now step
+  1764 at global RNG 106540: after the spell/rehumanize More chain, C starts
+  the next monster phase with `distfleeck()`/movement ordering while JS takes a
+  different movement branch. Continue by grounding that post-rehumanize monster
+  phase in `monmove.c` rather than adding replay padding.
 
 Next concrete target:
 
@@ -1856,11 +1869,10 @@ Next concrete target:
   screen pass; model when the bottom line is refreshed.
 - For `seed4500-knight-coverage`, the visible path remains closed
   (`1814/1814` screens), but PRNG is still short of exact. The current first
-  flat prefix mismatch appears at global RNG 106462 on step 1757 (` `): C has
-  completed the monster fire-trap slice and starts the next monster-turn
-  `distfleeck()`/movement chain, while JS fires the existing Sanctum spell
-  queue (`rn2(23)`, `rn2(230)`, `d(12,6)`) while dismissing the previous
-  message. Continue from C monster spell/message ordering in Sanctum.
+  flat prefix mismatch appears at global RNG 106540 on step 1764 (`ESC`): C's
+  post-rehumanize monster phase takes another `distfleeck()`-first path, while
+  JS branches into a different movement sequence. Continue from C
+  `monmove.c` ordering for that resumed phase.
 - Use `sessions/*.session.json` to locate divergences, but keep fixes in real
   mechanics. A score recovery is only valid when it falls out of those
   mechanics.
