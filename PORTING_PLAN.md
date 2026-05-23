@@ -465,7 +465,7 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
 - Runtime public-session replay code and generated answer modules have been
   removed from `js/` and `tools/`.
 - Public sessions are divergence fixtures only. The current full public smoke
-  reports `33/44` while the runtime is rebuilt from C behavior.
+  reports `39/44` while the runtime is rebuilt from C behavior.
 - The active cleanup direction is to remove remaining route-specific shims and
   replace them with C-derived subsystems, not to restore exact public-session
   parity by matching recorded seeds.
@@ -1624,6 +1624,26 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   on screen 148 at the right edge of the Priest start map. The full public
   scorer remains `39/44`, and focused guards `seed0108`, `seed0399`,
   `seed2200`, and `seed4500` still match all visible screens.
+- The Priest quest-start map and leader-text frontier now follows more C
+  evidence from `sp_lev.c`, `display.h`, `priest.c`, and `quest.lua`.
+  `Pri-strt.lua` map coordinates are centered at global origin `(3,1)`,
+  terrain replacement/branch/stairs/doors/temple occupants are offset from
+  that origin, and the final flip uses `get_level_extends()`-style bounds
+  through `flipSpecialLevelRnd()`. Altar glyph color now follows the tty C
+  altar color table, trees describe as trees in fire/farlook/travel/teleport
+  prompts, the untended temple entry path spends `rn2(4)`/`rn2(5)` at the C
+  `intemple()` message and ghost-roll boundary, and Priest quest leader pages
+  now use the C text with `%gP`, `%S`, `%s`, `%l`, and Priest pantheon deity
+  substitution. Automatic leader talk is suppressed on `x-strt`, but explicit
+  `#chat` starts the C pager flow and charges the assignment turn after
+  `assignquest`.
+  `seed0367-priest-quest-tour` now reaches the post-`assignquest` map-movement
+  frontier: focused metrics improve to RNG `3380/50125`, screens `215/324`,
+  and cursors `263/324`; the first visible mismatch is screen 198, where C and
+  JS move quest-start monsters to different squares after assignment. Full
+  public scoring remains `39/44`. Focused screen guards `seed0108`,
+  `seed0399`, `seed2200`, and `seed4500` still match all visible screens, with
+  `seed4500` retaining its known RNG-only failure.
 
 Next concrete target:
 
@@ -1636,10 +1656,13 @@ Next concrete target:
   semantics, C special-level room/corridor/shop filling for `minetn-3.lua`, and
   full `eat.c`, `sp_lev.c`, `mkobj.c`, `makemon.c`, `uhitm.c`, and
   `dogmove.c` behavior.
-- For `seed0367`, the next narrow frontier is the Priest quest-start special
-  level itself: the right edge of the randomized tree field/FOV still differs
-  on the arrival screen, and the following post-arrival Quest text/RNG should
-  be modeled directly instead of relying on the current narrow C-trace shim.
+- For `seed0367`, the next narrow frontier is Priest quest-start monster turn
+  ordering after `assignquest`: compare C `allmain.c`/`monmove.c` scheduling
+  from the assignment pager dismissal through screen 198, especially acolyte
+  movement energy and random-walk candidate ordering on the centered, flipped
+  `x-strt` map. Avoid adding another arrival or text shim; the map, temple
+  entry, quest text, and first assignment-turn timing are now C-shaped enough
+  that the remaining mismatch should come from shared monster movement.
 - The Archeologist tour, exact-wand wish tails, healer scroll tail, tourist
   disaster path, and wizard quaff/zap/read option-help path are now closed;
   use them as regression guards for artifact wishing, restored-level Sokoban

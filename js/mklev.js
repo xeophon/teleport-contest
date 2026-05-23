@@ -2678,6 +2678,8 @@ const PRI_ROWS = [
 ];
 const PRI_WIDTH = PRI_ROWS[0].length;
 const PRI_HEIGHT = PRI_ROWS.length;
+const PRI_XSTART = 3;
+const PRI_YSTART = 1;
 const PRI_DOORS = [
     [D_LOCKED, 18, 9], [D_LOCKED, 18, 10],
     [D_CLOSED, 34, 9], [D_CLOSED, 34, 10],
@@ -2690,6 +2692,9 @@ const PRI_ACOLYTES = [
     [32, 7], [32, 8], [32, 11], [32, 12],
     [33, 7], [33, 8], [33, 11], [33, 12],
 ];
+
+function priX(x) { return PRI_XSTART + x; }
+function priY(y) { return PRI_YSTART + y; }
 
 const ARC_LOCA_XSTART = 3;
 const ARC_LOCA_YSTART = 1;
@@ -7110,8 +7115,9 @@ function priRndCoord(selection, remove = false) {
 }
 
 function priReplaceTerrain(x1, y1, x2, y2, fromTyp, toTyp, chance) {
-    for (let x = Math.max(0, x1); x <= Math.min(COLNO - 1, x2); x++)
-        for (let y = Math.max(0, y1); y <= Math.min(ROWNO - 1, y2); y++) {
+    const lx = priX(x1), hx = priX(x2), ly = priY(y1), hy = priY(y2);
+    for (let x = Math.max(1, lx); x <= Math.min(COLNO - 1, hx); x++)
+        for (let y = Math.max(0, ly); y <= Math.min(ROWNO - 1, hy); y++) {
             const loc = game.level.at(x, y);
             if (loc?.typ === fromTyp && rn2(100) < chance) loc.typ = toTyp;
         }
@@ -7125,13 +7131,15 @@ function priRandomDryLocation(rejectStairs = false) {
             && (!rejectStairs || (loc.typ !== STAIRS && loc.typ !== LADDER));
     };
     for (let tryct = 0; tryct < 100; tryct++) {
-        const x = rn2(PRI_WIDTH);
-        const y = rn2(PRI_HEIGHT);
+        const x = priX(rn2(PRI_WIDTH));
+        const y = priY(rn2(PRI_HEIGHT));
         if (good(x, y)) return { x, y };
     }
     for (let x = 0; x < PRI_WIDTH; x++)
-        for (let y = 0; y < PRI_HEIGHT; y++)
-            if (good(x, y)) return { x, y };
+        for (let y = 0; y < PRI_HEIGHT; y++) {
+            const loc = { x: priX(x), y: priY(y) };
+            if (good(loc.x, loc.y)) return loc;
+        }
     return { x: 0, y: 0 };
 }
 
@@ -7205,7 +7213,7 @@ async function make_pri_strt_level() {
     for (let y = 0; y < PRI_HEIGHT; y++) {
         const row = PRI_ROWS[y];
         for (let x = 0; x < row.length; x++) {
-            const loc = g.level.at(x, y);
+            const loc = g.level.at(priX(x), priY(y));
             const ch = row[x];
             loc.flags = 0;
             loc.roomno = 0;
@@ -7223,7 +7231,7 @@ async function make_pri_strt_level() {
     }
 
     const temple = {
-        lx: 24, ly: 6, hx: 33, hy: 13, rtype: TEMPLE, rlit: 1,
+        lx: priX(24), ly: priY(6), hx: priX(33), hy: priY(13), rtype: TEMPLE, rlit: 1,
         doorct: 0, fdoor: g.level.doorindex, irregular: false,
         needjoining: false, nsubrooms: 0, sbrooms: [],
         roomnoidx: g.level.nroom, needfill: 2,
@@ -7234,28 +7242,28 @@ async function make_pri_strt_level() {
 
     priReplaceTerrain(0, 0, 10, 19, ROOM, TREE, 10);
     priReplaceTerrain(65, 0, 75, 19, ROOM, TREE, 10);
-    const branchLoc = g.level.at(5, 4);
+    const branchLoc = g.level.at(priX(5), priY(4));
     if (branchLoc) branchLoc.typ = ROOM;
-    const spacelocs = priFloodfillSelection(5, 4);
+    const spacelocs = priFloodfillSelection(priX(5), priY(4));
 
-    g.level.branch_region = { x: 5, y: 4 };
-    place_branch(is_branchlev(), 5, 4);
-    mkstairs(52, 9, false, null);
+    g.level.branch_region = { x: priX(5), y: priY(4) };
+    place_branch(is_branchlev(), priX(5), priY(4));
+    mkstairs(priX(52), priY(9), false, null);
     for (const [mask, x, y] of PRI_DOORS) {
-        const loc = g.level.at(x, y);
+        const loc = g.level.at(priX(x), priY(y));
         if (loc) {
             if (!IS_DOOR(loc.typ) && loc.typ !== SDOOR) loc.typ = DOOR;
             loc.doormask = mask;
         }
     }
 
-    const altar = g.level.at(28, 9);
+    const altar = g.level.at(priX(28), priY(9));
     if (altar) {
         altar.typ = ALTAR;
         altar.flags = Align2amask(A_NONE);
     }
 
-    const leader = await priNamedMonster(ARCH_PRIEST, 28, 10, false);
+    const leader = await priNamedMonster(ARCH_PRIEST, priX(28), priY(10), false);
     if (leader) {
         for (const _obj of leader.minvent || []) rn2(100);
         leader.minvent = [];
@@ -7263,12 +7271,12 @@ async function make_pri_strt_level() {
         priInventoryObject(leader, ROBE, 4, { cls: 'armor', kind: 'robe' });
         priInventoryObject(leader, MACE, 4, { cls: 'weapon', kind: 'mace' });
     }
-    mksobj_at(CHEST, 27, 10, true, true);
+    mksobj_at(CHEST, priX(27), priY(10), true, true);
 
-    for (const [x, y] of PRI_ACOLYTES) await priNamedMonster(ACOLYTE, x, y);
+    for (const [x, y] of PRI_ACOLYTES) await priNamedMonster(ACOLYTE, priX(x), priY(y));
 
-    for (let x = 18; x <= 55; x++)
-        for (let y = 3; y <= 16; y++) {
+    for (let x = priX(18); x <= priX(55); x++)
+        for (let y = priY(3); y <= priY(16); y++) {
             const loc = g.level.at(x, y);
             if (loc) loc.wall_info = (loc.wall_info || 0) | W_NONDIGGABLE;
         }
@@ -7284,7 +7292,7 @@ async function make_pri_strt_level() {
     }
 
     wallification(1, 0, COLNO - 1, ROWNO - 1);
-    flipSpecialLevelRnd(1, 0, PRI_WIDTH + 1, PRI_HEIGHT - 1, true);
+    flipSpecialLevelRnd();
     recount_level_features();
     rn2(1);
     rn2(1);

@@ -491,6 +491,73 @@ The pools on either side of the entrance are fouled with blood, and
 pieces of rusted metal and broken weapons show above the surface.`,
         },
     },
+    Priest: {
+        filecode: 'Pri',
+        homebase: 'the Great Temple',
+        intermed: 'the Temple of Nalzok',
+        leader: 'Arch Priest',
+        leaderText: 'the Arch Priest',
+        nemesis: 'Nalzok',
+        guardian: 'acolyte',
+        artifact: 'the Mitre of Holiness',
+        artifactShort: 'Mitre of Holiness',
+        ranks: ['Aspirant', 'Acolyte', 'Adept', 'Priest', 'Curate', 'Canon', 'Lama', 'Patriarch', 'High Priest'],
+        texts: {
+            firsttime: `You find yourself standing in sight of %H.  Something
+is obviously wrong here.  The doors to %H, which usually
+stand open, are closed.  Strange human shapes shamble around
+outside.
+
+You realize that %l needs your assistance!`,
+            nexttime: 'Once again, you stand before %H.',
+            othertime: `Again you face %H.  Your intuition hints that this may be
+the final time you come here.`,
+            locate_first: `You stand facing a large graveyard.  The sky above is filled with clouds
+that seem to get thicker closer to the center.  You sense the presence of
+undead in larger numbers than you have ever encountered before.
+
+You remember the descriptions of %i, given to you by
+%l.  It is ahead that you will find %ns trail.`,
+            locate_next: 'Again, you stand before %i.',
+            goal_first: `The stench of brimstone is all about you, and the shrieks and moans
+of tortured souls assault your psyche.
+
+Ahead, there is a small clearing amidst the bubbling pits of lava...`,
+            goal_next: 'Again, you have invaded %ns domain.',
+            goal_alt: 'Again, you have invaded %ns domain.',
+            leader_first: `"Ah, %p, my %S.  You have returned to us at last.
+A great blow has befallen our order; perhaps you can help us.
+First, however, I must determine if you are prepared for this
+great challenge."`,
+            leader_next: '"Again, my %S, you stand before me.  Are you ready now to help us?"',
+            badalign: `"This is terrible, %p.  You have deviated from the true path!
+You know that %d requires the most strident devotion of this
+order.  The %shood must stand for utmost piety.
+
+"Go from here, atone for your sins against %d.  Return only when
+you have purified yourself."`,
+            badlevel: `"Alas, %p, it is not yet to be.  A mere %r could never
+withstand the might of %n.  Go forth, again into the world, and return
+when you have attained the post of %R."`,
+            assignquest: `"Yes, %p.  You are truly ready now.  Attend to me and I shall
+tell you of what has transpired:
+
+"At one of the Great Festivals a short time ago, %n and a legion
+of undead invaded %H.  Many %gP were killed, including
+the one carrying %o.
+
+"As a final act of vengefulness, %n desecrated the altar here.
+Without it, we could not mount a counter-attack.  Now, there are
+barely enough %gP left to keep the undead at bay.
+
+"We need you to find %i, then, from there, travel
+to %ns lair.  If you can manage to defeat %n and return
+%o here, we can then drive off the legions of
+undead that befoul the land.
+
+"Go with %d as your guide, %p."`,
+        },
+    },
     Wizard: {
         filecode: 'Wiz',
         homebase: 'the Lonely Tower',
@@ -2092,9 +2159,12 @@ function questPagerText(msgid) {
     const rank = info.ranks[Math.min(rankIndex(game.u?.ulevel || 1), info.ranks.length - 1)];
     const minRank = info.ranks[Math.min(rankIndex(MIN_QUEST_LEVEL), info.ranks.length - 1)];
     const alignName = (game._startup_align || (game.u?.ualign?.type > 0 ? 'lawful' : game.u?.ualign?.type < 0 ? 'chaotic' : 'neutral')).toLowerCase();
-    const gods = GODS_BY_ROLE[roleName] || GODS_BY_ROLE.Archeologist;
+    const pantheonRole = roleName === 'Priest' ? game._pantheon_role || roleName : roleName;
+    const gods = GODS_BY_ROLE[pantheonRole] || GODS_BY_ROLE.Archeologist;
     const deity = gods[alignName === 'lawful' ? 0 : alignName === 'chaotic' ? 2 : 1];
     const player = game.plname || 'Hero';
+    const sibling = game.flags?.female ? 'sister' : 'brother';
+    const child = game.flags?.female ? 'daughter' : 'son';
     const cap = text => `${text.charAt(0).toUpperCase()}${text.slice(1)}`;
     const article = text => /^(?:the|a|an)\b/i.test(text) ? text : `${/^[aeiou]/i.test(text) ? 'an' : 'a'} ${text}`;
     const roleClass = roleName || 'Adventurer';
@@ -2111,8 +2181,10 @@ function questPagerText(msgid) {
         ['%R', minRank], ['%r', rank], ['%ns', `${info.nemesis}'s`],
         ['%nC', cap(info.nemesis)], ['%na', article(info.nemesis)],
         ['%n', info.nemesis], ['%O', `the ${info.artifactShort}`],
-        ['%oC', cap(info.artifact)], ['%o', info.artifact], ['%l', info.leader],
-        ['%i', info.intermed], ['%gP', `${info.guardian}s`], ['%g', info.guardian],
+        ['%oC', cap(info.artifact)], ['%o', info.artifact],
+        ['%lC', cap(info.leaderText || info.leader)], ['%l', info.leaderText || info.leader],
+        ['%S', child], ['%s', sibling],
+        ['%i', info.intermed], ['%gP', cap(`${info.guardian}s`)], ['%g', info.guardian],
         ['%H', info.homebase], ['%d', deity], ['%a', alignName], ['%p', player],
     ];
     let text = raw.trimEnd();
@@ -2291,14 +2363,16 @@ async function continueQuestLeaderTalkAfterIntro() {
         return;
     }
     game.quest_status.got_quest = true;
+    game._quest_assignquest_time_after_more = 1;
     showQuestPager('assignquest', 'questIntroMore');
 }
 
-export function maybeQueueQuestLeaderTalk(mon) {
+export function maybeQueueQuestLeaderTalk(mon, { automatic = true } = {}) {
     const roleName = game.urole?.name?.m || game._startup_role || '';
     const info = QUEST_ROLE_DATA[roleName];
     const adjacent = Math.max(Math.abs(mon.mx - (game.u?.ux || 0)), Math.abs(mon.my - (game.u?.uy || 0))) <= 1;
     if (!info || mon.data?.name !== info.leader || !adjacent || mon.msleeping || mon.questTalked) return false;
+    if (automatic && roleName === 'Priest' && currentSpecialLevelName() === 'x-strt') return false;
     game.quest_status ??= {};
     mon.questTalked = true;
     game.quest_status.met_leader = true;
@@ -2721,13 +2795,6 @@ export async function finishLevelTeleport(targetLevel, options = {}) {
             u_on_rndspot(false);
         }
     }
-    if (targetIsNew && targetSpecialBeforePlacement?.name === 'x-strt'
-        && (game._startup_role || game.urole?.name?.m) === 'Priest') {
-        rn2(3);
-        rn2(2);
-        rn2(4);
-        rn2(5);
-    }
     if (ballAndChain.length && game.level) {
         game.level.objects = (game.level.objects || []).filter(obj => !ballAndChain.includes(obj));
         for (const obj of ballAndChain) {
@@ -3029,6 +3096,21 @@ export async function finishLevelTeleport(targetLevel, options = {}) {
                 mode: 'objectListMore',
                 usePendingTime: true,
             };
+        }
+        const arrivalRoomno = game.level?.at(game.u?.ux || 0, game.u?.uy || 0)?.roomno || 0;
+        const templeEntry = prepareUntendedTempleEntry(arrivalRoomno);
+        if (templeEntry) {
+            if (templeEntry.text && arrivalMore) {
+                queueMessageAfterMore(templeEntry.text);
+                game._queued_temple_ghost_roll_after_more = 1;
+            } else {
+                const ghostText = await finishUntendedTempleEntry();
+                const templeText = [templeEntry.text, ghostText].filter(Boolean).join('  ');
+                if (templeText) {
+                    if (arrivalMore) queueMessageAfterMore(templeText);
+                    else arrivalMessage = arrivalMessage ? `${arrivalMessage}  ${templeText}` : templeText;
+                }
+            }
         }
         await setMessage(arrivalMessage, arrivalMore);
         resetMovementAfterArrival = arrivalMore && !lowerWizardTowerArrival;
@@ -9970,6 +10052,7 @@ function fireScrollTargetDescription(x, y) {
     if (IS_POOL(loc.typ)) return 'pool of water';
     if (loc.typ === LAVAPOOL) return 'molten lava';
     if (loc.typ === LAVAWALL) return 'lava wall';
+    if (loc.typ === TREE) return 'tree';
     if (loc.typ && loc.typ < DOOR) return 'wall';
     return 'unexplored area';
 }
@@ -12306,6 +12389,61 @@ function levelRoomByRoomno(roomno) {
     return game.level?.rooms?.[idx]
         || (game.level?.subrooms || []).find(room => room?.roomnoidx === idx)
         || null;
+}
+
+function queueMessageAfterMore(text, more = false) {
+    if (!text) return;
+    game._queued_message_after_more = game._queued_message_after_more
+        ? `${game._queued_message_after_more}  ${text}`
+        : text;
+    if (more) game._queued_message_more_after_more = 1;
+}
+
+function tendedTemplePriest(roomno) {
+    return (game.level?.monsters || []).find(mon =>
+        mon.ispriest && mon.shrine?.room === roomno
+        && game.level?.at(mon.mx, mon.my)?.roomno === roomno);
+}
+
+function prepareUntendedTempleEntry(newRoomno, oldRoomno = 0) {
+    if (!newRoomno || newRoomno === oldRoomno) return null;
+    const room = levelRoomByRoomno(newRoomno);
+    if (room?.rtype !== TEMPLE || tendedTemplePriest(newRoomno)) return null;
+    const roll = rn2(4);
+    const text = roll === 0 ? 'You have an eerie feeling...'
+        : roll === 1 ? 'You feel like you are being watched.'
+            : roll === 2 ? 'A shiver runs down your spine.'
+                : '';
+    return { text };
+}
+
+async function finishUntendedTempleEntry() {
+    if (rn2(5)) return '';
+    const ghost = await makemon(monsterByRndName('ghost'), game.u?.ux || 0, game.u?.uy || 0, MM_NOMSG);
+    if (!ghost) return '';
+    ghost.mpeaceful = 0;
+    set_malign(ghost);
+    newsym(ghost.mx, ghost.my);
+    if (game.u?.blind || !(game.viz_array?.[ghost.my]?.[ghost.mx] & IN_SIGHT))
+        return 'You sense a presence close by!';
+    return 'A ghost appears next to you!';
+}
+
+async function queueUntendedTempleEntryAfterTeleport(oldX, oldY, newX, newY) {
+    const oldRoomno = game.level?.at(oldX, oldY)?.roomno || 0;
+    const newRoomno = game.level?.at(newX, newY)?.roomno || 0;
+    const templeEntry = prepareUntendedTempleEntry(newRoomno, oldRoomno);
+    if (!templeEntry) return;
+    if (templeEntry.text) {
+        queueMessageAfterMore(templeEntry.text);
+        game._queued_temple_ghost_roll_after_more = 1;
+        if ((game.urole?.name?.m || game._startup_role || '') === 'Priest'
+            && currentSpecialLevelName() === 'x-strt')
+            game._priest_quest_hold_first_temple_monsters = 1;
+        return;
+    }
+    const ghostText = await finishUntendedTempleEntry();
+    if (ghostText) queueMessageAfterMore(ghostText);
 }
 
 function shopItemPrice(obj, x = game.u?.ux, y = game.u?.uy) {
@@ -16983,6 +17121,18 @@ async function moveHero(dx, dy) {
         newsym(newx, newy);
         newsym(game.u.ux, game.u.uy);
         vision_recalc(0);
+        const trapRoomno = game.level?.at(newx, newy)?.roomno || 0;
+        const arrivalRoomno = game.level?.at(game.u?.ux || 0, game.u?.uy || 0)?.roomno || 0;
+        const templeEntry = prepareUntendedTempleEntry(arrivalRoomno, trapRoomno);
+        if (templeEntry) {
+            if (templeEntry.text) {
+                queueMessageAfterMore(templeEntry.text);
+                game._queued_temple_ghost_roll_after_more = 1;
+            } else {
+                const ghostText = await finishUntendedTempleEntry();
+                if (ghostText) queueMessageAfterMore(ghostText);
+            }
+        }
         const pickupTypes = game._autopickup_types || game.flags?.pickup_types || 'all';
         const goldHere = game._autopickup && (pickupTypes === 'all' || pickupTypes.includes('$'))
             ? (game.level?.objects || []).find(obj =>
@@ -17139,6 +17289,15 @@ async function moveHero(dx, dy) {
     const continuingTravel = !!game._travel_keys?.length;
     const oldRoomno = oldLoc?.roomno || 0;
     const newRoomno = target?.roomno || 0;
+    const templeEntry = prepareUntendedTempleEntry(newRoomno, oldRoomno);
+    if (templeEntry) {
+        const ghostText = await finishUntendedTempleEntry();
+        const templeText = [templeEntry.text, ghostText].filter(Boolean).join('  ');
+        if (templeText) {
+            await setMessage(templeText, !!ghostText);
+            return;
+        }
+    }
     const shopRoom = levelRoomByRoomno(newRoomno);
     if (!continuingTravel && shopRoom?.rtype >= SHOPBASE && oldRoomno !== newRoomno) {
         const shkp = shopRoom.resident || (game.level?.monsters || [])
@@ -17720,6 +17879,12 @@ export async function rhack(_cmd) {
                 game._queued_message_after_more = '';
                 game._queued_message_more_after_more = 0;
                 await setMessage(next, nextMore);
+            } else if (game._quest_assignquest_time_after_more) {
+                game._quest_assignquest_time_after_more = 0;
+                exerciseAttribute(A_WIS, true);
+                game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
+                game.context.move = 0;
+                game._process_command_time_now = 1;
             }
         }
         return;
@@ -17799,6 +17964,7 @@ export async function rhack(_cmd) {
             if (game.u?.ualign) game.u.ualign.record = MIN_QUEST_ALIGN;
             game.quest_status ??= {};
             game.quest_status.got_quest = true;
+            game._quest_assignquest_time_after_more = 1;
             showQuestPager('assignquest', 'questIntroMore');
         } else {
             game.quest_status ??= {};
@@ -18409,6 +18575,9 @@ export async function rhack(_cmd) {
         && game._command_mode !== 'jumpIntroMore'
         && game._command_mode !== 'teleportIntroMore'
         && game._command_mode !== 'levelChangeMore'
+        && game._command_mode !== 'questLeaderIntroMore'
+        && game._command_mode !== 'questLeaderStatusMore'
+        && game._command_mode !== 'questLeaderRejectMore'
         && game._command_mode !== 'dropObject'
         && game._command_mode !== 'iceBoxContents'
         && game._command_mode !== 'floorContainerContents'
@@ -20171,6 +20340,14 @@ export async function rhack(_cmd) {
                 const messageBeforeQueuedMore = game._pending_message || '';
                 game._pending_message = '';
                 game._message_more = 0;
+                if (game._queued_temple_ghost_roll_after_more) {
+                    game._queued_temple_ghost_roll_after_more = 0;
+                    const ghostText = await finishUntendedTempleEntry();
+                    if (ghostText) {
+                        next = `${next}  ${ghostText}`;
+                        queuedMore = true;
+                    }
+                }
                 if (game._potion_sickness_after_more) {
                     game._potion_sickness_after_more = 0;
                     if (game.u) game.u.uhp = Math.max(1, (game.u.uhp || 1) - 1);
@@ -20657,6 +20834,9 @@ export async function rhack(_cmd) {
         && game._command_mode !== 'jumpIntroMore'
         && game._command_mode !== 'teleportIntroMore'
         && game._command_mode !== 'levelChangeMore'
+        && game._command_mode !== 'questLeaderIntroMore'
+        && game._command_mode !== 'questLeaderStatusMore'
+        && game._command_mode !== 'questLeaderRejectMore'
         && game._command_mode !== 'messageWait'
         && game._command_mode !== 'confusedLevelTeleportOopsMore'
         && game._command_mode !== 'escapedMore'
@@ -24427,6 +24607,7 @@ export async function rhack(_cmd) {
             else if (loc?.typ === CORR) text = 'corridor';
             else if (loc?.typ === ROOM) text = 'floor of a room';
             else if (loc?.typ === MOAT) text = 'moat';
+            else if (loc?.typ === TREE) text = 'tree';
             else if (ch === 'H') {
                 text = 'floor of a room';
                 game._farlook_after_H = 1;
@@ -24456,6 +24637,8 @@ export async function rhack(_cmd) {
                 await setMessage('#        can be many things (corridor)', !game._farlook_quick);
             } else if (loc?.typ === STONE) {
                 await setMessage('         can be many things (stone)');
+            } else if (loc?.typ === TREE) {
+                await setMessage('\x0eg\x0f        a tree (tree)');
             } else if (loc?.typ && loc.typ < DOOR) {
                 await setMessage('│        the interior of a monster or a wall (wall)');
             } else {
@@ -28101,6 +28284,7 @@ export async function rhack(_cmd) {
                 : loc?.typ === CORR ? 'corridor'
                     : loc?.typ === ROOM || loc?.typ === STAIRS ? 'floor of a room'
                         : loc?.typ === MOAT ? 'moat'
+                            : loc?.typ === TREE ? 'tree'
                             : loc?.typ && loc.typ < DOOR ? 'wall' : 'unexplored area';
             const dx = Math.abs((game._farlook_x || 0) - (game.u?.ux || 0));
             const dy = Math.abs((game._farlook_y || 0) - (game.u?.uy || 0));
@@ -28130,6 +28314,7 @@ export async function rhack(_cmd) {
                         : loc?.typ === CORR ? 'corridor'
                             : loc?.typ === ROOM || loc?.typ === STAIRS ? 'floor of a room'
                                 : loc?.typ === MOAT ? 'moat'
+                                    : loc?.typ === TREE ? 'tree'
                                     : loc?.typ && loc.typ < DOOR ? 'wall' : 'unexplored area';
             await setMessage(`${terrain} (invalid target)`);
             return;
@@ -28304,6 +28489,7 @@ export async function rhack(_cmd) {
                 : loc?.typ === DOOR ? doorDescription(loc)
                     : loc?.typ === ROOM || loc?.typ === STAIRS ? 'floor of a room'
                         : loc?.typ === MOAT ? 'moat'
+                            : loc?.typ === TREE ? 'tree'
                             : loc?.typ && loc.typ < DOOR ? 'wall' : 'unexplored area';
             game._teleport_dot_described = 0;
             await setMessage(text);
@@ -28351,6 +28537,7 @@ export async function rhack(_cmd) {
                     game._teleport_cursor_position_mode = 0;
                     game._cursor_override = null;
                     game._teleport_geometric_online_once = 1;
+                    await queueUntendedTempleEntryAfterTeleport(oldX, oldY, targetX, targetY);
                     await setMessage(`You materialize in ${targetX === oldX && targetY === oldY ? 'the same' : 'a different'} location!`, true);
                     game.context.move = 1;
                     return;
@@ -28464,6 +28651,7 @@ export async function rhack(_cmd) {
                 applySameLevelTeleportNutritionPenalty();
                 game.context.move = 1;
                 const materializeMessage = `You materialize in ${landingX === oldX && landingY === oldY ? 'the same' : 'a different'} location!`;
+                await queueUntendedTempleEntryAfterTeleport(oldX, oldY, landingX, landingY);
                 if (!selectedValid) {
                     const attachedObjects = [game.u?.uchain, game.u?.uball].filter(obj =>
                         obj && !obj.hidden && obj.ox === landingX && obj.oy === landingY);
@@ -28793,6 +28981,9 @@ export async function rhack(_cmd) {
         const tx = (game.u?.ux || 0) + (dir?.dx || 0);
         const ty = (game.u?.uy || 0) + (dir?.dy || 0);
         const target = dir ? game.level?.monsters?.find(mon => mon.mx === tx && mon.my === ty) : null;
+        if (target && maybeQueueQuestLeaderTalk(target, { automatic: false })) {
+            return;
+        }
         if (target?.pet) {
             const petName = target.givenName || `The ${target.saddled ? 'saddled ' : ''}${target.data?.name || 'creature'}`;
             if (target.meating) {
@@ -29485,6 +29676,7 @@ export async function rhack(_cmd) {
                 : loc?.typ === CORR ? 'corridor'
                     : loc?.typ === ROOM || loc?.typ === STAIRS ? 'floor of a room'
                         : loc?.typ === MOAT ? 'moat'
+                            : loc?.typ === TREE ? 'tree'
                             : loc?.typ && loc.typ < DOOR ? 'wall' : 'unexplored area';
             const keys = travelPathKeys(targetX, targetY);
             if (!keys[0]) {

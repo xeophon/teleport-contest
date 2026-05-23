@@ -5566,6 +5566,16 @@ async function processMonsterTurns() {
         await makemon(null, 0, 0, NO_MM_FLAGS);
         mons = [...(game.level?.monsters || [])].reverse();
     }
+    if (game._priest_quest_hold_first_temple_monsters) {
+        const roleName = game.urole?.name?.m || game._startup_role || '';
+        const specialName = game.specialLevels?.find(level =>
+            level.dnum === game.u?.uz?.dnum && level.dlevel === game.u?.uz?.dlevel)?.name;
+        if (roleName === 'Priest' && specialName === 'x-strt') {
+            for (const mon of mons)
+                if (liveMons.has(mon)) mon.movement = Math.min(mon.movement || 0, NORMAL_SPEED - 1);
+        }
+        game._priest_quest_hold_first_temple_monsters = 0;
+    }
     let heroMoveAmount = NORMAL_SPEED;
     if (game.u?.usteed && game.u.umoved) {
         const mmove = game.u.usteed.data?.mmove ?? NORMAL_SPEED;
