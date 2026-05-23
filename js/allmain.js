@@ -2152,11 +2152,13 @@ function processAttributeExercise() {
         || game._force_lock_occupation || game._pick_lock_occupation || game._tin_opening_occupation
         || game._prayer_occupation) return;
     if (game._fumble_turn_message_pending || game._pending_fumble_turn_message
-        || game._last_fumble_turn_message || game._defer_fumble_exerchk_once) {
+        || game._last_fumble_turn_message) {
         game._fumble_delayed_exerchk = 1;
         game._defer_fumble_exerchk_once = 0;
         return;
     }
+    const forceFumbleExerciseRoll = !!game._defer_fumble_exerchk_once;
+    game._defer_fumble_exerchk_once = 0;
 
     const aexe = u._aexe ??= Array(A_MAX).fill(0);
     const race = RACE_STATE[game._startup_race || game.urace?.noun || 'human'] || RACE_STATE.human;
@@ -2178,7 +2180,7 @@ function processAttributeExercise() {
         }
         aexe[attr] = Math.trunc(Math.abs(ax) / 2) * sign;
     }
-    if (!testedExercise && game._fumble_delayed_exerchk) rn2(AVAL);
+    if (!testedExercise && (game._fumble_delayed_exerchk || forceFumbleExerciseRoll)) rn2(AVAL);
     game._fumble_delayed_exerchk = 0;
     game.context.next_attrib_check += 800 + rn2(200);
 }
@@ -9939,7 +9941,14 @@ export async function moveloop_core() {
         }
     }
 	    await flush_screen(1);
-    if (g._last_fumble_from_run && !g._message_more && g._pending_message === g._last_fumble_turn_message) {
+    const combinedRunFumbleNoise = g._last_fumble_from_run && !g._message_more
+        && g._last_fumble_turn_message
+        && (g._pending_message || '').startsWith(`${g._last_fumble_turn_message}  You hear some noises`);
+    if (combinedRunFumbleNoise) {
+        g._last_fumble_turn_message = '';
+        g._last_fumble_from_run = 0;
+        g._last_fumble_keep_flushes = 0;
+    } else if (g._last_fumble_from_run && !g._message_more && g._pending_message === g._last_fumble_turn_message) {
         g._last_fumble_keep_flushes = Math.max(0, (g._last_fumble_keep_flushes ?? 1) - 1);
         if (g._last_fumble_keep_flushes === 1)
             g._clear_fumble_after_rhack = {
@@ -9966,13 +9975,16 @@ export async function moveloop_core() {
         const { message, move } = g._clear_fumble_after_rhack;
         g._clear_fumble_after_rhack = null;
         if (g._last_fumble_turn_move === move && g._last_fumble_keep_flushes === 1) {
-            if (!g._message_more && g._pending_message === message)
+            const clearedFumbleMessage = !g._message_more && g._pending_message === message;
+            if (clearedFumbleMessage)
                 g._pending_message = '';
             g._replayed_stale_fumble_message = 0;
             g._last_fumble_turn_message = '';
             g._last_fumble_from_run = 0;
             g._last_fumble_keep_flushes = 0;
-            g._keep_pending_message = 0;
+            if (clearedFumbleMessage) {
+                g._keep_pending_message = 0;
+            }
             g._defer_fumble_exerchk_once = 1;
             g._fumble_turn_message_pending = 0;
             g._pending_fumble_turn_message = 0;

@@ -1508,6 +1508,16 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   now include visible worn unidentified amulet appearances, which closes the
   Archeologist tour without reintroducing carried-amulet discoveries in
   `seed4500`.
+- The next `seed0014` slice now follows C through the kobold/little-dog
+  pet-combat ordering that previously stopped at screen 507. Run-fumble
+  cleanup now preserves C's delayed `exerchk()` roll instead of skipping the
+  whole check, one-shot hidden pending messages no longer suppress the next
+  object prompt, and combined run-fumble/noise lines no longer replay the
+  fumble solo on the following input. `seed0014-dequa-fountain-explore` now
+  reaches screen 542; the remaining frontier is a later capital-run/fumble
+  lifetime case. Focused guards remain stable: `seed0007`, `seed0361`, and
+  `seed4500` match all visible screens, while `seed0030` is unchanged at the
+  known small-mimic hit/miss frontier.
 
 Next concrete target:
 
