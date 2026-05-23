@@ -1457,6 +1457,24 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   RNG, matching `touchfood()`/`rottenfood()` ordering. Focused seed4500 parity
   advances from the Ctrl-T prompt at screen 134 to a later stale status-line
   turn display at screen 528 (`T:98` vs C's stale `T:97` after carrot eating).
+- The next `seed4500` Knight coverage slice now follows several real C systems
+  deeper into polymorph and maze generation. Hellfill variant 2 uses the C-like
+  recursive random walk and Sanctum metadata, including cockatrice/chickatrice
+  attack data and no-spider web-trap placement. Wizard conduct display, food,
+  reading, engraving, wand-digging, wish, and polyself self-zap conduct counters
+  now update through the bottom-line overlay. Wand digging now mutates terrain
+  and polyself system shock through C-shaped side effects, exact
+  `amulet of unchanging` wishes consume the namedesc RNG branch, and
+  same-command random monster creation refreshes the monster turn snapshot so
+  new shapechangers can move in the current turn. Brown mold polyself passive
+  cold now heals and raises max HP from `d(2,6)`, sequences cockatrice touch and
+  deferred `--More--` text like `mhitu.c`, and cleans up passive monster deaths
+  with corpse/discovery RNG. A partial dry-eel `minliquid()` path keeps the
+  out-of-water swimmer RNG stream aligned for this coverage branch. Focused
+  `seed4500-knight-coverage` parity now advances past the previous
+  cockatrice/brown-mold frontier and first diverges at screen 1629, where C
+  hears `You hear someone counting gold coins.` while JS is still resolving a
+  yellow-light/brown-mold attack message chain.
 
 Next concrete target:
 
@@ -1488,6 +1506,10 @@ Next concrete target:
   food mechanics: C has processed the carrot-eating turn RNG but has not
   redrawn the time field yet. Avoid changing turn accounting to make that
   screen pass; model when the bottom line is refreshed.
+- For `seed4500-knight-coverage`, the next narrow slice is the screen-1629
+  monster/sound ordering drift after brown mold passive handling: compare the
+  yellow-light/cockatrice/brown-mold turn tail against C's gold-counting ambient
+  sound before changing generic monster movement.
 - Use `sessions/*.session.json` to locate divergences, but keep fixes in real
   mechanics. A score recovery is only valid when it falls out of those
   mechanics.
