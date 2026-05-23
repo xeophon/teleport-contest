@@ -1644,6 +1644,27 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   public scoring remains `39/44`. Focused screen guards `seed0108`,
   `seed0399`, `seed2200`, and `seed4500` still match all visible screens, with
   `seed4500` retaining its known RNG-only failure.
+- The next Priest slice removes the quest-start monster hold shim and replaces
+  it with C-shaped turn scheduling plus the first Priest locate-level builder.
+  Blue dragon scale mail now counts as C `Very_fast` extrinsic speed rather
+  than ordinary intrinsic `Fast`, so the speed roll at the quest assignment
+  boundary awards movement on the same branch as C. The assignment pager
+  dismissal now matches C's 123-roll turn tail exactly, including all quest
+  monster `mcalcmove()` rolls, random monster generation, hero speed movement,
+  sounds, hunger, and moveloop bookkeeping. Priest locate (`Pri-loca.lua`) now
+  builds the fixed map at origin `(21,5)`, consumes the `solidfill` and mines
+  `init_fill` RNG, creates the shrine/clerics, random objects/traps, hardfloor
+  trapdoor-to-rocktrap conversion, quest-flavored `rndmonst_adj()` zombies and
+  wraiths, demon-capable morgue monsters, and C-like vampire-leader hostility
+  and skeleton `G_NOGEN` filtering.
+  `seed0367-priest-quest-tour` now reaches the Priest locate-level arrival
+  frontier: steps 198-202 are exact, screen 203 is the first visible mismatch,
+  and level-build RNG matches into late morgue/grave filling (first normalized
+  drift around RNG index 10966 of step 203). Full public scoring remains
+  `39/44`; the `seed4500` regression guard still matches all visible screens
+  and retains only its known RNG-only failure after restoring C special-level
+  `G_NOGEN` class-monster handling for Valley `Z` rolls and C role-level
+  intrinsic speed thresholds for slow-down messaging.
 
 Next concrete target:
 
@@ -1656,13 +1677,14 @@ Next concrete target:
   semantics, C special-level room/corridor/shop filling for `minetn-3.lua`, and
   full `eat.c`, `sp_lev.c`, `mkobj.c`, `makemon.c`, `uhitm.c`, and
   `dogmove.c` behavior.
-- For `seed0367`, the next narrow frontier is Priest quest-start monster turn
-  ordering after `assignquest`: compare C `allmain.c`/`monmove.c` scheduling
-  from the assignment pager dismissal through screen 198, especially acolyte
-  movement energy and random-walk candidate ordering on the centered, flipped
-  `x-strt` map. Avoid adding another arrival or text shim; the map, temple
-  entry, quest text, and first assignment-turn timing are now C-shaped enough
-  that the remaining mismatch should come from shared monster movement.
+- For `seed0367`, the next narrow frontier is Priest locate morgue/grave
+  filling and the random landing/viewport on screen 203. Compare C `mkroom.c`
+  `fill_zoo(MORGUE)`, `make_grave()`, trap occupancy, and overlapping special
+  regions for Pri-loca around the first late drift (`rn2(24075)` vs the next
+  C `morguemon()` roll). Avoid forcing the arrival coordinates; the assignment
+  turn and most locate-level generation are now close enough that the remaining
+  mismatch should come from room topology, trap/grave eligibility, or fill
+  iteration semantics.
 - The Archeologist tour, exact-wand wish tails, healer scroll tail, tourist
   disaster path, and wizard quaff/zap/read option-help path are now closed;
   use them as regression guards for artifact wishing, restored-level Sokoban

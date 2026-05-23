@@ -6000,10 +6000,47 @@ function updateWornDisplacement() {
     });
 }
 
+function isWornInventoryItem(item) {
+    return !!(item && (item.worn || item.line?.includes('being worn')));
+}
+
+function isBlueDragonArmorKind(kind) {
+    return kind === 'blue dragon scale mail' || kind === 'blue dragon scales';
+}
+
+const ROLE_INTRINSIC_FAST_LEVELS = {
+    Archeologist: 10,
+    Barbarian: 7,
+    Caveman: 7,
+    Knight: 7,
+    Monk: 1,
+    Samurai: 1,
+    Valkyrie: 7,
+};
+
+function heroHasIntrinsicFast() {
+    const role = game?._startup_role || game?.urole?.name?.m;
+    const threshold = ROLE_INTRINSIC_FAST_LEVELS[role];
+    return !!game.u?._intrinsicFast || (!!threshold && (game.u?.ulevel || 1) >= threshold);
+}
+
+function syncHeroSpeedState() {
+    if (!game.u) return;
+    const wearingSpeedBoots = (game.inventory || []).some(item =>
+        isWornInventoryItem(item) && String(item.kind || item.actualKind || '').toLowerCase() === 'speed boots');
+    const wearingBlueDragonArmor = (game.inventory || []).some(item =>
+        isWornInventoryItem(item) && isBlueDragonArmorKind(String(item.kind || item.actualKind || '').toLowerCase()));
+    game.u._blueDragonFast = wearingBlueDragonArmor;
+    const veryFast = !!(wearingSpeedBoots || wearingBlueDragonArmor || (game.u._veryfastTimeout || 0) > 0);
+    game.u.veryfast = veryFast;
+    game.u.fast = heroHasIntrinsicFast() || veryFast;
+}
+
 function removeInventoryItem(item, amount = 1) {
-    const wasWornSpeedBoots = item.cls === 'armor'
-        && (item.worn || item.line?.includes('being worn'))
-        && String(item.kind || '').toLowerCase() === 'speed boots';
+    const wasWornSpeedChanger = item.cls === 'armor'
+        && isWornInventoryItem(item)
+        && (String(item.kind || '').toLowerCase() === 'speed boots'
+            || isBlueDragonArmorKind(String(item.kind || '').toLowerCase()));
     const remaining = (item.quan || 1) - Math.max(1, amount | 0);
     if (remaining > 0) {
         item.quan = remaining;
@@ -6012,7 +6049,7 @@ function removeInventoryItem(item, amount = 1) {
         stopCarriedFigurineTimerOnLeave(item);
         game.inventory = (game.inventory || []).filter(other => other !== item);
     }
-    if (wasWornSpeedBoots && game.u) game.u.veryfast = false;
+    if (wasWornSpeedChanger) syncHeroSpeedState();
     updateWornDisplacement();
     game._pet_food_scan_inventory = game.inventory;
 }
@@ -6856,7 +6893,10 @@ async function advanceExperienceLevel(incremental = false) {
     game._level_change_ability_prefix = '';
     const ability = ROLE_LEVEL_ABILITIES[role]?.[level];
     const abilityMessage = ability?.[0] || '';
-    if (ability?.[1] && game.u) game.u[ability[1]] = true;
+    if (ability?.[1] && game.u) {
+        game.u[ability[1]] = true;
+        if (ability[1] === 'fast') game.u._intrinsicFast = true;
+    }
     let pendingMessage = '';
     let nextDelayed = delayed || abilityPrefix ? level : 0;
     if (abilityMessage && delayed) {
@@ -12391,12 +12431,13 @@ function levelRoomByRoomno(roomno) {
         || null;
 }
 
-function queueMessageAfterMore(text, more = false) {
+function queueMessageAfterMore(text, more = false, { blockTimeUntilClear = false } = {}) {
     if (!text) return;
     game._queued_message_after_more = game._queued_message_after_more
         ? `${game._queued_message_after_more}  ${text}`
         : text;
     if (more) game._queued_message_more_after_more = 1;
+    if (blockTimeUntilClear) game._queued_message_blocks_time_after_more = 1;
 }
 
 function tendedTemplePriest(roomno) {
@@ -12435,11 +12476,8 @@ async function queueUntendedTempleEntryAfterTeleport(oldX, oldY, newX, newY) {
     const templeEntry = prepareUntendedTempleEntry(newRoomno, oldRoomno);
     if (!templeEntry) return;
     if (templeEntry.text) {
-        queueMessageAfterMore(templeEntry.text);
+        queueMessageAfterMore(templeEntry.text, false, { blockTimeUntilClear: true });
         game._queued_temple_ghost_roll_after_more = 1;
-        if ((game.urole?.name?.m || game._startup_role || '') === 'Priest'
-            && currentSpecialLevelName() === 'x-strt')
-            game._priest_quest_hold_first_temple_monsters = 1;
         return;
     }
     const ghostText = await finishUntendedTempleEntry();
@@ -17604,6 +17642,7 @@ export async function rhack(_cmd) {
     if (game._fight_wall_message && game._pending_message && !game._message_more) {
         game._fight_wall_message = 0;
         game._pending_message = '';
+        game._pending_message_blocks_time = 0;
         game._pending_explore_lifesaving_message = 0;
         game._pending_message_is_search_safety_warning = 0;
         game._pending_rotten_food_eating_message = 0;
@@ -17882,6 +17921,7 @@ export async function rhack(_cmd) {
             } else if (game._quest_assignquest_time_after_more) {
                 game._quest_assignquest_time_after_more = 0;
                 exerciseAttribute(A_WIS, true);
+                game._resume_time_after_more = 0;
                 game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
                 game.context.move = 0;
                 game._process_command_time_now = 1;
@@ -20336,7 +20376,9 @@ export async function rhack(_cmd) {
                     game._queued_postmov_distfleeck--;
                 }
                 let queuedMore = !!game._queued_message_more_after_more;
+                const blockTimeUntilClear = !!game._queued_message_blocks_time_after_more;
                 game._queued_message_more_after_more = 0;
+                game._queued_message_blocks_time_after_more = 0;
                 const messageBeforeQueuedMore = game._pending_message || '';
                 game._pending_message = '';
                 game._message_more = 0;
@@ -20420,7 +20462,8 @@ export async function rhack(_cmd) {
                         item.worn = false;
                         item.line = `${item.letter || occupation.itemLetter || '?'} - ${occupation.baseName || pickupObjectName(item)}`;
                         if (game.u) game.u.uac = (game.u.uac ?? 10) + occupation.acBonus;
-                        if (occupation.kind === 'speed boots' && game.u) game.u.veryfast = false;
+                        if ((occupation.kind === 'speed boots' || isBlueDragonArmorKind(occupation.kind)) && game.u)
+                            syncHeroSpeedState();
                         updateGauntletsOfPowerStrength(occupation.kind, false);
                         updateWornDisplacement();
                     }
@@ -20467,6 +20510,11 @@ export async function rhack(_cmd) {
                 }
                 if (next === 'You die...' || next === 'You die.') prepareDeathBones();
 	                await setMessage(next, queuedMore);
+                if (blockTimeUntilClear && !queuedMore) {
+                    game._pending_message_blocks_time = 1;
+                    game._clear_pending_message_only_once = 1;
+                    game._keep_pending_message = 1;
+                }
                 if (nextMoreLine) game._message_more_line = nextMoreLine;
                 if (queuedMore && game._blind_arrival_objects_after_more
                     && /^You remember this level as /.test(next)) {
@@ -21931,7 +21979,10 @@ export async function rhack(_cmd) {
                 updateWornDisplacement();
                 if (kind === 'silver dragon scale mail' && game.u) game.u.reflecting = true;
                 if (kind === 'shield of reflection' && game.u) game.u.reflecting = true;
-                if (kind === 'speed boots' && game.u) game.u.veryfast = true;
+                if (kind === 'speed boots' && game.u) {
+                    game.u.veryfast = true;
+                    syncHeroSpeedState();
+                }
                 game._armor_wear_occupation = {
                     itemLetter: item.letter || ch,
                     kind,
@@ -22079,7 +22130,8 @@ export async function rhack(_cmd) {
             game._status_uac_before_more_seen = 0;
             game.u.uac = (game.u.uac ?? 10) + acBonus;
         }
-        if (kind === 'speed boots' && game.u) game.u.veryfast = false;
+        if ((kind === 'speed boots' || isBlueDragonArmorKind(kind)) && game.u)
+            syncHeroSpeedState();
         updateGauntletsOfPowerStrength(kind, false);
         updateWornDisplacement();
         if (preservePromptOnly) {
@@ -22359,7 +22411,10 @@ export async function rhack(_cmd) {
                 updateWornDisplacement();
                 if (kind === 'silver dragon scale mail' && game.u) game.u.reflecting = true;
                 if (kind === 'shield of reflection' && game.u) game.u.reflecting = true;
-                if (kind === 'speed boots' && game.u) game.u.veryfast = true;
+                if (kind === 'speed boots' && game.u) {
+                    game.u.veryfast = true;
+                    syncHeroSpeedState();
+                }
                 game._armor_wear_occupation = {
                     itemLetter: armor.letter || ch,
                     kind,
@@ -22383,7 +22438,10 @@ export async function rhack(_cmd) {
             if (kind === 'shield of reflection' && game.u) game.u.reflecting = true;
             if (kind.includes('boots')) {
                 const alreadyFast = !!(game.u?.fast || game.u?.veryfast);
-                if (kind === 'speed boots' && game.u) game.u.veryfast = true;
+                if (kind === 'speed boots' && game.u) {
+                    game.u.veryfast = true;
+                    syncHeroSpeedState();
+                }
                 game._armor_wear_occupation = {
                     itemLetter: armor.letter || ch,
                     kind,
@@ -30310,7 +30368,8 @@ export async function rhack(_cmd) {
                 game._status_uac_before_more_seen = 0;
                 game.u.uac = (game.u.uac ?? 10) + acBonus;
             }
-            if (kind === 'speed boots' && game.u) game.u.veryfast = false;
+            if ((kind === 'speed boots' || isBlueDragonArmorKind(kind)) && game.u)
+                syncHeroSpeedState();
             updateWornDisplacement();
             await setMessage(`You were wearing ${baseName}.`);
             game.context.move = 1;
