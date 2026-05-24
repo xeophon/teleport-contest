@@ -2402,12 +2402,22 @@ Next concrete target:
   and unearthing cancels that buried-organic timeout. Direct smokes cover those
   branches plus timeout expiry; focused swimmer, wand-polymorph pile, and
   Knight guards remain exact.
+- Post-ice-melt monster liquid handling now covers the next C `minliquid()`
+  survivor slice for the non-hero branch: teleport-capable drowning candidates
+  try `rloc()` before drowning, gremlins can split and survive while their
+  inventory is water-damaged, iron golems can rust for `d(2,6)` and survive
+  with inventory water damage, and monster-carried scrolls, spellbooks,
+  potions, towels, lit lamps, grease, and rustable gear take a monster-only
+  `water_damage_chain(minvent,FALSE)` pass. Direct smokes cover teleport
+  escape, gremlin split, iron-golem rust/inventory wetting, and the original
+  drowning path; focused liquid/fire guards and full score remain exact.
 - Remaining ice work outside this fire-ray terrain slice includes the broader
-  full `spoteffects()`/`pooleffects()` hero liquid behavior, shared post-melt
-  monster survivor relocation/inventory water damage, the remaining
-  `bury_objs()` behavior (ball/chain punishment, shop billing, exact
-  object-material table coverage), and a shared zap-ray walker so fire/sleep/cold
-  stop carrying parallel bounce code.
+  full `spoteffects()`/`pooleffects()` hero liquid behavior, deeper
+  `minliquid()` edges (life-saving or shape-shift survivor relocation,
+  waterwall/steed details, exact water-damage message/material coverage), the
+  remaining `bury_objs()` behavior (ball/chain punishment, shop billing, exact
+  object-material table coverage), and a shared zap-ray walker so
+  fire/sleep/cold stop carrying parallel bounce code.
 - Remaining trap work includes off-hero `impact_drop()` callers, deeper
   statue-trap edge cases, broader non-trap fire floor-object parity, and
   remaining bespoke ray floor/hero timing edges.
