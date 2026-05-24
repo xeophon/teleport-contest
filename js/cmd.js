@@ -1595,9 +1595,46 @@ function heroWearsNutritionAmulet() {
     });
 }
 
+function ringNutritionName(item) {
+    const roll = item?.ringRoll || item?.roll || 0;
+    if (roll) return IDENTIFIED_RING_NAMES[roll - 1] || '';
+    return String(item?.actualKind || item?.kind || '').toLowerCase().replace(/^ring of /, '');
+}
+
+function wornRingOnHand(hand) {
+    const handPattern = hand === 'left' ? /\(on left hand\)/ : /\(on right hand\)/;
+    return (game.inventory || []).find(item => item.cls === 'ring' && (item.worn === hand || handPattern.test(item.line || '')));
+}
+
+function heroWearsRingNamed(name) {
+    return (game.inventory || []).some(item => item.cls === 'ring' && item.worn && ringNutritionName(item) === name);
+}
+
+function wornRingConsumesNutrition(hand) {
+    const item = wornRingOnHand(hand);
+    if (!item) return false;
+    const name = ringNutritionName(item);
+    if (name === 'meat ring') return false;
+    if ((item.spe || 0) !== 0) return true;
+    return !(item.charged || (item.ringRoll || item.roll || 99) <= 6);
+}
+
 function applyAccessoryHunger(accessorytime) {
     if (!game.u) return;
-    if (accessorytime === 8 && heroWearsNutritionAmulet())
+    if (accessorytime % 2) {
+        if (heroWearsRingNamed('regeneration'))
+            game.u.uhunger = (game.u.uhunger ?? 900) - 1;
+        return;
+    }
+    if (heroWearsRingNamed('hunger'))
+        game.u.uhunger = (game.u.uhunger ?? 900) - 1;
+    if (accessorytime === 4 && wornRingConsumesNutrition('left'))
+        game.u.uhunger = (game.u.uhunger ?? 900) - 1;
+    else if (accessorytime === 8 && heroWearsNutritionAmulet())
+        game.u.uhunger = (game.u.uhunger ?? 900) - 1;
+    else if (accessorytime === 12 && wornRingConsumesNutrition('right'))
+        game.u.uhunger = (game.u.uhunger ?? 900) - 1;
+    else if (accessorytime === 16 && heroHasAmuletOfYendor())
         game.u.uhunger = (game.u.uhunger ?? 900) - 1;
 }
 
@@ -30067,15 +30104,16 @@ export async function rhack(_cmd) {
                         : `This ${corpseName} corpse is ${palatable}.`;
                 }
                 const eatTime = 3 + ((CORPSE_WEIGHTS.get(corpseName) ?? food.owt ?? 1) >> 6);
-                const reqtime = Math.max(1, eatTime - 1);
                 const nutrition = CORPSE_NUTRITION.get(corpseName) || 0;
-                const biteNutrition = Math.trunc(nutrition / reqtime);
+                const biteCount = eatTime >= 10 ? eatTime : Math.max(1, eatTime - 1);
+                const biteNutrition = Math.trunc(nutrition / biteCount);
+                // This port applies multi-turn corpse nutrition at finish time,
+                // so preserve the portion C would have delivered across bites.
                 game._eating_turns_remaining = eatTime + 1;
                 game._eating_finish_message = `You finish eating the ${corpseName} corpse.`;
                 game._eating_floor_object = food;
-                game._eating_nutrition = biteNutrition * reqtime;
-                // C takes an immediate first bite before the eating occupation ticks.
-                if (corpseName === 'bugbear') game._eating_nutrition += Math.max(0, biteNutrition - 4);
+                game._eating_nutrition = biteNutrition * biteCount
+                    + (eatTime >= 10 ? Math.min(nutrition % biteCount, 10) : 0);
                 game._eating_newt_buzz = corpseName === 'newt';
                 await setMessage(corpseMessage);
                 game._command_mode = null;

@@ -436,9 +436,51 @@ function heroWearsNutritionAmulet() {
     });
 }
 
+function heroHasRealAmuletOfYendor() {
+    return !!(game.u?.uhave?.amulet || (game.inventory || []).some(item =>
+        item.realAmuletOfYendor || String(item.actualKind || item.kind || '').toLowerCase() === 'amulet of yendor'));
+}
+
+function ringNutritionName(item) {
+    const roll = item?.ringRoll || item?.roll || 0;
+    if (roll) return RING_NAMES[roll - 1] || '';
+    return String(item?.actualKind || item?.kind || '').toLowerCase().replace(/^ring of /, '');
+}
+
+function wornRingOnHand(hand) {
+    const handPattern = hand === 'left' ? /\(on left hand\)/ : /\(on right hand\)/;
+    return (game.inventory || []).find(item => item.cls === 'ring' && (item.worn === hand || handPattern.test(item.line || '')));
+}
+
+function heroWearsRingNamed(name) {
+    return (game.inventory || []).some(item => item.cls === 'ring' && item.worn && ringNutritionName(item) === name);
+}
+
+function wornRingConsumesNutrition(hand) {
+    const item = wornRingOnHand(hand);
+    if (!item) return false;
+    const name = ringNutritionName(item);
+    if (name === 'meat ring') return false;
+    if ((item.spe || 0) !== 0) return true;
+    return !(item.charged || (item.ringRoll || item.roll || 99) <= 6);
+}
+
 function applyAccessoryHunger(accessorytime) {
     if (!game.u) return;
-    if (accessorytime === 8 && heroWearsNutritionAmulet())
+    if (accessorytime % 2) {
+        if (heroWearsRingNamed('regeneration'))
+            game.u.uhunger = (game.u.uhunger ?? 900) - 1;
+        return;
+    }
+    if (heroWearsRingNamed('hunger'))
+        game.u.uhunger = (game.u.uhunger ?? 900) - 1;
+    if (accessorytime === 4 && wornRingConsumesNutrition('left'))
+        game.u.uhunger = (game.u.uhunger ?? 900) - 1;
+    else if (accessorytime === 8 && heroWearsNutritionAmulet())
+        game.u.uhunger = (game.u.uhunger ?? 900) - 1;
+    else if (accessorytime === 12 && wornRingConsumesNutrition('right'))
+        game.u.uhunger = (game.u.uhunger ?? 900) - 1;
+    else if (accessorytime === 16 && heroHasRealAmuletOfYendor())
         game.u.uhunger = (game.u.uhunger ?? 900) - 1;
 }
 
