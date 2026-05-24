@@ -3,13 +3,13 @@
 
 import { game } from './gstate.js';
 import { mklev, l_nhcore_init, u_on_upstairs, makemon, mkcorpstat, mksobj, wipe_engr_at, dropMonsterInventory, wandIndexForRoll, scrollIndexForRoll, potionIndexForRoll, RANDOM_MONSTER_BY_NAME, STONE_RESISTANT_MONSTERS, adjustedMonsterLevel, monsterByRndName, monster_hp, rndmonnum, syncDungeonContext, next_ident, set_malign, enextoMonsterSpot, getbogusmon, pickNasty, chameleonAnimalForm, doppelgangerHumanoidForm, noteleportLevelForMonster, rlocNoMsg, rlocToCoreNoMsg, somexyspace, fumaroles, movebubbles } from './mklev.js';
-import { rhack, pickupObjectName, inventoryItemName, inventoryLetterRank, recordVanquished, finishForceLock, loseExperienceLevel, finishLevelTeleport, finishPickDigDownwardHole, finishPickDigDownwardPit, maybeQueueQuestLeaderTalk, monsterGrowUp, processSpellbookStudyOccupation, processTinOpeningOccupation, finishTinOpeningOccupation, refreshSwallowOverlay, travelPathKeys, updateGauntletsOfPowerStrength, consumeLifeSavingAmulet, activateStatueTrap, breakStatueObject, burnFloorObjectsByFire, burnRayFloorObjectsByFire, erodeArmorByFireTrap, dryWetTowelFromFire, igniteMonsterFireInventoryItems, monsterFireInventoryDamage, dropMonsterObject, landMonsterThrownObject, stoneMonster } from './cmd.js';
+import { rhack, pickupObjectName, inventoryItemName, inventoryLetterRank, recordVanquished, finishForceLock, loseExperienceLevel, finishLevelTeleport, finishPickDigDownwardHole, finishPickDigDownwardPit, maybeQueueQuestLeaderTalk, monsterGrowUp, processSpellbookStudyOccupation, processTinOpeningOccupation, finishTinOpeningOccupation, refreshSwallowOverlay, travelPathKeys, updateGauntletsOfPowerStrength, consumeLifeSavingAmulet, activateStatueTrap, breakStatueObject, burnFloorObjectsByFire, burnRayFloorObjectsByFire, erodeArmorByFireTrap, dryWetTowelFromFire, igniteMonsterFireInventoryItems, monsterFireInventoryDamage, dropMonsterObject, earthFloorEffects, landMonsterThrownObject, stoneMonster } from './cmd.js';
 import { docrt, cls, bot, flush_screen, pline, newsym, refreshHallucinatedMap, show_glyph_cell } from './display.js';
 import { vision_recalc, vision_reset, init_vision_globals, cansee, couldsee, view_from } from './vision.js';
 import { init_objects } from './o_init.js';
 import { init_dungeons_rng } from './dungeon.js';
 import { rn2, rn2_on_display_rng, rnd, rn1, rnl, rne, rnz, d } from './rng.js';
-import { COLNO, ROWNO, A_CHA, A_CON, A_DEX, A_INT, A_MAX, A_STR, A_WIS, IS_OBSTRUCTED, IS_STWALL, IS_TREE, IS_ROOM, IS_WALL, TREE, ROOM, DOOR, CORR, SDOOR, SCORR, IRONBARS, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, D_TRAPPED, W_NONDIGGABLE, W_NONPASSWALL, APPORT, CADAVER, ACCFOOD, DOGFOOD, MANFOOD, POISON, UNDEF, TABU, NO_MM_FLAGS, NO_MINVENT, MM_NOMSG, IN_SIGHT, ALL_TRAPS, ARROW_TRAP, ROCKTRAP, PIT, SPIKED_PIT, SQKY_BOARD, BEAR_TRAP, LANDMINE, ROLLING_BOULDER_TRAP, SLP_GAS_TRAP, RUST_TRAP, FIRE_TRAP, HOLE, TRAPDOOR, TELEP_TRAP, WEB, STATUE_TRAP, MAGIC_TRAP, ANTI_MAGIC, MAGIC_PORTAL, VIBRATING_SQUARE, ALLOW_M, ALLOW_TM, ALLOW_TRAPS, ALLOW_U, ALLOW_ALL, NOTONL, OPENDOOR, UNLOCKDOOR, BUSTDOOR, ALLOW_ROCK, ALLOW_WALL, ALLOW_DIG, ALLOW_SANCT, ALLOW_SSM, ALLOW_BARS, NOGARLIC, Is_airlevel, Is_oracle_level, ACCESSIBLE, IS_POOL, IS_LAVA, WATER, LAVAWALL, BOLT_LIM, MON_POLE_DIST, NO_WEAPON_WANTED, NEED_WEAPON, NEED_AXE, NEED_PICK_AXE, NEED_PICK_OR_AXE, VAULT, VAULT_GUARD_TIME, M_SEEN_MAGR, M_AP_FURNITURE, M_AP_OBJECT, M_AP_TYPE, MOD_ENCUMBER, HVY_ENCUMBER, EXT_ENCUMBER, OVERLOADED, ROOMOFFSET, SHOPBASE } from './const.js';
+import { COLNO, ROWNO, A_CHA, A_CON, A_DEX, A_INT, A_MAX, A_STR, A_WIS, ALTAR, GRAVE, ICE, IS_OBSTRUCTED, IS_STWALL, IS_TREE, IS_ROOM, IS_WALL, TREE, ROOM, DOOR, CORR, SDOOR, SCORR, IRONBARS, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, D_TRAPPED, W_NONDIGGABLE, W_NONPASSWALL, APPORT, CADAVER, ACCFOOD, DOGFOOD, MANFOOD, POISON, UNDEF, TABU, NO_MM_FLAGS, NO_MINVENT, MM_NOMSG, IN_SIGHT, ALL_TRAPS, ARROW_TRAP, ROCKTRAP, PIT, SPIKED_PIT, SQKY_BOARD, BEAR_TRAP, LANDMINE, ROLLING_BOULDER_TRAP, SLP_GAS_TRAP, RUST_TRAP, FIRE_TRAP, HOLE, TRAPDOOR, TELEP_TRAP, WEB, STATUE_TRAP, MAGIC_TRAP, ANTI_MAGIC, MAGIC_PORTAL, VIBRATING_SQUARE, ALLOW_M, ALLOW_TM, ALLOW_TRAPS, ALLOW_U, ALLOW_ALL, NOTONL, OPENDOOR, UNLOCKDOOR, BUSTDOOR, ALLOW_ROCK, ALLOW_WALL, ALLOW_DIG, ALLOW_SANCT, ALLOW_SSM, ALLOW_BARS, NOGARLIC, Is_airlevel, Is_oracle_level, ACCESSIBLE, IS_POOL, IS_LAVA, WATER, LAVAWALL, BOLT_LIM, MON_POLE_DIST, NO_WEAPON_WANTED, NEED_WEAPON, NEED_AXE, NEED_PICK_AXE, NEED_PICK_OR_AXE, VAULT, VAULT_GUARD_TIME, M_SEEN_MAGR, M_AP_FURNITURE, M_AP_OBJECT, M_AP_TYPE, MOD_ENCUMBER, HVY_ENCUMBER, EXT_ENCUMBER, OVERLOADED, ROOMOFFSET, SHOPBASE } from './const.js';
 import { CLR_BROWN, CLR_CYAN, CLR_MAGENTA, CLR_RED, CLR_WHITE, CLR_YELLOW, NO_COLOR } from './terminal.js';
 import { advanceVaultGuard, prepareVaultGuardEscort, restVaultFakecorr } from './vault.js';
 import { DISPLAY_MONSTER_GLYPHS, DISPLAY_MONSTER_HALLU_NAMES } from './monster_data.js';
@@ -1681,6 +1681,7 @@ const PETRIFYING_TOUCH_MONSTERS = new Set(['chickatrice', 'cockatrice']);
 const DART_TRAP = 2;
 const LARGE_BOX = 214;
 const CHEST = 215;
+const ICE_BOX = 216;
 const TRAP_NAMES = {
     1: 'arrow trap',
     2: 'dart trap',
@@ -1778,7 +1779,134 @@ function dogFood(mon, obj) {
         if (foodRoll > 387) return carnivore ? ACCFOOD : MANFOOD;
         return herbivore ? ACCFOOD : MANFOOD;
     }
+    if (isGelatinousCube(mon) && isOrganicObjectForGelatinousCube(obj)) return ACCFOOD;
     return obj.cursed ? UNDEF : APPORT;
+}
+
+function isGelatinousCube(mon) {
+    return mon?.data?.name === 'gelatinous cube';
+}
+
+function isOrganicObjectForGelatinousCube(obj) {
+    if (!obj) return false;
+    if (obj.otyp === BOULDER || obj.otyp === STATUE || obj.otyp === ROCK || obj.isRock) return false;
+    if (obj.cls === 'food' || obj.otyp === FOOD_CLASS || obj.otyp === CORPSE || obj.otyp === 'corpse') return true;
+    const kind = String(obj.kind || obj.actualKind || obj.singular || '').toLowerCase();
+    if (obj.otyp === LARGE_BOX || obj.otyp === CHEST || obj.otyp === ICE_BOX) return true;
+    return /\b(?:box|chest|sack|bag|scroll|spellbook|book|paper|cloth|leather|wood|wooden|corpse|meat|egg|ration|food|fruit|cookie|wafer|jelly)\b/.test(kind);
+}
+
+function containerContents(obj) {
+    if (Array.isArray(obj?.contents)) return obj.contents;
+    if (Array.isArray(obj?.cobj)) return obj.cobj;
+    return [];
+}
+
+function clearContainerContents(obj) {
+    if (!obj) return;
+    if (Array.isArray(obj.contents)) obj.contents = [];
+    if (Array.isArray(obj.cobj)) obj.cobj = [];
+}
+
+function detachContainedObject(container, obj) {
+    if (!container || !obj) return;
+    if (Array.isArray(container.contents))
+        container.contents = container.contents.filter(item => item !== obj);
+    if (Array.isArray(container.cobj))
+        container.cobj = container.cobj.filter(item => item !== obj);
+    obj.contained = false;
+    obj.container = null;
+    delete obj.nobj;
+    delete obj.nexthere;
+}
+
+function removedFromIceboxForMonsterConsumption(obj) {
+    if (!obj) return;
+    obj.fromIceBox = false;
+    obj.inIceBox = false;
+    const corpseName = obj.corpsenm?.name || '';
+    if (obj.otyp === CORPSE || obj.otyp === 'corpse') {
+        if (corpseName && corpseName !== 'ice troll') obj.norevive = true;
+    }
+}
+
+function floorSurfaceNameAt(x, y) {
+    const typ = game.level?.at(x, y)?.typ;
+    if (typ === ICE) return 'ice';
+    if (IS_LAVA(typ)) return 'lava';
+    if (IS_POOL(typ)) return 'water';
+    if (typ === ALTAR) return 'altar';
+    if (typ === GRAVE) return 'grave';
+    return 'floor';
+}
+
+function possessiveObjectName(obj) {
+    const base = pickupObjectName(obj) || obj?.kind || 'container';
+    const named = /^the\b/i.test(base) ? base : `The ${base}`;
+    return `${named}${/[sxz]$/i.test(named) ? "'" : "'s"}`;
+}
+
+function placeMonsterConsumedContent(obj, x, y, messages) {
+    Object.assign(obj, { ox: x, oy: y });
+    obj.hidden = false;
+    obj.buried = false;
+    obj.transientProjectile = false;
+    delete obj.line;
+    const previousMonsterMoving = game._monster_moving;
+    game._monster_moving = 1;
+    let consumed = false;
+    try {
+        consumed = earthFloorEffects(obj, x, y, messages, '');
+    } finally {
+        if (previousMonsterMoving === undefined) delete game._monster_moving;
+        else game._monster_moving = previousMonsterMoving;
+    }
+    if (consumed) return;
+    game.level.objects ??= [];
+    game.level.objects.push(obj);
+    newsym(x, y);
+}
+
+function monsterConsumeContainerContents(mon, container, messages) {
+    const contents = [...containerContents(container)];
+    if (!contents.length || !game.level) return;
+    const x = mon.mx;
+    const y = mon.my;
+    if (x == null || y == null) return;
+    const cube = isGelatinousCube(mon);
+    if (!cube && !game.u?.blind && couldSeeCoord(x, y))
+        messages.push(`${possessiveObjectName(container)} contents spill out onto the ${floorSurfaceNameAt(x, y)}.`);
+    for (const obj of contents) {
+        detachContainedObject(container, obj);
+        if (container.otyp === ICE_BOX || container.kind === 'ice box')
+            removedFromIceboxForMonsterConsumption(obj);
+        if (cube) {
+            obj.hidden = false;
+            obj.buried = false;
+            obj.transientProjectile = false;
+            delete obj.line;
+            mon.minvent = [obj, ...(mon.minvent || [])];
+        } else {
+            placeMonsterConsumedContent(obj, x, y, messages);
+        }
+    }
+    clearContainerContents(container);
+}
+
+function consumeMonsterEatenObject(mon, obj, objects, messages, { splitStackAccounted = false } = {}) {
+    monsterConsumeContainerContents(mon, obj, messages);
+    const idx = objects.indexOf(obj);
+    if (idx >= 0 && (obj.quan || 1) > 1 && obj.cls === 'food') {
+        if (!splitStackAccounted) next_ident();
+        obj.quan--;
+    } else if (idx >= 0) {
+        objects.splice(idx, 1);
+    }
+    newsym(mon.mx, mon.my);
+}
+
+function addMonsterConsumeMessages(messages) {
+    for (const msg of messages) addToplineMessage(msg);
 }
 
 function isRoyalJellyObject(obj) {
@@ -8932,13 +9060,13 @@ function movePet(mon, resumeAfterInventory = false, conflictActive = false) {
             mon.meating = (hereObj.otyp === 'corpse' || hereObj.otyp === CORPSE)
                 ? 3 + (objectWeight(hereObj) >> 6)
                 : PET_FOOD_DELAY[hereObj.kind] || 1;
-            if ((hereObj.quan || 1) > 1 && hereObj.cls === 'food') next_ident();
+            const splitStackAccounted = (hereObj.quan || 1) > 1 && hereObj.cls === 'food';
+            if (splitStackAccounted) next_ident();
             rn2(100);
             rn2(100);
-            const idx = objects.indexOf(hereObj);
-            if (idx >= 0 && (hereObj.quan || 1) > 1) hereObj.quan--;
-            else if (idx >= 0) objects.splice(idx, 1);
-            newsym(mon.mx, mon.my);
+            const consumeMessages = [];
+            consumeMonsterEatenObject(mon, hereObj, objects, consumeMessages, { splitStackAccounted });
+            addMonsterConsumeMessages(consumeMessages);
             return;
         }
         const petBodyWeight = mon.data?.cwt ?? MONSTER_BODY_WEIGHTS.get(mon.data?.name) ?? 1450;
@@ -9790,13 +9918,13 @@ function movePet(mon, resumeAfterInventory = false, conflictActive = false) {
             mon.meating = (eatenObj.otyp === 'corpse' || eatenObj.otyp === CORPSE)
                 ? 3 + (objectWeight(eatenObj) >> 6)
                 : PET_FOOD_DELAY[eatenObj.kind] || 1;
-            if ((eatenObj.quan || 1) > 1 && eatenObj.cls === 'food') next_ident();
+            const splitStackAccounted = (eatenObj.quan || 1) > 1 && eatenObj.cls === 'food';
+            if (splitStackAccounted) next_ident();
             rn2(100);
             rn2(100);
-            const idx = objects.indexOf(eatenObj);
-            if (idx >= 0 && (eatenObj.quan || 1) > 1) eatenObj.quan--;
-            else if (idx >= 0) objects.splice(idx, 1);
-            newsym(mon.mx, mon.my);
+            const consumeMessages = [];
+            consumeMonsterEatenObject(mon, eatenObj, objects, consumeMessages, { splitStackAccounted });
+            addMonsterConsumeMessages(consumeMessages);
         }
         if (reluctantObject) {
             const corpseName = reluctantObject.corpsenm?.name || 'monster';

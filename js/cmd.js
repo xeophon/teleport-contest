@@ -13136,7 +13136,7 @@ function droppedObjectAltarFloorEffects(obj, x, y, messages) {
     return true;
 }
 
-function earthFloorEffects(obj, x, y, messages, verb = 'fall') {
+export function earthFloorEffects(obj, x, y, messages, verb = 'fall') {
     const loc = game.level?.at(x, y);
     if (!loc || !obj) return false;
     if (obj?.otyp === BOULDER && earthBoulderHitsLiquid(loc)) {

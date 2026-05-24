@@ -2581,7 +2581,7 @@ Next concrete target:
   line while preventing the later hot-ground branch. Direct smokes cover
   ordinary monster drop placement, lava destruction, and visible monster-moving
   altar BUC feedback. Remaining caller-specific monster object paths include
-  meatbox `""`, remaining `monstone()` edge cases and callers, full
+  remaining `meatbox()` callers, remaining `monstone()` edge cases and callers, full
   `drop_throw()` break/ship/passive/mulch parity for thrown missiles,
   polymorph-beam `polyspot` bypass details, and the full shop billing matrix.
 - Monster-thrown persistent projectile landings now go through a shared
@@ -2613,6 +2613,15 @@ Next concrete target:
   `monstone()` parity includes `vamp_stone()` reversion, lifesaving,
   Medusa/digest/other stoning callers, exact tiny/vitals/shop details, and
   caller-specific messages.
+- Pet object consumption now routes eaten container contents through a
+  `meatbox()`-style helper after the visible eat message and before deleting
+  the consumed object. Contents spill with the C empty flooreffects verb
+  `""`, visible spill wording, monster-moving altar context, no survivor
+  stacking, ice-box corpse revival suppression, and gelatinous-cube content
+  absorption for organic container food. Focused pet/food replays stay exact.
+  Remaining `meatbox()` work is broader non-pet gelatinous-cube floor/inventory
+  digestion, metallivore/corpse-eater consumption callers, deeper ice-box age
+  timer parity, and shop billing edge cases.
 - Remaining ice work outside this fire-ray terrain slice includes the broader
   full `spoteffects()`/`pooleffects()` hero liquid behavior, deeper
   `minliquid()` edges (life-saving or shape-shift survivor relocation,
