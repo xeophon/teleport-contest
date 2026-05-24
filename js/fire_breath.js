@@ -243,8 +243,12 @@ export function advanceFireBreathRay(ray, sourceId) {
 }
 
 // C ref: zap.c zhitm() fire case.
-export function fireBreathDamageMonster(mon, nd = 6, inventoryFire = null) {
-    if (mon.data?.resistsFire) return { damage: 0, killedHidden: false, messages: [] };
+export function fireBreathDamageMonster(mon, nd = 6, inventoryFire = null, {
+    applyDamage = true,
+    adjustDamage = null,
+} = {}) {
+    if (mon.data?.resistsFire || mon.fireResistance)
+        return { damage: 0, killed: false, killedHidden: false, messages: [], resistedFire: true };
     const origDamage = d(nd, 6);
     let damage = origDamage;
     const messages = [];
@@ -257,9 +261,14 @@ export function fireBreathDamageMonster(mon, nd = 6, inventoryFire = null) {
             damage += inventory.damage || 0;
         }
     }
+    if (adjustDamage && damage > 0) damage = adjustDamage(damage, { origDamage, mon });
+    if (!applyDamage) return { damage, killed: false, killedHidden: false, messages, resistedFire: false };
+
     mon.mhp = (mon.mhp ?? 1) - damage;
     let killedHidden = false;
+    let killed = false;
     if (mon.mhp <= 0) {
+        killed = true;
         const loc = game.level?.at(mon.mx, mon.my);
         if (loc?.map_invisible) {
             killedHidden = true;
@@ -287,7 +296,7 @@ export function fireBreathDamageMonster(mon, nd = 6, inventoryFire = null) {
         game.level.monsters = (game.level?.monsters || []).filter(other => other !== mon);
         newsym(mon.mx, mon.my);
     }
-    return { damage, killedHidden, messages };
+    return { damage, killed, killedHidden, messages, resistedFire: false };
 }
 
 // C ref: zap.c zhitu() fire case.

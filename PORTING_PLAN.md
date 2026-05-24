@@ -2250,9 +2250,15 @@ Next concrete target:
   monster inventory smokes cover gate success/failure, non-body armor hits,
   fire-resistant targets, and item-damage kills; focused fire/breath guards
   still match.
+- Hero-zapped wand-of-fire monster hits now reuse the same C-shaped `zhitm()`
+  fire core, with wand-specific monster MR halving applied after armor and
+  inventory damage while leaving hero kill/drop handling in the wand branch.
+  Direct smokes cover body-hit destroy-plus-ignite, non-body armor hits,
+  fire-resistant targets, post-item MR halving, and item-damage kills; focused
+  wand/fire/breath guards still match.
 - Remaining trap work includes off-hero `impact_drop()` callers, deeper
   statue-trap edge cases, broader non-trap fire floor-object parity, and
-  non-trap fire inventory/ignite gates for bespoke wand/ordinary-ray branches.
+  remaining bespoke ray floor/hero timing edges.
 - `seed4500-knight-coverage` is closed again and should remain a guard for
   punished teleport landing object-list timing, Vlad tower generation, observed
   discovery accounting, Sokoban random-object display, and late enlightenment

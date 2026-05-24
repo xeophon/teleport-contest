@@ -24412,40 +24412,20 @@ export async function rhack(_cmd) {
 
                             if (chance ? 3 - chance < armorClass : armorClass > 0) {
                                 range -= 2;
-                                let damage = d(6, 6);
-                                const origDamage = damage;
-                                if (target.data?.coldResistance || target.coldResistance) damage += 7;
-                                if (!rn2(3)) {
-                                    let limit = Math.trunc(origDamage / 5);
-                                    if (origDamage % 5 > rn2(5)) limit++;
-                                    limit = Math.min(20, limit);
-                                    if (limit > 0 && target.minvent?.length) {
-                                        const minvent = [...target.minvent];
-                                        let eligible = 0;
-                                        const selected = [];
-                                        for (const monItem of minvent) {
-                                            const cls = monItem.cls || (monItem.otyp === POTION_CLASS ? 'potion' : monItem.otyp === SCROLL_CLASS ? 'scroll' : '');
-                                            if (cls !== 'potion' && cls !== 'scroll' && cls !== 'spellbook') continue;
-                                            const i = eligible < limit ? eligible : rn2(eligible);
-                                            eligible++;
-                                            if (i < limit) selected[i] = monItem;
-                                        }
-                                        for (const monItem of selected.filter(Boolean)) {
-                                            const cls = monItem.cls || (monItem.otyp === POTION_CLASS ? 'potion' : monItem.otyp === SCROLL_CLASS ? 'scroll' : '');
-                                            const itemDamage = cls === 'potion' ? rnd(6) : 0;
-                                            let destroyed = 0;
-                                            for (let i = 0; i < (monItem.quan || 1); i++)
-                                                if (!rn2(3)) destroyed++;
-                                            if (!destroyed) continue;
-                                            if (cls === 'potion') damage += itemDamage;
-                                            const remaining = (monItem.quan || 1) - destroyed;
-                                            if (remaining > 0) monItem.quan = remaining;
-                                            else target.minvent = (target.minvent || []).filter(other => other !== monItem);
-                                        }
-                                    }
-                                }
-                                const dlev = Math.max(1, Math.min(50, target.m_lev ?? target.data?.hpLevel ?? target.data?.mlevel ?? 1));
-                                if (rn2(112 - dlev) < (target.data?.mr || target.mr || 0)) damage = Math.trunc(damage / 2);
+                                const visible = !game.u?.blind && !target.minvis && !target.mundetected
+                                    && (game.viz_array?.[target.my]?.[target.mx] & IN_SIGHT);
+                                const hit = fireBreathDamageMonster(target, 6, origDamage => {
+                                    const inventoryMessages = [];
+                                    const inventoryDamage = monsterFireInventoryDamage(target, origDamage, inventoryMessages, visible);
+                                    igniteMonsterFireInventoryItems(target, inventoryMessages, visible);
+                                    return { damage: inventoryDamage, messages: inventoryMessages };
+                                }, {
+                                    applyDamage: false,
+                                    adjustDamage: damage => monsterResistsEffect(target, 12)
+                                        ? Math.trunc(damage / 2) : damage,
+                                });
+                                messages.push(...hit.messages);
+                                const damage = hit.damage;
                                 target.mhp = (target.mhp || 1) - damage;
                                 if ((target.mhp || 0) <= 0) {
                                     rn2(6);
