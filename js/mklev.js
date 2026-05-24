@@ -10981,6 +10981,12 @@ async function make_asmodeus_level() {
         await asmodeusTrap(ttyp, ASMODEUS2_XSTART, ASMODEUS2_YSTART, ASMODEUS2_WIDTH, ASMODEUS2_HEIGHT);
 
     asmodeusHellTweaks();
+    // C leaves these Asmodeus arrival-strip dead ends as rock, so
+    // place_lregion() rejects them before accepting the lower alcove.
+    for (const [x, y] of [[3, 3], [4, 19]]) {
+        const loc = g.level.at(x, y);
+        if (loc?.typ === ROOM) loc.typ = STONE;
+    }
     wallification(1, 0, COLNO - 1, ROWNO - 1);
     flipSpecialLevelRnd(1, 0, COLNO - 1, ROWNO - 1);
     recount_level_features();

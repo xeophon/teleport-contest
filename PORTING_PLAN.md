@@ -2006,6 +2006,14 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   frontier. Full `bash frozen/score.sh` stays `42/44`; the remaining failures
   are `seed0360-wizard-world-tour` (RNG `72924/120639`, screen `321/833`) and
   `seed0383-wizard-hallucinate` (RNG exact, screen `181/219`).
+- Asmodeus arrival terrain now preserves C's left-strip dead-end topology for
+  the two JS-only floor candidates that caused `place_lregion()` to accept too
+  early. Focused `seed0360-wizard-world-tour` advances past Asmodeus from
+  screen 307 to the Dlvl:40 frontier at screen 324, with full-score metrics
+  improving to RNG `79705/120639` and screen `340/833`. Focused
+  `seed0373-barbarian-quest-tour` still matches fully, and
+  `seed0383-wizard-hallucinate` remains the known RNG-exact screen-only
+  mismatch. Full `bash frozen/score.sh` remains `42/44`.
 
 Next concrete target:
 
