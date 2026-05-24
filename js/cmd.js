@@ -30345,6 +30345,7 @@ export async function rhack(_cmd) {
             game._travel_prompt_current = 0;
             game._travel_no_path_target = null;
             if (!keys[0]) {
+                game._travel_previous_target = { x: targetX, y: targetY };
                 await setMessage(keepMessage);
                 return;
             }
