@@ -5488,8 +5488,7 @@ function buildGenericAttributesPage2Rows() {
             : statusSuffix.includes('Weak') ? 'weak from severe hunger'
                 : statusSuffix.includes('Faint') ? 'fainting due to starvation'
                     : 'not hungry';
-    const debugHunger = (game.u?.uhunger ?? 900)
-        - (statusSuffix.includes('Hallu') && game._hallu_refresh_after_level_teleport_move ? 5 : 0);
+    const debugHunger = game.u?.uhunger ?? 900;
     const hungerLine = hunger === 'not hungry'
         ? game.flags?.debug ? `  You aren't hungry <${debugHunger}>.` : "  You aren't hungry."
         : game.flags?.debug ? `  You are ${hunger} <${debugHunger}>.` : `  You are ${hunger}.`;
@@ -7122,8 +7121,8 @@ async function setMessage(msg, more = false) {
         if (more && text === 'You get expelled!') {
             const prompt = `${game._pending_message}--More--`;
             game._simple_swallow_expel_prompt = 1;
-            for (const [, , ch] of SWALLOW_OVERLAY_CELLS)
-                if (ch !== '@') rn2_on_display_rng(DISPLAY_MONSTER_COLORS.length);
+            if ((game.u?._statusSuffix || '').includes('Hallu'))
+                game._hallu_expel_object_rng_skip = 1;
             const overlayLines = (game._overlay_lines || game._swallow_overlay_lines || []).map(line => [...line]);
             if (overlayLines[0]) overlayLines[0][2] = prompt;
             game._overlay_lines = overlayLines;
