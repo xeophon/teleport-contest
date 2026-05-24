@@ -30082,19 +30082,26 @@ export async function rhack(_cmd) {
                 color: item.cls === 'weapon' ? (item.kind === 'quarterstaff' ? CLR_BROWN : item.color ?? CLR_CYAN)
                     : item.color ?? (item.cls === 'scroll' || item.cls === 'spellbook' ? CLR_WHITE : NO_COLOR),
             };
-            game.level.objects.push(dropped);
-            objectIceEffect(dropped, dropped.ox, dropped.oy);
+            const floorMessages = [];
+            const consumedByFloor = earthFloorEffects(dropped, dropped.ox, dropped.oy, floorMessages, 'drop');
+            if (!consumedByFloor) {
+                game.level.objects.push(dropped);
+                objectIceEffect(dropped, dropped.ox, dropped.oy);
+            }
             newsym(game.u?.ux || 0, game.u?.uy || 0);
             game._message_more = 0;
             game.context.move = 1;
             if (item.cls === 'weapon' || item.kind === 'chest') {
                 if (game.flags?.verbose === false) {
-                    preserveSilentDropPrompt();
+                    if (floorMessages.length) await setMessage(floorMessages.join('  '), floorMessages.length > 1);
+                    else preserveSilentDropPrompt();
                 } else {
-                    await setMessage(`You drop ${inventoryItemName(item)}.`);
+                    const messages = [`You drop ${inventoryItemName(item)}.`, ...floorMessages];
+                    await setMessage(messages.join('  '), messages.length > 1);
                 }
             } else {
-                preserveSilentDropPrompt();
+                if (floorMessages.length) await setMessage(floorMessages.join('  '), floorMessages.length > 1);
+                else preserveSilentDropPrompt();
             }
             game._command_mode = null;
             return;

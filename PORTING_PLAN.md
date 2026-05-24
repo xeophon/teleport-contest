@@ -2546,6 +2546,15 @@ Next concrete target:
   Direct smokes cover confused scroll-of-earth rocks landing in a pool and
   burned-container boulder contents silently plugging a pit; focused replay
   guards remain exact.
+- Ordinary hero inventory drops now use the same pre-placement floor-effects
+  contract before placing survivors, matching the C `dropz()` ownership rule
+  for the covered branches: dropped boulders can be consumed by pit/hole/liquid
+  effects, lava-destroyed objects skip floor placement, pool-damaged survivors
+  are still placed, and hot-ground potion shatters can consume the dropped
+  object. The existing silent-drop prompt behavior is preserved when no floor
+  effect emits text. Direct smokes cover normal weapon placement, potion lava
+  destruction, scroll pool survival, and dropped-boulder pit fill; focused
+  replay guards remain exact.
 - Remaining ice work outside this fire-ray terrain slice includes the broader
   full `spoteffects()`/`pooleffects()` hero liquid behavior, deeper
   `minliquid()` edges (life-saving or shape-shift survivor relocation,
