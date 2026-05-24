@@ -2441,13 +2441,25 @@ Next concrete target:
   breaks!`, clear only the buried-ball tether, and leave the ball buried. Direct
   smokes cover all three branches; focused prayer/drum/Knight guards and full
   `npm run score` remain exact.
+- Earthquake pit creation now follows the next C ordering slice: monsters wake,
+  unhide, and reveal mimic appearances before the chasm RNG; high altars are
+  preserved; altar messages include alignment; secret corridors and doors print
+  reveal/collapse messages with the C door no-pit branch; chasm terrain is
+  normalized; boulders are handled after pit creation and remove the temporary
+  pit while freeing any monster from the trap; monsters falling into surviving
+  chasms get the visible/sound messages, trapped-state damage variance, death
+  removal, and vanquish accounting; and already-trapped heroes use the C
+  jostle/keep-footing damage split. Direct smokes cover monster fall/death,
+  boulder cleanup, high altar preservation, secret terrain reveal, buried-ball
+  chain break, and astral-plane level wording; focused drummer/altar/world-tour
+  guards remain exact.
 - Remaining ice work outside this fire-ray terrain slice includes the broader
   full `spoteffects()`/`pooleffects()` hero liquid behavior, deeper
   `minliquid()` edges (life-saving or shape-shift survivor relocation,
   waterwall/steed details, exact water-damage message/material coverage), the
   remaining `bury_objs()` behavior (full `drag_ball()` parity after
   same-level teleports, shop billing, exact object-material table coverage),
-  fuller earthquake terrain/object parity beyond the buried-ball tether break,
+  remaining earthquake liquid fill and `liquid_flow()` side effects,
   and a shared zap-ray walker so fire/sleep/cold stop carrying parallel bounce
   code.
 - Remaining trap work includes off-hero `impact_drop()` callers, deeper

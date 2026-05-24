@@ -6,7 +6,7 @@ import { nhgetch } from './input.js';
 import { bot, cls, docrt, flush_screen, newsym, pline, recordObservedObjectDiscovery, refreshHallucinatedMap, seeNearbyObjects, show_glyph_cell, strengthString } from './display.js';
 import { couldsee, vision_recalc, vision_reset } from './vision.js';
 import { RANDOM_MONSTER_BY_NAME, SHOP_TYPES, STALKER_MONSTERS, artifactDefinitionForName, artifactObjectName, enextoMonsterSpot, make_tutorial1_level, makemon, makeArtifactWishObject, maketrap, mkcorpstat, mklev, mkobj, mkobj_at, mksobj, monsterByRndName, morgueMonster, nameObjectAsArtifact, next_ident, object_display, potionIndexForRoll, resurrectWizardOfYendor, rndmonnum, scrollIndexForRoll, set_mimic_sym_rng, syncDungeonContext, u_on_dnstairs, u_on_rndspot, u_on_upstairs, wipe_engr_at, dropMonsterInventory, l_nhcore_init, getrumor, getbogusmon, level_difficulty, set_malign, somexyspace, fumaroles, movebubbles } from './mklev.js';
-import { ACCESSIBLE, A_CHA, A_CON, A_DEX, A_INT, A_MAX, A_STR, A_WIS, ALTAR, AM_SHRINE, Amask2align, BC_BALL, BC_CHAIN, BEAR_TRAP, BLCORNER, BOLT_LIM, BRCORNER, CLOUD, COLNO, CORPSTAT_FEMALE, CORPSTAT_GENDER, CORPSTAT_HISTORIC, CORPSTAT_MALE, CORPSTAT_NEUTER, CORR, DOOR, BURN, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, DUST, ENGRAVE, ENGR_BLOOD, FOUNTAIN, GRAVE, HEADSTONE, HWALL, ICE, IN_SIGHT, IS_AIR, IS_OBSTRUCTED, IS_POOL, IS_ROOM, IS_TREE, IS_WALL, In_endgame, In_quest, In_sokoban, Is_airlevel, Is_botlevel, Is_earthlevel, Is_rogue_level, Is_stronghold, Is_waterlevel, LADDER, LAVAPOOL, LAVAWALL, MAGIC_PORTAL, MARK, MAX_EGG_HATCH_TIME, MM_EDOG, MM_NOCOUNTBIRTH, MM_NOMSG, MM_NOWAIT, MOAT, MORGUE, M_AP_TYPE, NO_MINVENT, NORMAL_SPEED, OVERLOADED, P_BASIC, P_UNSKILLED, PIT, POOL, ROLLING_BOULDER_TRAP, ROOM, ROT_AGE, ROOMOFFSET, ROWNO, SCORR, SDOOR, SHOPBASE, SINK, SPIKED_PIT, STAIRS, STONE, TDWALL, TEMPLE, THRONE, TLCORNER, TRCORNER, TREE, TT_BEARTRAP, TT_BURIEDBALL, TT_INFLOOR, TT_LAVA, TT_PIT, TT_WEB, TUWALL, VAULT, VIBRATING_SQUARE, VWALL, WAND_BACKFIRE_CHANCE, WATER, WEB, WT_IRON_BALL_BASE, WT_IRON_BALL_INCR, W_NONDIGGABLE, ZAP_POS } from './const.js';
+import { ACCESSIBLE, A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_MAX, A_NEUTRAL, A_STR, A_WIS, ALTAR, AM_SANCTUM, AM_SHRINE, Amask2align, BC_BALL, BC_CHAIN, BEAR_TRAP, BLCORNER, BOLT_LIM, BRCORNER, CLOUD, COLNO, CORPSTAT_FEMALE, CORPSTAT_GENDER, CORPSTAT_HISTORIC, CORPSTAT_MALE, CORPSTAT_NEUTER, CORR, DOOR, BURN, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, DUST, ENGRAVE, ENGR_BLOOD, FOUNTAIN, GRAVE, HEADSTONE, HWALL, ICE, IN_SIGHT, IS_AIR, IS_OBSTRUCTED, IS_POOL, IS_ROOM, IS_TREE, IS_WALL, In_endgame, In_quest, In_sokoban, In_V_tower, Is_airlevel, Is_astralevel, Is_botlevel, Is_earthlevel, Is_rogue_level, Is_stronghold, Is_waterlevel, LADDER, LAVAPOOL, LAVAWALL, MAGIC_PORTAL, MARK, MAX_EGG_HATCH_TIME, MM_EDOG, MM_NOCOUNTBIRTH, MM_NOMSG, MM_NOWAIT, MOAT, MORGUE, M_AP_TYPE, NO_MINVENT, NORMAL_SPEED, OVERLOADED, P_BASIC, P_UNSKILLED, PIT, POOL, ROLLING_BOULDER_TRAP, ROOM, ROT_AGE, ROOMOFFSET, ROWNO, SCORR, SDOOR, SHOPBASE, SINK, SPIKED_PIT, STAIRS, STONE, TDWALL, TEMPLE, THRONE, TLCORNER, TRCORNER, TREE, TT_BEARTRAP, TT_BURIEDBALL, TT_INFLOOR, TT_LAVA, TT_PIT, TT_WEB, TUWALL, VAULT, VIBRATING_SQUARE, VWALL, WAND_BACKFIRE_CHANCE, WATER, WEB, WT_IRON_BALL_BASE, WT_IRON_BALL_INCR, W_NONDIGGABLE, ZAP_POS } from './const.js';
 import { d, rn1, rn2, rn2_on_display_rng, rnd, rnl, rnz } from './rng.js';
 import { CLR_BLACK, CLR_BLUE, CLR_BRIGHT_BLUE, CLR_BRIGHT_CYAN, CLR_BRIGHT_GREEN, CLR_BROWN, CLR_CYAN, CLR_GRAY, CLR_GREEN, CLR_MAGENTA, CLR_ORANGE, CLR_RED, CLR_YELLOW, CLR_WHITE, NO_COLOR } from './terminal.js';
 import { vfsDeleteFile, vfsReadFile, vfsWriteFile } from './storage.js';
@@ -3216,8 +3216,11 @@ async function digDownwardHoleResult(options = {}) {
 
 function earthquakeLevelDescription() {
     const uz = game.u?.uz || { dnum: 0, dlevel: 1 };
+    if (Is_astralevel(uz)) return 'astral plane';
     if (In_endgame(uz)) return 'plane';
+    if (currentSpecialLevelName() === 'sanctum') return 'sanctum';
     if (In_sokoban(uz)) return 'puzzle';
+    if (In_V_tower(uz)) return 'tower';
     return 'dungeon';
 }
 
@@ -3225,13 +3228,39 @@ function isPitTrapType(type) {
     return type === PIT || type === SPIKED_PIT || type === TT_PIT || type === 'pit' || type === 'spiked pit';
 }
 
+function altarMask(loc) {
+    return loc?.altarmask ?? loc?.flags ?? 0;
+}
+
+function earthquakeAltarAlignName(loc) {
+    const align = Amask2align(altarMask(loc));
+    if (align === A_LAWFUL) return 'lawful';
+    if (align === A_NEUTRAL) return 'neutral';
+    if (align === A_CHAOTIC) return 'chaotic';
+    return 'unaligned';
+}
+
 function earthquakeFeatureMessage(loc) {
     if (loc?.typ === FOUNTAIN) return 'The fountain falls into a chasm.';
     if (loc?.typ === SINK) return 'The kitchen sink falls into a chasm.';
     if (loc?.typ === GRAVE) return 'The headstone topples into a chasm.';
     if (loc?.typ === THRONE) return 'The throne falls into a chasm.';
-    if (loc?.typ === ALTAR) return 'The altar falls into a chasm.';
+    if (loc?.typ === ALTAR) return `The ${earthquakeAltarAlignName(loc)} altar falls into a chasm.`;
     return '';
+}
+
+function normalizeEarthquakePitTerrain(x, y) {
+    const loc = game.level?.at(x, y);
+    if (!loc) return;
+    const oldTyp = loc.typ;
+    if (IS_ROOM(oldTyp)) loc.typ = ROOM;
+    else if (oldTyp === STONE || oldTyp === SCORR) loc.typ = CORR;
+    else if (IS_WALL(oldTyp) || oldTyp === SDOOR) loc.typ = game.level?.flags?.is_maze_lev ? ROOM
+        : game.level?.flags?.is_cavernous_lev ? CORR
+            : DOOR;
+    loc.flags = 0;
+    loc.doormask = D_NODOOR;
+    loc.wall_info = 0;
 }
 
 function makeEarthquakePitTrap(x, y) {
@@ -3250,25 +3279,105 @@ function makeEarthquakePitTrap(x, y) {
     });
     game.level.traps ??= [];
     if (!existing) game.level.traps.push(trap);
+    normalizeEarthquakePitTerrain(x, y);
     return trap;
 }
 
+function earthquakeMonsterName(mon, { capital = true, article = true } = {}) {
+    if (mon?.givenName) return mon.givenName;
+    if (mon?.isshk && mon.shknam) return mon.shknam;
+    const name = mon?.data?.name || mon?.name || 'monster';
+    if (!article) return name;
+    return `${capital ? 'The' : 'the'} ${name}`;
+}
+
+function earthquakeMonsterVisible(mon) {
+    return !!mon && !game.u?.blind && !mon.minvis && !mon.mundetected && couldsee(mon.mx, mon.my);
+}
+
+function earthquakeMonsterHumanoid(mon) {
+    const mlet = mon?.data?.mlet;
+    return mlet === 'humanoid' || mlet === 'human' || mon?.data?.name === 'human';
+}
+
+function earthquakeRevealMimic(mon) {
+    if (!mon || (!M_AP_TYPE(mon) && mon.appearObj == null && !mon.appearGlyph)) return false;
+    mon.m_ap_type = 0;
+    mon.appearObj = null;
+    mon.appearGlyph = null;
+    mon.appearColor = null;
+    return true;
+}
+
+function earthquakeShakeMonster(x, y, messages) {
+    const mon = (game.level?.monsters || []).find(candidate => candidate.mx === x && candidate.my === y);
+    if (!mon) return;
+    mon.msleeping = 0;
+    mon.mcanmove = true;
+    mon.mfrozen = 0;
+    if (mon.mpeaceful && !mon.mtame && !mon.pet) mon.mpeaceful = 0;
+    if (mon.mundetected) {
+        const ceilingHider = !!mon.data?.ceilingHider;
+        mon.mundetected = false;
+        if (ceilingHider) {
+            if (!game.u?.blind && couldsee(x, y))
+                messages.push(`${earthquakeMonsterName(mon)} is shaken loose from the ceiling!`);
+            else if (!mon.data?.flyer && !heroIsDeaf()) messages.push('You hear a thump.');
+        }
+        newsym(x, y);
+    }
+    if (earthquakeRevealMimic(mon)) newsym(x, y);
+}
+
+function earthquakeMonsterFalls(mon, messages) {
+    if (!mon || mon.data?.flyer || mon.data?.clinger) return;
+    const alreadyTrapped = !!mon.mtrapped;
+    const visible = earthquakeMonsterVisible(mon);
+    mon.mtrapped = 1;
+    if (!alreadyTrapped) {
+        if (visible) messages.push(`${earthquakeMonsterName(mon)} falls into a chasm!`);
+        else if (earthquakeMonsterHumanoid(mon) && !heroIsDeaf()) messages.push('You hear a scream!');
+    }
+    mon.mhp = (mon.mhp ?? 1) - rnd(alreadyTrapped ? 4 : 6);
+    if ((mon.mhp ?? 0) > 0) return;
+
+    dropMonsterInventory(mon);
+    game.level.monsters = (game.level?.monsters || []).filter(candidate => candidate !== mon);
+    recordVanquished(mon, true);
+    newsym(mon.mx, mon.my);
+    messages.push(visible
+        ? `You destroy ${earthquakeMonsterName(mon, { capital: false })}!`
+        : 'It is destroyed!');
+}
+
+function earthquakeHeroPitKeepFooting() {
+    const roleName = game.urole?.name?.m || game._startup_role;
+    const target = roleName === 'Archeologist' ? 3 : 9;
+    const dex = game.u?.acurr?.a?.[A_DEX] ?? 10;
+    return !(game.u?.fumbling && rn2(5))
+        && (!rnl(target) || (dex > 7 && rn2(5)));
+}
+
 async function doEarthquakePit(x, y, tuPit, messages) {
+    const chasm = makeEarthquakePitTrap(x, y);
+    if (!chasm) return;
+
     const boulder = (game.level?.objects || []).find(obj =>
         !obj.hidden && !obj.transientProjectile && obj.ox === x && obj.oy === y && obj.otyp === BOULDER);
     if (boulder) {
         if (!game.u?.blind && (game.u?.ux === x && game.u?.uy === y || couldsee(x, y)))
             messages.push(`KADOOM!  The boulder falls into a chasm${game.u?.ux === x && game.u?.uy === y ? ' below you' : ''}!`);
+        const mon = (game.level?.monsters || []).find(candidate => candidate.mx === x && candidate.my === y);
+        if (mon) mon.mtrapped = 0;
         game.level.objects = (game.level?.objects || []).filter(obj => obj !== boulder);
+        removeDownwardDigTrap(chasm);
+        newsym(x, y);
         return;
     }
 
-    const chasm = makeEarthquakePitTrap(x, y);
-    if (!chasm) return;
-
     const mon = (game.level?.monsters || []).find(candidate => candidate.mx === x && candidate.my === y);
     if (mon) {
-        if (!mon.data?.flyer && !mon.data?.clinger) mon.mtrapped = 1;
+        earthquakeMonsterFalls(mon, messages);
         return;
     }
 
@@ -3291,11 +3400,13 @@ async function doEarthquakePit(x, y, tuPit, messages) {
         game.u.uhp = Math.max(0, (game.u.uhp || 1) - rnd(6));
         if ((game.u.uhp || 0) <= 0) game._death_cause = 'fell into a chasm';
     } else {
+        const keepFooting = earthquakeHeroPitKeepFooting();
         messages.push('You are jostled around violently!');
         game.u.utrap = rn1(6, 2);
         game.u.utraptype = 'pit';
-        game.u.uhp = Math.max(0, (game.u.uhp || 1) - rnd(4));
+        game.u.uhp = Math.max(0, (game.u.uhp || 1) - rnd(keepFooting ? 2 : 4));
         if ((game.u.uhp || 0) <= 0) game._death_cause = 'hurt in a chasm';
+        if (keepFooting) exerciseAttribute(A_DEX, true);
     }
 }
 
@@ -3313,33 +3424,34 @@ async function doEarthquake(force) {
 
     for (let x = startX; x <= endX; x++) {
         for (let y = startY; y <= endY; y++) {
-            const mon = (game.level?.monsters || []).find(candidate => candidate.mx === x && candidate.my === y);
-            if (mon) {
-                mon.msleeping = 0;
-                mon.mcanmove = true;
-                if (mon.mundetected) {
-                    mon.mundetected = false;
-                    newsym(x, y);
-                }
-            }
+            earthquakeShakeMonster(x, y, messages);
             if (rn2(14 - cappedForce)) continue;
 
             const loc = game.level?.at(x, y);
             if (!loc) continue;
             if ([FOUNTAIN, SINK, ALTAR, GRAVE, THRONE].includes(loc.typ)) {
+                if (loc.typ === ALTAR && (altarMask(loc) & AM_SANCTUM)) continue;
                 const featureMessage = earthquakeFeatureMessage(loc);
                 if (featureMessage && !game.u?.blind && couldsee(x, y)) messages.push(featureMessage);
                 await doEarthquakePit(x, y, tuPit, messages);
             } else if (loc.typ === SCORR) {
                 loc.typ = CORR;
                 newsym(x, y);
+                if (!game.u?.blind && couldsee(x, y)) messages.push('A secret corridor is revealed.');
                 await doEarthquakePit(x, y, tuPit, messages);
             } else if (loc.typ === CORR || loc.typ === ROOM) {
                 await doEarthquakePit(x, y, tuPit, messages);
             } else if (loc.typ === SDOOR) {
                 loc.typ = DOOR;
-                loc.doormask = D_NODOOR;
                 newsym(x, y);
+                if (!game.u?.blind && couldsee(x, y)) messages.push('A secret door is revealed.');
+                if (loc.doormask === D_NODOOR) {
+                    await doEarthquakePit(x, y, tuPit, messages);
+                } else {
+                    loc.doormask = D_NODOOR;
+                    newsym(x, y);
+                    if (!game.u?.blind && couldsee(x, y)) messages.push('The door collapses.');
+                }
             } else if (loc.typ === DOOR) {
                 if (loc.doormask === D_NODOOR) {
                     await doEarthquakePit(x, y, tuPit, messages);
