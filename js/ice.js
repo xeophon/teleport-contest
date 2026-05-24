@@ -587,7 +587,7 @@ function buryOneObject(obj, x, y, lvl, underIce = isIceAt(x, y), messages = []) 
     return 'buried';
 }
 
-function buryObjectsAt(x, y) {
+export function buryObjectsAt(x, y, { ignore = null } = {}) {
     const lvl = game.level;
     const messages = [];
     if (!lvl) return messages;
@@ -600,6 +600,10 @@ function buryObjectsAt(x, y) {
     const remaining = [];
     const underIce = isIceAt(x, y);
     for (const obj of lvl.objects) {
+        if (obj === ignore) {
+            remaining.push(obj);
+            continue;
+        }
         if (obj._burialDeleted) continue;
         if (obj.ox === x && obj.oy === y && !obj.transientProjectile) {
             if (buryOneObject(obj, x, y, lvl, underIce, messages) === 'floor') {

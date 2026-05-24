@@ -2486,15 +2486,27 @@ Next concrete target:
   spilled containers, boulder terrain fill ordering, waterproof chest protection,
   water recursion, and nested container recursion; focused drum/liquid/world-tour
   guards remain exact.
+- Lava-spilled container contents now follow the C per-content ordering more
+  closely: each burned-container content is placed and run through
+  `flooreffects()` before the next content is extracted, so a spilled boulder
+  that fills lava can call the shared burial helper without burying later
+  contents that are still inside the container. Boulder liquid fills now bury
+  existing floor objects at the square, record a narrow shop debt for buried
+  merchandise, and ignore the current free boulder to preserve the C RNG
+  boundary. Later contents that land on the resulting hot `ROOM`/`CORR` tile
+  now run the hot-ground potion heat/shatter branch. Direct smokes cover
+  sequential boulder/potion ordering, later content survival after lava fill,
+  shop burial debt/no-charge handling, and the focused replay guard remains
+  exact.
 - Remaining ice work outside this fire-ray terrain slice includes the broader
   full `spoteffects()`/`pooleffects()` hero liquid behavior, deeper
   `minliquid()` edges (life-saving or shape-shift survivor relocation,
   waterwall/steed details, exact water-damage message/material coverage), the
   remaining `bury_objs()` behavior (full `drag_ball()` parity after
-  same-level teleports, shop billing, exact object-material table coverage),
-  remaining earthquake `liquid_flow()` side effects for shop billing/object-cost
-  details, exact floor material tables, the non-lava `flooreffects()` spill
-  branches, and full hero `pooleffects()`,
+  same-level teleports, broader shop billing, exact object-material table
+  coverage), remaining earthquake `liquid_flow()` side effects for full
+  object-cost details, exact floor material tables, the remaining non-lava
+  `flooreffects()` spill branches, and full hero `pooleffects()`,
   and a shared zap-ray walker so fire/sleep/cold stop carrying parallel bounce
   code.
 - Remaining trap work includes off-hero `impact_drop()` callers, deeper

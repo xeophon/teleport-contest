@@ -20,7 +20,7 @@ import { advanceFireBreathRay, applyFireRayFountainTerrain, applyFireRayIceTerra
 import { dryupFountainAt, dryupFountainResultAt } from './fountain.js';
 import {
     applyColdRayTerrain, buriedBallToFreedom, buriedBallToPunishment,
-    findBuriedBallNear, isBuriedBallTrapActive, objectIceEffect, objIceEffectsAt,
+    buryObjectsAt, findBuriedBallNear, isBuriedBallTrapActive, objectIceEffect, objIceEffectsAt,
     unearthObjectsAt,
 } from './ice.js';
 import { createGasCloud } from './region.js';
@@ -7802,6 +7802,7 @@ function waterDamageFloorItem(obj, messages, visible, acidContext, {
 function fireDamageFloorContainer(obj, messages, visible, {
     removeObject = removeFloorObject,
     spillQueue = [],
+    processSpill = null,
     x,
     y,
 } = {}) {
@@ -7815,7 +7816,8 @@ function fireDamageFloorContainer(obj, messages, visible, {
     for (const content of contents) {
         removeContainedObject(obj, content);
         placeLiquidFlowFloorObject(content, x, y);
-        spillQueue.push({ obj: content, mode: 'flooreffects' });
+        if (processSpill) processSpill(content);
+        else spillQueue.push({ obj: content, mode: 'flooreffects' });
     }
     clearLiquidFlowContainerContents(obj);
     return true;
@@ -7850,10 +7852,12 @@ function fireDamageFloorPotion(obj, messages, visible, removeObject = removeFloo
 }
 
 function fireDamageFloorItem(obj, messages, visible, options = {}) {
-    const { removeObject = removeFloorObject, spillQueue = [], x, y } = options;
+    const { removeObject = removeFloorObject, spillQueue = [], processSpill = null, x, y } = options;
     if (maybeIgniteFloorFireItem(obj, messages, visible)) return false;
     if (isLiquidFlowContainer(obj))
-        return fireDamageFloorContainer(obj, messages, visible, { removeObject, spillQueue, x, y });
+        return fireDamageFloorContainer(obj, messages, visible, {
+            removeObject, spillQueue, processSpill, x, y,
+        });
 
     const cls = fireDestroyableInventoryClass(obj);
     if (cls === 'scroll' || cls === 'spellbook')
@@ -7927,6 +7931,7 @@ function lavaDirectBurnMaterialObject(obj) {
 function lavaDamageFloorEffectItem(obj, messages, visible, {
     removeObject = removeFloorObject,
     spillQueue = [],
+    processSpill = null,
     x,
     y,
 } = {}) {
@@ -7937,10 +7942,32 @@ function lavaDamageFloorEffectItem(obj, messages, visible, {
         removeObject(obj);
         return true;
     }
-    return fireDamageFloorItem(obj, messages, visible, { removeObject, spillQueue, x, y });
+    return fireDamageFloorItem(obj, messages, visible, {
+        removeObject, spillQueue, processSpill, x, y,
+    });
 }
 
-function liquidFlowFloorEffectsItem(obj, x, y, messages, visible, acidContext, spillQueue) {
+function hotGroundPotionFloorEffect(obj, x, y, messages, visible) {
+    const loc = game.level?.at?.(x, y);
+    if (!loc || !(loc.typ === ROOM || loc.typ === CORR)) return false;
+    if ((game.level?.flags?.temperature || 0) <= 0) return false;
+    if (fireDestroyableInventoryClass(obj) !== 'potion') return false;
+
+    const plural = (obj?.quan || 1) > 1;
+    if (visible) {
+        messages.push(`${floorObjectSubject(obj)} ${floorObjectVerb(obj, 'heats', 'heat')} up as ${plural ? 'they hit' : 'it hits'} the hot ground.`);
+    }
+    let survival = obj?.blessed ? 70 : 50;
+    if (obj?.invlet) survival += ((game.u?.uluck || 0) + (game.u?.moreluck || 0)) * 2;
+    if (isPotionOfOil(obj)) survival = 100;
+    if (rn2(100) < ((obj?.artifact || obj?.oartifact) ? 100 : survival)) return false;
+    if (visible) messages.push(plural ? 'They shatter from the heat!' : 'It shatters from the heat!');
+    else if (!heroIsDeaf()) messages.push('You hear a shattering noise.');
+    removeFloorObject(obj);
+    return true;
+}
+
+function liquidFlowFloorEffectsItem(obj, x, y, messages, visible, acidContext, spillQueue, processSpill = null) {
     const loc = game.level?.at?.(x, y);
     if (!loc) return false;
     if (obj?.otyp === BOULDER && (IS_POOL(loc.typ) || loc.typ === LAVAPOOL || loc.typ === LAVAWALL)) {
@@ -7951,9 +7978,10 @@ function liquidFlowFloorEffectsItem(obj, x, y, messages, visible, acidContext, s
         return false;
     }
     if (loc.typ === LAVAPOOL || loc.typ === LAVAWALL)
-        return lavaDamageFloorEffectItem(obj, messages, visible, { spillQueue, x, y });
+        return lavaDamageFloorEffectItem(obj, messages, visible, { spillQueue, processSpill, x, y });
     if (IS_POOL(loc.typ))
         return waterDamageFloorItem(obj, messages, visible, acidContext);
+    if (hotGroundPotionFloorEffect(obj, x, y, messages, visible)) return true;
     return false;
 }
 
@@ -7966,6 +7994,15 @@ export function applyLiquidFlowFloorObjectDamage(x, y, typ) {
 
     const queue = liquidFlowFloorObjectsAt(x, y).map(obj => ({ obj, mode: 'chain' }));
     const processed = new Set();
+    const processSpilledFloorEffect = obj => {
+        if (processed.has(obj)) return false;
+        processed.add(obj);
+        if (!(game.level?.objects || []).includes(obj)) return false;
+        const damaged = liquidFlowFloorEffectsItem(obj, x, y, messages, visible, acidContext, queue, processSpilledFloorEffect);
+        if (damaged) changed = true;
+        if (!(game.level?.objects || []).includes(obj)) destroyed++;
+        return damaged;
+    };
     for (let i = 0; i < queue.length; i++) {
         const entry = queue[i];
         const obj = entry?.obj || entry;
@@ -7974,9 +8011,11 @@ export function applyLiquidFlowFloorObjectDamage(x, y, typ) {
         if (!(game.level?.objects || []).includes(obj)) continue;
         let damaged;
         if (entry?.mode === 'flooreffects')
-            damaged = liquidFlowFloorEffectsItem(obj, x, y, messages, visible, acidContext, queue);
+            damaged = liquidFlowFloorEffectsItem(obj, x, y, messages, visible, acidContext, queue, processSpilledFloorEffect);
         else if (typ === LAVAPOOL)
-            damaged = fireDamageFloorItem(obj, messages, visible, { spillQueue: queue, x, y });
+            damaged = fireDamageFloorItem(obj, messages, visible, {
+                spillQueue: queue, processSpill: processSpilledFloorEffect, x, y,
+            });
         else
             damaged = waterDamageFloorItem(obj, messages, visible, acidContext);
         if (damaged) changed = true;
@@ -12588,6 +12627,35 @@ function earthWaterBodyName(loc) {
     return 'water';
 }
 
+function shopkeeperForCostlySpot(x, y) {
+    const roomno = game.level?.at?.(x, y)?.roomno || 0;
+    const room = levelRoomByRoomno(roomno);
+    if (!room || room.rtype < SHOPBASE) return null;
+    const shkp = room.resident || (game.level?.monsters || [])
+        .find(mon => mon.isshk && mon.shoproom === roomno);
+    if (!shkp?.isshk) return null;
+    return shkp;
+}
+
+function buriedMerchandiseDebtMessage(x, y, ignoredObject = null) {
+    const shkp = shopkeeperForCostlySpot(x, y);
+    if (!shkp || game._monster_moving) return '';
+    let loss = 0;
+    for (const obj of game.level?.objects || []) {
+        if (!obj || obj === ignoredObject || obj.transientProjectile || obj.no_charge) continue;
+        if (obj.ox !== x || obj.oy !== y) continue;
+        const price = shopItemPrice(obj, x, y);
+        if (!(price > 0)) continue;
+        loss += price;
+        if (!(obj.otyp === GOLD_PIECE || obj.cls === 'coin' || obj.glyph === '$'))
+            obj.no_charge = true;
+    }
+    if (!loss) return '';
+    shkp.debit = (shkp.debit || 0) + loss;
+    const name = shkp.shknam || shkp.shopkeeperName || 'the shopkeeper';
+    return `You owe ${name} ${loss} zorkmid${loss === 1 ? '' : 's'} for burying merchandise.`;
+}
+
 function earthFloorEffects(obj, x, y, messages) {
     const loc = game.level?.at(x, y);
     if (!loc || obj?.otyp !== BOULDER) return false;
@@ -12596,7 +12664,13 @@ function earthFloorEffects(obj, x, y, messages) {
     const chance = rn2(10);
     const fillsUp = lava ? chance === 0 : chance !== 0;
     const body = earthWaterBodyName(loc);
-    if (fillsUp) loc.typ = ROOM;
+    let buriedDebt = '';
+    if (fillsUp) {
+        loc.typ = ROOM;
+        buriedDebt = buriedMerchandiseDebtMessage(x, y, obj);
+        messages.push(...buryObjectsAt(x, y, { ignore: obj }));
+        if (buriedDebt) messages.push(buriedDebt);
+    }
     if (!game.u?.uinwater) {
         if (earthVisibleSquare(x, y)) {
             messages.push(`There is a large splash as the boulder ${fillsUp ? 'fills' : 'falls into'} the ${body}.`);
