@@ -12794,45 +12794,130 @@ function deleteBoulderFillFloorTrap(trap, x, y) {
     return true;
 }
 
+function earthBoulderPitTrapAt(x, y) {
+    const trap = boulderFillTrapAt(x, y);
+    return trap && (trap.ttyp === PIT || trap.ttyp === SPIKED_PIT || trap.ttyp === HOLE || trap.ttyp === TRAPDOOR)
+        ? trap
+        : null;
+}
+
+function earthBoulderPitMessage(trap) {
+    if (trap?.ttyp === TRAPDOOR) return `${trap.tseen ? '' : 'triggers and '}plugs a trap door`;
+    if (trap?.ttyp === HOLE) return 'plugs a hole';
+    return 'fills a pit';
+}
+
+function applyEarthBoulderPitOccupantEffects(trap, x, y, messages) {
+    const mon = (game.level?.monsters || []).find(candidate =>
+        candidate.mx === x && candidate.my === y && !candidate.dead && (candidate.mhp == null || candidate.mhp > 0));
+    const heroHere = game.u?.ux === x && game.u?.uy === y;
+    const monsterTrapped = mon && mon.mtrapped;
+    const heroTrapped = heroHere && game.u?.utrap;
+    if (!monsterTrapped && !heroTrapped) return { skipPlugMessage: false };
+    if (earthVisibleSquare(x, y) || heroHere)
+        messages.push(`${game.u?.blind ? 'A' : 'The'} boulder falls into the pit${monsterTrapped ? '' : ' with you'}.`);
+    if (monsterTrapped) {
+        if (earthTargetIsSolid(mon) && !earthTargetThrowsRocks(mon)) {
+            mon.mhp = (mon.mhp || 1) - earthObjectDamage({ otyp: BOULDER, quan: 1 }, mon);
+            if ((mon.mhp || 0) <= 0) {
+                dropMonsterInventory(mon);
+                game.level.monsters = (game.level?.monsters || []).filter(other => other !== mon);
+                mon.mhp = 0;
+                mon.dead = true;
+                const heroCaused = !game._monster_moving;
+                recordVanquished(mon, heroCaused);
+                if (earthVisibleSquare(x, y)) {
+                    messages.push(heroCaused
+                        ? `You kill the ${mon.data?.name || mon.name || 'monster'}!`
+                        : `${fireScrollMonsterName(mon)} is killed!`);
+                }
+            }
+        }
+        mon.mtrapped = 0;
+    } else if (heroTrapped) {
+        const heroTarget = { ...game.u, data: polyselfForm() || {} };
+        const solidHero = earthTargetIsSolid(heroTarget) && !earthTargetThrowsRocks(heroTarget);
+        if (solidHero && game.u) {
+            game.u.uhp = Math.max(0, (game.u.uhp || 1) - rnd(15));
+            if ((game.u.uhp || 0) <= 0) {
+                game._death_cause = 'squished under a boulder';
+                messages.push('You die...');
+            }
+            return { skipPlugMessage: true };
+        } else if (game.u?.utraptype !== TT_BURIEDBALL) {
+            game.u.utrap = 0;
+            game.u.utraptype = null;
+        }
+    }
+    return { skipPlugMessage: false };
+}
+
+function earthBoulderPitHoleEffects(obj, x, y, messages) {
+    if (obj?.otyp !== BOULDER) return false;
+    const trap = earthBoulderPitTrapAt(x, y);
+    if (!trap) return false;
+    const heroHere = game.u?.ux === x && game.u?.uy === y;
+    const { skipPlugMessage } = applyEarthBoulderPitOccupantEffects(trap, x, y, messages);
+    if (!skipPlugMessage && game.u?.blind && heroHere) {
+        messages.push('You hear a CRASH! beneath you.');
+    } else if (!skipPlugMessage && earthVisibleSquare(x, y)) {
+        messages.push(`The boulder ${earthBoulderPitMessage(trap)}.`);
+    } else if (!skipPlugMessage && !heroIsDeaf()) {
+        messages.push('You hear a boulder fall.');
+    }
+    const buriedDebt = buriedMerchandiseDebtMessage(x, y, obj);
+    deleteBoulderFillFloorTrap(trap, x, y);
+    if (game.u?.ux === x && game.u?.uy === y && game.u.utraptype !== TT_BURIEDBALL) {
+        game.u.utrap = 0;
+        game.u.utraptype = null;
+    }
+    messages.push(...buryObjectsAt(x, y, { ignore: obj }));
+    if (buriedDebt) messages.push(buriedDebt);
+    newsym(x, y);
+    return true;
+}
+
 function earthFloorEffects(obj, x, y, messages) {
     const loc = game.level?.at(x, y);
     if (!loc || obj?.otyp !== BOULDER) return false;
-    if (!earthBoulderHitsLiquid(loc)) return false;
-    const lava = earthLiquidIsLava(loc);
-    const chance = rn2(10);
-    const body = earthWaterBodyName(loc);
-    const trap = boulderFillTrapAt(x, y);
-    const fillsUp = earthBoulderFillsLiquid(loc, lava, chance);
-    let buriedDebt = '';
-    if (fillsUp) {
-        fillBoulderLiquidTerrain(loc);
-        killBoulderFillMonster(x, y);
-        deleteBoulderFillFloorTrap(trap, x, y);
-        buriedDebt = buriedMerchandiseDebtMessage(x, y, obj);
-        messages.push(...buryObjectsAt(x, y, { ignore: obj }));
-        if (buriedDebt) messages.push(buriedDebt);
-    }
-    if (!game.u?.uinwater) {
-        if (earthVisibleSquare(x, y)) {
-            messages.push(`There is a large splash as the boulder ${fillsUp ? 'fills' : 'falls into'} the ${body}.`);
-        } else if (!heroIsDeaf()) {
-            messages.push(`You hear a${lava ? ' sizzling' : ''} splash.`);
+    if (earthBoulderHitsLiquid(loc)) {
+        const lava = earthLiquidIsLava(loc);
+        const chance = rn2(10);
+        const body = earthWaterBodyName(loc);
+        const trap = boulderFillTrapAt(x, y);
+        const fillsUp = earthBoulderFillsLiquid(loc, lava, chance);
+        let buriedDebt = '';
+        if (fillsUp) {
+            fillBoulderLiquidTerrain(loc);
+            killBoulderFillMonster(x, y);
+            deleteBoulderFillFloorTrap(trap, x, y);
+            buriedDebt = buriedMerchandiseDebtMessage(x, y, obj);
+            messages.push(...buryObjectsAt(x, y, { ignore: obj }));
+            if (buriedDebt) messages.push(buriedDebt);
         }
+        if (!game.u?.uinwater) {
+            if (earthVisibleSquare(x, y)) {
+                messages.push(`There is a large splash as the boulder ${fillsUp ? 'fills' : 'falls into'} the ${body}.`);
+            } else if (!heroIsDeaf()) {
+                messages.push(`You hear a${lava ? ' sizzling' : ''} splash.`);
+            }
+        }
+        if (fillsUp && game.u?.uinwater && game.u?.ux === x && game.u?.uy === y) {
+            game.u.uinwater = 0;
+            game.u.underwater = false;
+            game.u.uunderwater = false;
+            game.u.uundetected = 0;
+            vision_recalc(1);
+            messages.push('You find yourself on dry land again!');
+        } else if (lava && heroNextToSquare(x, y)) {
+            applyBoulderLavaSplashToHero(messages);
+        } else if (!fillsUp && earthVisibleSquare(x, y)) {
+            messages.push('It sinks without a trace!');
+        }
+        newsym(x, y);
+        return true;
     }
-    if (fillsUp && game.u?.uinwater && game.u?.ux === x && game.u?.uy === y) {
-        game.u.uinwater = 0;
-        game.u.underwater = false;
-        game.u.uunderwater = false;
-        game.u.uundetected = 0;
-        vision_recalc(1);
-        messages.push('You find yourself on dry land again!');
-    } else if (lava && heroNextToSquare(x, y)) {
-        applyBoulderLavaSplashToHero(messages);
-    } else if (!fillsUp && earthVisibleSquare(x, y)) {
-        messages.push('It sinks without a trace!');
-    }
-    newsym(x, y);
-    return true;
+    return earthBoulderPitHoleEffects(obj, x, y, messages);
 }
 
 function earthTargetIsSolid(target) {
@@ -12840,6 +12925,11 @@ function earthTargetIsSolid(target) {
     return !(target?.passWalls || target?.noncorporeal || target?.unsolid
         || data.passWalls || data.noncorporeal || data.unsolid
         || data.amorphous || data.name === 'fog cloud');
+}
+
+function earthTargetThrowsRocks(target) {
+    const data = target?.data || target || {};
+    return !!(target?.throwsRocks || data.throwsRocks);
 }
 
 function earthObjectDamage(obj, target) {
@@ -12885,7 +12975,7 @@ function dropEarthObjectOnHero(confused, helmetProtects, messages) {
     }
     if (!earthFloorEffects(obj, game.u?.ux || 0, game.u?.uy || 0, messages))
         earthPlaceObject(obj, game.u?.ux || 0, game.u?.uy || 0);
-    if (damage && game.u) {
+    if (damage && game.u && (game.u.uhp || 0) > 0) {
         game.u.uhp = Math.max(0, (game.u.uhp || 0) - damage);
         if ((game.u.uhp || 0) <= 0) {
             game._death_cause = 'killed by a scroll of earth';

@@ -2526,6 +2526,16 @@ Next concrete target:
   cover floor-trap deletion, arrow-trap preservation, hero trap-state reset,
   Water Plane no-fill, water-wall success/failure, drawbridge mask conversion,
   and drawbridge-over-ice exclusion; focused replay guards remain exact.
+- The non-liquid boulder `flooreffects()` branch now plugs `PIT`,
+  `SPIKED_PIT`, `HOLE`, and `TRAPDOOR` traps for scroll-of-earth boulders:
+  trapped monsters take the extra sitting-duck boulder hit unless they can pass
+  walls or throw rocks, trapped heroes take the C `rnd(15)` squish hit and skip
+  the later plug message, hidden trapdoors report the trigger text, blind
+  underfoot drops report the crash sound, traps are deleted, floor objects are
+  buried, and shop merchandise debt is charged before burial. Direct
+  scroll-of-earth smokes cover pit fill with burial, hidden trapdoor plugs,
+  trapped hero release/damage/no plug message, trapped monster release/damage,
+  and blind underfoot crash messaging; focused replay guards remain exact.
 - Remaining ice work outside this fire-ray terrain slice includes the broader
   full `spoteffects()`/`pooleffects()` hero liquid behavior, deeper
   `minliquid()` edges (life-saving or shape-shift survivor relocation,
