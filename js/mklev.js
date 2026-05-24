@@ -40,6 +40,7 @@ import {
     MM_NOGRP, MM_ANGRY, MM_NONAME, MM_NOCOUNTBIRTH, MM_NOMSG, MM_ADJACENTOK, MM_NOTAIL, MM_NOWAIT,
     CORPSTAT_FEMALE, CORPSTAT_MALE, CORPSTAT_NEUTER, CORPSTAT_HISTORIC,
     LR_DOWNSTAIR, LR_UPSTAIR, LR_PORTAL, LR_TELE, LR_UPTELE, LR_DOWNTELE, LR_BRANCH,
+    DB_UNDER, DB_FLOOR,
     WM_MASK, WM_W_LEFT, WM_W_RIGHT, WM_W_TOP, WM_W_BOTTOM,
     WM_T_LONG, WM_T_BL, WM_T_BR,
     WM_C_OUTER, WM_C_INNER,
@@ -6839,6 +6840,72 @@ function dng_bottom(lev = game.u?.uz) {
     return bottom;
 }
 
+function del_engr_at(x, y) {
+    if (!game.level?.engravings) return;
+    game.level.engravings = game.level.engravings.filter(engr => engr.x !== x || engr.y !== y);
+}
+
+function unearth_objs(x, y) {
+    const lvl = game.level;
+    if (!lvl) return;
+    const unearthed = [];
+    if (lvl.buriedobjlist?.length) {
+        const buried = [];
+        for (const obj of lvl.buriedobjlist) {
+            if (obj?.ox === x && obj?.oy === y) unearthed.push(obj);
+            else buried.push(obj);
+        }
+        lvl.buriedobjlist = buried;
+    }
+    for (const obj of unearthed) {
+        obj.buried = false;
+        obj.hidden = false;
+        if (lvl.objects?.includes(obj)) {
+            Object.assign(obj, { ox: x, oy: y }, object_display(obj));
+        } else {
+            place_object(obj, x, y);
+        }
+        stack_floor_object(obj);
+    }
+    for (const obj of lvl.objects || []) {
+        if (obj?.ox !== x || obj?.oy !== y || !obj.buried) continue;
+        obj.buried = false;
+        obj.hidden = false;
+        Object.assign(obj, object_display(obj));
+        stack_floor_object(obj);
+    }
+    del_engr_at(x, y);
+}
+
+function normalizePitHoleTrapTerrain(x, y, typ) {
+    if (!is_pit(typ) && !is_hole(typ)) return;
+    const lvl = game.level;
+    const loc = lvl?.at(x, y);
+    if (!loc) return;
+    const oldTyp = loc.typ;
+    let clearFlags = true;
+    if (oldTyp === DRAWBRIDGE_UP) {
+        clearFlags = false;
+        loc.flags = ((loc.flags || 0) & ~DB_UNDER) | DB_FLOOR;
+    } else if (IS_ROOM(oldTyp)) {
+        loc.typ = ROOM;
+    } else if (oldTyp === STONE || oldTyp === SCORR) {
+        loc.typ = CORR;
+    } else if (IS_WALL(oldTyp) || oldTyp === SDOOR) {
+        loc.typ = lvl.flags?.is_maze_lev ? ROOM
+            : lvl.flags?.is_cavernous_lev ? CORR
+                : DOOR;
+    }
+    if (clearFlags) {
+        loc.flags = 0;
+        loc.doormask = D_NODOOR;
+        loc.wall_info = 0;
+    }
+    if ((oldTyp === FOUNTAIN || oldTyp === SINK) && loc.typ !== oldTyp)
+        recount_level_features();
+    unearth_objs(x, y);
+}
+
 // C ref: trap.c maketrap
 async function maketrap(x, y, typ) {
     if (typ === TRAPPED_DOOR || typ === TRAPPED_CHEST) return null;
@@ -6869,6 +6936,7 @@ async function maketrap(x, y, typ) {
             trap.launch = { x, y };
         }
     }
+    if (is_pit(typ)) trap.conjoined = 0;
     if (is_hole(typ)) {
         const uz = game.u?.uz ?? { dnum: 0, dlevel: 1 };
         const bottom = dng_bottom(uz);
@@ -6878,6 +6946,7 @@ async function maketrap(x, y, typ) {
             if (rn2(4)) break;
         }
     }
+    normalizePitHoleTrapTerrain(x, y, typ);
     if (!game.level) return trap;
     if (!existing) {
         if (!game.level.traps) game.level.traps = [];

@@ -2078,11 +2078,23 @@ Next concrete target:
   ordering, confused level teleportation, bones replacement prompts, generated
   help-window paging, and fire-ray `destroy_items()` timing before widening
   the same C-grounded fixes to other sessions.
-- The next narrow trap slice should deepen the remaining `trap.c` details beyond
-  the initial `maketrap()` guard layer: pit/hole terrain side effects,
-  floor-object `impact_drop()` effects for holes/trapdoors, special-level
-  launch/teleport destinations, statue-trap inventory transfer, and fire
-  `burnarmor()` material/protection plus floor-object burning details.
+- Remaining narrow trap slices should deepen the `trap.c` details beyond the
+  initial `maketrap()` guard and pit/hole terrain layers: floor-object
+  `impact_drop()` effects for holes/trapdoors, special-level launch/teleport
+  destinations, statue-trap inventory transfer, and fire `burnarmor()` material
+  protection plus floor-object burning details.
+- The pit/hole side-effect slice now mirrors the `trap.c:maketrap()` terrain
+  arm: pits set `conjoined`, pit/hole/trapdoor creation normalizes room,
+  stone/corridor, wall/secret-door, and drawbridge-underlay terrain, clears
+  overloaded terrain flags, recounts fountain/sink features when needed, and
+  unearths matching buried objects while deleting engravings. Focused guards
+  `seed0014`, `seed0030`, `seed0360`, `seed0367`, `seed0373`, `seed0383`, and
+  `seed4500` all pass, and full `bash frozen/score.sh` remains `44/44`.
+- The next narrow trap slice can use the captured C notes for special-level
+  rolling-boulder `launchfrom` offsets, fixed teleport-trap `teledest`
+  execution, and Sokoban rolling-boulder fallback launch metadata. Keep
+  `impact_drop()` separate from `maketrap()`, since C reaches it through
+  digging/fall-through paths rather than trap creation.
 - `seed4500-knight-coverage` is closed again and should remain a guard for
   punished teleport landing object-list timing, Vlad tower generation, observed
   discovery accounting, Sokoban random-object display, and late enlightenment
