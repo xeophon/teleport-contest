@@ -9,11 +9,13 @@ import { newsym } from './display.js';
 import { vision_recalc } from './vision.js';
 
 const BOULDER = 465;
+const CORPSE = 471;
 const LAND_MINE = 10160;
 const BEARTRAP = 10161;
 
 const ICE_MELT_MESSAGE = 'The ice crackles and melts.';
 const BOULDER_SETTLES_MESSAGE = 'A boulder settles...';
+const ROT_ICE_ADJUSTMENT = 2;
 
 export function isIceAt(x, y) {
     const loc = game.level?.at(x, y);
@@ -36,6 +38,74 @@ function removeMeltTimers(loc, x, y) {
     delete loc.meltIceAwayTurn;
     if (game.level?.meltIceTimers)
         game.level.meltIceTimers = game.level.meltIceTimers.filter(timer => timer.x !== x || timer.y !== y);
+}
+
+function isCorpseObject(obj) {
+    return obj?.otyp === CORPSE || obj?.otyp === 'corpse';
+}
+
+function corpseOnIce(obj) {
+    return !!(obj?.onIce || obj?.on_ice);
+}
+
+function setCorpseOnIce(obj, value) {
+    obj.onIce = !!value;
+    obj.on_ice = value ? 1 : 0;
+}
+
+function objectTimerKey(obj) {
+    if (obj?.rotAwayTurn) return 'rotAwayTurn';
+    if (obj?.reviveTurn) return 'reviveTurn';
+    return null;
+}
+
+function adjustCorpseIceTimer(obj, x, y, { onLevel = true } = {}) {
+    if (!isCorpseObject(obj)) return;
+    const key = objectTimerKey(obj);
+    if (!key) return;
+
+    const moves = game.moves || 0;
+    const nowOnIce = onLevel && isIceAt(x, y);
+    const wasOnIce = corpseOnIce(obj);
+    let tleft = Math.trunc((obj[key] || 0) - moves);
+    if (tleft <= 0) return;
+
+    const ageElapsed = Math.trunc(moves - (obj.age ?? moves));
+    if (nowOnIce && !wasOnIce) {
+        setCorpseOnIce(obj, true);
+        obj[key] = moves + (tleft * ROT_ICE_ADJUSTMENT);
+        obj.age = moves - (ageElapsed * ROT_ICE_ADJUSTMENT);
+    } else if (wasOnIce && !nowOnIce) {
+        setCorpseOnIce(obj, false);
+        obj[key] = moves + Math.trunc(tleft / ROT_ICE_ADJUSTMENT);
+        obj.age = (obj.age ?? moves) + Math.trunc(ageElapsed * (ROT_ICE_ADJUSTMENT - 1) / ROT_ICE_ADJUSTMENT);
+    }
+}
+
+export function objectIceEffect(obj, x = obj?.ox, y = obj?.oy, options = {}) {
+    if (x == null || y == null) return;
+    adjustCorpseIceTimer(obj, x, y, options);
+}
+
+export function objIceEffectsAt(x, y, { doBuried = false } = {}) {
+    const lvl = game.level;
+    if (!lvl) return;
+    const seen = new Set();
+    for (const obj of lvl.objects || []) {
+        if (obj?.ox !== x || obj?.oy !== y || obj.buried) continue;
+        seen.add(obj);
+        objectIceEffect(obj, x, y);
+    }
+    if (!doBuried) return;
+    for (const obj of lvl.buriedobjlist || []) {
+        if (obj?.ox !== x || obj?.oy !== y || seen.has(obj)) continue;
+        seen.add(obj);
+        objectIceEffect(obj, x, y);
+    }
+    for (const obj of lvl.objects || []) {
+        if (obj?.ox !== x || obj?.oy !== y || !obj.buried || seen.has(obj)) continue;
+        objectIceEffect(obj, x, y);
+    }
 }
 
 function applyTrapIceEffects(x, y) {
@@ -73,11 +143,13 @@ function unearthObjectsAt(x, y) {
         obj.ox = x;
         obj.oy = y;
         if (!lvl.objects.includes(obj)) lvl.objects.push(obj);
+        objectIceEffect(obj, x, y);
     }
     for (const obj of lvl.objects) {
         if (obj?.ox !== x || obj?.oy !== y || !obj.buried) continue;
         obj.buried = false;
         obj.hidden = false;
+        objectIceEffect(obj, x, y);
     }
     if (lvl.engravings) lvl.engravings = lvl.engravings.filter(engr => engr.x !== x || engr.y !== y);
 }
@@ -164,6 +236,7 @@ export function meltIceAt(x, y, { message = ICE_MELT_MESSAGE } = {}) {
     }
     removeMeltTimers(loc, x, y);
     applyTrapIceEffects(x, y);
+    objIceEffectsAt(x, y, { doBuried: false });
     unearthObjectsAt(x, y);
     if (game.u?.underwater || game.u?.uunderwater) vision_recalc(1);
     newsym(x, y);

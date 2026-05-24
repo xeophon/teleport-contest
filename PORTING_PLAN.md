@@ -2324,9 +2324,17 @@ Next concrete target:
   refresh; focused `seed0014`, `seed2200`, `seed4500`, `seed5002`,
   `seed5006`, `seed0006`, `seed0360`, `seed0361`, `seed0383`, and
   `seed0399` all pass, and full `npm run score` remains `44/44`.
+- Corpse rot timers now get the C `obj_ice_effects()` adjustment when timed
+  corpses move onto or off ice. Floor placement on existing ice doubles the
+  remaining rot/revive deadline and rewrites raw corpse `age`; pickup or
+  melting ice halves the remaining deadline and restores effective age.
+  The helper also supports buried-object ice passes for future freezing code,
+  while fire-ray `melt_ice()` keeps the C order by thawing floor corpses
+  before unearthing buried objects. Direct smokes cover floor placement,
+  pickup/removal, buried adjustment, and melt/unearth restoration.
 - Remaining ice work outside this fire-ray terrain slice includes the broader
   `MELT_ICE_AWAY` timer system, full `spoteffects()`/`pooleffects()` hero
-  liquid behavior, and exact object-on-ice rot timer adjustments.
+  liquid behavior, and broader cold-ray freezing integration.
 - Remaining trap work includes off-hero `impact_drop()` callers, deeper
   statue-trap edge cases, broader non-trap fire floor-object parity, and
   remaining bespoke ray floor/hero timing edges.

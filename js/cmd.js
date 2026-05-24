@@ -18,6 +18,7 @@ import { clearMonsterTrack, updateMonsterTrack } from './montrack.js';
 import { datFileLines as bundledDatFileLines } from './dat_files.js';
 import { advanceFireBreathRay, applyFireRayFountainTerrain, applyFireRayIceTerrain, applyFireRayWaterTerrain, burnFireRayWebTrap, finishHeroTargetedBreath, fireBreathDamageHero, fireBreathDamageMonster, fireBreathZapHits } from './fire_breath.js';
 import { dryupFountainAt, dryupFountainResultAt } from './fountain.js';
+import { objectIceEffect } from './ice.js';
 import { createGasCloud } from './region.js';
 import { figurineLocationCheck, isFigurineObject, makeFigurineFamiliar, maybeAttachCarriedFigurineTimeout, stopFigurineTransformTimeout, syncCarriedFigurineTransformTimer } from './figurine.js';
 
@@ -17712,6 +17713,7 @@ async function moveHero(dx, dy) {
                 kind: pickedObject.kind || pickupObjectName({ ...pickedObject, quan: 1 }),
                 line: `${letter} - ${amount}`,
             };
+            objectIceEffect(pickedItem, newx, newy, { onLevel: false });
             game.inventory = [...(game.inventory || []), pickedItem];
             maybeAttachCarriedFigurineTimeout(pickedItem);
             game.level.objects = (game.level.objects || []).filter(obj => obj !== pickedObject);
@@ -19568,11 +19570,15 @@ export async function rhack(_cmd) {
                     kind: obj.kind || pickupObjectName({ ...obj, quan: 1 }),
                     line: `${letter} - ${amount}`,
                 };
+                objectIceEffect(pickedItem, obj.ox, obj.oy, { onLevel: false });
                 game.inventory = [...(game.inventory || []), pickedItem];
                 maybeAttachCarriedFigurineTimeout(pickedItem);
                 messages.push(`${letter} - ${amount}.`);
             }
             game._pet_food_scan_inventory = game.inventory;
+            for (const obj of selected) {
+                objectIceEffect(obj, obj.ox, obj.oy, { onLevel: false });
+            }
             game.level.objects = (game.level.objects || []).filter(item => !selected.includes(item));
             game._overlay_lines = null;
             game._overlay_hide_status = 0;
@@ -28442,6 +28448,7 @@ export async function rhack(_cmd) {
                     : item.color ?? (item.cls === 'scroll' || item.cls === 'spellbook' ? CLR_WHITE : NO_COLOR),
             };
             game.level.objects.push(dropped);
+            objectIceEffect(dropped, dropped.ox, dropped.oy);
             newsym(game.u?.ux || 0, game.u?.uy || 0);
             game._message_more = 0;
             game.context.move = 1;
@@ -32335,13 +32342,15 @@ export async function rhack(_cmd) {
         if (objectHere?.otyp === 'corpse') {
             const corpseName = pickupObjectName({ ...objectHere, quan: 1 });
             const letter = nextInventoryLetter();
-            game.inventory = [...(game.inventory || []), {
+            const pickedItem = {
                 ...objectHere,
                 cls: 'food',
                 letter,
                 quan: 1,
                 kind: corpseName,
-            }];
+            };
+            objectIceEffect(pickedItem, game.u?.ux || 0, game.u?.uy || 0, { onLevel: false });
+            game.inventory = [...(game.inventory || []), pickedItem];
             game._pet_food_scan_inventory = game.inventory;
             game.level.objects = (game.level.objects || []).filter(obj => obj !== objectHere);
             newsym(game.u?.ux || 0, game.u?.uy || 0);
@@ -32401,6 +32410,7 @@ export async function rhack(_cmd) {
                     : `${/^[aeiou]/i.test(`${buc}${pickedName}`) ? 'an' : 'a'} ${buc}${pickedName}`;
                 const pickupMessage = `${existingFood.letter} - ${pickedPhrase} (${existingFood.quan} in total).`;
                 game._pet_food_scan_inventory = game.inventory;
+                objectIceEffect(objectHere, game.u?.ux || 0, game.u?.uy || 0, { onLevel: false });
                 game.level.objects = (game.level.objects || []).filter(obj => obj !== objectHere);
                 newsym(game.u?.ux || 0, game.u?.uy || 0);
                 if (learnedByComparing) {
@@ -32426,6 +32436,7 @@ export async function rhack(_cmd) {
                 unpaidPrice: shopPrice > 0 ? shopPrice : undefined,
                 line: `${letter} - ${amount}${unpaidSuffix}`,
             };
+            objectIceEffect(pickedItem, game.u?.ux || 0, game.u?.uy || 0, { onLevel: false });
             game.inventory = [...(game.inventory || []), pickedItem];
             maybeAttachCarriedFigurineTimeout(pickedItem);
             if (shopkeeperForPrice) shopkeeperForPrice.billct = Math.max(shopkeeperForPrice.billct || 0, 1);
