@@ -1952,6 +1952,16 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   `41/44`; remaining failures are `seed0360-wizard-world-tour` (RNG frontier
   `60574/120639`), `seed0373-barbarian-quest-tour` (screen-only), and
   `seed0383-wizard-hallucinate` (screen-only).
+- Hallucinated swallow-expel redraw now follows the C-shaped expulsion order
+  more closely: after dismissing the swallow message, JS performs the full
+  `docrt()` while swallowed vision is being recalculated, takes the C
+  `unstuck()` `rnd(2)` before relocation redraws, and queues the post-expel
+  hallucination refresh. Focused `seed0383-wizard-hallucinate` remains
+  core-RNG exact at `16915/16915` and advances from screen `176/219` to
+  `181/219` (cursors `212/219`). Full `npm run score` remains `41/44`; the
+  remaining failures are still `seed0360-wizard-world-tour`, screen-only
+  `seed0373-barbarian-quest-tour`, and screen-only
+  `seed0383-wizard-hallucinate`.
 
 Next concrete target:
 
@@ -1965,9 +1975,10 @@ Next concrete target:
   full `eat.c`, `sp_lev.c`, `mkobj.c`, `makemon.c`, `uhitm.c`, and
   `dogmove.c` behavior.
 - `seed0030-ten-diverse-deaths`, `seed0367-priest-quest-tour`,
-  `seed0373-barbarian-quest-tour`, and `seed4500-knight-coverage` should stay
-  in the focused guard set for nearby object observation, Priest/Knight and
-  Barbarian quest generation, Elemental Plane generation/arrival, Vlad tower
+  `seed0373-barbarian-quest-tour`, `seed0383-wizard-hallucinate`, and
+  `seed4500-knight-coverage` should stay in the focused guard set for nearby
+  object observation, Priest/Knight and Barbarian quest generation, Elemental
+  Plane generation/arrival, hallucinated swallow-expel redraw order, Vlad tower
   generation, observed discovery accounting, Sokoban random-object display,
   level-follower arrival, and enlightenment wording.
 - The Archeologist tour, exact-wand wish tails, healer scroll tail, tourist

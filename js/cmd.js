@@ -21231,39 +21231,29 @@ export async function rhack(_cmd) {
 	                    game.u.uswldtim = 0;
 	                    game.u.ustuck = null;
 	                    game._swallow_overlay_active = 0;
-		                    game._swallow_overlay_before_command = null;
-			                    game._overlay_lines = null;
-			                    game._overlay_hide_status = 0;
-			                    game._overlay_hide_status_only = 0;
-			                    game._display_hallucinated_redraw = 1;
-			                    vision_recalc(2);
-			                    game._docrt_redraw_memory_only = 1;
-			                    try {
-			                        await docrt();
-			                    } finally {
-			                        game._docrt_redraw_memory_only = 0;
-			                    }
-			                    vision_recalc(0);
-			                    game._docrt_seen_monsters_only = 1;
-			                    try {
-			                        await docrt();
-			                    } finally {
-			                        game._docrt_seen_monsters_only = 0;
-			                    }
-			                    mon.mspec_used = rnd(2);
-		                    const spot = enextoMonsterSpot(mon.mx, mon.my, mon.data || {});
-		                    if (spot) {
-		                        newsym(mon.mx, mon.my);
-		                        mon.mx = spot.x;
-		                        mon.my = spot.y;
-		                        newsym(mon.mx, mon.my);
-		                    }
-		                    newsym(heroX, heroY);
-		                    newsym(game.u.ux, game.u.uy);
-		                    game._hallu_display_after_expel = 1;
-		                    game._simple_swallow_expel_prompt = 0;
-		                    game._display_hallucinated_redraw = 0;
-			                }
+	                    game._swallow_overlay_before_command = null;
+	                    game._overlay_lines = null;
+	                    game._overlay_hide_status = 0;
+	                    game._overlay_hide_status_only = 0;
+	                    game._display_hallucinated_redraw = 1;
+	                    vision_recalc(2);
+	                    await docrt();
+	                    vision_recalc(0);
+	                    mon.mspec_used = rnd(2);
+	                    const spot = enextoMonsterSpot(mon.mx, mon.my, mon.data || {});
+	                    if (spot) {
+	                        newsym(mon.mx, mon.my);
+	                        mon.mx = spot.x;
+	                        mon.my = spot.y;
+	                        newsym(mon.mx, mon.my);
+	                    }
+	                    newsym(heroX, heroY);
+	                    newsym(game.u.ux, game.u.uy);
+	                    game._hallu_display_after_expel = 1;
+	                    game._hallu_refresh_after_expel = 1;
+	                    game._simple_swallow_expel_prompt = 0;
+	                    game._display_hallucinated_redraw = 0;
+	                }
 	                game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
 	                game.context.move = 0;
 	                game._process_command_time_now = 1;
