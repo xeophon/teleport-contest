@@ -8134,6 +8134,25 @@ function statueTrapAt(x, y) {
         trap.tx === x && trap.ty === y && trap.ttyp === STATUE_TRAP) || null;
 }
 
+function statueTrapStrikeTargetAlongLine(dir) {
+    for (let step = 1; step <= BOLT_LIM; step++) {
+        const x = (game.u?.ux || 0) + dir.dx * step;
+        const y = (game.u?.uy || 0) + dir.dy * step;
+        if (x < 1 || x >= COLNO || y < 0 || y >= ROWNO) break;
+        const loc = game.level?.at(x, y);
+        if (!loc) break;
+        if ((game.level?.monsters || []).some(mon => mon.mx === x && mon.my === y)) break;
+        if ((game.level?.objects || []).some(obj =>
+            !obj.hidden && !obj.transientProjectile && obj.ox === x && obj.oy === y && obj.otyp === BOULDER))
+            break;
+        const statue = floorStatueAt(x, y);
+        const trap = statue ? statueTrapAt(x, y) : null;
+        if (trap) return { trap, x, y };
+        if (!ZAP_POS(loc.typ) || (loc.typ === DOOR && (loc.doormask & (D_CLOSED | D_LOCKED)))) break;
+    }
+    return null;
+}
+
 export async function activateStatueTrap(trap, x, y, { prefix = '', shatter = false, search = false, normal = false } = {}) {
     if (trap?.ttyp !== STATUE_TRAP) return null;
     game.level.traps = (game.level?.traps || []).filter(candidate => candidate !== trap);
@@ -23871,24 +23890,9 @@ export async function rhack(_cmd) {
                 || item?.wandIndex === 7;
             if (strikingWand) {
                 let message = '';
-                for (let step = 1; step <= BOLT_LIM; step++) {
-                    const x = (game.u?.ux || 0) + dir.dx * step;
-                    const y = (game.u?.uy || 0) + dir.dy * step;
-                    if (x < 1 || x >= COLNO || y < 0 || y >= ROWNO) break;
-                    const loc = game.level?.at(x, y);
-                    if (!loc) break;
-                    if ((game.level?.monsters || []).some(mon => mon.mx === x && mon.my === y)) break;
-                    if ((game.level?.objects || []).some(obj =>
-                        !obj.hidden && !obj.transientProjectile && obj.ox === x && obj.oy === y && obj.otyp === BOULDER))
-                        break;
-                    const statue = floorStatueAt(x, y);
-                    const trap = statue ? statueTrapAt(x, y) : null;
-                    if (trap) {
-                        message = await activateStatueTrap(trap, x, y, { shatter: true }) || '';
-                        break;
-                    }
-                    if (!ZAP_POS(loc.typ) || (loc.typ === DOOR && (loc.doormask & (D_CLOSED | D_LOCKED)))) break;
-                }
+                const target = statueTrapStrikeTargetAlongLine(dir);
+                if (target)
+                    message = await activateStatueTrap(target.trap, target.x, target.y, { shatter: true }) || '';
                 if (message) {
                     item.known = true;
                     item.kind = 'striking';
@@ -24135,6 +24139,13 @@ export async function rhack(_cmd) {
         if (spell?.category === 'healing') {
             game.u.uhp = Math.min(game.u.uhpmax || game.u.uhp || 1, (game.u.uhp || 1) + d(6, 4));
             await setMessage('You feel better.');
+        } else if (spell?.name === 'force bolt') {
+            const dir = movementDirection(ch);
+            const target = dir ? statueTrapStrikeTargetAlongLine(dir) : null;
+            const message = target
+                ? await activateStatueTrap(target.trap, target.x, target.y, { shatter: true })
+                : '';
+            await setMessage(message || `You cast ${spell?.name || 'a spell'}.`);
         } else {
             await setMessage(`You cast ${spell?.name || 'a spell'}.`);
         }

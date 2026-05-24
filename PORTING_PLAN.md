@@ -2147,8 +2147,17 @@ Next concrete target:
   `seed0014`, `seed0030`, `seed0060`, `seed0360`, `seed0367`, `seed0373`,
   `seed0383`, `seed4500`, and `seed5006` all pass, and full
   `bash frozen/score.sh` remains `44/44`.
+- Force-bolt spell casts now reuse the same C `SPE_FORCE_BOLT`/`bhitpile()`
+  statue-trap prepass as striking zaps for the reachable JS spell path: a
+  successful directed cast scans the line for a floor statue plus `STATUE_TRAP`
+  behind the same monsters, boulders, and blocked-terrain stops, then animates
+  it with the shatter message instead of only printing the generic cast line.
+  Focused guards `seed0014`, `seed0030`, `seed0060`, `seed0360`, `seed0367`,
+  `seed0373`, `seed0383`, `seed0399`, `seed0501`, `seed2200`, `seed2600`,
+  `seed4500`, and `seed5006` all pass, and full `bash frozen/score.sh`
+  remains `44/44`.
 - Remaining trap work includes `impact_drop()` for actual fall/dig callers,
-  statue-trap polearm/force-bolt/pick break activation edges, and deeper fire
+  statue-trap polearm/pick break activation edges, and deeper fire
   trap `burnarmor()`/floor-object burning parity.
 - `seed4500-knight-coverage` is closed again and should remain a guard for
   punished teleport landing object-list timing, Vlad tower generation, observed
