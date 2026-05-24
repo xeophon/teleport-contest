@@ -8458,6 +8458,52 @@ function statueTrapAt(x, y) {
         trap.tx === x && trap.ty === y && trap.ttyp === STATUE_TRAP) || null;
 }
 
+function dropStatueContentsToFloor(statue, x, y) {
+    const contents = statue?.contents || [];
+    if (!contents.length || !game.level) return;
+    while (contents.length) {
+        const item = contents.shift();
+        item.contained = false;
+        item.ox = x;
+        item.oy = y;
+        item.hidden = false;
+        item.transientProjectile = false;
+        delete item.line;
+        Object.assign(item, object_display(item));
+        game.level.objects.push(item);
+    }
+    statue.contents = [];
+}
+
+export function breakStatueObject(statue, x = statue?.ox || 0, y = statue?.oy || 0) {
+    if (!statue || !game.level) return false;
+    const objects = game.level.objects || [];
+    if (!objects.includes(statue)) return false;
+    dropStatueContentsToFloor(statue, x, y);
+    Object.assign(statue, {
+        otyp: ROCK,
+        ox: x,
+        oy: y,
+        quan: rn1(60, 7),
+        cls: 'gem',
+        kind: 'rock',
+        actualKind: 'rock',
+        singular: 'rock',
+        plural: 'rocks',
+        gemDescription: 'rock',
+        spe: 0,
+        ...object_display({ otyp: ROCK }),
+    });
+    delete statue.contents;
+    delete statue.corpsenm;
+    delete statue.historic;
+    delete statue._death_remains;
+    game.level.objects = objects.filter(obj => obj !== statue);
+    game.level.objects.push(statue);
+    newsym(x, y);
+    return true;
+}
+
 function isPolearmItem(item) {
     if (!item) return false;
     const name = inventoryItemName(item).toLowerCase();
@@ -8518,7 +8564,7 @@ function polearmTargetDescription(x, y) {
     return loc.typ && loc.typ < DOOR ? 'wall' : 'unexplored area';
 }
 
-function statueTrapStrikeTargetAlongLine(dir) {
+function statueStrikeTargetAlongLine(dir) {
     for (let step = 1; step <= BOLT_LIM; step++) {
         const x = (game.u?.ux || 0) + dir.dx * step;
         const y = (game.u?.uy || 0) + dir.dy * step;
@@ -8531,10 +8577,33 @@ function statueTrapStrikeTargetAlongLine(dir) {
             break;
         const statue = floorStatueAt(x, y);
         const trap = statue ? statueTrapAt(x, y) : null;
-        if (trap) return { trap, x, y };
+        if (statue) return { statue, trap, x, y };
         if (!ZAP_POS(loc.typ) || (loc.typ === DOOR && (loc.doormask & (D_CLOSED | D_LOCKED)))) break;
     }
     return null;
+}
+
+function statueStrikeBreakResult(x, y) {
+    if (!game.u?.blind && couldsee(x, y))
+        return { message: 'The statue shatters.', learned: true };
+    if (!heroIsDeaf()) return { message: 'You hear a crumbling sound.', learned: true };
+    return { message: '', learned: false };
+}
+
+async function strikeStatueAlongLine(dir) {
+    const target = statueStrikeTargetAlongLine(dir);
+    if (!target) return { hit: false, message: '', learned: false };
+    if (target.trap) {
+        const message = await activateStatueTrap(target.trap, target.x, target.y, { shatter: true }) || '';
+        if (message) return { hit: true, message, learned: true };
+        const statue = floorStatueAt(target.x, target.y);
+        if (statue && breakStatueObject(statue, target.x, target.y))
+            return { hit: true, ...statueStrikeBreakResult(target.x, target.y) };
+        return { hit: true, message: '', learned: false };
+    }
+    if (!breakStatueObject(target.statue, target.x, target.y))
+        return { hit: false, message: '', learned: false };
+    return { hit: true, ...statueStrikeBreakResult(target.x, target.y) };
 }
 
 export async function activateStatueTrap(trap, x, y, { prefix = '', shatter = false, search = false, normal = false } = {}) {
@@ -24301,11 +24370,9 @@ export async function rhack(_cmd) {
                 || item?.actualKind === 'wand of striking'
                 || item?.wandIndex === 7;
             if (strikingWand) {
-                let message = '';
-                const target = statueTrapStrikeTargetAlongLine(dir);
-                if (target)
-                    message = await activateStatueTrap(target.trap, target.x, target.y, { shatter: true }) || '';
-                if (message) {
+                const result = await strikeStatueAlongLine(dir);
+                const message = result.message || '';
+                if (result.learned) {
                     item.known = true;
                     item.kind = 'striking';
                     item.wandIndex = 7;
@@ -24553,11 +24620,8 @@ export async function rhack(_cmd) {
             await setMessage('You feel better.');
         } else if (spell?.name === 'force bolt') {
             const dir = movementDirection(ch);
-            const target = dir ? statueTrapStrikeTargetAlongLine(dir) : null;
-            const message = target
-                ? await activateStatueTrap(target.trap, target.x, target.y, { shatter: true })
-                : '';
-            await setMessage(message || `You cast ${spell?.name || 'a spell'}.`);
+            const result = dir ? await strikeStatueAlongLine(dir) : null;
+            await setMessage(result?.hit ? (result.message || '') : `You cast ${spell?.name || 'a spell'}.`);
         } else {
             await setMessage(`You cast ${spell?.name || 'a spell'}.`);
         }

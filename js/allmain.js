@@ -3,7 +3,7 @@
 
 import { game } from './gstate.js';
 import { mklev, l_nhcore_init, u_on_upstairs, makemon, mkcorpstat, mksobj, wipe_engr_at, dropMonsterInventory, wandIndexForRoll, scrollIndexForRoll, potionIndexForRoll, RANDOM_MONSTER_BY_NAME, adjustedMonsterLevel, monsterByRndName, monster_hp, rndmonnum, syncDungeonContext, next_ident, set_malign, enextoMonsterSpot, getbogusmon, pickNasty, chameleonAnimalForm, doppelgangerHumanoidForm, noteleportLevelForMonster, rlocNoMsg, rlocToCoreNoMsg, somexyspace, fumaroles, movebubbles } from './mklev.js';
-import { rhack, pickupObjectName, inventoryItemName, inventoryLetterRank, recordVanquished, finishForceLock, loseExperienceLevel, finishLevelTeleport, finishPickDigDownwardHole, finishPickDigDownwardPit, maybeQueueQuestLeaderTalk, monsterGrowUp, processSpellbookStudyOccupation, processTinOpeningOccupation, finishTinOpeningOccupation, refreshSwallowOverlay, travelPathKeys, updateGauntletsOfPowerStrength, consumeLifeSavingAmulet, activateStatueTrap } from './cmd.js';
+import { rhack, pickupObjectName, inventoryItemName, inventoryLetterRank, recordVanquished, finishForceLock, loseExperienceLevel, finishLevelTeleport, finishPickDigDownwardHole, finishPickDigDownwardPit, maybeQueueQuestLeaderTalk, monsterGrowUp, processSpellbookStudyOccupation, processTinOpeningOccupation, finishTinOpeningOccupation, refreshSwallowOverlay, travelPathKeys, updateGauntletsOfPowerStrength, consumeLifeSavingAmulet, activateStatueTrap, breakStatueObject } from './cmd.js';
 import { docrt, cls, bot, flush_screen, pline, newsym, refreshHallucinatedMap, show_glyph_cell } from './display.js';
 import { vision_recalc, vision_reset, init_vision_globals, cansee, couldsee, view_from } from './vision.js';
 import { init_objects } from './o_init.js';
@@ -2521,26 +2521,6 @@ function pickDigErosionPenalty(item) {
     return Math.max(item?.oeroded || 0, item?.oeroded2 || 0, item?.erosion || 0);
 }
 
-function dropStatueContents(statue, x, y) {
-    const contents = statue?.contents || [];
-    if (!contents.length) return;
-    for (const item of contents) {
-        item.contained = false;
-        item.ox = x;
-        item.oy = y;
-        delete item.line;
-        game.level.objects.push(item);
-    }
-    statue.contents = [];
-}
-
-function breakPickDigStatue(statue, x, y) {
-    if (!statue) return;
-    game.level.objects = (game.level?.objects || []).filter(obj => obj !== statue);
-    dropStatueContents(statue, x, y);
-    newsym(x, y);
-}
-
 async function processPickDigOccupation() {
     const dig = game._pick_dig_occupation;
     if (!dig) return;
@@ -2599,7 +2579,7 @@ async function processPickDigOccupation() {
         }
         if (!animated) {
             const currentStatue = pickDigStatueAt(dig.x, dig.y);
-            if (currentStatue) breakPickDigStatue(currentStatue, dig.x, dig.y);
+            if (currentStatue) breakStatueObject(currentStatue, dig.x, dig.y);
             addToplineMessage('The statue shatters.');
         }
         return;

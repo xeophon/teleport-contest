@@ -2204,9 +2204,17 @@ Next concrete target:
   hole creation reuses the existing fall/`impact_drop()` path while clearing
   stale pit state. Focused wand/trap guards pass `12/12`, and full
   `SESSION_REPLAY_TIMEOUT_MS=60000 bash frozen/score.sh` remains `44/44`.
+- Ordinary statue breakage now shares a C `break_statue()`/`fracture_rock()`
+  helper for the reachable pick-axe, wand-of-striking, and force-bolt paths:
+  statue contents are dropped to the floor first, the statue object is
+  fractured into `rn1(60, 7)` rocks on top of the pile, visible or audible
+  striking/force-bolt breakage identifies the wand, and statue-trap animation
+  remains the pre-break path. Focused statue/apply/wand guards pass `19/19`,
+  a direct fracture smoke passes, and full
+  `SESSION_REPLAY_TIMEOUT_MS=60000 bash frozen/score.sh` remains `44/44`.
 - Remaining trap work includes off-hero `impact_drop()` callers, deeper
-  statue-trap inventory/normal-statue break fidelity, and deeper fire trap
-  `burnarmor()`/floor-object burning parity.
+  statue-trap edge cases, and deeper fire trap `burnarmor()`/floor-object
+  burning parity.
 - `seed4500-knight-coverage` is closed again and should remain a guard for
   punished teleport landing object-list timing, Vlad tower generation, observed
   discovery accounting, Sokoban random-object display, and late enlightenment
