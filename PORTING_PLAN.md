@@ -2263,6 +2263,12 @@ Next concrete target:
   visible floor lights can catch light before the smoke/hit message. Direct
   smokes cover visible, blind, protected-object, and under-monster ordering;
   focused fire/wand guards still match.
+- Ordinary monster fire-breath rays now share that ray-style floor-object fire
+  pass through an `advanceFireBreathRay()` callback, keeping terrain effects
+  first and floor burn/catch-light/smoke before monster or hero target
+  handling on both initial and resumed rays. Direct smokes cover visible,
+  blind, protected-object, hero-target, and under-monster ordering; focused
+  breath guards still match, and full `npm run score` remains `44/44`.
 - Remaining trap work includes off-hero `impact_drop()` callers, deeper
   statue-trap edge cases, broader non-trap fire floor-object parity, and
   remaining bespoke ray floor/hero timing edges.

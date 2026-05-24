@@ -221,7 +221,7 @@ export function fireBreathZapHits(ac) {
     return 3 - chance < ac;
 }
 
-export function advanceFireBreathRay(ray, sourceId) {
+export function advanceFireBreathRay(ray, sourceId, { floorFire = null } = {}) {
     const messages = [];
     while (ray.remaining > 0) {
         ray.remaining--;
@@ -231,6 +231,10 @@ export function advanceFireBreathRay(ray, sourceId) {
         if (terrainMessage && !ray.heardGas) {
             messages.push(terrainMessage);
             ray.heardGas = true;
+        }
+        if (floorFire) {
+            const floorMessages = floorFire(ray.x, ray.y) || [];
+            messages.push(...floorMessages);
         }
 
         const mon = (game.level?.monsters || []).find(candidate =>

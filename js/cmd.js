@@ -7096,6 +7096,15 @@ export function burnFloorObjectsByFire(x, y, {
     return { count, messages };
 }
 
+export function burnRayFloorObjectsByFire(x, y) {
+    const floorVisible = !game.u?.blind && !!(game.viz_array?.[y]?.[x] & IN_SIGHT);
+    const floorFire = burnFloorObjectsByFire(x, y, { igniteFeedback: floorVisible });
+    const messages = [...floorFire.messages];
+    if (floorFire.count && couldsee(x, y))
+        messages.push(`You ${game.u?.blind ? 'smell a whiff' : 'see a puff'} of smoke.`);
+    return messages;
+}
+
 function fireDamageInventory(origDamage, forceDestroyItems = false, rollIgniteItems = false, {
     updateArmorInventory = true,
     preburnedArmor = null,
@@ -21642,7 +21651,9 @@ export async function rhack(_cmd) {
                         ];
                     } else {
                         const ray = { ...breath.ray, heardGas: false };
-                        const follow = advanceFireBreathRay(ray, breath.sourceId);
+                        const follow = advanceFireBreathRay(ray, breath.sourceId, {
+                            floorFire: burnRayFloorObjectsByFire,
+                        });
                         if (follow.target?.type === 'monster') {
                             game._queued_messages_after_more ??= [];
                             game._queued_messages_after_more.unshift({
@@ -21691,7 +21702,9 @@ export async function rhack(_cmd) {
                         }
                         if (breath.ray.remaining > 0) breath.ray.remaining = Math.max(0, breath.ray.remaining - 2);
                     }
-                    const follow = advanceFireBreathRay(breath.ray, breath.sourceId);
+                    const follow = advanceFireBreathRay(breath.ray, breath.sourceId, {
+                        floorFire: burnRayFloorObjectsByFire,
+                    });
                     if (follow.target?.type === 'monster') {
                         game._queued_messages_after_more ??= [];
                         game._queued_messages_after_more.unshift({
@@ -24406,11 +24419,7 @@ export async function rhack(_cmd) {
                         const beam = dy === 0 ? '─' : dx === 0 ? '│' : dx === dy ? '\\' : '/';
                         beamCells.push({ x: sx, y: sy, ch: beam, color: CLR_ORANGE });
 
-                        const floorVisible = !game.u?.blind && !!(game.viz_array?.[sy]?.[sx] & IN_SIGHT);
-                        const floorFire = burnFloorObjectsByFire(sx, sy, { igniteFeedback: floorVisible });
-                        messages.push(...floorFire.messages);
-                        if (floorFire.count && couldsee(sx, sy))
-                            messages.push(`You ${game.u?.blind ? 'smell a whiff' : 'see a puff'} of smoke.`);
+                        messages.push(...burnRayFloorObjectsByFire(sx, sy));
 
                         const target = game.level?.monsters?.find(mon => mon.mx === sx && mon.my === sy);
                         if (target) {
