@@ -2360,11 +2360,21 @@ Next concrete target:
   an actual bounce occurs. Direct smokes cover empty-corridor bounceback,
   fatal monster hits, and cold-shattered doors; focused guards and full
   `npm run score` remain `44/44`.
+- Cold rays now run C-shaped `destroy_items(AD_COLD)` for hero and monster
+  inventories: only non-oil potion stacks are eligible, limit/reservoir
+  selection uses `orig_dmg`, each selected stack rolls `rnd(4)` before per-unit
+  `rn2(3)` shatter checks, hero item-protection rolls are modeled for cold
+  resistance gear/dwarvish cloaks, oil survives, and visible monster potion
+  messages precede the normal cold hit message. Self-zapping a cold wand now
+  uses the C self-zap messages and `d(12, 6)` damage path. Direct smokes cover
+  hero potion shatter, cold-resistant hero potion damage, oil immunity, and
+  visible monster potion shatter; focused guards and full `npm run score`
+  remain `44/44`.
 - Remaining ice work outside this fire-ray terrain slice includes the broader
   full `spoteffects()`/`pooleffects()` hero liquid behavior, shared post-melt
   monster liquid effects for timer melts, exact `bury_objs()` object-resistance
-  behavior, exact cold inventory destruction, monster reflection, and a shared
-  zap-ray walker so fire/sleep/cold stop carrying parallel bounce code.
+  behavior, monster reflection, and a shared zap-ray walker so fire/sleep/cold
+  stop carrying parallel bounce code.
 - Remaining trap work includes off-hero `impact_drop()` callers, deeper
   statue-trap edge cases, broader non-trap fire floor-object parity, and
   remaining bespoke ray floor/hero timing edges.

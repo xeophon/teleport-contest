@@ -6979,6 +6979,97 @@ function fireInventoryDestroyVerb(cls, item, plural) {
     return plural ? 'catch fire and burn' : 'catches fire and burns';
 }
 
+function coldDestroyablePotion(item) {
+    return isPotionObject(item)
+        && !isPotionOfOil(item)
+        && !item?.artifact
+        && !item?.oartifact
+        && !(item?.in_use && (item?.quan || 1) === 1);
+}
+
+function coldInventoryProtectionChance() {
+    const coldGear = (game.inventory || []).some(item => {
+        const kind = objectKindKey(item);
+        const active = isWornInventoryItem(item) || item.wielded || item.line?.includes('(weapon)');
+        return active && (kind === 'ring of cold resistance'
+            || kind === 'cold resistance'
+            || kind === 'white dragon scale mail'
+            || kind === 'white dragon scales'
+            || kind === 'Frost Brand'.toLowerCase()
+            || item.coldResistance);
+    });
+    if (coldGear) return 99;
+    const dwarvishCloak = (game.inventory || []).some(item =>
+        isWornInventoryItem(item) && objectKindKey(item) === 'dwarvish cloak');
+    return dwarvishCloak ? 90 : 0;
+}
+
+function coldInventoryItemProtected() {
+    const chance = coldInventoryProtectionChance();
+    return chance ? rn2(100) < chance : false;
+}
+
+function coldDestroyInventorySelection(items, origDamage) {
+    let limit = Math.trunc(origDamage / 5);
+    if (origDamage % 5 > rn2(5)) limit++;
+    if (limit < 1) return [];
+    limit = Math.min(20, limit);
+
+    const selected = [];
+    let eligible = 0;
+    for (const item of [...(items || [])]) {
+        if (!coldDestroyablePotion(item)) continue;
+        const i = eligible < limit ? eligible : rn2(eligible);
+        eligible++;
+        if (i < limit) selected[i] = item;
+    }
+    return selected.filter(Boolean);
+}
+
+function coldInventoryDestroyVerb(plural) {
+    return plural ? 'freeze and shatter' : 'freezes and shatters';
+}
+
+function coldInventoryDeathCause(plural) {
+    return plural ? 'killed by shattered potions' : 'killed by a shattered potion';
+}
+
+function coldPotionDisplayName(item, plural) {
+    const display = { ...item, line: '', quan: plural ? Math.max(2, item.quan || 1) : 1 };
+    const name = pickupObjectName(display);
+    if (plural && String(item?.kind || '').endsWith(' potion') && name === item.kind)
+        return `${item.kind.replace(/ potion$/, '')} potions`;
+    return name;
+}
+
+function coldDamageInventory(origDamage) {
+    const messages = [];
+    let damage = 0;
+    let deathCause = '';
+    for (const item of coldDestroyInventorySelection(game.inventory || [], origDamage)) {
+        if (coldInventoryItemProtected()) continue;
+        const itemDamage = rnd(4);
+        const quan = Math.max(0, (item.quan || 1) - (item.in_use ? 1 : 0));
+        let destroyed = 0;
+        for (let i = 0; i < quan; i++)
+            if (!rn2(3)) destroyed++;
+        if (!destroyed) continue;
+
+        const plural = destroyed > 1;
+        const name = coldPotionDisplayName(item, plural);
+        const subject = destroyed === 1 && quan === 1 ? `Your ${name}`
+            : destroyed === 1 ? `One of your ${name}`
+                : destroyed < quan ? `Some of your ${name}`
+                    : quan === 2 ? `Both of your ${name}`
+                        : `All of your ${name}`;
+        messages.push(`${subject} ${coldInventoryDestroyVerb(plural)}!`);
+        removeInventoryItem(item, destroyed);
+        damage += itemDamage;
+        deathCause = coldInventoryDeathCause(plural);
+    }
+    return { messages, damage, deathCause };
+}
+
 function fireItemCanCatchLight(item) {
     if (!item || item.lamplit || item.burning || item.in_use) return false;
     const kind = objectKindKey(item);
@@ -11373,6 +11464,36 @@ export function monsterFireInventoryDamage(mon, origDamage, messages, visible) {
             messages.push(`${subject} ${verb}!`);
         }
         const remaining = quan - destroyed;
+        if (remaining > 0) item.quan = remaining;
+        else mon.minvent = (mon.minvent || []).filter(other => other !== item);
+        damage += itemDamage;
+    }
+    return damage;
+}
+
+function monsterColdInventoryDamage(mon, origDamage, messages, visible) {
+    let damage = 0;
+    const owner = fireScrollMonsterName(mon).replace(/^The /, 'the ');
+    const possessive = owner.endsWith('s') ? `${owner}'` : `${owner}'s`;
+    for (const item of coldDestroyInventorySelection(mon?.minvent || [], origDamage)) {
+        const itemDamage = rnd(4);
+        const quan = Math.max(0, (item.quan || 1) - (item.in_use ? 1 : 0));
+        let destroyed = 0;
+        for (let i = 0; i < quan; i++)
+            if (!rn2(3)) destroyed++;
+        if (!destroyed) continue;
+
+        if (visible) {
+            const plural = destroyed > 1;
+            const itemName = coldPotionDisplayName(item, plural);
+            const subject = destroyed === 1 && quan === 1 ? `${sentenceCase(possessive)} ${itemName}`
+                : destroyed === 1 ? `One of ${possessive} ${itemName}`
+                    : destroyed < quan ? `Some of ${possessive} ${itemName}`
+                        : quan === 2 ? `Both of ${possessive} ${itemName}`
+                            : `All of ${possessive} ${itemName}`;
+            messages.push(`${subject} ${coldInventoryDestroyVerb(plural)}!`);
+        }
+        const remaining = (item.quan || 1) - destroyed;
         if (remaining > 0) item.quan = remaining;
         else mon.minvent = (mon.minvent || []).filter(other => other !== item);
         damage += itemDamage;
@@ -24211,6 +24332,7 @@ export async function rhack(_cmd) {
             return;
         }
         const fireWand = item?.wand === 'fire' || item?.kind === 'fire' || item?.wandIndex === 20;
+        const coldWand = item?.wand === 'cold' || item?.kind === 'cold' || item?.wandIndex === 21;
         if (selfZap && fireWand) {
             const origDamage = d(12, 6);
             const resistsFire = !!game.u?.fireResistance;
@@ -24232,6 +24354,33 @@ export async function rhack(_cmd) {
             item.kind = 'fire';
             item.line = `${item.letter} - a wand of fire${wandChargeSuffix(item)}`;
             await setMessage(resistsFire ? 'You feel rather warm.' : "You've set yourself afire!", !!followups.length);
+            game._command_mode = null;
+            game.context.move = 1;
+            return;
+        }
+        if (selfZap && coldWand) {
+            const origDamage = d(12, 6);
+            const resistsCold = !!game.u?.coldResistance;
+            const coldInventory = coldDamageInventory(origDamage);
+            const baseDamage = resistsCold ? 0 : origDamage;
+            const damage = baseDamage + coldInventory.damage;
+            const hpBefore = game.u?.uhp || 0;
+            if (damage && game.u)
+                game.u.uhp = Math.max(0, hpBefore - damage);
+            const followups = [...coldInventory.messages];
+            if ((game.u?.uhp || 0) <= 0) {
+                game._death_cause = coldInventory.damage >= hpBefore && coldInventory.deathCause
+                    ? coldInventory.deathCause
+                    : `zapped ${game.flags?.female ? 'herself' : 'himself'} with a wand of cold`;
+                followups.push('You die...');
+            }
+            if (followups.length)
+                game._queued_messages_after_more = [...(game._queued_messages_after_more || []),
+                    ...followups.map((text, index) => ({ text, more: index < followups.length - 1 }))];
+            item.known = true;
+            item.kind = 'cold';
+            item.line = `${item.letter} - a wand of cold${wandChargeSuffix(item)}`;
+            await setMessage(resistsCold ? 'You feel a little chill.' : 'You imitate a popsicle!', !!followups.length);
             game._command_mode = null;
             game.context.move = 1;
             return;
@@ -24335,7 +24484,7 @@ export async function rhack(_cmd) {
                 game.context.move = 1;
                 return;
             }
-            if (item?.wand === 'cold' || item?.kind === 'cold' || item?.wandIndex === 21) {
+            if (coldWand) {
                 exerciseAttribute(A_WIS, true);
                 const beamCells = [];
                 const messages = [];
@@ -24381,7 +24530,8 @@ export async function rhack(_cmd) {
                                     const origDamage = d(6, 6);
                                     damage = origDamage;
                                     if (target.fireResistance || target.data?.resistsFire) damage += d(6, 3);
-                                    if (!rn2(3)) rn2(5);
+                                    if (!rn2(3))
+                                        damage += monsterColdInventoryDamage(target, origDamage, messages, visible);
                                     if (damage > 0 && monsterResistsEffect(target, 12))
                                         damage = Math.trunc(damage / 2);
                                 }
@@ -24424,13 +24574,20 @@ export async function rhack(_cmd) {
                                     dy = -dy;
                                 } else {
                                     const origDamage = d(6, 6);
-                                    const damage = game.u?.coldResistance ? 0 : origDamage;
+                                    const baseDamage = game.u?.coldResistance ? 0 : origDamage;
                                     if (game.u?.coldResistance) messages.push("You don't feel cold.");
-                                    if (!rn2(3)) rn2(5);
+                                    const coldInventory = !rn2(3)
+                                        ? coldDamageInventory(origDamage)
+                                        : { messages: [], damage: 0, deathCause: '' };
+                                    messages.push(...coldInventory.messages);
+                                    const damage = baseDamage + coldInventory.damage;
+                                    const hpBefore = game.u?.uhp || 0;
                                     if (damage && game.u)
-                                        game.u.uhp = Math.max(0, (game.u.uhp || 0) - damage);
+                                        game.u.uhp = Math.max(0, hpBefore - damage);
                                     if ((game.u?.uhp || 0) <= 0) {
-                                        game._death_cause = 'killed by a bolt of cold';
+                                        game._death_cause = coldInventory.damage >= hpBefore && coldInventory.deathCause
+                                            ? coldInventory.deathCause
+                                            : 'killed by a bolt of cold';
                                         messages.push('You die...');
                                     }
                                 }
