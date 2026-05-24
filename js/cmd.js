@@ -858,6 +858,7 @@ const FIRE_TRAP = 10;
 const HOLE = 13;
 const TRAPDOOR = 14;
 const LEVEL_TELEP = 16;
+const STATUE_TRAP = 19;
 const MAGIC_TRAP = 20;
 const ANTI_MAGIC = 21;
 const POLY_TRAP = 22;
@@ -8076,6 +8077,68 @@ function corpseObjectName(obj) {
 function monsterIndefiniteName(name) {
     const monsterName = String(name || 'monster');
     return `${/^[aeiou]/i.test(monsterName) ? 'an' : 'a'} ${monsterName}`;
+}
+
+function upstartText(text) {
+    const value = String(text || '');
+    return value ? value.charAt(0).toUpperCase() + value.slice(1) : value;
+}
+
+function statueAnimationVerb(mon) {
+    const data = mon?.data || {};
+    if (data.nonliving || data.vampshifter) return 'moves';
+    return 'comes to life';
+}
+
+function moveStatueContentsToMonster(statue, mon) {
+    const contents = statue?.contents || [];
+    while (contents.length) {
+        const item = contents.shift();
+        item.contained = false;
+        delete item.ox;
+        delete item.oy;
+        delete item.line;
+        mon.minvent = [item, ...(mon.minvent || [])];
+    }
+    mon.hasInventory = !!(mon.minvent || []).length;
+}
+
+async function activateStatueTrap(trap, x, y, { prefix = '', shatter = false } = {}) {
+    if (trap?.ttyp !== STATUE_TRAP) return null;
+    game.level.traps = (game.level?.traps || []).filter(candidate => candidate !== trap);
+
+    const statue = (game.level?.objects || []).find(obj =>
+        !obj.transientProjectile && obj.otyp === STATUE && obj.ox === x && obj.oy === y);
+    const data = statue?.corpsenm;
+    if (!statue || !data?.name) {
+        newsym(x, y);
+        return prefix || '';
+    }
+
+    const mon = await makemon(data, x, y, NO_MINVENT | MM_NOMSG | MM_NOCOUNTBIRTH);
+    if (!mon) {
+        newsym(x, y);
+        return prefix || '';
+    }
+
+    mon.mtame = 0;
+    mon.pet = false;
+    mon.mpeaceful = 0;
+    mon.msleeping = 0;
+    mon.mundetected = false;
+    set_malign(mon);
+
+    const statueName = pickupObjectName(statue);
+    const verb = statueAnimationVerb(mon);
+    const body = shatter
+        ? `Instead of shattering, ${game.u?.blind || !couldsee(x, y) ? 'a statue' : `the ${statueName}`} suddenly ${verb}!`
+        : `${upstartText(`the ${statueName}`)} ${verb}!`;
+
+    moveStatueContentsToMonster(statue, mon);
+    game.level.objects = (game.level?.objects || []).filter(obj => obj !== statue);
+    newsym(x, y);
+    newsym(mon.mx, mon.my);
+    return prefix ? `${prefix}  ${body}` : body;
 }
 
 function noFittingWishObject() {
@@ -15505,6 +15568,10 @@ async function sitTriggerTrap(trap) {
         await finishSitMessage(sitWebTrapMessage(trap, prefix));
         return true;
     }
+    if (trap.ttyp === STATUE_TRAP) {
+        await finishSitMessage(await activateStatueTrap(trap, game.u?.ux || 0, game.u?.uy || 0, { prefix }));
+        return true;
+    }
     if (trap.ttyp === MAGIC_TRAP) {
         trap.tseen = true;
         const result = magicTrapResult(trap);
@@ -17895,6 +17962,11 @@ async function moveHero(dx, dy) {
             newsym(end.x, end.y);
         }
         await setMessage('Click!  You trigger a rolling boulder trap!  A boulder misses you.');
+        return;
+    }
+    if (steppedTrap?.ttyp === STATUE_TRAP) {
+        const message = await activateStatueTrap(steppedTrap, newx, newy);
+        if (message) await setMessage(message);
         return;
     }
     const brokenDoorTopology = game._tutorial_triggers?.brokenDoorTopology;

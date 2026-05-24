@@ -2115,8 +2115,17 @@ Next concrete target:
   Focused guards `seed0014`, `seed0030`, `seed0360`, `seed0367`, `seed0373`,
   `seed0383`, `seed4500`, and `seed5006` all pass, and full
   `bash frozen/score.sh` remains `44/44`.
+- Statue-trap activation now follows the C state transition for the hero-facing
+  path: `makemon()` honors `NO_MINVENT`, trap-created statues avoid birth
+  counting while preserving temporary monster inventory as statue contents,
+  stepping or sitting on a statue trap deletes the trap, animates the floor
+  statue into a hostile no-inventory monster, transfers the statue contents to
+  that monster, deletes the statue object, and redraws both squares. Focused
+  guards `seed0014`, `seed0030`, `seed0360`, `seed0367`, `seed0373`,
+  `seed0383`, `seed4500`, and `seed5006` all pass, and full
+  `bash frozen/score.sh` remains `44/44`.
 - Remaining trap work includes `impact_drop()` for actual fall/dig callers,
-  statue-trap inventory transfer edge cases, and deeper fire trap
+  statue-trap search/kick/zap/break activation edges, and deeper fire trap
   `burnarmor()`/floor-object burning parity.
 - `seed4500-knight-coverage` is closed again and should remain a guard for
   punished teleport landing object-list timing, Vlad tower generation, observed

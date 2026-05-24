@@ -37,7 +37,7 @@ import {
     ICE, MOAT, POOL, WATER, LAVAPOOL, LAVAWALL, DBWALL, DRAWBRIDGE_UP, TREE, CLOUD,
     A_NONE, A_LAWFUL, A_NEUTRAL, A_CHAOTIC, AM_SHRINE, AM_SANCTUM, Align2amask, Amask2align,
     FOODSHOP, RINGSHOP, WANDSHOP, TOOLSHOP, BOOKSHOP, FODDERSHOP, CANDLESHOP,
-    MM_NOGRP, MM_ANGRY, MM_NONAME, MM_NOCOUNTBIRTH, MM_NOMSG, MM_ADJACENTOK, MM_NOTAIL, MM_NOWAIT,
+    NO_MINVENT, MM_NOGRP, MM_ANGRY, MM_NONAME, MM_NOCOUNTBIRTH, MM_NOMSG, MM_ADJACENTOK, MM_NOTAIL, MM_NOWAIT,
     CORPSTAT_FEMALE, CORPSTAT_MALE, CORPSTAT_NEUTER, CORPSTAT_HISTORIC,
     LR_DOWNSTAIR, LR_UPSTAIR, LR_PORTAL, LR_TELE, LR_UPTELE, LR_DOWNTELE, LR_BRANCH,
     DB_UNDER, DB_FLOOR,
@@ -6417,7 +6417,7 @@ export async function makemon(mdat, x, y, mmflags) {
     if (ptr.name === 'ghost' && !(mmflags & MM_NONAME)) {
         if (rn2(7)) rn2(34);
     }
-    let allowMinvent = true;
+    let allowMinvent = !(mmflags & NO_MINVENT);
     const peacefulPtr = ptr;
     if (ptr.mlet === 'V') {
         let shifted = null;
@@ -6607,7 +6607,7 @@ export async function makemon(mdat, x, y, mmflags) {
         }
     }
 
-    if (ptr.mlet === S_NYMPH) {
+    if (allowMinvent && ptr.mlet === S_NYMPH) {
         if (!rn2(2)) {
             mon.nymphMirror = true;
             mongets(MIRROR);
@@ -6617,19 +6617,19 @@ export async function makemon(mdat, x, y, mmflags) {
             mongets(POT_OBJECT_DETECTION);
         }
     }
-    if (ptr.name === 'leprechaun') {
+    if (allowMinvent && ptr.name === 'leprechaun') {
         mkmonmoney(mon, d(level_difficulty(), 30));
     }
-    if (ptr.name === 'ice devil' && !rn2(4)) {
+    if (allowMinvent && ptr.name === 'ice devil' && !rn2(4)) {
         mongets(SPEAR);
         mon.hasInventory = true;
-    } else if (ptr.name === 'Asmodeus') {
+    } else if (allowMinvent && ptr.name === 'Asmodeus') {
         mongets(WAN_COLD);
         mongets(WAN_FIRE);
         mon.hasInventory = true;
     }
     const livingDwarf = ptr.dwarf && ptr.mlet === S_HUMANOID;
-    if (livingDwarf) {
+    if (allowMinvent && livingDwarf) {
         if (rn2(7)) mongets(DWARVISH_CLOAK);
         if (rn2(7)) mongets(IRON_SHOES);
         if (!rn2(4)) {
@@ -6653,20 +6653,20 @@ export async function makemon(mdat, x, y, mmflags) {
         m_initweap(ptr);
         if (game._last_mon_throw) mon.missile = game._last_mon_throw;
     }
-    if (ptr.priest) {
+    if (allowMinvent && ptr.priest) {
         mongets(rn2(7) ? ROBE : rn2(3) ? CLOAK_OF_PROTECTION : CLOAK_OF_MAGIC_RESISTANCE);
         mongets(SMALL_SHIELD);
         mkmonmoney(mon, rn1(10, 20));
     }
-    if (ptr.mercenary) {
+    if (allowMinvent && ptr.mercenary) {
         m_initmercinv(ptr);
         rn2(100);
         game._mongets_target = previousMongetsTarget;
         return mon;
     }
-    if (ptr.mlet === 'G' && !rn2(game.in_mklev && game.dungeons?.[game.u?.uz?.dnum]?.name === 'The Gnomish Mines' ? 20 : 60))
+    if (allowMinvent && ptr.mlet === 'G' && !rn2(game.in_mklev && game.dungeons?.[game.u?.uz?.dnum]?.name === 'The Gnomish Mines' ? 20 : 60))
         mksobj(rn2(4) ? TALLOW_CANDLE : WAX_CANDLE, true, false);
-    if (ptr.shopkeeper) {
+    if (allowMinvent && ptr.shopkeeper) {
         mongets(SKELETON_KEY);
         switch (rn2(4)) {
         case 0:
@@ -6680,7 +6680,7 @@ export async function makemon(mdat, x, y, mmflags) {
         }
         mon.hasInventory = true;
     }
-    const quantumBoxRoll = ptr.glyph === 'Q' && !rn2(20);
+    const quantumBoxRoll = allowMinvent && ptr.glyph === 'Q' && !rn2(20);
     if (ptr.name === 'quantum mechanic' && quantumBoxRoll) {
         const box = mksobj(LARGE_BOX, false, false);
         Object.assign(box, object_display(box));
@@ -6691,7 +6691,7 @@ export async function makemon(mdat, x, y, mmflags) {
         mon.minvent = [box, ...(mon.minvent || [])];
         mon.hasInventory = true;
     }
-    if (ptr.mlet === 'H') {
+    if (allowMinvent && ptr.mlet === 'H') {
         if (ptr.name === 'minotaur') {
             if (!rn2(8)) mongets(WAN_DIGGING);
         } else if (ptr.name?.includes('giant')) {
@@ -6702,7 +6702,7 @@ export async function makemon(mdat, x, y, mmflags) {
             }
         }
     }
-    if (ptr.mlet === 'L') {
+    if (allowMinvent && ptr.mlet === 'L') {
         if (ptr.name === 'master lich' && !rn2(13)) {
             mongets(rn2(7) ? ATHAME : WAN_NOTHING);
         } else if (ptr.name === 'arch-lich' && !rn2(3)) {
@@ -6714,7 +6714,7 @@ export async function makemon(mdat, x, y, mmflags) {
             mon.hasInventory = true;
         }
     }
-    if (ptr.mlet === S_MUMMY && rn2(7)) mongets(ORCISH_HELM);
+    if (allowMinvent && ptr.mlet === S_MUMMY && rn2(7)) mongets(ORCISH_HELM);
     if (allowMinvent && !ptr.noRandomInventoryRolls) {
         if (!skipRandomItemRolls) {
             if (mon.m_lev > rn2(50)) {
@@ -6943,10 +6943,16 @@ async function maketrap(x, y, typ, opts = {}) {
         const statue = mksobj_at(STATUE, x, y, false, false);
         statue.contents = [];
         statue.corpsenm = ptr;
-        const mon = await makemon(ptr, 0, 0, MM_NOGRP);
+        const mon = await makemon(ptr, 0, 0, MM_NOCOUNTBIRTH | MM_NOMSG);
         if (mon) {
             game.level.monsters = game.level.monsters.filter(candidate => candidate !== mon);
-            for (const obj of mon.minvent || []) add_to_container(statue, obj);
+            for (const obj of mon.minvent || []) {
+                obj.worn = false;
+                obj.owornmask = 0;
+                add_to_container(statue, obj);
+            }
+            mon.minvent = [];
+            mon.hasInventory = false;
         }
     }
     if (typ === ROLLING_BOULDER_TRAP) {
