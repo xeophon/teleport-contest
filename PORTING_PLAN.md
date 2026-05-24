@@ -2124,8 +2124,16 @@ Next concrete target:
   guards `seed0014`, `seed0030`, `seed0360`, `seed0367`, `seed0373`,
   `seed0383`, `seed4500`, and `seed5006` all pass, and full
   `bash frozen/score.sh` remains `44/44`.
+- Search-triggered statue traps now use the same activation helper as
+  stepping/sitting: explicit search and autosearch keep the C `rnl(8)` discovery
+  odds, delete the hidden trap instead of marking it seen, animate the floor
+  statue, exercise Wisdom on successful animation, and use the search-specific
+  "posing as a statue" message including hallucination and unseen-monster
+  variants. Focused guards `seed0014`, `seed0030`, `seed0360`, `seed0367`,
+  `seed0373`, `seed0383`, `seed4500`, and `seed5006` all pass, and full
+  `bash frozen/score.sh` remains `44/44`.
 - Remaining trap work includes `impact_drop()` for actual fall/dig callers,
-  statue-trap search/kick/zap/break activation edges, and deeper fire trap
+  statue-trap kick/zap/break activation edges, and deeper fire trap
   `burnarmor()`/floor-object burning parity.
 - `seed4500-knight-coverage` is closed again and should remain a guard for
   punished teleport landing object-list timing, Vlad tower generation, observed

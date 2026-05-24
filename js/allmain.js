@@ -3,7 +3,7 @@
 
 import { game } from './gstate.js';
 import { mklev, l_nhcore_init, u_on_upstairs, makemon, mkcorpstat, mksobj, wipe_engr_at, dropMonsterInventory, wandIndexForRoll, scrollIndexForRoll, potionIndexForRoll, RANDOM_MONSTER_BY_NAME, adjustedMonsterLevel, monsterByRndName, monster_hp, rndmonnum, syncDungeonContext, next_ident, set_malign, enextoMonsterSpot, getbogusmon, pickNasty, chameleonAnimalForm, doppelgangerHumanoidForm, noteleportLevelForMonster, rlocNoMsg, rlocToCoreNoMsg, somexyspace, fumaroles, movebubbles } from './mklev.js';
-import { rhack, pickupObjectName, inventoryItemName, inventoryLetterRank, recordVanquished, finishForceLock, loseExperienceLevel, finishLevelTeleport, maybeQueueQuestLeaderTalk, monsterGrowUp, processSpellbookStudyOccupation, processTinOpeningOccupation, finishTinOpeningOccupation, refreshSwallowOverlay, travelPathKeys, updateGauntletsOfPowerStrength, consumeLifeSavingAmulet } from './cmd.js';
+import { rhack, pickupObjectName, inventoryItemName, inventoryLetterRank, recordVanquished, finishForceLock, loseExperienceLevel, finishLevelTeleport, maybeQueueQuestLeaderTalk, monsterGrowUp, processSpellbookStudyOccupation, processTinOpeningOccupation, finishTinOpeningOccupation, refreshSwallowOverlay, travelPathKeys, updateGauntletsOfPowerStrength, consumeLifeSavingAmulet, activateStatueTrap } from './cmd.js';
 import { docrt, cls, bot, flush_screen, pline, newsym, refreshHallucinatedMap, show_glyph_cell } from './display.js';
 import { vision_recalc, vision_reset, init_vision_globals, cansee, couldsee, view_from } from './vision.js';
 import { init_objects } from './o_init.js';
@@ -5944,6 +5944,14 @@ async function finishMonsterTurnTail() {
                 if (trap.tseen) continue;
                 if (Math.max(Math.abs((trap.tx || 0) - (game.u?.ux || 0)), Math.abs((trap.ty || 0) - (game.u?.uy || 0))) > 1) continue;
                 if (rnl(8)) continue;
+                if (trap.ttyp === STATUE_TRAP) {
+                    const message = await activateStatueTrap(trap, trap.tx || 0, trap.ty || 0, { search: true });
+                    if (message) {
+                        exerciseAttribute(A_WIS, true);
+                        addToplineMessage(message);
+                    }
+                    break;
+                }
                 trap.tseen = true;
                 const name = TRAP_NAMES[trap.ttyp] || 'trap';
                 const article = /^[aeiou]/.test(name) ? 'an' : 'a';
@@ -9880,6 +9888,7 @@ export async function moveloop_core() {
             let foundMessage = '';
             let revealedSecretTerrain = false;
             let foundTrap = false;
+            let foundStatueTrap = false;
             g._search_pending_count--;
             for (let x = (g.u?.ux || 0) - 1; x <= (g.u?.ux || 0) + 1; x++) {
                 for (let y = (g.u?.uy || 0) - 1; y <= (g.u?.uy || 0) + 1; y++) {
@@ -9918,6 +9927,13 @@ export async function moveloop_core() {
                         const trap = (g.level?.traps || []).find(candidate =>
                             candidate.tx === x && candidate.ty === y);
                         if (trap && !trap.tseen && !rnl(8)) {
+                            if (trap.ttyp === STATUE_TRAP) {
+                                foundMessage = await activateStatueTrap(trap, x, y, { search: true }) || '';
+                                if (foundMessage) exerciseAttribute(A_WIS, true);
+                                foundTrap = true;
+                                foundStatueTrap = true;
+                                break;
+                            }
                             trap.tseen = true;
                             exerciseAttribute(A_WIS, true);
                             newsym(x, y);
@@ -9928,7 +9944,7 @@ export async function moveloop_core() {
                         }
                     }
                 }
-                if (foundSearchMonster) break;
+                if (foundSearchMonster || foundStatueTrap) break;
             }
             if (foundSearchMonster) {
                 g._search_pending_count = 0;
@@ -9943,7 +9959,7 @@ export async function moveloop_core() {
                 g._search_pending_count = 0;
                 g._pending_time_passed = Math.min(g._pending_time_passed, 1);
             } else if (foundTrap) {
-                await pline(foundMessage);
+                if (foundMessage) await pline(foundMessage);
                 g._keep_pending_message = 1;
                 g._search_pending_count = 0;
                 g._pending_time_passed = Math.min(g._pending_time_passed, 1);

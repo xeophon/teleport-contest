@@ -8103,7 +8103,27 @@ function moveStatueContentsToMonster(statue, mon) {
     mon.hasInventory = !!(mon.minvent || []).length;
 }
 
-async function activateStatueTrap(trap, x, y, { prefix = '', shatter = false } = {}) {
+function randomHallucinatedMonsterName() {
+    let halluIndex;
+    do {
+        halluIndex = rn2_on_display_rng(SPECIAL_PM + BOGUSMONSIZE);
+    } while (halluIndex < SPECIAL_PM && !DISPLAY_MONSTER_HALLU_NAMES[halluIndex]);
+    if (halluIndex >= SPECIAL_PM) return getbogusmon();
+    rn2_on_display_rng(2);
+    return DISPLAY_MONSTER_HALLU_NAMES[halluIndex] || 'monster';
+}
+
+function statueSearchAnimationMessage(statue, mon) {
+    if (heroIsHallucinating())
+        return `The ${randomHallucinatedMonsterName()} suddenly seems more animated.`;
+    const spotted = !game.u?.blind && !mon.mundetected
+        && (!mon.minvis || game.u?.seeInvisible)
+        && couldsee(mon.mx, mon.my);
+    const name = spotted ? monsterIndefiniteName(mon.data?.name || corpstatDisplayMonsterName(statue)) : 'something';
+    return `You find ${name} posing as a statue.`;
+}
+
+export async function activateStatueTrap(trap, x, y, { prefix = '', shatter = false, search = false } = {}) {
     if (trap?.ttyp !== STATUE_TRAP) return null;
     game.level.traps = (game.level?.traps || []).filter(candidate => candidate !== trap);
 
@@ -8130,7 +8150,9 @@ async function activateStatueTrap(trap, x, y, { prefix = '', shatter = false } =
 
     const statueName = pickupObjectName(statue);
     const verb = statueAnimationVerb(mon);
-    const body = shatter
+    const body = search
+        ? statueSearchAnimationMessage(statue, mon)
+        : shatter
         ? `Instead of shattering, ${game.u?.blind || !couldsee(x, y) ? 'a statue' : `the ${statueName}`} suddenly ${verb}!`
         : `${upstartText(`the ${statueName}`)} ${verb}!`;
 
