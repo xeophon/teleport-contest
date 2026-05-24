@@ -2106,9 +2106,18 @@ Next concrete target:
   before moving the hero when possible. Focused guards `seed0014`, `seed0030`,
   `seed0360`, `seed0367`, `seed0373`, `seed0383`, `seed4500`, and `seed5006`
   all pass, and full `bash frozen/score.sh` remains `44/44`.
-- Remaining trap work includes monster TELEP_TRAP fixed-destination handling,
-  `impact_drop()` for actual fall/dig callers, statue-trap inventory transfer
-  edge cases, and deeper fire trap `burnarmor()`/floor-object burning parity.
+- Monster TELEP_TRAP execution now follows the C `mtele_trap()` branch for
+  ordinary monsters and pets: known non-fixed traps can be avoided, no-teleport
+  levels and ridden steeds return without feedback, once/vault traps prefer a
+  vault room landing before random relocation, fixed destinations never
+  displace the hero or another monster, and visible feedback marks the trap
+  while reporting either disorientation or disappearance after relocation.
+  Focused guards `seed0014`, `seed0030`, `seed0360`, `seed0367`, `seed0373`,
+  `seed0383`, `seed4500`, and `seed5006` all pass, and full
+  `bash frozen/score.sh` remains `44/44`.
+- Remaining trap work includes `impact_drop()` for actual fall/dig callers,
+  statue-trap inventory transfer edge cases, and deeper fire trap
+  `burnarmor()`/floor-object burning parity.
 - `seed4500-knight-coverage` is closed again and should remain a guard for
   punished teleport landing object-list timing, Vlad tower generation, observed
   discovery accounting, Sokoban random-object display, and late enlightenment

@@ -2,14 +2,14 @@
 // C refs: src/allmain.c:newgame(), moveloop_core().
 
 import { game } from './gstate.js';
-import { mklev, l_nhcore_init, u_on_upstairs, makemon, mkcorpstat, mksobj, wipe_engr_at, dropMonsterInventory, wandIndexForRoll, scrollIndexForRoll, potionIndexForRoll, RANDOM_MONSTER_BY_NAME, adjustedMonsterLevel, monsterByRndName, monster_hp, rndmonnum, syncDungeonContext, next_ident, set_malign, enextoMonsterSpot, getbogusmon, pickNasty, chameleonAnimalForm, doppelgangerHumanoidForm, fumaroles, movebubbles } from './mklev.js';
+import { mklev, l_nhcore_init, u_on_upstairs, makemon, mkcorpstat, mksobj, wipe_engr_at, dropMonsterInventory, wandIndexForRoll, scrollIndexForRoll, potionIndexForRoll, RANDOM_MONSTER_BY_NAME, adjustedMonsterLevel, monsterByRndName, monster_hp, rndmonnum, syncDungeonContext, next_ident, set_malign, enextoMonsterSpot, getbogusmon, pickNasty, chameleonAnimalForm, doppelgangerHumanoidForm, noteleportLevelForMonster, rlocNoMsg, rlocToCoreNoMsg, somexyspace, fumaroles, movebubbles } from './mklev.js';
 import { rhack, pickupObjectName, inventoryItemName, inventoryLetterRank, recordVanquished, finishForceLock, loseExperienceLevel, finishLevelTeleport, maybeQueueQuestLeaderTalk, monsterGrowUp, processSpellbookStudyOccupation, processTinOpeningOccupation, finishTinOpeningOccupation, refreshSwallowOverlay, travelPathKeys, updateGauntletsOfPowerStrength, consumeLifeSavingAmulet } from './cmd.js';
 import { docrt, cls, bot, flush_screen, pline, newsym, refreshHallucinatedMap, show_glyph_cell } from './display.js';
 import { vision_recalc, vision_reset, init_vision_globals, cansee, couldsee, view_from } from './vision.js';
 import { init_objects } from './o_init.js';
 import { init_dungeons_rng } from './dungeon.js';
 import { rn2, rn2_on_display_rng, rnd, rn1, rnl, rne, rnz, d } from './rng.js';
-import { COLNO, ROWNO, A_CHA, A_CON, A_DEX, A_INT, A_MAX, A_STR, A_WIS, IS_OBSTRUCTED, IS_STWALL, IS_TREE, IS_ROOM, IS_WALL, TREE, ROOM, DOOR, CORR, SDOOR, SCORR, IRONBARS, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, D_TRAPPED, W_NONDIGGABLE, W_NONPASSWALL, APPORT, CADAVER, ACCFOOD, DOGFOOD, MANFOOD, POISON, UNDEF, TABU, NO_MM_FLAGS, NO_MINVENT, MM_NOMSG, IN_SIGHT, ALL_TRAPS, ARROW_TRAP, ROCKTRAP, PIT, SPIKED_PIT, SQKY_BOARD, BEAR_TRAP, LANDMINE, ROLLING_BOULDER_TRAP, SLP_GAS_TRAP, RUST_TRAP, FIRE_TRAP, HOLE, TRAPDOOR, WEB, STATUE_TRAP, MAGIC_TRAP, ANTI_MAGIC, MAGIC_PORTAL, VIBRATING_SQUARE, ALLOW_M, ALLOW_TM, ALLOW_TRAPS, ALLOW_U, ALLOW_ALL, NOTONL, OPENDOOR, UNLOCKDOOR, BUSTDOOR, ALLOW_ROCK, ALLOW_WALL, ALLOW_DIG, ALLOW_SANCT, ALLOW_SSM, ALLOW_BARS, NOGARLIC, Is_airlevel, Is_oracle_level, ACCESSIBLE, IS_POOL, IS_LAVA, WATER, LAVAWALL, BOLT_LIM, MON_POLE_DIST, NEED_WEAPON, NEED_AXE, NEED_PICK_AXE, NEED_PICK_OR_AXE, VAULT, VAULT_GUARD_TIME, M_SEEN_MAGR, M_AP_FURNITURE, M_AP_OBJECT, M_AP_TYPE, MOD_ENCUMBER, HVY_ENCUMBER, EXT_ENCUMBER, OVERLOADED, ROOMOFFSET, SHOPBASE } from './const.js';
+import { COLNO, ROWNO, A_CHA, A_CON, A_DEX, A_INT, A_MAX, A_STR, A_WIS, IS_OBSTRUCTED, IS_STWALL, IS_TREE, IS_ROOM, IS_WALL, TREE, ROOM, DOOR, CORR, SDOOR, SCORR, IRONBARS, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, D_TRAPPED, W_NONDIGGABLE, W_NONPASSWALL, APPORT, CADAVER, ACCFOOD, DOGFOOD, MANFOOD, POISON, UNDEF, TABU, NO_MM_FLAGS, NO_MINVENT, MM_NOMSG, IN_SIGHT, ALL_TRAPS, ARROW_TRAP, ROCKTRAP, PIT, SPIKED_PIT, SQKY_BOARD, BEAR_TRAP, LANDMINE, ROLLING_BOULDER_TRAP, SLP_GAS_TRAP, RUST_TRAP, FIRE_TRAP, HOLE, TRAPDOOR, TELEP_TRAP, WEB, STATUE_TRAP, MAGIC_TRAP, ANTI_MAGIC, MAGIC_PORTAL, VIBRATING_SQUARE, ALLOW_M, ALLOW_TM, ALLOW_TRAPS, ALLOW_U, ALLOW_ALL, NOTONL, OPENDOOR, UNLOCKDOOR, BUSTDOOR, ALLOW_ROCK, ALLOW_WALL, ALLOW_DIG, ALLOW_SANCT, ALLOW_SSM, ALLOW_BARS, NOGARLIC, Is_airlevel, Is_oracle_level, ACCESSIBLE, IS_POOL, IS_LAVA, WATER, LAVAWALL, BOLT_LIM, MON_POLE_DIST, NEED_WEAPON, NEED_AXE, NEED_PICK_AXE, NEED_PICK_OR_AXE, VAULT, VAULT_GUARD_TIME, M_SEEN_MAGR, M_AP_FURNITURE, M_AP_OBJECT, M_AP_TYPE, MOD_ENCUMBER, HVY_ENCUMBER, EXT_ENCUMBER, OVERLOADED, ROOMOFFSET, SHOPBASE } from './const.js';
 import { CLR_BROWN, CLR_CYAN, CLR_MAGENTA, CLR_RED, CLR_WHITE, CLR_YELLOW, NO_COLOR } from './terminal.js';
 import { advanceVaultGuard, prepareVaultGuardEscort, restVaultFakecorr } from './vault.js';
 import { DISPLAY_MONSTER_GLYPHS, DISPLAY_MONSTER_HALLU_NAMES } from './monster_data.js';
@@ -6870,6 +6870,89 @@ function monsterTriggerTrap(mon, trap) {
     }
 }
 
+function validTeleportTrapDestination(dst) {
+    return Number.isInteger(dst?.x) && Number.isInteger(dst?.y)
+        && dst.x >= 1 && dst.x < COLNO && dst.y >= 0 && dst.y < ROWNO;
+}
+
+function monsterTeleportTrapDestination(trap) {
+    if (validTeleportTrapDestination(trap?.teledest)) return trap.teledest;
+    if (validTeleportTrapDestination(trap?.launch)) return trap.launch;
+    return null;
+}
+
+function monsterVisibleForTeleportFeedback(mon) {
+    return (mon === game.u?.usteed)
+        || (!game.u?.blind && couldSeeCoord(mon.mx, mon.my) && !mon.minvis && !mon.mundetected);
+}
+
+function monsterTeleportDestinationOccupied(mon, x, y) {
+    if (game.u?.ux === x && game.u?.uy === y) return true;
+    return (game.level?.monsters || []).some(other => {
+        if (!other?.mx || other === mon) return false;
+        if (other.mx === x && other.my === y) return true;
+        return Array.isArray(other.wormSegments)
+            && other.wormSegments.some(seg => seg.x === x && seg.y === y);
+    });
+}
+
+function monsterVaultTeleportSpotGood(mon, x, y) {
+    const loc = game.level?.at(x, y);
+    if (!loc || !ACCESSIBLE(loc.typ)) return false;
+    if (monsterTeleportDestinationOccupied(mon, x, y)) return false;
+    const boulder = (game.level?.objects || [])
+        .some(obj => !obj.transientProjectile && obj.otyp === BOULDER && obj.ox === x && obj.oy === y);
+    return !boulder || !!mon.data?.throwsRocks;
+}
+
+function monsterVaultTeleport(mon) {
+    const vaultRoom = (game.level?.rooms || []).find(room => room?.rtype === VAULT);
+    const spot = { x: 0, y: 0 };
+    if (vaultRoom && somexyspace(vaultRoom, spot) && monsterVaultTeleportSpotGood(mon, spot.x, spot.y)) {
+        rlocToCoreNoMsg(mon, spot.x, spot.y);
+        clearMonsterTrack(mon);
+        return true;
+    }
+    if (!rlocNoMsg(mon)) return false;
+    clearMonsterTrack(mon);
+    return true;
+}
+
+function monsterTeleportTrapEffect(mon, trap) {
+    if (trap?.ttyp !== TELEP_TRAP) return false;
+    const fixedDest = monsterTeleportTrapDestination(trap);
+    if (!fixedDest && monsterKnowsTrap(mon, trap.ttyp) && rn2(4)) return true;
+
+    monsterTriggerTrap(mon, trap);
+    if (noteleportLevelForMonster(mon) || mon === game.u?.usteed) return true;
+
+    const oldX = mon.mx;
+    const oldY = mon.my;
+    const inSight = monsterVisibleForTeleportFeedback(mon);
+    const monName = monsterDisplayName(mon);
+    if (trap.once) {
+        monsterVaultTeleport(mon);
+    } else if (fixedDest) {
+        if (!monsterTeleportDestinationOccupied(mon, fixedDest.x, fixedDest.y)) {
+            rlocToCoreNoMsg(mon, fixedDest.x, fixedDest.y);
+            clearMonsterTrack(mon);
+        }
+    } else if (rlocNoMsg(mon)) {
+        clearMonsterTrack(mon);
+    }
+
+    const moved = mon.mx !== oldX || mon.my !== oldY;
+    if (inSight) {
+        trap.tseen = true;
+        addToplineMessage(monsterVisibleForTeleportFeedback(mon)
+            ? `${monName} seems disoriented.`
+            : `${monName} suddenly disappears!`);
+    }
+    newsym(oldX, oldY);
+    if (moved) newsym(mon.mx, mon.my);
+    return true;
+}
+
 function monsterTrapHarmless(mon, trap) {
     const ttyp = trap?.ttyp;
     const data = mon.data || {};
@@ -8164,6 +8247,7 @@ function moveMonsterTowardHero(mon, conflictActive = false, monIndex = null, som
     const cavernTunnelRoom = mon.data?.tunnel && mon.data?.name === 'rock mole'
         && game.level?.flags?.is_cavernous_lev && game.level?.at(mon.mx, mon.my)?.typ === ROOM
         && game.level?.at(mon.mx, mon.my)?.seenv === 64;
+    if (monsterTeleportTrapEffect(mon, trap)) return done();
     if (trap?.ttyp === MAGIC_PORTAL) {
         monsterTriggerTrap(mon, trap);
         if (couldSeeCoord(mon.mx, mon.my) && !game.u?.blind && !mon.minvis && !mon.mundetected) {
@@ -9449,6 +9533,7 @@ function movePet(mon, resumeAfterInventory = false, conflictActive = false) {
         }
 	    }
 	    const trap = game.level?.traps?.find(t => t.tx === mon.mx && t.ty === mon.my);
+	    if (monsterTeleportTrapEffect(mon, trap)) return;
 	    if (monsterWebSpecialEffect(mon, trap)) return;
 	    if (trap?.ttyp === MAGIC_TRAP && monsterKnowsTrap(mon, trap.ttyp) && rn2(4)) return;
 	    if (trap?.ttyp === MAGIC_TRAP) {

@@ -5524,7 +5524,7 @@ function noRandomMonsterItemRolls(ptr) {
     return ptr.mindless || ptr.mlet === 'ghost' || NO_RANDOM_MONSTER_ITEM_NAMES.has(ptr.name);
 }
 
-function noteleportLevelForMonster(mon) {
+export function noteleportLevelForMonster(mon) {
     const ptr = mon?.data || mon;
     const flags = game.level?.flags || {};
     const stasisUntil = flags.stasis_until ?? 0;
@@ -5849,7 +5849,7 @@ function collectRlocCoords(mon) {
     return coords;
 }
 
-function rlocToCoreNoMsg(mon, x, y) {
+export function rlocToCoreNoMsg(mon, x, y) {
     if (x === mon.mx && y === mon.my && monster_at(x, y) === mon) return;
     const tailCount = Array.isArray(mon.wormSegments) ? mon.wormSegments.length : 0;
     mon.mtrack = [];
@@ -5858,7 +5858,7 @@ function rlocToCoreNoMsg(mon, x, y) {
     if (tailCount) placeLongWormTailRandomly(mon, x, y, tailCount);
 }
 
-function rlocNoMsg(mon) {
+export function rlocNoMsg(mon) {
     if (!mon?.mx) return false;
     for (let trycount = 0; trycount < 50; trycount++) {
         const x = rnd(COLNO - 1);
