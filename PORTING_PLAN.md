@@ -2432,14 +2432,24 @@ Next concrete target:
   Status/farlook also reports the chained state while `uball` is temporarily
   buried. Direct helper smokes cover zero-timer restoration and freedom; focused
   ice/liquid guards and full `npm run score` remain exact.
+- Buried punishment ball command/prayer/earthquake edges now cover the adjacent
+  C paths: nymph-form `#monster` remove reports `The ball and chain are buried
+  firmly in the floor.` without time or state changes while `TT_BURIEDBALL` is
+  active, successful pleased-prayer handling frees the buried ball with `Your
+  chain disappears.` without perturbing ordinary punishment prayer outcomes,
+  and charged drum-of-earthquake chasms under the hero print `Your chain
+  breaks!`, clear only the buried-ball tether, and leave the ball buried. Direct
+  smokes cover all three branches; focused prayer/drum/Knight guards and full
+  `npm run score` remain exact.
 - Remaining ice work outside this fire-ray terrain slice includes the broader
   full `spoteffects()`/`pooleffects()` hero liquid behavior, deeper
   `minliquid()` edges (life-saving or shape-shift survivor relocation,
   waterwall/steed details, exact water-damage message/material coverage), the
   remaining `bury_objs()` behavior (full `drag_ball()` parity after
-  same-level teleports, #monster remove/prayer/earthquake buried-ball edge
-  cases, shop billing, exact object-material table coverage), and a shared
-  zap-ray walker so fire/sleep/cold stop carrying parallel bounce code.
+  same-level teleports, shop billing, exact object-material table coverage),
+  fuller earthquake terrain/object parity beyond the buried-ball tether break,
+  and a shared zap-ray walker so fire/sleep/cold stop carrying parallel bounce
+  code.
 - Remaining trap work includes off-hero `impact_drop()` callers, deeper
   statue-trap edge cases, broader non-trap fire floor-object parity, and
   remaining bespoke ray floor/hero timing edges.

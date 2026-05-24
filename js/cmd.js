@@ -3214,6 +3214,146 @@ async function digDownwardHoleResult(options = {}) {
     return { message: trapMessage(...messages), more: true };
 }
 
+function earthquakeLevelDescription() {
+    const uz = game.u?.uz || { dnum: 0, dlevel: 1 };
+    if (In_endgame(uz)) return 'plane';
+    if (In_sokoban(uz)) return 'puzzle';
+    return 'dungeon';
+}
+
+function isPitTrapType(type) {
+    return type === PIT || type === SPIKED_PIT || type === TT_PIT || type === 'pit' || type === 'spiked pit';
+}
+
+function earthquakeFeatureMessage(loc) {
+    if (loc?.typ === FOUNTAIN) return 'The fountain falls into a chasm.';
+    if (loc?.typ === SINK) return 'The kitchen sink falls into a chasm.';
+    if (loc?.typ === GRAVE) return 'The headstone topples into a chasm.';
+    if (loc?.typ === THRONE) return 'The throne falls into a chasm.';
+    if (loc?.typ === ALTAR) return 'The altar falls into a chasm.';
+    return '';
+}
+
+function makeEarthquakePitTrap(x, y) {
+    const existing = downwardDigTrapAt(x, y);
+    if (existing && (existing.ttyp === MAGIC_PORTAL || existing.ttyp === VIBRATING_SQUARE)) return null;
+    const trap = existing || { tx: x, ty: y };
+    Object.assign(trap, {
+        ttyp: PIT,
+        tseen: true,
+        once: false,
+        launch: { x: -1, y: -1 },
+        launch2: null,
+        teledest: null,
+        dst: { dnum: -1, dlevel: -1 },
+        conjoined: 0,
+    });
+    game.level.traps ??= [];
+    if (!existing) game.level.traps.push(trap);
+    return trap;
+}
+
+async function doEarthquakePit(x, y, tuPit, messages) {
+    const boulder = (game.level?.objects || []).find(obj =>
+        !obj.hidden && !obj.transientProjectile && obj.ox === x && obj.oy === y && obj.otyp === BOULDER);
+    if (boulder) {
+        if (!game.u?.blind && (game.u?.ux === x && game.u?.uy === y || couldsee(x, y)))
+            messages.push(`KADOOM!  The boulder falls into a chasm${game.u?.ux === x && game.u?.uy === y ? ' below you' : ''}!`);
+        game.level.objects = (game.level?.objects || []).filter(obj => obj !== boulder);
+        return;
+    }
+
+    const chasm = makeEarthquakePitTrap(x, y);
+    if (!chasm) return;
+
+    const mon = (game.level?.monsters || []).find(candidate => candidate.mx === x && candidate.my === y);
+    if (mon) {
+        if (!mon.data?.flyer && !mon.data?.clinger) mon.mtrapped = 1;
+        return;
+    }
+
+    if (game.u?.ux !== x || game.u?.uy !== y) {
+        newsym(x, y);
+        return;
+    }
+
+    if (breakBuriedBallChain()) messages.push('Your chain breaks!');
+    const avoidsFall = game.u?.levitating || game.u?.flying || polyselfForm()?.clinger;
+    if (avoidsFall) {
+        if (!tuPit) {
+            messages.push('A chasm opens up under you!');
+            messages.push("You don't fall in!");
+        }
+    } else if (!tuPit || !game.u.utrap || !isPitTrapType(game.u.utraptype)) {
+        messages.push('You fall into a chasm!');
+        game.u.utrap = rn1(6, 2);
+        game.u.utraptype = 'pit';
+        game.u.uhp = Math.max(0, (game.u.uhp || 1) - rnd(6));
+        if ((game.u.uhp || 0) <= 0) game._death_cause = 'fell into a chasm';
+    } else {
+        messages.push('You are jostled around violently!');
+        game.u.utrap = rn1(6, 2);
+        game.u.utraptype = 'pit';
+        game.u.uhp = Math.max(0, (game.u.uhp || 1) - rnd(4));
+        if ((game.u.uhp || 0) <= 0) game._death_cause = 'hurt in a chasm';
+    }
+}
+
+async function doEarthquake(force) {
+    const ux = game.u?.ux || 0;
+    const uy = game.u?.uy || 0;
+    const cappedForce = Math.min(13, Math.max(1, Math.trunc(force || 1)));
+    const startX = Math.max(1, ux - cappedForce * 2);
+    const endX = Math.min(COLNO - 1, ux + cappedForce * 2);
+    const startY = Math.max(0, uy - cappedForce * 2);
+    const endY = Math.min(ROWNO - 1, uy + cappedForce * 2);
+    const trapAtHero = downwardDigTrapAt(ux, uy);
+    const tuPit = trapAtHero && isPitTrapType(trapAtHero.ttyp);
+    const messages = [];
+
+    for (let x = startX; x <= endX; x++) {
+        for (let y = startY; y <= endY; y++) {
+            const mon = (game.level?.monsters || []).find(candidate => candidate.mx === x && candidate.my === y);
+            if (mon) {
+                mon.msleeping = 0;
+                mon.mcanmove = true;
+                if (mon.mundetected) {
+                    mon.mundetected = false;
+                    newsym(x, y);
+                }
+            }
+            if (rn2(14 - cappedForce)) continue;
+
+            const loc = game.level?.at(x, y);
+            if (!loc) continue;
+            if ([FOUNTAIN, SINK, ALTAR, GRAVE, THRONE].includes(loc.typ)) {
+                const featureMessage = earthquakeFeatureMessage(loc);
+                if (featureMessage && !game.u?.blind && couldsee(x, y)) messages.push(featureMessage);
+                await doEarthquakePit(x, y, tuPit, messages);
+            } else if (loc.typ === SCORR) {
+                loc.typ = CORR;
+                newsym(x, y);
+                await doEarthquakePit(x, y, tuPit, messages);
+            } else if (loc.typ === CORR || loc.typ === ROOM) {
+                await doEarthquakePit(x, y, tuPit, messages);
+            } else if (loc.typ === SDOOR) {
+                loc.typ = DOOR;
+                loc.doormask = D_NODOOR;
+                newsym(x, y);
+            } else if (loc.typ === DOOR) {
+                if (loc.doormask === D_NODOOR) {
+                    await doEarthquakePit(x, y, tuPit, messages);
+                } else {
+                    loc.doormask = D_NODOOR;
+                    newsym(x, y);
+                    if (!game.u?.blind && couldsee(x, y)) messages.push('The door collapses.');
+                }
+            }
+        }
+    }
+    return messages;
+}
+
 async function zapDigDownwardResult() {
     const current = game.u?.uz || { dnum: 0, dlevel: 1 };
     if (Is_airlevel(current) || Is_waterlevel(current)) return { message: '', more: false };
@@ -10385,6 +10525,19 @@ function unpunishHero() {
     game.u.upunished = false;
     game._punished = 0;
     newsym(game.u.ux || 0, game.u.uy || 0);
+}
+
+function breakBuriedBallChain() {
+    if (!isBuriedBallTrapActive() || !game.u) return false;
+    game.u.utrap = 0;
+    game.u.utraptype = null;
+    newsym(game.u.ux || 0, game.u.uy || 0);
+    return true;
+}
+
+function fixPrayerPunishmentTrouble() {
+    if (isBuriedBallTrapActive()) return buriedBallToFreedom();
+    return false;
 }
 
 function removeCurseScrollEffect(item) {
@@ -23693,6 +23846,8 @@ export async function rhack(_cmd) {
                     game.u.uhp = game.u.uhpmax;
                     message += '  You feel much better.';
                 }
+                if (!forceHeal && fixPrayerPunishmentTrouble())
+                    message += '  Your chain disappears.';
                 if (!forceHeal && !game._prayer_split_finish_message
                     && game.u?.ualign && (game.u.ualign.record || 0) < 2)
                     game.u.ualign.record++;
@@ -27801,6 +27956,27 @@ export async function rhack(_cmd) {
             game._command_mode = 'markerWriteObject';
             return;
         }
+        if (toolChargeKind(item) === 'drum of earthquake'
+            && !heroIsConfused() && !heroIsStunned() && (item.spe ?? 0) > 0) {
+            item.spe = Math.max(0, (item.spe ?? 0) - 1);
+            updateChargedItemLine(item);
+            item.known = true;
+            item.dknown = true;
+            const earthquakeMessages = await doEarthquake(Math.trunc(((game.u?.ulevel || 1) - 1) / 3) + 1);
+            const messages = [
+                'You produce a heavy, thunderous rolling!',
+                `The entire ${earthquakeLevelDescription()} is shaking around you!`,
+                ...earthquakeMessages,
+            ];
+            for (const mon of game.level?.monsters || []) {
+                mon.msleeping = 0;
+                mon.mcanmove = true;
+                mon.mfrozen = 0;
+            }
+            await setMessage(messages.join('  '), messages.length > 1);
+            game.context.move = 1;
+            return;
+        }
         if (name.includes('drum')) {
             const deaf = (game.u?._statusSuffix || '').includes('Deaf');
             rn2(2);
@@ -30288,6 +30464,22 @@ export async function rhack(_cmd) {
 	                return;
             }
             if (command === 'monster') {
+                const form = polyselfForm();
+                if (form?.mlet === 'n' || String(form?.name || '').includes('nymph')) {
+                    if (isBuriedBallTrapActive()) {
+                        const surface = sitSurfaceName(game.level?.at(game.u?.ux || 0, game.u?.uy || 0));
+                        await setMessage(`The ball and chain are buried firmly in the ${surface}.`);
+                    } else if (game.u?.uball || game.u?.uchain || game.u?.upunished || game._punished) {
+                        unpunishHero();
+                        await setMessage('');
+                        game._keep_pending_message = 0;
+                        game.context.move = 1;
+                    } else {
+                        await setMessage('You are not chained to anything!');
+                    }
+                    game._command_mode = null;
+                    return;
+                }
                 await setMessage(!game.u?._polyself_base
                     ? "You don't have a special ability in your normal form!"
                     : game.u?._glyph === 'D'
