@@ -2471,15 +2471,24 @@ Next concrete target:
   Direct smokes cover forced lava destruction, Book preservation, water acid
   explosion, scroll blanking, lit snuffing, and rust; focused
   drum/liquid/world-tour guards remain exact.
+- Earthquake floor-object liquid damage now recurses into containers along the
+  C paths: lava burns non-ice-box containers, reports contents falling out,
+  places spilled contents on the liquid square, and processes them once through
+  the liquid damage queue; water/moat keeps contents inside and recursively
+  damages them unless the container is waterproof, with cursed waterproof
+  containers using the C `rn2(3)` leakage gate. Direct smokes cover lava
+  container burn/spill, spilled content destruction/survival, waterproof chest
+  protection, water recursion, and nested container recursion; focused
+  drum/liquid/world-tour guards remain exact.
 - Remaining ice work outside this fire-ray terrain slice includes the broader
   full `spoteffects()`/`pooleffects()` hero liquid behavior, deeper
   `minliquid()` edges (life-saving or shape-shift survivor relocation,
   waterwall/steed details, exact water-damage message/material coverage), the
   remaining `bury_objs()` behavior (full `drag_ball()` parity after
   same-level teleports, shop billing, exact object-material table coverage),
-  remaining earthquake `liquid_flow()` side effects for container recursion,
-  shop billing/object-cost details, exact floor material tables, and full hero
-  `pooleffects()`,
+  remaining earthquake `liquid_flow()` side effects for shop billing/object-cost
+  details, exact floor material tables, full `flooreffects()` spill branches,
+  and full hero `pooleffects()`,
   and a shared zap-ray walker so fire/sleep/cold stop carrying parallel bounce
   code.
 - Remaining trap work includes off-hero `impact_drop()` callers, deeper

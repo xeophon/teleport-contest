@@ -7562,6 +7562,49 @@ function removeFloorObject(obj) {
     game.level.objects = (game.level?.objects || []).filter(item => item !== obj);
 }
 
+function liquidFlowContainerContents(obj) {
+    if (Array.isArray(obj?.contents)) return obj.contents;
+    if (Array.isArray(obj?.cobj)) return obj.cobj;
+    return [];
+}
+
+function clearLiquidFlowContainerContents(obj) {
+    if (Array.isArray(obj?.contents)) obj.contents.length = 0;
+    if (Array.isArray(obj?.cobj)) obj.cobj.length = 0;
+}
+
+function removeContainedObject(container, obj) {
+    if (Array.isArray(container?.contents))
+        container.contents = container.contents.filter(item => item !== obj);
+    if (Array.isArray(container?.cobj))
+        container.cobj = container.cobj.filter(item => item !== obj);
+}
+
+function isLiquidFlowContainer(obj) {
+    if (!obj) return false;
+    if (obj.otyp === LARGE_BOX || obj.otyp === CHEST || obj.otyp === ICE_BOX || BAG_OBJECT_TYPES.has(obj.otyp)) return true;
+    const kind = objectKindKey(obj);
+    return /^(?:large box|chest|ice box|sack|oilskin sack|bag of holding|bag)$/.test(kind);
+}
+
+function isLiquidFlowWaterproofContainer(obj) {
+    return obj?.otyp === LARGE_BOX || obj?.otyp === CHEST || obj?.otyp === ICE_BOX || obj?.otyp === OILSKIN_SACK
+        || /^(?:large box|chest|ice box|oilskin sack)$/.test(objectKindKey(obj));
+}
+
+function placeLiquidFlowFloorObject(obj, x, y) {
+    if (!obj || !game.level) return;
+    obj.contained = false;
+    obj.ox = x;
+    obj.oy = y;
+    obj.hidden = false;
+    obj.buried = false;
+    obj.transientProjectile = false;
+    delete obj.line;
+    Object.assign(obj, object_display(obj));
+    if (!(game.level.objects || []).includes(obj)) game.level.objects.push(obj);
+}
+
 function floorObjectVisible(x, y) {
     return !game.u?.blind && couldsee(x, y);
 }
@@ -7622,17 +7665,17 @@ function blankFloorSpellbook(obj) {
     obj.known = false;
 }
 
-function explodeFloorAcidPotion(obj, messages, acidContext) {
+function explodeFloorAcidPotion(obj, messages, acidContext, removeObject = removeFloorObject) {
     const plural = (obj?.quan || 1) > 1;
     const previous = acidContext.count++;
     const prefix = previous ? (plural ? 'More' : 'Another') : (plural ? 'Some' : 'A');
     messages.push(`${prefix} potion${plural ? 's' : ''} ${plural ? 'explode' : 'explodes'}!`);
-    removeFloorObject(obj);
+    removeObject(obj);
     return true;
 }
 
-function waterDamageFloorPotion(obj, messages, acidContext) {
-    if (acidPotionItem(obj)) return explodeFloorAcidPotion(obj, messages, acidContext);
+function waterDamageFloorPotion(obj, messages, acidContext, removeObject = removeFloorObject) {
+    if (acidPotionItem(obj)) return explodeFloorAcidPotion(obj, messages, acidContext, removeObject);
     if (isWaterPotion(obj)) return false;
     if (obj.odiluted) {
         obj.otyp = POT_WATER;
@@ -7654,6 +7697,7 @@ function erodeFloorObject(obj, messages, visible, {
     action,
     cause,
     destroyAtMax = false,
+    removeObject = removeFloorObject,
 }) {
     const profile = wishedDamageProfile(obj);
     if (!profile.erosionMatters || profile.primaryWord !== profileWord) return false;
@@ -7677,13 +7721,31 @@ function erodeFloorObject(obj, messages, visible, {
     }
     if (destroyAtMax) {
         if (visible) messages.push(`The ${name} ${action}s away!`);
-        removeFloorObject(obj);
+        removeObject(obj);
         return true;
     }
     return false;
 }
 
-function waterDamageFloorItem(obj, messages, visible, acidContext) {
+function waterDamageContainerContents(container, messages, visible, acidContext) {
+    const contents = [...liquidFlowContainerContents(container)];
+    const waterproof = isLiquidFlowWaterproofContainer(container);
+    if (waterproof) {
+        if (!container.cursed) return true;
+        if (rn2(3)) return true;
+    }
+    let damaged = true;
+    for (const content of contents) {
+        damaged = waterDamageFloorItem(content, messages, visible, acidContext, {
+            removeObject: item => removeContainedObject(container, item),
+        }) || damaged;
+    }
+    return damaged;
+}
+
+function waterDamageFloorItem(obj, messages, visible, acidContext, {
+    removeObject = removeFloorObject,
+} = {}) {
     if (waterDamageFloorLitObject(obj, messages, visible)) return true;
 
     const kind = objectKindKey(obj);
@@ -7698,10 +7760,11 @@ function waterDamageFloorItem(obj, messages, visible, acidContext) {
         if (!rn2(2)) {
             obj.greased = false;
             if (rustTrapItemClass(obj) === 'potion' && acidPotionItem(obj))
-                return explodeFloorAcidPotion(obj, messages, acidContext);
+                return explodeFloorAcidPotion(obj, messages, acidContext, removeObject);
         }
         return true;
     }
+    if (isLiquidFlowContainer(obj)) return waterDamageContainerContents(obj, messages, visible, acidContext);
     if (((game.u?.uluck || 0) + (game.u?.moreluck || 0) + 5) > rn2(20)) return false;
 
     const cls = rustTrapItemClass(obj);
@@ -7719,17 +7782,40 @@ function waterDamageFloorItem(obj, messages, visible, acidContext) {
         blankFloorSpellbook(obj);
         return true;
     }
-    if (cls === 'potion') return waterDamageFloorPotion(obj, messages, acidContext);
+    if (cls === 'potion') return waterDamageFloorPotion(obj, messages, acidContext, removeObject);
 
     return erodeFloorObject(obj, messages, visible, {
         profileWord: 'rusty',
         field: 'oeroded',
         action: 'rust',
         cause: 'oxidation',
+        removeObject,
     });
 }
 
-function fireDamageFloorScrollOrBook(obj, messages, visible, cls) {
+function fireDamageFloorContainer(obj, messages, visible, {
+    removeObject = removeFloorObject,
+    spillQueue = [],
+    x,
+    y,
+} = {}) {
+    if (!isLiquidFlowContainer(obj)) return false;
+    if (obj.otyp === ICE_BOX || obj.otyp === STATUE || objectKindKey(obj) === 'ice box')
+        return false;
+    const contents = [...liquidFlowContainerContents(obj)];
+    if (visible) messages.push(`${floorObjectSubject(obj)} catches fire and burns.`);
+    if (contents.length && visible) messages.push('Its contents fall out.');
+    removeObject(obj);
+    for (const content of contents) {
+        removeContainedObject(obj, content);
+        placeLiquidFlowFloorObject(content, x, y);
+        spillQueue.push(content);
+    }
+    clearLiquidFlowContainerContents(obj);
+    return true;
+}
+
+function fireDamageFloorScrollOrBook(obj, messages, visible, cls, removeObject = removeFloorObject) {
     if (cls === 'spellbook' && isBookOfTheDeadItem(obj)) {
         if (visible) messages.push(`Smoke rises from ${floorObjectTheName(obj)}.`);
         return false;
@@ -7741,11 +7827,11 @@ function fireDamageFloorScrollOrBook(obj, messages, visible, cls) {
         const subject = floorObjectSubject(obj);
         messages.push(`${subject} ${floorObjectVerb(obj, 'catches fire and burns', 'catch fire and burn')}.`);
     }
-    removeFloorObject(obj);
+    removeObject(obj);
     return true;
 }
 
-function fireDamageFloorPotion(obj, messages, visible) {
+function fireDamageFloorPotion(obj, messages, visible, removeObject = removeFloorObject) {
     if (visible) {
         const subject = floorObjectSubject(obj);
         const verb = isPotionOfOil(obj)
@@ -7753,17 +7839,20 @@ function fireDamageFloorPotion(obj, messages, visible) {
             : floorObjectVerb(obj, 'boils and explodes', 'boil and explode');
         messages.push(`${subject} ${verb}.`);
     }
-    removeFloorObject(obj);
+    removeObject(obj);
     return true;
 }
 
-function fireDamageFloorItem(obj, messages, visible) {
+function fireDamageFloorItem(obj, messages, visible, options = {}) {
+    const { removeObject = removeFloorObject, spillQueue = [], x, y } = options;
     if (maybeIgniteFloorFireItem(obj, messages, visible)) return false;
+    if (isLiquidFlowContainer(obj))
+        return fireDamageFloorContainer(obj, messages, visible, { removeObject, spillQueue, x, y });
 
     const cls = fireDestroyableInventoryClass(obj);
     if (cls === 'scroll' || cls === 'spellbook')
-        return fireDamageFloorScrollOrBook(obj, messages, visible, cls);
-    if (cls === 'potion') return fireDamageFloorPotion(obj, messages, visible);
+        return fireDamageFloorScrollOrBook(obj, messages, visible, cls, removeObject);
+    if (cls === 'potion') return fireDamageFloorPotion(obj, messages, visible, removeObject);
 
     return erodeFloorObject(obj, messages, visible, {
         profileWord: 'burnt',
@@ -7771,6 +7860,7 @@ function fireDamageFloorItem(obj, messages, visible) {
         action: 'smoulder',
         cause: 'heat',
         destroyAtMax: true,
+        removeObject,
     });
 }
 
@@ -7781,10 +7871,15 @@ export function applyLiquidFlowFloorObjectDamage(x, y, typ) {
     let destroyed = 0;
     const acidContext = { count: 0 };
 
-    for (const obj of [...liquidFlowFloorObjectsAt(x, y)]) {
+    const queue = [...liquidFlowFloorObjectsAt(x, y)];
+    const processed = new Set();
+    for (let i = 0; i < queue.length; i++) {
+        const obj = queue[i];
+        if (processed.has(obj)) continue;
+        processed.add(obj);
         if (!(game.level?.objects || []).includes(obj)) continue;
         const damaged = typ === LAVAPOOL
-            ? fireDamageFloorItem(obj, messages, visible)
+            ? fireDamageFloorItem(obj, messages, visible, { spillQueue: queue, x, y })
             : waterDamageFloorItem(obj, messages, visible, acidContext);
         if (damaged) changed = true;
         if (!(game.level?.objects || []).includes(obj)) destroyed++;
