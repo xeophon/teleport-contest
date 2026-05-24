@@ -2042,11 +2042,19 @@ Next concrete target:
   Plane generation/arrival, hallucinated swallow-expel redraw order, Vlad tower
   generation, observed discovery accounting, Sokoban random-object display,
   level-follower arrival, and enlightenment wording.
-- The next `seed0360` frontier is turn-tail ordering around C
-  `gethungry(); exerchk(); ... u_wipe_engr()`: C inserts a strength exercise
-  `rn2(19)` before the engraving-wipe `rn2(79)`, while JS reaches the
-  engraving-wipe roll first on the Home 1 wait turn. Keep this scoped to real
-  periodic exercise/move-count semantics rather than compensating the RNG.
+- The `seed0360` Home 1 travel turn now matches C's turn-tail phase through
+  the old step-399 failure. `processAttributeExercise()` always uses C's
+  already-incremented turn number from `svm.moves++` before
+  `gethungry(); exerchk(); ... u_wipe_engr()`, the cloak-of-displacement
+  exercise offset is consumed as a one-shot wear-message correction, and
+  blocked-target travel no longer delays the clairvoyance/seer timer. The C
+  `rn2(19)` there is the 10-turn `NOT_HUNGRY` `exercise(A_CON, TRUE)` roll,
+  not strength exercise. Focused `seed0360` advances to first screen mismatch
+  624, with score metrics `RNG 111344/120639`, `Screen 634/833`; full
+  `frozen/score.sh` remains `42/44`. The next seed0360 frontier is the
+  `^F`/travel full-map trap rendering on Wizard Quest Home: C's getpos view
+  shows the random special-level traps as `^` while JS still draws the
+  underlying floor, and flat RNG remains aligned until step 673.
 - The `seed0383` hallucination mismatch remains display-only: the swallow-expel
   redraw should follow C's `docrt()` order by redrawing remembered map glyphs
   before the visible monster/object/trap overlay pass while hallucinated, rather

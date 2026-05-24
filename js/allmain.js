@@ -2161,10 +2161,9 @@ function processAttributeExercise() {
     const u = game.u;
     if (!u) return;
 
-    const exerciseTurnOffset = (game._exercise_turn_offset || 0)
-        + (game._travel_dynamic_target?.allowBlockedTarget ? 1 : 0);
-    const turn = (game._travel_dynamic_target ? (game.moves || 1) : (game.moves || 1) + 1)
-        + exerciseTurnOffset;
+    const oneShotExerciseTurnOffset = game._exercise_turn_offset || 0;
+    const exerciseTurnOffset = oneShotExerciseTurnOffset;
+    const turn = (game.moves || 1) + 1 + exerciseTurnOffset;
     const skipPeriodicExerciseTurn = game._skip_periodic_exercise_turn || 0;
     const skipPeriodicExerciseAtTurn = !!skipPeriodicExerciseTurn && turn === skipPeriodicExerciseTurn;
     if (skipPeriodicExerciseAtTurn) game._skip_periodic_exercise_turn = 0;
@@ -2214,6 +2213,7 @@ function processAttributeExercise() {
         if ((u._woundedLegTurns || 0) > 0 || u.fumbling || status.includes('Stun')) exerciseAttribute(A_DEX, false);
     }
     if (!skipPeriodicExercise) game._last_periodic_exercise_turn = turn;
+    if (oneShotExerciseTurnOffset) game._exercise_turn_offset = 0;
 
     game.context ??= {};
     game.context.next_attrib_check ??= 600;

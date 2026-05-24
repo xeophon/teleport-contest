@@ -30268,7 +30268,6 @@ export async function rhack(_cmd) {
                 : { x: targetX, y: targetY, allowGuess: true };
             if (blockedTargetTravel) {
                 game._travel_ignore_adjacent_stop = 1;
-                if (game.context?.seer_turn) game.context.seer_turn++;
             }
             game._travel_keep_message = keepMessage;
             game._pending_message = '';
@@ -30340,8 +30339,10 @@ export async function rhack(_cmd) {
             const targetX = game._farlook_x;
             const targetY = game._farlook_y;
             const loc = game.level?.at(targetX, targetY);
-            const terrain = !loc || (!loc.seenv && !loc.remembered_glyph && (loc.disp_ch || ' ') === ' ') ? 'unexplored area'
-                : loc?.typ === STONE ? 'stone'
+            const terrain = loc?.typ === STONE
+                && (loc.seenv || loc.remembered_glyph || (loc.disp_ch || ' ') !== ' '
+                    || game._travel_previous_target) ? 'stone'
+                : !loc || (!loc.seenv && !loc.remembered_glyph && (loc.disp_ch || ' ') === ' ') ? 'unexplored area'
                 : loc?.typ === CLOUD ? 'fog/vapor cloud'
                 : loc?.typ === ROOM && !(game.viz_array?.[targetY]?.[targetX] & IN_SIGHT) ? 'dark part of a room'
                 : (loc.disp_ch || ' ') === ' ' ? 'dark part of a room'
