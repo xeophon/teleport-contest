@@ -2036,6 +2036,17 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   from screen 624 to screen 740; full `bash frozen/score.sh` remains `42/44`,
   with `seed0360` at RNG `112648/120639` and screen `738/833`. `seed4500` is
   again fully exact at RNG/screens/cursors `108275/108275` and `1814/1814`.
+- The latest public parity pass closes the remaining `seed0360` and `seed0383`
+  routes while continuing to remove C-semantic gaps instead of adding replay
+  data. Dungeon bookkeeping now tracks `dunlev_ureached` like C, so
+  `level_difficulty()` can use structural `builds_up()`, deepest reached depth
+  while carrying the Amulet, and the ring-of-aggravate multiplier. Trap
+  creation now follows the first `trap.c:maketrap()` guard layer: undestroyable
+  traps are not overwritten, invalid trap terrain is rejected, holes start as
+  visible traps, and hole/trapdoor destinations honor Quest locate and
+  pre-invocation Gehennom bottoms. Focused guards
+  `seed0030`, `seed0367`, `seed0373`, `seed0383`, and `seed4500` all pass, and
+  full `bash frozen/score.sh` is `44/44`.
 
 Next concrete target:
 
@@ -2055,17 +2066,10 @@ Next concrete target:
   Plane generation/arrival, hallucinated swallow-expel redraw order, Vlad tower
   generation, observed discovery accounting, Sokoban random-object display,
   level-follower arrival, and enlightenment wording.
-- The current `seed0360` frontier is no longer the `^F` trap-rendering path.
-  Focused comparison first differs at screen 740 on a shifted warning glyph, and
-  flat RNG remains aligned through the earlier teleport and apprentice-spell
-  slices at steps 673, 680, 698, and 699. The next narrow RNG frontier is step
-  732: C takes another `distfleeck()`/movement-attempt sequence where JS enters
-  `mcalcmove rn2(12)` earlier, so investigate monster scheduling and movement
-  consumption around that wait turn before touching display glyph placement.
-- The `seed0383` hallucination mismatch remains display-only: the swallow-expel
-  redraw should follow C's `docrt()` order by redrawing remembered map glyphs
-  before the visible monster/object/trap overlay pass while hallucinated, rather
-  than running every remembered cell through `newsym()` with vision disabled.
+- The old `seed0360` warning-glyph frontier and `seed0383` hallucinated
+  swallow-expel redraw mismatch are closed; keep both sessions in the focused
+  guard set while widening monster scheduling, travel/getpos, and hallucinated
+  display behavior to less-public routes.
 - The Archeologist tour, exact-wand wish tails, healer scroll tail, tourist
   disaster path, and wizard quaff/zap/read option-help path are now closed;
   use them as regression guards for artifact wishing, restored-level Sokoban
@@ -2074,13 +2078,11 @@ Next concrete target:
   ordering, confused level teleportation, bones replacement prompts, generated
   help-window paging, and fire-ray `destroy_items()` timing before widening
   the same C-grounded fixes to other sessions.
-- The next narrow `#sit` trap slice should deepen the remaining
-  `trap.c:trapeffect_*()` details now that deferred level-changing traps are
-  live: floor-object `impact_drop()` effects for holes/trapdoors, positive
-  Quest text/level-generation gaps beyond the Barbarian pager text,
-  escaped-game disclosure/score polish, remaining fire `burnarmor()`
-  material/protection and floor-object burning details, and any remaining
-  movement trap sharing where that lowers divergence.
+- The next narrow trap slice should deepen the remaining `trap.c` details beyond
+  the initial `maketrap()` guard layer: pit/hole terrain side effects,
+  floor-object `impact_drop()` effects for holes/trapdoors, special-level
+  launch/teleport destinations, statue-trap inventory transfer, and fire
+  `burnarmor()` material/protection plus floor-object burning details.
 - `seed4500-knight-coverage` is closed again and should remain a guard for
   punished teleport landing object-list timing, Vlad tower generation, observed
   discovery accounting, Sokoban random-object display, and late enlightenment

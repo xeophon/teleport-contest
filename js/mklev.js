@@ -45,7 +45,7 @@ import {
     WM_C_OUTER, WM_C_INNER,
     WM_X_TL, WM_X_TR, WM_X_BL, WM_X_BR, WM_X_TLBR, WM_X_BLTR,
     ROT_AGE, TAINT_AGE,
-    In_endgame, In_mines, Is_airlevel, Is_firelevel,
+    In_endgame, In_mines, In_quest, Is_airlevel, Is_firelevel,
 } from './const.js';
 
 // Object/class constants (normally from objects.js, not in contest template)
@@ -3627,21 +3627,77 @@ export function u_on_rndspot(up = false) {
 // oinit stub (level-dependent object probability reset)
 function oinit() { /* no-op for contest */ }
 
-// level_difficulty stub
+function builds_up(lev = game.u?.uz) {
+    const dnum = lev?.dnum ?? 0;
+    const dungeon = game.dungeons?.[dnum];
+    if (!dungeon) return false;
+    if ((dungeon.num_dunlevs ?? 1) > 1)
+        return (dungeon.entry_lev ?? 1) === dungeon.num_dunlevs;
+    const dlevel = lev?.dlevel ?? 1;
+    const branch = (game.branches || []).find(br =>
+        br.end2?.dnum === dnum && br.end2?.dlevel === dlevel);
+    return !!branch?.end1_up;
+}
+
+export function recordLevelReached(lev = game.u?.uz) {
+    const dnum = lev?.dnum;
+    const dlevel = lev?.dlevel;
+    const dungeon = game.dungeons?.[dnum];
+    if (!dungeon || !Number.isFinite(dlevel)) return;
+    const reached = dungeon.dunlev_ureached || 0;
+    if (!builds_up(lev)) {
+        if (dlevel > reached) dungeon.dunlev_ureached = dlevel;
+    } else if (!reached || dlevel < reached) {
+        dungeon.dunlev_ureached = dlevel;
+    }
+}
+
+function deepest_lev_reached(noquest = false) {
+    let ret = 0;
+    for (let dnum = 0; dnum < (game.dungeons?.length || 0); dnum++) {
+        if (noquest && dnum === game.quest_dnum) continue;
+        const dlevel = game.dungeons?.[dnum]?.dunlev_ureached || 0;
+        if (!dlevel) continue;
+        ret = Math.max(ret, depth_of_level({ dnum, dlevel }));
+    }
+    return ret;
+}
+
+function heroHasRealAmuletOfYendor() {
+    return !!(game.u?.uhave?.amulet || (game.inventory || []).some(item =>
+        item.realAmuletOfYendor || String(item.actualKind || item.kind || '').toLowerCase() === 'amulet of yendor'));
+}
+
+function heroHasExtrinsicAggravateMonster() {
+    if (game.u?.EAggravate_monster) return true;
+    return (game.inventory || []).some(item => {
+        if (item.cls !== 'ring' || !(item.worn || /\(on (?:left|right) hand\)/.test(item.line || '')))
+            return false;
+        const name = String(item.actualKind || item.kind || '').toLowerCase();
+        return (item.ringRoll || item.roll) === 13 || name === 'ring of aggravate monster';
+    });
+}
+
 export function level_difficulty() {
     const uz = game.u?.uz;
+    let res;
     if (In_endgame(uz)) {
         const sanctum = game.sanctum_level || game.specialLevels?.find(level => level?.name === 'sanctum');
         const sanctumDepth = sanctum ? depth_of_level(sanctum) : 51;
-        return sanctumDepth + Math.trunc((game.u?.ulevel || 1) / 2);
+        res = sanctumDepth + Math.trunc((game.u?.ulevel || 1) / 2);
+    } else if (heroHasRealAmuletOfYendor()) {
+        res = deepest_lev_reached(false);
+    } else {
+        res = depth_of_level(uz);
+        if (builds_up(uz)) {
+            const dungeon = game.dungeons?.[uz?.dnum];
+            const dlevel = uz?.dlevel ?? 1;
+            res += 2 * ((dungeon?.entry_lev ?? dlevel) - dlevel + 1);
+        }
     }
-    const dungeon = game.dungeons?.[uz?.dnum];
-    if (dungeon?.name === 'Sokoban' || dungeon?.name === "Vlad's Tower") {
-        const dlevel = uz?.dlevel ?? 1;
-        return depth_of_level(uz) + 2 * ((dungeon.entry_lev ?? dlevel) - dlevel + 1);
-    }
-    const d = depth_of_level(uz);
-    return d;
+    if (heroHasExtrinsicAggravateMonster())
+        res = res > 25 ? 50 : res * 2;
+    return res;
 }
 
 // ============================================================
@@ -6741,12 +6797,56 @@ function choose_trapnote(ttmp) {
     return picks.length ? picks[rn2(picks.length)] : rn2(12);
 }
 
-// maketrap stub
+function undestroyable_trap(ttyp) {
+    return ttyp === MAGIC_PORTAL || ttyp === VIBRATING_SQUARE;
+}
+
+function unhideable_trap(ttyp) {
+    return ttyp === HOLE;
+}
+
+function single_level_branch(lev = game.u?.uz) {
+    const dungeon = game.dungeons?.[lev?.dnum ?? 0];
+    return !!dungeon && (dungeon.num_dunlevs || 1) <= 1;
+}
+
+function trapTerrainBlocked(x, y, typ) {
+    const loc = game.level?.at(x, y);
+    if (!loc) return true;
+    const terrain = loc.typ;
+    if (terrain === STAIRS || terrain === LADDER) return true;
+    if (terrain === POOL || terrain === MOAT || terrain === WATER
+        || terrain === LAVAPOOL || terrain === LAVAWALL) return true;
+    if (IS_FURNITURE(terrain) && typ !== PIT && typ !== HOLE) return true;
+    if (terrain === DRAWBRIDGE_UP && typ === MAGIC_PORTAL) return true;
+    if ((terrain === AIR || terrain === CLOUD) && typ !== MAGIC_PORTAL) return true;
+    if (typ === LEVEL_TELEP && single_level_branch(game.u?.uz)) return true;
+    return false;
+}
+
+function dng_bottom(lev = game.u?.uz) {
+    const dungeon = game.dungeons?.[lev?.dnum ?? 0];
+    let bottom = dungeon?.num_dunlevs ?? lev?.dlevel ?? 1;
+    if (In_quest(lev)) {
+        const qlocate = game.specialLevels?.find(level =>
+            level?.dnum === lev?.dnum && level?.name === 'x-loca');
+        const qlocateDepth = qlocate?.dlevel;
+        if (qlocateDepth && (dungeon?.dunlev_ureached || 0) < qlocateDepth)
+            bottom = qlocateDepth;
+    } else if (dungeon?.name === 'Gehennom' && !game.u?.uevent?.invoked) {
+        bottom = Math.max(1, bottom - 1);
+    }
+    return bottom;
+}
+
+// C ref: trap.c maketrap
 async function maketrap(x, y, typ) {
     if (typ === TRAPPED_DOOR || typ === TRAPPED_CHEST) return null;
     const existing = t_at(x, y);
+    if (existing && undestroyable_trap(existing.ttyp)) return null;
+    if (!existing && trapTerrainBlocked(x, y, typ)) return null;
     const trap = existing || { tx: x, ty: y };
-    Object.assign(trap, { ttyp: typ, tseen: false, once: false, launch: { x: 0, y: 0 } });
+    Object.assign(trap, { ttyp: typ, tseen: unhideable_trap(typ), once: false, launch: { x: -1, y: -1 } });
     if (typ === SQKY_BOARD) trap.tnote = choose_trapnote(trap);
     if (typ === STATUE_TRAP) {
         const ptr = rndmonst_adj(3, 6);
@@ -6771,8 +6871,7 @@ async function maketrap(x, y, typ) {
     }
     if (is_hole(typ)) {
         const uz = game.u?.uz ?? { dnum: 0, dlevel: 1 };
-        const dungeon = game.dungeons?.[uz.dnum];
-        const bottom = dungeon?.num_dunlevs ?? uz.dlevel;
+        const bottom = dng_bottom(uz);
         trap.dst = { dnum: uz.dnum, dlevel: uz.dlevel };
         while (trap.dst.dlevel < bottom) {
             trap.dst.dlevel++;
@@ -7166,6 +7265,7 @@ export function l_nhcore_init() {
 
 export function syncDungeonContext() {
     game.inhell = game.dungeons?.[game.u?.uz?.dnum]?.name === 'Gehennom';
+    recordLevelReached(game.u?.uz);
 }
 
 // C ref: mklev.c mklev()
@@ -13321,6 +13421,7 @@ export async function make_tutorial1_level() {
 
     clear_level_structures();
     g.u.uz = { dnum: 8, dlevel: 1 };
+    syncDungeonContext();
     g.level.flags.is_maze_lev = true;
     g.level.flags.rndmongen = false;
     g.level.flags.deathdrops = false;
