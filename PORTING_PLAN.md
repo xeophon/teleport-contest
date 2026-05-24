@@ -2572,6 +2572,17 @@ Next concrete target:
   shop `globby_bill_fixup()` parity remains a future billing slice. Direct
   smokes cover same-square merging, adjacent search, BUC no-merge, and blind
   sloshing feedback.
+- Monster death inventory drops now route through the shared floor-effects
+  adapter before survivor placement, matching C `relobj()`/`mdrop_obj()` for
+  the generic `"fall"` path without creating a `mklev.js`/`cmd.js` import
+  cycle. Message-array death paths surface lava/pool/pit/glob/altar feedback;
+  silent cleanup paths still get state effects without new topline text. The
+  monster-moving altar branch now marks BUC and reports the C flash/landing
+  line while preventing the later hot-ground branch. Direct smokes cover
+  ordinary monster drop placement, lava destruction, and visible monster-moving
+  altar BUC feedback. Remaining caller-specific monster object paths include
+  unwielded weapon `"drop"`, meatbox `""`, monstone, thrown missiles, and the
+  full shop billing matrix.
 - Remaining ice work outside this fire-ray terrain slice includes the broader
   full `spoteffects()`/`pooleffects()` hero liquid behavior, deeper
   `minliquid()` edges (life-saving or shape-shift survivor relocation,

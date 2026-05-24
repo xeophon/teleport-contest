@@ -5,7 +5,7 @@ import { game } from './gstate.js';
 import { nhgetch } from './input.js';
 import { bot, cls, docrt, flush_screen, newsym, pline, recordObservedObjectDiscovery, refreshHallucinatedMap, seeNearbyObjects, show_glyph_cell, strengthString } from './display.js';
 import { couldsee, vision_recalc, vision_reset } from './vision.js';
-import { RANDOM_MONSTER_BY_NAME, SHOP_TYPES, STALKER_MONSTERS, artifactDefinitionForName, artifactObjectName, enextoMonsterSpot, make_tutorial1_level, makemon, makeArtifactWishObject, maketrap, mkcorpstat, mklev, mkobj, mkobj_at, mksobj, monsterByRndName, morgueMonster, nameObjectAsArtifact, next_ident, object_display, potionIndexForRoll, resurrectWizardOfYendor, rndmonnum, scrollIndexForRoll, set_mimic_sym_rng, syncDungeonContext, u_on_dnstairs, u_on_rndspot, u_on_upstairs, wipe_engr_at, dropMonsterInventory, l_nhcore_init, getrumor, getbogusmon, level_difficulty, set_malign, somexyspace, fumaroles, movebubbles } from './mklev.js';
+import { RANDOM_MONSTER_BY_NAME, SHOP_TYPES, STALKER_MONSTERS, artifactDefinitionForName, artifactObjectName, enextoMonsterSpot, make_tutorial1_level, makemon, makeArtifactWishObject, maketrap, mkcorpstat, mklev, mkobj, mkobj_at, mksobj, monsterByRndName, morgueMonster, nameObjectAsArtifact, next_ident, object_display, potionIndexForRoll, resurrectWizardOfYendor, rndmonnum, scrollIndexForRoll, set_mimic_sym_rng, syncDungeonContext, u_on_dnstairs, u_on_rndspot, u_on_upstairs, wipe_engr_at, dropMonsterInventory as dropMonsterInventoryRaw, l_nhcore_init, getrumor, getbogusmon, level_difficulty, set_malign, somexyspace, fumaroles, movebubbles } from './mklev.js';
 import { ACCESSIBLE, A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_MAX, A_NEUTRAL, A_STR, A_WIS, ALTAR, AM_SANCTUM, AM_SHRINE, Amask2align, BC_BALL, BC_CHAIN, BEAR_TRAP, BLCORNER, BOLT_LIM, BRCORNER, CLOUD, COLNO, CORPSTAT_FEMALE, CORPSTAT_GENDER, CORPSTAT_HISTORIC, CORPSTAT_MALE, CORPSTAT_NEUTER, CORR, DB_FLOOR, DB_LAVA, DB_MOAT, DB_UNDER, DOOR, DRAWBRIDGE_UP, BURN, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, DUST, ENGRAVE, ENGR_BLOOD, FOUNTAIN, GRAVE, HEADSTONE, HWALL, ICE, IN_SIGHT, IS_AIR, IS_LAVA, IS_OBSTRUCTED, IS_POOL, IS_ROOM, IS_TREE, IS_WALL, In_endgame, In_quest, In_sokoban, In_V_tower, Is_airlevel, Is_astralevel, Is_botlevel, Is_earthlevel, Is_rogue_level, Is_stronghold, Is_waterlevel, LADDER, LAVAPOOL, LAVAWALL, MAGIC_PORTAL, MARK, MAX_EGG_HATCH_TIME, MM_EDOG, MM_NOCOUNTBIRTH, MM_NOMSG, MM_NOWAIT, MOAT, MORGUE, M_AP_TYPE, NO_MINVENT, NORMAL_SPEED, OVERLOADED, P_BASIC, P_UNSKILLED, PIT, POOL, ROLLING_BOULDER_TRAP, ROOM, ROT_AGE, ROOMOFFSET, ROWNO, SCORR, SDOOR, SHOPBASE, SINK, SPIKED_PIT, STAIRS, STONE, TDWALL, TEMPLE, THRONE, TLCORNER, TRCORNER, TREE, TT_BEARTRAP, TT_BURIEDBALL, TT_INFLOOR, TT_LAVA, TT_PIT, TT_WEB, TUWALL, VAULT, VIBRATING_SQUARE, VWALL, WAND_BACKFIRE_CHANCE, WATER, WEB, WT_IRON_BALL_BASE, WT_IRON_BALL_INCR, W_NONDIGGABLE, ZAP_POS } from './const.js';
 import { d, rn1, rn2, rn2_on_display_rng, rnd, rnl, rnz } from './rng.js';
 import { CLR_BLACK, CLR_BLUE, CLR_BRIGHT_BLUE, CLR_BRIGHT_CYAN, CLR_BRIGHT_GREEN, CLR_BROWN, CLR_CYAN, CLR_GRAY, CLR_GREEN, CLR_MAGENTA, CLR_ORANGE, CLR_RED, CLR_YELLOW, CLR_WHITE, NO_COLOR } from './terminal.js';
@@ -3443,7 +3443,7 @@ function earthquakeMonsterFalls(mon, messages) {
     mon.mhp = (mon.mhp ?? 1) - rnd(alreadyTrapped ? 4 : 6);
     if ((mon.mhp ?? 0) > 0) return;
 
-    dropMonsterInventory(mon);
+    dropMonsterInventory(mon, messages);
     game.level.monsters = (game.level?.monsters || []).filter(candidate => candidate !== mon);
     recordVanquished(mon, true);
     newsym(mon.mx, mon.my);
@@ -12492,7 +12492,7 @@ function resolveFireScrollExplosion(cx, cy, dam, messages = []) {
         damage += itemDamage;
         mon.mhp = (mon.mhp || 1) - damage;
         if ((mon.mhp || 0) <= 0) {
-            dropMonsterInventory(mon);
+            dropMonsterInventory(mon, messages);
             game.level.monsters = (game.level?.monsters || []).filter(other => other !== mon);
             recordVanquished(mon, true);
             newsym(mon.mx, mon.my);
@@ -12540,7 +12540,7 @@ function resolvePyroliskEggExplosion(cx, cy, dam) {
         damage += itemDamage;
         mon.mhp = (mon.mhp || 1) - damage;
         if ((mon.mhp || 0) <= 0) {
-            dropMonsterInventory(mon);
+            dropMonsterInventory(mon, messages);
             game.level.monsters = (game.level?.monsters || []).filter(other => other !== mon);
             recordVanquished(mon, true);
             newsym(mon.mx, mon.my);
@@ -12823,7 +12823,7 @@ function applyEarthBoulderPitOccupantEffects(trap, x, y, messages, verb = 'fall'
         if (earthTargetIsSolid(mon) && !earthTargetThrowsRocks(mon)) {
             mon.mhp = (mon.mhp || 1) - earthObjectDamage({ otyp: BOULDER, quan: 1 }, mon);
             if ((mon.mhp || 0) <= 0) {
-                dropMonsterInventory(mon);
+                dropMonsterInventory(mon, messages);
                 game.level.monsters = (game.level?.monsters || []).filter(other => other !== mon);
                 mon.mhp = 0;
                 mon.dead = true;
@@ -13111,6 +13111,31 @@ function droppedObjectGlobMeldFloorEffects(obj, x, y, messages) {
     return true;
 }
 
+function floorObjectClass(obj) {
+    if (obj?.cls) return obj.cls;
+    if (obj?.otyp === GOLD_PIECE || obj?.glyph === '$') return 'coin';
+    return '';
+}
+
+function droppedObjectAltarFloorEffects(obj, x, y, messages) {
+    const loc = game.level?.at(x, y);
+    if (!game._monster_moving || loc?.typ !== ALTAR || !floorObjectVisible(x, y)) return false;
+    const coin = floorObjectClass(obj) === 'coin';
+    if (coin) {
+        obj.blessed = false;
+        obj.cursed = false;
+    }
+    if (obj.blessed || obj.cursed) {
+        const color = obj.blessed ? 'amber' : 'black';
+        messages.push(`There is an ${color} flash as ${floorObjectArticleName(obj)} ${floorObjectVerb(obj, 'hits', 'hit')} the altar.`);
+        if (!heroIsHallucinating()) obj.bknown = true;
+    } else {
+        messages.push(`${floorObjectSubject(obj)} ${floorObjectVerb(obj, 'lands', 'land')} on the altar.`);
+        if (!coin) obj.bknown = true;
+    }
+    return true;
+}
+
 function earthFloorEffects(obj, x, y, messages, verb = 'fall') {
     const loc = game.level?.at(x, y);
     if (!loc || !obj) return false;
@@ -13162,7 +13187,16 @@ function earthFloorEffects(obj, x, y, messages, verb = 'fall') {
     const pitHole = droppedObjectPitHoleFloorEffects(obj, x, y, messages);
     if (pitHole.handled) return pitHole.consumed;
     if (droppedObjectGlobMeldFloorEffects(obj, x, y, messages)) return true;
+    if (droppedObjectAltarFloorEffects(obj, x, y, messages)) return false;
     return droppedObjectHotGroundFloorEffects(obj, x, y, messages);
+}
+
+function dropMonsterInventory(mon, messages = null, { verb = 'fall' } = {}) {
+    const floorMessages = Array.isArray(messages) ? messages : [];
+    return dropMonsterInventoryRaw(mon, {
+        verb,
+        floorEffects: (obj, x, y, floorVerb) => earthFloorEffects(obj, x, y, floorMessages, floorVerb),
+    });
 }
 
 function earthTargetIsSolid(target) {
@@ -13250,7 +13284,7 @@ function dropEarthObjectOnMonster(x, y, confused, messages) {
         }
         mon.mhp = (mon.mhp || 1) - damage;
         if ((mon.mhp || 0) <= 0) {
-            dropMonsterInventory(mon);
+            dropMonsterInventory(mon, messages);
             game.level.monsters = (game.level?.monsters || []).filter(other => other !== mon);
             recordVanquished(mon, true);
             newsym(x, y);
@@ -19685,7 +19719,7 @@ async function moveHero(dx, dy) {
             game._chronicle_first_kill = 1;
         }
         recordVanquished(mon);
-        dropMonsterInventory(mon);
+        dropMonsterInventory(mon, messages);
 	        await setMessage(messages.join('  '), killedPet && messages.length > 1);
         const treasureDrop = !rn2(6);
 
@@ -26042,7 +26076,7 @@ export async function rhack(_cmd) {
                                         rn2(6);
                                         const corpseRoll = rn2(3);
                                         const corpseData = target.data?.corpse || target.data;
-                                        dropMonsterInventory(target);
+                                        dropMonsterInventory(target, messages);
                                         game.level.monsters = (game.level?.monsters || []).filter(mon => mon !== target);
                                         if (!corpseRoll && corpseData && !corpseData.noCorpse) {
                                             const corpse = mkcorpstat(CORPSE, target, corpseData, target.mx, target.my, 8);
@@ -26240,7 +26274,7 @@ export async function rhack(_cmd) {
                                     rn2(6);
                                     const corpseRoll = rn2(3);
                                     const corpseData = target.data?.corpse || target.data;
-                                    dropMonsterInventory(target);
+                                    dropMonsterInventory(target, messages);
                                     game.level.monsters = (game.level?.monsters || []).filter(mon => mon !== target);
                                     if (!corpseRoll && corpseData && !corpseData.noCorpse) {
                                         const corpse = mkcorpstat(CORPSE, target, corpseData, target.mx, target.my, 8);

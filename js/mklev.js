@@ -5478,7 +5478,7 @@ function mongets(otyp, erodes = true) {
     return otmp;
 }
 
-export function dropMonsterInventory(mon) {
+export function dropMonsterInventory(mon, { floorEffects = null, verb = 'fall' } = {}) {
     if (!mon || !game.level) return;
     const inventory = [...(mon.minvent || [])];
     if (mon.missile && (mon.missile.quan || 1) > 0 && !inventory.includes(mon.missile))
@@ -5487,6 +5487,8 @@ export function dropMonsterInventory(mon) {
     for (const otmp of inventory) {
         if ((otmp.quan || 1) <= 0) continue;
         Object.assign(otmp, { ox: mon.mx, oy: mon.my });
+        if (floorEffects?.(otmp, otmp.ox, otmp.oy, verb))
+            continue;
         const stack = game.level.objects.find(obj => obj.ox === otmp.ox && obj.oy === otmp.oy
             && obj.kind === otmp.kind && obj.otyp === otmp.otyp && obj.cls === otmp.cls);
         if (stack) {
