@@ -9,12 +9,16 @@ import {
     TLCORNER, TLWALL, TRCORNER, TRWALL, TT_INFLOOR, TT_LAVA, TUWALL,
     VIBRATING_SQUARE, VWALL, WATER,
 } from './const.js';
-import { rn1, rn2 } from './rng.js';
+import { rn1, rn2, rnd } from './rng.js';
 import { newsym } from './display.js';
 import { vision_recalc } from './vision.js';
 
 const BOULDER = 465;
 const CORPSE = 471;
+const ROCK = 467;
+const POTION_CLASS = 9;
+const FOOD_CLASS = 7;
+const POT_OIL = 252;
 const BELL = 358;
 const BOOK_OF_THE_DEAD = 10097;
 const CANDELABRUM_OF_INVOCATION = 10076;
@@ -37,6 +41,7 @@ const ROT_ICE_ADJUSTMENT = 2;
 const MIN_ICE_TIME = 50;
 const MAX_ICE_TIME = 2000;
 const RIDER_CORPSE_NAMES = new Set(['death', 'pestilence', 'famine']);
+const ORGANIC_MATERIALS = new Set(['liquid', 'wax', 'veggy', 'flesh', 'paper', 'cloth', 'leather', 'wood']);
 
 export function isIceAt(x, y) {
     const loc = game.level?.at(x, y);
@@ -236,6 +241,7 @@ function unearthObjectsAt(x, y) {
     for (const obj of unearthed) {
         obj.buried = false;
         obj.hidden = false;
+        clearBuriedOrganicRotTimer(obj);
         obj.ox = x;
         obj.oy = y;
         if (!lvl.objects.includes(obj)) lvl.objects.push(obj);
@@ -245,6 +251,7 @@ function unearthObjectsAt(x, y) {
         if (obj?.ox !== x || obj?.oy !== y || !obj.buried) continue;
         obj.buried = false;
         obj.hidden = false;
+        clearBuriedOrganicRotTimer(obj);
         objectIceEffect(obj, x, y);
     }
     if (lvl.engravings) lvl.engravings = lvl.engravings.filter(engr => engr.x !== x || engr.y !== y);
@@ -272,6 +279,7 @@ function isRiderCorpse(obj) {
 }
 
 function objectAlwaysResistsBurial(obj) {
+    if (obj && (obj === game.u?.uchain || obj === game.u?.uball)) return true;
     const actual = String(obj?.actualKind || '').toLowerCase();
     const kind = objectKindText(obj);
     if (obj?.realAmuletOfYendor || actual === 'amulet of yendor'
@@ -288,6 +296,114 @@ function objectResistsBurial(obj) {
     return false;
 }
 
+function objectResistsChance(obj, ordinaryChance, artifactChance) {
+    if (objectAlwaysResistsBurial(obj)) return true;
+    const chance = rn2(100);
+    return chance < (obj?.artifact || obj?.oartifact ? artifactChance : ordinaryChance);
+}
+
+function isPotionObject(obj) {
+    return obj?.otyp === POTION_CLASS
+        || (typeof obj?.otyp === 'number' && obj.otyp >= 230 && obj.otyp < 270)
+        || obj?.cls === 'potion'
+        || obj?.glyph === '!';
+}
+
+function isPotionOfOilObject(obj) {
+    const kind = objectKindText(obj);
+    return obj?.otyp === POT_OIL || obj?.potionIndex === 24
+        || kind === 'oil' || kind === 'potion of oil';
+}
+
+function isRockObject(obj) {
+    return obj?.otyp === ROCK || obj?.kind === 'rock' || obj?.isRock;
+}
+
+function isBoulderObject(obj) {
+    return obj?.otyp === BOULDER || obj?.kind === 'boulder';
+}
+
+function isCorpseObjectForBurial(obj) {
+    return obj?.otyp === CORPSE || obj?.otyp === 'corpse';
+}
+
+function isOrganicObject(obj) {
+    if (!obj || isCorpseObjectForBurial(obj) || isPotionObject(obj) || isRockObject(obj) || isBoulderObject(obj))
+        return false;
+    const material = String(obj.material || obj.oc_material || '').toLowerCase();
+    if (ORGANIC_MATERIALS.has(material)) return true;
+    if (obj.otyp === FOOD_CLASS || obj.cls === 'food')
+        return !/\btin\b/.test(objectKindText(obj));
+    if (obj.cls === 'scroll' || obj.cls === 'spellbook') return true;
+    const kind = objectKindText(obj);
+    return /\b(?:wax|leather|cloth|wood|wooden|paper|scroll|spellbook|book|sack|bag|leash|rope|bow|arrow|club|quarterstaff|aklys|bullwhip|sling|flute|harp|drum|whistle|horn)\b/.test(kind);
+}
+
+export function clearBuriedOrganicRotTimer(obj) {
+    if (!obj) return;
+    delete obj.buriedOrganicRotTurn;
+    delete obj.rotOrganicTurn;
+    delete obj.rotOrganicTimeout;
+    delete obj._buriedOrganicTimed;
+}
+
+function maybeStartBuriedOrganicRot(obj, underIce) {
+    clearBuriedOrganicRotTimer(obj);
+    if (isCorpseObjectForBurial(obj)) return;
+    const candidate = underIce ? isPotionObject(obj) : isOrganicObject(obj);
+    if (!candidate || objectResistsChance(obj, 5, 95)) return;
+    const turn = (game.moves || 0) + (underIce ? 0 : 250) + rnd(250);
+    obj.buriedOrganicRotTurn = turn;
+    obj.rotOrganicTurn = turn;
+    obj.rotOrganicTimeout = turn;
+    obj._buriedOrganicTimed = true;
+}
+
+function stopObjectBurningForBurial(obj) {
+    if (!(obj?.lamplit || obj?.burning) || isPotionOfOilObject(obj)) return;
+    obj.lamplit = false;
+    obj.burning = false;
+    delete obj._burnTimer;
+    delete obj.litRadius;
+}
+
+function unleashObjectForBurial(obj) {
+    if (objectKindText(obj) !== 'leash' || !obj.leashmon) return;
+    const leashmon = obj.leashmon;
+    obj.leashmon = 0;
+    const mon = (game.level?.monsters || []).find(candidate =>
+        candidate?.id === leashmon || candidate?.m_id === leashmon || candidate?.mid === leashmon);
+    if (mon) {
+        mon.mleashed = 0;
+        mon.leashed = false;
+    }
+}
+
+function containedObjects(obj) {
+    if (Array.isArray(obj?.contents)) return obj.contents;
+    if (Array.isArray(obj?.cobj)) return obj.cobj;
+    return [];
+}
+
+function buryOneObject(obj, x, y, lvl, underIce = isIceAt(x, y)) {
+    if (objectResistsBurial(obj)) return 'floor';
+    unleashObjectForBurial(obj);
+    stopObjectBurningForBurial(obj);
+    obj.ox = x;
+    obj.oy = y;
+    if ((isRockObject(obj) && !underIce) || isBoulderObject(obj)) {
+        clearBuriedOrganicRotTimer(obj);
+        obj.buried = false;
+        obj.hidden = false;
+        return 'deleted';
+    }
+    maybeStartBuriedOrganicRot(obj, underIce);
+    obj.buried = true;
+    obj.hidden = true;
+    lvl.buriedobjlist.push(obj);
+    return 'buried';
+}
+
 function buryObjectsAt(x, y) {
     const lvl = game.level;
     if (!lvl) return;
@@ -298,21 +414,56 @@ function buryObjectsAt(x, y) {
     }
     lvl.buriedobjlist ??= [];
     const remaining = [];
+    const underIce = isIceAt(x, y);
     for (const obj of lvl.objects) {
         if (obj.ox === x && obj.oy === y && !obj.transientProjectile) {
-            if (objectResistsBurial(obj)) {
+            if (buryOneObject(obj, x, y, lvl, underIce) === 'floor') {
                 remaining.push(obj);
-                continue;
             }
-            obj.buried = true;
-            obj.hidden = true;
-            lvl.buriedobjlist.push(obj);
         } else {
             remaining.push(obj);
         }
     }
     lvl.objects = remaining;
     newsym(x, y);
+}
+
+export function processBuriedOrganicRot(g = game) {
+    const lvl = g.level;
+    if (!lvl?.buriedobjlist?.length) return [];
+    const remaining = [];
+    const rotted = [];
+    const newlyBuried = [];
+    const savedList = lvl.buriedobjlist;
+    lvl.buriedobjlist = newlyBuried;
+    for (const obj of savedList) {
+        if (obj?.buriedOrganicRotTurn && obj.buriedOrganicRotTurn <= (g.moves || 0)) {
+            const x = obj.ox;
+            const y = obj.oy;
+            for (const content of containedObjects(obj)) {
+                content.ox = x;
+                content.oy = y;
+                const outcome = buryOneObject(content, x, y, lvl, isIceAt(x, y));
+                if (outcome === 'floor') {
+                    clearBuriedOrganicRotTimer(content);
+                    content.buried = false;
+                    content.hidden = false;
+                    if (!lvl.objects.includes(content)) lvl.objects.push(content);
+                }
+            }
+            if (Array.isArray(obj.contents)) obj.contents = [];
+            if (Array.isArray(obj.cobj)) obj.cobj = [];
+            clearBuriedOrganicRotTimer(obj);
+            obj.buried = false;
+            obj.hidden = false;
+            rotted.push(obj);
+        } else {
+            remaining.push(obj);
+        }
+    }
+    lvl.buriedobjlist = remaining.concat(newlyBuried);
+    for (const obj of rotted) newsym(obj.ox, obj.oy);
+    return rotted;
 }
 
 function isSolidTile(x, y) {

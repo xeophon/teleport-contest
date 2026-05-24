@@ -17,7 +17,7 @@ import { clearMonsterTrack, updateMonsterTrack } from './montrack.js';
 import { createGasCloud } from './region.js';
 import { advanceFireBreathRay, finishHeroTargetedBreath, fireBreathDamageMonster, fireBreathZapHits } from './fire_breath.js';
 import { attachFigurineTransformTimeout, figurineLocationCheck, isFigurineObject, makeFigurineFamiliar, stopFigurineTransformTimeout } from './figurine.js';
-import { processMeltIceTimers } from './ice.js';
+import { processBuriedOrganicRot, processMeltIceTimers } from './ice.js';
 import { applyMeltedIceMonsterLiquidEffects } from './monster_liquid.js';
 
 const ROLE_STATE = {
@@ -2874,6 +2874,7 @@ async function afterMoveTurn(g, includeHeroTime = true) {
         g.level.objects = (g.level.objects || []).filter(obj => !(obj.rotAwayTurn && obj.rotAwayTurn <= g.moves));
         for (const obj of rottenObjects) newsym(obj.ox, obj.oy);
     }
+    processBuriedOrganicRot(g);
     await processEggHatchTimeouts(g);
     await processFigurineTransformTimeouts(g);
     if (includeHeroTime && g.moves >= (g.context.seer_turn || 0)) {

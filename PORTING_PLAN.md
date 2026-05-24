@@ -2394,12 +2394,20 @@ Next concrete target:
   the burial square are cleared like C. Direct smokes cover ordinary burial RNG,
   Book/Rider no-RNG resistance, and freeze-then-melt unearthing; the swimmer and
   wand-polymorph pile focused guards remain exact.
+- The next `bury_an_obj()` material slice now handles the C post-gate branches
+  used by ice freezing and boulder-fill burial: boulders always merge away,
+  rocks merge away unless buried under ice, leashes clear `leashmon`, lit
+  non-oil objects are snuffed, buried potions under ice and buried organic
+  objects off ice run the `obj_resists(obj,5,95)` plus `rnd(250)` timeout path,
+  and unearthing cancels that buried-organic timeout. Direct smokes cover those
+  branches plus timeout expiry; focused swimmer, wand-polymorph pile, and
+  Knight guards remain exact.
 - Remaining ice work outside this fire-ray terrain slice includes the broader
   full `spoteffects()`/`pooleffects()` hero liquid behavior, shared post-melt
   monster survivor relocation/inventory water damage, the remaining
-  `bury_objs()` material behavior (ball/chain punishment, shop billing,
-  rock/boulder deletion, organic/potion rot timers, lamp/leash handling), and a
-  shared zap-ray walker so fire/sleep/cold stop carrying parallel bounce code.
+  `bury_objs()` behavior (ball/chain punishment, shop billing, exact
+  object-material table coverage), and a shared zap-ray walker so fire/sleep/cold
+  stop carrying parallel bounce code.
 - Remaining trap work includes off-hero `impact_drop()` callers, deeper
   statue-trap edge cases, broader non-trap fire floor-object parity, and
   remaining bespoke ray floor/hero timing edges.

@@ -22,7 +22,7 @@ import { init_rect, rnd_rect, get_rect, split_rects } from './rect.js';
 import { depth as depth_of_level } from './hacklib.js';
 import { RNDMONST_COMMON_MONSTERS } from './monster_data.js';
 import { datFileText } from './dat_files.js';
-import { objectIceEffect } from './ice.js';
+import { clearBuriedOrganicRotTimer, objectIceEffect } from './ice.js';
 import {
     COLNO, ROWNO, STONE, ROOM, CORR, DOOR, STAIRS, LADDER, AIR,
     HWALL, VWALL, TLCORNER, TRCORNER, BLCORNER, BRCORNER,
@@ -6877,6 +6877,7 @@ function unearth_objs(x, y) {
     for (const obj of unearthed) {
         obj.buried = false;
         obj.hidden = false;
+        clearBuriedOrganicRotTimer(obj);
         if (lvl.objects?.includes(obj)) {
             Object.assign(obj, { ox: x, oy: y }, object_display(obj));
         } else {
@@ -6888,6 +6889,7 @@ function unearth_objs(x, y) {
         if (obj?.ox !== x || obj?.oy !== y || !obj.buried) continue;
         obj.buried = false;
         obj.hidden = false;
+        clearBuriedOrganicRotTimer(obj);
         Object.assign(obj, object_display(obj));
         stack_floor_object(obj);
     }
