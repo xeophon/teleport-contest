@@ -7699,6 +7699,17 @@ function monsterResistsEffect(mon, attackLevel) {
     return rn2(bound) < monsterMagicResistance(mon);
 }
 
+function zapRayHitsArmorClass(ac) {
+    const chance = rn2(20);
+    if (!chance) return rnd(10) < ac;
+    if (ac < 0) ac = -rnd(-ac);
+    return 3 - chance < ac;
+}
+
+function zapBeamGlyph(dx, dy) {
+    return dy === 0 ? '─' : dx === 0 ? '│' : dx === dy ? '\\' : '/';
+}
+
 export function loseExperienceLevel() {
     const u = game.u;
     if (!u) return;
@@ -24325,62 +24336,171 @@ export async function rhack(_cmd) {
                 return;
             }
             if (item?.wand === 'cold' || item?.kind === 'cold' || item?.wandIndex === 21) {
-                rn2(19);
-                rn2(7);
-                rn2(20);
-                d(6, 6);
-                rn2(3);
-                rn2(5);
-                rn2(111);
-                let target = null;
-                const terrainMessages = [];
-                let range = BOLT_LIM;
-                for (let step = 1; step <= BOLT_LIM && range-- > 0; step++) {
-                    const x = (game.u?.ux || 0) + dir.dx * step;
-                    const y = (game.u?.uy || 0) + dir.dy * step;
-                    const loc = game.level?.at(x, y);
-                    if (IS_OBSTRUCTED(loc?.typ)) break;
-                    const terrain = applyColdRayTerrain(x, y);
-                    terrainMessages.push(...terrain.messages);
-                    range += terrain.rangeMod;
-                    if (terrain.stopped || terrain.blocked || range < 0) break;
-                    target = game.level?.monsters?.find(mon => mon.mx === x && mon.my === y);
-                    if (target) break;
-                }
-                if (target) {
-                    rn2(6);
-                    const corpseRoll = rn2(3);
-                    const corpseData = target.data?.corpse || target.data;
-                    dropMonsterInventory(target);
-                    game.level.monsters = (game.level?.monsters || []).filter(mon => mon !== target);
-                    if (!corpseRoll && corpseData && !corpseData.noCorpse) {
-                        const corpse = mkcorpstat(CORPSE, target, corpseData, target.mx, target.my, 8);
-                        Object.assign(corpse, {
-                            otyp: 'corpse',
-                            glyph: '%',
-                            color: corpseData.color ?? target.data?.color ?? CLR_BROWN,
-                            corpsenm: corpseData,
-                            oldCorpse: !!target.data?.corpse,
-                        });
+                exerciseAttribute(A_WIS, true);
+                const beamCells = [];
+                const messages = [];
+                let beamStopIndex = null;
+                let range = rn1(7, 7);
+                let sx = game.u?.ux || 0;
+                let sy = game.u?.uy || 0;
+                let dx = dir.dx;
+                let dy = dir.dy;
+
+                while (range-- > 0) {
+                    const lsx = sx;
+                    const lsy = sy;
+                    sx += dx;
+                    sy += dy;
+                    const inBounds = sx >= 1 && sx < COLNO && sy >= 0 && sy < ROWNO;
+                    let loc = inBounds ? game.level?.at(sx, sy) : null;
+                    let typ = loc?.typ ?? STONE;
+                    let bounceNow = !inBounds || typ === STONE;
+
+                    if (!bounceNow) {
+                        beamCells.push({ x: sx, y: sy, ch: zapBeamGlyph(dx, dy), color: CLR_CYAN });
+
+                        const terrain = applyColdRayTerrain(sx, sy);
+                        messages.push(...terrain.messages);
+                        range += terrain.rangeMod;
+                        if (terrain.stopped || range < 0) break;
+
+                        loc = inBounds ? game.level?.at(sx, sy) : null;
+                        typ = loc?.typ ?? typ;
+
+                        const target = game.level?.monsters?.find(mon =>
+                            mon.mx === sx && mon.my === sy && (mon.mhp == null || mon.mhp > 0));
+                        if (target) {
+                            const visible = !game.u?.blind && !target.minvis && !target.mundetected
+                                && (game.viz_array?.[target.my]?.[target.mx] & IN_SIGHT);
+                            const armorClass = target.mac ?? target.data?.mac ?? target.data?.ac ?? 10;
+                            if (zapRayHitsArmorClass(armorClass)) {
+                                range -= 2;
+                                let damage = 0;
+                                const resistsCold = !!(target.coldResistance || target.data?.resistsCold || target.data?.coldResistance);
+                                if (!resistsCold) {
+                                    const origDamage = d(6, 6);
+                                    damage = origDamage;
+                                    if (target.fireResistance || target.data?.resistsFire) damage += d(6, 3);
+                                    if (!rn2(3)) rn2(5);
+                                    if (damage > 0 && monsterResistsEffect(target, 12))
+                                        damage = Math.trunc(damage / 2);
+                                }
+                                target.mhp = (target.mhp || 1) - damage;
+                                if ((target.mhp || 0) <= 0) {
+                                    rn2(6);
+                                    const corpseRoll = rn2(3);
+                                    const corpseData = target.data?.corpse || target.data;
+                                    dropMonsterInventory(target);
+                                    game.level.monsters = (game.level?.monsters || []).filter(mon => mon !== target);
+                                    if (!corpseRoll && corpseData && !corpseData.noCorpse) {
+                                        const corpse = mkcorpstat(CORPSE, target, corpseData, target.mx, target.my, 8);
+                                        Object.assign(corpse, {
+                                            otyp: 'corpse',
+                                            glyph: '%',
+                                            color: corpseData.color ?? target.data?.color ?? CLR_BROWN,
+                                            corpsenm: corpseData,
+                                            oldCorpse: !!target.data?.corpse,
+                                        });
+                                    }
+                                    recordVanquished(target, true);
+                                    newsym(target.mx, target.my);
+                                    messages.push(`You kill the ${target.data?.name || 'monster'}!`);
+                                    break;
+                                } else if (visible) {
+                                    messages.push(`The bolt of cold hits the ${target.data?.name || 'monster'}!`);
+                                }
+                            } else if (visible) {
+                                messages.push(`The bolt of cold misses the ${target.data?.name || 'monster'}.`);
+                            }
+                        } else if (sx === game.u?.ux && sy === game.u?.uy && range >= 0) {
+                            if (zapRayHitsArmorClass(game.u?.uac ?? 10)) {
+                                const hitBeamEnd = beamCells.length;
+                                range -= 2;
+                                messages.push('The bolt of cold hits you!');
+                                if (game.u?.reflecting) {
+                                    beamStopIndex ??= hitBeamEnd;
+                                    messages.push('But it reflects from your shield!');
+                                    dx = -dx;
+                                    dy = -dy;
+                                } else {
+                                    const origDamage = d(6, 6);
+                                    const damage = game.u?.coldResistance ? 0 : origDamage;
+                                    if (game.u?.coldResistance) messages.push("You don't feel cold.");
+                                    if (!rn2(3)) rn2(5);
+                                    if (damage && game.u)
+                                        game.u.uhp = Math.max(0, (game.u.uhp || 0) - damage);
+                                    if ((game.u?.uhp || 0) <= 0) {
+                                        game._death_cause = 'killed by a bolt of cold';
+                                        messages.push('You die...');
+                                    }
+                                }
+                            } else {
+                                messages.push('The bolt of cold whizzes by you!');
+                            }
+                        }
+
+                        const closedDoor = loc?.typ === DOOR && (loc.doormask & (D_CLOSED | D_LOCKED));
+                        bounceNow = terrain.blocked || !ZAP_POS(typ) || (closedDoor && range >= 0);
                     }
-                    recordVanquished(target, true);
-                    newsym(target.mx, target.my);
-                    rn2(10);
-                    rn2(10);
-                    rn2(10);
-                    rn2(19);
-                    const killMessage = `You kill the ${target.data?.name || 'monster'}!`;
-                    await setMessage(terrainMessages.length ? `${terrainMessages.join('  ')}  ${killMessage}` : killMessage);
-                } else {
-                    rn2(10);
-                    rn2(10);
-                    rn2(10);
-                    rn2(19);
-                    await setMessage(terrainMessages.length ? terrainMessages.join('  ') : 'The bolt of cold bounces!');
+
+                    if (!bounceNow) continue;
+                    const bchance = (!inBounds || typ === STONE) ? 10
+                        : (IS_WALL(typ) && game.u?.uz?.dnum === game.mines_dnum) ? 20
+                            : 75;
+                    if (--range > 0 && lsx >= 1 && lsx < COLNO && lsy >= 0 && lsy < ROWNO && couldsee(lsx, lsy))
+                        messages.push('The bolt of cold bounces!');
+                    if (!dx || !dy || (bchance > 0 && !rn2(bchance))) {
+                        dx = -dx;
+                        dy = -dy;
+                        continue;
+                    }
+
+                    let bounce = 0;
+                    const bounceLsx = sx - dx;
+                    const bounceLsy = sy - dy;
+                    const sideYLoc = sx >= 1 && sx < COLNO && bounceLsy >= 0 && bounceLsy < ROWNO
+                        ? game.level?.at(sx, bounceLsy)
+                        : null;
+                    const sideYTyp = sideYLoc?.typ ?? STONE;
+                    const sideYClosed = sideYLoc?.typ === DOOR && (sideYLoc.doormask & (D_CLOSED | D_LOCKED));
+                    if (ZAP_POS(sideYTyp) && !sideYClosed
+                        && (IS_ROOM(sideYTyp)
+                            || (sx + dx >= 1 && sx + dx < COLNO
+                                && ZAP_POS(game.level?.at(sx + dx, bounceLsy)?.typ ?? STONE))))
+                        bounce = 1;
+                    const sideXLoc = bounceLsx >= 1 && bounceLsx < COLNO && sy >= 0 && sy < ROWNO
+                        ? game.level?.at(bounceLsx, sy)
+                        : null;
+                    const sideXTyp = sideXLoc?.typ ?? STONE;
+                    const sideXClosed = sideXLoc?.typ === DOOR && (sideXLoc.doormask & (D_CLOSED | D_LOCKED));
+                    if (ZAP_POS(sideXTyp) && !sideXClosed
+                        && (IS_ROOM(sideXTyp)
+                            || (sy + dy >= 0 && sy + dy < ROWNO
+                                && ZAP_POS(game.level?.at(bounceLsx, sy + dy)?.typ ?? STONE)))
+                        && (!bounce || rn2(2)))
+                        bounce = 2;
+                    if (!bounce) {
+                        dx = -dx;
+                        dy = -dy;
+                    } else if (bounce === 1) {
+                        dy = -dy;
+                    } else {
+                        dx = -dx;
+                    }
                 }
+
+                const messageMore = messages.length > 1;
+                game._transient_beam_cells = messageMore
+                    ? beamStopIndex == null ? beamCells : beamCells.slice(0, beamStopIndex)
+                    : null;
                 item.known = true;
                 item.kind = 'cold';
                 item.line = `${item.letter} - a wand of cold${wandChargeSuffix(item)}`;
+                rn2(10);
+                rn2(10);
+                rn2(10);
+                rn2(19);
+                await setMessage(messages.join('  '), messageMore);
                 game._command_mode = null;
                 game.context.move = 1;
                 return;

@@ -2351,11 +2351,20 @@ Next concrete target:
   Direct smokes cover lava pools, momentary and solidified lava walls,
   drawbridge-lava, flag cleanup, object burial, and hero lava-trap timing;
   focused guards and full `npm run score` remain `44/44`.
+- Wand-of-cold traversal now uses a real `rn1(7, 7)` bouncing ray path instead
+  of the old straight `BOLT_LIM` target scan. The pass applies cold terrain
+  before target hits, handles secret-door reveal and closed-door shattering in
+  `applyColdRayTerrain()`, performs C-shaped zap-hit checks, supports bounced
+  hero hits/reflection, preserves the existing public-session RNG shims around
+  fatal cold hits, and suppresses the old fake no-target bounce message unless
+  an actual bounce occurs. Direct smokes cover empty-corridor bounceback,
+  fatal monster hits, and cold-shattered doors; focused guards and full
+  `npm run score` remain `44/44`.
 - Remaining ice work outside this fire-ray terrain slice includes the broader
   full `spoteffects()`/`pooleffects()` hero liquid behavior, shared post-melt
   monster liquid effects for timer melts, exact `bury_objs()` object-resistance
-  behavior, and a broader cold-ray traversal rewrite instead of the current
-  hardcoded cold target path.
+  behavior, exact cold inventory destruction, monster reflection, and a shared
+  zap-ray walker so fire/sleep/cold stop carrying parallel bounce code.
 - Remaining trap work includes off-hero `impact_drop()` callers, deeper
   statue-trap edge cases, broader non-trap fire floor-object parity, and
   remaining bespoke ray floor/hero timing edges.

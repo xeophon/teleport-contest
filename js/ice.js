@@ -1,9 +1,10 @@
 import { game } from './gstate.js';
 import {
     BEAR_TRAP, BLCORNER, BRCORNER, COLNO, CROSSWALL, DB_FLOOR, DB_ICE,
-    DB_LAVA, DB_MOAT, DB_UNDER, DBWALL, DOOR, DRAWBRIDGE_DOWN,
+    DB_LAVA, DB_MOAT, DB_UNDER, DBWALL, DOOR, DRAWBRIDGE_DOWN, D_CLOSED,
+    D_LOCKED, D_NODOOR,
     DRAWBRIDGE_UP, HWALL, ICED_MOAT, ICED_POOL, ICE, IN_SIGHT, IRONBARS,
-    IS_DOOR, IS_WALL, IS_POOL, Is_waterlevel, isok, LANDMINE, LAVAPOOL,
+    IS_DOOR, IS_WALL, IS_POOL, Is_rogue_level, Is_waterlevel, isok, LANDMINE, LAVAPOOL,
     LAVAWALL, MAGIC_PORTAL, MOAT, POOL, ROOM, ROWNO, SDOOR, STONE, TDWALL,
     TLCORNER, TLWALL, TRCORNER, TRWALL, TT_INFLOOR, TT_LAVA, TUWALL,
     VIBRATING_SQUARE, VWALL, WATER,
@@ -26,6 +27,9 @@ const LAVA_SOLIDIFIES_MESSAGE = 'The lava cools and solidifies.';
 const LAVA_FREEZES_MOMENT_MESSAGE = 'The lava freezes for a moment.';
 const SOFT_CRACKLING_MESSAGE = 'You hear a soft crackling.';
 const CRACKLING_SOUND_MESSAGE = 'You hear a crackling sound.';
+const SECRET_DOOR_REVEAL_MESSAGE = 'Your bolt reveals a secret door.';
+const DEEP_CRACKING_SOUND_MESSAGE = 'You hear a deep cracking sound.';
+const DOOR_FREEZES_SHATTERS_MESSAGE = 'The door freezes and shatters!';
 const ROT_ICE_ADJUSTMENT = 2;
 const MIN_ICE_TIME = 50;
 const MAX_ICE_TIME = 2000;
@@ -420,6 +424,28 @@ export function applyColdRayTerrain(x, y) {
         const meltTime = spotMeltIceTimeLeft(x, y);
         if (meltTime) startMeltIceTimeout(x, y, meltTime);
         return { handled: true, messages: [], rangeMod: 0, stopped: false };
+    }
+
+    if (loc.typ === SDOOR || (loc.typ === DOOR && (loc.doormask & (D_CLOSED | D_LOCKED)))) {
+        const messages = [];
+        const visible = visibleAt(x, y);
+        if (loc.typ === SDOOR) {
+            loc.typ = DOOR;
+            const mask = loc.doormask || 0;
+            loc.doormask = Is_rogue_level(game.u?.uz)
+                ? D_NODOOR
+                : (mask & D_LOCKED) ? mask : (mask | D_CLOSED);
+            newsym(x, y);
+            if (visible) messages.push(SECRET_DOOR_REVEAL_MESSAGE);
+        }
+        if (loc.typ === DOOR && (loc.doormask & (D_CLOSED | D_LOCKED))) {
+            loc.doormask = D_NODOOR;
+            newsym(x, y);
+            if (visible) messages.push(DOOR_FREEZES_SHATTERS_MESSAGE);
+            else if (!heroDeaf()) messages.push(DEEP_CRACKING_SOUND_MESSAGE);
+            return { handled: true, messages, rangeMod: -1000, stopped: true };
+        }
+        if (messages.length) return { handled: true, messages, rangeMod: 0, stopped: false };
     }
 
     if (!(lava || loc.typ === POOL || loc.typ === MOAT
