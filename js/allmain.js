@@ -3,7 +3,7 @@
 
 import { game } from './gstate.js';
 import { mklev, l_nhcore_init, u_on_upstairs, makemon, mkcorpstat, mksobj, wipe_engr_at, dropMonsterInventory, wandIndexForRoll, scrollIndexForRoll, potionIndexForRoll, RANDOM_MONSTER_BY_NAME, adjustedMonsterLevel, monsterByRndName, monster_hp, rndmonnum, syncDungeonContext, next_ident, set_malign, enextoMonsterSpot, getbogusmon, pickNasty, chameleonAnimalForm, doppelgangerHumanoidForm, noteleportLevelForMonster, rlocNoMsg, rlocToCoreNoMsg, somexyspace, fumaroles, movebubbles } from './mklev.js';
-import { rhack, pickupObjectName, inventoryItemName, inventoryLetterRank, recordVanquished, finishForceLock, loseExperienceLevel, finishLevelTeleport, finishPickDigDownwardHole, finishPickDigDownwardPit, maybeQueueQuestLeaderTalk, monsterGrowUp, processSpellbookStudyOccupation, processTinOpeningOccupation, finishTinOpeningOccupation, refreshSwallowOverlay, travelPathKeys, updateGauntletsOfPowerStrength, consumeLifeSavingAmulet, activateStatueTrap, breakStatueObject, burnFloorObjectsByFire, burnRayFloorObjectsByFire, erodeArmorByFireTrap, dryWetTowelFromFire, igniteMonsterFireInventoryItems, monsterFireInventoryDamage } from './cmd.js';
+import { rhack, pickupObjectName, inventoryItemName, inventoryLetterRank, recordVanquished, finishForceLock, loseExperienceLevel, finishLevelTeleport, finishPickDigDownwardHole, finishPickDigDownwardPit, maybeQueueQuestLeaderTalk, monsterGrowUp, processSpellbookStudyOccupation, processTinOpeningOccupation, finishTinOpeningOccupation, refreshSwallowOverlay, travelPathKeys, updateGauntletsOfPowerStrength, consumeLifeSavingAmulet, activateStatueTrap, breakStatueObject, burnFloorObjectsByFire, burnRayFloorObjectsByFire, erodeArmorByFireTrap, dryWetTowelFromFire, igniteMonsterFireInventoryItems, monsterFireInventoryDamage, landMonsterThrownObject } from './cmd.js';
 import { docrt, cls, bot, flush_screen, pline, newsym, refreshHallucinatedMap, show_glyph_cell } from './display.js';
 import { vision_recalc, vision_reset, init_vision_globals, cansee, couldsee, view_from } from './vision.js';
 import { init_objects } from './o_init.js';
@@ -1930,6 +1930,28 @@ function addToplineMessage(msg) {
         game._topline_after_more_fumble_message_roll = 0;
     }
     return false;
+}
+
+function appendAfterMoreMessage(msg) {
+    if (!msg) return;
+    if (!game._topline_after_more) {
+        game._topline_after_more = msg;
+        return;
+    }
+    const width = game.nhDisplay?.cols || 80;
+    if (game._topline_after_more.length + msg.length + 3 < width - 8) {
+        game._topline_after_more = `${game._topline_after_more}  ${msg}`;
+    } else {
+        game._queued_messages_after_more ??= [];
+        game._queued_messages_after_more.push({ text: msg, more: true });
+    }
+}
+
+function addMonsterThrownFloorMessages(messages, afterMore = false) {
+    for (const msg of messages || []) {
+        if (afterMore) appendAfterMoreMessage(msg);
+        else addToplineMessage(msg);
+    }
 }
 
 function maybeBlockInvulnerableAttack(mon) {
@@ -5207,16 +5229,13 @@ async function processMonsterTurns() {
 					                                    game._exercise_after_topline_more = (game._exercise_after_topline_more || 0) + 1;
 					                                }
 					                                rn2(5);
-					                                game.level.objects.push({
-					                                    ...missile,
-					                                    ox: game.u?.ux || 0,
-					                                    oy: game.u?.uy || 0,
-					                                    quan: 1,
+					                                const floorMessages = [];
+					                                landMonsterThrownObject(missile, game.u?.ux || 0, game.u?.uy || 0, {
 					                                    glyph: missile.glyph || '*',
 					                                    color: missile.color ?? NO_COLOR,
-					                                    petFetchable: true,
+					                                    messages: floorMessages,
 					                                });
-					                                newsym(game.u?.ux || 0, game.u?.uy || 0);
+					                                addMonsterThrownFloorMessages(floorMessages, throwerVisible && !deferPrayerProjectile);
 					                            }
 					                            game._search_pending_count = 0;
 					                            game._run_steps_remaining = 0;
@@ -5489,16 +5508,13 @@ async function processMonsterTurns() {
                                 game._exercise_after_topline_more = (game._exercise_after_topline_more || 0) + 1;
                             }
                             rn2(5);
-                            game.level.objects.push({
-                                ...missile,
-                                ox: game.u?.ux || 0,
-                                oy: game.u?.uy || 0,
-                                quan: 1,
+                            const floorMessages = [];
+                            landMonsterThrownObject(missile, game.u?.ux || 0, game.u?.uy || 0, {
                                 glyph: ')',
                                 color: CLR_CYAN,
-                                petFetchable: true,
+                                messages: floorMessages,
                             });
-                            newsym(game.u?.ux || 0, game.u?.uy || 0);
+                            addMonsterThrownFloorMessages(floorMessages, throwerVisible);
                         }
                         game._search_pending_count = 0;
                         game._run_steps_remaining = 0;
@@ -5639,31 +5655,29 @@ async function processMonsterTurns() {
                                 game._monster_throw_after_more = {
                                     missile,
                                     hitPet,
+                                    x: hitPet ? hitPet.mx : game.u?.ux || 0,
+                                    y: hitPet ? hitPet.my : game.u?.uy || 0,
+                                    glyph: ')',
+                                    color: hitPet ? NO_COLOR : CLR_CYAN,
                                 };
                                 game._clear_transient_projectiles_after_more = 1;
                                 newsym(flightX, flightY);
                             } else if (hitPet) {
-                                game.level.objects.push({
-                                    ...missile,
-                                    ox: hitPet.mx,
-                                    oy: hitPet.my,
-                                    quan: 1,
+                                const floorMessages = [];
+                                landMonsterThrownObject(missile, hitPet.mx, hitPet.my, {
                                     glyph: ')',
                                     color: NO_COLOR,
-                                    petFetchable: true,
+                                    messages: floorMessages,
                                 });
-                                newsym(hitPet.mx, hitPet.my);
+                                addMonsterThrownFloorMessages(floorMessages);
                             } else {
-                                game.level.objects.push({
-                                    ...missile,
-                                    ox: game.u?.ux || 0,
-                                    oy: game.u?.uy || 0,
-                                    quan: 1,
+                                const floorMessages = [];
+                                landMonsterThrownObject(missile, game.u?.ux || 0, game.u?.uy || 0, {
                                     glyph: ')',
                                     color: CLR_CYAN,
-                                    petFetchable: true,
+                                    messages: floorMessages,
                                 });
-                                newsym(game.u?.ux || 0, game.u?.uy || 0);
+                                addMonsterThrownFloorMessages(floorMessages);
                             }
                             game._search_pending_count = 0;
                             game._counted_repeat_interruptible = 0;
@@ -5697,16 +5711,13 @@ async function processMonsterTurns() {
                             } else {
                                 addToplineMessage('A dart misses you.');
                                 rn2(5);
-                                game.level.objects.push({
-                                    ...mon.missile,
-                                    ox: game.u?.ux || 0,
-                                    oy: game.u?.uy || 0,
-                                    quan: 1,
+                                const floorMessages = [];
+                                landMonsterThrownObject(mon.missile, game.u?.ux || 0, game.u?.uy || 0, {
                                     glyph: ')',
                                     color: CLR_CYAN,
-                                    petFetchable: true,
+                                    messages: floorMessages,
                                 });
-                                newsym(game.u?.ux || 0, game.u?.uy || 0);
+                                addMonsterThrownFloorMessages(floorMessages);
                             }
                             game._search_pending_count = 0;
                             game._run_steps_remaining = 0;

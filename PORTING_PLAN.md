@@ -2581,8 +2581,19 @@ Next concrete target:
   line while preventing the later hot-ground branch. Direct smokes cover
   ordinary monster drop placement, lava destruction, and visible monster-moving
   altar BUC feedback. Remaining caller-specific monster object paths include
-  unwielded weapon `"drop"`, meatbox `""`, monstone, thrown missiles, and the
-  full shop billing matrix.
+  unwielded weapon `"drop"`, meatbox `""`, monstone, full `drop_throw()` break/
+  ship/passive/mulch parity for thrown missiles, and the full shop billing
+  matrix.
+- Monster-thrown persistent projectile landings now go through a shared
+  `landMonsterThrownObject()` helper before floor placement. Rocks, plain
+  daggers, invisible crude-dagger landings, visible deferred crude-dagger
+  landings, and missed darts now call the same `earthFloorEffects(...,"fall")`
+  path with monster-moving context, stack survivors on matching floor objects,
+  preserve existing hit/catch/deferred message ordering, and surface floor
+  feedback through the active topline/after-more flow. Direct smokes cover
+  ordinary landing, same-square stacking, lava consumption, and context
+  restoration; full score remains exact. Launcher arrows and thrown potion
+  transients remain separate pending `drop_throw()`/breakage slices.
 - Remaining ice work outside this fire-ray terrain slice includes the broader
   full `spoteffects()`/`pooleffects()` hero liquid behavior, deeper
   `minliquid()` edges (life-saving or shape-shift survivor relocation,

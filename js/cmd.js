@@ -13199,6 +13199,98 @@ function dropMonsterInventory(mon, messages = null, { verb = 'fall' } = {}) {
     });
 }
 
+function sameMonsterThrownStackObject(existing, obj) {
+    if (!existing || !obj || existing === obj) return false;
+    if (existing.hidden || existing.buried || existing.transientProjectile) return false;
+    if (existing.ox !== obj.ox || existing.oy !== obj.oy) return false;
+    return existing.otyp === obj.otyp
+        && existing.cls === obj.cls
+        && existing.kind === obj.kind
+        && existing.actualKind === obj.actualKind
+        && existing.glyph === obj.glyph
+        && existing.color === obj.color
+        && (existing.spe || 0) === (obj.spe || 0)
+        && !!existing.blessed === !!obj.blessed
+        && !!existing.cursed === !!obj.cursed
+        && !!existing.opoisoned === !!obj.opoisoned
+        && (existing.oeroded || 0) === (obj.oeroded || 0)
+        && (existing.oeroded2 || 0) === (obj.oeroded2 || 0)
+        && existing.gemDescription === obj.gemDescription
+        && existing.scrollIndex === obj.scrollIndex
+        && existing.potionIndex === obj.potionIndex
+        && existing.spellbookIndex === obj.spellbookIndex;
+}
+
+function stackMonsterThrownObject(obj) {
+    const stack = (game.level?.objects || []).find(existing => sameMonsterThrownStackObject(existing, obj));
+    if (!stack) return obj;
+    stack.quan = (stack.quan || 1) + (obj.quan || 1);
+    return stack;
+}
+
+function monsterThrownFloorEffects(obj, x, y, messages, verb) {
+    const previousMonsterMoving = game._monster_moving;
+    game._monster_moving = 1;
+    try {
+        return earthFloorEffects(obj, x, y, messages, verb);
+    } finally {
+        if (previousMonsterMoving === undefined) delete game._monster_moving;
+        else game._monster_moving = previousMonsterMoving;
+    }
+}
+
+export function landMonsterThrownObject(missile, x, y, {
+    glyph = missile?.glyph || ')',
+    color = missile?.color ?? CLR_CYAN,
+    petFetchable = true,
+    messages = null,
+    verb = 'fall',
+    quan = 1,
+} = {}) {
+    if (!missile || !game.level) return { consumed: false, object: null, messages: [] };
+    game.level.objects ??= [];
+    const floorMessages = Array.isArray(messages) ? messages : [];
+    const landing = {
+        ...missile,
+        ox: x,
+        oy: y,
+        quan: Math.max(1, quan || 1),
+        glyph,
+        color,
+        petFetchable,
+        hidden: false,
+        buried: false,
+        transientProjectile: false,
+    };
+    delete landing.line;
+    const consumed = monsterThrownFloorEffects(landing, x, y, floorMessages, verb);
+    if (consumed) {
+        newsym(x, y);
+        return { consumed: true, object: null, messages: floorMessages };
+    }
+    const stacked = stackMonsterThrownObject(landing);
+    if (stacked === landing) game.level.objects.push(landing);
+    newsym(x, y);
+    return { consumed: false, object: stacked, messages: floorMessages };
+}
+
+function appendToplineAfterMoreMessages(messages) {
+    for (const msg of messages || []) {
+        if (!msg) continue;
+        if (!game._topline_after_more) {
+            game._topline_after_more = msg;
+            continue;
+        }
+        const width = game.nhDisplay?.cols || 80;
+        if (game._topline_after_more.length + msg.length + 3 < width - 8) {
+            game._topline_after_more = `${game._topline_after_more}  ${msg}`;
+        } else {
+            game._queued_messages_after_more ??= [];
+            game._queued_messages_after_more.push({ text: msg, more: true });
+        }
+    }
+}
+
 function earthTargetIsSolid(target) {
     const data = target?.data || target || {};
     return !(target?.passWalls || target?.noncorporeal || target?.unsolid
@@ -22487,29 +22579,15 @@ export async function rhack(_cmd) {
 	                if (game._monster_throw_after_more) {
                     const thrown = game._monster_throw_after_more;
                     game._monster_throw_after_more = null;
-                    if (thrown.hitPet) {
-                        game.level?.objects?.push({
-                            ...thrown.missile,
-                            ox: thrown.hitPet.mx,
-                            oy: thrown.hitPet.my,
-                            quan: 1,
-                            glyph: ')',
-                            color: NO_COLOR,
-                            petFetchable: true,
-                        });
-                        newsym(thrown.hitPet.mx, thrown.hitPet.my);
-                    } else {
-                        game.level?.objects?.push({
-                            ...thrown.missile,
-                            ox: game.u?.ux || 0,
-                            oy: game.u?.uy || 0,
-                            quan: 1,
-                            glyph: ')',
-                            color: CLR_CYAN,
-                            petFetchable: true,
-                        });
-                        newsym(game.u?.ux || 0, game.u?.uy || 0);
-                    }
+                    const landingX = thrown.x ?? (thrown.hitPet ? thrown.hitPet.mx : game.u?.ux || 0);
+                    const landingY = thrown.y ?? (thrown.hitPet ? thrown.hitPet.my : game.u?.uy || 0);
+                    const floorMessages = [];
+                    landMonsterThrownObject(thrown.missile, landingX, landingY, {
+                        glyph: thrown.glyph || ')',
+                        color: thrown.color ?? (thrown.hitPet ? NO_COLOR : CLR_CYAN),
+                        messages: floorMessages,
+                    });
+                    appendToplineAfterMoreMessages(floorMessages);
                 }
                         if (game._cold_effect_after_topline_more) {
                             const cold = game._cold_effect_after_topline_more;
