@@ -2221,9 +2221,17 @@ Next concrete target:
   monster-triggered burns report smoke. Focused fire/trap guards pass `8/8`,
   a direct floor-burn smoke passes, and full
   `SESSION_REPLAY_TIMEOUT_MS=60000 bash frozen/score.sh` remains `44/44`.
+- Fire trap `burnarmor()` now routes hero and monster worn armor through shared
+  C-shaped fire erosion: wet towels dry before the armor slot roll,
+  nonflammable armor is skipped, unknown fireproof armor becomes known without
+  damage, blessed armor can resist via `rnl(4)`, primary `oeroded` caps at
+  `MAX_ERODE`, and trap armor damage updates worn AC immediately while the
+  existing fire-ray `--More--` timing stays deferred. Focused direct helper
+  smoke passes, `seed5002-wizard-coverage-pair` still matches, and full
+  `npm run score` remains `44/44`.
 - Remaining trap work includes off-hero `impact_drop()` callers, deeper
-  statue-trap edge cases, deeper fire trap `burnarmor()` material/proof
-  parity, and broader non-trap fire floor-object parity.
+  statue-trap edge cases, broader non-trap fire floor-object parity, and
+  non-trap fire armor/breath parity.
 - `seed4500-knight-coverage` is closed again and should remain a guard for
   punished teleport landing object-list timing, Vlad tower generation, observed
   discovery accounting, Sokoban random-object display, and late enlightenment

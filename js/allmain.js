@@ -3,7 +3,7 @@
 
 import { game } from './gstate.js';
 import { mklev, l_nhcore_init, u_on_upstairs, makemon, mkcorpstat, mksobj, wipe_engr_at, dropMonsterInventory, wandIndexForRoll, scrollIndexForRoll, potionIndexForRoll, RANDOM_MONSTER_BY_NAME, adjustedMonsterLevel, monsterByRndName, monster_hp, rndmonnum, syncDungeonContext, next_ident, set_malign, enextoMonsterSpot, getbogusmon, pickNasty, chameleonAnimalForm, doppelgangerHumanoidForm, noteleportLevelForMonster, rlocNoMsg, rlocToCoreNoMsg, somexyspace, fumaroles, movebubbles } from './mklev.js';
-import { rhack, pickupObjectName, inventoryItemName, inventoryLetterRank, recordVanquished, finishForceLock, loseExperienceLevel, finishLevelTeleport, finishPickDigDownwardHole, finishPickDigDownwardPit, maybeQueueQuestLeaderTalk, monsterGrowUp, processSpellbookStudyOccupation, processTinOpeningOccupation, finishTinOpeningOccupation, refreshSwallowOverlay, travelPathKeys, updateGauntletsOfPowerStrength, consumeLifeSavingAmulet, activateStatueTrap, breakStatueObject, burnFloorObjectsByFire } from './cmd.js';
+import { rhack, pickupObjectName, inventoryItemName, inventoryLetterRank, recordVanquished, finishForceLock, loseExperienceLevel, finishLevelTeleport, finishPickDigDownwardHole, finishPickDigDownwardPit, maybeQueueQuestLeaderTalk, monsterGrowUp, processSpellbookStudyOccupation, processTinOpeningOccupation, finishTinOpeningOccupation, refreshSwallowOverlay, travelPathKeys, updateGauntletsOfPowerStrength, consumeLifeSavingAmulet, activateStatueTrap, breakStatueObject, burnFloorObjectsByFire, erodeArmorByFireTrap, dryWetTowelFromFire } from './cmd.js';
 import { docrt, cls, bot, flush_screen, pline, newsym, refreshHallucinatedMap, show_glyph_cell } from './display.js';
 import { vision_recalc, vision_reset, init_vision_globals, cansee, couldsee, view_from } from './vision.js';
 import { init_objects } from './o_init.js';
@@ -7092,7 +7092,12 @@ function monsterTrapHarmless(mon, trap) {
     return ttyp === STATUE_TRAP || ttyp === MAGIC_TRAP || ttyp === VIBRATING_SQUARE;
 }
 
-function monsterFireTrapArmorSlot(mon, slot) {
+function monsterPossessiveName(mon) {
+    const name = monsterDisplayName(mon).replace(/^The /, 'the ');
+    return name.endsWith('s') ? `${name}'` : `${name}'s`;
+}
+
+function monsterFireTrapArmorSlot(mon, slot, messages, visible, ownerPrefix) {
     const inventory = mon.minvent || [];
     const matches = {
         helm: item => /helm|helmet|hat|pot/.test(String(item.kind || item.actualKind || '').toLowerCase()),
@@ -7105,41 +7110,38 @@ function monsterFireTrapArmorSlot(mon, slot) {
     }[slot];
     const item = inventory.find(candidate => candidate.cls === 'armor'
         && (candidate.worn || candidate.owornmask) && matches?.(candidate));
-    if (!item || item.oerodeproof) return false;
-    const kind = String(item.kind || item.actualKind || '').toLowerCase();
-    const burnable = /leather|cloth|cloak|robe|shirt|glove|boot|shoe|wood|shield|wrapping|smock/.test(kind);
-    if (!burnable) return false;
-    item.oeroded = Math.min(3, (item.oeroded || 0) + 1);
-    return true;
+    if (!item) return false;
+    return erodeArmorByFireTrap(item, { messages, ownerPrefix, visible });
 }
 
-function monsterBurnArmor(mon) {
-    const towel = (mon.minvent || []).find(item => String(item.kind || '').toLowerCase() === 'towel' && (item.spe || 0) > 0);
-    if (towel) towel.spe = Math.max(0, (towel.spe || 0) - rn2((towel.spe || 0) + 1));
+function monsterBurnArmor(mon, visible = false) {
+    const messages = [];
+    const ownerPrefix = monsterPossessiveName(mon);
+    dryWetTowelFromFire(mon.minvent || [], { messages, ownerPrefix, visible });
 
     for (;;) {
         switch (rn2(5)) {
         case 0:
-            if (!monsterFireTrapArmorSlot(mon, 'helm')) continue;
+            if (!monsterFireTrapArmorSlot(mon, 'helm', messages, visible, ownerPrefix)) continue;
             break;
         case 1:
-            monsterFireTrapArmorSlot(mon, 'cloak')
-                || monsterFireTrapArmorSlot(mon, 'body')
-                || monsterFireTrapArmorSlot(mon, 'shirt');
-            return true;
+            monsterFireTrapArmorSlot(mon, 'cloak', messages, visible, ownerPrefix)
+                || monsterFireTrapArmorSlot(mon, 'body', messages, visible, ownerPrefix)
+                || monsterFireTrapArmorSlot(mon, 'shirt', messages, visible, ownerPrefix);
+            return { bodyHit: true, messages };
         case 2:
-            if (!monsterFireTrapArmorSlot(mon, 'shield')) continue;
+            if (!monsterFireTrapArmorSlot(mon, 'shield', messages, visible, ownerPrefix)) continue;
             break;
         case 3:
-            if (!monsterFireTrapArmorSlot(mon, 'gloves')) continue;
+            if (!monsterFireTrapArmorSlot(mon, 'gloves', messages, visible, ownerPrefix)) continue;
             break;
         case 4:
-            if (!monsterFireTrapArmorSlot(mon, 'boots')) continue;
+            if (!monsterFireTrapArmorSlot(mon, 'boots', messages, visible, ownerPrefix)) continue;
             break;
         }
         break;
     }
-    return false;
+    return { bodyHit: false, messages };
 }
 
 function monsterFireDestroyableItem(item) {
@@ -7216,7 +7218,9 @@ function monsterFireTrapEffect(mon, trap) {
         mon.mhp = Math.min(mon.mhp || 1, mon.mhpmax);
     }
 
-    if (monsterBurnArmor(mon) || rn2(3)) {
+    const armorFire = monsterBurnArmor(mon, visibleMonster);
+    for (const message of armorFire.messages) addToplineMessage(message);
+    if (armorFire.bodyHit || rn2(3)) {
         const extraDamage = monsterDestroyItemsByFire(mon, origDamage);
         mon.mhp = (mon.mhp || 1) - extraDamage;
         if ((mon.mhp || 0) <= 0) {

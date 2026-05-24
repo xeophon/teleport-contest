@@ -6826,7 +6826,96 @@ function wornArmorFireSlot(item) {
     return 1;
 }
 
-function burnWornArmorFromFire() {
+function fireTrapOwnerSubject(ownerPrefix) {
+    const owner = String(ownerPrefix || 'your');
+    return owner === 'your' ? 'Your' : sentenceCase(owner);
+}
+
+function fireTrapArmorName(item) {
+    const kind = armorKind(item);
+    switch (armorSlot(item)) {
+    case 'cloak':
+        if (kind.includes('robe')) return 'robe';
+        if (kind.includes('wrapping')) return 'wrapping';
+        if (kind.includes('smock')) return 'smock';
+        if (kind.includes('apron')) return 'apron';
+        return 'cloak';
+    case 'shirt':
+        return 'shirt';
+    default:
+        return armorMessageName(item);
+    }
+}
+
+export function erodeArmorByFireTrap(item, {
+    messages = null,
+    ownerPrefix = 'your',
+    displayName = '',
+    updateHeroInventory = false,
+    visible = true,
+} = {}) {
+    if (!item) return false;
+    const profile = wishedDamageProfile(item);
+    if (!profile.erosionMatters || profile.primaryWord !== 'burnt') return false;
+
+    const name = displayName || fireTrapArmorName(item);
+    if (item.oerodeproof) {
+        if (!item.rknown && visible && messages && game.flags?.verbose !== false) {
+            messages.push(`Somehow, ${ownerPrefix} ${name} ${fireInventoryNameVerb(name, 'is', 'are')} not affected by the heat.`);
+        }
+        item.rknown = true;
+        if (updateHeroInventory) updateArmorLine(item);
+        return false;
+    }
+    if (item.blessed && !rnl(4)) return false;
+
+    const current = Math.min(3, item.oeroded || 0);
+    if (current >= 3) return false;
+
+    const oldAc = updateHeroInventory && isWornArmorItem(item) ? wornArmorAcValueGreatestErosion(item) : null;
+    item.oeroded = current + 1;
+    if (updateHeroInventory) {
+        if (oldAc != null) updateWornArmorAcAfterChange(item, oldAc);
+        else updateArmorLine(item);
+    }
+
+    if (visible && messages) {
+        const adverb = item.oeroded === 3 ? ' completely' : current ? ' further' : '';
+        messages.push(`${fireTrapOwnerSubject(ownerPrefix)} ${name} ${fireInventoryNameVerb(name, 'smoulders', 'smoulder')}${adverb}!`);
+    }
+    return true;
+}
+
+function towelWetness(item) {
+    return Math.max(0, item?.spe || item?.wetness || 0);
+}
+
+export function dryWetTowelFromFire(items, {
+    messages = null,
+    ownerPrefix = 'your',
+    updateInventory = false,
+    visible = true,
+} = {}) {
+    for (const item of items || []) {
+        if (objectKindKey(item) !== 'towel') continue;
+        const oldWetness = towelWetness(item);
+        if (oldWetness <= 0) continue;
+        const newWetness = rn2(oldWetness + 1);
+        if (item.spe != null || !('wetness' in item)) item.spe = newWetness;
+        if (item.wetness != null) item.wetness = newWetness;
+        if (updateInventory) item.line = normalInventoryLine({ ...item, line: '' });
+        if (newWetness >= oldWetness) continue;
+        if (visible && messages) {
+            messages.push(`${fireTrapOwnerSubject(ownerPrefix)} towel dries${newWetness ? '' : ' out'}.`);
+        }
+        return true;
+    }
+    return false;
+}
+
+function burnWornArmorFromFire({ updateHeroInventory = true } = {}) {
+    const messages = [];
+    dryWetTowelFromFire(game.inventory || [], { messages, updateInventory: updateHeroInventory });
     const wornArmor = (game.inventory || []).filter(item =>
         item.cls === 'armor' && (item.worn || item.line?.includes('being worn')));
     for (;;) {
@@ -6836,25 +6925,20 @@ function burnWornArmorFromFire() {
             item = wornArmor.find(armor => /cloak|robe|wrapping|smock|apron/i.test(inventoryItemName(armor)))
                 || wornArmor.find(armor => wornArmorFireSlot(armor) === slot);
         if (slot === 1) {
-            if (!item) return { bodyHit: true, message: '' };
-            const itemName = inventoryItemName(item);
-            let name = pickupObjectName(item);
-            if (/robe/i.test(itemName)) name = 'robe';
-            else if (/wrapping/i.test(itemName)) name = 'wrapping';
-            else if (/smock/i.test(itemName)) name = 'smock';
-            else if (/apron/i.test(itemName)) name = 'apron';
-            else if (/cloak/i.test(itemName)) name = 'cloak';
-            item.oeroded = (item.oeroded || 0) + 1;
-            item.bknown = true;
-            item.line = normalInventoryLine({ ...item, line: '' });
-            return { bodyHit: true, message: `Your ${name} smoulders${item.oeroded > 1 ? ' further' : ''}!` };
+            if (item) erodeArmorByFireTrap(item, {
+                messages,
+                updateHeroInventory,
+                displayName: fireTrapArmorName(item),
+            });
+            return { bodyHit: true, message: messages.join('  ') };
         }
         if (!item) continue;
-        const name = pickupObjectName(item);
-        item.oeroded = (item.oeroded || 0) + 1;
-        item.bknown = true;
-        item.line = normalInventoryLine({ ...item, line: '' });
-        return { bodyHit: false, message: `Your ${name} smoulders${item.oeroded > 1 ? ' further' : ''}!` };
+        if (!erodeArmorByFireTrap(item, {
+            messages,
+            updateHeroInventory,
+            displayName: fireTrapArmorName(item),
+        })) continue;
+        return { bodyHit: false, message: messages.join('  ') };
     }
 }
 
@@ -6999,10 +7083,12 @@ export function burnFloorObjectsByFire(x, y, { giveFeedback = false } = {}) {
     return { count, messages };
 }
 
-function fireDamageInventory(origDamage, forceDestroyItems = false, rollIgniteItems = false) {
+function fireDamageInventory(origDamage, forceDestroyItems = false, rollIgniteItems = false, {
+    updateArmorInventory = true,
+} = {}) {
     const messages = [];
     const events = [];
-    const armor = burnWornArmorFromFire();
+    const armor = burnWornArmorFromFire({ updateHeroInventory: updateArmorInventory });
     if (armor.message) messages.push(armor.message);
     const joinState = { joinedArmorMessage: false };
     let destroyItems = false;
@@ -12431,6 +12517,29 @@ function applyWishedContainerState(item, qualifiers) {
     }
 }
 
+const FIRE_FLAMMABLE_ARMOR_KINDS = new Set([
+    'elven leather helm', 'fedora', 'cornuthaum', 'dunce cap',
+    'studded leather armor', 'leather armor', 'leather jacket',
+    'hawaiian shirt', 't-shirt',
+    'mummy wrapping', 'elven cloak', 'orcish cloak', 'dwarvish cloak', 'oilskin cloak',
+    'robe', 'alchemy smock', 'leather cloak', 'cloak of protection',
+    'cloak of invisibility', 'cloak of magic resistance', 'cloak of displacement',
+    'small shield', 'shield of drain resistance', 'shield of shock resistance', 'elven shield',
+    'leather gloves', 'gauntlets of fumbling', 'gauntlets of dexterity',
+    'low boots', 'high boots', 'speed boots', 'water walking boots', 'jumping boots',
+    'elven boots', 'fumble boots', 'levitation boots',
+]);
+
+const FIRE_NONFLAMMABLE_ARMOR_KINDS = new Set([
+    'orcish helm', 'dwarvish iron helm', 'dented pot', 'helm of brilliance',
+    'helmet', 'helm of caution', 'helm of opposite alignment', 'helm of telepathy',
+    'plate mail', 'crystal plate mail', 'bronze plate mail', 'splint mail',
+    'banded mail', 'dwarvish mithril-coat', 'elven mithril-coat', 'chain mail',
+    'orcish chain mail', 'scale mail', 'ring mail', 'orcish ring mail',
+    'uruk-hai shield', 'orcish shield', 'large shield', 'dwarvish roundshield',
+    'shield of reflection', 'gauntlets of power', 'iron shoes', 'kicking boots',
+]);
+
 function wishedDamageProfile(item) {
     const kind = objectKindKey(item);
     const cls = itemClassKey(item);
@@ -12444,11 +12553,13 @@ function wishedDamageProfile(item) {
     const excludedMetal = /\b(?:silver|gold|mithril|platinum|gem|stone|crystal ball|shield of reflection)\b/.test(kind);
     const glassArmor = armor && /\b(?:crystal plate mail|helm of brilliance|crystal helmet)\b/.test(kind);
     const dragonHide = armor && /\bdragon (?:scales|scale mail|hide)\b/.test(kind);
+    const flammableArmor = armor && FIRE_FLAMMABLE_ARMOR_KINDS.has(kind);
+    const nonflammableArmor = armor && FIRE_NONFLAMMABLE_ARMOR_KINDS.has(kind);
     const copperLike = /\b(?:copper|bronze)\b/.test(kind);
-    const ironLike = !excludedMetal && !glassArmor && !copperLike && !dragonHide && (ballOrChain || kind.includes('iron')
+    const ironLike = !flammableArmor && !excludedMetal && !glassArmor && !copperLike && !dragonHide && (ballOrChain || kind.includes('iron')
         || /\b(?:plate mail|splint mail|banded mail|ring mail|chain mail|scale mail|large shield|roundshield|gauntlets|helm|helmet|dented pot|shoes|sword|saber|dagger|knife|axe|mace|hammer|flail|morning star|pick-axe|mattock|spear|trident|lance|polearm|dart)\b/.test(kind));
-    const flammableLike = !glassArmor && !ironLike && !copperLike && !excludedMetal
-        && /\b(?:leather|cloth|cloak|robe|shirt|boots|gloves|wooden|small shield|bow|crossbow|arrow|club|quarterstaff|aklys|bullwhip|sling)\b/.test(kind);
+    const flammableLike = flammableArmor || (!nonflammableArmor && !glassArmor && !ironLike && !copperLike && !excludedMetal
+        && /\b(?:leather|cloth|cloak|robe|shirt|boots|gloves|wooden|small shield|bow|crossbow|arrow|club|quarterstaff|aklys|bullwhip|sling)\b/.test(kind));
     const rustprone = ironLike;
     const crackable = glassArmor;
     const corrodeable = ironLike || copperLike;
@@ -12499,7 +12610,10 @@ function applyWishedQualifiers(item, qualifiers) {
     }
     if (qualifiers.zombifying && (item.otyp === CORPSE || /\bcorpse$/.test(objectKindKey(item))))
         item.zombifying = true;
-    if (qualifiers.wetness && objectKindKey(item) === 'towel') item.wetness = qualifiers.wetness;
+    if (qualifiers.wetness && objectKindKey(item) === 'towel') {
+        item.wetness = qualifiers.wetness;
+        item.spe = qualifiers.wetness;
+    }
     applyWishedContainerState(item, qualifiers);
 }
 
@@ -24325,7 +24439,7 @@ export async function rhack(_cmd) {
                                     dy = -dy;
                                 } else {
                                     const origDamage = d(6, 6);
-                                    const fireInventory = fireDamageInventory(origDamage, false, true);
+                                    const fireInventory = fireDamageInventory(origDamage, false, true, { updateArmorInventory: false });
                                     if (game.u?.fireResistance) messages.push("You don't feel hot!");
                                     const baseDamage = game.u?.fireResistance ? 0 : origDamage;
                                     const damage = fireInventory.damage + baseDamage;
