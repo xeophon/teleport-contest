@@ -1579,6 +1579,32 @@ function teleportHeroSameLevel(x, y) {
     return `You materialize in ${x === oldX && y === oldY ? 'the same' : 'a different'} location!`;
 }
 
+function fixedTeleportTrapDestination(trap) {
+    const dst = trap?.teledest || (trap?.ttyp === TELEP_TRAP ? trap?.launch : null);
+    if (!dst) return null;
+    if (dst.x < 1 || dst.x >= COLNO || dst.y < 0 || dst.y >= ROWNO) return null;
+    return dst;
+}
+
+function teleportHeroToFixedTrapDestination(trap) {
+    const dst = fixedTeleportTrapDestination(trap);
+    if (!dst) return null;
+    const loc = game.level?.at(dst.x, dst.y);
+    if (!loc || !ACCESSIBLE(loc.typ)) return '';
+    const occupant = (game.level?.monsters || []).find(mon => mon.mx === dst.x && mon.my === dst.y);
+    if (occupant) {
+        const spot = enextoMonsterSpot(occupant.mx, occupant.my, occupant.data || {});
+        if (!spot) return '';
+        const oldX = occupant.mx;
+        const oldY = occupant.my;
+        occupant.mx = spot.x;
+        occupant.my = spot.y;
+        newsym(oldX, oldY);
+        newsym(spot.x, spot.y);
+    }
+    return teleportHeroSameLevel(dst.x, dst.y);
+}
+
 function applySameLevelTeleportNutritionPenalty() {
     if (!game.u) return;
     game.u.uhunger = (game.u.uhunger ?? 900) - 100;
@@ -14553,6 +14579,7 @@ function findHellTargetLevel() {
 
 function clampDungeonLevel(level) {
     if (!level) return null;
+    if ((level.dnum != null && level.dnum < 0) || (level.dlevel != null && level.dlevel < 0)) return null;
     const current = game.u?.uz || { dnum: 0, dlevel: 1 };
     const dnum = level.dnum ?? current.dnum;
     const dungeon = game.dungeons?.[dnum];
@@ -15266,10 +15293,13 @@ function sitFireTrapMessage(trap, prefix) {
 
 function sitTeleportTrapMessage(trap, prefix) {
     trap.tseen = true;
-    if (heroHasAntimagic() || In_endgame(game.u?.uz)) {
+    if (heroHasAntimagic() || In_endgame(game.u?.uz) || heroNoTeleportLevel()) {
         return `${prefix}  You feel a wrenching sensation.`;
     }
     if (trap.once) deleteTrap(trap);
+    const fixedTeleport = teleportHeroToFixedTrapDestination(trap);
+    if (fixedTeleport !== null)
+        return [prefix, fixedTeleport || 'You shudder for a moment.'].join('  ');
     const materialize = safeTeleportHeroSameLevel();
     return [prefix, materialize || 'You shudder for a moment.'].join('  ');
 }
@@ -17764,7 +17794,13 @@ async function moveHero(dx, dy) {
     if (steppedTrap?.ttyp === TELEP_TRAP) {
         game.u.ux0 = newx;
         game.u.uy0 = newy;
+        if (heroHasAntimagic() || In_endgame(game.u?.uz) || heroNoTeleportLevel()) {
+            steppedTrap.tseen = true;
+            await setMessage('You feel a wrenching sensation.');
+            return;
+        }
         let teleportedToVault = false;
+        let materializeMessage = 'You materialize in a different location!';
         if (steppedTrap.once) {
             game.level.traps = (game.level.traps || []).filter(trap => trap !== steppedTrap);
             const vaultRoom = (game.level?.rooms || []).find(room => room.rtype === VAULT);
@@ -17779,7 +17815,19 @@ async function moveHero(dx, dy) {
                 }
             }
         }
-        if (!teleportedToVault) u_on_rndspot(false);
+        if (!teleportedToVault) {
+            const fixedTeleport = teleportHeroToFixedTrapDestination(steppedTrap);
+            if (fixedTeleport === '') {
+                newsym(newx, newy);
+                await setMessage('You shudder for a moment.', true);
+                return;
+            }
+            if (fixedTeleport) {
+                materializeMessage = fixedTeleport;
+            } else {
+                u_on_rndspot(false);
+            }
+        }
         newsym(newx, newy);
         newsym(game.u.ux, game.u.uy);
         vision_recalc(0);
@@ -17817,7 +17865,7 @@ async function moveHero(dx, dy) {
             const total = game._goldCount === amount ? '' : ` (${game._goldCount} in total)`;
             game._topline_after_more = `$ - ${amount} gold piece${amount === 1 ? '' : 's'}${total}.`;
         }
-        await setMessage('You materialize in a different location!', true);
+        await setMessage(materializeMessage, true);
         return;
     }
     if (steppedTrap?.ttyp === RUST_TRAP) {

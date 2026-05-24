@@ -6770,7 +6770,22 @@ function rolling_boulder_launch_path_end(x, y, distance, dx, dy) {
     return { x: lx, y: ly };
 }
 
-function rolling_boulder_launch_coord(trap) {
+function rolling_boulder_explicit_launch_coord(trap, launchfrom) {
+    if (!launchfrom) return null;
+    const x = trap.tx + (launchfrom.x || 0);
+    const y = trap.ty + (launchfrom.y || 0);
+    const dx = x - trap.tx;
+    const dy = y - trap.ty;
+    if (dx === 0 && dy === 0) return null;
+    if (!isok(x, y)) return null;
+    if (dx !== 0 && dy !== 0 && Math.abs(dx) !== Math.abs(dy)) return null;
+    return { x, y };
+}
+
+function rolling_boulder_launch_coord(trap, launchfrom = null) {
+    if (game.level?.flags?.sokoban_rules) return null;
+    const explicit = rolling_boulder_explicit_launch_coord(trap, launchfrom);
+    if (explicit) return explicit;
     let distance = rn1(5, 4);
     let dir = rn2(8);
     let trycount = 0;
@@ -6907,13 +6922,21 @@ function normalizePitHoleTrapTerrain(x, y, typ) {
 }
 
 // C ref: trap.c maketrap
-async function maketrap(x, y, typ) {
+async function maketrap(x, y, typ, opts = {}) {
     if (typ === TRAPPED_DOOR || typ === TRAPPED_CHEST) return null;
     const existing = t_at(x, y);
     if (existing && undestroyable_trap(existing.ttyp)) return null;
     if (!existing && trapTerrainBlocked(x, y, typ)) return null;
     const trap = existing || { tx: x, ty: y };
-    Object.assign(trap, { ttyp: typ, tseen: unhideable_trap(typ), once: false, launch: { x: -1, y: -1 } });
+    Object.assign(trap, {
+        ttyp: typ,
+        tseen: unhideable_trap(typ),
+        once: false,
+        launch: { x: -1, y: -1 },
+        launch2: null,
+        teledest: null,
+        dst: { dnum: -1, dlevel: -1 },
+    });
     if (typ === SQKY_BOARD) trap.tnote = choose_trapnote(trap);
     if (typ === STATUE_TRAP) {
         const ptr = rndmonst_adj(3, 6);
@@ -6927,14 +6950,19 @@ async function maketrap(x, y, typ) {
         }
     }
     if (typ === ROLLING_BOULDER_TRAP) {
-        const launch = rolling_boulder_launch_coord(trap);
+        const launch = rolling_boulder_launch_coord(trap, opts.launchfrom);
         if (launch) {
             mksobj_at(BOULDER, launch.x, launch.y, true, false);
             trap.launch = launch;
             trap.launch2 = { x: x - (launch.x - x), y: y - (launch.y - y) };
         } else {
             trap.launch = { x, y };
+            trap.launch2 = { x, y };
         }
+    }
+    if (typ === TELEP_TRAP && opts.teledest && isok(opts.teledest.x, opts.teledest.y)) {
+        trap.teledest = { x: opts.teledest.x, y: opts.teledest.y };
+        trap.launch = { ...trap.teledest };
     }
     if (is_pit(typ)) trap.conjoined = 0;
     if (is_hole(typ)) {
@@ -6951,6 +6979,25 @@ async function maketrap(x, y, typ) {
     if (!existing) {
         if (!game.level.traps) game.level.traps = [];
         game.level.traps.push(trap);
+    }
+    return trap;
+}
+
+function sokobanTrapRecord(typ, x, y) {
+    const trap = {
+        ttyp: typ,
+        tx: x,
+        ty: y,
+        tseen: true,
+        once: false,
+        launch: { x: -1, y: -1 },
+        launch2: null,
+        teledest: null,
+        dst: { dnum: -1, dlevel: -1 },
+    };
+    if (typ === ROLLING_BOULDER_TRAP) {
+        trap.launch = { x, y };
+        trap.launch2 = { x, y };
     }
     return trap;
 }
@@ -12229,6 +12276,7 @@ function flipSpecialLevelRnd(xminArg = null, yminArg = null, xmaxArg = null, yma
     for (const trap of map.traps || []) {
         point(trap.launch, 'x', 'y');
         point(trap.launch2, 'x', 'y');
+        point(trap.teledest, 'x', 'y');
     }
     for (const door of map.doors || []) point(door, 'x', 'y');
     for (const engr of map.engravings || []) point(engr, 'x', 'y');
@@ -15453,7 +15501,7 @@ export async function make_sokoban1_level() {
     u_on_newpos(SOKO_XSTART + landing[0], SOKO_YSTART + landing[1]);
 
     for (const [typ, x, y] of traps) {
-        const trap = { ttyp: typ, tx: SOKO_XSTART + x, ty: SOKO_YSTART + y, tseen: true, once: false, launch: { x: 0, y: 0 } };
+        const trap = sokobanTrapRecord(typ, SOKO_XSTART + x, SOKO_YSTART + y);
         if (is_hole(typ)) {
             const uz = g.u?.uz ?? { dnum: 4, dlevel: 1 };
             const dungeon = g.dungeons?.[uz.dnum];
@@ -15694,7 +15742,7 @@ async function make_sokoban2_level() {
         boulder.color = NO_COLOR;
     }
     for (const [typ, x, y] of layout.traps) {
-        const trap = { ttyp: typ, tx: start.x + x, ty: start.y + y, tseen: true, once: false, launch: { x: 0, y: 0 } };
+        const trap = sokobanTrapRecord(typ, start.x + x, start.y + y);
         if (is_hole(typ)) {
             const uz = g.u?.uz ?? { dnum: 4, dlevel: 1 };
             const dungeon = g.dungeons?.[uz.dnum];
@@ -15782,7 +15830,7 @@ async function make_sokoban3_level() {
         boulder.color = NO_COLOR;
     }
     for (const [typ, x, y] of layout.traps) {
-        const trap = { ttyp: typ, tx: start.x + x, ty: start.y + y, tseen: true, once: false, launch: { x: 0, y: 0 } };
+        const trap = sokobanTrapRecord(typ, start.x + x, start.y + y);
         if (is_hole(typ)) {
             const uz = g.u?.uz ?? { dnum: 4, dlevel: 1 };
             const dungeon = g.dungeons?.[uz.dnum];
@@ -15862,7 +15910,7 @@ async function make_sokoban4_level() {
         boulder.color = NO_COLOR;
     }
     for (const [typ, x, y] of layout.traps) {
-        const trap = { ttyp: typ, tx: start.x + x, ty: start.y + y, tseen: true, once: false, launch: { x: 0, y: 0 } };
+        const trap = sokobanTrapRecord(typ, start.x + x, start.y + y);
         rnd(4);
         g.level.traps.push(trap);
     }
@@ -18674,11 +18722,10 @@ async function run_themeroom_postprocess() {
                 break;
             }
         }
-        const trap = await maketrap(entry.x, entry.y, TELEP_TRAP);
+        const trap = await maketrap(entry.x, entry.y, TELEP_TRAP, dst ? { teledest: dst } : {});
         if (trap) {
             rnd(4);
             trap.tseen = true;
-            if (dst) trap.dst = dst;
         }
     }
 }

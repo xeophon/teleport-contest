@@ -2095,6 +2095,20 @@ Next concrete target:
   execution, and Sokoban rolling-boulder fallback launch metadata. Keep
   `impact_drop()` separate from `maketrap()`, since C reaches it through
   digging/fall-through paths rather than trap creation.
+- The launch/teledest slice now follows the C trap metadata path more closely:
+  `maketrap()` initializes invalid launch/destination state, rolling-boulder
+  traps accept special-level `launchfrom` as a relative offset without spending
+  random launch RNG, failed launches keep both endpoints on the trap square,
+  Sokoban rolling-boulder traps keep their no-ammo fallback metadata, and
+  theme-room teleport hubs store fixed `teledest` coordinates. Hero TELEP_TRAP
+  execution now honors Antimagic/endgame/no-teleport wrenching before either
+  random or fixed teleporting, and fixed-destination traps displace an occupant
+  before moving the hero when possible. Focused guards `seed0014`, `seed0030`,
+  `seed0360`, `seed0367`, `seed0373`, `seed0383`, `seed4500`, and `seed5006`
+  all pass, and full `bash frozen/score.sh` remains `44/44`.
+- Remaining trap work includes monster TELEP_TRAP fixed-destination handling,
+  `impact_drop()` for actual fall/dig callers, statue-trap inventory transfer
+  edge cases, and deeper fire trap `burnarmor()`/floor-object burning parity.
 - `seed4500-knight-coverage` is closed again and should remain a guard for
   punished teleport landing object-list timing, Vlad tower generation, observed
   discovery accounting, Sokoban random-object display, and late enlightenment
