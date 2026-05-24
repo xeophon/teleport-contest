@@ -3,7 +3,7 @@
 
 import { game } from './gstate.js';
 import { mklev, l_nhcore_init, u_on_upstairs, makemon, mkcorpstat, mksobj, wipe_engr_at, dropMonsterInventory, wandIndexForRoll, scrollIndexForRoll, potionIndexForRoll, RANDOM_MONSTER_BY_NAME, adjustedMonsterLevel, monsterByRndName, monster_hp, rndmonnum, syncDungeonContext, next_ident, set_malign, enextoMonsterSpot, getbogusmon, pickNasty, chameleonAnimalForm, doppelgangerHumanoidForm, noteleportLevelForMonster, rlocNoMsg, rlocToCoreNoMsg, somexyspace, fumaroles, movebubbles } from './mklev.js';
-import { rhack, pickupObjectName, inventoryItemName, inventoryLetterRank, recordVanquished, finishForceLock, loseExperienceLevel, finishLevelTeleport, maybeQueueQuestLeaderTalk, monsterGrowUp, processSpellbookStudyOccupation, processTinOpeningOccupation, finishTinOpeningOccupation, refreshSwallowOverlay, travelPathKeys, updateGauntletsOfPowerStrength, consumeLifeSavingAmulet, activateStatueTrap } from './cmd.js';
+import { rhack, pickupObjectName, inventoryItemName, inventoryLetterRank, recordVanquished, finishForceLock, loseExperienceLevel, finishLevelTeleport, finishPickDigDownwardHole, finishPickDigDownwardPit, maybeQueueQuestLeaderTalk, monsterGrowUp, processSpellbookStudyOccupation, processTinOpeningOccupation, finishTinOpeningOccupation, refreshSwallowOverlay, travelPathKeys, updateGauntletsOfPowerStrength, consumeLifeSavingAmulet, activateStatueTrap } from './cmd.js';
 import { docrt, cls, bot, flush_screen, pline, newsym, refreshHallucinatedMap, show_glyph_cell } from './display.js';
 import { vision_recalc, vision_reset, init_vision_globals, cansee, couldsee, view_from } from './vision.js';
 import { init_objects } from './o_init.js';
@@ -2499,6 +2499,10 @@ function pickDigStatueTrapAt(x, y) {
         trap.tx === x && trap.ty === y && trap.ttyp === STATUE_TRAP) || null;
 }
 
+function pickDigTrapAt(x, y) {
+    return (game.level?.traps || []).find(trap => trap.tx === x && trap.ty === y) || null;
+}
+
 function pickDigItemWielded(item) {
     return !!(item && (item.wielded || item.line?.includes('weapon in') || item.line?.includes('(wielded)')));
 }
@@ -2547,8 +2551,32 @@ async function processPickDigOccupation() {
     const item = (game.inventory || []).find(invItem => invItem.letter === dig.itemLetter);
     const ux = game.u?.ux || 0;
     const uy = game.u?.uy || 0;
-    if (!pickDigItemWielded(item) || Math.max(Math.abs((dig.x || 0) - ux), Math.abs((dig.y || 0) - uy)) > 1) {
+    const outOfReach = dig.down
+        ? (dig.x || 0) !== ux || (dig.y || 0) !== uy
+        : Math.max(Math.abs((dig.x || 0) - ux), Math.abs((dig.y || 0) - uy)) > 1;
+    if (!pickDigItemWielded(item) || outOfReach) {
         game._pick_dig_occupation = null;
+        return;
+    }
+
+    dig.effort = (dig.effort || 0) + 10 + rn2(5) + pickDigAbilityBonus()
+        + (item?.spe || 0) - pickDigErosionPenalty(item) + (game.u?.udaminc || 0);
+    if ((game.urace?.noun || game._startup_race) === 'dwarf') dig.effort *= 2;
+
+    if (dig.down) {
+        const trap = pickDigTrapAt(dig.x, dig.y);
+        let result = null;
+        if (dig.effort > 250 || trap?.ttyp === HOLE) {
+            game._pick_dig_occupation = null;
+            result = await finishPickDigDownwardHole();
+        } else if (dig.effort > 50 && !(trap && (trap.ttyp === TRAPDOOR || trap.ttyp === PIT || trap.ttyp === SPIKED_PIT))) {
+            game._pick_dig_occupation = null;
+            result = await finishPickDigDownwardPit();
+        }
+        if (result?.message) {
+            addToplineMessage(result.message);
+            if (result.more) game._message_more = 1;
+        }
         return;
     }
 
@@ -2557,10 +2585,6 @@ async function processPickDigOccupation() {
         game._pick_dig_occupation = null;
         return;
     }
-
-    dig.effort = (dig.effort || 0) + 10 + rn2(5) + pickDigAbilityBonus()
-        + (item?.spe || 0) - pickDigErosionPenalty(item) + (game.u?.udaminc || 0);
-    if ((game.urace?.noun || game._startup_race) === 'dwarf') dig.effort *= 2;
 
     if (dig.effort > 100) {
         game._pick_dig_occupation = null;

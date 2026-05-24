@@ -3125,30 +3125,89 @@ function dugHoleFallTarget() {
     return clampDungeonLevel({ dnum: current.dnum, dlevel: current.dlevel + 1 });
 }
 
-async function zapDigDownwardResult() {
+function downwardDigTrapAt(x, y) {
+    return (game.level?.traps || []).find(trap => trap.tx === x && trap.ty === y) || null;
+}
+
+function removeDownwardDigTrap(trap) {
+    if (!trap || !game.level?.traps) return;
+    game.level.traps = game.level.traps.filter(candidate => candidate !== trap);
+}
+
+function downwardDigTooHardResult() {
+    return { message: 'The floor here is too hard to dig in.', more: false };
+}
+
+function downwardDigBoulderResult(x, y, trap) {
+    const boulder = (game.level?.objects || []).find(obj =>
+        !obj.hidden && !obj.transientProjectile && obj.ox === x && obj.oy === y && obj.otyp === BOULDER);
+    if (!boulder) return null;
+
+    game.level.objects = (game.level?.objects || []).filter(obj => obj !== boulder);
+    if (trap && (trap.ttyp === PIT || trap.ttyp === SPIKED_PIT) && rn2(2)) {
+        trap.ttyp = PIT;
+        trap.tseen = true;
+        newsym(x, y);
+        return { message: 'The boulder settles into the pit.', more: false };
+    }
+
+    removeDownwardDigTrap(trap);
+    newsym(x, y);
+    return { message: 'KADOOM!  The boulder falls in!', more: false };
+}
+
+async function digDownwardPitResult(options = {}) {
     const current = game.u?.uz || { dnum: 0, dlevel: 1 };
-    if (Is_airlevel(current) || Is_waterlevel(current)) return { message: '', more: false };
-    const stair = heroStairway();
-    if (stair) return { message: zapDigFallingRockMessage(stair), more: false };
+    if (Is_airlevel(current) || Is_waterlevel(current))
+        return { message: options.pick ? 'You swing your pick through thin air.' : '', more: false };
 
     const x = game.u?.ux || 0;
     const y = game.u?.uy || 0;
+    const trap = downwardDigTrapAt(x, y);
+    if (!canDigDownFromLevel(current) && trap) return downwardDigTooHardResult();
+    const boulderResult = downwardDigBoulderResult(x, y, trap);
+    if (boulderResult) return boulderResult;
+
+    const pit = await maketrap(x, y, PIT);
+    if (!pit) return { message: '', more: false };
+    pit.madeby_u = true;
+    pit.tseen = true;
+    if (game.u) {
+        if (!(game.u.levitating || game.u.flying)) {
+            game.u.utrap = rn1(4, 2);
+            game.u.utraptype = 'pit';
+        } else {
+            game.u.utrap = 0;
+            game.u.utraptype = null;
+        }
+    }
+    return { message: 'You dig a pit in the floor.', more: false };
+}
+
+async function digDownwardHoleResult(options = {}) {
+    const current = game.u?.uz || { dnum: 0, dlevel: 1 };
+    if (Is_airlevel(current) || Is_waterlevel(current))
+        return { message: options.pick ? 'You swing your pick through thin air.' : '', more: false };
+
+    const x = game.u?.ux || 0;
+    const y = game.u?.uy || 0;
+    const existingTrap = downwardDigTrapAt(x, y);
     if (!canDigDownFromLevel(current)) {
-        return { message: 'The floor here is too hard to dig in.', more: false };
+        if (existingTrap) return downwardDigTooHardResult();
+        return digDownwardPitResult(options);
     }
 
-    const boulder = (game.level?.objects || []).find(obj =>
-        !obj.hidden && !obj.transientProjectile && obj.ox === x && obj.oy === y && obj.otyp === BOULDER);
-    if (boulder) {
-        game.level.objects = (game.level?.objects || []).filter(obj => obj !== boulder);
-        newsym(x, y);
-        return { message: 'KADOOM!  The boulder falls in!', more: false };
-    }
+    const boulderResult = downwardDigBoulderResult(x, y, existingTrap);
+    if (boulderResult) return boulderResult;
 
     const trap = await maketrap(x, y, HOLE);
     if (!trap) return { message: '', more: false };
     trap.madeby_u = true;
     trap.tseen = true;
+    if (game.u) {
+        game.u.utrap = 0;
+        game.u.utraptype = null;
+    }
     const messages = ['You dig a hole through the floor.'];
     const target = dugHoleFallTarget();
     const noFall = game.u?.levitating || game.u?.flying || game.u?.ustuck || !target;
@@ -3169,6 +3228,22 @@ async function zapDigDownwardResult() {
         impactDroppedObjects: impact.objects,
     });
     return { message: trapMessage(...messages), more: true };
+}
+
+async function zapDigDownwardResult() {
+    const current = game.u?.uz || { dnum: 0, dlevel: 1 };
+    if (Is_airlevel(current) || Is_waterlevel(current)) return { message: '', more: false };
+    const stair = heroStairway();
+    if (stair) return { message: zapDigFallingRockMessage(stair), more: false };
+    return digDownwardHoleResult();
+}
+
+export async function finishPickDigDownwardPit() {
+    return digDownwardPitResult({ pick: true });
+}
+
+export async function finishPickDigDownwardHole() {
+    return digDownwardHoleResult({ pick: true });
 }
 
 export async function finishLevelTeleport(targetLevel, options = {}) {
@@ -27161,9 +27236,37 @@ export async function rhack(_cmd) {
             await setMessage('Never mind.');
             return;
         }
-        const dir = movementDirection(ch);
-        if (!dir || dir.dz) return;
+        const dir = figurineApplyDirection(ch);
+        if (!dir) return;
         if (!item || !isPickDigItem(item) || !itemIsWielded(item)) return;
+        if (dir.dz < 0) {
+            await setMessage(game.u?.levitating ? "You don't have enough leverage." : "You can't reach the ceiling.");
+            game.context.move = 1;
+            return;
+        }
+        if (dir.dz > 0) {
+            game._pick_dig_occupation = {
+                itemLetter: item.letter,
+                x: game.u?.ux || 0,
+                y: game.u?.uy || 0,
+                down: true,
+                effort: 0,
+            };
+            await setMessage('You start digging downward.');
+            game.context.move = 1;
+            game._process_time_with_more = 1;
+            return;
+        }
+        if (!dir.dx && !dir.dy) {
+            const damage = Math.max(1, rnd(2) + (item?.spe || 0));
+            if (game.u) {
+                game.u.uhp = Math.max(0, (game.u.uhp || 1) - damage);
+                if ((game.u.uhp || 0) <= 0) game._death_cause = `hit ${game.flags?.female ? 'herself' : 'himself'} with a pick-axe`;
+            }
+            await setMessage(`You hit yourself with ${pickupObjectName(item)}.`);
+            game.context.move = 1;
+            return;
+        }
 
         const x = (game.u?.ux || 0) + dir.dx;
         const y = (game.u?.uy || 0) + dir.dy;
