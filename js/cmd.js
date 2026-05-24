@@ -12681,6 +12681,56 @@ function applyBoulderLavaSplashToHero(messages) {
     return true;
 }
 
+function boulderFillMonsterAt(x, y) {
+    return (game.level?.monsters || []).find(mon =>
+        mon.mx === x && mon.my === y && !mon.dead && (mon.mhp == null || mon.mhp > 0));
+}
+
+function boulderFillMonsterInAir(mon) {
+    const data = mon?.data || {};
+    return !!(mon?.inAir || mon?.flyer || mon?.floater
+        || data.inAir || data.flyer || data.floater
+        || ((mon?.mundetected || mon?.uundetected) && (data.clinger || data.ceilingHider)
+            && !Is_airlevel(game.u?.uz)));
+}
+
+function maybeCreateBoulderFillCorpse(mon) {
+    const data = mon?.data || {};
+    const corpseData = data.corpse || data;
+    if (!corpseData || corpseData.noCorpse) return;
+    const guaranteedCorpse = data.big || data.bigmonst || data.golem || data.mplayer
+        || data.rider || data.shopkeeper || data.name === 'lizard';
+    const corpseChance = 2 + ((data.genoFreq ?? 1) < 2 ? 1 : 0) + (data.verysmall ? 1 : 0);
+    if (!guaranteedCorpse && rn2(corpseChance)) return;
+    const corpse = mkcorpstat(CORPSE, mon, corpseData, mon.mx, mon.my, 8);
+    Object.assign(corpse, {
+        otyp: 'corpse',
+        glyph: '%',
+        color: corpseData.color ?? data.color ?? corpse.color ?? CLR_BROWN,
+        corpsenm: corpseData,
+        oldCorpse: !!data.corpse,
+    });
+}
+
+function killBoulderFillMonster(x, y) {
+    const mon = boulderFillMonsterAt(x, y);
+    if (!mon || boulderFillMonsterInAir(mon)) return false;
+    dropMonsterInventory(mon);
+    maybeCreateBoulderFillCorpse(mon);
+    recordVanquished(mon, false);
+    const loc = game.level?.at(x, y);
+    if (loc?.map_invisible) {
+        loc.map_invisible = false;
+        loc.remembered_glyph = null;
+    }
+    game.level.monsters = (game.level?.monsters || []).filter(other => other !== mon);
+    mon.mhp = 0;
+    mon.movement = 0;
+    mon.dead = true;
+    newsym(x, y);
+    return true;
+}
+
 function earthFloorEffects(obj, x, y, messages) {
     const loc = game.level?.at(x, y);
     if (!loc || obj?.otyp !== BOULDER) return false;
@@ -12692,6 +12742,7 @@ function earthFloorEffects(obj, x, y, messages) {
     let buriedDebt = '';
     if (fillsUp) {
         loc.typ = ROOM;
+        killBoulderFillMonster(x, y);
         buriedDebt = buriedMerchandiseDebtMessage(x, y, obj);
         messages.push(...buryObjectsAt(x, y, { ignore: obj }));
         if (buriedDebt) messages.push(buriedDebt);

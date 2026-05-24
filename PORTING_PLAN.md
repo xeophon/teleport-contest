@@ -2508,6 +2508,14 @@ Next concrete target:
   suppresses the visible `It sinks without a trace!` line like C's `else if`
   ordering. Direct smokes cover ordinary, fire-resistant, lethal, slimed, and
   underwater dry-land cases; focused drum/liquid/world-tour guards remain exact.
+- Boulder liquid fills now also handle the C `mondied()` side effect for a
+  live monster standing on the filled square: after terrain conversion and
+  before burial, grounded monsters drop inventory, may leave a corpse, are
+  removed without combat XP or an extra death message, and then the existing
+  burial pass hides those drops. Airborne/floating monsters remain on the
+  newly-filled square. Direct scroll-of-earth smokes cover grounded kill/drop
+  burial, guaranteed lizard corpse burial, zero XP, no added death message, and
+  airborne survival; focused replay guards remain exact.
 - Remaining ice work outside this fire-ray terrain slice includes the broader
   full `spoteffects()`/`pooleffects()` hero liquid behavior, deeper
   `minliquid()` edges (life-saving or shape-shift survivor relocation,
