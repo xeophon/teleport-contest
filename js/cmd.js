@@ -2926,6 +2926,160 @@ function removeCarriedPunishmentObjects(objects) {
     }
 }
 
+function impactDropGateText(trap) {
+    if (!trap?.tseen || (trap.ttyp !== HOLE && trap.ttyp !== TRAPDOOR))
+        return '';
+    return trap.ttyp === TRAPDOOR ? 'through the trap door' : 'through the hole';
+}
+
+function impactDropLevelKey(level) {
+    return level ? `${level.dnum}:${level.dlevel}` : '';
+}
+
+function queueImpactDroppedObjects(targetLevel, objects) {
+    if (!targetLevel || !objects?.length) return;
+    game._impact_drop_migrations ??= new Map();
+    const key = impactDropLevelKey(targetLevel);
+    const queued = game._impact_drop_migrations.get(key) || [];
+    queued.push(...objects);
+    game._impact_drop_migrations.set(key, queued);
+}
+
+function impactDropRandomLandingSpot() {
+    const candidates = [];
+    for (let x = 1; x < COLNO; x++)
+        for (let y = 0; y < ROWNO; y++) {
+            const loc = game.level?.at(x, y);
+            if (!loc || !ACCESSIBLE(loc.typ)) continue;
+            candidates.push({ x, y });
+        }
+    return candidates.length ? candidates[rn2(candidates.length)]
+        : { x: game.u?.ux || 0, y: game.u?.uy || 0 };
+}
+
+function deliverQueuedImpactDroppedObjects(targetLevel) {
+    const key = impactDropLevelKey(targetLevel);
+    const queued = game._impact_drop_migrations?.get?.(key) || [];
+    if (!queued.length || !game.level) return;
+    game._impact_drop_migrations.delete(key);
+    game.level.objects ??= [];
+    for (const obj of queued) {
+        const spot = impactDropRandomLandingSpot();
+        obj.ox = spot.x;
+        obj.oy = spot.y;
+        obj.hidden = false;
+        obj.transientProjectile = false;
+        game.level.objects.push(obj);
+        newsym(spot.x, spot.y);
+    }
+}
+
+function impactDropFloorObjects(x, y, trap, options = {}) {
+    const gateText = impactDropGateText(trap);
+    if (!gateText || !game.level?.objects?.length) return { message: '', objects: [] };
+    if (!options.withHero && !options.targetLevel) return { message: '', objects: [] };
+    const pile = (game.level.objects || []).filter(obj =>
+        !obj.hidden && !obj.transientProjectile && obj.ox === x && obj.oy === y);
+    if (!pile.length) return { message: '', objects: [] };
+
+    let objectCount = 0;
+    let fallenCount = 0;
+    const fallen = [];
+    for (const obj of pile) {
+        const quantity = obj.quan || 1;
+        objectCount += quantity;
+        if (obj === game.u?.uball || obj === game.u?.uchain) continue;
+        if (rn2(obj.otyp === BOULDER ? 30 : 3)) continue;
+        fallen.push(obj);
+        fallenCount += quantity;
+    }
+    if (!fallen.length) return { message: '', objects: [] };
+
+    game.level.objects = (game.level.objects || []).filter(obj => !fallen.includes(obj));
+    newsym(x, y);
+
+    let message = '';
+    if (!game.u?.blind && couldsee(x, y)) {
+        const what = fallenCount === 1 ? 'object falls' : 'objects fall';
+        if (fallenCount === objectCount)
+            message = `${fallenCount === 1 ? 'The' : 'All the'} adjacent ${what} ${gateText}.`;
+        else
+            message = `${fallenCount === 1 ? 'One of the' : 'Some of the'} adjacent ${fallenCount === 1 ? 'objects falls' : what} ${gateText}.`;
+    }
+    if (!options.withHero) {
+        queueImpactDroppedObjects(options.targetLevel, fallen);
+        return { message, objects: [] };
+    }
+    return { message, objects: fallen };
+}
+
+function impactDropObjectClass(obj) {
+    return obj?.cls || (obj?.otyp === POTION_CLASS || obj?.glyph === '!' ? 'potion'
+        : obj?.otyp === SCROLL_CLASS || obj?.glyph === '?' ? 'scroll'
+            : obj?.glyph === '+' ? 'spellbook'
+                : obj?.glyph === '*' ? 'gem' : '');
+}
+
+function impactDropBreakKind(obj) {
+    const cls = impactDropObjectClass(obj);
+    const name = String(obj?.actualKind || obj?.kind || pickupObjectName(obj)).toLowerCase();
+    if (cls === 'potion') return 'shatter';
+    if (obj?.otyp === EGG || name === 'egg') return 'splat';
+    if (name.includes('melon')) return 'splat';
+    if (name.includes('cream pie')) return 'mess';
+    if (obj?.otyp === EXPENSIVE_CAMERA || obj?.otyp === MIRROR
+        || name.includes('mirror') || name.includes('looking glass')
+        || name.includes('crystal ball') || name.includes('lenses'))
+        return 'pieces';
+    if (cls !== 'gem' && /\bglass\b|\bcrystal\b/.test(name)) return 'shatter';
+    return '';
+}
+
+function impactDropObjectBreaks(obj) {
+    const kind = impactDropBreakKind(obj);
+    if (!kind) return '';
+    const ordinaryResistChance = 1;
+    const artifactResistChance = 99;
+    if (rn2(100) < (obj?.artifact ? artifactResistChance : ordinaryResistChance)) return '';
+    return kind;
+}
+
+function impactDropLandingIsSoft() {
+    const loc = game.level?.at(game.u?.ux || 0, game.u?.uy || 0);
+    if (!loc) return false;
+    return IS_POOL(loc.typ) || loc.typ === WATER || loc.typ === MOAT
+        || loc.typ === LAVAPOOL || loc.typ === LAVAWALL;
+}
+
+function deliverImpactDroppedObjects(objects) {
+    if (!objects?.length || !game.level || !game.u) return '';
+    const messages = [];
+    const hardLanding = !impactDropLandingIsSoft();
+    for (const obj of objects) {
+        obj.ox = game.u.ux || 0;
+        obj.oy = game.u.uy || 0;
+        obj.hidden = false;
+        obj.transientProjectile = false;
+        const breakKind = hardLanding ? impactDropObjectBreaks(obj) : '';
+        if (breakKind) {
+            if (breakKind === 'splat') messages.push('Splat!');
+            else if (breakKind === 'mess') messages.push('What a mess!');
+            else if (game.u.blind) messages.push('You hear something shatter!');
+            else {
+                const name = pickupObjectName({ ...obj, quan: obj.quan || 1 });
+                const many = (obj.quan || 1) > 1;
+                const subject = many ? `The ${name}` : (/^[aeiou]/i.test(name) ? `An ${name}` : `A ${name}`);
+                const verb = many ? 'shatter' : 'shatters';
+                messages.push(`${subject} ${verb}${breakKind === 'pieces' ? ' into a thousand pieces' : ''}!`);
+            }
+            continue;
+        }
+        game.level.objects.push(obj);
+    }
+    newsym(game.u.ux || 0, game.u.uy || 0);
+    return messages.join('  ');
+}
+
 export async function finishLevelTeleport(targetLevel, options = {}) {
     if (!targetLevel) return false;
     const preserveMovement = !!options.preserveMovement
@@ -3077,6 +3231,7 @@ export async function finishLevelTeleport(targetLevel, options = {}) {
     game._was_in_wizard_tower = false;
     for (const follower of carriedFollowers)
         placeFollowerAfterLevelChange(follower);
+    deliverQueuedImpactDroppedObjects(targetLevel);
     if (game.level?.flags?.fumaroles) fumaroles();
     if (Is_airlevel(game.u?.uz)) movebubbles();
     if (!savedTarget && !game._getbones_prompted) game._utrack = [];
@@ -3094,6 +3249,7 @@ export async function finishLevelTeleport(targetLevel, options = {}) {
         game._hallu_refresh_after_level_teleport_move = 1;
         game._skip_hallu_refresh_after_level_teleport_once = 1;
     }
+    const impactDropArrivalMessage = deliverImpactDroppedObjects(options.impactDroppedObjects || []);
     if (savedTarget && game.level?.flags?.sokoban_rules) {
         const boulders = new Set((game.level.objects || [])
             .filter(obj => obj.otyp === BOULDER)
@@ -3117,7 +3273,7 @@ export async function finishLevelTeleport(targetLevel, options = {}) {
                 if (game.u.uhp <= 0) game._death_cause = 'falling down a mine shaft';
             }
         }
-        const fallMessage = [options.preMessage, options.arrivalMessage, options.postMessage]
+        const fallMessage = [options.preMessage, options.arrivalMessage, impactDropArrivalMessage, options.postMessage]
             .filter(Boolean).join('  ');
         if (fallMessage) await setMessage(fallMessage, !!options.arrivalMore);
         else {
@@ -14841,11 +14997,15 @@ function sitFallThroughTrapResult(trap, prefix) {
     }
     if (!sokobanFall && (form.huge || form.msize === 'huge' || form.size === 'huge')) {
         messages.push("You don't fit through.");
+        const impact = impactDropFloorObjects(game.u?.ux || 0, game.u?.uy || 0, trap, { targetLevel: target });
+        if (impact.message) messages.push(impact.message);
         return { message: trapMessage(...messages), more: false };
     }
     if (!sokobanFall && (game.u?.levitating || game.u?.flying || game.u?.ustuck
         || form.clinger || (form.ceilingHider && game.u?.uundetected))) {
         messages.push("You don't fall in.");
+        const impact = impactDropFloorObjects(game.u?.ux || 0, game.u?.uy || 0, trap, { targetLevel: target });
+        if (impact.message) messages.push(impact.message);
         return { message: trapMessage(...messages), more: false };
     }
     const dist = Math.max(1, depth_of_level(target) - depth_of_level(current));
@@ -14853,10 +15013,13 @@ function sitFallThroughTrapResult(trap, prefix) {
         const depth = dist > 3 ? 'very deep ' : dist > 2 ? 'deep ' : '';
         messages.push(`You fall down a ${depth}shaft!`);
     }
+    const impact = impactDropFloorObjects(game.u?.ux || 0, game.u?.uy || 0, trap, { targetLevel: target, withHero: true });
+    if (impact.message) messages.push(impact.message);
     scheduleSitLevelChange(target, {
         falling: true,
         fallingDamage: !game.u?.flying,
         arrivalMessage: '',
+        impactDroppedObjects: impact.objects,
     });
     return { message: trapMessage(...messages), more: true };
 }

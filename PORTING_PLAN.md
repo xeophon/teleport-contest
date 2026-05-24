@@ -2176,7 +2176,17 @@ Next concrete target:
   Focused guards `seed0002`, `seed0004`, `seed0014`, `seed0105`, `seed0116`,
   `seed0361`, and `seed4500` pass, the wider 17-session statue/apply guard set
   passes, and full `bash frozen/score.sh` remains `44/44`.
-- Remaining trap work includes `impact_drop()` for actual fall/dig callers,
+- Hole/trapdoor fall-through now covers the scoped floor-object
+  `impact_drop()` behavior reached through C `fall_through()`: seen
+  holes/trapdoors roll once per floor stack, boulders use the 1-in-30 chance
+  while other stacks use 1-in-3, punishment ball/chain objects are skipped,
+  visible aggregate messages report objects falling through the hole/trapdoor,
+  no valid lower destination performs no drop, no-fall objects queue for their
+  lower level, and actual falling carries selected objects with the hero for
+  delivery after arrival. Fragile delivered objects can break only on hard
+  landings. Focused trap/statue guards pass `15/15`, and full
+  `SESSION_REPLAY_TIMEOUT_MS=60000 bash frozen/score.sh` remains `44/44`.
+- Remaining trap work includes dig-created/off-hero `impact_drop()` callers,
   deeper statue-trap inventory/normal-statue break fidelity, and deeper fire
   trap `burnarmor()`/floor-object burning parity.
 - `seed4500-knight-coverage` is closed again and should remain a guard for
