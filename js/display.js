@@ -475,9 +475,6 @@ function objectAt(x, y) {
     const objects = game.level?.objects || [];
     for (let i = objects.length - 1; i >= 0; i--) {
         const obj = objects[i];
-        if (obj._sokoRandom && game.level?.flags?.sokoban_rules
-            && Math.max(Math.abs((obj.ox ?? 0) - (game.u?.ux ?? 0)), Math.abs((obj.oy ?? 0) - (game.u?.uy ?? 0))) > (obj._sokoRandomRange ?? 3))
-            continue;
         if (!obj.hidden && obj.ox === x && obj.oy === y) return obj;
     }
     return null;
@@ -1078,6 +1075,29 @@ function drawGrid() {
     const d = display();
     if (!d) return;
     const hidePendingMessageOnce = !!game._hide_pending_message_once;
+    if (game._preserved_grid_snapshot && game._pending_message && game._message_more) {
+        const snapshot = game._preserved_grid_snapshot;
+        for (let row = 0; row < Math.min(d.rows, snapshot.length); row++)
+            for (let col = 0; col < Math.min(d.cols, snapshot[row]?.length || 0); col++) {
+                const cell = snapshot[row][col] || {};
+                d.setCell(col, row, cell.ch || ' ', cell.color ?? NO_COLOR, cell.attr || 0);
+            }
+        const more = '--More--';
+        const inlineMore = !game._message_more_line
+            && game._pending_message.length < d.cols - more.length;
+        writeText(0, 0, ' '.repeat(d.cols), NO_COLOR);
+        writeText(0, 0, game._pending_message, NO_COLOR);
+        if (inlineMore) {
+            writeText(0, game._pending_message.length, more, NO_COLOR);
+            setCursorAfter(0, game._pending_message.length, more);
+        } else {
+            writeText(1, 0, ' '.repeat(d.cols), NO_COLOR);
+            writeText(1, 0, `${game._message_more_line || ''}${more}`, NO_COLOR);
+            setCursorAfter(1, 0, `${game._message_more_line || ''}${more}`);
+        }
+        game._clear_preserved_grid_snapshot_after_capture = 1;
+        return;
+    }
     if (game._hallucinated_map_needs_actual_refresh
         && !(game.u?._statusSuffix || '').includes('Hallu')) {
         game._hallucinated_map_needs_actual_refresh = 0;

@@ -1970,6 +1970,19 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   remains `41/44`; the remaining failures are `seed0360-wizard-world-tour`
   (RNG `60574/120639`, screen `292/833`), `seed0373-barbarian-quest-tour`
   (screen `88/124`), and `seed0383-wizard-hallucinate` (screen `181/219`).
+- Bar-loca and the late Barbarian wizard-menu path now match C further: the
+  locate map flip uses the 76-column/20-row special-level extent, Sokoban
+  random objects are no longer hidden by a JS-only reveal radius, centered
+  Sokoban vertical placement uses the C maze max, the unreachable `dummy`
+  teleport-menu entry keeps C's selector padding, and the automatic Endgame
+  prerequisite message preserves the old map redraw while still generating the
+  Fire level in the same RNG slice. Focused `seed0373-barbarian-quest-tour`
+  remains core-RNG exact at `35386/35386` and advances from screen `88/124` to
+  `100/124` (cursors `114/124`). Full `bash frozen/score.sh` remains `41/44`;
+  remaining failures are `seed0360-wizard-world-tour` (RNG `60574/120639`,
+  screen `292/833`), `seed0373-barbarian-quest-tour` (first mismatch now the
+  Plane of Fire map at screen 100), and `seed0383-wizard-hallucinate` (screen
+  `181/219`).
 
 Next concrete target:
 

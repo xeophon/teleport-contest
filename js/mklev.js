@@ -7673,7 +7673,7 @@ async function make_bar_loca_level() {
     for (const [name, x, y] of BAR_LOCA_MONSTERS) await barLocaMonster(name, x, y);
 
     wallification(1, 0, COLNO - 1, ROWNO - 1);
-    flipSpecialLevelRnd(1, 0, COLNO - 1, ROWNO - 1, true);
+    flipSpecialLevelRnd(1, 0, COLNO - 2, BAR_YSTART + BAR_HEIGHT - 1, true);
     recount_level_features();
     level_finalize_topology({ mineralizeLevel: false, mineralizeKelp: true });
 }
@@ -15050,7 +15050,7 @@ export async function make_sokoban1_level() {
 
 function centeredSokobanStart(width, height) {
     let x = 2 + Math.trunc((78 - 2 - width) / 2);
-    let y = 2 + Math.trunc((21 - 2 - height) / 2);
+    let y = 2 + Math.trunc((20 - 2 - height) / 2);
     if (!(x % 2)) x++;
     if (!(y % 2)) y++;
     return { x, y };

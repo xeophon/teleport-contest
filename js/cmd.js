@@ -4776,7 +4776,7 @@ const LEVEL_TELEPORT_MENU_PAGE3_LINES = [
     [1, 1, 'L -   fire: -3'],
     [2, 1, 'M -   air: -2'],
     [3, 1, 'N -   earth: -1'],
-    [4, 1, 'dummy: 0'],
+    [4, 7, 'dummy: 0'],
     [5, 1, 'The Tutorial: levels 1 to 2', 1],
     [6, 1, 'P -   tut-1: 1'],
     [7, 1, 'Q -   tut-2: 2'],
@@ -14564,8 +14564,50 @@ function grantEndgamePrerequisiteIfNeeded(targetLevel) {
     return `Endgame prerequisite: ${letter} - the Amulet of Yendor.`;
 }
 
+async function captureCurrentGridSnapshot() {
+    const saved = {
+        pendingMessage: game._pending_message,
+        messageMore: game._message_more,
+        messageMoreLine: game._message_more_line,
+        keepPendingMessage: game._keep_pending_message,
+        overlayLines: game._overlay_lines,
+        overlayHideStatus: game._overlay_hide_status,
+        overlayHideStatusOnly: game._overlay_hide_status_only,
+        commandMode: game._command_mode,
+    };
+    game._pending_message = '';
+    game._message_more = 0;
+    game._message_more_line = '';
+    game._keep_pending_message = 0;
+    game._overlay_lines = null;
+    game._overlay_hide_status = 0;
+    game._overlay_hide_status_only = 0;
+    game._command_mode = null;
+    await flush_screen(1);
+    const term = game.nhDisplay?.terminal || game.nhDisplay;
+    const snapshot = term?.grid?.map(row => row.map(cell => ({
+        ch: cell.ch,
+        color: cell.color,
+        attr: cell.attr,
+    }))) || null;
+    Object.assign(game, {
+        _pending_message: saved.pendingMessage,
+        _message_more: saved.messageMore,
+        _message_more_line: saved.messageMoreLine,
+        _keep_pending_message: saved.keepPendingMessage,
+        _overlay_lines: saved.overlayLines,
+        _overlay_hide_status: saved.overlayHideStatus,
+        _overlay_hide_status_only: saved.overlayHideStatusOnly,
+        _command_mode: saved.commandMode,
+    });
+    return snapshot;
+}
+
 async function finishMenuLevelTeleport(targetLevel, options = {}) {
     const prerequisiteMessage = grantEndgamePrerequisiteIfNeeded(targetLevel);
+    const prerequisiteSnapshot = prerequisiteMessage
+        ? await captureCurrentGridSnapshot()
+        : null;
     const finalOptions = prerequisiteMessage
         ? { ...options, endgameLevelTeleport: true }
         : options;
@@ -14606,6 +14648,7 @@ async function finishMenuLevelTeleport(targetLevel, options = {}) {
             : insertAfter;
         game._queued_message_after_more = '';
         game._queued_message_more_after_more = '';
+        game._preserved_grid_snapshot = prerequisiteSnapshot;
         await setMessage(prerequisiteMessage, true);
     }
     return ok;
