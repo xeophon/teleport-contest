@@ -1994,6 +1994,18 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   to `42/44`; the remaining failures are `seed0360-wizard-world-tour` (RNG
   `60574/120639`, screen `307/833`) and `seed0383-wizard-hallucinate` (RNG
   exact, screen `181/219`).
+- Level-teleport random arrivals now pass C's `goto_level()` direction into
+  `u_on_rndspot()`: upward depth changes use the up teleport region instead of
+  always using the down region. Fire's default Lua `teleport_region` now fills
+  both `dndest` and `updest`, preserving the closed Barbarian Endgame path when
+  Fire is reached as an upward Endgame target. Focused
+  `seed0360-wizard-world-tour` advances to the Asmodeus terrain frontier
+  (visible `compare-one` mismatch at screen 307), focused
+  `seed0373-barbarian-quest-tour` remains exact, and focused
+  `seed0383-wizard-hallucinate` remains at the known hallucinated redraw
+  frontier. Full `bash frozen/score.sh` stays `42/44`; the remaining failures
+  are `seed0360-wizard-world-tour` (RNG `72924/120639`, screen `321/833`) and
+  `seed0383-wizard-hallucinate` (RNG exact, screen `181/219`).
 
 Next concrete target:
 

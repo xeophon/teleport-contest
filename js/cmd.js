@@ -2864,6 +2864,7 @@ export async function finishLevelTeleport(targetLevel, options = {}) {
     game._overlay_lines = null;
     game._overlay_hide_status = 0;
     const fromLevel = { dnum: game.u?.uz?.dnum ?? 0, dlevel: game.u?.uz?.dlevel ?? 1 };
+    const arrivingUp = depth_of_level(targetLevel) < depth_of_level(fromLevel);
     if (fromLevel.dnum === targetLevel.dnum && fromLevel.dlevel === targetLevel.dlevel) {
         if (options.postMessage) await setMessage(options.postMessage, !!options.arrivalMore);
         else {
@@ -2978,7 +2979,7 @@ export async function finishLevelTeleport(targetLevel, options = {}) {
             game.u.uy = 16;
             game.u._monsterMoveRollQueue = [2];
         } else {
-            u_on_rndspot(false);
+            u_on_rndspot(arrivingUp);
         }
     }
     if (ballAndChain.length && game.level) {

@@ -11274,6 +11274,7 @@ async function make_fire_level() {
     g.level.flags.temperature = 1;
     g.level.flags.fumaroles = true;
     g.level.dndest = { lx: fireX(71), ly: 16, hx: fireX(71), hy: 16, nlx: 0, nly: 0, nhx: 0, nhy: 0 };
+    g.level.updest = { ...g.level.dndest };
 
     l_nhcore_init();
     rn2(2); // fire.lua level_init random solidfill lit; des.map then overwrites with lit=false.
