@@ -1962,6 +1962,14 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   remaining failures are still `seed0360-wizard-world-tour`, screen-only
   `seed0373-barbarian-quest-tour`, and screen-only
   `seed0383-wizard-hallucinate`.
+- Bar-strt horizontal random flipping now uses the C `get_level_extends()`
+  left bound for the centered 76-column special map while preserving the
+  existing vertical extent. Focused `seed0373-barbarian-quest-tour` remains
+  core-RNG exact at `35386/35386` and advances from screen `81/124` to
+  `88/124` (cursors `114/124`). Full `node frozen/ps_test_runner.mjs sessions`
+  remains `41/44`; the remaining failures are `seed0360-wizard-world-tour`
+  (RNG `60574/120639`, screen `292/833`), `seed0373-barbarian-quest-tour`
+  (screen `88/124`), and `seed0383-wizard-hallucinate` (screen `181/219`).
 
 Next concrete target:
 

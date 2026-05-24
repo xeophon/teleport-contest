@@ -7806,7 +7806,7 @@ async function make_bar_strt_level() {
     }
 
     wallification(1, 0, COLNO - 1, BAR_YSTART + BAR_HEIGHT - 1);
-    flipSpecialLevelRnd(1, 0, COLNO - 1, BAR_YSTART + BAR_HEIGHT - 1, true);
+    flipSpecialLevelRnd(2, 0, COLNO - 1, BAR_YSTART + BAR_HEIGHT - 1, true);
     recount_level_features();
     rn2(1);
     rn2(1);
