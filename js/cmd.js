@@ -6941,6 +6941,64 @@ function igniteFireInventoryItems(messages, events, armor, joinState) {
         maybeIgniteFireItem(item, messages, events, armor, joinState);
 }
 
+function fireFloorItemMessage(item, destroyed) {
+    if (destroyed > 1) {
+        const name = pickupObjectName({ ...item, line: '', quan: Math.max(2, item.quan || destroyed) });
+        return `${destroyed} ${name} burn.`;
+    }
+    const name = pickupObjectName({ ...item, line: '', quan: 1 });
+    return `${sentenceCase(articleFor(name))} burns.`;
+}
+
+function maybeIgniteFloorFireItem(item, messages, giveFeedback) {
+    if (!fireItemCanCatchLight(item)) return false;
+    const kind = objectKindKey(item);
+    if ((item.otyp === OIL_LAMP || item.otyp === MAGIC_LAMP || kind === 'oil lamp' || kind === 'magic lamp')
+        && item.cursed && !rn2(2))
+        return false;
+    const name = pickupObjectName({ ...item, line: '' });
+    beginWishedBurn(item);
+    if (giveFeedback) {
+        const many = (item.quan || 1) > 1;
+        const subject = many ? `The ${name}` : sentenceCase(articleFor(name));
+        messages.push(`${subject} ${fireInventoryNameVerb(name, 'catches', 'catch')} light!`);
+    }
+    return true;
+}
+
+export function burnFloorObjectsByFire(x, y, { giveFeedback = false } = {}) {
+    if (!game.level) return { count: 0, messages: [] };
+    const messages = [];
+    let count = 0;
+    let changed = false;
+    const atSquare = obj => obj && !obj.transientProjectile && !obj.buried && obj.ox === x && obj.oy === y;
+
+    for (const obj of [...(game.level.objects || [])]) {
+        if (!atSquare(obj)) continue;
+        const cls = fireDestroyableInventoryClass(obj);
+        if (!['scroll', 'spellbook', 'slime'].includes(cls) || fireInventoryItemImmune(obj, cls))
+            continue;
+        const quan = Math.max(1, obj.quan || 1);
+        let destroyed = 0;
+        for (let i = 0; i < quan; i++)
+            if (!rn2(3)) destroyed++;
+        if (!destroyed) continue;
+        if (giveFeedback) messages.push(fireFloorItemMessage(obj, destroyed));
+        count += destroyed;
+        changed = true;
+        const remaining = quan - destroyed;
+        if (remaining > 0) obj.quan = remaining;
+        else game.level.objects = (game.level.objects || []).filter(item => item !== obj);
+    }
+
+    for (const obj of [...(game.level.objects || [])]) {
+        if (atSquare(obj) && maybeIgniteFloorFireItem(obj, messages, giveFeedback))
+            changed = true;
+    }
+    if (changed) newsym(x, y);
+    return { count, messages };
+}
+
 function fireDamageInventory(origDamage, forceDestroyItems = false, rollIgniteItems = false) {
     const messages = [];
     const events = [];
@@ -15856,6 +15914,9 @@ function heroFireTrapMessage(trap, prefix = '') {
     }
     const inventoryFire = fireDamageInventory(origDamage);
     messages.push(...inventoryFire.messages);
+    const floorFire = burnFloorObjectsByFire(game.u?.ux || 0, game.u?.uy || 0, { giveFeedback: !game.u?.blind });
+    messages.push(...floorFire.messages);
+    if (floorFire.count && game.u?.blind) messages.push('You smell paper burning.');
     damage += inventoryFire.damage;
     if (game.u) game.u.uhp = Math.max(0, (game.u.uhp || 1) - damage);
     if ((game.u?.uhp || 0) <= 0) game._death_cause = inventoryFire.deathCause || 'killed by a tower of flame';

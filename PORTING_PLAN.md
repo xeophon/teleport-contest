@@ -2212,9 +2212,18 @@ Next concrete target:
   remains the pre-break path. Focused statue/apply/wand guards pass `19/19`,
   a direct fracture smoke passes, and full
   `SESSION_REPLAY_TIMEOUT_MS=60000 bash frozen/score.sh` remains `44/44`.
+- Fire traps now run a shared C `burn_floor_objects()`-shaped floor-chain
+  pass after hero and monster inventory fire effects: floor scrolls,
+  spellbooks, and green slime globs burn per quantity on `!rn2(3)` while
+  scrolls of fire, spellbooks of fireball, and resistant objects are skipped;
+  surviving floor light sources can catch light; visible burns report object
+  messages, blind hero-triggered burns report paper smell, and unseen nearby
+  monster-triggered burns report smoke. Focused fire/trap guards pass `8/8`,
+  a direct floor-burn smoke passes, and full
+  `SESSION_REPLAY_TIMEOUT_MS=60000 bash frozen/score.sh` remains `44/44`.
 - Remaining trap work includes off-hero `impact_drop()` callers, deeper
-  statue-trap edge cases, and deeper fire trap `burnarmor()`/floor-object
-  burning parity.
+  statue-trap edge cases, deeper fire trap `burnarmor()` material/proof
+  parity, and broader non-trap fire floor-object parity.
 - `seed4500-knight-coverage` is closed again and should remain a guard for
   punished teleport landing object-list timing, Vlad tower generation, observed
   discovery accounting, Sokoban random-object display, and late enlightenment
