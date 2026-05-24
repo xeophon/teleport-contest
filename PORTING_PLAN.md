@@ -2462,14 +2462,24 @@ Next concrete target:
   instead of dry chasm fall damage. Direct smokes cover water drowning, swimmer
   survival, lava monster death, trap deletion, and buried-object unearthing;
   focused drum/liquid/world-tour guards remain exact.
+- Earthquake `liquid_flow()` floor-object damage now runs before hero/monster
+  liquid effects like C: lava fill uses a forced floor `fire_damage_chain()`
+  slice for ignition, scroll/book/potion destruction, Book of the Dead smoke,
+  and burn erosion; water/moat fill uses a floor `water_damage_chain()` slice
+  for lit-object snuffing, acid-potion explosions, scroll/book blanking,
+  potion dilution, towel wetting, grease, luck, Book steam, and rust erosion.
+  Direct smokes cover forced lava destruction, Book preservation, water acid
+  explosion, scroll blanking, lit snuffing, and rust; focused
+  drum/liquid/world-tour guards remain exact.
 - Remaining ice work outside this fire-ray terrain slice includes the broader
   full `spoteffects()`/`pooleffects()` hero liquid behavior, deeper
   `minliquid()` edges (life-saving or shape-shift survivor relocation,
   waterwall/steed details, exact water-damage message/material coverage), the
   remaining `bury_objs()` behavior (full `drag_ball()` parity after
   same-level teleports, shop billing, exact object-material table coverage),
-  remaining earthquake `liquid_flow()` side effects for exact floor-object
-  `water_damage_chain()`/`fire_damage_chain()` and full hero `pooleffects()`,
+  remaining earthquake `liquid_flow()` side effects for container recursion,
+  shop billing/object-cost details, exact floor material tables, and full hero
+  `pooleffects()`,
   and a shared zap-ray walker so fire/sleep/cold stop carrying parallel bounce
   code.
 - Remaining trap work includes off-hero `impact_drop()` callers, deeper
