@@ -7615,6 +7615,12 @@ function floorObjectSubject(obj) {
     return quan > 1 ? name : sentenceCase(articleFor(name));
 }
 
+function floorObjectArticleName(obj) {
+    const quan = Math.max(1, obj?.quan || 1);
+    const name = pickupObjectName({ ...obj, line: '', quan });
+    return quan > 1 ? name : articleFor(name);
+}
+
 function floorObjectBaseName(obj) {
     return pickupObjectName({ ...obj, line: '', quan: 1 }).replace(/ \(lit\)$/, '');
 }
@@ -7809,7 +7815,7 @@ function fireDamageFloorContainer(obj, messages, visible, {
     for (const content of contents) {
         removeContainedObject(obj, content);
         placeLiquidFlowFloorObject(content, x, y);
-        spillQueue.push(content);
+        spillQueue.push({ obj: content, mode: 'flooreffects' });
     }
     clearLiquidFlowContainerContents(obj);
     return true;
@@ -7864,6 +7870,93 @@ function fireDamageFloorItem(obj, messages, visible, options = {}) {
     });
 }
 
+const LAVA_DIRECT_BURN_MATERIALS = new Set([
+    'liquid', 'wax', 'veggy', 'vegetable', 'flesh', 'paper', 'cloth', 'leather', 'wood', 'bone',
+]);
+const LIQUID_FLOW_RIDER_CORPSE_NAMES = new Set(['death', 'pestilence', 'famine']);
+
+function liquidFlowRiderCorpse(obj) {
+    if (!(obj?.otyp === CORPSE || obj?.otyp === 'corpse')) return false;
+    const corpse = obj.corpsenm || obj.corpse || {};
+    const corpseName = String(corpse.name || corpse.mname || '').toLowerCase();
+    if (corpse.rider || LIQUID_FLOW_RIDER_CORPSE_NAMES.has(corpseName)) return true;
+    return /\b(?:death|pestilence|famine) corpse\b/.test(objectKindKey(obj));
+}
+
+function lavaObjResistsHard(obj) {
+    const actual = String(obj?.actualKind || '').toLowerCase();
+    const kind = objectKindKey(obj);
+    if (obj?.realAmuletOfYendor || actual === 'amulet of yendor'
+        || (!actual && kind === 'amulet of yendor')) return true;
+    if (isBookOfTheDeadItem(obj)) return true;
+    if (isCandelabrumOfInvocationItem(obj)) return true;
+    if (isBellOfOpeningItem(obj)) return true;
+    return liquidFlowRiderCorpse(obj);
+}
+
+function lavaObjectProtectedByObjResists(obj) {
+    if (!lavaObjResistsHard(obj)) {
+        rn2(100);
+        return false;
+    }
+    return !isBookOfTheDeadItem(obj);
+}
+
+function lavaDirectFireExemptObject(obj, cls) {
+    if (cls === 'scroll' || cls === 'spellbook') return true;
+    if (obj?.oerodeproof || obj?.fireResistance || obj?.fireResistant) return true;
+    const kind = objectKindKey(obj);
+    return kind === 'wand of fire' || kind === 'fire horn' || obj?.oprop === 'fire'
+        || obj?.oprop === 'fire resistance' || obj?.oc_oprop === 'fire'
+        || obj?.oc_oprop === 'fire resistance';
+}
+
+function lavaDirectBurnMaterialObject(obj) {
+    if (liquidFlowContainerContents(obj).length) return false;
+    const material = String(obj?.material || obj?.oc_material || '').toLowerCase();
+    if (LAVA_DIRECT_BURN_MATERIALS.has(material)) return true;
+    const cls = itemClassKey(obj);
+    const kind = objectKindKey(obj);
+    if ((cls === 'food' || obj?.otyp === FOOD_CLASS || obj?.glyph === '%')
+        && !/\btin\b/.test(kind)) return true;
+    if (obj?.otyp === CORPSE || obj?.otyp === 'corpse') return true;
+    if (obj?.globby || GLOB_TYPES.has(kind.replace(/^glob of /, ''))) return true;
+    return /\b(?:wax|leather|cloth|wood|wooden|paper|bone|corpse|meat|ration|food|fruit|egg|sack|bag|box|chest|leash|rope|bow|arrow|club|quarterstaff|aklys|bullwhip|sling|flute|harp|drum|whistle|horn)\b/.test(kind);
+}
+
+function lavaDamageFloorEffectItem(obj, messages, visible, {
+    removeObject = removeFloorObject,
+    spillQueue = [],
+    x,
+    y,
+} = {}) {
+    if (lavaObjectProtectedByObjResists(obj)) return false;
+    const cls = fireDestroyableInventoryClass(obj);
+    if (!lavaDirectFireExemptObject(obj, cls) && lavaDirectBurnMaterialObject(obj)) {
+        if (visible) messages.push(`You see ${floorObjectArticleName(obj)} hit lava and burn up!`);
+        removeObject(obj);
+        return true;
+    }
+    return fireDamageFloorItem(obj, messages, visible, { removeObject, spillQueue, x, y });
+}
+
+function liquidFlowFloorEffectsItem(obj, x, y, messages, visible, acidContext, spillQueue) {
+    const loc = game.level?.at?.(x, y);
+    if (!loc) return false;
+    if (obj?.otyp === BOULDER && (IS_POOL(loc.typ) || loc.typ === LAVAPOOL || loc.typ === LAVAWALL)) {
+        if (earthFloorEffects(obj, x, y, messages)) {
+            removeFloorObject(obj);
+            return true;
+        }
+        return false;
+    }
+    if (loc.typ === LAVAPOOL || loc.typ === LAVAWALL)
+        return lavaDamageFloorEffectItem(obj, messages, visible, { spillQueue, x, y });
+    if (IS_POOL(loc.typ))
+        return waterDamageFloorItem(obj, messages, visible, acidContext);
+    return false;
+}
+
 export function applyLiquidFlowFloorObjectDamage(x, y, typ) {
     const messages = [];
     const visible = floorObjectVisible(x, y);
@@ -7871,16 +7964,21 @@ export function applyLiquidFlowFloorObjectDamage(x, y, typ) {
     let destroyed = 0;
     const acidContext = { count: 0 };
 
-    const queue = [...liquidFlowFloorObjectsAt(x, y)];
+    const queue = liquidFlowFloorObjectsAt(x, y).map(obj => ({ obj, mode: 'chain' }));
     const processed = new Set();
     for (let i = 0; i < queue.length; i++) {
-        const obj = queue[i];
+        const entry = queue[i];
+        const obj = entry?.obj || entry;
         if (processed.has(obj)) continue;
         processed.add(obj);
         if (!(game.level?.objects || []).includes(obj)) continue;
-        const damaged = typ === LAVAPOOL
-            ? fireDamageFloorItem(obj, messages, visible, { spillQueue: queue, x, y })
-            : waterDamageFloorItem(obj, messages, visible, acidContext);
+        let damaged;
+        if (entry?.mode === 'flooreffects')
+            damaged = liquidFlowFloorEffectsItem(obj, x, y, messages, visible, acidContext, queue);
+        else if (typ === LAVAPOOL)
+            damaged = fireDamageFloorItem(obj, messages, visible, { spillQueue: queue, x, y });
+        else
+            damaged = waterDamageFloorItem(obj, messages, visible, acidContext);
         if (damaged) changed = true;
         if (!(game.level?.objects || []).includes(obj)) destroyed++;
     }
