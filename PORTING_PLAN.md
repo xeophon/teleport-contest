@@ -2014,6 +2014,15 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   `seed0373-barbarian-quest-tour` still matches fully, and
   `seed0383-wizard-hallucinate` remains the known RNG-exact screen-only
   mismatch. Full `bash frozen/score.sh` remains `42/44`.
+- Monster random-item setup now treats the whole ghost monster class like C:
+  `rnd_offensive_item()`, `rnd_defensive_item()`, and `rnd_misc_item()` return
+  immediately for `S_GHOST`, not just the literal `ghost` monster. This removes
+  the extra Orcus shade `rn2(40)` in `seed0360-wizard-world-tour`; focused
+  comparison now matches the Orcus arrival at screen 324 and advances to the
+  Home 1 wait-turn frontier at screen 399. Full `bash frozen/score.sh` remains
+  `42/44`, with `seed0360` improving to RNG `101454/120639` and screen
+  `408/833`; `seed0373-barbarian-quest-tour` still matches fully and
+  `seed0383-wizard-hallucinate` remains RNG-exact with screen `181/219`.
 
 Next concrete target:
 
@@ -2033,6 +2042,15 @@ Next concrete target:
   Plane generation/arrival, hallucinated swallow-expel redraw order, Vlad tower
   generation, observed discovery accounting, Sokoban random-object display,
   level-follower arrival, and enlightenment wording.
+- The next `seed0360` frontier is turn-tail ordering around C
+  `gethungry(); exerchk(); ... u_wipe_engr()`: C inserts a strength exercise
+  `rn2(19)` before the engraving-wipe `rn2(79)`, while JS reaches the
+  engraving-wipe roll first on the Home 1 wait turn. Keep this scoped to real
+  periodic exercise/move-count semantics rather than compensating the RNG.
+- The `seed0383` hallucination mismatch remains display-only: the swallow-expel
+  redraw should follow C's `docrt()` order by redrawing remembered map glyphs
+  before the visible monster/object/trap overlay pass while hallucinated, rather
+  than running every remembered cell through `newsym()` with vision disabled.
 - The Archeologist tour, exact-wand wish tails, healer scroll tail, tourist
   disaster path, and wizard quaff/zap/read option-help path are now closed;
   use them as regression guards for artifact wishing, restored-level Sokoban
