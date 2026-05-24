@@ -12656,6 +12656,31 @@ function buriedMerchandiseDebtMessage(x, y, ignoredObject = null) {
     return `You owe ${name} ${loss} zorkmid${loss === 1 ? '' : 's'} for burying merchandise.`;
 }
 
+function clearHeroSlimeFromMoltenLava() {
+    if (game.u?._statusSuffix?.includes('Slimed')) {
+        game.u._statusSuffix = game.u._statusSuffix.replace(/ Slimed/g, '');
+        game.u.slimed = false;
+    }
+}
+
+function heroNextToSquare(x, y) {
+    if (game.u?.ux == null || game.u?.uy == null) return false;
+    return distmin(game.u.ux, game.u.uy, x, y) <= 1;
+}
+
+function applyBoulderLavaSplashToHero(messages) {
+    if (!game.u) return false;
+    messages.push(`You are hit by molten lava${game.u.fireResistance ? '.' : '!'}`);
+    clearHeroSlimeFromMoltenLava();
+    const damage = d(game.u.fireResistance ? 1 : 3, 6);
+    game.u.uhp = Math.max(0, (game.u.uhp || 1) - damage);
+    if ((game.u.uhp || 0) <= 0) {
+        game._death_cause = 'killed by molten lava';
+        messages.push('You die...');
+    }
+    return true;
+}
+
 function earthFloorEffects(obj, x, y, messages) {
     const loc = game.level?.at(x, y);
     if (!loc || obj?.otyp !== BOULDER) return false;
@@ -12678,7 +12703,18 @@ function earthFloorEffects(obj, x, y, messages) {
             messages.push(`You hear a${lava ? ' sizzling' : ''} splash.`);
         }
     }
-    if (!fillsUp && earthVisibleSquare(x, y)) messages.push('It sinks without a trace!');
+    if (fillsUp && game.u?.uinwater && game.u?.ux === x && game.u?.uy === y) {
+        game.u.uinwater = 0;
+        game.u.underwater = false;
+        game.u.uunderwater = false;
+        game.u.uundetected = 0;
+        vision_recalc(1);
+        messages.push('You find yourself on dry land again!');
+    } else if (lava && heroNextToSquare(x, y)) {
+        applyBoulderLavaSplashToHero(messages);
+    } else if (!fillsUp && earthVisibleSquare(x, y)) {
+        messages.push('It sinks without a trace!');
+    }
     newsym(x, y);
     return true;
 }

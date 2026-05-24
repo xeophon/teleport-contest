@@ -2498,6 +2498,16 @@ Next concrete target:
   sequential boulder/potion ordering, later content survival after lava fill,
   shop burial debt/no-charge handling, and the focused replay guard remains
   exact.
+- The non-pushed `boulder_hits_pool()` path used by scroll-of-earth boulders
+  and lava-spilled boulders now covers the next C hero side effects: if a
+  boulder fills the liquid square under an underwater hero, the hero is placed
+  back on dry land and underwater state is cleared; if a boulder falls into or
+  fills adjacent lava, the hero is hit by molten lava, slime is burned away,
+  fire resistance changes punctuation and reduces the damage dice, and lethal
+  damage records the molten-lava death. The lava adjacency branch now also
+  suppresses the visible `It sinks without a trace!` line like C's `else if`
+  ordering. Direct smokes cover ordinary, fire-resistant, lethal, slimed, and
+  underwater dry-land cases; focused drum/liquid/world-tour guards remain exact.
 - Remaining ice work outside this fire-ray terrain slice includes the broader
   full `spoteffects()`/`pooleffects()` hero liquid behavior, deeper
   `minliquid()` edges (life-saving or shape-shift survivor relocation,
