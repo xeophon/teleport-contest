@@ -2139,8 +2139,16 @@ Next concrete target:
   `seed0014`, `seed0030`, `seed0060`, `seed0360`, `seed0367`, `seed0373`,
   `seed0383`, `seed4500`, and `seed5006` all pass, and full
   `bash frozen/score.sh` remains `44/44`.
+- Player zaps with a wand of striking now cover the C `bhitpile()` statue-trap
+  prepass for the reachable JS path: the zap line stops at monsters, boulders,
+  and blocked terrain, and the first floor statue plus `STATUE_TRAP` animates
+  with the shatter message instead of falling through to a blank unknown-zap
+  result. Successful animation identifies the wand as striking. Focused guards
+  `seed0014`, `seed0030`, `seed0060`, `seed0360`, `seed0367`, `seed0373`,
+  `seed0383`, `seed4500`, and `seed5006` all pass, and full
+  `bash frozen/score.sh` remains `44/44`.
 - Remaining trap work includes `impact_drop()` for actual fall/dig callers,
-  statue-trap polearm/striking/pick break activation edges, and deeper fire
+  statue-trap polearm/force-bolt/pick break activation edges, and deeper fire
   trap `burnarmor()`/floor-object burning parity.
 - `seed4500-knight-coverage` is closed again and should remain a guard for
   punished teleport landing object-list timing, Vlad tower generation, observed

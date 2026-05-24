@@ -8123,6 +8123,17 @@ function statueSearchAnimationMessage(statue, mon) {
     return `You find ${name} posing as a statue.`;
 }
 
+function floorStatueAt(x, y) {
+    return (game.level?.objects || []).find(obj =>
+        !obj.hidden && !obj.transientProjectile && obj.ox === x && obj.oy === y
+        && (obj.kind === 'statue' || obj.otyp === STATUE)) || null;
+}
+
+function statueTrapAt(x, y) {
+    return (game.level?.traps || []).find(trap =>
+        trap.tx === x && trap.ty === y && trap.ttyp === STATUE_TRAP) || null;
+}
+
 export async function activateStatueTrap(trap, x, y, { prefix = '', shatter = false, search = false, normal = false } = {}) {
     if (trap?.ttyp !== STATUE_TRAP) return null;
     game.level.traps = (game.level?.traps || []).filter(candidate => candidate !== trap);
@@ -23854,6 +23865,41 @@ export async function rhack(_cmd) {
                 game.context.move = 1;
                 return;
             }
+            const strikingWand = item?.wand === 'striking'
+                || item?.kind === 'striking'
+                || item?.actualKind === 'wand of striking'
+                || item?.wandIndex === 7;
+            if (strikingWand) {
+                let message = '';
+                for (let step = 1; step <= BOLT_LIM; step++) {
+                    const x = (game.u?.ux || 0) + dir.dx * step;
+                    const y = (game.u?.uy || 0) + dir.dy * step;
+                    if (x < 1 || x >= COLNO || y < 0 || y >= ROWNO) break;
+                    const loc = game.level?.at(x, y);
+                    if (!loc) break;
+                    if ((game.level?.monsters || []).some(mon => mon.mx === x && mon.my === y)) break;
+                    if ((game.level?.objects || []).some(obj =>
+                        !obj.hidden && !obj.transientProjectile && obj.ox === x && obj.oy === y && obj.otyp === BOULDER))
+                        break;
+                    const statue = floorStatueAt(x, y);
+                    const trap = statue ? statueTrapAt(x, y) : null;
+                    if (trap) {
+                        message = await activateStatueTrap(trap, x, y, { shatter: true }) || '';
+                        break;
+                    }
+                    if (!ZAP_POS(loc.typ) || (loc.typ === DOOR && (loc.doormask & (D_CLOSED | D_LOCKED)))) break;
+                }
+                if (message) {
+                    item.known = true;
+                    item.kind = 'striking';
+                    item.wandIndex = 7;
+                    item.line = `${item.letter} - a wand of striking${wandChargeSuffix(item)}`;
+                }
+                await setMessage(message);
+                game._command_mode = null;
+                game.context.move = 1;
+                return;
+            }
             if (item?.wand === 'digging' || item?.kind === 'digging' || item?.wandIndex === 18) {
                 rn2(19);
                 let digdepth = rn2(18) + 8;
@@ -29824,12 +29870,8 @@ export async function rhack(_cmd) {
             game.context.move = 1;
             return;
         }
-        const statueObj = (game.level?.objects || []).find(obj =>
-            !obj.transientProjectile && obj.ox === x && obj.oy === y
-            && (obj.kind === 'statue' || obj.otyp === STATUE));
-        const statueTrap = statueObj
-            ? (game.level?.traps || []).find(trap => trap.tx === x && trap.ty === y && trap.ttyp === STATUE_TRAP)
-            : null;
+        const statueObj = floorStatueAt(x, y);
+        const statueTrap = statueObj ? statueTrapAt(x, y) : null;
         if (statueTrap) {
             const message = await activateStatueTrap(statueTrap, x, y, { normal: true }) || '';
             await setMessage(message);
