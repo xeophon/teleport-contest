@@ -2937,52 +2937,68 @@ async function processMonsterTurns() {
 	                    newsym(target.mx, target.my);
 	                    const targetIndex = mons.indexOf(target);
 	                    if (targetIndex >= 0) startIndex = Math.max(startIndex, targetIndex + 1);
-	                } else {
+                } else {
                     rn2(3);
                     const returnAttackRoll = rn2(4);
-                    if (returnAttackRoll
-                        && Math.max(Math.abs(target.mx - mon.mx), Math.abs(target.my - mon.my)) <= 1) {
-                    const returnAttack = target.data?.attack || { dice: 1, sides: 2 };
-                    const returnHit = (mon.data?.mac ?? 6) + (target.data?.mlevel ?? 0) > rnd(20);
-                    const targetName = target.data?.name || 'creature';
-                    const petName = mon.givenName || (mon.saddled ? `saddled ${mon.data?.name || 'creature'}`
-                        : mon.data?.name || 'creature');
-                    const petObject = mon.givenName || `the ${petName}`;
-                    const nymphReturn = targetName.includes('nymph');
-                    let returnMsg = `The ${targetName} ${returnHit ? (returnAttack.verb || 'hits') : 'misses'} ${petObject}.`;
-                    if (nymphReturn) {
-                        const sameGender = !!target.female === !!mon.female;
-                        returnMsg = returnHit
-                            ? `The ${targetName} smiles at ${petObject} ${sameGender ? 'engagingly' : 'seductively'}.`
-                            : `The ${targetName} pretends to be friendly to ${petObject}.`;
-                    }
-                    if (returnHit) {
-                        const returnDamage = nymphReturn ? d(0, 0) : d(returnAttack.dice ?? 1, returnAttack.sides ?? 2);
-                        rn2(3);
-                        rn2(6);
-                        mon.mhp = (mon.mhp || 1) - returnDamage;
-                        if ((mon.mhp || 0) <= 0) {
-                            game._dead_pet_after_more = mon;
-                            game._queued_message_after_more = `The ${petName} is killed!`;
-                        }
-                    } else {
-                        rn2(3);
-                    }
-	                    addToplineMessage(returnMsg);
-	                    game._message_more = 1;
-	                    game._process_time_with_more = 0;
-	                    if (nymphReturn) game._topline_more_after_more = 1;
-	                    if (nymphReturn && returnHit && (mon.mhp || 0) > 0) {
-	                        rn2(3);
-	                        const secondHit = (mon.data?.mac ?? 6) + (target.data?.mlevel ?? 0) > rnd(21);
-	                        if (!secondHit) {
-	                            game._queued_message_after_more = `The ${targetName} pretends to be friendly to ${petObject}.`;
-	                            game._nymph_second_passive_after_more = 1;
+	                    if (returnAttackRoll
+	                        && Math.max(Math.abs(target.mx - mon.mx), Math.abs(target.my - mon.my)) <= 1) {
+	                        const targetName = target.data?.name || 'creature';
+	                        const petName = mon.givenName || (mon.saddled ? `saddled ${mon.data?.name || 'creature'}`
+	                            : mon.data?.name || 'creature');
+	                        const petObject = mon.givenName || `the ${petName}`;
+	                        const weapon = target.mw || target.minvent?.find(item =>
+	                            item.otyp === ORCISH_DAGGER || item.kind === 'orcish dagger' || item.kind === 'dagger');
+	                        if (!target.mw && weapon) {
+	                            target.mw = weapon;
+	                            target.weapon_check = NEED_WEAPON;
+	                            target.mlstmv = game.moves || 1;
+	                            const stack = (weapon.quan || 1) === 1
+	                                ? (weapon.kind === 'orcish dagger' || weapon.otyp === ORCISH_DAGGER ? 'a crude dagger' : `a ${weapon.kind || 'weapon'}`)
+	                                : `${weapon.quan} ${weapon.kind === 'orcish dagger' || weapon.otyp === ORCISH_DAGGER ? 'crude daggers' : `${weapon.kind || 'weapon'}s`}`;
+	                            recordWeaponDiscoveryForItem(weapon);
+	                            addToplineMessage(`The ${targetName} wields ${stack}!`);
+	                            game._message_more = 1;
+	                            game._process_time_with_more = 0;
+	                            if ((mon.mhp || 0) > 0) game._pet_delayed_post_move_roll = 1;
+	                            return false;
 	                        }
+	                        const returnAttack = target.data?.attack || { dice: 1, sides: 2 };
+	                        const returnHit = (mon.data?.mac ?? 6) + (target.data?.mlevel ?? 0) > rnd(20);
+	                        const nymphReturn = targetName.includes('nymph');
+	                        let returnMsg = `The ${targetName} ${returnHit ? (returnAttack.verb || 'hits') : 'misses'} ${petObject}.`;
+	                        if (nymphReturn) {
+	                            const sameGender = !!target.female === !!mon.female;
+	                            returnMsg = returnHit
+	                                ? `The ${targetName} smiles at ${petObject} ${sameGender ? 'engagingly' : 'seductively'}.`
+	                                : `The ${targetName} pretends to be friendly to ${petObject}.`;
+	                        }
+	                        if (returnHit) {
+	                            const returnDamage = nymphReturn ? d(0, 0) : d(returnAttack.dice ?? 1, returnAttack.sides ?? 2);
+	                            rn2(3);
+	                            rn2(6);
+	                            mon.mhp = (mon.mhp || 1) - returnDamage;
+	                            if ((mon.mhp || 0) <= 0) {
+	                                game._dead_pet_after_more = mon;
+	                                game._queued_message_after_more = `The ${petName} is killed!`;
+	                            }
+	                        } else {
+	                            rn2(3);
+	                        }
+	                        addToplineMessage(returnMsg);
+	                        game._message_more = 1;
+	                        game._process_time_with_more = 0;
+	                        if (nymphReturn) game._topline_more_after_more = 1;
+	                        if (nymphReturn && returnHit && (mon.mhp || 0) > 0) {
+	                            rn2(3);
+	                            const secondHit = (mon.data?.mac ?? 6) + (target.data?.mlevel ?? 0) > rnd(21);
+	                            if (!secondHit) {
+	                                game._queued_message_after_more = `The ${targetName} pretends to be friendly to ${petObject}.`;
+	                                game._nymph_second_passive_after_more = 1;
+	                            }
+	                        }
+	                        if ((mon.mhp || 0) > 0) game._pet_delayed_post_move_roll = 1;
+	                        return false;
 	                    }
-                    if ((mon.mhp || 0) > 0) game._pet_delayed_post_move_roll = 1;
-                    return false;
-		                    }
 				                    rn2(5);
                 }
             }
@@ -9111,13 +9127,18 @@ function movePet(mon, resumeAfterInventory = false, conflictActive = false) {
                     item.otyp === ORCISH_DAGGER || item.kind === 'orcish dagger' || item.kind === 'dagger');
                 if (!pos.target.mw && weapon) {
                     pos.target.mw = weapon;
+                    pos.target.weapon_check = NEED_WEAPON;
+                    pos.target.mlstmv = game.moves || 1;
                     if (showCombat) {
                         const stack = (weapon.quan || 1) === 1
                             ? (weapon.kind === 'orcish dagger' || weapon.otyp === ORCISH_DAGGER ? 'a crude dagger' : `a ${weapon.kind || 'weapon'}`)
                             : `${weapon.quan} ${weapon.kind === 'orcish dagger' || weapon.otyp === ORCISH_DAGGER ? 'crude daggers' : `${weapon.kind || 'weapon'}s`}`;
                         recordWeaponDiscoveryForItem(weapon);
                         addToplineMessage(`The ${targetName} wields ${stack}!`);
+                        game._message_more = 1;
+                        game._process_time_with_more = 0;
                     }
+                    return;
                 }
                 const returnRoll = rnd(20);
                 pos.target.mlstmv = game.moves || 1;

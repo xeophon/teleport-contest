@@ -6786,6 +6786,24 @@ function movementDirection(ch) {
     return { dx: DIR_DX[lower], dy: DIR_DY[lower] };
 }
 
+function truncateCursorToMap(x, y, dx, dy) {
+    if (x + dx < 1) {
+        dy -= Math.sign(dy) * (1 - (x + dx));
+        dx = 1 - x;
+    } else if (x + dx > COLNO - 1) {
+        dy += Math.sign(dy) * ((COLNO - 1) - (x + dx));
+        dx = (COLNO - 1) - x;
+    }
+    if (y + dy < 0) {
+        dx -= Math.sign(dx) * (0 - (y + dy));
+        dy = -y;
+    } else if (y + dy > ROWNO - 1) {
+        dx += Math.sign(dx) * ((ROWNO - 1) - (y + dy));
+        dy = (ROWNO - 1) - y;
+    }
+    return { x: x + dx, y: y + dy };
+}
+
 function figurineApplyDirection(ch) {
     if (ch === '.') return { dx: 0, dy: 0, dz: 0 };
     if (ch === '<') return { dx: 0, dy: 0, dz: -1 };
@@ -29363,6 +29381,7 @@ export async function rhack(_cmd) {
                     const oldX = game.u?.ux || 0;
                     const oldY = game.u?.uy || 0;
                     const materializeMessage = safeTeleportHeroSameLevel();
+                    game._travel_previous_target = null;
                     const landingX = game.u?.ux || oldX;
                     const landingY = game.u?.uy || oldY;
                     game._teleport_dot_described = 0;
@@ -30260,7 +30279,6 @@ export async function rhack(_cmd) {
                         const validKeys = blocked ? [] : travelPathKeys(down.sx, down.sy, false, true);
                         if (validKeys[0]) {
                             game._travel_target = { x: down.sx, y: down.sy };
-                            game._travel_previous_target = { ...game._travel_target };
                             return;
                         }
                         game._travel_target = null;
@@ -30270,7 +30288,6 @@ export async function rhack(_cmd) {
                         return;
                     }
                     game._travel_target = { x: down.sx, y: down.sy };
-                    game._travel_previous_target = { ...game._travel_target };
                 } else {
                     game._farlook_x = previousX;
                     game._farlook_y = previousY;
@@ -30300,7 +30317,6 @@ export async function rhack(_cmd) {
                     game._farlook_y = up.sy;
                     game._cursor_override = [game._farlook_x - 1, game._farlook_y + 1];
                     game._travel_target = { x: up.sx, y: up.sy };
-                    game._travel_previous_target = { ...game._travel_target };
                 } else {
                     game._farlook_x = previousX;
                     game._farlook_y = previousY;
@@ -30421,8 +30437,14 @@ export async function rhack(_cmd) {
         const dir = movementDirection(moveCh);
         if (dir) {
             const steps = 'HJKLYUBN'.includes(moveCh) ? 8 : 1;
-            game._farlook_x = Math.max(1, Math.min(COLNO - 1, (game._farlook_x || game.u?.ux || 0) + dir.dx * steps));
-            game._farlook_y = Math.max(0, Math.min(ROWNO - 1, (game._farlook_y || game.u?.uy || 0) + dir.dy * steps));
+            const cursor = truncateCursorToMap(
+                game._farlook_x || game.u?.ux || 0,
+                game._farlook_y || game.u?.uy || 0,
+                dir.dx * steps,
+                dir.dy * steps,
+            );
+            game._farlook_x = cursor.x;
+            game._farlook_y = cursor.y;
             const targetX = game._farlook_x;
             const targetY = game._farlook_y;
             const loc = game.level?.at(targetX, targetY);
@@ -30450,7 +30472,6 @@ export async function rhack(_cmd) {
                 return;
             }
             game._travel_target = { x: targetX, y: targetY };
-            game._travel_previous_target = { ...game._travel_target };
             game._travel_target_description = terrain;
             game._travel_no_path_target = null;
             game._travel_prompt_current = 0;
@@ -30852,7 +30873,10 @@ export async function rhack(_cmd) {
     }
 
     if (ch === '_') {
-        const travelCursorStart = game._travel_previous_target || { x: game.u?.ux || 0, y: game.u?.uy || 0 };
+        let travelCursorStart = game._travel_previous_target || { x: game.u?.ux || 0, y: game.u?.uy || 0 };
+        const travelStartLoc = game.level?.at(travelCursorStart.x, travelCursorStart.y);
+        if (!travelStartLoc || IS_OBSTRUCTED(travelStartLoc.typ))
+            travelCursorStart = { x: game.u?.ux || 0, y: game.u?.uy || 0 };
         if (game._travel_tip_seen || game.flags?.tutorial === false) {
             game._travel_tip_seen = 1;
             const prompt = game.flags?.tutorial === false
