@@ -2536,6 +2536,16 @@ Next concrete target:
   scroll-of-earth smokes cover pit fill with burial, hidden trapdoor plugs,
   trapped hero release/damage/no plug message, trapped monster release/damage,
   and blind underfoot crash messaging; focused replay guards remain exact.
+- The shared `flooreffects()` adapter is no longer boulder-only for the current
+  pre-placement callers: non-boulder objects can now run the C lava, pool, and
+  hot-ground-potion branches while only returning `true` when the object is
+  actually destroyed/consumed, so water-damaged survivors are still placed.
+  Burned-container contents that use `flooreffects(..., "")` now send spilled
+  boulders through the silent pit/hole plug branch, deleting the trap and
+  burying previous floor objects without adding scroll-style boulder messages.
+  Direct smokes cover confused scroll-of-earth rocks landing in a pool and
+  burned-container boulder contents silently plugging a pit; focused replay
+  guards remain exact.
 - Remaining ice work outside this fire-ray terrain slice includes the broader
   full `spoteffects()`/`pooleffects()` hero liquid behavior, deeper
   `minliquid()` edges (life-saving or shape-shift survivor relocation,

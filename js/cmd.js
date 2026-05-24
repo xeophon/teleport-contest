@@ -7947,7 +7947,9 @@ function lavaDamageFloorEffectItem(obj, messages, visible, {
     });
 }
 
-function hotGroundPotionFloorEffect(obj, x, y, messages, visible) {
+function hotGroundPotionFloorEffect(obj, x, y, messages, visible, {
+    removeObject = removeFloorObject,
+} = {}) {
     const loc = game.level?.at?.(x, y);
     if (!loc || !(loc.typ === ROOM || loc.typ === CORR)) return false;
     if ((game.level?.flags?.temperature || 0) <= 0) return false;
@@ -7963,19 +7965,18 @@ function hotGroundPotionFloorEffect(obj, x, y, messages, visible) {
     if (rn2(100) < ((obj?.artifact || obj?.oartifact) ? 100 : survival)) return false;
     if (visible) messages.push(plural ? 'They shatter from the heat!' : 'It shatters from the heat!');
     else if (!heroIsDeaf()) messages.push('You hear a shattering noise.');
-    removeFloorObject(obj);
+    removeObject(obj);
     return true;
 }
 
 function liquidFlowFloorEffectsItem(obj, x, y, messages, visible, acidContext, spillQueue, processSpill = null) {
     const loc = game.level?.at?.(x, y);
     if (!loc) return false;
-    if (obj?.otyp === BOULDER && (IS_POOL(loc.typ) || loc.typ === LAVAPOOL || loc.typ === LAVAWALL)) {
-        if (earthFloorEffects(obj, x, y, messages)) {
+    if (obj?.otyp === BOULDER) {
+        if (earthFloorEffects(obj, x, y, messages, '')) {
             removeFloorObject(obj);
             return true;
         }
-        return false;
     }
     if (loc.typ === LAVAPOOL || loc.typ === LAVAWALL)
         return lavaDamageFloorEffectItem(obj, messages, visible, { spillQueue, processSpill, x, y });
@@ -12807,15 +12808,15 @@ function earthBoulderPitMessage(trap) {
     return 'fills a pit';
 }
 
-function applyEarthBoulderPitOccupantEffects(trap, x, y, messages) {
+function applyEarthBoulderPitOccupantEffects(trap, x, y, messages, verb = 'fall') {
     const mon = (game.level?.monsters || []).find(candidate =>
         candidate.mx === x && candidate.my === y && !candidate.dead && (candidate.mhp == null || candidate.mhp > 0));
     const heroHere = game.u?.ux === x && game.u?.uy === y;
     const monsterTrapped = mon && mon.mtrapped;
     const heroTrapped = heroHere && game.u?.utrap;
     if (!monsterTrapped && !heroTrapped) return { skipPlugMessage: false };
-    if (earthVisibleSquare(x, y) || heroHere)
-        messages.push(`${game.u?.blind ? 'A' : 'The'} boulder falls into the pit${monsterTrapped ? '' : ' with you'}.`);
+    if (verb && (earthVisibleSquare(x, y) || heroHere))
+        messages.push(`${game.u?.blind ? 'A' : 'The'} boulder ${verb}s into the pit${monsterTrapped ? '' : ' with you'}.`);
     if (monsterTrapped) {
         if (earthTargetIsSolid(mon) && !earthTargetThrowsRocks(mon)) {
             mon.mhp = (mon.mhp || 1) - earthObjectDamage({ otyp: BOULDER, quan: 1 }, mon);
@@ -12852,18 +12853,18 @@ function applyEarthBoulderPitOccupantEffects(trap, x, y, messages) {
     return { skipPlugMessage: false };
 }
 
-function earthBoulderPitHoleEffects(obj, x, y, messages) {
+function earthBoulderPitHoleEffects(obj, x, y, messages, verb = 'fall') {
     if (obj?.otyp !== BOULDER) return false;
     const trap = earthBoulderPitTrapAt(x, y);
     if (!trap) return false;
     const heroHere = game.u?.ux === x && game.u?.uy === y;
-    const { skipPlugMessage } = applyEarthBoulderPitOccupantEffects(trap, x, y, messages);
-    if (!skipPlugMessage && game.u?.blind && heroHere) {
+    const { skipPlugMessage } = applyEarthBoulderPitOccupantEffects(trap, x, y, messages, verb);
+    if (verb && !skipPlugMessage && game.u?.blind && heroHere) {
         messages.push('You hear a CRASH! beneath you.');
-    } else if (!skipPlugMessage && earthVisibleSquare(x, y)) {
+    } else if (verb && !skipPlugMessage && earthVisibleSquare(x, y)) {
         messages.push(`The boulder ${earthBoulderPitMessage(trap)}.`);
-    } else if (!skipPlugMessage && !heroIsDeaf()) {
-        messages.push('You hear a boulder fall.');
+    } else if (verb && !skipPlugMessage && !heroIsDeaf()) {
+        messages.push(`You hear a boulder ${verb}.`);
     }
     const buriedDebt = buriedMerchandiseDebtMessage(x, y, obj);
     deleteBoulderFillFloorTrap(trap, x, y);
@@ -12877,10 +12878,71 @@ function earthBoulderPitHoleEffects(obj, x, y, messages) {
     return true;
 }
 
-function earthFloorEffects(obj, x, y, messages) {
+function earthFloorLiquidType(loc) {
+    if (!loc) return null;
+    if (loc.typ === DRAWBRIDGE_UP) return earthLiquidUnderDrawbridge(loc);
+    return loc.typ;
+}
+
+function floorEffectsObjectWeight(obj) {
+    if (obj?.owt != null) return obj.owt;
+    if (obj?.weight != null) return obj.weight;
+    if (obj?.otyp === ROCK || objectKindKey(obj) === 'rock') return 10;
+    return 10 * Math.max(1, obj?.quan || 1);
+}
+
+function maybeDroppedObjectPoolFeedback(obj, x, y, messages) {
+    if (!game.u || game.u.ux !== x || game.u.uy !== y || heroIsDeaf()) return;
+    const floating = !!(game.u.levitation || game.u.Levitation || game.u.flying || game.u.Flying);
+    if (!game.u.blind && !floating) return;
+    if (!(game.u.underwater || game.u.uunderwater)) {
+        if (floorEffectsObjectWeight(obj) > 9) messages.push('Splash!');
+        else if (floating) messages.push('Plop!');
+    }
+    newsym(x, y);
+}
+
+function droppedObjectWaterFloorEffects(obj, x, y, messages) {
+    let destroyed = false;
+    maybeDroppedObjectPoolFeedback(obj, x, y, messages);
+    waterDamageFloorItem(obj, messages, floorObjectVisible(x, y), { count: 0 }, {
+        removeObject: () => { destroyed = true; },
+    });
+    return destroyed;
+}
+
+function droppedObjectLavaFloorEffects(obj, x, y, messages) {
+    let destroyed = false;
+    const visible = floorObjectVisible(x, y);
+    const acidContext = { count: 0 };
+    const processed = new Set();
+    const processSpill = item => {
+        if (processed.has(item)) return false;
+        processed.add(item);
+        if (!(game.level?.objects || []).includes(item)) return false;
+        return liquidFlowFloorEffectsItem(item, x, y, messages, visible, acidContext, [], processSpill);
+    };
+    lavaDamageFloorEffectItem(obj, messages, visible, {
+        removeObject: () => { destroyed = true; },
+        processSpill,
+        x,
+        y,
+    });
+    return destroyed;
+}
+
+function droppedObjectHotGroundFloorEffects(obj, x, y, messages) {
+    let destroyed = false;
+    hotGroundPotionFloorEffect(obj, x, y, messages, floorObjectVisible(x, y), {
+        removeObject: () => { destroyed = true; },
+    });
+    return destroyed;
+}
+
+function earthFloorEffects(obj, x, y, messages, verb = 'fall') {
     const loc = game.level?.at(x, y);
-    if (!loc || obj?.otyp !== BOULDER) return false;
-    if (earthBoulderHitsLiquid(loc)) {
+    if (!loc || !obj) return false;
+    if (obj?.otyp === BOULDER && earthBoulderHitsLiquid(loc)) {
         const lava = earthLiquidIsLava(loc);
         const chance = rn2(10);
         const body = earthWaterBodyName(loc);
@@ -12917,7 +12979,15 @@ function earthFloorEffects(obj, x, y, messages) {
         newsym(x, y);
         return true;
     }
-    return earthBoulderPitHoleEffects(obj, x, y, messages);
+    if (obj?.otyp === BOULDER)
+        return earthBoulderPitHoleEffects(obj, x, y, messages, verb);
+
+    const liquidType = earthFloorLiquidType(loc);
+    if (liquidType === LAVAPOOL || liquidType === LAVAWALL)
+        return droppedObjectLavaFloorEffects(obj, x, y, messages);
+    if (IS_POOL(liquidType))
+        return droppedObjectWaterFloorEffects(obj, x, y, messages);
+    return droppedObjectHotGroundFloorEffects(obj, x, y, messages);
 }
 
 function earthTargetIsSolid(target) {
