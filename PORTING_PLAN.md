@@ -2411,13 +2411,23 @@ Next concrete target:
   `water_damage_chain(minvent,FALSE)` pass. Direct smokes cover teleport
   escape, gremlin split, iron-golem rust/inventory wetting, and the original
   drowning path; focused liquid/fire guards and full score remain exact.
+- Ice freezing/boulder-fill burial now covers the C punishment ball/chain
+  branch in `bury_an_obj()`: an attached ball clears punishment, deletes the
+  old chain with the C `obj_resists(chain,0,0)` RNG, starts a
+  `TT_BURIEDBALL` trap for `rn1(50,20)`, reports `The iron ball gets buried!`,
+  and then buries the ball through the ordinary `obj_resists(ball,0,0)` gate.
+  An attached chain alone remains on the floor without burial RNG. Thawing or
+  trap unearthing restores the original buried ball to punishment with a newly
+  created chain at the hero, clears the buried-ball trap, and deletes the
+  buried engraving. Direct smokes cover ball burial/restoration and chain-only
+  resistance; focused ice/liquid guards and full `npm run score` remain exact.
 - Remaining ice work outside this fire-ray terrain slice includes the broader
   full `spoteffects()`/`pooleffects()` hero liquid behavior, deeper
   `minliquid()` edges (life-saving or shape-shift survivor relocation,
   waterwall/steed details, exact water-damage message/material coverage), the
-  remaining `bury_objs()` behavior (ball/chain punishment, shop billing, exact
-  object-material table coverage), and a shared zap-ray walker so
-  fire/sleep/cold stop carrying parallel bounce code.
+  remaining `bury_objs()` behavior (buried-ball movement/teleport tether,
+  shop billing, exact object-material table coverage), and a shared zap-ray
+  walker so fire/sleep/cold stop carrying parallel bounce code.
 - Remaining trap work includes off-hero `impact_drop()` callers, deeper
   statue-trap edge cases, broader non-trap fire floor-object parity, and
   remaining bespoke ray floor/hero timing edges.

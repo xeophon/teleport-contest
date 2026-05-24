@@ -6,7 +6,7 @@ import {
     DRAWBRIDGE_UP, HWALL, ICED_MOAT, ICED_POOL, ICE, IN_SIGHT, IRONBARS,
     IS_DOOR, IS_WALL, IS_POOL, Is_rogue_level, Is_waterlevel, isok, LANDMINE, LAVAPOOL,
     LAVAWALL, MAGIC_PORTAL, MOAT, POOL, ROOM, ROWNO, SDOOR, STONE, TDWALL,
-    TLCORNER, TLWALL, TRCORNER, TRWALL, TT_INFLOOR, TT_LAVA, TUWALL,
+    TLCORNER, TLWALL, TRCORNER, TRWALL, TT_BURIEDBALL, TT_INFLOOR, TT_LAVA, TUWALL,
     VIBRATING_SQUARE, VWALL, WATER,
 } from './const.js';
 import { rn1, rn2, rnd } from './rng.js';
@@ -16,6 +16,8 @@ import { vision_recalc } from './vision.js';
 const BOULDER = 465;
 const CORPSE = 471;
 const ROCK = 467;
+const HEAVY_IRON_BALL = 474;
+const IRON_CHAIN = 475;
 const POTION_CLASS = 9;
 const FOOD_CLASS = 7;
 const POT_OIL = 252;
@@ -239,6 +241,7 @@ function unearthObjectsAt(x, y) {
     }
     lvl.objects ??= [];
     for (const obj of unearthed) {
+        if (restoreBuriedBallIfNeeded(obj, x, y, lvl)) continue;
         obj.buried = false;
         obj.hidden = false;
         clearBuriedOrganicRotTimer(obj);
@@ -247,8 +250,9 @@ function unearthObjectsAt(x, y) {
         if (!lvl.objects.includes(obj)) lvl.objects.push(obj);
         objectIceEffect(obj, x, y);
     }
-    for (const obj of lvl.objects) {
+    for (const obj of [...lvl.objects]) {
         if (obj?.ox !== x || obj?.oy !== y || !obj.buried) continue;
+        if (restoreBuriedBallIfNeeded(obj, x, y, lvl)) continue;
         obj.buried = false;
         obj.hidden = false;
         clearBuriedOrganicRotTimer(obj);
@@ -271,6 +275,26 @@ function objectKindText(obj) {
     return String(obj?.actualKind || obj?.kind || obj?.name || obj?.artifact || '').toLowerCase();
 }
 
+function isHeroChain(obj) {
+    return !!obj && obj === game.u?.uchain;
+}
+
+function isHeroBall(obj) {
+    return !!obj && obj === game.u?.uball;
+}
+
+function isHeavyIronBallObject(obj) {
+    return obj?.otyp === HEAVY_IRON_BALL || obj?.cls === 'ball'
+        || objectKindText(obj) === 'heavy iron ball';
+}
+
+function nextLocalIdent() {
+    const ident = game._next_ident ?? 2;
+    game._next_ident = ident + rnd(2);
+    game._level_object_ident_count = (game._level_object_ident_count || 0) + 1;
+    return ident;
+}
+
 function isRiderCorpse(obj) {
     if (!(obj?.otyp === CORPSE || obj?.otyp === 'corpse')) return false;
     const corpse = obj.corpsenm || obj.corpse || {};
@@ -279,7 +303,7 @@ function isRiderCorpse(obj) {
 }
 
 function objectAlwaysResistsBurial(obj) {
-    if (obj && (obj === game.u?.uchain || obj === game.u?.uball)) return true;
+    if (isHeroChain(obj)) return true;
     const actual = String(obj?.actualKind || '').toLowerCase();
     const kind = objectKindText(obj);
     if (obj?.realAmuletOfYendor || actual === 'amulet of yendor'
@@ -288,6 +312,79 @@ function objectAlwaysResistsBurial(obj) {
     if (obj?.otyp === CANDELABRUM_OF_INVOCATION || kind === 'candelabrum of invocation') return true;
     if ((obj?.otyp === BELL || obj?.otyp === 'bell') && kind === 'bell of opening') return true;
     return isRiderCorpse(obj);
+}
+
+function deleteHeroChainForBuriedBall(lvl) {
+    const chain = game.u?.uchain;
+    if (!chain) return;
+    rn2(100); // C delobj(chain) reaches obj_resists(chain, 0, 0).
+    chain._burialDeleted = true;
+    chain.buried = false;
+    chain.hidden = false;
+    if (lvl?.objects) lvl.objects = lvl.objects.filter(obj => obj !== chain);
+}
+
+function clearPunishmentForBuriedBall(ball, lvl) {
+    deleteHeroChainForBuriedBall(lvl);
+    if (ball) {
+        ball.worn = false;
+        ball.buriedPunishmentBall = true;
+    }
+    if (game.u) {
+        game.u.uchain = null;
+        game.u.uball = null;
+        game.u.upunished = false;
+        game.u._bcFelt = 0;
+    }
+    game._punished = 0;
+}
+
+function makeRestoredChain(x, y) {
+    rnd(1); // C mkobj(CHAIN_CLASS) still consumes the class selection RNG.
+    return {
+        id: nextLocalIdent(),
+        otyp: IRON_CHAIN,
+        cls: 'chain',
+        kind: 'iron chain',
+        actualKind: 'iron chain',
+        glyph: '_',
+        owt: 120,
+        ox: x,
+        oy: y,
+        bknown: true,
+        known: true,
+        worn: true,
+    };
+}
+
+export function restoreBuriedBallIfNeeded(obj, x, y, lvl = game.level) {
+    if (!obj || !isHeavyIronBallObject(obj) || !game.u?.utrap
+        || game.u.utraptype !== TT_BURIEDBALL) return false;
+    const ux = game.u.ux ?? x;
+    const uy = game.u.uy ?? y;
+    clearBuriedOrganicRotTimer(obj);
+    obj.buried = false;
+    obj.hidden = false;
+    obj.worn = true;
+    obj.ox = ux;
+    obj.oy = uy;
+    obj.buriedPunishmentBall = false;
+    const chain = makeRestoredChain(ux, uy);
+    if (lvl) {
+        lvl.objects ??= [];
+        lvl.objects = (lvl.objects || []).filter(item => item !== obj && item !== chain);
+        lvl.objects.push(obj, chain);
+    }
+    game.u.uball = obj;
+    game.u.uchain = chain;
+    game.u.upunished = true;
+    game.u.utrap = 0;
+    game.u.utraptype = null;
+    game._punished = 1;
+    if (lvl?.engravings) lvl.engravings = lvl.engravings.filter(engr => engr.x !== x || engr.y !== y);
+    newsym(x, y);
+    newsym(ux, uy);
+    return true;
 }
 
 function objectResistsBurial(obj) {
@@ -385,7 +482,15 @@ function containedObjects(obj) {
     return [];
 }
 
-function buryOneObject(obj, x, y, lvl, underIce = isIceAt(x, y)) {
+function buryOneObject(obj, x, y, lvl, underIce = isIceAt(x, y), messages = []) {
+    if (isHeroBall(obj)) {
+        clearPunishmentForBuriedBall(obj, lvl);
+        if (game.u) {
+            game.u.utrap = rn1(50, 20);
+            game.u.utraptype = TT_BURIEDBALL;
+        }
+        messages.push('The iron ball gets buried!');
+    }
     if (objectResistsBurial(obj)) return 'floor';
     unleashObjectForBurial(obj);
     stopObjectBurningForBurial(obj);
@@ -406,26 +511,30 @@ function buryOneObject(obj, x, y, lvl, underIce = isIceAt(x, y)) {
 
 function buryObjectsAt(x, y) {
     const lvl = game.level;
-    if (!lvl) return;
+    const messages = [];
+    if (!lvl) return messages;
     if (lvl.engravings) lvl.engravings = lvl.engravings.filter(engr => engr.x !== x || engr.y !== y);
     if (!lvl.objects?.length) {
         newsym(x, y);
-        return;
+        return messages;
     }
     lvl.buriedobjlist ??= [];
     const remaining = [];
     const underIce = isIceAt(x, y);
     for (const obj of lvl.objects) {
+        if (obj._burialDeleted) continue;
         if (obj.ox === x && obj.oy === y && !obj.transientProjectile) {
-            if (buryOneObject(obj, x, y, lvl, underIce) === 'floor') {
+            if (buryOneObject(obj, x, y, lvl, underIce, messages) === 'floor') {
                 remaining.push(obj);
             }
         } else {
             remaining.push(obj);
         }
     }
-    lvl.objects = remaining;
+    lvl.objects = remaining.filter(obj => !obj._burialDeleted);
+    for (const obj of remaining) delete obj._burialDeleted;
     newsym(x, y);
+    return messages;
 }
 
 export function processBuriedOrganicRot(g = game) {
@@ -586,7 +695,7 @@ function settleBouldersAt(x, y) {
                 loc.flags = 0;
             }
             game.level.traps = (game.level?.traps || []).filter(trap => trap.tx !== x || trap.ty !== y);
-            buryObjectsAt(x, y);
+            messages.push(...buryObjectsAt(x, y));
             newsym(x, y);
         }
         if (visible) {
@@ -662,7 +771,7 @@ export function applyColdRayTerrain(x, y) {
         if (lava) loc.flags = 0;
         loc.typ = lava ? ROOM : ICE;
     }
-    buryObjectsAt(x, y);
+    const buryMessages = buryObjectsAt(x, y);
     if (!lava) {
         startMeltIceTimeout(x, y, 0);
         objIceEffectsAt(x, y, { doBuried: true });
@@ -685,6 +794,7 @@ export function applyColdRayTerrain(x, y) {
         redrawNear(Math.max(0, x - 1), Math.max(0, y - 1), Math.min(COLNO - 1, x + 1), Math.min(ROWNO - 1, y + 1));
 
     const messages = [];
+    messages.push(...buryMessages);
     if (visibleAt(x, y)) messages.push(lava ? LAVA_SOLIDIFIES_MESSAGE : wasMoat ? 'The moat is bridged with ice!' : WATER_FREEZES_MESSAGE);
     else if (!lava && !heroDeaf()) messages.push(CRACKLING_SOUND_MESSAGE);
     messages.push(...heroMessages);
