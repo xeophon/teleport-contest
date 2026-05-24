@@ -2283,12 +2283,22 @@ Next concrete target:
   ordinary monster fire-breath paths. Non-POOL water/moat/drawbridge-moat
   squares create the C `rnd(5)` steam cloud on normal levels, visible squares
   say `Some water evaporates.`, blind non-deaf squares use the hissing-gas
-  message with per-ray duplicate suppression, deaf unseen squares stay silent,
-  and Plane-of-Water squares use `Some water boils.` without creating a gas
-  cloud. Full POOL evaporation, pit/range/occupant effects, fountain dry-up,
-  and `melt_ice()` remain deferred slices. Direct smokes cover visible,
+  message with per-ray duplicate suppression, monster-breath deaf unseen
+  squares stay silent, and Plane-of-Water squares use `Some water boils.`
+  without creating a gas
+  cloud. Full POOL evaporation, fountain dry-up, and `melt_ice()` remained
+  deferred after this first pass. Direct smokes cover visible,
   blind, deaf, Plane-of-Water, POOL fallback, and breath/floor-fire ordering;
   focused guards and full `npm run score` remain `44/44`.
+- Fire rays now implement the C `POOL` evaporation branch rather than only
+  hissing over it: exact pools become `ROOM`, flags are cleared, a hidden PIT
+  trap is made, ray range is reduced by 3 before target-hit RNG in both wand
+  and monster-breath loops, hidden swimmer monsters are revealed before target
+  refresh, and immediate pit effects cover hero trapping/damage and monster
+  trapping/damage/kill handling. Hero-zapped deaf unseen water now also uses
+  the C `That seemed remarkably uneventful.` fallback. Direct smokes cover
+  visible, blind, deaf, hero-in-pool, hidden-swimmer, and breath range/floor
+  ordering; focused fire/water guards and full `npm run score` remain `44/44`.
 - Remaining trap work includes off-hero `impact_drop()` callers, deeper
   statue-trap edge cases, broader non-trap fire floor-object parity, and
   remaining bespoke ray floor/hero timing edges.

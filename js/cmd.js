@@ -24426,9 +24426,11 @@ export async function rhack(_cmd) {
                         const terrain = applyFireRayWaterTerrain(sx, sy, {
                             previousMessage: messages[messages.length - 1] || '',
                             heardGas,
+                            heroRay: true,
                         });
                         messages.push(...terrain.messages);
                         heardGas = terrain.heardGas;
+                        range += terrain.rangeMod;
                         messages.push(...burnRayFloorObjectsByFire(sx, sy));
 
                         const target = game.level?.monsters?.find(mon => mon.mx === sx && mon.my === sy);

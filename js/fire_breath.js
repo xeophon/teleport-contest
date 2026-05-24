@@ -1,6 +1,6 @@
 import { game } from './gstate.js';
-import { DB_MOAT, DB_UNDER, DRAWBRIDGE_UP, IN_SIGHT, Is_waterlevel, MOAT, POOL, TT_BURIEDBALL, WATER, WEB } from './const.js';
-import { d, rn2, rnd, rnl } from './rng.js';
+import { DB_MOAT, DB_UNDER, DRAWBRIDGE_UP, IN_SIGHT, Is_waterlevel, MOAT, PIT, POOL, ROOM, TT_BURIEDBALL, WATER, WEB } from './const.js';
+import { d, rn1, rn2, rnd, rnl } from './rng.js';
 import { createGasCloud } from './region.js';
 import { newsym } from './display.js';
 import { dropMonsterInventory, mkcorpstat } from './mklev.js';
@@ -10,7 +10,9 @@ const CORPSE = 471;
 const WEB_BURST_MESSAGE = 'A web bursts into flames!';
 const WATER_GAS_MESSAGE = 'You hear hissing gas.';
 const WATER_EVAPORATES_MESSAGE = 'Some water evaporates.';
+const POOL_EVAPORATES_MESSAGE = 'The water evaporates.';
 const WATER_BOILS_MESSAGE = 'Some water boils.';
+const UNEVENTFUL_MESSAGE = 'That seemed remarkably uneventful.';
 
 const FIRE_ARMOR_SLOT = {
     HELMET: 0,
@@ -251,33 +253,123 @@ function fireRayWaterTerrainKind(loc) {
     return null;
 }
 
+function makeFireRayPitTrap(x, y) {
+    const existing = (game.level?.traps || []).find(trap => trap.tx === x && trap.ty === y);
+    const trap = existing || { tx: x, ty: y };
+    Object.assign(trap, {
+        ttyp: PIT,
+        tseen: false,
+        once: false,
+        launch: { x: -1, y: -1 },
+        launch2: null,
+        teledest: null,
+        dst: { dnum: -1, dlevel: -1 },
+        conjoined: 0,
+    });
+    if (!existing) {
+        game.level.traps ??= [];
+        game.level.traps.push(trap);
+    }
+    return trap;
+}
+
+function monsterVisibleAt(mon, x, y) {
+    return !game.u?.blind && !!(game.viz_array?.[y]?.[x] & IN_SIGHT)
+        && !mon.minvis && !mon.mundetected;
+}
+
+function killMonsterByPit(mon, messages, visible) {
+    if (visible) messages.push(`The ${mon.data?.name || 'creature'} is killed!`);
+    const data = mon.data || {};
+    const corpseData = data.corpse || data;
+    const corpseChance = 2 + ((data.genoFreq ?? 1) < 2 ? 1 : 0) + (data.verysmall ? 1 : 0);
+    const corpseRoll = rn2(corpseChance);
+    dropMonsterInventory(mon);
+    if (!corpseRoll && corpseData && !corpseData.noCorpse) {
+        const corpse = mkcorpstat(CORPSE, mon, corpseData, mon.mx, mon.my, 8);
+        Object.assign(corpse, {
+            otyp: 'corpse',
+            glyph: '%',
+            color: corpseData.color ?? data.color ?? CLR_BROWN,
+            corpsenm: corpseData,
+            oldCorpse: !!data.corpse,
+        });
+    }
+    game.level.monsters = (game.level?.monsters || []).filter(other => other !== mon);
+    newsym(mon.mx, mon.my);
+}
+
+function applyFireRayPitEffects(x, y, trap) {
+    const messages = [];
+    if (game.u?.ux === x && game.u?.uy === y) {
+        if (game.u.levitating || game.u.flying) return messages;
+        trap.tseen = true;
+        game.u.utrap = rn1(6, 2);
+        game.u.utraptype = 'pit';
+        game.u.uhp = Math.max(0, (game.u.uhp || 1) - rnd(6));
+        if ((game.u.uhp || 0) <= 0) game._death_cause = 'fell into a pit';
+        newsym(x, y);
+        messages.push('You fall into a pit!');
+        return messages;
+    }
+
+    const mon = (game.level?.monsters || []).find(candidate =>
+        candidate.mx === x && candidate.my === y && (candidate.mhp == null || candidate.mhp > 0));
+    if (!mon || mon.data?.inAir || mon.data?.flyer || mon.data?.floater) return messages;
+    const visible = monsterVisibleAt(mon, x, y);
+    if (visible) {
+        trap.tseen = true;
+        messages.push(`The ${mon.data?.name || 'creature'} falls into a pit!`);
+    }
+    mon.mtrapped = 1;
+    mon.mhp = (mon.mhp || 1) - rnd(6);
+    if ((mon.mhp || 0) <= 0) killMonsterByPit(mon, messages, visible);
+    else newsym(x, y);
+    return messages;
+}
+
 // C ref: zap.c zap_over_floor() for fire over water.
-export function applyFireRayWaterTerrain(x, y, { previousMessage = '', heardGas = false } = {}) {
+export function applyFireRayWaterTerrain(x, y, {
+    previousMessage = '',
+    heardGas = false,
+    heroRay = false,
+} = {}) {
     const loc = game.level?.at(x, y);
     const terrain = fireRayWaterTerrainKind(loc);
-    if (terrain == null) return { messages: [], heardGas };
+    if (terrain == null) return { messages: [], heardGas, rangeMod: 0 };
 
     const onWaterLevel = Is_waterlevel(game.u?.uz);
-    if (!onWaterLevel) createGasCloud(x, y, rnd(5), 0);
-
     const visible = !game.u?.blind && !!(game.viz_array?.[y]?.[x] & IN_SIGHT);
     const deaf = heroIsDeaf();
-    let message = '';
+    if (!onWaterLevel) createGasCloud(x, y, rnd(5), 0);
+
+    let message = !deaf ? WATER_GAS_MESSAGE : heroRay ? UNEVENTFUL_MESSAGE : '';
     let gasHeard = heardGas;
+    let rangeMod = 0;
+    let followupMessages = [];
     if (terrain !== POOL) {
         if (onWaterLevel) message = (visible || !deaf) ? WATER_BOILS_MESSAGE : '';
         else if (visible) message = WATER_EVAPORATES_MESSAGE;
-        else if (!deaf && !heardGas) {
-            message = WATER_GAS_MESSAGE;
-            gasHeard = true;
-        }
-    } else if (!deaf && !heardGas) {
-        // Full POOL evaporation needs the later pit/range/occupant slice.
-        message = WATER_GAS_MESSAGE;
-        gasHeard = true;
+        else if (message === WATER_GAS_MESSAGE && heardGas) message = '';
+    } else {
+        rangeMod = -3;
+        loc.typ = ROOM;
+        loc.flags = 0;
+        loc.doormask = 0;
+        loc.wall_info = 0;
+        const trap = makeFireRayPitTrap(x, y);
+        if (visible) message = POOL_EVAPORATES_MESSAGE;
+        else if (message === WATER_GAS_MESSAGE && heardGas) message = '';
+        const mon = (game.level?.monsters || []).find(candidate => candidate.mx === x && candidate.my === y);
+        if (mon?.data?.swimmer && mon.mundetected) mon.mundetected = 0;
+        newsym(x, y);
+        followupMessages = applyFireRayPitEffects(x, y, trap);
     }
-    if (!message || norep(message, previousMessage)) return { messages: [], heardGas: gasHeard };
-    return { messages: [message], heardGas: gasHeard };
+    if (message === WATER_GAS_MESSAGE)
+        gasHeard = true;
+    const messages = !message || norep(message, previousMessage) ? [] : [message];
+    messages.push(...followupMessages);
+    return { messages, heardGas: gasHeard, rangeMod };
 }
 
 // C ref: zap.c zap_hit().
@@ -303,6 +395,7 @@ export function advanceFireBreathRay(ray, sourceId, { floorFire = null } = {}) {
         });
         messages.push(...terrain.messages);
         ray.heardGas = terrain.heardGas;
+        ray.remaining += terrain.rangeMod;
         if (floorFire) {
             const floorMessages = floorFire(ray.x, ray.y) || [];
             messages.push(...floorMessages);
@@ -312,7 +405,8 @@ export function advanceFireBreathRay(ray, sourceId, { floorFire = null } = {}) {
             candidate.m_id !== sourceId && candidate.mx === ray.x && candidate.my === ray.y
             && (candidate.mhp == null || candidate.mhp > 0));
         if (mon) return { messages, target: { type: 'monster', mon }, ray };
-        if (ray.x === game.u?.ux && ray.y === game.u?.uy) return { messages, target: { type: 'hero' }, ray };
+        if (ray.x === game.u?.ux && ray.y === game.u?.uy && ray.remaining >= 0)
+            return { messages, target: { type: 'hero' }, ray };
     }
     return { messages, target: null, ray };
 }
