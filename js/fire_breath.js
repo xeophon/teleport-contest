@@ -1,10 +1,11 @@
 import { game } from './gstate.js';
-import { DB_MOAT, DB_UNDER, DRAWBRIDGE_UP, IN_SIGHT, Is_waterlevel, MOAT, PIT, POOL, ROOM, TT_BURIEDBALL, WATER, WEB } from './const.js';
+import { DB_MOAT, DB_UNDER, DRAWBRIDGE_UP, FOUNTAIN, IN_SIGHT, Is_waterlevel, MOAT, PIT, POOL, ROOM, TT_BURIEDBALL, WATER, WEB } from './const.js';
 import { d, rn1, rn2, rnd, rnl } from './rng.js';
 import { createGasCloud } from './region.js';
 import { newsym } from './display.js';
 import { dropMonsterInventory, mkcorpstat } from './mklev.js';
 import { CLR_BROWN } from './terminal.js';
+import { dryupFountainResultAt } from './fountain.js';
 
 const CORPSE = 471;
 const WEB_BURST_MESSAGE = 'A web bursts into flames!';
@@ -12,6 +13,9 @@ const WATER_GAS_MESSAGE = 'You hear hissing gas.';
 const WATER_EVAPORATES_MESSAGE = 'Some water evaporates.';
 const POOL_EVAPORATES_MESSAGE = 'The water evaporates.';
 const WATER_BOILS_MESSAGE = 'Some water boils.';
+const FOUNTAIN_STEAM_MESSAGE = 'Steam billows from the fountain.';
+const FOUNTAIN_DRYUP_MESSAGE = 'The fountain dries up!';
+const FOUNTAIN_WATCHMAN_MESSAGE = '"Hey, stop using that fountain!"';
 const UNEVENTFUL_MESSAGE = 'That seemed remarkably uneventful.';
 
 const FIRE_ARMOR_SLOT = {
@@ -372,6 +376,25 @@ export function applyFireRayWaterTerrain(x, y, {
     return { messages, heardGas: gasHeard, rangeMod };
 }
 
+// C ref: zap.c zap_over_floor() for fire over fountains.
+export function applyFireRayFountainTerrain(x, y, { heroRay = false } = {}) {
+    const loc = game.level?.at(x, y);
+    if (loc?.typ !== FOUNTAIN) return { messages: [], rangeMod: 0 };
+
+    const visible = !game.u?.blind && !!(game.viz_array?.[y]?.[x] & IN_SIGHT);
+    createGasCloud(x, y, rnd(3), 0);
+    const messages = visible ? [FOUNTAIN_STEAM_MESSAGE] : [];
+    const dryup = dryupFountainResultAt(x, y, { isYou: heroRay });
+    if (dryup.dried) {
+        if (visible) messages.push(FOUNTAIN_DRYUP_MESSAGE);
+    } else if (dryup.warning) {
+        messages.push(dryup.warning, FOUNTAIN_WATCHMAN_MESSAGE);
+    } else if (dryup.trickle) {
+        messages.push(dryup.trickle);
+    }
+    return { messages, rangeMod: -1 };
+}
+
 // C ref: zap.c zap_hit().
 export function fireBreathZapHits(ac) {
     const chance = rn2(20);
@@ -396,6 +419,9 @@ export function advanceFireBreathRay(ray, sourceId, { floorFire = null } = {}) {
         messages.push(...terrain.messages);
         ray.heardGas = terrain.heardGas;
         ray.remaining += terrain.rangeMod;
+        const fountain = applyFireRayFountainTerrain(ray.x, ray.y);
+        messages.push(...fountain.messages);
+        ray.remaining += fountain.rangeMod;
         if (floorFire) {
             const floorMessages = floorFire(ray.x, ray.y) || [];
             messages.push(...floorMessages);

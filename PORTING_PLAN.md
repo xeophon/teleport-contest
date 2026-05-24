@@ -2299,6 +2299,18 @@ Next concrete target:
   the C `That seemed remarkably uneventful.` fallback. Direct smokes cover
   visible, blind, deaf, hero-in-pool, hidden-swimmer, and breath range/floor
   ordering; focused fire/water guards and full `npm run score` remain `44/44`.
+- Fire rays now implement the C fountain dry-up branch after water/pool
+  terrain handling: fountains create the harmless `rnd(3)` steam cloud,
+  visible squares say `Steam billows from the fountain.`, ray range is reduced
+  by 1, and the shared `dryup()` behavior covers ordinary drying plus hero
+  town-warning/trickle cases for wand rays. The dry-up helper now lives in
+  `js/fountain.js` so command fountain actions and fire rays share the same
+  state updates. Direct smokes cover forced dry-up, non-drying rolls, town
+  warning/trickle messages, and monster-breath range/floor ordering; focused
+  `seed0014`, `seed2200`, `seed4500`, `seed5002`, `seed5006`, `seed0006`,
+  `seed0383`, and `seed0399` all pass, and full `npm run score` remains
+  `44/44`.
+- Remaining fire-ray terrain work includes the C `melt_ice()` branch.
 - Remaining trap work includes off-hero `impact_drop()` callers, deeper
   statue-trap edge cases, broader non-trap fire floor-object parity, and
   remaining bespoke ray floor/hero timing edges.

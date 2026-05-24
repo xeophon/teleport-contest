@@ -16,7 +16,8 @@ import { DISPLAY_MONSTER_COLORS, DISPLAY_MONSTER_GLYPHS, DISPLAY_MONSTER_HALLU_N
 import { prepareVaultGuardEscort } from './vault.js';
 import { clearMonsterTrack, updateMonsterTrack } from './montrack.js';
 import { datFileLines as bundledDatFileLines } from './dat_files.js';
-import { advanceFireBreathRay, applyFireRayWaterTerrain, burnFireRayWebTrap, finishHeroTargetedBreath, fireBreathDamageHero, fireBreathDamageMonster, fireBreathZapHits } from './fire_breath.js';
+import { advanceFireBreathRay, applyFireRayFountainTerrain, applyFireRayWaterTerrain, burnFireRayWebTrap, finishHeroTargetedBreath, fireBreathDamageHero, fireBreathDamageMonster, fireBreathZapHits } from './fire_breath.js';
+import { dryupFountainAt, dryupFountainResultAt } from './fountain.js';
 import { createGasCloud } from './region.js';
 import { figurineLocationCheck, isFigurineObject, makeFigurineFamiliar, maybeAttachCarriedFigurineTimeout, stopFigurineTransformTimeout, syncCarriedFigurineTransformTimer } from './figurine.js';
 
@@ -317,30 +318,6 @@ export function refreshSwallowOverlay(more = !!game._message_more) {
     game._pending_message = message;
     game._message_more = more ? 1 : 0;
     game._swallow_overlay_active = 1;
-}
-
-function dryupFountainResultAt(x = game.u?.ux || 0, y = game.u?.uy || 0, { isYou = true } = {}) {
-    const loc = game.level?.at(x, y);
-    if (loc?.typ !== FOUNTAIN || (rn2(3) && !loc.fountainWarned)) return { dried: false };
-    if (isYou && game.level?.flags?.has_town && !loc.fountainWarned) {
-        loc.fountainWarned = true;
-        const watchman = (game.level?.monsters || []).find(mon =>
-            (mon.data?.name === 'watchman' || mon.data?.name === 'watch captain')
-            && mon.mpeaceful && couldsee(mon.mx, mon.my));
-        if (!watchman) return { dried: false, trickle: 'The flow reduces to a trickle.' };
-        const name = watchman.data?.name || 'watchman';
-        return { dried: false, warning: `${/^[aeiou]/i.test(name) ? 'An' : 'A'} ${name} yells:` };
-    }
-    loc.typ = ROOM;
-    loc.flags = 0;
-    loc.blessed = 0;
-    if (game.level?.flags?.nfountains) game.level.flags.nfountains--;
-    newsym(x, y);
-    return { dried: true };
-}
-
-function dryupFountainAt(x = game.u?.ux || 0, y = game.u?.uy || 0) {
-    return dryupFountainResultAt(x, y).dried;
 }
 
 const MIN_QUEST_LEVEL = 14;
@@ -24431,6 +24408,9 @@ export async function rhack(_cmd) {
                         messages.push(...terrain.messages);
                         heardGas = terrain.heardGas;
                         range += terrain.rangeMod;
+                        const fountain = applyFireRayFountainTerrain(sx, sy, { heroRay: true });
+                        messages.push(...fountain.messages);
+                        range += fountain.rangeMod;
                         messages.push(...burnRayFloorObjectsByFire(sx, sy));
 
                         const target = game.level?.monsters?.find(mon => mon.mx === sx && mon.my === sy);
