@@ -8123,7 +8123,7 @@ function statueSearchAnimationMessage(statue, mon) {
     return `You find ${name} posing as a statue.`;
 }
 
-export async function activateStatueTrap(trap, x, y, { prefix = '', shatter = false, search = false } = {}) {
+export async function activateStatueTrap(trap, x, y, { prefix = '', shatter = false, search = false, normal = false } = {}) {
     if (trap?.ttyp !== STATUE_TRAP) return null;
     game.level.traps = (game.level?.traps || []).filter(candidate => candidate !== trap);
 
@@ -8150,7 +8150,7 @@ export async function activateStatueTrap(trap, x, y, { prefix = '', shatter = fa
 
     const statueName = pickupObjectName(statue);
     const verb = statueAnimationVerb(mon);
-    const body = search
+    const body = search || normal
         ? statueSearchAnimationMessage(statue, mon)
         : shatter
         ? `Instead of shattering, ${game.u?.blind || !couldsee(x, y) ? 'a statue' : `the ${statueName}`} suddenly ${verb}!`
@@ -29820,6 +29820,19 @@ export async function rhack(_cmd) {
             game._clear_bullwhip_skip_after_time = invisibleTarget;
             invisibleTarget._bullwhip_find_misc_ready = 0;
             await setMessage('You kick it.');
+            game._command_mode = null;
+            game.context.move = 1;
+            return;
+        }
+        const statueObj = (game.level?.objects || []).find(obj =>
+            !obj.transientProjectile && obj.ox === x && obj.oy === y
+            && (obj.kind === 'statue' || obj.otyp === STATUE));
+        const statueTrap = statueObj
+            ? (game.level?.traps || []).find(trap => trap.tx === x && trap.ty === y && trap.ttyp === STATUE_TRAP)
+            : null;
+        if (statueTrap) {
+            const message = await activateStatueTrap(statueTrap, x, y, { normal: true }) || '';
+            await setMessage(message);
             game._command_mode = null;
             game.context.move = 1;
             return;

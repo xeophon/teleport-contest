@@ -2132,9 +2132,16 @@ Next concrete target:
   variants. Focused guards `seed0014`, `seed0030`, `seed0360`, `seed0367`,
   `seed0373`, `seed0383`, `seed4500`, and `seed5006` all pass, and full
   `bash frozen/score.sh` remains `44/44`.
+- Kicking a trapped statue now follows C `really_kick_object()`: the adjacent
+  floor statue plus `STATUE_TRAP` is activated before fumble/object-kick
+  handling, uses the normal off-square animation message, deletes the trap and
+  statue on successful animation, and consumes the kick turn. Focused guards
+  `seed0014`, `seed0030`, `seed0060`, `seed0360`, `seed0367`, `seed0373`,
+  `seed0383`, `seed4500`, and `seed5006` all pass, and full
+  `bash frozen/score.sh` remains `44/44`.
 - Remaining trap work includes `impact_drop()` for actual fall/dig callers,
-  statue-trap kick/zap/break activation edges, and deeper fire trap
-  `burnarmor()`/floor-object burning parity.
+  statue-trap polearm/striking/pick break activation edges, and deeper fire
+  trap `burnarmor()`/floor-object burning parity.
 - `seed4500-knight-coverage` is closed again and should remain a guard for
   punished teleport landing object-list timing, Vlad tower generation, observed
   discovery accounting, Sokoban random-object display, and late enlightenment
