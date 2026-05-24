@@ -13239,6 +13239,46 @@ function monsterThrownFloorEffects(obj, x, y, messages, verb) {
     }
 }
 
+export function dropMonsterObject(mon, obj, messages = null, {
+    verb = 'fall',
+    monsterMoving = true,
+} = {}) {
+    if (!mon || !obj || !game.level) return { consumed: false, object: null, messages: [] };
+    game.level.objects ??= [];
+    const floorMessages = Array.isArray(messages) ? messages : [];
+    if (Array.isArray(mon.minvent))
+        mon.minvent = mon.minvent.filter(item => item !== obj);
+    if (mon.missile === obj) mon.missile = null;
+    if (mon.mw === obj) mon.mw = null;
+
+    obj.ox = mon.mx;
+    obj.oy = mon.my;
+    obj.hidden = false;
+    obj.buried = false;
+    obj.transientProjectile = false;
+    delete obj.line;
+
+    const previousMonsterMoving = game._monster_moving;
+    if (monsterMoving) game._monster_moving = 1;
+    let consumed = false;
+    try {
+        consumed = earthFloorEffects(obj, obj.ox, obj.oy, floorMessages, verb);
+    } finally {
+        if (monsterMoving) {
+            if (previousMonsterMoving === undefined) delete game._monster_moving;
+            else game._monster_moving = previousMonsterMoving;
+        }
+    }
+    if (consumed) {
+        newsym(obj.ox, obj.oy);
+        return { consumed: true, object: null, messages: floorMessages };
+    }
+    const stacked = stackMonsterThrownObject(obj);
+    if (stacked === obj) game.level.objects.push(obj);
+    newsym(obj.ox, obj.oy);
+    return { consumed: false, object: stacked, messages: floorMessages };
+}
+
 export function landMonsterThrownObject(missile, x, y, {
     glyph = missile?.glyph || ')',
     color = missile?.color ?? CLR_CYAN,

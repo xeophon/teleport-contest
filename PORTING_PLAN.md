@@ -2581,9 +2581,9 @@ Next concrete target:
   line while preventing the later hot-ground branch. Direct smokes cover
   ordinary monster drop placement, lava destruction, and visible monster-moving
   altar BUC feedback. Remaining caller-specific monster object paths include
-  unwielded weapon `"drop"`, meatbox `""`, monstone, full `drop_throw()` break/
-  ship/passive/mulch parity for thrown missiles, and the full shop billing
-  matrix.
+  meatbox `""`, monstone, full `drop_throw()` break/ship/passive/mulch parity
+  for thrown missiles, polymorph-beam `polyspot` bypass details, and the full
+  shop billing matrix.
 - Monster-thrown persistent projectile landings now go through a shared
   `landMonsterThrownObject()` helper before floor placement. Rocks, plain
   daggers, invisible crude-dagger landings, visible deferred crude-dagger
@@ -2594,6 +2594,14 @@ Next concrete target:
   ordinary landing, same-square stacking, lava consumption, and context
   restoration; full score remains exact. Launcher arrows and thrown potion
   transients remain separate pending `drop_throw()`/breakage slices.
+- Natural monster shapechanges now mirror the C `possibly_unwield()` weapon
+  path for current JS shapeshifters: doppelgangers, chameleons, sandestins, and
+  vampires that lose weapon attacks clear their wielded weapon, print the
+  visible "`drops`" message before extraction, and route the weapon through
+  `earthFloorEffects(...,"drop")` with monster-moving context before stacking
+  any survivor. Direct smokes cover ordinary placement, same-square stacking,
+  lava consumption, and context restoration; full polymorph-beam `polyspot`
+  bypass and broader were/polymorph callers remain future slices.
 - Remaining ice work outside this fire-ray terrain slice includes the broader
   full `spoteffects()`/`pooleffects()` hero liquid behavior, deeper
   `minliquid()` edges (life-saving or shape-shift survivor relocation,

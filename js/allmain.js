@@ -3,13 +3,13 @@
 
 import { game } from './gstate.js';
 import { mklev, l_nhcore_init, u_on_upstairs, makemon, mkcorpstat, mksobj, wipe_engr_at, dropMonsterInventory, wandIndexForRoll, scrollIndexForRoll, potionIndexForRoll, RANDOM_MONSTER_BY_NAME, adjustedMonsterLevel, monsterByRndName, monster_hp, rndmonnum, syncDungeonContext, next_ident, set_malign, enextoMonsterSpot, getbogusmon, pickNasty, chameleonAnimalForm, doppelgangerHumanoidForm, noteleportLevelForMonster, rlocNoMsg, rlocToCoreNoMsg, somexyspace, fumaroles, movebubbles } from './mklev.js';
-import { rhack, pickupObjectName, inventoryItemName, inventoryLetterRank, recordVanquished, finishForceLock, loseExperienceLevel, finishLevelTeleport, finishPickDigDownwardHole, finishPickDigDownwardPit, maybeQueueQuestLeaderTalk, monsterGrowUp, processSpellbookStudyOccupation, processTinOpeningOccupation, finishTinOpeningOccupation, refreshSwallowOverlay, travelPathKeys, updateGauntletsOfPowerStrength, consumeLifeSavingAmulet, activateStatueTrap, breakStatueObject, burnFloorObjectsByFire, burnRayFloorObjectsByFire, erodeArmorByFireTrap, dryWetTowelFromFire, igniteMonsterFireInventoryItems, monsterFireInventoryDamage, landMonsterThrownObject } from './cmd.js';
+import { rhack, pickupObjectName, inventoryItemName, inventoryLetterRank, recordVanquished, finishForceLock, loseExperienceLevel, finishLevelTeleport, finishPickDigDownwardHole, finishPickDigDownwardPit, maybeQueueQuestLeaderTalk, monsterGrowUp, processSpellbookStudyOccupation, processTinOpeningOccupation, finishTinOpeningOccupation, refreshSwallowOverlay, travelPathKeys, updateGauntletsOfPowerStrength, consumeLifeSavingAmulet, activateStatueTrap, breakStatueObject, burnFloorObjectsByFire, burnRayFloorObjectsByFire, erodeArmorByFireTrap, dryWetTowelFromFire, igniteMonsterFireInventoryItems, monsterFireInventoryDamage, dropMonsterObject, landMonsterThrownObject } from './cmd.js';
 import { docrt, cls, bot, flush_screen, pline, newsym, refreshHallucinatedMap, show_glyph_cell } from './display.js';
 import { vision_recalc, vision_reset, init_vision_globals, cansee, couldsee, view_from } from './vision.js';
 import { init_objects } from './o_init.js';
 import { init_dungeons_rng } from './dungeon.js';
 import { rn2, rn2_on_display_rng, rnd, rn1, rnl, rne, rnz, d } from './rng.js';
-import { COLNO, ROWNO, A_CHA, A_CON, A_DEX, A_INT, A_MAX, A_STR, A_WIS, IS_OBSTRUCTED, IS_STWALL, IS_TREE, IS_ROOM, IS_WALL, TREE, ROOM, DOOR, CORR, SDOOR, SCORR, IRONBARS, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, D_TRAPPED, W_NONDIGGABLE, W_NONPASSWALL, APPORT, CADAVER, ACCFOOD, DOGFOOD, MANFOOD, POISON, UNDEF, TABU, NO_MM_FLAGS, NO_MINVENT, MM_NOMSG, IN_SIGHT, ALL_TRAPS, ARROW_TRAP, ROCKTRAP, PIT, SPIKED_PIT, SQKY_BOARD, BEAR_TRAP, LANDMINE, ROLLING_BOULDER_TRAP, SLP_GAS_TRAP, RUST_TRAP, FIRE_TRAP, HOLE, TRAPDOOR, TELEP_TRAP, WEB, STATUE_TRAP, MAGIC_TRAP, ANTI_MAGIC, MAGIC_PORTAL, VIBRATING_SQUARE, ALLOW_M, ALLOW_TM, ALLOW_TRAPS, ALLOW_U, ALLOW_ALL, NOTONL, OPENDOOR, UNLOCKDOOR, BUSTDOOR, ALLOW_ROCK, ALLOW_WALL, ALLOW_DIG, ALLOW_SANCT, ALLOW_SSM, ALLOW_BARS, NOGARLIC, Is_airlevel, Is_oracle_level, ACCESSIBLE, IS_POOL, IS_LAVA, WATER, LAVAWALL, BOLT_LIM, MON_POLE_DIST, NEED_WEAPON, NEED_AXE, NEED_PICK_AXE, NEED_PICK_OR_AXE, VAULT, VAULT_GUARD_TIME, M_SEEN_MAGR, M_AP_FURNITURE, M_AP_OBJECT, M_AP_TYPE, MOD_ENCUMBER, HVY_ENCUMBER, EXT_ENCUMBER, OVERLOADED, ROOMOFFSET, SHOPBASE } from './const.js';
+import { COLNO, ROWNO, A_CHA, A_CON, A_DEX, A_INT, A_MAX, A_STR, A_WIS, IS_OBSTRUCTED, IS_STWALL, IS_TREE, IS_ROOM, IS_WALL, TREE, ROOM, DOOR, CORR, SDOOR, SCORR, IRONBARS, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, D_TRAPPED, W_NONDIGGABLE, W_NONPASSWALL, APPORT, CADAVER, ACCFOOD, DOGFOOD, MANFOOD, POISON, UNDEF, TABU, NO_MM_FLAGS, NO_MINVENT, MM_NOMSG, IN_SIGHT, ALL_TRAPS, ARROW_TRAP, ROCKTRAP, PIT, SPIKED_PIT, SQKY_BOARD, BEAR_TRAP, LANDMINE, ROLLING_BOULDER_TRAP, SLP_GAS_TRAP, RUST_TRAP, FIRE_TRAP, HOLE, TRAPDOOR, TELEP_TRAP, WEB, STATUE_TRAP, MAGIC_TRAP, ANTI_MAGIC, MAGIC_PORTAL, VIBRATING_SQUARE, ALLOW_M, ALLOW_TM, ALLOW_TRAPS, ALLOW_U, ALLOW_ALL, NOTONL, OPENDOOR, UNLOCKDOOR, BUSTDOOR, ALLOW_ROCK, ALLOW_WALL, ALLOW_DIG, ALLOW_SANCT, ALLOW_SSM, ALLOW_BARS, NOGARLIC, Is_airlevel, Is_oracle_level, ACCESSIBLE, IS_POOL, IS_LAVA, WATER, LAVAWALL, BOLT_LIM, MON_POLE_DIST, NO_WEAPON_WANTED, NEED_WEAPON, NEED_AXE, NEED_PICK_AXE, NEED_PICK_OR_AXE, VAULT, VAULT_GUARD_TIME, M_SEEN_MAGR, M_AP_FURNITURE, M_AP_OBJECT, M_AP_TYPE, MOD_ENCUMBER, HVY_ENCUMBER, EXT_ENCUMBER, OVERLOADED, ROOMOFFSET, SHOPBASE } from './const.js';
 import { CLR_BROWN, CLR_CYAN, CLR_MAGENTA, CLR_RED, CLR_WHITE, CLR_YELLOW, NO_COLOR } from './terminal.js';
 import { advanceVaultGuard, prepareVaultGuardEscort, restVaultFakecorr } from './vault.js';
 import { DISPLAY_MONSTER_GLYPHS, DISPLAY_MONSTER_HALLU_NAMES } from './monster_data.js';
@@ -2957,6 +2957,7 @@ function maybeShapeshiftVampire(mon) {
     mon.mhpmax = newMax;
     mon.m_lev = newLevel;
     mon.data = { ...target, hpLevel: newLevel, vampshifter: true, vampBase: baseName };
+    possiblyUnwieldMonsterWeapon(mon);
     newsym(mon.mx, mon.my);
 }
 
@@ -5793,58 +5794,60 @@ async function processMonsterTurns() {
         if (!liveMons.has(mon)) continue;
         if (mon.chamBase && !mon.mspec_used && !rn2(6)) {
             mon.mspec_used = 3 + rn2(10);
-	            if (mon.chamBase === 'doppelganger') {
-	                let shifted = null;
-	                if (!rn2(7)) {
-	                    shifted = pickNasty(17);
-	                } else if (rn2(3)) {
-	                    if (rn2(13)) {
-	                        rnd(10);
-	                        rn2(13);
-	                    } else {
-	                        rn1(13, 0);
-	                    }
-	                    shifted = { name: 'doppelganger role monster', mlet: '@', glyph: '@', color: CLR_WHITE, mlevel: 10, difficulty: 12, mmove: 12, maligntyp: 0, neuter: false };
-	                } else if (!rn2(3)) {
-	                    rn1(13, 0);
-	                } else {
-	                    for (let tryct = 5; tryct > 0; tryct--) {
-	                        shifted = acceptShapechangeForm(mon, doppelgangerHumanoidForm());
-	                        if (shifted) break;
-	                    }
-	                }
-		                if (shifted) {
-		                    if (!shifted.neuter && !rn2(10)) mon.female = !mon.female;
-		                    const oldHp = mon.mhp || 1;
-		                    const oldMax = mon.mhpmax || oldHp;
-		                    const shiftedLevel = adjustedMonsterLevel(shifted);
-		                    const shiftedHp = monster_hp(shifted, shiftedLevel);
-		                    Object.assign(mon, {
-		                        data: { ...shifted, hpLevel: shiftedLevel },
-		                        m_lev: shiftedLevel,
-		                        mhp: Math.max(1, Math.min(shiftedHp, Math.trunc((oldHp * shiftedHp) / oldMax))),
-		                        mhpmax: shiftedHp,
-		                    });
-		                    newsym(mon.mx, mon.my);
-		                }
-	            } else if (mon.chamBase === 'chameleon') {
-	                const shifted = selectChameleonShiftForm(mon);
-	                if (shifted && shifted.name !== mon.data?.name) {
-	                    applyShapechangeGender(mon, shifted);
-	                    const oldHp = mon.mhp || 1;
-	                    const oldMax = mon.mhpmax || oldHp;
-	                    const shiftedLevel = adjustedMonsterLevel(shifted);
-	                    const shiftedHp = monster_hp(shifted, shiftedLevel);
-	                    Object.assign(mon, {
-	                        data: { ...shifted, hpLevel: shiftedLevel },
-	                        m_lev: shiftedLevel,
-	                        mhp: Math.max(1, Math.min(shiftedHp, Math.trunc((oldHp * shiftedHp) / oldMax))),
-	                        mhpmax: shiftedHp,
-	                    });
-	                    newsym(mon.mx, mon.my);
-	                }
-	            } else if (mon.chamBase === 'sandestin') {
-	                const shifted = rn2(7) ? pickNasty(25) : null;
+            if (mon.chamBase === 'doppelganger') {
+                let shifted = null;
+                if (!rn2(7)) {
+                    shifted = pickNasty(17);
+                } else if (rn2(3)) {
+                    if (rn2(13)) {
+                        rnd(10);
+                        rn2(13);
+                    } else {
+                        rn1(13, 0);
+                    }
+                    shifted = { name: 'doppelganger role monster', mlet: '@', glyph: '@', color: CLR_WHITE, mlevel: 10, difficulty: 12, mmove: 12, maligntyp: 0, neuter: false };
+                } else if (!rn2(3)) {
+                    rn1(13, 0);
+                } else {
+                    for (let tryct = 5; tryct > 0; tryct--) {
+                        shifted = acceptShapechangeForm(mon, doppelgangerHumanoidForm());
+                        if (shifted) break;
+                    }
+                }
+                if (shifted) {
+                    if (!shifted.neuter && !rn2(10)) mon.female = !mon.female;
+                    const oldHp = mon.mhp || 1;
+                    const oldMax = mon.mhpmax || oldHp;
+                    const shiftedLevel = adjustedMonsterLevel(shifted);
+                    const shiftedHp = monster_hp(shifted, shiftedLevel);
+                    Object.assign(mon, {
+                        data: { ...shifted, hpLevel: shiftedLevel },
+                        m_lev: shiftedLevel,
+                        mhp: Math.max(1, Math.min(shiftedHp, Math.trunc((oldHp * shiftedHp) / oldMax))),
+                        mhpmax: shiftedHp,
+                    });
+                    possiblyUnwieldMonsterWeapon(mon);
+                    newsym(mon.mx, mon.my);
+                }
+            } else if (mon.chamBase === 'chameleon') {
+                const shifted = selectChameleonShiftForm(mon);
+                if (shifted && shifted.name !== mon.data?.name) {
+                    applyShapechangeGender(mon, shifted);
+                    const oldHp = mon.mhp || 1;
+                    const oldMax = mon.mhpmax || oldHp;
+                    const shiftedLevel = adjustedMonsterLevel(shifted);
+                    const shiftedHp = monster_hp(shifted, shiftedLevel);
+                    Object.assign(mon, {
+                        data: { ...shifted, hpLevel: shiftedLevel },
+                        m_lev: shiftedLevel,
+                        mhp: Math.max(1, Math.min(shiftedHp, Math.trunc((oldHp * shiftedHp) / oldMax))),
+                        mhpmax: shiftedHp,
+                    });
+                    possiblyUnwieldMonsterWeapon(mon);
+                    newsym(mon.mx, mon.my);
+                }
+            } else if (mon.chamBase === 'sandestin') {
+                const shifted = rn2(7) ? pickNasty(25) : null;
                 if (shifted && shifted.name !== mon.data?.name) {
                     if (shifted.male) mon.female = false;
                     else if (shifted.female) mon.female = true;
@@ -5859,6 +5862,7 @@ async function processMonsterTurns() {
                         mhp: Math.max(1, Math.min(shiftedHp, Math.trunc((oldHp * shiftedHp) / oldMax))),
                         mhpmax: shiftedHp,
                     });
+                    possiblyUnwieldMonsterWeapon(mon);
                     newsym(mon.mx, mon.my);
                 }
             }
@@ -6751,6 +6755,31 @@ function monsterHasWeaponAttack(mon) {
         ? data.attacks
         : data.attack ? [data.attack] : [];
     return attacks.some(attack => attack.aatyp === 'weap');
+}
+
+function possiblyUnwieldMonsterWeapon(mon) {
+    const weapon = mon?.mw;
+    if (!weapon) return false;
+    if (!(mon.minvent || []).includes(weapon)) {
+        mon.mw = null;
+        mon.weapon_check = NEED_WEAPON;
+        return false;
+    }
+    if (monsterHasWeaponAttack(mon)) {
+        mon.weapon_check = NEED_WEAPON;
+        return false;
+    }
+
+    mon.mw = null;
+    mon.weapon_check = NO_WEAPON_WANTED;
+    if (!game.u?.blind && (game.viz_array?.[mon.my]?.[mon.mx] & IN_SIGHT)) {
+        addToplineMessage(`${monsterDisplayName(mon)} drops ${pickupObjectName(weapon)}.`);
+        newsym(mon.mx, mon.my);
+    }
+    const floorMessages = [];
+    dropMonsterObject(mon, weapon, floorMessages, { verb: 'drop', monsterMoving: true });
+    addMonsterThrownFloorMessages(floorMessages);
+    return true;
 }
 
 function monsterWouldCheckOffensiveLine(mon) {
