@@ -2342,11 +2342,20 @@ Next concrete target:
   cover timer scheduling/expiry, cold freeze/bury/object adjustment, WATER
   stop behavior, drawbridge ice, and timed-ice refresh; focused guards and
   full `npm run score` remain `44/44`.
+- Cold ray terrain now covers lava too: lava pools cool to `ROOM`,
+  drawbridge-lava becomes drawbridge-over-floor, lava walls use the C
+  temperature-dependent `rn2(max(2, 5 + temperature * 10))` momentary-freeze
+  roll, successful lavawall cooling converts to an oriented wall with local
+  spine fixup, objects are buried, visible squares say `The lava cools and
+  solidifies.`, and heroes trapped in lava become stuck in cooling rock.
+  Direct smokes cover lava pools, momentary and solidified lava walls,
+  drawbridge-lava, flag cleanup, object burial, and hero lava-trap timing;
+  focused guards and full `npm run score` remain `44/44`.
 - Remaining ice work outside this fire-ray terrain slice includes the broader
   full `spoteffects()`/`pooleffects()` hero liquid behavior, shared post-melt
-  monster liquid effects for timer melts, lava/lavawall cold terrain, and a
-  broader cold-ray traversal rewrite instead of the current hardcoded cold
-  target path.
+  monster liquid effects for timer melts, exact `bury_objs()` object-resistance
+  behavior, and a broader cold-ray traversal rewrite instead of the current
+  hardcoded cold target path.
 - Remaining trap work includes off-hero `impact_drop()` callers, deeper
   statue-trap edge cases, broader non-trap fire floor-object parity, and
   remaining bespoke ray floor/hero timing edges.

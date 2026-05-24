@@ -1,10 +1,14 @@
 import { game } from './gstate.js';
 import {
-    BEAR_TRAP, DB_FLOOR, DB_ICE, DB_MOAT, DB_UNDER, DRAWBRIDGE_DOWN,
-    DRAWBRIDGE_UP, ICED_MOAT, ICED_POOL, ICE, IN_SIGHT, IS_POOL, Is_waterlevel,
-    LANDMINE, MAGIC_PORTAL, MOAT, POOL, ROOM, VIBRATING_SQUARE, WATER,
+    BEAR_TRAP, BLCORNER, BRCORNER, COLNO, CROSSWALL, DB_FLOOR, DB_ICE,
+    DB_LAVA, DB_MOAT, DB_UNDER, DBWALL, DOOR, DRAWBRIDGE_DOWN,
+    DRAWBRIDGE_UP, HWALL, ICED_MOAT, ICED_POOL, ICE, IN_SIGHT, IRONBARS,
+    IS_DOOR, IS_WALL, IS_POOL, Is_waterlevel, isok, LANDMINE, LAVAPOOL,
+    LAVAWALL, MAGIC_PORTAL, MOAT, POOL, ROOM, ROWNO, SDOOR, STONE, TDWALL,
+    TLCORNER, TLWALL, TRCORNER, TRWALL, TT_INFLOOR, TT_LAVA, TUWALL,
+    VIBRATING_SQUARE, VWALL, WATER,
 } from './const.js';
-import { rn2 } from './rng.js';
+import { rn1, rn2 } from './rng.js';
 import { newsym } from './display.js';
 import { vision_recalc } from './vision.js';
 
@@ -18,6 +22,8 @@ const ICE_TIMER_MELT_MESSAGE = 'Some ice melts away.';
 const BOULDER_SETTLES_MESSAGE = 'A boulder settles...';
 const WATER_FREEZES_MESSAGE = 'The water freezes.';
 const WATER_FREEZES_MOMENT_MESSAGE = 'The water freezes for a moment.';
+const LAVA_SOLIDIFIES_MESSAGE = 'The lava cools and solidifies.';
+const LAVA_FREEZES_MOMENT_MESSAGE = 'The lava freezes for a moment.';
 const SOFT_CRACKLING_MESSAGE = 'You hear a soft crackling.';
 const CRACKLING_SOUND_MESSAGE = 'You hear a crackling sound.';
 const ROT_ICE_ADJUSTMENT = 2;
@@ -41,6 +47,11 @@ function visibleAt(x, y) {
 
 function heroDeaf() {
     return !!game.u?._deafTimeout || (game.u?._statusSuffix || '').includes('Deaf');
+}
+
+function heroPassesRocks() {
+    const form = game.u?._polyself_form || {};
+    return !!(game.u?.passWalls || (form.passWalls && !form.unsolid && !form.noncorporeal));
 }
 
 function stopMeltTimers(x, y) {
@@ -257,9 +268,95 @@ function buryObjectsAt(x, y) {
     lvl.objects = remaining;
 }
 
+function isSolidTile(x, y) {
+    if (!isok(x, y)) return true;
+    const typ = game.level?.at(x, y)?.typ ?? STONE;
+    return typ === STONE || isWallTile(x, y);
+}
+
+function isWallTile(x, y) {
+    if (!isok(x, y)) return false;
+    const typ = game.level?.at(x, y)?.typ ?? STONE;
+    return IS_WALL(typ) || IS_DOOR(typ) || typ === LAVAWALL
+        || typ === WATER || typ === SDOOR || typ === IRONBARS;
+}
+
+function wallOrStone(x, y) {
+    return isSolidTile(x, y) ? 1 : 0;
+}
+
+function extendSpine(locale, wallThere, dx, dy) {
+    const nx = 1 + dx;
+    const ny = 1 + dy;
+    if (!wallThere) return 0;
+    if (dx) {
+        if (locale[1][0] && locale[1][2] && locale[nx][0] && locale[nx][2]) return 0;
+        return 1;
+    }
+    if (locale[0][1] && locale[2][1] && locale[0][ny] && locale[2][ny]) return 0;
+    return 1;
+}
+
+function fixWallSpinesNear(x1, y1, x2, y2) {
+    const spineArray = [VWALL, HWALL, HWALL, HWALL,
+        VWALL, TRCORNER, TLCORNER, TDWALL,
+        VWALL, BRCORNER, BLCORNER, TUWALL,
+        VWALL, TLWALL, TRWALL, CROSSWALL];
+    const map = game.level;
+    if (!map) return;
+    for (let x = x1; x <= x2; x++) {
+        for (let y = y1; y <= y2; y++) {
+            const loc = map.at(x, y);
+            const typ = loc?.typ ?? STONE;
+            if (!(IS_WALL(typ) && typ !== DBWALL)) continue;
+            const locale = [
+                [wallOrStone(x - 1, y - 1), wallOrStone(x - 1, y), wallOrStone(x - 1, y + 1)],
+                [wallOrStone(x, y - 1), 0, wallOrStone(x, y + 1)],
+                [wallOrStone(x + 1, y - 1), wallOrStone(x + 1, y), wallOrStone(x + 1, y + 1)],
+            ];
+            const bits = (extendSpine(locale, isWallTile(x, y - 1), 0, -1) << 3)
+                | (extendSpine(locale, isWallTile(x, y + 1), 0, 1) << 2)
+                | (extendSpine(locale, isWallTile(x + 1, y), 1, 0) << 1)
+                | extendSpine(locale, isWallTile(x - 1, y), -1, 0);
+            if (bits) loc.typ = spineArray[bits];
+        }
+    }
+}
+
+function redrawNear(x1, y1, x2, y2) {
+    for (let x = x1; x <= x2; x++) {
+        for (let y = y1; y <= y2; y++) {
+            if (isok(x, y)) newsym(x, y);
+        }
+    }
+}
+
 function moatAt(loc) {
     return loc?.typ === MOAT
         || (loc?.typ === DRAWBRIDGE_UP && ((loc.flags || 0) & DB_UNDER) === DB_MOAT);
+}
+
+function lavaAt(loc) {
+    return loc?.typ === LAVAPOOL || loc?.typ === LAVAWALL
+        || (loc?.typ === DRAWBRIDGE_UP && ((loc.flags || 0) & DB_UNDER) === DB_LAVA);
+}
+
+function lavaWallTurnsVertical(x, y) {
+    return (isok(x, y - 1) && IS_WALL(game.level?.at(x, y - 1)?.typ))
+        || (isok(x, y + 1) && IS_WALL(game.level?.at(x, y + 1)?.typ));
+}
+
+function applyHeroCoolingLavaTrap(messages) {
+    if (!game.u?.utrap || !(game.u.utraptype === TT_LAVA || game.u.utraptype === 'lava')) return;
+    if (heroPassesRocks()) {
+        messages.push('You pass through the now-solid rock.');
+        game.u.utrap = 0;
+        game.u.utraptype = null;
+        return;
+    }
+    game.u.utrap = rn1(50, 20);
+    game.u.utraptype = TT_INFLOOR;
+    messages.push('You are firmly stuck in the cooling rock.');
 }
 
 function waterbodyName(loc) {
@@ -308,9 +405,13 @@ export function applyColdRayTerrain(x, y) {
     const loc = game.level?.at(x, y);
     if (!loc) return { handled: false, messages: [], rangeMod: 0, stopped: false };
 
-    if (loc.typ === WATER) {
+    const lava = lavaAt(loc);
+    const lavawall = loc.typ === LAVAWALL;
+    const momentaryLavaWall = lavawall && rn2(Math.max(2, 5 + (game.level?.flags?.temperature || 0) * 10));
+
+    if (loc.typ === WATER || momentaryLavaWall) {
         const messages = [];
-        if (visibleAt(x, y)) messages.push(WATER_FREEZES_MOMENT_MESSAGE);
+        if (visibleAt(x, y)) messages.push(lavawall ? LAVA_FREEZES_MOMENT_MESSAGE : WATER_FREEZES_MOMENT_MESSAGE);
         else if (!heroDeaf()) messages.push(SOFT_CRACKLING_MESSAGE);
         return { handled: true, messages, rangeMod: -1000, stopped: true };
     }
@@ -321,23 +422,34 @@ export function applyColdRayTerrain(x, y) {
         return { handled: true, messages: [], rangeMod: 0, stopped: false };
     }
 
-    if (!(loc.typ === POOL || loc.typ === MOAT
+    if (!(lava || loc.typ === POOL || loc.typ === MOAT
         || (loc.typ === DRAWBRIDGE_UP && ((loc.flags || 0) & DB_UNDER) === DB_MOAT))) {
         return { handled: false, messages: [], rangeMod: 0, stopped: false };
     }
 
     const wasMoat = moatAt(loc);
+    let solidifiedWall = false;
     if (loc.typ === DRAWBRIDGE_UP) {
-        loc.flags = ((loc.flags || 0) & ~DB_UNDER) | DB_ICE;
+        loc.flags = ((loc.flags || 0) & ~DB_UNDER) | (lava ? DB_FLOOR : DB_ICE);
+    } else if (lavawall) {
+        loc.flags = 0;
+        loc.icedpool = 0;
+        loc.typ = lavaWallTurnsVertical(x, y) ? VWALL : HWALL;
+        fixWallSpinesNear(Math.max(0, x - 1), Math.max(0, y - 1), Math.min(COLNO - 1, x + 1), Math.min(ROWNO - 1, y + 1));
+        solidifiedWall = true;
     } else {
-        loc.icedpool = loc.typ === POOL ? ICED_POOL : ICED_MOAT;
-        loc.typ = ICE;
+        loc.icedpool = lava ? 0 : loc.typ === POOL ? ICED_POOL : ICED_MOAT;
+        if (lava) loc.flags = 0;
+        loc.typ = lava ? ROOM : ICE;
     }
     buryObjectsAt(x, y);
-    startMeltIceTimeout(x, y, 0);
-    objIceEffectsAt(x, y, { doBuried: true });
+    if (!lava) {
+        startMeltIceTimeout(x, y, 0);
+        objIceEffectsAt(x, y, { doBuried: true });
+    }
 
     const mon = (game.level?.monsters || []).find(candidate => candidate.mx === x && candidate.my === y);
+    const heroMessages = [];
     if (mon?.mundetected) mon.mundetected = 0;
     if (game.u?.uinwater && heroAt(x, y)) {
         game.u.uinwater = 0;
@@ -345,13 +457,18 @@ export function applyColdRayTerrain(x, y) {
         game.u.uunderwater = false;
         game.u.uundetected = 0;
         vision_recalc(1);
+    } else if (lava && heroAt(x, y)) {
+        applyHeroCoolingLavaTrap(heroMessages);
     }
     newsym(x, y);
+    if (solidifiedWall)
+        redrawNear(Math.max(0, x - 1), Math.max(0, y - 1), Math.min(COLNO - 1, x + 1), Math.min(ROWNO - 1, y + 1));
 
     const messages = [];
-    if (visibleAt(x, y)) messages.push(wasMoat ? 'The moat is bridged with ice!' : WATER_FREEZES_MESSAGE);
-    else if (!heroDeaf()) messages.push(CRACKLING_SOUND_MESSAGE);
-    return { handled: true, messages, rangeMod: -3, stopped: false };
+    if (visibleAt(x, y)) messages.push(lava ? LAVA_SOLIDIFIES_MESSAGE : wasMoat ? 'The moat is bridged with ice!' : WATER_FREEZES_MESSAGE);
+    else if (!lava && !heroDeaf()) messages.push(CRACKLING_SOUND_MESSAGE);
+    messages.push(...heroMessages);
+    return { handled: true, messages, rangeMod: -3, stopped: false, blocked: solidifiedWall };
 }
 
 export function meltIceAt(x, y, { message = ICE_MELT_MESSAGE } = {}) {

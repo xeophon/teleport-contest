@@ -24343,7 +24343,7 @@ export async function rhack(_cmd) {
                     const terrain = applyColdRayTerrain(x, y);
                     terrainMessages.push(...terrain.messages);
                     range += terrain.rangeMod;
-                    if (terrain.stopped || range < 0) break;
+                    if (terrain.stopped || terrain.blocked || range < 0) break;
                     target = game.level?.monsters?.find(mon => mon.mx === x && mon.my === y);
                     if (target) break;
                 }
