@@ -2269,6 +2269,15 @@ Next concrete target:
   handling on both initial and resumed rays. Direct smokes cover visible,
   blind, protected-object, hero-target, and under-monster ordering; focused
   breath guards still match, and full `npm run score` remains `44/44`.
+- Fire rays now burn spider-web traps through the C `zap_over_floor()` ordering
+  before terrain, floor-object, and target handling for both wand-of-fire and
+  ordinary monster fire-breath paths. Visible webs say they burst into flames,
+  repeated visible web-burn lines are suppressed like C `Norep`, unseen webs
+  burn silently, and deleting the web also frees a trapped hero or monster
+  while preserving the buried-ball exception. Direct smokes cover
+  visible/blind web burns, duplicate suppression, trapped-state clearing,
+  hero-target, and under-monster ordering; focused wand/fire/breath guards
+  still match, and full `npm run score` remains `44/44`.
 - Remaining trap work includes off-hero `impact_drop()` callers, deeper
   statue-trap edge cases, broader non-trap fire floor-object parity, and
   remaining bespoke ray floor/hero timing edges.

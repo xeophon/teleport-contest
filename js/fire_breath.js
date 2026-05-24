@@ -1,5 +1,5 @@
 import { game } from './gstate.js';
-import { IS_POOL } from './const.js';
+import { IN_SIGHT, IS_POOL, TT_BURIEDBALL, WEB } from './const.js';
 import { d, rn2, rnd, rnl } from './rng.js';
 import { createGasCloud } from './region.js';
 import { newsym } from './display.js';
@@ -7,6 +7,7 @@ import { dropMonsterInventory, mkcorpstat } from './mklev.js';
 import { CLR_BROWN } from './terminal.js';
 
 const CORPSE = 471;
+const WEB_BURST_MESSAGE = 'A web bursts into flames!';
 
 const FIRE_ARMOR_SLOT = {
     HELMET: 0,
@@ -205,6 +206,32 @@ function burnMonsterArmorFromFire(mon) {
     }
 }
 
+// C ref: zap.c zap_over_floor() fire case for webs.
+export function burnFireRayWebTrap(x, y, { previousMessage = '' } = {}) {
+    const trap = (game.level?.traps || []).find(item =>
+        item.tx === x && item.ty === y && item.ttyp === WEB);
+    if (!trap) return [];
+    const visible = !game.u?.blind && !!(game.viz_array?.[y]?.[x] & IN_SIGHT);
+    if (game.u?.ux === x && game.u?.uy === y
+        && game.u.utraptype !== TT_BURIEDBALL && game.u.utraptype !== 'buriedball') {
+        game.u.utrap = 0;
+        game.u.utraptype = null;
+    } else {
+        const mon = (game.level?.monsters || []).find(candidate =>
+            candidate.mx === x && candidate.my === y);
+        if (mon) mon.mtrapped = 0;
+    }
+    game.level.traps = (game.level?.traps || []).filter(item => item !== trap);
+    if (visible) {
+        newsym(x, y);
+        if (previousMessage === WEB_BURST_MESSAGE
+            || (!previousMessage && game._last_pline_message === WEB_BURST_MESSAGE))
+            return [];
+        return [WEB_BURST_MESSAGE];
+    }
+    return [];
+}
+
 // C ref: zap.c zap_over_floor() for fire over water.
 export function applyFireBreathTerrain(x, y) {
     const loc = game.level?.at(x, y);
@@ -227,6 +254,9 @@ export function advanceFireBreathRay(ray, sourceId, { floorFire = null } = {}) {
         ray.remaining--;
         ray.x += ray.dx;
         ray.y += ray.dy;
+        messages.push(...burnFireRayWebTrap(ray.x, ray.y, {
+            previousMessage: messages[messages.length - 1] || '',
+        }));
         const terrainMessage = applyFireBreathTerrain(ray.x, ray.y);
         if (terrainMessage && !ray.heardGas) {
             messages.push(terrainMessage);
