@@ -2256,6 +2256,13 @@ Next concrete target:
   Direct smokes cover body-hit destroy-plus-ignite, non-body armor hits,
   fire-resistant targets, post-item MR halving, and item-damage kills; focused
   wand/fire/breath guards still match.
+- Hero-zapped wand-of-fire rays now run the ray-style `zap_over_floor()`
+  floor-object fire pass before target hit checks: floor scrolls, spellbooks,
+  and slime globs use generic puff/whiff smoke instead of per-object burn
+  messages, protected fire scroll/fireball spellbook stacks are skipped, and
+  visible floor lights can catch light before the smoke/hit message. Direct
+  smokes cover visible, blind, protected-object, and under-monster ordering;
+  focused fire/wand guards still match.
 - Remaining trap work includes off-hero `impact_drop()` callers, deeper
   statue-trap edge cases, broader non-trap fire floor-object parity, and
   remaining bespoke ray floor/hero timing edges.

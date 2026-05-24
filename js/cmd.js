@@ -7060,7 +7060,10 @@ function maybeIgniteFloorFireItem(item, messages, giveFeedback) {
     return true;
 }
 
-export function burnFloorObjectsByFire(x, y, { giveFeedback = false } = {}) {
+export function burnFloorObjectsByFire(x, y, {
+    giveFeedback = false,
+    igniteFeedback = giveFeedback,
+} = {}) {
     if (!game.level) return { count: 0, messages: [] };
     const messages = [];
     let count = 0;
@@ -7086,7 +7089,7 @@ export function burnFloorObjectsByFire(x, y, { giveFeedback = false } = {}) {
     }
 
     for (const obj of [...(game.level.objects || [])]) {
-        if (atSquare(obj) && maybeIgniteFloorFireItem(obj, messages, giveFeedback))
+        if (atSquare(obj) && maybeIgniteFloorFireItem(obj, messages, igniteFeedback))
             changed = true;
     }
     if (changed) newsym(x, y);
@@ -24402,6 +24405,12 @@ export async function rhack(_cmd) {
                     if (!bounceNow) {
                         const beam = dy === 0 ? '─' : dx === 0 ? '│' : dx === dy ? '\\' : '/';
                         beamCells.push({ x: sx, y: sy, ch: beam, color: CLR_ORANGE });
+
+                        const floorVisible = !game.u?.blind && !!(game.viz_array?.[sy]?.[sx] & IN_SIGHT);
+                        const floorFire = burnFloorObjectsByFire(sx, sy, { igniteFeedback: floorVisible });
+                        messages.push(...floorFire.messages);
+                        if (floorFire.count && couldsee(sx, sy))
+                            messages.push(`You ${game.u?.blind ? 'smell a whiff' : 'see a puff'} of smoke.`);
 
                         const target = game.level?.monsters?.find(mon => mon.mx === sx && mon.my === sy);
                         if (target) {
