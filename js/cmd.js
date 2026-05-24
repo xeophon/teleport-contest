@@ -3981,6 +3981,21 @@ function recordKnownArmorDiscovery(kind, starred = false) {
     }
     game._discoveries.push({ section: 'Armor', name: discoveryName, text, starred });
 }
+
+function recordKnownAmuletDiscovery(kind, item = null) {
+    const name = String(kind || '').toLowerCase();
+    const amuletIndex = item?.amuletIndex ?? IDENTIFIED_AMULET_NAMES.indexOf(name);
+    const appearance = item?.appearance || game._object_descriptions?.amulets?.[amuletIndex] || '';
+    const text = appearance ? `${name} (${appearance})` : name;
+    game._discoveries ??= [];
+    const existing = game._discoveries.find(entry => entry.section === 'Amulets' && entry.name === name);
+    if (existing) {
+        existing.text = text;
+        existing.starred = false;
+        return;
+    }
+    game._discoveries.push({ section: 'Amulets', name, text, starred: false, known: true });
+}
 const MAGICAL_ARMOR_KINDS = new Set([
     'cloak of displacement', 'cloak of invisibility', 'cloak of magic resistance',
     'cloak of protection', 'helm of brilliance', 'helm of caution',
@@ -11367,6 +11382,60 @@ function fireScrollMonsterName(mon) {
     if (mon?.givenName) return mon.givenName;
     if (mon?.isshk && mon.shknam) return mon.shknam;
     return `The ${mon?.data?.name || mon?.name || 'monster'}`;
+}
+
+function monsterPossessiveName(mon) {
+    const owner = fireScrollMonsterName(mon).replace(/^The /, 'the ');
+    return owner.endsWith('s') ? `${owner}'` : `${owner}'s`;
+}
+
+function coldRayMonsterName(mon) {
+    return fireScrollMonsterName(mon).replace(/^The /, 'the ');
+}
+
+const REFLECTING_MONSTER_ARTIFACTS = new Set(['dragonbane', 'the longbow of diana', 'longbow of diana']);
+
+function monsterReflectionItemName(item) {
+    return String(item?.actualKind || item?.kind || item?.artifact || item?.oname || item?.oextra?.oname || item?.line || '')
+        .toLowerCase()
+        .replace(/^the /, '');
+}
+
+function monsterReflectionSource(mon) {
+    const inventory = mon?.minvent || [];
+    for (const item of inventory) {
+        const kind = monsterReflectionItemName(item);
+        if (item?.otyp === SHIELD_OF_REFLECTION || kind === 'shield of reflection')
+            return { source: 'shield', item, kind: 'shield of reflection' };
+    }
+    for (const item of inventory) {
+        const artifact = String(item?.artifact || item?.oartifact || '').toLowerCase().replace(/^the /, '');
+        if ((item?.cls === 'weapon' || item?.glyph === ')' || item?.wielded || item === mon?.mwep)
+            && (REFLECTING_MONSTER_ARTIFACTS.has(artifact) || REFLECTING_MONSTER_ARTIFACTS.has(monsterReflectionItemName(item))))
+            return { source: 'weapon', item };
+    }
+    for (const item of inventory) {
+        const kind = monsterReflectionItemName(item);
+        if (item?.amuletIndex === 7 || kind === 'amulet of reflection')
+            return { source: 'amulet', item, kind: 'amulet of reflection' };
+    }
+    for (const item of inventory) {
+        const kind = monsterReflectionItemName(item);
+        if (item?.otyp === SILVER_DRAGON_SCALE_MAIL || item?.otyp === SILVER_DRAGON_SCALES
+            || kind === 'silver dragon scale mail' || kind === 'silver dragon scales')
+            return { source: 'armor', item };
+    }
+    const monsterName = String(mon?.data?.name || mon?.name || '').toLowerCase();
+    if (monsterName === 'silver dragon' || monsterName === 'chromatic dragon')
+        return { source: 'scales', item: null };
+    return null;
+}
+
+function recordMonsterReflectionDiscovery(reflection) {
+    if (!reflection?.item) return;
+    reflection.item.known = true;
+    if (reflection.kind === 'shield of reflection') recordKnownArmorDiscovery('shield of reflection', false);
+    else if (reflection.kind === 'amulet of reflection') recordKnownAmuletDiscovery('amulet of reflection', reflection.item);
 }
 
 function fireScrollTargetDescription(x, y) {
@@ -24524,40 +24593,51 @@ export async function rhack(_cmd) {
                             const armorClass = target.mac ?? target.data?.mac ?? target.data?.ac ?? 10;
                             if (zapRayHitsArmorClass(armorClass)) {
                                 range -= 2;
-                                let damage = 0;
-                                const resistsCold = !!(target.coldResistance || target.data?.resistsCold || target.data?.coldResistance);
-                                if (!resistsCold) {
-                                    const origDamage = d(6, 6);
-                                    damage = origDamage;
-                                    if (target.fireResistance || target.data?.resistsFire) damage += d(6, 3);
-                                    if (!rn2(3))
-                                        damage += monsterColdInventoryDamage(target, origDamage, messages, visible);
-                                    if (damage > 0 && monsterResistsEffect(target, 12))
-                                        damage = Math.trunc(damage / 2);
-                                }
-                                target.mhp = (target.mhp || 1) - damage;
-                                if ((target.mhp || 0) <= 0) {
-                                    rn2(6);
-                                    const corpseRoll = rn2(3);
-                                    const corpseData = target.data?.corpse || target.data;
-                                    dropMonsterInventory(target);
-                                    game.level.monsters = (game.level?.monsters || []).filter(mon => mon !== target);
-                                    if (!corpseRoll && corpseData && !corpseData.noCorpse) {
-                                        const corpse = mkcorpstat(CORPSE, target, corpseData, target.mx, target.my, 8);
-                                        Object.assign(corpse, {
-                                            otyp: 'corpse',
-                                            glyph: '%',
-                                            color: corpseData.color ?? target.data?.color ?? CLR_BROWN,
-                                            corpsenm: corpseData,
-                                            oldCorpse: !!target.data?.corpse,
-                                        });
+                                const reflection = monsterReflectionSource(target);
+                                if (reflection) {
+                                    if (visible) {
+                                        messages.push(`The bolt of cold hits ${coldRayMonsterName(target)}.`);
+                                        recordMonsterReflectionDiscovery(reflection);
+                                        messages.push(`But it reflects from ${monsterPossessiveName(target)} ${reflection.source}!`);
                                     }
-                                    recordVanquished(target, true);
-                                    newsym(target.mx, target.my);
-                                    messages.push(`You kill the ${target.data?.name || 'monster'}!`);
-                                    break;
-                                } else if (visible) {
-                                    messages.push(`The bolt of cold hits the ${target.data?.name || 'monster'}!`);
+                                    dx = -dx;
+                                    dy = -dy;
+                                } else {
+                                    let damage = 0;
+                                    const resistsCold = !!(target.coldResistance || target.data?.resistsCold || target.data?.coldResistance);
+                                    if (!resistsCold) {
+                                        const origDamage = d(6, 6);
+                                        damage = origDamage;
+                                        if (target.fireResistance || target.data?.resistsFire) damage += d(6, 3);
+                                        if (!rn2(3))
+                                            damage += monsterColdInventoryDamage(target, origDamage, messages, visible);
+                                        if (damage > 0 && monsterResistsEffect(target, 12))
+                                            damage = Math.trunc(damage / 2);
+                                    }
+                                    target.mhp = (target.mhp || 1) - damage;
+                                    if ((target.mhp || 0) <= 0) {
+                                        rn2(6);
+                                        const corpseRoll = rn2(3);
+                                        const corpseData = target.data?.corpse || target.data;
+                                        dropMonsterInventory(target);
+                                        game.level.monsters = (game.level?.monsters || []).filter(mon => mon !== target);
+                                        if (!corpseRoll && corpseData && !corpseData.noCorpse) {
+                                            const corpse = mkcorpstat(CORPSE, target, corpseData, target.mx, target.my, 8);
+                                            Object.assign(corpse, {
+                                                otyp: 'corpse',
+                                                glyph: '%',
+                                                color: corpseData.color ?? target.data?.color ?? CLR_BROWN,
+                                                corpsenm: corpseData,
+                                                oldCorpse: !!target.data?.corpse,
+                                            });
+                                        }
+                                        recordVanquished(target, true);
+                                        newsym(target.mx, target.my);
+                                        messages.push(`You kill the ${target.data?.name || 'monster'}!`);
+                                        break;
+                                    } else if (visible) {
+                                        messages.push(`The bolt of cold hits the ${target.data?.name || 'monster'}!`);
+                                    }
                                 }
                             } else if (visible) {
                                 messages.push(`The bolt of cold misses the ${target.data?.name || 'monster'}.`);

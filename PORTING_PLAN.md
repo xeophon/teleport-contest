@@ -2370,11 +2370,18 @@ Next concrete target:
   hero potion shatter, cold-resistant hero potion damage, oil immunity, and
   visible monster potion shatter; focused guards and full `npm run score`
   remain `44/44`.
+- Cold rays now reflect from monsters after a successful zap-hit check and
+  before cold damage/item destruction, matching C source order for shields,
+  reflecting artifact weapons, amulets, silver dragon armor/scales, and innate
+  silver/chromatic dragon scales. Visible reflectors produce the C hit/reflection
+  message pair and identify shield/amulet sources; unseen reflectors silently
+  reverse the ray. Direct smokes cover shield, amulet, innate silver-dragon, and
+  unseen reflection; focused guards remain exact.
 - Remaining ice work outside this fire-ray terrain slice includes the broader
   full `spoteffects()`/`pooleffects()` hero liquid behavior, shared post-melt
   monster liquid effects for timer melts, exact `bury_objs()` object-resistance
-  behavior, monster reflection, and a shared zap-ray walker so fire/sleep/cold
-  stop carrying parallel bounce code.
+  behavior, and a shared zap-ray walker so fire/sleep/cold stop carrying
+  parallel bounce code.
 - Remaining trap work includes off-hero `impact_drop()` callers, deeper
   statue-trap edge cases, broader non-trap fire floor-object parity, and
   remaining bespoke ray floor/hero timing edges.
