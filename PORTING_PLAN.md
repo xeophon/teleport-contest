@@ -2156,8 +2156,18 @@ Next concrete target:
   `seed0373`, `seed0383`, `seed0399`, `seed0501`, `seed2200`, `seed2600`,
   `seed4500`, and `seed5006` all pass, and full `bash frozen/score.sh`
   remains `44/44`.
+- Applying a wielded polearm now has a small getpos-style target mode for the
+  C `use_pole()` statue-trap edge: polearm-like weapons no longer fall through
+  to the generic weapon rejection, non-wielded polearms are wielded for a turn,
+  valid range-2 targets can thump statues/boulders or miss empty squares, and a
+  selected floor statue plus `STATUE_TRAP` activates with the normal "posing as
+  a statue" message instead of the shatter path. Focused guards `seed0002`,
+  `seed0014`, `seed0030`, `seed0060`, `seed0105`, `seed0360`, `seed0367`,
+  `seed0373`, `seed0383`, `seed0398`, `seed0399`, `seed0501`, `seed2200`,
+  `seed2600`, `seed4500`, and `seed5006` all pass, and full
+  `bash frozen/score.sh` remains `44/44`.
 - Remaining trap work includes `impact_drop()` for actual fall/dig callers,
-  statue-trap polearm/pick break activation edges, and deeper fire
+  statue-trap pick break activation edges, and deeper fire
   trap `burnarmor()`/floor-object burning parity.
 - `seed4500-knight-coverage` is closed again and should remain a guard for
   punished teleport landing object-list timing, Vlad tower generation, observed

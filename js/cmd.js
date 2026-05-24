@@ -980,6 +980,7 @@ const BAG_PUT_CLASS_TYPES = [
 ];
 const INVENTORY_LETTERS = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
 const APPLY_WEAPON_NAME_RE = /pick-axe|mattock|\baxe\b|bullwhip|lance|polearm|poleaxe|bardiche|bec de corbin|bill-guisarme|fauchard|glaive|guisarme|halberd|lucern hammer|partisan|ranseur|spetum|voulge|snickersnee/;
+const POLEARM_NAME_RE = /\blance\b|polearm|poleaxe|bardiche|bec de corbin|bill-guisarme|fauchard|glaive|guisarme|halberd|lucern hammer|partisan|ranseur|spetum|voulge|snickersnee/;
 const WISH_LOCK_QUALIFIER_RE = /^(locked|unlocked|broken)\s+/i;
 const WISH_PROOF_QUALIFIER_RE = /^(rustproof|erodeproof|corrodeproof|fixed|fireproof|rotproof|tempered|crackproof)\s+/i;
 const WISH_PRIMARY_EROSION_RE = /^(rusty|rusted|burnt|burned|cracked)\s+/i;
@@ -8132,6 +8133,55 @@ function floorStatueAt(x, y) {
 function statueTrapAt(x, y) {
     return (game.level?.traps || []).find(trap =>
         trap.tx === x && trap.ty === y && trap.ttyp === STATUE_TRAP) || null;
+}
+
+function isPolearmItem(item) {
+    if (!item) return false;
+    const name = inventoryItemName(item).toLowerCase();
+    return item.cls === 'weapon' && POLEARM_NAME_RE.test(name);
+}
+
+function itemIsWielded(item) {
+    return !!(item && (item.wielded || item.line?.includes('weapon in') || item.line?.includes('(wielded)')));
+}
+
+function wieldItemForApply(item) {
+    touchArtifactForWield(item);
+    const previousWielded = (game.inventory || []).find(invItem => invItem !== item && itemIsWielded(invItem));
+    if (previousWielded) {
+        previousWielded.wielded = false;
+        previousWielded.alternate = false;
+        previousWielded.line = `${previousWielded.letter || '?'} - ${inventoryItemName(previousWielded)}`;
+    }
+    for (const invItem of game.inventory || []) {
+        if (invItem === item) continue;
+        invItem.wielded = false;
+    }
+    item.wielded = true;
+    item.alternate = false;
+    const hand = isPolearmItem(item) || item.kind === 'quarterstaff' ? 'hands' : `${game.u?.uhandedness || 'right'} hand`;
+    item.line = `${item.letter || '?'} - ${inventoryItemName(item)} (weapon in ${hand})`;
+    game._wielded_mjollnir = item.artifact === 'Mjollnir' || item.kind === 'mjollnir' || /Mjollnir/.test(inventoryItemName(item));
+    return item.line;
+}
+
+function polearmTargetDescription(x, y) {
+    const mon = (game.level?.monsters || []).find(candidate => candidate.mx === x && candidate.my === y);
+    if (mon) return monsterIndefiniteName(mon.data?.name || 'monster');
+    const statue = floorStatueAt(x, y);
+    if (statue) return pickupObjectPhrase(statue);
+    const obj = (game.level?.objects || []).find(candidate =>
+        !candidate.hidden && !candidate.transientProjectile && candidate.ox === x && candidate.oy === y);
+    if (obj) return pickupObjectPhrase(obj);
+    const loc = game.level?.at(x, y);
+    if (!loc) return 'stone';
+    if (loc.typ === DOOR) return doorDescription(loc);
+    if (loc.typ === CORR) return 'corridor';
+    if (loc.typ === ROOM || loc.typ === STAIRS) return 'floor of a room';
+    if (loc.typ === TREE) return 'tree';
+    if (loc.typ === MOAT) return 'moat';
+    if (loc.typ === STONE) return 'stone';
+    return loc.typ && loc.typ < DOOR ? 'wall' : 'unexplored area';
 }
 
 function statueTrapStrikeTargetAlongLine(dir) {
@@ -26631,6 +26681,21 @@ export async function rhack(_cmd) {
             await beginTinOpenerUse(item);
             return;
         }
+        if (isPolearmItem(item)) {
+            if (!itemIsWielded(item)) {
+                const line = wieldItemForApply(item);
+                await setMessage(`${line}.`);
+                game.context.move = 1;
+                return;
+            }
+            game._apply_polearm_letter = item.letter;
+            game._farlook_x = game.u?.ux || 0;
+            game._farlook_y = game.u?.uy || 0;
+            game._cursor_override = [(game._farlook_x || 0) - 1, (game._farlook_y || 0) + 1];
+            await setMessage('Where do you want to hit?');
+            game._command_mode = 'applyPolearmTarget';
+            return;
+        }
         if (['armor', 'weapon', 'amulet', 'ring', 'gem', 'food'].includes(item.cls)) {
             await setMessage("Sorry, I don't know how to use that.");
             return;
@@ -26704,6 +26769,87 @@ export async function rhack(_cmd) {
         }
         await setMessage('Nothing happens.');
         game.context.move = 1;
+        return;
+    }
+
+    if (game._command_mode === 'applyPolearmTarget') {
+        const item = (game.inventory || []).find(invItem => invItem.letter === game._apply_polearm_letter);
+        if (ch === '\x1b') {
+            game._apply_polearm_letter = null;
+            game._cursor_override = null;
+            game._pending_message = '';
+            game._message_more = 0;
+            game._command_mode = null;
+            return;
+        }
+        const dir = movementDirection(ch === '\r' || ch === '\n' ? '.' : ch);
+        if (dir) {
+            const steps = ch !== ch.toLowerCase() ? 8 : 1;
+            const cursor = truncateCursorToMap(
+                game._farlook_x || game.u?.ux || 0,
+                game._farlook_y || game.u?.uy || 0,
+                dir.dx * steps,
+                dir.dy * steps,
+            );
+            game._farlook_x = cursor.x;
+            game._farlook_y = cursor.y;
+            game._cursor_override = [cursor.x - 1, cursor.y + 1];
+            const dist2 = (cursor.x - (game.u?.ux || 0)) ** 2 + (cursor.y - (game.u?.uy || 0)) ** 2;
+            const validRange = dist2 === 4;
+            await setMessage(validRange ? polearmTargetDescription(cursor.x, cursor.y)
+                : `${polearmTargetDescription(cursor.x, cursor.y)} (${dist2 < 4 ? 'too close' : 'too far'})`);
+            return;
+        }
+        if (ch === '.' || ch === ' ' || ch === '\r' || ch === '\n') {
+            const x = game._farlook_x || game.u?.ux || 0;
+            const y = game._farlook_y || game.u?.uy || 0;
+            game._apply_polearm_letter = null;
+            game._cursor_override = null;
+            game._command_mode = null;
+            if (!item || !isPolearmItem(item)) return;
+            const dist2 = (x - (game.u?.ux || 0)) ** 2 + (y - (game.u?.uy || 0)) ** 2;
+            if (dist2 > 4) {
+                await setMessage('Too far!');
+                return;
+            }
+            if (dist2 < 4) {
+                await setMessage('Too close!');
+                return;
+            }
+            if (!couldsee(x, y)) {
+                await setMessage("You can't reach that spot from here.");
+                return;
+            }
+
+            const statueObj = floorStatueAt(x, y);
+            if (statueObj) {
+                const statueTrap = statueTrapAt(x, y);
+                const message = statueTrap
+                    ? await activateStatueTrap(statueTrap, x, y, { normal: true }) || ''
+                    : 'Thump!  Your blow bounces harmlessly off the statue.';
+                await setMessage(message);
+                game.context.move = 1;
+                return;
+            }
+
+            const boulder = (game.level?.objects || []).some(obj =>
+                !obj.hidden && !obj.transientProjectile && obj.ox === x && obj.oy === y && obj.otyp === BOULDER);
+            if (boulder) {
+                await setMessage('Thump!  Your blow bounces harmlessly off the boulder.');
+                game.context.move = 1;
+                return;
+            }
+            const loc = game.level?.at(x, y);
+            if (!loc || !ACCESSIBLE(loc.typ)) {
+                await setMessage(`You uselessly attack ${loc?.typ === STONE ? 'stone' : 'an unknown obstacle'}.`);
+                game.context.move = 1;
+                return;
+            }
+            await setMessage('You miss; there is no one there to hit.');
+            game.context.move = 1;
+            return;
+        }
+        game._keep_pending_message = 1;
         return;
     }
 
