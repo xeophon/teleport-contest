@@ -12939,6 +12939,47 @@ function droppedObjectHotGroundFloorEffects(obj, x, y, messages) {
     return destroyed;
 }
 
+function floorEffectsTeeteringPit(trap, x, y) {
+    return !!(trap && (trap.ttyp === PIT || trap.ttyp === SPIKED_PIT) && trap.tseen
+        && game.u?.ux === x && game.u?.uy === y
+        && !(game.u?.utrap && isPitTrapType(game.u?.utraptype)));
+}
+
+function floorEffectsEscapedShaft(trap, x, y) {
+    return !!(trap && (trap.ttyp === HOLE || trap.ttyp === TRAPDOOR) && trap.tseen
+        && game.u?.ux === x && game.u?.uy === y);
+}
+
+function floorEffectsObjectVerb(obj, singular, plural) {
+    return (obj?.quan || 1) > 1 ? plural : singular;
+}
+
+function droppedObjectPitHoleFloorEffects(obj, x, y, messages) {
+    const trap = boulderFillTrapAt(x, y);
+    if (floorEffectsTeeteringPit(trap, x, y)) {
+        if (game.u?.blind && !heroIsDeaf()) {
+            messages.push(`You hear ${floorObjectTheName(obj)} tumble downwards.`);
+        } else {
+            const whose = trap.madeby_u ? 'your' : 'the';
+            messages.push(`${floorObjectSubject(obj)} ${floorEffectsObjectVerb(obj, 'tumbles', 'tumble')} into ${whose} pit.`);
+        }
+        return { handled: true, consumed: false };
+    }
+    if (!floorEffectsEscapedShaft(trap, x, y)) return { handled: false, consumed: false };
+    if (obj === game.u?.uball || obj === game.u?.uchain) return { handled: true, consumed: false };
+    if (!canFallThroughLevel(game.u?.uz)) return { handled: true, consumed: false };
+    if (rn2(3)) return { handled: true, consumed: false };
+    const target = sitFallTargetLevel(trap);
+    if (!target) return { handled: true, consumed: false };
+    if (floorObjectVisible(x, y)) {
+        const gate = trap.ttyp === TRAPDOOR ? 'through the trap door' : 'through the hole';
+        messages.push(`${floorObjectSubject(obj)} ${floorEffectsObjectVerb(obj, 'falls', 'fall')} ${gate}.`);
+    }
+    queueImpactDroppedObjects(target, [obj]);
+    newsym(x, y);
+    return { handled: true, consumed: true };
+}
+
 function earthFloorEffects(obj, x, y, messages, verb = 'fall') {
     const loc = game.level?.at(x, y);
     if (!loc || !obj) return false;
@@ -12987,6 +13028,8 @@ function earthFloorEffects(obj, x, y, messages, verb = 'fall') {
         return droppedObjectLavaFloorEffects(obj, x, y, messages);
     if (IS_POOL(liquidType))
         return droppedObjectWaterFloorEffects(obj, x, y, messages);
+    const pitHole = droppedObjectPitHoleFloorEffects(obj, x, y, messages);
+    if (pitHole.handled) return pitHole.consumed;
     return droppedObjectHotGroundFloorEffects(obj, x, y, messages);
 }
 

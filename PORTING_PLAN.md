@@ -2555,6 +2555,14 @@ Next concrete target:
   effect emits text. Direct smokes cover normal weapon placement, potion lava
   destruction, scroll pool survival, and dropped-boulder pit fill; focused
   replay guards remain exact.
+- The next non-boulder `flooreffects()` branch now covers hero-square
+  pit/shaft edges after liquid handling: objects dropped while the hero is
+  teetering over a seen pit report the C tumble message but still land on the
+  square, and seen holes/trapdoors use the C `rn2(3)==0` ship chance to queue
+  the object for the next level while unseen trapdoors leave the object on the
+  current floor. Punishment ball/chain and no-destination cases stay on the
+  current square. Direct smokes cover seen pit placement, seen hole migration,
+  and unseen trapdoor no-migration; focused replay guards remain exact.
 - Remaining ice work outside this fire-ray terrain slice includes the broader
   full `spoteffects()`/`pooleffects()` hero liquid behavior, deeper
   `minliquid()` edges (life-saving or shape-shift survivor relocation,
