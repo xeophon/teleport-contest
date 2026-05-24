@@ -2332,9 +2332,21 @@ Next concrete target:
   while fire-ray `melt_ice()` keeps the C order by thawing floor corpses
   before unearthing buried objects. Direct smokes cover floor placement,
   pickup/removal, buried adjustment, and melt/unearth restoration.
+- Ice now has level-local `MELT_ICE_AWAY` timers with the C
+  `start_melt_ice_timeout()` RNG loop, including remaining-time refresh and
+  permanent-ice outcomes. Turn processing melts due ice with `Some ice melts
+  away.`, and cold rays now run a terrain pass before monster hits: WATER
+  briefly freezes and stops the ray, pools/moats/drawbridge-moats freeze into
+  timed ice, objects are buried before `obj_ice_effects(..., TRUE)`, and
+  already-timed ice is firmed up by restarting its melt timer. Direct smokes
+  cover timer scheduling/expiry, cold freeze/bury/object adjustment, WATER
+  stop behavior, drawbridge ice, and timed-ice refresh; focused guards and
+  full `npm run score` remain `44/44`.
 - Remaining ice work outside this fire-ray terrain slice includes the broader
-  `MELT_ICE_AWAY` timer system, full `spoteffects()`/`pooleffects()` hero
-  liquid behavior, and broader cold-ray freezing integration.
+  full `spoteffects()`/`pooleffects()` hero liquid behavior, shared post-melt
+  monster liquid effects for timer melts, lava/lavawall cold terrain, and a
+  broader cold-ray traversal rewrite instead of the current hardcoded cold
+  target path.
 - Remaining trap work includes off-hero `impact_drop()` callers, deeper
   statue-trap edge cases, broader non-trap fire floor-object parity, and
   remaining bespoke ray floor/hero timing edges.

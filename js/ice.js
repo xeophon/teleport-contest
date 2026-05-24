@@ -1,8 +1,8 @@
 import { game } from './gstate.js';
 import {
     BEAR_TRAP, DB_FLOOR, DB_ICE, DB_MOAT, DB_UNDER, DRAWBRIDGE_DOWN,
-    DRAWBRIDGE_UP, ICED_POOL, ICE, IN_SIGHT, IS_POOL, Is_waterlevel,
-    LANDMINE, MAGIC_PORTAL, MOAT, POOL, ROOM, VIBRATING_SQUARE,
+    DRAWBRIDGE_UP, ICED_MOAT, ICED_POOL, ICE, IN_SIGHT, IS_POOL, Is_waterlevel,
+    LANDMINE, MAGIC_PORTAL, MOAT, POOL, ROOM, VIBRATING_SQUARE, WATER,
 } from './const.js';
 import { rn2 } from './rng.js';
 import { newsym } from './display.js';
@@ -14,8 +14,15 @@ const LAND_MINE = 10160;
 const BEARTRAP = 10161;
 
 const ICE_MELT_MESSAGE = 'The ice crackles and melts.';
+const ICE_TIMER_MELT_MESSAGE = 'Some ice melts away.';
 const BOULDER_SETTLES_MESSAGE = 'A boulder settles...';
+const WATER_FREEZES_MESSAGE = 'The water freezes.';
+const WATER_FREEZES_MOMENT_MESSAGE = 'The water freezes for a moment.';
+const SOFT_CRACKLING_MESSAGE = 'You hear a soft crackling.';
+const CRACKLING_SOUND_MESSAGE = 'You hear a crackling sound.';
 const ROT_ICE_ADJUSTMENT = 2;
+const MIN_ICE_TIME = 50;
+const MAX_ICE_TIME = 2000;
 
 export function isIceAt(x, y) {
     const loc = game.level?.at(x, y);
@@ -32,12 +39,81 @@ function visibleAt(x, y) {
     return !game.u?.blind && !!(game.viz_array?.[y]?.[x] & IN_SIGHT);
 }
 
-function removeMeltTimers(loc, x, y) {
-    delete loc.meltIceTurn;
-    delete loc.meltIceTimeout;
-    delete loc.meltIceAwayTurn;
+function heroDeaf() {
+    return !!game.u?._deafTimeout || (game.u?._statusSuffix || '').includes('Deaf');
+}
+
+function stopMeltTimers(x, y) {
+    const loc = game.level?.at(x, y);
+    if (loc) {
+        delete loc.meltIceTurn;
+        delete loc.meltIceTimeout;
+        delete loc.meltIceAwayTurn;
+    }
     if (game.level?.meltIceTimers)
         game.level.meltIceTimers = game.level.meltIceTimers.filter(timer => timer.x !== x || timer.y !== y);
+}
+
+function removeMeltTimers(loc, x, y) {
+    if (!loc) return;
+    stopMeltTimers(x, y);
+}
+
+export function spotMeltIceTimeLeft(x, y) {
+    const lvl = game.level;
+    if (!lvl?.meltIceTimers?.length) return 0;
+    const timer = lvl.meltIceTimers
+        .filter(item => item.x === x && item.y === y)
+        .sort((a, b) => (a.turn || 0) - (b.turn || 0))[0];
+    return timer ? Math.max(0, (timer.turn || 0) - (game.moves || 0)) : 0;
+}
+
+export function startMeltIceTimeout(x, y, minTime = 0) {
+    const loc = game.level?.at(x, y);
+    if (!loc) return 0;
+    stopMeltTimers(x, y);
+
+    let when = Math.trunc(minTime || 0);
+    if (when < MIN_ICE_TIME - 1) when = MIN_ICE_TIME - 1;
+    while (++when <= MAX_ICE_TIME) {
+        if (!rn2((MAX_ICE_TIME - when) + MIN_ICE_TIME)) break;
+    }
+    if (when > MAX_ICE_TIME) return 0;
+
+    const turn = (game.moves || 0) + when;
+    loc.meltIceTurn = turn;
+    loc.meltIceTimeout = turn;
+    loc.meltIceAwayTurn = turn;
+    game.level.meltIceTimers ??= [];
+    game._meltIceTimerSeq = (game._meltIceTimerSeq || 0) + 1;
+    game.level.meltIceTimers.push({ x, y, turn, seq: game._meltIceTimerSeq });
+    return turn;
+}
+
+export function processMeltIceTimers(g = game) {
+    const lvl = g.level;
+    if (!lvl?.meltIceTimers?.length) return [];
+    const due = [];
+    const pending = [];
+    for (const timer of lvl.meltIceTimers) {
+        if ((timer.turn || 0) <= (g.moves || 0)) due.push(timer);
+        else pending.push(timer);
+    }
+    if (!due.length) return [];
+    lvl.meltIceTimers = pending;
+    due.sort((a, b) => ((a.turn || 0) - (b.turn || 0)) || ((a.seq || 0) - (b.seq || 0)));
+
+    const messages = [];
+    for (const timer of due) {
+        const loc = lvl.at(timer.x, timer.y);
+        if (!loc) continue;
+        delete loc.meltIceTurn;
+        delete loc.meltIceTimeout;
+        delete loc.meltIceAwayTurn;
+        const result = meltIceAt(timer.x, timer.y, { message: ICE_TIMER_MELT_MESSAGE });
+        messages.push(...result.messages);
+    }
+    return messages;
 }
 
 function isCorpseObject(obj) {
@@ -181,6 +257,11 @@ function buryObjectsAt(x, y) {
     lvl.objects = remaining;
 }
 
+function moatAt(loc) {
+    return loc?.typ === MOAT
+        || (loc?.typ === DRAWBRIDGE_UP && ((loc.flags || 0) & DB_UNDER) === DB_MOAT);
+}
+
 function waterbodyName(loc) {
     if (loc?.typ === MOAT || loc?.typ === DRAWBRIDGE_UP) return 'moat';
     return 'pool of water';
@@ -221,6 +302,56 @@ function settleBouldersAt(x, y) {
         loc = game.level?.at(x, y);
     }
     return messages;
+}
+
+export function applyColdRayTerrain(x, y) {
+    const loc = game.level?.at(x, y);
+    if (!loc) return { handled: false, messages: [], rangeMod: 0, stopped: false };
+
+    if (loc.typ === WATER) {
+        const messages = [];
+        if (visibleAt(x, y)) messages.push(WATER_FREEZES_MOMENT_MESSAGE);
+        else if (!heroDeaf()) messages.push(SOFT_CRACKLING_MESSAGE);
+        return { handled: true, messages, rangeMod: -1000, stopped: true };
+    }
+
+    if (isIceAt(x, y)) {
+        const meltTime = spotMeltIceTimeLeft(x, y);
+        if (meltTime) startMeltIceTimeout(x, y, meltTime);
+        return { handled: true, messages: [], rangeMod: 0, stopped: false };
+    }
+
+    if (!(loc.typ === POOL || loc.typ === MOAT
+        || (loc.typ === DRAWBRIDGE_UP && ((loc.flags || 0) & DB_UNDER) === DB_MOAT))) {
+        return { handled: false, messages: [], rangeMod: 0, stopped: false };
+    }
+
+    const wasMoat = moatAt(loc);
+    if (loc.typ === DRAWBRIDGE_UP) {
+        loc.flags = ((loc.flags || 0) & ~DB_UNDER) | DB_ICE;
+    } else {
+        loc.icedpool = loc.typ === POOL ? ICED_POOL : ICED_MOAT;
+        loc.typ = ICE;
+    }
+    buryObjectsAt(x, y);
+    startMeltIceTimeout(x, y, 0);
+    objIceEffectsAt(x, y, { doBuried: true });
+
+    const mon = (game.level?.monsters || []).find(candidate => candidate.mx === x && candidate.my === y);
+    if (mon?.mundetected) mon.mundetected = 0;
+    if (game.u?.uinwater && heroAt(x, y)) {
+        game.u.uinwater = 0;
+        game.u.underwater = false;
+        game.u.uunderwater = false;
+        game.u.uundetected = 0;
+        vision_recalc(1);
+    }
+    newsym(x, y);
+
+    const messages = [];
+    if (visibleAt(x, y)) messages.push(wasMoat ? 'The moat is bridged with ice!' : WATER_FREEZES_MESSAGE);
+    else if (!heroDeaf()) messages.push(CRACKLING_SOUND_MESSAGE);
+    return { handled: true, messages, rangeMod: -3, stopped: false };
 }
 
 export function meltIceAt(x, y, { message = ICE_MELT_MESSAGE } = {}) {

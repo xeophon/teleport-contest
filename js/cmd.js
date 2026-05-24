@@ -18,7 +18,7 @@ import { clearMonsterTrack, updateMonsterTrack } from './montrack.js';
 import { datFileLines as bundledDatFileLines } from './dat_files.js';
 import { advanceFireBreathRay, applyFireRayFountainTerrain, applyFireRayIceTerrain, applyFireRayWaterTerrain, burnFireRayWebTrap, finishHeroTargetedBreath, fireBreathDamageHero, fireBreathDamageMonster, fireBreathZapHits } from './fire_breath.js';
 import { dryupFountainAt, dryupFountainResultAt } from './fountain.js';
-import { objectIceEffect } from './ice.js';
+import { applyColdRayTerrain, objectIceEffect } from './ice.js';
 import { createGasCloud } from './region.js';
 import { figurineLocationCheck, isFigurineObject, makeFigurineFamiliar, maybeAttachCarriedFigurineTimeout, stopFigurineTransformTimeout, syncCarriedFigurineTransformTimer } from './figurine.js';
 
@@ -24333,11 +24333,19 @@ export async function rhack(_cmd) {
                 rn2(5);
                 rn2(111);
                 let target = null;
-                for (let step = 1; step <= BOLT_LIM; step++) {
+                const terrainMessages = [];
+                let range = BOLT_LIM;
+                for (let step = 1; step <= BOLT_LIM && range-- > 0; step++) {
                     const x = (game.u?.ux || 0) + dir.dx * step;
                     const y = (game.u?.uy || 0) + dir.dy * step;
+                    const loc = game.level?.at(x, y);
+                    if (IS_OBSTRUCTED(loc?.typ)) break;
+                    const terrain = applyColdRayTerrain(x, y);
+                    terrainMessages.push(...terrain.messages);
+                    range += terrain.rangeMod;
+                    if (terrain.stopped || range < 0) break;
                     target = game.level?.monsters?.find(mon => mon.mx === x && mon.my === y);
-                    if (target || IS_OBSTRUCTED(game.level?.at(x, y)?.typ)) break;
+                    if (target) break;
                 }
                 if (target) {
                     rn2(6);
@@ -24361,13 +24369,14 @@ export async function rhack(_cmd) {
                     rn2(10);
                     rn2(10);
                     rn2(19);
-                    await setMessage(`You kill the ${target.data?.name || 'monster'}!`);
+                    const killMessage = `You kill the ${target.data?.name || 'monster'}!`;
+                    await setMessage(terrainMessages.length ? `${terrainMessages.join('  ')}  ${killMessage}` : killMessage);
                 } else {
                     rn2(10);
                     rn2(10);
                     rn2(10);
                     rn2(19);
-                    await setMessage('The bolt of cold bounces!');
+                    await setMessage(terrainMessages.length ? terrainMessages.join('  ') : 'The bolt of cold bounces!');
                 }
                 item.known = true;
                 item.kind = 'cold';
