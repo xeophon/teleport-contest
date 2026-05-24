@@ -16,7 +16,7 @@ import { DISPLAY_MONSTER_COLORS, DISPLAY_MONSTER_GLYPHS, DISPLAY_MONSTER_HALLU_N
 import { prepareVaultGuardEscort } from './vault.js';
 import { clearMonsterTrack, updateMonsterTrack } from './montrack.js';
 import { datFileLines as bundledDatFileLines } from './dat_files.js';
-import { advanceFireBreathRay, applyFireRayFountainTerrain, applyFireRayWaterTerrain, burnFireRayWebTrap, finishHeroTargetedBreath, fireBreathDamageHero, fireBreathDamageMonster, fireBreathZapHits } from './fire_breath.js';
+import { advanceFireBreathRay, applyFireRayFountainTerrain, applyFireRayIceTerrain, applyFireRayWaterTerrain, burnFireRayWebTrap, finishHeroTargetedBreath, fireBreathDamageHero, fireBreathDamageMonster, fireBreathZapHits } from './fire_breath.js';
 import { dryupFountainAt, dryupFountainResultAt } from './fountain.js';
 import { createGasCloud } from './region.js';
 import { figurineLocationCheck, isFigurineObject, makeFigurineFamiliar, maybeAttachCarriedFigurineTimeout, stopFigurineTransformTimeout, syncCarriedFigurineTransformTimer } from './figurine.js';
@@ -24400,17 +24400,21 @@ export async function rhack(_cmd) {
                         messages.push(...burnFireRayWebTrap(sx, sy, {
                             previousMessage: messages[messages.length - 1] || '',
                         }));
-                        const terrain = applyFireRayWaterTerrain(sx, sy, {
-                            previousMessage: messages[messages.length - 1] || '',
-                            heardGas,
-                            heroRay: true,
-                        });
-                        messages.push(...terrain.messages);
-                        heardGas = terrain.heardGas;
-                        range += terrain.rangeMod;
-                        const fountain = applyFireRayFountainTerrain(sx, sy, { heroRay: true });
-                        messages.push(...fountain.messages);
-                        range += fountain.rangeMod;
+                        const ice = applyFireRayIceTerrain(sx, sy, { heroRay: true });
+                        messages.push(...ice.messages);
+                        if (!ice.handled) {
+                            const terrain = applyFireRayWaterTerrain(sx, sy, {
+                                previousMessage: messages[messages.length - 1] || '',
+                                heardGas,
+                                heroRay: true,
+                            });
+                            messages.push(...terrain.messages);
+                            heardGas = terrain.heardGas;
+                            range += terrain.rangeMod;
+                            const fountain = applyFireRayFountainTerrain(sx, sy, { heroRay: true });
+                            messages.push(...fountain.messages);
+                            range += fountain.rangeMod;
+                        }
                         messages.push(...burnRayFloorObjectsByFire(sx, sy));
 
                         const target = game.level?.monsters?.find(mon => mon.mx === sx && mon.my === sy);

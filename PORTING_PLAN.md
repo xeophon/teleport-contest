@@ -2310,7 +2310,23 @@ Next concrete target:
   `seed0014`, `seed2200`, `seed4500`, `seed5002`, `seed5006`, `seed0006`,
   `seed0383`, and `seed0399` all pass, and full `npm run score` remains
   `44/44`.
-- Remaining fire-ray terrain work includes the C `melt_ice()` branch.
+- Fire rays now implement the C `melt_ice()` branch before water/pool or
+  fountain handling, preserving the C `if (ice) ... else if (pool) ...`
+  ordering so newly exposed liquid is not evaporated in the same ray step.
+  Normal ice becomes `POOL` or `MOAT` from its `ICED_POOL`/`ICED_MOAT`
+  flags, drawbridge ice reverts to drawbridge-over-moat, ray range is
+  unchanged, visible or hero-occupied squares say `The ice crackles and
+  melts.`, buried objects are unearthed before floor-object fire, destroyable
+  traps are cleared, boulders can settle/fill exposed liquid, and basic
+  monster drowning refreshes the ray target. Direct smokes cover pool/moat
+  conversion, silent unseen melt, blind hero messaging, drawbridge ice,
+  floor-fire ordering, skipped same-square water evaporation, and monster
+  refresh; focused `seed0014`, `seed2200`, `seed4500`, `seed5002`,
+  `seed5006`, `seed0006`, `seed0360`, `seed0361`, `seed0383`, and
+  `seed0399` all pass, and full `npm run score` remains `44/44`.
+- Remaining ice work outside this fire-ray terrain slice includes the broader
+  `MELT_ICE_AWAY` timer system, full `spoteffects()`/`pooleffects()` hero
+  liquid behavior, and exact object-on-ice rot timer adjustments.
 - Remaining trap work includes off-hero `impact_drop()` callers, deeper
   statue-trap edge cases, broader non-trap fire floor-object parity, and
   remaining bespoke ray floor/hero timing edges.

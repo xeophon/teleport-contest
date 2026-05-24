@@ -1,11 +1,12 @@
 import { game } from './gstate.js';
-import { DB_MOAT, DB_UNDER, DRAWBRIDGE_UP, FOUNTAIN, IN_SIGHT, Is_waterlevel, MOAT, PIT, POOL, ROOM, TT_BURIEDBALL, WATER, WEB } from './const.js';
+import { DB_MOAT, DB_UNDER, DRAWBRIDGE_UP, FOUNTAIN, IN_SIGHT, Is_waterlevel, IS_POOL, MOAT, PIT, POOL, ROOM, TT_BURIEDBALL, WATER, WEB } from './const.js';
 import { d, rn1, rn2, rnd, rnl } from './rng.js';
 import { createGasCloud } from './region.js';
 import { newsym } from './display.js';
 import { dropMonsterInventory, mkcorpstat } from './mklev.js';
 import { CLR_BROWN } from './terminal.js';
 import { dryupFountainResultAt } from './fountain.js';
+import { meltIceAt } from './ice.js';
 
 const CORPSE = 471;
 const WEB_BURST_MESSAGE = 'A web bursts into flames!';
@@ -332,6 +333,38 @@ function applyFireRayPitEffects(x, y, trap) {
     return messages;
 }
 
+function monsterDrownsInMeltedIce(mon) {
+    const data = mon?.data || {};
+    return !!mon && !(data.inAir || data.flyer || data.floater || data.swimmer || data.breathless || data.nonliving);
+}
+
+function applyMeltedIceLiquidEffects(x, y, { heroRay = false } = {}) {
+    const loc = game.level?.at(x, y);
+    if (!loc || !IS_POOL(loc.typ)) return [];
+    const mon = (game.level?.monsters || []).find(candidate =>
+        candidate.mx === x && candidate.my === y && (candidate.mhp == null || candidate.mhp > 0));
+    if (!monsterDrownsInMeltedIce(mon)) return [];
+
+    const messages = [];
+    if (monsterVisibleAt(mon, x, y)) {
+        const name = mon.data?.name || 'creature';
+        messages.push(heroRay ? `You drown the ${name}.` : `The ${name} drowns.`);
+    }
+    dropMonsterInventory(mon);
+    game.level.monsters = (game.level?.monsters || []).filter(other => other !== mon);
+    newsym(x, y);
+    return messages;
+}
+
+// C ref: zap.c zap_over_floor() fire case for ice.
+export function applyFireRayIceTerrain(x, y, { heroRay = false } = {}) {
+    const result = meltIceAt(x, y);
+    if (!result.melted) return { messages: [], handled: false, rangeMod: 0 };
+    const messages = [...result.messages];
+    if (result.becameLiquid) messages.push(...applyMeltedIceLiquidEffects(x, y, { heroRay }));
+    return { messages, handled: true, rangeMod: 0 };
+}
+
 // C ref: zap.c zap_over_floor() for fire over water.
 export function applyFireRayWaterTerrain(x, y, {
     previousMessage = '',
@@ -412,16 +445,20 @@ export function advanceFireBreathRay(ray, sourceId, { floorFire = null } = {}) {
         messages.push(...burnFireRayWebTrap(ray.x, ray.y, {
             previousMessage: messages[messages.length - 1] || '',
         }));
-        const terrain = applyFireRayWaterTerrain(ray.x, ray.y, {
-            previousMessage: messages[messages.length - 1] || '',
-            heardGas: ray.heardGas,
-        });
-        messages.push(...terrain.messages);
-        ray.heardGas = terrain.heardGas;
-        ray.remaining += terrain.rangeMod;
-        const fountain = applyFireRayFountainTerrain(ray.x, ray.y);
-        messages.push(...fountain.messages);
-        ray.remaining += fountain.rangeMod;
+        const ice = applyFireRayIceTerrain(ray.x, ray.y);
+        messages.push(...ice.messages);
+        if (!ice.handled) {
+            const terrain = applyFireRayWaterTerrain(ray.x, ray.y, {
+                previousMessage: messages[messages.length - 1] || '',
+                heardGas: ray.heardGas,
+            });
+            messages.push(...terrain.messages);
+            ray.heardGas = terrain.heardGas;
+            ray.remaining += terrain.rangeMod;
+            const fountain = applyFireRayFountainTerrain(ray.x, ray.y);
+            messages.push(...fountain.messages);
+            ray.remaining += fountain.rangeMod;
+        }
         if (floorFire) {
             const floorMessages = floorFire(ray.x, ray.y) || [];
             messages.push(...floorMessages);
