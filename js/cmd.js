@@ -16,7 +16,7 @@ import { DISPLAY_MONSTER_COLORS, DISPLAY_MONSTER_GLYPHS, DISPLAY_MONSTER_HALLU_N
 import { prepareVaultGuardEscort } from './vault.js';
 import { clearMonsterTrack, updateMonsterTrack } from './montrack.js';
 import { datFileLines as bundledDatFileLines } from './dat_files.js';
-import { advanceFireBreathRay, burnFireRayWebTrap, finishHeroTargetedBreath, fireBreathDamageHero, fireBreathDamageMonster, fireBreathZapHits } from './fire_breath.js';
+import { advanceFireBreathRay, applyFireRayWaterTerrain, burnFireRayWebTrap, finishHeroTargetedBreath, fireBreathDamageHero, fireBreathDamageMonster, fireBreathZapHits } from './fire_breath.js';
 import { createGasCloud } from './region.js';
 import { figurineLocationCheck, isFigurineObject, makeFigurineFamiliar, maybeAttachCarriedFigurineTimeout, stopFigurineTransformTimeout, syncCarriedFigurineTransformTimer } from './figurine.js';
 
@@ -24399,6 +24399,7 @@ export async function rhack(_cmd) {
                 const messages = [];
                 const followups = [];
                 let beamStopIndex = null;
+                let heardGas = false;
                 let range = rn1(7, 7);
                 let sx = game.u?.ux || 0;
                 let sy = game.u?.uy || 0;
@@ -24422,6 +24423,12 @@ export async function rhack(_cmd) {
                         messages.push(...burnFireRayWebTrap(sx, sy, {
                             previousMessage: messages[messages.length - 1] || '',
                         }));
+                        const terrain = applyFireRayWaterTerrain(sx, sy, {
+                            previousMessage: messages[messages.length - 1] || '',
+                            heardGas,
+                        });
+                        messages.push(...terrain.messages);
+                        heardGas = terrain.heardGas;
                         messages.push(...burnRayFloorObjectsByFire(sx, sy));
 
                         const target = game.level?.monsters?.find(mon => mon.mx === sx && mon.my === sy);

@@ -2278,6 +2278,17 @@ Next concrete target:
   visible/blind web burns, duplicate suppression, trapped-state clearing,
   hero-target, and under-monster ordering; focused wand/fire/breath guards
   still match, and full `npm run score` remains `44/44`.
+- Fire rays now share a first C-shaped water terrain pass after web handling
+  and before floor-object or target handling for both wand-of-fire and
+  ordinary monster fire-breath paths. Non-POOL water/moat/drawbridge-moat
+  squares create the C `rnd(5)` steam cloud on normal levels, visible squares
+  say `Some water evaporates.`, blind non-deaf squares use the hissing-gas
+  message with per-ray duplicate suppression, deaf unseen squares stay silent,
+  and Plane-of-Water squares use `Some water boils.` without creating a gas
+  cloud. Full POOL evaporation, pit/range/occupant effects, fountain dry-up,
+  and `melt_ice()` remain deferred slices. Direct smokes cover visible,
+  blind, deaf, Plane-of-Water, POOL fallback, and breath/floor-fire ordering;
+  focused guards and full `npm run score` remain `44/44`.
 - Remaining trap work includes off-hero `impact_drop()` callers, deeper
   statue-trap edge cases, broader non-trap fire floor-object parity, and
   remaining bespoke ray floor/hero timing edges.

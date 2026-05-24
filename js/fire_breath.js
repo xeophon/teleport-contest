@@ -1,5 +1,5 @@
 import { game } from './gstate.js';
-import { IN_SIGHT, IS_POOL, TT_BURIEDBALL, WEB } from './const.js';
+import { DB_MOAT, DB_UNDER, DRAWBRIDGE_UP, IN_SIGHT, Is_waterlevel, MOAT, POOL, TT_BURIEDBALL, WATER, WEB } from './const.js';
 import { d, rn2, rnd, rnl } from './rng.js';
 import { createGasCloud } from './region.js';
 import { newsym } from './display.js';
@@ -8,6 +8,9 @@ import { CLR_BROWN } from './terminal.js';
 
 const CORPSE = 471;
 const WEB_BURST_MESSAGE = 'A web bursts into flames!';
+const WATER_GAS_MESSAGE = 'You hear hissing gas.';
+const WATER_EVAPORATES_MESSAGE = 'Some water evaporates.';
+const WATER_BOILS_MESSAGE = 'Some water boils.';
 
 const FIRE_ARMOR_SLOT = {
     HELMET: 0,
@@ -232,12 +235,49 @@ export function burnFireRayWebTrap(x, y, { previousMessage = '' } = {}) {
     return [];
 }
 
+function norep(message, previousMessage = '') {
+    return previousMessage === message || (!previousMessage && game._last_pline_message === message);
+}
+
+function heroIsDeaf() {
+    return (game.u?._deafTimeout || 0) > 0 || (game.u?._statusSuffix || '').includes('Deaf');
+}
+
+function fireRayWaterTerrainKind(loc) {
+    if (!loc) return null;
+    if (loc.typ === POOL || loc.typ === MOAT || loc.typ === WATER) return loc.typ;
+    if (loc.typ === DRAWBRIDGE_UP && ((loc.flags || 0) & DB_UNDER) === DB_MOAT)
+        return DRAWBRIDGE_UP;
+    return null;
+}
+
 // C ref: zap.c zap_over_floor() for fire over water.
-export function applyFireBreathTerrain(x, y) {
+export function applyFireRayWaterTerrain(x, y, { previousMessage = '', heardGas = false } = {}) {
     const loc = game.level?.at(x, y);
-    if (!loc || !IS_POOL(loc.typ)) return '';
-    createGasCloud(x, y, rnd(5), 0);
-    return 'You hear hissing gas.';
+    const terrain = fireRayWaterTerrainKind(loc);
+    if (terrain == null) return { messages: [], heardGas };
+
+    const onWaterLevel = Is_waterlevel(game.u?.uz);
+    if (!onWaterLevel) createGasCloud(x, y, rnd(5), 0);
+
+    const visible = !game.u?.blind && !!(game.viz_array?.[y]?.[x] & IN_SIGHT);
+    const deaf = heroIsDeaf();
+    let message = '';
+    let gasHeard = heardGas;
+    if (terrain !== POOL) {
+        if (onWaterLevel) message = (visible || !deaf) ? WATER_BOILS_MESSAGE : '';
+        else if (visible) message = WATER_EVAPORATES_MESSAGE;
+        else if (!deaf && !heardGas) {
+            message = WATER_GAS_MESSAGE;
+            gasHeard = true;
+        }
+    } else if (!deaf && !heardGas) {
+        // Full POOL evaporation needs the later pit/range/occupant slice.
+        message = WATER_GAS_MESSAGE;
+        gasHeard = true;
+    }
+    if (!message || norep(message, previousMessage)) return { messages: [], heardGas: gasHeard };
+    return { messages: [message], heardGas: gasHeard };
 }
 
 // C ref: zap.c zap_hit().
@@ -257,11 +297,12 @@ export function advanceFireBreathRay(ray, sourceId, { floorFire = null } = {}) {
         messages.push(...burnFireRayWebTrap(ray.x, ray.y, {
             previousMessage: messages[messages.length - 1] || '',
         }));
-        const terrainMessage = applyFireBreathTerrain(ray.x, ray.y);
-        if (terrainMessage && !ray.heardGas) {
-            messages.push(terrainMessage);
-            ray.heardGas = true;
-        }
+        const terrain = applyFireRayWaterTerrain(ray.x, ray.y, {
+            previousMessage: messages[messages.length - 1] || '',
+            heardGas: ray.heardGas,
+        });
+        messages.push(...terrain.messages);
+        ray.heardGas = terrain.heardGas;
         if (floorFire) {
             const floorMessages = floorFire(ray.x, ray.y) || [];
             messages.push(...floorMessages);
