@@ -7100,7 +7100,7 @@ function monsterPossessiveName(mon) {
 function monsterFireTrapArmorSlot(mon, slot, messages, visible, ownerPrefix) {
     const inventory = mon.minvent || [];
     const matches = {
-        helm: item => /helm|helmet|hat|pot/.test(String(item.kind || item.actualKind || '').toLowerCase()),
+        helm: item => /helm|helmet|hat|fedora|cornuthaum|cap|pot/.test(String(item.kind || item.actualKind || '').toLowerCase()),
         cloak: item => /cloak|robe|smock|wrapping/.test(String(item.kind || item.actualKind || '').toLowerCase()),
         body: item => SUIT_ARMOR_PATTERN.test(String(item.kind || item.actualKind || '').toLowerCase()),
         shirt: item => /shirt/.test(String(item.kind || item.actualKind || '').toLowerCase()),

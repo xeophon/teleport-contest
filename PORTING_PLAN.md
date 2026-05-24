@@ -2229,9 +2229,16 @@ Next concrete target:
   existing fire-ray `--More--` timing stays deferred. Focused direct helper
   smoke passes, `seed5002-wizard-coverage-pair` still matches, and full
   `npm run score` remains `44/44`.
+- Ordinary fire breath armor now uses the same C `burnarmor()` essentials:
+  primary `oeroded` rather than secondary erosion, max-3 burn cap,
+  flammable/nonflammable armor filtering, fireproof knowledge, blessed
+  protection, body-slot truthiness, wet towel drying before armor-slot RNG,
+  and AC changes based on greatest erosion. The known breath guard
+  `seed4500-knight-coverage` screen 998 still matches, focused direct breath
+  smoke passes, and full `npm run score` remains `44/44`.
 - Remaining trap work includes off-hero `impact_drop()` callers, deeper
   statue-trap edge cases, broader non-trap fire floor-object parity, and
-  non-trap fire armor/breath parity.
+  non-trap fire inventory/ignite gates for ordinary rays and breath.
 - `seed4500-knight-coverage` is closed again and should remain a guard for
   punished teleport landing object-list timing, Vlad tower generation, observed
   discovery accounting, Sokoban random-object display, and late enlightenment

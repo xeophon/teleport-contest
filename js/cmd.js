@@ -3766,6 +3766,13 @@ const ARMOR_AC_BONUS = {
     'cloak of magic resistance': 1,
     'cloak of displacement': 1,
     'cloak of invisibility': 1,
+    'cloak of protection': 3,
+    'mummy wrapping': 1,
+    'elven cloak': 1,
+    'orcish cloak': 1,
+    'dwarvish cloak': 1,
+    'alchemy smock': 1,
+    'leather cloak': 1,
     'oilskin cloak': 1,
     robe: 2,
     'leather jacket': 1,
@@ -3809,6 +3816,9 @@ const ARMOR_AC_BONUS = {
     'elven shield': 2,
     'orcish shield': 1,
     'Uruk-hai shield': 1,
+    'uruk-hai shield': 1,
+    'shield of drain resistance': 1,
+    'shield of shock resistance': 1,
     'dwarvish roundshield': 2,
     'shield of reflection': 2,
     'leather gloves': 1,
@@ -6818,7 +6828,7 @@ function stopCarriedFigurineTimerOnLeave(item) {
 
 function wornArmorFireSlot(item) {
     const name = inventoryItemName(item).toLowerCase();
-    if (/helm|helmet|hat/.test(name)) return 0;
+    if (/helm|helmet|hat|fedora|cornuthaum|cap|pot/.test(name)) return 0;
     if (/cloak|mail|armor|shirt|robe/.test(name)) return 1;
     if (/shield/.test(name)) return 2;
     if (/gloves|gauntlets/.test(name)) return 3;
