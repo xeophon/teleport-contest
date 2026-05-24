@@ -2162,6 +2162,9 @@ function stopStoningOccupations() {
     game._pending_force_lock_start_message = 0;
     game._pick_lock_occupation = null;
     game._pick_lock_continue_time = 0;
+    game._pick_dig_occupation = null;
+    game._queued_pick_dig_apply_letter = null;
+    game._apply_pick_dig_letter = null;
     game._tin_opening_occupation = null;
     game._tin_finish_after_turn = null;
     game._tin_opened_pending = null;
@@ -2292,7 +2295,7 @@ function processAttributeExercise() {
         && (game._run_steps_remaining || 0) > 0)
         return;
     if (game._helpless_time || game._armor_wear_occupation || game._eating_turns_remaining
-        || game._force_lock_occupation || game._pick_lock_occupation || game._tin_opening_occupation
+        || game._force_lock_occupation || game._pick_lock_occupation || game._pick_dig_occupation || game._tin_opening_occupation
         || game._prayer_occupation) return;
     if (game._fumble_turn_message_pending || game._pending_fumble_turn_message
         || game._last_fumble_turn_message) {
@@ -2483,6 +2486,116 @@ function processPickLockOccupation() {
     rn2(19);
     if (addToplineMessage(`You succeed in ${pick.action}.`))
         game._pick_lock_continue_time = 1;
+}
+
+function pickDigStatueAt(x, y) {
+    return (game.level?.objects || []).find(obj =>
+        !obj.hidden && !obj.transientProjectile && obj.ox === x && obj.oy === y
+        && (obj.kind === 'statue' || obj.otyp === STATUE)) || null;
+}
+
+function pickDigStatueTrapAt(x, y) {
+    return (game.level?.traps || []).find(trap =>
+        trap.tx === x && trap.ty === y && trap.ttyp === STATUE_TRAP) || null;
+}
+
+function pickDigItemWielded(item) {
+    return !!(item && (item.wielded || item.line?.includes('weapon in') || item.line?.includes('(wielded)')));
+}
+
+function pickDigAbilityBonus() {
+    const str = game.u?.acurr?.a?.[A_STR] ?? 10;
+    if (str < 6) return -2;
+    if (str < 8) return -1;
+    if (str < 17) return 0;
+    if (str < 69) return 1;
+    if (str < 118) return 2;
+    return 3;
+}
+
+function pickDigErosionPenalty(item) {
+    return Math.max(item?.oeroded || 0, item?.oeroded2 || 0, item?.erosion || 0);
+}
+
+function dropStatueContents(statue, x, y) {
+    const contents = statue?.contents || [];
+    if (!contents.length) return;
+    for (const item of contents) {
+        item.contained = false;
+        item.ox = x;
+        item.oy = y;
+        delete item.line;
+        game.level.objects.push(item);
+    }
+    statue.contents = [];
+}
+
+function breakPickDigStatue(statue, x, y) {
+    if (!statue) return;
+    game.level.objects = (game.level?.objects || []).filter(obj => obj !== statue);
+    dropStatueContents(statue, x, y);
+    newsym(x, y);
+}
+
+async function processPickDigOccupation() {
+    const dig = game._pick_dig_occupation;
+    if (!dig) return;
+    if (game._message_more && !game._process_time_with_more) return;
+    if (game._pet_inventory_resume || game._monster_resume_index || game._monster_resume_same_index
+        || game._attack_resume_after_more || game._pickup_resume_after_more || game._queued_dead_monsters?.length) return;
+
+    const item = (game.inventory || []).find(invItem => invItem.letter === dig.itemLetter);
+    const ux = game.u?.ux || 0;
+    const uy = game.u?.uy || 0;
+    if (!pickDigItemWielded(item) || Math.max(Math.abs((dig.x || 0) - ux), Math.abs((dig.y || 0) - uy)) > 1) {
+        game._pick_dig_occupation = null;
+        return;
+    }
+
+    const statue = pickDigStatueAt(dig.x, dig.y);
+    if (!statue) {
+        game._pick_dig_occupation = null;
+        return;
+    }
+
+    dig.effort = (dig.effort || 0) + 10 + rn2(5) + pickDigAbilityBonus()
+        + (item?.spe || 0) - pickDigErosionPenalty(item) + (game.u?.udaminc || 0);
+    if ((game.urace?.noun || game._startup_race) === 'dwarf') dig.effort *= 2;
+
+    if (dig.effort > 100) {
+        game._pick_dig_occupation = null;
+        const trap = pickDigStatueTrapAt(dig.x, dig.y);
+        let animated = false;
+        if (trap) {
+            const message = await activateStatueTrap(trap, dig.x, dig.y, { shatter: true });
+            if (message) {
+                addToplineMessage(message);
+                animated = true;
+            }
+        }
+        if (!animated) {
+            const currentStatue = pickDigStatueAt(dig.x, dig.y);
+            if (currentStatue) breakPickDigStatue(currentStatue, dig.x, dig.y);
+            addToplineMessage('The statue shatters.');
+        }
+        return;
+    }
+
+    if (!dig.didMessage) {
+        dig.didMessage = true;
+        addToplineMessage('You hit the statue with all your might.');
+    }
+}
+
+function maybePromptQueuedPickDigApply() {
+    const letter = game._queued_pick_dig_apply_letter;
+    if (!letter || game._command_mode || game._pending_message || game._message_more || game._pending_time_passed) return;
+    const item = (game.inventory || []).find(invItem => invItem.letter === letter);
+    game._queued_pick_dig_apply_letter = null;
+    if (!item || !pickDigItemWielded(item)) return;
+    game._apply_pick_dig_letter = letter;
+    game._command_mode = 'applyPickDigDirection';
+    addToplineMessage('In what direction do you want to dig?');
 }
 
 async function processTinOpeningTurn() {
@@ -3671,7 +3784,7 @@ async function processMonsterTurns() {
                         const targetAc = game.u?.uac ?? 10;
                         let acValue = targetAc;
                         const occupationToHitBonus = game._armor_wear_occupation || game._eating_turns_remaining
-                            || game._force_lock_occupation || game._pick_lock_occupation || game._tin_opening_occupation
+                            || game._force_lock_occupation || game._pick_lock_occupation || game._pick_dig_occupation || game._tin_opening_occupation
                             || game._prayer_occupation ? 4 : 0;
                         const attackLevel = mon.m_lev ?? data.hpLevel ?? data.mlevel ?? 0;
 		                        let toHit = Math.max(1, acValue + 10 + attackLevel
@@ -5936,6 +6049,7 @@ async function finishMonsterTurnTail() {
             && !game._eating_turns_remaining
             && !game._force_lock_occupation
             && !game._pick_lock_occupation
+            && !game._pick_dig_occupation
             && !game._tin_opening_occupation
             && !game._prayer_occupation
             && !game._helpless_time;
@@ -9969,9 +10083,11 @@ export async function moveloop_core() {
 
         const earlyForceLock = g._force_lock_occupation && !g._process_time_with_more;
         const earlyPickLock = g._pick_lock_occupation && !g._process_time_with_more;
+        const earlyPickDig = g._pick_dig_occupation && !g._process_time_with_more;
         const earlyTinOpening = g._tin_opening_occupation && !g._process_time_with_more;
         if (earlyForceLock) processForceLockOccupation();
         if (earlyPickLock) processPickLockOccupation();
+        if (earlyPickDig) await processPickDigOccupation();
         if (earlyTinOpening) await processTinOpeningTurn();
 
         if (g._eating_turns_remaining > 0 && !(g._pending_message && g._message_more && g._process_time_with_more)) {
@@ -10288,6 +10404,7 @@ export async function moveloop_core() {
         }
         if (!earlyForceLock) processForceLockOccupation();
         if (!earlyPickLock) processPickLockOccupation();
+        if (!earlyPickDig) await processPickDigOccupation();
         if (!earlyTinOpening) await processTinOpeningTurn();
         if (g._force_lock_continue_time) {
             g._force_lock_continue_time = 0;
@@ -10299,6 +10416,8 @@ export async function moveloop_core() {
             g._pending_time_passed = Math.max(g._pending_time_passed || 0, 1);
             g._continue_monsters_after_more = 1;
         }
+        if (g._pick_dig_occupation && !g._message_more)
+            g._pending_time_passed = Math.max(g._pending_time_passed || 0, 1);
         if (g._tin_opening_occupation && !g._message_more)
             g._pending_time_passed = Math.max(g._pending_time_passed || 0, 1);
         if (!earlyForceLock
@@ -10334,6 +10453,8 @@ export async function moveloop_core() {
             g._pending_time_passed = Math.max(g._pending_time_passed || 0, 1);
         if (g._pick_lock_occupation && !g._message_more)
             g._pending_time_passed = Math.max(g._pending_time_passed || 0, 1);
+        if (g._pick_dig_occupation && !g._message_more)
+            g._pending_time_passed = Math.max(g._pending_time_passed || 0, 1);
         if (g._message_more && !g._process_time_with_more) {
             const moreNeedsTimeResume = g._pet_inventory_resume
                 || g._monster_resume_index
@@ -10346,6 +10467,7 @@ export async function moveloop_core() {
 	                || g._deferred_monster_turn_tail
 	                || g._force_lock_occupation
                     || g._pick_lock_occupation
+                    || g._pick_dig_occupation
                     || g._tin_opening_occupation;
             const completedTurnTailMore = g._turn_tail_topline_more && !moreNeedsTimeResume;
             if (g._armor_finish_after_more) g._armor_finish_after_more = 0;
@@ -10824,6 +10946,7 @@ export async function moveloop_core() {
         g._topline_after_more_fumble_turn_message_starts = 0;
         g._topline_after_more_fumble_message_roll = 0;
     }
+    maybePromptQueuedPickDigApply();
 
     if (g.context?.move) {
         if (!g.u?.umoved && g.u) {

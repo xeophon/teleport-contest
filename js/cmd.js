@@ -981,6 +981,7 @@ const BAG_PUT_CLASS_TYPES = [
 const INVENTORY_LETTERS = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
 const APPLY_WEAPON_NAME_RE = /pick-axe|mattock|\baxe\b|bullwhip|lance|polearm|poleaxe|bardiche|bec de corbin|bill-guisarme|fauchard|glaive|guisarme|halberd|lucern hammer|partisan|ranseur|spetum|voulge|snickersnee/;
 const POLEARM_NAME_RE = /\blance\b|polearm|poleaxe|bardiche|bec de corbin|bill-guisarme|fauchard|glaive|guisarme|halberd|lucern hammer|partisan|ranseur|spetum|voulge|snickersnee/;
+const PICK_DIG_NAME_RE = /(?:^|\b)(?:pick-axe|pick axe|pickaxe|pick-ax|pickax|dwarvish mattock|mattock)(?:\b|$)/;
 const WISH_LOCK_QUALIFIER_RE = /^(locked|unlocked|broken)\s+/i;
 const WISH_PROOF_QUALIFIER_RE = /^(rustproof|erodeproof|corrodeproof|fixed|fireproof|rotproof|tempered|crackproof)\s+/i;
 const WISH_PRIMARY_EROSION_RE = /^(rusty|rusted|burnt|burned|cracked)\s+/i;
@@ -8141,8 +8142,19 @@ function isPolearmItem(item) {
     return item.cls === 'weapon' && POLEARM_NAME_RE.test(name);
 }
 
+function isPickDigItem(item) {
+    if (!item) return false;
+    if (item.otyp === PICK_AXE || item.otyp === DWARVISH_MATTOCK) return true;
+    return PICK_DIG_NAME_RE.test(inventoryItemName(item).toLowerCase());
+}
+
 function itemIsWielded(item) {
     return !!(item && (item.wielded || item.line?.includes('weapon in') || item.line?.includes('(wielded)')));
+}
+
+function isTwoHandedWieldItem(item) {
+    const name = inventoryItemName(item).toLowerCase();
+    return isPolearmItem(item) || /quarterstaff|two-handed sword|battle-axe|dwarvish mattock|mattock/.test(name);
 }
 
 function wieldItemForApply(item) {
@@ -8159,7 +8171,7 @@ function wieldItemForApply(item) {
     }
     item.wielded = true;
     item.alternate = false;
-    const hand = isPolearmItem(item) || item.kind === 'quarterstaff' ? 'hands' : `${game.u?.uhandedness || 'right'} hand`;
+    const hand = isTwoHandedWieldItem(item) ? 'hands' : `${game.u?.uhandedness || 'right'} hand`;
     item.line = `${item.letter || '?'} - ${inventoryItemName(item)} (weapon in ${hand})`;
     game._wielded_mjollnir = item.artifact === 'Mjollnir' || item.kind === 'mjollnir' || /Mjollnir/.test(inventoryItemName(item));
     return item.line;
@@ -21773,6 +21785,11 @@ export async function rhack(_cmd) {
                 game._process_command_time_now = 1;
                 game._process_time_with_more = 1;
             }
+            if (game._pick_dig_occupation) {
+                game.context.move = 1;
+                game._process_command_time_now = 1;
+                game._process_time_with_more = 1;
+            }
             if (game._tin_opening_occupation) {
                 game.context.move = 1;
                 game._process_command_time_now = 1;
@@ -26681,6 +26698,19 @@ export async function rhack(_cmd) {
             await beginTinOpenerUse(item);
             return;
         }
+        if (isPickDigItem(item)) {
+            if (!itemIsWielded(item)) {
+                const line = wieldItemForApply(item);
+                game._queued_pick_dig_apply_letter = item.letter;
+                await setMessage(`${line}.`);
+                game.context.move = 1;
+                return;
+            }
+            game._apply_pick_dig_letter = item.letter;
+            await setMessage('In what direction do you want to dig?');
+            game._command_mode = 'applyPickDigDirection';
+            return;
+        }
         if (isPolearmItem(item)) {
             if (!itemIsWielded(item)) {
                 const line = wieldItemForApply(item);
@@ -26850,6 +26880,39 @@ export async function rhack(_cmd) {
             return;
         }
         game._keep_pending_message = 1;
+        return;
+    }
+
+    if (game._command_mode === 'applyPickDigDirection') {
+        const item = (game.inventory || []).find(invItem => invItem.letter === game._apply_pick_dig_letter);
+        game._apply_pick_dig_letter = null;
+        game._command_mode = null;
+        if (ch === '\x1b' || ch === ' ' || ch === '\r' || ch === '\n') {
+            await setMessage('Never mind.');
+            return;
+        }
+        const dir = movementDirection(ch);
+        if (!dir || dir.dz) return;
+        if (!item || !isPickDigItem(item) || !itemIsWielded(item)) return;
+
+        const x = (game.u?.ux || 0) + dir.dx;
+        const y = (game.u?.uy || 0) + dir.dy;
+        if (floorStatueAt(x, y)) {
+            game._pick_dig_occupation = {
+                itemLetter: item.letter,
+                x,
+                y,
+                effort: 0,
+                didMessage: false,
+            };
+            await setMessage('You start chipping the statue.');
+            game.context.move = 1;
+            game._process_time_with_more = 1;
+            return;
+        }
+
+        await setMessage(`You swing your ${pickupObjectName(item)} through thin air.`);
+        game.context.move = 1;
         return;
     }
 

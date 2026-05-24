@@ -2166,8 +2166,18 @@ Next concrete target:
   `seed0373`, `seed0383`, `seed0398`, `seed0399`, `seed0501`, `seed2200`,
   `seed2600`, `seed4500`, and `seed5006` all pass, and full
   `bash frozen/score.sh` remains `44/44`.
+- Applying a pick-axe or dwarvish mattock now covers the C `use_pick_axe()` /
+  `dig()` statue-break slice: non-wielded tools are wielded for a turn and
+  queue the direction prompt, adjacent floor statues start a delayed
+  "chipping the statue" occupation, effort advances with the C `10 + rn2(5)`
+  shape plus simple weapon/stat modifiers, normal statues shatter after enough
+  effort, and a floor statue plus `STATUE_TRAP` calls the existing shatter-path
+  animation helper instead of falling through to generic apply handling.
+  Focused guards `seed0002`, `seed0004`, `seed0014`, `seed0105`, `seed0116`,
+  `seed0361`, and `seed4500` pass, the wider 17-session statue/apply guard set
+  passes, and full `bash frozen/score.sh` remains `44/44`.
 - Remaining trap work includes `impact_drop()` for actual fall/dig callers,
-  statue-trap pick break activation edges, and deeper fire
+  deeper statue-trap inventory/normal-statue break fidelity, and deeper fire
   trap `burnarmor()`/floor-object burning parity.
 - `seed4500-knight-coverage` is closed again and should remain a guard for
   punished teleport landing object-list timing, Vlad tower generation, observed
