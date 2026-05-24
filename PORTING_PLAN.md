@@ -2242,10 +2242,17 @@ Next concrete target:
   queued death path. `seed4500-knight-coverage` screen 998 still matches,
   focused direct inventory smoke passes, and full `npm run score` remains
   `44/44`.
+- Monster hits from ordinary fire breath now follow C `zhitm()` fire inventory
+  timing: fire resistance exits before damage/armor/items, cold-resistant
+  targets take the extra fixed fire damage, body hits roll one shared
+  destroy-plus-ignite gate, item damage is aggregated before monster death and
+  drops, and visible item messages precede the blast-hit message. Direct
+  monster inventory smokes cover gate success/failure, non-body armor hits,
+  fire-resistant targets, and item-damage kills; focused fire/breath guards
+  still match.
 - Remaining trap work includes off-hero `impact_drop()` callers, deeper
   statue-trap edge cases, broader non-trap fire floor-object parity, and
-  non-trap fire inventory/ignite gates for monster ordinary breath and
-  bespoke wand/ordinary-ray branches.
+  non-trap fire inventory/ignite gates for bespoke wand/ordinary-ray branches.
 - `seed4500-knight-coverage` is closed again and should remain a guard for
   punished teleport landing object-list timing, Vlad tower generation, observed
   discovery accounting, Sokoban random-object display, and late enlightenment

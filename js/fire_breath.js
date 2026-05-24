@@ -243,11 +243,20 @@ export function advanceFireBreathRay(ray, sourceId) {
 }
 
 // C ref: zap.c zhitm() fire case.
-export function fireBreathDamageMonster(mon, nd = 6) {
-    if (mon.data?.resistsFire) return { damage: 0, killedHidden: false };
-    const damage = d(nd, 6);
+export function fireBreathDamageMonster(mon, nd = 6, inventoryFire = null) {
+    if (mon.data?.resistsFire) return { damage: 0, killedHidden: false, messages: [] };
+    const origDamage = d(nd, 6);
+    let damage = origDamage;
+    const messages = [];
+    if (mon.data?.resistsCold || mon.data?.coldResistance || mon.coldResistance) damage += 7;
     const bodyHit = burnMonsterArmorFromFire(mon);
-    if (bodyHit) rn2(3);
+    if (bodyHit && !rn2(3)) {
+        if (inventoryFire) {
+            const inventory = inventoryFire(origDamage) || {};
+            messages.push(...(inventory.messages || []));
+            damage += inventory.damage || 0;
+        }
+    }
     mon.mhp = (mon.mhp ?? 1) - damage;
     let killedHidden = false;
     if (mon.mhp <= 0) {
@@ -278,7 +287,7 @@ export function fireBreathDamageMonster(mon, nd = 6) {
         game.level.monsters = (game.level?.monsters || []).filter(other => other !== mon);
         newsym(mon.mx, mon.my);
     }
-    return { damage, killedHidden };
+    return { damage, killedHidden, messages };
 }
 
 // C ref: zap.c zhitu() fire case.

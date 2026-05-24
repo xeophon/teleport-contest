@@ -11325,7 +11325,7 @@ function fireInventoryItemImmune(item, cls) {
     return false;
 }
 
-function monsterFireInventoryDamage(mon, origDamage, messages, visible) {
+export function monsterFireInventoryDamage(mon, origDamage, messages, visible) {
     let limit = Math.trunc(origDamage / 5);
     if (origDamage % 5 > rn2(5)) limit++;
     if (limit < 1) return 0;
@@ -11377,6 +11377,27 @@ function monsterFireInventoryDamage(mon, origDamage, messages, visible) {
         damage += itemDamage;
     }
     return damage;
+}
+
+function maybeIgniteMonsterFireItem(item, messages, visible) {
+    if (!fireItemCanCatchLight(item)) return false;
+    const kind = objectKindKey(item);
+    if ((item.otyp === OIL_LAMP || item.otyp === MAGIC_LAMP || kind === 'oil lamp' || kind === 'magic lamp')
+        && item.cursed && !rn2(2))
+        return false;
+    const name = pickupObjectName({ ...item, line: '' });
+    beginWishedBurn(item);
+    if (visible) {
+        const subject = sentenceCase(articleFor(name));
+        messages.push(`${subject} ${fireInventoryNameVerb(name, 'catches', 'catch')} light!`);
+    }
+    return true;
+}
+
+export function igniteMonsterFireInventoryItems(mon, messages = [], visible = false) {
+    for (const item of [...(mon?.minvent || [])])
+        maybeIgniteMonsterFireItem(item, messages, visible);
+    return messages;
 }
 
 function resolveFireScrollExplosion(cx, cy, dam, messages = []) {
@@ -21651,7 +21672,15 @@ export async function rhack(_cmd) {
                         || (game.level?.monsters || []).find(mon => mon.mx === breath.ray.x && mon.my === breath.ray.y);
                     const messages = [nextText].filter(Boolean);
                     if (target && fireBreathZapHits(target.data?.ac ?? target.ac ?? 10)) {
-                        const hit = fireBreathDamageMonster(target, breath.dice);
+                        const visible = !game.u?.blind && !target.minvis && !target.mundetected
+                            && (game.viz_array?.[target.my]?.[target.mx] & IN_SIGHT);
+                        const hit = fireBreathDamageMonster(target, breath.dice, origDamage => {
+                            const inventoryMessages = [];
+                            const damage = monsterFireInventoryDamage(target, origDamage, inventoryMessages, visible);
+                            igniteMonsterFireInventoryItems(target, inventoryMessages, visible);
+                            return { damage, messages: inventoryMessages };
+                        });
+                        messages.push(...hit.messages);
                         if (!hit.killedHidden) {
                             messages.push(game.u?.blind || target.minvis || target.mundetected
                                 ? 'The blast of fire hits it!'
