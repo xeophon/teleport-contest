@@ -2023,6 +2023,19 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   `42/44`, with `seed0360` improving to RNG `101454/120639` and screen
   `408/833`; `seed0373-barbarian-quest-tour` still matches fully and
   `seed0383-wizard-hallucinate` remains RNG-exact with screen `181/219`.
+- Wizard-mode map/getpos/teleport and adjacent monster-turn behavior now match C
+  through the old Home 1 full-map and controlled-teleport failures. Direct
+  `^F` marks all traps `tseen` before the map redraw, direct `^T` shares the
+  global getpos tutorial-tip state with farlook/travel/jump prompts, and invalid
+  same-level wizard teleports use the C-shaped safe landing path with either the
+  combined `Sorry...  You materialize...` line or the punished ball/chain object
+  list after `Sorry...--More--`. Monster movement now treats an `ALLOW_U`
+  displaced-image square as a consumed move instead of a hero attack, and generic
+  wizard spellcasters such as quest apprentices choose/consume indirect wizard
+  spells with the post-spell `distfleeck()` RNG sink. Focused `seed0360` advances
+  from screen 624 to screen 740; full `bash frozen/score.sh` remains `42/44`,
+  with `seed0360` at RNG `112648/120639` and screen `738/833`. `seed4500` is
+  again fully exact at RNG/screens/cursors `108275/108275` and `1814/1814`.
 
 Next concrete target:
 
@@ -2042,19 +2055,13 @@ Next concrete target:
   Plane generation/arrival, hallucinated swallow-expel redraw order, Vlad tower
   generation, observed discovery accounting, Sokoban random-object display,
   level-follower arrival, and enlightenment wording.
-- The `seed0360` Home 1 travel turn now matches C's turn-tail phase through
-  the old step-399 failure. `processAttributeExercise()` always uses C's
-  already-incremented turn number from `svm.moves++` before
-  `gethungry(); exerchk(); ... u_wipe_engr()`, the cloak-of-displacement
-  exercise offset is consumed as a one-shot wear-message correction, and
-  blocked-target travel no longer delays the clairvoyance/seer timer. The C
-  `rn2(19)` there is the 10-turn `NOT_HUNGRY` `exercise(A_CON, TRUE)` roll,
-  not strength exercise. Focused `seed0360` advances to first screen mismatch
-  624, with score metrics `RNG 111344/120639`, `Screen 634/833`; full
-  `frozen/score.sh` remains `42/44`. The next seed0360 frontier is the
-  `^F`/travel full-map trap rendering on Wizard Quest Home: C's getpos view
-  shows the random special-level traps as `^` while JS still draws the
-  underlying floor, and flat RNG remains aligned until step 673.
+- The current `seed0360` frontier is no longer the `^F` trap-rendering path.
+  Focused comparison first differs at screen 740 on a shifted warning glyph, and
+  flat RNG remains aligned through the earlier teleport and apprentice-spell
+  slices at steps 673, 680, 698, and 699. The next narrow RNG frontier is step
+  732: C takes another `distfleeck()`/movement-attempt sequence where JS enters
+  `mcalcmove rn2(12)` earlier, so investigate monster scheduling and movement
+  consumption around that wait turn before touching display glyph placement.
 - The `seed0383` hallucination mismatch remains display-only: the swallow-expel
   redraw should follow C's `docrt()` order by redrawing remembered map glyphs
   before the visible monster/object/trap overlay pass while hallucinated, rather
@@ -2074,10 +2081,10 @@ Next concrete target:
   escaped-game disclosure/score polish, remaining fire `burnarmor()`
   material/protection and floor-object burning details, and any remaining
   movement trap sharing where that lowers divergence.
-- For `seed4500`, the next narrow slice is display-status caching rather than
-  food mechanics: C has processed the carrot-eating turn RNG but has not
-  redrawn the time field yet. Avoid changing turn accounting to make that
-  screen pass; model when the bottom line is refreshed.
+- `seed4500-knight-coverage` is closed again and should remain a guard for
+  punished teleport landing object-list timing, Vlad tower generation, observed
+  discovery accounting, Sokoban random-object display, and late enlightenment
+  wording.
 - Use `sessions/*.session.json` to locate divergences, but keep fixes in real
   mechanics. A score recovery is only valid when it falls out of those
   mechanics.
