@@ -8,7 +8,7 @@ import {
     CROSSWALL, TUWALL, TDWALL, TLWALL, TRWALL,
     D_ISOPEN, D_CLOSED, D_LOCKED, SDOOR, SCORR, FOUNTAIN, SINK,
     IRONBARS, MOAT, POOL, WATER, LAVAPOOL, LAVAWALL, ICE, TREE, CLOUD, GRAVE, THRONE, ALTAR,
-    COULD_SEE, IN_SIGHT,
+    COULD_SEE, IN_SIGHT, TEMP_LIT,
     WM_MASK, WM_W_LEFT, WM_W_RIGHT, WM_W_TOP, WM_W_BOTTOM,
     WM_T_LONG, WM_T_BL, WM_T_BR, WM_C_OUTER, WM_C_INNER,
     WM_X_TL, WM_X_TR, WM_X_BL, WM_X_BR, WM_X_TLBR, WM_X_BLTR,
@@ -769,7 +769,8 @@ export function newsym(x, y) {
         loc.lastseendoormask = loc.doormask;
         loc.lastseenwall_info = loc.wall_info;
     }
-    const remembered = visible || loc.map_invisible || loc.seenv || loc.waslit || loc.lastseentyp != null;
+    const remembered = visible || loc.map_invisible || loc.seenv || loc.waslit
+        || loc.lastseentyp != null || loc.remembered_glyph;
     const rawMon = rawMonsterAt(x, y);
     const mon = game.u?.blind ? undefined : monsterAt(x, y);
     const warningMon = game.level?.monsters?.find(candidate =>
@@ -786,7 +787,8 @@ export function newsym(x, y) {
     const obj = objectAt(x, y);
     const hasInfravision = game.u?.infravision || ['dwarven', 'elven', 'gnomish', 'orcish'].includes(game.urace?.adj);
     const heroRange = Math.max(Math.abs(x - (game.u?.ux ?? 0)), Math.abs(y - (game.u?.uy ?? 0)));
-    const monsterVisible = visible && !(loc.typ === ROOM && !loc.lit && heroRange > 1);
+    const tempLit = !!(game.viz_array?.[y]?.[x] & TEMP_LIT);
+    const monsterVisible = visible && !(loc.typ === ROOM && !loc.lit && !tempLit && heroRange > 1);
     const infraredHidden = INFRARED_HIDDEN_MLETS.has(mon?.data?.mlet || mon?.mlet);
     const seesInfrared = mon && canSee && !monsterVisible && !game.u?.blind && hasInfravision
         && !infraredHidden && !mon.data?.mindless && !mon.data?.nonliving && !mon.data?.name?.endsWith(' golem');

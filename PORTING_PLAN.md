@@ -1983,6 +1983,17 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   screen `292/833`), `seed0373-barbarian-quest-tour` (first mismatch now the
   Plane of Fire map at screen 100), and `seed0383-wizard-hallucinate` (screen
   `181/219`).
+- The Barbarian Endgame tour is now closed. Fire uses the C fire map rows,
+  consumes the `level_init` lit roll while keeping `des.map` rooms dark, and
+  keeps lava lit for visibility; Endgame status names now match the C bottom
+  line; Air uses the C special-level flip extent and remembers `#` for air/cloud
+  cells; and wizard-mode enlightenment now reports Endgame locations, Amulet
+  discovery, carried weight on Air, axe skill wording, poison resistance, and
+  turn-one wording in C order. Focused `seed0373-barbarian-quest-tour` is exact
+  at RNG `35386/35386` and screen `124/124`. Full `bash frozen/score.sh` moves
+  to `42/44`; the remaining failures are `seed0360-wizard-world-tour` (RNG
+  `60574/120639`, screen `307/833`) and `seed0383-wizard-hallucinate` (RNG
+  exact, screen `181/219`).
 
 Next concrete target:
 

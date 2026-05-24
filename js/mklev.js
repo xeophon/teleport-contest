@@ -2482,7 +2482,7 @@ const WIZARD1_FIXED_MONSTERS = [
     ['piranha', 19, 8],
 ];
 const WIZARD_OF_YENDOR = {
-    name: 'Wizard of Yendor', mlet: '@', glyph: '@', color: CLR_MAGENTA,
+    name: 'Wizard of Yendor', mlet: '@', glyph: '@', color: CLR_BRIGHT_MAGENTA,
     mlevel: 30, hpLevel: 30, difficulty: 34, mmove: 12, maligntyp: 0,
     male: true, strong: true, nasty: true, covetous: true,
     noCorpse: true, alwaysHostile: true, randomInventory: true,
@@ -11086,7 +11086,7 @@ const FIRE_ROWS = [
     'LL....LLLLLLLL............L...L.............LL....LLL.......................LL.',
     'L....LL...................L......................LLLL................LL........',
     '.....L.............LLLL...LL....LL...............LLLLL.............LLL.........',
-    '.L.LLLL..............LL....L.....LLL......L........LLLL....LL........LLL......L',
+    '.L.LLLL..............LL....L.....LLL..............LLLL..............LLLL......L',
     'LL..........LLLL...LLLL...LLL....LLL......L........LLLL....LL........LLL......L',
     'LL........LLLLLLL...LL.....L......L......LL.........LL......LL........LL...L...',
     'L.........LL..LLL..LL......LL......LLLL..L.........LL......LLL............LL...',
@@ -11097,8 +11097,8 @@ const FIRE_ROWS = [
     'LL..........LLLL............LL.L.............L....L...LL.........LLL..LLL......',
     '.L...........................LLLLL...........LL...L...L........LLLL..LLLLLL...L',
     '.L.....LLLL.............LL....LL.......LLL...LL.......L..LLL....LLLLLLL.......L',
-    '.........LLL.........LLLLLLLLLLL......LLLLL...L...........LL...LL...LL........',
-    '...........LL.......LL.........LL.......LLL....L..LLL....LL.........LL........',
+    '.........LLL.........LLLLLLLLLLL......LLLLL...L...........LL...LL...LL.........',
+    '...........LL.......LL.........LL.......LLL....L..LLL....LL.........LL.........',
     '............LLLLLLLLL...........LL....LLL.......LLLLL.....LL........LL.........',
     '.LL...............L.............LLLLLL............LL...LLLL.........LL.......L.',
     'LL.....L..........................LL....................LL..................LLL',
@@ -11138,7 +11138,7 @@ function fireLoadMap(lit) {
             loc.doormask = 0;
             loc.roomno = 0;
             loc.edge = 0;
-            loc.lit = lit;
+            loc.lit = !!lit || loc.typ === LAVAPOOL || loc.typ === LAVAWALL;
         }
     }
 }
@@ -11276,7 +11276,8 @@ async function make_fire_level() {
     g.level.dndest = { lx: fireX(71), ly: 16, hx: fireX(71), hy: 16, nlx: 0, nly: 0, nhx: 0, nhy: 0 };
 
     l_nhcore_init();
-    fireLoadMap(!!rn2(2));
+    rn2(2); // fire.lua level_init random solidfill lit; des.map then overwrites with lit=false.
+    fireLoadMap(false);
 
     for (let i = 0; i < 40; i++) {
         const loc = fireLocation('trap');
@@ -11419,6 +11420,10 @@ function airBubbleBounds() {
     return { xmin: b.xmin + 1, ymin: b.ymin + 1, xmax: b.xmax - 1, ymax: b.ymax - 1 };
 }
 
+function setAirMemoryGlyph(loc) {
+    if (loc) loc.remembered_glyph = { ch: '#', color: NO_COLOR, dec: false };
+}
+
 function drawAirBubble(bubble) {
     const bm = bubble.bm;
     for (let i = 0, x = bubble.x; i < bm[0]; i++, x++) {
@@ -11428,6 +11433,7 @@ function drawAirBubble(bubble) {
             if (!loc) continue;
             loc.typ = CLOUD;
             loc.lit = true;
+            setAirMemoryGlyph(loc);
         }
     }
 }
@@ -11503,6 +11509,7 @@ function setup_air_level() {
         for (let y = 0; y <= ROWNO - 1; y++) {
             const loc = game.level.at(x, y);
             if (loc?.typ === STONE) loc.typ = AIR;
+            setAirMemoryGlyph(loc);
         }
     }
     const bounds = airBubbleBounds();
@@ -11530,6 +11537,7 @@ export function movebubbles() {
             if (!loc) continue;
             loc.typ = AIR;
             loc.lit = true;
+            setAirMemoryGlyph(loc);
             const xedge = x < bounds.xmin || x > bounds.xmax;
             const yedge = y < bounds.ymin || y > bounds.ymax;
             if ((xedge || yedge) && !rn2(xedge ? 3 : 5))
@@ -11577,7 +11585,7 @@ async function make_air_level() {
     for (const spec of AIR_MONSTERS)
         await airMonster(spec);
 
-    const flips = flipSpecialLevelRnd(1, 0, COLNO - 1, ROWNO - 1, true);
+    const flips = flipSpecialLevelRnd();
     portalRegion = flipAirRect(portalRegion, flips);
     setup_air_level();
     place_lregion(portalRegion.lx, portalRegion.ly, portalRegion.hx, portalRegion.hy,

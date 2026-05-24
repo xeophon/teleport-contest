@@ -1695,6 +1695,10 @@ function specialLevel(name) {
     return game.specialLevels?.find(level => level.name === name);
 }
 
+function sameLevel(a, b) {
+    return !!a && !!b && a.dnum === b.dnum && a.dlevel === b.dlevel;
+}
+
 function branchLevel(dnum) {
     return game.branches?.find(branch => branch.end2.dnum === dnum)?.end1;
 }
@@ -3600,9 +3604,11 @@ export function updateGauntletsOfPowerStrength(kind, worn) {
 
 const OBJECT_WEIGHTS = {
     'aklys': 15,
+    'amulet of yendor': 20,
     'arrow': 1,
     'arrows': 1,
     'axe': 60,
+    'battle-axe': 120,
     'boomerang': 5,
     'bow': 30,
     'bullwhip': 20,
@@ -5187,6 +5193,29 @@ function currentSkillLines() {
     rows.push([23, 0, '(end)']);
     return rows.slice(0, 24);
 }
+
+function attributesDungeonLocation(uz) {
+    if (In_endgame(uz)) {
+        if (sameLevel(uz, specialLevel('astral'))) return 'the endgame, on the Astral Plane';
+        const elemental = [
+            ['water', 'Water'],
+            ['fire', 'Fire'],
+            ['air', 'Air'],
+            ['earth', 'Earth'],
+        ].find(([name]) => sameLevel(uz, specialLevel(name)));
+        if (elemental) return `the endgame, on the Elemental Plane of ${elemental[1]}`;
+        return 'the endgame';
+    }
+    const currentDungeon = game.dungeons?.[uz.dnum];
+    const dungeonName = currentDungeon?.name === 'The Dungeons of Doom'
+        ? 'the Dungeons of Doom'
+        : currentDungeon?.name === 'The Quest'
+            ? 'the Quest'
+            : currentDungeon?.name || 'the Dungeons of Doom';
+    const dungeonLevel = currentDungeon?.name === 'The Quest' ? uz.dlevel : depth_of_level(uz);
+    return `${dungeonName}, on level ${dungeonLevel}`;
+}
+
 function genericAttributesPage1() {
     const stats = game.u?.acurr?.a || [];
     const peaks = game.u?.amax?.a || stats;
@@ -5217,14 +5246,7 @@ function genericAttributesPage1() {
         .map(({ god, idx }) => `${god} (${alignNames[idx]})`)
         .join(' and ');
     const uz = game.u?.uz || { dnum: 0, dlevel: 1 };
-    const currentDungeon = game.dungeons?.[uz.dnum];
-    const dungeonName = currentDungeon?.name === 'The Dungeons of Doom'
-        ? 'the Dungeons of Doom'
-        : currentDungeon?.name === 'The Quest'
-            ? 'the Quest'
-        : currentDungeon?.name || 'the Dungeons of Doom';
-    const dungeonLevel = currentDungeon?.name === 'The Quest' ? uz.dlevel : depth_of_level(uz);
-    const dungeon = `${dungeonName}, on level ${dungeonLevel}`;
+    const dungeon = attributesDungeonLocation(uz);
     const hp = game.u?.uhp ?? game.u?.uhpmax ?? 1;
     const hpmax = game.u?.uhpmax ?? hp;
     const energy = game.u?.uen ?? game.u?.uenmax ?? 0;
@@ -5234,6 +5256,9 @@ function genericAttributesPage1() {
         : `  You have ${energy} out of ${energymax} energy points (spell power).`;
     const gold = game._goldCount || 0;
     const displayTurns = game.moves || 1;
+    const turnLine = displayTurns === 1
+        ? '  You have just started your adventure.'
+        : `  You entered the dungeon ${displayTurns} turns ago.`;
     const rows = [
         [0, 0, ` ${name} the ${role}'s attributes:`],
         [2, 0, ' Background:'],
@@ -5244,7 +5269,7 @@ function genericAttributesPage1() {
         [5, 0, `  who is opposed by ${opposedGods}.`],
         [6, 0, `  You are ${game.u?.uhandedness || 'right'}-handed.`],
         [7, 0, `  You are in ${dungeon}.`],
-        [8, 0, `  You entered the dungeon ${displayTurns} turns ago.`],
+        [8, 0, turnLine],
     ];
     let row = 9;
     if (game.flags?.moonphase === 4) rows.push([row++, 0, '  There is a full moon in effect.']);
@@ -5301,6 +5326,8 @@ function enlightenmentWeaponName(weapon, roleName) {
         if (name === 'katana') name = 'long sword';
         else if (name === 'wakizashi') name = 'short sword';
     }
+    if (name === 'battle-axe') name = 'axe';
+    if (name === 'dwarvish mattock') name = 'mattock';
     if (/war hammer|mjollnir/.test(name)) name = 'hammer';
     if (name === 'silver saber' || name === 'scimitar') name = 'saber';
     if (name === 'scalpel') name = 'knife';
@@ -5374,7 +5401,8 @@ function buildGenericAttributesPage2Rows() {
         const unitWeight = OBJECT_WEIGHTS[weightKind] ?? CLASS_WEIGHTS[cls] ?? item.owt ?? 0;
         carriedWeight += unitWeight * quan;
     }
-    const capacity = Math.min(1000, 25 * ((stats[0] ?? 10) + (stats[4] ?? 10)) + 50);
+    const normalCapacity = Math.min(1000, 25 * ((stats[0] ?? 10) + (stats[4] ?? 10)) + 50);
+    const capacity = Is_airlevel(game.u?.uz) || game.u?.levitating ? 1000 : normalCapacity;
     const burden = game.u?._debug_burden_override ?? (carriedWeight - capacity);
     const encumbrance = burden <= 0 ? 0 : Math.min(Math.trunc(burden * 2 / capacity) + 1, OVERLOADED);
     const statusSuffix = game.u?._statusSuffix || '';
@@ -5473,6 +5501,11 @@ function buildGenericAttributesPage2Rows() {
         if (blueDragonArmor) {
             rows.push([row++, 0, `  You are shock resistant because of your ${simpleEquipmentName(blueDragonArmor)}.`]);
             rows.push([row++, 0, `  Your items are protected from electric shocks by your ${blueDragonArmor.dragonArmorKind === 'mail' ? 'dragon mail' : 'dragon scales'}.`]);
+        }
+        if (game.u?.poisonResistance) {
+            const poisonSource = roleName === 'Barbarian' || roleName === 'Healer' || game._startup_race === 'orc'
+                ? 'innately' : 'because of your experience';
+            rows.push([row++, 0, `  You are poison resistant ${poisonSource}.`]);
         }
         const telepathyAmulet = (game.inventory || []).find(item =>
             isWornInventoryItem(item) && item.cls === 'amulet'
@@ -14561,6 +14594,15 @@ function grantEndgamePrerequisiteIfNeeded(targetLevel) {
     game.u ??= {};
     game.u.uhave ??= {};
     game.u.uhave.amulet = 1;
+    game._discoveries ??= [];
+    if (!game._discoveries.some(entry => entry.section === 'Amulets' && entry.name === 'amulet (Amulet of Yendor)'))
+        game._discoveries.push({
+            section: 'Amulets',
+            name: 'amulet (Amulet of Yendor)',
+            text: 'amulet (Amulet of Yendor)',
+            starred: false,
+            known: true,
+        });
     return `Endgame prerequisite: ${letter} - the Amulet of Yendor.`;
 }
 
