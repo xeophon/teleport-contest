@@ -2186,9 +2186,17 @@ Next concrete target:
   delivery after arrival. Fragile delivered objects can break only on hard
   landings. Focused trap/statue guards pass `15/15`, and full
   `SESSION_REPLAY_TIMEOUT_MS=60000 bash frozen/score.sh` remains `44/44`.
-- Remaining trap work includes dig-created/off-hero `impact_drop()` callers,
-  deeper statue-trap inventory/normal-statue break fidelity, and deeper fire
-  trap `burnarmor()`/floor-object burning parity.
+- Downward wand-of-digging now enters the C `zap_dig()`/`dighole()` slice:
+  vertical zap directions are accepted, upward or stair/ladder zaps loosen a
+  falling rock, downward zaps can create a hero-made visible `HOLE`, boulders
+  on the square fill the attempted hole, no-hole levels report too-hard floor,
+  no-fall outcomes reuse the scoped `impact_drop()` object migration, and
+  normal outcomes schedule a falling level transition carrying selected floor
+  objects with the hero. Focused wand/trap guards pass `11/11`, and full
+  `SESSION_REPLAY_TIMEOUT_MS=60000 bash frozen/score.sh` remains `44/44`.
+- Remaining trap work includes pick-created and off-hero `impact_drop()`
+  callers, deeper statue-trap inventory/normal-statue break fidelity, and
+  deeper fire trap `burnarmor()`/floor-object burning parity.
 - `seed4500-knight-coverage` is closed again and should remain a guard for
   punished teleport landing object-list timing, Vlad tower generation, observed
   discovery accounting, Sokoban random-object display, and late enlightenment

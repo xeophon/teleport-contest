@@ -5,7 +5,7 @@ import { game } from './gstate.js';
 import { nhgetch } from './input.js';
 import { bot, cls, docrt, flush_screen, newsym, pline, recordObservedObjectDiscovery, refreshHallucinatedMap, seeNearbyObjects, show_glyph_cell, strengthString } from './display.js';
 import { couldsee, vision_recalc, vision_reset } from './vision.js';
-import { RANDOM_MONSTER_BY_NAME, SHOP_TYPES, STALKER_MONSTERS, artifactDefinitionForName, artifactObjectName, enextoMonsterSpot, make_tutorial1_level, makemon, makeArtifactWishObject, mkcorpstat, mklev, mkobj, mkobj_at, mksobj, monsterByRndName, morgueMonster, nameObjectAsArtifact, next_ident, object_display, potionIndexForRoll, resurrectWizardOfYendor, rndmonnum, scrollIndexForRoll, set_mimic_sym_rng, syncDungeonContext, u_on_dnstairs, u_on_rndspot, u_on_upstairs, wipe_engr_at, dropMonsterInventory, l_nhcore_init, getrumor, getbogusmon, level_difficulty, set_malign, somexyspace, fumaroles, movebubbles } from './mklev.js';
+import { RANDOM_MONSTER_BY_NAME, SHOP_TYPES, STALKER_MONSTERS, artifactDefinitionForName, artifactObjectName, enextoMonsterSpot, make_tutorial1_level, makemon, makeArtifactWishObject, maketrap, mkcorpstat, mklev, mkobj, mkobj_at, mksobj, monsterByRndName, morgueMonster, nameObjectAsArtifact, next_ident, object_display, potionIndexForRoll, resurrectWizardOfYendor, rndmonnum, scrollIndexForRoll, set_mimic_sym_rng, syncDungeonContext, u_on_dnstairs, u_on_rndspot, u_on_upstairs, wipe_engr_at, dropMonsterInventory, l_nhcore_init, getrumor, getbogusmon, level_difficulty, set_malign, somexyspace, fumaroles, movebubbles } from './mklev.js';
 import { ACCESSIBLE, A_CHA, A_CON, A_DEX, A_INT, A_MAX, A_STR, A_WIS, ALTAR, AM_SHRINE, Amask2align, BC_BALL, BC_CHAIN, BEAR_TRAP, BLCORNER, BOLT_LIM, BRCORNER, CLOUD, COLNO, CORPSTAT_FEMALE, CORPSTAT_GENDER, CORPSTAT_HISTORIC, CORPSTAT_MALE, CORPSTAT_NEUTER, CORR, DOOR, BURN, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, DUST, ENGRAVE, ENGR_BLOOD, FOUNTAIN, GRAVE, HEADSTONE, HWALL, ICE, IN_SIGHT, IS_AIR, IS_OBSTRUCTED, IS_POOL, IS_ROOM, IS_TREE, IS_WALL, In_endgame, In_quest, In_sokoban, Is_airlevel, Is_botlevel, Is_earthlevel, Is_rogue_level, Is_stronghold, Is_waterlevel, LADDER, LAVAPOOL, LAVAWALL, MAGIC_PORTAL, MARK, MAX_EGG_HATCH_TIME, MM_EDOG, MM_NOCOUNTBIRTH, MM_NOMSG, MM_NOWAIT, MOAT, MORGUE, M_AP_TYPE, NO_MINVENT, NORMAL_SPEED, OVERLOADED, P_BASIC, P_UNSKILLED, PIT, POOL, ROLLING_BOULDER_TRAP, ROOM, ROT_AGE, ROOMOFFSET, ROWNO, SCORR, SDOOR, SHOPBASE, SINK, SPIKED_PIT, STAIRS, STONE, TDWALL, TEMPLE, THRONE, TLCORNER, TRCORNER, TREE, TT_BEARTRAP, TT_BURIEDBALL, TT_INFLOOR, TT_LAVA, TT_PIT, TT_WEB, TUWALL, VAULT, VIBRATING_SQUARE, VWALL, WAND_BACKFIRE_CHANCE, WATER, WEB, WT_IRON_BALL_BASE, WT_IRON_BALL_INCR, W_NONDIGGABLE, ZAP_POS } from './const.js';
 import { d, rn1, rn2, rn2_on_display_rng, rnd, rnl, rnz } from './rng.js';
 import { CLR_BLACK, CLR_BLUE, CLR_BRIGHT_BLUE, CLR_BRIGHT_CYAN, CLR_BRIGHT_GREEN, CLR_BROWN, CLR_CYAN, CLR_GRAY, CLR_GREEN, CLR_MAGENTA, CLR_ORANGE, CLR_RED, CLR_YELLOW, CLR_WHITE, NO_COLOR } from './terminal.js';
@@ -3078,6 +3078,97 @@ function deliverImpactDroppedObjects(objects) {
     }
     newsym(game.u.ux || 0, game.u.uy || 0);
     return messages.join('  ');
+}
+
+function heroStairway() {
+    for (let stair = game.stairs; stair; stair = stair.next)
+        if (stair.sx === game.u?.ux && stair.sy === game.u?.uy) return stair;
+    return null;
+}
+
+function placeRockAtHero() {
+    const rock = mksobj(ROCK, false, false);
+    Object.assign(rock, {
+        otyp: ROCK,
+        ox: game.u?.ux || 0,
+        oy: game.u?.uy || 0,
+        quan: 1,
+        cls: 'gem',
+        kind: 'rock',
+        singular: 'rock',
+        plural: 'rocks',
+        glyph: '*',
+    });
+    game.level.objects ??= [];
+    game.level.objects.push(rock);
+    newsym(rock.ox, rock.oy);
+}
+
+function zapDigFallingRockMessage(stair = null) {
+    const messages = [];
+    if (stair)
+        messages.push(`The beam bounces off the ${stair.isladder ? 'ladder' : 'stairs'} and hits the ceiling.`);
+    messages.push('You loosen a rock from the ceiling.');
+    messages.push('It falls on your head!');
+    const helmet = wornEarthHelmet();
+    const damage = rnd(helmet && hardEarthHelmet(helmet) ? 2 : 6);
+    if (game.u) {
+        game.u.uhp = Math.max(0, (game.u.uhp || 1) - damage);
+        if ((game.u.uhp || 0) <= 0) game._death_cause = 'falling rock';
+    }
+    placeRockAtHero();
+    return trapMessage(...messages);
+}
+
+function dugHoleFallTarget() {
+    const current = game.u?.uz || { dnum: 0, dlevel: 1 };
+    return clampDungeonLevel({ dnum: current.dnum, dlevel: current.dlevel + 1 });
+}
+
+async function zapDigDownwardResult() {
+    const current = game.u?.uz || { dnum: 0, dlevel: 1 };
+    if (Is_airlevel(current) || Is_waterlevel(current)) return { message: '', more: false };
+    const stair = heroStairway();
+    if (stair) return { message: zapDigFallingRockMessage(stair), more: false };
+
+    const x = game.u?.ux || 0;
+    const y = game.u?.uy || 0;
+    if (!canDigDownFromLevel(current)) {
+        return { message: 'The floor here is too hard to dig in.', more: false };
+    }
+
+    const boulder = (game.level?.objects || []).find(obj =>
+        !obj.hidden && !obj.transientProjectile && obj.ox === x && obj.oy === y && obj.otyp === BOULDER);
+    if (boulder) {
+        game.level.objects = (game.level?.objects || []).filter(obj => obj !== boulder);
+        newsym(x, y);
+        return { message: 'KADOOM!  The boulder falls in!', more: false };
+    }
+
+    const trap = await maketrap(x, y, HOLE);
+    if (!trap) return { message: '', more: false };
+    trap.madeby_u = true;
+    trap.tseen = true;
+    const messages = ['You dig a hole through the floor.'];
+    const target = dugHoleFallTarget();
+    const noFall = game.u?.levitating || game.u?.flying || game.u?.ustuck || !target;
+    if (noFall) {
+        const dropTarget = sitFallTargetLevel(trap) || target;
+        const impact = impactDropFloorObjects(x, y, trap, { targetLevel: dropTarget });
+        if (impact.message) messages.push(impact.message);
+        return { message: trapMessage(...messages), more: false };
+    }
+
+    messages.push('You fall through...');
+    const impact = impactDropFloorObjects(x, y, trap, { targetLevel: target, withHero: true });
+    if (impact.message) messages.push(impact.message);
+    scheduleSitLevelChange(target, {
+        falling: true,
+        fallingDamage: !game.u?.flying,
+        arrivalMessage: '',
+        impactDroppedObjects: impact.objects,
+    });
+    return { message: trapMessage(...messages), more: true };
 }
 
 export async function finishLevelTeleport(targetLevel, options = {}) {
@@ -23695,17 +23786,20 @@ export async function rhack(_cmd) {
 
     if (game._command_mode === 'zapDirection') {
         let dir = movementDirection(ch);
+        let verticalDir = !dir && ch === '<' ? { dx: 0, dy: 0, dz: -1 }
+            : !dir && ch === '>' ? { dx: 0, dy: 0, dz: 1 } : null;
         let selfZap = ch === '.';
         const item = game._zap_item;
         game._zap_item = null;
         const confusedDirection = (game.u?._statusSuffix || '').includes('Conf') || (game.u?._confusionTimeout || 0) > 0;
         const stunnedDirection = (game.u?._statusSuffix || '').includes('Stun') || game.u?.stunned;
-        if ((dir || selfZap) && (stunnedDirection || (confusedDirection && !rn2(5)))) {
+        if ((dir || verticalDir || selfZap) && (stunnedDirection || (confusedDirection && !rn2(5)))) {
             const confusedDirs = [
                 { dx: -1, dy: 0 }, { dx: 0, dy: -1 }, { dx: 1, dy: 0 }, { dx: 0, dy: 1 },
                 { dx: -1, dy: -1 }, { dx: 1, dy: -1 }, { dx: 1, dy: 1 }, { dx: -1, dy: 1 },
             ];
             dir = confusedDirs[rn2(confusedDirs.length)];
+            verticalDir = null;
             selfZap = false;
         }
         const deathWand = item?.wand === 'death'
@@ -23759,6 +23853,19 @@ export async function rhack(_cmd) {
             item.kind = 'fire';
             item.line = `${item.letter} - a wand of fire${wandChargeSuffix(item)}`;
             await setMessage(resistsFire ? 'You feel rather warm.' : "You've set yourself afire!", !!followups.length);
+            game._command_mode = null;
+            game.context.move = 1;
+            return;
+        }
+        if (verticalDir && (item?.wand === 'digging' || item?.kind === 'digging' || item?.wandIndex === 18)) {
+            item.known = true;
+            item.kind = 'digging';
+            item.line = `${item.letter} - a wand of digging${wandChargeSuffix(item)}`;
+            const result = verticalDir.dz < 0
+                ? { message: zapDigFallingRockMessage(), more: false }
+                : await zapDigDownwardResult();
+            await setMessage(result.message, !!result.more);
+            game._keep_pending_message = 0;
             game._command_mode = null;
             game.context.move = 1;
             return;
