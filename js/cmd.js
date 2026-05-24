@@ -647,6 +647,8 @@ const GLOB_TYPES = new Map([
     ['black pudding', { otyp: GLOB_OF_BLACK_PUDDING, name: 'glob of black pudding', color: CLR_BLACK }],
 ]);
 GLOB_TYPES.set('grey ooze', GLOB_TYPES.get('gray ooze'));
+const GLOB_TYPE_BY_OTYP = new Map();
+for (const globType of GLOB_TYPES.values()) GLOB_TYPE_BY_OTYP.set(globType.otyp, globType);
 const RANDOM_GLOB_MONSTER_NAMES = ['gray ooze', 'brown pudding', 'green slime'];
 const RANDOM_CLASS = 0;
 const WEAPON_CLASS = 1;
@@ -12980,6 +12982,135 @@ function droppedObjectPitHoleFloorEffects(obj, x, y, messages) {
     return { handled: true, consumed: true };
 }
 
+function globTypeForObject(obj) {
+    if (!obj) return null;
+    if (GLOB_TYPE_BY_OTYP.has(obj.otyp)) return GLOB_TYPE_BY_OTYP.get(obj.otyp);
+    let name = String(obj.globName || obj.actualKind || obj.kind || '').toLowerCase();
+    name = name.replace(/^partly eaten\s+/, '').replace(/^(?:small|medium|large|very large)\s+/, '');
+    const match = name.match(/^glob of (.+)$/);
+    return GLOB_TYPES.get(match?.[1] || name) || null;
+}
+
+function isGlobbyObject(obj) {
+    return !!(obj?.globby || globTypeForObject(obj));
+}
+
+function globsCanMeld(target, obj) {
+    const targetType = globTypeForObject(target);
+    const objType = globTypeForObject(obj);
+    if (!targetType || !objType || targetType.otyp !== objType.otyp) return false;
+    if (target === obj || target?.nomerge || obj?.nomerge) return false;
+    if (!!target.cursed !== !!obj.cursed || !!target.blessed !== !!obj.blessed) return false;
+    if (target.how_lost === 'LOST_EXPLODING' || obj.how_lost === 'LOST_EXPLODING') return false;
+    if (target.how_lost && target.how_lost !== 'LOST_NONE' && target.how_lost !== obj.how_lost) return false;
+    return true;
+}
+
+function floorGlobMeldCandidateAt(obj, x, y) {
+    return (game.level?.objects || []).find(candidate =>
+        candidate !== obj && !candidate.buried && !candidate.transientProjectile
+        && candidate.ox === x && candidate.oy === y
+        && globsCanMeld(candidate, obj)) || null;
+}
+
+function floorGlobMeldTarget(obj, x, y) {
+    const here = floorGlobMeldCandidateAt(obj, x, y);
+    if (here) return here;
+
+    const dx = rn2(2) ? -1 : 1;
+    const dy = rn2(2) ? -1 : 1;
+    const ex = x - dx;
+    const ey = y - dy;
+    for (let fx = ex; Math.abs(fx - ex) < 3; fx += dx) {
+        for (let fy = ey; Math.abs(fy - ey) < 3; fy += dy) {
+            if (fx < 0 || fx >= COLNO || fy < 0 || fy >= ROWNO || (fx === x && fy === y)) continue;
+            const target = floorGlobMeldCandidateAt(obj, fx, fy);
+            if (target) return target;
+        }
+    }
+    return null;
+}
+
+function globMeldWeight(obj) {
+    return Math.max(1, obj?.oeaten || obj?.owt || 20);
+}
+
+function globMeldRemainingTurns(obj) {
+    const turn = obj?.globShrinkTurn;
+    if (typeof turn !== 'number') return 25;
+    return Math.max(1, turn - (game.moves || 0));
+}
+
+function syncGlobObjectFields(obj) {
+    const globType = globTypeForObject(obj);
+    if (!globType) return;
+    Object.assign(obj, {
+        otyp: globType.otyp,
+        cls: 'food',
+        glyph: '%',
+        color: globType.color,
+        _display_color: globType.color,
+        kind: globType.name,
+        actualKind: globType.name,
+        singular: globType.name,
+        globName: globType.name,
+        globby: true,
+        quan: 1,
+        known: obj.known ?? true,
+        dknown: obj.dknown ?? true,
+    });
+}
+
+function absorbGlobObject(absorber, absorbed) {
+    const w1 = globMeldWeight(absorber);
+    const w2 = globMeldWeight(absorbed);
+    const moves = game.moves || 0;
+    const age1 = typeof absorber.age === 'number' ? absorber.age : moves;
+    const age2 = typeof absorbed.age === 'number' ? absorbed.age : moves;
+
+    if (!!absorber.bknown !== !!absorbed.bknown) absorber.bknown = false;
+    if (!!absorber.rknown !== !!absorbed.rknown) absorber.rknown = false;
+    if (!!absorber.greased !== !!absorbed.greased) absorber.greased = false;
+    if (absorber.orotten || absorbed.orotten) absorber.orotten = true;
+
+    absorber.age = moves - Math.trunc((((moves - age1) * w1) + ((moves - age2) * w2)) / (w1 + w2));
+    absorber.owt = Math.max(1, absorber.owt || w1) + w2;
+    if (absorber.oeaten || absorbed.oeaten) absorber.oeaten = w1 + w2;
+    absorber.globShrinkTurn = moves + Math.trunc((globMeldRemainingTurns(absorber) + globMeldRemainingTurns(absorbed) + 1) / 2);
+    syncGlobObjectFields(absorber);
+    if (game.level?.objects?.includes(absorbed))
+        game.level.objects = game.level.objects.filter(candidate => candidate !== absorbed);
+}
+
+function globPluralName(obj) {
+    const globType = globTypeForObject(obj);
+    return globType ? `${globType.name.replace(/^glob\b/, 'globs')}` : 'globs';
+}
+
+function droppedObjectGlobMeldFloorEffects(obj, x, y, messages) {
+    if (!isGlobbyObject(obj)) return false;
+    const target = floorGlobMeldTarget(obj, x, y);
+    if (!target) return false;
+
+    const visible = !game.u?.blind && (couldsee(x, y) || couldsee(target.ox, target.oy));
+    if (visible) {
+        if (heroIsHallucinating()) {
+            messages.push('You see parts of the floor melting!');
+        } else {
+            const adjacent = (x !== game.u?.ux || y !== game.u?.uy)
+                && (target.ox !== game.u?.ux || target.oy !== game.u?.uy);
+            messages.push(`The ${adjacent ? 'adjacent ' : ''}${globPluralName(obj)} coalesce.`);
+        }
+    } else if (!heroIsDeaf()) {
+        messages.push('You hear a faint sloshing sound.');
+    }
+
+    absorbGlobObject(target, obj);
+    newsym(x, y);
+    newsym(target.ox, target.oy);
+    return true;
+}
+
 function earthFloorEffects(obj, x, y, messages, verb = 'fall') {
     const loc = game.level?.at(x, y);
     if (!loc || !obj) return false;
@@ -13030,6 +13161,7 @@ function earthFloorEffects(obj, x, y, messages, verb = 'fall') {
         return droppedObjectWaterFloorEffects(obj, x, y, messages);
     const pitHole = droppedObjectPitHoleFloorEffects(obj, x, y, messages);
     if (pitHole.handled) return pitHole.consumed;
+    if (droppedObjectGlobMeldFloorEffects(obj, x, y, messages)) return true;
     return droppedObjectHotGroundFloorEffects(obj, x, y, messages);
 }
 

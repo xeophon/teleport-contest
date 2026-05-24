@@ -2563,6 +2563,15 @@ Next concrete target:
   current floor. Punishment ball/chain and no-destination cases stay on the
   current square. Direct smokes cover seen pit placement, seen hole migration,
   and unseen trapdoor no-migration; focused replay guards remain exact.
+- The globby `flooreffects()` branch now follows the next C `obj_meld()` path
+  for free globs landing near floor globs: same-square candidates are checked
+  first, adjacent 3x3 search spends C's two `rn2(2)` direction rolls only when
+  needed, BUC/nomerge/type mismatches do not meld, and the floor glob absorbs
+  the incoming free glob while combining weight, partial-eaten amount, age,
+  shrink timing, rot/known/grease state, and visible/sloshing feedback. Full
+  shop `globby_bill_fixup()` parity remains a future billing slice. Direct
+  smokes cover same-square merging, adjacent search, BUC no-merge, and blind
+  sloshing feedback.
 - Remaining ice work outside this fire-ray terrain slice includes the broader
   full `spoteffects()`/`pooleffects()` hero liquid behavior, deeper
   `minliquid()` edges (life-saving or shape-shift survivor relocation,
