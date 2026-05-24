@@ -39,13 +39,13 @@ import {
     FOODSHOP, RINGSHOP, WANDSHOP, TOOLSHOP, BOOKSHOP, FODDERSHOP, CANDLESHOP,
     MM_NOGRP, MM_ANGRY, MM_NONAME, MM_NOCOUNTBIRTH, MM_NOMSG, MM_ADJACENTOK, MM_NOTAIL, MM_NOWAIT,
     CORPSTAT_FEMALE, CORPSTAT_MALE, CORPSTAT_NEUTER, CORPSTAT_HISTORIC,
-    LR_DOWNSTAIR, LR_UPSTAIR, LR_TELE, LR_UPTELE, LR_DOWNTELE, LR_BRANCH,
+    LR_DOWNSTAIR, LR_UPSTAIR, LR_PORTAL, LR_TELE, LR_UPTELE, LR_DOWNTELE, LR_BRANCH,
     WM_MASK, WM_W_LEFT, WM_W_RIGHT, WM_W_TOP, WM_W_BOTTOM,
     WM_T_LONG, WM_T_BL, WM_T_BR,
     WM_C_OUTER, WM_C_INNER,
     WM_X_TL, WM_X_TR, WM_X_BL, WM_X_BR, WM_X_TLBR, WM_X_BLTR,
     ROT_AGE, TAINT_AGE,
-    In_endgame, In_mines, Is_firelevel,
+    In_endgame, In_mines, Is_airlevel, Is_firelevel,
 } from './const.js';
 
 // Object/class constants (normally from objects.js, not in contest template)
@@ -3482,6 +3482,11 @@ export function place_lregion(lx, ly, hx, hy, nlx, nly, nhx, nhy, rtype, lev) {
                 mkstairs(x, y, rtype === LR_UPSTAIR, null);
                 return;
             }
+            if (rtype === LR_PORTAL) {
+                game.level.traps ??= [];
+                game.level.traps.push({ tx: x, ty: y, ttyp: MAGIC_PORTAL, tseen: false, once: false, launch: { x: 0, y: 0 }, dst: lev });
+                return;
+            }
             if (rtype === LR_TELE) game._mklev_lregion_arrival = true;
             u_on_newpos(x, y);
             return;
@@ -3497,6 +3502,11 @@ export function place_lregion(lx, ly, hx, hy, nlx, nly, nhx, nhy, rtype, lev) {
                 }
                 if (rtype === LR_UPSTAIR || rtype === LR_DOWNSTAIR) {
                     mkstairs(x, y, rtype === LR_UPSTAIR, null);
+                    return;
+                }
+                if (rtype === LR_PORTAL) {
+                    game.level.traps ??= [];
+                    game.level.traps.push({ tx: x, ty: y, ttyp: MAGIC_PORTAL, tseen: false, once: false, launch: { x: 0, y: 0 }, dst: lev });
                     return;
                 }
                 if (rtype === LR_TELE) game._mklev_lregion_arrival = true;
@@ -4753,10 +4763,10 @@ function monsterFromRndMeta(row) {
     };
     const armedHuman = glyph === '@' && name !== 'nurse';
     ptr.armed = name !== 'minotaur' && name !== 'gnomish wizard' && !ptr.nohands && ((mlet === S_ORC && name !== 'orc shaman') || (mlet === S_KOBOLD && name !== 'kobold shaman') || glyph === 'A' || glyph === 'G' || glyph === 'h'
-        || armedHuman || glyph === 'O' || glyph === 'H' || glyph === 'C'
+        || armedHuman || glyph === 'O' || glyph === 'H' || glyph === 'C' || name === 'djinni'
         || glyph === 'T' || (glyph === '&' && DEMON_WEAPON_MONSTERS.has(name)));
     if (glyph === '&') {
-        ptr.demon = name !== 'sandestin';
+        ptr.demon = name !== 'sandestin' && name !== 'djinni' && name !== 'mail daemon';
         ptr.nasty = ptr.demon;
         if (ALWAYS_HOSTILE_DEMONS.has(name)) ptr.alwaysHostile = true;
         if (name === 'sandestin') ptr.strong = true;
@@ -7141,6 +7151,10 @@ export async function mklev() {
     }
     if (special?.name === 'fire') {
         await make_fire_level();
+        return;
+    }
+    if (special?.name === 'air') {
+        await make_air_level();
         return;
     }
     const questBuilder = QUEST_LEVEL_BUILDERS[g.urole?.name?.m || g._startup_role || ''];
@@ -11278,6 +11292,296 @@ async function make_fire_level() {
     flipSpecialLevelRnd(1, 0, 79, 20, true);
     rn2(79); // Fire -> Water portal levregion x placement.
     rn2(20); // Fire -> Water portal levregion y placement.
+
+    recount_level_features();
+    level_finalize_topology({ mineralizeLevel: false });
+    g.in_mklev = false;
+}
+
+const AIR_XSTART = 3;
+const AIR_YSTART = 1;
+const AIR_WIDTH = 76;
+const AIR_HEIGHT = 20;
+const AIR_BMASKS = [
+    [2, 1, 0x3],
+    [3, 2, 0x7, 0x7],
+    [4, 3, 0x6, 0xf, 0x6],
+    [5, 3, 0xe, 0x1f, 0xe],
+    [6, 4, 0x1e, 0x3f, 0x3f, 0x1e],
+    [7, 4, 0x3e, 0x7f, 0x7f, 0x3e],
+    [8, 4, 0x7e, 0xff, 0xff, 0x7e],
+];
+const AIR_MONSTERS = [
+    ...Array(11).fill({ name: 'air elemental', hostile: true }),
+    ...Array(3).fill({ name: 'floating eye', hostile: true }),
+    ...Array(3).fill({ name: 'yellow light', hostile: true }),
+    { name: 'couatl' },
+    ...Array(5).fill({ classGlyph: 'D' }),
+    ...Array(3).fill({ classGlyph: 'E' }),
+    ...Array(2).fill({ classGlyph: 'J' }),
+    ...Array(3).fill({ name: 'djinni', hostile: true }),
+    ...Array(9).fill({ name: 'fog cloud', hostile: true }),
+    ...Array(5).fill({ name: 'energy vortex', hostile: true }),
+    ...Array(5).fill({ name: 'steam vortex', hostile: true }),
+];
+
+function airX(x) { return AIR_XSTART + x; }
+function airY(y) { return AIR_YSTART + y; }
+
+function airLoadMap(lit) {
+    for (let y = 0; y < AIR_HEIGHT; y++) {
+        for (let x = 0; x < AIR_WIDTH; x++) {
+            const loc = game.level.at(airX(x), airY(y));
+            if (!loc) continue;
+            loc.typ = AIR;
+            loc.flags = 0;
+            loc.doormask = 0;
+            loc.roomno = 0;
+            loc.edge = 0;
+            loc.lit = lit;
+        }
+    }
+}
+
+function airLocationOkByHumidity(x, y, humidity) {
+    const loc = game.level.at(x, y);
+    if (!loc) return false;
+    const boulder = sobj_at(BOULDER, x, y);
+    if ((humidity & FIRE_SOLID) && IS_OBSTRUCTED(loc.typ)) return true;
+    if ((humidity & FIRE_DRY) && SPACE_POS(loc.typ) && (!boulder || (humidity & FIRE_SOLID))) return true;
+    if ((humidity & FIRE_WET) && IS_POOL(loc.typ)) return true;
+    if ((humidity & FIRE_HOT) && (loc.typ === LAVAPOOL || loc.typ === LAVAWALL)) return true;
+    return false;
+}
+
+function airLocationByHumidity(humidity, noWarn = true) {
+    for (let cpt = 0; cpt < 100; cpt++) {
+        const x = airX(rn2(AIR_WIDTH));
+        const y = airY(rn2(AIR_HEIGHT));
+        if (airLocationOkByHumidity(x, y, humidity)) return { x, y };
+    }
+    if (noWarn) return null;
+    for (let x = 0; x < AIR_WIDTH; x++)
+        for (let y = 0; y < AIR_HEIGHT; y++) {
+            const loc = { x: airX(x), y: airY(y) };
+            if (airLocationOkByHumidity(loc.x, loc.y, humidity)) return loc;
+        }
+    return null;
+}
+
+function airMonsterLocation(ptr) {
+    const humidity = fireMonsterHumidity(ptr);
+    let loc = airLocationByHumidity(humidity, true);
+    if (!loc) loc = airLocationByHumidity(humidity, true);
+    if (!loc && !(humidity & FIRE_DRY)) {
+        const dryHumidity = humidity | FIRE_DRY;
+        loc = airLocationByHumidity(dryHumidity, true);
+        if (!loc) loc = airLocationByHumidity(dryHumidity, false);
+    }
+    if (!loc) loc = airLocationByHumidity(humidity, false);
+    return loc || { x: airX(0), y: airY(0) };
+}
+
+async function airMonster(spec) {
+    let ptr = null;
+    let specifiedFemale = null;
+    if (spec.classGlyph) {
+        rn2(3);
+        ptr = mkclassAligned(spec.classGlyph, false, null, true);
+    } else {
+        ptr = monsterByRndName(spec.name);
+        if (!ptr) return null;
+        specifiedFemale = ptr.female ? true : ptr.male ? false : null;
+        if (!ptr.male && !ptr.female && !ptr.skipFindGender) specifiedFemale = !!rn2(2);
+        rn2(3);
+    }
+    if (!ptr) return null;
+    let loc = airMonsterLocation(ptr);
+    if (monster_at(loc.x, loc.y)) {
+        const spot = enextoMonsterSpot(loc.x, loc.y, ptr);
+        if (spot) loc = spot;
+    }
+    const mon = await makemon(ptr, loc.x, loc.y, 0);
+    if (mon && specifiedFemale != null) mon.female = specifiedFemale;
+    if (mon && spec.hostile) {
+        mon.mpeaceful = 0;
+        set_malign(mon);
+    }
+    return mon;
+}
+
+function airBounds() {
+    return { xmin: 3, ymin: 1, xmax: Math.min(78, COLNO - 2), ymax: Math.min(20, ROWNO - 1) };
+}
+
+function airBubbleBounds() {
+    const b = airBounds();
+    return { xmin: b.xmin + 1, ymin: b.ymin + 1, xmax: b.xmax - 1, ymax: b.ymax - 1 };
+}
+
+function drawAirBubble(bubble) {
+    const bm = bubble.bm;
+    for (let i = 0, x = bubble.x; i < bm[0]; i++, x++) {
+        for (let j = 0, y = bubble.y; j < bm[1]; j++, y++) {
+            if (!(bm[j + 2] & (1 << i))) continue;
+            const loc = game.level?.at(x, y);
+            if (!loc) continue;
+            loc.typ = CLOUD;
+            loc.lit = true;
+        }
+    }
+}
+
+function mv_air_bubble(bubble, dx, dy, ini) {
+    const bounds = airBubbleBounds();
+    let colli = 0;
+
+    if (!rn2(6)) {
+        if (dx < -1 || dx > 1 || dy < -1 || dy > 1) {
+            dx = Math.sign(dx);
+            dy = Math.sign(dy);
+        }
+        if (bubble.x <= bounds.xmin) colli |= 2;
+        if (bubble.y <= bounds.ymin) colli |= 1;
+        if (bubble.x + bubble.bm[0] - 1 >= bounds.xmax) colli |= 2;
+        if (bubble.y + bubble.bm[1] - 1 >= bounds.ymax) colli |= 1;
+
+        if (bubble.x < bounds.xmin) bubble.x = bounds.xmin;
+        if (bubble.y < bounds.ymin) bubble.y = bounds.ymin;
+        if (bubble.x + bubble.bm[0] - 1 > bounds.xmax) bubble.x = bounds.xmax - bubble.bm[0] + 1;
+        if (bubble.y + bubble.bm[1] - 1 > bounds.ymax) bubble.y = bounds.ymax - bubble.bm[1] + 1;
+
+        if (bubble.x === bounds.xmin && dx < 0) dx = -dx;
+        if (bubble.x + bubble.bm[0] - 1 === bounds.xmax && dx > 0) dx = -dx;
+        if (bubble.y === bounds.ymin && dy < 0) dy = -dy;
+        if (bubble.y + bubble.bm[1] - 1 === bounds.ymax && dy > 0) dy = -dy;
+
+        bubble.x += dx;
+        bubble.y += dy;
+    }
+
+    drawAirBubble(bubble);
+
+    switch (colli) {
+    case 1:
+        bubble.dy = -bubble.dy;
+        break;
+    case 3:
+        bubble.dy = -bubble.dy;
+        bubble.dx = -bubble.dx;
+        break;
+    case 2:
+        bubble.dx = -bubble.dx;
+        break;
+    default:
+        if (!ini && ((bubble.dx || bubble.dy) ? !rn2(20) : !rn2(5))) {
+            bubble.dx = 1 - rn2(3);
+            bubble.dy = 1 - rn2(3);
+        }
+        break;
+    }
+}
+
+function mk_air_bubble(x, y, n) {
+    const bounds = airBubbleBounds();
+    if (x >= bounds.xmax || y >= bounds.ymax) return;
+    const bm = AIR_BMASKS[Math.min(n, AIR_BMASKS.length - 1)];
+    if (x + bm[0] - 1 > bounds.xmax) x = bounds.xmax - bm[0] + 1;
+    if (y + bm[1] - 1 > bounds.ymax) y = bounds.ymax - bm[1] + 1;
+    const bubble = { x, y, dx: 1 - rn2(3), dy: 1 - rn2(3), bm: [...bm] };
+    game.level._airBubbles ??= [];
+    game.level._airBubbles.push(bubble);
+    mv_air_bubble(bubble, 0, 0, true);
+}
+
+function setup_air_level() {
+    if (!Is_airlevel(game.u?.uz)) return;
+    game.level.flags.hero_memory = 0;
+    game.level._airBubbles = [];
+    if (game._bubble_move_up == null) game._bubble_move_up = false;
+    for (let x = 1; x <= COLNO - 1; x++) {
+        for (let y = 0; y <= ROWNO - 1; y++) {
+            const loc = game.level.at(x, y);
+            if (loc?.typ === STONE) loc.typ = AIR;
+        }
+    }
+    const bounds = airBubbleBounds();
+    const xskip = 6 + rn2(4);
+    const yskip = 3 + rn2(3);
+    for (let x = bounds.xmin; x <= bounds.xmax; x += xskip)
+        for (let y = bounds.ymin; y <= bounds.ymax; y += yskip)
+            mk_air_bubble(x, y, rn2(7));
+}
+
+function flipAirRect(region, flips) {
+    if (!flips || (!flips.flipY && !flips.flipX)) return region;
+    const fx = x => flips.flipX ? flips.xmin + flips.xmax - x : x;
+    const fy = y => flips.flipY ? flips.ymin + flips.ymax - y : y;
+    const lx = fx(region.lx), hx = fx(region.hx), ly = fy(region.ly), hy = fy(region.hy);
+    return { lx: Math.min(lx, hx), ly: Math.min(ly, hy), hx: Math.max(lx, hx), hy: Math.max(ly, hy) };
+}
+
+export function movebubbles() {
+    if (!Is_airlevel(game.u?.uz) || !game.level?._airBubbles) return;
+    const bounds = airBubbleBounds();
+    for (let x = 1; x <= COLNO - 1; x++) {
+        for (let y = 0; y <= ROWNO - 1; y++) {
+            const loc = game.level.at(x, y);
+            if (!loc) continue;
+            loc.typ = AIR;
+            loc.lit = true;
+            const xedge = x < bounds.xmin || x > bounds.xmax;
+            const yedge = y < bounds.ymin || y > bounds.ymax;
+            if ((xedge || yedge) && !rn2(xedge ? 3 : 5))
+                loc.typ = CLOUD;
+        }
+    }
+
+    game._bubble_move_up = !game._bubble_move_up;
+    const bubbles = game._bubble_move_up
+        ? game.level._airBubbles
+        : [...game.level._airBubbles].reverse();
+    for (const bubble of bubbles) {
+        const rx = rn2(3), ry = rn2(3);
+        mv_air_bubble(
+            bubble,
+            bubble.dx + 1 - (!bubble.dx ? rx : (rx ? 1 : 0)),
+            bubble.dy + 1 - (!bubble.dy ? ry : (ry ? 1 : 0)),
+            false,
+        );
+    }
+}
+
+async function make_air_level() {
+    const g = game;
+    if (await getbones()) return;
+    g.in_mklev = true;
+
+    oinit();
+    clear_level_structures();
+    g.level.flags.is_maze_lev = true;
+    g.level.flags.noteleport = true;
+    g.level.flags.hardfloor = true;
+    g.level.flags.shortsighted = true;
+    g.level.flags.stormy = true;
+    g.level.updest = { lx: 1, ly: 0, hx: 24, hy: 20, nlx: 25, nly: 0, nhx: 79, nhy: 20 };
+    g.level.dndest = { lx: 56, ly: 0, hx: 79, hy: 20, nlx: 1, nly: 0, nhx: 55, nhy: 20 };
+    let portalRegion = { lx: 57, ly: 1, hx: 78, hy: 19 };
+
+    l_nhcore_init();
+    airLoadMap(!!rn2(2));
+    for (let x = airX(0); x <= airX(AIR_WIDTH - 1); x++)
+        for (let y = airY(0); y <= airY(AIR_HEIGHT - 1); y++)
+            g.level.at(x, y).lit = true;
+
+    for (const spec of AIR_MONSTERS)
+        await airMonster(spec);
+
+    const flips = flipSpecialLevelRnd(1, 0, COLNO - 1, ROWNO - 1, true);
+    portalRegion = flipAirRect(portalRegion, flips);
+    setup_air_level();
+    place_lregion(portalRegion.lx, portalRegion.ly, portalRegion.hx, portalRegion.hy,
+        0, 0, 0, 0, LR_PORTAL, { ...(g.fire_level || {}) });
 
     recount_level_features();
     level_finalize_topology({ mineralizeLevel: false });

@@ -1941,6 +1941,17 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   Guard sessions still pass, and focused `seed0373-barbarian-quest-tour`
   advances to RNG `32481/35386`, screen `81/124`. The next seed0373 frontier is
   the unported Plane of Air special level and its bubble movement RNG.
+- Plane of Air generation and arrival behavior now follows C/Lua order:
+  `air.lua` map lighting, fixed/class monster placement, djinni inventory
+  semantics, horizontal/vertical flip rolls, portal placement, Air cloud bubble
+  setup/movement, arrival-time bubble movement, and all adjacent level
+  followers' `mon_arrive()` placement are ported. The main move loop also runs
+  Air bubble movement and Fire fumaroles at the C turn-tail hook. Focused
+  `seed0373-barbarian-quest-tour` is now RNG-exact at `35386/35386`, with the
+  pre-existing screen drift unchanged at `81/124`. Full `npm run score` remains
+  `41/44`; remaining failures are `seed0360-wizard-world-tour` (RNG frontier
+  `60574/120639`), `seed0373-barbarian-quest-tour` (screen-only), and
+  `seed0383-wizard-hallucinate` (screen-only).
 
 Next concrete target:
 
@@ -1953,9 +1964,10 @@ Next concrete target:
   semantics, C special-level room/corridor/shop filling for `minetn-3.lua`, and
   full `eat.c`, `sp_lev.c`, `mkobj.c`, `makemon.c`, `uhitm.c`, and
   `dogmove.c` behavior.
-- `seed0030-ten-diverse-deaths`, `seed0367-priest-quest-tour`, and
-  `seed4500-knight-coverage` are closed and should stay in the focused guard
-  set for nearby object observation, Priest/Knight quest generation, Vlad tower
+- `seed0030-ten-diverse-deaths`, `seed0367-priest-quest-tour`,
+  `seed0373-barbarian-quest-tour`, and `seed4500-knight-coverage` should stay
+  in the focused guard set for nearby object observation, Priest/Knight and
+  Barbarian quest generation, Elemental Plane generation/arrival, Vlad tower
   generation, observed discovery accounting, Sokoban random-object display,
   level-follower arrival, and enlightenment wording.
 - The Archeologist tour, exact-wand wish tails, healer scroll tail, tourist
