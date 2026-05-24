@@ -4675,7 +4675,7 @@ function sameStackableObject(existing, otmp) {
         && existing.gemDescription === otmp.gemDescription
         && sameCorpse;
 }
-function add_to_container(container, otmp) {
+export function add_to_container(container, otmp) {
     if (!container || !otmp) return null;
     container.contents ??= [];
     for (const existing of container.contents) {
@@ -4815,7 +4815,7 @@ const COLD_RESISTANT_MONSTERS = new Set([
     'ettin zombie', 'ghoul', 'giant zombie', 'straw golem', 'paper golem',
     'wood golem', 'flesh golem', 'iron golem', 'ice devil',
 ]);
-const STONE_RESISTANT_MONSTERS = new Set([
+export const STONE_RESISTANT_MONSTERS = new Set([
     'acid blob', 'gelatinous cube', 'chickatrice', 'cockatrice',
     'gargoyle', 'winged gargoyle', 'spotted jelly', 'ochre jelly',
     'fog cloud', 'dust vortex', 'ice vortex', 'energy vortex',

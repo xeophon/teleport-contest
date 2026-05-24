@@ -2581,9 +2581,9 @@ Next concrete target:
   line while preventing the later hot-ground branch. Direct smokes cover
   ordinary monster drop placement, lava destruction, and visible monster-moving
   altar BUC feedback. Remaining caller-specific monster object paths include
-  meatbox `""`, monstone, full `drop_throw()` break/ship/passive/mulch parity
-  for thrown missiles, polymorph-beam `polyspot` bypass details, and the full
-  shop billing matrix.
+  meatbox `""`, remaining `monstone()` edge cases and callers, full
+  `drop_throw()` break/ship/passive/mulch parity for thrown missiles,
+  polymorph-beam `polyspot` bypass details, and the full shop billing matrix.
 - Monster-thrown persistent projectile landings now go through a shared
   `landMonsterThrownObject()` helper before floor placement. Rocks, plain
   daggers, invisible crude-dagger landings, visible deferred crude-dagger
@@ -2602,6 +2602,17 @@ Next concrete target:
   any survivor. Direct smokes cover ordinary placement, same-square stacking,
   lava consumption, and context restoration; full polymorph-beam `polyspot`
   bypass and broader were/polymorph callers remain future slices.
+- Monster-vs-monster petrification now uses a `stoneMonster()` helper for the
+  current pet hit paths against cockatrices and chickatrices: unarmed,
+  ungloved, non-resistant attackers turn to stone before defender damage,
+  non-stone golems solidify into stone golems, ordinary inventory is sealed
+  into the statue, boulders and invocation items route through
+  `earthFloorEffects(...,"fall")`, tiny monsters can leave a rock, and no hero
+  experience is awarded. Direct smokes cover statue contents, escaped
+  boulder/Amulet placement, lava floor effects, and monster removal. Remaining
+  `monstone()` parity includes `vamp_stone()` reversion, lifesaving,
+  Medusa/digest/other stoning callers, exact tiny/vitals/shop details, and
+  caller-specific messages.
 - Remaining ice work outside this fire-ray terrain slice includes the broader
   full `spoteffects()`/`pooleffects()` hero liquid behavior, deeper
   `minliquid()` edges (life-saving or shape-shift survivor relocation,

@@ -2,8 +2,8 @@
 // C refs: src/allmain.c:newgame(), moveloop_core().
 
 import { game } from './gstate.js';
-import { mklev, l_nhcore_init, u_on_upstairs, makemon, mkcorpstat, mksobj, wipe_engr_at, dropMonsterInventory, wandIndexForRoll, scrollIndexForRoll, potionIndexForRoll, RANDOM_MONSTER_BY_NAME, adjustedMonsterLevel, monsterByRndName, monster_hp, rndmonnum, syncDungeonContext, next_ident, set_malign, enextoMonsterSpot, getbogusmon, pickNasty, chameleonAnimalForm, doppelgangerHumanoidForm, noteleportLevelForMonster, rlocNoMsg, rlocToCoreNoMsg, somexyspace, fumaroles, movebubbles } from './mklev.js';
-import { rhack, pickupObjectName, inventoryItemName, inventoryLetterRank, recordVanquished, finishForceLock, loseExperienceLevel, finishLevelTeleport, finishPickDigDownwardHole, finishPickDigDownwardPit, maybeQueueQuestLeaderTalk, monsterGrowUp, processSpellbookStudyOccupation, processTinOpeningOccupation, finishTinOpeningOccupation, refreshSwallowOverlay, travelPathKeys, updateGauntletsOfPowerStrength, consumeLifeSavingAmulet, activateStatueTrap, breakStatueObject, burnFloorObjectsByFire, burnRayFloorObjectsByFire, erodeArmorByFireTrap, dryWetTowelFromFire, igniteMonsterFireInventoryItems, monsterFireInventoryDamage, dropMonsterObject, landMonsterThrownObject } from './cmd.js';
+import { mklev, l_nhcore_init, u_on_upstairs, makemon, mkcorpstat, mksobj, wipe_engr_at, dropMonsterInventory, wandIndexForRoll, scrollIndexForRoll, potionIndexForRoll, RANDOM_MONSTER_BY_NAME, STONE_RESISTANT_MONSTERS, adjustedMonsterLevel, monsterByRndName, monster_hp, rndmonnum, syncDungeonContext, next_ident, set_malign, enextoMonsterSpot, getbogusmon, pickNasty, chameleonAnimalForm, doppelgangerHumanoidForm, noteleportLevelForMonster, rlocNoMsg, rlocToCoreNoMsg, somexyspace, fumaroles, movebubbles } from './mklev.js';
+import { rhack, pickupObjectName, inventoryItemName, inventoryLetterRank, recordVanquished, finishForceLock, loseExperienceLevel, finishLevelTeleport, finishPickDigDownwardHole, finishPickDigDownwardPit, maybeQueueQuestLeaderTalk, monsterGrowUp, processSpellbookStudyOccupation, processTinOpeningOccupation, finishTinOpeningOccupation, refreshSwallowOverlay, travelPathKeys, updateGauntletsOfPowerStrength, consumeLifeSavingAmulet, activateStatueTrap, breakStatueObject, burnFloorObjectsByFire, burnRayFloorObjectsByFire, erodeArmorByFireTrap, dryWetTowelFromFire, igniteMonsterFireInventoryItems, monsterFireInventoryDamage, dropMonsterObject, landMonsterThrownObject, stoneMonster } from './cmd.js';
 import { docrt, cls, bot, flush_screen, pline, newsym, refreshHallucinatedMap, show_glyph_cell } from './display.js';
 import { vision_recalc, vision_reset, init_vision_globals, cansee, couldsee, view_from } from './vision.js';
 import { init_objects } from './o_init.js';
@@ -1677,6 +1677,7 @@ const MERC_ARMOR_BONUS = new Map([
 const SEARCH_POTION_INDICES = new Set([2, 3, 4, 5, 8, 10, 11, 12, 17, 18, 19, 23]);
 const SEARCH_WAND_INDICES = new Set([3, 7, 11, 14, 18, 19, 20, 21, 22, 23, 24]);
 const PET_PASSIVE_DAMAGE_MONSTERS = new Set(['brown mold', 'green mold', 'red mold']);
+const PETRIFYING_TOUCH_MONSTERS = new Set(['chickatrice', 'cockatrice']);
 const DART_TRAP = 2;
 const LARGE_BOX = 214;
 const CHEST = 215;
@@ -1849,6 +1850,85 @@ function maybeKillerBeeEatRoyalJelly(mon) {
     mon.mcanmove = false;
     mon._skip_mfrozen_decrement = 1;
     newsym(mon.mx, mon.my);
+    return true;
+}
+
+function monsterWearsGloves(mon) {
+    return (mon?.minvent || []).some(item => item.cls === 'armor'
+        && (item.worn || item.owornmask)
+        && /glove|gauntlet/.test(String(item.kind || item.actualKind || '').toLowerCase()));
+}
+
+function monsterResistsStoning(mon) {
+    const data = mon?.data || {};
+    return !!(data.stoneResistance || STONE_RESISTANT_MONSTERS.has(data.name));
+}
+
+function monsterPolyWhenStoned(mon) {
+    const data = mon?.data || {};
+    return data.name !== 'stone golem'
+        && (data.mlet === '\'' || data.glyph === '\'')
+        && !(game._genocided_monsters || []).includes('stone golem');
+}
+
+function monsterContactPetrifiesAttacker(attacker, defender) {
+    const defenderName = String(defender?.data?.name || '').toLowerCase();
+    if (!PETRIFYING_TOUCH_MONSTERS.has(defenderName)) return false;
+    if (monsterResistsStoning(attacker)) return false;
+    return !(attacker?.mw || monsterWearsGloves(attacker));
+}
+
+function maybeDropStoneGolemWeapon(mon, floorMessages) {
+    const weapon = mon?.mw;
+    if (!weapon) return;
+    if (!(mon.minvent || []).includes(weapon)) {
+        mon.mw = null;
+        mon.weapon_check = NEED_WEAPON;
+        return;
+    }
+    if (monsterHasWeaponAttack(mon)) {
+        mon.weapon_check = NEED_WEAPON;
+        return;
+    }
+    mon.mw = null;
+    mon.weapon_check = NO_WEAPON_WANTED;
+    if (!game.u?.blind && (game.viz_array?.[mon.my]?.[mon.mx] & IN_SIGHT))
+        floorMessages.push(`${monsterDisplayName(mon)} drops ${pickupObjectName(weapon)}.`);
+    dropMonsterObject(mon, weapon, floorMessages, { verb: 'drop', monsterMoving: true });
+}
+
+function stoneGolemPolymorphMonster(mon, floorMessages, visible) {
+    const stoneData = monsterByRndName('stone golem');
+    if (!stoneData) return false;
+    if (visible) floorMessages.push(`${monsterDisplayName(mon)} solidifies...`);
+    const oldHp = mon.mhp || 1;
+    const oldMax = mon.mhpmax || oldHp;
+    const shiftedLevel = adjustedMonsterLevel(stoneData);
+    const shiftedHp = monster_hp(stoneData, shiftedLevel);
+    Object.assign(mon, {
+        data: { ...stoneData, hpLevel: shiftedLevel },
+        m_lev: shiftedLevel,
+        mhp: Math.max(1, Math.min(shiftedHp, Math.trunc((oldHp * shiftedHp) / oldMax))),
+        mhpmax: shiftedHp,
+    });
+    maybeDropStoneGolemWeapon(mon, floorMessages);
+    if (visible) floorMessages.push(`Now it's a stone golem.`);
+    newsym(mon.mx, mon.my);
+    return true;
+}
+
+function petrifyMonsterAttacker(attacker, defender, { visible = false, messages = null } = {}) {
+    if (!monsterContactPetrifiesAttacker(attacker, defender)) return false;
+    const floorMessages = Array.isArray(messages) ? messages : [];
+    if (monsterPolyWhenStoned(attacker) && stoneGolemPolymorphMonster(attacker, floorMessages, visible)) {
+        for (const msg of floorMessages) addToplineMessage(msg);
+        return true;
+    }
+    if (visible) floorMessages.push(`${monsterDisplayName(attacker)} turns to stone!`);
+    else if (attacker?.mtame || attacker?.pet)
+        floorMessages.push('You have a peculiarly sad feeling for a moment, then it passes.');
+    stoneMonster(attacker, floorMessages, { awardExperience: false });
+    for (const msg of floorMessages) addToplineMessage(msg);
     return true;
 }
 
@@ -3055,6 +3135,11 @@ async function processMonsterTurns() {
             const mon = resume.mon;
             const target = resume.target;
             if (mon && target && (game.level?.monsters || []).includes(target)) {
+                const petrifyVisible = !game.u?.blind
+                    && !!(game.viz_array?.[mon.my]?.[mon.mx] & IN_SIGHT)
+                    && !!(game.viz_array?.[target.my]?.[target.mx] & IN_SIGHT)
+                    && !mon.minvis && !mon.mundetected && !target.minvis && !target.mundetected;
+                if (petrifyMonsterAttacker(mon, target, { visible: petrifyVisible })) return false;
                 const damage = d(resume.dice ?? 1, resume.sides ?? 2);
                 rn2(3);
                 rn2(6);
@@ -9270,6 +9355,7 @@ function movePet(mon, resumeAfterInventory = false, conflictActive = false) {
                         const secondRoll = rnd(21);
                         const secondHit = targetAc + petLevel > secondRoll;
                         if (secondHit) {
+                            if (petrifyMonsterAttacker(mon, pos.target, { visible: targetVisible && attackerSpotted })) return;
                             pos.target.mhp = (pos.target.mhp || 1) - d(1, 2);
                             rn2(3);
                             rn2(6);
@@ -9339,6 +9425,7 @@ function movePet(mon, resumeAfterInventory = false, conflictActive = false) {
                 return;
             }
 
+            if (petrifyMonsterAttacker(mon, pos.target, { visible: targetVisible && attackerSpotted })) return;
             const damage = d(attack.dice, attack.sides);
             rn2(3);
             rn2(6);

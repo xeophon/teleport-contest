@@ -5,7 +5,7 @@ import { game } from './gstate.js';
 import { nhgetch } from './input.js';
 import { bot, cls, docrt, flush_screen, newsym, pline, recordObservedObjectDiscovery, refreshHallucinatedMap, seeNearbyObjects, show_glyph_cell, strengthString } from './display.js';
 import { couldsee, vision_recalc, vision_reset } from './vision.js';
-import { RANDOM_MONSTER_BY_NAME, SHOP_TYPES, STALKER_MONSTERS, artifactDefinitionForName, artifactObjectName, enextoMonsterSpot, make_tutorial1_level, makemon, makeArtifactWishObject, maketrap, mkcorpstat, mklev, mkobj, mkobj_at, mksobj, monsterByRndName, morgueMonster, nameObjectAsArtifact, next_ident, object_display, potionIndexForRoll, resurrectWizardOfYendor, rndmonnum, scrollIndexForRoll, set_mimic_sym_rng, syncDungeonContext, u_on_dnstairs, u_on_rndspot, u_on_upstairs, wipe_engr_at, dropMonsterInventory as dropMonsterInventoryRaw, l_nhcore_init, getrumor, getbogusmon, level_difficulty, set_malign, somexyspace, fumaroles, movebubbles } from './mklev.js';
+import { RANDOM_MONSTER_BY_NAME, SHOP_TYPES, STALKER_MONSTERS, add_to_container, artifactDefinitionForName, artifactObjectName, enextoMonsterSpot, make_tutorial1_level, makemon, makeArtifactWishObject, maketrap, mkcorpstat, mklev, mkobj, mkobj_at, mksobj, monsterByRndName, morgueMonster, nameObjectAsArtifact, next_ident, object_display, potionIndexForRoll, resurrectWizardOfYendor, rndmonnum, scrollIndexForRoll, set_mimic_sym_rng, syncDungeonContext, u_on_dnstairs, u_on_rndspot, u_on_upstairs, wipe_engr_at, dropMonsterInventory as dropMonsterInventoryRaw, l_nhcore_init, getrumor, getbogusmon, level_difficulty, set_malign, somexyspace, fumaroles, movebubbles } from './mklev.js';
 import { ACCESSIBLE, A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_MAX, A_NEUTRAL, A_STR, A_WIS, ALTAR, AM_SANCTUM, AM_SHRINE, Amask2align, BC_BALL, BC_CHAIN, BEAR_TRAP, BLCORNER, BOLT_LIM, BRCORNER, CLOUD, COLNO, CORPSTAT_FEMALE, CORPSTAT_GENDER, CORPSTAT_HISTORIC, CORPSTAT_MALE, CORPSTAT_NEUTER, CORR, DB_FLOOR, DB_LAVA, DB_MOAT, DB_UNDER, DOOR, DRAWBRIDGE_UP, BURN, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, DUST, ENGRAVE, ENGR_BLOOD, FOUNTAIN, GRAVE, HEADSTONE, HWALL, ICE, IN_SIGHT, IS_AIR, IS_LAVA, IS_OBSTRUCTED, IS_POOL, IS_ROOM, IS_TREE, IS_WALL, In_endgame, In_quest, In_sokoban, In_V_tower, Is_airlevel, Is_astralevel, Is_botlevel, Is_earthlevel, Is_rogue_level, Is_stronghold, Is_waterlevel, LADDER, LAVAPOOL, LAVAWALL, MAGIC_PORTAL, MARK, MAX_EGG_HATCH_TIME, MM_EDOG, MM_NOCOUNTBIRTH, MM_NOMSG, MM_NOWAIT, MOAT, MORGUE, M_AP_TYPE, NO_MINVENT, NORMAL_SPEED, OVERLOADED, P_BASIC, P_UNSKILLED, PIT, POOL, ROLLING_BOULDER_TRAP, ROOM, ROT_AGE, ROOMOFFSET, ROWNO, SCORR, SDOOR, SHOPBASE, SINK, SPIKED_PIT, STAIRS, STONE, TDWALL, TEMPLE, THRONE, TLCORNER, TRCORNER, TREE, TT_BEARTRAP, TT_BURIEDBALL, TT_INFLOOR, TT_LAVA, TT_PIT, TT_WEB, TUWALL, VAULT, VIBRATING_SQUARE, VWALL, WAND_BACKFIRE_CHANCE, WATER, WEB, WT_IRON_BALL_BASE, WT_IRON_BALL_INCR, W_NONDIGGABLE, ZAP_POS } from './const.js';
 import { d, rn1, rn2, rn2_on_display_rng, rnd, rnl, rnz } from './rng.js';
 import { CLR_BLACK, CLR_BLUE, CLR_BRIGHT_BLUE, CLR_BRIGHT_CYAN, CLR_BRIGHT_GREEN, CLR_BROWN, CLR_CYAN, CLR_GRAY, CLR_GREEN, CLR_MAGENTA, CLR_ORANGE, CLR_RED, CLR_YELLOW, CLR_WHITE, NO_COLOR } from './terminal.js';
@@ -13197,6 +13197,103 @@ function dropMonsterInventory(mon, messages = null, { verb = 'fall' } = {}) {
         verb,
         floorEffects: (obj, x, y, floorVerb) => earthFloorEffects(obj, x, y, floorMessages, floorVerb),
     });
+}
+
+function monstoneObjectEscapesStatue(obj) {
+    if (!obj) return false;
+    if (obj.otyp === BOULDER || objectKindKey(obj) === 'boulder') return true;
+    const kind = objectKindKey(obj);
+    const actual = String(obj.actualKind || '').toLowerCase();
+    return obj.realAmuletOfYendor || actual === 'amulet of yendor' || kind === 'amulet of yendor'
+        || isBookOfTheDeadItem(obj) || isBellOfOpeningItem(obj) || isCandelabrumOfInvocationItem(obj);
+}
+
+function monsterStoneCorpstatFlags(mon) {
+    const data = mon?.data || {};
+    let flags = 0;
+    if (mon?.female) flags |= CORPSTAT_FEMALE;
+    else if (!data.neuter) flags |= CORPSTAT_MALE;
+    if (data.unique || data.nemesis || data.rider) flags |= CORPSTAT_HISTORIC;
+    return flags;
+}
+
+function placeMonstoneEscapedObject(obj, x, y, messages) {
+    Object.assign(obj, { ox: x, oy: y });
+    obj.hidden = false;
+    obj.buried = false;
+    obj.transientProjectile = false;
+    obj.contained = false;
+    delete obj.line;
+    if (earthFloorEffects(obj, x, y, messages, 'fall')) return;
+    game.level.objects.push(obj);
+    newsym(x, y);
+}
+
+function makeStoneMonsterRock(x, y) {
+    const rock = mksobj(ROCK, true, false);
+    Object.assign(rock, object_display(rock), { ox: x, oy: y, quan: 1 });
+    const stacked = stackMonsterThrownObject(rock);
+    if (stacked === rock) game.level.objects.push(rock);
+    return stacked;
+}
+
+export function stoneMonster(mon, messages = null, { awardExperience = false } = {}) {
+    if (!mon || !game.level) return null;
+    const x = mon.mx;
+    const y = mon.my;
+    if (x == null || y == null) return null;
+    game.level.objects ??= [];
+    const floorMessages = Array.isArray(messages) ? messages : [];
+    const data = mon.data || {};
+    mon.mhp = 0;
+    mon.mtrapped = 0;
+
+    const oldInventory = [...(mon.minvent || [])];
+    const statueContents = [];
+    mon.minvent = [];
+    if (mon.missile && !oldInventory.includes(mon.missile)) oldInventory.push(mon.missile);
+    mon.missile = null;
+    mon.mw = null;
+
+    for (const obj of oldInventory) {
+        if (monstoneObjectEscapesStatue(obj)) {
+            placeMonstoneEscapedObject(obj, x, y, floorMessages);
+            continue;
+        }
+        if (obj.lamplit || obj.burning) {
+            obj.lamplit = false;
+            obj.burning = false;
+            delete obj._burnTimer;
+            delete obj.litRadius;
+        }
+        obj.contained = false;
+        obj.worn = false;
+        obj.owornmask = 0;
+        statueContents.push(obj);
+    }
+
+    const tiny = !!(data.verysmall || data.tiny || data.msize === 'tiny' || data.size === 'tiny');
+    const makeStatue = !tiny || !rn2(2 + ((data.genoFreq ?? 1) > 2 ? 1 : 0));
+    let remains;
+    if (makeStatue) {
+        remains = mkcorpstat(STATUE, mon, data, x, y, monsterStoneCorpstatFlags(mon));
+        remains.kind = 'statue';
+        remains.contents = [];
+        for (const obj of statueContents) add_to_container(remains, obj);
+        remains.owt = (remains.owt || 0)
+            + remains.contents.reduce((sum, obj) => sum + (obj.owt || obj.weight || 0) * Math.max(1, obj.quan || 1), 0);
+        Object.assign(remains, object_display(remains));
+    } else {
+        for (const obj of statueContents) placeMonstoneEscapedObject(obj, x, y, floorMessages);
+        remains = makeStoneMonsterRock(x, y);
+    }
+
+    recordVanquished(mon, awardExperience);
+    game.level.monsters = (game.level.monsters || []).filter(other => other !== mon);
+    mon.dead = true;
+    mon.movement = 0;
+    newsym(x, y);
+    return remains;
 }
 
 function sameMonsterThrownStackObject(existing, obj) {
