@@ -2516,6 +2516,16 @@ Next concrete target:
   newly-filled square. Direct scroll-of-earth smokes cover grounded kill/drop
   burial, guaranteed lizard corpse burial, zero XP, no added death message, and
   airborne survival; focused replay guards remain exact.
+- The same `boulder_hits_pool()` slice now preserves more of the C fill
+  decision and terrain/trap ordering: Plane of Water boulders never fill,
+  `WATER` water-walls use the 50% `chance < 5` gate, raised drawbridges over
+  moat/lava keep `DRAWBRIDGE_UP` and switch only their `DB_UNDER` mask to
+  `DB_FLOOR`, already-floor/ice drawbridges are not treated as liquid, and
+  `delfloortrap()`-eligible floor traps are deleted after monster death but
+  before burial while non-floor traps remain. Direct scroll-of-earth smokes
+  cover floor-trap deletion, arrow-trap preservation, hero trap-state reset,
+  Water Plane no-fill, water-wall success/failure, drawbridge mask conversion,
+  and drawbridge-over-ice exclusion; focused replay guards remain exact.
 - Remaining ice work outside this fire-ray terrain slice includes the broader
   full `spoteffects()`/`pooleffects()` hero liquid behavior, deeper
   `minliquid()` edges (life-saving or shape-shift survivor relocation,

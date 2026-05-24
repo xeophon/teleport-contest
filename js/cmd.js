@@ -6,7 +6,7 @@ import { nhgetch } from './input.js';
 import { bot, cls, docrt, flush_screen, newsym, pline, recordObservedObjectDiscovery, refreshHallucinatedMap, seeNearbyObjects, show_glyph_cell, strengthString } from './display.js';
 import { couldsee, vision_recalc, vision_reset } from './vision.js';
 import { RANDOM_MONSTER_BY_NAME, SHOP_TYPES, STALKER_MONSTERS, artifactDefinitionForName, artifactObjectName, enextoMonsterSpot, make_tutorial1_level, makemon, makeArtifactWishObject, maketrap, mkcorpstat, mklev, mkobj, mkobj_at, mksobj, monsterByRndName, morgueMonster, nameObjectAsArtifact, next_ident, object_display, potionIndexForRoll, resurrectWizardOfYendor, rndmonnum, scrollIndexForRoll, set_mimic_sym_rng, syncDungeonContext, u_on_dnstairs, u_on_rndspot, u_on_upstairs, wipe_engr_at, dropMonsterInventory, l_nhcore_init, getrumor, getbogusmon, level_difficulty, set_malign, somexyspace, fumaroles, movebubbles } from './mklev.js';
-import { ACCESSIBLE, A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_MAX, A_NEUTRAL, A_STR, A_WIS, ALTAR, AM_SANCTUM, AM_SHRINE, Amask2align, BC_BALL, BC_CHAIN, BEAR_TRAP, BLCORNER, BOLT_LIM, BRCORNER, CLOUD, COLNO, CORPSTAT_FEMALE, CORPSTAT_GENDER, CORPSTAT_HISTORIC, CORPSTAT_MALE, CORPSTAT_NEUTER, CORR, DB_LAVA, DB_MOAT, DB_UNDER, DOOR, DRAWBRIDGE_UP, BURN, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, DUST, ENGRAVE, ENGR_BLOOD, FOUNTAIN, GRAVE, HEADSTONE, HWALL, ICE, IN_SIGHT, IS_AIR, IS_LAVA, IS_OBSTRUCTED, IS_POOL, IS_ROOM, IS_TREE, IS_WALL, In_endgame, In_quest, In_sokoban, In_V_tower, Is_airlevel, Is_astralevel, Is_botlevel, Is_earthlevel, Is_rogue_level, Is_stronghold, Is_waterlevel, LADDER, LAVAPOOL, LAVAWALL, MAGIC_PORTAL, MARK, MAX_EGG_HATCH_TIME, MM_EDOG, MM_NOCOUNTBIRTH, MM_NOMSG, MM_NOWAIT, MOAT, MORGUE, M_AP_TYPE, NO_MINVENT, NORMAL_SPEED, OVERLOADED, P_BASIC, P_UNSKILLED, PIT, POOL, ROLLING_BOULDER_TRAP, ROOM, ROT_AGE, ROOMOFFSET, ROWNO, SCORR, SDOOR, SHOPBASE, SINK, SPIKED_PIT, STAIRS, STONE, TDWALL, TEMPLE, THRONE, TLCORNER, TRCORNER, TREE, TT_BEARTRAP, TT_BURIEDBALL, TT_INFLOOR, TT_LAVA, TT_PIT, TT_WEB, TUWALL, VAULT, VIBRATING_SQUARE, VWALL, WAND_BACKFIRE_CHANCE, WATER, WEB, WT_IRON_BALL_BASE, WT_IRON_BALL_INCR, W_NONDIGGABLE, ZAP_POS } from './const.js';
+import { ACCESSIBLE, A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_MAX, A_NEUTRAL, A_STR, A_WIS, ALTAR, AM_SANCTUM, AM_SHRINE, Amask2align, BC_BALL, BC_CHAIN, BEAR_TRAP, BLCORNER, BOLT_LIM, BRCORNER, CLOUD, COLNO, CORPSTAT_FEMALE, CORPSTAT_GENDER, CORPSTAT_HISTORIC, CORPSTAT_MALE, CORPSTAT_NEUTER, CORR, DB_FLOOR, DB_LAVA, DB_MOAT, DB_UNDER, DOOR, DRAWBRIDGE_UP, BURN, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, DUST, ENGRAVE, ENGR_BLOOD, FOUNTAIN, GRAVE, HEADSTONE, HWALL, ICE, IN_SIGHT, IS_AIR, IS_LAVA, IS_OBSTRUCTED, IS_POOL, IS_ROOM, IS_TREE, IS_WALL, In_endgame, In_quest, In_sokoban, In_V_tower, Is_airlevel, Is_astralevel, Is_botlevel, Is_earthlevel, Is_rogue_level, Is_stronghold, Is_waterlevel, LADDER, LAVAPOOL, LAVAWALL, MAGIC_PORTAL, MARK, MAX_EGG_HATCH_TIME, MM_EDOG, MM_NOCOUNTBIRTH, MM_NOMSG, MM_NOWAIT, MOAT, MORGUE, M_AP_TYPE, NO_MINVENT, NORMAL_SPEED, OVERLOADED, P_BASIC, P_UNSKILLED, PIT, POOL, ROLLING_BOULDER_TRAP, ROOM, ROT_AGE, ROOMOFFSET, ROWNO, SCORR, SDOOR, SHOPBASE, SINK, SPIKED_PIT, STAIRS, STONE, TDWALL, TEMPLE, THRONE, TLCORNER, TRCORNER, TREE, TT_BEARTRAP, TT_BURIEDBALL, TT_INFLOOR, TT_LAVA, TT_PIT, TT_WEB, TUWALL, VAULT, VIBRATING_SQUARE, VWALL, WAND_BACKFIRE_CHANCE, WATER, WEB, WT_IRON_BALL_BASE, WT_IRON_BALL_INCR, W_NONDIGGABLE, ZAP_POS } from './const.js';
 import { d, rn1, rn2, rn2_on_display_rng, rnd, rnl, rnz } from './rng.js';
 import { CLR_BLACK, CLR_BLUE, CLR_BRIGHT_BLUE, CLR_BRIGHT_CYAN, CLR_BRIGHT_GREEN, CLR_BROWN, CLR_CYAN, CLR_GRAY, CLR_GREEN, CLR_MAGENTA, CLR_ORANGE, CLR_RED, CLR_YELLOW, CLR_WHITE, NO_COLOR } from './terminal.js';
 import { vfsDeleteFile, vfsReadFile, vfsWriteFile } from './storage.js';
@@ -12621,10 +12621,48 @@ function earthVisibleSquare(x, y) {
     return !game.u?.blind && !!(game.viz_array?.[y]?.[x] & IN_SIGHT);
 }
 
+function earthLiquidUnderDrawbridge(loc) {
+    if (loc?.typ !== DRAWBRIDGE_UP) return null;
+    const under = drawbridgeUnder(loc);
+    if (under === DB_LAVA) return LAVAPOOL;
+    if (under === DB_MOAT) return MOAT;
+    return null;
+}
+
+function earthBoulderHitsLiquid(loc) {
+    if (!loc) return false;
+    if (loc.typ === DRAWBRIDGE_UP) return !!earthLiquidUnderDrawbridge(loc);
+    return IS_POOL(loc.typ) || loc.typ === LAVAPOOL || loc.typ === LAVAWALL;
+}
+
+function earthLiquidIsLava(loc) {
+    return loc?.typ === LAVAPOOL || loc?.typ === LAVAWALL || earthLiquidUnderDrawbridge(loc) === LAVAPOOL;
+}
+
 function earthWaterBodyName(loc) {
-    if (loc?.typ === LAVAPOOL || loc?.typ === LAVAWALL) return 'lava';
-    if (loc?.typ === MOAT) return 'moat';
+    const typ = earthLiquidUnderDrawbridge(loc) || loc?.typ;
+    if (typ === LAVAPOOL) return 'molten lava';
+    if (typ === LAVAWALL) return 'wall of lava';
+    if (typ === POOL) return 'pool of water';
+    if (typ === MOAT) return 'moat';
+    if (typ === WATER) return Is_waterlevel(game.u?.uz) ? 'limitless water' : 'wall of water';
     return 'water';
+}
+
+function earthBoulderFillsLiquid(loc, lava, chance) {
+    if (Is_waterlevel(game.u?.uz)) return false;
+    if (loc?.typ === WATER) return chance < 5;
+    return lava ? chance === 0 : chance !== 0;
+}
+
+function fillBoulderLiquidTerrain(loc) {
+    if (!loc) return;
+    if (loc.typ === DRAWBRIDGE_UP) {
+        loc.flags = ((loc.flags || 0) & ~DB_UNDER) | DB_FLOOR;
+    } else {
+        loc.typ = ROOM;
+        loc.flags = 0;
+    }
 }
 
 function shopkeeperForCostlySpot(x, y) {
@@ -12731,18 +12769,45 @@ function killBoulderFillMonster(x, y) {
     return true;
 }
 
+const BOULDER_FILL_FLOOR_TRAPS = new Set([
+    SQKY_BOARD, BEAR_TRAP, LANDMINE, FIRE_TRAP,
+    PIT, SPIKED_PIT, HOLE, TRAPDOOR,
+    TELEP_TRAP, LEVEL_TELEP, WEB, MAGIC_TRAP, ANTI_MAGIC,
+]);
+
+function boulderFillTrapAt(x, y) {
+    return (game.level?.traps || []).find(trap => trap.tx === x && trap.ty === y) || null;
+}
+
+function deleteBoulderFillFloorTrap(trap, x, y) {
+    if (!trap || !BOULDER_FILL_FLOOR_TRAPS.has(trap.ttyp) || !game.level?.traps) return false;
+    if (game.u?.ux === x && game.u?.uy === y) {
+        if (game.u.utraptype !== TT_BURIEDBALL) {
+            game.u.utrap = 0;
+            game.u.utraptype = null;
+        }
+    } else {
+        const mon = (game.level?.monsters || []).find(candidate => candidate.mx === x && candidate.my === y);
+        if (mon) mon.mtrapped = 0;
+    }
+    game.level.traps = game.level.traps.filter(candidate => candidate !== trap);
+    return true;
+}
+
 function earthFloorEffects(obj, x, y, messages) {
     const loc = game.level?.at(x, y);
     if (!loc || obj?.otyp !== BOULDER) return false;
-    if (!(IS_POOL(loc.typ) || loc.typ === LAVAPOOL || loc.typ === LAVAWALL)) return false;
-    const lava = loc.typ === LAVAPOOL || loc.typ === LAVAWALL;
+    if (!earthBoulderHitsLiquid(loc)) return false;
+    const lava = earthLiquidIsLava(loc);
     const chance = rn2(10);
-    const fillsUp = lava ? chance === 0 : chance !== 0;
     const body = earthWaterBodyName(loc);
+    const trap = boulderFillTrapAt(x, y);
+    const fillsUp = earthBoulderFillsLiquid(loc, lava, chance);
     let buriedDebt = '';
     if (fillsUp) {
-        loc.typ = ROOM;
+        fillBoulderLiquidTerrain(loc);
         killBoulderFillMonster(x, y);
+        deleteBoulderFillFloorTrap(trap, x, y);
         buriedDebt = buriedMerchandiseDebtMessage(x, y, obj);
         messages.push(...buryObjectsAt(x, y, { ignore: obj }));
         if (buriedDebt) messages.push(buriedDebt);
