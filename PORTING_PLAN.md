@@ -2421,13 +2421,25 @@ Next concrete target:
   created chain at the hero, clears the buried-ball trap, and deletes the
   buried engraving. Direct smokes cover ball burial/restoration and chain-only
   resistance; focused ice/liquid guards and full `npm run score` remain exact.
+- Buried punishment ball lifecycle now covers the first C post-burial triggers:
+  `trapmove()` radius-one movement prints `You move within the chain's reach.`,
+  out-of-range movement decrements the buried-ball timer without RNG and
+  restores punishment with `You finally wrench the ball free.` at zero,
+  same-level/level/stair/dig-down transitions reattach the buried ball before
+  moving or replacing trap state, remove curse frees the buried ball even when
+  confused or cursed and prints the clasp message, and polyself pass-wall or
+  amorphous/whirly/unsolid forms free the buried ball with the C messages.
+  Status/farlook also reports the chained state while `uball` is temporarily
+  buried. Direct helper smokes cover zero-timer restoration and freedom; focused
+  ice/liquid guards and full `npm run score` remain exact.
 - Remaining ice work outside this fire-ray terrain slice includes the broader
   full `spoteffects()`/`pooleffects()` hero liquid behavior, deeper
   `minliquid()` edges (life-saving or shape-shift survivor relocation,
   waterwall/steed details, exact water-damage message/material coverage), the
-  remaining `bury_objs()` behavior (buried-ball movement/teleport tether,
-  shop billing, exact object-material table coverage), and a shared zap-ray
-  walker so fire/sleep/cold stop carrying parallel bounce code.
+  remaining `bury_objs()` behavior (full `drag_ball()` parity after
+  same-level teleports, #monster remove/prayer/earthquake buried-ball edge
+  cases, shop billing, exact object-material table coverage), and a shared
+  zap-ray walker so fire/sleep/cold stop carrying parallel bounce code.
 - Remaining trap work includes off-hero `impact_drop()` callers, deeper
   statue-trap edge cases, broader non-trap fire floor-object parity, and
   remaining bespoke ray floor/hero timing edges.

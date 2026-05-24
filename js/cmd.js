@@ -18,7 +18,10 @@ import { clearMonsterTrack, updateMonsterTrack } from './montrack.js';
 import { datFileLines as bundledDatFileLines } from './dat_files.js';
 import { advanceFireBreathRay, applyFireRayFountainTerrain, applyFireRayIceTerrain, applyFireRayWaterTerrain, burnFireRayWebTrap, finishHeroTargetedBreath, fireBreathDamageHero, fireBreathDamageMonster, fireBreathZapHits } from './fire_breath.js';
 import { dryupFountainAt, dryupFountainResultAt } from './fountain.js';
-import { applyColdRayTerrain, objectIceEffect } from './ice.js';
+import {
+    applyColdRayTerrain, buriedBallToFreedom, buriedBallToPunishment,
+    findBuriedBallNear, isBuriedBallTrapActive, objectIceEffect,
+} from './ice.js';
 import { createGasCloud } from './region.js';
 import { figurineLocationCheck, isFigurineObject, makeFigurineFamiliar, maybeAttachCarriedFigurineTimeout, stopFigurineTransformTimeout, syncCarriedFigurineTransformTimer } from './figurine.js';
 
@@ -1528,6 +1531,7 @@ function collectSameLevelTeleportCoords(cx, cy) {
 }
 
 function teleportHeroSameLevel(x, y) {
+    if (isBuriedBallTrapActive()) buriedBallToPunishment();
     const oldX = game.u?.ux || 0;
     const oldY = game.u?.uy || 0;
     const oldBallX = game.u?.uball?.ox;
@@ -3145,6 +3149,7 @@ async function digDownwardPitResult(options = {}) {
     if (!canDigDownFromLevel(current) && trap) return downwardDigTooHardResult();
     const boulderResult = downwardDigBoulderResult(x, y, trap);
     if (boulderResult) return boulderResult;
+    if (isBuriedBallTrapActive()) buriedBallToPunishment();
 
     const pit = await maketrap(x, y, PIT);
     if (!pit) return { message: '', more: false };
@@ -3177,6 +3182,7 @@ async function digDownwardHoleResult(options = {}) {
 
     const boulderResult = downwardDigBoulderResult(x, y, existingTrap);
     if (boulderResult) return boulderResult;
+    if (isBuriedBallTrapActive()) buriedBallToPunishment();
 
     const trap = await maketrap(x, y, HOLE);
     if (!trap) return { message: '', more: false };
@@ -3252,6 +3258,7 @@ export async function finishLevelTeleport(targetLevel, options = {}) {
         game._command_mode = null;
         return true;
     }
+    if (isBuriedBallTrapActive()) buriedBallToPunishment();
     const fromTemperature = game.level?.flags?.temperature ?? 0;
     const targetKey = `${targetLevel.dnum}:${targetLevel.dlevel}`;
     const savedTarget = game._saved_levels?.get(targetKey);
@@ -5859,7 +5866,7 @@ function buildGenericAttributesPage2Rows() {
     );
     if (statusSuffix.includes('Deaf')) rows.push([row++, 0, '  You are deaf.']);
     if (statusSuffix.includes('Hallu')) rows.push([row++, 0, '  You are hallucinating.']);
-    if (game.u?.uball) rows.push([row++, 0, '  You are chained to a heavy iron ball.']);
+    if (game.u?.uball || isBuriedBallTrapActive()) rows.push([row++, 0, '  You are chained to a heavy iron ball.']);
     if (game.u?._woundedLegTurns) {
         const side = game.u._woundedLegSide === 'left' ? 'left '
             : game.u._woundedLegSide === 'right' ? 'right ' : '';
@@ -6024,16 +6031,15 @@ function genericAttributesPage2() {
 
 function heroFarlookDescription() {
     const form = polyselfForm();
+    const chained = game.u?.uball || isBuriedBallTrapActive() ? ', chained to a heavy iron ball' : '';
     if (form) {
         const called = game.plname ? ` called ${game.plname}` : '';
-        const chained = game.u?.uball ? ', chained to a heavy iron ball' : '';
         return `${form.name}${called}${chained}`;
     }
     const raceAdj = game.urace?.adj || game._startup_race || 'human';
     const race = { orcish: 'orc', elven: 'elf', gnomish: 'gnome', dwarven: 'dwarf' }[raceAdj] || raceAdj;
     const role = game.urole?.name?.[game.flags?.female ? 'f' : 'm'] || game.urole?.name?.m || game._startup_role || 'Adventurer';
     const called = game.plname ? ` called ${game.plname}` : '';
-    const chained = game.u?.uball ? ', chained to a heavy iron ball' : '';
     return `${String(race).toLowerCase()} ${String(role).toLowerCase()}${called}${chained}`;
 }
 
@@ -8096,6 +8102,16 @@ function becomeMonster(name) {
     game.urole.rank = { m: rank, f: rank };
     const article = /^[aeiou]/i.test(form.name) ? 'an' : 'a';
     let message = `You turn into ${article} ${form.name}!`;
+    if (isBuriedBallTrapActive()) {
+        if (form.passWalls && buriedBallToFreedom()) {
+            message += '  The buried ball is no longer bound to you.';
+        } else if ((form.amorphous || form.whirly || form.unsolid || form.noncorporeal) && buriedBallToFreedom()) {
+            message += '  You slip free of the buried ball and chain.';
+        }
+    } else if (game.u?.uball && (form.amorphous || form.whirly || form.unsolid || form.noncorporeal)) {
+        unpunishHero();
+        message += '  You slip out of the iron chain.';
+    }
     const cloak = (game.inventory || []).find(item =>
         item.cls === 'armor' && (item.worn || item.line?.includes('being worn'))
         && inventoryItemName(item).toLowerCase().includes('cloak'));
@@ -10354,6 +10370,7 @@ function unpunishHero() {
     if (!game.u || !(game.u.uball || game.u.uchain || game.u.upunished || game._punished)) return;
     const chain = game.u.uchain;
     const ball = game.u.uball;
+    if (chain) rn2(100); // C delobj(chain) reaches obj_resists(chain, 0, 0).
     if (game.level?.objects && chain)
         game.level.objects = game.level.objects.filter(obj => obj !== chain);
     if (ball) {
@@ -10398,7 +10415,10 @@ function removeCurseScrollEffect(item) {
     } else {
         disintegrates = true;
     }
+    const buriedBall = isBuriedBallTrapActive();
     if (!confused) unpunishHero();
+    if (buriedBall && buriedBallToFreedom())
+        messages.push('The clasp on your leg vanishes.');
     return { messages, learned, disintegrates };
 }
 
@@ -17699,6 +17719,36 @@ async function moveHero(dx, dy) {
     const liquidTarget = IS_POOL(targetTyp) || targetTyp === LAVAPOOL || targetTyp === LAVAWALL;
     const targetBoulder = game.level?.objects?.find(obj =>
         !obj.transientProjectile && obj.ox === newx && obj.oy === newy && obj.otyp === BOULDER);
+
+    if (!swallowedMove && isBuriedBallTrapActive()) {
+        const found = findBuriedBallNear(oldx, oldy);
+        if (found && (newx - found.x) ** 2 + (newy - found.y) ** 2 <= 2) {
+            if (game.flags?.verbose !== false) await setMessage("You move within the chain's reach.");
+        } else {
+            game.u.utrap = Math.max(0, (game.u.utrap || 0) - 1);
+            const steedName = game.u?.usteed?.givenName || game.u?.usteed?.data?.name || 'steed';
+            const message = game.u.utrap > 0
+                ? game.u?.usteed
+                    ? `You and ${steedName} are chained to the buried ball.`
+                    : 'You are chained to the buried ball.'
+                : game.u?.usteed
+                    ? `${steedName[0]?.toUpperCase() || 'S'}${steedName.slice(1)} finally wrenches the ball free.`
+                    : 'You finally wrench the ball free.';
+            if (!game.u.utrap) {
+                const restored = buriedBallToPunishment();
+                if (!restored && game.u) game.u.utraptype = null;
+            }
+            if ((game.flags?.verbose !== false || !game.u.utrap) && game._last_trapmove_message !== message) {
+                await setMessage(message);
+            } else {
+                game._pending_message = '';
+                game._keep_pending_message = 0;
+            }
+            game._last_trapmove_message = message;
+            game.context.move = 1;
+            return;
+        }
+    }
 
     if (!swallowedMove && game.level?.flags?.sokoban_rules && dx && dy) {
         const boulderBlocksDiagonal = (x, y) =>
@@ -30720,6 +30770,7 @@ export async function rhack(_cmd) {
             const targetY = game._farlook_y || game.u?.uy || 0;
             const loc = game.level?.at(targetX, targetY);
             if (game._teleport_dot_described && loc && !IS_OBSTRUCTED(loc.typ)) {
+                if (isBuriedBallTrapActive()) buriedBallToPunishment();
                 const oldX = game.u?.ux || 0;
                 const oldY = game.u?.uy || 0;
                 const oldBallX = game.u?.uball?.ox;
@@ -30853,6 +30904,7 @@ export async function rhack(_cmd) {
                 }
                 let landingX = targetX;
                 let landingY = targetY;
+                if (isBuriedBallTrapActive()) buriedBallToPunishment();
                 const oldX = game.u?.ux || 0;
                 const oldY = game.u?.uy || 0;
                 const oldBallX = game.u?.uball?.ox;
@@ -32864,6 +32916,7 @@ export async function rhack(_cmd) {
         }
         downStair.u_traversed = true;
         const fromLevel = { dnum: game.u?.uz?.dnum ?? 0, dlevel: game.u?.uz?.dlevel ?? 1 };
+        if (isBuriedBallTrapActive()) buriedBallToPunishment();
         const ballAndChain = [game.u?.uball, game.u?.uchain].filter(Boolean);
         removeCarriedPunishmentObjects(ballAndChain);
         rememberObjectsAtHero();
@@ -32976,6 +33029,7 @@ export async function rhack(_cmd) {
         }
         upStair.u_traversed = true;
         const fromLevel = { dnum: game.u?.uz?.dnum ?? 0, dlevel: game.u?.uz?.dlevel ?? 1 };
+        if (isBuriedBallTrapActive()) buriedBallToPunishment();
         const ballAndChain = [game.u?.uball, game.u?.uchain].filter(Boolean);
         removeCarriedPunishmentObjects(ballAndChain);
         rememberObjectsAtHero();
