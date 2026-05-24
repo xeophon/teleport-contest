@@ -2453,13 +2453,23 @@ Next concrete target:
   boulder cleanup, high altar preservation, secret terrain reveal, buried-ball
   chain break, and astral-plane level wording; focused drummer/altar/world-tour
   guards remain exact.
+- Earthquake liquid fill now covers the C control-flow core after pit creation:
+  adjacent liquid is selected with `fillholetyp(FALSE)` count and RNG order,
+  the square converts to pool/moat/lava before falling checks, the new chasm is
+  deleted and clears monster/ordinary hero trapped state, ice timers and buried
+  objects are released through the shared unearth path, and off-hero monsters
+  get the existing water/moat liquid effects plus lava burn/death handling
+  instead of dry chasm fall damage. Direct smokes cover water drowning, swimmer
+  survival, lava monster death, trap deletion, and buried-object unearthing;
+  focused drum/liquid/world-tour guards remain exact.
 - Remaining ice work outside this fire-ray terrain slice includes the broader
   full `spoteffects()`/`pooleffects()` hero liquid behavior, deeper
   `minliquid()` edges (life-saving or shape-shift survivor relocation,
   waterwall/steed details, exact water-damage message/material coverage), the
   remaining `bury_objs()` behavior (full `drag_ball()` parity after
   same-level teleports, shop billing, exact object-material table coverage),
-  remaining earthquake liquid fill and `liquid_flow()` side effects,
+  remaining earthquake `liquid_flow()` side effects for exact floor-object
+  `water_damage_chain()`/`fire_damage_chain()` and full hero `pooleffects()`,
   and a shared zap-ray walker so fire/sleep/cold stop carrying parallel bounce
   code.
 - Remaining trap work includes off-hero `impact_drop()` callers, deeper

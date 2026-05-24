@@ -227,7 +227,7 @@ function applyTrapIceEffects(x, y) {
         game.level.traps = (game.level?.traps || []).filter(item => item !== trap);
 }
 
-function unearthObjectsAt(x, y) {
+export function unearthObjectsAt(x, y) {
     const lvl = game.level;
     if (!lvl) return;
     const unearthed = [];

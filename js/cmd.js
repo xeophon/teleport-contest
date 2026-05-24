@@ -6,7 +6,7 @@ import { nhgetch } from './input.js';
 import { bot, cls, docrt, flush_screen, newsym, pline, recordObservedObjectDiscovery, refreshHallucinatedMap, seeNearbyObjects, show_glyph_cell, strengthString } from './display.js';
 import { couldsee, vision_recalc, vision_reset } from './vision.js';
 import { RANDOM_MONSTER_BY_NAME, SHOP_TYPES, STALKER_MONSTERS, artifactDefinitionForName, artifactObjectName, enextoMonsterSpot, make_tutorial1_level, makemon, makeArtifactWishObject, maketrap, mkcorpstat, mklev, mkobj, mkobj_at, mksobj, monsterByRndName, morgueMonster, nameObjectAsArtifact, next_ident, object_display, potionIndexForRoll, resurrectWizardOfYendor, rndmonnum, scrollIndexForRoll, set_mimic_sym_rng, syncDungeonContext, u_on_dnstairs, u_on_rndspot, u_on_upstairs, wipe_engr_at, dropMonsterInventory, l_nhcore_init, getrumor, getbogusmon, level_difficulty, set_malign, somexyspace, fumaroles, movebubbles } from './mklev.js';
-import { ACCESSIBLE, A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_MAX, A_NEUTRAL, A_STR, A_WIS, ALTAR, AM_SANCTUM, AM_SHRINE, Amask2align, BC_BALL, BC_CHAIN, BEAR_TRAP, BLCORNER, BOLT_LIM, BRCORNER, CLOUD, COLNO, CORPSTAT_FEMALE, CORPSTAT_GENDER, CORPSTAT_HISTORIC, CORPSTAT_MALE, CORPSTAT_NEUTER, CORR, DOOR, BURN, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, DUST, ENGRAVE, ENGR_BLOOD, FOUNTAIN, GRAVE, HEADSTONE, HWALL, ICE, IN_SIGHT, IS_AIR, IS_OBSTRUCTED, IS_POOL, IS_ROOM, IS_TREE, IS_WALL, In_endgame, In_quest, In_sokoban, In_V_tower, Is_airlevel, Is_astralevel, Is_botlevel, Is_earthlevel, Is_rogue_level, Is_stronghold, Is_waterlevel, LADDER, LAVAPOOL, LAVAWALL, MAGIC_PORTAL, MARK, MAX_EGG_HATCH_TIME, MM_EDOG, MM_NOCOUNTBIRTH, MM_NOMSG, MM_NOWAIT, MOAT, MORGUE, M_AP_TYPE, NO_MINVENT, NORMAL_SPEED, OVERLOADED, P_BASIC, P_UNSKILLED, PIT, POOL, ROLLING_BOULDER_TRAP, ROOM, ROT_AGE, ROOMOFFSET, ROWNO, SCORR, SDOOR, SHOPBASE, SINK, SPIKED_PIT, STAIRS, STONE, TDWALL, TEMPLE, THRONE, TLCORNER, TRCORNER, TREE, TT_BEARTRAP, TT_BURIEDBALL, TT_INFLOOR, TT_LAVA, TT_PIT, TT_WEB, TUWALL, VAULT, VIBRATING_SQUARE, VWALL, WAND_BACKFIRE_CHANCE, WATER, WEB, WT_IRON_BALL_BASE, WT_IRON_BALL_INCR, W_NONDIGGABLE, ZAP_POS } from './const.js';
+import { ACCESSIBLE, A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_MAX, A_NEUTRAL, A_STR, A_WIS, ALTAR, AM_SANCTUM, AM_SHRINE, Amask2align, BC_BALL, BC_CHAIN, BEAR_TRAP, BLCORNER, BOLT_LIM, BRCORNER, CLOUD, COLNO, CORPSTAT_FEMALE, CORPSTAT_GENDER, CORPSTAT_HISTORIC, CORPSTAT_MALE, CORPSTAT_NEUTER, CORR, DB_LAVA, DB_MOAT, DB_UNDER, DOOR, DRAWBRIDGE_UP, BURN, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, DUST, ENGRAVE, ENGR_BLOOD, FOUNTAIN, GRAVE, HEADSTONE, HWALL, ICE, IN_SIGHT, IS_AIR, IS_LAVA, IS_OBSTRUCTED, IS_POOL, IS_ROOM, IS_TREE, IS_WALL, In_endgame, In_quest, In_sokoban, In_V_tower, Is_airlevel, Is_astralevel, Is_botlevel, Is_earthlevel, Is_rogue_level, Is_stronghold, Is_waterlevel, LADDER, LAVAPOOL, LAVAWALL, MAGIC_PORTAL, MARK, MAX_EGG_HATCH_TIME, MM_EDOG, MM_NOCOUNTBIRTH, MM_NOMSG, MM_NOWAIT, MOAT, MORGUE, M_AP_TYPE, NO_MINVENT, NORMAL_SPEED, OVERLOADED, P_BASIC, P_UNSKILLED, PIT, POOL, ROLLING_BOULDER_TRAP, ROOM, ROT_AGE, ROOMOFFSET, ROWNO, SCORR, SDOOR, SHOPBASE, SINK, SPIKED_PIT, STAIRS, STONE, TDWALL, TEMPLE, THRONE, TLCORNER, TRCORNER, TREE, TT_BEARTRAP, TT_BURIEDBALL, TT_INFLOOR, TT_LAVA, TT_PIT, TT_WEB, TUWALL, VAULT, VIBRATING_SQUARE, VWALL, WAND_BACKFIRE_CHANCE, WATER, WEB, WT_IRON_BALL_BASE, WT_IRON_BALL_INCR, W_NONDIGGABLE, ZAP_POS } from './const.js';
 import { d, rn1, rn2, rn2_on_display_rng, rnd, rnl, rnz } from './rng.js';
 import { CLR_BLACK, CLR_BLUE, CLR_BRIGHT_BLUE, CLR_BRIGHT_CYAN, CLR_BRIGHT_GREEN, CLR_BROWN, CLR_CYAN, CLR_GRAY, CLR_GREEN, CLR_MAGENTA, CLR_ORANGE, CLR_RED, CLR_YELLOW, CLR_WHITE, NO_COLOR } from './terminal.js';
 import { vfsDeleteFile, vfsReadFile, vfsWriteFile } from './storage.js';
@@ -20,10 +20,12 @@ import { advanceFireBreathRay, applyFireRayFountainTerrain, applyFireRayIceTerra
 import { dryupFountainAt, dryupFountainResultAt } from './fountain.js';
 import {
     applyColdRayTerrain, buriedBallToFreedom, buriedBallToPunishment,
-    findBuriedBallNear, isBuriedBallTrapActive, objectIceEffect,
+    findBuriedBallNear, isBuriedBallTrapActive, objectIceEffect, objIceEffectsAt,
+    unearthObjectsAt,
 } from './ice.js';
 import { createGasCloud } from './region.js';
 import { figurineLocationCheck, isFigurineObject, makeFigurineFamiliar, maybeAttachCarriedFigurineTimeout, stopFigurineTransformTimeout, syncCarriedFigurineTransformTimer } from './figurine.js';
+import { applyMonsterLiquidEffectsAt } from './monster_liquid.js';
 
 const DIR_DX = { h: -1, l: 1, j: 0, k: 0, y: -1, u: 1, b: -1, n: 1 };
 const DIR_DY = { h: 0, l: 0, j: 1, k: -1, y: -1, u: -1, b: 1, n: 1 };
@@ -3283,6 +3285,103 @@ function makeEarthquakePitTrap(x, y) {
     return trap;
 }
 
+function drawbridgeUnder(loc) {
+    return (loc?.flags || 0) & DB_UNDER;
+}
+
+function earthquakeIsMoatAt(x, y) {
+    const loc = game.level?.at(x, y);
+    if (!loc || currentSpecialLevelName() === 'juiblex') return false;
+    return loc.typ === MOAT || (loc.typ === DRAWBRIDGE_UP && drawbridgeUnder(loc) === DB_MOAT);
+}
+
+function earthquakeIsLavaAt(x, y) {
+    const loc = game.level?.at(x, y);
+    if (!loc) return false;
+    return IS_LAVA(loc.typ) || (loc.typ === DRAWBRIDGE_UP && drawbridgeUnder(loc) === DB_LAVA);
+}
+
+function earthquakeIsPoolAt(x, y) {
+    const loc = game.level?.at(x, y);
+    if (!loc) return false;
+    return loc.typ === POOL || loc.typ === MOAT || loc.typ === WATER || earthquakeIsMoatAt(x, y);
+}
+
+function earthquakeFillHoleType(x, y) {
+    const loX = Math.max(1, x - 1);
+    const hiX = Math.min(x + 1, COLNO - 1);
+    const loY = Math.max(0, y - 1);
+    const hiY = Math.min(y + 1, ROWNO - 1);
+    let poolCnt = 0;
+    let moatCnt = 0;
+    let lavaCnt = 0;
+    for (let x1 = loX; x1 <= hiX; x1++) {
+        for (let y1 = loY; y1 <= hiY; y1++) {
+            if (earthquakeIsMoatAt(x1, y1)) moatCnt++;
+            else if (earthquakeIsPoolAt(x1, y1)) poolCnt++;
+            else if (earthquakeIsLavaAt(x1, y1)) lavaCnt++;
+        }
+    }
+
+    poolCnt = Math.trunc(poolCnt / 3);
+    if (lavaCnt > moatCnt + poolCnt && rn2(lavaCnt + 1)) return LAVAPOOL;
+    if (moatCnt > 0 && rn2(moatCnt + 1)) return MOAT;
+    if (poolCnt > 0 && rn2(poolCnt + 1)) return POOL;
+    return ROOM;
+}
+
+function setEarthquakeLiquidTerrain(x, y, typ) {
+    const loc = game.level?.at(x, y);
+    if (!loc) return false;
+    loc.typ = typ;
+    loc.flags = 0;
+    loc.doormask = 0;
+    loc.wall_info = 0;
+    if (typ === LAVAPOOL) loc.lit = true;
+    newsym(x, y);
+    return true;
+}
+
+function deleteEarthquakeLiquidTrap(trap, x, y) {
+    if (game.u?.ux === x && game.u?.uy === y && game.u.utraptype !== TT_BURIEDBALL) {
+        game.u.utrap = 0;
+        game.u.utraptype = null;
+    }
+    const mon = (game.level?.monsters || []).find(candidate => candidate.mx === x && candidate.my === y);
+    if (mon) mon.mtrapped = 0;
+    removeDownwardDigTrap(trap);
+}
+
+function applyEarthquakeHeroLiquidEffects(x, y, typ, messages) {
+    if (game.u?.ux !== x || game.u?.uy !== y) return;
+    if (game.u?.levitating || game.u?.flying) return;
+    if (typ === LAVAPOOL) {
+        if (game.u?.fireResistance) return;
+        d(6, 6);
+        game.u.uhp = 0;
+        game._death_cause = 'burned by molten lava';
+        messages.push('You fall into the molten lava!  You burn to a crisp...');
+        messages.push('You die...');
+        return;
+    }
+    game.u.uinwater = 1;
+    game.u.underwater = true;
+    game.u.uunderwater = true;
+    messages.push('You fall into the pool of water!  You sink like a rock.');
+}
+
+function earthquakeLiquidFlow(x, y, typ, trap, messages) {
+    if (!setEarthquakeLiquidTerrain(x, y, typ)) return false;
+    deleteEarthquakeLiquidTrap(trap, x, y);
+    objIceEffectsAt(x, y, { doBuried: true });
+    unearthObjectsAt(x, y);
+    if (typ === LAVAPOOL) burnFloorObjectsByFire(x, y, { giveFeedback: false, igniteFeedback: false });
+    if (game.u?.ux === x && game.u?.uy === y) applyEarthquakeHeroLiquidEffects(x, y, typ, messages);
+    else messages.push(...applyMonsterLiquidEffectsAt(x, y, { heroCaused: true, recordKill: recordVanquished }));
+    newsym(x, y);
+    return true;
+}
+
 function earthquakeMonsterName(mon, { capital = true, article = true } = {}) {
     if (mon?.givenName) return mon.givenName;
     if (mon?.isshk && mon.shknam) return mon.shknam;
@@ -3373,6 +3472,12 @@ async function doEarthquakePit(x, y, tuPit, messages) {
         removeDownwardDigTrap(chasm);
         newsym(x, y);
         return;
+    }
+
+    const fillType = earthquakeFillHoleType(x, y);
+    if (fillType !== ROOM) {
+        earthquakeLiquidFlow(x, y, fillType, chasm, messages);
+        if (!downwardDigTrapAt(x, y)) return;
     }
 
     const mon = (game.level?.monsters || []).find(candidate => candidate.mx === x && candidate.my === y);
