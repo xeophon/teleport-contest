@@ -24772,7 +24772,7 @@ export async function rhack(_cmd) {
                         messages.push(...burnFireRayWebTrap(sx, sy, {
                             previousMessage: messages[messages.length - 1] || '',
                         }));
-                        const ice = applyFireRayIceTerrain(sx, sy, { heroRay: true });
+                        const ice = applyFireRayIceTerrain(sx, sy, { heroRay: true, recordKill: recordVanquished });
                         messages.push(...ice.messages);
                         if (!ice.handled) {
                             const terrain = applyFireRayWaterTerrain(sx, sy, {

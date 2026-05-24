@@ -2377,11 +2377,21 @@ Next concrete target:
   message pair and identify shield/amulet sources; unseen reflectors silently
   reverse the ray. Direct smokes cover shield, amulet, innate silver-dragon, and
   unseen reflection; focused guards remain exact.
+- Ice melt now has a shared post-melt monster liquid pass. Fire melts and timer
+  melts both run the C order through terrain conversion, trap thaw, object
+  timer adjustment, unearthing, boulder settlement/fill checks, then
+  `minliquid()`-style monster drowning if the final square is still pool/moat.
+  Hero fire gets `You drown the <monster>.` and hero kill credit; timer melts
+  use non-hero credit with `The <monster> drowns.` when visible. Swimmers,
+  breathless/nonliving monsters, and flyers/floating monsters outside the Plane
+  of Water survive. Direct smokes cover visible/unseen timer melt, hero fire
+  melt, swimmer survival, drawbridge ice, and boulder fill prevention; focused
+  guards remain exact.
 - Remaining ice work outside this fire-ray terrain slice includes the broader
   full `spoteffects()`/`pooleffects()` hero liquid behavior, shared post-melt
-  monster liquid effects for timer melts, exact `bury_objs()` object-resistance
-  behavior, and a shared zap-ray walker so fire/sleep/cold stop carrying
-  parallel bounce code.
+  monster survivor relocation/inventory water damage, exact `bury_objs()`
+  object-resistance behavior, and a shared zap-ray walker so fire/sleep/cold
+  stop carrying parallel bounce code.
 - Remaining trap work includes off-hero `impact_drop()` callers, deeper
   statue-trap edge cases, broader non-trap fire floor-object parity, and
   remaining bespoke ray floor/hero timing edges.

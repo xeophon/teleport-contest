@@ -105,7 +105,7 @@ export function startMeltIceTimeout(x, y, minTime = 0) {
     return turn;
 }
 
-export function processMeltIceTimers(g = game) {
+export function processMeltIceTimers(g = game, { afterMelt = null } = {}) {
     const lvl = g.level;
     if (!lvl?.meltIceTimers?.length) return [];
     const due = [];
@@ -127,6 +127,7 @@ export function processMeltIceTimers(g = game) {
         delete loc.meltIceAwayTurn;
         const result = meltIceAt(timer.x, timer.y, { message: ICE_TIMER_MELT_MESSAGE });
         messages.push(...result.messages);
+        if (afterMelt) messages.push(...afterMelt(timer.x, timer.y, result));
     }
     return messages;
 }
