@@ -7095,10 +7095,11 @@ export function burnFloorObjectsByFire(x, y, { giveFeedback = false } = {}) {
 
 function fireDamageInventory(origDamage, forceDestroyItems = false, rollIgniteItems = false, {
     updateArmorInventory = true,
+    preburnedArmor = null,
 } = {}) {
     const messages = [];
     const events = [];
-    const armor = burnWornArmorFromFire({ updateHeroInventory: updateArmorInventory });
+    const armor = preburnedArmor || burnWornArmorFromFire({ updateHeroInventory: updateArmorInventory });
     if (armor.message) messages.push(armor.message);
     const joinState = { joinedArmorMessage: false };
     let destroyItems = false;
@@ -21605,32 +21606,42 @@ export async function rhack(_cmd) {
                 }
                 if (next.fireBreathHeroHit) {
                     const breath = next.fireBreathHeroHit;
-                    const hit = fireBreathDamageHero(breath.dice);
+                    const hit = fireBreathDamageHero(breath.dice, origDamage =>
+                        fireDamageInventory(origDamage, false, true, {
+                            preburnedArmor: { bodyHit: true, message: '' },
+                        }));
                     const messages = [nextText, ...hit.messages].filter(Boolean);
-                    const ray = { ...breath.ray, heardGas: false };
-                    const follow = advanceFireBreathRay(ray, breath.sourceId);
-                    if (follow.target?.type === 'monster') {
-                        game._queued_messages_after_more ??= [];
-                        game._queued_messages_after_more.unshift({
-                            text: follow.messages.join('  '),
-                            more: true,
-                            fireBreathMonsterHit: {
-                                dice: breath.dice,
-                                ray: { ...follow.ray },
-                                sourceId: breath.sourceId,
-                                targetId: follow.target.mon.m_id,
-                                resumeIndex: breath.resumeIndex,
-                                somebodyCanMove: breath.somebodyCanMove,
-                            },
-                        });
-                        next.more = true;
+                    if (hit.lethal) {
+                        next.insertAfter = [
+                            { text: 'You die...', more: true },
+                            ...(next.insertAfter || []),
+                        ];
                     } else {
-                        messages.push(...follow.messages);
-                        const source = (game.level?.monsters || []).find(mon => mon.m_id === breath.sourceId);
-                        finishHeroTargetedBreath(source);
-                        next.processTime = true;
-                        next.resumeIndex = breath.resumeIndex;
-                        next.somebodyCanMove = breath.somebodyCanMove;
+                        const ray = { ...breath.ray, heardGas: false };
+                        const follow = advanceFireBreathRay(ray, breath.sourceId);
+                        if (follow.target?.type === 'monster') {
+                            game._queued_messages_after_more ??= [];
+                            game._queued_messages_after_more.unshift({
+                                text: follow.messages.join('  '),
+                                more: true,
+                                fireBreathMonsterHit: {
+                                    dice: breath.dice,
+                                    ray: { ...follow.ray },
+                                    sourceId: breath.sourceId,
+                                    targetId: follow.target.mon.m_id,
+                                    resumeIndex: breath.resumeIndex,
+                                    somebodyCanMove: breath.somebodyCanMove,
+                                },
+                            });
+                            next.more = true;
+                        } else {
+                            messages.push(...follow.messages);
+                            const source = (game.level?.monsters || []).find(mon => mon.m_id === breath.sourceId);
+                            finishHeroTargetedBreath(source);
+                            next.processTime = true;
+                            next.resumeIndex = breath.resumeIndex;
+                            next.somebodyCanMove = breath.somebodyCanMove;
+                        }
                     }
                     nextText = messages.join('  ');
                 }

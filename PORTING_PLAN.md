@@ -2236,9 +2236,16 @@ Next concrete target:
   and AC changes based on greatest erosion. The known breath guard
   `seed4500-knight-coverage` screen 998 still matches, focused direct breath
   smoke passes, and full `npm run score` remains `44/44`.
+- Hero hits from ordinary fire breath now run the body-hit-only post-armor
+  inventory fire gates through the shared destroy/ignite helper, while keeping
+  breath-local armor wording/timing and routing lethal results through the
+  queued death path. `seed4500-knight-coverage` screen 998 still matches,
+  focused direct inventory smoke passes, and full `npm run score` remains
+  `44/44`.
 - Remaining trap work includes off-hero `impact_drop()` callers, deeper
   statue-trap edge cases, broader non-trap fire floor-object parity, and
-  non-trap fire inventory/ignite gates for ordinary rays and breath.
+  non-trap fire inventory/ignite gates for monster ordinary breath and
+  bespoke wand/ordinary-ray branches.
 - `seed4500-knight-coverage` is closed again and should remain a guard for
   punished teleport landing object-list timing, Vlad tower generation, observed
   discovery accounting, Sokoban random-object display, and late enlightenment

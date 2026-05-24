@@ -282,19 +282,33 @@ export function fireBreathDamageMonster(mon, nd = 6) {
 }
 
 // C ref: zap.c zhitu() fire case.
-export function fireBreathDamageHero(nd = 6) {
+export function fireBreathDamageHero(nd = 6, inventoryFire = null) {
     const origDamage = d(nd, 6);
     const messages = [];
+    let damage = game.u?.fireResistance ? 0 : origDamage;
+    let deathCause = '';
     if (game.u?.fireResistance) messages.push("You don't feel hot!");
-    else if (game.u) game.u.uhp = Math.max(0, (game.u.uhp || 0) - origDamage);
 
     const armor = burnHeroArmorFromFire();
     messages.push(...armor.messages);
     if (armor.bodyHit) {
-        rn2(3);
-        rn2(3);
+        if (inventoryFire) {
+            const inventory = inventoryFire(origDamage);
+            messages.push(...(inventory.messages || []));
+            damage += inventory.damage || 0;
+            deathCause = inventory.deathCause || '';
+        } else {
+            rn2(3);
+            rn2(3);
+        }
     }
-    return { damage: game.u?.fireResistance ? 0 : origDamage, messages };
+    if (damage && game.u) game.u.uhp = Math.max(0, (game.u.uhp || 0) - damage);
+    let lethal = false;
+    if ((game.u?.uhp || 0) <= 0) {
+        lethal = true;
+        game._death_cause = deathCause || 'killed by a blast of fire';
+    }
+    return { damage, messages, lethal, deathCause: game._death_cause || deathCause };
 }
 
 export function finishHeroTargetedBreath(mon) {
