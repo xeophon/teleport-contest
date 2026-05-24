@@ -2387,11 +2387,19 @@ Next concrete target:
   of Water survive. Direct smokes cover visible/unseen timer melt, hero fire
   melt, swimmer survival, drawbridge ice, and boulder fill prevention; focused
   guards remain exact.
+- Ice freezing/boulder-fill burial now runs the first C `bury_objs()` object
+  resistance gate: ordinary floor objects consume `rn2(100)` and then bury,
+  while the real Amulet, Book of the Dead, Candelabrum of Invocation, Bell of
+  Opening, and Rider corpses remain accessible without that RNG. Engravings at
+  the burial square are cleared like C. Direct smokes cover ordinary burial RNG,
+  Book/Rider no-RNG resistance, and freeze-then-melt unearthing; the swimmer and
+  wand-polymorph pile focused guards remain exact.
 - Remaining ice work outside this fire-ray terrain slice includes the broader
   full `spoteffects()`/`pooleffects()` hero liquid behavior, shared post-melt
-  monster survivor relocation/inventory water damage, exact `bury_objs()`
-  object-resistance behavior, and a shared zap-ray walker so fire/sleep/cold
-  stop carrying parallel bounce code.
+  monster survivor relocation/inventory water damage, the remaining
+  `bury_objs()` material behavior (ball/chain punishment, shop billing,
+  rock/boulder deletion, organic/potion rot timers, lamp/leash handling), and a
+  shared zap-ray walker so fire/sleep/cold stop carrying parallel bounce code.
 - Remaining trap work includes off-hero `impact_drop()` callers, deeper
   statue-trap edge cases, broader non-trap fire floor-object parity, and
   remaining bespoke ray floor/hero timing edges.

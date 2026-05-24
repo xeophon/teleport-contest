@@ -15,6 +15,9 @@ import { vision_recalc } from './vision.js';
 
 const BOULDER = 465;
 const CORPSE = 471;
+const BELL = 358;
+const BOOK_OF_THE_DEAD = 10097;
+const CANDELABRUM_OF_INVOCATION = 10076;
 const LAND_MINE = 10160;
 const BEARTRAP = 10161;
 
@@ -33,6 +36,7 @@ const DOOR_FREEZES_SHATTERS_MESSAGE = 'The door freezes and shatters!';
 const ROT_ICE_ADJUSTMENT = 2;
 const MIN_ICE_TIME = 50;
 const MAX_ICE_TIME = 2000;
+const RIDER_CORPSE_NAMES = new Set(['death', 'pestilence', 'famine']);
 
 export function isIceAt(x, y) {
     const loc = game.level?.at(x, y);
@@ -256,13 +260,50 @@ function removeObject(obj) {
     game.level.objects = game.level.objects.filter(item => item !== obj);
 }
 
+function objectKindText(obj) {
+    return String(obj?.actualKind || obj?.kind || obj?.name || obj?.artifact || '').toLowerCase();
+}
+
+function isRiderCorpse(obj) {
+    if (!(obj?.otyp === CORPSE || obj?.otyp === 'corpse')) return false;
+    const corpse = obj.corpsenm || obj.corpse || {};
+    const name = String(corpse.name || corpse.mname || '').toLowerCase();
+    return !!corpse.rider || RIDER_CORPSE_NAMES.has(name);
+}
+
+function objectAlwaysResistsBurial(obj) {
+    const actual = String(obj?.actualKind || '').toLowerCase();
+    const kind = objectKindText(obj);
+    if (obj?.realAmuletOfYendor || actual === 'amulet of yendor'
+        || (!actual && kind === 'amulet of yendor')) return true;
+    if (obj?.otyp === BOOK_OF_THE_DEAD || kind === 'book of the dead') return true;
+    if (obj?.otyp === CANDELABRUM_OF_INVOCATION || kind === 'candelabrum of invocation') return true;
+    if ((obj?.otyp === BELL || obj?.otyp === 'bell') && kind === 'bell of opening') return true;
+    return isRiderCorpse(obj);
+}
+
+function objectResistsBurial(obj) {
+    if (objectAlwaysResistsBurial(obj)) return true;
+    rn2(100); // C obj_resists(obj, 0, 0): ordinary objects always fail after RNG.
+    return false;
+}
+
 function buryObjectsAt(x, y) {
     const lvl = game.level;
-    if (!lvl?.objects?.length) return;
+    if (!lvl) return;
+    if (lvl.engravings) lvl.engravings = lvl.engravings.filter(engr => engr.x !== x || engr.y !== y);
+    if (!lvl.objects?.length) {
+        newsym(x, y);
+        return;
+    }
     lvl.buriedobjlist ??= [];
     const remaining = [];
     for (const obj of lvl.objects) {
         if (obj.ox === x && obj.oy === y && !obj.transientProjectile) {
+            if (objectResistsBurial(obj)) {
+                remaining.push(obj);
+                continue;
+            }
             obj.buried = true;
             obj.hidden = true;
             lvl.buriedobjlist.push(obj);
@@ -271,6 +312,7 @@ function buryObjectsAt(x, y) {
         }
     }
     lvl.objects = remaining;
+    newsym(x, y);
 }
 
 function isSolidTile(x, y) {
