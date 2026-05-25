@@ -2695,8 +2695,12 @@ Next concrete target:
   spilled contents. Source ice-box `#tip` can now choose a carried target
   container, thawing contents before direct `add_to_container()` insertion and
   deliberately not freezing objects merely because the target is an ice box.
-  Generated
-  ice-box corpses are explicitly frozen at creation while the generic
+  Generic `#tip` source handling now covers ordinary floor and carried
+  containers (large boxes, chests, sacks, oilskin sacks, bags of holding, and
+  ice boxes), with carried target-container selection, floor fallback,
+  `contents`/`cobj` compatibility, broken-box prompt wording, source-only
+  ice-box thawing, and C-shaped lock/trap/empty abort checks before transfer.
+  Generated ice-box corpses are explicitly frozen at creation while the generic
   `add_to_container()` helper remains neutral like C; the floor put-in/stash
   paths freeze selected inventory objects immediately before insertion, and
   the thaw/removal helper restores normal corpse age, suppresses non-ice-troll
@@ -2705,9 +2709,10 @@ Next concrete target:
   starts a fresh C-shaped shrink timer. Focused guards, direct
   takeout/tip/put-in/stash/both-order/glob-timer smokes, focused replays, and
   full score remain exact. Remaining ice-box work is nested
-  `in_container()`/`out_container()` variants, broader non-ice-source
-  target-container `#tip` coverage, troll/Rider revive and zombify timers,
-  forced ice-box destruction, and shop billing edge cases.
+  `in_container()`/`out_container()` variants, bag-of-tricks/horn-of-plenty
+  `#tip` specials, cursed/exploding magic-bag transfer details, troll/Rider
+  revive and zombify timers, forced ice-box destruction, and shop billing edge
+  cases.
 - Remaining ice work outside this fire-ray terrain slice includes the broader
   full `spoteffects()`/`pooleffects()` hero liquid behavior, deeper
   `minliquid()` edges (life-saving or shape-shift survivor relocation,

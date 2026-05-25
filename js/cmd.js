@@ -7567,6 +7567,11 @@ function removeFloorObject(obj) {
 }
 
 function liquidFlowContainerContents(obj) {
+    const contents = Array.isArray(obj?.contents) ? obj.contents : [];
+    const cobj = Array.isArray(obj?.cobj) ? obj.cobj : [];
+    if (contents.length && cobj.length) return [...new Set([...contents, ...cobj])];
+    if (contents.length) return contents;
+    if (cobj.length) return cobj;
     if (Array.isArray(obj?.contents)) return obj.contents;
     if (Array.isArray(obj?.cobj)) return obj.cobj;
     return [];
@@ -16158,30 +16163,51 @@ function placeTippedObjectOnFloor(obj, x, y, messages) {
     newsym(x, y);
 }
 
-function tipIceBoxToFloor(iceBox) {
-    const contents = [...liquidFlowContainerContents(iceBox)];
-    iceBox.cknown = true;
-    if (!contents.length) return ['The ice box is empty.'];
-    const x = game.u?.ux ?? iceBox.ox ?? 0;
-    const y = game.u?.uy ?? iceBox.oy ?? 0;
+function tipContainerSimpleName(source) {
+    const display = BAG_OBJECT_TYPES.has(source?.otyp) ? { ...source, cknown: false } : source;
+    const name = articlelessObjectName(display);
+    if ((source?.broken || source?.obroken) && /^(?:large box|chest)$/.test(name))
+        return `broken ${name}`;
+    return name;
+}
+
+function tipContainerEmptyMessage(source) {
+    return `The ${tipContainerSimpleName(source)} is empty.`;
+}
+
+function thawObjectTippedFromSource(source, obj) {
+    if (isIceBoxObject(source)) removedFromIcebox(obj);
+}
+
+function tipContainerToFloor(source) {
+    const contents = [...liquidFlowContainerContents(source)];
+    source.cknown = true;
+    if (!contents.length) return [tipContainerEmptyMessage(source)];
+    const x = game.u?.ux ?? source.ox ?? 0;
+    const y = game.u?.uy ?? source.oy ?? 0;
     const names = contents.map(containerObjectPhrase).join(', ');
     const messages = [contents.length === 1
         ? `An object spills out: ${names}.`
         : `Objects spill out: ${names}.`];
     for (const obj of contents) {
-        removeContainedObject(iceBox, obj);
-        removedFromIcebox(obj);
+        removeContainedObject(source, obj);
+        thawObjectTippedFromSource(source, obj);
         placeTippedObjectOnFloor(obj, x, y, messages);
     }
-    if (Array.isArray(iceBox.contents)) iceBox.contents.length = 0;
-    if (Array.isArray(iceBox.cobj)) iceBox.cobj.length = 0;
+    if (Array.isArray(source.contents)) source.contents.length = 0;
+    if (Array.isArray(source.cobj)) source.cobj.length = 0;
+    refreshTipContainerWeight(source);
     return messages;
 }
 
-function isTipTargetContainer(obj) {
+function isTipContainerObject(obj) {
     if (!obj) return false;
     if (isIceBoxObject(obj) || isBoxObject(obj) || BAG_OBJECT_TYPES.has(obj.otyp)) return true;
     return /^(?:large box|chest|ice box|sack|oilskin sack|bag of holding|bag)$/.test(objectKindKey(obj));
+}
+
+function isTipTargetContainer(obj) {
+    return isTipContainerObject(obj);
 }
 
 function carriedTipTargetContainers(source) {
@@ -16196,6 +16222,22 @@ function tipTargetPhrase(targetBox) {
     return `the ${name}`;
 }
 
+function tipContainerCheckMessage(container, { allowEmpty = false } = {}) {
+    if (!container) return "You don't have that object.";
+    container.lknown = true;
+    if (container.locked || container.olocked) return `The ${tipContainerSimpleName(container)} is locked.`;
+    if (container.otrapped) {
+        container.otrapped = false;
+        container.tknown = false;
+        return 'You trigger a trap!';
+    }
+    if (!allowEmpty && !liquidFlowContainerContents(container).length) {
+        container.cknown = true;
+        return tipContainerEmptyMessage(container);
+    }
+    return '';
+}
+
 function clearTipState() {
     game._tip_container_object = null;
     game._tip_target_entries = null;
@@ -16204,8 +16246,11 @@ function clearTipState() {
 }
 
 function drawTipDestinationMenu(source, targets) {
+    const sourceName = (game.inventory || []).includes(source)
+        ? inventoryItemName(source)
+        : `the ${tipContainerSimpleName(source)}`;
     const rows = [
-        [0, 32, `Where to tip the contents of ${inventoryItemName(source)}?`, 1],
+        [0, 32, `Where to tip the contents of ${sourceName}?`, 1],
         [2, 32, '- - on the floor'],
     ];
     let row = 4;
@@ -16243,29 +16288,42 @@ function refreshTipContainerWeight(container) {
     if (isGlobWeightContainerObject(container)) container.owt = globObjectWeight(container);
 }
 
-function tipIceBoxIntoContainer(iceBox, targetBox) {
-    const contents = [...liquidFlowContainerContents(iceBox)];
-    iceBox.cknown = true;
-    if (!contents.length) return ['The ice box is empty.'];
+function tipContainerIntoContainer(source, targetBox) {
+    const contents = [...liquidFlowContainerContents(source)];
+    source.cknown = true;
+    if (!contents.length) return [tipContainerEmptyMessage(source)];
     targetBox.contents ??= [];
     const messages = [contents.length === 1
         ? `An object tumbles into ${tipTargetPhrase(targetBox)}.`
         : `Objects tumble into ${tipTargetPhrase(targetBox)}.`];
     for (const obj of contents) {
-        removeContainedObject(iceBox, obj);
-        removedFromIcebox(obj);
+        removeContainedObject(source, obj);
+        thawObjectTippedFromSource(source, obj);
         prepareTippedObjectForContainer(obj);
         add_to_container(targetBox, obj);
     }
-    if (Array.isArray(iceBox.contents)) iceBox.contents.length = 0;
-    if (Array.isArray(iceBox.cobj)) iceBox.cobj.length = 0;
-    refreshTipContainerWeight(iceBox);
+    if (Array.isArray(source.contents)) source.contents.length = 0;
+    if (Array.isArray(source.cobj)) source.cobj.length = 0;
+    refreshTipContainerWeight(source);
     refreshTipContainerWeight(targetBox);
     return messages;
 }
 
-function tipIceBoxContents(iceBox, targetBox = null) {
-    return targetBox ? tipIceBoxIntoContainer(iceBox, targetBox) : tipIceBoxToFloor(iceBox);
+function tipContainerContents(source, targetBox = null) {
+    const sourceError = tipContainerCheckMessage(source);
+    if (sourceError) return [sourceError];
+    if (targetBox) {
+        const targetError = tipContainerCheckMessage(targetBox, { allowEmpty: true });
+        if (targetError) return [targetError];
+    }
+    return targetBox ? tipContainerIntoContainer(source, targetBox) : tipContainerToFloor(source);
+}
+
+function tipContainerObjectPhrase(obj) {
+    const phrase = containerObjectPhrase(obj);
+    if (!(obj?.broken || obj?.obroken)) return phrase;
+    if (!/^(?:an? |the )?(?:large box|chest)$/i.test(phrase)) return phrase;
+    return phrase.replace(/^(an? |the )/i, '$1broken ');
 }
 
 function containerObjectPhrase(obj) {
@@ -32706,8 +32764,8 @@ export async function rhack(_cmd) {
     }
 
     if (game._command_mode === 'tipContainerObject') {
-        const iceBoxes = (game.inventory || []).filter(isIceBoxObject);
-        const letters = iceBoxes.map(item => item.letter).filter(Boolean).join('');
+        const containers = (game.inventory || []).filter(isTipContainerObject);
+        const letters = containers.map(item => item.letter).filter(Boolean).join('');
         if (ch === '\x1b' || ch === 'q' || ch === ' ' || ch === '\r' || ch === '\n') {
             game._overlay_lines = null;
             game._overlay_hide_status = 0;
@@ -32717,7 +32775,7 @@ export async function rhack(_cmd) {
         if (ch === '?' || ch === '*') {
             const rows = [[0, 40, 'Tip what?', 1]];
             let row = 2;
-            for (const item of iceBoxes) {
+            for (const item of containers) {
                 rows.push([row++, 40, normalInventoryLine(item)]);
                 if (row >= 23) break;
             }
@@ -32725,7 +32783,7 @@ export async function rhack(_cmd) {
             setOverlay(rows, Math.max(4, row + 1), false, 40);
             return;
         }
-        const tipTarget = iceBoxes.find(item => item.letter === ch);
+        const tipTarget = containers.find(item => item.letter === ch);
         if (!tipTarget) {
             await setMessage(`What do you want to tip? [${getobjPromptLetters(letters)} or ?*]`);
             return;
@@ -32742,13 +32800,13 @@ export async function rhack(_cmd) {
         const source = game._tip_container_object;
         const entries = game._tip_target_entries || [];
         const finishTip = async targetBox => {
-            const messages = tipIceBoxContents(source, targetBox);
+            const messages = tipContainerContents(source, targetBox);
             clearTipState();
             await setMessage(messages.join('  '), messages.length > 1);
             game.context.move = 1;
             game._command_mode = null;
         };
-        if (!source || !isIceBoxObject(source)) {
+        if (!source || !isTipContainerObject(source)) {
             clearTipState();
             game._command_mode = null;
             return;
@@ -32774,10 +32832,10 @@ export async function rhack(_cmd) {
         if (ch === 'q') game._keep_pending_message = 1;
         if (ch === 'y') {
             const tipTarget = game._tip_container_object;
-            if (isIceBoxObject(tipTarget)) {
+            if (isTipContainerObject(tipTarget)) {
                 if (beginTipDestinationSelection(tipTarget)) return;
                 game._tip_container_object = null;
-                const messages = tipIceBoxContents(tipTarget);
+                const messages = tipContainerContents(tipTarget);
                 await setMessage(messages.join('  '), messages.length > 1);
                 game.context.move = 1;
                 game._command_mode = null;
@@ -33498,23 +33556,23 @@ export async function rhack(_cmd) {
                 return;
             }
             if (command === 'tip') {
-                const iceBox = game.level?.objects?.find(obj =>
-                    isIceBoxObject(obj) && obj.ox === game.u?.ux && obj.oy === game.u?.uy);
-                if (iceBox) {
-                    game._tip_container_object = iceBox;
-                    await setMessage(`There is ${containerObjectPhrase(iceBox)} here, tip it? [ynq] (q)`);
+                const floorContainer = game.level?.objects?.find(obj =>
+                    isTipContainerObject(obj) && obj.ox === game.u?.ux && obj.oy === game.u?.uy);
+                if (floorContainer) {
+                    game._tip_container_object = floorContainer;
+                    await setMessage(`There is ${tipContainerObjectPhrase(floorContainer)} here, tip it? [ynq] (q)`);
                     game._command_mode = 'tipConfirm';
                     return;
                 }
-                const carriedIceBoxes = (game.inventory || []).filter(isIceBoxObject);
-                if (carriedIceBoxes.length === 1) {
-                    game._tip_container_object = carriedIceBoxes[0];
-                    await setMessage(`Tip ${inventoryItemName(carriedIceBoxes[0])}? [ynq] (q)`);
+                const carriedContainers = (game.inventory || []).filter(isTipContainerObject);
+                if (carriedContainers.length === 1) {
+                    game._tip_container_object = carriedContainers[0];
+                    await setMessage(`Tip ${inventoryItemName(carriedContainers[0])}? [ynq] (q)`);
                     game._command_mode = 'tipConfirm';
                     return;
                 }
-                if (carriedIceBoxes.length > 1) {
-                    const letters = carriedIceBoxes.map(item => item.letter).filter(Boolean).join('');
+                if (carriedContainers.length > 1) {
+                    const letters = carriedContainers.map(item => item.letter).filter(Boolean).join('');
                     await setMessage(`What do you want to tip? [${getobjPromptLetters(letters)} or ?*]`);
                     game._command_mode = 'tipContainerObject';
                     return;
