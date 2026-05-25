@@ -5712,6 +5712,38 @@ test('tipping unpaid lost contents from a carried cursed magic bag converts the 
     assert.equal((game._usedUpShopBills || []).length, 0);
 });
 
+test('tipping unpaid lost contents from a carried cursed magic bag outside a shop preserves a used-up bill', () => {
+    const { shkp } = installShopState();
+    initRng(17);
+    const source = bagOfHolding(69381);
+    source.cursed = true;
+    const ration = putObjectInContainer(source, foodRation(69382));
+    shop.addObjectToShopBill(shkp, ration, 45);
+    shkp.credit = 10;
+    game.inventory = [source];
+    game.u.ux = 1;
+    game.u.uy = 1;
+    game.level.at = (x, y) => ({
+        roomno: (x === 5 && y === 5) || (x === 6 && y === 5) ? ROOMOFFSET : 0,
+        typ: ROOM,
+    });
+
+    const messages = shop.tipContainerToFloor(source);
+
+    assert.match(messages.join(' '), /vanished/);
+    assert.doesNotMatch(messages.join(' '), /lost merchandise/);
+    assert.equal(source.contents.length, 0);
+    assert.notEqual(ration.unpaid, true);
+    assert.equal(shkp.credit, 10);
+    assert.equal(shkp.debit || 0, 0);
+    assert.equal(shkp.billct, 1);
+    const entry = shop.shopBillEntryForObject(shkp, ration);
+    assert.ok(entry);
+    assert.equal(entry.useup, true);
+    assert.equal(shop.shopBillEntryTotal(entry), 45);
+    assert.equal(game._usedUpShopBills.some(bill => String(bill.bo_id) === String(ration.id)), true);
+});
+
 test('paid carried container lost from a cursed magic bag preserves nested unpaid contents as used-up bills', () => {
     const { shkp } = installShopState();
     initRng(17);
@@ -5758,6 +5790,40 @@ test('carried magic bag explosion converts unpaid contents destroyed by the blas
     assert.notEqual(blade.unpaid, true);
     assert.equal(shkp.debit, expected);
     assert.equal(shkp.billct, 0);
+});
+
+test('carried magic bag explosion outside a shop preserves unpaid blast-lost contents as used-up bills', () => {
+    const { shkp } = installShopState();
+    initRng(13);
+    const source = bagOfHolding(69431);
+    const wand = cancellationWand(69432);
+    const blade = putObjectInContainer(source, dagger(69433));
+    const expected = 45;
+    shop.addObjectToShopBill(shkp, blade, expected);
+    game.u.uhp = 100;
+    game.u.ux = 1;
+    game.u.uy = 1;
+    game.level.at = (x, y) => ({
+        roomno: (x === 5 && y === 5) || (x === 6 && y === 5) ? ROOMOFFSET : 0,
+        typ: ROOM,
+    });
+    game.inventory = [source, wand];
+
+    const result = shop.putInventoryObjectIntoContainer(source, wand);
+
+    assert.equal(result.bagGone, true);
+    assert.match(result.messages.join(' '), /magical explosion/);
+    assert.equal(game.inventory.includes(source), false);
+    assert.equal(game.inventory.includes(wand), false);
+    assert.notEqual(blade.unpaid, true);
+    assert.equal(shkp.credit || 0, 0);
+    assert.equal(shkp.debit || 0, 0);
+    assert.equal(shkp.billct, 1);
+    const entry = shop.shopBillEntryForObject(shkp, blade);
+    assert.ok(entry);
+    assert.equal(entry.useup, true);
+    assert.equal(shop.shopBillEntryTotal(entry), expected);
+    assert.equal(game._usedUpShopBills.some(bill => String(bill.bo_id) === String(blade.id)), true);
 });
 
 test('unpaid carried magic bag destroyed by its own explosion remains as a used-up bill', () => {

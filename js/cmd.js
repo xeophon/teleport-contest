@@ -15871,8 +15871,13 @@ function markObjectTreeShopBillsUsedUp(obj, seen = new Set()) {
 function billHeldMagicBagLostItem(obj) {
     const owner = shopkeeperOwningBillEntry(obj);
     if (obj?.unpaid || owner.entry) {
-        const shkp = owner.shkp || heroShopkeeper();
+        const currentShopkeeper = heroShopkeeper();
+        const shkp = owner.shkp || currentShopkeeper;
         if (!shkp) return 0;
+        if (!currentShopkeeper) {
+            markObjectTreeShopBillsUsedUp(obj);
+            return 0;
+        }
         const value = heldMagicBagLostValueForObject(obj, shkp);
         return chargeShopkeeperForLostMerchandise(shkp, value);
     }
