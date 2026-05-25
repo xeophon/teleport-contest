@@ -123,8 +123,8 @@ function isWishingWand(item) {
         || actualKind === 'wand of wishing';
 }
 
-function wandCharges(item) {
-    return item?.spe ?? item?.charges ?? 0;
+function wandCharges(item, fallback = 0) {
+    return item?.spe ?? item?.charges ?? fallback;
 }
 
 function setWandCharges(item, charges) {
@@ -147,8 +147,8 @@ function setKnownWandLine(item, wand) {
     refreshWandLine(item);
 }
 
-function zappableWand(item) {
-    const charges = wandCharges(item);
+function zappableWand(item, { fallbackCharges = 0 } = {}) {
+    const charges = wandCharges(item, fallbackCharges);
     if (charges < 0) return { zapped: false, dust: true };
     if (charges === 0) {
         if (rn2(WAND_WREST_CHANCE)) return { zapped: false };
@@ -157,6 +157,18 @@ function zappableWand(item) {
     }
     setWandCharges(item, charges - 1);
     return { zapped: true };
+}
+
+function spendZapWandCharge(item, messages) {
+    const charges = wandCharges(item, 8);
+    checkUnpaidUsage(item, messages, { chargeCount: charges });
+    return zappableWand(item, { fallbackCharges: 8 });
+}
+
+function wandZapSpendMessages(usageMessages, chargeUse) {
+    const messages = [...usageMessages];
+    if (chargeUse?.wrested) messages.push('You wrest one last charge from the worn-out wand.');
+    return messages;
 }
 
 function dustWand(item) {
@@ -30496,33 +30508,33 @@ export async function rhack(_cmd) {
             || item?.kind === 'wand of secret door detection'
             || item?.wandIndex === 1
             || (item?.cls === 'wand' && item.roll > 95 && item.roll <= 145);
+        const usageMessages = [];
+        const chargeUse = item ? spendZapWandCharge(item, usageMessages) : null;
+        if (item && !chargeUse.zapped) {
+            const messages = [...usageMessages, 'Nothing happens.'];
+            if (chargeUse.dust && (game.inventory || []).includes(item))
+                messages.push(dustWand(item));
+            await setMessage(messages.join('  '));
+            game._command_mode = null;
+            game.context.move = 1;
+            return;
+        }
+        const spentMessages = () => wandZapSpendMessages(usageMessages, chargeUse);
         if (item && isWishingWand(item)) {
-            const chargeUse = zappableWand(item);
-            if (!chargeUse.zapped) {
-                const messages = ['Nothing happens.'];
-                if (chargeUse.dust && (game.inventory || []).includes(item))
-                    messages.push(dustWand(item));
-                await setMessage(messages.join('  '));
-                game._command_mode = null;
-                game.context.move = 1;
-                return;
-            }
             refreshWandLine(item);
-            const wrestMessage = chargeUse.wrested ? 'You wrest one last charge from the worn-out wand.' : '';
             if (item.cursed && !rn2(WAND_BACKFIRE_CHANCE)) {
                 const damage = d(wandCharges(item) + 2, 6);
                 if (game.u) game.u.uhp = Math.max(0, (game.u.uhp || 0) - damage);
                 const name = pickupObjectName(item);
                 game.inventory = (game.inventory || []).filter(invItem => invItem !== item);
-                await setMessage(`${wrestMessage ? `${wrestMessage}  ` : ''}The ${name} suddenly explodes!`);
+                await setMessage([...spentMessages(), `The ${name} suddenly explodes!`].join('  '));
                 game._command_mode = null;
                 game.context.move = 1;
                 return;
             }
             const luck = (game.u?.uluck || 0) + (game.u?.moreluck || 0);
             if (luck + rn2(5) < 0) {
-                const messages = [];
-                if (wrestMessage) messages.push(wrestMessage);
+                const messages = spentMessages();
                 messages.push('Unfortunately, nothing happens.');
                 if (wandCharges(item) < 0 && (game.inventory || []).includes(item))
                     messages.push(dustWand(item));
@@ -30536,7 +30548,7 @@ export async function rhack(_cmd) {
             await beginWishPrompt({
                 moveCost: 1,
                 dustItem: wandCharges(item) < 0 ? item : null,
-                message: wrestMessage ? `${wrestMessage}  For what do you wish?` : 'For what do you wish?',
+                message: [...spentMessages(), 'For what do you wish?'].join('  '),
             });
             return;
         }
@@ -30544,36 +30556,33 @@ export async function rhack(_cmd) {
             const damage = d((item.spe ?? item.charges ?? 0) + 2, 6);
             if (game.u) game.u.uhp = Math.max(0, (game.u.uhp || 0) - damage);
             game.inventory = (game.inventory || []).filter(invItem => invItem !== item);
-            await setMessage(`The ${pickupObjectName(item)} suddenly explodes!`);
+            await setMessage([...spentMessages(), `The ${pickupObjectName(item)} suddenly explodes!`].join('  '));
             game._command_mode = null;
             game.context.move = 1;
             return;
         }
         if (secretDoorDetection) {
-            item.charges = (item.charges ?? item.spe ?? 8) - 1;
-            item.spe = item.charges;
-            item.line = `${item.letter} - a ${pickupObjectName(item)}${wandChargeSuffix(item, item.charges)}`;
+            item.line = `${item.letter} - a ${pickupObjectName(item)}${wandChargeSuffix(item, wandCharges(item))}`;
             rn2(19);
-            await setMessage("You don't find anything.");
+            const messages = [...spentMessages(), "You don't find anything."];
+            if (wandCharges(item) < 0 && (game.inventory || []).includes(item))
+                messages.push(dustWand(item));
+            await setMessage(messages.join('  '), messages.length > 1);
             game._command_mode = null;
             game.context.move = 1;
             return;
         }
         if (item?.wand === 'polymorph') {
-            item.charges = (item.charges ?? item.spe ?? 8) - 1;
-            item.spe = item.charges;
-            item.line = `${item.letter} - a ${pickupObjectName(item)}${wandChargeSuffix(item, item.charges)}`;
+            item.line = `${item.letter} - a ${pickupObjectName(item)}${wandChargeSuffix(item, wandCharges(item))}`;
             game._zap_item = item;
-            await setMessage('In what direction?');
+            await setMessage([...spentMessages(), 'In what direction?'].join('  '));
             game._command_mode = 'zapPolymorphDirection';
             return;
         }
         if (item) {
-            item.charges = (item.charges ?? item.spe ?? 8) - 1;
-            item.spe = item.charges;
-            item.line = `${item.letter} - a ${pickupObjectName(item)}${wandChargeSuffix(item, item.charges)}`;
+            item.line = `${item.letter} - a ${pickupObjectName(item)}${wandChargeSuffix(item, wandCharges(item))}`;
             game._zap_item = item;
-            await setMessage('In what direction?');
+            await setMessage([...spentMessages(), 'In what direction?'].join('  '));
             game._command_mode = 'zapDirection';
             return;
         }

@@ -334,6 +334,70 @@ test('charged instrument use follows C quarter-price rule when more than one cha
     assert.equal(shop.shopBillEntryForObject(shkp, drum).useup, false);
 });
 
+test('unpaid wand use with more than one charge follows C quarter-price rule', () => {
+    const { shkp } = installShopState();
+    const wand = cancellationWand(3082, 'w');
+    wand.spe = 3;
+    game.inventory = [wand];
+    shop.addObjectToShopBill(shkp, wand, 100);
+    const messages = [];
+
+    const fee = shop.checkUnpaidUsageForTest(wand, messages);
+
+    assert.equal(fee, 25);
+    assert.equal(shkp.debit, 25);
+    assert.equal(shkp.billct, 1);
+    const entry = shop.shopBillEntryForObject(shkp, wand);
+    assert.ok(entry);
+    assert.equal(entry.useup, false);
+    assert.equal(shop.shopBillEntryTotal(entry), 100);
+    assert.equal(wand.unpaid, true);
+    assert.equal(messages.length, 1);
+    assert.match(messages[0], /Usage fee, 25 zorkmids/);
+});
+
+test('unpaid wand use with one charge bills full item price', () => {
+    const { shkp } = installShopState();
+    const wand = cancellationWand(3083, 'w');
+    game.inventory = [wand];
+    shop.addObjectToShopBill(shkp, wand, 100);
+    const messages = [];
+
+    const fee = shop.checkUnpaidUsageForTest(wand, messages);
+
+    assert.equal(fee, 100);
+    assert.equal(shkp.debit, 100);
+    assert.equal(shkp.billct, 1);
+    const entry = shop.shopBillEntryForObject(shkp, wand);
+    assert.ok(entry);
+    assert.equal(entry.useup, false);
+    assert.equal(shop.shopBillEntryTotal(entry), 100);
+    assert.equal(wand.unpaid, true);
+    assert.equal(messages.length, 1);
+    assert.match(messages[0], /Usage fee, 100 zorkmids/);
+});
+
+test('unpaid wand use with no charges is not billed for usage', () => {
+    const { shkp } = installShopState();
+    const wand = cancellationWand(3084, 'w');
+    wand.spe = 0;
+    game.inventory = [wand];
+    shop.addObjectToShopBill(shkp, wand, 100);
+    const messages = [];
+
+    const fee = shop.checkUnpaidUsageForTest(wand, messages);
+
+    assert.equal(fee, 0);
+    assert.equal(shkp.debit || 0, 0);
+    assert.equal(shkp.billct, 1);
+    const entry = shop.shopBillEntryForObject(shkp, wand);
+    assert.ok(entry);
+    assert.equal(entry.useup, false);
+    assert.equal(shop.shopBillEntryTotal(entry), 100);
+    assert.equal(wand.unpaid, true);
+    assert.equal(messages.length, 0);
+});
+
 test('unpaid charged object with no remaining charges is not billed for usage', () => {
     const { shkp } = installShopState();
     const bag = chargedTool(3081, 'bag of tricks', 'b', 0);
