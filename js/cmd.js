@@ -7165,6 +7165,7 @@ function removeInventoryItem(item, amount = 1) {
     if (remaining > 0) {
         item.quan = remaining;
         item.line = normalInventoryLine({ ...item, line: '' });
+        if (item.unpaid) syncUnpaidBillLine(item);
     } else {
         stopCarriedFigurineTimerOnLeave(item);
         game.inventory = (game.inventory || []).filter(other => other !== item);
@@ -13277,6 +13278,7 @@ export const __shopBillingTestHooks = {
     mergePickedObjectIntoShopBill,
     removeObjectFromShopBill,
     removeObjectFromShopBillById,
+    removeInventoryItem,
     sellobjReturnUnpaidToShop,
     splitShopBillEntry,
     subFromShopBill,

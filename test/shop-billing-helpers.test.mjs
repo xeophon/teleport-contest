@@ -328,3 +328,25 @@ test('unpaid return without matching bill does not delete unrelated ledger rows'
     assert.equal(shop.shopBillEntryForObject(shkp, billed), shkp.bill[0]);
     assert.equal(orphanedSplit.unpaid, false);
 });
+
+test('partial unpaid inventory use keeps bill total visible until return', () => {
+    const { shkp } = installShopState();
+    const stack = { ...dagger(8401, 'd'), quan: 3, line: 'd - 3 +0 daggers' };
+    shop.addObjectToShopBill(shkp, stack, 15);
+    game.inventory = [stack];
+
+    shop.removeInventoryItem(stack, 1);
+
+    assert.equal(stack.quan, 2);
+    assert.equal(stack.unpaidPrice, 15);
+    assert.match(stack.line, /^d - 2 \+0 daggers \(unpaid, 15 zorkmids\)$/);
+    const entry = shop.shopBillEntryForObject(shkp, stack);
+    assert.equal(entry.bquan, 3);
+    assert.equal(shop.shopBillEntryTotal(entry), 15);
+
+    assert.equal(shop.sellobjReturnUnpaidToShop(stack, 5, 5), true);
+    assert.equal(shkp.billct, 1);
+    assert.equal(shkp.bill[0].useup, true);
+    assert.equal(shkp.bill[0].bquan, 1);
+    assert.equal(shop.shopBillEntryTotal(shkp.bill[0]), 5);
+});
