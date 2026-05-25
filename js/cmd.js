@@ -10779,6 +10779,175 @@ function setTinMonster(item, monster, varietyIndex = null) {
     setTinDisplayName(item, tinNameWithVariety(name, varietyIndex));
 }
 
+function corpseMonsterName(item) {
+    return String(item?.corpsenm?.name || objectKindKey(item).replace(/\s+corpse$/, '') || '').toLowerCase();
+}
+
+function tinnableCorpseNutrition(item) {
+    if (!item) return 0;
+    if (typeof item.corpsenm?.cnutrit === 'number') return item.corpsenm.cnutrit;
+    if (typeof item.nutrition === 'number') return item.nutrition;
+    const name = corpseMonsterName(item);
+    const known = CORPSE_NUTRITION.get(name);
+    if (known != null) return known;
+    return name ? 1 : 0;
+}
+
+function isTinnableCorpse(item) {
+    return isCorpseItem(item) && !(item.oeaten > 0) && tinnableCorpseNutrition(item) > 0;
+}
+
+function floorTinnableCorpseAtHero() {
+    return (game.level?.objects || []).find(obj =>
+        !obj.hidden && !obj.transientProjectile
+        && obj.ox === game.u?.ux && obj.oy === game.u?.uy
+        && isTinnableCorpse(obj));
+}
+
+function tinningInventoryLetters() {
+    return inventoryLetters(isTinnableCorpse);
+}
+
+function tinningInventoryPrompt() {
+    const letters = tinningInventoryLetters();
+    return `What do you want to tin? [${getobjPromptLetters(letters)} or ?*]`;
+}
+
+function tinningFloorPrompt(corpse) {
+    const name = pickupObjectName(corpse);
+    if ((corpse?.quan || 1) > 1)
+        return `There are ${corpse.quan} ${corpse.plural || `${name}s`} here; tin one? [ynq] (n)`;
+    const article = /^[aeiou]/i.test(name) ? 'an' : 'a';
+    return `There is ${article} ${name} here; tin it? [ynq] (n)`;
+}
+
+function clearTinningKitState() {
+    game._apply_tinning_kit_letter = '';
+    game._tinning_floor_object = null;
+}
+
+function createHomemadeTinFromCorpse(corpse, kit) {
+    const can = mksobj(TIN, false, false);
+    Object.assign(can, {
+        cls: 'food',
+        glyph: '%',
+        kind: 'tin',
+        actualKind: 'tin',
+        singular: 'tin',
+        plural: 'tins',
+        quan: 1,
+        blessed: !!kit?.blessed,
+        cursed: !!kit?.cursed,
+        known: true,
+        dknown: true,
+        bknown: true,
+        ox: game.u?.ux ?? corpse?.ox ?? 0,
+        oy: game.u?.uy ?? corpse?.oy ?? 0,
+    });
+    setTinMonster(can, corpse?.corpsenm || { name: corpseMonsterName(corpse) }, HOMEMADE_TIN);
+    can.known = true;
+    return can;
+}
+
+function addHomemadeTinToInventory(can, messages) {
+    game.inventory ??= [];
+    const used = new Set(game.inventory.map(item => item.letter).filter(Boolean));
+    const letter = nextInventoryLetter();
+    if (!letter || used.has(letter)) {
+        can.ox = game.u?.ux ?? 0;
+        can.oy = game.u?.uy ?? 0;
+        delete can.letter;
+        delete can.line;
+        game.level.objects ??= [];
+        game.level.objects.push(can);
+        newsym(can.ox, can.oy);
+        messages.push(`You make, but cannot pick up, ${pickupObjectName(can)}.`);
+        return;
+    }
+    can.letter = letter;
+    can.line = normalInventoryLine({ ...can, line: '' });
+    game.inventory.push(can);
+    game._pet_food_scan_inventory = game.inventory;
+    messages.push(`${can.line}.`);
+}
+
+function carriedCorpseNeedsTinningBill(corpse) {
+    return !!(corpse?.unpaid || shopkeeperOwningBillEntry(corpse).entry);
+}
+
+function floorCorpseNeedsTinningBill(corpse) {
+    if (!corpse || corpse.no_charge) return false;
+    const x = corpse.ox ?? game.u?.ux;
+    const y = corpse.oy ?? game.u?.uy;
+    const shkp = shopkeeperForCostlySpot(x, y);
+    return shopkeeperInHisShop(shkp) && (shopItemPrice(corpse, x, y) > 0 || !!shopBillEntryForObject(shkp, corpse));
+}
+
+async function beginTinningInventorySelection(kit) {
+    const letters = tinningInventoryLetters();
+    if (!letters) {
+        clearTinningKitState();
+        await setMessage('You have nothing to tin.');
+        game._command_mode = null;
+        game.context.move = 1;
+        return true;
+    }
+    game._apply_tinning_kit_letter = kit?.letter || '';
+    await setMessage(tinningInventoryPrompt());
+    game._command_mode = 'tinningObject';
+    return true;
+}
+
+async function beginTinningKitUse(kit) {
+    game._apply_tinning_kit_letter = kit?.letter || '';
+    if ((kit?.spe ?? 0) <= 0) {
+        clearTinningKitState();
+        await setMessage('You seem to be out of tins.');
+        game._command_mode = null;
+        game.context.move = 1;
+        return true;
+    }
+    const floorCorpse = floorTinnableCorpseAtHero();
+    if (floorCorpse) {
+        game._tinning_floor_object = floorCorpse;
+        await setMessage(tinningFloorPrompt(floorCorpse));
+        game._command_mode = 'tinningFloorConfirm';
+        return true;
+    }
+    return beginTinningInventorySelection(kit);
+}
+
+async function finishTinningKitUse(kit, corpse, { floorObject = false } = {}) {
+    clearTinningKitState();
+    game._command_mode = null;
+    if (!kit) return false;
+    if (!isTinnableCorpse(corpse)) {
+        await setMessage(corpse?.oeaten ? 'You cannot tin something which is partly eaten.' : "That's too insubstantial to tin.");
+        game.context.move = 1;
+        return true;
+    }
+
+    const messages = [];
+    if (!spendChargedToolUse(kit, messages)) {
+        await setMessage('You seem to be out of tins.');
+        game.context.move = 1;
+        return true;
+    }
+
+    const can = createHomemadeTinFromCorpse(corpse, kit);
+    if (floorObject) {
+        if (floorCorpseNeedsTinningBill(corpse) && !heroIsDeaf()) messages.push('"You tin it, you bought it!"');
+        useUpFloorObject(corpse, 1, { heroCaused: true });
+    } else {
+        if (carriedCorpseNeedsTinningBill(corpse) && !heroIsDeaf()) messages.push('"You tin it, you bought it!"');
+        useUpInventoryItem(corpse, 1);
+    }
+    addHomemadeTinToInventory(can, messages);
+    await setMessage(messages.join('  '), messages.length > 1);
+    game.context.move = 1;
+    return true;
+}
+
 function isTinObject(item) {
     const kind = String(item?.kind || '').toLowerCase();
     return item?.otyp === TIN || kind === 'tin' || kind === 'empty tin'
@@ -34505,6 +34674,10 @@ export async function rhack(_cmd) {
             await beginTinOpenerUse(item);
             return;
         }
+        if (toolChargeKind(item) === 'tinning kit' || name.includes('tinning kit')) {
+            await beginTinningKitUse(item);
+            return;
+        }
         if (isPotionOfOil(item)) {
             await applyPotionOfOil(item);
             return;
@@ -39078,6 +39251,78 @@ export async function rhack(_cmd) {
         const letters = (game.inventory || []).filter(isTinObject).map(invItem => invItem.letter).filter(Boolean).join('');
         await setMessage("You don't have that object.", true);
         game._topline_after_more = `What do you want to open? [${getobjPromptLetters(letters)} or ?*]`;
+        return;
+    }
+
+    if (game._command_mode === 'tinningFloorConfirm') {
+        const kit = (game.inventory || []).find(invItem => invItem.letter === game._apply_tinning_kit_letter);
+        const corpse = game._tinning_floor_object;
+        if (ch === 'y') {
+            await finishTinningKitUse(kit, corpse, { floorObject: true });
+            return;
+        }
+        if (ch === 'n') {
+            game._tinning_floor_object = null;
+            await beginTinningInventorySelection(kit);
+            return;
+        }
+        if (ch === 'q' || ch === '\x1b' || ch === ' ' || ch === '\r' || ch === '\n') {
+            clearTinningKitState();
+            await setMessage('Never mind.');
+            game._command_mode = null;
+            game.context.move = 1;
+            return;
+        }
+        game._keep_pending_message = 1;
+        return;
+    }
+
+    if (game._command_mode === 'tinningObject') {
+        if (ch === '\x1b' || ch === ' ' || ch === '\r' || ch === '\n') {
+            clearTinningKitState();
+            await setMessage('Never mind.');
+            game._command_mode = null;
+            game.context.move = 1;
+            return;
+        }
+        if (ch === '?' || ch === '*') {
+            setOverlay(inventoryOverlayLines(0, false, isTinnableCorpse), 24, true);
+            game._command_mode = 'tinningInventoryOverlay';
+            return;
+        }
+        const kit = (game.inventory || []).find(invItem => invItem.letter === game._apply_tinning_kit_letter);
+        const corpse = (game.inventory || []).find(invItem => invItem.letter === ch);
+        if (!corpse) {
+            game._topline_after_more = tinningInventoryPrompt();
+            await setMessage("You don't have that object.", true);
+            return;
+        }
+        if (!isTinnableCorpse(corpse)) {
+            clearTinningKitState();
+            await setMessage(corpse.oeaten ? 'You cannot tin something which is partly eaten.' : "That's too insubstantial to tin.");
+            game._command_mode = null;
+            game.context.move = 1;
+            return;
+        }
+        await finishTinningKitUse(kit, corpse, { floorObject: false });
+        return;
+    }
+
+    if (game._command_mode === 'tinningInventoryOverlay') {
+        game._overlay_lines = null;
+        game._overlay_hide_status = 0;
+        if (ch === ' ' || ch === '\x1b' || ch === '\r' || ch === '\n') {
+            await setMessage(tinningInventoryPrompt());
+            game._command_mode = 'tinningObject';
+            return;
+        }
+        if (!(game.inventory || []).some(invItem => invItem.letter === ch && isTinnableCorpse(invItem))) {
+            game._keep_pending_message = 1;
+            return;
+        }
+        const kit = (game.inventory || []).find(invItem => invItem.letter === game._apply_tinning_kit_letter);
+        const corpse = (game.inventory || []).find(invItem => invItem.letter === ch && isTinnableCorpse(invItem));
+        await finishTinningKitUse(kit, corpse, { floorObject: false });
         return;
     }
 

@@ -147,6 +147,27 @@ function tin(id, letter = 't', quan = 1) {
     };
 }
 
+function corpse(id, letter = 'c', name = 'newt', nutrition = 20) {
+    return {
+        id,
+        otyp: 'corpse',
+        cls: 'food',
+        glyph: '%',
+        kind: `${name} corpse`,
+        actualKind: `${name} corpse`,
+        singular: `${name} corpse`,
+        plural: `${name} corpses`,
+        quan: 1,
+        ox: 5,
+        oy: 5,
+        letter,
+        line: `${letter} - a ${name} corpse`,
+        corpsenm: { name, cnutrit: nutrition },
+        known: true,
+        dknown: true,
+    };
+}
+
 function egg(id, letter = 'e', quan = 1) {
     return {
         id,
@@ -1143,6 +1164,93 @@ test('applying a dry unpaid magic marker still charges the C flat fee for a vali
     assert.equal(game.inventory.includes(paper), true);
     assert.match(game._pending_message, /Usage fee, 50 zorkmids/);
     assert.match(game._pending_message, /Your marker is too dry to write that!/);
+});
+
+test('applying unpaid tinning kit to a carried corpse bills usage and makes a homemade tin', async () => {
+    const { shkp } = installCommandShopState();
+    const kit = chargedTool(3108, 'tinning kit', 'k', 4);
+    const body = corpse(3109, 'c', 'newt');
+    game.inventory = [kit, body];
+    shop.addObjectToShopBill(shkp, kit, 100);
+
+    await rhack('a');
+
+    assert.equal(game._command_mode, 'applyObject');
+    assert.match(game._pending_message, /What do you want to use or apply\?/);
+
+    await rhack('k');
+
+    assert.equal(game._command_mode, 'tinningObject');
+    assert.equal(game._apply_tinning_kit_letter, 'k');
+    assert.equal(kit.spe, 4);
+    assert.equal(shkp.debit || 0, 0);
+    assert.match(game._pending_message, /What do you want to tin\? \[c or \?\*\]/);
+
+    await rhack('c');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(kit.spe, 3);
+    assert.equal(shkp.debit, 10);
+    assert.equal(shkp.billct, 1);
+    const entry = shop.shopBillEntryForObject(shkp, kit);
+    assert.ok(entry);
+    assert.equal(entry.useup, false);
+    assert.equal(shop.shopBillEntryTotal(entry), 100);
+    assert.equal(kit.unpaid, true);
+    assert.equal(game.inventory.includes(body), false);
+
+    const madeTin = game.inventory.find(item => item.actualKind === 'tin' && item.corpsenm?.name === 'newt');
+    assert.ok(madeTin);
+    assert.equal(madeTin.cls, 'food');
+    assert.equal(madeTin.glyph, '%');
+    assert.equal(madeTin.kind, 'tin:newt');
+    assert.equal(madeTin.singular, 'homemade tin of newt meat');
+    assert.equal(madeTin.plural, 'homemade tins of newt meat');
+    assert.equal(madeTin.spe, -2);
+    assert.equal(madeTin.quan, 1);
+    assert.notEqual(madeTin.unpaid, true);
+    assert.match(game._pending_message, /Usage fee, 10 zorkmids/);
+    assert.match(game._pending_message, /homemade tin of newt meat/);
+});
+
+test('applying unpaid tinning kit with no corpse spends no charge and adds no usage fee', async () => {
+    const { shkp } = installCommandShopState();
+    const kit = chargedTool(3110, 'tinning kit', 'k', 4);
+    game.inventory = [kit];
+    shop.addObjectToShopBill(shkp, kit, 100);
+
+    await rhack('a');
+    await rhack('k');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(kit.spe, 4);
+    assert.equal(shkp.debit || 0, 0);
+    assert.equal(shkp.billct, 1);
+    assert.equal(shop.shopBillEntryForObject(shkp, kit).useup, false);
+    assert.equal(game.inventory.filter(item => item.actualKind === 'tin').length, 0);
+    assert.match(game._pending_message, /nothing to tin/i);
+});
+
+test('applying empty unpaid tinning kit with a corpse adds no usage fee', async () => {
+    const { shkp } = installCommandShopState();
+    const kit = chargedTool(3111, 'tinning kit', 'k', 0);
+    const body = corpse(3112, 'c', 'newt');
+    game.inventory = [kit, body];
+    shop.addObjectToShopBill(shkp, kit, 100);
+
+    await rhack('a');
+    await rhack('k');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(kit.spe, 0);
+    assert.equal(shkp.debit || 0, 0);
+    assert.equal(game.inventory.includes(body), true);
+    assert.equal(game.inventory.filter(item => item.actualKind === 'tin').length, 0);
+    assert.equal(shop.shopBillEntryForObject(shkp, kit).useup, false);
+    assert.match(game._pending_message, /out of tins/);
 });
 
 test('unpaid charged object with no remaining charges is not billed for usage', () => {
