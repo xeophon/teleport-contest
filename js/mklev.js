@@ -4266,7 +4266,9 @@ function mkbox_cnts(box) {
 
     for (n = rn2(n + 1); n > 0; n--) {
         if (box.otyp === ICE_BOX) {
-            add_to_container(box, mksobj(CORPSE, true, false));
+            const corpse = mksobj(CORPSE, true, false);
+            freezeObjectInIcebox(corpse);
+            add_to_container(box, corpse);
             continue;
         }
 
@@ -4679,7 +4681,6 @@ function sameStackableObject(existing, otmp) {
 }
 export function add_to_container(container, otmp) {
     if (!container || !otmp) return null;
-    if (container.otyp === ICE_BOX || container.kind === 'ice box') freezeObjectInIcebox(otmp);
     container.contents ??= [];
     for (const existing of container.contents) {
         if (!sameStackableObject(existing, otmp)) continue;

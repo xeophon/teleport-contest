@@ -21,7 +21,7 @@ import { dryupFountainAt, dryupFountainResultAt } from './fountain.js';
 import {
     applyColdRayTerrain, buriedBallToFreedom, buriedBallToPunishment,
     buryObjectsAt, findBuriedBallNear, isBuriedBallTrapActive, objectIceEffect, objIceEffectsAt,
-    unearthObjectsAt,
+    removedFromIcebox, unearthObjectsAt,
 } from './ice.js';
 import { createGasCloud } from './region.js';
 import { figurineLocationCheck, isFigurineObject, makeFigurineFamiliar, maybeAttachCarriedFigurineTimeout, stopFigurineTransformTimeout, syncCarriedFigurineTransformTimer } from './figurine.js';
@@ -15377,6 +15377,124 @@ function containerLootSortKey(item) {
 function compareContainerLootItems(a, b) {
     return containerSortRank(a) - containerSortRank(b)
         || containerLootSortKey(a).localeCompare(containerLootSortKey(b));
+}
+
+function isIceBoxObject(obj) {
+    return !!obj && (obj.otyp === ICE_BOX || obj.kind === 'ice box' || objectKindKey(obj) === 'ice box');
+}
+
+function containerLootCategory(item) {
+    if (item.otyp === GOLD_PIECE || item.cls === 'coin' || item.glyph === '$') return 'Coins';
+    if (item.otyp === FOOD_CLASS || item.cls === 'food' || item.glyph === '%') return 'Comestibles';
+    if (item.otyp === SCROLL_CLASS || item.cls === 'scroll' || item.glyph === '?') return 'Scrolls';
+    if (item.cls === 'spellbook' || item.glyph === '+') return 'Spellbooks';
+    if (item.otyp === POTION_CLASS || item.cls === 'potion' || item.glyph === '!') return 'Potions';
+    if (item.otyp === RING_CLASS || item.cls === 'ring' || item.glyph === '=') return 'Rings';
+    if (item.otyp === GEM_CLASS || item.cls === 'gem' || item.glyph === '*') return 'Gems/Stones';
+    return 'Other Items';
+}
+
+function beginIceBoxTakeout(iceBox) {
+    const contents = [...(iceBox?.contents || [])].sort(compareContainerLootItems);
+    if (!contents.length) return false;
+    const seen = new Set(contents.map(containerLootCategory));
+    const typeEntries = [...seen]
+        .sort((a, b) => PICKUP_SECTION_ORDER.indexOf(a) - PICKUP_SECTION_ORDER.indexOf(b))
+        .map((label, i) => ({ letter: String.fromCharCode('b'.charCodeAt(0) + i), label }));
+    if (typeEntries.length === 1) {
+        const entries = contents.map((item, i) => ({
+            item,
+            label: typeEntries[0].label,
+            letter: String.fromCharCode('a'.charCodeAt(0) + i),
+        }));
+        const rows = [[0, 41, 'Take out what?', 1], [2, 41, typeEntries[0].label, 1]];
+        let row = 3;
+        for (const entry of entries)
+            rows.push([row++, 41, `${entry.letter} - ${pickupObjectPhrase(entry.item)}`]);
+        rows.push([row, 41, '(end)']);
+        game._loot_takeout_container = iceBox;
+        game._loot_takeout_entries = entries;
+        game._loot_takeout_selected = [];
+        game._loot_takeout_clear_col = 40;
+        setOverlay(rows, row + 1, false, game._loot_takeout_clear_col);
+        game._command_mode = 'lootTakeoutObjects';
+        return true;
+    }
+
+    const typeRows = [
+        [0, 23, 'Take out what type of objects?', 1],
+        [2, 23, 'A - Auto-select every relevant item'],
+        [3, 27, '(ignored unless some other choices are also picked)'],
+        [5, 23, 'a - All types'],
+    ];
+    for (let i = 0; i < typeEntries.length; i++)
+        typeRows.push([6 + i, 23, `${typeEntries[i].letter} - ${typeEntries[i].label}`]);
+    let filterRow = 7 + typeEntries.length;
+    if (contents.some(item => objectBucCategory(item) === 'blessed'))
+        typeRows.push([filterRow++, 23, 'B - Items known to be Blessed']);
+    if (contents.some(item => objectBucCategory(item) === 'cursed'))
+        typeRows.push([filterRow++, 23, 'C - Items known to be Cursed']);
+    if (contents.some(item => objectBucCategory(item) === 'uncursed'))
+        typeRows.push([filterRow++, 23, 'U - Items known to be Uncursed']);
+    if (contents.some(item => objectBucCategory(item) === 'unknown'))
+        typeRows.push([filterRow++, 23, 'X - Items of unknown Bless/Curse status']);
+    typeRows.push([filterRow, 23, '(end)']);
+    game._loot_takeout_container = iceBox;
+    game._loot_takeout_type_entries = typeEntries;
+    game._loot_takeout_types_selected = [];
+    setOverlay(typeRows, filterRow + 1, false, 22);
+    game._command_mode = 'lootTakeoutMenu';
+    return true;
+}
+
+function prepareContainerTakeoutObject(container, obj) {
+    if (!isIceBoxObject(container)) return obj;
+    removedFromIcebox(obj);
+    obj.contained = false;
+    obj.container = null;
+    delete obj.nobj;
+    delete obj.nexthere;
+    return obj;
+}
+
+function placeTippedObjectOnFloor(obj, x, y, messages) {
+    obj.contained = false;
+    obj.container = null;
+    obj.ox = x;
+    obj.oy = y;
+    obj.hidden = false;
+    obj.buried = false;
+    obj.transientProjectile = false;
+    delete obj.line;
+    delete obj.nobj;
+    delete obj.nexthere;
+    Object.assign(obj, object_display(obj));
+    if (!earthFloorEffects(obj, x, y, messages, 'drop')) {
+        game.level.objects ??= [];
+        game.level.objects.push(obj);
+        objectIceEffect(obj, x, y);
+    }
+    newsym(x, y);
+}
+
+function tipIceBoxToFloor(iceBox) {
+    const contents = [...(iceBox?.contents || [])];
+    iceBox.cknown = true;
+    if (!contents.length) return ['The ice box is empty.'];
+    const x = game.u?.ux ?? iceBox.ox ?? 0;
+    const y = game.u?.uy ?? iceBox.oy ?? 0;
+    const names = contents.map(containerObjectPhrase).join(', ');
+    const messages = [contents.length === 1
+        ? `An object spills out: ${names}.`
+        : `Objects spill out: ${names}.`];
+    for (const obj of contents) {
+        removeContainedObject(iceBox, obj);
+        removedFromIcebox(obj);
+        placeTippedObjectOnFloor(obj, x, y, messages);
+    }
+    if (Array.isArray(iceBox.contents)) iceBox.contents.length = 0;
+    if (Array.isArray(iceBox.cobj)) iceBox.cobj.length = 0;
+    return messages;
 }
 
 function containerObjectPhrase(obj) {
@@ -30773,9 +30891,9 @@ export async function rhack(_cmd) {
     }
 
     if (game._command_mode === 'lootIceMenu') {
+        const iceBox = game.level?.objects?.find(obj =>
+            isIceBoxObject(obj) && obj.ox === game.u?.ux && obj.oy === game.u?.uy);
         if (ch === ':') {
-            const iceBox = game.level?.objects?.find(obj =>
-                obj.otyp === ICE_BOX && obj.ox === game.u?.ux && obj.oy === game.u?.uy);
             if (iceBox) iceBox.cknown = true;
             const rows = [[0, 41, 'Contents of the ice box:']];
             let row = 2;
@@ -30789,6 +30907,16 @@ export async function rhack(_cmd) {
             rows.push([moreRow, 41, '--More--']);
             setOverlay(rows, Math.max(11, moreRow + 1));
             game._command_mode = 'iceBoxContents';
+            return;
+        }
+        if (ch === 'o') {
+            if (iceBox) iceBox.cknown = true;
+            if (iceBox && beginIceBoxTakeout(iceBox)) return;
+            game._overlay_lines = null;
+            game._overlay_hide_status = 0;
+            game._command_mode = null;
+            await setMessage('The ice box is empty.');
+            game.context.move = 1;
             return;
         }
         if (ch === '\x1b' || ch === 'q') {
@@ -31092,16 +31220,17 @@ export async function rhack(_cmd) {
                     continue;
                 }
                 const letter = nextInventoryLetter();
+                prepareContainerTakeoutObject(container, obj);
                 const amount = pickupObjectPhrase(obj);
-                const pickedItem = {
-                    ...obj,
+                const pickedItem = isIceBoxObject(container) ? obj : { ...obj };
+                Object.assign(pickedItem, {
                     cls: obj.cls || (obj.otyp === GEM_CLASS ? 'gem'
                         : obj.otyp === SCROLL_CLASS ? 'scroll'
                             : obj.glyph === '+' ? 'spellbook' : obj.cls),
                     letter,
                     kind: obj.kind || pickupObjectName({ ...obj, quan: 1 }),
                     line: `${letter} - ${amount}`,
-                };
+                });
                 game.inventory = [...(game.inventory || []), pickedItem];
                 maybeAttachCarriedFigurineTimeout(pickedItem);
                 messages.push(`${letter} - ${amount}.`);
@@ -31325,6 +31454,18 @@ export async function rhack(_cmd) {
 
     if (game._command_mode === 'tipConfirm') {
         if (ch === 'q') game._keep_pending_message = 1;
+        if (ch === 'y') {
+            const tipTarget = game._tip_container_object;
+            game._tip_container_object = null;
+            if (isIceBoxObject(tipTarget)) {
+                const messages = tipIceBoxToFloor(tipTarget);
+                await setMessage(messages.join('  '), messages.length > 1);
+                game.context.move = 1;
+                game._command_mode = null;
+                return;
+            }
+        }
+        game._tip_container_object = null;
         game._command_mode = null;
         return;
     }
@@ -32039,6 +32180,14 @@ export async function rhack(_cmd) {
                 return;
             }
             if (command === 'tip') {
+                const iceBox = game.level?.objects?.find(obj =>
+                    isIceBoxObject(obj) && obj.ox === game.u?.ux && obj.oy === game.u?.uy);
+                if (iceBox) {
+                    game._tip_container_object = iceBox;
+                    await setMessage(`There is ${containerObjectPhrase(iceBox)} here, tip it? [ynq] (q)`);
+                    game._command_mode = 'tipConfirm';
+                    return;
+                }
                 await setMessage('There is a broken chest here, tip it? [ynq] (q)');
                 game._command_mode = 'tipConfirm';
                 return;

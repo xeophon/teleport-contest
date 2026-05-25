@@ -2648,15 +2648,17 @@ Next concrete target:
   tables, with generic random tools and wands deferred until the port has a
   stronger authoritative `oc_material` table. Focused metallivore-adjacent
   replays and full score remain exact.
-- Ice-box `meatbox()` age parity now covers generated ice-box contents and
-  monster-eaten container spills: the shared ice-box insertion helper stores
-  corpse age as frozen elapsed time and stops active corpse timers, while the
+- Ice-box corpse age parity now covers generated ice-box contents,
+  monster-eaten container spills, floor ice-box takeout, and floor ice-box
+  `#tip` spills. Generated ice-box corpses are explicitly frozen at creation
+  while the generic `add_to_container()` helper remains neutral like C; the
   thaw/removal helper restores normal corpse age, suppresses non-ice-troll
   revival, and restarts ordinary corpse rot using the C `ROT_AGE`/`rnz`
-  formula. Focused ice-box/metallivore guards and full score remain exact.
-  Remaining `meatbox()` work is full player `out_container()`/`#tip` ice-box
-  thaw coverage, troll/Rider revive and zombify timers, glob shrinking, forced
-  ice-box destruction, and shop billing edge cases.
+  formula. Focused guards, direct takeout/tip smokes, and full score remain
+  exact. Remaining ice-box work is player put-in freeze coverage, full
+  carried/nested/target-container `out_container()`/`#tip` variants,
+  troll/Rider revive and zombify timers, glob shrinking, forced ice-box
+  destruction, and shop billing edge cases.
 - Remaining ice work outside this fire-ray terrain slice includes the broader
   full `spoteffects()`/`pooleffects()` hero liquid behavior, deeper
   `minliquid()` edges (life-saving or shape-shift survivor relocation,
