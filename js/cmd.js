@@ -17052,6 +17052,14 @@ function floorPickupPreflightMessage(preflight) {
     return parts.join('  ') || 'You cannot pick that up.';
 }
 
+async function floorPickupRiderCorpseRevival(obj) {
+    if (!isCorpseItem(obj) || !isRiderCorpseTimerObject(obj)) return null;
+    const messages = ['At your touch, the corpse suddenly moves...'];
+    messages.push(...await reviveCorpseTimerEntry({ obj, source: 'floor' }));
+    exerciseAttribute(A_WIS, false);
+    return { ok: false, riderRevival: true, messages };
+}
+
 function findFloorPickupInventoryMergeTargetForPreflight(source, sourcePrice = null) {
     if (!pickupObjectCanInventoryMerge(source)) return null;
     const x = source?.ox ?? game.u?.ux;
@@ -17095,9 +17103,11 @@ function findFloorPickupFoodMergeTargetForPreflight(source, sourcePrice = null) 
     return null;
 }
 
-function floorPickupPreflight(obj, { shopPrice = null } = {}) {
+async function floorPickupPreflight(obj, { shopPrice = null } = {}) {
     const prelift = containerTakeoutPreliftCheck(obj);
     if (!prelift.ok || prelift.skip) return prelift;
+    const riderRevival = await floorPickupRiderCorpseRevival(obj);
+    if (riderRevival) return riderRevival;
 
     const currentWeight = heroCarriedWeight();
     const gold = Math.max(0, Math.trunc(Number(game._goldCount || 0)));
@@ -28149,7 +28159,7 @@ export async function rhack(_cmd) {
             const preflightByObject = new Map();
             for (const obj of selected) {
                 if (!obj || shopBillableGold(obj)) continue;
-                const preflight = floorPickupPreflight(obj);
+                const preflight = await floorPickupPreflight(obj);
                 preflightByObject.set(obj, preflight);
                 if (!preflight.ok) {
                     game._overlay_lines = null;
@@ -42222,7 +42232,7 @@ export async function rhack(_cmd) {
             return;
         }
         if (objectHere?.otyp === 'corpse' || objectHere?.otyp === CORPSE) {
-            const preflight = floorPickupPreflight(objectHere);
+            const preflight = await floorPickupPreflight(objectHere);
             if (!preflight.ok || preflight.skip) {
                 await setMessage(floorPickupPreflightMessage(preflight));
                 game.context.move = 0;
@@ -42265,7 +42275,7 @@ export async function rhack(_cmd) {
                 return;
             }
             if (skipShopQuote) game._skip_shop_quote_once = null;
-            const preflight = floorPickupPreflight(objectHere, { shopPrice });
+            const preflight = await floorPickupPreflight(objectHere, { shopPrice });
             if (!preflight.ok || preflight.skip) {
                 await setMessage(floorPickupPreflightMessage(preflight));
                 game.context.move = 0;

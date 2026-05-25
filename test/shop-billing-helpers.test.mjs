@@ -2955,6 +2955,36 @@ test('ordinary floor petrifying corpse touch precedes slot preflight and billing
     assert.equal(game.context.move || 0, 0);
 });
 
+test('ordinary floor Rider corpse pickup revives before billing or inventory', async () => {
+    const { shkp } = installCommandShopState();
+    const body = corpse(6010, 'c', 'Death');
+    body.corpsenm = {
+        name: 'Death',
+        rider: true,
+        unique: true,
+        glyph: '&',
+        mlet: '&',
+        mlevel: 30,
+        mmove: 12,
+        ac: -5,
+        mr: 100,
+    };
+    game.level.objects = [body];
+    game.level.at = () => ({ roomno: ROOMOFFSET, typ: ROOM });
+
+    await rhack(',');
+
+    const revived = game.level.monsters.find(mon => mon.data?.name === 'Death');
+    assert.match(game._pending_message, /At your touch, the corpse suddenly moves/);
+    assert.ok(revived);
+    assert.equal(revived.mrevived, 1);
+    assert.equal(game.level.objects.includes(body), false);
+    assert.equal(game.inventory.includes(body), false);
+    assert.equal(body.unpaid, undefined);
+    assert.equal(shkp.billct, 0);
+    assert.equal(shkp.bill.length, 0);
+});
+
 test('taking merchandise from a shop-floor container adds the carried object to the bill', () => {
     const { shkp } = installShopState();
     const container = shopFloorContainer(6101);
@@ -3168,6 +3198,23 @@ test('container take-out fatal corpse touch precedes slot preflight and billing'
     assert.equal(shkp.bill.length, 0);
     assert.equal(game.u.uhp, 0);
     assert.equal(game._death_cause, 'petrified by a cockatrice corpse');
+});
+
+test('container take-out of a Rider corpse does not immediately revive it', async () => {
+    installCommandShopState();
+    const container = shopFloorContainer(6146);
+    const body = putObjectInContainer(container, corpse(6147, 'c', 'Death'));
+    body.corpsenm = { name: 'Death', rider: true };
+    game.level.objects = [container];
+
+    await confirmSingleContainerTakeout(container, body);
+
+    assert.doesNotMatch(game._pending_message || '', /suddenly moves/);
+    assert.equal(game.level.monsters.some(mon => mon.data?.name === 'Death'), false);
+    assert.equal(container.contents.includes(body), false);
+    assert.equal(game.inventory.includes(body), true);
+    assert.equal(body.contained, false);
+    assert.equal(body.container, null);
 });
 
 test('worn gloves allow dangerous corpse take-out without fatal touch', async () => {
