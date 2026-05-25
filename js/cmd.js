@@ -16739,6 +16739,23 @@ function prepareContainerTakeoutObject(container, obj) {
     return obj;
 }
 
+function addContainerTakeoutObjectToInventory(container, obj) {
+    prepareContainerTakeoutObject(container, obj);
+    const letter = nextInventoryLetter();
+    Object.assign(obj, {
+        cls: obj.cls || (obj.otyp === GEM_CLASS ? 'gem'
+            : obj.otyp === SCROLL_CLASS ? 'scroll'
+                : obj.glyph === '+' ? 'spellbook' : obj.cls),
+        letter,
+        kind: obj.kind || pickupObjectName({ ...obj, quan: 1 }),
+    });
+    obj.line = normalInventoryLine({ ...obj, line: '' });
+    game.inventory = [...(game.inventory || []), obj];
+    maybeAttachCarriedFigurineTimeout(obj);
+    game._pet_food_scan_inventory = game.inventory;
+    return obj.line || `${letter} - ${pickupObjectPhrase(obj)}`;
+}
+
 function placeObjectOnFloorWithEffects(obj, x, y, messages, verb = 'drop', { stack = false } = {}) {
     obj.contained = false;
     obj.container = null;
@@ -32252,13 +32269,15 @@ export async function rhack(_cmd) {
         if (ch === ':') {
             bag.cknown = true;
             const rows = [[0, 41, 'Contents of the bag:', 1]];
-            const coins = bag.contents.find(item => item.cls === 'coin' || item.letter === '$');
+            const contents = liquidFlowContainerContents(bag);
+            const coins = contents.find(item => item.cls === 'coin' || item.letter === '$');
             let row = 2;
             if (coins?.quan) {
                 rows.push([row++, 41, 'Coins', 1]);
                 rows.push([row++, 41, `$ - ${coins.quan} gold piece${coins.quan === 1 ? '' : 's'}`]);
             }
-            for (const item of bag.contents.filter(item => item !== coins)) rows.push([row++, 41, item.line || `${item.letter || '?'} - ${inventoryItemName(item)}`]);
+            for (const item of contents.filter(item => item !== coins))
+                rows.push([row++, 41, item.line || `${item.letter || '?'} - ${inventoryItemName(item)}`]);
             rows.push([row, 41, '(end)']);
             setOverlay(rows, rows.length);
             game._command_mode = 'simpleOverlay';
@@ -32267,9 +32286,10 @@ export async function rhack(_cmd) {
         if (ch === 'o') {
             bag.cknown = true;
             const entries = [];
-            const coins = bag.contents.find(item => item.cls === 'coin' || item.letter === '$');
+            const contents = liquidFlowContainerContents(bag);
+            const coins = contents.find(item => item.cls === 'coin' || item.letter === '$');
             if (coins?.quan) entries.push({ item: coins, letter: '$', category: 'coin', amount: coins.quan });
-            for (const item of bag.contents.filter(item => item !== coins))
+            for (const item of contents.filter(item => item !== coins))
                 entries.push({ item, letter: item.letter || '?', category: item.cls || 'Other Items', amount: item.quan || 1 });
             const rows = [[0, 41, 'Take out what?', 1]];
             let row = 2, lastCategory = '';
@@ -32585,6 +32605,15 @@ export async function rhack(_cmd) {
 
     if (game._command_mode === 'bagTakeObject') {
         const bag = (game.inventory || []).find(item => item.letter === game._container_letter);
+        if (!bag) {
+            game._container_letter = null;
+            game._bag_take_entries = null;
+            game._bag_take_selected = null;
+            game._overlay_lines = null;
+            game._overlay_hide_status = 0;
+            game._command_mode = null;
+            return;
+        }
         if (game._bag_take_entries) {
             const entries = game._bag_take_entries || [];
             const selected = new Set(game._bag_take_selected || []);
@@ -32617,6 +32646,8 @@ export async function rhack(_cmd) {
                 const taken = selectedEntries[0];
                 if (taken.letter === '$' || taken.item?.cls === 'coin') {
                     const gold = taken.item.quan || 0;
+                    prepareContainerTakeoutObject(bag, taken.item);
+                    removeContainedObject(bag, taken.item);
                     game._goldCount = (game._goldCount || 0) + gold;
                     const money = (game.inventory || []).find(invItem => invItem.letter === '$' || invItem.cls === 'coin');
                     if (money) {
@@ -32624,13 +32655,14 @@ export async function rhack(_cmd) {
                         updateMoneyLine(money);
                     }
                     else game.inventory = [...(game.inventory || []), { letter: '$', cls: 'coin', otyp: GOLD_PIECE, glyph: '$', quan: gold }];
-                    bag.contents = (bag.contents || []).filter(content => content !== taken.item);
+                    game._pet_food_scan_inventory = game.inventory;
+                    refreshTipContainerWeight(bag);
                     await setMessage(`$ - ${gold} gold piece${gold === 1 ? '' : 's'}.`);
                 } else {
-                    bag.contents = (bag.contents || []).filter(content => content !== taken.item);
-                    game.inventory = [...(game.inventory || []), taken.item];
-                    maybeAttachCarriedFigurineTimeout(taken.item);
-                    await setMessage(`${taken.item.line || `${taken.item.letter || '?'} - ${inventoryItemName(taken.item)}`}.`);
+                    removeContainedObject(bag, taken.item);
+                    const line = addContainerTakeoutObjectToInventory(bag, taken.item);
+                    refreshTipContainerWeight(bag);
+                    await setMessage(`${line}.`);
                 }
                 game.context.move = 1;
                 game._container_letter = null;
@@ -32651,9 +32683,11 @@ export async function rhack(_cmd) {
             }
             return;
         }
-        const item = bag?.contents?.find(content => content.letter === ch);
+        const item = liquidFlowContainerContents(bag).find(content => content.letter === ch);
         if (item?.letter === '$' || item?.cls === 'coin') {
             const gold = item.quan || 0;
+            prepareContainerTakeoutObject(bag, item);
+            removeContainedObject(bag, item);
             game._goldCount = (game._goldCount || 0) + gold;
             const money = (game.inventory || []).find(invItem => invItem.letter === '$' || invItem.cls === 'coin');
             if (money) {
@@ -32661,17 +32695,20 @@ export async function rhack(_cmd) {
                 updateMoneyLine(money);
             }
             else game.inventory = [...(game.inventory || []), { letter: '$', cls: 'coin', otyp: GOLD_PIECE, glyph: '$', quan: gold }];
-            bag.contents = bag.contents.filter(content => content !== item);
+            game._pet_food_scan_inventory = game.inventory;
+            refreshTipContainerWeight(bag);
             await setMessage(`$ - ${gold} gold piece${gold === 1 ? '' : 's'}.`);
             game.context.move = 1;
         } else if (item) {
-            bag.contents = bag.contents.filter(content => content !== item);
-            game.inventory = [...(game.inventory || []), item];
-            maybeAttachCarriedFigurineTimeout(item);
-            await setMessage(`${item.line || `${item.letter || '?'} - ${inventoryItemName(item)}`}.`);
+            removeContainedObject(bag, item);
+            const line = addContainerTakeoutObjectToInventory(bag, item);
+            refreshTipContainerWeight(bag);
+            await setMessage(`${line}.`);
             game.context.move = 1;
         }
         game._container_letter = null;
+        game._bag_take_entries = null;
+        game._bag_take_selected = null;
         game._overlay_lines = null;
         game._overlay_hide_status = 0;
         game._command_mode = null;

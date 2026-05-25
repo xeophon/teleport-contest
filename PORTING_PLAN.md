@@ -2786,8 +2786,13 @@ Next concrete target:
   chest stash, box rejection, metadata cleanup, large-box `lootabc` stash, and
   the take-out-then-put-in sequence; focused replays and full score remain
   exact.
-  Remaining nested-container work is carried-bag takeout/back-pointer parity,
-  full magic-bag
+  Carried bag `out_container()` now follows the same metadata shape: contained
+  objects get parent back-pointers while stored, takeout removes them through
+  the shared contained-list helper, clears stale contained/container/list links,
+  assigns a fresh inventory letter/line, refreshes bag weight, and leaves
+  JSON save encoding cycle-safe. Direct smokes cover object takeout, gold
+  takeout, and save encoding; full score remains exact.
+  Remaining nested-container work is full magic-bag
   `ohitmon()`/`thitu()` special cases and
   non-gold scatter shop billing refinements,
   and shop billing edge cases.

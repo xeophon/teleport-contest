@@ -4703,15 +4703,19 @@ export function add_to_container(container, otmp) {
         if (globsCanMeld(existing, otmp)) {
             absorbGlobObject(existing, otmp);
             existing.contained = true;
+            existing.container = container;
             return existing;
         }
         if (globTypeForObject(existing) || globTypeForObject(otmp)) continue;
         if (!sameStackableObject(existing, otmp)) continue;
         existing.quan = (existing.quan || 1) + (otmp.quan || 1);
+        existing.contained = true;
+        existing.container = container;
         return existing;
     }
     container.contents.unshift(otmp);
     otmp.contained = true;
+    otmp.container = container;
     return otmp;
 }
 export function add_to_minv(mon, otmp) {
