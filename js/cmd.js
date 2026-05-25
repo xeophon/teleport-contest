@@ -268,6 +268,7 @@ function dropCarriedObjectAtHero(item, messages = []) {
                 : item.cls === 'spellbook' ? '+' : '('),
         color: item.color ?? (item.cls === 'scroll' || item.cls === 'spellbook' ? CLR_WHITE : NO_COLOR),
     };
+    curseLoadstoneLeavingInventory(dropped);
     if (Array.isArray(dropped.contents)) dropped.contents = [...dropped.contents];
     if (Array.isArray(dropped.cobj)) dropped.cobj = [...dropped.cobj];
     normalizeContainedObjectParents(dropped);
@@ -4654,6 +4655,7 @@ const OBJECT_WEIGHTS = {
     'silver bell': 10,
     'skeleton key': 3,
     'stethoscope': 4,
+    'loadstone': 500,
     'tinning kit': 100,
     'tin opener': 4,
     'touchstone': 10,
@@ -4907,6 +4909,7 @@ const SHOP_OBJECT_COSTS = {
     'obsidian': 200,
     'agate': 200,
     'jade': 300,
+    'loadstone': 1,
     'rock': 0,
 };
 const RING_SHOP_COSTS = [
@@ -17001,6 +17004,7 @@ function floorPickupObjectKey(obj) {
 function splitFloorPickupObjectForLift(obj, count) {
     const quantity = Math.max(1, Math.trunc(Number(obj?.quan || 1)));
     const takeCount = Math.max(1, Math.min(quantity, Math.trunc(Number(count || quantity))));
+    if (isLoadstoneObject(obj)) return obj;
     if (!obj || takeCount >= quantity) return obj;
     const lifted = { ...obj, id: next_ident(), quan: takeCount };
     delete lifted.o_id;
@@ -17009,6 +17013,31 @@ function splitFloorPickupObjectForLift(obj, count) {
     delete lifted.line;
     obj.quan = quantity - takeCount;
     return lifted;
+}
+
+function isLoadstoneObject(obj) {
+    return !!obj && (obj.otyp === LOADSTONE || objectKindKey(obj) === 'loadstone');
+}
+
+function carriedLoadstoneObject() {
+    return (game.inventory || []).find(item => isLoadstoneObject(item));
+}
+
+function loadstoneNoSlotPickupMessage(obj) {
+    const name = pickupObjectName(obj);
+    return `You are carrying too much stuff to pick up ${(obj?.quan || 1) === 1 ? 'another' : 'more'} ${name}.`;
+}
+
+function curseLoadstoneLeavingInventory(obj) {
+    if (!isLoadstoneObject(obj)) return;
+    obj.cursed = true;
+    obj.blessed = false;
+}
+
+function cursedLoadstoneLetGoMessage(obj, word = 'drop') {
+    if (obj) obj.bknown = true;
+    const plural = Math.max(1, Math.trunc(Number(obj?.quan || 1))) > 1;
+    return `For some reason, you cannot ${word} ${plural ? 'any of ' : ''}the stone${plural ? 's' : ''}!`;
 }
 
 function isScareMonsterScrollObject(obj) {
@@ -17187,9 +17216,32 @@ async function floorPickupPreflight(obj, { shopPrice = null, prompt = true, scar
 
     const currentWeight = heroCarriedWeight();
     const gold = Math.max(0, Math.trunc(Number(game._goldCount || 0)));
-    const takeCount = containerTakeoutLiftableCount(null, obj, currentWeight, gold);
     const messages = [...(prelift.messages || [])];
     const originalCount = Math.max(1, Math.trunc(Number(obj?.quan || 1)));
+    if (isLoadstoneObject(obj)) {
+        const x = obj?.ox ?? game.u?.ux;
+        const y = obj?.oy ?? game.u?.uy;
+        const price = shopPrice != null ? shopPrice : shopItemPrice(obj, x, y);
+        const mergeTarget = findFloorPickupInventoryMergeTargetForPreflight(obj, price);
+        const hasSlot = !!simulatedNextInventoryLetters(1);
+        if (!hasSlot && carriedLoadstoneObject() && !mergeTarget) {
+            return {
+                ok: false,
+                message: loadstoneNoSlotPickupMessage(obj),
+                messages,
+            };
+        }
+        return {
+            ok: true,
+            skip: false,
+            messages,
+            takeCount: originalCount,
+            liftView: obj,
+            prompt: null,
+            inventoryLetter: !hasSlot && !mergeTarget ? '#' : null,
+        };
+    }
+    const takeCount = containerTakeoutLiftableCount(null, obj, currentWeight, gold);
     if (takeCount < 1) {
         return {
             ok: false,
@@ -17284,6 +17336,28 @@ function containerTakeoutPreflight(container, entries) {
             continue;
         }
         const originalCount = Math.max(1, Math.trunc(Number(obj.quan || 1)));
+        if (isLoadstoneObject(obj)) {
+            const view = containerTakeoutObjectView(obj, originalCount);
+            const mergeTarget = findContainerTakeoutInventoryMergeTarget(container, view);
+            const hasSlot = !!simulatedNextInventoryLetters(1);
+            if (!hasSlot && carriedLoadstoneObject() && !mergeTarget) {
+                return {
+                    ok: false,
+                    message: loadstoneNoSlotPickupMessage(obj),
+                    messages,
+                };
+            }
+            const increase = containerTakeoutWeightIncrease(obj, originalCount, gold);
+            currentWeight += increase;
+            planned.push({
+                ...entry,
+                item: obj,
+                takeCount: originalCount,
+                liftView: view,
+                inventoryLetter: !hasSlot && !mergeTarget ? '#' : null,
+            });
+            continue;
+        }
         const takeCount = containerTakeoutLiftableCount(container, obj, currentWeight, gold);
         if (takeCount < 1) {
             return {
@@ -17307,7 +17381,7 @@ function containerTakeoutPreflight(container, entries) {
     }
 
     const newSlotCount = planned
-        .filter(entry => !shopBillableGold(entry.liftView) && !findContainerTakeoutInventoryMergeTarget(container, entry.liftView))
+        .filter(entry => !entry.inventoryLetter && !shopBillableGold(entry.liftView) && !findContainerTakeoutInventoryMergeTarget(container, entry.liftView))
         .length;
     if (newSlotCount && !simulatedNextInventoryLetters(newSlotCount)) {
         return {
@@ -20227,6 +20301,7 @@ function putInventoryObjectIntoIceBox(iceBox, item, amount = item?.quan || 1, op
             return { moved: false, pendingSale, message: pendingSale.promptMessage };
         if (pendingSale?.handled) sellobjResult = pendingSale;
     }
+    curseLoadstoneLeavingInventory(putItem);
     const billing = billShopFloorContainerPutObject(iceBox, putItem, {
         acceptedSale: !!options.acceptedSale,
         shkp: options.salePending?.shkp,
@@ -20270,6 +20345,7 @@ function putInventoryObjectIntoBag(bag, item, amount = item?.quan || 1) {
     const count = Math.min(Math.max(1, amount || 1), item.quan || 1);
     const putItem = (item.quan || 1) > count ? { ...item, quan: count } : item;
     clearContainerPutEquipmentState(putItem, name);
+    curseLoadstoneLeavingInventory(putItem);
     if (isMagicBagObject(bag) && magicBagExplodesWithObject(putItem)) {
         removeInventoryItem(item, count);
         return explodeMagicBagTransfer(bag, putItem, []);
@@ -20362,6 +20438,7 @@ function putInventoryObjectIntoContainer(container, item, amount = item?.quan ||
             return { moved: false, pendingSale, message: pendingSale.promptMessage };
         if (pendingSale?.handled) sellobjResult = pendingSale;
     }
+    curseLoadstoneLeavingInventory(putItem);
     const billing = billShopFloorContainerPutObject(container, putItem, {
         acceptedSale: !!options.acceptedSale,
         shkp: options.salePending?.shkp,
@@ -20588,7 +20665,7 @@ function prepareContainerTakeoutObject(container, obj) {
     return obj;
 }
 
-function addContainerTakeoutObjectToInventory(container, obj) {
+function addContainerTakeoutObjectToInventory(container, obj, options = {}) {
     if (shopBillableGold(obj)) {
         prepareContainerTakeoutObject(container, obj);
         const amount = Math.max(1, Math.trunc(Number(obj.quan || 1)));
@@ -20603,7 +20680,7 @@ function addContainerTakeoutObjectToInventory(container, obj) {
         return line;
     }
     prepareContainerTakeoutObject(container, obj);
-    const letter = nextInventoryLetter();
+    const letter = options.inventoryLetter || nextInventoryLetter();
     Object.assign(obj, {
         cls: obj.cls || (obj.otyp === GEM_CLASS ? 'gem'
             : obj.otyp === SCROLL_CLASS ? 'scroll'
@@ -20622,6 +20699,7 @@ function addContainerTakeoutObjectToInventory(container, obj) {
 function splitContainerTakeoutObjectForLift(obj, count) {
     const quantity = Math.max(1, Math.trunc(Number(obj?.quan || 1)));
     const takeCount = Math.max(1, Math.min(quantity, Math.trunc(Number(count || quantity))));
+    if (isLoadstoneObject(obj)) return obj;
     if (!obj || takeCount >= quantity) return obj;
     const lifted = { ...obj, id: next_ident(), quan: takeCount };
     delete lifted.o_id;
@@ -20650,7 +20728,7 @@ async function finishContainerTakeoutSelection(container, picked, preflightMessa
     for (const pickedEntry of picked || []) {
         const source = pickedEntry.item;
         const obj = splitContainerTakeoutObjectForLift(source, pickedEntry.takeCount || source?.quan || 1);
-        const line = addContainerTakeoutObjectToInventory(container, obj);
+        const line = addContainerTakeoutObjectToInventory(container, obj, { inventoryLetter: pickedEntry.inventoryLetter });
         moved.push(obj);
         messages.push(/[.!?]$/.test(line) ? line : `${line}.`);
     }
@@ -28317,7 +28395,7 @@ export async function rhack(_cmd) {
                 const pickupObj = splitFloorPickupObjectForLift(obj, preflight?.takeCount || obj.quan || 1);
                 const letter = pickupObj.wasStolen && pickupObj.letter
                     ? pickupObj.letter
-                    : nextInventoryLetter();
+                    : preflight?.inventoryLetter || nextInventoryLetter();
                 const amount = pickupObjectPhrase(pickupObj);
                 const shopPrice = shopItemPrice(pickupObj);
                 const mergeTarget = findPickedObjectInventoryMergeTarget(pickupObj, shopPrice);
@@ -37774,6 +37852,12 @@ export async function rhack(_cmd) {
         }
         const item = (game.inventory || []).find(invItem => invItem.letter === ch);
         if (item) {
+            if (isLoadstoneObject(item) && item.cursed) {
+                await setMessage(cursedLoadstoneLetGoMessage(item, 'drop'));
+                game.context.move = 0;
+                game._command_mode = null;
+                return;
+            }
             stopCarriedFigurineTimerOnLeave(item);
             game.inventory = (game.inventory || []).filter(invItem => invItem !== item);
             updateWornDisplacement();
@@ -37795,6 +37879,7 @@ export async function rhack(_cmd) {
                 color: item.cls === 'weapon' ? (item.kind === 'quarterstaff' ? CLR_BROWN : item.color ?? CLR_CYAN)
                     : item.color ?? (item.cls === 'scroll' || item.cls === 'spellbook' ? CLR_WHITE : NO_COLOR),
             };
+            curseLoadstoneLeavingInventory(dropped);
             if (Array.isArray(dropped.contents)) dropped.contents = [...dropped.contents];
             if (Array.isArray(dropped.cobj)) dropped.cobj = [...dropped.cobj];
             normalizeContainedObjectParents(dropped);
@@ -41835,6 +41920,13 @@ export async function rhack(_cmd) {
             game._throw_item_letter = null;
             return;
         }
+        if (isLoadstoneObject(item) && item.cursed) {
+            await setMessage(cursedLoadstoneLetGoMessage(item, 'throw'));
+            game._command_mode = null;
+            game._throw_item_letter = null;
+            game.context.move = 0;
+            return;
+        }
         const name = inventoryItemName(item);
         const lowerName = name.toLowerCase();
 	        const ux = game.u?.ux || 0;
@@ -41900,6 +41992,7 @@ export async function rhack(_cmd) {
             glyph: item.cls === 'food' ? '%' : item.glyph || (item.cls === 'gem' ? '*' : ')'),
             color: item.cls === 'food' ? CLR_ORANGE : item.color || (item.cls === 'gem' ? CLR_GRAY : CLR_CYAN),
         };
+        curseLoadstoneLeavingInventory(thrownObject);
         if ((item.quan || 1) > 1) splitCarriedObjectShopBill(item, thrownObject, 1);
         const shopLanding = resolveUnpaidProjectileShopLanding(thrownObject, ox, oy);
         stopCarriedFigurineTimerOnLeave(thrownObject);
@@ -42536,7 +42629,7 @@ export async function rhack(_cmd) {
                 ? pickupObj.letter
                 : pickupObj.wasStolen && pickupObj.letter
                 ? pickupObj.letter
-                : nextInventoryLetter();
+                : preflight.inventoryLetter || nextInventoryLetter();
             const pickedItem = {
                 ...pickupObj,
                 letter,

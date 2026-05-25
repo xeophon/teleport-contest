@@ -65,6 +65,7 @@ The current audit source of truth is `docs/c-parity-audit/`.
 - Added C-style ordinary floor partial-stack lifting: overweight floor stacks now split to the liftable quantity before shop billing/inventory insertion and leave the remainder untouched on the floor.
 - Added C-style single-object floor burden prompts: ordinary floor objects, corpses, and gold now ask before billing/removal when pickup would exceed `pickup_burden`, declined prompts leave state untouched, and accepted overweight gold pickups split to the liftable count before shop charging.
 - Added C-style single-object floor scare-monster scroll pickup handling: explicit generated scrolls now carry scroll metadata/pricing, blessed floor scrolls unbless on pickup, first uncursed pickups mark `spe`, and cursed or already-picked-up scrolls turn to dust through a `useupf()`-style used-up shop bill row.
+- Added C-style starter loadstone transfer handling: loadstones now use weight 500/cost 1 metadata, generated loadstones are cursed, floor pickup and container take-out bypass weight/burden prompts, loadstone stacks avoid partial split, full-inventory loadstone exceptions use C's overflow/refusal rules, and cursed loadstones refuse ordinary drop/throw/stash while successful let-go curses the moved stone.
 - Latest verified public score: `44/44`.
 
 ## Current Priorities
@@ -73,7 +74,7 @@ The current audit source of truth is `docs/c-parity-audit/`.
    - Source notes: `docs/c-parity-audit/05-food-inventory-containers-shops.md`.
    - Current JS has a starter bill ledger, but object `unpaid`/`unpaidPrice` fields and legacy fallback scans still participate in billing.
    - Missing or partial concepts include full `addtobill`, full `subfrombill` routing, non-ordinary magic-bag source/target cases, full `obfree()`/container-aware `stolen_value()` helper integration, shared `sellobj()` helper integration beyond ordinary branches, remaining add-inventory/no-charge cleanup outside ordinary shop pickup, remaining charge-consuming `check_unpaid_usage` caller coverage, and non-bite `costly_alteration` coverage outside the narrow food/tin paths.
-   - The next narrow C-backed gaps are non-ordinary magic-bag sources/targets, remaining floor/container lift preflight details such as multi-pickup burden prompts, loadstone handling, and scare-scroll multi-pickup/stack-prompt edges, remaining inventory merge edge cases, remaining merge/destruction edge cases, generic floor-effect deletion ownership, artifact touch side effects outside floor pickup/container take-out, and payment container/robbed-shop semantics.
+   - The next narrow C-backed gaps are non-ordinary magic-bag sources/targets, remaining floor/container lift preflight details such as multi-pickup burden prompts and partial-success ordering, scare-scroll multi-pickup/stack-prompt edges, remaining inventory merge edge cases, remaining merge/destruction edge cases, generic floor-effect deletion ownership, artifact touch side effects outside floor pickup/container take-out, and payment container/robbed-shop semantics.
 
 2. Object registry and canonical object factory.
    - Source notes: `docs/c-parity-audit/02-objects-wishing-readobjnam.md`.
@@ -112,7 +113,7 @@ The current audit source of truth is `docs/c-parity-audit/`.
 
 Continue the shop ledger migration:
 
-1. Broaden shop-floor container take-out and tip beyond recursive billing into remaining lift preflight details, remaining inventory merge edge cases, and merge/destruction edge cases; continue floor pickup through loadstones and multi-pickup scare-scroll edges, and continue magic-bag work through non-ordinary sources/targets and shared `obfree()`/`stolen_value()` debt naming.
+1. Broaden shop-floor container take-out and tip beyond recursive billing into remaining lift preflight details, remaining inventory merge edge cases, and merge/destruction edge cases; continue floor pickup through multi-pickup partial-success ordering and scare-scroll edges, and continue magic-bag work through non-ordinary sources/targets and shared `obfree()`/`stolen_value()` debt naming.
 2. Finish remaining `sellobj()` follow-ups: complete recursive `subfrombill()` integration, broken/container projectile impact edge cases, and shared-helper integration for less ordinary object transfers.
 3. Move payment toward a complete C `dopay()` model for containers, queued itemized selections, and robbed-shop interactions.
 4. Finish remaining musical edge cases: exact snake/nymph/mercenary polish, drawbridge occupant/object-death side effects and achievement/status integration, and any remaining charged-instrument callers that share `do_play_instrument()`.

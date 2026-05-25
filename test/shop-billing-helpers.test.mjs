@@ -14,6 +14,7 @@ const CRYSTAL_BALL = 10088;
 const CANDELABRUM_OF_INVOCATION = 10076;
 const INVENTORY_LETTERS = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
 const SCR_SCARE_MONSTER = 279;
+const LOADSTONE = 10165;
 
 function installShopState() {
     const g = resetGame();
@@ -278,6 +279,36 @@ function floorScareMonsterScroll(id, props = {}) {
         bknown: true,
         ...props,
     };
+}
+
+function floorLoadstone(id, props = {}) {
+    return {
+        id,
+        otyp: LOADSTONE,
+        cls: 'gem',
+        glyph: '*',
+        kind: 'loadstone',
+        actualKind: 'loadstone',
+        gemDescription: 'gray stone',
+        quan: 1,
+        cursed: true,
+        blessed: false,
+        ox: 5,
+        oy: 5,
+        known: true,
+        dknown: true,
+        bknown: true,
+        ...props,
+    };
+}
+
+function carriedLoadstone(id, letter = 'l', props = {}) {
+    const stone = floorLoadstone(id, props);
+    delete stone.ox;
+    delete stone.oy;
+    stone.letter = letter;
+    stone.line = `${letter} - a ${stone.cursed ? 'cursed ' : 'uncursed '}loadstone`;
+    return stone;
 }
 
 function tin(id, letter = 't', quan = 1) {
@@ -3230,9 +3261,142 @@ test('cursed or used scare monster floor scroll crumbles into used-up bill', asy
     }
 });
 
+test('cursed shop-floor loadstone pickup ignores overweight and bills live item', async () => {
+    const { shkp } = installCommandShopState();
+    const stone = floorLoadstone(6020);
+    game.level.objects = [stone];
+    game.u.acurr.a = [1, 1, 10, 10, 1, 10];
+    const expectedPrice = shop.shopItemPrice(stone, 5, 5);
+
+    assert.ok(expectedPrice > 0);
+
+    await rhack(',');
+    assert.equal(game._command_mode, 'pickupShopQuote');
+
+    await rhack(' ');
+
+    const carried = game.inventory.find(item => item.id === stone.id);
+    const entry = shop.shopBillEntryForObject(shkp, carried);
+
+    assert.ok(carried);
+    assert.equal(game._command_mode, null);
+    assert.equal(game.level.objects.includes(stone), false);
+    assert.equal(carried.cursed, true);
+    assert.equal(carried.unpaid, true);
+    assert.ok(entry);
+    assert.equal(entry.useup, false);
+    assert.equal(shop.shopBillEntryTotal(entry), expectedPrice);
+    assert.doesNotMatch(game._pending_message, /knapsack|cannot carry|Continue\?/i);
+    assert.equal(game.context.move, 1);
+});
+
+test('first loadstone can exceed full inventory slot limit and is billed', async () => {
+    const { shkp } = installCommandShopState();
+    fillInventoryLetters();
+    const stone = floorLoadstone(6021);
+    game.level.objects = [stone];
+    const expectedPrice = shop.shopItemPrice(stone, 5, 5);
+
+    await rhack(',');
+    assert.equal(game._command_mode, 'pickupShopQuote');
+
+    await rhack(' ');
+
+    const carried = game.inventory.find(item => item.id === stone.id);
+    const entry = shop.shopBillEntryForObject(shkp, carried);
+
+    assert.ok(carried);
+    assert.equal(carried.letter, '#');
+    assert.equal(game.inventory.length, INVENTORY_LETTERS.length + 1);
+    assert.equal(game.level.objects.includes(stone), false);
+    assert.ok(entry);
+    assert.equal(shop.shopBillEntryTotal(entry), expectedPrice);
+    assert.doesNotMatch(game._pending_message, /knapsack cannot accommodate/i);
+    assert.equal(game.context.move, 1);
+});
+
+test('full inventory refuses another non-mergeable loadstone before billing', async () => {
+    const { shkp } = installCommandShopState();
+    fillInventoryLetters();
+    game.inventory[0] = carriedLoadstone(6022, 'a', { cursed: false });
+    const floor = floorLoadstone(6023, { cursed: true });
+    game.level.objects = [floor];
+
+    await rhack(',');
+    assert.equal(game._command_mode, 'pickupShopQuote');
+
+    await rhack(' ');
+
+    assert.match(game._pending_message, /too much stuff to pick up another loadstone/i);
+    assert.equal(game.level.objects.includes(floor), true);
+    assert.equal(game.inventory.some(item => item.id === floor.id), false);
+    assert.equal(floor.unpaid, undefined);
+    assert.equal(shkp.billct, 0);
+    assert.equal(shkp.bill.length, 0);
+    assert.equal(game.context.move || 0, 0);
+});
+
+test('loadstone floor pickup from a pile still bypasses burden prompt', async () => {
+    const { shkp } = installCommandShopState();
+    const stone = floorLoadstone(6024, { section: 'Gems/Stones' });
+    const ration = foodRation(6025, 'f');
+    ration.section = 'Comestibles';
+    game.level.objects = [stone, ration];
+    game.u.acurr.a = [1, 1, 10, 10, 1, 10];
+
+    await rhack(',');
+    assert.equal(game._command_mode, 'pickupList');
+
+    await rhack('b');
+    await rhack('\n');
+
+    const carried = game.inventory.find(item => item.id === stone.id);
+
+    assert.ok(carried);
+    assert.equal(game.level.objects.includes(stone), false);
+    assert.equal(game.level.objects.includes(ration), true);
+    assert.ok(shop.shopBillEntryForObject(shkp, carried));
+    assert.doesNotMatch(game._pending_message, /Continue\?/);
+    assert.equal(game.context.move, 1);
+});
+
+test('cursed loadstone cannot be dropped and non-cursed drop becomes cursed', async () => {
+    installCommandShopState();
+    game.level.rooms = [{ rtype: ROOM }];
+    game.level.monsters = [];
+    game.level.at = () => ({ roomno: ROOMOFFSET, typ: ROOM });
+    const cursed = carriedLoadstone(6026, 'l', { cursed: true });
+    game.inventory = [cursed];
+
+    await rhack('d');
+    assert.equal(game._command_mode, 'dropObject');
+
+    await rhack('l');
+
+    assert.match(game._pending_message, /cannot drop the stone/i);
+    assert.equal(game.inventory.includes(cursed), true);
+    assert.equal(cursed.bknown, true);
+    assert.equal(game.level.objects.length, 0);
+    assert.equal(game.context.move || 0, 0);
+
+    const uncursed = carriedLoadstone(6027, 'm', { cursed: false, bknown: false });
+    game.inventory = [uncursed];
+
+    await rhack('d');
+    await rhack('m');
+
+    const dropped = game.level.objects.find(item => item.id === uncursed.id);
+    assert.ok(dropped);
+    assert.equal(game.inventory.includes(uncursed), false);
+    assert.equal(dropped.cursed, true);
+    assert.equal(dropped.blessed, false);
+    assert.equal(dropped.bknown, false);
+    assert.equal(game.context.move, 1);
+});
+
 test('ordinary shop-floor partial stack pickup splits before billing', async () => {
     const { shkp } = installCommandShopState();
-    const stack = foodRationStack(6019, 20);
+    const stack = foodRationStack(6028, 20);
     game.level.objects = [stack];
     game.u.acurr.a = [1, 1, 10, 10, 1, 10];
     game.flags.pickup_burden = 'overloaded';
