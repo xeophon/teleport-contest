@@ -22331,6 +22331,20 @@ function shopItemPriceSuffix(obj, x = game.u?.ux, y = game.u?.uy) {
     return ` (for sale, ${price} zorkmid${price === 1 ? '' : 's'})`;
 }
 
+function shopPickupQuoteMessage(obj, shopPrice) {
+    const honorifics = ['good', 'honored', 'most gracious', 'esteemed'];
+    const honorific = honorifics[rn2(4) || 1];
+    const title = game.flags?.female ? 'lady' : 'sir';
+    const pricingUnits = Math.max(1, Math.trunc(Number(shopPricingUnits(obj) || 1)));
+    const stackQuote = (obj?.quan || 1) > 1;
+    const quotePrice = stackQuote && pricingUnits > 1
+        ? Math.max(1, Math.trunc(shopPrice / pricingUnits))
+        : shopPrice;
+    const relation = stackQuote ? 'per' : 'for this';
+    const name = pickupObjectName({ ...(obj || {}), quan: 1 });
+    return `"For you, ${honorific} ${title}; only ${quotePrice} zorkmid${quotePrice === 1 ? '' : 's'} ${relation} ${name}."`;
+}
+
 function shopDebtItemName(item) {
     let name = String(item?.line || '')
         .replace(/^[a-zA-Z$] - /, '')
@@ -22688,7 +22702,8 @@ function pickupMenuLines(entries, selected) {
             rows.push([row++, 41, entry.section, 1]);
             lastSection = entry.section;
         }
-        rows.push([row++, 41, `${entry.letter} ${selectedLetters.has(entry.letter) ? '+' : '-'} ${pickupObjectPhrase(entry.obj)}`]);
+        const priceSuffix = shopItemPriceSuffix(entry.obj, entry.obj?.ox, entry.obj?.oy);
+        rows.push([row++, 41, `${entry.letter} ${selectedLetters.has(entry.letter) ? '+' : '-'} ${pickupObjectPhrase(entry.obj)}${priceSuffix}`]);
     }
     rows.push([row, 41, '(end)']);
     return rows;
@@ -22773,6 +22788,8 @@ function pickupListHandleObject(obj, preflight, state) {
     const mergeTarget = findPickedObjectInventoryMergeTarget(pickupObj, shopPrice);
     if (mergeTarget) {
         objectIceEffect(pickupObj, pickupObj.ox, pickupObj.oy, { onLevel: false });
+        if (mergeTarget.billMerge?.price > 0)
+            state.messages.push(shopPickupQuoteMessage(pickupObj, mergeTarget.billMerge.price));
         state.messages.push(mergePickedObjectIntoInventory(pickupObj, mergeTarget.target));
         removePickupListFloorObject(pickupObj);
         return;
@@ -22791,6 +22808,7 @@ function pickupListHandleObject(obj, preflight, state) {
     const unpaidSuffix = billedPrice > 0
         ? ` (unpaid, ${billedPrice} zorkmid${billedPrice === 1 ? '' : 's'})`
         : '';
+    if (billedPrice > 0) state.messages.push(shopPickupQuoteMessage(pickupObj, billedPrice));
     state.messages.push(`${letter} - ${amount}${unpaidSuffix}.`);
     removePickupListFloorObject(pickupObj);
 }
@@ -42864,14 +42882,10 @@ export async function rhack(_cmd) {
                 return;
             }
             if (shopPrice > 0 && !skipShopQuote) {
-                const honorifics = ['good', 'honored', 'most gracious', 'esteemed'];
-                const honorific = honorifics[rn2(4) || 1];
-                const title = game.flags?.female ? 'lady' : 'sir';
-                const name = pickupObjectName({ ...objectHere, quan: 1 });
                 game._pending_shop_pickup_id = objectId;
                 game._pending_shop_pickup_preflight = preflight;
                 game._command_mode = 'pickupShopQuote';
-                await setMessage(`"For you, ${honorific} ${title}; only ${shopPrice} zorkmids for this ${name}."`, true);
+                await setMessage(shopPickupQuoteMessage(objectHere, shopPrice), true);
                 return;
             }
             if (skipShopQuote) game._skip_shop_quote_once = null;

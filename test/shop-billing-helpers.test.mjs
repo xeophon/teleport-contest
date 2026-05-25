@@ -3257,6 +3257,50 @@ test('ordinary floor gold burden prompt splits before shop charging', async () =
     assert.equal(game.context.move, 1);
 });
 
+test('shop pickup quote for stacks uses C per-item wording before billing', async () => {
+    const { shkp } = installCommandShopState();
+    const stack = foodRationStack(6090, 2);
+    game.level.objects = [stack];
+    const unitPrice = shop.shopItemPrice({ ...stack, quan: 1 }, stack.ox, stack.oy);
+
+    await rhack(',');
+
+    assert.equal(game._command_mode, 'pickupShopQuote');
+    assert.match(game._pending_message, new RegExp(`only ${unitPrice} zorkmids? per food ration\\."$`));
+    assert.doesNotMatch(game._pending_message, /for this food ration/);
+    assert.equal(game.level.objects.includes(stack), true);
+    assert.equal(game.inventory.some(item => item.id === stack.id), false);
+    assert.equal(shkp.billct, 0);
+});
+
+test('pickup menu rows and selected stack quotes use C shop pricing text', async () => {
+    const { shkp } = installCommandShopState();
+    const ration = foodRationStack(6091, 2);
+    const scroll = blankScroll(6092);
+    game.level.objects = [ration, scroll];
+    const rationPrice = shop.shopItemPrice(ration, ration.ox, ration.oy);
+    const rationUnitPrice = shop.shopItemPrice({ ...ration, quan: 1 }, ration.ox, ration.oy);
+    const scrollPrice = shop.shopItemPrice(scroll, scroll.ox, scroll.oy);
+
+    await rhack(',');
+
+    assert.equal(game._command_mode, 'pickupList');
+    const menuText = (game._overlay_lines || []).map(line => line[2]).join('\n');
+    assert.match(menuText, new RegExp(`a - 2 food rations \\(for sale, ${rationPrice} zorkmids?\\)`));
+    assert.match(menuText, new RegExp(`b - a scroll of blank paper \\(for sale, ${scrollPrice} zorkmids?\\)`));
+
+    await rhack('a');
+    await rhack('\n');
+
+    const carried = game.inventory.find(item => item.id === ration.id);
+    const entry = shop.shopBillEntryForObject(shkp, carried);
+    assert.ok(carried);
+    assert.ok(entry);
+    assert.match(game._pending_message, new RegExp(`only ${rationUnitPrice} zorkmids? per food ration\\.`));
+    assert.match(game._pending_message, new RegExp(`a - 2 food rations \\(unpaid, ${rationPrice} zorkmids?\\)`));
+    assert.equal(shop.shopBillEntryTotal(entry), rationPrice);
+});
+
 test('uncursed scare monster floor scroll first pickup marks spe and bills live item', async () => {
     const { shkp } = installCommandShopState();
     const scroll = floorScareMonsterScroll(6015);
