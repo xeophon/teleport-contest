@@ -16074,6 +16074,31 @@ function iceBoxPutLetters(iceBox = null) {
     return letters.join('');
 }
 
+function buildContainerPutItems(container = null) {
+    const putItems = [];
+    if (game._goldCount) {
+        putItems.push({
+            item: { letter: '$', cls: 'coin', otyp: GOLD_PIECE, glyph: '$', quan: game._goldCount },
+            category: 'coin',
+        });
+    }
+    for (const item of game.inventory || []) {
+        if (item.letter === '$' || item.cls === 'coin' || item.glyph === '$') continue;
+        if (item === container) continue;
+        putItems.push({ item, category: iceBoxPutCategory(item) });
+    }
+    return putItems;
+}
+
+function containerPutLetters(container = null) {
+    const letters = [];
+    if (game._goldCount) letters.push('$');
+    for (const { item } of buildContainerPutItems(container)) {
+        if (item.letter && item.letter !== '$') letters.push(item.letter);
+    }
+    return letters.join('');
+}
+
 function clearIceBoxPutState() {
     game._icebox_put_container = null;
     game._icebox_put_type_choices = null;
@@ -16082,6 +16107,18 @@ function clearIceBoxPutState() {
     game._icebox_put_entries = null;
     game._icebox_put_selected = null;
     game._icebox_stash_letters = null;
+    game._overlay_lines = null;
+    game._overlay_hide_status = 0;
+}
+
+function clearContainerPutState() {
+    game._container_put_container = null;
+    game._container_put_type_choices = null;
+    game._container_put_type_selected = null;
+    game._container_put_items = null;
+    game._container_put_entries = null;
+    game._container_put_selected = null;
+    game._container_stash_letters = null;
     game._overlay_lines = null;
     game._overlay_hide_status = 0;
 }
@@ -16102,6 +16139,13 @@ function clearIceBoxSequenceState() {
     game._icebox_sequence_messages = null;
 }
 
+function clearContainerSequenceState() {
+    game._container_sequence_after_takeout = null;
+    game._container_sequence_after_putin = null;
+    game._container_sequence_used = 0;
+    game._container_sequence_messages = null;
+}
+
 function startIceBoxSequence(nextAction) {
     clearIceBoxSequenceState();
     if (nextAction === 'putin') game._icebox_sequence_after_takeout = 'putin';
@@ -16109,12 +16153,27 @@ function startIceBoxSequence(nextAction) {
     game._icebox_sequence_messages = [];
 }
 
+function startContainerSequence(nextAction) {
+    clearContainerSequenceState();
+    if (nextAction === 'putin') game._container_sequence_after_takeout = 'putin';
+    else if (nextAction === 'takeout') game._container_sequence_after_putin = 'takeout';
+    game._container_sequence_messages = [];
+}
+
 function iceBoxSequenceActive() {
     return !!(game._icebox_sequence_after_takeout || game._icebox_sequence_after_putin);
 }
 
+function containerSequenceActive() {
+    return !!(game._container_sequence_after_takeout || game._container_sequence_after_putin);
+}
+
 function markIceBoxSequenceUsed(used = true) {
     if (used) game._icebox_sequence_used = 1;
+}
+
+function markContainerSequenceUsed(used = true) {
+    if (used) game._container_sequence_used = 1;
 }
 
 function addIceBoxSequenceMessages(messages) {
@@ -16122,6 +16181,14 @@ function addIceBoxSequenceMessages(messages) {
     game._icebox_sequence_messages ??= [];
     for (const message of list) {
         if (message) game._icebox_sequence_messages.push(message);
+    }
+}
+
+function addContainerSequenceMessages(messages) {
+    const list = Array.isArray(messages) ? messages : [messages];
+    game._container_sequence_messages ??= [];
+    for (const message of list) {
+        if (message) game._container_sequence_messages.push(message);
     }
 }
 
@@ -16183,9 +16250,30 @@ function iceBoxPutTypeChoices(putItems) {
     return choices;
 }
 
+function containerPutTypeChoices(putItems) {
+    return iceBoxPutTypeChoices(putItems);
+}
+
 function drawIceBoxPutTypeMenu() {
     const choices = game._icebox_put_type_choices || [];
     const selected = new Set(game._icebox_put_type_selected || []);
+    const rows = [
+        [0, 23, 'Put in what type of objects?', 1],
+        [2, 23, `A ${selected.has('auto') ? '+' : '-'} Auto-select every relevant item`],
+        [3, 27, '(ignored unless some other choices are also picked)'],
+    ];
+    for (const choice of choices) {
+        if (!choice.row) continue;
+        rows.push([choice.row, 23, `${choice.letter} ${selected.has(choice.key) ? '+' : '-'} ${choice.label}`]);
+    }
+    const endRow = Math.max(4, ...choices.map(choice => choice.row || 0)) + 1;
+    rows.push([endRow, 23, '(end)']);
+    setOverlay(rows, endRow + 1, false, 23);
+}
+
+function drawContainerPutTypeMenu() {
+    const choices = game._container_put_type_choices || [];
+    const selected = new Set(game._container_put_type_selected || []);
     const rows = [
         [0, 23, 'Put in what type of objects?', 1],
         [2, 23, `A ${selected.has('auto') ? '+' : '-'} Auto-select every relevant item`],
@@ -16212,9 +16300,47 @@ function beginIceBoxPutIn(iceBox) {
     return true;
 }
 
+function beginContainerPutIn(container) {
+    const putItems = buildContainerPutItems(container);
+    if (!putItems.length) return false;
+    game._container_put_container = container;
+    game._container_put_items = putItems;
+    game._container_put_type_choices = containerPutTypeChoices(putItems);
+    game._container_put_type_selected = [];
+    drawContainerPutTypeMenu();
+    game._command_mode = 'containerPutTypes';
+    return true;
+}
+
 function drawIceBoxPutObjectMenu() {
     const entries = game._icebox_put_entries || [];
     const selected = new Set(game._icebox_put_selected || []);
+    const rows = [[0, 41, 'Put in what?', 1]];
+    let row = 2;
+    let lastCategory = '';
+    for (const entry of entries) {
+        if (entry.category !== lastCategory) {
+            const type = iceBoxPutClassTypes().find(type => type.key === entry.category);
+            rows.push([row, 34, '┌─────']);
+            rows.push([row, 40, ' '.repeat(40)]);
+            rows.push([row++, 41, type?.label || 'Other Items', 1]);
+            lastCategory = entry.category;
+        }
+        entry.row = row;
+        const label = entry.letter === '$'
+            ? `${entry.amount} gold piece${entry.amount === 1 ? '' : 's'}`
+            : inventoryItemName(entry.item);
+        rows.push([row, 34, '│']);
+        rows.push([row++, 40, ` ${entry.letter} ${selected.has(entry.letter) ? '+' : '-'} ${label}`.padEnd(40, ' ')]);
+    }
+    rows.push([row, 34, '│']);
+    rows.push([row, 40, ' (end)'.padEnd(40, ' ')]);
+    setOverlay(rows, 2, false, 0);
+}
+
+function drawContainerPutObjectMenu() {
+    const entries = game._container_put_entries || [];
+    const selected = new Set(game._container_put_selected || []);
     const rows = [[0, 41, 'Put in what?', 1]];
     let row = 2;
     let lastCategory = '';
@@ -16375,6 +16501,48 @@ function putInventoryObjectIntoBag(bag, item, amount = item?.quan || 1) {
     return { moved: true, message: `You put ${name} into the bag.` };
 }
 
+function putInventoryObjectIntoContainer(container, item, amount = item?.quan || 1) {
+    if (!container) return { moved: false, message: '' };
+    if (isIceBoxObject(container)) return putInventoryObjectIntoIceBox(container, item, amount);
+    container.contents ??= [];
+    container.cknown = true;
+    const containerName = tipContainerSimpleName(container);
+    if (item?.letter === '$' || item?.otyp === GOLD_PIECE || item?.cls === 'coin' || item?.glyph === '$') {
+        const gold = Math.min(Math.max(0, amount || 0), game._goldCount || 0);
+        if (!gold) return { moved: false, message: 'You have no gold to put in.' };
+        add_to_container(container, { letter: '$', cls: 'coin', otyp: GOLD_PIECE, glyph: '$', quan: gold });
+        game._goldCount = Math.max(0, (game._goldCount || 0) - gold);
+        game._just_picked_gold = Math.max(0, (game._just_picked_gold || 0) - gold);
+        const money = (game.inventory || []).find(invItem => invItem.letter === '$' || invItem.cls === 'coin');
+        if (money && game._goldCount) {
+            money.quan = game._goldCount;
+            updateMoneyLine(money);
+        } else {
+            game.inventory = (game.inventory || []).filter(invItem => invItem.letter !== '$' && invItem.cls !== 'coin');
+        }
+        refreshTipContainerWeight(container);
+        game._pet_food_scan_inventory = game.inventory;
+        return { moved: true, message: `You put ${gold} gold piece${gold === 1 ? '' : 's'} into the ${containerName}.` };
+    }
+
+    const reject = containerPutRejectMessage(container, item);
+    if (reject) return { moved: false, message: reject };
+
+    const name = inventoryItemName(item);
+    const count = Math.min(Math.max(1, amount || 1), item.quan || 1);
+    const putItem = (item.quan || 1) > count ? { ...item, quan: count } : item;
+    clearContainerPutEquipmentState(putItem, name);
+    if (isMagicBagObject(container) && magicBagExplodesWithObject(putItem)) {
+        removeInventoryItem(item, count);
+        return explodeMagicBagTransfer(container, putItem, []);
+    }
+    removeInventoryItem(item, count);
+    add_to_container(container, putItem);
+    refreshTipContainerWeight(container);
+    game._pet_food_scan_inventory = game.inventory;
+    return { moved: true, message: `You put ${name} into the ${containerName}.` };
+}
+
 async function showIceBoxMessageList(messages) {
     messages = (messages || []).filter(Boolean);
     if (!messages.length) return;
@@ -16410,12 +16578,33 @@ async function finishIceBoxSequence(messages = [], moved = false) {
     await showIceBoxMessageList(allMessages);
 }
 
+async function finishContainerSequence(messages = [], moved = false) {
+    const allMessages = [...(game._container_sequence_messages || []), ...(messages || [])];
+    const used = moved || !!game._container_sequence_used;
+    clearContainerSequenceState();
+    game._floor_container_object = null;
+    game._command_mode = null;
+    game._overlay_lines = null;
+    game._overlay_hide_status = 0;
+    if (used) game.context.move = 1;
+    await showIceBoxMessageList(allMessages);
+}
+
 async function continueIceBoxSequenceToPutIn(iceBox, messages = []) {
     addIceBoxSequenceMessages(messages);
     if (iceBoxContainerAvailable(iceBox) && beginIceBoxPutIn(iceBox)) return true;
     clearIceBoxPutState();
     game._command_mode = null;
     await finishIceBoxSequence(["You don't have anything to put in."]);
+    return true;
+}
+
+async function continueContainerSequenceToPutIn(container, messages = []) {
+    addContainerSequenceMessages(messages);
+    if (beginContainerPutIn(container)) return true;
+    clearContainerPutState();
+    game._command_mode = null;
+    await finishContainerSequence(["You don't have anything to put in."]);
     return true;
 }
 
@@ -16438,6 +16627,25 @@ async function continueIceBoxSequenceToTakeout(iceBox, messages = []) {
     return true;
 }
 
+async function continueContainerSequenceToTakeout(container, messages = []) {
+    addContainerSequenceMessages(messages);
+    if (!container) {
+        clearContainerTakeoutState();
+        clearContainerPutState();
+        game._command_mode = null;
+        await finishContainerSequence();
+        return true;
+    }
+    const learnedEmpty = !(container.contents || []).length && !container.cknown;
+    container.cknown = true;
+    if (beginIceBoxTakeout(container)) return true;
+    if (learnedEmpty) markContainerSequenceUsed();
+    clearContainerTakeoutState();
+    game._command_mode = null;
+    await finishContainerSequence([tipContainerEmptyMessage(container)]);
+    return true;
+}
+
 async function beginIceBoxStash(iceBox) {
     const letters = iceBoxPutLetters(iceBox);
     if (!letters) return false;
@@ -16445,6 +16653,16 @@ async function beginIceBoxStash(iceBox) {
     game._icebox_stash_letters = letters;
     await setMessage(`What do you want to stash? [${getobjPromptLetters(letters)} or ?*]`);
     game._command_mode = 'iceBoxStashObject';
+    return true;
+}
+
+async function beginContainerStash(container) {
+    const letters = containerPutLetters(container);
+    if (!letters) return false;
+    game._container_put_container = container;
+    game._container_stash_letters = letters;
+    await setMessage(`What do you want to stash? [${getobjPromptLetters(letters)} or ?*]`);
+    game._command_mode = 'containerStashObject';
     return true;
 }
 
@@ -16513,8 +16731,7 @@ function beginIceBoxTakeout(iceBox) {
 }
 
 function prepareContainerTakeoutObject(container, obj) {
-    if (!isIceBoxObject(container)) return obj;
-    removedFromIcebox(obj);
+    if (isIceBoxObject(container)) removedFromIcebox(obj);
     obj.contained = false;
     obj.container = null;
     delete obj.nobj;
@@ -33399,6 +33616,200 @@ export async function rhack(_cmd) {
         return;
     }
 
+    if (game._command_mode === 'containerPutTypes') {
+        const container = game._container_put_container;
+        const choices = game._container_put_type_choices || [];
+        const selected = new Set(game._container_put_type_selected || []);
+        const choice = choices.find(entry => entry.letter === ch || entry.symbol === ch);
+        if (ch === '\x1b' || ch === 'q') {
+            clearContainerPutState();
+            if (game._container_sequence_after_putin === 'takeout') {
+                await continueContainerSequenceToTakeout(container);
+                return;
+            }
+            if (containerSequenceActive()) {
+                await finishContainerSequence();
+                return;
+            }
+            clearContainerSequenceState();
+            game._command_mode = null;
+            return;
+        }
+        if (ch === '@') {
+            for (const entry of choices) {
+                if (entry.key !== 'auto') selected.add(entry.key);
+            }
+            game._container_put_type_selected = [...selected];
+            drawContainerPutTypeMenu();
+            return;
+        }
+        if (choice) {
+            if (selected.has(choice.key)) selected.delete(choice.key);
+            else selected.add(choice.key);
+            game._container_put_type_selected = [...selected];
+            drawContainerPutTypeMenu();
+            return;
+        }
+        if (ch === '\r' || ch === '\n' || ch === ' ') {
+            if (!selected.size || (selected.size === 1 && selected.has('auto'))) {
+                clearContainerPutState();
+                if (game._container_sequence_after_putin === 'takeout') {
+                    await continueContainerSequenceToTakeout(container);
+                    return;
+                }
+                if (containerSequenceActive()) {
+                    await finishContainerSequence(['No relevant items selected.']);
+                    return;
+                }
+                clearContainerSequenceState();
+                game._command_mode = null;
+                await setMessage('No relevant items selected.');
+                return;
+            }
+            const items = (game._container_put_items || []).filter(({ item, category }) => {
+                if (selected.has('all')) return true;
+                if (selected.has(category)) return true;
+                const bucCategory = objectBucCategory(item);
+                if (selected.has('blessed') && bucCategory === 'blessed') return true;
+                if (selected.has('cursed') && bucCategory === 'cursed') return true;
+                if (selected.has('uncursed') && bucCategory === 'uncursed') return true;
+                return (selected.has('unknown') && bucCategory === 'unknown')
+                    || (selected.has('justpicked') && item.letter === '$' && game._just_picked_gold);
+            });
+            const entries = items.map(({ item, category }) => ({
+                item,
+                category,
+                letter: item.letter,
+                amount: item.letter === '$' && selected.has('justpicked')
+                    ? game._just_picked_gold || 0
+                    : item.quan || 1,
+            })).filter(entry => entry.amount > 0);
+            if (!entries.length) {
+                clearContainerPutState();
+                if (game._container_sequence_after_putin === 'takeout') {
+                    await continueContainerSequenceToTakeout(container);
+                    return;
+                }
+                if (containerSequenceActive()) {
+                    await finishContainerSequence(['No relevant items selected.']);
+                    return;
+                }
+                clearContainerSequenceState();
+                game._command_mode = null;
+                await setMessage('No relevant items selected.');
+                return;
+            }
+            game._container_put_entries = entries;
+            game._container_put_selected = [];
+            drawContainerPutObjectMenu();
+            game._command_mode = 'containerPutObjects';
+            return;
+        }
+        return;
+    }
+
+    if (game._command_mode === 'containerPutObjects') {
+        const container = game._container_put_container;
+        const entries = game._container_put_entries || [];
+        const selected = new Set(game._container_put_selected || []);
+        const entry = entries.find(item => item.letter === ch);
+        if (entry) {
+            if (selected.has(entry.letter)) selected.delete(entry.letter);
+            else selected.add(entry.letter);
+            game._container_put_selected = [...selected];
+            drawContainerPutObjectMenu();
+            return;
+        }
+        if (ch === '\r' || ch === '\n' || ch === ' ') {
+            const selectedEntries = entries.filter(item => selected.has(item.letter));
+            if (!selectedEntries.length) {
+                clearContainerPutState();
+                if (game._container_sequence_after_putin === 'takeout') {
+                    await continueContainerSequenceToTakeout(container);
+                    return;
+                }
+                if (containerSequenceActive()) {
+                    await finishContainerSequence(['No relevant items selected.']);
+                    return;
+                }
+                clearContainerSequenceState();
+                game._command_mode = null;
+                await setMessage('No relevant items selected.');
+                return;
+            }
+            const results = selectedEntries.map(selectedEntry =>
+                putInventoryObjectIntoContainer(container, selectedEntry.item, selectedEntry.amount));
+            const moved = results.some(result => result.moved);
+            const bagGone = results.some(result => result.bagGone);
+            const messages = results.flatMap(result => result.messages || (result.message ? [result.message] : []));
+            clearContainerPutState();
+            if (!bagGone && game._container_sequence_after_putin === 'takeout') {
+                markContainerSequenceUsed(moved);
+                await continueContainerSequenceToTakeout(container, messages);
+                return;
+            }
+            if (containerSequenceActive()) {
+                await finishContainerSequence(messages, moved || bagGone);
+                return;
+            }
+            clearContainerSequenceState();
+            game._floor_container_object = null;
+            game._command_mode = null;
+            if (moved || bagGone) game.context.move = 1;
+            await showIceBoxMessageList(messages);
+            return;
+        }
+        if (ch === '\x1b' || ch === 'q') {
+            clearContainerPutState();
+            if (game._container_sequence_after_putin === 'takeout') {
+                await continueContainerSequenceToTakeout(container);
+                return;
+            }
+            if (containerSequenceActive()) {
+                await finishContainerSequence();
+                return;
+            }
+            clearContainerSequenceState();
+            game._command_mode = null;
+        }
+        return;
+    }
+
+    if (game._command_mode === 'containerStashObject') {
+        const container = game._container_put_container;
+        if (ch === '\x1b' || ch === ' ' || ch === '\r' || ch === '\n') {
+            clearContainerPutState();
+            game._floor_container_object = null;
+            game._command_mode = null;
+            await setMessage('Never mind.');
+            return;
+        }
+        if (ch === '?' || ch === '*') {
+            const rows = [[0, 40, 'Stash what?', 1]];
+            let row = 2;
+            for (const { item } of buildContainerPutItems(container)) {
+                const label = item.letter === '$'
+                    ? `${item.letter} - ${item.quan || 0} gold piece${(item.quan || 0) === 1 ? '' : 's'}`
+                    : `${item.letter || '?'} - ${inventoryItemName(item)}`;
+                rows.push([row++, 40, label]);
+                if (row >= 23) break;
+            }
+            rows.push([row, 40, '(end)']);
+            setOverlay(rows, Math.max(4, row + 1), false, 40);
+            return;
+        }
+        const item = ch === '$'
+            ? { letter: '$', cls: 'coin', otyp: GOLD_PIECE, glyph: '$', quan: game._goldCount || 0 }
+            : (game.inventory || []).find(invItem => invItem.letter === ch);
+        const result = putInventoryObjectIntoContainer(container, item, item?.quan || 1);
+        clearContainerPutState();
+        game._floor_container_object = null;
+        game._command_mode = null;
+        if (result.moved || result.bagGone) game.context.move = 1;
+        await showIceBoxMessageList(result.messages || (result.message ? [result.message] : []));
+        return;
+    }
+
     if (game._command_mode === 'iceBoxContents') {
         if (ch === ' ' || ch === '\x1b' || ch === '\r' || ch === '\n') {
             setIceBoxActionMenu(game._icebox_action_container, true);
@@ -33420,8 +33831,15 @@ export async function rhack(_cmd) {
 
     if (game._command_mode === 'lootMenu') {
         const container = game._floor_container_object;
+        const largeBox = container?.kind === 'large box' || container?.otyp === LARGE_BOX;
+        const abcLargeBox = !!(largeBox && game.flags?.lootabc);
+        const takeoutKey = abcLargeBox ? 'a' : 'o';
+        const putinKey = abcLargeBox ? 'b' : 'i';
+        const bothKey = abcLargeBox ? 'c' : 'b';
+        const reversedKey = abcLargeBox ? 'd' : 'r';
+        const stashKey = abcLargeBox ? 'e' : 's';
         if (container && ch === ':') {
-            const name = container.kind === 'large box' || container.otyp === LARGE_BOX ? 'large box' : 'chest';
+            const name = largeBox ? 'large box' : 'chest';
             container.cknown = true;
             const rows = [[0, 41, `Contents of the ${name}:`]];
             let row = 2;
@@ -33434,71 +33852,49 @@ export async function rhack(_cmd) {
             game._command_mode = 'floorContainerContents';
             return;
         }
-        if ((!game.flags?.lootabc && ch === 'o') || (game.flags?.lootabc && ch === 'a')) {
+        if (ch === takeoutKey) {
             if (container) {
-                const typeRows = [
-                    [0, 23, 'Take out what type of objects?', 1],
-                    [2, 23, 'A - Auto-select every relevant item'],
-                    [3, 27, '(ignored unless some other choices are also picked)'],
-                ];
-                const seen = new Set();
-                const contents = [...(container.contents || [])].sort(compareContainerLootItems);
-                for (const item of contents) {
-                    let label = 'Other Items';
-                    if (item.otyp === GOLD_PIECE || item.cls === 'coin' || item.glyph === '$') label = 'Coins';
-                    else if (item.otyp === FOOD_CLASS || item.cls === 'food' || item.glyph === '%') label = 'Comestibles';
-                    else if (item.otyp === SCROLL_CLASS || item.cls === 'scroll' || item.glyph === '?') label = 'Scrolls';
-                    else if (item.cls === 'spellbook' || item.glyph === '+') label = 'Spellbooks';
-                    else if (item.otyp === POTION_CLASS || item.cls === 'potion' || item.glyph === '!') label = 'Potions';
-                    else if (item.otyp === RING_CLASS || item.cls === 'ring' || item.glyph === '=') label = 'Rings';
-                    else if (item.otyp === GEM_CLASS || item.cls === 'gem' || item.glyph === '*') label = 'Gems/Stones';
-                    if (seen.has(label)) continue;
-                    seen.add(label);
-                }
-                const typeEntries = [...seen]
-                    .sort((a, b) => PICKUP_SECTION_ORDER.indexOf(a) - PICKUP_SECTION_ORDER.indexOf(b))
-                    .map((label, i) => ({ letter: String.fromCharCode('b'.charCodeAt(0) + i), label }));
-                if (typeEntries.length === 1) {
-                    const entries = contents.map((item, i) => ({
-                        item,
-                        label: typeEntries[0].label,
-                        letter: String.fromCharCode('a'.charCodeAt(0) + i),
-                    }));
-                    const rows = [[0, 41, 'Take out what?', 1], [2, 41, typeEntries[0].label, 1]];
-                    let row = 3;
-                    for (const entry of entries)
-                        rows.push([row++, 41, `${entry.letter} - ${pickupObjectPhrase(entry.item)}`]);
-                    rows.push([row, 41, '(end)']);
-                    game._loot_takeout_container = container;
-                    game._loot_takeout_entries = entries;
-                    game._loot_takeout_selected = [];
-                    game._loot_takeout_clear_col = 40;
-                    setOverlay(rows, row + 1, false, game._loot_takeout_clear_col);
-                    game._command_mode = 'lootTakeoutObjects';
-                    return;
-                }
-                typeRows.push([5, 23, 'a - All types']);
-                for (let i = 0; i < typeEntries.length; i++)
-                    typeRows.push([6 + i, 23, `${typeEntries[i].letter} - ${typeEntries[i].label}`]);
-                let filterRow = 7 + typeEntries.length;
-                if (contents.some(item => objectBucCategory(item) === 'blessed'))
-                    typeRows.push([filterRow++, 23, 'B - Items known to be Blessed']);
-                if (contents.some(item => objectBucCategory(item) === 'cursed'))
-                    typeRows.push([filterRow++, 23, 'C - Items known to be Cursed']);
-                if (contents.some(item => objectBucCategory(item) === 'uncursed'))
-                    typeRows.push([filterRow++, 23, 'U - Items known to be Uncursed']);
-                if (contents.some(item => objectBucCategory(item) === 'unknown'))
-                    typeRows.push([filterRow++, 23, 'X - Items of unknown Bless/Curse status']);
-                typeRows.push([filterRow, 23, '(end)']);
-                game._loot_takeout_container = container;
-                game._loot_takeout_type_entries = typeEntries;
-                game._loot_takeout_types_selected = [];
-                setOverlay(typeRows, filterRow + 1, false, 22);
-                game._command_mode = 'lootTakeoutMenu';
+                container.cknown = true;
+                if (beginIceBoxTakeout(container)) return;
+                await setMessage(tipContainerEmptyMessage(container));
+                game.context.move = 1;
+                game._command_mode = null;
                 return;
             }
             setOverlay(LOOT_TAKEOUT_MENU_LINES, 12);
             game._command_mode = 'lootTakeoutMenu';
+            return;
+        }
+        if (container && ch === putinKey) {
+            container.cknown = true;
+            if (beginContainerPutIn(container)) return;
+            clearContainerPutState();
+            game._command_mode = null;
+            await setMessage("You don't have anything to put in.");
+            return;
+        }
+        if (container && ch === stashKey) {
+            container.cknown = true;
+            if (await beginContainerStash(container)) return;
+            clearContainerPutState();
+            game._command_mode = null;
+            await setMessage("You don't have anything to stash.");
+            return;
+        }
+        if (container && ch === bothKey) {
+            startContainerSequence('putin');
+            const learnedEmpty = !(container.contents || []).length && !container.cknown;
+            container.cknown = true;
+            if (beginIceBoxTakeout(container)) return;
+            if (learnedEmpty) markContainerSequenceUsed();
+            await continueContainerSequenceToPutIn(container, [tipContainerEmptyMessage(container)]);
+            return;
+        }
+        if (container && ch === reversedKey) {
+            startContainerSequence('takeout');
+            container.cknown = true;
+            if (beginContainerPutIn(container)) return;
+            await continueContainerSequenceToTakeout(container, ["You don't have anything to put in."]);
             return;
         }
         if (ch === '\x1b' || ch === 'q') {
@@ -33623,7 +34019,16 @@ export async function rhack(_cmd) {
                     await finishIceBoxSequence();
                     return;
                 }
+                if (game._container_sequence_after_takeout === 'putin' && !isIceBoxObject(container)) {
+                    await continueContainerSequenceToPutIn(container);
+                    return;
+                }
+                if (containerSequenceActive() && !isIceBoxObject(container)) {
+                    await finishContainerSequence();
+                    return;
+                }
                 clearIceBoxSequenceState();
+                clearContainerSequenceState();
                 game._command_mode = null;
             }
             return;
@@ -33637,6 +34042,7 @@ export async function rhack(_cmd) {
             game._overlay_lines = null;
             game._overlay_hide_status = 0;
             clearIceBoxSequenceState();
+            clearContainerSequenceState();
             game._command_mode = null;
         }
         return;
@@ -33716,6 +34122,8 @@ export async function rhack(_cmd) {
             game._pet_food_scan_inventory = game.inventory;
             const followupPutIn = game._icebox_sequence_after_takeout === 'putin' && isIceBoxObject(container);
             const finishSequence = !followupPutIn && iceBoxSequenceActive() && isIceBoxObject(container);
+            const followupContainerPutIn = game._container_sequence_after_takeout === 'putin' && !isIceBoxObject(container);
+            const finishContainerSeq = !followupContainerPutIn && containerSequenceActive() && !isIceBoxObject(container);
             clearContainerTakeoutState();
             game._floor_container_object = null;
             game._overlay_lines = null;
@@ -33730,7 +34138,17 @@ export async function rhack(_cmd) {
                 await finishIceBoxSequence(messages, true);
                 return;
             }
+            if (followupContainerPutIn) {
+                markContainerSequenceUsed(true);
+                await continueContainerSequenceToPutIn(container, messages);
+                return;
+            }
+            if (finishContainerSeq) {
+                await finishContainerSequence(messages, true);
+                return;
+            }
             clearIceBoxSequenceState();
+            clearContainerSequenceState();
             game._command_mode = null;
             if (message.length <= 79) {
                 await setMessage(message);
@@ -33747,6 +34165,7 @@ export async function rhack(_cmd) {
         if (ch === '\x1b') {
             const container = game._loot_takeout_container;
             const followupPutIn = game._icebox_sequence_after_takeout === 'putin' && isIceBoxObject(container);
+            const followupContainerPutIn = game._container_sequence_after_takeout === 'putin' && !isIceBoxObject(container);
             clearContainerTakeoutState();
             game._overlay_lines = null;
             game._overlay_hide_status = 0;
@@ -33758,7 +34177,16 @@ export async function rhack(_cmd) {
                 await finishIceBoxSequence();
                 return;
             }
+            if (followupContainerPutIn) {
+                await continueContainerSequenceToPutIn(container);
+                return;
+            }
+            if (containerSequenceActive() && !isIceBoxObject(container)) {
+                await finishContainerSequence();
+                return;
+            }
             clearIceBoxSequenceState();
+            clearContainerSequenceState();
             game._command_mode = null;
         }
         return;

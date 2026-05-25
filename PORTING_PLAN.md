@@ -2777,8 +2777,17 @@ Next concrete target:
   `breakchestlock()` has no current force/kick/wand caller. Direct smokes cover
   large-box prompting, large-box destruction with a surviving content spill,
   and locked ice-box exclusion; focused replays and full score remain exact.
-  Remaining ice-box work is
-  nested `in_container()`/`out_container()` variants, full magic-bag
+  Floor chest/large-box `in_container()` now supports put-in, stash, and both
+  orderings through the C-style rejection gate: bags can be nested while boxes,
+  ice boxes, boulders, big statues, worn gear, cursed loadstones, attached
+  leashes, and invocation items stay out with C-shaped messages. The shared
+  floor/ice takeout path clears contained/link metadata for its removed object,
+  while thawing remains limited to direct ice-box removals. Direct smokes cover
+  chest stash, box rejection, metadata cleanup, large-box `lootabc` stash, and
+  the take-out-then-put-in sequence; focused replays and full score remain
+  exact.
+  Remaining nested-container work is carried-bag takeout/back-pointer parity,
+  full magic-bag
   `ohitmon()`/`thitu()` special cases and
   non-gold scatter shop billing refinements,
   and shop billing edge cases.
