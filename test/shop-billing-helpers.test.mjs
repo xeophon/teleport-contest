@@ -3403,6 +3403,8 @@ test('cursed or used scare monster floor scroll crumbles into used-up bill', asy
         assert.equal(shop.shopBillEntryTotal(entry), expectedPrice, label);
         assert.equal(debts.some(debt => debt.billPortion === 'fullyUsedUp' && debt.price === expectedPrice), true, label);
         assert.match(game._pending_message, /scroll.*turns? to dust.*pick.*up/i, label);
+        assert.match(game._pending_message, /scroll of scare monster will cost you \d+ zorkmids?/i, label);
+        assert.doesNotMatch(game._pending_message, /For you/i, label);
         assert.equal(game.context.move, 1, label);
     }
 });
@@ -3435,6 +3437,33 @@ test('unknown used scare monster floor scroll dust offers type-call before used-
     assert.equal(entry.useup, true);
     assert.equal(shop.shopBillEntryTotal(entry), expectedPrice);
     assert.equal(debts.some(debt => debt.billPortion === 'fullyUsedUp' && debt.price === expectedPrice), true);
+    assert.match(game._pending_message, /will cost you \d+ zorkmids?/i);
+    assert.doesNotMatch(game._pending_message, /For you/i);
+    assert.equal(game.context.move, 1);
+});
+
+test('plural scare monster floor scroll dust quotes unit shop price', async () => {
+    const { shkp } = installCommandShopState();
+    const scroll = floorScareMonsterScroll(6022, {
+        cursed: true,
+        quan: 2,
+        plural: 'scrolls of scare monster',
+    });
+    game.level.objects = [scroll];
+    const expectedPrice = shop.shopItemPrice(scroll, 5, 5);
+    const unitPrice = Math.trunc(expectedPrice / 2);
+
+    await rhack(',');
+
+    const entry = shop.shopBillEntryForObject(shkp, scroll);
+
+    assert.equal(game.inventory.some(item => item.id === scroll.id), false);
+    assert.equal(game.level.objects.includes(scroll), false);
+    assert.ok(entry);
+    assert.equal(entry.useup, true);
+    assert.equal(shop.shopBillEntryTotal(entry), expectedPrice);
+    assert.match(game._pending_message, /The scrolls turn to dust as you pick them up\./);
+    assert.match(game._pending_message, new RegExp(`The 2 scrolls of scare monster will cost you ${unitPrice} zorkmids each\\.`));
     assert.equal(game.context.move, 1);
 });
 
@@ -3474,7 +3503,9 @@ test('multi-pickup cursed or used scare monster scroll dusts and continues to la
         assert.equal(shop.shopBillEntryTotal(rationEntry), rationPrice, label);
         assert.equal(shkp.billct, 2, label);
         assert.match(game._pending_message, /scroll.*turns? to dust.*pick.*up/i, label);
+        assert.match(game._pending_message, /scroll of scare monster will cost you \d+ zorkmids?/i, label);
         assert.match(game._pending_message, /food ration/, label);
+        assert.ok(game._pending_message.indexOf('will cost you') < game._pending_message.indexOf('food ration'), label);
         assert.equal(game.context.move, 1, label);
     }
 });
@@ -3526,7 +3557,9 @@ test('unknown scare monster dust in multi-pickup prompts before continuing later
     assert.equal(rationEntry.useup, false);
     assert.equal(shop.shopBillEntryTotal(rationEntry), rationPrice);
     assert.equal(shkp.billct, 2);
+    assert.match(game._pending_message, /will cost you \d+ zorkmids?/i);
     assert.match(game._pending_message, /food ration/);
+    assert.ok(game._pending_message.indexOf('will cost you') < game._pending_message.indexOf('food ration'));
     assert.equal(game.context.move, 1);
 });
 

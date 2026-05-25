@@ -17158,25 +17158,38 @@ function scareMonsterScrollDustMessage(obj) {
     return `The scroll${plural ? 's' : ''} ${plural ? 'turn' : 'turns'} to dust as you pick ${plural ? 'them' : 'it'} up.`;
 }
 
+function floorUsedUpShopBillMessage(obj, price) {
+    if (!obj || !(price > 0)) return '';
+    const units = Math.max(1, Math.trunc(Number(shopPricingUnits(obj) || 1)));
+    const unitPrice = units > 1 ? Math.max(1, Math.trunc(price / units)) : Math.trunc(price);
+    const subject = units > 1
+        ? pickupObjectPhrase(obj)
+        : pickupObjectName({ ...(obj || {}), quan: 1 });
+    return `The ${subject} will cost you ${unitPrice} ${shopCurrency(unitPrice)}${units > 1 ? ' each' : ''}.`;
+}
+
 function useUpFloorObjectWithShopBill(obj) {
-    if (!obj) return;
+    if (!obj) return '';
     const x = obj.ox ?? game.u?.ux;
     const y = obj.oy ?? game.u?.uy;
     const shkp = x == null || y == null ? null : shopkeeperForCostlySpot(x, y);
+    let billMessage = '';
     if (shopkeeperInHisShop(shkp)) {
         const price = shopItemPrice(obj, x, y);
         if (price > 0) {
             addObjectToShopBill(shkp, obj, price, { useup: true });
             markObjectShopBillUsedUp(obj, shkp);
+            billMessage = floorUsedUpShopBillMessage(obj, price);
         }
     }
     game.level.objects = (game.level?.objects || []).filter(item => item !== obj);
     if (x != null && y != null) newsym(x, y);
+    return billMessage;
 }
 
 function finalizeScareMonsterDust(preflight) {
     const dustObj = preflight?.scareDustObj || preflight;
-    useUpFloorObjectWithShopBill(dustObj);
+    return useUpFloorObjectWithShopBill(dustObj);
 }
 
 function observeFloorPickupObject(obj) {
@@ -17203,13 +17216,16 @@ async function finishPendingScrollTryCall(defaultMoveCost = 1) {
     const pending = game._scroll_trycall_pending;
     game._scroll_trycall_pending = null;
     if (!pending) return false;
-    if (pending.kind === 'scareDust') finalizeScareMonsterDust(pending.preflight);
+    let followupMessage = '';
+    if (pending.kind === 'scareDust') followupMessage = finalizeScareMonsterDust(pending.preflight);
     if (pending.pickupListState) {
+        if (followupMessage) pending.pickupListState.messages.push(followupMessage);
         pending.pickupListState.index = (pending.pickupListState.index || 0) + 1;
         await continuePickupListProcessing(pending.pickupListState);
         return true;
     }
     game.context.move = pending.moveCost ?? defaultMoveCost;
+    if (followupMessage) await setMessage(followupMessage);
     return true;
 }
 
@@ -22943,7 +22959,10 @@ async function continuePickupListProcessing(state, acceptedPreflight = null) {
                 game.context.move = 0;
                 return;
             }
-            if (preflight.scareDust) finalizeScareMonsterDust(preflight);
+            if (preflight.scareDust) {
+                const billMessage = finalizeScareMonsterDust(preflight);
+                if (billMessage) state.messages.push(billMessage);
+            }
             state.index++;
             if (preflight.scareDust) continue;
             break;
@@ -42970,8 +42989,8 @@ export async function rhack(_cmd) {
                 const message = floorPickupPreflightMessage(preflight);
                 if (preflight.scareDust) {
                     const waitingForCall = scheduleScareMonsterDustTryCall(preflight, { moveCost: preflight.move ? 1 : 0 });
-                    if (!waitingForCall) finalizeScareMonsterDust(preflight);
-                    await setMessage(message, waitingForCall);
+                    const billMessage = waitingForCall ? '' : finalizeScareMonsterDust(preflight);
+                    await setMessage([message, billMessage].filter(Boolean).join('  '), waitingForCall);
                     game.context.move = waitingForCall ? 0 : preflight.move ? 1 : 0;
                     return;
                 }
