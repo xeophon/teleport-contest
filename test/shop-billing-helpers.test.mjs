@@ -277,6 +277,42 @@ test('cashless shopkeeper offers sale credit without changing hero gold', () => 
     assert.equal(dropped.no_charge, undefined);
 });
 
+test('angry shopkeeper keeps a paid non-gold drop without sale prompt', () => {
+    const { shkp } = installShopState();
+    shkp.angry = true;
+    const dropped = dagger(5004);
+
+    const sale = shop.shopDroppedPaidObjectSaleInfo(dropped, 5, 5);
+
+    assert.equal(sale.handled, true);
+    assert.equal(sale.prompt, false);
+    assert.equal(sale.angry, true);
+    assert.match(sale.message, /smirks/);
+    assert.equal(game._goldCount, 0);
+    assert.equal(shop.shopkeeperCash(shkp), 100);
+    assert.equal(shkp.credit || 0, 0);
+    assert.notEqual(dropped.no_charge, true);
+});
+
+test('robbed shopkeeper treats a paid non-gold drop as restock contribution', () => {
+    const { shkp } = installShopState();
+    shkp.robbed = 20;
+    const dropped = dagger(5005);
+
+    const sale = shop.shopDroppedPaidObjectSaleInfo(dropped, 5, 5);
+
+    assert.equal(sale.handled, true);
+    assert.equal(sale.prompt, false);
+    assert.equal(sale.robbed, true);
+    assert.equal(sale.robbedContribution, shop.shopSaleOffer(dropped, shkp));
+    assert.match(sale.message, /contribution/);
+    assert.equal(shkp.robbed, 0);
+    assert.equal(game._goldCount, 0);
+    assert.equal(shop.shopkeeperCash(shkp), 100);
+    assert.equal(shkp.credit || 0, 0);
+    assert.notEqual(dropped.no_charge, true);
+});
+
 test('dropping gold in a shop partially pays shop debt', () => {
     const { shkp } = installShopState();
     shkp.debit = 10;
@@ -422,8 +458,8 @@ test('picking up shop-floor gold creates debt when no credit exists', () => {
 
 test('dropping a paid container in a shop can sell saleable contents', () => {
     const { shkp } = installShopState();
-    const bag = sack(5004, 'b');
-    const blade = putObjectInContainer(bag, dagger(5005));
+    const bag = sack(5104, 'b');
+    const blade = putObjectInContainer(bag, dagger(5105));
     bag.ox = 5;
     bag.oy = 5;
     game._goldCount = 5;
@@ -454,8 +490,8 @@ test('dropping a paid container in a shop can sell saleable contents', () => {
 
 test('declining a dropped container sale marks owned contents no-charge', () => {
     const { shkp } = installShopState();
-    const bag = sack(5006, 'b');
-    const blade = putObjectInContainer(bag, dagger(5007));
+    const bag = sack(5106, 'b');
+    const blade = putObjectInContainer(bag, dagger(5107));
     bag.ox = 5;
     bag.oy = 5;
     game.level.objects = [bag];
@@ -474,8 +510,8 @@ test('declining a dropped container sale marks owned contents no-charge', () => 
 test('cashless shopkeeper offers credit for dropped container contents', () => {
     const { shkp } = installShopState();
     shkp.minvent = [];
-    const bag = sack(5008, 'b');
-    const blade = putObjectInContainer(bag, dagger(5009));
+    const bag = sack(5108, 'b');
+    const blade = putObjectInContainer(bag, dagger(5109));
     bag.ox = 5;
     bag.oy = 5;
     game.level.objects = [bag];
@@ -500,9 +536,9 @@ test('cashless shopkeeper offers credit for dropped container contents', () => {
 
 test('dropped container sale donates contained gold before selling the rest', () => {
     const { shkp } = installShopState();
-    const bag = sack(5010, 'b');
-    const coins = putObjectInContainer(bag, goldPieces(5011, 9));
-    const blade = putObjectInContainer(bag, dagger(5012));
+    const bag = sack(5110, 'b');
+    const coins = putObjectInContainer(bag, goldPieces(5111, 9));
+    const blade = putObjectInContainer(bag, dagger(5112));
     bag.ox = 5;
     bag.oy = 5;
     shkp.credit = 1;
@@ -527,8 +563,8 @@ test('dropped container sale donates contained gold before selling the rest', ()
 
 test('dropped container sale removes unpaid contained bill rows on decline', () => {
     const { shkp } = installShopState();
-    const bag = sack(5013, 'b');
-    const ration = putObjectInContainer(bag, foodRation(5014));
+    const bag = sack(5113, 'b');
+    const ration = putObjectInContainer(bag, foodRation(5114));
     bag.ox = 5;
     bag.oy = 5;
     shop.addObjectToShopBill(shkp, ration, 45);
@@ -544,6 +580,60 @@ test('dropped container sale removes unpaid contained bill rows on decline', () 
     assert.equal(ration.unpaidPrice, undefined);
     assert.equal(shkp.billct, 0);
     assert.equal(bag.no_charge, true);
+});
+
+test('angry shopkeeper takes dropped container contents without sale or no-charge marking', () => {
+    const { shkp } = installShopState();
+    shkp.angry = true;
+    const bag = sack(5121, 'b');
+    const blade = putObjectInContainer(bag, dagger(5122));
+    const ration = putObjectInContainer(bag, foodRation(5123));
+    shop.addObjectToShopBill(shkp, ration, 45);
+
+    const sale = shop.shopDroppedPaidObjectSaleInfo(bag, 5, 5);
+
+    assert.equal(sale.handled, true);
+    assert.equal(sale.prompt, false);
+    assert.equal(sale.angry, true);
+    assert.match(sale.message, /smirks/);
+    assert.equal(shop.shopBillEntryForObject(shkp, ration), null);
+    assert.notEqual(ration.unpaid, true);
+    assert.equal(shkp.billct, 0);
+    assert.notEqual(bag.no_charge, true);
+    assert.notEqual(blade.no_charge, true);
+    assert.notEqual(ration.no_charge, true);
+    assert.equal(game._goldCount, 0);
+    assert.equal(shop.shopkeeperCash(shkp), 100);
+    assert.equal(shkp.credit || 0, 0);
+});
+
+test('robbed shopkeeper treats dropped container contents as restock contribution', () => {
+    const { shkp } = installShopState();
+    shkp.robbed = 20;
+    const bag = sack(5131, 'b');
+    const blade = putObjectInContainer(bag, dagger(5132));
+    const coins = putObjectInContainer(bag, goldPieces(5133, 9));
+    const ration = putObjectInContainer(bag, foodRation(5134));
+    shop.addObjectToShopBill(shkp, ration, 45);
+
+    const sale = shop.shopDroppedPaidObjectSaleInfo(bag, 5, 5);
+
+    assert.equal(sale.handled, true);
+    assert.equal(sale.prompt, false);
+    assert.equal(sale.robbed, true);
+    assert.equal(sale.robbedContribution, shop.shopSaleOffer(bag, shkp) + shop.shopSaleOffer(blade, shkp) + 1);
+    assert.match(sale.message, /contribution/);
+    assert.equal(shkp.robbed, 0);
+    assert.equal(shop.shopBillEntryForObject(shkp, ration), null);
+    assert.notEqual(ration.unpaid, true);
+    assert.equal(shkp.billct, 0);
+    assert.notEqual(bag.no_charge, true);
+    assert.notEqual(blade.no_charge, true);
+    assert.notEqual(coins.unpaid, true);
+    assert.equal(shkp.debit || 0, 0);
+    assert.equal(shkp.credit || 0, 0);
+    assert.equal(game._goldCount, 0);
+    assert.equal(shop.shopkeeperCash(shkp), 100);
 });
 
 test('putting paid merchandise into a shop-floor container accepts cash sale', () => {
@@ -644,6 +734,51 @@ test('putting paid merchandise into a shop-floor container accepts cashless cred
     assert.equal(game._goldCount, 5);
     assert.equal(shop.shopkeeperCash(shkp), 0);
     assert.equal(shkp.credit, 1);
+    assert.equal(shkp.billct, 0);
+});
+
+test('putting paid merchandise into a shop-floor container for an angry shopkeeper does not mark no-charge', () => {
+    const { shkp } = installShopState();
+    shkp.angry = true;
+    const container = shopFloorContainer(5075);
+    const item = dagger(5076, 'a');
+    game.inventory = [item];
+    game.level.objects = [container];
+
+    const result = shop.putInventoryObjectIntoContainer(container, item);
+
+    assert.equal(result.moved, true);
+    assert.match(result.message, /smirks/);
+    assert.equal(game.inventory.includes(item), false);
+    assert.equal(container.contents.includes(item), true);
+    assert.notEqual(item.no_charge, true);
+    assert.notEqual(item.unpaid, true);
+    assert.equal(game._goldCount, 0);
+    assert.equal(shop.shopkeeperCash(shkp), 100);
+    assert.equal(shkp.credit || 0, 0);
+    assert.equal(shkp.billct, 0);
+});
+
+test('putting paid merchandise into a robbed shop-floor container is a restock contribution', () => {
+    const { shkp } = installShopState();
+    shkp.robbed = 20;
+    const container = shopFloorContainer(5077);
+    const item = dagger(5078, 'a');
+    game.inventory = [item];
+    game.level.objects = [container];
+
+    const result = shop.putInventoryObjectIntoContainer(container, item);
+
+    assert.equal(result.moved, true);
+    assert.match(result.message, /contribution/);
+    assert.equal(shkp.robbed, 0);
+    assert.equal(game.inventory.includes(item), false);
+    assert.equal(container.contents.includes(item), true);
+    assert.notEqual(item.no_charge, true);
+    assert.notEqual(item.unpaid, true);
+    assert.equal(game._goldCount, 0);
+    assert.equal(shop.shopkeeperCash(shkp), 100);
+    assert.equal(shkp.credit || 0, 0);
     assert.equal(shkp.billct, 0);
 });
 
@@ -839,6 +974,8 @@ test('putting gold into a shop-floor container pays debt before adding excess cr
     const result = shop.putInventoryObjectIntoContainer(container, wallet, 12);
 
     assert.equal(result.moved, true);
+    assert.match(result.message, /Your debt is paid off/);
+    assert.match(result.message, /5 zorkmids added to your credit/);
     assert.equal(game._goldCount, 8);
     assert.equal(wallet.quan, 8);
     assert.equal(container.contents.length, 1);
@@ -848,6 +985,47 @@ test('putting gold into a shop-floor container pays debt before adding excess cr
     assert.equal(shkp.credit, 8);
     assert.equal(shkp.billct, 0);
     assert.equal(shop.shopkeeperCash(shkp), 100);
+});
+
+test('putting gold into a shop-floor container for angry or robbed shopkeepers does not donate', () => {
+    const { shkp } = installShopState();
+    const angryContainer = shopFloorContainer(6453);
+    const angryWallet = goldPieces(6454, 20);
+    shkp.angry = true;
+    shkp.debit = 7;
+    shkp.loan = 7;
+    game._goldCount = 20;
+    game.inventory = [angryWallet];
+    game.level.objects = [angryContainer];
+
+    const angry = shop.putInventoryObjectIntoContainer(angryContainer, angryWallet, 8);
+
+    assert.equal(angry.moved, true);
+    assert.match(angry.message, /smirks/);
+    assert.equal(game._goldCount, 12);
+    assert.equal(angryContainer.contents[0].quan, 8);
+    assert.equal(shkp.debit, 7);
+    assert.equal(shkp.loan, 7);
+    assert.equal(shkp.credit || 0, 0);
+
+    shkp.angry = false;
+    shkp.robbed = 20;
+    const robbedContainer = shopFloorContainer(6455);
+    const robbedWallet = goldPieces(6456, 12);
+    game._goldCount = 12;
+    game.inventory = [robbedWallet];
+    game.level.objects = [robbedContainer];
+
+    const robbed = shop.putInventoryObjectIntoContainer(robbedContainer, robbedWallet, 5);
+
+    assert.equal(robbed.moved, true);
+    assert.match(robbed.message, /contribution/);
+    assert.equal(game._goldCount, 7);
+    assert.equal(robbedContainer.contents[0].quan, 5);
+    assert.equal(shkp.robbed, 0);
+    assert.equal(shkp.debit, 7);
+    assert.equal(shkp.loan, 7);
+    assert.equal(shkp.credit || 0, 0);
 });
 
 test('putting a carried container with contents into a shop-floor container donates contained gold', () => {

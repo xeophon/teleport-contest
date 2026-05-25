@@ -13370,7 +13370,7 @@ function pickUpFloorGoldObject(goldObj) {
 function donateShopGoldAt(container, amount) {
     const gold = Math.max(0, Math.trunc(Number(amount || 0)));
     const shkp = shopFloorContainerShopkeeper(container);
-    return donateGoldToShopkeeper(shkp, gold);
+    return sellobjGoldToShopkeeper(shkp, gold);
 }
 
 function donateShopGoldAtSpot(x, y, amount) {
@@ -13378,7 +13378,7 @@ function donateShopGoldAtSpot(x, y, amount) {
     if (x == null || y == null) return { shkp: null, donated: 0 };
     const shkp = shopkeeperForCostlySpot(x, y);
     if (!shopkeeperInHisShop(shkp)) return { shkp: null, donated: 0 };
-    return donateGoldToShopkeeper(shkp, gold);
+    return sellobjGoldToShopkeeper(shkp, gold);
 }
 
 function donateGoldToShopkeeper(shkp, gold) {
@@ -13421,12 +13421,10 @@ function shopGoldDonationMessages(donation, { selling = true } = {}) {
     return messages;
 }
 
-function sellobjDroppedGoldAt(x, y, amount) {
+function sellobjGoldToShopkeeper(shkp, amount) {
     const gold = Math.max(0, Math.trunc(Number(amount || 0)));
-    if (!gold || x == null || y == null) return { shkp: null, donated: 0, messages: [] };
-    const shkp = shopkeeperForCostlySpot(x, y);
-    if (!shopkeeperInHisShop(shkp)) return { shkp: null, donated: 0, messages: [] };
-    if (shkp.angry || shkp.hostile || shkp.mpeaceful === 0)
+    if (!shkp || !gold) return { shkp: shkp || null, donated: 0, messages: [] };
+    if (shopkeeperAngryForSellobj(shkp))
         return { shkp, donated: 0, angry: true, messages: [`${shopkeeperDisplayName(shkp)} smirks with satisfaction.`] };
     const robbed = Math.max(0, Math.trunc(Number(shkp.robbed || 0)));
     if (robbed > 0) {
@@ -13440,6 +13438,14 @@ function sellobjDroppedGoldAt(x, y, amount) {
     }
     const donation = donateGoldToShopkeeper(shkp, gold);
     return { ...donation, messages: shopGoldDonationMessages(donation, { selling: true }) };
+}
+
+function sellobjDroppedGoldAt(x, y, amount) {
+    const gold = Math.max(0, Math.trunc(Number(amount || 0)));
+    if (!gold || x == null || y == null) return { shkp: null, donated: 0, messages: [] };
+    const shkp = shopkeeperForCostlySpot(x, y);
+    if (!shopkeeperInHisShop(shkp)) return { shkp: null, donated: 0, messages: [] };
+    return sellobjGoldToShopkeeper(shkp, gold);
 }
 
 function saleDeclineQuestionObject(obj, sale = {}) {
@@ -13496,21 +13502,67 @@ function shopSalePromptObjectName(obj, sale = {}) {
     return contentsSold ? `${shopSalePromptName(obj)} and its contents` : shopSalePromptName(obj);
 }
 
+function shopkeeperAngryForSellobj(shkp) {
+    return !!shkp && (shkp.angry || shkp.hostile || shkp.mpeaceful === 0);
+}
+
+function shopSellobjAngryResult(obj, shkp, kind = 'drop') {
+    if (globContents(obj).length) subFromShopBill(obj, shkp);
+    return {
+        kind,
+        obj,
+        shkp,
+        handled: true,
+        prompt: false,
+        angry: true,
+        message: `${shopkeeperDisplayName(shkp)} smirks with satisfaction.`,
+    };
+}
+
+function robbedShopSellobjResult(obj, shkp, offer, containedGold = 0, kind = 'drop') {
+    const robbed = Math.max(0, Math.trunc(Number(shkp?.robbed || 0)));
+    if (!robbed) return null;
+    const contribution = Math.max(0, Math.trunc(Number(offer || 0)))
+        + (Math.max(0, Math.trunc(Number(containedGold || 0))) > 0 ? 1 : 0);
+    shkp.robbed = 0;
+    subFromShopBill(obj, shkp);
+    return {
+        kind,
+        obj,
+        shkp,
+        handled: true,
+        prompt: false,
+        robbed: true,
+        robbedContribution: contribution,
+        message: contribution > 0
+            ? 'Thank you for your contribution to restock this recently plundered shop.'
+            : '',
+    };
+}
+
 function shopDroppedPaidObjectSaleInfo(obj, x, y) {
     const containerSale = globContents(obj).length > 0;
     if (!obj || shopBillableGold(obj) || (!containerSale && obj.unpaid)) return null;
     const shkp = shopkeeperForCostlySpot(x, y);
     if (!shopkeeperInHisShop(shkp)) return null;
-    if (shkp.angry || shkp.hostile || shkp.mpeaceful === 0) {
-        if (containerSale) subFromShopBill(obj, shkp);
-        return { obj, shkp, handled: true, prompt: false, message: `${shopkeeperDisplayName(shkp)} smirks with satisfaction.` };
-    }
+    if (shopkeeperAngryForSellobj(shkp)) return shopSellobjAngryResult(obj, shkp, 'drop');
     const contentSale = containerSale ? containedShopSaleOffer(shkp, obj) : { offer: 0, count: 0 };
     const topOffer = ownedShopSaleOffer(shkp, obj);
     const containedGold = containerSale ? containedShopGold(obj) : 0;
     const offer = topOffer + contentSale.offer;
-    if (containedGold > 0) donateShopGoldAtSpot(x, y, containedGold);
     const noSale = !(offer > 0);
+    if (!containedGold && noSale) {
+        if (containerSale) {
+            markNoChargeRecursively(obj);
+            subFromShopBill(obj, shkp);
+        } else {
+            obj.no_charge = true;
+        }
+        return { obj, shkp, handled: true, prompt: false, message: `${shopkeeperDisplayName(shkp)} seems uninterested.` };
+    }
+    const robbed = robbedShopSellobjResult(obj, shkp, offer, containedGold, 'drop');
+    if (robbed) return robbed;
+    if (containedGold > 0) donateShopGoldAtSpot(x, y, containedGold);
     if (containedGold > 0 && noSale) {
         if (containerSale) {
             markNoChargeRecursively(obj);
@@ -13578,10 +13630,18 @@ function shopFloorContainerPutSaleInfo(container, putItem) {
         return null;
     if (shopBillableGold(putItem) || putItem.unpaid || container.no_charge) return null;
     const shkp = shopFloorContainerShopkeeper(container);
-    if (!shopkeeperInHisShop(shkp) || shkp.angry || shkp.hostile || shkp.mpeaceful === 0) return null;
+    if (!shopkeeperInHisShop(shkp)) return null;
+    if (shopkeeperAngryForSellobj(shkp)) return {
+        ...shopSellobjAngryResult(putItem, shkp, 'containerPutIn'),
+        container,
+    };
     const contentSale = containedShopSaleOffer(shkp, putItem);
     const topOffer = ownedShopSaleOffer(shkp, putItem);
+    const containedGold = containedShopGold(putItem);
     const offer = topOffer + contentSale.offer;
+    if (!(offer > 0) && !containedGold) return null;
+    const robbed = robbedShopSellobjResult(putItem, shkp, offer, containedGold, 'containerPutIn');
+    if (robbed) return { ...robbed, container };
     if (!(offer > 0) || (Array.isArray(shkp.bill) && shkp.bill.length >= SHOP_BILL_LIMIT)) return null;
     const sale = {
         kind: 'containerPutIn',
@@ -17628,7 +17688,7 @@ function putInventoryObjectIntoIceBox(iceBox, item, amount = item?.quan || 1, op
     if (item?.letter === '$' || item?.otyp === GOLD_PIECE || item?.cls === 'coin' || item?.glyph === '$') {
         const gold = Math.min(Math.max(0, amount || 0), game._goldCount || 0);
         if (!gold) return { moved: false, message: 'You have no gold to put in.' };
-        donateShopGoldAt(iceBox, gold);
+        const shopGold = donateShopGoldAt(iceBox, gold);
         add_to_container(iceBox, { letter: '$', cls: 'coin', otyp: GOLD_PIECE, glyph: '$', quan: gold });
         game._goldCount = Math.max(0, (game._goldCount || 0) - gold);
         game._just_picked_gold = Math.max(0, (game._just_picked_gold || 0) - gold);
@@ -17640,7 +17700,8 @@ function putInventoryObjectIntoIceBox(iceBox, item, amount = item?.quan || 1, op
             game.inventory = (game.inventory || []).filter(invItem => invItem.letter !== '$' && invItem.cls !== 'coin');
         }
         game._pet_food_scan_inventory = game.inventory;
-        return { moved: true, message: `You put ${gold} gold piece${gold === 1 ? '' : 's'} into the ice box.` };
+        const messages = [`You put ${gold} gold piece${gold === 1 ? '' : 's'} into the ice box.`, ...(shopGold.messages || [])];
+        return { moved: true, message: messages.join('  '), messages };
     }
 
     const reject = iceBoxPutRejectMessage(iceBox, item);
@@ -17650,14 +17711,17 @@ function putInventoryObjectIntoIceBox(iceBox, item, amount = item?.quan || 1, op
     const count = Math.min(Math.max(1, amount || 1), item.quan || 1);
     const putItem = (item.quan || 1) > count ? { ...item, quan: count } : item;
     clearContainerPutEquipmentState(putItem, name);
+    let sellobjResult = null;
     if (!options.skipSalePrompt) {
         const pendingSale = beginShopFloorContainerPutSale(iceBox, item, count);
         if (pendingSale?.prompt)
             return { moved: false, pendingSale, message: pendingSale.promptMessage };
+        if (pendingSale?.handled) sellobjResult = pendingSale;
     }
     const billing = billShopFloorContainerPutObject(iceBox, putItem, {
         acceptedSale: !!options.acceptedSale,
         shkp: options.salePending?.shkp,
+        sellobjResult,
     });
     removeInventoryItem(item, count);
     freezeObjectInIcebox(putItem);
@@ -17665,7 +17729,8 @@ function putInventoryObjectIntoIceBox(iceBox, item, amount = item?.quan || 1, op
     if (options.acceptedSale && contained) markAcceptedShopContainerSaleState(contained, options.salePending?.shkp || billing.shkp);
     if (billing.noCharge && contained && contained !== putItem) markNoChargeRecursively(contained);
     game._pet_food_scan_inventory = game.inventory;
-    return { moved: true, message: `You put ${name} into the ice box.` };
+    const messages = [sellobjResult?.message, `You put ${name} into the ice box.`].filter(Boolean);
+    return { moved: true, message: messages.join('  '), messages };
 }
 
 function putInventoryObjectIntoBag(bag, item, amount = item?.quan || 1) {
@@ -17724,6 +17789,9 @@ function billShopFloorContainerPutObject(container, putItem, options = {}) {
     const shkp = shopFloorContainerShopkeeper(container);
     if (!shkp) return { shkp: null, returned: false, noCharge: false };
     if (shopBillableGold(putItem)) return { shkp, returned: false, noCharge: false };
+    const sellobjResult = options.sellobjResult;
+    if (sellobjResult?.angry || sellobjResult?.robbed)
+        return { shkp, returned: false, noCharge: false, sellobjResult };
     const gold = containedShopGold(putItem);
     if (gold > 0) donateShopGoldAt(container, gold);
     if (returnUnpaidObjectToShopBillOwnerAt(putItem, x, y))
@@ -17748,7 +17816,7 @@ function putInventoryObjectIntoContainer(container, item, amount = item?.quan ||
     if (item?.letter === '$' || item?.otyp === GOLD_PIECE || item?.cls === 'coin' || item?.glyph === '$') {
         const gold = Math.min(Math.max(0, amount || 0), game._goldCount || 0);
         if (!gold) return { moved: false, message: 'You have no gold to put in.' };
-        donateShopGoldAt(container, gold);
+        const shopGold = donateShopGoldAt(container, gold);
         add_to_container(container, { letter: '$', cls: 'coin', otyp: GOLD_PIECE, glyph: '$', quan: gold });
         game._goldCount = Math.max(0, (game._goldCount || 0) - gold);
         game._just_picked_gold = Math.max(0, (game._just_picked_gold || 0) - gold);
@@ -17761,7 +17829,8 @@ function putInventoryObjectIntoContainer(container, item, amount = item?.quan ||
         }
         refreshTipContainerWeight(container);
         game._pet_food_scan_inventory = game.inventory;
-        return { moved: true, message: `You put ${gold} gold piece${gold === 1 ? '' : 's'} into the ${containerName}.` };
+        const messages = [`You put ${gold} gold piece${gold === 1 ? '' : 's'} into the ${containerName}.`, ...(shopGold.messages || [])];
+        return { moved: true, message: messages.join('  '), messages };
     }
 
     const reject = containerPutRejectMessage(container, item);
@@ -17775,14 +17844,17 @@ function putInventoryObjectIntoContainer(container, item, amount = item?.quan ||
         removeInventoryItem(item, count);
         return explodeMagicBagTransfer(container, putItem, []);
     }
+    let sellobjResult = null;
     if (!options.skipSalePrompt) {
         const pendingSale = beginShopFloorContainerPutSale(container, item, count);
         if (pendingSale?.prompt)
             return { moved: false, pendingSale, message: pendingSale.promptMessage };
+        if (pendingSale?.handled) sellobjResult = pendingSale;
     }
     const billing = billShopFloorContainerPutObject(container, putItem, {
         acceptedSale: !!options.acceptedSale,
         shkp: options.salePending?.shkp,
+        sellobjResult,
     });
     removeInventoryItem(item, count);
     const contained = add_to_container(container, putItem);
@@ -17790,7 +17862,8 @@ function putInventoryObjectIntoContainer(container, item, amount = item?.quan ||
     if (billing.noCharge && contained && contained !== putItem) markNoChargeRecursively(contained);
     refreshTipContainerWeight(container);
     game._pet_food_scan_inventory = game.inventory;
-    return { moved: true, message: `You put ${name} into the ${containerName}.` };
+    const messages = [sellobjResult?.message, `You put ${name} into the ${containerName}.`].filter(Boolean);
+    return { moved: true, message: messages.join('  '), messages };
 }
 
 function finishShopFloorContainerPutSale(pending, accept) {
