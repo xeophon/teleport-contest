@@ -36,8 +36,8 @@ This folder records source-backed audits against `nethack-c/upstream`. The notes
 Continue with the shop area because it combines visible current behavior with a high-impact missing C subsystem.
 
 - Keep `unpaid` and `unpaidPrice` as compatibility/display fields while migrating callers.
-- Extend ledger use to container put-in, take-out, and tip moves after ordinary pickup/drop is stable.
-- Expand `sellobj()` beyond ordinary paid non-container drops to container contents, gold donation/credit, robbed-shop, and angry-shopkeeper edge cases.
+- Extend ledger use to recursive container put-in, take-out, and tip moves after ordinary objects and loose gold are stable.
+- Expand `sellobj()` beyond ordinary paid non-container drops to container contents, ordinary gold drops, robbed-shop, and angry-shopkeeper edge cases.
 - Continue moving payment toward complete C `dopay()` semantics for containers, queued itemized selections, and robbed-shop interactions.
 
 Every code slice should be followed by source-derived smoke checks plus `npm run score`.
