@@ -13340,6 +13340,50 @@ function shopSalePromptName(obj) {
     return (obj?.quan || 1) === 1 ? `${obj?.unique ? 'the' : 'your'} ${name}` : `your ${name}`;
 }
 
+function shopSaleUninterestedObject(obj) {
+    return obj?.cls === 'ball' || obj?.glyph === '0' || obj?.otyp === HEAVY_IRON_BALL
+        || obj?.cls === 'chain' || obj?.glyph === '_' || obj?.otyp === IRON_CHAIN
+        || ((obj?.cls === 'food' || obj?.otyp === FOOD_CLASS) && obj?.oeaten)
+        || (isCandleObject(obj) && obj.age < 20 * shopBaseCost(obj));
+}
+
+function ownedShopSaleOffer(shkp, obj) {
+    if (!obj || obj.unpaid || obj.no_charge || shopBillableGold(obj) || shopSaleUninterestedObject(obj)) return 0;
+    return shopSaleableObject(shkp, obj) ? shopSaleOffer(obj, shkp) : 0;
+}
+
+function containedShopSaleOffer(shkp, obj, seen = new Set()) {
+    if (!obj || seen.has(obj)) return { offer: 0, count: 0 };
+    seen.add(obj);
+    let offer = 0;
+    let count = 0;
+    for (const child of globContents(obj)) {
+        if (shopBillableGold(child)) continue;
+        const childOffer = ownedShopSaleOffer(shkp, child);
+        if (childOffer > 0) {
+            offer += childOffer;
+            count += 1;
+        }
+        const contained = containedShopSaleOffer(shkp, child, seen);
+        offer += contained.offer;
+        count += contained.count;
+    }
+    return { offer, count };
+}
+
+function markAcceptedShopContainerSaleState(obj, shkp, seen = new Set()) {
+    if (!obj || seen.has(obj) || shopBillableGold(obj)) return;
+    seen.add(obj);
+    if (!obj.unpaid && ownedShopSaleOffer(shkp, obj) <= 0) obj.no_charge = true;
+    for (const child of globContents(obj))
+        markAcceptedShopContainerSaleState(child, shkp, seen);
+}
+
+function shopSalePromptObjectName(obj, sale = {}) {
+    const contentsSold = (sale.contentOffer || 0) > 0 || (sale.contentSaleCount || 0) > 0;
+    return contentsSold ? `${shopSalePromptName(obj)} and its contents` : shopSalePromptName(obj);
+}
+
 function shopDroppedPaidObjectSaleInfo(obj, x, y) {
     if (!obj || obj.unpaid || shopBillableGold(obj) || globContents(obj).length) return null;
     const shkp = shopkeeperForCostlySpot(x, y);
@@ -13347,13 +13391,10 @@ function shopDroppedPaidObjectSaleInfo(obj, x, y) {
     if (shkp.angry || shkp.hostile || shkp.mpeaceful === 0) {
         return { obj, shkp, handled: true, prompt: false, message: `${shopkeeperDisplayName(shkp)} smirks with satisfaction.` };
     }
-    const offer = shopSaleableObject(shkp, obj) ? shopSaleOffer(obj, shkp) : 0;
+    const offer = ownedShopSaleOffer(shkp, obj);
     const uninterested = !offer
         || (Array.isArray(shkp.bill) && shkp.bill.length >= SHOP_BILL_LIMIT)
-        || obj.cls === 'ball' || obj.glyph === '0' || obj.otyp === HEAVY_IRON_BALL
-        || obj.cls === 'chain' || obj.glyph === '_' || obj.otyp === IRON_CHAIN
-        || ((obj.cls === 'food' || obj.otyp === FOOD_CLASS) && obj.oeaten)
-        || (isCandleObject(obj) && obj.age < 20 * shopBaseCost(obj));
+        || shopSaleUninterestedObject(obj);
     if (uninterested) {
         obj.no_charge = true;
         return { obj, shkp, handled: true, prompt: false, message: `${shopkeeperDisplayName(shkp)} seems uninterested.` };
@@ -13382,21 +13423,90 @@ function beginDroppedPaidObjectSale(obj, x, y, declineMessage = '') {
     return sale;
 }
 
+function shopFloorContainerPutSaleInfo(container, putItem) {
+    const x = container?.ox ?? game.u?.ux;
+    const y = container?.oy ?? game.u?.uy;
+    if (!container || !putItem || (game.inventory || []).includes(container) || x == null || y == null)
+        return null;
+    if (shopBillableGold(putItem) || putItem.unpaid || container.no_charge) return null;
+    const shkp = shopFloorContainerShopkeeper(container);
+    if (!shopkeeperInHisShop(shkp) || shkp.angry || shkp.hostile || shkp.mpeaceful === 0) return null;
+    const contentSale = containedShopSaleOffer(shkp, putItem);
+    const topOffer = ownedShopSaleOffer(shkp, putItem);
+    const offer = topOffer + contentSale.offer;
+    if (!(offer > 0) || (Array.isArray(shkp.bill) && shkp.bill.length >= SHOP_BILL_LIMIT)) return null;
+    const sale = {
+        kind: 'containerPutIn',
+        obj: putItem,
+        container,
+        shkp,
+        handled: true,
+        prompt: true,
+        offer,
+        topOffer,
+        contentOffer: contentSale.offer,
+        contentSaleCount: contentSale.count,
+        containerSale: globContents(putItem).length > 0,
+    };
+    const cash = shopkeeperCash(shkp);
+    const saleName = shopSalePromptObjectName(putItem, sale);
+    if (!cash) {
+        const creditOffer = Math.trunc((offer * 9) / 10) + (offer <= 1 ? 1 : 0);
+        return {
+            ...sale,
+            credit: true,
+            offer: creditOffer,
+            promptMessage: `${shopkeeperDisplayName(shkp)} cannot pay you at present.  Will you accept ${creditOffer} zorkmid${creditOffer === 1 ? '' : 's'} in credit for ${saleName}? [ynaq] (n)`,
+        };
+    }
+    const cashOffer = Math.min(offer, cash);
+    const shortFunds = cashOffer < offer;
+    return {
+        ...sale,
+        credit: false,
+        offer: cashOffer,
+        promptMessage: `${shopkeeperDisplayName(shkp)} offers${shortFunds ? ' only' : ''} ${cashOffer} gold piece${cashOffer === 1 ? '' : 's'} for ${saleName}.  Sell ${saleDeclineQuestionObject(putItem)}? [ynaq] (n)`,
+    };
+}
+
+function beginShopFloorContainerPutSale(container, item, amount = item?.quan || 1) {
+    if (!container) return null;
+    if (item?.letter === '$' || item?.otyp === GOLD_PIECE || item?.cls === 'coin' || item?.glyph === '$') return null;
+    if (item?.unpaid) return null;
+    const reject = containerPutRejectMessage(container, item);
+    if (reject) return null;
+    const count = Math.min(Math.max(1, amount || 1), item.quan || 1);
+    const putItem = splitInventoryObjectForContainerPut(item, count);
+    const sale = shopFloorContainerPutSaleInfo(container, putItem);
+    if (!sale?.prompt) return sale;
+    return {
+        ...sale,
+        item,
+        putItem,
+        amount: count,
+        itemName: inventoryItemName(item),
+    };
+}
+
+function shopSalePaymentMessage(pending, verb = 'relinquish') {
+    const offer = Math.max(0, Math.trunc(Number(pending.offer || 0)));
+    if (pending.credit) {
+        pending.shkp.credit = Math.max(0, Math.trunc(Number(pending.shkp.credit || 0))) + offer;
+        return `You ${verb} ${pickupObjectPhrase(pending.obj)} and acquire ${offer} zorkmid${offer === 1 ? '' : 's'} in credit.`;
+    }
+    const paid = removeGoldFromShopkeeper(pending.shkp, offer);
+    addGoldToHero(paid);
+    return `You ${verb} ${pickupObjectPhrase(pending.obj)} and receive ${paid} gold piece${paid === 1 ? '' : 's'} in compensation.`;
+}
+
 function finishDroppedObjectSale(pending, accept) {
     if (!pending?.obj || !pending.shkp) return '';
     const obj = pending.obj;
-    const offer = Math.max(0, Math.trunc(Number(pending.offer || 0)));
     if (!accept) {
         obj.no_charge = true;
         return pending.declineMessage || `You drop ${pickupObjectPhrase(obj)}.`;
     }
-    if (pending.credit) {
-        pending.shkp.credit = Math.max(0, Math.trunc(Number(pending.shkp.credit || 0))) + offer;
-        return `You relinquish ${pickupObjectPhrase(obj)} and acquire ${offer} zorkmid${offer === 1 ? '' : 's'} in credit.`;
-    }
-    const paid = removeGoldFromShopkeeper(pending.shkp, offer);
-    addGoldToHero(paid);
-    return `You relinquish ${pickupObjectPhrase(obj)} and receive ${paid} gold piece${paid === 1 ? '' : 's'} in compensation.`;
+    return shopSalePaymentMessage(pending);
 }
 
 function addPickedObjectToShopBill(source, pickedItem) {
@@ -13589,10 +13699,12 @@ export const __shopBillingTestHooks = {
     addObjectToShopBill,
     addPickedObjectToShopBill,
     beginDroppedPaidObjectSale,
+    beginShopFloorContainerPutSale,
     collectPayableShopDebts,
     finishShopPaymentSelection,
     findPickedObjectInventoryMergeTarget,
     finishDroppedObjectSale,
+    finishShopFloorContainerPutSale,
     mergePickedObjectIntoInventory,
     mergePickedObjectIntoShopBill,
     placeStackableFloorObject,
@@ -17339,7 +17451,7 @@ function clearContainerPutEquipmentState(item, name) {
     if (item.line) item.line = `${item.letter || '?'} - ${name}`;
 }
 
-function putInventoryObjectIntoIceBox(iceBox, item, amount = item?.quan || 1) {
+function putInventoryObjectIntoIceBox(iceBox, item, amount = item?.quan || 1, options = {}) {
     if (!iceBoxContainerAvailable(iceBox)) return { moved: false, message: '' };
     iceBox.contents ??= [];
     iceBox.cknown = true;
@@ -17368,10 +17480,19 @@ function putInventoryObjectIntoIceBox(iceBox, item, amount = item?.quan || 1) {
     const count = Math.min(Math.max(1, amount || 1), item.quan || 1);
     const putItem = (item.quan || 1) > count ? { ...item, quan: count } : item;
     clearContainerPutEquipmentState(putItem, name);
-    const billing = billShopFloorContainerPutObject(iceBox, putItem);
+    if (!options.skipSalePrompt) {
+        const pendingSale = beginShopFloorContainerPutSale(iceBox, item, count);
+        if (pendingSale?.prompt)
+            return { moved: false, pendingSale, message: pendingSale.promptMessage };
+    }
+    const billing = billShopFloorContainerPutObject(iceBox, putItem, {
+        acceptedSale: !!options.acceptedSale,
+        shkp: options.salePending?.shkp,
+    });
     removeInventoryItem(item, count);
     freezeObjectInIcebox(putItem);
     const contained = add_to_container(iceBox, putItem);
+    if (options.acceptedSale && contained) markAcceptedShopContainerSaleState(contained, options.salePending?.shkp || billing.shkp);
     if (billing.noCharge && contained && contained !== putItem) markNoChargeRecursively(contained);
     game._pet_food_scan_inventory = game.inventory;
     return { moved: true, message: `You put ${name} into the ice box.` };
@@ -17425,7 +17546,7 @@ function splitInventoryObjectForContainerPut(item, count) {
     return putItem;
 }
 
-function billShopFloorContainerPutObject(container, putItem) {
+function billShopFloorContainerPutObject(container, putItem, options = {}) {
     const x = container?.ox ?? game.u?.ux;
     const y = container?.oy ?? game.u?.uy;
     if (!container || !putItem || (game.inventory || []).includes(container) || x == null || y == null)
@@ -17438,15 +17559,19 @@ function billShopFloorContainerPutObject(container, putItem) {
     if (returnUnpaidObjectToShopBillOwnerAt(putItem, x, y))
         return { shkp, returned: true, noCharge: false };
     if (!putItem.unpaid) {
+        if (options.acceptedSale) {
+            markAcceptedShopContainerSaleState(putItem, options.shkp || shkp);
+            return { shkp, returned: false, noCharge: false, acceptedSale: true };
+        }
         markNoChargeRecursively(putItem);
         return { shkp, returned: false, noCharge: true };
     }
     return { shkp, returned: false, noCharge: false };
 }
 
-function putInventoryObjectIntoContainer(container, item, amount = item?.quan || 1) {
+function putInventoryObjectIntoContainer(container, item, amount = item?.quan || 1, options = {}) {
     if (!container) return { moved: false, message: '' };
-    if (isIceBoxObject(container)) return putInventoryObjectIntoIceBox(container, item, amount);
+    if (isIceBoxObject(container)) return putInventoryObjectIntoIceBox(container, item, amount, options);
     container.contents ??= [];
     container.cknown = true;
     const containerName = tipContainerSimpleName(container);
@@ -17480,13 +17605,37 @@ function putInventoryObjectIntoContainer(container, item, amount = item?.quan ||
         removeInventoryItem(item, count);
         return explodeMagicBagTransfer(container, putItem, []);
     }
-    const billing = billShopFloorContainerPutObject(container, putItem);
+    if (!options.skipSalePrompt) {
+        const pendingSale = beginShopFloorContainerPutSale(container, item, count);
+        if (pendingSale?.prompt)
+            return { moved: false, pendingSale, message: pendingSale.promptMessage };
+    }
+    const billing = billShopFloorContainerPutObject(container, putItem, {
+        acceptedSale: !!options.acceptedSale,
+        shkp: options.salePending?.shkp,
+    });
     removeInventoryItem(item, count);
     const contained = add_to_container(container, putItem);
+    if (options.acceptedSale && contained) markAcceptedShopContainerSaleState(contained, options.salePending?.shkp || billing.shkp);
     if (billing.noCharge && contained && contained !== putItem) markNoChargeRecursively(contained);
     refreshTipContainerWeight(container);
     game._pet_food_scan_inventory = game.inventory;
     return { moved: true, message: `You put ${name} into the ${containerName}.` };
+}
+
+function finishShopFloorContainerPutSale(pending, accept) {
+    if (!pending?.container || !pending.item || !pending.putItem || !pending.shkp)
+        return { moved: false, message: '' };
+    const result = putInventoryObjectIntoContainer(
+        pending.container,
+        pending.item,
+        pending.amount || pending.item?.quan || 1,
+        { skipSalePrompt: true, acceptedSale: !!accept, salePending: pending },
+    );
+    if (!result.moved || !accept) return result;
+    const saleMessage = shopSalePaymentMessage({ ...pending, obj: pending.putItem }, 'sell');
+    const messages = [saleMessage, ...(result.messages || (result.message ? [result.message] : []))].filter(Boolean);
+    return { ...result, saleMessage, messages, message: messages.join('  ') };
 }
 
 async function showIceBoxMessageList(messages) {
@@ -25665,7 +25814,13 @@ export async function rhack(_cmd) {
             return;
         }
         const accepted = answer === 'y' || answer === 'a';
-        const message = finishDroppedObjectSale(pendingSale, accepted);
+        let message;
+        if (pendingSale.kind === 'containerPutIn') {
+            const result = finishShopFloorContainerPutSale(pendingSale, accepted);
+            message = (result.messages || (result.message ? [result.message] : [])).join('  ');
+        } else {
+            message = finishDroppedObjectSale(pendingSale, accepted);
+        }
         game._shop_sale_pending = null;
         game._pending_message = '';
         game._message_more = 0;
@@ -34831,11 +34986,27 @@ export async function rhack(_cmd) {
                 await setMessage('No relevant items selected.');
                 return;
             }
-            const results = selectedEntries.map(selectedEntry =>
-                putInventoryObjectIntoIceBox(iceBox, selectedEntry.item, selectedEntry.amount));
+            const results = [];
+            let pendingSale = null;
+            for (const selectedEntry of selectedEntries) {
+                const result = putInventoryObjectIntoIceBox(iceBox, selectedEntry.item, selectedEntry.amount);
+                results.push(result);
+                if (result.pendingSale) {
+                    pendingSale = result.pendingSale;
+                    break;
+                }
+            }
             const moved = results.some(result => result.moved);
             const messages = iceBoxPutResultMessages(results);
             clearIceBoxPutState();
+            if (pendingSale) {
+                clearIceBoxSequenceState();
+                game._shop_sale_pending = pendingSale;
+                game._command_mode = 'shopSaleConfirm';
+                if (moved) game.context.move = 1;
+                await showIceBoxMessageList([...messages.filter(message => message !== pendingSale.promptMessage), pendingSale.promptMessage]);
+                return;
+            }
             if (game._icebox_sequence_after_putin === 'takeout') {
                 markIceBoxSequenceUsed(moved);
                 await continueIceBoxSequenceToTakeout(iceBox, messages);
@@ -34899,6 +35070,12 @@ export async function rhack(_cmd) {
             : (game.inventory || []).find(invItem => invItem.letter === ch);
         const result = putInventoryObjectIntoIceBox(iceBox, item, item?.quan || 1);
         clearIceBoxPutState();
+        if (result.pendingSale) {
+            game._shop_sale_pending = result.pendingSale;
+            game._command_mode = 'shopSaleConfirm';
+            await showIceBoxMessageList([result.pendingSale.promptMessage]);
+            return;
+        }
         game._command_mode = null;
         if (result.moved) game.context.move = 1;
         await showIceBoxPutMessages([result]);
@@ -35026,12 +35203,30 @@ export async function rhack(_cmd) {
                 await setMessage('No relevant items selected.');
                 return;
             }
-            const results = selectedEntries.map(selectedEntry =>
-                putInventoryObjectIntoContainer(container, selectedEntry.item, selectedEntry.amount));
+            const results = [];
+            let pendingSale = null;
+            for (const selectedEntry of selectedEntries) {
+                const result = putInventoryObjectIntoContainer(container, selectedEntry.item, selectedEntry.amount);
+                results.push(result);
+                if (result.pendingSale) {
+                    pendingSale = result.pendingSale;
+                    break;
+                }
+                if (result.bagGone) break;
+            }
             const moved = results.some(result => result.moved);
             const bagGone = results.some(result => result.bagGone);
             const messages = results.flatMap(result => result.messages || (result.message ? [result.message] : []));
             clearContainerPutState();
+            if (pendingSale) {
+                clearContainerSequenceState();
+                game._floor_container_object = null;
+                game._shop_sale_pending = pendingSale;
+                game._command_mode = 'shopSaleConfirm';
+                if (moved || bagGone) game.context.move = 1;
+                await showIceBoxMessageList([...messages.filter(message => message !== pendingSale.promptMessage), pendingSale.promptMessage]);
+                return;
+            }
             if (!bagGone && game._container_sequence_after_putin === 'takeout') {
                 markContainerSequenceUsed(moved);
                 await continueContainerSequenceToTakeout(container, messages);
@@ -35093,6 +35288,12 @@ export async function rhack(_cmd) {
         const result = putInventoryObjectIntoContainer(container, item, item?.quan || 1);
         clearContainerPutState();
         game._floor_container_object = null;
+        if (result.pendingSale) {
+            game._shop_sale_pending = result.pendingSale;
+            game._command_mode = 'shopSaleConfirm';
+            await showIceBoxMessageList([result.pendingSale.promptMessage]);
+            return;
+        }
         game._command_mode = null;
         if (result.moved || result.bagGone) game.context.move = 1;
         await showIceBoxMessageList(result.messages || (result.message ? [result.message] : []));

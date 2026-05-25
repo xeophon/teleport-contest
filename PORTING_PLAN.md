@@ -36,6 +36,7 @@ The current audit source of truth is `docs/c-parity-audit/`.
 - Added starter `tipcontainer()` shop billing for ordinary objects tipped out of shop-floor containers, including floor and carried-target destinations plus stale-coordinate floor-source guards.
 - Added loose-gold shop-floor container billing for put-in, take-out, and tip flows using C-shaped credit/debit/loan transitions.
 - Added recursive shop-floor container billing for moved containers and contained gold across put-in, take-out, and tip flows.
+- Added accepted-sale prompts for shop-floor container put-in, including C-style `sellobj()` cash/credit handling for paid objects and containers placed into shop-floor containers.
 - Latest verified public score: `44/44`.
 
 ## Current Priorities
@@ -43,8 +44,8 @@ The current audit source of truth is `docs/c-parity-audit/`.
 1. Shop ledger foundation.
    - Source notes: `docs/c-parity-audit/05-food-inventory-containers-shops.md`.
    - Current JS tracks unpaid state on objects instead of a C-shaped bill ledger.
-   - Missing or partial concepts include full `addtobill`, full `subfrombill` routing, recursive/accepted-sale container `sellobj` edge cases, robbed/angry shopkeeper gold cases, `dropped_container`, `picked_container`, `check_unpaid_usage`, and `costly_alteration`.
-   - The next narrow C-backed gaps are accepted-sale prompts, robbed/angry shopkeeper gold cases, and shop billing for magic-bag loss/explosion.
+   - Missing or partial concepts include full `addtobill`, full `subfrombill` routing, remaining container `sellobj` edge cases, robbed/angry shopkeeper gold cases, `dropped_container`, `picked_container`, `check_unpaid_usage`, and `costly_alteration`.
+   - The next narrow C-backed gaps are robbed/angry shopkeeper gold cases, shop billing for magic-bag loss/explosion, and remaining dropped-container `sellobj()`/`dropped_container()` state.
 
 2. Object registry and canonical object factory.
    - Source notes: `docs/c-parity-audit/02-objects-wishing-readobjnam.md`.
@@ -83,8 +84,8 @@ The current audit source of truth is `docs/c-parity-audit/`.
 
 Continue the shop ledger migration:
 
-1. Broaden shop-floor container put-in, take-out, and tip beyond recursive billing into accepted sale prompts, lift limits, capacity/slot failures, and merge/destruction edge cases.
-2. Expand `sellobj()` beyond ordinary paid non-container objects to ordinary gold drops, accepted container sale prompts, robbed-shop, and angry-shopkeeper edge cases.
+1. Broaden shop-floor container take-out and tip beyond recursive billing into lift limits, capacity/slot failures, and merge/destruction edge cases; continue put-in through robbed/angry shopkeeper and magic-bag failure paths.
+2. Expand `sellobj()` beyond ordinary paid non-container objects and accepted shop-floor container put-in to ordinary gold drops, dropped-container sale state, robbed-shop, and angry-shopkeeper edge cases.
 3. Move payment toward a complete C `dopay()` model for containers, queued itemized selections, and robbed-shop interactions.
 
 ## Verification

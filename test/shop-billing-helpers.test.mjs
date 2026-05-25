@@ -114,6 +114,21 @@ function shopFloorContainer(id, x = 5, y = 5) {
     };
 }
 
+function shopFloorIceBox(id, x = 5, y = 5) {
+    return {
+        id,
+        cls: 'tool',
+        otyp: 216,
+        glyph: '(',
+        kind: 'ice box',
+        actualKind: 'ice box',
+        ox: x,
+        oy: y,
+        contents: [],
+        cknown: true,
+    };
+}
+
 function putObjectInContainer(container, obj) {
     obj.contained = true;
     obj.container = container;
@@ -260,6 +275,140 @@ test('cashless shopkeeper offers sale credit without changing hero gold', () => 
     assert.equal(shkp.credit, 1);
     assert.equal(game._goldCount, 0);
     assert.equal(dropped.no_charge, undefined);
+});
+
+test('putting paid merchandise into a shop-floor container accepts cash sale', () => {
+    const { shkp } = installShopState();
+    const container = shopFloorContainer(5051);
+    const item = dagger(5052, 'a');
+    game._goldCount = 5;
+    game.inventory = [item];
+    game.level.objects = [container];
+
+    const pending = shop.beginShopFloorContainerPutSale(container, item);
+
+    assert.equal(pending.prompt, true);
+    assert.equal(pending.credit, false);
+    assert.equal(pending.offer, 2);
+    assert.equal(game.inventory.includes(item), true);
+
+    const result = shop.finishShopFloorContainerPutSale(pending, true);
+
+    assert.equal(result.moved, true);
+    assert.equal(game.inventory.includes(item), false);
+    assert.equal(container.contents.includes(item), true);
+    assert.equal(item.contained, true);
+    assert.equal(item.container, container);
+    assert.notEqual(item.no_charge, true);
+    assert.notEqual(item.unpaid, true);
+    assert.equal(game._goldCount, 7);
+    assert.equal(shop.shopkeeperCash(shkp), 98);
+    assert.equal(shkp.credit || 0, 0);
+    assert.equal(shkp.billct, 0);
+});
+
+test('putting paid merchandise into a shop-floor ice box accepts cash sale', () => {
+    const { shkp } = installShopState();
+    const iceBox = shopFloorIceBox(5056);
+    const item = dagger(5057, 'a');
+    game._goldCount = 5;
+    game.inventory = [item];
+    game.level.objects = [iceBox];
+
+    const pending = shop.beginShopFloorContainerPutSale(iceBox, item);
+    assert.equal(pending.prompt, true);
+    assert.equal(pending.offer, 2);
+
+    const result = shop.finishShopFloorContainerPutSale(pending, true);
+
+    assert.equal(result.moved, true);
+    assert.equal(game.inventory.includes(item), false);
+    assert.equal(iceBox.contents.includes(item), true);
+    assert.notEqual(item.no_charge, true);
+    assert.equal(game._goldCount, 7);
+    assert.equal(shop.shopkeeperCash(shkp), 98);
+});
+
+test('putting paid merchandise into a shop-floor container declines cash sale', () => {
+    const { shkp } = installShopState();
+    const container = shopFloorContainer(5061);
+    const item = dagger(5062, 'a');
+    game._goldCount = 5;
+    game.inventory = [item];
+    game.level.objects = [container];
+
+    const pending = shop.beginShopFloorContainerPutSale(container, item);
+    const result = shop.finishShopFloorContainerPutSale(pending, false);
+
+    assert.equal(result.moved, true);
+    assert.equal(game.inventory.includes(item), false);
+    assert.equal(container.contents.includes(item), true);
+    assert.equal(item.no_charge, true);
+    assert.notEqual(item.unpaid, true);
+    assert.equal(game._goldCount, 5);
+    assert.equal(shop.shopkeeperCash(shkp), 100);
+    assert.equal(shkp.credit || 0, 0);
+    assert.equal(shkp.billct, 0);
+});
+
+test('putting paid merchandise into a shop-floor container accepts cashless credit sale', () => {
+    const { shkp } = installShopState();
+    shkp.minvent = [];
+    const container = shopFloorContainer(5071);
+    const item = dagger(5072, 'a');
+    game._goldCount = 5;
+    game.inventory = [item];
+    game.level.objects = [container];
+
+    const pending = shop.beginShopFloorContainerPutSale(container, item);
+
+    assert.equal(pending.prompt, true);
+    assert.equal(pending.credit, true);
+    assert.equal(pending.offer, 1);
+
+    const result = shop.finishShopFloorContainerPutSale(pending, true);
+
+    assert.equal(result.moved, true);
+    assert.equal(game.inventory.includes(item), false);
+    assert.equal(container.contents.includes(item), true);
+    assert.notEqual(item.no_charge, true);
+    assert.equal(game._goldCount, 5);
+    assert.equal(shop.shopkeeperCash(shkp), 0);
+    assert.equal(shkp.credit, 1);
+    assert.equal(shkp.billct, 0);
+});
+
+test('putting a paid container into a shop-floor container can sell saleable contents', () => {
+    const { shkp } = installShopState();
+    const target = shopFloorContainer(5081);
+    const bag = sack(5082, 'b');
+    const blade = putObjectInContainer(bag, dagger(5083));
+    game._goldCount = 5;
+    game.inventory = [bag];
+    game.level.objects = [target];
+
+    const pending = shop.beginShopFloorContainerPutSale(target, bag);
+    const expectedOffer = shop.shopSaleOffer(bag, shkp) + shop.shopSaleOffer(blade, shkp);
+
+    assert.equal(pending.prompt, true);
+    assert.equal(pending.credit, false);
+    assert.equal(pending.offer, expectedOffer);
+
+    const result = shop.finishShopFloorContainerPutSale(pending, true);
+
+    assert.equal(result.moved, true);
+    assert.equal(game.inventory.includes(bag), false);
+    assert.equal(target.contents.includes(bag), true);
+    assert.equal(bag.container, target);
+    assert.equal(blade.container, bag);
+    assert.notEqual(bag.no_charge, true);
+    assert.notEqual(blade.no_charge, true);
+    assert.notEqual(bag.unpaid, true);
+    assert.notEqual(blade.unpaid, true);
+    assert.equal(game._goldCount, 5 + expectedOffer);
+    assert.equal(shop.shopkeeperCash(shkp), 100 - expectedOffer);
+    assert.equal(shkp.credit || 0, 0);
+    assert.equal(shkp.billct, 0);
 });
 
 test('no-charge floor merchandise is not billed when picked back up', () => {
@@ -446,7 +595,9 @@ test('putting a carried container with contents into a shop-floor container dona
     game.inventory = [bag];
     game.level.objects = [target];
 
-    const result = shop.putInventoryObjectIntoContainer(target, bag);
+    const prompt = shop.putInventoryObjectIntoContainer(target, bag);
+    assert.equal(prompt.pendingSale.prompt, true);
+    const result = shop.finishShopFloorContainerPutSale(prompt.pendingSale, false);
 
     assert.equal(result.moved, true);
     assert.equal(game.inventory.includes(bag), false);
@@ -516,7 +667,10 @@ test('putting paid and no-charge items into a shop-floor container does not crea
     game.inventory = [paid, free];
     game.level.objects = [container];
 
-    assert.equal(shop.putInventoryObjectIntoContainer(container, paid).moved, true);
+    const paidPrompt = shop.putInventoryObjectIntoContainer(container, paid);
+    assert.equal(paidPrompt.moved, false);
+    assert.equal(paidPrompt.pendingSale.prompt, true);
+    assert.equal(shop.finishShopFloorContainerPutSale(paidPrompt.pendingSale, false).moved, true);
     assert.equal(shop.putInventoryObjectIntoContainer(container, free).moved, true);
 
     assert.equal(shkp.billct, 0);
@@ -539,7 +693,8 @@ test('shop-floor container put-in does not merge no-charge goods into chargeable
     game.inventory = [paid];
     game.level.objects = [container];
 
-    const result = shop.putInventoryObjectIntoContainer(container, paid);
+    const prompt = shop.putInventoryObjectIntoContainer(container, paid);
+    const result = shop.finishShopFloorContainerPutSale(prompt.pendingSale, false);
 
     assert.equal(result.moved, true);
     assert.equal(container.contents.length, 2);
