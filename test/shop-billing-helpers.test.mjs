@@ -2789,6 +2789,59 @@ test('no-charge floor merchandise is not billed when picked back up', () => {
     assert.equal(result.price, 0);
     assert.equal(shkp.billct, 0);
     assert.equal(carried.unpaid, undefined);
+    assert.equal(floorObj.no_charge, false);
+    assert.equal(carried.no_charge, false);
+});
+
+test('picking back up a declined dropped container clears recursive no-charge', async () => {
+    const { shkp } = installCommandShopState();
+    const bag = sack(6002, 'b');
+    const blade = putObjectInContainer(bag, dagger(6003));
+    bag.ox = 5;
+    bag.oy = 5;
+    game.level.objects = [bag];
+
+    const sale = shop.shopDroppedPaidObjectSaleInfo(bag, 5, 5);
+    shop.finishDroppedObjectSale({ ...sale, declineMessage: 'You drop a sack.' }, false);
+
+    assert.equal(bag.no_charge, true);
+    assert.equal(blade.no_charge, true);
+
+    await rhack(',');
+
+    const carried = game.inventory.find(item => item.id === bag.id);
+    assert.ok(carried);
+    assert.equal(game.level.objects.includes(bag), false);
+    assert.equal(carried.no_charge, false);
+    assert.equal(carried.unpaid, undefined);
+    assert.equal(carried.contents.includes(blade), true);
+    assert.equal(blade.no_charge, false);
+    assert.equal(blade.unpaid, undefined);
+    assert.equal(blade.container, carried);
+    assert.equal(shkp.billct, 0);
+});
+
+test('picking up a no-charge floor container bills chargeable contents', () => {
+    const { shkp } = installShopState();
+    const bag = sack(6004, 'b');
+    const blade = putObjectInContainer(bag, dagger(6005));
+    bag.no_charge = true;
+    bag.ox = 5;
+    bag.oy = 5;
+    const carried = { ...bag, line: 'b - a sack' };
+    const expectedPrice = shop.shopItemPrice(blade, 5, 5);
+
+    const result = shop.addPickedObjectToShopBill(bag, carried);
+
+    assert.equal(result.price, expectedPrice);
+    assert.equal(shop.shopBillEntryForObject(shkp, carried), null);
+    assert.equal(shop.shopBillEntryForObject(shkp, blade).bo_id, String(blade.id));
+    assert.equal(shkp.billct, 1);
+    assert.equal(bag.no_charge, false);
+    assert.equal(carried.no_charge, false);
+    assert.equal(blade.no_charge, false);
+    assert.equal(blade.unpaid, true);
+    assert.equal(blade.container, carried);
 });
 
 test('taking merchandise from a shop-floor container adds the carried object to the bill', () => {

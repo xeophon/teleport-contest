@@ -14822,8 +14822,8 @@ function resolveUnpaidProjectileShopLanding(obj, x, y, options = {}) {
 }
 
 function markNoChargeRecursively(obj) {
-    if (!obj || shopBillableGold(obj) || obj.unpaid) return;
-    obj.no_charge = true;
+    if (!obj || shopBillableGold(obj)) return;
+    if (!obj.unpaid) obj.no_charge = true;
     for (const child of globContents(obj)) markNoChargeRecursively(child);
 }
 
@@ -15565,6 +15565,15 @@ function addPickedObjectToShopBill(source, pickedItem) {
     if (x == null || y == null || shopBillableGold(source)) return { shkp: null, price: 0, billEntry: null };
     const shkp = shopkeeperForCostlySpot(x, y);
     if (!shopkeeperInHisShop(shkp)) return { shkp: null, price: 0, billEntry: null };
+    if (globContents(source).length) {
+        if (pickedItem && pickedItem !== source) normalizeContainedObjectParents(pickedItem);
+        return addContainerAndContentsToShopBill(source, source, pickedItem || source, shkp, x, y);
+    }
+    if (source.no_charge) {
+        source.no_charge = false;
+        if (pickedItem) pickedItem.no_charge = false;
+        return { shkp, price: 0, billEntry: null };
+    }
     const price = shopItemPrice(source, x, y);
     if (!(price > 0)) return { shkp, price: 0, billEntry: null };
     const billEntry = addObjectToShopBill(shkp, pickedItem, price);
@@ -42142,7 +42151,6 @@ export async function rhack(_cmd) {
             }
             if (skipShopQuote) game._skip_shop_quote_once = null;
             const amount = pickupObjectPhrase(objectHere);
-            const unpaidSuffix = shopPrice > 0 ? ` (unpaid, ${shopPrice} zorkmid${shopPrice === 1 ? '' : 's'})` : '';
             const name = pickupObjectName({ ...objectHere, quan: 1 });
             let existingFood = (objectHere.otyp === FOOD_CLASS || objectHere.cls === 'food')
                 && (game.inventory || []).find(item =>
@@ -42205,11 +42213,12 @@ export async function rhack(_cmd) {
                 kind: objectHere.kind || name,
                 quan: objectHere.quan || 1,
                 no_charge: undefined,
-                unpaid: shopPrice > 0,
-                unpaidPrice: shopPrice > 0 ? shopPrice : undefined,
-                line: `${letter} - ${amount}${unpaidSuffix}`,
+                line: `${letter} - ${amount}`,
             };
-            if (shopPrice > 0) addPickedObjectToShopBill(objectHere, pickedItem);
+            const { price: billedPrice } = addPickedObjectToShopBill(objectHere, pickedItem);
+            const unpaidSuffix = billedPrice > 0
+                ? ` (unpaid, ${billedPrice} zorkmid${billedPrice === 1 ? '' : 's'})`
+                : '';
             objectIceEffect(pickedItem, game.u?.ux || 0, game.u?.uy || 0, { onLevel: false });
             game.inventory = [...(game.inventory || []), pickedItem];
             maybeAttachCarriedFigurineTimeout(pickedItem);
