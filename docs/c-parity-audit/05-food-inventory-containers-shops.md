@@ -141,7 +141,7 @@ JS implements meaningful timing for tin openers, daggers/knives/picks/axes, bles
 
 Concrete gaps:
 
-- No `costly_tin()` equivalent for opening, destroying, or eating tins from a shop (`eat.c:1386-1402` vs `js/cmd.js:10394-10537`, `js/cmd.js:10574-10634`).
+- JS now has narrow `costly_tin(COST_OPEN/COST_DSTROY)`-style billing for opened or trap-destroyed tins, including one-tin stack splits before used-up billing; remaining tin gaps are exact C split/use-up integration across all effect paths, tin variety corrections, metallivore details, and full corpse pre/post effects.
 - Tin contents do not run the full `cprefx()`/`cpostfx()` corpse matrix; JS handles only selected outcomes.
 - C variety selection corrects rotten tins for non-rotting corpses and homemade tins with rot checks (`eat.c:1460-1512`); JS variety logic is simpler (`js/cmd.js:10346-10354`).
 - Metallivore tin nutrition is only partially represented; C gives the tin itself 5 nutrition in relevant paths (`eat.c:1560`, `eat.c:1256`).
@@ -202,7 +202,7 @@ Concrete gaps:
 - Payment now applies shop credit before cash for selected ledger rows and shrinks partly used bills before intact rows can clear them, but container itemized payment, full queued-selection behavior, and robbed-shop payment still do not match C.
 - `get_cost()` parity is incomplete: JS has base tables, unknown-name surcharge, enchantment surcharge, charisma adjustment, and pricing units (`js/cmd.js:18486-18713`), but not full C role/status/shopkeeper anger/tourist/dunce/artifact/contained/no-charge/price-quote side effects.
 - `check_unpaid_usage()` is still partial. JS now has a reusable debit-only helper with C-style charged-object fee branches and callers for bag/horn use, alternate emptying, and drum-of-earthquake charges, but remaining spellbook, oil, wand, marker, camera, grease, tinning-kit, lamp, and other charge-consuming callers still need to route through it.
-- Generic `costly_alteration()` is still partial. JS now covers unpaid food `COST_BITE`, plus local billing for buried merchandise and horn-created objects, but not the shared open/destroy/cancel/degrade billing hook used across C.
+- Generic `costly_alteration()` is still partial. JS now covers unpaid food `COST_BITE` and narrow tin `COST_OPEN/COST_DSTROY` paths, plus local billing for buried merchandise and horn-created objects, but not the shared open/destroy/cancel/degrade billing hook used across C.
 - Used-up unpaid items are not centralized. C `useup()`/`obfree()` preserve bills for consumed unpaid objects; JS only remembers selected corpse rot/glob shrink, projectile, payment, and magic-bag destruction paths.
 
 ## Recommended Implementation Slices
@@ -218,7 +218,7 @@ Concrete gaps:
    - Preserve interruption/resume behavior before expanding more corpse effects.
 
 3. Port tins on top of the ledger and victual/use-up helpers.
-   - Implement `costly_tin()`, C tin variety corrections, use-up ordering, metallivore nutrition, and full corpse pre/post effect routing for tin contents.
+   - Finish tin billing beyond the narrow `COST_OPEN/COST_DSTROY` path: exact C split/use-up integration across all effects, tin variety corrections, metallivore nutrition, and full corpse pre/post effect routing for tin contents.
    - Keep the current tin opener timing as a base, but drive billing and effects from C-shaped helpers.
 
 4. Port pickup/drop around shop and stack invariants.
@@ -237,7 +237,7 @@ Concrete gaps:
 
 ## Highest-Risk Current Behaviors
 
-- Tins and non-bite alterations can still avoid C billing because `costly_tin()` and generic non-bite `costly_alteration()` coverage are missing.
+- Tin paths outside the narrow open/trap-destroy billing slice and generic non-bite alterations can still avoid C billing because full `costly_tin()` integration and shared non-bite `costly_alteration()` coverage are still incomplete.
 - Multi-pickup still lacks full C quote/lift semantics, and split-stack object identity can still lose unpaid/shop state in non-projectile delete, container, and generic merge paths.
 - Container-moving objects in shops and complex drops still do not exercise full C `sellobj()`/`addtobill()`/`subfrombill()` paths outside ordinary dropped-container, angry/robbed `sellobj()` shopkeeper-state, ordinary gold drop/pickup paths, ordinary shop-floor magic-bag tip loss/put-in explosion slices, narrow carried magic-bag held-loss billing, and magic-bag scatter/useup plus destructive floor-effect preservation; special-stock/uninterested cases and generic merge/destruction paths remain high-risk.
 - Carried/non-ordinary loss sources/targets and destroyed recursive contents can still miss full C `obfree()` preservation and `stolen_value()` debt naming; carried held/blast-loss billing and selected scatter/useup preservation are covered through local helpers, not a general C-shaped subsystem.

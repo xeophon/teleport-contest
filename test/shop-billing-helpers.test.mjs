@@ -88,6 +88,27 @@ function chargedTool(id, kind, letter = 't', spe = 3) {
     };
 }
 
+function tin(id, letter = 't', quan = 1) {
+    return {
+        id,
+        cls: 'food',
+        glyph: '%',
+        kind: 'tin',
+        actualKind: 'tin',
+        singular: 'tin',
+        plural: 'tins',
+        quan,
+        ox: 5,
+        oy: 5,
+        letter,
+        line: `${letter || 't'} - ${quan > 1 ? `${quan} tins` : 'a tin'}`,
+        corpsenm: { name: 'newt' },
+        spe: -2,
+        known: true,
+        dknown: true,
+    };
+}
+
 function egg(id, letter = 'e', quan = 1) {
     return {
         id,
@@ -325,6 +346,82 @@ test('unpaid charged object with no remaining charges is not billed for usage', 
     assert.equal(shkp.debit || 0, 0);
     assert.equal(shkp.billct, 1);
     assert.equal(shop.shopBillEntryForObject(shkp, bag).useup, false);
+});
+
+test('costly tin opens one carried unpaid tin from a stack', () => {
+    const { shkp } = installShopState();
+    const stack = tin(3091, 't', 2);
+    game.inventory = [stack];
+    const unitPrice = shop.shopItemPrice({ ...stack, quan: 1 }, 5, 5);
+    shop.addObjectToShopBill(shkp, stack, unitPrice * 2);
+
+    const opened = shop.costlyTinForTest(stack, { floorObject: false, alterType: 'open' });
+
+    assert.notEqual(opened, stack);
+    assert.equal(game.inventory.includes(stack), true);
+    assert.equal(game.inventory.includes(opened), true);
+    assert.equal(stack.quan, 1);
+    assert.equal(opened.quan, 1);
+    assert.equal(stack.unpaid, true);
+    assert.equal(stack.unpaidPrice, unitPrice);
+    assert.notEqual(opened.unpaid, true);
+    assert.equal(opened.unpaidPrice, undefined);
+    assert.equal(shkp.billct, 2);
+    const live = shop.shopBillEntryForObject(shkp, stack);
+    const used = shop.shopBillEntryForObject(shkp, opened);
+    assert.ok(live);
+    assert.ok(used);
+    assert.equal(live.useup, false);
+    assert.equal(used.useup, true);
+    assert.equal(shop.shopBillEntryTotal(live), unitPrice);
+    assert.equal(shop.shopBillEntryTotal(used), unitPrice);
+    assert.equal(game._usedUpShopBills.some(bill => String(bill.bo_id) === String(opened.id)), true);
+});
+
+test('costly tin opens one shop-floor tin from a stack', () => {
+    const { shkp } = installShopState();
+    const stack = tin(3092, undefined, 2);
+    delete stack.letter;
+    delete stack.line;
+    game.level.objects = [stack];
+    const unitPrice = shop.shopItemPrice({ ...stack, quan: 1 }, 5, 5);
+
+    const opened = shop.costlyTinForTest(stack, { floorObject: true, alterType: 'open' });
+
+    assert.notEqual(opened, stack);
+    assert.equal(game.level.objects.includes(stack), true);
+    assert.equal(game.level.objects.includes(opened), true);
+    assert.equal(stack.quan, 1);
+    assert.equal(opened.quan, 1);
+    assert.equal(opened.no_charge, true);
+    assert.notEqual(opened.unpaid, true);
+    assert.notEqual(stack.unpaid, true);
+    assert.notEqual(stack.no_charge, true);
+    assert.equal(shkp.billct, 1);
+    const entry = shop.shopBillEntryForObject(shkp, opened);
+    assert.ok(entry);
+    assert.equal(entry.useup, true);
+    assert.equal(shop.shopBillEntryTotal(entry), unitPrice);
+    assert.equal(game._usedUpShopBills.some(bill => String(bill.bo_id) === String(opened.id)), true);
+});
+
+test('costly tin ignores no-charge shop-floor tins', () => {
+    const { shkp } = installShopState();
+    const floorTin = tin(3093, undefined, 2);
+    delete floorTin.letter;
+    delete floorTin.line;
+    floorTin.no_charge = true;
+    game.level.objects = [floorTin];
+
+    const opened = shop.costlyTinForTest(floorTin, { floorObject: true, alterType: 'open' });
+
+    assert.equal(opened, floorTin);
+    assert.equal(floorTin.quan, 2);
+    assert.equal(floorTin.no_charge, true);
+    assert.notEqual(floorTin.unpaid, true);
+    assert.equal(shkp.billct, 0);
+    assert.equal(shkp.bill.length, 0);
+    assert.deepEqual(game._usedUpShopBills || [], []);
 });
 
 test('first bite of unpaid carried food stack splits live and used-up bill rows', () => {

@@ -10455,6 +10455,61 @@ function consumeTinObject(tin, floorObject = false) {
     game._tin_opening_occupation = null;
 }
 
+function splitTinForCostlyAlteration(tin, floorObject = false) {
+    if (!tin || (tin.quan || 1) <= 1) return tin;
+    const split = { ...tin, id: next_ident(), quan: 1, line: '' };
+    tin.quan = (tin.quan || 1) - 1;
+    if (floorObject) {
+        delete split.letter;
+        delete split.line;
+        game.level.objects ??= [];
+        game.level.objects.push(split);
+        newsym(split.ox, split.oy);
+    } else {
+        split.letter = nextInventoryLetter();
+        if (tin.unpaid && !splitCarriedObjectShopBill(tin, split, 1))
+            clearObjectShopBillState(split);
+        refreshInventoryObjectLine(tin);
+        if (tin.unpaid) syncUnpaidBillLine(tin);
+        refreshInventoryObjectLine(split);
+        game.inventory.push(split);
+    }
+    return split;
+}
+
+function costlyTinAlteration(tin, { floorObject = false, alterType = 'open' } = {}) {
+    if (!tin) return tin;
+    const shouldBill = floorObject
+        ? (() => {
+            if (tin.no_charge) return false;
+            const x = tin.ox ?? game.u?.ux;
+            const y = tin.oy ?? game.u?.uy;
+            const itemShkp = shopkeeperForCostlySpot(x, y);
+            const heroShkp = shopkeeperForCostlySpot(game.u?.ux, game.u?.uy);
+            return !!itemShkp && sameShopkeeper(itemShkp, heroShkp) && shopkeeperInHisShop(itemShkp);
+        })()
+        : !!tin.unpaid;
+    if (!shouldBill) return tin;
+
+    const chargedTin = splitTinForCostlyAlteration(tin, floorObject);
+    if (floorObject) {
+        const x = chargedTin.ox ?? game.u?.ux;
+        const y = chargedTin.oy ?? game.u?.uy;
+        const shkp = shopkeeperForCostlySpot(x, y);
+        const entry = shopBillEntryForObject(shkp, chargedTin);
+        const price = entry ? shopBillEntryTotal(entry) : shopItemPrice(chargedTin, x, y);
+        if (price > 0 && (entry || addObjectToShopBill(shkp, chargedTin, price, { useup: true }))) {
+            markObjectShopBillUsedUp(chargedTin, shkp);
+            chargedTin.no_charge = true;
+        }
+        return chargedTin;
+    }
+
+    const { shkp } = shopkeeperOwningBillEntry(chargedTin);
+    markObjectShopBillUsedUp(chargedTin, shkp || heroShopkeeper());
+    return chargedTin;
+}
+
 function tinContentName(tin) {
     const monster = tin?.corpsenm;
     if (!monster?.name) return 'monster';
@@ -10495,6 +10550,7 @@ async function explodeTinTrap(tin, floorObject = false) {
         addHeroStatusSuffix('Stun');
     }
     exerciseAttribute(A_STR, false);
+    tin = costlyTinAlteration(tin, { floorObject, alterType: 'destroy' });
     consumeTinObject(tin, floorObject);
     await setMessage('KABOOM!!  The tin was booby-trapped!', true);
     game._command_mode = null;
@@ -10503,6 +10559,7 @@ async function explodeTinTrap(tin, floorObject = false) {
 
 async function finishTinContents(tin, floorObject = false, eat = true, knownVariety = null) {
     if (!eat) {
+        tin = costlyTinAlteration(tin, { floorObject });
         consumeTinObject(tin, floorObject);
         await setMessage('You discard the open tin.');
         game._command_mode = null;
@@ -10525,9 +10582,10 @@ async function finishTinContents(tin, floorObject = false, eat = true, knownVari
             game.u.acurr.a[A_STR] = after;
             if (game.u.amax?.a) game.u.amax.a[A_STR] = Math.max(game.u.amax.a[A_STR] || after, after);
         }
+        tin = costlyTinAlteration(tin, { floorObject });
+        consumeTinObject(tin, floorObject);
         const nutrition = tin.blessed ? 600 : !tin.cursed ? 400 + rnd(200) : 200 + rnd(400);
         addHeroNutrition(nutrition);
-        consumeTinObject(tin, floorObject);
         await setMessage(messages.join('  '), messages.length > 1);
         game._command_mode = null;
         game.context.move = 1;
@@ -10536,6 +10594,7 @@ async function finishTinContents(tin, floorObject = false, eat = true, knownVari
 
     if (!tin.corpsenm?.name || tin.emptyTin || objectKindKey(tin) === 'empty tin') {
         tin.known = true;
+        tin = costlyTinAlteration(tin, { floorObject });
         consumeTinObject(tin, floorObject);
         await setMessage("It turns out to be empty.");
         game._command_mode = null;
@@ -10549,20 +10608,22 @@ async function finishTinContents(tin, floorObject = false, eat = true, knownVari
     const sideEffect = applyTinMonsterSideEffects(tin);
     if (sideEffect) messages.push(sideEffect);
     tin.known = true;
+    let nutrition = null;
     if ((TIN_VARIETY_NUTRITION[r] || 0) < 0) {
         addHeroVomiting(rn1(15, 10));
     } else {
-        let nutrition = TIN_VARIETY_NUTRITION[r] || 0;
+        nutrition = TIN_VARIETY_NUTRITION[r] || 0;
         if (r === HOMEMADE_TIN)
             nutrition = Math.min(nutrition, CORPSE_NUTRITION.get(monsterName) || nutrition);
-        addHeroNutrition(nutrition);
     }
     if (TIN_GREASY_VARIETIES.has(r)) {
         const already = game.u?._glibTimeout || 0;
         if (game.u) game.u._glibTimeout = already + rn1(11, 5);
         messages.push(`Eating ${varietyText} food made your ${wornGlovesItem() ? 'gloves' : 'fingers'} ${already ? 'even more' : 'very'} slippery.`);
     }
+    tin = costlyTinAlteration(tin, { floorObject });
     consumeTinObject(tin, floorObject);
+    if (nutrition != null) addHeroNutrition(nutrition);
     await setMessage(messages.join('  '), messages.length > 1);
     game._command_mode = null;
     game.context.move = 1;
@@ -10577,6 +10638,8 @@ async function consumeOpenedTin(tin, floorObject = false, openMessage = 'You suc
     }
 
     if (!tin.corpsenm?.name && r !== SPINACH_TIN) {
+        tin.known = true;
+        tin = costlyTinAlteration(tin, { floorObject });
         consumeTinObject(tin, floorObject);
         await setMessage(`${openMessage}  It turns out to be empty.`, true);
         game._command_mode = null;
@@ -14153,6 +14216,7 @@ export const __shopBillingTestHooks = {
     subFromShopBill,
     subOneFromShopBill,
     checkUnpaidUsageForTest: checkUnpaidUsage,
+    costlyTinForTest: costlyTinAlteration,
     tipContainerContents,
     tipContainerIntoContainer,
     tipContainerToFloor,
