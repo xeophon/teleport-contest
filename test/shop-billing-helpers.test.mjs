@@ -3360,6 +3360,63 @@ test('loadstone floor pickup from a pile still bypasses burden prompt', async ()
     assert.equal(game.context.move, 1);
 });
 
+test('multi-pickup keeps earlier shop item when later selection runs out of slots', async () => {
+    const { shkp } = installCommandShopState();
+    fillInventoryLetters();
+    game.inventory = game.inventory.filter(item => item.letter !== 'Z');
+    const first = foodRation(6030);
+    const later = blankScroll(6031);
+    game.level.objects = [first, later];
+
+    await rhack(',');
+    assert.equal(game._command_mode, 'pickupList');
+
+    await rhack('a');
+    await rhack('b');
+    await rhack('\n');
+
+    const carried = game.inventory.find(item => item.id === first.id);
+    const entry = shop.shopBillEntryForObject(shkp, carried);
+
+    assert.ok(carried);
+    assert.equal(carried.letter, 'Z');
+    assert.ok(entry);
+    assert.equal(entry.useup, false);
+    assert.equal(game.level.objects.includes(first), false);
+    assert.equal(game.level.objects.includes(later), true);
+    assert.equal(game.inventory.some(item => item.id === later.id), false);
+    assert.equal(later.unpaid, undefined);
+    assert.equal(shkp.billct, 1);
+    assert.match(game._pending_message, /Z - a food ration/);
+    assert.match(game._pending_message, /knapsack cannot accommodate any more items/);
+    assert.equal(game.context.move, 1);
+});
+
+test('multi-pickup failed first selection still consumes an explicit pickup turn', async () => {
+    const { shkp } = installCommandShopState();
+    fillInventoryLetters();
+    const first = foodRation(6032);
+    const later = blankScroll(6033);
+    game.level.objects = [first, later];
+
+    await rhack(',');
+    assert.equal(game._command_mode, 'pickupList');
+
+    await rhack('a');
+    await rhack('b');
+    await rhack('\n');
+
+    assert.equal(game.level.objects.includes(first), true);
+    assert.equal(game.level.objects.includes(later), true);
+    assert.equal(game.inventory.some(item => item.id === first.id), false);
+    assert.equal(game.inventory.some(item => item.id === later.id), false);
+    assert.equal(first.unpaid, undefined);
+    assert.equal(later.unpaid, undefined);
+    assert.equal(shkp.billct, 0);
+    assert.match(game._pending_message, /knapsack cannot accommodate any more items/);
+    assert.equal(game.context.move, 1);
+});
+
 test('cursed loadstone cannot be dropped and non-cursed drop becomes cursed', async () => {
     installCommandShopState();
     game.level.rooms = [{ rtype: ROOM }];

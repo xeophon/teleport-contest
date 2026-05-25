@@ -79,7 +79,7 @@ This audit is based only on upstream C and current JS source inspection. It does
 
 ### Pickup, Drop, Containers, Tip
 
-- `js/cmd.js:24588-24674`: multi-object pickup menu.
+- `js/cmd.js:24588-24674`, `js/cmd.js:28361-28432`: multi-object pickup menu and sequential selected-object pickup, including C-style partial-success ordering where earlier successful objects remain picked up when a later selected object fails.
 - `js/cmd.js:33688-33774`: drop command, direct gold-drop donation, and unpaid-drop shop hook.
 - `js/cmd.js:37612-37683`, `js/cmd.js:37808-37933`: fired and thrown projectile split/landing paths.
 - `js/cmd.js:19609-20230`: container put-in menus, rejection checks, and transfer helpers.
@@ -161,14 +161,14 @@ Concrete gaps:
 
 C pickup computes what can be carried before transferring the object. `carry_count()` and `lift_object()` can reduce quantity, reject based on slots or special objects, ask burden prompts, and trigger special cases. `pick_obj()` calls `addtobill()` before `addinv()` so unpaid merges and bill identity stay correct.
 
-JS single pickup computes a shop price, shows a quote, and then transfers the picked object (`js/cmd.js:42200-42508`). It now has a starter floor-pickup preflight before transfer/billing for artifact blast/evasion/death, fatal barehanded cockatrice/chickatrice corpse touch, floor Rider corpse revival, maximum-carry failure, partial stack lifting, single-object burden prompts, gold lift splitting, inventory-slot failure, single-object scare-monster scroll handling, and loadstone weight/slot exceptions (`js/cmd.js:17000-17264`, `js/cmd.js:28684-28708`, `js/cmd.js:42302-42484`). Multi-pickup preflights selected non-gold objects before mutating floor or inventory state, then moves selected objects into inventory after ledger/merge checks (`js/cmd.js:28182-28288`).
+JS single pickup computes a shop price, shows a quote, and then transfers the picked object (`js/cmd.js:42200-42508`). It now has a starter floor-pickup preflight before transfer/billing for artifact blast/evasion/death, fatal barehanded cockatrice/chickatrice corpse touch, floor Rider corpse revival, maximum-carry failure, partial stack lifting, single-object burden prompts, gold lift splitting, inventory-slot failure, single-object scare-monster scroll handling, and loadstone weight/slot exceptions (`js/cmd.js:17000-17264`, `js/cmd.js:28684-28708`, `js/cmd.js:42302-42484`). Multi-pickup now processes selected floor objects sequentially, running preflight and transfer against current inventory state for each selected object, so earlier successful picked shop objects remain carried and billed if a later selected object fails (`js/cmd.js:28361-28432`).
 
 Concrete gaps:
 
-- Multi-object pickup still bypasses the C quote flow and preflights the full selected set before moving anything, so C's partial-success ordering after an earlier selected object succeeds and a later one fails is still incomplete; ordinary picked objects now enter the JS shop ledger and loadstones use the C weight exception in this path.
+- Multi-object pickup still bypasses the C quote flow, menu burden-confirmation flow, gold lift preflight, and scare-scroll special handling; ordinary picked objects now enter the JS shop ledger, selected objects run sequentially for C-style partial-success ordering, and loadstones use the C weight exception in this path.
 - Single food pickup and ordinary stackable non-food pickup now reject paid/unpaid mismatches and carry compatible same-price unpaid bill totals forward.
 - Bill ledger calls exist for ordinary shop pickup and compatible inventory merges, but they are not yet a full C `addtobill()`/`addinv()` merge invariant across every transfer path.
-- Lift limits are not full C parity: starter pre-transfer slot/max-carry failure, artifact/fatal-corpse touch gates, floor Rider corpse revival, single-object burden prompts, partial stack pickup, gold lift splitting, single-object scare-monster scroll pickup, and loadstone weight/slot exceptions exist for ordinary floor pickup, but multi-pickup burden semantics and partial-success ordering, boulder handling, scare-scroll multi-pickup and partial-stack prompt exactness, and the full artifact bane/silver/life-saving matrix remain incomplete.
+- Lift limits are not full C parity: starter pre-transfer slot/max-carry failure, artifact/fatal-corpse touch gates, floor Rider corpse revival, single-object burden prompts, partial stack pickup, gold lift splitting, single-object scare-monster scroll pickup, loadstone weight/slot exceptions, and multi-pickup partial-success ordering exist for ordinary floor pickup, but multi-pickup burden and gold-lift semantics, boulder handling, scare-scroll multi-pickup and partial-stack prompt exactness, and the full artifact bane/silver/life-saving matrix remain incomplete.
 - Stolen value when carrying merchandise out of a shop is not tied to recursive bill/container state the way `pick_obj()` and `stolen_value()` are in C.
 
 ### 5. Drop Flow Only Partially Implements `sellobj()` Semantics
@@ -249,7 +249,7 @@ Concrete gaps:
 ## Highest-Risk Current Behaviors
 
 - Tin paths outside the narrow open/trap-destroy and basic tinning-kit billing slices plus generic non-bite alterations can still avoid C billing because full `costly_tin()` integration and shared non-bite `costly_alteration()` coverage are still incomplete.
-- Multi-pickup still lacks full C quote/lift semantics, and split-stack object identity can still lose unpaid/shop state in non-projectile delete, container, and generic merge paths.
+- Multi-pickup still lacks full C quote, burden-prompt, gold-lift, and scare-scroll semantics, though selected-object partial-success ordering is now C-shaped; split-stack object identity can still lose unpaid/shop state in non-projectile delete, container, and generic merge paths.
 - Container-moving objects in shops and complex drops still do not exercise full C `sellobj()`/`addtobill()`/`subfrombill()` paths outside ordinary dropped-container, angry/robbed and special-stock/uninterested `sellobj()` branches, ordinary gold drop/pickup paths, ordinary shop-floor magic-bag tip loss/put-in explosion slices, narrow carried magic-bag held-loss billing, and magic-bag scatter/useup plus destructive floor-effect preservation; generic merge/destruction paths remain high-risk.
 - Carried/non-ordinary loss sources/targets and destroyed recursive contents can still miss full C `obfree()` preservation and `stolen_value()` debt naming; carried held/blast-loss billing, failed spellbook reads, carried fire destruction, hero-caused floor fire, and selected scatter/useup preservation are covered through local helpers, not a general C-shaped subsystem.
 - Payment is only partly backed by authoritative bill rows; container payment, robbed-shop repayment, and several legacy unpaid fallbacks still need C parity.

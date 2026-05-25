@@ -28363,21 +28363,6 @@ export async function rhack(_cmd) {
             const selected = pickup.entries
                 .filter(entry => selectedLetters.has(entry.letter))
                 .map(entry => entry.obj);
-            const preflightByObject = new Map();
-            for (const obj of selected) {
-                if (!obj || shopBillableGold(obj)) continue;
-                const preflight = await floorPickupPreflight(obj, { prompt: false, scareSpecial: false });
-                preflightByObject.set(obj, preflight);
-                if (!preflight.ok) {
-                    game._overlay_lines = null;
-                    game._overlay_hide_status = 0;
-                    game._command_mode = null;
-                    game._pickup_list = null;
-                    await setMessage(floorPickupPreflightMessage(preflight));
-                    game.context.move = preflight.move ? 1 : 0;
-                    return;
-                }
-            }
             const messages = [];
             const moved = [];
             for (const obj of selected) {
@@ -28387,7 +28372,11 @@ export async function rhack(_cmd) {
                     moved.push(obj);
                     continue;
                 }
-                const preflight = preflightByObject.get(obj);
+                const preflight = await floorPickupPreflight(obj, { prompt: false, scareSpecial: false });
+                if (!preflight.ok) {
+                    messages.push(floorPickupPreflightMessage(preflight));
+                    break;
+                }
                 if (preflight?.messages?.length) messages.push(...preflight.messages);
                 if (preflight?.skip) {
                     continue;
@@ -28440,7 +28429,7 @@ export async function rhack(_cmd) {
             game._pickup_list = null;
             newsym(game.u?.ux || 0, game.u?.uy || 0);
             await setMessage(messages.join('  '));
-            game.context.move = moved.length ? 1 : 0;
+            game.context.move = 1;
             return;
         }
         if (ch === '\x1b' || ch === ' ') {
