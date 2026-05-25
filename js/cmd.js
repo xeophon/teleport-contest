@@ -16524,6 +16524,152 @@ function magicBagScatterWeight(obj) {
     return Math.max(0, globObjectWeight(obj) || obj?.owt || obj?.weight || floorEffectsObjectWeight(obj));
 }
 
+function magicBagScatterMonsterAt(x, y) {
+    return (game.level?.monsters || []).find(mon =>
+        mon.mx === x && mon.my === y && !mon.dead && (mon.mhp == null || mon.mhp > 0));
+}
+
+function magicBagScatterObjectName(obj) {
+    return pickupObjectName({ ...obj, quan: Math.max(1, obj?.quan || 1) });
+}
+
+function magicBagScatterMissileName(obj) {
+    return pickupObjectName({ ...obj, quan: 1 });
+}
+
+function magicBagScatterObjectArticle(obj) {
+    const name = magicBagScatterObjectName(obj);
+    return (obj?.quan || 1) > 1 ? name : articleFor(name);
+}
+
+function magicBagScatterMonsterHitBonus(mon) {
+    const data = mon?.data || {};
+    let bonus = data.verysmall || data.tiny ? -2 : data.small ? -1 : 0;
+    if (data.big || data.bigmonst || data.large || data.strong) bonus += 2;
+    if (mon?.msleeping) bonus += 2;
+    if (mon?.mcanmove === 0 || data.mmove === 0) bonus += 4;
+    return bonus;
+}
+
+function magicBagScatterObjectHitBonus(obj) {
+    if (obj?.otyp === HEAVY_IRON_BALL) return 2;
+    if (obj?.otyp === BOULDER) return 6;
+    const cls = obj?.cls || (obj?.otyp === GEM_CLASS ? 'gem' : obj?.otyp === WEAPON_CLASS ? 'weapon' : '');
+    return (cls === 'weapon' || cls === 'gem' || obj?.glyph === ')') ? (obj?.spe || 0) : 0;
+}
+
+function magicBagScatterHitConsumesObject(obj) {
+    const kind = objectKindKey(obj);
+    return isPotionObject(obj)
+        || obj?.otyp === CREAM_PIE || kind === 'cream pie'
+        || obj?.otyp === EGG || kind === 'egg'
+        || obj?.cls === 'venom';
+}
+
+function magicBagScatterKillVerb(mon) {
+    const data = mon?.data || {};
+    return data.nonliving || data.mlet === 'Z' || data.mlet === 'zombie'
+        || data.glyph === 'Z' || data.name?.includes('zombie') || data.name?.endsWith(' golem')
+        ? 'destroyed'
+        : 'killed';
+}
+
+function magicBagScatterCorpseData(mon) {
+    const data = mon?.data || {};
+    return data.corpse
+        || (data.name?.endsWith(' zombie') ? monsterByRndName(data.name.replace(/ zombie$/, '')) : null)
+        || data;
+}
+
+function magicBagScatterRemoveKilledMonster(mon, messages) {
+    const data = mon?.data || {};
+    const corpseData = magicBagScatterCorpseData(mon);
+    const dropCorpse = monsterLeavesCorpseLikeDrop(corpseData)
+        && monsterCorpseDropSucceeds(mon, data);
+    dropMonsterInventory(mon, messages);
+    if (dropCorpse) createMonsterCorpseOrGlob(mon, corpseData, mon.mx, mon.my, { messages });
+    recordVanquished(mon, !game._monster_moving);
+    const loc = game.level?.at(mon.mx, mon.my);
+    if (loc?.map_invisible) {
+        loc.map_invisible = false;
+        loc.remembered_glyph = null;
+    }
+    game.level.monsters = (game.level?.monsters || []).filter(other => other !== mon);
+    mon.mhp = 0;
+    mon.dead = true;
+    mon.movement = 0;
+    newsym(mon.mx, mon.my);
+}
+
+function magicBagScatterHitMonster(mon, obj, x, y, messages) {
+    const visible = floorObjectVisible(x, y);
+    const monsterName = fireScrollMonsterName(mon).replace(/^The /, 'the ');
+    const toHit = 5 + (mon?.data?.mac ?? 10)
+        + magicBagScatterMonsterHitBonus(mon)
+        + magicBagScatterObjectHitBonus(obj);
+    if (toHit < rnd(20)) {
+        if (visible)
+            messages.push(`${sentenceCase(articleFor(magicBagScatterMissileName(obj)))} misses ${monsterName}.`);
+        return { stopped: false, consumed: false };
+    }
+
+    const consumedOnHit = magicBagScatterHitConsumesObject(obj);
+    const damage = consumedOnHit ? 0 : earthObjectDamage(obj, mon);
+    mon.msleeping = 0;
+    if (visible) {
+        const punct = damage > 4 ? '!' : '.';
+        messages.push(`${sentenceCase(articleFor(magicBagScatterMissileName(obj)))} hits ${monsterName}${punct}`);
+    }
+    if (damage > 0) mon.mhp = (mon.mhp || 1) - damage;
+    if ((mon.mhp || 0) <= 0) {
+        if (visible)
+            messages.push(`${fireScrollMonsterName(mon)} is ${magicBagScatterKillVerb(mon)}!`);
+        magicBagScatterRemoveKilledMonster(mon, messages);
+    } else if (!game._monster_moving) {
+        mon.mpeaceful = false;
+    }
+
+    if (consumedOnHit) {
+        destroyMagicBagItem(obj, messages, { silent: true });
+        newsym(x, y);
+        return { stopped: true, consumed: true };
+    }
+    placeObjectOnFloorWithEffects(obj, x, y, messages, 'land', { stack: true });
+    return { stopped: true, consumed: false };
+}
+
+function magicBagScatterHitHero(obj, messages) {
+    if (!game.u) return { hit: false, consumed: false };
+    const form = polyselfForm() || {};
+    const damage = earthObjectDamage(obj, { data: form });
+    const hitValue = 8 + (obj?.spe || 0) + (form.big || form.bigmonst ? 1 : 0);
+    const roll = rnd(20);
+    const objectName = magicBagScatterObjectArticle(obj);
+    if ((game.u.uac ?? 10) + hitValue <= roll) {
+        if (game.u.blind || game.flags?.verbose === false) messages.push('It misses.');
+        else if ((game.u.uac ?? 10) + hitValue <= roll - 2)
+            messages.push(`${sentenceCase(objectName)} misses you.`);
+        else
+            messages.push(`You are almost hit by ${objectName}.`);
+        return { hit: false, consumed: false };
+    }
+
+    if (game.u.blind || game.flags?.verbose === false) messages.push(`You are hit${damage > 4 ? '!' : '.'}`);
+    else messages.push(`You are hit by ${objectName}${damage > 4 ? '!' : '.'}`);
+    if (magicBagScatterHitConsumesObject(obj)) {
+        destroyMagicBagItem(obj, messages, { silent: true });
+        return { hit: true, consumed: true };
+    }
+    if (damage > 0) {
+        game.u.uhp = Math.max(0, (game.u.uhp || 1) - damage);
+        if ((game.u.uhp || 0) <= 0) {
+            game._death_cause = `killed by ${magicBagScatterObjectName(obj)}`;
+            messages.push('You die...');
+        }
+    }
+    return { hit: true, consumed: false };
+}
+
 function scatterMagicBagObject(container, obj, sx, sy, messages) {
     const scatterObj = splitMagicBagScatterStack(obj);
     if (scatterObj !== obj) {
@@ -16550,10 +16696,18 @@ function scatterMagicBagObject(container, obj, sx, sy, messages) {
         x = nx;
         y = ny;
         if (loc.typ === SINK) break;
-        if ((game.level?.monsters || []).some(mon => mon.mx === x && mon.my === y && !mon.dead))
-            break;
-        if (game.u?.ux === x && game.u?.uy === y)
-            break;
+        const mon = magicBagScatterMonsterAt(x, y);
+        if (mon) {
+            range--;
+            const hit = magicBagScatterHitMonster(mon, scatterObj, x, y, messages);
+            if (hit.stopped) return;
+            continue;
+        }
+        if (game.u?.ux === x && game.u?.uy === y) {
+            const hit = magicBagScatterHitHero(scatterObj, messages);
+            if (hit.consumed) return;
+            if (hit.hit) range -= 3;
+        }
     }
     placeObjectOnFloorWithEffects(scatterObj, x, y, messages, 'land', { stack: true });
 }

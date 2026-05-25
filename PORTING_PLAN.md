@@ -2731,6 +2731,14 @@ Next concrete target:
   and stacking. Direct smokes cover content-loaded explosions scattering
   survivors off the hero square while preserving cursed-bag vanish and `#tip`
   explosion behavior.
+  Scatter now follows the first object-combat branch of C `scatter()`:
+  monster encounters spend the extra range unit, roll to-hit before damage,
+  miss without stopping when range remains, and on hit wake/anger/damage or
+  remove the monster before landing or consuming the object at the impact
+  square. The hero branch now uses a `thitu()`-style hit/miss check, damage
+  application, potion-style consumption, and the extra range penalty for hits.
+  A direct smoke forces bag-explosion darts into adjacent monsters to cover
+  the new hit path.
   Generated ice-box corpses are explicitly frozen at creation while the generic
   `add_to_container()` helper remains neutral like C; the floor put-in/stash
   paths freeze selected inventory objects immediately before insertion, and
@@ -2741,7 +2749,8 @@ Next concrete target:
   takeout/tip/put-in/stash/both-order/glob-timer/bag-horn-apply smokes,
   focused replays, and full score remain exact. Remaining ice-box work is
   nested `in_container()`/`out_container()` variants, bag-of-tricks/horn shop
-  usage billing, magic-bag scatter hit/combat details and shop billing,
+  usage billing, full magic-bag `ohitmon()`/`thitu()` special cases and shop
+  billing,
   troll/Rider revive and zombify timers, forced ice-box destruction, and shop
   billing edge cases.
 - Remaining ice work outside this fire-ray terrain slice includes the broader
