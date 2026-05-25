@@ -7225,11 +7225,37 @@ export function inventoryItemName(item) {
 }
 
 const ARTIFACT_ALIGN_TYPE = { lawful: 1, neutral: 0, chaotic: -1 };
+const QUEST_ARTIFACT_ALIGN_TYPE = Object.freeze({
+    'The Orb of Detection': 1,
+    'The Heart of Ahriman': 0,
+    'The Sceptre of Might': 1,
+    'The Staff of Aesculapius': 0,
+    'The Magic Mirror of Merlin': 1,
+    'The Eyes of the Overworld': 0,
+    'The Mitre of Holiness': 1,
+    'The Longbow of Diana': -1,
+    'The Master Key of Thievery': -1,
+    'The Tsurugi of Muramasa': 1,
+    'The Platinum Yendorian Express Card': 0,
+    'The Orb of Fate': 0,
+    'The Eye of the Aethiopica': 0,
+});
+
+function artifactAlignmentType(def) {
+    if (!def) return null;
+    const explicit = ARTIFACT_ALIGN_TYPE[def.alignment];
+    if (explicit != null) return explicit;
+    return QUEST_ARTIFACT_ALIGN_TYPE[def.name] ?? null;
+}
+
+function artifactIsRestricted(def) {
+    return !!def?.restricted || !!def?.questArtifact;
+}
 
 function touchArtifact(item) {
     const def = artifactDefinitionForName(item?.artifact);
-    if (!def?.restricted || def.alignment == null || def.alignment === 'none') return;
-    const artifactAlign = ARTIFACT_ALIGN_TYPE[def.alignment];
+    if (!artifactIsRestricted(def)) return;
+    const artifactAlign = artifactAlignmentType(def);
     if (artifactAlign == null) return;
     const heroAlign = game.u?.ualign?.type ?? 0;
     const alignRecord = game.u?.ualign?.record ?? 0;
@@ -16916,6 +16942,45 @@ function containerTakeoutLiftableCount(container, obj, currentWeight, goldCount 
     return low;
 }
 
+function containerTakeoutArtifactRefusalMessage(obj) {
+    const def = artifactDefinitionForName(obj?.artifact);
+    if (!def) return '';
+    const heroRole = game._startup_role || game.urole?.name?.m || '';
+    const badClass = !!def.questArtifact && !!def.questRole && def.questRole !== heroRole;
+    const artifactAlign = artifactAlignmentType(def);
+    const badAlign = artifactIsRestricted(def) && artifactAlign != null
+        && (artifactAlign !== (game.u?.ualign?.type ?? 0) || (game.u?.ualign?.record ?? 0) < 0);
+    if (!(badClass && badAlign)) return '';
+    touchArtifact(obj);
+    return `${obj.artifact || pickupObjectName(obj)} evades your grasp!`;
+}
+
+function isPetrifyingCorpseObject(obj) {
+    if (!(obj?.otyp === CORPSE || obj?.otyp === 'corpse')) return false;
+    const name = corpseMonsterName(obj).toLowerCase();
+    return name === 'cockatrice' || name === 'chickatrice' || !!obj?.corpsenm?.touchPetrifies;
+}
+
+function containerTakeoutFatalCorpseMessage(obj) {
+    if (!isPetrifyingCorpseObject(obj) || wornGlovesItem() || game.u?.stoneResistance)
+        return '';
+    if (heroPolyselfResistsStoning()) return '';
+    const polyselfMessage = maybeTurnPolyselfIntoStoneGolem();
+    if (polyselfMessage) return '';
+    const name = corpseMonsterName(obj).toLowerCase() || 'cockatrice';
+    if (game.u) game.u.uhp = 0;
+    game._death_cause = `petrified by a ${name} corpse`;
+    return `Touching ${pickupObjectPhrase({ ...obj, quan: 1 })} is a fatal mistake.`;
+}
+
+function containerTakeoutPreliftCheck(obj) {
+    const artifactMessage = containerTakeoutArtifactRefusalMessage(obj);
+    if (artifactMessage) return { ok: true, skip: true, message: artifactMessage };
+    const fatalMessage = containerTakeoutFatalCorpseMessage(obj);
+    if (fatalMessage) return { ok: false, fatal: true, message: fatalMessage };
+    return { ok: true, skip: false, message: '' };
+}
+
 function containerTakeoutPreflight(container, entries) {
     let currentWeight = heroCarriedWeight();
     let gold = Math.max(0, Math.trunc(Number(game._goldCount || 0)));
@@ -16928,6 +16993,12 @@ function containerTakeoutPreflight(container, entries) {
     for (const entry of entries || []) {
         const obj = entry?.item || entry;
         if (!obj) continue;
+        const prelift = containerTakeoutPreliftCheck(obj);
+        if (!prelift.ok) return prelift;
+        if (prelift.skip) {
+            if (prelift.message) messages.push(prelift.message);
+            continue;
+        }
         const originalCount = Math.max(1, Math.trunc(Number(obj.quan || 1)));
         const takeCount = containerTakeoutLiftableCount(container, obj, currentWeight, gold);
         if (takeCount < 1) {
@@ -20278,6 +20349,18 @@ function splitContainerTakeoutObjectForLift(obj, count) {
 
 async function finishContainerTakeoutSelection(container, picked, preflightMessages = []) {
     const messages = [...(preflightMessages || [])];
+    if (!(picked || []).length) {
+        clearContainerTakeoutState();
+        game._floor_container_object = null;
+        game._overlay_lines = null;
+        game._overlay_hide_status = 0;
+        clearIceBoxSequenceState();
+        clearContainerSequenceState();
+        game._command_mode = null;
+        game.context.move = 0;
+        await showIceBoxMessageList(messages);
+        return;
+    }
     const moved = [];
     for (const pickedEntry of picked || []) {
         const source = pickedEntry.item;

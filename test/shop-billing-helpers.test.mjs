@@ -2885,6 +2885,84 @@ test('container take-out capacity preflight refuses objects beyond maximum carry
     assert.equal(game.context.move || 0, 0);
 });
 
+test('container take-out artifact refusal happens before billing or extraction', async () => {
+    const { shkp } = installCommandShopState();
+    const container = shopFloorContainer(6133);
+    const artifact = putObjectInContainer(container, {
+        id: 6134,
+        cls: 'tool',
+        glyph: '(',
+        kind: 'crystal ball',
+        actualKind: 'crystal ball',
+        artifact: 'The Orb of Detection',
+        quan: 1,
+    });
+    game.level.objects = [container];
+    game._startup_role = 'Wizard';
+    game.u.ualign = { type: -1, record: 0 };
+
+    await confirmSingleContainerTakeout(container, artifact, 'a', 'Tools');
+
+    assert.match(game._pending_message, /Orb of Detection evades your grasp/);
+    assert.equal(container.contents.includes(artifact), true);
+    assert.equal(game.inventory.includes(artifact), false);
+    assert.equal(artifact.contained, true);
+    assert.equal(artifact.container, container);
+    assert.equal(artifact.unpaid, undefined);
+    assert.equal(shkp.billct, 0);
+    assert.equal(shkp.bill.length, 0);
+    assert.equal(game.context.move || 0, 0);
+});
+
+test('container take-out fatal corpse touch precedes slot preflight and billing', async () => {
+    const { shkp } = installCommandShopState();
+    const container = shopFloorContainer(6136);
+    const body = putObjectInContainer(container, corpse(6137, 'c', 'cockatrice'));
+    game.level.objects = [container];
+    fillInventoryLetters();
+
+    await confirmSingleContainerTakeout(container, body);
+
+    assert.match(game._pending_message, /Touching a cockatrice corpse is a fatal mistake/);
+    assert.doesNotMatch(game._pending_message, /knapsack cannot accommodate/);
+    assert.equal(container.contents.includes(body), true);
+    assert.equal(game.inventory.includes(body), false);
+    assert.equal(body.contained, true);
+    assert.equal(body.container, container);
+    assert.equal(body.unpaid, undefined);
+    assert.equal(shkp.billct, 0);
+    assert.equal(shkp.bill.length, 0);
+    assert.equal(game.u.uhp, 0);
+    assert.equal(game._death_cause, 'petrified by a cockatrice corpse');
+});
+
+test('worn gloves allow dangerous corpse take-out without fatal touch', async () => {
+    const { shkp } = installCommandShopState();
+    const container = shopFloorContainer(6138);
+    const body = putObjectInContainer(container, corpse(6139, 'c', 'cockatrice'));
+    game.level.objects = [container];
+    game.inventory = [{
+        id: 6140,
+        cls: 'armor',
+        glyph: '[',
+        kind: 'leather gloves',
+        actualKind: 'leather gloves',
+        letter: 'g',
+        line: 'g - a pair of leather gloves (being worn)',
+        worn: true,
+    }];
+
+    await confirmSingleContainerTakeout(container, body);
+
+    assert.doesNotMatch(game._pending_message, /fatal mistake/);
+    assert.equal(container.contents.includes(body), false);
+    assert.equal(game.inventory.includes(body), true);
+    assert.equal(game.u.uhp, 10);
+    assert.equal(game._death_cause || '', '');
+    assert.equal(shkp.billct, 0);
+    assert.equal(game.context.move, 1);
+});
+
 test('declined container take-out burden prompt leaves merchandise untouched', async () => {
     const { shkp } = installCommandShopState();
     const container = shopFloorContainer(6134);
