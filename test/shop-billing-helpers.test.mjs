@@ -2885,6 +2885,54 @@ test('container take-out capacity preflight refuses objects beyond maximum carry
     assert.equal(game.context.move || 0, 0);
 });
 
+test('full inventory allows no-charge container take-out into a paid stack', async () => {
+    const { shkp } = installCommandShopState();
+    const container = shopFloorContainer(6141);
+    const contained = putObjectInContainer(container, { ...dagger(6142), no_charge: true });
+    game.level.objects = [container];
+    fillInventoryLetters();
+    const target = game.inventory[0];
+
+    await confirmSingleContainerTakeout(container, contained, 'a', 'Weapons');
+
+    assert.doesNotMatch(game._pending_message, /knapsack cannot accommodate any more items/);
+    assert.equal(container.contents.includes(contained), false);
+    assert.equal(game.inventory.length, INVENTORY_LETTERS.length);
+    assert.equal(game.inventory.includes(contained), false);
+    assert.equal(target.quan, 2);
+    assert.notEqual(target.unpaid, true);
+    assert.equal(shop.shopBillEntryForObject(shkp, target), null);
+    assert.equal(shkp.billct, 0);
+    assert.equal(game.context.move, 1);
+});
+
+test('full inventory allows shop-floor container take-out into a compatible unpaid stack', async () => {
+    const { shkp } = installCommandShopState();
+    const container = shopFloorContainer(6144);
+    const contained = putObjectInContainer(container, dagger(6145));
+    game.level.objects = [container];
+    fillInventoryLetters();
+    const target = game.inventory[0];
+    const price = shop.shopItemPrice(contained, container.ox, container.oy);
+    shop.addObjectToShopBill(shkp, target, price);
+
+    await confirmSingleContainerTakeout(container, contained, 'a', 'Weapons');
+
+    const entry = shop.shopBillEntryForObject(shkp, target);
+    assert.doesNotMatch(game._pending_message, /knapsack cannot accommodate any more items/);
+    assert.equal(container.contents.includes(contained), false);
+    assert.equal(game.inventory.length, INVENTORY_LETTERS.length);
+    assert.equal(game.inventory.includes(contained), false);
+    assert.equal(target.quan, 2);
+    assert.equal(target.unpaid, true);
+    assert.equal(entry.bquan, 2);
+    assert.equal(shop.shopBillEntryTotal(entry), price * 2);
+    assert.equal(target.unpaidPrice, price * 2);
+    assert.match(target.line, new RegExp(`unpaid, ${price * 2} zorkmids?`));
+    assert.equal(shkp.billct, 1);
+    assert.equal(game.context.move, 1);
+});
+
 test('taking gold from a shop-floor container charges debt and merges into hero gold', () => {
     const { shkp } = installShopState();
     const container = shopFloorContainer(6151);

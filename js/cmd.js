@@ -15802,6 +15802,72 @@ function mergePickedObjectIntoInventory(source, target) {
     return `${target.letter} - ${pickedPhrase} (${target.quan} in total).`;
 }
 
+function containerTakeoutInventorySourceView(container, obj) {
+    return {
+        ...obj,
+        cls: obj?.cls || (obj?.otyp === GEM_CLASS ? 'gem'
+            : obj?.otyp === SCROLL_CLASS ? 'scroll'
+                : obj?.glyph === '+' ? 'spellbook' : obj?.cls),
+        kind: obj?.kind || pickupObjectName({ ...(obj || {}), quan: 1 }),
+        no_charge: false,
+        ox: container?.ox ?? obj?.ox,
+        oy: container?.oy ?? obj?.oy,
+    };
+}
+
+function containerTakeoutMergeBilling(container, obj) {
+    const shkp = shopFloorContainerShopkeeper(container);
+    if (!shkp || obj?.unpaid || obj?.no_charge || globContents(obj).length)
+        return { shkp, price: 0, sourceWillBeUnpaid: false };
+    const x = container?.ox;
+    const y = container?.oy;
+    const price = x == null || y == null ? 0 : shopItemPrice(obj, x, y);
+    return {
+        shkp,
+        price,
+        sourceWillBeUnpaid: price > 0 && shopkeeperInHisShop(shkp),
+    };
+}
+
+function containerTakeoutBillMergeCompatible(source, target, billing) {
+    if (!billing.sourceWillBeUnpaid) return true;
+    const entry = shopBillEntryForObject(billing.shkp, target);
+    const targetCount = Math.max(1, Math.trunc(Number(target?.quan || 1)));
+    const sourceCount = Math.max(1, Math.trunc(Number(source?.quan || 1)));
+    const existingTotal = entry ? shopBillEntryTotal(entry) : unpaidBillPrice(target);
+    return existingTotal > 0 && existingTotal * sourceCount === billing.price * targetCount;
+}
+
+function findContainerTakeoutInventoryMergeTarget(container, obj) {
+    if (!obj || shopBillableGold(obj) || obj.unpaid) return null;
+    const source = containerTakeoutInventorySourceView(container, obj);
+    if (!pickupObjectCanInventoryMerge(source)) return null;
+    const billing = containerTakeoutMergeBilling(container, obj);
+    for (const target of game.inventory || []) {
+        if (!pickedObjectInventoryMergeCompatible(target, source, billing.sourceWillBeUnpaid, billing.shkp)) continue;
+        if (!containerTakeoutBillMergeCompatible(source, target, billing)) continue;
+        return { target, source, billing };
+    }
+    return null;
+}
+
+function mergeContainerTakeoutObjectIntoInventory(container, obj, mergeInfo) {
+    const { target, source, billing } = mergeInfo;
+    prepareContainerTakeoutObject(container, obj);
+    Object.assign(obj, {
+        cls: source.cls,
+        kind: source.kind,
+        no_charge: false,
+    });
+    if (billing.sourceWillBeUnpaid) {
+        const billSource = { ...obj, ox: container?.ox, oy: container?.oy, no_charge: false };
+        mergePickedObjectIntoShopBill(billSource, target, billing.price);
+    }
+    const line = mergePickedObjectIntoInventory(obj, target);
+    maybeAttachCarriedFigurineTimeout(target);
+    return line;
+}
+
 function sellobjReturnUnpaidToShop(obj, x, y) {
     if (!obj?.unpaid || shopBillableGold(obj) || globContents(obj).length) return false;
     const shkp = shopkeeperForCostlySpot(x, y);
@@ -16804,8 +16870,10 @@ function projectedContainerTakeoutWeight(container, objects) {
 
 function containerTakeoutPreflight(container, entries) {
     const objects = (entries || []).map(entry => entry?.item || entry).filter(Boolean);
-    const nonGoldCount = objects.filter(obj => !shopBillableGold(obj)).length;
-    if (nonGoldCount && !simulatedNextInventoryLetters(nonGoldCount)) {
+    const newSlotCount = objects
+        .filter(obj => !shopBillableGold(obj) && !findContainerTakeoutInventoryMergeTarget(container, obj))
+        .length;
+    if (newSlotCount && !simulatedNextInventoryLetters(newSlotCount)) {
         return {
             ok: false,
             message: 'Your knapsack cannot accommodate any more items.',
@@ -20092,13 +20160,20 @@ function prepareContainerTakeoutObject(container, obj) {
 }
 
 function addContainerTakeoutObjectToInventory(container, obj) {
-    prepareContainerTakeoutObject(container, obj);
     if (shopBillableGold(obj)) {
+        prepareContainerTakeoutObject(container, obj);
         const amount = Math.max(1, Math.trunc(Number(obj.quan || 1)));
         addContainerTakeoutObjectToShopBill(container, obj, obj);
         addGoldToHero(amount);
         return `$ - ${amount} gold piece${amount === 1 ? '' : 's'}`;
     }
+    const mergeInfo = findContainerTakeoutInventoryMergeTarget(container, obj);
+    if (mergeInfo) {
+        const line = mergeContainerTakeoutObjectIntoInventory(container, obj, mergeInfo);
+        game._pet_food_scan_inventory = game.inventory;
+        return line;
+    }
+    prepareContainerTakeoutObject(container, obj);
     const letter = nextInventoryLetter();
     Object.assign(obj, {
         cls: obj.cls || (obj.otyp === GEM_CLASS ? 'gem'
@@ -38240,28 +38315,8 @@ export async function rhack(_cmd) {
             const messages = [];
             for (const pickedEntry of picked) {
                 const obj = pickedEntry.item;
-                if (obj.otyp === GOLD_PIECE || obj.cls === 'coin' || obj.glyph === '$') {
-                    const amount = obj.quan || 1;
-                    addContainerTakeoutObjectToInventory(container, obj);
-                    messages.push(`$ - ${amount} gold piece${amount === 1 ? '' : 's'}.`);
-                    continue;
-                }
-                const letter = nextInventoryLetter();
-                prepareContainerTakeoutObject(container, obj);
-                const amount = pickupObjectPhrase(obj);
-                const pickedItem = isIceBoxObject(container) ? obj : { ...obj };
-                Object.assign(pickedItem, {
-                    cls: obj.cls || (obj.otyp === GEM_CLASS ? 'gem'
-                        : obj.otyp === SCROLL_CLASS ? 'scroll'
-                            : obj.glyph === '+' ? 'spellbook' : obj.cls),
-                    letter,
-                    kind: obj.kind || pickupObjectName({ ...obj, quan: 1 }),
-                    line: `${letter} - ${amount}`,
-                });
-                addContainerTakeoutObjectToShopBill(container, obj, pickedItem);
-                game.inventory = [...(game.inventory || []), pickedItem];
-                maybeAttachCarriedFigurineTimeout(pickedItem);
-                messages.push(`${pickedItem.line || `${letter} - ${amount}`}.`);
+                const line = addContainerTakeoutObjectToInventory(container, obj);
+                messages.push(/[.!?]$/.test(line) ? line : `${line}.`);
             }
             if (container) container.contents = (container.contents || []).filter(item => !picked.some(entry => entry.item === item));
             game._pet_food_scan_inventory = game.inventory;
