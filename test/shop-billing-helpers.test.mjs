@@ -6,6 +6,11 @@ import { game, resetGame } from '../js/gstate.js';
 import { initRng } from '../js/rng.js';
 import { LAVAPOOL, ROOM, ROOMOFFSET, SHOPBASE } from '../js/const.js';
 
+const BRASS_LANTERN = 226;
+const OIL_LAMP = 227;
+const MAGIC_LAMP = 228;
+const POT_OIL = 252;
+
 function installShopState() {
     const g = resetGame();
     initRng(1);
@@ -187,6 +192,43 @@ function cancellationWand(id, letter = 'c') {
         spe: 1,
         letter,
         line: `${letter} - a wand of cancellation`,
+    };
+}
+
+function lamp(id, kind = 'oil lamp', letter = 'l', spe = 1) {
+    const otyp = kind === 'brass lantern' ? BRASS_LANTERN : kind === 'magic lamp' ? MAGIC_LAMP : OIL_LAMP;
+    return {
+        id,
+        otyp,
+        cls: 'tool',
+        glyph: '(',
+        kind,
+        actualKind: kind,
+        quan: 1,
+        spe,
+        age: 1500,
+        ox: 5,
+        oy: 5,
+        letter,
+        line: `${letter} - an ${kind}`,
+    };
+}
+
+function oilPotion(id, letter = 'o', quan = 1) {
+    return {
+        id,
+        otyp: POT_OIL,
+        cls: 'potion',
+        glyph: '!',
+        kind: 'oil',
+        actualKind: 'potion of oil',
+        potionIndex: 24,
+        quan,
+        age: 400,
+        ox: 5,
+        oy: 5,
+        letter,
+        line: `${letter} - ${quan > 1 ? `${quan} potions of oil` : 'a potion of oil'}`,
     };
 }
 
@@ -454,6 +496,77 @@ test('unpaid camera grease and tinning kit use charge one tenth price', () => {
     }
 });
 
+test('unpaid lamp and oil usage fees follow C cost-per-charge rules', () => {
+    {
+        const { shkp } = installShopState();
+        const item = lamp(3093, 'oil lamp', 'l', 3);
+        game.inventory = [item];
+        shop.addObjectToShopBill(shkp, item, 100);
+        const fee = shop.checkUnpaidUsageForTest(item, []);
+
+        assert.equal(fee, 25);
+        assert.equal(shkp.debit, 25);
+        assert.equal(shop.shopBillEntryForObject(shkp, item).useup, false);
+    }
+    {
+        const { shkp } = installShopState();
+        const item = lamp(3094, 'oil lamp', 'l', 1);
+        game.inventory = [item];
+        shop.addObjectToShopBill(shkp, item, 100);
+        const fee = shop.checkUnpaidUsageForTest(item, []);
+
+        assert.equal(fee, 100);
+        assert.equal(shkp.debit, 100);
+        assert.equal(shop.shopBillEntryForObject(shkp, item).useup, false);
+    }
+    {
+        const { shkp } = installShopState();
+        const item = lamp(3095, 'brass lantern', 'l', 3);
+        game.inventory = [item];
+        shop.addObjectToShopBill(shkp, item, 100);
+        const fee = shop.checkUnpaidUsageForTest(item, []);
+
+        assert.equal(fee, 25);
+        assert.equal(shkp.debit, 25);
+        assert.equal(shop.shopBillEntryForObject(shkp, item).useup, false);
+    }
+    {
+        const { shkp } = installShopState();
+        const item = lamp(3096, 'magic lamp', 'l', 1);
+        game.inventory = [item];
+        shop.addObjectToShopBill(shkp, item, 90);
+        const fee = shop.checkUnpaidUsageForTest(item, []);
+
+        assert.equal(fee, 10);
+        assert.equal(shkp.debit, 10);
+        assert.equal(shop.shopBillEntryForObject(shkp, item).useup, false);
+    }
+    {
+        const { shkp } = installShopState();
+        const item = lamp(3097, 'magic lamp', 'l', 1);
+        game.inventory = [item];
+        shop.addObjectToShopBill(shkp, item, 90);
+        const fee = shop.checkUnpaidUsageForTest(item, [], { altusage: true });
+
+        assert.equal(fee, 120);
+        assert.equal(shkp.debit, 120);
+        assert.equal(shop.shopBillEntryForObject(shkp, item).useup, false);
+    }
+    {
+        const { shkp } = installShopState();
+        const item = oilPotion(3098, 'o');
+        game.inventory = [item];
+        shop.addObjectToShopBill(shkp, item, 100);
+        const messages = [];
+        const fee = shop.checkUnpaidUsageForTest(item, messages);
+
+        assert.equal(fee, 20);
+        assert.equal(shkp.debit, 20);
+        assert.equal(shop.shopBillEntryForObject(shkp, item).useup, false);
+        assert.match(messages[0], /Yendorian Fuel Tax/);
+    }
+});
+
 test('unpaid spellbook study usage charges four fifths of bill price', () => {
     const { shkp } = installShopState();
     const book = healingSpellbook(3093, 'b');
@@ -512,6 +625,74 @@ test('completing study of an unpaid spellbook bills library usage and keeps live
     assert.match(`${game._pending_message || ''} ${game._topline_after_more || ''}`, /You learn the "healing" spell\./);
     assert.match(`${game._pending_message || ''} ${game._topline_after_more || ''}`, /This is no free library/);
     assert.match(`${game._pending_message || ''} ${game._topline_after_more || ''}`, /80 zorkmids/);
+});
+
+test('applying an unpaid oil lamp lights it and bills usage without consuming the live bill', async () => {
+    const { shkp } = installCommandShopState();
+    const item = lamp(3090, 'oil lamp', 'l', 3);
+    game.inventory = [item];
+    shop.addObjectToShopBill(shkp, item, 100);
+
+    await rhack('a');
+
+    assert.equal(game._command_mode, 'applyObject');
+    assert.match(game._pending_message, /What do you want to use or apply\? \[l or \?\*\]/);
+
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(item.lamplit, true);
+    assert.equal(item.burning, true);
+    assert.equal(shkp.debit, 25);
+    assert.equal(shkp.billct, 1);
+    const entry = shop.shopBillEntryForObject(shkp, item);
+    assert.ok(entry);
+    assert.equal(entry.useup, false);
+    assert.equal(shop.shopBillEntryTotal(entry), 100);
+    assert.equal(item.unpaid, true);
+    assert.match(game._pending_message, /Usage fee, 25 zorkmids/);
+    assert.match(game._pending_message, /Your lamp is now on\./);
+    assert.doesNotMatch(game._pending_message, /rub the lamp/);
+
+    await rhack(' ');
+    await rhack('a');
+    await rhack('l');
+
+    assert.equal(item.lamplit, false);
+    assert.equal(item.burning, false);
+    assert.equal(shkp.debit, 25);
+    assert.match(game._pending_message, /Your lamp is now off\./);
+});
+
+test('applying an unpaid potion of oil charges fuel tax and keeps a used-up bill row', async () => {
+    const { shkp } = installCommandShopState();
+    const item = oilPotion(3092, 'o');
+    game.inventory = [item];
+    shop.addObjectToShopBill(shkp, item, 100);
+
+    await rhack('a');
+
+    assert.equal(game._command_mode, 'applyObject');
+    assert.match(game._pending_message, /What do you want to use or apply\? \[o or \?\*\]/);
+
+    await rhack('o');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(item.lamplit, true);
+    assert.equal(item.burning, true);
+    assert.equal(item.known, true);
+    assert.equal(item.unpaid, false);
+    assert.equal(shkp.debit, 20);
+    assert.equal(shkp.billct, 1);
+    const entry = shop.shopBillEntryForObject(shkp, item);
+    assert.ok(entry);
+    assert.equal(entry.useup, true);
+    assert.equal(shop.shopBillEntryTotal(entry), 100);
+    assert.match(game._pending_message, /You light your potion/);
+    assert.match(game._pending_message, /Yendorian Fuel Tax/);
+    assert.match(game._pending_message, /in addition to the cost of the potion/);
 });
 
 test('applying unpaid can of grease bills usage and greases the selected object', async () => {

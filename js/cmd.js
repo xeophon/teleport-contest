@@ -9348,20 +9348,118 @@ function beginWishedBurn(item) {
     }
 }
 
+function endWishedBurn(item) {
+    item.lamplit = false;
+    item.burning = false;
+    delete item._burnTimer;
+    delete item.litRadius;
+}
+
 function applyWishedLightState(item, state) {
     if (!isWishedLightSource(item) || state == null) return;
     if (state) beginWishedBurn(item);
-    else {
-        item.lamplit = false;
-        item.burning = false;
-        delete item._burnTimer;
-        delete item.litRadius;
-    }
+    else endWishedBurn(item);
 }
 
 function maybeLitObjectName(obj, name) {
     if (!(obj?.lamplit || obj?.burning) || name.endsWith(' (lit)')) return name;
     return `${name} (lit)`;
+}
+
+function lampNoun(item) {
+    return item?.otyp === BRASS_LANTERN || objectKindKey(item) === 'brass lantern' ? 'lantern' : 'lamp';
+}
+
+function lampUsageChargeCount(item) {
+    if (item?.spe != null || item?.charges != null) return chargedUsageChargeCount(item);
+    return 1;
+}
+
+function refreshLightSourceLine(item) {
+    refreshInventoryObjectLine(item);
+    if (item?.unpaid) syncUnpaidBillLine(item);
+}
+
+async function applyLamp(item) {
+    const noun = lampNoun(item);
+    const messages = [];
+    if (item.lamplit || item.burning) {
+        endWishedBurn(item);
+        refreshLightSourceLine(item);
+        messages.push(`Your ${noun} is now off.`);
+    } else if (game.u?.underwater || game.u?.uunderwater) {
+        messages.push('This is not a diving lamp.');
+    } else if ((item.age ?? 1500) === 0
+        || ((item.otyp === MAGIC_LAMP || objectKindKey(item) === 'magic lamp') && (item.spe ?? 1) <= 0)) {
+        messages.push(noun === 'lantern'
+            ? (game.u?.blind ? 'Nothing happens.' : 'Your lantern is out of power.')
+            : `This ${pickupObjectName({ ...item, line: '' })} has no oil.`);
+    } else if (item.cursed && !rn2(2)) {
+        if (noun === 'lamp' && !rn2(3)) {
+            addHeroGlibTimeout(d(2, 10));
+            messages.push(`The lamp spills and covers your ${fingersOrGloves()} with oil.`);
+        } else {
+            messages.push(game.u?.blind ? 'Nothing happens.' : `${sentenceCase(pickupObjectName({ ...item, line: '' }))} flickers for a moment, then dies.`);
+        }
+    } else {
+        checkUnpaidUsage(item, messages, { chargeCount: lampUsageChargeCount(item) });
+        beginWishedBurn(item);
+        refreshLightSourceLine(item);
+        messages.push(`Your ${noun} is now on.`);
+    }
+    await setMessage(messages.join('  '), messages.length > 1);
+    game.context.move = 1;
+}
+
+function splitOilPotionForApply(item) {
+    if (!item || (item.quan || 1) <= 1) return item;
+    const split = { ...item, id: next_ident(), quan: 1, line: '' };
+    delete split.o_id;
+    delete split._shopBillObjectId;
+    split.letter = nextInventoryLetter();
+    if (item.unpaid && !splitCarriedObjectShopBill(item, split, 1))
+        clearObjectShopBillState(split);
+    item.quan = (item.quan || 1) - 1;
+    refreshInventoryObjectLine(item);
+    if (item.unpaid) syncUnpaidBillLine(item);
+    refreshInventoryObjectLine(split);
+    game.inventory ??= [];
+    game.inventory.push(split);
+    return split;
+}
+
+function identifyPotionOfOil(item) {
+    if (!item) return;
+    item.known = true;
+    item.actualKind = 'potion of oil';
+    item.kind = 'oil';
+    item.potionIndex = 24;
+    recordKnownPotionDiscovery(item, 'oil');
+    learnObjectScore('Potions', 'potion of oil');
+}
+
+async function applyPotionOfOil(item) {
+    const messages = [];
+    if (item.lamplit || item.burning) {
+        messages.push('You snuff the lit potion.');
+        endWishedBurn(item);
+        refreshLightSourceLine(item);
+    } else if (game.u?.underwater || game.u?.uunderwater) {
+        messages.push('There is not enough oxygen to sustain a fire.');
+    } else {
+        const potion = splitOilPotionForApply(item);
+        messages.push(`You light your potion.${game.u?.blind ? '' : '  It gives off a dim light.'}`);
+        if (potion.unpaid) {
+            checkUnpaidUsage(potion, messages);
+            messages.push('"That\'s in addition to the cost of the potion, of course."');
+            markObjectShopBillUsedUp(potion);
+        }
+        identifyPotionOfOil(potion);
+        beginWishedBurn(potion);
+        refreshLightSourceLine(potion);
+    }
+    await setMessage(messages.join('  '), messages.length > 1);
+    game.context.move = 1;
 }
 
 function foodObjectNutrition(item) {
@@ -19196,6 +19294,10 @@ function chargedToolUsageBasePrice(obj) {
 function chargedUsageChargeCount(obj, override = null) {
     if (override != null) return Math.max(0, Math.trunc(Number(override || 0)));
     if (isWandItem(obj)) return Math.max(0, wandCharges(obj));
+    const kind = toolChargeKind(obj);
+    if ((kind === 'oil lamp' || kind === 'brass lantern' || kind === 'magic lamp')
+        && obj?.spe == null && obj?.charges == null)
+        return 1;
     return Math.max(0, Math.trunc(Number(obj?.spe ?? obj?.charges ?? 0)));
 }
 
@@ -33970,6 +34072,7 @@ export async function rhack(_cmd) {
                 return invItem.cls === 'tool' || invItem.cls === 'wand' || invItem.kind === 'wand of sleep'
                     || invItem.otyp === WAND_CLASS || invItem.cls === 'spellbook'
                     || invItem.section === 'Tools' || /lamp|camera|card|bag|sack|cream pie/.test(name)
+                    || isPotionOfOil(invItem)
                     || isIceBoxObject(invItem)
                     || isRoyalJelly(invItem)
                     || (invItem.cls === 'weapon' && APPLY_WEAPON_NAME_RE.test(name));
@@ -34008,6 +34111,7 @@ export async function rhack(_cmd) {
                 return invItem.cls === 'tool' || invItem.cls === 'wand' || invItem.kind === 'wand of sleep'
                     || invItem.otyp === WAND_CLASS || invItem.cls === 'spellbook'
                     || invItem.section === 'Tools' || /lamp|camera|card|bag|sack|cream pie/.test(name)
+                    || isPotionOfOil(invItem)
                     || isIceBoxObject(invItem)
                     || isRoyalJelly(invItem)
                     || (invItem.cls === 'weapon' && APPLY_WEAPON_NAME_RE.test(name));
@@ -34039,6 +34143,10 @@ export async function rhack(_cmd) {
         }
         if (isTinOpenerObject(item)) {
             await beginTinOpenerUse(item);
+            return;
+        }
+        if (isPotionOfOil(item)) {
+            await applyPotionOfOil(item);
             return;
         }
         if (isPickDigItem(item)) {
@@ -34225,9 +34333,8 @@ export async function rhack(_cmd) {
             game.context.move = 1;
             return;
         }
-        if (name.includes('lamp')) {
-            await setMessage('You rub the lamp.  Nothing happens.');
-            game.context.move = 1;
+        if (isLampObject(item)) {
+            await applyLamp(item);
             return;
         }
         await setMessage('Nothing happens.');
@@ -39818,6 +39925,7 @@ export async function rhack(_cmd) {
             return item.cls === 'tool' || item.cls === 'wand' || item.kind === 'wand of sleep'
                 || item.otyp === WAND_CLASS || item.cls === 'spellbook'
                 || item.section === 'Tools' || /lamp|camera|card|bag|sack|cream pie/.test(name)
+                || isPotionOfOil(item)
                 || isRoyalJelly(item)
                 || (item.cls === 'weapon' && APPLY_WEAPON_NAME_RE.test(name));
         });
