@@ -12828,6 +12828,10 @@ function sameShopkeeper(a, b) {
     return aId != null && bId != null && String(aId) === String(bId);
 }
 
+function shopkeeperPeacefulForDebt(shkp) {
+    return !!shkp && shkp.mpeaceful !== 0 && !shkp.hostile;
+}
+
 function addObjectToShopBill(shkp, obj, totalPrice, { useup = false } = {}) {
     if (!shkp || !obj || !(totalPrice > 0)) return null;
     const ledger = shopBillLedger(shkp);
@@ -12977,6 +12981,91 @@ function returnUnpaidObjectToShopBillOwnerAt(obj, x, y) {
     const spotShkp = shopkeeperForCostlySpot(x, y);
     if (!sameShopkeeper(shkp, spotShkp) || !shopkeeperInHisShop(shkp)) return false;
     return subOneFromShopBill(obj, shkp);
+}
+
+function shopDebtObjectPronoun(obj) {
+    return (obj?.quan || 1) > 1 ? 'them' : 'it';
+}
+
+function convertUnpaidObjectToShopDebt(obj, { silent = false, broken = false } = {}) {
+    if (!obj?.unpaid || shopBillableGold(obj)) return { charged: false, value: 0, shkp: null, message: '' };
+    const { shkp, entry } = shopkeeperOwningBillEntry(obj);
+    if (!shkp) return { charged: false, value: 0, shkp: null, message: '' };
+    const value = entry ? shopBillEntryTotal(entry) : unpaidBillPrice(obj);
+    if (entry) removeObjectFromShopBillById(shkp, entry.bo_id);
+    clearObjectShopBillState(obj);
+    if (broken) obj.no_charge = true;
+    if (!(value > 0)) return { charged: false, value: 0, shkp, message: '' };
+
+    const credit = Math.max(0, Math.trunc(Number(shkp.credit || 0)));
+    let remaining = value;
+    let creditUse = false;
+    if (shopkeeperPeacefulForDebt(shkp) && credit > 0) {
+        const covered = Math.min(credit, remaining);
+        shkp.credit = credit - covered;
+        remaining -= covered;
+        creditUse = covered > 0;
+    }
+
+    if (shopkeeperPeacefulForDebt(shkp) && !shkp.angry) {
+        shkp.debit = Math.max(0, Math.trunc(Number(shkp.debit || 0))) + remaining;
+    } else {
+        shkp.robbed = Math.max(0, Math.trunc(Number(shkp.robbed || 0))) + remaining;
+    }
+
+    let message = '';
+    if (!silent) {
+        if (shopkeeperPeacefulForDebt(shkp)) {
+            if (creditUse && shkp.credit > 0) {
+                message = `You have ${shkp.credit} zorkmid${shkp.credit === 1 ? '' : 's'} credit remaining.`;
+            } else if (creditUse && !remaining) {
+                message = 'You have no credit remaining.';
+            } else {
+                const still = creditUse ? 'still ' : '';
+                message = `You ${still}owe ${shopkeeperDisplayName(shkp)} ${remaining} zorkmid${remaining === 1 ? '' : 's'} for ${shopDebtObjectPronoun(obj)}!`;
+            }
+        } else {
+            message = `You hear a scream, "Thief!"`;
+        }
+    }
+    return { charged: true, value, shkp, message };
+}
+
+function resolveUnpaidProjectileShopLanding(obj, x, y, options = {}) {
+    if (!obj?.unpaid) return { handled: false, charged: false, returned: false, value: 0, shkp: null, message: '' };
+    if (returnUnpaidObjectToShopBillOwnerAt(obj, x, y))
+        return { handled: true, charged: false, returned: true, value: 0, shkp: null, message: '' };
+    const charged = convertUnpaidObjectToShopDebt(obj, options);
+    return { ...charged, handled: charged.charged, returned: false };
+}
+
+function sameShopBillUnitPrice(a, b) {
+    const first = shopkeeperOwningBillEntry(a);
+    const second = first.shkp
+        ? { shkp: first.shkp, entry: shopBillEntryForObject(first.shkp, b) }
+        : shopkeeperOwningBillEntry(b);
+    if (!first.entry || !second.entry || !sameShopkeeper(first.shkp, second.shkp)) return false;
+    const firstPrice = shopBillEntryUnitPrice(first.entry);
+    const secondPrice = shopBillEntryUnitPrice(second.entry);
+    return firstPrice > 0 && firstPrice === secondPrice;
+}
+
+function mergeStackedShopBillEntries(stacked, obj) {
+    if (!stacked?.unpaid || !obj?.unpaid) return false;
+    const { shkp, entry: stackedEntry } = shopkeeperOwningBillEntry(stacked);
+    const objEntry = shkp ? shopBillEntryForObject(shkp, obj) : null;
+    if (!shkp || !stackedEntry || !objEntry) return false;
+    const unitPrice = shopBillEntryUnitPrice(stackedEntry);
+    if (!(unitPrice > 0) || unitPrice !== shopBillEntryUnitPrice(objEntry)) return false;
+    stackedEntry.bquan = shopBillEntryQuantity(stackedEntry) + shopBillEntryQuantity(objEntry);
+    stackedEntry.price = unitPrice;
+    stackedEntry.totalPrice = unitPrice * stackedEntry.bquan;
+    removeObjectFromShopBillById(shkp, objEntry.bo_id);
+    stacked.unpaid = true;
+    stacked.unpaidPrice = shopBillEntryTotal(stackedEntry);
+    syncUnpaidBillLine(stacked);
+    clearObjectShopBillState(obj);
+    return true;
 }
 
 function shopBillableGold(obj) {
@@ -13317,11 +13406,14 @@ export const __shopBillingTestHooks = {
     finishDroppedObjectSale,
     mergePickedObjectIntoInventory,
     mergePickedObjectIntoShopBill,
+    placeStackableFloorObject,
     removeObjectFromShopBill,
     removeObjectFromShopBillById,
     removeInventoryItem,
+    resolveUnpaidProjectileShopLanding,
     returnUnpaidObjectToShopBillOwnerAt,
     sellobjReturnUnpaidToShop,
+    stackMonsterThrownObject,
     splitCarriedObjectShopBill,
     splitShopBillEntry,
     subFromShopBill,
@@ -14532,6 +14624,8 @@ function sameMonsterThrownStackObject(existing, obj) {
     if (!existing || !obj || existing === obj) return false;
     if (existing.hidden || existing.buried || existing.transientProjectile) return false;
     if (existing.ox !== obj.ox || existing.oy !== obj.oy) return false;
+    if (!!existing.unpaid !== !!obj.unpaid || !!existing.no_charge !== !!obj.no_charge) return false;
+    if (existing.unpaid && !sameShopBillUnitPrice(existing, obj)) return false;
     return existing.otyp === obj.otyp
         && existing.cls === obj.cls
         && existing.kind === obj.kind
@@ -14553,8 +14647,16 @@ function sameMonsterThrownStackObject(existing, obj) {
 function stackMonsterThrownObject(obj) {
     const stack = (game.level?.objects || []).find(existing => sameMonsterThrownStackObject(existing, obj));
     if (!stack) return obj;
+    mergeStackedShopBillEntries(stack, obj);
     stack.quan = (stack.quan || 1) + (obj.quan || 1);
     return stack;
+}
+
+function placeStackableFloorObject(obj) {
+    game.level.objects ??= [];
+    const stacked = stackMonsterThrownObject(obj);
+    if (stacked === obj) game.level.objects.push(obj);
+    return stacked;
 }
 
 function monsterThrownFloorEffects(obj, x, y, messages, verb) {
@@ -37553,8 +37655,8 @@ export async function rhack(_cmd) {
             color: item.color || (item.cls === 'gem' ? CLR_GRAY : CLR_CYAN),
         };
         if (oldQuan > shotCount) splitCarriedObjectShopBill(item, projectileObject, shotCount);
-        returnUnpaidObjectToShopBillOwnerAt(projectileObject, ox, oy);
-        game.level?.objects?.push(projectileObject);
+        const shopLanding = resolveUnpaidProjectileShopLanding(projectileObject, ox, oy);
+        placeStackableFloorObject(projectileObject);
         if (game._fire_launcher_letter) {
             game._stale_projectile_marks ??= [];
             game._stale_projectile_marks.push({
@@ -37576,9 +37678,11 @@ export async function rhack(_cmd) {
         const name = inventoryItemName(item)
             .replace(/^\d+ /, '')
             .replace(/^(?:uncursed|blessed|cursed) /, '');
-        await setMessage(shotCount > 1
+        const fireMessage = shotCount > 1
             ? `${game._fire_launcher_letter ? 'You shoot' : 'You throw'} ${shotCount} ${name}.`
-            : `${game._fire_launcher_letter ? 'You shoot' : 'You throw'} ${name}.`);
+            : `${game._fire_launcher_letter ? 'You shoot' : 'You throw'} ${name}.`;
+        if (shopLanding.message) game._queued_message_after_more = shopLanding.message;
+        await setMessage(fireMessage, !!shopLanding.message);
         game._command_mode = null;
         game._fire_item_letter = null;
         game._fire_launcher_letter = null;
@@ -37787,14 +37891,9 @@ export async function rhack(_cmd) {
             color: item.cls === 'food' ? CLR_ORANGE : item.color || (item.cls === 'gem' ? CLR_GRAY : CLR_CYAN),
         };
         if ((item.quan || 1) > 1) splitCarriedObjectShopBill(item, thrownObject, 1);
-        returnUnpaidObjectToShopBillOwnerAt(thrownObject, ox, oy);
+        const shopLanding = resolveUnpaidProjectileShopLanding(thrownObject, ox, oy);
         stopCarriedFigurineTimerOnLeave(thrownObject);
-	        const existingStack = (game.level?.objects || []).find(obj => !obj.transientProjectile
-	            && obj.ox === ox && obj.oy === oy && obj.cls === thrownObject.cls
-	            && obj.kind === thrownObject.kind && obj.otyp === thrownObject.otyp
-                && !obj.unpaid && !thrownObject.unpaid);
-	        if (existingStack) existingStack.quan = (existingStack.quan || 1) + 1;
-	        else game.level?.objects?.push(thrownObject);
+        placeStackableFloorObject(thrownObject);
 	        newsym(ox, oy);
 	        const wasBurdened = (game.u?._statusSuffix || '').includes('Burdened');
 	        removeInventoryItem(item);
@@ -37819,8 +37918,15 @@ export async function rhack(_cmd) {
 	        const wieldedLauncher = (game.inventory || []).find(invItem =>
 	            (invItem.wielded || invItem.line?.includes('weapon in')) && /bow|sling/.test(inventoryItemName(invItem).toLowerCase()));
 	        const thrownByHand = /arrow/.test(lowerName) && !wieldedLauncher;
-	        if (thrownByHand) await setMessage("You aren't wielding a bow, so you throw your arrow by hand.");
-	        else if (impactMessage) await setMessage(impactMessage, true);
+	        if (thrownByHand) {
+            if (shopLanding.message) game._queued_message_after_more = shopLanding.message;
+            await setMessage("You aren't wielding a bow, so you throw your arrow by hand.", !!shopLanding.message);
+        }
+	        else if (impactMessage) {
+            if (shopLanding.message) game._queued_message_after_more = shopLanding.message;
+            await setMessage(impactMessage, true);
+        }
+        else if (shopLanding.message) await setMessage(shopLanding.message);
 	        else {
 	            game._pending_message = '';
 	            game._message_more = 0;

@@ -36,7 +36,7 @@ This folder records source-backed audits against `nethack-c/upstream`. The notes
 Continue with the shop area because it combines visible current behavior with a high-impact missing C subsystem.
 
 - Keep `unpaid` and `unpaidPrice` as compatibility/display fields while migrating callers.
-- Finish thrown/fired unpaid projectile shop resolution: stolen-value debit/robbed conversion and bill-aware floor stacking.
+- Normalize itemized payment for split and used-up bill rows so payment is driven by authoritative ledger entries.
 - Extend ledger use to container put-in, take-out, and tip moves after ordinary pickup/drop is stable.
 - Expand `sellobj()` beyond ordinary paid non-container drops to container contents, gold donation/credit, robbed-shop, and angry-shopkeeper edge cases.
 

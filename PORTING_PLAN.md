@@ -29,6 +29,7 @@ The current audit source of truth is `docs/c-parity-audit/`.
 - Started C-shaped `splitbill`/`subfrombill` compatibility for unpaid stack returns: split parent/child bill rows, used-up residual quantities, and safer orphan fallback handling.
 - Made partial unpaid inventory use preserve the C `bquan > quan` bill representation and visible unpaid total until return/payment resolves the used-up part.
 - Wired unpaid throw/fire projectile splits through child bill rows and same-shop bill return before floor stacking.
+- Added starter `stolen_value()` parity for thrown/fired unpaid projectiles leaving their owning shop, plus bill-aware floor stack merging for compatible unpaid rows.
 - Latest verified public score: `44/44`.
 
 ## Current Priorities
@@ -37,7 +38,7 @@ The current audit source of truth is `docs/c-parity-audit/`.
    - Source notes: `docs/c-parity-audit/05-food-inventory-containers-shops.md`.
    - Current JS tracks unpaid state on objects instead of a C-shaped bill ledger.
    - Missing or partial concepts include full `addtobill`, full `subfrombill` routing, container/gold `sellobj`, `dropped_container`, `picked_container`, `check_unpaid_usage`, and `costly_alteration`.
-   - The next narrow C-backed gap is finishing projectile shop resolution for thrown/fired merchandise that leaves the owning shop, then itemized payment normalization for partly used stacks.
+   - The next narrow C-backed gap is itemized payment normalization for partly used stacks, then container put-in/take-out/tip shop transfers.
 
 2. Object registry and canonical object factory.
    - Source notes: `docs/c-parity-audit/02-objects-wishing-readobjnam.md`.
@@ -76,7 +77,7 @@ The current audit source of truth is `docs/c-parity-audit/`.
 
 Continue the shop ledger migration:
 
-1. Finish thrown/fired unpaid projectile shop resolution: stolen-value debit/robbed conversion and bill-aware floor stacking.
+1. Normalize itemized payment for split and used-up bill rows so the pay menu is driven by authoritative ledger entries.
 2. Extend ledger use to container put-in, take-out, and tip moves.
 3. Expand `sellobj()` beyond ordinary paid non-container objects to container contents, gold donation/credit, robbed-shop, and angry-shopkeeper edge cases.
 4. Move payment toward authoritative bill rows and shop credit instead of object-field collection.

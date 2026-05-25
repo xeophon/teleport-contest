@@ -406,5 +406,76 @@ test('returning a thrown unpaid projectile removes only the child bill', () => {
     assert.equal(shop.shopBillEntryTotal(parentEntry), 10);
     assert.equal(shop.shopBillEntryForObject(shkp, thrown), null);
     assert.equal(thrown.unpaid, false);
+    assert.equal(thrown.unpaidPrice, undefined);
+    assert.equal(shkp.billct, 1);
+});
+
+test('projectile leaving its owning shop converts the child bill to debit', () => {
+    const { shkp } = installShopState();
+    game.level.at = (x, y) => ({ roomno: x === 9 && y === 5 ? 0 : ROOMOFFSET });
+    const stack = { ...dagger(8701, 'd'), quan: 3, line: 'd - 3 +0 daggers' };
+    shop.addObjectToShopBill(shkp, stack, 15);
+    game.inventory = [stack];
+    const thrown = {
+        ...stack,
+        id: 8702,
+        letter: undefined,
+        line: undefined,
+        quan: 1,
+        ox: 9,
+        oy: 5,
+    };
+    shop.splitCarriedObjectShopBill(stack, thrown, 1);
+    const result = shop.resolveUnpaidProjectileShopLanding(thrown, 9, 5, { silent: true });
+    shop.removeInventoryItem(stack, 1);
+
+    const parentEntry = shop.shopBillEntryForObject(shkp, stack);
+    assert.equal(result.charged, true);
+    assert.equal(result.value, 5);
+    assert.equal(shkp.debit, 5);
+    assert.equal(parentEntry.bquan, 2);
+    assert.equal(shop.shopBillEntryTotal(parentEntry), 10);
+    assert.equal(shop.shopBillEntryForObject(shkp, thrown), null);
+    assert.equal(thrown.unpaid, false);
+    assert.equal(thrown.unpaidPrice, undefined);
+    assert.equal(shkp.billct, 1);
+});
+
+test('floor stacking rejects unpaid projectiles into paid stacks', () => {
+    const { shkp } = installShopState();
+    const paidStack = { ...dagger(8801), letter: undefined, line: undefined, quan: 1, ox: 7, oy: 5 };
+    const thrown = { ...dagger(8802), letter: undefined, line: undefined, quan: 1, ox: 7, oy: 5 };
+    shop.addObjectToShopBill(shkp, thrown, 5);
+    game.level.objects = [paidStack];
+
+    const stacked = shop.placeStackableFloorObject(thrown);
+
+    assert.equal(stacked, thrown);
+    assert.equal(game.level.objects.length, 2);
+    assert.equal(paidStack.quan, 1);
+    assert.equal(thrown.unpaid, true);
+    assert.equal(shop.shopBillEntryForObject(shkp, thrown).bquan, 1);
+    assert.equal(shkp.billct, 1);
+});
+
+test('floor stacking merges compatible unpaid bill rows', () => {
+    const { shkp } = installShopState();
+    const floorStack = { ...dagger(8901), letter: undefined, line: undefined, quan: 1, ox: 7, oy: 5 };
+    const thrown = { ...dagger(8902), letter: undefined, line: undefined, quan: 1, ox: 7, oy: 5 };
+    shop.addObjectToShopBill(shkp, floorStack, 5);
+    shop.addObjectToShopBill(shkp, thrown, 5);
+    game.level.objects = [floorStack];
+
+    const stacked = shop.placeStackableFloorObject(thrown);
+
+    const floorEntry = shop.shopBillEntryForObject(shkp, floorStack);
+    assert.equal(stacked, floorStack);
+    assert.equal(game.level.objects.length, 1);
+    assert.equal(floorStack.quan, 2);
+    assert.equal(floorEntry.bquan, 2);
+    assert.equal(shop.shopBillEntryTotal(floorEntry), 10);
+    assert.equal(floorStack.unpaidPrice, 10);
+    assert.equal(shop.shopBillEntryForObject(shkp, thrown), null);
+    assert.equal(thrown.unpaid, false);
     assert.equal(shkp.billct, 1);
 });
