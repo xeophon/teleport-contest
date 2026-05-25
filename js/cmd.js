@@ -5,7 +5,7 @@ import { game } from './gstate.js';
 import { nhgetch } from './input.js';
 import { bot, cls, docrt, flush_screen, newsym, pline, recordObservedObjectDiscovery, refreshHallucinatedMap, seeNearbyObjects, show_glyph_cell, strengthString } from './display.js';
 import { cansee, couldsee, vision_recalc, vision_reset } from './vision.js';
-import { RANDOM_MONSTER_BY_NAME, SHOP_TYPES, STALKER_MONSTERS, add_to_container, artifactDefinitionForName, artifactObjectName, enextoMonsterSpot, make_tutorial1_level, makemon, makeArtifactWishObject, maketrap, mkcorpstat, mklev, mkobj, mkobj_at, mksobj, monsterByRndName, morgueMonster, nameObjectAsArtifact, next_ident, object_display, potionIndexForRoll, resurrectWizardOfYendor, rndmonnum, scrollIndexForRoll, set_mimic_sym_rng, syncDungeonContext, u_on_dnstairs, u_on_rndspot, u_on_upstairs, wipe_engr_at, dropMonsterInventory as dropMonsterInventoryRaw, l_nhcore_init, getrumor, getbogusmon, level_difficulty, set_malign, somexyspace, fumaroles, createMonsterCorpseOrGlob, monsterCorpseDropSucceeds, monsterLeavesCorpseLikeDrop, movebubbles } from './mklev.js';
+import { RANDOM_MONSTER_BY_NAME, SHOP_TYPES, STALKER_MONSTERS, add_to_container, add_to_minv, artifactDefinitionForName, artifactObjectName, enextoMonsterSpot, make_tutorial1_level, makemon, makeArtifactWishObject, maketrap, mkcorpstat, mklev, mkobj, mkobj_at, mksobj, monsterByRndName, morgueMonster, nameObjectAsArtifact, next_ident, object_display, potionIndexForRoll, resurrectWizardOfYendor, rndmonnum, scrollIndexForRoll, set_mimic_sym_rng, syncDungeonContext, u_on_dnstairs, u_on_rndspot, u_on_upstairs, wipe_engr_at, dropMonsterInventory as dropMonsterInventoryRaw, l_nhcore_init, getrumor, getbogusmon, level_difficulty, set_malign, somexyspace, fumaroles, createMonsterCorpseOrGlob, monsterCorpseDropSucceeds, monsterLeavesCorpseLikeDrop, movebubbles } from './mklev.js';
 import { ACCESSIBLE, A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_MAX, A_NEUTRAL, A_STR, A_WIS, ALTAR, AM_SANCTUM, AM_SHRINE, Amask2align, BC_BALL, BC_CHAIN, BEAR_TRAP, BLCORNER, BOLT_LIM, BRCORNER, CLOUD, COLNO, CORPSTAT_FEMALE, CORPSTAT_GENDER, CORPSTAT_HISTORIC, CORPSTAT_MALE, CORPSTAT_NEUTER, CORR, DB_FLOOR, DB_LAVA, DB_MOAT, DB_UNDER, DOOR, DRAWBRIDGE_UP, BURN, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, DUST, ENGRAVE, ENGR_BLOOD, FOUNTAIN, GRAVE, HEADSTONE, HWALL, ICE, IN_SIGHT, IS_AIR, IS_LAVA, IS_OBSTRUCTED, IS_POOL, IS_ROOM, IS_TREE, IS_WALL, In_endgame, In_quest, In_sokoban, In_V_tower, Is_airlevel, Is_astralevel, Is_botlevel, Is_earthlevel, Is_rogue_level, Is_stronghold, Is_waterlevel, LADDER, LAVAPOOL, LAVAWALL, MAGIC_PORTAL, MARK, MAX_EGG_HATCH_TIME, MM_EDOG, MM_NOCOUNTBIRTH, MM_NOMSG, MM_NOWAIT, MOAT, MORGUE, M_AP_TYPE, NO_MINVENT, NORMAL_SPEED, OVERLOADED, P_BASIC, P_UNSKILLED, PIT, POOL, ROLLING_BOULDER_TRAP, ROOM, ROT_AGE, ROOMOFFSET, ROWNO, SCORR, SDOOR, SHOPBASE, SINK, SPIKED_PIT, STAIRS, STONE, TDWALL, TEMPLE, THRONE, TLCORNER, TRCORNER, TREE, TT_BEARTRAP, TT_BURIEDBALL, TT_INFLOOR, TT_LAVA, TT_PIT, TT_WEB, TUWALL, VAULT, VIBRATING_SQUARE, VWALL, WAND_BACKFIRE_CHANCE, WATER, WEB, WT_IRON_BALL_BASE, WT_IRON_BALL_INCR, W_NONDIGGABLE, ZAP_POS } from './const.js';
 import { d, rn1, rn2, rn2_on_display_rng, rnd, rnl, rnz } from './rng.js';
 import { CLR_BLACK, CLR_BLUE, CLR_BRIGHT_BLUE, CLR_BRIGHT_CYAN, CLR_BRIGHT_GREEN, CLR_BROWN, CLR_CYAN, CLR_GRAY, CLR_GREEN, CLR_MAGENTA, CLR_ORANGE, CLR_RED, CLR_YELLOW, CLR_WHITE, NO_COLOR } from './terminal.js';
@@ -9538,7 +9538,7 @@ function moveStatueContentsToMonster(statue, mon) {
         delete item.ox;
         delete item.oy;
         delete item.line;
-        mon.minvent = [item, ...(mon.minvent || [])];
+        add_to_minv(mon, item);
     }
     mon.hasInventory = !!(mon.minvent || []).length;
 }
@@ -23769,7 +23769,7 @@ export async function rhack(_cmd) {
 	                            stolen.wasStolen = true;
                             stopCarriedFigurineTimerOnLeave(stolen);
                             maybeAttachCarriedFigurineTimeout(stolen);
-	                            mon.minvent = [stolen, ...(mon.minvent || [])];
+	                            add_to_minv(mon, stolen);
 	                        }
                         removeInventoryItem(item);
                     }
@@ -23796,7 +23796,7 @@ export async function rhack(_cmd) {
                         removeInventoryItem(item);
                         if (action.whereTo === 3 && action.mon) {
                             maybeAttachCarriedFigurineTimeout(dropped);
-                            action.mon.minvent = [dropped, ...(action.mon.minvent || [])];
+                            add_to_minv(action.mon, dropped);
                         } else {
                             dropped.ox = action.whereTo === 1 ? action.mon?.mx : game.u?.ux || 0;
                             dropped.oy = action.whereTo === 1 ? action.mon?.my : game.u?.uy || 0;
@@ -30733,9 +30733,7 @@ export async function rhack(_cmd) {
                 for (const selectedEntry of selectedEntries) {
                     if (selectedEntry.letter === '$') {
                         const gold = Math.min(selectedEntry.amount || 0, game._goldCount || 0);
-                        const coins = bag.contents.find(item => item.cls === 'coin' || item.letter === '$');
-                        if (coins) coins.quan = (coins.quan || 0) + gold;
-                        else bag.contents.push({ letter: '$', cls: 'coin', otyp: GOLD_PIECE, glyph: '$', quan: gold });
+                        add_to_container(bag, { letter: '$', cls: 'coin', otyp: GOLD_PIECE, glyph: '$', quan: gold });
                         game._goldCount = Math.max(0, (game._goldCount || 0) - gold);
                         game._just_picked_gold = Math.max(0, (game._just_picked_gold || 0) - gold);
                         const money = (game.inventory || []).find(item => item.letter === '$' || item.cls === 'coin');
@@ -30750,7 +30748,7 @@ export async function rhack(_cmd) {
                         stopCarriedFigurineTimerOnLeave(selectedEntry.item);
                         game.inventory = (game.inventory || []).filter(item => item !== selectedEntry.item);
                         updateWornDisplacement();
-                        bag.contents.push(selectedEntry.item);
+                        add_to_container(bag, selectedEntry.item);
                         messages.push(`You put ${inventoryItemName(selectedEntry.item)} into the bag.`);
                     }
                 }
@@ -30782,9 +30780,7 @@ export async function rhack(_cmd) {
                 game._command_mode = null;
                 return;
             }
-            const coins = bag.contents.find(item => item.cls === 'coin' || item.letter === '$');
-            if (coins) coins.quan = (coins.quan || 0) + gold;
-            else bag.contents.push({ letter: '$', cls: 'coin', otyp: GOLD_PIECE, glyph: '$', quan: gold });
+            add_to_container(bag, { letter: '$', cls: 'coin', otyp: GOLD_PIECE, glyph: '$', quan: gold });
             game._goldCount = 0;
             game.inventory = (game.inventory || []).filter(item => item.letter !== '$' && item.cls !== 'coin');
             await setMessage(`You put ${gold} gold piece${gold === 1 ? '' : 's'} into the bag.`);
@@ -30798,7 +30794,7 @@ export async function rhack(_cmd) {
             stopCarriedFigurineTimerOnLeave(item);
             game.inventory = (game.inventory || []).filter(invItem => invItem !== item);
             updateWornDisplacement();
-            bag.contents.push(item);
+            add_to_container(bag, item);
             await setMessage(`You put ${inventoryItemName(item)} into the bag.`);
             game._container_letter = null;
             game._command_mode = null;

@@ -2,7 +2,7 @@
 // C refs: src/allmain.c:newgame(), moveloop_core().
 
 import { game } from './gstate.js';
-import { mklev, l_nhcore_init, u_on_upstairs, makemon, mkcorpstat, mksobj, wipe_engr_at, dropMonsterInventory, wandIndexForRoll, scrollIndexForRoll, potionIndexForRoll, RANDOM_MONSTER_BY_NAME, STONE_RESISTANT_MONSTERS, adjustedMonsterLevel, monsterByRndName, monster_hp, rndmonnum, syncDungeonContext, next_ident, set_malign, enextoMonsterSpot, getbogusmon, pickNasty, chameleonAnimalForm, doppelgangerHumanoidForm, noteleportLevelForMonster, rlocNoMsg, rlocToCoreNoMsg, somexyspace, fumaroles, createMonsterCorpseOrGlob, monsterCorpseDropSucceeds, monsterLeavesCorpseLikeDrop, movebubbles } from './mklev.js';
+import { mklev, l_nhcore_init, u_on_upstairs, makemon, mkcorpstat, mksobj, wipe_engr_at, dropMonsterInventory, wandIndexForRoll, scrollIndexForRoll, potionIndexForRoll, RANDOM_MONSTER_BY_NAME, STONE_RESISTANT_MONSTERS, adjustedMonsterLevel, monsterByRndName, monster_hp, rndmonnum, syncDungeonContext, next_ident, set_malign, enextoMonsterSpot, getbogusmon, pickNasty, chameleonAnimalForm, doppelgangerHumanoidForm, noteleportLevelForMonster, rlocNoMsg, rlocToCoreNoMsg, somexyspace, fumaroles, createMonsterCorpseOrGlob, monsterCorpseDropSucceeds, monsterLeavesCorpseLikeDrop, movebubbles, add_to_minv } from './mklev.js';
 import { rhack, pickupObjectName, inventoryItemName, inventoryLetterRank, recordVanquished, finishForceLock, loseExperienceLevel, finishLevelTeleport, finishPickDigDownwardHole, finishPickDigDownwardPit, maybeQueueQuestLeaderTalk, monsterGrowUp, processSpellbookStudyOccupation, processTinOpeningOccupation, finishTinOpeningOccupation, refreshSwallowOverlay, travelPathKeys, updateGauntletsOfPowerStrength, consumeLifeSavingAmulet, activateStatueTrap, breakStatueObject, burnFloorObjectsByFire, burnRayFloorObjectsByFire, erodeArmorByFireTrap, dryWetTowelFromFire, igniteMonsterFireInventoryItems, monsterFireInventoryDamage, dropMonsterObject, earthFloorEffects, landMonsterThrownObject, stoneMonster, processGlobShrinkTimers } from './cmd.js';
 import { docrt, cls, bot, flush_screen, pline, newsym, refreshHallucinatedMap, show_glyph_cell } from './display.js';
 import { vision_recalc, vision_reset, init_vision_globals, cansee, couldsee, view_from } from './vision.js';
@@ -1944,7 +1944,7 @@ function gelatinousCubeAddToInventory(mon, obj) {
     delete obj.line;
     delete obj.nexthere;
     delete obj.nobj;
-    mon.minvent = [obj, ...(mon.minvent || [])];
+    add_to_minv(mon, obj);
 }
 
 function containerContents(obj) {
@@ -8404,7 +8404,7 @@ function monsterPickStuff(mon, monIndex = null, somebodyCanMove = false, forceMo
     }
     pickedObj.seen = false;
     pickedObj._hide_until_seen = false;
-    mon.minvent = [pickedObj, ...(mon.minvent || [])];
+    add_to_minv(mon, pickedObj);
     if (pickedObj.cls === 'armor' || pickedObj.glyph === '[' || pickedObj.otyp === ARMOR_CLASS)
         mon._gear_next_turn = 1;
     if (deferPickupNewsym) {
@@ -9575,7 +9575,7 @@ function movePet(mon, resumeAfterInventory = false, conflictActive = false) {
                     pickedObj.seen = false;
                     pickedObj._hide_until_seen = false;
                     if (hereObj.otyp === FOOD_CLASS && !pickupVisible) mon._preserve_pickup_memory = { x: mon.mx, y: mon.my };
-                    mon.minvent = [pickedObj, ...(mon.minvent || [])];
+                    add_to_minv(mon, pickedObj);
                     pickedUpThisTurn = true;
                     if (!game.u?.blind && pickupVisible && !hereObj.hidden) {
                         const petName = mon.givenName || `The ${mon.saddled ? 'saddled ' : ''}${mon.data?.name || 'pet'}`;

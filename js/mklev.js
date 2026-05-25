@@ -4699,12 +4699,29 @@ export function add_to_container(container, otmp) {
     if (!container || !otmp) return null;
     container.contents ??= [];
     for (const existing of container.contents) {
+        if (globsCanMeld(existing, otmp)) {
+            absorbGlobObject(existing, otmp);
+            existing.contained = true;
+            return existing;
+        }
+        if (globTypeForObject(existing) || globTypeForObject(otmp)) continue;
         if (!sameStackableObject(existing, otmp)) continue;
         existing.quan = (existing.quan || 1) + (otmp.quan || 1);
         return existing;
     }
     container.contents.unshift(otmp);
     otmp.contained = true;
+    return otmp;
+}
+export function add_to_minv(mon, otmp) {
+    if (!mon || !otmp) return null;
+    mon.minvent ??= [];
+    for (const existing of mon.minvent) {
+        if (!globsCanMeld(existing, otmp)) continue;
+        absorbGlobObject(existing, otmp);
+        return existing;
+    }
+    mon.minvent = [otmp, ...mon.minvent];
     return otmp;
 }
 function floorObjectCanStack(otmp) {
