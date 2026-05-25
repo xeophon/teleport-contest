@@ -2634,10 +2634,21 @@ Next concrete target:
   search without becoming pickup messages, one corpse is split from stacks,
   vegan/Rider/unsafe petrifying corpses are skipped, and consumption uses the
   shared `m_consume_obj()` helper path without adding `meating`. Monster data
-  now carries explicit `corpseEater` and future `metallivorous` diet flags.
-  Focused pet/pile guards and full score remain exact. Remaining `meatbox()`
-  work is metallivore `meatmetal()` consumption, deeper ice-box age timer
-  parity, and shop billing edge cases.
+  now carries explicit `corpseEater` and `metallivorous` diet flags. Focused
+  pet/pile guards and full score remain exact.
+- Metallivore floor consumption now covers the `meatmetal()` post-move path for
+  non-pet rock moles, rust monsters, and xorns before cube/corpse/pickup
+  handling. The port filters slow-digestion rings, strangulation amulets,
+  poisoned metal for non-resistant monsters, artifact/prize resistance, and
+  rust-monster non-iron targets; rustproof iron has its proofing stripped and
+  stuns the rust monster, ordinary consumption sets `meating`, routes
+  containers through the shared `m_consume_obj()`/`meatbox()` helper, can leave
+  initialized rocks, and lets edible metal guide item search. Material coverage
+  uses the current object metadata plus explicit ring/amulet/weapon/armor/tool
+  tables, with generic random tools and wands deferred until the port has a
+  stronger authoritative `oc_material` table. Focused metallivore-adjacent
+  replays and full score remain exact. Remaining `meatbox()` work is deeper
+  ice-box age timer parity and shop billing edge cases.
 - Remaining ice work outside this fire-ray terrain slice includes the broader
   full `spoteffects()`/`pooleffects()` hero liquid behavior, deeper
   `minliquid()` edges (life-saving or shape-shift survivor relocation,
