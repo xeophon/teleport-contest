@@ -14152,6 +14152,7 @@ export const __shopBillingTestHooks = {
     splitShopBillEntry,
     subFromShopBill,
     subOneFromShopBill,
+    checkUnpaidUsageForTest: checkUnpaidUsage,
     tipContainerContents,
     tipContainerIntoContainer,
     tipContainerToFloor,
@@ -19001,17 +19002,53 @@ function chargedToolUsageBasePrice(obj) {
     return shopItemPrice(obj, game.u?.ux, game.u?.uy) || shopBaseCost(obj) || 0;
 }
 
-function chargedToolUsageFee(obj, altusage = false) {
+function chargedUsageChargeCount(obj, override = null) {
+    if (override != null) return Math.max(0, Math.trunc(Number(override || 0)));
+    if (isWandItem(obj)) return Math.max(0, wandCharges(obj));
+    return Math.max(0, Math.trunc(Number(obj?.spe ?? obj?.charges ?? 0)));
+}
+
+function chargedUsageIsChargeBased(obj) {
+    if (isWandItem(obj)) return true;
+    const kind = toolChargeKind(obj);
+    return CHARGED_TOOL_KINDS.has(kind)
+        || kind === 'oil lamp' || kind === 'brass lantern' || kind === 'magic lamp';
+}
+
+function chargedToolUsageFee(obj, altusage = false, chargeCount = chargedUsageChargeCount(obj)) {
     let fee = chargedToolUsageBasePrice(obj);
     if (!(fee > 0)) return 0;
-    if (!altusage && (isBagOfTricksObject(obj) || isHornOfPlentyObject(obj)))
+    const kind = toolChargeKind(obj);
+    if (kind === 'magic lamp') {
+        if (!altusage) return shopBaseCost({ cls: 'tool', kind: 'oil lamp', actualKind: 'oil lamp' }) || 0;
+        fee += Math.trunc(fee / 3);
+    } else if (kind === 'magic marker') {
+        fee = Math.trunc(fee / 2);
+    } else if (!altusage && (isBagOfTricksObject(obj) || isHornOfPlentyObject(obj))) {
         fee = Math.trunc(fee / 5);
+    } else if (isWandItem(obj) || kind === 'crystal ball' || kind === 'oil lamp'
+        || kind === 'brass lantern' || kind === 'magic flute' || kind === 'magic harp'
+        || kind === 'frost horn' || kind === 'fire horn' || kind === 'drum of earthquake') {
+        if (chargeCount > 1) fee = Math.trunc(fee / 4);
+    } else if (obj?.cls === 'spellbook' || obj?.glyph === '+') {
+        fee -= Math.trunc(fee / 5);
+    } else if (kind === 'can of grease' || kind === 'tinning kit' || kind === 'expensive camera') {
+        fee = Math.trunc(fee / 10);
+    } else if (obj?.cls === 'potion' && /(?:^| )oil$|potion of oil/.test(objectKindKey(obj))) {
+        fee = Math.trunc(fee / 5);
+    }
     return Math.max(0, fee);
 }
 
-function chargedToolUsageFeeMessage(obj, fee, altusage = false) {
+function chargedToolUsageFeeMessage(obj, fee, altusage = false, shkp = null) {
     let arg1 = '';
     let arg2 = '';
+    if (obj?.cls === 'spellbook' || obj?.glyph === '+') {
+        const additional = (shkp?.debit || 0) > 0 ? ' an additional' : '';
+        return `"This is no free library!  You owe${additional} ${fee} zorkmid${fee === 1 ? '' : 's'}."`;
+    }
+    if (obj?.cls === 'potion' && /(?:^| )oil$|potion of oil/.test(objectKindKey(obj)))
+        return `"That will cost you ${fee} zorkmid${fee === 1 ? '' : 's'} (Yendorian Fuel Tax)."`;
     if (altusage && (isBagOfTricksObject(obj) || isHornOfPlentyObject(obj))) {
         if (!rn2(3)) arg1 = 'Whoa!  ';
         if (!rn2(3)) arg1 = 'Watch it!  ';
@@ -19022,16 +19059,22 @@ function chargedToolUsageFeeMessage(obj, fee, altusage = false) {
     return `"${arg1}${arg2}Usage fee, ${fee} zorkmid${fee === 1 ? '' : 's'}."`;
 }
 
-function billChargedToolUsage(obj, messages, { altusage = false, chargeCount = tipChargeCount(obj) } = {}) {
-    if (!obj?.unpaid || !(chargeCount > 0)) return 0;
+function checkUnpaidUsage(obj, messages, { altusage = false, chargeCount = null } = {}) {
+    if (!obj?.unpaid) return 0;
+    const currentCharges = chargedUsageChargeCount(obj, chargeCount);
+    if (chargedUsageIsChargeBased(obj) && currentCharges <= 0) return 0;
     const shkp = heroShopkeeper();
     if (!shkp) return 0;
-    const fee = chargedToolUsageFee(obj, altusage);
+    const fee = chargedToolUsageFee(obj, altusage, currentCharges);
     if (!(fee > 0)) return 0;
+    const message = chargedToolUsageFeeMessage(obj, fee, altusage, shkp);
     shkp.debit = Math.max(0, Math.trunc(Number(shkp.debit || 0))) + fee;
-    const message = chargedToolUsageFeeMessage(obj, fee, altusage);
     if (!heroIsDeaf()) messages?.push(message);
     return fee;
+}
+
+function billChargedToolUsage(obj, messages, { altusage = false, chargeCount = tipChargeCount(obj) } = {}) {
+    return checkUnpaidUsage(obj, messages, { altusage, chargeCount });
 }
 
 function floorSpecialSourceUsageBill(source) {
@@ -33890,12 +33933,15 @@ export async function rhack(_cmd) {
         }
         if (toolChargeKind(item) === 'drum of earthquake'
             && !heroIsConfused() && !heroIsStunned() && (item.spe ?? 0) > 0) {
+            const usageMessages = [];
+            checkUnpaidUsage(item, usageMessages);
             item.spe = Math.max(0, (item.spe ?? 0) - 1);
             updateChargedItemLine(item);
             item.known = true;
             item.dknown = true;
             const earthquakeMessages = await doEarthquake(Math.trunc(((game.u?.ulevel || 1) - 1) / 3) + 1);
             const messages = [
+                ...usageMessages,
                 'You produce a heavy, thunderous rolling!',
                 `The entire ${earthquakeLevelDescription()} is shaking around you!`,
                 ...earthquakeMessages,

@@ -72,6 +72,22 @@ function foodRation(id, letter = 'a') {
     };
 }
 
+function chargedTool(id, kind, letter = 't', spe = 3) {
+    return {
+        id,
+        cls: 'tool',
+        glyph: '(',
+        kind,
+        actualKind: kind,
+        quan: 1,
+        spe,
+        ox: 5,
+        oy: 5,
+        letter,
+        line: `${letter} - a ${kind}`,
+    };
+}
+
 function egg(id, letter = 'e', quan = 1) {
     return {
         id,
@@ -244,6 +260,71 @@ test('shop-created carried objects use the same ledger representation', () => {
     assert.equal(hornCreated.unpaid, true);
     assert.equal(shop.shopBillEntryForObject(shkp, hornCreated), bill);
     assert.equal(shop.shopBillEntryTotal(bill), 45);
+});
+
+test('normal unpaid charged tool use adds debit without changing the bill row', () => {
+    const { shkp } = installShopState();
+    const bag = chargedTool(3051, 'bag of tricks', 'b', 3);
+    game.inventory = [bag];
+    shop.addObjectToShopBill(shkp, bag, 100);
+    const messages = [];
+
+    const fee = shop.checkUnpaidUsageForTest(bag, messages);
+
+    assert.equal(fee, 20);
+    assert.equal(shkp.debit, 20);
+    assert.equal(shkp.billct, 1);
+    const entry = shop.shopBillEntryForObject(shkp, bag);
+    assert.ok(entry);
+    assert.equal(entry.useup, false);
+    assert.equal(shop.shopBillEntryTotal(entry), 100);
+    assert.equal(bag.unpaid, true);
+    assert.equal(messages.length, 1);
+    assert.match(messages[0], /Usage fee, 20 zorkmids/);
+});
+
+test('alternate unpaid horn emptying charges full use fee', () => {
+    const { shkp } = installShopState();
+    const horn = chargedTool(3061, 'horn of plenty', 'h', 4);
+    game.inventory = [horn];
+    shop.addObjectToShopBill(shkp, horn, 50);
+    const messages = [];
+
+    const fee = shop.checkUnpaidUsageForTest(horn, messages, { altusage: true, chargeCount: 4 });
+
+    assert.equal(fee, 50);
+    assert.equal(shkp.debit, 50);
+    assert.equal(shkp.billct, 1);
+    assert.equal(shop.shopBillEntryForObject(shkp, horn).useup, false);
+    assert.match(messages[0], /Emptying that will cost you 50 zorkmids/);
+});
+
+test('charged instrument use follows C quarter-price rule when more than one charge remains', () => {
+    const { shkp } = installShopState();
+    const drum = chargedTool(3071, 'drum of earthquake', 'd', 3);
+    game.inventory = [drum];
+    shop.addObjectToShopBill(shkp, drum, 100);
+
+    const fee = shop.checkUnpaidUsageForTest(drum, []);
+
+    assert.equal(fee, 25);
+    assert.equal(shkp.debit, 25);
+    assert.equal(shkp.billct, 1);
+    assert.equal(shop.shopBillEntryForObject(shkp, drum).useup, false);
+});
+
+test('unpaid charged object with no remaining charges is not billed for usage', () => {
+    const { shkp } = installShopState();
+    const bag = chargedTool(3081, 'bag of tricks', 'b', 0);
+    game.inventory = [bag];
+    shop.addObjectToShopBill(shkp, bag, 100);
+
+    const fee = shop.checkUnpaidUsageForTest(bag, []);
+
+    assert.equal(fee, 0);
+    assert.equal(shkp.debit || 0, 0);
+    assert.equal(shkp.billct, 1);
+    assert.equal(shop.shopBillEntryForObject(shkp, bag).useup, false);
 });
 
 test('first bite of unpaid carried food stack splits live and used-up bill rows', () => {
