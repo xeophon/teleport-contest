@@ -9695,9 +9695,29 @@ async function finishCrystalBallUse(ch) {
     return true;
 }
 
-function magicInstrumentKind(item) {
+const MUSICAL_INSTRUMENT_KINDS = new Set([
+    'wooden flute', 'magic flute', 'tooled horn', 'frost horn', 'fire horn',
+    'wooden harp', 'magic harp', 'bugle', 'leather drum', 'drum of earthquake',
+]);
+const CHARGED_MUSICAL_INSTRUMENT_KINDS = new Set([
+    'magic flute', 'magic harp', 'frost horn', 'fire horn', 'drum of earthquake',
+]);
+const BLOW_MUSICAL_INSTRUMENT_KINDS = new Set([
+    'wooden flute', 'magic flute', 'tooled horn', 'frost horn', 'fire horn', 'bugle',
+]);
+const DRUM_MUSICAL_INSTRUMENT_KINDS = new Set(['leather drum', 'drum of earthquake']);
+
+function normalizeMusicalInstrumentKind(kind) {
+    if (kind === 'flute') return 'wooden flute';
+    if (kind === 'harp') return 'wooden harp';
+    if (kind === 'drum') return 'leather drum';
+    return kind;
+}
+
+function musicalInstrumentKind(item) {
     const kind = toolChargeKind(item);
-    return kind === 'magic flute' || kind === 'magic harp' || kind === 'frost horn' || kind === 'fire horn' ? kind : '';
+    const normalized = normalizeMusicalInstrumentKind(kind);
+    return MUSICAL_INSTRUMENT_KINDS.has(normalized) ? normalized : '';
 }
 
 function instrumentDisplayName(item) {
@@ -9708,22 +9728,75 @@ function instrumentTheName(item) {
     return `The ${instrumentDisplayName(item).replace(/^(?:an?|the) /i, '')}`;
 }
 
+function instrumentPlayName(item) {
+    const name = instrumentDisplayName(item);
+    if (/\bunpaid\b/i.test(name)) return name;
+    return name.replace(/^(?:an?|the) /i, 'your ');
+}
+
+function instrumentSimpleName(item) {
+    return instrumentDisplayName(item).replace(/^(?:an?|the) /i, '');
+}
+
+function heroCanBlowInstrument() {
+    const form = polyselfForm();
+    if ((game.u?._statusSuffix || '').includes('Strngl') || game.u?.strangled || game.u?.strangling)
+        return false;
+    if (!form) return true;
+    const msound = String(form.msound || '').toLowerCase();
+    const silentOrBuzz = !!form.silent || msound === 'buzz' || msound === 'ms_buzz';
+    const noHead = form.hasHead === false || form.noHead || form.headless;
+    const eelLike = form.mlet === ';' || /\beel\b/i.test(String(form.name || ''));
+    return !(silentOrBuzz && (form.breathless || form.verysmall || noHead || eelLike));
+}
+
 function instrumentOpeningMessage() {
-    if (heroIsHallucinating())
+    let mode = 'normal';
+    if (heroIsStunned() && heroIsConfused()) mode = 'stunned-confused';
+    else if (heroIsStunned()) mode = 'stunned';
+    else if (heroIsConfused()) mode = 'confused';
+    if (heroIsHallucinating()) mode = mode === 'normal' ? 'hallucinating' : `${mode}-hallucinating`;
+
+    if (!rn2(2)) {
+        if (mode === 'stunned-confused')
+            mode = !rn2(2) ? 'stunned' : 'confused';
+        if (mode.includes('hallucinating'))
+            mode = 'hallucinating';
+    }
+
+    if (mode === 'normal')
+        return null;
+    if (mode === 'hallucinating')
         return 'You disseminate a kaleidoscopic display of floating butterflies.';
-    if (heroIsStunned() && heroIsConfused())
-        return 'What you perform is quite far from music...';
-    if (heroIsStunned())
+    if (mode === 'stunned')
         return heroIsDeaf() ? 'You feel a monotonous vibration.' : 'You radiate an obnoxious droning sound.';
-    if (heroIsConfused())
+    if (mode === 'confused')
         return heroIsDeaf() ? 'You feel a jarring vibration.' : 'You generate a raucous noise.';
-    return null;
+    return 'What you perform is quite far from music...';
 }
 
 function monsterDistanceSquaredFromHero(mon) {
     const dx = (mon?.mx || 0) - (game.u?.ux || 0);
     const dy = (mon?.my || 0) - (game.u?.uy || 0);
     return dx * dx + dy * dy;
+}
+
+function visibleInstrumentMonster(mon) {
+    return !game.u?.blind && !mon?.minvis && !mon?.mundetected
+        && !!(game.viz_array?.[mon?.my]?.[mon?.mx] & IN_SIGHT);
+}
+
+function rollInstrumentImprovisation() {
+    game.context ??= {};
+    if (!(heroHasUnchanging() && game.context.jingle)) {
+        const notes = 'ABCDEFG';
+        let tune = '';
+        const count = rnd(5);
+        for (let i = 0; i < count; i++) tune += notes[rn2(notes.length)];
+        game.context.jingle = tune || 'C';
+        return { notes: game.context.jingle, sameOldSong: false };
+    }
+    return { notes: game.context.jingle, sameOldSong: true };
 }
 
 function sleepMonstersWithMagicFlute(distance) {
@@ -9740,6 +9813,95 @@ function charmMonstersWithMagicHarp(distance) {
         if (!mon || mon.dead || (mon.mhp != null && mon.mhp <= 0)) continue;
         if (monsterDistanceSquaredFromHero(mon) > distance) continue;
         tameMonsterWithScroll(mon, {});
+    }
+}
+
+function charmSnakesWithWoodenFlute(distance, messages) {
+    for (const mon of game.level?.monsters || []) {
+        if (!mon || mon.dead || (mon.mhp != null && mon.mhp <= 0)) continue;
+        const data = mon.data || {};
+        if (!(data.mlet === 'S' || data.snake || /\bsnake\b/i.test(String(data.name || '')))) continue;
+        if (mon.mcanmove === false || monsterDistanceSquaredFromHero(mon) >= distance) continue;
+        const wasPeaceful = !!mon.mpeaceful;
+        const couldSee = visibleInstrumentMonster(mon);
+        mon.mpeaceful = 1;
+        mon.mavenge = 0;
+        mon.mundetected = 0;
+        newsym(mon.mx, mon.my);
+        if (!visibleInstrumentMonster(mon)) continue;
+        const name = mon.givenName || mon.shknam || `The ${data.name || 'snake'}`;
+        messages.push(couldSee
+            ? `${name} freezes, then sways with the music${wasPeaceful ? '' : ', and now seems quieter'}.`
+            : `You notice ${name.toLowerCase()}, swaying with the music.`);
+    }
+}
+
+function calmNymphsWithWoodenHarp(distance, messages) {
+    for (const mon of game.level?.monsters || []) {
+        if (!mon || mon.dead || (mon.mhp != null && mon.mhp <= 0)) continue;
+        const data = mon.data || {};
+        if (!(data.mlet === 'n' || data.nymph || /\bnymph\b/i.test(String(data.name || '')))) continue;
+        if (mon.mcanmove === false || monsterDistanceSquaredFromHero(mon) >= distance) continue;
+        mon.msleeping = 0;
+        mon.mpeaceful = 1;
+        mon.mavenge = 0;
+        if (visibleInstrumentMonster(mon)) {
+            const name = mon.givenName || mon.shknam || `The ${data.name || 'nymph'}`;
+            messages.push(`${name} listens cheerfully to the music, then seems quieter.`);
+        }
+    }
+}
+
+function awakenScareInstrumentMonster(mon, scary) {
+    mon.msleeping = 0;
+    mon.mcanmove = true;
+    mon.mfrozen = 0;
+    mon.waiting = false;
+    if (!scary || mon.data?.mindless) return false;
+    const bound = Math.max(1, 110 - monsterResistanceLevel(mon));
+    if (rn2(bound) < monsterMagicResistance(mon)) return false;
+    const wasFleeing = !!mon.mflee;
+    mon.mflee = 1;
+    mon.mfleetim = 0;
+    return !wasFleeing;
+}
+
+function awakenMonstersWithInstrument(distance) {
+    const fleeMessages = [];
+    for (const mon of game.level?.monsters || []) {
+        if (!mon || mon.dead || (mon.mhp != null && mon.mhp <= 0)) continue;
+        const dist = monsterDistanceSquaredFromHero(mon);
+        if (dist >= distance) continue;
+        const newlyFleeing = awakenScareInstrumentMonster(mon, dist < Math.trunc(distance / 3));
+        if (newlyFleeing && visibleInstrumentMonster(mon)) {
+            const name = mon.givenName || mon.shknam || `The ${mon.data?.name || 'monster'}`;
+            fleeMessages.push(`${name} turns to flee.`);
+        }
+    }
+    if (fleeMessages.length) game._topline_after_more = fleeMessages.join('  ');
+}
+
+function awakenSoldiersWithBugle(messages) {
+    const distance = (game.u?.ulevel || 1) * 30;
+    for (const mon of game.level?.monsters || []) {
+        if (!mon || mon.dead || (mon.mhp != null && mon.mhp <= 0)) continue;
+        const data = mon.data || {};
+        if (data.mercenary && data.name !== 'guard') {
+            if (!mon.mtame) mon.mpeaceful = 0;
+            mon.msleeping = 0;
+            mon.mfrozen = 0;
+            mon.mcanmove = true;
+            mon.waiting = false;
+            if (visibleInstrumentMonster(mon)) {
+                const name = mon.givenName || mon.shknam || `The ${data.name || 'soldier'}`;
+                messages.push(`${name} is now ready for battle!`);
+            } else if (!heroIsDeaf()) {
+                messages.push('You hear the rattle of battle gear being readied.');
+            }
+        } else {
+            const dist = monsterDistanceSquaredFromHero(mon);
+            if (dist < distance) awakenScareInstrumentMonster(mon, dist < Math.trunc(distance / 3));
+        }
     }
 }
 
@@ -9773,22 +9935,30 @@ function hornBlastMessage(item) {
     return `A bolt of ${element} blasts out of the horn!`;
 }
 
-function tooledHornImprovisationEffect(messages) {
-    messages.push(heroIsDeaf() ? 'You blow into the horn.' : 'You produce a frightful, grave sound.');
-    const distance = (game.u?.ulevel || 1) * 30;
-    const scareDistance = Math.trunc(distance / 3);
-    for (const mon of game.level?.monsters || []) {
-        if (!mon || mon.dead || (mon.mhp != null && mon.mhp <= 0)) continue;
-        const dist = monsterDistanceSquaredFromHero(mon);
-        if (dist >= distance) continue;
-        mon.msleeping = 0;
-        mon.mcanmove = true;
-        mon.mfrozen = 0;
-        if (dist >= scareDistance || mon.data?.mindless || monsterResistsEffect(mon, 0)) continue;
-        mon.mflee = 1;
-        mon.mfleetim = 0;
-    }
+function tooledHornImprovisationEffect(messages, sameOldSong = false) {
+    messages.push(heroIsDeaf()
+        ? 'You blow into the horn.'
+        : `You produce a frightful, grave${sameOldSong ? ', yet familiar,' : ''} sound.`);
+    awakenMonstersWithInstrument((game.u?.ulevel || 1) * 30);
     exerciseAttribute(A_WIS, false);
+}
+
+function leatherDrumImprovisationEffect(messages, { mundaneDowngrade = false, sameOldSong = false } = {}) {
+    if (!mundaneDowngrade) {
+        if (!heroIsDeaf()) {
+            messages.push(`You beat a ${sameOldSong ? 'familiar ' : ''}deafening row!`);
+            if (game.u)
+                game.u._deafTimeout = Math.max(game.u._deafTimeout || 0, rn1(20, 30));
+            game._deaf_after_more = 1;
+        } else {
+            messages.push('You pound on the drum.');
+        }
+        exerciseAttribute(A_WIS, false);
+    } else {
+        const verb = rn2(2) ? 'butcher' : rn2(2) ? 'manage' : 'pull off';
+        messages.push(`You ${verb} a drumbeat.`);
+    }
+    awakenMonstersWithInstrument((game.u?.ulevel || 1) * (mundaneDowngrade ? 5 : 40));
 }
 
 async function finishInstrumentTune(item) {
@@ -9806,7 +9976,7 @@ async function finishInstrumentTune(item) {
 }
 
 async function finishMusicalImprovisation(item) {
-    const kind = magicInstrumentKind(item);
+    const kind = musicalInstrumentKind(item);
     if (!kind) return false;
     game._apply_instrument_letter = '';
     game._command_mode = null;
@@ -9814,34 +9984,92 @@ async function finishMusicalImprovisation(item) {
     const messages = [];
     const opening = instrumentOpeningMessage();
     if (opening) messages.push(opening);
-    else messages.push(`You start playing ${instrumentDisplayName(item)}.`);
+    else messages.push(`You start playing ${instrumentPlayName(item)}.`);
 
-    const hasSpecialEffect = !heroIsStunned() && !heroIsConfused() && (item.spe ?? 0) > 0;
-    if (!hasSpecialEffect) {
-        if (kind === 'magic flute') {
-            messages.push(heroIsDeaf() ? `You feel ${instrumentDisplayName(item)} toot.` : `${instrumentTheName(item)} toots.`);
-            exerciseAttribute(A_DEX, true);
-        } else if (kind === 'magic harp') {
-            messages.push(heroIsDeaf() ? 'You feel soothing vibrations.' : `${instrumentTheName(item)} twangs.`);
-            exerciseAttribute(A_DEX, true);
-        } else {
-            tooledHornImprovisationEffect(messages);
-        }
+    const { sameOldSong } = rollInstrumentImprovisation();
+    const doSpec = !heroIsStunned() && !heroIsConfused();
+    let effectiveKind = kind;
+    let mundaneDowngrade = false;
+    if ((!doSpec || (item.spe ?? 0) <= 0) && CHARGED_MUSICAL_INSTRUMENT_KINDS.has(kind)) {
+        effectiveKind = kind === 'magic flute' ? 'wooden flute'
+            : kind === 'magic harp' ? 'wooden harp'
+                : kind === 'drum of earthquake' ? 'leather drum'
+                    : 'tooled horn';
+        mundaneDowngrade = true;
+    }
+
+    if (effectiveKind === 'wooden flute') {
+        const dex = Math.max(1, game.u?.acurr?.a?.[A_DEX] ?? 10);
+        const calms = doSpec && rn2(dex) + (game.u?.ulevel || 1) > 25;
+        messages.push(heroIsDeaf()
+            ? `You feel ${instrumentDisplayName(item)} ${calms ? 'trill' : 'toot'}.`
+            : `${instrumentTheName(item)} ${calms ? 'trills' : 'toots'}${sameOldSong ? ' a familiar tune' : ''}.`);
+        if (calms) charmSnakesWithWoodenFlute((game.u?.ulevel || 1) * 3, messages);
+        exerciseAttribute(A_DEX, true);
+        await setMessage(messages.join('  '), messages.length > 1);
+        game.context.move = 1;
+        return true;
+    }
+
+    if (effectiveKind === 'wooden harp') {
+        const dex = Math.max(1, game.u?.acurr?.a?.[A_DEX] ?? 10);
+        const calms = doSpec && rn2(dex) + (game.u?.ulevel || 1) > 25;
+        const normalMessage = calms
+            ? `${instrumentTheName(item)} produces ${sameOldSong ? 'a familiar, ' : 'a '}lilting melody.`
+            : `${instrumentTheName(item)} twangs${sameOldSong ? ' a familiar tune' : ''}.`;
+        messages.push(heroIsDeaf() ? 'You feel soothing vibrations.' : normalMessage);
+        if (calms) calmNymphsWithWoodenHarp((game.u?.ulevel || 1) * 3, messages);
+        exerciseAttribute(A_DEX, true);
+        await setMessage(messages.join('  '), messages.length > 1);
+        game.context.move = 1;
+        return true;
+    }
+
+    if (effectiveKind === 'tooled horn') {
+        tooledHornImprovisationEffect(messages, sameOldSong);
+        await setMessage(messages.join('  '), messages.length > 1);
+        game.context.move = 1;
+        return true;
+    }
+
+    if (effectiveKind === 'bugle') {
+        messages.push(heroIsDeaf()
+            ? 'You blow into the bugle.'
+            : `You extract a loud${sameOldSong ? ', familiar' : ''} noise from ${instrumentDisplayName(item)}.`);
+        awakenSoldiersWithBugle(messages);
+        exerciseAttribute(A_WIS, false);
+        await setMessage(messages.join('  '), messages.length > 1);
+        game.context.move = 1;
+        return true;
+    }
+
+    if (effectiveKind === 'leather drum') {
+        leatherDrumImprovisationEffect(messages, { mundaneDowngrade, sameOldSong });
         await setMessage(messages.join('  '), messages.length > 1);
         game.context.move = 1;
         return true;
     }
 
     spendChargedToolUse(item, messages);
-    if (kind === 'magic flute') {
+    if (effectiveKind === 'magic flute') {
         const tone = heroIsHallucinating() ? 'piped' : 'soft';
-        messages.push(heroIsDeaf() ? `You seem to produce ${tone} music.` : `You produce ${tone} music.`);
+        messages.push(heroIsDeaf()
+            ? `You seem to produce ${tone}${sameOldSong ? ', familiar' : ''} music.`
+            : `You produce ${tone}${sameOldSong ? ', familiar' : ''} music.`);
         sleepMonstersWithMagicFlute((game.u?.ulevel || 1) * 5);
-    } else if (kind === 'magic harp') {
+    } else if (effectiveKind === 'magic harp') {
         messages.push(heroIsDeaf()
             ? 'You feel very soothing vibrations.'
-            : `${instrumentTheName(item)} produces very attractive music.`);
+            : `${instrumentTheName(item)} produces very attractive${sameOldSong ? ' and familiar' : ''} music.`);
         charmMonstersWithMagicHarp(Math.trunc(((game.u?.ulevel || 1) - 1) / 3) + 1);
+    } else if (effectiveKind === 'drum of earthquake') {
+        messages.push('You produce a heavy, thunderous rolling!');
+        const earthquakeMessages = await doEarthquake(Math.trunc(((game.u?.ulevel || 1) - 1) / 3) + 1);
+        messages.push(`The entire ${earthquakeLevelDescription()} is shaking around you!`, ...earthquakeMessages);
+        awakenMonstersWithInstrument(ROWNO * COLNO);
+        item.known = true;
+        item.dknown = true;
+        updateChargedItemLine(item);
     } else {
         game._zap_item = item;
         game._zap_prelude_messages = messages;
@@ -9849,19 +10077,28 @@ async function finishMusicalImprovisation(item) {
         await setMessage([...messages, 'In what direction?'].join('  '), messages.length > 0);
         return true;
     }
-    exerciseAttribute(A_DEX, true);
+    if (effectiveKind === 'magic flute' || effectiveKind === 'magic harp')
+        exerciseAttribute(A_DEX, true);
     await setMessage(messages.join('  '), messages.length > 1);
     game.context.move = 1;
     return true;
 }
 
 async function beginMusicalInstrumentUse(item) {
+    const kind = musicalInstrumentKind(item);
+    if (!kind) return false;
     if (game.u?.underwater || game.u?.uunderwater) {
         await setMessage("You can't play music underwater!");
         game._command_mode = null;
         return true;
     }
-    if (!heroIsStunned() && !heroIsConfused() && !heroIsHallucinating()) {
+    if (BLOW_MUSICAL_INSTRUMENT_KINDS.has(kind) && !heroCanBlowInstrument()) {
+        await setMessage(`You are incapable of playing the ${instrumentSimpleName(item)}.`);
+        game._command_mode = null;
+        return true;
+    }
+    if (!DRUM_MUSICAL_INSTRUMENT_KINDS.has(kind)
+        && !heroIsStunned() && !heroIsConfused() && !heroIsHallucinating()) {
         game._apply_instrument_letter = item.letter || '';
         await setMessage('Improvise? [ynq] (q)');
         game._command_mode = 'instrumentImprovisePrompt';
@@ -35090,7 +35327,7 @@ export async function rhack(_cmd) {
             await beginCrystalBallUse(item);
             return;
         }
-        if (magicInstrumentKind(item)) {
+        if (musicalInstrumentKind(item)) {
             await beginMusicalInstrumentUse(item);
             return;
         }

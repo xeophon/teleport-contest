@@ -135,6 +135,37 @@ function chargedTool(id, kind, letter = 't', spe = 3) {
     };
 }
 
+function ordinaryTool(id, kind, letter = 't') {
+    const tool = chargedTool(id, kind, letter, 0);
+    delete tool.spe;
+    return tool;
+}
+
+function sleepingMonster(name, x = 7, y = 5, data = {}) {
+    return {
+        mx: x,
+        my: y,
+        mhp: 5,
+        m_lev: 1,
+        mr: 0,
+        msleeping: 1,
+        mcanmove: false,
+        mfrozen: 3,
+        mpeaceful: true,
+        data: { name, mlevel: 1, ...data },
+    };
+}
+
+function installNoBlowButHandsForm() {
+    game.u._polyself_form = {
+        name: 'gas spore',
+        nohands: false,
+        silent: true,
+        breathless: true,
+        verysmall: true,
+    };
+}
+
 function crystalBall(id, letter = 'c', spe = 2) {
     return {
         id,
@@ -1569,6 +1600,219 @@ test('confused unpaid fire horn uses tooled-horn fallback without charge or bill
     assert.equal(shop.shopBillEntryForObject(shkp, horn).useup, false);
     assert.match(game._pending_message, /raucous noise|frightful, grave sound/);
     assert.doesNotMatch(game._pending_message, /In what direction/);
+});
+
+test('ordinary non-drum instruments prompt for improvise and q cancels without time or billing', async () => {
+    for (const [kind, letter] of [
+        ['wooden flute', 'f'],
+        ['wooden harp', 'h'],
+        ['tooled horn', 't'],
+        ['bugle', 'b'],
+    ]) {
+        const { shkp } = installCommandShopState();
+        makeInstrumentApplyDeterministic(shkp);
+        const instrument = ordinaryTool(3150 + letter.charCodeAt(0), kind, letter);
+        game.inventory = [instrument];
+        shop.addObjectToShopBill(shkp, instrument, 60);
+
+        await rhack('a');
+        await rhack(letter);
+
+        assert.equal(game._command_mode, 'instrumentImprovisePrompt');
+        assert.match(game._pending_message, /Improvise\?/);
+        assert.equal(game.context.move || 0, 0);
+
+        await rhack('q');
+
+        assert.equal(game._command_mode, null);
+        assert.equal(game.context.move || 0, 0);
+        assert.match(game._pending_message, /Never mind/);
+        assert.equal(shkp.debit || 0, 0);
+        assert.equal(shop.shopBillEntryForObject(shkp, instrument).useup, false);
+    }
+});
+
+test('ordinary flute and harp improvise with mundane sound and no billing', async () => {
+    for (const [kind, letter, sound] of [
+        ['wooden flute', 'f', /wooden flute.*toots/i],
+        ['wooden harp', 'h', /wooden harp.*twangs/i],
+    ]) {
+        const { shkp } = installCommandShopState();
+        makeInstrumentApplyDeterministic(shkp);
+        const instrument = ordinaryTool(3180 + letter.charCodeAt(0), kind, letter);
+        game.inventory = [instrument];
+        shop.addObjectToShopBill(shkp, instrument, 60);
+
+        await rhack('a');
+        await rhack(letter);
+        await rhack('y');
+
+        assert.equal(game._command_mode, null);
+        assert.equal(game.context.move, 1);
+        assert.match(game._pending_message, /start playing .*wooden/i);
+        assert.match(game._pending_message, sound);
+        assert.equal(shkp.debit || 0, 0);
+        assert.equal(shop.shopBillEntryForObject(shkp, instrument).useup, false);
+    }
+});
+
+test('tooled horn and bugle improvise wake appropriate monsters without billing', async () => {
+    {
+        const { shkp } = installCommandShopState();
+        makeInstrumentApplyDeterministic(shkp);
+        const horn = ordinaryTool(3220, 'tooled horn', 't');
+        const sleeper = sleepingMonster('orc');
+        game.inventory = [horn];
+        game.level.monsters = [shkp, sleeper];
+        shop.addObjectToShopBill(shkp, horn, 60);
+
+        await rhack('a');
+        await rhack('t');
+        await rhack('y');
+
+        assert.equal(game._command_mode, null);
+        assert.equal(game.context.move, 1);
+        assert.match(game._pending_message, /frightful, grave/i);
+        assert.equal(sleeper.msleeping, 0);
+        assert.equal(sleeper.mcanmove, true);
+        assert.equal(sleeper.mfrozen, 0);
+        assert.equal(shkp.debit || 0, 0);
+    }
+
+    {
+        const { shkp } = installCommandShopState();
+        makeInstrumentApplyDeterministic(shkp);
+        const bugle = ordinaryTool(3221, 'bugle', 'b');
+        const soldier = sleepingMonster('soldier', 7, 5, { mlet: '@', mercenary: true });
+        game.inventory = [bugle];
+        game.level.monsters = [shkp, soldier];
+        shop.addObjectToShopBill(shkp, bugle, 60);
+
+        await rhack('a');
+        await rhack('b');
+        await rhack('y');
+
+        assert.equal(game._command_mode, null);
+        assert.equal(game.context.move, 1);
+        assert.match(game._pending_message, /extract a loud.*bugle/i);
+        assert.equal(soldier.mpeaceful, 0);
+        assert.equal(soldier.msleeping, 0);
+        assert.equal(soldier.mcanmove, true);
+        assert.equal(soldier.mfrozen, 0);
+        assert.equal(shkp.debit || 0, 0);
+    }
+});
+
+test('leather drum skips improvise prompt and wakes monsters', async () => {
+    const { shkp } = installCommandShopState();
+    makeInstrumentApplyDeterministic(shkp);
+    const drum = ordinaryTool(3230, 'leather drum', 'd');
+    const sleeper = sleepingMonster('orc');
+    game.inventory = [drum];
+    game.level.monsters = [shkp, sleeper];
+    shop.addObjectToShopBill(shkp, drum, 60);
+
+    await rhack('a');
+    await rhack('d');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.match(game._pending_message, /beat a .*deafening row/i);
+    assert.ok(game.u._deafTimeout > 0);
+    assert.equal(sleeper.msleeping, 0);
+    assert.equal(sleeper.mcanmove, true);
+    assert.equal(sleeper.mfrozen, 0);
+    assert.equal(shkp.debit || 0, 0);
+});
+
+test('underwater blocks ordinary instruments before prompt or effect', async () => {
+    for (const [kind, letter] of [
+        ['wooden flute', 'f'],
+        ['wooden harp', 'h'],
+        ['tooled horn', 't'],
+        ['bugle', 'b'],
+        ['leather drum', 'd'],
+    ]) {
+        const { shkp } = installCommandShopState();
+        makeInstrumentApplyDeterministic(shkp);
+        game.u.underwater = true;
+        game.u.uunderwater = true;
+        const instrument = ordinaryTool(3240 + letter.charCodeAt(0), kind, letter);
+        const sleeper = sleepingMonster('orc');
+        game.inventory = [instrument];
+        game.level.monsters = [shkp, sleeper];
+        shop.addObjectToShopBill(shkp, instrument, 60);
+
+        await rhack('a');
+        await rhack(letter);
+
+        assert.equal(game._command_mode, null);
+        assert.equal(game.context.move || 0, 0);
+        assert.match(game._pending_message, /can't play music underwater/i);
+        assert.doesNotMatch(game._pending_message, /Improvise/);
+        assert.equal(sleeper.msleeping, 1);
+        assert.equal(shkp.debit || 0, 0);
+    }
+});
+
+test('no-blow form gates flutes horns and bugles but not harp or drum', async () => {
+    for (const [kind, letter, spe] of [
+        ['wooden flute', 'f', undefined],
+        ['magic flute', 'm', 2],
+        ['tooled horn', 't', undefined],
+        ['fire horn', 'r', 2],
+        ['bugle', 'b', undefined],
+    ]) {
+        const { shkp } = installCommandShopState();
+        makeInstrumentApplyDeterministic(shkp);
+        installNoBlowButHandsForm();
+        const instrument = spe == null
+            ? ordinaryTool(3300 + letter.charCodeAt(0), kind, letter)
+            : chargedTool(3300 + letter.charCodeAt(0), kind, letter, spe);
+        game.inventory = [instrument];
+        shop.addObjectToShopBill(shkp, instrument, 100);
+
+        await rhack('a');
+        await rhack(letter);
+
+        assert.equal(game._command_mode, null);
+        assert.equal(game.context.move || 0, 0);
+        assert.match(game._pending_message, /incapable of playing/i);
+        assert.doesNotMatch(game._pending_message, /Improvise/);
+        assert.equal(instrument.spe ?? spe, spe);
+        assert.equal(shkp.debit || 0, 0);
+    }
+
+    {
+        const { shkp } = installCommandShopState();
+        makeInstrumentApplyDeterministic(shkp);
+        installNoBlowButHandsForm();
+        const harp = ordinaryTool(3400, 'wooden harp', 'h');
+        game.inventory = [harp];
+        shop.addObjectToShopBill(shkp, harp, 60);
+
+        await rhack('a');
+        await rhack('h');
+
+        assert.equal(game._command_mode, 'instrumentImprovisePrompt');
+        assert.match(game._pending_message, /Improvise\?/);
+    }
+
+    {
+        const { shkp } = installCommandShopState();
+        makeInstrumentApplyDeterministic(shkp);
+        installNoBlowButHandsForm();
+        const drum = ordinaryTool(3401, 'leather drum', 'd');
+        game.inventory = [drum];
+        shop.addObjectToShopBill(shkp, drum, 60);
+
+        await rhack('a');
+        await rhack('d');
+
+        assert.equal(game._command_mode, null);
+        assert.equal(game.context.move, 1);
+        assert.match(game._pending_message, /deafening row|pound on the drum/i);
+    }
 });
 
 test('unpaid charged object with no remaining charges is not billed for usage', () => {
