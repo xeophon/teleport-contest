@@ -6,7 +6,7 @@ import { nhgetch } from './input.js';
 import { bot, cls, docrt, flush_screen, newsym, pline, recordObservedObjectDiscovery, refreshHallucinatedMap, seeNearbyObjects, show_glyph_cell, strengthString } from './display.js';
 import { cansee, couldsee, vision_recalc, vision_reset } from './vision.js';
 import { RANDOM_MONSTER_BY_NAME, SHOP_TYPES, STALKER_MONSTERS, add_to_container, add_to_minv, artifactDefinitionForName, artifactObjectName, enextoMonsterSpot, make_tutorial1_level, makemon, makeArtifactWishObject, maketrap, mkcorpstat, mklev, mkobj, mkobj_at, mksobj, monsterByRndName, morgueMonster, nameObjectAsArtifact, next_ident, object_display, potionIndexForRoll, resurrectWizardOfYendor, rndmonnum, scrollIndexForRoll, set_mimic_sym_rng, syncDungeonContext, u_on_dnstairs, u_on_rndspot, u_on_upstairs, wipe_engr_at, dropMonsterInventory as dropMonsterInventoryRaw, l_nhcore_init, getrumor, getbogusmon, level_difficulty, set_malign, somexyspace, fumaroles, createMonsterCorpseOrGlob, monsterCorpseDropSucceeds, monsterLeavesCorpseLikeDrop, movebubbles } from './mklev.js';
-import { ACCESSIBLE, A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_MAX, A_NEUTRAL, A_STR, A_WIS, ALTAR, AM_SANCTUM, AM_SHRINE, Amask2align, BC_BALL, BC_CHAIN, BEAR_TRAP, BLCORNER, BOLT_LIM, BRCORNER, CLOUD, COLNO, CORPSTAT_FEMALE, CORPSTAT_GENDER, CORPSTAT_HISTORIC, CORPSTAT_MALE, CORPSTAT_NEUTER, CORR, DB_FLOOR, DB_LAVA, DB_MOAT, DB_UNDER, DOOR, DRAWBRIDGE_UP, BURN, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, DUST, ENGRAVE, ENGR_BLOOD, FOUNTAIN, GRAVE, HEADSTONE, HWALL, ICE, IN_SIGHT, IS_AIR, IS_LAVA, IS_OBSTRUCTED, IS_POOL, IS_ROOM, IS_TREE, IS_WALL, In_endgame, In_quest, In_sokoban, In_V_tower, Is_airlevel, Is_astralevel, Is_botlevel, Is_earthlevel, Is_rogue_level, Is_stronghold, Is_waterlevel, LADDER, LAVAPOOL, LAVAWALL, MAGIC_PORTAL, MARK, MAX_EGG_HATCH_TIME, MM_EDOG, MM_NOCOUNTBIRTH, MM_NOMSG, MM_NOWAIT, MOAT, MORGUE, M_AP_TYPE, NO_MINVENT, NORMAL_SPEED, OVERLOADED, P_BASIC, P_UNSKILLED, PIT, POOL, ROLLING_BOULDER_TRAP, ROOM, ROT_AGE, ROOMOFFSET, ROWNO, SCORR, SDOOR, SHOPBASE, SINK, SPIKED_PIT, STAIRS, STONE, TDWALL, TEMPLE, THRONE, TLCORNER, TRCORNER, TREE, TT_BEARTRAP, TT_BURIEDBALL, TT_INFLOOR, TT_LAVA, TT_PIT, TT_WEB, TUWALL, VAULT, VIBRATING_SQUARE, VWALL, WAND_BACKFIRE_CHANCE, WATER, WEB, WT_IRON_BALL_BASE, WT_IRON_BALL_INCR, W_NONDIGGABLE, ZAP_POS } from './const.js';
+import { ACCESSIBLE, A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_MAX, A_NEUTRAL, A_STR, A_WIS, ALTAR, AM_SANCTUM, AM_SHRINE, Amask2align, BC_BALL, BC_CHAIN, BEAR_TRAP, BLCORNER, BOLT_LIM, BRCORNER, CLOUD, COLNO, CORPSTAT_FEMALE, CORPSTAT_GENDER, CORPSTAT_HISTORIC, CORPSTAT_MALE, CORPSTAT_NEUTER, CORR, DB_FLOOR, DB_LAVA, DB_MOAT, DB_UNDER, DOOR, DRAWBRIDGE_UP, BURN, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, DUST, ENGRAVE, ENGR_BLOOD, FOUNTAIN, GRAVE, HEADSTONE, HWALL, ICE, IN_SIGHT, IS_AIR, IS_LAVA, IS_OBSTRUCTED, IS_POOL, IS_ROOM, IS_TREE, IS_WALL, In_endgame, In_quest, In_sokoban, In_V_tower, Is_airlevel, Is_astralevel, Is_botlevel, Is_earthlevel, Is_rogue_level, Is_stronghold, Is_waterlevel, LADDER, LAVAPOOL, LAVAWALL, MAGIC_PORTAL, MARK, MAX_EGG_HATCH_TIME, MM_EDOG, MM_NOCOUNTBIRTH, MM_NOMSG, MM_NOWAIT, MOAT, MORGUE, M_AP_TYPE, N_DIRS, NO_MINVENT, NORMAL_SPEED, OVERLOADED, P_BASIC, P_UNSKILLED, PIT, POOL, ROLLING_BOULDER_TRAP, ROOM, ROT_AGE, ROOMOFFSET, ROWNO, SCORR, SDOOR, SHOPBASE, SINK, SPIKED_PIT, STAIRS, STONE, TDWALL, TEMPLE, THRONE, TLCORNER, TRCORNER, TREE, TT_BEARTRAP, TT_BURIEDBALL, TT_INFLOOR, TT_LAVA, TT_PIT, TT_WEB, TUWALL, VAULT, VIBRATING_SQUARE, VWALL, WAND_BACKFIRE_CHANCE, WATER, WEB, WT_IRON_BALL_BASE, WT_IRON_BALL_INCR, W_NONDIGGABLE, ZAP_POS, isok, xdir, ydir } from './const.js';
 import { d, rn1, rn2, rn2_on_display_rng, rnd, rnl, rnz } from './rng.js';
 import { CLR_BLACK, CLR_BLUE, CLR_BRIGHT_BLUE, CLR_BRIGHT_CYAN, CLR_BRIGHT_GREEN, CLR_BROWN, CLR_CYAN, CLR_GRAY, CLR_GREEN, CLR_MAGENTA, CLR_ORANGE, CLR_RED, CLR_YELLOW, CLR_WHITE, NO_COLOR } from './terminal.js';
 import { vfsDeleteFile, vfsReadFile, vfsWriteFile } from './storage.js';
@@ -16207,7 +16207,7 @@ function prepareContainerTakeoutObject(container, obj) {
     return obj;
 }
 
-function placeTippedObjectOnFloor(obj, x, y, messages) {
+function placeObjectOnFloorWithEffects(obj, x, y, messages, verb = 'drop', { stack = false } = {}) {
     obj.contained = false;
     obj.container = null;
     obj.ox = x;
@@ -16219,12 +16219,17 @@ function placeTippedObjectOnFloor(obj, x, y, messages) {
     delete obj.nobj;
     delete obj.nexthere;
     Object.assign(obj, object_display(obj));
-    if (!earthFloorEffects(obj, x, y, messages, 'drop')) {
+    if (!earthFloorEffects(obj, x, y, messages, verb)) {
         game.level.objects ??= [];
-        game.level.objects.push(obj);
+        const stacked = stack ? stackMonsterThrownObject(obj) : obj;
+        if (stacked === obj) game.level.objects.push(obj);
         objectIceEffect(obj, x, y);
     }
     newsym(x, y);
+}
+
+function placeTippedObjectOnFloor(obj, x, y, messages) {
+    placeObjectOnFloorWithEffects(obj, x, y, messages, 'drop');
 }
 
 function tipContainerSimpleName(source) {
@@ -16464,16 +16469,107 @@ function magicBagContentsLoss(container, messages, { silent = false } = {}) {
     return lost;
 }
 
+function magicBagScatterBreakMessage(obj, breakKind, messages) {
+    if (!breakKind) return;
+    if (breakKind === 'splat') {
+        messages.push('Splat!');
+        return;
+    }
+    if (breakKind === 'mess') {
+        messages.push('What a mess!');
+        return;
+    }
+    if (game.u?.blind) {
+        messages.push('You hear something shatter!');
+        return;
+    }
+    const name = pickupObjectName({ ...obj, quan: obj.quan || 1 });
+    const many = (obj.quan || 1) > 1;
+    const subject = many ? `The ${name}` : (/^[aeiou]/i.test(name) ? `An ${name}` : `A ${name}`);
+    const verb = many ? 'shatter' : 'shatters';
+    messages.push(`${subject} ${verb}${breakKind === 'pieces' ? ' into a thousand pieces' : ''}!`);
+}
+
+function magicBagScatterBreaks(obj, sx, sy, messages) {
+    const randomBreak = !rn2(10);
+    const material = String(obj?.material || obj?.oc_material || '').toLowerCase();
+    const forcedBreak = obj?.otyp === EGG || objectKindKey(obj) === 'egg' || material === 'glass';
+    if (!randomBreak && !forcedBreak) return false;
+    const breakKind = impactDropBreakKind(obj);
+    if (!breakKind && !forcedBreak) return false;
+    if (floorObjectVisible(sx, sy)) magicBagScatterBreakMessage(obj, breakKind || 'shatter', messages);
+    destroyMagicBagItem(obj, messages, { silent: true });
+    return true;
+}
+
+function splitMagicBagScatterStack(obj) {
+    if ((obj?.quan || 1) <= 1) return obj;
+    const splitCount = rnd(Math.min(obj.quan - 1, Number.MAX_SAFE_INTEGER));
+    obj.quan -= splitCount;
+    return {
+        ...obj,
+        id: next_ident(),
+        quan: splitCount,
+        contents: Array.isArray(obj.contents) ? [...obj.contents] : obj.contents,
+        cobj: Array.isArray(obj.cobj) ? [...obj.cobj] : obj.cobj,
+    };
+}
+
+function magicBagScatterClosedDoor(x, y) {
+    const loc = game.level?.at(x, y);
+    return !!(loc?.typ === DOOR && (loc.doormask & (D_CLOSED | D_LOCKED)));
+}
+
+function magicBagScatterWeight(obj) {
+    return Math.max(0, globObjectWeight(obj) || obj?.owt || obj?.weight || floorEffectsObjectWeight(obj));
+}
+
+function scatterMagicBagObject(container, obj, sx, sy, messages) {
+    const scatterObj = splitMagicBagScatterStack(obj);
+    if (scatterObj !== obj) {
+        scatterObj.container = null;
+        scatterObj.contained = false;
+    } else {
+        removeContainedObject(container, obj);
+    }
+    if (magicBagScatterBreaks(scatterObj, sx, sy, messages)) return;
+
+    const dir = rn2(N_DIRS);
+    const dx = xdir[dir];
+    const dy = ydir[dir];
+    const force = Math.max(1, 4 - Math.trunc(magicBagScatterWeight(scatterObj) / 40));
+    let range = rnd(force);
+    let x = sx;
+    let y = sy;
+    while (range-- > 0) {
+        const nx = x + dx;
+        const ny = y + dy;
+        const loc = game.level?.at(nx, ny);
+        if (!isok(nx, ny) || !loc || !ZAP_POS(loc.typ) || magicBagScatterClosedDoor(nx, ny))
+            break;
+        x = nx;
+        y = ny;
+        if (loc.typ === SINK) break;
+        if ((game.level?.monsters || []).some(mon => mon.mx === x && mon.my === y && !mon.dead))
+            break;
+        if (game.u?.ux === x && game.u?.uy === y)
+            break;
+    }
+    placeObjectOnFloorWithEffects(scatterObj, x, y, messages, 'land', { stack: true });
+}
+
 function scatterMagicBagContents(container, messages) {
     const x = game.u?.ux ?? container?.ox ?? 0;
     const y = game.u?.uy ?? container?.oy ?? 0;
     for (const obj of [...liquidFlowContainerContents(container)]) {
-        removeContainedObject(container, obj);
         if (!rn2(13)) {
+            removeContainedObject(container, obj);
             destroyMagicBagItem(obj, messages, { silent: true });
             continue;
         }
-        placeTippedObjectOnFloor(obj, x, y, messages);
+        obj.ox = x;
+        obj.oy = y;
+        scatterMagicBagObject(container, obj, x, y, messages);
     }
     clearLiquidFlowContainerContents(container);
 }

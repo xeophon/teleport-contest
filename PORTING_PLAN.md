@@ -2722,6 +2722,15 @@ Next concrete target:
   magic bags, and charged bags of tricks. Direct smokes cover carried wand
   insertion explosions, cursed-bag vanish messages, and `#tip` into a carried
   bag of holding.
+  Bag-of-holding explosion survivors now use a focused `scatter()` subset
+  instead of landing back on the hero square: one split-off stack quantity is
+  scattered, the separate `MAY_DESTROY` break check runs before direction
+  selection, direction/range use the C `rn2(N_DIRS)` and weight-capped
+  `rnd(force)` order, blocked/ZAP-invalid/closed-door/sink squares stop
+  movement, and floor effects run with the C `"land"` verb before placement
+  and stacking. Direct smokes cover content-loaded explosions scattering
+  survivors off the hero square while preserving cursed-bag vanish and `#tip`
+  explosion behavior.
   Generated ice-box corpses are explicitly frozen at creation while the generic
   `add_to_container()` helper remains neutral like C; the floor put-in/stash
   paths freeze selected inventory objects immediately before insertion, and
@@ -2732,7 +2741,7 @@ Next concrete target:
   takeout/tip/put-in/stash/both-order/glob-timer/bag-horn-apply smokes,
   focused replays, and full score remain exact. Remaining ice-box work is
   nested `in_container()`/`out_container()` variants, bag-of-tricks/horn shop
-  usage billing, exact magic-bag explosion scatter placement and shop billing,
+  usage billing, magic-bag scatter hit/combat details and shop billing,
   troll/Rider revive and zombify timers, forced ice-box destruction, and shop
   billing edge cases.
 - Remaining ice work outside this fire-ray terrain slice includes the broader
