@@ -4,13 +4,14 @@ import test from 'node:test';
 import { burnFloorObjectsByFire, processSpellbookStudyOccupation, rhack, __shopBillingTestHooks as shop } from '../js/cmd.js';
 import { game, resetGame } from '../js/gstate.js';
 import { initRng } from '../js/rng.js';
-import { DB_EAST, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, LAVAPOOL, ROOM, ROOMOFFSET, SHOPBASE } from '../js/const.js';
+import { CANDLESHOP, DB_EAST, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, LAVAPOOL, ROOM, ROOMOFFSET, SHOPBASE } from '../js/const.js';
 
 const BRASS_LANTERN = 226;
 const OIL_LAMP = 227;
 const MAGIC_LAMP = 228;
 const POT_OIL = 252;
 const CRYSTAL_BALL = 10088;
+const CANDELABRUM_OF_INVOCATION = 10076;
 
 function installShopState() {
     const g = resetGame();
@@ -44,6 +45,11 @@ function installShopState() {
         at: () => ({ roomno }),
     };
     return { shkp };
+}
+
+function makeCandleShop(shkp) {
+    shkp.shoptype = CANDLESHOP;
+    if (game.level?.rooms?.[0]) game.level.rooms[0].rtype = CANDLESHOP;
 }
 
 function installCommandShopState() {
@@ -198,6 +204,25 @@ function crystalBall(id, letter = 'c', spe = 2) {
         oy: 5,
         letter,
         line: `${letter} - a crystal ball`,
+        known: true,
+        dknown: true,
+    };
+}
+
+function candelabrum(id, letter = 'c', spe = 0) {
+    return {
+        id,
+        otyp: CANDELABRUM_OF_INVOCATION,
+        cls: 'tool',
+        glyph: '(',
+        kind: 'candelabrum of invocation',
+        actualKind: 'candelabrum of invocation',
+        quan: 1,
+        spe,
+        ox: 5,
+        oy: 5,
+        letter,
+        line: `${letter} - a candelabrum of invocation`,
         known: true,
         dknown: true,
     };
@@ -2188,6 +2213,54 @@ test('robbed shopkeeper treats a paid non-gold drop as restock contribution', ()
     assert.notEqual(dropped.no_charge, true);
 });
 
+test('paid unsaleable shop drop is kept without a sale prompt', () => {
+    const { shkp } = installShopState();
+    makeCandleShop(shkp);
+    const dropped = blankScroll(5006);
+
+    const sale = shop.shopDroppedPaidObjectSaleInfo(dropped, 5, 5);
+
+    assert.equal(sale.handled, true);
+    assert.equal(sale.prompt, false);
+    assert.match(sale.message, /Izchak seems uninterested\./);
+    assert.equal(dropped.no_charge, true);
+    assert.equal(game._goldCount, 0);
+    assert.equal(shop.shopkeeperCash(shkp), 100);
+    assert.equal(shkp.billct, 0);
+});
+
+test('Izchak refuses the candelabrum with special-stock dialogue before invocation', () => {
+    const { shkp } = installShopState();
+    makeCandleShop(shkp);
+    game.u.uevent = {};
+    const dropped = candelabrum(5007, 'c', 3);
+
+    const sale = shop.shopDroppedPaidObjectSaleInfo(dropped, 5, 5);
+
+    assert.equal(sale.handled, true);
+    assert.equal(sale.prompt, false);
+    assert.match(sale.message, /hang onto that/);
+    assert.match(sale.message, /4 more candles/);
+    assert.doesNotMatch(sale.message, /uninterested/);
+    assert.equal(dropped.no_charge, true);
+    assert.equal(game._goldCount, 0);
+});
+
+test('candelabrum special stock refusal changes after invocation', () => {
+    const { shkp } = installShopState();
+    makeCandleShop(shkp);
+    game.u.uevent = { invoked: 1 };
+    const dropped = candelabrum(5008);
+
+    const sale = shop.shopDroppedPaidObjectSaleInfo(dropped, 5, 5);
+
+    assert.equal(sale.handled, true);
+    assert.equal(sale.prompt, false);
+    assert.match(sale.message, /won't stock that/);
+    assert.doesNotMatch(sale.message, /uninterested/);
+    assert.equal(dropped.no_charge, true);
+});
+
 test('dropping gold in a shop partially pays shop debt', () => {
     const { shkp } = installShopState();
     shkp.debit = 10;
@@ -3002,6 +3075,51 @@ test('putting paid and no-charge items into a shop-floor container does not crea
     assert.equal(paid.no_charge, true);
     assert.equal(free.no_charge, true);
     assert.equal(game._goldCount, 0);
+});
+
+test('putting an unsaleable paid item into a shop-floor container reports uninterested', () => {
+    const { shkp } = installShopState();
+    makeCandleShop(shkp);
+    const container = shopFloorContainer(6704);
+    const paper = blankScroll(6705);
+    game.inventory = [paper];
+    game.level.objects = [container];
+
+    const result = shop.putInventoryObjectIntoContainer(container, paper);
+
+    assert.equal(result.moved, true);
+    assert.equal(result.pendingSale, undefined);
+    assert.match(result.message, /Izchak seems uninterested\./);
+    assert.match(result.message, /You put a scroll of blank paper into the large box\./);
+    assert.equal(container.contents.includes(paper), true);
+    assert.equal(paper.no_charge, true);
+    assert.equal(shkp.billct, 0);
+    assert.equal(shkp.bill.length, 0);
+});
+
+test('putting saleable goods into a shop-floor container with a full bill reports uninterested', () => {
+    const { shkp } = installShopState();
+    const container = shopFloorContainer(6710);
+    const paid = dagger(6711);
+    shkp.bill = Array.from({ length: 200 }, (_, index) => ({
+        bo_id: `full-${index}`,
+        price: 1,
+        bquan: 1,
+        totalPrice: 1,
+    }));
+    shkp.billct = shkp.bill.length;
+    game.inventory = [paid];
+    game.level.objects = [container];
+
+    const result = shop.putInventoryObjectIntoContainer(container, paid);
+
+    assert.equal(result.moved, true);
+    assert.equal(result.pendingSale, undefined);
+    assert.match(result.message, /Izchak seems uninterested\./);
+    assert.equal(container.contents.includes(paid), true);
+    assert.equal(paid.no_charge, true);
+    assert.equal(shkp.bill.length, 200);
+    assert.equal(shkp.billct, 200);
 });
 
 test('shop-floor container put-in does not merge no-charge goods into chargeable stacks', () => {

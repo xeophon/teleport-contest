@@ -6,7 +6,7 @@ import { nhgetch } from './input.js';
 import { bot, cls, docrt, flush_screen, newsym, pline, recordObservedObjectDiscovery, refreshHallucinatedMap, seeNearbyObjects, show_glyph_cell, strengthString } from './display.js';
 import { cansee, couldsee, vision_recalc, vision_reset } from './vision.js';
 import { RANDOM_MONSTER_BY_NAME, SHOP_TYPES, STALKER_MONSTERS, add_to_container, add_to_minv, artifactDefinitionForName, artifactObjectName, enextoMonsterSpot, make_tutorial1_level, makemon, makeArtifactWishObject, maketrap, mkcorpstat, mklev, mkobj, mkobj_at, mksobj, monsterByRndName, morgueMonster, nameObjectAsArtifact, next_ident, object_display, potionIndexForRoll, resurrectWizardOfYendor, rndmonnum, scrollIndexForRoll, set_mimic_sym_rng, syncDungeonContext, u_on_dnstairs, u_on_rndspot, u_on_upstairs, wipe_engr_at, dropMonsterInventory as dropMonsterInventoryRaw, l_nhcore_init, getrumor, getbogusmon, level_difficulty, set_malign, somexyspace, fumaroles, createMonsterCorpseOrGlob, monsterCorpseDropSucceeds, monsterLeavesCorpseLikeDrop, movebubbles } from './mklev.js';
-import { ACCESSIBLE, A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_MAX, A_NEUTRAL, A_STR, A_WIS, ALTAR, AM_SANCTUM, AM_SHRINE, Amask2align, BC_BALL, BC_CHAIN, BEAR_TRAP, BLCORNER, BOLT_LIM, BRCORNER, CLOUD, COLNO, CORPSTAT_FEMALE, CORPSTAT_GENDER, CORPSTAT_HISTORIC, CORPSTAT_MALE, CORPSTAT_NEUTER, CORR, DB_DIR, DB_EAST, DB_FLOOR, DB_LAVA, DB_MOAT, DB_NORTH, DB_SOUTH, DB_UNDER, DB_WEST, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, BURN, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, DUST, ENGRAVE, ENGR_BLOOD, FOUNTAIN, GRAVE, HEADSTONE, HWALL, ICE, IN_SIGHT, IS_AIR, IS_LAVA, IS_OBSTRUCTED, IS_POOL, IS_ROOM, IS_TREE, IS_WALL, In_endgame, In_quest, In_sokoban, In_V_tower, Is_airlevel, Is_astralevel, Is_botlevel, Is_earthlevel, Is_rogue_level, Is_stronghold, Is_waterlevel, LADDER, LAVAPOOL, LAVAWALL, MAGIC_PORTAL, MARK, MAX_EGG_HATCH_TIME, MM_EDOG, MM_NOCOUNTBIRTH, MM_NOMSG, MM_NOWAIT, MOAT, MORGUE, M_AP_TYPE, N_DIRS, NO_MINVENT, NORMAL_SPEED, OVERLOADED, P_BASIC, P_UNSKILLED, PIT, POOL, ROLLING_BOULDER_TRAP, ROOM, ROOMOFFSET, ROWNO, SCORR, SDOOR, SHOPBASE, SINK, SPIKED_PIT, STAIRS, STONE, TDWALL, TEMPLE, THRONE, TLCORNER, TRCORNER, TREE, TT_BEARTRAP, TT_BURIEDBALL, TT_INFLOOR, TT_LAVA, TT_PIT, TT_WEB, TUWALL, VAULT, VIBRATING_SQUARE, VWALL, WAND_BACKFIRE_CHANCE, WATER, WEB, WT_IRON_BALL_BASE, WT_IRON_BALL_INCR, W_NONDIGGABLE, ZAP_POS, isok, xdir, ydir } from './const.js';
+import { ACCESSIBLE, A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_MAX, A_NEUTRAL, A_STR, A_WIS, ALTAR, AM_SANCTUM, AM_SHRINE, Amask2align, BC_BALL, BC_CHAIN, BEAR_TRAP, BLCORNER, BOLT_LIM, BRCORNER, CANDLESHOP, CLOUD, COLNO, CORPSTAT_FEMALE, CORPSTAT_GENDER, CORPSTAT_HISTORIC, CORPSTAT_MALE, CORPSTAT_NEUTER, CORR, DB_DIR, DB_EAST, DB_FLOOR, DB_LAVA, DB_MOAT, DB_NORTH, DB_SOUTH, DB_UNDER, DB_WEST, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, BURN, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, DUST, ENGRAVE, ENGR_BLOOD, FOUNTAIN, GRAVE, HEADSTONE, HWALL, ICE, IN_SIGHT, IS_AIR, IS_LAVA, IS_OBSTRUCTED, IS_POOL, IS_ROOM, IS_TREE, IS_WALL, In_endgame, In_quest, In_sokoban, In_V_tower, Is_airlevel, Is_astralevel, Is_botlevel, Is_earthlevel, Is_rogue_level, Is_stronghold, Is_waterlevel, LADDER, LAVAPOOL, LAVAWALL, MAGIC_PORTAL, MARK, MAX_EGG_HATCH_TIME, MM_EDOG, MM_NOCOUNTBIRTH, MM_NOMSG, MM_NOWAIT, MOAT, MORGUE, M_AP_TYPE, N_DIRS, NO_MINVENT, NORMAL_SPEED, OVERLOADED, P_BASIC, P_UNSKILLED, PIT, POOL, ROLLING_BOULDER_TRAP, ROOM, ROOMOFFSET, ROWNO, SCORR, SDOOR, SHOPBASE, SINK, SPIKED_PIT, STAIRS, STONE, TDWALL, TEMPLE, THRONE, TLCORNER, TRCORNER, TREE, TT_BEARTRAP, TT_BURIEDBALL, TT_INFLOOR, TT_LAVA, TT_PIT, TT_WEB, TUWALL, VAULT, VIBRATING_SQUARE, VWALL, WAND_BACKFIRE_CHANCE, WATER, WEB, WT_IRON_BALL_BASE, WT_IRON_BALL_INCR, W_NONDIGGABLE, ZAP_POS, isok, xdir, ydir } from './const.js';
 import { d, rn1, rn2, rn2_on_display_rng, rnd, rnl, rnz } from './rng.js';
 import { CLR_BLACK, CLR_BLUE, CLR_BRIGHT_BLUE, CLR_BRIGHT_CYAN, CLR_BRIGHT_GREEN, CLR_BROWN, CLR_CYAN, CLR_GRAY, CLR_GREEN, CLR_MAGENTA, CLR_ORANGE, CLR_RED, CLR_YELLOW, CLR_WHITE, NO_COLOR } from './terminal.js';
 import { vfsDeleteFile, vfsReadFile, vfsWriteFile } from './storage.js';
@@ -15157,6 +15157,51 @@ function shopSaleUninterestedObject(obj) {
         || (isCandleObject(obj) && obj.age < 20 * shopBaseCost(obj));
 }
 
+function shopObjectOrContentsUnpaid(obj, seen = new Set()) {
+    if (!obj || seen.has(obj)) return false;
+    seen.add(obj);
+    if (obj.unpaid) return true;
+    return globContents(obj).some(child => shopObjectOrContentsUnpaid(child, seen));
+}
+
+function shopkeeperIsIzchak(shkp) {
+    return String(shkp?.shknam || shkp?.shopkeeperName || '').replace(/^[|+\-_]/, '').toLowerCase() === 'izchak';
+}
+
+function shopkeeperPossessivePronoun(shkp) {
+    if (shkp?.female) return 'her';
+    if (shkp?.neuter || shkp?.data?.neuter) return 'its';
+    return 'his';
+}
+
+function shopSpecialStockMessage(obj, shkp) {
+    if (shkp?.shoptype !== CANDLESHOP || !isCandelabrumOfInvocationItem(obj)) return '';
+    const name = shopkeeperDisplayName(shkp);
+    const candles = Math.max(0, Math.trunc(Number(obj?.spe || 0)));
+    const invoked = !!game.u?.uevent?.invoked;
+    const canTalk = !heroIsDeaf() && !shkp?.mute && !shkp?.silent && !shkp?.helpless;
+    if (shopkeeperIsIzchak(shkp) && !invoked) {
+        if (!canTalk)
+            return `${name} seems ${candles < 7 ? 'horrified' : 'concerned'} that you want to sell that.`;
+        const messages = [`${name} says: "No thanks, I'd hang onto that if I were you."`];
+        if (candles < 7) {
+            const needed = 7 - candles;
+            messages.push(`${name} says: "You'll need ${needed}${candles > 0 ? ' more' : ''} candle${needed === 1 ? '' : 's'} to go along with it."`);
+        }
+        return messages.join('  ');
+    }
+    if (canTalk) return `${name} says: "I won't stock that.  Take it out of here!"`;
+    return `${name} shakes ${shopkeeperPossessivePronoun(shkp)} head in refusal.`;
+}
+
+function shopSellobjUninterestedMessage(shkp, containedGold = 0) {
+    return `${shopkeeperDisplayName(shkp)} seems uninterested${containedGold > 0 ? ' in the rest' : ''}.`;
+}
+
+function shopSellobjNoPromptResult(obj, shkp, kind, message, extra = {}) {
+    return { kind, obj, shkp, handled: true, prompt: false, message, ...extra };
+}
+
 function ownedShopSaleOffer(shkp, obj) {
     if (!obj || obj.unpaid || obj.no_charge || shopBillableGold(obj) || shopSaleUninterestedObject(obj)) return 0;
     return shopSaleableObject(shkp, obj) ? shopSaleOffer(obj, shkp) : 0;
@@ -15244,13 +15289,15 @@ function shopDroppedPaidObjectSaleInfo(obj, x, y) {
     const offer = topOffer + contentSale.offer;
     const noSale = !(offer > 0);
     if (!containedGold && noSale) {
+        const unpaid = shopObjectOrContentsUnpaid(obj);
         if (containerSale) {
             markNoChargeRecursively(obj);
             subFromShopBill(obj, shkp);
         } else {
             obj.no_charge = true;
         }
-        return { obj, shkp, handled: true, prompt: false, message: `${shopkeeperDisplayName(shkp)} seems uninterested.` };
+        const message = unpaid ? '' : shopSpecialStockMessage(obj, shkp) || shopSellobjUninterestedMessage(shkp);
+        return shopSellobjNoPromptResult(obj, shkp, 'drop', message);
     }
     const robbed = robbedShopSellobjResult(obj, shkp, offer, containedGold, 'drop');
     if (robbed) return robbed;
@@ -15272,7 +15319,7 @@ function shopDroppedPaidObjectSaleInfo(obj, x, y) {
         } else {
             obj.no_charge = true;
         }
-        return { obj, shkp, handled: true, prompt: false, message: `${shopkeeperDisplayName(shkp)} seems uninterested.` };
+        return shopSellobjNoPromptResult(obj, shkp, 'drop', shopSellobjUninterestedMessage(shkp, containedGold));
     }
     const sale = {
         kind: 'drop',
@@ -15320,7 +15367,7 @@ function shopFloorContainerPutSaleInfo(container, putItem) {
     const y = container?.oy ?? game.u?.uy;
     if (!container || !putItem || (game.inventory || []).includes(container) || x == null || y == null)
         return null;
-    if (shopBillableGold(putItem) || putItem.unpaid || container.no_charge) return null;
+    if (shopBillableGold(putItem) || putItem.unpaid || putItem.no_charge || container.no_charge) return null;
     const shkp = shopFloorContainerShopkeeper(container);
     if (!shopkeeperInHisShop(shkp)) return null;
     if (shopkeeperAngryForSellobj(shkp)) return {
@@ -15331,10 +15378,18 @@ function shopFloorContainerPutSaleInfo(container, putItem) {
     const topOffer = ownedShopSaleOffer(shkp, putItem);
     const containedGold = containedShopGold(putItem);
     const offer = topOffer + contentSale.offer;
-    if (!(offer > 0) && !containedGold) return null;
+    const noSale = !(offer > 0);
+    if (noSale && !containedGold) {
+        const message = shopObjectOrContentsUnpaid(putItem)
+            ? ''
+            : shopSpecialStockMessage(putItem, shkp) || shopSellobjUninterestedMessage(shkp);
+        return shopSellobjNoPromptResult(putItem, shkp, 'containerPutIn', message, { container });
+    }
     const robbed = robbedShopSellobjResult(putItem, shkp, offer, containedGold, 'containerPutIn');
     if (robbed) return { ...robbed, container };
-    if (!(offer > 0) || (Array.isArray(shkp.bill) && shkp.bill.length >= SHOP_BILL_LIMIT)) return null;
+    if (noSale) return null;
+    if ((Array.isArray(shkp.bill) && shkp.bill.length >= SHOP_BILL_LIMIT) || shopSaleUninterestedObject(putItem))
+        return shopSellobjNoPromptResult(putItem, shkp, 'containerPutIn', shopSellobjUninterestedMessage(shkp, containedGold), { container });
     const sale = {
         kind: 'containerPutIn',
         obj: putItem,
