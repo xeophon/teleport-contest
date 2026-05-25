@@ -58,6 +58,13 @@ const STONED_TEXTS = [
     'You have turned to stone.',
     'You are a statue.',
 ];
+const SLIME_TEXTS = new Map([
+    [9, 'You are turning a little green.'],
+    [7, 'Your limbs are getting oozy.'],
+    [5, 'Your skin begins to peel away.'],
+    [3, 'You are turning into a green slime.'],
+    [1, 'You have become a green slime.'],
+]);
 const ROLE_PET = {
     Caveman: 'dog',
     Knight: 'pony',
@@ -2890,6 +2897,31 @@ function applyStoningDialogueSideEffects(timeout) {
     default:
         break;
     }
+}
+
+function applySlimingDialogueSideEffects(timeout) {
+    if (!game.u) return;
+    switch (timeout) {
+    case 7:
+        game.u._veryfastTimeout = 0;
+        syncHeroSpeedState(game);
+        interruptPositiveMultiForStoning();
+        break;
+    case 5:
+        if ((game.u._deafTimeout || 0) > 0 && game.u._deafTimeout < 5)
+            game.u._deafTimeout = 5;
+        break;
+    case 3:
+        if (game.u._stonedTimeout) {
+            game.u._stonedTimeout = 0;
+            game.u._stonedKiller = '';
+            removeHeroStatusSuffix('Stone');
+        }
+        break;
+    default:
+        break;
+    }
+    exerciseAttribute(A_DEX, false);
 }
 
 function processAttributeExercise() {
@@ -7006,6 +7038,28 @@ async function finishMonsterTurnTail() {
                 return false;
             }
             game._death_bones_body = 'statue';
+            armHeroDeathMore();
+            return false;
+        }
+    }
+    if ((game.u?._slimingTimeout || 0) > 0) {
+        addHeroStatusSuffix('Slime');
+        game.u.sliming = true;
+        game.u._slimingTimeout--;
+        const timeout = game.u._slimingTimeout;
+        const message = SLIME_TEXTS.get(timeout);
+        if (message) addToplineMessage(message);
+        applySlimingDialogueSideEffects(timeout);
+        if (!game.u._slimingTimeout) {
+            game.u.sliming = false;
+            removeHeroStatusSuffix('Slime');
+            game.u.uhp = 0;
+            game._death_cause = 'turned into green slime';
+            game._death_current_move = 1;
+            if (consumeLifeSavingAmulet()) {
+                armHeroLifeSavingMore();
+                return false;
+            }
             armHeroDeathMore();
             return false;
         }

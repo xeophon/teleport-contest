@@ -9213,7 +9213,7 @@ function recordFoodConduct(item) {
     const corpseName = item?.corpsenm?.name || kind.replace(/\s+corpse$/, '');
     const veganCorpse = ['lichen', 'brown mold', 'yellow mold', 'green mold', 'red mold', 'shrieker', 'violet fungus']
         .includes(corpseName);
-    if ((isCorpseItem(item) || /\bcorpse$/.test(kind)) && !veganCorpse) {
+    if ((isCorpseItem(item) || isGlobFood(item) || /\bcorpse$/.test(kind)) && !veganCorpse) {
         conduct.unvegan = (conduct.unvegan || 0) + 1;
         conduct.unvegetarian = (conduct.unvegetarian || 0) + 1;
     } else if (isEggItem(item) || isRoyalJelly(item)) {
@@ -17394,6 +17394,47 @@ function isRoyalJelly(item) {
     return item?.otyp === LUMP_OF_ROYAL_JELLY || objectKindKey(item).replace(/^partly eaten /, '') === 'lump of royal jelly';
 }
 
+function isGlobFood(item) {
+    return !!item?.globby || GLOB_TYPE_BY_OTYP.has(item?.otyp);
+}
+
+function globFoodMonsterName(item) {
+    if (item?.corpsenm?.name) return item.corpsenm.name;
+    const type = GLOB_TYPE_BY_OTYP.get(item?.otyp);
+    if (type) return type.name.replace(/^glob of /, '');
+    const text = objectKindKey(item).replace(/^partly eaten\s+/, '');
+    return text.match(/^glob of (.+)$/)?.[1]
+        || text.match(/^(?:small|medium|large|very large) glob of (.+)$/)?.[1]
+        || '';
+}
+
+function heroHasAcidResistance() {
+    const form = game.u?._polyself_form || {};
+    return !!(game.u?.acidResistance || form.acidResistance || form.resistsAcid);
+}
+
+function heroSlimeproof() {
+    const form = game.u?._polyself_form || {};
+    const name = String(form.name || '').toLowerCase();
+    return name === 'green slime' || !!(form.flaming || form.noncorporeal);
+}
+
+function startHeroSliming() {
+    if (!game.u || game.u._slimingTimeout || heroHasUnchanging() || heroSlimeproof()) return false;
+    game.u._slimingTimeout = 10;
+    game.u.sliming = true;
+    addHeroStatusSuffix('Slime');
+    return true;
+}
+
+function fixHeroPetrificationFromAcidicFood() {
+    if (!game.u?._stonedTimeout) return '';
+    game.u._stonedTimeout = 0;
+    game.u._stonedKiller = '';
+    removeHeroStatusSuffix('Stone');
+    return 'You feel limber!';
+}
+
 function heroHasUnchanging() {
     return !!game.u?.unchanging || (game.inventory || []).some(item =>
         item.worn && /amulet of unchanging|unchanging/i.test(String(item.kind || item.actualKind || item.line || '')));
@@ -17480,6 +17521,76 @@ async function finishRoyalJellyEating(item, floorObject, baseMessage, { more = f
 async function eatRoyalJelly(item, floorObject = false) {
     const name = pickupObjectName({ ...(item || {}), quan: 1 });
     await finishRoyalJellyEating(item, floorObject, `This ${name} is delicious!`);
+}
+
+async function finishFatalEatingMessage(message) {
+    if (consumeLifeSavingAmulet()) {
+        if (game.u) game.u.uhp = 0;
+        game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
+        game._command_mode = 'lifeSavingMore';
+        await setMessage(`${message}  You die...  But wait...  Your medallion begins to glow!`, true);
+        return;
+    }
+    if (game.u) game.u.uhp = 0;
+    game._pending_time_passed = 0;
+    game.context.move = 0;
+    game._process_command_time_now = 0;
+    game._run_steps_remaining = 0;
+    game._command_mode = 'deathDieMore';
+    prepareDeathBones();
+    await setMessage(`${message}  You die...`, true);
+}
+
+async function eatGlobFood(item, floorObject = false) {
+    const touched = touchEatenFood(item, floorObject);
+    const monsterName = globFoodMonsterName(touched);
+    const messages = [];
+    recordFoodConduct(touched);
+    addHeroNutrition(remainingFoodNutrition(touched));
+    consumeTouchedFood(touched, floorObject);
+
+    if (!heroHasAcidResistance()) {
+        const damage = rnd(15);
+        if (game.u) game.u.uhp = Math.max(0, (game.u.uhp || 1) - damage);
+        messages.push('You have a very bad case of stomach acid.');
+        if ((game.u?.uhp || 0) <= 0) {
+            game._death_cause = 'killed by an acidic glob';
+            game._pet_food_scan_inventory = game.inventory || [];
+            await finishFatalEatingMessage(messages.join('  '));
+            return;
+        }
+    } else if (monsterName === 'green slime' && rn2(5)) {
+        messages.push('Ecch - that must have been poisonous!');
+        if (!game.u?.poisonResistance) {
+            const strengthDamage = rnd(4);
+            const hpDamage = rnd(15);
+            if (game.u?.acurr?.a)
+                game.u.acurr.a[A_STR] = Math.max(3, (game.u.acurr.a[A_STR] ?? 10) - strengthDamage);
+            if (game.u) game.u.uhp = Math.max(0, (game.u.uhp || 1) - hpDamage);
+            if ((game.u?.uhp || 0) <= 0) {
+                game._death_cause = 'poisoned by a poisonous glob';
+                game._pet_food_scan_inventory = game.inventory || [];
+                await finishFatalEatingMessage(messages.join('  '));
+                return;
+            }
+        } else {
+            messages.push('You seem unaffected by the poison.');
+        }
+    }
+
+    if (monsterName === 'green slime' && startHeroSliming())
+        messages.push("You don't feel very well.");
+    const petrificationMessage = fixHeroPetrificationFromAcidicFood();
+    if (petrificationMessage) messages.push(petrificationMessage);
+
+    if (!messages.length) {
+        const name = pickupObjectName({ ...(touched || {}), quan: 1 });
+        messages.push(`This ${name} tastes terrible!`);
+    }
+    game._pet_food_scan_inventory = game.inventory || [];
+    await setMessage(messages.join('  '), messages.length > 1);
+    game._command_mode = null;
+    game.context.move = 1;
 }
 
 function royalJellyRubTargetLetters() {
@@ -33994,6 +34105,10 @@ export async function rhack(_cmd) {
                 game.context.move = 9;
                 return;
             }
+            if (isGlobFood(item)) {
+                await eatGlobFood(item);
+                return;
+            }
             if (shouldUseGenericRottenEggPath(item)) {
                 await eatRottenEgg(item);
                 return;
@@ -34174,6 +34289,10 @@ export async function rhack(_cmd) {
                 await setMessage(corpseMessage);
                 game._command_mode = null;
                 game.context.move = game._eating_turns_remaining;
+                return;
+            }
+            if (isGlobFood(food)) {
+                await eatGlobFood(food, true);
                 return;
             }
             if (shouldUseGenericRottenEggPath(food)) {
