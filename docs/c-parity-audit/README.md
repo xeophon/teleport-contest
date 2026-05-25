@@ -33,11 +33,11 @@ This folder records source-backed audits against `nethack-c/upstream`. The notes
 
 ## Selected Next Slice
 
-Start with the shop area because it combines a visible current bug with a high-impact missing C subsystem.
+Continue with the shop area because it combines visible current behavior with a high-impact missing C subsystem.
 
-- Fix the multi-item pay message to use the computed cash total.
-- Then introduce a small bill-ledger model keyed by shopkeeper and object identity.
+- Add source-derived smoke tests for multi-item payment, used-up unpaid items, and shop-created carried objects.
 - Keep `unpaid` and `unpaidPrice` as compatibility/display fields while migrating callers.
-- Wire the first ledger helpers through payment, then extend to pickup/drop and container moves.
+- Wire `subfrombill` and `sellobj` style helpers through pickup/drop next.
+- Extend ledger use to container put-in, take-out, and tip moves after ordinary pickup/drop is stable.
 
 Every code slice should be followed by source-derived smoke checks plus `npm run score`.

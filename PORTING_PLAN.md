@@ -21,6 +21,7 @@ The current audit source of truth is `docs/c-parity-audit/`.
 - Removed public-session replay runtime and replay-generation tooling.
 - Rebuilt tip, bag, horn, ice, corpse timer, large-box force, floor-box put-in, and carried-bag takeout behavior around live game state.
 - Fixed carried-bag takeout metadata so removed contents no longer retain stale `contained`, `container`, `nobj`, or floor-link state.
+- Added the first shop bill ledger scaffold for newly picked-up shop items, horn-created shop objects, and payment removal while preserving legacy unpaid display fields.
 - Latest verified public score: `44/44`.
 
 ## Current Priorities
@@ -66,12 +67,12 @@ The current audit source of truth is `docs/c-parity-audit/`.
 
 ## Immediate Slice
 
-Begin with the shop area:
+Continue the shop ledger migration:
 
-1. Fix the multi-item pay message to report `cashTotal`.
-2. Add a minimal shop bill ledger data shape that can coexist with current `unpaid`/`unpaidPrice` fields.
-3. Migrate payment to read from the ledger where available.
-4. Extend ledger use to pickup/drop and container moves in later commits.
+1. Add source-derived shop smoke tests for paying multiple carried items, used-up unpaid items, and carried shop-created objects.
+2. Add `subfrombill` and `sellobj` compatible helpers around the new ledger.
+3. Move ordinary pickup/drop through those helpers.
+4. Extend ledger use to container put-in, take-out, and tip moves.
 
 ## Verification
 

@@ -12745,6 +12745,90 @@ function shopkeeperDisplayName(shkp) {
     return shkp?.shknam || shkp?.shopkeeperName || 'the shopkeeper';
 }
 
+const SHOP_BILL_LIMIT = 200;
+
+function shopBillObjectId(obj) {
+    if (!obj) return null;
+    const id = obj.o_id ?? obj.id ?? obj._shopBillObjectId;
+    if (id != null) return String(id);
+    const key = [
+        obj.ox ?? '',
+        obj.oy ?? '',
+        obj.otyp ?? '',
+        obj.kind || obj.actualKind || obj.singular || '',
+        obj.quan ?? 1,
+    ].join(':');
+    obj._shopBillObjectId = key;
+    return key;
+}
+
+function shopBillLedger(shkp) {
+    if (!shkp) return null;
+    if (!Array.isArray(shkp.bill)) shkp.bill = [];
+    return shkp.bill;
+}
+
+function shopBillEntryTotal(entry) {
+    const explicit = Number(entry?.totalPrice ?? entry?.unpaidPrice ?? 0);
+    if (Number.isFinite(explicit) && explicit > 0) return Math.trunc(explicit);
+    const price = Number(entry?.price || 0);
+    const quantity = Math.max(1, Math.trunc(Number(entry?.bquan || 1)));
+    if (!Number.isFinite(price) || price <= 0) return 0;
+    return Math.trunc(price * quantity);
+}
+
+function shopBillEntryForObject(shkp, obj) {
+    const ledger = Array.isArray(shkp?.bill) ? shkp.bill : null;
+    if (!ledger) return null;
+    const id = shopBillObjectId(obj);
+    if (id == null) return null;
+    return ledger.find(entry => String(entry.bo_id) === id) || null;
+}
+
+function addObjectToShopBill(shkp, obj, totalPrice, { useup = false } = {}) {
+    if (!shkp || !obj || !(totalPrice > 0)) return null;
+    const ledger = shopBillLedger(shkp);
+    if (!ledger) return null;
+    const id = shopBillObjectId(obj);
+    if (id == null) return null;
+    let entry = ledger.find(candidate => String(candidate.bo_id) === id);
+    if (!entry) {
+        if (ledger.length >= SHOP_BILL_LIMIT) return null;
+        entry = { bo_id: id, useup: !!useup, price: totalPrice, bquan: obj.quan || 1, totalPrice };
+        ledger.push(entry);
+    } else {
+        entry.useup = entry.useup || !!useup;
+        entry.price = totalPrice;
+        entry.bquan = obj.quan || entry.bquan || 1;
+        entry.totalPrice = totalPrice;
+    }
+    shkp.billct = ledger.length;
+    obj.unpaid = true;
+    obj.unpaidPrice = shopBillEntryTotal(entry);
+    syncUnpaidBillLine(obj);
+    return entry;
+}
+
+function removeObjectFromShopBillById(shkp, id) {
+    const ledger = Array.isArray(shkp?.bill) ? shkp.bill : null;
+    if (!ledger || id == null) return false;
+    const before = ledger.length;
+    shkp.bill = ledger.filter(entry => String(entry.bo_id) !== String(id));
+    if (shkp.bill.length === before) return false;
+    shkp.billct = shkp.bill.length;
+    return true;
+}
+
+function removeObjectFromShopBill(shkp, obj) {
+    const removed = removeObjectFromShopBillById(shkp, shopBillObjectId(obj));
+    if (removed && obj) {
+        obj.unpaid = false;
+        obj.unpaidPrice = undefined;
+        obj.line = String(obj.line || '').replace(/ \(unpaid, \d+ zorkmids?\)/, '');
+    }
+    return removed;
+}
+
 function buriedMerchandiseDebtMessage(x, y, ignoredObject = null) {
     const shkp = shopkeeperForCostlySpot(x, y);
     if (!shkp || game._monster_moving) return '';
@@ -13555,8 +13639,14 @@ function usedUpShopBillName(obj) {
 function rememberUsedUpShopBill(obj) {
     const price = unpaidBillPrice(obj);
     if (!obj?.unpaid || !price) return;
+    const shkp = heroShopkeeper();
+    const billEntry = shopBillEntryForObject(shkp, obj);
     game._usedUpShopBills ??= [];
-    game._usedUpShopBills.push({ name: usedUpShopBillName(obj), price });
+    game._usedUpShopBills.push({
+        name: usedUpShopBillName(obj),
+        price,
+        bo_id: billEntry?.bo_id ?? shopBillObjectId(obj),
+    });
 }
 
 function objectWeightKind(obj) {
@@ -17532,9 +17622,11 @@ function billHornCreatedObject(horn, obj, messages, { silent = false } = {}) {
     if (!shkp) return 0;
     const price = shopItemPrice(obj, game.u?.ux, game.u?.uy);
     if (!(price > 0)) return 0;
-    obj.unpaid = true;
-    obj.unpaidPrice = price;
-    shkp.billct = Math.max(0, Math.trunc(Number(shkp.billct || 0))) + 1;
+    if (!addObjectToShopBill(shkp, obj, price)) {
+        obj.unpaid = true;
+        obj.unpaidPrice = price;
+        shkp.billct = Math.max(0, Math.trunc(Number(shkp.billct || 0))) + 1;
+    }
     if (!silent && !heroIsDeaf()) messages?.push(hornCreatedObjectBillMessage(obj, price));
     return price;
 }
@@ -18018,19 +18110,20 @@ function shopDebtItemName(item) {
     return `${/^[aeiou]/i.test(baseName) ? 'an' : 'a'} ${baseName}`;
 }
 
-function collectUnpaidShopItemsFromList(list, entries) {
+function collectUnpaidShopItemsFromList(list, entries, shkp = null) {
     for (const item of list || []) {
-        const price = unpaidBillPrice(item);
-        if (item?.unpaid && price) entries.push({ item, name: shopDebtItemName(item), price });
+        const billEntry = shopBillEntryForObject(shkp, item);
+        const price = billEntry ? shopBillEntryTotal(billEntry) : unpaidBillPrice(item);
+        if ((item?.unpaid || billEntry) && price) entries.push({ item, billEntry, name: shopDebtItemName(item), price });
         const contents = globContents(item);
-        if (contents.length) collectUnpaidShopItemsFromList(contents, entries);
+        if (contents.length) collectUnpaidShopItemsFromList(contents, entries, shkp);
     }
 }
 
 function collectPayableShopDebts(shkp = null) {
     const entries = [];
-    collectUnpaidShopItemsFromList(game.inventory || [], entries);
-    collectUnpaidShopItemsFromList(game.level?.objects || [], entries);
+    collectUnpaidShopItemsFromList(game.inventory || [], entries, shkp);
+    collectUnpaidShopItemsFromList(game.level?.objects || [], entries, shkp);
     for (const bill of game._usedUpShopBills || []) {
         const price = Number(bill?.price || 0);
         if (price > 0) entries.push({
@@ -24459,8 +24552,11 @@ export async function rhack(_cmd) {
                 updateMoneyLine(money);
             }
             const paidUsedUpBills = new Set();
+            let removedLedgerBillCount = 0;
             for (const entry of selected) {
                 if (entry.usedUpBill) {
+                    if (removeObjectFromShopBillById(game._pay_shopkeeper, entry.usedUpBill.bo_id))
+                        removedLedgerBillCount++;
                     paidUsedUpBills.add(entry.usedUpBill);
                     continue;
                 }
@@ -24472,17 +24568,22 @@ export async function rhack(_cmd) {
                     continue;
                 }
                 if (!entry.item) continue;
-                entry.item.unpaid = false;
-                entry.item.unpaidPrice = undefined;
-                entry.item.line = String(entry.item.line || '')
-                    .replace(/ \(unpaid, \d+ zorkmids?\)/, '');
+                if (removeObjectFromShopBill(game._pay_shopkeeper, entry.item)) removedLedgerBillCount++;
+                else {
+                    entry.item.unpaid = false;
+                    entry.item.unpaidPrice = undefined;
+                    entry.item.line = String(entry.item.line || '')
+                        .replace(/ \(unpaid, \d+ zorkmids?\)/, '');
+                }
             }
             if (paidUsedUpBills.size)
                 game._usedUpShopBills = (game._usedUpShopBills || [])
                     .filter(bill => !paidUsedUpBills.has(bill));
             const shkp = game._pay_shopkeeper;
             const billedSelections = selected.filter(entry => !entry.shopkeeperDebit).length;
-            if (shkp) shkp.billct = Math.max(0, (shkp.billct || billedSelections) - billedSelections);
+            const legacyBillSelections = Math.max(0, billedSelections - removedLedgerBillCount);
+            if (shkp && legacyBillSelections)
+                shkp.billct = Math.max(0, (shkp.billct || legacyBillSelections) - legacyBillSelections);
             if (shkp?.shk) {
                 const home = shkp.shk;
                 const blockingPet = (game.level?.monsters || []).find(mon =>
@@ -37706,10 +37807,12 @@ export async function rhack(_cmd) {
                 unpaidPrice: shopPrice > 0 ? shopPrice : undefined,
                 line: `${letter} - ${amount}${unpaidSuffix}`,
             };
+            const billEntry = shopkeeperForPrice ? addObjectToShopBill(shopkeeperForPrice, pickedItem, shopPrice) : null;
             objectIceEffect(pickedItem, game.u?.ux || 0, game.u?.uy || 0, { onLevel: false });
             game.inventory = [...(game.inventory || []), pickedItem];
             maybeAttachCarriedFigurineTimeout(pickedItem);
-            if (shopkeeperForPrice) shopkeeperForPrice.billct = Math.max(shopkeeperForPrice.billct || 0, 1);
+            if (shopkeeperForPrice && !billEntry)
+                shopkeeperForPrice.billct = Math.max(shopkeeperForPrice.billct || 0, 1);
             game._pet_food_scan_inventory = game.inventory;
             game.level.objects = (game.level.objects || []).filter(obj => obj !== objectHere);
             newsym(game.u?.ux || 0, game.u?.uy || 0);
