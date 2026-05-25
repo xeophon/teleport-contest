@@ -13215,6 +13215,23 @@ function globShrinkName(obj) {
     return globObjectName(obj).replace(/^the /i, '');
 }
 
+function catchUpGlobShrink(entry, iceState) {
+    const obj = entry.obj;
+    const moves = game.moves || 0;
+    const expired = obj.globShrinkTurn || moves;
+    let delta = Math.trunc((moves - expired + 24) / 25);
+    const nextDelay = 25 - (delta % 25);
+    if (iceState === 'onice') delta = Math.trunc((delta + 2) / 3);
+    if (delta >= Math.max(0, obj.owt ?? 20)) {
+        obj.owt = 0;
+        removeShrunkGlob(entry);
+        return [];
+    }
+    obj.owt = Math.max(0, (obj.owt ?? 20) - Math.max(1, delta));
+    startGlobShrinkTimeout(obj, nextDelay);
+    return [];
+}
+
 function processGlobShrinkEntry(entry) {
     const obj = entry.obj;
     if (!isGlobbyObject(obj) || typeof obj.globShrinkTurn !== 'number') return [];
@@ -13222,8 +13239,11 @@ function processGlobShrinkEntry(entry) {
         delete obj.globShrinkTurn;
         return [];
     }
-    if (game._eating_floor_object === obj || globIceState(entry) === 'buried'
-        || (globIceState(entry) === 'onice' && (game.moves || 0) % 3 === 1)) {
+    const iceState = globIceState(entry);
+    if (obj.globShrinkTurn < (game.moves || 0) && iceState !== 'buried')
+        return catchUpGlobShrink(entry, iceState);
+    if (game._eating_floor_object === obj || iceState === 'buried'
+        || (iceState === 'onice' && (game.moves || 0) % 3 === 1)) {
         startGlobShrinkTimeout(obj);
         return [];
     }

@@ -818,10 +818,11 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   names fall back to C's random gray-ooze/brown-pudding/green-slime glob
   selection. Active-level glob shrink timers now use the C 23-27 turn cadence,
   reduce weight and partial-eaten amount one unit at a time, emit inventory and
-  visible floor disappearance messages, slow/skip on ice, and pause in ice
-  boxes until removal starts a fresh timer. Remaining glob work is off-level
-  catch-up, full container weight/capacity messaging, shop billing around
-  merges, and eating side effects.
+  visible floor disappearance messages, slow/skip on ice, pause in ice boxes
+  until removal starts a fresh timer, and apply the silent C overdue catch-up
+  formula for represented stale timers. Remaining glob work is full off-level
+  timer restoration plumbing, full container weight/capacity messaging, shop
+  billing around merges, and eating side effects.
 - Exact wished eggs now use the C `readobjnam()` egg path instead of generic
   food fallback: `egg`, `eggs`, `egg of <monster>`, and `<monster> egg`
   create initialized egg objects first, then apply a local `can_be_hatched()`
