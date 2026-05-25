@@ -13860,6 +13860,59 @@ function billLostMagicBagShopItem(source, obj) {
     return chargeShopkeeperForLostMerchandise(shkp, value);
 }
 
+function objectCarriedByHero(obj, seen = new Set()) {
+    if (!obj || seen.has(obj)) return false;
+    seen.add(obj);
+    if ((game.inventory || []).includes(obj)) return true;
+    if ((game.level?.objects || []).includes(obj)) return false;
+    return objectCarriedByHero(obj.container, seen);
+}
+
+function heldMagicBagLostValueForObject(obj, shkp, seen = new Set()) {
+    if (!obj || !shkp || seen.has(obj) || shopBillableGold(obj)) return 0;
+    seen.add(obj);
+    let value = 0;
+    const entry = shopBillEntryForObject(shkp, obj);
+    if (entry) {
+        value += shopBillEntryTotal(entry);
+        removeObjectFromShopBill(shkp, obj);
+    } else if (obj.unpaid) {
+        value += unpaidBillPrice(obj) || shopItemPrice(obj, game.u?.ux, game.u?.uy);
+        clearObjectShopBillState(obj);
+    }
+    for (const child of globContents(obj))
+        value += heldMagicBagLostValueForObject(child, shkp, seen);
+    return value;
+}
+
+function markHeldMagicBagDeletedContentsUsedUp(obj, seen = new Set()) {
+    if (!obj || seen.has(obj)) return;
+    seen.add(obj);
+    for (const child of globContents(obj)) {
+        markHeldMagicBagDeletedContentsUsedUp(child, seen);
+        markObjectShopBillUsedUp(child);
+    }
+}
+
+function billHeldMagicBagLostItem(obj) {
+    const owner = shopkeeperOwningBillEntry(obj);
+    if (obj?.unpaid || owner.entry) {
+        const shkp = owner.shkp || heroShopkeeper();
+        if (!shkp) return 0;
+        const value = heldMagicBagLostValueForObject(obj, shkp);
+        return chargeShopkeeperForLostMerchandise(shkp, value);
+    }
+    markHeldMagicBagDeletedContentsUsedUp(obj);
+    return 0;
+}
+
+function billMagicBagLostItem(source, obj) {
+    const shkp = shopFloorContainerShopkeeper(source);
+    if (shkp) return billLostMagicBagShopItem(source, obj);
+    if (objectCarriedByHero(source)) return billHeldMagicBagLostItem(obj);
+    return 0;
+}
+
 function billShopFloorMagicBagExplosionTarget(targetBag) {
     const shkp = shopFloorContainerShopkeeper(targetBag);
     if (!shkp || !targetBag || shopBillableGold(targetBag)) return { shkp: null, billEntry: null };
@@ -18264,7 +18317,7 @@ function tipContainerToFloor(source) {
         removeContainedObject(source, obj);
         thawObjectTippedFromSource(source, obj);
         if (cursedMagicBag && !rn2(13)) {
-            lostMerchandise += billLostMagicBagShopItem(source, obj);
+            lostMerchandise += billMagicBagLostItem(source, obj);
             destroyMagicBagItem(obj, messages);
             continue;
         }
@@ -18469,13 +18522,17 @@ function destroyMagicBagItem(item, messages, { silent = false } = {}) {
 function magicBagContentsLoss(container, messages, { silent = false } = {}) {
     if (!isMagicBagObject(container) || !container.cursed) return 0;
     let lost = 0;
+    let lostMerchandise = 0;
     for (const obj of [...liquidFlowContainerContents(container)]) {
         if (rn2(13)) continue;
+        lostMerchandise += billMagicBagLostItem(container, obj);
         removeContainedObject(container, obj);
         destroyMagicBagItem(obj, messages, { silent });
         lost++;
     }
     refreshTipContainerWeight(container);
+    const lostMessage = !silent ? lostShopMerchandiseMessage(lostMerchandise) : '';
+    if (lostMessage) messages.push(lostMessage);
     return lost;
 }
 
@@ -18789,7 +18846,7 @@ function scatterMagicBagContents(container, messages) {
     const shopContext = magicBagScatterShopContext(x, y);
     for (const obj of [...liquidFlowContainerContents(container)]) {
         if (!rn2(13)) {
-            billLostMagicBagShopItem(container, obj);
+            billMagicBagLostItem(container, obj);
             removeContainedObject(container, obj);
             destroyMagicBagItem(obj, messages, { silent: true });
             continue;
@@ -19130,7 +19187,7 @@ function tipContainerIntoContainer(source, targetBox) {
         removeContainedObject(source, obj);
         thawObjectTippedFromSource(source, obj);
         if (cursedMagicBag && !rn2(13)) {
-            lostMerchandise += billLostMagicBagShopItem(source, obj);
+            lostMerchandise += billMagicBagLostItem(source, obj);
             destroyMagicBagItem(obj, messages);
             continue;
         }
