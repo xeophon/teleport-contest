@@ -16850,28 +16850,109 @@ function heroCarryCapacity() {
     return Is_airlevel(game.u?.uz) || game.u?.levitating ? 1000 : normalCapacity;
 }
 
-function projectedContainerTakeoutWeight(container, objects) {
-    if ((game.inventory || []).includes(container)) return heroCarriedWeight();
-    let weight = heroCarriedWeight();
-    let gold = Math.max(0, Math.trunc(Number(game._goldCount || 0)));
-    for (const obj of objects) {
-        if (shopBillableGold(obj)) {
-            const amount = Math.max(1, Math.trunc(Number(obj.quan || 1)));
-            const oldGoldWeight = Math.max(0, Math.trunc((gold + 50) / 100));
-            gold += amount;
-            const newGoldWeight = Math.max(0, Math.trunc((gold + 50) / 100));
-            weight += newGoldWeight - oldGoldWeight;
-        } else {
-            weight += globObjectWeight(obj);
-        }
+const PICKUP_BURDEN_LEVELS = {
+    unencumbered: 0,
+    burdened: 1,
+    stressed: 2,
+    strained: 3,
+    overtaxed: 4,
+    overloaded: 5,
+};
+
+function heroEncumbranceForWeight(weight) {
+    const capacity = heroCarryCapacity();
+    const burden = Math.trunc(Number(weight || 0)) - capacity;
+    if (burden <= 0) return 0;
+    if (capacity <= 1) return OVERLOADED;
+    return Math.min(Math.trunc(burden * 2 / capacity) + 1, OVERLOADED);
+}
+
+function pickupBurdenLimit() {
+    const value = String(game.flags?.pickup_burden || 'stressed').toLowerCase();
+    return PICKUP_BURDEN_LEVELS[value] ?? PICKUP_BURDEN_LEVELS.stressed;
+}
+
+function containerTakeoutBurdenPrefix(encumbrance) {
+    if (encumbrance >= 4) return 'You have extreme difficulty';
+    if (encumbrance >= 3) return 'You have much trouble';
+    if (encumbrance >= 2) return 'You have trouble';
+    return 'You have a little trouble';
+}
+
+function containerTakeoutObjectView(obj, count) {
+    const quantity = Math.max(1, Math.trunc(Number(count || obj?.quan || 1)));
+    return quantity === Math.max(1, Math.trunc(Number(obj?.quan || 1)))
+        ? obj
+        : { ...obj, quan: quantity };
+}
+
+function containerTakeoutWeightIncrease(obj, count, goldCount = game._goldCount || 0) {
+    const quantity = Math.max(1, Math.trunc(Number(count || obj?.quan || 1)));
+    if (shopBillableGold(obj)) {
+        const oldGoldWeight = Math.max(0, Math.trunc((Math.max(0, Math.trunc(Number(goldCount || 0))) + 50) / 100));
+        const newGoldWeight = Math.max(0, Math.trunc((Math.max(0, Math.trunc(Number(goldCount || 0))) + quantity + 50) / 100));
+        return newGoldWeight - oldGoldWeight;
     }
-    return weight;
+    return globObjectWeight(containerTakeoutObjectView(obj, quantity));
+}
+
+function containerTakeoutLiftableCount(container, obj, currentWeight, goldCount = game._goldCount || 0) {
+    const count = Math.max(1, Math.trunc(Number(obj?.quan || 1)));
+    if ((game.inventory || []).includes(container)) return count;
+    const maxWeight = heroCarryCapacity() * 3;
+    if (currentWeight + containerTakeoutWeightIncrease(obj, count, goldCount) <= maxWeight)
+        return count;
+    if (count <= 1 || obj?.otyp === LOADSTONE || objectKindKey(obj) === 'loadstone' || globContents(obj).length)
+        return 0;
+
+    let low = 0;
+    let high = count;
+    while (low < high) {
+        const mid = Math.ceil((low + high) / 2);
+        if (currentWeight + containerTakeoutWeightIncrease(obj, mid, goldCount) <= maxWeight)
+            low = mid;
+        else high = mid - 1;
+    }
+    return low;
 }
 
 function containerTakeoutPreflight(container, entries) {
-    const objects = (entries || []).map(entry => entry?.item || entry).filter(Boolean);
-    const newSlotCount = objects
-        .filter(obj => !shopBillableGold(obj) && !findContainerTakeoutInventoryMergeTarget(container, obj))
+    let currentWeight = heroCarriedWeight();
+    let gold = Math.max(0, Math.trunc(Number(game._goldCount || 0)));
+    const initialEncumbrance = heroEncumbranceForWeight(currentWeight);
+    const burdenLimit = Math.max(initialEncumbrance, pickupBurdenLimit());
+    let burdenPrompt = null;
+    const messages = [];
+    const planned = [];
+
+    for (const entry of entries || []) {
+        const obj = entry?.item || entry;
+        if (!obj) continue;
+        const originalCount = Math.max(1, Math.trunc(Number(obj.quan || 1)));
+        const takeCount = containerTakeoutLiftableCount(container, obj, currentWeight, gold);
+        if (takeCount < 1) {
+            return {
+                ok: false,
+                message: `There is ${pickupObjectPhrase(obj)} in ${containerObjectPhrase(container)}, but you cannot carry any more.`,
+            };
+        }
+        if (takeCount < originalCount) {
+            messages.push(`You can only carry ${takeCount === 1 ? 'one' : 'some'} of the ${pickupObjectPhrase(obj)} in ${containerObjectPhrase(container)}.`);
+        }
+        const view = containerTakeoutObjectView(obj, takeCount);
+        const increase = containerTakeoutWeightIncrease(obj, takeCount, gold);
+        const nextWeight = currentWeight + increase;
+        const nextEncumbrance = heroEncumbranceForWeight(nextWeight);
+        if (!burdenPrompt && nextEncumbrance > burdenLimit) {
+            burdenPrompt = `${containerTakeoutBurdenPrefix(nextEncumbrance)} removing ${pickupObjectPhrase(view)}.  Continue? [ynq] (q)`;
+        }
+        currentWeight = nextWeight;
+        if (shopBillableGold(obj)) gold += takeCount;
+        planned.push({ ...entry, item: obj, takeCount, liftView: view });
+    }
+
+    const newSlotCount = planned
+        .filter(entry => !shopBillableGold(entry.liftView) && !findContainerTakeoutInventoryMergeTarget(container, entry.liftView))
         .length;
     if (newSlotCount && !simulatedNextInventoryLetters(newSlotCount)) {
         return {
@@ -16879,15 +16960,7 @@ function containerTakeoutPreflight(container, entries) {
             message: 'Your knapsack cannot accommodate any more items.',
         };
     }
-    const capacity = heroCarryCapacity();
-    if (projectedContainerTakeoutWeight(container, objects) > capacity * 3) {
-        const obj = objects.find(item => !shopBillableGold(item)) || objects[0];
-        return {
-            ok: false,
-            message: `There is ${pickupObjectPhrase(obj)} in ${containerObjectPhrase(container)}, but you cannot carry any more.`,
-        };
-    }
-    return { ok: true, message: '' };
+    return { ok: true, message: '', entries: planned, messages, prompt: burdenPrompt };
 }
 
 function globEntryTopContainer(entry) {
@@ -20188,6 +20261,64 @@ function addContainerTakeoutObjectToInventory(container, obj) {
     maybeAttachCarriedFigurineTimeout(obj);
     game._pet_food_scan_inventory = game.inventory;
     return obj.line || `${letter} - ${pickupObjectPhrase(obj)}`;
+}
+
+function splitContainerTakeoutObjectForLift(obj, count) {
+    const quantity = Math.max(1, Math.trunc(Number(obj?.quan || 1)));
+    const takeCount = Math.max(1, Math.min(quantity, Math.trunc(Number(count || quantity))));
+    if (!obj || takeCount >= quantity) return obj;
+    const lifted = { ...obj, id: next_ident(), quan: takeCount };
+    delete lifted.o_id;
+    delete lifted._shopBillObjectId;
+    delete lifted.letter;
+    delete lifted.line;
+    obj.quan = quantity - takeCount;
+    return lifted;
+}
+
+async function finishContainerTakeoutSelection(container, picked, preflightMessages = []) {
+    const messages = [...(preflightMessages || [])];
+    const moved = [];
+    for (const pickedEntry of picked || []) {
+        const source = pickedEntry.item;
+        const obj = splitContainerTakeoutObjectForLift(source, pickedEntry.takeCount || source?.quan || 1);
+        const line = addContainerTakeoutObjectToInventory(container, obj);
+        moved.push(obj);
+        messages.push(/[.!?]$/.test(line) ? line : `${line}.`);
+    }
+    for (const obj of moved) removeContainedObject(container, obj);
+    game._pet_food_scan_inventory = game.inventory;
+    const followupPutIn = game._icebox_sequence_after_takeout === 'putin' && isIceBoxObject(container);
+    const finishSequence = !followupPutIn && iceBoxSequenceActive() && isIceBoxObject(container);
+    const followupContainerPutIn = game._container_sequence_after_takeout === 'putin' && !isIceBoxObject(container);
+    const finishContainerSeq = !followupContainerPutIn && containerSequenceActive() && !isIceBoxObject(container);
+    clearContainerTakeoutState();
+    game._floor_container_object = null;
+    game._overlay_lines = null;
+    game._overlay_hide_status = 0;
+    if (followupPutIn) {
+        markIceBoxSequenceUsed(true);
+        await continueIceBoxSequenceToPutIn(container, messages);
+        return;
+    }
+    if (finishSequence) {
+        await finishIceBoxSequence(messages, true);
+        return;
+    }
+    if (followupContainerPutIn) {
+        markContainerSequenceUsed(true);
+        await continueContainerSequenceToPutIn(container, messages);
+        return;
+    }
+    if (finishContainerSeq) {
+        await finishContainerSequence(messages, true);
+        return;
+    }
+    clearIceBoxSequenceState();
+    clearContainerSequenceState();
+    game._command_mode = null;
+    game.context.move = 1;
+    await showIceBoxMessageList(messages);
 }
 
 function placeObjectOnFloorWithEffects(obj, x, y, messages, verb = 'drop', {
@@ -28233,6 +28364,32 @@ export async function rhack(_cmd) {
         game._command_mode = null;
         game._skip_shop_quote_once = objectId;
         await rhack(',');
+        return;
+    }
+
+    if (game._command_mode === 'containerTakeoutBurdenConfirm') {
+        const pending = game._container_takeout_pending;
+        const answer = ch.toLowerCase();
+        if (!pending || !['y', 'n', 'q', ' ', '\r', '\n', '\x1b'].includes(answer)) {
+            game._keep_pending_message = 1;
+            return;
+        }
+        game._container_takeout_pending = null;
+        game._pending_message = '';
+        game._message_more = 0;
+        game._keep_pending_message = 0;
+        if (answer === 'y') {
+            await finishContainerTakeoutSelection(pending.container, pending.picked, pending.messages);
+            return;
+        }
+        clearContainerTakeoutState();
+        game._floor_container_object = null;
+        game._overlay_lines = null;
+        game._overlay_hide_status = 0;
+        clearIceBoxSequenceState();
+        clearContainerSequenceState();
+        game._command_mode = null;
+        game.context.move = 0;
         return;
     }
 
@@ -38312,54 +38469,22 @@ export async function rhack(_cmd) {
                 await setMessage(preflight.message || 'You cannot carry that.');
                 return;
             }
-            const messages = [];
-            for (const pickedEntry of picked) {
-                const obj = pickedEntry.item;
-                const line = addContainerTakeoutObjectToInventory(container, obj);
-                messages.push(/[.!?]$/.test(line) ? line : `${line}.`);
-            }
-            if (container) container.contents = (container.contents || []).filter(item => !picked.some(entry => entry.item === item));
-            game._pet_food_scan_inventory = game.inventory;
-            const followupPutIn = game._icebox_sequence_after_takeout === 'putin' && isIceBoxObject(container);
-            const finishSequence = !followupPutIn && iceBoxSequenceActive() && isIceBoxObject(container);
-            const followupContainerPutIn = game._container_sequence_after_takeout === 'putin' && !isIceBoxObject(container);
-            const finishContainerSeq = !followupContainerPutIn && containerSequenceActive() && !isIceBoxObject(container);
-            clearContainerTakeoutState();
-            game._floor_container_object = null;
-            game._overlay_lines = null;
-            game._overlay_hide_status = 0;
-            const message = messages.join('  ');
-            if (followupPutIn) {
-                markIceBoxSequenceUsed(true);
-                await continueIceBoxSequenceToPutIn(container, messages);
+            const planned = preflight.entries || picked;
+            if (preflight.prompt) {
+                game._container_takeout_pending = {
+                    container,
+                    picked: planned,
+                    messages: preflight.messages || [],
+                };
+                clearContainerTakeoutState();
+                game._floor_container_object = null;
+                game._overlay_lines = null;
+                game._overlay_hide_status = 0;
+                game._command_mode = 'containerTakeoutBurdenConfirm';
+                await setMessage(preflight.prompt);
                 return;
             }
-            if (finishSequence) {
-                await finishIceBoxSequence(messages, true);
-                return;
-            }
-            if (followupContainerPutIn) {
-                markContainerSequenceUsed(true);
-                await continueContainerSequenceToPutIn(container, messages);
-                return;
-            }
-            if (finishContainerSeq) {
-                await finishContainerSequence(messages, true);
-                return;
-            }
-            clearIceBoxSequenceState();
-            clearContainerSequenceState();
-            game._command_mode = null;
-            if (message.length <= 79) {
-                await setMessage(message);
-            } else {
-                const first = messages.slice(0, 2).join('  ');
-                const rest = messages.slice(2).join('  ');
-                game._queued_message_after_more = rest || null;
-                game._queued_message_process_time_after_more = 1;
-                await setMessage(first, true);
-            }
-            game.context.move = 1;
+            await finishContainerTakeoutSelection(container, planned, preflight.messages || []);
             return;
         }
         if (ch === '\x1b') {

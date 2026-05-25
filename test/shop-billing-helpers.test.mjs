@@ -2885,6 +2885,89 @@ test('container take-out capacity preflight refuses objects beyond maximum carry
     assert.equal(game.context.move || 0, 0);
 });
 
+test('declined container take-out burden prompt leaves merchandise untouched', async () => {
+    const { shkp } = installCommandShopState();
+    const container = shopFloorContainer(6134);
+    const contained = putObjectInContainer(container, { ...foodRation(6135), quan: 11 });
+    game.level.objects = [container];
+    game.u.acurr.a = [1, 1, 10, 10, 1, 10];
+
+    await confirmSingleContainerTakeout(container, contained);
+
+    assert.equal(game._command_mode, 'containerTakeoutBurdenConfirm');
+    assert.match(game._pending_message, /trouble removing .*Continue\? \[ynq\]/);
+    assert.equal(container.contents.includes(contained), true);
+    assert.equal(game.inventory.includes(contained), false);
+    assert.equal(shkp.billct, 0);
+
+    await rhack('n');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(container.contents.includes(contained), true);
+    assert.equal(contained.quan, 11);
+    assert.equal(contained.contained, true);
+    assert.equal(contained.container, container);
+    assert.equal(game.inventory.includes(contained), false);
+    assert.equal(contained.unpaid, undefined);
+    assert.equal(shkp.billct, 0);
+    assert.equal(shkp.bill.length, 0);
+    assert.equal(game.context.move || 0, 0);
+});
+
+test('accepted container take-out burden prompt bills after confirmation', async () => {
+    const { shkp } = installCommandShopState();
+    const container = shopFloorContainer(6137);
+    const contained = putObjectInContainer(container, { ...foodRation(6138), quan: 11 });
+    game.level.objects = [container];
+    game.u.acurr.a = [1, 1, 10, 10, 1, 10];
+
+    await confirmSingleContainerTakeout(container, contained);
+
+    assert.equal(container.contents.includes(contained), true);
+    assert.equal(game.inventory.includes(contained), false);
+    assert.equal(shkp.billct, 0);
+
+    await rhack('y');
+
+    const entry = shop.shopBillEntryForObject(shkp, contained);
+    assert.equal(game._command_mode, null);
+    assert.equal(container.contents.includes(contained), false);
+    assert.equal(game.inventory.includes(contained), true);
+    assert.equal(contained.unpaid, true);
+    assert.ok(entry);
+    assert.equal(contained.unpaidPrice, shop.shopBillEntryTotal(entry));
+    assert.match(contained.line, /unpaid, \d+ zorkmids?/);
+    assert.equal(game.context.move, 1);
+});
+
+test('container take-out partial stack lifting splits before shop billing', async () => {
+    const { shkp } = installCommandShopState();
+    const container = shopFloorContainer(6140);
+    const contained = putObjectInContainer(container, { ...foodRation(6141), quan: 20 });
+    game.level.objects = [container];
+    game.u.acurr.a = [1, 1, 10, 10, 1, 10];
+    game.flags.pickup_burden = 'overloaded';
+
+    await confirmSingleContainerTakeout(container, contained);
+
+    const carried = game.inventory.find(item => item.kind === 'food ration');
+    const entry = shop.shopBillEntryForObject(shkp, carried);
+    const expectedPrice = shop.shopItemPrice(carried, container.ox, container.oy);
+
+    assert.match(game._pending_message, /can only carry some of the 20 food rations in a large box/);
+    assert.equal(container.contents.includes(contained), true);
+    assert.equal(contained.quan, 5);
+    assert.equal(contained.unpaid, undefined);
+    assert.notEqual(carried, contained);
+    assert.equal(carried.quan, 15);
+    assert.equal(carried.unpaid, true);
+    assert.ok(entry);
+    assert.equal(shop.shopBillEntryTotal(entry), expectedPrice);
+    assert.equal(carried.unpaidPrice, expectedPrice);
+    assert.equal(shkp.billct, 1);
+    assert.equal(game.context.move, 1);
+});
+
 test('full inventory allows no-charge container take-out into a paid stack', async () => {
     const { shkp } = installCommandShopState();
     const container = shopFloorContainer(6141);

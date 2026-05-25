@@ -56,6 +56,7 @@ The current audit source of truth is `docs/c-parity-audit/`.
 - Added C-style hero-caused shop-floor fire `useupf()` billing: hero traps and hero fire rays split destroyed floor stacks before used-up billing, monster-caused floor fire remains unbilled, and outside-shop hero fire records robbed value.
 - Added the first C `lift_object()`-ordered shop-floor container take-out preflight: slot and maximum-carry failures now stop before extraction, recursive billing, gold debt, or inventory insertion.
 - Added stackable shop-floor container take-out inventory merges for no-charge goods and same-price unpaid bill rows, including full-inventory cases that do not require a fresh inventory letter.
+- Added more C `lift_object()`-ordered shop-floor container take-out behavior: burden prompts now happen before extraction/billing, declined prompts leave contents untouched, and overweight stacks split to the liftable quantity before shop billing.
 - Latest verified public score: `44/44`.
 
 ## Current Priorities
@@ -64,7 +65,7 @@ The current audit source of truth is `docs/c-parity-audit/`.
    - Source notes: `docs/c-parity-audit/05-food-inventory-containers-shops.md`.
    - Current JS has a starter bill ledger, but object `unpaid`/`unpaidPrice` fields and legacy fallback scans still participate in billing.
    - Missing or partial concepts include full `addtobill`, full `subfrombill` routing, non-ordinary magic-bag source/target cases, full `obfree()`/container-aware `stolen_value()` helper integration, shared `sellobj()` helper integration beyond ordinary branches, `picked_container`, remaining charge-consuming `check_unpaid_usage` caller coverage, and non-bite `costly_alteration` coverage outside the narrow food/tin paths.
-   - The next narrow C-backed gaps are non-ordinary magic-bag sources/targets, remaining lift preflight details, remaining inventory merge edge cases, remaining merge/destruction edge cases, generic floor-effect deletion ownership, and payment container/robbed-shop semantics.
+   - The next narrow C-backed gaps are non-ordinary magic-bag sources/targets, remaining lift preflight details such as artifact/fatal-corpse checks, remaining inventory merge edge cases, remaining merge/destruction edge cases, generic floor-effect deletion ownership, and payment container/robbed-shop semantics.
 
 2. Object registry and canonical object factory.
    - Source notes: `docs/c-parity-audit/02-objects-wishing-readobjnam.md`.
@@ -103,7 +104,7 @@ The current audit source of truth is `docs/c-parity-audit/`.
 
 Continue the shop ledger migration:
 
-1. Broaden shop-floor container take-out and tip beyond recursive billing into remaining lift preflight details, burden prompts, partial stack lifting, remaining inventory merge edge cases, and merge/destruction edge cases; continue magic-bag work through non-ordinary sources/targets and shared `obfree()`/`stolen_value()` debt naming.
+1. Broaden shop-floor container take-out and tip beyond recursive billing into remaining lift preflight details such as artifact/fatal-corpse checks, remaining inventory merge edge cases, and merge/destruction edge cases; continue magic-bag work through non-ordinary sources/targets and shared `obfree()`/`stolen_value()` debt naming.
 2. Finish remaining `sellobj()` follow-ups: complete recursive `subfrombill()` integration, broken/container projectile impact edge cases, and shared-helper integration for less ordinary object transfers.
 3. Move payment toward a complete C `dopay()` model for containers, queued itemized selections, and robbed-shop interactions.
 4. Finish remaining musical edge cases: exact snake/nymph/mercenary polish, drawbridge occupant/object-death side effects and achievement/status integration, and any remaining charged-instrument callers that share `do_play_instrument()`.
