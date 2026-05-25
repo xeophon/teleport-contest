@@ -2627,9 +2627,17 @@ Next concrete target:
   routed through the existing cube-aware `meatbox()` helper, and skips for
   rocks/statues, scare-monster scrolls, ball-and-chain objects, prizes, Rider
   corpses, and unsafe petrifying corpses. Focused pet/pile replays and full
-  score remain exact. Remaining `meatbox()` work is metallivore/corpse-eater
-  consumption callers, deeper ice-box age timer parity, and shop billing edge
-  cases.
+  score remain exact.
+- Corpse-eater floor consumption now mirrors the `meatcorpse()` shape for
+  purple worms, baby purple worms, ghouls, and piranhas: post-move corpse
+  checks happen before ordinary pickup, edible corpse targets can guide item
+  search without becoming pickup messages, one corpse is split from stacks,
+  vegan/Rider/unsafe petrifying corpses are skipped, and consumption uses the
+  shared `m_consume_obj()` helper path without adding `meating`. Monster data
+  now carries explicit `corpseEater` and future `metallivorous` diet flags.
+  Focused pet/pile guards and full score remain exact. Remaining `meatbox()`
+  work is metallivore `meatmetal()` consumption, deeper ice-box age timer
+  parity, and shop billing edge cases.
 - Remaining ice work outside this fire-ray terrain slice includes the broader
   full `spoteffects()`/`pooleffects()` hero liquid behavior, deeper
   `minliquid()` edges (life-saving or shape-shift survivor relocation,

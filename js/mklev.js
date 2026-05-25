@@ -545,6 +545,8 @@ const ANIMAL_GLYPHS = new Set(['a', 'B', 'c', 'd', 'f', 'q', 'r', 's', 'u', 'x',
 const TUNNEL_MONSTERS = new Set(['dwarf', 'dwarf leader', 'dwarf ruler', 'rock mole', 'umber hulk']);
 const NEED_PICK_MONSTERS = new Set(['dwarf', 'dwarf leader', 'dwarf ruler']);
 const WALLWALK_MONSTERS = new Set(['earth elemental', 'xorn']);
+const METALLIVOROUS_MONSTERS = new Set(['rock mole', 'rust monster', 'xorn']);
+const CORPSE_EATER_MONSTERS = new Set(['purple worm', 'baby purple worm', 'ghoul', 'piranha']);
 const RNDMONST_FLAGS_BY_NAME = new Map(
     RNDMONST_COMMON_MONSTERS.map(([name, , , , , , , flags]) => [name, flags]),
 );
@@ -4889,6 +4891,8 @@ function monsterFromRndMeta(row) {
         passWalls: WALLWALK_MONSTERS.has(name),
         tunnel: TUNNEL_MONSTERS.has(name),
         needPick: NEED_PICK_MONSTERS.has(name),
+        metallivorous: METALLIVOROUS_MONSTERS.has(name),
+        corpseEater: CORPSE_EATER_MONSTERS.has(name),
         oviparous: flags.includes('o'),
         covetous: COVETOUS_MONSTER_NAMES.has(name),
         hidesUnder: HIDES_UNDER_MONSTERS.has(name),

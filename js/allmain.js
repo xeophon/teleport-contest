@@ -1628,6 +1628,7 @@ const KELP_FROND = 172;
 const CORPSE = 471;
 const STATUE = 472;
 const POISONOUS_CORPSES = new Set(['kobold', 'large kobold', 'kobold leader', 'kobold shaman']);
+const CORPSE_EATER_MONSTERS = new Set(['purple worm', 'baby purple worm', 'ghoul', 'piranha']);
 const DART = 353;
 const ORCISH_DAGGER = 10020;
 const DAGGER = 10023;
@@ -1971,7 +1972,8 @@ function consumeMonsterEatenObject(mon, obj, objects, messages, { splitStackAcco
     applyMonsterConsumedObjectEffects(mon, obj);
     monsterConsumeContainerContents(mon, obj, messages);
     const idx = objects.indexOf(obj);
-    if (!wholeStack && idx >= 0 && (obj.quan || 1) > 1 && obj.cls === 'food') {
+    if (!wholeStack && idx >= 0 && (obj.quan || 1) > 1
+        && (obj.cls === 'food' || obj.otyp === CORPSE || obj.otyp === 'corpse')) {
         if (!splitStackAccounted) next_ident();
         obj.quan--;
     } else if (idx >= 0) {
@@ -2040,6 +2042,47 @@ function gelatinousCubeEatFloorObjects(mon) {
     if ((ate || engulfed) && isGelatinousCube(mon)) newsym(mon.mx, mon.my);
     addMonsterConsumeMessages(messages);
     return !!(ate || engulfed);
+}
+
+function monsterIsCorpseEater(mon) {
+    return !!mon?.data?.corpseEater || CORPSE_EATER_MONSTERS.has(mon?.data?.name || '');
+}
+
+function corpseEaterVeganCorpse(obj) {
+    const corpse = obj?.corpsenm || {};
+    const name = String(corpse.name || '').toLowerCase();
+    const glyph = corpse.glyph || corpse.mlet || '';
+    if (['b', 'j', 'v', 'y', 'F'].includes(glyph)) return true;
+    if (glyph === 'E' && name !== 'stalker') return true;
+    if (glyph === '\'' && name !== 'flesh golem' && name !== 'leather golem') return true;
+    return !!(corpse.noncorporeal || corpse.whirly || ['ghost', 'shade'].includes(name));
+}
+
+function monsterWouldConsumeItem(mon, obj) {
+    if (!monsterIsCorpseEater(mon) || mon.pet || mon.mtame || !obj || obj.transientProjectile) return false;
+    if (obj.otyp !== CORPSE && obj.otyp !== 'corpse') return false;
+    if (corpseEaterVeganCorpse(obj)) return false;
+    const corpseName = String(obj.corpsenm?.name || '').toLowerCase();
+    if (obj.corpsenm?.rider || obj.riderCorpse
+        || corpseName === 'death' || corpseName === 'pestilence' || corpseName === 'famine') return false;
+    return !(PETRIFYING_TOUCH_MONSTERS.has(corpseName) && !monsterResistsStoning(mon));
+}
+
+function corpseEaterEatFloorCorpse(mon) {
+    if (!monsterIsCorpseEater(mon) || mon.pet || mon.mtame || !game.level) return false;
+    const objects = game.level.objects || [];
+    const corpse = [...objects].reverse()
+        .find(obj => obj.ox === mon.mx && obj.oy === mon.my && !obj.hidden && monsterWouldConsumeItem(mon, obj));
+    if (!corpse) return false;
+
+    const messages = [];
+    if (monsterVisibleToHero(mon) && game.flags?.verbose !== false)
+        messages.push(`${monsterDisplayName(mon)} eats ${pickupObjectName(corpse)}!`);
+    else if (game.flags?.verbose !== false)
+        messages.push('You hear a masticating sound.');
+    consumeMonsterEatenObject(mon, corpse, objects, messages);
+    addMonsterConsumeMessages(messages);
+    return true;
 }
 
 function isRoyalJellyObject(obj) {
@@ -7969,7 +8012,7 @@ function monsterSearchItemGoal(mon) {
                 .filter(obj => obj.ox === x && obj.oy === y && !obj.transientProjectile);
             if (!stack.some(obj => obj.otyp !== ROCK && obj.kind !== 'rock' && !obj.isRock
                 && (!costlySpot || obj.no_charge)
-                && monsterWouldTakeItem(mon, obj))) continue;
+                && (monsterWouldTakeItem(mon, obj) || monsterWouldConsumeItem(mon, obj)))) continue;
             radius = dist;
             goal = { x, y };
             if (!dist) return goal;
@@ -7980,6 +8023,7 @@ function monsterSearchItemGoal(mon) {
 
 function monsterPickStuff(mon, monIndex = null, somebodyCanMove = false, forceMoreOnAppend = false) {
     if (gelatinousCubeEatFloorObjects(mon)) return true;
+    if (corpseEaterEatFloorCorpse(mon)) return true;
     if (mon.mpeaceful && !(mon.pet || mon.mtame) && !mon.isshk) return false;
     const objects = game.level?.objects || [];
     const obj = [...objects].reverse()
