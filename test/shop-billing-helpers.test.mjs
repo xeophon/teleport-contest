@@ -2989,6 +2989,79 @@ test('picking up a no-charge floor container bills chargeable contents', () => {
     assert.equal(blade.container, carried);
 });
 
+test('pickup menu prices billable contents of a no-charge floor container', async () => {
+    installCommandShopState();
+    const bag = sack(6100, 'b');
+    bag.no_charge = true;
+    bag.ox = 5;
+    bag.oy = 5;
+    const blade = putObjectInContainer(bag, dagger(6101));
+    const scroll = blankScroll(6102);
+    game.level.objects = [scroll, bag];
+    const expected = shop.shopItemPrice(blade, 5, 5);
+
+    await rhack(',');
+
+    assert.equal(game._command_mode, 'pickupList');
+    const menuText = (game._overlay_lines || []).map(row => row[2]).join('\n');
+    assert.match(menuText, new RegExp(`a bag \\(contents, ${expected} zorkmids?\\)`));
+    assert.doesNotMatch(menuText, /a bag \(no charge\)/);
+});
+
+test('single pickup quotes no-charge floor container contents without marking the container unpaid', async () => {
+    const { shkp } = installCommandShopState();
+    const bag = sack(6103, 'b');
+    bag.no_charge = true;
+    bag.ox = 5;
+    bag.oy = 5;
+    const blade = putObjectInContainer(bag, dagger(6104));
+    game.level.objects = [bag];
+    const expected = shop.shopItemPrice(blade, 5, 5);
+
+    await rhack(',');
+
+    assert.equal(game._command_mode, 'pickupShopQuote');
+    assert.match(game._pending_message, new RegExp(`only ${expected} zorkmids? for the contents of this bag`));
+
+    await rhack(' ');
+
+    const carried = game.inventory.find(item => item.id === bag.id);
+    assert.ok(carried);
+    assert.equal(carried.unpaid, undefined);
+    assert.match(carried.line, new RegExp(`\\(contents, ${expected} zorkmids?\\)`));
+    assert.match(game._pending_message, new RegExp(`\\(contents, ${expected} zorkmids?\\)`));
+    assert.equal(shop.shopBillEntryForObject(shkp, carried), null);
+    assert.equal(shop.shopBillEntryForObject(shkp, blade).bo_id, String(blade.id));
+    assert.equal(shkp.billct, 1);
+});
+
+test('whole container pickup quote excludes contained gold from item price', async () => {
+    const { shkp } = installCommandShopState();
+    const bag = sack(6105, 'b');
+    bag.ox = 5;
+    bag.oy = 5;
+    const blade = putObjectInContainer(bag, dagger(6106));
+    const coins = putObjectInContainer(bag, goldPieces(6107, 12));
+    game.level.objects = [bag];
+    const expectedItemPrice = shop.shopItemPrice(bag, 5, 5) + shop.shopItemPrice(blade, 5, 5);
+
+    await rhack(',');
+
+    assert.equal(game._command_mode, 'pickupShopQuote');
+    assert.match(game._pending_message, new RegExp(`only ${expectedItemPrice} zorkmids? for this bag and its contents`));
+    assert.doesNotMatch(game._pending_message, new RegExp(`${expectedItemPrice + 12} zorkmids?`));
+
+    await rhack(' ');
+
+    const carried = game.inventory.find(item => item.id === bag.id);
+    assert.ok(carried);
+    assert.match(game._pending_message, new RegExp(`\\(unpaid, ${expectedItemPrice} zorkmids?\\)`));
+    assert.doesNotMatch(game._pending_message, new RegExp(`\\(unpaid, ${expectedItemPrice + 12} zorkmids?\\)`));
+    assert.equal(shkp.debit, 12);
+    assert.equal(shop.shopBillEntryForObject(shkp, coins), null);
+    assertBillRowsFor(shkp, [carried, blade]);
+});
+
 test('ordinary shop-floor pickup slot failure happens before billing or removal', async () => {
     const { shkp } = installCommandShopState();
     const floorObj = foodRation(6006, 'a');

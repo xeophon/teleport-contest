@@ -74,6 +74,7 @@ The current audit source of truth is `docs/c-parity-audit/`.
 - Added C-style menu pickup scare-monster scroll basics: blessed and first-uncursed scrolls mutate before live pickup, cursed or already-picked-up scrolls dust into used-up shop bills while the selected-object loop continues, and partial lifted stacks leave the floor remainder state unchanged.
 - Added C-style menu pickup burden and gold lift handling: selected items now prompt one at a time, `n` skips the current item and continues, `q` aborts later selections, and shop-floor gold is split and charged only after the liftable count is accepted.
 - Added C-style ordinary shop pickup pricing text: pickup menu rows now use shop price suffixes, and single/menu stack pickup quotes use per-unit `addtobill()` wording before the inventory line.
+- Added C-style whole-container shop pickup quote pricing: floor pickup menus and quotes now include non-gold container contents, use `contents` wording for no-charge top containers, use `and its contents` wording when the top container is also billed, and keep contained gold as separate shop debt instead of item price.
 - Added C-style scare-scroll floor used-up billing quotes: cursed or already-picked-up shop-floor scare-monster scrolls now dust first, then print the floor `addtobill()` "will cost you" quote for single and menu pickup, including per-unit stack wording after unknown-scroll `trycall()`.
 - Added C-style floor boulder pickup handling: boulders now carry 6000-weight metadata, ordinary heroes spend the pickup command and fail to lift them, Sokoban boulders refuse before rock-throwing overrides, and polymorphed rock-throwing forms can lift boulders without shop billing or burden prompts.
 - Added C-style container boulder take-out handling: contained boulders share `lift_object()` ordering, ordinary heroes fail before extraction/billing, Sokoban still beats rock-throwing forms, rock-throwing forms can take the first boulder through full inventory overflow, and container menus group them with boulders/statues.
@@ -86,7 +87,7 @@ The current audit source of truth is `docs/c-parity-audit/`.
    - Source notes: `docs/c-parity-audit/05-food-inventory-containers-shops.md`.
    - Current JS has a starter bill ledger, but object `unpaid`/`unpaidPrice` fields and legacy fallback scans still participate in billing.
    - Missing or partial concepts include full `addtobill`, full `subfrombill` routing, non-ordinary magic-bag source/target cases, full `obfree()`/container-aware `stolen_value()` helper integration, shared `sellobj()` helper integration beyond ordinary branches, remaining add-inventory/no-charge cleanup outside ordinary shop pickup, remaining charge-consuming `check_unpaid_usage` caller coverage, and non-bite `costly_alteration` coverage outside the narrow food/tin paths.
-   - The next narrow C-backed gaps are non-ordinary magic-bag sources/targets, container/contents quote edge cases, remaining inventory merge edge cases outside carried-bag partial put-in, remaining merge/destruction edge cases, generic floor-effect deletion ownership, artifact touch side effects outside floor pickup/container take-out, and payment container semantics.
+   - The next narrow C-backed gaps are non-ordinary magic-bag sources/targets, remaining inventory merge edge cases outside carried-bag partial put-in, remaining merge/destruction edge cases, generic floor-effect deletion ownership, artifact touch side effects outside floor pickup/container take-out, payment container semantics, and less ordinary `addtobill()`/quote positioning outside whole-container pickup.
 
 2. Object registry and canonical object factory.
    - Source notes: `docs/c-parity-audit/02-objects-wishing-readobjnam.md`.
@@ -125,7 +126,7 @@ The current audit source of truth is `docs/c-parity-audit/`.
 
 Continue the shop ledger migration:
 
-1. Broaden shop-floor container take-out and tip beyond recursive billing into remaining lift preflight details, remaining inventory merge edge cases outside carried-bag partial put-in, and merge/destruction edge cases; continue floor pickup through container/contents quote edge cases, and continue magic-bag work through non-ordinary sources/targets and shared `obfree()`/`stolen_value()` debt naming.
+1. Broaden shop-floor container take-out and tip beyond recursive billing into remaining lift preflight details, remaining inventory merge edge cases outside carried-bag partial put-in, and merge/destruction edge cases; continue magic-bag work through non-ordinary sources/targets and shared `obfree()`/`stolen_value()` debt naming.
 2. Finish remaining `sellobj()` follow-ups: complete recursive `subfrombill()` integration, broken/container projectile impact edge cases, and shared-helper integration for less ordinary object transfers.
 3. Move payment toward a complete C `dopay()` model for containers and queued itemized selections.
 4. Finish remaining musical edge cases: exact snake/nymph/mercenary polish, drawbridge occupant/object-death side effects and achievement/status integration, and any remaining charged-instrument callers that share `do_play_instrument()`.
