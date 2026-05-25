@@ -10,6 +10,7 @@ const BRASS_LANTERN = 226;
 const OIL_LAMP = 227;
 const MAGIC_LAMP = 228;
 const POT_OIL = 252;
+const CRYSTAL_BALL = 10088;
 
 function installShopState() {
     const g = resetGame();
@@ -59,6 +60,16 @@ function installCommandShopState() {
     return state;
 }
 
+function makeCrystalBallGazeDeterministic() {
+    initRng(1);
+    game.u.acurr.a[1] = 25;
+    game.u.blind = false;
+    game.u.hallucinating = false;
+    game.u._statusSuffix = '';
+    game.u._confusionTimeout = 0;
+    game.flags.verbose = false;
+}
+
 function dagger(id, letter = 'd') {
     return {
         id,
@@ -104,6 +115,25 @@ function chargedTool(id, kind, letter = 't', spe = 3) {
         oy: 5,
         letter,
         line: `${letter} - a ${kind}`,
+    };
+}
+
+function crystalBall(id, letter = 'c', spe = 2) {
+    return {
+        id,
+        otyp: CRYSTAL_BALL,
+        cls: 'tool',
+        glyph: '(',
+        kind: 'crystal ball',
+        actualKind: 'crystal ball',
+        quan: 1,
+        spe,
+        ox: 5,
+        oy: 5,
+        letter,
+        line: `${letter} - a crystal ball`,
+        known: true,
+        dknown: true,
     };
 }
 
@@ -1251,6 +1281,102 @@ test('applying empty unpaid tinning kit with a corpse adds no usage fee', async 
     assert.equal(game.inventory.filter(item => item.actualKind === 'tin').length, 0);
     assert.equal(shop.shopBillEntryForObject(shkp, kit).useup, false);
     assert.match(game._pending_message, /out of tins/);
+});
+
+test('applying unpaid crystal ball with two charges bills quarter price after look key', async () => {
+    const { shkp } = installCommandShopState();
+    makeCrystalBallGazeDeterministic();
+    const ball = crystalBall(3113, 'c', 2);
+    game.inventory = [ball];
+    shop.addObjectToShopBill(shkp, ball, 100);
+
+    await rhack('a');
+
+    assert.equal(game._command_mode, 'applyObject');
+    assert.match(game._pending_message, /What do you want to use or apply\? \[c or \?\*\]/);
+
+    await rhack('c');
+
+    assert.equal(game._command_mode, 'crystalBallLook');
+    assert.match(game._pending_message, /What do you look for\?/);
+    assert.equal(shkp.debit || 0, 0);
+    assert.equal(ball.spe, 2);
+
+    await rhack('!');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(ball.spe, 1);
+    assert.equal(shkp.debit, 25);
+    assert.equal(shkp.billct, 1);
+    const entry = shop.shopBillEntryForObject(shkp, ball);
+    assert.ok(entry);
+    assert.equal(entry.useup, false);
+    assert.equal(shop.shopBillEntryTotal(entry), 100);
+    assert.equal(ball.unpaid, true);
+    assert.match(game._pending_message, /Usage fee, 25 zorkmids/);
+});
+
+test('applying unpaid crystal ball with one charge bills full price and keeps live bill', async () => {
+    const { shkp } = installCommandShopState();
+    makeCrystalBallGazeDeterministic();
+    const ball = crystalBall(3114, 'c', 1);
+    game.inventory = [ball];
+    shop.addObjectToShopBill(shkp, ball, 100);
+
+    await rhack('a');
+    await rhack('c');
+    await rhack('!');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(ball.spe, 0);
+    assert.equal(shkp.debit, 100);
+    const entry = shop.shopBillEntryForObject(shkp, ball);
+    assert.ok(entry);
+    assert.equal(entry.useup, false);
+    assert.equal(shop.shopBillEntryTotal(entry), 100);
+    assert.equal(ball.unpaid, true);
+    assert.match(game._pending_message, /Usage fee, 100 zorkmids/);
+});
+
+test('canceling unpaid crystal ball look prompt spends no charge and adds no usage fee', async () => {
+    const { shkp } = installCommandShopState();
+    makeCrystalBallGazeDeterministic();
+    const ball = crystalBall(3115, 'c', 2);
+    game.inventory = [ball];
+    shop.addObjectToShopBill(shkp, ball, 100);
+
+    await rhack('a');
+    await rhack('c');
+    await rhack('\x1b');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(ball.spe, 2);
+    assert.equal(shkp.debit || 0, 0);
+    assert.equal(shop.shopBillEntryForObject(shkp, ball).useup, false);
+    assert.equal(ball.unpaid, true);
+});
+
+test('applying unpaid crystal ball while blind spends no charge and adds no usage fee', async () => {
+    const { shkp } = installCommandShopState();
+    initRng(1);
+    game.u.blind = true;
+    const ball = crystalBall(3116, 'c', 2);
+    game.inventory = [ball];
+    shop.addObjectToShopBill(shkp, ball, 100);
+
+    await rhack('a');
+    await rhack('c');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(ball.spe, 2);
+    assert.equal(shkp.debit || 0, 0);
+    assert.equal(shop.shopBillEntryForObject(shkp, ball).useup, false);
+    assert.equal(ball.unpaid, true);
+    assert.match(game._pending_message, /can't see|Too bad/i);
 });
 
 test('unpaid charged object with no remaining charges is not billed for usage', () => {

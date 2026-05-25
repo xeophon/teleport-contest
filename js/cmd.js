@@ -764,6 +764,7 @@ const IRON_CHAIN = 475;
 const ROCK = 467;
 const EGG = 10001;
 const TIN = 10004;
+const CRYSTAL_BALL = 10088;
 const GLOB_OF_GRAY_OOZE = 10180;
 const GLOB_OF_BROWN_PUDDING = 10181;
 const GLOB_OF_GREEN_SLIME = 10182;
@@ -9364,6 +9365,12 @@ function isLampObject(item) {
         || kind === 'oil lamp' || kind === 'magic lamp' || kind === 'brass lantern';
 }
 
+function isCrystalBallObject(item) {
+    const kind = toolChargeKind(item);
+    return item?.otyp === CRYSTAL_BALL || kind === 'crystal ball'
+        || (kind === 'glass orb' && String(item?.actualKind || '').toLowerCase() === 'crystal ball');
+}
+
 function isWishedLightSource(item) {
     return isLampObject(item) || isCandleObject(item) || isPotionOfOil(item);
 }
@@ -9467,6 +9474,225 @@ async function applyLamp(item) {
     }
     await setMessage(messages.join('  '), messages.length > 1);
     game.context.move = 1;
+}
+
+const CRYSTAL_BALL_HALLUCINATION_MESSAGES = [
+    'You grok some groovy globs of incandescent lava.',
+    'Whoa!  Psychedelic colors, dude!',
+    'The crystal pulses with sinister light!',
+    'You see goldfish swimming above fluorescent rocks.',
+    'You see tiny snowflakes spinning around a miniature farmhouse.',
+    'Oh wow... like a kaleidoscope!',
+];
+
+const CRYSTAL_BALL_LEVEL_DETECTS = [
+    'Delphi',
+    "Medusa's lair",
+    'a castle',
+    "the Wizard of Yendor's tower",
+];
+
+const CRYSTAL_BALL_OBJECT_CLASSES = new Map([
+    ['$', { label: 'gold', predicate: obj => obj?.glyph === '$' || obj?.cls === 'coin' }],
+    ['"', { label: 'amulets', predicate: obj => obj?.glyph === '"' || obj?.cls === 'amulet' }],
+    ['%', { label: 'food', predicate: obj => obj?.glyph === '%' || obj?.cls === 'food' }],
+    ['?', { label: 'scrolls', predicate: obj => obj?.glyph === '?' || obj?.cls === 'scroll' }],
+    ['+', { label: 'spellbooks', predicate: obj => obj?.glyph === '+' || obj?.cls === 'spellbook' }],
+    ['!', { label: 'potions', predicate: obj => obj?.glyph === '!' || obj?.cls === 'potion' }],
+    ['=', { label: 'rings', predicate: obj => obj?.glyph === '=' || obj?.cls === 'ring' }],
+    ['/', { label: 'wands', predicate: obj => obj?.glyph === '/' || obj?.cls === 'wand' }],
+    ['*', { label: 'gems', predicate: obj => obj?.glyph === '*' || obj?.cls === 'gem' }],
+    ['(', { label: 'tools', predicate: obj => obj?.glyph === '(' || obj?.cls === 'tool' }],
+    [')', { label: 'weapons', predicate: obj => obj?.glyph === ')' || obj?.cls === 'weapon' }],
+    ['[', { label: 'armor', predicate: obj => obj?.glyph === '[' || obj?.cls === 'armor' }],
+]);
+
+function crystalBallObjectName(item) {
+    return pickupObjectName({ ...(item || {}), line: '' }) || 'crystal ball';
+}
+
+function crystalBallSubject(item) {
+    return `The ${crystalBallObjectName(item)}`;
+}
+
+function crystalBallTooBadMessage(item) {
+    return `Too bad you can't see the ${crystalBallObjectName(item)}.`;
+}
+
+function crystalBallIntelligence() {
+    return game.u?.acurr?.a?.[A_INT] ?? 10;
+}
+
+function crystalBallBackfire(item, messages) {
+    if (!item || (item.spe ?? 0) <= 0) return false;
+    const oops = item.artifact ? 8 : item.blessed ? 16 : 20;
+    if (!item.cursed && rnd(oops) <= crystalBallIntelligence()) return false;
+
+    const impair = rnd(Math.max(1, 100 - 3 * crystalBallIntelligence()));
+    const roll = rnd((item.artifact || item.blessed) ? 4 : 5);
+    const subject = crystalBallSubject(item);
+    if (roll === 1) {
+        messages.push(`${subject} is too much to comprehend!`);
+    } else if (roll === 2) {
+        messages.push(`${subject} confuses you!`);
+        addHeroConfusion(impair);
+    } else if (roll === 3) {
+        messages.push(`${subject} damages your vision!`);
+        if (game.u) {
+            game.u.blind = true;
+            game.u._blindTimeout = (game.u._blindTimeout || 0) + impair;
+        }
+    } else if (roll === 4) {
+        messages.push(`${subject} zaps your mind!`);
+        if (game.u) {
+            game.u.hallucinating = true;
+            game.u._halluTimeout = (game.u._halluTimeout || 0) + impair;
+            addHeroStatusSuffix('Hallu');
+        }
+    } else {
+        messages.push(`${subject} explodes!`);
+        useUpInventoryItem(item, item.quan || 1);
+        const damage = rnd(30);
+        if (game.u) {
+            game.u.uhp = Math.max(0, (game.u.uhp || 0) - damage);
+            if ((game.u.uhp || 0) <= 0) {
+                game._death_cause = 'killed by an exploding crystal ball';
+                messages.push('You die...');
+            }
+        }
+        return true;
+    }
+    spendChargedToolUse(item, messages);
+    return true;
+}
+
+function implodeCrystalBall(item, messages) {
+    messages.push(`${crystalBallSubject(item)} implodes!`);
+    useUpInventoryItem(item, item?.quan || 1);
+}
+
+function crystalBallHallucinationUse(item, messages) {
+    if ((item?.spe ?? 0) <= 0) {
+        messages.push('All you see is funky haze.');
+        if ((item?.spe ?? 0) < 0) implodeCrystalBall(item, messages);
+        return;
+    }
+    messages.push(CRYSTAL_BALL_HALLUCINATION_MESSAGES[rn2(CRYSTAL_BALL_HALLUCINATION_MESSAGES.length)]);
+    spendChargedToolUse(item, messages);
+}
+
+function crystalBallTrapDetectionMessage() {
+    const traps = game.level?.traps || [];
+    const ux = game.u?.ux ?? -1;
+    const uy = game.u?.uy ?? -1;
+    const remote = traps.filter(trap => trap && (trap.tx !== ux || trap.ty !== uy));
+    if (remote.length) {
+        for (const trap of remote) {
+            trap.tseen = true;
+            const loc = game.level?.at?.(trap.tx, trap.ty);
+            if (loc) {
+                loc.remembered_glyph = { ch: '^', color: CLR_BROWN, dec: false };
+                loc.waslit = true;
+            }
+            show_glyph_cell(trap.tx, trap.ty, '^', CLR_BROWN, false);
+        }
+        newsym(ux, uy);
+        return 'You feel entrapped.';
+    }
+    if (traps.some(trap => trap && trap.tx === ux && trap.ty === uy)) return 'Your toes itch.';
+    return 'Your toes stop itching.';
+}
+
+function crystalBallObjectDetectionMessage(ch) {
+    const spec = CRYSTAL_BALL_OBJECT_CLASSES.get(ch);
+    if (!spec) return '';
+    const found = collectDetectedObjects(spec.predicate);
+    if (found.remote.length) {
+        markDetectedObjects(found.remote);
+        return `You sense ${spec.label}.`;
+    }
+    if (found.here.length) return `You sense ${spec.label} nearby.`;
+    return 'The vision is unclear.';
+}
+
+function crystalBallMonsterDetectionMessage(ch) {
+    if (!/^[A-Za-z]$/.test(ch)) return '';
+    const found = (game.level?.monsters || []).filter(mon =>
+        mon && !mon.dead && (mon.mhp == null || mon.mhp > 0)
+        && (mon.data?.mlet === ch || mon.data?.glyph === ch || String(mon.data?.name || '').startsWith(ch)));
+    if (!found.length) return 'The vision is unclear.';
+    game._detect_monsters_display = 1;
+    return 'You sense the presence of monsters.';
+}
+
+function crystalBallLevelDetectionMessage() {
+    const what = CRYSTAL_BALL_LEVEL_DETECTS[rn2(CRYSTAL_BALL_LEVEL_DETECTS.length)];
+    return `You see ${what}, in the distance.`;
+}
+
+function crystalBallDetectionMessage(ch) {
+    if (ch === '^') return crystalBallTrapDetectionMessage();
+    return crystalBallObjectDetectionMessage(ch)
+        || crystalBallMonsterDetectionMessage(ch)
+        || crystalBallLevelDetectionMessage();
+}
+
+async function beginCrystalBallUse(item) {
+    if (game.u?.blind || (game.u?._statusSuffix || '').includes('Blind')) {
+        await setMessage(crystalBallTooBadMessage(item));
+        game._command_mode = null;
+        game.context.move = 1;
+        return true;
+    }
+
+    const messages = [];
+    if (crystalBallBackfire(item, messages)) {
+        await setMessage(messages.join('  '), messages.length > 1);
+        game._command_mode = null;
+        game.context.move = 1;
+        return true;
+    }
+    if (heroIsHallucinating()) {
+        crystalBallHallucinationUse(item, messages);
+        await setMessage(messages.join('  '), messages.length > 1);
+        game._command_mode = null;
+        game.context.move = 1;
+        return true;
+    }
+
+    game._apply_crystal_ball_letter = item?.letter || '';
+    await setMessage(`${game.flags?.verbose === false ? '' : 'You may look for an object, monster, or special map symbol.  '}What do you look for?`);
+    game._command_mode = 'crystalBallLook';
+    return true;
+}
+
+async function finishCrystalBallUse(ch) {
+    const item = (game.inventory || []).find(invItem => invItem.letter === game._apply_crystal_ball_letter);
+    game._apply_crystal_ball_letter = '';
+    game._command_mode = null;
+    if (!item) return false;
+    if (ch !== '@' && (ch === 'q' || ch === '\x1b' || ch === '\r' || ch === '\n')) {
+        if (game.flags?.verbose !== false) await setMessage('Never mind.');
+        game.context.move = 1;
+        return true;
+    }
+
+    const messages = [`You peer into the ${crystalBallObjectName(item)}...`];
+    const charged = (item.spe ?? 0) > 0;
+    if (!charged) {
+        messages.push('The vision is unclear.');
+        if ((item.spe ?? 0) < 0) implodeCrystalBall(item, messages);
+    } else {
+        item.known = true;
+        item.dknown = true;
+        item.actualKind = 'crystal ball';
+        item.kind = 'crystal ball';
+        spendChargedToolUse(item, messages);
+        messages.push(crystalBallDetectionMessage(ch));
+    }
+    await setMessage(messages.filter(Boolean).join('  '), messages.length > 1);
+    game.context.move = 1;
+    return true;
 }
 
 function splitOilPotionForApply(item) {
@@ -34678,6 +34904,10 @@ export async function rhack(_cmd) {
             await beginTinningKitUse(item);
             return;
         }
+        if (isCrystalBallObject(item)) {
+            await beginCrystalBallUse(item);
+            return;
+        }
         if (isPotionOfOil(item)) {
             await applyPotionOfOil(item);
             return;
@@ -35077,6 +35307,11 @@ export async function rhack(_cmd) {
         }
         await setMessage(messages.join('  '), messages.length > 1);
         game.context.move = 1;
+        return;
+    }
+
+    if (game._command_mode === 'crystalBallLook') {
+        await finishCrystalBallUse(ch);
         return;
     }
 
