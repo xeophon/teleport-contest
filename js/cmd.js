@@ -15726,7 +15726,7 @@ function iceBoxPutCategory(item) {
     return 'other';
 }
 
-function buildIceBoxPutItems() {
+function buildIceBoxPutItems(iceBox = null) {
     const putItems = [];
     if (game._goldCount) {
         putItems.push({
@@ -15736,16 +15736,18 @@ function buildIceBoxPutItems() {
     }
     for (const item of game.inventory || []) {
         if (item.letter === '$' || item.cls === 'coin' || item.glyph === '$') continue;
+        if (item === iceBox) continue;
         putItems.push({ item, category: iceBoxPutCategory(item) });
     }
     return putItems;
 }
 
-function iceBoxPutLetters() {
+function iceBoxPutLetters(iceBox = null) {
     const letters = [];
     if (game._goldCount) letters.push('$');
     for (const item of game.inventory || []) {
         if (item.letter === '$' || item.cls === 'coin' || item.glyph === '$') continue;
+        if (item === iceBox) continue;
         if (item.letter) letters.push(item.letter);
     }
     return letters.join('');
@@ -15806,9 +15808,27 @@ function iceBoxEmptyMessage() {
     return 'The ice box is empty.';
 }
 
-function iceBoxContainerAvailable(iceBox) {
+function iceBoxIsOnHeroFloor(iceBox) {
     return !!(iceBox && (game.level?.objects || []).includes(iceBox)
         && iceBox.ox === game.u?.ux && iceBox.oy === game.u?.uy);
+}
+
+function iceBoxIsCarried(iceBox) {
+    return !!(iceBox && (game.inventory || []).includes(iceBox));
+}
+
+function iceBoxContainerAvailable(iceBox) {
+    return iceBoxIsOnHeroFloor(iceBox) || iceBoxIsCarried(iceBox);
+}
+
+function setIceBoxActionMenu(iceBox, done = false) {
+    game._icebox_action_container = iceBox || null;
+    setOverlay(done ? LOOT_ICE_MENU_DONE_LINES : LOOT_ICE_MENU_LINES, 11);
+    game._command_mode = 'iceBoxAction';
+}
+
+function clearIceBoxActionState() {
+    game._icebox_action_container = null;
 }
 
 function iceBoxPutTypeChoices(putItems) {
@@ -15860,7 +15880,7 @@ function drawIceBoxPutTypeMenu() {
 }
 
 function beginIceBoxPutIn(iceBox) {
-    const putItems = buildIceBoxPutItems();
+    const putItems = buildIceBoxPutItems(iceBox);
     if (!putItems.length) return false;
     game._icebox_put_container = iceBox;
     game._icebox_put_items = putItems;
@@ -15998,6 +16018,7 @@ async function finishIceBoxSequence(messages = [], moved = false) {
     const allMessages = [...(game._icebox_sequence_messages || []), ...(messages || [])];
     const used = moved || !!game._icebox_sequence_used;
     clearIceBoxSequenceState();
+    clearIceBoxActionState();
     game._command_mode = null;
     game._overlay_lines = null;
     game._overlay_hide_status = 0;
@@ -16034,7 +16055,7 @@ async function continueIceBoxSequenceToTakeout(iceBox, messages = []) {
 }
 
 async function beginIceBoxStash(iceBox) {
-    const letters = iceBoxPutLetters();
+    const letters = iceBoxPutLetters(iceBox);
     if (!letters) return false;
     game._icebox_put_container = iceBox;
     game._icebox_stash_letters = letters;
@@ -30280,6 +30301,7 @@ export async function rhack(_cmd) {
                 return invItem.cls === 'tool' || invItem.cls === 'wand' || invItem.kind === 'wand of sleep'
                     || invItem.otyp === WAND_CLASS || invItem.cls === 'spellbook'
                     || invItem.section === 'Tools' || /lamp|camera|card|bag|sack|cream pie/.test(name)
+                    || isIceBoxObject(invItem)
                     || isRoyalJelly(invItem)
                     || (invItem.cls === 'weapon' && APPLY_WEAPON_NAME_RE.test(name));
             }).sort((a, b) => {
@@ -30317,6 +30339,7 @@ export async function rhack(_cmd) {
                 return invItem.cls === 'tool' || invItem.cls === 'wand' || invItem.kind === 'wand of sleep'
                     || invItem.otyp === WAND_CLASS || invItem.cls === 'spellbook'
                     || invItem.section === 'Tools' || /lamp|camera|card|bag|sack|cream pie/.test(name)
+                    || isIceBoxObject(invItem)
                     || isRoyalJelly(invItem)
                     || (invItem.cls === 'weapon' && APPLY_WEAPON_NAME_RE.test(name));
             });
@@ -30379,6 +30402,10 @@ export async function rhack(_cmd) {
         }
         if (['armor', 'weapon', 'amulet', 'ring', 'gem', 'food'].includes(item.cls)) {
             await setMessage("Sorry, I don't know how to use that.");
+            return;
+        }
+        if (isIceBoxObject(item)) {
+            setIceBoxActionMenu(item);
             return;
         }
         if (/bag|sack/.test(name)) {
@@ -31747,9 +31774,17 @@ export async function rhack(_cmd) {
         return;
     }
 
-    if (game._command_mode === 'lootIceMenu') {
-        const iceBox = game.level?.objects?.find(obj =>
+    if (game._command_mode === 'lootIceMenu' || game._command_mode === 'iceBoxAction') {
+        const iceBox = game._icebox_action_container || game.level?.objects?.find(obj =>
             isIceBoxObject(obj) && obj.ox === game.u?.ux && obj.oy === game.u?.uy);
+        if (!iceBoxContainerAvailable(iceBox)) {
+            clearIceBoxActionState();
+            game._overlay_lines = null;
+            game._overlay_hide_status = 0;
+            game._command_mode = null;
+            return;
+        }
+        game._icebox_action_container = iceBox;
         if (ch === ':') {
             if (iceBox) iceBox.cknown = true;
             const rows = [[0, 41, 'Contents of the ice box:']];
@@ -31814,6 +31849,7 @@ export async function rhack(_cmd) {
         }
         if (ch === '\x1b' || ch === 'q') {
             for (let row = 0; row < 12; row++) game.nhDisplay?.clearRow(row);
+            clearIceBoxActionState();
             game._overlay_lines = null;
             game._overlay_hide_status = 0;
             game._command_mode = null;
@@ -32010,7 +32046,7 @@ export async function rhack(_cmd) {
         if (ch === '?' || ch === '*') {
             const rows = [[0, 40, 'Stash what?', 1]];
             let row = 2;
-            for (const { item } of buildIceBoxPutItems()) {
+            for (const { item } of buildIceBoxPutItems(iceBox)) {
                 const label = item.letter === '$'
                     ? `${item.letter} - ${item.quan || 0} gold piece${(item.quan || 0) === 1 ? '' : 's'}`
                     : `${item.letter || '?'} - ${inventoryItemName(item)}`;
@@ -32034,10 +32070,9 @@ export async function rhack(_cmd) {
 
     if (game._command_mode === 'iceBoxContents') {
         if (ch === ' ' || ch === '\x1b' || ch === '\r' || ch === '\n') {
-            setOverlay(LOOT_ICE_MENU_DONE_LINES, 11);
+            setIceBoxActionMenu(game._icebox_action_container, true);
             game._pending_message = '';
             game._message_more = 0;
-            game._command_mode = 'lootIceMenu';
         }
         return;
     }
@@ -32577,6 +32612,39 @@ export async function rhack(_cmd) {
             ? levelTeleportOptionsWithTrapFollowup({ preHalluRefresh: true })
             : { preHalluRefresh: true });
         if (game._command_mode === 'levelTeleportMenu3') game._command_mode = null;
+        return;
+    }
+
+    if (game._command_mode === 'tipContainerObject') {
+        const iceBoxes = (game.inventory || []).filter(isIceBoxObject);
+        const letters = iceBoxes.map(item => item.letter).filter(Boolean).join('');
+        if (ch === '\x1b' || ch === 'q' || ch === ' ' || ch === '\r' || ch === '\n') {
+            game._overlay_lines = null;
+            game._overlay_hide_status = 0;
+            game._command_mode = null;
+            return;
+        }
+        if (ch === '?' || ch === '*') {
+            const rows = [[0, 40, 'Tip what?', 1]];
+            let row = 2;
+            for (const item of iceBoxes) {
+                rows.push([row++, 40, normalInventoryLine(item)]);
+                if (row >= 23) break;
+            }
+            rows.push([row, 40, '(end)']);
+            setOverlay(rows, Math.max(4, row + 1), false, 40);
+            return;
+        }
+        const tipTarget = iceBoxes.find(item => item.letter === ch);
+        if (!tipTarget) {
+            await setMessage(`What do you want to tip? [${getobjPromptLetters(letters)} or ?*]`);
+            return;
+        }
+        game._overlay_lines = null;
+        game._overlay_hide_status = 0;
+        game._tip_container_object = tipTarget;
+        await setMessage(`Tip ${inventoryItemName(tipTarget)}? [ynq] (q)`);
+        game._command_mode = 'tipConfirm';
         return;
     }
 
@@ -33259,8 +33327,7 @@ export async function rhack(_cmd) {
                     game._command_mode = 'lootMenu';
                     return;
                 } else if (iceBox) {
-                    setOverlay(LOOT_ICE_MENU_LINES, 11);
-                    game._command_mode = 'lootIceMenu';
+                    setIceBoxActionMenu(iceBox);
                     return;
                 } else if (bag) {
                     game._floor_container_object = bag;
@@ -33314,6 +33381,19 @@ export async function rhack(_cmd) {
                     game._tip_container_object = iceBox;
                     await setMessage(`There is ${containerObjectPhrase(iceBox)} here, tip it? [ynq] (q)`);
                     game._command_mode = 'tipConfirm';
+                    return;
+                }
+                const carriedIceBoxes = (game.inventory || []).filter(isIceBoxObject);
+                if (carriedIceBoxes.length === 1) {
+                    game._tip_container_object = carriedIceBoxes[0];
+                    await setMessage(`Tip ${inventoryItemName(carriedIceBoxes[0])}? [ynq] (q)`);
+                    game._command_mode = 'tipConfirm';
+                    return;
+                }
+                if (carriedIceBoxes.length > 1) {
+                    const letters = carriedIceBoxes.map(item => item.letter).filter(Boolean).join('');
+                    await setMessage(`What do you want to tip? [${getobjPromptLetters(letters)} or ?*]`);
+                    game._command_mode = 'tipContainerObject';
                     return;
                 }
                 await setMessage('There is a broken chest here, tip it? [ynq] (q)');

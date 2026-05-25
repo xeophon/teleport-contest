@@ -2688,7 +2688,11 @@ Next concrete target:
 - Ice-box corpse age parity now covers generated ice-box contents,
   monster-eaten container spills, floor ice-box takeout, floor ice-box `#tip`
   spills, player floor ice-box put-in/stash-one insertion, and floor ice-box
-  menu `b`/`r` both-order sequencing. Generated
+  menu `b`/`r` both-order sequencing. Carried ice boxes opened via apply now
+  use the same object-backed ice-box menu for put-in, takeout, stash, and
+  both-order sequencing, excluding the source ice box from the put/stash
+  inventory choices; carried source ice-box `#tip` to the floor also thaws
+  spilled contents. Generated
   ice-box corpses are explicitly frozen at creation while the generic
   `add_to_container()` helper remains neutral like C; the floor put-in/stash
   paths freeze selected inventory objects immediately before insertion, and
@@ -2697,7 +2701,7 @@ Next concrete target:
   formula. Globs placed in ice boxes now stop their shrink timer, and removal
   starts a fresh C-shaped shrink timer. Focused guards, direct
   takeout/tip/put-in/stash/both-order/glob-timer smokes, focused replays, and
-  full score remain exact. Remaining ice-box work is full carried, nested, and
+  full score remain exact. Remaining ice-box work is nested and
   target-container `in_container()`/`out_container()`/`#tip` variants,
   troll/Rider revive and zombify timers, forced ice-box destruction, and shop
   billing edge cases.
