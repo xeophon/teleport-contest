@@ -126,6 +126,15 @@ function foodRation(id, letter = 'a') {
     };
 }
 
+function foodRationStack(id, quan, letter = 'a') {
+    return {
+        ...foodRation(id, letter),
+        quan,
+        plural: 'food rations',
+        line: `${letter} - ${quan} food rations`,
+    };
+}
+
 function chargedTool(id, kind, letter = 't', spe = 3) {
     return {
         id,
@@ -2983,6 +2992,39 @@ test('ordinary floor Rider corpse pickup revives before billing or inventory', a
     assert.equal(body.unpaid, undefined);
     assert.equal(shkp.billct, 0);
     assert.equal(shkp.bill.length, 0);
+});
+
+test('ordinary shop-floor partial stack pickup splits before billing', async () => {
+    const { shkp } = installCommandShopState();
+    const stack = foodRationStack(6011, 20);
+    game.level.objects = [stack];
+    game.u.acurr.a = [1, 1, 10, 10, 1, 10];
+    game.flags.pickup_burden = 'overloaded';
+
+    await rhack(',');
+    assert.equal(game._command_mode, 'pickupShopQuote');
+
+    await rhack(' ');
+
+    const carried = game.inventory.find(item => item.kind === 'food ration');
+    const entry = shop.shopBillEntryForObject(shkp, carried);
+    const expectedPrice = shop.shopItemPrice(carried, stack.ox, stack.oy);
+
+    assert.match(game._pending_message, /can only lift some of the 20 food rations lying here/);
+    assert.equal(game.level.objects.includes(stack), true);
+    assert.equal(stack.quan, 5);
+    assert.equal(stack.unpaid, undefined);
+    assert.ok(carried);
+    assert.notEqual(carried, stack);
+    assert.equal(carried.quan, 15);
+    assert.equal(carried.unpaid, true);
+    assert.ok(entry);
+    assert.equal(entry.bquan, 15);
+    assert.equal(shop.shopBillEntryTotal(entry), expectedPrice);
+    assert.equal(carried.unpaidPrice, expectedPrice);
+    assert.equal(shkp.billct, 1);
+    assert.equal(shkp.bill.length, 1);
+    assert.equal(game.context.move, 1);
 });
 
 test('taking merchandise from a shop-floor container adds the carried object to the bill', () => {

@@ -16989,6 +16989,19 @@ function containerTakeoutLiftableCount(container, obj, currentWeight, goldCount 
     return low;
 }
 
+function splitFloorPickupObjectForLift(obj, count) {
+    const quantity = Math.max(1, Math.trunc(Number(obj?.quan || 1)));
+    const takeCount = Math.max(1, Math.min(quantity, Math.trunc(Number(count || quantity))));
+    if (!obj || takeCount >= quantity) return obj;
+    const lifted = { ...obj, id: next_ident(), quan: takeCount };
+    delete lifted.o_id;
+    delete lifted._shopBillObjectId;
+    delete lifted.letter;
+    delete lifted.line;
+    obj.quan = quantity - takeCount;
+    return lifted;
+}
+
 function artifactPowerSourceName(obj) {
     const name = String(obj?.artifact || pickupObjectName(obj) || 'the artifact');
     return name.replace(/^The\b/, 'the');
@@ -17113,18 +17126,21 @@ async function floorPickupPreflight(obj, { shopPrice = null } = {}) {
     const gold = Math.max(0, Math.trunc(Number(game._goldCount || 0)));
     const takeCount = containerTakeoutLiftableCount(null, obj, currentWeight, gold);
     const messages = [...(prelift.messages || [])];
-    if (takeCount < Math.max(1, Math.trunc(Number(obj?.quan || 1)))) {
+    const originalCount = Math.max(1, Math.trunc(Number(obj?.quan || 1)));
+    if (takeCount < 1) {
         return {
             ok: false,
             message: `There is ${pickupObjectPhrase(obj)} here, but you cannot carry any more.`,
             messages,
         };
     }
+    if (takeCount < originalCount)
+        messages.push(`You can only lift ${takeCount === 1 ? 'one' : 'some'} of the ${pickupObjectPhrase(obj)} lying here.`);
 
     const view = containerTakeoutObjectView(obj, takeCount);
     const x = obj?.ox ?? game.u?.ux;
     const y = obj?.oy ?? game.u?.uy;
-    const price = shopPrice != null ? shopPrice : shopItemPrice(view, x, y);
+    const price = shopPrice != null && takeCount === originalCount ? shopPrice : shopItemPrice(view, x, y);
     const mergeTarget = findFloorPickupFoodMergeTargetForPreflight(view, price)
         || findFloorPickupInventoryMergeTargetForPreflight(view, price);
     if (!shopBillableGold(view) && !mergeTarget && !simulatedNextInventoryLetters(1)) {
@@ -28185,41 +28201,42 @@ export async function rhack(_cmd) {
                 if (preflight?.skip) {
                     continue;
                 }
-                const letter = obj.wasStolen && obj.letter
-                    ? obj.letter
+                const pickupObj = splitFloorPickupObjectForLift(obj, preflight?.takeCount || obj.quan || 1);
+                const letter = pickupObj.wasStolen && pickupObj.letter
+                    ? pickupObj.letter
                     : nextInventoryLetter();
-                const amount = pickupObjectPhrase(obj);
-                const shopPrice = shopItemPrice(obj);
-                const mergeTarget = findPickedObjectInventoryMergeTarget(obj, shopPrice);
+                const amount = pickupObjectPhrase(pickupObj);
+                const shopPrice = shopItemPrice(pickupObj);
+                const mergeTarget = findPickedObjectInventoryMergeTarget(pickupObj, shopPrice);
                 if (mergeTarget) {
-                    objectIceEffect(obj, obj.ox, obj.oy, { onLevel: false });
-                    messages.push(mergePickedObjectIntoInventory(obj, mergeTarget.target));
-                    moved.push(obj);
+                    objectIceEffect(pickupObj, pickupObj.ox, pickupObj.oy, { onLevel: false });
+                    messages.push(mergePickedObjectIntoInventory(pickupObj, mergeTarget.target));
+                    moved.push(pickupObj);
                     continue;
                 }
                 const pickedItem = {
-                    ...obj,
-                    cls: obj.cls || (obj.otyp === DART ? 'weapon'
-                        : obj.otyp === GEM_CLASS ? 'gem'
-                            : obj.otyp === 'corpse' || obj.otyp === CORPSE ? 'food'
-                                : obj.otyp === RING_CLASS || obj.glyph === '=' ? 'ring'
-                                    : BAG_OBJECT_TYPES.has(obj.otyp) || obj.otyp === OIL_LAMP || obj.otyp === MAGIC_LAMP
-                                        || obj.otyp === MIRROR || obj.otyp === EXPENSIVE_CAMERA
-                                        || obj.otyp === STETHOSCOPE || obj.otyp === MAGIC_MARKER ? 'tool'
+                    ...pickupObj,
+                    cls: pickupObj.cls || (pickupObj.otyp === DART ? 'weapon'
+                        : pickupObj.otyp === GEM_CLASS ? 'gem'
+                            : pickupObj.otyp === 'corpse' || pickupObj.otyp === CORPSE ? 'food'
+                                : pickupObj.otyp === RING_CLASS || pickupObj.glyph === '=' ? 'ring'
+                                    : BAG_OBJECT_TYPES.has(pickupObj.otyp) || pickupObj.otyp === OIL_LAMP || pickupObj.otyp === MAGIC_LAMP
+                                        || pickupObj.otyp === MIRROR || pickupObj.otyp === EXPENSIVE_CAMERA
+                                        || pickupObj.otyp === STETHOSCOPE || pickupObj.otyp === MAGIC_MARKER ? 'tool'
                                         : undefined),
                     letter,
-                    kind: obj.kind || pickupObjectName({ ...obj, quan: 1 }),
+                    kind: pickupObj.kind || pickupObjectName({ ...pickupObj, quan: 1 }),
                     line: `${letter} - ${amount}`,
                 };
-                const { price: billedPrice } = addPickedObjectToShopBill(obj, pickedItem);
-                objectIceEffect(pickedItem, obj.ox, obj.oy, { onLevel: false });
+                const { price: billedPrice } = addPickedObjectToShopBill(pickupObj, pickedItem);
+                objectIceEffect(pickedItem, pickupObj.ox, pickupObj.oy, { onLevel: false });
                 game.inventory = [...(game.inventory || []), pickedItem];
                 maybeAttachCarriedFigurineTimeout(pickedItem);
                 const unpaidSuffix = billedPrice > 0
                     ? ` (unpaid, ${billedPrice} zorkmid${billedPrice === 1 ? '' : 's'})`
                     : '';
                 messages.push(`${letter} - ${amount}${unpaidSuffix}.`);
-                moved.push(obj);
+                moved.push(pickupObj);
             }
             game._pet_food_scan_inventory = game.inventory;
             for (const obj of moved) {
@@ -42282,22 +42299,24 @@ export async function rhack(_cmd) {
                 return;
             }
             const preflightMessages = preflight.messages || [];
-            const amount = pickupObjectPhrase(objectHere);
-            const name = pickupObjectName({ ...objectHere, quan: 1 });
-            let existingFood = (objectHere.otyp === FOOD_CLASS || objectHere.cls === 'food')
+            const pickupObj = splitFloorPickupObjectForLift(objectHere, preflight.takeCount || objectHere.quan || 1);
+            const liftedShopPrice = pickupObj === objectHere ? shopPrice : shopItemPrice(pickupObj);
+            const amount = pickupObjectPhrase(pickupObj);
+            const name = pickupObjectName({ ...pickupObj, quan: 1 });
+            let existingFood = (pickupObj.otyp === FOOD_CLASS || pickupObj.cls === 'food')
                 && (game.inventory || []).find(item =>
                     item.cls === 'food' && !item.worn && !item.wielded
-                    && !(isEggItem(item) || isEggItem(objectHere))
+                    && !(isEggItem(item) || isEggItem(pickupObj))
                     && pickupObjectName({ ...item, quan: 1 }) === name);
-            if (existingFood && !mergePickedObjectIntoShopBill(objectHere, existingFood, shopPrice).canMerge)
+            if (existingFood && !mergePickedObjectIntoShopBill(pickupObj, existingFood, liftedShopPrice).canMerge)
                 existingFood = null;
             if (existingFood) {
-                const pickedKnown = objectHere.bknown === true;
+                const pickedKnown = pickupObj.bknown === true;
                 const carriedKnown = existingFood.bknown !== false;
                 const learnedByComparing = pickedKnown !== carriedKnown;
-                const pickedCount = objectHere.quan || 1;
+                const pickedCount = pickupObj.quan || 1;
                 existingFood.quan = (existingFood.quan || 1) + pickedCount;
-                if (objectHere.plural && !existingFood.plural) existingFood.plural = objectHere.plural;
+                if (pickupObj.plural && !existingFood.plural) existingFood.plural = pickupObj.plural;
                 if (learnedByComparing) existingFood.bknown = true;
                 const buc = existingFood.bknown === false
                     ? ''
@@ -42311,8 +42330,8 @@ export async function rhack(_cmd) {
                     : `${/^[aeiou]/i.test(`${buc}${pickedName}`) ? 'an' : 'a'} ${buc}${pickedName}`;
                 const pickupMessage = `${existingFood.letter} - ${pickedPhrase} (${existingFood.quan} in total).`;
                 game._pet_food_scan_inventory = game.inventory;
-                objectIceEffect(objectHere, game.u?.ux || 0, game.u?.uy || 0, { onLevel: false });
-                game.level.objects = (game.level.objects || []).filter(obj => obj !== objectHere);
+                objectIceEffect(pickupObj, game.u?.ux || 0, game.u?.uy || 0, { onLevel: false });
+                game.level.objects = (game.level.objects || []).filter(obj => obj !== pickupObj);
                 newsym(game.u?.ux || 0, game.u?.uy || 0);
                 const pickupMessages = [...preflightMessages, pickupMessage];
                 if (learnedByComparing) {
@@ -42322,33 +42341,33 @@ export async function rhack(_cmd) {
                 game.context.move = 1;
                 return;
             }
-            const mergeTarget = findPickedObjectInventoryMergeTarget(objectHere, shopPrice);
+            const mergeTarget = findPickedObjectInventoryMergeTarget(pickupObj, liftedShopPrice);
             if (mergeTarget) {
-                const pickupMessage = mergePickedObjectIntoInventory(objectHere, mergeTarget.target);
+                const pickupMessage = mergePickedObjectIntoInventory(pickupObj, mergeTarget.target);
                 game._pet_food_scan_inventory = game.inventory;
-                objectIceEffect(objectHere, game.u?.ux || 0, game.u?.uy || 0, { onLevel: false });
-                game.level.objects = (game.level.objects || []).filter(obj => obj !== objectHere);
+                objectIceEffect(pickupObj, game.u?.ux || 0, game.u?.uy || 0, { onLevel: false });
+                game.level.objects = (game.level.objects || []).filter(obj => obj !== pickupObj);
                 newsym(game.u?.ux || 0, game.u?.uy || 0);
                 await setMessage([...preflightMessages, pickupMessage].join('  '));
                 game.context.move = 1;
                 return;
             }
-            const reusableLetter = objectHere.letter
-                && !(game.inventory || []).some(item => item.letter === objectHere.letter);
+            const reusableLetter = pickupObj.letter
+                && !(game.inventory || []).some(item => item.letter === pickupObj.letter);
             const letter = reusableLetter
-                ? objectHere.letter
-                : objectHere.wasStolen && objectHere.letter
-                ? objectHere.letter
+                ? pickupObj.letter
+                : pickupObj.wasStolen && pickupObj.letter
+                ? pickupObj.letter
                 : nextInventoryLetter();
             const pickedItem = {
-                ...objectHere,
+                ...pickupObj,
                 letter,
-                kind: objectHere.kind || name,
-                quan: objectHere.quan || 1,
+                kind: pickupObj.kind || name,
+                quan: pickupObj.quan || 1,
                 no_charge: undefined,
                 line: `${letter} - ${amount}`,
             };
-            const { price: billedPrice } = addPickedObjectToShopBill(objectHere, pickedItem);
+            const { price: billedPrice } = addPickedObjectToShopBill(pickupObj, pickedItem);
             const unpaidSuffix = billedPrice > 0
                 ? ` (unpaid, ${billedPrice} zorkmid${billedPrice === 1 ? '' : 's'})`
                 : '';
@@ -42356,7 +42375,7 @@ export async function rhack(_cmd) {
             game.inventory = [...(game.inventory || []), pickedItem];
             maybeAttachCarriedFigurineTimeout(pickedItem);
             game._pet_food_scan_inventory = game.inventory;
-            game.level.objects = (game.level.objects || []).filter(obj => obj !== objectHere);
+            game.level.objects = (game.level.objects || []).filter(obj => obj !== pickupObj);
             newsym(game.u?.ux || 0, game.u?.uy || 0);
             let carriedWeight = Math.trunc(((game._goldCount || 0) + 50) / 100);
             for (const invItem of game.inventory || []) {
@@ -42371,7 +42390,7 @@ export async function rhack(_cmd) {
             const stats = game.u?.acurr?.a || [];
             const capacity = Math.min(1000, 25 * ((stats[0] ?? 10) + (stats[4] ?? 10)) + 50);
             if (carriedWeight > capacity) {
-                const troubleMessage = `You have a little trouble lifting ${letter} - ${amount}${unpaidSuffix}.`;
+                const troubleMessage = [...preflightMessages, `You have a little trouble lifting ${letter} - ${amount}${unpaidSuffix}.`].join('  ');
                 const alreadyBurdened = (game.u?._statusSuffix || '').includes('Burdened');
                 const width = game.nhDisplay?.cols || 80;
                 const showMore = !alreadyBurdened || troubleMessage.length >= width - 8;
@@ -42395,7 +42414,7 @@ export async function rhack(_cmd) {
             }
             const pickupMessage = `${letter} - ${amount}${unpaidSuffix}.`;
             const pickupMessages = [...preflightMessages, pickupMessage];
-            await setMessage(pickupMessages.join('  '), !!objectHere.wasStolen || pickupMessages.join('  ').length >= (game.nhDisplay?.cols || 80) - 8);
+            await setMessage(pickupMessages.join('  '), !!pickupObj.wasStolen || pickupMessages.join('  ').length >= (game.nhDisplay?.cols || 80) - 8);
             game.context.move = 1;
             return;
         }

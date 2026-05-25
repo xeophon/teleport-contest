@@ -159,14 +159,14 @@ Concrete gaps:
 
 C pickup computes what can be carried before transferring the object. `carry_count()` and `lift_object()` can reduce quantity, reject based on slots or special objects, ask burden prompts, and trigger special cases. `pick_obj()` calls `addtobill()` before `addinv()` so unpaid merges and bill identity stay correct.
 
-JS single pickup computes a shop price, shows a quote, and then transfers the picked object (`js/cmd.js:42200-42386`). It now has a starter floor-pickup preflight before transfer/billing for artifact blast/evasion/death, fatal barehanded cockatrice/chickatrice corpse touch, floor Rider corpse revival, maximum-carry failure, and inventory-slot failure (`js/cmd.js:17048-17136`). It still computes ordinary burden feedback after adding the object. Multi-pickup preflights selected non-gold objects before mutating floor or inventory state, then moves selected objects into inventory after ledger/merge checks (`js/cmd.js:28123-28222`).
+JS single pickup computes a shop price, shows a quote, and then transfers the picked object (`js/cmd.js:42200-42386`). It now has a starter floor-pickup preflight before transfer/billing for artifact blast/evasion/death, fatal barehanded cockatrice/chickatrice corpse touch, floor Rider corpse revival, maximum-carry failure, partial stack lifting, and inventory-slot failure (`js/cmd.js:16992-17151`). It still computes ordinary burden feedback after adding the object. Multi-pickup preflights selected non-gold objects before mutating floor or inventory state, then moves selected objects into inventory after ledger/merge checks (`js/cmd.js:28123-28240`).
 
 Concrete gaps:
 
 - Multi-object pickup still bypasses the C quote flow and only has starter floor preflight, though ordinary picked objects now enter the JS shop ledger.
 - Single food pickup and ordinary stackable non-food pickup now reject paid/unpaid mismatches and carry compatible same-price unpaid bill totals forward.
 - Bill ledger calls exist for ordinary shop pickup and compatible inventory merges, but they are not yet a full C `addtobill()`/`addinv()` merge invariant across every transfer path.
-- Lift limits are not full C parity: starter pre-transfer slot/max-carry failure, artifact/fatal-corpse touch gates, and floor Rider corpse revival exist for ordinary floor pickup, but partial stack pickup, burden prompts, boulder/loadstone/scare monster scroll behavior, and the full artifact bane/silver/life-saving matrix remain incomplete.
+- Lift limits are not full C parity: starter pre-transfer slot/max-carry failure, artifact/fatal-corpse touch gates, floor Rider corpse revival, and partial stack pickup exist for ordinary floor pickup, but burden prompts, boulder/loadstone/scare monster scroll behavior, and the full artifact bane/silver/life-saving matrix remain incomplete.
 - Stolen value when carrying merchandise out of a shop is not tied to recursive bill/container state the way `pick_obj()` and `stolen_value()` are in C.
 
 ### 5. Drop Flow Only Partially Implements `sellobj()` Semantics
