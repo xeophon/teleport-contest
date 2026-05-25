@@ -1291,6 +1291,26 @@ test('hero-caused floor fire from outside the shop records robbed value', () => 
     assert.deepEqual(game._usedUpShopBills || [], []);
 });
 
+test('shop-floor lamp catching light from floor fire is not billed', () => {
+    const { shkp } = installShopState();
+    const item = lamp(3108, 'oil lamp', 'l', 3);
+    delete item.letter;
+    delete item.line;
+    game.level.objects = [item];
+
+    const result = burnFloorObjectsByFire(5, 5, { giveFeedback: true, heroCaused: true });
+
+    assert.equal(result.count, 0);
+    assert.equal(game.level.objects.includes(item), true);
+    assert.equal(item.lamplit, true);
+    assert.equal(item.burning, true);
+    assert.equal(shkp.billct, 0);
+    assert.equal(shkp.debit || 0, 0);
+    assert.equal(shkp.robbed || 0, 0);
+    assert.deepEqual(game._usedUpShopBills || [], []);
+    assert.match(result.messages.join(' '), /catches light/);
+});
+
 test('applying an unpaid oil lamp lights it and bills usage without consuming the live bill', async () => {
     const { shkp } = installCommandShopState();
     const item = lamp(3090, 'oil lamp', 'l', 3);

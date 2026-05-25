@@ -86,6 +86,8 @@ The current audit source of truth is `docs/c-parity-audit/`.
 - Added C-ordered shop-floor magic-bag put-in `sellobj()` handling: trigger objects now resolve unpaid return, sale/no-sale, angry/robbed shopkeeper, and declined-sale `no_charge` handling before magic-bag explosion billing, matching C `in_container()` ordering for destroyed trigger and target bags.
 - Added C-style invalid wish retry/random fallback: unrecognized wish text no longer creates arbitrary named weapons, bad descriptions retry without consuming wish conduct, and the fifth bad try falls back to a random object.
 - Added C-style carried fire-ignition billing: unpaid carried light sources that catch fire in a shop now charge the normal usage fee, then preserve the original bill row as a used-up bill entry; off-shop ignition leaves the live bill row unchanged.
+- Added a narrow C-shaped wish finalization slice: requested quantities now stay limited to mergeable object classes and C multigen caps, requested `spe` follows class rules for weapons, armor, weapon-tools, charged rings, wands, crystal balls, and non-`spe` objects, and wished crystal balls now use the proper tool initialization path.
+- Tightened floor fire source ownership: generic C floor fire catch-light remains unbilled, monster red dragon breath now uses non-hero floor-fire ownership, and hero-caused trap/ray floor destruction remains routed through used-up or robbed shop billing.
 - Latest verified public score: `44/44`.
 
 ## Current Priorities
@@ -94,13 +96,13 @@ The current audit source of truth is `docs/c-parity-audit/`.
    - Source notes: `docs/c-parity-audit/05-food-inventory-containers-shops.md`.
    - Current JS has a starter bill ledger, but object `unpaid`/`unpaidPrice` fields and legacy fallback scans still participate in billing.
    - Missing or partial concepts include full `addtobill`, full `subfrombill` routing, non-ordinary magic-bag source/target cases, full `obfree()`/container-aware `stolen_value()` helper integration, shared `sellobj()` helper integration beyond ordinary branches, remaining add-inventory/no-charge cleanup outside ordinary shop pickup, remaining charge-consuming `check_unpaid_usage` caller coverage such as wand engraving, and non-bite `costly_alteration` coverage outside the narrow food/tin/box-lock/cream-pie paths.
-   - The next narrow C-backed gaps are generic `fire_damage()` floor-item deletion ownership outside `burn_floor_objects`, remaining container itemized `#pay` aggregation outside carried ledger-backed contents, non-ordinary magic-bag source/target cases, remaining inventory merge edge cases outside carried-bag partial put-in, remaining merge/destruction edge cases, artifact touch side effects outside floor pickup/container take-out, full `obfree()`/container-aware `stolen_value()` debt naming, and less ordinary `addtobill()`/quote positioning outside whole-container pickup.
+   - The next narrow C-backed gaps are remaining container itemized `#pay` aggregation outside carried ledger-backed contents, non-ordinary magic-bag source/target cases, remaining inventory merge edge cases outside carried-bag partial put-in, remaining merge/destruction edge cases, artifact touch side effects outside floor pickup/container take-out, full `obfree()`/container-aware `stolen_value()` debt naming, wand engraving usage fees, and less ordinary `addtobill()`/quote positioning outside whole-container pickup.
 
 2. Object registry and canonical object factory.
    - Source notes: `docs/c-parity-audit/02-objects-wishing-readobjnam.md`.
    - Create one object metadata registry for type, class, material, weight, cost, probability, wishability, merge rules, and damage predicates.
    - Add a C-shaped object factory before deeper `mkobj`, wishing, artifact, and timer work.
-   - Continue replacing the independent wish parser with C-shaped matching, property limits, explicit "nothing" handling, artifact provenance, and object finalization rules. The next narrow wish slice is constraining requested quantity to mergeable object classes and requested `spe` by C object-class rules.
+   - Continue replacing the independent wish parser with C-shaped matching, full `objects[].oc_merge` metadata, charge suffix parsing, explicit "nothing" handling, artifact provenance, non-wishable substitutions, and registry-backed object finalization rules.
 
 3. Level generation lifecycle and special-level data.
    - Source notes: `docs/c-parity-audit/03-levelgen-specials-quest.md`.
@@ -133,11 +135,11 @@ The current audit source of truth is `docs/c-parity-audit/`.
 
 Continue the shop ledger migration:
 
-1. Add generic `fire_damage()` floor-item ownership billing for hero-caused destructive floor effects, keeping floor catch-light unbilled as in C `ignite_items()`.
+1. Keep generic `fire_damage()` floor catch-light unbilled, and continue auditing individual destructive floor-effect callers for the right hero/non-hero ownership before they enter shop billing.
 2. Broaden shop-floor container take-out and tip beyond recursive billing into remaining lift preflight details, remaining inventory merge edge cases outside carried-bag partial put-in, and merge/destruction edge cases; continue magic-bag work through non-ordinary sources/targets and shared `obfree()`/`stolen_value()` debt naming.
 3. Finish remaining `sellobj()` follow-ups: complete recursive `subfrombill()` integration, broken/container projectile impact edge cases, and shared-helper integration for less ordinary object transfers.
 4. Move payment toward a complete C `dopay()` model for containers and queued itemized selections.
-5. Add the narrow wish finalization slice for mergeable quantity and requested `spe` constraints.
+5. Continue wish finalization by replacing local parser/finalizer tables with registry-backed `oc_merge`, `oc_charged`, charge suffix, non-wishable substitution, and artifact provenance rules.
 
 ## Verification
 

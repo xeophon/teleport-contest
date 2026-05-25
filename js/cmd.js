@@ -1215,7 +1215,7 @@ const WISH_BASE_OBJECTS = new Map([
     ['wax candle', { otyp: WAX_CANDLE, cls: 'tool', glyph: '(', kind: 'wax candle', plural: 'wax candles', age: 400 }],
     ['wax candles', { otyp: WAX_CANDLE, cls: 'tool', glyph: '(', kind: 'wax candle', plural: 'wax candles', age: 400 }],
     ['stethoscope', { otyp: STETHOSCOPE, cls: 'tool', glyph: '(', kind: 'stethoscope' }],
-    ['magic marker', { otyp: MAGIC_MARKER, cls: 'tool', glyph: '(', kind: 'magic marker' }],
+    ['magic marker', { otyp: MAGIC_MARKER, cls: 'tool', glyph: '(', kind: 'magic marker', plural: 'magic markers' }],
     ['lock pick', { otyp: LOCK_PICK, cls: 'tool', glyph: '(', kind: 'lock pick', actualKind: 'lock pick' }],
     ['wooden harp', { otyp: WOODEN_HARP, cls: 'tool', glyph: '(', kind: 'harp', actualKind: 'wooden harp', known: false }],
     ['magic harp', { otyp: MAGIC_HARP, cls: 'tool', glyph: '(', kind: 'harp', actualKind: 'magic harp', known: false }],
@@ -1284,6 +1284,7 @@ const WISH_TOOL_ROLLS = new Map([
     ['horn of plenty', 957], ['harp', 961], ['wooden harp', 961],
     ['magic harp', 963], ['bell', 965], ['bugle', 969],
     ['leather drum', 973], ['drum of earthquake', 975],
+    ['crystal ball', 495],
 ]);
 const WISH_TOOL_APPEARANCES = new Map([
     ['wooden flute', 'flute'], ['magic flute', 'flute'],
@@ -9502,11 +9503,26 @@ function capWishSpe(spe) {
 }
 
 function wishedSpeForItem(item, spe) {
-    if ((item?.cls === 'wand' || item?.otyp === WAND_CLASS) && !game.flags?.debug) {
-        if (spe < 0) return Math.max(spe, -1);
-        return Math.min(spe, item.spe ?? spe);
+    let requested = Math.min(Math.abs(Math.trunc(Number(spe || 0))), SPE_LIM);
+    let negative = spe < 0;
+    if (game.flags?.debug) return negative && requested ? -requested : requested;
+
+    const generated = item?.spe ?? 0;
+    const cls = itemClassKey(item);
+    if (cls === 'armor' || cls === 'weapon' || isWeaponTool(item) || isChargeableRing(item)) {
+        if (requested > rnd(5) && requested > generated)
+            requested = 0;
+        if (requested > 2 && ((game.u?.uluck || 0) + (game.u?.moreluck || 0)) < 0)
+            negative = true;
+    } else {
+        if (cls === 'wand' || item?.otyp === WAND_CLASS || isCrystalBallObject(item)) {
+            if (requested > 1 && negative) requested = 1;
+        } else if (requested > 0 && negative) {
+            requested = 0;
+        }
+        if (requested > generated) requested = generated;
     }
-    return spe;
+    return negative && requested ? -requested : requested;
 }
 
 function applyWishedBuc(item, { wishedBlessed, wishedUncursed, wishedCursed, negativeSpe }) {
@@ -19320,16 +19336,41 @@ function applyWishedQualifiers(item, qualifiers) {
 }
 
 function applyWishedQuantity(item, wishedQuan, forceQuantity = false) {
+    const quantity = Math.max(1, Math.trunc(Number(wishedQuan || 1)));
     if (item?.globby) {
-        applyWishedGlobQuantity(item, wishedQuan);
+        applyWishedGlobQuantity(item, quantity);
     } else if (item?.dragonArmor) {
         item.quan = 1;
     } else if (isTinObject(item)) {
-        if (game.flags?.debug || wishedQuan < rnd(6))
-            item.quan = wishedQuan;
-    } else if (wishedQuan > 1 || forceQuantity) {
-        item.quan = wishedQuan;
+        if (game.flags?.debug || quantity < rnd(6))
+            item.quan = quantity;
+    } else if (wishQuantityMergeable(item)) {
+        if (game.flags?.debug || quantity < rnd(6) || wishQuantityAlwaysAllowed(item, quantity))
+            item.quan = quantity;
+    } else if (forceQuantity) {
+        item.quan = 1;
     }
+}
+
+function wishQuantityMergeable(item) {
+    const cls = itemClassKey(item);
+    if (cls === 'scroll' || cls === 'potion' || cls === 'gem') return true;
+    if (cls === 'food' && objectKindKey(item) !== 'meat ring') return true;
+    if (cls === 'weapon') return true;
+    if (isCandleObject(item)) return true;
+    return false;
+}
+
+function wishedAmmoOrMissile(item) {
+    const kind = objectKindKey(item);
+    return item?.otyp === DART
+        || /\b(?:arrow|arrows|bolt|bolts|dart|darts|shuriken|throwing star|throwing stars|rock|rocks|flint)\b/.test(kind);
+}
+
+function wishQuantityAlwaysAllowed(item, quantity) {
+    if (quantity <= 7 && isCandleObject(item)) return true;
+    return quantity <= 20 && (wishedAmmoOrMissile(item)
+        || item?.otyp === ROCK || item?.otyp === FLINT || ['rock', 'flint'].includes(objectKindKey(item)));
 }
 
 function applyWishedTinVariety(item) {
@@ -19498,7 +19539,26 @@ function resolveWishedSpellingAlias(lowerName) {
     const normalized = String(lowerName || '').trim().replace(/\s+/g, ' ');
     const explicit = WISH_EXPLICIT_SPELLING_ALIASES.get(normalized);
     if (explicit) return { name: explicit, skipNamedesc: true };
-    return { name: WISH_NAME_ALIASES.get(normalized) || normalized, skipNamedesc: false };
+    const alias = WISH_NAME_ALIASES.get(normalized);
+    if (alias) return { name: alias, skipNamedesc: false };
+    return { name: singularizeWishedPluralName(normalized), skipNamedesc: false };
+}
+
+function singularizeWishedPluralName(normalized) {
+    for (const [name, baseObject] of WISH_BASE_OBJECTS.entries()) {
+        if (baseObject?.plural === normalized) return name;
+    }
+    for (const [plural, singular] of [
+        [/^wands of (.+)$/, 'wand of $1'],
+        [/^rings of (.+)$/, 'ring of $1'],
+        [/^potions of (.+)$/, 'potion of $1'],
+        [/^spellbooks of (.+)$/, 'spellbook of $1'],
+        [/^scrolls of (.+)$/, 'scroll of $1'],
+    ]) {
+        const match = normalized.match(plural);
+        if (match) return singular.replace('$1', match[1]);
+    }
+    return normalized;
 }
 
 function makeWishedGrayStoneObject(lowerName) {
@@ -19973,7 +20033,7 @@ function wishedBaseObjectFromName(lowerName, qualifiers = {}, originalName = low
         const otmp = mksobj(GEM_CLASS, false, false);
         return Object.assign(otmp, { cls: 'gem', glyph: '*', gemDescription: lowerName, actualKind: lowerName, wishedfor: true });
     }
-    if (/lamp|chest|camera|bag|sack|tool|marker|card|bell|harp|leash|blindfold|towel|lenses|flute|horn|whistle|drum|saddle|grease|figurine|tin opener/.test(lowerName)) {
+    if (/lamp|chest|camera|bag|sack|tool|marker|card|bell|harp|leash|blindfold|towel|lenses|flute|horn|whistle|drum|saddle|grease|figurine|tin opener|crystal ball/.test(lowerName)) {
         const namedescBound = WISH_TOOL_NAMEDESC_BOUNDS.get(lowerName);
         if (namedescBound) rn2(namedescBound);
         const toolRoll = WISH_TOOL_ROLLS.get(lowerName);
@@ -38508,8 +38568,10 @@ export async function rhack(_cmd) {
             if (item._artifact_wish_name) wishedQuan = 1;
             if (item._artifact_wish_name || item.artifact) addConductCount('wisharti');
             if (item.artifact) touchArtifact(item);
-            if (wishedSpe !== undefined && !item._wish_ignore_requested_spe && !item._wish_spe_from_suffix)
-                item.spe = wishedSpeForItem(item, wishedSpe);
+            if (wishedSpe !== undefined && !item._wish_ignore_requested_spe && !item._wish_spe_from_suffix) {
+                const requestedSpe = wishedSpeNegative ? -Math.abs(wishedSpe) : Math.abs(wishedSpe);
+                item.spe = wishedSpeForItem(item, requestedSpe);
+            }
             applyWishedBuc(item, {
                 wishedBlessed,
                 wishedUncursed,
