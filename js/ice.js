@@ -7,9 +7,9 @@ import {
     IS_DOOR, IS_WALL, IS_POOL, Is_rogue_level, Is_waterlevel, isok, LANDMINE, LAVAPOOL,
     LAVAWALL, MAGIC_PORTAL, MOAT, POOL, ROOM, ROWNO, SDOOR, STONE, TDWALL,
     TLCORNER, TLWALL, TRCORNER, TRWALL, TT_BURIEDBALL, TT_INFLOOR, TT_LAVA, TUWALL,
-    VIBRATING_SQUARE, VWALL, WATER,
+    VIBRATING_SQUARE, VWALL, WATER, ROT_AGE,
 } from './const.js';
-import { rn1, rn2, rnd } from './rng.js';
+import { rn1, rn2, rnd, rnz } from './rng.js';
 import { newsym } from './display.js';
 import { vision_recalc } from './vision.js';
 
@@ -145,6 +145,64 @@ export function processMeltIceTimers(g = game, { afterMelt = null } = {}) {
 
 function isCorpseObject(obj) {
     return obj?.otyp === CORPSE || obj?.otyp === 'corpse';
+}
+
+function corpseName(obj) {
+    const named = obj?.corpsenm?.name || obj?.corpsenm || obj?.corpseName;
+    if (named) return String(named).toLowerCase();
+    return String(obj?.actualKind || obj?.kind || '').toLowerCase().replace(/\s+corpse$/, '');
+}
+
+function corpseHasNoTimeout(obj) {
+    const name = corpseName(obj);
+    return name === 'lichen' || name === 'lizard';
+}
+
+function corpseUsesRevivePath(obj) {
+    const name = corpseName(obj);
+    return !!(obj?.corpsenm?.rider || obj?.riderCorpse || name.includes('troll'));
+}
+
+function restartCorpseRotTimeout(obj) {
+    delete obj.rotAwayTurn;
+    delete obj.reviveTurn;
+    if (!isCorpseObject(obj) || corpseHasNoTimeout(obj)) return;
+    if (corpseUsesRevivePath(obj)) return;
+    const moves = Math.max(game.moves || 0, 1);
+    const rotAdjust = game.in_mklev ? 25 : 10;
+    const age = moves - (obj.age ?? moves);
+    let timeout = age > ROT_AGE ? rotAdjust : ROT_AGE - age;
+    timeout += rnz(rotAdjust) - rotAdjust;
+    obj.rotAwayTurn = moves + Math.max(1, timeout);
+}
+
+export function freezeObjectInIcebox(obj) {
+    if (!obj) return;
+    obj.inIceBox = true;
+    obj.fromIceBox = true;
+    if (!isCorpseObject(obj)) return;
+    const moves = Math.max(game.moves || 0, 1);
+    obj.age = Math.max(0, moves - (obj.age ?? moves));
+    delete obj.rotAwayTurn;
+    delete obj.reviveTurn;
+    setCorpseOnIce(obj, false);
+}
+
+export function removedFromIcebox(obj) {
+    if (!obj) return;
+    const moves = Math.max(game.moves || 0, 1);
+    if (isCorpseObject(obj)) {
+        const frozenAge = obj.inIceBox || obj.fromIceBox
+            ? Math.max(0, obj.age ?? 0)
+            : Math.max(0, moves - (obj.age ?? moves));
+        obj.age = moves - frozenAge;
+        const name = corpseName(obj);
+        if (name) obj.norevive = name !== 'ice troll';
+        setCorpseOnIce(obj, false);
+        restartCorpseRotTimeout(obj);
+    }
+    obj.fromIceBox = false;
+    obj.inIceBox = false;
 }
 
 function corpseOnIce(obj) {

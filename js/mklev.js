@@ -22,7 +22,7 @@ import { init_rect, rnd_rect, get_rect, split_rects } from './rect.js';
 import { depth as depth_of_level } from './hacklib.js';
 import { RNDMONST_COMMON_MONSTERS } from './monster_data.js';
 import { datFileText } from './dat_files.js';
-import { clearBuriedOrganicRotTimer, objectIceEffect, restoreBuriedBallIfNeeded } from './ice.js';
+import { clearBuriedOrganicRotTimer, freezeObjectInIcebox, objectIceEffect, restoreBuriedBallIfNeeded } from './ice.js';
 import {
     COLNO, ROWNO, STONE, ROOM, CORR, DOOR, STAIRS, LADDER, AIR,
     HWALL, VWALL, TLCORNER, TRCORNER, BLCORNER, BRCORNER,
@@ -4679,6 +4679,7 @@ function sameStackableObject(existing, otmp) {
 }
 export function add_to_container(container, otmp) {
     if (!container || !otmp) return null;
+    if (container.otyp === ICE_BOX || container.kind === 'ice box') freezeObjectInIcebox(otmp);
     container.contents ??= [];
     for (const existing of container.contents) {
         if (!sameStackableObject(existing, otmp)) continue;

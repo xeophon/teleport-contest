@@ -17,7 +17,7 @@ import { clearMonsterTrack, updateMonsterTrack } from './montrack.js';
 import { createGasCloud } from './region.js';
 import { advanceFireBreathRay, finishHeroTargetedBreath, fireBreathDamageMonster, fireBreathZapHits } from './fire_breath.js';
 import { attachFigurineTransformTimeout, figurineLocationCheck, isFigurineObject, makeFigurineFamiliar, stopFigurineTransformTimeout } from './figurine.js';
-import { processBuriedOrganicRot, processMeltIceTimers } from './ice.js';
+import { processBuriedOrganicRot, processMeltIceTimers, removedFromIcebox } from './ice.js';
 import { applyMeltedIceMonsterLiquidEffects } from './monster_liquid.js';
 
 const ROLE_STATE = {
@@ -1964,16 +1964,6 @@ function detachContainedObject(container, obj) {
     delete obj.nexthere;
 }
 
-function removedFromIceboxForMonsterConsumption(obj) {
-    if (!obj) return;
-    obj.fromIceBox = false;
-    obj.inIceBox = false;
-    const corpseName = obj.corpsenm?.name || '';
-    if (obj.otyp === CORPSE || obj.otyp === 'corpse') {
-        if (corpseName && corpseName !== 'ice troll') obj.norevive = true;
-    }
-}
-
 function floorSurfaceNameAt(x, y) {
     const typ = game.level?.at(x, y)?.typ;
     if (typ === ICE) return 'ice';
@@ -2023,7 +2013,7 @@ function monsterConsumeContainerContents(mon, container, messages) {
     for (const obj of contents) {
         detachContainedObject(container, obj);
         if (container.otyp === ICE_BOX || container.kind === 'ice box')
-            removedFromIceboxForMonsterConsumption(obj);
+            removedFromIcebox(obj);
         if (cube) {
             gelatinousCubeAddToInventory(mon, obj);
         } else {

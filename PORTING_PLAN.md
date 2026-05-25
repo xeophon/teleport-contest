@@ -2647,8 +2647,16 @@ Next concrete target:
   uses the current object metadata plus explicit ring/amulet/weapon/armor/tool
   tables, with generic random tools and wands deferred until the port has a
   stronger authoritative `oc_material` table. Focused metallivore-adjacent
-  replays and full score remain exact. Remaining `meatbox()` work is deeper
-  ice-box age timer parity and shop billing edge cases.
+  replays and full score remain exact.
+- Ice-box `meatbox()` age parity now covers generated ice-box contents and
+  monster-eaten container spills: the shared ice-box insertion helper stores
+  corpse age as frozen elapsed time and stops active corpse timers, while the
+  thaw/removal helper restores normal corpse age, suppresses non-ice-troll
+  revival, and restarts ordinary corpse rot using the C `ROT_AGE`/`rnz`
+  formula. Focused ice-box/metallivore guards and full score remain exact.
+  Remaining `meatbox()` work is full player `out_container()`/`#tip` ice-box
+  thaw coverage, troll/Rider revive and zombify timers, glob shrinking, forced
+  ice-box destruction, and shop billing edge cases.
 - Remaining ice work outside this fire-ray terrain slice includes the broader
   full `spoteffects()`/`pooleffects()` hero liquid behavior, deeper
   `minliquid()` edges (life-saving or shape-shift survivor relocation,
