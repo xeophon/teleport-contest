@@ -1080,7 +1080,7 @@ const BAG_OBJECT_TYPES = new Set([SACK, OILSKIN_SACK, BAG_OF_HOLDING]);
 const PICKUP_SECTION_ORDER = [
     'Coins', 'Amulets', 'Weapons', 'Armor', 'Comestibles', 'Scrolls',
     'Spellbooks', 'Potions', 'Rings', 'Wands', 'Tools', 'Gems/Stones',
-    'Other Items',
+    'Boulders/Statues', 'Other Items',
 ];
 const BAG_PUT_CLASS_TYPES = [
     { key: 'coin', label: 'Coins', symbol: '$' },
@@ -4635,6 +4635,7 @@ const OBJECT_WEIGHTS = {
     'credit card': 1,
     'expensive camera': 12,
     'apple': 2,
+    'boulder': 6000,
     'carrot': 2,
     'cream pie': 10,
     'food ration': 20,
@@ -16863,6 +16864,7 @@ function rememberUsedUpShopBill(obj) {
 function objectWeightKind(obj) {
     const kind = String(obj?.actualKind || obj?.kind || obj?.spellName || obj?.spell?.name || '').toLowerCase();
     if (/war hammer|mjollnir/.test(kind)) return 'war hammer';
+    if (!kind && isBoulderObject(obj)) return 'boulder';
     if (!kind && obj?.otyp === LARGE_BOX) return 'large box';
     if (!kind && obj?.otyp === CHEST) return 'chest';
     if (!kind && obj?.otyp === ICE_BOX) return 'ice box';
@@ -17019,13 +17021,57 @@ function isLoadstoneObject(obj) {
     return !!obj && (obj.otyp === LOADSTONE || objectKindKey(obj) === 'loadstone');
 }
 
+function isBoulderObject(obj) {
+    return !!obj && (obj.otyp === BOULDER || objectKindKey(obj) === 'boulder');
+}
+
+function normalizeBoulderObject(obj) {
+    if (!isBoulderObject(obj)) return obj;
+    obj.otyp = BOULDER;
+    obj.cls = 'rock';
+    obj.glyph = '`';
+    obj.kind ||= 'boulder';
+    obj.actualKind ||= 'boulder';
+    obj.quan = Math.max(1, Math.trunc(Number(obj.quan || 1)));
+    obj.owt = 6000 * obj.quan;
+    return obj;
+}
+
+const ROCK_THROWING_FORM_NAMES = new Set([
+    'giant', 'stone giant', 'hill giant', 'fire giant', 'frost giant',
+    'storm giant', 'titan', 'cyclops', 'lord surtur',
+]);
+
+function heroThrowsRocks() {
+    const form = game.u?._polyself_form || game.u?._polyself_base || {};
+    const name = String(form.name || '').toLowerCase();
+    return !!(form.throwsRocks || form.rockThrower || ROCK_THROWING_FORM_NAMES.has(name));
+}
+
+function carriedBoulderObject() {
+    return (game.inventory || []).find(item => isBoulderObject(item));
+}
+
 function carriedLoadstoneObject() {
     return (game.inventory || []).find(item => isLoadstoneObject(item));
 }
 
-function loadstoneNoSlotPickupMessage(obj) {
+function noSlotSpecialPickupMessage(obj) {
     const name = pickupObjectName(obj);
     return `You are carrying too much stuff to pick up ${(obj?.quan || 1) === 1 ? 'another' : 'more'} ${name}.`;
+}
+
+function boulderSokobanPickupMessage(obj) {
+    return `You cannot get your hand around this ${pickupObjectName({ ...obj, quan: 1 })}.`;
+}
+
+function boulderTooHeavyPickupMessage(obj) {
+    const quantity = Math.max(1, Math.trunc(Number(obj?.quan || 1)));
+    const phrase = pickupObjectPhrase(obj);
+    const hereVerb = quantity === 1 ? 'is' : 'are';
+    if ((game.inventory || []).length || (game._goldCount || 0))
+        return `There ${hereVerb} ${phrase} here, but you cannot lift any more.`;
+    return `There ${hereVerb} ${phrase} here, but ${quantity === 1 ? 'it' : 'even one'} is too heavy for you to lift.`;
 }
 
 function curseLoadstoneLeavingInventory(obj) {
@@ -17218,6 +17264,41 @@ async function floorPickupPreflight(obj, { shopPrice = null, prompt = true, scar
     const gold = Math.max(0, Math.trunc(Number(game._goldCount || 0)));
     const messages = [...(prelift.messages || [])];
     const originalCount = Math.max(1, Math.trunc(Number(obj?.quan || 1)));
+    if (isBoulderObject(obj)) {
+        normalizeBoulderObject(obj);
+        if (game.level?.flags?.sokoban_rules) {
+            return {
+                ok: false,
+                move: true,
+                message: boulderSokobanPickupMessage(obj),
+                messages,
+            };
+        }
+        if (heroThrowsRocks()) {
+            const x = obj?.ox ?? game.u?.ux;
+            const y = obj?.oy ?? game.u?.uy;
+            const price = shopPrice != null ? shopPrice : shopItemPrice(obj, x, y);
+            const mergeTarget = findFloorPickupInventoryMergeTargetForPreflight(obj, price);
+            const hasSlot = !!simulatedNextInventoryLetters(1);
+            if (!hasSlot && carriedBoulderObject() && !mergeTarget) {
+                return {
+                    ok: false,
+                    move: true,
+                    message: noSlotSpecialPickupMessage(obj),
+                    messages,
+                };
+            }
+            return {
+                ok: true,
+                skip: false,
+                messages,
+                takeCount: originalCount,
+                liftView: obj,
+                prompt: null,
+                inventoryLetter: !hasSlot && !mergeTarget ? '#' : null,
+            };
+        }
+    }
     if (isLoadstoneObject(obj)) {
         const x = obj?.ox ?? game.u?.ux;
         const y = obj?.oy ?? game.u?.uy;
@@ -17227,7 +17308,7 @@ async function floorPickupPreflight(obj, { shopPrice = null, prompt = true, scar
         if (!hasSlot && carriedLoadstoneObject() && !mergeTarget) {
             return {
                 ok: false,
-                message: loadstoneNoSlotPickupMessage(obj),
+                message: noSlotSpecialPickupMessage(obj),
                 messages,
             };
         }
@@ -17245,7 +17326,10 @@ async function floorPickupPreflight(obj, { shopPrice = null, prompt = true, scar
     if (takeCount < 1) {
         return {
             ok: false,
-            message: `There is ${pickupObjectPhrase(obj)} here, but you cannot carry any more.`,
+            move: isBoulderObject(obj) ? true : undefined,
+            message: isBoulderObject(obj)
+                ? boulderTooHeavyPickupMessage(obj)
+                : `There is ${pickupObjectPhrase(obj)} here, but you cannot carry any more.`,
             messages,
         };
     }
@@ -17344,7 +17428,7 @@ function containerTakeoutPreflight(container, entries) {
             if (!hasSlot && carriedLoadstoneObject() && !mergeTarget) {
                 return {
                     ok: false,
-                    message: loadstoneNoSlotPickupMessage(obj),
+                    message: noSlotSpecialPickupMessage(obj),
                     messages,
                 };
             }
@@ -19676,6 +19760,7 @@ export function pickupObjectName(obj) {
     const archeologist = (game.urole?.name?.m || game._startup_role) === 'Archeologist';
     if (obj.otyp === GOLD_PIECE || obj.cls === 'coin' || obj.glyph === '$')
         return (obj.quan || 1) > 1 ? 'gold pieces' : 'gold piece';
+    if (isBoulderObject(obj)) return named((obj.quan || 1) > 1 ? 'boulders' : 'boulder');
     if (obj.artifact) return artifactObjectName(obj) || obj.kind;
     if (obj.otyp === 'corpse' || obj.otyp === CORPSE) return corpseObjectName(obj);
     if (obj.otyp === EGG) return named(eggObjectName(obj));
@@ -22449,6 +22534,7 @@ function pickupMenuEntries(objects) {
         else if (obj.otyp === RING_CLASS || obj.cls === 'ring' || obj.glyph === '=') section = 'Rings';
         else if (obj.otyp === WAND_CLASS || obj.cls === 'wand') section = 'Wands';
         else if (BAG_OBJECT_TYPES.has(obj.otyp) || obj.otyp === OIL_LAMP || obj.otyp === MAGIC_LAMP || obj.cls === 'tool' || obj.glyph === '(') section = 'Tools';
+        else if (isBoulderObject(obj) || obj.otyp === STATUE || obj.cls === 'rock' || obj.glyph === '`') section = 'Boulders/Statues';
         else if (obj.otyp === GEM_CLASS || obj.cls === 'gem' || obj.glyph === '*') section = 'Gems/Stones';
         if (obj.section) section = obj.section;
         return { obj, index, section };
@@ -22506,7 +22592,7 @@ function removePickupListFloorObject(obj) {
 }
 
 function pickupListPickedClass(obj) {
-    return obj.cls || (obj.otyp === DART ? 'weapon'
+    return isBoulderObject(obj) ? 'rock' : obj.cls || (obj.otyp === DART ? 'weapon'
         : obj.otyp === GEM_CLASS ? 'gem'
             : obj.otyp === 'corpse' || obj.otyp === CORPSE ? 'food'
                 : obj.otyp === RING_CLASS || obj.glyph === '=' ? 'ring'
@@ -25786,18 +25872,19 @@ function inventoryOverlayLines(page = 0, identify = false, match = null) {
     const sectionName = item => item.section || ({
         coin: 'Coins', amulet: 'Amulets', weapon: 'Weapons', armor: 'Armor', food: 'Comestibles',
         scroll: 'Scrolls', spellbook: 'Spellbooks', potion: 'Potions',
-        ring: 'Rings', wand: 'Wands', tool: 'Tools', gem: 'Gems/Stones',
+        ring: 'Rings', wand: 'Wands', tool: 'Tools', gem: 'Gems/Stones', rock: 'Boulders/Statues',
     })[item.cls] || (item.otyp === SCROLL_CLASS ? 'Scrolls'
         : item.otyp === POTION_CLASS ? 'Potions'
             : item.otyp === WAND_CLASS ? 'Wands'
                 : item.otyp === FOOD_CLASS ? 'Comestibles'
                     : item.otyp === TOOL_CLASS || item.otyp === MIRROR || item.otyp === EXPENSIVE_CAMERA || item.otyp === STETHOSCOPE || item.otyp === MAGIC_MARKER ? 'Tools'
                         : item.otyp === RING_CLASS ? 'Rings'
-                            : item.otyp === GEM_CLASS ? 'Gems/Stones' : 'Other Items');
+                            : isBoulderObject(item) || item.otyp === STATUE ? 'Boulders/Statues'
+                                : item.otyp === GEM_CLASS ? 'Gems/Stones' : 'Other Items');
     const sectionOrder = [
         'Coins', 'Amulets', 'Weapons', 'Armor', 'Comestibles', 'Scrolls',
         'Spellbooks', 'Potions', 'Rings', 'Wands', 'Tools', 'Gems/Stones',
-        'Other Items',
+        'Boulders/Statues', 'Other Items',
     ];
     const rows = [];
     let lastSection = '';
@@ -42553,7 +42640,7 @@ export async function rhack(_cmd) {
             return;
         }
         const objectsHere = (game.level?.objects || [])
-            .filter(obj => !obj.hidden && !obj.transientProjectile && obj.ox === game.u?.ux && obj.oy === game.u?.uy && obj.otyp !== BOULDER)
+            .filter(obj => !obj.hidden && !obj.transientProjectile && obj.ox === game.u?.ux && obj.oy === game.u?.uy)
             .sort((a, b) => ((b.otyp === 'corpse' || b.otyp === CORPSE) ? 1 : 0) - ((a.otyp === 'corpse' || a.otyp === CORPSE) ? 1 : 0));
         if (objectsHere.length > 1) {
             const entries = pickupMenuEntries(objectsHere);

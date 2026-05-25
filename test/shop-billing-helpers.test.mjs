@@ -15,6 +15,7 @@ const CANDELABRUM_OF_INVOCATION = 10076;
 const INVENTORY_LETTERS = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
 const SCR_SCARE_MONSTER = 279;
 const LOADSTONE = 10165;
+const BOULDER = 465;
 
 function installShopState() {
     const g = resetGame();
@@ -66,6 +67,16 @@ function installCommandShopState() {
         ulevel: 1,
         uac: 10,
     });
+    return state;
+}
+
+function installNonShopFloorState() {
+    const state = installCommandShopState();
+    game.level.rooms = [];
+    game.level.monsters = [];
+    game.level.objects = [];
+    game.level.flags = {};
+    game.level.at = () => ({ roomno: 0, typ: ROOM });
     return state;
 }
 
@@ -302,6 +313,22 @@ function floorLoadstone(id, props = {}) {
     };
 }
 
+function floorBoulder(id, props = {}) {
+    return {
+        id,
+        otyp: BOULDER,
+        cls: 'rock',
+        glyph: '`',
+        kind: 'boulder',
+        actualKind: 'boulder',
+        quan: 1,
+        ox: 5,
+        oy: 5,
+        owt: 6000,
+        ...props,
+    };
+}
+
 function carriedLoadstone(id, letter = 'l', props = {}) {
     const stone = floorLoadstone(id, props);
     delete stone.ox;
@@ -309,6 +336,17 @@ function carriedLoadstone(id, letter = 'l', props = {}) {
     stone.letter = letter;
     stone.line = `${letter} - a ${stone.cursed ? 'cursed ' : 'uncursed '}loadstone`;
     return stone;
+}
+
+function installThrowsRocksForm() {
+    game.u._polyself_form = {
+        name: 'stone giant',
+        mlet: 'H',
+        nohands: false,
+        throwsRocks: true,
+        strong: true,
+        giant: true,
+    };
 }
 
 function tin(id, letter = 't', quan = 1) {
@@ -3674,6 +3712,112 @@ test('loadstone floor pickup from a pile still bypasses burden prompt', async ()
     assert.equal(game.level.objects.includes(ration), true);
     assert.ok(shop.shopBillEntryForObject(shkp, carried));
     assert.doesNotMatch(game._pending_message, /Continue\?/);
+    assert.equal(game.context.move, 1);
+});
+
+test('ordinary hero cannot pick up floor boulder but spends command', async () => {
+    installNonShopFloorState();
+    const rock = floorBoulder(6060);
+    game.level.objects = [rock];
+
+    await rhack(',');
+
+    assert.match(game._pending_message, /There is a boulder here, but it is too heavy for you to lift/);
+    assert.equal(game.level.objects.includes(rock), true);
+    assert.equal(game.inventory.some(item => item.otyp === BOULDER), false);
+    assert.equal(game._command_mode ?? null, null);
+    assert.equal(game.context.move, 1);
+});
+
+test('Sokoban boulder blocks pickup even for throws-rocks form', async () => {
+    installNonShopFloorState();
+    installThrowsRocksForm();
+    game.level.flags = { sokoban_rules: true };
+    const rock = floorBoulder(6061);
+    game.level.objects = [rock];
+
+    await rhack(',');
+
+    assert.match(game._pending_message, /cannot get your .* around this boulder/i);
+    assert.equal(game.level.objects.includes(rock), true);
+    assert.equal(game.inventory.some(item => item.otyp === BOULDER), false);
+    assert.equal(game._command_mode ?? null, null);
+    assert.equal(game.context.move, 1);
+});
+
+test('polymorphed throws-rocks hero picks up overweight boulder', async () => {
+    installNonShopFloorState();
+    installThrowsRocksForm();
+    const rock = floorBoulder(6062);
+    game.level.objects = [rock];
+
+    await rhack(',');
+
+    const carried = game.inventory.find(item => item.otyp === BOULDER);
+    assert.ok(carried);
+    assert.equal(carried.kind, 'boulder');
+    assert.equal(carried.cls, 'rock');
+    assert.equal(carried.quan, 1);
+    assert.equal(game.level.objects.includes(rock), false);
+    assert.match(game._pending_message, /a - a boulder/);
+    assert.doesNotMatch(game._pending_message, /Continue\?/);
+    assert.equal(game._command_mode ?? null, null);
+    assert.equal(game.context.move, 1);
+});
+
+test('menu pickup ordinary boulder failure aborts later selected items', async () => {
+    installNonShopFloorState();
+    const rock = floorBoulder(6063, { section: 'Other Items' });
+    const later = blankScroll(6064);
+    later.section = 'Other Items';
+    game.level.objects = [rock, later];
+
+    await rhack(',');
+    assert.equal(game._command_mode, 'pickupList');
+
+    await rhack('a');
+    await rhack('b');
+    await rhack('\n');
+
+    assert.match(game._pending_message, /There is a boulder here, but it is too heavy for you to lift/);
+    assert.equal(game.level.objects.includes(rock), true);
+    assert.equal(game.level.objects.includes(later), true);
+    assert.equal(game.inventory.some(item => item.otyp === BOULDER), false);
+    assert.equal(game.inventory.some(item => item.id === later.id), false);
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+});
+
+test('shop menu pickup by throws-rocks hero bills normal item and carries boulder without billing', async () => {
+    const { shkp } = installCommandShopState();
+    installThrowsRocksForm();
+    const scroll = blankScroll(6066);
+    scroll.section = 'Other Items';
+    const rock = floorBoulder(6065, { section: 'Other Items' });
+    game.level.objects = [scroll, rock];
+
+    await rhack(',');
+    assert.equal(game._command_mode, 'pickupList');
+
+    await rhack('a');
+    await rhack('b');
+    await rhack('\n');
+
+    const carriedBoulder = game.inventory.find(item => item.otyp === BOULDER);
+    const carriedScroll = game.inventory.find(item => item.id === scroll.id);
+    const scrollEntry = shop.shopBillEntryForObject(shkp, carriedScroll);
+
+    assert.ok(carriedBoulder);
+    assert.equal(carriedBoulder.unpaid == null, true);
+    assert.equal(shop.shopBillEntryForObject(shkp, carriedBoulder) == null, true);
+    assert.ok(carriedScroll);
+    assert.ok(scrollEntry);
+    assert.equal(scrollEntry.useup, false);
+    assert.equal(shkp.billct, 1);
+    assert.equal(game.level.objects.includes(rock), false);
+    assert.equal(game.level.objects.includes(scroll), false);
+    assert.match(game._pending_message, /a - a scroll of blank paper \(unpaid, \d+ zorkmids?\)/);
+    assert.match(game._pending_message, /b - a boulder/);
     assert.equal(game.context.move, 1);
 });
 
