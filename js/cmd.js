@@ -13298,6 +13298,7 @@ function addContainerTakeoutObjectToShopBill(container, sourceObj, pickedItem = 
     const y = container?.oy;
     if (!container || !sourceObj || !pickedItem) return { shkp: null, price: 0, billEntry: null };
     if ((game.inventory || []).includes(container)) return { shkp: null, price: 0, billEntry: null };
+    if (!(game.level?.objects || []).includes(container)) return { shkp: null, price: 0, billEntry: null };
     if (pickedItem.unpaid) {
         syncUnpaidBillLine(pickedItem);
         return { shkp: null, price: 0, billEntry: null };
@@ -13327,6 +13328,10 @@ function addContainerTakeoutObjectToShopBill(container, sourceObj, pickedItem = 
         shkp.billct = Math.max(0, Math.trunc(Number(shkp.billct || 0))) + 1;
     }
     return { shkp, price, billEntry };
+}
+
+function addTippedContainerObjectToShopBill(container, obj) {
+    return addContainerTakeoutObjectToShopBill(container, obj, obj);
 }
 
 function mergePickedObjectIntoShopBill(source, target, sourcePrice = null) {
@@ -13475,6 +13480,9 @@ export const __shopBillingTestHooks = {
     splitShopBillEntry,
     subFromShopBill,
     subOneFromShopBill,
+    tipContainerContents,
+    tipContainerIntoContainer,
+    tipContainerToFloor,
     shopDroppedPaidObjectSaleInfo,
     shopBillEntryForObject,
     shopBillEntryQuantity,
@@ -17289,6 +17297,7 @@ function billShopFloorContainerPutObject(container, putItem) {
     const y = container?.oy ?? game.u?.uy;
     if (!container || !putItem || (game.inventory || []).includes(container) || x == null || y == null)
         return { shkp: null, returned: false, noCharge: false };
+    if (!(game.level?.objects || []).includes(container)) return { shkp: null, returned: false, noCharge: false };
     const shkp = shopkeeperForCostlySpot(x, y);
     if (!shopkeeperInHisShop(shkp)) return { shkp: null, returned: false, noCharge: false };
     if (shopBillableGold(putItem)) return { shkp, returned: false, noCharge: false };
@@ -17623,6 +17632,7 @@ function tipContainerToFloor(source) {
             destroyMagicBagItem(obj, messages);
             continue;
         }
+        addTippedContainerObjectToShopBill(source, obj);
         placeTippedObjectOnFloor(obj, x, y, messages);
     }
     if (Array.isArray(source.contents)) source.contents.length = 0;
@@ -18476,6 +18486,7 @@ function tipContainerIntoContainer(source, targetBox) {
             destroyMagicBagItem(obj, messages);
             continue;
         }
+        addTippedContainerObjectToShopBill(source, obj);
         prepareTippedObjectForContainer(obj);
         if (isMagicBagObject(targetBox) && magicBagExplodesWithObject(obj)) {
             explodeMagicBagTransfer(targetBox, obj, messages, { tumble: true });

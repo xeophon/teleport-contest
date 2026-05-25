@@ -395,6 +395,90 @@ test('shop-floor container put-in does not merge no-charge goods into chargeable
     assert.equal(shkp.billct, 0);
 });
 
+test('tipping merchandise from a shop-floor container to the floor adds it to the bill', () => {
+    const { shkp } = installShopState();
+    const container = shopFloorContainer(6901);
+    const contained = putObjectInContainer(container, foodRation(6902));
+    game.level.objects = [container];
+
+    const messages = shop.tipContainerToFloor(container);
+
+    assert.match(messages.join(' '), /Objects spill|An object spills/);
+    assert.equal(container.contents.length, 0);
+    assert.equal(game.level.objects.includes(contained), true);
+    assert.equal(contained.ox, 5);
+    assert.equal(contained.oy, 5);
+    assert.equal(contained.unpaid, true);
+    assert.equal(shkp.billct, 1);
+    assert.equal(shkp.bill[0].bo_id, String(contained.id));
+    assert.equal(contained.unpaidPrice, shop.shopBillEntryTotal(shkp.bill[0]));
+});
+
+test('tipping no-charge contents from a shop-floor container clears no-charge without billing', () => {
+    const { shkp } = installShopState();
+    const container = shopFloorContainer(6911);
+    const contained = putObjectInContainer(container, foodRation(6912));
+    contained.no_charge = true;
+    game.level.objects = [container];
+
+    shop.tipContainerToFloor(container);
+
+    assert.equal(game.level.objects.includes(contained), true);
+    assert.equal(shkp.billct, 0);
+    assert.equal(shop.shopBillEntryForObject(shkp, contained), null);
+    assert.notEqual(contained.unpaid, true);
+    assert.equal(contained.no_charge, false);
+});
+
+test('tipping contents from a carried container does not use shop-floor billing', () => {
+    const { shkp } = installShopState();
+    const container = shopFloorContainer(6921);
+    container.letter = 'b';
+    const contained = putObjectInContainer(container, foodRation(6922));
+    game.inventory = [container];
+
+    shop.tipContainerToFloor(container);
+
+    assert.equal(game.level.objects.includes(contained), true);
+    assert.equal(shkp.billct, 0);
+    assert.equal(shop.shopBillEntryForObject(shkp, contained), null);
+    assert.notEqual(contained.unpaid, true);
+});
+
+test('tipping a non-floor container with stale shop coordinates does not bill', () => {
+    const { shkp } = installShopState();
+    const container = shopFloorContainer(6926);
+    const contained = putObjectInContainer(container, foodRation(6927));
+
+    shop.tipContainerToFloor(container);
+
+    assert.equal(game.level.objects.includes(contained), true);
+    assert.equal(shkp.billct, 0);
+    assert.equal(shop.shopBillEntryForObject(shkp, contained), null);
+    assert.notEqual(contained.unpaid, true);
+});
+
+test('tipping merchandise from a shop-floor container into another container keeps the bill with the moved object', () => {
+    const { shkp } = installShopState();
+    const source = shopFloorContainer(6931);
+    const target = shopFloorContainer(6932);
+    target.letter = 'b';
+    const contained = putObjectInContainer(source, dagger(6933));
+    game.inventory = [target];
+    game.level.objects = [source];
+
+    const messages = shop.tipContainerIntoContainer(source, target);
+
+    assert.match(messages.join(' '), /tumbles into/);
+    assert.equal(source.contents.length, 0);
+    assert.equal(target.contents.includes(contained), true);
+    assert.equal(contained.container, target);
+    assert.equal(contained.unpaid, true);
+    assert.equal(shkp.billct, 1);
+    assert.equal(shkp.bill[0].bo_id, String(contained.id));
+    assert.equal(contained.unpaidPrice, shop.shopBillEntryTotal(shkp.bill[0]));
+});
+
 test('non-food pickup merges compatible paid inventory stacks', () => {
     installShopState();
     const carried = dagger(7001, 'd');

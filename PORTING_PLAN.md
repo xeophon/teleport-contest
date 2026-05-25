@@ -33,6 +33,7 @@ The current audit source of truth is `docs/c-parity-audit/`.
 - Made shop payment enumerate authoritative bill rows first, split partly used stacks into used-up and intact payment portions, and apply shop credit before cash for item rows.
 - Added starter `out_container()` shop billing for ordinary non-gold objects taken from shop-floor containers, using the source container's coordinates and C's no-charge take-back behavior.
 - Added starter `in_container()` shop billing for ordinary put-in: whole and partial unpaid stack returns, split child bill rows, outside-shop debt preservation, and no-charge marking for the no-sale path.
+- Added starter `tipcontainer()` shop billing for ordinary objects tipped out of shop-floor containers, including floor and carried-target destinations plus stale-coordinate floor-source guards.
 - Latest verified public score: `44/44`.
 
 ## Current Priorities
@@ -41,7 +42,7 @@ The current audit source of truth is `docs/c-parity-audit/`.
    - Source notes: `docs/c-parity-audit/05-food-inventory-containers-shops.md`.
    - Current JS tracks unpaid state on objects instead of a C-shaped bill ledger.
    - Missing or partial concepts include full `addtobill`, full `subfrombill` routing, container/gold `sellobj`, `dropped_container`, `picked_container`, `check_unpaid_usage`, and `costly_alteration`.
-   - The next narrow C-backed gaps are container tip shop transfers, plus recursive container/gold billing and accepted-sale prompts.
+   - The next narrow C-backed gaps are recursive container/gold billing, accepted-sale prompts, and shop billing for magic-bag loss/explosion.
 
 2. Object registry and canonical object factory.
    - Source notes: `docs/c-parity-audit/02-objects-wishing-readobjnam.md`.
@@ -80,10 +81,9 @@ The current audit source of truth is `docs/c-parity-audit/`.
 
 Continue the shop ledger migration:
 
-1. Extend ledger use to container tip moves.
-2. Broaden shop-floor container put-in and take-out from ordinary non-gold objects to recursive contents, contained gold, accepted sale prompts, lift limits, and merge edge cases.
-3. Expand `sellobj()` beyond ordinary paid non-container objects to container contents, gold donation/credit, robbed-shop, and angry-shopkeeper edge cases.
-4. Move payment toward a complete C `dopay()` model for containers, queued itemized selections, and robbed-shop interactions.
+1. Broaden shop-floor container put-in, take-out, and tip from ordinary non-gold objects to recursive contents, contained gold, accepted sale prompts, lift limits, and merge/destruction edge cases.
+2. Expand `sellobj()` beyond ordinary paid non-container objects to container contents, gold donation/credit, robbed-shop, and angry-shopkeeper edge cases.
+3. Move payment toward a complete C `dopay()` model for containers, queued itemized selections, and robbed-shop interactions.
 
 ## Verification
 
