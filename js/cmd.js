@@ -22482,6 +22482,139 @@ function pickupMenuLines(entries, selected) {
     return rows;
 }
 
+function pickupListSelectedObjects(pickup) {
+    const selectedLetters = new Set(pickup?.selected || []);
+    return (pickup?.entries || [])
+        .filter(entry => selectedLetters.has(entry.letter))
+        .map(entry => entry.obj);
+}
+
+function clearPickupListOverlay() {
+    game._overlay_lines = null;
+    game._overlay_hide_status = 0;
+    game._pickup_list = null;
+}
+
+function isFloorGoldObject(obj) {
+    return !!obj && (obj.otyp === GOLD_PIECE || obj.cls === 'coin' || obj.glyph === '$');
+}
+
+function removePickupListFloorObject(obj) {
+    if (!obj) return;
+    objectIceEffect(obj, obj.ox, obj.oy, { onLevel: false });
+    game.level.objects = (game.level?.objects || []).filter(item => item !== obj);
+}
+
+function pickupListPickedClass(obj) {
+    return obj.cls || (obj.otyp === DART ? 'weapon'
+        : obj.otyp === GEM_CLASS ? 'gem'
+            : obj.otyp === 'corpse' || obj.otyp === CORPSE ? 'food'
+                : obj.otyp === RING_CLASS || obj.glyph === '=' ? 'ring'
+                    : BAG_OBJECT_TYPES.has(obj.otyp) || obj.otyp === OIL_LAMP || obj.otyp === MAGIC_LAMP
+                        || obj.otyp === MIRROR || obj.otyp === EXPENSIVE_CAMERA
+                        || obj.otyp === STETHOSCOPE || obj.otyp === MAGIC_MARKER ? 'tool'
+                        : undefined);
+}
+
+function finishPickupListProcessing(state) {
+    game._pet_food_scan_inventory = game.inventory;
+    clearPickupListOverlay();
+    game._floor_pickup_menu_pending = null;
+    game._command_mode = null;
+    newsym(game.u?.ux || 0, game.u?.uy || 0);
+    return setMessage((state?.messages || []).join('  ')).then(() => {
+        game.context.move = 1;
+    });
+}
+
+function pickupListPromptMessage(state, preflight) {
+    return [...(state?.messages || []), floorPickupBurdenPromptMessage(preflight)].join('  ');
+}
+
+function pickupListPendingPrompt(state, obj, preflight) {
+    state.pendingObject = obj;
+    state.pendingPreflight = preflight;
+    state.scareResetSpeObj = preflight.scareResetSpeOnDecline ? obj : null;
+    game._floor_pickup_menu_pending = state;
+    game._command_mode = 'pickupListBurdenConfirm';
+    return setMessage(pickupListPromptMessage(state, preflight)).then(() => {
+        game.context.move = 0;
+    });
+}
+
+function pickupListHandleGold(obj, preflight, state) {
+    if (preflight?.messages?.length) state.messages.push(...preflight.messages);
+    const pickup = pickUpFloorGoldObject(obj, preflight?.takeCount || obj.quan || 1);
+    state.messages.push(...(pickup.messages || []));
+}
+
+function pickupListHandleObject(obj, preflight, state) {
+    if (preflight?.messages?.length) state.messages.push(...preflight.messages);
+    const pickupObj = splitFloorPickupObjectForLift(obj, preflight?.takeCount || obj.quan || 1);
+    if (preflight.scareRemainderState && pickupObj !== obj)
+        Object.assign(obj, preflight.scareRemainderState);
+    const letter = pickupObj.wasStolen && pickupObj.letter
+        ? pickupObj.letter
+        : preflight?.inventoryLetter || nextInventoryLetter();
+    const amount = pickupObjectPhrase(pickupObj);
+    const shopPrice = shopItemPrice(pickupObj);
+    const mergeTarget = findPickedObjectInventoryMergeTarget(pickupObj, shopPrice);
+    if (mergeTarget) {
+        objectIceEffect(pickupObj, pickupObj.ox, pickupObj.oy, { onLevel: false });
+        state.messages.push(mergePickedObjectIntoInventory(pickupObj, mergeTarget.target));
+        removePickupListFloorObject(pickupObj);
+        return;
+    }
+    const pickedItem = {
+        ...pickupObj,
+        cls: pickupListPickedClass(pickupObj),
+        letter,
+        kind: pickupObj.kind || pickupObjectName({ ...pickupObj, quan: 1 }),
+        line: `${letter} - ${amount}`,
+    };
+    const { price: billedPrice } = addPickedObjectToShopBill(pickupObj, pickedItem);
+    objectIceEffect(pickedItem, pickupObj.ox, pickupObj.oy, { onLevel: false });
+    game.inventory = [...(game.inventory || []), pickedItem];
+    maybeAttachCarriedFigurineTimeout(pickedItem);
+    const unpaidSuffix = billedPrice > 0
+        ? ` (unpaid, ${billedPrice} zorkmid${billedPrice === 1 ? '' : 's'})`
+        : '';
+    state.messages.push(`${letter} - ${amount}${unpaidSuffix}.`);
+    removePickupListFloorObject(pickupObj);
+}
+
+async function continuePickupListProcessing(state, acceptedPreflight = null) {
+    state.index ??= 0;
+    state.messages ??= [];
+    state.selected ??= [];
+    while (state.index < state.selected.length) {
+        const obj = state.selected[state.index];
+        if (!obj || !(game.level?.objects || []).includes(obj)) {
+            state.index++;
+            continue;
+        }
+        const preflight = acceptedPreflight || await floorPickupPreflight(obj);
+        acceptedPreflight = null;
+        if (preflight.prompt)
+            return pickupListPendingPrompt(state, obj, preflight);
+        if (!preflight.ok) {
+            state.messages.push(floorPickupPreflightMessage(preflight));
+            state.index++;
+            if (preflight.scareDust) continue;
+            break;
+        }
+        if (preflight?.skip) {
+            if (preflight?.messages?.length) state.messages.push(...preflight.messages);
+            state.index++;
+            continue;
+        }
+        if (isFloorGoldObject(obj)) pickupListHandleGold(obj, preflight, state);
+        else pickupListHandleObject(obj, preflight, state);
+        state.index++;
+    }
+    return finishPickupListProcessing(state);
+}
+
 function deathSummary() {
     const genderKey = game.flags?.female ? 'f' : 'm';
     const role = game.urole?.name?.[genderKey] || game.urole?.name?.m || game._startup_role || 'Adventurer';
@@ -28360,80 +28493,14 @@ export async function rhack(_cmd) {
             return;
         }
         if ((ch === '\r' || ch === '\n' || ch === ' ') && Array.isArray(pickup.selected) && pickup.selected.length) {
-            const selectedLetters = new Set(pickup.selected);
-            const selected = pickup.entries
-                .filter(entry => selectedLetters.has(entry.letter))
-                .map(entry => entry.obj);
-            const messages = [];
-            const moved = [];
-            for (const obj of selected) {
-                if (obj.otyp === GOLD_PIECE || obj.cls === 'coin' || obj.glyph === '$') {
-                    const pickup = pickUpFloorGoldObject(obj);
-                    messages.push(...(pickup.messages || []));
-                    moved.push(obj);
-                    continue;
-                }
-                const preflight = await floorPickupPreflight(obj, { prompt: false });
-                if (!preflight.ok) {
-                    messages.push(floorPickupPreflightMessage(preflight));
-                    if (preflight.scareDust) continue;
-                    break;
-                }
-                if (preflight?.messages?.length) messages.push(...preflight.messages);
-                if (preflight?.skip) {
-                    continue;
-                }
-                const pickupObj = splitFloorPickupObjectForLift(obj, preflight?.takeCount || obj.quan || 1);
-                if (preflight.scareRemainderState && pickupObj !== obj)
-                    Object.assign(obj, preflight.scareRemainderState);
-                const letter = pickupObj.wasStolen && pickupObj.letter
-                    ? pickupObj.letter
-                    : preflight?.inventoryLetter || nextInventoryLetter();
-                const amount = pickupObjectPhrase(pickupObj);
-                const shopPrice = shopItemPrice(pickupObj);
-                const mergeTarget = findPickedObjectInventoryMergeTarget(pickupObj, shopPrice);
-                if (mergeTarget) {
-                    objectIceEffect(pickupObj, pickupObj.ox, pickupObj.oy, { onLevel: false });
-                    messages.push(mergePickedObjectIntoInventory(pickupObj, mergeTarget.target));
-                    moved.push(pickupObj);
-                    continue;
-                }
-                const pickedItem = {
-                    ...pickupObj,
-                    cls: pickupObj.cls || (pickupObj.otyp === DART ? 'weapon'
-                        : pickupObj.otyp === GEM_CLASS ? 'gem'
-                            : pickupObj.otyp === 'corpse' || pickupObj.otyp === CORPSE ? 'food'
-                                : pickupObj.otyp === RING_CLASS || pickupObj.glyph === '=' ? 'ring'
-                                    : BAG_OBJECT_TYPES.has(pickupObj.otyp) || pickupObj.otyp === OIL_LAMP || pickupObj.otyp === MAGIC_LAMP
-                                        || pickupObj.otyp === MIRROR || pickupObj.otyp === EXPENSIVE_CAMERA
-                                        || pickupObj.otyp === STETHOSCOPE || pickupObj.otyp === MAGIC_MARKER ? 'tool'
-                                        : undefined),
-                    letter,
-                    kind: pickupObj.kind || pickupObjectName({ ...pickupObj, quan: 1 }),
-                    line: `${letter} - ${amount}`,
-                };
-                const { price: billedPrice } = addPickedObjectToShopBill(pickupObj, pickedItem);
-                objectIceEffect(pickedItem, pickupObj.ox, pickupObj.oy, { onLevel: false });
-                game.inventory = [...(game.inventory || []), pickedItem];
-                maybeAttachCarriedFigurineTimeout(pickedItem);
-                const unpaidSuffix = billedPrice > 0
-                    ? ` (unpaid, ${billedPrice} zorkmid${billedPrice === 1 ? '' : 's'})`
-                    : '';
-                messages.push(`${letter} - ${amount}${unpaidSuffix}.`);
-                moved.push(pickupObj);
-            }
-            game._pet_food_scan_inventory = game.inventory;
-            for (const obj of moved) {
-                objectIceEffect(obj, obj.ox, obj.oy, { onLevel: false });
-            }
-            game.level.objects = (game.level.objects || []).filter(item => !moved.includes(item));
-            game._overlay_lines = null;
-            game._overlay_hide_status = 0;
+            const state = {
+                selected: pickupListSelectedObjects(pickup),
+                index: 0,
+                messages: [],
+            };
+            clearPickupListOverlay();
             game._command_mode = null;
-            game._pickup_list = null;
-            newsym(game.u?.ux || 0, game.u?.uy || 0);
-            await setMessage(messages.join('  '));
-            game.context.move = 1;
+            await continuePickupListProcessing(state);
             return;
         }
         if (ch === '\x1b' || ch === ' ') {
@@ -28855,6 +28922,37 @@ export async function rhack(_cmd) {
         }
         if (pending.scareResetSpeObj) pending.scareResetSpeObj.spe = 0;
         game.context.move = 0;
+        return;
+    }
+
+    if (game._command_mode === 'pickupListBurdenConfirm') {
+        const pending = game._floor_pickup_menu_pending;
+        const answer = ch.toLowerCase();
+        if (!pending || !['y', 'n', 'q', ' ', '\r', '\n', '\x1b'].includes(answer)) {
+            game._keep_pending_message = 1;
+            return;
+        }
+        game._pending_message = '';
+        game._message_more = 0;
+        game._keep_pending_message = 0;
+        if (answer === 'y') {
+            const preflight = floorPickupAcceptedPreflight(pending.pendingPreflight);
+            pending.pendingObject = null;
+            pending.pendingPreflight = null;
+            pending.scareResetSpeObj = null;
+            await continuePickupListProcessing(pending, preflight);
+            return;
+        }
+        if (pending.scareResetSpeObj) pending.scareResetSpeObj.spe = 0;
+        pending.pendingObject = null;
+        pending.pendingPreflight = null;
+        pending.scareResetSpeObj = null;
+        if (answer === 'n') {
+            pending.index = (pending.index || 0) + 1;
+            await continuePickupListProcessing(pending);
+            return;
+        }
+        await finishPickupListProcessing(pending);
         return;
     }
 

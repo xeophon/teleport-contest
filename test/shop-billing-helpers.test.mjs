@@ -3360,6 +3360,11 @@ test('multi-pickup partial scare monster stack preserves remainder state', async
         await rhack('a');
         await rhack('\n');
 
+        assert.equal(game._command_mode, 'pickupListBurdenConfirm', label);
+        assert.match(game._pending_message, /You can only lift/, label);
+
+        await rhack('y');
+
         const carried = game.inventory.find(item => item.id !== filler.id && item.scrollIndex === 3);
         const entry = shop.shopBillEntryForObject(shkp, carried);
 
@@ -3376,10 +3381,201 @@ test('multi-pickup partial scare monster stack preserves remainder state', async
         assert.ok(entry, label);
         assert.equal(entry.useup, false, label);
         assert.equal(shop.shopBillEntryTotal(entry), shop.shopItemPrice(carried, 5, 5), label);
-        assert.match(game._pending_message, /You can only lift/, label);
         assert.doesNotMatch(game._pending_message, /turns? to dust/i, label);
         assert.equal(game.context.move, 1, label);
     }
+});
+
+test('multi-pickup declined burden prompt skips item and continues', async () => {
+    const { shkp } = installCommandShopState();
+    const heavy = foodRationStack(6046, 11);
+    heavy.section = 'Other Items';
+    const later = blankScroll(6047);
+    later.section = 'Other Items';
+    game.level.objects = [heavy, later];
+    game.u.acurr.a = [1, 1, 10, 10, 1, 10];
+
+    await rhack(',');
+    assert.equal(game._command_mode, 'pickupList');
+
+    await rhack('a');
+    await rhack('b');
+    await rhack('\n');
+
+    assert.equal(game._command_mode, 'pickupListBurdenConfirm');
+    assert.match(game._pending_message, /much trouble lifting 11 food rations.*Continue\? \[ynq\]/);
+    assert.equal(game.level.objects.includes(heavy), true);
+    assert.equal(game.level.objects.includes(later), true);
+    assert.equal(shkp.billct, 0);
+
+    await rhack('n');
+
+    const carriedLater = game.inventory.find(item => item.id === later.id);
+    const entry = shop.shopBillEntryForObject(shkp, carriedLater);
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.level.objects.includes(heavy), true);
+    assert.equal(heavy.quan, 11);
+    assert.equal(heavy.unpaid, undefined);
+    assert.equal(game.level.objects.includes(later), false);
+    assert.ok(carriedLater);
+    assert.ok(entry);
+    assert.equal(entry.useup, false);
+    assert.equal(shkp.billct, 1);
+    assert.equal(game.context.move, 1);
+});
+
+test('multi-pickup quit burden prompt aborts remaining selections', async () => {
+    const { shkp } = installCommandShopState();
+    const heavy = foodRationStack(6048, 11);
+    heavy.section = 'Other Items';
+    const later = blankScroll(6049);
+    later.section = 'Other Items';
+    game.level.objects = [heavy, later];
+    game.u.acurr.a = [1, 1, 10, 10, 1, 10];
+
+    await rhack(',');
+    assert.equal(game._command_mode, 'pickupList');
+
+    await rhack('a');
+    await rhack('b');
+    await rhack('\n');
+
+    assert.equal(game._command_mode, 'pickupListBurdenConfirm');
+
+    await rhack('q');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.level.objects.includes(heavy), true);
+    assert.equal(game.level.objects.includes(later), true);
+    assert.equal(game.inventory.some(item => item.id === heavy.id), false);
+    assert.equal(game.inventory.some(item => item.id === later.id), false);
+    assert.equal(heavy.unpaid, undefined);
+    assert.equal(later.unpaid, undefined);
+    assert.equal(shkp.billct, 0);
+    assert.equal(shkp.bill.length, 0);
+    assert.equal(game.context.move, 1);
+});
+
+test('menu pickup accepted partial-stack burden prompt bills only lifted count', async () => {
+    const { shkp } = installCommandShopState();
+    const stack = foodRationStack(6050, 20);
+    stack.section = 'Other Items';
+    const filler = blankScroll(6051);
+    filler.section = 'Other Items';
+    game.level.objects = [stack, filler];
+    game.u.acurr.a = [1, 1, 10, 10, 1, 10];
+
+    await rhack(',');
+    assert.equal(game._command_mode, 'pickupList');
+
+    await rhack('a');
+    await rhack('\n');
+
+    assert.equal(game._command_mode, 'pickupListBurdenConfirm');
+    assert.match(game._pending_message, /can only lift some of the 20 food rations lying here/);
+    assert.match(game._pending_message, /extreme difficulty lifting .*Continue\? \[ynq\]/);
+    assert.equal(stack.quan, 20);
+    assert.equal(shkp.billct, 0);
+
+    await rhack('y');
+
+    const carried = game.inventory.find(item => item.kind === 'food ration');
+    const entry = shop.shopBillEntryForObject(shkp, carried);
+
+    assert.equal(game._command_mode, null);
+    assert.ok(carried);
+    assert.ok(carried.quan > 0 && carried.quan < 20);
+    assert.equal(stack.quan, 20 - carried.quan);
+    assert.equal(stack.unpaid, undefined);
+    assert.equal(game.level.objects.includes(stack), true);
+    assert.equal(game.level.objects.includes(filler), true);
+    assert.equal(carried.unpaid, true);
+    assert.ok(entry);
+    assert.equal(entry.useup, false);
+    assert.equal(shop.shopBillEntryTotal(entry), shop.shopItemPrice(carried, 5, 5));
+    assert.equal(shkp.billct, 1);
+    assert.equal(game.context.move, 1);
+});
+
+test('multi-pickup declined gold burden prompt does not charge shop gold and continues', async () => {
+    const { shkp } = installCommandShopState();
+    const gold = goldPieces(6052, 50000);
+    gold.ox = 5;
+    gold.oy = 5;
+    const later = blankScroll(6053);
+    later.section = 'Other Items';
+    game.level.objects = [gold, later];
+    game.u.acurr.a = [1, 1, 10, 10, 1, 10];
+
+    await rhack(',');
+    assert.equal(game._command_mode, 'pickupList');
+
+    await rhack('$');
+    await rhack('a');
+    await rhack('\n');
+
+    assert.equal(game._command_mode, 'pickupListBurdenConfirm');
+    assert.match(game._pending_message, /can only lift some of the 50000 gold pieces lying here/);
+    assert.match(game._pending_message, /extreme difficulty lifting .*gold pieces.*Continue\? \[ynq\]/);
+    assert.equal(game._goldCount, 0);
+    assert.equal(shkp.debit || 0, 0);
+    assert.equal(shkp.loan || 0, 0);
+
+    await rhack('n');
+
+    const carriedLater = game.inventory.find(item => item.id === later.id);
+    const entry = shop.shopBillEntryForObject(shkp, carriedLater);
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game._goldCount, 0);
+    assert.equal(gold.quan, 50000);
+    assert.equal(game.level.objects.includes(gold), true);
+    assert.equal(game.level.objects.includes(later), false);
+    assert.equal(shkp.debit || 0, 0);
+    assert.equal(shkp.loan || 0, 0);
+    assert.ok(carriedLater);
+    assert.ok(entry);
+    assert.equal(entry.useup, false);
+    assert.equal(shkp.billct, 1);
+    assert.equal(game.context.move, 1);
+});
+
+test('menu pickup accepted shop gold lift charges only lifted amount', async () => {
+    const { shkp } = installCommandShopState();
+    const gold = goldPieces(6054, 50000);
+    gold.ox = 5;
+    gold.oy = 5;
+    const filler = blankScroll(6055);
+    filler.section = 'Other Items';
+    shkp.credit = 5;
+    game.level.objects = [gold, filler];
+    game.u.acurr.a = [1, 1, 10, 10, 1, 10];
+
+    await rhack(',');
+    assert.equal(game._command_mode, 'pickupList');
+
+    await rhack('$');
+    await rhack('\n');
+
+    assert.equal(game._command_mode, 'pickupListBurdenConfirm');
+
+    await rhack('y');
+
+    assert.equal(game._command_mode, null);
+    assert.ok(game._goldCount > 0);
+    assert.ok(game._goldCount < 50000);
+    assert.equal(gold.quan, 50000 - game._goldCount);
+    assert.equal(game.level.objects.includes(gold), true);
+    assert.equal(game.level.objects.includes(filler), true);
+    assert.equal(shkp.credit, 0);
+    assert.equal(shkp.debit, game._goldCount - 5);
+    assert.equal(shkp.loan, game._goldCount - 5);
+    assert.equal(shkp.billct, 0);
+    assert.match(game._pending_message, /\$ - \d+ gold pieces/);
+    assert.match(game._pending_message, /credit is erased|credit is reduced/);
+    assert.match(game._pending_message, /owe|debt increases/);
+    assert.equal(game.context.move, 1);
 });
 
 test('cursed shop-floor loadstone pickup ignores overweight and bills live item', async () => {
