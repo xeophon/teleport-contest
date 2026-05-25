@@ -16159,7 +16159,7 @@ function placeTippedObjectOnFloor(obj, x, y, messages) {
 }
 
 function tipIceBoxToFloor(iceBox) {
-    const contents = [...(iceBox?.contents || [])];
+    const contents = [...liquidFlowContainerContents(iceBox)];
     iceBox.cknown = true;
     if (!contents.length) return ['The ice box is empty.'];
     const x = game.u?.ux ?? iceBox.ox ?? 0;
@@ -16176,6 +16176,96 @@ function tipIceBoxToFloor(iceBox) {
     if (Array.isArray(iceBox.contents)) iceBox.contents.length = 0;
     if (Array.isArray(iceBox.cobj)) iceBox.cobj.length = 0;
     return messages;
+}
+
+function isTipTargetContainer(obj) {
+    if (!obj) return false;
+    if (isIceBoxObject(obj) || isBoxObject(obj) || BAG_OBJECT_TYPES.has(obj.otyp)) return true;
+    return /^(?:large box|chest|ice box|sack|oilskin sack|bag of holding|bag)$/.test(objectKindKey(obj));
+}
+
+function carriedTipTargetContainers(source) {
+    if (polyselfNoHands()) return [];
+    return (game.inventory || [])
+        .filter(obj => obj !== source && isTipTargetContainer(obj)
+            && !(obj.lknown && (obj.locked || obj.olocked)));
+}
+
+function tipTargetPhrase(targetBox) {
+    const name = articlelessObjectName(targetBox);
+    return `the ${name}`;
+}
+
+function clearTipState() {
+    game._tip_container_object = null;
+    game._tip_target_entries = null;
+    game._overlay_lines = null;
+    game._overlay_hide_status = 0;
+}
+
+function drawTipDestinationMenu(source, targets) {
+    const rows = [
+        [0, 32, `Where to tip the contents of ${inventoryItemName(source)}?`, 1],
+        [2, 32, '- - on the floor'],
+    ];
+    let row = 4;
+    for (const target of targets) {
+        rows.push([row++, 32, `${target.letter || '?'} - ${normalInventoryLine(target).replace(/^[a-zA-Z] - /, '')}`]);
+        if (row >= 23) break;
+    }
+    rows.push([row, 32, '(end)']);
+    setOverlay(rows, Math.max(5, row + 1), false, 31);
+}
+
+function beginTipDestinationSelection(source) {
+    const targets = carriedTipTargetContainers(source);
+    if (!targets.length) return false;
+    game._tip_container_object = source;
+    game._tip_target_entries = targets.map(target => ({ target, letter: target.letter }));
+    drawTipDestinationMenu(source, targets);
+    game._command_mode = 'tipDestination';
+    return true;
+}
+
+function prepareTippedObjectForContainer(obj) {
+    obj.contained = false;
+    obj.container = null;
+    delete obj.ox;
+    delete obj.oy;
+    delete obj.hidden;
+    delete obj.buried;
+    delete obj.transientProjectile;
+    delete obj.nobj;
+    delete obj.nexthere;
+}
+
+function refreshTipContainerWeight(container) {
+    if (isGlobWeightContainerObject(container)) container.owt = globObjectWeight(container);
+}
+
+function tipIceBoxIntoContainer(iceBox, targetBox) {
+    const contents = [...liquidFlowContainerContents(iceBox)];
+    iceBox.cknown = true;
+    if (!contents.length) return ['The ice box is empty.'];
+    targetBox.contents ??= [];
+    const messages = [contents.length === 1
+        ? `An object tumbles into ${tipTargetPhrase(targetBox)}.`
+        : `Objects tumble into ${tipTargetPhrase(targetBox)}.`];
+    for (const obj of contents) {
+        removeContainedObject(iceBox, obj);
+        removedFromIcebox(obj);
+        prepareTippedObjectForContainer(obj);
+        add_to_container(targetBox, obj);
+    }
+    if (Array.isArray(iceBox.contents)) iceBox.contents.length = 0;
+    if (Array.isArray(iceBox.cobj)) iceBox.cobj.length = 0;
+    refreshTipContainerWeight(iceBox);
+    refreshTipContainerWeight(targetBox);
+    return messages;
+}
+
+function tipIceBoxContents(iceBox, targetBox = null) {
+    return targetBox ? tipIceBoxIntoContainer(iceBox, targetBox) : tipIceBoxToFloor(iceBox);
 }
 
 function containerObjectPhrase(obj) {
@@ -32648,20 +32738,53 @@ export async function rhack(_cmd) {
         return;
     }
 
+    if (game._command_mode === 'tipDestination') {
+        const source = game._tip_container_object;
+        const entries = game._tip_target_entries || [];
+        const finishTip = async targetBox => {
+            const messages = tipIceBoxContents(source, targetBox);
+            clearTipState();
+            await setMessage(messages.join('  '), messages.length > 1);
+            game.context.move = 1;
+            game._command_mode = null;
+        };
+        if (!source || !isIceBoxObject(source)) {
+            clearTipState();
+            game._command_mode = null;
+            return;
+        }
+        if (ch === '\x1b' || ch === 'q') {
+            clearTipState();
+            game._command_mode = null;
+            return;
+        }
+        if (ch === '-' || ch === ' ' || ch === '\r' || ch === '\n') {
+            await finishTip(null);
+            return;
+        }
+        const entry = entries.find(item => item.letter === ch);
+        if (entry?.target && (game.inventory || []).includes(entry.target)) {
+            await finishTip(entry.target);
+            return;
+        }
+        return;
+    }
+
     if (game._command_mode === 'tipConfirm') {
         if (ch === 'q') game._keep_pending_message = 1;
         if (ch === 'y') {
             const tipTarget = game._tip_container_object;
-            game._tip_container_object = null;
             if (isIceBoxObject(tipTarget)) {
-                const messages = tipIceBoxToFloor(tipTarget);
+                if (beginTipDestinationSelection(tipTarget)) return;
+                game._tip_container_object = null;
+                const messages = tipIceBoxContents(tipTarget);
                 await setMessage(messages.join('  '), messages.length > 1);
                 game.context.move = 1;
                 game._command_mode = null;
                 return;
             }
         }
-        game._tip_container_object = null;
+        clearTipState();
         game._command_mode = null;
         return;
     }
