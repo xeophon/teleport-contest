@@ -16271,6 +16271,14 @@ function consumeTipCharge(item) {
     updateChargedItemLine(item);
 }
 
+function identifyChargedToolKind(item, knownKind) {
+    if (!item || !knownKind) return;
+    item.known = true;
+    item.actualKind = knownKind;
+    item.kind = knownKind;
+    updateChargedItemLine(item);
+}
+
 function clearTipState() {
     game._tip_container_object = null;
     game._tip_target_entries = null;
@@ -16328,7 +16336,7 @@ function visibleCreatedMonster(mon) {
 
 async function applyBagOfTricksOnce(bag, { tipping = false } = {}) {
     if (tipChargeCount(bag) < 1) {
-        if (bag.cknown) return ["It's empty."];
+        if (tipping && bag.cknown) return ["It's empty."];
         if (bag.dknown || bag.known) bag.cknown = true;
         return ['Nothing happens.'];
     }
@@ -16344,7 +16352,7 @@ async function applyBagOfTricksOnce(bag, { tipping = false } = {}) {
         moncount++;
         if (visibleCreatedMonster(mon)) seecount++;
     }
-    if (seecount && bag.dknown) bag.known = true;
+    if (seecount && bag.dknown) identifyChargedToolKind(bag, 'bag of tricks');
     if (!tipping && !seecount) return [moncount ? 'Nothing seems to happen.' : 'Nothing happens.'];
     return [];
 }
@@ -16374,6 +16382,12 @@ function hornCreatedObjectDescription(obj, potion) {
     return 'Some food';
 }
 
+function hornSpillMessage(obj, potion) {
+    const what = hornCreatedObjectDescription(obj, potion);
+    const spills = !potion || what === 'A potion';
+    return `${what} ${spills ? 'spills' : 'spill'} out.`;
+}
+
 function createHornOfPlentyObject(horn) {
     const potion = !rn2(13);
     const obj = mkobj(potion ? POTION_CLASS : FOOD_CLASS, false);
@@ -16398,6 +16412,53 @@ function placeHornObjectOnFloor(obj, messages) {
     messages.push(`${upstartText(containerObjectPhrase(obj))} drops to the floor.`);
 }
 
+function hornApplyFloorMessage(obj) {
+    const quan = obj.quan || 1;
+    const name = pickupObjectName({ ...obj, quan: 1 });
+    const subject = quan > 1 ? upstartText(containerObjectPhrase(obj)) : `The ${name}`;
+    return `Oops! ${subject} slip${quan > 1 ? '' : 's'} to the floor!`;
+}
+
+function placeAppliedHornObjectOnFloor(obj, messages) {
+    const x = game.u?.ux ?? 0;
+    const y = game.u?.uy ?? 0;
+    placeTippedObjectOnFloor(obj, x, y, messages);
+    messages.push(hornApplyFloorMessage(obj));
+}
+
+function addAppliedHornObjectToInventory(obj, messages) {
+    game.inventory ??= [];
+    const used = new Set(game.inventory.map(item => item.letter).filter(Boolean));
+    const letter = nextInventoryLetter();
+    if (!letter || used.has(letter)) {
+        placeAppliedHornObjectOnFloor(obj, messages);
+        return;
+    }
+    prepareTippedObjectForContainer(obj);
+    obj.letter = letter;
+    obj.line = normalInventoryLine(obj);
+    game.inventory.push(obj);
+    maybeAttachCarriedFigurineTimeout(obj);
+    game._pet_food_scan_inventory = game.inventory;
+    messages.push(`${obj.line}.`);
+}
+
+function applyHornOfPlentyOnce(horn) {
+    if (tipChargeCount(horn) < 1) {
+        horn.cknown = true;
+        updateChargedItemLine(horn);
+        return ['Nothing happens.'];
+    }
+
+    consumeTipCharge(horn);
+    const { obj, potion } = createHornOfPlentyObject(horn);
+    const messages = [hornSpillMessage(obj, potion)];
+    if (horn.dknown) identifyChargedToolKind(horn, 'horn of plenty');
+    updateChargedItemLine(horn);
+    addAppliedHornObjectToInventory(obj, messages);
+    return messages;
+}
+
 async function tipHornOfPlenty(horn, targetBox = null) {
     if (tipChargeCount(horn) < 1) {
         horn.cknown = true;
@@ -16410,8 +16471,7 @@ async function tipHornOfPlenty(horn, targetBox = null) {
     while (tipChargeCount(horn) > 0) {
         consumeTipCharge(horn);
         const { obj, potion } = createHornOfPlentyObject(horn);
-        const what = hornCreatedObjectDescription(obj, potion);
-        messages.push(`${what} ${what === 'A potion' ? 'spills' : 'spill'} out.`);
+        messages.push(hornSpillMessage(obj, potion));
         if (targetBox) {
             prepareTippedObjectForContainer(obj);
             add_to_container(targetBox, obj);
@@ -16423,7 +16483,7 @@ async function tipHornOfPlenty(horn, targetBox = null) {
     if (tipChargeCount(horn) < oldSpe) {
         horn.spe = 0;
         horn.cknown = true;
-        if (horn.dknown) horn.known = true;
+        if (horn.dknown) identifyChargedToolKind(horn, 'horn of plenty');
         updateChargedItemLine(horn);
     }
     return messages;
@@ -30709,6 +30769,19 @@ export async function rhack(_cmd) {
         }
         if (isIceBoxObject(item)) {
             setIceBoxActionMenu(item);
+            return;
+        }
+        if (isBagOfTricksObject(item)) {
+            const messages = await applyBagOfTricksOnce(item, { tipping: false });
+            if (messages.length) await setMessage(messages.join('  '), messages.length > 1);
+            else await setMessage('');
+            game.context.move = 1;
+            return;
+        }
+        if (isHornOfPlentyObject(item)) {
+            const messages = applyHornOfPlentyOnce(item);
+            await setMessage(messages.join('  '), messages.length > 1);
+            game.context.move = 1;
             return;
         }
         if (/bag|sack/.test(name)) {
