@@ -816,13 +816,18 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   numeric glob wishes scale weight while keeping `quan` at 1, invalid living
   monster globs use the normal no-fitting wish message, and unknown monster
   names fall back to C's random gray-ooze/brown-pudding/green-slime glob
-  selection. Active-level glob shrink timers now use the C 23-27 turn cadence,
-  reduce weight and partial-eaten amount one unit at a time, emit inventory and
-  visible floor disappearance messages, slow/skip on ice, pause in ice boxes
-  until removal starts a fresh timer, and apply the silent C overdue catch-up
-  formula for represented stale timers. Remaining glob work is full off-level
-  timer restoration plumbing, full container weight/capacity messaging, shop
-  billing around merges, and eating side effects.
+  selection. Monster deaths now route gray ooze, brown pudding, green slime,
+  and black pudding corpse drops through C-style glob creation after the
+  existing corpse-chance decision, including known 20-weight glob objects, shrink
+  timers, same-square/adjacent floor-floor melding, and visible/sloshing merge
+  feedback across hero, pet/monster, trap, fire-breath, and liquid death paths.
+  Active-level glob shrink timers now use the C 23-27 turn cadence, reduce
+  weight and partial-eaten amount one unit at a time, emit inventory and visible
+  floor disappearance messages, slow/skip on ice, pause in ice boxes until
+  removal starts a fresh timer, and apply the silent C overdue catch-up formula
+  for represented stale timers. Remaining glob work is full off-level timer
+  restoration plumbing, full container weight/capacity messaging, shop billing
+  around merges, and eating side effects.
 - Exact wished eggs now use the C `readobjnam()` egg path instead of generic
   food fallback: `egg`, `eggs`, `egg of <monster>`, and `<monster> egg`
   create initialized egg objects first, then apply a local `can_be_hatched()`

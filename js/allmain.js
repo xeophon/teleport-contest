@@ -2,7 +2,7 @@
 // C refs: src/allmain.c:newgame(), moveloop_core().
 
 import { game } from './gstate.js';
-import { mklev, l_nhcore_init, u_on_upstairs, makemon, mkcorpstat, mksobj, wipe_engr_at, dropMonsterInventory, wandIndexForRoll, scrollIndexForRoll, potionIndexForRoll, RANDOM_MONSTER_BY_NAME, STONE_RESISTANT_MONSTERS, adjustedMonsterLevel, monsterByRndName, monster_hp, rndmonnum, syncDungeonContext, next_ident, set_malign, enextoMonsterSpot, getbogusmon, pickNasty, chameleonAnimalForm, doppelgangerHumanoidForm, noteleportLevelForMonster, rlocNoMsg, rlocToCoreNoMsg, somexyspace, fumaroles, movebubbles } from './mklev.js';
+import { mklev, l_nhcore_init, u_on_upstairs, makemon, mkcorpstat, mksobj, wipe_engr_at, dropMonsterInventory, wandIndexForRoll, scrollIndexForRoll, potionIndexForRoll, RANDOM_MONSTER_BY_NAME, STONE_RESISTANT_MONSTERS, adjustedMonsterLevel, monsterByRndName, monster_hp, rndmonnum, syncDungeonContext, next_ident, set_malign, enextoMonsterSpot, getbogusmon, pickNasty, chameleonAnimalForm, doppelgangerHumanoidForm, noteleportLevelForMonster, rlocNoMsg, rlocToCoreNoMsg, somexyspace, fumaroles, createMonsterCorpseOrGlob, monsterLeavesCorpseLikeDrop, movebubbles } from './mklev.js';
 import { rhack, pickupObjectName, inventoryItemName, inventoryLetterRank, recordVanquished, finishForceLock, loseExperienceLevel, finishLevelTeleport, finishPickDigDownwardHole, finishPickDigDownwardPit, maybeQueueQuestLeaderTalk, monsterGrowUp, processSpellbookStudyOccupation, processTinOpeningOccupation, finishTinOpeningOccupation, refreshSwallowOverlay, travelPathKeys, updateGauntletsOfPowerStrength, consumeLifeSavingAmulet, activateStatueTrap, breakStatueObject, burnFloorObjectsByFire, burnRayFloorObjectsByFire, erodeArmorByFireTrap, dryWetTowelFromFire, igniteMonsterFireInventoryItems, monsterFireInventoryDamage, dropMonsterObject, earthFloorEffects, landMonsterThrownObject, stoneMonster, processGlobShrinkTimers } from './cmd.js';
 import { docrt, cls, bot, flush_screen, pline, newsym, refreshHallucinatedMap, show_glyph_cell } from './display.js';
 import { vision_recalc, vision_reset, init_vision_globals, cansee, couldsee, view_from } from './vision.js';
@@ -3712,16 +3712,8 @@ async function processMonsterTurns() {
                     const corpseRoll = rn2(corpseChance);
                     const corpseData = corpseDataForMonster(target.data);
                     dropMonsterInventory(target);
-                    if (!corpseRoll && corpseData && !corpseData.noCorpse) {
-                        const corpse = mkcorpstat(CORPSE, target, corpseData, target.mx, target.my, 8);
-                        Object.assign(corpse, {
-                            otyp: 'corpse',
-                            glyph: '%',
-                            color: corpseData.color,
-                            corpsenm: corpseData,
-                            oldCorpse: !!target.data?.corpse,
-                        });
-                    }
+                    if (!corpseRoll && monsterLeavesCorpseLikeDrop(corpseData))
+                        createMonsterCorpseOrGlob(target, corpseData);
                     monsterGrowUp(mon, target);
                     rn2(5);
 	                    recordVanquished(target, false);
@@ -7287,19 +7279,10 @@ function killMonsterFromPassive(mon) {
     const guaranteedCorpse = data.big || data.bigmonst || data.golem || data.mplayer
         || data.rider || data.shopkeeper || data.name === 'lizard';
     const corpseChance = 2 + ((data.genoFreq ?? 1) < 2 ? 1 : 0) + (data.verysmall ? 1 : 0);
-    const dropCorpse = corpseData && !corpseData.noCorpse
+    const dropCorpse = monsterLeavesCorpseLikeDrop(corpseData)
         && (guaranteedCorpse || !rn2(corpseChance));
     dropMonsterInventory(mon);
-    if (dropCorpse) {
-        const corpse = mkcorpstat(CORPSE, mon, corpseData, mon.mx, mon.my, 8);
-        Object.assign(corpse, {
-            otyp: 'corpse',
-            glyph: '%',
-            color: corpseData.color,
-            corpsenm: corpseData,
-            oldCorpse: !!data.corpse,
-        });
-    }
+    if (dropCorpse) createMonsterCorpseOrGlob(mon, corpseData);
     recordVanquished(mon, false);
     const loc = game.level?.at(mon.mx, mon.my);
     if (loc?.map_invisible) {
@@ -9156,16 +9139,8 @@ function moveMonsterTowardHero(mon, conflictActive = false, monIndex = null, som
             const corpseChance = 2 + ((data.genoFreq ?? 1) < 2 ? 1 : 0) + (data.verysmall ? 1 : 0);
             const corpseRoll = rn2(corpseChance);
             dropMonsterInventory(mon);
-            if (!corpseRoll && corpseData && !corpseData.noCorpse) {
-                const corpse = mkcorpstat(CORPSE, mon, corpseData, mon.mx, mon.my, 8);
-                Object.assign(corpse, {
-                    otyp: 'corpse',
-                    glyph: '%',
-                    color: corpseData.color,
-                    corpsenm: corpseData,
-                    oldCorpse: !!data.corpse,
-                });
-            }
+            if (!corpseRoll && monsterLeavesCorpseLikeDrop(corpseData))
+                createMonsterCorpseOrGlob(mon, corpseData);
             recordVanquished(mon, false);
             game.level.monsters = (game.level?.monsters || []).filter(other => other !== mon);
             mon.movement = 0;
@@ -9192,16 +9167,8 @@ function moveMonsterTowardHero(mon, conflictActive = false, monIndex = null, som
                 || data.rider || data.shopkeeper || data.name === 'lizard';
             const corpseChance = 2 + ((data.genoFreq ?? 1) < 2 ? 1 : 0) + (data.verysmall ? 1 : 0);
             dropMonsterInventory(mon);
-            if (corpseData && !corpseData.noCorpse && (guaranteedCorpse || !rn2(corpseChance))) {
-                const corpse = mkcorpstat(CORPSE, mon, corpseData, mon.mx, mon.my, 8);
-                Object.assign(corpse, {
-                    otyp: 'corpse',
-                    glyph: '%',
-                    color: corpseData.color,
-                    corpsenm: corpseData,
-                    oldCorpse: !!data.corpse,
-                });
-            }
+            if (monsterLeavesCorpseLikeDrop(corpseData) && (guaranteedCorpse || !rn2(corpseChance)))
+                createMonsterCorpseOrGlob(mon, corpseData);
             recordVanquished(mon, false);
 	            game.level.monsters = (game.level?.monsters || []).filter(other => other !== mon);
 	            mon.movement = 0;
@@ -9940,16 +9907,8 @@ function movePet(mon, resumeAfterInventory = false, conflictActive = false) {
                                 const corpseRoll = rn2(corpseChance);
                                 const corpseData = corpseDataForMonster(pos.target.data);
                                 dropMonsterInventory(pos.target);
-                                if (!corpseRoll && corpseData && !corpseData.noCorpse) {
-                                    const corpse = mkcorpstat(CORPSE, pos.target, corpseData, pos.target.mx, pos.target.my, 8);
-                                    Object.assign(corpse, {
-                                        otyp: 'corpse',
-                                        glyph: '%',
-                                        color: corpseData.color,
-                                        corpsenm: corpseData,
-                                        oldCorpse: !!pos.target.data?.corpse,
-                                    });
-                                }
+                                if (!corpseRoll && monsterLeavesCorpseLikeDrop(corpseData))
+                                    createMonsterCorpseOrGlob(pos.target, corpseData);
                                 monsterGrowUp(mon, pos.target);
                                 rn2(5);
                                 recordVanquished(pos.target, false);
@@ -10035,16 +9994,8 @@ function movePet(mon, resumeAfterInventory = false, conflictActive = false) {
                 const corpseRoll = rn2(corpseChance);
                 const corpseData = corpseDataForMonster(pos.target.data);
                 dropMonsterInventory(pos.target);
-                if (!corpseRoll && corpseData && !corpseData.noCorpse) {
-                    const corpse = mkcorpstat(CORPSE, pos.target, corpseData, pos.target.mx, pos.target.my, 8);
-                    Object.assign(corpse, {
-                        otyp: 'corpse',
-                        glyph: '%',
-                        color: corpseData.color,
-                        corpsenm: corpseData,
-                        oldCorpse: !!pos.target.data?.corpse,
-                    });
-                }
+                if (!corpseRoll && monsterLeavesCorpseLikeDrop(corpseData))
+                    createMonsterCorpseOrGlob(pos.target, corpseData);
                 monsterGrowUp(mon, pos.target);
                 rn2(5);
                 if (targetName === 'lichen') game._pet_skip_post_move_roll = 1;
@@ -10420,16 +10371,8 @@ function movePet(mon, resumeAfterInventory = false, conflictActive = false) {
                 || data.rider || data.shopkeeper || data.name === 'lizard';
             const corpseChance = 2 + ((data.genoFreq ?? 1) < 2 ? 1 : 0) + (data.verysmall ? 1 : 0);
             dropMonsterInventory(mon);
-            if (corpseData && !corpseData.noCorpse && (guaranteedCorpse || !rn2(corpseChance))) {
-                const corpse = mkcorpstat(CORPSE, mon, corpseData, mon.mx, mon.my, 8);
-                Object.assign(corpse, {
-                    otyp: 'corpse',
-                    glyph: '%',
-                    color: corpseData.color,
-                    corpsenm: corpseData,
-                    oldCorpse: !!data.corpse,
-                });
-            }
+            if (monsterLeavesCorpseLikeDrop(corpseData) && (guaranteedCorpse || !rn2(corpseChance)))
+                createMonsterCorpseOrGlob(mon, corpseData);
             recordVanquished(mon, false);
             game.level.monsters = (game.level?.monsters || []).filter(other => other !== mon);
             mon.movement = 0;
