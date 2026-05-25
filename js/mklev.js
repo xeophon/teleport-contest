@@ -4897,6 +4897,28 @@ function syncGlobObjectFields(obj) {
     });
 }
 
+function unpaidBillPrice(obj) {
+    const price = Number(obj?.unpaidPrice || 0);
+    return Number.isFinite(price) ? Math.max(0, price) : 0;
+}
+
+function syncUnpaidBillLine(obj) {
+    const price = unpaidBillPrice(obj);
+    if (!obj?.line || !price) return;
+    const suffix = ` (unpaid, ${price} zorkmid${price === 1 ? '' : 's'})`;
+    if (/ \(unpaid, \d+ zorkmids?\)/.test(obj.line))
+        obj.line = obj.line.replace(/ \(unpaid, \d+ zorkmids?\)/, suffix);
+    else obj.line = `${obj.line}${suffix}`;
+}
+
+function combineAbsorbedGlobBill(absorber, absorbed) {
+    const total = unpaidBillPrice(absorber) + unpaidBillPrice(absorbed);
+    if (!total) return;
+    absorber.unpaid = true;
+    absorber.unpaidPrice = total;
+    syncUnpaidBillLine(absorber);
+}
+
 function absorbGlobObject(absorber, absorbed) {
     const w1 = globMeldWeight(absorber);
     const w2 = globMeldWeight(absorbed);
@@ -4908,6 +4930,7 @@ function absorbGlobObject(absorber, absorbed) {
     if (!!absorber.rknown !== !!absorbed.rknown) absorber.rknown = false;
     if (!!absorber.greased !== !!absorbed.greased) absorber.greased = false;
     if (absorber.orotten || absorbed.orotten) absorber.orotten = true;
+    combineAbsorbedGlobBill(absorber, absorbed);
 
     absorber.age = moves - Math.trunc((((moves - age1) * w1) + ((moves - age2) * w2)) / (w1 + w2));
     absorber.owt = Math.max(1, absorber.owt || w1) + w2;

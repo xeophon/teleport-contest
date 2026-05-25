@@ -13053,6 +13053,28 @@ function syncGlobObjectFields(obj) {
     });
 }
 
+function unpaidBillPrice(obj) {
+    const price = Number(obj?.unpaidPrice || 0);
+    return Number.isFinite(price) ? Math.max(0, price) : 0;
+}
+
+function syncUnpaidBillLine(obj) {
+    const price = unpaidBillPrice(obj);
+    if (!obj?.line || !price) return;
+    const suffix = ` (unpaid, ${price} zorkmid${price === 1 ? '' : 's'})`;
+    if (/ \(unpaid, \d+ zorkmids?\)/.test(obj.line))
+        obj.line = obj.line.replace(/ \(unpaid, \d+ zorkmids?\)/, suffix);
+    else obj.line = `${obj.line}${suffix}`;
+}
+
+function combineAbsorbedGlobBill(absorber, absorbed) {
+    const total = unpaidBillPrice(absorber) + unpaidBillPrice(absorbed);
+    if (!total) return;
+    absorber.unpaid = true;
+    absorber.unpaidPrice = total;
+    syncUnpaidBillLine(absorber);
+}
+
 function absorbGlobObject(absorber, absorbed) {
     const w1 = globMeldWeight(absorber);
     const w2 = globMeldWeight(absorbed);
@@ -13064,6 +13086,7 @@ function absorbGlobObject(absorber, absorbed) {
     if (!!absorber.rknown !== !!absorbed.rknown) absorber.rknown = false;
     if (!!absorber.greased !== !!absorbed.greased) absorber.greased = false;
     if (absorber.orotten || absorbed.orotten) absorber.orotten = true;
+    combineAbsorbedGlobBill(absorber, absorbed);
 
     absorber.age = moves - Math.trunc((((moves - age1) * w1) + ((moves - age2) * w2)) / (w1 + w2));
     absorber.owt = Math.max(1, absorber.owt || w1) + w2;
@@ -13177,6 +13200,7 @@ function globIceState(entry) {
 
 function removeShrunkGlob(entry) {
     const obj = entry.obj;
+    rememberUsedUpShopBill(obj);
     if (entry.parent) {
         removeContainedObject(entry.parent, obj);
         refreshGlobEntryContainerWeights(entry);
@@ -13198,6 +13222,22 @@ function removeShrunkGlob(entry) {
 function outerInventoryContainer(entry) {
     if (entry.source !== 'inventory' || !entry.parent) return null;
     return entry.root || entry.parent;
+}
+
+function usedUpShopBillName(obj) {
+    let name = String(obj?.line || '')
+        .replace(/^[a-zA-Z$] - /, '')
+        .replace(/ \(unpaid, \d+ zorkmids?\)/, '');
+    if (name) return name;
+    const baseName = pickupObjectName({ ...(obj || {}), quan: 1 });
+    return `${/^[aeiou]/i.test(baseName) ? 'an' : 'a'} ${baseName}`;
+}
+
+function rememberUsedUpShopBill(obj) {
+    const price = unpaidBillPrice(obj);
+    if (!obj?.unpaid || !price) return;
+    game._usedUpShopBills ??= [];
+    game._usedUpShopBills.push({ name: usedUpShopBillName(obj), price });
 }
 
 function objectWeightKind(obj) {
@@ -16418,6 +16458,42 @@ function shopItemPriceSuffix(obj, x = game.u?.ux, y = game.u?.uy) {
     if (price == null) return '';
     if (price === 0) return ' (no charge)';
     return ` (for sale, ${price} zorkmid${price === 1 ? '' : 's'})`;
+}
+
+function shopDebtItemName(item) {
+    let name = String(item?.line || '')
+        .replace(/^[a-zA-Z$] - /, '')
+        .replace(/ \(unpaid, \d+ zorkmids?\)/, '');
+    if (name) return name;
+    const baseName = pickupObjectName({ ...(item || {}), quan: 1 });
+    return `${/^[aeiou]/i.test(baseName) ? 'an' : 'a'} ${baseName}`;
+}
+
+function collectUnpaidShopItemsFromList(list, entries) {
+    for (const item of list || []) {
+        const price = unpaidBillPrice(item);
+        if (item?.unpaid && price) entries.push({ item, name: shopDebtItemName(item), price });
+        const contents = globContents(item);
+        if (contents.length) collectUnpaidShopItemsFromList(contents, entries);
+    }
+}
+
+function collectPayableShopDebts() {
+    const entries = [];
+    collectUnpaidShopItemsFromList(game.inventory || [], entries);
+    for (const bill of game._usedUpShopBills || []) {
+        const price = Number(bill?.price || 0);
+        if (price > 0) entries.push({
+            usedUpBill: bill,
+            name: bill.name || 'used-up object',
+            price,
+        });
+    }
+    return entries.map((entry, index) => ({
+        ...entry,
+        letter: String.fromCharCode(97 + index),
+        selected: false,
+    }));
 }
 
 function pickupMenuEntries(objects) {
@@ -22810,12 +22886,21 @@ export async function rhack(_cmd) {
                 money.quan = game._goldCount;
                 updateMoneyLine(money);
             }
+            const paidUsedUpBills = new Set();
             for (const entry of selected) {
+                if (entry.usedUpBill) {
+                    paidUsedUpBills.add(entry.usedUpBill);
+                    continue;
+                }
+                if (!entry.item) continue;
                 entry.item.unpaid = false;
                 entry.item.unpaidPrice = undefined;
                 entry.item.line = String(entry.item.line || '')
                     .replace(/ \(unpaid, \d+ zorkmids?\)/, '');
             }
+            if (paidUsedUpBills.size)
+                game._usedUpShopBills = (game._usedUpShopBills || [])
+                    .filter(bill => !paidUsedUpBills.has(bill));
             const shkp = game._pay_shopkeeper;
             if (shkp) shkp.billct = Math.max(0, (shkp.billct || selected.length) - selected.length);
             if (shkp?.shk) {
@@ -35981,28 +36066,11 @@ export async function rhack(_cmd) {
             return;
         }
 
-        const unpaidItems = (game.inventory || []).filter(item => item.unpaid);
-        if (!unpaidItems.length) {
+        const entries = collectPayableShopDebts();
+        if (!entries.length) {
             await setMessage(`You do not owe ${shkp.shknam || 'the shopkeeper'} anything.`);
             return;
         }
-
-        const entries = unpaidItems.map((item, index) => {
-            let name = String(item.line || '')
-                .replace(/^[a-zA-Z$] - /, '')
-                .replace(/ \(unpaid, \d+ zorkmids?\)/, '');
-            if (!name) {
-                const baseName = pickupObjectName({ ...item, quan: 1 });
-                name = `${/^[aeiou]/i.test(baseName) ? 'an' : 'a'} ${baseName}`;
-            }
-            return {
-                item,
-                name,
-                letter: String.fromCharCode(97 + index),
-                price: item.unpaidPrice || 0,
-                selected: false,
-            };
-        });
         const width = String(Math.max(...entries.map(entry => entry.price))).length;
         const rows = [[0, 41, 'Pay for which items?', 1]];
         for (let i = 0; i < entries.length; i++) {

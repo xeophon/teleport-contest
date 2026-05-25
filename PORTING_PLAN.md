@@ -848,9 +848,12 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   weights, including nested sacks and bag-of-holding rounding, and carried
   containers use the C `becomes`/`seems` lighter split when a reporting
   threshold is crossed. Shop display pricing now counts globs by C weight units
-  instead of `quan`. Remaining glob work is full off-level timer restoration
-  plumbing, broader capacity/encumbrance messaging, full shop billing around
-  merges and used-up bills, and eating side effects.
+  instead of `quan`; unpaid glob melds preserve the simplified owed-price
+  snapshot, unpaid globs that shrink away stay payable as used-up bills, and
+  `#pay` now sees unpaid objects inside carried containers. Remaining glob work
+  is full off-level timer restoration plumbing, broader capacity/encumbrance
+  messaging, deeper shop debit/credit and container-sale details, and eating
+  side effects.
 - Exact wished eggs now use the C `readobjnam()` egg path instead of generic
   food fallback: `egg`, `eggs`, `egg of <monster>`, and `<monster> egg`
   create initialized egg objects first, then apply a local `can_be_hatched()`
