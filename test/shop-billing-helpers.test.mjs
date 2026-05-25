@@ -107,6 +107,25 @@ function chargedTool(id, kind, letter = 't', spe = 3) {
     };
 }
 
+function blankScroll(id, letter = 's') {
+    return {
+        id,
+        cls: 'scroll',
+        glyph: '?',
+        kind: 'blank paper',
+        actualKind: 'scroll of blank paper',
+        scrollIndex: 21,
+        quan: 1,
+        ox: 5,
+        oy: 5,
+        letter,
+        line: `${letter} - a scroll of blank paper`,
+        known: true,
+        dknown: true,
+        bknown: true,
+    };
+}
+
 function tin(id, letter = 't', quan = 1) {
     return {
         id,
@@ -1057,6 +1076,73 @@ test('grease target selection rejects inaccessible worn equipment without spendi
     assert.equal(suit.greased, undefined);
     assert.equal(shkp.debit || 0, 0);
     assert.match(game._pending_message, /You need to take off your \+0 cloak of displacement to grease your \+0 ring mail\./);
+});
+
+test('applying unpaid magic marker to write a known scroll bills usage before ink is spent', async () => {
+    const { shkp } = installCommandShopState();
+    const marker = chargedTool(3104, 'magic marker', 'm', 20);
+    const paper = blankScroll(3105, 's');
+    game.inventory = [marker, paper];
+    game._discoveries = [{ section: 'Scrolls', name: 'scroll of enchant weapon', known: true }];
+    shop.addObjectToShopBill(shkp, marker, 100);
+
+    await rhack('a');
+    await rhack('m');
+
+    assert.equal(game._command_mode, 'markerWriteObject');
+    assert.equal(game._apply_marker_letter, 'm');
+    assert.equal(shkp.debit || 0, 0);
+    assert.match(game._pending_message, /What do you want to write on\?/);
+
+    await rhack('s');
+
+    assert.equal(game._command_mode, 'markerWriteText');
+    assert.equal(game._marker_write_paper_letter, 's');
+    assert.equal(marker.spe, 20);
+    assert.equal(shkp.debit || 0, 0);
+    assert.match(game._pending_message, /What type of scroll do you want to write\?/);
+
+    for (const ch of 'enchant weapon') await rhack(ch);
+    await rhack('\n');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(shkp.debit, 50);
+    assert.ok(marker.spe < 20);
+    assert.equal(marker.unpaid, true);
+    const entry = shop.shopBillEntryForObject(shkp, marker);
+    assert.ok(entry);
+    assert.equal(entry.useup, false);
+    assert.equal(shop.shopBillEntryTotal(entry), 100);
+    assert.equal(game.inventory.includes(paper), false);
+    const scroll = game.inventory.find(item => item.letter === 's');
+    assert.ok(scroll);
+    assert.equal(scroll.actualKind, 'scroll of enchant weapon');
+    assert.equal(scroll.unpaid, undefined);
+    assert.match(game._pending_message, /Usage fee, 50 zorkmids/);
+});
+
+test('applying a dry unpaid magic marker still charges the C flat fee for a valid write attempt', async () => {
+    const { shkp } = installCommandShopState();
+    const marker = chargedTool(3106, 'magic marker', 'm', 1);
+    const paper = blankScroll(3107, 's');
+    game.inventory = [marker, paper];
+    game._discoveries = [{ section: 'Scrolls', name: 'scroll of enchant weapon', known: true }];
+    shop.addObjectToShopBill(shkp, marker, 100);
+
+    await rhack('a');
+    await rhack('m');
+    await rhack('s');
+    for (const ch of 'enchant weapon') await rhack(ch);
+    await rhack('\n');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(marker.spe, 1);
+    assert.equal(shkp.debit, 50);
+    assert.equal(game.inventory.includes(paper), true);
+    assert.match(game._pending_message, /Usage fee, 50 zorkmids/);
+    assert.match(game._pending_message, /Your marker is too dry to write that!/);
 });
 
 test('unpaid charged object with no remaining charges is not billed for usage', () => {

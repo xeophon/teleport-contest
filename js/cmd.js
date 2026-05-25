@@ -11247,6 +11247,193 @@ function isBlankSpellbookItem(item) {
     return name === 'blank paper' || (!name && item.appearance === 'plain');
 }
 
+const MARKER_SCROLL_INK_COSTS = new Map([
+    ['light', 8], ['gold detection', 8], ['food detection', 8], ['magic mapping', 8],
+    ['amnesia', 8], ['fire', 8], ['earth', 8],
+    ['destroy armor', 10], ['create monster', 10], ['punishment', 10],
+    ['confuse monster', 12],
+    ['identify', 14],
+    ['enchant armor', 16], ['remove curse', 16], ['enchant weapon', 16], ['charging', 16],
+    ['scare monster', 20], ['stinking cloud', 20], ['taming', 20], ['teleportation', 20],
+    ['genocide', 30],
+]);
+
+function markerPaperType(item) {
+    if (item?.cls === 'spellbook' || item?.glyph === '+' || item?.otyp === SPBOOK_NO_NOVEL) return 'spellbook';
+    if (item?.cls === 'scroll' || item?.glyph === '?' || item?.otyp === SCROLL_CLASS) return 'scroll';
+    return '';
+}
+
+function markerPaperTypeWord(item) {
+    const type = markerPaperType(item);
+    if (type === 'spellbook') return isBookOfTheDeadItem(item) ? 'book' : 'spellbook';
+    return type || 'scroll';
+}
+
+function markerWritePrompt(item) {
+    return `What type of ${markerPaperTypeWord(item)} do you want to write?`;
+}
+
+function normalizeMarkerWriteName(text) {
+    let name = String(text || '').trim().replace(/\s+/g, ' ');
+    name = normalizeWishedSpelling(name).toLowerCase();
+    if (name.startsWith('scroll ')) name = name.slice(7);
+    else if (name.startsWith('spellbook ')) name = name.slice(10);
+    if (name.startsWith('of ')) name = name.slice(3);
+    return name.trim();
+}
+
+function markerResolveWrittenType(rawText, paper) {
+    const paperType = markerPaperType(paper);
+    const normalized = normalizeMarkerWriteName(rawText);
+    if (!normalized) return null;
+    const alias = resolveWishedSpellingAlias(
+        paperType === 'scroll' ? normalized : `spellbook of ${normalized}`,
+    ).name;
+    const name = paperType === 'scroll'
+        ? alias.replace(/^scroll of /, '')
+        : alias.replace(/^spellbook(?: of)?\s+/, '');
+
+    if (name === 'blank paper') return { paperType, name, blank: true };
+    if (paperType === 'scroll') {
+        const index = IDENTIFIED_SCROLL_NAMES.indexOf(name);
+        if (index < 0) return null;
+        return { paperType, name, index, inkCost: MARKER_SCROLL_INK_COSTS.get(name) || 1000 };
+    }
+    if (paperType === 'spellbook') {
+        const level = SPELLBOOK_LEVELS[name] || 0;
+        if (!(level > 0)) return null;
+        return { paperType, name, spellbookIndex: Object.keys(SPELLBOOK_LEVELS).indexOf(name), inkCost: 10 * level };
+    }
+    return null;
+}
+
+function markerKnownWrittenType(target) {
+    if (!target) return false;
+    if (target.paperType === 'scroll') return scrollDiscoveryKnown(target.name);
+    if (target.paperType === 'spellbook') return spellbookDiscoveryKnown(target.name);
+    return false;
+}
+
+function markerWrittenObject(target, marker, paper, letter) {
+    const curseval = (marker?.blessed ? 1 : marker?.cursed ? -1 : 0)
+        + (paper?.blessed ? 1 : paper?.cursed ? -1 : 0);
+    const base = {
+        id: next_ident(),
+        quan: 1,
+        ox: game.u?.ux || paper?.ox || 0,
+        oy: game.u?.uy || paper?.oy || 0,
+        letter,
+        bknown: !!(paper?.bknown && marker?.bknown),
+        blessed: curseval > 0,
+        cursed: curseval < 0,
+        dknown: false,
+    };
+    if (target.paperType === 'scroll') {
+        const known = scrollDiscoveryKnown(target.name);
+        const label = game._object_descriptions?.scrolls?.[target.index] || 'ZELGO MER';
+        return Object.assign(base, {
+            cls: 'scroll',
+            glyph: '?',
+            otyp: SCROLL_CLASS,
+            kind: known ? `scroll of ${target.name}` : `scroll labeled ${label}`,
+            actualKind: `scroll of ${target.name}`,
+            scrollIndex: target.index,
+            known,
+        });
+    }
+    const known = spellbookDiscoveryKnown(target.name);
+    return Object.assign(base, {
+        cls: 'spellbook',
+        glyph: '+',
+        otyp: SPBOOK_NO_NOVEL,
+        kind: `spellbook of ${target.name}`,
+        spellName: target.name,
+        spellbookIndex: target.spellbookIndex,
+        appearance: game._object_descriptions?.spellbooks?.[target.spellbookIndex] || '',
+        known,
+    });
+}
+
+async function finishMarkerWriting() {
+    const marker = (game.inventory || []).find(item => item.letter === game._apply_marker_letter);
+    const paper = (game.inventory || []).find(item => item.letter === game._marker_write_paper_letter);
+    const text = game._marker_write_text || '';
+    game._apply_marker_letter = null;
+    game._marker_write_paper_letter = null;
+    game._marker_write_text = '';
+    game._command_mode = null;
+
+    if (!marker || !paper) return false;
+    const target = markerResolveWrittenType(text, paper);
+    const typeword = markerPaperTypeWord(paper);
+    if (!target) {
+        await setMessage(`There is no such ${typeword}!`);
+        game.context.move = 1;
+        return true;
+    }
+    if (target.blank) {
+        await setMessage("You can't write that!  It's obscene!");
+        game.context.move = 1;
+        return true;
+    }
+
+    const messages = [];
+    checkUnpaidUsage(marker, messages);
+    const inkCost = target.inkCost || 1000;
+    const halfCost = Math.trunc(inkCost / 2);
+    if ((marker.spe ?? 0) < halfCost) {
+        messages.push('Your marker is too dry to write that!');
+        await setMessage(messages.join('  '), messages.length > 1);
+        game.context.move = 1;
+        return true;
+    }
+
+    const actualCost = rn1(halfCost, halfCost);
+    if ((marker.spe ?? 0) < actualCost) {
+        marker.spe = 0;
+        updateChargedItemLine(marker);
+        messages.push('Your marker dries out!');
+        if (target.paperType === 'spellbook') {
+            messages.push('The spellbook is left unfinished and your writing fades.');
+        } else {
+            messages.push('The scroll is now useless and disappears!');
+            useUpInventoryItem(paper);
+        }
+        await setMessage(messages.join('  '), true);
+        game.context.move = 1;
+        return true;
+    }
+
+    marker.spe = Math.max(0, (marker.spe ?? 0) - actualCost);
+    updateChargedItemLine(marker);
+
+    if (!markerKnownWrittenType(target) && !game.flags?.debug) {
+        messages.push("You don't know how to write that.");
+        if (target.paperType === 'spellbook') {
+            messages.push('You write in your best handwriting:  "My Diary", but it quickly fades.');
+        } else {
+            messages.push(`You write "${game.plname || 'You'} was here!" and the scroll disappears.`);
+            useUpInventoryItem(paper);
+        }
+        await setMessage(messages.join('  '), true);
+        game.context.move = 1;
+        return true;
+    }
+
+    const letter = paper.letter;
+    useUpInventoryItem(paper);
+    const written = markerWrittenObject(target, marker, paper, letter);
+    written.line = normalInventoryLine({ ...written, line: '' });
+    game.inventory ??= [];
+    game.inventory.push(written);
+    if (target.paperType === 'spellbook')
+        messages.push('The spellbook warps strangely.');
+    await setMessage(messages.join('  '), messages.length > 1);
+    game.context.move = 1;
+    return true;
+}
+
 function isBookOfTheDeadItem(item) {
     if (item?.otyp === BOOK_OF_THE_DEAD) return true;
     const text = [
@@ -34438,6 +34625,7 @@ export async function rhack(_cmd) {
         }
         if (name.includes('magic marker')) {
             await setMessage('What do you want to write on? [*]');
+            game._apply_marker_letter = item.letter;
             game._command_mode = 'markerWriteObject';
             return;
         }
@@ -34801,9 +34989,36 @@ export async function rhack(_cmd) {
         return;
     }
 
+    if (game._command_mode === 'markerWriteText') {
+        if (ch === '\r' || ch === '\n') {
+            await finishMarkerWriting();
+            return;
+        }
+        if (ch === '\x1b') {
+            game._apply_marker_letter = null;
+            game._marker_write_paper_letter = null;
+            game._marker_write_text = '';
+            game._command_mode = null;
+            game.context.move = 1;
+            return;
+        }
+        const code = typeof key === 'number' ? key : ch.charCodeAt(0);
+        if (code === 8 || code === 127 || ch === '\x7f') {
+            game._marker_write_text = (game._marker_write_text || '').slice(0, -1);
+        } else if (code >= 32) {
+            game._marker_write_text = `${game._marker_write_text || ''}${ch}`;
+        }
+        const paper = (game.inventory || []).find(invItem => invItem.letter === game._marker_write_paper_letter);
+        const prompt = markerWritePrompt(paper);
+        const text = game._marker_write_text || '';
+        await setMessage(`${prompt}${text ? ` ${text}` : ''}`);
+        return;
+    }
+
     if (game._command_mode === 'markerWriteObject') {
         if (ch === '\x1b') {
             await setMessage('Never mind.');
+            game._apply_marker_letter = null;
             game._command_mode = null;
             return;
         }
@@ -34813,8 +35028,37 @@ export async function rhack(_cmd) {
             game._command_mode = 'markerWriteInvalidMore';
             return;
         }
-        await setMessage('That is a silly thing to write on.');
-        game._command_mode = null;
+        const paperType = markerPaperType(item);
+        if (!paperType) {
+            await setMessage('That is a silly thing to write on.');
+            game._command_mode = null;
+            game._apply_marker_letter = null;
+            return;
+        }
+        if (game.u?.blind && !item.dknown) {
+            await setMessage(`You don't know whether that ${markerPaperTypeWord(item)} is blank or not.`);
+            game._command_mode = null;
+            game._apply_marker_letter = null;
+            return;
+        }
+        if (game.u?.blind && paperType === 'spellbook') {
+            await setMessage("Magic marker can't create braille text.");
+            game._command_mode = null;
+            game._apply_marker_letter = null;
+            return;
+        }
+        if ((paperType === 'scroll' && !isBlankScrollItem(item))
+            || (paperType === 'spellbook' && !isBlankSpellbookItem(item))) {
+            await setMessage(`That ${markerPaperTypeWord(item)} is not blank!`);
+            game._command_mode = null;
+            game._apply_marker_letter = null;
+            game.context.move = 1;
+            return;
+        }
+        game._marker_write_paper_letter = item.letter;
+        game._marker_write_text = '';
+        await setMessage(markerWritePrompt(item));
+        game._command_mode = 'markerWriteText';
         return;
     }
 
