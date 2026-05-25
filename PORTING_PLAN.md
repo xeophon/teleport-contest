@@ -2768,11 +2768,20 @@ Next concrete target:
   keeps the C non-ice-troll revival suppression. Direct timer smokes cover
   floor/inventory rot, zombifying revival, ice-box thaw suppression and the
   ice-troll exception, Rider timing, and norevive fallback; focused replays
-  and full score remain exact. Remaining ice-box work is
+  and full score remain exact.
+  Force-lock handling now follows C `Is_box`: `#force` recognizes locked
+  chests and large boxes, names large-box prompts/destruction correctly, and
+  spills surviving contents through the shared container helpers when blunt
+  force destroys the box. Ice boxes are deliberately excluded from `#force`
+  because upstream `Is_box` excludes `ICE_BOX`; the dormant ice-box branch in
+  `breakchestlock()` has no current force/kick/wand caller. Direct smokes cover
+  large-box prompting, large-box destruction with a surviving content spill,
+  and locked ice-box exclusion; focused replays and full score remain exact.
+  Remaining ice-box work is
   nested `in_container()`/`out_container()` variants, full magic-bag
   `ohitmon()`/`thitu()` special cases and
   non-gold scatter shop billing refinements,
-  forced ice-box destruction, and shop billing edge cases.
+  and shop billing edge cases.
 - Remaining ice work outside this fire-ray terrain slice includes the broader
   full `spoteffects()`/`pooleffects()` hero liquid behavior, deeper
   `minliquid()` edges (life-saving or shape-shift survivor relocation,

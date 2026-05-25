@@ -8157,6 +8157,45 @@ function forceLockChance(item) {
     return 8;
 }
 
+function isForceableBoxObject(obj) {
+    const kind = objectKindKey(obj);
+    return !!obj && (obj.otyp === CHEST || obj.otyp === LARGE_BOX
+        || kind === 'chest' || kind === 'large box');
+}
+
+function forceableLockedBoxAtHero() {
+    return (game.level?.objects || []).find(obj =>
+        isForceableBoxObject(obj)
+        && (obj.locked || obj.olocked)
+        && obj.ox === game.u?.ux
+        && obj.oy === game.u?.uy) || null;
+}
+
+function forceBoxSimpleName(box) {
+    const kind = objectKindKey(box);
+    if (box?.otyp === LARGE_BOX || kind === 'large box') return 'large box';
+    return 'chest';
+}
+
+function forceBoxArticleName(box) {
+    const baseName = forceBoxSimpleName(box);
+    const name = box?.lknown && (box.locked || box.olocked) ? `locked ${baseName}` : baseName;
+    return `${/^[aeiou]/i.test(name) ? 'an' : 'a'} ${name}`;
+}
+
+function syncBrokenBoxContentDisplay(content) {
+    const kind = String(content.kind || content.actualKind || '');
+    if (content.glyph === '=' || content.otyp === RING_CLASS || kind.startsWith('ring of ') || /\bring$/i.test(kind)) {
+        content.cls = 'ring';
+        content.glyph = '=';
+    }
+    if (/helm|armor|mail|boots|gloves|shield|cloak|shirt/.test(String(content.kind || ''))) {
+        content.cls = 'armor';
+        content.glyph = '[';
+    }
+    if (OBJECT_CLASS_GLYPHS[content.cls]) content.glyph = OBJECT_CLASS_GLYPHS[content.cls];
+}
+
 export function finishForceLock(force) {
     const chest = force?.chest;
     if (!chest) return false;
@@ -8173,22 +8212,19 @@ export function finishForceLock(force) {
         return false;
     }
 
+    const contents = [...liquidFlowContainerContents(chest)];
+    const boxName = forceBoxSimpleName(chest);
     game.level.objects = (game.level?.objects || []).filter(obj => obj !== chest);
     newsym(chest.ox, chest.oy);
-    game._queued_message_after_more = "In fact, you've totally destroyed the chest.";
-    game._break_chest_contents_after_more = [...(chest.contents || [])];
+    game._queued_message_after_more = `In fact, you've totally destroyed the ${boxName}.`;
+    game._break_chest_destroyed_message = game._queued_message_after_more;
+    game._break_chest_content_message_active = 0;
+    game._break_chest_contents_after_more = contents;
     for (const content of game._break_chest_contents_after_more) {
-        const kind = String(content.kind || content.actualKind || '');
-        if (content.glyph === '=' || content.otyp === RING_CLASS || kind.startsWith('ring of ') || /\bring$/i.test(kind)) {
-            content.cls = 'ring';
-            content.glyph = '=';
-        }
-        if (/helm|armor|mail|boots|gloves|shield|cloak|shirt/.test(String(content.kind || ''))) {
-            content.cls = 'armor';
-            content.glyph = '[';
-        }
-        if (OBJECT_CLASS_GLYPHS[content.cls]) content.glyph = OBJECT_CLASS_GLYPHS[content.cls];
+        removeContainedObject(chest, content);
+        syncBrokenBoxContentDisplay(content);
     }
+    clearLiquidFlowContainerContents(chest);
     game._queued_message_more_after_more = false;
     return true;
 }
@@ -26126,7 +26162,7 @@ export async function rhack(_cmd) {
                 }
                 let finishedBreakChestContents = false;
                 if (game._break_chest_contents_after_more
-                    && (next === "In fact, you've totally destroyed the chest." || next.endsWith('is torn to shreds!'))) {
+                    && (next === game._break_chest_destroyed_message || game._break_chest_content_message_active)) {
                     let destroyedMessage = '';
                     while (game._break_chest_contents_after_more.length) {
                         const content = game._break_chest_contents_after_more.shift();
@@ -26167,10 +26203,13 @@ export async function rhack(_cmd) {
                     }
                     if (destroyedMessage) {
                         queuedMore = true;
+                        game._break_chest_content_message_active = 1;
                         game._queued_message_after_more = destroyedMessage;
                     }
                     if (!game._break_chest_contents_after_more.length) {
                         game._break_chest_contents_after_more = null;
+                        game._break_chest_destroyed_message = '';
+                        game._break_chest_content_message_active = 0;
                         finishedBreakChestContents = true;
                     }
                 }
@@ -34264,11 +34303,7 @@ export async function rhack(_cmd) {
 
     if (game._command_mode === 'forceConfirm') {
         if (ch === 'y') {
-            const chest = game.level?.objects?.find(obj =>
-                (obj.kind === 'chest' || obj.otyp === CHEST)
-                && obj.ox === game.u?.ux
-                && obj.oy === game.u?.uy
-                && (obj.locked || obj.olocked));
+            const chest = forceableLockedBoxAtHero();
             const weapon = (game.inventory || []).find(item => item.wielded || item.line?.includes('weapon in'));
             if (chest) {
                 const weaponName = forceWeaponName(weapon);
@@ -34669,16 +34704,12 @@ export async function rhack(_cmd) {
             }
             if (command === 'force') {
 
-                const chest = game.level?.objects?.find(obj =>
-                    (obj.kind === 'chest' || obj.otyp === CHEST)
-                    && (obj.locked || obj.olocked)
-                    && obj.ox === game.u?.ux
-                    && obj.oy === game.u?.uy);
+                const chest = forceableLockedBoxAtHero();
                 const weapon = (game.inventory || []).find(item =>
                     item.wielded || item.line?.includes('weapon in'));
                 if (weapon && chest) {
                     chest.lknown = true;
-                    await setMessage('There is a locked chest here; force its lock? [ynq] (q)');
+                    await setMessage(`There is ${forceBoxArticleName(chest)} here; force its lock? [ynq] (q)`);
                     game._command_mode = 'forceConfirm';
                     return;
                 }
