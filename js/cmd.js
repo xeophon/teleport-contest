@@ -26877,11 +26877,11 @@ export async function rhack(_cmd) {
                                     target.mhp = (target.mhp || 1) - damage;
                                     if ((target.mhp || 0) <= 0) {
                                         rn2(6);
-                                        const corpseRoll = rn2(3);
                                         const corpseData = target.data?.corpse || target.data;
+                                        const dropCorpse = monsterCorpseDropSucceeds(target, target.data);
                                         dropMonsterInventory(target, messages);
                                         game.level.monsters = (game.level?.monsters || []).filter(mon => mon !== target);
-                                        if (!corpseRoll && monsterLeavesCorpseLikeDrop(corpseData))
+                                        if (dropCorpse && monsterLeavesCorpseLikeDrop(corpseData))
                                             createMonsterCorpseOrGlob(target, corpseData, target.mx, target.my, { messages });
                                         recordVanquished(target, true);
                                         newsym(target.mx, target.my);
@@ -27067,11 +27067,11 @@ export async function rhack(_cmd) {
                                 target.mhp = (target.mhp || 1) - damage;
                                 if ((target.mhp || 0) <= 0) {
                                     rn2(6);
-                                    const corpseRoll = rn2(3);
                                     const corpseData = target.data?.corpse || target.data;
+                                    const dropCorpse = monsterCorpseDropSucceeds(target, target.data);
                                     dropMonsterInventory(target, messages);
                                     game.level.monsters = (game.level?.monsters || []).filter(mon => mon !== target);
-                                    if (!corpseRoll && monsterLeavesCorpseLikeDrop(corpseData))
+                                    if (dropCorpse && monsterLeavesCorpseLikeDrop(corpseData))
                                         createMonsterCorpseOrGlob(target, corpseData, target.mx, target.my, { messages });
                                     recordVanquished(target, true);
                                     newsym(target.mx, target.my);

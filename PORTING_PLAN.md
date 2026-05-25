@@ -825,7 +825,8 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   deaths get the guaranteed glob drop instead of the medium-pudding RNG roll.
   Corpse-drop chance callsites now share the C guarantee gate for big/lizard
   non-clones, golems, mplayers, Riders, and shopkeepers before falling back to
-  the normal rarity/verysmall RNG roll.
+  the normal rarity/verysmall RNG roll, including fire/cold ray kills after
+  their C-style extra-item roll.
   Active-level glob shrink timers now use the C 23-27 turn cadence, reduce
   weight and partial-eaten amount one unit at a time, emit inventory and visible
   floor disappearance messages, slow/skip on ice, pause in ice boxes until
