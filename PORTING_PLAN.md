@@ -2619,9 +2619,17 @@ Next concrete target:
   `""`, visible spill wording, monster-moving altar context, no survivor
   stacking, ice-box corpse revival suppression, and gelatinous-cube content
   absorption for organic container food. Focused pet/food replays stay exact.
-  Remaining `meatbox()` work is broader non-pet gelatinous-cube floor/inventory
-  digestion, metallivore/corpse-eater consumption callers, deeper ice-box age
-  timer parity, and shop billing edge cases.
+- Non-pet gelatinous cubes now have the C `gelcube_digests()`/`meatobj()`
+  shape for object consumption: carried organic non-prize, non-artifact items
+  are digested before normal movement and set a one-turn `meating` delay;
+  floor piles are consumed through the cube path before ordinary pickup, with
+  organic devouring, inedible engulfing into `minvent`, container contents
+  routed through the existing cube-aware `meatbox()` helper, and skips for
+  rocks/statues, scare-monster scrolls, ball-and-chain objects, prizes, Rider
+  corpses, and unsafe petrifying corpses. Focused pet/pile replays and full
+  score remain exact. Remaining `meatbox()` work is metallivore/corpse-eater
+  consumption callers, deeper ice-box age timer parity, and shop billing edge
+  cases.
 - Remaining ice work outside this fire-ray terrain slice includes the broader
   full `spoteffects()`/`pooleffects()` hero liquid behavior, deeper
   `minliquid()` edges (life-saving or shape-shift survivor relocation,

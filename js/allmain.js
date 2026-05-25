@@ -1796,6 +1796,72 @@ function isOrganicObjectForGelatinousCube(obj) {
     return /\b(?:box|chest|sack|bag|scroll|spellbook|book|paper|cloth|leather|wood|wooden|corpse|meat|egg|ration|food|fruit|cookie|wafer|jelly)\b/.test(kind);
 }
 
+function gelatinousCubeSpecialPrizeObject(obj) {
+    return !!(obj?._sokoPrize || obj?.sokoPrize || obj?._minesPrize || obj?.minesPrize
+        || (game.level?.flags?.sokoban_rules && obj?.hidden));
+}
+
+function gelatinousCubeUntouchableObject(mon, obj) {
+    if (!obj || obj.transientProjectile) return true;
+    if (gelatinousCubeSpecialPrizeObject(obj)) return true;
+    if (obj.otyp === BOULDER || obj.otyp === STATUE || obj.otyp === ROCK || obj.isRock) return true;
+    if (obj.otyp === SCR_SCARE_MONSTER || isScareMonsterScroll(obj)) return true;
+    const kind = String(obj.kind || obj.actualKind || '').toLowerCase();
+    if (obj === game.u?.uball || obj === game.u?.uchain
+        || obj.cls === 'ball' || obj.cls === 'chain'
+        || kind === 'heavy iron ball' || kind === 'iron chain') return true;
+    const corpseName = String(obj.corpsenm?.name || '').toLowerCase();
+    if (corpseName === 'death' || corpseName === 'pestilence' || corpseName === 'famine'
+        || obj.corpsenm?.rider || obj.riderCorpse) return true;
+    if ((obj.otyp === CORPSE || obj.otyp === 'corpse')
+        && PETRIFYING_TOUCH_MONSTERS.has(corpseName)
+        && !monsterResistsStoning(mon)) return true;
+    return false;
+}
+
+function gelatinousCubeInventoryDigestible(obj) {
+    return isOrganicObjectForGelatinousCube(obj)
+        && !obj?.artifact && !obj?.oartifact
+        && !gelatinousCubeSpecialPrizeObject(obj);
+}
+
+function gelatinousCubeDigestResisted(obj) {
+    const artifact = obj?.artifact || obj?.oartifact;
+    return rn2(100) < (artifact ? 95 : 5);
+}
+
+function gelatinousCubeHazardousFood(mon, obj) {
+    const kind = String(obj?.kind || obj?.actualKind || obj?.globName || '').toLowerCase();
+    const corpseName = String(obj?.corpsenm?.name || '').toLowerCase();
+    if (/amulet of strangulation|ring of slow digestion/.test(kind)) return true;
+    if ((obj?.opoisoned || POISONOUS_CORPSES.has(corpseName)) && !monsterPoisonResistant(mon)) return true;
+    if ((PETRIFYING_TOUCH_MONSTERS.has(corpseName) || kind === 'egg' && PETRIFYING_TOUCH_MONSTERS.has(corpseName))
+        && !monsterResistsStoning(mon)) return true;
+    if (kind === 'glob of green slime' && mon?.data?.name !== 'green slime') return true;
+    return false;
+}
+
+function gelatinousCubeCanDigestFloorObject(mon, obj) {
+    if (gelatinousCubeUntouchableObject(mon, obj)) return false;
+    if (!isOrganicObjectForGelatinousCube(obj)) return false;
+    if (gelatinousCubeDigestResisted(obj)) return false;
+    if (obj?.artifact || obj?.oartifact) return false;
+    return !gelatinousCubeHazardousFood(mon, obj);
+}
+
+function gelatinousCubeAddToInventory(mon, obj) {
+    if (!mon || !obj) return;
+    obj.hidden = false;
+    obj.buried = false;
+    obj.transientProjectile = false;
+    obj.seen = false;
+    obj._hide_until_seen = false;
+    delete obj.line;
+    delete obj.nexthere;
+    delete obj.nobj;
+    mon.minvent = [obj, ...(mon.minvent || [])];
+}
+
 function containerContents(obj) {
     if (Array.isArray(obj?.contents)) return obj.contents;
     if (Array.isArray(obj?.cobj)) return obj.cobj;
@@ -1881,11 +1947,7 @@ function monsterConsumeContainerContents(mon, container, messages) {
         if (container.otyp === ICE_BOX || container.kind === 'ice box')
             removedFromIceboxForMonsterConsumption(obj);
         if (cube) {
-            obj.hidden = false;
-            obj.buried = false;
-            obj.transientProjectile = false;
-            delete obj.line;
-            mon.minvent = [obj, ...(mon.minvent || [])];
+            gelatinousCubeAddToInventory(mon, obj);
         } else {
             placeMonsterConsumedContent(obj, x, y, messages);
         }
@@ -1893,10 +1955,23 @@ function monsterConsumeContainerContents(mon, container, messages) {
     clearContainerContents(container);
 }
 
-function consumeMonsterEatenObject(mon, obj, objects, messages, { splitStackAccounted = false } = {}) {
+function applyMonsterConsumedObjectEffects(mon, obj) {
+    if (!mon || !obj) return;
+    const ispet = mon.pet || mon.mtame;
+    if (!ispet && (mon.mhp || 0) < (mon.mhpmax || 0))
+        mon.mhp = Math.min(mon.mhpmax || mon.mhp || 1, (mon.mhp || 1) + objectWeight(obj));
+    const corpseName = String(obj.corpsenm?.name || '').toLowerCase();
+    if (corpseName === 'wraith') monsterGrowUp(mon, null);
+    if (corpseName === 'nurse') mon.mhp = mon.mhpmax || mon.mhp || 1;
+    if (String(obj.kind || obj.actualKind || '').toLowerCase() === 'carrot' && mon.mcansee === false)
+        mon.mcansee = true;
+}
+
+function consumeMonsterEatenObject(mon, obj, objects, messages, { splitStackAccounted = false, wholeStack = false } = {}) {
+    applyMonsterConsumedObjectEffects(mon, obj);
     monsterConsumeContainerContents(mon, obj, messages);
     const idx = objects.indexOf(obj);
-    if (idx >= 0 && (obj.quan || 1) > 1 && obj.cls === 'food') {
+    if (!wholeStack && idx >= 0 && (obj.quan || 1) > 1 && obj.cls === 'food') {
         if (!splitStackAccounted) next_ident();
         obj.quan--;
     } else if (idx >= 0) {
@@ -1907,6 +1982,64 @@ function consumeMonsterEatenObject(mon, obj, objects, messages, { splitStackAcco
 
 function addMonsterConsumeMessages(messages) {
     for (const msg of messages) addToplineMessage(msg);
+}
+
+function gelatinousCubeDigestInventory(mon) {
+    if (!isGelatinousCube(mon) || mon.pet || mon.mtame || mon.meating) return false;
+    const item = (mon.minvent || []).find(gelatinousCubeInventoryDigestible);
+    if (!item) return false;
+    mon.meating = 1;
+    mon.minvent = (mon.minvent || []).filter(obj => obj !== item);
+    const messages = [];
+    applyMonsterConsumedObjectEffects(mon, item);
+    monsterConsumeContainerContents(mon, item, messages);
+    addMonsterConsumeMessages(messages);
+    newsym(mon.mx, mon.my);
+    return true;
+}
+
+function gelatinousCubeEngulfFloorObject(mon, obj) {
+    const objects = game.level?.objects || [];
+    const idx = objects.indexOf(obj);
+    if (idx >= 0) objects.splice(idx, 1);
+    gelatinousCubeAddToInventory(mon, obj);
+}
+
+function gelatinousCubeEatFloorObjects(mon) {
+    if (!isGelatinousCube(mon) || mon.pet || mon.mtame || !game.level) return false;
+    const objects = game.level.objects || [];
+    const stack = [...objects]
+        .filter(obj => obj.ox === mon.mx && obj.oy === mon.my && !obj.hidden && !obj.transientProjectile)
+        .reverse();
+    if (!stack.length) return false;
+
+    const messages = [];
+    let ate = 0;
+    let engulfed = 0;
+    let firstEngulfed = null;
+    const visible = monsterVisibleToHero(mon);
+    for (const obj of stack) {
+        if (!objects.includes(obj) || gelatinousCubeUntouchableObject(mon, obj)) continue;
+        if (gelatinousCubeCanDigestFloorObject(mon, obj)) {
+            ate++;
+            if (visible) messages.push(`${monsterDisplayName(mon)} eats ${pickupObjectName(obj)}!`);
+            consumeMonsterEatenObject(mon, obj, objects, messages, { wholeStack: true });
+        } else {
+            engulfed++;
+            if (!firstEngulfed) firstEngulfed = obj;
+            gelatinousCubeEngulfFloorObject(mon, obj);
+        }
+        if (!(game.level?.monsters || []).includes(mon)) break;
+    }
+    if (engulfed === 1 && visible && firstEngulfed)
+        messages.push(`${monsterDisplayName(mon)} engulfs ${pickupObjectName(firstEngulfed)}.`);
+    else if (engulfed > 1 && visible)
+        messages.push(`${monsterDisplayName(mon)} engulfs several objects.`);
+    else if (engulfed && game.flags?.verbose !== false)
+        messages.push(`You hear ${engulfed === 1 ? 'a' : 'several'} slurping sound${engulfed === 1 ? '' : 's'}.`);
+    if ((ate || engulfed) && isGelatinousCube(mon)) newsym(mon.mx, mon.my);
+    addMonsterConsumeMessages(messages);
+    return !!(ate || engulfed);
 }
 
 function isRoyalJellyObject(obj) {
@@ -3712,11 +3845,11 @@ async function processMonsterTurns() {
                             continue;
                         }
                     }
-			                    if (mon.pet && mon.meating) {
+			                    if (mon.meating) {
                         const targetX = mon.mux ?? game.u?.ux ?? mon.mx;
                         const targetY = mon.muy ?? game.u?.uy ?? mon.my;
                         const nearby = (mon.mx - targetX) ** 2 + (mon.my - targetY) ** 2 <= 2;
-                        if (nearby && !mon.mflee && !mon.mconf && !mon.mstun && mon.mcansee !== false
+                        if (mon.pet && nearby && !mon.mflee && !mon.mconf && !mon.mstun && mon.mcansee !== false
                             && mon.data?.wanderer) rn2(4);
                         mon.meating--;
                         if (mon.meating <= 0) mon.meating = 0;
@@ -3844,6 +3977,14 @@ async function processMonsterTurns() {
                 }
                 if (resumedAfterPreturn) resumeAfterPreturn = false;
                 if (!resumingPetInventory && !resumedAfterPreturn && maybeKillerBeeEatRoyalJelly(mon)) {
+                    if (game._message_more && !game._process_time_with_more) {
+                        game._monster_resume_index = monIndex + 1;
+                        game._monster_resume_somebody_can_move = somebodyCanMove;
+                        return false;
+                    }
+                    continue;
+                }
+                if (!resumingPetInventory && !resumedAfterPreturn && gelatinousCubeDigestInventory(mon)) {
                     if (game._message_more && !game._process_time_with_more) {
                         game._monster_resume_index = monIndex + 1;
                         game._monster_resume_somebody_can_move = somebodyCanMove;
@@ -7173,8 +7314,11 @@ function monsterPickupClass(obj) {
 
 function monsterWouldTakeItem(mon, obj) {
     if (!obj || obj.transientProjectile) return false;
-    if (obj.otyp === BOULDER || obj.otyp === STATUE) return false;
-    if (obj.otyp === CORPSE || obj.otyp === 'corpse') return false;
+    const cubeWantsObject = isGelatinousCube(mon) && !gelatinousCubeUntouchableObject(mon, obj);
+    if (!cubeWantsObject) {
+        if (obj.otyp === BOULDER || obj.otyp === STATUE) return false;
+        if (obj.otyp === CORPSE || obj.otyp === 'corpse') return false;
+    }
 
     const cls = monsterPickupClass(obj);
     const data = mon.data || {};
@@ -7187,6 +7331,7 @@ function monsterWouldTakeItem(mon, obj) {
     for (const held of mon.minvent || []) currentLoad += objectWeight(held);
     const pctLoad = Math.trunc((currentLoad * 100) / Math.max(maxLoad, 1));
     if (!mon.isshk && currentLoad + objectWeight(obj) > Math.max(maxLoad, 1)) return false;
+    if (cubeWantsObject) return true;
 
     if (pctLoad < 75 && monsterSearchesForItem(mon, obj, cls)) return true;
     if (data.likesGold && cls === GOLD_PIECE && pctLoad < 95) return true;
@@ -7834,6 +7979,7 @@ function monsterSearchItemGoal(mon) {
 }
 
 function monsterPickStuff(mon, monIndex = null, somebodyCanMove = false, forceMoreOnAppend = false) {
+    if (gelatinousCubeEatFloorObjects(mon)) return true;
     if (mon.mpeaceful && !(mon.pet || mon.mtame) && !mon.isshk) return false;
     const objects = game.level?.objects || [];
     const obj = [...objects].reverse()
