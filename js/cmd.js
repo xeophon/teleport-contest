@@ -9695,6 +9695,122 @@ async function finishCrystalBallUse(ch) {
     return true;
 }
 
+function magicInstrumentKind(item) {
+    const kind = toolChargeKind(item);
+    return kind === 'magic flute' || kind === 'magic harp' ? kind : '';
+}
+
+function instrumentDisplayName(item) {
+    return inventoryItemName(item).replace(/\s+\(0:\d+\)$/, '');
+}
+
+function instrumentTheName(item) {
+    return `The ${instrumentDisplayName(item).replace(/^(?:an?|the) /i, '')}`;
+}
+
+function instrumentOpeningMessage() {
+    if (heroIsHallucinating())
+        return 'You disseminate a kaleidoscopic display of floating butterflies.';
+    if (heroIsStunned() && heroIsConfused())
+        return 'What you perform is quite far from music...';
+    if (heroIsStunned())
+        return heroIsDeaf() ? 'You feel a monotonous vibration.' : 'You radiate an obnoxious droning sound.';
+    if (heroIsConfused())
+        return heroIsDeaf() ? 'You feel a jarring vibration.' : 'You generate a raucous noise.';
+    return null;
+}
+
+function monsterDistanceSquaredFromHero(mon) {
+    const dx = (mon?.mx || 0) - (game.u?.ux || 0);
+    const dy = (mon?.my || 0) - (game.u?.uy || 0);
+    return dx * dx + dy * dy;
+}
+
+function sleepMonstersWithMagicFlute(distance) {
+    for (const mon of game.level?.monsters || []) {
+        if (!mon || mon.dead || (mon.mhp != null && mon.mhp <= 0)) continue;
+        if (monsterDistanceSquaredFromHero(mon) >= distance) continue;
+        if (monsterResistsEffect(mon, game.u?.ulevel || 1)) continue;
+        mon.msleeping = 1;
+    }
+}
+
+function charmMonstersWithMagicHarp(distance) {
+    for (const mon of game.level?.monsters || []) {
+        if (!mon || mon.dead || (mon.mhp != null && mon.mhp <= 0)) continue;
+        if (monsterDistanceSquaredFromHero(mon) > distance) continue;
+        tameMonsterWithScroll(mon, {});
+    }
+}
+
+async function finishInstrumentTune(item) {
+    game._apply_instrument_letter = '';
+    game._instrument_tune_text = '';
+    game._command_mode = null;
+    if (!item) return false;
+    const name = instrumentTheName(item).replace(/^The /, 'the ');
+    const message = heroIsDeaf()
+        ? `You can feel ${name} emitting vibrations.`
+        : `You extract a strange sound from ${name}!`;
+    await setMessage(message);
+    game.context.move = 1;
+    return true;
+}
+
+async function finishMusicalImprovisation(item) {
+    const kind = magicInstrumentKind(item);
+    if (!kind) return false;
+    game._apply_instrument_letter = '';
+    game._command_mode = null;
+
+    const messages = [];
+    const opening = instrumentOpeningMessage();
+    if (opening) messages.push(opening);
+    else messages.push(`You start playing ${instrumentDisplayName(item)}.`);
+
+    const hasSpecialEffect = !heroIsStunned() && !heroIsConfused() && (item.spe ?? 0) > 0;
+    if (!hasSpecialEffect) {
+        messages.push(kind === 'magic flute'
+            ? (heroIsDeaf() ? `You feel ${instrumentDisplayName(item)} toot.` : `${instrumentTheName(item)} toots.`)
+            : (heroIsDeaf() ? 'You feel soothing vibrations.' : `${instrumentTheName(item)} twangs.`));
+        exerciseAttribute(A_DEX, true);
+        await setMessage(messages.join('  '), messages.length > 1);
+        game.context.move = 1;
+        return true;
+    }
+
+    spendChargedToolUse(item, messages);
+    if (kind === 'magic flute') {
+        const tone = heroIsHallucinating() ? 'piped' : 'soft';
+        messages.push(heroIsDeaf() ? `You seem to produce ${tone} music.` : `You produce ${tone} music.`);
+        sleepMonstersWithMagicFlute((game.u?.ulevel || 1) * 5);
+    } else {
+        messages.push(heroIsDeaf()
+            ? 'You feel very soothing vibrations.'
+            : `${instrumentTheName(item)} produces very attractive music.`);
+        charmMonstersWithMagicHarp(Math.trunc(((game.u?.ulevel || 1) - 1) / 3) + 1);
+    }
+    exerciseAttribute(A_DEX, true);
+    await setMessage(messages.join('  '), messages.length > 1);
+    game.context.move = 1;
+    return true;
+}
+
+async function beginMusicalInstrumentUse(item) {
+    if (game.u?.underwater || game.u?.uunderwater) {
+        await setMessage("You can't play music underwater!");
+        game._command_mode = null;
+        return true;
+    }
+    if (!heroIsStunned() && !heroIsConfused() && !heroIsHallucinating()) {
+        game._apply_instrument_letter = item.letter || '';
+        await setMessage('Improvise? [ynq] (q)');
+        game._command_mode = 'instrumentImprovisePrompt';
+        return true;
+    }
+    return finishMusicalImprovisation(item);
+}
+
 function splitOilPotionForApply(item) {
     if (!item || (item.quan || 1) <= 1) return item;
     const split = { ...item, id: next_ident(), quan: 1, line: '' };
@@ -34908,6 +35024,10 @@ export async function rhack(_cmd) {
             await beginCrystalBallUse(item);
             return;
         }
+        if (magicInstrumentKind(item)) {
+            await beginMusicalInstrumentUse(item);
+            return;
+        }
         if (isPotionOfOil(item)) {
             await applyPotionOfOil(item);
             return;
@@ -35312,6 +35432,56 @@ export async function rhack(_cmd) {
 
     if (game._command_mode === 'crystalBallLook') {
         await finishCrystalBallUse(ch);
+        return;
+    }
+
+    if (game._command_mode === 'instrumentImprovisePrompt') {
+        const item = (game.inventory || []).find(invItem => invItem.letter === game._apply_instrument_letter);
+        if (ch === 'y') {
+            await finishMusicalImprovisation(item);
+            return;
+        }
+        if (ch === 'n') {
+            if (!item) {
+                game._apply_instrument_letter = '';
+                game._command_mode = null;
+                return;
+            }
+            game._instrument_tune_text = '';
+            await setMessage('What tune are you playing? [5 notes, A-G]');
+            game._command_mode = 'instrumentTuneText';
+            return;
+        }
+        if (ch === 'q' || ch === '\x1b' || ch === ' ' || ch === '\r' || ch === '\n') {
+            game._apply_instrument_letter = '';
+            game._command_mode = null;
+            await setMessage('Never mind.');
+            return;
+        }
+        game._keep_pending_message = 1;
+        return;
+    }
+
+    if (game._command_mode === 'instrumentTuneText') {
+        const item = (game.inventory || []).find(invItem => invItem.letter === game._apply_instrument_letter);
+        if (ch === '\x1b') {
+            game._apply_instrument_letter = '';
+            game._instrument_tune_text = '';
+            game._command_mode = null;
+            await setMessage('Never mind.');
+            return;
+        }
+        if (ch === '\r' || ch === '\n') {
+            await finishInstrumentTune(item);
+            return;
+        }
+        const code = ch.charCodeAt(0);
+        if (code === 8 || code === 127 || ch === '\x7f') {
+            game._instrument_tune_text = (game._instrument_tune_text || '').slice(0, -1);
+        } else if (code >= 32) {
+            game._instrument_tune_text = `${game._instrument_tune_text || ''}${ch}`;
+        }
+        await setMessage(`What tune are you playing? [5 notes, A-G]${game._instrument_tune_text ? ` ${game._instrument_tune_text}` : ''}`);
         return;
     }
 

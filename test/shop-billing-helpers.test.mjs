@@ -70,6 +70,22 @@ function makeCrystalBallGazeDeterministic() {
     game.flags.verbose = false;
 }
 
+function makeInstrumentApplyDeterministic(shkp) {
+    initRng(1);
+    Object.assign(game.u, {
+        ulevel: 1,
+        blind: false,
+        hallucinating: false,
+        stunned: false,
+        _statusSuffix: '',
+        _deafTimeout: 0,
+        _confusionTimeout: 0,
+        _stunTimeout: 0,
+    });
+    Object.assign(shkp, { mx: 20, my: 20, shk: { x: 20, y: 20 } });
+    game.flags.verbose = false;
+}
+
 function dagger(id, letter = 'd') {
     return {
         id,
@@ -1377,6 +1393,89 @@ test('applying unpaid crystal ball while blind spends no charge and adds no usag
     assert.equal(shop.shopBillEntryForObject(shkp, ball).useup, false);
     assert.equal(ball.unpaid, true);
     assert.match(game._pending_message, /can't see|Too bad/i);
+});
+
+test('applying unpaid magic flute and magic harp through improvise bills charged usage', async () => {
+    for (const [kind, letter, spe, expectedSpe, expectedDebit, effect] of [
+        ['magic flute', 'f', 3, 2, 25, /soft music/i],
+        ['magic harp', 'h', 1, 0, 100, /very attractive music/i],
+    ]) {
+        const { shkp } = installCommandShopState();
+        makeInstrumentApplyDeterministic(shkp);
+        const instrument = chargedTool(3117 + expectedDebit, kind, letter, spe);
+        game.inventory = [instrument];
+        shop.addObjectToShopBill(shkp, instrument, 100);
+
+        await rhack('a');
+
+        assert.equal(game._command_mode, 'applyObject');
+        assert.match(game._pending_message, /What do you want to use or apply\?/);
+
+        await rhack(letter);
+
+        assert.equal(game._command_mode, 'instrumentImprovisePrompt');
+        assert.match(game._pending_message, /Improvise\?/);
+        assert.equal(instrument.spe, spe);
+        assert.equal(shkp.debit || 0, 0);
+        assert.doesNotMatch(game._pending_message, /In what direction/i);
+
+        await rhack('y');
+
+        assert.equal(game._command_mode, null);
+        assert.equal(game.context.move, 1);
+        assert.equal(instrument.spe, expectedSpe);
+        assert.equal(shkp.debit, expectedDebit);
+        assert.equal(shkp.billct, 1);
+        const entry = shop.shopBillEntryForObject(shkp, instrument);
+        assert.ok(entry);
+        assert.equal(entry.useup, false);
+        assert.equal(shop.shopBillEntryTotal(entry), 100);
+        assert.equal(instrument.unpaid, true);
+        assert.match(game._pending_message, new RegExp(`Usage fee, ${expectedDebit} zorkmids`));
+        assert.match(game._pending_message, effect);
+        assert.doesNotMatch(game._pending_message, /Nothing happens/i);
+        assert.doesNotMatch(game._pending_message, /In what direction/i);
+    }
+});
+
+test('canceling unpaid magic instrument improvise spends no charge and adds no usage fee', async () => {
+    const { shkp } = installCommandShopState();
+    makeInstrumentApplyDeterministic(shkp);
+    const flute = chargedTool(3140, 'magic flute', 'f', 3);
+    game.inventory = [flute];
+    shop.addObjectToShopBill(shkp, flute, 100);
+
+    await rhack('a');
+    await rhack('f');
+    await rhack('q');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 0);
+    assert.equal(flute.spe, 3);
+    assert.equal(shkp.debit || 0, 0);
+    assert.equal(shop.shopBillEntryForObject(shkp, flute).useup, false);
+    assert.equal(flute.unpaid, true);
+    assert.match(game._pending_message, /Never mind/);
+});
+
+test('confused unpaid magic instrument improvisation uses mundane effect without billing', async () => {
+    const { shkp } = installCommandShopState();
+    makeInstrumentApplyDeterministic(shkp);
+    game.u._confusionTimeout = 5;
+    game.u._statusSuffix = ' Conf';
+    const flute = chargedTool(3141, 'magic flute', 'f', 3);
+    game.inventory = [flute];
+    shop.addObjectToShopBill(shkp, flute, 100);
+
+    await rhack('a');
+    await rhack('f');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(flute.spe, 3);
+    assert.equal(shkp.debit || 0, 0);
+    assert.equal(shop.shopBillEntryForObject(shkp, flute).useup, false);
+    assert.match(game._pending_message, /raucous noise|toots/);
 });
 
 test('unpaid charged object with no remaining charges is not billed for usage', () => {

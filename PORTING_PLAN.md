@@ -46,7 +46,7 @@ The current audit source of truth is `docs/c-parity-audit/`.
 - Added magic-bag scatter/useup bill preservation: explosion scatter breakage and consumed-on-hit destruction keep unpaid rows as used-up bills, tipped trigger/target bag destruction uses the same `obfree()`-style preservation, and scattered unpaid stacks split bill rows before each chunk is handled.
 - Added magic-bag scatter destructive floor-effect bill preservation: unpaid objects destroyed by lava/water/hot-ground or boulder landing effects now keep existing bill rows as used-up entries without treating hole migration or glob melding as deletion.
 - Added C-style unpaid food bite billing: first-touch food splits now route through a `costly_alteration(COST_BITE)`-equivalent shop ledger path, preserving live stack rows while moving bitten portions to used-up bill rows.
-- Added starter C-style `check_unpaid_usage()` coverage for partial unpaid charged-object use: bag/horn use, wand zaps, camera use, can-of-grease applications with target prompts and inaccessible worn-gear checks, normal lamp lighting, magic-lamp `#rub` djinni release, potion-of-oil lighting with Fuel Tax billing, spellbook study completion, magic-marker writing, tinning-kit corpse applications, crystal-ball gazing, alternate emptying, and drum-of-earthquake charges now debit the shopkeeper without converting the live bill row into a used-up bill unless C also creates a used-up bill row.
+- Added starter C-style `check_unpaid_usage()` coverage for partial unpaid charged-object use: bag/horn use, wand zaps, camera use, can-of-grease applications with target prompts and inaccessible worn-gear checks, normal lamp lighting, magic-lamp `#rub` djinni release, potion-of-oil lighting with Fuel Tax billing, spellbook study completion, magic-marker writing, tinning-kit corpse applications, crystal-ball gazing, magic flute/harp improvisation, alternate emptying, and drum-of-earthquake charges now debit the shopkeeper without converting the live bill row into a used-up bill unless C also creates a used-up bill row.
 - Added narrow C-style tin billing: opened or trap-destroyed unpaid/shop-floor tins now split one tin first, move that tin to a used-up bill row, and leave remaining tin stacks as live shop stock/bill rows.
 - Added C-style carried inventory `useup()` bill preservation for failed spellbook read destruction and carried fire destruction: final-copy unpaid objects now remain as used-up bill rows, while surviving and partial-stack cases keep their live bill representation.
 - Added C-style hero-caused shop-floor fire `useupf()` billing: hero traps and hero fire rays split destroyed floor stacks before used-up billing, monster-caused floor fire remains unbilled, and outside-shop hero fire records robbed value.
@@ -57,7 +57,7 @@ The current audit source of truth is `docs/c-parity-audit/`.
 1. Shop ledger foundation.
    - Source notes: `docs/c-parity-audit/05-food-inventory-containers-shops.md`.
    - Current JS has a starter bill ledger, but object `unpaid`/`unpaidPrice` fields and legacy fallback scans still participate in billing.
-   - Missing or partial concepts include full `addtobill`, full `subfrombill` routing, non-ordinary magic-bag source/target cases, full `obfree()`/container-aware `stolen_value()` helper integration, special-stock/uninterested `sellobj()` polish, `picked_container`, remaining charge-consuming `check_unpaid_usage` caller coverage, and non-bite `costly_alteration` coverage outside the narrow food/tin paths.
+   - Missing or partial concepts include full `addtobill`, full `subfrombill` routing, non-ordinary magic-bag source/target cases, full `obfree()`/container-aware `stolen_value()` helper integration, special-stock/uninterested `sellobj()` polish, `picked_container`, remaining charge-consuming `check_unpaid_usage` caller coverage such as frost/fire horn direction zaps, and non-bite `costly_alteration` coverage outside the narrow food/tin paths.
    - The next narrow C-backed gaps are non-ordinary magic-bag sources/targets, lift/capacity/slot failures, bill-aware stack/merge/destruction edge cases, generic floor-effect deletion ownership, and payment container/robbed-shop semantics.
 
 2. Object registry and canonical object factory.
@@ -100,6 +100,7 @@ Continue the shop ledger migration:
 1. Broaden shop-floor container take-out and tip beyond recursive billing into lift limits, capacity/slot failures, and merge/destruction edge cases; continue magic-bag work through non-ordinary sources/targets and shared `obfree()`/`stolen_value()` debt naming.
 2. Finish remaining `sellobj()` follow-ups: special-stock/uninterested branches, complete recursive `subfrombill()` integration, bill-aware drop stacking, and broken/container projectile impact edge cases.
 3. Move payment toward a complete C `dopay()` model for containers, queued itemized selections, and robbed-shop interactions.
+4. Finish the remaining charged musical instruments: frost/fire horn direction prompts and ray effects, then ordinary flute/harp/horn/bugle prompt effects where they share the same `do_play_instrument()` shell.
 
 ## Verification
 
