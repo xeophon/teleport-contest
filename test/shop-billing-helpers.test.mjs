@@ -2952,9 +2952,6 @@ test('ordinary shop-floor pickup slot failure happens before billing or removal'
     fillInventoryLetters();
 
     await rhack(',');
-    assert.equal(game._command_mode, 'pickupShopQuote');
-
-    await rhack(' ');
 
     assert.match(game._pending_message, /knapsack cannot accommodate any more items/);
     assert.equal(game.level.objects.includes(floorObj), true);
@@ -2985,9 +2982,6 @@ test('ordinary shop-floor pickup artifact refusal happens before billing or remo
     game.u.ualign = { type: -1, record: 0 };
 
     await rhack(',');
-    assert.equal(game._command_mode, 'pickupShopQuote');
-
-    await rhack(' ');
 
     assert.match(game._pending_message, /You are blasted by the Orb of Detection's power/);
     assert.match(game._pending_message, /Orb of Detection evades your grasp/);
@@ -3020,9 +3014,6 @@ test('lethal ordinary shop-floor pickup artifact blast stops before billing or r
     game.u.ualign = { type: -1, record: 0 };
 
     await rhack(',');
-    assert.equal(game._command_mode, 'pickupShopQuote');
-
-    await rhack(' ');
 
     assert.match(game._pending_message, /You are blasted by the Orb of Detection's power/);
     assert.match(game._pending_message, /You die/);
@@ -3093,9 +3084,6 @@ test('declined ordinary floor burden prompt leaves shop merchandise untouched', 
     game.u.acurr.a = [1, 1, 10, 10, 1, 10];
 
     await rhack(',');
-    assert.equal(game._command_mode, 'pickupShopQuote');
-
-    await rhack(' ');
 
     assert.equal(game._command_mode, 'floorPickupBurdenConfirm');
     assert.match(game._pending_message, /much trouble lifting 11 food rations.*Continue\? \[ynq\]/);
@@ -3122,15 +3110,18 @@ test('accepted ordinary floor burden prompt bills after confirmation', async () 
     game.u.acurr.a = [1, 1, 10, 10, 1, 10];
 
     await rhack(',');
-    assert.equal(game._command_mode, 'pickupShopQuote');
-
-    await rhack(' ');
 
     assert.equal(game._command_mode, 'floorPickupBurdenConfirm');
     assert.equal(game.level.objects.includes(stack), true);
     assert.equal(shkp.billct, 0);
 
     await rhack('y');
+
+    assert.equal(game._command_mode, 'pickupShopQuote');
+    assert.equal(game.level.objects.includes(stack), true);
+    assert.equal(shkp.billct, 0);
+
+    await rhack(' ');
 
     const carried = game.inventory.find(item => item.kind === 'food ration');
     const entry = shop.shopBillEntryForObject(shkp, carried);
@@ -3158,9 +3149,6 @@ test('accepted ordinary floor partial-stack burden prompt bills only lifted coun
     game.u.acurr.a = [1, 1, 10, 10, 1, 10];
 
     await rhack(',');
-    assert.equal(game._command_mode, 'pickupShopQuote');
-
-    await rhack(' ');
 
     assert.equal(game._command_mode, 'floorPickupBurdenConfirm');
     assert.match(game._pending_message, /can only lift some of the 20 food rations lying here/);
@@ -3170,6 +3158,13 @@ test('accepted ordinary floor partial-stack burden prompt bills only lifted coun
     assert.equal(shkp.billct, 0);
 
     await rhack('y');
+
+    assert.equal(game._command_mode, 'pickupShopQuote');
+    assert.equal(game.level.objects.includes(stack), true);
+    assert.equal(stack.quan, 20);
+    assert.equal(shkp.billct, 0);
+
+    await rhack(' ');
 
     const carried = game.inventory.find(item => item.kind === 'food ration');
     const entry = shop.shopBillEntryForObject(shkp, carried);
@@ -3269,6 +3264,34 @@ test('blessed scare monster floor scroll unblesses without setting pickup spe', 
     assert.doesNotMatch(game._pending_message, /turns? to dust/i);
 });
 
+test('too-heavy scare monster floor scroll stays untouched before quote or billing', async () => {
+    const { shkp } = installCommandShopState();
+    const scroll = floorScareMonsterScroll(60155, { blessed: true });
+    game.u.acurr.a = [1, 1, 10, 10, 1, 10];
+    game.inventory = [{
+        id: 60156,
+        cls: 'tool',
+        kind: 'weighted test object',
+        actualKind: 'weighted test object',
+        quan: 1,
+        owt: 1000,
+        letter: 'a',
+        line: 'a - a weighted test object',
+    }];
+    game.level.objects = [scroll];
+
+    await rhack(',');
+
+    assert.notEqual(game._command_mode, 'pickupShopQuote');
+    assert.match(game._pending_message, /cannot carry any more/);
+    assert.equal(game.level.objects.includes(scroll), true);
+    assert.equal(game.inventory.some(item => item.id === scroll.id), false);
+    assert.equal(scroll.blessed, true);
+    assert.equal(scroll.cursed, false);
+    assert.equal(scroll.spe || 0, 0);
+    assert.equal(shkp.billct, 0);
+});
+
 test('cursed or used scare monster floor scroll crumbles into used-up bill', async () => {
     for (const [label, id, props] of [
         ['cursed', 6017, { cursed: true }],
@@ -3280,9 +3303,6 @@ test('cursed or used scare monster floor scroll crumbles into used-up bill', asy
         const expectedPrice = shop.shopItemPrice(scroll, 5, 5);
 
         await rhack(',');
-        assert.equal(game._command_mode, 'pickupShopQuote', label);
-
-        await rhack(' ');
 
         const entry = shop.shopBillEntryForObject(shkp, scroll);
         const debts = shop.collectPayableShopDebts(shkp);
@@ -3678,9 +3698,6 @@ test('full inventory refuses another non-mergeable loadstone before billing', as
     game.level.objects = [floor];
 
     await rhack(',');
-    assert.equal(game._command_mode, 'pickupShopQuote');
-
-    await rhack(' ');
 
     assert.match(game._pending_message, /too much stuff to pick up another loadstone/i);
     assert.equal(game.level.objects.includes(floor), true);

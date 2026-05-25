@@ -29023,10 +29023,14 @@ export async function rhack(_cmd) {
             return;
         }
         const objectId = game._pending_shop_pickup_id;
+        const preflight = game._pending_shop_pickup_preflight;
         game._pending_shop_pickup_id = null;
+        game._pending_shop_pickup_preflight = null;
         game._pending_message = '';
         game._message_more = 0;
         game._command_mode = null;
+        if (objectId != null && preflight)
+            game._skip_floor_pickup_preflight_once = { objectId, preflight };
         game._skip_shop_quote_once = objectId;
         await rhack(',');
         return;
@@ -29049,7 +29053,6 @@ export async function rhack(_cmd) {
                 objectId: pending.objectId,
                 preflight: pending.preflight,
             };
-            game._skip_shop_quote_once = pending.objectId;
             await rhack(',');
             return;
         }
@@ -42756,17 +42759,6 @@ export async function rhack(_cmd) {
             const skipShopQuote = game._skip_shop_quote_once != null && game._skip_shop_quote_once === objectId;
             if (game._skip_shop_quote_once != null && !skipShopQuote) game._skip_shop_quote_once = null;
             const shopPrice = shopItemPrice(objectHere);
-            if (shopPrice > 0 && !skipShopQuote) {
-                const honorifics = ['good', 'honored', 'most gracious', 'esteemed'];
-                const honorific = honorifics[rn2(4) || 1];
-                const title = game.flags?.female ? 'lady' : 'sir';
-                const name = pickupObjectName({ ...objectHere, quan: 1 });
-                game._pending_shop_pickup_id = objectId;
-                game._command_mode = 'pickupShopQuote';
-                await setMessage(`"For you, ${honorific} ${title}; only ${shopPrice} zorkmids for this ${name}."`, true);
-                return;
-            }
-            if (skipShopQuote) game._skip_shop_quote_once = null;
             const preflight = await floorPickupPreflight(objectHere, { shopPrice });
             if (!preflight.ok || preflight.skip) {
                 await setMessage(floorPickupPreflightMessage(preflight));
@@ -42784,6 +42776,18 @@ export async function rhack(_cmd) {
                 game.context.move = 0;
                 return;
             }
+            if (shopPrice > 0 && !skipShopQuote) {
+                const honorifics = ['good', 'honored', 'most gracious', 'esteemed'];
+                const honorific = honorifics[rn2(4) || 1];
+                const title = game.flags?.female ? 'lady' : 'sir';
+                const name = pickupObjectName({ ...objectHere, quan: 1 });
+                game._pending_shop_pickup_id = objectId;
+                game._pending_shop_pickup_preflight = preflight;
+                game._command_mode = 'pickupShopQuote';
+                await setMessage(`"For you, ${honorific} ${title}; only ${shopPrice} zorkmids for this ${name}."`, true);
+                return;
+            }
+            if (skipShopQuote) game._skip_shop_quote_once = null;
             const preflightMessages = preflight.messages || [];
             const pickupObj = splitFloorPickupObjectForLift(objectHere, preflight.takeCount || objectHere.quan || 1);
             if (preflight.scareRemainderState && pickupObj !== objectHere)
