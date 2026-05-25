@@ -277,6 +277,149 @@ test('cashless shopkeeper offers sale credit without changing hero gold', () => 
     assert.equal(dropped.no_charge, undefined);
 });
 
+test('dropping gold in a shop partially pays shop debt', () => {
+    const { shkp } = installShopState();
+    shkp.debit = 10;
+    shkp.loan = 10;
+    shkp.credit = 3;
+
+    const result = shop.sellobjDroppedGoldAt(5, 5, 4);
+
+    assert.equal(result.donated, 4);
+    assert.deepEqual(result.messages, ['Your debt is partially paid off.']);
+    assert.equal(shkp.debit, 6);
+    assert.equal(shkp.loan, 6);
+    assert.equal(shkp.credit, 3);
+});
+
+test('dropping gold in a shop pays debt before adding credit', () => {
+    const { shkp } = installShopState();
+    shkp.debit = 7;
+    shkp.loan = 7;
+    shkp.credit = 2;
+
+    const result = shop.sellobjDroppedGoldAt(5, 5, 12);
+
+    assert.equal(result.donated, 12);
+    assert.deepEqual(result.messages, [
+        'Your debt is paid off.',
+        '5 zorkmids added to your credit; total is now 7 zorkmids.',
+    ]);
+    assert.equal(shkp.debit, 0);
+    assert.equal(shkp.loan, 0);
+    assert.equal(shkp.credit, 7);
+});
+
+test('dropping gold in a shop establishes or adds credit without changing shopkeeper cash', () => {
+    const { shkp } = installShopState();
+
+    const established = shop.sellobjDroppedGoldAt(5, 5, 8);
+
+    assert.deepEqual(established.messages, ['You have established 8 zorkmids credit.']);
+    assert.equal(shkp.credit, 8);
+    assert.equal(shop.shopkeeperCash(shkp), 100);
+
+    const added = shop.sellobjDroppedGoldAt(5, 5, 3);
+
+    assert.deepEqual(added.messages, ['3 zorkmids added to your credit; total is now 11 zorkmids.']);
+    assert.equal(shkp.credit, 11);
+    assert.equal(shop.shopkeeperCash(shkp), 100);
+});
+
+test('dropping gold outside a shop does not affect shop debt or credit', () => {
+    const { shkp } = installShopState();
+    game.level.at = (x, y) => ({ roomno: x === 9 && y === 5 ? 0 : ROOMOFFSET });
+    shkp.debit = 4;
+    shkp.loan = 4;
+
+    const result = shop.sellobjDroppedGoldAt(9, 5, 12);
+
+    assert.equal(result.donated, 0);
+    assert.deepEqual(result.messages, []);
+    assert.equal(shkp.debit, 4);
+    assert.equal(shkp.loan, 4);
+    assert.equal(shkp.credit || 0, 0);
+});
+
+test('dropping gold for angry or robbed shopkeepers does not create credit', () => {
+    const { shkp } = installShopState();
+    shkp.angry = true;
+
+    const angry = shop.sellobjDroppedGoldAt(5, 5, 6);
+
+    assert.equal(angry.angry, true);
+    assert.match(angry.messages.join(' '), /smirks/);
+    assert.equal(shkp.credit || 0, 0);
+
+    shkp.angry = false;
+    shkp.robbed = 20;
+    const robbed = shop.sellobjDroppedGoldAt(5, 5, 6);
+
+    assert.equal(robbed.robbedContribution, 6);
+    assert.match(robbed.messages.join(' '), /contribution/);
+    assert.equal(shkp.robbed, 0);
+    assert.equal(shkp.credit || 0, 0);
+});
+
+test('picking up shop-floor gold consumes shop credit before adding carried gold', () => {
+    const { shkp } = installShopState();
+    shkp.credit = 10;
+    const gold = { cls: 'coin', otyp: 466, glyph: '$', ox: 5, oy: 5, quan: 4 };
+    game.level.objects = [gold];
+
+    const result = shop.pickUpFloorGoldObject(gold);
+
+    assert.equal(result.picked, true);
+    assert.deepEqual(result.messages, [
+        '$ - 4 gold pieces.',
+        'Your credit is reduced by 4 zorkmids.',
+    ]);
+    assert.equal(game._goldCount, 4);
+    assert.equal(game.inventory[0].quan, 4);
+    assert.equal(game.level.objects.includes(gold), false);
+    assert.equal(shkp.credit, 6);
+    assert.equal(shkp.debit || 0, 0);
+    assert.equal(shkp.loan || 0, 0);
+});
+
+test('picking up shop-floor gold erases credit then increases debt', () => {
+    const { shkp } = installShopState();
+    shkp.credit = 3;
+    shkp.debit = 2;
+    shkp.loan = 2;
+    const gold = { cls: 'coin', otyp: 466, glyph: '$', ox: 5, oy: 5, quan: 8 };
+    game.level.objects = [gold];
+
+    const result = shop.pickUpFloorGoldObject(gold);
+
+    assert.deepEqual(result.messages, [
+        '$ - 8 gold pieces.',
+        'Your credit is erased.',
+        'Your debt increases by 5 zorkmids.',
+    ]);
+    assert.equal(game._goldCount, 8);
+    assert.equal(shkp.credit, 0);
+    assert.equal(shkp.debit, 7);
+    assert.equal(shkp.loan, 7);
+});
+
+test('picking up shop-floor gold creates debt when no credit exists', () => {
+    const { shkp } = installShopState();
+    const gold = { cls: 'coin', otyp: 466, glyph: '$', ox: 5, oy: 5, quan: 6 };
+    game.level.objects = [gold];
+
+    const result = shop.pickUpFloorGoldObject(gold);
+
+    assert.deepEqual(result.messages, [
+        '$ - 6 gold pieces.',
+        'You owe Izchak 6 zorkmids.',
+    ]);
+    assert.equal(game._goldCount, 6);
+    assert.equal(shkp.credit, 0);
+    assert.equal(shkp.debit, 6);
+    assert.equal(shkp.loan, 6);
+});
+
 test('dropping a paid container in a shop can sell saleable contents', () => {
     const { shkp } = installShopState();
     const bag = sack(5004, 'b');

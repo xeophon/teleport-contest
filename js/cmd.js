@@ -13303,6 +13303,19 @@ function costlyShopGoldAt(container, amount) {
     const gold = Math.max(0, Math.trunc(Number(amount || 0)));
     const shkp = shopFloorContainerShopkeeper(container);
     if (!shkp || !gold) return { shkp: null, charged: 0 };
+    return costlyGoldToShopkeeper(shkp, gold);
+}
+
+function costlyShopGoldAtSpot(x, y, amount) {
+    const gold = Math.max(0, Math.trunc(Number(amount || 0)));
+    if (x == null || y == null || !gold) return { shkp: null, charged: 0, messages: [] };
+    const shkp = shopkeeperForCostlySpot(x, y);
+    if (!shopkeeperInHisShop(shkp)) return { shkp: null, charged: 0, messages: [] };
+    const charged = costlyGoldToShopkeeper(shkp, gold);
+    return { ...charged, messages: costlyGoldMessages(charged) };
+}
+
+function costlyGoldToShopkeeper(shkp, gold) {
     const credit = Math.max(0, Math.trunc(Number(shkp.credit || 0)));
     const coveredByCredit = Math.min(credit, gold);
     shkp.credit = credit - coveredByCredit;
@@ -13311,7 +13324,47 @@ function costlyShopGoldAt(container, amount) {
         shkp.debit = Math.max(0, Math.trunc(Number(shkp.debit || 0))) + delta;
         shkp.loan = Math.max(0, Math.trunc(Number(shkp.loan || 0))) + delta;
     }
-    return { shkp, charged: gold, coveredByCredit, debit: delta };
+    return { shkp, charged: gold, coveredByCredit, debit: delta, creditBefore: credit };
+}
+
+function costlyGoldMessages(charged) {
+    if (!charged?.charged) return [];
+    const messages = [];
+    const creditBefore = Math.max(0, Math.trunc(Number(charged.creditBefore || 0)));
+    const coveredByCredit = Math.max(0, Math.trunc(Number(charged.coveredByCredit || 0)));
+    const debit = Math.max(0, Math.trunc(Number(charged.debit || 0)));
+    if (coveredByCredit > 0)
+        messages.push(coveredByCredit < creditBefore
+            ? `Your credit is reduced by ${coveredByCredit} ${shopCurrency(coveredByCredit)}.`
+            : 'Your credit is erased.');
+    if (debit > 0) {
+        if (Math.max(0, Math.trunc(Number(charged.shkp?.debit || 0))) > debit)
+            messages.push(`Your debt increases by ${debit} ${shopCurrency(debit)}.`);
+        else
+            messages.push(`You owe ${shopkeeperDisplayName(charged.shkp)} ${debit} ${shopCurrency(debit)}.`);
+    }
+    return messages;
+}
+
+function pickUpFloorGoldObject(goldObj) {
+    if (!goldObj || !(goldObj.otyp === GOLD_PIECE || goldObj.cls === 'coin' || goldObj.glyph === '$'))
+        return { picked: false, amount: 0, messages: [] };
+    const amount = Math.max(1, Math.trunc(Number(goldObj.quan || 1)));
+    const charged = costlyShopGoldAtSpot(goldObj.ox, goldObj.oy, amount);
+    game._goldCount = (game._goldCount || 0) + amount;
+    game._just_picked_gold = amount;
+    const invGold = (game.inventory || []).find(obj => obj.letter === '$' || obj.cls === 'coin');
+    if (invGold) {
+        invGold.quan = (invGold.quan || 0) + amount;
+        updateMoneyLine(invGold);
+    } else {
+        game.inventory = [...(game.inventory || []), { cls: 'coin', letter: '$', otyp: GOLD_PIECE, glyph: '$', quan: amount }];
+    }
+    game.level.objects = (game.level?.objects || []).filter(obj => obj !== goldObj);
+    game._pet_food_scan_inventory = game.inventory;
+    const total = game._goldCount === amount ? '' : ` (${game._goldCount} in total)`;
+    const pickupMessage = `$ - ${amount} gold piece${amount === 1 ? '' : 's'}${total}.`;
+    return { picked: true, amount, charged, messages: [pickupMessage, ...(charged.messages || [])] };
 }
 
 function donateShopGoldAt(container, amount) {
@@ -13331,6 +13384,7 @@ function donateShopGoldAtSpot(x, y, amount) {
 function donateGoldToShopkeeper(shkp, gold) {
     if (!shkp || !gold) return { shkp: null, donated: 0 };
     const debit = Math.max(0, Math.trunc(Number(shkp.debit || 0)));
+    const previousCredit = Math.max(0, Math.trunc(Number(shkp.credit || 0)));
     const coveredDebt = Math.min(debit, gold);
     if (coveredDebt > 0) {
         shkp.debit = debit - coveredDebt;
@@ -13339,8 +13393,53 @@ function donateGoldToShopkeeper(shkp, gold) {
     }
     const credit = gold - coveredDebt;
     if (credit > 0)
-        shkp.credit = Math.max(0, Math.trunc(Number(shkp.credit || 0))) + credit;
-    return { shkp, donated: gold, coveredDebt, credit };
+        shkp.credit = previousCredit + credit;
+    return { shkp, donated: gold, coveredDebt, credit, debitBefore: debit, creditBefore: previousCredit };
+}
+
+function shopCurrency(amount) {
+    const gold = Math.max(0, Math.trunc(Number(amount || 0)));
+    return `zorkmid${gold === 1 ? '' : 's'}`;
+}
+
+function shopGoldDonationMessages(donation, { selling = true } = {}) {
+    if (!donation?.donated) return [];
+    const messages = [];
+    const debitBefore = Math.max(0, Math.trunc(Number(donation.debitBefore || 0)));
+    const credit = Math.max(0, Math.trunc(Number(donation.credit || 0)));
+    if (debitBefore > 0) {
+        messages.push(`Your debt is ${donation.donated < debitBefore ? 'partially ' : ''}paid off.`);
+    }
+    if (credit > 0) {
+        const totalCredit = Math.max(0, Math.trunc(Number(donation.shkp?.credit || 0)));
+        if (totalCredit === credit) {
+            messages.push(`You have ${selling ? '' : 're-'}established ${credit} ${shopCurrency(credit)} credit.`);
+        } else {
+            messages.push(`${credit} ${shopCurrency(credit)} added${selling ? '' : ' back'} to your credit; total is now ${totalCredit} ${shopCurrency(totalCredit)}.`);
+        }
+    }
+    return messages;
+}
+
+function sellobjDroppedGoldAt(x, y, amount) {
+    const gold = Math.max(0, Math.trunc(Number(amount || 0)));
+    if (!gold || x == null || y == null) return { shkp: null, donated: 0, messages: [] };
+    const shkp = shopkeeperForCostlySpot(x, y);
+    if (!shopkeeperInHisShop(shkp)) return { shkp: null, donated: 0, messages: [] };
+    if (shkp.angry || shkp.hostile || shkp.mpeaceful === 0)
+        return { shkp, donated: 0, angry: true, messages: [`${shopkeeperDisplayName(shkp)} smirks with satisfaction.`] };
+    const robbed = Math.max(0, Math.trunc(Number(shkp.robbed || 0)));
+    if (robbed > 0) {
+        shkp.robbed = 0;
+        return {
+            shkp,
+            donated: 0,
+            robbedContribution: gold,
+            messages: ['Thank you for your contribution to restock this recently plundered shop.'],
+        };
+    }
+    const donation = donateGoldToShopkeeper(shkp, gold);
+    return { ...donation, messages: shopGoldDonationMessages(donation, { selling: true }) };
 }
 
 function saleDeclineQuestionObject(obj, sale = {}) {
@@ -13766,6 +13865,7 @@ export const __shopBillingTestHooks = {
     mergePickedObjectIntoInventory,
     mergePickedObjectIntoShopBill,
     placeStackableFloorObject,
+    pickUpFloorGoldObject,
     prepareContainerTakeoutObject,
     putInventoryObjectIntoContainer,
     removeObjectFromShopBill,
@@ -13774,7 +13874,9 @@ export const __shopBillingTestHooks = {
     removeInventoryItem,
     resolveUnpaidProjectileShopLanding,
     returnUnpaidObjectToShopBillOwnerAt,
+    costlyShopGoldAtSpot,
     sellobjReturnUnpaidToShop,
+    sellobjDroppedGoldAt,
     stackMonsterThrownObject,
     splitCarriedObjectShopBill,
     splitShopBillEntry,
@@ -24546,19 +24648,8 @@ async function moveHero(dx, dy) {
                 && (obj.otyp === GOLD_PIECE || obj.glyph === '$'))
             : null;
         if (goldHere) {
-            const amount = goldHere.quan || 1;
-            game._goldCount = (game._goldCount || 0) + amount;
-            game._just_picked_gold = amount;
-            const invGold = (game.inventory || []).find(obj => obj.letter === '$' || obj.cls === 'coin');
-            if (invGold) {
-                invGold.quan = (invGold.quan || 0) + amount;
-                updateMoneyLine(invGold);
-            } else {
-                game.inventory = [...(game.inventory || []), { cls: 'coin', letter: '$', otyp: GOLD_PIECE, glyph: '$', quan: amount }];
-            }
-            game.level.objects = (game.level.objects || []).filter(obj => obj !== goldHere);
-            const total = game._goldCount === amount ? '' : ` (${game._goldCount} in total)`;
-            game._topline_after_more = `$ - ${amount} gold piece${amount === 1 ? '' : 's'}${total}.`;
+            const pickup = pickUpFloorGoldObject(goldHere);
+            game._topline_after_more = (pickup.messages || []).join('  ');
         }
         await setMessage(materializeMessage, true);
         return;
@@ -24748,26 +24839,16 @@ async function moveHero(dx, dy) {
     if (trapHere?.ttyp === BEAR_TRAP && objectsHere.length > 1) game._pending_bear_trap = trapHere;
     const goldHere = objectsHere.find(obj => obj.otyp === GOLD_PIECE || obj.glyph === '$');
     if (game._autopickup && goldHere) {
-        const amount = goldHere.quan || 1;
-        game._goldCount = (game._goldCount || 0) + amount;
-        game._just_picked_gold = amount;
-        const invGold = (game.inventory || []).find(obj => obj.letter === '$' || obj.cls === 'coin');
-        if (invGold) {
-            invGold.quan = (invGold.quan || 0) + amount;
-            updateMoneyLine(invGold);
-        }
-        else game.inventory = [...(game.inventory || []), { cls: 'coin', letter: '$', otyp: GOLD_PIECE, glyph: '$', quan: amount }];
-        game.level.objects = (game.level.objects || []).filter(obj => obj !== goldHere);
-        const total = game._goldCount === amount ? '' : ` (${game._goldCount} in total)`;
-        let message = `$ - ${amount} gold piece${amount === 1 ? '' : 's'}${total}.`;
+        const pickup = pickUpFloorGoldObject(goldHere);
+        const messages = [...(pickup.messages || [])];
         const remainingObjects = objectsHere.filter(obj => obj !== goldHere);
         if (remainingObjects.length === 1) {
             const remaining = remainingObjects[0];
             if (remaining.kind === 'chest' || remaining.otyp === CHEST)
-                message += `  You see here a ${remaining.lknown && (remaining.locked || remaining.olocked) ? 'locked ' : ''}chest.`;
-            else message += `  You see here ${pickupObjectPhrase(remaining)}.`;
+                messages.push(`You see here a ${remaining.lknown && (remaining.locked || remaining.olocked) ? 'locked ' : ''}chest.`);
+            else messages.push(`You see here ${pickupObjectPhrase(remaining)}.`);
         }
-        await setMessage(message);
+        await setMessage(messages.join('  '));
         return;
     }
     const pickupTypes = game._autopickup_types || game.flags?.pickup_types || 'all';
@@ -25457,17 +25538,8 @@ export async function rhack(_cmd) {
             const messages = [];
             for (const obj of selected) {
                 if (obj.otyp === GOLD_PIECE || obj.cls === 'coin' || obj.glyph === '$') {
-                    const amount = obj.quan || 1;
-                    game._goldCount = (game._goldCount || 0) + amount;
-                    game._just_picked_gold = amount;
-                    const money = (game.inventory || []).find(item => item.letter === '$' || item.cls === 'coin');
-                    if (money) {
-                        money.quan = (money.quan || 0) + amount;
-                        updateMoneyLine(money);
-                    }
-                    else game.inventory = [...(game.inventory || []), { cls: 'coin', letter: '$', otyp: GOLD_PIECE, glyph: '$', quan: amount }];
-                    const total = game._goldCount === amount ? '' : ` (${game._goldCount} in total)`;
-                    messages.push(`$ - ${amount} gold piece${amount === 1 ? '' : 's'}${total}.`);
+                    const pickup = pickUpFloorGoldObject(obj);
+                    messages.push(...(pickup.messages || []));
                     continue;
                 }
                 const letter = obj.wasStolen && obj.letter
@@ -34510,7 +34582,7 @@ export async function rhack(_cmd) {
             const amount = game._goldCount || (game.inventory || []).find(item => item.letter === '$' || item.cls === 'coin')?.quan || 0;
             game._goldCount = 0;
             game.inventory = (game.inventory || []).filter(item => item.letter !== '$' && item.cls !== 'coin');
-            game.level.objects.push({
+            const floorGold = {
                 otyp: GOLD_PIECE,
                 cls: 'coin',
                 glyph: '$',
@@ -34518,11 +34590,19 @@ export async function rhack(_cmd) {
                 ox: game.u?.ux || 0,
                 oy: game.u?.uy || 0,
                 quan: amount,
-            });
+            };
+            placeStackableFloorObject(floorGold);
+            const shopGold = sellobjDroppedGoldAt(floorGold.ox, floorGold.oy, amount);
             const guard = (game.level?.monsters || []).find(mon => mon.isgd || mon.data?.name === 'guard');
             if (guard) prepareVaultGuardEscort(guard);
             newsym(game.u?.ux || 0, game.u?.uy || 0);
-            if (game.flags?.verbose === false) {
+            const messages = [
+                ...(game.flags?.verbose === false ? [] : [`You drop ${amount} gold piece${amount === 1 ? '' : 's'}.`]),
+                ...(shopGold.messages || []),
+            ];
+            if (messages.length) {
+                await setMessage(messages.join('  '), messages.length > 1);
+            } else if (game.flags?.verbose === false) {
                 preserveSilentDropPrompt();
             } else {
                 await setMessage(`You drop ${amount} gold piece${amount === 1 ? '' : 's'}.`);
@@ -39121,20 +39201,9 @@ export async function rhack(_cmd) {
         }
         const objectHere = objectsHere[0];
         if (objectHere?.otyp === GOLD_PIECE || objectHere?.glyph === '$') {
-            const amount = objectHere.quan || 1;
-            game._goldCount = (game._goldCount || 0) + amount;
-            game._just_picked_gold = amount;
-            const money = (game.inventory || []).find(item => item.letter === '$' || item.cls === 'coin');
-            if (money) {
-                money.quan = (money.quan || 0) + amount;
-                updateMoneyLine(money);
-            }
-            else game.inventory = [...(game.inventory || []), { cls: 'coin', letter: '$', otyp: GOLD_PIECE, glyph: '$', quan: amount }];
-            game._pet_food_scan_inventory = game.inventory;
-            game.level.objects = (game.level.objects || []).filter(obj => obj !== objectHere);
+            const pickup = pickUpFloorGoldObject(objectHere);
             newsym(game.u?.ux || 0, game.u?.uy || 0);
-            const total = game._goldCount === amount ? '' : ` (${game._goldCount} in total)`;
-            await setMessage(`$ - ${amount} gold piece${amount === 1 ? '' : 's'}${total}.`);
+            await setMessage((pickup.messages || []).join('  '), (pickup.messages || []).length > 1);
             game.context.move = 1;
             return;
         }
