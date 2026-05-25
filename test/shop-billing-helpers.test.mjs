@@ -5407,6 +5407,36 @@ test('unpaid trigger object destroyed by tipping into a carried magic bag remain
     assert.equal(shop.shopBillEntryTotal(entry), 45);
 });
 
+test('putting part of an unpaid carried stack into a carried bag splits the bill row', () => {
+    const { shkp } = installShopState();
+    const bag = sack(6960, 'b');
+    const stack = foodRationStack(6961, 3, 'f');
+    game.inventory = [bag, stack];
+    shop.addObjectToShopBill(shkp, stack, 135);
+
+    const result = shop.putInventoryObjectIntoBag(bag, stack, 1);
+
+    assert.equal(result.moved, true);
+    assert.equal(stack.quan, 2);
+    assert.equal(bag.contents.length, 1);
+    const stashed = bag.contents[0];
+    assert.notEqual(stashed, stack);
+    assert.notEqual(String(stashed.id), String(stack.id));
+    assert.equal(stashed.quan, 1);
+    assert.equal(stashed.container, bag);
+    assert.equal(stashed.unpaid, true);
+    assert.equal(stack.unpaid, true);
+    assert.equal(shkp.billct, 2);
+    const parentEntry = shop.shopBillEntryForObject(shkp, stack);
+    const childEntry = shop.shopBillEntryForObject(shkp, stashed);
+    assert.ok(parentEntry);
+    assert.ok(childEntry);
+    assert.equal(shop.shopBillEntryQuantity(parentEntry), 2);
+    assert.equal(shop.shopBillEntryTotal(parentEntry), 90);
+    assert.equal(shop.shopBillEntryQuantity(childEntry), 1);
+    assert.equal(shop.shopBillEntryTotal(childEntry), 45);
+});
+
 test('tipping contents from a carried container does not use shop-floor billing', () => {
     const { shkp } = installShopState();
     const container = shopFloorContainer(6921);

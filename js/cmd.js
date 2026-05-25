@@ -16015,6 +16015,7 @@ export const __shopBillingTestHooks = {
     placeStackableFloorObject,
     pickUpFloorGoldObject,
     prepareContainerTakeoutObject,
+    putInventoryObjectIntoBag,
     putInventoryObjectIntoContainer,
     removeObjectFromShopBill,
     removeObjectFromShopBillById,
@@ -20552,7 +20553,7 @@ function putInventoryObjectIntoBag(bag, item, amount = item?.quan || 1) {
 
     const name = inventoryItemName(item);
     const count = Math.min(Math.max(1, amount || 1), item.quan || 1);
-    const putItem = (item.quan || 1) > count ? { ...item, quan: count } : item;
+    const putItem = splitInventoryObjectForContainerPut(item, count);
     clearContainerPutEquipmentState(putItem, name);
     curseLoadstoneLeavingInventory(putItem);
     if (isMagicBagObject(bag) && magicBagExplodesWithObject(putItem)) {
