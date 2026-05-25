@@ -12983,6 +12983,25 @@ function subFromShopBill(obj, shkp) {
     return removed;
 }
 
+function markObjectShopBillUsedUp(obj, shkp = null) {
+    if (!obj || shopBillableGold(obj)) return false;
+    const owner = shkp
+        ? { shkp, entry: shopBillEntryForObject(shkp, obj) }
+        : shopkeeperOwningBillEntry(obj);
+    const billOwner = owner.shkp || shkp;
+    let entry = owner.entry;
+    const price = entry ? shopBillEntryTotal(entry) : unpaidBillPrice(obj);
+    if (!entry && billOwner && obj.unpaid && price > 0)
+        entry = addObjectToShopBill(billOwner, obj, price, { useup: true });
+    if (!entry || !(price > 0)) return false;
+    entry.useup = true;
+    clearObjectShopBillState(obj);
+    if (!usedUpShopBillTrackerForId(entry.bo_id, billOwner))
+        rememberUsedUpShopBillEntry(obj, entry, price, billOwner);
+    billOwner.billct = Array.isArray(billOwner.bill) ? billOwner.bill.length : Math.max(1, billOwner.billct || 1);
+    return true;
+}
+
 function returnUnpaidObjectToShopBillOwnerAt(obj, x, y) {
     if (!obj?.unpaid || shopBillableGold(obj) || globContents(obj).length) return false;
     const { shkp } = shopkeeperOwningBillEntry(obj);
@@ -13839,6 +13858,23 @@ function billLostMagicBagShopItem(source, obj) {
     if (!shkp || !obj) return 0;
     const value = lostShopMerchandiseValueForObject(source, obj, shkp);
     return chargeShopkeeperForLostMerchandise(shkp, value);
+}
+
+function billShopFloorMagicBagExplosionTarget(targetBag) {
+    const shkp = shopFloorContainerShopkeeper(targetBag);
+    if (!shkp || !targetBag || shopBillableGold(targetBag)) return { shkp: null, billEntry: null };
+    const wasNoCharge = !!targetBag.no_charge;
+    const billing = addContainerAndContentsToShopBill(
+        targetBag,
+        targetBag,
+        targetBag,
+        shkp,
+        targetBag.ox,
+        targetBag.oy,
+    );
+    targetBag.no_charge = wasNoCharge;
+    markObjectShopBillUsedUp(targetBag, shkp);
+    return { shkp, billEntry: shopBillEntryForObject(shkp, targetBag), billing };
 }
 
 function lostShopMerchandiseMessage(loss) {
@@ -17897,6 +17933,8 @@ function putInventoryObjectIntoContainer(container, item, amount = item?.quan ||
     const putItem = splitInventoryObjectForContainerPut(item, count);
     clearContainerPutEquipmentState(putItem, name);
     if (isMagicBagObject(container) && magicBagExplodesWithObject(putItem)) {
+        billShopFloorMagicBagExplosionTarget(container);
+        markObjectShopBillUsedUp(putItem);
         removeInventoryItem(item, count);
         return explodeMagicBagTransfer(container, putItem, []);
     }
@@ -18751,6 +18789,7 @@ function scatterMagicBagContents(container, messages) {
     const shopContext = magicBagScatterShopContext(x, y);
     for (const obj of [...liquidFlowContainerContents(container)]) {
         if (!rn2(13)) {
+            billLostMagicBagShopItem(container, obj);
             removeContainedObject(container, obj);
             destroyMagicBagItem(obj, messages, { silent: true });
             continue;
