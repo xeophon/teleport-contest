@@ -63,6 +63,7 @@ The current audit source of truth is `docs/c-parity-audit/`.
 - Added starter C `pickup_object()`/`lift_object()` preflight for ordinary floor pickup: shop-floor slot/max-carry failures, restricted/self-willed artifact blast/evasion/death, and barehanded cockatrice/chickatrice corpse touch now stop before billing, removal, or inventory insertion.
 - Added floor-only C Rider corpse pickup revival: touching a Rider corpse on the floor now revives it before billing or inventory insertion, while container take-out still follows C `out_container()` and does not immediately revive Riders.
 - Added C-style ordinary floor partial-stack lifting: overweight floor stacks now split to the liftable quantity before shop billing/inventory insertion and leave the remainder untouched on the floor.
+- Added C-style single-object floor burden prompts: ordinary floor objects, corpses, and gold now ask before billing/removal when pickup would exceed `pickup_burden`, declined prompts leave state untouched, and accepted overweight gold pickups split to the liftable count before shop charging.
 - Latest verified public score: `44/44`.
 
 ## Current Priorities
@@ -71,7 +72,7 @@ The current audit source of truth is `docs/c-parity-audit/`.
    - Source notes: `docs/c-parity-audit/05-food-inventory-containers-shops.md`.
    - Current JS has a starter bill ledger, but object `unpaid`/`unpaidPrice` fields and legacy fallback scans still participate in billing.
    - Missing or partial concepts include full `addtobill`, full `subfrombill` routing, non-ordinary magic-bag source/target cases, full `obfree()`/container-aware `stolen_value()` helper integration, shared `sellobj()` helper integration beyond ordinary branches, remaining add-inventory/no-charge cleanup outside ordinary shop pickup, remaining charge-consuming `check_unpaid_usage` caller coverage, and non-bite `costly_alteration` coverage outside the narrow food/tin paths.
-   - The next narrow C-backed gaps are non-ordinary magic-bag sources/targets, remaining floor/container lift preflight details such as floor burden prompts and loadstone/scare-monster handling, remaining inventory merge edge cases, remaining merge/destruction edge cases, generic floor-effect deletion ownership, artifact touch side effects outside floor pickup/container take-out, and payment container/robbed-shop semantics.
+   - The next narrow C-backed gaps are non-ordinary magic-bag sources/targets, remaining floor/container lift preflight details such as multi-pickup burden prompts and loadstone/scare-monster handling, remaining inventory merge edge cases, remaining merge/destruction edge cases, generic floor-effect deletion ownership, artifact touch side effects outside floor pickup/container take-out, and payment container/robbed-shop semantics.
 
 2. Object registry and canonical object factory.
    - Source notes: `docs/c-parity-audit/02-objects-wishing-readobjnam.md`.

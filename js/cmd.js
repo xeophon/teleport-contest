@@ -15120,10 +15120,11 @@ function costlyGoldMessages(charged) {
     return messages;
 }
 
-function pickUpFloorGoldObject(goldObj) {
+function pickUpFloorGoldObject(goldObj, count = goldObj?.quan || 1) {
     if (!goldObj || !(goldObj.otyp === GOLD_PIECE || goldObj.cls === 'coin' || goldObj.glyph === '$'))
         return { picked: false, amount: 0, messages: [] };
-    const amount = Math.max(1, Math.trunc(Number(goldObj.quan || 1)));
+    const originalAmount = Math.max(1, Math.trunc(Number(goldObj.quan || 1)));
+    const amount = Math.max(1, Math.min(originalAmount, Math.trunc(Number(count || originalAmount))));
     const charged = costlyShopGoldAtSpot(goldObj.ox, goldObj.oy, amount);
     game._goldCount = (game._goldCount || 0) + amount;
     game._just_picked_gold = amount;
@@ -15134,7 +15135,8 @@ function pickUpFloorGoldObject(goldObj) {
     } else {
         game.inventory = [...(game.inventory || []), { cls: 'coin', letter: '$', otyp: GOLD_PIECE, glyph: '$', quan: amount }];
     }
-    game.level.objects = (game.level?.objects || []).filter(obj => obj !== goldObj);
+    if (amount < originalAmount) goldObj.quan = originalAmount - amount;
+    else game.level.objects = (game.level?.objects || []).filter(obj => obj !== goldObj);
     game._pet_food_scan_inventory = game.inventory;
     const total = game._goldCount === amount ? '' : ` (${game._goldCount} in total)`;
     const pickupMessage = `$ - ${amount} gold piece${amount === 1 ? '' : 's'}${total}.`;
@@ -16989,6 +16991,12 @@ function containerTakeoutLiftableCount(container, obj, currentWeight, goldCount 
     return low;
 }
 
+function floorPickupObjectKey(obj) {
+    if (!obj) return null;
+    return obj.id ?? obj.o_id
+        ?? `${obj.ox},${obj.oy},${obj.otyp},${obj.kind || obj.actualKind || ''}`;
+}
+
 function splitFloorPickupObjectForLift(obj, count) {
     const quantity = Math.max(1, Math.trunc(Number(obj?.quan || 1)));
     const takeCount = Math.max(1, Math.min(quantity, Math.trunc(Number(count || quantity))));
@@ -17065,6 +17073,14 @@ function floorPickupPreflightMessage(preflight) {
     return parts.join('  ') || 'You cannot pick that up.';
 }
 
+function floorPickupBurdenPromptMessage(preflight) {
+    return [...(preflight?.messages || []), preflight?.prompt || 'Continue? [ynq] (q)'].join('  ');
+}
+
+function floorPickupAcceptedPreflight(preflight) {
+    return { ...(preflight || {}), messages: [], prompt: null };
+}
+
 async function floorPickupRiderCorpseRevival(obj) {
     if (!isCorpseItem(obj) || !isRiderCorpseTimerObject(obj)) return null;
     const messages = ['At your touch, the corpse suddenly moves...'];
@@ -17116,7 +17132,15 @@ function findFloorPickupFoodMergeTargetForPreflight(source, sourcePrice = null) 
     return null;
 }
 
-async function floorPickupPreflight(obj, { shopPrice = null } = {}) {
+async function floorPickupPreflight(obj, { shopPrice = null, prompt = true } = {}) {
+    const promptKey = floorPickupObjectKey(obj);
+    const cached = game._skip_floor_pickup_preflight_once;
+    if (cached && cached.objectId === promptKey) {
+        game._skip_floor_pickup_preflight_once = null;
+        return { ...(cached.preflight || {}), prompt: null };
+    }
+    if (cached) game._skip_floor_pickup_preflight_once = null;
+
     const prelift = containerTakeoutPreliftCheck(obj);
     if (!prelift.ok || prelift.skip) return prelift;
     const riderRevival = await floorPickupRiderCorpseRevival(obj);
@@ -17151,7 +17175,16 @@ async function floorPickupPreflight(obj, { shopPrice = null } = {}) {
         };
     }
 
-    return { ok: true, skip: false, messages, takeCount, liftView: view };
+    let burdenPrompt = null;
+    if (prompt) {
+        const burdenLimit = Math.max(heroEncumbranceForWeight(currentWeight), pickupBurdenLimit());
+        const nextWeight = currentWeight + containerTakeoutWeightIncrease(obj, takeCount, gold);
+        const nextEncumbrance = heroEncumbranceForWeight(nextWeight);
+        if (nextEncumbrance > burdenLimit)
+            burdenPrompt = `${containerTakeoutBurdenPrefix(nextEncumbrance)} lifting ${pickupObjectPhrase(view)}.  Continue? [ynq] (q)`;
+    }
+
+    return { ok: true, skip: false, messages, takeCount, liftView: view, prompt: burdenPrompt };
 }
 
 function containerTakeoutPreflight(container, entries) {
@@ -28175,7 +28208,7 @@ export async function rhack(_cmd) {
             const preflightByObject = new Map();
             for (const obj of selected) {
                 if (!obj || shopBillableGold(obj)) continue;
-                const preflight = await floorPickupPreflight(obj);
+                const preflight = await floorPickupPreflight(obj, { prompt: false });
                 preflightByObject.set(obj, preflight);
                 if (!preflight.ok) {
                     game._overlay_lines = null;
@@ -28645,6 +28678,31 @@ export async function rhack(_cmd) {
         game._command_mode = null;
         game._skip_shop_quote_once = objectId;
         await rhack(',');
+        return;
+    }
+
+    if (game._command_mode === 'floorPickupBurdenConfirm') {
+        const pending = game._floor_pickup_pending;
+        const answer = ch.toLowerCase();
+        if (!pending || !['y', 'n', 'q', ' ', '\r', '\n', '\x1b'].includes(answer)) {
+            game._keep_pending_message = 1;
+            return;
+        }
+        game._floor_pickup_pending = null;
+        game._pending_message = '';
+        game._message_more = 0;
+        game._keep_pending_message = 0;
+        game._command_mode = null;
+        if (answer === 'y') {
+            game._skip_floor_pickup_preflight_once = {
+                objectId: pending.objectId,
+                preflight: pending.preflight,
+            };
+            game._skip_shop_quote_once = pending.objectId;
+            await rhack(',');
+            return;
+        }
+        game.context.move = 0;
         return;
     }
 
@@ -42242,9 +42300,26 @@ export async function rhack(_cmd) {
         }
         const objectHere = objectsHere[0];
         if (objectHere?.otyp === GOLD_PIECE || objectHere?.glyph === '$') {
-            const pickup = pickUpFloorGoldObject(objectHere);
+            const preflight = await floorPickupPreflight(objectHere);
+            if (!preflight.ok || preflight.skip) {
+                await setMessage(floorPickupPreflightMessage(preflight));
+                game.context.move = 0;
+                return;
+            }
+            if (preflight.prompt) {
+                game._floor_pickup_pending = {
+                    objectId: floorPickupObjectKey(objectHere),
+                    preflight: floorPickupAcceptedPreflight(preflight),
+                };
+                game._command_mode = 'floorPickupBurdenConfirm';
+                await setMessage(floorPickupBurdenPromptMessage(preflight));
+                game.context.move = 0;
+                return;
+            }
+            const pickup = pickUpFloorGoldObject(objectHere, preflight.takeCount || objectHere.quan || 1);
             newsym(game.u?.ux || 0, game.u?.uy || 0);
-            await setMessage((pickup.messages || []).join('  '), (pickup.messages || []).length > 1);
+            const messages = [...(preflight.messages || []), ...(pickup.messages || [])];
+            await setMessage(messages.join('  '), messages.length > 1);
             game.context.move = 1;
             return;
         }
@@ -42252,6 +42327,16 @@ export async function rhack(_cmd) {
             const preflight = await floorPickupPreflight(objectHere);
             if (!preflight.ok || preflight.skip) {
                 await setMessage(floorPickupPreflightMessage(preflight));
+                game.context.move = 0;
+                return;
+            }
+            if (preflight.prompt) {
+                game._floor_pickup_pending = {
+                    objectId: floorPickupObjectKey(objectHere),
+                    preflight: floorPickupAcceptedPreflight(preflight),
+                };
+                game._command_mode = 'floorPickupBurdenConfirm';
+                await setMessage(floorPickupBurdenPromptMessage(preflight));
                 game.context.move = 0;
                 return;
             }
@@ -42276,8 +42361,7 @@ export async function rhack(_cmd) {
             return;
         }
         if (objectHere) {
-            const objectId = objectHere.id ?? objectHere.o_id
-                ?? `${objectHere.ox},${objectHere.oy},${objectHere.otyp},${objectHere.kind || objectHere.actualKind || ''}`;
+            const objectId = floorPickupObjectKey(objectHere);
             const skipShopQuote = game._skip_shop_quote_once != null && game._skip_shop_quote_once === objectId;
             if (game._skip_shop_quote_once != null && !skipShopQuote) game._skip_shop_quote_once = null;
             const shopPrice = shopItemPrice(objectHere);
@@ -42295,6 +42379,16 @@ export async function rhack(_cmd) {
             const preflight = await floorPickupPreflight(objectHere, { shopPrice });
             if (!preflight.ok || preflight.skip) {
                 await setMessage(floorPickupPreflightMessage(preflight));
+                game.context.move = 0;
+                return;
+            }
+            if (preflight.prompt) {
+                game._floor_pickup_pending = {
+                    objectId,
+                    preflight: floorPickupAcceptedPreflight(preflight),
+                };
+                game._command_mode = 'floorPickupBurdenConfirm';
+                await setMessage(floorPickupBurdenPromptMessage(preflight));
                 game.context.move = 0;
                 return;
             }
@@ -42390,7 +42484,8 @@ export async function rhack(_cmd) {
             const stats = game.u?.acurr?.a || [];
             const capacity = Math.min(1000, 25 * ((stats[0] ?? 10) + (stats[4] ?? 10)) + 50);
             if (carriedWeight > capacity) {
-                const troubleMessage = [...preflightMessages, `You have a little trouble lifting ${letter} - ${amount}${unpaidSuffix}.`].join('  ');
+                const troublePrefix = containerTakeoutBurdenPrefix(heroEncumbranceForWeight(carriedWeight));
+                const troubleMessage = [...preflightMessages, `${troublePrefix} lifting ${letter} - ${amount}${unpaidSuffix}.`].join('  ');
                 const alreadyBurdened = (game.u?._statusSuffix || '').includes('Burdened');
                 const width = game.nhDisplay?.cols || 80;
                 const showMore = !alreadyBurdened || troubleMessage.length >= width - 8;

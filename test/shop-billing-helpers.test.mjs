@@ -2994,9 +2994,141 @@ test('ordinary floor Rider corpse pickup revives before billing or inventory', a
     assert.equal(shkp.bill.length, 0);
 });
 
+test('declined ordinary floor burden prompt leaves shop merchandise untouched', async () => {
+    const { shkp } = installCommandShopState();
+    const stack = foodRationStack(6011, 11);
+    game.level.objects = [stack];
+    game.u.acurr.a = [1, 1, 10, 10, 1, 10];
+
+    await rhack(',');
+    assert.equal(game._command_mode, 'pickupShopQuote');
+
+    await rhack(' ');
+
+    assert.equal(game._command_mode, 'floorPickupBurdenConfirm');
+    assert.match(game._pending_message, /much trouble lifting 11 food rations.*Continue\? \[ynq\]/);
+    assert.equal(game.level.objects.includes(stack), true);
+    assert.equal(game.inventory.some(item => item.kind === 'food ration'), false);
+    assert.equal(shkp.billct, 0);
+
+    await rhack('n');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.level.objects.includes(stack), true);
+    assert.equal(stack.quan, 11);
+    assert.equal(stack.unpaid, undefined);
+    assert.equal(game.inventory.some(item => item.kind === 'food ration'), false);
+    assert.equal(shkp.billct, 0);
+    assert.equal(shkp.bill.length, 0);
+    assert.equal(game.context.move || 0, 0);
+});
+
+test('accepted ordinary floor burden prompt bills after confirmation', async () => {
+    const { shkp } = installCommandShopState();
+    const stack = foodRationStack(6012, 11);
+    game.level.objects = [stack];
+    game.u.acurr.a = [1, 1, 10, 10, 1, 10];
+
+    await rhack(',');
+    assert.equal(game._command_mode, 'pickupShopQuote');
+
+    await rhack(' ');
+
+    assert.equal(game._command_mode, 'floorPickupBurdenConfirm');
+    assert.equal(game.level.objects.includes(stack), true);
+    assert.equal(shkp.billct, 0);
+
+    await rhack('y');
+
+    const carried = game.inventory.find(item => item.kind === 'food ration');
+    const entry = shop.shopBillEntryForObject(shkp, carried);
+    const expectedPrice = shop.shopItemPrice(carried, stack.ox, stack.oy);
+
+    assert.equal(game._command_mode, null);
+    assert.match(game._pending_message, /much trouble lifting .*11 food rations.*unpaid/);
+    assert.equal(game.level.objects.includes(stack), false);
+    assert.ok(carried);
+    assert.notEqual(carried, stack);
+    assert.equal(carried.quan, 11);
+    assert.equal(carried.unpaid, true);
+    assert.ok(entry);
+    assert.equal(entry.bquan, 11);
+    assert.equal(shop.shopBillEntryTotal(entry), expectedPrice);
+    assert.equal(carried.unpaidPrice, expectedPrice);
+    assert.equal(shkp.billct, 1);
+    assert.equal(game.context.move, 1);
+});
+
+test('accepted ordinary floor partial-stack burden prompt bills only lifted count', async () => {
+    const { shkp } = installCommandShopState();
+    const stack = foodRationStack(6013, 20);
+    game.level.objects = [stack];
+    game.u.acurr.a = [1, 1, 10, 10, 1, 10];
+
+    await rhack(',');
+    assert.equal(game._command_mode, 'pickupShopQuote');
+
+    await rhack(' ');
+
+    assert.equal(game._command_mode, 'floorPickupBurdenConfirm');
+    assert.match(game._pending_message, /can only lift some of the 20 food rations lying here/);
+    assert.match(game._pending_message, /extreme difficulty lifting 15 food rations.*Continue\? \[ynq\]/);
+    assert.equal(game.level.objects.includes(stack), true);
+    assert.equal(stack.quan, 20);
+    assert.equal(shkp.billct, 0);
+
+    await rhack('y');
+
+    const carried = game.inventory.find(item => item.kind === 'food ration');
+    const entry = shop.shopBillEntryForObject(shkp, carried);
+    const expectedPrice = shop.shopItemPrice(carried, stack.ox, stack.oy);
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.level.objects.includes(stack), true);
+    assert.equal(stack.quan, 5);
+    assert.equal(stack.unpaid, undefined);
+    assert.ok(carried);
+    assert.notEqual(carried, stack);
+    assert.equal(carried.quan, 15);
+    assert.equal(carried.unpaid, true);
+    assert.ok(entry);
+    assert.equal(entry.bquan, 15);
+    assert.equal(shop.shopBillEntryTotal(entry), expectedPrice);
+    assert.equal(carried.unpaidPrice, expectedPrice);
+    assert.equal(shkp.billct, 1);
+    assert.equal(game.context.move, 1);
+});
+
+test('ordinary floor gold burden prompt splits before shop charging', async () => {
+    const { shkp } = installCommandShopState();
+    const gold = goldPieces(6014, 50000);
+    gold.ox = 5;
+    gold.oy = 5;
+    game.level.objects = [gold];
+    game.u.acurr.a = [1, 1, 10, 10, 1, 10];
+
+    await rhack(',');
+
+    assert.equal(game._command_mode, 'floorPickupBurdenConfirm');
+    assert.match(game._pending_message, /can only lift some of the 50000 gold pieces lying here/);
+    assert.match(game._pending_message, /extreme difficulty lifting \d+ gold pieces.*Continue\? \[ynq\]/);
+    assert.equal(game._goldCount, 0);
+    assert.equal(shkp.debit || 0, 0);
+
+    await rhack('y');
+
+    assert.equal(game._command_mode, null);
+    assert.ok(game._goldCount > 0);
+    assert.ok(game._goldCount < 50000);
+    assert.equal(game.level.objects.includes(gold), true);
+    assert.equal(gold.quan, 50000 - game._goldCount);
+    assert.equal(shkp.debit, game._goldCount);
+    assert.equal(game.context.move, 1);
+});
+
 test('ordinary shop-floor partial stack pickup splits before billing', async () => {
     const { shkp } = installCommandShopState();
-    const stack = foodRationStack(6011, 20);
+    const stack = foodRationStack(6015, 20);
     game.level.objects = [stack];
     game.u.acurr.a = [1, 1, 10, 10, 1, 10];
     game.flags.pickup_burden = 'overloaded';
