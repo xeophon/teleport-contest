@@ -979,9 +979,11 @@ const BIG_MONSTER_NAMES = new Set([
     'bugbear',
     'earth elemental',
     'fire elemental',
-	'giant spider',
-	'tiger',
-	'water elemental',
+    'giant spider',
+    'green slime',
+    'black pudding',
+    'tiger',
+    'water elemental',
 ]);
 
 export const RANDOM_MONSTER_BY_NAME = new Map(

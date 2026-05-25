@@ -821,6 +821,8 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   existing corpse-chance decision, including known 20-weight glob objects, shrink
   timers, same-square/adjacent floor-floor melding, and visible/sloshing merge
   feedback across hero, pet/monster, trap, fire-breath, and liquid death paths.
+  Green slime and black pudding now carry the C `bigmonst()` input so uncloned
+  deaths get the guaranteed glob drop instead of the medium-pudding RNG roll.
   Active-level glob shrink timers now use the C 23-27 turn cadence, reduce
   weight and partial-eaten amount one unit at a time, emit inventory and visible
   floor disappearance messages, slow/skip on ice, pause in ice boxes until
