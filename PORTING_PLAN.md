@@ -44,6 +44,7 @@ The current audit source of truth is `docs/c-parity-audit/`.
 - Added ordinary shop-floor magic-bag put-in explosion billing: destroyed shop-floor bags and unpaid trigger objects remain as used-up bill rows, while contents destroyed by the blast's loss roll charge lost-merchandise debt.
 - Added narrow carried magic-bag held-loss billing: vanished top-level unpaid contents convert bill rows to debt/robbed after credit, while nested unpaid contents inside non-unpaid vanished containers remain used-up bill rows.
 - Added magic-bag scatter/useup bill preservation: explosion scatter breakage and consumed-on-hit destruction keep unpaid rows as used-up bills, tipped trigger/target bag destruction uses the same `obfree()`-style preservation, and scattered unpaid stacks split bill rows before each chunk is handled.
+- Added magic-bag scatter destructive floor-effect bill preservation: unpaid objects destroyed by lava/water/hot-ground or boulder landing effects now keep existing bill rows as used-up entries without treating hole migration or glob melding as deletion.
 - Latest verified public score: `44/44`.
 
 ## Current Priorities
@@ -51,8 +52,8 @@ The current audit source of truth is `docs/c-parity-audit/`.
 1. Shop ledger foundation.
    - Source notes: `docs/c-parity-audit/05-food-inventory-containers-shops.md`.
    - Current JS has a starter bill ledger, but object `unpaid`/`unpaidPrice` fields and legacy fallback scans still participate in billing.
-   - Missing or partial concepts include full `addtobill`, full `subfrombill` routing, remaining magic-bag scatter floor-effect/landing edge cases, full `obfree()`/container-aware `stolen_value()` helper integration, special-stock/uninterested `sellobj()` polish, `picked_container`, `check_unpaid_usage`, and `costly_alteration`.
-   - The next narrow C-backed gaps are scatter floor-effect bill preservation, non-ordinary magic-bag sources/targets, lift/capacity/slot failures, bill-aware stack/merge/destruction edge cases, and payment container/robbed-shop semantics.
+   - Missing or partial concepts include full `addtobill`, full `subfrombill` routing, non-ordinary magic-bag source/target cases, full `obfree()`/container-aware `stolen_value()` helper integration, special-stock/uninterested `sellobj()` polish, `picked_container`, `check_unpaid_usage`, and `costly_alteration`.
+   - The next narrow C-backed gaps are non-ordinary magic-bag sources/targets, lift/capacity/slot failures, bill-aware stack/merge/destruction edge cases, generic floor-effect deletion ownership, and payment container/robbed-shop semantics.
 
 2. Object registry and canonical object factory.
    - Source notes: `docs/c-parity-audit/02-objects-wishing-readobjnam.md`.
@@ -91,7 +92,7 @@ The current audit source of truth is `docs/c-parity-audit/`.
 
 Continue the shop ledger migration:
 
-1. Broaden shop-floor container take-out and tip beyond recursive billing into lift limits, capacity/slot failures, and merge/destruction edge cases; continue magic-bag work through scatter floor-effect bill preservation, non-ordinary sources/targets, and shared `obfree()`/`stolen_value()` debt naming.
+1. Broaden shop-floor container take-out and tip beyond recursive billing into lift limits, capacity/slot failures, and merge/destruction edge cases; continue magic-bag work through non-ordinary sources/targets and shared `obfree()`/`stolen_value()` debt naming.
 2. Finish remaining `sellobj()` follow-ups: special-stock/uninterested branches, complete recursive `subfrombill()` integration, bill-aware drop stacking, and broken/container projectile impact edge cases.
 3. Move payment toward a complete C `dopay()` model for containers, queued itemized selections, and robbed-shop interactions.
 

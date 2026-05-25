@@ -7569,6 +7569,14 @@ function removeFloorObject(obj) {
     game.level.objects = (game.level?.objects || []).filter(item => item !== obj);
 }
 
+function floorEffectRemoveObject(removeObject, usedUpShopBillOnDestroy = false) {
+    if (!usedUpShopBillOnDestroy) return removeObject;
+    return obj => {
+        markObjectShopBillUsedUp(obj);
+        removeObject(obj);
+    };
+}
+
 function liquidFlowContainerContents(obj) {
     const contents = Array.isArray(obj?.contents) ? obj.contents : [];
     const cobj = Array.isArray(obj?.cobj) ? obj.cobj : [];
@@ -7745,7 +7753,9 @@ function erodeFloorObject(obj, messages, visible, {
     return false;
 }
 
-function waterDamageContainerContents(container, messages, visible, acidContext) {
+function waterDamageContainerContents(container, messages, visible, acidContext, {
+    usedUpShopBillOnDestroy = false,
+} = {}) {
     const contents = [...liquidFlowContainerContents(container)];
     const waterproof = isLiquidFlowWaterproofContainer(container);
     if (waterproof) {
@@ -7756,6 +7766,7 @@ function waterDamageContainerContents(container, messages, visible, acidContext)
     for (const content of contents) {
         damaged = waterDamageFloorItem(content, messages, visible, acidContext, {
             removeObject: item => removeContainedObject(container, item),
+            usedUpShopBillOnDestroy,
         }) || damaged;
     }
     return damaged;
@@ -7763,7 +7774,9 @@ function waterDamageContainerContents(container, messages, visible, acidContext)
 
 function waterDamageFloorItem(obj, messages, visible, acidContext, {
     removeObject = removeFloorObject,
+    usedUpShopBillOnDestroy = false,
 } = {}) {
+    const destroyObject = floorEffectRemoveObject(removeObject, usedUpShopBillOnDestroy);
     if (waterDamageFloorLitObject(obj, messages, visible)) return true;
 
     const kind = objectKindKey(obj);
@@ -7782,7 +7795,8 @@ function waterDamageFloorItem(obj, messages, visible, acidContext, {
         }
         return true;
     }
-    if (isLiquidFlowContainer(obj)) return waterDamageContainerContents(obj, messages, visible, acidContext);
+    if (isLiquidFlowContainer(obj))
+        return waterDamageContainerContents(obj, messages, visible, acidContext, { usedUpShopBillOnDestroy });
     if (((game.u?.uluck || 0) + (game.u?.moreluck || 0) + 5) > rn2(20)) return false;
 
     const cls = rustTrapItemClass(obj);
@@ -7800,14 +7814,14 @@ function waterDamageFloorItem(obj, messages, visible, acidContext, {
         blankFloorSpellbook(obj);
         return true;
     }
-    if (cls === 'potion') return waterDamageFloorPotion(obj, messages, acidContext, removeObject);
+    if (cls === 'potion') return waterDamageFloorPotion(obj, messages, acidContext, destroyObject);
 
     return erodeFloorObject(obj, messages, visible, {
         profileWord: 'rusty',
         field: 'oeroded',
         action: 'rust',
         cause: 'oxidation',
-        removeObject,
+        removeObject: destroyObject,
     });
 }
 
@@ -7864,17 +7878,21 @@ function fireDamageFloorPotion(obj, messages, visible, removeObject = removeFloo
 }
 
 function fireDamageFloorItem(obj, messages, visible, options = {}) {
-    const { removeObject = removeFloorObject, spillQueue = [], processSpill = null, x, y } = options;
+    const {
+        removeObject = removeFloorObject, spillQueue = [], processSpill = null,
+        usedUpShopBillOnDestroy = false, x, y,
+    } = options;
+    const destroyObject = floorEffectRemoveObject(removeObject, usedUpShopBillOnDestroy);
     if (maybeIgniteFloorFireItem(obj, messages, visible)) return false;
     if (isLiquidFlowContainer(obj))
         return fireDamageFloorContainer(obj, messages, visible, {
-            removeObject, spillQueue, processSpill, x, y,
+            removeObject: destroyObject, spillQueue, processSpill, x, y,
         });
 
     const cls = fireDestroyableInventoryClass(obj);
     if (cls === 'scroll' || cls === 'spellbook')
-        return fireDamageFloorScrollOrBook(obj, messages, visible, cls, removeObject);
-    if (cls === 'potion') return fireDamageFloorPotion(obj, messages, visible, removeObject);
+        return fireDamageFloorScrollOrBook(obj, messages, visible, cls, destroyObject);
+    if (cls === 'potion') return fireDamageFloorPotion(obj, messages, visible, destroyObject);
 
     return erodeFloorObject(obj, messages, visible, {
         profileWord: 'burnt',
@@ -7882,7 +7900,7 @@ function fireDamageFloorItem(obj, messages, visible, options = {}) {
         action: 'smoulder',
         cause: 'heat',
         destroyAtMax: true,
-        removeObject,
+        removeObject: destroyObject,
     });
 }
 
@@ -7944,24 +7962,28 @@ function lavaDamageFloorEffectItem(obj, messages, visible, {
     removeObject = removeFloorObject,
     spillQueue = [],
     processSpill = null,
+    usedUpShopBillOnDestroy = false,
     x,
     y,
 } = {}) {
+    const destroyObject = floorEffectRemoveObject(removeObject, usedUpShopBillOnDestroy);
     if (lavaObjectProtectedByObjResists(obj)) return false;
     const cls = fireDestroyableInventoryClass(obj);
     if (!lavaDirectFireExemptObject(obj, cls) && lavaDirectBurnMaterialObject(obj)) {
         if (visible) messages.push(`You see ${floorObjectArticleName(obj)} hit lava and burn up!`);
-        removeObject(obj);
+        destroyObject(obj);
         return true;
     }
     return fireDamageFloorItem(obj, messages, visible, {
-        removeObject, spillQueue, processSpill, x, y,
+        removeObject, spillQueue, processSpill, usedUpShopBillOnDestroy, x, y,
     });
 }
 
 function hotGroundPotionFloorEffect(obj, x, y, messages, visible, {
     removeObject = removeFloorObject,
+    usedUpShopBillOnDestroy = false,
 } = {}) {
+    const destroyObject = floorEffectRemoveObject(removeObject, usedUpShopBillOnDestroy);
     const loc = game.level?.at?.(x, y);
     if (!loc || !(loc.typ === ROOM || loc.typ === CORR)) return false;
     if ((game.level?.flags?.temperature || 0) <= 0) return false;
@@ -7977,24 +7999,28 @@ function hotGroundPotionFloorEffect(obj, x, y, messages, visible, {
     if (rn2(100) < ((obj?.artifact || obj?.oartifact) ? 100 : survival)) return false;
     if (visible) messages.push(plural ? 'They shatter from the heat!' : 'It shatters from the heat!');
     else if (!heroIsDeaf()) messages.push('You hear a shattering noise.');
-    removeObject(obj);
+    destroyObject(obj);
     return true;
 }
 
-function liquidFlowFloorEffectsItem(obj, x, y, messages, visible, acidContext, spillQueue, processSpill = null) {
+function liquidFlowFloorEffectsItem(obj, x, y, messages, visible, acidContext, spillQueue, processSpill = null, {
+    usedUpShopBillOnDestroy = false,
+} = {}) {
     const loc = game.level?.at?.(x, y);
     if (!loc) return false;
     if (obj?.otyp === BOULDER) {
-        if (earthFloorEffects(obj, x, y, messages, '')) {
+        if (earthFloorEffects(obj, x, y, messages, '', { usedUpShopBillOnDestroy })) {
             removeFloorObject(obj);
             return true;
         }
     }
     if (loc.typ === LAVAPOOL || loc.typ === LAVAWALL)
-        return lavaDamageFloorEffectItem(obj, messages, visible, { spillQueue, processSpill, x, y });
+        return lavaDamageFloorEffectItem(obj, messages, visible, {
+            spillQueue, processSpill, usedUpShopBillOnDestroy, x, y,
+        });
     if (IS_POOL(loc.typ))
-        return waterDamageFloorItem(obj, messages, visible, acidContext);
-    if (hotGroundPotionFloorEffect(obj, x, y, messages, visible)) return true;
+        return waterDamageFloorItem(obj, messages, visible, acidContext, { usedUpShopBillOnDestroy });
+    if (hotGroundPotionFloorEffect(obj, x, y, messages, visible, { usedUpShopBillOnDestroy })) return true;
     return false;
 }
 
@@ -14277,7 +14303,9 @@ function applyEarthBoulderPitOccupantEffects(trap, x, y, messages, verb = 'fall'
     return { skipPlugMessage: false };
 }
 
-function earthBoulderPitHoleEffects(obj, x, y, messages, verb = 'fall') {
+function earthBoulderPitHoleEffects(obj, x, y, messages, verb = 'fall', {
+    usedUpShopBillOnDestroy = false,
+} = {}) {
     if (obj?.otyp !== BOULDER) return false;
     const trap = earthBoulderPitTrapAt(x, y);
     if (!trap) return false;
@@ -14298,6 +14326,7 @@ function earthBoulderPitHoleEffects(obj, x, y, messages, verb = 'fall') {
     }
     messages.push(...buryObjectsAt(x, y, { ignore: obj }));
     if (buriedDebt) messages.push(buriedDebt);
+    if (usedUpShopBillOnDestroy) markObjectShopBillUsedUp(obj);
     newsym(x, y);
     return true;
 }
@@ -14326,16 +14355,21 @@ function maybeDroppedObjectPoolFeedback(obj, x, y, messages) {
     newsym(x, y);
 }
 
-function droppedObjectWaterFloorEffects(obj, x, y, messages) {
+function droppedObjectWaterFloorEffects(obj, x, y, messages, {
+    usedUpShopBillOnDestroy = false,
+} = {}) {
     let destroyed = false;
     maybeDroppedObjectPoolFeedback(obj, x, y, messages);
     waterDamageFloorItem(obj, messages, floorObjectVisible(x, y), { count: 0 }, {
         removeObject: () => { destroyed = true; },
+        usedUpShopBillOnDestroy,
     });
     return destroyed;
 }
 
-function droppedObjectLavaFloorEffects(obj, x, y, messages) {
+function droppedObjectLavaFloorEffects(obj, x, y, messages, {
+    usedUpShopBillOnDestroy = false,
+} = {}) {
     let destroyed = false;
     const visible = floorObjectVisible(x, y);
     const acidContext = { count: 0 };
@@ -14344,21 +14378,27 @@ function droppedObjectLavaFloorEffects(obj, x, y, messages) {
         if (processed.has(item)) return false;
         processed.add(item);
         if (!(game.level?.objects || []).includes(item)) return false;
-        return liquidFlowFloorEffectsItem(item, x, y, messages, visible, acidContext, [], processSpill);
+        return liquidFlowFloorEffectsItem(item, x, y, messages, visible, acidContext, [], processSpill, {
+            usedUpShopBillOnDestroy,
+        });
     };
     lavaDamageFloorEffectItem(obj, messages, visible, {
         removeObject: () => { destroyed = true; },
         processSpill,
+        usedUpShopBillOnDestroy,
         x,
         y,
     });
     return destroyed;
 }
 
-function droppedObjectHotGroundFloorEffects(obj, x, y, messages) {
+function droppedObjectHotGroundFloorEffects(obj, x, y, messages, {
+    usedUpShopBillOnDestroy = false,
+} = {}) {
     let destroyed = false;
     hotGroundPotionFloorEffect(obj, x, y, messages, floorObjectVisible(x, y), {
         removeObject: () => { destroyed = true; },
+        usedUpShopBillOnDestroy,
     });
     return destroyed;
 }
@@ -15160,7 +15200,9 @@ function droppedObjectAltarFloorEffects(obj, x, y, messages) {
     return true;
 }
 
-export function earthFloorEffects(obj, x, y, messages, verb = 'fall') {
+export function earthFloorEffects(obj, x, y, messages, verb = 'fall', {
+    usedUpShopBillOnDestroy = false,
+} = {}) {
     const loc = game.level?.at(x, y);
     if (!loc || !obj) return false;
     if (obj?.otyp === BOULDER && earthBoulderHitsLiquid(loc)) {
@@ -15197,22 +15239,23 @@ export function earthFloorEffects(obj, x, y, messages, verb = 'fall') {
         } else if (!fillsUp && earthVisibleSquare(x, y)) {
             messages.push('It sinks without a trace!');
         }
+        if (usedUpShopBillOnDestroy) markObjectShopBillUsedUp(obj);
         newsym(x, y);
         return true;
     }
     if (obj?.otyp === BOULDER)
-        return earthBoulderPitHoleEffects(obj, x, y, messages, verb);
+        return earthBoulderPitHoleEffects(obj, x, y, messages, verb, { usedUpShopBillOnDestroy });
 
     const liquidType = earthFloorLiquidType(loc);
     if (liquidType === LAVAPOOL || liquidType === LAVAWALL)
-        return droppedObjectLavaFloorEffects(obj, x, y, messages);
+        return droppedObjectLavaFloorEffects(obj, x, y, messages, { usedUpShopBillOnDestroy });
     if (IS_POOL(liquidType))
-        return droppedObjectWaterFloorEffects(obj, x, y, messages);
+        return droppedObjectWaterFloorEffects(obj, x, y, messages, { usedUpShopBillOnDestroy });
     const pitHole = droppedObjectPitHoleFloorEffects(obj, x, y, messages);
     if (pitHole.handled) return pitHole.consumed;
     if (droppedObjectGlobMeldFloorEffects(obj, x, y, messages)) return true;
     if (droppedObjectAltarFloorEffects(obj, x, y, messages)) return false;
-    return droppedObjectHotGroundFloorEffects(obj, x, y, messages);
+    return droppedObjectHotGroundFloorEffects(obj, x, y, messages, { usedUpShopBillOnDestroy });
 }
 
 function dropMonsterInventory(mon, messages = null, { verb = 'fall' } = {}) {
@@ -18257,7 +18300,10 @@ function addContainerTakeoutObjectToInventory(container, obj) {
     return obj.line || `${letter} - ${pickupObjectPhrase(obj)}`;
 }
 
-function placeObjectOnFloorWithEffects(obj, x, y, messages, verb = 'drop', { stack = false } = {}) {
+function placeObjectOnFloorWithEffects(obj, x, y, messages, verb = 'drop', {
+    stack = false,
+    usedUpShopBillOnDestroy = false,
+} = {}) {
     obj.contained = false;
     obj.container = null;
     obj.ox = x;
@@ -18269,7 +18315,7 @@ function placeObjectOnFloorWithEffects(obj, x, y, messages, verb = 'drop', { sta
     delete obj.nobj;
     delete obj.nexthere;
     Object.assign(obj, object_display(obj));
-    if (!earthFloorEffects(obj, x, y, messages, verb)) {
+    if (!earthFloorEffects(obj, x, y, messages, verb, { usedUpShopBillOnDestroy })) {
         game.level.objects ??= [];
         const stacked = stack ? stackMonsterThrownObject(obj) : obj;
         if (stacked === obj) game.level.objects.push(obj);
@@ -18859,7 +18905,10 @@ function scatterOneMagicBagObject(scatterObj, sx, sy, messages, shopContext = nu
             if (hit.hit) range -= 3;
         }
     }
-    if (placeObjectOnFloorWithEffects(scatterObj, x, y, messages, 'land', { stack: true }))
+    if (placeObjectOnFloorWithEffects(scatterObj, x, y, messages, 'land', {
+        stack: true,
+        usedUpShopBillOnDestroy: true,
+    }))
         maybeBillMagicBagScatterGold(scatterObj, sx, sy, x, y, shopContext);
 }
 

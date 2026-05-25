@@ -4,7 +4,7 @@ import test from 'node:test';
 import { __shopBillingTestHooks as shop } from '../js/cmd.js';
 import { game, resetGame } from '../js/gstate.js';
 import { initRng } from '../js/rng.js';
-import { ROOMOFFSET, SHOPBASE } from '../js/const.js';
+import { LAVAPOOL, ROOM, ROOMOFFSET, SHOPBASE } from '../js/const.js';
 
 function installShopState() {
     const g = resetGame();
@@ -1543,6 +1543,37 @@ test('carried magic bag scatter splits unpaid stacks before preserving used-up b
     assert.ok(originalEntry);
     assert.equal(originalEntry.useup, true);
     assert.equal(shop.shopBillEntryTotal(originalEntry), 45);
+});
+
+test('carried magic bag scatter into lava preserves unpaid landing destruction as used-up bill', () => {
+    const { shkp } = installShopState();
+    initRng(2);
+    game.level.at = (x, y) => ({
+        typ: x === 5 && y === 5 ? ROOM : LAVAPOOL,
+        roomno: x === 5 && y === 5 ? ROOMOFFSET : 0,
+        doormask: 0,
+    });
+    const source = bagOfHolding(6957);
+    const wand = cancellationWand(6958);
+    const ration = putObjectInContainer(source, foodRation(6959));
+    shop.addObjectToShopBill(shkp, ration, 45);
+    game.u.uhp = 100;
+    game.inventory = [source, wand];
+
+    const result = shop.putInventoryObjectIntoContainer(source, wand);
+
+    assert.equal(result.bagGone, true);
+    assert.equal(game.level.objects.includes(ration), false);
+    assert.notEqual(ration.unpaid, true);
+    assert.equal(ration.unpaidPrice, undefined);
+    assert.equal(shkp.debit || 0, 0);
+    assert.equal(shkp.robbed || 0, 0);
+    assert.equal(shkp.billct, 1);
+    const entry = shop.shopBillEntryForObject(shkp, ration);
+    assert.ok(entry);
+    assert.equal(entry.useup, true);
+    assert.equal(shop.shopBillEntryTotal(entry), 45);
+    assert.equal(game._usedUpShopBills.some(bill => String(bill.bo_id) === String(ration.id)), true);
 });
 
 test('unpaid trigger object destroyed by tipping into a carried magic bag remains as a used-up bill', () => {
