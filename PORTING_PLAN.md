@@ -2573,9 +2573,10 @@ Next concrete target:
   first, adjacent 3x3 search spends C's two `rn2(2)` direction rolls only when
   needed, BUC/nomerge/type mismatches do not meld, and the floor glob absorbs
   the incoming free glob while combining weight, partial-eaten amount, age,
-  shrink timing, rot/known/grease state, and visible/sloshing feedback. Full
-  shop `globby_bill_fixup()` parity remains a future billing slice. Direct
-  smokes cover same-square merging, adjacent search, BUC no-merge, and blind
+  shrink timing, rot/known/grease state, and C `cansee()`-based
+  visible/sloshing feedback. Full shop `globby_bill_fixup()` parity remains a
+  future billing slice. Direct smokes cover same-square merging, adjacent
+  search, BUC no-merge, blind sloshing feedback, and remembered-but-not-seen
   sloshing feedback.
 - Monster death inventory drops now route through the shared floor-effects
   adapter before survivor placement, matching C `relobj()`/`mdrop_obj()` for
