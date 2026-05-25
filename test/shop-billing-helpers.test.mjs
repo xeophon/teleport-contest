@@ -518,6 +518,21 @@ function cancellationWand(id, letter = 'c') {
     };
 }
 
+function wishingWand(id, letter = 'w') {
+    return {
+        id,
+        cls: 'wand',
+        glyph: '/',
+        kind: 'wand of wishing',
+        actualKind: 'wand of wishing',
+        wand: 'wishing',
+        quan: 1,
+        spe: 1,
+        letter,
+        line: `${letter} - a wand of wishing`,
+    };
+}
+
 function lamp(id, kind = 'oil lamp', letter = 'l', spe = 1) {
     const otyp = kind === 'brass lantern' ? BRASS_LANTERN : kind === 'magic lamp' ? MAGIC_LAMP : OIL_LAMP;
     return {
@@ -831,6 +846,58 @@ test('unpaid wand use with no charges is not billed for usage', () => {
     assert.equal(shop.shopBillEntryTotal(entry), 100);
     assert.equal(wand.unpaid, true);
     assert.equal(messages.length, 0);
+});
+
+test('cursed unpaid wand backfire preserves the wand as a used-up bill row', async () => {
+    const { shkp } = installCommandShopState();
+    initRng(49);
+    const wand = cancellationWand(3085, 'w');
+    wand.cursed = true;
+    game.inventory = [wand];
+    shop.addObjectToShopBill(shkp, wand, 100);
+
+    await rhack('z');
+    await rhack('w');
+
+    assert.match(game._pending_message, /Usage fee, 100 zorkmids/);
+    assert.match(game._pending_message, /The wand of cancellation suddenly explodes!/);
+    assert.equal(game.inventory.includes(wand), false);
+    assert.equal(shkp.debit, 100);
+    assert.equal(shkp.billct, 1);
+    const entry = shop.shopBillEntryForObject(shkp, wand);
+    assert.ok(entry);
+    assert.equal(entry.useup, true);
+    assert.equal(shop.shopBillEntryTotal(entry), 100);
+    assert.equal(wand.unpaid, false);
+    assert.equal((game._usedUpShopBills || []).length, 1);
+    assert.equal(game._usedUpShopBills[0].bo_id, entry.bo_id);
+    assert.equal(game._usedUpShopBills[0].price, 100);
+});
+
+test('cursed unpaid wand of wishing backfire preserves the used-up bill row', async () => {
+    const { shkp } = installCommandShopState();
+    initRng(49);
+    const wand = wishingWand(3086, 'w');
+    wand.cursed = true;
+    game.inventory = [wand];
+    shop.addObjectToShopBill(shkp, wand, 100);
+
+    await rhack('z');
+    await rhack('w');
+
+    assert.match(game._pending_message, /Usage fee, 100 zorkmids/);
+    assert.match(game._pending_message, /The wand of wishing suddenly explodes!/);
+    assert.equal(game.inventory.includes(wand), false);
+    assert.equal(shkp.debit, 100);
+    assert.equal(shkp.billct, 1);
+    const entry = shop.shopBillEntryForObject(shkp, wand);
+    assert.ok(entry);
+    assert.equal(entry.useup, true);
+    assert.equal(shop.shopBillEntryTotal(entry), 100);
+    assert.equal(wand.unpaid, false);
+    assert.equal((game._usedUpShopBills || []).length, 1);
+    assert.equal(game._usedUpShopBills[0].bo_id, entry.bo_id);
+    assert.equal(game._usedUpShopBills[0].price, 100);
 });
 
 test('unpaid camera grease and tinning kit use charge one tenth price', () => {

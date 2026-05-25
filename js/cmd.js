@@ -33580,7 +33580,7 @@ export async function rhack(_cmd) {
                 const damage = d(wandCharges(item) + 2, 6);
                 if (game.u) game.u.uhp = Math.max(0, (game.u.uhp || 0) - damage);
                 const name = pickupObjectName(item);
-                game.inventory = (game.inventory || []).filter(invItem => invItem !== item);
+                useUpInventoryItem(item, item.quan || 1);
                 await setMessage([...spentMessages(), `The ${name} suddenly explodes!`].join('  '));
                 game._command_mode = null;
                 game.context.move = 1;
@@ -33609,7 +33609,7 @@ export async function rhack(_cmd) {
         if (item?.cursed && !rn2(WAND_BACKFIRE_CHANCE)) {
             const damage = d((item.spe ?? item.charges ?? 0) + 2, 6);
             if (game.u) game.u.uhp = Math.max(0, (game.u.uhp || 0) - damage);
-            game.inventory = (game.inventory || []).filter(invItem => invItem !== item);
+            useUpInventoryItem(item, item.quan || 1);
             await setMessage([...spentMessages(), `The ${pickupObjectName(item)} suddenly explodes!`].join('  '));
             game._command_mode = null;
             game.context.move = 1;
