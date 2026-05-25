@@ -511,6 +511,8 @@ function cancellationWand(id, letter = 'c') {
         glyph: '/',
         kind: 'wand of cancellation',
         actualKind: 'wand of cancellation',
+        wand: 'cancellation',
+        wandIndex: 13,
         quan: 1,
         spe: 1,
         letter,
@@ -5531,7 +5533,7 @@ test('looting no-charge cursed shop-floor magic bag contents vanishes without tu
     assert.ok((game._overlay_lines || []).some(row => row[2] === 'q * do nothing'));
 });
 
-test('putting a cancellation wand into an empty shop-floor magic bag leaves the destroyed bag on the bill', () => {
+test('putting a paid cancellation wand into a shop-floor magic bag prompts before explosion', () => {
     const { shkp } = installShopState();
     const source = bagOfHolding(6928);
     const wand = cancellationWand(6929);
@@ -5540,19 +5542,84 @@ test('putting a cancellation wand into an empty shop-floor magic bag leaves the 
     game.u.uhp = 100;
     game.inventory = [wand];
     game.level.objects = [source];
-    const expectedBagPrice = shop.shopItemPrice(source, 5, 5);
     const cashBefore = shop.shopkeeperCash(shkp);
 
     const result = shop.putInventoryObjectIntoContainer(source, wand);
 
+    assert.equal(result.moved, false);
+    assert.equal(result.pendingSale.prompt, true);
+    assert.match(result.message, /Sell it\?/);
+    assert.equal(game.inventory.includes(wand), true);
+    assert.equal(game.level.objects.includes(source), true);
+    assert.equal(source.contents.length, 0);
+    assert.equal(game.u.uhp, 100);
+    assert.equal(shop.shopkeeperCash(shkp), cashBefore);
+    assert.equal(shkp.billct, 0);
+});
+
+test('accepting sale before shop-floor magic bag explosion bills only the destroyed bag', () => {
+    const { shkp } = installShopState();
+    const source = bagOfHolding(6940);
+    const wand = cancellationWand(6941);
+    source.ox = 5;
+    source.oy = 5;
+    game.u.uhp = 100;
+    game._goldCount = 5;
+    game.inventory = [wand];
+    game.level.objects = [source];
+    const expectedBagPrice = shop.shopItemPrice(source, 5, 5);
+    const expectedOffer = shop.shopSaleOffer(wand, shkp);
+    const cashBefore = shop.shopkeeperCash(shkp);
+
+    const prompt = shop.putInventoryObjectIntoContainer(source, wand);
+    const result = shop.finishShopFloorContainerPutSale(prompt.pendingSale, true);
+
     assert.equal(result.moved, true);
     assert.equal(result.bagGone, true);
-    assert.match(result.messages.join(' '), /magical explosion/);
-    assert.equal(result.pendingSale, undefined);
+    const saleIndex = result.message.indexOf('You sell');
+    const explosionIndex = result.message.indexOf('magical explosion');
+    assert.ok(saleIndex >= 0);
+    assert.ok(explosionIndex > saleIndex);
     assert.equal(game.inventory.includes(wand), false);
     assert.equal(game.level.objects.includes(source), false);
     assert.notEqual(wand.no_charge, true);
+    assert.equal(game._goldCount, 5 + expectedOffer);
+    assert.equal(shop.shopkeeperCash(shkp), cashBefore - expectedOffer);
+    assert.equal(shop.shopBillEntryForObject(shkp, wand), null);
+    assert.equal(shkp.debit || 0, 0);
+    assert.equal(shkp.billct, 1);
+    const bagEntry = shop.shopBillEntryForObject(shkp, source);
+    assert.ok(bagEntry);
+    assert.equal(bagEntry.useup, true);
+    assert.equal(shop.shopBillEntryTotal(bagEntry), expectedBagPrice);
+    assert.equal(game._usedUpShopBills.some(entry => String(entry.bo_id) === String(source.id)), true);
+});
+
+test('declining sale before shop-floor magic bag explosion leaves only the destroyed bag on the bill', () => {
+    const { shkp } = installShopState();
+    const source = bagOfHolding(6942);
+    const wand = cancellationWand(6943);
+    source.ox = 5;
+    source.oy = 5;
+    game.u.uhp = 100;
+    game._goldCount = 5;
+    game.inventory = [wand];
+    game.level.objects = [source];
+    const expectedBagPrice = shop.shopItemPrice(source, 5, 5);
+    const cashBefore = shop.shopkeeperCash(shkp);
+
+    const prompt = shop.putInventoryObjectIntoContainer(source, wand);
+    const result = shop.finishShopFloorContainerPutSale(prompt.pendingSale, false);
+
+    assert.equal(result.moved, true);
+    assert.equal(result.bagGone, true);
+    assert.match(result.messages.join(' '), /magical explosion/);
+    assert.equal(game.inventory.includes(wand), false);
+    assert.equal(game.level.objects.includes(source), false);
+    assert.equal(wand.no_charge, true);
+    assert.equal(game._goldCount, 5);
     assert.equal(shop.shopkeeperCash(shkp), cashBefore);
+    assert.equal(shop.shopBillEntryForObject(shkp, wand), null);
     assert.equal(shkp.debit || 0, 0);
     assert.equal(shkp.billct, 1);
     const bagEntry = shop.shopBillEntryForObject(shkp, source);
@@ -5576,7 +5643,9 @@ test('shop-floor magic bag explosion charges contents destroyed by the bag blast
     game.inventory = [wand];
     game.level.objects = [source];
 
-    const result = shop.putInventoryObjectIntoContainer(source, wand);
+    const prompt = shop.putInventoryObjectIntoContainer(source, wand);
+    assert.equal(prompt.pendingSale.prompt, true);
+    const result = shop.finishShopFloorContainerPutSale(prompt.pendingSale, false);
 
     assert.equal(result.bagGone, true);
     assert.equal(game.level.objects.includes(source), false);

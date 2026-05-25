@@ -82,6 +82,7 @@ The current audit source of truth is `docs/c-parity-audit/`.
 - Added C-style non-destroying shop box lock-break billing: forced lock breaks now create a dummy used-up bill row for the altered box only, leave contents unbilled, and mark the floor box no-charge before it becomes broken/unlocked.
 - Added C-style cream-pie `COST_SPLAT` billing: applying an unpaid carried cream pie to yourself now splits stacks first, creates a dummy used-up bill row for the splatted pie, and leaves any residual stack on its live bill row.
 - Added C-style cursed wand backfire `useupall()` billing: unpaid backfiring wands still charge normal usage, then preserve the exploded wand as a used-up bill row for both ordinary and wishing wand branches.
+- Added C-ordered shop-floor magic-bag put-in `sellobj()` handling: trigger objects now resolve unpaid return, sale/no-sale, angry/robbed shopkeeper, and declined-sale `no_charge` handling before magic-bag explosion billing, matching C `in_container()` ordering for destroyed trigger and target bags.
 - Latest verified public score: `44/44`.
 
 ## Current Priorities
@@ -90,7 +91,7 @@ The current audit source of truth is `docs/c-parity-audit/`.
    - Source notes: `docs/c-parity-audit/05-food-inventory-containers-shops.md`.
    - Current JS has a starter bill ledger, but object `unpaid`/`unpaidPrice` fields and legacy fallback scans still participate in billing.
    - Missing or partial concepts include full `addtobill`, full `subfrombill` routing, non-ordinary magic-bag source/target cases, full `obfree()`/container-aware `stolen_value()` helper integration, shared `sellobj()` helper integration beyond ordinary branches, remaining add-inventory/no-charge cleanup outside ordinary shop pickup, remaining charge-consuming `check_unpaid_usage` caller coverage, and non-bite `costly_alteration` coverage outside the narrow food/tin/box-lock/cream-pie paths.
-   - The next narrow C-backed gaps are the remaining shop-floor magic-bag put-in ordering gap where C resolves `sellobj()`/sale handling before the already-covered explosion billing, container itemized `#pay` aggregation, remaining inventory merge edge cases outside carried-bag partial put-in, remaining merge/destruction edge cases, generic floor-effect deletion ownership, artifact touch side effects outside floor pickup/container take-out, and less ordinary `addtobill()`/quote positioning outside whole-container pickup.
+   - The next narrow C-backed gaps are container itemized `#pay` aggregation, non-ordinary magic-bag source/target cases, remaining inventory merge edge cases outside carried-bag partial put-in, remaining merge/destruction edge cases, generic floor-effect deletion ownership, artifact touch side effects outside floor pickup/container take-out, full `obfree()`/container-aware `stolen_value()` debt naming, and less ordinary `addtobill()`/quote positioning outside whole-container pickup.
 
 2. Object registry and canonical object factory.
    - Source notes: `docs/c-parity-audit/02-objects-wishing-readobjnam.md`.

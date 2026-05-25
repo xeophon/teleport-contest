@@ -20717,6 +20717,15 @@ function billShopFloorContainerPutObject(container, putItem, options = {}) {
     return { shkp, returned: false, noCharge: false };
 }
 
+function preserveExplodedShopFloorPutTriggerBill(putItem, owner, fallbackShkp, price) {
+    if (!putItem || shopBillableGold(putItem)) return false;
+    const shkp = owner?.shkp || fallbackShkp || heroShopkeeper();
+    if (!shkp) return false;
+    if (!shopBillEntryForObject(shkp, putItem) && price > 0)
+        addObjectToShopBill(shkp, putItem, price, { useup: true });
+    return markObjectShopBillUsedUp(putItem, shkp);
+}
+
 function putInventoryObjectIntoContainer(container, item, amount = item?.quan || 1, options = {}) {
     if (!container) return { moved: false, message: '' };
     if (isIceBoxObject(container)) return putInventoryObjectIntoIceBox(container, item, amount, options);
@@ -20750,12 +20759,6 @@ function putInventoryObjectIntoContainer(container, item, amount = item?.quan ||
     const count = Math.min(Math.max(1, amount || 1), item.quan || 1);
     const putItem = splitInventoryObjectForContainerPut(item, count);
     clearContainerPutEquipmentState(putItem, name);
-    if (isMagicBagObject(container) && magicBagExplodesWithObject(putItem)) {
-        billShopFloorMagicBagExplosionTarget(container);
-        markObjectShopBillUsedUp(putItem);
-        removeInventoryItem(item, count);
-        return explodeMagicBagTransfer(container, putItem, []);
-    }
     let sellobjResult = null;
     if (!options.skipSalePrompt) {
         const pendingSale = beginShopFloorContainerPutSale(container, item, count);
@@ -20764,6 +20767,22 @@ function putInventoryObjectIntoContainer(container, item, amount = item?.quan ||
         if (pendingSale?.handled) sellobjResult = pendingSale;
     }
     curseLoadstoneLeavingInventory(putItem);
+    if (isMagicBagObject(container) && magicBagExplodesWithObject(putItem)) {
+        const triggerOwner = shopkeeperOwningBillEntry(putItem);
+        const triggerPrice = triggerOwner.entry ? shopBillEntryTotal(triggerOwner.entry) : unpaidBillPrice(putItem);
+        const wasUnpaid = !!(putItem.unpaid || triggerOwner.entry);
+        const billing = billShopFloorContainerPutObject(container, putItem, {
+            acceptedSale: !!options.acceptedSale,
+            shkp: options.salePending?.shkp,
+            sellobjResult,
+        });
+        if (wasUnpaid)
+            preserveExplodedShopFloorPutTriggerBill(putItem, triggerOwner, billing.shkp, triggerPrice);
+        billShopFloorMagicBagExplosionTarget(container);
+        removeInventoryItem(item, count);
+        const messages = sellobjResult?.message ? [sellobjResult.message] : [];
+        return explodeMagicBagTransfer(container, putItem, messages);
+    }
     const billing = billShopFloorContainerPutObject(container, putItem, {
         acceptedSale: !!options.acceptedSale,
         shkp: options.salePending?.shkp,
