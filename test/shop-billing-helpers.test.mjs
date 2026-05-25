@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { rhack, __shopBillingTestHooks as shop } from '../js/cmd.js';
+import { processSpellbookStudyOccupation, rhack, __shopBillingTestHooks as shop } from '../js/cmd.js';
 import { game, resetGame } from '../js/gstate.js';
 import { initRng } from '../js/rng.js';
 import { LAVAPOOL, ROOM, ROOMOFFSET, SHOPBASE } from '../js/const.js';
@@ -187,6 +187,25 @@ function cancellationWand(id, letter = 'c') {
         spe: 1,
         letter,
         line: `${letter} - a wand of cancellation`,
+    };
+}
+
+function healingSpellbook(id, letter = 'b') {
+    return {
+        id,
+        cls: 'spellbook',
+        glyph: '+',
+        kind: 'spellbook of healing',
+        actualKind: 'spellbook of healing',
+        spellName: 'healing',
+        spell: { name: 'healing', level: 1, skill: 'healing' },
+        quan: 1,
+        ox: 5,
+        oy: 5,
+        letter,
+        line: `${letter} - a spellbook of healing`,
+        known: false,
+        bknown: true,
     };
 }
 
@@ -433,6 +452,66 @@ test('unpaid camera grease and tinning kit use charge one tenth price', () => {
         assert.equal(messages.length, 1, kind);
         assert.match(messages[0], /Usage fee, 10 zorkmids/, kind);
     }
+});
+
+test('unpaid spellbook study usage charges four fifths of bill price', () => {
+    const { shkp } = installShopState();
+    const book = healingSpellbook(3093, 'b');
+    game.inventory = [book];
+    shop.addObjectToShopBill(shkp, book, 100);
+    const messages = [];
+
+    const fee = shop.checkUnpaidUsageForTest(book, messages);
+
+    assert.equal(fee, 80);
+    assert.equal(shkp.debit, 80);
+    assert.equal(shkp.billct, 1);
+    const entry = shop.shopBillEntryForObject(shkp, book);
+    assert.ok(entry);
+    assert.equal(entry.useup, false);
+    assert.equal(shop.shopBillEntryTotal(entry), 100);
+    assert.equal(book.unpaid, true);
+    assert.equal(messages.length, 1);
+    assert.match(messages[0], /This is no free library/);
+    assert.match(messages[0], /80 zorkmids/);
+});
+
+test('completing study of an unpaid spellbook bills library usage and keeps live bill row', async () => {
+    const { shkp } = installCommandShopState();
+    const book = healingSpellbook(3099, 'b');
+    book.blessed = true;
+    game.inventory = [book];
+    game.nhDisplay = { cols: 200 };
+    shop.addObjectToShopBill(shkp, book, 100);
+
+    await rhack('r');
+
+    assert.equal(game._command_mode, 'readObject');
+    assert.match(game._pending_message, /What do you want to read\? \[b or \?\*\]/);
+
+    await rhack('b');
+
+    assert.equal(game._command_mode, null);
+    assert.match(game._pending_message, /You begin to memorize the runes\./);
+    assert.ok(game._spellbook_study_occupation);
+    assert.equal(shkp.debit || 0, 0);
+
+    await processSpellbookStudyOccupation();
+    await processSpellbookStudyOccupation();
+
+    assert.equal(game._spellbook_study_occupation, null);
+    assert.equal(shkp.debit, 80);
+    assert.equal(shkp.billct, 1);
+    const entry = shop.shopBillEntryForObject(shkp, book);
+    assert.ok(entry);
+    assert.equal(entry.useup, false);
+    assert.equal(shop.shopBillEntryTotal(entry), 100);
+    assert.equal(book.unpaid, true);
+    assert.equal(book.known, true);
+    assert.equal(game._known_spells?.some(spell => spell.name === 'healing'), true);
+    assert.match(`${game._pending_message || ''} ${game._topline_after_more || ''}`, /You learn the "healing" spell\./);
+    assert.match(`${game._pending_message || ''} ${game._topline_after_more || ''}`, /This is no free library/);
+    assert.match(`${game._pending_message || ''} ${game._topline_after_more || ''}`, /80 zorkmids/);
 });
 
 test('applying unpaid can of grease bills usage and greases the selected object', async () => {

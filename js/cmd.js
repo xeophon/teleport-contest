@@ -23362,6 +23362,10 @@ export async function processSpellbookStudyOccupation() {
             : `You add the "${name}" spell to your repertoire, as '${spellLetter}'.`;
     }
 
+    const usageMessages = [];
+    if (item) checkUnpaidUsage(item, usageMessages);
+    if (usageMessages.length) message = [message, ...usageMessages].join('  ');
+
     const width = game.nhDisplay?.cols || 80;
     const splitAfterMore = game._pending_message
         && game._pending_message.length + message.length + 3 >= width - 8;
