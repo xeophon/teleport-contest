@@ -15446,6 +15446,49 @@ function clearIceBoxPutState() {
     game._overlay_hide_status = 0;
 }
 
+function clearContainerTakeoutState() {
+    game._loot_takeout_container = null;
+    game._loot_takeout_entries = null;
+    game._loot_takeout_selected = null;
+    game._loot_takeout_clear_col = null;
+    game._loot_takeout_type_entries = null;
+    game._loot_takeout_types_selected = null;
+}
+
+function clearIceBoxSequenceState() {
+    game._icebox_sequence_after_takeout = null;
+    game._icebox_sequence_after_putin = null;
+    game._icebox_sequence_used = 0;
+    game._icebox_sequence_messages = null;
+}
+
+function startIceBoxSequence(nextAction) {
+    clearIceBoxSequenceState();
+    if (nextAction === 'putin') game._icebox_sequence_after_takeout = 'putin';
+    else if (nextAction === 'takeout') game._icebox_sequence_after_putin = 'takeout';
+    game._icebox_sequence_messages = [];
+}
+
+function iceBoxSequenceActive() {
+    return !!(game._icebox_sequence_after_takeout || game._icebox_sequence_after_putin);
+}
+
+function markIceBoxSequenceUsed(used = true) {
+    if (used) game._icebox_sequence_used = 1;
+}
+
+function addIceBoxSequenceMessages(messages) {
+    const list = Array.isArray(messages) ? messages : [messages];
+    game._icebox_sequence_messages ??= [];
+    for (const message of list) {
+        if (message) game._icebox_sequence_messages.push(message);
+    }
+}
+
+function iceBoxEmptyMessage() {
+    return 'The ice box is empty.';
+}
+
 function iceBoxContainerAvailable(iceBox) {
     return !!(iceBox && (game.level?.objects || []).includes(iceBox)
         && iceBox.ox === game.u?.ux && iceBox.oy === game.u?.uy);
@@ -15611,8 +15654,8 @@ function putInventoryObjectIntoIceBox(iceBox, item, amount = item?.quan || 1) {
     return { moved: true, message: `You put ${name} into the ice box.` };
 }
 
-async function showIceBoxPutMessages(results) {
-    const messages = results.map(result => result.message).filter(Boolean);
+async function showIceBoxMessageList(messages) {
+    messages = (messages || []).filter(Boolean);
     if (!messages.length) return;
     const message = messages.join('  ');
     if (message.length <= 79) {
@@ -15624,6 +15667,53 @@ async function showIceBoxPutMessages(results) {
         game._queued_message_process_time_after_more = 1;
         await setMessage(first, true);
     }
+}
+
+function iceBoxPutResultMessages(results) {
+    return (results || []).map(result => result.message).filter(Boolean);
+}
+
+async function showIceBoxPutMessages(results) {
+    await showIceBoxMessageList(iceBoxPutResultMessages(results));
+}
+
+async function finishIceBoxSequence(messages = [], moved = false) {
+    const allMessages = [...(game._icebox_sequence_messages || []), ...(messages || [])];
+    const used = moved || !!game._icebox_sequence_used;
+    clearIceBoxSequenceState();
+    game._command_mode = null;
+    game._overlay_lines = null;
+    game._overlay_hide_status = 0;
+    if (used) game.context.move = 1;
+    await showIceBoxMessageList(allMessages);
+}
+
+async function continueIceBoxSequenceToPutIn(iceBox, messages = []) {
+    addIceBoxSequenceMessages(messages);
+    if (iceBoxContainerAvailable(iceBox) && beginIceBoxPutIn(iceBox)) return true;
+    clearIceBoxPutState();
+    game._command_mode = null;
+    await finishIceBoxSequence(["You don't have anything to put in."]);
+    return true;
+}
+
+async function continueIceBoxSequenceToTakeout(iceBox, messages = []) {
+    addIceBoxSequenceMessages(messages);
+    if (!iceBoxContainerAvailable(iceBox)) {
+        clearContainerTakeoutState();
+        clearIceBoxPutState();
+        game._command_mode = null;
+        await finishIceBoxSequence();
+        return true;
+    }
+    const learnedEmpty = !(iceBox.contents || []).length && !iceBox.cknown;
+    iceBox.cknown = true;
+    if (beginIceBoxTakeout(iceBox)) return true;
+    if (learnedEmpty) markIceBoxSequenceUsed();
+    clearContainerTakeoutState();
+    game._command_mode = null;
+    await finishIceBoxSequence([iceBoxEmptyMessage()]);
+    return true;
 }
 
 async function beginIceBoxStash(iceBox) {
@@ -31188,11 +31278,32 @@ export async function rhack(_cmd) {
             await setMessage("You don't have anything to stash.");
             return;
         }
+        if (ch === 'b') {
+            startIceBoxSequence('putin');
+            if (iceBox) {
+                const learnedEmpty = !(iceBox.contents || []).length && !iceBox.cknown;
+                iceBox.cknown = true;
+                if (beginIceBoxTakeout(iceBox)) return;
+                if (learnedEmpty) markIceBoxSequenceUsed();
+                await continueIceBoxSequenceToPutIn(iceBox, [iceBoxEmptyMessage()]);
+                return;
+            }
+            await finishIceBoxSequence([iceBoxEmptyMessage(), "You don't have anything to put in."]);
+            game._command_mode = null;
+            return;
+        }
+        if (ch === 'r') {
+            startIceBoxSequence('takeout');
+            if (iceBox && beginIceBoxPutIn(iceBox)) return;
+            await continueIceBoxSequenceToTakeout(iceBox, ["You don't have anything to put in."]);
+            return;
+        }
         if (ch === '\x1b' || ch === 'q') {
             for (let row = 0; row < 12; row++) game.nhDisplay?.clearRow(row);
             game._overlay_lines = null;
             game._overlay_hide_status = 0;
             game._command_mode = null;
+            clearIceBoxSequenceState();
             game.context.move = 1;
         }
         return;
@@ -31202,6 +31313,8 @@ export async function rhack(_cmd) {
         const iceBox = game._icebox_put_container;
         if (!iceBoxContainerAvailable(iceBox)) {
             clearIceBoxPutState();
+            if (iceBoxSequenceActive()) await finishIceBoxSequence();
+            else clearIceBoxSequenceState();
             game._command_mode = null;
             return;
         }
@@ -31210,6 +31323,15 @@ export async function rhack(_cmd) {
         const choice = choices.find(entry => entry.letter === ch || entry.symbol === ch);
         if (ch === '\x1b' || ch === 'q') {
             clearIceBoxPutState();
+            if (game._icebox_sequence_after_putin === 'takeout') {
+                await continueIceBoxSequenceToTakeout(iceBox);
+                return;
+            }
+            if (iceBoxSequenceActive()) {
+                await finishIceBoxSequence();
+                return;
+            }
+            clearIceBoxSequenceState();
             game._command_mode = null;
             return;
         }
@@ -31231,6 +31353,15 @@ export async function rhack(_cmd) {
         if (ch === '\r' || ch === '\n' || ch === ' ') {
             if (!selected.size || (selected.size === 1 && selected.has('auto'))) {
                 clearIceBoxPutState();
+                if (game._icebox_sequence_after_putin === 'takeout') {
+                    await continueIceBoxSequenceToTakeout(iceBox);
+                    return;
+                }
+                if (iceBoxSequenceActive()) {
+                    await finishIceBoxSequence(['No relevant items selected.']);
+                    return;
+                }
+                clearIceBoxSequenceState();
                 game._command_mode = null;
                 await setMessage('No relevant items selected.');
                 return;
@@ -31255,6 +31386,15 @@ export async function rhack(_cmd) {
             })).filter(entry => entry.amount > 0);
             if (!entries.length) {
                 clearIceBoxPutState();
+                if (game._icebox_sequence_after_putin === 'takeout') {
+                    await continueIceBoxSequenceToTakeout(iceBox);
+                    return;
+                }
+                if (iceBoxSequenceActive()) {
+                    await finishIceBoxSequence(['No relevant items selected.']);
+                    return;
+                }
+                clearIceBoxSequenceState();
                 game._command_mode = null;
                 await setMessage('No relevant items selected.');
                 return;
@@ -31272,6 +31412,8 @@ export async function rhack(_cmd) {
         const iceBox = game._icebox_put_container;
         if (!iceBoxContainerAvailable(iceBox)) {
             clearIceBoxPutState();
+            if (iceBoxSequenceActive()) await finishIceBoxSequence();
+            else clearIceBoxSequenceState();
             game._command_mode = null;
             return;
         }
@@ -31289,6 +31431,15 @@ export async function rhack(_cmd) {
             const selectedEntries = entries.filter(item => selected.has(item.letter));
             if (!selectedEntries.length) {
                 clearIceBoxPutState();
+                if (game._icebox_sequence_after_putin === 'takeout') {
+                    await continueIceBoxSequenceToTakeout(iceBox);
+                    return;
+                }
+                if (iceBoxSequenceActive()) {
+                    await finishIceBoxSequence(['No relevant items selected.']);
+                    return;
+                }
+                clearIceBoxSequenceState();
                 game._command_mode = null;
                 await setMessage('No relevant items selected.');
                 return;
@@ -31296,14 +31447,34 @@ export async function rhack(_cmd) {
             const results = selectedEntries.map(selectedEntry =>
                 putInventoryObjectIntoIceBox(iceBox, selectedEntry.item, selectedEntry.amount));
             const moved = results.some(result => result.moved);
+            const messages = iceBoxPutResultMessages(results);
             clearIceBoxPutState();
+            if (game._icebox_sequence_after_putin === 'takeout') {
+                markIceBoxSequenceUsed(moved);
+                await continueIceBoxSequenceToTakeout(iceBox, messages);
+                return;
+            }
+            if (iceBoxSequenceActive()) {
+                await finishIceBoxSequence(messages, moved);
+                return;
+            }
+            clearIceBoxSequenceState();
             game._command_mode = null;
             if (moved) game.context.move = 1;
-            await showIceBoxPutMessages(results);
+            await showIceBoxMessageList(messages);
             return;
         }
         if (ch === '\x1b' || ch === 'q') {
             clearIceBoxPutState();
+            if (game._icebox_sequence_after_putin === 'takeout') {
+                await continueIceBoxSequenceToTakeout(iceBox);
+                return;
+            }
+            if (iceBoxSequenceActive()) {
+                await finishIceBoxSequence();
+                return;
+            }
+            clearIceBoxSequenceState();
             game._command_mode = null;
         }
         return;
@@ -31561,11 +31732,18 @@ export async function rhack(_cmd) {
                 return;
             }
             if (ch === '\x1b') {
-                game._loot_takeout_container = null;
-                game._loot_takeout_type_entries = null;
-                game._loot_takeout_types_selected = null;
+                clearContainerTakeoutState();
                 game._overlay_lines = null;
                 game._overlay_hide_status = 0;
+                if (game._icebox_sequence_after_takeout === 'putin' && isIceBoxObject(container)) {
+                    await continueIceBoxSequenceToPutIn(container);
+                    return;
+                }
+                if (iceBoxSequenceActive() && isIceBoxObject(container)) {
+                    await finishIceBoxSequence();
+                    return;
+                }
+                clearIceBoxSequenceState();
                 game._command_mode = null;
             }
             return;
@@ -31578,6 +31756,7 @@ export async function rhack(_cmd) {
             for (let row = 0; row < 12; row++) game.nhDisplay?.clearRow(row);
             game._overlay_lines = null;
             game._overlay_hide_status = 0;
+            clearIceBoxSequenceState();
             game._command_mode = null;
         }
         return;
@@ -31655,15 +31834,24 @@ export async function rhack(_cmd) {
             }
             if (container) container.contents = (container.contents || []).filter(item => !picked.some(entry => entry.item === item));
             game._pet_food_scan_inventory = game.inventory;
-            game._loot_takeout_container = null;
-            game._loot_takeout_entries = null;
-            game._loot_takeout_selected = null;
-            game._loot_takeout_clear_col = null;
+            const followupPutIn = game._icebox_sequence_after_takeout === 'putin' && isIceBoxObject(container);
+            const finishSequence = !followupPutIn && iceBoxSequenceActive() && isIceBoxObject(container);
+            clearContainerTakeoutState();
             game._floor_container_object = null;
             game._overlay_lines = null;
             game._overlay_hide_status = 0;
-            game._command_mode = null;
             const message = messages.join('  ');
+            if (followupPutIn) {
+                markIceBoxSequenceUsed(true);
+                await continueIceBoxSequenceToPutIn(container, messages);
+                return;
+            }
+            if (finishSequence) {
+                await finishIceBoxSequence(messages, true);
+                return;
+            }
+            clearIceBoxSequenceState();
+            game._command_mode = null;
             if (message.length <= 79) {
                 await setMessage(message);
             } else {
@@ -31677,12 +31865,20 @@ export async function rhack(_cmd) {
             return;
         }
         if (ch === '\x1b') {
-            game._loot_takeout_container = null;
-            game._loot_takeout_entries = null;
-            game._loot_takeout_selected = null;
-            game._loot_takeout_clear_col = null;
+            const container = game._loot_takeout_container;
+            const followupPutIn = game._icebox_sequence_after_takeout === 'putin' && isIceBoxObject(container);
+            clearContainerTakeoutState();
             game._overlay_lines = null;
             game._overlay_hide_status = 0;
+            if (followupPutIn) {
+                await continueIceBoxSequenceToPutIn(container);
+                return;
+            }
+            if (iceBoxSequenceActive() && isIceBoxObject(container)) {
+                await finishIceBoxSequence();
+                return;
+            }
+            clearIceBoxSequenceState();
             game._command_mode = null;
         }
         return;

@@ -2650,17 +2650,18 @@ Next concrete target:
   replays and full score remain exact.
 - Ice-box corpse age parity now covers generated ice-box contents,
   monster-eaten container spills, floor ice-box takeout, floor ice-box `#tip`
-  spills, and player floor ice-box put-in/stash-one insertion. Generated
+  spills, player floor ice-box put-in/stash-one insertion, and floor ice-box
+  menu `b`/`r` both-order sequencing. Generated
   ice-box corpses are explicitly frozen at creation while the generic
   `add_to_container()` helper remains neutral like C; the floor put-in/stash
   paths freeze selected inventory objects immediately before insertion, and
   the thaw/removal helper restores normal corpse age, suppresses non-ice-troll
   revival, and restarts ordinary corpse rot using the C `ROT_AGE`/`rnz`
-  formula. Focused guards, direct takeout/tip/put-in/stash smokes, and full
-  score remain exact. Remaining ice-box work is full carried, nested, and
-  target-container `in_container()`/`out_container()`/`#tip` variants, exact `b`/`r`
-  menu sequencing, troll/Rider revive and zombify timers, glob shrinking,
-  forced ice-box destruction, and shop billing edge cases.
+  formula. Focused guards, direct takeout/tip/put-in/stash/both-order smokes,
+  focused replays, and full score remain exact. Remaining ice-box work is full
+  carried, nested, and target-container `in_container()`/`out_container()`/`#tip`
+  variants, troll/Rider revive and zombify timers, glob shrinking, forced
+  ice-box destruction, and shop billing edge cases.
 - Remaining ice work outside this fire-ray terrain slice includes the broader
   full `spoteffects()`/`pooleffects()` hero liquid behavior, deeper
   `minliquid()` edges (life-saving or shape-shift survivor relocation,
