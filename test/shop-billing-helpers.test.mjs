@@ -232,6 +232,19 @@ function oilPotion(id, letter = 'o', quan = 1) {
     };
 }
 
+async function invokeRub(letter) {
+    await rhack('#');
+    await rhack('r');
+    await rhack('u');
+    await rhack('b');
+    await rhack('\n');
+
+    assert.equal(game._command_mode, 'rubObject');
+    assert.match(game._pending_message, /What do you want to rub\?/);
+
+    await rhack(letter);
+}
+
 function healingSpellbook(id, letter = 'b') {
     return {
         id,
@@ -693,6 +706,78 @@ test('applying an unpaid potion of oil charges fuel tax and keeps a used-up bill
     assert.match(game._pending_message, /You light your potion/);
     assert.match(game._pending_message, /Yendorian Fuel Tax/);
     assert.match(game._pending_message, /in addition to the cost of the potion/);
+});
+
+test('rubbing a non-wielded magic lamp first wields it without releasing the djinni', async () => {
+    const { shkp } = installCommandShopState();
+    const item = lamp(3100, 'magic lamp', 'l', 1);
+    game.inventory = [item];
+    shop.addObjectToShopBill(shkp, item, 90);
+
+    await invokeRub('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(item.wielded, true);
+    assert.equal(item.otyp, MAGIC_LAMP);
+    assert.equal(item.spe, 1);
+    assert.equal(shkp.debit || 0, 0);
+    assert.equal(game.level.monsters.length, 1);
+    assert.match(game._pending_message, /You now wield a lamp\./);
+});
+
+test('rubbing a wielded unpaid magic lamp bills unusual use and converts it before djinni handling', async () => {
+    const { shkp } = installCommandShopState();
+    initRng(3);
+    const item = lamp(3101, 'magic lamp', 'l', 1);
+    item.wielded = true;
+    item.line = 'l - a magic lamp (weapon in right hand)';
+    game.inventory = [item];
+    shop.addObjectToShopBill(shkp, item, 90);
+
+    await invokeRub('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(item.otyp, OIL_LAMP);
+    assert.equal(item.kind, 'oil lamp');
+    assert.equal(item.actualKind, 'oil lamp');
+    assert.equal(item.spe, 0);
+    assert.ok(item.age >= 1000 && item.age <= 1499);
+    assert.equal(item.unpaid, true);
+    assert.equal(shkp.debit, 120);
+    const entry = shop.shopBillEntryForObject(shkp, item);
+    assert.ok(entry);
+    assert.equal(entry.useup, false);
+    assert.equal(shop.shopBillEntryTotal(entry), 90);
+    assert.match(game._pending_message, /Usage fee, 120 zorkmids/);
+    assert.match(game._pending_message, /In a cloud of smoke, a djinni emerges!|It turns out to be empty\./);
+    if (/In a cloud of smoke/.test(game._pending_message))
+        assert.match(game._pending_message, /I am in your debt|Thank you for freeing me|You freed me|It is about time|You disturbed me/);
+});
+
+test('rubbing wielded oil and brass lamps follows C lamp messages', async () => {
+    installCommandShopState();
+    const oil = lamp(3102, 'oil lamp', 'l', 1);
+    oil.wielded = true;
+    oil.line = 'l - an oil lamp (weapon in right hand)';
+    game.inventory = [oil];
+
+    await invokeRub('l');
+
+    assert.equal(game.context.move, 1);
+    assert.match(game._pending_message, /Nothing happens\./);
+
+    const brass = lamp(3103, 'brass lantern', 'b', 1);
+    brass.wielded = true;
+    brass.line = 'b - a brass lantern (weapon in right hand)';
+    game.inventory = [brass];
+
+    await invokeRub('b');
+
+    assert.equal(game.context.move, 1);
+    assert.match(game._pending_message, /Rubbing the electric lamp is not particularly rewarding\./);
+    assert.match(game._pending_message, /Anyway, nothing exciting happens\./);
 });
 
 test('applying unpaid can of grease bills usage and greases the selected object', async () => {

@@ -9438,6 +9438,15 @@ function identifyPotionOfOil(item) {
     learnObjectScore('Potions', 'potion of oil');
 }
 
+function recordKnownToolDiscovery(toolName) {
+    const name = String(toolName || '').trim();
+    if (!name) return;
+    game._discoveries ??= [];
+    if (!game._discoveries.some(entry => entry.section === 'Tools' && entry.name === name))
+        game._discoveries.push({ section: 'Tools', name, text: name, starred: false, known: true });
+    learnObjectScore('Tools', name);
+}
+
 async function applyPotionOfOil(item) {
     const messages = [];
     if (item.lamplit || item.burning) {
@@ -9459,6 +9468,109 @@ async function applyPotionOfOil(item) {
         refreshLightSourceLine(potion);
     }
     await setMessage(messages.join('  '), messages.length > 1);
+    game.context.move = 1;
+}
+
+function removeMonsterFromLevel(mon) {
+    if (!mon || !game.level?.monsters) return;
+    game.level.monsters = game.level.monsters.filter(candidate => candidate !== mon);
+    newsym(mon.mx, mon.my);
+}
+
+async function djinniFromLamp(lamp, messages) {
+    const data = monsterByRndName('djinni') || RANDOM_MONSTER_BY_NAME.get('djinni');
+    const mon = data ? await makemon(data, game.u?.ux || 0, game.u?.uy || 0, MM_NOMSG) : null;
+    if (!mon) {
+        messages.push('It turns out to be empty.');
+        return;
+    }
+
+    const name = mon.data?.name || 'djinni';
+    if (game.u?.blind) {
+        messages.push('You smell acrid fumes.');
+        messages.push('Something speaks.');
+    } else {
+        messages.push(`In a cloud of smoke, ${monsterIndefiniteName(name)} emerges!`);
+        messages.push(`The ${name} speaks.`);
+    }
+
+    let chance = rn2(5);
+    if (lamp.blessed) chance = chance === 4 ? rnd(4) : 0;
+    else if (lamp.cursed) chance = chance === 0 ? rn2(4) : 4;
+
+    switch (chance) {
+    case 0:
+        messages.push('"I am in your debt.  I will grant one wish!"');
+        removeMonsterFromLevel(mon);
+        game._queued_messages_after_more ??= [];
+        game._queued_messages_after_more.push({ text: 'For what do you wish?', more: false, beginWishPrompt: true });
+        break;
+    case 1:
+        messages.push('"Thank you for freeing me!"');
+        mon.pet = true;
+        mon.mtame = Math.max(1, mon.mtame || 0);
+        mon.mpeaceful = 1;
+        break;
+    case 2:
+        messages.push('"You freed me!"');
+        mon.pet = false;
+        mon.mtame = 0;
+        mon.mpeaceful = 1;
+        set_malign(mon);
+        break;
+    case 3:
+        messages.push('"It is about time!"');
+        if (visibleCreatedMonster(mon)) messages.push(`The ${name} vanishes.`);
+        removeMonsterFromLevel(mon);
+        break;
+    default:
+        messages.push('"You disturbed me, fool!"');
+        mon.pet = false;
+        mon.mtame = 0;
+        mon.mpeaceful = 0;
+        set_malign(mon);
+        break;
+    }
+}
+
+async function rubLampObject(item) {
+    const messages = [];
+    if (!itemIsWielded(item)) {
+        wieldItemForApply(item);
+        await setMessage(`You now wield ${articleFor(pickupObjectName({ ...item, line: '' }))}.`);
+        game._command_mode = null;
+        game.context.move = 1;
+        return;
+    }
+
+    const kind = objectKindKey(item);
+    if (item.otyp === MAGIC_LAMP || kind === 'magic lamp') {
+        if ((item.spe ?? 0) > 0 && !rn2(3)) {
+            checkUnpaidUsage(item, messages, { altusage: true, chargeCount: 1 });
+            const wasLit = !!(item.lamplit || item.burning);
+            item.otyp = OIL_LAMP;
+            item.kind = 'oil lamp';
+            item.actualKind = 'oil lamp';
+            item.spe = 0;
+            item.age = rn1(500, 1000);
+            if (wasLit) beginWishedBurn(item);
+            refreshLightSourceLine(item);
+            recordKnownToolDiscovery('magic lamp');
+            await djinniFromLamp(item, messages);
+        } else if (rn2(2)) {
+            messages.push(game.u?.blind ? 'You smell smoke.' : 'You see a puff of smoke.');
+        } else {
+            messages.push('Nothing happens.');
+        }
+    } else if (item.otyp === BRASS_LANTERN || kind === 'brass lantern') {
+        messages.push('Rubbing the electric lamp is not particularly rewarding.');
+        messages.push('Anyway, nothing exciting happens.');
+    } else {
+        messages.push('Nothing happens.');
+    }
+
+    await setMessage(messages.join('  '), messages.length > 1 || !!game._queued_messages_after_more?.length);
+    game._command_mode = null;
     game.context.move = 1;
 }
 
@@ -21683,8 +21795,7 @@ function royalJellyRubPrompt() {
 
 function rubObjectLetters() {
     return inventoryLetters(item => {
-        const name = inventoryItemName(item).toLowerCase();
-        return name.includes('lamp') || isRoyalJelly(item);
+        return isLampObject(item) || isRoyalJelly(item);
     });
 }
 
@@ -35567,8 +35678,7 @@ export async function rhack(_cmd) {
     if (game._command_mode === 'rubObject') {
         if (ch === '?' || ch === '*') {
             const rubItems = (game.inventory || []).filter(item => {
-                const name = inventoryItemName(item).toLowerCase();
-                return name.includes('lamp') || isRoyalJelly(item);
+                return isLampObject(item) || isRoyalJelly(item);
             });
             const rows = rubItems.map((item, index) => [index, 40, ` ${normalInventoryLine(item)}`.padEnd(40, ' ')]);
             rows.push([rows.length, 40, ' (end)'.padEnd(40, ' ')]);
@@ -35580,19 +35690,8 @@ export async function rhack(_cmd) {
             await beginRoyalJellyRub(item);
             return;
         }
-        const name = item ? inventoryItemName(item).toLowerCase() : '';
-        if (item && name.includes('lamp')) {
-            const lamp = item;
-            for (const invItem of game.inventory || []) {
-                if (invItem.wielded || invItem.line?.includes('weapon in')) {
-                    invItem.line = `${invItem.letter || '?'} - ${inventoryItemName(invItem)}`;
-                }
-                invItem.wielded = invItem === lamp;
-            }
-            if (lamp) lamp.line = `${lamp.letter || '?'} - ${inventoryItemName(lamp)} (weapon in right hand)`;
-            await setMessage('You now wield a lamp.');
-            game._command_mode = null;
-            game.context.move = 1;
+        if (item && isLampObject(item)) {
+            await rubLampObject(item);
             return;
         }
         if (ch === '\x1b') {
