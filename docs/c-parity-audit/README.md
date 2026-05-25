@@ -22,7 +22,7 @@ This folder records source-backed audits against `nethack-c/upstream`. The notes
 
 ## Ranked Roadmap
 
-1. Shop ledger foundation from `05`: current JS is field-based, misses `addtobill`/`sellobj`/`subfrombill`/`costly_alteration`, and has a known multi-item payment message bug.
+1. Shop ledger foundation from `05`: current JS is still partly field-based, misses broad `addtobill`/`subfrombill`/container `sellobj`/`costly_alteration` coverage, and has a known multi-item payment message bug.
 2. Object registry and canonical object factory from `02`: `mkobj`, wishes, weight, timers, names, and display should share one metadata source.
 3. Level generation lifecycle and minimal `sp_lev` layer from `03`: fix generation ordering, shared finalization, and special/quest level data drift.
 4. Command, prompt, and menu registry from `01`: remove literal-key dispatch drift and make `getlin`, `yn_function`, extended commands, and menus reusable.
@@ -37,8 +37,8 @@ Continue with the shop area because it combines visible current behavior with a 
 
 - Keep `unpaid` and `unpaidPrice` as compatibility/display fields while migrating callers.
 - Expand `subfrombill` style helpers for split stacks and containers.
-- Add the sale/credit side of `sellobj()` for paid objects dropped in a shop.
 - Move remaining non-food inventory stack merges through bill-aware helpers.
 - Extend ledger use to container put-in, take-out, and tip moves after ordinary pickup/drop is stable.
+- Expand `sellobj()` beyond ordinary paid non-container drops to container contents, gold donation/credit, robbed-shop, and angry-shopkeeper edge cases.
 
 Every code slice should be followed by source-derived smoke checks plus `npm run score`.

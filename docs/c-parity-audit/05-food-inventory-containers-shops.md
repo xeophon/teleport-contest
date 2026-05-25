@@ -152,22 +152,22 @@ JS single pickup computes a shop price, shows a quote, and stores `unpaid`/`unpa
 
 Concrete gaps:
 
-- Multi-object pickup bypasses shop quote and unpaid setup entirely (`js/cmd.js:24000-24055`).
-- Single pickup merges matching food into an existing inventory stack without carrying forward the current shop price or unpaid state (`js/cmd.js:37656-37691`).
-- There is no bill ledger call before inventory insertion, so C's `addtobill()`/`addinv()` merge invariant is absent.
+- Multi-object pickup still bypasses the C quote and lift preflight, though ordinary picked objects now enter the JS shop ledger.
+- Single food pickup now rejects paid/unpaid mismatches and carries compatible unpaid bill totals forward; remaining non-food stack merges still need the same bill-aware path.
+- Bill ledger calls exist for ordinary shop pickup, but they are not yet a full C `addtobill()`/`addinv()` merge invariant across every transfer path.
 - Lift limits are not C-parity: no pre-transfer partial pickup, no inventory-slot failure, no C boulder/loadstone/scare monster/fatal corpse/artifact touch matrix, and burden is handled after full insertion.
 - Stolen value when carrying merchandise out of a shop is not tied to recursive bill/container state the way `pick_obj()` and `stolen_value()` are in C.
 
-### 5. Drop Flow Does Not Implement `sellobj()` Semantics
+### 5. Drop Flow Only Partially Implements `sellobj()` Semantics
 
 C drop unwields/unquivers as needed, removes from inventory, applies floor effects, places/stacks the object, and calls `sellobj()` when on a costly spot. `sellobj()` handles unpaid returns, deliberate sale offers, credit, no-charge state for dropped containers, and bill removal.
 
-JS drop clones the inventory object to the floor, clears basic equipment flags, applies earth/ice effects, and prints a message (`js/cmd.js:33037-33117`). It does not call a shop sale/return path.
+JS drop clones the inventory object to the floor, clears basic equipment flags, applies earth/ice effects, and prints a message (`js/cmd.js:33037-33117`). It now handles ordinary unpaid non-container returns and paid non-container sale/credit offers, including declined-sale `no_charge`, but broader `sellobj()` coverage is still missing.
 
 Concrete gaps:
 
-- Dropping unpaid merchandise in a shop does not return it through `subfrombill()`/`sellobj()`.
-- Dropping paid items in a shop does not offer sale/credit or mark contained items `no_charge`.
+- Split stacks and containers are not yet routed through full `subfrombill()`/`sellobj()` compatibility.
+- Gold donation/credit, robbed-shop, angry-shopkeeper, and special-stock edge cases are still incomplete.
 - Dropped containers do not recursively mark contents `no_charge` or preserve C's `dropped_container()`/`picked_container()` state.
 - Drop stacking is not bill-aware. C `mergable()` checks unpaid, bill price, `no_charge`, `oeaten`, corpse/egg/tin identity, and related state; JS drop pushes a new floor object.
 
@@ -220,8 +220,8 @@ Concrete gaps:
 
 4. Port pickup/drop around shop and stack invariants.
    - Move pickup through `carry_count()`/`lift_object()` style preflight and `pick_obj()` style bill-before-inventory insertion.
-   - Move drop through `dropx()`/`dropy()`/`dropz()` style removal, floor effects, `sellobj()`, and bill-aware stack merging.
-   - Fix multi-pickup and same-food merge as part of this slice because both currently lose shop state.
+   - Continue moving drop through `dropx()`/`dropy()`/`dropz()` style removal, floor effects, complete `sellobj()`, and bill-aware stack merging.
+   - Continue from the current multi-pickup and same-food merge fixes into non-food stack merges and container flows.
 
 5. Port container operations after pickup/drop and shop billing.
    - Rework put-in, take-out, and tip to call ledger-aware `sellobj`, `addtobill`, `subfrombill`, stolen-value, and no-charge helpers.
@@ -235,7 +235,7 @@ Concrete gaps:
 ## Highest-Risk Current Behaviors
 
 - Eating unpaid shop food or tins can avoid C billing because `costly_alteration()` and `costly_tin()` are missing.
-- Multi-pickup and pickup merge can lose unpaid/shop state.
-- Dropping or container-moving objects in shops does not exercise C `sellobj()`/`addtobill()`/`subfrombill()` paths.
+- Multi-pickup still lacks full C quote/lift semantics, and non-food pickup merges can lose unpaid/shop state.
+- Container-moving objects in shops and complex drops still do not exercise full C `sellobj()`/`addtobill()`/`subfrombill()` paths.
 - Container take-out/tip can move shop-owned contents without becoming unpaid or stolen.
 - Payment is not backed by a bill ledger, and the multi-item pay message references an undefined `total`.

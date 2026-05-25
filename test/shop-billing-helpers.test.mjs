@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { __shopBillingTestHooks as shop } from '../js/cmd.js';
-import { resetGame } from '../js/gstate.js';
+import { game, resetGame } from '../js/gstate.js';
 import { ROOMOFFSET, SHOPBASE } from '../js/const.js';
 
 function installShopState() {
@@ -18,8 +18,12 @@ function installShopState() {
         shk: { x: 6, y: 5 },
         bill: [],
         billct: 0,
+        minvent: [{ cls: 'coin', otyp: 466, glyph: '$', quan: 100 }],
+        m_id: 1,
     };
     g.flags = {};
+    g.inventory = [];
+    g._goldCount = 0;
     g.u = {
         ux: 5,
         uy: 5,
@@ -32,6 +36,23 @@ function installShopState() {
         at: () => ({ roomno }),
     };
     return { shkp };
+}
+
+function dagger(id, letter = 'd') {
+    return {
+        id,
+        cls: 'weapon',
+        glyph: ')',
+        kind: 'dagger',
+        actualKind: 'dagger',
+        quan: 1,
+        ox: 5,
+        oy: 5,
+        letter,
+        line: `${letter} - a dagger`,
+        dknown: true,
+        known: true,
+    };
 }
 
 function foodRation(id, letter = 'a') {
@@ -124,4 +145,62 @@ test('shop pickup merge rejects unpaid into paid and combines compatible unpaid 
     assert.equal(result.billEntry.bquan, 2);
     assert.equal(shop.shopBillEntryTotal(result.billEntry), 90);
     assert.equal(unpaidStack.unpaidPrice, 90);
+});
+
+test('paid saleable shop drop computes C-style sale offer and transfers cash on accept', () => {
+    const { shkp } = installShopState();
+    const dropped = dagger(5001);
+    const sale = shop.shopDroppedPaidObjectSaleInfo(dropped, 5, 5);
+
+    assert.equal(shop.shopSaleableObject(shkp, dropped), true);
+    assert.equal(shop.shopSaleOffer(dropped, shkp), 2);
+    assert.equal(sale.prompt, true);
+    assert.equal(sale.offer, 2);
+
+    const message = shop.finishDroppedObjectSale(sale, true);
+
+    assert.match(message, /receive 2 gold pieces/);
+    assert.equal(shkp.minvent[0].quan, 98);
+    assert.equal(shop.shopkeeperCash(shkp), 98);
+    assert.equal(game._goldCount, 2);
+    assert.equal(dropped.no_charge, undefined);
+});
+
+test('declining a paid shop sale marks the floor object no-charge', () => {
+    installShopState();
+    const dropped = dagger(5002);
+    const sale = shop.shopDroppedPaidObjectSaleInfo(dropped, 5, 5);
+    const message = shop.finishDroppedObjectSale({ ...sale, declineMessage: 'You drop a dagger.' }, false);
+
+    assert.equal(message, 'You drop a dagger.');
+    assert.equal(dropped.no_charge, true);
+    assert.equal(game._goldCount, 0);
+});
+
+test('cashless shopkeeper offers sale credit without changing hero gold', () => {
+    const { shkp } = installShopState();
+    shkp.minvent = [];
+    const dropped = dagger(5003);
+    const sale = shop.shopDroppedPaidObjectSaleInfo(dropped, 5, 5);
+
+    assert.equal(sale.credit, true);
+    assert.equal(sale.offer, 1);
+    const message = shop.finishDroppedObjectSale(sale, true);
+
+    assert.match(message, /1 zorkmid in credit/);
+    assert.equal(shkp.credit, 1);
+    assert.equal(game._goldCount, 0);
+    assert.equal(dropped.no_charge, undefined);
+});
+
+test('no-charge floor merchandise is not billed when picked back up', () => {
+    const { shkp } = installShopState();
+    const floorObj = foodRation(6001, 'a');
+    floorObj.no_charge = true;
+    const carried = { ...floorObj, line: 'a - a food ration' };
+    const result = shop.addPickedObjectToShopBill(floorObj, carried);
+
+    assert.equal(result.price, 0);
+    assert.equal(shkp.billct, 0);
+    assert.equal(carried.unpaid, undefined);
 });

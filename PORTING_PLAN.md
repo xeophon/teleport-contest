@@ -24,6 +24,7 @@ The current audit source of truth is `docs/c-parity-audit/`.
 - Added the first shop bill ledger scaffold for newly picked-up shop items, horn-created shop objects, and payment removal while preserving legacy unpaid display fields.
 - Added source-derived shop billing helper tests, wired multi-pickup through the ledger, and made unpaid non-container drops in shops clear the bill like the early `sellobj()` return path.
 - Made ordinary food pickup respect C unpaid merge rules: unpaid shop food no longer merges into paid stacks, and compatible unpaid stack merges carry the bill total forward.
+- Added the paid non-container `sellobj()` side for ordinary shop drops: C-style stocked-item sale offers, cash transfer, cashless credit offers, and declined-sale `no_charge` pickup semantics.
 - Latest verified public score: `44/44`.
 
 ## Current Priorities
@@ -31,7 +32,7 @@ The current audit source of truth is `docs/c-parity-audit/`.
 1. Shop ledger foundation.
    - Source notes: `docs/c-parity-audit/05-food-inventory-containers-shops.md`.
    - Current JS tracks unpaid state on objects instead of a C-shaped bill ledger.
-   - Missing or partial concepts include `addtobill`, `splitbill`, `subfrombill`, `sellobj`, `dropped_container`, `picked_container`, `check_unpaid_usage`, and `costly_alteration`.
+   - Missing or partial concepts include `addtobill`, `splitbill`, `subfrombill`, container/gold `sellobj`, `dropped_container`, `picked_container`, `check_unpaid_usage`, and `costly_alteration`.
    - Immediate visible bug: multi-item payment computes `cashTotal` but formats the final message with an undefined `total`.
 
 2. Object registry and canonical object factory.
@@ -72,9 +73,9 @@ The current audit source of truth is `docs/c-parity-audit/`.
 Continue the shop ledger migration:
 
 1. Expand `subfrombill` compatibility for split stacks and containers.
-2. Add the sale/credit side of `sellobj()` for paid objects dropped in a shop.
-3. Move non-food inventory stack merges through bill-aware helpers.
-4. Extend ledger use to container put-in, take-out, and tip moves.
+2. Move non-food inventory stack merges through bill-aware helpers.
+3. Extend ledger use to container put-in, take-out, and tip moves.
+4. Expand `sellobj()` beyond ordinary paid non-container objects to container contents, gold donation/credit, robbed-shop, and angry-shopkeeper edge cases.
 
 ## Verification
 
