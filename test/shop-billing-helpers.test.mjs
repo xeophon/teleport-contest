@@ -3986,6 +3986,158 @@ test('shop-floor container take-out slot failure happens before billing or extra
     assert.equal(game.context.move || 0, 0);
 });
 
+test('ordinary hero cannot take boulder out of a container', async () => {
+    installNonShopFloorState();
+    const container = shopFloorContainer(6141);
+    const rock = putObjectInContainer(container, floorBoulder(6142));
+    game.level.objects = [container];
+
+    await confirmSingleContainerTakeout(container, rock, 'a', 'Boulders/Statues');
+
+    assert.match(game._pending_message, /There is a boulder in .*large box.*, but it is too heavy for you to carry/);
+    assert.equal(container.contents.includes(rock), true);
+    assert.equal(game.inventory.some(item => item.otyp === BOULDER), false);
+    assert.equal(rock.contained, true);
+    assert.equal(rock.container, container);
+    assert.equal(game.context.move || 0, 0);
+});
+
+test('Sokoban container boulder blocks before throws-rocks override', async () => {
+    installNonShopFloorState();
+    installThrowsRocksForm();
+    game.level.flags = { sokoban_rules: true };
+    const container = shopFloorContainer(6143);
+    const rock = putObjectInContainer(container, floorBoulder(6144));
+    game.level.objects = [container];
+
+    await confirmSingleContainerTakeout(container, rock, 'a', 'Boulders/Statues');
+
+    assert.match(game._pending_message, /cannot get your .* around this boulder/i);
+    assert.equal(container.contents.includes(rock), true);
+    assert.equal(game.inventory.some(item => item.otyp === BOULDER), false);
+    assert.equal(rock.contained, true);
+    assert.equal(rock.container, container);
+    assert.equal(game.context.move || 0, 0);
+});
+
+test('throws-rocks hero takes boulder out of a container without burden prompt', async () => {
+    installNonShopFloorState();
+    installThrowsRocksForm();
+    game.u.acurr.a = [1, 1, 10, 10, 1, 10];
+    const container = shopFloorContainer(6145);
+    const rock = putObjectInContainer(container, floorBoulder(6146));
+    game.level.objects = [container];
+
+    await confirmSingleContainerTakeout(container, rock, 'a', 'Boulders/Statues');
+
+    const carried = game.inventory.find(item => item.otyp === BOULDER);
+    assert.ok(carried);
+    assert.equal(carried, rock);
+    assert.equal(carried.cls, 'rock');
+    assert.equal(carried.glyph, '`');
+    assert.equal(carried.kind, 'boulder');
+    assert.equal(container.contents.includes(rock), false);
+    assert.equal(rock.contained, false);
+    assert.equal(rock.container, null);
+    assert.match(game._pending_message, /a - a boulder/);
+    assert.doesNotMatch(game._pending_message, /Continue\?/);
+    assert.equal(game.context.move, 1);
+});
+
+test('full inventory still allows first contained boulder for throws-rocks form', async () => {
+    installNonShopFloorState();
+    installThrowsRocksForm();
+    fillInventoryLetters();
+    const container = shopFloorContainer(6147);
+    const rock = putObjectInContainer(container, floorBoulder(6148));
+    game.level.objects = [container];
+
+    await confirmSingleContainerTakeout(container, rock, 'a', 'Boulders/Statues');
+
+    const carried = game.inventory.find(item => item.otyp === BOULDER);
+    assert.ok(carried);
+    assert.equal(carried.letter, '#');
+    assert.doesNotMatch(game._pending_message, /knapsack cannot accommodate/);
+    assert.doesNotMatch(game._pending_message, /too much stuff/);
+    assert.equal(container.contents.includes(rock), false);
+    assert.equal(game.context.move, 1);
+});
+
+test('full inventory and carried boulder refuses another contained boulder', async () => {
+    const { shkp } = installCommandShopState();
+    installThrowsRocksForm();
+    fillInventoryLetters();
+    const carried = floorBoulder(6149, { letter: '#' });
+    delete carried.ox;
+    delete carried.oy;
+    carried.line = '# - a boulder';
+    game.inventory.push(carried);
+    const container = shopFloorContainer(6150);
+    const rock = putObjectInContainer(container, floorBoulder(6151));
+    game.level.objects = [container];
+
+    await confirmSingleContainerTakeout(container, rock, 'a', 'Boulders/Statues');
+
+    assert.match(game._pending_message, /carrying too much stuff to pick up another boulder/);
+    assert.equal(container.contents.includes(rock), true);
+    assert.equal(game.inventory.includes(rock), false);
+    assert.equal(rock.contained, true);
+    assert.equal(rock.container, container);
+    assert.equal(shop.shopBillEntryForObject(shkp, rock), null);
+    assert.equal(shkp.billct, 0);
+    assert.equal(game.context.move || 0, 0);
+});
+
+test('container take-out menu groups contained boulders with statues', async () => {
+    installNonShopFloorState();
+    const container = shopFloorContainer(6152);
+    const rock = putObjectInContainer(container, floorBoulder(6153));
+    game.level.objects = [container];
+    game._floor_container_object = container;
+    game._command_mode = 'lootMenu';
+
+    await rhack('o');
+
+    assert.equal(game._command_mode, 'lootTakeoutObjects');
+    assert.equal(game._loot_takeout_entries.length, 1);
+    assert.equal(game._loot_takeout_entries[0].item, rock);
+    assert.equal(game._loot_takeout_entries[0].label, 'Boulders/Statues');
+});
+
+test('shop-floor container take-out bills normal merchandise but not boulder', async () => {
+    const { shkp } = installCommandShopState();
+    installThrowsRocksForm();
+    const container = shopFloorContainer(6154);
+    const ration = putObjectInContainer(container, foodRation(6155));
+    const rock = putObjectInContainer(container, floorBoulder(6156));
+    game.level.objects = [container];
+    game._command_mode = 'lootTakeoutObjects';
+    game._loot_takeout_container = container;
+    game._loot_takeout_entries = [
+        { item: ration, label: 'Comestibles', letter: 'a' },
+        { item: rock, label: 'Boulders/Statues', letter: 'b' },
+    ];
+    game._loot_takeout_selected = ['a', 'b'];
+
+    await rhack(' ');
+
+    const carriedBoulder = game.inventory.find(item => item.otyp === BOULDER);
+    const carriedRation = game.inventory.find(item => item.id === ration.id);
+
+    assert.ok(carriedBoulder);
+    assert.ok(carriedRation);
+    assert.equal(container.contents.includes(rock), false);
+    assert.equal(container.contents.includes(ration), false);
+    assert.equal(carriedBoulder.unpaid == null, true);
+    assert.equal(shop.shopBillEntryForObject(shkp, carriedBoulder), null);
+    assert.equal(carriedRation.unpaid, true);
+    assert.ok(shop.shopBillEntryForObject(shkp, carriedRation));
+    assert.equal(shkp.billct, 1);
+    assert.match(game._pending_message, /a - a food ration \(unpaid, \d+ zorkmids?\)/);
+    assert.match(game._pending_message, /b - a boulder/);
+    assert.equal(game.context.move, 1);
+});
+
 test('failed take-out preflight does not recursively bill nested contents', async () => {
     const { shkp } = installCommandShopState();
     const source = shopFloorContainer(6121);

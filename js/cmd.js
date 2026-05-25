@@ -17074,6 +17074,15 @@ function boulderTooHeavyPickupMessage(obj) {
     return `There ${hereVerb} ${phrase} here, but ${quantity === 1 ? 'it' : 'even one'} is too heavy for you to lift.`;
 }
 
+function boulderContainerTooHeavyPickupMessage(container, obj) {
+    const quantity = Math.max(1, Math.trunc(Number(obj?.quan || 1)));
+    const phrase = pickupObjectPhrase(obj);
+    const verb = quantity === 1 ? 'is' : 'are';
+    if ((game.inventory || []).length || (game._goldCount || 0))
+        return `There ${verb} ${phrase} in ${containerObjectPhrase(container)}, but you cannot carry any more.`;
+    return `There ${verb} ${phrase} in ${containerObjectPhrase(container)}, but ${quantity === 1 ? 'it' : 'even one'} is too heavy for you to carry.`;
+}
+
 function curseLoadstoneLeavingInventory(obj) {
     if (!isLoadstoneObject(obj)) return;
     obj.cursed = true;
@@ -17421,6 +17430,39 @@ function containerTakeoutPreflight(container, entries) {
             continue;
         }
         const originalCount = Math.max(1, Math.trunc(Number(obj.quan || 1)));
+        if (isBoulderObject(obj)) {
+            normalizeBoulderObject(obj);
+            if (game.level?.flags?.sokoban_rules) {
+                return {
+                    ok: false,
+                    message: boulderSokobanPickupMessage(obj),
+                    messages,
+                };
+            }
+            if (heroThrowsRocks()) {
+                const view = containerTakeoutObjectView(obj, originalCount);
+                const mergeTarget = findContainerTakeoutInventoryMergeTarget(container, view);
+                const hasSlot = !!simulatedNextInventoryLetters(1);
+                const plannedBoulder = planned.some(item => isBoulderObject(item?.liftView || item?.item));
+                if (!hasSlot && (carriedBoulderObject() || plannedBoulder) && !mergeTarget) {
+                    return {
+                        ok: false,
+                        message: noSlotSpecialPickupMessage(obj),
+                        messages,
+                    };
+                }
+                const increase = containerTakeoutWeightIncrease(obj, originalCount, gold);
+                currentWeight += increase;
+                planned.push({
+                    ...entry,
+                    item: obj,
+                    takeCount: originalCount,
+                    liftView: view,
+                    inventoryLetter: !hasSlot && !mergeTarget ? '#' : null,
+                });
+                continue;
+            }
+        }
         if (isLoadstoneObject(obj)) {
             const view = containerTakeoutObjectView(obj, originalCount);
             const mergeTarget = findContainerTakeoutInventoryMergeTarget(container, view);
@@ -17447,7 +17489,9 @@ function containerTakeoutPreflight(container, entries) {
         if (takeCount < 1) {
             return {
                 ok: false,
-                message: `There is ${pickupObjectPhrase(obj)} in ${containerObjectPhrase(container)}, but you cannot carry any more.`,
+                message: isBoulderObject(obj)
+                    ? boulderContainerTooHeavyPickupMessage(container, obj)
+                    : `There is ${pickupObjectPhrase(obj)} in ${containerObjectPhrase(container)}, but you cannot carry any more.`,
             };
         }
         if (takeCount < originalCount) {
@@ -20686,6 +20730,7 @@ function containerLootCategory(item) {
     if (item.otyp === POTION_CLASS || item.cls === 'potion' || item.glyph === '!') return 'Potions';
     if (item.otyp === RING_CLASS || item.cls === 'ring' || item.glyph === '=') return 'Rings';
     if (item.otyp === GEM_CLASS || item.cls === 'gem' || item.glyph === '*') return 'Gems/Stones';
+    if (isBoulderObject(item) || item.otyp === STATUE || item.cls === 'rock' || item.glyph === '`') return 'Boulders/Statues';
     return 'Other Items';
 }
 
@@ -20759,6 +20804,7 @@ function addContainerTakeoutObjectToInventory(container, obj, options = {}) {
         addGoldToHero(amount);
         return `$ - ${amount} gold piece${amount === 1 ? '' : 's'}`;
     }
+    if (isBoulderObject(obj)) normalizeBoulderObject(obj);
     const mergeInfo = findContainerTakeoutInventoryMergeTarget(container, obj);
     if (mergeInfo) {
         const line = mergeContainerTakeoutObjectIntoInventory(container, obj, mergeInfo);
@@ -39025,14 +39071,7 @@ export async function rhack(_cmd) {
                 const entries = [];
                 const contents = [...(container.contents || [])].sort(compareContainerLootItems);
                 for (const item of contents) {
-                    let label = 'Other Items';
-                    if (item.otyp === GOLD_PIECE || item.cls === 'coin' || item.glyph === '$') label = 'Coins';
-                    else if (item.otyp === FOOD_CLASS || item.cls === 'food' || item.glyph === '%') label = 'Comestibles';
-                    else if (item.otyp === SCROLL_CLASS || item.cls === 'scroll' || item.glyph === '?') label = 'Scrolls';
-                    else if (item.cls === 'spellbook' || item.glyph === '+') label = 'Spellbooks';
-                    else if (item.otyp === POTION_CLASS || item.cls === 'potion' || item.glyph === '!') label = 'Potions';
-                    else if (item.otyp === RING_CLASS || item.cls === 'ring' || item.glyph === '=') label = 'Rings';
-                    else if (item.otyp === GEM_CLASS || item.cls === 'gem' || item.glyph === '*') label = 'Gems/Stones';
+                    const label = containerLootCategory(item);
                     if (!selectedLabels.has(label)) continue;
                     entries.push({
                         item,
