@@ -12851,6 +12851,39 @@ function addPickedObjectToShopBill(source, pickedItem) {
     return { shkp, price, billEntry };
 }
 
+function mergePickedObjectIntoShopBill(source, target, sourcePrice = null) {
+    const pickedCount = Math.max(1, Math.trunc(Number(source?.quan || 1)));
+    const targetCount = Math.max(1, Math.trunc(Number(target?.quan || 1)));
+    const x = source?.ox ?? game.u?.ux;
+    const y = source?.oy ?? game.u?.uy;
+    const shkp = x == null || y == null ? null : shopkeeperForCostlySpot(x, y);
+    const price = sourcePrice != null ? Number(sourcePrice) : shopItemPrice(source, x, y);
+    const sourceBillable = Number.isFinite(price) && price > 0 && shopkeeperInHisShop(shkp);
+    const existingEntry = shopBillEntryForObject(shkp, target);
+    const targetUnpaid = !!(target?.unpaid || existingEntry);
+
+    if (!sourceBillable) return { canMerge: !targetUnpaid, price: 0, billEntry: existingEntry };
+    if (!targetUnpaid) return { canMerge: false, price, billEntry: null };
+
+    const existingTotal = existingEntry ? shopBillEntryTotal(existingEntry) : unpaidBillPrice(target);
+    if (!(existingTotal > 0)) return { canMerge: false, price, billEntry: existingEntry };
+    if (existingTotal * pickedCount !== price * targetCount)
+        return { canMerge: false, price, billEntry: existingEntry };
+
+    const totalPrice = existingTotal + price;
+    let billEntry = existingEntry;
+    if (!billEntry) billEntry = addObjectToShopBill(shkp, target, totalPrice);
+    if (billEntry) {
+        billEntry.bquan = targetCount + pickedCount;
+        billEntry.totalPrice = totalPrice;
+        billEntry.price = totalPrice;
+        shkp.billct = Array.isArray(shkp.bill) ? shkp.bill.length : Math.max(1, shkp.billct || 1);
+    }
+    target.unpaid = true;
+    target.unpaidPrice = totalPrice;
+    return { canMerge: true, price, billEntry };
+}
+
 function sellobjReturnUnpaidToShop(obj, x, y) {
     if (!obj?.unpaid || shopBillableGold(obj) || globContents(obj).length) return false;
     const shkp = shopkeeperForCostlySpot(x, y);
@@ -12866,6 +12899,7 @@ function sellobjReturnUnpaidToShop(obj, x, y) {
 export const __shopBillingTestHooks = {
     addObjectToShopBill,
     addPickedObjectToShopBill,
+    mergePickedObjectIntoShopBill,
     removeObjectFromShopBill,
     removeObjectFromShopBillById,
     sellobjReturnUnpaidToShop,
@@ -37798,11 +37832,13 @@ export async function rhack(_cmd) {
             const amount = pickupObjectPhrase(objectHere);
             const unpaidSuffix = shopPrice > 0 ? ` (unpaid, ${shopPrice} zorkmid${shopPrice === 1 ? '' : 's'})` : '';
             const name = pickupObjectName({ ...objectHere, quan: 1 });
-            const existingFood = (objectHere.otyp === FOOD_CLASS || objectHere.cls === 'food')
+            let existingFood = (objectHere.otyp === FOOD_CLASS || objectHere.cls === 'food')
                 && (game.inventory || []).find(item =>
                     item.cls === 'food' && !item.worn && !item.wielded
                     && !(isEggItem(item) || isEggItem(objectHere))
                     && pickupObjectName({ ...item, quan: 1 }) === name);
+            if (existingFood && !mergePickedObjectIntoShopBill(objectHere, existingFood, shopPrice).canMerge)
+                existingFood = null;
             if (existingFood) {
                 const pickedKnown = objectHere.bknown === true;
                 const carriedKnown = existingFood.bknown !== false;
@@ -37816,6 +37852,7 @@ export async function rhack(_cmd) {
                     : existingFood.blessed ? 'blessed ' : existingFood.cursed ? 'cursed ' : 'uncursed ';
                 const totalName = pickupObjectName(existingFood);
                 existingFood.line = `${existingFood.letter} - ${existingFood.quan} ${buc}${totalName}`;
+                if (existingFood.unpaid) syncUnpaidBillLine(existingFood);
                 const pickedName = pickupObjectName({ ...existingFood, quan: pickedCount });
                 const pickedPhrase = pickedCount > 1
                     ? `${pickedCount} ${buc}${pickedName}`

@@ -38,7 +38,7 @@ Continue with the shop area because it combines visible current behavior with a 
 - Keep `unpaid` and `unpaidPrice` as compatibility/display fields while migrating callers.
 - Expand `subfrombill` style helpers for split stacks and containers.
 - Add the sale/credit side of `sellobj()` for paid objects dropped in a shop.
-- Move ordinary pickup food-merge behavior through bill-aware stack helpers.
+- Move remaining non-food inventory stack merges through bill-aware helpers.
 - Extend ledger use to container put-in, take-out, and tip moves after ordinary pickup/drop is stable.
 
 Every code slice should be followed by source-derived smoke checks plus `npm run score`.

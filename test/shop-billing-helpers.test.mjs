@@ -101,3 +101,27 @@ test('shop-created carried objects use the same ledger representation', () => {
     assert.equal(shop.shopBillEntryForObject(shkp, hornCreated), bill);
     assert.equal(shop.shopBillEntryTotal(bill), 45);
 });
+
+test('shop pickup merge rejects unpaid into paid and combines compatible unpaid bills', () => {
+    const { shkp } = installShopState();
+    const floorObj = foodRation(4001, 'b');
+    const paidStack = foodRation(4002, 'a');
+
+    assert.deepEqual(
+        shop.mergePickedObjectIntoShopBill(floorObj, paidStack, 45),
+        { canMerge: false, price: 45, billEntry: null },
+    );
+    assert.equal(paidStack.unpaid, undefined);
+    assert.equal(shkp.billct, 0);
+
+    const unpaidStack = foodRation(4003, 'c');
+    shop.addObjectToShopBill(shkp, unpaidStack, 45);
+    const result = shop.mergePickedObjectIntoShopBill(floorObj, unpaidStack, 45);
+
+    assert.equal(result.canMerge, true);
+    assert.equal(shkp.billct, 1);
+    assert.equal(shop.shopBillEntryForObject(shkp, unpaidStack), result.billEntry);
+    assert.equal(result.billEntry.bquan, 2);
+    assert.equal(shop.shopBillEntryTotal(result.billEntry), 90);
+    assert.equal(unpaidStack.unpaidPrice, 90);
+});
