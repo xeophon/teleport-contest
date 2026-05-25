@@ -21272,7 +21272,7 @@ function destroyMagicBagItem(item, messages, { silent = false, usedUpShopBill = 
     removeObjectFromWorld(item);
 }
 
-function magicBagContentsLoss(container, messages, { silent = false } = {}) {
+function magicBagContentsLoss(container, messages, { silent = false, details = null } = {}) {
     if (!isMagicBagObject(container) || !container.cursed) return 0;
     let lost = 0;
     let lostMerchandise = 0;
@@ -21286,6 +21286,10 @@ function magicBagContentsLoss(container, messages, { silent = false } = {}) {
     refreshTipContainerWeight(container);
     const lostMessage = !silent ? lostShopMerchandiseMessage(lostMerchandise) : '';
     if (lostMessage) messages.push(lostMessage);
+    if (details) {
+        details.lost = lost;
+        details.lostMerchandise = lostMerchandise;
+    }
     return lost;
 }
 
@@ -37631,14 +37635,18 @@ export async function rhack(_cmd) {
             game._overlay_lines = null;
             game._overlay_hide_status = 0;
             game._command_mode = null;
-            if (!bag.contents.length) {
-                await setMessage('The bag is empty.');
+            const contents = liquidFlowContainerContents(bag);
+            if (!contents.length) {
+                const emptyMessage = bag._floorLootMbagLossEmptied ? 'The bag is now empty.' : 'The bag is empty.';
+                delete bag._floorLootMbagLossEmptied;
+                await setMessage(emptyMessage);
                 if (ch === 'o') game.context.move = 1;
                 return;
             }
+            delete bag._floorLootMbagLossEmptied;
             const rows = [[0, 41, ch === ':' ? 'Contents of the bag:' : 'Take out what?', 1]];
             let row = 2;
-            for (const item of bag.contents) rows.push([row++, 41, pickupObjectPhrase(item)]);
+            for (const item of contents) rows.push([row++, 41, pickupObjectPhrase(item)]);
             rows.push([row, 41, '--More--']);
             setOverlay(rows, rows.length);
             game._command_mode = 'simpleOverlay';
@@ -40394,7 +40402,26 @@ export async function rhack(_cmd) {
                     return;
                 } else if (bag) {
                     game._floor_container_object = bag;
-                    setOverlay(LOOT_FLOOR_BAG_MENU_LINES, 11);
+                    const lossMessages = [];
+                    const lossDetails = { lost: 0, lostMerchandise: 0 };
+                    magicBagContentsLoss(bag, lossMessages, { details: lossDetails });
+                    if (lossDetails.lost) {
+                        bag.cknown = true;
+                        bag._floorLootMbagLossEmptied = !liquidFlowContainerContents(bag).length;
+                    }
+                    if (lossDetails.lostMerchandise > 0) game.context.move = 1;
+                    const menuLines = lossDetails.lostMerchandise > 0
+                        ? LOOT_FLOOR_BAG_MENU_LINES.map(row =>
+                            row[2] === 'q * do nothing' ? [row[0], row[1], 'q * done'] : row)
+                        : LOOT_FLOOR_BAG_MENU_LINES;
+                    setOverlay(menuLines, 11);
+                    if (lossMessages.length) {
+                        const lossText = lossMessages.join('  ');
+                        game._pending_message = lossText;
+                        game._last_pline_message = lossText;
+                        game._message_more = lossMessages.length > 1 ? 1 : 0;
+                        game._keep_pending_message = 1;
+                    }
                     game._command_mode = 'floorBagAction';
                     return;
                 } else {

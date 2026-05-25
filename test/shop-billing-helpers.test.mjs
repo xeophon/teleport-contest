@@ -5196,6 +5196,96 @@ test('tipping no-charge lost contents from a cursed shop-floor magic bag does no
     assert.equal(shkp.billct, 0);
 });
 
+test('looting a cursed shop-floor magic bag loses merchandise before empty handling', async () => {
+    const { shkp } = installCommandShopState();
+    initRng(17);
+    const source = bagOfHolding(6927);
+    source.cursed = true;
+    source.ox = 5;
+    source.oy = 5;
+    const blade = putObjectInContainer(source, dagger(6928));
+    const expected = shop.shopItemPrice(blade, 5, 5);
+    game.level.objects = [source];
+
+    await rhack('#');
+    await rhack('l');
+    await rhack('\n');
+    assert.equal(game._command_mode, 'floorBagAction');
+
+    assert.match(game._pending_message, /vanished/);
+    assert.match(game._pending_message, new RegExp(`owe ${expected} zorkmids? for lost merchandise`));
+    assert.equal(source.contents.length, 0);
+    assert.equal(source.contents.includes(blade), false);
+    assert.equal(shkp.debit, expected);
+    assert.equal(shkp.billct, 0);
+    assert.equal(game.context.move, 1);
+    assert.ok((game._overlay_lines || []).some(row => row[2] === 'q * done'));
+
+    await rhack(' ');
+    await rhack('o');
+
+    assert.match(game._pending_message, /bag is now empty/i);
+    assert.equal(game._command_mode, null);
+});
+
+test('looking inside a cursed shop-floor magic bag loses merchandise before contents display', async () => {
+    const { shkp } = installCommandShopState();
+    initRng(17);
+    const source = bagOfHolding(6926);
+    source.cursed = true;
+    source.ox = 5;
+    source.oy = 5;
+    const blade = putObjectInContainer(source, dagger(6929));
+    const ration = putObjectInContainer(source, foodRation(6934));
+    const expected = shop.shopItemPrice(blade, 5, 5);
+    game.level.objects = [source];
+
+    await rhack('#');
+    await rhack('l');
+    await rhack('\n');
+    assert.equal(game._command_mode, 'floorBagAction');
+
+    assert.match(game._pending_message, /vanished/);
+    assert.match(game._pending_message, new RegExp(`owe ${expected} zorkmids? for lost merchandise`));
+    assert.equal(source.contents.includes(blade), false);
+    assert.equal(source.contents.includes(ration), true);
+    assert.equal(source.contents.length, 1);
+    assert.equal(shkp.debit, expected);
+    assert.equal(game.context.move, 1);
+
+    await rhack(' ');
+    await rhack(':');
+
+    assert.equal(game._command_mode, 'simpleOverlay');
+    assert.ok((game._overlay_lines || []).some(row => String(row[2] || '').includes('food ration')));
+});
+
+test('looting no-charge cursed shop-floor magic bag contents vanishes without turn-cost debt', async () => {
+    const { shkp } = installCommandShopState();
+    initRng(17);
+    const source = bagOfHolding(6935);
+    source.cursed = true;
+    source.ox = 5;
+    source.oy = 5;
+    const blade = putObjectInContainer(source, dagger(6936));
+    blade.no_charge = true;
+    game.level.objects = [source];
+
+    await rhack('#');
+    await rhack('l');
+    await rhack('\n');
+
+    assert.equal(game._command_mode, 'floorBagAction');
+    assert.match(game._pending_message, /vanished/);
+    assert.doesNotMatch(game._pending_message, /lost merchandise/);
+    assert.equal(source.contents.includes(blade), false);
+    assert.equal(source.contents.length, 0);
+    assert.equal(shkp.debit || 0, 0);
+    assert.equal(shkp.robbed || 0, 0);
+    assert.equal(game.context.move || 0, 0);
+    assert.ok((game._overlay_lines || []).some(row => row[2] === 'q * do nothing'));
+});
+
 test('putting a cancellation wand into an empty shop-floor magic bag leaves the destroyed bag on the bill', () => {
     const { shkp } = installShopState();
     const source = bagOfHolding(6928);
