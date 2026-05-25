@@ -350,3 +350,61 @@ test('partial unpaid inventory use keeps bill total visible until return', () =>
     assert.equal(shkp.bill[0].bquan, 1);
     assert.equal(shop.shopBillEntryTotal(shkp.bill[0]), 5);
 });
+
+test('projectile split creates a separate child bill before inventory removal', () => {
+    const { shkp } = installShopState();
+    const stack = { ...dagger(8501, 'd'), quan: 3, line: 'd - 3 +0 daggers' };
+    shop.addObjectToShopBill(shkp, stack, 15);
+    game.inventory = [stack];
+    const thrown = {
+        ...stack,
+        id: 8502,
+        letter: undefined,
+        line: undefined,
+        quan: 1,
+        ox: 7,
+        oy: 5,
+    };
+
+    const thrownEntry = shop.splitCarriedObjectShopBill(stack, thrown, 1);
+    shop.removeInventoryItem(stack, 1);
+
+    const parentEntry = shop.shopBillEntryForObject(shkp, stack);
+    assert.equal(stack.quan, 2);
+    assert.equal(stack.unpaidPrice, 10);
+    assert.match(stack.line, /^d - 2 \+0 daggers \(unpaid, 10 zorkmids\)$/);
+    assert.equal(parentEntry.bquan, 2);
+    assert.equal(shop.shopBillEntryTotal(parentEntry), 10);
+    assert.equal(thrownEntry.bo_id, String(thrown.id));
+    assert.equal(thrownEntry.bquan, 1);
+    assert.equal(shop.shopBillEntryTotal(thrownEntry), 5);
+    assert.equal(thrown.unpaidPrice, 5);
+    assert.equal(shkp.billct, 2);
+});
+
+test('returning a thrown unpaid projectile removes only the child bill', () => {
+    const { shkp } = installShopState();
+    const stack = { ...dagger(8601, 'd'), quan: 3, line: 'd - 3 +0 daggers' };
+    shop.addObjectToShopBill(shkp, stack, 15);
+    game.inventory = [stack];
+    const thrown = {
+        ...stack,
+        id: 8602,
+        letter: undefined,
+        line: undefined,
+        quan: 1,
+        ox: 5,
+        oy: 5,
+    };
+    shop.splitCarriedObjectShopBill(stack, thrown, 1);
+    shop.removeInventoryItem(stack, 1);
+
+    assert.equal(shop.returnUnpaidObjectToShopBillOwnerAt(thrown, 5, 5), true);
+
+    const parentEntry = shop.shopBillEntryForObject(shkp, stack);
+    assert.equal(parentEntry.bquan, 2);
+    assert.equal(shop.shopBillEntryTotal(parentEntry), 10);
+    assert.equal(shop.shopBillEntryForObject(shkp, thrown), null);
+    assert.equal(thrown.unpaid, false);
+    assert.equal(shkp.billct, 1);
+});

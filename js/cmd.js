@@ -12802,6 +12802,32 @@ function shopBillEntryForObject(shkp, obj) {
     return ledger.find(entry => String(entry.bo_id) === id) || null;
 }
 
+function shopkeeperOwningBillEntry(obj) {
+    if (!obj) return { shkp: null, entry: null };
+    const candidates = [
+        ...(game.level?.monsters || []).filter(mon => mon?.isshk),
+        ...(game.level?.rooms || []).map(room => room?.resident).filter(mon => mon?.isshk),
+        ...(game.level?.subrooms || []).map(room => room?.resident).filter(mon => mon?.isshk),
+    ];
+    const seen = new Set();
+    for (const shkp of candidates) {
+        const key = shkp.m_id ?? shkp.id ?? shkp.shknam ?? candidates.indexOf(shkp);
+        if (seen.has(key)) continue;
+        seen.add(key);
+        const entry = shopBillEntryForObject(shkp, obj);
+        if (entry) return { shkp, entry };
+    }
+    return { shkp: null, entry: null };
+}
+
+function sameShopkeeper(a, b) {
+    if (!a || !b) return false;
+    if (a === b) return true;
+    const aId = a.m_id ?? a.id;
+    const bId = b.m_id ?? b.id;
+    return aId != null && bId != null && String(aId) === String(bId);
+}
+
 function addObjectToShopBill(shkp, obj, totalPrice, { useup = false } = {}) {
     if (!shkp || !obj || !(totalPrice > 0)) return null;
     const ledger = shopBillLedger(shkp);
@@ -12889,6 +12915,13 @@ function splitShopBillEntry(shkp, parent, child, count = child?.quan || 1) {
     return childEntry;
 }
 
+function splitCarriedObjectShopBill(parent, child, count = child?.quan || 1) {
+    if (!parent || !child) return null;
+    const { shkp } = shopkeeperOwningBillEntry(parent);
+    if (!shkp) return null;
+    return splitShopBillEntry(shkp, parent, child, count);
+}
+
 function rememberUsedUpShopBillEntry(obj, entry, price) {
     if (!(price > 0)) return;
     game._usedUpShopBills ??= [];
@@ -12936,6 +12969,14 @@ function subFromShopBill(obj, shkp) {
         else subOneFromShopBill(child, shkp);
     }
     return removed;
+}
+
+function returnUnpaidObjectToShopBillOwnerAt(obj, x, y) {
+    if (!obj?.unpaid || shopBillableGold(obj) || globContents(obj).length) return false;
+    const { shkp } = shopkeeperOwningBillEntry(obj);
+    const spotShkp = shopkeeperForCostlySpot(x, y);
+    if (!sameShopkeeper(shkp, spotShkp) || !shopkeeperInHisShop(shkp)) return false;
+    return subOneFromShopBill(obj, shkp);
 }
 
 function shopBillableGold(obj) {
@@ -13279,7 +13320,9 @@ export const __shopBillingTestHooks = {
     removeObjectFromShopBill,
     removeObjectFromShopBillById,
     removeInventoryItem,
+    returnUnpaidObjectToShopBillOwnerAt,
     sellobjReturnUnpaidToShop,
+    splitCarriedObjectShopBill,
     splitShopBillEntry,
     subFromShopBill,
     subOneFromShopBill,
@@ -37496,7 +37539,7 @@ export async function rhack(_cmd) {
             const landingLoc = game.level?.at(ox, oy);
             if (!landingLoc || !IS_POOL(landingLoc.typ)) rn2(100);
         }
-        game.level?.objects?.push({
+        const projectileObject = {
             ...item,
             letter: undefined,
             line: undefined,
@@ -37508,7 +37551,10 @@ export async function rhack(_cmd) {
             oy,
             glyph: item.glyph || (item.cls === 'gem' ? '*' : ')'),
             color: item.color || (item.cls === 'gem' ? CLR_GRAY : CLR_CYAN),
-        });
+        };
+        if (oldQuan > shotCount) splitCarriedObjectShopBill(item, projectileObject, shotCount);
+        returnUnpaidObjectToShopBillOwnerAt(projectileObject, ox, oy);
+        game.level?.objects?.push(projectileObject);
         if (game._fire_launcher_letter) {
             game._stale_projectile_marks ??= [];
             game._stale_projectile_marks.push({
@@ -37521,6 +37567,7 @@ export async function rhack(_cmd) {
         if (oldQuan > shotCount) {
             item.quan = oldQuan - shotCount;
             if (item.line) item.line = item.line.replace(/ - \d+ /, ` - ${item.quan} `);
+            if (item.unpaid) syncUnpaidBillLine(item);
         } else {
             game.inventory = (game.inventory || []).filter(invItem => invItem !== item);
         }
@@ -37739,10 +37786,13 @@ export async function rhack(_cmd) {
             glyph: item.cls === 'food' ? '%' : item.glyph || (item.cls === 'gem' ? '*' : ')'),
             color: item.cls === 'food' ? CLR_ORANGE : item.color || (item.cls === 'gem' ? CLR_GRAY : CLR_CYAN),
         };
+        if ((item.quan || 1) > 1) splitCarriedObjectShopBill(item, thrownObject, 1);
+        returnUnpaidObjectToShopBillOwnerAt(thrownObject, ox, oy);
         stopCarriedFigurineTimerOnLeave(thrownObject);
 	        const existingStack = (game.level?.objects || []).find(obj => !obj.transientProjectile
 	            && obj.ox === ox && obj.oy === oy && obj.cls === thrownObject.cls
-	            && obj.kind === thrownObject.kind && obj.otyp === thrownObject.otyp);
+	            && obj.kind === thrownObject.kind && obj.otyp === thrownObject.otyp
+                && !obj.unpaid && !thrownObject.unpaid);
 	        if (existingStack) existingStack.quan = (existingStack.quan || 1) + 1;
 	        else game.level?.objects?.push(thrownObject);
 	        newsym(ox, oy);
