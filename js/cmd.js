@@ -16680,7 +16680,13 @@ function magicBagScatterHitHero(obj, messages) {
 function magicBagScatterShopContext(sx, sy) {
     const originRoomno = game.level?.at?.(sx, sy)?.roomno || 0;
     const shkp = shopkeeperForCostlySpot(sx, sy);
-    return shkp ? { shkp, originRoomno, addedDebt: 0 } : null;
+    return shkp ? {
+        shkp,
+        originRoomno,
+        beforeCredit: Math.max(0, Math.trunc(Number(shkp.credit || 0))),
+        beforeDebit: Math.max(0, Math.trunc(Number(shkp.debit || 0))),
+        beforeLoan: Math.max(0, Math.trunc(Number(shkp.loan || 0))),
+    } : null;
 }
 
 function magicBagScatterGoldValue(obj) {
@@ -16693,19 +16699,42 @@ function magicBagScatterHeroInOriginShop(shopContext) {
     return roomno >= ROOMOFFSET && roomno === shopContext?.originRoomno;
 }
 
+function chargeShopGold(shkp, amount) {
+    if (!shkp || !(amount > 0)) return;
+    const credit = Math.max(0, Math.trunc(Number(shkp.credit || 0)));
+    if (credit >= amount) {
+        shkp.credit = credit - amount;
+        return;
+    }
+    const delta = amount - credit;
+    shkp.credit = 0;
+    shkp.debit = Math.max(0, Math.trunc(Number(shkp.debit || 0))) + delta;
+    shkp.loan = Math.max(0, Math.trunc(Number(shkp.loan || 0))) + delta;
+}
+
 function maybeBillMagicBagScatterGold(obj, sx, sy, x, y, shopContext) {
     if (!shopContext?.shkp || (x === sx && y === sy)) return;
     if (shopkeeperForCostlySpot(x, y) || !magicBagScatterHeroInOriginShop(shopContext)) return;
-    const debt = magicBagScatterGoldValue(obj);
-    if (!debt) return;
-    shopContext.shkp.debit = (shopContext.shkp.debit || 0) + debt;
-    shopContext.addedDebt += debt;
+    chargeShopGold(shopContext.shkp, magicBagScatterGoldValue(obj));
 }
 
 function finishMagicBagScatterShopBilling(shopContext, messages) {
-    const debt = shopContext?.addedDebt || 0;
-    if (!debt) return;
-    messages.push(`Your debt has increased by ${debt} zorkmid${debt === 1 ? '' : 's'}.`);
+    if (!shopContext?.shkp) return;
+    const nowCredit = Math.max(0, Math.trunc(Number(shopContext.shkp.credit || 0)));
+    const nowDebit = Math.max(0, Math.trunc(Number(shopContext.shkp.debit || 0)));
+    const nowLoan = Math.max(0, Math.trunc(Number(shopContext.shkp.loan || 0)));
+    let amount = 0;
+    let kind = 'debt has increased';
+    if (nowCredit < shopContext.beforeCredit) {
+        amount = shopContext.beforeCredit - nowCredit;
+        kind = 'credit has been reduced';
+    } else if (nowDebit > shopContext.beforeDebit) {
+        amount = nowDebit - shopContext.beforeDebit;
+    } else if (nowLoan > shopContext.beforeLoan) {
+        amount = nowLoan - shopContext.beforeLoan;
+    }
+    if (amount)
+        messages.push(`Your ${kind} by ${amount} zorkmid${amount === 1 ? '' : 's'}.`);
 }
 
 function scatterMagicBagObject(container, obj, sx, sy, messages, shopContext = null) {
@@ -17361,6 +17390,15 @@ function collectPayableShopDebts(shkp = null) {
         letter: String.fromCharCode(97 + index),
         selected: false,
     }));
+}
+
+function shopkeeperDebitPayment(entry) {
+    const shkp = entry?.shopkeeperDebit;
+    if (!shkp) return { debt: 0, credit: 0, coveredByCredit: 0, cashDue: 0 };
+    const debt = Math.max(0, Math.trunc(Number(shkp.debit ?? entry.price ?? 0)));
+    const credit = Math.max(0, Math.trunc(Number(shkp.credit || 0)));
+    const coveredByCredit = Math.min(credit, debt);
+    return { debt, credit, coveredByCredit, cashDue: debt - coveredByCredit };
 }
 
 function pickupMenuEntries(objects) {
@@ -23745,10 +23783,17 @@ export async function rhack(_cmd) {
                 return;
             }
 
-            const total = selected.reduce((sum, entry) => sum + entry.price, 0);
             const money = (game.inventory || []).find(item => item.letter === '$' || item.cls === 'coin');
-            if ((game._goldCount || money?.quan || 0) > total) next_ident();
-            game._goldCount = Math.max(0, (game._goldCount || money?.quan || 0) - total);
+            const availableGold = game._goldCount || money?.quan || 0;
+            const cashTotal = selected.reduce((sum, entry) =>
+                sum + (entry.shopkeeperDebit ? shopkeeperDebitPayment(entry).cashDue : entry.price), 0);
+            if (availableGold < cashTotal) {
+                game._pay_shopkeeper = null;
+                await setMessage("You don't have enough gold.");
+                return;
+            }
+            if (availableGold > cashTotal) next_ident();
+            game._goldCount = Math.max(0, availableGold - cashTotal);
             if (money) {
                 money.quan = game._goldCount;
                 updateMoneyLine(money);
@@ -23760,7 +23805,10 @@ export async function rhack(_cmd) {
                     continue;
                 }
                 if (entry.shopkeeperDebit) {
-                    entry.shopkeeperDebit.debit = Math.max(0, (entry.shopkeeperDebit.debit || 0) - entry.price);
+                    const payment = shopkeeperDebitPayment(entry);
+                    entry.shopkeeperDebit.credit = Math.max(0, payment.credit - payment.coveredByCredit);
+                    entry.shopkeeperDebit.debit = 0;
+                    entry.shopkeeperDebit.loan = 0;
                     continue;
                 }
                 if (!entry.item) continue;

@@ -2742,9 +2742,10 @@ Next concrete target:
   Scatter also now follows C's current gold-only shop billing branch: when a
   surviving bag-explosion gold stack starts on a costly shop square and lands
   outside the shop while the hero remains in that shop, the resident
-  shopkeeper's debit increases and the pay menu exposes the debt. The
-  placement helper reports whether floor effects consumed the object so
-  billing only occurs for gold that actually lands.
+  shopkeeper applies store credit first, then increases debit/loan for any
+  remainder, and the pay menu exposes the debt. The placement helper reports
+  whether floor effects consumed the object so billing only occurs for gold
+  that actually lands.
   Generated ice-box corpses are explicitly frozen at creation while the generic
   `add_to_container()` helper remains neutral like C; the floor put-in/stash
   paths freeze selected inventory objects immediately before insertion, and
