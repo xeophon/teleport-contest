@@ -13,6 +13,7 @@ const POT_OIL = 252;
 const CRYSTAL_BALL = 10088;
 const CANDELABRUM_OF_INVOCATION = 10076;
 const INVENTORY_LETTERS = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
+const SCR_SCARE_MONSTER = 279;
 
 function installShopState() {
     const g = resetGame();
@@ -254,6 +255,28 @@ function blankScroll(id, letter = 's') {
         known: true,
         dknown: true,
         bknown: true,
+    };
+}
+
+function floorScareMonsterScroll(id, props = {}) {
+    return {
+        id,
+        otyp: SCR_SCARE_MONSTER,
+        cls: 'scroll',
+        glyph: '?',
+        kind: 'scroll of scare monster',
+        actualKind: 'scroll of scare monster',
+        scrollIndex: 3,
+        quan: 1,
+        spe: 0,
+        blessed: false,
+        cursed: false,
+        ox: 5,
+        oy: 5,
+        known: true,
+        dknown: true,
+        bknown: true,
+        ...props,
     };
 }
 
@@ -3126,9 +3149,90 @@ test('ordinary floor gold burden prompt splits before shop charging', async () =
     assert.equal(game.context.move, 1);
 });
 
+test('uncursed scare monster floor scroll first pickup marks spe and bills live item', async () => {
+    const { shkp } = installCommandShopState();
+    const scroll = floorScareMonsterScroll(6015);
+    game.level.objects = [scroll];
+    const expectedPrice = shop.shopItemPrice(scroll, 5, 5);
+
+    await rhack(',');
+    assert.equal(game._command_mode, 'pickupShopQuote');
+
+    await rhack(' ');
+
+    const carried = game.inventory.find(item => item.id === scroll.id);
+    const entry = shop.shopBillEntryForObject(shkp, carried);
+
+    assert.ok(carried);
+    assert.equal(game.level.objects.includes(scroll), false);
+    assert.equal(carried.spe, 1);
+    assert.equal(carried.unpaid, true);
+    assert.ok(entry);
+    assert.equal(entry.useup, false);
+    assert.equal(shop.shopBillEntryTotal(entry), expectedPrice);
+    assert.doesNotMatch(game._pending_message, /turns? to dust/i);
+    assert.equal(game.context.move, 1);
+});
+
+test('blessed scare monster floor scroll unblesses without setting pickup spe', async () => {
+    const { shkp } = installCommandShopState();
+    const scroll = floorScareMonsterScroll(6016, { blessed: true });
+    game.level.objects = [scroll];
+    const expectedPrice = shop.shopItemPrice(scroll, 5, 5);
+
+    await rhack(',');
+    assert.equal(game._command_mode, 'pickupShopQuote');
+
+    await rhack(' ');
+
+    const carried = game.inventory.find(item => item.id === scroll.id);
+    const entry = shop.shopBillEntryForObject(shkp, carried);
+
+    assert.ok(carried);
+    assert.equal(game.level.objects.includes(scroll), false);
+    assert.equal(carried.blessed, false);
+    assert.equal(carried.cursed, false);
+    assert.equal(carried.spe || 0, 0);
+    assert.equal(carried.unpaid, true);
+    assert.ok(entry);
+    assert.equal(entry.useup, false);
+    assert.equal(shop.shopBillEntryTotal(entry), expectedPrice);
+    assert.doesNotMatch(game._pending_message, /turns? to dust/i);
+});
+
+test('cursed or used scare monster floor scroll crumbles into used-up bill', async () => {
+    for (const [label, id, props] of [
+        ['cursed', 6017, { cursed: true }],
+        ['used', 6018, { spe: 1 }],
+    ]) {
+        const { shkp } = installCommandShopState();
+        const scroll = floorScareMonsterScroll(id, props);
+        game.level.objects = [scroll];
+        const expectedPrice = shop.shopItemPrice(scroll, 5, 5);
+
+        await rhack(',');
+        assert.equal(game._command_mode, 'pickupShopQuote', label);
+
+        await rhack(' ');
+
+        const entry = shop.shopBillEntryForObject(shkp, scroll);
+        const debts = shop.collectPayableShopDebts(shkp);
+
+        assert.equal(game.inventory.some(item => item.id === scroll.id), false, label);
+        assert.equal(game.level.objects.includes(scroll), false, label);
+        assert.equal(shkp.billct, 1, label);
+        assert.ok(entry, label);
+        assert.equal(entry.useup, true, label);
+        assert.equal(shop.shopBillEntryTotal(entry), expectedPrice, label);
+        assert.equal(debts.some(debt => debt.billPortion === 'fullyUsedUp' && debt.price === expectedPrice), true, label);
+        assert.match(game._pending_message, /scroll.*turns? to dust.*pick.*up/i, label);
+        assert.equal(game.context.move, 1, label);
+    }
+});
+
 test('ordinary shop-floor partial stack pickup splits before billing', async () => {
     const { shkp } = installCommandShopState();
-    const stack = foodRationStack(6015, 20);
+    const stack = foodRationStack(6019, 20);
     game.level.objects = [stack];
     game.u.acurr.a = [1, 1, 10, 10, 1, 10];
     game.flags.pickup_burden = 'overloaded';

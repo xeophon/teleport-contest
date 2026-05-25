@@ -84,6 +84,7 @@ This audit is based only on upstream C and current JS source inspection. It does
 - `js/cmd.js:37612-37683`, `js/cmd.js:37808-37933`: fired and thrown projectile split/landing paths.
 - `js/cmd.js:19609-20230`: container put-in menus, rejection checks, and transfer helpers.
 - `js/cmd.js:15580-15972`, `js/cmd.js:16983-17090`, `js/cmd.js:20249-20445`, `js/cmd.js:38560-38625`: container take-out shop billing, pre-lift touch/weight checks, preparation, and inventory insertion.
+- `js/cmd.js:17011-17264`, `js/cmd.js:42384-42484`: floor pickup now handles single-object scare-monster scroll identity, blessed/uncursed/used state changes, dusting, and used-up shop billing before ordinary inventory insertion.
 - `js/cmd.js:20489-20658`, `js/cmd.js:38873-38899`: tip checks and destination selection.
 - `js/cmd.js:17542-18220`: magic bag, bag of tricks, horn of plenty, usage-fee helpers, and tip into another container.
 - `js/cmd.js:33982-34818`: loot UI modes for ice boxes, boxes, bags, put-in, take-out, and stash.
@@ -159,14 +160,14 @@ Concrete gaps:
 
 C pickup computes what can be carried before transferring the object. `carry_count()` and `lift_object()` can reduce quantity, reject based on slots or special objects, ask burden prompts, and trigger special cases. `pick_obj()` calls `addtobill()` before `addinv()` so unpaid merges and bill identity stay correct.
 
-JS single pickup computes a shop price, shows a quote, and then transfers the picked object (`js/cmd.js:42200-42508`). It now has a starter floor-pickup preflight before transfer/billing for artifact blast/evasion/death, fatal barehanded cockatrice/chickatrice corpse touch, floor Rider corpse revival, maximum-carry failure, partial stack lifting, single-object burden prompts, gold lift splitting, and inventory-slot failure (`js/cmd.js:17000-17184`, `js/cmd.js:28684-28708`, `js/cmd.js:42302-42396`). Multi-pickup preflights selected non-gold objects before mutating floor or inventory state, then moves selected objects into inventory after ledger/merge checks (`js/cmd.js:28182-28288`).
+JS single pickup computes a shop price, shows a quote, and then transfers the picked object (`js/cmd.js:42200-42508`). It now has a starter floor-pickup preflight before transfer/billing for artifact blast/evasion/death, fatal barehanded cockatrice/chickatrice corpse touch, floor Rider corpse revival, maximum-carry failure, partial stack lifting, single-object burden prompts, gold lift splitting, inventory-slot failure, and single-object scare-monster scroll handling (`js/cmd.js:17000-17264`, `js/cmd.js:28684-28708`, `js/cmd.js:42302-42484`). Multi-pickup preflights selected non-gold objects before mutating floor or inventory state, then moves selected objects into inventory after ledger/merge checks (`js/cmd.js:28182-28288`).
 
 Concrete gaps:
 
 - Multi-object pickup still bypasses the C quote flow and only has starter floor preflight, though ordinary picked objects now enter the JS shop ledger.
 - Single food pickup and ordinary stackable non-food pickup now reject paid/unpaid mismatches and carry compatible same-price unpaid bill totals forward.
 - Bill ledger calls exist for ordinary shop pickup and compatible inventory merges, but they are not yet a full C `addtobill()`/`addinv()` merge invariant across every transfer path.
-- Lift limits are not full C parity: starter pre-transfer slot/max-carry failure, artifact/fatal-corpse touch gates, floor Rider corpse revival, single-object burden prompts, partial stack pickup, and gold lift splitting exist for ordinary floor pickup, but multi-pickup burden semantics, boulder/loadstone/scare monster scroll behavior, and the full artifact bane/silver/life-saving matrix remain incomplete.
+- Lift limits are not full C parity: starter pre-transfer slot/max-carry failure, artifact/fatal-corpse touch gates, floor Rider corpse revival, single-object burden prompts, partial stack pickup, gold lift splitting, and single-object scare-monster scroll pickup exist for ordinary floor pickup, but multi-pickup burden semantics, boulder/loadstone handling, scare-scroll multi-pickup and partial-stack prompt exactness, and the full artifact bane/silver/life-saving matrix remain incomplete.
 - Stolen value when carrying merchandise out of a shop is not tied to recursive bill/container state the way `pick_obj()` and `stolen_value()` are in C.
 
 ### 5. Drop Flow Only Partially Implements `sellobj()` Semantics
@@ -212,7 +213,7 @@ Concrete gaps:
 - `get_cost()` parity is incomplete: JS has base tables, unknown-name surcharge, enchantment surcharge, charisma adjustment, and pricing units (`js/cmd.js:18486-18713`), but not full C role/status/shopkeeper anger/tourist/dunce/artifact/contained/no-charge/price-quote side effects.
 - `check_unpaid_usage()` is still partial. JS now has a reusable debit-only helper with C-style charged-object fee branches and callers for bag/horn use, wand zaps, camera use, can-of-grease applications, normal lamp and potion-of-oil apply lighting, magic-lamp `#rub` djinni release, successful spellbook study completion, magic-marker writing, tinning-kit corpse applications, crystal-ball gazing, magic flute/harp improvisation, frost/fire horn direction zaps, alternate emptying, and drum-of-earthquake charges; the ordinary musical-instrument shell shares the same C gates while correctly avoiding usage billing for no-charge mundane instruments. Other charge-consuming callers still need to route through the appropriate C billing paths.
 - Generic `costly_alteration()` is still partial. JS now covers unpaid food `COST_BITE` and narrow tin `COST_OPEN/COST_DSTROY` paths, plus local billing for buried merchandise and horn-created objects, but not the shared open/destroy/cancel/degrade billing hook used across C.
-- Used-up unpaid items are not centralized. C `useup()`/`obfree()` preserve bills for consumed unpaid objects; JS only remembers selected corpse rot/glob shrink, projectile, payment, magic-bag destruction, failed spellbook read, carried fire destruction, and hero-caused floor fire paths.
+- Used-up unpaid items are not centralized. C `useup()`/`obfree()` preserve bills for consumed unpaid objects; JS only remembers selected corpse rot/glob shrink, projectile, payment, magic-bag destruction, failed spellbook read, carried fire destruction, hero-caused floor fire, and single-object scare-scroll pickup dust paths.
 
 ## Recommended Implementation Slices
 

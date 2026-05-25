@@ -3969,6 +3969,12 @@ function mksobj_init(otmp, otyp, artif) {
     // For general objects: varies
     // We just do blessorcurse for scrolls/potions
     if (otyp === SCROLL_CLASS || (otyp >= 270 && otyp < 300)) {
+        if (otyp === SCR_SCARE_MONSTER) {
+            otmp.cls = 'scroll';
+            otmp.glyph = '?';
+            otmp.scrollIndex = 3;
+            otmp.actualKind = 'scroll of scare monster';
+        }
         blessorcurse(otmp, 4);
     } else if (otyp === POTION_CLASS || (otyp >= 230 && otyp < 270)) {
         if (otyp !== POTION_CLASS) {

@@ -788,6 +788,7 @@ const RING_CLASS = 3;
 const FOOD_CLASS = 7;
 const SCROLL_CLASS = 8;
 const SCR_ENCHANT_ARMOR = 277;
+const SCR_SCARE_MONSTER = 279;
 const SCR_BLANK_PAPER = 293;
 const POTION_CLASS = 9;
 const POT_ACID = 238;
@@ -16870,7 +16871,7 @@ function objectWeightKind(obj) {
 
 function objectWeightClass(obj) {
     return obj?.cls || (obj?.otyp === RING_CLASS ? 'ring'
-        : obj?.otyp === SCROLL_CLASS ? 'scroll'
+        : obj?.otyp === SCROLL_CLASS || obj?.otyp === SCR_SCARE_MONSTER ? 'scroll'
             : obj?.otyp === POTION_CLASS ? 'potion'
                 : obj?.otyp === WAND_CLASS ? 'wand'
                     : obj?.otyp === GEM_CLASS ? 'gem'
@@ -17010,6 +17011,44 @@ function splitFloorPickupObjectForLift(obj, count) {
     return lifted;
 }
 
+function isScareMonsterScrollObject(obj) {
+    if (!obj) return false;
+    if (obj.otyp === SCR_SCARE_MONSTER || obj.scrollIndex === 3) return true;
+    const raw = String(obj.actualKind || obj.kind || '').toLowerCase()
+        .replace(/^scroll(?::| of | labeled )/, '');
+    return raw === 'scare monster';
+}
+
+function normalizeScareMonsterScrollObject(obj) {
+    if (!isScareMonsterScrollObject(obj)) return obj;
+    obj.cls = 'scroll';
+    obj.glyph = '?';
+    obj.scrollIndex = 3;
+    obj.actualKind ||= 'scroll of scare monster';
+    return obj;
+}
+
+function scareMonsterScrollDustMessage(obj) {
+    const plural = Math.max(1, Math.trunc(Number(obj?.quan || 1))) > 1;
+    return `The scroll${plural ? 's' : ''} ${plural ? 'turn' : 'turns'} to dust as you pick ${plural ? 'them' : 'it'} up.`;
+}
+
+function useUpFloorObjectWithShopBill(obj) {
+    if (!obj) return;
+    const x = obj.ox ?? game.u?.ux;
+    const y = obj.oy ?? game.u?.uy;
+    const shkp = x == null || y == null ? null : shopkeeperForCostlySpot(x, y);
+    if (shopkeeperInHisShop(shkp)) {
+        const price = shopItemPrice(obj, x, y);
+        if (price > 0) {
+            addObjectToShopBill(shkp, obj, price, { useup: true });
+            markObjectShopBillUsedUp(obj, shkp);
+        }
+    }
+    game.level.objects = (game.level?.objects || []).filter(item => item !== obj);
+    if (x != null && y != null) newsym(x, y);
+}
+
 function artifactPowerSourceName(obj) {
     const name = String(obj?.artifact || pickupObjectName(obj) || 'the artifact');
     return name.replace(/^The\b/, 'the');
@@ -17132,7 +17171,7 @@ function findFloorPickupFoodMergeTargetForPreflight(source, sourcePrice = null) 
     return null;
 }
 
-async function floorPickupPreflight(obj, { shopPrice = null, prompt = true } = {}) {
+async function floorPickupPreflight(obj, { shopPrice = null, prompt = true, scareSpecial = true } = {}) {
     const promptKey = floorPickupObjectKey(obj);
     const cached = game._skip_floor_pickup_preflight_once;
     if (cached && cached.objectId === promptKey) {
@@ -17161,6 +17200,35 @@ async function floorPickupPreflight(obj, { shopPrice = null, prompt = true } = {
     if (takeCount < originalCount)
         messages.push(`You can only lift ${takeCount === 1 ? 'one' : 'some'} of the ${pickupObjectPhrase(obj)} lying here.`);
 
+    let scareResetSpeOnDecline = false;
+    let scareRemainderState = null;
+    if (scareSpecial && isScareMonsterScrollObject(obj)) {
+        normalizeScareMonsterScrollObject(obj);
+        const oldState = {
+            blessed: !!obj.blessed,
+            cursed: !!obj.cursed,
+            spe: obj.spe || 0,
+        };
+        if (obj.blessed) {
+            obj.blessed = false;
+            scareRemainderState = oldState;
+        } else if (!obj.cursed && !(obj.spe || 0)) {
+            obj.spe = 1;
+            scareResetSpeOnDecline = true;
+            scareRemainderState = oldState;
+        } else {
+            const dustObj = splitFloorPickupObjectForLift(obj, takeCount);
+            normalizeScareMonsterScrollObject(dustObj);
+            useUpFloorObjectWithShopBill(dustObj);
+            return {
+                ok: false,
+                move: true,
+                message: scareMonsterScrollDustMessage(dustObj),
+                messages,
+            };
+        }
+    }
+
     const view = containerTakeoutObjectView(obj, takeCount);
     const x = obj?.ox ?? game.u?.ux;
     const y = obj?.oy ?? game.u?.uy;
@@ -17168,6 +17236,7 @@ async function floorPickupPreflight(obj, { shopPrice = null, prompt = true } = {
     const mergeTarget = findFloorPickupFoodMergeTargetForPreflight(view, price)
         || findFloorPickupInventoryMergeTargetForPreflight(view, price);
     if (!shopBillableGold(view) && !mergeTarget && !simulatedNextInventoryLetters(1)) {
+        if (scareResetSpeOnDecline) obj.spe = 0;
         return {
             ok: false,
             message: 'Your knapsack cannot accommodate any more items.',
@@ -17184,7 +17253,16 @@ async function floorPickupPreflight(obj, { shopPrice = null, prompt = true } = {
             burdenPrompt = `${containerTakeoutBurdenPrefix(nextEncumbrance)} lifting ${pickupObjectPhrase(view)}.  Continue? [ynq] (q)`;
     }
 
-    return { ok: true, skip: false, messages, takeCount, liftView: view, prompt: burdenPrompt };
+    return {
+        ok: true,
+        skip: false,
+        messages,
+        takeCount,
+        liftView: view,
+        prompt: burdenPrompt,
+        scareResetSpeOnDecline,
+        scareRemainderState,
+    };
 }
 
 function containerTakeoutPreflight(container, entries) {
@@ -19544,10 +19622,11 @@ export function pickupObjectName(obj) {
         const name = obj.kind || (obj.otyp === WAX_CANDLE ? 'wax candle' : 'tallow candle');
         return named(maybeLitObjectName(obj, (obj.quan || 1) > 1 ? obj.plural || `${name}s` : name));
     }
-    if (obj.otyp === SCROLL_CLASS || obj.cls === 'scroll') {
+    if (obj.otyp === SCROLL_CLASS || obj.cls === 'scroll' || obj.otyp === SCR_SCARE_MONSTER) {
         if ((obj.quan || 1) > 1 && obj.plural) return named(obj.plural);
-        const blankScroll = obj.otyp === SCR_BLANK_PAPER || obj.scrollIndex === 21
-            || obj.kind === 'blank paper' || (obj.scrollIndex == null && !obj.kind);
+        const scrollIndex = obj.scrollIndex ?? (obj.otyp === SCR_SCARE_MONSTER ? 3 : undefined);
+        const blankScroll = obj.otyp === SCR_BLANK_PAPER || scrollIndex === 21
+            || obj.kind === 'blank paper' || (scrollIndex == null && !obj.kind);
         if (blankScroll) {
             if (obj.known === true || obj.actualKind === 'scroll of blank paper')
                 return named((obj.quan || 1) > 1 ? 'scrolls of blank paper' : 'scroll of blank paper');
@@ -19566,7 +19645,7 @@ export function pickupObjectName(obj) {
             const name = obj.kind.replace(/^scroll of /, '');
             return named((obj.quan || 1) > 1 ? `scrolls of ${name}` : `scroll of ${name}`);
         }
-        const label = game._object_descriptions?.scrolls?.[obj.scrollIndex] || 'ZELGO MER';
+        const label = game._object_descriptions?.scrolls?.[scrollIndex] || 'ZELGO MER';
         return named((obj.quan || 1) > 1 ? `scrolls labeled ${label}` : `scroll labeled ${label}`);
     }
     if (obj.otyp === POTION_CLASS || obj.cls === 'potion') {
@@ -21731,8 +21810,9 @@ function shopBaseCost(obj) {
     kind = kind.replace(/^(?:blessed|uncursed|cursed) /, '');
     if (isGlobbyObject(obj)) return 6;
 
-    if (obj.otyp === SCROLL_CLASS || cls === 'scroll') {
-        if (obj.scrollIndex != null) return SCROLL_SHOP_COSTS[obj.scrollIndex] || 0;
+    if (obj.otyp === SCROLL_CLASS || cls === 'scroll' || obj.otyp === SCR_SCARE_MONSTER) {
+        const scrollIndex = obj.scrollIndex ?? (obj.otyp === SCR_SCARE_MONSTER ? 3 : undefined);
+        if (scrollIndex != null) return SCROLL_SHOP_COSTS[scrollIndex] || 0;
         kind = kind.replace(/^scroll(?::| of | labeled )/, '');
         return SHOP_OBJECT_COSTS[kind] || (kind === 'blank paper' ? 60 : 0);
     }
@@ -28208,7 +28288,7 @@ export async function rhack(_cmd) {
             const preflightByObject = new Map();
             for (const obj of selected) {
                 if (!obj || shopBillableGold(obj)) continue;
-                const preflight = await floorPickupPreflight(obj, { prompt: false });
+                const preflight = await floorPickupPreflight(obj, { prompt: false, scareSpecial: false });
                 preflightByObject.set(obj, preflight);
                 if (!preflight.ok) {
                     game._overlay_lines = null;
@@ -28216,7 +28296,7 @@ export async function rhack(_cmd) {
                     game._command_mode = null;
                     game._pickup_list = null;
                     await setMessage(floorPickupPreflightMessage(preflight));
-                    game.context.move = 0;
+                    game.context.move = preflight.move ? 1 : 0;
                     return;
                 }
             }
@@ -28702,6 +28782,7 @@ export async function rhack(_cmd) {
             await rhack(',');
             return;
         }
+        if (pending.scareResetSpeObj) pending.scareResetSpeObj.spe = 0;
         game.context.move = 0;
         return;
     }
@@ -42303,7 +42384,7 @@ export async function rhack(_cmd) {
             const preflight = await floorPickupPreflight(objectHere);
             if (!preflight.ok || preflight.skip) {
                 await setMessage(floorPickupPreflightMessage(preflight));
-                game.context.move = 0;
+                game.context.move = preflight.move ? 1 : 0;
                 return;
             }
             if (preflight.prompt) {
@@ -42327,7 +42408,7 @@ export async function rhack(_cmd) {
             const preflight = await floorPickupPreflight(objectHere);
             if (!preflight.ok || preflight.skip) {
                 await setMessage(floorPickupPreflightMessage(preflight));
-                game.context.move = 0;
+                game.context.move = preflight.move ? 1 : 0;
                 return;
             }
             if (preflight.prompt) {
@@ -42379,13 +42460,14 @@ export async function rhack(_cmd) {
             const preflight = await floorPickupPreflight(objectHere, { shopPrice });
             if (!preflight.ok || preflight.skip) {
                 await setMessage(floorPickupPreflightMessage(preflight));
-                game.context.move = 0;
+                game.context.move = preflight.move ? 1 : 0;
                 return;
             }
             if (preflight.prompt) {
                 game._floor_pickup_pending = {
                     objectId,
                     preflight: floorPickupAcceptedPreflight(preflight),
+                    scareResetSpeObj: preflight.scareResetSpeOnDecline ? objectHere : null,
                 };
                 game._command_mode = 'floorPickupBurdenConfirm';
                 await setMessage(floorPickupBurdenPromptMessage(preflight));
@@ -42394,6 +42476,8 @@ export async function rhack(_cmd) {
             }
             const preflightMessages = preflight.messages || [];
             const pickupObj = splitFloorPickupObjectForLift(objectHere, preflight.takeCount || objectHere.quan || 1);
+            if (preflight.scareRemainderState && pickupObj !== objectHere)
+                Object.assign(objectHere, preflight.scareRemainderState);
             const liftedShopPrice = pickupObj === objectHere ? shopPrice : shopItemPrice(pickupObj);
             const amount = pickupObjectPhrase(pickupObj);
             const name = pickupObjectName({ ...pickupObj, quan: 1 });
