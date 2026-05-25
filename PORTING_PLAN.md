@@ -2700,6 +2700,13 @@ Next concrete target:
   ice boxes), with carried target-container selection, floor fallback,
   `contents`/`cobj` compatibility, broken-box prompt wording, source-only
   ice-box thawing, and C-shaped lock/trap/empty abort checks before transfer.
+  Bag-of-tricks and horn-of-plenty `#tip` specials now follow the C
+  charge-drain shape: generated bag/horn tools store their `rn1(18, 3)`
+  charges, bag tipping repeatedly consumes charges into monster creation and
+  handles empty/no-visible-effect messages, horn tipping repeatedly creates
+  blessed/cursed food or potion objects onto the floor or into the selected
+  carried target, and an unidentified bag-of-tricks destination applies once
+  and aborts the source transfer.
   Generated ice-box corpses are explicitly frozen at creation while the generic
   `add_to_container()` helper remains neutral like C; the floor put-in/stash
   paths freeze selected inventory objects immediately before insertion, and
@@ -2709,10 +2716,10 @@ Next concrete target:
   starts a fresh C-shaped shrink timer. Focused guards, direct
   takeout/tip/put-in/stash/both-order/glob-timer smokes, focused replays, and
   full score remain exact. Remaining ice-box work is nested
-  `in_container()`/`out_container()` variants, bag-of-tricks/horn-of-plenty
-  `#tip` specials, cursed/exploding magic-bag transfer details, troll/Rider
-  revive and zombify timers, forced ice-box destruction, and shop billing edge
-  cases.
+  `in_container()`/`out_container()` variants, fuller bag-of-tricks/horn apply
+  parity and shop usage billing, cursed/exploding magic-bag transfer details,
+  troll/Rider revive and zombify timers, forced ice-box destruction, and shop
+  billing edge cases.
 - Remaining ice work outside this fire-ray terrain slice includes the broader
   full `spoteffects()`/`pooleffects()` hero liquid behavior, deeper
   `minliquid()` edges (life-saving or shape-shift survivor relocation,

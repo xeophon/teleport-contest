@@ -887,6 +887,7 @@ const TIN_OPENER = 10159;
 const LAND_MINE = 10160;
 const BEARTRAP = 10161;
 const TOOLED_HORN = 10162;
+const HORN_OF_PLENTY = 957;
 const GRAPPLING_HOOK = 10163;
 const MEAT_RING = 10164;
 const LOADSTONE = 10165;
@@ -16206,8 +16207,31 @@ function isTipContainerObject(obj) {
     return /^(?:large box|chest|ice box|sack|oilskin sack|bag of holding|bag)$/.test(objectKindKey(obj));
 }
 
+function isBagOfTricksObject(obj) {
+    return !!obj && (obj.otyp === BAG_OF_TRICKS || objectKindKey(obj) === 'bag of tricks'
+        || pickupObjectName({ ...obj, quan: 1 }).toLowerCase() === 'bag of tricks');
+}
+
+function isUnknownBagOfTricksObject(obj) {
+    return isBagOfTricksObject(obj) && obj.known !== true
+        && String(obj.kind || '').toLowerCase() === 'bag';
+}
+
+function isHornOfPlentyObject(obj) {
+    return !!obj && (obj.otyp === HORN_OF_PLENTY || objectKindKey(obj) === 'horn of plenty'
+        || pickupObjectName({ ...obj, quan: 1 }).toLowerCase() === 'horn of plenty');
+}
+
+function isTipSourceObject(obj) {
+    return isTipContainerObject(obj) || isBagOfTricksObject(obj) || isHornOfPlentyObject(obj);
+}
+
+function isFloorTipSourceObject(obj) {
+    return isTipContainerObject(obj) || isBagOfTricksObject(obj);
+}
+
 function isTipTargetContainer(obj) {
-    return isTipContainerObject(obj);
+    return isTipContainerObject(obj) || isUnknownBagOfTricksObject(obj);
 }
 
 function carriedTipTargetContainers(source) {
@@ -16236,6 +16260,15 @@ function tipContainerCheckMessage(container, { allowEmpty = false } = {}) {
         return tipContainerEmptyMessage(container);
     }
     return '';
+}
+
+function tipChargeCount(item) {
+    return Math.max(0, item?.spe ?? 0);
+}
+
+function consumeTipCharge(item) {
+    item.spe = Math.max(0, (item.spe ?? 0) - 1);
+    updateChargedItemLine(item);
 }
 
 function clearTipState() {
@@ -16288,6 +16321,124 @@ function refreshTipContainerWeight(container) {
     if (isGlobWeightContainerObject(container)) container.owt = globObjectWeight(container);
 }
 
+function visibleCreatedMonster(mon) {
+    if (!mon || game.u?.blind) return false;
+    return cansee(mon.mx, mon.my) || !!(game.viz_array?.[mon.my]?.[mon.mx] & IN_SIGHT);
+}
+
+async function applyBagOfTricksOnce(bag, { tipping = false } = {}) {
+    if (tipChargeCount(bag) < 1) {
+        if (bag.cknown) return ["It's empty."];
+        if (bag.dknown || bag.known) bag.cknown = true;
+        return ['Nothing happens.'];
+    }
+
+    consumeTipCharge(bag);
+    let creatcnt = 1;
+    if (!rn2(23)) creatcnt += rnd(7);
+    let moncount = 0;
+    let seecount = 0;
+    for (let i = 0; i < creatcnt; i++) {
+        const mon = await makemon(null, game.u?.ux || 0, game.u?.uy || 0, 0);
+        if (!mon) continue;
+        moncount++;
+        if (visibleCreatedMonster(mon)) seecount++;
+    }
+    if (seecount && bag.dknown) bag.known = true;
+    if (!tipping && !seecount) return [moncount ? 'Nothing seems to happen.' : 'Nothing happens.'];
+    return [];
+}
+
+async function tipBagOfTricks(bag) {
+    if (tipChargeCount(bag) < 1) return applyBagOfTricksOnce(bag, { tipping: true });
+    const oldSpe = tipChargeCount(bag);
+    let seen = false;
+    while (tipChargeCount(bag) > 0) {
+        const beforeMonsters = (game.level?.monsters || []).length;
+        const messages = await applyBagOfTricksOnce(bag, { tipping: true });
+        if (messages.length) return messages;
+        const created = (game.level?.monsters || []).slice(beforeMonsters);
+        if (created.some(visibleCreatedMonster)) seen = true;
+    }
+    if (tipChargeCount(bag) < oldSpe) {
+        bag.spe = 0;
+        bag.cknown = true;
+        updateChargedItemLine(bag);
+        return seen ? [] : ['Nothing seems to happen.'];
+    }
+    return [];
+}
+
+function hornCreatedObjectDescription(obj, potion) {
+    if (potion) return (obj.quan || 1) > 1 ? 'Some potions' : 'A potion';
+    return 'Some food';
+}
+
+function createHornOfPlentyObject(horn) {
+    const potion = !rn2(13);
+    const obj = mkobj(potion ? POTION_CLASS : FOOD_CLASS, false);
+    if (!potion && objectKindKey(obj) === 'food ration' && !rn2(7)) {
+        Object.assign(obj, {
+            otyp: LUMP_OF_ROYAL_JELLY,
+            kind: 'lump of royal jelly',
+            singular: 'lump of royal jelly',
+            plural: 'lumps of royal jelly',
+        });
+    }
+    obj.blessed = !!horn.blessed;
+    obj.cursed = !!horn.cursed;
+    Object.assign(obj, object_display(obj));
+    return { obj, potion };
+}
+
+function placeHornObjectOnFloor(obj, messages) {
+    const x = game.u?.ux ?? 0;
+    const y = game.u?.uy ?? 0;
+    placeTippedObjectOnFloor(obj, x, y, messages);
+    messages.push(`${upstartText(containerObjectPhrase(obj))} drops to the floor.`);
+}
+
+async function tipHornOfPlenty(horn, targetBox = null) {
+    if (tipChargeCount(horn) < 1) {
+        horn.cknown = true;
+        updateChargedItemLine(horn);
+        return ['Nothing happens.'];
+    }
+
+    const messages = [];
+    const oldSpe = tipChargeCount(horn);
+    while (tipChargeCount(horn) > 0) {
+        consumeTipCharge(horn);
+        const { obj, potion } = createHornOfPlentyObject(horn);
+        const what = hornCreatedObjectDescription(obj, potion);
+        messages.push(`${what} ${what === 'A potion' ? 'spills' : 'spill'} out.`);
+        if (targetBox) {
+            prepareTippedObjectForContainer(obj);
+            add_to_container(targetBox, obj);
+            refreshTipContainerWeight(targetBox);
+        } else {
+            placeHornObjectOnFloor(obj, messages);
+        }
+    }
+    if (tipChargeCount(horn) < oldSpe) {
+        horn.spe = 0;
+        horn.cknown = true;
+        if (horn.dknown) horn.known = true;
+        updateChargedItemLine(horn);
+    }
+    return messages;
+}
+
+async function tipSpecialSourceContents(source, targetBox = null) {
+    if (targetBox) {
+        const targetError = tipContainerCheckMessage(targetBox, { allowEmpty: true });
+        if (targetError) return [targetError];
+    }
+    if (isBagOfTricksObject(source)) return tipBagOfTricks(source);
+    if (isHornOfPlentyObject(source)) return tipHornOfPlenty(source, targetBox);
+    return null;
+}
+
 function tipContainerIntoContainer(source, targetBox) {
     const contents = [...liquidFlowContainerContents(source)];
     source.cknown = true;
@@ -16309,9 +16460,13 @@ function tipContainerIntoContainer(source, targetBox) {
     return messages;
 }
 
-function tipContainerContents(source, targetBox = null) {
-    const sourceError = tipContainerCheckMessage(source);
+async function tipContainerContents(source, targetBox = null) {
+    const special = isBagOfTricksObject(source) || isHornOfPlentyObject(source);
+    const sourceError = tipContainerCheckMessage(source, { allowEmpty: special });
     if (sourceError) return [sourceError];
+    if (targetBox && isBagOfTricksObject(targetBox))
+        return applyBagOfTricksOnce(targetBox, { tipping: false });
+    if (special) return tipSpecialSourceContents(source, targetBox);
     if (targetBox) {
         const targetError = tipContainerCheckMessage(targetBox, { allowEmpty: true });
         if (targetError) return [targetError];
@@ -32764,7 +32919,7 @@ export async function rhack(_cmd) {
     }
 
     if (game._command_mode === 'tipContainerObject') {
-        const containers = (game.inventory || []).filter(isTipContainerObject);
+        const containers = (game.inventory || []).filter(isTipSourceObject);
         const letters = containers.map(item => item.letter).filter(Boolean).join('');
         if (ch === '\x1b' || ch === 'q' || ch === ' ' || ch === '\r' || ch === '\n') {
             game._overlay_lines = null;
@@ -32800,13 +32955,13 @@ export async function rhack(_cmd) {
         const source = game._tip_container_object;
         const entries = game._tip_target_entries || [];
         const finishTip = async targetBox => {
-            const messages = tipContainerContents(source, targetBox);
+            const messages = await tipContainerContents(source, targetBox);
             clearTipState();
             await setMessage(messages.join('  '), messages.length > 1);
             game.context.move = 1;
             game._command_mode = null;
         };
-        if (!source || !isTipContainerObject(source)) {
+        if (!source || !isTipSourceObject(source)) {
             clearTipState();
             game._command_mode = null;
             return;
@@ -32832,10 +32987,10 @@ export async function rhack(_cmd) {
         if (ch === 'q') game._keep_pending_message = 1;
         if (ch === 'y') {
             const tipTarget = game._tip_container_object;
-            if (isTipContainerObject(tipTarget)) {
+            if (isTipSourceObject(tipTarget)) {
                 if (beginTipDestinationSelection(tipTarget)) return;
                 game._tip_container_object = null;
-                const messages = tipContainerContents(tipTarget);
+                const messages = await tipContainerContents(tipTarget);
                 await setMessage(messages.join('  '), messages.length > 1);
                 game.context.move = 1;
                 game._command_mode = null;
@@ -33557,14 +33712,14 @@ export async function rhack(_cmd) {
             }
             if (command === 'tip') {
                 const floorContainer = game.level?.objects?.find(obj =>
-                    isTipContainerObject(obj) && obj.ox === game.u?.ux && obj.oy === game.u?.uy);
+                    isFloorTipSourceObject(obj) && obj.ox === game.u?.ux && obj.oy === game.u?.uy);
                 if (floorContainer) {
                     game._tip_container_object = floorContainer;
                     await setMessage(`There is ${tipContainerObjectPhrase(floorContainer)} here, tip it? [ynq] (q)`);
                     game._command_mode = 'tipConfirm';
                     return;
                 }
-                const carriedContainers = (game.inventory || []).filter(isTipContainerObject);
+                const carriedContainers = (game.inventory || []).filter(isTipSourceObject);
                 if (carriedContainers.length === 1) {
                     game._tip_container_object = carriedContainers[0];
                     await setMessage(`Tip ${inventoryItemName(carriedContainers[0])}? [ynq] (q)`);
