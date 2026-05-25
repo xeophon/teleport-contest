@@ -640,6 +640,106 @@ test('completing study of an unpaid spellbook bills library usage and keeps live
     assert.match(`${game._pending_message || ''} ${game._topline_after_more || ''}`, /80 zorkmids/);
 });
 
+test('failed read that crumbles an unpaid spellbook preserves full used-up bill', async () => {
+    const { shkp } = installCommandShopState();
+    initRng(1);
+    const book = healingSpellbook(3100, 'b');
+    book.cursed = true;
+    book.known = true;
+    game.inventory = [book];
+    shop.addObjectToShopBill(shkp, book, 100);
+
+    await rhack('r');
+    await rhack('b');
+
+    assert.equal(game.inventory.includes(book), false);
+    assert.equal(shkp.debit || 0, 0);
+    assert.equal(shkp.billct, 1);
+    const entry = shop.shopBillEntryForObject(shkp, book);
+    assert.ok(entry);
+    assert.equal(entry.useup, true);
+    assert.equal(shop.shopBillEntryTotal(entry), 100);
+    assert.equal(book.unpaid, false);
+    assert.equal(game._usedUpShopBills.some(bill => String(bill.bo_id) === String(book.id)), true);
+    const debts = shop.collectPayableShopDebts(shkp);
+    assert.equal(debts.some(debt => debt.billPortion === 'fullyUsedUp' && debt.price === 100), true);
+    assert.match(game._pending_message, /The spellbook crumbles to dust!/);
+    assert.doesNotMatch(game._pending_message, /free library/);
+});
+
+test('failed read that leaves an unpaid spellbook intact does not mark it used-up', async () => {
+    const { shkp } = installCommandShopState();
+    initRng(2);
+    const book = healingSpellbook(3101, 'b');
+    book.cursed = true;
+    book.known = true;
+    game.inventory = [book];
+    shop.addObjectToShopBill(shkp, book, 100);
+
+    await rhack('r');
+    await rhack('b');
+
+    assert.equal(game.inventory.includes(book), true);
+    assert.equal(shkp.debit || 0, 0);
+    const entry = shop.shopBillEntryForObject(shkp, book);
+    assert.ok(entry);
+    assert.equal(entry.useup, false);
+    assert.equal(shop.shopBillEntryTotal(entry), 100);
+    assert.equal(book.unpaid, true);
+    assert.deepEqual(game._usedUpShopBills || [], []);
+    assert.doesNotMatch(game._pending_message, /crumbles to dust/);
+    assert.doesNotMatch(game._pending_message, /free library/);
+});
+
+test('confused reading that tears an unpaid spellbook preserves full used-up bill', async () => {
+    const { shkp } = installCommandShopState();
+    initRng(1);
+    const book = healingSpellbook(3102, 'b');
+    book.blessed = true;
+    book.known = true;
+    game.u._confusionTimeout = 10;
+    game.inventory = [book];
+    shop.addObjectToShopBill(shkp, book, 100);
+
+    await rhack('r');
+    await rhack('b');
+
+    assert.equal(game.inventory.includes(book), false);
+    assert.equal(shkp.debit || 0, 0);
+    assert.equal(shkp.billct, 1);
+    const entry = shop.shopBillEntryForObject(shkp, book);
+    assert.ok(entry);
+    assert.equal(entry.useup, true);
+    assert.equal(shop.shopBillEntryTotal(entry), 100);
+    assert.equal(book.unpaid, false);
+    assert.equal(game._usedUpShopBills.some(bill => String(bill.bo_id) === String(book.id)), true);
+    assert.match(game._pending_message, /You accidentally tear the spellbook to pieces\./);
+    assert.doesNotMatch(game._pending_message, /free library/);
+});
+
+test('carried fire destruction of an unpaid spellbook preserves full used-up bill', () => {
+    const { shkp } = installShopState();
+    initRng(2);
+    const book = healingSpellbook(3103, 'b');
+    book.known = true;
+    game.inventory = [book];
+    shop.addObjectToShopBill(shkp, book, 100);
+
+    const result = shop.fireDamageInventoryForTest(20, true, false, {
+        preburnedArmor: { bodyHit: true, message: '' },
+    });
+
+    assert.equal(game.inventory.includes(book), false);
+    assert.equal(shkp.debit || 0, 0);
+    const entry = shop.shopBillEntryForObject(shkp, book);
+    assert.ok(entry);
+    assert.equal(entry.useup, true);
+    assert.equal(shop.shopBillEntryTotal(entry), 100);
+    assert.equal(book.unpaid, false);
+    assert.equal(game._usedUpShopBills.some(bill => String(bill.bo_id) === String(book.id)), true);
+    assert.equal(result.messages.some(message => /catches fire and burns!/.test(message)), true);
+});
+
 test('applying an unpaid oil lamp lights it and bills usage without consuming the live bill', async () => {
     const { shkp } = installCommandShopState();
     const item = lamp(3090, 'oil lamp', 'l', 3);

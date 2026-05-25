@@ -7302,6 +7302,18 @@ function removeInventoryItem(item, amount = 1) {
     game._pet_food_scan_inventory = game.inventory;
 }
 
+function useUpInventoryItem(item, amount = 1) {
+    if (!item) return false;
+    const usedCount = Math.max(1, Math.trunc(Number(amount || 1)));
+    const quantity = Math.max(1, Math.trunc(Number(item.quan || 1)));
+    if (usedCount >= quantity) {
+        const { shkp } = shopkeeperOwningBillEntry(item);
+        markObjectShopBillUsedUp(item, shkp || heroShopkeeper());
+    }
+    removeInventoryItem(item, usedCount);
+    return true;
+}
+
 export function consumeLifeSavingAmulet({ clearStoning = false } = {}) {
     const lifesaving = (game.inventory || []).find(item =>
         item.worn && String(item.kind || item.actualKind || item.line || '').includes('life saving'));
@@ -8279,10 +8291,10 @@ function fireDamageInventory(origDamage, forceDestroyItems = false, rollIgniteIt
                 event.breatheMessage = "For an instant you couldn't see yourself!";
             damage += itemDamage;
             deathCause = fireInventoryDeathCause(cls, item, plural);
-            removeInventoryItem(item, destroyed);
+            useUpInventoryItem(item, destroyed);
             if (cls === 'potion') rn2(2);
         } else {
-            removeInventoryItem(item, destroyed);
+            useUpInventoryItem(item, destroyed);
             if (!game.u?.fireResistance) {
                 event.damage = 1;
                 damage += 1;
@@ -14552,6 +14564,7 @@ export const __shopBillingTestHooks = {
     splitShopBillEntry,
     subFromShopBill,
     subOneFromShopBill,
+    fireDamageInventoryForTest: fireDamageInventory,
     checkUnpaidUsageForTest: checkUnpaidUsage,
     costlyTinForTest: costlyTinAlteration,
     tipContainerContents,
@@ -32628,7 +32641,7 @@ export async function rhack(_cmd) {
                 if (result.gone || !rn2(3)) {
                     shouldCall = shouldTryCallSpellbook(item, name);
                     if (shouldCall) prepareSpellbookTryCall(item, studyDelay);
-                    removeInventoryItem(item);
+                    useUpInventoryItem(item);
                     if (!result.gone) messages.push('The spellbook crumbles to dust!');
                 }
                 game._helpless_time = Math.max(game._helpless_time || 0, studyDelay);
@@ -32645,7 +32658,7 @@ export async function rhack(_cmd) {
                     messages.push('Being confused you have difficulties in controlling your actions.');
                     shouldCall = shouldTryCallSpellbook(item, name);
                     if (shouldCall) prepareSpellbookTryCall(item, studyDelay);
-                    removeInventoryItem(item);
+                    useUpInventoryItem(item);
                     messages.push('You accidentally tear the spellbook to pieces.');
                 } else {
                     messages.push('You find yourself reading the first line over and over again.');
