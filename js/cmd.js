@@ -12683,7 +12683,12 @@ function shopkeeperForCostlySpot(x, y) {
     const shkp = room.resident || (game.level?.monsters || [])
         .find(mon => mon.isshk && mon.shoproom === roomno);
     if (!shkp?.isshk) return null;
+    if (shkp.shk && x === shkp.shk.x && y === shkp.shk.y) return null;
     return shkp;
+}
+
+function shopkeeperDisplayName(shkp) {
+    return shkp?.shknam || shkp?.shopkeeperName || 'the shopkeeper';
 }
 
 function buriedMerchandiseDebtMessage(x, y, ignoredObject = null) {
@@ -12701,8 +12706,7 @@ function buriedMerchandiseDebtMessage(x, y, ignoredObject = null) {
     }
     if (!loss) return '';
     shkp.debit = (shkp.debit || 0) + loss;
-    const name = shkp.shknam || shkp.shopkeeperName || 'the shopkeeper';
-    return `You owe ${name} ${loss} zorkmid${loss === 1 ? '' : 's'} for burying merchandise.`;
+    return `You owe ${shopkeeperDisplayName(shkp)} ${loss} zorkmid${loss === 1 ? '' : 's'} for burying merchandise.`;
 }
 
 function clearHeroSlimeFromMoltenLava() {
@@ -16224,8 +16228,11 @@ function placeObjectOnFloorWithEffects(obj, x, y, messages, verb = 'drop', { sta
         const stacked = stack ? stackMonsterThrownObject(obj) : obj;
         if (stacked === obj) game.level.objects.push(obj);
         objectIceEffect(obj, x, y);
+        newsym(x, y);
+        return true;
     }
     newsym(x, y);
+    return false;
 }
 
 function placeTippedObjectOnFloor(obj, x, y, messages) {
@@ -16670,7 +16677,38 @@ function magicBagScatterHitHero(obj, messages) {
     return { hit: true, consumed: false };
 }
 
-function scatterMagicBagObject(container, obj, sx, sy, messages) {
+function magicBagScatterShopContext(sx, sy) {
+    const originRoomno = game.level?.at?.(sx, sy)?.roomno || 0;
+    const shkp = shopkeeperForCostlySpot(sx, sy);
+    return shkp ? { shkp, originRoomno, addedDebt: 0 } : null;
+}
+
+function magicBagScatterGoldValue(obj) {
+    if (!(obj?.otyp === GOLD_PIECE || obj?.cls === 'coin' || obj?.glyph === '$')) return 0;
+    return Math.max(1, obj.quan || 1);
+}
+
+function magicBagScatterHeroInOriginShop(shopContext) {
+    const roomno = game.level?.at?.(game.u?.ux, game.u?.uy)?.roomno || 0;
+    return roomno >= ROOMOFFSET && roomno === shopContext?.originRoomno;
+}
+
+function maybeBillMagicBagScatterGold(obj, sx, sy, x, y, shopContext) {
+    if (!shopContext?.shkp || (x === sx && y === sy)) return;
+    if (shopkeeperForCostlySpot(x, y) || !magicBagScatterHeroInOriginShop(shopContext)) return;
+    const debt = magicBagScatterGoldValue(obj);
+    if (!debt) return;
+    shopContext.shkp.debit = (shopContext.shkp.debit || 0) + debt;
+    shopContext.addedDebt += debt;
+}
+
+function finishMagicBagScatterShopBilling(shopContext, messages) {
+    const debt = shopContext?.addedDebt || 0;
+    if (!debt) return;
+    messages.push(`Your debt has increased by ${debt} zorkmid${debt === 1 ? '' : 's'}.`);
+}
+
+function scatterMagicBagObject(container, obj, sx, sy, messages, shopContext = null) {
     const scatterObj = splitMagicBagScatterStack(obj);
     if (scatterObj !== obj) {
         scatterObj.container = null;
@@ -16709,12 +16747,14 @@ function scatterMagicBagObject(container, obj, sx, sy, messages) {
             if (hit.hit) range -= 3;
         }
     }
-    placeObjectOnFloorWithEffects(scatterObj, x, y, messages, 'land', { stack: true });
+    if (placeObjectOnFloorWithEffects(scatterObj, x, y, messages, 'land', { stack: true }))
+        maybeBillMagicBagScatterGold(scatterObj, sx, sy, x, y, shopContext);
 }
 
 function scatterMagicBagContents(container, messages) {
     const x = game.u?.ux ?? container?.ox ?? 0;
     const y = game.u?.uy ?? container?.oy ?? 0;
+    const shopContext = magicBagScatterShopContext(x, y);
     for (const obj of [...liquidFlowContainerContents(container)]) {
         if (!rn2(13)) {
             removeContainedObject(container, obj);
@@ -16723,8 +16763,9 @@ function scatterMagicBagContents(container, messages) {
         }
         obj.ox = x;
         obj.oy = y;
-        scatterMagicBagObject(container, obj, x, y, messages);
+        scatterMagicBagObject(container, obj, x, y, messages, shopContext);
     }
+    finishMagicBagScatterShopBilling(shopContext, messages);
     clearLiquidFlowContainerContents(container);
 }
 
@@ -17298,7 +17339,7 @@ function collectUnpaidShopItemsFromList(list, entries) {
     }
 }
 
-function collectPayableShopDebts() {
+function collectPayableShopDebts(shkp = null) {
     const entries = [];
     collectUnpaidShopItemsFromList(game.inventory || [], entries);
     for (const bill of game._usedUpShopBills || []) {
@@ -17309,6 +17350,12 @@ function collectPayableShopDebts() {
             price,
         });
     }
+    const debit = Math.max(0, Math.trunc(Number(shkp?.debit || 0)));
+    if (debit > 0) entries.push({
+        shopkeeperDebit: shkp,
+        name: `debt owed to ${shopkeeperDisplayName(shkp)}`,
+        price: debit,
+    });
     return entries.map((entry, index) => ({
         ...entry,
         letter: String.fromCharCode(97 + index),
@@ -23712,6 +23759,10 @@ export async function rhack(_cmd) {
                     paidUsedUpBills.add(entry.usedUpBill);
                     continue;
                 }
+                if (entry.shopkeeperDebit) {
+                    entry.shopkeeperDebit.debit = Math.max(0, (entry.shopkeeperDebit.debit || 0) - entry.price);
+                    continue;
+                }
                 if (!entry.item) continue;
                 entry.item.unpaid = false;
                 entry.item.unpaidPrice = undefined;
@@ -23722,7 +23773,8 @@ export async function rhack(_cmd) {
                 game._usedUpShopBills = (game._usedUpShopBills || [])
                     .filter(bill => !paidUsedUpBills.has(bill));
             const shkp = game._pay_shopkeeper;
-            if (shkp) shkp.billct = Math.max(0, (shkp.billct || selected.length) - selected.length);
+            const billedSelections = selected.filter(entry => !entry.shopkeeperDebit).length;
+            if (shkp) shkp.billct = Math.max(0, (shkp.billct || billedSelections) - billedSelections);
             if (shkp?.shk) {
                 const home = shkp.shk;
                 const blockingPet = (game.level?.monsters || []).find(mon =>
@@ -36981,7 +37033,7 @@ export async function rhack(_cmd) {
             return;
         }
 
-        const entries = collectPayableShopDebts();
+        const entries = collectPayableShopDebts(shkp);
         if (!entries.length) {
             await setMessage(`You do not owe ${shkp.shknam || 'the shopkeeper'} anything.`);
             return;

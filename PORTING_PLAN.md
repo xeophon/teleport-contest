@@ -2739,6 +2739,12 @@ Next concrete target:
   application, potion-style consumption, and the extra range penalty for hits.
   A direct smoke forces bag-explosion darts into adjacent monsters to cover
   the new hit path.
+  Scatter also now follows C's current gold-only shop billing branch: when a
+  surviving bag-explosion gold stack starts on a costly shop square and lands
+  outside the shop while the hero remains in that shop, the resident
+  shopkeeper's debit increases and the pay menu exposes the debt. The
+  placement helper reports whether floor effects consumed the object so
+  billing only occurs for gold that actually lands.
   Generated ice-box corpses are explicitly frozen at creation while the generic
   `add_to_container()` helper remains neutral like C; the floor put-in/stash
   paths freeze selected inventory objects immediately before insertion, and
@@ -2749,8 +2755,8 @@ Next concrete target:
   takeout/tip/put-in/stash/both-order/glob-timer/bag-horn-apply smokes,
   focused replays, and full score remain exact. Remaining ice-box work is
   nested `in_container()`/`out_container()` variants, bag-of-tricks/horn shop
-  usage billing, full magic-bag `ohitmon()`/`thitu()` special cases and shop
-  billing,
+  usage billing, full magic-bag `ohitmon()`/`thitu()` special cases and
+  non-gold scatter shop billing refinements,
   troll/Rider revive and zombify timers, forced ice-box destruction, and shop
   billing edge cases.
 - Remaining ice work outside this fire-ray terrain slice includes the broader
