@@ -4015,6 +4015,106 @@ test('floor stacking merges compatible unpaid bill rows', () => {
     assert.equal(shkp.billct, 1);
 });
 
+test('ordinary inventory drop stacks with compatible floor objects after placement', async () => {
+    const { shkp } = installCommandShopState();
+    game.level.at = () => ({ roomno: 0, typ: ROOM });
+    const floorStack = { ...dagger(8911), letter: undefined, line: undefined, quan: 1, ox: 5, oy: 5 };
+    const carried = dagger(8912, 'd');
+    game.level.objects = [floorStack];
+    game.inventory = [carried];
+
+    await rhack('d');
+    await rhack('d');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.inventory.length, 0);
+    assert.equal(game.level.objects.length, 1);
+    assert.equal(game.level.objects[0].id, carried.id);
+    assert.equal(game.level.objects[0].quan, 2);
+    assert.equal(shkp.billct, 0);
+});
+
+test('ordinary unpaid drop merges same-price floor bill rows after placement', async () => {
+    const { shkp } = installCommandShopState();
+    game.level.at = () => ({ roomno: 0, typ: ROOM });
+    const floorStack = { ...dagger(8913), letter: undefined, line: undefined, quan: 1, ox: 5, oy: 5 };
+    const carried = dagger(8914, 'd');
+    game.level.objects = [floorStack];
+    game.inventory = [carried];
+    shop.addObjectToShopBill(shkp, floorStack, 5);
+    shop.addObjectToShopBill(shkp, carried, 5);
+
+    await rhack('d');
+    await rhack('d');
+
+    const merged = game.level.objects[0];
+    const mergedEntry = shop.shopBillEntryForObject(shkp, merged);
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.inventory.length, 0);
+    assert.equal(game.level.objects.length, 1);
+    assert.equal(merged.id, carried.id);
+    assert.equal(merged.quan, 2);
+    assert.equal(merged.unpaid, true);
+    assert.equal(mergedEntry.bquan, 2);
+    assert.equal(shop.shopBillEntryTotal(mergedEntry), 10);
+    assert.equal(shop.shopBillEntryForObject(shkp, floorStack), null);
+    assert.equal(floorStack.unpaid, false);
+    assert.equal(shkp.billct, 1);
+});
+
+test('declined paid drop sale does not stack into chargeable shop stock', async () => {
+    const { shkp } = installCommandShopState();
+    const stock = { ...dagger(8921), letter: undefined, line: undefined, quan: 1, ox: 5, oy: 5 };
+    const carried = dagger(8922, 'd');
+    game.level.objects = [stock];
+    game.inventory = [carried];
+
+    await rhack('d');
+    await rhack('d');
+
+    assert.equal(game._command_mode, 'shopSaleConfirm');
+
+    await rhack('n');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.level.objects.length, 2);
+    assert.equal(stock.quan, 1);
+    assert.equal(stock.no_charge, undefined);
+    const dropped = game.level.objects.find(obj => obj.id === carried.id);
+    assert.ok(dropped);
+    assert.equal(dropped.quan, 1);
+    assert.equal(dropped.no_charge, true);
+    assert.equal(shkp.billct, 0);
+});
+
+test('accepted paid drop sale stacks into compatible chargeable shop stock', async () => {
+    const { shkp } = installCommandShopState();
+    const stock = { ...dagger(8931), letter: undefined, line: undefined, quan: 1, ox: 5, oy: 5 };
+    const carried = dagger(8932, 'd');
+    game.level.objects = [stock];
+    game.inventory = [carried];
+    game._goldCount = 0;
+
+    await rhack('d');
+    await rhack('d');
+
+    assert.equal(game._command_mode, 'shopSaleConfirm');
+
+    await rhack('y');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.level.objects.length, 1);
+    assert.equal(game.level.objects[0].id, carried.id);
+    assert.equal(game.level.objects[0].quan, 2);
+    assert.equal(game.level.objects[0].no_charge, undefined);
+    assert.equal(game._goldCount > 0, true);
+    assert.equal(shkp.billct, 0);
+});
+
 test('payable debts split partly used stacks into used and intact bill portions', () => {
     const { shkp } = installShopState();
     const stack = { ...dagger(9001, 'd'), quan: 3, line: 'd - 3 +0 daggers' };

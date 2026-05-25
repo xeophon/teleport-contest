@@ -41,6 +41,7 @@ The current audit source of truth is `docs/c-parity-audit/`.
 - Added ordinary gold-drop `donate_gold()` and floor-gold `costly_gold()` parity for direct shop drops/pickups, including debt payoff, loan reduction, excess shop credit, and gold-specific robbed/angry handling.
 - Broadened `sellobj()` shopkeeper-state parity for ordinary drops and shop-floor container put-in: angry/hostile shopkeepers take goods without sale credit, robbed shops treat dropped or stashed value as restock contribution instead of credit, and affected container contents/bill rows are cleaned up through the starter `subfrombill()` path.
 - Added `sellobj()` no-sale polish for ordinary paid drops and shop-floor container put-in: CANDLESHOP candelabrum special-stock refusal, generic uninterested messages, full-bill uninterested handling, and no-charge state for rejected paid goods.
+- Added C-ordered ordinary drop stacking after `sellobj()` handling: compatible floor stacks merge after unpaid returns or sale prompt resolution, keep paid/no-charge boundaries, and merge same-price unpaid bill rows.
 - Added ordinary shop-floor cursed magic-bag tip loss billing: destroyed tipped contents charge lost merchandise debt, consume shop credit first, and clear affected starter bill rows.
 - Added ordinary shop-floor magic-bag put-in explosion billing: destroyed shop-floor bags and unpaid trigger objects remain as used-up bill rows, while contents destroyed by the blast's loss roll charge lost-merchandise debt.
 - Added narrow carried magic-bag held-loss billing: vanished top-level unpaid contents convert bill rows to debt/robbed after credit, while nested unpaid contents inside non-unpaid vanished containers remain used-up bill rows.
@@ -61,7 +62,7 @@ The current audit source of truth is `docs/c-parity-audit/`.
    - Source notes: `docs/c-parity-audit/05-food-inventory-containers-shops.md`.
    - Current JS has a starter bill ledger, but object `unpaid`/`unpaidPrice` fields and legacy fallback scans still participate in billing.
    - Missing or partial concepts include full `addtobill`, full `subfrombill` routing, non-ordinary magic-bag source/target cases, full `obfree()`/container-aware `stolen_value()` helper integration, shared `sellobj()` helper integration beyond ordinary branches, `picked_container`, remaining charge-consuming `check_unpaid_usage` caller coverage, and non-bite `costly_alteration` coverage outside the narrow food/tin paths.
-   - The next narrow C-backed gaps are non-ordinary magic-bag sources/targets, lift/capacity/slot failures, bill-aware stack/merge/destruction edge cases, generic floor-effect deletion ownership, and payment container/robbed-shop semantics.
+   - The next narrow C-backed gaps are non-ordinary magic-bag sources/targets, lift/capacity/slot failures, remaining merge/destruction edge cases, generic floor-effect deletion ownership, and payment container/robbed-shop semantics.
 
 2. Object registry and canonical object factory.
    - Source notes: `docs/c-parity-audit/02-objects-wishing-readobjnam.md`.
@@ -101,7 +102,7 @@ The current audit source of truth is `docs/c-parity-audit/`.
 Continue the shop ledger migration:
 
 1. Broaden shop-floor container take-out and tip beyond recursive billing into lift limits, capacity/slot failures, and merge/destruction edge cases; continue magic-bag work through non-ordinary sources/targets and shared `obfree()`/`stolen_value()` debt naming.
-2. Finish remaining `sellobj()` follow-ups: complete recursive `subfrombill()` integration, bill-aware drop stacking, broken/container projectile impact edge cases, and shared-helper integration for less ordinary object transfers.
+2. Finish remaining `sellobj()` follow-ups: complete recursive `subfrombill()` integration, broken/container projectile impact edge cases, and shared-helper integration for less ordinary object transfers.
 3. Move payment toward a complete C `dopay()` model for containers, queued itemized selections, and robbed-shop interactions.
 4. Finish remaining musical edge cases: exact snake/nymph/mercenary polish, drawbridge occupant/object-death side effects and achievement/status integration, and any remaining charged-instrument callers that share `do_play_instrument()`.
 

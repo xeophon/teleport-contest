@@ -273,10 +273,12 @@ function dropCarriedObjectAtHero(item, messages = []) {
     normalizeContainedObjectParents(dropped);
     removeInventoryItem(item, item.quan || 1);
     const placed = placeObjectOnFloorWithEffects(dropped, dropped.ox, dropped.oy, messages, 'drop');
+    let shopSale = null;
     if (placed && !sellobjReturnUnpaidToShop(dropped, dropped.ox, dropped.oy)) {
-        const shopSale = beginDroppedPaidObjectSale(dropped, dropped.ox, dropped.oy);
+        shopSale = beginDroppedPaidObjectSale(dropped, dropped.ox, dropped.oy);
         if (shopSale?.message) messages.push(shopSale.message);
     }
+    if (placed && !shopSale?.prompt) stackDroppedFloorObject(dropped);
     return dropped;
 }
 
@@ -15457,6 +15459,7 @@ function shopSalePaymentMessage(pending, verb = 'relinquish') {
 function finishDroppedObjectSale(pending, accept) {
     if (!pending?.obj || !pending.shkp) return '';
     const obj = pending.obj;
+    let message;
     if (!accept) {
         if (pending.containerSale) {
             markNoChargeRecursively(obj);
@@ -15464,13 +15467,16 @@ function finishDroppedObjectSale(pending, accept) {
         } else {
             obj.no_charge = true;
         }
-        return pending.declineMessage || `You drop ${pickupObjectPhrase(obj)}.`;
+        message = pending.declineMessage || `You drop ${pickupObjectPhrase(obj)}.`;
+    } else {
+        if (pending.containerSale) {
+            markAcceptedShopContainerSaleState(obj, pending.shkp);
+            subFromShopBill(obj, pending.shkp);
+        }
+        message = shopSalePaymentMessage(pending);
     }
-    if (pending.containerSale) {
-        markAcceptedShopContainerSaleState(obj, pending.shkp);
-        subFromShopBill(obj, pending.shkp);
-    }
-    return shopSalePaymentMessage(pending);
+    stackDroppedFloorObject(obj);
+    return message;
 }
 
 function addPickedObjectToShopBill(source, pickedItem) {
@@ -17069,18 +17075,32 @@ export function stoneMonster(mon, messages = null, { awardExperience = false } =
     return remains;
 }
 
+function objectStackType(obj) {
+    if (!obj) return undefined;
+    if (obj.otyp != null && obj.otyp !== obj.cls) return obj.otyp;
+    return obj.actualKind ?? obj.kind ?? obj.otyp ?? obj.cls;
+}
+
+function objectStackColor(obj) {
+    if (!obj) return undefined;
+    if (obj.color != null) return obj.color;
+    if (obj.cls === 'weapon') return obj.kind === 'quarterstaff' ? CLR_BROWN : CLR_CYAN;
+    if (obj.cls === 'scroll' || obj.cls === 'spellbook') return CLR_WHITE;
+    return NO_COLOR;
+}
+
 function sameMonsterThrownStackObject(existing, obj) {
     if (!existing || !obj || existing === obj) return false;
     if (existing.hidden || existing.buried || existing.transientProjectile) return false;
     if (existing.ox !== obj.ox || existing.oy !== obj.oy) return false;
     if (!!existing.unpaid !== !!obj.unpaid || !!existing.no_charge !== !!obj.no_charge) return false;
     if (existing.unpaid && !sameShopBillUnitPrice(existing, obj)) return false;
-    return existing.otyp === obj.otyp
+    return objectStackType(existing) === objectStackType(obj)
         && existing.cls === obj.cls
         && existing.kind === obj.kind
         && existing.actualKind === obj.actualKind
         && existing.glyph === obj.glyph
-        && existing.color === obj.color
+        && objectStackColor(existing) === objectStackColor(obj)
         && (existing.spe || 0) === (obj.spe || 0)
         && !!existing.blessed === !!obj.blessed
         && !!existing.cursed === !!obj.cursed
@@ -17099,6 +17119,28 @@ function stackMonsterThrownObject(obj) {
     mergeStackedShopBillEntries(stack, obj);
     stack.quan = (stack.quan || 1) + (obj.quan || 1);
     return stack;
+}
+
+function sameDroppedFloorStackObject(dropped, existing) {
+    if (!sameMonsterThrownStackObject(existing, dropped)) return false;
+    if (dropped.nomerge || existing.nomerge) return false;
+    if (dropped.artifact || existing.artifact) return false;
+    if (globContents(dropped).length || globContents(existing).length) return false;
+    return true;
+}
+
+function stackDroppedFloorObject(obj) {
+    if (!game.level || !Array.isArray(game.level.objects) || !obj) return obj;
+    const objects = game.level.objects;
+    if (!objects.includes(obj)) return obj;
+    const stack = objects.find(existing => existing !== obj && sameDroppedFloorStackObject(obj, existing));
+    if (!stack) return obj;
+    mergeStackedShopBillEntries(obj, stack);
+    obj.quan = (obj.quan || 1) + (stack.quan || 1);
+    stack.quan = 0;
+    game.level.objects = objects.filter(existing => existing !== stack);
+    newsym(obj.ox, obj.oy);
+    return obj;
 }
 
 function placeStackableFloorObject(obj) {
@@ -37046,6 +37088,7 @@ export async function rhack(_cmd) {
                     shopSale = beginDroppedPaidObjectSale(dropped, dropped.ox, dropped.oy);
                 if (shopSale?.message) floorMessages.push(shopSale.message);
                 objectIceEffect(dropped, dropped.ox, dropped.oy);
+                if (!shopSale?.prompt) stackDroppedFloorObject(dropped);
             }
             newsym(game.u?.ux || 0, game.u?.uy || 0);
             game._message_more = 0;

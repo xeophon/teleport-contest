@@ -37,7 +37,7 @@ Continue with the shop area because it combines visible current behavior with a 
 
 - Keep `unpaid` and `unpaidPrice` as compatibility/display fields while migrating callers.
 - Recursive container put-in, take-out, tip moves, contained gold, accepted put-in sales, ordinary shop-floor magic-bag tip loss/put-in explosion billing, narrow carried magic-bag held-loss billing, magic-bag scatter break/useup and destructive floor-effect preservation, ordinary dropped-container sale/no-charge state, direct ordinary gold drop/pickup handling, broader angry/robbed `sellobj()` handling, and special-stock/uninterested no-sale handling are in place; next extend them through non-ordinary magic-bag sources/targets, lift limits, generic merge/destruction ownership, and full `sellobj`/`subfrombill` routing.
-- Finish remaining `sellobj()` parity around recursive `subfrombill()` integration, bill-aware drop stacking, broken/container projectile impact edge cases, and shared-helper use in less ordinary transfer paths.
+- Finish remaining `sellobj()` parity around recursive `subfrombill()` integration, broken/container projectile impact edge cases, and shared-helper use in less ordinary transfer paths.
 - Continue moving payment toward complete C `dopay()` semantics for containers, queued itemized selections, and robbed-shop interactions.
 
 Every code slice should be followed by source-derived smoke checks plus `npm run score`.
