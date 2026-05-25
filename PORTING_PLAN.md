@@ -843,10 +843,14 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   absorbs same-type globs C-style, preserving single quantity, adding mass, and
   averaging shrink timers. Returning to an already-saved level now silently
   catches up stale local glob shrink timers for floor objects, nested floor
-  containers, and local monster inventories before arrival display. Remaining
-  glob work is full off-level timer restoration plumbing, full container
-  weight/capacity messaging, shop billing around merges, and eating side
-  effects.
+  containers, and local monster inventories before arrival display. Active and
+  restored contained-glob shrink now recursively refreshes enclosing container
+  weights, including nested sacks and bag-of-holding rounding, and carried
+  containers use the C `becomes`/`seems` lighter split when a reporting
+  threshold is crossed. Shop display pricing now counts globs by C weight units
+  instead of `quan`. Remaining glob work is full off-level timer restoration
+  plumbing, broader capacity/encumbrance messaging, full shop billing around
+  merges and used-up bills, and eating side effects.
 - Exact wished eggs now use the C `readobjnam()` egg path instead of generic
   food fallback: `egg`, `eggs`, `egg of <monster>`, and `<monster> egg`
   create initialized egg objects first, then apply a local `can_be_hatched()`

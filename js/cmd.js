@@ -13179,6 +13179,7 @@ function removeShrunkGlob(entry) {
     const obj = entry.obj;
     if (entry.parent) {
         removeContainedObject(entry.parent, obj);
+        refreshGlobEntryContainerWeights(entry);
         return;
     }
     if (entry.source === 'inventory') {
@@ -13197,6 +13198,81 @@ function removeShrunkGlob(entry) {
 function outerInventoryContainer(entry) {
     if (entry.source !== 'inventory' || !entry.parent) return null;
     return entry.root || entry.parent;
+}
+
+function objectWeightKind(obj) {
+    const kind = String(obj?.actualKind || obj?.kind || obj?.spellName || obj?.spell?.name || '').toLowerCase();
+    if (/war hammer|mjollnir/.test(kind)) return 'war hammer';
+    if (!kind && obj?.otyp === LARGE_BOX) return 'large box';
+    if (!kind && obj?.otyp === CHEST) return 'chest';
+    if (!kind && obj?.otyp === ICE_BOX) return 'ice box';
+    if (!kind && obj?.otyp === SACK) return 'sack';
+    if (!kind && obj?.otyp === OILSKIN_SACK) return 'oilskin sack';
+    if (!kind && obj?.otyp === BAG_OF_HOLDING) return 'bag of holding';
+    return kind;
+}
+
+function objectWeightClass(obj) {
+    return obj?.cls || (obj?.otyp === RING_CLASS ? 'ring'
+        : obj?.otyp === SCROLL_CLASS ? 'scroll'
+            : obj?.otyp === POTION_CLASS ? 'potion'
+                : obj?.otyp === WAND_CLASS ? 'wand'
+                    : obj?.otyp === GEM_CLASS ? 'gem'
+                        : obj?.otyp === FOOD_CLASS ? 'food'
+                            : obj?.otyp === AMULET_CLASS ? 'amulet' : '');
+}
+
+function containerBaseWeight(obj) {
+    if (obj?.otyp === LARGE_BOX) return 350;
+    if (obj?.otyp === CHEST) return 600;
+    if (obj?.otyp === ICE_BOX) return 900;
+    if (obj?.otyp === SACK || obj?.otyp === OILSKIN_SACK || obj?.otyp === BAG_OF_HOLDING) return 15;
+    return null;
+}
+
+function isGlobWeightContainerObject(obj) {
+    return obj?.otyp === LARGE_BOX || obj?.otyp === CHEST || obj?.otyp === ICE_BOX
+        || obj?.otyp === SACK || obj?.otyp === OILSKIN_SACK || obj?.otyp === BAG_OF_HOLDING;
+}
+
+function globObjectWeight(obj) {
+    if (isGlobbyObject(obj)) return Math.max(0, obj.owt ?? 20);
+    if (obj?.otyp === GOLD_PIECE || obj?.cls === 'coin' || obj?.glyph === '$')
+        return Math.max(1, Math.trunc(((obj.quan || 1) + 50) / 100));
+    const contents = globContents(obj);
+    if (contents.length || isGlobWeightContainerObject(obj)) {
+        let contentsWeight = contents.reduce((sum, item) => sum + globObjectWeight(item), 0);
+        if (obj?.otyp === BAG_OF_HOLDING) {
+            contentsWeight = obj.cursed ? contentsWeight * 2
+                : obj.blessed ? Math.trunc((contentsWeight + 3) / 4)
+                    : Math.trunc((contentsWeight + 1) / 2);
+        }
+        const baseKind = objectWeightKind(obj);
+        const base = containerBaseWeight(obj) ?? OBJECT_WEIGHTS[baseKind] ?? CLASS_WEIGHTS[objectWeightClass(obj)] ?? 0;
+        return Math.max(0, base + contentsWeight);
+    }
+    const kind = objectWeightKind(obj);
+    const cls = objectWeightClass(obj);
+    const unitWeight = OBJECT_WEIGHTS[kind] ?? CLASS_WEIGHTS[cls] ?? obj?.owt ?? 0;
+    return Math.max(0, unitWeight * (obj?.quan || 1));
+}
+
+function globEntryTopContainer(entry) {
+    if (!entry?.parent) return null;
+    const chain = entry.ancestors?.length ? entry.ancestors : [entry.parent];
+    return chain[0] || entry.parent;
+}
+
+function refreshGlobEntryContainerWeights(entry, oldTopWeight = null) {
+    if (!entry?.parent) return { top: null, oldTopWeight: 0, newTopWeight: 0 };
+    const chain = entry.ancestors?.length ? entry.ancestors : [entry.parent];
+    const top = globEntryTopContainer(entry);
+    oldTopWeight ??= globObjectWeight(top);
+    for (let i = chain.length - 1; i >= 0; i--) {
+        const container = chain[i];
+        if (container) container.owt = globObjectWeight(container);
+    }
+    return { top, oldTopWeight, newTopWeight: top?.owt ?? globObjectWeight(top) };
 }
 
 function globFloorVisible(entry) {
@@ -13223,6 +13299,7 @@ function catchUpGlobShrink(entry, iceState) {
         return [];
     }
     obj.owt = Math.max(0, (obj.owt ?? 20) - Math.max(1, delta));
+    refreshGlobEntryContainerWeights(entry);
     startGlobShrinkTimeout(obj, nextDelay);
     return [];
 }
@@ -13246,17 +13323,20 @@ function processGlobShrinkEntry(entry) {
     const oldWeight = Math.max(0, obj.owt ?? 20);
     const thresholdMessage = oldWeight > 0 && oldWeight % 10 === 0;
     const name = globShrinkName(obj);
+    const topContainer = outerInventoryContainer(entry);
+    const oldTopContainerWeight = topContainer ? globObjectWeight(topContainer) : null;
     obj.owt = Math.max(0, oldWeight - 1);
     if ((obj.oeaten || 0) > 1) obj.oeaten -= 1;
+    const containerWeights = refreshGlobEntryContainerWeights(entry, oldTopContainerWeight);
 
     const messages = [];
     const gone = !obj.owt;
     if (entry.source === 'inventory' && !entry.parent && (thresholdMessage || gone))
         messages.push(`Your ${name} ${gone ? 'dissolves completely' : 'shrinks'}.`);
-    const topContainer = outerInventoryContainer(entry);
     if (topContainer && (thresholdMessage || gone)) {
         const topName = pickupObjectName(topContainer);
-        messages.push(`Your ${topName} becomes${gone ? '' : ' slightly'} lighter.`);
+        const verb = containerWeights.newTopWeight !== containerWeights.oldTopWeight ? 'becomes' : 'seems';
+        messages.push(`Your ${topName} ${verb}${gone ? '' : ' slightly'} lighter.`);
     }
 
     if (gone) {
@@ -16109,6 +16189,7 @@ function shopBaseCost(obj) {
     const cls = obj.cls || '';
     let kind = String(obj.actualKind || obj.kind || '').toLowerCase();
     kind = kind.replace(/^(?:blessed|uncursed|cursed) /, '');
+    if (isGlobbyObject(obj)) return 6;
 
     if (obj.otyp === SCROLL_CLASS || cls === 'scroll') {
         if (obj.scrollIndex != null) return SCROLL_SHOP_COSTS[obj.scrollIndex] || 0;
@@ -16160,6 +16241,12 @@ function shopBaseCost(obj) {
     else if (!kind && obj.otyp === STETHOSCOPE) kind = 'stethoscope';
     else if (!kind && obj.otyp === MAGIC_MARKER) kind = 'magic marker';
     return SHOP_OBJECT_COSTS[kind] || 0;
+}
+
+function shopPricingUnits(obj) {
+    if (isGlobbyObject(obj))
+        return Math.max(1, Math.trunc(((obj.owt ?? 20) + 19) / 20));
+    return obj?.quan || 1;
 }
 
 function shopObjectNameKnown(obj) {
@@ -16322,7 +16409,7 @@ function shopItemPrice(obj, x = game.u?.ux, y = game.u?.uy) {
     else if (cha <= 10) { multiplier *= 4; divisor *= 3; }
     price *= multiplier;
     if (divisor > 1) price = Math.trunc((Math.trunc(price * 10 / divisor) + 5) / 10);
-    price = Math.max(1, price) * (obj.quan || 1);
+    price = Math.max(1, price) * shopPricingUnits(obj);
     return price;
 }
 
