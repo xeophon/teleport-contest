@@ -287,6 +287,114 @@ test('taking contents from a carried container does not use shop-floor billing',
     assert.doesNotMatch(line, /unpaid/);
 });
 
+test('putting a whole unpaid item into a shop-floor container returns it to shop billing', () => {
+    const { shkp } = installShopState();
+    const container = shopFloorContainer(6401);
+    const item = foodRation(6402, 'a');
+    shop.addObjectToShopBill(shkp, item, 45);
+    game.inventory = [item];
+    game.level.objects = [container];
+
+    const result = shop.putInventoryObjectIntoContainer(container, item);
+
+    assert.equal(result.moved, true);
+    assert.equal(game.inventory.includes(item), false);
+    assert.equal(container.contents.includes(item), true);
+    assert.equal(item.contained, true);
+    assert.equal(item.container, container);
+    assert.equal(item.unpaid, false);
+    assert.equal(item.unpaidPrice, undefined);
+    assert.equal(shop.shopBillEntryForObject(shkp, item), null);
+    assert.equal(shkp.billct, 0);
+    assert.equal(shkp.bill.length, 0);
+});
+
+test('putting part of an unpaid stack into a shop-floor container reduces only the live bill', () => {
+    const { shkp } = installShopState();
+    const container = shopFloorContainer(6501);
+    const stack = { ...dagger(6502, 'd'), quan: 3, line: 'd - 3 +0 daggers' };
+    shop.addObjectToShopBill(shkp, stack, 15);
+    game.inventory = [stack];
+    game.level.objects = [container];
+
+    const result = shop.putInventoryObjectIntoContainer(container, stack, 1);
+    const contained = container.contents[0];
+    const parentEntry = shop.shopBillEntryForObject(shkp, stack);
+
+    assert.equal(result.moved, true);
+    assert.equal(stack.quan, 2);
+    assert.equal(contained.quan, 1);
+    assert.notEqual(contained.id, stack.id);
+    assert.notEqual(contained.unpaid, true);
+    assert.equal(contained.unpaidPrice, undefined);
+    assert.equal(parentEntry.bquan, 2);
+    assert.equal(shop.shopBillEntryTotal(parentEntry), 10);
+    assert.equal(stack.unpaid, true);
+    assert.equal(stack.unpaidPrice, 10);
+    assert.match(stack.line, /unpaid, 10 zorkmids/);
+    assert.equal(shkp.billct, 1);
+});
+
+test('putting unpaid merchandise into an outside-shop container preserves the debt', () => {
+    const { shkp } = installShopState();
+    game.level.at = (x, y) => ({ roomno: x === 9 && y === 5 ? 0 : ROOMOFFSET });
+    const container = shopFloorContainer(6601, 9, 5);
+    const item = foodRation(6602, 'a');
+    shop.addObjectToShopBill(shkp, item, 45);
+    game.inventory = [item];
+    game.level.objects = [container];
+
+    const result = shop.putInventoryObjectIntoContainer(container, item);
+
+    assert.equal(result.moved, true);
+    assert.equal(container.contents.includes(item), true);
+    assert.equal(item.unpaid, true);
+    assert.equal(item.unpaidPrice, 45);
+    assert.equal(shop.shopBillEntryForObject(shkp, item), shkp.bill[0]);
+    assert.equal(shkp.billct, 1);
+});
+
+test('putting paid and no-charge items into a shop-floor container does not create debt', () => {
+    const { shkp } = installShopState();
+    const container = shopFloorContainer(6701);
+    const paid = dagger(6702, 'd');
+    const free = foodRation(6703, 'e');
+    free.no_charge = true;
+    game.inventory = [paid, free];
+    game.level.objects = [container];
+
+    assert.equal(shop.putInventoryObjectIntoContainer(container, paid).moved, true);
+    assert.equal(shop.putInventoryObjectIntoContainer(container, free).moved, true);
+
+    assert.equal(shkp.billct, 0);
+    assert.equal(shkp.bill.length, 0);
+    assert.notEqual(paid.unpaid, true);
+    assert.notEqual(free.unpaid, true);
+    assert.equal(paid.no_charge, true);
+    assert.equal(free.no_charge, true);
+    assert.equal(game._goldCount, 0);
+});
+
+test('shop-floor container put-in does not merge no-charge goods into chargeable stacks', () => {
+    const { shkp } = installShopState();
+    const container = shopFloorContainer(6801);
+    const stocked = { ...dagger(6802), letter: undefined, line: undefined };
+    const paid = dagger(6803, 'd');
+    container.contents = [stocked];
+    stocked.contained = true;
+    stocked.container = container;
+    game.inventory = [paid];
+    game.level.objects = [container];
+
+    const result = shop.putInventoryObjectIntoContainer(container, paid);
+
+    assert.equal(result.moved, true);
+    assert.equal(container.contents.length, 2);
+    assert.equal(stocked.no_charge, undefined);
+    assert.equal(paid.no_charge, true);
+    assert.equal(shkp.billct, 0);
+});
+
 test('non-food pickup merges compatible paid inventory stacks', () => {
     installShopState();
     const carried = dagger(7001, 'd');

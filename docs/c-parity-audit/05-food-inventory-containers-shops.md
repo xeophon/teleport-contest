@@ -102,6 +102,7 @@ This audit is based only on upstream C and current JS source inspection. It does
 - `js/cmd.js:18504-19046`: shop base cost, price calculation, ledger-first debt collection, itemized bill-row payment, credit/debit handling.
 - `js/cmd.js:25450-25513`: shop quote and pay menu handling.
 - `js/cmd.js:38977-39013`: pay command source selection.
+- `js/mklev.js:4681-4701`: container stacking now rejects `unpaid`/`no_charge` mismatches and unpaid container merges.
 - `js/mklev.js:4902-4921`: duplicate unpaid-price helpers used by level generation/object merging.
 
 ## Findings
@@ -176,11 +177,11 @@ Concrete gaps:
 
 C container operations are deeply tied to shops. Putting an inventory object into a shop-floor container can sell it. Taking an object out of a shop-floor container bills it. Tipping a shop-floor container can bill, steal, or suppress price depending on source and target. Ice boxes, cursed bags of holding, bag of tricks, horn of plenty, traps, locked state, and weight all route through those same object/bill invariants.
 
-JS has a substantial UI implementation for boxes, bags, ice boxes, take-out, put-in, stash, and tip (`js/cmd.js:16669-18220`, `js/cmd.js:33982-34818`, `js/cmd.js:35034-35129`). It also implements some magic bag, bag of tricks, and horn of plenty behavior. Ordinary non-gold take-out from a shop-floor container now goes through a starter `addtobill()`-style helper (`js/cmd.js:13290-13324`, `js/cmd.js:17509-17524`, `js/cmd.js:35190-35209`), prices from the source container's coordinates, skips carried containers/already-unpaid objects, and clears ordinary `no_charge` contents when they are taken back without billing.
+JS has a substantial UI implementation for boxes, bags, ice boxes, take-out, put-in, stash, and tip (`js/cmd.js:16669-18220`, `js/cmd.js:33982-34818`, `js/cmd.js:35034-35129`). It also implements some magic bag, bag of tricks, and horn of plenty behavior. Ordinary non-gold take-out from a shop-floor container now goes through a starter `addtobill()`-style helper (`js/cmd.js:13296-13330`, `js/cmd.js:17544-17559`, `js/cmd.js:35225-35244`), prices from the source container's coordinates, skips carried containers/already-unpaid objects, and clears ordinary `no_charge` contents when they are taken back without billing. Ordinary put-in now has starter `sellobj()`-style coverage for unpaid non-container returns, partial unpaid split rows, outside-shop debt preservation, and no-sale `no_charge` marking (`js/cmd.js:13050-13054`, `js/cmd.js:17277-17343`), with container stacking guarded against unpaid/no-charge provenance loss (`js/mklev.js:4681-4701`).
 
 Concrete gaps:
 
-- `putInventoryObjectIntoContainer()` directly removes inventory and inserts into the target container (`js/cmd.js:17064-17086`); it does not call `sellobj()` or equivalent when the target is a shop-floor container.
+- Shop-floor put-in now covers ordinary unpaid non-container returns and no-sale `no_charge` marking, but it is still not a full C `in_container()`/`sellobj()` path: accepted sale prompts, gold donation/credit, angry/robbed shopkeeper cases, recursive container sale values, and magic-bag failure re-billing remain incomplete.
 - Shop-floor take-out now covers ordinary non-gold objects, but it is still not a full C `out_container()`/`addtobill()` path: recursive container contents, contained gold, lift limits, capacity/slot failures, artifact/Rider/fatal-corpse checks, and bill-aware inventory merge edge cases remain incomplete.
 - `tipContainerToFloor()` and `tipContainerIntoContainer()` move contents without C's per-item shop billing/stolen-value rules, except for narrow magic bag gold/debit handling (`js/cmd.js:17363-17399`, `js/cmd.js:18220-18249`).
 - Loot reachability is simplified. C checks water/lava access, limbs/free hand, multiple containers, confusion reverse-loot, blind cockatrice touch, saddles, and directional cases (`pickup.c:2022-2345`).

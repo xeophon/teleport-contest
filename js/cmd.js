@@ -13047,6 +13047,12 @@ function resolveUnpaidProjectileShopLanding(obj, x, y, options = {}) {
     return { ...charged, handled: charged.charged, returned: false };
 }
 
+function markNoChargeRecursively(obj) {
+    if (!obj || shopBillableGold(obj) || obj.unpaid) return;
+    obj.no_charge = true;
+    for (const child of globContents(obj)) markNoChargeRecursively(child);
+}
+
 function sameShopBillUnitPrice(a, b) {
     const first = shopkeeperOwningBillEntry(a);
     const second = first.shkp
@@ -17268,6 +17274,33 @@ function putInventoryObjectIntoBag(bag, item, amount = item?.quan || 1) {
     return { moved: true, message: `You put ${name} into the bag.` };
 }
 
+function splitInventoryObjectForContainerPut(item, count) {
+    if (!item || (item.quan || 1) <= count) return item;
+    const putItem = { ...item, quan: count, id: next_ident() };
+    delete putItem.o_id;
+    delete putItem._shopBillObjectId;
+    if (item.unpaid && !splitCarriedObjectShopBill(item, putItem, count))
+        clearObjectShopBillState(putItem);
+    return putItem;
+}
+
+function billShopFloorContainerPutObject(container, putItem) {
+    const x = container?.ox ?? game.u?.ux;
+    const y = container?.oy ?? game.u?.uy;
+    if (!container || !putItem || (game.inventory || []).includes(container) || x == null || y == null)
+        return { shkp: null, returned: false, noCharge: false };
+    const shkp = shopkeeperForCostlySpot(x, y);
+    if (!shopkeeperInHisShop(shkp)) return { shkp: null, returned: false, noCharge: false };
+    if (shopBillableGold(putItem)) return { shkp, returned: false, noCharge: false };
+    if (returnUnpaidObjectToShopBillOwnerAt(putItem, x, y))
+        return { shkp, returned: true, noCharge: false };
+    if (!putItem.unpaid) {
+        markNoChargeRecursively(putItem);
+        return { shkp, returned: false, noCharge: true };
+    }
+    return { shkp, returned: false, noCharge: false };
+}
+
 function putInventoryObjectIntoContainer(container, item, amount = item?.quan || 1) {
     if (!container) return { moved: false, message: '' };
     if (isIceBoxObject(container)) return putInventoryObjectIntoIceBox(container, item, amount);
@@ -17297,14 +17330,16 @@ function putInventoryObjectIntoContainer(container, item, amount = item?.quan ||
 
     const name = inventoryItemName(item);
     const count = Math.min(Math.max(1, amount || 1), item.quan || 1);
-    const putItem = (item.quan || 1) > count ? { ...item, quan: count } : item;
+    const putItem = splitInventoryObjectForContainerPut(item, count);
     clearContainerPutEquipmentState(putItem, name);
     if (isMagicBagObject(container) && magicBagExplodesWithObject(putItem)) {
         removeInventoryItem(item, count);
         return explodeMagicBagTransfer(container, putItem, []);
     }
+    const billing = billShopFloorContainerPutObject(container, putItem);
     removeInventoryItem(item, count);
-    add_to_container(container, putItem);
+    const contained = add_to_container(container, putItem);
+    if (billing.noCharge && contained && contained !== putItem) markNoChargeRecursively(contained);
     refreshTipContainerWeight(container);
     game._pet_food_scan_inventory = game.inventory;
     return { moved: true, message: `You put ${name} into the ${containerName}.` };
