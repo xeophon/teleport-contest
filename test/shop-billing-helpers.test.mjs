@@ -12,6 +12,7 @@ const MAGIC_LAMP = 228;
 const POT_OIL = 252;
 const CRYSTAL_BALL = 10088;
 const CANDELABRUM_OF_INVOCATION = 10076;
+const INVENTORY_LETTERS = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
 
 function installShopState() {
     const g = resetGame();
@@ -472,6 +473,21 @@ function putObjectInContainer(container, obj) {
     delete obj.oy;
     container.contents = [...(container.contents || []), obj];
     return obj;
+}
+
+function fillInventoryLetters(startId = 7000) {
+    game.inventory = [...INVENTORY_LETTERS].map((letter, index) => ({
+        ...dagger(startId + index, letter),
+        line: `${letter} - a dagger`,
+    }));
+}
+
+async function confirmSingleContainerTakeout(container, obj, letter = 'a', label = 'Comestibles') {
+    game._command_mode = 'lootTakeoutObjects';
+    game._loot_takeout_container = container;
+    game._loot_takeout_entries = [{ item: obj, label, letter }];
+    game._loot_takeout_selected = [letter];
+    await rhack(' ');
 }
 
 function assertBillRowsFor(shkp, objects) {
@@ -2793,6 +2809,80 @@ test('taking merchandise from a shop-floor container adds the carried object to 
     assert.equal(contained.unpaidPrice, shop.shopBillEntryTotal(shkp.bill[0]));
     assert.match(line, /unpaid, \d+ zorkmids?/);
     assert.match(contained.line, /unpaid, \d+ zorkmids?/);
+});
+
+test('shop-floor container take-out slot failure happens before billing or extraction', async () => {
+    const { shkp } = installCommandShopState();
+    const container = shopFloorContainer(6111);
+    const contained = putObjectInContainer(container, foodRation(6112));
+    game.level.objects = [container];
+    fillInventoryLetters();
+
+    await confirmSingleContainerTakeout(container, contained);
+
+    assert.equal(game._command_mode, null);
+    assert.match(game._pending_message, /knapsack cannot accommodate any more items/);
+    assert.equal(container.contents.includes(contained), true);
+    assert.equal(game.inventory.includes(contained), false);
+    assert.equal(contained.contained, true);
+    assert.equal(contained.container, container);
+    assert.equal(contained.unpaid, undefined);
+    assert.equal(shkp.billct, 0);
+    assert.equal(shkp.bill.length, 0);
+    assert.equal(game.context.move || 0, 0);
+});
+
+test('failed take-out preflight does not recursively bill nested contents', async () => {
+    const { shkp } = installCommandShopState();
+    const source = shopFloorContainer(6121);
+    const bag = sack(6122);
+    const ration = putObjectInContainer(bag, foodRation(6123));
+    const coins = putObjectInContainer(bag, goldPieces(6124, 12));
+    putObjectInContainer(source, bag);
+    game.level.objects = [source];
+    game._goldCount = 3;
+    fillInventoryLetters();
+
+    await confirmSingleContainerTakeout(source, bag, 'a', 'Tools');
+
+    assert.equal(source.contents.includes(bag), true);
+    assert.equal(game.inventory.includes(bag), false);
+    assert.equal(bag.contained, true);
+    assert.equal(bag.container, source);
+    assert.equal(shop.shopBillEntryForObject(shkp, bag), null);
+    assert.equal(shop.shopBillEntryForObject(shkp, ration), null);
+    assert.equal(shop.shopBillEntryForObject(shkp, coins), null);
+    assert.equal(bag.unpaid, undefined);
+    assert.equal(ration.unpaid, undefined);
+    assert.equal(shkp.billct, 0);
+    assert.equal(shkp.debit || 0, 0);
+    assert.equal(shkp.credit || 0, 0);
+    assert.equal(game._goldCount, 3);
+});
+
+test('container take-out capacity preflight refuses objects beyond maximum carry', async () => {
+    installCommandShopState();
+    const container = shopFloorContainer(6131);
+    const heavy = putObjectInContainer(container, {
+        id: 6132,
+        cls: 'rock',
+        glyph: '`',
+        kind: 'heavy lump',
+        actualKind: 'heavy lump',
+        quan: 1,
+        owt: 400,
+    });
+    game.level.objects = [container];
+    game.u.acurr.a = [1, 10, 10, 10, 1, 10];
+
+    await confirmSingleContainerTakeout(container, heavy, 'a', 'Boulders/Statues');
+
+    assert.match(game._pending_message, /cannot carry any more/);
+    assert.equal(container.contents.includes(heavy), true);
+    assert.equal(game.inventory.includes(heavy), false);
+    assert.equal(heavy.contained, true);
+    assert.equal(heavy.container, container);
+    assert.equal(game.context.move || 0, 0);
 });
 
 test('taking gold from a shop-floor container charges debt and merges into hero gold', () => {

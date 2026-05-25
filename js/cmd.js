@@ -7141,6 +7141,22 @@ function nextInventoryLetter() {
     return INVENTORY_LETTERS[index] || INVENTORY_LETTERS[INVENTORY_LETTERS.length - 1];
 }
 
+function simulatedNextInventoryLetters(count) {
+    const used = new Set((game.inventory || []).map(item => item.letter).filter(Boolean));
+    let index = game._nextInventoryLetterIndex ?? Math.max(-1,
+        ...(game.inventory || []).map(item => INVENTORY_LETTERS.indexOf(item.letter)).filter(i => i >= 0)) + 1;
+    const letters = [];
+    for (let i = 0; i < count; i++) {
+        while (used.has(INVENTORY_LETTERS[index]) && index < INVENTORY_LETTERS.length - 1) index++;
+        const letter = INVENTORY_LETTERS[index];
+        if (!letter || used.has(letter)) return null;
+        letters.push(letter);
+        used.add(letter);
+        index = Math.min(INVENTORY_LETTERS.length, index + 1);
+    }
+    return letters;
+}
+
 function updateMoneyLine(money) {
     if (money) money.line = `$ - ${money.quan || 0} gold piece${(money.quan || 0) === 1 ? '' : 's'}`;
 }
@@ -15823,6 +15839,7 @@ export const __shopBillingTestHooks = {
     resolveUnpaidProjectileShopLanding,
     returnUnpaidObjectToShopBillOwnerAt,
     costlyShopGoldAtSpot,
+    containerTakeoutPreflight,
     sellobjReturnUnpaidToShop,
     sellobjDroppedGoldAt,
     stackMonsterThrownObject,
@@ -16753,6 +16770,56 @@ function globObjectWeight(obj) {
     const cls = objectWeightClass(obj);
     const unitWeight = OBJECT_WEIGHTS[kind] ?? CLASS_WEIGHTS[cls] ?? obj?.owt ?? 0;
     return Math.max(0, unitWeight * (obj?.quan || 1));
+}
+
+function heroCarriedWeight() {
+    let weight = Math.max(0, Math.trunc(((game._goldCount || 0) + 50) / 100));
+    for (const item of game.inventory || []) weight += globObjectWeight(item);
+    return weight;
+}
+
+function heroCarryCapacity() {
+    const stats = game.u?.acurr?.a || [];
+    const normalCapacity = Math.min(1000, 25 * ((stats[0] ?? 10) + (stats[4] ?? 10)) + 50);
+    return Is_airlevel(game.u?.uz) || game.u?.levitating ? 1000 : normalCapacity;
+}
+
+function projectedContainerTakeoutWeight(container, objects) {
+    if ((game.inventory || []).includes(container)) return heroCarriedWeight();
+    let weight = heroCarriedWeight();
+    let gold = Math.max(0, Math.trunc(Number(game._goldCount || 0)));
+    for (const obj of objects) {
+        if (shopBillableGold(obj)) {
+            const amount = Math.max(1, Math.trunc(Number(obj.quan || 1)));
+            const oldGoldWeight = Math.max(0, Math.trunc((gold + 50) / 100));
+            gold += amount;
+            const newGoldWeight = Math.max(0, Math.trunc((gold + 50) / 100));
+            weight += newGoldWeight - oldGoldWeight;
+        } else {
+            weight += globObjectWeight(obj);
+        }
+    }
+    return weight;
+}
+
+function containerTakeoutPreflight(container, entries) {
+    const objects = (entries || []).map(entry => entry?.item || entry).filter(Boolean);
+    const nonGoldCount = objects.filter(obj => !shopBillableGold(obj)).length;
+    if (nonGoldCount && !simulatedNextInventoryLetters(nonGoldCount)) {
+        return {
+            ok: false,
+            message: 'Your knapsack cannot accommodate any more items.',
+        };
+    }
+    const capacity = heroCarryCapacity();
+    if (projectedContainerTakeoutWeight(container, objects) > capacity * 3) {
+        const obj = objects.find(item => !shopBillableGold(item)) || objects[0];
+        return {
+            ok: false,
+            message: `There is ${pickupObjectPhrase(obj)} in ${containerObjectPhrase(container)}, but you cannot carry any more.`,
+        };
+    }
+    return { ok: true, message: '' };
 }
 
 function globEntryTopContainer(entry) {
@@ -38158,6 +38225,18 @@ export async function rhack(_cmd) {
         if ((ch === '\r' || ch === '\n' || ch === ' ') && selected.size) {
             const container = game._loot_takeout_container;
             const picked = entries.filter(entry => selected.has(entry.letter));
+            const preflight = containerTakeoutPreflight(container, picked);
+            if (!preflight.ok) {
+                clearContainerTakeoutState();
+                game._floor_container_object = null;
+                game._overlay_lines = null;
+                game._overlay_hide_status = 0;
+                clearIceBoxSequenceState();
+                clearContainerSequenceState();
+                game._command_mode = null;
+                await setMessage(preflight.message || 'You cannot carry that.');
+                return;
+            }
             const messages = [];
             for (const pickedEntry of picked) {
                 const obj = pickedEntry.item;
