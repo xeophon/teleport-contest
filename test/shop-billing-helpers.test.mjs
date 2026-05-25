@@ -3261,6 +3261,127 @@ test('cursed or used scare monster floor scroll crumbles into used-up bill', asy
     }
 });
 
+test('multi-pickup cursed or used scare monster scroll dusts and continues to later item', async () => {
+    for (const [label, id, props] of [
+        ['cursed', 6034, { cursed: true }],
+        ['used', 6036, { spe: 1 }],
+    ]) {
+        const { shkp } = installCommandShopState();
+        const scroll = floorScareMonsterScroll(id, { ...props, section: 'Other Items' });
+        const ration = foodRation(id + 1);
+        ration.section = 'Other Items';
+        game.level.objects = [scroll, ration];
+        const scrollPrice = shop.shopItemPrice(scroll, 5, 5);
+        const rationPrice = shop.shopItemPrice(ration, 5, 5);
+
+        await rhack(',');
+        assert.equal(game._command_mode, 'pickupList', label);
+
+        await rhack('a');
+        await rhack('b');
+        await rhack('\n');
+
+        const carriedRation = game.inventory.find(item => item.id === ration.id);
+        const dustEntry = shop.shopBillEntryForObject(shkp, scroll);
+        const rationEntry = shop.shopBillEntryForObject(shkp, carriedRation);
+
+        assert.ok(carriedRation, label);
+        assert.equal(game.inventory.some(item => item.id === scroll.id), false, label);
+        assert.equal(game.level.objects.includes(scroll), false, label);
+        assert.equal(game.level.objects.includes(ration), false, label);
+        assert.ok(dustEntry, label);
+        assert.equal(dustEntry.useup, true, label);
+        assert.equal(shop.shopBillEntryTotal(dustEntry), scrollPrice, label);
+        assert.ok(rationEntry, label);
+        assert.equal(rationEntry.useup, false, label);
+        assert.equal(shop.shopBillEntryTotal(rationEntry), rationPrice, label);
+        assert.equal(shkp.billct, 2, label);
+        assert.match(game._pending_message, /scroll.*turns? to dust.*pick.*up/i, label);
+        assert.match(game._pending_message, /food ration/, label);
+        assert.equal(game.context.move, 1, label);
+    }
+});
+
+test('multi-pickup scare monster scroll live states match single pickup', async () => {
+    for (const [label, id, props, expected] of [
+        ['uncursed', 6038, {}, { spe: 1, blessed: false }],
+        ['blessed', 6040, { blessed: true }, { spe: 0, blessed: false }],
+    ]) {
+        const { shkp } = installCommandShopState();
+        const scroll = floorScareMonsterScroll(id, { ...props, section: 'Other Items' });
+        const filler = foodRation(id + 1);
+        filler.section = 'Other Items';
+        game.level.objects = [scroll, filler];
+        const expectedPrice = shop.shopItemPrice(scroll, 5, 5);
+
+        await rhack(',');
+        assert.equal(game._command_mode, 'pickupList', label);
+
+        await rhack('a');
+        await rhack('\n');
+
+        const carried = game.inventory.find(item => item.id === scroll.id);
+        const entry = shop.shopBillEntryForObject(shkp, carried);
+
+        assert.ok(carried, label);
+        assert.equal(carried.spe || 0, expected.spe, label);
+        assert.equal(!!carried.blessed, expected.blessed, label);
+        assert.equal(carried.cursed, false, label);
+        assert.equal(game.level.objects.includes(scroll), false, label);
+        assert.equal(game.level.objects.includes(filler), true, label);
+        assert.ok(entry, label);
+        assert.equal(entry.useup, false, label);
+        assert.equal(shop.shopBillEntryTotal(entry), expectedPrice, label);
+        assert.doesNotMatch(game._pending_message, /turns? to dust/i, label);
+        assert.equal(game.context.move, 1, label);
+    }
+});
+
+test('multi-pickup partial scare monster stack preserves remainder state', async () => {
+    for (const [label, id, props, expected] of [
+        ['fresh', 6042, {}, { carriedSpe: 1, remainderBlessed: false }],
+        ['blessed', 6044, { blessed: true }, { carriedSpe: 0, remainderBlessed: true }],
+    ]) {
+        const { shkp } = installCommandShopState();
+        const stack = floorScareMonsterScroll(id, {
+            quan: 100,
+            plural: 'scrolls of scare monster',
+            section: 'Other Items',
+            ...props,
+        });
+        const filler = foodRation(id + 1);
+        filler.section = 'Other Items';
+        game.level.objects = [stack, filler];
+        game.u.acurr.a = [1, 1, 10, 10, 1, 10];
+
+        await rhack(',');
+        assert.equal(game._command_mode, 'pickupList', label);
+
+        await rhack('a');
+        await rhack('\n');
+
+        const carried = game.inventory.find(item => item.id !== filler.id && item.scrollIndex === 3);
+        const entry = shop.shopBillEntryForObject(shkp, carried);
+
+        assert.ok(carried, label);
+        assert.ok(carried.quan > 0 && carried.quan < 100, label);
+        assert.equal(carried.spe || 0, expected.carriedSpe, label);
+        assert.equal(carried.blessed, false, label);
+        assert.equal(stack.quan, 100 - carried.quan, label);
+        assert.equal(stack.spe || 0, 0, label);
+        assert.equal(!!stack.blessed, expected.remainderBlessed, label);
+        assert.equal(stack.cursed, false, label);
+        assert.equal(game.level.objects.includes(stack), true, label);
+        assert.equal(game.level.objects.includes(filler), true, label);
+        assert.ok(entry, label);
+        assert.equal(entry.useup, false, label);
+        assert.equal(shop.shopBillEntryTotal(entry), shop.shopItemPrice(carried, 5, 5), label);
+        assert.match(game._pending_message, /You can only lift/, label);
+        assert.doesNotMatch(game._pending_message, /turns? to dust/i, label);
+        assert.equal(game.context.move, 1, label);
+    }
+});
+
 test('cursed shop-floor loadstone pickup ignores overweight and bills live item', async () => {
     const { shkp } = installCommandShopState();
     const stone = floorLoadstone(6020);

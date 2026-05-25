@@ -17274,6 +17274,7 @@ async function floorPickupPreflight(obj, { shopPrice = null, prompt = true, scar
             useUpFloorObjectWithShopBill(dustObj);
             return {
                 ok: false,
+                scareDust: true,
                 move: true,
                 message: scareMonsterScrollDustMessage(dustObj),
                 messages,
@@ -28372,9 +28373,10 @@ export async function rhack(_cmd) {
                     moved.push(obj);
                     continue;
                 }
-                const preflight = await floorPickupPreflight(obj, { prompt: false, scareSpecial: false });
+                const preflight = await floorPickupPreflight(obj, { prompt: false });
                 if (!preflight.ok) {
                     messages.push(floorPickupPreflightMessage(preflight));
+                    if (preflight.scareDust) continue;
                     break;
                 }
                 if (preflight?.messages?.length) messages.push(...preflight.messages);
@@ -28382,6 +28384,8 @@ export async function rhack(_cmd) {
                     continue;
                 }
                 const pickupObj = splitFloorPickupObjectForLift(obj, preflight?.takeCount || obj.quan || 1);
+                if (preflight.scareRemainderState && pickupObj !== obj)
+                    Object.assign(obj, preflight.scareRemainderState);
                 const letter = pickupObj.wasStolen && pickupObj.letter
                     ? pickupObj.letter
                     : preflight?.inventoryLetter || nextInventoryLetter();
