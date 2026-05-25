@@ -13112,6 +13112,160 @@ function droppedObjectGlobMeldFloorEffects(obj, x, y, messages) {
     return true;
 }
 
+function globShrinkDelay() {
+    return 25 + rn2(5) - 2;
+}
+
+function startGlobShrinkTimeout(obj, when = 0) {
+    if (!isGlobbyObject(obj)) return;
+    const delay = when > 0 ? when : globShrinkDelay();
+    obj.globShrinkTurn = Math.max(game.moves || 0, 1) + delay;
+}
+
+function globContents(obj) {
+    if (Array.isArray(obj?.contents)) return obj.contents;
+    if (Array.isArray(obj?.cobj)) return obj.cobj;
+    return [];
+}
+
+function collectGlobShrinkEntriesFromList(list, source, entries, {
+    parent = null,
+    root = null,
+    ancestors = [],
+    owner = null,
+} = {}) {
+    for (const obj of list || []) {
+        const top = root || obj;
+        if (isGlobbyObject(obj)) entries.push({
+            obj,
+            parent,
+            root: top,
+            ancestors: [...ancestors],
+            source,
+            owner,
+        });
+        const contents = globContents(obj);
+        if (contents.length) {
+            collectGlobShrinkEntriesFromList(contents, source, entries, {
+                parent: obj,
+                root: top,
+                ancestors: [...ancestors, obj],
+                owner,
+            });
+        }
+    }
+}
+
+function collectGlobShrinkEntries(g = game) {
+    const entries = [];
+    collectGlobShrinkEntriesFromList(g.inventory || [], 'inventory', entries);
+    collectGlobShrinkEntriesFromList(g.level?.objects || [], 'floor', entries);
+    for (const mon of g.level?.monsters || [])
+        collectGlobShrinkEntriesFromList(mon.minvent || [], 'minvent', entries, { owner: mon });
+    return entries;
+}
+
+function globInIceBox(entry) {
+    return !!(entry.obj?.inIceBox || entry.ancestors.some(isIceBoxObject));
+}
+
+function globIceState(entry) {
+    if (entry.source !== 'floor') return 'none';
+    const root = entry.root || entry.obj;
+    const x = root?.ox;
+    const y = root?.oy;
+    if (typeof x !== 'number' || typeof y !== 'number') return 'none';
+    const loc = game.level?.at?.(x, y);
+    if (loc?.typ !== ICE) return 'none';
+    return root.buried ? 'buried' : 'onice';
+}
+
+function removeShrunkGlob(entry) {
+    const obj = entry.obj;
+    if (entry.parent) {
+        removeContainedObject(entry.parent, obj);
+        return;
+    }
+    if (entry.source === 'inventory') {
+        game.inventory = (game.inventory || []).filter(item => item !== obj);
+        return;
+    }
+    if (entry.source === 'floor') {
+        game.level.objects = (game.level?.objects || []).filter(item => item !== obj);
+        if (typeof obj.ox === 'number' && typeof obj.oy === 'number') newsym(obj.ox, obj.oy);
+        return;
+    }
+    if (entry.source === 'minvent' && entry.owner)
+        entry.owner.minvent = (entry.owner.minvent || []).filter(item => item !== obj);
+}
+
+function outerInventoryContainer(entry) {
+    if (entry.source !== 'inventory' || !entry.parent) return null;
+    return entry.root || entry.parent;
+}
+
+function globFloorVisible(entry) {
+    const obj = entry.obj;
+    return entry.source === 'floor' && !entry.parent
+        && typeof obj.ox === 'number' && typeof obj.oy === 'number'
+        && !game.u?.blind && couldsee(obj.ox, obj.oy);
+}
+
+function globShrinkName(obj) {
+    return globObjectName(obj).replace(/^the /i, '');
+}
+
+function processGlobShrinkEntry(entry) {
+    const obj = entry.obj;
+    if (!isGlobbyObject(obj) || typeof obj.globShrinkTurn !== 'number') return [];
+    if (globInIceBox(entry)) {
+        delete obj.globShrinkTurn;
+        return [];
+    }
+    if (game._eating_floor_object === obj || globIceState(entry) === 'buried'
+        || (globIceState(entry) === 'onice' && (game.moves || 0) % 3 === 1)) {
+        startGlobShrinkTimeout(obj);
+        return [];
+    }
+
+    const oldWeight = Math.max(0, obj.owt ?? 20);
+    const thresholdMessage = oldWeight > 0 && oldWeight % 10 === 0;
+    const name = globShrinkName(obj);
+    obj.owt = Math.max(0, oldWeight - 1);
+    if ((obj.oeaten || 0) > 1) obj.oeaten -= 1;
+
+    const messages = [];
+    const gone = !obj.owt;
+    if (entry.source === 'inventory' && !entry.parent && (thresholdMessage || gone))
+        messages.push(`Your ${name} ${gone ? 'dissolves completely' : 'shrinks'}.`);
+    const topContainer = outerInventoryContainer(entry);
+    if (topContainer && (thresholdMessage || gone)) {
+        const topName = pickupObjectName(topContainer);
+        messages.push(`Your ${topName} becomes${gone ? '' : ' slightly'} lighter.`);
+    }
+
+    if (gone) {
+        const visibleFloor = globFloorVisible(entry);
+        removeShrunkGlob(entry);
+        if (visibleFloor) messages.push(`A ${name} fades away.`);
+    } else {
+        startGlobShrinkTimeout(obj);
+    }
+    return messages;
+}
+
+export function processGlobShrinkTimers(g = game) {
+    const moves = g.moves || 0;
+    const due = collectGlobShrinkEntries(g)
+        .filter(entry => typeof entry.obj?.globShrinkTurn === 'number'
+            && entry.obj.globShrinkTurn <= moves)
+        .sort((a, b) => (a.obj.globShrinkTurn - b.obj.globShrinkTurn)
+            || ((a.obj.id || a.obj.oid || 0) - (b.obj.id || b.obj.oid || 0)));
+    const messages = [];
+    for (const entry of due) messages.push(...processGlobShrinkEntry(entry));
+    return messages;
+}
+
 function floorObjectClass(obj) {
     if (obj?.cls) return obj.cls;
     if (obj?.otyp === GOLD_PIECE || obj?.glyph === '$') return 'coin';

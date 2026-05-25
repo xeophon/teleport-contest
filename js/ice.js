@@ -26,6 +26,8 @@ const BOOK_OF_THE_DEAD = 10097;
 const CANDELABRUM_OF_INVOCATION = 10076;
 const LAND_MINE = 10160;
 const BEARTRAP = 10161;
+const GLOB_OF_GRAY_OOZE = 10180;
+const GLOB_OF_BLACK_PUDDING = 10183;
 
 const ICE_MELT_MESSAGE = 'The ice crackles and melts.';
 const ICE_TIMER_MELT_MESSAGE = 'Some ice melts away.';
@@ -44,6 +46,21 @@ const MIN_ICE_TIME = 50;
 const MAX_ICE_TIME = 2000;
 const RIDER_CORPSE_NAMES = new Set(['death', 'pestilence', 'famine']);
 const ORGANIC_MATERIALS = new Set(['liquid', 'wax', 'veggy', 'flesh', 'paper', 'cloth', 'leather', 'wood']);
+
+function isGlobbyObject(obj) {
+    return !!(obj?.globby || (obj?.otyp >= GLOB_OF_GRAY_OOZE && obj?.otyp <= GLOB_OF_BLACK_PUDDING)
+        || /^glob of /.test(String(obj?.kind || obj?.actualKind || obj?.globName || '').toLowerCase()));
+}
+
+function stopGlobShrinkTimeout(obj) {
+    delete obj.globShrinkTurn;
+}
+
+function startGlobShrinkTimeout(obj) {
+    if (!isGlobbyObject(obj)) return;
+    const delay = 25 + rn2(5) - 2;
+    obj.globShrinkTurn = Math.max(game.moves || 0, 1) + delay;
+}
 
 export function isIceAt(x, y) {
     const loc = game.level?.at(x, y);
@@ -180,6 +197,7 @@ export function freezeObjectInIcebox(obj) {
     if (!obj) return;
     obj.inIceBox = true;
     obj.fromIceBox = true;
+    if (isGlobbyObject(obj)) stopGlobShrinkTimeout(obj);
     if (!isCorpseObject(obj)) return;
     const moves = Math.max(game.moves || 0, 1);
     obj.age = Math.max(0, moves - (obj.age ?? moves));
@@ -201,6 +219,7 @@ export function removedFromIcebox(obj) {
         setCorpseOnIce(obj, false);
         restartCorpseRotTimeout(obj);
     }
+    if (isGlobbyObject(obj)) startGlobShrinkTimeout(obj);
     obj.fromIceBox = false;
     obj.inIceBox = false;
 }
