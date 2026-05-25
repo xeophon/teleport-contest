@@ -3,10 +3,12 @@ import test from 'node:test';
 
 import { __shopBillingTestHooks as shop } from '../js/cmd.js';
 import { game, resetGame } from '../js/gstate.js';
+import { initRng } from '../js/rng.js';
 import { ROOMOFFSET, SHOPBASE } from '../js/const.js';
 
 function installShopState() {
     const g = resetGame();
+    initRng(1);
     const roomno = ROOMOFFSET;
     const shkp = {
         isshk: true,
@@ -247,4 +249,82 @@ test('non-food shop pickup merge combines compatible unpaid bill entries', () =>
     assert.equal(shop.shopBillEntryTotal(merge.billMerge.billEntry), 10);
     assert.match(unpaidStack.line, /unpaid, 10 zorkmids/);
     assert.equal(shkp.billct, 1);
+});
+
+test('split shop bill entry preserves parent and child unit prices', () => {
+    const { shkp } = installShopState();
+    const parent = { ...dagger(8001, 'd'), quan: 3, line: 'd - 3 +0 daggers' };
+    shop.addObjectToShopBill(shkp, parent, 15);
+    const child = { ...parent, id: 8002, quan: 1, letter: 'e', line: 'e - a +0 dagger' };
+
+    const childEntry = shop.splitShopBillEntry(shkp, parent, child, 1);
+    const parentEntry = shop.shopBillEntryForObject(shkp, parent);
+
+    assert.equal(parentEntry.bquan, 2);
+    assert.equal(shop.shopBillEntryTotal(parentEntry), 10);
+    assert.equal(parent.unpaidPrice, 10);
+    assert.equal(childEntry.bo_id, String(child.id));
+    assert.equal(childEntry.bquan, 1);
+    assert.equal(childEntry.useup, false);
+    assert.equal(shop.shopBillEntryTotal(childEntry), 5);
+    assert.equal(child.unpaidPrice, 5);
+    assert.equal(shkp.billct, 2);
+});
+
+test('returning a split unpaid child leaves the parent bill entry intact', () => {
+    const { shkp } = installShopState();
+    const parent = { ...dagger(8101, 'd'), quan: 3, line: 'd - 3 +0 daggers' };
+    shop.addObjectToShopBill(shkp, parent, 15);
+    const child = { ...parent, id: 8102, quan: 1, letter: 'e', line: 'e - a +0 dagger' };
+    shop.splitShopBillEntry(shkp, parent, child, 1);
+
+    assert.equal(shop.sellobjReturnUnpaidToShop(child, 5, 5), true);
+
+    const parentEntry = shop.shopBillEntryForObject(shkp, parent);
+    assert.equal(parentEntry.bquan, 2);
+    assert.equal(shop.shopBillEntryTotal(parentEntry), 10);
+    assert.equal(shop.shopBillEntryForObject(shkp, child), null);
+    assert.equal(child.unpaid, false);
+    assert.equal(shkp.billct, 1);
+});
+
+test('unpaid return keeps used-up residual bill quantity when live stack shrank', () => {
+    const { shkp } = installShopState();
+    const stack = { ...dagger(8201, 'd'), quan: 3, line: 'd - 3 +0 daggers' };
+    shop.addObjectToShopBill(shkp, stack, 15);
+    stack.quan = 1;
+    stack.line = 'd - a +0 dagger (unpaid, 15 zorkmids)';
+
+    assert.equal(shop.sellobjReturnUnpaidToShop(stack, 5, 5), true);
+
+    assert.equal(stack.unpaid, false);
+    assert.doesNotMatch(stack.line, /unpaid/);
+    assert.equal(shkp.billct, 1);
+    assert.equal(shkp.bill.length, 1);
+    assert.notEqual(String(shkp.bill[0].bo_id), String(stack.id));
+    assert.equal(shkp.bill[0].useup, true);
+    assert.equal(shkp.bill[0].bquan, 2);
+    assert.equal(shop.shopBillEntryTotal(shkp.bill[0]), 10);
+    assert.equal(game._usedUpShopBills.length, 1);
+    assert.equal(game._usedUpShopBills[0].bo_id, shkp.bill[0].bo_id);
+    assert.equal(game._usedUpShopBills[0].price, 10);
+});
+
+test('unpaid return without matching bill does not delete unrelated ledger rows', () => {
+    const { shkp } = installShopState();
+    const billed = dagger(8301, 'd');
+    shop.addObjectToShopBill(shkp, billed, 5);
+    const orphanedSplit = {
+        ...dagger(8302, 'e'),
+        unpaid: true,
+        unpaidPrice: 5,
+        line: 'e - a +0 dagger (unpaid, 5 zorkmids)',
+    };
+
+    assert.equal(shop.sellobjReturnUnpaidToShop(orphanedSplit, 5, 5), true);
+
+    assert.equal(shkp.billct, 1);
+    assert.equal(shkp.bill.length, 1);
+    assert.equal(shop.shopBillEntryForObject(shkp, billed), shkp.bill[0]);
+    assert.equal(orphanedSplit.unpaid, false);
 });

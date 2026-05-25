@@ -26,6 +26,7 @@ The current audit source of truth is `docs/c-parity-audit/`.
 - Made ordinary food pickup respect C unpaid merge rules: unpaid shop food no longer merges into paid stacks, and compatible unpaid stack merges carry the bill total forward.
 - Added the paid non-container `sellobj()` side for ordinary shop drops: C-style stocked-item sale offers, cash transfer, cashless credit offers, and declined-sale `no_charge` pickup semantics.
 - Moved ordinary stackable non-food pickup merges through bill-aware helpers for compatible paid stacks and same-price unpaid shop stacks.
+- Started C-shaped `splitbill`/`subfrombill` compatibility for unpaid stack returns: split parent/child bill rows, used-up residual quantities, and safer orphan fallback handling.
 - Latest verified public score: `44/44`.
 
 ## Current Priorities
@@ -33,8 +34,8 @@ The current audit source of truth is `docs/c-parity-audit/`.
 1. Shop ledger foundation.
    - Source notes: `docs/c-parity-audit/05-food-inventory-containers-shops.md`.
    - Current JS tracks unpaid state on objects instead of a C-shaped bill ledger.
-   - Missing or partial concepts include `addtobill`, `splitbill`, `subfrombill`, container/gold `sellobj`, `dropped_container`, `picked_container`, `check_unpaid_usage`, and `costly_alteration`.
-   - The next narrow C-backed gap is split-stack bill preservation: `splitbill()` and the used-up residual branch of `subfrombill()`.
+   - Missing or partial concepts include full `addtobill`, full `subfrombill` routing, container/gold `sellobj`, `dropped_container`, `picked_container`, `check_unpaid_usage`, and `costly_alteration`.
+   - The next narrow C-backed gap is wiring split bill preservation through actual split producers: `removeInventoryItem()`, throw/fire projectile splits, and item-use paths.
 
 2. Object registry and canonical object factory.
    - Source notes: `docs/c-parity-audit/02-objects-wishing-readobjnam.md`.
@@ -73,10 +74,10 @@ The current audit source of truth is `docs/c-parity-audit/`.
 
 Continue the shop ledger migration:
 
-1. Add C-shaped `splitbill`/`subfrombill` helpers for split stacks and used-up residual bill entries.
-2. Wire those helpers through unpaid drop returns before broader container flows.
-3. Extend ledger use to container put-in, take-out, and tip moves.
-4. Expand `sellobj()` beyond ordinary paid non-container objects to container contents, gold donation/credit, robbed-shop, and angry-shopkeeper edge cases.
+1. Wire split bill helpers through partial inventory use, throw, and fired projectile stack splits.
+2. Extend ledger use to container put-in, take-out, and tip moves.
+3. Expand `sellobj()` beyond ordinary paid non-container objects to container contents, gold donation/credit, robbed-shop, and angry-shopkeeper edge cases.
+4. Move payment toward authoritative bill rows and shop credit instead of object-field collection.
 
 ## Verification
 

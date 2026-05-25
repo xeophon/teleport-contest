@@ -77,30 +77,30 @@ This audit is based only on upstream C and current JS source inspection. It does
 
 ### Pickup, Drop, Containers, Tip
 
-- `js/cmd.js:23979-24065`: multi-object pickup menu.
-- `js/cmd.js:33037-33117`: drop command.
-- `js/cmd.js:16077-16543`: container put-in menus, rejection checks, and transfer helpers.
-- `js/cmd.js:16581-16667`: container sequence and stash helpers.
-- `js/cmd.js:16733-16829`: container take-out preparation and tip-to-floor transfer.
-- `js/cmd.js:16876-16940`: tip checks and destination selection.
-- `js/cmd.js:16974-17656`: magic bag, bag of tricks, horn of plenty, and usage-fee helpers.
-- `js/cmd.js:17658-17699`: tip container into another container or floor.
-- `js/cmd.js:33362-34230`: loot UI modes for ice boxes, boxes, bags, put-in, take-out, and stash.
-- `js/cmd.js:34414-34496`: tip command UI modes.
-- `js/cmd.js:35132-35221`: command dispatch for loot and tip.
-- `js/cmd.js:38087-38256`: single-object pickup path.
+- `js/cmd.js:24543-24629`: multi-object pickup menu.
+- `js/cmd.js:33643-33729`: drop command and unpaid-drop shop hook.
+- `js/cmd.js:16669-17086`: container put-in menus, rejection checks, and transfer helpers.
+- `js/cmd.js:17192-17335`: container take-out preparation and inventory insertion.
+- `js/cmd.js:17363-17540`: tip checks and destination selection.
+- `js/cmd.js:17542-18220`: magic bag, bag of tricks, horn of plenty, usage-fee helpers, and tip into another container.
+- `js/cmd.js:33982-34818`: loot UI modes for ice boxes, boxes, bags, put-in, take-out, and stash.
+- `js/cmd.js:35034-35129`: tip command UI modes.
+- `js/cmd.js:35823-35841`, `js/cmd.js:36434-36478`: command dispatch for tip and loot direction.
+- `js/cmd.js:38197-38368`: single-object pickup path.
 
 ### Shop Billing
 
-- `js/cmd.js:12714-12763`: shopkeeper lookup and buried-merchandise debt helper.
-- `js/cmd.js:12789-13149`: starter shop bill entries, pickup bill merge helpers, and unpaid line synchronization.
-- `js/cmd.js:13989-14003`: used-up bill memory helper.
-- `js/cmd.js:17856-17866`: unpaid charged-tool usage fee helper.
-- `js/cmd.js:17868-17901`: temporary floor source billing for special tip sources.
-- `js/cmd.js:17979-17990`: horn-created object billing and unpaid stack merge helper.
-- `js/cmd.js:18229-18515`: shop base cost, price calculation, debt collection, and debit payment.
-- `js/cmd.js:24913-25011`: shop quote and pay menu handling.
-- `js/cmd.js:38468-38504`: pay command source selection.
+- `js/cmd.js:12715-12743`: shopkeeper lookup helpers.
+- `js/cmd.js:12804-13280`: starter shop bill entries, split/subtract helpers, pickup bill merge helpers, unpaid drop return, and test exports.
+- `js/cmd.js:13292-13308`: buried-merchandise debt helper.
+- `js/cmd.js:13669-13676`: unpaid line synchronization.
+- `js/cmd.js:14090-14113`: used-up bill naming and memory helper.
+- `js/cmd.js:17966-17976`: unpaid charged-tool usage fee helper.
+- `js/cmd.js:17978-18011`: temporary floor source billing for special tip sources.
+- `js/cmd.js:18089-18111`: horn-created object billing and unpaid stack merge helper.
+- `js/cmd.js:18339-18629`: shop base cost, price calculation, debt collection, and debit payment.
+- `js/cmd.js:25023-25121`: shop quote and pay menu handling.
+- `js/cmd.js:38578-38614`: pay command source selection.
 - `js/mklev.js:4902-4921`: duplicate unpaid-price helpers used by level generation/object merging.
 
 ## Findings
@@ -148,7 +148,7 @@ Concrete gaps:
 
 C pickup computes what can be carried before transferring the object. `carry_count()` and `lift_object()` can reduce quantity, reject based on slots or special objects, ask burden prompts, and trigger special cases. `pick_obj()` calls `addtobill()` before `addinv()` so unpaid merges and bill identity stay correct.
 
-JS single pickup computes a shop price, shows a quote, and stores `unpaid`/`unpaidPrice` on the picked object (`js/cmd.js:38143-38215`). It then computes weight after adding the object and only reports burden feedback (`js/cmd.js:38216-38256`). Multi-pickup moves selected objects directly into inventory after ledger/merge checks (`js/cmd.js:24433-24519`).
+JS single pickup computes a shop price, shows a quote, and stores `unpaid`/`unpaidPrice` on the picked object (`js/cmd.js:38253-38342`). It then computes weight after adding the object and only reports burden feedback (`js/cmd.js:38343-38368`). Multi-pickup moves selected objects directly into inventory after ledger/merge checks (`js/cmd.js:24543-24631`).
 
 Concrete gaps:
 
@@ -162,11 +162,11 @@ Concrete gaps:
 
 C drop unwields/unquivers as needed, removes from inventory, applies floor effects, places/stacks the object, and calls `sellobj()` when on a costly spot. `sellobj()` handles unpaid returns, deliberate sale offers, credit, no-charge state for dropped containers, and bill removal.
 
-JS drop clones the inventory object to the floor, clears basic equipment flags, applies earth/ice effects, and prints a message (`js/cmd.js:33037-33117`). It now handles ordinary unpaid non-container returns and paid non-container sale/credit offers, including declined-sale `no_charge`, but broader `sellobj()` coverage is still missing.
+JS drop clones the inventory object to the floor, clears basic equipment flags, applies earth/ice effects, and prints a message (`js/cmd.js:33643-33729`). It now handles ordinary unpaid non-container returns, including the narrow split-stack residual bill branch, and paid non-container sale/credit offers with declined-sale `no_charge`, but broader `sellobj()` coverage is still missing.
 
 Concrete gaps:
 
-- Split stacks and containers are not yet routed through full `subfrombill()`/`sellobj()` compatibility.
+- Split-stack unpaid returns have starter `splitbill`/`subfrombill` helpers, but throw/fire splits, partial inventory use, containers, and full recursive `subfrombill()`/`sellobj()` compatibility are still incomplete.
 - Gold donation/credit, robbed-shop, angry-shopkeeper, and special-stock edge cases are still incomplete.
 - Dropped containers do not recursively mark contents `no_charge` or preserve C's `dropped_container()`/`picked_container()` state.
 - Drop stacking is not bill-aware. C `mergable()` checks unpaid, bill price, `no_charge`, `oeaten`, corpse/egg/tin identity, and related state; JS drop pushes a new floor object.
@@ -175,30 +175,30 @@ Concrete gaps:
 
 C container operations are deeply tied to shops. Putting an inventory object into a shop-floor container can sell it. Taking an object out of a shop-floor container bills it. Tipping a shop-floor container can bill, steal, or suppress price depending on source and target. Ice boxes, cursed bags of holding, bag of tricks, horn of plenty, traps, locked state, and weight all route through those same object/bill invariants.
 
-JS has a substantial UI implementation for boxes, bags, ice boxes, take-out, put-in, stash, and tip (`js/cmd.js:16077-17699`, `js/cmd.js:33362-34230`, `js/cmd.js:34414-34496`). It also implements some magic bag, bag of tricks, and horn of plenty behavior.
+JS has a substantial UI implementation for boxes, bags, ice boxes, take-out, put-in, stash, and tip (`js/cmd.js:16669-18220`, `js/cmd.js:33982-34818`, `js/cmd.js:35034-35129`). It also implements some magic bag, bag of tricks, and horn of plenty behavior.
 
 Concrete gaps:
 
-- `putInventoryObjectIntoContainer()` directly removes inventory and inserts into the target container (`js/cmd.js:16504-16543`); it does not call `sellobj()` or equivalent when the target is a shop-floor container.
-- `addContainerTakeoutObjectToInventory()` and loot take-out directly add items to inventory (`js/cmd.js:16742-16756`, `js/cmd.js:34123-34159`); they do not call `addtobill()` when taking from a shop-floor container.
-- `tipContainerToFloor()` and `tipContainerIntoContainer()` move contents without C's per-item shop billing/stolen-value rules, except for narrow magic bag gold/debit handling (`js/cmd.js:16803-16829`, `js/cmd.js:17658-17699`).
+- `putInventoryObjectIntoContainer()` directly removes inventory and inserts into the target container (`js/cmd.js:17064-17086`); it does not call `sellobj()` or equivalent when the target is a shop-floor container.
+- `addContainerTakeoutObjectToInventory()` and loot take-out directly add items to inventory (`js/cmd.js:17302-17316`, `js/cmd.js:34567-34818`); they do not call `addtobill()` when taking from a shop-floor container.
+- `tipContainerToFloor()` and `tipContainerIntoContainer()` move contents without C's per-item shop billing/stolen-value rules, except for narrow magic bag gold/debit handling (`js/cmd.js:17363-17399`, `js/cmd.js:18220-18249`).
 - Loot reachability is simplified. C checks water/lava access, limbs/free hand, multiple containers, confusion reverse-loot, blind cockatrice touch, saddles, and directional cases (`pickup.c:2022-2345`).
-- Trap handling for tip/loot is placeholder-level in JS (`js/cmd.js:16876-16884`) compared with C `chest_trap()` and `use_container()` effects.
+- Trap handling for tip/loot is placeholder-level in JS (`js/cmd.js:17388-17394`) compared with C `chest_trap()` and `use_container()` effects.
 - Take-out does not run C `lift_object()` for capacity, slot, artifact, Rider corpse, or fatal-corpse checks.
 
 ### 7. Shop Billing Is Field-Based, Not Ledger-Based
 
 C uses shopkeeper bill entries with explicit invariants: an object is unpaid iff it is on a bill, except used-up bill entries. The system supports split/merge, contained unpaid objects, hidden containers, used-up items, itemized payment, partial usage fees, price quote learning, `no_charge`, stolen value, and alteration billing.
 
-JS uses starter bill entries plus object fields (`unpaid`, `unpaidPrice`), loose shopkeeper counters/debit, and a global `_usedUpShopBills` list (`js/cmd.js:12789-13149`, `js/cmd.js:13546-13560`, `js/cmd.js:18484-18515`). This supports visible unpaid suffixes, ordinary pickup/drop billing, compatible pickup stack merges, and basic payment, but does not yet preserve C's full ownership and bill-entry semantics.
+JS uses starter bill entries plus object fields (`unpaid`, `unpaidPrice`), loose shopkeeper counters/debit, and a global `_usedUpShopBills` list (`js/cmd.js:12804-13280`, `js/cmd.js:13669-13676`, `js/cmd.js:18594-18629`). This supports visible unpaid suffixes, ordinary pickup/drop billing, compatible pickup stack merges, narrow split-stack unpaid returns, and basic payment, but does not yet preserve C's full ownership and bill-entry semantics.
 
 Concrete gaps:
 
-- Ledger coverage is partial: starter `bill` entries exist, but there is no source-equivalent `onbill()`, `splitbill()`, `subfrombill()`, or `obfree()`; split object identity changes and used-up quantities can still lose bill state.
+- Ledger coverage is partial: starter `bill` entries and narrow split/subtract helpers exist, but there is no full source-equivalent `onbill()`, recursive `subfrombill()`, or `obfree()`; throw/fire splits, partial inventory use, and merges outside ordinary pickup can still lose bill state.
 - `billct` is tied to the starter ledger in newer paths, but legacy debit/payment and object-field scans still mean it is not authoritative everywhere.
-- `collectPayableShopDebts()` scans inventory and floor objects globally, so payable objects are not strictly tied to a specific shopkeeper's bill (`js/cmd.js:18484-18515`).
+- `collectPayableShopDebts()` scans inventory and floor objects globally, so payable objects are not strictly tied to a specific shopkeeper's bill (`js/cmd.js:18594-18617`).
 - Payment uses a `cashTotal` accumulator, but it is still driven by collected object fields rather than authoritative bill rows and shop credit.
-- `get_cost()` parity is incomplete: JS has base tables, unknown-name surcharge, enchantment surcharge, charisma adjustment, and pricing units (`js/cmd.js:17777-18002`), but not full C role/status/shopkeeper anger/tourist/dunce/artifact/contained/no-charge/price-quote side effects.
+- `get_cost()` parity is incomplete: JS has base tables, unknown-name surcharge, enchantment surcharge, charisma adjustment, and pricing units (`js/cmd.js:18339-18566`), but not full C role/status/shopkeeper anger/tourist/dunce/artifact/contained/no-charge/price-quote side effects.
 - Generic `costly_alteration()` is absent. JS has local billing for buried merchandise, charged bag/horn use, and horn-created objects, but not the shared bite/open/destroy/cancel/degrade billing hook used across C.
 - Used-up unpaid items are not centralized. C `useup()`/`obfree()` preserve bills for consumed unpaid objects; JS only remembers some corpse rot/glob shrink paths.
 
@@ -206,7 +206,7 @@ Concrete gaps:
 
 1. Build the shop ledger foundation first.
    - Add a C-shaped bill model keyed by shopkeeper, object identity, quantity, price, and used-up status.
-   - Implement source-equivalent helpers for `onbill`, `addtobill`, `splitbill`, `subfrombill`, `unpaid_cost`, `contained_cost`, `sellobj`, `dropped_container`, `picked_container`, `check_unpaid_usage`, and `costly_alteration`.
+   - Continue the started split/subtract helpers into source-equivalent `onbill`, full `addtobill`, recursive `subfrombill`, `unpaid_cost`, `contained_cost`, `sellobj`, `dropped_container`, `picked_container`, `check_unpaid_usage`, and `costly_alteration`.
    - Keep `unpaid`/`unpaidPrice` as derived display state, not the source of truth.
 
 2. Port `touchfood()` and the victual core.
@@ -221,7 +221,7 @@ Concrete gaps:
 4. Port pickup/drop around shop and stack invariants.
    - Move pickup through `carry_count()`/`lift_object()` style preflight and `pick_obj()` style bill-before-inventory insertion.
    - Continue moving drop through `dropx()`/`dropy()`/`dropz()` style removal, floor effects, complete `sellobj()`, and bill-aware stack merging.
-   - Continue from the current pickup merge fixes into split-stack bill preservation and container flows.
+   - Wire split bill preservation through partial inventory use, throw/fire projectile splits, floor stacking, and container flows.
 
 5. Port container operations after pickup/drop and shop billing.
    - Rework put-in, take-out, and tip to call ledger-aware `sellobj`, `addtobill`, `subfrombill`, stolen-value, and no-charge helpers.
@@ -235,7 +235,7 @@ Concrete gaps:
 ## Highest-Risk Current Behaviors
 
 - Eating unpaid shop food or tins can avoid C billing because `costly_alteration()` and `costly_tin()` are missing.
-- Multi-pickup still lacks full C quote/lift semantics, and split-stack object identity can still lose unpaid/shop state.
+- Multi-pickup still lacks full C quote/lift semantics, and split-stack object identity can still lose unpaid/shop state in throw/fire, partial use, and non-pickup merge paths.
 - Container-moving objects in shops and complex drops still do not exercise full C `sellobj()`/`addtobill()`/`subfrombill()` paths.
 - Container take-out/tip can move shop-owned contents without becoming unpaid or stolen.
 - Payment is not fully backed by authoritative bill rows or shop credit.

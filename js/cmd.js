@@ -12778,6 +12778,21 @@ function shopBillEntryTotal(entry) {
     return Math.trunc(price * quantity);
 }
 
+function shopBillEntryQuantity(entry) {
+    const quantity = Math.trunc(Number(entry?.bquan || 1));
+    return Number.isFinite(quantity) && quantity > 0 ? quantity : 1;
+}
+
+function shopBillEntryUnitPrice(entry) {
+    const quantity = shopBillEntryQuantity(entry);
+    const total = shopBillEntryTotal(entry);
+    const price = Number(entry?.price || 0);
+    if (Number.isFinite(price) && price > 0 && Math.trunc(price * quantity) === total)
+        return Math.trunc(price);
+    if (!(total > 0)) return 0;
+    return Math.max(1, Math.trunc(total / quantity));
+}
+
 function shopBillEntryForObject(shkp, obj) {
     const ledger = Array.isArray(shkp?.bill) ? shkp.bill : null;
     if (!ledger) return null;
@@ -12820,12 +12835,104 @@ function removeObjectFromShopBillById(shkp, id) {
     return true;
 }
 
+function clearObjectShopBillState(obj) {
+    if (!obj) return;
+    obj.unpaid = false;
+    obj.unpaidPrice = undefined;
+    obj.line = String(obj.line || '').replace(/ \(unpaid, \d+ zorkmids?\)/, '');
+}
+
 function removeObjectFromShopBill(shkp, obj) {
     const removed = removeObjectFromShopBillById(shkp, shopBillObjectId(obj));
-    if (removed && obj) {
-        obj.unpaid = false;
-        obj.unpaidPrice = undefined;
-        obj.line = String(obj.line || '').replace(/ \(unpaid, \d+ zorkmids?\)/, '');
+    if (removed) clearObjectShopBillState(obj);
+    return removed;
+}
+
+function splitShopBillEntry(shkp, parent, child, count = child?.quan || 1) {
+    const ledger = shopBillLedger(shkp);
+    if (!ledger || !parent || !child) return null;
+    const parentEntry = shopBillEntryForObject(shkp, parent);
+    if (!parentEntry) return null;
+    const splitCount = Math.max(1, Math.trunc(Number(count || 1)));
+    const parentQuantity = shopBillEntryQuantity(parentEntry);
+    if (splitCount >= parentQuantity) return null;
+    const unitPrice = shopBillEntryUnitPrice(parentEntry);
+    if (!(unitPrice > 0)) return null;
+
+    parentEntry.bquan = parentQuantity - splitCount;
+    parentEntry.price = unitPrice;
+    parentEntry.totalPrice = unitPrice * parentEntry.bquan;
+    parent.unpaid = true;
+    parent.unpaidPrice = parentEntry.totalPrice;
+    syncUnpaidBillLine(parent);
+
+    if (ledger.length >= SHOP_BILL_LIMIT) {
+        clearObjectShopBillState(child);
+        shkp.billct = ledger.length;
+        return null;
+    }
+
+    const childId = shopBillObjectId(child);
+    const childEntry = {
+        bo_id: childId,
+        useup: false,
+        price: unitPrice,
+        bquan: splitCount,
+        totalPrice: unitPrice * splitCount,
+    };
+    ledger.push(childEntry);
+    shkp.billct = ledger.length;
+    child.unpaid = true;
+    child.unpaidPrice = childEntry.totalPrice;
+    syncUnpaidBillLine(child);
+    return childEntry;
+}
+
+function rememberUsedUpShopBillEntry(obj, entry, price) {
+    if (!(price > 0)) return;
+    game._usedUpShopBills ??= [];
+    game._usedUpShopBills.push({
+        name: usedUpShopBillName(obj),
+        price,
+        bo_id: entry.bo_id,
+    });
+}
+
+function subOneFromShopBill(obj, shkp) {
+    const entry = shopBillEntryForObject(shkp, obj);
+    if (!entry) {
+        if (obj?.unpaid) clearObjectShopBillState(obj);
+        return false;
+    }
+
+    const liveQuantity = Math.max(1, Math.trunc(Number(obj?.quan || 1)));
+    const billedQuantity = shopBillEntryQuantity(entry);
+    const unitPrice = shopBillEntryUnitPrice(entry);
+    clearObjectShopBillState(obj);
+
+    if (billedQuantity > liveQuantity && unitPrice > 0) {
+        const residualQuantity = billedQuantity - liveQuantity;
+        entry.bo_id = String(next_ident());
+        entry.useup = true;
+        entry.price = unitPrice;
+        entry.bquan = residualQuantity;
+        entry.totalPrice = unitPrice * residualQuantity;
+        shkp.billct = Array.isArray(shkp.bill) ? shkp.bill.length : Math.max(1, shkp.billct || 1);
+        rememberUsedUpShopBillEntry(obj, entry, entry.totalPrice);
+        return true;
+    }
+
+    removeObjectFromShopBillById(shkp, entry.bo_id);
+    return true;
+}
+
+function subFromShopBill(obj, shkp) {
+    const removed = subOneFromShopBill(obj, shkp);
+    const contents = Array.isArray(obj?.contents) ? obj.contents : [];
+    for (const child of contents) {
+        if (shopBillableGold(child)) continue;
+        if (Array.isArray(child.contents) && child.contents.length) subFromShopBill(child, shkp);
+        else subOneFromShopBill(child, shkp);
     }
     return removed;
 }
@@ -13152,11 +13259,11 @@ function sellobjReturnUnpaidToShop(obj, x, y) {
     if (!obj?.unpaid || shopBillableGold(obj) || globContents(obj).length) return false;
     const shkp = shopkeeperForCostlySpot(x, y);
     if (!shopkeeperInHisShop(shkp)) return false;
-    if (removeObjectFromShopBill(shkp, obj)) return true;
-    obj.unpaid = false;
-    obj.unpaidPrice = undefined;
-    obj.line = String(obj.line || '').replace(/ \(unpaid, \d+ zorkmids?\)/, '');
-    shkp.billct = Math.max(0, Math.trunc(Number(shkp.billct || 0)) - 1);
+    if (subOneFromShopBill(obj, shkp)) return true;
+    clearObjectShopBillState(obj);
+    shkp.billct = Array.isArray(shkp.bill)
+        ? shkp.bill.length
+        : Math.max(0, Math.trunc(Number(shkp.billct || 0)) - 1);
     return true;
 }
 
@@ -13171,6 +13278,9 @@ export const __shopBillingTestHooks = {
     removeObjectFromShopBill,
     removeObjectFromShopBillById,
     sellobjReturnUnpaidToShop,
+    splitShopBillEntry,
+    subFromShopBill,
+    subOneFromShopBill,
     shopDroppedPaidObjectSaleInfo,
     shopBillEntryForObject,
     shopBillEntryTotal,
