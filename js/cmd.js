@@ -8497,6 +8497,36 @@ function syncBrokenBoxContentDisplay(content) {
     if (OBJECT_CLASS_GLYPHS[content.cls]) content.glyph = OBJECT_CLASS_GLYPHS[content.cls];
 }
 
+function billDummyAlteredShopObject(obj) {
+    if (!obj || shopBillableGold(obj)) return false;
+    const x = obj.ox ?? game.u?.ux;
+    const y = obj.oy ?? game.u?.uy;
+    const shkp = shopkeeperForCostlySpot(x, y);
+    if (!shopkeeperInHisShop(shkp)) return false;
+    const price = shopItemPrice({ ...obj, contents: [], cobj: [] }, x, y);
+    if (!(price > 0)) return false;
+    const dummy = {
+        ...obj,
+        id: next_ident(),
+        o_id: undefined,
+        contents: [],
+        cobj: [],
+        contained: false,
+        container: null,
+        nobj: null,
+        nexthere: null,
+        ox: undefined,
+        oy: undefined,
+    };
+    const entry = addObjectToShopBill(shkp, dummy, price, { useup: true });
+    if (!entry) return false;
+    rememberUsedUpShopBillEntry(obj, entry, price, shkp);
+    obj.no_charge = true;
+    clearObjectShopBillState(obj);
+    obj.no_charge = true;
+    return true;
+}
+
 export function finishForceLock(force) {
     const chest = force?.chest;
     if (!chest) return false;
@@ -8505,6 +8535,7 @@ export function finishForceLock(force) {
     const destroyRoll = rn2(3);
     const destroyed = !force.picktyp && !destroyRoll;
     if (!destroyed) {
+        billDummyAlteredShopObject(chest);
         chest.locked = false;
         chest.olocked = false;
         chest.obroken = true;

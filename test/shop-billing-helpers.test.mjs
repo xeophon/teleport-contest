@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { burnFloorObjectsByFire, processSpellbookStudyOccupation, rhack, __shopBillingTestHooks as shop } from '../js/cmd.js';
+import { burnFloorObjectsByFire, finishForceLock, processSpellbookStudyOccupation, rhack, __shopBillingTestHooks as shop } from '../js/cmd.js';
 import { game, resetGame } from '../js/gstate.js';
 import { initRng } from '../js/rng.js';
 import { CANDLESHOP, DB_EAST, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, LAVAPOOL, ROOM, ROOMOFFSET, SHOPBASE } from '../js/const.js';
@@ -2987,6 +2987,39 @@ test('picking up a no-charge floor container bills chargeable contents', () => {
     assert.equal(blade.no_charge, false);
     assert.equal(blade.unpaid, true);
     assert.equal(blade.container, carried);
+});
+
+test('forcing a shop-floor box lock bills only the altered box as a dummy bill', () => {
+    const { shkp } = installCommandShopState();
+    initRng(1);
+    const box = shopFloorContainer(6098);
+    box.locked = true;
+    box.olocked = true;
+    box.lknown = true;
+    const blade = putObjectInContainer(box, dagger(6099));
+    game.level.objects = [box];
+    const expected = shop.shopItemPrice(box, 5, 5);
+
+    const destroyed = finishForceLock({ chest: box, picktyp: true });
+
+    assert.equal(destroyed, false);
+    assert.equal(box.locked, false);
+    assert.equal(box.olocked, false);
+    assert.equal(box.obroken, true);
+    assert.equal(box.lknown, true);
+    assert.equal(box.no_charge, true);
+    assert.equal(game.level.objects.includes(box), true);
+    assert.equal(box.contents.includes(blade), true);
+    assert.equal(shop.shopBillEntryForObject(shkp, box), null);
+    assert.equal(shop.shopBillEntryForObject(shkp, blade), null);
+    assert.notEqual(blade.unpaid, true);
+    assert.equal(shkp.billct, 1);
+    assert.equal(shkp.bill.length, 1);
+    assert.notEqual(String(shkp.bill[0].bo_id), String(box.id));
+    assert.equal(shop.shopBillEntryTotal(shkp.bill[0]), expected);
+    assert.equal((game._usedUpShopBills || []).length, 1);
+    assert.equal(game._usedUpShopBills[0].bo_id, shkp.bill[0].bo_id);
+    assert.equal(game._usedUpShopBills[0].price, expected);
 });
 
 test('pickup menu prices billable contents of a no-charge floor container', async () => {
