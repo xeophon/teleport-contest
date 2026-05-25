@@ -12676,15 +12676,34 @@ function fillBoulderLiquidTerrain(loc) {
     }
 }
 
-function shopkeeperForCostlySpot(x, y) {
+function shopkeeperForShopRoom(x, y) {
     const roomno = game.level?.at?.(x, y)?.roomno || 0;
     const room = levelRoomByRoomno(roomno);
     if (!room || room.rtype < SHOPBASE) return null;
     const shkp = room.resident || (game.level?.monsters || [])
         .find(mon => mon.isshk && mon.shoproom === roomno);
     if (!shkp?.isshk) return null;
+    return shkp;
+}
+
+function shopkeeperInHisShop(shkp) {
+    if (!shkp?.isshk || shkp.dead || (shkp.mhp != null && shkp.mhp <= 0)) return false;
+    const x = shkp.mx ?? shkp.shk?.x;
+    const y = shkp.my ?? shkp.shk?.y;
+    if (x == null || y == null) return false;
+    return (game.level?.at?.(x, y)?.roomno || 0) === shkp.shoproom;
+}
+
+function shopkeeperForCostlySpot(x, y) {
+    const shkp = shopkeeperForShopRoom(x, y);
+    if (!shkp) return null;
     if (shkp.shk && x === shkp.shk.x && y === shkp.shk.y) return null;
     return shkp;
+}
+
+function heroShopkeeper() {
+    const shkp = shopkeeperForShopRoom(game.u?.ux, game.u?.uy);
+    return shopkeeperInHisShop(shkp) ? shkp : null;
 }
 
 function shopkeeperDisplayName(shkp) {
@@ -16309,7 +16328,7 @@ function isTipSourceObject(obj) {
 }
 
 function isFloorTipSourceObject(obj) {
-    return isTipContainerObject(obj) || isBagOfTricksObject(obj);
+    return isTipContainerObject(obj) || isBagOfTricksObject(obj) || isHornOfPlentyObject(obj);
 }
 
 function isTipTargetContainer(obj) {
@@ -16831,6 +16850,74 @@ function visibleCreatedMonster(mon) {
     return cansee(mon.mx, mon.my) || !!(game.viz_array?.[mon.my]?.[mon.mx] & IN_SIGHT);
 }
 
+function chargedToolUsageBasePrice(obj) {
+    const billed = unpaidBillPrice(obj);
+    if (billed > 0) return billed;
+    return shopItemPrice(obj, game.u?.ux, game.u?.uy) || shopBaseCost(obj) || 0;
+}
+
+function chargedToolUsageFee(obj, altusage = false) {
+    let fee = chargedToolUsageBasePrice(obj);
+    if (!(fee > 0)) return 0;
+    if (!altusage && (isBagOfTricksObject(obj) || isHornOfPlentyObject(obj)))
+        fee = Math.trunc(fee / 5);
+    return Math.max(0, fee);
+}
+
+function chargedToolUsageFeeMessage(obj, fee, altusage = false) {
+    let arg1 = '';
+    let arg2 = '';
+    if (altusage && (isBagOfTricksObject(obj) || isHornOfPlentyObject(obj))) {
+        if (!rn2(3)) arg1 = 'Whoa!  ';
+        if (!rn2(3)) arg1 = 'Watch it!  ';
+        return `"${arg1}Emptying that will cost you ${fee} zorkmid${fee === 1 ? '' : 's'}."`;
+    }
+    if (!rn2(3)) arg1 = 'Hey!  ';
+    if (!rn2(3)) arg2 = 'Ahem.  ';
+    return `"${arg1}${arg2}Usage fee, ${fee} zorkmid${fee === 1 ? '' : 's'}."`;
+}
+
+function billChargedToolUsage(obj, messages, { altusage = false, chargeCount = tipChargeCount(obj) } = {}) {
+    if (!obj?.unpaid || !(chargeCount > 0)) return 0;
+    const shkp = heroShopkeeper();
+    if (!shkp) return 0;
+    const fee = chargedToolUsageFee(obj, altusage);
+    if (!(fee > 0)) return 0;
+    shkp.debit = Math.max(0, Math.trunc(Number(shkp.debit || 0))) + fee;
+    const message = chargedToolUsageFeeMessage(obj, fee, altusage);
+    if (!heroIsDeaf()) messages?.push(message);
+    return fee;
+}
+
+function floorSpecialSourceUsageBill(source) {
+    if (!source || (game.inventory || []).includes(source) || source.no_charge) return null;
+    const x = source.ox ?? game.u?.ux;
+    const y = source.oy ?? game.u?.uy;
+    if (x == null || y == null || x !== game.u?.ux || y !== game.u?.uy) return null;
+    const shkp = shopkeeperForCostlySpot(x, y);
+    if (!shopkeeperInHisShop(shkp)) return null;
+    const price = shopItemPrice(source, x, y);
+    if (!(price > 0)) return null;
+    return {
+        unpaid: source.unpaid,
+        unpaidPrice: source.unpaidPrice,
+        line: source.line,
+        price,
+    };
+}
+
+function beginFloorSpecialSourceUsageBill(source) {
+    const saved = floorSpecialSourceUsageBill(source);
+    if (!saved) return null;
+    source.unpaid = true;
+    source.unpaidPrice = saved.price;
+    return () => {
+        source.unpaid = saved.unpaid;
+        source.unpaidPrice = saved.unpaidPrice;
+        source.line = saved.line;
+    };
+}
+
 async function applyBagOfTricksOnce(bag, { tipping = false } = {}) {
     if (tipChargeCount(bag) < 1) {
         if (tipping && bag.cknown) return ["It's empty."];
@@ -16838,6 +16925,8 @@ async function applyBagOfTricksOnce(bag, { tipping = false } = {}) {
         return ['Nothing happens.'];
     }
 
+    const messages = [];
+    if (!tipping) billChargedToolUsage(bag, messages);
     consumeTipCharge(bag);
     let creatcnt = 1;
     if (!rn2(23)) creatcnt += rnd(7);
@@ -16850,8 +16939,8 @@ async function applyBagOfTricksOnce(bag, { tipping = false } = {}) {
         if (visibleCreatedMonster(mon)) seecount++;
     }
     if (seecount && bag.dknown) identifyChargedToolKind(bag, 'bag of tricks');
-    if (!tipping && !seecount) return [moncount ? 'Nothing seems to happen.' : 'Nothing happens.'];
-    return [];
+    if (!tipping && !seecount) messages.push(moncount ? 'Nothing seems to happen.' : 'Nothing happens.');
+    return messages;
 }
 
 async function tipBagOfTricks(bag) {
@@ -16869,7 +16958,9 @@ async function tipBagOfTricks(bag) {
         bag.spe = 0;
         bag.cknown = true;
         updateChargedItemLine(bag);
-        return seen ? [] : ['Nothing seems to happen.'];
+        const messages = seen ? [] : ['Nothing seems to happen.'];
+        billChargedToolUsage(bag, messages, { altusage: true, chargeCount: oldSpe });
+        return messages;
     }
     return [];
 }
@@ -16900,6 +16991,35 @@ function createHornOfPlentyObject(horn) {
     obj.cursed = !!horn.cursed;
     Object.assign(obj, object_display(obj));
     return { obj, potion };
+}
+
+function hornCreatedObjectBillMessage(obj, price) {
+    const name = pickupObjectName(obj);
+    const subject = (obj.quan || 1) > 1 ? upstartText(name) : `The ${name}`;
+    const each = (obj.quan || 1) > 1 ? ' each' : '';
+    return `${subject} will cost you ${price} zorkmid${price === 1 ? '' : 's'}${each}.`;
+}
+
+function billHornCreatedObject(horn, obj, messages, { silent = false } = {}) {
+    if (!horn?.unpaid || !obj) return 0;
+    const shkp = heroShopkeeper();
+    if (!shkp) return 0;
+    const price = shopItemPrice(obj, game.u?.ux, game.u?.uy);
+    if (!(price > 0)) return 0;
+    obj.unpaid = true;
+    obj.unpaidPrice = price;
+    shkp.billct = Math.max(0, Math.trunc(Number(shkp.billct || 0))) + 1;
+    if (!silent && !heroIsDeaf()) messages?.push(hornCreatedObjectBillMessage(obj, price));
+    return price;
+}
+
+function mergeStackedUnpaidBill(stacked, obj) {
+    if (!stacked || stacked === obj || !obj?.unpaid) return;
+    const price = unpaidBillPrice(stacked) + unpaidBillPrice(obj);
+    if (!(price > 0)) return;
+    stacked.unpaid = true;
+    stacked.unpaidPrice = price;
+    syncUnpaidBillLine(stacked);
 }
 
 function placeHornObjectOnFloor(obj, messages) {
@@ -16933,11 +17053,13 @@ function addAppliedHornObjectToInventory(obj, messages) {
     }
     prepareTippedObjectForContainer(obj);
     obj.letter = letter;
-    obj.line = normalInventoryLine(obj);
+    const displayLine = normalInventoryLine({ ...obj, line: '' });
+    obj.line = displayLine;
+    if (obj.unpaid) syncUnpaidBillLine(obj);
     game.inventory.push(obj);
     maybeAttachCarriedFigurineTimeout(obj);
     game._pet_food_scan_inventory = game.inventory;
-    messages.push(`${obj.line}.`);
+    messages.push(`${displayLine}.`);
 }
 
 function applyHornOfPlentyOnce(horn) {
@@ -16947,9 +17069,12 @@ function applyHornOfPlentyOnce(horn) {
         return ['Nothing happens.'];
     }
 
+    const messages = [];
+    billChargedToolUsage(horn, messages);
     consumeTipCharge(horn);
     const { obj, potion } = createHornOfPlentyObject(horn);
-    const messages = [hornSpillMessage(obj, potion)];
+    messages.push(hornSpillMessage(obj, potion));
+    billHornCreatedObject(horn, obj, messages);
     if (horn.dknown) identifyChargedToolKind(horn, 'horn of plenty');
     updateChargedItemLine(horn);
     addAppliedHornObjectToInventory(obj, messages);
@@ -16969,9 +17094,11 @@ async function tipHornOfPlenty(horn, targetBox = null) {
         consumeTipCharge(horn);
         const { obj, potion } = createHornOfPlentyObject(horn);
         messages.push(hornSpillMessage(obj, potion));
+        billHornCreatedObject(horn, obj, messages, { silent: true });
         if (targetBox) {
             prepareTippedObjectForContainer(obj);
-            add_to_container(targetBox, obj);
+            const stacked = add_to_container(targetBox, obj);
+            mergeStackedUnpaidBill(stacked, obj);
             refreshTipContainerWeight(targetBox);
         } else {
             placeHornObjectOnFloor(obj, messages);
@@ -16982,6 +17109,7 @@ async function tipHornOfPlenty(horn, targetBox = null) {
         horn.cknown = true;
         if (horn.dknown) identifyChargedToolKind(horn, 'horn of plenty');
         updateChargedItemLine(horn);
+        billChargedToolUsage(horn, messages, { altusage: true, chargeCount: oldSpe });
     }
     return messages;
 }
@@ -16991,9 +17119,14 @@ async function tipSpecialSourceContents(source, targetBox = null) {
         const targetError = tipContainerCheckMessage(targetBox, { allowEmpty: true });
         if (targetError) return [targetError];
     }
-    if (isBagOfTricksObject(source)) return tipBagOfTricks(source);
-    if (isHornOfPlentyObject(source)) return tipHornOfPlenty(source, targetBox);
-    return null;
+    const restoreFloorBill = beginFloorSpecialSourceUsageBill(source);
+    try {
+        if (isBagOfTricksObject(source)) return await tipBagOfTricks(source);
+        if (isHornOfPlentyObject(source)) return await tipHornOfPlenty(source, targetBox);
+        return null;
+    } finally {
+        if (restoreFloorBill) restoreFloorBill();
+    }
 }
 
 function tipContainerIntoContainer(source, targetBox) {
@@ -17371,6 +17504,7 @@ function collectUnpaidShopItemsFromList(list, entries) {
 function collectPayableShopDebts(shkp = null) {
     const entries = [];
     collectUnpaidShopItemsFromList(game.inventory || [], entries);
+    collectUnpaidShopItemsFromList(game.level?.objects || [], entries);
     for (const bill of game._usedUpShopBills || []) {
         const price = Number(bill?.price || 0);
         if (price > 0) entries.push({

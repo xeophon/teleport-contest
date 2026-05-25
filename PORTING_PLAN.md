@@ -2713,6 +2713,12 @@ Next concrete target:
   charge, creates inherited blessed/cursed food or potion into inventory,
   reports the spill and inventory line, fixes the food spill verb, and reveals
   unknown horn appearances when C would make the type known.
+  Unpaid bag-of-tricks and horn-of-plenty use now follows C's shop charging
+  shape: normal apply bills one-fifth of the shop cost before charge
+  consumption, `#tip` bills one full emptying fee after the drain, floor shop
+  special sources receive the same temporary source bill, and objects created
+  by an unpaid horn become unpaid shop debt without leaking the price suffix
+  into the immediate inventory message.
   Carried bag put-in now runs through a shared `in_container()`-style gate for
   self-insertion, worn gear, loadstones, invocation items, attached leashes,
   boxes, boulders, and oversized statues, while preserving C's type-menu shape.
@@ -2755,8 +2761,8 @@ Next concrete target:
   starts a fresh C-shaped shrink timer. Focused guards, direct
   takeout/tip/put-in/stash/both-order/glob-timer/bag-horn-apply smokes,
   focused replays, and full score remain exact. Remaining ice-box work is
-  nested `in_container()`/`out_container()` variants, bag-of-tricks/horn shop
-  usage billing, full magic-bag `ohitmon()`/`thitu()` special cases and
+  nested `in_container()`/`out_container()` variants, full magic-bag
+  `ohitmon()`/`thitu()` special cases and
   non-gold scatter shop billing refinements,
   troll/Rider revive and zombify timers, forced ice-box destruction, and shop
   billing edge cases.
