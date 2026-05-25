@@ -6,7 +6,7 @@ import { nhgetch } from './input.js';
 import { bot, cls, docrt, flush_screen, newsym, pline, recordObservedObjectDiscovery, refreshHallucinatedMap, seeNearbyObjects, show_glyph_cell, strengthString } from './display.js';
 import { cansee, couldsee, vision_recalc, vision_reset } from './vision.js';
 import { RANDOM_MONSTER_BY_NAME, SHOP_TYPES, STALKER_MONSTERS, add_to_container, add_to_minv, artifactDefinitionForName, artifactObjectName, enextoMonsterSpot, make_tutorial1_level, makemon, makeArtifactWishObject, maketrap, mkcorpstat, mklev, mkobj, mkobj_at, mksobj, monsterByRndName, morgueMonster, nameObjectAsArtifact, next_ident, object_display, potionIndexForRoll, resurrectWizardOfYendor, rndmonnum, scrollIndexForRoll, set_mimic_sym_rng, syncDungeonContext, u_on_dnstairs, u_on_rndspot, u_on_upstairs, wipe_engr_at, dropMonsterInventory as dropMonsterInventoryRaw, l_nhcore_init, getrumor, getbogusmon, level_difficulty, set_malign, somexyspace, fumaroles, createMonsterCorpseOrGlob, monsterCorpseDropSucceeds, monsterLeavesCorpseLikeDrop, movebubbles } from './mklev.js';
-import { ACCESSIBLE, A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_MAX, A_NEUTRAL, A_STR, A_WIS, ALTAR, AM_SANCTUM, AM_SHRINE, Amask2align, BC_BALL, BC_CHAIN, BEAR_TRAP, BLCORNER, BOLT_LIM, BRCORNER, CLOUD, COLNO, CORPSTAT_FEMALE, CORPSTAT_GENDER, CORPSTAT_HISTORIC, CORPSTAT_MALE, CORPSTAT_NEUTER, CORR, DB_FLOOR, DB_LAVA, DB_MOAT, DB_UNDER, DOOR, DRAWBRIDGE_UP, BURN, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, DUST, ENGRAVE, ENGR_BLOOD, FOUNTAIN, GRAVE, HEADSTONE, HWALL, ICE, IN_SIGHT, IS_AIR, IS_LAVA, IS_OBSTRUCTED, IS_POOL, IS_ROOM, IS_TREE, IS_WALL, In_endgame, In_quest, In_sokoban, In_V_tower, Is_airlevel, Is_astralevel, Is_botlevel, Is_earthlevel, Is_rogue_level, Is_stronghold, Is_waterlevel, LADDER, LAVAPOOL, LAVAWALL, MAGIC_PORTAL, MARK, MAX_EGG_HATCH_TIME, MM_EDOG, MM_NOCOUNTBIRTH, MM_NOMSG, MM_NOWAIT, MOAT, MORGUE, M_AP_TYPE, N_DIRS, NO_MINVENT, NORMAL_SPEED, OVERLOADED, P_BASIC, P_UNSKILLED, PIT, POOL, ROLLING_BOULDER_TRAP, ROOM, ROT_AGE, ROOMOFFSET, ROWNO, SCORR, SDOOR, SHOPBASE, SINK, SPIKED_PIT, STAIRS, STONE, TDWALL, TEMPLE, THRONE, TLCORNER, TRCORNER, TREE, TT_BEARTRAP, TT_BURIEDBALL, TT_INFLOOR, TT_LAVA, TT_PIT, TT_WEB, TUWALL, VAULT, VIBRATING_SQUARE, VWALL, WAND_BACKFIRE_CHANCE, WATER, WEB, WT_IRON_BALL_BASE, WT_IRON_BALL_INCR, W_NONDIGGABLE, ZAP_POS, isok, xdir, ydir } from './const.js';
+import { ACCESSIBLE, A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_MAX, A_NEUTRAL, A_STR, A_WIS, ALTAR, AM_SANCTUM, AM_SHRINE, Amask2align, BC_BALL, BC_CHAIN, BEAR_TRAP, BLCORNER, BOLT_LIM, BRCORNER, CLOUD, COLNO, CORPSTAT_FEMALE, CORPSTAT_GENDER, CORPSTAT_HISTORIC, CORPSTAT_MALE, CORPSTAT_NEUTER, CORR, DB_FLOOR, DB_LAVA, DB_MOAT, DB_UNDER, DOOR, DRAWBRIDGE_UP, BURN, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, DUST, ENGRAVE, ENGR_BLOOD, FOUNTAIN, GRAVE, HEADSTONE, HWALL, ICE, IN_SIGHT, IS_AIR, IS_LAVA, IS_OBSTRUCTED, IS_POOL, IS_ROOM, IS_TREE, IS_WALL, In_endgame, In_quest, In_sokoban, In_V_tower, Is_airlevel, Is_astralevel, Is_botlevel, Is_earthlevel, Is_rogue_level, Is_stronghold, Is_waterlevel, LADDER, LAVAPOOL, LAVAWALL, MAGIC_PORTAL, MARK, MAX_EGG_HATCH_TIME, MM_EDOG, MM_NOCOUNTBIRTH, MM_NOMSG, MM_NOWAIT, MOAT, MORGUE, M_AP_TYPE, N_DIRS, NO_MINVENT, NORMAL_SPEED, OVERLOADED, P_BASIC, P_UNSKILLED, PIT, POOL, ROLLING_BOULDER_TRAP, ROOM, ROOMOFFSET, ROWNO, SCORR, SDOOR, SHOPBASE, SINK, SPIKED_PIT, STAIRS, STONE, TDWALL, TEMPLE, THRONE, TLCORNER, TRCORNER, TREE, TT_BEARTRAP, TT_BURIEDBALL, TT_INFLOOR, TT_LAVA, TT_PIT, TT_WEB, TUWALL, VAULT, VIBRATING_SQUARE, VWALL, WAND_BACKFIRE_CHANCE, WATER, WEB, WT_IRON_BALL_BASE, WT_IRON_BALL_INCR, W_NONDIGGABLE, ZAP_POS, isok, xdir, ydir } from './const.js';
 import { d, rn1, rn2, rn2_on_display_rng, rnd, rnl, rnz } from './rng.js';
 import { CLR_BLACK, CLR_BLUE, CLR_BRIGHT_BLUE, CLR_BRIGHT_CYAN, CLR_BRIGHT_GREEN, CLR_BROWN, CLR_CYAN, CLR_GRAY, CLR_GREEN, CLR_MAGENTA, CLR_ORANGE, CLR_RED, CLR_YELLOW, CLR_WHITE, NO_COLOR } from './terminal.js';
 import { vfsDeleteFile, vfsReadFile, vfsWriteFile } from './storage.js';
@@ -20,9 +20,9 @@ import { advanceFireBreathRay, applyFireRayFountainTerrain, applyFireRayIceTerra
 import { dryupFountainAt, dryupFountainResultAt } from './fountain.js';
 import {
     applyColdRayTerrain, buriedBallToFreedom, buriedBallToPunishment,
-    freezeObjectInIcebox,
+    clearCorpseTimeout, corpseName, freezeObjectInIcebox,
     buryObjectsAt, findBuriedBallNear, isBuriedBallTrapActive, objectIceEffect, objIceEffectsAt,
-    removedFromIcebox, unearthObjectsAt,
+    removedFromIcebox, riderRevivalDelay, startCorpseTimeout, unearthObjectsAt, zombieFormNameForCorpse,
 } from './ice.js';
 import { createGasCloud } from './region.js';
 import { figurineLocationCheck, isFigurineObject, makeFigurineFamiliar, maybeAttachCarriedFigurineTimeout, stopFigurineTransformTimeout, syncCarriedFigurineTransformTimer } from './figurine.js';
@@ -10012,15 +10012,9 @@ function wishedCorpseOverrideMonster(monster) {
 }
 
 function restartWishedCorpseTimeout(otmp) {
-    const corpseName = otmp?.corpsenm?.name || '';
-    if (!corpseName) return;
-    if (corpseName === 'lichen' || corpseName === 'lizard') {
-        delete otmp.rotAwayTurn;
-        return;
-    }
-    const rotAdjust = game.in_mklev ? 25 : 10;
-    otmp.rotAwayTurn = (game.moves || 1) + ROT_AGE + rnz(rotAdjust) - rotAdjust;
-    otmp._corpse_restart_consumed = true;
+    startCorpseTimeout(otmp);
+    const name = otmp?.corpsenm?.name || '';
+    if (name !== 'lichen' && name !== 'lizard') otmp._corpse_restart_consumed = true;
 }
 
 function finishWishedCorpseDisplay(otmp) {
@@ -10045,14 +10039,19 @@ function makeWishedCorpseObject(corpseWish, qualifiers = {}) {
         return makeWishedGlobObject({ monsterName: monster.name });
 
     const otmp = mksobj(CORPSE, true, false);
+    if (qualifiers.zombifying) otmp.zombifying = true;
+    let restartedTimeout = false;
     if (monster) {
         otmp.spe = wishedCorpstatSpe(monster, resolved.requestedGender);
         const corpseMonster = wishedCorpseOverrideMonster(monster);
         if (corpseMonster) {
             otmp.corpsenm = corpseMonster;
             restartWishedCorpseTimeout(otmp);
+            restartedTimeout = true;
         }
     }
+    if (qualifiers.zombifying && !restartedTimeout)
+        startCorpseTimeout(otmp, { zombify: true });
     Object.assign(otmp, {
         cls: 'food',
         glyph: '%',
@@ -13212,6 +13211,261 @@ function collectGlobShrinkEntries(g = game) {
     return entries;
 }
 
+function collectCorpseTimerEntriesFromList(list, source, entries, {
+    parent = null,
+    root = null,
+    ancestors = [],
+    owner = null,
+    seen = new Set(),
+} = {}) {
+    for (const obj of list || []) {
+        if (!obj || seen.has(obj)) continue;
+        seen.add(obj);
+        const top = root || obj;
+        const actualSource = source === 'floor' && top?.buried ? 'buried' : source;
+        if (isCorpseItem(obj)) entries.push({
+            obj,
+            parent,
+            root: top,
+            ancestors: [...ancestors],
+            source: actualSource,
+            owner,
+        });
+        const contents = globContents(obj);
+        if (contents.length) {
+            collectCorpseTimerEntriesFromList(contents, source, entries, {
+                parent: obj,
+                root: top,
+                ancestors: [...ancestors, obj],
+                owner,
+                seen,
+            });
+        }
+    }
+}
+
+function collectCorpseTimerEntries(g = game) {
+    const entries = [];
+    const seen = new Set();
+    collectCorpseTimerEntriesFromList(g.inventory || [], 'inventory', entries, { seen });
+    collectCorpseTimerEntriesFromList(g.level?.objects || [], 'floor', entries, { seen });
+    collectCorpseTimerEntriesFromList(g.level?.buriedobjlist || [], 'buried', entries, { seen });
+    for (const mon of g.level?.monsters || [])
+        collectCorpseTimerEntriesFromList(mon.minvent || [], 'minvent', entries, { owner: mon, seen });
+    return entries;
+}
+
+const CORPSE_TIMER_ACTION_RANK = { revive: 0, zombify: 1, rot: 2 };
+
+function corpseTimerDue(entry, moves = game.moves || 0) {
+    const obj = entry?.obj;
+    const timers = [
+        ['rot', obj?.rotAwayTurn],
+        ['revive', obj?.reviveTurn],
+        ['zombify', obj?.zombifyTurn],
+    ].filter(([, turn]) => typeof turn === 'number' && turn <= moves);
+    if (!timers.length) return null;
+    timers.sort((a, b) => a[1] - b[1] || CORPSE_TIMER_ACTION_RANK[a[0]] - CORPSE_TIMER_ACTION_RANK[b[0]]);
+    return { action: timers[0][0], turn: timers[0][1] };
+}
+
+function corpseInIceBox(entry) {
+    return !!(entry?.obj?.inIceBox || entry?.ancestors?.some(isIceBoxObject));
+}
+
+function corpseTimerObjectName(obj) {
+    return pickupObjectName({ ...(obj || {}), line: '', quan: 1 });
+}
+
+function corpseTimerRotMessage(entry) {
+    const obj = entry.obj;
+    const name = corpseTimerObjectName(obj);
+    if (entry.source === 'inventory' && !entry.parent) return `Your ${name} rots away.`;
+    if (entry.source === 'inventory' && entry.parent) {
+        const container = articlelessObjectName(entry.root || entry.parent);
+        return `You smell something rotten in your ${container}.`;
+    }
+    if (entry.source === 'floor' && !entry.parent && floorObjectVisible(obj.ox, obj.oy))
+        return `The ${name} rots away.`;
+    return '';
+}
+
+function refreshCorpseTimerContainerWeights(entry) {
+    if (!entry?.parent) return;
+    refreshGlobEntryContainerWeights(entry);
+    if (entry.root) refreshTipContainerWeight(entry.root);
+}
+
+function removeCorpseTimerObject(entry) {
+    const obj = entry.obj;
+    rememberUsedUpShopBill(obj);
+    if (entry.parent) {
+        removeContainedObject(entry.parent, obj);
+        refreshCorpseTimerContainerWeights(entry);
+        return;
+    }
+    if (entry.source === 'inventory') {
+        game.inventory = (game.inventory || []).filter(item => item !== obj);
+        game._pet_food_scan_inventory = game.inventory;
+        return;
+    }
+    if (entry.source === 'floor') {
+        removeFloorObject(obj);
+        if (typeof obj.ox === 'number' && typeof obj.oy === 'number') newsym(obj.ox, obj.oy);
+        return;
+    }
+    if (entry.source === 'buried') {
+        if (game.level?.buriedobjlist)
+            game.level.buriedobjlist = game.level.buriedobjlist.filter(item => item !== obj);
+        if (game.level?.objects)
+            game.level.objects = game.level.objects.filter(item => item !== obj);
+        if (typeof obj.ox === 'number' && typeof obj.oy === 'number') newsym(obj.ox, obj.oy);
+        return;
+    }
+    if (entry.source === 'minvent' && entry.owner)
+        entry.owner.minvent = (entry.owner.minvent || []).filter(item => item !== obj);
+}
+
+function rotCorpseTimerEntry(entry, { silent = false } = {}) {
+    const messages = [];
+    if (!silent) {
+        const message = corpseTimerRotMessage(entry);
+        if (message) messages.push(message);
+    }
+    removeCorpseTimerObject(entry);
+    return messages;
+}
+
+function scheduleCorpseFallbackRot(obj) {
+    clearCorpseTimeout(obj);
+    const moves = game.moves || 0;
+    const age = obj?.age ?? moves;
+    const delay = Math.max(1, d(5, 50) - Math.max(0, moves - age));
+    obj.rotAwayTurn = moves + delay;
+}
+
+function corpseTimerMonsterData(obj) {
+    if (obj?.corpsenm?.name) return obj.corpsenm;
+    const name = corpseName(obj);
+    return name ? monsterByRndName(name) || RANDOM_MONSTER_BY_NAME.get(name) || null : null;
+}
+
+function isRiderCorpseTimerObject(obj) {
+    const name = corpseName(obj);
+    return !!(obj?.corpsenm?.rider || name === 'death' || name === 'pestilence' || name === 'famine');
+}
+
+function applyCorpseGenderToRevivedMonster(mon, obj) {
+    const gender = (obj?.spe || 0) & CORPSTAT_GENDER;
+    if (gender === CORPSTAT_MALE) mon.female = false;
+    else if (gender === CORPSTAT_FEMALE) mon.female = true;
+}
+
+function corpseTimerLocation(entry) {
+    if (entry.source === 'inventory') {
+        return { x: game.u?.ux || 0, y: game.u?.uy || 0, carried: true };
+    }
+    if (entry.source === 'minvent' && entry.owner) {
+        return { x: entry.owner.mx || 0, y: entry.owner.my || 0, carried: true };
+    }
+    const root = entry.root || entry.obj;
+    if (typeof root?.ox === 'number' && typeof root?.oy === 'number')
+        return { x: root.ox, y: root.oy, carried: false };
+    if (typeof entry.obj?.ox === 'number' && typeof entry.obj?.oy === 'number')
+        return { x: entry.obj.ox, y: entry.obj.oy, carried: false };
+    return { x: game.u?.ux || 0, y: game.u?.uy || 0, carried: true };
+}
+
+function corpseRevivalSpot(entry, data) {
+    const loc = corpseTimerLocation(entry);
+    if (loc.carried || entry.parent) return enextoMonsterSpot(loc.x, loc.y, data) || null;
+    return { x: loc.x, y: loc.y };
+}
+
+function corpseRevivalMessages(entry, mon, data) {
+    const messages = [];
+    if (entry.source === 'inventory') {
+        if (entry.parent) messages.push(`Something writhes out of your ${articlelessObjectName(entry.root || entry.parent)}!`);
+        else messages.push('You feel squirming in your backpack!');
+    } else if (entry.source === 'minvent') {
+        if (!game.u?.blind && couldsee(mon.mx, mon.my))
+            messages.push(`Something writhes out of the ${entry.owner?.data?.name || 'monster'}'s pack!`);
+    } else if (entry.source === 'floor' && !entry.parent && floorObjectVisible(mon.mx, mon.my)) {
+        messages.push(`${sentenceCase(monsterIndefiniteName(data?.name || 'monster'))} rises from the dead!`);
+    }
+    return messages;
+}
+
+function handleCorpseRevivalFailure(entry, { zombified = false } = {}) {
+    if (zombified) return rotCorpseTimerEntry(entry, { silent: true });
+    const obj = entry.obj;
+    if (isRiderCorpseTimerObject(obj) && rn2(99)) {
+        clearCorpseTimeout(obj);
+        obj.reviveTurn = (game.moves || 0) + riderRevivalDelay(obj, true);
+    } else {
+        scheduleCorpseFallbackRot(obj);
+    }
+    return [];
+}
+
+async function reviveCorpseTimerEntry(entry, data = corpseTimerMonsterData(entry.obj), options = {}) {
+    const obj = entry.obj;
+    clearCorpseTimeout(obj);
+    if (!data?.name || obj.norevive || isMonsterGenocidedName(data.name))
+        return handleCorpseRevivalFailure(entry, options);
+    const spot = corpseRevivalSpot(entry, data);
+    if (!spot) return handleCorpseRevivalFailure(entry, options);
+    const mon = await makemon(data, spot.x, spot.y, NO_MINVENT | MM_NOMSG | MM_NOCOUNTBIRTH | MM_NOWAIT);
+    if (!mon) return handleCorpseRevivalFailure(entry, options);
+
+    mon.mrevived = 1;
+    mon.mundetected = 0;
+    applyCorpseGenderToRevivedMonster(mon, obj);
+    removeCorpseTimerObject(entry);
+    newsym(mon.mx, mon.my);
+    return corpseRevivalMessages(entry, mon, data);
+}
+
+async function zombifyCorpseTimerEntry(entry) {
+    const obj = entry.obj;
+    const zombieName = zombieFormNameForCorpse(obj);
+    const data = zombieName ? monsterByRndName(zombieName) || RANDOM_MONSTER_BY_NAME.get(zombieName) : null;
+    clearCorpseTimeout(obj);
+    if (!data?.name || isMonsterGenocidedName(data.name))
+        return rotCorpseTimerEntry(entry, { silent: true });
+    obj.corpsenm = data;
+    obj.zombifying = false;
+    Object.assign(obj, object_display(obj));
+    return reviveCorpseTimerEntry(entry, data, { zombified: true });
+}
+
+async function processCorpseTimerEntry(entry) {
+    if (!isCorpseItem(entry.obj)) return [];
+    if (corpseInIceBox(entry)) {
+        clearCorpseTimeout(entry.obj);
+        return [];
+    }
+    const due = corpseTimerDue(entry);
+    if (!due) return [];
+    if (due.action === 'rot') return rotCorpseTimerEntry(entry);
+    if (due.action === 'zombify') return zombifyCorpseTimerEntry(entry);
+    return reviveCorpseTimerEntry(entry);
+}
+
+export async function processCorpseTimers(g = game) {
+    const moves = g.moves || 0;
+    const due = collectCorpseTimerEntries(g)
+        .map(entry => ({ entry, due: corpseTimerDue(entry, moves) }))
+        .filter(item => item.due)
+        .sort((a, b) => a.due.turn - b.due.turn
+            || CORPSE_TIMER_ACTION_RANK[a.due.action] - CORPSE_TIMER_ACTION_RANK[b.due.action]
+            || ((a.entry.obj.id || a.entry.obj.oid || 0) - (b.entry.obj.id || b.entry.obj.oid || 0)));
+    const messages = [];
+    for (const { entry } of due)
+        messages.push(...await processCorpseTimerEntry(entry));
+    return messages;
+}
+
 function globInIceBox(entry) {
     return !!(entry.obj?.inIceBox || entry.ancestors.some(isIceBoxObject));
 }
@@ -14831,8 +15085,10 @@ function applyWishedQualifiers(item, qualifiers) {
         if (wishedPoisonable(item)) item.opoisoned = ((game.u?.uluck || 0) + (game.u?.moreluck || 0)) >= 0;
         else if (itemClassKey(item) === 'food') item.age = 1;
     }
-    if (qualifiers.zombifying && (item.otyp === CORPSE || /\bcorpse$/.test(objectKindKey(item))))
+    if (qualifiers.zombifying && (item.otyp === CORPSE || /\bcorpse$/.test(objectKindKey(item)))) {
         item.zombifying = true;
+        if (!item.zombifyTurn) startCorpseTimeout(item, { zombify: true });
+    }
     if (qualifiers.wetness && objectKindKey(item) === 'towel') {
         item.wetness = qualifiers.wetness;
         item.spe = qualifiers.wetness;

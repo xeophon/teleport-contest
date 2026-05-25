@@ -2760,12 +2760,19 @@ Next concrete target:
   formula. Globs placed in ice boxes now stop their shrink timer, and removal
   starts a fresh C-shaped shrink timer. Focused guards, direct
   takeout/tip/put-in/stash/both-order/glob-timer/bag-horn-apply smokes,
-  focused replays, and full score remain exact. Remaining ice-box work is
+  focused replays, and full score remain exact.
+  Corpse timers now route through C-shaped `ROT_CORPSE`, `REVIVE_MON`, and
+  `ZOMBIFY_MON` deadlines: ordinary corpses rot through the shared move-loop
+  processor, trolls and Riders revive or fall back to delayed rot, zombifying
+  corpses become the matching zombie form before revival, and ice-box thaw
+  keeps the C non-ice-troll revival suppression. Direct timer smokes cover
+  floor/inventory rot, zombifying revival, ice-box thaw suppression and the
+  ice-troll exception, Rider timing, and norevive fallback; focused replays
+  and full score remain exact. Remaining ice-box work is
   nested `in_container()`/`out_container()` variants, full magic-bag
   `ohitmon()`/`thitu()` special cases and
   non-gold scatter shop billing refinements,
-  troll/Rider revive and zombify timers, forced ice-box destruction, and shop
-  billing edge cases.
+  forced ice-box destruction, and shop billing edge cases.
 - Remaining ice work outside this fire-ray terrain slice includes the broader
   full `spoteffects()`/`pooleffects()` hero liquid behavior, deeper
   `minliquid()` edges (life-saving or shape-shift survivor relocation,
