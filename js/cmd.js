@@ -24510,7 +24510,7 @@ export async function rhack(_cmd) {
             game._queued_message_after_more = `"Thank you for shopping in ${possessive} ${shopName}!"`;
             const message = selected.length === 1
                 ? `You bought ${selected[0].name} for ${selected[0].price} gold piece${selected[0].price === 1 ? '' : 's'}.`
-                : `You bought ${selected.length} items for ${total} gold pieces.`;
+                : `You bought ${selected.length} items for ${cashTotal} gold pieces.`;
             await setMessage(message, true);
             game.context.move = 1;
             return;

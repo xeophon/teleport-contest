@@ -1,0 +1,273 @@
+# C Parity Audit 02: Objects, Wishing, and `readobjnam`
+
+## Scope
+
+This audit compares upstream NetHack C object creation and wish parsing with the current JS implementation. It covers:
+
+- object instance shape and object-class metadata
+- `mkobj`, `mksobj`, class-specific initialization, and container contents
+- `readobjnam`, wishing, named/called/labeled objects, artifact creation and naming
+- object properties, erosion, BUC, charges, weight, `corpsenm`, and selected timers
+
+The goal is parity planning only. The recommendations below are implementation slices, not private-test deductions.
+
+## C reference map
+
+| Area | C refs | Notes |
+| --- | --- | --- |
+| Object instance fields | `nethack-c/upstream/include/obj.h:27`, `nethack-c/upstream/include/obj.h:35`, `nethack-c/upstream/include/obj.h:191` | `struct obj` carries identity, location, type, quantity, BUC, knowledge, erosion, timers, `oextra`, `ONAME`, `corpsenm`, age, weight, worn mask, and many flag aliases. |
+| Object-class metadata | `nethack-c/upstream/include/objclass.h:47`, `nethack-c/upstream/include/objclass.h:187` | `objects[]` and `obj_descr[]` drive names, descriptions, class, probabilities, material, weight, cost, chargeability, uniqueness, wishability, and object properties. |
+| Object constants/macros | `nethack-c/upstream/include/hack.h:1188`, `nethack-c/upstream/include/hack.h:1271` | Corpse/statue constants and `ONAME_*` origin flags, including wish/random/artifact naming provenance. |
+| Generic timers | `nethack-c/upstream/include/timeout.h:11`, `nethack-c/upstream/include/timeout.h:37` | Object timers cover rot, revival, zombification, burning, hatching, figurine transformation, and glob shrinking through a common timer layer. |
+| Random object class weights | `nethack-c/upstream/src/mkobj.c:36`, `nethack-c/upstream/src/mkobj.c:48`, `nethack-c/upstream/src/mkobj.c:58`, `nethack-c/upstream/src/mkobj.c:66` | Normal, container, Rogue-level, and Gehennom class-probability tables. |
+| Erosion on generated objects | `nethack-c/upstream/src/mkobj.c:175`, `nethack-c/upstream/src/mkobj.c:200` | Generated erosion/proofing/grease is conditional on material, artifact status, generation context, and damageability. |
+| `mkobj`/`mksobj` | `nethack-c/upstream/src/mkobj.c:267`, `nethack-c/upstream/src/mkobj.c:867`, `nethack-c/upstream/src/mkobj.c:1177` | Type selection is table-driven from `objects[]`; `mksobj_init` handles class-specific initialization; `mksobj` sets the canonical instance baseline and weight. |
+| Containers and placement | `nethack-c/upstream/src/mkobj.c:303`, `nethack-c/upstream/src/mkobj.c:2303`, `nethack-c/upstream/src/mkobj.c:2642` | Container contents, object placement, inventory/container insertion, weight, and timer/ice side effects are all integrated. |
+| Corpse/statue/object timers | `nethack-c/upstream/src/mkobj.c:1297`, `nethack-c/upstream/src/mkobj.c:1384`, `nethack-c/upstream/src/mkobj.c:1471`, `nethack-c/upstream/src/mkobj.c:2050`, `nethack-c/upstream/src/mkobj.c:2391` | `set_corpsenm`, corpse rot/revival/zombification, glob shrinking, `mkcorpstat`, and ice timer adjustments. |
+| Object weight/gold | `nethack-c/upstream/src/mkobj.c:1875`, `nethack-c/upstream/src/mkobj.c:2001` | Weight depends on object type, quantity, contents, corpse data, eaten state, globs, and gold quantity. |
+| Wish parser stages | `nethack-c/upstream/src/objnam.c:3241`, `nethack-c/upstream/src/objnam.c:3345`, `nethack-c/upstream/src/objnam.c:3932`, `nethack-c/upstream/src/objnam.c:4177`, `nethack-c/upstream/src/objnam.c:4239`, `nethack-c/upstream/src/objnam.c:4902` | Fuzzy matching, object ranges, aliases, qualifier preparse, charge suffixes, postparse passes, artifact matching, and final object construction. |
+| Wish prompt behavior | `nethack-c/upstream/src/zap.c:2575`, `nethack-c/upstream/src/zap.c:6313` | Wand luck gate, retry loop, random fallback after repeated bad wishes, conduct tracking, artifact origin, and delivery to inventory. |
+| Naming/artifacts | `nethack-c/upstream/src/do_name.c:59`, `nethack-c/upstream/src/do_name.c:372`, `nethack-c/upstream/src/artifact.c:150`, `nethack-c/upstream/src/artifact.c:171`, `nethack-c/upstream/src/artifact.c:328`, `nethack-c/upstream/src/artifact.c:473` | `ONAME`, duplicate artifact prevention, artifact eligibility, existence flags, fuzzy artifact lookup, and origin tracking. |
+
+## JS reference map
+
+| Area | JS refs | Notes |
+| --- | --- | --- |
+| Level object constants and artifacts | `js/mklev.js:54`, `js/mklev.js:1497`, `js/mklev.js:3775` | Local constants, artifact definitions, and artifact helper routines are embedded in level-generation code rather than a shared object registry. |
+| Generated erosion | `js/mklev.js:3754` | `mkobj_erosion_rolls` consumes RNG but does not assign erosion/proof/grease fields to an object. |
+| `mksobj`/`mksobj_init` | `js/mklev.js:3904`, `js/mklev.js:3962` | Object construction is partial and uses ad hoc object shapes and hand-coded type behavior. |
+| Container generation | `js/mklev.js:4277`, `js/mklev.js:4699`, `js/mklev.js:4721` | Box contents and add-to-container/minvent are simpler array operations without a C-like `where` model. |
+| Object display/placement/random generation | `js/mklev.js:4384`, `js/mklev.js:4456`, `js/mklev.js:4469`, `js/mklev.js:4647`, `js/mklev.js:4651` | Display naming, placement, `mkobj`, `mkobj_at`, and gold creation are split and partly hand-rolled. |
+| Corpse/statue/glob creation | `js/mklev.js:4765`, `js/mklev.js:4779`, `js/mklev.js:4808`, `js/mklev.js:4992`, `js/mklev.js:5037` | `set_corpsenm`, `mkcorpstat`, globs, and monster-death corpse/glob creation are implemented separately from C timer semantics. |
+| Startup inventory objects | `js/allmain.js:956`, `js/allmain.js:1145`, `js/allmain.js:1194`, `js/allmain.js:1239`, `js/allmain.js:1338` | Role inventory uses another object creation path and has its own knowledge, BUC, and display fields. |
+| Weight | `js/allmain.js:428`, `js/cmd.js:32999` | Weight is map/class based in startup and recomputed specially during wishing; it is not a single `weight()` equivalent. |
+| Wish constants and parser tables | `js/cmd.js:630`, `js/cmd.js:973`, `js/cmd.js:1034`, `js/cmd.js:1110`, `js/cmd.js:1372` | Wish classes, qualifier regexes, base object maps, namedesc bounds, and wand maps are local to `cmd.js`. |
+| Wish creation helpers | `js/cmd.js:9059`, `js/cmd.js:9083`, `js/cmd.js:9091`, `js/cmd.js:9391`, `js/cmd.js:9507`, `js/cmd.js:9815`, `js/cmd.js:9849`, `js/cmd.js:9891`, `js/cmd.js:10668` | Random wish fallback, requested enchantment, BUC, blank objects, monster/corpstat handling, statues, figurines, corpses/globs/eggs, and tins. |
+| Wish artifact path | `js/cmd.js:9247`, `js/cmd.js:15484`, `js/mklev.js:3775` | Conduct and artifact creation exist, but are not backed by C `ONAME`/`artiexist` provenance. |
+| Wish parser final path | `js/cmd.js:15056`, `js/cmd.js:15135`, `js/cmd.js:15157`, `js/cmd.js:15219`, `js/cmd.js:15317`, `js/cmd.js:15484`, `js/cmd.js:15508` | Qualifier application, quantity, named/called/labeled parsing, aliases, gems/groups, object construction, and the catch-all parser path. |
+| Wish prompt execution | `js/cmd.js:28540`, `js/cmd.js:32720` | Wand luck gate and wish input handling are in command code; invalid wish behavior differs from C. |
+| Object timers | `js/ice.js:167`, `js/ice.js:221`, `js/ice.js:285`, `js/cmd.js:13296`, `js/cmd.js:13491`, `js/cmd.js:13711` | Corpse timers, ice adjustment, and glob shrinking use object fields such as `rotAwayTurn`/`reviveTurn`/`zombifyTurn`/`globShrinkTurn`, not a generic timer queue. |
+
+## Current parity observations
+
+### Object model and metadata
+
+Upstream C has two strong centers of truth:
+
+- `objects[]`/`obj_descr[]` for object-type metadata.
+- `struct obj` for object-instance state.
+
+The JS implementation currently has several centers of truth:
+
+- `js/mklev.js` for level-generation object constants, artifact definitions, `mksobj`, and `mkobj`.
+- `js/cmd.js` for wishing object tables, parser helpers, artifact wish behavior, and display-time inventory delivery.
+- `js/allmain.js` for startup inventory object generation and weight/knowledge fields.
+- `js/ice.js` and `js/cmd.js` for corpse/glob timers.
+
+That split is the main source of drift. It makes random generation, wish parsing, display, inventory, timers, object weight, and artifact creation each responsible for reconstructing pieces of C object semantics.
+
+### `mkobj` and `mksobj`
+
+C `mkobj` selects an object class from probability tables, then selects a concrete type by walking `objects[]` probabilities. It delegates initialization to `mksobj`, which creates a canonical object and applies `mksobj_init` class behavior.
+
+JS mirrors the high-level class probability tables in `js/mklev.js:4469`, but concrete type selection is hand-coded per class. `mksobj` at `js/mklev.js:3904` creates a small JS object and `mksobj_init` at `js/mklev.js:3962` implements selected behavior with hard-coded type IDs and many local branches.
+
+This is close enough for some visible object generation, but it is not table-driven. It also means object metadata changes require updates in multiple JS tables and parser branches.
+
+### Object properties
+
+C object instances carry many properties that matter to game behavior:
+
+- BUC and knowledge flags: `cursed`, `blessed`, `known`, `dknown`, `bknown`, `rknown`, `cknown`, `lknown`, `tknown`.
+- damage/protection state: `oeroded`, `oeroded2`, `oerodeproof`, `greased`.
+- locks/traps/poison/light/recharge fields and aliases.
+- `age`, `owt`, `where`, `timed`, `oextra`, `ONAME`, `oartifact`, `corpsenm`, and `usecount`.
+
+JS objects use flexible field bags. Some fields exist on some paths, but there is no single normalization layer. For example, wished inventory objects are assembled in `js/cmd.js:32955`, level objects in `js/mklev.js:3904`, and startup inventory objects in `js/allmain.js:1239`. Those paths do not consistently assign `age`, `owt`, knowledge flags, `where`, timer linkage, `oextra`/`oname`, or C-compatible erosion fields.
+
+### Erosion and greasing
+
+C generated erosion is handled in `may_generate_eroded`/`mkobj_erosions` (`nethack-c/upstream/src/mkobj.c:175`, `nethack-c/upstream/src/mkobj.c:200`). It considers generation context, material, damageability, artifacts, body parts, and early inventory. It can set erosion, proofing, and grease.
+
+JS has `mkobj_erosion_rolls` at `js/mklev.js:3754`, but it only consumes RNG. It does not mutate an object, and at least one caller invokes it without passing an object. Wish-time erosion is handled separately by regex/profile logic in `js/cmd.js:15056`, so generated objects and wished objects can diverge from C in different ways.
+
+### Containers and object location
+
+C tracks object state through `where` and list-specific insertion helpers. Container insertion updates containment, weight, and object state (`nethack-c/upstream/src/mkobj.c:2642`). `mkbox_cnts` also has object-specific behavior, including icebox corpse timer freezing and bag-of-holding nested magic-bag/cancellation handling.
+
+JS stores level objects and container contents as arrays (`js/mklev.js:4456`, `js/mklev.js:4699`). This is simpler, but it does not model C `where`, `timed`, or container weight propagation. `mkbox_cnts` at `js/mklev.js:4277` is a partial implementation.
+
+### Corpse, egg, figurine, burn, and glob timers
+
+C object timers are generic and typed. Corpse rot/revival/zombification, egg hatching, figurine transformation, object burning, and glob shrinking are all represented through the timer subsystem (`nethack-c/upstream/include/timeout.h:37`).
+
+JS implements several timer concepts with direct fields:
+
+- corpse rot/revival/zombification through `rotAwayTurn`, `reviveTurn`, and `zombifyTurn` in `js/ice.js:221` and processing code in `js/cmd.js:13491`.
+- ice adjustment in `js/ice.js:285`.
+- glob shrinking through `globShrinkTurn` and `js/cmd.js:13711`.
+- figurine timeout attachment from the wish path at `js/cmd.js:32997`.
+
+This can support visible behavior, but it is not the same state model. C timer operations like "stop this object's timer", "object timer checks", and carrying timers across containment/location changes do not have one shared JS abstraction.
+
+### `readobjnam` and wishing
+
+C `readobjnam` is a staged parser:
+
+1. preparse counts, articles, BUC, enchantment, proofing, light/wet/blank/poison/trap/lock/grease/zombifying/erosion/partly-eaten/historic/diluted/empty/glob qualifiers;
+2. parse charge suffixes;
+3. resolve named/called/labeled/object-of phrases, monster corpstat forms, class names, alternates, object ranges, namedesc lookup, gems/glass, fruits, and artifact names;
+4. create the object with `mksobj` or `mkobj`;
+5. apply C wish restrictions and object fixups.
+
+JS has a substantial independent parser in `js/cmd.js`. It covers many common qualifiers and special cases, but it is built from local regexes, local object maps, namedesc bounds, and parser fallbacks. The most concrete behavioral gap is in `wishedBaseObjectFromName`: after many matching attempts, it falls back to creating a generic weapon named after the unmatched input (`js/cmd.js:15508`). C returns no object for unrecognized wishes, lets `makewish` retry up to five times, and only then falls back to a random object (`nethack-c/upstream/src/zap.c:6313`).
+
+### Wish modifiers and restrictions
+
+C wish handling restricts several requested properties:
+
+- enchantment requests are constrained by object class, luck, blessed/cursed state, and wand/tool charge rules.
+- quantity only applies under mergeability and random wish rules.
+- special items such as the real Amulet, Candelabrum, Bell, Book, magic lamp, and `oc_nowish` objects are substituted or rejected for non-wizards.
+- requested light sources are actually lit through placement and burn-timer setup.
+- random erosion from creation is cleared before requested erosion/proofing is applied.
+
+JS implements some of this, but not all:
+
+- `wishedSpeForItem` at `js/cmd.js:9083` mainly caps wands, so requested enchantment for weapons, armor, weapon-tools, and charged rings is not C-equivalent.
+- `applyWishedQuantity` at `js/cmd.js:15135` is local policy rather than the C `readobjnam` quantity rules.
+- non-wizard substitutions exist around `js/cmd.js:10240`, but they are parser-specific and not backed by `objects[].oc_nowish`.
+- light handling is field-based rather than connected to a generic `BURN_OBJECT` timer.
+- erosion is applied after wish parsing in `js/cmd.js:15056`, but generated erosion is already divergent.
+
+### Artifact naming and creation
+
+C artifact creation flows through `mk_artifact`, `artifact_exists`, `oname`, and `artifact_origin`. `ONAME` is the object name store, duplicate artifact naming is prevented, eligibility is checked, and provenance records whether an artifact was wished, randomly generated, gifted, named, placed by level definition, or found in bones.
+
+JS has artifact definitions and helpers in `js/mklev.js:1497` and `js/mklev.js:3775`, plus wish-side matching in `js/cmd.js:15484`. It tracks generated artifact names/counts enough to prevent some duplicates. It does not have a C-equivalent `ONAME`/`artiexist` model with full origin flags, `mk_artifact` eligibility, role/race/alignment/skill filtering, or per-artifact generation metadata.
+
+## Concrete parity gaps
+
+1. **No shared object metadata registry.** JS object type metadata is duplicated across `mklev.js`, `cmd.js`, and `allmain.js` instead of using a C-like `objects[]` table.
+
+2. **No canonical object constructor.** `mksobj`, wish creation, gold creation, monster corpse/glob creation, and startup inventory each create different object shapes. This causes inconsistent fields for knowledge, weight, age, timers, naming, and artifact state.
+
+3. **`mkobj` concrete type selection is not table-driven.** JS class weights mostly mirror C, but per-class type rolls are hand-coded and cannot naturally honor `objects[].oc_prob`, `oc_nowish`, `oc_unique`, `oc_charged`, material, or descriptions.
+
+4. **Generated erosion is a RNG sink, not behavior.** `mkobj_erosion_rolls` consumes randomness without setting `oeroded`, `oeroded2`, `oerodeproof`, or `greased`.
+
+5. **Weight is fragmented.** C has `weight()`; JS has startup weight maps, wish-time carrying recomputation, and per-object `owt` fields in selected cases.
+
+6. **Container state is incomplete.** JS lacks C-style `where`, timer membership, object list transitions, container weight propagation, and several `mkbox_cnts` special cases.
+
+7. **Object timers are not unified.** Corpse, glob, figurine, burn, and ice logic use direct fields and local processors instead of one object timer model. This makes `set_corpsenm`, containment changes, icebox freezing, and object destruction harder to make C-equivalent.
+
+8. **`readobjnam` has a non-C fallback.** Unrecognized wishes can become arbitrary named weapons. C retries and then randomizes after repeated failures.
+
+9. **Wish matching is not C fuzzy matching.** C `wishymatch`, ranges, namedesc lookup, alternate spellings, and artifact matching are more systematic than the JS local regex/table approach.
+
+10. **Wish property limits are partial.** Requested enchantment, charge, quantity, BUC, erosion, light, poison, lock/trap, and non-wishable substitutions are not all constrained by the C rules.
+
+11. **Artifact provenance is partial.** JS duplicate tracking exists, but not full `artiexist`/`artifact_origin`/`ONAME` semantics or `mk_artifact` eligibility.
+
+12. **Startup inventory is a separate creation system.** `allmain.js` duplicates object generation and knowledge setup instead of reusing the same object factory as level generation and wishing.
+
+## Recommended implementation slices
+
+### Slice 1: Shared object registry
+
+Create a JS object metadata registry that mirrors the public C object table semantics:
+
+- type id, class, name, description, probability, material, weight, cost
+- `oc_charged`, `oc_unique`, `oc_nowish`, merge behavior, and object properties
+- helper predicates for damageability, material erosion, poisonability, light sources, multigen objects, and wishability
+
+Then migrate `mkobj`, wish lookup, display naming, and weight to read from that registry instead of local maps.
+
+### Slice 2: Canonical object factory
+
+Add a single constructor/factory equivalent to the C `mksobj` baseline:
+
+- assigns id, type/class, quantity, age, `owt`, knowledge defaults, BUC defaults, `where`, `timed`, `corpsenm`, `oextra`/name fields, and artifact fields
+- exposes helpers for `set_corpsenm`, BUC mutation, knowledge mutation, weight refresh, and naming
+- keeps compatibility shims so existing callers can migrate incrementally
+
+Use it first from `mklev.js`, then from wish creation, then from startup inventory.
+
+### Slice 3: Table-driven `mkobj` and `mksobj_init`
+
+Move concrete random object selection to the registry probabilities. Port `mksobj_init` class-by-class:
+
+1. gems, food, corpses, tins, eggs, and globs
+2. potions, scrolls, spellbooks, rings, wands, and amulets
+3. tools and containers
+4. weapons and armor
+5. artifact chance and artifact-specific post-processing
+
+Fix generated erosion as part of this slice so it mutates objects and respects material, artifact, and generation context.
+
+### Slice 4: Object timer abstraction
+
+Introduce a small object timer layer with typed timers matching the C concepts:
+
+- corpse rot, Rider/troll revival, zombification
+- egg hatch
+- figurine transform
+- object burn
+- glob shrink
+
+Back it with JS turn fields if needed, but expose operations equivalent to starting, stopping, checking, and moving timers with objects. Then wire `ice.js`, `cmd.js` corpse processing, glob shrinking, and figurine handling through the shared layer.
+
+### Slice 5: Artifact state and naming
+
+Add artifact existence/provenance state before deepening wish parity:
+
+- `artifact_exists`, `artifact_name`, `oname`, and `artifact_origin`
+- duplicate prevention for named artifacts
+- origin flags for wished, random, named, gifted, level-defined, bones, and found
+- `mk_artifact` eligibility checks for base object, uniqueness, role/race/alignment/skill constraints, and special generated properties
+
+This makes random generation, naming, wishing, and display share the same artifact rules.
+
+### Slice 6: Port `readobjnam` in stages
+
+Replace the wish parser by stages instead of adding more one-off regexes:
+
+1. preparse articles, counts, BUC, enchantment, proofing, light/wet/blank/poison/trap/lock/grease/zombifying/erosion/partly-eaten/historic/diluted/empty/glob size
+2. parse charge/recharge suffixes
+3. implement `wishymatch`, alternate spellings, object ranges, namedesc lookup, and class-name lookup using the registry
+4. handle monster corpstat forms, tins, eggs, statues, figurines, globs, dragon armor, gems/glass, fruits, and artifact names
+5. return an explicit result kind: object, terrain/trap/furniture wizard wish, hands/nothing, or no match
+6. implement C retry/random fallback behavior in the wish prompt
+
+The key behavioral change is removing the arbitrary "unknown input becomes named weapon" fallback.
+
+### Slice 7: Wish finalization rules
+
+After parser resolution, port the C finalization rules:
+
+- non-wizard substitutions for real Amulet, Candelabrum, Bell, Book, magic lamp, and `oc_nowish`
+- enchantment and charge caps by object class, luck, blessed/cursed state, and special wand behavior
+- quantity limits for mergeable objects
+- requested erosion/proof after clearing generated erosion
+- requested light via burn timer
+- artifact conduct, disappearance/abuse rules, and gods-notice timing
+
+### Slice 8: Public-mechanics verification
+
+Add deterministic tests against documented upstream behavior, not private-test inference:
+
+- random object class/type snapshots for representative seeds
+- `mksobj_init` field snapshots by object class
+- wish-string matrix for BUC, enchantment, erosion, charges, naming, artifacts, corpses, globs, tins, eggs, statues, figurines, and invalid wishes
+- corpse/glob/egg/figurine/burn timer transitions
+- container contents, icebox behavior, and weight refresh
+
+## Suggested first cut
+
+The most leverage comes from two small foundations:
+
+1. a shared object registry with enough metadata for `mkobj`, wish lookup, and weight;
+2. a canonical object factory used by new code paths while old callers are migrated.
+
+Those two reduce the amount of duplicated parser and generator logic before attempting a full `readobjnam` port.
