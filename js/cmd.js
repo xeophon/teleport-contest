@@ -12829,6 +12829,50 @@ function removeObjectFromShopBill(shkp, obj) {
     return removed;
 }
 
+function shopBillableGold(obj) {
+    return obj?.otyp === GOLD_PIECE || obj?.cls === 'coin' || obj?.glyph === '$';
+}
+
+function addPickedObjectToShopBill(source, pickedItem) {
+    const x = source?.ox ?? game.u?.ux;
+    const y = source?.oy ?? game.u?.uy;
+    if (x == null || y == null || shopBillableGold(source)) return { shkp: null, price: 0, billEntry: null };
+    const shkp = shopkeeperForCostlySpot(x, y);
+    if (!shopkeeperInHisShop(shkp)) return { shkp: null, price: 0, billEntry: null };
+    const price = shopItemPrice(source, x, y);
+    if (!(price > 0)) return { shkp, price: 0, billEntry: null };
+    const billEntry = addObjectToShopBill(shkp, pickedItem, price);
+    if (!billEntry) {
+        pickedItem.unpaid = true;
+        pickedItem.unpaidPrice = price;
+        syncUnpaidBillLine(pickedItem);
+        shkp.billct = Math.max(0, Math.trunc(Number(shkp.billct || 0))) + 1;
+    }
+    return { shkp, price, billEntry };
+}
+
+function sellobjReturnUnpaidToShop(obj, x, y) {
+    if (!obj?.unpaid || shopBillableGold(obj) || globContents(obj).length) return false;
+    const shkp = shopkeeperForCostlySpot(x, y);
+    if (!shopkeeperInHisShop(shkp)) return false;
+    if (removeObjectFromShopBill(shkp, obj)) return true;
+    obj.unpaid = false;
+    obj.unpaidPrice = undefined;
+    obj.line = String(obj.line || '').replace(/ \(unpaid, \d+ zorkmids?\)/, '');
+    shkp.billct = Math.max(0, Math.trunc(Number(shkp.billct || 0)) - 1);
+    return true;
+}
+
+export const __shopBillingTestHooks = {
+    addObjectToShopBill,
+    addPickedObjectToShopBill,
+    removeObjectFromShopBill,
+    removeObjectFromShopBillById,
+    sellobjReturnUnpaidToShop,
+    shopBillEntryForObject,
+    shopBillEntryTotal,
+};
+
 function buriedMerchandiseDebtMessage(x, y, ignoredObject = null) {
     const shkp = shopkeeperForCostlySpot(x, y);
     if (!shkp || game._monster_moving) return '';
@@ -24129,10 +24173,14 @@ export async function rhack(_cmd) {
                     kind: obj.kind || pickupObjectName({ ...obj, quan: 1 }),
                     line: `${letter} - ${amount}`,
                 };
+                const { price: shopPrice } = addPickedObjectToShopBill(obj, pickedItem);
                 objectIceEffect(pickedItem, obj.ox, obj.oy, { onLevel: false });
                 game.inventory = [...(game.inventory || []), pickedItem];
                 maybeAttachCarriedFigurineTimeout(pickedItem);
-                messages.push(`${letter} - ${amount}.`);
+                const unpaidSuffix = shopPrice > 0
+                    ? ` (unpaid, ${shopPrice} zorkmid${shopPrice === 1 ? '' : 's'})`
+                    : '';
+                messages.push(`${letter} - ${amount}${unpaidSuffix}.`);
             }
             game._pet_food_scan_inventory = game.inventory;
             for (const obj of selected) {
@@ -33198,6 +33246,7 @@ export async function rhack(_cmd) {
             const consumedByFloor = earthFloorEffects(dropped, dropped.ox, dropped.oy, floorMessages, 'drop');
             if (!consumedByFloor) {
                 game.level.objects.push(dropped);
+                sellobjReturnUnpaidToShop(dropped, dropped.ox, dropped.oy);
                 objectIceEffect(dropped, dropped.ox, dropped.oy);
             }
             newsym(game.u?.ux || 0, game.u?.uy || 0);
@@ -37735,14 +37784,6 @@ export async function rhack(_cmd) {
             const skipShopQuote = game._skip_shop_quote_once != null && game._skip_shop_quote_once === objectId;
             if (game._skip_shop_quote_once != null && !skipShopQuote) game._skip_shop_quote_once = null;
             const shopPrice = shopItemPrice(objectHere);
-            let shopkeeperForPrice = null;
-            if (shopPrice > 0) {
-                const loc = game.level?.at(game.u?.ux, game.u?.uy);
-                const roomno = loc?.roomno || 0;
-                const room = levelRoomByRoomno(roomno);
-                shopkeeperForPrice = room?.resident || (game.level?.monsters || [])
-                    .find(mon => mon.isshk && mon.shoproom === roomno);
-            }
             if (shopPrice > 0 && !skipShopQuote) {
                 const honorifics = ['good', 'honored', 'most gracious', 'esteemed'];
                 const honorific = honorifics[rn2(4) || 1];
@@ -37807,12 +37848,10 @@ export async function rhack(_cmd) {
                 unpaidPrice: shopPrice > 0 ? shopPrice : undefined,
                 line: `${letter} - ${amount}${unpaidSuffix}`,
             };
-            const billEntry = shopkeeperForPrice ? addObjectToShopBill(shopkeeperForPrice, pickedItem, shopPrice) : null;
+            if (shopPrice > 0) addPickedObjectToShopBill(objectHere, pickedItem);
             objectIceEffect(pickedItem, game.u?.ux || 0, game.u?.uy || 0, { onLevel: false });
             game.inventory = [...(game.inventory || []), pickedItem];
             maybeAttachCarriedFigurineTimeout(pickedItem);
-            if (shopkeeperForPrice && !billEntry)
-                shopkeeperForPrice.billct = Math.max(shopkeeperForPrice.billct || 0, 1);
             game._pet_food_scan_inventory = game.inventory;
             game.level.objects = (game.level.objects || []).filter(obj => obj !== objectHere);
             newsym(game.u?.ux || 0, game.u?.uy || 0);
