@@ -72,6 +72,21 @@ function foodRation(id, letter = 'a') {
     };
 }
 
+function egg(id, letter = 'e', quan = 1) {
+    return {
+        id,
+        cls: 'food',
+        glyph: '%',
+        kind: 'egg',
+        actualKind: 'egg',
+        quan,
+        ox: 5,
+        oy: 5,
+        letter,
+        line: `${letter} - ${quan > 1 ? `${quan} eggs` : 'an egg'}`,
+    };
+}
+
 function goldPieces(id, quan, letter = '$') {
     return {
         id,
@@ -1454,6 +1469,103 @@ test('carried magic bag explosion converts unpaid contents destroyed by the blas
     assert.notEqual(blade.unpaid, true);
     assert.equal(shkp.debit, expected);
     assert.equal(shkp.billct, 0);
+});
+
+test('unpaid carried magic bag destroyed by its own explosion remains as a used-up bill', () => {
+    const { shkp } = installShopState();
+    initRng(1);
+    const source = bagOfHolding(6946);
+    const wand = cancellationWand(6947);
+    shop.addObjectToShopBill(shkp, source, 100);
+    game.u.uhp = 100;
+    game.inventory = [source, wand];
+
+    const result = shop.putInventoryObjectIntoContainer(source, wand);
+
+    assert.equal(result.bagGone, true);
+    assert.equal(game.inventory.includes(source), false);
+    assert.notEqual(source.unpaid, true);
+    assert.equal(shkp.debit || 0, 0);
+    assert.equal(shkp.robbed || 0, 0);
+    assert.equal(shkp.billct, 1);
+    const entry = shop.shopBillEntryForObject(shkp, source);
+    assert.ok(entry);
+    assert.equal(entry.useup, true);
+    assert.equal(shop.shopBillEntryTotal(entry), 100);
+    assert.equal(game._usedUpShopBills.some(bill => String(bill.bo_id) === String(source.id)), true);
+});
+
+test('carried magic bag scatter break preserves unpaid destroyed contents as used-up bills', () => {
+    const { shkp } = installShopState();
+    initRng(1);
+    const source = bagOfHolding(6948);
+    const wand = cancellationWand(6949);
+    const thrownEgg = putObjectInContainer(source, egg(6950));
+    shop.addObjectToShopBill(shkp, thrownEgg, 45);
+    game.u.uhp = 100;
+    game.inventory = [source, wand];
+
+    const result = shop.putInventoryObjectIntoContainer(source, wand);
+
+    assert.equal(result.bagGone, true);
+    assert.equal(game.level.objects.includes(thrownEgg), false);
+    assert.notEqual(thrownEgg.unpaid, true);
+    assert.equal(shkp.debit || 0, 0);
+    assert.equal(shkp.robbed || 0, 0);
+    assert.equal(shkp.billct, 1);
+    const entry = shop.shopBillEntryForObject(shkp, thrownEgg);
+    assert.ok(entry);
+    assert.equal(entry.useup, true);
+    assert.equal(shop.shopBillEntryTotal(entry), 45);
+    assert.equal(game._usedUpShopBills.some(bill => String(bill.bo_id) === String(thrownEgg.id)), true);
+});
+
+test('carried magic bag scatter splits unpaid stacks before preserving used-up bills', () => {
+    const { shkp } = installShopState();
+    initRng(1);
+    const source = bagOfHolding(6951);
+    const wand = cancellationWand(6952);
+    const eggs = putObjectInContainer(source, egg(6953, 'e', 2));
+    shop.addObjectToShopBill(shkp, eggs, 90);
+    game.u.uhp = 100;
+    game.inventory = [source, wand];
+
+    const result = shop.putInventoryObjectIntoContainer(source, wand);
+
+    assert.equal(result.bagGone, true);
+    assert.equal(source.contents.length, 0);
+    assert.equal(game.level.objects.some(obj => obj.kind === 'egg'), false);
+    assert.equal(shkp.debit || 0, 0);
+    assert.equal(shkp.billct, 2);
+    assert.equal(shkp.bill.every(entry => entry.useup), true);
+    assert.equal(shkp.bill.reduce((sum, entry) => sum + shop.shopBillEntryTotal(entry), 0), 90);
+    const originalEntry = shop.shopBillEntryForObject(shkp, eggs);
+    assert.ok(originalEntry);
+    assert.equal(originalEntry.useup, true);
+    assert.equal(shop.shopBillEntryTotal(originalEntry), 45);
+});
+
+test('unpaid trigger object destroyed by tipping into a carried magic bag remains as a used-up bill', () => {
+    const { shkp } = installShopState();
+    const source = sack(6954);
+    const target = bagOfHolding(6955);
+    const wand = putObjectInContainer(source, cancellationWand(6956));
+    shop.addObjectToShopBill(shkp, wand, 45);
+    game.u.uhp = 100;
+    game.inventory = [source, target];
+
+    const messages = shop.tipContainerIntoContainer(source, target);
+
+    assert.match(messages.join(' '), /magical explosion/);
+    assert.equal(game.inventory.includes(target), false);
+    assert.equal(source.contents.length, 0);
+    assert.notEqual(wand.unpaid, true);
+    assert.equal(shkp.debit || 0, 0);
+    assert.equal(shkp.billct, 1);
+    const entry = shop.shopBillEntryForObject(shkp, wand);
+    assert.ok(entry);
+    assert.equal(entry.useup, true);
+    assert.equal(shop.shopBillEntryTotal(entry), 45);
 });
 
 test('tipping contents from a carried container does not use shop-floor billing', () => {

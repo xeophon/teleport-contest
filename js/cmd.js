@@ -13894,6 +13894,15 @@ function markHeldMagicBagDeletedContentsUsedUp(obj, seen = new Set()) {
     }
 }
 
+function markObjectTreeShopBillsUsedUp(obj, seen = new Set()) {
+    if (!obj || seen.has(obj)) return false;
+    seen.add(obj);
+    let marked = false;
+    for (const child of globContents(obj))
+        marked = markObjectTreeShopBillsUsedUp(child, seen) || marked;
+    return markObjectShopBillUsedUp(obj) || marked;
+}
+
 function billHeldMagicBagLostItem(obj) {
     const owner = shopkeeperOwningBillEntry(obj);
     if (obj?.unpaid || owner.entry) {
@@ -18513,8 +18522,9 @@ function removeObjectFromWorld(obj) {
     game._pet_food_scan_inventory = game.inventory || [];
 }
 
-function destroyMagicBagItem(item, messages, { silent = false } = {}) {
+function destroyMagicBagItem(item, messages, { silent = false, usedUpShopBill = false } = {}) {
     if (!item) return;
+    if (usedUpShopBill) markObjectTreeShopBillsUsedUp(item);
     if (!silent) messages.push(magicBagItemGoneMessage(item));
     removeObjectFromWorld(item);
 }
@@ -18565,7 +18575,7 @@ function magicBagScatterBreaks(obj, sx, sy, messages) {
     const breakKind = impactDropBreakKind(obj);
     if (!breakKind && !forcedBreak) return false;
     if (floorObjectVisible(sx, sy)) magicBagScatterBreakMessage(obj, breakKind || 'shatter', messages);
-    destroyMagicBagItem(obj, messages, { silent: true });
+    destroyMagicBagItem(obj, messages, { silent: true, usedUpShopBill: true });
     return true;
 }
 
@@ -18573,13 +18583,18 @@ function splitMagicBagScatterStack(obj) {
     if ((obj?.quan || 1) <= 1) return obj;
     const splitCount = rnd(Math.min(obj.quan - 1, Number.MAX_SAFE_INTEGER));
     obj.quan -= splitCount;
-    return {
+    const splitObj = {
         ...obj,
         id: next_ident(),
         quan: splitCount,
         contents: Array.isArray(obj.contents) ? [...obj.contents] : obj.contents,
         cobj: Array.isArray(obj.cobj) ? [...obj.cobj] : obj.cobj,
     };
+    delete splitObj.o_id;
+    delete splitObj._shopBillObjectId;
+    if (obj.unpaid && !splitCarriedObjectShopBill(obj, splitObj, splitCount))
+        clearObjectShopBillState(splitObj);
+    return splitObj;
 }
 
 function magicBagScatterClosedDoor(x, y) {
@@ -18697,7 +18712,7 @@ function magicBagScatterHitMonster(mon, obj, x, y, messages) {
     }
 
     if (consumedOnHit) {
-        destroyMagicBagItem(obj, messages, { silent: true });
+        destroyMagicBagItem(obj, messages, { silent: true, usedUpShopBill: true });
         newsym(x, y);
         return { stopped: true, consumed: true };
     }
@@ -18724,7 +18739,7 @@ function magicBagScatterHitHero(obj, messages) {
     if (game.u.blind || game.flags?.verbose === false) messages.push(`You are hit${damage > 4 ? '!' : '.'}`);
     else messages.push(`You are hit by ${objectName}${damage > 4 ? '!' : '.'}`);
     if (magicBagScatterHitConsumesObject(obj)) {
-        destroyMagicBagItem(obj, messages, { silent: true });
+        destroyMagicBagItem(obj, messages, { silent: true, usedUpShopBill: true });
         return { hit: true, consumed: true };
     }
     if (damage > 0) {
@@ -18798,13 +18813,21 @@ function finishMagicBagScatterShopBilling(shopContext, messages) {
 }
 
 function scatterMagicBagObject(container, obj, sx, sy, messages, shopContext = null) {
-    const scatterObj = splitMagicBagScatterStack(obj);
-    if (scatterObj !== obj) {
-        scatterObj.container = null;
-        scatterObj.contained = false;
-    } else {
-        removeContainedObject(container, obj);
+    let remaining = obj;
+    while (remaining) {
+        const scatterObj = splitMagicBagScatterStack(remaining);
+        if (scatterObj !== remaining) {
+            scatterObj.container = null;
+            scatterObj.contained = false;
+        } else {
+            removeContainedObject(container, remaining);
+            remaining = null;
+        }
+        scatterOneMagicBagObject(scatterObj, sx, sy, messages, shopContext);
     }
+}
+
+function scatterOneMagicBagObject(scatterObj, sx, sy, messages, shopContext = null) {
     if (magicBagScatterBreaks(scatterObj, sx, sy, messages)) return;
 
     const dir = rn2(N_DIRS);
@@ -18880,9 +18903,9 @@ function damageHeroWithMagicBagExplosion(messages) {
 function explodeMagicBagTransfer(targetBag, triggerObj, messages, { tumble = false } = {}) {
     messages.push(magicBagExplosionMessage(triggerObj, tumble));
     if (isBagOfHoldingObject(triggerObj)) scatterMagicBagContents(triggerObj, messages);
-    destroyMagicBagItem(triggerObj, messages, { silent: true });
+    destroyMagicBagItem(triggerObj, messages, { silent: true, usedUpShopBill: true });
     scatterMagicBagContents(targetBag, messages);
-    destroyMagicBagItem(targetBag, messages, { silent: true });
+    destroyMagicBagItem(targetBag, messages, { silent: true, usedUpShopBill: true });
     damageHeroWithMagicBagExplosion(messages);
     return { bagGone: true, moved: true, message: '', messages };
 }
