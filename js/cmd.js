@@ -20,6 +20,7 @@ import { advanceFireBreathRay, applyFireRayFountainTerrain, applyFireRayIceTerra
 import { dryupFountainAt, dryupFountainResultAt } from './fountain.js';
 import {
     applyColdRayTerrain, buriedBallToFreedom, buriedBallToPunishment,
+    freezeObjectInIcebox,
     buryObjectsAt, findBuriedBallNear, isBuriedBallTrapActive, objectIceEffect, objIceEffectsAt,
     removedFromIcebox, unearthObjectsAt,
 } from './ice.js';
@@ -15381,6 +15382,258 @@ function compareContainerLootItems(a, b) {
 
 function isIceBoxObject(obj) {
     return !!obj && (obj.otyp === ICE_BOX || obj.kind === 'ice box' || objectKindKey(obj) === 'ice box');
+}
+
+function iceBoxPutClassTypes() {
+    return [...BAG_PUT_CLASS_TYPES, { key: 'other', label: 'Other Items', symbol: '*' }];
+}
+
+function iceBoxPutCategory(item) {
+    if (item.otyp === GOLD_PIECE || item.cls === 'coin' || item.glyph === '$') return 'coin';
+    if (item.cls === 'amulet' || item.otyp === AMULET_CLASS || item.glyph === '"') return 'amulet';
+    if (item.cls === 'weapon' || item.otyp === WEAPON_CLASS || item.glyph === ')') return 'weapon';
+    if (item.cls === 'armor' || item.otyp === ARMOR_CLASS || item.glyph === '[') return 'armor';
+    if (item.otyp === 'corpse' || item.otyp === CORPSE || item.otyp === FOOD_CLASS || item.cls === 'food' || item.glyph === '%') return 'food';
+    if (item.otyp === SCROLL_CLASS || item.cls === 'scroll' || item.glyph === '?') return 'scroll';
+    if (item.otyp === SPBOOK_NO_NOVEL || item.cls === 'spellbook' || item.glyph === '+') return 'spellbook';
+    if (item.otyp === POTION_CLASS || item.cls === 'potion' || item.glyph === '!') return 'potion';
+    if (item.otyp === RING_CLASS || item.cls === 'ring' || item.glyph === '=') return 'ring';
+    if (item.otyp === WAND_CLASS || item.cls === 'wand' || item.glyph === '/') return 'wand';
+    if (item.otyp === GEM_CLASS || item.cls === 'gem' || item.glyph === '*') return 'gem';
+    if (item.otyp === BOULDER || item.otyp === STATUE || item.cls === 'rock' || item.glyph === '`') return 'rock';
+    if (item === game.u?.uball || item.cls === 'ball' || item.glyph === '0') return 'ball';
+    if (item === game.u?.uchain || item.cls === 'chain' || item.glyph === '_') return 'chain';
+    if (BAG_OBJECT_TYPES.has(item.otyp) || item.otyp === ICE_BOX || item.otyp === OIL_LAMP || item.otyp === MAGIC_LAMP
+        || item.otyp === MIRROR || item.otyp === EXPENSIVE_CAMERA || item.otyp === STETHOSCOPE
+        || item.otyp === MAGIC_MARKER || item.cls === 'tool' || item.glyph === '(') return 'tool';
+    return 'other';
+}
+
+function buildIceBoxPutItems() {
+    const putItems = [];
+    if (game._goldCount) {
+        putItems.push({
+            item: { letter: '$', cls: 'coin', otyp: GOLD_PIECE, glyph: '$', quan: game._goldCount },
+            category: 'coin',
+        });
+    }
+    for (const item of game.inventory || []) {
+        if (item.letter === '$' || item.cls === 'coin' || item.glyph === '$') continue;
+        putItems.push({ item, category: iceBoxPutCategory(item) });
+    }
+    return putItems;
+}
+
+function iceBoxPutLetters() {
+    const letters = [];
+    if (game._goldCount) letters.push('$');
+    for (const item of game.inventory || []) {
+        if (item.letter === '$' || item.cls === 'coin' || item.glyph === '$') continue;
+        if (item.letter) letters.push(item.letter);
+    }
+    return letters.join('');
+}
+
+function clearIceBoxPutState() {
+    game._icebox_put_container = null;
+    game._icebox_put_type_choices = null;
+    game._icebox_put_type_selected = null;
+    game._icebox_put_items = null;
+    game._icebox_put_entries = null;
+    game._icebox_put_selected = null;
+    game._icebox_stash_letters = null;
+    game._overlay_lines = null;
+    game._overlay_hide_status = 0;
+}
+
+function iceBoxContainerAvailable(iceBox) {
+    return !!(iceBox && (game.level?.objects || []).includes(iceBox)
+        && iceBox.ox === game.u?.ux && iceBox.oy === game.u?.uy);
+}
+
+function iceBoxPutTypeChoices(putItems) {
+    const classTypes = iceBoxPutClassTypes();
+    const presentTypes = classTypes.filter(type => putItems.some(entry => entry.category === type.key));
+    const choices = [{ key: 'auto', letter: 'A', label: 'Auto-select every relevant item' }];
+    if (presentTypes.length > 1) choices.push({ key: 'all', letter: 'a', label: 'All types', row: 5 });
+    let row = presentTypes.length > 1 ? 6 : 5;
+    let letterIndex = presentTypes.length > 1 ? 1 : 0;
+    for (const type of presentTypes) {
+        const letter = 'abcdefghijklmnopqrstuvwxyz'[letterIndex++];
+        choices.push({ ...type, letter, row: row++ });
+    }
+    const extraChoices = [];
+    if (putItems.some(({ item }) => objectBucCategory(item) === 'blessed'))
+        extraChoices.push({ key: 'blessed', letter: 'B', label: 'Items known to be Blessed' });
+    if (putItems.some(({ item }) => objectBucCategory(item) === 'cursed'))
+        extraChoices.push({ key: 'cursed', letter: 'C', label: 'Items known to be Cursed' });
+    if (putItems.some(({ item }) => objectBucCategory(item) === 'uncursed'))
+        extraChoices.push({ key: 'uncursed', letter: 'U', label: 'Items known to be Uncursed' });
+    if (putItems.some(({ item }) => objectBucCategory(item) === 'unknown'))
+        extraChoices.push({ key: 'unknown', letter: 'X', label: 'Items of unknown Bless/Curse status' });
+    if (game._just_picked_gold && game._goldCount)
+        extraChoices.push({
+            key: 'justpicked',
+            letter: 'P',
+            label: `Just picked up: ${game._goldCount} gold piece${game._goldCount === 1 ? '' : 's'}`,
+        });
+    if (extraChoices.length) row++;
+    for (const choice of extraChoices) choices.push({ ...choice, row: row++ });
+    return choices;
+}
+
+function drawIceBoxPutTypeMenu() {
+    const choices = game._icebox_put_type_choices || [];
+    const selected = new Set(game._icebox_put_type_selected || []);
+    const rows = [
+        [0, 23, 'Put in what type of objects?', 1],
+        [2, 23, `A ${selected.has('auto') ? '+' : '-'} Auto-select every relevant item`],
+        [3, 27, '(ignored unless some other choices are also picked)'],
+    ];
+    for (const choice of choices) {
+        if (!choice.row) continue;
+        rows.push([choice.row, 23, `${choice.letter} ${selected.has(choice.key) ? '+' : '-'} ${choice.label}`]);
+    }
+    const endRow = Math.max(4, ...choices.map(choice => choice.row || 0)) + 1;
+    rows.push([endRow, 23, '(end)']);
+    setOverlay(rows, endRow + 1, false, 23);
+}
+
+function beginIceBoxPutIn(iceBox) {
+    const putItems = buildIceBoxPutItems();
+    if (!putItems.length) return false;
+    game._icebox_put_container = iceBox;
+    game._icebox_put_items = putItems;
+    game._icebox_put_type_choices = iceBoxPutTypeChoices(putItems);
+    game._icebox_put_type_selected = [];
+    drawIceBoxPutTypeMenu();
+    game._command_mode = 'iceBoxPutTypes';
+    return true;
+}
+
+function drawIceBoxPutObjectMenu() {
+    const entries = game._icebox_put_entries || [];
+    const selected = new Set(game._icebox_put_selected || []);
+    const rows = [[0, 41, 'Put in what?', 1]];
+    let row = 2;
+    let lastCategory = '';
+    for (const entry of entries) {
+        if (entry.category !== lastCategory) {
+            const type = iceBoxPutClassTypes().find(type => type.key === entry.category);
+            rows.push([row, 34, '┌─────']);
+            rows.push([row, 40, ' '.repeat(40)]);
+            rows.push([row++, 41, type?.label || 'Other Items', 1]);
+            lastCategory = entry.category;
+        }
+        entry.row = row;
+        const label = entry.letter === '$'
+            ? `${entry.amount} gold piece${entry.amount === 1 ? '' : 's'}`
+            : inventoryItemName(entry.item);
+        rows.push([row, 34, '│']);
+        rows.push([row++, 40, ` ${entry.letter} ${selected.has(entry.letter) ? '+' : '-'} ${label}`.padEnd(40, ' ')]);
+    }
+    rows.push([row, 34, '│']);
+    rows.push([row, 40, ' (end)'.padEnd(40, ' ')]);
+    setOverlay(rows, 2, false, 0);
+}
+
+function articlelessObjectName(item) {
+    return pickupObjectName(item).replace(/^(?:an? |the )/i, '');
+}
+
+function iceBoxPutRejectMessage(iceBox, item) {
+    if (!item) return "You don't have that object.";
+    if (item === game.u?.uball || item === game.u?.uchain) return 'You must be kidding.';
+    if (item === iceBox) return 'That would be an interesting topological exercise.';
+    if (isWornInventoryItem(item)) return 'You cannot refrigerate something you are wearing.';
+    const kind = objectKindKey(item);
+    if ((item.otyp === LOADSTONE || kind === 'loadstone') && item.cursed) {
+        item.bknown = true;
+        return `The stone${(item.quan || 1) === 1 ? '' : 's'} won't leave your person.`;
+    }
+    const actual = String(item.actualKind || '').toLowerCase();
+    if (item.realAmuletOfYendor || actual === 'amulet of yendor' || (!actual && kind === 'amulet of yendor')
+        || isBookOfTheDeadItem(item) || isBellOfOpeningItem(item) || isCandelabrumOfInvocationItem(item))
+        return `The ${articlelessObjectName(item)} cannot be confined in such trappings.`;
+    if (kind === 'leash' && item.leashmon) return 'The leash is attached to your pet.';
+    const boxLike = isIceBoxObject(item) || item.otyp === CHEST || item.otyp === LARGE_BOX
+        || kind === 'chest' || kind === 'large box';
+    const bigStatue = item.otyp === STATUE
+        && (item.big || item.bigStatue || item.large || item.corpsenm?.msize === 'large' || item.corpsenm?.size === 'large');
+    if (boxLike || item.otyp === BOULDER || kind === 'boulder' || bigStatue)
+        return `You cannot fit the ${articlelessObjectName(item)} into the ice box.`;
+    return '';
+}
+
+function clearContainerPutEquipmentState(item, name) {
+    const line = String(item.line || '');
+    if (item.wielded || /(?:weapon|wielded) in/.test(line) || line.includes('(wielded)')) {
+        item.wielded = false;
+        if (item.artifact === 'Mjollnir' || item.kind === 'mjollnir') game._wielded_mjollnir = false;
+    }
+    if (item.alternate || line.includes('alternate weapon')) item.alternate = false;
+    if (item.quivered || /at the ready|in quiver/.test(line)) item.quivered = false;
+    if (item.line) item.line = `${item.letter || '?'} - ${name}`;
+}
+
+function putInventoryObjectIntoIceBox(iceBox, item, amount = item?.quan || 1) {
+    if (!iceBoxContainerAvailable(iceBox)) return { moved: false, message: '' };
+    iceBox.contents ??= [];
+    iceBox.cknown = true;
+    if (item?.letter === '$' || item?.otyp === GOLD_PIECE || item?.cls === 'coin' || item?.glyph === '$') {
+        const gold = Math.min(Math.max(0, amount || 0), game._goldCount || 0);
+        if (!gold) return { moved: false, message: 'You have no gold to put in.' };
+        add_to_container(iceBox, { letter: '$', cls: 'coin', otyp: GOLD_PIECE, glyph: '$', quan: gold });
+        game._goldCount = Math.max(0, (game._goldCount || 0) - gold);
+        game._just_picked_gold = Math.max(0, (game._just_picked_gold || 0) - gold);
+        const money = (game.inventory || []).find(invItem => invItem.letter === '$' || invItem.cls === 'coin');
+        if (money && game._goldCount) {
+            money.quan = game._goldCount;
+            updateMoneyLine(money);
+        } else {
+            game.inventory = (game.inventory || []).filter(invItem => invItem.letter !== '$' && invItem.cls !== 'coin');
+        }
+        game._pet_food_scan_inventory = game.inventory;
+        return { moved: true, message: `You put ${gold} gold piece${gold === 1 ? '' : 's'} into the ice box.` };
+    }
+
+    const reject = iceBoxPutRejectMessage(iceBox, item);
+    if (reject) return { moved: false, message: reject };
+
+    const name = inventoryItemName(item);
+    const count = Math.min(Math.max(1, amount || 1), item.quan || 1);
+    const putItem = (item.quan || 1) > count ? { ...item, quan: count } : item;
+    clearContainerPutEquipmentState(putItem, name);
+    removeInventoryItem(item, count);
+    freezeObjectInIcebox(putItem);
+    add_to_container(iceBox, putItem);
+    game._pet_food_scan_inventory = game.inventory;
+    return { moved: true, message: `You put ${name} into the ice box.` };
+}
+
+async function showIceBoxPutMessages(results) {
+    const messages = results.map(result => result.message).filter(Boolean);
+    if (!messages.length) return;
+    const message = messages.join('  ');
+    if (message.length <= 79) {
+        await setMessage(message);
+    } else {
+        const first = messages.slice(0, 2).join('  ');
+        const rest = messages.slice(2).join('  ');
+        game._queued_message_after_more = rest || null;
+        game._queued_message_process_time_after_more = 1;
+        await setMessage(first, true);
+    }
+}
+
+async function beginIceBoxStash(iceBox) {
+    const letters = iceBoxPutLetters();
+    if (!letters) return false;
+    game._icebox_put_container = iceBox;
+    game._icebox_stash_letters = letters;
+    await setMessage(`What do you want to stash? [${getobjPromptLetters(letters)} or ?*]`);
+    game._command_mode = 'iceBoxStashObject';
+    return true;
 }
 
 function containerLootCategory(item) {
@@ -30919,6 +31172,22 @@ export async function rhack(_cmd) {
             game.context.move = 1;
             return;
         }
+        if (ch === 'i') {
+            if (iceBox) iceBox.cknown = true;
+            if (iceBox && beginIceBoxPutIn(iceBox)) return;
+            clearIceBoxPutState();
+            game._command_mode = null;
+            await setMessage("You don't have anything to put in.");
+            return;
+        }
+        if (ch === 's') {
+            if (iceBox) iceBox.cknown = true;
+            if (iceBox && (await beginIceBoxStash(iceBox))) return;
+            clearIceBoxPutState();
+            game._command_mode = null;
+            await setMessage("You don't have anything to stash.");
+            return;
+        }
         if (ch === '\x1b' || ch === 'q') {
             for (let row = 0; row < 12; row++) game.nhDisplay?.clearRow(row);
             game._overlay_lines = null;
@@ -30926,6 +31195,155 @@ export async function rhack(_cmd) {
             game._command_mode = null;
             game.context.move = 1;
         }
+        return;
+    }
+
+    if (game._command_mode === 'iceBoxPutTypes') {
+        const iceBox = game._icebox_put_container;
+        if (!iceBoxContainerAvailable(iceBox)) {
+            clearIceBoxPutState();
+            game._command_mode = null;
+            return;
+        }
+        const choices = game._icebox_put_type_choices || [];
+        const selected = new Set(game._icebox_put_type_selected || []);
+        const choice = choices.find(entry => entry.letter === ch || entry.symbol === ch);
+        if (ch === '\x1b' || ch === 'q') {
+            clearIceBoxPutState();
+            game._command_mode = null;
+            return;
+        }
+        if (ch === '@') {
+            for (const entry of choices) {
+                if (entry.key !== 'auto') selected.add(entry.key);
+            }
+            game._icebox_put_type_selected = [...selected];
+            drawIceBoxPutTypeMenu();
+            return;
+        }
+        if (choice) {
+            if (selected.has(choice.key)) selected.delete(choice.key);
+            else selected.add(choice.key);
+            game._icebox_put_type_selected = [...selected];
+            drawIceBoxPutTypeMenu();
+            return;
+        }
+        if (ch === '\r' || ch === '\n' || ch === ' ') {
+            if (!selected.size || (selected.size === 1 && selected.has('auto'))) {
+                clearIceBoxPutState();
+                game._command_mode = null;
+                await setMessage('No relevant items selected.');
+                return;
+            }
+            const items = (game._icebox_put_items || []).filter(({ item, category }) => {
+                if (selected.has('all')) return true;
+                if (selected.has(category)) return true;
+                const bucCategory = objectBucCategory(item);
+                if (selected.has('blessed') && bucCategory === 'blessed') return true;
+                if (selected.has('cursed') && bucCategory === 'cursed') return true;
+                if (selected.has('uncursed') && bucCategory === 'uncursed') return true;
+                return (selected.has('unknown') && bucCategory === 'unknown')
+                    || (selected.has('justpicked') && item.letter === '$' && game._just_picked_gold);
+            });
+            const entries = items.map(({ item, category }) => ({
+                item,
+                category,
+                letter: item.letter,
+                amount: item.letter === '$' && selected.has('justpicked')
+                    ? game._just_picked_gold || 0
+                    : item.quan || 1,
+            })).filter(entry => entry.amount > 0);
+            if (!entries.length) {
+                clearIceBoxPutState();
+                game._command_mode = null;
+                await setMessage('No relevant items selected.');
+                return;
+            }
+            game._icebox_put_entries = entries;
+            game._icebox_put_selected = [];
+            drawIceBoxPutObjectMenu();
+            game._command_mode = 'iceBoxPutObjects';
+            return;
+        }
+        return;
+    }
+
+    if (game._command_mode === 'iceBoxPutObjects') {
+        const iceBox = game._icebox_put_container;
+        if (!iceBoxContainerAvailable(iceBox)) {
+            clearIceBoxPutState();
+            game._command_mode = null;
+            return;
+        }
+        const entries = game._icebox_put_entries || [];
+        const selected = new Set(game._icebox_put_selected || []);
+        const entry = entries.find(item => item.letter === ch);
+        if (entry) {
+            if (selected.has(entry.letter)) selected.delete(entry.letter);
+            else selected.add(entry.letter);
+            game._icebox_put_selected = [...selected];
+            drawIceBoxPutObjectMenu();
+            return;
+        }
+        if (ch === '\r' || ch === '\n' || ch === ' ') {
+            const selectedEntries = entries.filter(item => selected.has(item.letter));
+            if (!selectedEntries.length) {
+                clearIceBoxPutState();
+                game._command_mode = null;
+                await setMessage('No relevant items selected.');
+                return;
+            }
+            const results = selectedEntries.map(selectedEntry =>
+                putInventoryObjectIntoIceBox(iceBox, selectedEntry.item, selectedEntry.amount));
+            const moved = results.some(result => result.moved);
+            clearIceBoxPutState();
+            game._command_mode = null;
+            if (moved) game.context.move = 1;
+            await showIceBoxPutMessages(results);
+            return;
+        }
+        if (ch === '\x1b' || ch === 'q') {
+            clearIceBoxPutState();
+            game._command_mode = null;
+        }
+        return;
+    }
+
+    if (game._command_mode === 'iceBoxStashObject') {
+        const iceBox = game._icebox_put_container;
+        if (!iceBoxContainerAvailable(iceBox)) {
+            clearIceBoxPutState();
+            game._command_mode = null;
+            return;
+        }
+        if (ch === '\x1b' || ch === ' ' || ch === '\r' || ch === '\n') {
+            clearIceBoxPutState();
+            game._command_mode = null;
+            await setMessage('Never mind.');
+            return;
+        }
+        if (ch === '?' || ch === '*') {
+            const rows = [[0, 40, 'Stash what?', 1]];
+            let row = 2;
+            for (const { item } of buildIceBoxPutItems()) {
+                const label = item.letter === '$'
+                    ? `${item.letter} - ${item.quan || 0} gold piece${(item.quan || 0) === 1 ? '' : 's'}`
+                    : `${item.letter || '?'} - ${inventoryItemName(item)}`;
+                rows.push([row++, 40, label]);
+                if (row >= 23) break;
+            }
+            rows.push([row, 40, '(end)']);
+            setOverlay(rows, Math.max(4, row + 1), false, 40);
+            return;
+        }
+        const item = ch === '$'
+            ? { letter: '$', cls: 'coin', otyp: GOLD_PIECE, glyph: '$', quan: game._goldCount || 0 }
+            : (game.inventory || []).find(invItem => invItem.letter === ch);
+        const result = putInventoryObjectIntoIceBox(iceBox, item, item?.quan || 1);
+        clearIceBoxPutState();
+        game._command_mode = null;
+        if (result.moved) game.context.move = 1;
+        await showIceBoxPutMessages([result]);
         return;
     }
 
