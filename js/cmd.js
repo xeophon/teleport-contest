@@ -175,6 +175,111 @@ function spendChargedToolUse(item, messages) {
     return true;
 }
 
+function heroHasSlipperyFingers() {
+    return !!(game.u?._glibTimeout || game.u?.glib || (game.u?._statusSuffix || '').includes('Slippery'));
+}
+
+function heroIsFumbling() {
+    return !!(game.u?.fumbling || game.u?._fumblingTimeout || (game.u?._statusSuffix || '').includes('Fumbling')
+        || (game.inventory || []).some(item => isWornArmorItem(item)
+            && String(item.kind || item.actualKind || '').toLowerCase() === 'fumble boots'));
+}
+
+function fingersOrGloves() {
+    return wornGlovesItem() ? 'gloves' : 'fingers';
+}
+
+function wornRingItem(item) {
+    return !!item && (item.cls === 'ring' || item.glyph === '=' || item.otyp === RING_CLASS)
+        && (item.worn || /\(on (?:left|right) hand\)/.test(String(item.line || '')));
+}
+
+function wornArmorInSlot(slot) {
+    return (game.inventory || []).find(item => isWornArmorItem(item) && armorSlot(item) === slot) || null;
+}
+
+function greaseInaccessibleBlockers(item) {
+    if (!item) return [];
+    if (isWornArmorItem(item)) {
+        const slot = armorSlot(item);
+        if (slot === 'body') {
+            const cloak = wornArmorInSlot('cloak');
+            return cloak && cloak !== item ? [cloak] : [];
+        }
+        if (slot === 'shirt') {
+            return [wornArmorInSlot('cloak'), wornArmorInSlot('body')]
+                .filter(blocker => blocker && blocker !== item);
+        }
+    }
+    if (wornRingItem(item)) {
+        const gloves = wornGlovesItem();
+        return gloves ? [gloves] : [];
+    }
+    return [];
+}
+
+function ownedEquipmentName(item) {
+    return `your ${inventoryItemName(item).replace(/^(?:an?|the) /i, '')}`;
+}
+
+function ownedEquipmentListName(items) {
+    const names = items.map(item => inventoryItemName(item).replace(/^(?:an?|the) /i, ''));
+    return `your ${names.join(' and ')}`;
+}
+
+function canGreaseObject(item) {
+    return !!item && item.cls !== 'coin' && item.letter !== '$'
+        && !greaseInaccessibleBlockers(item).length;
+}
+
+function canSelectGreaseObject(item) {
+    return !!item && item.cls !== 'coin' && item.letter !== '$';
+}
+
+function greaseTargetPrompt() {
+    const letters = inventoryLetters(canGreaseObject);
+    const display = letters ? `- ${getobjPromptLetters(letters)}` : '-';
+    return `What do you want to grease? [${display} or ?*]`;
+}
+
+function greaseInaccessibleMessage(item) {
+    const blockers = greaseInaccessibleBlockers(item);
+    if (!blockers.length) return '';
+    return `You need to take off ${ownedEquipmentListName(blockers)} to grease ${ownedEquipmentName(item)}.`;
+}
+
+function addHeroGlibTimeout(duration) {
+    if (!game.u) return;
+    game.u._glibTimeout = (game.u._glibTimeout || 0) + duration;
+}
+
+function dropCarriedObjectAtHero(item, messages = []) {
+    const dropped = {
+        ...item,
+        letter: undefined,
+        line: undefined,
+        wielded: false,
+        worn: false,
+        quivered: false,
+        ox: game.u?.ux || 0,
+        oy: game.u?.uy || 0,
+        glyph: item.glyph || (item.cls === 'weapon' ? ')' : item.cls === 'armor' ? '[' : item.cls === 'wand' ? '/'
+            : item.cls === 'ring' ? '=' : item.cls === 'potion' ? '!' : item.cls === 'scroll' ? '?'
+                : item.cls === 'spellbook' ? '+' : '('),
+        color: item.color ?? (item.cls === 'scroll' || item.cls === 'spellbook' ? CLR_WHITE : NO_COLOR),
+    };
+    if (Array.isArray(dropped.contents)) dropped.contents = [...dropped.contents];
+    if (Array.isArray(dropped.cobj)) dropped.cobj = [...dropped.cobj];
+    normalizeContainedObjectParents(dropped);
+    removeInventoryItem(item, item.quan || 1);
+    const placed = placeObjectOnFloorWithEffects(dropped, dropped.ox, dropped.oy, messages, 'drop');
+    if (placed && !sellobjReturnUnpaidToShop(dropped, dropped.ox, dropped.oy)) {
+        const shopSale = beginDroppedPaidObjectSale(dropped, dropped.ox, dropped.oy);
+        if (shopSale?.message) messages.push(shopSale.message);
+    }
+    return dropped;
+}
+
 function wandZapSpendMessages(usageMessages, chargeUse) {
     const messages = [...usageMessages];
     if (chargeUse?.wrested) messages.push('You wrest one last charge from the worn-out wand.');
@@ -34019,6 +34124,33 @@ export async function rhack(_cmd) {
             game._command_mode = 'cameraDirection';
             return;
         }
+        if (toolChargeKind(item) === 'can of grease' || name.includes('can of grease')) {
+            if (heroHasSlipperyFingers()) {
+                const messages = [`The ${pickupObjectName(item)} slips from your fingers.`];
+                dropCarriedObjectAtHero(item, messages);
+                await setMessage(messages.join('  '), messages.length > 1);
+                game.context.move = 1;
+                return;
+            }
+            if ((item.spe ?? 0) <= 0) {
+                await setMessage(`The ${pickupObjectName(item)} ${item.known ? 'is' : 'seems to be'} empty.`);
+                game.context.move = 1;
+                return;
+            }
+            if ((item.cursed || heroIsFumbling()) && !rn2(2)) {
+                const messages = [];
+                spendChargedToolUse(item, messages);
+                messages.push(`The ${pickupObjectName(item)} slips from your fingers.`);
+                dropCarriedObjectAtHero(item, messages);
+                await setMessage(messages.join('  '), messages.length > 1);
+                game.context.move = 1;
+                return;
+            }
+            game._apply_grease_letter = item.letter;
+            await setMessage(greaseTargetPrompt());
+            game._command_mode = 'greaseObject';
+            return;
+        }
         if (name.includes('magic marker')) {
             await setMessage('What do you want to write on? [*]');
             game._command_mode = 'markerWriteObject';
@@ -34296,6 +34428,77 @@ export async function rhack(_cmd) {
                 target.mblinded = Math.max(target.mblinded || 0, rnd(20));
                 if (!game.u?.blind && (game.viz_array?.[target.my]?.[target.mx] & IN_SIGHT))
                     messages.push(`The ${target.data?.name || 'monster'} is blinded by the flash!`);
+            }
+        }
+        await setMessage(messages.join('  '), messages.length > 1);
+        game.context.move = 1;
+        return;
+    }
+
+    if (game._command_mode === 'greaseInventoryOverlay') {
+        game._overlay_lines = null;
+        game._overlay_hide_status = 0;
+        if (ch === ' ' || ch === '\x1b' || ch === '\r' || ch === '\n') {
+            await setMessage(greaseTargetPrompt());
+            game._command_mode = 'greaseObject';
+            return;
+        }
+        if (ch !== '-' && !(game.inventory || []).some(invItem => invItem.letter === ch && canSelectGreaseObject(invItem))) {
+            game._keep_pending_message = 1;
+            return;
+        }
+        game._command_mode = 'greaseObject';
+    }
+
+    if (game._command_mode === 'greaseObject') {
+        if (ch === '\x1b' || ch === ' ' || ch === '\r' || ch === '\n') {
+            game._apply_grease_letter = null;
+            await setMessage('Never mind.');
+            game._command_mode = null;
+            return;
+        }
+        if (ch === '?' || ch === '*') {
+            setOverlay(inventoryOverlayLines(0, false, canGreaseObject), 24, true);
+            game._command_mode = 'greaseInventoryOverlay';
+            return;
+        }
+        const grease = (game.inventory || []).find(invItem => invItem.letter === game._apply_grease_letter);
+        const target = ch === '-' ? null
+            : (game.inventory || []).find(invItem => invItem.letter === ch && canSelectGreaseObject(invItem));
+        if (ch !== '-' && !target) {
+            game._topline_after_more = greaseTargetPrompt();
+            await setMessage("You don't have that object.", true);
+            return;
+        }
+        if (target) {
+            const inaccessible = greaseInaccessibleMessage(target);
+            if (inaccessible) {
+                game._apply_grease_letter = null;
+                game._command_mode = null;
+                await setMessage(inaccessible);
+                return;
+            }
+        }
+        game._apply_grease_letter = null;
+        game._command_mode = null;
+        if (!grease) return;
+        const messages = [];
+        if (!spendChargedToolUse(grease, messages)) {
+            await setMessage(`The ${pickupObjectName(grease)} ${grease.known ? 'is' : 'seems to be'} empty.`);
+            game.context.move = 1;
+            return;
+        }
+        if (ch === '-') {
+            addHeroGlibTimeout(rn1(11, 5));
+            messages.push(`You coat your ${fingersOrGloves()} with grease.`);
+        } else {
+            messages.push(`You cover ${inventoryItemName(target)} with a thick layer of grease.`);
+            target.greased = true;
+            target.line = normalInventoryLine({ ...target, line: '' });
+            if (target.unpaid) syncUnpaidBillLine(target);
+            if (grease.cursed) {
+                addHeroGlibTimeout(rn1(6, 10));
+                messages.push(`Some of the grease gets all over your ${fingersOrGloves()}.`);
             }
         }
         await setMessage(messages.join('  '), messages.length > 1);

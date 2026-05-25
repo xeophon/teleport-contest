@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { __shopBillingTestHooks as shop } from '../js/cmd.js';
+import { rhack, __shopBillingTestHooks as shop } from '../js/cmd.js';
 import { game, resetGame } from '../js/gstate.js';
 import { initRng } from '../js/rng.js';
 import { LAVAPOOL, ROOM, ROOMOFFSET, SHOPBASE } from '../js/const.js';
@@ -38,6 +38,20 @@ function installShopState() {
         at: () => ({ roomno }),
     };
     return { shkp };
+}
+
+function installCommandShopState() {
+    const state = installShopState();
+    Object.assign(game.u, {
+        uhunger: 900,
+        uhp: 10,
+        uhpmax: 10,
+        uen: 0,
+        uenmax: 0,
+        ulevel: 1,
+        uac: 10,
+    });
+    return state;
 }
 
 function dagger(id, letter = 'd') {
@@ -419,6 +433,92 @@ test('unpaid camera grease and tinning kit use charge one tenth price', () => {
         assert.equal(messages.length, 1, kind);
         assert.match(messages[0], /Usage fee, 10 zorkmids/, kind);
     }
+});
+
+test('applying unpaid can of grease bills usage and greases the selected object', async () => {
+    const { shkp } = installCommandShopState();
+    const grease = chargedTool(3094, 'can of grease', 'g', 4);
+    const target = dagger(3095, 'd');
+    game.inventory = [grease, target];
+    shop.addObjectToShopBill(shkp, grease, 100);
+
+    await rhack('a');
+
+    assert.equal(game._command_mode, 'applyObject');
+    assert.match(game._pending_message, /What do you want to use or apply\?/);
+
+    await rhack('g');
+
+    assert.equal(game._command_mode, 'greaseObject');
+    assert.equal(game._apply_grease_letter, 'g');
+    assert.match(game._pending_message, /What do you want to grease\? \[- gd or \?\*\]/);
+    assert.equal(grease.spe, 4);
+    assert.equal(shkp.debit || 0, 0);
+
+    await rhack('d');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(grease.spe, 3);
+    assert.equal(target.greased, true);
+    assert.match(target.line, /greased/);
+    assert.equal(shkp.debit, 10);
+    assert.equal(shkp.billct, 1);
+    const entry = shop.shopBillEntryForObject(shkp, grease);
+    assert.ok(entry);
+    assert.equal(entry.useup, false);
+    assert.equal(shop.shopBillEntryTotal(entry), 100);
+    assert.equal(grease.unpaid, true);
+    assert.match(game._pending_message, /Usage fee, 10 zorkmids/);
+    assert.match(game._pending_message, /You cover a dagger with a thick layer of grease/);
+});
+
+test('grease target selection rejects inaccessible worn equipment without spending a charge', async () => {
+    const { shkp } = installCommandShopState();
+    const grease = chargedTool(3096, 'can of grease', 'g', 4);
+    const cloak = {
+        id: 3097,
+        cls: 'armor',
+        glyph: '[',
+        kind: 'cloak of displacement',
+        actualKind: 'cloak of displacement',
+        quan: 1,
+        ox: 5,
+        oy: 5,
+        letter: 'c',
+        line: 'c - a +0 cloak of displacement (being worn)',
+        worn: true,
+    };
+    const suit = {
+        id: 3098,
+        cls: 'armor',
+        glyph: '[',
+        kind: 'ring mail',
+        actualKind: 'ring mail',
+        quan: 1,
+        ox: 5,
+        oy: 5,
+        letter: 'r',
+        line: 'r - a +0 ring mail (being worn)',
+        worn: true,
+    };
+    game.inventory = [grease, cloak, suit];
+    shop.addObjectToShopBill(shkp, grease, 100);
+
+    await rhack('a');
+    await rhack('g');
+
+    assert.equal(game._command_mode, 'greaseObject');
+    assert.match(game._pending_message, /What do you want to grease\? \[- gc or \?\*\]/);
+
+    await rhack('r');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 0);
+    assert.equal(grease.spe, 4);
+    assert.equal(suit.greased, undefined);
+    assert.equal(shkp.debit || 0, 0);
+    assert.match(game._pending_message, /You need to take off your \+0 cloak of displacement to grease your \+0 ring mail\./);
 });
 
 test('unpaid charged object with no remaining charges is not billed for usage', () => {
