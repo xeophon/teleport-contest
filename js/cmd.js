@@ -15951,6 +15951,31 @@ function iceBoxPutRejectMessage(iceBox, item) {
     return '';
 }
 
+function containerPutRejectMessage(container, item) {
+    if (!item) return "You don't have that object.";
+    if (isIceBoxObject(container)) return iceBoxPutRejectMessage(container, item);
+    if (item === game.u?.uball || item === game.u?.uchain) return 'You must be kidding.';
+    if (item === container) return 'That would be an interesting topological exercise.';
+    if (isWornInventoryItem(item)) return 'You cannot stash something you are wearing.';
+    const kind = objectKindKey(item);
+    if ((item.otyp === LOADSTONE || kind === 'loadstone') && item.cursed) {
+        item.bknown = true;
+        return `The stone${(item.quan || 1) === 1 ? '' : 's'} won't leave your person.`;
+    }
+    const actual = String(item.actualKind || '').toLowerCase();
+    if (item.realAmuletOfYendor || actual === 'amulet of yendor' || (!actual && kind === 'amulet of yendor')
+        || isBookOfTheDeadItem(item) || isBellOfOpeningItem(item) || isCandelabrumOfInvocationItem(item))
+        return `The ${articlelessObjectName(item)} cannot be confined in such trappings.`;
+    if (kind === 'leash' && item.leashmon) return 'The leash is attached to your pet.';
+    const boxLike = isIceBoxObject(item) || item.otyp === CHEST || item.otyp === LARGE_BOX
+        || kind === 'chest' || kind === 'large box';
+    const bigStatue = item.otyp === STATUE
+        && (item.big || item.bigStatue || item.large || item.corpsenm?.msize === 'large' || item.corpsenm?.size === 'large');
+    if (boxLike || item.otyp === BOULDER || kind === 'boulder' || bigStatue)
+        return `You cannot fit the ${articlelessObjectName(item)} into the ${tipContainerSimpleName(container)}.`;
+    return '';
+}
+
 function clearContainerPutEquipmentState(item, name) {
     const line = String(item.line || '');
     if (item.wielded || /(?:weapon|wielded) in/.test(line) || line.includes('(wielded)')) {
@@ -15995,6 +16020,44 @@ function putInventoryObjectIntoIceBox(iceBox, item, amount = item?.quan || 1) {
     add_to_container(iceBox, putItem);
     game._pet_food_scan_inventory = game.inventory;
     return { moved: true, message: `You put ${name} into the ice box.` };
+}
+
+function putInventoryObjectIntoBag(bag, item, amount = item?.quan || 1) {
+    if (!bag || !(game.inventory || []).includes(bag)) return { moved: false, message: '' };
+    bag.contents ??= [];
+    bag.cknown = true;
+    if (item?.letter === '$' || item?.otyp === GOLD_PIECE || item?.cls === 'coin' || item?.glyph === '$') {
+        const gold = Math.min(Math.max(0, amount || 0), game._goldCount || 0);
+        if (!gold) return { moved: false, message: 'You have no gold to put in.' };
+        add_to_container(bag, { letter: '$', cls: 'coin', otyp: GOLD_PIECE, glyph: '$', quan: gold });
+        game._goldCount = Math.max(0, (game._goldCount || 0) - gold);
+        game._just_picked_gold = Math.max(0, (game._just_picked_gold || 0) - gold);
+        const money = (game.inventory || []).find(invItem => invItem.letter === '$' || invItem.cls === 'coin');
+        if (money && game._goldCount) {
+            money.quan = game._goldCount;
+            updateMoneyLine(money);
+        } else {
+            game.inventory = (game.inventory || []).filter(invItem => invItem.letter !== '$' && invItem.cls !== 'coin');
+        }
+        game._pet_food_scan_inventory = game.inventory;
+        return { moved: true, message: `You put ${gold} gold piece${gold === 1 ? '' : 's'} into the bag.` };
+    }
+
+    const reject = containerPutRejectMessage(bag, item);
+    if (reject) return { moved: false, message: reject };
+
+    const name = inventoryItemName(item);
+    const count = Math.min(Math.max(1, amount || 1), item.quan || 1);
+    const putItem = (item.quan || 1) > count ? { ...item, quan: count } : item;
+    clearContainerPutEquipmentState(putItem, name);
+    if (isMagicBagObject(bag) && magicBagExplodesWithObject(putItem)) {
+        removeInventoryItem(item, count);
+        return explodeMagicBagTransfer(bag, putItem, []);
+    }
+    removeInventoryItem(item, count);
+    add_to_container(bag, putItem);
+    game._pet_food_scan_inventory = game.inventory;
+    return { moved: true, message: `You put ${name} into the bag.` };
 }
 
 async function showIceBoxMessageList(messages) {
@@ -16186,13 +16249,20 @@ function tipContainerToFloor(source) {
     if (!contents.length) return [tipContainerEmptyMessage(source)];
     const x = game.u?.ux ?? source.ox ?? 0;
     const y = game.u?.uy ?? source.oy ?? 0;
+    const cursedMagicBag = isMagicBagObject(source) && source.cursed;
     const names = contents.map(containerObjectPhrase).join(', ');
-    const messages = [contents.length === 1
-        ? `An object spills out: ${names}.`
-        : `Objects spill out: ${names}.`];
+    const messages = [cursedMagicBag
+        ? (contents.length === 1 ? 'An object spills out.' : 'Objects spill out.')
+        : contents.length === 1
+            ? `An object spills out: ${names}.`
+            : `Objects spill out: ${names}.`];
     for (const obj of contents) {
         removeContainedObject(source, obj);
         thawObjectTippedFromSource(source, obj);
+        if (cursedMagicBag && !rn2(13)) {
+            destroyMagicBagItem(obj, messages);
+            continue;
+        }
         placeTippedObjectOnFloor(obj, x, y, messages);
     }
     if (Array.isArray(source.contents)) source.contents.length = 0;
@@ -16327,6 +16397,113 @@ function prepareTippedObjectForContainer(obj) {
 
 function refreshTipContainerWeight(container) {
     if (isGlobWeightContainerObject(container)) container.owt = globObjectWeight(container);
+}
+
+function isBagOfHoldingObject(obj) {
+    return !!obj && (obj.otyp === BAG_OF_HOLDING || objectKindKey(obj) === 'bag of holding');
+}
+
+function isMagicBagObject(obj) {
+    return isBagOfHoldingObject(obj) || isBagOfTricksObject(obj);
+}
+
+function isWandOfCancellationObject(obj) {
+    return !!obj && (obj.wandIndex === WAND_NAME_TO_INDEX.get('cancellation')
+        || wandTypeName(obj) === 'cancellation'
+        || objectKindKey(obj) === 'wand of cancellation'
+        || objectKindKey(obj) === 'cancellation');
+}
+
+function magicBagExplodesWithObject(obj, depth = 0) {
+    if ((isWandOfCancellationObject(obj) || isBagOfTricksObject(obj)) && (obj.spe ?? 0) <= 0)
+        return false;
+    if ((isMagicBagObject(obj) || isWandOfCancellationObject(obj))
+        && rn2(1 << Math.min(depth, 7)) <= depth)
+        return true;
+    for (const content of liquidFlowContainerContents(obj))
+        if (magicBagExplodesWithObject(content, depth + 1)) return true;
+    return false;
+}
+
+function magicBagItemGoneMessage(item) {
+    const subject = upstartText(containerObjectPhrase(item));
+    const verb = (item.quan || 1) > 1 ? 'have' : 'has';
+    return `${subject} ${verb} vanished!`;
+}
+
+function removeObjectFromWorld(obj) {
+    if (!obj) return;
+    if ((game.inventory || []).includes(obj))
+        game.inventory = (game.inventory || []).filter(item => item !== obj);
+    if ((game.level?.objects || []).includes(obj)) {
+        const x = obj.ox;
+        const y = obj.oy;
+        removeFloorObject(obj);
+        if (x != null && y != null) newsym(x, y);
+    }
+    stopCarriedFigurineTimerOnLeave(obj);
+    game._pet_food_scan_inventory = game.inventory || [];
+}
+
+function destroyMagicBagItem(item, messages, { silent = false } = {}) {
+    if (!item) return;
+    if (!silent) messages.push(magicBagItemGoneMessage(item));
+    removeObjectFromWorld(item);
+}
+
+function magicBagContentsLoss(container, messages, { silent = false } = {}) {
+    if (!isMagicBagObject(container) || !container.cursed) return 0;
+    let lost = 0;
+    for (const obj of [...liquidFlowContainerContents(container)]) {
+        if (rn2(13)) continue;
+        removeContainedObject(container, obj);
+        destroyMagicBagItem(obj, messages, { silent });
+        lost++;
+    }
+    refreshTipContainerWeight(container);
+    return lost;
+}
+
+function scatterMagicBagContents(container, messages) {
+    const x = game.u?.ux ?? container?.ox ?? 0;
+    const y = game.u?.uy ?? container?.oy ?? 0;
+    for (const obj of [...liquidFlowContainerContents(container)]) {
+        removeContainedObject(container, obj);
+        if (!rn2(13)) {
+            destroyMagicBagItem(obj, messages, { silent: true });
+            continue;
+        }
+        placeTippedObjectOnFloor(obj, x, y, messages);
+    }
+    clearLiquidFlowContainerContents(container);
+}
+
+function magicBagExplosionMessage(obj, tumble = false) {
+    if (tumble) {
+        const subject = containerObjectPhrase(obj);
+        const verb = (obj.quan || 1) > 1 ? 'tumble' : 'tumbles';
+        return `As ${subject} ${verb} inside, you are blasted by a magical explosion!`;
+    }
+    return `As you put ${inventoryItemName(obj)} inside, you are blasted by a magical explosion!`;
+}
+
+function damageHeroWithMagicBagExplosion(messages) {
+    if (!game.u) return;
+    game.u.uhp = Math.max(0, (game.u.uhp || 0) - d(6, 6));
+    if ((game.u.uhp || 0) <= 0) {
+        game._death_cause = 'killed by a magical explosion';
+        messages.push('You die...');
+    }
+}
+
+function explodeMagicBagTransfer(targetBag, triggerObj, messages, { tumble = false } = {}) {
+    messages.push(magicBagExplosionMessage(triggerObj, tumble));
+    if (isBagOfHoldingObject(triggerObj)) scatterMagicBagContents(triggerObj, messages);
+    destroyMagicBagItem(triggerObj, messages, { silent: true });
+    scatterMagicBagContents(targetBag, messages);
+    destroyMagicBagItem(targetBag, messages, { silent: true });
+    damageHeroWithMagicBagExplosion(messages);
+    return { bagGone: true, moved: true, message: '', messages };
 }
 
 function visibleCreatedMonster(mon) {
@@ -16504,13 +16681,22 @@ function tipContainerIntoContainer(source, targetBox) {
     source.cknown = true;
     if (!contents.length) return [tipContainerEmptyMessage(source)];
     targetBox.contents ??= [];
+    const cursedMagicBag = isMagicBagObject(source) && source.cursed;
     const messages = [contents.length === 1
         ? `An object tumbles into ${tipTargetPhrase(targetBox)}.`
         : `Objects tumble into ${tipTargetPhrase(targetBox)}.`];
     for (const obj of contents) {
         removeContainedObject(source, obj);
         thawObjectTippedFromSource(source, obj);
+        if (cursedMagicBag && !rn2(13)) {
+            destroyMagicBagItem(obj, messages);
+            continue;
+        }
         prepareTippedObjectForContainer(obj);
+        if (isMagicBagObject(targetBox) && magicBagExplodesWithObject(obj)) {
+            explodeMagicBagTransfer(targetBox, obj, messages, { tumble: true });
+            break;
+        }
         add_to_container(targetBox, obj);
     }
     if (Array.isArray(source.contents)) source.contents.length = 0;
@@ -30785,8 +30971,20 @@ export async function rhack(_cmd) {
             return;
         }
         if (/bag|sack/.test(name)) {
+            const lossMessages = [];
+            if (magicBagContentsLoss(item, lossMessages)) {
+                item.cknown = true;
+                game.context.move = 1;
+            }
             game._container_letter = item.letter;
             setOverlay(LOOT_BAG_MENU_LINES, 11);
+            if (lossMessages.length) {
+                const lossText = lossMessages.join('  ');
+                game._pending_message = lossText;
+                game._last_pline_message = lossText;
+                game._message_more = lossMessages.length > 1 ? 1 : 0;
+                game._keep_pending_message = 1;
+            }
             game._command_mode = 'bagAction';
             return;
         }
@@ -31150,7 +31348,7 @@ export async function rhack(_cmd) {
                 extraChoices.push({ key: 'cursed', letter: 'C', label: 'Items known to be Cursed' });
             if (putItems.some(({ item }) => objectBucCategory(item) === 'uncursed'))
                 extraChoices.push({ key: 'uncursed', letter: 'U', label: 'Items known to be Uncursed' });
-            if (putItems.some(({ item }) => objectBucCategory(item) === 'unknown' || item === bag))
+            if (putItems.some(({ item }) => objectBucCategory(item) === 'unknown'))
                 extraChoices.push({ key: 'unknown', letter: 'X', label: 'Items of unknown Bless/Curse status' });
             if (game._just_picked_gold && game._goldCount)
                 extraChoices.push({
@@ -31334,29 +31532,17 @@ export async function rhack(_cmd) {
                     return;
                 }
                 const messages = [];
+                let moved = false;
+                let bagGone = false;
                 for (const selectedEntry of selectedEntries) {
-                    if (selectedEntry.letter === '$') {
-                        const gold = Math.min(selectedEntry.amount || 0, game._goldCount || 0);
-                        add_to_container(bag, { letter: '$', cls: 'coin', otyp: GOLD_PIECE, glyph: '$', quan: gold });
-                        game._goldCount = Math.max(0, (game._goldCount || 0) - gold);
-                        game._just_picked_gold = Math.max(0, (game._just_picked_gold || 0) - gold);
-                        const money = (game.inventory || []).find(item => item.letter === '$' || item.cls === 'coin');
-                        if (money && game._goldCount) {
-                            money.quan = game._goldCount;
-                            updateMoneyLine(money);
-                        } else {
-                            game.inventory = (game.inventory || []).filter(item => item.letter !== '$' && item.cls !== 'coin');
-                        }
-                        messages.push(`You put ${gold} gold piece${gold === 1 ? '' : 's'} into the bag.`);
-                    } else {
-                        stopCarriedFigurineTimerOnLeave(selectedEntry.item);
-                        game.inventory = (game.inventory || []).filter(item => item !== selectedEntry.item);
-                        updateWornDisplacement();
-                        add_to_container(bag, selectedEntry.item);
-                        messages.push(`You put ${inventoryItemName(selectedEntry.item)} into the bag.`);
+                    const result = putInventoryObjectIntoBag(bag, selectedEntry.item, selectedEntry.amount);
+                    moved ||= !!result.moved;
+                    messages.push(...(result.messages || (result.message ? [result.message] : [])));
+                    if (result.bagGone) {
+                        bagGone = true;
+                        break;
                     }
                 }
-                await setMessage(messages[0]);
                 game._container_letter = null;
                 game._bag_put_entries = null;
                 game._bag_put_selected = null;
@@ -31364,7 +31550,8 @@ export async function rhack(_cmd) {
                 game._bag_put_type_selected = null;
                 game._bag_put_items = null;
                 game._command_mode = null;
-                game.context.move = 1;
+                if (moved || bagGone) game.context.move = 1;
+                await showIceBoxMessageList(messages);
                 return;
             }
             if (ch === '\x1b' || ch === 'q') {
@@ -31378,31 +31565,20 @@ export async function rhack(_cmd) {
             return;
         }
         if (ch === '$') {
-            const gold = game._goldCount || 0;
-            if (!gold) {
-                await setMessage('You have no gold to put in.');
-                game._command_mode = null;
-                return;
-            }
-            add_to_container(bag, { letter: '$', cls: 'coin', otyp: GOLD_PIECE, glyph: '$', quan: gold });
-            game._goldCount = 0;
-            game.inventory = (game.inventory || []).filter(item => item.letter !== '$' && item.cls !== 'coin');
-            await setMessage(`You put ${gold} gold piece${gold === 1 ? '' : 's'} into the bag.`);
+            const result = putInventoryObjectIntoBag(bag, { letter: '$', cls: 'coin', otyp: GOLD_PIECE, glyph: '$', quan: game._goldCount || 0 }, game._goldCount || 0);
             game._container_letter = null;
             game._command_mode = null;
-            game.context.move = 1;
+            if (result.moved) game.context.move = 1;
+            await showIceBoxMessageList(result.messages || (result.message ? [result.message] : []));
             return;
         }
-        const item = (game.inventory || []).find(invItem => invItem.letter === ch && invItem !== bag);
+        const item = (game.inventory || []).find(invItem => invItem.letter === ch);
         if (item) {
-            stopCarriedFigurineTimerOnLeave(item);
-            game.inventory = (game.inventory || []).filter(invItem => invItem !== item);
-            updateWornDisplacement();
-            add_to_container(bag, item);
-            await setMessage(`You put ${inventoryItemName(item)} into the bag.`);
+            const result = putInventoryObjectIntoBag(bag, item, item?.quan || 1);
             game._container_letter = null;
             game._command_mode = null;
-            game.context.move = 1;
+            if (result.moved) game.context.move = 1;
+            await showIceBoxMessageList(result.messages || (result.message ? [result.message] : []));
             return;
         }
         await setMessage("You don't have that object.");

@@ -2713,6 +2713,15 @@ Next concrete target:
   charge, creates inherited blessed/cursed food or potion into inventory,
   reports the spill and inventory line, fixes the food spill verb, and reveals
   unknown horn appearances when C would make the type known.
+  Carried bag put-in now runs through a shared `in_container()`-style gate for
+  self-insertion, worn gear, loadstones, invocation items, attached leashes,
+  boxes, boulders, and oversized statues, while preserving C's type-menu shape.
+  Cursed bags of holding and bags of tricks now apply the 1-in-13 content loss
+  on apply/open and as `#tip` sources, and dangerous transfers into magic bags
+  can trigger the C `mbag_explodes()` shape for wands of cancellation, nested
+  magic bags, and charged bags of tricks. Direct smokes cover carried wand
+  insertion explosions, cursed-bag vanish messages, and `#tip` into a carried
+  bag of holding.
   Generated ice-box corpses are explicitly frozen at creation while the generic
   `add_to_container()` helper remains neutral like C; the floor put-in/stash
   paths freeze selected inventory objects immediately before insertion, and
@@ -2723,7 +2732,7 @@ Next concrete target:
   takeout/tip/put-in/stash/both-order/glob-timer/bag-horn-apply smokes,
   focused replays, and full score remain exact. Remaining ice-box work is
   nested `in_container()`/`out_container()` variants, bag-of-tricks/horn shop
-  usage billing, cursed/exploding magic-bag transfer details,
+  usage billing, exact magic-bag explosion scatter placement and shop billing,
   troll/Rider revive and zombify timers, forced ice-box destruction, and shop
   billing edge cases.
 - Remaining ice work outside this fire-ray terrain slice includes the broader
