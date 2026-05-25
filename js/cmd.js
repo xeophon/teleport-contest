@@ -297,6 +297,7 @@ function dustWand(item) {
 
 async function beginWishPrompt({ moveCost = 0, dustItem = null, message = 'For what do you wish?' } = {}) {
     game._wish_text = '';
+    game._wish_tries = 0;
     game._wish_move_cost = moveCost;
     game._wish_dust_item = dustItem;
     await setMessage(message);
@@ -308,6 +309,7 @@ async function setWishResultMessage(message, more = false) {
     const dustItem = game._wish_dust_item || null;
     game._wish_move_cost = 0;
     game._wish_dust_item = null;
+    game._wish_tries = 0;
     game.context.move = moveCost;
     let text = message;
     if (dustItem && (game.inventory || []).includes(dustItem)) {
@@ -9449,8 +9451,9 @@ function makeRandomWishObject() {
     return Object.assign(item, object_display(item), { wishedfor: true });
 }
 
-async function finishRandomBlankWish() {
+async function finishRandomBlankWish(prefix = '') {
     recordWishConduct();
+    game._wish_tries = 0;
     const letter = nextInventoryLetter();
     const item = Object.assign({ letter, quan: 1 }, makeRandomWishObject());
     item.line = `${letter} - ${wishedInventoryPhrase(item)}`;
@@ -9459,7 +9462,29 @@ async function finishRandomBlankWish() {
     maybeAttachCarriedFigurineTimeout(item);
     game._pet_food_scan_inventory = game.inventory;
     godsNoticeWish();
-    await setWishResultMessage(`${item.line}.`);
+    await setWishResultMessage(`${prefix}${item.line}.`);
+}
+
+const MAX_WISH_TRIES = 5;
+
+function wishRetryPrompt() {
+    return game.flags?.cmdassist
+        ? "For what do you wish (enter 'help' for assistance)?"
+        : 'For what do you wish?';
+}
+
+async function handleNoFittingWish() {
+    const tries = Math.max(0, Math.trunc(Number(game._wish_tries || 0))) + 1;
+    game._wish_text = '';
+    if (tries < MAX_WISH_TRIES) {
+        game._wish_tries = tries;
+        game._command_mode = 'wizardWish';
+        await setMessage(`Nothing fitting that description exists in the game.  ${wishRetryPrompt()}`);
+        return;
+    }
+    game._wish_tries = 0;
+    game._command_mode = null;
+    await finishRandomBlankWish("Nothing fitting that description exists in the game.  That's enough tries!  ");
 }
 
 function capWishSpe(spe) {
@@ -11236,8 +11261,7 @@ export async function activateStatueTrap(trap, x, y, { prefix = '', shatter = fa
 
 function noFittingWishObject() {
     return {
-        _wish_disappeared: true,
-        _wish_disappear_message: 'Nothing fitting that wish appears.',
+        _wish_no_match: true,
     };
 }
 
@@ -19956,8 +19980,7 @@ function wishedBaseObjectFromName(lowerName, qualifiers = {}, originalName = low
             wishedfor: true,
         });
     }
-    const otmp = mksobj(WEAPON_CLASS, true, false);
-    return Object.assign(otmp, { cls: 'weapon', glyph: ')', kind: lowerName, actualKind: lowerName, wishedfor: true });
+    return noFittingWishObject();
 }
 
 function setOverlay(lines, clearRows = 24, hideStatus = false, clearCol = null) {
@@ -38434,12 +38457,16 @@ export async function rhack(_cmd) {
             wishedQuanForced = wishedQuanForced || groupedWish.matched;
             wishedQuan = applyWishedPluralQuantity(wishedName, wishedQuan);
             const lowerName = wishedName.trim().toLowerCase();
-            if (!lowerName || lowerName === 'nothing' || lowerName === 'nil' || lowerName === 'none') {
+            if (!lowerName) {
+                await handleNoFittingWish();
+                return;
+            }
+            if (lowerName === 'nothing' || lowerName === 'nil' || lowerName === 'none') {
                 await setWishResultMessage('Nothing fitting that wish appears.');
                 return;
             }
-            recordWishConduct();
             if (/^(?:gold(?: pieces?)?|coins?|zorkmids?|money|\$)$/.test(lowerName)) {
+                recordWishConduct();
                 next_ident();
                 godsNoticeWish();
                 game._goldCount = (game._goldCount || 0) + wishedQuan;
@@ -38460,10 +38487,15 @@ export async function rhack(_cmd) {
                 letter = nextInventoryLetter();
             }
             const item = Object.assign({ letter, quan: 1 }, wishedObjectFromName(wishedName.trim(), wishedQualifiers));
+            if (item._wish_no_match) {
+                await handleNoFittingWish();
+                return;
+            }
             if (item._wish_disappeared) {
                 await setWishResultMessage(item._wish_disappear_message);
                 return;
             }
+            recordWishConduct();
             if (item._artifact_wish_name) wishedQuan = 1;
             if (item._artifact_wish_name || item.artifact) addConductCount('wisharti');
             if (item.artifact) touchArtifact(item);

@@ -120,7 +120,7 @@ C `readobjnam` is a staged parser:
 4. create the object with `mksobj` or `mkobj`;
 5. apply C wish restrictions and object fixups.
 
-JS has a substantial independent parser in `js/cmd.js`. It covers many common qualifiers and special cases, but it is built from local regexes, local object maps, namedesc bounds, and parser fallbacks. The most concrete behavioral gap is in `wishedBaseObjectFromName`: after many matching attempts, it falls back to creating a generic weapon named after the unmatched input (`js/cmd.js:15508`). C returns no object for unrecognized wishes, lets `makewish` retry up to five times, and only then falls back to a random object (`nethack-c/upstream/src/zap.c:6313`).
+JS has a substantial independent parser in `js/cmd.js`. It covers many common qualifiers and special cases, but it is built from local regexes, local object maps, namedesc bounds, and parser fallbacks. The previous catch-all path where unrecognized input became a generic weapon has been removed: no-match wish results now keep the prompt in C-style retry mode and the fifth bad description falls back to a random object (`nethack-c/upstream/src/zap.c:6313`). Remaining parser drift is in C's staged fuzzy matching, object ranges, exact property limits, explicit non-object results, and final object fixups.
 
 ### Wish modifiers and restrictions
 
@@ -162,7 +162,7 @@ JS has artifact definitions and helpers in `js/mklev.js:1497` and `js/mklev.js:3
 
 7. **Object timers are not unified.** Corpse, glob, figurine, burn, and ice logic use direct fields and local processors instead of one object timer model. This makes `set_corpsenm`, containment changes, icebox freezing, and object destruction harder to make C-equivalent.
 
-8. **`readobjnam` has a non-C fallback.** Unrecognized wishes can become arbitrary named weapons. C retries and then randomizes after repeated failures.
+8. **`readobjnam` matching is still local.** Unrecognized wishes no longer become arbitrary named weapons and now use the C retry/random fallback shape, but JS still lacks C `wishymatch`, ranges, namedesc lookup, alternate spellings, explicit non-object results, and full parser staging.
 
 9. **Wish matching is not C fuzzy matching.** C `wishymatch`, ranges, namedesc lookup, alternate spellings, and artifact matching are more systematic than the JS local regex/table approach.
 
@@ -237,10 +237,10 @@ Replace the wish parser by stages instead of adding more one-off regexes:
 2. parse charge/recharge suffixes
 3. implement `wishymatch`, alternate spellings, object ranges, namedesc lookup, and class-name lookup using the registry
 4. handle monster corpstat forms, tins, eggs, statues, figurines, globs, dragon armor, gems/glass, fruits, and artifact names
-5. return an explicit result kind: object, terrain/trap/furniture wizard wish, hands/nothing, or no match
-6. implement C retry/random fallback behavior in the wish prompt
+5. return an explicit result kind: object, terrain/trap/furniture wizard wish, hands/nothing, or no match; the no-match sentinel exists, but the other result kinds still need the full C split
+6. keep the implemented C retry/random fallback behavior wired through the prompt while replacing the parser underneath it
 
-The key behavioral change is removing the arbitrary "unknown input becomes named weapon" fallback.
+The key no-match behavioral change is now in place: unknown input no longer becomes a named weapon, invalid descriptions retry, and repeated failures randomize through the existing random wish path.
 
 ### Slice 7: Wish finalization rules
 

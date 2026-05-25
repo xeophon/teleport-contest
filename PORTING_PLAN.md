@@ -84,6 +84,7 @@ The current audit source of truth is `docs/c-parity-audit/`.
 - Added C-style cream-pie `COST_SPLAT` billing: applying an unpaid carried cream pie to yourself now splits stacks first, creates a dummy used-up bill row for the splatted pie, and leaves any residual stack on its live bill row.
 - Added C-style cursed wand backfire `useupall()` billing: unpaid backfiring wands still charge normal usage, then preserve the exploded wand as a used-up bill row for both ordinary and wishing wand branches.
 - Added C-ordered shop-floor magic-bag put-in `sellobj()` handling: trigger objects now resolve unpaid return, sale/no-sale, angry/robbed shopkeeper, and declined-sale `no_charge` handling before magic-bag explosion billing, matching C `in_container()` ordering for destroyed trigger and target bags.
+- Added C-style invalid wish retry/random fallback: unrecognized wish text no longer creates arbitrary named weapons, bad descriptions retry without consuming wish conduct, and the fifth bad try falls back to a random object.
 - Latest verified public score: `44/44`.
 
 ## Current Priorities
@@ -98,7 +99,7 @@ The current audit source of truth is `docs/c-parity-audit/`.
    - Source notes: `docs/c-parity-audit/02-objects-wishing-readobjnam.md`.
    - Create one object metadata registry for type, class, material, weight, cost, probability, wishability, merge rules, and damage predicates.
    - Add a C-shaped object factory before deeper `mkobj`, wishing, artifact, and timer work.
-   - Remove the non-C fallback where an unrecognized wish becomes an arbitrary named weapon.
+   - Continue replacing the independent wish parser with C-shaped matching, property limits, explicit "nothing" handling, artifact provenance, and object finalization rules.
 
 3. Level generation lifecycle and special-level data.
    - Source notes: `docs/c-parity-audit/03-levelgen-specials-quest.md`.
