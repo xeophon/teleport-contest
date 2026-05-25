@@ -13390,6 +13390,44 @@ function scrollCallLabel(item, scrollIndex, fallback = 'ZELGO MER') {
     return game._object_descriptions?.scrolls?.[scrollIndex] || fallback;
 }
 
+function recordCalledScroll(label, name) {
+    const call = String(name || '').trim();
+    if (!call) return;
+    const scrollLabel = label || 'ZELGO MER';
+    game._called_scrolls ??= {};
+    game._called_scrolls[scrollLabel] = call;
+    game._discoveries ??= [];
+    const discoveryName = `scroll called ${call}`;
+    const existing = game._discoveries.find(entry =>
+        entry.section === 'Scrolls'
+        && (entry.name === discoveryName || String(entry.text || '').endsWith(`(${scrollLabel})`)));
+    if (existing) {
+        existing.name = discoveryName;
+        existing.text = `${discoveryName} (${scrollLabel})`;
+        existing.starred = false;
+    } else {
+        game._discoveries.push({
+            section: 'Scrolls',
+            name: discoveryName,
+            text: `${discoveryName} (${scrollLabel})`,
+            starred: false,
+        });
+    }
+}
+
+function shouldTryCallScroll(scrollName, item, scrollIndex) {
+    if (!item || item.dknown === false) return false;
+    if (item.known === true || scrollDiscoveryKnown(scrollName)) return false;
+    const label = scrollCallLabel(item, scrollIndex);
+    return !game._called_scrolls?.[label];
+}
+
+function prepareScrollTryCall(item, scrollIndex, moveCost = 1) {
+    game._call_scroll_label = scrollCallLabel(item, scrollIndex);
+    game._call_scroll_text = '';
+    game._call_scroll_move_cost = moveCost;
+}
+
 function scrollDisappearMessages(confusedReading) {
     const messages = [game.u?.blind
         ? 'As you pronounce the formula on it, the scroll disappears.'
@@ -17133,6 +17171,45 @@ function useUpFloorObjectWithShopBill(obj) {
     if (x != null && y != null) newsym(x, y);
 }
 
+function finalizeScareMonsterDust(preflight) {
+    const dustObj = preflight?.scareDustObj || preflight;
+    useUpFloorObjectWithShopBill(dustObj);
+}
+
+function observeFloorPickupObject(obj) {
+    if (!obj || game.u?.blind || heroIsHallucinating()) return;
+    obj.dknown = true;
+    recordObservedObjectDiscovery(obj);
+}
+
+function scheduleScareMonsterDustTryCall(preflight, pending = {}) {
+    const dustObj = preflight?.scareDustObj;
+    if (!dustObj || !preflight?.scareDustTryCall) return false;
+    prepareScrollTryCall(dustObj, 3, pending.moveCost ?? 1);
+    game._scroll_trycall_pending = {
+        kind: 'scareDust',
+        preflight,
+        moveCost: pending.moveCost ?? 1,
+        pickupListState: pending.pickupListState || null,
+    };
+    game._command_mode = 'callScrollAfterMore';
+    return true;
+}
+
+async function finishPendingScrollTryCall(defaultMoveCost = 1) {
+    const pending = game._scroll_trycall_pending;
+    game._scroll_trycall_pending = null;
+    if (!pending) return false;
+    if (pending.kind === 'scareDust') finalizeScareMonsterDust(pending.preflight);
+    if (pending.pickupListState) {
+        pending.pickupListState.index = (pending.pickupListState.index || 0) + 1;
+        await continuePickupListProcessing(pending.pickupListState);
+        return true;
+    }
+    game.context.move = pending.moveCost ?? defaultMoveCost;
+    return true;
+}
+
 function artifactPowerSourceName(obj) {
     const name = String(obj?.artifact || pickupObjectName(obj) || 'the artifact');
     return name.replace(/^The\b/, 'the');
@@ -17264,6 +17341,7 @@ async function floorPickupPreflight(obj, { shopPrice = null, prompt = true, scar
     }
     if (cached) game._skip_floor_pickup_preflight_once = null;
 
+    observeFloorPickupObject(obj);
     const prelift = containerTakeoutPreliftCheck(obj);
     if (!prelift.ok || prelift.skip) return prelift;
     const riderRevival = await floorPickupRiderCorpseRevival(obj);
@@ -17364,10 +17442,11 @@ async function floorPickupPreflight(obj, { shopPrice = null, prompt = true, scar
         } else {
             const dustObj = splitFloorPickupObjectForLift(obj, takeCount);
             normalizeScareMonsterScrollObject(dustObj);
-            useUpFloorObjectWithShopBill(dustObj);
             return {
                 ok: false,
                 scareDust: true,
+                scareDustObj: dustObj,
+                scareDustTryCall: shouldTryCallScroll('scare monster', dustObj, 3),
                 move: true,
                 message: scareMonsterScrollDustMessage(dustObj),
                 messages,
@@ -22731,6 +22810,12 @@ async function continuePickupListProcessing(state, acceptedPreflight = null) {
             return pickupListPendingPrompt(state, obj, preflight);
         if (!preflight.ok) {
             state.messages.push(floorPickupPreflightMessage(preflight));
+            if (preflight.scareDust && scheduleScareMonsterDustTryCall(preflight, { moveCost: 1, pickupListState: state })) {
+                await setMessage((state.messages || []).join('  '), true);
+                game.context.move = 0;
+                return;
+            }
+            if (preflight.scareDust) finalizeScareMonsterDust(preflight);
             state.index++;
             if (preflight.scareDust) continue;
             break;
@@ -28853,46 +28938,32 @@ export async function rhack(_cmd) {
     if (game._command_mode === 'callScrollText') {
         if (ch === '\r' || ch === '\n') {
             const name = (game._call_scroll_text || '').trim();
-            if (name) {
-                game._called_scrolls ??= {};
-                const label = game._call_scroll_label || 'ZELGO MER';
-                game._called_scrolls[label] = name;
-                game._discoveries ??= [];
-                const discoveryName = `scroll called ${name}`;
-                const existing = game._discoveries.find(entry =>
-                    entry.section === 'Scrolls'
-                    && (entry.name === discoveryName || String(entry.text || '').endsWith(`(${label})`)));
-                if (existing) {
-                    existing.name = discoveryName;
-                    existing.text = `${discoveryName} (${label})`;
-                    existing.starred = false;
-                } else {
-                    game._discoveries.push({
-                        section: 'Scrolls',
-                        name: discoveryName,
-                        text: `${discoveryName} (${label})`,
-                        starred: false,
-                    });
-                }
-            }
+            if (name) recordCalledScroll(game._call_scroll_label || 'ZELGO MER', name);
+            const moveCost = game._call_scroll_move_cost || 1;
             game._call_scroll_label = '';
             game._call_scroll_text = '';
+            game._call_scroll_move_cost = 0;
             game._pending_message = '';
             game._message_more = 0;
             game._command_mode = null;
-            game.context.move = 1;
+            if (!await finishPendingScrollTryCall(moveCost))
+                game.context.move = 1;
             return;
         }
         if (ch === '\x1b') {
+            const moveCost = game._call_scroll_move_cost || 0;
             game._call_scroll_label = '';
             game._call_scroll_text = '';
+            game._call_scroll_move_cost = 0;
             game._pending_message = '';
             game._message_more = 0;
             game._command_mode = null;
+            await finishPendingScrollTryCall(moveCost);
             return;
         }
-        if (key === 8 || key === 127) game._call_scroll_text = (game._call_scroll_text || '').slice(0, -1);
-        else if (key >= 32) game._call_scroll_text = `${game._call_scroll_text || ''}${ch}`;
+        const code = typeof key === 'number' ? key : ch.charCodeAt(0);
+        if (code === 8 || code === 127) game._call_scroll_text = (game._call_scroll_text || '').slice(0, -1);
+        else if (code >= 32) game._call_scroll_text = `${game._call_scroll_text || ''}${ch}`;
         const text = game._call_scroll_text || '';
         await setMessage(`Call a scroll labeled ${game._call_scroll_label || 'ZELGO MER'}:${text ? ` ${text}` : ''}`);
         return;
@@ -34469,12 +34540,19 @@ export async function rhack(_cmd) {
             return;
         }
         if (isScroll && (scrollName === 'scare monster' || item.scrollIndex === 3)) {
+            const shouldCall = shouldTryCallScroll('scare monster', item, 3);
             removeInventoryItem(item);
             rn2(19);
             const effectMessage = scareMonsterScrollEffect(item);
+            if (shouldCall) prepareScrollTryCall(item, 3, 1);
             await setMessage(`As you read the scroll, it disappears.  ${effectMessage}`, true);
-            game._command_mode = null;
-            game.context.move = 1;
+            game._command_mode = shouldCall ? 'callScrollAfterMore' : null;
+            if (shouldCall) {
+                game._scroll_trycall_pending = { kind: 'scrollRead', moveCost: 1 };
+                game.context.move = 0;
+            } else {
+                game.context.move = 1;
+            }
             return;
         }
         if (isScroll && (scrollName === 'enchant weapon' || item.scrollIndex === 5)) {
@@ -42761,7 +42839,15 @@ export async function rhack(_cmd) {
             const shopPrice = shopItemPrice(objectHere);
             const preflight = await floorPickupPreflight(objectHere, { shopPrice });
             if (!preflight.ok || preflight.skip) {
-                await setMessage(floorPickupPreflightMessage(preflight));
+                const message = floorPickupPreflightMessage(preflight);
+                if (preflight.scareDust) {
+                    const waitingForCall = scheduleScareMonsterDustTryCall(preflight, { moveCost: preflight.move ? 1 : 0 });
+                    if (!waitingForCall) finalizeScareMonsterDust(preflight);
+                    await setMessage(message, waitingForCall);
+                    game.context.move = waitingForCall ? 0 : preflight.move ? 1 : 0;
+                    return;
+                }
+                await setMessage(message);
                 game.context.move = preflight.move ? 1 : 0;
                 return;
             }

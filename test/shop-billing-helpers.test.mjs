@@ -292,6 +292,50 @@ function floorScareMonsterScroll(id, props = {}) {
     };
 }
 
+function setScareScrollLabel(label = 'TRYME TEST') {
+    game._object_descriptions ??= {};
+    game._object_descriptions.scrolls = [...(game._object_descriptions.scrolls || [])];
+    game._object_descriptions.scrolls[3] = label;
+    return label;
+}
+
+function unknownLabeledScareMonsterScroll(id, props = {}) {
+    const { label = 'TRYME TEST', letter = 's', ...rest } = props;
+    const scrollLabel = setScareScrollLabel(label);
+    return floorScareMonsterScroll(id, {
+        letter,
+        kind: `scroll labeled ${scrollLabel}`,
+        actualKind: 'scroll of scare monster',
+        known: false,
+        dknown: true,
+        bknown: false,
+        line: `${letter} - a scroll labeled ${scrollLabel}`,
+        ...rest,
+    });
+}
+
+async function answerScrollTryCall(label, name = 'fear') {
+    assert.equal(game._command_mode, 'callScrollAfterMore');
+    assert.equal(game._call_scroll_label, label);
+
+    await rhack(' ');
+    assert.equal(game._command_mode, 'callScrollText');
+    assert.match(game._pending_message, new RegExp(`Call a scroll labeled ${label}:`));
+
+    for (const ch of name) await rhack(ch);
+    await rhack('\n');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game._called_scrolls?.[label], name);
+    assert.equal(
+        game._discoveries.some(entry =>
+            entry.section === 'Scrolls'
+            && entry.name === `scroll called ${name}`
+            && entry.text === `scroll called ${name} (${label})`),
+        true,
+    );
+}
+
 function floorLoadstone(id, props = {}) {
     return {
         id,
@@ -3319,6 +3363,37 @@ test('cursed or used scare monster floor scroll crumbles into used-up bill', asy
     }
 });
 
+test('unknown used scare monster floor scroll dust offers type-call before used-up billing', async () => {
+    const { shkp } = installCommandShopState();
+    const label = 'TRYME TEST';
+    const scroll = unknownLabeledScareMonsterScroll(6020, { label, spe: 1 });
+    game.level.objects = [scroll];
+    const expectedPrice = shop.shopItemPrice(scroll, 5, 5);
+
+    await rhack(',');
+
+    assert.equal(game._command_mode, 'callScrollAfterMore');
+    assert.equal(game._call_scroll_label, label);
+    assert.equal(game.inventory.some(item => item.id === scroll.id), false);
+    assert.equal(game.level.objects.includes(scroll), true);
+    assert.equal(shkp.billct, 0);
+    assert.match(game._pending_message, /scroll.*turns? to dust.*pick.*up/i);
+    assert.equal(game.context.move, 0);
+
+    await answerScrollTryCall(label, 'fear');
+
+    const entry = shop.shopBillEntryForObject(shkp, scroll);
+    const debts = shop.collectPayableShopDebts(shkp);
+
+    assert.equal(game.level.objects.includes(scroll), false);
+    assert.equal(shkp.billct, 1);
+    assert.ok(entry);
+    assert.equal(entry.useup, true);
+    assert.equal(shop.shopBillEntryTotal(entry), expectedPrice);
+    assert.equal(debts.some(debt => debt.billPortion === 'fullyUsedUp' && debt.price === expectedPrice), true);
+    assert.equal(game.context.move, 1);
+});
+
 test('multi-pickup cursed or used scare monster scroll dusts and continues to later item', async () => {
     for (const [label, id, props] of [
         ['cursed', 6034, { cursed: true }],
@@ -3358,6 +3433,76 @@ test('multi-pickup cursed or used scare monster scroll dusts and continues to la
         assert.match(game._pending_message, /food ration/, label);
         assert.equal(game.context.move, 1, label);
     }
+});
+
+test('unknown scare monster dust in multi-pickup prompts before continuing later item', async () => {
+    const { shkp } = installCommandShopState();
+    const label = 'TRYME TEST';
+    const scroll = unknownLabeledScareMonsterScroll(6037, {
+        label,
+        cursed: true,
+        section: 'Other Items',
+    });
+    const ration = foodRation(6038);
+    ration.section = 'Other Items';
+    game.level.objects = [scroll, ration];
+    const scrollPrice = shop.shopItemPrice(scroll, 5, 5);
+    const rationPrice = shop.shopItemPrice(ration, 5, 5);
+
+    await rhack(',');
+    assert.equal(game._command_mode, 'pickupList');
+
+    await rhack('a');
+    await rhack('b');
+    await rhack('\n');
+
+    assert.equal(game._command_mode, 'callScrollAfterMore');
+    assert.equal(game._call_scroll_label, label);
+    assert.equal(game.level.objects.includes(scroll), true);
+    assert.equal(game.level.objects.includes(ration), true);
+    assert.equal(shkp.billct, 0);
+    assert.match(game._pending_message, /scroll.*turns? to dust.*pick.*up/i);
+    assert.doesNotMatch(game._pending_message, /food ration/);
+    assert.equal(game.context.move, 0);
+
+    await answerScrollTryCall(label, 'fear');
+
+    const carriedRation = game.inventory.find(item => item.id === ration.id);
+    const dustEntry = shop.shopBillEntryForObject(shkp, scroll);
+    const rationEntry = shop.shopBillEntryForObject(shkp, carriedRation);
+
+    assert.ok(carriedRation);
+    assert.equal(game.inventory.some(item => item.id === scroll.id), false);
+    assert.equal(game.level.objects.includes(scroll), false);
+    assert.equal(game.level.objects.includes(ration), false);
+    assert.ok(dustEntry);
+    assert.equal(dustEntry.useup, true);
+    assert.equal(shop.shopBillEntryTotal(dustEntry), scrollPrice);
+    assert.ok(rationEntry);
+    assert.equal(rationEntry.useup, false);
+    assert.equal(shop.shopBillEntryTotal(rationEntry), rationPrice);
+    assert.equal(shkp.billct, 2);
+    assert.match(game._pending_message, /food ration/);
+    assert.equal(game.context.move, 1);
+});
+
+test('reading unknown scare monster scroll offers type-call after effect', async () => {
+    installCommandShopState();
+    const label = 'TRYME TEST';
+    const scroll = unknownLabeledScareMonsterScroll(6046, { label, letter: 's' });
+    game.inventory = [scroll];
+
+    await rhack('r');
+    await rhack('s');
+
+    assert.equal(game._command_mode, 'callScrollAfterMore');
+    assert.equal(game.inventory.includes(scroll), false);
+    assert.match(game._pending_message, /As you read the scroll, it disappears/);
+    assert.equal(game.context.move, 0);
+
+    await answerScrollTryCall(label, 'fear');
+
+    assert.equal(game.context.move, 1);
 });
 
 test('multi-pickup scare monster scroll live states match single pickup', async () => {
