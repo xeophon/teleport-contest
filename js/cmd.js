@@ -22589,10 +22589,46 @@ function shopBillEntryDisplayName(entry, obj, quantity = null, shkp = null) {
     return 'used-up object';
 }
 
+function outermostCarriedContainerForShopBillObject(obj) {
+    let top = obj;
+    const seen = new Set();
+    while (top?.container && !seen.has(top.container)) {
+        seen.add(top);
+        top = top.container;
+    }
+    return top && top !== obj && (game.inventory || []).includes(top) ? top : null;
+}
+
+function shopContainerPaymentName(container, includesContainer = false) {
+    const baseName = pickupObjectName({ ...(container || {}), line: '', quan: 1 })
+        .replace(/^empty /, '');
+    if (includesContainer)
+        return `${articleFor(`unpaid ${baseName}`)} and its contents`;
+    return `the contents of your ${baseName}`;
+}
+
+function addContainerPaymentBillItem(groups, container, item, billEntry, price) {
+    if (!container || !item || !(price > 0)) return;
+    const key = shopBillObjectId(container);
+    if (key == null) return;
+    let group = groups.get(key);
+    if (!group) {
+        group = { container, billItems: [], price: 0, includesContainer: false };
+        groups.set(key, group);
+    }
+    const billId = billEntry?.bo_id ?? shopBillObjectId(item);
+    if (group.billItems.some(entry => String(entry.billId) === String(billId))) return;
+    group.billItems.push({ item, billEntry, billId, price });
+    group.price += price;
+    if (item === container) group.includesContainer = true;
+}
+
 function pushShopBillLedgerDebtEntries(shkp, entries, seenBillIds) {
     const ledger = Array.isArray(shkp?.bill) ? shkp.bill : [];
     const usedEntries = [];
     const intactEntries = [];
+    const possibleTopContainerEntries = [];
+    const containerPaymentGroups = new Map();
     for (const billEntry of ledger) {
         const billId = String(billEntry.bo_id);
         seenBillIds.add(billId);
@@ -22638,13 +22674,39 @@ function pushShopBillLedgerDebtEntries(shkp, entries, seenBillIds) {
         }
 
         const price = shopBillEntryTotal(billEntry);
-        if (price > 0) intactEntries.push({
+        if (!(price > 0)) continue;
+        const intactEntry = {
             item: obj,
             billEntry,
             billPortion: 'intact',
             quantity: liveQuantity || billedQuantity,
             name: shopDebtItemName(obj),
             price,
+        };
+        const topContainer = outermostCarriedContainerForShopBillObject(obj);
+        if (topContainer) {
+            addContainerPaymentBillItem(containerPaymentGroups, topContainer, obj, billEntry, price);
+        } else if (globContents(obj).length) {
+            possibleTopContainerEntries.push(intactEntry);
+        } else {
+            intactEntries.push(intactEntry);
+        }
+    }
+    for (const entry of possibleTopContainerEntries) {
+        const group = containerPaymentGroups.get(shopBillObjectId(entry.item));
+        if (group) addContainerPaymentBillItem(containerPaymentGroups, entry.item, entry.item, entry.billEntry, entry.price);
+        else intactEntries.push(entry);
+    }
+    for (const group of containerPaymentGroups.values()) {
+        if (!(group.price > 0) || !group.billItems.length) continue;
+        intactEntries.push({
+            item: group.container,
+            containerPayment: true,
+            billPortion: 'containerContents',
+            billItems: group.billItems,
+            quantity: 1,
+            name: shopContainerPaymentName(group.container, group.includesContainer),
+            price: group.price,
         });
     }
     entries.push(...usedEntries, ...intactEntries);
@@ -22798,6 +22860,33 @@ function payIntactShopBillEntry(shkp, entry) {
     return { billed: true, removedLedger: false, legacy: true };
 }
 
+function payContainerShopBillEntry(shkp, entry) {
+    const billItems = Array.isArray(entry?.billItems) ? entry.billItems : [];
+    if (!billItems.length) return { billed: false, removedLedger: false, legacy: false };
+    applyShopPaymentValue(shkp, entry.price);
+    const container = entry.item;
+    const ordered = [...billItems].sort((a, b) => (a.item === container) - (b.item === container));
+    const seen = new Set();
+    let removedLedgerBillCount = 0;
+    let legacy = false;
+    for (const billItem of ordered) {
+        const item = billItem.item;
+        const billId = billItem.billEntry?.bo_id ?? shopBillObjectId(item);
+        if (billId == null || seen.has(String(billId))) continue;
+        seen.add(String(billId));
+        const removedLedger = removeObjectFromShopBillById(shkp, billId);
+        if (removedLedger) removedLedgerBillCount++;
+        else legacy = true;
+        clearObjectShopBillState(item);
+    }
+    return {
+        billed: true,
+        removedLedger: removedLedgerBillCount > 0,
+        removedLedgerBillCount,
+        legacy,
+    };
+}
+
 function applyShopPaymentEntry(shkp, entry) {
     if (entry?.shopkeeperDebit) {
         const debt = Math.max(0, Math.trunc(Number(entry.shopkeeperDebit.debit ?? entry.price ?? 0)));
@@ -22808,6 +22897,7 @@ function applyShopPaymentEntry(shkp, entry) {
     }
     if (entry?.billPortion === 'partlyUsedUp') return payPartlyUsedShopBillEntry(shkp, entry);
     if (entry?.billPortion === 'fullyUsedUp' || entry?.usedUpBill) return payFullyUsedShopBillEntry(shkp, entry);
+    if (entry?.billPortion === 'containerContents' || entry?.containerPayment) return payContainerShopBillEntry(shkp, entry);
     return payIntactShopBillEntry(shkp, entry);
 }
 
@@ -22838,7 +22928,10 @@ function finishShopPaymentSelection(shkp, selected) {
         const result = applyShopPaymentEntry(shkp, entry);
         if (!result.billed) continue;
         billedSelections++;
-        if (result.removedLedger) removedLedgerBillCount++;
+        if (result.removedLedgerBillCount != null)
+            removedLedgerBillCount += result.removedLedgerBillCount;
+        else if (result.removedLedger)
+            removedLedgerBillCount++;
         if (result.legacy) legacyBillSelections++;
     }
     if (shkp && legacyBillSelections)

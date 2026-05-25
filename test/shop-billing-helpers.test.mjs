@@ -6671,3 +6671,77 @@ test('shop credit offsets itemized bill rows before hero gold', () => {
     assert.equal(shop.shopBillEntryForObject(shkp, ration), null);
     assert.equal(ration.unpaid, false);
 });
+
+test('payable debts aggregate unpaid contents in a carried container', () => {
+    const { shkp } = installShopState();
+    const bag = sack(9410, 'b');
+    const blade = putObjectInContainer(bag, dagger(9411));
+    const ration = putObjectInContainer(bag, foodRation(9412));
+    game.inventory = [bag];
+    shop.addObjectToShopBill(shkp, blade, 10);
+    shop.addObjectToShopBill(shkp, ration, 45);
+
+    const entries = shop.collectPayableShopDebts(shkp);
+
+    assert.equal(entries.length, 1);
+    assert.equal(entries[0].billPortion, 'containerContents');
+    assert.equal(entries[0].containerPayment, true);
+    assert.equal(entries[0].item, bag);
+    assert.equal(entries[0].price, 55);
+    assert.match(entries[0].name, /contents of your bag/);
+    assert.equal(entries[0].billItems.length, 2);
+});
+
+test('paying carried container contents clears every constituent bill row', () => {
+    const { shkp } = installShopState();
+    const bag = sack(9420, 'b');
+    const blade = putObjectInContainer(bag, dagger(9421));
+    const ration = putObjectInContainer(bag, foodRation(9422));
+    game.inventory = [bag];
+    game._goldCount = 100;
+    shop.addObjectToShopBill(shkp, blade, 10);
+    shop.addObjectToShopBill(shkp, ration, 45);
+    const entries = shop.collectPayableShopDebts(shkp);
+
+    const payment = shop.finishShopPaymentSelection(shkp, entries);
+
+    assert.equal(payment.cashTotal, 55);
+    assert.equal(payment.removedLedgerBillCount, 2);
+    assert.equal(game._goldCount, 45);
+    assert.equal(shkp.billct, 0);
+    assert.equal(shkp.bill.length, 0);
+    assert.equal(shop.shopBillEntryForObject(shkp, blade), null);
+    assert.equal(shop.shopBillEntryForObject(shkp, ration), null);
+    assert.equal(blade.unpaid, false);
+    assert.equal(ration.unpaid, false);
+    assert.equal(bag.contents.includes(blade), true);
+    assert.equal(bag.contents.includes(ration), true);
+});
+
+test('payable debts aggregate an unpaid carried container with its unpaid contents', () => {
+    const { shkp } = installShopState();
+    const bag = sack(9430, 'b');
+    const blade = putObjectInContainer(bag, dagger(9431));
+    game.inventory = [bag];
+    game._goldCount = 100;
+    shop.addObjectToShopBill(shkp, bag, 2);
+    shop.addObjectToShopBill(shkp, blade, 10);
+
+    const entries = shop.collectPayableShopDebts(shkp);
+
+    assert.equal(entries.length, 1);
+    assert.equal(entries[0].billPortion, 'containerContents');
+    assert.equal(entries[0].price, 12);
+    assert.match(entries[0].name, /unpaid bag and its contents/);
+
+    const payment = shop.finishShopPaymentSelection(shkp, entries);
+
+    assert.equal(payment.cashTotal, 12);
+    assert.equal(payment.removedLedgerBillCount, 2);
+    assert.equal(game._goldCount, 88);
+    assert.equal(shkp.billct, 0);
+    assert.equal(shop.shopBillEntryForObject(shkp, bag), null);
+    assert.equal(shop.shopBillEntryForObject(shkp, blade), null);
+    assert.equal(bag.unpaid, false);
+    assert.equal(blade.unpaid, false);
+});
