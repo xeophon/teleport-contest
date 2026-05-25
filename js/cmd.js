@@ -3651,6 +3651,7 @@ export async function finishLevelTeleport(targetLevel, options = {}) {
         game.level = savedTarget.level;
         game.stairs = savedTarget.stairs;
         game._utrack = [...(savedTarget.utrack || [])];
+        catchUpReturnedLevelGlobShrinkTimers();
         const elapsed = (game.moves || 1) - (savedTarget.moves || game.moves || 1);
         restoredLevelMonsterCatchup(game.level?.monsters || [], elapsed);
         if (game.level?.flags?.sokoban_rules) {
@@ -13278,6 +13279,34 @@ export function processGlobShrinkTimers(g = game) {
     const messages = [];
     for (const entry of due) messages.push(...processGlobShrinkEntry(entry));
     return messages;
+}
+
+function collectReturnedLevelGlobShrinkEntries(g = game) {
+    const entries = [];
+    collectGlobShrinkEntriesFromList(g.level?.objects || [], 'floor', entries);
+    for (const mon of g.level?.monsters || [])
+        collectGlobShrinkEntriesFromList(mon.minvent || [], 'minvent', entries, { owner: mon });
+    return entries;
+}
+
+export function catchUpReturnedLevelGlobShrinkTimers(g = game) {
+    const moves = g.moves || 0;
+    const stale = collectReturnedLevelGlobShrinkEntries(g)
+        .filter(entry => typeof entry.obj?.globShrinkTurn === 'number'
+            && entry.obj.globShrinkTurn < moves)
+        .sort((a, b) => (a.obj.globShrinkTurn - b.obj.globShrinkTurn)
+            || ((a.obj.id || a.obj.oid || 0) - (b.obj.id || b.obj.oid || 0)));
+    for (const entry of stale) {
+        const obj = entry.obj;
+        if (!isGlobbyObject(obj) || typeof obj.globShrinkTurn !== 'number') continue;
+        if (globInIceBox(entry)) {
+            delete obj.globShrinkTurn;
+            continue;
+        }
+        const iceState = globIceState(entry);
+        if (iceState === 'buried') continue;
+        catchUpGlobShrink(entry, iceState);
+    }
 }
 
 function floorObjectClass(obj) {
@@ -35692,6 +35721,7 @@ export async function rhack(_cmd) {
             game.level = saved.level;
             game.stairs = saved.stairs;
             game._utrack = [...(saved.utrack || [])];
+            catchUpReturnedLevelGlobShrinkTimers();
             for (const mon of game.level?.monsters || []) {
                 rnd(10);
             }
@@ -35805,6 +35835,7 @@ export async function rhack(_cmd) {
             game.level = saved.level;
             game.stairs = saved.stairs;
             game._utrack = [...(saved.utrack || [])];
+            catchUpReturnedLevelGlobShrinkTimers();
             for (const mon of game.level?.monsters || []) {
                 rnd(10);
             }
