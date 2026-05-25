@@ -13317,6 +13317,18 @@ function costlyShopGoldAt(container, amount) {
 function donateShopGoldAt(container, amount) {
     const gold = Math.max(0, Math.trunc(Number(amount || 0)));
     const shkp = shopFloorContainerShopkeeper(container);
+    return donateGoldToShopkeeper(shkp, gold);
+}
+
+function donateShopGoldAtSpot(x, y, amount) {
+    const gold = Math.max(0, Math.trunc(Number(amount || 0)));
+    if (x == null || y == null) return { shkp: null, donated: 0 };
+    const shkp = shopkeeperForCostlySpot(x, y);
+    if (!shopkeeperInHisShop(shkp)) return { shkp: null, donated: 0 };
+    return donateGoldToShopkeeper(shkp, gold);
+}
+
+function donateGoldToShopkeeper(shkp, gold) {
     if (!shkp || !gold) return { shkp: null, donated: 0 };
     const debit = Math.max(0, Math.trunc(Number(shkp.debit || 0)));
     const coveredDebt = Math.min(debit, gold);
@@ -13331,7 +13343,8 @@ function donateShopGoldAt(container, amount) {
     return { shkp, donated: gold, coveredDebt, credit };
 }
 
-function saleDeclineQuestionObject(obj) {
+function saleDeclineQuestionObject(obj, sale = {}) {
+    if ((sale.contentOffer || 0) > 0 || (sale.contentSaleCount || 0) > 0) return 'them';
     return (obj?.quan || 1) === 1 ? 'it' : 'them';
 }
 
@@ -13385,33 +13398,69 @@ function shopSalePromptObjectName(obj, sale = {}) {
 }
 
 function shopDroppedPaidObjectSaleInfo(obj, x, y) {
-    if (!obj || obj.unpaid || shopBillableGold(obj) || globContents(obj).length) return null;
+    const containerSale = globContents(obj).length > 0;
+    if (!obj || shopBillableGold(obj) || (!containerSale && obj.unpaid)) return null;
     const shkp = shopkeeperForCostlySpot(x, y);
     if (!shopkeeperInHisShop(shkp)) return null;
     if (shkp.angry || shkp.hostile || shkp.mpeaceful === 0) {
+        if (containerSale) subFromShopBill(obj, shkp);
         return { obj, shkp, handled: true, prompt: false, message: `${shopkeeperDisplayName(shkp)} smirks with satisfaction.` };
     }
-    const offer = ownedShopSaleOffer(shkp, obj);
-    const uninterested = !offer
+    const contentSale = containerSale ? containedShopSaleOffer(shkp, obj) : { offer: 0, count: 0 };
+    const topOffer = ownedShopSaleOffer(shkp, obj);
+    const containedGold = containerSale ? containedShopGold(obj) : 0;
+    const offer = topOffer + contentSale.offer;
+    if (containedGold > 0) donateShopGoldAtSpot(x, y, containedGold);
+    const noSale = !(offer > 0);
+    if (containedGold > 0 && noSale) {
+        if (containerSale) {
+            markNoChargeRecursively(obj);
+            subFromShopBill(obj, shkp);
+        }
+        return { obj, shkp, handled: true, prompt: false, message: '' };
+    }
+    const uninterested = noSale
         || (Array.isArray(shkp.bill) && shkp.bill.length >= SHOP_BILL_LIMIT)
         || shopSaleUninterestedObject(obj);
     if (uninterested) {
-        obj.no_charge = true;
+        if (containerSale) {
+            markNoChargeRecursively(obj);
+            subFromShopBill(obj, shkp);
+        } else {
+            obj.no_charge = true;
+        }
         return { obj, shkp, handled: true, prompt: false, message: `${shopkeeperDisplayName(shkp)} seems uninterested.` };
     }
+    const sale = {
+        kind: 'drop',
+        obj,
+        shkp,
+        handled: true,
+        prompt: true,
+        offer,
+        topOffer,
+        contentOffer: contentSale.offer,
+        contentSaleCount: contentSale.count,
+        containerSale,
+    };
     const cash = shopkeeperCash(shkp);
+    const saleName = shopSalePromptObjectName(obj, sale);
     if (!cash) {
         const creditOffer = Math.trunc((offer * 9) / 10) + (offer <= 1 ? 1 : 0);
         return {
-            obj, shkp, handled: true, prompt: true, credit: true, offer: creditOffer,
-            promptMessage: `${shopkeeperDisplayName(shkp)} cannot pay you at present.  Will you accept ${creditOffer} zorkmid${creditOffer === 1 ? '' : 's'} in credit for ${shopSalePromptName(obj)}? [ynaq] (n)`,
+            ...sale,
+            credit: true,
+            offer: creditOffer,
+            promptMessage: `${shopkeeperDisplayName(shkp)} cannot pay you at present.  Will you accept ${creditOffer} zorkmid${creditOffer === 1 ? '' : 's'} in credit for ${saleName}? [ynaq] (n)`,
         };
     }
     const cashOffer = Math.min(offer, cash);
     const shortFunds = cashOffer < offer;
     return {
-        obj, shkp, handled: true, prompt: true, credit: false, offer: cashOffer,
-        promptMessage: `${shopkeeperDisplayName(shkp)} offers${shortFunds ? ' only' : ''} ${cashOffer} gold piece${cashOffer === 1 ? '' : 's'} for ${shopSalePromptName(obj)}.  Sell ${saleDeclineQuestionObject(obj)}? [ynaq] (n)`,
+        ...sale,
+        credit: false,
+        offer: cashOffer,
+        promptMessage: `${shopkeeperDisplayName(shkp)} offers${shortFunds ? ' only' : ''} ${cashOffer} gold piece${cashOffer === 1 ? '' : 's'} for ${saleName}.  Sell ${saleDeclineQuestionObject(obj, sale)}? [ynaq] (n)`,
     };
 }
 
@@ -13465,7 +13514,7 @@ function shopFloorContainerPutSaleInfo(container, putItem) {
         ...sale,
         credit: false,
         offer: cashOffer,
-        promptMessage: `${shopkeeperDisplayName(shkp)} offers${shortFunds ? ' only' : ''} ${cashOffer} gold piece${cashOffer === 1 ? '' : 's'} for ${saleName}.  Sell ${saleDeclineQuestionObject(putItem)}? [ynaq] (n)`,
+        promptMessage: `${shopkeeperDisplayName(shkp)} offers${shortFunds ? ' only' : ''} ${cashOffer} gold piece${cashOffer === 1 ? '' : 's'} for ${saleName}.  Sell ${saleDeclineQuestionObject(putItem, sale)}? [ynaq] (n)`,
     };
 }
 
@@ -13503,8 +13552,17 @@ function finishDroppedObjectSale(pending, accept) {
     if (!pending?.obj || !pending.shkp) return '';
     const obj = pending.obj;
     if (!accept) {
-        obj.no_charge = true;
+        if (pending.containerSale) {
+            markNoChargeRecursively(obj);
+            subFromShopBill(obj, pending.shkp);
+        } else {
+            obj.no_charge = true;
+        }
         return pending.declineMessage || `You drop ${pickupObjectPhrase(obj)}.`;
+    }
+    if (pending.containerSale) {
+        markAcceptedShopContainerSaleState(obj, pending.shkp);
+        subFromShopBill(obj, pending.shkp);
     }
     return shopSalePaymentMessage(pending);
 }
@@ -14200,6 +14258,16 @@ function globContents(obj) {
     if (Array.isArray(obj?.contents)) return obj.contents;
     if (Array.isArray(obj?.cobj)) return obj.cobj;
     return [];
+}
+
+function normalizeContainedObjectParents(container, seen = new Set()) {
+    if (!container || seen.has(container)) return;
+    seen.add(container);
+    for (const child of globContents(container)) {
+        child.contained = true;
+        child.container = container;
+        normalizeContainedObjectParents(child, seen);
+    }
 }
 
 function collectGlobShrinkEntriesFromList(list, source, entries, {
@@ -34486,6 +34554,9 @@ export async function rhack(_cmd) {
                 color: item.cls === 'weapon' ? (item.kind === 'quarterstaff' ? CLR_BROWN : item.color ?? CLR_CYAN)
                     : item.color ?? (item.cls === 'scroll' || item.cls === 'spellbook' ? CLR_WHITE : NO_COLOR),
             };
+            if (Array.isArray(dropped.contents)) dropped.contents = [...dropped.contents];
+            if (Array.isArray(dropped.cobj)) dropped.cobj = [...dropped.cobj];
+            normalizeContainedObjectParents(dropped);
             const floorMessages = [];
             let shopSale = null;
             const consumedByFloor = earthFloorEffects(dropped, dropped.ox, dropped.oy, floorMessages, 'drop');

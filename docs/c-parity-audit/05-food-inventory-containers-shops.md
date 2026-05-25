@@ -164,13 +164,13 @@ Concrete gaps:
 
 C drop unwields/unquivers as needed, removes from inventory, applies floor effects, places/stacks the object, and calls `sellobj()` when on a costly spot. `sellobj()` handles unpaid returns, deliberate sale offers, credit, no-charge state for dropped containers, and bill removal.
 
-JS drop clones the inventory object to the floor, clears basic equipment flags, applies earth/ice effects, and prints a message (`js/cmd.js:33688-33774`). It now handles ordinary unpaid non-container returns, including the narrow split-stack residual bill branch, and paid non-container sale/credit offers with declined-sale `no_charge`, but broader `sellobj()` coverage is still missing.
+JS drop clones the inventory object to the floor, clears basic equipment flags, applies earth/ice effects, and prints a message (`js/cmd.js:33688-33774`). It now handles ordinary unpaid non-container returns, including the narrow split-stack residual bill branch, paid non-container sale/credit offers with declined-sale `no_charge`, and ordinary dropped-container sale/no-sale state for saleable contents, contained gold, and recursive no-charge marking, but broader `sellobj()` coverage is still missing.
 
 Concrete gaps:
 
-- Split-stack unpaid returns have starter `splitbill`/`subfrombill` helpers, partial inventory use preserves C's `bquan > quan` representation, and throw/fire projectile splits now create child bill rows, return same-shop landings, convert off-shop child rows to debt/robbed value, and merge compatible unpaid floor bill rows. Containers, broken-projectile edge cases, and full recursive `subfrombill()`/`sellobj()` compatibility remain incomplete.
-- Gold donation/credit, robbed-shop, angry-shopkeeper, and special-stock edge cases are still incomplete.
-- Dropped containers do not recursively mark contents `no_charge` or preserve C's `dropped_container()`/`picked_container()` state.
+- Split-stack unpaid returns have starter `splitbill`/`subfrombill` helpers, partial inventory use preserves C's `bquan > quan` representation, and throw/fire projectile splits now create child bill rows, return same-shop landings, convert off-shop child rows to debt/robbed value, and merge compatible unpaid floor bill rows. Broken-projectile edge cases, ordinary gold drops, and full recursive `subfrombill()`/`sellobj()` compatibility remain incomplete.
+- Ordinary gold donation/credit, robbed-shop, angry-shopkeeper, and special-stock edge cases are still incomplete.
+- Ordinary dropped-container `sellobj()` now preserves C `dropped_container()` sale/no-sale state and recursively marks contained non-gold objects `no_charge` when the shopkeeper does not buy them; `picked_container()` clearing and non-ordinary container branches remain incomplete.
 - Drop stacking is not bill-aware. C `mergable()` checks unpaid, bill price, `no_charge`, `oeaten`, corpse/egg/tin identity, and related state; JS drop pushes a new floor object.
 
 ### 6. Container Loot Exists but Shop Ownership Is Missing
@@ -208,7 +208,7 @@ Concrete gaps:
 
 1. Build the shop ledger foundation first.
    - Add a C-shaped bill model keyed by shopkeeper, object identity, quantity, price, and used-up status.
-   - Continue the started split/subtract helpers into source-equivalent `onbill`, full `addtobill`, recursive `subfrombill`, `unpaid_cost`, `contained_cost`, `sellobj`, `dropped_container`, `picked_container`, `check_unpaid_usage`, and `costly_alteration`.
+   - Continue the started split/subtract helpers into source-equivalent `onbill`, full `addtobill`, recursive `subfrombill`, `unpaid_cost`, `contained_cost`, complete `sellobj`, `picked_container`, `check_unpaid_usage`, and `costly_alteration`; ordinary `dropped_container` state is covered for direct drops but still needs shared-helper integration.
    - Keep `unpaid`/`unpaidPrice` as derived display state, not the source of truth.
 
 2. Port `touchfood()` and the victual core.
@@ -238,6 +238,6 @@ Concrete gaps:
 
 - Eating unpaid shop food or tins can avoid C billing because `costly_alteration()` and `costly_tin()` are missing.
 - Multi-pickup still lacks full C quote/lift semantics, and split-stack object identity can still lose unpaid/shop state in non-projectile delete, container, and generic merge paths.
-- Container-moving objects in shops and complex drops still do not exercise full C `sellobj()`/`addtobill()`/`subfrombill()` paths.
+- Container-moving objects in shops and complex drops still do not exercise full C `sellobj()`/`addtobill()`/`subfrombill()` paths outside ordinary dropped-container state; ordinary gold drops, robbed/angry cases, and magic-bag loss/explosion remain high-risk.
 - Container tip magic-bag loss/explosion and destroyed recursive contents can still miss C stolen/debt naming.
 - Payment is only partly backed by authoritative bill rows; container payment, robbed-shop repayment, and several legacy unpaid fallbacks still need C parity.
