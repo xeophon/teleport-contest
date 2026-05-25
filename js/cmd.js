@@ -7402,6 +7402,61 @@ function useUpInventoryItem(item, amount = 1) {
     return true;
 }
 
+function splitCarriedCreamPieForSplat(item) {
+    if (!item || (item.quan || 1) <= 1) return item;
+    const split = { ...item, id: next_ident(), quan: 1, line: '' };
+    delete split.o_id;
+    delete split._shopBillObjectId;
+    split.letter = nextInventoryLetter();
+    if (item.unpaid && !splitCarriedObjectShopBill(item, split, 1))
+        clearObjectShopBillState(split);
+    item.quan = (item.quan || 1) - 1;
+    refreshInventoryObjectLine(item);
+    if (item.unpaid) syncUnpaidBillLine(item);
+    refreshInventoryObjectLine(split);
+    game.inventory ??= [];
+    game.inventory.push(split);
+    return split;
+}
+
+function billDummyAlteredCarriedObject(obj) {
+    if (!obj || shopBillableGold(obj)) return false;
+    const owner = shopkeeperOwningBillEntry(obj);
+    const shkp = owner.shkp || heroShopkeeper();
+    const entry = owner.entry || (shkp ? shopBillEntryForObject(shkp, obj) : null);
+    const price = entry ? shopBillEntryTotal(entry) : unpaidBillPrice(obj);
+    if (!shkp || !(price > 0) || (!entry && !obj.unpaid)) return false;
+    const dummy = {
+        ...obj,
+        id: next_ident(),
+        o_id: undefined,
+        letter: undefined,
+        line: undefined,
+        contained: false,
+        container: null,
+        contents: [],
+        cobj: [],
+        nobj: null,
+        nexthere: null,
+        ox: undefined,
+        oy: undefined,
+    };
+    if (entry) removeObjectFromShopBillById(shkp, entry.bo_id);
+    const dummyEntry = addObjectToShopBill(shkp, dummy, price, { useup: true });
+    if (!dummyEntry) return false;
+    rememberUsedUpShopBillEntry(obj, dummyEntry, price, shkp);
+    clearObjectShopBillState(obj);
+    return true;
+}
+
+function finishCreamPieSplat(item) {
+    if (!item) return false;
+    const pie = splitCarriedCreamPieForSplat(item);
+    const billed = billDummyAlteredCarriedObject(pie);
+    removeInventoryItem(pie);
+    return billed;
+}
+
 export function consumeLifeSavingAmulet({ clearStoning = false } = {}) {
     const lifesaving = (game.inventory || []).find(item =>
         item.worn && String(item.kind || item.actualKind || item.line || '').includes('life saving'));
@@ -30469,9 +30524,13 @@ export async function rhack(_cmd) {
                     newsym(x, y);
                 }
                 if (game._cream_pie_after_more_letter) {
-                    rn2(100);
+                    rn2(100); // C delobj() reaches obj_resists(obj, 0, 0).
                     const pie = (game.inventory || []).find(item => item.letter === game._cream_pie_after_more_letter);
-                    if (pie) removeInventoryItem(pie);
+                    if (pie && finishCreamPieSplat(pie)) {
+                        const queuedBefore = game._queued_messages_after_more?.length || 0;
+                        appendToplineAfterMoreMessages(['You splatter that cream pie, you pay for it!']);
+                        if ((game._queued_messages_after_more?.length || 0) > queuedBefore) keepMore = true;
+                    }
                     game._cream_pie_after_more_letter = '';
                 }
                 if (game._polyself_cloak_after_more_letter) {
@@ -36922,7 +36981,7 @@ export async function rhack(_cmd) {
             for (const mon of game.level?.monsters || []) newsym(mon.mx, mon.my);
             game._cream_pie_after_more_letter = item.letter;
             game._topline_after_more = "You can't see through all the sticky goop on your face.";
-            await setMessage('You immerse your face in the cream pie.', true);
+            await setMessage(`You immerse your face in ${(item.quan || 1) > 1 ? 'one of the cream pies' : 'the cream pie'}.`, true);
             return;
         }
         if (isRoyalJelly(item)) {

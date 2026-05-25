@@ -148,6 +148,22 @@ function foodRationStack(id, quan, letter = 'a') {
     };
 }
 
+function creamPie(id, letter = 'p', quan = 1) {
+    return {
+        id,
+        cls: 'food',
+        glyph: '%',
+        kind: 'cream pie',
+        actualKind: 'cream pie',
+        quan,
+        plural: quan > 1 ? 'cream pies' : undefined,
+        ox: 5,
+        oy: 5,
+        letter,
+        line: `${letter} - ${quan > 1 ? `${quan} cream pies` : 'a cream pie'}`,
+    };
+}
+
 function chargedTool(id, kind, letter = 't', spe = 3) {
     return {
         id,
@@ -1221,6 +1237,62 @@ test('applying an unpaid potion of oil charges fuel tax and keeps a used-up bill
     assert.match(game._pending_message, /You light your potion/);
     assert.match(game._pending_message, /Yendorian Fuel Tax/);
     assert.match(game._pending_message, /in addition to the cost of the potion/);
+});
+
+test('applying an unpaid cream pie to yourself bills a dummy used-up pie', async () => {
+    const { shkp } = installCommandShopState();
+    const pie = creamPie(3094, 'p');
+    game.inventory = [pie];
+    shop.addObjectToShopBill(shkp, pie, 10);
+
+    await rhack('a');
+    await rhack('p');
+
+    assert.equal(game.inventory.includes(pie), true);
+    assert.match(game._pending_message, /You immerse your face in the cream pie\./);
+
+    await rhack(' ');
+
+    assert.equal(game.inventory.includes(pie), false);
+    assert.equal(shkp.billct, 1);
+    assert.equal(shkp.bill.length, 1);
+    assert.equal(shkp.bill[0].useup, true);
+    assert.notEqual(String(shkp.bill[0].bo_id), String(pie.id));
+    assert.equal(shop.shopBillEntryTotal(shkp.bill[0]), 10);
+    assert.equal((game._usedUpShopBills || []).length, 1);
+    assert.equal(game._usedUpShopBills[0].bo_id, shkp.bill[0].bo_id);
+    assert.equal(game._usedUpShopBills[0].price, 10);
+    assert.equal(shop.shopBillEntryForObject(shkp, pie), null);
+});
+
+test('applying one unpaid cream pie from a stack preserves the live residual bill', async () => {
+    const { shkp } = installCommandShopState();
+    const pies = creamPie(3096, 'p', 2);
+    game.inventory = [pies];
+    shop.addObjectToShopBill(shkp, pies, 20);
+
+    await rhack('a');
+    await rhack('p');
+
+    assert.match(game._pending_message, /one of the cream pies/);
+
+    await rhack(' ');
+
+    assert.equal(game.inventory.includes(pies), true);
+    assert.equal(pies.quan, 1);
+    const liveEntry = shop.shopBillEntryForObject(shkp, pies);
+    assert.ok(liveEntry);
+    assert.equal(liveEntry.useup, false);
+    assert.equal(shop.shopBillEntryTotal(liveEntry), 10);
+    const usedEntry = shkp.bill.find(entry => entry !== liveEntry);
+    assert.ok(usedEntry);
+    assert.equal(usedEntry.useup, true);
+    assert.notEqual(String(usedEntry.bo_id), String(pies.id));
+    assert.equal(shop.shopBillEntryTotal(usedEntry), 10);
+    assert.equal(shkp.billct, 2);
+    assert.equal((game._usedUpShopBills || []).length, 1);
+    assert.equal(game._usedUpShopBills[0].bo_id, usedEntry.bo_id);
+    assert.equal(game._usedUpShopBills[0].price, 10);
 });
 
 test('rubbing a non-wielded magic lamp first wields it without releasing the djinni', async () => {
