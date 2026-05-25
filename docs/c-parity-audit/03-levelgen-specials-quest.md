@@ -144,7 +144,7 @@ Primary references:
 
 The JS port has many substantial hand-written builders. Covered examples include Oracle, Castle, Big Room, Medusa variants, Sokoban, Mines town/end variants, Wizard tower levels, several Gehennom levels, Fire and Air, Sanctum, Valley, Rogue, and selected quest levels.
 
-However, the model is coverage-by-builder. A special level in `js/dungeon.js` only works if `mklev()` dispatches to a builder for that name. The current codebase has dungeon entries without complete builder coverage, including Fort Ludios (`knox`), fake Wizard levels, Astral, Water, Earth, and Tutorial 2. Quest coverage is also partial: the builder table covers only some role/level combinations.
+However, the model is coverage-by-builder. A special level in `js/dungeon.js` only works if `mklev()` dispatches to a builder for that name. The current codebase has dungeon entries without complete builder coverage, including Fort Ludios (`knox`), fake Wizard levels, Astral, Water, Earth, and Tutorial 2. Quest coverage is also partial: the builder table covers only some role/level combinations. Castle now tags its closed drawbridge with C-style direction metadata so manual tune handling can find and toggle the bridge, but full drawbridge entity crushing, vision blocking, and achievement integration are still local approximations rather than a shared `dbridge.c` port.
 
 ### Rooms, corridors, and shops
 

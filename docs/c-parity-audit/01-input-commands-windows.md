@@ -96,6 +96,7 @@ The highest-value parity work is to add a small command/window compatibility lay
   - `js/display.js:1275` renders overlay lines, cursors, `(end)`, and `--More--`.
   - `js/cmd.js:31246` handles `helpMenu`.
   - `js/cmd.js:31720` handles the options menu.
+  - `js/cmd.js:9964` and `js/cmd.js:35906` now give musical instrument manual tunes a C-shaped local prompt flow: note normalization, `Play the passtune?`, cancel behavior, Stronghold tune awareness, and tumbler/gear feedback.
   - Many object, spell, loot, pay, and prompt flows are local `_command_mode` handlers rather than generic `NHW_MENU`/`select_menu` calls.
 
 ## Concrete Parity Gaps
@@ -179,6 +180,8 @@ Specific gaps:
 C has generic `getlin()` and `yn_function()` semantics. Tty `getlin()` has ESC behavior that clears existing text first, then returns ESC when empty. It also supports erase, kill, previous message display, and command queue input. Tty `yn_function()` handles defaults, ESC conversion to `q`/`n`/default, quitchars, case preservation when uppercase responses are present, and `#` numeric answers via `yn_number`.
 
 JS represents text prompts as `_command_mode` plus a per-prompt text field. Some modes implement backspace and ESC; others only accept or cancel. Yes/no prompts are usually direct branch checks against `y`, `n`, `q`, space, enter, or ESC.
+
+Recent coverage: musical instrument manual tune prompts now normalize typed notes, map `H` to `B`, handle known-passtune `ynq`, and preserve C-style cancel/no-time behavior for that local flow.
 
 Key evidence:
 

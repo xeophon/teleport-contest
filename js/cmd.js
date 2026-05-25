@@ -6,7 +6,7 @@ import { nhgetch } from './input.js';
 import { bot, cls, docrt, flush_screen, newsym, pline, recordObservedObjectDiscovery, refreshHallucinatedMap, seeNearbyObjects, show_glyph_cell, strengthString } from './display.js';
 import { cansee, couldsee, vision_recalc, vision_reset } from './vision.js';
 import { RANDOM_MONSTER_BY_NAME, SHOP_TYPES, STALKER_MONSTERS, add_to_container, add_to_minv, artifactDefinitionForName, artifactObjectName, enextoMonsterSpot, make_tutorial1_level, makemon, makeArtifactWishObject, maketrap, mkcorpstat, mklev, mkobj, mkobj_at, mksobj, monsterByRndName, morgueMonster, nameObjectAsArtifact, next_ident, object_display, potionIndexForRoll, resurrectWizardOfYendor, rndmonnum, scrollIndexForRoll, set_mimic_sym_rng, syncDungeonContext, u_on_dnstairs, u_on_rndspot, u_on_upstairs, wipe_engr_at, dropMonsterInventory as dropMonsterInventoryRaw, l_nhcore_init, getrumor, getbogusmon, level_difficulty, set_malign, somexyspace, fumaroles, createMonsterCorpseOrGlob, monsterCorpseDropSucceeds, monsterLeavesCorpseLikeDrop, movebubbles } from './mklev.js';
-import { ACCESSIBLE, A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_MAX, A_NEUTRAL, A_STR, A_WIS, ALTAR, AM_SANCTUM, AM_SHRINE, Amask2align, BC_BALL, BC_CHAIN, BEAR_TRAP, BLCORNER, BOLT_LIM, BRCORNER, CLOUD, COLNO, CORPSTAT_FEMALE, CORPSTAT_GENDER, CORPSTAT_HISTORIC, CORPSTAT_MALE, CORPSTAT_NEUTER, CORR, DB_FLOOR, DB_LAVA, DB_MOAT, DB_UNDER, DOOR, DRAWBRIDGE_UP, BURN, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, DUST, ENGRAVE, ENGR_BLOOD, FOUNTAIN, GRAVE, HEADSTONE, HWALL, ICE, IN_SIGHT, IS_AIR, IS_LAVA, IS_OBSTRUCTED, IS_POOL, IS_ROOM, IS_TREE, IS_WALL, In_endgame, In_quest, In_sokoban, In_V_tower, Is_airlevel, Is_astralevel, Is_botlevel, Is_earthlevel, Is_rogue_level, Is_stronghold, Is_waterlevel, LADDER, LAVAPOOL, LAVAWALL, MAGIC_PORTAL, MARK, MAX_EGG_HATCH_TIME, MM_EDOG, MM_NOCOUNTBIRTH, MM_NOMSG, MM_NOWAIT, MOAT, MORGUE, M_AP_TYPE, N_DIRS, NO_MINVENT, NORMAL_SPEED, OVERLOADED, P_BASIC, P_UNSKILLED, PIT, POOL, ROLLING_BOULDER_TRAP, ROOM, ROOMOFFSET, ROWNO, SCORR, SDOOR, SHOPBASE, SINK, SPIKED_PIT, STAIRS, STONE, TDWALL, TEMPLE, THRONE, TLCORNER, TRCORNER, TREE, TT_BEARTRAP, TT_BURIEDBALL, TT_INFLOOR, TT_LAVA, TT_PIT, TT_WEB, TUWALL, VAULT, VIBRATING_SQUARE, VWALL, WAND_BACKFIRE_CHANCE, WATER, WEB, WT_IRON_BALL_BASE, WT_IRON_BALL_INCR, W_NONDIGGABLE, ZAP_POS, isok, xdir, ydir } from './const.js';
+import { ACCESSIBLE, A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_MAX, A_NEUTRAL, A_STR, A_WIS, ALTAR, AM_SANCTUM, AM_SHRINE, Amask2align, BC_BALL, BC_CHAIN, BEAR_TRAP, BLCORNER, BOLT_LIM, BRCORNER, CLOUD, COLNO, CORPSTAT_FEMALE, CORPSTAT_GENDER, CORPSTAT_HISTORIC, CORPSTAT_MALE, CORPSTAT_NEUTER, CORR, DB_DIR, DB_EAST, DB_FLOOR, DB_LAVA, DB_MOAT, DB_NORTH, DB_SOUTH, DB_UNDER, DB_WEST, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, BURN, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, DUST, ENGRAVE, ENGR_BLOOD, FOUNTAIN, GRAVE, HEADSTONE, HWALL, ICE, IN_SIGHT, IS_AIR, IS_LAVA, IS_OBSTRUCTED, IS_POOL, IS_ROOM, IS_TREE, IS_WALL, In_endgame, In_quest, In_sokoban, In_V_tower, Is_airlevel, Is_astralevel, Is_botlevel, Is_earthlevel, Is_rogue_level, Is_stronghold, Is_waterlevel, LADDER, LAVAPOOL, LAVAWALL, MAGIC_PORTAL, MARK, MAX_EGG_HATCH_TIME, MM_EDOG, MM_NOCOUNTBIRTH, MM_NOMSG, MM_NOWAIT, MOAT, MORGUE, M_AP_TYPE, N_DIRS, NO_MINVENT, NORMAL_SPEED, OVERLOADED, P_BASIC, P_UNSKILLED, PIT, POOL, ROLLING_BOULDER_TRAP, ROOM, ROOMOFFSET, ROWNO, SCORR, SDOOR, SHOPBASE, SINK, SPIKED_PIT, STAIRS, STONE, TDWALL, TEMPLE, THRONE, TLCORNER, TRCORNER, TREE, TT_BEARTRAP, TT_BURIEDBALL, TT_INFLOOR, TT_LAVA, TT_PIT, TT_WEB, TUWALL, VAULT, VIBRATING_SQUARE, VWALL, WAND_BACKFIRE_CHANCE, WATER, WEB, WT_IRON_BALL_BASE, WT_IRON_BALL_INCR, W_NONDIGGABLE, ZAP_POS, isok, xdir, ydir } from './const.js';
 import { d, rn1, rn2, rn2_on_display_rng, rnd, rnl, rnz } from './rng.js';
 import { CLR_BLACK, CLR_BLUE, CLR_BRIGHT_BLUE, CLR_BRIGHT_CYAN, CLR_BRIGHT_GREEN, CLR_BROWN, CLR_CYAN, CLR_GRAY, CLR_GREEN, CLR_MAGENTA, CLR_ORANGE, CLR_RED, CLR_YELLOW, CLR_WHITE, NO_COLOR } from './terminal.js';
 import { vfsDeleteFile, vfsReadFile, vfsWriteFile } from './storage.js';
@@ -9961,16 +9961,181 @@ function leatherDrumImprovisationEffect(messages, { mundaneDowngrade = false, sa
     awakenMonstersWithInstrument((game.u?.ulevel || 1) * (mundaneDowngrade ? 5 : 40));
 }
 
-async function finishInstrumentTune(item) {
+function normalizeManualTuneText(text) {
+    return String(text || '')
+        .replace(/\t/g, ' ')
+        .replace(/^ +| +$/g, '')
+        .replace(/ {2,}/g, ' ')
+        .toUpperCase()
+        .replace(/H/g, 'B');
+}
+
+function drawbridgeDirectionAt(x, y) {
+    const loc = game.level?.at?.(x, y);
+    if (!loc || (loc.typ !== DRAWBRIDGE_UP && loc.typ !== DRAWBRIDGE_DOWN)) return null;
+    return (loc.flags || 0) & DB_DIR;
+}
+
+function wallCoordForDrawbridge(x, y) {
+    const dir = drawbridgeDirectionAt(x, y);
+    if (dir == null) return null;
+    if (dir === DB_NORTH) return { x, y: y - 1 };
+    if (dir === DB_SOUTH) return { x, y: y + 1 };
+    if (dir === DB_EAST) return { x: x + 1, y };
+    if (dir === DB_WEST) return { x: x - 1, y };
+    return null;
+}
+
+function isDrawbridgeWallAt(x, y) {
+    const loc = game.level?.at?.(x, y);
+    if (!loc || (loc.typ !== DOOR && loc.typ !== DBWALL)) return -1;
+    if (drawbridgeDirectionAt(x + 1, y) === DB_WEST) return DB_WEST;
+    if (drawbridgeDirectionAt(x - 1, y) === DB_EAST) return DB_EAST;
+    if (drawbridgeDirectionAt(x, y - 1) === DB_SOUTH) return DB_SOUTH;
+    if (drawbridgeDirectionAt(x, y + 1) === DB_NORTH) return DB_NORTH;
+    return -1;
+}
+
+function findDrawbridgeAtOrWall(x, y) {
+    const loc = game.level?.at?.(x, y);
+    if (loc?.typ === DRAWBRIDGE_UP || loc?.typ === DRAWBRIDGE_DOWN) return { x, y };
+    const dir = isDrawbridgeWallAt(x, y);
+    if (dir === DB_NORTH) return { x, y: y + 1 };
+    if (dir === DB_SOUTH) return { x, y: y - 1 };
+    if (dir === DB_EAST) return { x: x - 1, y };
+    if (dir === DB_WEST) return { x: x + 1, y };
+    return null;
+}
+
+function findAdjacentDrawbridge() {
+    for (let y = (game.u?.uy || 0) - 1; y <= (game.u?.uy || 0) + 1; y++) {
+        for (let x = (game.u?.ux || 0) - 1; x <= (game.u?.ux || 0) + 1; x++) {
+            if (!isok(x, y)) continue;
+            const found = findDrawbridgeAtOrWall(x, y);
+            if (found) return found;
+        }
+    }
+    return null;
+}
+
+function clearDrawbridgeSquareState(x, y) {
+    if (!game.level) return;
+    game.level.objects = (game.level.objects || []).filter(obj => obj.ox !== x || obj.oy !== y);
+    game.level.traps = (game.level.traps || []).filter(trap => trap.tx !== x || trap.ty !== y);
+    game.level.engravings = (game.level.engravings || []).filter(engr => engr.x !== x || engr.y !== y);
+}
+
+function drawbridgeVisible(x, y, wall) {
+    if (game.u?.blind) return false;
+    return !!(game.viz_array?.[y]?.[x] & IN_SIGHT)
+        || !!(game.viz_array?.[wall.y]?.[wall.x] & IN_SIGHT);
+}
+
+function toggleDrawbridgeForTune(x, y) {
+    const loc = game.level?.at?.(x, y);
+    const wall = wallCoordForDrawbridge(x, y);
+    const wallLoc = wall ? game.level?.at?.(wall.x, wall.y) : null;
+    if (!loc || !wall || !wallLoc) return '';
+    const ux = game.u?.ux || 0;
+    const uy = game.u?.uy || 0;
+    const distBridge = (ux - x) ** 2 + (uy - y) ** 2;
+    const distWall = (ux - wall.x) ** 2 + (uy - wall.y) ** 2;
+    let message = '';
+    if (loc.typ === DRAWBRIDGE_UP) {
+        message = drawbridgeVisible(x, y, wall)
+            ? `You see a drawbridge ${distWall < distBridge ? 'going' : 'coming'} down!`
+            : 'You hear gears turning and chains rattling.';
+        loc.typ = DRAWBRIDGE_DOWN;
+        wallLoc.typ = DOOR;
+        wallLoc.doormask = D_NODOOR;
+        if (game.u) {
+            game.u.uevent ??= {};
+            game.u.uevent.uopened_dbridge = 1;
+        }
+    } else if (loc.typ === DRAWBRIDGE_DOWN) {
+        const coming = ((ux === x || uy === y) && !(game.u?.underwater || game.u?.uunderwater)) || distWall < distBridge;
+        message = drawbridgeVisible(x, y, wall)
+            ? `You see a drawbridge ${coming ? 'coming' : 'going'} up!`
+            : 'You hear chains rattling and gears turning.';
+        loc.typ = DRAWBRIDGE_UP;
+        wallLoc.typ = DBWALL;
+        wallLoc.wall_info = W_NONDIGGABLE;
+        const dir = drawbridgeDirectionAt(x, y);
+        wallLoc.horizontal = dir === DB_NORTH || dir === DB_SOUTH;
+    }
+    clearDrawbridgeSquareState(x, y);
+    clearDrawbridgeSquareState(wall.x, wall.y);
+    newsym(x, y);
+    newsym(wall.x, wall.y);
+    return message;
+}
+
+function castleTuneFeedbackMessage(tune) {
+    const target = normalizeManualTuneText(game.castleTune || '');
+    if (!target) return '';
+    let tumblers = 0;
+    let gears = 0;
+    const matched = [false, false, false, false, false];
+    for (let i = 0; i < tune.length && i < 5; i++) {
+        if (tune[i] === target[i]) {
+            gears++;
+            matched[i] = true;
+        } else {
+            for (let j = 0; j < 5; j++) {
+                if (!matched[j] && tune[i] === target[j] && tune[j] !== target[j]) {
+                    tumblers++;
+                    matched[j] = true;
+                    break;
+                }
+            }
+        }
+    }
+    if (gears === 5 && game.u) {
+        game.u.uevent ??= {};
+        game.u.uevent.uheard_tune = 2;
+    }
+    const tumblerText = tumblers === 1 ? '1 tumbler click' : `${tumblers} tumblers click`;
+    const gearText = gears === 1 ? '1 gear turn' : `${gears} gears turn`;
+    if (tumblers && gears) return `You hear ${tumblerText} and ${gearText}.`;
+    if (tumblers) return `You hear ${tumblerText}.`;
+    if (gears) return `You hear ${gearText}.`;
+    return '';
+}
+
+function handleStrongholdManualTune(tune, messages) {
+    if (!Is_stronghold(game.u?.uz)) return;
+    exerciseAttribute(A_WIS, true);
+    const found = findAdjacentDrawbridge();
+    const target = normalizeManualTuneText(game.castleTune || '');
+    if (target && tune === target && found) {
+        game.u.uevent ??= {};
+        game.u.uevent.uheard_tune = 2;
+        const bridgeMessage = toggleDrawbridgeForTune(found.x, found.y);
+        if (bridgeMessage) messages.push(bridgeMessage);
+        return;
+    }
+    if (heroIsDeaf()) return;
+    game.u.uevent ??= {};
+    if ((game.u.uevent.uheard_tune || 0) < 1) game.u.uevent.uheard_tune = 1;
+    if (found) {
+        const feedback = castleTuneFeedbackMessage(tune);
+        if (feedback) messages.push(feedback);
+    }
+}
+
+async function finishInstrumentTune(item, tuneText = game._instrument_tune_text || '') {
     game._apply_instrument_letter = '';
     game._instrument_tune_text = '';
     game._command_mode = null;
     if (!item) return false;
+    const tune = normalizeManualTuneText(tuneText);
     const name = instrumentTheName(item).replace(/^The /, 'the ');
     const message = heroIsDeaf()
         ? `You can feel ${name} emitting vibrations.`
         : `You extract a strange sound from ${name}!`;
-    await setMessage(message);
+    const messages = [message];
+    handleStrongholdManualTune(tune, messages);
+    await setMessage(messages.join('  '), messages.length > 1);
     game.context.move = 1;
     return true;
 }
@@ -35750,6 +35915,11 @@ export async function rhack(_cmd) {
                 game._command_mode = null;
                 return;
             }
+            if ((game.u?.uevent?.uheard_tune || 0) === 2) {
+                await setMessage('Play the passtune? [ynq] (q)');
+                game._command_mode = 'instrumentPasstunePrompt';
+                return;
+            }
             game._instrument_tune_text = '';
             await setMessage('What tune are you playing? [5 notes, A-G]');
             game._command_mode = 'instrumentTuneText';
@@ -35757,6 +35927,29 @@ export async function rhack(_cmd) {
         }
         if (ch === 'q' || ch === '\x1b' || ch === ' ' || ch === '\r' || ch === '\n') {
             game._apply_instrument_letter = '';
+            game._command_mode = null;
+            await setMessage('Never mind.');
+            return;
+        }
+        game._keep_pending_message = 1;
+        return;
+    }
+
+    if (game._command_mode === 'instrumentPasstunePrompt') {
+        const item = (game.inventory || []).find(invItem => invItem.letter === game._apply_instrument_letter);
+        if (ch === 'y') {
+            await finishInstrumentTune(item, game.castleTune || '');
+            return;
+        }
+        if (ch === 'n') {
+            game._instrument_tune_text = '';
+            await setMessage('What tune are you playing? [5 notes, A-G]');
+            game._command_mode = 'instrumentTuneText';
+            return;
+        }
+        if (ch === 'q' || ch === '\x1b' || ch === ' ' || ch === '\r' || ch === '\n') {
+            game._apply_instrument_letter = '';
+            game._instrument_tune_text = '';
             game._command_mode = null;
             await setMessage('Never mind.');
             return;

@@ -4,7 +4,7 @@ import test from 'node:test';
 import { burnFloorObjectsByFire, processSpellbookStudyOccupation, rhack, __shopBillingTestHooks as shop } from '../js/cmd.js';
 import { game, resetGame } from '../js/gstate.js';
 import { initRng } from '../js/rng.js';
-import { LAVAPOOL, ROOM, ROOMOFFSET, SHOPBASE } from '../js/const.js';
+import { DB_EAST, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, LAVAPOOL, ROOM, ROOMOFFSET, SHOPBASE } from '../js/const.js';
 
 const BRASS_LANTERN = 226;
 const OIL_LAMP = 227;
@@ -164,6 +164,24 @@ function installNoBlowButHandsForm() {
         breathless: true,
         verysmall: true,
     };
+}
+
+function installStrongholdInstrumentState(tune = 'ABCDE') {
+    const { shkp } = installCommandShopState();
+    makeInstrumentApplyDeterministic(shkp);
+    game.castleTune = tune;
+    game.u.uz = { dnum: 0, dlevel: 10 };
+    game.u.uevent = {};
+    game.stronghold_level = { dnum: 0, dlevel: 10 };
+    const cells = new Map();
+    const key = (x, y) => `${x},${y}`;
+    const bridge = { typ: DRAWBRIDGE_UP, flags: DB_EAST | DB_MOAT, roomno: ROOMOFFSET };
+    const wall = { typ: DBWALL, flags: 0, roomno: ROOMOFFSET };
+    cells.set(key(6, 5), bridge);
+    cells.set(key(7, 5), wall);
+    game.level.at = (x, y) => cells.get(key(x, y)) || { typ: ROOM, roomno: ROOMOFFSET };
+    game.viz_array = Array.from({ length: 21 }, () => Array(80).fill(0));
+    return { shkp, bridge, wall };
 }
 
 function crystalBall(id, letter = 'c', spe = 2) {
@@ -1813,6 +1831,83 @@ test('no-blow form gates flutes horns and bugles but not harp or drum', async ()
         assert.equal(game.context.move, 1);
         assert.match(game._pending_message, /deafening row|pound on the drum/i);
     }
+});
+
+test('manual instrument tune normalizes notes and opens the stronghold drawbridge', async () => {
+    const { bridge, wall } = installStrongholdInstrumentState('ABCDE');
+    const flute = ordinaryTool(3450, 'wooden flute', 'f');
+    game.inventory = [flute];
+
+    await rhack('a');
+    await rhack('f');
+    await rhack('n');
+    for (const ch of 'ahcde') await rhack(ch);
+    await rhack('\n');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.match(game._pending_message, /extract a strange sound from the wooden flute/i);
+    assert.equal(game.u.uevent.uheard_tune, 2);
+    assert.equal(game.u.uevent.uopened_dbridge, 1);
+    assert.equal(bridge.typ, DRAWBRIDGE_DOWN);
+    assert.equal(wall.typ, DOOR);
+});
+
+test('known passtune prompt can cancel or play the castle tune', async () => {
+    {
+        installStrongholdInstrumentState('CDEFG');
+        game.u.uevent.uheard_tune = 2;
+        const harp = ordinaryTool(3451, 'wooden harp', 'h');
+        game.inventory = [harp];
+
+        await rhack('a');
+        await rhack('h');
+        await rhack('n');
+
+        assert.equal(game._command_mode, 'instrumentPasstunePrompt');
+        assert.match(game._pending_message, /Play the passtune\?/);
+
+        await rhack('q');
+
+        assert.equal(game._command_mode, null);
+        assert.equal(game.context.move || 0, 0);
+        assert.match(game._pending_message, /Never mind/);
+    }
+
+    {
+        const { bridge, wall } = installStrongholdInstrumentState('CDEFG');
+        game.u.uevent.uheard_tune = 2;
+        const harp = ordinaryTool(3452, 'wooden harp', 'h');
+        game.inventory = [harp];
+
+        await rhack('a');
+        await rhack('h');
+        await rhack('n');
+        await rhack('y');
+
+        assert.equal(game._command_mode, null);
+        assert.equal(game.context.move, 1);
+        assert.equal(bridge.typ, DRAWBRIDGE_DOWN);
+        assert.equal(wall.typ, DOOR);
+        assert.equal(game.u.uevent.uheard_tune, 2);
+    }
+});
+
+test('wrong stronghold tune gives mastermind feedback and marks tune awareness', async () => {
+    installStrongholdInstrumentState('ABCDE');
+    const horn = ordinaryTool(3453, 'tooled horn', 't');
+    game.inventory = [horn];
+
+    await rhack('a');
+    await rhack('t');
+    await rhack('n');
+    for (const ch of 'aeczz') await rhack(ch);
+    await rhack('\n');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.u.uevent.uheard_tune, 1);
+    assert.match(game._pending_message, /1 tumbler click and 2 gears turn/);
 });
 
 test('unpaid charged object with no remaining charges is not billed for usage', () => {
