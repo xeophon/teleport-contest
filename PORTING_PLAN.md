@@ -45,6 +45,7 @@ The current audit source of truth is `docs/c-parity-audit/`.
 - Added narrow carried magic-bag held-loss billing: vanished top-level unpaid contents convert bill rows to debt/robbed after credit, while nested unpaid contents inside non-unpaid vanished containers remain used-up bill rows.
 - Added magic-bag scatter/useup bill preservation: explosion scatter breakage and consumed-on-hit destruction keep unpaid rows as used-up bills, tipped trigger/target bag destruction uses the same `obfree()`-style preservation, and scattered unpaid stacks split bill rows before each chunk is handled.
 - Added magic-bag scatter destructive floor-effect bill preservation: unpaid objects destroyed by lava/water/hot-ground or boulder landing effects now keep existing bill rows as used-up entries without treating hole migration or glob melding as deletion.
+- Added C-style unpaid food bite billing: first-touch food splits now route through a `costly_alteration(COST_BITE)`-equivalent shop ledger path, preserving live stack rows while moving bitten portions to used-up bill rows.
 - Latest verified public score: `44/44`.
 
 ## Current Priorities
@@ -52,7 +53,7 @@ The current audit source of truth is `docs/c-parity-audit/`.
 1. Shop ledger foundation.
    - Source notes: `docs/c-parity-audit/05-food-inventory-containers-shops.md`.
    - Current JS has a starter bill ledger, but object `unpaid`/`unpaidPrice` fields and legacy fallback scans still participate in billing.
-   - Missing or partial concepts include full `addtobill`, full `subfrombill` routing, non-ordinary magic-bag source/target cases, full `obfree()`/container-aware `stolen_value()` helper integration, special-stock/uninterested `sellobj()` polish, `picked_container`, `check_unpaid_usage`, and `costly_alteration`.
+   - Missing or partial concepts include full `addtobill`, full `subfrombill` routing, non-ordinary magic-bag source/target cases, full `obfree()`/container-aware `stolen_value()` helper integration, special-stock/uninterested `sellobj()` polish, `picked_container`, `check_unpaid_usage`, and non-bite `costly_alteration` coverage.
    - The next narrow C-backed gaps are non-ordinary magic-bag sources/targets, lift/capacity/slot failures, bill-aware stack/merge/destruction edge cases, generic floor-effect deletion ownership, and payment container/robbed-shop semantics.
 
 2. Object registry and canonical object factory.

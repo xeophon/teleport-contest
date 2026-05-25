@@ -9334,11 +9334,33 @@ function takePretouchedFoodId(item) {
     return id;
 }
 
+function costlyBiteFood(item, { floorObject = false } = {}) {
+    if (!item || item.oeaten > 0) return false;
+    if (floorObject) {
+        const x = item.ox ?? game.u?.ux;
+        const y = item.oy ?? game.u?.uy;
+        const shkp = shopkeeperForCostlySpot(x, y);
+        if (!shopkeeperInHisShop(shkp)) return false;
+        const entry = shopBillEntryForObject(shkp, item);
+        const price = entry ? shopBillEntryTotal(entry) : shopItemPrice(item, x, y);
+        if (!(price > 0)) return false;
+        if (!entry && !addObjectToShopBill(shkp, item, price, { useup: true })) return false;
+        const billed = markObjectShopBillUsedUp(item, shkp);
+        if (billed) item.no_charge = true;
+        return billed;
+    }
+    if (!item.unpaid && !shopkeeperOwningBillEntry(item).entry) return false;
+    return markObjectShopBillUsedUp(item);
+}
+
 function touchInventoryFood(item) {
     if (!item) return item;
+    const firstBite = !(item.oeaten > 0);
     if ((item.quan || 1) <= 1) {
         clearPretouchedFood(item);
+        if (firstBite) costlyBiteFood(item);
         ensureFoodOeaten(item);
+        refreshInventoryObjectLine(item);
         return item;
     }
     const id = takePretouchedFoodId(item) ?? next_ident();
@@ -9346,7 +9368,11 @@ function touchInventoryFood(item) {
     clearPretouchedFood(split);
     delete split.oeaten;
     item.quan--;
+    if (item.unpaid && !splitCarriedObjectShopBill(item, split, 1))
+        clearObjectShopBillState(split);
     refreshInventoryObjectLine(item);
+    if (item.unpaid) syncUnpaidBillLine(item);
+    if (firstBite) costlyBiteFood(split);
     ensureFoodOeaten(split);
     refreshInventoryObjectLine(split);
     game.inventory.push(split);
@@ -9355,16 +9381,20 @@ function touchInventoryFood(item) {
 
 function touchFloorFood(item) {
     if (!item) return item;
+    const firstBite = !(item.oeaten > 0);
     if ((item.quan || 1) > 1) {
         const rest = { ...item, id: takePretouchedFoodId(item) ?? next_ident(), quan: (item.quan || 1) - 1 };
         clearPretouchedFood(rest);
         delete rest.oeaten;
         item.quan = 1;
+        if (item.unpaid && !splitCarriedObjectShopBill(item, rest, rest.quan || 1))
+            clearObjectShopBillState(rest);
         game.level.objects ??= [];
         game.level.objects.push(rest);
     } else {
         clearPretouchedFood(item);
     }
+    if (firstBite) costlyBiteFood(item, { floorObject: true });
     ensureFoodOeaten(item);
     newsym(item.ox, item.oy);
     return item;
@@ -14125,6 +14155,7 @@ export const __shopBillingTestHooks = {
     tipContainerContents,
     tipContainerIntoContainer,
     tipContainerToFloor,
+    touchFoodForBiteTest: touchEatenFood,
     shopDroppedPaidObjectSaleInfo,
     shopBillEntryForObject,
     shopBillEntryQuantity,
@@ -21225,8 +21256,9 @@ async function finishRoyalJellyEating(item, floorObject, baseMessage, { more = f
 }
 
 async function eatRoyalJelly(item, floorObject = false) {
-    const name = pickupObjectName({ ...(item || {}), quan: 1 });
-    await finishRoyalJellyEating(item, floorObject, `This ${name} is delicious!`);
+    const touched = touchEatenFood(item, floorObject);
+    const name = pickupObjectName({ ...(touched || {}), quan: 1 });
+    await finishRoyalJellyEating(touched, floorObject, `This ${name} is delicious!`);
 }
 
 async function finishFatalEatingMessage(message) {
@@ -22817,7 +22849,8 @@ async function eatRottenEgg(item, floorObject = false) {
 }
 
 async function eatPyroliskEgg(item, floorObject = false) {
-    consumeOneEatenFood(item, floorObject);
+    const touched = touchEatenFood(item, floorObject);
+    consumeOneEatenFood(touched, floorObject);
     const result = resolvePyroliskEggExplosion(game.u?.ux || 0, game.u?.uy || 0, d(3, 6));
     await setMessage(result.messages.join('  '), result.more);
     game._command_mode = null;
@@ -22825,10 +22858,11 @@ async function eatPyroliskEgg(item, floorObject = false) {
 }
 
 async function eatStaleEgg(item, floorObject = false) {
+    const touched = touchEatenFood(item, floorObject);
     addHeroVomiting(d(10, 4));
-    if (item.oeaten > 0) addHeroNutrition(item.oeaten);
-    consumeOneEatenFood(item, floorObject);
-    const petrificationMessage = startPetrifyingEggStoning(item);
+    if (touched.oeaten > 0) addHeroNutrition(touched.oeaten);
+    consumeOneEatenFood(touched, floorObject);
+    const petrificationMessage = startPetrifyingEggStoning(touched);
     await setMessage(appendPetrificationMessage('Ugh.  Rotten egg.', petrificationMessage));
     game._command_mode = null;
     game.context.move = 1;
@@ -38231,17 +38265,13 @@ export async function rhack(_cmd) {
                 await eatRoyalJelly(item);
                 return;
             }
-            if ((item.quan || 1) > 1) {
-                if (takePretouchedFoodId(item) == null) next_ident();
-            } else {
-                clearPretouchedFood(item);
-            }
-            recordFoodConduct(item);
-            if (item.kind === 'clove of garlic') scareNearbyOlfactoryMonstersWithGarlic();
-            addHeroNutrition(item.oeaten > 0 ? item.oeaten : foodObjectNutrition(item));
-            removeInventoryItem(item);
+            const touched = touchEatenFood(item);
+            recordFoodConduct(touched);
+            if (touched.kind === 'clove of garlic') scareNearbyOlfactoryMonstersWithGarlic();
+            addHeroNutrition(touched.oeaten > 0 ? touched.oeaten : foodObjectNutrition(touched));
+            removeInventoryItem(touched);
             game._pet_food_scan_inventory = game.inventory || [];
-            const petrificationMessage = startPetrifyingEggStoning(item);
+            const petrificationMessage = startPetrifyingEggStoning(touched);
             const eatMessage = item.kind === 'apple'
                 ? 'Delicious!  Must be a Macintosh!'
                 : `This ${name} is delicious!`;
@@ -38411,11 +38441,12 @@ export async function rhack(_cmd) {
                 await eatRoyalJelly(food, true);
                 return;
             }
-            addHeroNutrition(food.oeaten > 0 ? food.oeaten : foodObjectNutrition(food));
-            recordFoodConduct(food);
-            if (food?.kind === 'clove of garlic') scareNearbyOlfactoryMonstersWithGarlic();
-            consumeOneFloorObject(food);
-            const petrificationMessage = startPetrifyingEggStoning(food);
+            const touched = touchEatenFood(food, true);
+            addHeroNutrition(touched.oeaten > 0 ? touched.oeaten : foodObjectNutrition(touched));
+            recordFoodConduct(touched);
+            if (touched?.kind === 'clove of garlic') scareNearbyOlfactoryMonstersWithGarlic();
+            consumeOneFloorObject(touched);
+            const petrificationMessage = startPetrifyingEggStoning(touched);
             await setMessage(appendPetrificationMessage(`This ${name} is delicious!`, petrificationMessage));
             game._command_mode = null;
             game.context.move = 1;

@@ -246,6 +246,88 @@ test('shop-created carried objects use the same ledger representation', () => {
     assert.equal(shop.shopBillEntryTotal(bill), 45);
 });
 
+test('first bite of unpaid carried food stack splits live and used-up bill rows', () => {
+    const { shkp } = installShopState();
+    const stack = foodRation(3101, 'a');
+    stack.quan = 2;
+    stack.line = 'a - 2 food rations';
+    game.inventory = [stack];
+    shop.addObjectToShopBill(shkp, stack, 90);
+
+    const touched = shop.touchFoodForBiteTest(stack, false);
+
+    assert.notEqual(touched, stack);
+    assert.equal(game.inventory.includes(touched), true);
+    assert.equal(stack.quan, 1);
+    assert.equal(touched.quan, 1);
+    assert.equal(touched.oeaten, 800);
+    assert.equal(stack.unpaid, true);
+    assert.equal(stack.unpaidPrice, 45);
+    assert.match(stack.line, /unpaid, 45 zorkmids/);
+    assert.notEqual(touched.unpaid, true);
+    assert.equal(touched.unpaidPrice, undefined);
+    assert.equal(shkp.billct, 2);
+    const live = shop.shopBillEntryForObject(shkp, stack);
+    const bite = shop.shopBillEntryForObject(shkp, touched);
+    assert.ok(live);
+    assert.ok(bite);
+    assert.equal(live.useup, false);
+    assert.equal(bite.useup, true);
+    assert.equal(shop.shopBillEntryTotal(live), 45);
+    assert.equal(shop.shopBillEntryTotal(bite), 45);
+    assert.equal(game._usedUpShopBills.some(bill => String(bill.bo_id) === String(touched.id)), true);
+    const debts = shop.collectPayableShopDebts(shkp);
+    assert.equal(debts.some(entry => entry.billPortion === 'fullyUsedUp' && entry.price === 45), true);
+    assert.equal(debts.some(entry => entry.billPortion === 'intact' && entry.price === 45), true);
+});
+
+test('repeated bite touch on partly eaten food does not double bill', () => {
+    const { shkp } = installShopState();
+    const ration = foodRation(3111, 'a');
+    game.inventory = [ration];
+    shop.addObjectToShopBill(shkp, ration, 45);
+
+    const touched = shop.touchFoodForBiteTest(ration, false);
+    const again = shop.touchFoodForBiteTest(touched, false);
+
+    assert.equal(again, touched);
+    assert.equal(shkp.billct, 1);
+    const entry = shop.shopBillEntryForObject(shkp, touched);
+    assert.ok(entry);
+    assert.equal(entry.useup, true);
+    assert.equal(shop.shopBillEntryTotal(entry), 45);
+    assert.equal((game._usedUpShopBills || []).filter(bill => String(bill.bo_id) === String(touched.id)).length, 1);
+});
+
+test('first bite of shop-floor food stack bills only the touched unit', () => {
+    const { shkp } = installShopState();
+    const floor = foodRation(3121);
+    floor.quan = 2;
+    delete floor.letter;
+    delete floor.line;
+    game.level.objects = [floor];
+    const expected = shop.shopItemPrice({ ...floor, quan: 1 }, 5, 5);
+
+    const touched = shop.touchFoodForBiteTest(floor, true);
+
+    assert.equal(touched, floor);
+    assert.equal(floor.quan, 1);
+    assert.equal(floor.oeaten, 800);
+    assert.equal(floor.no_charge, true);
+    assert.notEqual(floor.unpaid, true);
+    const rest = game.level.objects.find(obj => obj !== floor && obj.kind === 'food ration');
+    assert.ok(rest);
+    assert.equal(rest.quan, 1);
+    assert.notEqual(rest.unpaid, true);
+    assert.notEqual(rest.no_charge, true);
+    assert.equal(shkp.billct, 1);
+    const entry = shop.shopBillEntryForObject(shkp, floor);
+    assert.ok(entry);
+    assert.equal(entry.useup, true);
+    assert.equal(shop.shopBillEntryTotal(entry), expected);
+    assert.equal(game._usedUpShopBills.some(bill => String(bill.bo_id) === String(floor.id)), true);
+});
+
 test('shop pickup merge rejects unpaid into paid and combines compatible unpaid bills', () => {
     const { shkp } = installShopState();
     const floorObj = foodRation(4001, 'b');

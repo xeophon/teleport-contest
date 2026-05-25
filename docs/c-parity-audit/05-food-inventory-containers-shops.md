@@ -115,7 +115,7 @@ Current JS has touch/split helpers and a basic `_eating_turns_remaining` occupat
 
 Concrete gaps:
 
-- `touchInventoryFood()` and `touchFloorFood()` split and set `oeaten` but do not call a C-equivalent `costly_alteration(COST_BITE)` (`js/cmd.js:9309-9342` vs `eat.c:360-388`, `mkobj.c:752-826`).
+- `touchInventoryFood()` and `touchFloorFood()` now split, set `oeaten`, and charge unpaid shop food through a C-equivalent `costly_alteration(COST_BITE)` path; remaining victual gaps are per-turn nutrition/use-up and interruption parity.
 - Inventory corpse eating removes the item before the occupation finishes (`js/cmd.js:36274-36299`), while C keeps the food as `svc.context.victual.piece` until `done_eating()` or an effect consumes/revives it.
 - Generic non-corpse food applies full nutrition and removes the object in one command (`js/cmd.js:36331-36347`, `js/cmd.js:36511-36518`), bypassing C `oc_delay`, `fprefx()`, `fpostfx()`, `lesshungry()`, and choking logic.
 - `consumeOeaten()` clamps `oeaten` to at least 1 (`js/cmd.js:9278-9283`); C consumes `oeaten` toward use-up and can finish/delete the object through `done_eating()`/`useup()` (`eat.c:544-573`, `eat.c:3136-3154`).
@@ -201,7 +201,7 @@ Concrete gaps:
 - `collectPayableShopDebts()` now enumerates selected shopkeeper bill rows first and splits `bquan > quan` rows into used-up/intact portions, but retains object-field fallback scanning for legacy unpaid objects (`js/cmd.js:18867-18895`).
 - Payment now applies shop credit before cash for selected ledger rows and shrinks partly used bills before intact rows can clear them, but container itemized payment, full queued-selection behavior, and robbed-shop payment still do not match C.
 - `get_cost()` parity is incomplete: JS has base tables, unknown-name surcharge, enchantment surcharge, charisma adjustment, and pricing units (`js/cmd.js:18486-18713`), but not full C role/status/shopkeeper anger/tourist/dunce/artifact/contained/no-charge/price-quote side effects.
-- Generic `costly_alteration()` is absent. JS has local billing for buried merchandise, charged bag/horn use, and horn-created objects, but not the shared bite/open/destroy/cancel/degrade billing hook used across C.
+- Generic `costly_alteration()` is still partial. JS now covers unpaid food `COST_BITE`, plus local billing for buried merchandise, charged bag/horn use, and horn-created objects, but not the shared open/destroy/cancel/degrade billing hook used across C.
 - Used-up unpaid items are not centralized. C `useup()`/`obfree()` preserve bills for consumed unpaid objects; JS only remembers selected corpse rot/glob shrink, projectile, payment, and magic-bag destruction paths.
 
 ## Recommended Implementation Slices
@@ -213,7 +213,7 @@ Concrete gaps:
 
 2. Port `touchfood()` and the victual core.
    - Model `piece`, `usedtime`, `reqtime`, `nmod`, `canchoke`, and `fullwarn`.
-   - Charge `COST_BITE` on first touch, consume `oeaten` per tick, and route finished/used-up unpaid food through the shop ledger.
+   - Keep first-touch `COST_BITE` billing wired through the shop ledger, then consume `oeaten` per tick and route finished/used-up unpaid food through central use-up handling.
    - Preserve interruption/resume behavior before expanding more corpse effects.
 
 3. Port tins on top of the ledger and victual/use-up helpers.
@@ -236,7 +236,7 @@ Concrete gaps:
 
 ## Highest-Risk Current Behaviors
 
-- Eating unpaid shop food or tins can avoid C billing because `costly_alteration()` and `costly_tin()` are missing.
+- Tins and non-bite alterations can still avoid C billing because `costly_tin()` and generic non-bite `costly_alteration()` coverage are missing.
 - Multi-pickup still lacks full C quote/lift semantics, and split-stack object identity can still lose unpaid/shop state in non-projectile delete, container, and generic merge paths.
 - Container-moving objects in shops and complex drops still do not exercise full C `sellobj()`/`addtobill()`/`subfrombill()` paths outside ordinary dropped-container, angry/robbed `sellobj()` shopkeeper-state, ordinary gold drop/pickup paths, ordinary shop-floor magic-bag tip loss/put-in explosion slices, narrow carried magic-bag held-loss billing, and magic-bag scatter/useup plus destructive floor-effect preservation; special-stock/uninterested cases and generic merge/destruction paths remain high-risk.
 - Carried/non-ordinary loss sources/targets and destroyed recursive contents can still miss full C `obfree()` preservation and `stolen_value()` debt naming; carried held/blast-loss billing and selected scatter/useup preservation are covered through local helpers, not a general C-shaped subsystem.
