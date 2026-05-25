@@ -2898,12 +2898,16 @@ test('container take-out artifact refusal happens before billing or extraction',
         quan: 1,
     });
     game.level.objects = [container];
+    game.u.uhp = 80;
+    game.u.uhpmax = 80;
     game._startup_role = 'Wizard';
     game.u.ualign = { type: -1, record: 0 };
 
     await confirmSingleContainerTakeout(container, artifact, 'a', 'Tools');
 
+    assert.match(game._pending_message, /You are blasted by the Orb of Detection's power/);
     assert.match(game._pending_message, /Orb of Detection evades your grasp/);
+    assert.ok(game.u.uhp > 0 && game.u.uhp < 80);
     assert.equal(container.contents.includes(artifact), true);
     assert.equal(game.inventory.includes(artifact), false);
     assert.equal(artifact.contained, true);
@@ -2911,6 +2915,72 @@ test('container take-out artifact refusal happens before billing or extraction',
     assert.equal(artifact.unpaid, undefined);
     assert.equal(shkp.billct, 0);
     assert.equal(shkp.bill.length, 0);
+    assert.equal(game.context.move || 0, 0);
+});
+
+test('container take-out artifact blast can still allow billing and extraction', async () => {
+    const { shkp } = installCommandShopState();
+    const container = shopFloorContainer(6141);
+    const artifact = putObjectInContainer(container, {
+        id: 6142,
+        cls: 'tool',
+        glyph: '(',
+        kind: 'crystal ball',
+        actualKind: 'crystal ball',
+        artifact: 'The Orb of Detection',
+        quan: 1,
+    });
+    game.level.objects = [container];
+    game.u.uhp = 80;
+    game.u.uhpmax = 80;
+    game._startup_role = 'Archeologist';
+    game.u.ualign = { type: -1, record: 0 };
+
+    await confirmSingleContainerTakeout(container, artifact, 'a', 'Tools');
+
+    assert.match(game._pending_message, /You are blasted by the Orb of Detection's power/);
+    assert.doesNotMatch(game._pending_message, /evades your grasp/);
+    assert.ok(game.u.uhp > 0 && game.u.uhp < 80);
+    assert.equal(container.contents.includes(artifact), false);
+    assert.equal(game.inventory.includes(artifact), true);
+    assert.equal(artifact.contained, false);
+    assert.equal(artifact.container, null);
+    assert.equal(artifact.unpaid, true);
+    assert.ok(shop.shopBillEntryForObject(shkp, artifact));
+    assert.equal(game.context.move, 1);
+});
+
+test('lethal container take-out artifact blast stops before billing or extraction', async () => {
+    const { shkp } = installCommandShopState();
+    const container = shopFloorContainer(6143);
+    const artifact = putObjectInContainer(container, {
+        id: 6144,
+        cls: 'tool',
+        glyph: '(',
+        kind: 'crystal ball',
+        actualKind: 'crystal ball',
+        artifact: 'The Orb of Detection',
+        quan: 1,
+    });
+    game.level.objects = [container];
+    game.u.uhp = 1;
+    game.u.uhpmax = 1;
+    game._startup_role = 'Wizard';
+    game.u.ualign = { type: -1, record: 0 };
+
+    await confirmSingleContainerTakeout(container, artifact, 'a', 'Tools');
+
+    assert.match(game._pending_message, /You are blasted by the Orb of Detection's power/);
+    assert.match(game._pending_message, /You die/);
+    assert.equal(container.contents.includes(artifact), true);
+    assert.equal(game.inventory.includes(artifact), false);
+    assert.equal(artifact.contained, true);
+    assert.equal(artifact.container, container);
+    assert.equal(artifact.unpaid, undefined);
+    assert.equal(shkp.billct, 0);
+    assert.equal(shkp.bill.length, 0);
+    assert.equal(game.u.uhp, 0);
+    assert.equal(game._death_cause, 'touching The Orb of Detection');
     assert.equal(game.context.move || 0, 0);
 });
 

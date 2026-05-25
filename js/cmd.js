@@ -7225,41 +7225,79 @@ export function inventoryItemName(item) {
 }
 
 const ARTIFACT_ALIGN_TYPE = { lawful: 1, neutral: 0, chaotic: -1 };
-const QUEST_ARTIFACT_ALIGN_TYPE = Object.freeze({
-    'The Orb of Detection': 1,
-    'The Heart of Ahriman': 0,
-    'The Sceptre of Might': 1,
-    'The Staff of Aesculapius': 0,
-    'The Magic Mirror of Merlin': 1,
-    'The Eyes of the Overworld': 0,
-    'The Mitre of Holiness': 1,
-    'The Longbow of Diana': -1,
-    'The Master Key of Thievery': -1,
-    'The Tsurugi of Muramasa': 1,
-    'The Platinum Yendorian Express Card': 0,
-    'The Orb of Fate': 0,
-    'The Eye of the Aethiopica': 0,
+const ARTIFACT_TOUCH_METADATA = Object.freeze({
+    Excalibur: { restricted: true, selfWilled: true, alignment: 1, role: 'Knight' },
+    Stormbringer: { restricted: true, selfWilled: true, alignment: -1 },
+    Mjollnir: { restricted: true, alignment: 0 },
+    Cleaver: { restricted: true, alignment: 0 },
+    Grimtooth: { restricted: true, alignment: -1 },
+    Magicbane: { restricted: true, alignment: 0 },
+    'Frost Brand': { restricted: true, alignment: null },
+    'Fire Brand': { restricted: true, alignment: null },
+    Dragonbane: { restricted: true, alignment: null },
+    Demonbane: { restricted: true, alignment: 1 },
+    Werebane: { restricted: true, alignment: null },
+    Grayswandir: { restricted: true, alignment: 1 },
+    Giantslayer: { restricted: true, alignment: 0 },
+    Ogresmasher: { restricted: true, alignment: null },
+    Trollsbane: { restricted: true, alignment: null },
+    'Vorpal Blade': { restricted: true, alignment: 0 },
+    Snickersnee: { restricted: true, alignment: 1 },
+    Sunsword: { restricted: true, alignment: 1 },
+    'The Orb of Detection': { restricted: true, selfWilled: true, alignment: 1, role: 'Archeologist' },
+    'The Heart of Ahriman': { restricted: true, selfWilled: true, alignment: 0, role: 'Barbarian' },
+    'The Sceptre of Might': { restricted: true, selfWilled: true, alignment: 1, role: 'Caveman' },
+    'The Staff of Aesculapius': { restricted: true, selfWilled: true, alignment: 0, role: 'Healer' },
+    'The Magic Mirror of Merlin': { restricted: true, selfWilled: true, alignment: 1, role: 'Knight' },
+    'The Eyes of the Overworld': { restricted: true, selfWilled: true, alignment: 0, role: 'Monk' },
+    'The Mitre of Holiness': { restricted: true, selfWilled: true, alignment: 1, role: 'Priest' },
+    'The Longbow of Diana': { restricted: true, selfWilled: true, alignment: -1, role: 'Ranger' },
+    'The Master Key of Thievery': { restricted: true, selfWilled: true, alignment: -1, role: 'Rogue' },
+    'The Tsurugi of Muramasa': { restricted: true, selfWilled: true, alignment: 1, role: 'Samurai' },
+    'The Platinum Yendorian Express Card': { restricted: true, selfWilled: true, alignment: 0, role: 'Tourist' },
+    'The Orb of Fate': { restricted: true, selfWilled: true, alignment: 0, role: 'Valkyrie' },
+    'The Eye of the Aethiopica': { restricted: true, selfWilled: true, alignment: 0, role: 'Wizard' },
 });
+
+function artifactTouchMetadata(def) {
+    return def ? ARTIFACT_TOUCH_METADATA[def.name] || null : null;
+}
 
 function artifactAlignmentType(def) {
     if (!def) return null;
     const explicit = ARTIFACT_ALIGN_TYPE[def.alignment];
     if (explicit != null) return explicit;
-    return QUEST_ARTIFACT_ALIGN_TYPE[def.name] ?? null;
+    return artifactTouchMetadata(def)?.alignment ?? null;
 }
 
 function artifactIsRestricted(def) {
-    return !!def?.restricted || !!def?.questArtifact;
+    return !!def?.restricted || !!def?.questArtifact || !!artifactTouchMetadata(def)?.restricted;
+}
+
+function artifactIsSelfWilled(def) {
+    return !!def?.questArtifact || !!artifactTouchMetadata(def)?.selfWilled;
+}
+
+function artifactTouchRole(def) {
+    return def?.questRole || artifactTouchMetadata(def)?.role || '';
+}
+
+function artifactTouchStatus(def) {
+    if (!def) return { badClass: false, badAlign: false, selfWilled: false };
+    const selfWilled = artifactIsSelfWilled(def);
+    const heroRole = game._startup_role || game.urole?.name?.m || '';
+    const role = artifactTouchRole(def);
+    const badClass = selfWilled && !!role && role !== heroRole;
+    const artifactAlign = artifactAlignmentType(def);
+    const badAlign = artifactIsRestricted(def) && artifactAlign != null
+        && (artifactAlign !== (game.u?.ualign?.type ?? 0) || (game.u?.ualign?.record ?? 0) < 0);
+    return { badClass, badAlign, selfWilled };
 }
 
 function touchArtifact(item) {
     const def = artifactDefinitionForName(item?.artifact);
-    if (!artifactIsRestricted(def)) return;
-    const artifactAlign = artifactAlignmentType(def);
-    if (artifactAlign == null) return;
-    const heroAlign = game.u?.ualign?.type ?? 0;
-    const alignRecord = game.u?.ualign?.record ?? 0;
-    if (artifactAlign !== heroAlign || alignRecord < 0) rn2(4);
+    const status = artifactTouchStatus(def);
+    if (status.badAlign && !status.selfWilled) rn2(4);
 }
 
 function touchArtifactForWield(item) {
@@ -16942,17 +16980,34 @@ function containerTakeoutLiftableCount(container, obj, currentWeight, goldCount 
     return low;
 }
 
-function containerTakeoutArtifactRefusalMessage(obj) {
+function artifactPowerSourceName(obj) {
+    const name = String(obj?.artifact || pickupObjectName(obj) || 'the artifact');
+    return name.replace(/^The\b/, 'the');
+}
+
+function containerTakeoutArtifactTouch(obj) {
     const def = artifactDefinitionForName(obj?.artifact);
-    if (!def) return '';
-    const heroRole = game._startup_role || game.urole?.name?.m || '';
-    const badClass = !!def.questArtifact && !!def.questRole && def.questRole !== heroRole;
-    const artifactAlign = artifactAlignmentType(def);
-    const badAlign = artifactIsRestricted(def) && artifactAlign != null
-        && (artifactAlign !== (game.u?.ualign?.type ?? 0) || (game.u?.ualign?.record ?? 0) < 0);
-    if (!(badClass && badAlign)) return '';
-    touchArtifact(obj);
-    return `${obj.artifact || pickupObjectName(obj)} evades your grasp!`;
+    if (!def) return { ok: true, skip: false, messages: [] };
+    const status = artifactTouchStatus(def);
+    const messages = [];
+    const blast = ((status.badClass || status.badAlign) && status.selfWilled)
+        || (status.badAlign && !rn2(4));
+    if (blast) {
+        messages.push(`You are blasted by ${artifactPowerSourceName(obj)}'s power!`);
+        const damage = d(heroHasAntimagic() ? 2 : 4, status.selfWilled ? 10 : 4);
+        if (game.u) game.u.uhp = Math.max(0, (game.u.uhp || 0) - damage);
+        exerciseAttribute(A_WIS, false);
+        if ((game.u?.uhp || 0) <= 0) {
+            game._death_cause = `touching ${def.name}`;
+            messages.push('You die...');
+            return { ok: false, fatal: true, message: messages.join('  '), messages };
+        }
+    }
+    if (status.badClass && status.badAlign && status.selfWilled) {
+        messages.push(`${obj.artifact || pickupObjectName(obj)} evades your grasp!`);
+        return { ok: true, skip: true, messages };
+    }
+    return { ok: true, skip: false, messages };
 }
 
 function isPetrifyingCorpseObject(obj) {
@@ -16974,11 +17029,11 @@ function containerTakeoutFatalCorpseMessage(obj) {
 }
 
 function containerTakeoutPreliftCheck(obj) {
-    const artifactMessage = containerTakeoutArtifactRefusalMessage(obj);
-    if (artifactMessage) return { ok: true, skip: true, message: artifactMessage };
+    const artifactTouch = containerTakeoutArtifactTouch(obj);
+    if (!artifactTouch.ok || artifactTouch.skip) return artifactTouch;
     const fatalMessage = containerTakeoutFatalCorpseMessage(obj);
     if (fatalMessage) return { ok: false, fatal: true, message: fatalMessage };
-    return { ok: true, skip: false, message: '' };
+    return { ok: true, skip: false, messages: artifactTouch.messages || [] };
 }
 
 function containerTakeoutPreflight(container, entries) {
@@ -16995,8 +17050,8 @@ function containerTakeoutPreflight(container, entries) {
         if (!obj) continue;
         const prelift = containerTakeoutPreliftCheck(obj);
         if (!prelift.ok) return prelift;
+        if (prelift.messages?.length) messages.push(...prelift.messages);
         if (prelift.skip) {
-            if (prelift.message) messages.push(prelift.message);
             continue;
         }
         const originalCount = Math.max(1, Math.trunc(Number(obj.quan || 1)));
