@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { processSpellbookStudyOccupation, rhack, __shopBillingTestHooks as shop } from '../js/cmd.js';
+import { burnFloorObjectsByFire, processSpellbookStudyOccupation, rhack, __shopBillingTestHooks as shop } from '../js/cmd.js';
 import { game, resetGame } from '../js/gstate.js';
 import { initRng } from '../js/rng.js';
 import { LAVAPOOL, ROOM, ROOMOFFSET, SHOPBASE } from '../js/const.js';
@@ -262,6 +262,15 @@ function healingSpellbook(id, letter = 'b') {
         known: false,
         bknown: true,
     };
+}
+
+function floorHealingSpellbook(id, quan = 1) {
+    const book = healingSpellbook(id);
+    delete book.letter;
+    delete book.line;
+    book.known = true;
+    book.quan = quan;
+    return book;
 }
 
 function shopFloorContainer(id, x = 5, y = 5) {
@@ -738,6 +747,90 @@ test('carried fire destruction of an unpaid spellbook preserves full used-up bil
     assert.equal(book.unpaid, false);
     assert.equal(game._usedUpShopBills.some(bill => String(bill.bo_id) === String(book.id)), true);
     assert.equal(result.messages.some(message => /catches fire and burns!/.test(message)), true);
+});
+
+test('hero floor fire destruction of shop-floor spellbook leaves used-up bill row', () => {
+    const { shkp } = installShopState();
+    initRng(1);
+    const book = floorHealingSpellbook(3104);
+    game.level.objects = [book];
+    const expectedPrice = shop.shopItemPrice(book, 5, 5);
+
+    const result = burnFloorObjectsByFire(5, 5, { giveFeedback: true, heroCaused: true });
+
+    assert.equal(result.count, 1);
+    assert.equal(game.level.objects.includes(book), false);
+    assert.equal(shkp.debit || 0, 0);
+    assert.equal(shkp.robbed || 0, 0);
+    assert.equal(shkp.billct, 1);
+    const entry = shop.shopBillEntryForObject(shkp, book);
+    assert.ok(entry);
+    assert.equal(entry.useup, true);
+    assert.equal(shop.shopBillEntryTotal(entry), expectedPrice);
+    assert.notEqual(book.unpaid, true);
+    assert.equal(game._usedUpShopBills.some(bill => String(bill.bo_id) === String(book.id)), true);
+    const debts = shop.collectPayableShopDebts(shkp);
+    assert.equal(debts.some(debt => debt.billPortion === 'fullyUsedUp' && debt.price === expectedPrice), true);
+    assert.equal(result.messages.some(message => /burns\./.test(message)), true);
+});
+
+test('hero floor fire bills only the destroyed part of a shop-floor spellbook stack', () => {
+    const { shkp } = installShopState();
+    initRng(1);
+    const stack = floorHealingSpellbook(3105, 2);
+    game.level.objects = [stack];
+    const expectedUnitPrice = shop.shopItemPrice({ ...stack, quan: 1 }, 5, 5);
+
+    const result = burnFloorObjectsByFire(5, 5, { heroCaused: true });
+
+    assert.equal(result.count, 1);
+    assert.equal(game.level.objects.includes(stack), true);
+    assert.equal(stack.quan, 1);
+    assert.notEqual(stack.unpaid, true);
+    assert.equal(shkp.billct, 1);
+    assert.equal(shop.shopBillEntryForObject(shkp, stack), null);
+    assert.equal(shkp.bill[0].useup, true);
+    assert.equal(shop.shopBillEntryTotal(shkp.bill[0]), expectedUnitPrice);
+    assert.notEqual(String(shkp.bill[0].bo_id), String(stack.id));
+    assert.equal(game._usedUpShopBills.some(bill => String(bill.bo_id) === String(shkp.bill[0].bo_id)), true);
+});
+
+test('non-hero floor fire destroys shop-floor spellbooks without billing the hero', () => {
+    const { shkp } = installShopState();
+    initRng(1);
+    const book = floorHealingSpellbook(3106);
+    game.level.objects = [book];
+
+    const result = burnFloorObjectsByFire(5, 5, { heroCaused: false });
+
+    assert.equal(result.count, 1);
+    assert.equal(game.level.objects.includes(book), false);
+    assert.equal(shkp.billct, 0);
+    assert.equal(shkp.debit || 0, 0);
+    assert.equal(shkp.robbed || 0, 0);
+    assert.deepEqual(game._usedUpShopBills || [], []);
+});
+
+test('hero-caused floor fire from outside the shop records robbed value', () => {
+    const { shkp } = installShopState();
+    initRng(1);
+    const book = floorHealingSpellbook(3107);
+    game.level.objects = [book];
+    game.level.at = (x, y) => ({
+        roomno: (x === 5 && y === 5) || (x === 6 && y === 5) ? ROOMOFFSET : 0,
+    });
+    game.u.ux = 1;
+    game.u.uy = 1;
+    const expectedPrice = shop.shopItemPrice(book, 5, 5);
+
+    const result = burnFloorObjectsByFire(5, 5, { heroCaused: true });
+
+    assert.equal(result.count, 1);
+    assert.equal(game.level.objects.includes(book), false);
+    assert.equal(shkp.billct, 0);
+    assert.equal(shkp.debit || 0, 0);
+    assert.equal(shkp.robbed, expectedPrice);
+    assert.deepEqual(game._usedUpShopBills || [], []);
 });
 
 test('applying an unpaid oil lamp lights it and bills usage without consuming the live bill', async () => {

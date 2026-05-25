@@ -7657,6 +7657,7 @@ function maybeIgniteFloorFireItem(item, messages, giveFeedback) {
 export function burnFloorObjectsByFire(x, y, {
     giveFeedback = false,
     igniteFeedback = giveFeedback,
+    heroCaused = false,
 } = {}) {
     if (!game.level) return { count: 0, messages: [] };
     const messages = [];
@@ -7677,9 +7678,13 @@ export function burnFloorObjectsByFire(x, y, {
         if (giveFeedback) messages.push(fireFloorItemMessage(obj, destroyed));
         count += destroyed;
         changed = true;
-        const remaining = quan - destroyed;
-        if (remaining > 0) obj.quan = remaining;
-        else game.level.objects = (game.level.objects || []).filter(item => item !== obj);
+        if (heroCaused) {
+            useUpFloorObject(obj, destroyed, { heroCaused: true });
+        } else {
+            const remaining = quan - destroyed;
+            if (remaining > 0) obj.quan = remaining;
+            else game.level.objects = (game.level.objects || []).filter(item => item !== obj);
+        }
     }
 
     for (const obj of [...(game.level.objects || [])]) {
@@ -7690,9 +7695,9 @@ export function burnFloorObjectsByFire(x, y, {
     return { count, messages };
 }
 
-export function burnRayFloorObjectsByFire(x, y) {
+export function burnRayFloorObjectsByFire(x, y, { heroCaused = true } = {}) {
     const floorVisible = !game.u?.blind && !!(game.viz_array?.[y]?.[x] & IN_SIGHT);
-    const floorFire = burnFloorObjectsByFire(x, y, { igniteFeedback: floorVisible });
+    const floorFire = burnFloorObjectsByFire(x, y, { igniteFeedback: floorVisible, heroCaused });
     const messages = [...floorFire.messages];
     if (floorFire.count && couldsee(x, y))
         messages.push(`You ${game.u?.blind ? 'smell a whiff' : 'see a puff'} of smoke.`);
@@ -7706,6 +7711,47 @@ function liquidFlowFloorObjectsAt(x, y) {
 
 function removeFloorObject(obj) {
     game.level.objects = (game.level?.objects || []).filter(item => item !== obj);
+}
+
+function splitFloorObjectForUseUp(obj, count) {
+    const usedCount = Math.max(1, Math.trunc(Number(count || 1)));
+    const quantity = Math.max(1, Math.trunc(Number(obj?.quan || 1)));
+    if (!obj || quantity <= usedCount) return obj;
+    const split = { ...obj, id: next_ident(), quan: usedCount };
+    obj.quan = quantity - usedCount;
+    game.level.objects ??= [];
+    game.level.objects.push(split);
+    return split;
+}
+
+function billHeroCausedFloorUseUp(obj, precomputedPrice = null) {
+    if (!obj || obj.no_charge || shopBillableGold(obj)) return false;
+    const x = obj.ox ?? game.u?.ux;
+    const y = obj.oy ?? game.u?.uy;
+    const shkp = shopkeeperForCostlySpot(x, y);
+    if (!shopkeeperInHisShop(shkp)) return false;
+    const price = precomputedPrice ?? shopItemPrice(obj, x, y);
+    if (!(price > 0)) return false;
+    const heroRoomShkp = shopkeeperForShopRoom(game.u?.ux, game.u?.uy);
+    if (sameShopkeeper(shkp, heroRoomShkp)) {
+        if (!shopBillEntryForObject(shkp, obj))
+            addObjectToShopBill(shkp, obj, price, { useup: true });
+        return markObjectShopBillUsedUp(obj, shkp);
+    }
+    shkp.robbed = Math.max(0, Math.trunc(Number(shkp.robbed || 0))) + price;
+    return true;
+}
+
+function useUpFloorObject(obj, count, { heroCaused = false } = {}) {
+    if (!obj) return null;
+    const usedCount = Math.max(1, Math.trunc(Number(count || 1)));
+    const precomputedPrice = heroCaused
+        ? shopItemPrice({ ...obj, quan: Math.min(usedCount, Math.max(1, Math.trunc(Number(obj.quan || 1)))) }, obj.ox, obj.oy)
+        : null;
+    const usedObj = splitFloorObjectForUseUp(obj, count);
+    if (heroCaused) billHeroCausedFloorUseUp(usedObj, precomputedPrice);
+    removeFloorObject(usedObj);
+    return usedObj;
 }
 
 function floorEffectRemoveObject(removeObject, usedUpShopBillOnDestroy = false) {
@@ -22848,7 +22894,10 @@ function heroFireTrapMessage(trap, prefix = '') {
     }
     const inventoryFire = fireDamageInventory(origDamage);
     messages.push(...inventoryFire.messages);
-    const floorFire = burnFloorObjectsByFire(game.u?.ux || 0, game.u?.uy || 0, { giveFeedback: !game.u?.blind });
+    const floorFire = burnFloorObjectsByFire(game.u?.ux || 0, game.u?.uy || 0, {
+        giveFeedback: !game.u?.blind,
+        heroCaused: true,
+    });
     messages.push(...floorFire.messages);
     if (floorFire.count && game.u?.blind) messages.push('You smell paper burning.');
     damage += inventoryFire.damage;
@@ -28426,7 +28475,7 @@ export async function rhack(_cmd) {
                     } else {
                         const ray = { ...breath.ray, heardGas: false };
                         const follow = advanceFireBreathRay(ray, breath.sourceId, {
-                            floorFire: burnRayFloorObjectsByFire,
+                            floorFire: (x, y) => burnRayFloorObjectsByFire(x, y, { heroCaused: false }),
                         });
                         if (follow.target?.type === 'monster') {
                             game._queued_messages_after_more ??= [];
@@ -28477,7 +28526,7 @@ export async function rhack(_cmd) {
                         if (breath.ray.remaining > 0) breath.ray.remaining = Math.max(0, breath.ray.remaining - 2);
                     }
                     const follow = advanceFireBreathRay(breath.ray, breath.sourceId, {
-                        floorFire: burnRayFloorObjectsByFire,
+                        floorFire: (x, y) => burnRayFloorObjectsByFire(x, y, { heroCaused: false }),
                     });
                     if (follow.target?.type === 'monster') {
                         game._queued_messages_after_more ??= [];
