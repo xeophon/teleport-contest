@@ -2,7 +2,7 @@
 // C refs: src/allmain.c:newgame(), moveloop_core().
 
 import { game } from './gstate.js';
-import { mklev, l_nhcore_init, u_on_upstairs, makemon, mkcorpstat, mksobj, wipe_engr_at, dropMonsterInventory, wandIndexForRoll, scrollIndexForRoll, potionIndexForRoll, RANDOM_MONSTER_BY_NAME, STONE_RESISTANT_MONSTERS, adjustedMonsterLevel, monsterByRndName, monster_hp, rndmonnum, syncDungeonContext, next_ident, set_malign, enextoMonsterSpot, getbogusmon, pickNasty, chameleonAnimalForm, doppelgangerHumanoidForm, noteleportLevelForMonster, rlocNoMsg, rlocToCoreNoMsg, somexyspace, fumaroles, createMonsterCorpseOrGlob, monsterLeavesCorpseLikeDrop, movebubbles } from './mklev.js';
+import { mklev, l_nhcore_init, u_on_upstairs, makemon, mkcorpstat, mksobj, wipe_engr_at, dropMonsterInventory, wandIndexForRoll, scrollIndexForRoll, potionIndexForRoll, RANDOM_MONSTER_BY_NAME, STONE_RESISTANT_MONSTERS, adjustedMonsterLevel, monsterByRndName, monster_hp, rndmonnum, syncDungeonContext, next_ident, set_malign, enextoMonsterSpot, getbogusmon, pickNasty, chameleonAnimalForm, doppelgangerHumanoidForm, noteleportLevelForMonster, rlocNoMsg, rlocToCoreNoMsg, somexyspace, fumaroles, createMonsterCorpseOrGlob, monsterCorpseDropSucceeds, monsterLeavesCorpseLikeDrop, movebubbles } from './mklev.js';
 import { rhack, pickupObjectName, inventoryItemName, inventoryLetterRank, recordVanquished, finishForceLock, loseExperienceLevel, finishLevelTeleport, finishPickDigDownwardHole, finishPickDigDownwardPit, maybeQueueQuestLeaderTalk, monsterGrowUp, processSpellbookStudyOccupation, processTinOpeningOccupation, finishTinOpeningOccupation, refreshSwallowOverlay, travelPathKeys, updateGauntletsOfPowerStrength, consumeLifeSavingAmulet, activateStatueTrap, breakStatueObject, burnFloorObjectsByFire, burnRayFloorObjectsByFire, erodeArmorByFireTrap, dryWetTowelFromFire, igniteMonsterFireInventoryItems, monsterFireInventoryDamage, dropMonsterObject, earthFloorEffects, landMonsterThrownObject, stoneMonster, processGlobShrinkTimers } from './cmd.js';
 import { docrt, cls, bot, flush_screen, pline, newsym, refreshHallucinatedMap, show_glyph_cell } from './display.js';
 import { vision_recalc, vision_reset, init_vision_globals, cansee, couldsee, view_from } from './vision.js';
@@ -3706,13 +3706,10 @@ async function processMonsterTurns() {
                 if (target.mhp < 1) {
                     const targetName = target.data?.name || 'creature';
                     addToplineMessage(`The ${targetName} is killed!`);
-                    const corpseChance = 2
-                        + ((target.data?.genoFreq ?? 1) < 2 ? 1 : 0)
-                        + (target.data?.verysmall ? 1 : 0);
-                    const corpseRoll = rn2(corpseChance);
+                    const dropCorpse = monsterCorpseDropSucceeds(target, target.data);
                     const corpseData = corpseDataForMonster(target.data);
                     dropMonsterInventory(target);
-                    if (!corpseRoll && monsterLeavesCorpseLikeDrop(corpseData))
+                    if (dropCorpse && monsterLeavesCorpseLikeDrop(corpseData))
                         createMonsterCorpseOrGlob(target, corpseData);
                     monsterGrowUp(mon, target);
                     rn2(5);
@@ -7276,11 +7273,8 @@ function killMonsterFromPassive(mon) {
     const data = mon.data || {};
     rn2(6);
     const corpseData = corpseDataForMonster(data);
-    const guaranteedCorpse = data.big || data.bigmonst || data.golem || data.mplayer
-        || data.rider || data.shopkeeper || data.name === 'lizard';
-    const corpseChance = 2 + ((data.genoFreq ?? 1) < 2 ? 1 : 0) + (data.verysmall ? 1 : 0);
     const dropCorpse = monsterLeavesCorpseLikeDrop(corpseData)
-        && (guaranteedCorpse || !rn2(corpseChance));
+        && monsterCorpseDropSucceeds(mon, data);
     dropMonsterInventory(mon);
     if (dropCorpse) createMonsterCorpseOrGlob(mon, corpseData);
     recordVanquished(mon, false);
@@ -9136,10 +9130,9 @@ function moveMonsterTowardHero(mon, conflictActive = false, monIndex = null, som
         if (mon.mhp <= 0) {
             const data = mon.data || {};
             const corpseData = corpseDataForMonster(data);
-            const corpseChance = 2 + ((data.genoFreq ?? 1) < 2 ? 1 : 0) + (data.verysmall ? 1 : 0);
-            const corpseRoll = rn2(corpseChance);
+            const dropCorpse = monsterCorpseDropSucceeds(mon, data);
             dropMonsterInventory(mon);
-            if (!corpseRoll && monsterLeavesCorpseLikeDrop(corpseData))
+            if (dropCorpse && monsterLeavesCorpseLikeDrop(corpseData))
                 createMonsterCorpseOrGlob(mon, corpseData);
             recordVanquished(mon, false);
             game.level.monsters = (game.level?.monsters || []).filter(other => other !== mon);
@@ -9163,11 +9156,8 @@ function moveMonsterTowardHero(mon, conflictActive = false, monIndex = null, som
 	            if (inSight) addToplineMessage(`${monsterDisplayName(mon)} is killed!`);
             const data = mon.data || {};
             const corpseData = corpseDataForMonster(data);
-            const guaranteedCorpse = data.big || data.bigmonst || data.golem || data.mplayer
-                || data.rider || data.shopkeeper || data.name === 'lizard';
-            const corpseChance = 2 + ((data.genoFreq ?? 1) < 2 ? 1 : 0) + (data.verysmall ? 1 : 0);
             dropMonsterInventory(mon);
-            if (monsterLeavesCorpseLikeDrop(corpseData) && (guaranteedCorpse || !rn2(corpseChance)))
+            if (monsterLeavesCorpseLikeDrop(corpseData) && monsterCorpseDropSucceeds(mon, data))
                 createMonsterCorpseOrGlob(mon, corpseData);
             recordVanquished(mon, false);
 	            game.level.monsters = (game.level?.monsters || []).filter(other => other !== mon);
@@ -9901,13 +9891,10 @@ function movePet(mon, resumeAfterInventory = false, conflictActive = false) {
                             rn2(3);
                             rn2(6);
                             if (pos.target.mhp < 1) {
-                                const corpseChance = 2
-                                    + ((pos.target.data?.genoFreq ?? 1) < 2 ? 1 : 0)
-                                    + (pos.target.data?.verysmall ? 1 : 0);
-                                const corpseRoll = rn2(corpseChance);
+                                const dropCorpse = monsterCorpseDropSucceeds(pos.target, pos.target.data);
                                 const corpseData = corpseDataForMonster(pos.target.data);
                                 dropMonsterInventory(pos.target);
-                                if (!corpseRoll && monsterLeavesCorpseLikeDrop(corpseData))
+                                if (dropCorpse && monsterLeavesCorpseLikeDrop(corpseData))
                                     createMonsterCorpseOrGlob(pos.target, corpseData);
                                 monsterGrowUp(mon, pos.target);
                                 rn2(5);
@@ -9988,13 +9975,10 @@ function movePet(mon, resumeAfterInventory = false, conflictActive = false) {
 	                        game._message_more = 0;
 	                    }
 	                }
-                const corpseChance = 2
-                    + ((pos.target.data?.genoFreq ?? 1) < 2 ? 1 : 0)
-                    + (pos.target.data?.verysmall ? 1 : 0);
-                const corpseRoll = rn2(corpseChance);
+                const dropCorpse = monsterCorpseDropSucceeds(pos.target, pos.target.data);
                 const corpseData = corpseDataForMonster(pos.target.data);
                 dropMonsterInventory(pos.target);
-                if (!corpseRoll && monsterLeavesCorpseLikeDrop(corpseData))
+                if (dropCorpse && monsterLeavesCorpseLikeDrop(corpseData))
                     createMonsterCorpseOrGlob(pos.target, corpseData);
                 monsterGrowUp(mon, pos.target);
                 rn2(5);
@@ -10367,11 +10351,8 @@ function movePet(mon, resumeAfterInventory = false, conflictActive = false) {
             addToplineMessage(`The ${mon.data?.name || 'creature'} is killed!`);
             const data = mon.data || {};
             const corpseData = corpseDataForMonster(data);
-            const guaranteedCorpse = data.big || data.bigmonst || data.golem || data.mplayer
-                || data.rider || data.shopkeeper || data.name === 'lizard';
-            const corpseChance = 2 + ((data.genoFreq ?? 1) < 2 ? 1 : 0) + (data.verysmall ? 1 : 0);
             dropMonsterInventory(mon);
-            if (monsterLeavesCorpseLikeDrop(corpseData) && (guaranteedCorpse || !rn2(corpseChance)))
+            if (monsterLeavesCorpseLikeDrop(corpseData) && monsterCorpseDropSucceeds(mon, data))
                 createMonsterCorpseOrGlob(mon, corpseData);
             recordVanquished(mon, false);
             game.level.monsters = (game.level?.monsters || []).filter(other => other !== mon);

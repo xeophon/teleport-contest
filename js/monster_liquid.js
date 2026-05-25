@@ -1,7 +1,7 @@
 import { game } from './gstate.js';
 import { DB_MOAT, DB_UNDER, DRAWBRIDGE_UP, IN_SIGHT, IS_LAVA, IS_POOL, Is_waterlevel } from './const.js';
 import { newsym } from './display.js';
-import { createMonsterCorpseOrGlob, dropMonsterInventory, enextoMonsterSpot, monsterLeavesCorpseLikeDrop, next_ident, noteleportLevelForMonster, rlocNoMsg } from './mklev.js';
+import { createMonsterCorpseOrGlob, dropMonsterInventory, enextoMonsterSpot, monsterCorpseDropSucceeds, monsterLeavesCorpseLikeDrop, next_ident, noteleportLevelForMonster, rlocNoMsg } from './mklev.js';
 import { d, rn2, rnd } from './rng.js';
 
 const SCR_BLANK_PAPER = 293;
@@ -236,10 +236,9 @@ function maybeTeleportAwayFromWater(mon, messages, visible) {
 function removeLiquidKilledMonster(mon, recordKill = null, awardExperience = false) {
     const data = mon.data || {};
     const corpseData = data.corpse || data;
-    const corpseChance = 2 + ((data.genoFreq ?? 1) < 2 ? 1 : 0) + (data.verysmall ? 1 : 0);
-    const corpseRoll = rn2(corpseChance);
+    const dropCorpse = monsterCorpseDropSucceeds(mon, data);
     dropMonsterInventory(mon);
-    if (!corpseRoll && monsterLeavesCorpseLikeDrop(corpseData))
+    if (dropCorpse && monsterLeavesCorpseLikeDrop(corpseData))
         createMonsterCorpseOrGlob(mon, corpseData);
     recordKill?.(mon, awardExperience);
     const loc = game.level?.at(mon.mx, mon.my);

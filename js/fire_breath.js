@@ -3,7 +3,7 @@ import { DB_MOAT, DB_UNDER, DRAWBRIDGE_UP, FOUNTAIN, IN_SIGHT, Is_waterlevel, IS
 import { d, rn1, rn2, rnd, rnl } from './rng.js';
 import { createGasCloud } from './region.js';
 import { newsym } from './display.js';
-import { createMonsterCorpseOrGlob, dropMonsterInventory, monsterLeavesCorpseLikeDrop } from './mklev.js';
+import { createMonsterCorpseOrGlob, dropMonsterInventory, monsterCorpseDropSucceeds, monsterLeavesCorpseLikeDrop } from './mklev.js';
 import { dryupFountainResultAt } from './fountain.js';
 import { meltIceAt } from './ice.js';
 import { applyMeltedIceMonsterLiquidEffects } from './monster_liquid.js';
@@ -286,10 +286,9 @@ function killMonsterByPit(mon, messages, visible) {
     if (visible) messages.push(`The ${mon.data?.name || 'creature'} is killed!`);
     const data = mon.data || {};
     const corpseData = data.corpse || data;
-    const corpseChance = 2 + ((data.genoFreq ?? 1) < 2 ? 1 : 0) + (data.verysmall ? 1 : 0);
-    const corpseRoll = rn2(corpseChance);
+    const dropCorpse = monsterCorpseDropSucceeds(mon, data);
     dropMonsterInventory(mon);
-    if (!corpseRoll && monsterLeavesCorpseLikeDrop(corpseData))
+    if (dropCorpse && monsterLeavesCorpseLikeDrop(corpseData))
         createMonsterCorpseOrGlob(mon, corpseData, mon.mx, mon.my, { messages });
     game.level.monsters = (game.level?.monsters || []).filter(other => other !== mon);
     newsym(mon.mx, mon.my);
@@ -484,10 +483,9 @@ export function fireBreathDamageMonster(mon, nd = 6, inventoryFire = null, {
         }
         const data = mon.data || {};
         const corpseData = data.corpse || data;
-        const corpseChance = 2 + ((data.genoFreq ?? 1) < 2 ? 1 : 0) + (data.verysmall ? 1 : 0);
-        const corpseRoll = rn2(corpseChance);
+        const dropCorpse = monsterCorpseDropSucceeds(mon, data);
         dropMonsterInventory(mon);
-        if (!corpseRoll && monsterLeavesCorpseLikeDrop(corpseData))
+        if (dropCorpse && monsterLeavesCorpseLikeDrop(corpseData))
             createMonsterCorpseOrGlob(mon, corpseData, mon.mx, mon.my, { messages });
         game.level.monsters = (game.level?.monsters || []).filter(other => other !== mon);
         newsym(mon.mx, mon.my);

@@ -4795,6 +4795,16 @@ export function monsterLeavesCorpseLikeDrop(corpseData) {
     return !!corpseData && (!corpseData.noCorpse || !!globTypeForMonsterCorpseData(corpseData));
 }
 
+export function monsterCorpseDropSucceeds(mon, data = mon?.data || {}) {
+    const bigOrLizard = data.big || data.bigmonst || data.name === 'lizard';
+    const golem = data.golem || /\bgolem$/.test(String(data.name || ''));
+    if ((bigOrLizard && !mon?.mcloned)
+        || golem || data.mplayer || data.rider || data.shopkeeper || mon?.isshk)
+        return true;
+    const corpseChance = 2 + ((data.genoFreq ?? 1) < 2 ? 1 : 0) + (data.verysmall ? 1 : 0);
+    return !rn2(corpseChance);
+}
+
 function globTypeForObject(obj) {
     if (!obj) return null;
     if (GLOB_TYPE_BY_OTYP.has(obj.otyp)) return GLOB_TYPE_BY_OTYP.get(obj.otyp);
