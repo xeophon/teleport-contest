@@ -83,6 +83,7 @@ function makeInstrumentApplyDeterministic(shkp) {
         _stunTimeout: 0,
     });
     Object.assign(shkp, { mx: 20, my: 20, shk: { x: 20, y: 20 } });
+    game.level.at = () => ({ roomno: ROOMOFFSET, typ: ROOM });
     game.flags.verbose = false;
 }
 
@@ -1476,6 +1477,98 @@ test('confused unpaid magic instrument improvisation uses mundane effect without
     assert.equal(shkp.debit || 0, 0);
     assert.equal(shop.shopBillEntryForObject(shkp, flute).useup, false);
     assert.match(game._pending_message, /raucous noise|toots/);
+});
+
+test('applying unpaid fire horn bills before direction and keeps horn identity after ray', async () => {
+    const { shkp } = installCommandShopState();
+    makeInstrumentApplyDeterministic(shkp);
+    const horn = chargedTool(3142, 'fire horn', 'f', 2);
+    horn.kind = 'horn';
+    horn.actualKind = 'fire horn';
+    horn.line = 'f - a horn';
+    game.inventory = [horn];
+    shop.addObjectToShopBill(shkp, horn, 100);
+
+    await rhack('a');
+    await rhack('f');
+
+    assert.equal(game._command_mode, 'instrumentImprovisePrompt');
+    assert.match(game._pending_message, /Improvise\?/);
+
+    await rhack('y');
+
+    assert.equal(game._command_mode, 'zapDirection');
+    assert.equal(horn.spe, 1);
+    assert.equal(shkp.debit, 25);
+    assert.match(game._pending_message, /Usage fee, 25 zorkmids/);
+    assert.match(game._pending_message, /In what direction\?/);
+
+    await rhack(' ');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(horn.spe, 1);
+    assert.equal(horn.kind, 'fire horn');
+    assert.equal(horn.actualKind, 'fire horn');
+    assert.match(game._pending_message, /A bolt of fire blasts out of the horn/);
+    assert.doesNotMatch(game._pending_message, /wand of fire/);
+    const entry = shop.shopBillEntryForObject(shkp, horn);
+    assert.ok(entry);
+    assert.equal(entry.useup, false);
+    assert.equal(shop.shopBillEntryTotal(entry), 100);
+});
+
+test('canceling unpaid frost horn direction still spends charge and bills without identifying', async () => {
+    const { shkp } = installCommandShopState();
+    makeInstrumentApplyDeterministic(shkp);
+    const horn = chargedTool(3143, 'frost horn', 'f', 1);
+    horn.kind = 'horn';
+    horn.actualKind = 'frost horn';
+    horn.line = 'f - a horn';
+    game.inventory = [horn];
+    shop.addObjectToShopBill(shkp, horn, 100);
+
+    await rhack('a');
+    await rhack('f');
+    await rhack('y');
+
+    assert.equal(game._command_mode, 'zapDirection');
+    assert.equal(horn.spe, 0);
+    assert.equal(shkp.debit, 100);
+
+    await rhack(' ');
+    await rhack('\x1b');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(horn.spe, 0);
+    assert.equal(horn.kind, 'horn');
+    assert.equal(horn.actualKind, 'frost horn');
+    assert.match(game._pending_message, /Usage fee, 100 zorkmids/);
+    assert.match(game._pending_message, /horn vibrates/);
+    assert.doesNotMatch(game._pending_message, /frost horn/);
+});
+
+test('confused unpaid fire horn uses tooled-horn fallback without charge or billing', async () => {
+    const { shkp } = installCommandShopState();
+    makeInstrumentApplyDeterministic(shkp);
+    game.u._confusionTimeout = 5;
+    game.u._statusSuffix = ' Conf';
+    const horn = chargedTool(3144, 'fire horn', 'f', 3);
+    game.inventory = [horn];
+    shop.addObjectToShopBill(shkp, horn, 100);
+
+    await rhack('a');
+    await rhack('f');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(horn.spe, 3);
+    assert.equal(shkp.debit || 0, 0);
+    assert.equal(shop.shopBillEntryForObject(shkp, horn).useup, false);
+    assert.match(game._pending_message, /raucous noise|frightful, grave sound/);
+    assert.doesNotMatch(game._pending_message, /In what direction/);
 });
 
 test('unpaid charged object with no remaining charges is not billed for usage', () => {

@@ -9697,7 +9697,7 @@ async function finishCrystalBallUse(ch) {
 
 function magicInstrumentKind(item) {
     const kind = toolChargeKind(item);
-    return kind === 'magic flute' || kind === 'magic harp' ? kind : '';
+    return kind === 'magic flute' || kind === 'magic harp' || kind === 'frost horn' || kind === 'fire horn' ? kind : '';
 }
 
 function instrumentDisplayName(item) {
@@ -9743,6 +9743,54 @@ function charmMonstersWithMagicHarp(distance) {
     }
 }
 
+function fireColdHornElement(item) {
+    const kind = toolChargeKind(item);
+    if (kind === 'fire horn') return 'fire';
+    if (kind === 'frost horn') return 'cold';
+    return '';
+}
+
+function identifyZapToolOrWand(item, element) {
+    if (!item) return;
+    const hornElement = fireColdHornElement(item);
+    if (hornElement) {
+        const hornKind = hornElement === 'fire' ? 'fire horn' : 'frost horn';
+        item.known = true;
+        item.dknown = true;
+        item.actualKind = hornKind;
+        item.kind = hornKind;
+        updateChargedItemLine(item);
+        return;
+    }
+    item.known = true;
+    item.kind = element;
+    item.line = `${item.letter} - a wand of ${element}${wandChargeSuffix(item)}`;
+}
+
+function hornBlastMessage(item) {
+    const element = fireColdHornElement(item);
+    if (!element || game.u?.blind) return '';
+    return `A bolt of ${element} blasts out of the horn!`;
+}
+
+function tooledHornImprovisationEffect(messages) {
+    messages.push(heroIsDeaf() ? 'You blow into the horn.' : 'You produce a frightful, grave sound.');
+    const distance = (game.u?.ulevel || 1) * 30;
+    const scareDistance = Math.trunc(distance / 3);
+    for (const mon of game.level?.monsters || []) {
+        if (!mon || mon.dead || (mon.mhp != null && mon.mhp <= 0)) continue;
+        const dist = monsterDistanceSquaredFromHero(mon);
+        if (dist >= distance) continue;
+        mon.msleeping = 0;
+        mon.mcanmove = true;
+        mon.mfrozen = 0;
+        if (dist >= scareDistance || mon.data?.mindless || monsterResistsEffect(mon, 0)) continue;
+        mon.mflee = 1;
+        mon.mfleetim = 0;
+    }
+    exerciseAttribute(A_WIS, false);
+}
+
 async function finishInstrumentTune(item) {
     game._apply_instrument_letter = '';
     game._instrument_tune_text = '';
@@ -9770,10 +9818,15 @@ async function finishMusicalImprovisation(item) {
 
     const hasSpecialEffect = !heroIsStunned() && !heroIsConfused() && (item.spe ?? 0) > 0;
     if (!hasSpecialEffect) {
-        messages.push(kind === 'magic flute'
-            ? (heroIsDeaf() ? `You feel ${instrumentDisplayName(item)} toot.` : `${instrumentTheName(item)} toots.`)
-            : (heroIsDeaf() ? 'You feel soothing vibrations.' : `${instrumentTheName(item)} twangs.`));
-        exerciseAttribute(A_DEX, true);
+        if (kind === 'magic flute') {
+            messages.push(heroIsDeaf() ? `You feel ${instrumentDisplayName(item)} toot.` : `${instrumentTheName(item)} toots.`);
+            exerciseAttribute(A_DEX, true);
+        } else if (kind === 'magic harp') {
+            messages.push(heroIsDeaf() ? 'You feel soothing vibrations.' : `${instrumentTheName(item)} twangs.`);
+            exerciseAttribute(A_DEX, true);
+        } else {
+            tooledHornImprovisationEffect(messages);
+        }
         await setMessage(messages.join('  '), messages.length > 1);
         game.context.move = 1;
         return true;
@@ -9784,11 +9837,17 @@ async function finishMusicalImprovisation(item) {
         const tone = heroIsHallucinating() ? 'piped' : 'soft';
         messages.push(heroIsDeaf() ? `You seem to produce ${tone} music.` : `You produce ${tone} music.`);
         sleepMonstersWithMagicFlute((game.u?.ulevel || 1) * 5);
-    } else {
+    } else if (kind === 'magic harp') {
         messages.push(heroIsDeaf()
             ? 'You feel very soothing vibrations.'
             : `${instrumentTheName(item)} produces very attractive music.`);
         charmMonstersWithMagicHarp(Math.trunc(((game.u?.ulevel || 1) - 1) / 3) + 1);
+    } else {
+        game._zap_item = item;
+        game._zap_prelude_messages = messages;
+        game._command_mode = 'zapDirection';
+        await setMessage([...messages, 'In what direction?'].join('  '), messages.length > 0);
+        return true;
     }
     exerciseAttribute(A_DEX, true);
     await setMessage(messages.join('  '), messages.length > 1);
@@ -31690,6 +31749,9 @@ export async function rhack(_cmd) {
         let selfZap = ch === '.';
         const item = game._zap_item;
         game._zap_item = null;
+        const preludeMessages = game._zap_prelude_messages || [];
+        game._zap_prelude_messages = null;
+        const hornElement = fireColdHornElement(item);
         const confusedDirection = (game.u?._statusSuffix || '').includes('Conf') || (game.u?._confusionTimeout || 0) > 0;
         const stunnedDirection = (game.u?._statusSuffix || '').includes('Stun') || game.u?.stunned;
         if ((dir || verticalDir || selfZap) && (stunnedDirection || (confusedDirection && !rn2(5)))) {
@@ -31730,8 +31792,8 @@ export async function rhack(_cmd) {
             game.context.move = sleepTime;
             return;
         }
-        const fireWand = item?.wand === 'fire' || item?.kind === 'fire' || item?.wandIndex === 20;
-        const coldWand = item?.wand === 'cold' || item?.kind === 'cold' || item?.wandIndex === 21;
+        const fireWand = item?.wand === 'fire' || item?.kind === 'fire' || item?.wandIndex === 20 || hornElement === 'fire';
+        const coldWand = item?.wand === 'cold' || item?.kind === 'cold' || item?.wandIndex === 21 || hornElement === 'cold';
         if (selfZap && fireWand) {
             const origDamage = d(12, 6);
             const resistsFire = !!game.u?.fireResistance;
@@ -31743,16 +31805,16 @@ export async function rhack(_cmd) {
             const followups = [...fireInventory.messages];
             if ((game.u?.uhp || 0) <= 0) {
                 game._death_cause = fireInventory.deathCause
-                    || `zapped ${game.flags?.female ? 'herself' : 'himself'} with a wand of fire`;
+                    || (hornElement
+                        ? `using a magical horn on ${game.flags?.female ? 'herself' : 'himself'}`
+                        : `zapped ${game.flags?.female ? 'herself' : 'himself'} with a wand of fire`);
                 followups.push('You die...');
             }
             if (followups.length)
                 game._queued_messages_after_more = [...(game._queued_messages_after_more || []),
                     ...followups.map((text, index) => ({ text, more: index < followups.length - 1 }))];
-            item.known = true;
-            item.kind = 'fire';
-            item.line = `${item.letter} - a wand of fire${wandChargeSuffix(item)}`;
-            await setMessage(resistsFire ? 'You feel rather warm.' : "You've set yourself afire!", !!followups.length);
+            identifyZapToolOrWand(item, 'fire');
+            await setMessage([...preludeMessages, resistsFire ? 'You feel rather warm.' : "You've set yourself afire!"].join('  '), !!followups.length || preludeMessages.length > 0);
             game._command_mode = null;
             game.context.move = 1;
             return;
@@ -31770,16 +31832,16 @@ export async function rhack(_cmd) {
             if ((game.u?.uhp || 0) <= 0) {
                 game._death_cause = coldInventory.damage >= hpBefore && coldInventory.deathCause
                     ? coldInventory.deathCause
-                    : `zapped ${game.flags?.female ? 'herself' : 'himself'} with a wand of cold`;
+                    : hornElement
+                        ? `using a magical horn on ${game.flags?.female ? 'herself' : 'himself'}`
+                        : `zapped ${game.flags?.female ? 'herself' : 'himself'} with a wand of cold`;
                 followups.push('You die...');
             }
             if (followups.length)
                 game._queued_messages_after_more = [...(game._queued_messages_after_more || []),
                     ...followups.map((text, index) => ({ text, more: index < followups.length - 1 }))];
-            item.known = true;
-            item.kind = 'cold';
-            item.line = `${item.letter} - a wand of cold${wandChargeSuffix(item)}`;
-            await setMessage(resistsCold ? 'You feel a little chill.' : 'You imitate a popsicle!', !!followups.length);
+            identifyZapToolOrWand(item, 'cold');
+            await setMessage([...preludeMessages, resistsCold ? 'You feel a little chill.' : 'You imitate a popsicle!'].join('  '), !!followups.length || preludeMessages.length > 0);
             game._command_mode = null;
             game.context.move = 1;
             return;
@@ -31886,7 +31948,8 @@ export async function rhack(_cmd) {
             if (coldWand) {
                 exerciseAttribute(A_WIS, true);
                 const beamCells = [];
-                const messages = [];
+                const blast = hornBlastMessage(item);
+                const messages = [...preludeMessages, ...(blast ? [blast] : [])];
                 let beamStopIndex = null;
                 let range = rn1(7, 7);
                 let sx = game.u?.ux || 0;
@@ -32052,9 +32115,7 @@ export async function rhack(_cmd) {
                 game._transient_beam_cells = messageMore
                     ? beamStopIndex == null ? beamCells : beamCells.slice(0, beamStopIndex)
                     : null;
-                item.known = true;
-                item.kind = 'cold';
-                item.line = `${item.letter} - a wand of cold${wandChargeSuffix(item)}`;
+                identifyZapToolOrWand(item, 'cold');
                 rn2(10);
                 rn2(10);
                 rn2(10);
@@ -32067,7 +32128,8 @@ export async function rhack(_cmd) {
             if (fireWand) {
                 rn2(19);
                 const beamCells = [];
-                const messages = [];
+                const blast = hornBlastMessage(item);
+                const messages = [...preludeMessages, ...(blast ? [blast] : [])];
                 const followups = [];
                 let beamStopIndex = null;
                 let heardGas = false;
@@ -32262,9 +32324,7 @@ export async function rhack(_cmd) {
                         ...followups.map((entry, index) => typeof entry === 'string'
                             ? { text: entry, more: index < followups.length - 1 }
                             : { ...entry, more: entry.more ?? index < followups.length - 1 })];
-                item.known = true;
-                item.kind = 'fire';
-                item.line = `${item.letter} - a wand of fire${wandChargeSuffix(item)}`;
+                identifyZapToolOrWand(item, 'fire');
                 await setMessage(messages.join('  '), messages.length > 1 || !!followups.length);
                 game._command_mode = null;
                 game.context.move = 1;
@@ -32362,6 +32422,12 @@ export async function rhack(_cmd) {
             }
             await setMessage('');
             game._keep_pending_message = 0;
+            game._command_mode = null;
+            game.context.move = 1;
+            return;
+        }
+        if (hornElement) {
+            await setMessage([...preludeMessages, `${instrumentTheName(item)} vibrates.`].join('  '), preludeMessages.length > 0);
             game._command_mode = null;
             game.context.move = 1;
             return;
