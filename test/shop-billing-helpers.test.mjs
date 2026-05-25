@@ -996,6 +996,57 @@ test('unpaid lamp and oil usage fees follow C cost-per-charge rules', () => {
     }
 });
 
+test('unpaid carried lamp catching fire in a shop charges usage and preserves a used-up bill row', () => {
+    const { shkp } = installShopState();
+    const item = lamp(30981, 'oil lamp', 'l', 3);
+    game.inventory = [item];
+    shop.addObjectToShopBill(shkp, item, 100);
+
+    const result = shop.fireDamageInventoryForTest(0, true);
+
+    assert.equal(item.lamplit, true);
+    assert.equal(item.burning, true);
+    assert.equal(item.unpaid, false);
+    assert.equal(shkp.debit, 25);
+    assert.equal(shkp.billct, 1);
+    assert.match(result.messages.join(' '), /catches light/);
+    assert.match(result.messages.join(' '), /Usage fee, 25 zorkmids/);
+    assert.match(result.messages.join(' '), /in addition to the cost/);
+    const entry = shop.shopBillEntryForObject(shkp, item);
+    assert.ok(entry);
+    assert.equal(entry.useup, true);
+    assert.equal(shop.shopBillEntryTotal(entry), 100);
+    assert.equal(game._usedUpShopBills.some(bill => String(bill.bo_id) === String(item.id)), true);
+});
+
+test('unpaid carried lamp catching fire outside a shop keeps the live bill row', () => {
+    const { shkp } = installShopState();
+    const item = lamp(30982, 'oil lamp', 'l', 3);
+    game.inventory = [item];
+    shop.addObjectToShopBill(shkp, item, 100);
+    game.u.ux = 1;
+    game.u.uy = 1;
+    game.level.at = (x, y) => ({
+        roomno: (x === 5 && y === 5) || (x === 6 && y === 5) ? ROOMOFFSET : 0,
+        typ: ROOM,
+    });
+
+    const result = shop.fireDamageInventoryForTest(0, true);
+
+    assert.equal(item.lamplit, true);
+    assert.equal(item.burning, true);
+    assert.equal(item.unpaid, true);
+    assert.equal(shkp.debit || 0, 0);
+    assert.equal(shkp.billct, 1);
+    assert.match(result.messages.join(' '), /catches light/);
+    assert.doesNotMatch(result.messages.join(' '), /Usage fee|in addition to the cost/);
+    const entry = shop.shopBillEntryForObject(shkp, item);
+    assert.ok(entry);
+    assert.equal(entry.useup, false);
+    assert.equal(shop.shopBillEntryTotal(entry), 100);
+    assert.equal((game._usedUpShopBills || []).length, 0);
+});
+
 test('unpaid spellbook study usage charges four fifths of bill price', () => {
     const { shkp } = installShopState();
     const book = healingSpellbook(3093, 'b');

@@ -134,8 +134,8 @@ C wish handling restricts several requested properties:
 
 JS implements some of this, but not all:
 
-- `wishedSpeForItem` at `js/cmd.js:9083` mainly caps wands, so requested enchantment for weapons, armor, weapon-tools, and charged rings is not C-equivalent.
-- `applyWishedQuantity` at `js/cmd.js:15135` is local policy rather than the C `readobjnam` quantity rules.
+- `wishedSpeForItem` is still underconstrained compared with `objnam.c`: wands/crystal balls cap negative requests differently, non-`spe` objects collapse negative requests to zero while becoming cursed, and weapons/armor/weapon-tools/charged rings use C's anti-abuse limits rather than accepting arbitrary large requests.
+- `applyWishedQuantity` is local policy rather than the C `readobjnam` quantity rules. C only honors counts for mergeable object classes after the wish quantity gates; JS can still create non-mergeable stacks such as multiple boots, wands, or magic markers.
 - non-wizard substitutions exist around `js/cmd.js:10240`, but they are parser-specific and not backed by `objects[].oc_nowish`.
 - light handling is field-based rather than connected to a generic `BURN_OBJECT` timer.
 - erosion is applied after wish parsing in `js/cmd.js:15056`, but generated erosion is already divergent.
@@ -166,7 +166,7 @@ JS has artifact definitions and helpers in `js/mklev.js:1497` and `js/mklev.js:3
 
 9. **Wish matching is not C fuzzy matching.** C `wishymatch`, ranges, namedesc lookup, alternate spellings, and artifact matching are more systematic than the JS local regex/table approach.
 
-10. **Wish property limits are partial.** Requested enchantment, charge, quantity, BUC, erosion, light, poison, lock/trap, and non-wishable substitutions are not all constrained by the C rules.
+10. **Wish property limits are partial.** Requested enchantment, charge, quantity, BUC, erosion, light, poison, lock/trap, and non-wishable substitutions are not all constrained by the C rules. The narrow next gap is quantity over-application to non-mergeable objects and requested `spe` handling for weapons, armor, weapon-tools, charged rings, wands, crystal balls, and objects that do not normally carry `spe`.
 
 11. **Artifact provenance is partial.** JS duplicate tracking exists, but not full `artiexist`/`artifact_origin`/`ONAME` semantics or `mk_artifact` eligibility.
 
@@ -247,8 +247,8 @@ The key no-match behavioral change is now in place: unknown input no longer beco
 After parser resolution, port the C finalization rules:
 
 - non-wizard substitutions for real Amulet, Candelabrum, Bell, Book, magic lamp, and `oc_nowish`
-- enchantment and charge caps by object class, luck, blessed/cursed state, and special wand behavior
-- quantity limits for mergeable objects
+- enchantment and charge caps by object class, luck, blessed/cursed state, and special wand/crystal-ball behavior
+- quantity limits for mergeable objects, keeping non-mergeable wished objects at quantity one even in wizard-mode wishes
 - requested erosion/proof after clearing generated erosion
 - requested light via burn timer
 - artifact conduct, disappearance/abuse rules, and gods-notice timing

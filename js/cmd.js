@@ -7766,6 +7766,15 @@ function maybeIgniteFireItem(item, messages, events, armor, joinState) {
     beginWishedBurn(item);
     item.line = normalInventoryLine({ ...item, line: '' });
     addFireInventoryMessage(messages, events, message, { damage: 0 }, armor, joinState);
+    if (item.unpaid) {
+        const shkp = heroShopkeeper();
+        if (shkp) {
+            checkUnpaidUsage(item, messages, { chargeCount: lampUsageChargeCount(item) });
+            const pronoun = (item.quan || 1) === 1 ? 'itself' : 'themselves';
+            messages.push(`"That's in addition to the cost of ${pickupObjectName({ ...item, line: '' })} ${pronoun}, of course."`);
+            markObjectShopBillUsedUp(item, shkp);
+        }
+    }
     return true;
 }
 
