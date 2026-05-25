@@ -13074,6 +13074,80 @@ function mergePickedObjectIntoShopBill(source, target, sourcePrice = null) {
     return { canMerge: true, price, billEntry };
 }
 
+function pickupMergeName(obj) {
+    return pickupObjectName({ ...(obj || {}), line: '', quan: 1 }).toLowerCase();
+}
+
+function pickupWeaponCanStack(obj) {
+    if (!obj) return false;
+    const name = pickupMergeName(obj);
+    return /\b(?:arrow|ya|bolt|dart|dagger|knife|spear|javelin|shuriken|boomerang|rock|stone)\b/.test(name);
+}
+
+function pickupObjectCanInventoryMerge(obj) {
+    if (!obj || shopBillableGold(obj) || globContents(obj).length || isGlobbyObject(obj)) return false;
+    if (obj.otyp === CORPSE || obj.otyp === 'corpse' || obj.otyp === EGG || isTinObject(obj)) return false;
+    if (obj.cls === 'food' || obj.otyp === FOOD_CLASS) return false;
+    const cls = shopObjectClassCode(obj);
+    if (cls === SCROLL_CLASS || cls === POTION_CLASS || cls === GEM_CLASS) return true;
+    if (cls === WEAPON_CLASS) return pickupWeaponCanStack(obj);
+    return isCandleObject(obj);
+}
+
+function pickedObjectInventoryMergeCompatible(target, source, sourceWillBeUnpaid, shkp = null) {
+    if (!target || !source || target === source) return false;
+    if (!pickupObjectCanInventoryMerge(target) || !pickupObjectCanInventoryMerge(source)) return false;
+    if (target.worn || target.wielded || target.alternate || source.worn || source.wielded || source.alternate) return false;
+    if (target.nomerge || source.nomerge || target.artifact || source.artifact) return false;
+    const targetUnpaid = !!(target.unpaid || shopBillEntryForObject(shkp, target));
+    if (targetUnpaid !== !!sourceWillBeUnpaid) return false;
+    if (!!target.no_charge !== !!source.no_charge) return false;
+    if (!!target.blessed !== !!source.blessed || !!target.cursed !== !!source.cursed) return false;
+    if ((target.spe ?? 0) !== (source.spe ?? 0)) return false;
+    if ((target.obroken ?? false) !== (source.obroken ?? false)) return false;
+    if ((target.lamplit ?? false) !== (source.lamplit ?? false)) return false;
+    if ((target.odiluted ?? false) !== (source.odiluted ?? false)) return false;
+    if ((target.oeroded ?? 0) !== (source.oeroded ?? 0) || (target.oeroded2 ?? 0) !== (source.oeroded2 ?? 0)) return false;
+    if ((target.greased ?? false) !== (source.greased ?? false)) return false;
+    if (shopObjectClassCode(target) !== shopObjectClassCode(source)) return false;
+    if ((target.otyp ?? null) !== (source.otyp ?? null) && pickupMergeName(target) !== pickupMergeName(source)) return false;
+    if ((target.scrollIndex ?? null) !== (source.scrollIndex ?? null)) return false;
+    if ((target.potionIndex ?? null) !== (source.potionIndex ?? null)) return false;
+    if ((target.gemDescription ?? null) !== (source.gemDescription ?? null)) return false;
+    if ((target.actualKind || target.kind || '') !== (source.actualKind || source.kind || '')
+        && pickupMergeName(target) !== pickupMergeName(source)) return false;
+    if (isCandleObject(source) && Math.trunc((target.age || 0) / 25) !== Math.trunc((source.age || 0) / 25))
+        return false;
+    return true;
+}
+
+function findPickedObjectInventoryMergeTarget(source, sourcePrice = null) {
+    const x = source?.ox ?? game.u?.ux;
+    const y = source?.oy ?? game.u?.uy;
+    const shkp = x == null || y == null ? null : shopkeeperForCostlySpot(x, y);
+    const price = sourcePrice != null ? Number(sourcePrice) : shopItemPrice(source, x, y);
+    const sourceWillBeUnpaid = Number.isFinite(price) && price > 0 && shopkeeperInHisShop(shkp);
+    for (const target of game.inventory || []) {
+        if (!pickedObjectInventoryMergeCompatible(target, source, sourceWillBeUnpaid, shkp)) continue;
+        const billMerge = mergePickedObjectIntoShopBill(source, target, price);
+        if (billMerge.canMerge) return { target, billMerge };
+    }
+    return null;
+}
+
+function mergePickedObjectIntoInventory(source, target) {
+    const pickedCount = Math.max(1, Math.trunc(Number(source?.quan || 1)));
+    target.quan = Math.max(1, Math.trunc(Number(target.quan || 1))) + pickedCount;
+    if (source.plural && !target.plural) target.plural = source.plural;
+    if (source.known !== target.known) target.known = true;
+    if (source.bknown !== target.bknown && game._startup_role !== 'Priest') target.bknown = true;
+    if (source.rknown !== target.rknown) target.rknown = true;
+    target.line = normalInventoryLine({ ...target, line: '' });
+    if (target.unpaid) syncUnpaidBillLine(target);
+    const pickedPhrase = pickupObjectPhrase({ ...source, line: '', quan: pickedCount });
+    return `${target.letter} - ${pickedPhrase} (${target.quan} in total).`;
+}
+
 function sellobjReturnUnpaidToShop(obj, x, y) {
     if (!obj?.unpaid || shopBillableGold(obj) || globContents(obj).length) return false;
     const shkp = shopkeeperForCostlySpot(x, y);
@@ -13090,7 +13164,9 @@ export const __shopBillingTestHooks = {
     addObjectToShopBill,
     addPickedObjectToShopBill,
     beginDroppedPaidObjectSale,
+    findPickedObjectInventoryMergeTarget,
     finishDroppedObjectSale,
+    mergePickedObjectIntoInventory,
     mergePickedObjectIntoShopBill,
     removeObjectFromShopBill,
     removeObjectFromShopBillById,
@@ -16344,6 +16420,16 @@ export function pickupObjectName(obj) {
                 .some(entry => entry.section === 'Weapons' && entry.name === 'orcish dagger' && entry.starred);
             if (known) return named((obj.quan || 1) > 1 ? 'orcish daggers' : 'orcish dagger');
             return named((obj.quan || 1) > 1 ? 'crude daggers' : 'crude dagger');
+        }
+        if ((obj.quan || 1) > 1 && kind) {
+            const plural = {
+                knife: 'knives',
+                stiletto: 'stilettos',
+                ya: 'ya',
+                'crossbow bolt': 'crossbow bolts',
+                shuriken: 'shuriken',
+            }[kind] || (kind.endsWith('s') ? kind : `${kind}s`);
+            return named(plural);
         }
     }
     if (obj.otyp === FOOD_CLASS || obj.cls === 'food') {
@@ -24390,6 +24476,13 @@ export async function rhack(_cmd) {
                     ? obj.letter
                     : nextInventoryLetter();
                 const amount = pickupObjectPhrase(obj);
+                const shopPrice = shopItemPrice(obj);
+                const mergeTarget = findPickedObjectInventoryMergeTarget(obj, shopPrice);
+                if (mergeTarget) {
+                    objectIceEffect(obj, obj.ox, obj.oy, { onLevel: false });
+                    messages.push(mergePickedObjectIntoInventory(obj, mergeTarget.target));
+                    continue;
+                }
                 const pickedItem = {
                     ...obj,
                     cls: obj.cls || (obj.otyp === DART ? 'weapon'
@@ -24404,12 +24497,12 @@ export async function rhack(_cmd) {
                     kind: obj.kind || pickupObjectName({ ...obj, quan: 1 }),
                     line: `${letter} - ${amount}`,
                 };
-                const { price: shopPrice } = addPickedObjectToShopBill(obj, pickedItem);
+                const { price: billedPrice } = addPickedObjectToShopBill(obj, pickedItem);
                 objectIceEffect(pickedItem, obj.ox, obj.oy, { onLevel: false });
                 game.inventory = [...(game.inventory || []), pickedItem];
                 maybeAttachCarriedFigurineTimeout(pickedItem);
-                const unpaidSuffix = shopPrice > 0
-                    ? ` (unpaid, ${shopPrice} zorkmid${shopPrice === 1 ? '' : 's'})`
+                const unpaidSuffix = billedPrice > 0
+                    ? ` (unpaid, ${billedPrice} zorkmid${billedPrice === 1 ? '' : 's'})`
                     : '';
                 messages.push(`${letter} - ${amount}${unpaidSuffix}.`);
             }
@@ -38099,6 +38192,17 @@ export async function rhack(_cmd) {
                     game._queued_message_after_more = pickupMessage;
                     await setMessage('You learn more about your items by comparing them.', true);
                 } else await setMessage(pickupMessage);
+                game.context.move = 1;
+                return;
+            }
+            const mergeTarget = findPickedObjectInventoryMergeTarget(objectHere, shopPrice);
+            if (mergeTarget) {
+                const pickupMessage = mergePickedObjectIntoInventory(objectHere, mergeTarget.target);
+                game._pet_food_scan_inventory = game.inventory;
+                objectIceEffect(objectHere, game.u?.ux || 0, game.u?.uy || 0, { onLevel: false });
+                game.level.objects = (game.level.objects || []).filter(obj => obj !== objectHere);
+                newsym(game.u?.ux || 0, game.u?.uy || 0);
+                await setMessage(pickupMessage);
                 game.context.move = 1;
                 return;
             }

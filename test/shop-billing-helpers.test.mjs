@@ -204,3 +204,47 @@ test('no-charge floor merchandise is not billed when picked back up', () => {
     assert.equal(shkp.billct, 0);
     assert.equal(carried.unpaid, undefined);
 });
+
+test('non-food pickup merges compatible paid inventory stacks', () => {
+    installShopState();
+    const carried = dagger(7001, 'd');
+    const floorObj = { ...dagger(7002), letter: undefined, line: undefined };
+    game.inventory = [carried];
+
+    const merge = shop.findPickedObjectInventoryMergeTarget(floorObj, 0);
+    assert.equal(merge.target, carried);
+    const message = shop.mergePickedObjectIntoInventory(floorObj, carried);
+
+    assert.equal(carried.quan, 2);
+    assert.match(carried.line, /^d - 2 \+0 daggers/);
+    assert.match(message, /2 in total/);
+});
+
+test('non-food shop pickup merge rejects unpaid into paid stacks', () => {
+    const { shkp } = installShopState();
+    const paidStack = dagger(7101, 'd');
+    const floorObj = { ...dagger(7102), letter: undefined, line: undefined };
+    game.inventory = [paidStack];
+
+    assert.equal(shop.findPickedObjectInventoryMergeTarget(floorObj, 5), null);
+    assert.equal(paidStack.quan, 1);
+    assert.equal(shkp.billct, 0);
+});
+
+test('non-food shop pickup merge combines compatible unpaid bill entries', () => {
+    const { shkp } = installShopState();
+    const unpaidStack = dagger(7201, 'd');
+    shop.addObjectToShopBill(shkp, unpaidStack, 5);
+    game.inventory = [unpaidStack];
+    const floorObj = { ...dagger(7202), letter: undefined, line: undefined };
+
+    const merge = shop.findPickedObjectInventoryMergeTarget(floorObj, 5);
+    assert.equal(merge.target, unpaidStack);
+    shop.mergePickedObjectIntoInventory(floorObj, unpaidStack);
+
+    assert.equal(unpaidStack.quan, 2);
+    assert.equal(unpaidStack.unpaidPrice, 10);
+    assert.equal(shop.shopBillEntryTotal(merge.billMerge.billEntry), 10);
+    assert.match(unpaidStack.line, /unpaid, 10 zorkmids/);
+    assert.equal(shkp.billct, 1);
+});
