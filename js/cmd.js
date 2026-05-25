@@ -13287,6 +13287,42 @@ function addPickedObjectToShopBill(source, pickedItem) {
     return { shkp, price, billEntry };
 }
 
+function addContainerTakeoutObjectToShopBill(container, sourceObj, pickedItem = sourceObj) {
+    const x = container?.ox;
+    const y = container?.oy;
+    if (!container || !sourceObj || !pickedItem) return { shkp: null, price: 0, billEntry: null };
+    if ((game.inventory || []).includes(container)) return { shkp: null, price: 0, billEntry: null };
+    if (pickedItem.unpaid) {
+        syncUnpaidBillLine(pickedItem);
+        return { shkp: null, price: 0, billEntry: null };
+    }
+    if (sourceObj.unpaid) {
+        pickedItem.unpaid = true;
+        pickedItem.unpaidPrice = pickedItem.unpaidPrice || sourceObj.unpaidPrice;
+        syncUnpaidBillLine(pickedItem);
+        return { shkp: null, price: 0, billEntry: null };
+    }
+    if (x == null || y == null || shopBillableGold(sourceObj))
+        return { shkp: null, price: 0, billEntry: null };
+    const shkp = shopkeeperForCostlySpot(x, y);
+    if (!shopkeeperInHisShop(shkp)) return { shkp: null, price: 0, billEntry: null };
+    if (sourceObj.no_charge && !globContents(sourceObj).length) {
+        sourceObj.no_charge = false;
+        pickedItem.no_charge = false;
+        return { shkp, price: 0, billEntry: null };
+    }
+    const price = shopItemPrice(sourceObj, x, y);
+    if (!(price > 0)) return { shkp, price: 0, billEntry: null };
+    const billEntry = addObjectToShopBill(shkp, pickedItem, price);
+    if (!billEntry) {
+        pickedItem.unpaid = true;
+        pickedItem.unpaidPrice = price;
+        syncUnpaidBillLine(pickedItem);
+        shkp.billct = Math.max(0, Math.trunc(Number(shkp.billct || 0))) + 1;
+    }
+    return { shkp, price, billEntry };
+}
+
 function mergePickedObjectIntoShopBill(source, target, sourcePrice = null) {
     const pickedCount = Math.max(1, Math.trunc(Number(source?.quan || 1)));
     const targetCount = Math.max(1, Math.trunc(Number(target?.quan || 1)));
@@ -13407,6 +13443,8 @@ function sellobjReturnUnpaidToShop(obj, x, y) {
 }
 
 export const __shopBillingTestHooks = {
+    addContainerTakeoutObjectToInventory,
+    addContainerTakeoutObjectToShopBill,
     addObjectToShopBill,
     addPickedObjectToShopBill,
     beginDroppedPaidObjectSale,
@@ -13417,8 +13455,11 @@ export const __shopBillingTestHooks = {
     mergePickedObjectIntoInventory,
     mergePickedObjectIntoShopBill,
     placeStackableFloorObject,
+    prepareContainerTakeoutObject,
+    putInventoryObjectIntoContainer,
     removeObjectFromShopBill,
     removeObjectFromShopBillById,
+    removeContainedObject,
     removeInventoryItem,
     resolveUnpaidProjectileShopLanding,
     returnUnpaidObjectToShopBillOwnerAt,
@@ -13434,6 +13475,7 @@ export const __shopBillingTestHooks = {
     shopBillEntryTotal,
     shopkeeperDebitPayment,
     shopkeeperCash,
+    shopItemPrice,
     shopPaymentCashDue,
     shopSaleableObject,
     shopSaleOffer,
@@ -17475,6 +17517,7 @@ function addContainerTakeoutObjectToInventory(container, obj) {
         kind: obj.kind || pickupObjectName({ ...obj, quan: 1 }),
     });
     obj.line = normalInventoryLine({ ...obj, line: '' });
+    addContainerTakeoutObjectToShopBill(container, obj, obj);
     game.inventory = [...(game.inventory || []), obj];
     maybeAttachCarriedFigurineTimeout(obj);
     game._pet_food_scan_inventory = game.inventory;
@@ -35159,9 +35202,10 @@ export async function rhack(_cmd) {
                     kind: obj.kind || pickupObjectName({ ...obj, quan: 1 }),
                     line: `${letter} - ${amount}`,
                 });
+                addContainerTakeoutObjectToShopBill(container, obj, pickedItem);
                 game.inventory = [...(game.inventory || []), pickedItem];
                 maybeAttachCarriedFigurineTimeout(pickedItem);
-                messages.push(`${letter} - ${amount}.`);
+                messages.push(`${pickedItem.line || `${letter} - ${amount}`}.`);
             }
             if (container) container.contents = (container.contents || []).filter(item => !picked.some(entry => entry.item === item));
             game._pet_food_scan_inventory = game.inventory;

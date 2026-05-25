@@ -72,6 +72,31 @@ function foodRation(id, letter = 'a') {
     };
 }
 
+function shopFloorContainer(id, x = 5, y = 5) {
+    return {
+        id,
+        cls: 'tool',
+        glyph: '(',
+        kind: 'large box',
+        actualKind: 'large box',
+        ox: x,
+        oy: y,
+        contents: [],
+        cknown: true,
+    };
+}
+
+function putObjectInContainer(container, obj) {
+    obj.contained = true;
+    obj.container = container;
+    delete obj.letter;
+    delete obj.line;
+    delete obj.ox;
+    delete obj.oy;
+    container.contents = [...(container.contents || []), obj];
+    return obj;
+}
+
 test('picked shop item enters the bill before inventory display compatibility', () => {
     const { shkp } = installShopState();
     const floorObj = foodRation(1001, 'a');
@@ -205,6 +230,61 @@ test('no-charge floor merchandise is not billed when picked back up', () => {
     assert.equal(result.price, 0);
     assert.equal(shkp.billct, 0);
     assert.equal(carried.unpaid, undefined);
+});
+
+test('taking merchandise from a shop-floor container adds the carried object to the bill', () => {
+    const { shkp } = installShopState();
+    const container = shopFloorContainer(6101);
+    const contained = putObjectInContainer(container, foodRation(6102));
+    game.level.objects = [container];
+
+    shop.removeContainedObject(container, contained);
+    const line = shop.addContainerTakeoutObjectToInventory(container, contained);
+
+    assert.equal(container.contents.length, 0);
+    assert.equal(game.inventory.includes(contained), true);
+    assert.equal(contained.unpaid, true);
+    assert.equal(shkp.billct, 1);
+    assert.equal(shkp.bill.length, 1);
+    assert.equal(shkp.bill[0].bo_id, String(contained.id));
+    assert.equal(contained.unpaidPrice, shop.shopBillEntryTotal(shkp.bill[0]));
+    assert.match(line, /unpaid, \d+ zorkmids?/);
+    assert.match(contained.line, /unpaid, \d+ zorkmids?/);
+});
+
+test('taking no-charge contents from a shop-floor container does not bill', () => {
+    const { shkp } = installShopState();
+    const container = shopFloorContainer(6201);
+    const contained = putObjectInContainer(container, foodRation(6202));
+    contained.no_charge = true;
+    game.level.objects = [container];
+
+    shop.removeContainedObject(container, contained);
+    const line = shop.addContainerTakeoutObjectToInventory(container, contained);
+
+    assert.equal(game.inventory.includes(contained), true);
+    assert.equal(shkp.billct, 0);
+    assert.equal(shop.shopBillEntryForObject(shkp, contained), null);
+    assert.notEqual(contained.unpaid, true);
+    assert.equal(contained.no_charge, false);
+    assert.doesNotMatch(line, /unpaid/);
+});
+
+test('taking contents from a carried container does not use shop-floor billing', () => {
+    const { shkp } = installShopState();
+    const container = shopFloorContainer(6301);
+    container.letter = 'b';
+    const contained = putObjectInContainer(container, foodRation(6302));
+    game.inventory = [container];
+
+    shop.removeContainedObject(container, contained);
+    const line = shop.addContainerTakeoutObjectToInventory(container, contained);
+
+    assert.equal(game.inventory.includes(contained), true);
+    assert.equal(shkp.billct, 0);
+    assert.equal(shop.shopBillEntryForObject(shkp, contained), null);
+    assert.notEqual(contained.unpaid, true);
+    assert.doesNotMatch(line, /unpaid/);
 });
 
 test('non-food pickup merges compatible paid inventory stacks', () => {

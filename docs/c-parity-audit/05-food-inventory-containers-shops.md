@@ -92,7 +92,7 @@ This audit is based only on upstream C and current JS source inspection. It does
 ### Shop Billing
 
 - `js/cmd.js:12715-12743`: shopkeeper lookup helpers.
-- `js/cmd.js:12804-13436`: starter shop bill entries, split/subtract helpers, carried projectile bill split, same-shop unpaid projectile return, projectile debt conversion, bill-aware floor stack merging, pickup bill merge helpers, unpaid drop return, and test exports.
+- `js/cmd.js:12804-13480`: starter shop bill entries, split/subtract helpers, carried projectile bill split, same-shop unpaid projectile return, projectile debt conversion, bill-aware floor stack merging, pickup bill merge helpers, shop-floor container take-out billing, unpaid drop return, and test exports.
 - `js/cmd.js:13442-13458`: buried-merchandise debt helper.
 - `js/cmd.js:13819-13826`: unpaid line synchronization.
 - `js/cmd.js:14240-14268`: used-up bill naming and memory helper.
@@ -176,12 +176,12 @@ Concrete gaps:
 
 C container operations are deeply tied to shops. Putting an inventory object into a shop-floor container can sell it. Taking an object out of a shop-floor container bills it. Tipping a shop-floor container can bill, steal, or suppress price depending on source and target. Ice boxes, cursed bags of holding, bag of tricks, horn of plenty, traps, locked state, and weight all route through those same object/bill invariants.
 
-JS has a substantial UI implementation for boxes, bags, ice boxes, take-out, put-in, stash, and tip (`js/cmd.js:16669-18220`, `js/cmd.js:33982-34818`, `js/cmd.js:35034-35129`). It also implements some magic bag, bag of tricks, and horn of plenty behavior.
+JS has a substantial UI implementation for boxes, bags, ice boxes, take-out, put-in, stash, and tip (`js/cmd.js:16669-18220`, `js/cmd.js:33982-34818`, `js/cmd.js:35034-35129`). It also implements some magic bag, bag of tricks, and horn of plenty behavior. Ordinary non-gold take-out from a shop-floor container now goes through a starter `addtobill()`-style helper (`js/cmd.js:13290-13324`, `js/cmd.js:17509-17524`, `js/cmd.js:35190-35209`), prices from the source container's coordinates, skips carried containers/already-unpaid objects, and clears ordinary `no_charge` contents when they are taken back without billing.
 
 Concrete gaps:
 
 - `putInventoryObjectIntoContainer()` directly removes inventory and inserts into the target container (`js/cmd.js:17064-17086`); it does not call `sellobj()` or equivalent when the target is a shop-floor container.
-- `addContainerTakeoutObjectToInventory()` and loot take-out directly add items to inventory (`js/cmd.js:17302-17316`, `js/cmd.js:34567-34818`); they do not call `addtobill()` when taking from a shop-floor container.
+- Shop-floor take-out now covers ordinary non-gold objects, but it is still not a full C `out_container()`/`addtobill()` path: recursive container contents, contained gold, lift limits, capacity/slot failures, artifact/Rider/fatal-corpse checks, and bill-aware inventory merge edge cases remain incomplete.
 - `tipContainerToFloor()` and `tipContainerIntoContainer()` move contents without C's per-item shop billing/stolen-value rules, except for narrow magic bag gold/debit handling (`js/cmd.js:17363-17399`, `js/cmd.js:18220-18249`).
 - Loot reachability is simplified. C checks water/lava access, limbs/free hand, multiple containers, confusion reverse-loot, blind cockatrice touch, saddles, and directional cases (`pickup.c:2022-2345`).
 - Trap handling for tip/loot is placeholder-level in JS (`js/cmd.js:17388-17394`) compared with C `chest_trap()` and `use_container()` effects.
@@ -238,5 +238,5 @@ Concrete gaps:
 - Eating unpaid shop food or tins can avoid C billing because `costly_alteration()` and `costly_tin()` are missing.
 - Multi-pickup still lacks full C quote/lift semantics, and split-stack object identity can still lose unpaid/shop state in non-projectile delete, container, and generic merge paths.
 - Container-moving objects in shops and complex drops still do not exercise full C `sellobj()`/`addtobill()`/`subfrombill()` paths.
-- Container take-out/tip can move shop-owned contents without becoming unpaid or stolen.
+- Container tip and the remaining recursive take-out cases can still move shop-owned contents without becoming unpaid or stolen.
 - Payment is only partly backed by authoritative bill rows; container payment, robbed-shop repayment, and several legacy unpaid fallbacks still need C parity.
