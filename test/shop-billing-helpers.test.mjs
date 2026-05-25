@@ -84,6 +84,22 @@ function goldPieces(id, quan, letter = '$') {
     };
 }
 
+function sack(id, letter = 'b') {
+    return {
+        id,
+        cls: 'tool',
+        otyp: 217,
+        glyph: '(',
+        kind: 'sack',
+        actualKind: 'sack',
+        quan: 1,
+        letter,
+        line: `${letter} - a sack`,
+        cknown: true,
+        contents: [],
+    };
+}
+
 function shopFloorContainer(id, x = 5, y = 5) {
     return {
         id,
@@ -107,6 +123,20 @@ function putObjectInContainer(container, obj) {
     delete obj.oy;
     container.contents = [...(container.contents || []), obj];
     return obj;
+}
+
+function assertBillRowsFor(shkp, objects) {
+    assert.equal(shkp.billct, objects.length);
+    assert.deepEqual(
+        new Set(shkp.bill.map(entry => String(entry.bo_id))),
+        new Set(objects.map(obj => String(obj.id))),
+    );
+    for (const obj of objects) {
+        const entry = shop.shopBillEntryForObject(shkp, obj);
+        assert.ok(entry);
+        assert.equal(obj.unpaid, true);
+        assert.equal(obj.unpaidPrice, shop.shopBillEntryTotal(entry));
+    }
 }
 
 test('picked shop item enters the bill before inventory display compatibility', () => {
@@ -292,6 +322,34 @@ test('taking gold from a shop-floor container charges debt and merges into hero 
     assert.match(line, /12 gold pieces/);
 });
 
+test('taking a nested shop-floor container bills recursive contents and charges contained gold', () => {
+    const { shkp } = installShopState();
+    const source = shopFloorContainer(6161);
+    const bag = sack(6162);
+    const ration = putObjectInContainer(bag, foodRation(6163));
+    const inner = sack(6164);
+    const blade = putObjectInContainer(inner, dagger(6165));
+    const coins = putObjectInContainer(inner, goldPieces(6166, 12));
+    putObjectInContainer(bag, inner);
+    putObjectInContainer(source, bag);
+    shkp.credit = 5;
+    shkp.debit = 2;
+    shkp.loan = 2;
+    game.level.objects = [source];
+
+    shop.removeContainedObject(source, bag);
+    const line = shop.addContainerTakeoutObjectToInventory(source, bag);
+
+    assert.equal(game.inventory.includes(bag), true);
+    assertBillRowsFor(shkp, [bag, ration, inner, blade]);
+    assert.equal(shop.shopBillEntryForObject(shkp, coins), null);
+    assert.notEqual(coins.unpaid, true);
+    assert.equal(shkp.credit, 0);
+    assert.equal(shkp.debit, 9);
+    assert.equal(shkp.loan, 9);
+    assert.match(line, /unpaid/);
+});
+
 test('taking no-charge contents from a shop-floor container does not bill', () => {
     const { shkp } = installShopState();
     const container = shopFloorContainer(6201);
@@ -372,6 +430,36 @@ test('putting gold into a shop-floor container pays debt before adding excess cr
     assert.equal(shkp.credit, 8);
     assert.equal(shkp.billct, 0);
     assert.equal(shop.shopkeeperCash(shkp), 100);
+});
+
+test('putting a carried container with contents into a shop-floor container donates contained gold', () => {
+    const { shkp } = installShopState();
+    const target = shopFloorContainer(6461);
+    const bag = sack(6462, 'b');
+    const inner = sack(6463);
+    const ration = putObjectInContainer(inner, foodRation(6464));
+    const coins = putObjectInContainer(inner, goldPieces(6465, 9));
+    putObjectInContainer(bag, inner);
+    shkp.credit = 1;
+    shkp.debit = 5;
+    shkp.loan = 5;
+    game.inventory = [bag];
+    game.level.objects = [target];
+
+    const result = shop.putInventoryObjectIntoContainer(target, bag);
+
+    assert.equal(result.moved, true);
+    assert.equal(game.inventory.includes(bag), false);
+    assert.equal(target.contents.includes(bag), true);
+    assert.equal(shkp.billct, 0);
+    assert.equal(shkp.bill.length, 0);
+    assert.equal(shkp.credit, 5);
+    assert.equal(shkp.debit, 0);
+    assert.equal(shkp.loan, 0);
+    assert.equal(bag.no_charge, true);
+    assert.equal(inner.no_charge, true);
+    assert.equal(ration.no_charge, true);
+    assert.notEqual(coins.unpaid, true);
 });
 
 test('putting part of an unpaid stack into a shop-floor container reduces only the live bill', () => {
@@ -460,7 +548,7 @@ test('shop-floor container put-in does not merge no-charge goods into chargeable
     assert.equal(shkp.billct, 0);
 });
 
-test('tipping merchandise from a shop-floor container to the floor adds it to the bill', () => {
+test('tipping merchandise from a shop-floor container to the floor returns it to shop stock', () => {
     const { shkp } = installShopState();
     const container = shopFloorContainer(6901);
     const contained = putObjectInContainer(container, foodRation(6902));
@@ -473,10 +561,10 @@ test('tipping merchandise from a shop-floor container to the floor adds it to th
     assert.equal(game.level.objects.includes(contained), true);
     assert.equal(contained.ox, 5);
     assert.equal(contained.oy, 5);
-    assert.equal(contained.unpaid, true);
-    assert.equal(shkp.billct, 1);
-    assert.equal(shkp.bill[0].bo_id, String(contained.id));
-    assert.equal(contained.unpaidPrice, shop.shopBillEntryTotal(shkp.bill[0]));
+    assert.notEqual(contained.unpaid, true);
+    assert.equal(contained.unpaidPrice, undefined);
+    assert.equal(shkp.billct, 0);
+    assert.equal(shkp.bill.length, 0);
 });
 
 test('tipping no-charge contents from a shop-floor container clears no-charge without billing', () => {
@@ -544,6 +632,35 @@ test('tipping merchandise from a shop-floor container into another container kee
     assert.equal(contained.unpaidPrice, shop.shopBillEntryTotal(shkp.bill[0]));
 });
 
+test('tipping nested shop-floor container into a carried container bills recursive contents and charges contained gold', () => {
+    const { shkp } = installShopState();
+    const source = shopFloorContainer(6936);
+    const target = sack(6937, 'b');
+    const bag = sack(6938);
+    const inner = sack(6939);
+    const blade = putObjectInContainer(inner, dagger(6940));
+    const coins = putObjectInContainer(inner, goldPieces(6941, 6));
+    putObjectInContainer(bag, inner);
+    putObjectInContainer(source, bag);
+    shkp.credit = 10;
+    shkp.debit = 2;
+    shkp.loan = 2;
+    game.inventory = [target];
+    game.level.objects = [source];
+
+    const messages = shop.tipContainerIntoContainer(source, target);
+
+    assert.match(messages.join(' '), /tumbles into/);
+    assert.equal(target.contents.includes(bag), true);
+    assert.equal(bag.container, target);
+    assertBillRowsFor(shkp, [bag, inner, blade]);
+    assert.equal(shop.shopBillEntryForObject(shkp, coins), null);
+    assert.notEqual(coins.unpaid, true);
+    assert.equal(shkp.credit, 4);
+    assert.equal(shkp.debit, 2);
+    assert.equal(shkp.loan, 2);
+});
+
 test('tipping gold from a shop-floor container to the floor charges then donates it', () => {
     const { shkp } = installShopState();
     const container = shopFloorContainer(6941);
@@ -569,6 +686,37 @@ test('tipping gold from a shop-floor container to the floor charges then donates
     assert.equal(shkp.debit, 0);
     assert.equal(shkp.loan, 0);
     assert.equal(shkp.billct, 0);
+});
+
+test('tipping nested shop-floor container to the floor charges then donates contained gold and returns bill rows', () => {
+    const { shkp } = installShopState();
+    const source = shopFloorContainer(6946);
+    const bag = sack(6947);
+    const inner = sack(6948);
+    const blade = putObjectInContainer(inner, dagger(6949));
+    const coins = putObjectInContainer(inner, goldPieces(6950, 6));
+    putObjectInContainer(bag, inner);
+    putObjectInContainer(source, bag);
+    shkp.credit = 10;
+    shkp.debit = 2;
+    shkp.loan = 2;
+    game.level.objects = [source];
+
+    const messages = shop.tipContainerToFloor(source);
+
+    assert.match(messages.join(' '), /spills/);
+    assert.equal(game.level.objects.includes(bag), true);
+    assert.equal(bag.ox, 5);
+    assert.equal(bag.oy, 5);
+    assert.equal(shkp.billct, 0);
+    assert.equal(shkp.bill.length, 0);
+    assert.notEqual(bag.unpaid, true);
+    assert.notEqual(inner.unpaid, true);
+    assert.notEqual(blade.unpaid, true);
+    assert.notEqual(coins.unpaid, true);
+    assert.equal(shkp.credit, 8);
+    assert.equal(shkp.debit, 0);
+    assert.equal(shkp.loan, 0);
 });
 
 test('tipping gold from a shop-floor container into a carried container only charges it', () => {

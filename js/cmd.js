@@ -12974,10 +12974,10 @@ function subOneFromShopBill(obj, shkp) {
 
 function subFromShopBill(obj, shkp) {
     const removed = subOneFromShopBill(obj, shkp);
-    const contents = Array.isArray(obj?.contents) ? obj.contents : [];
+    const contents = globContents(obj);
     for (const child of contents) {
         if (shopBillableGold(child)) continue;
-        if (Array.isArray(child.contents) && child.contents.length) subFromShopBill(child, shkp);
+        if (globContents(child).length) subFromShopBill(child, shkp);
         else subOneFromShopBill(child, shkp);
     }
     return removed;
@@ -13051,6 +13051,88 @@ function markNoChargeRecursively(obj) {
     if (!obj || shopBillableGold(obj) || obj.unpaid) return;
     obj.no_charge = true;
     for (const child of globContents(obj)) markNoChargeRecursively(child);
+}
+
+function clearNoChargeRecursively(obj, { includeSelf = true } = {}, seen = new Set()) {
+    if (!obj || seen.has(obj)) return;
+    seen.add(obj);
+    if (includeSelf && !shopBillableGold(obj)) obj.no_charge = false;
+    for (const child of globContents(obj))
+        clearNoChargeRecursively(child, { includeSelf: true }, seen);
+}
+
+function containedShopGold(obj, seen = new Set()) {
+    if (!obj || seen.has(obj)) return 0;
+    seen.add(obj);
+    let total = 0;
+    for (const child of globContents(obj)) {
+        if (shopBillableGold(child)) {
+            total += Math.max(1, Math.trunc(Number(child.quan || 1)));
+        } else {
+            total += containedShopGold(child, seen);
+        }
+    }
+    return total;
+}
+
+function addShopBillEntryOrMark(shkp, obj, totalPrice) {
+    if (!shkp || !obj || shopBillableGold(obj) || !(totalPrice > 0)) return null;
+    const billEntry = addObjectToShopBill(shkp, obj, totalPrice);
+    if (!billEntry) {
+        obj.unpaid = true;
+        obj.unpaidPrice = totalPrice;
+        syncUnpaidBillLine(obj);
+        shkp.billct = Math.max(0, Math.trunc(Number(shkp.billct || 0))) + 1;
+    }
+    return billEntry;
+}
+
+function addContainedObjectsToShopBill(shkp, obj, x, y, seen = new Set()) {
+    let price = 0;
+    const billEntries = [];
+    for (const child of globContents(obj)) {
+        if (!child || seen.has(child)) continue;
+        seen.add(child);
+        if (shopBillableGold(child)) continue;
+        if (child.unpaid) {
+            syncUnpaidBillLine(child);
+        } else if (!child.no_charge) {
+            const childPrice = shopItemPrice(child, x, y);
+            if (childPrice > 0) {
+                billEntries.push(addShopBillEntryOrMark(shkp, child, childPrice));
+                price += childPrice;
+            }
+        }
+        const nested = addContainedObjectsToShopBill(shkp, child, x, y, seen);
+        price += nested.price;
+        billEntries.push(...nested.billEntries);
+    }
+    return { price, billEntries };
+}
+
+function addContainerAndContentsToShopBill(container, sourceObj, pickedItem, shkp, x, y) {
+    let price = 0;
+    let billEntry = null;
+    if (!sourceObj.no_charge) {
+        const topPrice = shopItemPrice(sourceObj, x, y);
+        if (topPrice > 0) {
+            billEntry = addShopBillEntryOrMark(shkp, pickedItem, topPrice);
+            price += topPrice;
+        }
+    }
+    const nested = addContainedObjectsToShopBill(shkp, sourceObj, x, y);
+    price += nested.price;
+    const gold = containedShopGold(sourceObj);
+    if (gold > 0) {
+        costlyShopGoldAt(container, gold);
+        price += gold;
+    }
+    clearNoChargeRecursively(sourceObj);
+    if (pickedItem && pickedItem !== sourceObj) {
+        pickedItem.no_charge = false;
+        clearNoChargeRecursively(pickedItem, { includeSelf: false });
+    }
+    return { shkp, price, billEntry, billEntries: [billEntry, ...nested.billEntries].filter(Boolean) };
 }
 
 function sameShopBillUnitPrice(a, b) {
@@ -13356,6 +13438,8 @@ function addContainerTakeoutObjectToShopBill(container, sourceObj, pickedItem = 
         syncUnpaidBillLine(pickedItem);
         return { shkp: null, price: 0, billEntry: null };
     }
+    if (globContents(sourceObj).length)
+        return addContainerAndContentsToShopBill(container, sourceObj, pickedItem, floorShkp, x, y);
     if (x == null || y == null || shopBillableGold(sourceObj))
         return { shkp: null, price: 0, billEntry: null };
     const shkp = floorShkp;
@@ -17284,9 +17368,11 @@ function putInventoryObjectIntoIceBox(iceBox, item, amount = item?.quan || 1) {
     const count = Math.min(Math.max(1, amount || 1), item.quan || 1);
     const putItem = (item.quan || 1) > count ? { ...item, quan: count } : item;
     clearContainerPutEquipmentState(putItem, name);
+    const billing = billShopFloorContainerPutObject(iceBox, putItem);
     removeInventoryItem(item, count);
     freezeObjectInIcebox(putItem);
-    add_to_container(iceBox, putItem);
+    const contained = add_to_container(iceBox, putItem);
+    if (billing.noCharge && contained && contained !== putItem) markNoChargeRecursively(contained);
     game._pet_food_scan_inventory = game.inventory;
     return { moved: true, message: `You put ${name} into the ice box.` };
 }
@@ -17347,6 +17433,8 @@ function billShopFloorContainerPutObject(container, putItem) {
     const shkp = shopFloorContainerShopkeeper(container);
     if (!shkp) return { shkp: null, returned: false, noCharge: false };
     if (shopBillableGold(putItem)) return { shkp, returned: false, noCharge: false };
+    const gold = containedShopGold(putItem);
+    if (gold > 0) donateShopGoldAt(container, gold);
     if (returnUnpaidObjectToShopBillOwnerAt(putItem, x, y))
         return { shkp, returned: true, noCharge: false };
     if (!putItem.unpaid) {
@@ -17665,6 +17753,13 @@ function thawObjectTippedFromSource(source, obj) {
     if (isIceBoxObject(source)) removedFromIcebox(obj);
 }
 
+function returnTippedObjectToShopFloor(source, obj) {
+    const shkp = shopFloorContainerShopkeeper(source);
+    if (!shkp || !obj || shopBillableGold(obj)) return false;
+    if (globContents(obj).length) return subFromShopBill(obj, shkp);
+    return sellobjReturnUnpaidToShop(obj, obj.ox, obj.oy);
+}
+
 function tipContainerToFloor(source) {
     const contents = [...liquidFlowContainerContents(source)];
     source.cknown = true;
@@ -17687,7 +17782,13 @@ function tipContainerToFloor(source) {
         }
         addTippedContainerObjectToShopBill(source, obj);
         const placed = placeTippedObjectOnFloor(obj, x, y, messages);
-        if (placed && shopBillableGold(obj)) donateShopGoldAt(source, obj.quan || 1);
+        if (placed) {
+            const gold = shopBillableGold(obj)
+                ? Math.max(1, Math.trunc(Number(obj.quan || 1)))
+                : containedShopGold(obj);
+            if (gold > 0) donateShopGoldAt(source, gold);
+            returnTippedObjectToShopFloor(source, obj);
+        }
     }
     if (Array.isArray(source.contents)) source.contents.length = 0;
     if (Array.isArray(source.cobj)) source.cobj.length = 0;
