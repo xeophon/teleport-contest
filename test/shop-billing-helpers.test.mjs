@@ -2844,6 +2844,117 @@ test('picking up a no-charge floor container bills chargeable contents', () => {
     assert.equal(blade.container, carried);
 });
 
+test('ordinary shop-floor pickup slot failure happens before billing or removal', async () => {
+    const { shkp } = installCommandShopState();
+    const floorObj = foodRation(6006, 'a');
+    game.level.objects = [floorObj];
+    fillInventoryLetters();
+
+    await rhack(',');
+    assert.equal(game._command_mode, 'pickupShopQuote');
+
+    await rhack(' ');
+
+    assert.match(game._pending_message, /knapsack cannot accommodate any more items/);
+    assert.equal(game.level.objects.includes(floorObj), true);
+    assert.equal(game.inventory.includes(floorObj), false);
+    assert.equal(floorObj.unpaid, undefined);
+    assert.equal(shkp.billct, 0);
+    assert.equal(shkp.bill.length, 0);
+    assert.equal(game.context.move || 0, 0);
+});
+
+test('ordinary shop-floor pickup artifact refusal happens before billing or removal', async () => {
+    const { shkp } = installCommandShopState();
+    const artifact = {
+        id: 6007,
+        cls: 'tool',
+        glyph: '(',
+        kind: 'crystal ball',
+        actualKind: 'crystal ball',
+        artifact: 'The Orb of Detection',
+        quan: 1,
+        ox: 5,
+        oy: 5,
+    };
+    game.level.objects = [artifact];
+    game.u.uhp = 80;
+    game.u.uhpmax = 80;
+    game._startup_role = 'Wizard';
+    game.u.ualign = { type: -1, record: 0 };
+
+    await rhack(',');
+    assert.equal(game._command_mode, 'pickupShopQuote');
+
+    await rhack(' ');
+
+    assert.match(game._pending_message, /You are blasted by the Orb of Detection's power/);
+    assert.match(game._pending_message, /Orb of Detection evades your grasp/);
+    assert.ok(game.u.uhp > 0 && game.u.uhp < 80);
+    assert.equal(game.level.objects.includes(artifact), true);
+    assert.equal(game.inventory.includes(artifact), false);
+    assert.equal(artifact.unpaid, undefined);
+    assert.equal(shkp.billct, 0);
+    assert.equal(shkp.bill.length, 0);
+    assert.equal(game.context.move || 0, 0);
+});
+
+test('lethal ordinary shop-floor pickup artifact blast stops before billing or removal', async () => {
+    const { shkp } = installCommandShopState();
+    const artifact = {
+        id: 6008,
+        cls: 'tool',
+        glyph: '(',
+        kind: 'crystal ball',
+        actualKind: 'crystal ball',
+        artifact: 'The Orb of Detection',
+        quan: 1,
+        ox: 5,
+        oy: 5,
+    };
+    game.level.objects = [artifact];
+    game.u.uhp = 1;
+    game.u.uhpmax = 1;
+    game._startup_role = 'Wizard';
+    game.u.ualign = { type: -1, record: 0 };
+
+    await rhack(',');
+    assert.equal(game._command_mode, 'pickupShopQuote');
+
+    await rhack(' ');
+
+    assert.match(game._pending_message, /You are blasted by the Orb of Detection's power/);
+    assert.match(game._pending_message, /You die/);
+    assert.equal(game.level.objects.includes(artifact), true);
+    assert.equal(game.inventory.includes(artifact), false);
+    assert.equal(artifact.unpaid, undefined);
+    assert.equal(shkp.billct, 0);
+    assert.equal(shkp.bill.length, 0);
+    assert.equal(game.u.uhp, 0);
+    assert.equal(game._death_cause, 'touching The Orb of Detection');
+    assert.equal(game.context.move || 0, 0);
+});
+
+test('ordinary floor petrifying corpse touch precedes slot preflight and billing', async () => {
+    const { shkp } = installCommandShopState();
+    const body = corpse(6009, 'c', 'chickatrice');
+    game.level.objects = [body];
+    fillInventoryLetters();
+
+    await rhack(',');
+
+    assert.match(game._pending_message, /Touching a chickatrice corpse is a fatal mistake/);
+    assert.doesNotMatch(game._pending_message, /knapsack cannot accommodate/);
+    assert.equal(game.level.objects.includes(body), true);
+    assert.equal(game.inventory.includes(body), false);
+    assert.equal(body.unpaid, undefined);
+    assert.equal(shkp.billct, 0);
+    assert.equal(shkp.bill.length, 0);
+    assert.equal(game.u.uhp, 0);
+    assert.equal(game._death_cause, 'petrified by a chickatrice corpse');
+    assert.equal(game.context.move || 0, 0);
+});
+
 test('taking merchandise from a shop-floor container adds the carried object to the bill', () => {
     const { shkp } = installShopState();
     const container = shopFloorContainer(6101);
