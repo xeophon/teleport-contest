@@ -16006,6 +16006,7 @@ export const __shopBillingTestHooks = {
     beginDroppedPaidObjectSale,
     beginShopFloorContainerPutSale,
     collectPayableShopDebts,
+    finishRobbedOnlyShopPayment,
     finishShopPaymentSelection,
     findPickedObjectInventoryMergeTarget,
     finishDroppedObjectSale,
@@ -16015,6 +16016,7 @@ export const __shopBillingTestHooks = {
     placeStackableFloorObject,
     pickUpFloorGoldObject,
     prepareContainerTakeoutObject,
+    hasRobbedOnlyShopPayment,
     putInventoryObjectIntoBag,
     putInventoryObjectIntoContainer,
     removeObjectFromShopBill,
@@ -22657,6 +22659,113 @@ function finishShopPaymentSelection(shkp, selected) {
         billedSelections,
         removedLedgerBillCount,
         legacyBillSelections,
+    };
+}
+
+function shopkeeperObjectivePronoun(shkp) {
+    if (shkp?.female) return 'her';
+    if (shkp?.neuter || shkp?.data?.neuter) return 'it';
+    return 'him';
+}
+
+function shopkeeperRobbedAmount(shkp) {
+    return Math.max(0, Math.trunc(Number(shkp?.robbed || 0)));
+}
+
+function hasRobbedOnlyShopPayment(shkp, entries = []) {
+    if (!shkp || shopkeeperRobbedAmount(shkp) <= 0 || entries.length) return false;
+    const ledgerCount = Array.isArray(shkp.bill) ? shkp.bill.length : 0;
+    const billCount = Math.max(ledgerCount, Math.max(0, Math.trunc(Number(shkp.billct || 0))));
+    const debit = Math.max(0, Math.trunc(Number(shkp.debit || 0)));
+    return billCount === 0 && debit === 0;
+}
+
+function finishRobbedOnlyShopPayment(shkp, { resident = null } = {}) {
+    const robbed = shopkeeperRobbedAmount(shkp);
+    if (!robbed) return { handled: false, paid: false, cashTotal: 0, message: '' };
+
+    const money = (game.inventory || []).find(item => item.letter === '$' || item.cls === 'coin');
+    const availableGold = Math.max(0, Math.trunc(Number(game._goldCount || money?.quan || 0)));
+    const name = shopkeeperDisplayName(shkp);
+    const isResident = !resident || sameShopkeeper(shkp, resident);
+    const isAngry = shopkeeperAngryForSellobj(shkp);
+    const messages = [];
+
+    if (!isResident && !isAngry) {
+        if (!availableGold) {
+            return { handled: true, paid: false, cashTotal: 0, message: 'You have no gold.' };
+        }
+        const nominalPayment = Math.min(availableGold, robbed);
+        const payment = applyShopPaymentValue(shkp, nominalPayment);
+        const paidCash = payment.cashDue;
+        if (availableGold > paidCash) next_ident();
+        game._goldCount = Math.max(0, availableGold - paidCash);
+        if (money) {
+            money.quan = game._goldCount;
+            updateMoneyLine(money);
+        }
+        if (availableGold > robbed)
+            messages.push(`You give ${name} the ${robbed} gold piece${robbed === 1 ? '' : 's'} ${shopkeeperObjectivePronoun(shkp)} asked for.`);
+        else
+            messages.push(`You give ${name} all your gold.`);
+        if (availableGold < Math.trunc(robbed / 2)) {
+            messages.push(`Unfortunately, ${shopkeeperObjectivePronoun(shkp)} doesn't look satisfied.`);
+        } else {
+            shkp.robbed = 0;
+            shkp.following = 0;
+            shkp.angry = false;
+            shkp.hostile = false;
+            shkp.mpeaceful = 1;
+        }
+        return {
+            handled: true,
+            paid: true,
+            cashTotal: paidCash,
+            compensationValue: nominalPayment,
+            robbedOnly: true,
+            message: messages.join('  '),
+        };
+    }
+
+    messages.push(`${name} is after blood, not gold!`);
+    if (availableGold < Math.trunc(robbed / 2)) {
+        messages.push(availableGold
+            ? `Besides, you don't have enough to interest ${shopkeeperObjectivePronoun(shkp)}.`
+            : 'Moreover, you have no gold.');
+        return {
+            handled: true,
+            paid: false,
+            cashTotal: 0,
+            compensationValue: 0,
+            robbedOnly: true,
+            message: messages.join('  '),
+        };
+    }
+
+    const possessivePronoun = shopkeeperPossessivePronoun(shkp);
+    const nominalPayment = Math.min(availableGold, robbed);
+    messages.push(`But since ${possessivePronoun} shop has been robbed recently,`);
+    messages.push(`you ${availableGold < robbed ? 'partially ' : ''}compensate ${name} for ${possessivePronoun} losses.`);
+    const payment = applyShopPaymentValue(shkp, nominalPayment);
+    const paidCash = payment.cashDue;
+    if (availableGold > paidCash) next_ident();
+    game._goldCount = Math.max(0, availableGold - paidCash);
+    if (money) {
+        money.quan = game._goldCount;
+        updateMoneyLine(money);
+    }
+    shkp.robbed = 0;
+    shkp.following = 0;
+    shkp.angry = false;
+    shkp.hostile = false;
+    shkp.mpeaceful = 1;
+    return {
+        handled: true,
+        paid: true,
+        cashTotal: paidCash,
+        compensationValue: nominalPayment,
+        robbedOnly: true,
+        message: messages.join('  '),
     };
 }
 
@@ -43227,6 +43336,13 @@ export async function rhack(_cmd) {
         }
 
         const entries = collectPayableShopDebts(shkp);
+        if (hasRobbedOnlyShopPayment(shkp, entries)) {
+            const payment = finishRobbedOnlyShopPayment(shkp, { resident });
+            game._command_mode = null;
+            await setMessage(payment.message || "You don't have enough gold.");
+            game.context.move = 1;
+            return;
+        }
         if (!entries.length) {
             await setMessage(`You do not owe ${shkp.shknam || 'the shopkeeper'} anything.`);
             return;

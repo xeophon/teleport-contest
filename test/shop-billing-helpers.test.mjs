@@ -6141,6 +6141,80 @@ test('paying a used-up residual bill removes ledger row and tracker once', () =>
     assert.equal(game._usedUpShopBills.length, 0);
 });
 
+test('paying a robbed-only shopkeeper compensates shop losses', () => {
+    const { shkp } = installShopState();
+    shkp.robbed = 20;
+    game._goldCount = 25;
+
+    const entries = shop.collectPayableShopDebts(shkp);
+    assert.equal(entries.length, 0);
+    assert.equal(shop.hasRobbedOnlyShopPayment(shkp, entries), true);
+
+    const payment = shop.finishRobbedOnlyShopPayment(shkp);
+
+    assert.equal(payment.paid, true);
+    assert.equal(payment.robbedOnly, true);
+    assert.equal(payment.cashTotal, 20);
+    assert.equal(payment.compensationValue, 20);
+    assert.equal(game._goldCount, 5);
+    assert.equal(shkp.robbed, 0);
+    assert.equal(shkp.billct, 0);
+    assert.equal(shkp.bill.length, 0);
+});
+
+test('pay command handles robbed-only shopkeepers without claiming nothing is owed', async () => {
+    const { shkp } = installCommandShopState();
+    shkp.robbed = 20;
+    game._goldCount = 25;
+
+    await rhack('p');
+
+    assert.equal(game._command_mode, null);
+    assert.match(game._pending_message, /after blood, not gold/i);
+    assert.match(game._pending_message, /shop has been robbed recently/i);
+    assert.match(game._pending_message, /compensate Izchak/i);
+    assert.doesNotMatch(game._pending_message, /do not owe/i);
+    assert.equal(game._goldCount, 5);
+    assert.equal(shkp.robbed, 0);
+    assert.equal(shkp.billct, 0);
+    assert.equal(game.context.move, 1);
+});
+
+test('pay command partially compensates robbed-only shopkeepers when carrying at least half', async () => {
+    const { shkp } = installCommandShopState();
+    shkp.robbed = 20;
+    shkp.angry = true;
+    game._goldCount = 12;
+
+    await rhack('p');
+
+    assert.equal(game._command_mode, null);
+    assert.match(game._pending_message, /after blood, not gold/i);
+    assert.match(game._pending_message, /partially compensate Izchak/i);
+    assert.equal(game._goldCount, 0);
+    assert.equal(shkp.robbed, 0);
+    assert.equal(shkp.angry, false);
+    assert.equal(shkp.mpeaceful, 1);
+    assert.equal(game.context.move, 1);
+});
+
+test('pay command refuses robbed-only compensation below half the loss', async () => {
+    const { shkp } = installCommandShopState();
+    shkp.robbed = 20;
+    game._goldCount = 9;
+
+    await rhack('p');
+
+    assert.equal(game._command_mode, null);
+    assert.match(game._pending_message, /after blood, not gold/i);
+    assert.match(game._pending_message, /don't have enough to interest him/i);
+    assert.doesNotMatch(game._pending_message, /compensate Izchak/i);
+    assert.doesNotMatch(game._pending_message, /do not owe/i);
+    assert.equal(game._goldCount, 9);
+    assert.equal(shkp.robbed, 20);
+    assert.equal(game.context.move, 1);
+});
+
 test('shop credit offsets itemized bill rows before hero gold', () => {
     const { shkp } = installShopState();
     const ration = foodRation(9401, 'a');
