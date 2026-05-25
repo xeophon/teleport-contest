@@ -92,16 +92,16 @@ This audit is based only on upstream C and current JS source inspection. It does
 ### Shop Billing
 
 - `js/cmd.js:12715-12743`: shopkeeper lookup helpers.
-- `js/cmd.js:12804-13423`: starter shop bill entries, split/subtract helpers, carried projectile bill split, same-shop unpaid projectile return, projectile debt conversion, bill-aware floor stack merging, pickup bill merge helpers, unpaid drop return, and test exports.
-- `js/cmd.js:13429-13445`: buried-merchandise debt helper.
-- `js/cmd.js:13806-13813`: unpaid line synchronization.
-- `js/cmd.js:14227-14250`: used-up bill naming and memory helper.
-- `js/cmd.js:18092-18102`: unpaid charged-tool usage fee helper.
-- `js/cmd.js:17932-17991`: magic bag shop debit context for special tip sources.
-- `js/cmd.js:18236-18258`: horn-created object billing and unpaid stack merge helper.
-- `js/cmd.js:18486-18776`: shop base cost, price calculation, debt collection, and debit payment.
-- `js/cmd.js:25170-25268`: shop quote and pay menu handling.
-- `js/cmd.js:38736-38772`: pay command source selection.
+- `js/cmd.js:12804-13436`: starter shop bill entries, split/subtract helpers, carried projectile bill split, same-shop unpaid projectile return, projectile debt conversion, bill-aware floor stack merging, pickup bill merge helpers, unpaid drop return, and test exports.
+- `js/cmd.js:13442-13458`: buried-merchandise debt helper.
+- `js/cmd.js:13819-13826`: unpaid line synchronization.
+- `js/cmd.js:14240-14268`: used-up bill naming and memory helper.
+- `js/cmd.js:18110-18120`: unpaid charged-tool usage fee helper.
+- `js/cmd.js:17950-18009`: magic bag shop debit context for special tip sources.
+- `js/cmd.js:18254-18276`: horn-created object billing and unpaid stack merge helper.
+- `js/cmd.js:18504-19046`: shop base cost, price calculation, ledger-first debt collection, itemized bill-row payment, credit/debit handling.
+- `js/cmd.js:25450-25513`: shop quote and pay menu handling.
+- `js/cmd.js:38977-39013`: pay command source selection.
 - `js/mklev.js:4902-4921`: duplicate unpaid-price helpers used by level generation/object merging.
 
 ## Findings
@@ -191,14 +191,14 @@ Concrete gaps:
 
 C uses shopkeeper bill entries with explicit invariants: an object is unpaid iff it is on a bill, except used-up bill entries. The system supports split/merge, contained unpaid objects, hidden containers, used-up items, itemized payment, partial usage fees, price quote learning, `no_charge`, stolen value, and alteration billing.
 
-JS uses starter bill entries plus object fields (`unpaid`, `unpaidPrice`), loose shopkeeper counters/debit, and a global `_usedUpShopBills` list (`js/cmd.js:12804-13423`, `js/cmd.js:13806-13813`, `js/cmd.js:18741-18776`). This supports visible unpaid suffixes, ordinary pickup/drop billing, compatible pickup stack merges, narrow split-stack unpaid returns, partial inventory-use debt display, throw/fire child bill rows with off-shop debt conversion, bill-aware floor stack merging, and basic payment, but does not yet preserve C's full ownership and bill-entry semantics.
+JS uses starter bill entries plus object fields (`unpaid`, `unpaidPrice`), loose shopkeeper counters/debit, and a transitional `_usedUpShopBills` list (`js/cmd.js:12804-13445`, `js/cmd.js:13828-13835`, `js/cmd.js:18791-19046`). This supports visible unpaid suffixes, ordinary pickup/drop billing, compatible pickup stack merges, narrow split-stack unpaid returns, partial inventory-use debt display, throw/fire child bill rows with off-shop debt conversion, bill-aware floor stack merging, and ledger-first payment for split and used-up bill rows, but does not yet preserve C's full ownership and bill-entry semantics.
 
 Concrete gaps:
 
 - Ledger coverage is partial: starter `bill` entries and narrow split/subtract/debt helpers exist, but there is no full source-equivalent `onbill()`, recursive `subfrombill()`, container-aware `stolen_value()`, or general `obfree()`; non-projectile merge/delete paths can still lose bill state.
-- `billct` is tied to the starter ledger in newer paths, but legacy debit/payment and object-field scans still mean it is not authoritative everywhere.
-- `collectPayableShopDebts()` scans inventory and floor objects globally, so payable objects are not strictly tied to a specific shopkeeper's bill (`js/cmd.js:18741-18764`).
-- Payment uses a `cashTotal` accumulator, but it is still driven by collected object fields rather than authoritative bill rows and shop credit.
+- `billct` is tied to the starter ledger in newer paths, but legacy object-field fallback scans still mean it is not authoritative everywhere.
+- `collectPayableShopDebts()` now enumerates selected shopkeeper bill rows first and splits `bquan > quan` rows into used-up/intact portions, but retains object-field fallback scanning for legacy unpaid objects (`js/cmd.js:18867-18895`).
+- Payment now applies shop credit before cash for selected ledger rows and shrinks partly used bills before intact rows can clear them, but container itemized payment, full queued-selection behavior, and robbed-shop payment still do not match C.
 - `get_cost()` parity is incomplete: JS has base tables, unknown-name surcharge, enchantment surcharge, charisma adjustment, and pricing units (`js/cmd.js:18486-18713`), but not full C role/status/shopkeeper anger/tourist/dunce/artifact/contained/no-charge/price-quote side effects.
 - Generic `costly_alteration()` is absent. JS has local billing for buried merchandise, charged bag/horn use, and horn-created objects, but not the shared bite/open/destroy/cancel/degrade billing hook used across C.
 - Used-up unpaid items are not centralized. C `useup()`/`obfree()` preserve bills for consumed unpaid objects; JS only remembers some corpse rot/glob shrink paths.
@@ -239,4 +239,4 @@ Concrete gaps:
 - Multi-pickup still lacks full C quote/lift semantics, and split-stack object identity can still lose unpaid/shop state in non-projectile delete, container, and generic merge paths.
 - Container-moving objects in shops and complex drops still do not exercise full C `sellobj()`/`addtobill()`/`subfrombill()` paths.
 - Container take-out/tip can move shop-owned contents without becoming unpaid or stolen.
-- Payment is not fully backed by authoritative bill rows or shop credit.
+- Payment is only partly backed by authoritative bill rows; container payment, robbed-shop repayment, and several legacy unpaid fallbacks still need C parity.

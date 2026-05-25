@@ -22,7 +22,7 @@ This folder records source-backed audits against `nethack-c/upstream`. The notes
 
 ## Ranked Roadmap
 
-1. Shop ledger foundation from `05`: current JS is still partly field-based; split-stack unpaid returns are started, but broad split routing, container `sellobj`, payment, and `costly_alteration` coverage are missing.
+1. Shop ledger foundation from `05`: current JS is still partly field-based; split-stack unpaid returns and itemized bill-row payment are started, but broad split routing, container `sellobj`, and `costly_alteration` coverage are missing.
 2. Object registry and canonical object factory from `02`: `mkobj`, wishes, weight, timers, names, and display should share one metadata source.
 3. Level generation lifecycle and minimal `sp_lev` layer from `03`: fix generation ordering, shared finalization, and special/quest level data drift.
 4. Command, prompt, and menu registry from `01`: remove literal-key dispatch drift and make `getlin`, `yn_function`, extended commands, and menus reusable.
@@ -36,8 +36,8 @@ This folder records source-backed audits against `nethack-c/upstream`. The notes
 Continue with the shop area because it combines visible current behavior with a high-impact missing C subsystem.
 
 - Keep `unpaid` and `unpaidPrice` as compatibility/display fields while migrating callers.
-- Normalize itemized payment for split and used-up bill rows so payment is driven by authoritative ledger entries.
 - Extend ledger use to container put-in, take-out, and tip moves after ordinary pickup/drop is stable.
 - Expand `sellobj()` beyond ordinary paid non-container drops to container contents, gold donation/credit, robbed-shop, and angry-shopkeeper edge cases.
+- Continue moving payment toward complete C `dopay()` semantics for containers, queued itemized selections, and robbed-shop interactions.
 
 Every code slice should be followed by source-derived smoke checks plus `npm run score`.

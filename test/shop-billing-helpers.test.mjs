@@ -479,3 +479,121 @@ test('floor stacking merges compatible unpaid bill rows', () => {
     assert.equal(thrown.unpaid, false);
     assert.equal(shkp.billct, 1);
 });
+
+test('payable debts split partly used stacks into used and intact bill portions', () => {
+    const { shkp } = installShopState();
+    const stack = { ...dagger(9001, 'd'), quan: 3, line: 'd - 3 +0 daggers' };
+    shop.addObjectToShopBill(shkp, stack, 15);
+    game.inventory = [stack];
+    game._goldCount = 20;
+    shop.removeInventoryItem(stack, 1);
+
+    const entries = shop.collectPayableShopDebts(shkp);
+    assert.equal(entries.length, 2);
+    assert.equal(entries[0].billPortion, 'partlyUsedUp');
+    assert.equal(entries[0].price, 5);
+    assert.equal(entries[1].billPortion, 'intact');
+    assert.equal(entries[1].price, 10);
+
+    const payment = shop.finishShopPaymentSelection(shkp, [entries[0]]);
+
+    const bill = shop.shopBillEntryForObject(shkp, stack);
+    assert.equal(payment.cashTotal, 5);
+    assert.equal(game._goldCount, 15);
+    assert.equal(bill.bquan, 2);
+    assert.equal(shop.shopBillEntryTotal(bill), 10);
+    assert.equal(stack.unpaid, true);
+    assert.equal(stack.unpaidPrice, 10);
+});
+
+test('paying intact portion after used-up quantity clears the remaining bill row', () => {
+    const { shkp } = installShopState();
+    const stack = { ...dagger(9101, 'd'), quan: 3, line: 'd - 3 +0 daggers' };
+    shop.addObjectToShopBill(shkp, stack, 15);
+    game.inventory = [stack];
+    game._goldCount = 20;
+    shop.removeInventoryItem(stack, 1);
+
+    let entries = shop.collectPayableShopDebts(shkp);
+    shop.finishShopPaymentSelection(shkp, [entries[0]]);
+    entries = shop.collectPayableShopDebts(shkp);
+    assert.equal(entries.length, 1);
+    assert.equal(entries[0].billPortion, 'intact');
+
+    const payment = shop.finishShopPaymentSelection(shkp, [entries[0]]);
+
+    assert.equal(payment.cashTotal, 10);
+    assert.equal(game._goldCount, 5);
+    assert.equal(shop.shopBillEntryForObject(shkp, stack), null);
+    assert.equal(stack.unpaid, false);
+    assert.equal(stack.unpaidPrice, undefined);
+    assert.equal(shkp.billct, 0);
+});
+
+test('paying a split stack child removes only the child ledger row', () => {
+    const { shkp } = installShopState();
+    const parent = { ...dagger(9201, 'd'), quan: 3, line: 'd - 3 +0 daggers' };
+    const child = { ...parent, id: 9202, letter: undefined, line: undefined, quan: 1, ox: 7, oy: 5 };
+    shop.addObjectToShopBill(shkp, parent, 15);
+    shop.splitShopBillEntry(shkp, parent, child, 1);
+    game.inventory = [parent];
+    game.level.objects = [child];
+    game._goldCount = 20;
+
+    const entries = shop.collectPayableShopDebts(shkp);
+    const childEntry = entries.find(entry => entry.billEntry?.bo_id === String(child.id));
+    const payment = shop.finishShopPaymentSelection(shkp, [childEntry]);
+
+    const parentEntry = shop.shopBillEntryForObject(shkp, parent);
+    assert.equal(payment.cashTotal, 5);
+    assert.equal(game._goldCount, 15);
+    assert.equal(parentEntry.bquan, 2);
+    assert.equal(shop.shopBillEntryTotal(parentEntry), 10);
+    assert.equal(shop.shopBillEntryForObject(shkp, child), null);
+    assert.equal(child.unpaid, false);
+    assert.equal(child.unpaidPrice, undefined);
+    assert.equal(shkp.billct, 1);
+});
+
+test('paying a used-up residual bill removes ledger row and tracker once', () => {
+    const { shkp } = installShopState();
+    const stack = { ...dagger(9301, 'd'), quan: 3, line: 'd - 3 +0 daggers' };
+    shop.addObjectToShopBill(shkp, stack, 15);
+    stack.quan = 1;
+    stack.line = 'd - a +0 dagger (unpaid, 15 zorkmids)';
+    shop.sellobjReturnUnpaidToShop(stack, 5, 5);
+    game._goldCount = 20;
+
+    const entries = shop.collectPayableShopDebts(shkp);
+    assert.equal(entries.length, 1);
+    assert.equal(entries[0].billPortion, 'fullyUsedUp');
+    assert.equal(entries[0].price, 10);
+
+    const payment = shop.finishShopPaymentSelection(shkp, entries);
+
+    assert.equal(payment.cashTotal, 10);
+    assert.equal(game._goldCount, 10);
+    assert.equal(shkp.billct, 0);
+    assert.equal(shkp.bill.length, 0);
+    assert.equal(game._usedUpShopBills.length, 0);
+});
+
+test('shop credit offsets itemized bill rows before hero gold', () => {
+    const { shkp } = installShopState();
+    const ration = foodRation(9401, 'a');
+    shop.addObjectToShopBill(shkp, ration, 45);
+    game.inventory = [ration];
+    game._goldCount = 50;
+    shkp.credit = 20;
+
+    const entries = shop.collectPayableShopDebts(shkp);
+    assert.equal(shop.shopPaymentCashDue(shkp, entries), 25);
+
+    const payment = shop.finishShopPaymentSelection(shkp, entries);
+
+    assert.equal(payment.cashTotal, 25);
+    assert.equal(game._goldCount, 25);
+    assert.equal(shkp.credit, 0);
+    assert.equal(shop.shopBillEntryForObject(shkp, ration), null);
+    assert.equal(ration.unpaid, false);
+});

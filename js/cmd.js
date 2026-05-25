@@ -12811,7 +12811,7 @@ function shopkeeperOwningBillEntry(obj) {
     ];
     const seen = new Set();
     for (const shkp of candidates) {
-        const key = shkp.m_id ?? shkp.id ?? shkp.shknam ?? candidates.indexOf(shkp);
+        const key = shopkeeperIdentity(shkp) ?? candidates.indexOf(shkp);
         if (seen.has(key)) continue;
         seen.add(key);
         const entry = shopBillEntryForObject(shkp, obj);
@@ -12820,11 +12820,15 @@ function shopkeeperOwningBillEntry(obj) {
     return { shkp: null, entry: null };
 }
 
+function shopkeeperIdentity(shkp) {
+    return shkp?.m_id ?? shkp?.id ?? shkp?.shknam ?? shkp?.shopkeeperName ?? null;
+}
+
 function sameShopkeeper(a, b) {
     if (!a || !b) return false;
     if (a === b) return true;
-    const aId = a.m_id ?? a.id;
-    const bId = b.m_id ?? b.id;
+    const aId = shopkeeperIdentity(a);
+    const bId = shopkeeperIdentity(b);
     return aId != null && bId != null && String(aId) === String(bId);
 }
 
@@ -12926,13 +12930,17 @@ function splitCarriedObjectShopBill(parent, child, count = child?.quan || 1) {
     return splitShopBillEntry(shkp, parent, child, count);
 }
 
-function rememberUsedUpShopBillEntry(obj, entry, price) {
+function rememberUsedUpShopBillEntry(obj, entry, price, shkp = null) {
     if (!(price > 0)) return;
+    const name = usedUpShopBillName(obj);
+    entry.name = name;
+    entry.shopkeeperId = shopkeeperIdentity(shkp);
     game._usedUpShopBills ??= [];
     game._usedUpShopBills.push({
-        name: usedUpShopBillName(obj),
+        name,
         price,
         bo_id: entry.bo_id,
+        shopkeeperId: shopkeeperIdentity(shkp),
     });
 }
 
@@ -12956,7 +12964,7 @@ function subOneFromShopBill(obj, shkp) {
         entry.bquan = residualQuantity;
         entry.totalPrice = unitPrice * residualQuantity;
         shkp.billct = Array.isArray(shkp.bill) ? shkp.bill.length : Math.max(1, shkp.billct || 1);
-        rememberUsedUpShopBillEntry(obj, entry, entry.totalPrice);
+        rememberUsedUpShopBillEntry(obj, entry, entry.totalPrice, shkp);
         return true;
     }
 
@@ -13402,6 +13410,8 @@ export const __shopBillingTestHooks = {
     addObjectToShopBill,
     addPickedObjectToShopBill,
     beginDroppedPaidObjectSale,
+    collectPayableShopDebts,
+    finishShopPaymentSelection,
     findPickedObjectInventoryMergeTarget,
     finishDroppedObjectSale,
     mergePickedObjectIntoInventory,
@@ -13420,8 +13430,11 @@ export const __shopBillingTestHooks = {
     subOneFromShopBill,
     shopDroppedPaidObjectSaleInfo,
     shopBillEntryForObject,
+    shopBillEntryQuantity,
     shopBillEntryTotal,
+    shopkeeperDebitPayment,
     shopkeeperCash,
+    shopPaymentCashDue,
     shopSaleableObject,
     shopSaleOffer,
 };
@@ -14238,11 +14251,16 @@ function rememberUsedUpShopBill(obj) {
     if (!obj?.unpaid || !price) return;
     const shkp = heroShopkeeper();
     const billEntry = shopBillEntryForObject(shkp, obj);
+    if (billEntry) {
+        billEntry.name = usedUpShopBillName(obj);
+        billEntry.shopkeeperId = shopkeeperIdentity(shkp);
+    }
     game._usedUpShopBills ??= [];
     game._usedUpShopBills.push({
         name: usedUpShopBillName(obj),
         price,
         bo_id: billEntry?.bo_id ?? shopBillObjectId(obj),
+        shopkeeperId: shopkeeperIdentity(shkp),
     });
 }
 
@@ -18728,22 +18746,135 @@ function shopDebtItemName(item) {
     return `${/^[aeiou]/i.test(baseName) ? 'an' : 'a'} ${baseName}`;
 }
 
-function collectUnpaidShopItemsFromList(list, entries, shkp = null) {
+function findShopBillObjectInList(list, id, seen = new Set()) {
+    if (id == null) return null;
+    for (const item of list || []) {
+        if (!item || seen.has(item)) continue;
+        seen.add(item);
+        if (String(shopBillObjectId(item)) === String(id)) return item;
+        const contents = globContents(item);
+        const found = contents.length ? findShopBillObjectInList(contents, id, seen) : null;
+        if (found) return found;
+    }
+    return null;
+}
+
+function findShopBillObjectById(id) {
+    return findShopBillObjectInList([...(game.inventory || []), ...(game.level?.objects || [])], id);
+}
+
+function usedUpShopBillTrackerForId(id, shkp = null) {
+    const shkpId = shopkeeperIdentity(shkp);
+    return (game._usedUpShopBills || []).find(bill => {
+        if (String(bill?.bo_id) !== String(id)) return false;
+        return shkpId == null || bill.shopkeeperId == null || String(bill.shopkeeperId) === String(shkpId);
+    }) || null;
+}
+
+function removeUsedUpShopBillTracker(id, shkp = null) {
+    const shkpId = shopkeeperIdentity(shkp);
+    const before = (game._usedUpShopBills || []).length;
+    game._usedUpShopBills = (game._usedUpShopBills || [])
+        .filter(bill => String(bill?.bo_id) !== String(id)
+            || (shkpId != null && bill.shopkeeperId != null && String(bill.shopkeeperId) !== String(shkpId)));
+    return game._usedUpShopBills.length !== before;
+}
+
+function shopBillEntryDisplayName(entry, obj, quantity = null, shkp = null) {
+    const tracker = usedUpShopBillTrackerForId(entry?.bo_id, shkp);
+    if (tracker?.name) return tracker.name;
+    if (entry?.name) return entry.name;
+    if (obj) return shopDebtItemName(quantity ? { ...obj, quan: quantity, line: '' } : obj);
+    return 'used-up object';
+}
+
+function pushShopBillLedgerDebtEntries(shkp, entries, seenBillIds) {
+    const ledger = Array.isArray(shkp?.bill) ? shkp.bill : [];
+    const usedEntries = [];
+    const intactEntries = [];
+    for (const billEntry of ledger) {
+        const billId = String(billEntry.bo_id);
+        seenBillIds.add(billId);
+        const unitPrice = shopBillEntryUnitPrice(billEntry);
+        const billedQuantity = shopBillEntryQuantity(billEntry);
+        const obj = findShopBillObjectById(billId);
+        const liveQuantity = obj ? Math.max(1, Math.trunc(Number(obj.quan || 1))) : 0;
+        const tracker = usedUpShopBillTrackerForId(billId, shkp);
+
+        if (billEntry.useup || !obj) {
+            const price = shopBillEntryTotal(billEntry) || Number(tracker?.price || 0);
+            if (price > 0) usedEntries.push({
+                usedUpBill: tracker || { bo_id: billEntry.bo_id, price, name: billEntry.name },
+                billEntry,
+                billPortion: 'fullyUsedUp',
+                quantity: billedQuantity,
+                name: shopBillEntryDisplayName(billEntry, obj, billedQuantity, shkp),
+                price,
+            });
+            continue;
+        }
+
+        if (liveQuantity < billedQuantity && unitPrice > 0) {
+            const usedQuantity = billedQuantity - liveQuantity;
+            usedEntries.push({
+                item: obj,
+                billEntry,
+                billPortion: 'partlyUsedUp',
+                quantity: usedQuantity,
+                name: shopBillEntryDisplayName(billEntry, obj, usedQuantity, shkp),
+                price: unitPrice * usedQuantity,
+            });
+            intactEntries.push({
+                item: obj,
+                billEntry,
+                billPortion: 'intact',
+                quantity: liveQuantity,
+                blockedByUsedUp: true,
+                name: shopDebtItemName({ ...obj, quan: liveQuantity, line: '' }),
+                price: unitPrice * liveQuantity,
+            });
+            continue;
+        }
+
+        const price = shopBillEntryTotal(billEntry);
+        if (price > 0) intactEntries.push({
+            item: obj,
+            billEntry,
+            billPortion: 'intact',
+            quantity: liveQuantity || billedQuantity,
+            name: shopDebtItemName(obj),
+            price,
+        });
+    }
+    entries.push(...usedEntries, ...intactEntries);
+}
+
+function collectLegacyUnpaidShopItemsFromList(list, entries, shkp = null, seenBillIds = new Set()) {
     for (const item of list || []) {
         const billEntry = shopBillEntryForObject(shkp, item);
+        if (billEntry && seenBillIds.has(String(billEntry.bo_id))) {
+            const contents = globContents(item);
+            if (contents.length) collectLegacyUnpaidShopItemsFromList(contents, entries, shkp, seenBillIds);
+            continue;
+        }
         const price = billEntry ? shopBillEntryTotal(billEntry) : unpaidBillPrice(item);
-        if ((item?.unpaid || billEntry) && price) entries.push({ item, billEntry, name: shopDebtItemName(item), price });
+        if ((item?.unpaid || billEntry) && price) entries.push({ item, billEntry, billPortion: 'legacy', name: shopDebtItemName(item), price });
         const contents = globContents(item);
-        if (contents.length) collectUnpaidShopItemsFromList(contents, entries, shkp);
+        if (contents.length) collectLegacyUnpaidShopItemsFromList(contents, entries, shkp, seenBillIds);
     }
 }
 
 function collectPayableShopDebts(shkp = null) {
     const entries = [];
-    collectUnpaidShopItemsFromList(game.inventory || [], entries, shkp);
-    collectUnpaidShopItemsFromList(game.level?.objects || [], entries, shkp);
+    const seenBillIds = new Set();
+    if (shkp) pushShopBillLedgerDebtEntries(shkp, entries, seenBillIds);
+    collectLegacyUnpaidShopItemsFromList(game.inventory || [], entries, shkp, seenBillIds);
+    collectLegacyUnpaidShopItemsFromList(game.level?.objects || [], entries, shkp, seenBillIds);
     for (const bill of game._usedUpShopBills || []) {
         const price = Number(bill?.price || 0);
+        if (seenBillIds.has(String(bill?.bo_id))) continue;
+        const shkpId = shopkeeperIdentity(shkp);
+        if (shkpId != null && bill.shopkeeperId != null && String(bill.shopkeeperId) !== String(shkpId)) continue;
         if (price > 0) entries.push({
             usedUpBill: bill,
             name: bill.name || 'used-up object',
@@ -18770,6 +18901,155 @@ function shopkeeperDebitPayment(entry) {
     const credit = Math.max(0, Math.trunc(Number(shkp.credit || 0)));
     const coveredByCredit = Math.min(credit, debt);
     return { debt, credit, coveredByCredit, cashDue: debt - coveredByCredit };
+}
+
+function shopPaymentEntryRank(entry) {
+    if (entry?.shopkeeperDebit) return 0;
+    if (entry?.billPortion === 'partlyUsedUp' || entry?.billPortion === 'fullyUsedUp' || entry?.usedUpBill) return 1;
+    return 2;
+}
+
+function shopPaymentHasUsedUpSelection(selected, entry) {
+    return selected.some(candidate =>
+        candidate !== entry && candidate.billEntry === entry.billEntry
+        && candidate.billPortion === 'partlyUsedUp');
+}
+
+function shopPaymentEntryBlocked(entry, selected) {
+    if (!entry?.blockedByUsedUp || !entry.billEntry || !entry.item) return false;
+    const liveQuantity = Math.max(1, Math.trunc(Number(entry.item.quan || 1)));
+    if (shopBillEntryQuantity(entry.billEntry) <= liveQuantity) return false;
+    return !shopPaymentHasUsedUpSelection(selected, entry);
+}
+
+function payableShopPaymentEntries(selected) {
+    return [...(selected || [])]
+        .filter(entry => !shopPaymentEntryBlocked(entry, selected || []))
+        .sort((a, b) => shopPaymentEntryRank(a) - shopPaymentEntryRank(b));
+}
+
+function shopPaymentEntryValue(entry) {
+    if (entry?.shopkeeperDebit) return Math.max(0, Math.trunc(Number(entry.shopkeeperDebit.debit ?? entry.price ?? 0)));
+    return Math.max(0, Math.trunc(Number(entry?.price || 0)));
+}
+
+function shopPaymentCashDue(shkp, selected) {
+    let credit = Math.max(0, Math.trunc(Number(shkp?.credit || 0)));
+    let cashDue = 0;
+    for (const entry of payableShopPaymentEntries(selected)) {
+        const value = shopPaymentEntryValue(entry);
+        const coveredByCredit = Math.min(credit, value);
+        credit -= coveredByCredit;
+        cashDue += value - coveredByCredit;
+    }
+    return cashDue;
+}
+
+function applyShopPaymentValue(shkp, value) {
+    const amount = Math.max(0, Math.trunc(Number(value || 0)));
+    if (!shkp || !amount) return { coveredByCredit: 0, cashDue: 0 };
+    const credit = Math.max(0, Math.trunc(Number(shkp.credit || 0)));
+    const coveredByCredit = Math.min(credit, amount);
+    shkp.credit = credit - coveredByCredit;
+    if (shkp.robbed)
+        shkp.robbed = Math.max(0, Math.trunc(Number(shkp.robbed || 0)) - amount);
+    return { coveredByCredit, cashDue: amount - coveredByCredit };
+}
+
+function payPartlyUsedShopBillEntry(shkp, entry) {
+    const billEntry = entry?.billEntry;
+    const item = entry?.item;
+    if (!billEntry || !item) return { billed: true, removedLedger: false, legacy: true };
+    applyShopPaymentValue(shkp, entry.price);
+    const liveQuantity = Math.max(1, Math.trunc(Number(item.quan || 1)));
+    const unitPrice = shopBillEntryUnitPrice(billEntry);
+    billEntry.bquan = liveQuantity;
+    billEntry.price = unitPrice;
+    billEntry.totalPrice = unitPrice * liveQuantity;
+    billEntry.useup = false;
+    item.unpaid = true;
+    item.unpaidPrice = shopBillEntryTotal(billEntry);
+    syncUnpaidBillLine(item);
+    removeUsedUpShopBillTracker(billEntry.bo_id, shkp);
+    return { billed: true, removedLedger: false, legacy: false };
+}
+
+function payFullyUsedShopBillEntry(shkp, entry) {
+    const billId = entry?.billEntry?.bo_id ?? entry?.usedUpBill?.bo_id;
+    applyShopPaymentValue(shkp, entry.price);
+    const removedLedger = removeObjectFromShopBillById(shkp, billId);
+    removeUsedUpShopBillTracker(billId, shkp);
+    return { billed: true, removedLedger, legacy: !removedLedger };
+}
+
+function payIntactShopBillEntry(shkp, entry) {
+    applyShopPaymentValue(shkp, entry.price);
+    if (!entry?.item) return { billed: false, removedLedger: false, legacy: false };
+    const billId = entry.billEntry?.bo_id;
+    if (billId != null) {
+        const removedLedger = removeObjectFromShopBillById(shkp, billId);
+        if (removedLedger) clearObjectShopBillState(entry.item);
+        else clearObjectShopBillState(entry.item);
+        return { billed: true, removedLedger, legacy: !removedLedger };
+    }
+    if (removeObjectFromShopBill(shkp, entry.item)) return { billed: true, removedLedger: true, legacy: false };
+    clearObjectShopBillState(entry.item);
+    return { billed: true, removedLedger: false, legacy: true };
+}
+
+function applyShopPaymentEntry(shkp, entry) {
+    if (entry?.shopkeeperDebit) {
+        const debt = Math.max(0, Math.trunc(Number(entry.shopkeeperDebit.debit ?? entry.price ?? 0)));
+        applyShopPaymentValue(entry.shopkeeperDebit, debt);
+        entry.shopkeeperDebit.debit = 0;
+        entry.shopkeeperDebit.loan = 0;
+        return { billed: false, removedLedger: false, legacy: false };
+    }
+    if (entry?.billPortion === 'partlyUsedUp') return payPartlyUsedShopBillEntry(shkp, entry);
+    if (entry?.billPortion === 'fullyUsedUp' || entry?.usedUpBill) return payFullyUsedShopBillEntry(shkp, entry);
+    return payIntactShopBillEntry(shkp, entry);
+}
+
+function finishShopPaymentSelection(shkp, selected) {
+    const payableEntries = payableShopPaymentEntries(selected);
+    const cashTotal = shopPaymentCashDue(shkp, payableEntries);
+    if (!payableEntries.length) return { paid: false, skipped: true, cashTotal, payableEntries, message: '' };
+    const money = (game.inventory || []).find(item => item.letter === '$' || item.cls === 'coin');
+    const availableGold = game._goldCount || money?.quan || 0;
+    if (availableGold < cashTotal) return {
+        paid: false,
+        cashTotal,
+        payableEntries,
+        message: "You don't have enough gold.",
+    };
+
+    if (availableGold > cashTotal) next_ident();
+    game._goldCount = Math.max(0, availableGold - cashTotal);
+    if (money) {
+        money.quan = game._goldCount;
+        updateMoneyLine(money);
+    }
+
+    let removedLedgerBillCount = 0;
+    let billedSelections = 0;
+    let legacyBillSelections = 0;
+    for (const entry of payableEntries) {
+        const result = applyShopPaymentEntry(shkp, entry);
+        if (!result.billed) continue;
+        billedSelections++;
+        if (result.removedLedger) removedLedgerBillCount++;
+        if (result.legacy) legacyBillSelections++;
+    }
+    if (shkp && legacyBillSelections)
+        shkp.billct = Math.max(0, (shkp.billct || legacyBillSelections) - legacyBillSelections);
+    return {
+        paid: true,
+        cashTotal,
+        payableEntries,
+        billedSelections,
+        removedLedgerBillCount,
+        legacyBillSelections,
+    };
 }
 
 function pickupMenuEntries(objects) {
@@ -25188,54 +25468,14 @@ export async function rhack(_cmd) {
                 return;
             }
 
-            const money = (game.inventory || []).find(item => item.letter === '$' || item.cls === 'coin');
-            const availableGold = game._goldCount || money?.quan || 0;
-            const cashTotal = selected.reduce((sum, entry) =>
-                sum + (entry.shopkeeperDebit ? shopkeeperDebitPayment(entry).cashDue : entry.price), 0);
-            if (availableGold < cashTotal) {
+            const shkp = game._pay_shopkeeper;
+            const payment = finishShopPaymentSelection(shkp, selected);
+            if (!payment.paid) {
                 game._pay_shopkeeper = null;
-                await setMessage("You don't have enough gold.");
+                if (payment.skipped) return;
+                await setMessage(payment.message || "You don't have enough gold.");
                 return;
             }
-            if (availableGold > cashTotal) next_ident();
-            game._goldCount = Math.max(0, availableGold - cashTotal);
-            if (money) {
-                money.quan = game._goldCount;
-                updateMoneyLine(money);
-            }
-            const paidUsedUpBills = new Set();
-            let removedLedgerBillCount = 0;
-            for (const entry of selected) {
-                if (entry.usedUpBill) {
-                    if (removeObjectFromShopBillById(game._pay_shopkeeper, entry.usedUpBill.bo_id))
-                        removedLedgerBillCount++;
-                    paidUsedUpBills.add(entry.usedUpBill);
-                    continue;
-                }
-                if (entry.shopkeeperDebit) {
-                    const payment = shopkeeperDebitPayment(entry);
-                    entry.shopkeeperDebit.credit = Math.max(0, payment.credit - payment.coveredByCredit);
-                    entry.shopkeeperDebit.debit = 0;
-                    entry.shopkeeperDebit.loan = 0;
-                    continue;
-                }
-                if (!entry.item) continue;
-                if (removeObjectFromShopBill(game._pay_shopkeeper, entry.item)) removedLedgerBillCount++;
-                else {
-                    entry.item.unpaid = false;
-                    entry.item.unpaidPrice = undefined;
-                    entry.item.line = String(entry.item.line || '')
-                        .replace(/ \(unpaid, \d+ zorkmids?\)/, '');
-                }
-            }
-            if (paidUsedUpBills.size)
-                game._usedUpShopBills = (game._usedUpShopBills || [])
-                    .filter(bill => !paidUsedUpBills.has(bill));
-            const shkp = game._pay_shopkeeper;
-            const billedSelections = selected.filter(entry => !entry.shopkeeperDebit).length;
-            const legacyBillSelections = Math.max(0, billedSelections - removedLedgerBillCount);
-            if (shkp && legacyBillSelections)
-                shkp.billct = Math.max(0, (shkp.billct || legacyBillSelections) - legacyBillSelections);
             if (shkp?.shk) {
                 const home = shkp.shk;
                 const blockingPet = (game.level?.monsters || []).find(mon =>
@@ -25261,9 +25501,10 @@ export async function rhack(_cmd) {
             const shopkeeperName = shkp?.shknam || 'shopkeeper';
             const possessive = shopkeeperName.endsWith('s') ? `${shopkeeperName}'` : `${shopkeeperName}'s`;
             game._queued_message_after_more = `"Thank you for shopping in ${possessive} ${shopName}!"`;
-            const message = selected.length === 1
-                ? `You bought ${selected[0].name} for ${selected[0].price} gold piece${selected[0].price === 1 ? '' : 's'}.`
-                : `You bought ${selected.length} items for ${cashTotal} gold pieces.`;
+            const paidEntries = payment.payableEntries;
+            const message = paidEntries.length === 1
+                ? `You bought ${paidEntries[0].name} for ${paidEntries[0].price} gold piece${paidEntries[0].price === 1 ? '' : 's'}.`
+                : `You bought ${paidEntries.length} items for ${payment.cashTotal} gold pieces.`;
             await setMessage(message, true);
             game.context.move = 1;
             return;
