@@ -13791,6 +13791,62 @@ function addTippedContainerObjectToShopBill(container, obj) {
     return addContainerTakeoutObjectToShopBill(container, obj, obj);
 }
 
+function lostShopMerchandiseValueForObject(source, obj, shkp, seen = new Set()) {
+    if (!source || !obj || !shkp || seen.has(obj)) return 0;
+    seen.add(obj);
+    if (shopBillableGold(obj))
+        return Math.max(1, Math.trunc(Number(obj.quan || 1)));
+
+    let value = 0;
+    const entry = shopBillEntryForObject(shkp, obj);
+    if (entry) {
+        value += shopBillEntryTotal(entry);
+        removeObjectFromShopBill(shkp, obj);
+    } else if (obj.unpaid) {
+        value += unpaidBillPrice(obj);
+        clearObjectShopBillState(obj);
+    } else if (!obj.no_charge) {
+        value += shopItemPrice(obj, source.ox ?? game.u?.ux, source.oy ?? game.u?.uy);
+    }
+
+    for (const child of globContents(obj))
+        value += lostShopMerchandiseValueForObject(source, child, shkp, seen);
+    return value;
+}
+
+function chargeShopkeeperForLostMerchandise(shkp, value) {
+    let remaining = Math.max(0, Math.trunc(Number(value || 0)));
+    if (!shkp || !remaining) return 0;
+    const peaceful = shopkeeperPeacefulForDebt(shkp);
+    if (peaceful) {
+        const credit = Math.max(0, Math.trunc(Number(shkp.credit || 0)));
+        const covered = Math.min(credit, remaining);
+        shkp.credit = credit - covered;
+        remaining -= covered;
+    }
+    if (remaining > 0) {
+        if (peaceful && !shkp.angry) {
+            shkp.debit = Math.max(0, Math.trunc(Number(shkp.debit || 0))) + remaining;
+        } else {
+            shkp.robbed = Math.max(0, Math.trunc(Number(shkp.robbed || 0))) + remaining;
+        }
+    }
+    return remaining;
+}
+
+function billLostMagicBagShopItem(source, obj) {
+    const shkp = shopFloorContainerShopkeeper(source);
+    if (!shkp || !obj) return 0;
+    const value = lostShopMerchandiseValueForObject(source, obj, shkp);
+    return chargeShopkeeperForLostMerchandise(shkp, value);
+}
+
+function lostShopMerchandiseMessage(loss) {
+    const amount = Math.max(0, Math.trunc(Number(loss || 0)));
+    if (!amount) return '';
+    return `You owe ${amount} ${shopCurrency(amount)} for lost merchandise.`;
+}
+
 function mergePickedObjectIntoShopBill(source, target, sourcePrice = null) {
     const pickedCount = Math.max(1, Math.trunc(Number(source?.quan || 1)));
     const targetCount = Math.max(1, Math.trunc(Number(target?.quan || 1)));
@@ -18159,6 +18215,7 @@ function tipContainerToFloor(source) {
     const x = game.u?.ux ?? source.ox ?? 0;
     const y = game.u?.uy ?? source.oy ?? 0;
     const cursedMagicBag = isMagicBagObject(source) && source.cursed;
+    let lostMerchandise = 0;
     const names = contents.map(containerObjectPhrase).join(', ');
     const messages = [cursedMagicBag
         ? (contents.length === 1 ? 'An object spills out.' : 'Objects spill out.')
@@ -18169,6 +18226,7 @@ function tipContainerToFloor(source) {
         removeContainedObject(source, obj);
         thawObjectTippedFromSource(source, obj);
         if (cursedMagicBag && !rn2(13)) {
+            lostMerchandise += billLostMagicBagShopItem(source, obj);
             destroyMagicBagItem(obj, messages);
             continue;
         }
@@ -18185,6 +18243,8 @@ function tipContainerToFloor(source) {
     if (Array.isArray(source.contents)) source.contents.length = 0;
     if (Array.isArray(source.cobj)) source.cobj.length = 0;
     refreshTipContainerWeight(source);
+    const lostMessage = lostShopMerchandiseMessage(lostMerchandise);
+    if (lostMessage) messages.push(lostMessage);
     return messages;
 }
 
@@ -19023,6 +19083,7 @@ function tipContainerIntoContainer(source, targetBox) {
     if (!contents.length) return [tipContainerEmptyMessage(source)];
     targetBox.contents ??= [];
     const cursedMagicBag = isMagicBagObject(source) && source.cursed;
+    let lostMerchandise = 0;
     const messages = [contents.length === 1
         ? `An object tumbles into ${tipTargetPhrase(targetBox)}.`
         : `Objects tumble into ${tipTargetPhrase(targetBox)}.`];
@@ -19030,6 +19091,7 @@ function tipContainerIntoContainer(source, targetBox) {
         removeContainedObject(source, obj);
         thawObjectTippedFromSource(source, obj);
         if (cursedMagicBag && !rn2(13)) {
+            lostMerchandise += billLostMagicBagShopItem(source, obj);
             destroyMagicBagItem(obj, messages);
             continue;
         }
@@ -19045,6 +19107,8 @@ function tipContainerIntoContainer(source, targetBox) {
     if (Array.isArray(source.cobj)) source.cobj.length = 0;
     refreshTipContainerWeight(source);
     refreshTipContainerWeight(targetBox);
+    const lostMessage = lostShopMerchandiseMessage(lostMerchandise);
+    if (lostMessage) messages.push(lostMessage);
     return messages;
 }
 

@@ -22,7 +22,7 @@ This folder records source-backed audits against `nethack-c/upstream`. The notes
 
 ## Ranked Roadmap
 
-1. Shop ledger foundation from `05`: current JS is still partly field-based; split-stack unpaid returns, itemized bill-row payment, accepted shop-floor container put-in sales, ordinary dropped-container sale/no-charge state, direct gold drop/pickup donation/charge parity, and broader angry/robbed `sellobj()` shopkeeper-state branches are covered in ordinary paths, but broad split routing, magic-bag loss/destruction, special-stock/uninterested polish, and `costly_alteration` coverage are missing.
+1. Shop ledger foundation from `05`: current JS is still partly field-based; split-stack unpaid returns, itemized bill-row payment, accepted shop-floor container put-in sales, ordinary shop-floor cursed magic-bag tip loss billing, ordinary dropped-container sale/no-charge state, direct gold drop/pickup donation/charge parity, and broader angry/robbed `sellobj()` shopkeeper-state branches are covered in ordinary paths, but broad split routing, magic-bag explosion and non-ordinary loss/destruction, special-stock/uninterested polish, and `costly_alteration` coverage are missing.
 2. Object registry and canonical object factory from `02`: `mkobj`, wishes, weight, timers, names, and display should share one metadata source.
 3. Level generation lifecycle and minimal `sp_lev` layer from `03`: fix generation ordering, shared finalization, and special/quest level data drift.
 4. Command, prompt, and menu registry from `01`: remove literal-key dispatch drift and make `getlin`, `yn_function`, extended commands, and menus reusable.
@@ -36,7 +36,7 @@ This folder records source-backed audits against `nethack-c/upstream`. The notes
 Continue with the shop area because it combines visible current behavior with a high-impact missing C subsystem.
 
 - Keep `unpaid` and `unpaidPrice` as compatibility/display fields while migrating callers.
-- Recursive container put-in, take-out, tip moves, contained gold, accepted put-in sales, ordinary dropped-container sale/no-charge state, direct ordinary gold drop/pickup handling, and broader angry/robbed `sellobj()` handling are in place; next extend them through magic-bag loss/destruction, lift limits, merge/destruction edge cases, and full `sellobj`/`subfrombill` routing.
+- Recursive container put-in, take-out, tip moves, contained gold, accepted put-in sales, ordinary shop-floor cursed magic-bag tip loss billing, ordinary dropped-container sale/no-charge state, direct ordinary gold drop/pickup handling, and broader angry/robbed `sellobj()` handling are in place; next extend them through magic-bag explosion and non-ordinary loss/destruction, lift limits, merge/destruction edge cases, and full `sellobj`/`subfrombill` routing.
 - Finish remaining `sellobj()` parity around special-stock/uninterested branches, recursive `subfrombill()` integration, bill-aware drop stacking, and broken/container projectile impact edge cases.
 - Continue moving payment toward complete C `dopay()` semantics for containers, queued itemized selections, and robbed-shop interactions.
 
