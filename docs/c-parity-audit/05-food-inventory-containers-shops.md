@@ -96,7 +96,8 @@ This audit is based only on upstream C and current JS source inspection. It does
 - `js/cmd.js:13442-13458`: buried-merchandise debt helper.
 - `js/cmd.js:13819-13826`: unpaid line synchronization.
 - `js/cmd.js:14240-14268`: used-up bill naming and memory helper.
-- `js/cmd.js:18110-18120`: unpaid charged-object usage fee helper.
+- `js/cmd.js:168-176`, `js/cmd.js:19104-19155`: unpaid charged-object usage fee and charge-spend helpers.
+- `js/cmd.js:34012-34021`, `js/cmd.js:34244-34305`: expensive-camera apply direction and charge-use path.
 - `js/cmd.js:17950-18009`: magic bag shop debit context for special tip sources.
 - `js/cmd.js:18254-18276`: horn-created object billing and unpaid stack merge helper.
 - `js/cmd.js:18504-19046`: shop base cost, price calculation, ledger-first debt collection, itemized bill-row payment, credit/debit handling.
@@ -192,7 +193,7 @@ Concrete gaps:
 
 C uses shopkeeper bill entries with explicit invariants: an object is unpaid iff it is on a bill, except used-up bill entries. The system supports split/merge, contained unpaid objects, hidden containers, used-up items, itemized payment, partial usage fees, price quote learning, `no_charge`, stolen value, and alteration billing.
 
-JS uses starter bill entries plus object fields (`unpaid`, `unpaidPrice`), loose shopkeeper counters/debit, and a transitional `_usedUpShopBills` list (`js/cmd.js:12804-13487`, `js/cmd.js:13828-13835`, `js/cmd.js:18791-19046`). This supports visible unpaid suffixes, ordinary pickup/drop billing, compatible pickup stack merges, narrow split-stack unpaid returns, partial inventory-use debt display, starter C `check_unpaid_usage()` debit coverage for charged-object partial use, throw/fire child bill rows with off-shop debt conversion, bill-aware floor stack merging, selected magic-bag `obfree()`-style used-up preservation, and ledger-first payment for split and used-up bill rows, but does not yet preserve C's full ownership and bill-entry semantics.
+JS uses starter bill entries plus object fields (`unpaid`, `unpaidPrice`), loose shopkeeper counters/debit, and a transitional `_usedUpShopBills` list (`js/cmd.js:12804-13487`, `js/cmd.js:13828-13835`, `js/cmd.js:18791-19046`). This supports visible unpaid suffixes, ordinary pickup/drop billing, compatible pickup stack merges, narrow split-stack unpaid returns, partial inventory-use debt display, starter C `check_unpaid_usage()` debit coverage for charged-object partial use including camera flashes, throw/fire child bill rows with off-shop debt conversion, bill-aware floor stack merging, selected magic-bag `obfree()`-style used-up preservation, and ledger-first payment for split and used-up bill rows, but does not yet preserve C's full ownership and bill-entry semantics.
 
 Concrete gaps:
 
@@ -201,7 +202,7 @@ Concrete gaps:
 - `collectPayableShopDebts()` now enumerates selected shopkeeper bill rows first and splits `bquan > quan` rows into used-up/intact portions, but retains object-field fallback scanning for legacy unpaid objects (`js/cmd.js:18867-18895`).
 - Payment now applies shop credit before cash for selected ledger rows and shrinks partly used bills before intact rows can clear them, but container itemized payment, full queued-selection behavior, and robbed-shop payment still do not match C.
 - `get_cost()` parity is incomplete: JS has base tables, unknown-name surcharge, enchantment surcharge, charisma adjustment, and pricing units (`js/cmd.js:18486-18713`), but not full C role/status/shopkeeper anger/tourist/dunce/artifact/contained/no-charge/price-quote side effects.
-- `check_unpaid_usage()` is still partial. JS now has a reusable debit-only helper with C-style charged-object fee branches and callers for bag/horn use, wand zaps, alternate emptying, and drum-of-earthquake charges, but remaining spellbook, oil, marker, camera, grease, tinning-kit, lamp, and other charge-consuming callers still need to route through it.
+- `check_unpaid_usage()` is still partial. JS now has a reusable debit-only helper with C-style charged-object fee branches and callers for bag/horn use, wand zaps, camera use, alternate emptying, and drum-of-earthquake charges, but remaining spellbook, oil, marker, grease, tinning-kit, lamp, and other charge-consuming callers still need to route through it.
 - Generic `costly_alteration()` is still partial. JS now covers unpaid food `COST_BITE` and narrow tin `COST_OPEN/COST_DSTROY` paths, plus local billing for buried merchandise and horn-created objects, but not the shared open/destroy/cancel/degrade billing hook used across C.
 - Used-up unpaid items are not centralized. C `useup()`/`obfree()` preserve bills for consumed unpaid objects; JS only remembers selected corpse rot/glob shrink, projectile, payment, and magic-bag destruction paths.
 

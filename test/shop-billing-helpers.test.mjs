@@ -398,6 +398,29 @@ test('unpaid wand use with no charges is not billed for usage', () => {
     assert.equal(messages.length, 0);
 });
 
+test('unpaid camera grease and tinning kit use charge one tenth price', () => {
+    for (const [index, kind] of ['expensive camera', 'can of grease', 'tinning kit'].entries()) {
+        const { shkp } = installShopState();
+        const tool = chargedTool(3091 + index, kind, 't', 4);
+        game.inventory = [tool];
+        shop.addObjectToShopBill(shkp, tool, 100);
+        const messages = [];
+
+        const fee = shop.checkUnpaidUsageForTest(tool, messages);
+
+        assert.equal(fee, 10, kind);
+        assert.equal(shkp.debit, 10, kind);
+        assert.equal(shkp.billct, 1, kind);
+        const entry = shop.shopBillEntryForObject(shkp, tool);
+        assert.ok(entry, kind);
+        assert.equal(entry.useup, false, kind);
+        assert.equal(shop.shopBillEntryTotal(entry), 100, kind);
+        assert.equal(tool.unpaid, true, kind);
+        assert.equal(messages.length, 1, kind);
+        assert.match(messages[0], /Usage fee, 10 zorkmids/, kind);
+    }
+});
+
 test('unpaid charged object with no remaining charges is not billed for usage', () => {
     const { shkp } = installShopState();
     const bag = chargedTool(3081, 'bag of tricks', 'b', 0);

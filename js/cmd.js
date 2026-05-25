@@ -165,6 +165,16 @@ function spendZapWandCharge(item, messages) {
     return zappableWand(item, { fallbackCharges: 8 });
 }
 
+function spendChargedToolUse(item, messages) {
+    const charges = chargedUsageChargeCount(item);
+    if (charges <= 0) return false;
+    checkUnpaidUsage(item, messages, { chargeCount: charges });
+    item.spe = Math.max(0, charges - 1);
+    if ('charges' in item) item.charges = item.spe;
+    updateChargedItemLine(item);
+    return true;
+}
+
 function wandZapSpendMessages(usageMessages, chargeUse) {
     const messages = [...usageMessages];
     if (chargeUse?.wrested) messages.push('You wrest one last charge from the worn-out wand.');
@@ -33999,6 +34009,16 @@ export async function rhack(_cmd) {
             game._command_mode = 'stethoscopeDirection';
             return;
         }
+        if (toolChargeKind(item) === 'expensive camera' || name.includes('camera')) {
+            if (game.u?.underwater || game.u?.uunderwater) {
+                await setMessage('Using your camera underwater would void the warranty.');
+                return;
+            }
+            game._apply_camera_letter = item.letter;
+            await setMessage('In what direction?');
+            game._command_mode = 'cameraDirection';
+            return;
+        }
         if (name.includes('magic marker')) {
             await setMessage('What do you want to write on? [*]');
             game._command_mode = 'markerWriteObject';
@@ -34217,6 +34237,68 @@ export async function rhack(_cmd) {
         }
 
         await setMessage(`You swing your ${pickupObjectName(item)} through thin air.`);
+        game.context.move = 1;
+        return;
+    }
+
+    if (game._command_mode === 'cameraDirection') {
+        const item = (game.inventory || []).find(invItem => invItem.letter === game._apply_camera_letter);
+        if (ch === '\x1b' || ch === ' ' || ch === '\r' || ch === '\n') {
+            game._apply_camera_letter = null;
+            game._command_mode = null;
+            await setMessage('Never mind.');
+            return;
+        }
+        const dir = movementDirection(ch);
+        const verticalDir = !dir && ch === '<' ? { dx: 0, dy: 0, dz: -1 }
+            : !dir && ch === '>' ? { dx: 0, dy: 0, dz: 1 } : null;
+        const selfZap = ch === '.';
+        if (!dir && !verticalDir && !selfZap) {
+            game._keep_pending_message = 1;
+            return;
+        }
+        game._apply_camera_letter = null;
+        game._command_mode = null;
+        if (!item) return;
+        const messages = [];
+        if (!spendChargedToolUse(item, messages)) {
+            await setMessage('Nothing happens.');
+            game.context.move = 1;
+            return;
+        }
+        const flashHero = item.cursed && !rn2(2);
+        if (flashHero || selfZap) {
+            const duration = 5 + rnd(25);
+            if (game.u) {
+                game.u.blind = true;
+                game.u._blindTimeout = (game.u._blindTimeout || 0) + duration;
+            }
+            messages.push('You are blinded by the flash!');
+        } else if (verticalDir) {
+            messages.push(`You take a picture of the ${verticalDir.dz > 0 ? 'floor' : 'ceiling'}.`);
+        } else if (dir) {
+            let x = game.u?.ux || 0;
+            let y = game.u?.uy || 0;
+            let target = null;
+            for (let range = 0; range < COLNO; range++) {
+                x += dir.dx;
+                y += dir.dy;
+                if (x <= 0 || x >= COLNO || y < 0 || y >= ROWNO) break;
+                target = game.level?.monsters?.find(mon =>
+                    mon.mx === x && mon.my === y && (mon.mhp == null || mon.mhp > 0));
+                if (target) break;
+                const loc = game.level?.at?.(x, y);
+                if (!ZAP_POS(loc?.typ ?? STONE)) break;
+            }
+            if (target) {
+                target.msleeping = 0;
+                target.mcansee = false;
+                target.mblinded = Math.max(target.mblinded || 0, rnd(20));
+                if (!game.u?.blind && (game.viz_array?.[target.my]?.[target.mx] & IN_SIGHT))
+                    messages.push(`The ${target.data?.name || 'monster'} is blinded by the flash!`);
+            }
+        }
+        await setMessage(messages.join('  '), messages.length > 1);
         game.context.move = 1;
         return;
     }
