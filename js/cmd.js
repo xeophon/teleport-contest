@@ -17408,9 +17408,29 @@ function globFoodMonsterName(item) {
         || '';
 }
 
+const GLOB_CPOSTFX_INTRINSICS = new Map([
+    ['gray ooze', {
+        mlevel: 3,
+        intrinsics: ['fireResistance', 'coldResistance', 'poisonResistance'],
+    }],
+    ['brown pudding', {
+        mlevel: 5,
+        intrinsics: ['coldResistance', 'shockResistance', 'poisonResistance'],
+    }],
+    ['green slime', {
+        mlevel: 6,
+        intrinsics: ['acidResistance', 'stoneResistance'],
+    }],
+    ['black pudding', {
+        mlevel: 10,
+        intrinsics: ['coldResistance', 'shockResistance', 'poisonResistance'],
+    }],
+]);
+
 function heroHasAcidResistance() {
     const form = game.u?._polyself_form || {};
-    return !!(game.u?.acidResistance || form.acidResistance || form.resistsAcid);
+    return !!(game.u?.acidResistance || game.u?._acidResistanceTimeout
+        || form.acidResistance || form.resistsAcid);
 }
 
 function heroSlimeproof() {
@@ -17433,6 +17453,76 @@ function fixHeroPetrificationFromAcidicFood() {
     game.u._stonedKiller = '';
     removeHeroStatusSuffix('Stone');
     return 'You feel limber!';
+}
+
+function globCpostfxIntrinsicForMonster(monsterName) {
+    const spec = GLOB_CPOSTFX_INTRINSICS.get(monsterName);
+    if (!spec) return null;
+    let count = 0;
+    let selected = null;
+    for (const intrinsic of spec.intrinsics) {
+        count++;
+        if (!rn2(count)) selected = intrinsic;
+    }
+    return selected ? { intrinsic: selected, mlevel: spec.mlevel } : null;
+}
+
+function globIntrinsicGrantSucceeds(intrinsic, mlevel) {
+    if (mlevel > rn2(15)) return true;
+    if (intrinsic === 'acidResistance') return mlevel > rn2(3);
+    if (intrinsic === 'stoneResistance') return mlevel > rn2(6);
+    return false;
+}
+
+function addTemporaryResistance(prop, duration) {
+    if (!game.u) return;
+    const timeoutField = prop === 'acidResistance' ? '_acidResistanceTimeout' : '_stoneResistanceTimeout';
+    const baseField = prop === 'acidResistance' ? '_acidResistanceBase' : '_stoneResistanceBase';
+    if (!(game.u[timeoutField] > 0)) game.u[baseField] = !!game.u[prop];
+    game.u[timeoutField] = (game.u[timeoutField] || 0) + duration;
+    game.u[prop] = true;
+}
+
+function applyGlobCpostfxIntrinsic(monsterName) {
+    const choice = globCpostfxIntrinsicForMonster(monsterName);
+    if (!choice || !globIntrinsicGrantSucceeds(choice.intrinsic, choice.mlevel)) return '';
+    switch (choice.intrinsic) {
+    case 'fireResistance':
+        if (game.u?._corpseFireResistance) return '';
+        game.u.fireResistance = true;
+        game.u._corpseFireResistance = true;
+        return heroIsHallucinating() ? "You be chillin'." : 'You feel a momentary chill.';
+    case 'coldResistance':
+        if (game.u?._corpseColdResistance) return '';
+        game.u.coldResistance = true;
+        game.u._corpseColdResistance = true;
+        return 'You feel full of hot air.';
+    case 'shockResistance':
+        if (game.u?._corpseShockResistance) return '';
+        game.u.shockResistance = true;
+        game.u._corpseShockResistance = true;
+        return heroIsHallucinating()
+            ? 'You feel grounded in reality.'
+            : 'Your health currently feels amplified!';
+    case 'poisonResistance':
+        if (game.u?._corpsePoisonResistance) return '';
+        const alreadyPoisonResistant = !!game.u?.poisonResistance;
+        game.u.poisonResistance = true;
+        game.u._corpsePoisonResistance = true;
+        return alreadyPoisonResistant ? 'You feel especially healthy.' : 'You feel healthy.';
+    case 'acidResistance': {
+        const alreadyAcidResistant = heroHasAcidResistance();
+        addTemporaryResistance('acidResistance', d(3, 6));
+        return alreadyAcidResistant ? '' : 'You feel less concerned about being harmed by acid.';
+    }
+    case 'stoneResistance': {
+        const alreadyStoneResistant = !!game.u?.stoneResistance;
+        addTemporaryResistance('stoneResistance', d(3, 6));
+        return alreadyStoneResistant ? '' : 'You feel less concerned about becoming petrified.';
+    }
+    default:
+        return '';
+    }
 }
 
 function heroHasUnchanging() {
@@ -17545,6 +17635,8 @@ async function eatGlobFood(item, floorObject = false) {
     const touched = touchEatenFood(item, floorObject);
     const monsterName = globFoodMonsterName(touched);
     const messages = [];
+    const name = pickupObjectName({ ...(touched || {}), quan: 1 });
+    let tasted = false;
     recordFoodConduct(touched);
     addHeroNutrition(remainingFoodNutrition(touched));
     consumeTouchedFood(touched, floorObject);
@@ -17578,15 +17670,18 @@ async function eatGlobFood(item, floorObject = false) {
         }
     }
 
+    if (!messages.length) {
+        messages.push(`This ${name} tastes terrible!`);
+        tasted = true;
+    }
+
     if (monsterName === 'green slime' && startHeroSliming())
         messages.push("You don't feel very well.");
     const petrificationMessage = fixHeroPetrificationFromAcidicFood();
     if (petrificationMessage) messages.push(petrificationMessage);
-
-    if (!messages.length) {
-        const name = pickupObjectName({ ...(touched || {}), quan: 1 });
-        messages.push(`This ${name} tastes terrible!`);
-    }
+    const cpostfxMessage = applyGlobCpostfxIntrinsic(monsterName);
+    if (cpostfxMessage) messages.push(cpostfxMessage);
+    if (!tasted && !messages.length) messages.push(`This ${name} tastes terrible!`);
     game._pet_food_scan_inventory = game.inventory || [];
     await setMessage(messages.join('  '), messages.length > 1);
     game._command_mode = null;

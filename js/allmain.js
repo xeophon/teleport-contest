@@ -7064,6 +7064,20 @@ async function finishMonsterTurnTail() {
             return false;
         }
     }
+    if ((game.u?._acidResistanceTimeout || 0) > 0) {
+        game.u._acidResistanceTimeout--;
+        if (!game.u._acidResistanceTimeout) {
+            if (!game.u._acidResistanceBase) game.u.acidResistance = false;
+            delete game.u._acidResistanceBase;
+        }
+    }
+    if ((game.u?._stoneResistanceTimeout || 0) > 0) {
+        game.u._stoneResistanceTimeout--;
+        if (!game.u._stoneResistanceTimeout) {
+            if (!game.u._stoneResistanceBase) game.u.stoneResistance = false;
+            delete game.u._stoneResistanceBase;
+        }
+    }
     if ((game.u?._vomitingTimeout || 0) > 0) {
         addHeroStatusSuffix('Vom');
         game.u.vomiting = true;

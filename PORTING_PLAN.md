@@ -831,7 +831,10 @@ A useful addition would be to run the prompt in a fresh branch and commit the cl
   nutrition comes from remaining weight, acidic globs can damage or kill with
   acidic-glob death causes, green slime globs can start the 10-turn sliming
   countdown, acidic glob flesh can cure petrification, and sliming dialogue
-  now advances through the turn loop.
+  now advances through the turn loop. Glob completion also applies the C
+  `cpostfx()` resistance grant path for the four pudding/ooze/slime sources,
+  including reservoir intrinsic selection, grant-chance rolls, and temporary
+  acid/stoning resistance durations.
   Active-level glob shrink timers now use the C 23-27 turn cadence, reduce
   weight and partial-eaten amount one unit at a time, emit inventory and visible
   floor disappearance messages, slow/skip on ice, pause in ice boxes until
