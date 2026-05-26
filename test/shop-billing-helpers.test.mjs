@@ -3844,6 +3844,116 @@ test('carried food ration command splits unpaid stack before victual bites', asy
     assert.equal(shop.shopBillEntryTotal(bite), 45);
 });
 
+test('carried delayed ordinary foods use C bite timing and messages', async () => {
+    const cases = [
+        { kind: 'pancake', letter: 'p', firstOeaten: 100, firstHunger: 1000, turns: 2, bite: 100, finalHunger: 1100, message: 'This pancake is delicious!', conduct: 'unvegan' },
+        { kind: 'lembas wafer', letter: 'l', firstOeaten: 400, firstHunger: 1300, turns: 2, bite: 400, finalHunger: 1700, message: 'This lembas wafer is delicious!' },
+        { kind: 'cram ration', letter: 'c', firstOeaten: 400, firstHunger: 1100, turns: 3, bite: 200, finalHunger: 1500, message: 'This cram ration is bland.' },
+    ];
+
+    for (const entry of cases) {
+        installCommandShopState();
+        const food = simpleFood(3140 + cases.indexOf(entry), entry.kind, entry.letter);
+        game.inventory = [food];
+
+        await rhack('e');
+        await rhack(entry.letter);
+
+        assert.equal(game._pending_message, entry.message, entry.kind);
+        assert.equal(game.inventory.includes(food), true, entry.kind);
+        assert.equal(food.oeaten, entry.firstOeaten, entry.kind);
+        assert.equal(game.u.uhunger, entry.firstHunger, entry.kind);
+        assert.equal(game._eating_turns_remaining, entry.turns, entry.kind);
+        assert.equal(game._eating_inventory_object, food, entry.kind);
+        assert.equal(game._eating_bite_nutrition, entry.bite, entry.kind);
+        assert.equal(game._eating_bite_hunger, entry.bite, entry.kind);
+        if (entry.conduct) assert.equal(game.u.uconduct?.[entry.conduct], 1, entry.kind);
+
+        finishEatingOccupation();
+
+        assert.equal(game.inventory.includes(food), false, entry.kind);
+        assert.equal(game.u.uhunger, entry.finalHunger, entry.kind);
+        assert.equal(game._eating_turns_remaining || 0, 0, entry.kind);
+        assert.equal(game._eating_bite_hunger || 0, 0, entry.kind);
+        assert.match(game._pending_message || '', new RegExp(`You finish eating the ${entry.kind.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\.`), entry.kind);
+    }
+});
+
+test('carried delayed foods use C race-adjusted hunger before victual ticks', async () => {
+    const cases = [
+        { race: 'orc', kind: 'lembas wafer', letter: 'l', firstOeaten: 400, firstHunger: 1200, turns: 2, bite: 400, biteHunger: 300, finalHunger: 1500, message: '!#?&* elf kibble!' },
+        { race: 'elf', kind: 'lembas wafer', letter: 'l', firstOeaten: 400, firstHunger: 1400, turns: 2, bite: 400, biteHunger: 500, finalHunger: 1900, message: 'A little goes a long way.' },
+        { race: 'dwarf', kind: 'cram ration', letter: 'c', firstOeaten: 400, firstHunger: 1133, turns: 3, bite: 200, biteHunger: 233, finalHunger: 1599, message: 'This cram ration is bland.' },
+    ];
+
+    for (const entry of cases) {
+        installCommandShopState();
+        game._startup_race = entry.race;
+        game.urace = { noun: entry.race };
+        const food = simpleFood(3150 + cases.indexOf(entry), entry.kind, entry.letter);
+        game.inventory = [food];
+
+        await rhack('e');
+        await rhack(entry.letter);
+
+        assert.equal(game._pending_message, entry.message, entry.race);
+        assert.equal(food.oeaten, entry.firstOeaten, entry.race);
+        assert.equal(game.u.uhunger, entry.firstHunger, entry.race);
+        assert.equal(game._eating_turns_remaining, entry.turns, entry.race);
+        assert.equal(game._eating_bite_nutrition, entry.bite, entry.race);
+        assert.equal(game._eating_bite_hunger, entry.biteHunger, entry.race);
+
+        finishEatingOccupation();
+
+        assert.equal(game.inventory.includes(food), false, entry.race);
+        assert.equal(game.u.uhunger, entry.finalHunger, entry.race);
+    }
+});
+
+test('carried delayed ordinary food command splits unpaid stacks before C bites', async () => {
+    const cases = [
+        { kind: 'pancake', letter: 'p', firstOeaten: 100, unitPrice: 15 },
+        { kind: 'lembas wafer', letter: 'l', firstOeaten: 400, unitPrice: 45 },
+        { kind: 'cram ration', letter: 'c', firstOeaten: 400, unitPrice: 35 },
+    ];
+
+    for (const entry of cases) {
+        const { shkp } = installCommandShopState();
+        const stack = simpleFood(3160 + cases.indexOf(entry), entry.kind, entry.letter, {
+            dknown: true,
+            known: true,
+            quan: 2,
+            line: `${entry.letter} - 2 ${entry.kind}s`,
+        });
+        game.inventory = [stack];
+        const unitPrice = entry.unitPrice;
+        assert.equal(shop.shopBaseCost(stack), unitPrice, entry.kind);
+        shop.addObjectToShopBill(shkp, stack, unitPrice * 2);
+
+        await rhack('e');
+        await rhack(entry.letter);
+
+        const touched = game._eating_inventory_object;
+        assert.ok(touched, entry.kind);
+        assert.notEqual(touched, stack, entry.kind);
+        assert.equal(game.inventory.includes(touched), true, entry.kind);
+        assert.equal(stack.quan, 1, entry.kind);
+        assert.equal(touched.quan, 1, entry.kind);
+        assert.equal(touched.oeaten, entry.firstOeaten, entry.kind);
+        assert.equal(stack.unpaid, true, entry.kind);
+        assert.equal(stack.unpaidPrice, unitPrice, entry.kind);
+        assert.notEqual(touched.unpaid, true, entry.kind);
+        const live = shop.shopBillEntryForObject(shkp, stack);
+        const bite = shop.shopBillEntryForObject(shkp, touched);
+        assert.ok(live, entry.kind);
+        assert.ok(bite, entry.kind);
+        assert.equal(live.useup, false, entry.kind);
+        assert.equal(bite.useup, true, entry.kind);
+        assert.equal(shop.shopBillEntryTotal(live), unitPrice, entry.kind);
+        assert.equal(shop.shopBillEntryTotal(bite), unitPrice, entry.kind);
+    }
+});
+
 test('shop pickup merge rejects unpaid into paid and combines compatible unpaid bills', () => {
     const { shkp } = installShopState();
     const floorObj = foodRation(4001, 'b');

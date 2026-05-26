@@ -1165,7 +1165,12 @@ const FOOD_NUTRITION = new Map([
     ['c-ration', 300],
     ['tin', 0],
 ]);
-const FOOD_RATION_EAT_DELAY = 5;
+const CARRIED_DELAYED_FOOD_VICTUALS = new Map([
+    ['pancake', { otyp: PANCAKE, delay: 2, finishName: 'pancake' }],
+    ['lembas wafer', { otyp: LEMBAS_WAFER, delay: 2, finishName: 'lembas wafer' }],
+    ['cram ration', { otyp: CRAM_RATION, delay: 3, finishName: 'cram ration', bland: true }],
+    ['food ration', { otyp: FOOD_RATION, delay: 5, finishName: 'food ration', rationFeedback: true }],
+]);
 const ROTTABLE_NON_CORPSE_FOODS = new Set(['apple', 'carrot', 'pear', 'melon', 'orange', 'banana', 'kelp frond', 'lump of royal jelly']);
 const POISONABLE_WISH_WEAPONS = new Set([
     'arrow', 'arrows', 'elven arrow', 'elven arrows', 'orcish arrow', 'orcish arrows',
@@ -10849,7 +10854,7 @@ function recordFoodConduct(item) {
     if ((isCorpseItem(item) || isGlobFood(item) || /\bcorpse$/.test(kind)) && !veganCorpse) {
         conduct.unvegan = (conduct.unvegan || 0) + 1;
         conduct.unvegetarian = (conduct.unvegetarian || 0) + 1;
-    } else if (isEggItem(item) || isRoyalJelly(item)) {
+    } else if (isEggItem(item) || isRoyalJelly(item) || kind === 'pancake') {
         conduct.unvegan = (conduct.unvegan || 0) + 1;
     }
 }
@@ -10971,31 +10976,81 @@ function touchEatenFood(item, floorObject = false) {
     return floorObject ? touchFloorFood(item) : touchInventoryFood(item);
 }
 
-function isCarriedFoodRationVictualCandidate(item) {
-    if (!item || item.orotten) return false;
+function carriedDelayedFoodVictualSpec(item) {
+    if (!item || item.cursed || item.orotten) return null;
     const kind = objectKindKey(item).replace(/^partly eaten /, '');
-    return kind === 'food ration' || item.otyp === FOOD_RATION;
+    const spec = CARRIED_DELAYED_FOOD_VICTUALS.get(kind);
+    if (spec) return { ...spec, kind };
+    for (const [entryKind, entrySpec] of CARRIED_DELAYED_FOOD_VICTUALS) {
+        if (item.otyp === entrySpec.otyp) return { ...entrySpec, kind: entryKind };
+    }
+    return null;
 }
 
-function foodRationFirstBiteMessage(hunger) {
-    if ((hunger ?? 900) <= 200) return 'This food really hits the spot!';
-    if ((hunger ?? 900) < 700) return 'This satiates your stomach!';
-    return '';
+function heroFoodRaceOrPolyName() {
+    const formName = String(polyselfForm()?.name || '').toLowerCase();
+    if (formName) return formName;
+    return String(game.urace?.noun || game.urace?.adj || game._startup_race || 'human').toLowerCase();
 }
 
-function startCarriedFoodRationVictual(item) {
+function heroFoodIsElf() {
+    const name = heroFoodRaceOrPolyName();
+    return name === 'elven' || name.includes('elf');
+}
+
+function heroFoodIsOrc() {
+    const name = heroFoodRaceOrPolyName();
+    return name === 'orcish' || /(?:^|[-\s])orc(?:$|[-\s])/.test(name);
+}
+
+function heroFoodIsDwarf() {
+    const name = heroFoodRaceOrPolyName();
+    return name === 'dwarven' || name === 'dwarvish' || /^dwarv/.test(name)
+        || /(?:^|[-\s])dwarf(?:$|[-\s])/.test(name);
+}
+
+function adjustedDelayedFoodBiteHunger(spec, baseNutrition) {
+    let nutrition = Math.trunc(baseNutrition || 0);
+    if (!(nutrition > 0)) return 0;
+    if (spec?.kind === 'lembas wafer') {
+        const adjustment = Math.trunc((nutrition + 2) / 4);
+        if (heroFoodIsElf()) nutrition += adjustment;
+        else if (heroFoodIsOrc()) nutrition -= adjustment;
+    } else if (spec?.kind === 'cram ration' && heroFoodIsDwarf()) {
+        nutrition += Math.trunc((nutrition + 3) / 6);
+    }
+    return Math.max(nutrition, 1);
+}
+
+function delayedFoodFirstBiteMessage(spec, hunger) {
+    if (!spec) return '';
+    if (spec.rationFeedback) {
+        if ((hunger ?? 900) <= 200) return 'This food really hits the spot!';
+        if ((hunger ?? 900) < 700) return 'This satiates your stomach!';
+        return '';
+    }
+    if (spec.kind === 'lembas wafer') {
+        if (heroFoodIsOrc()) return '!#?&* elf kibble!';
+        if (heroFoodIsElf()) return 'A little goes a long way.';
+    }
+    return `This ${spec.finishName || spec.kind} is ${spec.bland ? 'bland.' : 'delicious!'}`;
+}
+
+function startCarriedDelayedFoodVictual(item, spec) {
     const hungerBeforeBite = game.u?.uhunger ?? 900;
     const alreadyPartlyEaten = item?.oeaten > 0;
     const touched = touchEatenFood(item);
     recordFoodConduct(touched);
-    const fullNutrition = foodObjectNutrition(touched) || FOOD_NUTRITION.get('food ration') || 800;
-    const reqtime = roundDivPositive(FOOD_RATION_EAT_DELAY * remainingFoodNutrition(touched), fullNutrition);
+    const fullNutrition = foodObjectNutrition(touched) || FOOD_NUTRITION.get(spec.kind) || 0;
+    const reqtime = roundDivPositive(spec.delay * remainingFoodNutrition(touched), fullNutrition);
     const biteNutrition = reqtime > 0 && touched.oeaten >= reqtime
         ? Math.trunc(touched.oeaten / reqtime)
         : 0;
+    const finishName = spec.finishName || spec.kind;
 
     if (biteNutrition > 0) {
-        addHeroNutrition(biteNutrition);
+        const biteHunger = adjustedDelayedFoodBiteHunger(spec, biteNutrition);
+        addHeroNutrition(biteHunger);
         consumeOeaten(touched, -biteNutrition);
         refreshInventoryObjectLine(touched);
     }
@@ -11004,20 +11059,21 @@ function startCarriedFoodRationVictual(item) {
         removeInventoryItem(touched);
         game._pet_food_scan_inventory = game.inventory || [];
         return {
-            message: alreadyPartlyEaten ? 'You eat the partly eaten food ration.' : foodRationFirstBiteMessage(hungerBeforeBite),
+            message: alreadyPartlyEaten ? `You eat the partly eaten ${finishName}.` : delayedFoodFirstBiteMessage(spec, hungerBeforeBite),
             finished: true,
         };
     }
 
     game._eating_turns_remaining = reqtime;
-    game._eating_finish_message = 'You finish eating the food ration.';
+    game._eating_finish_message = `You finish eating the ${finishName}.`;
     game._eating_inventory_object = touched;
     game._eating_bite_nutrition = biteNutrition;
+    game._eating_bite_hunger = adjustedDelayedFoodBiteHunger(spec, biteNutrition);
     game._eating_nutrition = 0;
     game._pet_food_scan_inventory = game.inventory || [];
 
     return {
-        message: alreadyPartlyEaten ? 'You begin eating the partly eaten food ration.' : foodRationFirstBiteMessage(hungerBeforeBite),
+        message: alreadyPartlyEaten ? `You begin eating the partly eaten ${finishName}.` : delayedFoodFirstBiteMessage(spec, hungerBeforeBite),
         finished: false,
         touched,
     };
@@ -43956,8 +44012,9 @@ export async function rhack(_cmd) {
                 await eatRoyalJelly(item);
                 return;
             }
-            if (isCarriedFoodRationVictualCandidate(item)) {
-                const result = startCarriedFoodRationVictual(item);
+            const delayedFoodVictual = carriedDelayedFoodVictualSpec(item);
+            if (delayedFoodVictual) {
+                const result = startCarriedDelayedFoodVictual(item, delayedFoodVictual);
                 await setMessage(result.message);
                 game._command_mode = null;
                 game.context.move = 1;

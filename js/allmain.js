@@ -2825,6 +2825,7 @@ function removeEatingInventoryObject(g, item) {
 function clearEatingInventoryState(g) {
     g._eating_inventory_object = null;
     g._eating_bite_nutrition = 0;
+    g._eating_bite_hunger = 0;
 }
 
 function interruptPositiveMultiForStoning() {
@@ -10711,8 +10712,9 @@ export function processEatingOccupationTick(g = game) {
     g._eating_turns_remaining--;
     const eatenInventoryObject = g._eating_inventory_object;
     const biteNutrition = Math.trunc(g._eating_bite_nutrition || 0);
+    const biteHunger = Math.trunc(g._eating_bite_hunger || biteNutrition);
     if (eatenInventoryObject && biteNutrition > 0 && g._eating_turns_remaining > 0) {
-        addEatingNutrition(g, biteNutrition);
+        addEatingNutrition(g, biteHunger);
         consumeEatingInventoryObject(eatenInventoryObject, biteNutrition);
     }
     if (!g._eating_turns_remaining) {
