@@ -1165,6 +1165,7 @@ const FOOD_NUTRITION = new Map([
     ['c-ration', 300],
     ['tin', 0],
 ]);
+const FOOD_RATION_EAT_DELAY = 5;
 const ROTTABLE_NON_CORPSE_FOODS = new Set(['apple', 'carrot', 'pear', 'melon', 'orange', 'banana', 'kelp frond', 'lump of royal jelly']);
 const POISONABLE_WISH_WEAPONS = new Set([
     'arrow', 'arrows', 'elven arrow', 'elven arrows', 'orcish arrow', 'orcish arrows',
@@ -10871,6 +10872,11 @@ function consumeOeaten(item, amount) {
     if (item.oeaten <= 0) item.oeaten = 1;
 }
 
+function roundDivPositive(numerator, denominator) {
+    if (!(denominator > 0)) return 0;
+    return Math.trunc((numerator + Math.trunc(denominator / 2)) / denominator);
+}
+
 function refreshInventoryObjectLine(item) {
     if (item) item.line = normalInventoryLine({ ...item, line: '' });
 }
@@ -10963,6 +10969,58 @@ function touchFloorFood(item) {
 
 function touchEatenFood(item, floorObject = false) {
     return floorObject ? touchFloorFood(item) : touchInventoryFood(item);
+}
+
+function isCarriedFoodRationVictualCandidate(item) {
+    if (!item || item.orotten) return false;
+    const kind = objectKindKey(item).replace(/^partly eaten /, '');
+    return kind === 'food ration' || item.otyp === FOOD_RATION;
+}
+
+function foodRationFirstBiteMessage(hunger) {
+    if ((hunger ?? 900) <= 200) return 'This food really hits the spot!';
+    if ((hunger ?? 900) < 700) return 'This satiates your stomach!';
+    return '';
+}
+
+function startCarriedFoodRationVictual(item) {
+    const hungerBeforeBite = game.u?.uhunger ?? 900;
+    const alreadyPartlyEaten = item?.oeaten > 0;
+    const touched = touchEatenFood(item);
+    recordFoodConduct(touched);
+    const fullNutrition = foodObjectNutrition(touched) || FOOD_NUTRITION.get('food ration') || 800;
+    const reqtime = roundDivPositive(FOOD_RATION_EAT_DELAY * remainingFoodNutrition(touched), fullNutrition);
+    const biteNutrition = reqtime > 0 && touched.oeaten >= reqtime
+        ? Math.trunc(touched.oeaten / reqtime)
+        : 0;
+
+    if (biteNutrition > 0) {
+        addHeroNutrition(biteNutrition);
+        consumeOeaten(touched, -biteNutrition);
+        refreshInventoryObjectLine(touched);
+    }
+
+    if (reqtime <= 1 || biteNutrition <= 0) {
+        removeInventoryItem(touched);
+        game._pet_food_scan_inventory = game.inventory || [];
+        return {
+            message: alreadyPartlyEaten ? 'You eat the partly eaten food ration.' : foodRationFirstBiteMessage(hungerBeforeBite),
+            finished: true,
+        };
+    }
+
+    game._eating_turns_remaining = reqtime;
+    game._eating_finish_message = 'You finish eating the food ration.';
+    game._eating_inventory_object = touched;
+    game._eating_bite_nutrition = biteNutrition;
+    game._eating_nutrition = 0;
+    game._pet_food_scan_inventory = game.inventory || [];
+
+    return {
+        message: alreadyPartlyEaten ? 'You begin eating the partly eaten food ration.' : foodRationFirstBiteMessage(hungerBeforeBite),
+        finished: false,
+        touched,
+    };
 }
 
 function applyWishedPartlyEaten(item) {
@@ -43896,6 +43954,13 @@ export async function rhack(_cmd) {
             }
             if (isRoyalJelly(item)) {
                 await eatRoyalJelly(item);
+                return;
+            }
+            if (isCarriedFoodRationVictualCandidate(item)) {
+                const result = startCarriedFoodRationVictual(item);
+                await setMessage(result.message);
+                game._command_mode = null;
+                game.context.move = 1;
                 return;
             }
             const touched = touchEatenFood(item);

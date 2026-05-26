@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
+import { processEatingOccupationTick } from '../js/allmain.js';
 import { burnFloorObjectsByFire, earthFloorEffects, finishForceLock, processCorpseTimers, processGlobShrinkTimers, processSpellbookStudyOccupation, rhack, __shopBillingTestHooks as shop } from '../js/cmd.js';
 import { game, resetGame } from '../js/gstate.js';
 import { initRng } from '../js/rng.js';
@@ -73,6 +74,11 @@ function installCommandShopState() {
         uac: 10,
     });
     return state;
+}
+
+function finishEatingOccupation() {
+    while (game._eating_turns_remaining > 0)
+        processEatingOccupationTick(game);
 }
 
 function installAngryNotRobbedPayState({ gold = 0, seed = 1, player = 'Hero', customer = 'PreviousCustomer' } = {}) {
@@ -3770,6 +3776,72 @@ test('first bite of shop-floor food stack bills only the touched unit', () => {
     assert.equal(entry.useup, true);
     assert.equal(shop.shopBillEntryTotal(entry), expected);
     assert.equal(game._usedUpShopBills.some(bill => String(bill.bo_id) === String(floor.id)), true);
+});
+
+test('carried food ration command starts victual with one C bite', async () => {
+    installCommandShopState();
+    const ration = foodRation(3131, 'a');
+    game.inventory = [ration];
+
+    await rhack('e');
+    await rhack('a');
+
+    assert.equal(game.inventory.includes(ration), true);
+    assert.equal(ration.oeaten, 640);
+    assert.match(ration.line, /partly eaten food ration/);
+    assert.equal(game.u.uhunger, 1060);
+    assert.equal(game._eating_turns_remaining, 5);
+    assert.equal(game._eating_inventory_object, ration);
+    assert.equal(game._eating_bite_nutrition, 160);
+    assert.equal(game.context.move, 1);
+});
+
+test('carried food ration occupation removes item after later bites', async () => {
+    installCommandShopState();
+    const ration = foodRation(3132, 'a');
+    game.inventory = [ration];
+
+    await rhack('e');
+    await rhack('a');
+    finishEatingOccupation();
+
+    assert.equal(game.inventory.includes(ration), false);
+    assert.equal(game.u.uhunger, 1700);
+    assert.equal(game._eating_turns_remaining || 0, 0);
+    assert.equal(game._eating_inventory_object, null);
+    assert.equal(game._eating_bite_nutrition || 0, 0);
+    assert.match(game._pending_message || '', /You finish eating the food ration\./);
+});
+
+test('carried food ration command splits unpaid stack before victual bites', async () => {
+    const { shkp } = installCommandShopState();
+    const stack = foodRation(3133, 'a');
+    stack.quan = 2;
+    stack.line = 'a - 2 food rations';
+    game.inventory = [stack];
+    shop.addObjectToShopBill(shkp, stack, 90);
+
+    await rhack('e');
+    await rhack('a');
+
+    const touched = game._eating_inventory_object;
+    assert.ok(touched);
+    assert.notEqual(touched, stack);
+    assert.equal(game.inventory.includes(touched), true);
+    assert.equal(stack.quan, 1);
+    assert.equal(touched.quan, 1);
+    assert.equal(touched.oeaten, 640);
+    assert.equal(stack.unpaid, true);
+    assert.equal(stack.unpaidPrice, 45);
+    assert.notEqual(touched.unpaid, true);
+    const live = shop.shopBillEntryForObject(shkp, stack);
+    const bite = shop.shopBillEntryForObject(shkp, touched);
+    assert.ok(live);
+    assert.ok(bite);
+    assert.equal(live.useup, false);
+    assert.equal(bite.useup, true);
+    assert.equal(shop.shopBillEntryTotal(live), 45);
+    assert.equal(shop.shopBillEntryTotal(bite), 45);
 });
 
 test('shop pickup merge rejects unpaid into paid and combines compatible unpaid bills', () => {
