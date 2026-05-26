@@ -15158,6 +15158,118 @@ function resolveUnpaidProjectileShopLanding(obj, x, y, options = {}) {
     return { ...charged, handled: charged.charged, returned: false };
 }
 
+function isProjectileImpactContainer(obj) {
+    return isTipContainerObject(obj) && globContents(obj).length && !isMagicBagObject(obj);
+}
+
+function projectileLandingIsSoft(x, y) {
+    const loc = game.level?.at?.(x, y);
+    if (!loc) return false;
+    return IS_POOL(loc.typ) || loc.typ === WATER || loc.typ === MOAT
+        || loc.typ === LAVAPOOL || loc.typ === LAVAWALL;
+}
+
+function projectileImpactGlassCandidate(obj) {
+    if (!obj || impactDropObjectClass(obj) === 'gem') return false;
+    const material = String(obj.material || obj.oc_material || '').toLowerCase();
+    const kind = objectKindKey(obj);
+    return material === 'glass' || impactDropObjectClass(obj) === 'potion'
+        || obj.otyp === MIRROR || kind === 'looking glass' || kind === 'mirror'
+        || kind === 'crystal ball' || kind === 'lenses'
+        || /\bglass\b|\bcrystal\b/.test(kind);
+}
+
+function projectileImpactContentBreakKind(obj) {
+    if (projectileImpactGlassCandidate(obj)) {
+        if (obj.artifact || rn2(100) < 33) return '';
+        return 'shatter';
+    }
+    if (isEggItem(obj) && !rn2(3)) return 'cracking';
+    return '';
+}
+
+function splitImpactBrokenStackItem(container, obj, shkp) {
+    const quantity = Math.max(1, Math.trunc(Number(obj?.quan || 1)));
+    if (quantity <= 1) return obj;
+    const broken = {
+        ...obj,
+        id: next_ident(),
+        o_id: undefined,
+        _shopBillObjectId: undefined,
+        quan: 1,
+        contained: true,
+        container,
+    };
+    obj.quan = quantity - 1;
+    if (obj.unpaid && shkp) splitShopBillEntry(shkp, obj, broken, 1);
+    if (obj.unpaid) syncUnpaidBillLine(obj);
+    return broken;
+}
+
+function projectileContainerImpactDmg(obj, fromX, fromY, options = {}) {
+    const messages = Array.isArray(options.messages) ? options.messages : [];
+    if (!isProjectileImpactContainer(obj)) return { loss: 0, broke: false, messages };
+    const shkp = shopkeeperForCostlySpot(fromX, fromY);
+    const costly = shopkeeperInHisShop(shkp);
+    const insider = costly && sameShopkeeper(shkp, shopkeeperForShopRoom(game.u?.ux, game.u?.uy));
+    let loss = 0;
+    let broke = false;
+    for (const child of [...globContents(obj)]) {
+        const breakKind = projectileImpactContentBreakKind(child);
+        if (!breakKind) continue;
+        const brokenChild = splitImpactBrokenStackItem(obj, child, shkp);
+        if (costly) {
+            if (!brokenChild.unpaid) brokenChild.no_charge = true;
+            const charged = convertUnpaidObjectToShopDebt(brokenChild, { silent: true, broken: true });
+            loss += charged.value || 0;
+        }
+        if (brokenChild === child) removeContainedObject(obj, child);
+        brokenChild.contained = false;
+        brokenChild.container = null;
+        obj.cknown = false;
+        broke = true;
+        if (!options.silent) messages.push(`You hear a muffled ${breakKind}.`);
+    }
+    if (broke && isGlobWeightContainerObject(obj)) obj.owt = globObjectWeight(obj);
+    if (costly && loss && !options.silent) {
+        if (insider) {
+            messages.push(`You owe ${shopkeeperDisplayName(shkp)} ${loss} ${shopCurrency(loss)} for objects destroyed.`);
+        } else {
+            messages.push(`You caused ${loss} ${shopCurrency(loss)} worth of damage!`);
+        }
+    }
+    return { loss, broke, messages };
+}
+
+function placeUnstackedFloorObject(obj) {
+    game.level.objects ??= [];
+    game.level.objects.push(obj);
+    return obj;
+}
+
+function stackPlacedProjectileObject(obj) {
+    const objects = game.level?.objects || [];
+    if (!objects.includes(obj)) return obj;
+    const stack = objects.find(existing => existing !== obj && sameMonsterThrownStackObject(existing, obj));
+    if (!stack) return obj;
+    mergeStackedShopBillEntries(stack, obj);
+    stack.quan = (stack.quan || 1) + (obj.quan || 1);
+    game.level.objects = objects.filter(existing => existing !== obj);
+    return stack;
+}
+
+function landProjectileObjectWithShopHandling(obj, x, y, options = {}) {
+    const messages = [];
+    const placed = placeUnstackedFloorObject(obj);
+    const impact = projectileLandingIsSoft(x, y)
+        ? { loss: 0, broke: false, messages }
+        : projectileContainerImpactDmg(placed, options.fromX ?? game.u?.ux ?? x, options.fromY ?? game.u?.uy ?? y, { messages, silent: options.silent });
+    const shopLanding = resolveUnpaidProjectileShopLanding(placed, x, y, options);
+    if (shopLanding.message) messages.push(shopLanding.message);
+    const stacked = stackPlacedProjectileObject(placed);
+    return { object: stacked, impact, shopLanding, messages };
+}
+
 function markNoChargeRecursively(obj) {
     if (!obj || shopBillableGold(obj)) return;
     if (!obj.unpaid) obj.no_charge = true;
@@ -16323,7 +16435,9 @@ export const __shopBillingTestHooks = {
     finishShopFloorContainerPutSale,
     mergePickedObjectIntoInventory,
     mergePickedObjectIntoShopBill,
+    landProjectileObjectWithShopHandling,
     placeStackableFloorObject,
+    projectileContainerImpactDmg,
     pickUpFloorGoldObject,
     prepareContainerTakeoutObject,
     hasRobbedOnlyShopPayment,
@@ -43104,8 +43218,8 @@ export async function rhack(_cmd) {
             color: item.color || (item.cls === 'gem' ? CLR_GRAY : CLR_CYAN),
         };
         if (oldQuan > shotCount) splitCarriedObjectShopBill(item, projectileObject, shotCount);
-        const shopLanding = resolveUnpaidProjectileShopLanding(projectileObject, ox, oy);
-        placeStackableFloorObject(projectileObject);
+        const landing = landProjectileObjectWithShopHandling(projectileObject, ox, oy);
+        const landingMessage = landing.messages.join('  ');
         if (game._fire_launcher_letter) {
             game._stale_projectile_marks ??= [];
             game._stale_projectile_marks.push({
@@ -43130,8 +43244,8 @@ export async function rhack(_cmd) {
         const fireMessage = shotCount > 1
             ? `${game._fire_launcher_letter ? 'You shoot' : 'You throw'} ${shotCount} ${name}.`
             : `${game._fire_launcher_letter ? 'You shoot' : 'You throw'} ${name}.`;
-        if (shopLanding.message) game._queued_message_after_more = shopLanding.message;
-        await setMessage(fireMessage, !!shopLanding.message);
+        if (landingMessage) game._queued_message_after_more = landingMessage;
+        await setMessage(fireMessage, !!landingMessage);
         game._command_mode = null;
         game._fire_item_letter = null;
         game._fire_launcher_letter = null;
@@ -43348,45 +43462,45 @@ export async function rhack(_cmd) {
         };
         curseLoadstoneLeavingInventory(thrownObject);
         if ((item.quan || 1) > 1) splitCarriedObjectShopBill(item, thrownObject, 1);
-        const shopLanding = resolveUnpaidProjectileShopLanding(thrownObject, ox, oy);
         stopCarriedFigurineTimerOnLeave(thrownObject);
-        placeStackableFloorObject(thrownObject);
-	        newsym(ox, oy);
-	        const wasBurdened = (game.u?._statusSuffix || '').includes('Burdened');
-	        removeInventoryItem(item);
-	        if (wasBurdened) {
-	            let carriedWeight = Math.trunc(((game._goldCount || 0) + 50) / 100);
-	            for (const invItem of game.inventory || []) {
-	                const kind = String(invItem.kind || invItem.actualKind || invItem.spellName || invItem.spell?.name || '').toLowerCase();
-	                const cls = invItem.cls || (invItem.otyp === RING_CLASS ? 'ring'
-	                    : invItem.otyp === SCROLL_CLASS ? 'scroll'
-	                        : invItem.otyp === POTION_CLASS ? 'potion'
-	                            : invItem.otyp === WAND_CLASS ? 'wand'
-	                                : invItem.otyp === GEM_CLASS ? 'gem' : '');
-	                carriedWeight += (OBJECT_WEIGHTS[kind] ?? CLASS_WEIGHTS[cls] ?? invItem.owt ?? 0) * (invItem.quan || 1);
-	            }
-	            const stats = game.u?.acurr?.a || [];
-	            const capacity = Math.min(1000, 25 * ((stats[0] ?? 10) + (stats[4] ?? 10)) + 50);
-	            if (carriedWeight <= capacity) {
-	                game._topline_after_more = 'Your movements are now unencumbered.';
-	                game._unburden_after_topline_more = 1;
-	            }
-	        }
-	        const wieldedLauncher = (game.inventory || []).find(invItem =>
-	            (invItem.wielded || invItem.line?.includes('weapon in')) && /bow|sling/.test(inventoryItemName(invItem).toLowerCase()));
-	        const thrownByHand = /arrow/.test(lowerName) && !wieldedLauncher;
-	        if (thrownByHand) {
-            if (shopLanding.message) game._queued_message_after_more = shopLanding.message;
-            await setMessage("You aren't wielding a bow, so you throw your arrow by hand.", !!shopLanding.message);
+        const landing = landProjectileObjectWithShopHandling(thrownObject, ox, oy);
+        const landingMessage = landing.messages.join('  ');
+        newsym(ox, oy);
+        const wasBurdened = (game.u?._statusSuffix || '').includes('Burdened');
+        removeInventoryItem(item);
+        if (wasBurdened) {
+            let carriedWeight = Math.trunc(((game._goldCount || 0) + 50) / 100);
+            for (const invItem of game.inventory || []) {
+                const kind = String(invItem.kind || invItem.actualKind || invItem.spellName || invItem.spell?.name || '').toLowerCase();
+                const cls = invItem.cls || (invItem.otyp === RING_CLASS ? 'ring'
+                    : invItem.otyp === SCROLL_CLASS ? 'scroll'
+                        : invItem.otyp === POTION_CLASS ? 'potion'
+                            : invItem.otyp === WAND_CLASS ? 'wand'
+                                : invItem.otyp === GEM_CLASS ? 'gem' : '');
+                carriedWeight += (OBJECT_WEIGHTS[kind] ?? CLASS_WEIGHTS[cls] ?? invItem.owt ?? 0) * (invItem.quan || 1);
+            }
+            const stats = game.u?.acurr?.a || [];
+            const capacity = Math.min(1000, 25 * ((stats[0] ?? 10) + (stats[4] ?? 10)) + 50);
+            if (carriedWeight <= capacity) {
+                game._topline_after_more = 'Your movements are now unencumbered.';
+                game._unburden_after_topline_more = 1;
+            }
         }
-	        else if (impactMessage) {
-            if (shopLanding.message) game._queued_message_after_more = shopLanding.message;
+        const wieldedLauncher = (game.inventory || []).find(invItem =>
+            (invItem.wielded || invItem.line?.includes('weapon in')) && /bow|sling/.test(inventoryItemName(invItem).toLowerCase()));
+        const thrownByHand = /arrow/.test(lowerName) && !wieldedLauncher;
+        if (thrownByHand) {
+            if (landingMessage) game._queued_message_after_more = landingMessage;
+            await setMessage("You aren't wielding a bow, so you throw your arrow by hand.", !!landingMessage);
+        }
+        else if (impactMessage) {
+            if (landingMessage) game._queued_message_after_more = landingMessage;
             await setMessage(impactMessage, true);
         }
-        else if (shopLanding.message) await setMessage(shopLanding.message);
-	        else {
-	            game._pending_message = '';
-	            game._message_more = 0;
+        else if (landingMessage) await setMessage(landingMessage);
+        else {
+            game._pending_message = '';
+            game._message_more = 0;
         }
         game._command_mode = null;
         game._throw_item_letter = null;

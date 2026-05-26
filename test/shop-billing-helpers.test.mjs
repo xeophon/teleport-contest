@@ -3141,6 +3141,22 @@ test('dropped container sale removes unpaid contained bill rows on decline', () 
     assert.equal(bag.no_charge, true);
 });
 
+test('ordinary carried-container drop does not run hard-landing impact', async () => {
+    installCommandShopState();
+    initRng(1);
+    const bag = sack(5118, 'b');
+    const potion = putObjectInContainer(bag, oilPotion(5119));
+    game.inventory = [bag];
+
+    await rhack('d');
+    await rhack('b');
+
+    const dropped = game.level.objects.find(obj => obj.kind === 'sack');
+    assert.ok(dropped);
+    assert.equal(dropped.contents.includes(potion), true);
+    assert.equal(dropped.cknown, true);
+});
+
 test('angry shopkeeper takes dropped container contents without sale or no-charge marking', () => {
     const { shkp } = installShopState();
     shkp.angry = true;
@@ -6814,6 +6830,73 @@ test('projectile unpaid container leaving shop charges it and its unpaid content
     assert.equal(shop.shopBillEntryForObject(shkp, blade), null);
     assert.equal(bag.unpaid, false);
     assert.equal(blade.unpaid, false);
+});
+
+test('hard-landing projectile container breaks contents before same-shop return', () => {
+    const { shkp } = installShopState();
+    initRng(1);
+    const bag = sack(8735);
+    const potion = putObjectInContainer(bag, oilPotion(8736));
+    const blade = putObjectInContainer(bag, dagger(8737));
+    shop.addObjectToShopBill(shkp, potion, 20);
+    shop.addObjectToShopBill(shkp, blade, 10);
+
+    const landing = shop.landProjectileObjectWithShopHandling(bag, 5, 5, { fromX: 5, fromY: 5, silent: true });
+
+    assert.equal(landing.impact.broke, true);
+    assert.equal(landing.impact.loss, 20);
+    assert.equal(landing.shopLanding.returned, true);
+    assert.equal(shkp.debit, 20);
+    assert.equal(shkp.billct, 0);
+    assert.equal(shkp.bill.length, 0);
+    assert.equal(bag.contents.includes(potion), false);
+    assert.equal(bag.contents.includes(blade), true);
+    assert.equal(blade.unpaid, false);
+    assert.equal(bag.cknown, false);
+});
+
+test('hard-landing projectile container charges broken contents before outside-shop debt', () => {
+    const { shkp } = installShopState();
+    initRng(1);
+    game.level.at = (x, y) => ({ roomno: x === 9 && y === 5 ? 0 : ROOMOFFSET });
+    const bag = sack(8738);
+    const potion = putObjectInContainer(bag, oilPotion(8739));
+    const blade = putObjectInContainer(bag, dagger(8740));
+    shop.addObjectToShopBill(shkp, potion, 20);
+    shop.addObjectToShopBill(shkp, blade, 10);
+
+    const landing = shop.landProjectileObjectWithShopHandling(bag, 9, 5, { fromX: 5, fromY: 5, silent: true });
+
+    assert.equal(landing.impact.broke, true);
+    assert.equal(landing.impact.loss, 20);
+    assert.equal(landing.shopLanding.charged, true);
+    assert.equal(landing.shopLanding.value, 10);
+    assert.equal(shkp.debit, 30);
+    assert.equal(shkp.billct, 0);
+    assert.equal(bag.contents.includes(potion), false);
+    assert.equal(bag.contents.includes(blade), true);
+    assert.equal(blade.unpaid, false);
+});
+
+test('soft-landing projectile container skips content impact before shop return', () => {
+    const { shkp } = installShopState();
+    initRng(1);
+    game.level.at = () => ({ roomno: ROOMOFFSET, typ: LAVAPOOL });
+    const bag = sack(8741);
+    const potion = putObjectInContainer(bag, oilPotion(8742));
+    const blade = putObjectInContainer(bag, dagger(8743));
+    shop.addObjectToShopBill(shkp, potion, 20);
+    shop.addObjectToShopBill(shkp, blade, 10);
+
+    const landing = shop.landProjectileObjectWithShopHandling(bag, 5, 5, { fromX: 5, fromY: 5, silent: true });
+
+    assert.equal(landing.impact.broke, false);
+    assert.equal(shkp.debit || 0, 0);
+    assert.equal(shkp.billct, 0);
+    assert.equal(bag.contents.includes(potion), true);
+    assert.equal(potion.unpaid, false);
+    assert.equal(blade.unpaid, false);
+    assert.equal(bag.cknown, true);
 });
 
 test('floor stacking rejects unpaid projectiles into paid stacks', () => {
