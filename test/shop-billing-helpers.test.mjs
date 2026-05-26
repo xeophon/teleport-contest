@@ -7048,6 +7048,56 @@ test('soft-landing projectile container skips content impact before shop return'
     assert.equal(bag.cknown, true);
 });
 
+test('hard-landing top-level unpaid projectile breaks before same-shop return', () => {
+    const { shkp } = installShopState();
+    const potion = oilPotion(8744);
+    shop.addObjectToShopBill(shkp, potion, 20);
+
+    const landing = shop.landProjectileObjectWithShopHandling(potion, 5, 5, { breakRoll: 50, silent: true });
+
+    assert.equal(landing.topBreak.broke, true);
+    assert.equal(landing.topBreak.value, 20);
+    assert.equal(landing.object, null);
+    assert.equal(game.level.objects.includes(potion), false);
+    assert.equal(shkp.debit, 20);
+    assert.equal(shkp.billct, 0);
+    assert.equal(shop.shopBillEntryForObject(shkp, potion), null);
+    assert.equal(potion.unpaid, false);
+    assert.equal(potion.no_charge, true);
+});
+
+test('hard-landing top-level unpaid projectile breaks before outside-shop debt', () => {
+    const { shkp } = installShopState();
+    game.level.at = (x, y) => ({ roomno: x === 9 && y === 5 ? 0 : ROOMOFFSET, typ: ROOM });
+    const potion = oilPotion(8745);
+    shop.addObjectToShopBill(shkp, potion, 20);
+
+    const landing = shop.landProjectileObjectWithShopHandling(potion, 9, 5, { breakRoll: 50, silent: true });
+
+    assert.equal(landing.topBreak.broke, true);
+    assert.equal(landing.shopLanding.charged, true);
+    assert.equal(landing.shopLanding.value, 20);
+    assert.equal(game.level.objects.includes(potion), false);
+    assert.equal(shkp.debit, 20);
+    assert.equal(shkp.billct, 0);
+    assert.equal(potion.unpaid, false);
+    assert.equal(potion.no_charge, true);
+});
+
+test('hard-landing top-level paid projectile breaks without sale or floor placement', () => {
+    const { shkp } = installShopState();
+    const potion = oilPotion(8746);
+
+    const landing = shop.landProjectileObjectWithShopHandling(potion, 5, 5, { breakRoll: 50, silent: true });
+
+    assert.equal(landing.topBreak.broke, true);
+    assert.equal(landing.object, null);
+    assert.equal(game.level.objects.includes(potion), false);
+    assert.equal(shkp.billct, 0);
+    assert.equal(shkp.debit || 0, 0);
+    assert.equal(potion.no_charge, true);
+});
+
 test('floor stacking rejects unpaid projectiles into paid stacks', () => {
     const { shkp } = installShopState();
     const paidStack = { ...dagger(8801), letter: undefined, line: undefined, quan: 1, ox: 7, oy: 5 };

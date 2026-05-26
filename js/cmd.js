@@ -15230,6 +15230,35 @@ function projectileImpactContentBreakKind(obj) {
     return '';
 }
 
+function projectileTopLevelBreakKind(obj, options = {}) {
+    const roll = Number.isInteger(options.breakRoll) ? options.breakRoll : rn2(100);
+    const kind = impactDropBreakKind(obj);
+    if (!kind) return '';
+    const resistChance = obj?.artifact ? 99 : 1;
+    return roll < resistChance ? '' : kind;
+}
+
+function projectileTopLevelBreakMessage(obj, breakKind, messages) {
+    if (!breakKind) return;
+    if (breakKind === 'splat') {
+        messages.push('Splat!');
+        return;
+    }
+    if (breakKind === 'mess') {
+        messages.push('What a mess!');
+        return;
+    }
+    if (game.u?.blind) {
+        messages.push('You hear something shatter!');
+        return;
+    }
+    const name = pickupObjectName({ ...obj, quan: obj.quan || 1 });
+    const many = (obj.quan || 1) > 1;
+    const subject = many ? `The ${name}` : articleFor(name, true);
+    const verb = many ? 'shatter' : 'shatters';
+    messages.push(`${subject} ${verb}${breakKind === 'pieces' ? ' into a thousand pieces' : ''}!`);
+}
+
 function splitImpactBrokenStackItem(container, obj, shkp) {
     const quantity = Math.max(1, Math.trunc(Number(obj?.quan || 1)));
     if (quantity <= 1) return obj;
@@ -15302,14 +15331,31 @@ function stackPlacedProjectileObject(obj) {
 
 function landProjectileObjectWithShopHandling(obj, x, y, options = {}) {
     const messages = [];
+    const hardLanding = !projectileLandingIsSoft(x, y);
+    if (hardLanding) {
+        const breakKind = projectileTopLevelBreakKind(obj, options);
+        if (breakKind) {
+            if (!options.silent) projectileTopLevelBreakMessage(obj, breakKind, messages);
+            const shopLanding = convertUnpaidObjectToShopDebt(obj, { ...options, broken: true });
+            if (!shopLanding.charged) obj.no_charge = true;
+            if (shopLanding.message) messages.push(shopLanding.message);
+            return {
+                object: null,
+                impact: { loss: 0, broke: false, messages },
+                topBreak: { broke: true, breakKind, value: shopLanding.value || 0 },
+                shopLanding: { ...shopLanding, handled: shopLanding.charged, returned: false },
+                messages,
+            };
+        }
+    }
     const placed = placeUnstackedFloorObject(obj);
-    const impact = projectileLandingIsSoft(x, y)
+    const impact = !hardLanding
         ? { loss: 0, broke: false, messages }
         : projectileContainerImpactDmg(placed, options.fromX ?? game.u?.ux ?? x, options.fromY ?? game.u?.uy ?? y, { messages, silent: options.silent });
     const shopLanding = resolveUnpaidProjectileShopLanding(placed, x, y, options);
     if (shopLanding.message) messages.push(shopLanding.message);
     const stacked = stackPlacedProjectileObject(placed);
-    return { object: stacked, impact, shopLanding, messages };
+    return { object: stacked, impact, topBreak: { broke: false, breakKind: '', value: 0 }, shopLanding, messages };
 }
 
 function markNoChargeRecursively(obj) {
@@ -43297,10 +43343,14 @@ export async function rhack(_cmd) {
         const volleyLimit = game._fire_launcher_letter && oldQuan > 1 ? 2 : 1;
         const shotCount = volleyLimit > 1 ? Math.min(oldQuan, rnd(volleyLimit)) : 1;
         let projectileId = null;
+        let projectileBreakRoll = null;
+        const hardLanding = !projectileLandingIsSoft(ox, oy);
         for (let shot = 0; shot < shotCount; shot++) {
             if (oldQuan - shot > 1) projectileId = next_ident();
-            const landingLoc = game.level?.at(ox, oy);
-            if (!landingLoc || !IS_POOL(landingLoc.typ)) rn2(100);
+            if (hardLanding) {
+                const roll = rn2(100);
+                if (projectileBreakRoll == null) projectileBreakRoll = roll;
+            }
         }
         const projectileObject = {
             ...item,
@@ -43316,7 +43366,7 @@ export async function rhack(_cmd) {
             color: item.color || (item.cls === 'gem' ? CLR_GRAY : CLR_CYAN),
         };
         if (oldQuan > shotCount) splitCarriedObjectShopBill(item, projectileObject, shotCount);
-        const landing = landProjectileObjectWithShopHandling(projectileObject, ox, oy);
+        const landing = landProjectileObjectWithShopHandling(projectileObject, ox, oy, { breakRoll: projectileBreakRoll });
         const landingMessage = landing.messages.join('  ');
         if (game._fire_launcher_letter) {
             game._stale_projectile_marks ??= [];
@@ -43515,7 +43565,6 @@ export async function rhack(_cmd) {
 	            targetMon = (game.level?.monsters || []).find(mon => mon.mx === ox && mon.my === oy) || null;
 	            if (targetMon) break;
 	        }
-	        const landingLoc = game.level?.at(ox, oy);
 	        const combatObject = item.cls === 'weapon' || item.cls === 'gem' || item.glyph === ')' || item.otyp === GEM_CLASS;
 	        let impactMessage = '';
 	        if (targetMon && (item.otyp === CREAM_PIE || lowerName === 'cream pie')) {
@@ -43543,7 +43592,7 @@ export async function rhack(_cmd) {
 	            impactMessage = `The ${thrownName} misses the ${targetName}.`;
 	            if (!rn2(3)) targetMon.msleeping = 0;
 	        }
-	        if (!landingLoc || !IS_POOL(landingLoc.typ)) rn2(100); // C breaktest: obj_resists() on hard landing.
+	        const projectileBreakRoll = projectileLandingIsSoft(ox, oy) ? null : rn2(100); // C breaktest: obj_resists() on hard landing.
         const thrownObject = {
             ...item,
             letter: undefined,
@@ -43561,7 +43610,7 @@ export async function rhack(_cmd) {
         curseLoadstoneLeavingInventory(thrownObject);
         if ((item.quan || 1) > 1) splitCarriedObjectShopBill(item, thrownObject, 1);
         stopCarriedFigurineTimerOnLeave(thrownObject);
-        const landing = landProjectileObjectWithShopHandling(thrownObject, ox, oy);
+        const landing = landProjectileObjectWithShopHandling(thrownObject, ox, oy, { breakRoll: projectileBreakRoll });
         const landingMessage = landing.messages.join('  ');
         newsym(ox, oy);
         const wasBurdened = (game.u?._statusSuffix || '').includes('Burdened');
