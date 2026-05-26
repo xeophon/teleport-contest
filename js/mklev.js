@@ -169,6 +169,8 @@ const CREAM_PIE = 10081;
 const EXPENSIVE_CAMERA = 10082;
 const STETHOSCOPE = 10083;
 const MAGIC_MARKER = 10084;
+const TINNING_KIT = 10170;
+const CAN_OF_GREASE = 10171;
 const MAGIC_HARP = 10169;
 const CRYSTAL_BALL = 10088;
 const LUCKSTONE = 10127;
@@ -4165,8 +4167,11 @@ function mksobj_init(otmp, otyp, artif) {
         if (!rn2(6)) otmp.quan = 2;
     } else if (otyp === BAG_OF_TRICKS || otyp === HORN_OF_PLENTY) {
         otmp.spe = rn1(18, 3);
-    } else if (otyp === EXPENSIVE_CAMERA || otyp === MAGIC_MARKER) {
+    } else if (otyp === EXPENSIVE_CAMERA || otyp === TINNING_KIT || otyp === MAGIC_MARKER) {
         otmp.spe = rn1(70, 30);
+    } else if (otyp === CAN_OF_GREASE) {
+        otmp.spe = rn1(21, 5);
+        blessorcurse(otmp, 10);
     } else if (otyp === MAGIC_HARP) {
         otmp.spe = rn1(5, 4);
     } else if (otyp === CRYSTAL_BALL) {
@@ -4462,7 +4467,8 @@ export function object_display(otmp) {
         return { glyph: '(', color: displayColor ?? CLR_YELLOW };
     if (otyp === CRYSTAL_BALL) return { glyph: '(', color: displayColor ?? CLR_BRIGHT_CYAN };
     if (otyp === TOOL_CLASS || otyp === TIN_WHISTLE || otyp === TALLOW_CANDLE || otyp === WAX_CANDLE
-        || otyp === EXPENSIVE_CAMERA || otyp === MIRROR || otyp === STETHOSCOPE || otyp === MAGIC_MARKER || otyp === BELL
+        || otyp === EXPENSIVE_CAMERA || otyp === TINNING_KIT || otyp === CAN_OF_GREASE
+        || otyp === MIRROR || otyp === STETHOSCOPE || otyp === MAGIC_MARKER || otyp === BELL
         || otyp === LENSES || otyp === CREDIT_CARD || otyp === SKELETON_KEY)
         return { glyph: '(', color: displayColor ?? CLR_MAGENTA };
     if (otyp === BOULDER) return { glyph: '`', color: NO_COLOR };

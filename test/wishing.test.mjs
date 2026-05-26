@@ -9,7 +9,10 @@ import { mksobj } from '../js/mklev.js';
 
 const HORN_OF_PLENTY = 957;
 const CRYSTAL_BALL = 10088;
+const EXPENSIVE_CAMERA = 10082;
 const MAGIC_MARKER = 10084;
+const TINNING_KIT = 10170;
+const CAN_OF_GREASE = 10171;
 const BAG_OF_TRICKS = 10158;
 const MEAT_RING = 10164;
 const K_RATION = 10035;
@@ -456,11 +459,41 @@ test('wished charged tools use C object metadata rows', async () => {
     assert.match(item.line, /glass orb/);
 });
 
+test('wished camera tinning kit and grease use C charged-tool metadata rows', async () => {
+    const cases = [
+        ['uncursed expensive camera', EXPENSIVE_CAMERA, 'expensive camera', 30, 99, 12, 200],
+        ['uncursed tinning kit', TINNING_KIT, 'tinning kit', 30, 99, 100, 30],
+        ['uncursed can of grease', CAN_OF_GREASE, 'can of grease', 5, 25, 15, 20],
+    ];
+
+    for (const [wish, otyp, kind, minSpe, maxSpe, weight, cost] of cases) {
+        installWishState(3, { debug: false });
+        beginWishDirectly();
+        await submitWish(wish);
+
+        const item = game.inventory[0];
+        assert.equal(game._command_mode, null);
+        assert.equal(item.otyp, otyp);
+        assert.equal(item.cls, 'tool');
+        assert.equal(item.kind, kind);
+        assert.equal(item.actualKind, kind);
+        assert.equal(item.quan, 1);
+        assert.ok(item.spe >= minSpe && item.spe <= maxSpe);
+        assert.equal(item.blessed, false);
+        assert.equal(item.cursed, false);
+        assert.equal(item.owt, weight);
+        assert.equal(shop.shopBaseCost(item), cost);
+    }
+});
+
 test('wish charge suffix applies through charged-tool metadata', async () => {
     const cases = [
         ['bag of tricks (1:3)', BAG_OF_TRICKS, 'bag of tricks', 'bag of tricks', 15],
         ['magic marker (1:3)', MAGIC_MARKER, 'magic marker', 'magic marker', 2],
         ['glass orb (1:3)', CRYSTAL_BALL, 'glass orb', 'crystal ball', 150],
+        ['expensive camera (1:3)', EXPENSIVE_CAMERA, 'expensive camera', 'expensive camera', 12],
+        ['tinning kit (1:3)', TINNING_KIT, 'tinning kit', 'tinning kit', 100],
+        ['can of grease (1:3)', CAN_OF_GREASE, 'can of grease', 'can of grease', 15],
     ];
 
     for (const [wish, otyp, kind, actualKind, weight] of cases) {
@@ -476,6 +509,31 @@ test('wish charge suffix applies through charged-tool metadata', async () => {
         assert.equal(item.spe, 3);
         assert.equal(item.recharged ?? 0, 0);
         assert.equal(item.owt, weight);
+    }
+});
+
+test('plural wished camera tinning kit and grease remain one requested tool', async () => {
+    const cases = [
+        ['2 expensive cameras', EXPENSIVE_CAMERA, 'expensive camera', 12, 200],
+        ['2 tinning kits', TINNING_KIT, 'tinning kit', 100, 30],
+        ['2 cans of grease', CAN_OF_GREASE, 'can of grease', 15, 20],
+    ];
+
+    for (const [wish, otyp, kind, weight, cost] of cases) {
+        installWishState(3, { debug: false });
+        beginWishDirectly();
+        await submitWish(wish);
+
+        const item = game.inventory[0];
+        assert.equal(game._command_mode, null);
+        assert.equal(item.otyp, otyp);
+        assert.equal(item.kind, kind);
+        assert.equal(item.actualKind, kind);
+        assert.equal(item.quan, 1);
+        assert.equal(item.owt, weight);
+        assert.equal(shop.shopBaseCost(item), cost);
+        assert.match(item.line, new RegExp(kind));
+        assert.doesNotMatch(item.line, /^a - 2 /);
     }
 });
 

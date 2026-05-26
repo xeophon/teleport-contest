@@ -1068,6 +1068,8 @@ const FORTUNE_COOKIE = 11010;
 const EXPENSIVE_CAMERA = 10082;
 const STETHOSCOPE = 10083;
 const MAGIC_MARKER = 10084;
+const TINNING_KIT = 10170;
+const CAN_OF_GREASE = 10171;
 const TALLOW_CANDLE = 370;
 const WAX_CANDLE = 371;
 const GRAY_DRAGON_SCALE_MAIL = 10085;
@@ -1288,7 +1290,9 @@ const WISH_BASE_OBJECTS = new Map([
     ['wooden harp', { otyp: WOODEN_HARP, cls: 'tool', glyph: '(', kind: 'harp', actualKind: 'wooden harp', known: false }],
     ['magic harp', { otyp: MAGIC_HARP, cls: 'tool', glyph: '(', kind: 'harp', actualKind: 'magic harp', known: false }],
     ['mirror', { otyp: MIRROR, cls: 'tool', glyph: '(', kind: 'looking glass', actualKind: 'mirror' }],
-    ['expensive camera', { otyp: EXPENSIVE_CAMERA, cls: 'tool', glyph: '(', kind: 'expensive camera' }],
+    ['expensive camera', { otyp: EXPENSIVE_CAMERA, cls: 'tool', glyph: '(', kind: 'expensive camera', actualKind: 'expensive camera', plural: 'expensive cameras' }],
+    ['tinning kit', { otyp: TINNING_KIT, cls: 'tool', glyph: '(', kind: 'tinning kit', actualKind: 'tinning kit', plural: 'tinning kits' }],
+    ['can of grease', { otyp: CAN_OF_GREASE, cls: 'tool', glyph: '(', kind: 'can of grease', actualKind: 'can of grease', plural: 'cans of grease' }],
     ['blindfold', { otyp: BLINDFOLD, cls: 'tool', glyph: '(', kind: 'blindfold' }],
     ['bell of opening', { otyp: BELL, cls: 'tool', glyph: '(', kind: 'silver bell', actualKind: 'bell of opening', known: false }],
     ['meat ring', { otyp: MEAT_RING, cls: 'food', glyph: '%', kind: 'meat ring', actualKind: 'meat ring', singular: 'meat ring', plural: 'meat rings', nutrition: 5, quan: 1 }],
@@ -1338,6 +1342,7 @@ const WISH_BASE_NAMEDESC_BOUNDS = new Map([
     ['wax candle', 6], ['wax candles', 6], ['stethoscope', 26],
     ['magic marker', 16], ['lock pick', 61], ['wooden harp', 5],
     ['magic harp', 3], ['mirror', 46], ['expensive camera', 16],
+    ['tinning kit', 16], ['can of grease', 16],
     ['bell of opening', 1], ['blindfold', 51], ['leather gloves', 16],
     ['meat ring', 1], ['tin opener', 36], ['beartrap', 1],
     ['land mine', 1], ['bag of tricks', 21], ['tooled horn', 6],
@@ -1351,6 +1356,21 @@ const WISH_BASE_NAMEDESC_BOUNDS = new Map([
     ['crystal ball', 495], ['glass orb', 495],
 ]);
 const WISH_OBJECT_METADATA = new Map([
+    ['expensive camera', {
+        otyp: EXPENSIVE_CAMERA, cls: 'tool', glyph: '(', ocMerge: false,
+        ocCharged: true, ocNowish: false, ocProb: 15, unitWeight: 12,
+        unitCost: 200,
+    }],
+    ['tinning kit', {
+        otyp: TINNING_KIT, cls: 'tool', glyph: '(', ocMerge: false,
+        ocCharged: true, ocNowish: false, ocProb: 15, unitWeight: 100,
+        unitCost: 30,
+    }],
+    ['can of grease', {
+        otyp: CAN_OF_GREASE, cls: 'tool', glyph: '(', ocMerge: false,
+        ocCharged: true, ocNowish: false, ocProb: 15, unitWeight: 15,
+        unitCost: 20,
+    }],
     ['bag of tricks', {
         otyp: BAG_OF_TRICKS, cls: 'tool', glyph: '(', ocMerge: false,
         ocCharged: true, ocNowish: false, ocProb: 20, unitWeight: 15,
@@ -24307,6 +24327,8 @@ function shopBaseCost(obj) {
     else if (!kind && obj.otyp === MIRROR) kind = 'mirror';
     else if (!kind && obj.otyp === CREAM_PIE) kind = 'cream pie';
     else if (!kind && obj.otyp === EXPENSIVE_CAMERA) kind = 'expensive camera';
+    else if (!kind && obj.otyp === TINNING_KIT) kind = 'tinning kit';
+    else if (!kind && obj.otyp === CAN_OF_GREASE) kind = 'can of grease';
     else if (!kind && obj.otyp === STETHOSCOPE) kind = 'stethoscope';
     else if (!kind && obj.otyp === MAGIC_MARKER) kind = 'magic marker';
     if ((obj.foodRoll || 1000) <= 140 || kind === 'tripe') kind = 'tripe ration';
