@@ -3235,6 +3235,50 @@ test('floor food pickup preflight ignores stale unpaid targets without a current
     assert.equal(shop.findFloorPickupFoodMergeTargetForPreflight(source, 45), staleTarget);
 });
 
+test('dummy alteration billing ignores stale unpaid objects without a bill row', () => {
+    const { shkp } = installShopState();
+    const stalePie = creamPie(4010, 'p');
+    stalePie.unpaid = true;
+    stalePie.unpaidPrice = 10;
+
+    assert.equal(shop.billDummyAlteredCarriedObjectForTest(stalePie), false);
+    assert.equal(shkp.billct, 0);
+    assert.equal((game._usedUpShopBills || []).length, 0);
+    assert.equal(stalePie.unpaid, true);
+    assert.equal(stalePie.unpaidPrice, 10);
+
+    shop.addObjectToShopBill(shkp, stalePie, 10);
+
+    assert.equal(shop.billDummyAlteredCarriedObjectForTest(stalePie), true);
+    assert.equal(shkp.billct, 1);
+    assert.equal(shkp.bill[0].useup, true);
+    assert.equal(shop.shopBillEntryTotal(shkp.bill[0]), 10);
+    assert.equal(stalePie.unpaid, false);
+    assert.equal((game._usedUpShopBills || []).length, 1);
+});
+
+test('used-up preservation ignores stale unpaid objects without a bill row', () => {
+    const { shkp } = installShopState();
+    const staleRation = foodRation(4011, 'a');
+    staleRation.unpaid = true;
+    staleRation.unpaidPrice = 45;
+
+    assert.equal(shop.markObjectShopBillUsedUpForTest(staleRation, shkp), false);
+    assert.equal(shkp.billct, 0);
+    assert.equal((game._usedUpShopBills || []).length, 0);
+    assert.equal(staleRation.unpaid, true);
+    assert.equal(staleRation.unpaidPrice, 45);
+
+    shop.addObjectToShopBill(shkp, staleRation, 45);
+
+    assert.equal(shop.markObjectShopBillUsedUpForTest(staleRation, shkp), true);
+    assert.equal(shkp.billct, 1);
+    assert.equal(shkp.bill[0].useup, true);
+    assert.equal(shop.shopBillEntryTotal(shkp.bill[0]), 45);
+    assert.equal(staleRation.unpaid, false);
+    assert.equal((game._usedUpShopBills || []).length, 1);
+});
+
 test('paid saleable shop drop computes C-style sale offer and transfers cash on accept', () => {
     const { shkp } = installShopState();
     const dropped = dagger(5001);

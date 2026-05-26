@@ -7457,8 +7457,9 @@ function billDummyAlteredCarriedObject(obj) {
     const owner = shopkeeperOwningBillEntry(obj);
     const shkp = owner.shkp || heroShopkeeper();
     const entry = owner.entry || (shkp ? shopBillEntryForObject(shkp, obj) : null);
-    const price = entry ? shopBillEntryTotal(entry) : unpaidBillPrice(obj);
-    if (!shkp || !(price > 0) || (!entry && !obj.unpaid)) return false;
+    if (!shkp || !entry) return false;
+    const price = shopBillEntryTotal(entry);
+    if (!(price > 0)) return false;
     const dummy = {
         ...obj,
         id: next_ident(),
@@ -15114,10 +15115,8 @@ function markObjectShopBillUsedUp(obj, shkp = null) {
         ? { shkp, entry: shopBillEntryForObject(shkp, obj) }
         : shopkeeperOwningBillEntry(obj);
     const billOwner = owner.shkp || shkp;
-    let entry = owner.entry;
-    const price = entry ? shopBillEntryTotal(entry) : unpaidBillPrice(obj);
-    if (!entry && billOwner && obj.unpaid && price > 0)
-        entry = addObjectToShopBill(billOwner, obj, price, { useup: true });
+    const entry = owner.entry;
+    const price = entry ? shopBillEntryTotal(entry) : 0;
     if (!entry || !(price > 0)) return false;
     entry.useup = true;
     clearObjectShopBillState(obj);
@@ -16610,6 +16609,7 @@ export const __shopBillingTestHooks = {
     addContainerTakeoutObjectToShopBill,
     addObjectToShopBill,
     addPickedObjectToShopBill,
+    billDummyAlteredCarriedObjectForTest: billDummyAlteredCarriedObject,
     beginDroppedPaidObjectSale,
     beginShopFloorContainerPutSale,
     collectPayableShopDebts,
@@ -16624,6 +16624,7 @@ export const __shopBillingTestHooks = {
     mergePickedObjectIntoShopBill,
     containerTakeoutBillMergeCompatible,
     landProjectileObjectWithShopHandling,
+    markObjectShopBillUsedUpForTest: markObjectShopBillUsedUp,
     placeStackableFloorObject,
     projectileContainerImpactDmg,
     pickUpFloorGoldObject,
