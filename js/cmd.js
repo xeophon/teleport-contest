@@ -3199,6 +3199,10 @@ function impactDropObjectBreaks(obj) {
     return kind;
 }
 
+function shipObjectMuffledBreakResult(breakKind) {
+    return breakKind === 'splat' ? 'splat' : 'crash';
+}
+
 function impactDropLandingIsSoft() {
     const loc = game.level?.at(game.u?.ux || 0, game.u?.uy || 0);
     if (!loc) return false;
@@ -17033,6 +17037,12 @@ function droppedObjectPitHoleFloorEffects(obj, x, y, messages) {
     }
     const debt = shipObjectShopDebt(obj, x, y);
     if (debt.message) messages.push(debt.message);
+    const breakKind = impactDropObjectBreaks(obj);
+    if (breakKind) {
+        messages.push(`You hear a muffled ${shipObjectMuffledBreakResult(breakKind)}.`);
+        newsym(x, y);
+        return { handled: true, consumed: true };
+    }
     queueImpactDroppedObjects(target, [obj]);
     newsym(x, y);
     return { handled: true, consumed: true };

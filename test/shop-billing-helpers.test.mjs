@@ -4284,6 +4284,47 @@ test('unpaid carried object falling through a hole converts bill row to shop deb
     assert.equal(blade.no_charge, false);
 });
 
+test('fragile carried object falling through a hole breaks before migration queue', async () => {
+    installNonShopFloorState();
+    installSeenHoleAtHero();
+    initRng(1);
+    const potion = oilPotion(512011, 'o');
+    game.inventory = [potion];
+
+    await rhack('d');
+    await rhack('o');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.inventory.length, 0);
+    assert.equal(game.level.objects.some(obj => obj.id === potion.id), false);
+    assert.equal(queuedImpactDropsFor().some(obj => obj.id === potion.id), false);
+    assert.match(game._pending_message, /You hear a muffled crash\./);
+});
+
+test('unpaid fragile carried object falling through a hole charges before breaking', async () => {
+    const { shkp } = installCommandShopState();
+    installSeenHoleAtHero();
+    initRng(1);
+    const potion = oilPotion(512012, 'o');
+    game.inventory = [potion];
+    shop.addObjectToShopBill(shkp, potion, 60);
+
+    await rhack('d');
+    await rhack('o');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.inventory.length, 0);
+    assert.equal(game.level.objects.some(obj => obj.id === potion.id), false);
+    assert.equal(queuedImpactDropsFor().some(obj => obj.id === potion.id), false);
+    assert.match(game._pending_message, /owe Izchak 60 zorkmids? for it/);
+    assert.match(game._pending_message, /You hear a muffled crash\./);
+    assert.equal(shkp.debit, 60);
+    assert.equal(shkp.billct, 0);
+    assert.equal(shop.shopBillEntryForObject(shkp, potion), null);
+});
+
 test('shop-floor stock falling through a hole charges stolen value before migration', () => {
     const { shkp } = installShopState();
     installSeenHoleAtHero();
@@ -4300,6 +4341,24 @@ test('shop-floor stock falling through a hole charges stolen value before migrat
     assert.equal(shkp.debit, expected);
     assert.equal(shkp.billct, 0);
     assert.equal(blade.no_charge, false);
+});
+
+test('shop-floor fragile stock falling through a hole migrates without ship-object breakage', () => {
+    const { shkp } = installShopState();
+    installSeenHoleAtHero();
+    initRng(1);
+    const potion = { ...oilPotion(512022), letter: undefined, line: undefined, ox: 5, oy: 5 };
+    const expected = shop.shopItemPrice(potion, 5, 5);
+    game.level.objects = [potion];
+
+    const impact = shop.impactDropFloorObjects(5, 5, game.level.traps[0], { targetLevel: { dnum: 0, dlevel: 2 } });
+
+    assert.match(impact.message, new RegExp(`owe Izchak ${expected} zorkmids? for goods lost`));
+    assert.doesNotMatch(impact.message, /muffled/);
+    assert.equal(game.level.objects.includes(potion), false);
+    assert.equal(queuedImpactDropsFor().includes(potion), true);
+    assert.equal(shkp.debit, expected);
+    assert.equal(shkp.billct, 0);
 });
 
 test('shop-floor stock falling through a hole routes angry shopkeeper value to robbed', () => {
