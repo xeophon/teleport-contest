@@ -4916,6 +4916,7 @@ const SHOP_OBJECT_COSTS = {
     'wooden harp': 50,
     'magic harp': 50,
     'bell': 50,
+    'bell of opening': 5000,
     'bugle': 15,
     'leather drum': 25,
     'drum of earthquake': 25,
@@ -22902,6 +22903,7 @@ function shopBaseCost(obj) {
     let kind = String(obj.actualKind || obj.kind || '').toLowerCase();
     kind = kind.replace(/^(?:blessed|uncursed|cursed) /, '');
     if (isGlobbyObject(obj)) return 6;
+    if (isBellOfOpeningItem(obj)) return SHOP_OBJECT_COSTS['bell of opening'];
 
     if (obj.otyp === SCROLL_CLASS || cls === 'scroll' || obj.otyp === SCR_SCARE_MONSTER) {
         const scrollIndex = obj.scrollIndex ?? (obj.otyp === SCR_SCARE_MONSTER ? 3 : undefined);
@@ -24989,6 +24991,49 @@ function itemKindText(item) {
 function isBellOfOpeningItem(item) {
     const text = itemKindText(item);
     return text === 'bell of opening' || item?.otyp === BELL && text === 'silver bell';
+}
+
+function identifyBellOfOpening(item) {
+    if (!item) return;
+    item.known = true;
+    item.dknown = true;
+    item.kind = 'Bell of Opening';
+    item.actualKind = 'bell of opening';
+    recordKnownToolDiscovery('Bell of Opening');
+    updateChargedItemLine(item);
+    if (item.unpaid) syncUnpaidBillLine(item);
+}
+
+function applyBellOfOpening(item) {
+    const messages = [`You ring the ${pickupObjectName(item)}.`];
+    if (game.u?.underwater || game.u?.uunderwater) {
+        messages.push('But the sound is muffled.');
+        return messages;
+    }
+
+    const invoking = heroOnInvocationSquare();
+    if (chargedUsageChargeCount(item) <= 0) {
+        if (invoking) {
+            messages.push('But it makes no sound.');
+            identifyBellOfOpening(item);
+        }
+        return messages;
+    }
+
+    const bellName = pickupObjectName(item);
+    spendChargedToolUse(item, messages);
+    if (item.unpaid) syncUnpaidBillLine(item);
+
+    if (item.cursed) {
+        messages.push('Nothing happens.');
+    } else if (invoking) {
+        messages.push(`The ${bellName} issues an unsettling shrill sound...`);
+        item.age = game.moves || 0;
+        identifyBellOfOpening(item);
+    } else {
+        messages.push('Nothing happens.');
+    }
+    return messages;
 }
 
 function isCandelabrumOfInvocationItem(item) {
@@ -38073,6 +38118,12 @@ export async function rhack(_cmd) {
         }
         if (musicalInstrumentKind(item)) {
             await beginMusicalInstrumentUse(item);
+            return;
+        }
+        if (isBellOfOpeningItem(item)) {
+            const messages = applyBellOfOpening(item);
+            await setMessage(messages.join('  '), messages.length > 1);
+            game.context.move = 1;
             return;
         }
         if (isPotionOfOil(item)) {

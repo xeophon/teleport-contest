@@ -12,6 +12,7 @@ const MAGIC_LAMP = 228;
 const POT_OIL = 252;
 const CRYSTAL_BALL = 10088;
 const CANDELABRUM_OF_INVOCATION = 10076;
+const BELL = 358;
 const INVENTORY_LETTERS = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
 const SCR_SCARE_MONSTER = 279;
 const LOADSTONE = 10165;
@@ -231,6 +232,17 @@ function chargedTool(id, kind, letter = 't', spe = 3) {
         oy: 5,
         letter,
         line: `${letter} - a ${kind}`,
+    };
+}
+
+function bellOfOpening(id, letter = 'b', spe = 3) {
+    return {
+        ...chargedTool(id, 'silver bell', letter, spe),
+        otyp: BELL,
+        actualKind: 'bell of opening',
+        known: false,
+        dknown: true,
+        line: `${letter} - a silver bell`,
     };
 }
 
@@ -970,6 +982,152 @@ test('normal unpaid charged tool use adds debit without changing the bill row', 
     assert.equal(bag.unpaid, true);
     assert.equal(messages.length, 1);
     assert.match(messages[0], new RegExp(`Usage fee, ${expectedFee} zorkmids`));
+});
+
+test('Bell of Opening uses the C unique shop price', () => {
+    installShopState();
+    const bell = bellOfOpening(30511, 'b', 3);
+
+    assert.equal(shop.shopBaseCost(bell), 5000);
+});
+
+test('unpaid Bell of Opening charged use bills full live-row price', () => {
+    const { shkp } = installShopState();
+    const bell = bellOfOpening(30512, 'b', 3);
+    game.inventory = [bell];
+    const price = shop.shopItemPrice(bell, 5, 5);
+    shop.addObjectToShopBill(shkp, bell, price);
+    const messages = [];
+
+    const fee = shop.checkUnpaidUsageForTest(bell, messages, { chargeCount: 3 });
+
+    assert.equal(fee, price);
+    assert.equal(shkp.debit, price);
+    assert.equal(shkp.billct, 1);
+    const entry = shop.shopBillEntryForObject(shkp, bell);
+    assert.ok(entry);
+    assert.equal(entry.useup, false);
+    assert.equal(shop.shopBillEntryTotal(entry), price);
+    assert.equal(bell.unpaid, true);
+    assert.match(messages[0], new RegExp(`Usage fee, ${price} zorkmids`));
+});
+
+test('zero-charge unpaid Bell of Opening use adds no usage fee', () => {
+    const { shkp } = installShopState();
+    const bell = bellOfOpening(30513, 'b', 0);
+    game.inventory = [bell];
+    const price = shop.shopItemPrice(bell, 5, 5);
+    shop.addObjectToShopBill(shkp, bell, price);
+    const messages = [];
+
+    const fee = shop.checkUnpaidUsageForTest(bell, messages, { chargeCount: 0 });
+
+    assert.equal(fee, 0);
+    assert.equal(shkp.debit || 0, 0);
+    assert.equal(shkp.billct, 1);
+    assert.equal(shop.shopBillEntryForObject(shkp, bell).useup, false);
+    assert.equal(messages.length, 0);
+});
+
+test('applying unpaid Bell of Opening spends a charge and keeps the live bill', async () => {
+    const { shkp } = installCommandShopState();
+    const bell = bellOfOpening(30514, 'b', 3);
+    game.inventory = [bell];
+    const price = shop.shopItemPrice(bell, 5, 5);
+    shop.addObjectToShopBill(shkp, bell, price);
+    const expectedFee = expectedUnpaidUsageFee(bell, { chargeCount: 3 });
+
+    await rhack('a');
+
+    assert.equal(game._command_mode, 'applyObject');
+    assert.match(game._pending_message, /What do you want to use or apply\? \[b or \?\*\]/);
+
+    await rhack('b');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(bell.spe, 2);
+    assert.equal(shkp.debit, expectedFee);
+    assert.equal(shkp.billct, 1);
+    const entry = shop.shopBillEntryForObject(shkp, bell);
+    assert.ok(entry);
+    assert.equal(entry.useup, false);
+    assert.equal(shop.shopBillEntryTotal(entry), price);
+    assert.equal(bell.unpaid, true);
+    assert.match(game._pending_message, /You ring the silver bell/);
+    assert.match(game._pending_message, new RegExp(`Usage fee, ${expectedFee} zorkmids`));
+});
+
+test('charged Bell of Opening on invocation square records recent ringing after billing', async () => {
+    const { shkp } = installCommandShopState();
+    const bell = bellOfOpening(30515, 'b', 1);
+    game.inventory = [bell];
+    game.level.invocationPosition = { x: 5, y: 5 };
+    game.moves = 123;
+    const price = shop.shopItemPrice(bell, 5, 5);
+    shop.addObjectToShopBill(shkp, bell, price);
+    const expectedFee = expectedUnpaidUsageFee(bell, { chargeCount: 1 });
+
+    await rhack('a');
+    await rhack('b');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(bell.spe, 0);
+    assert.equal(shkp.debit, expectedFee);
+    assert.equal(bell.age, 123);
+    assert.equal(bell.known, true);
+    assert.equal(bell.actualKind, 'bell of opening');
+    assert.equal(shop.shopBillEntryForObject(shkp, bell).useup, false);
+    assert.match(game._pending_message, /unsettling shrill sound/);
+    assert.doesNotMatch(game._pending_message, /Nothing happens/);
+});
+
+test('zero-charge Bell of Opening on invocation square identifies without billing or priming', async () => {
+    const { shkp } = installCommandShopState();
+    const bell = bellOfOpening(30516, 'b', 0);
+    game.inventory = [bell];
+    game.level.invocationPosition = { x: 5, y: 5 };
+    game.moves = 124;
+    const price = shop.shopItemPrice(bell, 5, 5);
+    shop.addObjectToShopBill(shkp, bell, price);
+
+    await rhack('a');
+    await rhack('b');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(bell.spe, 0);
+    assert.equal(shkp.debit || 0, 0);
+    assert.equal(bell.age, undefined);
+    assert.equal(bell.known, true);
+    assert.equal(bell.actualKind, 'bell of opening');
+    assert.equal(shop.shopBillEntryForObject(shkp, bell).useup, false);
+    assert.match(game._pending_message, /But it makes no sound/);
+    assert.doesNotMatch(game._pending_message, /Usage fee|zorkmid/);
+});
+
+test('cursed charged Bell of Opening on invocation square bills without priming', async () => {
+    const { shkp } = installCommandShopState();
+    const bell = { ...bellOfOpening(30517, 'b', 1), cursed: true, blessed: false };
+    game.inventory = [bell];
+    game.level.invocationPosition = { x: 5, y: 5 };
+    game.moves = 125;
+    const price = shop.shopItemPrice(bell, 5, 5);
+    shop.addObjectToShopBill(shkp, bell, price);
+    const expectedFee = expectedUnpaidUsageFee(bell, { chargeCount: 1 });
+
+    await rhack('a');
+    await rhack('b');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(bell.spe, 0);
+    assert.equal(shkp.debit, expectedFee);
+    assert.equal(bell.age ?? bell.invocationAge ?? bell._invocation_rung_turn, undefined);
+    assert.equal(shop.shopBillEntryForObject(shkp, bell).useup, false);
+    assert.match(game._pending_message, new RegExp(`Usage fee, ${expectedFee} zorkmids`));
+    assert.doesNotMatch(game._pending_message, /unsettling shrill sound/);
 });
 
 test('tipping into an unpaid unknown bag of tricks bills target before locked source checks', async () => {
