@@ -1307,7 +1307,7 @@ const WISH_TOOL_APPEARANCES = new Map([
     ['magic harp', 'harp'], ['drum of earthquake', 'drum'],
 ]);
 const WISH_TOOL_NAMEDESC_BOUNDS = new Map([
-    ['magic harp', 3], ['leash', 66],
+    ['magic harp', 3], ['leash', 66], ['lenses', 6],
 ]);
 const WISH_AMULET_NAMEDESC_BOUNDS = new Map([
     ['amulet of esp', 121],
@@ -4680,6 +4680,7 @@ const OBJECT_WEIGHTS = {
     'lamp': 20,
     'harp': 30,
     'leash': 12,
+    'lenses': 3,
     'lock pick': 4,
     'magic lamp': 20,
     'magic marker': 2,
@@ -9479,11 +9480,20 @@ function wishedInventoryPhrase(item, wishedQuan = 1) {
     const displayQuan = item.quan || wishedQuan;
     const article = item.unique ? 'the'
         : item.noArticle ? ''
-        : /^(?:.* )?(?:boots|gloves)$/.test(baseVisibleName) ? 'a pair of'
+        : pairArticleObjectName(baseVisibleName) ? 'a pair of'
         : /^[aeiou]/i.test(visibleName) ? 'an' : 'a';
     return displayQuan > 1 ? `${displayQuan} ${visibleName}`
         : article === 'a pair of' ? `a ${bucPrefix}pair of ${baseVisibleName}`
             : article ? `${article} ${visibleName}` : visibleName;
+}
+
+function pairArticleObjectName(name) {
+    const objectName = String(name || '').toLowerCase();
+    return objectName === 'lenses'
+        || objectName.endsWith('boots')
+        || objectName.endsWith('shoes')
+        || objectName.endsWith('gloves')
+        || objectName.startsWith('gauntlets');
 }
 
 function makeRandomWishObject() {
@@ -16655,6 +16665,7 @@ export const __shopBillingTestHooks = {
     shopBillEntryTotal,
     shopkeeperDebitPayment,
     shopkeeperCash,
+    shopBaseCost,
     shopItemPrice,
     shopPaymentCashDue,
     shopSaleableObject,
@@ -22824,7 +22835,7 @@ function containerObjectPhrase(obj) {
     if (count > 1) return `${count} ${name}`;
     if (obj.unique) return `the ${name}`;
     if (obj.noArticle) return name;
-    if (name.endsWith('boots') || name.endsWith('shoes') || name.endsWith('gloves') || name.startsWith('gauntlets'))
+    if (pairArticleObjectName(name))
         return `a pair of ${name}`;
     const article = /^[aeiou]/i.test(name) || name === 'orcish helm' ? 'an' : 'a';
     return `${article} ${name}`;
@@ -22880,7 +22891,7 @@ function pickupObjectPhrase(obj) {
     if (count > 1) return `${count} ${name}`;
     if (obj.unique) return `the ${name}`;
     if (obj.noArticle) return name;
-    if (name.endsWith('boots') || name.endsWith('shoes') || name.endsWith('gloves') || name.startsWith('gauntlets'))
+    if (pairArticleObjectName(name))
         return `a pair of ${name}`;
     const article = /^[aeiou]/i.test(name) || name === 'orcish helm' ? 'an' : 'a';
     return `${article} ${name}`;
@@ -24856,8 +24867,9 @@ function normalInventoryLine(item) {
     let suffix = '';
 
     if (cls === 'coin') return `$ - ${quan} gold piece${quan === 1 ? '' : 's'}`;
-    if (cls === 'armor' && !name.startsWith('pair of ')
-        && (name.endsWith('boots') || name.endsWith('shoes') || name.endsWith('gloves') || name.startsWith('gauntlets')))
+    if ((cls === 'armor' || (cls === 'tool' && kind === 'lenses'))
+        && !name.startsWith('pair of ')
+        && pairArticleObjectName(name))
         name = `pair of ${name}`;
     if (cls === 'tool' && kind === 'sack') name = `empty ${blessedState}sack`;
     if ((cls === 'wand' || item.tool === 'charges' || item.tool === 'magicMarker' || isChargedTool(item)) && item.spe != null && item.chargeKnown)
@@ -39450,7 +39462,7 @@ export async function rhack(_cmd) {
             const displayQuan = item.quan || wishedQuan;
             const article = item.unique ? 'the'
                 : item.noArticle ? ''
-                : /^(?:.* )?(?:boots|gloves)$/.test(baseVisibleName) ? 'a pair of'
+                : pairArticleObjectName(baseVisibleName) ? 'a pair of'
                 : /^[aeiou]/i.test(visibleName) ? 'an' : 'a';
             const displayPhrase = displayQuan > 1 ? `${displayQuan} ${visibleName}`
                 : article === 'a pair of' ? `a ${bucPrefix}pair of ${baseVisibleName}`

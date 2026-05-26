@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { rhack } from '../js/cmd.js';
+import { rhack, __shopBillingTestHooks as shop } from '../js/cmd.js';
 import { game, resetGame } from '../js/gstate.js';
 import { ROOM } from '../js/const.js';
 import { initRng } from '../js/rng.js';
@@ -308,6 +308,40 @@ test('wished object finalization recomputes stack weight', async () => {
     assert.equal(game.inventory[0].kind, 'dagger');
     assert.equal(game.inventory[0].quan, 2);
     assert.equal(game.inventory[0].owt, 20);
+});
+
+test('wished lenses use C pair naming, weight, and cost', async () => {
+    installWishState();
+    beginWishDirectly();
+    await submitWish('lenses');
+
+    const item = game.inventory[0];
+    assert.equal(item.kind, 'lenses');
+    assert.equal(item.actualKind, 'lenses');
+    assert.equal(item.quan, 1);
+    assert.equal(item.owt, 3);
+    assert.match(item.line, /a pair of lenses/);
+    assert.match(game._pending_message, /a pair of lenses/);
+    assert.equal(shop.shopBaseCost(item), 80);
+
+    item.line = '';
+    await rhack('i');
+    const overlayText = (game._overlay_lines || []).map(line => line[2]).join('\n');
+    assert.match(overlayText, /a pair of lenses/);
+    assert.doesNotMatch(overlayText, /a lenses/);
+});
+
+test('pair of lenses wish remains one non-mergeable object', async () => {
+    installWishState();
+    beginWishDirectly();
+    await submitWish('2 pair of lenses');
+
+    const item = game.inventory[0];
+    assert.equal(item.kind, 'lenses');
+    assert.equal(item.actualKind, 'lenses');
+    assert.equal(item.quan, 1);
+    assert.match(item.line, /a pair of lenses/);
+    assert.doesNotMatch(item.line, /2 lenses/);
 });
 
 test('signed wish charge suffix is invalid and stripped like C', async () => {
