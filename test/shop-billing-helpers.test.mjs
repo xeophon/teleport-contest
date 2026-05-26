@@ -6738,6 +6738,34 @@ test('queued shop payment stops after selected entries become unaffordable', () 
     assert.equal(shkp.billct, 1);
 });
 
+test('pay command separates used-up and unpaid sections in the itemized menu', async () => {
+    const { shkp } = installCommandShopState();
+    const partlyUsed = { ...dagger(8995, 'a'), quan: 2, line: 'a - 2 +0 daggers' };
+    const costly = dagger(8996, 'b');
+    game.inventory = [partlyUsed, costly];
+    game._goldCount = 50;
+    shop.addObjectToShopBill(shkp, costly, 30);
+    shop.addObjectToShopBill(shkp, partlyUsed, 10);
+    partlyUsed.quan = 1;
+
+    await rhack('p');
+
+    assert.equal(game._command_mode, 'payMenu');
+    let lines = (game._overlay_lines || []).map(row => row[2]);
+    const usedHeader = lines.indexOf('Used up item:');
+    const unpaidHeader = lines.indexOf('Unpaid items:');
+    assert.notEqual(usedHeader, -1);
+    assert.ok(unpaidHeader > usedHeader);
+    assert.match(lines[usedHeader + 1], /^a -\s*5 Zm,/);
+    assert.match(lines[unpaidHeader + 1], /^b -\s*30 Zm,/);
+    assert.match(lines[unpaidHeader + 2], /^c -\s*5 Zm,/);
+
+    await rhack('b');
+
+    lines = (game._overlay_lines || []).map(row => row[2]);
+    assert.match(lines[unpaidHeader + 1], /^b \+\s*30 Zm,/);
+});
+
 test('payable debts split partly used stacks into used and intact bill portions', () => {
     const { shkp } = installShopState();
     const stack = { ...dagger(9001, 'd'), quan: 3, line: 'd - 3 +0 daggers' };

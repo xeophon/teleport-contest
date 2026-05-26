@@ -22960,6 +22960,12 @@ function shopPaymentEntryRank(entry) {
     return 2;
 }
 
+function shopPaymentEntryIsUsedUp(entry) {
+    return entry?.billPortion === 'partlyUsedUp'
+        || entry?.billPortion === 'fullyUsedUp'
+        || !!entry?.usedUpBill;
+}
+
 function shopPaymentEntryCompare(a, b) {
     const rank = shopPaymentEntryRank(a) - shopPaymentEntryRank(b);
     if (rank) return rank;
@@ -23222,6 +23228,28 @@ function finishShopPaymentSelection(shkp, selected) {
         stoppedShort,
         message: stopMessage,
     };
+}
+
+function shopPaymentMenuRows(entries, width) {
+    const rows = [[0, 41, 'Pay for which items?', 1]];
+    let row = 2;
+    const hasUsedUpSection = shopPaymentEntryIsUsedUp(entries[0]);
+    if (hasUsedUpSection) {
+        const plural = entries[1] && shopPaymentEntryIsUsedUp(entries[1]) ? 's' : '';
+        rows.push([row++, 41, `Used up item${plural}:`]);
+    }
+    for (let i = 0; i < entries.length; i++) {
+        const entry = entries[i];
+        if (hasUsedUpSection && i > 0 && shopPaymentEntryIsUsedUp(entries[i - 1]) && !shopPaymentEntryIsUsedUp(entry)) {
+            const plural = i < entries.length - 1 ? 's' : '';
+            rows.push([row++, 41, `Unpaid item${plural}:`]);
+        }
+        const price = String(entry.price).padStart(width, ' ');
+        entry.payMenuRow = row;
+        rows.push([row++, 41, `${entry.letter} - ${price} Zm, ${entry.name}`]);
+    }
+    rows.push([row, 41, '(end)']);
+    return rows;
 }
 
 function shopkeeperObjectivePronoun(shkp) {
@@ -29963,7 +29991,7 @@ export async function rhack(_cmd) {
         const entry = entries[index];
         if (!entry) return;
         entry.selected = !entry.selected;
-        const row = (game._overlay_lines || []).find(line => line[0] === index + 2 && line[1] === 41);
+        const row = (game._overlay_lines || []).find(line => line[0] === (entry.payMenuRow ?? index + 2) && line[1] === 41);
         if (row) {
             const price = String(entry.price).padStart(game._pay_menu_width || 1, ' ');
             row[2] = `${entry.letter} ${entry.selected ? '+' : '-'} ${price} Zm, ${entry.name}`;
@@ -44010,16 +44038,11 @@ export async function rhack(_cmd) {
             return;
         }
         const width = String(Math.max(...entries.map(entry => entry.price))).length;
-        const rows = [[0, 41, 'Pay for which items?', 1]];
-        for (let i = 0; i < entries.length; i++) {
-            const entry = entries[i];
-            rows.push([i + 2, 41, `${entry.letter} - ${String(entry.price).padStart(width, ' ')} Zm, ${entry.name}`]);
-        }
-        rows.push([entries.length + 2, 41, '(end)']);
+        const rows = shopPaymentMenuRows(entries, width);
         game._pay_menu_items = entries;
         game._pay_menu_width = width;
         game._pay_shopkeeper = shkp;
-        setOverlay(rows, entries.length + 3, false, 41);
+        setOverlay(rows, Math.max(...rows.map(([row]) => row)) + 1, false, 41);
         game._command_mode = 'payMenu';
         return;
     }
