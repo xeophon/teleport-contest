@@ -16548,11 +16548,13 @@ function addTippedContainerObjectToShopBill(container, obj) {
     return addContainerTakeoutObjectToShopBill(container, obj, obj);
 }
 
-function lostShopMerchandiseValueForObject(source, obj, shkp, seen = new Set()) {
+function lostShopMerchandiseValueForObject(source, obj, shkp, seen = new Set(), options = {}) {
     if (!source || !obj || !shkp || seen.has(obj)) return 0;
     seen.add(obj);
     if (shopBillableGold(obj))
-        return Math.max(1, Math.trunc(Number(obj.quan || 1)));
+        return (options.topLevel !== false || options.includeContainedGold !== false)
+            ? Math.max(1, Math.trunc(Number(obj.quan || 1)))
+            : 0;
 
     let value = 0;
     const entry = shopBillEntryForObject(shkp, obj);
@@ -16564,7 +16566,10 @@ function lostShopMerchandiseValueForObject(source, obj, shkp, seen = new Set()) 
     }
 
     for (const child of globContents(obj))
-        value += lostShopMerchandiseValueForObject(source, child, shkp, seen);
+        value += lostShopMerchandiseValueForObject(source, child, shkp, seen, {
+            ...options,
+            topLevel: false,
+        });
     return value;
 }
 
@@ -16634,7 +16639,9 @@ function shipObjectShopDebt(obj, x, y, { shopFloorObj = false, silent = false } 
 function billLostMagicBagShopItem(source, obj) {
     const shkp = shopFloorContainerShopkeeper(source);
     if (!shkp || !obj) return 0;
-    const value = lostShopMerchandiseValueForObject(source, obj, shkp);
+    const value = lostShopMerchandiseValueForObject(source, obj, shkp, new Set(), {
+        includeContainedGold: false,
+    });
     return chargeShopkeeperForLostMerchandise(shkp, value);
 }
 

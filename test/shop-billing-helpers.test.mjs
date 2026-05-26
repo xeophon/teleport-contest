@@ -7325,6 +7325,66 @@ test('tipping lost merchandise from a cursed shop-floor magic bag charges debt',
     assert.equal(shkp.billct, 0);
 });
 
+test('tipping lost container from a cursed shop-floor magic bag ignores contained gold', () => {
+    const { shkp } = installShopState();
+    initRng(17);
+    const source = bagOfHolding(69161);
+    source.cursed = true;
+    source.ox = 5;
+    source.oy = 5;
+    const nested = putObjectInContainer(source, sack(69162));
+    putObjectInContainer(nested, goldPieces(69163, 17));
+    const expected = shop.shopItemPrice(nested, 5, 5);
+    game.level.objects = [source];
+
+    const messages = shop.tipContainerToFloor(source);
+
+    assert.match(messages.join(' '), /vanished/);
+    assert.match(messages.join(' '), new RegExp(`owe ${expected} zorkmids? for lost merchandise`));
+    assert.equal(shkp.debit, expected);
+    assert.notEqual(shkp.debit, expected + 17);
+    assert.equal(shkp.billct, 0);
+});
+
+test('tipping no-charge lost container with only gold from a cursed shop-floor magic bag does not bill', () => {
+    const { shkp } = installShopState();
+    initRng(17);
+    const source = bagOfHolding(69164);
+    source.cursed = true;
+    source.ox = 5;
+    source.oy = 5;
+    const nested = putObjectInContainer(source, sack(69165));
+    nested.no_charge = true;
+    putObjectInContainer(nested, goldPieces(69166, 17));
+    game.level.objects = [source];
+
+    const messages = shop.tipContainerToFloor(source);
+
+    assert.match(messages.join(' '), /vanished/);
+    assert.doesNotMatch(messages.join(' '), /lost merchandise/);
+    assert.equal(shkp.debit || 0, 0);
+    assert.equal(shkp.robbed || 0, 0);
+    assert.equal(shkp.billct, 0);
+});
+
+test('tipping direct gold lost from a cursed shop-floor magic bag still charges coin value', () => {
+    const { shkp } = installShopState();
+    initRng(17);
+    const source = bagOfHolding(69167);
+    source.cursed = true;
+    source.ox = 5;
+    source.oy = 5;
+    putObjectInContainer(source, goldPieces(69168, 17));
+    game.level.objects = [source];
+
+    const messages = shop.tipContainerToFloor(source);
+
+    assert.match(messages.join(' '), /vanished/);
+    assert.match(messages.join(' '), /owe 17 zorkmids? for lost merchandise/);
+    assert.equal(shkp.debit, 17);
+    assert.equal(shkp.billct, 0);
+});
+
 test('tipping unpaid lost merchandise from a cursed shop-floor magic bag removes bill row and consumes credit first', () => {
     const { shkp } = installShopState();
     initRng(17);
