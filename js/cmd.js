@@ -22759,14 +22759,17 @@ function shopBillEntryDisplayName(entry, obj, quantity = null, shkp = null) {
     return 'used-up object';
 }
 
-function outermostCarriedContainerForShopBillObject(obj) {
+function outermostShopBillContainerForObject(obj) {
     let top = obj;
     const seen = new Set();
     while (top?.container && !seen.has(top.container)) {
         seen.add(top);
         top = top.container;
     }
-    return top && top !== obj && (game.inventory || []).includes(top) ? top : null;
+    if (!top || top === obj) return null;
+    if ((game.inventory || []).includes(top) || (game.level?.objects || []).includes(top))
+        return top;
+    return null;
 }
 
 function shopContainerPaymentName(container, includesContainer = false) {
@@ -22774,6 +22777,8 @@ function shopContainerPaymentName(container, includesContainer = false) {
         .replace(/^empty /, '');
     if (includesContainer)
         return `${articleFor(`unpaid ${baseName}`)} and its contents`;
+    if ((game.level?.objects || []).includes(container))
+        return `the contents of the ${baseName}`;
     return `the contents of your ${baseName}`;
 }
 
@@ -22853,7 +22858,7 @@ function pushShopBillLedgerDebtEntries(shkp, entries, seenBillIds) {
             name: shopDebtItemName(obj),
             price,
         };
-        const topContainer = outermostCarriedContainerForShopBillObject(obj);
+        const topContainer = outermostShopBillContainerForObject(obj);
         if (topContainer) {
             addContainerPaymentBillItem(containerPaymentGroups, topContainer, obj, billEntry, price);
         } else if (globContents(obj).length) {

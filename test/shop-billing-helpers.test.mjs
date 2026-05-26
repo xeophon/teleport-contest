@@ -6948,3 +6948,78 @@ test('payable debts aggregate an unpaid carried container with its unpaid conten
     assert.equal(bag.unpaid, false);
     assert.equal(blade.unpaid, false);
 });
+
+test('payable debts aggregate unpaid contents in a floor container', () => {
+    const { shkp } = installShopState();
+    const box = shopFloorContainer(9440);
+    const blade = putObjectInContainer(box, dagger(9441));
+    const ration = putObjectInContainer(box, foodRation(9442));
+    game.level.objects = [box];
+    shop.addObjectToShopBill(shkp, blade, 10);
+    shop.addObjectToShopBill(shkp, ration, 45);
+
+    const entries = shop.collectPayableShopDebts(shkp);
+
+    assert.equal(entries.length, 1);
+    assert.equal(entries[0].billPortion, 'containerContents');
+    assert.equal(entries[0].containerPayment, true);
+    assert.equal(entries[0].item, box);
+    assert.equal(entries[0].price, 55);
+    assert.match(entries[0].name, /contents of the large box/);
+    assert.equal(entries[0].billItems.length, 2);
+});
+
+test('paying floor container contents clears every constituent bill row', () => {
+    const { shkp } = installShopState();
+    const box = shopFloorContainer(9450);
+    const blade = putObjectInContainer(box, dagger(9451));
+    const ration = putObjectInContainer(box, foodRation(9452));
+    game.level.objects = [box];
+    game._goldCount = 100;
+    shop.addObjectToShopBill(shkp, blade, 10);
+    shop.addObjectToShopBill(shkp, ration, 45);
+    const entries = shop.collectPayableShopDebts(shkp);
+
+    const payment = shop.finishShopPaymentSelection(shkp, entries);
+
+    assert.equal(payment.cashTotal, 55);
+    assert.equal(payment.removedLedgerBillCount, 2);
+    assert.equal(game._goldCount, 45);
+    assert.equal(shkp.billct, 0);
+    assert.equal(shkp.bill.length, 0);
+    assert.equal(shop.shopBillEntryForObject(shkp, blade), null);
+    assert.equal(shop.shopBillEntryForObject(shkp, ration), null);
+    assert.equal(blade.unpaid, false);
+    assert.equal(ration.unpaid, false);
+    assert.equal(box.contents.includes(blade), true);
+    assert.equal(box.contents.includes(ration), true);
+    assert.equal(game.level.objects.includes(box), true);
+});
+
+test('payable debts aggregate an unpaid floor container with its unpaid contents', () => {
+    const { shkp } = installShopState();
+    const box = shopFloorContainer(9460);
+    const blade = putObjectInContainer(box, dagger(9461));
+    game.level.objects = [box];
+    game._goldCount = 100;
+    shop.addObjectToShopBill(shkp, box, 2);
+    shop.addObjectToShopBill(shkp, blade, 10);
+
+    const entries = shop.collectPayableShopDebts(shkp);
+
+    assert.equal(entries.length, 1);
+    assert.equal(entries[0].billPortion, 'containerContents');
+    assert.equal(entries[0].price, 12);
+    assert.match(entries[0].name, /unpaid large box and its contents/);
+
+    const payment = shop.finishShopPaymentSelection(shkp, entries);
+
+    assert.equal(payment.cashTotal, 12);
+    assert.equal(payment.removedLedgerBillCount, 2);
+    assert.equal(game._goldCount, 88);
+    assert.equal(shkp.billct, 0);
+    assert.equal(shop.shopBillEntryForObject(shkp, box), null);
+    assert.equal(shop.shopBillEntryForObject(shkp, blade), null);
+    assert.equal(box.unpaid, false);
+    assert.equal(blade.unpaid, false);
+});
