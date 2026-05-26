@@ -7,12 +7,19 @@ import { ROOM } from '../js/const.js';
 import { initRng } from '../js/rng.js';
 import { mksobj } from '../js/mklev.js';
 
+const BELL = 358;
+const TOOL_CLASS = 12;
 const HORN_OF_PLENTY = 957;
 const CRYSTAL_BALL = 10088;
 const EXPENSIVE_CAMERA = 10082;
 const MAGIC_MARKER = 10084;
 const TINNING_KIT = 10170;
 const CAN_OF_GREASE = 10171;
+const MAGIC_FLUTE = 946;
+const FROST_HORN = 953;
+const FIRE_HORN = 955;
+const MAGIC_HARP = 10169;
+const DRUM_OF_EARTHQUAKE = 975;
 const BAG_OF_TRICKS = 10158;
 const MEAT_RING = 10164;
 const K_RATION = 10035;
@@ -252,6 +259,43 @@ test('mksobj initializes kelp frond quantity from C rnd(2)', () => {
     }
 
     assert.deepEqual([...quantities].sort(), [1, 2]);
+});
+
+test('mksobj initializes exact charged instruments with C charge ranges', () => {
+    const cases = [
+        [MAGIC_FLUTE, 4, 8],
+        [FROST_HORN, 4, 8],
+        [FIRE_HORN, 4, 8],
+        [MAGIC_HARP, 4, 8],
+        [DRUM_OF_EARTHQUAKE, 4, 8],
+        [HORN_OF_PLENTY, 3, 20],
+    ];
+
+    for (const [otyp, minSpe, maxSpe] of cases) {
+        installWishState(1);
+        const item = mksobj(otyp, true, false);
+        assert.equal(item.otyp, otyp);
+        assert.ok(item.spe >= minSpe && item.spe <= maxSpe, String(otyp));
+    }
+});
+
+test('random tool generation maps charged instrument rolls to concrete tools', () => {
+    const cases = [
+        [946, MAGIC_FLUTE, 4, 8],
+        [953, FROST_HORN, 4, 8],
+        [955, FIRE_HORN, 4, 8],
+        [957, HORN_OF_PLENTY, 3, 20],
+        [963, MAGIC_HARP, 4, 8],
+        [975, DRUM_OF_EARTHQUAKE, 4, 8],
+    ];
+
+    for (const [roll, otyp, minSpe, maxSpe] of cases) {
+        installWishState(1);
+        game._mkobj_tool_roll = roll;
+        const item = mksobj(TOOL_CLASS, true, false);
+        assert.equal(item.otyp, otyp, String(roll));
+        assert.ok(item.spe >= minSpe && item.spe <= maxSpe, String(roll));
+    }
 });
 
 test('normal-mode wish quantity keeps C merge caps', async () => {
@@ -537,6 +581,93 @@ test('plural wished camera tinning kit and grease remain one requested tool', as
     }
 });
 
+test('wished charged instruments use C object metadata rows', async () => {
+    const cases = [
+        ['magic flute', MAGIC_FLUTE, 'flute', 'magic flute', 4, 8, 5, 36],
+        ['frost horn', FROST_HORN, 'horn', 'frost horn', 4, 8, 18, 50],
+        ['fire horn', FIRE_HORN, 'horn', 'fire horn', 4, 8, 18, 50],
+        ['magic harp', MAGIC_HARP, 'harp', 'magic harp', 4, 8, 30, 50],
+        ['drum of earthquake', DRUM_OF_EARTHQUAKE, 'drum', 'drum of earthquake', 4, 8, 25, 25],
+        ['horn of plenty', HORN_OF_PLENTY, 'horn', 'horn of plenty', 3, 20, 18, 50],
+    ];
+
+    for (const [wish, otyp, kind, actualKind, minSpe, maxSpe, weight, cost] of cases) {
+        installWishState(3, { debug: false });
+        beginWishDirectly();
+        await submitWish(wish);
+
+        const item = game.inventory[0];
+        assert.equal(game._command_mode, null, wish);
+        assert.equal(item.otyp, otyp, wish);
+        assert.equal(item.cls, 'tool', wish);
+        assert.equal(item.kind, kind, wish);
+        assert.equal(item.actualKind, actualKind, wish);
+        assert.equal(item.quan, 1, wish);
+        assert.ok(item.spe >= minSpe && item.spe <= maxSpe, wish);
+        assert.equal(item.known, false, wish);
+        assert.equal(item.blessed, false, wish);
+        assert.equal(item.cursed, false, wish);
+        assert.equal(item.owt, weight, wish);
+        assert.equal(shop.shopBaseCost(item), cost, wish);
+        assert.match(item.line, new RegExp(kind), wish);
+    }
+});
+
+test('wish charge suffix applies through charged instrument metadata', async () => {
+    const cases = [
+        ['magic flute (1:3)', MAGIC_FLUTE, 'flute', 'magic flute', 5, 36],
+        ['frost horn (1:3)', FROST_HORN, 'horn', 'frost horn', 18, 50],
+        ['fire horn (1:3)', FIRE_HORN, 'horn', 'fire horn', 18, 50],
+        ['magic harp (1:3)', MAGIC_HARP, 'harp', 'magic harp', 30, 50],
+        ['drum of earthquake (1:3)', DRUM_OF_EARTHQUAKE, 'drum', 'drum of earthquake', 25, 25],
+        ['horn of plenty (1:3)', HORN_OF_PLENTY, 'horn', 'horn of plenty', 18, 50],
+    ];
+
+    for (const [wish, otyp, kind, actualKind, weight, cost] of cases) {
+        installWishState(3, { debug: false });
+        beginWishDirectly();
+        await submitWish(wish);
+
+        const item = game.inventory[0];
+        assert.equal(game._command_mode, null, wish);
+        assert.equal(item.otyp, otyp, wish);
+        assert.equal(item.kind, kind, wish);
+        assert.equal(item.actualKind, actualKind, wish);
+        assert.equal(item.spe, 3, wish);
+        assert.equal(item.recharged ?? 0, 0, wish);
+        assert.equal(item.owt, weight, wish);
+        assert.equal(shop.shopBaseCost(item), cost, wish);
+    }
+});
+
+test('plural wished charged instruments remain one requested tool', async () => {
+    const cases = [
+        ['2 magic flutes', MAGIC_FLUTE, 'flute', 'magic flute', 5, 36],
+        ['2 frost horns', FROST_HORN, 'horn', 'frost horn', 18, 50],
+        ['2 fire horns', FIRE_HORN, 'horn', 'fire horn', 18, 50],
+        ['2 magic harps', MAGIC_HARP, 'harp', 'magic harp', 30, 50],
+        ['2 drums of earthquake', DRUM_OF_EARTHQUAKE, 'drum', 'drum of earthquake', 25, 25],
+        ['2 horns of plenty', HORN_OF_PLENTY, 'horn', 'horn of plenty', 18, 50],
+    ];
+
+    for (const [wish, otyp, kind, actualKind, weight, cost] of cases) {
+        installWishState(3, { debug: false });
+        beginWishDirectly();
+        await submitWish(wish);
+
+        const item = game.inventory[0];
+        assert.equal(game._command_mode, null, wish);
+        assert.equal(item.otyp, otyp, wish);
+        assert.equal(item.kind, kind, wish);
+        assert.equal(item.actualKind, actualKind, wish);
+        assert.equal(item.quan, 1, wish);
+        assert.equal(item.owt, weight, wish);
+        assert.equal(shop.shopBaseCost(item), cost, wish);
+        assert.match(item.line, new RegExp(kind), wish);
+        assert.doesNotMatch(item.line, /^a - 2 /, wish);
+    }
+});
+
 test('empty wished horn of plenty zeroes charges after charge suffix parsing', async () => {
     installWishState(3, { debug: false });
     beginWishDirectly();
@@ -566,14 +697,35 @@ test('normal-mode wished wand of wishing ignores requested abuse charges', async
 test('wizard bell of opening wish follows C namedesc silver-bell path', async () => {
     installWishState();
     beginWishDirectly();
-    await submitWish('Bell of Opening');
+    await submitWish('Bell of Opening (1:3)');
 
     assert.equal(game._command_mode, null);
+    assert.equal(game.inventory[0].otyp, BELL);
     assert.equal(game.inventory[0].kind, 'silver bell');
     assert.equal(game.inventory[0].actualKind, 'bell of opening');
+    assert.equal(game.inventory[0].spe, 3);
+    assert.equal(game.inventory[0].recharged ?? 0, 0);
+    assert.equal(game.inventory[0].owt, 10);
+    assert.equal(shop.shopBaseCost(game.inventory[0]), 5000);
     assert.notEqual(game.inventory[0].unique, true);
     assert.match(game.inventory[0].line, /silver bell/);
     assert.equal(game.u.uconduct?.wisharti || 0, 0);
+});
+
+test('silver bell wish resolves through Bell of Opening namedesc path in wizard mode', async () => {
+    installWishState();
+    beginWishDirectly();
+    await submitWish('silver bell');
+
+    const item = game.inventory[0];
+    assert.equal(game._command_mode, null);
+    assert.equal(item.otyp, BELL);
+    assert.equal(item.kind, 'silver bell');
+    assert.equal(item.actualKind, 'bell of opening');
+    assert.equal(item.spe, 3);
+    assert.equal(item.owt, 10);
+    assert.equal(shop.shopBaseCost(item), 5000);
+    assert.match(item.line, /silver bell/);
 });
 
 test('wizard wishes create real unique invocation candelabrum and book objects', async () => {

@@ -1047,6 +1047,10 @@ const FLINT = 10166;
 const LOCK_PICK = 10167;
 const WOODEN_HARP = 10168;
 const MAGIC_HARP = 10169;
+const MAGIC_FLUTE = 946;
+const FROST_HORN = 953;
+const FIRE_HORN = 955;
+const DRUM_OF_EARTHQUAKE = 975;
 const LUCKSTONE = 10127;
 const TOUCHSTONE = FLINT_STONE;
 const BLINDFOLD = 10113;
@@ -1288,13 +1292,18 @@ const WISH_BASE_OBJECTS = new Map([
     ['magic marker', { otyp: MAGIC_MARKER, cls: 'tool', glyph: '(', kind: 'magic marker', actualKind: 'magic marker', plural: 'magic markers' }],
     ['lock pick', { otyp: LOCK_PICK, cls: 'tool', glyph: '(', kind: 'lock pick', actualKind: 'lock pick' }],
     ['wooden harp', { otyp: WOODEN_HARP, cls: 'tool', glyph: '(', kind: 'harp', actualKind: 'wooden harp', known: false }],
-    ['magic harp', { otyp: MAGIC_HARP, cls: 'tool', glyph: '(', kind: 'harp', actualKind: 'magic harp', known: false }],
+    ['magic flute', { otyp: MAGIC_FLUTE, cls: 'tool', glyph: '(', kind: 'flute', actualKind: 'magic flute', known: false, plural: 'magic flutes' }],
+    ['frost horn', { otyp: FROST_HORN, cls: 'tool', glyph: '(', kind: 'horn', actualKind: 'frost horn', known: false, plural: 'frost horns' }],
+    ['fire horn', { otyp: FIRE_HORN, cls: 'tool', glyph: '(', kind: 'horn', actualKind: 'fire horn', known: false, plural: 'fire horns' }],
+    ['horn of plenty', { otyp: HORN_OF_PLENTY, cls: 'tool', glyph: '(', kind: 'horn', actualKind: 'horn of plenty', known: false, plural: 'horns of plenty' }],
+    ['magic harp', { otyp: MAGIC_HARP, cls: 'tool', glyph: '(', kind: 'harp', actualKind: 'magic harp', known: false, plural: 'magic harps' }],
+    ['drum of earthquake', { otyp: DRUM_OF_EARTHQUAKE, cls: 'tool', glyph: '(', kind: 'drum', actualKind: 'drum of earthquake', known: false, plural: 'drums of earthquake' }],
     ['mirror', { otyp: MIRROR, cls: 'tool', glyph: '(', kind: 'looking glass', actualKind: 'mirror' }],
     ['expensive camera', { otyp: EXPENSIVE_CAMERA, cls: 'tool', glyph: '(', kind: 'expensive camera', actualKind: 'expensive camera', plural: 'expensive cameras' }],
     ['tinning kit', { otyp: TINNING_KIT, cls: 'tool', glyph: '(', kind: 'tinning kit', actualKind: 'tinning kit', plural: 'tinning kits' }],
     ['can of grease', { otyp: CAN_OF_GREASE, cls: 'tool', glyph: '(', kind: 'can of grease', actualKind: 'can of grease', plural: 'cans of grease' }],
     ['blindfold', { otyp: BLINDFOLD, cls: 'tool', glyph: '(', kind: 'blindfold' }],
-    ['bell of opening', { otyp: BELL, cls: 'tool', glyph: '(', kind: 'silver bell', actualKind: 'bell of opening', known: false }],
+    ['bell of opening', { otyp: BELL, cls: 'tool', glyph: '(', kind: 'silver bell', actualKind: 'bell of opening', known: false, spe: 3 }],
     ['meat ring', { otyp: MEAT_RING, cls: 'food', glyph: '%', kind: 'meat ring', actualKind: 'meat ring', singular: 'meat ring', plural: 'meat rings', nutrition: 5, quan: 1 }],
     ['tin opener', { otyp: TIN_OPENER, cls: 'tool', glyph: '(', kind: 'tin opener', actualKind: 'tin opener' }],
     ['beartrap', { otyp: BEARTRAP, cls: 'tool', glyph: '(', kind: 'beartrap', actualKind: 'beartrap' }],
@@ -1341,7 +1350,9 @@ const WISH_BASE_NAMEDESC_BOUNDS = new Map([
     ['tallow candle', 21], ['tallow candles', 21],
     ['wax candle', 6], ['wax candles', 6], ['stethoscope', 26],
     ['magic marker', 16], ['lock pick', 61], ['wooden harp', 5],
-    ['magic harp', 3], ['mirror', 46], ['expensive camera', 16],
+    ['magic flute', 3], ['frost horn', 3], ['fire horn', 3],
+    ['horn of plenty', 3], ['magic harp', 3], ['drum of earthquake', 3],
+    ['mirror', 46], ['expensive camera', 16],
     ['tinning kit', 16], ['can of grease', 16],
     ['bell of opening', 1], ['blindfold', 51], ['leather gloves', 16],
     ['meat ring', 1], ['tin opener', 36], ['beartrap', 1],
@@ -1356,6 +1367,36 @@ const WISH_BASE_NAMEDESC_BOUNDS = new Map([
     ['crystal ball', 495], ['glass orb', 495],
 ]);
 const WISH_OBJECT_METADATA = new Map([
+    ['magic flute', {
+        otyp: MAGIC_FLUTE, cls: 'tool', glyph: '(', ocMerge: false,
+        ocCharged: true, ocNowish: false, ocProb: 2, unitWeight: 5,
+        unitCost: 36,
+    }],
+    ['frost horn', {
+        otyp: FROST_HORN, cls: 'tool', glyph: '(', ocMerge: false,
+        ocCharged: true, ocNowish: false, ocProb: 2, unitWeight: 18,
+        unitCost: 50,
+    }],
+    ['fire horn', {
+        otyp: FIRE_HORN, cls: 'tool', glyph: '(', ocMerge: false,
+        ocCharged: true, ocNowish: false, ocProb: 2, unitWeight: 18,
+        unitCost: 50,
+    }],
+    ['horn of plenty', {
+        otyp: HORN_OF_PLENTY, cls: 'tool', glyph: '(', ocMerge: false,
+        ocCharged: true, ocNowish: false, ocProb: 2, unitWeight: 18,
+        unitCost: 50,
+    }],
+    ['magic harp', {
+        otyp: MAGIC_HARP, cls: 'tool', glyph: '(', ocMerge: false,
+        ocCharged: true, ocNowish: false, ocProb: 2, unitWeight: 30,
+        unitCost: 50,
+    }],
+    ['drum of earthquake', {
+        otyp: DRUM_OF_EARTHQUAKE, cls: 'tool', glyph: '(', ocMerge: false,
+        ocCharged: true, ocNowish: false, ocProb: 2, unitWeight: 25,
+        unitCost: 25,
+    }],
     ['expensive camera', {
         otyp: EXPENSIVE_CAMERA, cls: 'tool', glyph: '(', ocMerge: false,
         ocCharged: true, ocNowish: false, ocProb: 15, unitWeight: 12,
@@ -4777,6 +4818,13 @@ const OBJECT_WEIGHTS = {
     'can of grease': 15,
     'credit card': 1,
     'expensive camera': 12,
+    'magic flute': 5,
+    'frost horn': 18,
+    'fire horn': 18,
+    'horn of plenty': 18,
+    'magic harp': 30,
+    'drum of earthquake': 25,
+    'bell of opening': 10,
     'apple': 2,
     'banana': 2,
     'boulder': 6000,
@@ -18901,7 +18949,7 @@ function isGlobWeightContainerObject(obj) {
 
 const WISHED_OBJECT_WEIGHT_OVERRIDES = new Map([
     ['bell', 30],
-    ['bell of opening', 50],
+    ['bell of opening', 10],
     ['book of the dead', 20],
     ['heavy iron ball', WT_IRON_BALL_BASE],
     ['horn of plenty', 18],
@@ -21357,6 +21405,7 @@ const WISH_EXPLICIT_SPELLING_ALIASES = new Map([
     ['lantern', 'brass lantern'],
     ['camera', 'expensive camera'],
     ['marker', 'magic marker'],
+    ['silver bell', 'bell of opening'],
     ['can opener', 'tin opener'],
     ['hook', 'grappling hook'],
     ['grappling iron', 'grappling hook'],
@@ -24329,6 +24378,12 @@ function shopBaseCost(obj) {
     else if (!kind && obj.otyp === EXPENSIVE_CAMERA) kind = 'expensive camera';
     else if (!kind && obj.otyp === TINNING_KIT) kind = 'tinning kit';
     else if (!kind && obj.otyp === CAN_OF_GREASE) kind = 'can of grease';
+    else if (!kind && obj.otyp === MAGIC_FLUTE) kind = 'magic flute';
+    else if (!kind && obj.otyp === FROST_HORN) kind = 'frost horn';
+    else if (!kind && obj.otyp === FIRE_HORN) kind = 'fire horn';
+    else if (!kind && obj.otyp === HORN_OF_PLENTY) kind = 'horn of plenty';
+    else if (!kind && obj.otyp === MAGIC_HARP) kind = 'magic harp';
+    else if (!kind && obj.otyp === DRUM_OF_EARTHQUAKE) kind = 'drum of earthquake';
     else if (!kind && obj.otyp === STETHOSCOPE) kind = 'stethoscope';
     else if (!kind && obj.otyp === MAGIC_MARKER) kind = 'magic marker';
     if ((obj.foodRoll || 1000) <= 140 || kind === 'tripe') kind = 'tripe ration';

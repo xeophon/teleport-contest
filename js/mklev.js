@@ -171,7 +171,11 @@ const STETHOSCOPE = 10083;
 const MAGIC_MARKER = 10084;
 const TINNING_KIT = 10170;
 const CAN_OF_GREASE = 10171;
+const MAGIC_FLUTE = 946;
+const FROST_HORN = 953;
+const FIRE_HORN = 955;
 const MAGIC_HARP = 10169;
+const DRUM_OF_EARTHQUAKE = 975;
 const CRYSTAL_BALL = 10088;
 const LUCKSTONE = 10127;
 const LOADSTONE = 10165;
@@ -4172,7 +4176,8 @@ function mksobj_init(otmp, otyp, artif) {
     } else if (otyp === CAN_OF_GREASE) {
         otmp.spe = rn1(21, 5);
         blessorcurse(otmp, 10);
-    } else if (otyp === MAGIC_HARP) {
+    } else if (otyp === MAGIC_FLUTE || otyp === FROST_HORN || otyp === FIRE_HORN
+        || otyp === MAGIC_HARP || otyp === DRUM_OF_EARTHQUAKE) {
         otmp.spe = rn1(5, 4);
     } else if (otyp === CRYSTAL_BALL) {
         otmp.spe = rn1(5, 3);
@@ -4227,8 +4232,14 @@ function mksobj_init(otmp, otyp, artif) {
                         : rn2(2) ? CORPSTAT_FEMALE : CORPSTAT_MALE;
         } else if ((roll > 944 && roll <= 946) || (roll > 951 && roll <= 955)
             || (roll > 961 && roll <= 963) || (roll > 973 && roll <= 975)) {
+            if (roll > 944 && roll <= 946) otmp.otyp = MAGIC_FLUTE;
+            else if (roll > 951 && roll <= 953) otmp.otyp = FROST_HORN;
+            else if (roll > 953 && roll <= 955) otmp.otyp = FIRE_HORN;
+            else if (roll > 961 && roll <= 963) otmp.otyp = MAGIC_HARP;
+            else if (roll > 973 && roll <= 975) otmp.otyp = DRUM_OF_EARTHQUAKE;
             otmp.spe = rn1(5, 4);
         } else if (roll > 955 && roll <= 957) {
+            otmp.otyp = HORN_OF_PLENTY;
             otmp.spe = rn1(18, 3);
         }
         if (roll > 975) mkobj_erosion_rolls();
@@ -4468,6 +4479,8 @@ export function object_display(otmp) {
     if (otyp === CRYSTAL_BALL) return { glyph: '(', color: displayColor ?? CLR_BRIGHT_CYAN };
     if (otyp === TOOL_CLASS || otyp === TIN_WHISTLE || otyp === TALLOW_CANDLE || otyp === WAX_CANDLE
         || otyp === EXPENSIVE_CAMERA || otyp === TINNING_KIT || otyp === CAN_OF_GREASE
+        || otyp === MAGIC_FLUTE || otyp === FROST_HORN || otyp === FIRE_HORN
+        || otyp === HORN_OF_PLENTY || otyp === MAGIC_HARP || otyp === DRUM_OF_EARTHQUAKE
         || otyp === MIRROR || otyp === STETHOSCOPE || otyp === MAGIC_MARKER || otyp === BELL
         || otyp === LENSES || otyp === CREDIT_CARD || otyp === SKELETON_KEY)
         return { glyph: '(', color: displayColor ?? CLR_MAGENTA };
