@@ -120,7 +120,7 @@ C `readobjnam` is a staged parser:
 4. create the object with `mksobj` or `mkobj`;
 5. apply C wish restrictions and object fixups.
 
-JS has a substantial independent parser in `js/cmd.js`. It covers many common qualifiers and special cases, but it is built from local regexes, local object maps, namedesc bounds, and parser fallbacks. The previous catch-all path where unrecognized input became a generic weapon has been removed: no-match wish results now keep the prompt in C-style retry mode and the fifth bad description falls back to a random object (`nethack-c/upstream/src/zap.c:6313`). Remaining parser drift is in C's staged fuzzy matching, object ranges, exact property limits, explicit non-object results, and final object fixups.
+JS has a substantial independent parser in `js/cmd.js`. It covers many common qualifiers and special cases, but it is built from local regexes, local object maps, namedesc bounds, and parser fallbacks. The previous catch-all path where unrecognized input became a generic weapon has been removed: no-match wish results now keep the prompt in C-style retry mode and the fifth bad description falls back to a random object (`nethack-c/upstream/src/zap.c:6313`). Charge suffixes now run through a common pre-lookup parser shaped like `readobjnam_parse_charges()`, including `(n)`, `(r:n)`, `(lit)`, trailing-text preservation, invalid suffix stripping, `SPE_LIM`, and wand-only recharge persistence. Remaining parser drift is in C's staged fuzzy matching, object ranges, exact property limits outside the covered suffix/`spe` cases, explicit non-object results, and final object fixups.
 
 ### Wish modifiers and restrictions
 
@@ -136,6 +136,7 @@ JS implements some of this, but not all:
 
 - `wishedSpeForItem` now has a narrow C-shaped class split: weapons, armor, weapon-tools, and charged rings use C's anti-abuse limits; wands and crystal balls cap negative requests; and non-`spe` objects collapse negative requests to zero while still taking curse state. It is still local policy because JS lacks a registry-backed `oc_charged`/class table for every object.
 - `applyWishedQuantity` now follows the C shape for common cases: non-mergeable wishes such as boots, wands, magic markers, and spellbooks stay at one, plural spellings resolve to the base object where covered, and candles/ammunition keep the C multigen caps. It is still local policy rather than full `objects[].oc_merge` metadata.
+- `parseWishedChargeSuffix` now mirrors C's last-parenthesis suffix stage for `(lit)`, `(n)`, and `(r:n)`. Parsed recharge counts are assigned to wands only; charged tools receive only the parsed `spe`, and known charge display uses the stored recharge counter instead of hard-coded zero.
 - non-wizard substitutions exist around `js/cmd.js:10240`, but they are parser-specific and not backed by `objects[].oc_nowish`.
 - light handling is field-based rather than connected to a generic `BURN_OBJECT` timer.
 - erosion is applied after wish parsing in `js/cmd.js:15056`, but generated erosion is already divergent.
@@ -166,7 +167,7 @@ JS has artifact definitions and helpers in `js/mklev.js:1497` and `js/mklev.js:3
 
 9. **Wish matching is not C fuzzy matching.** C `wishymatch`, ranges, namedesc lookup, alternate spellings, and artifact matching are more systematic than the JS local regex/table approach.
 
-10. **Wish property limits are partial.** Requested `spe` and quantity now have a narrow C-shaped implementation for common object classes, but requested charge suffixes, BUC, erosion, light, poison, lock/trap, full `oc_merge`/`oc_charged` metadata, and non-wishable substitutions are not all constrained by the C rules.
+10. **Wish property limits are partial.** Requested `spe`, quantity, and charge suffixes now have narrow C-shaped implementations for common object classes, but BUC, erosion, light, poison, lock/trap, full `oc_merge`/`oc_charged` metadata, and non-wishable substitutions are not all constrained by the C rules.
 
 11. **Artifact provenance is partial.** JS duplicate tracking exists, but not full `artiexist`/`artifact_origin`/`ONAME` semantics or `mk_artifact` eligibility.
 

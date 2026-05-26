@@ -223,3 +223,52 @@ test('non-debug wished spe follows C class constraints', async () => {
     assert.equal(game.inventory[0].spe, -1);
     assert.equal(game.inventory[0].cursed, true);
 });
+
+test('wish charge suffix applies before object naming', async () => {
+    installWishState();
+    beginWishDirectly();
+    await submitWish('wand of fire (1:3)');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.inventory[0].cls, 'wand');
+    assert.equal(game.inventory[0].wand, 'fire');
+    assert.equal(game.inventory[0].spe, 3);
+    assert.equal(game.inventory[0].recharged, 1);
+
+    installWishState();
+    beginWishDirectly();
+    await submitWish('magic marker (0:7) named dry');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.inventory[0].kind, 'magic marker');
+    assert.equal(game.inventory[0].oname, 'dry');
+    assert.equal(game.inventory[0].spe, 7);
+    assert.equal(game.inventory[0].recharged ?? 0, 0);
+});
+
+test('wish charge suffix ignores tool recharge count in normal mode', async () => {
+    installWishState(3, { debug: false });
+    beginWishDirectly();
+    await submitWish('horn of plenty (1:3)');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.inventory[0].actualKind, 'horn of plenty');
+    assert.equal(game.inventory[0].spe, 3);
+    assert.equal(game.inventory[0].recharged ?? 0, 0);
+});
+
+test('signed wish charge suffix is invalid and stripped like C', async () => {
+    installWishState(17);
+    beginWishDirectly();
+    await submitWish('magic marker');
+    const generatedSpe = game.inventory[0].spe;
+
+    installWishState(17);
+    beginWishDirectly();
+    await submitWish('magic marker (-3)');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.inventory[0].kind, 'magic marker');
+    assert.equal(game.inventory[0].spe, generatedSpe);
+    assert.equal(game.inventory[0].cursed || false, false);
+});

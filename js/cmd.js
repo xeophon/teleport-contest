@@ -133,7 +133,7 @@ function setWandCharges(item, charges) {
 }
 
 function refreshWandLine(item) {
-    if (/\(0:\d+\)/.test(String(item.line || ''))) item.chargeKnown = true;
+    if (/\(\d+:-?\d+\)/.test(String(item.line || ''))) item.chargeKnown = true;
     item.line = normalInventoryLine({ ...item, line: '' });
 }
 
@@ -9516,6 +9516,59 @@ function capWishSpe(spe) {
     return sign * Math.min(Math.abs(spe), SPE_LIM);
 }
 
+function parseWishedChargeSuffix(name) {
+    const text = String(name || '');
+    if (text.length <= 1) return { name: text, type: 'none' };
+    const open = text.lastIndexOf('(');
+    if (open < 0) return { name: text, type: 'none' };
+    const beforeCut = open > 0 && text[open - 1] === ' ' ? open - 1 : open;
+    let pos = open + 1;
+
+    if (text.slice(pos, pos + 4).toLowerCase() === 'lit)') {
+        return {
+            name: text.slice(0, beforeCut) + text.slice(pos + 4),
+            type: 'lit',
+        };
+    }
+
+    const readDigits = start => {
+        let end = start;
+        while (end < text.length && text.charCodeAt(end) >= 48 && text.charCodeAt(end) <= 57)
+            end++;
+        return {
+            value: end > start ? Number(text.slice(start, end)) : 0,
+            end,
+        };
+    };
+
+    let first = readDigits(pos);
+    let spe = first.value;
+    let recharged = 0;
+    pos = first.end;
+    if (text[pos] === ':') {
+        recharged = spe;
+        first = readDigits(pos + 1);
+        spe = first.value;
+        pos = first.end;
+    }
+    if (text[pos] !== ')') {
+        return {
+            name: text.slice(0, beforeCut),
+            type: 'invalid',
+            spe: 0,
+            recharged: 0,
+        };
+    }
+    if (!Number.isFinite(spe) || spe > SPE_LIM) spe = SPE_LIM;
+    if (!Number.isFinite(recharged) || recharged < 0 || recharged > 7) recharged = 7;
+    return {
+        name: text.slice(0, beforeCut) + text.slice(pos + 1),
+        type: 'charge',
+        spe,
+        recharged,
+    };
+}
+
 function wishedSpeForItem(item, spe) {
     let requested = Math.min(Math.abs(Math.trunc(Number(spe || 0))), SPE_LIM);
     let negative = spe < 0;
@@ -9958,7 +10011,7 @@ function musicalInstrumentKind(item) {
 }
 
 function instrumentDisplayName(item) {
-    return inventoryItemName(item).replace(/\s+\(0:\d+\)$/, '');
+    return inventoryItemName(item).replace(/\s+\(\d+:-?\d+\)$/, '');
 }
 
 function instrumentTheName(item) {
@@ -14057,6 +14110,11 @@ const CHARGED_TOOL_KINDS = new Set([
     'horn of plenty', 'bag of tricks', 'can of grease', 'magic flute', 'magic harp',
     'frost horn', 'fire horn', 'drum of earthquake',
 ]);
+
+function isChargedTool(item) {
+    if (!(item?.cls === 'tool' || item?.otyp === TOOL_CLASS || item?.glyph === '(')) return false;
+    return CHARGED_TOOL_KINDS.has(toolChargeKind(item));
+}
 
 function isRechargeableTool(item) {
     if (!(item?.cls === 'tool' || item?.otyp === TOOL_CLASS || item?.glyph === '(')) return false;
@@ -19824,15 +19882,16 @@ function wishedBaseObjectFromName(lowerName, qualifiers = {}, originalName = low
         return Object.assign(otmp, baseFields, { wishedfor: true });
     }
 
-    const wandWish = lowerName.match(/^wand of ([a-z ]+?)(?:\s+\((?:(\d+):)?(\d+)\))?$/);
+    const wandWish = lowerName.match(/^wand of ([a-z ]+?)$/);
     if (wandWish && WAND_NAME_TO_INDEX.has(wandWish[1])) {
         const wand = wandWish[1];
         const wandIndex = WAND_NAME_TO_INDEX.get(wand);
         rn2(WAND_WISH_NAMEDESC_BOUNDS.get(wand));
         game._mkobj_wand_index = wandIndex;
         const otmp = mksobj(WAND_CLASS, true, false);
-        let spe = wandWish[3] ? capWishSpe(Number(wandWish[3])) : otmp.spe;
-        let recharged = wandWish[2] ? Math.min(Number(wandWish[2]), 7) : 0;
+        const chargeSuffix = !!qualifiers.wishChargeSuffix;
+        let spe = chargeSuffix ? capWishSpe(Number(qualifiers.wishChargeSpe || 0)) : otmp.spe;
+        let recharged = chargeSuffix ? Math.min(Math.max(0, Math.trunc(Number(qualifiers.wishRecharged || 0))), 7) : 0;
         let ignoreRequestedSpe = false;
         if (wand === 'wishing' && !game.flags?.debug) {
             spe = rn2(10) ? -1 : 0;
@@ -19852,7 +19911,7 @@ function wishedBaseObjectFromName(lowerName, qualifiers = {}, originalName = low
             known: false,
             wishedfor: true,
             _wish_ignore_requested_spe: ignoreRequestedSpe,
-            _wish_spe_from_suffix: wandWish[3] != null,
+            _wish_spe_from_suffix: chargeSuffix,
         });
     }
 
@@ -23974,14 +24033,15 @@ function identifiedInventoryLine(item) {
             || (item.wandIndex != null ? IDENTIFIED_WAND_NAMES[item.wandIndex] : '')
             || String(item.kind || '').replace(/^wand of /, '')
             || 'nothing';
-        phrase = `wand of ${raw}${item.spe == null ? '' : ` (0:${item.spe})`}`;
+        phrase = `wand of ${raw}${identifiedChargeSuffix(item)}`;
     } else if (cls === 'tool') {
         const raw = pickupObjectName(item);
+        const chargeSuffix = isChargedTool(item) ? identifiedChargeSuffix(item) : '';
         phrase = item.tool === 'magicMarker' || item.kind === 'magic marker'
-            ? `magic marker${item.spe == null ? '' : ` (0:${item.spe})`}`
+            ? `magic marker${identifiedChargeSuffix(item)}`
             : item.kind === 'sack'
                 ? `empty ${buc} sack`
-            : `${buc} ${raw}`;
+            : `${buc} ${raw}${chargeSuffix}`;
     } else if (cls === 'food' || item.otyp === FOOD_CLASS) {
         let name = pickupObjectName(item);
         if (String(item.kind || '').startsWith('tin:')) {
@@ -24043,6 +24103,8 @@ function identifyInventoryItem(item) {
         if (raw) item.kind = `ring of ${raw}`;
     } else if (item.cls === 'wand' || item.otyp === WAND_CLASS) {
         item.chargeKnown = true;
+    } else if (isChargedTool(item)) {
+        item.chargeKnown = true;
     }
     item.line = identifiedInventoryLine(item);
 }
@@ -24087,8 +24149,8 @@ function normalInventoryLine(item) {
         && (name.endsWith('boots') || name.endsWith('shoes') || name.endsWith('gloves') || name.startsWith('gauntlets')))
         name = `pair of ${name}`;
     if (cls === 'tool' && kind === 'sack') name = `empty ${blessedState}sack`;
-    if ((cls === 'wand' || item.tool === 'charges' || item.tool === 'magicMarker') && item.spe != null && item.chargeKnown)
-        name = `${name} (0:${item.spe})`;
+    if ((cls === 'wand' || item.tool === 'charges' || item.tool === 'magicMarker' || isChargedTool(item)) && item.spe != null && item.chargeKnown)
+        name = `${name}${identifiedChargeSuffix(item)}`;
 
     if (cls === 'weapon' || item.wielded || item.alternate) {
         const spe = item.spe ?? 0;
@@ -24136,8 +24198,14 @@ function normalInventoryLine(item) {
 
 function wandChargeSuffix(item, charges = item?.spe) {
     if (charges == null) return '';
-    const chargesKnown = item.chargeKnown || /\(0:\d+\)/.test(String(item.line || ''));
-    return chargesKnown ? ` (0:${charges})` : '';
+    const chargesKnown = item.chargeKnown || /\(\d+:-?\d+\)/.test(String(item.line || ''));
+    return chargesKnown ? identifiedChargeSuffix(item, charges) : '';
+}
+
+function identifiedChargeSuffix(item, charges = item?.spe) {
+    if (charges == null) return '';
+    const recharged = Math.max(0, Math.trunc(Number(item?.recharged || 0)));
+    return ` (${recharged}:${charges})`;
 }
 
 function learnObjectScore(section, name) {
@@ -38407,6 +38475,9 @@ export async function rhack(_cmd) {
                 fakeAmulet: false,
                 monsterGender: null,
                 zombifying: false,
+                wishChargeSuffix: false,
+                wishChargeSpe: 0,
+                wishRecharged: 0,
             };
             let wishedErosionIntensity = 0;
             for (;;) {
@@ -38558,18 +38629,18 @@ export async function rhack(_cmd) {
                 wishedQuanForced = true;
                 wishedName = wishedName.slice(quan[0].length);
             }
-            const litSuffix = wishedName.match(/\s*\(lit\)\s*$/i);
-            if (litSuffix) {
+            const chargeSuffix = parseWishedChargeSuffix(wishedName);
+            wishedName = chargeSuffix.name;
+            if (chargeSuffix.type === 'lit') {
                 wishedQualifiers.lightState = 1;
-                wishedName = wishedName.slice(0, litSuffix.index);
-            } else if (!/^wand of\b/i.test(wishedName)) {
-                const chargeSuffix = wishedName.match(/\s*\((-?\d+)\)\s*$/);
-                if (chargeSuffix) {
-                    const charge = Number(chargeSuffix[1]);
-                    wishedSpeNegative = charge < 0;
-                    wishedSpe = capWishSpe(Math.abs(charge));
-                    wishedName = wishedName.slice(0, chargeSuffix.index);
-                }
+            } else if (chargeSuffix.type === 'charge') {
+                wishedSpeNegative = false;
+                wishedSpe = capWishSpe(chargeSuffix.spe);
+                wishedQualifiers.wishChargeSuffix = true;
+                wishedQualifiers.wishChargeSpe = chargeSuffix.spe;
+                wishedQualifiers.wishRecharged = chargeSuffix.recharged;
+            } else if (chargeSuffix.type === 'invalid' && wishedSpe !== undefined) {
+                wishedSpe = 0;
             }
             const groupedWish = normalizeWishedGroupPhrase(wishedName, wishedQuan);
             wishedName = groupedWish.name;

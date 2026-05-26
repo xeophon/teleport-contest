@@ -89,6 +89,7 @@ The current audit source of truth is `docs/c-parity-audit/`.
 - Added a narrow C-shaped wish finalization slice: requested quantities now stay limited to mergeable object classes and C multigen caps, requested `spe` follows class rules for weapons, armor, weapon-tools, charged rings, wands, crystal balls, and non-`spe` objects, and wished crystal balls now use the proper tool initialization path.
 - Tightened floor fire source ownership: generic C floor fire catch-light remains unbilled, monster red dragon breath now uses non-hero floor-fire ownership, and hero-caused trap/ray floor destruction remains routed through used-up or robbed shop billing.
 - Added C-style wand engraving usage billing: engraving with a wand spends a charge before text entry, unpaid usage is billed from the post-spend charge count, last-charge engraving adds no usage fee, and cursed backfire preserves the wand as a used-up bill row.
+- Added C-style wish charge suffix parsing: `(lit)`, `(n)`, and `(r:n)` are parsed before object lookup, valid trailing text such as `named` is preserved, invalid signed/text suffixes are stripped like C, wand recharge counts persist, charged-tool recharge counts are ignored, and known charge display uses the stored recharge count.
 - Latest verified public score: `44/44`.
 
 ## Current Priorities
@@ -103,7 +104,7 @@ The current audit source of truth is `docs/c-parity-audit/`.
    - Source notes: `docs/c-parity-audit/02-objects-wishing-readobjnam.md`.
    - Create one object metadata registry for type, class, material, weight, cost, probability, wishability, merge rules, and damage predicates.
    - Add a C-shaped object factory before deeper `mkobj`, wishing, artifact, and timer work.
-   - Continue replacing the independent wish parser with C-shaped matching, full `objects[].oc_merge` metadata, charge suffix parsing, explicit "nothing" handling, artifact provenance, non-wishable substitutions, and registry-backed object finalization rules.
+   - Continue replacing the independent wish parser with C-shaped matching, full `objects[].oc_merge`/`oc_charged` metadata, explicit "nothing" handling, artifact provenance, non-wishable substitutions, and registry-backed object finalization rules.
 
 3. Level generation lifecycle and special-level data.
    - Source notes: `docs/c-parity-audit/03-levelgen-specials-quest.md`.
@@ -140,7 +141,7 @@ Continue the shop ledger migration:
 2. Broaden shop-floor container take-out and tip beyond recursive billing into remaining lift preflight details, remaining inventory merge edge cases outside carried-bag partial put-in, and merge/destruction edge cases; continue magic-bag work through non-ordinary sources/targets and shared `obfree()`/`stolen_value()` debt naming.
 3. Finish remaining `sellobj()` follow-ups: complete recursive `subfrombill()` integration, broken/container projectile impact edge cases, and shared-helper integration for less ordinary object transfers.
 4. Move payment toward a complete C `dopay()` model for containers and queued itemized selections.
-5. Continue wish finalization by replacing local parser/finalizer tables with registry-backed `oc_merge`, `oc_charged`, charge suffix, non-wishable substitution, and artifact provenance rules.
+5. Continue wish finalization by replacing local parser/finalizer tables with registry-backed `oc_merge`, `oc_charged`, non-wishable substitution, and artifact provenance rules.
 
 ## Verification
 
