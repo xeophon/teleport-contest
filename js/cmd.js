@@ -21468,6 +21468,48 @@ function isFloorTipSourceObject(obj) {
     return isTipContainerObject(obj) || isBagOfTricksObject(obj) || isHornOfPlentyObject(obj);
 }
 
+function tipSpillageKind(obj) {
+    const kind = objectKindKey(obj);
+    if (isCandleObject(obj) && obj.lamplit) return 'wax';
+    if ((isPotionOfOil(obj) && obj.lamplit)
+        || ((obj?.otyp === OIL_LAMP || kind === 'oil lamp') && (obj.age ?? 0) !== 0)
+        || ((obj?.otyp === MAGIC_LAMP || kind === 'magic lamp') && (obj.spe ?? 0) !== 0))
+        return 'oil';
+    if ((toolChargeKind(obj) === 'can of grease' || kind === 'can of grease') && (obj?.spe ?? 0) > 0)
+        return 'grease';
+    if (obj?.otyp === FOOD_RATION || obj?.otyp === LEMBAS_WAFER
+        || kind === 'food ration' || kind === 'cram ration' || kind === 'lembas wafer')
+        return 'crumbs';
+    if (obj?.cls === 'venom') return 'venom';
+    return '';
+}
+
+function isTipSpillageObject(obj) {
+    return !!tipSpillageKind(obj);
+}
+
+function isTipCommandObject(obj) {
+    return isTipSourceObject(obj) || isTipSpillageObject(obj);
+}
+
+function tipSpillageSurfacePhrase() {
+    const loc = game.level?.at?.(game.u?.ux, game.u?.uy);
+    if (loc?.typ === LAVAPOOL || loc?.typ === LAVAWALL) return { surface: 'lava', suffix: ' and immediately burns away' };
+    if (loc && (IS_POOL(loc.typ) || loc.typ === WATER || loc.typ === MOAT)) return { surface: 'water', suffix: ' and gradually dissipates' };
+    return { surface: 'floor', suffix: '' };
+}
+
+function tipSpillageObject(obj) {
+    const spillage = tipSpillageKind(obj);
+    if (!spillage) return ['Nothing happens.'];
+    const plural = spillage === 'crumbs';
+    const { surface, suffix } = tipSpillageSurfacePhrase();
+    const messages = [`Some ${spillage} ${plural ? 'spill' : 'spills'} onto the ${surface}${suffix}.`];
+    if ((toolChargeKind(obj) === 'can of grease' || objectKindKey(obj) === 'can of grease') && (obj?.spe ?? 0) > 0)
+        spendChargedToolUse(obj, messages);
+    return messages;
+}
+
 function isTipTargetContainer(obj) {
     return isTipContainerObject(obj) || isUnknownBagOfTricksObject(obj);
 }
@@ -22350,6 +22392,7 @@ function tipContainerIntoContainer(source, targetBox) {
     const messages = [contents.length === 1
         ? `An object tumbles into ${tipTargetPhrase(targetBox)}.`
         : `Objects tumble into ${tipTargetPhrase(targetBox)}.`];
+    let targetGone = false;
     for (const obj of contents) {
         removeContainedObject(source, obj);
         thawObjectTippedFromSource(source, obj);
@@ -22362,14 +22405,13 @@ function tipContainerIntoContainer(source, targetBox) {
         prepareTippedObjectForContainer(obj);
         if (isMagicBagObject(targetBox) && magicBagExplodesWithObject(obj)) {
             explodeMagicBagTransfer(targetBox, obj, messages, { tumble: true });
+            targetGone = true;
             break;
         }
         add_to_container(targetBox, obj);
     }
-    if (Array.isArray(source.contents)) source.contents.length = 0;
-    if (Array.isArray(source.cobj)) source.cobj.length = 0;
     refreshTipContainerWeight(source);
-    refreshTipContainerWeight(targetBox);
+    if (!targetGone) refreshTipContainerWeight(targetBox);
     const lostMessage = lostShopMerchandiseMessage(lostMerchandise);
     if (lostMessage) messages.push(lostMessage);
     return messages;
@@ -40447,8 +40489,8 @@ export async function rhack(_cmd) {
     }
 
     if (game._command_mode === 'tipContainerObject') {
-        const containers = (game.inventory || []).filter(isTipSourceObject);
-        const letters = containers.map(item => item.letter).filter(Boolean).join('');
+        const tipObjects = (game.inventory || []).filter(isTipCommandObject);
+        const letters = tipObjects.map(item => item.letter).filter(Boolean).join('');
         if (ch === '\x1b' || ch === 'q' || ch === ' ' || ch === '\r' || ch === '\n') {
             game._overlay_lines = null;
             game._overlay_hide_status = 0;
@@ -40458,7 +40500,7 @@ export async function rhack(_cmd) {
         if (ch === '?' || ch === '*') {
             const rows = [[0, 40, 'Tip what?', 1]];
             let row = 2;
-            for (const item of containers) {
+            for (const item of tipObjects) {
                 rows.push([row++, 40, normalInventoryLine(item)]);
                 if (row >= 23) break;
             }
@@ -40466,7 +40508,7 @@ export async function rhack(_cmd) {
             setOverlay(rows, Math.max(4, row + 1), false, 40);
             return;
         }
-        const tipTarget = containers.find(item => item.letter === ch);
+        const tipTarget = tipObjects.find(item => item.letter === ch);
         if (!tipTarget) {
             await setMessage(`What do you want to tip? [${getobjPromptLetters(letters)} or ?*]`);
             return;
@@ -40519,6 +40561,14 @@ export async function rhack(_cmd) {
                 if (beginTipDestinationSelection(tipTarget)) return;
                 game._tip_container_object = null;
                 const messages = await tipContainerContents(tipTarget);
+                await setMessage(messages.join('  '), messages.length > 1);
+                game.context.move = 1;
+                game._command_mode = null;
+                return;
+            }
+            if (isTipSpillageObject(tipTarget)) {
+                game._tip_container_object = null;
+                const messages = tipSpillageObject(tipTarget);
                 await setMessage(messages.join('  '), messages.length > 1);
                 game.context.move = 1;
                 game._command_mode = null;
@@ -41258,15 +41308,15 @@ export async function rhack(_cmd) {
                     game._command_mode = 'tipConfirm';
                     return;
                 }
-                const carriedContainers = (game.inventory || []).filter(isTipSourceObject);
-                if (carriedContainers.length === 1) {
-                    game._tip_container_object = carriedContainers[0];
-                    await setMessage(`Tip ${inventoryItemName(carriedContainers[0])}? [ynq] (q)`);
+                const carriedTipObjects = (game.inventory || []).filter(isTipCommandObject);
+                if (carriedTipObjects.length === 1) {
+                    game._tip_container_object = carriedTipObjects[0];
+                    await setMessage(`Tip ${inventoryItemName(carriedTipObjects[0])}? [ynq] (q)`);
                     game._command_mode = 'tipConfirm';
                     return;
                 }
-                if (carriedContainers.length > 1) {
-                    const letters = carriedContainers.map(item => item.letter).filter(Boolean).join('');
+                if (carriedTipObjects.length > 1) {
+                    const letters = carriedTipObjects.map(item => item.letter).filter(Boolean).join('');
                     await setMessage(`What do you want to tip? [${getobjPromptLetters(letters)} or ?*]`);
                     game._command_mode = 'tipContainerObject';
                     return;

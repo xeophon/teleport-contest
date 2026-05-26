@@ -1632,6 +1632,38 @@ test('applying unpaid can of grease bills usage and greases the selected object'
     assert.match(game._pending_message, /You cover a dagger with a thick layer of grease/);
 });
 
+test('tipping an unpaid can of grease spills first then bills one charge', async () => {
+    const { shkp } = installCommandShopState();
+    const grease = chargedTool(3096, 'can of grease', 'g', 4);
+    game.inventory = [grease];
+    shop.addObjectToShopBill(shkp, grease, 100);
+
+    await rhack('#');
+    for (const ch of 'tip') await rhack(ch);
+    await rhack('\n');
+
+    assert.equal(game._command_mode, 'tipConfirm');
+    assert.match(game._pending_message, /Tip a can of grease/);
+    assert.equal(grease.spe, 4);
+    assert.equal(shkp.debit || 0, 0);
+
+    await rhack('y');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(grease.spe, 3);
+    assert.equal(shkp.debit, 10);
+    assert.equal(shkp.billct, 1);
+    const entry = shop.shopBillEntryForObject(shkp, grease);
+    assert.ok(entry);
+    assert.equal(entry.useup, false);
+    assert.equal(shop.shopBillEntryTotal(entry), 100);
+    assert.equal(grease.unpaid, true);
+    assert.match(game._pending_message, /Some grease spills onto the floor\./);
+    assert.match(game._pending_message, /Usage fee, 10 zorkmids/);
+    assert.ok(game._pending_message.indexOf('Some grease spills') < game._pending_message.indexOf('Usage fee'));
+});
+
 test('grease target selection rejects inaccessible worn equipment without spending a charge', async () => {
     const { shkp } = installCommandShopState();
     const grease = chargedTool(3096, 'can of grease', 'g', 4);
@@ -6110,6 +6142,24 @@ test('unpaid trigger object destroyed by tipping into a carried magic bag remain
     assert.ok(entry);
     assert.equal(entry.useup, true);
     assert.equal(shop.shopBillEntryTotal(entry), 45);
+});
+
+test('tipping into a magic bag explosion leaves later source contents in source', () => {
+    installShopState();
+    const source = sack(6962, 's');
+    const target = bagOfHolding(6963, 'b');
+    const wand = putObjectInContainer(source, cancellationWand(6964));
+    const ration = putObjectInContainer(source, foodRation(6965));
+    game.u.uhp = 100;
+    game.inventory = [source, target];
+
+    const messages = shop.tipContainerIntoContainer(source, target);
+
+    assert.match(messages.join(' '), /magical explosion/);
+    assert.equal(source.contents.includes(wand), false);
+    assert.equal(source.contents.includes(ration), true);
+    assert.equal(ration.container, source);
+    assert.equal(game.inventory.includes(target), false);
 });
 
 test('putting part of an unpaid carried stack into a carried bag splits the bill row', () => {
