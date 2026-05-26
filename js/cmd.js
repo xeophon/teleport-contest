@@ -1174,6 +1174,8 @@ const CARRIED_DELAYED_FOOD_VICTUALS = new Map([
 ]);
 const DELAY_ONE_FOOD_VICTUALS = new Map([
     ['apple', { otyp: APPLE, delay: 1, finishName: 'apple' }],
+    ['cream pie', { otyp: CREAM_PIE, delay: 1, finishName: 'cream pie' }],
+    ['candy bar', { delay: 1, finishName: 'candy bar' }],
     ['fortune cookie', { otyp: FORTUNE_COOKIE, delay: 1, finishName: 'fortune cookie' }],
 ]);
 const ROTTABLE_NON_CORPSE_FOODS = new Set(['apple', 'carrot', 'pear', 'melon', 'orange', 'banana', 'kelp frond', 'lump of royal jelly']);
@@ -10995,7 +10997,9 @@ function recordFoodConduct(item) {
     if ((isCorpseItem(item) || isGlobFood(item) || /\bcorpse$/.test(kind)) && !veganCorpse) {
         conduct.unvegan = (conduct.unvegan || 0) + 1;
         conduct.unvegetarian = (conduct.unvegetarian || 0) + 1;
-    } else if (isEggItem(item) || isRoyalJelly(item) || kind === 'pancake' || kind === 'fortune cookie') {
+    } else if (isEggItem(item) || isRoyalJelly(item)
+        || kind === 'pancake' || kind === 'fortune cookie'
+        || kind === 'cream pie' || kind === 'candy bar') {
         conduct.unvegan = (conduct.unvegan || 0) + 1;
     }
 }
@@ -11161,7 +11165,8 @@ function delayedFoodVictualSpec(item) {
     const spec = CARRIED_DELAYED_FOOD_VICTUALS.get(kind);
     if (spec) return { ...spec, kind };
     for (const [entryKind, entrySpec] of CARRIED_DELAYED_FOOD_VICTUALS) {
-        if (item.otyp === entrySpec.otyp) return { ...entrySpec, kind: entryKind };
+        if (entrySpec.otyp != null && item.otyp === entrySpec.otyp)
+            return { ...entrySpec, kind: entryKind };
     }
     return null;
 }
@@ -11172,7 +11177,8 @@ function delayOneFoodVictualSpec(item) {
     const spec = DELAY_ONE_FOOD_VICTUALS.get(kind);
     if (spec) return { ...spec, kind };
     for (const [entryKind, entrySpec] of DELAY_ONE_FOOD_VICTUALS) {
-        if (item.otyp === entrySpec.otyp) return { ...entrySpec, kind: entryKind };
+        if (entrySpec.otyp != null && item.otyp === entrySpec.otyp)
+            return { ...entrySpec, kind: entryKind };
     }
     return null;
 }
@@ -11306,7 +11312,7 @@ function pauseDelayedFoodAfterChoke(touched, {
     floorObject = false,
     finishName = '',
 } = {}) {
-    if (remainingTurns <= 0) {
+    if (remainingTurns <= 1) {
         if (floorObject) consumeOneFloorObject(touched);
         else {
             removeInventoryItem(touched);

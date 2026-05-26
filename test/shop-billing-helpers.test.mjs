@@ -4606,6 +4606,59 @@ test('carried delay-one apple and fortune cookie finish without occupation', asy
     assert.equal(game._eating_turns_remaining || 0, 0);
 });
 
+test('carried delay-one cream pie and candy bar use victual path and animal-product conduct', async () => {
+    const cases = [
+        { kind: 'cream pie', letter: 'p', message: 'This cream pie is delicious!' },
+        { kind: 'candy bar', letter: 'c', message: 'This candy bar is delicious!' },
+    ];
+
+    for (const entry of cases) {
+        installNonShopFloorState();
+        const food = simpleFood(31883 + cases.indexOf(entry), entry.kind, entry.letter);
+        game.inventory = [food];
+
+        await rhack('e');
+        await rhack(entry.letter);
+
+        assert.equal(game._pending_message, entry.message, entry.kind);
+        assert.equal(game.inventory.includes(food), false, entry.kind);
+        assert.equal(game.u.uhunger, 1000, entry.kind);
+        assert.equal(game.u.uconduct?.food, 1, entry.kind);
+        assert.equal(game.u.uconduct?.unvegan, 1, entry.kind);
+        assert.equal(game.u.uconduct?.unvegetarian || 0, 0, entry.kind);
+        assert.equal(game._eating_turns_remaining || 0, 0, entry.kind);
+    }
+});
+
+test('recovered choking on one-bite candy bar consumes the food', async () => {
+    installCommandShopState();
+    game.u.uhunger = 1950;
+    const candy = simpleFood(31885, 'candy bar', 'c');
+    const amulet = {
+        id: 31886,
+        letter: 'm',
+        cls: 'amulet',
+        glyph: '"',
+        kind: 'amulet of magical breathing',
+        actualKind: 'amulet of magical breathing',
+        quan: 1,
+        worn: true,
+        line: 'm - an amulet of magical breathing (being worn)',
+    };
+    game.inventory = [candy, amulet];
+
+    await rhack('e');
+    await rhack('c');
+
+    assert.equal(game._pending_message, 'This candy bar is delicious!  You stuff yourself and then vomit voluminously.');
+    assert.equal(game.inventory.includes(candy), false);
+    assert.equal(game.u.uhunger, 1050);
+    assert.equal(game.context.move, 2);
+    assert.equal(game.u.uconduct?.unvegan, 1);
+    assert.equal(game._eating_turns_remaining || 0, 0);
+    assert.equal(game._eating_interrupted || 0, 0);
+});
+
 test('blind fortune cookie shows unreadable paper instead of a rumor', async () => {
     installNonShopFloorState();
     const cookie = simpleFood(31882, 'fortune cookie', 'f');
@@ -4688,13 +4741,21 @@ test('shop-floor delay-one food stacks bill the touched unit before immediate fi
     const cases = [
         { kind: 'apple', id: 31893, message: 'Delicious!  Must be a Macintosh!', hunger: 950 },
         { kind: 'fortune cookie', id: 31894, message: 'This fortune cookie is delicious!', hunger: 940, more: 1, conduct: 'unvegan' },
+        { kind: 'cream pie', id: 31895, message: 'This cream pie is delicious!', hunger: 1000, conduct: 'unvegan' },
+        { kind: 'candy bar', id: 31896, message: 'This candy bar is delicious!', hunger: 1000, conduct: 'unvegan' },
     ];
 
     for (const entry of cases) {
         const { shkp } = installCommandShopState();
+        const plurals = {
+            apple: 'apples',
+            'fortune cookie': 'fortune cookies',
+            'cream pie': 'cream pies',
+            'candy bar': 'candy bars',
+        };
         const stack = simpleFood(entry.id, entry.kind, undefined, {
             quan: 2,
-            plural: entry.kind === 'apple' ? 'apples' : 'fortune cookies',
+            plural: plurals[entry.kind],
         });
         delete stack.letter;
         delete stack.line;
