@@ -281,7 +281,10 @@ function dropCarriedObjectAtHero(item, messages = []) {
     if (Array.isArray(dropped.cobj)) dropped.cobj = [...dropped.cobj];
     normalizeContainedObjectParents(dropped);
     removeInventoryItem(item, item.quan || 1);
-    const placed = placeObjectOnFloorWithEffects(dropped, dropped.ox, dropped.oy, messages, 'drop');
+    const placed = placeObjectOnFloorWithEffects(dropped, dropped.ox, dropped.oy, messages, 'drop', {
+        usedUpShopBillOnDestroy: true,
+    });
+    if (!placed) clearObjectShopBillState(item);
     let shopSale = null;
     if (placed && !sellobjReturnUnpaidToShop(dropped, dropped.ox, dropped.oy)) {
         shopSale = beginDroppedPaidObjectSale(dropped, dropped.ox, dropped.oy);
@@ -21818,7 +21821,9 @@ function placeObjectOnFloorWithEffects(obj, x, y, messages, verb = 'drop', {
 }
 
 function placeTippedObjectOnFloor(obj, x, y, messages) {
-    return placeObjectOnFloorWithEffects(obj, x, y, messages, 'drop');
+    return placeObjectOnFloorWithEffects(obj, x, y, messages, 'drop', {
+        usedUpShopBillOnDestroy: true,
+    });
 }
 
 function tipContainerSimpleName(source) {
@@ -39761,7 +39766,10 @@ export async function rhack(_cmd) {
             normalizeContainedObjectParents(dropped);
             const floorMessages = [];
             let shopSale = null;
-            const consumedByFloor = earthFloorEffects(dropped, dropped.ox, dropped.oy, floorMessages, 'drop');
+            const consumedByFloor = earthFloorEffects(dropped, dropped.ox, dropped.oy, floorMessages, 'drop', {
+                usedUpShopBillOnDestroy: true,
+            });
+            if (consumedByFloor) clearObjectShopBillState(item);
             if (!consumedByFloor) {
                 game.level.objects.push(dropped);
                 if (!sellobjReturnUnpaidToShop(dropped, dropped.ox, dropped.oy))

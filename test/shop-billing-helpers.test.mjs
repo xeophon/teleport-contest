@@ -4,7 +4,7 @@ import test from 'node:test';
 import { burnFloorObjectsByFire, earthFloorEffects, finishForceLock, processCorpseTimers, processGlobShrinkTimers, processSpellbookStudyOccupation, rhack, __shopBillingTestHooks as shop } from '../js/cmd.js';
 import { game, resetGame } from '../js/gstate.js';
 import { initRng } from '../js/rng.js';
-import { CANDLESHOP, DB_EAST, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, HOLE, LAVAPOOL, ROOM, ROOMOFFSET, SHOPBASE } from '../js/const.js';
+import { CANDLESHOP, DB_EAST, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, HOLE, LAVAPOOL, POOL, ROOM, ROOMOFFSET, SHOPBASE } from '../js/const.js';
 
 const BRASS_LANTERN = 226;
 const OIL_LAMP = 227;
@@ -13,6 +13,7 @@ const POT_OIL = 252;
 const CRYSTAL_BALL = 10088;
 const CANDELABRUM_OF_INVOCATION = 10076;
 const BELL = 358;
+const POT_ACID = 238;
 const INVENTORY_LETTERS = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
 const SCR_SCARE_MONSTER = 279;
 const LOADSTONE = 10165;
@@ -94,6 +95,16 @@ function installSeenHoleAtHero() {
 
 function queuedImpactDropsFor(level = { dnum: 0, dlevel: 2 }) {
     return game._impact_drop_migrations?.get(`${level.dnum}:${level.dlevel}`) || [];
+}
+
+function assertUsedUpBillForObject(shkp, obj, price) {
+    const entry = shop.shopBillEntryForObject(shkp, obj);
+    assert.ok(entry);
+    assert.equal(entry.useup, true);
+    assert.equal(shop.shopBillEntryTotal(entry), price);
+    assert.equal(shkp.billct, 1);
+    assert.equal((game._usedUpShopBills || []).some(bill =>
+        String(bill.bo_id) === String(entry.bo_id) && bill.price === price), true);
 }
 
 function makeCrystalBallGazeDeterministic() {
@@ -811,6 +822,39 @@ function waterPotion(id, letter = 'w', { blessed = false, cursed = false, bknown
         oy: 5,
         letter,
         line: `${letter} - ${quan > 1 ? `${quan} potions of ${cursed ? 'unholy ' : blessed ? 'holy ' : ''}water` : `a potion of ${cursed ? 'unholy ' : blessed ? 'holy ' : ''}water`}`,
+    };
+}
+
+function acidPotion(id, letter = 'a', quan = 1) {
+    return {
+        id,
+        otyp: POT_ACID,
+        cls: 'potion',
+        glyph: '!',
+        kind: 'acid',
+        actualKind: 'potion of acid',
+        potionIndex: 23,
+        quan,
+        ox: 5,
+        oy: 5,
+        letter,
+        line: `${letter} - ${quan > 1 ? `${quan} potions of acid` : 'a potion of acid'}`,
+    };
+}
+
+function healingPotion(id, letter = 'h', quan = 1) {
+    return {
+        id,
+        cls: 'potion',
+        glyph: '!',
+        kind: 'healing',
+        actualKind: 'potion of healing',
+        potionIndex: 1,
+        quan,
+        ox: 5,
+        oy: 5,
+        letter,
+        line: `${letter} - ${quan > 1 ? `${quan} potions of healing` : 'a potion of healing'}`,
     };
 }
 
@@ -4264,6 +4308,65 @@ test('ordinary carried-container drop does not run hard-landing impact', async (
     assert.equal(dropped.cknown, true);
 });
 
+test('ordinary unpaid carried drop into lava preserves a used-up bill row', async () => {
+    const { shkp } = installCommandShopState();
+    game.level.at = () => ({ roomno: ROOMOFFSET, typ: LAVAPOOL });
+    const ration = foodRation(51202, 'a');
+    game.inventory = [ration];
+    shop.addObjectToShopBill(shkp, ration, 45);
+
+    await rhack('d');
+    await rhack('a');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.inventory.length, 0);
+    assert.equal(game.level.objects.some(obj => obj.id === ration.id), false);
+    assert.equal(ration.unpaid, false);
+    assert.equal(shkp.debit || 0, 0);
+    assertUsedUpBillForObject(shkp, ration, 45);
+});
+
+test('ordinary unpaid carried acid potion drop into water preserves a used-up bill row', async () => {
+    const { shkp } = installCommandShopState();
+    game.level.at = () => ({ roomno: ROOMOFFSET, typ: POOL });
+    const potion = acidPotion(51203, 'a');
+    game.inventory = [potion];
+    shop.addObjectToShopBill(shkp, potion, 75);
+
+    await rhack('d');
+    await rhack('a');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.inventory.length, 0);
+    assert.equal(game.level.objects.some(obj => obj.id === potion.id), false);
+    assert.equal(potion.unpaid, false);
+    assert.match(game._pending_message, /potion explodes/);
+    assertUsedUpBillForObject(shkp, potion, 75);
+});
+
+test('ordinary unpaid carried potion shattering on hot ground preserves a used-up bill row', async () => {
+    const { shkp } = installCommandShopState();
+    initRng(4);
+    game.level.flags = { temperature: 1 };
+    game.level.at = () => ({ roomno: ROOMOFFSET, typ: ROOM });
+    const potion = healingPotion(51204, 'h');
+    game.inventory = [potion];
+    shop.addObjectToShopBill(shkp, potion, 80);
+
+    await rhack('d');
+    await rhack('h');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.inventory.length, 0);
+    assert.equal(game.level.objects.some(obj => obj.id === potion.id), false);
+    assert.equal(potion.unpaid, false);
+    assert.match(game._pending_message, /shattering noise|shatters from the heat/);
+    assertUsedUpBillForObject(shkp, potion, 80);
+});
+
 test('unpaid carried object falling through a hole converts bill row to shop debt', () => {
     const { shkp } = installShopState();
     installSeenHoleAtHero();
@@ -7052,6 +7155,61 @@ test('tipping merchandise from a shop-floor container to the floor returns it to
     assert.equal(contained.unpaidPrice, undefined);
     assert.equal(shkp.billct, 0);
     assert.equal(shkp.bill.length, 0);
+});
+
+test('tipping shop-floor merchandise into lava preserves a used-up bill row', () => {
+    const { shkp } = installShopState();
+    game.level.at = () => ({ roomno: ROOMOFFSET, typ: LAVAPOOL });
+    const container = shopFloorContainer(6905);
+    const contained = putObjectInContainer(container, foodRation(6906));
+    game.level.objects = [container];
+    const price = shop.shopItemPrice(contained, 5, 5);
+
+    const messages = shop.tipContainerToFloor(container);
+
+    assert.match(messages.join(' '), /spills out/);
+    assert.equal(container.contents.length, 0);
+    assert.equal(game.level.objects.includes(container), true);
+    assert.equal(game.level.objects.includes(contained), false);
+    assert.equal(contained.unpaid, false);
+    assert.equal(contained.unpaidPrice, undefined);
+    assertUsedUpBillForObject(shkp, contained, price);
+});
+
+test('tipping shop-floor acid potion into water preserves a used-up bill row', () => {
+    const { shkp } = installShopState();
+    game.level.at = () => ({ roomno: ROOMOFFSET, typ: POOL });
+    const container = shopFloorContainer(6907);
+    const contained = putObjectInContainer(container, acidPotion(6908));
+    game.level.objects = [container];
+    const price = shop.shopItemPrice(contained, 5, 5);
+
+    const messages = shop.tipContainerToFloor(container);
+
+    assert.match(messages.join(' '), /potion explodes/);
+    assert.equal(container.contents.length, 0);
+    assert.equal(game.level.objects.includes(contained), false);
+    assert.equal(contained.unpaid, false);
+    assertUsedUpBillForObject(shkp, contained, price);
+});
+
+test('tipping shop-floor potion onto hot ground preserves a used-up bill row', () => {
+    const { shkp } = installShopState();
+    initRng(4);
+    game.level.flags = { temperature: 1 };
+    game.level.at = () => ({ roomno: ROOMOFFSET, typ: ROOM });
+    const container = shopFloorContainer(6909);
+    const contained = putObjectInContainer(container, healingPotion(6910));
+    game.level.objects = [container];
+    const price = shop.shopItemPrice(contained, 5, 5);
+
+    const messages = shop.tipContainerToFloor(container);
+
+    assert.match(messages.join(' '), /shattering noise|shatters from the heat/);
+    assert.equal(container.contents.length, 0);
+    assert.equal(game.level.objects.includes(contained), false);
+    assert.equal(contained.unpaid, false);
+    assertUsedUpBillForObject(shkp, contained, price);
 });
 
 test('tipping no-charge contents from a shop-floor container clears no-charge without billing', () => {
