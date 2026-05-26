@@ -305,6 +305,24 @@ function scrollOfEnchantArmor(id, letter = 's', cursed = false) {
     };
 }
 
+function scrollOfDestroyArmor(id, letter = 's', cursed = false) {
+    return {
+        id,
+        cls: 'scroll',
+        glyph: '?',
+        kind: 'scroll of destroy armor',
+        actualKind: 'scroll of destroy armor',
+        scrollIndex: 1,
+        cursed,
+        bknown: true,
+        quan: 1,
+        ox: 5,
+        oy: 5,
+        letter,
+        line: `${letter} - a scroll of destroy armor`,
+    };
+}
+
 function chargeableRing(id, letter = 'r', spe = 0) {
     return {
         id,
@@ -1393,6 +1411,100 @@ test('cursed enchant armor with no enchantment loss keeps the live unpaid bill',
     assert.equal(shop.shopBillEntryTotal(shkp.bill[0]), 100);
     assert.equal((game._usedUpShopBills || []).length, 0);
     assert.match(game._pending_message, /Your leather armor violently glows black/);
+    assert.doesNotMatch(game._pending_message, /you pay for it/);
+});
+
+test('confused cursed enchant weapon strips unpaid proofing into a used-up bill', async () => {
+    const { shkp } = installCommandShopState();
+    game.u._confusionTimeout = 10;
+    const scroll = scrollOfEnchantWeapon(309029, 's', true);
+    const blade = wieldedWeapon(309030, 'dagger', 'w', 0);
+    blade.oerodeproof = true;
+    game.inventory = [scroll, blade];
+    shop.addObjectToShopBill(shkp, blade, 80);
+
+    await rhack('r');
+    await rhack('s');
+
+    assert.equal(game.context.move, 1);
+    assert.equal(blade.oerodeproof, false);
+    assert.equal(blade.unpaid, false);
+    assert.equal(shop.shopBillEntryForObject(shkp, blade), null);
+    assert.equal(shkp.billct, 1);
+    assert.equal(shkp.bill[0].useup, true);
+    assert.equal(shop.shopBillEntryTotal(shkp.bill[0]), 80);
+    assert.equal((game._usedUpShopBills || []).length, 1);
+    assert.equal(game._usedUpShopBills[0].bo_id, shkp.bill[0].bo_id);
+    assert.match(game._pending_message, /mottled purple glow/);
+    assert.match(game._pending_message, /You degrade that .*dagger, you pay for it!/);
+    assert.ok(game._pending_message.indexOf('mottled purple glow') < game._pending_message.indexOf('you pay for it'));
+});
+
+test('confused cursed enchant armor strips unpaid proofing into a used-up bill', async () => {
+    const { shkp } = installCommandShopState();
+    game.u._confusionTimeout = 10;
+    const scroll = scrollOfEnchantArmor(309031, 's', true);
+    const armor = wornArmor(309032, 'leather armor', 'a', 0, { oerodeproof: true });
+    game.inventory = [scroll, armor];
+    shop.addObjectToShopBill(shkp, armor, 100);
+
+    await rhack('r');
+    await rhack('s');
+
+    assert.equal(game.context.move, 1);
+    assert.equal(armor.oerodeproof, false);
+    assert.equal(armor.unpaid, false);
+    assert.equal(shop.shopBillEntryForObject(shkp, armor), null);
+    assert.equal(shkp.billct, 1);
+    assert.equal(shkp.bill[0].useup, true);
+    assert.equal(shop.shopBillEntryTotal(shkp.bill[0]), 100);
+    assert.equal((game._usedUpShopBills || []).length, 1);
+    assert.equal(game._usedUpShopBills[0].bo_id, shkp.bill[0].bo_id);
+    assert.match(game._pending_message, /mottled black glow/);
+    assert.match(game._pending_message, /You degrade that .*leather armor, you pay for it!/);
+});
+
+test('confused uncursed destroy armor strips unpaid proofing into a used-up bill', async () => {
+    const { shkp } = installCommandShopState();
+    game.u._confusionTimeout = 10;
+    const scroll = scrollOfDestroyArmor(309033, 's', false);
+    const armor = wornArmor(309034, 'leather armor', 'a', 0, { oerodeproof: true });
+    game.inventory = [scroll, armor];
+    shop.addObjectToShopBill(shkp, armor, 100);
+
+    await rhack('r');
+    await rhack('s');
+
+    assert.equal(game.context.move, 1);
+    assert.equal(armor.oerodeproof, false);
+    assert.equal(armor.unpaid, false);
+    assert.equal(shop.shopBillEntryForObject(shkp, armor), null);
+    assert.equal(shkp.billct, 1);
+    assert.equal(shkp.bill[0].useup, true);
+    assert.equal(shop.shopBillEntryTotal(shkp.bill[0]), 100);
+    assert.equal((game._usedUpShopBills || []).length, 1);
+    assert.equal(game._usedUpShopBills[0].bo_id, shkp.bill[0].bo_id);
+    assert.match(game._pending_message, /glows purple/);
+    assert.match(game._pending_message, /You degrade that .*leather armor, you pay for it!/);
+});
+
+test('confused uncursed enchant armor adds proofing without used-up billing', async () => {
+    const { shkp } = installCommandShopState();
+    game.u._confusionTimeout = 10;
+    const scroll = scrollOfEnchantArmor(309035, 's', false);
+    const armor = wornArmor(309036, 'leather armor', 'a', 0);
+    game.inventory = [scroll, armor];
+    shop.addObjectToShopBill(shkp, armor, 100);
+
+    await rhack('r');
+    await rhack('s');
+
+    assert.equal(game.context.move, 1);
+    assert.equal(armor.oerodeproof, true);
+    assert.equal(armor.unpaid, true);
+    assert.equal(shop.shopBillEntryForObject(shkp, armor)?.useup, false);
+    assert.equal(shkp.billct, 1);
+    assert.equal((game._usedUpShopBills || []).length, 0);
     assert.doesNotMatch(game._pending_message, /you pay for it/);
 });
 

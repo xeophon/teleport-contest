@@ -13914,12 +13914,23 @@ function enchantWeaponAmount(scroll, target) {
     return 1;
 }
 
+function finishConfusedProofMutation(target, oldErodeproof, newErodeproof, messages) {
+    if (oldErodeproof && !newErodeproof) {
+        target.oerodeproof = true;
+        const payment = costlyAlterationPaymentMessage(target, 'degrade');
+        if (payment) messages.push(payment);
+    }
+    target.oerodeproof = !!newErodeproof;
+}
+
 function enchantWeaponConfusedEffect(scroll, messages) {
     const target = primaryWieldedItem();
     const profile = wishedDamageProfile(target);
     if (!target || !profile.erosionMatters || target.cls === 'armor' || target.glyph === '[') return null;
 
+    const oldErodeproof = !!target.oerodeproof;
     const newErodeproof = !scroll.cursed;
+    target.oerodeproof = false;
     if (game.u?.blind) {
         target.rknown = false;
         messages.push('Your weapon feels warm for a moment.');
@@ -13932,7 +13943,7 @@ function enchantWeaponConfusedEffect(scroll, messages) {
         target.oeroded2 = 0;
         messages.push(`${enchantWeaponSubject(target)} ${enchantWeaponVerb(target, game.u?.blind ? 'feels' : 'looks', game.u?.blind ? 'feel' : 'look')} as good as new!`);
     }
-    target.oerodeproof = newErodeproof;
+    finishConfusedProofMutation(target, oldErodeproof, newErodeproof, messages);
     refreshEnchantWeaponLine(target);
     return { learned: false, more: messages.length > 1 };
 }
@@ -19215,8 +19226,11 @@ function destroyArmorConfusedEffect(scroll, target, messages) {
         exerciseAttribute(A_CON, false);
         return { learned: false, more: messages.length > 1 };
     }
+    const oldErodeproof = !!target.oerodeproof;
+    const newErodeproof = !!scroll.cursed;
+    target.oerodeproof = false;
     messages.push(armorGlowMessage(target, 'purple'));
-    target.oerodeproof = !!scroll.cursed;
+    finishConfusedProofMutation(target, oldErodeproof, newErodeproof, messages);
     updateArmorLine(target);
     return { learned: false, more: messages.length > 1 };
 }
@@ -19298,9 +19312,10 @@ function enchantArmorColorWord(item, cursed, blind) {
 
 function enchantArmorConfusedEffect(item, armor) {
     const messages = [];
-    const subject = armorSubject(armor);
     const oldErodeproof = !!armor.oerodeproof;
     const newErodeproof = !item.cursed;
+    armor.oerodeproof = false;
+    const subject = armorSubject(armor);
     if (game.u?.blind) {
         armor.rknown = false;
         messages.push(`${subject} ${armorVerb(armor, 'feels', 'feel')} warm for a moment.`);
@@ -19315,7 +19330,7 @@ function enchantArmorConfusedEffect(item, armor) {
         if (game.u) game.u.uac = (game.u.uac ?? 10) + oldAc - wornArmorAcValue(armor);
         messages.push(`${subject} ${armorVerb(armor, game.u?.blind ? 'feels' : 'looks', game.u?.blind ? 'feel' : 'look')} as good as new!`);
     }
-    armor.oerodeproof = newErodeproof;
+    finishConfusedProofMutation(armor, oldErodeproof, newErodeproof, messages);
     if (oldErodeproof && !newErodeproof) armor.rknown = true;
     updateArmorLine(armor);
     return { messages, known: false };
