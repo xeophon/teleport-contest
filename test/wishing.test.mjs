@@ -6,6 +6,9 @@ import { game, resetGame } from '../js/gstate.js';
 import { ROOM } from '../js/const.js';
 import { initRng } from '../js/rng.js';
 
+const HORN_OF_PLENTY = 957;
+const MEAT_RING = 10164;
+
 function installWishState(seed = 1, { debug = true, luck = 0 } = {}) {
     const g = resetGame();
     initRng(seed);
@@ -152,6 +155,10 @@ test('normal-mode wish quantity keeps C merge caps', async () => {
     assert.equal(game._command_mode, null);
     assert.equal(game.inventory[0].kind, 'wax candle');
     assert.equal(game.inventory[0].quan, 7);
+    assert.equal(game.inventory[0].spe, 1);
+    assert.equal(game.inventory[0].age, 400);
+    assert.equal(game.inventory[0].lamplit || false, false);
+    assert.equal(game.inventory[0].owt, 14);
 
     installWishState(1, { debug: false });
     beginWishDirectly();
@@ -168,6 +175,40 @@ test('normal-mode wish quantity keeps C merge caps', async () => {
     assert.equal(game._command_mode, null);
     assert.equal(game.inventory[0].kind, 'dart');
     assert.notEqual(game.inventory[0].quan, 21);
+});
+
+test('plural meat ring wish remains one nonmergeable food object', async () => {
+    installWishState();
+    beginWishDirectly();
+    await submitWish('2 meat rings');
+
+    const item = game.inventory[0];
+    assert.equal(game._command_mode, null);
+    assert.equal(item.otyp, MEAT_RING);
+    assert.equal(item.cls, 'food');
+    assert.equal(item.kind, 'meat ring');
+    assert.equal(item.actualKind, 'meat ring');
+    assert.equal(item.quan, 1);
+    assert.equal(item.owt, 5);
+    assert.match(item.line, /a meat ring/);
+    assert.doesNotMatch(item.line, /meat rings/);
+});
+
+test('burning wished candles keep C candle metadata', async () => {
+    installWishState();
+    beginWishDirectly();
+    await submitWish('6 burning tallow candles');
+
+    const item = game.inventory[0];
+    assert.equal(game._command_mode, null);
+    assert.equal(item.kind, 'tallow candle');
+    assert.equal(item.quan, 6);
+    assert.equal(item.spe, 1);
+    assert.equal(item.lamplit, true);
+    assert.equal(item.burning, true);
+    assert.equal(item.age, 75);
+    assert.equal(item.owt, 12);
+    assert.match(item.line, /6 tallow candles \(lit\)/);
 });
 
 test('non-debug wished spe follows C class constraints', async () => {
@@ -252,9 +293,11 @@ test('wish charge suffix ignores tool recharge count in normal mode', async () =
     await submitWish('horn of plenty (1:3)');
 
     assert.equal(game._command_mode, null);
+    assert.equal(game.inventory[0].otyp, HORN_OF_PLENTY);
     assert.equal(game.inventory[0].actualKind, 'horn of plenty');
     assert.equal(game.inventory[0].spe, 3);
     assert.equal(game.inventory[0].recharged ?? 0, 0);
+    assert.equal(game.inventory[0].owt, 18);
 });
 
 test('empty wished horn of plenty zeroes charges after charge suffix parsing', async () => {
@@ -263,9 +306,24 @@ test('empty wished horn of plenty zeroes charges after charge suffix parsing', a
     await submitWish('empty horn of plenty (1:3)');
 
     assert.equal(game._command_mode, null);
+    assert.equal(game.inventory[0].otyp, HORN_OF_PLENTY);
     assert.equal(game.inventory[0].actualKind, 'horn of plenty');
     assert.equal(game.inventory[0].spe, 0);
     assert.equal(game.inventory[0].recharged ?? 0, 0);
+});
+
+test('normal-mode wished wand of wishing ignores requested abuse charges', async () => {
+    installWishState(11, { debug: false });
+    beginWishDirectly();
+    await submitWish('wand of wishing (7:99)');
+
+    const item = game.inventory[0];
+    assert.equal(game._command_mode, null);
+    assert.equal(item.cls, 'wand');
+    assert.equal(item.wand, 'wishing');
+    assert.ok(item.spe === -1 || item.spe === 0);
+    assert.equal(item.recharged, 1);
+    assert.notEqual(item.spe, 7);
 });
 
 test('wizard bell of opening wish follows C namedesc silver-bell path', async () => {

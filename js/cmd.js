@@ -1240,7 +1240,7 @@ const WISH_BASE_OBJECTS = new Map([
     ['expensive camera', { otyp: EXPENSIVE_CAMERA, cls: 'tool', glyph: '(', kind: 'expensive camera' }],
     ['blindfold', { otyp: BLINDFOLD, cls: 'tool', glyph: '(', kind: 'blindfold' }],
     ['bell of opening', { otyp: BELL, cls: 'tool', glyph: '(', kind: 'silver bell', actualKind: 'bell of opening', known: false }],
-    ['meat ring', { otyp: MEAT_RING, cls: 'food', glyph: '%', kind: 'meat ring', actualKind: 'meat ring', nutrition: 5, quan: 1 }],
+    ['meat ring', { otyp: MEAT_RING, cls: 'food', glyph: '%', kind: 'meat ring', actualKind: 'meat ring', singular: 'meat ring', plural: 'meat rings', nutrition: 5, quan: 1 }],
     ['tin opener', { otyp: TIN_OPENER, cls: 'tool', glyph: '(', kind: 'tin opener', actualKind: 'tin opener' }],
     ['beartrap', { otyp: BEARTRAP, cls: 'tool', glyph: '(', kind: 'beartrap', actualKind: 'beartrap' }],
     ['land mine', { otyp: LAND_MINE, cls: 'tool', glyph: '(', kind: 'land mine', actualKind: 'land mine' }],
@@ -1308,6 +1308,9 @@ const WISH_TOOL_APPEARANCES = new Map([
     ['tooled horn', 'horn'], ['frost horn', 'horn'], ['fire horn', 'horn'],
     ['horn of plenty', 'horn'], ['wooden harp', 'harp'],
     ['magic harp', 'harp'], ['drum of earthquake', 'drum'],
+]);
+const WISH_TOOL_OTYPES = new Map([
+    ['horn of plenty', HORN_OF_PLENTY],
 ]);
 const WISH_TOOL_NAMEDESC_BOUNDS = new Map([
     ['magic harp', 3], ['leash', 66], ['lenses', 6],
@@ -4682,6 +4685,7 @@ const OBJECT_WEIGHTS = {
     'fortune cookie': 1,
     'fortune cookies': 1,
     'sprig of wolfsbane': 1,
+    'meat ring': 5,
     'grappling hook': 30,
     'hammer': 50,
     'lamp': 20,
@@ -4697,12 +4701,14 @@ const OBJECT_WEIGHTS = {
     'silver bell': 10,
     'skeleton key': 3,
     'stethoscope': 4,
+    'tallow candle': 2,
     'loadstone': 500,
     'tinning kit': 100,
     'tin opener': 4,
     'touchstone': 10,
     'towel': 2,
     'unicorn horn': 20,
+    'wax candle': 2,
 };
 const CLASS_WEIGHTS = {
     ring: 3,
@@ -20618,6 +20624,8 @@ function wishedBaseObjectFromName(lowerName, qualifiers = {}, originalName = low
         if (toolRoll) game._mkobj_tool_roll = toolRoll;
         const otmp = mksobj(TOOL_CLASS, true, false);
         const appearance = WISH_TOOL_APPEARANCES.get(lowerName);
+        const explicitOtyp = WISH_TOOL_OTYPES.get(lowerName);
+        if (explicitOtyp != null) otmp.otyp = explicitOtyp;
         return Object.assign(otmp, {
             cls: 'tool',
             glyph: '(',
