@@ -6766,6 +6766,81 @@ test('pay command separates used-up and unpaid sections in the itemized menu', a
     assert.match(lines[unpaidHeader + 1], /^b \+\s*30 Zm,/);
 });
 
+test('pay command does not open itemized menu with no gold or credit', async () => {
+    const { shkp } = installCommandShopState();
+    const ration = foodRation(8997, 'a');
+    game.inventory = [ration];
+    game._goldCount = 0;
+    shop.addObjectToShopBill(shkp, ration, 45);
+
+    await rhack('p');
+
+    assert.notEqual(game._command_mode, 'payMenu');
+    assert.match(game._pending_message, /You have no gold or credit\./);
+    assert.equal(shkp.billct, 1);
+    assert.notEqual(shop.shopBillEntryForObject(shkp, ration), null);
+});
+
+test('pay command refuses itemized menu below the cheapest billed row', async () => {
+    const { shkp } = installCommandShopState();
+    const cheap = dagger(8998, 'a');
+    const costly = foodRation(8999, 'b');
+    game.inventory = [cheap, costly];
+    game._goldCount = 5;
+    shop.addObjectToShopBill(shkp, cheap, 10);
+    shop.addObjectToShopBill(shkp, costly, 45);
+
+    await rhack('p');
+
+    assert.notEqual(game._command_mode, 'payMenu');
+    assert.match(game._pending_message, /You don't have enough gold to buy any of the items you've picked\./);
+    assert.equal(game._goldCount, 5);
+    assert.equal(shkp.billct, 2);
+    assert.notEqual(shop.shopBillEntryForObject(shkp, cheap), null);
+    assert.notEqual(shop.shopBillEntryForObject(shkp, costly), null);
+});
+
+test('pay command settles shop debt before opening itemized billing', async () => {
+    const { shkp } = installCommandShopState();
+    const ration = foodRation(9000, 'a');
+    game.inventory = [ration];
+    game._goldCount = 30;
+    shkp.debit = 10;
+    shkp.loan = 10;
+    shop.addObjectToShopBill(shkp, ration, 15);
+
+    await rhack('p');
+
+    assert.equal(shkp.debit, 0);
+    assert.equal(shkp.loan, 0);
+    assert.equal(game._goldCount, 20);
+    assert.equal(game._command_mode, 'payMenu');
+    assert.equal(game._pay_menu_items.length, 1);
+    assert.equal(game._pay_menu_items[0].item, ration);
+    assert.doesNotMatch((game._overlay_lines || []).map(row => row[2]).join('\n'), /debt owed/i);
+    assert.notEqual(shop.shopBillEntryForObject(shkp, ration), null);
+});
+
+test('pay command refuses itemized billing when shop debt cannot be settled', async () => {
+    const { shkp } = installCommandShopState();
+    const ration = foodRation(9002, 'a');
+    game.inventory = [ration];
+    game._goldCount = 10;
+    shkp.debit = 20;
+    shkp.loan = 20;
+    shop.addObjectToShopBill(shkp, ration, 5);
+
+    await rhack('p');
+
+    assert.notEqual(game._command_mode, 'payMenu');
+    assert.match(game._pending_message, /You owe Izchak 20 zorkmids you picked up in the store\./);
+    assert.match(game._pending_message, /But you don't have enough gold\./);
+    assert.equal(shkp.debit, 20);
+    assert.equal(shkp.loan, 20);
+    assert.equal(game._goldCount, 10);
+    assert.notEqual(shop.shopBillEntryForObject(shkp, ration), null);
+});
+
 test('payable debts split partly used stacks into used and intact bill portions', () => {
     const { shkp } = installShopState();
     const stack = { ...dagger(9001, 'd'), quan: 3, line: 'd - 3 +0 daggers' };

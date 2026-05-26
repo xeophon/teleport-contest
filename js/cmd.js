@@ -22929,12 +22929,6 @@ function collectPayableShopDebts(shkp = null) {
             price,
         });
     }
-    const debit = Math.max(0, Math.trunc(Number(shkp?.debit || 0)));
-    if (debit > 0) entries.push({
-        shopkeeperDebit: shkp,
-        name: `debt owed to ${shopkeeperDisplayName(shkp)}`,
-        price: debit,
-    });
     return entries
         .map((entry, index) => ({ entry, index }))
         .sort((a, b) => shopPaymentEntryCompare(a.entry, b.entry) || a.index - b.index)
@@ -23033,6 +23027,83 @@ function shopPaymentCashDue(shkp, selected) {
         cashDue += value - coveredByCredit;
     }
     return cashDue;
+}
+
+function shopPaymentPreMenuBlockMessage(shkp, entries, { paidBefore = false } = {}) {
+    if (!entries?.length) return '';
+    const money = (game.inventory || []).find(item => item.letter === '$' || item.cls === 'coin');
+    const availableGold = Math.max(0, Math.trunc(Number(game._goldCount || money?.quan || 0)));
+    const credit = Math.max(0, Math.trunc(Number(shkp?.credit || 0)));
+    if (availableGold + credit <= 0) return `You have no gold or credit${paidBefore ? ' left' : ''}.`;
+    const cheapest = Math.min(...entries.map(entry => shopPaymentEntryValue(entry)).filter(value => value > 0));
+    if (Number.isFinite(cheapest) && availableGold + credit < cheapest) {
+        const moreThanOne = entries.length > 1;
+        return `You don't have enough gold to buy${moreThanOne ? ' any of' : ''} the item${moreThanOne ? 's' : ''} ${moreThanOne ? "you've picked" : 'on your bill'}.`;
+    }
+    return '';
+}
+
+function finishShopDebitPayment(shkp) {
+    const debit = Math.max(0, Math.trunc(Number(shkp?.debit || 0)));
+    if (!shkp || debit <= 0) return { handled: false, paid: false, blocked: false, cashTotal: 0, message: '' };
+
+    const money = (game.inventory || []).find(item => item.letter === '$' || item.cls === 'coin');
+    const availableGold = Math.max(0, Math.trunc(Number(game._goldCount || money?.quan || 0)));
+    const credit = Math.max(0, Math.trunc(Number(shkp.credit || 0)));
+    const loan = Math.max(0, Math.trunc(Number(shkp.loan || 0)));
+    const name = shopkeeperDisplayName(shkp);
+    const currency = `zorkmid${debit === 1 ? '' : 's'}`;
+    let owed = `You owe ${name} ${debit} ${currency} `;
+    if (loan) {
+        owed += loan === debit
+            ? 'you picked up in the store.'
+            : 'for gold picked up and the use of merchandise.';
+    } else {
+        owed += 'for the use of merchandise.';
+    }
+
+    if (availableGold + credit < debit) {
+        return {
+            handled: true,
+            paid: false,
+            blocked: true,
+            cashTotal: 0,
+            message: `${owed}  But you don't have enough gold${credit ? ' or credit' : ''}.`,
+        };
+    }
+
+    let cashDue = 0;
+    let resultMessage = '';
+    if (credit >= debit) {
+        shkp.credit = credit - debit;
+        resultMessage = 'Your debt is covered by your credit.';
+    } else if (!credit) {
+        cashDue = debit;
+        resultMessage = 'You pay that debt.';
+    } else {
+        cashDue = debit - credit;
+        shkp.credit = 0;
+        resultMessage = 'That debt is partially offset by your credit.  You pay the remainder.';
+    }
+
+    shkp.debit = 0;
+    shkp.loan = 0;
+    if (cashDue > 0) {
+        if (availableGold > cashDue) next_ident();
+        game._goldCount = Math.max(0, availableGold - cashDue);
+        if (money) {
+            money.quan = game._goldCount;
+            updateMoneyLine(money);
+        }
+    }
+
+    return {
+        handled: true,
+        paid: true,
+        blocked: false,
+        cashTotal: cashDue,
+        message: `${owed}  ${resultMessage}`,
+    };
 }
 
 function applyShopPaymentValue(shkp, value) {
@@ -29923,12 +29994,20 @@ export async function rhack(_cmd) {
 
     if (game._command_mode === 'payMenu') {
         const entries = game._pay_menu_items || [];
+        const prepaidMessage = game._pay_prepaid_message || '';
+        const prepaidPaid = !!game._pay_prepaid_paid;
         if (ch === '\x1b') {
             game._pay_menu_items = null;
             game._pay_menu_width = 0;
             game._pay_shopkeeper = null;
+            game._pay_prepaid_message = '';
+            game._pay_prepaid_paid = false;
             game._overlay_lines = null;
             game._command_mode = null;
+            if (prepaidPaid) {
+                await setMessage(prepaidMessage);
+                game.context.move = 1;
+            }
             return;
         }
         if (ch === '\r' || ch === '\n') {
@@ -29937,8 +30016,14 @@ export async function rhack(_cmd) {
             game._pay_menu_width = 0;
             game._overlay_lines = null;
             game._command_mode = null;
+            game._pay_prepaid_message = '';
+            game._pay_prepaid_paid = false;
             if (!selected.length) {
                 game._pay_shopkeeper = null;
+                if (prepaidPaid) {
+                    await setMessage(prepaidMessage);
+                    game.context.move = 1;
+                }
                 return;
             }
 
@@ -29947,7 +30032,10 @@ export async function rhack(_cmd) {
             if (!payment.paid) {
                 game._pay_shopkeeper = null;
                 if (payment.skipped) return;
-                await setMessage(payment.message || "You don't have enough gold.");
+                const message = [prepaidMessage, payment.message || "You don't have enough gold."]
+                    .filter(Boolean).join('  ');
+                await setMessage(message);
+                if (prepaidPaid) game.context.move = 1;
                 return;
             }
             if (shkp?.shk) {
@@ -29978,9 +30066,10 @@ export async function rhack(_cmd) {
                 ? payment.message || "You don't have enough gold."
                 : `"Thank you for shopping in ${possessive} ${shopName}!"`;
             const paidEntries = payment.payableEntries;
-            const message = paidEntries.length === 1
+            const boughtMessage = paidEntries.length === 1
                 ? `You bought ${paidEntries[0].name} for ${paidEntries[0].price} gold piece${paidEntries[0].price === 1 ? '' : 's'}.`
                 : `You bought ${paidEntries.length} items for ${payment.cashTotal} gold pieces.`;
+            const message = [prepaidMessage, boughtMessage].filter(Boolean).join('  ');
             await setMessage(message, true);
             game.context.move = 1;
             return;
@@ -44025,8 +44114,17 @@ export async function rhack(_cmd) {
             return;
         }
 
+        game._pay_prepaid_message = '';
+        game._pay_prepaid_paid = false;
+        const debitPayment = finishShopDebitPayment(shkp);
+        if (debitPayment.blocked) {
+            game._command_mode = null;
+            await setMessage(debitPayment.message || "You don't have enough gold.");
+            game.context.move = 1;
+            return;
+        }
         const entries = collectPayableShopDebts(shkp);
-        if (hasRobbedOnlyShopPayment(shkp, entries)) {
+        if (!debitPayment.paid && hasRobbedOnlyShopPayment(shkp, entries)) {
             const payment = finishRobbedOnlyShopPayment(shkp, { resident });
             game._command_mode = null;
             await setMessage(payment.message || "You don't have enough gold.");
@@ -44034,7 +44132,14 @@ export async function rhack(_cmd) {
             return;
         }
         if (!entries.length) {
-            await setMessage(`You do not owe ${shkp.shknam || 'the shopkeeper'} anything.`);
+            await setMessage(debitPayment.message || `You do not owe ${shkp.shknam || 'the shopkeeper'} anything.`);
+            if (debitPayment.paid) game.context.move = 1;
+            return;
+        }
+        const preMenuBlockMessage = shopPaymentPreMenuBlockMessage(shkp, entries, { paidBefore: debitPayment.paid });
+        if (preMenuBlockMessage) {
+            await setMessage([debitPayment.message, preMenuBlockMessage].filter(Boolean).join('  '));
+            if (debitPayment.paid) game.context.move = 1;
             return;
         }
         const width = String(Math.max(...entries.map(entry => entry.price))).length;
@@ -44042,6 +44147,8 @@ export async function rhack(_cmd) {
         game._pay_menu_items = entries;
         game._pay_menu_width = width;
         game._pay_shopkeeper = shkp;
+        game._pay_prepaid_message = debitPayment.message || '';
+        game._pay_prepaid_paid = !!debitPayment.paid;
         setOverlay(rows, Math.max(...rows.map(([row]) => row)) + 1, false, 41);
         game._command_mode = 'payMenu';
         return;
