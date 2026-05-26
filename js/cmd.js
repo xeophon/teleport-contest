@@ -22927,6 +22927,8 @@ async function queueUntendedTempleEntryAfterTeleport(oldX, oldY, newX, newY) {
 
 function shopItemPrice(obj, x = game.u?.ux, y = game.u?.uy) {
     if (!obj || obj.otyp === GOLD_PIECE || obj.cls === 'coin' || obj.glyph === '$') return null;
+    if ((obj.cls === 'food' || obj.otyp === FOOD_CLASS || obj.otyp === CORPSE || obj.otyp === 'corpse') && obj.oeaten)
+        return 0;
     const loc = game.level?.at(x, y);
     const roomno = loc?.roomno || 0;
     const room = levelRoomByRoomno(roomno);

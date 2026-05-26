@@ -5831,6 +5831,92 @@ test('tipping no-charge lost contents from a cursed shop-floor magic bag does no
     assert.equal(shkp.billct, 0);
 });
 
+test('tipping unbilled partly eaten food from a cursed shop-floor magic bag does not bill', () => {
+    const { shkp } = installShopState();
+    initRng(17);
+    const source = bagOfHolding(6926);
+    source.cursed = true;
+    source.ox = 5;
+    source.oy = 5;
+    const ration = putObjectInContainer(source, foodRation(6927));
+    ration.oeaten = 400;
+    game.level.objects = [source];
+
+    const messages = shop.tipContainerToFloor(source);
+
+    assert.match(messages.join(' '), /vanished/);
+    assert.doesNotMatch(messages.join(' '), /lost merchandise/);
+    assert.equal(source.contents.includes(ration), false);
+    assert.equal(shkp.debit || 0, 0);
+    assert.equal(shkp.robbed || 0, 0);
+    assert.equal(shkp.billct, 0);
+});
+
+test('tipping billed partly eaten food from a cursed shop-floor magic bag converts bill row to debt', () => {
+    const { shkp } = installShopState();
+    initRng(17);
+    const source = bagOfHolding(6926);
+    source.cursed = true;
+    source.ox = 5;
+    source.oy = 5;
+    const ration = putObjectInContainer(source, foodRation(6927));
+    ration.oeaten = 400;
+    shop.addObjectToShopBill(shkp, ration, 45);
+    game.level.objects = [source];
+
+    const messages = shop.tipContainerToFloor(source);
+
+    assert.match(messages.join(' '), /owe 45 zorkmids? for lost merchandise/);
+    assert.equal(shop.shopBillEntryForObject(shkp, ration), null);
+    assert.notEqual(ration.unpaid, true);
+    assert.equal(shkp.debit, 45);
+    assert.equal(shkp.billct, 0);
+});
+
+test('tipping nested unbilled partly eaten food from a cursed shop-floor magic bag does not bill', () => {
+    const { shkp } = installShopState();
+    initRng(17);
+    const source = bagOfHolding(6926);
+    source.cursed = true;
+    source.ox = 5;
+    source.oy = 5;
+    const nested = putObjectInContainer(source, sack(6927));
+    nested.no_charge = true;
+    const ration = putObjectInContainer(nested, foodRation(6928));
+    ration.oeaten = 400;
+    game.level.objects = [source];
+
+    const messages = shop.tipContainerToFloor(source);
+
+    assert.match(messages.join(' '), /vanished/);
+    assert.doesNotMatch(messages.join(' '), /lost merchandise/);
+    assert.equal(shkp.debit || 0, 0);
+    assert.equal(shkp.robbed || 0, 0);
+    assert.equal(shkp.billct, 0);
+});
+
+test('tipping nested billed partly eaten food from a cursed shop-floor magic bag converts bill row', () => {
+    const { shkp } = installShopState();
+    initRng(17);
+    const source = bagOfHolding(6926);
+    source.cursed = true;
+    source.ox = 5;
+    source.oy = 5;
+    const nested = putObjectInContainer(source, sack(6927));
+    nested.no_charge = true;
+    const ration = putObjectInContainer(nested, foodRation(6928));
+    ration.oeaten = 400;
+    shop.addObjectToShopBill(shkp, ration, 45);
+    game.level.objects = [source];
+
+    const messages = shop.tipContainerToFloor(source);
+
+    assert.match(messages.join(' '), /owe 45 zorkmids? for lost merchandise/);
+    assert.equal(shop.shopBillEntryForObject(shkp, ration), null);
+    assert.equal(shkp.debit, 45);
+    assert.equal(shkp.billct, 0);
+});
+
 test('looting a cursed shop-floor magic bag loses merchandise before empty handling', async () => {
     const { shkp } = installCommandShopState();
     initRng(17);
