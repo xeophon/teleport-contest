@@ -9563,6 +9563,105 @@ test('hard-landing top-level paid projectile breaks without sale or floor placem
     assert.equal(shkp.billct, 0);
     assert.equal(shkp.debit || 0, 0);
     assert.equal(potion.no_charge, true);
+    assert.equal(landing.shopSale.handled, false);
+});
+
+test('same-shop paid projectile auto-sells before stacking', () => {
+    const { shkp } = installShopState();
+    const floorStack = { ...dagger(8747), letter: undefined, line: undefined, quan: 1, ox: 5, oy: 5 };
+    const thrown = { ...dagger(8748), letter: undefined, line: undefined, quan: 1, ox: 5, oy: 5 };
+    game.level.objects = [floorStack];
+    const expectedOffer = shop.shopSaleOffer(thrown, shkp);
+    const cashBefore = shop.shopkeeperCash(shkp);
+
+    const landing = shop.landProjectileObjectWithShopHandling(thrown, 5, 5, { breakRoll: 0, silent: true });
+
+    assert.equal(landing.shopSale.handled, true);
+    assert.equal(landing.shopSale.sold, true);
+    assert.equal(landing.object, floorStack);
+    assert.equal(game.level.objects.length, 1);
+    assert.equal(floorStack.quan, 2);
+    assert.equal(game._goldCount, expectedOffer);
+    assert.equal(shop.shopkeeperCash(shkp), cashBefore - expectedOffer);
+    assert.equal(shkp.billct, 0);
+    assert.notEqual(floorStack.no_charge, true);
+    assert.notEqual(game._command_mode, 'shopSaleConfirm');
+});
+
+test('paid projectile landing on shopkeeper square is not sold', () => {
+    const { shkp } = installShopState();
+    const thrown = { ...dagger(8749), letter: undefined, line: undefined, quan: 1, ox: 6, oy: 5 };
+    const cashBefore = shop.shopkeeperCash(shkp);
+
+    const landing = shop.landProjectileObjectWithShopHandling(thrown, 6, 5, { breakRoll: 0, silent: true });
+
+    assert.equal(landing.shopSale.handled, false);
+    assert.equal(landing.object, thrown);
+    assert.equal(game.level.objects.includes(thrown), true);
+    assert.equal(game._goldCount || 0, 0);
+    assert.equal(shop.shopkeeperCash(shkp), cashBefore);
+    assert.equal(shkp.credit || 0, 0);
+    assert.equal(shkp.debit || 0, 0);
+});
+
+test('thrown gold donation uses projectile amount before stacking', () => {
+    const { shkp } = installShopState();
+    shkp.debit = 7;
+    shkp.loan = 7;
+    const floorGold = { ...goldPieces(8750, 4), letter: undefined, line: undefined, ox: 5, oy: 5 };
+    const thrownGold = { ...goldPieces(8751, 10), letter: undefined, line: undefined, ox: 5, oy: 5 };
+    game.level.objects = [floorGold];
+
+    const landing = shop.landProjectileObjectWithShopHandling(thrownGold, 5, 5, { breakRoll: 0, silent: true });
+
+    assert.equal(landing.shopSale.handled, true);
+    assert.equal(landing.shopSale.gold, true);
+    assert.equal(landing.object, floorGold);
+    assert.equal(game.level.objects.length, 1);
+    assert.equal(floorGold.quan, 14);
+    assert.equal(shkp.debit, 0);
+    assert.equal(shkp.loan, 0);
+    assert.equal(shkp.credit, 3);
+});
+
+test('thrown gold landing on shopkeeper square does not donate', () => {
+    const { shkp } = installShopState();
+    shkp.debit = 7;
+    shkp.loan = 7;
+    const thrownGold = { ...goldPieces(8752, 10), letter: undefined, line: undefined, ox: 6, oy: 5 };
+
+    const landing = shop.landProjectileObjectWithShopHandling(thrownGold, 6, 5, { breakRoll: 0, silent: true });
+
+    assert.equal(landing.shopSale.handled, false);
+    assert.equal(landing.object, thrownGold);
+    assert.equal(game.level.objects.includes(thrownGold), true);
+    assert.equal(shkp.debit, 7);
+    assert.equal(shkp.loan, 7);
+    assert.equal(shkp.credit || 0, 0);
+});
+
+test('throwing gold from inventory donates the whole purse and updates wallet state', async () => {
+    const { shkp } = installCommandShopState();
+    shkp.debit = 5;
+    shkp.loan = 5;
+    const floorGold = { ...goldPieces(8753, 4), letter: undefined, line: undefined, ox: 5, oy: 13 };
+    const purse = goldPieces(8754, 12);
+    game.level.objects = [floorGold];
+    game.inventory = [purse];
+    game._goldCount = 12;
+
+    await rhack('t');
+    await rhack('$');
+    await rhack('j');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game._goldCount, 0);
+    assert.equal(game.inventory.some(item => item.letter === '$' || item.cls === 'coin'), false);
+    assert.equal(game.level.objects.length, 1);
+    assert.equal(game.level.objects[0].quan, 16);
+    assert.equal(shkp.debit, 0);
+    assert.equal(shkp.loan, 0);
+    assert.equal(shkp.credit, 7);
 });
 
 test('floor stacking rejects unpaid projectiles into paid stacks', () => {

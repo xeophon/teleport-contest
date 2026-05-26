@@ -7447,6 +7447,11 @@ function syncHeroSpeedState() {
 }
 
 function removeInventoryItem(item, amount = 1) {
+    if (shopBillableGold(item)) {
+        removeGoldFromHero(amount);
+        updateWornDisplacement();
+        return;
+    }
     const wasWornSpeedChanger = item.cls === 'armor'
         && isWornInventoryItem(item)
         && (String(item.kind || '').toLowerCase() === 'speed boots'
@@ -15702,6 +15707,39 @@ function stackPlacedProjectileObject(obj) {
     return stack;
 }
 
+function projectileLandingSellobjShopkeeper(x, y) {
+    const heroShkp = heroShopkeeper();
+    if (!shopkeeperInHisShop(heroShkp)) return null;
+    const landingShkp = shopkeeperForCostlySpot(x, y);
+    if (!sameShopkeeper(heroShkp, landingShkp) || !shopkeeperInHisShop(landingShkp)) return null;
+    if (x === landingShkp.mx && y === landingShkp.my) return null;
+    return landingShkp;
+}
+
+function autoSellProjectileLandingObject(obj, x, y, options = {}) {
+    const shkp = projectileLandingSellobjShopkeeper(x, y);
+    if (!shkp || !obj) return { handled: false, shkp: null, message: '', messages: [] };
+    if (shopBillableGold(obj)) {
+        const goldSale = sellobjDroppedGoldAt(x, y, obj.quan || 1);
+        const messages = options.silent ? [] : (goldSale.messages || []);
+        return { ...goldSale, handled: !!goldSale.shkp, gold: true, message: messages.join('  '), messages };
+    }
+    if (shopObjectOrContentsUnpaid(obj)) return { handled: false, shkp: null, message: '', messages: [] };
+    const sale = shopDroppedPaidObjectSaleInfo(obj, x, y);
+    if (!sale?.handled) return { handled: false, shkp: null, message: '', messages: [] };
+    if (!sale.prompt) {
+        const messages = options.silent || !sale.message ? [] : [sale.message];
+        return { ...sale, sold: false, message: messages.join('  '), messages };
+    }
+    if (sale.containerSale) {
+        markAcceptedShopContainerSaleState(obj, sale.shkp);
+        subFromShopBill(obj, sale.shkp);
+    }
+    const paymentMessage = shopSalePaymentMessage(sale);
+    const message = options.silent ? '' : paymentMessage;
+    return { ...sale, sold: true, prompt: false, message, messages: message ? [message] : [] };
+}
+
 function landProjectileObjectWithShopHandling(obj, x, y, options = {}) {
     const messages = [];
     const hardLanding = !projectileLandingIsSoft(x, y);
@@ -15717,6 +15755,7 @@ function landProjectileObjectWithShopHandling(obj, x, y, options = {}) {
                 impact: { loss: 0, broke: false, messages },
                 topBreak: { broke: true, breakKind, value: shopLanding.value || 0 },
                 shopLanding: { ...shopLanding, handled: shopLanding.charged, returned: false },
+                shopSale: { handled: false, shkp: null, message: '', messages: [] },
                 messages,
             };
         }
@@ -15727,8 +15766,11 @@ function landProjectileObjectWithShopHandling(obj, x, y, options = {}) {
         : projectileContainerImpactDmg(placed, options.fromX ?? game.u?.ux ?? x, options.fromY ?? game.u?.uy ?? y, { messages, silent: options.silent });
     const shopLanding = resolveUnpaidProjectileShopLanding(placed, x, y, options);
     if (shopLanding.message) messages.push(shopLanding.message);
+    const shopSale = shopLanding.handled ? { handled: false, shkp: null, message: '', messages: [] }
+        : autoSellProjectileLandingObject(placed, x, y, options);
+    if (shopSale.message) messages.push(shopSale.message);
     const stacked = stackPlacedProjectileObject(placed);
-    return { object: stacked, impact, topBreak: { broke: false, breakKind: '', value: 0 }, shopLanding, messages };
+    return { object: stacked, impact, topBreak: { broke: false, breakKind: '', value: 0 }, shopLanding, shopSale, messages };
 }
 
 function markNoChargeRecursively(obj) {
@@ -15989,6 +16031,23 @@ function addGoldToHero(amount) {
         updateMoneyLine(money);
     } else {
         game.inventory.push({ letter: '$', cls: 'coin', otyp: GOLD_PIECE, glyph: '$', quan: game._goldCount });
+    }
+    game._pet_food_scan_inventory = game.inventory;
+    return gold;
+}
+
+function removeGoldFromHero(amount) {
+    const money = (game.inventory || []).find(item => item.letter === '$' || item.cls === 'coin' || item.otyp === GOLD_PIECE);
+    const available = Math.max(0, Math.trunc(Number(game._goldCount || money?.quan || 0)));
+    const gold = Math.min(available, Math.max(0, Math.trunc(Number(amount || 0))));
+    if (!gold) return 0;
+    game._goldCount = Math.max(0, available - gold);
+    game._just_picked_gold = Math.max(0, (game._just_picked_gold || 0) - gold);
+    if (money && game._goldCount) {
+        money.quan = game._goldCount;
+        updateMoneyLine(money);
+    } else {
+        game.inventory = (game.inventory || []).filter(item => item.letter !== '$' && item.cls !== 'coin' && item.otyp !== GOLD_PIECE);
     }
     game._pet_food_scan_inventory = game.inventory;
     return gold;
@@ -18986,6 +19045,7 @@ function objectStackType(obj) {
 
 function objectStackColor(obj) {
     if (!obj) return undefined;
+    if (shopBillableGold(obj)) return CLR_YELLOW;
     if (obj.color != null) return obj.color;
     if (obj.cls === 'weapon') return obj.kind === 'quarterstaff' ? CLR_BROWN : CLR_CYAN;
     if (obj.cls === 'scroll' || obj.cls === 'spellbook') return CLR_WHITE;
@@ -44583,11 +44643,6 @@ export async function rhack(_cmd) {
 		        let ox = ux;
 		        let oy = uy;
 		        let targetMon = null;
-        let thrownId = null;
-        if ((item.quan || 1) > 1) {
-            if (item.otyp === DART || /\bdarts?\b/.test(lowerName)) rnd(1); // C throw_obj: multishot count.
-            thrownId = next_ident(); // C splitobj: nextoid()/next_ident() for the thrown unit.
-        }
         for (let step = 0; step < 8; step++) {
             const nx = ox + dir.dx;
             const ny = oy + dir.dy;
@@ -44598,6 +44653,39 @@ export async function rhack(_cmd) {
 	            targetMon = (game.level?.monsters || []).find(mon => mon.mx === ox && mon.my === oy) || null;
 	            if (targetMon) break;
 	        }
+        if (shopBillableGold(item)) {
+            const amount = Math.max(1, Math.trunc(Number(game._goldCount || item.quan || 1)));
+            const thrownGold = {
+                ...item,
+                letter: undefined,
+                line: undefined,
+                ox,
+                oy,
+                quan: amount,
+                glyph: '$',
+                color: CLR_YELLOW,
+            };
+            const landing = landProjectileObjectWithShopHandling(thrownGold, ox, oy, { breakRoll: 0 });
+            const landingMessage = landing.messages.join('  ');
+            newsym(ox, oy);
+            removeGoldFromHero(amount);
+            if (landingMessage) await setMessage(landingMessage);
+            else {
+                game._pending_message = '';
+                game._message_more = 0;
+            }
+            game._command_mode = null;
+            game._throw_item_letter = null;
+            game._resume_time_after_more = 0;
+            game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
+            game.context.move = 0;
+            return;
+        }
+        let thrownId = null;
+        if ((item.quan || 1) > 1) {
+            if (item.otyp === DART || /\bdarts?\b/.test(lowerName)) rnd(1); // C throw_obj: multishot count.
+            thrownId = next_ident(); // C splitobj: nextoid()/next_ident() for the thrown unit.
+        }
 	        const combatObject = item.cls === 'weapon' || item.cls === 'gem' || item.glyph === ')' || item.otyp === GEM_CLASS;
 	        let impactMessage = '';
 	        if (targetMon && (item.otyp === CREAM_PIE || lowerName === 'cream pie')) {
