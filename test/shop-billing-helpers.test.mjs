@@ -329,6 +329,9 @@ function simpleFood(id, kind, letter = 'f', extra = {}) {
         'cream pie': 'cream pies',
         'cram ration': 'cram rations',
         'fortune cookie': 'fortune cookies',
+        'sprig of wolfsbane': 'sprigs of wolfsbane',
+        'clove of garlic': 'cloves of garlic',
+        'eucalyptus leaf': 'eucalyptus leaves',
         'tripe ration': 'tripe rations',
     };
     const article = /^[aeiou]/i.test(kind) ? 'an' : 'a';
@@ -4661,6 +4664,162 @@ test('carried K-ration and C-ration use C delay-one bland victual path', async (
     }
 });
 
+test('carried delay-one plant foods use shared C victual path', async () => {
+    const cases = [
+        { kind: 'orange', letter: 'o', message: 'This orange is delicious!', hunger: 980 },
+        { kind: 'pear', letter: 'p', message: 'Core dumped.', hunger: 950 },
+        { kind: 'melon', letter: 'm', message: 'This melon is delicious!', hunger: 1000 },
+        { kind: 'banana', letter: 'b', message: 'This banana is delicious!', hunger: 980 },
+        { kind: 'carrot', letter: 'c', message: 'This carrot is delicious!', hunger: 950 },
+        { kind: 'sprig of wolfsbane', letter: 'w', message: 'This sprig of wolfsbane is delicious!', hunger: 940 },
+        { kind: 'clove of garlic', letter: 'g', message: 'This clove of garlic is delicious!', hunger: 940 },
+        { kind: 'eucalyptus leaf', letter: 'e', message: 'This eucalyptus leaf is delicious!', hunger: 901 },
+    ];
+
+    for (const [index, entry] of cases.entries()) {
+        installNonShopFloorState();
+        const food = simpleFood(31920 + index, entry.kind, entry.letter);
+        game.inventory = [food];
+
+        await rhack('e');
+        await rhack(entry.letter);
+
+        assert.equal(game._pending_message, entry.message, entry.kind);
+        assert.equal(game.inventory.includes(food), false, entry.kind);
+        assert.equal(game.u.uhunger, entry.hunger, entry.kind);
+        assert.equal(game.u.uconduct?.food, 1, entry.kind);
+        assert.equal(game.u.uconduct?.unvegan || 0, 0, entry.kind);
+        assert.equal(game.u.uconduct?.unvegetarian || 0, 0, entry.kind);
+        assert.equal(game._eating_turns_remaining || 0, 0, entry.kind);
+        assert.equal(game._eating_inventory_object, null, entry.kind);
+        assert.equal(game._eating_bite_nutrition || 0, 0, entry.kind);
+        assert.equal(game.context.move, 1, entry.kind);
+    }
+});
+
+test('carrot clears temporary blindness after the delay-one bite', async () => {
+    installNonShopFloorState();
+    const carrot = simpleFood(31940, 'carrot', 'c');
+    game.inventory = [carrot];
+    Object.assign(game.u, {
+        blind: true,
+        _blindTimeout: 20,
+        ucreamed: 0,
+        _statusSuffix: ' Blind',
+    });
+
+    await rhack('e');
+    await rhack('c');
+
+    assert.equal(game._pending_message, 'This carrot is delicious!  You can see again.');
+    assert.equal(game.inventory.includes(carrot), false);
+    assert.equal(game.u.uhunger, 950);
+    assert.equal(game.u.blind, false);
+    assert.equal(game.u._blindTimeout, 0);
+    assert.doesNotMatch(game.u._statusSuffix || '', /Blind/);
+});
+
+test('garlic scares nearby olfactory monsters after the delay-one bite', async () => {
+    installNonShopFloorState();
+    const garlic = simpleFood(31941, 'clove of garlic', 'g');
+    const nearDog = { mx: 6, my: 5, data: { name: 'dog', mlet: 'd' } };
+    const farDog = { mx: 9, my: 5, data: { name: 'dog', mlet: 'd' } };
+    const eye = { mx: 5, my: 6, data: { name: 'floating eye', mlet: 'e' } };
+    game.inventory = [garlic];
+    game.level.monsters = [nearDog, farDog, eye];
+
+    await rhack('e');
+    await rhack('g');
+
+    assert.equal(game._pending_message, 'This clove of garlic is delicious!');
+    assert.equal(nearDog.mflee, 1);
+    assert.equal(nearDog.mfleetim, 0);
+    assert.equal(farDog.mflee || 0, 0);
+    assert.equal(eye.mflee || 0, 0);
+});
+
+test('undead garlic starts vomiting instead of scaring monsters', async () => {
+    installNonShopFloorState();
+    const garlic = simpleFood(31942, 'clove of garlic', 'g');
+    const nearDog = { mx: 6, my: 5, data: { name: 'dog', mlet: 'd' } };
+    game.inventory = [garlic];
+    game.level.monsters = [nearDog];
+    game.u._polyself_form = { name: 'ghost', undead: true };
+
+    await rhack('e');
+    await rhack('g');
+
+    assert.equal(game._pending_message, '');
+    assert.equal(game.inventory.includes(garlic), false);
+    assert.equal(game.u.uhunger, 940);
+    assert.equal(game.u._vomitingTimeout, 5);
+    assert.equal(game.u.vomiting, true);
+    assert.match(game.u._statusSuffix || '', /Vom/);
+    assert.equal(nearDog.mflee || 0, 0);
+});
+
+test('rotten garlic skips the C garlic prefix effect', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    const garlic = simpleFood(31945, 'clove of garlic', 'g', { cursed: true });
+    const nearDog = { mx: 6, my: 5, data: { name: 'dog', mlet: 'd' } };
+    game.inventory = [garlic];
+    game.level.monsters = [nearDog];
+    game.u._polyself_form = { name: 'ghost', undead: true };
+
+    await rhack('e');
+    await rhack('g');
+
+    assert.equal(game._pending_message, 'Blecch!  Rotten food!');
+    assert.equal(game.u.uhunger, 920);
+    assert.equal(game.u._vomitingTimeout || 0, 0);
+    assert.equal(nearDog.mflee || 0, 0);
+});
+
+test('eucalyptus leaf cures sickness and vomiting when uncursed', async () => {
+    installNonShopFloorState();
+    const leaf = simpleFood(31943, 'eucalyptus leaf', 'e');
+    game.inventory = [leaf];
+    Object.assign(game.u, {
+        sick: true,
+        _sickTimeout: 20,
+        vomiting: true,
+        _vomitingTimeout: 12,
+        _statusSuffix: ' Sick Vom',
+    });
+
+    await rhack('e');
+    await rhack('e');
+
+    assert.equal(game._pending_message, 'This eucalyptus leaf is delicious!  You feel cured.  What a relief!  You feel much less nauseated now.');
+    assert.equal(game.inventory.includes(leaf), false);
+    assert.equal(game.u.uhunger, 901);
+    assert.equal(game.u.sick, false);
+    assert.equal(game.u._sickTimeout, 0);
+    assert.equal(game.u.vomiting, false);
+    assert.equal(game.u._vomitingTimeout, 0);
+    assert.doesNotMatch(game.u._statusSuffix || '', /Sick|Vom/);
+});
+
+test('sprig of wolfsbane cures lycanthropy after the delay-one bite', async () => {
+    installNonShopFloorState();
+    const sprig = simpleFood(31944, 'sprig of wolfsbane', 'w');
+    game.inventory = [sprig];
+    Object.assign(game.u, {
+        ulycn: 123,
+        lycanthrope: true,
+    });
+
+    await rhack('e');
+    await rhack('w');
+
+    assert.equal(game._pending_message, 'This sprig of wolfsbane is delicious!  You feel purified.');
+    assert.equal(game.inventory.includes(sprig), false);
+    assert.equal(game.u.uhunger, 940);
+    assert.equal(game.u.ulycn, -1);
+    assert.equal(game.u.lycanthrope, false);
+});
+
 test('recovered choking on one-bite candy bar consumes the food', async () => {
     installCommandShopState();
     game.u.uhunger = 1950;
@@ -4771,6 +4930,14 @@ test('floor delay-one apple stack consumes one item without occupation', async (
 test('shop-floor delay-one food stacks bill the touched unit before immediate finish', async () => {
     const cases = [
         { kind: 'apple', id: 31893, message: 'Delicious!  Must be a Macintosh!', hunger: 950 },
+        { kind: 'orange', id: 31951, message: 'This orange is delicious!', hunger: 980 },
+        { kind: 'pear', id: 31952, message: 'Core dumped.', hunger: 950 },
+        { kind: 'melon', id: 31953, message: 'This melon is delicious!', hunger: 1000 },
+        { kind: 'banana', id: 31954, message: 'This banana is delicious!', hunger: 980 },
+        { kind: 'carrot', id: 31955, message: 'This carrot is delicious!', hunger: 950 },
+        { kind: 'sprig of wolfsbane', id: 31956, message: 'This sprig of wolfsbane is delicious!', hunger: 940 },
+        { kind: 'clove of garlic', id: 31957, message: 'This clove of garlic is delicious!', hunger: 940 },
+        { kind: 'eucalyptus leaf', id: 31958, message: 'This eucalyptus leaf is delicious!', hunger: 901 },
         { kind: 'fortune cookie', id: 31894, message: 'This fortune cookie is delicious!', hunger: 940, more: 1, conduct: 'unvegan' },
         { kind: 'cream pie', id: 31895, message: 'This cream pie is delicious!', hunger: 1000, conduct: 'unvegan' },
         { kind: 'candy bar', id: 31896, message: 'This candy bar is delicious!', hunger: 1000, conduct: 'unvegan' },
@@ -4787,6 +4954,14 @@ test('shop-floor delay-one food stacks bill the touched unit before immediate fi
             'candy bar': 'candy bars',
             'K-ration': 'K-rations',
             'C-ration': 'C-rations',
+            orange: 'oranges',
+            pear: 'pears',
+            melon: 'melons',
+            banana: 'bananas',
+            carrot: 'carrots',
+            'sprig of wolfsbane': 'sprigs of wolfsbane',
+            'clove of garlic': 'cloves of garlic',
+            'eucalyptus leaf': 'eucalyptus leaves',
         };
         const stack = simpleFood(entry.id, entry.kind, undefined, {
             quan: 2,
