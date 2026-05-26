@@ -11757,6 +11757,35 @@ function makeOrdinaryBellWishObject() {
     });
 }
 
+function makeCandelabrumOfInvocationWishObject() {
+    const otmp = mksobj(CANDELABRUM_OF_INVOCATION, true, false);
+    return Object.assign(otmp, {
+        cls: 'tool',
+        glyph: '(',
+        color: CLR_YELLOW,
+        kind: 'Candelabrum of Invocation',
+        actualKind: 'Candelabrum of Invocation',
+        known: true,
+        unique: true,
+        wishedfor: true,
+    });
+}
+
+function makeBookOfTheDeadWishObject() {
+    const otmp = mksobj(BOOK_OF_THE_DEAD, true, false);
+    return Object.assign(otmp, {
+        cls: 'spellbook',
+        glyph: '+',
+        color: CLR_WHITE,
+        kind: 'Book of the Dead',
+        actualKind: 'Book of the Dead',
+        spellName: '',
+        known: true,
+        unique: true,
+        wishedfor: true,
+    });
+}
+
 function makeCandleFromCandelabrumWishObject() {
     const candleType = rnd(25) <= 20 ? TALLOW_CANDLE : WAX_CANDLE;
     const wax = candleType === WAX_CANDLE;
@@ -11780,6 +11809,19 @@ function makeOilLampFromMagicLampWishObject() {
         actualKind: 'oil lamp',
         wishedfor: true,
     });
+}
+
+function makeWizardSpecialWishObject(lowerName) {
+    if (!game.flags?.debug) return null;
+    if (lowerName === 'candelabrum of invocation') {
+        rn2(WIZARD_ONLY_WISH_NAMEDESC_BOUNDS.get(lowerName));
+        return makeCandelabrumOfInvocationWishObject();
+    }
+    if (lowerName === 'book of the dead') {
+        rn2(WIZARD_ONLY_WISH_NAMEDESC_BOUNDS.get(lowerName));
+        return makeBookOfTheDeadWishObject();
+    }
+    return null;
 }
 
 function substituteNonWizardSpecialWish(lowerName) {
@@ -17362,6 +17404,17 @@ function isGlobWeightContainerObject(obj) {
         || obj?.otyp === SACK || obj?.otyp === OILSKIN_SACK || obj?.otyp === BAG_OF_HOLDING;
 }
 
+const WISHED_OBJECT_WEIGHT_OVERRIDES = new Map([
+    ['bag of tricks', 15],
+    ['bell', 30],
+    ['bell of opening', 50],
+    ['book of the dead', 20],
+    ['crystal ball', 150],
+    ['heavy iron ball', WT_IRON_BALL_BASE],
+    ['horn of plenty', 18],
+    ['tooled horn', 18],
+]);
+
 function globObjectWeight(obj) {
     if (isGlobbyObject(obj)) return Math.max(0, obj.owt ?? 20);
     if (obj?.otyp === GOLD_PIECE || obj?.cls === 'coin' || obj?.glyph === '$')
@@ -17382,6 +17435,18 @@ function globObjectWeight(obj) {
     const cls = objectWeightClass(obj);
     const unitWeight = OBJECT_WEIGHTS[kind] ?? CLASS_WEIGHTS[cls] ?? obj?.owt ?? 0;
     return Math.max(0, unitWeight * (obj?.quan || 1));
+}
+
+function wishedObjectFinalWeight(obj) {
+    if (!obj) return 0;
+    if (isCandelabrumOfInvocationItem(obj)) {
+        const candleWeight = OBJECT_WEIGHTS['tallow candle'] ?? 2;
+        return 200 + Math.max(0, Math.trunc(Number(obj.spe || 0))) * candleWeight;
+    }
+    const kind = objectKindKey(obj);
+    const override = WISHED_OBJECT_WEIGHT_OVERRIDES.get(kind);
+    if (override != null) return Math.max(0, override * (obj.quan || 1));
+    return globObjectWeight(obj);
 }
 
 function heroCarriedWeight() {
@@ -19482,7 +19547,7 @@ function applyWishedContainerState(item, qualifiers) {
         item.otrapped = qualifiers.trappedState === 1;
     if (qualifiers.empty && tin && !item._wish_tin_explicit_content)
         setTinEmpty(item);
-    if (qualifiers.empty && objectKindKey(item) === 'bag of tricks')
+    if (qualifiers.empty && (objectKindKey(item) === 'bag of tricks' || isHornOfPlentyObject(item)))
         item.spe = 0;
     if (qualifiers.empty && isWishedContainerObject(item))
         item.contents = [];
@@ -20060,6 +20125,9 @@ function wishedBaseObjectFromName(lowerName, qualifiers = {}, originalName = low
 
     const eggWish = parseWishedEggName(lowerName, qualifiers);
     if (eggWish) return makeWishedEggObject(eggWish, qualifiers);
+
+    const wizardSpecial = makeWizardSpecialWishObject(lowerName);
+    if (wizardSpecial) return wizardSpecial;
 
     const specialSubstitution = substituteNonWizardSpecialWish(lowerName);
     if (specialSubstitution) return specialSubstitution;
@@ -39191,6 +39259,7 @@ export async function rhack(_cmd) {
             applyWishedQualifiers(item, wishedQualifiers);
             applyWishedQuantity(item, wishedQuan, wishedQuanForced);
             applyWishedTinVariety(item);
+            const finalWishedWeight = wishedObjectFinalWeight(item);
             delete item._wish_ignore_requested_spe;
             delete item._wish_spe_from_suffix;
             delete item._wish_tin_explicit_content;
@@ -39238,12 +39307,14 @@ export async function rhack(_cmd) {
             const stats = game.u?.acurr?.a || [];
             const capacity = Math.min(1000, 25 * ((stats[0] ?? 10) + (stats[4] ?? 10)) + 50);
             if (carriedWeight > capacity && !(game.u?._statusSuffix || '').includes('Burdened')) {
+                item.owt = finalWishedWeight;
                 game._burden_after_more = 1;
                 game._queued_message_after_more = 'Your movements are slowed slightly because of your load.';
                 game._wish_notice_after_more = 1;
                 await setWishResultMessage(`${item.line}.`, true);
                 return;
             }
+            item.owt = finalWishedWeight;
             godsNoticeWish();
             await setWishResultMessage(`${item.line}.`);
             return;

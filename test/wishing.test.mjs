@@ -257,6 +257,59 @@ test('wish charge suffix ignores tool recharge count in normal mode', async () =
     assert.equal(game.inventory[0].recharged ?? 0, 0);
 });
 
+test('empty wished horn of plenty zeroes charges after charge suffix parsing', async () => {
+    installWishState(3, { debug: false });
+    beginWishDirectly();
+    await submitWish('empty horn of plenty (1:3)');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.inventory[0].actualKind, 'horn of plenty');
+    assert.equal(game.inventory[0].spe, 0);
+    assert.equal(game.inventory[0].recharged ?? 0, 0);
+});
+
+test('wizard bell of opening wish follows C namedesc silver-bell path', async () => {
+    installWishState();
+    beginWishDirectly();
+    await submitWish('Bell of Opening');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.inventory[0].kind, 'silver bell');
+    assert.equal(game.inventory[0].actualKind, 'bell of opening');
+    assert.notEqual(game.inventory[0].unique, true);
+    assert.match(game.inventory[0].line, /silver bell/);
+    assert.equal(game.u.uconduct?.wisharti || 0, 0);
+});
+
+test('wizard wishes create real unique invocation candelabrum and book objects', async () => {
+    installWishState();
+    beginWishDirectly();
+    await submitWish('Candelabrum of Invocation');
+
+    assert.equal(game.inventory[0].actualKind, 'Candelabrum of Invocation');
+    assert.equal(game.inventory[0].unique, true);
+    assert.equal(game.inventory[0].cls, 'tool');
+
+    installWishState();
+    beginWishDirectly();
+    await submitWish('Book of the Dead');
+
+    assert.equal(game.inventory[0].actualKind, 'Book of the Dead');
+    assert.equal(game.inventory[0].unique, true);
+    assert.equal(game.inventory[0].cls, 'spellbook');
+    assert.equal(game.u.uconduct?.wisharti || 0, 0);
+});
+
+test('wished object finalization recomputes stack weight', async () => {
+    installWishState();
+    beginWishDirectly();
+    await submitWish('2 daggers');
+
+    assert.equal(game.inventory[0].kind, 'dagger');
+    assert.equal(game.inventory[0].quan, 2);
+    assert.equal(game.inventory[0].owt, 20);
+});
+
 test('signed wish charge suffix is invalid and stripped like C', async () => {
     installWishState(17);
     beginWishDirectly();

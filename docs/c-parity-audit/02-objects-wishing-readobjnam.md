@@ -120,7 +120,7 @@ C `readobjnam` is a staged parser:
 4. create the object with `mksobj` or `mkobj`;
 5. apply C wish restrictions and object fixups.
 
-JS has a substantial independent parser in `js/cmd.js`. It covers many common qualifiers and special cases, but it is built from local regexes, local object maps, namedesc bounds, and parser fallbacks. The previous catch-all path where unrecognized input became a generic weapon has been removed: no-match wish results now keep the prompt in C-style retry mode and the fifth bad description falls back to a random object (`nethack-c/upstream/src/zap.c:6313`). Charge suffixes now run through a common pre-lookup parser shaped like `readobjnam_parse_charges()`, including `(n)`, `(r:n)`, `(lit)`, trailing-text preservation, invalid suffix stripping, `SPE_LIM`, and wand-only recharge persistence. Remaining parser drift is in C's staged fuzzy matching, object ranges, exact property limits outside the covered suffix/`spe` cases, explicit non-object results, and final object fixups.
+JS has a substantial independent parser in `js/cmd.js`. It covers many common qualifiers and special cases, but it is built from local regexes, local object maps, namedesc bounds, and parser fallbacks. The previous catch-all path where unrecognized input became a generic weapon has been removed: no-match wish results now keep the prompt in C-style retry mode and the fifth bad description falls back to a random object (`nethack-c/upstream/src/zap.c:6313`). Charge suffixes now run through a common pre-lookup parser shaped like `readobjnam_parse_charges()`, including `(n)`, `(r:n)`, `(lit)`, trailing-text preservation, invalid suffix stripping, `SPE_LIM`, and wand-only recharge persistence. Wizard-mode Candelabrum/Book wishes, the Bell namedesc silver-bell path, `empty horn of plenty`, and final wished-object `owt` recomputation now follow narrow C finalization rules. Remaining parser drift is in C's staged fuzzy matching, object ranges, exact property limits outside the covered suffix/`spe` cases, explicit non-object results, and broader object-factory fixups.
 
 ### Wish modifiers and restrictions
 
@@ -137,7 +137,8 @@ JS implements some of this, but not all:
 - `wishedSpeForItem` now has a narrow C-shaped class split: weapons, armor, weapon-tools, and charged rings use C's anti-abuse limits; wands and crystal balls cap negative requests; and non-`spe` objects collapse negative requests to zero while still taking curse state. It is still local policy because JS lacks a registry-backed `oc_charged`/class table for every object.
 - `applyWishedQuantity` now follows the C shape for common cases: non-mergeable wishes such as boots, wands, magic markers, and spellbooks stay at one, plural spellings resolve to the base object where covered, and candles/ammunition keep the C multigen caps. It is still local policy rather than full `objects[].oc_merge` metadata.
 - `parseWishedChargeSuffix` now mirrors C's last-parenthesis suffix stage for `(lit)`, `(n)`, and `(r:n)`. Parsed recharge counts are assigned to wands only; charged tools receive only the parsed `spe`, and known charge display uses the stored recharge counter instead of hard-coded zero.
-- non-wizard substitutions exist around `js/cmd.js:10240`, but they are parser-specific and not backed by `objects[].oc_nowish`.
+- non-wizard substitutions, wizard-mode real Candelabrum/Book wishes, and the Bell namedesc silver-bell path exist around `js/cmd.js:11760`, but they are parser-specific and not backed by `objects[].oc_nowish`.
+- `empty` now zeroes bag-of-tricks and horn-of-plenty charges, and the wish path refreshes final `owt` after qualifiers and quantity. This still depends on local weight maps rather than the C `objects[]` table.
 - light handling is field-based rather than connected to a generic `BURN_OBJECT` timer.
 - erosion is applied after wish parsing in `js/cmd.js:15056`, but generated erosion is already divergent.
 
@@ -250,6 +251,7 @@ After parser resolution, port the C finalization rules:
 - non-wizard substitutions for real Amulet, Candelabrum, Bell, Book, magic lamp, and `oc_nowish`
 - replace the starter requested-`spe` caps with registry-backed class, `oc_charged`, luck, blessed/cursed, wand, and crystal-ball rules
 - replace the starter quantity gates with registry-backed `oc_merge`/multigen rules, keeping non-mergeable wished objects at quantity one
+- replace the local weight maps behind final wished-object `owt` with registry-backed `weight()`
 - requested erosion/proof after clearing generated erosion
 - requested light via burn timer
 - artifact conduct, disappearance/abuse rules, and gods-notice timing

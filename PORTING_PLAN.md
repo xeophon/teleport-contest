@@ -26,7 +26,7 @@ Detailed source-backed history is kept in `docs/c-parity-audit/`. Current comple
 - Added focused C-style object-loss and alteration billing: food bites, tins, failed spellbook reads, carried fire destruction/ignition, hero-caused floor fire, box lock break, cream-pie splat, cursed charging uncharge/disenchant alteration, cursed wand backfire, magic-bag loss/scatter/blast paths, hard-landing projectile container-content impact, and container-aware projectile `stolen_value()` debt conversion.
 - Broadened charged-object and instrument usage parity: wand zaps/engraving, camera, can of grease including `#tip` spillage billing, lamps/oil, magic lamps, spellbook study, magic markers, tinning kits, crystal balls, magic flute/harp, frost/fire horns, alternate emptying, drums, and ordinary instrument shell behavior.
 - Improved C-style command/menu/payment details: multi-pickup partial-success ordering, burden/gold/scare-scroll menu handling, shop quote ordering/text, robbed-only `#pay`, itemized `#pay` row ordering/tie-breaks/headings/affordability, debit-before-itemized settlement, and nonresident distance payment refusal.
-- Improved wishing/object parsing in narrow slices: invalid wish retry/random fallback, quantity and requested `spe` constraints, charge suffix parsing, crystal-ball initialization, and known charge display.
+- Improved wishing/object parsing in narrow slices: invalid wish retry/random fallback, quantity and requested `spe` constraints, charge suffix parsing, wizard-mode Candelabrum/Book wishes plus the Bell namedesc silver-bell path, `empty horn of plenty`, final wished-object `owt`, crystal-ball initialization, and known charge display.
 - Latest verified public score: `44/44`.
 
 ## Current Priorities
@@ -41,7 +41,7 @@ Detailed source-backed history is kept in `docs/c-parity-audit/`. Current comple
    - Source notes: `docs/c-parity-audit/02-objects-wishing-readobjnam.md`.
    - Create one object metadata registry for type, class, material, weight, cost, probability, wishability, merge rules, and damage predicates.
    - Add a C-shaped object factory before deeper `mkobj`, wishing, artifact, and timer work.
-   - Continue replacing the independent wish parser with C-shaped matching, full `objects[].oc_merge`/`oc_charged` metadata, explicit "nothing" handling, artifact provenance, non-wishable substitutions, and registry-backed object finalization rules.
+   - Continue replacing the independent wish parser with C-shaped matching, full `objects[].oc_merge`/`oc_charged` metadata, explicit "nothing" handling, artifact provenance, remaining non-wishable filtering, and registry-backed object finalization rules.
 
 3. Level generation lifecycle and special-level data.
    - Source notes: `docs/c-parity-audit/03-levelgen-specials-quest.md`.
@@ -78,7 +78,7 @@ Continue the shop ledger migration:
 2. Broaden shop-floor container take-out and tip beyond recursive billing into remaining lift preflight details, remaining inventory merge edge cases outside carried-bag partial put-in, and merge/destruction edge cases; continue magic-bag work through non-ordinary sources/targets and shared `obfree()`/`stolen_value()` debt naming.
 3. Finish remaining `sellobj()` follow-ups: complete recursive `subfrombill()` integration, thrown-object breakage and less ordinary projectile ownership branches, and shared-helper integration for less ordinary object transfers.
 4. Move payment toward a complete C `dopay()` model for legacy fallbacks and remaining itemized prompt edge cases.
-5. Continue wish finalization by replacing local parser/finalizer tables with registry-backed `oc_merge`, `oc_charged`, non-wishable substitution, and artifact provenance rules.
+5. Continue wish finalization by replacing local parser/finalizer tables with registry-backed `oc_merge`, `oc_charged`, `oc_nowish`, canonical weight, and artifact provenance rules.
 
 ## Verification
 
