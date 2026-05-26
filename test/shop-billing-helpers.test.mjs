@@ -139,6 +139,25 @@ function dagger(id, letter = 'd') {
     };
 }
 
+function wieldedWeapon(id, kind, letter = 'w', spe = 0) {
+    return {
+        id,
+        cls: 'weapon',
+        glyph: ')',
+        kind,
+        actualKind: kind,
+        quan: 1,
+        spe,
+        ox: 5,
+        oy: 5,
+        letter,
+        wielded: true,
+        known: true,
+        dknown: true,
+        line: `${letter} - a ${spe >= 0 ? '+' : ''}${spe} ${kind} (weapon in right hand)`,
+    };
+}
+
 function foodRation(id, letter = 'a') {
     return {
         id,
@@ -227,6 +246,24 @@ function scrollOfRemoveCurse(id, letter = 's', blessed = false, cursed = false) 
         oy: 5,
         letter,
         line: `${letter} - a scroll of remove curse`,
+    };
+}
+
+function scrollOfEnchantWeapon(id, letter = 's', cursed = false) {
+    return {
+        id,
+        cls: 'scroll',
+        glyph: '?',
+        kind: 'scroll of enchant weapon',
+        actualKind: 'scroll of enchant weapon',
+        scrollIndex: 5,
+        cursed,
+        bknown: true,
+        quan: 1,
+        ox: 5,
+        oy: 5,
+        letter,
+        line: `${letter} - a scroll of enchant weapon`,
     };
 }
 
@@ -1220,6 +1257,56 @@ test('cursed charging an unpaid chargeable ring bills the disenchantment as used
     assert.equal(shop.shopBillEntryTotal(shkp.bill[0]), 120);
     assert.match(game._pending_message, /Your ring of protection spins counterclockwise for a moment/);
     assert.match(game._pending_message, /You disenchant that ring of protection, you pay for it!/);
+});
+
+test('cursed enchant weapon on unpaid crysknife bills pre-degraded item as used-up', async () => {
+    const { shkp } = installCommandShopState();
+    const scroll = scrollOfEnchantWeapon(309021, 's', true);
+    const blade = wieldedWeapon(309022, 'crysknife', 'w', 0);
+    game.inventory = [scroll, blade];
+    shop.addObjectToShopBill(shkp, blade, 100);
+
+    await rhack('r');
+    await rhack('s');
+
+    assert.equal(game.context.move, 1);
+    assert.equal(game.inventory.includes(scroll), false);
+    assert.equal(game.inventory.includes(blade), true);
+    assert.equal(blade.kind, 'worm tooth');
+    assert.equal(blade.actualKind, 'worm tooth');
+    assert.equal(blade.unpaid, false);
+    assert.equal(shop.shopBillEntryForObject(shkp, blade), null);
+    assert.equal(shkp.billct, 1);
+    assert.equal(shkp.bill[0].useup, true);
+    assert.equal(shop.shopBillEntryTotal(shkp.bill[0]), 100);
+    assert.equal((game._usedUpShopBills || []).length, 1);
+    assert.equal(game._usedUpShopBills[0].bo_id, shkp.bill[0].bo_id);
+    assert.match(game._pending_message, /Your crysknife is much duller now/);
+    assert.match(game._pending_message, /You degrade that crysknife, you pay for it!/);
+});
+
+test('cursed enchant weapon on unpaid enchanted weapon bills disenchantment as used-up', async () => {
+    const { shkp } = installCommandShopState();
+    const scroll = scrollOfEnchantWeapon(309023, 's', true);
+    const blade = wieldedWeapon(309024, 'dagger', 'w', 2);
+    game.inventory = [scroll, blade];
+    shop.addObjectToShopBill(shkp, blade, 80);
+
+    await rhack('r');
+    await rhack('s');
+
+    assert.equal(game.context.move, 1);
+    assert.equal(blade.spe, 1);
+    assert.equal(blade.kind, 'dagger');
+    assert.equal(blade.unpaid, false);
+    assert.equal(shop.shopBillEntryForObject(shkp, blade), null);
+    assert.equal(shkp.billct, 1);
+    assert.equal(shkp.bill[0].useup, true);
+    assert.equal(shop.shopBillEntryTotal(shkp.bill[0]), 80);
+    assert.equal((game._usedUpShopBills || []).length, 1);
+    assert.equal(game._usedUpShopBills[0].bo_id, shkp.bill[0].bo_id);
+    assert.match(game._pending_message, /Your dagger glows black for a moment/);
+    assert.match(game._pending_message, /You disenchant that dagger, you pay for it!/);
 });
 
 test('remove curse uncurses unpaid unholy water and preserves a used-up bill row', async () => {

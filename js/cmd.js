@@ -13952,6 +13952,8 @@ function transformWormToCrysknife(target, messages) {
 function transformCrysknifeToWormTooth(scroll, target, messages) {
     const multiple = (target.quan || 1) > 1;
     messages.push(`${enchantWeaponSubject(target)} ${multiple ? 'fuse, and become' : 'is'} much duller now.`);
+    const payment = costlyAlterationPaymentMessage(target, 'degrade');
+    if (payment) messages.push(payment);
     target.kind = 'worm tooth';
     target.actualKind = 'worm tooth';
     target.quan = 1;
@@ -14013,6 +14015,10 @@ function enchantWeaponScrollChwepon(scroll, amount, messages) {
         learned = target.known === true && (amount > 0 || (amount < 0 && scroll.bknown === true));
     }
 
+    if (amount < 0) {
+        const payment = costlyAlterationPaymentMessage(target, 'disenchant');
+        if (payment) messages.push(payment);
+    }
     target.spe = capWishSpe(spe + amount);
     if (amount > 0 && target.cursed) target.cursed = false;
     refreshEnchantWeaponLine(target);
