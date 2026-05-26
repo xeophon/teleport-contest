@@ -5963,6 +5963,29 @@ test('taking merchandise from a shop-floor container adds the carried object to 
     assert.match(contained.line, /unpaid, \d+ zorkmids?/);
 });
 
+test('taking stale field-only unpaid merchandise from a shop-floor container bills current shop price', () => {
+    const { shkp } = installShopState();
+    const container = shopFloorContainer(6103);
+    const contained = putObjectInContainer(container, foodRation(6104));
+    contained.unpaid = true;
+    contained.unpaidPrice = 999;
+    game.level.objects = [container];
+    const expectedPrice = shop.shopItemPrice(contained, container.ox, container.oy);
+
+    shop.removeContainedObject(container, contained);
+    const line = shop.addContainerTakeoutObjectToInventory(container, contained);
+    const entry = shop.shopBillEntryForObject(shkp, contained);
+
+    assert.equal(game.inventory.includes(contained), true);
+    assert.ok(entry);
+    assert.equal(shop.shopBillEntryTotal(entry), expectedPrice);
+    assert.equal(contained.unpaid, true);
+    assert.equal(contained.unpaidPrice, expectedPrice);
+    assert.notEqual(contained.unpaidPrice, 999);
+    assert.equal(shkp.billct, 1);
+    assert.match(line, new RegExp(`unpaid, ${expectedPrice} zorkmids?`));
+});
+
 test('shop-floor container take-out slot failure happens before billing or extraction', async () => {
     const { shkp } = installCommandShopState();
     const container = shopFloorContainer(6111);
@@ -6437,6 +6460,69 @@ test('container take-out partial stack lifting splits before shop billing', asyn
     assert.equal(game.context.move, 1);
 });
 
+test('container take-out partial stack clears stale unpaid fields before billing lifted part', async () => {
+    const { shkp } = installCommandShopState();
+    const container = shopFloorContainer(61401);
+    const contained = putObjectInContainer(container, { ...foodRation(61402), quan: 20 });
+    contained.unpaid = true;
+    contained.unpaidPrice = 999;
+    game.level.objects = [container];
+    game.u.acurr.a = [1, 1, 10, 10, 1, 10];
+    game.flags.pickup_burden = 'overloaded';
+
+    await confirmSingleContainerTakeout(container, contained);
+
+    const carried = game.inventory.find(item => item.kind === 'food ration');
+    const entry = shop.shopBillEntryForObject(shkp, carried);
+    const expectedPrice = shop.shopItemPrice(carried, container.ox, container.oy);
+
+    assert.ok(carried);
+    assert.notEqual(carried, contained);
+    assert.equal(contained.quan, 5);
+    assert.notEqual(contained.unpaid, true);
+    assert.equal(contained.unpaidPrice, undefined);
+    assert.equal(carried.quan, 15);
+    assert.equal(carried.unpaid, true);
+    assert.ok(entry);
+    assert.equal(shop.shopBillEntryTotal(entry), expectedPrice);
+    assert.equal(carried.unpaidPrice, expectedPrice);
+    assert.notEqual(carried.unpaidPrice, 999);
+    assert.equal(shkp.billct, 1);
+    assert.equal(game.context.move, 1);
+});
+
+test('container take-out partial live unpaid stack splits the bill row', async () => {
+    const { shkp } = installCommandShopState();
+    const container = shopFloorContainer(61403);
+    const contained = putObjectInContainer(container, { ...foodRation(61404), quan: 20 });
+    const totalPrice = shop.shopItemPrice(contained, container.ox, container.oy);
+    shop.addObjectToShopBill(shkp, contained, totalPrice);
+    game.level.objects = [container];
+    game.u.acurr.a = [1, 1, 10, 10, 1, 10];
+    game.flags.pickup_burden = 'overloaded';
+
+    await confirmSingleContainerTakeout(container, contained);
+
+    const carried = game.inventory.find(item => item.kind === 'food ration');
+    const parentEntry = shop.shopBillEntryForObject(shkp, contained);
+    const childEntry = shop.shopBillEntryForObject(shkp, carried);
+
+    assert.ok(carried);
+    assert.notEqual(carried, contained);
+    assert.equal(contained.quan, 5);
+    assert.equal(carried.quan, 15);
+    assert.ok(parentEntry);
+    assert.ok(childEntry);
+    assert.equal(parentEntry.bquan, 5);
+    assert.equal(childEntry.bquan, 15);
+    assert.equal(parentEntry.price, childEntry.price);
+    assert.equal(shop.shopBillEntryTotal(parentEntry) + shop.shopBillEntryTotal(childEntry), totalPrice);
+    assert.equal(contained.unpaidPrice, shop.shopBillEntryTotal(parentEntry));
+    assert.equal(carried.unpaidPrice, shop.shopBillEntryTotal(childEntry));
+    assert.equal(shkp.billct, 2);
+    assert.equal(game.context.move, 1);
+});
+
 test('full inventory allows no-charge container take-out into a paid stack', async () => {
     const { shkp } = installCommandShopState();
     const container = shopFloorContainer(6141);
@@ -6481,6 +6567,36 @@ test('full inventory allows shop-floor container take-out into a compatible unpa
     assert.equal(shop.shopBillEntryTotal(entry), price * 2);
     assert.equal(target.unpaidPrice, price * 2);
     assert.match(target.line, new RegExp(`unpaid, ${price * 2} zorkmids?`));
+    assert.equal(shkp.billct, 1);
+    assert.equal(game.context.move, 1);
+});
+
+test('full inventory treats stale unpaid take-out source as current shop merchandise for merge', async () => {
+    const { shkp } = installCommandShopState();
+    const container = shopFloorContainer(6146);
+    const contained = putObjectInContainer(container, dagger(6147));
+    contained.unpaid = true;
+    contained.unpaidPrice = 999;
+    game.level.objects = [container];
+    fillInventoryLetters();
+    const target = game.inventory[0];
+    const price = shop.shopItemPrice(contained, container.ox, container.oy);
+    shop.addObjectToShopBill(shkp, target, price);
+
+    await confirmSingleContainerTakeout(container, contained, 'a', 'Weapons');
+
+    const entry = shop.shopBillEntryForObject(shkp, target);
+    assert.doesNotMatch(game._pending_message, /knapsack cannot accommodate any more items/);
+    assert.equal(container.contents.includes(contained), false);
+    assert.equal(game.inventory.length, INVENTORY_LETTERS.length);
+    assert.equal(game.inventory.includes(contained), false);
+    assert.notEqual(contained.unpaid, true);
+    assert.equal(contained.unpaidPrice, undefined);
+    assert.equal(target.quan, 2);
+    assert.equal(target.unpaid, true);
+    assert.equal(entry.bquan, 2);
+    assert.equal(shop.shopBillEntryTotal(entry), price * 2);
+    assert.equal(target.unpaidPrice, price * 2);
     assert.equal(shkp.billct, 1);
     assert.equal(game.context.move, 1);
 });
@@ -6539,6 +6655,33 @@ test('taking a nested shop-floor container bills recursive contents and charges 
     assert.equal(shkp.debit, 9);
     assert.equal(shkp.loan, 9);
     assert.match(line, /unpaid/);
+});
+
+test('taking a nested shop-floor container bills stale field-only recursive contents', () => {
+    const { shkp } = installShopState();
+    const source = shopFloorContainer(6167);
+    const bag = sack(6168);
+    const ration = putObjectInContainer(bag, foodRation(6169));
+    bag.no_charge = true;
+    ration.unpaid = true;
+    ration.unpaidPrice = 999;
+    putObjectInContainer(source, bag);
+    game.level.objects = [source];
+    const expectedPrice = shop.shopItemPrice(ration, source.ox, source.oy);
+
+    shop.removeContainedObject(source, bag);
+    const line = shop.addContainerTakeoutObjectToInventory(source, bag);
+    const rationEntry = shop.shopBillEntryForObject(shkp, ration);
+
+    assert.equal(game.inventory.includes(bag), true);
+    assert.notEqual(bag.unpaid, true);
+    assert.ok(rationEntry);
+    assert.equal(shop.shopBillEntryTotal(rationEntry), expectedPrice);
+    assert.equal(ration.unpaid, true);
+    assert.equal(ration.unpaidPrice, expectedPrice);
+    assert.notEqual(ration.unpaidPrice, 999);
+    assert.equal(shkp.billct, 1);
+    assert.doesNotMatch(line, /sack \(unpaid/);
 });
 
 test('taking no-charge contents from a shop-floor container does not bill', () => {
@@ -7919,6 +8062,31 @@ test('tipping merchandise from a shop-floor container into another container kee
     assert.equal(shkp.billct, 1);
     assert.equal(shkp.bill[0].bo_id, String(contained.id));
     assert.equal(contained.unpaidPrice, shop.shopBillEntryTotal(shkp.bill[0]));
+});
+
+test('tipping stale field-only unpaid merchandise from a shop-floor container bills current shop price', () => {
+    const { shkp } = installShopState();
+    const source = shopFloorContainer(6934);
+    const target = sack(6935, 'b');
+    const contained = putObjectInContainer(source, dagger(6936));
+    contained.unpaid = true;
+    contained.unpaidPrice = 999;
+    game.inventory = [target];
+    game.level.objects = [source];
+    const expectedPrice = shop.shopItemPrice(contained, source.ox, source.oy);
+
+    const messages = shop.tipContainerIntoContainer(source, target);
+    const entry = shop.shopBillEntryForObject(shkp, contained);
+
+    assert.match(messages.join(' '), /tumbles into/);
+    assert.equal(source.contents.length, 0);
+    assert.equal(target.contents.includes(contained), true);
+    assert.ok(entry);
+    assert.equal(shop.shopBillEntryTotal(entry), expectedPrice);
+    assert.equal(contained.unpaid, true);
+    assert.equal(contained.unpaidPrice, expectedPrice);
+    assert.notEqual(contained.unpaidPrice, 999);
+    assert.equal(shkp.billct, 1);
 });
 
 test('tipping nested shop-floor container into a carried container bills recursive contents and charges contained gold', () => {

@@ -15497,6 +15497,16 @@ function addShopBillEntryOrMark(shkp, obj, totalPrice) {
     return billEntry;
 }
 
+function liveUnpaidBillOwnerOrClear(shkp, obj) {
+    if (!obj?.unpaid) return { shkp: null, entry: null };
+    const entry = shopBillEntryForObject(shkp, obj);
+    if (entry) return { shkp, entry };
+    const owner = shopkeeperOwningBillEntry(obj);
+    if (owner.entry) return owner;
+    clearObjectShopBillState(obj);
+    return { shkp: null, entry: null };
+}
+
 function addContainedObjectsToShopBill(shkp, obj, x, y, seen = new Set()) {
     let price = 0;
     const billEntries = [];
@@ -15504,7 +15514,7 @@ function addContainedObjectsToShopBill(shkp, obj, x, y, seen = new Set()) {
         if (!child || seen.has(child)) continue;
         seen.add(child);
         if (shopBillableGold(child)) continue;
-        if (child.unpaid) {
+        if (liveUnpaidBillOwnerOrClear(shkp, child).entry) {
             syncUnpaidBillLine(child);
         } else if (!child.no_charge) {
             const childPrice = shopItemPrice(child, x, y);
@@ -16246,15 +16256,24 @@ function addContainerTakeoutObjectToShopBill(container, sourceObj, pickedItem = 
         costlyShopGoldAt(container, gold);
         return { shkp: floorShkp, price: gold, billEntry: null };
     }
-    if (pickedItem.unpaid) {
-        syncUnpaidBillLine(pickedItem);
-        return { shkp: null, price: 0, billEntry: null };
-    }
-    if (sourceObj.unpaid) {
+    const sourceOwner = sourceObj === pickedItem ? { shkp: null, entry: null } : liveUnpaidBillOwnerOrClear(floorShkp, sourceObj);
+    if (sourceOwner.entry) {
+        const splitCount = Math.max(1, Math.trunc(Number(pickedItem.quan || 1)));
+        if (splitCount < shopBillEntryQuantity(sourceOwner.entry)) {
+            const billEntry = splitShopBillEntry(sourceOwner.shkp, sourceObj, pickedItem, splitCount);
+            if (!billEntry) return { shkp: sourceOwner.shkp, price: 0, billEntry: null };
+            syncUnpaidBillLine(sourceObj);
+            return { shkp: sourceOwner.shkp, price: 0, billEntry };
+        }
         pickedItem.unpaid = true;
-        pickedItem.unpaidPrice = pickedItem.unpaidPrice || sourceObj.unpaidPrice;
+        pickedItem.unpaidPrice = pickedItem.unpaidPrice || sourceObj.unpaidPrice || shopBillEntryTotal(sourceOwner.entry);
         syncUnpaidBillLine(pickedItem);
-        return { shkp: null, price: 0, billEntry: null };
+        return { shkp: sourceOwner.shkp, price: 0, billEntry: sourceOwner.entry };
+    }
+    const pickedOwner = liveUnpaidBillOwnerOrClear(floorShkp, pickedItem);
+    if (pickedOwner.entry) {
+        syncUnpaidBillLine(pickedItem);
+        return { shkp: pickedOwner.shkp, price: 0, billEntry: pickedOwner.entry };
     }
     if (globContents(sourceObj).length)
         return addContainerAndContentsToShopBill(container, sourceObj, pickedItem, floorShkp, x, y);
@@ -16266,7 +16285,7 @@ function addContainerTakeoutObjectToShopBill(container, sourceObj, pickedItem = 
         pickedItem.no_charge = false;
         return { shkp, price: 0, billEntry: null };
     }
-    const price = shopItemPrice(sourceObj, x, y);
+    const price = shopItemPrice(pickedItem, x, y);
     if (!(price > 0)) return { shkp, price: 0, billEntry: null };
     const billEntry = addObjectToShopBill(shkp, pickedItem, price);
     if (!billEntry) {
@@ -16581,7 +16600,7 @@ function containerTakeoutInventorySourceView(container, obj) {
 
 function containerTakeoutMergeBilling(container, obj) {
     const shkp = shopFloorContainerShopkeeper(container);
-    if (!shkp || obj?.unpaid || obj?.no_charge || globContents(obj).length)
+    if (!shkp || liveUnpaidBillOwnerOrClear(shkp, obj).entry || obj?.no_charge || globContents(obj).length)
         return { shkp, price: 0, sourceWillBeUnpaid: false };
     const x = container?.ox;
     const y = container?.oy;
@@ -16604,10 +16623,11 @@ function containerTakeoutBillMergeCompatible(source, target, billing) {
 }
 
 function findContainerTakeoutInventoryMergeTarget(container, obj) {
-    if (!obj || shopBillableGold(obj) || obj.unpaid) return null;
+    if (!obj || shopBillableGold(obj)) return null;
+    const billing = containerTakeoutMergeBilling(container, obj);
+    if (obj.unpaid) return null;
     const source = containerTakeoutInventorySourceView(container, obj);
     if (!pickupObjectCanInventoryMerge(source)) return null;
-    const billing = containerTakeoutMergeBilling(container, obj);
     for (const target of game.inventory || []) {
         if (!pickedObjectInventoryMergeCompatible(target, source, billing.sourceWillBeUnpaid, billing.shkp)) continue;
         if (!containerTakeoutBillMergeCompatible(source, target, billing)) continue;
@@ -21657,10 +21677,11 @@ function prepareContainerTakeoutObject(container, obj) {
 }
 
 function addContainerTakeoutObjectToInventory(container, obj, options = {}) {
+    const billingSource = options.sourceObj || obj;
     if (shopBillableGold(obj)) {
         prepareContainerTakeoutObject(container, obj);
         const amount = Math.max(1, Math.trunc(Number(obj.quan || 1)));
-        addContainerTakeoutObjectToShopBill(container, obj, obj);
+        addContainerTakeoutObjectToShopBill(container, billingSource, obj);
         addGoldToHero(amount);
         return `$ - ${amount} gold piece${amount === 1 ? '' : 's'}`;
     }
@@ -21681,7 +21702,7 @@ function addContainerTakeoutObjectToInventory(container, obj, options = {}) {
         kind: obj.kind || pickupObjectName({ ...obj, quan: 1 }),
     });
     obj.line = normalInventoryLine({ ...obj, line: '' });
-    addContainerTakeoutObjectToShopBill(container, obj, obj);
+    addContainerTakeoutObjectToShopBill(container, billingSource, obj);
     game.inventory = [...(game.inventory || []), obj];
     maybeAttachCarriedFigurineTimeout(obj);
     game._pet_food_scan_inventory = game.inventory;
@@ -21720,7 +21741,7 @@ async function finishContainerTakeoutSelection(container, picked, preflightMessa
     for (const pickedEntry of picked || []) {
         const source = pickedEntry.item;
         const obj = splitContainerTakeoutObjectForLift(source, pickedEntry.takeCount || source?.quan || 1);
-        const line = addContainerTakeoutObjectToInventory(container, obj, { inventoryLetter: pickedEntry.inventoryLetter });
+        const line = addContainerTakeoutObjectToInventory(container, obj, { inventoryLetter: pickedEntry.inventoryLetter, sourceObj: source });
         moved.push(obj);
         messages.push(/[.!?]$/.test(line) ? line : `${line}.`);
     }
