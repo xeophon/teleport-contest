@@ -1143,6 +1143,7 @@ const HOMEMADE_TIN = 1;
 const SPINACH_TIN = -1;
 const FOOD_NUTRITION = new Map([
     ['tripe ration', 200],
+    ['tripe', 200],
     ['egg', 80],
     ['eucalyptus leaf', 1],
     ['apple', 50],
@@ -1167,6 +1168,8 @@ const FOOD_NUTRITION = new Map([
     ['tin', 0],
 ]);
 const CARRIED_DELAYED_FOOD_VICTUALS = new Map([
+    ['tripe ration', { delay: 2, finishName: 'tripe ration' }],
+    ['tripe', { delay: 2, finishName: 'tripe ration' }],
     ['pancake', { otyp: PANCAKE, delay: 2, finishName: 'pancake' }],
     ['lembas wafer', { otyp: LEMBAS_WAFER, delay: 2, finishName: 'lembas wafer' }],
     ['cram ration', { otyp: CRAM_RATION, delay: 3, finishName: 'cram ration', bland: true }],
@@ -1177,6 +1180,8 @@ const DELAY_ONE_FOOD_VICTUALS = new Map([
     ['cream pie', { otyp: CREAM_PIE, delay: 1, finishName: 'cream pie' }],
     ['candy bar', { delay: 1, finishName: 'candy bar' }],
     ['fortune cookie', { otyp: FORTUNE_COOKIE, delay: 1, finishName: 'fortune cookie' }],
+    ['k-ration', { otyp: K_RATION, delay: 1, finishName: 'K-ration', bland: true }],
+    ['c-ration', { otyp: C_RATION, delay: 1, finishName: 'C-ration', bland: true }],
 ]);
 const ROTTABLE_NON_CORPSE_FOODS = new Set(['apple', 'carrot', 'pear', 'melon', 'orange', 'banana', 'kelp frond', 'lump of royal jelly']);
 const POISONABLE_WISH_WEAPONS = new Set([
@@ -4723,6 +4728,8 @@ const OBJECT_WEIGHTS = {
     'pancake': 2,
     'pear': 2,
     'sprig of wolfsbane': 1,
+    'tripe': 10,
+    'tripe ration': 10,
     'meat ring': 5,
     'grappling hook': 30,
     'hammer': 50,
@@ -4909,6 +4916,7 @@ const SHOP_OBJECT_COSTS = {
     'fumble boots': 30,
     'levitation boots': 30,
     'tripe ration': 15,
+    'tripe': 15,
     'egg': 9,
     'apple': 7,
     'orange': 9,
@@ -10819,6 +10827,7 @@ function foodObjectNutrition(item) {
         return CORPSE_NUTRITION.get(corpseName) || 0;
     }
     const kind = objectKindKey(item).replace(/^partly eaten /, '');
+    if ((item.foodRoll || 1000) <= 140) return FOOD_NUTRITION.get('tripe ration') || 200;
     if (kind.startsWith('tin:')) return 0;
     return FOOD_NUTRITION.get(kind) ?? 0;
 }
@@ -10997,6 +11006,9 @@ function recordFoodConduct(item) {
     if ((isCorpseItem(item) || isGlobFood(item) || /\bcorpse$/.test(kind)) && !veganCorpse) {
         conduct.unvegan = (conduct.unvegan || 0) + 1;
         conduct.unvegetarian = (conduct.unvegetarian || 0) + 1;
+    } else if (kind === 'tripe ration' || kind === 'tripe' || (item?.foodRoll || 1000) <= 140) {
+        conduct.unvegan = (conduct.unvegan || 0) + 1;
+        conduct.unvegetarian = (conduct.unvegetarian || 0) + 1;
     } else if (isEggItem(item) || isRoyalJelly(item)
         || kind === 'pancake' || kind === 'fortune cookie'
         || kind === 'cream pie' || kind === 'candy bar') {
@@ -11162,6 +11174,8 @@ function touchEatenFood(item, floorObject = false) {
 function delayedFoodVictualSpec(item) {
     if (!item) return null;
     const kind = objectKindKey(item).replace(/^partly eaten /, '');
+    if ((item.foodRoll || 1000) <= 140)
+        return { ...CARRIED_DELAYED_FOOD_VICTUALS.get('tripe ration'), kind: 'tripe ration' };
     const spec = CARRIED_DELAYED_FOOD_VICTUALS.get(kind);
     if (spec) return { ...spec, kind };
     for (const [entryKind, entrySpec] of CARRIED_DELAYED_FOOD_VICTUALS) {
@@ -11223,6 +11237,27 @@ function heroFoodIsDwarf() {
         || /(?:^|[-\s])dwarf(?:$|[-\s])/.test(name);
 }
 
+function heroFoodIsCarnivorousNonHumanoid() {
+    const form = polyselfForm() || {};
+    return !!(form.carnivorous || form.carnivore) && form.humanoid === false;
+}
+
+function heroTripeVomitingExempt() {
+    const role = String(game.urole?.name?.m || game._startup_role || '').toLowerCase();
+    return heroFoodIsOrc() || role.includes('cave');
+}
+
+function delayedTripeFirstBiteMessage(spec) {
+    if (heroFoodIsCarnivorousNonHumanoid())
+        return 'This tripe ration is surprisingly good!';
+    if (heroFoodIsOrc())
+        return heroIsHallucinating() ? 'Tastes great!  Less filling!' : 'Mmm, tripe... not bad!';
+    if (game.u) game.u.uexp = (game.u.uexp || 0) + 1;
+    if (rn2(2) && !heroTripeVomitingExempt())
+        addHeroVomiting(rn1(spec?.delay || 1, 14));
+    return 'Yak - dog food!';
+}
+
 function adjustedDelayedFoodBiteHunger(spec, baseNutrition) {
     let nutrition = Math.trunc(baseNutrition || 0);
     if (!(nutrition > 0)) return 0;
@@ -11247,6 +11282,8 @@ function delayedFoodFirstBiteMessage(spec, hunger) {
         if (heroFoodIsOrc()) return '!#?&* elf kibble!';
         if (heroFoodIsElf()) return 'A little goes a long way.';
     }
+    if (spec.kind === 'tripe ration' || spec.kind === 'tripe')
+        return delayedTripeFirstBiteMessage(spec);
     if (spec.kind === 'apple') return 'Delicious!  Must be a Macintosh!';
     return `This ${spec.finishName || spec.kind} is ${spec.bland ? 'bland.' : 'delicious!'}`;
 }
@@ -24056,6 +24093,7 @@ function shopBaseCost(obj) {
     else if (!kind && obj.otyp === EXPENSIVE_CAMERA) kind = 'expensive camera';
     else if (!kind && obj.otyp === STETHOSCOPE) kind = 'stethoscope';
     else if (!kind && obj.otyp === MAGIC_MARKER) kind = 'magic marker';
+    if ((obj.foodRoll || 1000) <= 140 || kind === 'tripe') kind = 'tripe ration';
     return SHOP_OBJECT_COSTS[kind] || 0;
 }
 

@@ -329,6 +329,7 @@ function simpleFood(id, kind, letter = 'f', extra = {}) {
         'cream pie': 'cream pies',
         'cram ration': 'cram rations',
         'fortune cookie': 'fortune cookies',
+        'tripe ration': 'tripe rations',
     };
     const article = /^[aeiou]/i.test(kind) ? 'an' : 'a';
     return {
@@ -4260,6 +4261,7 @@ test('carried delayed ordinary foods use C bite timing and messages', async () =
         { kind: 'pancake', letter: 'p', firstOeaten: 100, firstHunger: 1000, turns: 2, bite: 100, finalHunger: 1100, message: 'This pancake is delicious!', conduct: 'unvegan' },
         { kind: 'lembas wafer', letter: 'l', firstOeaten: 400, firstHunger: 1300, turns: 2, bite: 400, finalHunger: 1700, message: 'This lembas wafer is delicious!', finish: "You're finally finished." },
         { kind: 'cram ration', letter: 'c', firstOeaten: 400, firstHunger: 1100, turns: 3, bite: 200, finalHunger: 1500, message: 'This cram ration is bland.', finish: "You're finally finished." },
+        { kind: 'tripe ration', letter: 't', firstOeaten: 100, firstHunger: 1000, turns: 2, bite: 100, finalHunger: 1100, message: 'Yak - dog food!', conduct: 'unvegan', vegetarianConduct: true, experience: 1 },
     ];
 
     for (const entry of cases) {
@@ -4279,6 +4281,8 @@ test('carried delayed ordinary foods use C bite timing and messages', async () =
         assert.equal(game._eating_bite_nutrition, entry.bite, entry.kind);
         assert.equal(game._eating_bite_hunger, entry.bite, entry.kind);
         if (entry.conduct) assert.equal(game.u.uconduct?.[entry.conduct], 1, entry.kind);
+        if (entry.vegetarianConduct) assert.equal(game.u.uconduct?.unvegetarian, 1, entry.kind);
+        if (entry.experience) assert.equal(game.u.uexp, entry.experience, entry.kind);
 
         finishEatingOccupation();
 
@@ -4630,6 +4634,33 @@ test('carried delay-one cream pie and candy bar use victual path and animal-prod
     }
 });
 
+test('carried K-ration and C-ration use C delay-one bland victual path', async () => {
+    const cases = [
+        { kind: 'K-ration', letter: 'k', message: 'This K-ration is bland.', hunger: 1300 },
+        { kind: 'C-ration', letter: 'c', message: 'This C-ration is bland.', hunger: 1200 },
+    ];
+
+    for (const entry of cases) {
+        installNonShopFloorState();
+        const food = simpleFood(31897 + cases.indexOf(entry), entry.kind, entry.letter);
+        game.inventory = [food];
+
+        await rhack('e');
+        await rhack(entry.letter);
+
+        assert.equal(game._pending_message, entry.message, entry.kind);
+        assert.equal(game.inventory.includes(food), false, entry.kind);
+        assert.equal(game.u.uhunger, entry.hunger, entry.kind);
+        assert.equal(game.u.uconduct?.food, 1, entry.kind);
+        assert.equal(game.u.uconduct?.unvegan || 0, 0, entry.kind);
+        assert.equal(game.u.uconduct?.unvegetarian || 0, 0, entry.kind);
+        assert.equal(game._eating_turns_remaining || 0, 0, entry.kind);
+        assert.equal(game._eating_inventory_object, null, entry.kind);
+        assert.equal(game._eating_bite_nutrition || 0, 0, entry.kind);
+        assert.equal(game.context.move, 1, entry.kind);
+    }
+});
+
 test('recovered choking on one-bite candy bar consumes the food', async () => {
     installCommandShopState();
     game.u.uhunger = 1950;
@@ -4743,6 +4774,8 @@ test('shop-floor delay-one food stacks bill the touched unit before immediate fi
         { kind: 'fortune cookie', id: 31894, message: 'This fortune cookie is delicious!', hunger: 940, more: 1, conduct: 'unvegan' },
         { kind: 'cream pie', id: 31895, message: 'This cream pie is delicious!', hunger: 1000, conduct: 'unvegan' },
         { kind: 'candy bar', id: 31896, message: 'This candy bar is delicious!', hunger: 1000, conduct: 'unvegan' },
+        { kind: 'K-ration', id: 31897, message: 'This K-ration is bland.', hunger: 1300 },
+        { kind: 'C-ration', id: 31898, message: 'This C-ration is bland.', hunger: 1200 },
     ];
 
     for (const entry of cases) {
@@ -4752,6 +4785,8 @@ test('shop-floor delay-one food stacks bill the touched unit before immediate fi
             'fortune cookie': 'fortune cookies',
             'cream pie': 'cream pies',
             'candy bar': 'candy bars',
+            'K-ration': 'K-rations',
+            'C-ration': 'C-rations',
         };
         const stack = simpleFood(entry.id, entry.kind, undefined, {
             quan: 2,
@@ -4788,6 +4823,7 @@ test('floor delayed ordinary foods use C bite timing and finish removal', async 
         { kind: 'pancake', firstOeaten: 100, firstHunger: 1000, turns: 2, bite: 100, finalHunger: 1100, message: 'This pancake is delicious!', conduct: 'unvegan' },
         { kind: 'lembas wafer', firstOeaten: 400, firstHunger: 1300, turns: 2, bite: 400, finalHunger: 1700, message: 'This lembas wafer is delicious!', finish: "You're finally finished." },
         { kind: 'cram ration', firstOeaten: 400, firstHunger: 1100, turns: 3, bite: 200, finalHunger: 1500, message: 'This cram ration is bland.', finish: "You're finally finished." },
+        { kind: 'tripe ration', firstOeaten: 100, firstHunger: 1000, turns: 2, bite: 100, finalHunger: 1100, message: 'Yak - dog food!', conduct: 'unvegan', vegetarianConduct: true, experience: 1 },
     ];
 
     for (const entry of cases) {
@@ -4809,6 +4845,8 @@ test('floor delayed ordinary foods use C bite timing and finish removal', async 
         assert.equal(game._eating_bite_nutrition, entry.bite, entry.kind);
         assert.equal(game._eating_bite_hunger, entry.bite, entry.kind);
         if (entry.conduct) assert.equal(game.u.uconduct?.[entry.conduct], 1, entry.kind);
+        if (entry.vegetarianConduct) assert.equal(game.u.uconduct?.unvegetarian, 1, entry.kind);
+        if (entry.experience) assert.equal(game.u.uexp, entry.experience, entry.kind);
 
         finishEatingOccupation();
 
@@ -10260,9 +10298,11 @@ test('covered simple food pickup full-inventory preflight allows no-charge K-rat
     assert.equal(game.context.move, 1);
 });
 
-test('shopBaseCost returns C prices for K-ration and C-ration', () => {
+test('shopBaseCost returns C prices for K-ration, C-ration, and tripe aliases', () => {
     assert.equal(shop.shopBaseCost(simpleFood(7125, 'K-ration')), 25);
     assert.equal(shop.shopBaseCost(simpleFood(7126, 'C-ration')), 20);
+    assert.equal(shop.shopBaseCost(simpleFood(7127, 'tripe ration')), 15);
+    assert.equal(shop.shopBaseCost({ ...simpleFood(7128, 'tripe'), foodRoll: 140 }), 15);
 });
 
 test('food-ration pickup full-inventory preflight rejects BUC mismatch', async () => {
