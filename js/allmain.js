@@ -2811,10 +2811,14 @@ function addEatingNutrition(g, nutrition) {
     if (g.u.uhunger > 1000) g.u._statusSuffix = `${g.u._statusSuffix || ''} Satiated`;
 }
 
-function consumeEatingInventoryObject(item, nutrition) {
+function consumeEatingObject(item, nutrition) {
     if (!item?.oeaten || !(nutrition > 0)) return;
     item.oeaten -= nutrition;
     if (item.oeaten <= 0) item.oeaten = 1;
+}
+
+function consumeEatingInventoryObject(item, nutrition) {
+    consumeEatingObject(item, nutrition);
 }
 
 function removeEatingInventoryObject(g, item) {
@@ -2826,6 +2830,12 @@ function clearEatingInventoryState(g) {
     g._eating_inventory_object = null;
     g._eating_bite_nutrition = 0;
     g._eating_bite_hunger = 0;
+}
+
+function useUpEatingFloorObject(g, item) {
+    if (!item || !g?.level) return;
+    g.level.objects = (g.level.objects || []).filter(other => other !== item);
+    newsym(item.ox, item.oy);
 }
 
 function interruptPositiveMultiForStoning() {
@@ -2843,6 +2853,7 @@ function stopStoningOccupations() {
     game._eating_turns_remaining = 0;
     game._eating_finish_message = '';
     game._eating_floor_object = null;
+    game._eating_floor_object_direct_useup = 0;
     game._eating_floor_object_pending_useup = null;
     game._eating_nutrition = 0;
     game._eating_newt_buzz = 0;
@@ -10711,23 +10722,33 @@ export function processEatingOccupationTick(g = game) {
         return false;
     g._eating_turns_remaining--;
     const eatenInventoryObject = g._eating_inventory_object;
+    const eatenFloorObject = g._eating_floor_object;
     const biteNutrition = Math.trunc(g._eating_bite_nutrition || 0);
     const biteHunger = Math.trunc(g._eating_bite_hunger || biteNutrition);
     if (eatenInventoryObject && biteNutrition > 0 && g._eating_turns_remaining > 0) {
         addEatingNutrition(g, biteHunger);
         consumeEatingInventoryObject(eatenInventoryObject, biteNutrition);
     }
+    if (eatenFloorObject && biteNutrition > 0 && g._eating_turns_remaining > 0) {
+        addEatingNutrition(g, biteHunger);
+        consumeEatingObject(eatenFloorObject, biteNutrition);
+    }
     if (!g._eating_turns_remaining) {
         g._map_redraw_pending = 1;
-        const eatenFloorObject = g._eating_floor_object;
         if (eatenFloorObject) {
-            g._eating_floor_object_pending_useup = eatenFloorObject;
+            if (g._eating_floor_object_direct_useup) {
+                useUpEatingFloorObject(g, eatenFloorObject);
+                g._eating_floor_object_direct_useup = 0;
+            } else {
+                g._eating_floor_object_pending_useup = eatenFloorObject;
+            }
             g._eating_floor_object = null;
         }
         if (eatenInventoryObject) {
             removeEatingInventoryObject(g, eatenInventoryObject);
             clearEatingInventoryState(g);
         }
+        if (eatenFloorObject && biteNutrition > 0) clearEatingInventoryState(g);
         if (g._eating_nutrition && g.u) {
             addEatingNutrition(g, g._eating_nutrition);
             g._eating_nutrition = 0;
@@ -10919,6 +10940,7 @@ export async function moveloop_core() {
 	            g._eating_turns_remaining = 0;
 	            g._eating_finish_message = '';
 	            g._eating_floor_object = null;
+	            g._eating_floor_object_direct_useup = 0;
 	            g._eating_newt_buzz = 0;
 	            g._eating_nutrition = 0;
 	            clearEatingInventoryState(g);

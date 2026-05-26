@@ -4169,6 +4169,165 @@ test('partly eaten rotten carried delayed food keeps the rotten message when con
     assert.equal(game._eating_turns_remaining || 0, 0);
 });
 
+test('floor delayed ordinary foods use C bite timing and finish removal', async () => {
+    const cases = [
+        { kind: 'food ration', firstOeaten: 640, firstHunger: 1060, turns: 5, bite: 160, finalHunger: 1700, message: '' },
+        { kind: 'pancake', firstOeaten: 100, firstHunger: 1000, turns: 2, bite: 100, finalHunger: 1100, message: 'This pancake is delicious!', conduct: 'unvegan' },
+        { kind: 'lembas wafer', firstOeaten: 400, firstHunger: 1300, turns: 2, bite: 400, finalHunger: 1700, message: 'This lembas wafer is delicious!' },
+        { kind: 'cram ration', firstOeaten: 400, firstHunger: 1100, turns: 3, bite: 200, finalHunger: 1500, message: 'This cram ration is bland.' },
+    ];
+
+    for (const entry of cases) {
+        installNonShopFloorState();
+        const food = simpleFood(3190 + cases.indexOf(entry), entry.kind);
+        delete food.letter;
+        delete food.line;
+        game.level.objects = [food];
+
+        await rhack('e');
+        await rhack('y');
+
+        assert.equal(game._pending_message, entry.message, entry.kind);
+        assert.equal(game.level.objects.includes(food), true, entry.kind);
+        assert.equal(food.oeaten, entry.firstOeaten, entry.kind);
+        assert.equal(game.u.uhunger, entry.firstHunger, entry.kind);
+        assert.equal(game._eating_turns_remaining, entry.turns, entry.kind);
+        assert.equal(game._eating_floor_object, food, entry.kind);
+        assert.equal(game._eating_bite_nutrition, entry.bite, entry.kind);
+        assert.equal(game._eating_bite_hunger, entry.bite, entry.kind);
+        if (entry.conduct) assert.equal(game.u.uconduct?.[entry.conduct], 1, entry.kind);
+
+        finishEatingOccupation();
+
+        assert.equal(game.level.objects.includes(food), false, entry.kind);
+        assert.equal(game.u.uhunger, entry.finalHunger, entry.kind);
+        assert.equal(game._eating_turns_remaining || 0, 0, entry.kind);
+        assert.equal(game._eating_floor_object, null, entry.kind);
+        assert.equal(game._eating_bite_hunger || 0, 0, entry.kind);
+        assert.match(game._pending_message || '', new RegExp(`You finish eating the ${entry.kind.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\.`), entry.kind);
+    }
+});
+
+test('floor delayed foods use C race-adjusted hunger before victual ticks', async () => {
+    const cases = [
+        { race: 'orc', kind: 'lembas wafer', firstOeaten: 400, firstHunger: 1200, turns: 2, bite: 400, biteHunger: 300, finalHunger: 1500, message: '!#?&* elf kibble!' },
+        { race: 'elf', kind: 'lembas wafer', firstOeaten: 400, firstHunger: 1400, turns: 2, bite: 400, biteHunger: 500, finalHunger: 1900, message: 'A little goes a long way.' },
+        { race: 'dwarf', kind: 'cram ration', firstOeaten: 400, firstHunger: 1133, turns: 3, bite: 200, biteHunger: 233, finalHunger: 1599, message: 'This cram ration is bland.' },
+    ];
+
+    for (const entry of cases) {
+        installNonShopFloorState();
+        game._startup_race = entry.race;
+        game.urace = { noun: entry.race };
+        const food = simpleFood(3198 + cases.indexOf(entry), entry.kind);
+        delete food.letter;
+        delete food.line;
+        game.level.objects = [food];
+
+        await rhack('e');
+        await rhack('y');
+
+        assert.equal(game._pending_message, entry.message, entry.race);
+        assert.equal(food.oeaten, entry.firstOeaten, entry.race);
+        assert.equal(game.u.uhunger, entry.firstHunger, entry.race);
+        assert.equal(game._eating_turns_remaining, entry.turns, entry.race);
+        assert.equal(game._eating_bite_nutrition, entry.bite, entry.race);
+        assert.equal(game._eating_bite_hunger, entry.biteHunger, entry.race);
+
+        finishEatingOccupation();
+
+        assert.equal(game.level.objects.includes(food), false, entry.race);
+        assert.equal(game.u.uhunger, entry.finalHunger, entry.race);
+    }
+});
+
+test('floor cursed delayed food halves before C bites and then finishes', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    const ration = foodRation(3195);
+    delete ration.letter;
+    delete ration.line;
+    ration.cursed = true;
+    game.level.objects = [ration];
+
+    await rhack('e');
+    await rhack('y');
+
+    assert.equal(game._pending_message, 'Blecch!  Rotten food!');
+    assert.equal(game.level.objects.includes(ration), true);
+    assert.equal(ration.oeaten, 267);
+    assert.equal(game.u.uhunger, 1033);
+    assert.equal(game._eating_turns_remaining, 3);
+    assert.equal(game._eating_floor_object, ration);
+
+    acknowledgeMoreForOccupation();
+    finishEatingOccupation();
+
+    assert.equal(game.level.objects.includes(ration), false);
+    assert.equal(game.u.uhunger, 1299);
+    assert.match(game._pending_message || '', /You finish eating the food ration\./);
+});
+
+test('floor rotten delayed food sleep leaves the halved meal on the floor', async () => {
+    installNonShopFloorState();
+    const ration = foodRation(3196);
+    delete ration.letter;
+    delete ration.line;
+    ration.cursed = true;
+    game.level.objects = [ration];
+
+    await rhack('e');
+    await rhack('y');
+
+    assert.equal(game._pending_message, 'Blecch!  Rotten food!  The world spins and goes dark.');
+    assert.equal(game.level.objects.includes(ration), true);
+    assert.equal(ration.oeaten, 400);
+    assert.equal(ration.orotten, true);
+    assert.equal(game.u.uhunger, 900);
+    assert.equal(game._eating_turns_remaining || 0, 0);
+    assert.equal(game._eating_floor_object || null, null);
+    assert.ok(game.context.move > 1);
+});
+
+test('floor delayed shop stack bills touched unit before C bites', async () => {
+    const { shkp } = installCommandShopState();
+    const stack = foodRation(3197);
+    Object.assign(stack, {
+        quan: 2,
+        plural: 'food rations',
+    });
+    delete stack.letter;
+    delete stack.line;
+    game.level.objects = [stack];
+    const expected = shop.shopItemPrice({ ...stack, quan: 1 }, 5, 5);
+
+    await rhack('e');
+    await rhack('y');
+
+    assert.equal(game.level.objects.includes(stack), true);
+    assert.equal(stack.quan, 1);
+    assert.equal(stack.oeaten, 640);
+    assert.equal(stack.no_charge, true);
+    const rest = game.level.objects.find(obj => obj !== stack && obj.kind === 'food ration');
+    assert.ok(rest);
+    assert.equal(rest.quan, 1);
+    assert.notEqual(rest.no_charge, true);
+    const bite = shop.shopBillEntryForObject(shkp, stack);
+    assert.ok(bite);
+    assert.equal(bite.useup, true);
+    assert.equal(shop.shopBillEntryTotal(bite), expected);
+
+    finishEatingOccupation();
+
+    assert.equal(game.level.objects.includes(stack), false);
+    assert.equal(game.level.objects.includes(rest), true);
+    assert.equal(rest.quan, 1);
+    assert.equal(rest.no_charge || false, false);
+    assert.equal(game.u.uhunger, 1700);
+    assert.equal(game._eating_floor_object, null);
+    assert.equal(shop.shopBillEntryTotal(bite), expected);
+});
+
 test('shop pickup merge rejects unpaid into paid and combines compatible unpaid bills', () => {
     const { shkp } = installShopState();
     const floorObj = foodRation(4001, 'b');

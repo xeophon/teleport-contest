@@ -10996,7 +10996,7 @@ function delayedFoodCanAgeRot(spec) {
     return spec?.kind !== 'lembas wafer' && spec?.kind !== 'cram ration';
 }
 
-function carriedDelayedFoodShouldBeRotten(item, spec) {
+function delayedFoodShouldBeRotten(item, spec) {
     if (!item || !spec) return false;
     if (item.cursed) return true;
     if (!delayedFoodCanAgeRot(spec)) return false;
@@ -11064,10 +11064,10 @@ function delayedFoodVictualState(touched, spec) {
     return { reqtime, biteNutrition, biteHunger };
 }
 
-function startCarriedDelayedFoodVictual(item, spec) {
+function startDelayedFoodVictual(item, spec, { floorObject = false } = {}) {
     const hungerBeforeBite = game.u?.uhunger ?? 900;
     const alreadyPartlyEaten = item?.oeaten > 0;
-    const touched = touchEatenFood(item);
+    const touched = touchEatenFood(item, floorObject);
     recordFoodConduct(touched);
     const finishName = spec.finishName || spec.kind;
     let message = alreadyPartlyEaten ? `You begin eating the partly eaten ${finishName}.` : delayedFoodFirstBiteMessage(spec, hungerBeforeBite);
@@ -11076,17 +11076,18 @@ function startCarriedDelayedFoodVictual(item, spec) {
     let move = 1;
     let rottenFirstBite = false;
 
-    if (carriedDelayedFoodShouldBeRotten(touched, spec)) {
+    if (delayedFoodShouldBeRotten(touched, spec)) {
         const rotten = rottenFoodEffect();
         message = rotten.message;
         more = true;
         processTimeWithMore = true;
         rottenFirstBite = true;
         consumeOeaten(touched, 1);
-        refreshInventoryObjectLine(touched);
+        if (floorObject) newsym(touched.ox, touched.oy);
+        else refreshInventoryObjectLine(touched);
         if (rotten.rottenSleepDuration) {
             touched.orotten = true;
-            game._pet_food_scan_inventory = game.inventory || [];
+            if (!floorObject) game._pet_food_scan_inventory = game.inventory || [];
             return {
                 message,
                 more,
@@ -11103,12 +11104,16 @@ function startCarriedDelayedFoodVictual(item, spec) {
     if (biteNutrition > 0) {
         addHeroNutrition(biteHunger);
         consumeOeaten(touched, -biteNutrition);
-        refreshInventoryObjectLine(touched);
+        if (floorObject) newsym(touched.ox, touched.oy);
+        else refreshInventoryObjectLine(touched);
     }
 
     if (reqtime <= 1 || biteNutrition <= 0) {
-        removeInventoryItem(touched);
-        game._pet_food_scan_inventory = game.inventory || [];
+        if (floorObject) consumeOneFloorObject(touched);
+        else {
+            removeInventoryItem(touched);
+            game._pet_food_scan_inventory = game.inventory || [];
+        }
         return {
             message: reqtime <= 1 && alreadyPartlyEaten && !rottenFirstBite ? `You eat the partly eaten ${finishName}.` : message,
             more,
@@ -11120,11 +11125,16 @@ function startCarriedDelayedFoodVictual(item, spec) {
 
     game._eating_turns_remaining = reqtime;
     game._eating_finish_message = `You finish eating the ${finishName}.`;
-    game._eating_inventory_object = touched;
+    if (floorObject) {
+        game._eating_floor_object = touched;
+        game._eating_floor_object_direct_useup = 1;
+    } else {
+        game._eating_inventory_object = touched;
+        game._pet_food_scan_inventory = game.inventory || [];
+    }
     game._eating_bite_nutrition = biteNutrition;
     game._eating_bite_hunger = biteHunger;
     game._eating_nutrition = 0;
-    game._pet_food_scan_inventory = game.inventory || [];
 
     return {
         message,
@@ -11134,6 +11144,10 @@ function startCarriedDelayedFoodVictual(item, spec) {
         finished: false,
         touched,
     };
+}
+
+function startCarriedDelayedFoodVictual(item, spec) {
+    return startDelayedFoodVictual(item, spec);
 }
 
 function applyWishedPartlyEaten(item) {
@@ -44105,6 +44119,7 @@ export async function rhack(_cmd) {
             const oldCorpse = floorCorpse && food?.oldCorpse;
             const name = pickupObjectName({ ...(food || {}), quan: 1 });
             game._eat_floor_object = null;
+            game._eating_floor_object_direct_useup = 0;
             if (isTinObject(food)) {
                 await startTinOpening(food, true);
                 return;
@@ -44252,6 +44267,15 @@ export async function rhack(_cmd) {
             }
             if (isRoyalJelly(food)) {
                 await eatRoyalJelly(food, true);
+                return;
+            }
+            const delayedFoodVictual = delayedFoodVictualSpec(food);
+            if (delayedFoodVictual) {
+                const result = startDelayedFoodVictual(food, delayedFoodVictual, { floorObject: true });
+                await setMessage(result.message, result.more);
+                if (result.processTimeWithMore) game._process_time_with_more = 1;
+                game._command_mode = null;
+                game.context.move = result.move ?? 1;
                 return;
             }
             const touched = touchEatenFood(food, true);
