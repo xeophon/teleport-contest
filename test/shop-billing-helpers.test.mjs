@@ -75,6 +75,51 @@ function installCommandShopState() {
     return state;
 }
 
+function installAngryNotRobbedPayState({ gold = 0, seed = 1, player = 'Hero', customer = 'PreviousCustomer' } = {}) {
+    const { shkp } = installCommandShopState();
+    initRng(seed);
+    game.plname = player;
+    Object.assign(shkp, {
+        angry: true,
+        hostile: true,
+        mpeaceful: 0,
+        following: 1,
+        robbed: 0,
+        debit: 0,
+        loan: 0,
+        credit: 0,
+        bill: [],
+        billct: 0,
+        customer,
+    });
+    const purse = gold ? goldPieces(99100, gold) : null;
+    game.inventory = purse ? [purse] : [];
+    game._goldCount = gold;
+    return { shkp, purse };
+}
+
+function assertStillAngryNotRobbed(shkp) {
+    assert.equal(shkp.angry, true);
+    assert.equal(shkp.hostile, true);
+    assert.equal(shkp.mpeaceful, 0);
+    assert.equal(shkp.following, 1);
+    assert.equal(shkp.robbed || 0, 0);
+    assert.equal(shkp.debit || 0, 0);
+    assert.equal(shkp.loan || 0, 0);
+    assert.equal(shkp.billct, 0);
+    assert.deepEqual(shkp.bill, []);
+}
+
+function assertPacifiedNoDebt(shkp) {
+    assert.equal(shkp.angry, false);
+    assert.equal(shkp.hostile, false);
+    assert.equal(shkp.mpeaceful, 1);
+    assert.equal(shkp.following, 0);
+    assert.equal(shkp.robbed || 0, 0);
+    assert.equal(shkp.debit || 0, 0);
+    assert.equal(shkp.billct, 0);
+}
+
 function makeShopkeeper(id, name, x, y, overrides = {}) {
     const resident = game.level?.rooms?.[0]?.resident || {};
     return {
@@ -10027,6 +10072,67 @@ test('pay command refuses robbed-only compensation below half the loss', async (
     assert.doesNotMatch(game._pending_message, /do not owe/i);
     assert.equal(game._goldCount, 9);
     assert.equal(shkp.robbed, 20);
+    assert.equal(game.context.move, 1);
+});
+
+test('pay command refuses angry unrobbed appeasement with no gold', async () => {
+    const { shkp } = installAngryNotRobbedPayState({ gold: 0 });
+
+    await rhack('p');
+
+    assert.equal(game._command_mode, null);
+    assert.match(game._pending_message, /Izchak is after your hide, not your gold!/);
+    assert.match(game._pending_message, /Moreover, you have no gold\./);
+    assert.doesNotMatch(game._pending_message, /do not owe|try to appease/i);
+    assert.equal(game._goldCount, 0);
+    assertStillAngryNotRobbed(shkp);
+    assert.equal(game.context.move, 1);
+});
+
+test('pay command refuses angry unrobbed appeasement below 1000 gold', async () => {
+    const { shkp, purse } = installAngryNotRobbedPayState({ gold: 999 });
+    shkp.credit = 1000;
+
+    await rhack('p');
+
+    assert.equal(game._command_mode, null);
+    assert.match(game._pending_message, /Izchak is after your hide, not your gold!/);
+    assert.match(game._pending_message, /Besides, you don't have enough to interest him\./);
+    assert.doesNotMatch(game._pending_message, /try to appease/i);
+    assert.equal(game._goldCount, 999);
+    assert.equal(purse.quan, 999);
+    assert.equal(shkp.credit, 1000);
+    assertStillAngryNotRobbed(shkp);
+    assert.equal(game.context.move, 1);
+});
+
+test('pay command appeases angry unrobbed shopkeepers with 1000 gold', async () => {
+    const { shkp, purse } = installAngryNotRobbedPayState({ gold: 1500, customer: 'SomeoneElse' });
+
+    await rhack('p');
+
+    assert.equal(game._command_mode, null);
+    assert.match(game._pending_message, /Izchak is after your hide, not your gold!/);
+    assert.match(game._pending_message, /You try to appease the angry Izchak by giving him 1000 gold pieces\./);
+    assert.match(game._pending_message, /Izchak calms down\./);
+    assert.doesNotMatch(game._pending_message, /as angry as ever/i);
+    assert.equal(game._goldCount, 500);
+    assert.equal(purse.quan, 500);
+    assertPacifiedNoDebt(shkp);
+    assert.equal(game.context.move, 1);
+});
+
+test('pay command can leave the same angry unrobbed customer angry after appeasement', async () => {
+    const { shkp, purse } = installAngryNotRobbedPayState({ gold: 1500, seed: 2, player: 'Hero', customer: 'Hero' });
+
+    await rhack('p');
+
+    assert.equal(game._command_mode, null);
+    assert.match(game._pending_message, /You try to appease the angry Izchak by giving him 1000 gold pieces\./);
+    assert.match(game._pending_message, /But Izchak is as angry as ever\./);
+    assert.equal(game._goldCount, 500);
+    assert.equal(purse.quan, 500);
+    assertStillAngryNotRobbed(shkp);
     assert.equal(game.context.move, 1);
 });
 

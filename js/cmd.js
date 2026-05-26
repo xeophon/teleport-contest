@@ -24167,8 +24167,18 @@ function shopkeeperRobbedAmount(shkp) {
     return Math.max(0, Math.trunc(Number(shkp?.robbed || 0)));
 }
 
+const SHOPKEEPER_APPEASEMENT_GOLD = 1000;
+
 function hasRobbedOnlyShopPayment(shkp, entries = []) {
     if (!shkp || shopkeeperRobbedAmount(shkp) <= 0 || entries.length) return false;
+    const ledgerCount = Array.isArray(shkp.bill) ? shkp.bill.length : 0;
+    const billCount = Math.max(ledgerCount, Math.max(0, Math.trunc(Number(shkp.billct || 0))));
+    const debit = Math.max(0, Math.trunc(Number(shkp.debit || 0)));
+    return billCount === 0 && debit === 0;
+}
+
+function hasAngryUnrobbedShopPayment(shkp, entries = []) {
+    if (!shkp || entries.length || shopkeeperRobbedAmount(shkp) > 0 || !shopkeeperAngryForSellobj(shkp)) return false;
     const ledgerCount = Array.isArray(shkp.bill) ? shkp.bill.length : 0;
     const billCount = Math.max(ledgerCount, Math.max(0, Math.trunc(Number(shkp.billct || 0))));
     const debit = Math.max(0, Math.trunc(Number(shkp.debit || 0)));
@@ -24264,6 +24274,61 @@ function finishRobbedOnlyShopPayment(shkp, { resident = null } = {}) {
     };
 }
 
+function finishAngryUnrobbedShopPayment(shkp) {
+    if (!shkp) return { handled: false, paid: false, cashTotal: 0, message: '' };
+
+    const money = (game.inventory || []).find(item => item.letter === '$' || item.cls === 'coin');
+    const availableGold = Math.max(0, Math.trunc(Number(game._goldCount || money?.quan || 0)));
+    const name = shopkeeperDisplayName(shkp);
+    const messages = [`${name} is after your hide, not your gold!`];
+
+    if (availableGold < SHOPKEEPER_APPEASEMENT_GOLD) {
+        messages.push(availableGold
+            ? `Besides, you don't have enough to interest ${shopkeeperObjectivePronoun(shkp)}.`
+            : 'Moreover, you have no gold.');
+        return { handled: true, paid: false, cashTotal: 0, message: messages.join('  ') };
+    }
+
+    const targetName = payCanSpotMonster(shkp) ? `the angry ${name}` : name;
+    messages.push(`You try to appease ${targetName} by giving ${shopkeeperObjectivePronoun(shkp)} ${SHOPKEEPER_APPEASEMENT_GOLD} gold pieces.`);
+    const payment = applyShopPaymentValue(shkp, SHOPKEEPER_APPEASEMENT_GOLD);
+    if (payment.coveredByCredit >= SHOPKEEPER_APPEASEMENT_GOLD) {
+        messages.push('The price is deducted from your credit.');
+    } else {
+        if (payment.coveredByCredit > 0)
+            messages.push('The price is partially covered by your credit.');
+        if (availableGold > payment.cashDue) next_ident();
+        game._goldCount = Math.max(0, availableGold - payment.cashDue);
+        if (money) {
+            money.quan = game._goldCount;
+            updateMoneyLine(money);
+        }
+    }
+
+    const customer = String(shkp.customer || '');
+    const player = String(game.plname || '');
+    const stillAngry = !!customer && !!player && customer === player && !rn2(3);
+    if (stillAngry) {
+        messages.push(`But ${name} is as angry as ever.`);
+    } else {
+        shkp.robbed = 0;
+        shkp.following = 0;
+        shkp.angry = false;
+        shkp.hostile = false;
+        shkp.mpeaceful = 1;
+        messages.push(`${name} calms down.`);
+    }
+
+    return {
+        handled: true,
+        paid: true,
+        cashTotal: payment.cashDue,
+        compensationValue: SHOPKEEPER_APPEASEMENT_GOLD,
+        angryUnrobbed: true,
+        message: messages.join('  '),
+    };
+}
+
 async function finishPayCommandForShopkeeper(shkp, resident) {
     game._pay_prepaid_message = '';
     game._pay_prepaid_paid = false;
@@ -24275,6 +24340,13 @@ async function finishPayCommandForShopkeeper(shkp, resident) {
         return;
     }
     const entries = collectPayableShopDebts(shkp);
+    if (!debitPayment.paid && hasAngryUnrobbedShopPayment(shkp, entries)) {
+        const payment = finishAngryUnrobbedShopPayment(shkp);
+        game._command_mode = null;
+        await setMessage(payment.message || "You don't have enough gold.");
+        game.context.move = 1;
+        return;
+    }
     if (!debitPayment.paid && hasRobbedOnlyShopPayment(shkp, entries)) {
         const payment = finishRobbedOnlyShopPayment(shkp, { resident });
         game._command_mode = null;
