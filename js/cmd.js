@@ -11129,7 +11129,99 @@ function delayedFoodVictualState(touched, spec) {
     return { reqtime, biteNutrition, biteHunger };
 }
 
+function clearInterruptedEatingVictualState() {
+    game._eating_interrupted = 0;
+    game._eating_paused_turns_remaining = 0;
+}
+
+function clearDelayedEatingVictualState() {
+    game._eating_turns_remaining = 0;
+    game._eating_finish_message = '';
+    game._eating_floor_object = null;
+    game._eating_floor_object_direct_useup = 0;
+    game._eating_inventory_object = null;
+    game._eating_bite_nutrition = 0;
+    game._eating_bite_hunger = 0;
+    game._eating_nutrition = 0;
+    game._eating_newt_buzz = 0;
+    clearInterruptedEatingVictualState();
+}
+
+function isPausedDelayedFoodVictual(item, floorObject = false) {
+    if (!game._eating_interrupted || !(game._eating_paused_turns_remaining > 0)) return false;
+    if (!(game._eating_bite_nutrition > 0)) return false;
+    if (floorObject)
+        return game._eating_floor_object === item
+            && (game.level?.objects || []).includes(item)
+            && item.ox === game.u?.ux
+            && item.oy === game.u?.uy;
+    return game._eating_inventory_object === item
+        && (game.inventory || []).includes(item);
+}
+
+function resumeDelayedFoodVictual(item, spec, { floorObject = false } = {}) {
+    if (!isPausedDelayedFoodVictual(item, floorObject)) return null;
+
+    const pausedTurns = Math.trunc(game._eating_paused_turns_remaining || 0);
+    const touched = touchEatenFood(item, floorObject);
+    const biteNutrition = Math.trunc(game._eating_bite_nutrition || 0);
+    const biteHunger = Math.trunc(game._eating_bite_hunger || biteNutrition);
+    const finishName = spec.finishName || spec.kind;
+    const lastBite = pausedTurns <= 2;
+    const message = lastBite
+        ? 'You consume the last bite of your meal.'
+        : 'You resume your meal.';
+
+    if (biteNutrition > 0) {
+        addHeroNutrition(biteHunger);
+        consumeOeaten(touched, -biteNutrition);
+        if (floorObject) newsym(touched.ox, touched.oy);
+        else refreshInventoryObjectLine(touched);
+    }
+
+    clearInterruptedEatingVictualState();
+    if (lastBite || biteNutrition <= 0) {
+        if (floorObject) consumeOneFloorObject(touched);
+        else {
+            removeInventoryItem(touched);
+            game._pet_food_scan_inventory = game.inventory || [];
+        }
+        clearDelayedEatingVictualState();
+        return {
+            message: `${message}  You finish eating the ${finishName}.`,
+            more: false,
+            move: 1,
+            finished: true,
+        };
+    }
+
+    game._eating_turns_remaining = pausedTurns - 1;
+    game._eating_finish_message = `You finish eating the ${finishName}.`;
+    if (floorObject) {
+        game._eating_floor_object = touched;
+        game._eating_floor_object_direct_useup = 1;
+    } else {
+        game._eating_inventory_object = touched;
+        game._pet_food_scan_inventory = game.inventory || [];
+    }
+    game._eating_bite_nutrition = biteNutrition;
+    game._eating_bite_hunger = biteHunger;
+    game._eating_nutrition = 0;
+
+    return {
+        message,
+        more: false,
+        move: 1,
+        finished: false,
+        touched,
+    };
+}
+
 function startDelayedFoodVictual(item, spec, { floorObject = false } = {}) {
+    const resumed = resumeDelayedFoodVictual(item, spec, { floorObject });
+    if (resumed) return resumed;
+    clearDelayedEatingVictualState();
+
     const hungerBeforeBite = game.u?.uhunger ?? 900;
     const alreadyPartlyEaten = item?.oeaten > 0;
     const touched = touchEatenFood(item, floorObject);

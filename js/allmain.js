@@ -2832,10 +2832,56 @@ function clearEatingInventoryState(g) {
     g._eating_bite_hunger = 0;
 }
 
+function clearInterruptedEatingState(g) {
+    g._eating_interrupted = 0;
+    g._eating_paused_turns_remaining = 0;
+}
+
 function useUpEatingFloorObject(g, item) {
     if (!item || !g?.level) return;
     g.level.objects = (g.level.objects || []).filter(other => other !== item);
     newsym(item.ox, item.oy);
+}
+
+function eatingOccupationObjectName(item) {
+    const rawName = item?.line ? inventoryItemName(item) : pickupObjectName({ ...item, quan: 1 });
+    const base = rawName
+        .replace(/^[a-zA-Z$?] - /, '')
+        .replace(/ \((?:weapon|wielded|alternate weapon|being worn|at the ready|in quiver|on .* hand).*$/, '')
+        .replace(/^(?:a|an|the)\s+/i, '');
+    return `the ${base}`;
+}
+
+function clearActiveEatingOccupation(g) {
+    g._eating_turns_remaining = 0;
+    g._eating_finish_message = '';
+    g._eating_floor_object = null;
+    g._eating_floor_object_direct_useup = 0;
+    g._eating_nutrition = 0;
+    g._eating_newt_buzz = 0;
+    clearEatingInventoryState(g);
+    clearInterruptedEatingState(g);
+}
+
+export function interruptEatingOccupation(g = game) {
+    if (!(g._eating_turns_remaining > 0)) return false;
+    if (g._eating_turns_remaining <= 1)
+        return processEatingOccupationTick(g);
+
+    const eatenObject = g._eating_inventory_object || g._eating_floor_object;
+    const biteNutrition = Math.trunc(g._eating_bite_nutrition || 0);
+    if (eatenObject && biteNutrition > 0) {
+        g._eating_paused_turns_remaining = g._eating_turns_remaining;
+        g._eating_interrupted = 1;
+        g._eating_turns_remaining = 0;
+        g._pending_rotten_food_eating_message = 0;
+        addToplineMessage(`You stop eating ${eatingOccupationObjectName(eatenObject)}.`);
+        return true;
+    }
+
+    clearActiveEatingOccupation(g);
+    g._pending_rotten_food_eating_message = 0;
+    return true;
 }
 
 function interruptPositiveMultiForStoning() {
@@ -2858,6 +2904,7 @@ function stopStoningOccupations() {
     game._eating_nutrition = 0;
     game._eating_newt_buzz = 0;
     clearEatingInventoryState(game);
+    clearInterruptedEatingState(game);
     game._pending_rotten_food_eating_message = 0;
     game._armor_wear_occupation = null;
     game._armor_takeoff_after_more = null;
@@ -10768,6 +10815,7 @@ export function processEatingOccupationTick(g = game) {
             }
         }
         g._pending_rotten_food_eating_message = 0;
+        clearInterruptedEatingState(g);
         g._pet_food_scan_inventory = g.inventory || [];
     }
     return true;
@@ -10937,13 +10985,7 @@ export async function moveloop_core() {
 	                !mon.pet && !mon.mpeaceful && !mon.msleeping && !mon.mundetected
 	                && Math.max(Math.abs(mon.mx - (g.u?.ux || 0)), Math.abs(mon.my - (g.u?.uy || 0))) <= 1
 	                && couldSeeCoord(mon.mx, mon.my))) {
-	            g._eating_turns_remaining = 0;
-	            g._eating_finish_message = '';
-	            g._eating_floor_object = null;
-	            g._eating_floor_object_direct_useup = 0;
-	            g._eating_newt_buzz = 0;
-	            g._eating_nutrition = 0;
-	            clearEatingInventoryState(g);
+	            interruptEatingOccupation(g);
 	            g._pending_time_passed = 0;
 	        }
         if (clearPetKillHalluDisplay) g._hallu_display_after_pet_kill_luck = 0;

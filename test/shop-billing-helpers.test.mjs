@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { processEatingOccupationTick } from '../js/allmain.js';
+import { interruptEatingOccupation, processEatingOccupationTick } from '../js/allmain.js';
 import { burnFloorObjectsByFire, earthFloorEffects, finishForceLock, processCorpseTimers, processGlobShrinkTimers, processSpellbookStudyOccupation, rhack, __shopBillingTestHooks as shop } from '../js/cmd.js';
 import { game, resetGame } from '../js/gstate.js';
 import { initRng } from '../js/rng.js';
@@ -3819,6 +3819,64 @@ test('carried food ration occupation removes item after later bites', async () =
     assert.match(game._pending_message || '', /You finish eating the food ration\./);
 });
 
+test('interrupted carried food ration resumes same victual without rebilling', async () => {
+    const { shkp } = installCommandShopState();
+    const ration = foodRation(31321, 'a');
+    game.inventory = [ration];
+    shop.addObjectToShopBill(shkp, ration, 45);
+
+    await rhack('e');
+    await rhack('a');
+    processEatingOccupationTick(game);
+    interruptEatingOccupation(game);
+
+    assert.equal(game._pending_message, 'You stop eating the partly eaten food ration.');
+    assert.equal(game.inventory.includes(ration), true);
+    assert.equal(ration.oeaten, 480);
+    assert.equal(game.u.uhunger, 1220);
+    assert.equal(game._eating_turns_remaining || 0, 0);
+    assert.equal(game._eating_interrupted, 1);
+    assert.equal(game._eating_paused_turns_remaining, 4);
+    assert.equal(game.u.uconduct?.food, 1);
+    assert.equal(shkp.billct, 1);
+    assert.equal((game._usedUpShopBills || []).filter(bill => String(bill.bo_id) === String(ration.id)).length, 1);
+
+    await rhack('e');
+    await rhack('a');
+
+    assert.equal(game._pending_message, 'You resume your meal.');
+    assert.equal(ration.oeaten, 320);
+    assert.equal(game.u.uhunger, 1380);
+    assert.equal(game._eating_turns_remaining, 3);
+    assert.equal(game._eating_interrupted || 0, 0);
+    assert.equal(game.u.uconduct?.food, 1);
+    assert.equal(shkp.billct, 1);
+
+    finishEatingOccupation();
+
+    assert.equal(game.inventory.includes(ration), false);
+    assert.equal(game.u.uhunger, 1700);
+    assert.match(game._pending_message || '', /You finish eating the food ration\./);
+});
+
+test('interruption on carried food ration final bite finishes the meal', async () => {
+    installCommandShopState();
+    const ration = foodRation(31322, 'a');
+    game.inventory = [ration];
+
+    await rhack('e');
+    await rhack('a');
+    for (let i = 0; i < 4; i++) processEatingOccupationTick(game);
+    interruptEatingOccupation(game);
+
+    assert.equal(game.inventory.includes(ration), false);
+    assert.equal(game.u.uhunger, 1700);
+    assert.equal(game._eating_turns_remaining || 0, 0);
+    assert.equal(game._eating_interrupted || 0, 0);
+    assert.doesNotMatch(game._pending_message || '', /stop eating/);
+    assert.match(game._pending_message || '', /You finish eating the food ration\./);
+});
+
 test('carried food ration command splits unpaid stack before victual bites', async () => {
     const { shkp } = installCommandShopState();
     const stack = foodRation(3133, 'a');
@@ -4352,6 +4410,45 @@ test('floor delayed ordinary foods use C bite timing and finish removal', async 
         assert.equal(game._eating_bite_hunger || 0, 0, entry.kind);
         assert.match(game._pending_message || '', new RegExp(`You finish eating the ${entry.kind.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\.`), entry.kind);
     }
+});
+
+test('interrupted floor food ration resumes and removes same floor unit', async () => {
+    installNonShopFloorState();
+    const ration = foodRation(31901);
+    delete ration.letter;
+    delete ration.line;
+    game.level.objects = [ration];
+
+    await rhack('e');
+    await rhack('y');
+    processEatingOccupationTick(game);
+    interruptEatingOccupation(game);
+
+    assert.equal(game._pending_message, 'You stop eating the partly eaten food ration.');
+    assert.equal(game.level.objects.includes(ration), true);
+    assert.equal(ration.oeaten, 480);
+    assert.equal(game.u.uhunger, 1220);
+    assert.equal(game._eating_turns_remaining || 0, 0);
+    assert.equal(game._eating_floor_object, ration);
+    assert.equal(game._eating_interrupted, 1);
+    assert.equal(game._eating_paused_turns_remaining, 4);
+
+    await rhack('e');
+    await rhack('y');
+
+    assert.equal(game._pending_message, 'You resume your meal.');
+    assert.equal(ration.oeaten, 320);
+    assert.equal(game.u.uhunger, 1380);
+    assert.equal(game._eating_turns_remaining, 3);
+    assert.equal(game._eating_floor_object, ration);
+    assert.equal(game._eating_interrupted || 0, 0);
+
+    finishEatingOccupation();
+
+    assert.equal(game.level.objects.includes(ration), false);
+    assert.equal(game.u.uhunger, 1700);
+    assert.equal(game._eating_floor_object, null);
+    assert.match(game._pending_message || '', /You finish eating the food ration\./);
 });
 
 test('floor delayed foods use C race-adjusted hunger before victual ticks', async () => {

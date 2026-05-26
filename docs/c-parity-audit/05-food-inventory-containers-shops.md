@@ -140,13 +140,13 @@ This audit is based only on upstream C and current JS source inspection. It does
 
 ### 1. Eating and Food State Are Approximate
 
-C keeps an active `victual` with `piece`, `usedtime`, `reqtime`, `nmod`, `canchoke`, `fullwarn`, and per-bite `oeaten` updates. First bite calls `touchfood()`, which can split a stack, set `oeaten`, and bill shop alterations before eating proceeds. Nutrition is applied during occupation ticks, not only at completion.
+C keeps an active `victual` with `piece`, `usedtime`, `reqtime`, `nmod`, `canchoke`, `fullwarn`, and per-bite `oeaten` updates. First bite calls `touchfood()`, which can split a stack, set `oeaten`, and bill shop alterations before eating proceeds. Nutrition is applied during occupation ticks, not only at completion, and `stop_occupation()`/`reset_eat()` preserve the same `victual.piece` for C's later same-object resume path (`eat.c:2923-2950`, `eat.c:3874-3888`, `allmain.c:684-688`).
 
-Current JS has touch/split helpers and a basic `_eating_turns_remaining` occupation, but most non-corpse food is consumed immediately, and multi-turn corpse nutrition is intentionally deferred until finish (`js/cmd.js:36474-36480`, `js/allmain.js:10821-10828`). This misses C behaviors that depend on bite-by-bite state: choking/full warnings, interruption/resume with a partly eaten object, per-bite shop charging, and `oeaten` weight/nutrition changes during occupation.
+Current JS now covers carried and floor `food ration`, `pancake`, `lembas wafer`, and `cram ration` with first-bite stack/shop billing, later bites, finish-time use-up, and same-object interruption/resume state (`js/cmd.js:11150-11223`, `js/allmain.js:2866-2885`, `js/allmain.js:10983-10989`). Most other non-corpse food is still consumed immediately, and multi-turn corpse nutrition is intentionally deferred until finish. Remaining gaps include choking/full warnings, broader food rows, exact corpse/glob victual state, and full `oeaten` weight/nutrition parity outside the covered rows.
 
 Concrete gaps:
 
-- `touchInventoryFood()` and `touchFloorFood()` now split, set `oeaten`, and charge unpaid shop food through a C-equivalent `costly_alteration(COST_BITE)` path; remaining victual gaps are per-turn nutrition/use-up and interruption parity.
+- `touchInventoryFood()` and `touchFloorFood()` now split, set `oeaten`, and charge unpaid shop food through a C-equivalent `costly_alteration(COST_BITE)` path; covered ordinary delayed rows also pause on visible adjacent hostile-monster interruption, print `You stop eating ...`, resume the same object with `You resume your meal.`/`You consume the last bite of your meal.`, and finish instead of stopping when the final bite has already been consumed.
 - Inventory corpse eating removes the item before the occupation finishes (`js/cmd.js:36274-36299`), while C keeps the food as `svc.context.victual.piece` until `done_eating()` or an effect consumes/revives it.
 - Generic non-corpse food applies full nutrition and removes the object in one command (`js/cmd.js:36331-36347`, `js/cmd.js:36511-36518`), bypassing C `oc_delay`, `fprefx()`, `fpostfx()`, `lesshungry()`, and choking logic.
 - `consumeOeaten()` clamps `oeaten` to at least 1 (`js/cmd.js:9278-9283`); C consumes `oeaten` toward use-up and can finish/delete the object through `done_eating()`/`useup()` (`eat.c:544-573`, `eat.c:3136-3154`).
