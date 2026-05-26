@@ -22782,7 +22782,7 @@ function shopContainerPaymentName(container, includesContainer = false) {
     return `the contents of your ${baseName}`;
 }
 
-function addContainerPaymentBillItem(groups, container, item, billEntry, price) {
+function addContainerPaymentBillItem(groups, container, item, billEntry, price, options = {}) {
     if (!container || !item || !(price > 0)) return;
     const key = shopBillObjectId(container);
     if (key == null) return;
@@ -22793,9 +22793,10 @@ function addContainerPaymentBillItem(groups, container, item, billEntry, price) 
     }
     const billId = billEntry?.bo_id ?? shopBillObjectId(item);
     if (group.billItems.some(entry => String(entry.billId) === String(billId))) return;
-    group.billItems.push({ item, billEntry, billId, price });
+    group.billItems.push({ item, billEntry, billId, price, blockedByUsedUp: !!options.blockedByUsedUp });
     group.price += price;
     if (item === container) group.includesContainer = true;
+    if (options.blockedByUsedUp) group.blockedByUsedUp = true;
 }
 
 function pushShopBillLedgerDebtEntries(shkp, entries, seenBillIds) {
@@ -22836,15 +22837,23 @@ function pushShopBillLedgerDebtEntries(shkp, entries, seenBillIds) {
                 name: shopBillEntryDisplayName(billEntry, obj, usedQuantity, shkp),
                 price: unitPrice * usedQuantity,
             });
-            intactEntries.push({
-                item: obj,
-                billEntry,
-                billPortion: 'intact',
-                quantity: liveQuantity,
-                blockedByUsedUp: true,
-                name: shopDebtItemName({ ...obj, quan: liveQuantity, line: '' }),
-                price: unitPrice * liveQuantity,
-            });
+            const intactPrice = unitPrice * liveQuantity;
+            const topContainer = outermostShopBillContainerForObject(obj);
+            if (topContainer) {
+                addContainerPaymentBillItem(containerPaymentGroups, topContainer, obj, billEntry, intactPrice, {
+                    blockedByUsedUp: true,
+                });
+            } else {
+                intactEntries.push({
+                    item: obj,
+                    billEntry,
+                    billPortion: 'intact',
+                    quantity: liveQuantity,
+                    blockedByUsedUp: true,
+                    name: shopDebtItemName({ ...obj, quan: liveQuantity, line: '' }),
+                    price: intactPrice,
+                });
+            }
             continue;
         }
 
@@ -22882,6 +22891,7 @@ function pushShopBillLedgerDebtEntries(shkp, entries, seenBillIds) {
             quantity: 1,
             name: shopContainerPaymentName(group.container, group.includesContainer),
             price: group.price,
+            blockedByUsedUp: !!group.blockedByUsedUp,
         });
     }
     entries.push(...usedEntries, ...intactEntries);
@@ -22953,11 +22963,36 @@ function shopPaymentHasUsedUpSelection(selected, entry) {
         && candidate.billPortion === 'partlyUsedUp');
 }
 
-function shopPaymentEntryBlocked(entry, selected) {
-    if (!entry?.blockedByUsedUp || !entry.billEntry || !entry.item) return false;
+function blockedShopPaymentBillItem(entry, selected) {
+    if (entry?.containerPayment || entry?.billPortion === 'containerContents') {
+        const billItems = Array.isArray(entry.billItems) ? entry.billItems : [];
+        return billItems.find(billItem => {
+            if (!billItem?.blockedByUsedUp || !billItem.billEntry || !billItem.item) return false;
+            const liveQuantity = Math.max(1, Math.trunc(Number(billItem.item.quan || 1)));
+            if (shopBillEntryQuantity(billItem.billEntry) <= liveQuantity) return false;
+            return !shopPaymentHasUsedUpSelection(selected, { billEntry: billItem.billEntry });
+        }) || null;
+    }
+    if (!entry?.blockedByUsedUp || !entry.billEntry || !entry.item) return null;
     const liveQuantity = Math.max(1, Math.trunc(Number(entry.item.quan || 1)));
-    if (shopBillEntryQuantity(entry.billEntry) <= liveQuantity) return false;
-    return !shopPaymentHasUsedUpSelection(selected, entry);
+    if (shopBillEntryQuantity(entry.billEntry) <= liveQuantity) return null;
+    return !shopPaymentHasUsedUpSelection(selected, entry) ? { item: entry.item, billEntry: entry.billEntry } : null;
+}
+
+function shopPaymentEntryBlocked(entry, selected) {
+    return !!blockedShopPaymentBillItem(entry, selected);
+}
+
+function blockedShopPaymentMessage(entry, selected) {
+    const blocker = blockedShopPaymentBillItem(entry, selected);
+    if (!blocker?.item || !blocker.billEntry) return "You can't buy that yet.";
+    const liveQuantity = Math.max(1, Math.trunc(Number(blocker.item.quan || 1)));
+    const usedQuantity = Math.max(1, shopBillEntryQuantity(blocker.billEntry) - liveQuantity);
+    const usedName = pickupObjectName({ ...blocker.item, quan: usedQuantity, line: '' });
+    const container = entry?.item || blocker.item.container;
+    const containerName = pickupObjectName({ ...(container || {}), quan: 1, line: '' }).replace(/^empty /, '');
+    const liveWord = liveQuantity > 1 ? 'ones' : 'one';
+    return `Please pay for the other ${usedName} before buying the ${liveWord} in the ${containerName}.`;
 }
 
 function payableShopPaymentEntries(selected) {
@@ -23038,6 +23073,13 @@ function payIntactShopBillEntry(shkp, entry) {
 function payContainerShopBillEntry(shkp, entry) {
     const billItems = Array.isArray(entry?.billItems) ? entry.billItems : [];
     if (!billItems.length) return { billed: false, removedLedger: false, legacy: false };
+    if (shopPaymentEntryBlocked(entry, [entry])) return {
+        billed: false,
+        removedLedger: false,
+        legacy: false,
+        blocked: true,
+        message: blockedShopPaymentMessage(entry, [entry]),
+    };
     applyShopPaymentValue(shkp, entry.price);
     const container = entry.item;
     const ordered = [...billItems].sort((a, b) => (a.item === container) - (b.item === container));
@@ -23079,7 +23121,18 @@ function applyShopPaymentEntry(shkp, entry) {
 function finishShopPaymentSelection(shkp, selected) {
     const payableEntries = payableShopPaymentEntries(selected);
     const cashTotal = shopPaymentCashDue(shkp, payableEntries);
-    if (!payableEntries.length) return { paid: false, skipped: true, cashTotal, payableEntries, message: '' };
+    if (!payableEntries.length) {
+        const blockedEntry = (selected || []).find(entry => shopPaymentEntryBlocked(entry, selected || []));
+        if (blockedEntry) return {
+            paid: false,
+            skipped: false,
+            blocked: true,
+            cashTotal,
+            payableEntries,
+            message: blockedShopPaymentMessage(blockedEntry, selected || []),
+        };
+        return { paid: false, skipped: true, cashTotal, payableEntries, message: '' };
+    }
     const money = (game.inventory || []).find(item => item.letter === '$' || item.cls === 'coin');
     const availableGold = game._goldCount || money?.quan || 0;
     if (availableGold < cashTotal) return {

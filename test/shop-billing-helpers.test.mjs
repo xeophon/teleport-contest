@@ -7023,3 +7023,76 @@ test('payable debts aggregate an unpaid floor container with its unpaid contents
     assert.equal(box.unpaid, false);
     assert.equal(blade.unpaid, false);
 });
+
+test('partly used contained bill blocks container payment until used-up portion is paid', () => {
+    const { shkp } = installShopState();
+    const box = shopFloorContainer(9470);
+    const stack = putObjectInContainer(box, { ...dagger(9471), quan: 3 });
+    game.level.objects = [box];
+    game._goldCount = 100;
+    shop.addObjectToShopBill(shkp, stack, 15);
+    stack.quan = 2;
+
+    const entries = shop.collectPayableShopDebts(shkp);
+
+    assert.equal(entries.length, 2);
+    assert.equal(entries[0].billPortion, 'partlyUsedUp');
+    assert.equal(entries[0].price, 5);
+    assert.equal(entries[1].billPortion, 'containerContents');
+    assert.equal(entries[1].price, 10);
+    assert.equal(entries[1].blockedByUsedUp, true);
+    assert.equal(entries[1].billItems[0].blockedByUsedUp, true);
+
+    const blocked = shop.finishShopPaymentSelection(shkp, [entries[1]]);
+
+    assert.equal(blocked.paid, false);
+    assert.equal(blocked.blocked, true);
+    assert.equal(blocked.skipped, false);
+    assert.match(blocked.message, /Please pay for the other dagger before buying the ones in the large box\./);
+    assert.equal(game._goldCount, 100);
+    assert.equal(shop.shopBillEntryForObject(shkp, stack).bquan, 3);
+
+    const paid = shop.finishShopPaymentSelection(shkp, [entries[1], entries[0]]);
+
+    assert.equal(paid.paid, true);
+    assert.equal(paid.cashTotal, 15);
+    assert.equal(paid.removedLedgerBillCount, 1);
+    assert.equal(game._goldCount, 85);
+    assert.equal(shkp.billct, 0);
+    assert.equal(shop.shopBillEntryForObject(shkp, stack), null);
+    assert.equal(stack.unpaid, false);
+    assert.equal(box.contents.includes(stack), true);
+});
+
+test('paying contained used-up portion first lets later container payment clear the live row', () => {
+    const { shkp } = installShopState();
+    const bag = sack(9480, 'b');
+    const stack = putObjectInContainer(bag, { ...dagger(9481), quan: 3 });
+    game.inventory = [bag];
+    game._goldCount = 100;
+    shop.addObjectToShopBill(shkp, stack, 15);
+    stack.quan = 2;
+
+    let entries = shop.collectPayableShopDebts(shkp);
+    const firstPayment = shop.finishShopPaymentSelection(shkp, [entries[0]]);
+
+    assert.equal(firstPayment.cashTotal, 5);
+    assert.equal(game._goldCount, 95);
+    assert.equal(shop.shopBillEntryForObject(shkp, stack).bquan, 2);
+
+    entries = shop.collectPayableShopDebts(shkp);
+
+    assert.equal(entries.length, 1);
+    assert.equal(entries[0].billPortion, 'containerContents');
+    assert.equal(entries[0].price, 10);
+    assert.equal(entries[0].blockedByUsedUp, false);
+
+    const secondPayment = shop.finishShopPaymentSelection(shkp, [entries[0]]);
+
+    assert.equal(secondPayment.cashTotal, 10);
+    assert.equal(game._goldCount, 85);
+    assert.equal(shkp.billct, 0);
+    assert.equal(shop.shopBillEntryForObject(shkp, stack), null);
+    assert.equal(stack.unpaid, false);
+    assert.equal(bag.contents.includes(stack), true);
+});
