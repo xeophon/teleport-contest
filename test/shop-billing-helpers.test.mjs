@@ -234,6 +234,37 @@ function chargedTool(id, kind, letter = 't', spe = 3) {
     };
 }
 
+function testObjectKind(item) {
+    return String(item?.actualKind || item?.kind || '').toLowerCase()
+        .replace(/^(?:blessed|uncursed|cursed) /, '');
+}
+
+function expectedUnpaidUsageFee(item, { altusage = false, chargeCount = item?.spe ?? item?.charges ?? 0 } = {}) {
+    const kind = testObjectKind(item);
+    let fee = shop.shopItemPrice(item, 5, 5) || 0;
+    const charges = Math.max(0, Math.trunc(Number(chargeCount || 0)));
+    if (kind === 'magic lamp') {
+        if (!altusage) return 10;
+        fee += Math.trunc(fee / 3);
+    } else if (kind === 'magic marker') {
+        fee = Math.trunc(fee / 2);
+    } else if (!altusage && (kind === 'bag of tricks' || kind === 'horn of plenty')) {
+        fee = Math.trunc(fee / 5);
+    } else if (item?.cls === 'wand' || item?.glyph === '/' || kind === 'crystal ball'
+        || kind === 'oil lamp' || kind === 'brass lantern' || kind === 'magic flute'
+        || kind === 'magic harp' || kind === 'frost horn' || kind === 'fire horn'
+        || kind === 'drum of earthquake') {
+        if (charges > 1) fee = Math.trunc(fee / 4);
+    } else if (item?.cls === 'spellbook' || item?.glyph === '+') {
+        fee -= Math.trunc(fee / 5);
+    } else if (kind === 'can of grease' || kind === 'tinning kit' || kind === 'expensive camera') {
+        fee = Math.trunc(fee / 10);
+    } else if (item?.cls === 'potion' && /(?:^| )oil$|potion of oil/.test(kind)) {
+        fee = Math.trunc(fee / 5);
+    }
+    return Math.max(0, fee);
+}
+
 function scrollOfCharging(id, letter = 's', cursed = false) {
     return {
         id,
@@ -691,6 +722,7 @@ function wishingWand(id, letter = 'w') {
         kind: 'wand of wishing',
         actualKind: 'wand of wishing',
         wand: 'wishing',
+        wandIndex: 4,
         quan: 1,
         spe: 1,
         letter,
@@ -924,11 +956,12 @@ test('normal unpaid charged tool use adds debit without changing the bill row', 
     game.inventory = [bag];
     shop.addObjectToShopBill(shkp, bag, 100);
     const messages = [];
+    const expectedFee = Math.trunc(shop.shopItemPrice(bag, 5, 5) / 5);
 
     const fee = shop.checkUnpaidUsageForTest(bag, messages);
 
-    assert.equal(fee, 20);
-    assert.equal(shkp.debit, 20);
+    assert.equal(fee, expectedFee);
+    assert.equal(shkp.debit, expectedFee);
     assert.equal(shkp.billct, 1);
     const entry = shop.shopBillEntryForObject(shkp, bag);
     assert.ok(entry);
@@ -936,7 +969,7 @@ test('normal unpaid charged tool use adds debit without changing the bill row', 
     assert.equal(shop.shopBillEntryTotal(entry), 100);
     assert.equal(bag.unpaid, true);
     assert.equal(messages.length, 1);
-    assert.match(messages[0], /Usage fee, 20 zorkmids/);
+    assert.match(messages[0], new RegExp(`Usage fee, ${expectedFee} zorkmids`));
 });
 
 test('tipping into an unpaid unknown bag of tricks bills target before locked source checks', async () => {
@@ -966,14 +999,15 @@ test('alternate unpaid horn emptying charges full use fee', () => {
     game.inventory = [horn];
     shop.addObjectToShopBill(shkp, horn, 50);
     const messages = [];
+    const expectedFee = expectedUnpaidUsageFee(horn, { altusage: true, chargeCount: 4 });
 
     const fee = shop.checkUnpaidUsageForTest(horn, messages, { altusage: true, chargeCount: 4 });
 
-    assert.equal(fee, 50);
-    assert.equal(shkp.debit, 50);
+    assert.equal(fee, expectedFee);
+    assert.equal(shkp.debit, expectedFee);
     assert.equal(shkp.billct, 1);
     assert.equal(shop.shopBillEntryForObject(shkp, horn).useup, false);
-    assert.match(messages[0], /Emptying that will cost you 50 zorkmids/);
+    assert.match(messages[0], new RegExp(`Emptying that will cost you ${expectedFee} zorkmids`));
 });
 
 test('floor horn of plenty is not selected as a #tip source', async () => {
@@ -1042,11 +1076,12 @@ test('charged instrument use follows C quarter-price rule when more than one cha
     const drum = chargedTool(3071, 'drum of earthquake', 'd', 3);
     game.inventory = [drum];
     shop.addObjectToShopBill(shkp, drum, 100);
+    const expectedFee = expectedUnpaidUsageFee(drum);
 
     const fee = shop.checkUnpaidUsageForTest(drum, []);
 
-    assert.equal(fee, 25);
-    assert.equal(shkp.debit, 25);
+    assert.equal(fee, expectedFee);
+    assert.equal(shkp.debit, expectedFee);
     assert.equal(shkp.billct, 1);
     assert.equal(shop.shopBillEntryForObject(shkp, drum).useup, false);
 });
@@ -1058,11 +1093,12 @@ test('unpaid wand use with more than one charge follows C quarter-price rule', (
     game.inventory = [wand];
     shop.addObjectToShopBill(shkp, wand, 100);
     const messages = [];
+    const expectedFee = expectedUnpaidUsageFee(wand);
 
     const fee = shop.checkUnpaidUsageForTest(wand, messages);
 
-    assert.equal(fee, 25);
-    assert.equal(shkp.debit, 25);
+    assert.equal(fee, expectedFee);
+    assert.equal(shkp.debit, expectedFee);
     assert.equal(shkp.billct, 1);
     const entry = shop.shopBillEntryForObject(shkp, wand);
     assert.ok(entry);
@@ -1070,7 +1106,7 @@ test('unpaid wand use with more than one charge follows C quarter-price rule', (
     assert.equal(shop.shopBillEntryTotal(entry), 100);
     assert.equal(wand.unpaid, true);
     assert.equal(messages.length, 1);
-    assert.match(messages[0], /Usage fee, 25 zorkmids/);
+    assert.match(messages[0], new RegExp(`Usage fee, ${expectedFee} zorkmids`));
 });
 
 test('unpaid wand use with one charge bills full item price', () => {
@@ -1079,11 +1115,12 @@ test('unpaid wand use with one charge bills full item price', () => {
     game.inventory = [wand];
     shop.addObjectToShopBill(shkp, wand, 100);
     const messages = [];
+    const expectedFee = expectedUnpaidUsageFee(wand);
 
     const fee = shop.checkUnpaidUsageForTest(wand, messages);
 
-    assert.equal(fee, 100);
-    assert.equal(shkp.debit, 100);
+    assert.equal(fee, expectedFee);
+    assert.equal(shkp.debit, expectedFee);
     assert.equal(shkp.billct, 1);
     const entry = shop.shopBillEntryForObject(shkp, wand);
     assert.ok(entry);
@@ -1091,7 +1128,7 @@ test('unpaid wand use with one charge bills full item price', () => {
     assert.equal(shop.shopBillEntryTotal(entry), 100);
     assert.equal(wand.unpaid, true);
     assert.equal(messages.length, 1);
-    assert.match(messages[0], /Usage fee, 100 zorkmids/);
+    assert.match(messages[0], new RegExp(`Usage fee, ${expectedFee} zorkmids`));
 });
 
 test('unpaid wand use with no charges is not billed for usage', () => {
@@ -1121,14 +1158,15 @@ test('engraving with an unpaid wand bills from the post-spend charge count', asy
     wand.spe = 2;
     game.inventory = [wand];
     shop.addObjectToShopBill(shkp, wand, 100);
+    const expectedFee = expectedUnpaidUsageFee(wand, { chargeCount: 1 });
 
     await rhack('E');
     await rhack('w');
 
     assert.equal(wand.spe, 1);
-    assert.equal(shkp.debit, 100);
+    assert.equal(shkp.debit, expectedFee);
     assert.equal(shkp.billct, 1);
-    assert.match(game._pending_message, /Usage fee, 100 zorkmids/);
+    assert.match(game._pending_message, new RegExp(`Usage fee, ${expectedFee} zorkmids`));
     assert.equal(game._command_mode, 'engraveToolMore');
     const entry = shop.shopBillEntryForObject(shkp, wand);
     assert.ok(entry);
@@ -1165,14 +1203,15 @@ test('cursed unpaid wand engraving backfire preserves the used-up bill row', asy
     wand.cursed = true;
     game.inventory = [wand];
     shop.addObjectToShopBill(shkp, wand, 100);
+    const expectedFee = expectedUnpaidUsageFee(wand, { chargeCount: 1 });
 
     await rhack('E');
     await rhack('w');
 
-    assert.match(game._pending_message, /Usage fee, 100 zorkmids/);
+    assert.match(game._pending_message, new RegExp(`Usage fee, ${expectedFee} zorkmids`));
     assert.match(game._pending_message, /The wand of cancellation suddenly explodes!/);
     assert.equal(game.inventory.includes(wand), false);
-    assert.equal(shkp.debit, 100);
+    assert.equal(shkp.debit, expectedFee);
     assert.equal(shkp.billct, 1);
     const entry = shop.shopBillEntryForObject(shkp, wand);
     assert.ok(entry);
@@ -1188,14 +1227,15 @@ test('cursed unpaid wand backfire preserves the wand as a used-up bill row', asy
     wand.cursed = true;
     game.inventory = [wand];
     shop.addObjectToShopBill(shkp, wand, 100);
+    const expectedFee = expectedUnpaidUsageFee(wand);
 
     await rhack('z');
     await rhack('w');
 
-    assert.match(game._pending_message, /Usage fee, 100 zorkmids/);
+    assert.match(game._pending_message, new RegExp(`Usage fee, ${expectedFee} zorkmids`));
     assert.match(game._pending_message, /The wand of cancellation suddenly explodes!/);
     assert.equal(game.inventory.includes(wand), false);
-    assert.equal(shkp.debit, 100);
+    assert.equal(shkp.debit, expectedFee);
     assert.equal(shkp.billct, 1);
     const entry = shop.shopBillEntryForObject(shkp, wand);
     assert.ok(entry);
@@ -1214,14 +1254,15 @@ test('cursed unpaid wand of wishing backfire preserves the used-up bill row', as
     wand.cursed = true;
     game.inventory = [wand];
     shop.addObjectToShopBill(shkp, wand, 100);
+    const expectedFee = expectedUnpaidUsageFee(wand);
 
     await rhack('z');
     await rhack('w');
 
-    assert.match(game._pending_message, /Usage fee, 100 zorkmids/);
+    assert.match(game._pending_message, new RegExp(`Usage fee, ${expectedFee} zorkmids`));
     assert.match(game._pending_message, /The wand of wishing suddenly explodes!/);
     assert.equal(game.inventory.includes(wand), false);
-    assert.equal(shkp.debit, 100);
+    assert.equal(shkp.debit, expectedFee);
     assert.equal(shkp.billct, 1);
     const entry = shop.shopBillEntryForObject(shkp, wand);
     assert.ok(entry);
@@ -1561,11 +1602,12 @@ test('unpaid camera grease and tinning kit use charge one tenth price', () => {
         game.inventory = [tool];
         shop.addObjectToShopBill(shkp, tool, 100);
         const messages = [];
+        const expectedFee = expectedUnpaidUsageFee(tool);
 
         const fee = shop.checkUnpaidUsageForTest(tool, messages);
 
-        assert.equal(fee, 10, kind);
-        assert.equal(shkp.debit, 10, kind);
+        assert.equal(fee, expectedFee, kind);
+        assert.equal(shkp.debit, expectedFee, kind);
         assert.equal(shkp.billct, 1, kind);
         const entry = shop.shopBillEntryForObject(shkp, tool);
         assert.ok(entry, kind);
@@ -1573,7 +1615,7 @@ test('unpaid camera grease and tinning kit use charge one tenth price', () => {
         assert.equal(shop.shopBillEntryTotal(entry), 100, kind);
         assert.equal(tool.unpaid, true, kind);
         assert.equal(messages.length, 1, kind);
-        assert.match(messages[0], /Usage fee, 10 zorkmids/, kind);
+        assert.match(messages[0], new RegExp(`Usage fee, ${expectedFee} zorkmids`), kind);
     }
 });
 
@@ -1583,10 +1625,11 @@ test('unpaid lamp and oil usage fees follow C cost-per-charge rules', () => {
         const item = lamp(3093, 'oil lamp', 'l', 3);
         game.inventory = [item];
         shop.addObjectToShopBill(shkp, item, 100);
+        const expectedFee = expectedUnpaidUsageFee(item);
         const fee = shop.checkUnpaidUsageForTest(item, []);
 
-        assert.equal(fee, 25);
-        assert.equal(shkp.debit, 25);
+        assert.equal(fee, expectedFee);
+        assert.equal(shkp.debit, expectedFee);
         assert.equal(shop.shopBillEntryForObject(shkp, item).useup, false);
     }
     {
@@ -1594,10 +1637,11 @@ test('unpaid lamp and oil usage fees follow C cost-per-charge rules', () => {
         const item = lamp(3094, 'oil lamp', 'l', 1);
         game.inventory = [item];
         shop.addObjectToShopBill(shkp, item, 100);
+        const expectedFee = expectedUnpaidUsageFee(item);
         const fee = shop.checkUnpaidUsageForTest(item, []);
 
-        assert.equal(fee, 100);
-        assert.equal(shkp.debit, 100);
+        assert.equal(fee, expectedFee);
+        assert.equal(shkp.debit, expectedFee);
         assert.equal(shop.shopBillEntryForObject(shkp, item).useup, false);
     }
     {
@@ -1605,10 +1649,11 @@ test('unpaid lamp and oil usage fees follow C cost-per-charge rules', () => {
         const item = lamp(3095, 'brass lantern', 'l', 3);
         game.inventory = [item];
         shop.addObjectToShopBill(shkp, item, 100);
+        const expectedFee = expectedUnpaidUsageFee(item);
         const fee = shop.checkUnpaidUsageForTest(item, []);
 
-        assert.equal(fee, 25);
-        assert.equal(shkp.debit, 25);
+        assert.equal(fee, expectedFee);
+        assert.equal(shkp.debit, expectedFee);
         assert.equal(shop.shopBillEntryForObject(shkp, item).useup, false);
     }
     {
@@ -1616,10 +1661,11 @@ test('unpaid lamp and oil usage fees follow C cost-per-charge rules', () => {
         const item = lamp(3096, 'magic lamp', 'l', 1);
         game.inventory = [item];
         shop.addObjectToShopBill(shkp, item, 90);
+        const expectedFee = expectedUnpaidUsageFee(item);
         const fee = shop.checkUnpaidUsageForTest(item, []);
 
-        assert.equal(fee, 10);
-        assert.equal(shkp.debit, 10);
+        assert.equal(fee, expectedFee);
+        assert.equal(shkp.debit, expectedFee);
         assert.equal(shop.shopBillEntryForObject(shkp, item).useup, false);
     }
     {
@@ -1627,10 +1673,11 @@ test('unpaid lamp and oil usage fees follow C cost-per-charge rules', () => {
         const item = lamp(3097, 'magic lamp', 'l', 1);
         game.inventory = [item];
         shop.addObjectToShopBill(shkp, item, 90);
+        const expectedFee = expectedUnpaidUsageFee(item, { altusage: true });
         const fee = shop.checkUnpaidUsageForTest(item, [], { altusage: true });
 
-        assert.equal(fee, 120);
-        assert.equal(shkp.debit, 120);
+        assert.equal(fee, expectedFee);
+        assert.equal(shkp.debit, expectedFee);
         assert.equal(shop.shopBillEntryForObject(shkp, item).useup, false);
     }
     {
@@ -1639,10 +1686,11 @@ test('unpaid lamp and oil usage fees follow C cost-per-charge rules', () => {
         game.inventory = [item];
         shop.addObjectToShopBill(shkp, item, 100);
         const messages = [];
+        const expectedFee = expectedUnpaidUsageFee(item);
         const fee = shop.checkUnpaidUsageForTest(item, messages);
 
-        assert.equal(fee, 20);
-        assert.equal(shkp.debit, 20);
+        assert.equal(fee, expectedFee);
+        assert.equal(shkp.debit, expectedFee);
         assert.equal(shop.shopBillEntryForObject(shkp, item).useup, false);
         assert.match(messages[0], /Yendorian Fuel Tax/);
     }
@@ -1653,16 +1701,17 @@ test('unpaid carried lamp catching fire in a shop charges usage and preserves a 
     const item = lamp(30981, 'oil lamp', 'l', 3);
     game.inventory = [item];
     shop.addObjectToShopBill(shkp, item, 100);
+    const expectedFee = expectedUnpaidUsageFee(item);
 
     const result = shop.fireDamageInventoryForTest(0, true);
 
     assert.equal(item.lamplit, true);
     assert.equal(item.burning, true);
     assert.equal(item.unpaid, false);
-    assert.equal(shkp.debit, 25);
+    assert.equal(shkp.debit, expectedFee);
     assert.equal(shkp.billct, 1);
     assert.match(result.messages.join(' '), /catches light/);
-    assert.match(result.messages.join(' '), /Usage fee, 25 zorkmids/);
+    assert.match(result.messages.join(' '), new RegExp(`Usage fee, ${expectedFee} zorkmids`));
     assert.match(result.messages.join(' '), /in addition to the cost/);
     const entry = shop.shopBillEntryForObject(shkp, item);
     assert.ok(entry);
@@ -1699,17 +1748,18 @@ test('unpaid carried lamp catching fire outside a shop keeps the live bill row',
     assert.equal((game._usedUpShopBills || []).length, 0);
 });
 
-test('unpaid spellbook study usage charges four fifths of bill price', () => {
+test('unpaid spellbook study usage charges four fifths of current shop price', () => {
     const { shkp } = installShopState();
     const book = healingSpellbook(3093, 'b');
     game.inventory = [book];
     shop.addObjectToShopBill(shkp, book, 100);
     const messages = [];
+    const expectedFee = expectedUnpaidUsageFee(book);
 
     const fee = shop.checkUnpaidUsageForTest(book, messages);
 
-    assert.equal(fee, 80);
-    assert.equal(shkp.debit, 80);
+    assert.equal(fee, expectedFee);
+    assert.equal(shkp.debit, expectedFee);
     assert.equal(shkp.billct, 1);
     const entry = shop.shopBillEntryForObject(shkp, book);
     assert.ok(entry);
@@ -1718,7 +1768,7 @@ test('unpaid spellbook study usage charges four fifths of bill price', () => {
     assert.equal(book.unpaid, true);
     assert.equal(messages.length, 1);
     assert.match(messages[0], /This is no free library/);
-    assert.match(messages[0], /80 zorkmids/);
+    assert.match(messages[0], new RegExp(`${expectedFee} zorkmids`));
 });
 
 test('completing study of an unpaid spellbook bills library usage and keeps live bill row', async () => {
@@ -1728,6 +1778,7 @@ test('completing study of an unpaid spellbook bills library usage and keeps live
     game.inventory = [book];
     game.nhDisplay = { cols: 200 };
     shop.addObjectToShopBill(shkp, book, 100);
+    const expectedFee = expectedUnpaidUsageFee(book);
 
     await rhack('r');
 
@@ -1745,7 +1796,7 @@ test('completing study of an unpaid spellbook bills library usage and keeps live
     await processSpellbookStudyOccupation();
 
     assert.equal(game._spellbook_study_occupation, null);
-    assert.equal(shkp.debit, 80);
+    assert.equal(shkp.debit, expectedFee);
     assert.equal(shkp.billct, 1);
     const entry = shop.shopBillEntryForObject(shkp, book);
     assert.ok(entry);
@@ -1756,7 +1807,7 @@ test('completing study of an unpaid spellbook bills library usage and keeps live
     assert.equal(game._known_spells?.some(spell => spell.name === 'healing'), true);
     assert.match(`${game._pending_message || ''} ${game._topline_after_more || ''}`, /You learn the "healing" spell\./);
     assert.match(`${game._pending_message || ''} ${game._topline_after_more || ''}`, /This is no free library/);
-    assert.match(`${game._pending_message || ''} ${game._topline_after_more || ''}`, /80 zorkmids/);
+    assert.match(`${game._pending_message || ''} ${game._topline_after_more || ''}`, new RegExp(`${expectedFee} zorkmids`));
 });
 
 test('failed read that crumbles an unpaid spellbook preserves full used-up bill', async () => {
@@ -1968,6 +2019,7 @@ test('applying an unpaid oil lamp lights it and bills usage without consuming th
     const item = lamp(3090, 'oil lamp', 'l', 3);
     game.inventory = [item];
     shop.addObjectToShopBill(shkp, item, 100);
+    const expectedFee = expectedUnpaidUsageFee(item);
 
     await rhack('a');
 
@@ -1980,14 +2032,14 @@ test('applying an unpaid oil lamp lights it and bills usage without consuming th
     assert.equal(game.context.move, 1);
     assert.equal(item.lamplit, true);
     assert.equal(item.burning, true);
-    assert.equal(shkp.debit, 25);
+    assert.equal(shkp.debit, expectedFee);
     assert.equal(shkp.billct, 1);
     const entry = shop.shopBillEntryForObject(shkp, item);
     assert.ok(entry);
     assert.equal(entry.useup, false);
     assert.equal(shop.shopBillEntryTotal(entry), 100);
     assert.equal(item.unpaid, true);
-    assert.match(game._pending_message, /Usage fee, 25 zorkmids/);
+    assert.match(game._pending_message, new RegExp(`Usage fee, ${expectedFee} zorkmids`));
     assert.match(game._pending_message, /Your lamp is now on\./);
     assert.doesNotMatch(game._pending_message, /rub the lamp/);
 
@@ -1997,7 +2049,7 @@ test('applying an unpaid oil lamp lights it and bills usage without consuming th
 
     assert.equal(item.lamplit, false);
     assert.equal(item.burning, false);
-    assert.equal(shkp.debit, 25);
+    assert.equal(shkp.debit, expectedFee);
     assert.match(game._pending_message, /Your lamp is now off\./);
 });
 
@@ -2006,6 +2058,7 @@ test('applying an unpaid potion of oil charges fuel tax and keeps a used-up bill
     const item = oilPotion(3092, 'o');
     game.inventory = [item];
     shop.addObjectToShopBill(shkp, item, 100);
+    const expectedFee = expectedUnpaidUsageFee(item);
 
     await rhack('a');
 
@@ -2020,7 +2073,7 @@ test('applying an unpaid potion of oil charges fuel tax and keeps a used-up bill
     assert.equal(item.burning, true);
     assert.equal(item.known, true);
     assert.equal(item.unpaid, false);
-    assert.equal(shkp.debit, 20);
+    assert.equal(shkp.debit, expectedFee);
     assert.equal(shkp.billct, 1);
     const entry = shop.shopBillEntryForObject(shkp, item);
     assert.ok(entry);
@@ -2113,6 +2166,7 @@ test('rubbing a wielded unpaid magic lamp bills unusual use and converts it befo
     item.line = 'l - a magic lamp (weapon in right hand)';
     game.inventory = [item];
     shop.addObjectToShopBill(shkp, item, 90);
+    const expectedFee = expectedUnpaidUsageFee(item, { altusage: true });
 
     await invokeRub('l');
 
@@ -2124,12 +2178,12 @@ test('rubbing a wielded unpaid magic lamp bills unusual use and converts it befo
     assert.equal(item.spe, 0);
     assert.ok(item.age >= 1000 && item.age <= 1499);
     assert.equal(item.unpaid, true);
-    assert.equal(shkp.debit, 120);
+    assert.equal(shkp.debit, expectedFee);
     const entry = shop.shopBillEntryForObject(shkp, item);
     assert.ok(entry);
     assert.equal(entry.useup, false);
     assert.equal(shop.shopBillEntryTotal(entry), 90);
-    assert.match(game._pending_message, /Usage fee, 120 zorkmids/);
+    assert.match(game._pending_message, new RegExp(`Usage fee, ${expectedFee} zorkmids`));
     assert.match(game._pending_message, /In a cloud of smoke, a djinni emerges!|It turns out to be empty\./);
     if (/In a cloud of smoke/.test(game._pending_message))
         assert.match(game._pending_message, /I am in your debt|Thank you for freeing me|You freed me|It is about time|You disturbed me/);
@@ -2165,6 +2219,7 @@ test('applying unpaid can of grease bills usage and greases the selected object'
     const target = dagger(3095, 'd');
     game.inventory = [grease, target];
     shop.addObjectToShopBill(shkp, grease, 100);
+    const expectedFee = expectedUnpaidUsageFee(grease);
 
     await rhack('a');
 
@@ -2186,14 +2241,14 @@ test('applying unpaid can of grease bills usage and greases the selected object'
     assert.equal(grease.spe, 3);
     assert.equal(target.greased, true);
     assert.match(target.line, /greased/);
-    assert.equal(shkp.debit, 10);
+    assert.equal(shkp.debit, expectedFee);
     assert.equal(shkp.billct, 1);
     const entry = shop.shopBillEntryForObject(shkp, grease);
     assert.ok(entry);
     assert.equal(entry.useup, false);
     assert.equal(shop.shopBillEntryTotal(entry), 100);
     assert.equal(grease.unpaid, true);
-    assert.match(game._pending_message, /Usage fee, 10 zorkmids/);
+    assert.match(game._pending_message, new RegExp(`Usage fee, ${expectedFee} zorkmids`));
     assert.match(game._pending_message, /You cover a dagger with a thick layer of grease/);
 });
 
@@ -2202,6 +2257,7 @@ test('tipping an unpaid can of grease spills first then bills one charge', async
     const grease = chargedTool(3096, 'can of grease', 'g', 4);
     game.inventory = [grease];
     shop.addObjectToShopBill(shkp, grease, 100);
+    const expectedFee = expectedUnpaidUsageFee(grease);
 
     await rhack('#');
     for (const ch of 'tip') await rhack(ch);
@@ -2217,7 +2273,7 @@ test('tipping an unpaid can of grease spills first then bills one charge', async
     assert.equal(game._command_mode, null);
     assert.equal(game.context.move, 1);
     assert.equal(grease.spe, 3);
-    assert.equal(shkp.debit, 10);
+    assert.equal(shkp.debit, expectedFee);
     assert.equal(shkp.billct, 1);
     const entry = shop.shopBillEntryForObject(shkp, grease);
     assert.ok(entry);
@@ -2225,7 +2281,7 @@ test('tipping an unpaid can of grease spills first then bills one charge', async
     assert.equal(shop.shopBillEntryTotal(entry), 100);
     assert.equal(grease.unpaid, true);
     assert.match(game._pending_message, /Some grease spills onto the floor\./);
-    assert.match(game._pending_message, /Usage fee, 10 zorkmids/);
+    assert.match(game._pending_message, new RegExp(`Usage fee, ${expectedFee} zorkmids`));
     assert.ok(game._pending_message.indexOf('Some grease spills') < game._pending_message.indexOf('Usage fee'));
 });
 
@@ -2284,6 +2340,7 @@ test('applying unpaid magic marker to write a known scroll bills usage before in
     game.inventory = [marker, paper];
     game._discoveries = [{ section: 'Scrolls', name: 'scroll of enchant weapon', known: true }];
     shop.addObjectToShopBill(shkp, marker, 100);
+    const expectedFee = expectedUnpaidUsageFee(marker);
 
     await rhack('a');
     await rhack('m');
@@ -2306,7 +2363,7 @@ test('applying unpaid magic marker to write a known scroll bills usage before in
 
     assert.equal(game._command_mode, null);
     assert.equal(game.context.move, 1);
-    assert.equal(shkp.debit, 50);
+    assert.equal(shkp.debit, expectedFee);
     assert.ok(marker.spe < 20);
     assert.equal(marker.unpaid, true);
     const entry = shop.shopBillEntryForObject(shkp, marker);
@@ -2318,7 +2375,7 @@ test('applying unpaid magic marker to write a known scroll bills usage before in
     assert.ok(scroll);
     assert.equal(scroll.actualKind, 'scroll of enchant weapon');
     assert.equal(scroll.unpaid, undefined);
-    assert.match(game._pending_message, /Usage fee, 50 zorkmids/);
+    assert.match(game._pending_message, new RegExp(`Usage fee, ${expectedFee} zorkmids`));
 });
 
 test('applying a dry unpaid magic marker still charges the C flat fee for a valid write attempt', async () => {
@@ -2328,6 +2385,7 @@ test('applying a dry unpaid magic marker still charges the C flat fee for a vali
     game.inventory = [marker, paper];
     game._discoveries = [{ section: 'Scrolls', name: 'scroll of enchant weapon', known: true }];
     shop.addObjectToShopBill(shkp, marker, 100);
+    const expectedFee = expectedUnpaidUsageFee(marker);
 
     await rhack('a');
     await rhack('m');
@@ -2338,9 +2396,9 @@ test('applying a dry unpaid magic marker still charges the C flat fee for a vali
     assert.equal(game._command_mode, null);
     assert.equal(game.context.move, 1);
     assert.equal(marker.spe, 1);
-    assert.equal(shkp.debit, 50);
+    assert.equal(shkp.debit, expectedFee);
     assert.equal(game.inventory.includes(paper), true);
-    assert.match(game._pending_message, /Usage fee, 50 zorkmids/);
+    assert.match(game._pending_message, new RegExp(`Usage fee, ${expectedFee} zorkmids`));
     assert.match(game._pending_message, /Your marker is too dry to write that!/);
 });
 
@@ -2350,6 +2408,7 @@ test('applying unpaid tinning kit to a carried corpse bills usage and makes a ho
     const body = corpse(3109, 'c', 'newt');
     game.inventory = [kit, body];
     shop.addObjectToShopBill(shkp, kit, 100);
+    const expectedFee = expectedUnpaidUsageFee(kit);
 
     await rhack('a');
 
@@ -2369,7 +2428,7 @@ test('applying unpaid tinning kit to a carried corpse bills usage and makes a ho
     assert.equal(game._command_mode, null);
     assert.equal(game.context.move, 1);
     assert.equal(kit.spe, 3);
-    assert.equal(shkp.debit, 10);
+    assert.equal(shkp.debit, expectedFee);
     assert.equal(shkp.billct, 1);
     const entry = shop.shopBillEntryForObject(shkp, kit);
     assert.ok(entry);
@@ -2388,7 +2447,7 @@ test('applying unpaid tinning kit to a carried corpse bills usage and makes a ho
     assert.equal(madeTin.spe, -2);
     assert.equal(madeTin.quan, 1);
     assert.notEqual(madeTin.unpaid, true);
-    assert.match(game._pending_message, /Usage fee, 10 zorkmids/);
+    assert.match(game._pending_message, new RegExp(`Usage fee, ${expectedFee} zorkmids`));
     assert.match(game._pending_message, /homemade tin of newt meat/);
 });
 
@@ -2437,6 +2496,7 @@ test('applying unpaid crystal ball with two charges bills quarter price after lo
     const ball = crystalBall(3113, 'c', 2);
     game.inventory = [ball];
     shop.addObjectToShopBill(shkp, ball, 100);
+    const expectedFee = expectedUnpaidUsageFee(ball, { chargeCount: 2 });
 
     await rhack('a');
 
@@ -2455,14 +2515,14 @@ test('applying unpaid crystal ball with two charges bills quarter price after lo
     assert.equal(game._command_mode, null);
     assert.equal(game.context.move, 1);
     assert.equal(ball.spe, 1);
-    assert.equal(shkp.debit, 25);
+    assert.equal(shkp.debit, expectedFee);
     assert.equal(shkp.billct, 1);
     const entry = shop.shopBillEntryForObject(shkp, ball);
     assert.ok(entry);
     assert.equal(entry.useup, false);
     assert.equal(shop.shopBillEntryTotal(entry), 100);
     assert.equal(ball.unpaid, true);
-    assert.match(game._pending_message, /Usage fee, 25 zorkmids/);
+    assert.match(game._pending_message, new RegExp(`Usage fee, ${expectedFee} zorkmids`));
 });
 
 test('applying unpaid crystal ball with one charge bills full price and keeps live bill', async () => {
@@ -2471,6 +2531,7 @@ test('applying unpaid crystal ball with one charge bills full price and keeps li
     const ball = crystalBall(3114, 'c', 1);
     game.inventory = [ball];
     shop.addObjectToShopBill(shkp, ball, 100);
+    const expectedFee = expectedUnpaidUsageFee(ball, { chargeCount: 0 });
 
     await rhack('a');
     await rhack('c');
@@ -2479,13 +2540,13 @@ test('applying unpaid crystal ball with one charge bills full price and keeps li
     assert.equal(game._command_mode, null);
     assert.equal(game.context.move, 1);
     assert.equal(ball.spe, 0);
-    assert.equal(shkp.debit, 100);
+    assert.equal(shkp.debit, expectedFee);
     const entry = shop.shopBillEntryForObject(shkp, ball);
     assert.ok(entry);
     assert.equal(entry.useup, false);
     assert.equal(shop.shopBillEntryTotal(entry), 100);
     assert.equal(ball.unpaid, true);
-    assert.match(game._pending_message, /Usage fee, 100 zorkmids/);
+    assert.match(game._pending_message, new RegExp(`Usage fee, ${expectedFee} zorkmids`));
 });
 
 test('canceling unpaid crystal ball look prompt spends no charge and adds no usage fee', async () => {
@@ -2528,15 +2589,16 @@ test('applying unpaid crystal ball while blind spends no charge and adds no usag
 });
 
 test('applying unpaid magic flute and magic harp through improvise bills charged usage', async () => {
-    for (const [kind, letter, spe, expectedSpe, expectedDebit, effect] of [
-        ['magic flute', 'f', 3, 2, 25, /soft music/i],
-        ['magic harp', 'h', 1, 0, 100, /very attractive music/i],
+    for (const [kind, letter, spe, expectedSpe, effect] of [
+        ['magic flute', 'f', 3, 2, /soft music/i],
+        ['magic harp', 'h', 1, 0, /very attractive music/i],
     ]) {
         const { shkp } = installCommandShopState();
         makeInstrumentApplyDeterministic(shkp);
-        const instrument = chargedTool(3117 + expectedDebit, kind, letter, spe);
+        const instrument = chargedTool(3117 + expectedSpe + spe, kind, letter, spe);
         game.inventory = [instrument];
         shop.addObjectToShopBill(shkp, instrument, 100);
+        const expectedDebit = expectedUnpaidUsageFee(instrument, { chargeCount: expectedSpe });
 
         await rhack('a');
 
@@ -2619,6 +2681,7 @@ test('applying unpaid fire horn bills before direction and keeps horn identity a
     horn.line = 'f - a horn';
     game.inventory = [horn];
     shop.addObjectToShopBill(shkp, horn, 100);
+    const expectedFee = expectedUnpaidUsageFee(horn, { chargeCount: 2 });
 
     await rhack('a');
     await rhack('f');
@@ -2630,8 +2693,8 @@ test('applying unpaid fire horn bills before direction and keeps horn identity a
 
     assert.equal(game._command_mode, 'zapDirection');
     assert.equal(horn.spe, 1);
-    assert.equal(shkp.debit, 25);
-    assert.match(game._pending_message, /Usage fee, 25 zorkmids/);
+    assert.equal(shkp.debit, expectedFee);
+    assert.match(game._pending_message, new RegExp(`Usage fee, ${expectedFee} zorkmids`));
     assert.match(game._pending_message, /In what direction\?/);
 
     await rhack(' ');
@@ -2659,6 +2722,7 @@ test('canceling unpaid frost horn direction still spends charge and bills withou
     horn.line = 'f - a horn';
     game.inventory = [horn];
     shop.addObjectToShopBill(shkp, horn, 100);
+    const expectedFee = expectedUnpaidUsageFee(horn, { chargeCount: 0 });
 
     await rhack('a');
     await rhack('f');
@@ -2666,7 +2730,7 @@ test('canceling unpaid frost horn direction still spends charge and bills withou
 
     assert.equal(game._command_mode, 'zapDirection');
     assert.equal(horn.spe, 0);
-    assert.equal(shkp.debit, 100);
+    assert.equal(shkp.debit, expectedFee);
 
     await rhack(' ');
     await rhack('\x1b');
@@ -2676,7 +2740,7 @@ test('canceling unpaid frost horn direction still spends charge and bills withou
     assert.equal(horn.spe, 0);
     assert.equal(horn.kind, 'horn');
     assert.equal(horn.actualKind, 'frost horn');
-    assert.match(game._pending_message, /Usage fee, 100 zorkmids/);
+    assert.match(game._pending_message, new RegExp(`Usage fee, ${expectedFee} zorkmids`));
     assert.match(game._pending_message, /horn vibrates/);
     assert.doesNotMatch(game._pending_message, /frost horn/);
 });
@@ -3277,6 +3341,67 @@ test('used-up preservation ignores stale unpaid objects without a bill row', () 
     assert.equal(shop.shopBillEntryTotal(shkp.bill[0]), 45);
     assert.equal(staleRation.unpaid, false);
     assert.equal((game._usedUpShopBills || []).length, 1);
+});
+
+test('unpaid usage ignores stale charged tools without a current bill row', () => {
+    const { shkp } = installShopState();
+    const staleBag = chargedTool(4012, 'bag of tricks', 'b', 3);
+    staleBag.unpaid = true;
+    staleBag.unpaidPrice = 100;
+    game.inventory = [staleBag];
+    const messages = [];
+
+    assert.equal(shop.checkUnpaidUsageForTest(staleBag, messages), 0);
+    assert.equal(shkp.debit || 0, 0);
+    assert.deepEqual(messages, []);
+    assert.equal(shkp.billct, 0);
+
+    const bill = shop.addObjectToShopBill(shkp, staleBag, 100);
+    const billedMessages = [];
+    const expectedFee = Math.trunc(shop.shopItemPrice(staleBag, 5, 5) / 5);
+
+    assert.equal(shop.checkUnpaidUsageForTest(staleBag, billedMessages), expectedFee);
+    assert.equal(shkp.debit, expectedFee);
+    assert.equal(shop.shopBillEntryForObject(shkp, staleBag), bill);
+    assert.equal(shop.shopBillEntryTotal(bill), 100);
+    assert.equal(billedMessages.length, 1);
+    assert.match(billedMessages[0], new RegExp(`Usage fee, ${expectedFee} zorkmids`));
+});
+
+test('unpaid charged tool usage prices from current shop cost instead of stored bill total', () => {
+    const { shkp } = installShopState();
+    const bag = chargedTool(4014, 'bag of tricks', 'b', 3);
+    game.inventory = [bag];
+    const currentPrice = shop.shopItemPrice(bag, 5, 5);
+    assert.equal(currentPrice, 133);
+    shop.addObjectToShopBill(shkp, bag, 25);
+    const messages = [];
+    const expectedFee = Math.trunc(currentPrice / 5);
+
+    const fee = shop.checkUnpaidUsageForTest(bag, messages);
+
+    assert.equal(fee, expectedFee);
+    assert.equal(shkp.debit, expectedFee);
+    assert.equal(bag.unpaidPrice, 25);
+    assert.match(messages[0], new RegExp(`Usage fee, ${expectedFee} zorkmids`));
+});
+
+test('payable debts ignore stale unpaid field rows for selected shopkeeper', () => {
+    const { shkp } = installShopState();
+    const staleRation = foodRation(4013, 'a');
+    staleRation.unpaid = true;
+    staleRation.unpaidPrice = 45;
+    game.inventory = [staleRation];
+
+    assert.deepEqual(shop.collectPayableShopDebts(shkp), []);
+
+    const bill = shop.addObjectToShopBill(shkp, staleRation, 45);
+    const debts = shop.collectPayableShopDebts(shkp);
+
+    assert.equal(debts.length, 1);
+    assert.equal(debts[0].billEntry, bill);
+    assert.equal(debts[0].billPortion, 'intact');
+    assert.equal(debts[0].price, 45);
 });
 
 test('paid saleable shop drop computes C-style sale offer and transfers cash on accept', () => {

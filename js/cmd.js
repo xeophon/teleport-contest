@@ -22423,8 +22423,6 @@ function visibleCreatedMonster(mon) {
 }
 
 function chargedToolUsageBasePrice(obj) {
-    const billed = unpaidBillPrice(obj);
-    if (billed > 0) return billed;
     return shopItemPrice(obj, game.u?.ux, game.u?.uy) || shopBaseCost(obj) || 0;
 }
 
@@ -22490,11 +22488,12 @@ function chargedToolUsageFeeMessage(obj, fee, altusage = false, shkp = null) {
 }
 
 function checkUnpaidUsage(obj, messages, { altusage = false, chargeCount = null } = {}) {
-    if (!obj?.unpaid) return 0;
-    const currentCharges = chargedUsageChargeCount(obj, chargeCount);
-    if (chargedUsageIsChargeBased(obj) && currentCharges <= 0) return 0;
     const shkp = heroShopkeeper();
     if (!shkp) return 0;
+    const billEntry = shopBillEntryForObject(shkp, obj);
+    if (!billEntry || billEntry.useup) return 0;
+    const currentCharges = chargedUsageChargeCount(obj, chargeCount);
+    if (chargedUsageIsChargeBased(obj) && currentCharges <= 0) return 0;
     const fee = chargedToolUsageFee(obj, altusage, currentCharges);
     if (!(fee > 0)) return 0;
     const message = chargedToolUsageFeeMessage(obj, fee, altusage, shkp);
@@ -23411,7 +23410,7 @@ function collectLegacyUnpaidShopItemsFromList(list, entries, shkp = null, seenBi
             continue;
         }
         const price = billEntry ? shopBillEntryTotal(billEntry) : unpaidBillPrice(item);
-        if ((item?.unpaid || billEntry) && price) entries.push({ item, billEntry, billPortion: 'legacy', name: shopDebtItemName(item), price });
+        if ((billEntry || (!shkp && item?.unpaid)) && price) entries.push({ item, billEntry, billPortion: 'legacy', name: shopDebtItemName(item), price });
         const contents = globContents(item);
         if (contents.length) collectLegacyUnpaidShopItemsFromList(contents, entries, shkp, seenBillIds);
     }
