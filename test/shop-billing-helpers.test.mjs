@@ -18,6 +18,7 @@ const LOADSTONE = 10165;
 const BOULDER = 465;
 const HORN_OF_PLENTY = 957;
 const BAG_OF_TRICKS = 10158;
+const POT_WATER = 253;
 
 function installShopState() {
     const g = resetGame();
@@ -208,6 +209,24 @@ function scrollOfCharging(id, letter = 's', cursed = false) {
         oy: 5,
         letter,
         line: `${letter} - a scroll of charging`,
+    };
+}
+
+function scrollOfRemoveCurse(id, letter = 's', blessed = false, cursed = false) {
+    return {
+        id,
+        cls: 'scroll',
+        glyph: '?',
+        kind: 'scroll of remove curse',
+        actualKind: 'scroll of remove curse',
+        scrollIndex: 4,
+        blessed,
+        cursed,
+        quan: 1,
+        ox: 5,
+        oy: 5,
+        letter,
+        line: `${letter} - a scroll of remove curse`,
     };
 }
 
@@ -620,6 +639,26 @@ function oilPotion(id, letter = 'o', quan = 1) {
         oy: 5,
         letter,
         line: `${letter} - ${quan > 1 ? `${quan} potions of oil` : 'a potion of oil'}`,
+    };
+}
+
+function waterPotion(id, letter = 'w', { blessed = false, cursed = false, bknown = false, quan = 1 } = {}) {
+    return {
+        id,
+        otyp: POT_WATER,
+        cls: 'potion',
+        glyph: '!',
+        kind: 'water',
+        actualKind: 'potion of water',
+        potionIndex: null,
+        blessed,
+        cursed,
+        bknown,
+        quan,
+        ox: 5,
+        oy: 5,
+        letter,
+        line: `${letter} - ${quan > 1 ? `${quan} potions of ${cursed ? 'unholy ' : blessed ? 'holy ' : ''}water` : `a potion of ${cursed ? 'unholy ' : blessed ? 'holy ' : ''}water`}`,
     };
 }
 
@@ -1181,6 +1220,52 @@ test('cursed charging an unpaid chargeable ring bills the disenchantment as used
     assert.equal(shop.shopBillEntryTotal(shkp.bill[0]), 120);
     assert.match(game._pending_message, /Your ring of protection spins counterclockwise for a moment/);
     assert.match(game._pending_message, /You disenchant that ring of protection, you pay for it!/);
+});
+
+test('remove curse uncurses unpaid unholy water and preserves a used-up bill row', async () => {
+    const { shkp } = installCommandShopState();
+    const scroll = scrollOfRemoveCurse(30903, 's', true);
+    const water = waterPotion(30904, 'w', { cursed: true });
+    game.inventory = [scroll, water];
+    shop.addObjectToShopBill(shkp, water, 100);
+
+    await rhack('r');
+    await rhack('s');
+
+    assert.equal(game.context.move, 1);
+    assert.equal(game.inventory.includes(scroll), false);
+    assert.equal(game.inventory.includes(water), true);
+    assert.equal(water.cursed, false);
+    assert.equal(water.blessed, false);
+    assert.equal(water.bknown, true);
+    assert.equal(water.kind, 'water');
+    assert.equal(water.actualKind, 'potion of water');
+    assert.equal(water.unpaid, false);
+    assert.equal(shop.shopBillEntryForObject(shkp, water), null);
+    assert.equal(shkp.billct, 1);
+    assert.equal(shkp.bill[0].useup, true);
+    assert.equal(shop.shopBillEntryTotal(shkp.bill[0]), 100);
+    assert.equal((game._usedUpShopBills || []).length, 1);
+    assert.equal(game._usedUpShopBills[0].bo_id, shkp.bill[0].bo_id);
+    assert.match(game._pending_message, /You uncurse that potion of unholy water, you pay for it!/);
+});
+
+test('unblessed remove curse does not alter inactive unpaid unholy water', async () => {
+    const { shkp } = installCommandShopState();
+    const scroll = scrollOfRemoveCurse(30905, 's');
+    const water = waterPotion(30906, 'w', { cursed: true });
+    game.inventory = [scroll, water];
+    shop.addObjectToShopBill(shkp, water, 100);
+
+    await rhack('r');
+    await rhack('s');
+
+    assert.equal(water.cursed, true);
+    assert.equal(water.unpaid, true);
+    assert.notEqual(shop.shopBillEntryForObject(shkp, water), null);
+    assert.equal(shkp.billct, 1);
+    assert.equal((game._usedUpShopBills || []).length, 0);
+    assert.doesNotMatch(game._pending_message, /you pay for it/);
 });
 
 test('unpaid camera grease and tinning kit use charge one tenth price', () => {

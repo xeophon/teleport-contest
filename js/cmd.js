@@ -13268,6 +13268,20 @@ function removeCurseActiveTarget(item) {
     return false;
 }
 
+function normalizeUncursedWaterPotion(item) {
+    if (!isWaterPotion(item)) return;
+    item.kind = 'water';
+    item.actualKind = 'potion of water';
+    item.potionIndex = null;
+    item.blessed = false;
+}
+
+function costlyUncurseWater(item) {
+    if (!item?.cursed || !item.unpaid || !isWaterPotion(item)) return '';
+    item.bknown = true;
+    return costlyAlterationPaymentMessage(item, 'uncurse');
+}
+
 function unpunishHero() {
     if (!game.u || !(game.u.uball || game.u.uchain || game.u.upunished || game._punished)) return;
     const chain = game.u.uchain;
@@ -13322,7 +13336,13 @@ function removeCurseScrollEffect(item) {
                 refreshInventoryLineAfterBucChange(obj);
             } else if (obj.cursed) {
                 if (obj.bknown === true) learned = true;
+                const payment = costlyUncurseWater(obj);
+                if (payment) {
+                    learned = true;
+                    messages.push(payment);
+                }
                 obj.cursed = false;
+                normalizeUncursedWaterPotion(obj);
                 syncCarriedFigurineTransformTimer(obj);
                 refreshInventoryLineAfterBucChange(obj);
             }
