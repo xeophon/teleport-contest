@@ -8,6 +8,10 @@ import { initRng } from '../js/rng.js';
 
 const HORN_OF_PLENTY = 957;
 const MEAT_RING = 10164;
+const K_RATION = 10035;
+const C_RATION = 10036;
+const CRAM_RATION = 145;
+const PANCAKE = 11011;
 
 function installWishState(seed = 1, { debug = true, luck = 0 } = {}) {
     const g = resetGame();
@@ -145,6 +149,77 @@ test('wish quantity only applies to mergeable object classes', async () => {
     assert.equal(game._command_mode, null);
     assert.equal(game.inventory[0].kind, 'food ration');
     assert.equal(game.inventory[0].quan, 2);
+});
+
+test('wished ration foods use concrete C object metadata', async () => {
+    const cases = [
+        ['1 pancake', PANCAKE, 'pancake', 'pancakes', 200, 2, 15],
+        ['1 cram ration', CRAM_RATION, 'cram ration', 'cram rations', 600, 15, 35],
+        ['1 K-ration', K_RATION, 'K-ration', 'K-rations', 400, 10, 25],
+        ['1 C-ration', C_RATION, 'C-ration', 'C-rations', 300, 10, 20],
+    ];
+
+    for (const [wish, otyp, kind, plural, nutrition, weight, cost] of cases) {
+        installWishState();
+        beginWishDirectly();
+        await submitWish(wish);
+
+        const item = game.inventory[0];
+        assert.equal(game._command_mode, null);
+        assert.equal(item.otyp, otyp);
+        assert.equal(item.kind, kind);
+        assert.equal(item.plural, plural);
+        assert.equal(item.nutrition, nutrition);
+        assert.equal(item.quan, 1);
+        assert.equal(item.owt, weight);
+        assert.equal(shop.shopBaseCost(item), cost);
+        assert.match(item.line, new RegExp(kind));
+    }
+});
+
+test('plural wished ration foods keep C plural metadata and weights', async () => {
+    const cases = [
+        ['pancakes', PANCAKE, 'pancake', 'pancakes', 2, 4],
+        ['cram rations', CRAM_RATION, 'cram ration', 'cram rations', 2, 30],
+        ['K-rations', K_RATION, 'K-ration', 'K-rations', 2, 20],
+        ['C-rations', C_RATION, 'C-ration', 'C-rations', 2, 20],
+    ];
+
+    for (const [wish, otyp, kind, plural, quantity, weight] of cases) {
+        installWishState();
+        beginWishDirectly();
+        await submitWish(wish);
+
+        const item = game.inventory[0];
+        assert.equal(game._command_mode, null);
+        assert.equal(item.otyp, otyp);
+        assert.equal(item.kind, kind);
+        assert.equal(item.plural, plural);
+        assert.equal(item.quan, quantity);
+        assert.equal(item.owt, weight);
+        assert.match(item.line, new RegExp(`${quantity} ${plural}`));
+    }
+});
+
+test('K-ration and C-ration wishes tolerate C fuzzy hyphen spacing', async () => {
+    const cases = [
+        ['K ration', K_RATION, 'K-ration', 1],
+        ['krations', K_RATION, 'K-ration', 2],
+        ['C ration', C_RATION, 'C-ration', 1],
+        ['crations', C_RATION, 'C-ration', 2],
+    ];
+
+    for (const [wish, otyp, kind, quantity] of cases) {
+        installWishState();
+        beginWishDirectly();
+        await submitWish(wish);
+
+        const item = game.inventory[0];
+        assert.equal(game._command_mode, null);
+        assert.equal(item.otyp, otyp);
+        assert.equal(item.kind, kind);
+        assert.equal(item.quan, quantity);
+    }
 });
 
 test('normal-mode wish quantity keeps C merge caps', async () => {

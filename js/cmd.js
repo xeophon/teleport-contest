@@ -1056,7 +1056,11 @@ const CREAM_PIE = 10081;
 const LUMP_OF_ROYAL_JELLY = 10089;
 const KELP_FROND = 172;
 const EUCALYPTUS_LEAF = 11000;
+const PANCAKE = 11011;
+const CRAM_RATION = 145;
 const LEMBAS_WAFER = 146;
+const K_RATION = 10035;
+const C_RATION = 10036;
 const FORTUNE_COOKIE = 11010;
 const EXPENSIVE_CAMERA = 10082;
 const STETHOSCOPE = 10083;
@@ -1205,10 +1209,18 @@ const WISH_BASE_OBJECTS = new Map([
     ['lump of royal jelly', { otyp: LUMP_OF_ROYAL_JELLY, cls: 'food', glyph: '%', kind: 'lump of royal jelly', singular: 'lump of royal jelly', plural: 'lumps of royal jelly' }],
     ['eucalyptus leaf', { otyp: EUCALYPTUS_LEAF, cls: 'food', glyph: '%', kind: 'eucalyptus leaf', plural: 'eucalyptus leaves' }],
     ['kelp frond', { otyp: KELP_FROND, cls: 'food', glyph: '%', kind: 'kelp frond' }],
+    ['pancake', { otyp: PANCAKE, cls: 'food', glyph: '%', kind: 'pancake', plural: 'pancakes', nutrition: 200 }],
+    ['pancakes', { otyp: PANCAKE, cls: 'food', glyph: '%', kind: 'pancake', plural: 'pancakes', nutrition: 200 }],
     ['lembas wafer', { otyp: LEMBAS_WAFER, cls: 'food', glyph: '%', kind: 'lembas wafer', plural: 'lembas wafers' }],
+    ['cram ration', { otyp: CRAM_RATION, cls: 'food', glyph: '%', kind: 'cram ration', plural: 'cram rations', nutrition: 600 }],
+    ['cram rations', { otyp: CRAM_RATION, cls: 'food', glyph: '%', kind: 'cram ration', plural: 'cram rations', nutrition: 600 }],
     ['fortune cookie', { otyp: FORTUNE_COOKIE, cls: 'food', glyph: '%', kind: 'fortune cookie', plural: 'fortune cookies' }],
     ['fortune cookies', { otyp: FORTUNE_COOKIE, cls: 'food', glyph: '%', kind: 'fortune cookie', plural: 'fortune cookies' }],
     ['food ration', { otyp: FOOD_RATION, cls: 'food', glyph: '%', kind: 'food ration', plural: 'food rations', nutrition: 800 }],
+    ['k-ration', { otyp: K_RATION, cls: 'food', glyph: '%', kind: 'K-ration', actualKind: 'K-ration', plural: 'K-rations', nutrition: 400 }],
+    ['k-rations', { otyp: K_RATION, cls: 'food', glyph: '%', kind: 'K-ration', actualKind: 'K-ration', plural: 'K-rations', nutrition: 400 }],
+    ['c-ration', { otyp: C_RATION, cls: 'food', glyph: '%', kind: 'C-ration', actualKind: 'C-ration', plural: 'C-rations', nutrition: 300 }],
+    ['c-rations', { otyp: C_RATION, cls: 'food', glyph: '%', kind: 'C-ration', actualKind: 'C-ration', plural: 'C-rations', nutrition: 300 }],
     ['enormous meatball', { otyp: FOOD_CLASS, cls: 'food', glyph: '%', kind: 'enormous meatball', actualKind: 'enormous meatball', nutrition: 2000 }],
     ['rock', { otyp: ROCK, cls: 'gem', glyph: '*', kind: 'rock', actualKind: 'rock', plural: 'rocks', gemDescription: 'rock' }],
     ['luckstone', { otyp: LUCKSTONE, cls: 'gem', glyph: '*', kind: 'luckstone', actualKind: 'luckstone', gemDescription: 'gray stone' }],
@@ -1271,8 +1283,12 @@ const WISH_BASE_NAMEDESC_BOUNDS = new Map([
     ['bullwhip', 3], ['silver saber', 7], ['dwarvish mattock', 14],
     ['pick-axe', 21], ['pick axe', 21], ['pickaxe', 21], ['pickax', 21], ['pick-ax', 21],
     ['cream pie', 26], ['lump of royal jelly', 1], ['eucalyptus leaf', 4], ['kelp frond', 1],
-    ['lembas wafer', 21], ['fortune cookie', 56], ['fortune cookies', 56],
-    ['food ration', 381], ['enormous meatball', 1], ['rock', 101], ['luckstone', 11],
+    ['pancake', 26], ['pancakes', 26], ['lembas wafer', 21],
+    ['cram ration', 21], ['cram rations', 21],
+    ['fortune cookie', 56], ['fortune cookies', 56],
+    ['food ration', 381],
+    ['k-ration', 1], ['k-rations', 1], ['c-ration', 1], ['c-rations', 1],
+    ['enormous meatball', 1], ['rock', 101], ['luckstone', 11],
     ['loadstone', 11], ['touchstone', 9], ['flint', 11],
     ['heavy iron ball', 1001], ['large box', 41], ['chest', 36], ['ice box', 6],
     ['sack', 36], ['oilskin sack', 6], ['bag of holding', 21],
@@ -20398,6 +20414,14 @@ const WISH_EXPLICIT_SPELLING_ALIASES = new Map([
     ['kelp', 'kelp frond'],
     ['eucalyptus', 'eucalyptus leaf'],
     ['lembas', 'lembas wafer'],
+    ['k ration', 'k-ration'],
+    ['k rations', 'k-rations'],
+    ['kration', 'k-ration'],
+    ['krations', 'k-rations'],
+    ['c ration', 'c-ration'],
+    ['c rations', 'c-rations'],
+    ['cration', 'c-ration'],
+    ['crations', 'c-rations'],
     ['tripe', 'tripe ration'],
     ['cookie', 'fortune cookie'],
     ['pie', 'cream pie'],
@@ -20441,7 +20465,7 @@ function resolveWishedSpellingAlias(lowerName) {
 
 function singularizeWishedPluralName(normalized) {
     for (const [name, baseObject] of WISH_BASE_OBJECTS.entries()) {
-        if (baseObject?.plural === normalized) return name;
+        if (String(baseObject?.plural || '').toLowerCase() === normalized) return name;
     }
     for (const [plural, singular] of [
         [/^wands of (.+)$/, 'wand of $1'],
@@ -20607,9 +20631,12 @@ function normalizeWishedGroupPhrase(name, quantity) {
 
 function applyWishedPluralQuantity(name, quantity) {
     if (quantity !== 1) return quantity;
-    const lowerName = String(name || '').trim().toLowerCase();
+    const rawLowerName = String(name || '').trim().toLowerCase();
+    const rawBaseObject = WISH_BASE_OBJECTS.get(rawLowerName);
+    if (rawBaseObject?.plural && rawLowerName === String(rawBaseObject.plural).toLowerCase()) return 2;
+    const lowerName = resolveWishedSpellingAlias(rawLowerName).name;
     const baseObject = WISH_BASE_OBJECTS.get(lowerName);
-    if (baseObject?.plural && lowerName === baseObject.plural) return 2;
+    if (baseObject?.plural && lowerName === String(baseObject.plural).toLowerCase()) return 2;
     if (/^(?:worthless\s+)?pieces\s+of\s+.+\s+glass$/.test(lowerName)) return 2;
     if (/\bgems$/.test(lowerName) || /\bstones$/.test(lowerName)) return 2;
     if (lowerName === 'fortune cookies') return 2;
