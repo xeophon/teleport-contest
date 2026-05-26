@@ -3188,6 +3188,53 @@ test('shop pickup merge rejects unpaid into paid and combines compatible unpaid 
     assert.equal(unpaidStack.unpaidPrice, 90);
 });
 
+test('shop pickup merge rejects stale unpaid targets without a current bill row', () => {
+    const { shkp } = installShopState();
+    const floorObj = foodRation(4004, 'b');
+    const staleStack = foodRation(4005, 'a');
+    staleStack.unpaid = true;
+    staleStack.unpaidPrice = 45;
+
+    const result = shop.mergePickedObjectIntoShopBill(floorObj, staleStack, 45);
+
+    assert.equal(result.canMerge, false);
+    assert.equal(result.billEntry, null);
+    assert.equal(shkp.billct, 0);
+    assert.equal(shop.shopBillEntryForObject(shkp, staleStack), null);
+    assert.equal(staleStack.unpaid, true);
+    assert.equal(staleStack.unpaidPrice, 45);
+});
+
+test('container takeout bill merge requires a same-shop target bill row', () => {
+    const { shkp } = installShopState();
+    const source = foodRation(4006, 'b');
+    const staleTarget = foodRation(4007, 'a');
+    staleTarget.unpaid = true;
+    staleTarget.unpaidPrice = 45;
+    const billing = { shkp, price: 45, sourceWillBeUnpaid: true };
+
+    assert.equal(shop.containerTakeoutBillMergeCompatible(source, staleTarget, billing), false);
+
+    shop.addObjectToShopBill(shkp, staleTarget, 45);
+
+    assert.equal(shop.containerTakeoutBillMergeCompatible(source, staleTarget, billing), true);
+});
+
+test('floor food pickup preflight ignores stale unpaid targets without a current bill row', () => {
+    const { shkp } = installShopState();
+    const source = foodRation(4008);
+    const staleTarget = foodRation(4009, 'a');
+    staleTarget.unpaid = true;
+    staleTarget.unpaidPrice = 45;
+    game.inventory = [staleTarget];
+
+    assert.equal(shop.findFloorPickupFoodMergeTargetForPreflight(source, 45), null);
+
+    shop.addObjectToShopBill(shkp, staleTarget, 45);
+
+    assert.equal(shop.findFloorPickupFoodMergeTargetForPreflight(source, 45), staleTarget);
+});
+
 test('paid saleable shop drop computes C-style sale offer and transfers cash on accept', () => {
     const { shkp } = installShopState();
     const dropped = dagger(5001);

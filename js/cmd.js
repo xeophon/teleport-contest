@@ -16432,15 +16432,15 @@ function mergePickedObjectIntoShopBill(source, target, sourcePrice = null) {
 
     if (!sourceBillable) return { canMerge: !targetUnpaid, price: 0, billEntry: existingEntry };
     if (!targetUnpaid) return { canMerge: false, price, billEntry: null };
+    if (!existingEntry) return { canMerge: false, price, billEntry: null };
 
-    const existingTotal = existingEntry ? shopBillEntryTotal(existingEntry) : unpaidBillPrice(target);
+    const existingTotal = shopBillEntryTotal(existingEntry);
     if (!(existingTotal > 0)) return { canMerge: false, price, billEntry: existingEntry };
     if (existingTotal * pickedCount !== price * targetCount)
         return { canMerge: false, price, billEntry: existingEntry };
 
     const totalPrice = existingTotal + price;
-    let billEntry = existingEntry;
-    if (!billEntry) billEntry = addObjectToShopBill(shkp, target, totalPrice);
+    const billEntry = existingEntry;
     if (billEntry) {
         billEntry.bquan = targetCount + pickedCount;
         billEntry.totalPrice = totalPrice;
@@ -16556,9 +16556,10 @@ function containerTakeoutMergeBilling(container, obj) {
 function containerTakeoutBillMergeCompatible(source, target, billing) {
     if (!billing.sourceWillBeUnpaid) return true;
     const entry = shopBillEntryForObject(billing.shkp, target);
+    if (!entry) return false;
     const targetCount = Math.max(1, Math.trunc(Number(target?.quan || 1)));
     const sourceCount = Math.max(1, Math.trunc(Number(source?.quan || 1)));
-    const existingTotal = entry ? shopBillEntryTotal(entry) : unpaidBillPrice(target);
+    const existingTotal = shopBillEntryTotal(entry);
     return existingTotal > 0 && existingTotal * sourceCount === billing.price * targetCount;
 }
 
@@ -16615,11 +16616,13 @@ export const __shopBillingTestHooks = {
     finishRobbedOnlyShopPayment,
     finishShopPaymentSelection,
     findPickedObjectInventoryMergeTarget,
+    findFloorPickupFoodMergeTargetForPreflight,
     finishDroppedObjectSale,
     finishShopFloorContainerPutSale,
     impactDropFloorObjects,
     mergePickedObjectIntoInventory,
     mergePickedObjectIntoShopBill,
+    containerTakeoutBillMergeCompatible,
     landProjectileObjectWithShopHandling,
     placeStackableFloorObject,
     projectileContainerImpactDmg,
@@ -17978,8 +17981,9 @@ function findFloorPickupFoodMergeTargetForPreflight(source, sourcePrice = null) 
             continue;
         }
         if (!targetUnpaid) continue;
+        if (!entry) continue;
         const targetCount = Math.max(1, Math.trunc(Number(target.quan || 1)));
-        const existingTotal = entry ? shopBillEntryTotal(entry) : unpaidBillPrice(target);
+        const existingTotal = shopBillEntryTotal(entry);
         if (existingTotal > 0 && existingTotal * sourceCount === price * targetCount)
             return target;
     }
