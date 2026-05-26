@@ -9843,6 +9843,136 @@ test('pay command opens Pay whom cursor for multiple visible shopkeepers without
     assert.notEqual(game._command_mode, 'payMenu');
 });
 
+test('pay command Pay whom monster cycling follows getpos distance order and wraps through self', async () => {
+    const { shkp } = installCommandShopState();
+    Object.assign(shkp, { mx: 5, my: 7, shk: { x: 5, y: 7 } });
+    const secondShopkeeper = makeShopkeeper(2, 'Asidonhopo', 4, 2, { shoproom: ROOMOFFSET + 1 });
+    game.level.monsters.push(secondShopkeeper);
+    shkp.debit = 10;
+    shkp.loan = 10;
+    secondShopkeeper.debit = 10;
+    secondShopkeeper.loan = 10;
+    game._goldCount = 30;
+
+    await rhack('p');
+    await rhack('m');
+
+    assert.equal(game._command_mode, 'payWhomCursor');
+    assert.equal(game._farlook_x, shkp.mx);
+    assert.equal(game._farlook_y, shkp.my);
+    assert.match(game._pending_message, /Izchak/);
+
+    await rhack('m');
+
+    assert.equal(game._farlook_x, secondShopkeeper.mx);
+    assert.equal(game._farlook_y, secondShopkeeper.my);
+    assert.match(game._pending_message, /Asidonhopo/);
+
+    await rhack('m');
+
+    assert.equal(game._farlook_x, game.u.ux);
+    assert.equal(game._farlook_y, game.u.uy);
+    assert.equal(shkp.debit, 10);
+    assert.equal(secondShopkeeper.debit, 10);
+
+    await rhack('M');
+
+    assert.equal(game._farlook_x, secondShopkeeper.mx);
+    assert.equal(game._farlook_y, secondShopkeeper.my);
+});
+
+test('pay command Pay whom monster cycling includes non-shopkeeper targets', async () => {
+    const { shkp } = installCommandShopState();
+    const secondShopkeeper = makeShopkeeper(2, 'Asidonhopo', 4, 6, { shoproom: ROOMOFFSET + 1 });
+    const orc = sleepingMonster('orc', 4, 5);
+    game.level.monsters.push(secondShopkeeper, orc);
+    shkp.debit = 10;
+    shkp.loan = 10;
+    secondShopkeeper.debit = 10;
+    secondShopkeeper.loan = 10;
+    game._goldCount = 30;
+
+    await rhack('p');
+    await rhack('m');
+
+    assert.equal(game._command_mode, 'payWhomCursor');
+    assert.equal(game._farlook_x, orc.mx);
+    assert.equal(game._farlook_y, orc.my);
+    assert.match(game._pending_message, /orc/);
+
+    await rhack('.');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game._pending_message, 'The orc is not interested in your payment.');
+    assert.equal(shkp.debit, 10);
+    assert.equal(secondShopkeeper.debit, 10);
+    assert.equal(game._goldCount, 30);
+});
+
+test('pay command Pay whom object cycling targets visible objects without payment', async () => {
+    const { shkp } = installCommandShopState();
+    Object.assign(shkp, { mx: 5, my: 7, shk: { x: 5, y: 7 } });
+    const secondShopkeeper = makeShopkeeper(2, 'Asidonhopo', 4, 2, { shoproom: ROOMOFFSET + 1 });
+    const blade = dagger(9703, 'c');
+    blade.ox = 7;
+    blade.oy = 5;
+    game.level.monsters.push(secondShopkeeper);
+    game.level.objects = [blade];
+    shkp.debit = 10;
+    shkp.loan = 10;
+    secondShopkeeper.debit = 10;
+    secondShopkeeper.loan = 10;
+    game._goldCount = 30;
+
+    await rhack('p');
+    await rhack('o');
+
+    assert.equal(game._command_mode, 'payWhomCursor');
+    assert.equal(game._farlook_x, blade.ox);
+    assert.equal(game._farlook_y, blade.oy);
+    assert.match(game._pending_message, /dagger/);
+    assert.equal(shkp.debit, 10);
+    assert.equal(secondShopkeeper.debit, 10);
+
+    await rhack('.');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game._pending_message, 'There is no one there to receive your payment.');
+    assert.equal(shkp.debit, 10);
+    assert.equal(secondShopkeeper.debit, 10);
+    assert.equal(game._goldCount, 30);
+});
+
+test('pay command Pay whom object cycling wraps through self', async () => {
+    const { shkp } = installCommandShopState();
+    Object.assign(shkp, { mx: 5, my: 7, shk: { x: 5, y: 7 } });
+    const secondShopkeeper = makeShopkeeper(2, 'Asidonhopo', 4, 2, { shoproom: ROOMOFFSET + 1 });
+    const ration = foodRation(9704, 'c');
+    ration.ox = 7;
+    ration.oy = 5;
+    game.level.monsters.push(secondShopkeeper);
+    game.level.objects = [ration];
+    shkp.debit = 10;
+    shkp.loan = 10;
+    secondShopkeeper.debit = 10;
+    secondShopkeeper.loan = 10;
+    game._goldCount = 30;
+
+    await rhack('p');
+    await rhack('o');
+    await rhack('o');
+
+    assert.equal(game._command_mode, 'payWhomCursor');
+    assert.equal(game._farlook_x, game.u.ux);
+    assert.equal(game._farlook_y, game.u.uy);
+
+    await rhack('O');
+
+    assert.equal(game._farlook_x, ration.ox);
+    assert.equal(game._farlook_y, ration.oy);
+    assert.match(game._pending_message, /food ration/);
+});
+
 test('pay command cancels Pay whom cursor without mutation', async () => {
     const { shkp } = installCommandShopState();
     const secondShopkeeper = makeShopkeeper(2, 'Asidonhopo', 4, 5);

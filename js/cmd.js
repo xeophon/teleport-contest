@@ -15053,6 +15053,8 @@ function payWhomTargetDescription(x, y) {
     if (x === (game.u?.ux || 0) && y === (game.u?.uy || 0)) return heroFarlookDescription();
     const mon = monsterAtPayTarget(x, y);
     if (mon && payCanSpotMonster(mon)) return farlookMonsterDescription(mon);
+    const obj = payWhomObjectAt(x, y);
+    if (obj) return pickupObjectPhrase(obj);
     if (!payTargetCanSee(x, y)) return 'unexplored area';
     const loc = game.level?.at(x, y);
     if (loc?.typ === DOOR) return doorDescription(loc);
@@ -15064,31 +15066,77 @@ function payWhomTargetDescription(x, y) {
     return 'unexplored area';
 }
 
+function payWhomCycleDistance(x, y) {
+    return Math.max(Math.abs(x - (game.u?.ux || 0)), Math.abs(y - (game.u?.uy || 0)));
+}
+
+function payWhomLocationSort(a, b) {
+    return (payWhomCycleDistance(a.x, a.y) - payWhomCycleDistance(b.x, b.y))
+        || (a.y - b.y) || (a.x - b.x);
+}
+
 function visiblePayWhomMonsters() {
     return (game.level?.monsters || [])
         .filter(payCanSpotMonster)
-        .sort((a, b) => (a.my - b.my) || (a.mx - b.mx));
+        .sort((a, b) => payWhomLocationSort({ x: a.mx, y: a.my }, { x: b.mx, y: b.my }));
 }
 
-function cyclePayWhomMonsterCursor(reverse = false) {
-    const monsters = visiblePayWhomMonsters();
-    if (!monsters.length) return null;
-    const currentX = game._farlook_x || game.u?.ux || 0;
-    const currentY = game._farlook_y || game.u?.uy || 0;
-    let index = monsters.findIndex(mon => mon.mx === currentX && mon.my === currentY);
-    if (index < 0) {
-        index = reverse ? monsters.length : -1;
+function payWhomObjectAt(x, y) {
+    if (!payTargetCanSee(x, y)) return null;
+    const mon = monsterAtPayTarget(x, y);
+    if (mon && payCanSpotMonster(mon)) return null;
+    const loc = game.level?.at?.(x, y);
+    const objects = game.level?.objects || [];
+    for (let i = objects.length - 1; i >= 0; i--) {
+        const obj = objects[i];
+        if (!obj || obj.hidden || obj.transientProjectile || obj.ox !== x || obj.oy !== y) continue;
+        if (obj.otyp === BOULDER || obj.otyp === ROCK || objectKindKey(obj) === 'boulder'
+            || objectKindKey(obj) === 'rock') continue;
+        if (loc?.disp_ch && loc.disp_ch !== ' ' && obj.glyph && loc.disp_ch !== obj.glyph) continue;
+        return obj;
     }
-    const mon = monsters[(index + (reverse ? -1 : 1) + monsters.length) % monsters.length];
-    game._farlook_x = mon.mx;
-    game._farlook_y = mon.my;
-    game._cursor_override = [mon.mx - 1, mon.my + 1];
-    return mon;
+    return null;
+}
+
+function visiblePayWhomObjects() {
+    const seen = new Set();
+    const targets = [];
+    for (const obj of game.level?.objects || []) {
+        if (!obj || seen.has(`${obj.ox}:${obj.oy}`)) continue;
+        const target = payWhomObjectAt(obj.ox, obj.oy);
+        if (!target) continue;
+        seen.add(`${obj.ox}:${obj.oy}`);
+        targets.push({ x: obj.ox, y: obj.oy, obj: target });
+    }
+    return targets.sort(payWhomLocationSort);
+}
+
+function payWhomCycleLocations(kind) {
+    const hero = { x: game.u?.ux || 0, y: game.u?.uy || 0, kind: 'hero' };
+    const targets = kind === 'objects'
+        ? visiblePayWhomObjects()
+        : visiblePayWhomMonsters().map(mon => ({ x: mon.mx, y: mon.my, mon }));
+    return [hero, ...targets];
+}
+
+function cyclePayWhomCursor(kind, reverse = false) {
+    const locations = payWhomCycleLocations(kind);
+    if (!locations.length) return null;
+    game._pay_getpos_cycle_indexes ??= {};
+    const current = Math.max(0, Math.trunc(Number(game._pay_getpos_cycle_indexes[kind] || 0)));
+    const index = (current + (reverse ? -1 : 1) + locations.length) % locations.length;
+    game._pay_getpos_cycle_indexes[kind] = index;
+    const target = locations[index];
+    game._farlook_x = target.x;
+    game._farlook_y = target.y;
+    game._cursor_override = [target.x - 1, target.y + 1];
+    return target;
 }
 
 async function startPayWhomCursor(resident, { requestMenu = false } = {}) {
     game._pay_whom_resident = resident || null;
     game._pay_request_menu = !!requestMenu;
+    game._pay_getpos_cycle_indexes = {};
     game._farlook_x = game.u?.ux || 0;
     game._farlook_y = game.u?.uy || 0;
     game._cursor_override = [(game._farlook_x || 1) - 1, (game._farlook_y || 0) + 1];
@@ -15099,6 +15147,7 @@ async function startPayWhomCursor(resident, { requestMenu = false } = {}) {
 function clearPayWhomCursor() {
     game._pay_whom_resident = null;
     game._pay_request_menu = false;
+    game._pay_getpos_cycle_indexes = null;
     game._cursor_override = null;
 }
 
@@ -31112,6 +31161,7 @@ export async function rhack(_cmd) {
             return;
         }
         if (ch === '@') {
+            game._pay_getpos_cycle_indexes = {};
             game._farlook_x = game.u?.ux || 0;
             game._farlook_y = game.u?.uy || 0;
             game._cursor_override = [(game._farlook_x || 1) - 1, (game._farlook_y || 0) + 1];
@@ -31119,12 +31169,13 @@ export async function rhack(_cmd) {
             return;
         }
         if (ch === 'm' || ch === 'M') {
-            const mon = cyclePayWhomMonsterCursor(ch === 'M');
-            if (!mon) {
-                await setMessage("Can't find monster.");
-                return;
-            }
-            await setMessage(payWhomTargetDescription(mon.mx, mon.my));
+            const target = cyclePayWhomCursor('monsters', ch === 'M');
+            await setMessage(payWhomTargetDescription(target.x, target.y));
+            return;
+        }
+        if (ch === 'o' || ch === 'O') {
+            const target = cyclePayWhomCursor('objects', ch === 'O');
+            await setMessage(payWhomTargetDescription(target.x, target.y));
             return;
         }
         const pickTarget = ch === '.' || ch === ',' || ch === ';' || ch === ':'
