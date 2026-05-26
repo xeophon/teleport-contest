@@ -15169,8 +15169,8 @@ function collectObjectAndContentsShopDebtItems(obj, shkp, seen = new Set()) {
     seen.add(obj);
     const items = [];
     const entry = shopBillEntryForObject(shkp, obj);
-    const price = entry ? shopBillEntryTotal(entry) : (obj.unpaid ? unpaidBillPrice(obj) : 0);
-    if ((entry || obj.unpaid) && price > 0) items.push({ item: obj, entry, price });
+    const price = entry ? shopBillEntryTotal(entry) : 0;
+    if (entry && price > 0) items.push({ item: obj, entry, price });
     for (const child of globContents(obj))
         items.push(...collectObjectAndContentsShopDebtItems(child, shkp, seen));
     return items;
@@ -16246,9 +16246,6 @@ function lostShopMerchandiseValueForObject(source, obj, shkp, seen = new Set()) 
     if (entry) {
         value += shopBillEntryTotal(entry);
         subOneFromShopBill(obj, shkp);
-    } else if (obj.unpaid) {
-        value += unpaidBillPrice(obj);
-        clearObjectShopBillState(obj);
     } else if (!obj.no_charge) {
         value += shopItemPrice(obj, source.ox ?? game.u?.ux, source.oy ?? game.u?.uy);
     }
@@ -16344,9 +16341,6 @@ function heldMagicBagLostValueForObject(obj, shkp, seen = new Set()) {
     if (entry) {
         value += shopBillEntryTotal(entry);
         subOneFromShopBill(obj, shkp);
-    } else if (obj.unpaid) {
-        value += unpaidBillPrice(obj) || shopItemPrice(obj, game.u?.ux, game.u?.uy);
-        clearObjectShopBillState(obj);
     }
     for (const child of globContents(obj))
         value += heldMagicBagLostValueForObject(child, shkp, seen);
@@ -16373,7 +16367,7 @@ function markObjectTreeShopBillsUsedUp(obj, seen = new Set()) {
 
 function billHeldMagicBagLostItem(obj) {
     const owner = shopkeeperOwningBillEntry(obj);
-    if (obj?.unpaid || owner.entry) {
+    if (owner.entry) {
         const currentShopkeeper = heroShopkeeper();
         const shkp = owner.shkp || currentShopkeeper;
         if (!shkp) return 0;
@@ -17501,19 +17495,20 @@ function usedUpShopBillName(obj) {
 }
 
 function rememberUsedUpShopBill(obj) {
-    const price = unpaidBillPrice(obj);
-    if (!obj?.unpaid || !price) return;
-    const shkp = heroShopkeeper();
-    const billEntry = shopBillEntryForObject(shkp, obj);
-    if (billEntry) {
-        billEntry.name = usedUpShopBillName(obj);
-        billEntry.shopkeeperId = shopkeeperIdentity(shkp);
-    }
+    const { shkp, entry: billEntry } = shopkeeperOwningBillEntry(obj);
+    const price = shopBillEntryTotal(billEntry);
+    if (!shkp || !billEntry || !(price > 0)) return;
+    const name = usedUpShopBillName(obj);
+    billEntry.useup = true;
+    clearObjectShopBillState(obj);
+    billEntry.name = name;
+    billEntry.shopkeeperId = shopkeeperIdentity(shkp);
+    if (usedUpShopBillTrackerForId(billEntry.bo_id, shkp)) return;
     game._usedUpShopBills ??= [];
     game._usedUpShopBills.push({
-        name: usedUpShopBillName(obj),
+        name,
         price,
-        bo_id: billEntry?.bo_id ?? shopBillObjectId(obj),
+        bo_id: billEntry.bo_id,
         shopkeeperId: shopkeeperIdentity(shkp),
     });
 }
@@ -21318,6 +21313,7 @@ function billShopFloorContainerPutObject(container, putItem, options = {}) {
 
 function preserveExplodedShopFloorPutTriggerBill(putItem, owner, fallbackShkp, price) {
     if (!putItem || shopBillableGold(putItem)) return false;
+    if (!owner?.entry) return false;
     const shkp = owner?.shkp || fallbackShkp || heroShopkeeper();
     if (!shkp) return false;
     if (!shopBillEntryForObject(shkp, putItem) && price > 0)
@@ -21368,8 +21364,8 @@ function putInventoryObjectIntoContainer(container, item, amount = item?.quan ||
     curseLoadstoneLeavingInventory(putItem);
     if (isMagicBagObject(container) && magicBagExplodesWithObject(putItem)) {
         const triggerOwner = shopkeeperOwningBillEntry(putItem);
-        const triggerPrice = triggerOwner.entry ? shopBillEntryTotal(triggerOwner.entry) : unpaidBillPrice(putItem);
-        const wasUnpaid = !!(putItem.unpaid || triggerOwner.entry);
+        const triggerPrice = triggerOwner.entry ? shopBillEntryTotal(triggerOwner.entry) : 0;
+        const wasUnpaid = !!triggerOwner.entry;
         const billing = billShopFloorContainerPutObject(container, putItem, {
             acceptedSale: !!options.acceptedSale,
             shkp: options.salePending?.shkp,

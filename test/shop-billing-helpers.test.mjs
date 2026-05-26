@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { burnFloorObjectsByFire, earthFloorEffects, finishForceLock, processSpellbookStudyOccupation, rhack, __shopBillingTestHooks as shop } from '../js/cmd.js';
+import { burnFloorObjectsByFire, earthFloorEffects, finishForceLock, processCorpseTimers, processGlobShrinkTimers, processSpellbookStudyOccupation, rhack, __shopBillingTestHooks as shop } from '../js/cmd.js';
 import { game, resetGame } from '../js/gstate.js';
 import { initRng } from '../js/rng.js';
 import { CANDLESHOP, DB_EAST, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, HOLE, LAVAPOOL, ROOM, ROOMOFFSET, SHOPBASE } from '../js/const.js';
@@ -3404,6 +3404,112 @@ test('payable debts ignore stale unpaid field rows for selected shopkeeper', () 
     assert.equal(debts[0].price, 45);
 });
 
+test('corpse timer used-up tracking ignores stale unpaid fields without bill rows', async () => {
+    const { shkp } = installShopState();
+    game.moves = 10;
+    const corpse = {
+        ...foodRation(4015, 'c'),
+        otyp: 'corpse',
+        kind: 'newt corpse',
+        actualKind: 'newt corpse',
+        line: 'c - a newt corpse',
+        rotAwayTurn: 10,
+        unpaid: true,
+        unpaidPrice: 45,
+    };
+    game.inventory = [corpse];
+
+    await processCorpseTimers(game);
+
+    assert.equal(game.inventory.includes(corpse), false);
+    assert.equal(shkp.billct, 0);
+    assert.equal(shkp.debit || 0, 0);
+    assert.equal((game._usedUpShopBills || []).length, 0);
+});
+
+test('corpse timer preserves a real bill row as used-up', async () => {
+    const { shkp } = installShopState();
+    game.moves = 10;
+    const corpse = {
+        ...foodRation(4016, 'c'),
+        otyp: 'corpse',
+        kind: 'newt corpse',
+        actualKind: 'newt corpse',
+        line: 'c - a newt corpse',
+        rotAwayTurn: 10,
+    };
+    shop.addObjectToShopBill(shkp, corpse, 45);
+    game.inventory = [corpse];
+
+    await processCorpseTimers(game);
+
+    assert.equal(game.inventory.includes(corpse), false);
+    assert.equal(shkp.billct, 1);
+    const entry = shop.shopBillEntryForObject(shkp, corpse);
+    assert.ok(entry);
+    assert.equal(entry.useup, true);
+    assert.equal(shop.shopBillEntryTotal(entry), 45);
+    assert.equal(game._usedUpShopBills.some(bill => String(bill.bo_id) === String(corpse.id)), true);
+});
+
+test('glob shrink used-up tracking ignores stale unpaid fields without bill rows', () => {
+    const { shkp } = installShopState();
+    game.moves = 20;
+    const glob = {
+        id: 4017,
+        cls: 'food',
+        otyp: 'glob',
+        glyph: '%',
+        kind: 'glob of gray ooze',
+        actualKind: 'glob of gray ooze',
+        globName: 'glob of gray ooze',
+        globby: true,
+        owt: 1,
+        globShrinkTurn: 20,
+        line: 'g - a glob of gray ooze',
+        unpaid: true,
+        unpaidPrice: 45,
+    };
+    game.inventory = [glob];
+
+    processGlobShrinkTimers(game);
+
+    assert.equal(game.inventory.includes(glob), false);
+    assert.equal(shkp.billct, 0);
+    assert.equal(shkp.debit || 0, 0);
+    assert.equal((game._usedUpShopBills || []).length, 0);
+});
+
+test('glob shrink preserves a real bill row as used-up', () => {
+    const { shkp } = installShopState();
+    game.moves = 20;
+    const glob = {
+        id: 4018,
+        cls: 'food',
+        otyp: 'glob',
+        glyph: '%',
+        kind: 'glob of gray ooze',
+        actualKind: 'glob of gray ooze',
+        globName: 'glob of gray ooze',
+        globby: true,
+        owt: 1,
+        globShrinkTurn: 20,
+        line: 'g - a glob of gray ooze',
+    };
+    shop.addObjectToShopBill(shkp, glob, 45);
+    game.inventory = [glob];
+
+    processGlobShrinkTimers(game);
+
+    assert.equal(game.inventory.includes(glob), false);
+    assert.equal(shkp.billct, 1);
+    const entry = shop.shopBillEntryForObject(shkp, glob);
+    assert.ok(entry);
+    assert.equal(entry.useup, true);
+    assert.equal(shop.shopBillEntryTotal(entry), 45);
+    assert.equal(game._usedUpShopBills.some(bill => String(bill.bo_id) === String(glob.id)), true);
+});
+
 test('paid saleable shop drop computes C-style sale offer and transfers cash on accept', () => {
     const { shkp } = installShopState();
     const dropped = dagger(5001);
@@ -6510,6 +6616,28 @@ test('tipping no-charge lost contents from a cursed shop-floor magic bag does no
     assert.equal(shkp.billct, 0);
 });
 
+test('tipping stale unpaid shop-floor magic bag contents uses current shop price', () => {
+    const { shkp } = installShopState();
+    initRng(17);
+    const source = bagOfHolding(69241);
+    source.cursed = true;
+    source.ox = 5;
+    source.oy = 5;
+    const ration = putObjectInContainer(source, foodRation(69242));
+    ration.unpaid = true;
+    ration.unpaidPrice = 999;
+    const expected = shop.shopItemPrice(ration, 5, 5);
+    game.level.objects = [source];
+
+    const messages = shop.tipContainerToFloor(source);
+
+    assert.match(messages.join(' '), new RegExp(`owe ${expected} zorkmids? for lost merchandise`));
+    assert.equal(shkp.debit, expected);
+    assert.notEqual(shkp.debit, 999);
+    assert.equal(shkp.billct, 0);
+    assert.equal(shop.shopBillEntryForObject(shkp, ration), null);
+});
+
 test('tipping unbilled partly eaten food from a cursed shop-floor magic bag does not bill', () => {
     const { shkp } = installShopState();
     initRng(17);
@@ -6843,6 +6971,33 @@ test('unpaid cancellation wand that explodes a shop-floor magic bag remains as a
     assert.equal(game._usedUpShopBills.some(entry => String(entry.bo_id) === String(source.id)), true);
 });
 
+test('stale unpaid cancellation wand that explodes a shop-floor magic bag does not create trigger bill', () => {
+    const { shkp } = installShopState();
+    const source = bagOfHolding(69361);
+    const wand = cancellationWand(69371);
+    source.ox = 5;
+    source.oy = 5;
+    wand.unpaid = true;
+    wand.unpaidPrice = 999;
+    game.u.uhp = 100;
+    game.inventory = [wand];
+    game.level.objects = [source];
+    const expectedBagPrice = shop.shopItemPrice(source, 5, 5);
+
+    const result = shop.putInventoryObjectIntoContainer(source, wand);
+
+    assert.equal(result.bagGone, true);
+    assert.equal(game.inventory.includes(wand), false);
+    assert.equal(shop.shopBillEntryForObject(shkp, wand), null);
+    const bagEntry = shop.shopBillEntryForObject(shkp, source);
+    assert.ok(bagEntry);
+    assert.equal(bagEntry.useup, true);
+    assert.equal(shop.shopBillEntryTotal(bagEntry), expectedBagPrice);
+    assert.equal(shkp.billct, 1);
+    assert.equal(game._usedUpShopBills.some(entry => String(entry.bo_id) === String(wand.id)), false);
+    assert.equal(game._usedUpShopBills.some(entry => String(entry.bo_id) === String(source.id)), true);
+});
+
 test('tipping unpaid lost contents from a carried cursed magic bag converts the bill to debt', () => {
     const { shkp } = installShopState();
     initRng(17);
@@ -6861,6 +7016,27 @@ test('tipping unpaid lost contents from a carried cursed magic bag converts the 
     assert.notEqual(ration.unpaid, true);
     assert.equal(shkp.credit, 0);
     assert.equal(shkp.debit, 35);
+    assert.equal(shkp.billct, 0);
+    assert.equal((game._usedUpShopBills || []).length, 0);
+});
+
+test('tipping stale unpaid lost contents from a carried cursed magic bag does not bill', () => {
+    const { shkp } = installShopState();
+    initRng(17);
+    const source = bagOfHolding(69383);
+    source.cursed = true;
+    const ration = putObjectInContainer(source, foodRation(69384));
+    ration.unpaid = true;
+    ration.unpaidPrice = 999;
+    game.inventory = [source];
+
+    const messages = shop.tipContainerToFloor(source);
+
+    assert.match(messages.join(' '), /vanished/);
+    assert.doesNotMatch(messages.join(' '), /lost merchandise/);
+    assert.equal(source.contents.length, 0);
+    assert.equal(shkp.debit || 0, 0);
+    assert.equal(shkp.robbed || 0, 0);
     assert.equal(shkp.billct, 0);
     assert.equal((game._usedUpShopBills || []).length, 0);
 });
@@ -7636,6 +7812,29 @@ test('projectile container leaving its owning shop converts unpaid contents to d
     assert.equal(blade.unpaid, false);
     assert.equal(bag.unpaid || false, false);
     assert.equal(bag.contents.includes(blade), true);
+});
+
+test('projectile container debt ignores stale unpaid contents without bill rows', () => {
+    const { shkp } = installShopState();
+    game.level.at = (x, y) => ({ roomno: x === 9 && y === 5 ? 0 : ROOMOFFSET });
+    const bag = sack(8725);
+    const blade = putObjectInContainer(bag, dagger(8726));
+    const staleRation = putObjectInContainer(bag, foodRation(8727));
+    staleRation.unpaid = true;
+    staleRation.unpaidPrice = 999;
+    shop.addObjectToShopBill(shkp, blade, 10);
+
+    const result = shop.resolveUnpaidProjectileShopLanding(bag, 9, 5, { silent: true });
+
+    assert.equal(result.handled, true);
+    assert.equal(result.charged, true);
+    assert.equal(result.value, 10);
+    assert.equal(shkp.debit, 10);
+    assert.equal(shkp.billct, 0);
+    assert.equal(shop.shopBillEntryForObject(shkp, blade), null);
+    assert.equal(blade.unpaid, false);
+    assert.equal(staleRation.unpaid, true);
+    assert.equal(staleRation.unpaidPrice, 999);
 });
 
 test('projectile unpaid container leaving shop charges it and its unpaid contents', () => {
