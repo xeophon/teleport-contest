@@ -81,6 +81,12 @@ function finishEatingOccupation() {
         processEatingOccupationTick(game);
 }
 
+function acknowledgeMoreForOccupation() {
+    game._pending_message = '';
+    game._message_more = false;
+    game._process_time_with_more = 0;
+}
+
 function installAngryNotRobbedPayState({ gold = 0, seed = 1, player = 'Hero', customer = 'PreviousCustomer' } = {}) {
     const { shkp } = installCommandShopState();
     initRng(seed);
@@ -3910,6 +3916,157 @@ test('carried delayed foods use C race-adjusted hunger before victual ticks', as
     }
 });
 
+test('cursed carried delayed foods use C rotten first bite before victual ticks', async () => {
+    const cases = [
+        { kind: 'food ration', letter: 'f', firstOeaten: 267, firstHunger: 1033, turns: 3, bite: 133, finalHunger: 1299 },
+        { kind: 'pancake', letter: 'p', firstOeaten: null, firstHunger: 1000, turns: 0, bite: 0, finalHunger: 1000, conduct: 'unvegan' },
+        { kind: 'lembas wafer', letter: 'l', race: 'orc', firstOeaten: null, firstHunger: 1200, turns: 0, bite: 0, finalHunger: 1200 },
+        { kind: 'cram ration', letter: 'c', race: 'dwarf', firstOeaten: 150, firstHunger: 1075, turns: 2, bite: 150, biteHunger: 175, finalHunger: 1250 },
+    ];
+
+    for (const entry of cases) {
+        installCommandShopState();
+        initRng(2);
+        if (entry.race) {
+            game._startup_race = entry.race;
+            game.urace = { noun: entry.race };
+        }
+        const food = simpleFood(3170 + cases.indexOf(entry), entry.kind, entry.letter, { cursed: true });
+        game.inventory = [food];
+
+        await rhack('e');
+        await rhack(entry.letter);
+
+        assert.equal(game._pending_message, 'Blecch!  Rotten food!', entry.kind);
+        assert.equal(game.u.uhunger, entry.firstHunger, entry.kind);
+        if (entry.firstOeaten == null) {
+            assert.equal(game.inventory.includes(food), false, entry.kind);
+            assert.equal(game._eating_turns_remaining || 0, 0, entry.kind);
+        } else {
+            assert.equal(game.inventory.includes(food), true, entry.kind);
+            assert.equal(food.oeaten, entry.firstOeaten, entry.kind);
+            assert.equal(game._eating_turns_remaining, entry.turns, entry.kind);
+            assert.equal(game._eating_bite_nutrition, entry.bite, entry.kind);
+            assert.equal(game._eating_bite_hunger, entry.biteHunger || entry.bite, entry.kind);
+            acknowledgeMoreForOccupation();
+            finishEatingOccupation();
+            assert.equal(game.inventory.includes(food), false, entry.kind);
+        }
+        assert.equal(game.u.uhunger, entry.finalHunger, entry.kind);
+        if (entry.conduct) assert.equal(game.u.uconduct?.[entry.conduct], 1, entry.kind);
+    }
+});
+
+test('old orotten carried delayed food halves before first C bite', async () => {
+    installCommandShopState();
+    initRng(2);
+    game.moves = 100;
+    const ration = foodRation(3180, 'f');
+    Object.assign(ration, { age: 0, orotten: true });
+    game.inventory = [ration];
+
+    await rhack('e');
+    await rhack('f');
+
+    assert.match(game._pending_message, /^Blecch!  Rotten food!/);
+    assert.equal(ration.oeaten, 267);
+    assert.equal(game.u.uhunger, 1033);
+    assert.equal(game._eating_turns_remaining, 3);
+});
+
+test('orotten carried delayed foods respect C nonrotting exemptions', async () => {
+    const cases = [
+        { kind: 'pancake', letter: 'p', rotten: true, firstOeaten: null, firstHunger: 1000, turns: 0, bite: 0, finalHunger: 1000 },
+        { kind: 'lembas wafer', letter: 'l', rotten: false, firstOeaten: 400, firstHunger: 1300, turns: 2, bite: 400, finalHunger: 1700, message: 'This lembas wafer is delicious!' },
+        { kind: 'cram ration', letter: 'c', rotten: false, firstOeaten: 400, firstHunger: 1100, turns: 3, bite: 200, finalHunger: 1500, message: 'This cram ration is bland.' },
+    ];
+
+    for (const entry of cases) {
+        installCommandShopState();
+        initRng(2);
+        game.moves = 100;
+        const food = simpleFood(3182 + cases.indexOf(entry), entry.kind, entry.letter, {
+            age: 0,
+            orotten: true,
+        });
+        game.inventory = [food];
+
+        await rhack('e');
+        await rhack(entry.letter);
+
+        assert.equal(game._pending_message, entry.rotten ? 'Blecch!  Rotten food!' : entry.message, entry.kind);
+        assert.equal(game.u.uhunger, entry.firstHunger, entry.kind);
+        if (entry.firstOeaten == null) {
+            assert.equal(game.inventory.includes(food), false, entry.kind);
+            assert.equal(game._eating_turns_remaining || 0, 0, entry.kind);
+        } else {
+            assert.equal(game.inventory.includes(food), true, entry.kind);
+            assert.equal(food.oeaten, entry.firstOeaten, entry.kind);
+            assert.equal(game._eating_turns_remaining, entry.turns, entry.kind);
+            assert.equal(game._eating_bite_nutrition, entry.bite, entry.kind);
+            finishEatingOccupation();
+        }
+        assert.equal(game.u.uhunger, entry.finalHunger, entry.kind);
+    }
+});
+
+test('blessed stale carried delayed food uses the C age threshold', async () => {
+    installCommandShopState();
+    initRng(2);
+    game.moves = 100;
+    const blessed = foodRation(3186, 'f');
+    Object.assign(blessed, { age: 60, blessed: true, orotten: true });
+    game.inventory = [blessed];
+
+    await rhack('e');
+    await rhack('f');
+
+    assert.notEqual(game._pending_message, 'Blecch!  Rotten food!');
+    assert.equal(blessed.oeaten, 640);
+    assert.equal(game.u.uhunger, 1060);
+    assert.equal(game._eating_turns_remaining, 5);
+
+    installCommandShopState();
+    initRng(2);
+    game.moves = 100;
+    const uncursed = foodRation(3187, 'f');
+    Object.assign(uncursed, { age: 60, orotten: true });
+    game.inventory = [uncursed];
+
+    await rhack('e');
+    await rhack('f');
+
+    assert.match(game._pending_message, /^Blecch!  Rotten food!/);
+    assert.equal(uncursed.oeaten, 267);
+    assert.equal(game.u.uhunger, 1033);
+    assert.equal(game._eating_turns_remaining, 3);
+});
+
+test('rotten delayed food sleep leaves the halved carried meal unfinished', async () => {
+    installCommandShopState();
+    const ration = foodRation(3181, 'f');
+    ration.cursed = true;
+    game.inventory = [ration];
+
+    await rhack('e');
+    await rhack('f');
+
+    assert.equal(game._pending_message, 'Blecch!  Rotten food!  The world spins and goes dark.');
+    assert.equal(game.inventory.includes(ration), true);
+    assert.equal(ration.oeaten, 400);
+    assert.equal(ration.orotten, true);
+    assert.equal(game.u.uhunger, 900);
+    assert.equal(game._eating_turns_remaining || 0, 0);
+    assert.ok(game.context.move > 1);
+
+    acknowledgeMoreForOccupation();
+    await rhack('e');
+
+    assert.equal(game._command_mode, 'eatObject');
+    assert.equal(game._eating_finish_message || '', '');
+    assert.match(game._pending_message, /What do you want to eat\? \[f or \?\*\]/);
+});
+
 test('carried delayed ordinary food command splits unpaid stacks before C bites', async () => {
     const cases = [
         { kind: 'pancake', letter: 'p', firstOeaten: 100, unitPrice: 15 },
@@ -3952,6 +4109,64 @@ test('carried delayed ordinary food command splits unpaid stacks before C bites'
         assert.equal(shop.shopBillEntryTotal(live), unitPrice, entry.kind);
         assert.equal(shop.shopBillEntryTotal(bite), unitPrice, entry.kind);
     }
+});
+
+test('cursed carried delayed food stack splits and bills before rotten first bite', async () => {
+    const { shkp } = installCommandShopState();
+    initRng(2);
+    const stack = foodRation(3188, 'f');
+    Object.assign(stack, {
+        cursed: true,
+        quan: 2,
+        plural: 'food rations',
+        line: 'f - 2 food rations',
+    });
+    game.inventory = [stack];
+    shop.addObjectToShopBill(shkp, stack, 90);
+
+    await rhack('e');
+    await rhack('f');
+
+    assert.match(game._pending_message, /^Blecch!  Rotten food!/);
+    const touched = game._eating_inventory_object;
+    assert.ok(touched);
+    assert.notEqual(touched, stack);
+    assert.equal(game.inventory.includes(touched), true);
+    assert.equal(stack.quan, 1);
+    assert.equal(touched.quan, 1);
+    assert.equal(touched.oeaten, 267);
+    assert.equal(game.u.uhunger, 1033);
+    assert.equal(game._eating_turns_remaining, 3);
+    assert.equal(stack.unpaid, true);
+    assert.equal(stack.unpaidPrice, 45);
+    assert.notEqual(touched.unpaid, true);
+    const live = shop.shopBillEntryForObject(shkp, stack);
+    const bite = shop.shopBillEntryForObject(shkp, touched);
+    assert.ok(live);
+    assert.ok(bite);
+    assert.equal(live.useup, false);
+    assert.equal(bite.useup, true);
+    assert.equal(shop.shopBillEntryTotal(live), 45);
+    assert.equal(shop.shopBillEntryTotal(bite), 45);
+});
+
+test('partly eaten rotten carried delayed food keeps the rotten message when consumed', async () => {
+    installCommandShopState();
+    initRng(2);
+    const pancake = simpleFood(3189, 'pancake', 'p', {
+        cursed: true,
+        oeaten: 100,
+        line: 'p - a partly eaten pancake',
+    });
+    game.inventory = [pancake];
+
+    await rhack('e');
+    await rhack('p');
+
+    assert.equal(game._pending_message, 'Blecch!  Rotten food!');
+    assert.equal(game.inventory.includes(pancake), false);
+    assert.equal(game.u.uhunger, 950);
+    assert.equal(game._eating_turns_remaining || 0, 0);
 });
 
 test('shop pickup merge rejects unpaid into paid and combines compatible unpaid bills', () => {
