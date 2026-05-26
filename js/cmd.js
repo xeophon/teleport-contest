@@ -15086,8 +15086,9 @@ function cyclePayWhomMonsterCursor(reverse = false) {
     return mon;
 }
 
-async function startPayWhomCursor(resident) {
+async function startPayWhomCursor(resident, { requestMenu = false } = {}) {
     game._pay_whom_resident = resident || null;
+    game._pay_request_menu = !!requestMenu;
     game._farlook_x = game.u?.ux || 0;
     game._farlook_y = game.u?.uy || 0;
     game._cursor_override = [(game._farlook_x || 1) - 1, (game._farlook_y || 0) + 1];
@@ -15097,6 +15098,7 @@ async function startPayWhomCursor(resident) {
 
 function clearPayWhomCursor() {
     game._pay_whom_resident = null;
+    game._pay_request_menu = false;
     game._cursor_override = null;
 }
 
@@ -24151,6 +24153,112 @@ function shopPaymentMenuRows(entries, width) {
     return rows;
 }
 
+function shopPaymentTraditionalStyle() {
+    const style = game.flags?.menu_style ?? game.flags?.menustyle ?? game.flags?.menuStyle;
+    return style === 0 || String(style || '').toLowerCase() === 'traditional';
+}
+
+function shopPaymentMoreThanOne(entries) {
+    if ((entries || []).length > 1) return true;
+    const entry = entries?.[0];
+    return !!(entry?.containerPayment || entry?.billPortion === 'containerContents' || entry?.billPortion === 'partlyUsedUp');
+}
+
+function clearShopPaymentPromptState({ clearShopkeeper = true } = {}) {
+    game._pay_menu_items = null;
+    game._pay_menu_width = 0;
+    game._pay_itemized_index = 0;
+    game._pay_itemized_paid_entries = null;
+    game._pay_itemized_cash_total = 0;
+    game._pay_prepaid_message = '';
+    game._pay_prepaid_paid = false;
+    game._overlay_lines = null;
+    if (clearShopkeeper) game._pay_shopkeeper = null;
+}
+
+function shopPaymentThankYouMessage(shkp) {
+    const shopIndex = (shkp?.shoptype || 0) - SHOPBASE;
+    const shopName = SHOP_TYPES[shopIndex]?.name || 'shop';
+    const shopkeeperName = shkp?.shknam || 'shopkeeper';
+    const possessive = shopkeeperName.endsWith('s') ? `${shopkeeperName}'` : `${shopkeeperName}'s`;
+    return `"Thank you for shopping in ${possessive} ${shopName}!"`;
+}
+
+function shopPaymentBoughtMessage(entries, cashTotal) {
+    const paidEntries = entries || [];
+    if (paidEntries.length === 1) {
+        const entry = paidEntries[0];
+        return `You bought ${entry.name} for ${entry.price} gold piece${entry.price === 1 ? '' : 's'}.`;
+    }
+    return `You bought ${paidEntries.length} items for ${cashTotal} gold pieces.`;
+}
+
+function shopPaymentItemizedQuestion(entry) {
+    const price = Math.max(0, Math.trunc(Number(entry?.price || 0)));
+    return `Pay for ${entry?.name || 'that item'} for ${price} zorkmid${price === 1 ? '' : 's'}? [yn]`;
+}
+
+function openShopPaymentMenu(shkp, entries, { prepaidMessage = '', prepaidPaid = false } = {}) {
+    const width = String(Math.max(...entries.map(entry => entry.price))).length;
+    const rows = shopPaymentMenuRows(entries, width);
+    game._pay_menu_items = entries;
+    game._pay_menu_width = width;
+    game._pay_shopkeeper = shkp;
+    game._pay_prepaid_message = prepaidMessage || '';
+    game._pay_prepaid_paid = !!prepaidPaid;
+    setOverlay(rows, Math.max(...rows.map(([row]) => row)) + 1, false, 41);
+    game._command_mode = 'payMenu';
+}
+
+async function finishShopPaymentCommandResult(shkp, payment, { prepaidMessage = '', prepaidPaid = false } = {}) {
+    if (!payment.paid) {
+        if (payment.skipped) return false;
+        const message = [prepaidMessage, payment.message || "You don't have enough gold."]
+            .filter(Boolean).join('  ');
+        await setMessage(message);
+        if (prepaidPaid) game.context.move = 1;
+        return false;
+    }
+    if (shkp?.shk) {
+        const home = shkp.shk;
+        const blockingPet = (game.level?.monsters || []).find(mon =>
+            mon.pet && Math.max(Math.abs(mon.mx - home.x), Math.abs(mon.my - home.y)) === 1
+            && (mon.mx === home.x || mon.my === home.y));
+        if (blockingPet) {
+            const stepDx = Math.sign((game.u?.ux ?? home.x) - home.x)
+                || Math.sign(blockingPet.mx - home.x) || -1;
+            const stepDy = Math.sign(blockingPet.my - home.y)
+                || Math.sign((game.u?.uy ?? home.y) - home.y) || 1;
+            shkp._paid_shopkeeper_step = { x: home.x + stepDx, y: home.y + stepDy };
+            blockingPet._paid_shopkeeper_pet_step = {
+                x: blockingPet.mx + Math.sign(blockingPet.mx - home.x),
+                y: blockingPet.my + Math.sign(blockingPet.my - home.y),
+            };
+        }
+    }
+    game._pet_food_scan_inventory = game.inventory;
+    game._queued_message_after_more = payment.stoppedShort
+        ? payment.message || "You don't have enough gold."
+        : shopPaymentThankYouMessage(shkp);
+    const message = [prepaidMessage, shopPaymentBoughtMessage(payment.payableEntries, payment.cashTotal)]
+        .filter(Boolean).join('  ');
+    await setMessage(message, true);
+    game.context.move = 1;
+    return true;
+}
+
+async function startShopPaymentItemizedFlow(shkp, entries, { prepaidMessage = '', prepaidPaid = false } = {}) {
+    game._pay_menu_items = entries;
+    game._pay_shopkeeper = shkp;
+    game._pay_prepaid_message = prepaidMessage || '';
+    game._pay_prepaid_paid = !!prepaidPaid;
+    game._pay_itemized_index = 0;
+    game._pay_itemized_paid_entries = [];
+    game._pay_itemized_cash_total = 0;
+    game._command_mode = 'payItemized';
+    await setMessage(shopPaymentItemizedQuestion(entries[0]));
+}
+
 function shopkeeperObjectivePronoun(shkp) {
     if (shkp?.female) return 'her';
     if (shkp?.neuter || shkp?.data?.neuter) return 'it';
@@ -24329,7 +24437,7 @@ function finishAngryUnrobbedShopPayment(shkp) {
     };
 }
 
-async function finishPayCommandForShopkeeper(shkp, resident) {
+async function finishPayCommandForShopkeeper(shkp, resident, { requestMenu = false } = {}) {
     game._pay_prepaid_message = '';
     game._pay_prepaid_paid = false;
     const debitPayment = finishShopDebitPayment(shkp);
@@ -24365,15 +24473,28 @@ async function finishPayCommandForShopkeeper(shkp, resident) {
         if (debitPayment.paid) game.context.move = 1;
         return;
     }
-    const width = String(Math.max(...entries.map(entry => entry.price))).length;
-    const rows = shopPaymentMenuRows(entries, width);
+    let viaMenu = !shopPaymentTraditionalStyle();
+    if (requestMenu) viaMenu = !viaMenu;
+    if (viaMenu) {
+        openShopPaymentMenu(shkp, entries, {
+            prepaidMessage: debitPayment.message || '',
+            prepaidPaid: !!debitPayment.paid,
+        });
+        return;
+    }
     game._pay_menu_items = entries;
-    game._pay_menu_width = width;
     game._pay_shopkeeper = shkp;
     game._pay_prepaid_message = debitPayment.message || '';
     game._pay_prepaid_paid = !!debitPayment.paid;
-    setOverlay(rows, Math.max(...rows.map(([row]) => row)) + 1, false, 41);
-    game._command_mode = 'payMenu';
+    if (!shopPaymentMoreThanOne(entries)) {
+        await startShopPaymentItemizedFlow(shkp, entries, {
+            prepaidMessage: debitPayment.message || '',
+            prepaidPaid: !!debitPayment.paid,
+        });
+        return;
+    }
+    game._command_mode = 'payItemizedPrompt';
+    await setMessage('Itemized billing? [ynq m] (q)');
 }
 
 function pickupMenuEntries(objects) {
@@ -31012,6 +31133,7 @@ export async function rhack(_cmd) {
             const targetX = game._farlook_x || game.u?.ux || 0;
             const targetY = game._farlook_y || game.u?.uy || 0;
             const resident = game._pay_whom_resident || null;
+            const requestMenu = !!game._pay_request_menu;
             const target = validatePayWhomTarget(targetX, targetY, resident);
             game._pending_message = '';
             game._message_more = 0;
@@ -31021,7 +31143,7 @@ export async function rhack(_cmd) {
                 await setMessage(target.message || 'There is no one there to receive your payment.');
                 return;
             }
-            await finishPayCommandForShopkeeper(target.shkp, resident);
+            await finishPayCommandForShopkeeper(target.shkp, resident, { requestMenu });
             return;
         }
         const dir = movementDirection(ch);
@@ -31043,17 +31165,145 @@ export async function rhack(_cmd) {
         return;
     }
 
+    if (game._command_mode === 'payItemizedPrompt') {
+        const entries = game._pay_menu_items || [];
+        const shkp = game._pay_shopkeeper;
+        const prepaidMessage = game._pay_prepaid_message || '';
+        const prepaidPaid = !!game._pay_prepaid_paid;
+        const answer = ch === '\x1b' ? 'q' : ch.toLowerCase();
+        if (answer === 'q') {
+            clearShopPaymentPromptState();
+            game._pending_message = '';
+            game._message_more = 0;
+            game._keep_pending_message = 0;
+            game._command_mode = null;
+            if (prepaidPaid) {
+                await setMessage(prepaidMessage);
+                game.context.move = 1;
+            }
+            return;
+        }
+        if (answer === 'm') {
+            openShopPaymentMenu(shkp, entries, { prepaidMessage, prepaidPaid });
+            return;
+        }
+        if (answer === 'n') {
+            clearShopPaymentPromptState({ clearShopkeeper: false });
+            game._command_mode = null;
+            const payment = finishShopPaymentSelection(shkp, entries);
+            game._pay_shopkeeper = null;
+            await finishShopPaymentCommandResult(shkp, payment, { prepaidMessage, prepaidPaid });
+            return;
+        }
+        if (answer === 'y') {
+            await startShopPaymentItemizedFlow(shkp, entries, { prepaidMessage, prepaidPaid });
+            return;
+        }
+        game._keep_pending_message = 1;
+        return;
+    }
+
+    if (game._command_mode === 'payItemized') {
+        const entries = game._pay_menu_items || [];
+        const shkp = game._pay_shopkeeper;
+        const prepaidMessage = game._pay_prepaid_message || '';
+        const prepaidPaid = !!game._pay_prepaid_paid;
+        const answer = ch === '\x1b' ? 'n' : ch.toLowerCase();
+        if (answer !== 'y' && answer !== 'n') {
+            game._keep_pending_message = 1;
+            return;
+        }
+
+        const index = Math.max(0, Math.trunc(Number(game._pay_itemized_index || 0)));
+        const entry = entries[index];
+        if (!entry) {
+            const paidEntries = game._pay_itemized_paid_entries || [];
+            const cashTotal = Math.max(0, Math.trunc(Number(game._pay_itemized_cash_total || 0)));
+            clearShopPaymentPromptState({ clearShopkeeper: false });
+            game._command_mode = null;
+            game._pay_shopkeeper = null;
+            if (paidEntries.length) {
+                await finishShopPaymentCommandResult(shkp, {
+                    paid: true,
+                    cashTotal,
+                    payableEntries: paidEntries,
+                }, { prepaidMessage, prepaidPaid });
+            } else if (prepaidPaid) {
+                await setMessage(prepaidMessage);
+                game.context.move = 1;
+            } else {
+                game._pending_message = '';
+                game._keep_pending_message = 0;
+            }
+            return;
+        }
+
+        if (answer === 'y') {
+            const payment = finishShopPaymentSelection(shkp, [entry]);
+            if (!payment.paid) {
+                const paidEntries = game._pay_itemized_paid_entries || [];
+                const cashTotal = Math.max(0, Math.trunc(Number(game._pay_itemized_cash_total || 0)));
+                clearShopPaymentPromptState({ clearShopkeeper: false });
+                game._command_mode = null;
+                game._pay_shopkeeper = null;
+                if (paidEntries.length) {
+                    await finishShopPaymentCommandResult(shkp, {
+                        paid: true,
+                        stoppedShort: true,
+                        cashTotal,
+                        payableEntries: paidEntries,
+                        message: payment.message || "You don't have enough gold.",
+                    }, { prepaidMessage, prepaidPaid });
+                } else {
+                    const message = [prepaidMessage, payment.message || "You don't have enough gold."]
+                        .filter(Boolean).join('  ');
+                    await setMessage(message);
+                    if (prepaidPaid) game.context.move = 1;
+                }
+                return;
+            }
+            game._pay_itemized_paid_entries = [
+                ...(game._pay_itemized_paid_entries || []),
+                ...(payment.payableEntries || []),
+            ];
+            game._pay_itemized_cash_total = Math.max(0, Math.trunc(Number(game._pay_itemized_cash_total || 0)))
+                + Math.max(0, Math.trunc(Number(payment.cashTotal || 0)));
+        }
+
+        const nextIndex = index + 1;
+        game._pay_itemized_index = nextIndex;
+        if (nextIndex < entries.length) {
+            await setMessage(shopPaymentItemizedQuestion(entries[nextIndex]));
+            return;
+        }
+
+        const paidEntries = game._pay_itemized_paid_entries || [];
+        const cashTotal = Math.max(0, Math.trunc(Number(game._pay_itemized_cash_total || 0)));
+        clearShopPaymentPromptState({ clearShopkeeper: false });
+        game._command_mode = null;
+        game._pay_shopkeeper = null;
+        if (paidEntries.length) {
+            await finishShopPaymentCommandResult(shkp, {
+                paid: true,
+                cashTotal,
+                payableEntries: paidEntries,
+            }, { prepaidMessage, prepaidPaid });
+        } else if (prepaidPaid) {
+            await setMessage(prepaidMessage);
+            game.context.move = 1;
+        } else {
+            game._pending_message = '';
+            game._keep_pending_message = 0;
+        }
+        return;
+    }
+
     if (game._command_mode === 'payMenu') {
         const entries = game._pay_menu_items || [];
         const prepaidMessage = game._pay_prepaid_message || '';
         const prepaidPaid = !!game._pay_prepaid_paid;
         if (ch === '\x1b') {
-            game._pay_menu_items = null;
-            game._pay_menu_width = 0;
-            game._pay_shopkeeper = null;
-            game._pay_prepaid_message = '';
-            game._pay_prepaid_paid = false;
-            game._overlay_lines = null;
+            clearShopPaymentPromptState();
             game._command_mode = null;
             if (prepaidPaid) {
                 await setMessage(prepaidMessage);
@@ -31063,12 +31313,8 @@ export async function rhack(_cmd) {
         }
         if (ch === '\r' || ch === '\n') {
             const selected = entries.filter(entry => entry.selected);
-            game._pay_menu_items = null;
-            game._pay_menu_width = 0;
-            game._overlay_lines = null;
+            clearShopPaymentPromptState({ clearShopkeeper: false });
             game._command_mode = null;
-            game._pay_prepaid_message = '';
-            game._pay_prepaid_paid = false;
             if (!selected.length) {
                 game._pay_shopkeeper = null;
                 if (prepaidPaid) {
@@ -31080,49 +31326,8 @@ export async function rhack(_cmd) {
 
             const shkp = game._pay_shopkeeper;
             const payment = finishShopPaymentSelection(shkp, selected);
-            if (!payment.paid) {
-                game._pay_shopkeeper = null;
-                if (payment.skipped) return;
-                const message = [prepaidMessage, payment.message || "You don't have enough gold."]
-                    .filter(Boolean).join('  ');
-                await setMessage(message);
-                if (prepaidPaid) game.context.move = 1;
-                return;
-            }
-            if (shkp?.shk) {
-                const home = shkp.shk;
-                const blockingPet = (game.level?.monsters || []).find(mon =>
-                    mon.pet && Math.max(Math.abs(mon.mx - home.x), Math.abs(mon.my - home.y)) === 1
-                    && (mon.mx === home.x || mon.my === home.y));
-                if (blockingPet) {
-                    const stepDx = Math.sign((game.u?.ux ?? home.x) - home.x)
-                        || Math.sign(blockingPet.mx - home.x) || -1;
-                    const stepDy = Math.sign(blockingPet.my - home.y)
-                        || Math.sign((game.u?.uy ?? home.y) - home.y) || 1;
-                    shkp._paid_shopkeeper_step = { x: home.x + stepDx, y: home.y + stepDy };
-                    blockingPet._paid_shopkeeper_pet_step = {
-                        x: blockingPet.mx + Math.sign(blockingPet.mx - home.x),
-                        y: blockingPet.my + Math.sign(blockingPet.my - home.y),
-                    };
-                }
-            }
             game._pay_shopkeeper = null;
-            game._pet_food_scan_inventory = game.inventory;
-
-            const shopIndex = (shkp?.shoptype || 0) - SHOPBASE;
-            const shopName = SHOP_TYPES[shopIndex]?.name || 'shop';
-            const shopkeeperName = shkp?.shknam || 'shopkeeper';
-            const possessive = shopkeeperName.endsWith('s') ? `${shopkeeperName}'` : `${shopkeeperName}'s`;
-            game._queued_message_after_more = payment.stoppedShort
-                ? payment.message || "You don't have enough gold."
-                : `"Thank you for shopping in ${possessive} ${shopName}!"`;
-            const paidEntries = payment.payableEntries;
-            const boughtMessage = paidEntries.length === 1
-                ? `You bought ${paidEntries[0].name} for ${paidEntries[0].price} gold piece${paidEntries[0].price === 1 ? '' : 's'}.`
-                : `You bought ${paidEntries.length} items for ${payment.cashTotal} gold pieces.`;
-            const message = [prepaidMessage, boughtMessage].filter(Boolean).join('  ');
-            await setMessage(message, true);
-            game.context.move = 1;
+            await finishShopPaymentCommandResult(shkp, payment, { prepaidMessage, prepaidPaid });
             return;
         }
 
@@ -45175,14 +45380,14 @@ export async function rhack(_cmd) {
     if (ch === 'p') {
         const target = resolvePayShopkeeperFromScan(scanPayShopkeepers());
         if (target.needsPayWhomPrompt) {
-            await startPayWhomCursor(target.resident);
+            await startPayWhomCursor(target.resident, { requestMenu: requestMenuPrefix });
             return;
         }
         if (!target.selected) {
             await setMessage(target.message || 'There appears to be no shopkeeper here to receive your payment.');
             return;
         }
-        await finishPayCommandForShopkeeper(target.selected, target.resident);
+        await finishPayCommandForShopkeeper(target.selected, target.resident, { requestMenu: requestMenuPrefix });
         return;
     }
 

@@ -120,6 +120,18 @@ function assertPacifiedNoDebt(shkp) {
     assert.equal(shkp.billct, 0);
 }
 
+function installTraditionalPayPromptState({ gold = 100, menuStyle = 'traditional' } = {}) {
+    const { shkp } = installCommandShopState();
+    if (menuStyle != null) game.flags.menu_style = menuStyle;
+    const ration = foodRation(9701, 'a');
+    const blade = dagger(9702, 'b');
+    game.inventory = [ration, blade];
+    game._goldCount = gold;
+    shop.addObjectToShopBill(shkp, ration, 45);
+    shop.addObjectToShopBill(shkp, blade, 10);
+    return { shkp, ration, blade };
+}
+
 function makeShopkeeper(id, name, x, y, overrides = {}) {
     const resident = game.level?.rooms?.[0]?.resident || {};
     return {
@@ -9553,6 +9565,108 @@ test('pay command queued payment stops with selected row shortfall wording', asy
     assert.equal(cheap.unpaid, true);
     assert.equal(shop.shopBillEntryForObject(shkp, costly), null);
     assert.notEqual(shop.shopBillEntryForObject(shkp, cheap), null);
+});
+
+test('pay command traditional itemized prompt q cancels without mutation', async () => {
+    const { shkp, ration, blade } = installTraditionalPayPromptState();
+
+    await rhack('p');
+
+    assert.equal(game._command_mode, 'payItemizedPrompt');
+    assert.match(game._pending_message, /Itemized billing\? \[ynq m\] \(q\)/);
+    assert.equal(game.context.move, 0);
+
+    await rhack('q');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game._pending_message, '');
+    assert.equal(game.context.move, 0);
+    assert.equal(game._goldCount, 100);
+    assert.equal(shkp.billct, 2);
+    assert.notEqual(shop.shopBillEntryForObject(shkp, ration), null);
+    assert.notEqual(shop.shopBillEntryForObject(shkp, blade), null);
+});
+
+test('pay command traditional itemized prompt n buys all billed items', async () => {
+    const { shkp, ration, blade } = installTraditionalPayPromptState();
+
+    await rhack('p');
+    await rhack('n');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game._pending_message, 'You bought 2 items for 55 gold pieces.');
+    assert.equal(game._queued_message_after_more, "\"Thank you for shopping in Izchak's general store!\"");
+    assert.equal(game._goldCount, 45);
+    assert.equal(shkp.billct, 0);
+    assert.equal(shop.shopBillEntryForObject(shkp, ration), null);
+    assert.equal(shop.shopBillEntryForObject(shkp, blade), null);
+    assert.equal(ration.unpaid, false);
+    assert.equal(blade.unpaid, false);
+});
+
+test('pay command traditional itemized prompt m opens the pay menu without mutation', async () => {
+    const { shkp, ration, blade } = installTraditionalPayPromptState();
+
+    await rhack('p');
+    await rhack('m');
+
+    assert.equal(game._command_mode, 'payMenu');
+    assert.equal(game.context.move, 0);
+    assert.equal(game._goldCount, 100);
+    assert.equal(shkp.billct, 2);
+    assert.notEqual(shop.shopBillEntryForObject(shkp, ration), null);
+    assert.notEqual(shop.shopBillEntryForObject(shkp, blade), null);
+    assert.match((game._overlay_lines || []).map(row => row[2]).join('\n'), /Pay for which items\?/);
+});
+
+test('pay command traditional itemized prompt y asks and pays item-by-item', async () => {
+    const { shkp, ration, blade } = installTraditionalPayPromptState();
+
+    await rhack('p');
+    await rhack('y');
+
+    assert.equal(game._command_mode, 'payItemized');
+    assert.match(game._pending_message, /Pay for a food ration for 45 zorkmids\? \[yn\]/);
+    assert.equal(game.context.move, 0);
+    assert.equal(game._goldCount, 100);
+    assert.equal(shkp.billct, 2);
+
+    await rhack('n');
+
+    assert.equal(game._command_mode, 'payItemized');
+    assert.match(game._pending_message, /Pay for a dagger for 10 zorkmids\? \[yn\]/);
+    assert.equal(game._goldCount, 100);
+    assert.notEqual(shop.shopBillEntryForObject(shkp, ration), null);
+    assert.notEqual(shop.shopBillEntryForObject(shkp, blade), null);
+
+    await rhack('y');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game._pending_message, 'You bought a dagger for 10 gold pieces.');
+    assert.equal(game._queued_message_after_more, "\"Thank you for shopping in Izchak's general store!\"");
+    assert.equal(game._goldCount, 90);
+    assert.equal(shkp.billct, 1);
+    assert.notEqual(shop.shopBillEntryForObject(shkp, ration), null);
+    assert.equal(shop.shopBillEntryForObject(shkp, blade), null);
+    assert.equal(ration.unpaid, true);
+    assert.equal(blade.unpaid, false);
+});
+
+test('pay command m prefix inverts traditional itemized prompt to the pay menu', async () => {
+    const { shkp, ration, blade } = installTraditionalPayPromptState();
+
+    await rhack('m');
+    await rhack('p');
+
+    assert.equal(game._command_mode, 'payMenu');
+    assert.equal(game.context.move, 0);
+    assert.equal(game._goldCount, 100);
+    assert.equal(shkp.billct, 2);
+    assert.notEqual(shop.shopBillEntryForObject(shkp, ration), null);
+    assert.notEqual(shop.shopBillEntryForObject(shkp, blade), null);
+    assert.match((game._overlay_lines || []).map(row => row[2]).join('\n'), /Pay for which items\?/);
 });
 
 test('pay command settles shop debt before opening itemized billing', async () => {
