@@ -756,6 +756,27 @@ test('normal unpaid charged tool use adds debit without changing the bill row', 
     assert.match(messages[0], /Usage fee, 20 zorkmids/);
 });
 
+test('tipping into an unpaid unknown bag of tricks bills target before locked source checks', async () => {
+    const { shkp } = installShopState();
+    const source = sack(3052, 's');
+    source.locked = true;
+    source.olocked = true;
+    const ration = putObjectInContainer(source, foodRation(3053));
+    const target = { ...chargedTool(3054, 'bag', 'b', 3), actualKind: 'bag of tricks', known: false };
+    game.inventory = [source, target];
+    const price = shop.shopItemPrice(target, 5, 5);
+    shop.addObjectToShopBill(shkp, target, price);
+
+    const messages = await shop.tipContainerContents(source, target);
+
+    assert.equal(target.spe, 2);
+    assert.equal(shkp.debit, Math.trunc(price / 5));
+    assert.equal(shop.shopBillEntryForObject(shkp, target).useup, false);
+    assert.equal(target.unpaid, true);
+    assert.equal(source.contents.includes(ration), true);
+    assert.doesNotMatch(messages.join('  '), /locked/);
+});
+
 test('alternate unpaid horn emptying charges full use fee', () => {
     const { shkp } = installShopState();
     const horn = chargedTool(3061, 'horn of plenty', 'h', 4);
@@ -6544,6 +6565,88 @@ test('projectile leaving its owning shop converts the child bill to debit', () =
     assert.equal(shkp.billct, 1);
 });
 
+test('projectile leaving shop preserves used-up residual from partly used bill row', () => {
+    const { shkp } = installShopState();
+    game.level.at = (x, y) => ({ roomno: x === 9 && y === 5 ? 0 : ROOMOFFSET });
+    const stack = { ...dagger(8705, 'd'), quan: 3, line: 'd - 3 +0 daggers' };
+    shop.addObjectToShopBill(shkp, stack, 15);
+    stack.quan = 2;
+
+    const result = shop.resolveUnpaidProjectileShopLanding(stack, 9, 5, { silent: true });
+
+    assert.equal(result.charged, true);
+    assert.equal(result.value, 15);
+    assert.equal(shkp.debit, 15);
+    assert.equal(shkp.billct, 1);
+    assert.equal(shkp.bill.length, 1);
+    assert.equal(shkp.bill[0].useup, true);
+    assert.equal(shkp.bill[0].bquan, 1);
+    assert.equal(shop.shopBillEntryTotal(shkp.bill[0]), 5);
+    assert.equal(stack.unpaid, false);
+});
+
+test('projectile container landing in its owning shop returns unpaid contents', () => {
+    const { shkp } = installShopState();
+    const bag = sack(8710);
+    const blade = putObjectInContainer(bag, dagger(8711));
+    putObjectInContainer(bag, goldPieces(8712, 6));
+    shop.addObjectToShopBill(shkp, blade, 10);
+
+    const result = shop.resolveUnpaidProjectileShopLanding(bag, 5, 5, { silent: true });
+
+    assert.equal(result.handled, true);
+    assert.equal(result.returned, true);
+    assert.equal(result.charged, false);
+    assert.equal(shkp.billct, 0);
+    assert.equal(shkp.bill.length, 0);
+    assert.equal(shkp.credit, 6);
+    assert.equal(shop.shopBillEntryForObject(shkp, blade), null);
+    assert.equal(blade.unpaid, false);
+    assert.equal(bag.contents.includes(blade), true);
+});
+
+test('projectile container leaving its owning shop converts unpaid contents to debt', () => {
+    const { shkp } = installShopState();
+    game.level.at = (x, y) => ({ roomno: x === 9 && y === 5 ? 0 : ROOMOFFSET });
+    const bag = sack(8720);
+    const blade = putObjectInContainer(bag, dagger(8721));
+    shop.addObjectToShopBill(shkp, blade, 10);
+
+    const result = shop.resolveUnpaidProjectileShopLanding(bag, 9, 5, { silent: true });
+
+    assert.equal(result.handled, true);
+    assert.equal(result.charged, true);
+    assert.equal(result.value, 10);
+    assert.equal(shkp.debit, 10);
+    assert.equal(shkp.billct, 0);
+    assert.equal(shop.shopBillEntryForObject(shkp, blade), null);
+    assert.equal(blade.unpaid, false);
+    assert.equal(bag.unpaid || false, false);
+    assert.equal(bag.contents.includes(blade), true);
+});
+
+test('projectile unpaid container leaving shop charges it and its unpaid contents', () => {
+    const { shkp } = installShopState();
+    game.level.at = (x, y) => ({ roomno: x === 9 && y === 5 ? 0 : ROOMOFFSET });
+    const bag = sack(8730);
+    const blade = putObjectInContainer(bag, dagger(8731));
+    shop.addObjectToShopBill(shkp, bag, 2);
+    shop.addObjectToShopBill(shkp, blade, 10);
+
+    const result = shop.resolveUnpaidProjectileShopLanding(bag, 9, 5);
+
+    assert.equal(result.handled, true);
+    assert.equal(result.charged, true);
+    assert.equal(result.value, 12);
+    assert.equal(shkp.debit, 12);
+    assert.match(result.message, /owe Izchak 12 zorkmids for it and its contents!/);
+    assert.equal(shkp.billct, 0);
+    assert.equal(shop.shopBillEntryForObject(shkp, bag), null);
+    assert.equal(shop.shopBillEntryForObject(shkp, blade), null);
+    assert.equal(bag.unpaid, false);
+    assert.equal(blade.unpaid, false);
+});
+
 test('floor stacking rejects unpaid projectiles into paid stacks', () => {
     const { shkp } = installShopState();
     const paidStack = { ...dagger(8801), letter: undefined, line: undefined, quan: 1, ox: 7, oy: 5 };
@@ -6839,6 +6942,24 @@ test('pay command refuses itemized billing when shop debt cannot be settled', as
     assert.equal(shkp.loan, 20);
     assert.equal(game._goldCount, 10);
     assert.notEqual(shop.shopBillEntryForObject(shkp, ration), null);
+});
+
+test('pay command refuses a lone nonresident shopkeeper at a distance', async () => {
+    const { shkp } = installCommandShopState();
+    game.u.ux = 1;
+    game.u.uy = 1;
+    game.level.at = () => ({ roomno: 0, typ: ROOM });
+    game._goldCount = 20;
+    shkp.debit = 10;
+    shkp.loan = 10;
+
+    await rhack('p');
+
+    assert.match(game._pending_message, /Izchak is not near enough to receive your payment\./);
+    assert.equal(shkp.debit, 10);
+    assert.equal(shkp.loan, 10);
+    assert.equal(game._goldCount, 20);
+    assert.notEqual(game._command_mode, 'payMenu');
 });
 
 test('payable debts split partly used stacks into used and intact bill portions', () => {

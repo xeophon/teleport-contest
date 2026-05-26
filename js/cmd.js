@@ -15015,17 +15015,78 @@ function returnUnpaidObjectToShopBillOwnerAt(obj, x, y) {
     return subOneFromShopBill(obj, shkp);
 }
 
+function shopkeeperOwningObjectOrContentsBillEntry(obj, seen = new Set()) {
+    if (!obj || seen.has(obj)) return { shkp: null, entry: null };
+    seen.add(obj);
+    const owner = shopkeeperOwningBillEntry(obj);
+    if (owner.shkp) return owner;
+    for (const child of globContents(obj)) {
+        const childOwner = shopkeeperOwningObjectOrContentsBillEntry(child, seen);
+        if (childOwner.shkp) return childOwner;
+    }
+    return { shkp: null, entry: null };
+}
+
+function returnProjectileShopBillToOwnerAt(obj, x, y) {
+    if (!shopObjectOrContentsUnpaid(obj) || shopBillableGold(obj)) return null;
+    const { shkp } = shopkeeperOwningObjectOrContentsBillEntry(obj);
+    const spotShkp = shopkeeperForCostlySpot(x, y);
+    if (!sameShopkeeper(shkp, spotShkp) || !shopkeeperInHisShop(shkp)) return null;
+    const containedGold = containedShopGold(obj);
+    const before = Array.isArray(shkp?.bill) ? shkp.bill.length : Math.max(0, Math.trunc(Number(shkp?.billct || 0)));
+    subFromShopBill(obj, shkp);
+    const donation = containedGold > 0 ? donateShopGoldAtSpot(x, y, containedGold) : null;
+    const after = Array.isArray(shkp?.bill) ? shkp.bill.length : Math.max(0, Math.trunc(Number(shkp?.billct || 0)));
+    const returned = after < before || !shopObjectOrContentsUnpaid(obj);
+    return returned ? { shkp, messages: donation?.messages || [] } : null;
+}
+
 function shopDebtObjectPronoun(obj) {
     return (obj?.quan || 1) > 1 ? 'them' : 'it';
 }
 
+function collectObjectAndContentsShopDebtItems(obj, shkp, seen = new Set()) {
+    if (!obj || seen.has(obj) || shopBillableGold(obj)) return [];
+    seen.add(obj);
+    const items = [];
+    const entry = shopBillEntryForObject(shkp, obj);
+    const price = entry ? shopBillEntryTotal(entry) : (obj.unpaid ? unpaidBillPrice(obj) : 0);
+    if ((entry || obj.unpaid) && price > 0) items.push({ item: obj, entry, price });
+    for (const child of globContents(obj))
+        items.push(...collectObjectAndContentsShopDebtItems(child, shkp, seen));
+    return items;
+}
+
+function shopDebtContainerSuffix(obj, debtItems) {
+    const topCharged = debtItems.some(item => item.item === obj);
+    const chargedContents = debtItems.filter(item => item.item !== obj).length;
+    if (!chargedContents) return shopDebtObjectPronoun(obj);
+    const contentCount = countContentsForShopDebt(obj);
+    const some = contentCount > chargedContents ? 'some of ' : '';
+    return `${topCharged ? 'it and ' : ''}${some}its contents`;
+}
+
+function countContentsForShopDebt(obj, seen = new Set()) {
+    if (!obj || seen.has(obj)) return 0;
+    seen.add(obj);
+    let count = 0;
+    for (const child of globContents(obj)) {
+        if (!shopBillableGold(child)) count++;
+        count += countContentsForShopDebt(child, seen);
+    }
+    return count;
+}
+
 function convertUnpaidObjectToShopDebt(obj, { silent = false, broken = false } = {}) {
-    if (!obj?.unpaid || shopBillableGold(obj)) return { charged: false, value: 0, shkp: null, message: '' };
-    const { shkp, entry } = shopkeeperOwningBillEntry(obj);
+    if (!shopObjectOrContentsUnpaid(obj) || shopBillableGold(obj)) return { charged: false, value: 0, shkp: null, message: '' };
+    const { shkp } = shopkeeperOwningObjectOrContentsBillEntry(obj);
     if (!shkp) return { charged: false, value: 0, shkp: null, message: '' };
-    const value = entry ? shopBillEntryTotal(entry) : unpaidBillPrice(obj);
-    if (entry) removeObjectFromShopBillById(shkp, entry.bo_id);
-    clearObjectShopBillState(obj);
+    const debtItems = collectObjectAndContentsShopDebtItems(obj, shkp);
+    const value = debtItems.reduce((sum, item) => sum + item.price, 0);
+    for (const debtItem of debtItems) {
+        if (debtItem.entry) subOneFromShopBill(debtItem.item, shkp);
+        else clearObjectShopBillState(debtItem.item);
+    }
     if (broken) obj.no_charge = true;
     if (!(value > 0)) return { charged: false, value: 0, shkp, message: '' };
 
@@ -15054,7 +15115,7 @@ function convertUnpaidObjectToShopDebt(obj, { silent = false, broken = false } =
                 message = 'You have no credit remaining.';
             } else {
                 const still = creditUse ? 'still ' : '';
-                message = `You ${still}owe ${shopkeeperDisplayName(shkp)} ${remaining} zorkmid${remaining === 1 ? '' : 's'} for ${shopDebtObjectPronoun(obj)}!`;
+                message = `You ${still}owe ${shopkeeperDisplayName(shkp)} ${remaining} zorkmid${remaining === 1 ? '' : 's'} for ${shopDebtContainerSuffix(obj, debtItems)}!`;
             }
         } else {
             message = `You hear a scream, "Thief!"`;
@@ -15064,9 +15125,10 @@ function convertUnpaidObjectToShopDebt(obj, { silent = false, broken = false } =
 }
 
 function resolveUnpaidProjectileShopLanding(obj, x, y, options = {}) {
-    if (!obj?.unpaid) return { handled: false, charged: false, returned: false, value: 0, shkp: null, message: '' };
-    if (returnUnpaidObjectToShopBillOwnerAt(obj, x, y))
-        return { handled: true, charged: false, returned: true, value: 0, shkp: null, message: '' };
+    if (!shopObjectOrContentsUnpaid(obj)) return { handled: false, charged: false, returned: false, value: 0, shkp: null, message: '' };
+    const returned = returnProjectileShopBillToOwnerAt(obj, x, y);
+    if (returned)
+        return { handled: true, charged: false, returned: true, value: 0, shkp: returned.shkp, message: (returned.messages || []).join('  ') };
     const charged = convertUnpaidObjectToShopDebt(obj, options);
     return { ...charged, handled: charged.charged, returned: false };
 }
@@ -15906,7 +15968,7 @@ function lostShopMerchandiseValueForObject(source, obj, shkp, seen = new Set()) 
     const entry = shopBillEntryForObject(shkp, obj);
     if (entry) {
         value += shopBillEntryTotal(entry);
-        removeObjectFromShopBill(shkp, obj);
+        subOneFromShopBill(obj, shkp);
     } else if (obj.unpaid) {
         value += unpaidBillPrice(obj);
         clearObjectShopBillState(obj);
@@ -15961,7 +16023,7 @@ function heldMagicBagLostValueForObject(obj, shkp, seen = new Set()) {
     const entry = shopBillEntryForObject(shkp, obj);
     if (entry) {
         value += shopBillEntryTotal(entry);
-        removeObjectFromShopBill(shkp, obj);
+        subOneFromShopBill(obj, shkp);
     } else if (obj.unpaid) {
         value += unpaidBillPrice(obj) || shopItemPrice(obj, game.u?.ux, game.u?.uy);
         clearObjectShopBillState(obj);
@@ -22315,10 +22377,10 @@ function tipContainerIntoContainer(source, targetBox) {
 
 async function tipContainerContents(source, targetBox = null) {
     const special = isBagOfTricksObject(source) || isHornOfPlentyObject(source);
-    const sourceError = tipContainerCheckMessage(source, { allowEmpty: special });
-    if (sourceError) return [sourceError];
     if (targetBox && isBagOfTricksObject(targetBox))
         return applyBagOfTricksOnce(targetBox, { tipping: false });
+    const sourceError = tipContainerCheckMessage(source, { allowEmpty: special });
+    if (sourceError) return [sourceError];
     if (special) return tipSpecialSourceContents(source, targetBox);
     if (targetBox) {
         const targetError = tipContainerCheckMessage(targetBox, { allowEmpty: true });
@@ -44108,7 +44170,11 @@ export async function rhack(_cmd) {
         const roomno = loc?.roomno || 0;
         const room = levelRoomByRoomno(roomno);
         const resident = room?.resident || shopkeepers.find(mon => mon.shoproom === roomno);
-        const shkp = adjacent.length === 1 ? adjacent[0] : resident || (shopkeepers.length === 1 ? shopkeepers[0] : null);
+        const shkp = adjacent.length === 1 ? adjacent[0] : resident || null;
+        if (!shkp && shopkeepers.length === 1) {
+            await setMessage(`${shopkeeperDisplayName(shopkeepers[0])} is not near enough to receive your payment.`);
+            return;
+        }
         if (!shkp) {
             await setMessage('There appears to be no shopkeeper here to receive your payment.');
             return;
