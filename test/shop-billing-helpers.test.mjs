@@ -10249,6 +10249,9 @@ test('expanded simple food floor pickup merges compatible paid inventory stacks'
         ['melon', 'melons', 'm'],
         ['banana', 'bananas', 'b'],
         ['carrot', 'carrots', 't'],
+        ['sprig of wolfsbane', 'sprigs of wolfsbane', 'w'],
+        ['clove of garlic', 'cloves of garlic', 'g'],
+        ['eucalyptus leaf', 'eucalyptus leaves', 'e'],
     ];
 
     for (const [index, [kind, plural, letter]] of cases.entries()) {
@@ -10455,29 +10458,41 @@ test('food-ration pickup full-inventory preflight allows no-charge merge', async
     assert.equal(game.context.move, 1);
 });
 
-test('covered simple food pickup full-inventory preflight allows no-charge K-ration merge', async () => {
-    const { shkp } = installCommandShopState();
-    const carried = { ...simpleFood(7113, 'K-ration', 'k'), bknown: false };
-    const floorObj = { ...simpleFood(7114, 'K-ration'), letter: undefined, line: undefined, bknown: false, no_charge: true };
-    fillInventoryLetters();
-    game.inventory[0] = carried;
-    game.level.objects = [floorObj];
+test('expanded simple food pickup full-inventory preflight allows no-charge merges', async () => {
+    const cases = [
+        ['K-ration', 'k'],
+        ['sprig of wolfsbane', 'w'],
+        ['clove of garlic', 'g'],
+        ['eucalyptus leaf', 'e'],
+    ];
 
-    await rhack(',');
+    for (const [index, [kind, letter]] of cases.entries()) {
+        const { shkp } = installCommandShopState();
+        const carried = { ...simpleFood(7113 + (index * 2), kind, letter), bknown: false };
+        const floorObj = { ...simpleFood(7114 + (index * 2), kind), letter: undefined, line: undefined, bknown: false, no_charge: true };
+        fillInventoryLetters();
+        game.inventory[0] = carried;
+        game.level.objects = [floorObj];
 
-    assert.equal(game.inventory.length, INVENTORY_LETTERS.length);
-    assert.equal(carried.quan, 2);
-    assert.equal(game.level.objects.includes(floorObj), false);
-    assert.doesNotMatch(game._pending_message, /knapsack cannot accommodate/);
-    assert.equal(shkp.billct, 0);
-    assert.equal(game.context.move, 1);
+        await rhack(',');
+
+        assert.equal(game.inventory.length, INVENTORY_LETTERS.length);
+        assert.equal(carried.quan, 2);
+        assert.equal(game.level.objects.includes(floorObj), false);
+        assert.doesNotMatch(game._pending_message, /knapsack cannot accommodate/);
+        assert.equal(shkp.billct, 0);
+        assert.equal(game.context.move, 1);
+    }
 });
 
-test('shopBaseCost returns C prices for K-ration, C-ration, and tripe aliases', () => {
+test('shopBaseCost returns C prices for covered simple foods', () => {
     assert.equal(shop.shopBaseCost(simpleFood(7125, 'K-ration')), 25);
     assert.equal(shop.shopBaseCost(simpleFood(7126, 'C-ration')), 20);
     assert.equal(shop.shopBaseCost(simpleFood(7127, 'tripe ration')), 15);
     assert.equal(shop.shopBaseCost({ ...simpleFood(7128, 'tripe'), foodRoll: 140 }), 15);
+    assert.equal(shop.shopBaseCost(simpleFood(7129, 'sprig of wolfsbane')), 7);
+    assert.equal(shop.shopBaseCost(simpleFood(7130, 'clove of garlic')), 7);
+    assert.equal(shop.shopBaseCost(simpleFood(7131, 'eucalyptus leaf')), 5);
 });
 
 test('food-ration pickup full-inventory preflight rejects BUC mismatch', async () => {
