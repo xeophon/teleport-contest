@@ -10840,7 +10840,8 @@ function heroIsSatiatedForEating() {
 }
 
 function delayedEatingFullWarningOutcome(remainingAfterBite) {
-    if (!game.u || (game.u.uhunger ?? 900) < 1500 || game._eating_fullwarn) return null;
+    if (!game.u || (game.u.uhunger ?? 900) < 1500 || game._eating_fullwarn
+        || heroHasHungerPropertyForChoke()) return null;
     game._eating_fullwarn = 1;
     game._eating_nomovemsg = "You're finally finished.";
     const messages = ["You're having a hard time getting all of it down."];
@@ -10870,15 +10871,54 @@ function delayedFoodChokeDeathCause(food) {
     return `choked on ${article} ${word}`;
 }
 
+function wornItemKindIncludes(text) {
+    const needle = String(text || '').toLowerCase();
+    return (game.inventory || []).some(item => {
+        if (!item?.worn) return false;
+        const fields = [item.actualKind, item.kind, item.line];
+        return fields.some(field => String(field || '').toLowerCase().includes(needle));
+    });
+}
+
+function heroIsBreathlessForChoke() {
+    const form = polyselfForm() || {};
+    return !!(game.u?.breathless || game.u?.Breathless
+        || form.breathless
+        || wornItemKindIncludes('amulet of magical breathing'));
+}
+
+function heroHasHungerPropertyForChoke() {
+    return !!(game.u?.hunger || game.u?.Hunger || game.u?.hungerProperty
+        || game.u?.intrinsics?.hunger
+        || wornItemKindIncludes('ring of hunger'));
+}
+
+function heroIsStrangledForChoke() {
+    return !!((game.u?._statusSuffix || '').includes('Strngl')
+        || game.u?.strangled || game.u?.strangling);
+}
+
+function heroCannotVomitForChoke() {
+    const form = polyselfForm() || {};
+    const name = String(form.name || '').toLowerCase();
+    const mlet = String(form.mlet || '').toLowerCase();
+    if (['pony', 'horse', 'warhorse'].includes(name)) return true;
+    if (mlet === 'r' && name !== 'rock mole' && name !== 'woodchuck') return true;
+    return !!form.cantVomit;
+}
+
 function delayedFoodChokeOutcome(food) {
     const messages = [];
     const role = game.urole?.name?.m || game._startup_role || '';
     if (role === 'Knight' && game.u?.ualign?.type === A_LAWFUL)
         messages.push('You feel like a glutton!');
-    if (!rn2(20)) {
+    const hungerProperty = heroHasHungerPropertyForChoke();
+    if (heroIsBreathlessForChoke() || hungerProperty
+        || (!heroIsStrangledForChoke() && !rn2(20))) {
         messages.push('You stuff yourself and then vomit voluminously.');
+        if (heroCannotVomitForChoke()) messages.push('Your jaw gapes convulsively.');
         if (game.u) {
-            game.u.uhunger = Math.max(0, (game.u.uhunger ?? 900) - 1000);
+            game.u.uhunger = hungerProperty ? 60 : Math.max(0, (game.u.uhunger ?? 900) - 1000);
             refreshHeroEatingHungerStatus();
         }
         game._helpless_time = Math.max(game._helpless_time || 0, 2);
@@ -45696,6 +45736,10 @@ export async function rhack(_cmd) {
     }
 
     if (ch === 'e') {
+        if (heroIsStrangledForChoke()) {
+            await setMessage("If you can't breathe air, how can you consume solids?");
+            return;
+        }
         const floorFood = (game.level?.objects || []).find(obj =>
             !obj.hidden
             && obj.ox === game.u?.ux

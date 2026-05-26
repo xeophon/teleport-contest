@@ -4035,6 +4035,120 @@ test('satiated carried food ration choking life-saving resets hunger', async () 
     assert.equal(game.u.uhunger, 900);
 });
 
+test('satiated carried food ration choking recovers with magical breathing', async () => {
+    installCommandShopState();
+    game.u.uhunger = 1840;
+    const ration = foodRation(313263, 'a');
+    const amulet = {
+        id: 313264,
+        letter: 'b',
+        cls: 'amulet',
+        glyph: '"',
+        kind: 'amulet of magical breathing',
+        actualKind: 'amulet of magical breathing',
+        quan: 1,
+        worn: true,
+        line: 'b - an amulet of magical breathing (being worn)',
+    };
+    game.inventory = [ration, amulet];
+
+    await rhack('e');
+    await rhack('a');
+
+    assert.equal(game._pending_message, 'You stuff yourself and then vomit voluminously.');
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game.context.move, 2);
+    assert.equal(game.u.uhunger, 1000);
+    assert.equal(ration.oeaten, 640);
+    assert.equal(game._eating_interrupted, 1);
+    assert.equal(game._eating_paused_turns_remaining, 5);
+});
+
+test('hunger property skips full warning and recovers choking to 60 hunger', async () => {
+    installCommandShopState();
+    game.u.uhunger = 1400;
+    const warningRation = foodRation(313265, 'a');
+    const ring = {
+        id: 313266,
+        letter: 'b',
+        cls: 'ring',
+        glyph: '=',
+        kind: 'ring of hunger',
+        actualKind: 'ring of hunger',
+        quan: 1,
+        worn: true,
+        line: 'b - a ring of hunger (on right hand)',
+    };
+    game.inventory = [warningRation, ring];
+
+    await rhack('e');
+    await rhack('a');
+
+    assert.equal(game.u.uhunger, 1560);
+    assert.equal(game._eating_fullwarn || 0, 0);
+    assert.equal(game._command_mode || null, null);
+    assert.doesNotMatch(game._pending_message || '', /hard time/);
+
+    installCommandShopState();
+    game.u.uhunger = 1840;
+    const chokingRation = foodRation(313267, 'a');
+    const hungerRing = { ...ring, id: 313268 };
+    game.inventory = [chokingRation, hungerRing];
+
+    await rhack('e');
+    await rhack('a');
+
+    assert.equal(game._pending_message, 'You stuff yourself and then vomit voluminously.');
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game.context.move, 2);
+    assert.equal(game.u.uhunger, 60);
+    assert.equal(chokingRation.oeaten, 640);
+    assert.equal(game._eating_interrupted, 1);
+    assert.equal(game._eating_paused_turns_remaining, 5);
+});
+
+test('strangulation blocks starting ordinary eating', async () => {
+    installCommandShopState();
+    game.u.strangled = true;
+    game.inventory = [foodRation(313269, 'a')];
+
+    await rhack('e');
+
+    assert.equal(game._pending_message, "If you can't breathe air, how can you consume solids?");
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game.u.uhunger, 900);
+    assert.equal(game.inventory.length, 1);
+});
+
+test('strangulation blocks random carried food choking recovery after eating starts', async () => {
+    installCommandShopState();
+    initRng(26);
+    game.u.uhunger = 1200;
+    const ration = foodRation(313270, 'a');
+    game.inventory = [ration];
+
+    await rhack('e');
+    await rhack('a');
+    processEatingOccupationTick(game);
+
+    assert.equal(game._command_mode, 'continueEatingPrompt');
+
+    await rhack('y');
+    acknowledgePendingMessage();
+    game.u.strangled = true;
+    game.u._statusSuffix = `${game.u._statusSuffix || ''} Strngl`;
+    processEatingOccupationTick(game);
+    processEatingOccupationTick(game);
+    processEatingOccupationTick(game);
+
+    assert.equal(game._pending_message, 'You choke over your food.  You die...');
+    assert.equal(game._command_mode, 'deathDieMore');
+    assert.equal(game.u.uhp, 0);
+    assert.equal(game.u.uhunger, 2000);
+    assert.equal(ration.oeaten, 160);
+    assert.doesNotMatch(game._pending_message, /vomit/);
+});
+
 test('satiated carried food ration over 2000 can recover by vomiting', async () => {
     installCommandShopState();
     initRng(26);
