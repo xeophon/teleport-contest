@@ -4169,6 +4169,152 @@ test('partly eaten rotten carried delayed food keeps the rotten message when con
     assert.equal(game._eating_turns_remaining || 0, 0);
 });
 
+test('carried delay-one apple and fortune cookie finish without occupation', async () => {
+    installNonShopFloorState();
+    const apple = simpleFood(31880, 'apple', 'a');
+    game.inventory = [apple];
+
+    await rhack('e');
+    await rhack('a');
+
+    assert.equal(game._pending_message, 'Delicious!  Must be a Macintosh!');
+    assert.equal(game._message_more || false, false);
+    assert.equal(game.inventory.includes(apple), false);
+    assert.equal(game.u.uhunger, 950);
+    assert.equal(game._eating_turns_remaining || 0, 0);
+
+    installNonShopFloorState();
+    const cookie = simpleFood(31881, 'fortune cookie', 'f');
+    game.inventory = [cookie];
+
+    await rhack('e');
+    await rhack('f');
+
+    assert.equal(game._pending_message, 'This fortune cookie is delicious!');
+    assert.equal(game._message_more, 1);
+    assert.equal(game.inventory.includes(cookie), false);
+    assert.equal(game.u.uhunger, 940);
+    assert.equal(game.u.uconduct?.unvegan, 1);
+    assert.equal(game._queued_message_after_more, 'This cookie has a scrap of paper inside.  It reads:');
+    assert.ok(game._fortune_cookie_rumor_after_more);
+    assert.equal(game._eating_turns_remaining || 0, 0);
+});
+
+test('blind fortune cookie shows unreadable paper instead of a rumor', async () => {
+    installNonShopFloorState();
+    const cookie = simpleFood(31882, 'fortune cookie', 'f');
+    game.inventory = [cookie];
+    game.u.blind = true;
+
+    await rhack('e');
+    await rhack('f');
+
+    assert.equal(game._pending_message, 'This fortune cookie is delicious!');
+    assert.equal(game._message_more, 1);
+    assert.equal(game.inventory.includes(cookie), false);
+    assert.equal(game._queued_message_after_more, 'This cookie has a scrap of paper inside.');
+    assert.equal(game._fortune_cookie_rumor_after_more, 'What a pity that you cannot read it!');
+});
+
+test('floor fortune cookie uses the C paper and rumor flow', async () => {
+    installNonShopFloorState();
+    const cookie = simpleFood(31890, 'fortune cookie');
+    delete cookie.letter;
+    delete cookie.line;
+    game.level.objects = [cookie];
+
+    await rhack('e');
+    await rhack('y');
+
+    assert.equal(game._pending_message, 'This fortune cookie is delicious!');
+    assert.equal(game._message_more, 1);
+    assert.equal(game.level.objects.includes(cookie), false);
+    assert.equal(game.u.uhunger, 940);
+    assert.equal(game.u.uconduct?.unvegan, 1);
+    assert.equal(game._queued_message_after_more, 'This cookie has a scrap of paper inside.  It reads:');
+    assert.equal(game._queued_message_more_after_more, 1);
+    assert.ok(game._fortune_cookie_rumor_after_more);
+});
+
+test('cursed floor apple applies rotten bite then Snow White sleep when not knocked out', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    const apple = simpleFood(31891, 'apple', undefined, { cursed: true });
+    delete apple.letter;
+    delete apple.line;
+    game.level.objects = [apple];
+
+    await rhack('e');
+    await rhack('y');
+
+    assert.equal(game.level.objects.includes(apple), false);
+    assert.equal(game.u.uhunger, 925);
+    assert.match(game._pending_message, /^Blecch!  Rotten food!  You hear sinister laughter as you fall asleep\.\.\.$/);
+    assert.ok(game._helpless_time >= 20 && game._helpless_time <= 30);
+    assert.equal(game._sleeping_time, game._helpless_time + 1);
+    assert.equal(game.context.move, game._helpless_time);
+});
+
+test('floor delay-one apple stack consumes one item without occupation', async () => {
+    installNonShopFloorState();
+    const apples = simpleFood(31892, 'apple', undefined, {
+        quan: 2,
+        plural: 'apples',
+    });
+    delete apples.letter;
+    delete apples.line;
+    game.level.objects = [apples];
+
+    await rhack('e');
+    await rhack('y');
+
+    assert.equal(game._pending_message, 'Delicious!  Must be a Macintosh!');
+    assert.equal(game.u.uhunger, 950);
+    assert.equal(game._eating_turns_remaining || 0, 0);
+    assert.equal(game.level.objects.includes(apples), false);
+    const rest = game.level.objects.find(obj => obj.kind === 'apple');
+    assert.ok(rest);
+    assert.equal(rest.quan, 1);
+    assert.equal(rest.oeaten || 0, 0);
+});
+
+test('shop-floor delay-one food stacks bill the touched unit before immediate finish', async () => {
+    const cases = [
+        { kind: 'apple', id: 31893, message: 'Delicious!  Must be a Macintosh!', hunger: 950 },
+        { kind: 'fortune cookie', id: 31894, message: 'This fortune cookie is delicious!', hunger: 940, more: 1, conduct: 'unvegan' },
+    ];
+
+    for (const entry of cases) {
+        const { shkp } = installCommandShopState();
+        const stack = simpleFood(entry.id, entry.kind, undefined, {
+            quan: 2,
+            plural: entry.kind === 'apple' ? 'apples' : 'fortune cookies',
+        });
+        delete stack.letter;
+        delete stack.line;
+        game.level.objects = [stack];
+        const expected = shop.shopItemPrice({ ...stack, quan: 1 }, 5, 5);
+
+        await rhack('e');
+        await rhack('y');
+
+        assert.equal(game._pending_message, entry.message, entry.kind);
+        assert.equal(game._message_more || false, entry.more || false, entry.kind);
+        assert.equal(game.u.uhunger, entry.hunger, entry.kind);
+        assert.equal(game.level.objects.includes(stack), false, entry.kind);
+        const rest = game.level.objects.find(obj => obj.kind === entry.kind);
+        assert.ok(rest, entry.kind);
+        assert.equal(rest.quan, 1, entry.kind);
+        assert.equal(rest.no_charge || false, false, entry.kind);
+        if (entry.conduct) assert.equal(game.u.uconduct?.[entry.conduct], 1, entry.kind);
+        const bite = shop.shopBillEntryForObject(shkp, stack);
+        assert.ok(bite, entry.kind);
+        assert.equal(bite.useup, true, entry.kind);
+        assert.equal(shop.shopBillEntryTotal(bite), expected, entry.kind);
+        assert.equal(game._eating_turns_remaining || 0, 0, entry.kind);
+    }
+});
+
 test('floor delayed ordinary foods use C bite timing and finish removal', async () => {
     const cases = [
         { kind: 'food ration', firstOeaten: 640, firstHunger: 1060, turns: 5, bite: 160, finalHunger: 1700, message: '' },

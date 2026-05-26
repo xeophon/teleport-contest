@@ -1056,6 +1056,7 @@ const CREAM_PIE = 10081;
 const LUMP_OF_ROYAL_JELLY = 10089;
 const KELP_FROND = 172;
 const EUCALYPTUS_LEAF = 11000;
+const APPLE = 11001;
 const PANCAKE = 11011;
 const CRAM_RATION = 145;
 const LEMBAS_WAFER = 146;
@@ -1170,6 +1171,10 @@ const CARRIED_DELAYED_FOOD_VICTUALS = new Map([
     ['lembas wafer', { otyp: LEMBAS_WAFER, delay: 2, finishName: 'lembas wafer' }],
     ['cram ration', { otyp: CRAM_RATION, delay: 3, finishName: 'cram ration', bland: true }],
     ['food ration', { otyp: FOOD_RATION, delay: 5, finishName: 'food ration', rationFeedback: true }],
+]);
+const DELAY_ONE_FOOD_VICTUALS = new Map([
+    ['apple', { otyp: APPLE, delay: 1, finishName: 'apple' }],
+    ['fortune cookie', { otyp: FORTUNE_COOKIE, delay: 1, finishName: 'fortune cookie' }],
 ]);
 const ROTTABLE_NON_CORPSE_FOODS = new Set(['apple', 'carrot', 'pear', 'melon', 'orange', 'banana', 'kelp frond', 'lump of royal jelly']);
 const POISONABLE_WISH_WEAPONS = new Set([
@@ -10854,9 +10859,47 @@ function recordFoodConduct(item) {
     if ((isCorpseItem(item) || isGlobFood(item) || /\bcorpse$/.test(kind)) && !veganCorpse) {
         conduct.unvegan = (conduct.unvegan || 0) + 1;
         conduct.unvegetarian = (conduct.unvegetarian || 0) + 1;
-    } else if (isEggItem(item) || isRoyalJelly(item) || kind === 'pancake') {
+    } else if (isEggItem(item) || isRoyalJelly(item) || kind === 'pancake' || kind === 'fortune cookie') {
         conduct.unvegan = (conduct.unvegan || 0) + 1;
     }
+}
+
+function isFortuneCookieFood(item) {
+    return itemKindText(item).replace(/^partly eaten /, '') === 'fortune cookie';
+}
+
+function heroIsBlind() {
+    return !!(game.u?.blind || (game.u?._statusSuffix || '').includes('Blind'));
+}
+
+function fortuneCookieRumorTruth(item) {
+    if (item?.blessed) return 1;
+    if (item?.cursed) return -1;
+    return 0;
+}
+
+function queueFortuneCookieRumor(item) {
+    if (heroIsBlind()) {
+        game._queued_message_after_more = 'This cookie has a scrap of paper inside.';
+        game._queued_message_more_after_more = 1;
+        game._fortune_cookie_rumor_after_more = 'What a pity that you cannot read it!';
+        return;
+    }
+    game._queued_message_after_more = 'This cookie has a scrap of paper inside.  It reads:';
+    game._queued_message_more_after_more = 1;
+    const rumor = getrumor(false, fortuneCookieRumorTruth(item)).replace(/^\[cookie\]\s*/, '');
+    game._fortune_cookie_rumor_after_more = rumor || 'This cookie is devoid of wisdom.';
+}
+
+function cursedAppleSleepPostEffect(item) {
+    const kind = itemKindText(item).replace(/^partly eaten /, '');
+    if (kind !== 'apple' || !item?.cursed || game.u?.sleepResistance) return null;
+    const duration = rn1(11, 20);
+    game._helpless_time = Math.max(game._helpless_time || 0, duration);
+    game._sleeping_time = Math.max(game._sleeping_time || 0, duration + 1);
+    if (heroIsDeaf() || game.flags?.acoustics === false)
+        return { message: 'You fall asleep.', duration };
+    return { message: 'You hear sinister laughter as you fall asleep...', duration };
 }
 
 function remainingFoodNutrition(item) {
@@ -10987,9 +11030,19 @@ function delayedFoodVictualSpec(item) {
     return null;
 }
 
-function carriedDelayedFoodVictualSpec(item) {
-    const spec = delayedFoodVictualSpec(item);
-    return spec || null;
+function delayOneFoodVictualSpec(item) {
+    if (!item) return null;
+    const kind = objectKindKey(item).replace(/^partly eaten /, '');
+    const spec = DELAY_ONE_FOOD_VICTUALS.get(kind);
+    if (spec) return { ...spec, kind };
+    for (const [entryKind, entrySpec] of DELAY_ONE_FOOD_VICTUALS) {
+        if (item.otyp === entrySpec.otyp) return { ...entrySpec, kind: entryKind };
+    }
+    return null;
+}
+
+function ordinaryFoodVictualSpec(item) {
+    return delayOneFoodVictualSpec(item) || delayedFoodVictualSpec(item);
 }
 
 function delayedFoodCanAgeRot(spec) {
@@ -10998,6 +11051,7 @@ function delayedFoodCanAgeRot(spec) {
 
 function delayedFoodShouldBeRotten(item, spec) {
     if (!item || !spec) return false;
+    if (spec.kind === 'fortune cookie') return false;
     if (item.cursed) return true;
     if (!delayedFoodCanAgeRot(spec)) return false;
     if (item.age == null) item.age = game.moves || 1;
@@ -11051,7 +11105,18 @@ function delayedFoodFirstBiteMessage(spec, hunger) {
         if (heroFoodIsOrc()) return '!#?&* elf kibble!';
         if (heroFoodIsElf()) return 'A little goes a long way.';
     }
+    if (spec.kind === 'apple') return 'Delicious!  Must be a Macintosh!';
     return `This ${spec.finishName || spec.kind} is ${spec.bland ? 'bland.' : 'delicious!'}`;
+}
+
+function applyDelayedFoodPostEffect(touched, spec) {
+    if (spec?.kind === 'fortune cookie') {
+        queueFortuneCookieRumor(touched);
+        return { more: true };
+    }
+    if (spec?.kind === 'apple')
+        return cursedAppleSleepPostEffect(touched) || {};
+    return {};
 }
 
 function delayedFoodVictualState(touched, spec) {
@@ -11109,6 +11174,10 @@ function startDelayedFoodVictual(item, spec, { floorObject = false } = {}) {
     }
 
     if (reqtime <= 1 || biteNutrition <= 0) {
+        const postEffect = applyDelayedFoodPostEffect(touched, spec);
+        if (postEffect.message) message = `${message}  ${postEffect.message}`;
+        if (postEffect.more) more = true;
+        if (postEffect.duration) move = postEffect.duration;
         if (floorObject) consumeOneFloorObject(touched);
         else {
             removeInventoryItem(touched);
@@ -27871,6 +27940,7 @@ async function doSitCommand() {
 async function eatRottenNonCorpseFood(item, floorObject = false) {
     const touched = partialRottenFood(item, floorObject);
     const { message, rottenSleepDuration } = rottenFoodEffect();
+    let postEffect = null;
     if (!rottenSleepDuration) {
         if (isRoyalJelly(touched)) {
             await finishRoyalJellyEating(touched, floorObject, message, { more: true, processTimeWithMore: 1 });
@@ -27878,12 +27948,13 @@ async function eatRottenNonCorpseFood(item, floorObject = false) {
         }
         addHeroNutrition(remainingFoodNutrition(touched));
         consumeTouchedFood(touched, floorObject);
+        postEffect = cursedAppleSleepPostEffect(touched);
     }
     game._pet_food_scan_inventory = game.inventory || [];
-    await setMessage(message, true);
+    await setMessage(postEffect?.message ? `${message}  ${postEffect.message}` : message, true);
     game._process_time_with_more = 1;
     game._command_mode = null;
-    game.context.move = rottenSleepDuration ? rottenSleepDuration + 1 : 1;
+    game.context.move = rottenSleepDuration ? rottenSleepDuration + 1 : (postEffect?.duration || 1);
 }
 
 function addHeroVomiting(turns) {
@@ -44020,7 +44091,7 @@ export async function rhack(_cmd) {
         }
         if (item?.cls === 'food' || item?.otyp === FOOD_CLASS || item?.otyp === 'corpse' || item?.otyp === CORPSE) {
             const name = item.singular || pickupObjectName({ ...item, quan: 1 });
-            const fortuneCookie = item.kind === 'fortune cookie';
+            const fortuneCookie = isFortuneCookieFood(item);
             const corpse = item.otyp === 'corpse' || item.otyp === CORPSE;
             if (isTinObject(item)) {
                 await startTinOpening(item, false);
@@ -44069,13 +44140,7 @@ export async function rhack(_cmd) {
                 await eatStaleEgg(item);
                 return;
             }
-            if (fortuneCookie) {
-                const rumor = getrumor(false).replace(/^\[cookie\]\s*/, '');
-                game._queued_message_after_more = 'This cookie has a scrap of paper inside.  It reads:';
-                game._queued_message_more_after_more = 1;
-                game._fortune_cookie_rumor_after_more = rumor || 'This cookie is devoid of wisdom.';
-            }
-            if (shouldUseGenericRottenFoodPath(item)) {
+            if (!ordinaryFoodVictualSpec(item) && shouldUseGenericRottenFoodPath(item)) {
                 await eatRottenNonCorpseFood(item);
                 return;
             }
@@ -44083,7 +44148,7 @@ export async function rhack(_cmd) {
                 await eatRoyalJelly(item);
                 return;
             }
-            const delayedFoodVictual = carriedDelayedFoodVictualSpec(item);
+            const delayedFoodVictual = ordinaryFoodVictualSpec(item);
             if (delayedFoodVictual) {
                 const result = startCarriedDelayedFoodVictual(item, delayedFoodVictual);
                 await setMessage(result.message, result.more);
@@ -44099,7 +44164,7 @@ export async function rhack(_cmd) {
             removeInventoryItem(touched);
             game._pet_food_scan_inventory = game.inventory || [];
             const petrificationMessage = startPetrifyingEggStoning(touched);
-            const eatMessage = item.kind === 'apple'
+            const eatMessage = itemKindText(touched).replace(/^partly eaten /, '') === 'apple'
                 ? 'Delicious!  Must be a Macintosh!'
                 : `This ${name} is delicious!`;
             await setMessage(appendPetrificationMessage(eatMessage, petrificationMessage), fortuneCookie);
@@ -44261,7 +44326,7 @@ export async function rhack(_cmd) {
                 await eatStaleEgg(food, true);
                 return;
             }
-            if (shouldUseGenericRottenFoodPath(food)) {
+            if (!ordinaryFoodVictualSpec(food) && shouldUseGenericRottenFoodPath(food)) {
                 await eatRottenNonCorpseFood(food, true);
                 return;
             }
@@ -44269,7 +44334,7 @@ export async function rhack(_cmd) {
                 await eatRoyalJelly(food, true);
                 return;
             }
-            const delayedFoodVictual = delayedFoodVictualSpec(food);
+            const delayedFoodVictual = ordinaryFoodVictualSpec(food);
             if (delayedFoodVictual) {
                 const result = startDelayedFoodVictual(food, delayedFoodVictual, { floorObject: true });
                 await setMessage(result.message, result.more);
@@ -44284,7 +44349,13 @@ export async function rhack(_cmd) {
             if (touched?.kind === 'clove of garlic') scareNearbyOlfactoryMonstersWithGarlic();
             consumeOneFloorObject(touched);
             const petrificationMessage = startPetrifyingEggStoning(touched);
-            await setMessage(appendPetrificationMessage(`This ${name} is delicious!`, petrificationMessage));
+            const fortuneCookie = isFortuneCookieFood(touched);
+            if (fortuneCookie) queueFortuneCookieRumor(touched);
+            const kind = itemKindText(touched).replace(/^partly eaten /, '');
+            const eatMessage = kind === 'apple'
+                ? 'Delicious!  Must be a Macintosh!'
+                : `This ${name} is delicious!`;
+            await setMessage(appendPetrificationMessage(eatMessage, petrificationMessage), fortuneCookie);
             game._command_mode = null;
             game.context.move = 1;
             return;
