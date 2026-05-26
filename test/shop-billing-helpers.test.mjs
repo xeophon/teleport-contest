@@ -246,6 +246,21 @@ function bellOfOpening(id, letter = 'b', spe = 3) {
     };
 }
 
+function floorBagOfTricks(id, spe = 3, extra = {}) {
+    const bag = {
+        ...chargedTool(id, 'bag of tricks', 'b', spe),
+        otyp: BAG_OF_TRICKS,
+        known: true,
+        dknown: true,
+        ox: 5,
+        oy: 5,
+        ...extra,
+    };
+    delete bag.letter;
+    delete bag.line;
+    return bag;
+}
+
 function testObjectKind(item) {
     return String(item?.actualKind || item?.kind || '').toLowerCase()
         .replace(/^(?:blessed|uncursed|cursed) /, '');
@@ -1185,9 +1200,73 @@ test('floor horn of plenty is not selected as a #tip source', async () => {
     assert.doesNotMatch(game._pending_message, /horn of plenty/);
 });
 
+test('floor shop bag of tricks #tip charges emptying fee through a temporary bill row', async () => {
+    const { shkp } = installCommandShopState();
+    const bag = floorBagOfTricks(3064, 3);
+    game.level.objects = [bag];
+    game.inventory = [];
+    const expectedFee = expectedUnpaidUsageFee(bag, { altusage: true, chargeCount: 3 });
+
+    await rhack('#');
+    for (const ch of 'tip') await rhack(ch);
+    await rhack('\n');
+
+    assert.equal(game._command_mode, 'tipConfirm');
+    assert.equal(game._tip_container_object, bag);
+
+    await rhack('y');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(bag.spe, 0);
+    assert.equal(shkp.debit, expectedFee);
+    assert.equal(shkp.robbed || 0, 0);
+    assert.equal(shkp.billct, 0);
+    assert.equal(shkp.bill.length, 0);
+    assert.equal(shop.shopBillEntryForObject(shkp, bag), null);
+    assert.notEqual(bag.unpaid, true);
+    assert.equal(bag.unpaidPrice, undefined);
+    assert.match(game._pending_message, new RegExp(`Emptying that will cost you ${expectedFee} zorkmids`));
+});
+
+test('zero-charge floor bag of tricks #tip creates no usage debt or persistent bill row', async () => {
+    const { shkp } = installShopState();
+    const bag = floorBagOfTricks(3065, 0);
+    game.level.objects = [bag];
+
+    const messages = await shop.tipContainerContents(bag);
+
+    assert.equal(bag.spe, 0);
+    assert.equal(shkp.debit || 0, 0);
+    assert.equal(shkp.robbed || 0, 0);
+    assert.equal(shkp.billct, 0);
+    assert.equal(shkp.bill.length, 0);
+    assert.equal(shop.shopBillEntryForObject(shkp, bag), null);
+    assert.notEqual(bag.unpaid, true);
+    assert.equal(bag.unpaidPrice, undefined);
+    assert.doesNotMatch(messages.join('  '), /Usage fee|Emptying that will cost|zorkmid/);
+});
+
+test('no-charge floor bag of tricks #tip spends charges without shop usage billing', async () => {
+    const { shkp } = installShopState();
+    const bag = floorBagOfTricks(3066, 2, { no_charge: true });
+    game.level.objects = [bag];
+
+    const messages = await shop.tipContainerContents(bag);
+
+    assert.equal(bag.spe, 0);
+    assert.equal(bag.no_charge, true);
+    assert.equal(shkp.debit || 0, 0);
+    assert.equal(shkp.robbed || 0, 0);
+    assert.equal(shkp.billct, 0);
+    assert.equal(shkp.bill.length, 0);
+    assert.equal(shop.shopBillEntryForObject(shkp, bag), null);
+    assert.doesNotMatch(messages.join('  '), /Emptying that will cost|zorkmid/);
+});
+
 test('floor bag of tricks #loot bites without shop usage billing', async () => {
     const { shkp } = installCommandShopState();
-    const bag = { ...chargedTool(3064, 'bag of tricks', 'b', 3), otyp: BAG_OF_TRICKS };
+    const bag = { ...chargedTool(3067, 'bag of tricks', 'b', 3), otyp: BAG_OF_TRICKS };
     game.level.objects = [bag];
     game.inventory = [];
     game.u.uhp = 100;
@@ -1210,8 +1289,8 @@ test('floor bag of tricks #loot bites without shop usage billing', async () => {
 
 test('cursed floor bag of tricks #loot does not lose contained shop merchandise', async () => {
     const { shkp } = installCommandShopState();
-    const bag = { ...chargedTool(3065, 'bag of tricks', 'b', 3), otyp: BAG_OF_TRICKS, cursed: true, contents: [] };
-    const blade = putObjectInContainer(bag, dagger(3066));
+    const bag = { ...chargedTool(3068, 'bag of tricks', 'b', 3), otyp: BAG_OF_TRICKS, cursed: true, contents: [] };
+    const blade = putObjectInContainer(bag, dagger(3069));
     game.level.objects = [bag];
     game.inventory = [];
     game.u.uhp = 100;

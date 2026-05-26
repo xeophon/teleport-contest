@@ -22524,6 +22524,7 @@ function floorSpecialSourceUsageBill(source) {
     const price = shopItemPrice(source, x, y);
     if (!(price > 0)) return null;
     return {
+        shkp,
         unpaid: source.unpaid,
         unpaidPrice: source.unpaidPrice,
         line: source.line,
@@ -22534,9 +22535,14 @@ function floorSpecialSourceUsageBill(source) {
 function beginFloorSpecialSourceUsageBill(source) {
     const saved = floorSpecialSourceUsageBill(source);
     if (!saved) return null;
-    source.unpaid = true;
-    source.unpaidPrice = saved.price;
+    const existingEntry = shopBillEntryForObject(saved.shkp, source);
+    const savedEntry = existingEntry ? { ...existingEntry } : null;
+    const billEntry = existingEntry || addObjectToShopBill(saved.shkp, source, saved.price);
+    if (!billEntry) return null;
     return () => {
+        if (savedEntry) Object.assign(existingEntry, savedEntry);
+        else removeObjectFromShopBillById(saved.shkp, shopBillObjectId(source));
+        saved.shkp.billct = Array.isArray(saved.shkp.bill) ? saved.shkp.bill.length : Math.max(0, saved.shkp.billct || 0);
         source.unpaid = saved.unpaid;
         source.unpaidPrice = saved.unpaidPrice;
         source.line = saved.line;
