@@ -23,6 +23,7 @@ This note preserves the latest parallel source audits. These are implementation 
 - Can-of-grease `#tip` billing: C allows non-container inventory choices for `#tip`, spills grease, then consumes one can charge through `consume_obj_charge(..., TRUE)` so unpaid usage is billed after the spill message (`nethack-c/upstream/src/pickup.c:3481-3654`, `nethack-c/upstream/src/pickup.c:3658-3663`, `nethack-c/upstream/src/invent.c:1337-1344`). JS now includes spillage objects in carried `#tip` selection and bills an unpaid can of grease after reporting the spill.
 - Tip-into-magic-bag target explosion tail preservation: C stops the tipping loop after a target magic-bag explosion by setting `nobj = 0`, leaving later source contents in the source container (`nethack-c/upstream/src/pickup.c:3757-3801`). JS now removes only processed source items instead of clearing the whole source after such an explosion.
 - Cursed charging alteration billing: Cursed recharging calls `costly_alteration()` before charge/enchantment mutation for `stripspe()` targets, crystal balls, and negatively adjusted charged rings (`nethack-c/upstream/src/read.c:651-663`, `nethack-c/upstream/src/read.c:770-821`, `nethack-c/upstream/src/read.c:857-930`, `nethack-c/upstream/src/read.c:959-982`, `nethack-c/upstream/src/mkobj.c:752-826`). JS now preserves the pre-altered unpaid carried item as a dummy used-up bill row before clearing charges, fuel, or ring enchantment.
+- Equal-price itemized `#pay` tie-breaks: C sorts itemized bill rows by used-up state, descending cost, then `bidx`; container-content rows for hero-owned outer containers use `bidx == -1` and therefore sort before equal-price bill-indexed rows (`nethack-c/upstream/src/shk.c:1495-1517`, `nethack-c/upstream/src/shk.c:1567-1661`, `nethack-c/upstream/src/shk.c:2119-2143`). JS now carries a C-style sort bill index on payable rows and container aggregates so equal-price payment display and queued payment follow the same order.
 
 ## Candidate Slices
 
@@ -36,27 +37,22 @@ This note preserves the latest parallel source audits. These are implementation 
    - JS refs: `js/cmd.js:14901-14945`, `js/cmd.js:42499`, `js/cmd.js:42743`.
    - Narrow slice: add hard-landing container-content impact before recursive projectile shop return/debt. C places thrown containers, breaks fragile contents on hard landing, then runs shop handling (`nethack-c/upstream/src/dothrow.c:1824-1835`, `nethack-c/upstream/src/dokick.c:409-463`); JS still resolves unpaid projectile contents before any equivalent impact hook.
 
-3. Equal-price itemized `#pay` tie-breaks.
-   - C refs: `nethack-c/upstream/src/shk.c:1495-1513`, `nethack-c/upstream/src/shk.c:1630`, `nethack-c/upstream/src/shk.c:1660`, `nethack-c/upstream/src/shk.c:2119`.
-   - JS refs: `js/cmd.js:22922`, `js/cmd.js:22946`, `js/cmd.js:23025`, `js/cmd.js:23295`.
-   - Narrow slice: add a `sortBillIndex` tie-break to payable rows so equal-price container-contents rows for non-unpaid carried containers sort with C's `bidx == -1` ahead of ordinary bill rows.
-
-4. Victual runtime after first-bite billing.
+3. Victual runtime after first-bite billing.
    - C refs: `nethack-c/upstream/src/eat.c:360`, `nethack-c/upstream/src/eat.c:519`, `nethack-c/upstream/src/eat.c:2020`, `nethack-c/upstream/src/eat.c:3049-3129`, `nethack-c/upstream/src/eat.c:3806`.
    - JS refs: `js/cmd.js:10611-10753`, `js/cmd.js:41878-42119`, `js/allmain.js:10812`.
    - Narrow slice: use the existing `oeaten` and first-bite billing helpers for ordinary non-special food so one bite happens at command start, later bites happen during occupation, and the object is removed only at finish.
 
-5. Tin follow-up.
+4. Tin follow-up.
    - C refs: `nethack-c/upstream/src/eat.c:1389`, `nethack-c/upstream/src/eat.c:1514-1721`.
    - JS refs: `js/cmd.js:11992-12235`.
    - Narrow slice: handle metallivorous empty/meat/spinach tin nutrition and prompt bypass exactly, after ordinary victual runtime is stable.
 
-6. Wish parser and object finalization.
+5. Wish parser and object finalization.
    - C refs: `nethack-c/upstream/src/objnam.c:3978-3996`, `nethack-c/upstream/src/objnam.c:4177-4237`, `nethack-c/upstream/src/objnam.c:5037-5189`, `nethack-c/upstream/src/objnam.c:5255-5268`, `nethack-c/upstream/include/objclass.h:52`, `nethack-c/upstream/include/objclass.h:60`, `nethack-c/upstream/include/obj.h:49`, `nethack-c/upstream/src/zap.c:6360`.
    - JS refs: `js/cmd.js:9485`, `js/cmd.js:9504`, `js/cmd.js:19322`, `js/cmd.js:38258-38512`.
    - Narrow slice status: C-shaped quantity, requested-`spe`, and common charge suffix constraints are now in place for common object classes without replacing the whole parser. Remaining work is registry-backed `oc_merge`/`oc_charged` metadata, non-wishable substitutions, exact fuzzy matching/ranges, explicit non-object results, and artifact provenance.
 
-7. Victual runtime after first-bite billing.
+6. Victual runtime after first-bite billing.
    - C refs: `nethack-c/upstream/src/eat.c:360`, `nethack-c/upstream/src/eat.c:519`, `nethack-c/upstream/src/eat.c:2022`, `nethack-c/upstream/src/eat.c:2968`, `nethack-c/upstream/src/eat.c:3026`, `nethack-c/upstream/src/eat.c:3056`, `nethack-c/upstream/src/eat.c:3806`.
    - JS refs: `js/cmd.js:10758`, `js/cmd.js:10777`, `js/cmd.js:10803`, `js/cmd.js:42046`, `js/cmd.js:42222`, `js/allmain.js:10814`.
    - Narrow slice: start with ordinary delayed food such as food rations, keeping the touched item active after the first bite, consuming nutrition/`oeaten` over occupation ticks, and removing the item only at finish.

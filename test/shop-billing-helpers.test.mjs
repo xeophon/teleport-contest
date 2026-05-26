@@ -6978,6 +6978,58 @@ test('payable debts use C itemized order by used-up state then price', () => {
     assert.equal(entries[2].letter, 'c');
 });
 
+test('equal-price payable contents in a hero-owned container sort before bill-indexed rows', async () => {
+    const { shkp } = installCommandShopState();
+    const bag = sack(89921, 'b');
+    const contained = putObjectInContainer(bag, foodRation(89922));
+    const ordinary = foodRation(89923, 'f');
+    game.inventory = [bag, ordinary];
+    game._goldCount = 100;
+    shop.addObjectToShopBill(shkp, ordinary, 45);
+    shop.addObjectToShopBill(shkp, contained, 45);
+
+    const entries = shop.collectPayableShopDebts(shkp);
+
+    assert.equal(entries.length, 2);
+    assert.equal(entries[0].containerPayment, true);
+    assert.equal(entries[0].item, bag);
+    assert.equal(entries[0].price, 45);
+    assert.equal(entries[0].letter, 'a');
+    assert.equal(entries[1].item, ordinary);
+    assert.equal(entries[1].price, 45);
+    assert.equal(entries[1].letter, 'b');
+
+    await rhack('p');
+
+    assert.equal(game._command_mode, 'payMenu');
+    const lines = (game._overlay_lines || []).map(row => row[2]);
+    assert.match(lines.find(line => /^a -/.test(line)) || '', /contents of your bag/);
+    assert.match(lines.find(line => /^b -/.test(line)) || '', /food ration/);
+});
+
+test('queued equal-price itemized payment follows C bill-index tie-break', () => {
+    const { shkp } = installShopState();
+    const bag = sack(89924, 'b');
+    const contained = putObjectInContainer(bag, dagger(89925));
+    const loose = dagger(89926, 'd');
+    game.inventory = [bag, loose];
+    game._goldCount = 10;
+    shop.addObjectToShopBill(shkp, loose, 10);
+    shop.addObjectToShopBill(shkp, contained, 10);
+
+    const entries = shop.collectPayableShopDebts(shkp);
+    const payment = shop.finishShopPaymentSelection(shkp, entries);
+
+    assert.equal(payment.paid, true);
+    assert.equal(payment.stoppedShort, true);
+    assert.equal(payment.cashTotal, 10);
+    assert.equal(payment.payableEntries.length, 1);
+    assert.equal(payment.payableEntries[0].billPortion, 'containerContents');
+    assert.equal(shop.shopBillEntryForObject(shkp, contained), null);
+    assert.notEqual(shop.shopBillEntryForObject(shkp, loose), null);
+    assert.equal(game._goldCount, 0);
+});
+
 test('queued shop payment stops after selected entries become unaffordable', () => {
     const { shkp } = installShopState();
     const cheap = dagger(8993, 'a');

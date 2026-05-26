@@ -22917,8 +22917,11 @@ function addContainerPaymentBillItem(groups, container, item, billEntry, price, 
     if (key == null) return;
     let group = groups.get(key);
     if (!group) {
-        group = { container, billItems: [], price: 0, includesContainer: false };
+        group = { container, billItems: [], price: 0, includesContainer: false, sortBillIndex: options.sortBillIndex };
         groups.set(key, group);
+    } else if (group.sortBillIndex == null || options.sortBillIndex === -1
+        || (options.sortBillIndex != null && group.sortBillIndex !== -1 && options.sortBillIndex < group.sortBillIndex)) {
+        group.sortBillIndex = options.sortBillIndex;
     }
     const billId = billEntry?.bo_id ?? shopBillObjectId(item);
     if (group.billItems.some(entry => String(entry.billId) === String(billId))) return;
@@ -22934,7 +22937,8 @@ function pushShopBillLedgerDebtEntries(shkp, entries, seenBillIds) {
     const intactEntries = [];
     const possibleTopContainerEntries = [];
     const containerPaymentGroups = new Map();
-    for (const billEntry of ledger) {
+    for (let billIndex = 0; billIndex < ledger.length; billIndex++) {
+        const billEntry = ledger[billIndex];
         const billId = String(billEntry.bo_id);
         seenBillIds.add(billId);
         const unitPrice = shopBillEntryUnitPrice(billEntry);
@@ -22952,6 +22956,7 @@ function pushShopBillLedgerDebtEntries(shkp, entries, seenBillIds) {
                 quantity: billedQuantity,
                 name: shopBillEntryDisplayName(billEntry, obj, billedQuantity, shkp),
                 price,
+                sortBillIndex: billIndex,
             });
             continue;
         }
@@ -22965,12 +22970,14 @@ function pushShopBillLedgerDebtEntries(shkp, entries, seenBillIds) {
                 quantity: usedQuantity,
                 name: shopBillEntryDisplayName(billEntry, obj, usedQuantity, shkp),
                 price: unitPrice * usedQuantity,
+                sortBillIndex: billIndex,
             });
             const intactPrice = unitPrice * liveQuantity;
             const topContainer = outermostShopBillContainerForObject(obj);
             if (topContainer) {
                 addContainerPaymentBillItem(containerPaymentGroups, topContainer, obj, billEntry, intactPrice, {
                     blockedByUsedUp: true,
+                    sortBillIndex: topContainer.unpaid ? billIndex : -1,
                 });
             } else {
                 intactEntries.push({
@@ -22981,6 +22988,7 @@ function pushShopBillLedgerDebtEntries(shkp, entries, seenBillIds) {
                     blockedByUsedUp: true,
                     name: shopDebtItemName({ ...obj, quan: liveQuantity, line: '' }),
                     price: intactPrice,
+                    sortBillIndex: billIndex,
                 });
             }
             continue;
@@ -22995,10 +23003,13 @@ function pushShopBillLedgerDebtEntries(shkp, entries, seenBillIds) {
             quantity: liveQuantity || billedQuantity,
             name: shopDebtItemName(obj),
             price,
+            sortBillIndex: billIndex,
         };
         const topContainer = outermostShopBillContainerForObject(obj);
         if (topContainer) {
-            addContainerPaymentBillItem(containerPaymentGroups, topContainer, obj, billEntry, price);
+            addContainerPaymentBillItem(containerPaymentGroups, topContainer, obj, billEntry, price, {
+                sortBillIndex: topContainer.unpaid ? billIndex : -1,
+            });
         } else if (globContents(obj).length) {
             possibleTopContainerEntries.push(intactEntry);
         } else {
@@ -23007,7 +23018,9 @@ function pushShopBillLedgerDebtEntries(shkp, entries, seenBillIds) {
     }
     for (const entry of possibleTopContainerEntries) {
         const group = containerPaymentGroups.get(shopBillObjectId(entry.item));
-        if (group) addContainerPaymentBillItem(containerPaymentGroups, entry.item, entry.item, entry.billEntry, entry.price);
+        if (group) addContainerPaymentBillItem(containerPaymentGroups, entry.item, entry.item, entry.billEntry, entry.price, {
+            sortBillIndex: entry.sortBillIndex,
+        });
         else intactEntries.push(entry);
     }
     for (const group of containerPaymentGroups.values()) {
@@ -23021,6 +23034,7 @@ function pushShopBillLedgerDebtEntries(shkp, entries, seenBillIds) {
             name: shopContainerPaymentName(group.container, group.includesContainer),
             price: group.price,
             blockedByUsedUp: !!group.blockedByUsedUp,
+            sortBillIndex: group.sortBillIndex,
         });
     }
     entries.push(...usedEntries, ...intactEntries);
@@ -23094,6 +23108,10 @@ function shopPaymentEntryCompare(a, b) {
     if (rank) return rank;
     const price = shopPaymentEntryValue(b) - shopPaymentEntryValue(a);
     if (price) return price;
+    const aSortIndex = Number(a?.sortBillIndex);
+    const bSortIndex = Number(b?.sortBillIndex);
+    if (Number.isFinite(aSortIndex) && Number.isFinite(bSortIndex) && aSortIndex !== bSortIndex)
+        return aSortIndex - bSortIndex;
     return 0;
 }
 
