@@ -9414,6 +9414,74 @@ test('pay command refuses a lone nonresident shopkeeper at a distance', async ()
     assert.notEqual(game._command_mode, 'payMenu');
 });
 
+test('pay command skips dead shopkeepers during target selection', async () => {
+    const { shkp } = installCommandShopState();
+    shkp.dead = true;
+    shkp.debit = 10;
+    shkp.loan = 10;
+    game._goldCount = 20;
+
+    await rhack('p');
+
+    assert.match(game._pending_message, /There appears to be no shopkeeper here to receive your payment\./);
+    assert.equal(shkp.debit, 10);
+    assert.equal(shkp.loan, 10);
+    assert.equal(game._goldCount, 20);
+    assert.notEqual(game._command_mode, 'payMenu');
+});
+
+test('pay command refuses a resident who is outside the shop at a distance', async () => {
+    const { shkp } = installCommandShopState();
+    shkp.mx = 8;
+    shkp.my = 5;
+    shkp.shk = { x: 8, y: 5 };
+    game.level.at = (x, y) => (x === game.u.ux && y === game.u.uy
+        ? { roomno: shkp.shoproom, typ: ROOM }
+        : { roomno: 0, typ: ROOM });
+    shkp.debit = 10;
+    shkp.loan = 10;
+    game._goldCount = 20;
+
+    await rhack('p');
+
+    assert.match(game._pending_message, /Izchak is not near enough to receive your payment\./);
+    assert.equal(shkp.debit, 10);
+    assert.equal(shkp.loan, 10);
+    assert.equal(game._goldCount, 20);
+    assert.notEqual(game._command_mode, 'payMenu');
+});
+
+test('pay command defers multiple visible shopkeepers to Pay whom prompt without mutation', async () => {
+    const { shkp } = installCommandShopState();
+    const secondShopkeeper = {
+        isshk: true,
+        shoproom: shkp.shoproom,
+        shoptype: shkp.shoptype,
+        shknam: 'Asidonhopo',
+        mx: 4,
+        my: 5,
+        shk: { x: 4, y: 5 },
+        bill: [],
+        billct: 0,
+        minvent: [],
+        m_id: 2,
+    };
+    game.level.monsters.push(secondShopkeeper);
+    shkp.debit = 10;
+    shkp.loan = 10;
+    secondShopkeeper.debit = 10;
+    secondShopkeeper.loan = 10;
+    game._goldCount = 30;
+
+    await rhack('p');
+
+    assert.match(game._pending_message, /Pay whom\?/);
+    assert.equal(shkp.debit, 10);
+    assert.equal(secondShopkeeper.debit, 10);
+    assert.equal(game._goldCount, 30);
+    assert.notEqual(game._command_mode, 'payMenu');
+});
+
 test('payable debts split partly used stacks into used and intact bill portions', () => {
     const { shkp } = installShopState();
     const stack = { ...dagger(9001, 'd'), quan: 3, line: 'd - 3 +0 daggers' };
@@ -9548,6 +9616,23 @@ test('pay command handles robbed-only shopkeepers without claiming nothing is ow
     assert.equal(game._goldCount, 5);
     assert.equal(shkp.robbed, 0);
     assert.equal(shkp.billct, 0);
+    assert.equal(game.context.move, 1);
+});
+
+test('pay command gives a peaceful robbed nonresident the gold they asked for', async () => {
+    const { shkp } = installCommandShopState();
+    game.level.at = () => ({ roomno: 0, typ: ROOM });
+    shkp.robbed = 20;
+    game._goldCount = 25;
+
+    await rhack('p');
+
+    assert.equal(game._command_mode, null);
+    assert.match(game._pending_message, /You give Izchak the 20 gold pieces he asked for\./);
+    assert.doesNotMatch(game._pending_message, /after blood/i);
+    assert.doesNotMatch(game._pending_message, /do not owe/i);
+    assert.equal(game._goldCount, 5);
+    assert.equal(shkp.robbed, 0);
     assert.equal(game.context.move, 1);
 });
 

@@ -14917,6 +14917,92 @@ function shopkeeperInHisShop(shkp) {
     return (game.level?.at?.(x, y)?.roomno || 0) === shkp.shoproom;
 }
 
+function liveShopkeeper(mon) {
+    return !!mon?.isshk && !mon.dead && (mon.mhp == null || mon.mhp > 0);
+}
+
+function shopkeeperNextToHero(shkp, ux = game.u?.ux || 0, uy = game.u?.uy || 0) {
+    if (!shkp) return false;
+    return Math.max(Math.abs((shkp.mx ?? 0) - ux), Math.abs((shkp.my ?? 0) - uy)) <= 1;
+}
+
+function payCanSpotShopkeeper(shkp) {
+    if (!shkp || game.u?.blind || shkp.mundetected) return false;
+    if (!game.viz_array) return true;
+    return cansee(shkp.mx, shkp.my) || !!(game.viz_array?.[shkp.my]?.[shkp.mx] & IN_SIGHT);
+}
+
+function scanPayShopkeepers() {
+    const ux = game.u?.ux || 0;
+    const uy = game.u?.uy || 0;
+    const roomno = game.level?.at?.(ux, uy)?.roomno || 0;
+    const room = levelRoomByRoomno(roomno);
+    const liveShopkeepers = (game.level?.monsters || []).filter(liveShopkeeper);
+    const scan = {
+        sk: 0,
+        seensk: 0,
+        nexttosk: 0,
+        nxtm: null,
+        resident: null,
+        visibleShopkeeper: null,
+        ux,
+        uy,
+    };
+
+    for (const shkp of liveShopkeepers) {
+        scan.sk++;
+        if (shopkeeperNextToHero(shkp, ux, uy)) {
+            if (!scan.nxtm || !shopkeeperAngryForSellobj(scan.nxtm)) {
+                scan.nexttosk++;
+                scan.nxtm = shkp;
+            }
+        }
+        if (payCanSpotShopkeeper(shkp)) {
+            scan.seensk++;
+            scan.visibleShopkeeper = shkp;
+        }
+        if (room?.rtype >= SHOPBASE
+            && shopkeeperInHisShop(shkp)
+            && shkp.shoproom === roomno) {
+            scan.resident = shkp;
+        }
+    }
+    return scan;
+}
+
+function resolvePayShopkeeperFromScan(scan) {
+    if (scan.nxtm && scan.nexttosk === 1)
+        return { selected: scan.nxtm, resident: scan.resident, needsPayWhomPrompt: false, message: '' };
+
+    if ((!scan.sk && !game.u?.blind) || (!game.u?.blind && !scan.seensk))
+        return {
+            selected: null,
+            resident: scan.resident,
+            needsPayWhomPrompt: false,
+            message: 'There appears to be no shopkeeper here to receive your payment.',
+        };
+
+    if (!scan.seensk)
+        return { selected: null, resident: scan.resident, needsPayWhomPrompt: false, message: "You can't see..." };
+
+    if (scan.sk === 1 && scan.resident)
+        return { selected: scan.resident, resident: scan.resident, needsPayWhomPrompt: false, message: '' };
+
+    if (scan.seensk === 1) {
+        const shkp = scan.visibleShopkeeper;
+        if (!sameShopkeeper(shkp, scan.resident) && !shopkeeperNextToHero(shkp, scan.ux, scan.uy))
+            return {
+                selected: null,
+                resident: scan.resident,
+                needsPayWhomPrompt: false,
+                message: `${shopkeeperDisplayName(shkp)} is not near enough to receive your payment.`,
+            };
+        return { selected: shkp, resident: scan.resident, needsPayWhomPrompt: false, message: '' };
+    }
+
+    return { selected: null, resident: scan.resident, needsPayWhomPrompt: true, message: 'Pay whom?' };
+}
+
 function shopkeeperForCostlySpot(x, y) {
     const shkp = shopkeeperForShopRoom(x, y);
     if (!shkp) return null;
@@ -23950,6 +24036,12 @@ function shopkeeperObjectivePronoun(shkp) {
     return 'him';
 }
 
+function shopkeeperSubjectPronoun(shkp) {
+    if (shkp?.female) return 'she';
+    if (shkp?.neuter || shkp?.data?.neuter) return 'it';
+    return 'he';
+}
+
 function shopkeeperRobbedAmount(shkp) {
     return Math.max(0, Math.trunc(Number(shkp?.robbed || 0)));
 }
@@ -23969,7 +24061,7 @@ function finishRobbedOnlyShopPayment(shkp, { resident = null } = {}) {
     const money = (game.inventory || []).find(item => item.letter === '$' || item.cls === 'coin');
     const availableGold = Math.max(0, Math.trunc(Number(game._goldCount || money?.quan || 0)));
     const name = shopkeeperDisplayName(shkp);
-    const isResident = !resident || sameShopkeeper(shkp, resident);
+    const isResident = !!resident && sameShopkeeper(shkp, resident);
     const isAngry = shopkeeperAngryForSellobj(shkp);
     const messages = [];
 
@@ -23987,11 +24079,11 @@ function finishRobbedOnlyShopPayment(shkp, { resident = null } = {}) {
             updateMoneyLine(money);
         }
         if (availableGold > robbed)
-            messages.push(`You give ${name} the ${robbed} gold piece${robbed === 1 ? '' : 's'} ${shopkeeperObjectivePronoun(shkp)} asked for.`);
+            messages.push(`You give ${name} the ${robbed} gold piece${robbed === 1 ? '' : 's'} ${shopkeeperSubjectPronoun(shkp)} asked for.`);
         else
             messages.push(`You give ${name} all your gold.`);
         if (availableGold < Math.trunc(robbed / 2)) {
-            messages.push(`Unfortunately, ${shopkeeperObjectivePronoun(shkp)} doesn't look satisfied.`);
+            messages.push(`Unfortunately, ${shopkeeperSubjectPronoun(shkp)} doesn't look satisfied.`);
         } else {
             shkp.robbed = 0;
             shkp.following = 0;
@@ -44819,28 +44911,13 @@ export async function rhack(_cmd) {
     }
 
     if (ch === 'p') {
-        const ux = game.u?.ux || 0;
-        const uy = game.u?.uy || 0;
-        const shopkeepers = (game.level?.monsters || []).filter(mon => mon.isshk);
-        const adjacent = shopkeepers.filter(mon => Math.max(Math.abs(mon.mx - ux), Math.abs(mon.my - uy)) <= 1);
-        const uniqueAdjacent = adjacent.length === 1 ? adjacent[0] : null;
-        if (game.u?.blind && !uniqueAdjacent) {
-            await setMessage("You can't see...");
+        const target = resolvePayShopkeeperFromScan(scanPayShopkeepers());
+        if (!target.selected) {
+            await setMessage(target.message || 'There appears to be no shopkeeper here to receive your payment.');
             return;
         }
-        const loc = game.level?.at(ux, uy);
-        const roomno = loc?.roomno || 0;
-        const room = levelRoomByRoomno(roomno);
-        const resident = room?.resident || shopkeepers.find(mon => mon.shoproom === roomno);
-        const shkp = uniqueAdjacent || resident || null;
-        if (!shkp && shopkeepers.length === 1) {
-            await setMessage(`${shopkeeperDisplayName(shopkeepers[0])} is not near enough to receive your payment.`);
-            return;
-        }
-        if (!shkp) {
-            await setMessage('There appears to be no shopkeeper here to receive your payment.');
-            return;
-        }
+        const shkp = target.selected;
+        const resident = target.resident;
 
         game._pay_prepaid_message = '';
         game._pay_prepaid_paid = false;
