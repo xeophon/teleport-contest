@@ -19402,6 +19402,16 @@ function erosionVerb(armor, action) {
     return armorVerb(armor, singular, plural);
 }
 
+function erosionAlterationVerb(action) {
+    return {
+        smoulder: 'burn',
+        rust: 'rust',
+        rot: 'rot',
+        corrode: 'tarnish',
+        crack: 'crack',
+    }[action] || action;
+}
+
 function erodeDestroyArmor(armor, messages) {
     const erosion = destroyArmorErosionType(armor);
     if (!erosion || armor.oerodeproof) return false;
@@ -19412,6 +19422,8 @@ function erodeDestroyArmor(armor, messages) {
     if (current < 3) {
         const adverb = current + 1 === 3 ? ' completely' : current ? ' further' : '';
         messages.push(`Your ${name} ${erosionVerb(armor, erosion.action)}${adverb}!`);
+        const payment = costlyAlterationPaymentMessage(armor, erosionAlterationVerb(erosion.action));
+        if (payment) messages.push(payment);
         const oldAc = wornArmorAcValueGreatestErosion(armor);
         armor[erosion.field] = current + 1;
         updateWornArmorAcAfterChange(armor, oldAc);
@@ -19421,6 +19433,8 @@ function erodeDestroyArmor(armor, messages) {
     messages.push(erosion.shatters
         ? `Your ${name} shatters!`
         : `Your ${name} ${erosionVerb(armor, erosion.action)} away!`);
+    const payment = costlyAlterationPaymentMessage(armor, erosionAlterationVerb(erosion.action));
+    if (payment) messages.push(payment);
     destroyWornArmorItem(armor);
     return 'destroyed';
 }

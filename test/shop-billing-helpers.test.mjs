@@ -1987,6 +1987,59 @@ test('confused uncursed destroy armor strips unpaid proofing into a used-up bill
     assert.match(game._pending_message, /You degrade that .*leather armor, you pay for it!/);
 });
 
+test('blessed destroy armor rusts unpaid worn armor into a used-up bill', async () => {
+    const { shkp } = installCommandShopState();
+    initRng(5);
+    const scroll = scrollOfDestroyArmor(309037, 's', false);
+    scroll.blessed = true;
+    const armor = wornArmor(309038, 'orcish helm', 'a', 0);
+    game.inventory = [scroll, armor];
+    shop.addObjectToShopBill(shkp, armor, 100);
+
+    await rhack('r');
+    await rhack('s');
+
+    assert.equal(game.context.move, 1);
+    assert.equal(game.inventory.includes(scroll), false);
+    assert.equal(game.inventory.includes(armor), true);
+    assert.ok((armor.oeroded || 0) > 0);
+    assert.equal(armor.unpaid, false);
+    assert.equal(shop.shopBillEntryForObject(shkp, armor), null);
+    assert.equal(shkp.billct, 1);
+    assert.equal(shkp.bill[0].useup, true);
+    assert.equal(shop.shopBillEntryTotal(shkp.bill[0]), 100);
+    assert.equal((game._usedUpShopBills || []).length, 1);
+    assert.equal(game._usedUpShopBills[0].bo_id, shkp.bill[0].bo_id);
+    assert.match(game._pending_message, /Your orcish helm rusts!/);
+    assert.match(game._pending_message, /You rust that .*orcish helm, you pay for it!/);
+    assert.ok(game._pending_message.indexOf('rusts!') < game._pending_message.indexOf('you pay for it'));
+});
+
+test('blessed destroy armor erosion ignores stale field-only unpaid armor', async () => {
+    const { shkp } = installCommandShopState();
+    initRng(5);
+    const scroll = scrollOfDestroyArmor(309039, 's', false);
+    scroll.blessed = true;
+    const armor = wornArmor(309040, 'orcish helm', 'a', 0);
+    armor.unpaid = true;
+    armor.unpaidPrice = 100;
+    game.inventory = [scroll, armor];
+
+    await rhack('r');
+    await rhack('s');
+
+    assert.equal(game.context.move, 1);
+    assert.equal(game.inventory.includes(armor), true);
+    assert.ok((armor.oeroded || 0) > 0);
+    assert.equal(armor.unpaid, true);
+    assert.equal(armor.unpaidPrice, 100);
+    assert.equal(shkp.billct || 0, 0);
+    assert.equal((shkp.bill || []).length, 0);
+    assert.equal((game._usedUpShopBills || []).length, 0);
+    assert.match(game._pending_message, /Your orcish helm rusts!/);
+    assert.doesNotMatch(game._pending_message, /you pay for it/);
+});
+
 test('confused uncursed enchant armor adds proofing without used-up billing', async () => {
     const { shkp } = installCommandShopState();
     game.u._confusionTimeout = 10;
