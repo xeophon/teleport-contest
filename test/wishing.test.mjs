@@ -5,6 +5,7 @@ import { rhack, __shopBillingTestHooks as shop } from '../js/cmd.js';
 import { game, resetGame } from '../js/gstate.js';
 import { ROOM } from '../js/const.js';
 import { initRng } from '../js/rng.js';
+import { mksobj } from '../js/mklev.js';
 
 const HORN_OF_PLENTY = 957;
 const MEAT_RING = 10164;
@@ -12,6 +13,7 @@ const K_RATION = 10035;
 const C_RATION = 10036;
 const CRAM_RATION = 145;
 const PANCAKE = 11011;
+const KELP_FROND = 172;
 
 function installWishState(seed = 1, { debug = true, luck = 0 } = {}) {
     const g = resetGame();
@@ -155,6 +157,7 @@ test('wished ration foods use concrete C object metadata', async () => {
     const cases = [
         ['1 pancake', PANCAKE, 'pancake', 'pancakes', 200, 2, 15],
         ['1 cram ration', CRAM_RATION, 'cram ration', 'cram rations', 600, 15, 35],
+        ['1 kelp frond', KELP_FROND, 'kelp frond', 'kelp fronds', 30, 1, 6],
         ['1 K-ration', K_RATION, 'K-ration', 'K-rations', 400, 10, 25],
         ['1 C-ration', C_RATION, 'C-ration', 'C-rations', 300, 10, 20],
     ];
@@ -181,6 +184,7 @@ test('plural wished ration foods keep C plural metadata and weights', async () =
     const cases = [
         ['pancakes', PANCAKE, 'pancake', 'pancakes', 2, 4],
         ['cram rations', CRAM_RATION, 'cram ration', 'cram rations', 2, 30],
+        ['kelp fronds', KELP_FROND, 'kelp frond', 'kelp fronds', 2, 2],
         ['K-rations', K_RATION, 'K-ration', 'K-rations', 2, 20],
         ['C-rations', C_RATION, 'C-ration', 'C-rations', 2, 20],
     ];
@@ -201,8 +205,9 @@ test('plural wished ration foods keep C plural metadata and weights', async () =
     }
 });
 
-test('K-ration and C-ration wishes tolerate C fuzzy hyphen spacing', async () => {
+test('covered food wishes tolerate C aliases and fuzzy hyphen spacing', async () => {
     const cases = [
+        ['kelp', KELP_FROND, 'kelp frond', 1],
         ['K ration', K_RATION, 'K-ration', 1],
         ['krations', K_RATION, 'K-ration', 2],
         ['C ration', C_RATION, 'C-ration', 1],
@@ -220,6 +225,16 @@ test('K-ration and C-ration wishes tolerate C fuzzy hyphen spacing', async () =>
         assert.equal(item.kind, kind);
         assert.equal(item.quan, quantity);
     }
+});
+
+test('mksobj initializes kelp frond quantity from C rnd(2)', () => {
+    const quantities = new Set();
+    for (let seed = 1; seed <= 40; seed++) {
+        installWishState(seed);
+        quantities.add(mksobj(KELP_FROND, true, false).quan);
+    }
+
+    assert.deepEqual([...quantities].sort(), [1, 2]);
 });
 
 test('normal-mode wish quantity keeps C merge caps', async () => {

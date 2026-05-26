@@ -329,6 +329,7 @@ function simpleFood(id, kind, letter = 'f', extra = {}) {
         'cream pie': 'cream pies',
         'cram ration': 'cram rations',
         'fortune cookie': 'fortune cookies',
+        'kelp frond': 'kelp fronds',
         'sprig of wolfsbane': 'sprigs of wolfsbane',
         'clove of garlic': 'cloves of garlic',
         'eucalyptus leaf': 'eucalyptus leaves',
@@ -4671,6 +4672,7 @@ test('carried delay-one plant foods use shared C victual path', async () => {
         { kind: 'melon', letter: 'm', message: 'This melon is delicious!', hunger: 1000 },
         { kind: 'banana', letter: 'b', message: 'This banana is delicious!', hunger: 980 },
         { kind: 'carrot', letter: 'c', message: 'This carrot is delicious!', hunger: 950 },
+        { kind: 'kelp frond', letter: 'k', message: 'This kelp frond is delicious!', hunger: 930 },
         { kind: 'sprig of wolfsbane', letter: 'w', message: 'This sprig of wolfsbane is delicious!', hunger: 940 },
         { kind: 'clove of garlic', letter: 'g', message: 'This clove of garlic is delicious!', hunger: 940 },
         { kind: 'eucalyptus leaf', letter: 'e', message: 'This eucalyptus leaf is delicious!', hunger: 901 },
@@ -4935,6 +4937,7 @@ test('shop-floor delay-one food stacks bill the touched unit before immediate fi
         { kind: 'melon', id: 31953, message: 'This melon is delicious!', hunger: 1000 },
         { kind: 'banana', id: 31954, message: 'This banana is delicious!', hunger: 980 },
         { kind: 'carrot', id: 31955, message: 'This carrot is delicious!', hunger: 950 },
+        { kind: 'kelp frond', id: 31959, message: 'This kelp frond is delicious!', hunger: 930 },
         { kind: 'sprig of wolfsbane', id: 31956, message: 'This sprig of wolfsbane is delicious!', hunger: 940 },
         { kind: 'clove of garlic', id: 31957, message: 'This clove of garlic is delicious!', hunger: 940 },
         { kind: 'eucalyptus leaf', id: 31958, message: 'This eucalyptus leaf is delicious!', hunger: 901 },
@@ -4959,6 +4962,7 @@ test('shop-floor delay-one food stacks bill the touched unit before immediate fi
             melon: 'melons',
             banana: 'bananas',
             carrot: 'carrots',
+            'kelp frond': 'kelp fronds',
             'sprig of wolfsbane': 'sprigs of wolfsbane',
             'clove of garlic': 'cloves of garlic',
             'eucalyptus leaf': 'eucalyptus leaves',
@@ -10249,6 +10253,7 @@ test('expanded simple food floor pickup merges compatible paid inventory stacks'
         ['melon', 'melons', 'm'],
         ['banana', 'bananas', 'b'],
         ['carrot', 'carrots', 't'],
+        ['kelp frond', 'kelp fronds', 'd'],
         ['sprig of wolfsbane', 'sprigs of wolfsbane', 'w'],
         ['clove of garlic', 'cloves of garlic', 'g'],
         ['eucalyptus leaf', 'eucalyptus leaves', 'e'],
@@ -10461,6 +10466,7 @@ test('food-ration pickup full-inventory preflight allows no-charge merge', async
 test('expanded simple food pickup full-inventory preflight allows no-charge merges', async () => {
     const cases = [
         ['K-ration', 'k'],
+        ['kelp frond', 'd'],
         ['sprig of wolfsbane', 'w'],
         ['clove of garlic', 'g'],
         ['eucalyptus leaf', 'e'],
@@ -10490,6 +10496,7 @@ test('shopBaseCost returns C prices for covered simple foods', () => {
     assert.equal(shop.shopBaseCost(simpleFood(7126, 'C-ration')), 20);
     assert.equal(shop.shopBaseCost(simpleFood(7127, 'tripe ration')), 15);
     assert.equal(shop.shopBaseCost({ ...simpleFood(7128, 'tripe'), foodRoll: 140 }), 15);
+    assert.equal(shop.shopBaseCost(simpleFood(7132, 'kelp frond')), 6);
     assert.equal(shop.shopBaseCost(simpleFood(7129, 'sprig of wolfsbane')), 7);
     assert.equal(shop.shopBaseCost(simpleFood(7130, 'clove of garlic')), 7);
     assert.equal(shop.shopBaseCost(simpleFood(7131, 'eucalyptus leaf')), 5);
