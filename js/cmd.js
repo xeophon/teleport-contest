@@ -44621,19 +44621,20 @@ export async function rhack(_cmd) {
     }
 
     if (ch === 'p') {
-        if (game.u?.blind) {
-            await setMessage("You can't see...");
-            return;
-        }
         const ux = game.u?.ux || 0;
         const uy = game.u?.uy || 0;
         const shopkeepers = (game.level?.monsters || []).filter(mon => mon.isshk);
         const adjacent = shopkeepers.filter(mon => Math.max(Math.abs(mon.mx - ux), Math.abs(mon.my - uy)) <= 1);
+        const uniqueAdjacent = adjacent.length === 1 ? adjacent[0] : null;
+        if (game.u?.blind && !uniqueAdjacent) {
+            await setMessage("You can't see...");
+            return;
+        }
         const loc = game.level?.at(ux, uy);
         const roomno = loc?.roomno || 0;
         const room = levelRoomByRoomno(roomno);
         const resident = room?.resident || shopkeepers.find(mon => mon.shoproom === roomno);
-        const shkp = adjacent.length === 1 ? adjacent[0] : resident || null;
+        const shkp = uniqueAdjacent || resident || null;
         if (!shkp && shopkeepers.length === 1) {
             await setMessage(`${shopkeeperDisplayName(shopkeepers[0])} is not near enough to receive your payment.`);
             return;

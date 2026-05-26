@@ -8325,6 +8325,74 @@ test('pay command refuses itemized billing when shop debt cannot be settled', as
     assert.notEqual(shop.shopBillEntryForObject(shkp, ration), null);
 });
 
+test('pay command lets a blind hero pay a unique adjacent shopkeeper', async () => {
+    const { shkp } = installCommandShopState();
+    game.u.blind = true;
+    game._goldCount = 20;
+    shkp.debit = 10;
+    shkp.loan = 10;
+
+    await rhack('p');
+
+    assert.match(game._pending_message, /You owe Izchak 10 zorkmids you picked up in the store\./);
+    assert.match(game._pending_message, /You pay that debt\./);
+    assert.equal(shkp.debit, 0);
+    assert.equal(shkp.loan, 0);
+    assert.equal(game._goldCount, 10);
+    assert.notEqual(game._command_mode, 'payMenu');
+});
+
+test('pay command keeps blind resident-at-distance blocked', async () => {
+    const { shkp } = installCommandShopState();
+    game.u.blind = true;
+    shkp.mx = 8;
+    shkp.my = 5;
+    shkp.shk = { x: 8, y: 5 };
+    game._goldCount = 20;
+    shkp.debit = 10;
+    shkp.loan = 10;
+
+    await rhack('p');
+
+    assert.match(game._pending_message, /You can't see\.\.\./);
+    assert.equal(shkp.debit, 10);
+    assert.equal(shkp.loan, 10);
+    assert.equal(game._goldCount, 20);
+    assert.notEqual(game._command_mode, 'payMenu');
+});
+
+test('pay command does not auto-select while blind with multiple adjacent shopkeepers', async () => {
+    const { shkp } = installCommandShopState();
+    const secondShopkeeper = {
+        isshk: true,
+        shoproom: shkp.shoproom,
+        shoptype: shkp.shoptype,
+        shknam: 'Asidonhopo',
+        mx: 4,
+        my: 5,
+        shk: { x: 4, y: 5 },
+        bill: [],
+        billct: 0,
+        minvent: [],
+        m_id: 2,
+    };
+    game.level.monsters.push(secondShopkeeper);
+    game.u.blind = true;
+    game._goldCount = 20;
+    shkp.debit = 10;
+    shkp.loan = 10;
+    secondShopkeeper.debit = 10;
+    secondShopkeeper.loan = 10;
+
+    await rhack('p');
+
+    assert.match(game._pending_message, /You can't see\.\.\./);
+    assert.equal(shkp.debit, 10);
+    assert.equal(secondShopkeeper.debit, 10);
+    assert.equal(game._goldCount, 20);
+    assert.notEqual(game._command_mode, 'payMenu');
+});
+
 test('pay command refuses a lone nonresident shopkeeper at a distance', async () => {
     const { shkp } = installCommandShopState();
     game.u.ux = 1;
