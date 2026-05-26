@@ -330,6 +330,8 @@ function simpleFood(id, kind, letter = 'f', extra = {}) {
         'cram ration': 'cram rations',
         'fortune cookie': 'fortune cookies',
         'lump of royal jelly': 'lumps of royal jelly',
+        meatball: 'meatballs',
+        'enormous meatball': 'enormous meatballs',
         'kelp frond': 'kelp fronds',
         'sprig of wolfsbane': 'sprigs of wolfsbane',
         'clove of garlic': 'cloves of garlic',
@@ -4300,6 +4302,28 @@ test('carried delayed ordinary foods use C bite timing and messages', async () =
     }
 });
 
+test('carried enormous meatball starts C delayed flesh meal', async () => {
+    installCommandShopState();
+    game.u.uhunger = 0;
+    const food = simpleFood(31887, 'enormous meatball', 'n');
+    game.inventory = [food];
+
+    await rhack('e');
+    await rhack('n');
+
+    assert.equal(game._pending_message, 'This enormous meatball is delicious!');
+    assert.equal(game.inventory.includes(food), true);
+    assert.equal(food.oeaten, 1900);
+    assert.equal(game.u.uhunger, 100);
+    assert.equal(game._eating_turns_remaining, 20);
+    assert.equal(game._eating_inventory_object, food);
+    assert.equal(game._eating_bite_nutrition, 100);
+    assert.equal(game._eating_bite_hunger, 100);
+    assert.equal(game.u.uconduct?.food, 1);
+    assert.equal(game.u.uconduct?.unvegan, 1);
+    assert.equal(game.u.uconduct?.unvegetarian, 1);
+});
+
 test('carried delayed foods use C race-adjusted hunger before victual ticks', async () => {
     const cases = [
         { race: 'orc', kind: 'lembas wafer', letter: 'l', firstOeaten: 400, firstHunger: 1200, turns: 2, bite: 400, biteHunger: 300, finalHunger: 1500, message: '!#?&* elf kibble!' },
@@ -4637,6 +4661,24 @@ test('carried delay-one cream pie and candy bar use victual path and animal-prod
         assert.equal(game.u.uconduct?.unvegetarian || 0, 0, entry.kind);
         assert.equal(game._eating_turns_remaining || 0, 0, entry.kind);
     }
+});
+
+test('carried meatball uses C delay-one flesh conduct and nutrition', async () => {
+    installNonShopFloorState();
+    const food = simpleFood(31886, 'meatball', 'm');
+    game.inventory = [food];
+
+    await rhack('e');
+    await rhack('m');
+
+    assert.equal(game._pending_message, 'This meatball is delicious!');
+    assert.equal(game.inventory.includes(food), false);
+    assert.equal(game.u.uhunger, 905);
+    assert.equal(game.u.uconduct?.food, 1);
+    assert.equal(game.u.uconduct?.unvegan, 1);
+    assert.equal(game.u.uconduct?.unvegetarian, 1);
+    assert.equal(game._eating_turns_remaining || 0, 0);
+    assert.equal(game.context.move, 1);
 });
 
 test('carried K-ration and C-ration use C delay-one bland victual path', async () => {
@@ -10259,6 +10301,8 @@ test('expanded simple food floor pickup merges compatible paid inventory stacks'
         ['clove of garlic', 'cloves of garlic', 'g'],
         ['eucalyptus leaf', 'eucalyptus leaves', 'e'],
         ['lump of royal jelly', 'lumps of royal jelly', 'j'],
+        ['meatball', 'meatballs', 's'],
+        ['enormous meatball', 'enormous meatballs', 'n'],
         ['fortune cookie', 'fortune cookies', 'f'],
     ];
 
@@ -10450,13 +10494,33 @@ test('covered simple food pickup merge excludes remaining special food exception
     assert.equal(carriedRoyalJelly.quan, 2);
     assert.match(carriedRoyalJelly.line, /^j - 2 lumps of royal jelly/);
 
+    const carriedMeatball = simpleFood(7139, 'meatball', 's');
+    const floorMeatball = { ...simpleFood(7140, 'meatball'), letter: undefined, line: undefined };
+    game.inventory = [carriedMeatball];
+
+    const meatballMerge = shop.findPickedObjectInventoryMergeTarget(floorMeatball, 0);
+    assert.equal(meatballMerge.target, carriedMeatball);
+    shop.mergePickedObjectIntoInventory(floorMeatball, carriedMeatball);
+    assert.equal(carriedMeatball.quan, 2);
+    assert.match(carriedMeatball.line, /^s - 2 meatballs/);
+
+    const carriedEnormousMeatball = simpleFood(7141, 'enormous meatball', 'n');
+    const floorEnormousMeatball = { ...simpleFood(7142, 'enormous meatball'), letter: undefined, line: undefined };
+    game.inventory = [carriedEnormousMeatball];
+
+    const enormousMeatballMerge = shop.findPickedObjectInventoryMergeTarget(floorEnormousMeatball, 0);
+    assert.equal(enormousMeatballMerge.target, carriedEnormousMeatball);
+    shop.mergePickedObjectIntoInventory(floorEnormousMeatball, carriedEnormousMeatball);
+    assert.equal(carriedEnormousMeatball.quan, 2);
+    assert.match(carriedEnormousMeatball.line, /^n - 2 enormous meatballs/);
+
     const carriedMeatRing = {
-        ...foodRation(7137, 'm'),
+        ...foodRation(7143, 'm'),
         kind: 'meat ring',
         actualKind: 'meat ring',
         plural: 'meat rings',
     };
-    const floorMeatRing = { ...carriedMeatRing, id: 7138, letter: undefined, line: undefined };
+    const floorMeatRing = { ...carriedMeatRing, id: 7144, letter: undefined, line: undefined };
     game.inventory = [carriedMeatRing];
 
     assert.equal(shop.findPickedObjectInventoryMergeTarget(floorMeatRing, 0), null);
@@ -10488,11 +10552,16 @@ test('expanded simple food pickup full-inventory preflight allows no-charge merg
         ['clove of garlic', 'g'],
         ['eucalyptus leaf', 'e'],
         ['lump of royal jelly', 'j'],
+        ['meatball', 's'],
+        ['enormous meatball', 'n'],
         ['fortune cookie', 'f'],
     ];
 
     for (const [index, [kind, letter]] of cases.entries()) {
         const { shkp } = installCommandShopState();
+        // Keep this matrix about full inventory slots, not the 400-weight enormous meatball.
+        game.u.acurr.a[0] = 30;
+        game.u.acurr.a[4] = 30;
         const carried = { ...simpleFood(7113 + (index * 2), kind, letter), bknown: false };
         const floorObj = { ...simpleFood(7114 + (index * 2), kind), letter: undefined, line: undefined, bknown: false, no_charge: true };
         fillInventoryLetters();
@@ -10501,12 +10570,12 @@ test('expanded simple food pickup full-inventory preflight allows no-charge merg
 
         await rhack(',');
 
-        assert.equal(game.inventory.length, INVENTORY_LETTERS.length);
-        assert.equal(carried.quan, 2);
-        assert.equal(game.level.objects.includes(floorObj), false);
-        assert.doesNotMatch(game._pending_message, /knapsack cannot accommodate/);
-        assert.equal(shkp.billct, 0);
-        assert.equal(game.context.move, 1);
+        assert.equal(game.inventory.length, INVENTORY_LETTERS.length, kind);
+        assert.equal(carried.quan, 2, kind);
+        assert.equal(game.level.objects.includes(floorObj), false, kind);
+        assert.doesNotMatch(game._pending_message, /knapsack cannot accommodate/, kind);
+        assert.equal(shkp.billct, 0, kind);
+        assert.equal(game.context.move, 1, kind);
     }
 });
 
@@ -10520,6 +10589,8 @@ test('shopBaseCost returns C prices for covered simple foods', () => {
     assert.equal(shop.shopBaseCost(simpleFood(7130, 'clove of garlic')), 7);
     assert.equal(shop.shopBaseCost(simpleFood(7131, 'eucalyptus leaf')), 5);
     assert.equal(shop.shopBaseCost(simpleFood(7134, 'lump of royal jelly')), 15);
+    assert.equal(shop.shopBaseCost(simpleFood(7135, 'meatball')), 5);
+    assert.equal(shop.shopBaseCost(simpleFood(7136, 'enormous meatball')), 105);
     assert.equal(shop.shopBaseCost(simpleFood(7133, 'fortune cookie')), 7);
 });
 
@@ -10560,6 +10631,14 @@ test('simple food pickup full-inventory preflight rejects billable source into p
             (id, letter) => simpleFood(id, 'lump of royal jelly', letter),
             id => simpleFood(id, 'lump of royal jelly'),
         ],
+        [
+            (id, letter) => simpleFood(id, 'meatball', letter),
+            id => simpleFood(id, 'meatball'),
+        ],
+        [
+            (id, letter) => simpleFood(id, 'enormous meatball', letter),
+            id => simpleFood(id, 'enormous meatball'),
+        ],
     ];
 
     for (const [index, [makeCarried, makeFloor]] of cases.entries()) {
@@ -10593,6 +10672,14 @@ test('simple food pickup full-inventory preflight rejects billable source before
         [
             (id, letter) => simpleFood(id, 'lump of royal jelly', letter),
             id => simpleFood(id, 'lump of royal jelly'),
+        ],
+        [
+            (id, letter) => simpleFood(id, 'meatball', letter),
+            id => simpleFood(id, 'meatball'),
+        ],
+        [
+            (id, letter) => simpleFood(id, 'enormous meatball', letter),
+            id => simpleFood(id, 'enormous meatball'),
         ],
     ];
 

@@ -15,6 +15,8 @@ const CRAM_RATION = 145;
 const PANCAKE = 11011;
 const KELP_FROND = 172;
 const LUMP_OF_ROYAL_JELLY = 10089;
+const MEATBALL = 11012;
+const ENORMOUS_MEATBALL = 11013;
 
 function installWishState(seed = 1, { debug = true, luck = 0 } = {}) {
     const g = resetGame();
@@ -160,6 +162,8 @@ test('wished ration foods use concrete C object metadata', async () => {
         ['1 cram ration', CRAM_RATION, 'cram ration', 'cram rations', 600, 15, 35],
         ['1 kelp frond', KELP_FROND, 'kelp frond', 'kelp fronds', 30, 1, 6],
         ['1 lump of royal jelly', LUMP_OF_ROYAL_JELLY, 'lump of royal jelly', 'lumps of royal jelly', 200, 2, 15],
+        ['1 meatball', MEATBALL, 'meatball', 'meatballs', 5, 1, 5],
+        ['1 enormous meatball', ENORMOUS_MEATBALL, 'enormous meatball', 'enormous meatballs', 2000, 400, 105],
         ['1 K-ration', K_RATION, 'K-ration', 'K-rations', 400, 10, 25],
         ['1 C-ration', C_RATION, 'C-ration', 'C-rations', 300, 10, 20],
     ];
@@ -188,6 +192,8 @@ test('plural wished ration foods keep C plural metadata and weights', async () =
         ['cram rations', CRAM_RATION, 'cram ration', 'cram rations', 2, 30],
         ['kelp fronds', KELP_FROND, 'kelp frond', 'kelp fronds', 2, 2],
         ['lumps of royal jelly', LUMP_OF_ROYAL_JELLY, 'lump of royal jelly', 'lumps of royal jelly', 2, 4],
+        ['meatballs', MEATBALL, 'meatball', 'meatballs', 2, 2],
+        ['enormous meatballs', ENORMOUS_MEATBALL, 'enormous meatball', 'enormous meatballs', 2, 800],
         ['K-rations', K_RATION, 'K-ration', 'K-rations', 2, 20],
         ['C-rations', C_RATION, 'C-ration', 'C-rations', 2, 20],
     ];
@@ -215,6 +221,8 @@ test('covered food wishes tolerate C aliases and fuzzy hyphen spacing', async ()
         ['krations', K_RATION, 'K-ration', 2],
         ['C ration', C_RATION, 'C-ration', 1],
         ['crations', C_RATION, 'C-ration', 2],
+        ['huge meatball', ENORMOUS_MEATBALL, 'enormous meatball', 1],
+        ['huge chunk of meat', ENORMOUS_MEATBALL, 'enormous meatball', 1],
     ];
 
     for (const [wish, otyp, kind, quantity] of cases) {

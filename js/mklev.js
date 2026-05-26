@@ -152,6 +152,8 @@ const CLOVE_OF_GARLIC = 11008;
 const SLIME_MOLD = 11009;
 const FORTUNE_COOKIE = 11010;
 const PANCAKE = 11011;
+const MEATBALL = 11012;
+const ENORMOUS_MEATBALL = 11013;
 const LUMP_OF_ROYAL_JELLY = 10089;
 const GLOB_TYPES = new Map([
     ['gray ooze', { otyp: GLOB_OF_GRAY_OOZE, name: 'glob of gray ooze', color: CLR_GRAY }],
@@ -1564,6 +1566,8 @@ const SPECIFIC_FOOD_INFO = new Map([
     [LUMP_OF_ROYAL_JELLY, ['lump of royal jelly', 'lumps of royal jelly', CLR_YELLOW]],
     [FORTUNE_COOKIE, ['fortune cookie', 'fortune cookies', CLR_YELLOW]],
     [PANCAKE, ['pancake', 'pancakes', CLR_YELLOW]],
+    [MEATBALL, ['meatball', 'meatballs', CLR_BROWN]],
+    [ENORMOUS_MEATBALL, ['enormous meatball', 'enormous meatballs', CLR_BROWN]],
 ]);
 const VEGETARIAN_FOOD_PROBS = [
     [85, EGG],

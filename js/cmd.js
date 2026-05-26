@@ -1058,6 +1058,8 @@ const KELP_FROND = 172;
 const EUCALYPTUS_LEAF = 11000;
 const APPLE = 11001;
 const PANCAKE = 11011;
+const MEATBALL = 11012;
+const ENORMOUS_MEATBALL = 11013;
 const CRAM_RATION = 145;
 const LEMBAS_WAFER = 146;
 const K_RATION = 10035;
@@ -1145,6 +1147,8 @@ const FOOD_NUTRITION = new Map([
     ['tripe ration', 200],
     ['tripe', 200],
     ['egg', 80],
+    ['meatball', 5],
+    ['enormous meatball', 2000],
     ['kelp frond', 30],
     ['eucalyptus leaf', 1],
     ['apple', 50],
@@ -1171,12 +1175,14 @@ const FOOD_NUTRITION = new Map([
 const CARRIED_DELAYED_FOOD_VICTUALS = new Map([
     ['tripe ration', { delay: 2, finishName: 'tripe ration' }],
     ['tripe', { delay: 2, finishName: 'tripe ration' }],
+    ['enormous meatball', { otyp: ENORMOUS_MEATBALL, delay: 20, finishName: 'enormous meatball' }],
     ['pancake', { otyp: PANCAKE, delay: 2, finishName: 'pancake' }],
     ['lembas wafer', { otyp: LEMBAS_WAFER, delay: 2, finishName: 'lembas wafer' }],
     ['cram ration', { otyp: CRAM_RATION, delay: 3, finishName: 'cram ration', bland: true }],
     ['food ration', { otyp: FOOD_RATION, delay: 5, finishName: 'food ration', rationFeedback: true }],
 ]);
 const DELAY_ONE_FOOD_VICTUALS = new Map([
+    ['meatball', { otyp: MEATBALL, delay: 1, finishName: 'meatball' }],
     ['kelp frond', { otyp: KELP_FROND, delay: 1, finishName: 'kelp frond' }],
     ['eucalyptus leaf', { otyp: EUCALYPTUS_LEAF, delay: 1, finishName: 'eucalyptus leaf' }],
     ['apple', { otyp: APPLE, delay: 1, finishName: 'apple' }],
@@ -1251,7 +1257,10 @@ const WISH_BASE_OBJECTS = new Map([
     ['k-rations', { otyp: K_RATION, cls: 'food', glyph: '%', kind: 'K-ration', actualKind: 'K-ration', plural: 'K-rations', nutrition: 400 }],
     ['c-ration', { otyp: C_RATION, cls: 'food', glyph: '%', kind: 'C-ration', actualKind: 'C-ration', plural: 'C-rations', nutrition: 300 }],
     ['c-rations', { otyp: C_RATION, cls: 'food', glyph: '%', kind: 'C-ration', actualKind: 'C-ration', plural: 'C-rations', nutrition: 300 }],
-    ['enormous meatball', { otyp: FOOD_CLASS, cls: 'food', glyph: '%', kind: 'enormous meatball', actualKind: 'enormous meatball', nutrition: 2000 }],
+    ['meatball', { otyp: MEATBALL, cls: 'food', glyph: '%', kind: 'meatball', actualKind: 'meatball', singular: 'meatball', plural: 'meatballs', nutrition: 5, owt: 1 }],
+    ['meatballs', { otyp: MEATBALL, cls: 'food', glyph: '%', kind: 'meatball', actualKind: 'meatball', singular: 'meatball', plural: 'meatballs', nutrition: 5, owt: 1 }],
+    ['enormous meatball', { otyp: ENORMOUS_MEATBALL, cls: 'food', glyph: '%', kind: 'enormous meatball', actualKind: 'enormous meatball', singular: 'enormous meatball', plural: 'enormous meatballs', nutrition: 2000, owt: 400 }],
+    ['enormous meatballs', { otyp: ENORMOUS_MEATBALL, cls: 'food', glyph: '%', kind: 'enormous meatball', actualKind: 'enormous meatball', singular: 'enormous meatball', plural: 'enormous meatballs', nutrition: 2000, owt: 400 }],
     ['rock', { otyp: ROCK, cls: 'gem', glyph: '*', kind: 'rock', actualKind: 'rock', plural: 'rocks', gemDescription: 'rock' }],
     ['luckstone', { otyp: LUCKSTONE, cls: 'gem', glyph: '*', kind: 'luckstone', actualKind: 'luckstone', gemDescription: 'gray stone' }],
     ['loadstone', { otyp: LOADSTONE, cls: 'gem', glyph: '*', kind: 'loadstone', actualKind: 'loadstone', gemDescription: 'gray stone' }],
@@ -1318,7 +1327,7 @@ const WISH_BASE_NAMEDESC_BOUNDS = new Map([
     ['fortune cookie', 56], ['fortune cookies', 56],
     ['food ration', 381],
     ['k-ration', 1], ['k-rations', 1], ['c-ration', 1], ['c-rations', 1],
-    ['enormous meatball', 1], ['rock', 101], ['luckstone', 11],
+    ['meatball', 1], ['meatballs', 1], ['enormous meatball', 1], ['enormous meatballs', 1], ['rock', 101], ['luckstone', 11],
     ['loadstone', 11], ['touchstone', 9], ['flint', 11],
     ['heavy iron ball', 1001], ['large box', 41], ['chest', 36], ['ice box', 6],
     ['sack', 36], ['oilskin sack', 6], ['bag of holding', 21],
@@ -4739,6 +4748,8 @@ const OBJECT_WEIGHTS = {
     'k-ration': 10,
     'lembas wafer': 5,
     'lump of royal jelly': 2,
+    'meatball': 1,
+    'enormous meatball': 400,
     'melon': 5,
     'orange': 2,
     'pancake': 2,
@@ -4946,6 +4957,8 @@ const SHOP_OBJECT_COSTS = {
     'kelp frond': 6,
     'slime mold': 17,
     'lump of royal jelly': 15,
+    'meatball': 5,
+    'enormous meatball': 105,
     'cream pie': 10,
     'candy bar': 10,
     'fortune cookie': 7,
@@ -11025,7 +11038,7 @@ function recordFoodConduct(item) {
     if ((isCorpseItem(item) || isGlobFood(item) || /\bcorpse$/.test(kind)) && !veganCorpse) {
         conduct.unvegan = (conduct.unvegan || 0) + 1;
         conduct.unvegetarian = (conduct.unvegetarian || 0) + 1;
-    } else if (kind === 'tripe ration' || kind === 'tripe' || (item?.foodRoll || 1000) <= 140) {
+    } else if (kind === 'tripe ration' || kind === 'tripe' || kind === 'meatball' || kind === 'enormous meatball' || (item?.foodRoll || 1000) <= 140) {
         conduct.unvegan = (conduct.unvegan || 0) + 1;
         conduct.unvegetarian = (conduct.unvegetarian || 0) + 1;
     } else if (isEggItem(item) || isRoyalJelly(item)
@@ -17650,6 +17663,8 @@ const COVERED_SIMPLE_MERGEABLE_FOOD_KINDS = new Set([
     'clove of garlic',
     'eucalyptus leaf',
     'lump of royal jelly',
+    'meatball',
+    'enormous meatball',
     'cream pie',
     'fortune cookie',
     'pancake',
