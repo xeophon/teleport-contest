@@ -17647,6 +17647,7 @@ const COVERED_SIMPLE_MERGEABLE_FOOD_KINDS = new Set([
     'clove of garlic',
     'eucalyptus leaf',
     'cream pie',
+    'fortune cookie',
     'pancake',
     'lembas wafer',
     'cram ration',
@@ -19211,6 +19212,7 @@ function findFloorPickupInventoryMergeTargetForPreflight(source, sourcePrice = n
     const shkp = x == null || y == null ? null : shopkeeperForCostlySpot(x, y);
     const price = sourcePrice != null ? Number(sourcePrice) : shopItemPrice(source, x, y);
     const sourceWillBeUnpaid = Number.isFinite(price) && price > 0 && shopkeeperInHisShop(shkp);
+    if (sourceWillBeUnpaid) return null;
     const billing = { shkp, price, sourceWillBeUnpaid };
     for (const target of game.inventory || []) {
         if (!pickedObjectInventoryMergeCompatible(target, source, sourceWillBeUnpaid, shkp)) continue;
