@@ -15003,6 +15003,103 @@ function resolvePayShopkeeperFromScan(scan) {
     return { selected: null, resident: scan.resident, needsPayWhomPrompt: true, message: 'Pay whom?' };
 }
 
+function payTargetCanSee(x, y) {
+    if (game.u?.blind) return false;
+    if (!game.viz_array) return true;
+    return cansee(x, y) || !!(game.viz_array?.[y]?.[x] & IN_SIGHT);
+}
+
+function payCanSpotMonster(mon) {
+    if (!mon || mon.dead || (mon.mhp != null && mon.mhp <= 0)) return false;
+    if (mon.mundetected || (mon.minvis && !game.u?.seeInvisible)) return false;
+    return payTargetCanSee(mon.mx, mon.my);
+}
+
+function payMonsterDisplayName(mon) {
+    if (!mon) return 'Someone';
+    if (mon.isshk) return shopkeeperDisplayName(mon);
+    if (mon.givenName) return mon.givenName;
+    const name = mon.data?.name || mon.name || 'monster';
+    return `The ${name}`;
+}
+
+function monsterAtPayTarget(x, y) {
+    return (game.level?.monsters || []).find(mon =>
+        mon.mx === x && mon.my === y
+        && !mon.dead && (mon.mhp == null || mon.mhp > 0)) || null;
+}
+
+function validatePayWhomTarget(x, y, resident) {
+    if (x === (game.u?.ux || 0) && y === (game.u?.uy || 0))
+        return { shkp: null, message: 'You are generous to yourself.' };
+
+    const mon = monsterAtPayTarget(x, y);
+    if (!payTargetCanSee(x, y) && (!mon || !payCanSpotMonster(mon)))
+        return { shkp: null, message: `You can't ${game.u?.blind ? 'sense' : 'see'} anyone there.` };
+
+    if (!mon)
+        return { shkp: null, message: 'There is no one there to receive your payment.' };
+
+    if (!mon.isshk)
+        return { shkp: null, message: `${payMonsterDisplayName(mon)} is not interested in your payment.` };
+
+    if (!sameShopkeeper(mon, resident) && !shopkeeperNextToHero(mon))
+        return { shkp: null, message: `${shopkeeperDisplayName(mon)} is too far to receive your payment.` };
+
+    return { shkp: mon, message: '' };
+}
+
+function payWhomTargetDescription(x, y) {
+    if (x === (game.u?.ux || 0) && y === (game.u?.uy || 0)) return heroFarlookDescription();
+    const mon = monsterAtPayTarget(x, y);
+    if (mon && payCanSpotMonster(mon)) return farlookMonsterDescription(mon);
+    if (!payTargetCanSee(x, y)) return 'unexplored area';
+    const loc = game.level?.at(x, y);
+    if (loc?.typ === DOOR) return doorDescription(loc);
+    if (loc?.typ === CORR) return 'corridor';
+    if (loc?.typ === ROOM || loc?.typ === STAIRS) return 'floor of a room';
+    if (loc?.typ === MOAT) return 'moat';
+    if (loc?.typ === TREE) return 'tree';
+    if (loc?.typ && loc.typ < DOOR) return 'wall';
+    return 'unexplored area';
+}
+
+function visiblePayWhomMonsters() {
+    return (game.level?.monsters || [])
+        .filter(payCanSpotMonster)
+        .sort((a, b) => (a.my - b.my) || (a.mx - b.mx));
+}
+
+function cyclePayWhomMonsterCursor(reverse = false) {
+    const monsters = visiblePayWhomMonsters();
+    if (!monsters.length) return null;
+    const currentX = game._farlook_x || game.u?.ux || 0;
+    const currentY = game._farlook_y || game.u?.uy || 0;
+    let index = monsters.findIndex(mon => mon.mx === currentX && mon.my === currentY);
+    if (index < 0) {
+        index = reverse ? monsters.length : -1;
+    }
+    const mon = monsters[(index + (reverse ? -1 : 1) + monsters.length) % monsters.length];
+    game._farlook_x = mon.mx;
+    game._farlook_y = mon.my;
+    game._cursor_override = [mon.mx - 1, mon.my + 1];
+    return mon;
+}
+
+async function startPayWhomCursor(resident) {
+    game._pay_whom_resident = resident || null;
+    game._farlook_x = game.u?.ux || 0;
+    game._farlook_y = game.u?.uy || 0;
+    game._cursor_override = [(game._farlook_x || 1) - 1, (game._farlook_y || 0) + 1];
+    game._command_mode = 'payWhomCursor';
+    await setMessage('Pay whom?');
+}
+
+function clearPayWhomCursor() {
+    game._pay_whom_resident = null;
+    game._cursor_override = null;
+}
+
 function shopkeeperForCostlySpot(x, y) {
     const shkp = shopkeeperForShopRoom(x, y);
     if (!shkp) return null;
@@ -24167,6 +24264,46 @@ function finishRobbedOnlyShopPayment(shkp, { resident = null } = {}) {
     };
 }
 
+async function finishPayCommandForShopkeeper(shkp, resident) {
+    game._pay_prepaid_message = '';
+    game._pay_prepaid_paid = false;
+    const debitPayment = finishShopDebitPayment(shkp);
+    if (debitPayment.blocked) {
+        game._command_mode = null;
+        await setMessage(debitPayment.message || "You don't have enough gold.");
+        game.context.move = 1;
+        return;
+    }
+    const entries = collectPayableShopDebts(shkp);
+    if (!debitPayment.paid && hasRobbedOnlyShopPayment(shkp, entries)) {
+        const payment = finishRobbedOnlyShopPayment(shkp, { resident });
+        game._command_mode = null;
+        await setMessage(payment.message || "You don't have enough gold.");
+        game.context.move = 1;
+        return;
+    }
+    if (!entries.length) {
+        await setMessage(debitPayment.message || `You do not owe ${shkp.shknam || 'the shopkeeper'} anything.`);
+        if (debitPayment.paid) game.context.move = 1;
+        return;
+    }
+    const preMenuBlockMessage = shopPaymentPreMenuBlockMessage(shkp, entries, { paidBefore: debitPayment.paid });
+    if (preMenuBlockMessage) {
+        await setMessage([debitPayment.message, preMenuBlockMessage].filter(Boolean).join('  '));
+        if (debitPayment.paid) game.context.move = 1;
+        return;
+    }
+    const width = String(Math.max(...entries.map(entry => entry.price))).length;
+    const rows = shopPaymentMenuRows(entries, width);
+    game._pay_menu_items = entries;
+    game._pay_menu_width = width;
+    game._pay_shopkeeper = shkp;
+    game._pay_prepaid_message = debitPayment.message || '';
+    game._pay_prepaid_paid = !!debitPayment.paid;
+    setOverlay(rows, Math.max(...rows.map(([row]) => row)) + 1, false, 41);
+    game._command_mode = 'payMenu';
+}
+
 function pickupMenuEntries(objects) {
     return objects.map((obj, index) => {
         let section = 'Other Items';
@@ -30770,6 +30907,67 @@ export async function rhack(_cmd) {
         clearContainerSequenceState();
         game._command_mode = null;
         game.context.move = 0;
+        return;
+    }
+
+    if (game._command_mode === 'payWhomCursor') {
+        if (ch === '\x1b') {
+            game._pending_message = '';
+            game._message_more = 0;
+            game._command_mode = null;
+            clearPayWhomCursor();
+            return;
+        }
+        if (ch === '@') {
+            game._farlook_x = game.u?.ux || 0;
+            game._farlook_y = game.u?.uy || 0;
+            game._cursor_override = [(game._farlook_x || 1) - 1, (game._farlook_y || 0) + 1];
+            await setMessage(payWhomTargetDescription(game._farlook_x, game._farlook_y));
+            return;
+        }
+        if (ch === 'm' || ch === 'M') {
+            const mon = cyclePayWhomMonsterCursor(ch === 'M');
+            if (!mon) {
+                await setMessage("Can't find monster.");
+                return;
+            }
+            await setMessage(payWhomTargetDescription(mon.mx, mon.my));
+            return;
+        }
+        const pickTarget = ch === '.' || ch === ',' || ch === ';' || ch === ':'
+            || ch === ' ' || ch === '\r' || ch === '\n';
+        if (pickTarget) {
+            const targetX = game._farlook_x || game.u?.ux || 0;
+            const targetY = game._farlook_y || game.u?.uy || 0;
+            const resident = game._pay_whom_resident || null;
+            const target = validatePayWhomTarget(targetX, targetY, resident);
+            game._pending_message = '';
+            game._message_more = 0;
+            game._command_mode = null;
+            clearPayWhomCursor();
+            if (!target.shkp) {
+                await setMessage(target.message || 'There is no one there to receive your payment.');
+                return;
+            }
+            await finishPayCommandForShopkeeper(target.shkp, resident);
+            return;
+        }
+        const dir = movementDirection(ch);
+        if (dir) {
+            const steps = ch !== ch.toLowerCase() ? 8 : 1;
+            const cursor = truncateCursorToMap(
+                game._farlook_x || game.u?.ux || 0,
+                game._farlook_y || game.u?.uy || 0,
+                dir.dx * steps,
+                dir.dy * steps,
+            );
+            game._farlook_x = cursor.x;
+            game._farlook_y = cursor.y;
+            game._cursor_override = [cursor.x - 1, cursor.y + 1];
+            await setMessage(payWhomTargetDescription(cursor.x, cursor.y));
+            return;
+        }
+        game._keep_pending_message = 1;
         return;
     }
 
@@ -44904,50 +45102,15 @@ export async function rhack(_cmd) {
 
     if (ch === 'p') {
         const target = resolvePayShopkeeperFromScan(scanPayShopkeepers());
+        if (target.needsPayWhomPrompt) {
+            await startPayWhomCursor(target.resident);
+            return;
+        }
         if (!target.selected) {
             await setMessage(target.message || 'There appears to be no shopkeeper here to receive your payment.');
             return;
         }
-        const shkp = target.selected;
-        const resident = target.resident;
-
-        game._pay_prepaid_message = '';
-        game._pay_prepaid_paid = false;
-        const debitPayment = finishShopDebitPayment(shkp);
-        if (debitPayment.blocked) {
-            game._command_mode = null;
-            await setMessage(debitPayment.message || "You don't have enough gold.");
-            game.context.move = 1;
-            return;
-        }
-        const entries = collectPayableShopDebts(shkp);
-        if (!debitPayment.paid && hasRobbedOnlyShopPayment(shkp, entries)) {
-            const payment = finishRobbedOnlyShopPayment(shkp, { resident });
-            game._command_mode = null;
-            await setMessage(payment.message || "You don't have enough gold.");
-            game.context.move = 1;
-            return;
-        }
-        if (!entries.length) {
-            await setMessage(debitPayment.message || `You do not owe ${shkp.shknam || 'the shopkeeper'} anything.`);
-            if (debitPayment.paid) game.context.move = 1;
-            return;
-        }
-        const preMenuBlockMessage = shopPaymentPreMenuBlockMessage(shkp, entries, { paidBefore: debitPayment.paid });
-        if (preMenuBlockMessage) {
-            await setMessage([debitPayment.message, preMenuBlockMessage].filter(Boolean).join('  '));
-            if (debitPayment.paid) game.context.move = 1;
-            return;
-        }
-        const width = String(Math.max(...entries.map(entry => entry.price))).length;
-        const rows = shopPaymentMenuRows(entries, width);
-        game._pay_menu_items = entries;
-        game._pay_menu_width = width;
-        game._pay_shopkeeper = shkp;
-        game._pay_prepaid_message = debitPayment.message || '';
-        game._pay_prepaid_paid = !!debitPayment.paid;
-        setOverlay(rows, Math.max(...rows.map(([row]) => row)) + 1, false, 41);
-        game._command_mode = 'payMenu';
+        await finishPayCommandForShopkeeper(target.selected, target.resident);
         return;
     }
 

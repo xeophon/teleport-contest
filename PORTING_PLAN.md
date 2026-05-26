@@ -75,7 +75,7 @@ Detailed source-backed history is kept in `docs/c-parity-audit/`. Current comple
 
 Continue the shop ledger migration:
 
-1. Finish the remaining C `dopay()` gaps after the scanner slice: full `Pay whom?` target cursor validation, self/empty/non-shopkeeper/distant messages, angry-not-robbed 1000-gold appeasement, and remaining traditional itemized prompt edge cases.
+1. Finish the remaining C `dopay()` gaps after the scanner and `Pay whom?` prompt-validation slices: angry-not-robbed 1000-gold appeasement, remaining traditional itemized prompt edge cases, and any follow-up polish for `getpos()` monster/object cycling beyond the covered cursor movement, cancel, and target validation paths.
 2. Continue magic-bag work through remaining source/target ordering, loss valuation, and shared `obfree()`/`stolen_value()` debt naming after the paid-container put-in, shop-floor nested tip, carried apply turn-cost/message, and stale take-out/tip billing slices.
 3. Broaden merge parity beyond the completed ordinary food-ration pickup path: keep the ration predicate limited to exact ration identity, C object-name compatibility, BUC/state checks, age averaging, no-charge normalization, and same-shop/unit-price proof for unpaid stacks; add corpses, tins, eggs, globs, and broader `oc_merge` metadata only when their C fields and timers are modeled.
 4. Finish remaining `sellobj()` follow-ups: complete recursive `subfrombill()` integration, less ordinary projectile ownership branches, and shared-helper integration for less ordinary object transfers.
