@@ -291,7 +291,15 @@ function foodRationStack(id, quan, letter = 'a') {
 
 function simpleFood(id, kind, letter = 'f', extra = {}) {
     const pluralByKind = {
+        apple: 'apples',
+        orange: 'oranges',
+        pear: 'pears',
+        melon: 'melons',
+        banana: 'bananas',
+        carrot: 'carrots',
         'lembas wafer': 'lembas wafers',
+        'K-ration': 'K-rations',
+        'C-ration': 'C-rations',
         pancake: 'pancakes',
         'cream pie': 'cream pies',
         'cram ration': 'cram rations',
@@ -8808,6 +8816,38 @@ test('covered simple food floor pickup merges compatible paid inventory stacks',
     assert.equal(game.context.move, 1);
 });
 
+test('expanded simple food floor pickup merges compatible paid inventory stacks', async () => {
+    const cases = [
+        ['cream pie', 'cream pies', 'p'],
+        ['K-ration', 'K-rations', 'k'],
+        ['C-ration', 'C-rations', 'c'],
+        ['apple', 'apples', 'a'],
+        ['orange', 'oranges', 'o'],
+        ['pear', 'pears', 'r'],
+        ['melon', 'melons', 'm'],
+        ['banana', 'bananas', 'b'],
+        ['carrot', 'carrots', 't'],
+    ];
+
+    for (const [index, [kind, plural, letter]] of cases.entries()) {
+        installNonShopFloorState();
+        const carried = { ...simpleFood(7060 + (index * 2), kind, letter), bknown: false };
+        const floorObj = { ...simpleFood(7061 + (index * 2), kind), letter: undefined, line: undefined, bknown: false };
+        game.inventory = [carried];
+        game.level.objects = [floorObj];
+
+        await rhack(',');
+
+        assert.equal(game.inventory.length, 1);
+        assert.equal(game.inventory[0], carried);
+        assert.equal(carried.quan, 2);
+        assert.match(carried.line, new RegExp(`^${letter} - 2 ${plural}`));
+        assert.equal(game.level.objects.includes(floorObj), false);
+        assert.match(game._pending_message, new RegExp(`${letter} - .*${kind} \\(2 in total\\)`, 'i'));
+        assert.equal(game.context.move, 1);
+    }
+});
+
 test('food-ration pickup merge rejects actual BUC mismatches even when unknown', () => {
     installShopState();
     const carried = foodRation(7061, 'a');
@@ -8889,10 +8929,67 @@ test('food-ration shop pickup merge rejects paid targets and combines same-shop 
     assert.equal(shkp.billct, 1);
 });
 
+test('cream pie shop pickup merge rejects paid targets and combines same-shop unpaid bills', () => {
+    const { shkp } = installShopState();
+    const paidStack = creamPie(7101, 'p');
+    const billableSource = { ...creamPie(7102), letter: undefined, line: undefined };
+    game.inventory = [paidStack];
+
+    assert.equal(shop.findPickedObjectInventoryMergeTarget(billableSource, 10), null);
+    assert.equal(shkp.billct, 0);
+
+    const unpaidStack = creamPie(7103, 'q');
+    shop.addObjectToShopBill(shkp, unpaidStack, 10);
+    game.inventory = [unpaidStack];
+    const merge = shop.findPickedObjectInventoryMergeTarget(billableSource, 10);
+    assert.equal(merge.target, unpaidStack);
+    shop.mergePickedObjectIntoInventory(billableSource, unpaidStack);
+
+    assert.equal(unpaidStack.quan, 2);
+    assert.equal(unpaidStack.unpaidPrice, 20);
+    assert.equal(shop.shopBillEntryTotal(merge.billMerge.billEntry), 20);
+    assert.match(unpaidStack.line, /unpaid, 20 zorkmids/);
+    assert.equal(shkp.billct, 1);
+});
+
+test('K-ration and C-ration pickup merge only with exact ration kind', () => {
+    installShopState();
+    const carriedK = simpleFood(7111, 'K-ration', 'k');
+    const floorC = { ...simpleFood(7112, 'C-ration'), letter: undefined, line: undefined };
+    game.inventory = [carriedK];
+
+    assert.equal(shop.findPickedObjectInventoryMergeTarget(floorC, 0), null);
+
+    const floorK = { ...simpleFood(7113, 'K-ration'), letter: undefined, line: undefined };
+    const merge = shop.findPickedObjectInventoryMergeTarget(floorK, 0);
+    assert.equal(merge.target, carriedK);
+    shop.mergePickedObjectIntoInventory(floorK, carriedK);
+
+    assert.equal(carriedK.quan, 2);
+    assert.match(carriedK.line, /^k - 2 K-rations/);
+});
+
+test('fruit pickup merge accepts same fruit and rejects different fruit', () => {
+    installShopState();
+    const carriedApple = simpleFood(7121, 'apple', 'a');
+    const floorOrange = { ...simpleFood(7122, 'orange'), letter: undefined, line: undefined };
+    game.inventory = [carriedApple];
+
+    assert.equal(shop.findPickedObjectInventoryMergeTarget(floorOrange, 0), null);
+
+    const floorApple = { ...simpleFood(7123, 'apple'), letter: undefined, line: undefined };
+    const merge = shop.findPickedObjectInventoryMergeTarget(floorApple, 0);
+    assert.equal(merge.target, carriedApple);
+    shop.mergePickedObjectIntoInventory(floorApple, carriedApple);
+
+    assert.equal(carriedApple.quan, 2);
+    assert.match(carriedApple.line, /^a - 2 apples/);
+});
+
 test('covered simple food pickup merge excludes not-yet-modeled food exceptions', () => {
     installShopState();
-    const carriedPancake = simpleFood(7101, 'pancake', 'p');
-    const floorPancake = { ...simpleFood(7102, 'pancake'), letter: undefined, line: undefined };
+    const carriedPancake = simpleFood(7131, 'pancake', 'p');
+    const floorPancake = { ...simpleFood(7132, 'pancake'), letter: undefined, line: undefined };
     game.inventory = [carriedPancake];
 
     const pancakeMerge = shop.findPickedObjectInventoryMergeTarget(floorPancake, 0);
@@ -8900,19 +8997,19 @@ test('covered simple food pickup merge excludes not-yet-modeled food exceptions'
     shop.mergePickedObjectIntoInventory(floorPancake, carriedPancake);
     assert.equal(carriedPancake.quan, 2);
 
-    const carriedPie = creamPie(7105, 'p');
-    const floorPie = { ...creamPie(7106), letter: undefined, line: undefined };
-    game.inventory = [carriedPie];
+    const carriedCookie = simpleFood(7133, 'fortune cookie', 'f');
+    const floorCookie = { ...simpleFood(7134, 'fortune cookie'), letter: undefined, line: undefined };
+    game.inventory = [carriedCookie];
 
-    assert.equal(shop.findPickedObjectInventoryMergeTarget(floorPie, 0), null);
+    assert.equal(shop.findPickedObjectInventoryMergeTarget(floorCookie, 0), null);
 
     const carriedMeatRing = {
-        ...foodRation(7103, 'm'),
+        ...foodRation(7135, 'm'),
         kind: 'meat ring',
         actualKind: 'meat ring',
         plural: 'meat rings',
     };
-    const floorMeatRing = { ...carriedMeatRing, id: 7104, letter: undefined, line: undefined };
+    const floorMeatRing = { ...carriedMeatRing, id: 7136, letter: undefined, line: undefined };
     game.inventory = [carriedMeatRing];
 
     assert.equal(shop.findPickedObjectInventoryMergeTarget(floorMeatRing, 0), null);
@@ -8936,10 +9033,10 @@ test('food-ration pickup full-inventory preflight allows no-charge merge', async
     assert.equal(game.context.move, 1);
 });
 
-test('covered simple food pickup full-inventory preflight allows no-charge merge', async () => {
+test('covered simple food pickup full-inventory preflight allows no-charge K-ration merge', async () => {
     const { shkp } = installCommandShopState();
-    const carried = { ...simpleFood(7113, 'lembas wafer', 'l'), bknown: false };
-    const floorObj = { ...simpleFood(7114, 'lembas wafer'), letter: undefined, line: undefined, bknown: false, no_charge: true };
+    const carried = { ...simpleFood(7113, 'K-ration', 'k'), bknown: false };
+    const floorObj = { ...simpleFood(7114, 'K-ration'), letter: undefined, line: undefined, bknown: false, no_charge: true };
     fillInventoryLetters();
     game.inventory[0] = carried;
     game.level.objects = [floorObj];
@@ -8952,6 +9049,11 @@ test('covered simple food pickup full-inventory preflight allows no-charge merge
     assert.doesNotMatch(game._pending_message, /knapsack cannot accommodate/);
     assert.equal(shkp.billct, 0);
     assert.equal(game.context.move, 1);
+});
+
+test('shopBaseCost returns C prices for K-ration and C-ration', () => {
+    assert.equal(shop.shopBaseCost(simpleFood(7125, 'K-ration')), 25);
+    assert.equal(shop.shopBaseCost(simpleFood(7126, 'C-ration')), 20);
 });
 
 test('food-ration pickup full-inventory preflight rejects BUC mismatch', async () => {
