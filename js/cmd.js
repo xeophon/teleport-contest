@@ -1328,6 +1328,8 @@ const WISH_BASE_OBJECTS = new Map([
 const WIZARD_ONLY_WISH_NAMEDESC_BOUNDS = new Map([
     ['bell of opening', 1],
     ['book of the dead', 1],
+    ['papyrus', 1],
+    ['candelabrum', 1],
     ['candelabrum of invocation', 1],
 ]);
 const WISH_BASE_NAMEDESC_BOUNDS = new Map([
@@ -9716,6 +9718,10 @@ function wishRetryPrompt() {
         : 'For what do you wish?';
 }
 
+function isExplicitNoWishText(text) {
+    return /^(?:nothing|nil|none)$/i.test(String(text || '').trim().replace(/\s+/g, ' '));
+}
+
 async function handleNoFittingWish() {
     const tries = Math.max(0, Math.trunc(Number(game._wish_tries || 0))) + 1;
     game._wish_text = '';
@@ -12790,11 +12796,11 @@ function makeOilLampFromMagicLampWishObject() {
 
 function makeWizardSpecialWishObject(lowerName) {
     if (!game.flags?.debug) return null;
-    if (lowerName === 'candelabrum of invocation') {
+    if (lowerName === 'candelabrum' || lowerName === 'candelabrum of invocation') {
         rn2(WIZARD_ONLY_WISH_NAMEDESC_BOUNDS.get(lowerName));
         return makeCandelabrumOfInvocationWishObject();
     }
-    if (lowerName === 'book of the dead') {
+    if (lowerName === 'papyrus' || lowerName === 'book of the dead') {
         rn2(WIZARD_ONLY_WISH_NAMEDESC_BOUNDS.get(lowerName));
         return makeBookOfTheDeadWishObject();
     }
@@ -12806,7 +12812,7 @@ function substituteNonWizardSpecialWish(lowerName) {
     if (/\bamulet of yendor\b/.test(lowerName)) {
         return makeFakeAmuletOfYendorWishObject();
     }
-    if (lowerName === 'candelabrum of invocation') {
+    if (lowerName === 'candelabrum' || lowerName === 'candelabrum of invocation') {
         rn2(WIZARD_ONLY_WISH_NAMEDESC_BOUNDS.get(lowerName));
         return makeCandleFromCandelabrumWishObject();
     }
@@ -12814,7 +12820,7 @@ function substituteNonWizardSpecialWish(lowerName) {
         rn2(WIZARD_ONLY_WISH_NAMEDESC_BOUNDS.get(lowerName));
         return makeOrdinaryBellWishObject();
     }
-    if (lowerName === 'book of the dead') {
+    if (lowerName === 'papyrus' || lowerName === 'book of the dead') {
         rn2(WIZARD_ONLY_WISH_NAMEDESC_BOUNDS.get(lowerName));
         return makeBlankSpellbookWishObject();
     }
@@ -41093,8 +41099,13 @@ export async function rhack(_cmd) {
             const wish = wishText.toLowerCase();
             game._wish_text = '';
             game._command_mode = null;
+            if (isExplicitNoWishText(wishText)) {
+                game._wish_tries = 0;
+                await setWishResultMessage('');
+                return;
+            }
             if (!wish) {
-                await setWishResultMessage('Nothing fitting that wish appears.');
+                await handleNoFittingWish();
                 return;
             }
             let wishedName = wishText;
@@ -41306,8 +41317,8 @@ export async function rhack(_cmd) {
                 await handleNoFittingWish();
                 return;
             }
-            if (lowerName === 'nothing' || lowerName === 'nil' || lowerName === 'none') {
-                await setWishResultMessage('Nothing fitting that wish appears.');
+            if (isExplicitNoWishText(lowerName)) {
+                await handleNoFittingWish();
                 return;
             }
             if (/^(?:gold(?: pieces?)?|coins?|zorkmids?|money|\$)$/.test(lowerName)) {
@@ -41337,6 +41348,7 @@ export async function rhack(_cmd) {
                 return;
             }
             if (item._wish_disappeared) {
+                if (item._artifact_wish_name || item.artifact) addConductCount('wisharti');
                 await setWishResultMessage(item._wish_disappear_message);
                 return;
             }

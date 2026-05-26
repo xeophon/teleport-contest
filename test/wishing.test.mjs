@@ -9,6 +9,10 @@ import { mksobj } from '../js/mklev.js';
 
 const BELL = 358;
 const TOOL_CLASS = 12;
+const TALLOW_CANDLE = 370;
+const WAX_CANDLE = 371;
+const CANDELABRUM_OF_INVOCATION = 10076;
+const BOOK_OF_THE_DEAD = 10097;
 const HORN_OF_PLENTY = 957;
 const CRYSTAL_BALL = 10088;
 const EXPENSIVE_CAMERA = 10082;
@@ -103,6 +107,49 @@ test('five unrecognized wishes fall back to a random object', async () => {
     assert.match(game._pending_message, /Nothing fitting that description exists in the game\./);
     assert.match(game._pending_message, /That's enough tries!/);
     assert.doesNotMatch(game.inventory[0].kind || game.inventory[0].actualKind || '', /flibbertigibbet/);
+});
+
+test('explicit nothing wishes decline without consuming wish conduct', async () => {
+    for (const wish of ['nothing', 'nil', 'none']) {
+        installWishState();
+        await beginWizardWish();
+        await submitWish(wish);
+
+        assert.equal(game._command_mode, null, wish);
+        assert.equal(game.inventory.length, 0, wish);
+        assert.equal(game._wish_tries, 0, wish);
+        assert.equal(game.u.uconduct?.wishes || 0, 0, wish);
+        assert.equal(game.u.uconduct?.wisharti || 0, 0, wish);
+        assert.doesNotMatch(game._pending_message || '', /Nothing fitting/, wish);
+    }
+});
+
+test('qualified nothing wishes retry as bad descriptions', async () => {
+    for (const wish of ['blessed nothing', 'a nothing', 'nothing (0)']) {
+        installWishState();
+        await beginWizardWish();
+        await submitWish(wish);
+
+        assert.equal(game._command_mode, 'wizardWish', wish);
+        assert.equal(game.inventory.length, 0, wish);
+        assert.equal(game._wish_tries, 1, wish);
+        assert.equal(game.u.uconduct?.wishes || 0, 0, wish);
+        assert.match(game._pending_message, /Nothing fitting that description exists in the game\./, wish);
+        assert.match(game._pending_message, /For what do you wish\?/, wish);
+    }
+});
+
+test('wand of nothing remains an object wish', async () => {
+    installWishState();
+    await beginWizardWish();
+    await submitWish('wand of nothing');
+
+    const item = game.inventory[0];
+    assert.equal(game._command_mode, null);
+    assert.equal(game.inventory.length, 1);
+    assert.equal(item.cls, 'wand');
+    assert.equal(item.kind, 'nothing');
+    assert.equal(game.u.uconduct?.wishes, 1);
 });
 
 test('recognized wishes still create the requested object', async () => {
@@ -745,6 +792,67 @@ test('wizard wishes create real unique invocation candelabrum and book objects',
     assert.equal(game.inventory[0].unique, true);
     assert.equal(game.inventory[0].cls, 'spellbook');
     assert.equal(game.u.uconduct?.wisharti || 0, 0);
+});
+
+test('wizard description wishes create real unique candelabrum and book objects', async () => {
+    installWishState();
+    beginWishDirectly();
+    await submitWish('candelabrum');
+
+    assert.equal(game.inventory[0].otyp, CANDELABRUM_OF_INVOCATION);
+    assert.equal(game.inventory[0].actualKind, 'Candelabrum of Invocation');
+    assert.equal(game.inventory[0].unique, true);
+    assert.equal(game.inventory[0].cls, 'tool');
+
+    installWishState();
+    beginWishDirectly();
+    await submitWish('papyrus');
+
+    assert.equal(game.inventory[0].otyp, BOOK_OF_THE_DEAD);
+    assert.equal(game.inventory[0].actualKind, 'Book of the Dead');
+    assert.equal(game.inventory[0].unique, true);
+    assert.equal(game.inventory[0].cls, 'spellbook');
+    assert.equal(game.u.uconduct?.wisharti || 0, 0);
+});
+
+test('non-wizard unique description wishes use C substitutions', async () => {
+    installWishState(7, { debug: false });
+    beginWishDirectly();
+    await submitWish('candelabrum');
+
+    const candle = game.inventory[0];
+    assert.equal(game._command_mode, null);
+    assert.ok([TALLOW_CANDLE, WAX_CANDLE].includes(candle.otyp));
+    assert.equal(candle.cls, 'tool');
+    assert.match(candle.kind, /candle/);
+    assert.notEqual(candle.actualKind, 'Candelabrum of Invocation');
+    assert.equal(game.u.uconduct?.wishes, 1);
+
+    installWishState(7, { debug: false });
+    beginWishDirectly();
+    await submitWish('papyrus');
+
+    const book = game.inventory[0];
+    assert.equal(game._command_mode, null);
+    assert.equal(book.cls, 'spellbook');
+    assert.equal(book.kind, 'spellbook of blank paper');
+    assert.notEqual(book.actualKind, 'Book of the Dead');
+    assert.equal(game.u.uconduct?.wishes, 1);
+    assert.equal(game.u.uconduct?.wisharti || 0, 0);
+});
+
+test('denied quest artifact wish records artifact conduct without ordinary wish conduct', async () => {
+    installWishState(5, { debug: false });
+    game._startup_role = 'Wizard';
+    beginWishDirectly();
+    await submitWish('The Eye of the Aethiopica');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.inventory.length, 0);
+    assert.match(game._pending_message, /For a moment, you feel something in your hands, but it disappears!/);
+    assert.equal(game.u.uconduct?.wisharti, 1);
+    assert.equal(game.u.uconduct?.wishes || 0, 0);
+    assert.equal(game.u.ublesscnt, 0);
 });
 
 test('wished object finalization recomputes stack weight', async () => {
