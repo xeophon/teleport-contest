@@ -21349,11 +21349,14 @@ function billShopFloorContainerPutObject(container, putItem, options = {}) {
     if (returnUnpaidObjectToShopBillOwnerAt(putItem, x, y))
         return { shkp, returned: true, noCharge: false };
     if (!putItem.unpaid) {
+        const hadContainedUnpaid = globContents(putItem).length && shopObjectOrContentsUnpaid(putItem);
         if (options.acceptedSale) {
             markAcceptedShopContainerSaleState(putItem, options.shkp || shkp);
+            if (hadContainedUnpaid) subFromShopBill(putItem, options.shkp || shkp);
             return { shkp, returned: false, noCharge: false, acceptedSale: true };
         }
         markNoChargeRecursively(putItem);
+        if (hadContainedUnpaid) subFromShopBill(putItem, options.shkp || shkp);
         return { shkp, returned: false, noCharge: true };
     }
     return { shkp, returned: false, noCharge: false };

@@ -7249,6 +7249,85 @@ test('declining sale before shop-floor magic bag explosion leaves only the destr
     assert.equal(game._usedUpShopBills.some(entry => String(entry.bo_id) === String(source.id)), true);
 });
 
+test('accepting sale of paid container with unpaid trigger contents clears contents before shop-floor magic bag explosion', () => {
+    const { shkp } = installShopState();
+    const source = bagOfHolding(69418);
+    const outer = sack(69419, 's');
+    const wand = putObjectInContainer(outer, cancellationWand(69420));
+    source.ox = 5;
+    source.oy = 5;
+    shop.addObjectToShopBill(shkp, wand, 45);
+    game.u.uhp = 100;
+    game._goldCount = 5;
+    game.inventory = [outer];
+    game.level.objects = [source];
+    const expectedBagPrice = shop.shopItemPrice(source, 5, 5);
+    const expectedOffer = shop.shopSaleOffer(outer, shkp);
+    const cashBefore = shop.shopkeeperCash(shkp);
+
+    const prompt = shop.putInventoryObjectIntoContainer(source, outer);
+    assert.equal(prompt.pendingSale.prompt, true);
+    const result = shop.finishShopFloorContainerPutSale(prompt.pendingSale, true);
+
+    assert.equal(result.moved, true);
+    assert.equal(result.bagGone, true);
+    assert.match(result.messages.join(' '), /You sell/);
+    assert.match(result.messages.join(' '), /magical explosion/);
+    assert.equal(game.inventory.includes(outer), false);
+    assert.equal(game.level.objects.includes(source), false);
+    assert.equal(shop.shopBillEntryForObject(shkp, outer), null);
+    assert.equal(shop.shopBillEntryForObject(shkp, wand), null);
+    assert.notEqual(wand.unpaid, true);
+    assert.equal(game._goldCount, 5 + expectedOffer);
+    assert.equal(shop.shopkeeperCash(shkp), cashBefore - expectedOffer);
+    assert.equal(shkp.debit || 0, 0);
+    assert.equal(shkp.robbed || 0, 0);
+    assert.equal(shkp.billct, 1);
+    const bagEntry = shop.shopBillEntryForObject(shkp, source);
+    assert.ok(bagEntry);
+    assert.equal(bagEntry.useup, true);
+    assert.equal(shop.shopBillEntryTotal(bagEntry), expectedBagPrice);
+    assert.equal(game._usedUpShopBills.some(entry => String(entry.bo_id) === String(source.id)), true);
+    assert.equal(game._usedUpShopBills.some(entry => String(entry.bo_id) === String(wand.id)), false);
+});
+
+test('declining sale of paid container with unpaid trigger contents clears contents before shop-floor magic bag explosion', () => {
+    const { shkp } = installShopState();
+    const source = bagOfHolding(69421);
+    const outer = sack(69422, 's');
+    const wand = putObjectInContainer(outer, cancellationWand(69423));
+    source.ox = 5;
+    source.oy = 5;
+    shop.addObjectToShopBill(shkp, wand, 45);
+    game.u.uhp = 100;
+    game._goldCount = 5;
+    game.inventory = [outer];
+    game.level.objects = [source];
+    const expectedBagPrice = shop.shopItemPrice(source, 5, 5);
+
+    const prompt = shop.putInventoryObjectIntoContainer(source, outer);
+    assert.equal(prompt.pendingSale.prompt, true);
+    const result = shop.finishShopFloorContainerPutSale(prompt.pendingSale, false);
+
+    assert.equal(result.moved, true);
+    assert.equal(result.bagGone, true);
+    assert.match(result.messages.join(' '), /magical explosion/);
+    assert.equal(game.inventory.includes(outer), false);
+    assert.equal(game.level.objects.includes(source), false);
+    assert.equal(shop.shopBillEntryForObject(shkp, outer), null);
+    assert.equal(shop.shopBillEntryForObject(shkp, wand), null);
+    assert.notEqual(wand.unpaid, true);
+    assert.equal(shkp.debit || 0, 0);
+    assert.equal(shkp.robbed || 0, 0);
+    assert.equal(shkp.billct, 1);
+    const bagEntry = shop.shopBillEntryForObject(shkp, source);
+    assert.ok(bagEntry);
+    assert.equal(bagEntry.useup, true);
+    assert.equal(shop.shopBillEntryTotal(bagEntry), expectedBagPrice);
+    assert.equal(game._usedUpShopBills.some(entry => String(entry.bo_id) === String(source.id)), true);
+    assert.equal(game._usedUpShopBills.some(entry => String(entry.bo_id) === String(wand.id)), false);
+});
+
 test('shop-floor magic bag explosion charges contents destroyed by the bag blast as lost merchandise', () => {
     const { shkp } = installShopState();
     initRng(13);
@@ -7620,6 +7699,45 @@ test('unpaid trigger object destroyed by tipping into a carried magic bag remain
     assert.ok(entry);
     assert.equal(entry.useup, true);
     assert.equal(shop.shopBillEntryTotal(entry), 45);
+});
+
+test('tipping shop-floor nested cancellation trigger into carried magic bag preserves billed tree', () => {
+    const { shkp } = installShopState();
+    const source = shopFloorContainer(69561);
+    const target = bagOfHolding(69562, 'b');
+    const outer = putObjectInContainer(source, sack(69563));
+    const wand = putObjectInContainer(outer, cancellationWand(69564));
+    const outerPrice = shop.shopItemPrice(outer, 5, 5);
+    const wandPrice = shop.shopItemPrice(wand, 5, 5);
+    game.u.uhp = 100;
+    game.inventory = [target];
+    game.level.objects = [source];
+
+    const messages = shop.tipContainerIntoContainer(source, target);
+
+    assert.match(messages.join(' '), /An object tumbles into the empty bag/);
+    assert.match(messages.join(' '), /As a bag tumbles inside, you are blasted by a magical explosion/);
+    assert.doesNotMatch(messages.join(' '), /lost merchandise/);
+    assert.equal(game.u.uhp < 100, true);
+    assert.equal(game.inventory.includes(target), false);
+    assert.equal(source.contents.includes(outer), false);
+    assert.equal(game.level.objects.includes(outer), false);
+    assert.equal(game.level.objects.includes(wand), false);
+    assert.notEqual(outer.unpaid, true);
+    assert.notEqual(wand.unpaid, true);
+    assert.equal(shkp.debit || 0, 0);
+    assert.equal(shkp.robbed || 0, 0);
+    assert.equal(shkp.billct, 2);
+    const outerEntry = shop.shopBillEntryForObject(shkp, outer);
+    const wandEntry = shop.shopBillEntryForObject(shkp, wand);
+    assert.ok(outerEntry);
+    assert.ok(wandEntry);
+    assert.equal(outerEntry.useup, true);
+    assert.equal(wandEntry.useup, true);
+    assert.equal(shop.shopBillEntryTotal(outerEntry), outerPrice);
+    assert.equal(shop.shopBillEntryTotal(wandEntry), wandPrice);
+    assert.equal(game._usedUpShopBills.some(entry => String(entry.bo_id) === String(outer.id)), true);
+    assert.equal(game._usedUpShopBills.some(entry => String(entry.bo_id) === String(wand.id)), true);
 });
 
 test('tipping into a magic bag explosion leaves later source contents in source', () => {
