@@ -14,6 +14,7 @@ const C_RATION = 10036;
 const CRAM_RATION = 145;
 const PANCAKE = 11011;
 const KELP_FROND = 172;
+const LUMP_OF_ROYAL_JELLY = 10089;
 
 function installWishState(seed = 1, { debug = true, luck = 0 } = {}) {
     const g = resetGame();
@@ -158,6 +159,7 @@ test('wished ration foods use concrete C object metadata', async () => {
         ['1 pancake', PANCAKE, 'pancake', 'pancakes', 200, 2, 15],
         ['1 cram ration', CRAM_RATION, 'cram ration', 'cram rations', 600, 15, 35],
         ['1 kelp frond', KELP_FROND, 'kelp frond', 'kelp fronds', 30, 1, 6],
+        ['1 lump of royal jelly', LUMP_OF_ROYAL_JELLY, 'lump of royal jelly', 'lumps of royal jelly', 200, 2, 15],
         ['1 K-ration', K_RATION, 'K-ration', 'K-rations', 400, 10, 25],
         ['1 C-ration', C_RATION, 'C-ration', 'C-rations', 300, 10, 20],
     ];
@@ -185,6 +187,7 @@ test('plural wished ration foods keep C plural metadata and weights', async () =
         ['pancakes', PANCAKE, 'pancake', 'pancakes', 2, 4],
         ['cram rations', CRAM_RATION, 'cram ration', 'cram rations', 2, 30],
         ['kelp fronds', KELP_FROND, 'kelp frond', 'kelp fronds', 2, 2],
+        ['lumps of royal jelly', LUMP_OF_ROYAL_JELLY, 'lump of royal jelly', 'lumps of royal jelly', 2, 4],
         ['K-rations', K_RATION, 'K-ration', 'K-rations', 2, 20],
         ['C-rations', C_RATION, 'C-ration', 'C-rations', 2, 20],
     ];

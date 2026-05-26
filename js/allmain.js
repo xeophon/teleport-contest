@@ -419,6 +419,7 @@ const PET_OBJECT_WEIGHTS = {
     scalpel: 5,
     stethoscope: 4,
     apple: 2,
+    'lump of royal jelly': 2,
     rock: 10,
     'tinning kit': 100,
     touchstone: 10,

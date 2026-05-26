@@ -329,6 +329,7 @@ function simpleFood(id, kind, letter = 'f', extra = {}) {
         'cream pie': 'cream pies',
         'cram ration': 'cram rations',
         'fortune cookie': 'fortune cookies',
+        'lump of royal jelly': 'lumps of royal jelly',
         'kelp frond': 'kelp fronds',
         'sprig of wolfsbane': 'sprigs of wolfsbane',
         'clove of garlic': 'cloves of garlic',
@@ -10257,6 +10258,7 @@ test('expanded simple food floor pickup merges compatible paid inventory stacks'
         ['sprig of wolfsbane', 'sprigs of wolfsbane', 'w'],
         ['clove of garlic', 'cloves of garlic', 'g'],
         ['eucalyptus leaf', 'eucalyptus leaves', 'e'],
+        ['lump of royal jelly', 'lumps of royal jelly', 'j'],
         ['fortune cookie', 'fortune cookies', 'f'],
     ];
 
@@ -10438,13 +10440,23 @@ test('covered simple food pickup merge excludes remaining special food exception
     assert.equal(carriedCookie.quan, 2);
     assert.match(carriedCookie.line, /^f - 2 fortune cookies/);
 
+    const carriedRoyalJelly = simpleFood(7135, 'lump of royal jelly', 'j');
+    const floorRoyalJelly = { ...simpleFood(7136, 'lump of royal jelly'), letter: undefined, line: undefined };
+    game.inventory = [carriedRoyalJelly];
+
+    const royalJellyMerge = shop.findPickedObjectInventoryMergeTarget(floorRoyalJelly, 0);
+    assert.equal(royalJellyMerge.target, carriedRoyalJelly);
+    shop.mergePickedObjectIntoInventory(floorRoyalJelly, carriedRoyalJelly);
+    assert.equal(carriedRoyalJelly.quan, 2);
+    assert.match(carriedRoyalJelly.line, /^j - 2 lumps of royal jelly/);
+
     const carriedMeatRing = {
-        ...foodRation(7135, 'm'),
+        ...foodRation(7137, 'm'),
         kind: 'meat ring',
         actualKind: 'meat ring',
         plural: 'meat rings',
     };
-    const floorMeatRing = { ...carriedMeatRing, id: 7136, letter: undefined, line: undefined };
+    const floorMeatRing = { ...carriedMeatRing, id: 7138, letter: undefined, line: undefined };
     game.inventory = [carriedMeatRing];
 
     assert.equal(shop.findPickedObjectInventoryMergeTarget(floorMeatRing, 0), null);
@@ -10475,6 +10487,7 @@ test('expanded simple food pickup full-inventory preflight allows no-charge merg
         ['sprig of wolfsbane', 'w'],
         ['clove of garlic', 'g'],
         ['eucalyptus leaf', 'e'],
+        ['lump of royal jelly', 'j'],
         ['fortune cookie', 'f'],
     ];
 
@@ -10506,6 +10519,7 @@ test('shopBaseCost returns C prices for covered simple foods', () => {
     assert.equal(shop.shopBaseCost(simpleFood(7129, 'sprig of wolfsbane')), 7);
     assert.equal(shop.shopBaseCost(simpleFood(7130, 'clove of garlic')), 7);
     assert.equal(shop.shopBaseCost(simpleFood(7131, 'eucalyptus leaf')), 5);
+    assert.equal(shop.shopBaseCost(simpleFood(7134, 'lump of royal jelly')), 15);
     assert.equal(shop.shopBaseCost(simpleFood(7133, 'fortune cookie')), 7);
 });
 
@@ -10542,6 +10556,10 @@ test('simple food pickup full-inventory preflight rejects billable source into p
             (id, letter) => simpleFood(id, 'fortune cookie', letter),
             id => simpleFood(id, 'fortune cookie'),
         ],
+        [
+            (id, letter) => simpleFood(id, 'lump of royal jelly', letter),
+            id => simpleFood(id, 'lump of royal jelly'),
+        ],
     ];
 
     for (const [index, [makeCarried, makeFloor]] of cases.entries()) {
@@ -10571,6 +10589,10 @@ test('simple food pickup full-inventory preflight rejects billable source before
         [
             (id, letter) => simpleFood(id, 'fortune cookie', letter),
             id => simpleFood(id, 'fortune cookie'),
+        ],
+        [
+            (id, letter) => simpleFood(id, 'lump of royal jelly', letter),
+            id => simpleFood(id, 'lump of royal jelly'),
         ],
     ];
 
