@@ -3,11 +3,12 @@ import test from 'node:test';
 
 import { rhack, __shopBillingTestHooks as shop } from '../js/cmd.js';
 import { game, resetGame } from '../js/gstate.js';
-import { ROOM } from '../js/const.js';
+import { PIT, ROOM } from '../js/const.js';
 import { initRng } from '../js/rng.js';
 import { mksobj } from '../js/mklev.js';
 
 const BELL = 358;
+const GOLD_PIECE = 466;
 const TOOL_CLASS = 12;
 const TALLOW_CANDLE = 370;
 const WAX_CANDLE = 371;
@@ -51,9 +52,11 @@ function installWishState(seed = 1, { debug = true, luck = 0 } = {}) {
         acurr: { a: [10, 10, 10, 10, 10, 10] },
     };
     g.level = {
+        flags: {},
         rooms: [],
         monsters: [],
         objects: [],
+        traps: [],
         at: () => ({ roomno: 0, typ: ROOM }),
     };
     return g;
@@ -150,6 +153,85 @@ test('wand of nothing remains an object wish', async () => {
     assert.equal(item.cls, 'wand');
     assert.equal(item.kind, 'nothing');
     assert.equal(game.u.uconduct?.wishes, 1);
+});
+
+test('normal-mode wished gold clamps to C quantity bounds', async () => {
+    installWishState(1, { debug: false });
+    beginWishDirectly();
+    await submitWish('5001 gold pieces');
+
+    const money = game.inventory.find(item => item.otyp === GOLD_PIECE || item.letter === '$');
+    assert.equal(game._command_mode, null);
+    assert.equal(game._goldCount, 5000);
+    assert.equal(money.quan, 5000);
+    assert.equal(money.owt, 50);
+    assert.match(game._pending_message, /\$ - 5000 gold pieces\./);
+    assert.equal(game.u.uconduct?.wishes, 1);
+
+    installWishState(1, { debug: false });
+    beginWishDirectly();
+    await submitWish('0 zorkmids');
+
+    const one = game.inventory.find(item => item.otyp === GOLD_PIECE || item.letter === '$');
+    assert.equal(game._goldCount, 1);
+    assert.equal(one.quan, 1);
+    assert.equal(one.owt, 1);
+    assert.match(game._pending_message, /\$ - 1 gold piece\./);
+});
+
+test('wizard-mode wished gold keeps requested quantity above normal cap', async () => {
+    installWishState(1, { debug: true });
+    beginWishDirectly();
+    await submitWish('6000 zorkmids');
+
+    const money = game.inventory.find(item => item.otyp === GOLD_PIECE || item.letter === '$');
+    assert.equal(game._command_mode, null);
+    assert.equal(game._goldCount, 6000);
+    assert.equal(money.quan, 6000);
+    assert.equal(money.owt, 60);
+    assert.match(game._pending_message, /\$ - 6000 gold pieces\./);
+});
+
+test('bare plural money wishes follow C singularization count', async () => {
+    for (const wish of ['gold pieces', 'coins', 'zorkmids']) {
+        installWishState(1, { debug: false });
+        beginWishDirectly();
+        await submitWish(wish);
+
+        const money = game.inventory.find(item => item.otyp === GOLD_PIECE || item.letter === '$');
+        assert.equal(game._command_mode, null, wish);
+        assert.equal(game._goldCount, 2, wish);
+        assert.equal(money.quan, 2, wish);
+        assert.equal(money.owt, 1, wish);
+        assert.match(game._pending_message, /\$ - 2 gold pieces\./, wish);
+    }
+});
+
+test('wizard trap wish creates a non-object hands result', async () => {
+    installWishState();
+    beginWishDirectly();
+    await submitWish('pit');
+
+    const trap = game.level.traps.find(t => t.tx === game.u.ux && t.ty === game.u.uy);
+    assert.equal(game._command_mode, null);
+    assert.equal(trap?.ttyp, PIT);
+    assert.equal(game.inventory.length, 0);
+    assert.equal(game.u.uconduct?.wishes || 0, 0);
+    assert.equal(game.u.uconduct?.wisharti || 0, 0);
+    assert.equal(game.u.ublesscnt, 0);
+    assert.match(game._pending_message, /^A pit\.$/);
+});
+
+test('non-wizard trap words remain bad wish descriptions', async () => {
+    installWishState(1, { debug: false });
+    beginWishDirectly();
+    await submitWish('pit');
+
+    assert.equal(game.level.traps.length, 0);
+    assert.equal(game.inventory.length, 0);
+    assert.equal(game._command_mode, 'wizardWish');
+    assert.equal(game._wish_tries, 1);
+    assert.match(game._pending_message, /Nothing fitting that description exists in the game\./);
 });
 
 test('recognized wishes still create the requested object', async () => {

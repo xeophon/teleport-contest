@@ -1020,11 +1020,35 @@ const TRAP_NAMES = {
     16: 'level teleporter',
     17: 'magic portal',
     18: 'spider web',
+    19: 'statue trap',
     20: 'magic trap',
     21: 'anti-magic field',
     22: 'polymorph trap',
     23: 'vibrating square',
 };
+const WIZARD_WISH_TRAP_TYPES = new Map([
+    ['arrow trap', 1],
+    ['dart trap', DART_TRAP],
+    ['falling rock trap', ROCKTRAP],
+    ['squeaky board', SQKY_BOARD],
+    ['rolling boulder trap', ROLLING_BOULDER_TRAP],
+    ['sleeping gas trap', SLP_GAS_TRAP],
+    ['rust trap', RUST_TRAP],
+    ['fire trap', FIRE_TRAP],
+    ['pit', PIT],
+    ['spiked pit', SPIKED_PIT],
+    ['hole', HOLE],
+    ['trap door', TRAPDOOR],
+    ['teleportation trap', 15],
+    ['level teleporter', LEVEL_TELEP],
+    ['magic portal', MAGIC_PORTAL],
+    ['web', WEB],
+    ['statue trap', STATUE_TRAP],
+    ['magic trap', MAGIC_TRAP],
+    ['anti magic trap', ANTI_MAGIC],
+    ['polymorph trap', POLY_TRAP],
+    ['vibrating square', VIBRATING_SQUARE],
+]);
 const LARGE_BOX = 214;
 const ICE_BOX = 216;
 const CHEST = 215;
@@ -6549,6 +6573,7 @@ function buildGenericAttributesPage2Rows() {
     const weaponArticle = weaponName && /^[aeiou]/i.test(weaponName) ? 'an' : 'a';
     let carriedWeight = Math.trunc(((game._goldCount || 0) + 50) / 100);
     for (const item of game.inventory || []) {
+        if (isGoldObject(item)) continue;
         let kind = String(item.actualKind || item.kind || item.spellName || item.spell?.name || '').toLowerCase();
         kind = ARMOR_APPEARANCE_KINDS[kind] || kind;
         const cls = item.cls || (item.otyp === RING_CLASS ? 'ring'
@@ -9734,6 +9759,54 @@ async function handleNoFittingWish() {
     game._wish_tries = 0;
     game._command_mode = null;
     await finishRandomBlankWish("Nothing fitting that description exists in the game.  That's enough tries!  ");
+}
+
+function isWishedMoneyName(lowerName) {
+    return /^(?:gold(?: pieces?)?|coins?|zorkmids?|money|\$)$/.test(lowerName);
+}
+
+function wishedMoneyQuantity(lowerName, quantity, forced) {
+    let amount = Math.trunc(Number(quantity || 0));
+    if (!forced && /^(?:gold pieces|coins|zorkmids)$/.test(lowerName)) amount = 2;
+    amount = Math.max(1, amount);
+    return game.flags?.debug ? amount : Math.min(amount, 5000);
+}
+
+function goldStackWeight(quantity) {
+    const amount = Math.max(1, Math.trunc(Number(quantity || 0)));
+    return Math.max(1, Math.trunc((amount + 50) / 100));
+}
+
+function wizardTrapWishMatch(lowerName) {
+    for (const [trapName, trapType] of WIZARD_WISH_TRAP_TYPES.entries()) {
+        if (lowerName === trapName || lowerName.startsWith(`${trapName} `))
+            return { trapName, trapType };
+    }
+    return null;
+}
+
+async function tryWizardNonObjectWish(lowerName) {
+    if (!game.flags?.debug) return false;
+    const trapWish = wizardTrapWishMatch(lowerName);
+    if (!trapWish) return false;
+
+    const x = game.u?.ux || 0;
+    const y = game.u?.uy || 0;
+    let trapType = trapWish.trapType;
+    if ((trapType === HOLE || trapType === TRAPDOOR) && !canFallThroughLevel(game.u?.uz))
+        trapType = ROCKTRAP;
+    const trap = await maketrap(x, y, trapType);
+    if (trap) {
+        const trapName = trap.ttyp === trapWish.trapType
+            ? trapWish.trapName
+            : TRAP_NAMES[trap.ttyp] || trapWish.trapName;
+        const suffix = trap.ttyp === MAGIC_PORTAL ? ' to nowhere' : '';
+        newsym(x, y);
+        await setWishResultMessage(`${upstartText(articleForName(trapName))}${suffix}.`);
+    } else {
+        await setWishResultMessage(`Creation of ${articleForName(trapWish.trapName)} failed.`);
+    }
+    return true;
 }
 
 function capWishSpe(spe) {
@@ -19000,7 +19073,10 @@ function wishedObjectFinalWeight(obj) {
 
 function heroCarriedWeight() {
     let weight = Math.max(0, Math.trunc(((game._goldCount || 0) + 50) / 100));
-    for (const item of game.inventory || []) weight += globObjectWeight(item);
+    for (const item of game.inventory || []) {
+        if (isGoldObject(item)) continue;
+        weight += globObjectWeight(item);
+    }
     return weight;
 }
 
@@ -31557,6 +31633,7 @@ export async function rhack(_cmd) {
                 game.u._woundedLegSide = woundedSide ? 'right' : 'left';
                 let carriedWeight = Math.trunc(((game._goldCount || 0) + 50) / 100);
                 for (const invItem of game.inventory || []) {
+                    if (isGoldObject(invItem)) continue;
                     const kind = String(invItem.kind || invItem.actualKind || invItem.spellName || invItem.spell?.name || '').toLowerCase();
                     const cls = invItem.cls || (invItem.otyp === RING_CLASS ? 'ring'
                         : invItem.otyp === SCROLL_CLASS ? 'scroll'
@@ -41321,20 +41398,33 @@ export async function rhack(_cmd) {
                 await handleNoFittingWish();
                 return;
             }
-            if (/^(?:gold(?: pieces?)?|coins?|zorkmids?|money|\$)$/.test(lowerName)) {
+            if (isWishedMoneyName(lowerName)) {
+                const moneyQuan = wishedMoneyQuantity(lowerName, wishedQuan, wishedQuanForced);
                 recordWishConduct();
                 next_ident();
                 godsNoticeWish();
-                game._goldCount = (game._goldCount || 0) + wishedQuan;
+                game._goldCount = (game._goldCount || 0) + moneyQuan;
                 game.inventory ??= [];
                 const money = game.inventory.find(item => item.letter === '$' || item.cls === 'coin');
                 if (money) {
                     money.quan = game._goldCount;
+                    money.owt = goldStackWeight(game._goldCount);
                     updateMoneyLine(money);
                 }
-                else game.inventory.push({ letter: '$', cls: 'coin', otyp: GOLD_PIECE, glyph: '$', quan: game._goldCount });
+                else game.inventory.push({ letter: '$', cls: 'coin', otyp: GOLD_PIECE, glyph: '$', quan: game._goldCount, owt: goldStackWeight(game._goldCount) });
                 game._pet_food_scan_inventory = game.inventory;
-                await setWishResultMessage(`$ - ${wishedQuan} gold piece${wishedQuan === 1 ? '' : 's'}.`);
+                await setWishResultMessage(`$ - ${moneyQuan} gold piece${moneyQuan === 1 ? '' : 's'}.`);
+                return;
+            }
+            const wishedItem = wishedObjectFromName(wishedName.trim(), wishedQualifiers);
+            if (wishedItem._wish_no_match) {
+                if (await tryWizardNonObjectWish(lowerName)) return;
+                await handleNoFittingWish();
+                return;
+            }
+            if (wishedItem._wish_disappeared) {
+                if (wishedItem._artifact_wish_name || wishedItem.artifact) addConductCount('wisharti');
+                await setWishResultMessage(wishedItem._wish_disappear_message);
                 return;
             }
             let letter = nextInventoryLetter();
@@ -41342,16 +41432,7 @@ export async function rhack(_cmd) {
                 && !(game.inventory || []).some(invItem => invItem.letter === 'n')) {
                 letter = nextInventoryLetter();
             }
-            const item = Object.assign({ letter, quan: 1 }, wishedObjectFromName(wishedName.trim(), wishedQualifiers));
-            if (item._wish_no_match) {
-                await handleNoFittingWish();
-                return;
-            }
-            if (item._wish_disappeared) {
-                if (item._artifact_wish_name || item.artifact) addConductCount('wisharti');
-                await setWishResultMessage(item._wish_disappear_message);
-                return;
-            }
+            const item = Object.assign({ letter, quan: 1 }, wishedItem);
             recordWishConduct();
             if (item._artifact_wish_name) wishedQuan = 1;
             if (item._artifact_wish_name || item.artifact) addConductCount('wisharti');
@@ -41397,6 +41478,7 @@ export async function rhack(_cmd) {
             game._pet_food_scan_inventory = game.inventory;
             let carriedWeight = Math.trunc(((game._goldCount || 0) + 50) / 100);
             for (const invItem of game.inventory || []) {
+                if (isGoldObject(invItem)) continue;
                 if (invItem === item && wishObjectMetadataForItem(invItem)?.unitWeight != null) {
                     carriedWeight += finalWishedWeight;
                     continue;
@@ -45734,6 +45816,7 @@ export async function rhack(_cmd) {
         if (wasBurdened) {
             let carriedWeight = Math.trunc(((game._goldCount || 0) + 50) / 100);
             for (const invItem of game.inventory || []) {
+                if (isGoldObject(invItem)) continue;
                 const kind = String(invItem.kind || invItem.actualKind || invItem.spellName || invItem.spell?.name || '').toLowerCase();
                 const cls = invItem.cls || (invItem.otyp === RING_CLASS ? 'ring'
                     : invItem.otyp === SCROLL_CLASS ? 'scroll'
@@ -46364,6 +46447,7 @@ export async function rhack(_cmd) {
             newsym(game.u?.ux || 0, game.u?.uy || 0);
             let carriedWeight = Math.trunc(((game._goldCount || 0) + 50) / 100);
             for (const invItem of game.inventory || []) {
+                if (isGoldObject(invItem)) continue;
                 const kind = String(invItem.kind || invItem.actualKind || invItem.spellName || invItem.spell?.name || '').toLowerCase();
                 const cls = invItem.cls || (invItem.otyp === RING_CLASS ? 'ring'
                     : invItem.otyp === SCROLL_CLASS ? 'scroll'
