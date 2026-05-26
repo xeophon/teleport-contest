@@ -1389,6 +1389,108 @@ test('unpaid wand use with no charges is not billed for usage', () => {
     assert.equal(messages.length, 0);
 });
 
+test('applying an unpaid no-effect wand bills usage before destroy billing', async () => {
+    const { shkp } = installCommandShopState();
+    const wand = wishingWand(30844, 'w');
+    game.inventory = [wand];
+    const price = shop.shopItemPrice(wand, 5, 5);
+    shop.addObjectToShopBill(shkp, wand, price);
+    const expectedFee = expectedUnpaidUsageFee(wand);
+
+    await rhack('a');
+    await rhack('w');
+
+    assert.equal(game._command_mode, 'breakWandConfirm');
+    assert.match(game._pending_message, /Are you really sure you want to break the wand of wishing/);
+
+    await rhack('y');
+
+    assert.equal(game.context.move, 1);
+    assert.equal(game.inventory.includes(wand), false);
+    assert.equal(shkp.debit, expectedFee);
+    assert.equal(shkp.billct, 1);
+    assert.equal(shop.shopBillEntryForObject(shkp, wand), null);
+    assert.equal(shkp.bill[0].useup, true);
+    assert.equal(shop.shopBillEntryTotal(shkp.bill[0]), price);
+    assert.equal(wand.unpaid, false);
+    assert.match(game._pending_message, /Raising the wand of wishing high above your head, you break it in two!/);
+    assert.match(game._pending_message, new RegExp(`Usage fee, ${expectedFee} zorkmids`));
+    assert.match(game._pending_message, /You destroy that wand of wishing, you pay for it!/);
+    assert.match(game._pending_message, /But nothing else happens\.\.\./);
+    assert.equal((game._usedUpShopBills || []).length, 1);
+    assert.equal(game._usedUpShopBills[0].price, price);
+});
+
+test('applying an unpaid no-effect wand uses pre-break charges for the usage fee', async () => {
+    const { shkp } = installCommandShopState();
+    const wand = wishingWand(30845, 'w');
+    wand.spe = 2;
+    wand.charges = 2;
+    game.inventory = [wand];
+    const price = shop.shopItemPrice(wand, 5, 5);
+    shop.addObjectToShopBill(shkp, wand, price);
+    const expectedFee = expectedUnpaidUsageFee(wand, { chargeCount: 2 });
+
+    await rhack('a');
+    await rhack('w');
+    await rhack('y');
+
+    assert.equal(expectedFee, Math.trunc(price / 4));
+    assert.equal(shkp.debit, expectedFee);
+    assert.equal(shkp.billct, 1);
+    assert.equal(shkp.bill[0].useup, true);
+    assert.equal(shop.shopBillEntryTotal(shkp.bill[0]), price);
+    assert.equal(game.inventory.includes(wand), false);
+    const usageIndex = game._pending_message.indexOf('Usage fee');
+    const destroyIndex = game._pending_message.indexOf('you pay for it');
+    assert.ok(usageIndex >= 0);
+    assert.ok(destroyIndex > usageIndex);
+});
+
+test('applying a worn-out unpaid no-effect wand skips usage but still bills destroy', async () => {
+    const { shkp } = installCommandShopState();
+    const wand = wishingWand(30846, 'w');
+    game.inventory = [wand];
+    const price = shop.shopItemPrice(wand, 5, 5);
+    shop.addObjectToShopBill(shkp, wand, price);
+    wand.spe = -1;
+    wand.charges = -1;
+
+    await rhack('a');
+    await rhack('w');
+    await rhack('y');
+
+    assert.equal(shkp.debit || 0, 0);
+    assert.equal(shkp.billct, 1);
+    assert.equal(shkp.bill[0].useup, true);
+    assert.equal(shop.shopBillEntryTotal(shkp.bill[0]), price);
+    assert.equal(game.inventory.includes(wand), false);
+    assert.doesNotMatch(game._pending_message, /Usage fee/);
+    assert.match(game._pending_message, /You destroy that wand of wishing, you pay for it!/);
+    assert.match(game._pending_message, /But nothing else happens\.\.\./);
+});
+
+test('applying stale field-only unpaid wand does not synthesize destroy billing', async () => {
+    const { shkp } = installCommandShopState();
+    const wand = wishingWand(30847, 'w');
+    wand.unpaid = true;
+    wand.unpaidPrice = 999;
+    game.inventory = [wand];
+
+    await rhack('a');
+    await rhack('w');
+    await rhack('y');
+
+    assert.equal(game.inventory.includes(wand), false);
+    assert.equal(shkp.debit || 0, 0);
+    assert.equal(shkp.billct || 0, 0);
+    assert.equal((shkp.bill || []).length, 0);
+    assert.equal((game._usedUpShopBills || []).length, 0);
+    assert.doesNotMatch(game._pending_message, /Usage fee/);
+    assert.doesNotMatch(game._pending_message, /you pay for it/);
+    assert.match(game._pending_message, /But nothing else happens\.\.\./);
+});
+
 test('engraving with an unpaid wand bills from the post-spend charge count', async () => {
     const { shkp } = installCommandShopState();
     const wand = cancellationWand(30841, 'w');

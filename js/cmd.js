@@ -14105,6 +14105,42 @@ function costlyAlterationPaymentMessage(item, verb) {
     return `You ${verb} ${plural ? 'those' : 'that'} ${name}, you pay for ${plural ? 'them' : 'it'}!`;
 }
 
+const NO_EFFECT_BROKEN_WANDS = new Set([
+    'enlightenment',
+    'locking',
+    'nothing',
+    'opening',
+    'probing',
+    'secret door detection',
+    'stasis',
+    'wishing',
+]);
+
+function canApplyNoEffectWandBreak(item) {
+    return isWandItem(item) && (wandCharges(item) < 0 || NO_EFFECT_BROKEN_WANDS.has(wandTypeName(item)));
+}
+
+function wandBreakObjectName(item) {
+    const name = pickupObjectName(item);
+    return /^(?:a|an|the|some) /i.test(name) ? name : `the ${name}`;
+}
+
+function applyNoEffectWandBreak(item) {
+    const messages = [`Raising ${wandBreakObjectName(item)} high above your head, you break it in two!`];
+    checkUnpaidUsage(item, messages);
+    const payment = costlyAlterationPaymentMessage(item, 'destroy');
+    if (payment) messages.push(payment);
+    const chargeUse = zappableWand(item);
+    if (chargeUse.zapped) {
+        setWandCharges(item, wandCharges(item) + 1);
+        if (wandCharges(item) === 0) setWandCharges(item, rnd(3));
+        messages.push(...wandZapSpendMessages([], chargeUse));
+    }
+    removeInventoryItem(item, item.quan || 1);
+    messages.push('But nothing else happens...');
+    return messages;
+}
+
 function stripCharges(item) {
     const spe = item?.spe ?? 0;
     if (item?.blessed || spe <= 0) return ['Nothing happens.'];
@@ -38029,6 +38065,27 @@ export async function rhack(_cmd) {
         return;
     }
 
+    if (game._command_mode === 'breakWandConfirm') {
+        const item = (game.inventory || []).find(invItem => invItem.letter === game._apply_break_wand_letter);
+        if (ch === 'y' && item && canApplyNoEffectWandBreak(item)) {
+            game._apply_break_wand_letter = null;
+            game._command_mode = null;
+            const messages = applyNoEffectWandBreak(item);
+            await setMessage(messages.join('  '), messages.length > 1);
+            game.context.move = 1;
+            return;
+        }
+        if (ch === 'n' || ch === 'q' || ch === ' ' || ch === '\x1b' || ch === '\r' || ch === '\n'
+            || !item || !canApplyNoEffectWandBreak(item)) {
+            game._apply_break_wand_letter = null;
+            game._command_mode = null;
+            await setMessage('Never mind.');
+            return;
+        }
+        game._keep_pending_message = 1;
+        return;
+    }
+
     if (game._command_mode === 'applyObject') {
         if (ch === '\x1b' || ch === ' ' || ch === '\r' || ch === '\n') {
             await setMessage('Never mind.');
@@ -38162,6 +38219,12 @@ export async function rhack(_cmd) {
             game._cursor_override = [(game._farlook_x || 0) - 1, (game._farlook_y || 0) + 1];
             await setMessage('Where do you want to hit?');
             game._command_mode = 'applyPolearmTarget';
+            return;
+        }
+        if (canApplyNoEffectWandBreak(item)) {
+            game._apply_break_wand_letter = item.letter;
+            await setMessage(`Are you really sure you want to break ${wandBreakObjectName(item)}? [yn] (n)`);
+            game._command_mode = 'breakWandConfirm';
             return;
         }
         if (['armor', 'weapon', 'amulet', 'ring', 'gem', 'food'].includes(item.cls)) {
