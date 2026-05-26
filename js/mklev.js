@@ -4072,6 +4072,9 @@ function mksobj_init(otmp, otyp, artif) {
         }
         if (artif) maybeMkArtifact(otmp, otyp, 20);
         if (otyp !== SILVER_SABER) mkobj_erosion_rolls(otmp);
+    } else if (otyp === BAG_OF_TRICKS && game._mkobj_force_bag_of_tricks) {
+        game._mkobj_force_bag_of_tricks = false;
+        otmp.spe = rn1(18, 3);
     } else if (otyp === ARMOR_CLASS || SPECIFIC_ARMOR.has(otyp)) {
         const autocurse = !!game._mkobj_armor_autocurse;
         const erosion = game._mkobj_armor_erosion || { primary: true, secondary: true };

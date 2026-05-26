@@ -8,6 +8,9 @@ import { initRng } from '../js/rng.js';
 import { mksobj } from '../js/mklev.js';
 
 const HORN_OF_PLENTY = 957;
+const CRYSTAL_BALL = 10088;
+const MAGIC_MARKER = 10084;
+const BAG_OF_TRICKS = 10158;
 const MEAT_RING = 10164;
 const K_RATION = 10035;
 const C_RATION = 10036;
@@ -399,6 +402,81 @@ test('wish charge suffix ignores tool recharge count in normal mode', async () =
     assert.equal(game.inventory[0].spe, 3);
     assert.equal(game.inventory[0].recharged ?? 0, 0);
     assert.equal(game.inventory[0].owt, 18);
+});
+
+test('wished charged tools use C object metadata rows', async () => {
+    installWishState(3);
+    beginWishDirectly();
+    await submitWish('bag of tricks');
+
+    let item = game.inventory[0];
+    assert.equal(game._command_mode, null);
+    assert.equal(item.otyp, BAG_OF_TRICKS);
+    assert.equal(item.cls, 'tool');
+    assert.equal(item.kind, 'bag of tricks');
+    assert.equal(item.actualKind, 'bag of tricks');
+    assert.equal(item.quan, 1);
+    assert.ok(item.spe >= 3 && item.spe <= 20);
+    assert.equal(item.blessed, false);
+    assert.equal(item.cursed, false);
+    assert.equal(item.owt, 15);
+    assert.equal(shop.shopBaseCost(item), 100);
+
+    installWishState(11);
+    beginWishDirectly();
+    await submitWish('magic marker');
+
+    item = game.inventory[0];
+    assert.equal(game._command_mode, null);
+    assert.equal(item.otyp, MAGIC_MARKER);
+    assert.equal(item.cls, 'tool');
+    assert.equal(item.kind, 'magic marker');
+    assert.equal(item.actualKind, 'magic marker');
+    assert.equal(item.quan, 1);
+    assert.ok(item.spe >= 30 && item.spe <= 99);
+    assert.equal(item.blessed, false);
+    assert.equal(item.cursed, false);
+    assert.equal(item.owt, 2);
+    assert.equal(shop.shopBaseCost(item), 50);
+
+    installWishState(11);
+    beginWishDirectly();
+    await submitWish('glass orb');
+
+    item = game.inventory[0];
+    assert.equal(game._command_mode, null);
+    assert.equal(item.otyp, CRYSTAL_BALL);
+    assert.equal(item.cls, 'tool');
+    assert.equal(item.kind, 'glass orb');
+    assert.equal(item.actualKind, 'crystal ball');
+    assert.equal(item.known || false, false);
+    assert.ok(item.spe >= 3 && item.spe <= 7);
+    assert.equal(item.owt, 150);
+    assert.equal(shop.shopBaseCost(item), 60);
+    assert.match(item.line, /glass orb/);
+});
+
+test('wish charge suffix applies through charged-tool metadata', async () => {
+    const cases = [
+        ['bag of tricks (1:3)', BAG_OF_TRICKS, 'bag of tricks', 'bag of tricks', 15],
+        ['magic marker (1:3)', MAGIC_MARKER, 'magic marker', 'magic marker', 2],
+        ['glass orb (1:3)', CRYSTAL_BALL, 'glass orb', 'crystal ball', 150],
+    ];
+
+    for (const [wish, otyp, kind, actualKind, weight] of cases) {
+        installWishState(3, { debug: false });
+        beginWishDirectly();
+        await submitWish(wish);
+
+        const item = game.inventory[0];
+        assert.equal(game._command_mode, null);
+        assert.equal(item.otyp, otyp);
+        assert.equal(item.kind, kind);
+        assert.equal(item.actualKind, actualKind);
+        assert.equal(item.spe, 3);
+        assert.equal(item.recharged ?? 0, 0);
+        assert.equal(item.owt, weight);
+    }
 });
 
 test('empty wished horn of plenty zeroes charges after charge suffix parsing', async () => {

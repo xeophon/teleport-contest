@@ -1283,7 +1283,7 @@ const WISH_BASE_OBJECTS = new Map([
     ['wax candle', { otyp: WAX_CANDLE, cls: 'tool', glyph: '(', kind: 'wax candle', plural: 'wax candles', age: 400 }],
     ['wax candles', { otyp: WAX_CANDLE, cls: 'tool', glyph: '(', kind: 'wax candle', plural: 'wax candles', age: 400 }],
     ['stethoscope', { otyp: STETHOSCOPE, cls: 'tool', glyph: '(', kind: 'stethoscope' }],
-    ['magic marker', { otyp: MAGIC_MARKER, cls: 'tool', glyph: '(', kind: 'magic marker', plural: 'magic markers' }],
+    ['magic marker', { otyp: MAGIC_MARKER, cls: 'tool', glyph: '(', kind: 'magic marker', actualKind: 'magic marker', plural: 'magic markers' }],
     ['lock pick', { otyp: LOCK_PICK, cls: 'tool', glyph: '(', kind: 'lock pick', actualKind: 'lock pick' }],
     ['wooden harp', { otyp: WOODEN_HARP, cls: 'tool', glyph: '(', kind: 'harp', actualKind: 'wooden harp', known: false }],
     ['magic harp', { otyp: MAGIC_HARP, cls: 'tool', glyph: '(', kind: 'harp', actualKind: 'magic harp', known: false }],
@@ -1295,7 +1295,9 @@ const WISH_BASE_OBJECTS = new Map([
     ['tin opener', { otyp: TIN_OPENER, cls: 'tool', glyph: '(', kind: 'tin opener', actualKind: 'tin opener' }],
     ['beartrap', { otyp: BEARTRAP, cls: 'tool', glyph: '(', kind: 'beartrap', actualKind: 'beartrap' }],
     ['land mine', { otyp: LAND_MINE, cls: 'tool', glyph: '(', kind: 'land mine', actualKind: 'land mine' }],
-    ['bag of tricks', { otyp: BAG_OF_TRICKS, cls: 'tool', glyph: '(', kind: 'bag of tricks', actualKind: 'bag of tricks', wishSpeRn1: [18, 3] }],
+    ['bag of tricks', { otyp: BAG_OF_TRICKS, cls: 'tool', glyph: '(', kind: 'bag of tricks', actualKind: 'bag of tricks' }],
+    ['crystal ball', { otyp: CRYSTAL_BALL, cls: 'tool', glyph: '(', kind: 'crystal ball', actualKind: 'crystal ball', plural: 'crystal balls', known: true }],
+    ['glass orb', { otyp: CRYSTAL_BALL, cls: 'tool', glyph: '(', kind: 'glass orb', actualKind: 'crystal ball', plural: 'glass orbs', known: false }],
     ['tooled horn', { otyp: TOOLED_HORN, cls: 'tool', glyph: '(', kind: 'horn', actualKind: 'tooled horn', known: false }],
     ['grappling hook', { otyp: GRAPPLING_HOOK, cls: 'tool', glyph: '(', kind: 'grappling hook', actualKind: 'grappling hook' }],
     ['plate mail', { otyp: PLATE_MAIL, cls: 'armor', glyph: '[', kind: 'plate mail', actualKind: 'plate mail' }],
@@ -1346,7 +1348,31 @@ const WISH_BASE_NAMEDESC_BOUNDS = new Map([
     ['shield of reflection', 8],
     ['gauntlets of power', 9], ['cloak of displacement', 13],
     ['speed boots', 13],
+    ['crystal ball', 495], ['glass orb', 495],
 ]);
+const WISH_OBJECT_METADATA = new Map([
+    ['bag of tricks', {
+        otyp: BAG_OF_TRICKS, cls: 'tool', glyph: '(', ocMerge: false,
+        ocCharged: true, ocNowish: false, ocProb: 20, unitWeight: 15,
+        unitCost: 100, forceBagOfTricksTool: true,
+    }],
+    ['crystal ball', {
+        otyp: CRYSTAL_BALL, cls: 'tool', glyph: '(', ocMerge: false,
+        ocCharged: true, ocNowish: false, ocProb: 15, unitWeight: 150,
+        unitCost: 60, negativeSpeLikeWand: true,
+    }],
+    ['magic marker', {
+        otyp: MAGIC_MARKER, cls: 'tool', glyph: '(', ocMerge: false,
+        ocCharged: true, ocNowish: false, ocProb: 15, unitWeight: 2,
+        unitCost: 50,
+    }],
+]);
+const WISH_OBJECT_METADATA_ALIASES = new Map([
+    ['glass orb', 'crystal ball'],
+]);
+const WISH_OBJECT_METADATA_BY_OTYP = new Map(
+    [...WISH_OBJECT_METADATA.values()].map(metadata => [metadata.otyp, metadata])
+);
 const WISH_TOOL_ROLLS = new Map([
     ['lamp', 415], ['lenses', 510], ['blindfold', 560], ['towel', 610],
     ['saddle', 615], ['leash', 680], ['tin opener', 755],
@@ -1356,7 +1382,6 @@ const WISH_TOOL_ROLLS = new Map([
     ['horn of plenty', 957], ['harp', 961], ['wooden harp', 961],
     ['magic harp', 963], ['bell', 965], ['bugle', 969],
     ['leather drum', 973], ['drum of earthquake', 975],
-    ['crystal ball', 495],
 ]);
 const WISH_TOOL_APPEARANCES = new Map([
     ['wooden flute', 'flute'], ['magic flute', 'flute'],
@@ -9702,13 +9727,14 @@ function wishedSpeForItem(item, spe) {
 
     const generated = item?.spe ?? 0;
     const cls = itemClassKey(item);
+    const wishMetadata = wishObjectMetadataForItem(item);
     if (cls === 'armor' || cls === 'weapon' || isWeaponTool(item) || isChargeableRing(item)) {
         if (requested > rnd(5) && requested > generated)
             requested = 0;
         if (requested > 2 && ((game.u?.uluck || 0) + (game.u?.moreluck || 0)) < 0)
             negative = true;
     } else {
-        if (cls === 'wand' || item?.otyp === WAND_CLASS || isCrystalBallObject(item)) {
+        if (cls === 'wand' || item?.otyp === WAND_CLASS || wishMetadata?.negativeSpeLikeWand || isCrystalBallObject(item)) {
             if (requested > 1 && negative) requested = 1;
         } else if (requested > 0 && negative) {
             requested = 0;
@@ -9745,6 +9771,28 @@ function itemClassKey(item) {
             : item?.otyp === WEAPON_CLASS ? 'weapon'
                 : item?.otyp === FOOD_CLASS ? 'food'
                     : '');
+}
+
+function wishObjectMetadataForName(name) {
+    const key = String(name || '').trim().toLowerCase();
+    return WISH_OBJECT_METADATA.get(WISH_OBJECT_METADATA_ALIASES.get(key) || key);
+}
+
+function wishObjectMetadataForItem(item) {
+    if (!item) return null;
+    const actual = String(item.actualKind || '').toLowerCase();
+    const kind = String(item.kind || '').toLowerCase();
+    const spell = String(item.spellName || item.spell?.name || '').toLowerCase();
+    const wand = String(item.wand || '').toLowerCase();
+    for (const key of [actual, kind, spell, wand]) {
+        const metadata = wishObjectMetadataForName(key);
+        if (metadata) return metadata;
+    }
+    const metadata = WISH_OBJECT_METADATA_BY_OTYP.get(item.otyp);
+    if (!metadata) return null;
+    const cls = itemClassKey(item);
+    if (cls === metadata.cls || item.glyph === metadata.glyph) return metadata;
+    return null;
 }
 
 function isPotionObject(item) {
@@ -18832,11 +18880,9 @@ function isGlobWeightContainerObject(obj) {
 }
 
 const WISHED_OBJECT_WEIGHT_OVERRIDES = new Map([
-    ['bag of tricks', 15],
     ['bell', 30],
     ['bell of opening', 50],
     ['book of the dead', 20],
-    ['crystal ball', 150],
     ['heavy iron ball', WT_IRON_BALL_BASE],
     ['horn of plenty', 18],
     ['tooled horn', 18],
@@ -18871,6 +18917,8 @@ function wishedObjectFinalWeight(obj) {
         return 200 + Math.max(0, Math.trunc(Number(obj.spe || 0))) * candleWeight;
     }
     const kind = objectKindKey(obj);
+    const metadata = wishObjectMetadataForItem(obj);
+    if (metadata?.unitWeight != null) return Math.max(0, metadata.unitWeight * (obj.quan || 1));
     const override = WISHED_OBJECT_WEIGHT_OVERRIDES.get(kind);
     if (override != null) return Math.max(0, override * (obj.quan || 1));
     return globObjectWeight(obj);
@@ -21121,6 +21169,8 @@ function applyWishedQuantity(item, wishedQuan, forceQuantity = false) {
 }
 
 function wishQuantityMergeable(item) {
+    const metadata = wishObjectMetadataForItem(item);
+    if (metadata?.ocMerge != null) return !!metadata.ocMerge;
     const cls = itemClassKey(item);
     if (cls === 'scroll' || cls === 'potion' || cls === 'gem') return true;
     if (cls === 'food' && objectKindKey(item) !== 'meat ring') return true;
@@ -21507,6 +21557,16 @@ function applyWishedInstanceName(item, name) {
     item._wish_object_name = objectName;
 }
 
+function makeWishedBaseObject(baseObject, metadata) {
+    const forceBagOfTricksTool = !!metadata?.forceBagOfTricksTool;
+    if (forceBagOfTricksTool) game._mkobj_force_bag_of_tricks = true;
+    try {
+        return mksobj(baseObject.otyp, true, false);
+    } finally {
+        if (forceBagOfTricksTool) game._mkobj_force_bag_of_tricks = false;
+    }
+}
+
 function wishedObjectFromName(name, qualifiers = {}) {
     const wishName = String(name || '').trim();
     const lowerWishName = wishName.toLowerCase();
@@ -21572,6 +21632,8 @@ function wishedBaseObjectFromName(lowerName, qualifiers = {}, originalName = low
 
     const specialSubstitution = substituteNonWizardSpecialWish(lowerName);
     if (specialSubstitution) return specialSubstitution;
+    const localWishMetadata = wishObjectMetadataForName(lowerName);
+    if (localWishMetadata?.ocNowish && !game.flags?.debug) return noFittingWishObject();
 
     const dragonArmorWish = parseWishedDragonArmorName(lowerName);
     if (dragonArmorWish) return makeWishedDragonArmorObject(dragonArmorWish);
@@ -21586,9 +21648,10 @@ function wishedBaseObjectFromName(lowerName, qualifiers = {}, originalName = low
     if (baseObject) {
         const namedescBound = WISH_BASE_NAMEDESC_BOUNDS.get(lowerName);
         if (namedescBound && !spellingAlias.skipNamedesc) rn2(namedescBound);
-        const { wishSpeRn1, ...baseFields } = baseObject;
-        const otmp = mksobj(baseObject.otyp, true, false);
-        if (wishSpeRn1) otmp.spe = rn1(wishSpeRn1[0], wishSpeRn1[1]);
+        const baseFields = { ...baseObject };
+        delete baseFields.wishSpeRn1;
+        const metadata = localWishMetadata ?? wishObjectMetadataForItem(baseFields);
+        const otmp = makeWishedBaseObject(baseObject, metadata);
         return Object.assign(otmp, baseFields, { wishedfor: true });
     }
 
@@ -24247,6 +24310,8 @@ function shopBaseCost(obj) {
     else if (!kind && obj.otyp === STETHOSCOPE) kind = 'stethoscope';
     else if (!kind && obj.otyp === MAGIC_MARKER) kind = 'magic marker';
     if ((obj.foodRoll || 1000) <= 140 || kind === 'tripe') kind = 'tripe ration';
+    const metadata = wishObjectMetadataForItem(obj);
+    if (metadata?.unitCost != null) return metadata.unitCost;
     return SHOP_OBJECT_COSTS[kind] || 0;
 }
 
@@ -41243,6 +41308,10 @@ export async function rhack(_cmd) {
             game._pet_food_scan_inventory = game.inventory;
             let carriedWeight = Math.trunc(((game._goldCount || 0) + 50) / 100);
             for (const invItem of game.inventory || []) {
+                if (invItem === item && wishObjectMetadataForItem(invItem)?.unitWeight != null) {
+                    carriedWeight += finalWishedWeight;
+                    continue;
+                }
                 if (invItem.globby) {
                     carriedWeight += (invItem.owt ?? 20) * (invItem.quan || 1);
                     continue;
