@@ -13991,14 +13991,24 @@ function chargeGlowMessage(item, color = '', feeble = false) {
     return `${chargingObjectSubject(item)} ${feeble ? 'feebly ' : ''}${verb} ${color} for a moment.`;
 }
 
+function costlyAlterationPaymentMessage(item, verb) {
+    const name = pickupObjectName(item);
+    const plural = (item?.quan || 1) > 1;
+    if (!billDummyAlteredCarriedObject(item)) return '';
+    return `You ${verb} ${plural ? 'those' : 'that'} ${name}, you pay for ${plural ? 'them' : 'it'}!`;
+}
+
 function stripCharges(item) {
     const spe = item?.spe ?? 0;
     if (item?.blessed || spe <= 0) return ['Nothing happens.'];
+    const messages = [`${chargingObjectSubject(item)} vibrates briefly.`];
+    const payment = costlyAlterationPaymentMessage(item, 'uncharge');
+    if (payment) messages.push(payment);
     item.spe = 0;
     if (isWandItem(item)) item.charges = 0;
     if (isLampObject(item)) item.age = 0;
     updateChargedItemLine(item);
-    return [`${chargingObjectSubject(item)} vibrates briefly.`];
+    return messages;
 }
 
 function wandRechargeLimit(item) {
@@ -14082,10 +14092,15 @@ function rechargeRing(item, curseBless) {
         }
         return { messages, more: messages.length > 1 };
     }
+    const direction = curseBless < 0 ? 'counterclockwise' : 'clockwise';
+    const messages = [`${chargingObjectSubject(item)} spins ${direction} for a moment.`];
+    if (adjustment < 0) {
+        const payment = costlyAlterationPaymentMessage(item, 'disenchant');
+        if (payment) messages.push(payment);
+    }
     item.spe = capWishSpe(oldSpe + adjustment);
     updateChargedItemLine(item);
-    const direction = curseBless < 0 ? 'counterclockwise' : 'clockwise';
-    return { messages: [`${chargingObjectSubject(item)} spins ${direction} for a moment.`], more: false };
+    return { messages, more: messages.length > 1 };
 }
 
 function toolChargeKind(item) {
@@ -14191,11 +14206,21 @@ function rechargeLamp(item, curseBless) {
 function rechargeCrystalBall(item, curseBless) {
     if ((item.spe ?? 0) === -1) item.spe = 0;
     if (curseBless < 0) {
-        item.cursed = true;
-        item.blessed = false;
+        const messages = [];
+        if (!item.cursed) {
+            messages.push(chargeGlowMessage(item, 'black'));
+            item.cursed = true;
+            item.blessed = false;
+        } else {
+            messages.push(`${chargingObjectSubject(item)} vibrates briefly.`);
+        }
+        if ((item.spe ?? 0) > 0) {
+            const payment = costlyAlterationPaymentMessage(item, 'uncharge');
+            if (payment) messages.push(payment);
+        }
         item.spe = 0;
         updateChargedItemLine(item);
-        return [chargeGlowMessage(item, 'black')];
+        return messages;
     }
     if (curseBless > 0) {
         item.spe = 7;

@@ -180,6 +180,43 @@ function chargedTool(id, kind, letter = 't', spe = 3) {
     };
 }
 
+function scrollOfCharging(id, letter = 's', cursed = false) {
+    return {
+        id,
+        cls: 'scroll',
+        glyph: '?',
+        kind: 'scroll of charging',
+        actualKind: 'scroll of charging',
+        scrollIndex: 19,
+        cursed,
+        quan: 1,
+        ox: 5,
+        oy: 5,
+        letter,
+        line: `${letter} - a scroll of charging`,
+    };
+}
+
+function chargeableRing(id, letter = 'r', spe = 0) {
+    return {
+        id,
+        cls: 'ring',
+        glyph: '=',
+        kind: 'ring of protection',
+        actualKind: 'ring of protection',
+        ringRoll: 6,
+        charged: true,
+        known: true,
+        dknown: true,
+        quan: 1,
+        spe,
+        ox: 5,
+        oy: 5,
+        letter,
+        line: `${letter} - a ring of protection`,
+    };
+}
+
 function ordinaryTool(id, kind, letter = 't') {
     const tool = chargedTool(id, kind, letter, 0);
     delete tool.spe;
@@ -987,6 +1024,88 @@ test('cursed unpaid wand of wishing backfire preserves the used-up bill row', as
     assert.equal((game._usedUpShopBills || []).length, 1);
     assert.equal(game._usedUpShopBills[0].bo_id, entry.bo_id);
     assert.equal(game._usedUpShopBills[0].price, 100);
+});
+
+test('cursed charging an unpaid wand preserves the pre-altered object as a used-up bill', async () => {
+    const { shkp } = installCommandShopState();
+    const scroll = scrollOfCharging(3087, 's', true);
+    const wand = cancellationWand(3088, 'w');
+    wand.spe = 3;
+    game.inventory = [scroll, wand];
+    shop.addObjectToShopBill(shkp, wand, 100);
+
+    await rhack('r');
+    await rhack('s');
+
+    assert.equal(game._command_mode, 'chargeObject');
+    assert.match(game._pending_message, /What do you want to charge\?/);
+    assert.equal(wand.spe, 3);
+    assert.equal(wand.unpaid, true);
+
+    await rhack('w');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(wand.spe, 0);
+    assert.equal(wand.charges, 0);
+    assert.equal(wand.unpaid, false);
+    assert.equal(shkp.billct, 1);
+    assert.equal(shop.shopBillEntryForObject(shkp, wand), null);
+    assert.equal(shkp.bill[0].useup, true);
+    assert.equal(shop.shopBillEntryTotal(shkp.bill[0]), 100);
+    assert.equal((game._usedUpShopBills || []).length, 1);
+    assert.equal(game._usedUpShopBills[0].bo_id, shkp.bill[0].bo_id);
+    assert.match(game._pending_message, /Your wand of cancellation vibrates briefly/);
+    assert.match(game._pending_message, /You uncharge that wand of cancellation, you pay for it!/);
+    assert.ok(game._pending_message.indexOf('vibrates briefly') < game._pending_message.indexOf('you pay for it'));
+});
+
+test('cursed charging an unpaid crystal ball creates an uncharged used-up bill row', async () => {
+    const { shkp } = installCommandShopState();
+    const scroll = scrollOfCharging(3089, 's', true);
+    const ball = crystalBall(3090, 'c', 2);
+    game.inventory = [scroll, ball];
+    shop.addObjectToShopBill(shkp, ball, 100);
+
+    await rhack('r');
+    await rhack('s');
+    await rhack('c');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(ball.spe, 0);
+    assert.equal(ball.cursed, true);
+    assert.equal(ball.blessed, false);
+    assert.equal(ball.unpaid, false);
+    assert.equal(shkp.billct, 1);
+    assert.equal(shop.shopBillEntryForObject(shkp, ball), null);
+    assert.equal(shkp.bill[0].useup, true);
+    assert.equal(shop.shopBillEntryTotal(shkp.bill[0]), 100);
+    assert.match(game._pending_message, /Your crystal ball glows black for a moment/);
+    assert.match(game._pending_message, /You uncharge that crystal ball, you pay for it!/);
+});
+
+test('cursed charging an unpaid chargeable ring bills the disenchantment as used-up', async () => {
+    const { shkp } = installCommandShopState();
+    const scroll = scrollOfCharging(30901, 's', true);
+    const ring = chargeableRing(30902, 'r', 0);
+    game.inventory = [scroll, ring];
+    shop.addObjectToShopBill(shkp, ring, 120);
+
+    await rhack('r');
+    await rhack('s');
+    await rhack('r');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.ok(ring.spe < 0);
+    assert.equal(ring.unpaid, false);
+    assert.equal(shkp.billct, 1);
+    assert.equal(shop.shopBillEntryForObject(shkp, ring), null);
+    assert.equal(shkp.bill[0].useup, true);
+    assert.equal(shop.shopBillEntryTotal(shkp.bill[0]), 120);
+    assert.match(game._pending_message, /Your ring of protection spins counterclockwise for a moment/);
+    assert.match(game._pending_message, /You disenchant that ring of protection, you pay for it!/);
 });
 
 test('unpaid camera grease and tinning kit use charge one tenth price', () => {
