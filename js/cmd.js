@@ -10824,6 +10824,11 @@ function foodObjectNutrition(item) {
 function addHeroNutrition(nutrition) {
     if (!game.u || nutrition <= 0) return;
     game.u.uhunger = (game.u.uhunger ?? 900) + nutrition;
+    refreshHeroEatingHungerStatus();
+}
+
+function refreshHeroEatingHungerStatus() {
+    if (!game.u) return;
     game.u._statusSuffix = (game.u._statusSuffix || '')
         .replace(/ Satiated| Hungry| Weak| Fainting| Fainted/g, '');
     if (game.u.uhunger > 1000) game.u._statusSuffix = `${game.u._statusSuffix || ''} Satiated`;
@@ -10846,9 +10851,74 @@ function delayedEatingFullWarningOutcome(remainingAfterBite) {
     return { messages, prompt: false };
 }
 
-export function addDelayedFoodBiteNutrition(nutrition, { remainingAfterBite = 0 } = {}) {
+function delayedFoodChokeWord(food) {
+    if (!food) return 'it';
+    return pickupObjectName({ ...food, quan: 1 })
+        .replace(/^[a-zA-Z$?] - /, '')
+        .replace(/^(?:a|an|the)\s+/i, '');
+}
+
+function delayedFoodChokeMessageWord(food) {
+    if (food?.cls === 'food' || food?.otyp === FOOD_CLASS || food?.glyph === '%') return 'food';
+    return delayedFoodChokeWord(food);
+}
+
+function delayedFoodChokeDeathCause(food) {
+    const word = delayedFoodChokeWord(food).replace(/^partly eaten\s+/i, '');
+    if (word === 'it') return 'choked on a quick snack';
+    const article = /^[aeiou]/i.test(word) ? 'an' : 'a';
+    return `choked on ${article} ${word}`;
+}
+
+function delayedFoodChokeOutcome(food) {
+    const messages = [];
+    const role = game.urole?.name?.m || game._startup_role || '';
+    if (role === 'Knight' && game.u?.ualign?.type === A_LAWFUL)
+        messages.push('You feel like a glutton!');
+    if (!rn2(20)) {
+        messages.push('You stuff yourself and then vomit voluminously.');
+        if (game.u) {
+            game.u.uhunger = Math.max(0, (game.u.uhunger ?? 900) - 1000);
+            refreshHeroEatingHungerStatus();
+        }
+        game._helpless_time = Math.max(game._helpless_time || 0, 2);
+        game._wake_message = 'You can move again.';
+        return { messages, choked: true, recovered: true, move: 2 };
+    }
+
+    messages.push(`You choke over your ${delayedFoodChokeMessageWord(food)}.`);
+    game._death_cause = delayedFoodChokeDeathCause(food);
+    if (consumeLifeSavingAmulet()) {
+        if (game.u) {
+            game.u.uhp = 0;
+            game.u.uhunger = 900;
+            refreshHeroEatingHungerStatus();
+        }
+        messages.push('You die...');
+        messages.push(`But wait...  Your medallion ${game.u?.blind ? 'feels warm' : 'begins to glow'}!`);
+        game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
+        game._command_mode = 'lifeSavingMore';
+        return { messages, choked: true, fatal: true, lifesaved: true, more: true, move: 0 };
+    }
+
+    if (game.u) game.u.uhp = 0;
+    game._pending_time_passed = 0;
+    if (game.context) game.context.move = 0;
+    game._process_command_time_now = 0;
+    game._run_steps_remaining = 0;
+    game._command_mode = 'deathDieMore';
+    prepareDeathBones();
+    messages.push('You die...');
+    return { messages, choked: true, fatal: true, more: true, move: 0 };
+}
+
+export function addDelayedFoodBiteNutrition(nutrition, { remainingAfterBite = 0, food = null } = {}) {
     if (!game.u || !(nutrition > 0)) return { messages: [], prompt: false };
+    if (game._eating_canchoke && (game.u.uhunger ?? 900) >= 2000)
+        return { ...delayedFoodChokeOutcome(food), preBite: true };
     addHeroNutrition(nutrition);
+    if (game._eating_canchoke && (game.u.uhunger ?? 900) >= 2000)
+        return { ...delayedFoodChokeOutcome(food), nutritionApplied: true };
     const warning = (game.u.uhunger ?? 900) < 2000
         ? delayedEatingFullWarningOutcome(remainingAfterBite)
         : null;
@@ -11189,6 +11259,40 @@ function declineDelayedFoodContinuation() {
     game._eating_nomovemsg = '';
 }
 
+function pauseDelayedFoodAfterChoke(touched, {
+    remainingTurns = 0,
+    biteNutrition = 0,
+    biteHunger = biteNutrition,
+    floorObject = false,
+    finishName = '',
+} = {}) {
+    if (remainingTurns <= 0) {
+        if (floorObject) consumeOneFloorObject(touched);
+        else {
+            removeInventoryItem(touched);
+            game._pet_food_scan_inventory = game.inventory || [];
+        }
+        clearDelayedEatingVictualState();
+        return;
+    }
+    game._eating_turns_remaining = 0;
+    game._eating_paused_turns_remaining = remainingTurns;
+    game._eating_interrupted = 1;
+    game._eating_finish_message = `You finish eating the ${finishName}.`;
+    if (floorObject) {
+        game._eating_floor_object = touched;
+        game._eating_floor_object_direct_useup = 1;
+    } else {
+        game._eating_inventory_object = touched;
+        game._pet_food_scan_inventory = game.inventory || [];
+    }
+    game._eating_bite_nutrition = biteNutrition;
+    game._eating_bite_hunger = biteHunger;
+    game._eating_nutrition = 0;
+    game._eating_fullwarn = 0;
+    game._eating_nomovemsg = '';
+}
+
 function isPausedDelayedFoodVictual(item, floorObject = false) {
     if (!game._eating_interrupted || !(game._eating_paused_turns_remaining > 0)) return false;
     if (!(game._eating_bite_nutrition > 0)) return false;
@@ -11220,12 +11324,38 @@ function resumeDelayedFoodVictual(item, spec, { floorObject = false } = {}) {
     if (biteNutrition > 0) {
         nutritionOutcome = addDelayedFoodBiteNutrition(biteHunger, {
             remainingAfterBite: Math.max(0, pausedTurns - 2),
+            food: touched,
         });
-        consumeOeaten(touched, -biteNutrition);
-        if (floorObject) newsym(touched.ox, touched.oy);
-        else refreshInventoryObjectLine(touched);
+        if (!nutritionOutcome.fatal && !nutritionOutcome.preBite) {
+            consumeOeaten(touched, -biteNutrition);
+            if (floorObject) newsym(touched.ox, touched.oy);
+            else refreshInventoryObjectLine(touched);
+        }
     }
     const combinedMessage = [message, ...(nutritionOutcome.messages || [])].filter(Boolean).join('  ');
+
+    if (nutritionOutcome.choked) {
+        clearInterruptedEatingVictualState();
+        if (nutritionOutcome.recovered) {
+            pauseDelayedFoodAfterChoke(touched, {
+                remainingTurns: nutritionOutcome.preBite ? pausedTurns : Math.max(0, pausedTurns - 1),
+                biteNutrition,
+                biteHunger,
+                floorObject,
+                finishName,
+            });
+        } else {
+            clearDelayedEatingVictualState();
+        }
+        return {
+            message: combinedMessage,
+            more: !!nutritionOutcome.more,
+            commandMode: nutritionOutcome.fatal || nutritionOutcome.lifesaved
+                ? (game._command_mode || null) : null,
+            move: nutritionOutcome.move ?? 0,
+            finished: false,
+        };
+    }
 
     clearInterruptedEatingVictualState();
     if (lastBite || biteNutrition <= 0) {
@@ -11315,13 +11445,39 @@ function startDelayedFoodVictual(item, spec, { floorObject = false } = {}) {
     if (biteNutrition > 0) {
         nutritionOutcome = addDelayedFoodBiteNutrition(biteHunger, {
             remainingAfterBite: Math.max(0, reqtime - 1),
+            food: touched,
         });
-        consumeOeaten(touched, -biteNutrition);
-        if (floorObject) newsym(touched.ox, touched.oy);
-        else refreshInventoryObjectLine(touched);
+        if (!nutritionOutcome.fatal && !nutritionOutcome.preBite) {
+            consumeOeaten(touched, -biteNutrition);
+            if (floorObject) newsym(touched.ox, touched.oy);
+            else refreshInventoryObjectLine(touched);
+        }
     }
     if (nutritionOutcome.messages?.length)
         message = [message, ...nutritionOutcome.messages].filter(Boolean).join('  ');
+
+    if (nutritionOutcome.choked) {
+        if (nutritionOutcome.recovered) {
+            pauseDelayedFoodAfterChoke(touched, {
+                remainingTurns: reqtime,
+                biteNutrition,
+                biteHunger,
+                floorObject,
+                finishName,
+            });
+        } else {
+            clearDelayedEatingVictualState();
+        }
+        return {
+            message,
+            more: !!nutritionOutcome.more,
+            commandMode: nutritionOutcome.fatal || nutritionOutcome.lifesaved
+                ? (game._command_mode || null) : null,
+            move: nutritionOutcome.move ?? 0,
+            finished: false,
+            touched,
+        };
+    }
 
     if (reqtime <= 1 || biteNutrition <= 0) {
         const postEffect = applyDelayedFoodPostEffect(touched, spec);

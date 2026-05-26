@@ -2870,6 +2870,18 @@ function clearActiveEatingOccupation(g) {
     clearEatingFullnessState(g);
 }
 
+function pauseEatingOccupationAfterChoke(g, remainingTurns) {
+    if (!(remainingTurns > 0)) {
+        clearActiveEatingOccupation(g);
+        return;
+    }
+    g._eating_paused_turns_remaining = remainingTurns;
+    g._eating_interrupted = 1;
+    g._eating_turns_remaining = 0;
+    g._eating_fullwarn = 0;
+    g._eating_nomovemsg = '';
+}
+
 export function interruptEatingOccupation(g = game) {
     if (!(g._eating_turns_remaining > 0)) return false;
     if (g._eating_turns_remaining <= 1)
@@ -10784,8 +10796,21 @@ export function processEatingOccupationTick(g = game) {
     if (eatenInventoryObject && biteNutrition > 0 && g._eating_turns_remaining > 0) {
         const nutritionOutcome = addDelayedFoodBiteNutrition(biteHunger, {
             remainingAfterBite: Math.max(0, g._eating_turns_remaining - 1),
+            food: eatenInventoryObject,
         });
         if (nutritionOutcome.messages?.length) addToplineMessage(nutritionOutcome.messages.join('  '));
+        if (nutritionOutcome.choked) {
+            if (nutritionOutcome.recovered) {
+                if (!nutritionOutcome.preBite) consumeEatingInventoryObject(eatenInventoryObject, biteNutrition);
+                pauseEatingOccupationAfterChoke(g, nutritionOutcome.preBite
+                    ? g._eating_turns_remaining + 1 : g._eating_turns_remaining);
+            } else {
+                g._message_more = nutritionOutcome.more ? 1 : 0;
+                clearActiveEatingOccupation(g);
+            }
+            if (g.context) g.context.move = nutritionOutcome.move ?? 0;
+            return false;
+        }
         consumeEatingInventoryObject(eatenInventoryObject, biteNutrition);
         if (nutritionOutcome.prompt) {
             g._command_mode = 'continueEatingPrompt';
@@ -10795,8 +10820,21 @@ export function processEatingOccupationTick(g = game) {
     if (eatenFloorObject && biteNutrition > 0 && g._eating_turns_remaining > 0) {
         const nutritionOutcome = addDelayedFoodBiteNutrition(biteHunger, {
             remainingAfterBite: Math.max(0, g._eating_turns_remaining - 1),
+            food: eatenFloorObject,
         });
         if (nutritionOutcome.messages?.length) addToplineMessage(nutritionOutcome.messages.join('  '));
+        if (nutritionOutcome.choked) {
+            if (nutritionOutcome.recovered) {
+                if (!nutritionOutcome.preBite) consumeEatingObject(eatenFloorObject, biteNutrition);
+                pauseEatingOccupationAfterChoke(g, nutritionOutcome.preBite
+                    ? g._eating_turns_remaining + 1 : g._eating_turns_remaining);
+            } else {
+                g._message_more = nutritionOutcome.more ? 1 : 0;
+                clearActiveEatingOccupation(g);
+            }
+            if (g.context) g.context.move = nutritionOutcome.move ?? 0;
+            return false;
+        }
         consumeEatingObject(eatenFloorObject, biteNutrition);
         if (nutritionOutcome.prompt) {
             g._command_mode = 'continueEatingPrompt';

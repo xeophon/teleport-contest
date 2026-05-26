@@ -3980,6 +3980,136 @@ test('floor pancake full warning uses finally-finished message without continue 
     assert.equal(game._pending_message, "You're finally finished.");
 });
 
+test('satiated carried food ration can fatally choke on first bite over 2000', async () => {
+    installCommandShopState();
+    game.u.uhunger = 1840;
+    const ration = foodRation(31326, 'a');
+    game.inventory = [ration];
+
+    await rhack('e');
+    await rhack('a');
+
+    assert.equal(game._pending_message, 'You choke over your food.  You die...');
+    assert.equal(game._message_more, 1);
+    assert.equal(game._command_mode, 'deathDieMore');
+    assert.equal(game.u.uhp, 0);
+    assert.equal(game.u.uhunger, 2000);
+    assert.equal(game._death_cause, 'choked on a food ration');
+    assert.equal(game.inventory.includes(ration), true);
+    assert.equal(ration.oeaten, 800);
+    assert.equal(game._eating_turns_remaining || 0, 0);
+    assert.doesNotMatch(game._pending_message, /finally finished/);
+});
+
+test('satiated carried food ration choking life-saving resets hunger', async () => {
+    installCommandShopState();
+    game.u.uhunger = 1840;
+    const ration = foodRation(313261, 'a');
+    const amulet = {
+        id: 313262,
+        letter: 'b',
+        cls: 'amulet',
+        glyph: '"',
+        kind: 'amulet of life saving',
+        actualKind: 'amulet of life saving',
+        quan: 1,
+        worn: true,
+        line: 'b - an amulet of life saving (being worn)',
+    };
+    game.inventory = [ration, amulet];
+
+    await rhack('e');
+    await rhack('a');
+
+    assert.equal(game._pending_message, 'You choke over your food.  You die...  But wait...  Your medallion begins to glow!');
+    assert.equal(game._command_mode, 'lifeSavingMore');
+    assert.equal(game.u.uhunger, 900);
+    assert.equal(game.inventory.includes(ration), true);
+    assert.equal(game.inventory.includes(amulet), false);
+
+    await rhack(' ');
+
+    assert.equal(game._pending_message, 'You feel much better!');
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game.u.uhp, game.u.uhpmax);
+    assert.equal(game.u.uhunger, 900);
+});
+
+test('satiated carried food ration over 2000 can recover by vomiting', async () => {
+    installCommandShopState();
+    initRng(26);
+    game.u.uhunger = 1840;
+    const ration = foodRation(31327, 'a');
+    game.inventory = [ration];
+
+    await rhack('e');
+    await rhack('a');
+
+    assert.equal(game._pending_message, 'You stuff yourself and then vomit voluminously.');
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game.context.move, 2);
+    assert.equal(game._helpless_time, 2);
+    assert.equal(game._wake_message, 'You can move again.');
+    assert.equal(game.u.uhunger, 1000);
+    assert.equal(game.inventory.includes(ration), true);
+    assert.equal(ration.oeaten, 640);
+    assert.equal(game._eating_turns_remaining || 0, 0);
+    assert.equal(game._eating_interrupted, 1);
+    assert.equal(game._eating_paused_turns_remaining, 5);
+    assert.equal(game._eating_canchoke, true);
+    assert.equal(game._eating_fullwarn, 0);
+});
+
+test('accepted carried food ration full-warning prompt preserves canchoke until choking', async () => {
+    installCommandShopState();
+    game.u.uhunger = 1200;
+    const ration = foodRation(31328, 'a');
+    game.inventory = [ration];
+
+    await rhack('e');
+    await rhack('a');
+    processEatingOccupationTick(game);
+
+    assert.equal(game._command_mode, 'continueEatingPrompt');
+    assert.equal(game._eating_canchoke, true);
+
+    await rhack('y');
+    acknowledgePendingMessage();
+    processEatingOccupationTick(game);
+    processEatingOccupationTick(game);
+    processEatingOccupationTick(game);
+
+    assert.equal(game._pending_message, 'You choke over your food.  You die...');
+    assert.equal(game._message_more, 1);
+    assert.equal(game._command_mode, 'deathDieMore');
+    assert.equal(game.u.uhp, 0);
+    assert.equal(game.u.uhunger, 2000);
+    assert.equal(game._death_cause, 'choked on a food ration');
+    assert.equal(game.inventory.includes(ration), true);
+    assert.equal(ration.oeaten, 160);
+    assert.equal(game._eating_turns_remaining || 0, 0);
+});
+
+test('floor food ration can fatally choke on first bite over 2000', async () => {
+    installNonShopFloorState();
+    game.u.uhunger = 1840;
+    const ration = foodRation(31329);
+    delete ration.letter;
+    delete ration.line;
+    game.level.objects = [ration];
+
+    await rhack('e');
+    await rhack('y');
+
+    assert.equal(game._pending_message, 'You choke over your food.  You die...');
+    assert.equal(game._command_mode, 'deathDieMore');
+    assert.equal(game.u.uhp, 0);
+    assert.equal(game._death_cause, 'choked on a food ration');
+    assert.equal(game.level.objects.includes(ration), true);
+    assert.equal(ration.oeaten, 800);
+    assert.equal(game._eating_turns_remaining || 0, 0);
+});
+
 test('carried food ration command splits unpaid stack before victual bites', async () => {
     const { shkp } = installCommandShopState();
     const stack = foodRation(3133, 'a');
