@@ -158,6 +158,26 @@ function wieldedWeapon(id, kind, letter = 'w', spe = 0) {
     };
 }
 
+function wornArmor(id, kind = 'leather armor', letter = 'a', spe = 0, extra = {}) {
+    return {
+        id,
+        cls: 'armor',
+        glyph: '[',
+        kind,
+        actualKind: kind,
+        quan: 1,
+        spe,
+        ox: 5,
+        oy: 5,
+        letter,
+        worn: true,
+        known: true,
+        dknown: true,
+        line: `${letter} - a ${spe >= 0 ? '+' : ''}${spe} ${kind} (being worn)`,
+        ...extra,
+    };
+}
+
 function foodRation(id, letter = 'a') {
     return {
         id,
@@ -264,6 +284,24 @@ function scrollOfEnchantWeapon(id, letter = 's', cursed = false) {
         oy: 5,
         letter,
         line: `${letter} - a scroll of enchant weapon`,
+    };
+}
+
+function scrollOfEnchantArmor(id, letter = 's', cursed = false) {
+    return {
+        id,
+        cls: 'scroll',
+        glyph: '?',
+        kind: 'scroll of enchant armor',
+        actualKind: 'scroll of enchant armor',
+        scrollIndex: 0,
+        cursed,
+        bknown: true,
+        quan: 1,
+        ox: 5,
+        oy: 5,
+        letter,
+        line: `${letter} - a scroll of enchant armor`,
     };
 }
 
@@ -1307,6 +1345,55 @@ test('cursed enchant weapon on unpaid enchanted weapon bills disenchantment as u
     assert.equal(game._usedUpShopBills[0].bo_id, shkp.bill[0].bo_id);
     assert.match(game._pending_message, /Your dagger glows black for a moment/);
     assert.match(game._pending_message, /You disenchant that dagger, you pay for it!/);
+});
+
+test('cursed enchant armor on unpaid worn armor bills disenchantment as used-up', async () => {
+    const { shkp } = installCommandShopState();
+    const scroll = scrollOfEnchantArmor(309025, 's', true);
+    const armor = wornArmor(309026, 'leather armor', 'a', 1);
+    game.inventory = [scroll, armor];
+    shop.addObjectToShopBill(shkp, armor, 100);
+
+    await rhack('r');
+    await rhack('s');
+
+    assert.equal(game.context.move, 1);
+    assert.equal(game.inventory.includes(scroll), false);
+    assert.equal(game.inventory.includes(armor), true);
+    assert.ok(armor.spe < 1);
+    assert.equal(armor.cursed, true);
+    assert.equal(armor.blessed, false);
+    assert.equal(armor.unpaid, false);
+    assert.equal(shop.shopBillEntryForObject(shkp, armor), null);
+    assert.equal(shkp.billct, 1);
+    assert.equal(shkp.bill[0].useup, true);
+    assert.equal(shop.shopBillEntryTotal(shkp.bill[0]), 100);
+    assert.equal((game._usedUpShopBills || []).length, 1);
+    assert.equal(game._usedUpShopBills[0].bo_id, shkp.bill[0].bo_id);
+    assert.match(game._pending_message, /Your leather armor glows black/);
+    assert.match(game._pending_message, /You disenchant that .*leather armor, you pay for it!/);
+});
+
+test('cursed enchant armor with no enchantment loss keeps the live unpaid bill', async () => {
+    const { shkp } = installCommandShopState();
+    const scroll = scrollOfEnchantArmor(309027, 's', true);
+    const armor = wornArmor(309028, 'leather armor', 'a', -3, { magic: true });
+    game.inventory = [scroll, armor];
+    shop.addObjectToShopBill(shkp, armor, 100);
+
+    await rhack('r');
+    await rhack('s');
+
+    assert.equal(game.context.move, 1);
+    assert.equal(armor.spe, -3);
+    assert.equal(armor.cursed, true);
+    assert.equal(armor.unpaid, true);
+    assert.equal(shop.shopBillEntryForObject(shkp, armor)?.useup, false);
+    assert.equal(shkp.billct, 1);
+    assert.equal(shop.shopBillEntryTotal(shkp.bill[0]), 100);
+    assert.equal((game._usedUpShopBills || []).length, 0);
+    assert.match(game._pending_message, /Your leather armor violently glows black/);
+    assert.doesNotMatch(game._pending_message, /you pay for it/);
 });
 
 test('remove curse uncurses unpaid unholy water and preserves a used-up bill row', async () => {

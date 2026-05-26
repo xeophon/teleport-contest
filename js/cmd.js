@@ -19399,6 +19399,11 @@ function enchantArmorScrollEffect(item) {
     const color = enchantArmorColorWord(armor, item.cursed, game.u?.blind);
     messages.push(`${armorSubject(armor)} ${s === 0 ? 'violently ' : ''}${armorVerb(armor, game.u?.blind ? 'vibrates' : 'glows', game.u?.blind ? 'vibrate' : 'glow')}${color} for a ${s * s > 1 ? 'while' : 'moment'}.`);
 
+    if (s < 0) {
+        const payment = costlyAlterationPaymentMessage(armor, 'disenchant');
+        if (payment) messages.push(payment);
+    }
+
     if (item.cursed) {
         armor.cursed = true;
         armor.blessed = false;
