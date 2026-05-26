@@ -9785,11 +9785,7 @@ function wizardTrapWishMatch(lowerName) {
     return null;
 }
 
-async function tryWizardNonObjectWish(lowerName) {
-    if (!game.flags?.debug) return false;
-    const trapWish = wizardTrapWishMatch(lowerName);
-    if (!trapWish) return false;
-
+async function createWizardTrapWishResult(trapWish) {
     const x = game.u?.ux || 0;
     const y = game.u?.uy || 0;
     let trapType = trapWish.trapType;
@@ -9807,6 +9803,28 @@ async function tryWizardNonObjectWish(lowerName) {
         await setWishResultMessage(`Creation of ${articleForName(trapWish.trapName)} failed.`);
     }
     return true;
+}
+
+function wizardBearLandTrapWish(lowerName, qualifiers = {}) {
+    if (!game.flags?.debug) return null;
+    const name = String(lowerName || '').trim().replace(/\s+/g, ' ');
+    const match = name.match(/^(bear\s*trap|land\s*mine)(.*)$/);
+    if (!match) return null;
+    const isBear = match[1].startsWith('bear');
+    const suffix = match[2] || '';
+    const objectName = isBear ? 'beartrap' : 'land mine';
+    if (qualifiers.trappedState === 2 || suffix.toLowerCase() === ' object')
+        return { result: 'object', objectName };
+    if (qualifiers.trappedState === 1 || suffix)
+        return { result: 'trap', trapName: isBear ? 'bear trap' : 'land mine', trapType: isBear ? BEAR_TRAP : LANDMINE };
+    return { result: 'object', objectName };
+}
+
+async function tryWizardNonObjectWish(lowerName) {
+    if (!game.flags?.debug) return false;
+    const trapWish = wizardTrapWishMatch(lowerName);
+    if (!trapWish) return false;
+    return createWizardTrapWishResult(trapWish);
 }
 
 function capWishSpe(spe) {
@@ -41416,7 +41434,15 @@ export async function rhack(_cmd) {
                 await setWishResultMessage(`$ - ${moneyQuan} gold piece${moneyQuan === 1 ? '' : 's'}.`);
                 return;
             }
-            const wishedItem = wishedObjectFromName(wishedName.trim(), wishedQualifiers);
+            const bearLandResolution = wizardBearLandTrapWish(lowerName, wishedQualifiers);
+            if (bearLandResolution?.result === 'trap') {
+                await createWizardTrapWishResult(bearLandResolution);
+                return;
+            }
+            const objectWishName = bearLandResolution?.result === 'object'
+                ? bearLandResolution.objectName
+                : wishedName.trim();
+            const wishedItem = wishedObjectFromName(objectWishName, wishedQualifiers);
             if (wishedItem._wish_no_match) {
                 if (await tryWizardNonObjectWish(lowerName)) return;
                 await handleNoFittingWish();

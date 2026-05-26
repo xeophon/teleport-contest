@@ -3,13 +3,15 @@ import test from 'node:test';
 
 import { rhack, __shopBillingTestHooks as shop } from '../js/cmd.js';
 import { game, resetGame } from '../js/gstate.js';
-import { PIT, ROOM } from '../js/const.js';
+import { BEAR_TRAP, LANDMINE, PIT, ROOM } from '../js/const.js';
 import { initRng } from '../js/rng.js';
 import { mksobj } from '../js/mklev.js';
 
 const BELL = 358;
 const GOLD_PIECE = 466;
 const TOOL_CLASS = 12;
+const LAND_MINE_OBJECT = 10160;
+const BEARTRAP_OBJECT = 10161;
 const TALLOW_CANDLE = 370;
 const WAX_CANDLE = 371;
 const CANDELABRUM_OF_INVOCATION = 10076;
@@ -76,6 +78,10 @@ function beginWishDirectly() {
 async function submitWish(text) {
     for (const ch of text) await rhack(ch.charCodeAt(0));
     await rhack('\n');
+}
+
+function trapAtHero() {
+    return game.level.traps.find(t => t.tx === game.u.ux && t.ty === game.u.uy);
 }
 
 test('unrecognized wish retries without creating a named weapon', async () => {
@@ -212,7 +218,7 @@ test('wizard trap wish creates a non-object hands result', async () => {
     beginWishDirectly();
     await submitWish('pit');
 
-    const trap = game.level.traps.find(t => t.tx === game.u.ux && t.ty === game.u.uy);
+    const trap = trapAtHero();
     assert.equal(game._command_mode, null);
     assert.equal(trap?.ttyp, PIT);
     assert.equal(game.inventory.length, 0);
@@ -220,6 +226,104 @@ test('wizard trap wish creates a non-object hands result', async () => {
     assert.equal(game.u.uconduct?.wisharti || 0, 0);
     assert.equal(game.u.ublesscnt, 0);
     assert.match(game._pending_message, /^A pit\.$/);
+});
+
+test('wizard ambiguous trap names default to disarmed objects', async () => {
+    for (const { wish, otyp, kind } of [
+        { wish: 'bear trap', otyp: BEARTRAP_OBJECT, kind: 'beartrap' },
+        { wish: 'beartrap', otyp: BEARTRAP_OBJECT, kind: 'beartrap' },
+        { wish: 'land mine', otyp: LAND_MINE_OBJECT, kind: 'land mine' },
+        { wish: 'landmine', otyp: LAND_MINE_OBJECT, kind: 'land mine' },
+    ]) {
+        installWishState();
+        beginWishDirectly();
+        await submitWish(wish);
+
+        assert.equal(game._command_mode, null, wish);
+        assert.equal(game.level.traps.length, 0, wish);
+        assert.equal(game.inventory.length, 1, wish);
+        assert.equal(game.inventory[0].otyp, otyp, wish);
+        assert.equal(game.inventory[0].kind, kind, wish);
+        assert.equal(game.u.uconduct?.wishes, 1, wish);
+        assert.ok(game.u.ublesscnt > 0, wish);
+    }
+});
+
+test('wizard ambiguous trapped forms create armed trap non-object results', async () => {
+    for (const { wish, ttyp, message } of [
+        { wish: 'trapped bear trap', ttyp: BEAR_TRAP, message: /^A bear trap\.$/ },
+        { wish: 'trapped beartrap', ttyp: BEAR_TRAP, message: /^A bear trap\.$/ },
+        { wish: 'bear trap trap', ttyp: BEAR_TRAP, message: /^A bear trap\.$/ },
+        { wish: 'beartrap trap', ttyp: BEAR_TRAP, message: /^A bear trap\.$/ },
+        { wish: 'trapped land mine', ttyp: LANDMINE, message: /^A land mine\.$/ },
+        { wish: 'trapped landmine', ttyp: LANDMINE, message: /^A land mine\.$/ },
+        { wish: 'land mine trap', ttyp: LANDMINE, message: /^A land mine\.$/ },
+        { wish: 'landmine trap', ttyp: LANDMINE, message: /^A land mine\.$/ },
+    ]) {
+        installWishState();
+        beginWishDirectly();
+        await submitWish(wish);
+
+        assert.equal(game._command_mode, null, wish);
+        assert.equal(trapAtHero()?.ttyp, ttyp, wish);
+        assert.equal(game.inventory.length, 0, wish);
+        assert.equal(game.u.uconduct?.wishes || 0, 0, wish);
+        assert.equal(game.u.uconduct?.wisharti || 0, 0, wish);
+        assert.equal(game.u.ublesscnt, 0, wish);
+        assert.match(game._pending_message, message, wish);
+    }
+});
+
+test('wizard ambiguous object-forced forms stay disarmed objects', async () => {
+    for (const { wish, otyp } of [
+        { wish: 'untrapped bear trap', otyp: BEARTRAP_OBJECT },
+        { wish: 'bear trap object', otyp: BEARTRAP_OBJECT },
+        { wish: 'trapped bear trap object', otyp: BEARTRAP_OBJECT },
+        { wish: 'untrapped land mine', otyp: LAND_MINE_OBJECT },
+        { wish: 'land mine object', otyp: LAND_MINE_OBJECT },
+        { wish: 'trapped land mine object', otyp: LAND_MINE_OBJECT },
+    ]) {
+        installWishState();
+        beginWishDirectly();
+        await submitWish(wish);
+
+        assert.equal(game._command_mode, null, wish);
+        assert.equal(game.level.traps.length, 0, wish);
+        assert.equal(game.inventory.length, 1, wish);
+        assert.equal(game.inventory[0].otyp, otyp, wish);
+        assert.equal(game.u.uconduct?.wishes, 1, wish);
+    }
+});
+
+test('non-wizard ambiguous trapped prefixes still resolve to objects', async () => {
+    for (const { wish, otyp } of [
+        { wish: 'trapped bear trap', otyp: BEARTRAP_OBJECT },
+        { wish: 'trapped land mine', otyp: LAND_MINE_OBJECT },
+    ]) {
+        installWishState(1, { debug: false });
+        beginWishDirectly();
+        await submitWish(wish);
+
+        assert.equal(game._command_mode, null, wish);
+        assert.equal(game.level.traps.length, 0, wish);
+        assert.equal(game.inventory.length, 1, wish);
+        assert.equal(game.inventory[0].otyp, otyp, wish);
+        assert.equal(game.u.uconduct?.wishes, 1, wish);
+    }
+});
+
+test('non-wizard ambiguous suffixes do not create map traps', async () => {
+    for (const wish of ['bear trap trap', 'land mine trap']) {
+        installWishState(1, { debug: false });
+        beginWishDirectly();
+        await submitWish(wish);
+
+        assert.equal(game._command_mode, 'wizardWish', wish);
+        assert.equal(game.level.traps.length, 0, wish);
+        assert.equal(game.inventory.length, 0, wish);
+        assert.equal(game._wish_tries, 1, wish);
+        assert.match(game._pending_message, /Nothing fitting that description exists in the game\./, wish);
+    }
 });
 
 test('non-wizard trap words remain bad wish descriptions', async () => {
