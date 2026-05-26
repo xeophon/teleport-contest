@@ -6683,6 +6683,61 @@ test('accepted paid drop sale stacks into compatible chargeable shop stock', asy
     assert.equal(shkp.billct, 0);
 });
 
+test('payable debts use C itemized order by used-up state then price', () => {
+    const { shkp } = installShopState();
+    const costly = dagger(8991, 'a');
+    const partlyUsed = { ...dagger(8992, 'b'), quan: 2, line: 'b - 2 +0 daggers' };
+    game.inventory = [costly, partlyUsed];
+    shop.addObjectToShopBill(shkp, costly, 30);
+    shop.addObjectToShopBill(shkp, partlyUsed, 10);
+    partlyUsed.quan = 1;
+
+    const entries = shop.collectPayableShopDebts(shkp);
+
+    assert.equal(entries.length, 3);
+    assert.equal(entries[0].billPortion, 'partlyUsedUp');
+    assert.equal(entries[0].price, 5);
+    assert.equal(entries[0].letter, 'a');
+    assert.equal(entries[1].item, costly);
+    assert.equal(entries[1].price, 30);
+    assert.equal(entries[1].letter, 'b');
+    assert.equal(entries[2].item, partlyUsed);
+    assert.equal(entries[2].price, 5);
+    assert.equal(entries[2].letter, 'c');
+});
+
+test('queued shop payment stops after selected entries become unaffordable', () => {
+    const { shkp } = installShopState();
+    const cheap = dagger(8993, 'a');
+    const costly = dagger(8994, 'b');
+    game.inventory = [cheap, costly];
+    game._goldCount = 25;
+    shop.addObjectToShopBill(shkp, cheap, 10);
+    shop.addObjectToShopBill(shkp, costly, 20);
+
+    const entries = shop.collectPayableShopDebts(shkp);
+
+    assert.equal(entries.length, 2);
+    assert.equal(entries[0].item, costly);
+    assert.equal(entries[0].price, 20);
+    assert.equal(entries[1].item, cheap);
+    assert.equal(entries[1].price, 10);
+
+    const payment = shop.finishShopPaymentSelection(shkp, entries);
+
+    assert.equal(payment.paid, true);
+    assert.equal(payment.stoppedShort, true);
+    assert.equal(payment.cashTotal, 20);
+    assert.equal(payment.payableEntries.length, 1);
+    assert.equal(payment.payableEntries[0].item, costly);
+    assert.equal(game._goldCount, 5);
+    assert.equal(shop.shopBillEntryForObject(shkp, costly), null);
+    assert.notEqual(shop.shopBillEntryForObject(shkp, cheap), null);
+    assert.equal(costly.unpaid, false);
+    assert.equal(cheap.unpaid, true);
+    assert.equal(shkp.billct, 1);
+});
+
 test('payable debts split partly used stacks into used and intact bill portions', () => {
     const { shkp } = installShopState();
     const stack = { ...dagger(9001, 'd'), quan: 3, line: 'd - 3 +0 daggers' };

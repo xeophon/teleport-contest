@@ -22935,11 +22935,14 @@ function collectPayableShopDebts(shkp = null) {
         name: `debt owed to ${shopkeeperDisplayName(shkp)}`,
         price: debit,
     });
-    return entries.map((entry, index) => ({
-        ...entry,
-        letter: String.fromCharCode(97 + index),
-        selected: false,
-    }));
+    return entries
+        .map((entry, index) => ({ entry, index }))
+        .sort((a, b) => shopPaymentEntryCompare(a.entry, b.entry) || a.index - b.index)
+        .map(({ entry }, index) => ({
+            ...entry,
+            letter: String.fromCharCode(97 + index),
+            selected: false,
+        }));
 }
 
 function shopkeeperDebitPayment(entry) {
@@ -22955,6 +22958,14 @@ function shopPaymentEntryRank(entry) {
     if (entry?.shopkeeperDebit) return 0;
     if (entry?.billPortion === 'partlyUsedUp' || entry?.billPortion === 'fullyUsedUp' || entry?.usedUpBill) return 1;
     return 2;
+}
+
+function shopPaymentEntryCompare(a, b) {
+    const rank = shopPaymentEntryRank(a) - shopPaymentEntryRank(b);
+    if (rank) return rank;
+    const price = shopPaymentEntryValue(b) - shopPaymentEntryValue(a);
+    if (price) return price;
+    return 0;
 }
 
 function shopPaymentHasUsedUpSelection(selected, entry) {
@@ -22998,7 +23009,7 @@ function blockedShopPaymentMessage(entry, selected) {
 function payableShopPaymentEntries(selected) {
     return [...(selected || [])]
         .filter(entry => !shopPaymentEntryBlocked(entry, selected || []))
-        .sort((a, b) => shopPaymentEntryRank(a) - shopPaymentEntryRank(b));
+        .sort(shopPaymentEntryCompare);
 }
 
 function shopPaymentEntryValue(entry) {
@@ -23120,40 +23131,60 @@ function applyShopPaymentEntry(shkp, entry) {
 
 function finishShopPaymentSelection(shkp, selected) {
     const payableEntries = payableShopPaymentEntries(selected);
-    const cashTotal = shopPaymentCashDue(shkp, payableEntries);
     if (!payableEntries.length) {
         const blockedEntry = (selected || []).find(entry => shopPaymentEntryBlocked(entry, selected || []));
         if (blockedEntry) return {
             paid: false,
             skipped: false,
             blocked: true,
-            cashTotal,
+            cashTotal: 0,
             payableEntries,
             message: blockedShopPaymentMessage(blockedEntry, selected || []),
         };
-        return { paid: false, skipped: true, cashTotal, payableEntries, message: '' };
+        return { paid: false, skipped: true, cashTotal: 0, payableEntries, message: '' };
     }
     const money = (game.inventory || []).find(item => item.letter === '$' || item.cls === 'coin');
     const availableGold = game._goldCount || money?.quan || 0;
-    if (availableGold < cashTotal) return {
-        paid: false,
-        cashTotal,
-        payableEntries,
-        message: "You don't have enough gold.",
-    };
-
-    if (availableGold > cashTotal) next_ident();
-    game._goldCount = Math.max(0, availableGold - cashTotal);
-    if (money) {
-        money.quan = game._goldCount;
-        updateMoneyLine(money);
-    }
-
+    let remainingGold = availableGold;
+    let cashTotal = 0;
     let removedLedgerBillCount = 0;
     let billedSelections = 0;
     let legacyBillSelections = 0;
+    const paidEntries = [];
+    let stoppedShort = false;
+    let stopMessage = '';
     for (const entry of payableEntries) {
+        const paymentShopkeeper = entry?.shopkeeperDebit || shkp;
+        const value = shopPaymentEntryValue(entry);
+        const credit = Math.max(0, Math.trunc(Number(paymentShopkeeper?.credit || 0)));
+        const cashDue = value - Math.min(credit, value);
+        if (cashDue > remainingGold) {
+            if (paidEntries.length) break;
+            return {
+                paid: false,
+                cashTotal: 0,
+                payableEntries,
+                message: "You don't have enough gold.",
+            };
+        }
         const result = applyShopPaymentEntry(shkp, entry);
+        if (result.blocked) {
+            if (paidEntries.length) {
+                stoppedShort = true;
+                stopMessage = result.message || blockedShopPaymentMessage(entry, selected || []);
+                break;
+            }
+            return {
+                paid: false,
+                blocked: true,
+                cashTotal: 0,
+                payableEntries,
+                message: result.message || blockedShopPaymentMessage(entry, selected || []),
+            };
+        }
+        remainingGold -= cashDue;
+        cashTotal += cashDue;
+        paidEntries.push(entry);
         if (!result.billed) continue;
         billedSelections++;
         if (result.removedLedgerBillCount != null)
@@ -23162,15 +23193,34 @@ function finishShopPaymentSelection(shkp, selected) {
             removedLedgerBillCount++;
         if (result.legacy) legacyBillSelections++;
     }
+    if (payableEntries.length > paidEntries.length && !stoppedShort) {
+        stoppedShort = true;
+        stopMessage = "You don't have enough gold.";
+    }
     if (shkp && legacyBillSelections)
         shkp.billct = Math.max(0, (shkp.billct || legacyBillSelections) - legacyBillSelections);
+    if (!paidEntries.length) return {
+        paid: false,
+        cashTotal: 0,
+        payableEntries,
+        message: "You don't have enough gold.",
+    };
+
+    if (availableGold > cashTotal) next_ident();
+    game._goldCount = Math.max(0, remainingGold);
+    if (money) {
+        money.quan = game._goldCount;
+        updateMoneyLine(money);
+    }
     return {
         paid: true,
         cashTotal,
-        payableEntries,
+        payableEntries: paidEntries,
         billedSelections,
         removedLedgerBillCount,
         legacyBillSelections,
+        stoppedShort,
+        message: stopMessage,
     };
 }
 
@@ -29896,7 +29946,9 @@ export async function rhack(_cmd) {
             const shopName = SHOP_TYPES[shopIndex]?.name || 'shop';
             const shopkeeperName = shkp?.shknam || 'shopkeeper';
             const possessive = shopkeeperName.endsWith('s') ? `${shopkeeperName}'` : `${shopkeeperName}'s`;
-            game._queued_message_after_more = `"Thank you for shopping in ${possessive} ${shopName}!"`;
+            game._queued_message_after_more = payment.stoppedShort
+                ? payment.message || "You don't have enough gold."
+                : `"Thank you for shopping in ${possessive} ${shopName}!"`;
             const paidEntries = payment.payableEntries;
             const message = paidEntries.length === 1
                 ? `You bought ${paidEntries[0].name} for ${paidEntries[0].price} gold piece${paidEntries[0].price === 1 ? '' : 's'}.`
