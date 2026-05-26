@@ -88,6 +88,7 @@ The current audit source of truth is `docs/c-parity-audit/`.
 - Added C-style carried fire-ignition billing: unpaid carried light sources that catch fire in a shop now charge the normal usage fee, then preserve the original bill row as a used-up bill entry; off-shop ignition leaves the live bill row unchanged.
 - Added a narrow C-shaped wish finalization slice: requested quantities now stay limited to mergeable object classes and C multigen caps, requested `spe` follows class rules for weapons, armor, weapon-tools, charged rings, wands, crystal balls, and non-`spe` objects, and wished crystal balls now use the proper tool initialization path.
 - Tightened floor fire source ownership: generic C floor fire catch-light remains unbilled, monster red dragon breath now uses non-hero floor-fire ownership, and hero-caused trap/ray floor destruction remains routed through used-up or robbed shop billing.
+- Added C-style wand engraving usage billing: engraving with a wand spends a charge before text entry, unpaid usage is billed from the post-spend charge count, last-charge engraving adds no usage fee, and cursed backfire preserves the wand as a used-up bill row.
 - Latest verified public score: `44/44`.
 
 ## Current Priorities
@@ -95,8 +96,8 @@ The current audit source of truth is `docs/c-parity-audit/`.
 1. Shop ledger foundation.
    - Source notes: `docs/c-parity-audit/05-food-inventory-containers-shops.md`.
    - Current JS has a starter bill ledger, but object `unpaid`/`unpaidPrice` fields and legacy fallback scans still participate in billing.
-   - Missing or partial concepts include full `addtobill`, full `subfrombill` routing, non-ordinary magic-bag source/target cases, full `obfree()`/container-aware `stolen_value()` helper integration, shared `sellobj()` helper integration beyond ordinary branches, remaining add-inventory/no-charge cleanup outside ordinary shop pickup, remaining charge-consuming `check_unpaid_usage` caller coverage such as wand engraving, and non-bite `costly_alteration` coverage outside the narrow food/tin/box-lock/cream-pie paths.
-   - The next narrow C-backed gaps are remaining container itemized `#pay` aggregation outside carried ledger-backed contents, non-ordinary magic-bag source/target cases, remaining inventory merge edge cases outside carried-bag partial put-in, remaining merge/destruction edge cases, artifact touch side effects outside floor pickup/container take-out, full `obfree()`/container-aware `stolen_value()` debt naming, wand engraving usage fees, and less ordinary `addtobill()`/quote positioning outside whole-container pickup.
+   - Missing or partial concepts include full `addtobill`, full `subfrombill` routing, non-ordinary magic-bag source/target cases, full `obfree()`/container-aware `stolen_value()` helper integration, shared `sellobj()` helper integration beyond ordinary branches, remaining add-inventory/no-charge cleanup outside ordinary shop pickup, less-common `check_unpaid_usage` caller coverage, and non-bite `costly_alteration` coverage outside the narrow food/tin/box-lock/cream-pie paths.
+   - The next narrow C-backed gaps are remaining container itemized `#pay` aggregation outside carried ledger-backed contents, non-ordinary magic-bag source/target cases, remaining inventory merge edge cases outside carried-bag partial put-in, remaining merge/destruction edge cases, artifact touch side effects outside floor pickup/container take-out, full `obfree()`/container-aware `stolen_value()` debt naming, and less ordinary `addtobill()`/quote positioning outside whole-container pickup.
 
 2. Object registry and canonical object factory.
    - Source notes: `docs/c-parity-audit/02-objects-wishing-readobjnam.md`.

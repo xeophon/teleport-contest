@@ -850,6 +850,72 @@ test('unpaid wand use with no charges is not billed for usage', () => {
     assert.equal(messages.length, 0);
 });
 
+test('engraving with an unpaid wand bills from the post-spend charge count', async () => {
+    const { shkp } = installCommandShopState();
+    const wand = cancellationWand(30841, 'w');
+    wand.spe = 2;
+    game.inventory = [wand];
+    shop.addObjectToShopBill(shkp, wand, 100);
+
+    await rhack('E');
+    await rhack('w');
+
+    assert.equal(wand.spe, 1);
+    assert.equal(shkp.debit, 100);
+    assert.equal(shkp.billct, 1);
+    assert.match(game._pending_message, /Usage fee, 100 zorkmids/);
+    assert.equal(game._command_mode, 'engraveToolMore');
+    const entry = shop.shopBillEntryForObject(shkp, wand);
+    assert.ok(entry);
+    assert.equal(entry.useup, false);
+    assert.equal(wand.unpaid, true);
+});
+
+test('engraving with the last unpaid wand charge does not add a usage fee', async () => {
+    const { shkp } = installCommandShopState();
+    const wand = cancellationWand(30842, 'w');
+    wand.spe = 1;
+    game.inventory = [wand];
+    shop.addObjectToShopBill(shkp, wand, 100);
+
+    await rhack('E');
+    await rhack('w');
+
+    assert.equal(wand.spe, 0);
+    assert.equal(shkp.debit || 0, 0);
+    assert.equal(shkp.billct, 1);
+    assert.doesNotMatch(game._pending_message, /Usage fee/);
+    assert.equal(game._command_mode, 'engraveToolMore');
+    const entry = shop.shopBillEntryForObject(shkp, wand);
+    assert.ok(entry);
+    assert.equal(entry.useup, false);
+    assert.equal(wand.unpaid, true);
+});
+
+test('cursed unpaid wand engraving backfire preserves the used-up bill row', async () => {
+    const { shkp } = installCommandShopState();
+    initRng(49);
+    const wand = cancellationWand(30843, 'w');
+    wand.spe = 2;
+    wand.cursed = true;
+    game.inventory = [wand];
+    shop.addObjectToShopBill(shkp, wand, 100);
+
+    await rhack('E');
+    await rhack('w');
+
+    assert.match(game._pending_message, /Usage fee, 100 zorkmids/);
+    assert.match(game._pending_message, /The wand of cancellation suddenly explodes!/);
+    assert.equal(game.inventory.includes(wand), false);
+    assert.equal(shkp.debit, 100);
+    assert.equal(shkp.billct, 1);
+    const entry = shop.shopBillEntryForObject(shkp, wand);
+    assert.ok(entry);
+    assert.equal(entry.useup, true);
+    assert.equal(shop.shopBillEntryTotal(entry), 100);
+    assert.equal(wand.unpaid, false);
+});
+
 test('cursed unpaid wand backfire preserves the wand as a used-up bill row', async () => {
     const { shkp } = installCommandShopState();
     initRng(49);

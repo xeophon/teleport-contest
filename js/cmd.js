@@ -165,6 +165,14 @@ function spendZapWandCharge(item, messages) {
     return zappableWand(item, { fallbackCharges: 8 });
 }
 
+function spendEngraveWandCharge(item, messages) {
+    const chargeUse = zappableWand(item);
+    if (!chargeUse.zapped) return chargeUse;
+    checkUnpaidUsage(item, messages, { chargeCount: wandCharges(item) });
+    refreshWandLine(item);
+    return chargeUse;
+}
+
 function spendChargedToolUse(item, messages) {
     const charges = chargedUsageChargeCount(item);
     if (charges <= 0) return false;
@@ -292,6 +300,12 @@ function wandZapSpendMessages(usageMessages, chargeUse) {
 function dustWand(item) {
     const name = pickupObjectName(item);
     removeInventoryItem(item);
+    return `The ${name} turns to dust.`;
+}
+
+function useUpDustWand(item) {
+    const name = pickupObjectName(item);
+    useUpInventoryItem(item, item?.quan || 1);
     return `The ${name} turns to dust.`;
 }
 
@@ -35679,6 +35693,43 @@ export async function rhack(_cmd) {
         }
         if (ch === '-') {
             await setMessage('You write in the dust with your fingertip.', true);
+            game._command_mode = 'engraveToolMore';
+            return;
+        }
+        const item = (game.inventory || []).find(invItem => invItem.letter === ch);
+        if (item && isWandItem(item)) {
+            const usageMessages = [];
+            const chargeUse = spendEngraveWandCharge(item, usageMessages);
+            const messages = wandZapSpendMessages(usageMessages, chargeUse);
+            if (!chargeUse.zapped) {
+                if (chargeUse.dust && (game.inventory || []).includes(item))
+                    messages.push(useUpDustWand(item));
+                else
+                    messages.push('The wand is too worn out to engrave.');
+                await setMessage(messages.join('  '));
+                game._command_mode = null;
+                game.context.move = 1;
+                return;
+            }
+            if (item.cursed && !rn2(WAND_BACKFIRE_CHANCE)) {
+                const damage = d(wandCharges(item) + 2, 6);
+                if (game.u) game.u.uhp = Math.max(0, (game.u.uhp || 0) - damage);
+                useUpInventoryItem(item, item.quan || 1);
+                messages.push(`The ${pickupObjectName(item)} suddenly explodes!`);
+                await setMessage(messages.join('  '));
+                game._command_mode = null;
+                game.context.move = 1;
+                return;
+            }
+            if (wandCharges(item) < 0 && (game.inventory || []).includes(item)) {
+                messages.push(useUpDustWand(item));
+                await setMessage(messages.join('  '));
+                game._command_mode = null;
+                game.context.move = 1;
+                return;
+            }
+            if (!messages.length) messages.push(`You write in the dust with ${articleFor(pickupObjectName(item))}.`);
+            await setMessage(messages.join('  '), true);
             game._command_mode = 'engraveToolMore';
             return;
         }
