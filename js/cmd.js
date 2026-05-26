@@ -23802,6 +23802,13 @@ function applyShopPaymentEntry(shkp, entry) {
     return payIntactShopBillEntry(shkp, entry);
 }
 
+function shopPaymentInsufficientFundsMessage(entry, shkp) {
+    const paymentShopkeeper = entry?.shopkeeperDebit || shkp;
+    const credit = Math.max(0, Math.trunc(Number(paymentShopkeeper?.credit || 0)));
+    const itemName = entry?.name || 'that item';
+    return `You don't have gold${credit ? ' or credit' : ''} enough to pay for ${itemName}.`;
+}
+
 function finishShopPaymentSelection(shkp, selected) {
     const payableEntries = payableShopPaymentEntries(selected);
     if (!payableEntries.length) {
@@ -23832,12 +23839,17 @@ function finishShopPaymentSelection(shkp, selected) {
         const credit = Math.max(0, Math.trunc(Number(paymentShopkeeper?.credit || 0)));
         const cashDue = value - Math.min(credit, value);
         if (cashDue > remainingGold) {
-            if (paidEntries.length) break;
+            const message = shopPaymentInsufficientFundsMessage(entry, paymentShopkeeper);
+            if (paidEntries.length) {
+                stoppedShort = true;
+                stopMessage = message;
+                break;
+            }
             return {
                 paid: false,
                 cashTotal: 0,
                 payableEntries,
-                message: "You don't have enough gold.",
+                message,
             };
         }
         const result = applyShopPaymentEntry(shkp, entry);
@@ -23868,7 +23880,7 @@ function finishShopPaymentSelection(shkp, selected) {
     }
     if (payableEntries.length > paidEntries.length && !stoppedShort) {
         stoppedShort = true;
-        stopMessage = "You don't have enough gold.";
+        stopMessage = shopPaymentInsufficientFundsMessage(payableEntries[paidEntries.length] || payableEntries[0], shkp);
     }
     if (shkp && legacyBillSelections)
         shkp.billct = Math.max(0, (shkp.billct || legacyBillSelections) - legacyBillSelections);
@@ -23876,7 +23888,7 @@ function finishShopPaymentSelection(shkp, selected) {
         paid: false,
         cashTotal: 0,
         payableEntries,
-        message: "You don't have enough gold.",
+        message: shopPaymentInsufficientFundsMessage(payableEntries[0], shkp),
     };
 
     if (availableGold > cashTotal) next_ident();

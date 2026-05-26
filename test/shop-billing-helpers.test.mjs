@@ -8988,6 +8988,26 @@ test('queued shop payment stops after selected entries become unaffordable', () 
     assert.equal(costly.unpaid, false);
     assert.equal(cheap.unpaid, true);
     assert.equal(shkp.billct, 1);
+    assert.equal(payment.message, "You don't have gold enough to pay for a dagger.");
+});
+
+test('selected shop payment shortfall names the unpaid row and credit', () => {
+    const { shkp } = installShopState();
+    const ration = foodRation(9601, 'a');
+    game.inventory = [ration];
+    game._goldCount = 5;
+    shkp.credit = 10;
+    shop.addObjectToShopBill(shkp, ration, 45);
+
+    const entries = shop.collectPayableShopDebts(shkp);
+    const payment = shop.finishShopPaymentSelection(shkp, [entries[0]]);
+
+    assert.equal(payment.paid, false);
+    assert.equal(payment.message, "You don't have gold or credit enough to pay for a food ration.");
+    assert.equal(game._goldCount, 5);
+    assert.equal(shkp.credit, 10);
+    assert.equal(shkp.billct, 1);
+    assert.notEqual(shop.shopBillEntryForObject(shkp, ration), null);
 });
 
 test('pay command separates used-up and unpaid sections in the itemized menu', async () => {
@@ -9050,6 +9070,63 @@ test('pay command refuses itemized menu below the cheapest billed row', async ()
     assert.equal(shkp.billct, 2);
     assert.notEqual(shop.shopBillEntryForObject(shkp, cheap), null);
     assert.notEqual(shop.shopBillEntryForObject(shkp, costly), null);
+});
+
+test('pay command selected row shortfall names the unpaid item and credit', async () => {
+    const { shkp } = installCommandShopState();
+    const cheap = dagger(9602, 'a');
+    const costly = foodRation(9603, 'b');
+    game.inventory = [cheap, costly];
+    game._goldCount = 20;
+    shkp.credit = 5;
+    shop.addObjectToShopBill(shkp, cheap, 10);
+    shop.addObjectToShopBill(shkp, costly, 45);
+
+    await rhack('p');
+
+    assert.equal(game._command_mode, 'payMenu');
+    assert.equal(game._pay_menu_items[0].item, costly);
+
+    await rhack('a');
+    await rhack('\n');
+
+    assert.notEqual(game._command_mode, 'payMenu');
+    assert.equal(game._pending_message, "You don't have gold or credit enough to pay for a food ration.");
+    assert.equal(game._goldCount, 20);
+    assert.equal(shkp.credit, 5);
+    assert.equal(shkp.billct, 2);
+    assert.notEqual(shop.shopBillEntryForObject(shkp, costly), null);
+    assert.notEqual(shop.shopBillEntryForObject(shkp, cheap), null);
+});
+
+test('pay command queued payment stops with selected row shortfall wording', async () => {
+    const { shkp } = installCommandShopState();
+    const cheap = dagger(9604, 'a');
+    const costly = foodRation(9605, 'b');
+    game.inventory = [cheap, costly];
+    game._goldCount = 50;
+    shop.addObjectToShopBill(shkp, cheap, 10);
+    shop.addObjectToShopBill(shkp, costly, 45);
+
+    await rhack('p');
+
+    assert.equal(game._command_mode, 'payMenu');
+    assert.equal(game._pay_menu_items[0].item, costly);
+    assert.equal(game._pay_menu_items[1].item, cheap);
+
+    await rhack('a');
+    await rhack('b');
+    await rhack('\n');
+
+    assert.equal(game._pending_message, 'You bought a food ration for 45 gold pieces.');
+    assert.equal(game._queued_message_after_more, "You don't have gold enough to pay for a dagger.");
+    assert.equal(game.context.move, 1);
+    assert.equal(game._goldCount, 5);
+    assert.equal(shkp.billct, 1);
+    assert.equal(costly.unpaid, false);
+    assert.equal(cheap.unpaid, true);
+    assert.equal(shop.shopBillEntryForObject(shkp, costly), null);
+    assert.notEqual(shop.shopBillEntryForObject(shkp, cheap), null);
 });
 
 test('pay command settles shop debt before opening itemized billing', async () => {
