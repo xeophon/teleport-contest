@@ -289,6 +289,31 @@ function foodRationStack(id, quan, letter = 'a') {
     };
 }
 
+function simpleFood(id, kind, letter = 'f', extra = {}) {
+    const pluralByKind = {
+        'lembas wafer': 'lembas wafers',
+        pancake: 'pancakes',
+        'cream pie': 'cream pies',
+        'cram ration': 'cram rations',
+        'fortune cookie': 'fortune cookies',
+    };
+    const article = /^[aeiou]/i.test(kind) ? 'an' : 'a';
+    return {
+        id,
+        cls: 'food',
+        glyph: '%',
+        kind,
+        actualKind: kind,
+        quan: 1,
+        plural: pluralByKind[kind],
+        ox: 5,
+        oy: 5,
+        letter,
+        line: `${letter} - ${article} ${kind}`,
+        ...extra,
+    };
+}
+
 function creamPie(id, letter = 'p', quan = 1) {
     return {
         id,
@@ -8667,6 +8692,24 @@ test('food-ration floor pickup merges compatible paid inventory stacks', async (
     assert.equal(game.context.move, 1);
 });
 
+test('covered simple food floor pickup merges compatible paid inventory stacks', async () => {
+    installNonShopFloorState();
+    const carried = { ...simpleFood(7053, 'lembas wafer', 'l'), bknown: false };
+    const floorObj = { ...simpleFood(7054, 'lembas wafer'), letter: undefined, line: undefined, bknown: false };
+    game.inventory = [carried];
+    game.level.objects = [floorObj];
+
+    await rhack(',');
+
+    assert.equal(game.inventory.length, 1);
+    assert.equal(game.inventory[0], carried);
+    assert.equal(carried.quan, 2);
+    assert.match(carried.line, /^l - 2 lembas wafers/);
+    assert.equal(game.level.objects.includes(floorObj), false);
+    assert.match(game._pending_message, /l - a lembas wafer \(2 in total\)\./);
+    assert.equal(game.context.move, 1);
+});
+
 test('food-ration pickup merge rejects actual BUC mismatches even when unknown', () => {
     installShopState();
     const carried = foodRation(7061, 'a');
@@ -8748,10 +8791,19 @@ test('food-ration shop pickup merge rejects paid targets and combines same-shop 
     assert.equal(shkp.billct, 1);
 });
 
-test('food-ration pickup merge keeps other food outside the narrow slice', () => {
+test('covered simple food pickup merge excludes not-yet-modeled food exceptions', () => {
     installShopState();
-    const carriedPie = creamPie(7101, 'p');
-    const floorPie = { ...creamPie(7102), letter: undefined, line: undefined };
+    const carriedPancake = simpleFood(7101, 'pancake', 'p');
+    const floorPancake = { ...simpleFood(7102, 'pancake'), letter: undefined, line: undefined };
+    game.inventory = [carriedPancake];
+
+    const pancakeMerge = shop.findPickedObjectInventoryMergeTarget(floorPancake, 0);
+    assert.equal(pancakeMerge.target, carriedPancake);
+    shop.mergePickedObjectIntoInventory(floorPancake, carriedPancake);
+    assert.equal(carriedPancake.quan, 2);
+
+    const carriedPie = creamPie(7105, 'p');
+    const floorPie = { ...creamPie(7106), letter: undefined, line: undefined };
     game.inventory = [carriedPie];
 
     assert.equal(shop.findPickedObjectInventoryMergeTarget(floorPie, 0), null);
@@ -8772,6 +8824,24 @@ test('food-ration pickup full-inventory preflight allows no-charge merge', async
     const { shkp } = installCommandShopState();
     const carried = { ...foodRation(7111, 'a'), bknown: false };
     const floorObj = { ...foodRation(7112), letter: undefined, line: undefined, bknown: false, no_charge: true };
+    fillInventoryLetters();
+    game.inventory[0] = carried;
+    game.level.objects = [floorObj];
+
+    await rhack(',');
+
+    assert.equal(game.inventory.length, INVENTORY_LETTERS.length);
+    assert.equal(carried.quan, 2);
+    assert.equal(game.level.objects.includes(floorObj), false);
+    assert.doesNotMatch(game._pending_message, /knapsack cannot accommodate/);
+    assert.equal(shkp.billct, 0);
+    assert.equal(game.context.move, 1);
+});
+
+test('covered simple food pickup full-inventory preflight allows no-charge merge', async () => {
+    const { shkp } = installCommandShopState();
+    const carried = { ...simpleFood(7113, 'lembas wafer', 'l'), bknown: false };
+    const floorObj = { ...simpleFood(7114, 'lembas wafer'), letter: undefined, line: undefined, bknown: false, no_charge: true };
     fillInventoryLetters();
     game.inventory[0] = carried;
     game.level.objects = [floorObj];

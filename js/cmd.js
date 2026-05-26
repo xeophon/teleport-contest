@@ -4684,6 +4684,9 @@ const OBJECT_WEIGHTS = {
     'food ration': 20,
     'fortune cookie': 1,
     'fortune cookies': 1,
+    'pancake': 2,
+    'lembas wafer': 5,
+    'cram ration': 15,
     'sprig of wolfsbane': 1,
     'meat ring': 5,
     'grappling hook': 30,
@@ -16775,15 +16778,28 @@ function pickupWeaponCanStack(obj) {
     return /\b(?:arrow|ya|bolt|dart|dagger|knife|spear|javelin|shuriken|boomerang|rock|stone)\b/.test(name);
 }
 
-function isOrdinaryFoodRationObject(obj) {
+const COVERED_SIMPLE_MERGEABLE_FOOD_KINDS = new Set([
+    'pancake',
+    'lembas wafer',
+    'cram ration',
+    'food ration',
+]);
+
+function simpleMergeableFoodKind(obj) {
+    const kind = objectKindKey(obj).replace(/^partly eaten\s+/, '').trim();
+    if (COVERED_SIMPLE_MERGEABLE_FOOD_KINDS.has(kind)) return kind;
+    const singular = String(obj?.singular || '').toLowerCase().trim();
+    if (COVERED_SIMPLE_MERGEABLE_FOOD_KINDS.has(singular)) return singular;
+    return '';
+}
+
+function isSimpleMergeableFoodObject(obj) {
     if (!obj || isTinObject(obj) || isEggItem(obj) || isGlobbyObject(obj) || globContents(obj).length) return false;
     if (obj.otyp === CORPSE || obj.otyp === 'corpse') return false;
-    const kind = objectKindKey(obj).replace(/^partly eaten\s+/, '').trim();
+    const kind = simpleMergeableFoodKind(obj);
     if (obj.otyp === MEAT_RING || kind === 'meat ring') return false;
-    if (obj.otyp === FOOD_RATION) return true;
-    const singular = String(obj?.singular || '').toLowerCase().trim();
     const foodLike = obj.cls === 'food' || obj.otyp === FOOD_CLASS || obj.glyph === '%';
-    return foodLike && (kind === 'food ration' || singular === 'food ration');
+    return foodLike && !!kind;
 }
 
 function objectInstanceNameKey(obj) {
@@ -16807,7 +16823,7 @@ function copyObjectInstanceNameForMerge(target, source) {
 function pickupObjectCanInventoryMerge(obj) {
     if (!obj || shopBillableGold(obj) || globContents(obj).length || isGlobbyObject(obj)) return false;
     if (obj.otyp === CORPSE || obj.otyp === 'corpse' || obj.otyp === EGG || isTinObject(obj)) return false;
-    if (isOrdinaryFoodRationObject(obj)) return true;
+    if (isSimpleMergeableFoodObject(obj)) return true;
     if (obj.cls === 'food' || obj.otyp === FOOD_CLASS) return false;
     const cls = shopObjectClassCode(obj);
     if (cls === SCROLL_CLASS || cls === POTION_CLASS || cls === GEM_CLASS) return true;
@@ -16839,9 +16855,10 @@ function pickedObjectInventoryMergeCompatible(target, source, sourceWillBeUnpaid
     if ((target.gemDescription ?? null) !== (source.gemDescription ?? null)) return false;
     if ((target.actualKind || target.kind || '') !== (source.actualKind || source.kind || '')
         && pickupMergeName(target) !== pickupMergeName(source)) return false;
-    if ((isOrdinaryFoodRationObject(target) || isOrdinaryFoodRationObject(source))
-        && (!isOrdinaryFoodRationObject(target)
-            || !isOrdinaryFoodRationObject(source)
+    if ((isSimpleMergeableFoodObject(target) || isSimpleMergeableFoodObject(source))
+        && (!isSimpleMergeableFoodObject(target)
+            || !isSimpleMergeableFoodObject(source)
+            || simpleMergeableFoodKind(target) !== simpleMergeableFoodKind(source)
             || !objectInstanceNamesMergeCompatible(target, source)))
         return false;
     if (isCandleObject(source) && Math.trunc((target.age || 0) / 25) !== Math.trunc((source.age || 0) / 25))
@@ -16866,7 +16883,7 @@ function findPickedObjectInventoryMergeTarget(source, sourcePrice = null) {
 function mergePickedObjectIntoInventory(source, target) {
     const pickedCount = Math.max(1, Math.trunc(Number(source?.quan || 1)));
     const targetCount = Math.max(1, Math.trunc(Number(target.quan || 1)));
-    if (isOrdinaryFoodRationObject(target) && isOrdinaryFoodRationObject(source)) {
+    if (isSimpleMergeableFoodObject(target) && isSimpleMergeableFoodObject(source)) {
         const targetAge = Number.isFinite(Number(target.age)) ? Number(target.age) : 0;
         const sourceAge = Number.isFinite(Number(source.age)) ? Number(source.age) : 0;
         if (target.age != null || source.age != null)
@@ -16880,7 +16897,7 @@ function mergePickedObjectIntoInventory(source, target) {
     if (source.rknown !== target.rknown) target.rknown = true;
     target.line = normalInventoryLine({ ...target, line: '' });
     if (target.unpaid) syncUnpaidBillLine(target);
-    const pickedPhrase = isOrdinaryFoodRationObject(target) && isOrdinaryFoodRationObject(source)
+    const pickedPhrase = isSimpleMergeableFoodObject(target) && isSimpleMergeableFoodObject(source)
         ? normalInventoryLine({ ...target, line: '', quan: pickedCount }).replace(/^[^ ]+ - /, '')
         : pickupObjectPhrase({ ...source, line: '', quan: pickedCount });
     return `${target.letter} - ${pickedPhrase} (${target.quan} in total).`;
@@ -18334,7 +18351,7 @@ function findFloorPickupInventoryMergeTargetForPreflight(source, sourcePrice = n
 }
 
 function findFloorPickupFoodMergeTargetForPreflight(source, sourcePrice = null) {
-    if (!isOrdinaryFoodRationObject(source)) return null;
+    if (!isSimpleMergeableFoodObject(source)) return null;
     return findFloorPickupInventoryMergeTargetForPreflight(source, sourcePrice);
 }
 
@@ -45172,7 +45189,7 @@ export async function rhack(_cmd) {
             const name = pickupObjectName({ ...pickupObj, quan: 1 });
             const mergeTarget = findPickedObjectInventoryMergeTarget(pickupObj, liftedShopPrice);
             if (mergeTarget) {
-                const learnedByComparing = isOrdinaryFoodRationObject(pickupObj)
+                const learnedByComparing = isSimpleMergeableFoodObject(pickupObj)
                     && (pickupObj.bknown === true) !== (mergeTarget.target.bknown !== false);
                 const pickupMessage = mergePickedObjectIntoInventory(pickupObj, mergeTarget.target);
                 game._pet_food_scan_inventory = game.inventory;
