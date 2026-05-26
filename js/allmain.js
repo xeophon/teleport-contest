@@ -3,7 +3,7 @@
 
 import { game } from './gstate.js';
 import { mklev, l_nhcore_init, u_on_upstairs, makemon, mkcorpstat, mksobj, wipe_engr_at, dropMonsterInventory, wandIndexForRoll, scrollIndexForRoll, potionIndexForRoll, RANDOM_MONSTER_BY_NAME, STONE_RESISTANT_MONSTERS, adjustedMonsterLevel, monsterByRndName, monster_hp, rndmonnum, syncDungeonContext, next_ident, set_malign, enextoMonsterSpot, getbogusmon, pickNasty, chameleonAnimalForm, doppelgangerHumanoidForm, noteleportLevelForMonster, rlocNoMsg, rlocToCoreNoMsg, somexyspace, fumaroles, createMonsterCorpseOrGlob, monsterCorpseDropSucceeds, monsterLeavesCorpseLikeDrop, movebubbles, add_to_minv } from './mklev.js';
-import { rhack, pickupObjectName, inventoryItemName, inventoryLetterRank, recordVanquished, finishForceLock, loseExperienceLevel, finishLevelTeleport, finishPickDigDownwardHole, finishPickDigDownwardPit, maybeQueueQuestLeaderTalk, monsterGrowUp, processSpellbookStudyOccupation, processTinOpeningOccupation, finishTinOpeningOccupation, refreshSwallowOverlay, travelPathKeys, updateGauntletsOfPowerStrength, consumeLifeSavingAmulet, activateStatueTrap, breakStatueObject, burnFloorObjectsByFire, burnRayFloorObjectsByFire, erodeArmorByFireTrap, dryWetTowelFromFire, igniteMonsterFireInventoryItems, monsterFireInventoryDamage, dropMonsterObject, earthFloorEffects, landMonsterThrownObject, stoneMonster, processCorpseTimers, processGlobShrinkTimers } from './cmd.js';
+import { rhack, pickupObjectName, inventoryItemName, inventoryLetterRank, recordVanquished, finishForceLock, loseExperienceLevel, finishLevelTeleport, finishPickDigDownwardHole, finishPickDigDownwardPit, maybeQueueQuestLeaderTalk, monsterGrowUp, processSpellbookStudyOccupation, processTinOpeningOccupation, finishTinOpeningOccupation, refreshSwallowOverlay, travelPathKeys, updateGauntletsOfPowerStrength, consumeLifeSavingAmulet, activateStatueTrap, breakStatueObject, burnFloorObjectsByFire, burnRayFloorObjectsByFire, erodeArmorByFireTrap, dryWetTowelFromFire, igniteMonsterFireInventoryItems, monsterFireInventoryDamage, dropMonsterObject, earthFloorEffects, landMonsterThrownObject, stoneMonster, processCorpseTimers, processGlobShrinkTimers, addDelayedFoodBiteNutrition } from './cmd.js';
 import { docrt, cls, bot, flush_screen, pline, newsym, refreshHallucinatedMap, show_glyph_cell } from './display.js';
 import { vision_recalc, vision_reset, init_vision_globals, cansee, couldsee, view_from } from './vision.js';
 import { init_objects } from './o_init.js';
@@ -2837,6 +2837,12 @@ function clearInterruptedEatingState(g) {
     g._eating_paused_turns_remaining = 0;
 }
 
+function clearEatingFullnessState(g) {
+    g._eating_canchoke = 0;
+    g._eating_fullwarn = 0;
+    g._eating_nomovemsg = '';
+}
+
 function useUpEatingFloorObject(g, item) {
     if (!item || !g?.level) return;
     g.level.objects = (g.level.objects || []).filter(other => other !== item);
@@ -2861,6 +2867,7 @@ function clearActiveEatingOccupation(g) {
     g._eating_newt_buzz = 0;
     clearEatingInventoryState(g);
     clearInterruptedEatingState(g);
+    clearEatingFullnessState(g);
 }
 
 export function interruptEatingOccupation(g = game) {
@@ -2905,6 +2912,7 @@ function stopStoningOccupations() {
     game._eating_newt_buzz = 0;
     clearEatingInventoryState(game);
     clearInterruptedEatingState(game);
+    clearEatingFullnessState(game);
     game._pending_rotten_food_eating_message = 0;
     game._armor_wear_occupation = null;
     game._armor_takeoff_after_more = null;
@@ -10765,7 +10773,8 @@ function advanceSpecialLevelFeatures(g) {
 }
 
 export function processEatingOccupationTick(g = game) {
-    if (!(g._eating_turns_remaining > 0) || (g._pending_message && g._message_more && g._process_time_with_more))
+    if (!(g._eating_turns_remaining > 0) || g._command_mode === 'continueEatingPrompt'
+        || (g._pending_message && g._message_more && g._process_time_with_more))
         return false;
     g._eating_turns_remaining--;
     const eatenInventoryObject = g._eating_inventory_object;
@@ -10773,12 +10782,26 @@ export function processEatingOccupationTick(g = game) {
     const biteNutrition = Math.trunc(g._eating_bite_nutrition || 0);
     const biteHunger = Math.trunc(g._eating_bite_hunger || biteNutrition);
     if (eatenInventoryObject && biteNutrition > 0 && g._eating_turns_remaining > 0) {
-        addEatingNutrition(g, biteHunger);
+        const nutritionOutcome = addDelayedFoodBiteNutrition(biteHunger, {
+            remainingAfterBite: Math.max(0, g._eating_turns_remaining - 1),
+        });
+        if (nutritionOutcome.messages?.length) addToplineMessage(nutritionOutcome.messages.join('  '));
         consumeEatingInventoryObject(eatenInventoryObject, biteNutrition);
+        if (nutritionOutcome.prompt) {
+            g._command_mode = 'continueEatingPrompt';
+            g._pending_time_passed = 0;
+        }
     }
     if (eatenFloorObject && biteNutrition > 0 && g._eating_turns_remaining > 0) {
-        addEatingNutrition(g, biteHunger);
+        const nutritionOutcome = addDelayedFoodBiteNutrition(biteHunger, {
+            remainingAfterBite: Math.max(0, g._eating_turns_remaining - 1),
+        });
+        if (nutritionOutcome.messages?.length) addToplineMessage(nutritionOutcome.messages.join('  '));
         consumeEatingObject(eatenFloorObject, biteNutrition);
+        if (nutritionOutcome.prompt) {
+            g._command_mode = 'continueEatingPrompt';
+            g._pending_time_passed = 0;
+        }
     }
     if (!g._eating_turns_remaining) {
         g._map_redraw_pending = 1;
@@ -10800,7 +10823,8 @@ export function processEatingOccupationTick(g = game) {
             addEatingNutrition(g, g._eating_nutrition);
             g._eating_nutrition = 0;
         }
-        addToplineMessage(g._eating_finish_message || 'You finish eating.');
+        addToplineMessage(g._eating_nomovemsg || g._eating_finish_message || 'You finish eating.');
+        g._eating_nomovemsg = '';
         g._eating_finish_message = '';
         if (g._eating_newt_buzz) {
             g._eating_newt_buzz = 0;
@@ -10816,6 +10840,7 @@ export function processEatingOccupationTick(g = game) {
         }
         g._pending_rotten_food_eating_message = 0;
         clearInterruptedEatingState(g);
+        clearEatingFullnessState(g);
         g._pet_food_scan_inventory = g.inventory || [];
     }
     return true;

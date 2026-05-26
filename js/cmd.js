@@ -10829,6 +10829,32 @@ function addHeroNutrition(nutrition) {
     if (game.u.uhunger > 1000) game.u._statusSuffix = `${game.u._statusSuffix || ''} Satiated`;
 }
 
+function heroIsSatiatedForEating() {
+    return (game.u?.uhunger ?? 900) > 1000
+        || (game.u?._statusSuffix || '').includes('Satiated');
+}
+
+function delayedEatingFullWarningOutcome(remainingAfterBite) {
+    if (!game.u || (game.u.uhunger ?? 900) < 1500 || game._eating_fullwarn) return null;
+    game._eating_fullwarn = 1;
+    game._eating_nomovemsg = "You're finally finished.";
+    const messages = ["You're having a hard time getting all of it down."];
+    if (game._eating_canchoke && remainingAfterBite > 1) {
+        messages.push('Continue eating? [yn] (n)');
+        return { messages, prompt: true };
+    }
+    return { messages, prompt: false };
+}
+
+export function addDelayedFoodBiteNutrition(nutrition, { remainingAfterBite = 0 } = {}) {
+    if (!game.u || !(nutrition > 0)) return { messages: [], prompt: false };
+    addHeroNutrition(nutrition);
+    const warning = (game.u.uhunger ?? 900) < 2000
+        ? delayedEatingFullWarningOutcome(remainingAfterBite)
+        : null;
+    return warning || { messages: [], prompt: false };
+}
+
 function heroConduct() {
     if (!game.u) return {};
     game.u.uconduct ??= {};
@@ -11134,6 +11160,12 @@ function clearInterruptedEatingVictualState() {
     game._eating_paused_turns_remaining = 0;
 }
 
+function clearDelayedEatingFullnessState() {
+    game._eating_canchoke = 0;
+    game._eating_fullwarn = 0;
+    game._eating_nomovemsg = '';
+}
+
 function clearDelayedEatingVictualState() {
     game._eating_turns_remaining = 0;
     game._eating_finish_message = '';
@@ -11145,6 +11177,16 @@ function clearDelayedEatingVictualState() {
     game._eating_nutrition = 0;
     game._eating_newt_buzz = 0;
     clearInterruptedEatingVictualState();
+    clearDelayedEatingFullnessState();
+}
+
+function declineDelayedFoodContinuation() {
+    if (!(game._eating_turns_remaining > 0)) return;
+    game._eating_paused_turns_remaining = game._eating_turns_remaining;
+    game._eating_interrupted = 1;
+    game._eating_turns_remaining = 0;
+    game._eating_fullwarn = 0;
+    game._eating_nomovemsg = '';
 }
 
 function isPausedDelayedFoodVictual(item, floorObject = false) {
@@ -11171,13 +11213,19 @@ function resumeDelayedFoodVictual(item, spec, { floorObject = false } = {}) {
     const message = lastBite
         ? 'You consume the last bite of your meal.'
         : 'You resume your meal.';
+    if (!heroIsSatiatedForEating()) game._eating_canchoke = 0;
+    game._eating_fullwarn = 0;
 
+    let nutritionOutcome = { messages: [], prompt: false };
     if (biteNutrition > 0) {
-        addHeroNutrition(biteHunger);
+        nutritionOutcome = addDelayedFoodBiteNutrition(biteHunger, {
+            remainingAfterBite: Math.max(0, pausedTurns - 2),
+        });
         consumeOeaten(touched, -biteNutrition);
         if (floorObject) newsym(touched.ox, touched.oy);
         else refreshInventoryObjectLine(touched);
     }
+    const combinedMessage = [message, ...(nutritionOutcome.messages || [])].filter(Boolean).join('  ');
 
     clearInterruptedEatingVictualState();
     if (lastBite || biteNutrition <= 0) {
@@ -11186,9 +11234,10 @@ function resumeDelayedFoodVictual(item, spec, { floorObject = false } = {}) {
             removeInventoryItem(touched);
             game._pet_food_scan_inventory = game.inventory || [];
         }
+        const finishMessage = game._eating_nomovemsg || `You finish eating the ${finishName}.`;
         clearDelayedEatingVictualState();
         return {
-            message: `${message}  You finish eating the ${finishName}.`,
+            message: `${combinedMessage}  ${finishMessage}`,
             more: false,
             move: 1,
             finished: true,
@@ -11209,8 +11258,9 @@ function resumeDelayedFoodVictual(item, spec, { floorObject = false } = {}) {
     game._eating_nutrition = 0;
 
     return {
-        message,
+        message: combinedMessage,
         more: false,
+        commandMode: nutritionOutcome.prompt ? 'continueEatingPrompt' : null,
         move: 1,
         finished: false,
         touched,
@@ -11257,13 +11307,21 @@ function startDelayedFoodVictual(item, spec, { floorObject = false } = {}) {
     }
 
     const { reqtime, biteNutrition, biteHunger } = delayedFoodVictualState(touched, spec);
+    game._eating_canchoke = heroIsSatiatedForEating();
+    game._eating_fullwarn = 0;
+    game._eating_nomovemsg = '';
 
+    let nutritionOutcome = { messages: [], prompt: false };
     if (biteNutrition > 0) {
-        addHeroNutrition(biteHunger);
+        nutritionOutcome = addDelayedFoodBiteNutrition(biteHunger, {
+            remainingAfterBite: Math.max(0, reqtime - 1),
+        });
         consumeOeaten(touched, -biteNutrition);
         if (floorObject) newsym(touched.ox, touched.oy);
         else refreshInventoryObjectLine(touched);
     }
+    if (nutritionOutcome.messages?.length)
+        message = [message, ...nutritionOutcome.messages].filter(Boolean).join('  ');
 
     if (reqtime <= 1 || biteNutrition <= 0) {
         const postEffect = applyDelayedFoodPostEffect(touched, spec);
@@ -11301,6 +11359,7 @@ function startDelayedFoodVictual(item, spec, { floorObject = false } = {}) {
         message,
         more,
         processTimeWithMore,
+        commandMode: nutritionOutcome.prompt ? 'continueEatingPrompt' : null,
         move,
         finished: false,
         touched,
@@ -44152,6 +44211,24 @@ export async function rhack(_cmd) {
         return;
     }
 
+    if (game._command_mode === 'continueEatingPrompt') {
+        if (ch === 'y') {
+            game._command_mode = null;
+            game._keep_pending_message = 1;
+            game.context.move = game._eating_turns_remaining > 0 ? 1 : 0;
+            return;
+        }
+        if (ch === 'n' || ch === 'q' || ch === '\x1b' || ch === ' ' || ch === '\r' || ch === '\n') {
+            declineDelayedFoodContinuation();
+            game._command_mode = null;
+            game._keep_pending_message = 1;
+            game.context.move = 0;
+            return;
+        }
+        game._keep_pending_message = 1;
+        return;
+    }
+
     if (game._command_mode === 'eatObject') {
         if (ch === '\x1b') {
             game._command_mode = null;
@@ -44245,7 +44322,7 @@ export async function rhack(_cmd) {
                 const result = startCarriedDelayedFoodVictual(item, delayedFoodVictual);
                 await setMessage(result.message, result.more);
                 if (result.processTimeWithMore) game._process_time_with_more = 1;
-                game._command_mode = null;
+                game._command_mode = result.commandMode || null;
                 game.context.move = result.move ?? 1;
                 return;
             }
@@ -44431,7 +44508,7 @@ export async function rhack(_cmd) {
                 const result = startDelayedFoodVictual(food, delayedFoodVictual, { floorObject: true });
                 await setMessage(result.message, result.more);
                 if (result.processTimeWithMore) game._process_time_with_more = 1;
-                game._command_mode = null;
+                game._command_mode = result.commandMode || null;
                 game.context.move = result.move ?? 1;
                 return;
             }
