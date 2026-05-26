@@ -7424,6 +7424,28 @@ test('tipping lost container from a cursed shop-floor magic bag ignores containe
     assert.equal(shkp.billct, 0);
 });
 
+test('tipping lost container from a cursed shop-floor magic bag ignores unbilled nested contents', () => {
+    const { shkp } = installShopState();
+    initRng(17);
+    const source = bagOfHolding(69169);
+    source.cursed = true;
+    source.ox = 5;
+    source.oy = 5;
+    const nested = putObjectInContainer(source, sack(69170));
+    const blade = putObjectInContainer(nested, dagger(69171));
+    const expected = shop.shopItemPrice(nested, 5, 5);
+    const overbilled = expected + shop.shopItemPrice(blade, 5, 5);
+    game.level.objects = [source];
+
+    const messages = shop.tipContainerToFloor(source);
+
+    assert.match(messages.join(' '), /vanished/);
+    assert.match(messages.join(' '), new RegExp(`owe ${expected} zorkmids? for lost merchandise`));
+    assert.equal(shkp.debit, expected);
+    assert.notEqual(shkp.debit, overbilled);
+    assert.equal(shkp.billct, 0);
+});
+
 test('tipping no-charge lost container with only gold from a cursed shop-floor magic bag does not bill', () => {
     const { shkp } = installShopState();
     initRng(17);
@@ -7434,6 +7456,27 @@ test('tipping no-charge lost container with only gold from a cursed shop-floor m
     const nested = putObjectInContainer(source, sack(69165));
     nested.no_charge = true;
     putObjectInContainer(nested, goldPieces(69166, 17));
+    game.level.objects = [source];
+
+    const messages = shop.tipContainerToFloor(source);
+
+    assert.match(messages.join(' '), /vanished/);
+    assert.doesNotMatch(messages.join(' '), /lost merchandise/);
+    assert.equal(shkp.debit || 0, 0);
+    assert.equal(shkp.robbed || 0, 0);
+    assert.equal(shkp.billct, 0);
+});
+
+test('tipping no-charge lost container with unbilled nested contents from a cursed shop-floor magic bag does not bill', () => {
+    const { shkp } = installShopState();
+    initRng(17);
+    const source = bagOfHolding(69172);
+    source.cursed = true;
+    source.ox = 5;
+    source.oy = 5;
+    const nested = putObjectInContainer(source, sack(69173));
+    nested.no_charge = true;
+    putObjectInContainer(nested, dagger(69174));
     game.level.objects = [source];
 
     const messages = shop.tipContainerToFloor(source);
@@ -7666,6 +7709,34 @@ test('looting a cursed shop-floor magic bag loses merchandise before empty handl
 
     assert.match(game._pending_message, /bag is now empty/i);
     assert.equal(game._command_mode, null);
+});
+
+test('looting a cursed shop-floor magic bag ignores unbilled nested contents in a lost container', async () => {
+    const { shkp } = installCommandShopState();
+    initRng(17);
+    const source = bagOfHolding(69301);
+    source.cursed = true;
+    source.ox = 5;
+    source.oy = 5;
+    const nested = putObjectInContainer(source, sack(69302));
+    const blade = putObjectInContainer(nested, dagger(69303));
+    const expected = shop.shopItemPrice(nested, 5, 5);
+    const overbilled = expected + shop.shopItemPrice(blade, 5, 5);
+    game.level.objects = [source];
+
+    await rhack('#');
+    await rhack('l');
+    await rhack('\n');
+
+    assert.equal(game._command_mode, 'floorBagAction');
+    assert.match(game._pending_message, /vanished/);
+    assert.match(game._pending_message, new RegExp(`owe ${expected} zorkmids? for lost merchandise`));
+    assert.equal(source.contents.includes(nested), false);
+    assert.equal(source.contents.length, 0);
+    assert.equal(shkp.debit, expected);
+    assert.notEqual(shkp.debit, overbilled);
+    assert.equal(shkp.billct, 0);
+    assert.equal(game.context.move, 1);
 });
 
 test('looking inside a cursed shop-floor magic bag loses merchandise before contents display', async () => {
@@ -8656,6 +8727,33 @@ test('tipping lost merchandise from a cursed shop-floor magic bag into another c
     assert.equal(source.contents.length, 0);
     assert.equal(target.contents.includes(blade), false);
     assert.equal(shkp.debit, expected);
+    assert.equal(shkp.billct, 0);
+});
+
+test('tipping lost container from a cursed shop-floor magic bag into another container ignores unbilled nested contents', () => {
+    const { shkp } = installShopState();
+    initRng(17);
+    const source = bagOfHolding(6959);
+    const target = sack(6960, 'b');
+    source.cursed = true;
+    source.ox = 5;
+    source.oy = 5;
+    const nested = putObjectInContainer(source, sack(6961));
+    const blade = putObjectInContainer(nested, dagger(6962));
+    const expected = shop.shopItemPrice(nested, 5, 5);
+    const overbilled = expected + shop.shopItemPrice(blade, 5, 5);
+    game.inventory = [target];
+    game.level.objects = [source];
+
+    const messages = shop.tipContainerIntoContainer(source, target);
+
+    assert.match(messages.join(' '), /vanished/);
+    assert.match(messages.join(' '), new RegExp(`owe ${expected} zorkmids? for lost merchandise`));
+    assert.equal(source.contents.length, 0);
+    assert.equal(target.contents.includes(nested), false);
+    assert.equal(target.contents.includes(blade), false);
+    assert.equal(shkp.debit, expected);
+    assert.notEqual(shkp.debit, overbilled);
     assert.equal(shkp.billct, 0);
 });
 

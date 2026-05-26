@@ -16560,11 +16560,12 @@ function lostShopMerchandiseValueForObject(source, obj, shkp, seen = new Set(), 
             : 0;
 
     let value = 0;
+    const inventoryLikeNestedContent = options.inventoryLikeContents && options.topLevel === false;
     const entry = shopBillEntryForObject(shkp, obj);
     if (entry) {
         value += shopBillEntryTotal(entry);
         subOneFromShopBill(obj, shkp);
-    } else if (!obj.no_charge) {
+    } else if (!obj.no_charge && (!inventoryLikeNestedContent || obj.unpaid)) {
         value += shopItemPrice(obj, source.ox ?? game.u?.ux, source.oy ?? game.u?.uy);
     }
 
@@ -16644,6 +16645,7 @@ function billLostMagicBagShopItem(source, obj) {
     if (!shkp || !obj) return 0;
     const value = lostShopMerchandiseValueForObject(source, obj, shkp, new Set(), {
         includeContainedGold: false,
+        inventoryLikeContents: true,
     });
     return chargeShopkeeperForLostMerchandise(shkp, value);
 }
