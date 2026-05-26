@@ -3,7 +3,7 @@ import test from 'node:test';
 
 import { rhack, __shopBillingTestHooks as shop } from '../js/cmd.js';
 import { game, resetGame } from '../js/gstate.js';
-import { BEAR_TRAP, LANDMINE, PIT, ROOM } from '../js/const.js';
+import { BEAR_TRAP, FOUNTAIN, F_LOOTED, LANDMINE, PIT, ROOM, SINK, S_LDWASHER, S_LPUDDING, S_LRING, THRONE, T_LOOTED } from '../js/const.js';
 import { initRng } from '../js/rng.js';
 import { mksobj } from '../js/mklev.js';
 
@@ -38,6 +38,10 @@ const LUMP_OF_ROYAL_JELLY = 10089;
 const MEATBALL = 11012;
 const ENORMOUS_MEATBALL = 11013;
 
+function testCell(typ = ROOM) {
+    return { roomno: 0, typ, flags: 0, doormask: 0, horizontal: false, wall_info: 0 };
+}
+
 function installWishState(seed = 1, { debug = true, luck = 0 } = {}) {
     const g = resetGame();
     initRng(seed);
@@ -53,13 +57,14 @@ function installWishState(seed = 1, { debug = true, luck = 0 } = {}) {
         moreluck: 0,
         acurr: { a: [10, 10, 10, 10, 10, 10] },
     };
+    const heroCell = testCell();
     g.level = {
-        flags: {},
+        flags: { nfountains: 0, nsinks: 0 },
         rooms: [],
         monsters: [],
         objects: [],
         traps: [],
-        at: () => ({ roomno: 0, typ: ROOM }),
+        at: (x, y) => x === g.u.ux && y === g.u.uy ? heroCell : testCell(),
     };
     return g;
 }
@@ -82,6 +87,10 @@ async function submitWish(text) {
 
 function trapAtHero() {
     return game.level.traps.find(t => t.tx === game.u.ux && t.ty === game.u.uy);
+}
+
+function cellAtHero() {
+    return game.level.at(game.u.ux, game.u.uy);
 }
 
 test('unrecognized wish retries without creating a named weapon', async () => {
@@ -336,6 +345,77 @@ test('non-wizard trap words remain bad wish descriptions', async () => {
     assert.equal(game._command_mode, 'wizardWish');
     assert.equal(game._wish_tries, 1);
     assert.match(game._pending_message, /Nothing fitting that description exists in the game\./);
+});
+
+test('wizard terrain and furniture wishes create non-object map results', async () => {
+    for (const { wish, typ, message, nfountains, nsinks } of [
+        { wish: 'throne', typ: THRONE, message: /^A throne\.$/, nfountains: 0, nsinks: 0 },
+        { wish: 'fountain', typ: FOUNTAIN, message: /^A fountain\.$/, nfountains: 1, nsinks: 0 },
+        { wish: 'sink', typ: SINK, message: /^A sink\.$/, nfountains: 0, nsinks: 1 },
+    ]) {
+        installWishState();
+        beginWishDirectly();
+        await submitWish(wish);
+
+        assert.equal(game._command_mode, null, wish);
+        assert.equal(cellAtHero().typ, typ, wish);
+        assert.equal(game.level.flags.nfountains || 0, nfountains, wish);
+        assert.equal(game.level.flags.nsinks || 0, nsinks, wish);
+        assert.equal(game.inventory.length, 0, wish);
+        assert.equal(game.level.traps.length, 0, wish);
+        assert.equal(game.u.uconduct?.wishes || 0, 0, wish);
+        assert.equal(game.u.uconduct?.wisharti || 0, 0, wish);
+        assert.equal(game.u.ublesscnt, 0, wish);
+        assert.match(game._pending_message, message, wish);
+    }
+});
+
+test('wizard terrain and furniture wish qualifiers set C map flags', async () => {
+    for (const { wish, typ, flags, blessedftn, message } of [
+        { wish: 'looted throne', typ: THRONE, flags: T_LOOTED, blessedftn: 0, message: /^A throne\.$/ },
+        { wish: 'disturbed throne', typ: THRONE, flags: T_LOOTED, blessedftn: 0, message: /^A throne\.$/ },
+        { wish: 'opulent throne', typ: THRONE, flags: 0, blessedftn: 0, message: /^A throne\.$/ },
+        { wish: 'looted fountain', typ: FOUNTAIN, flags: F_LOOTED, blessedftn: 0, message: /^A fountain\.$/ },
+        { wish: 'magic fountain', typ: FOUNTAIN, flags: 0, blessedftn: 1, message: /^A magic fountain\.$/ },
+        { wish: 'magic fountains', typ: FOUNTAIN, flags: 0, blessedftn: 1, message: /^A magic fountain\.$/ },
+        { wish: 'looted magic fountain', typ: FOUNTAIN, flags: F_LOOTED, blessedftn: 1, message: /^A magic fountain\.$/ },
+        { wish: 'blessed fountain', typ: FOUNTAIN, flags: 0, blessedftn: 1, message: /^A magic fountain\.$/ },
+        { wish: 'holy fountain', typ: FOUNTAIN, flags: 0, blessedftn: 1, message: /^A magic fountain\.$/ },
+        { wish: 'looted sink', typ: SINK, flags: S_LPUDDING | S_LDWASHER | S_LRING, blessedftn: 0, message: /^A sink\.$/ },
+        { wish: 'kitchen sink', typ: SINK, flags: 0, blessedftn: 0, message: /^A sink\.$/ },
+    ]) {
+        installWishState();
+        beginWishDirectly();
+        await submitWish(wish);
+
+        assert.equal(game._command_mode, null, wish);
+        assert.equal(cellAtHero().typ, typ, wish);
+        assert.equal(cellAtHero().flags || 0, flags, wish);
+        assert.equal(cellAtHero().blessedftn || 0, blessedftn, wish);
+        assert.equal(game.inventory.length, 0, wish);
+        assert.equal(game.u.uconduct?.wishes || 0, 0, wish);
+        assert.equal(game.u.ublesscnt, 0, wish);
+        assert.match(game._pending_message, message, wish);
+    }
+});
+
+test('non-wizard terrain and furniture wish words remain bad descriptions', async () => {
+    for (const wish of ['throne', 'fountain', 'magic fountain', 'looted throne', 'sink']) {
+        installWishState(1, { debug: false });
+        beginWishDirectly();
+        await submitWish(wish);
+
+        assert.equal(game._command_mode, 'wizardWish', wish);
+        assert.equal(cellAtHero().typ, ROOM, wish);
+        assert.equal(game.level.flags.nfountains || 0, 0, wish);
+        assert.equal(game.level.flags.nsinks || 0, 0, wish);
+        assert.equal(game.inventory.length, 0, wish);
+        assert.equal(game.level.traps.length, 0, wish);
+        assert.equal(game._wish_tries, 1, wish);
+        assert.equal(game.u.uconduct?.wishes || 0, 0, wish);
+        assert.equal(game.u.ublesscnt, 0, wish);
+        assert.match(game._pending_message, /Nothing fitting that description exists in the game\./, wish);
+    }
 });
 
 test('recognized wishes still create the requested object', async () => {
