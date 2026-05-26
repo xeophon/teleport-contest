@@ -22050,9 +22050,12 @@ function magicBagExplodesWithObject(obj, depth = 0) {
 }
 
 function magicBagItemGoneMessage(item) {
-    const subject = upstartText(containerObjectPhrase(item));
-    const verb = (item.quan || 1) > 1 ? 'have' : 'has';
-    return `${subject} ${verb} vanished!`;
+    if (item?.dknown !== false) {
+        const subject = upstartText(containerObjectPhrase(item));
+        const verb = (item.quan || 1) > 1 ? 'have' : 'has';
+        return `${subject} ${verb} vanished!`;
+    }
+    return `You ${game.u?.blind ? 'notice' : 'see'} ${containerObjectPhrase(item)} disappear!`;
 }
 
 function removeObjectFromWorld(obj) {
@@ -38253,9 +38256,10 @@ export async function rhack(_cmd) {
         }
         if (/bag|sack/.test(name)) {
             const lossMessages = [];
-            if (magicBagContentsLoss(item, lossMessages)) {
+            const lossDetails = { lost: 0, lostMerchandise: 0 };
+            if (magicBagContentsLoss(item, lossMessages, { details: lossDetails })) {
                 item.cknown = true;
-                game.context.move = 1;
+                if (lossDetails.lostMerchandise > 0) game.context.move = 1;
             }
             game._container_letter = item.letter;
             setOverlay(LOOT_BAG_MENU_LINES, 11);

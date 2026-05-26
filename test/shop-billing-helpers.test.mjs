@@ -7459,6 +7459,90 @@ test('tipping stale unpaid lost contents from a carried cursed magic bag does no
     assert.equal((game._usedUpShopBills || []).length, 0);
 });
 
+test('applying carried cursed magic bag with no-charge known contents vanishes without turn cost', async () => {
+    const { shkp } = installCommandShopState();
+    initRng(17);
+    const source = bagOfHolding(69385);
+    source.cursed = true;
+    const blade = putObjectInContainer(source, dagger(69386));
+    blade.no_charge = true;
+    blade.dknown = true;
+    game.inventory = [source];
+
+    await rhack('a');
+    await rhack('b');
+
+    assert.equal(game._command_mode, 'bagAction');
+    assert.match(game._pending_message, /A dagger has vanished!/);
+    assert.doesNotMatch(game._pending_message, /lost merchandise/);
+    assert.equal(source.contents.includes(blade), false);
+    assert.equal(source.contents.length, 0);
+    assert.equal(source.cknown, true);
+    assert.equal(shkp.debit || 0, 0);
+    assert.equal(shkp.robbed || 0, 0);
+    assert.equal(game.context.move || 0, 0);
+});
+
+test('applying carried cursed magic bag reports unknown lost contents by sight', async () => {
+    installCommandShopState();
+    initRng(17);
+    const source = bagOfHolding(69387);
+    source.cursed = true;
+    const blade = putObjectInContainer(source, dagger(69388));
+    blade.no_charge = true;
+    blade.dknown = false;
+    game.inventory = [source];
+
+    await rhack('a');
+    await rhack('b');
+
+    assert.match(game._pending_message, /You see a dagger disappear!/);
+    assert.doesNotMatch(game._pending_message, /has vanished|lost merchandise/);
+    assert.equal(game.context.move || 0, 0);
+});
+
+test('applying carried cursed magic bag reports unknown lost contents while blind', async () => {
+    installCommandShopState();
+    initRng(17);
+    game.u.blind = true;
+    const source = bagOfHolding(69389);
+    source.cursed = true;
+    const blade = putObjectInContainer(source, dagger(69390));
+    blade.no_charge = true;
+    blade.dknown = false;
+    game.inventory = [source];
+
+    await rhack('a');
+    await rhack('b');
+
+    assert.match(game._pending_message, /You notice a dagger disappear!/);
+    assert.doesNotMatch(game._pending_message, /has vanished|lost merchandise/);
+    assert.equal(game.context.move || 0, 0);
+});
+
+test('applying carried cursed magic bag charges a turn for billed lost merchandise', async () => {
+    const { shkp } = installCommandShopState();
+    initRng(17);
+    const source = bagOfHolding(69391);
+    source.cursed = true;
+    const ration = putObjectInContainer(source, foodRation(69392));
+    ration.dknown = true;
+    shop.addObjectToShopBill(shkp, ration, 45);
+    game.inventory = [source];
+
+    await rhack('a');
+    await rhack('b');
+
+    assert.equal(game._command_mode, 'bagAction');
+    assert.match(game._pending_message, /A food ration has vanished!/);
+    assert.match(game._pending_message, /owe 45 zorkmids? for lost merchandise/);
+    assert.equal(source.contents.includes(ration), false);
+    assert.equal(shop.shopBillEntryForObject(shkp, ration), null);
+    assert.notEqual(ration.unpaid, true);
+    assert.equal(shkp.debit, 45);
+    assert.equal(game.context.move, 1);
+});
+
 test('tipping unpaid lost contents from a carried cursed magic bag outside a shop preserves a used-up bill', () => {
     const { shkp } = installShopState();
     initRng(17);
