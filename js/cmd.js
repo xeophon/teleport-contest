@@ -16620,9 +16620,39 @@ function pickupWeaponCanStack(obj) {
     return /\b(?:arrow|ya|bolt|dart|dagger|knife|spear|javelin|shuriken|boomerang|rock|stone)\b/.test(name);
 }
 
+function isOrdinaryFoodRationObject(obj) {
+    if (!obj || isTinObject(obj) || isEggItem(obj) || isGlobbyObject(obj) || globContents(obj).length) return false;
+    if (obj.otyp === CORPSE || obj.otyp === 'corpse') return false;
+    const kind = objectKindKey(obj).replace(/^partly eaten\s+/, '').trim();
+    if (obj.otyp === MEAT_RING || kind === 'meat ring') return false;
+    if (obj.otyp === FOOD_RATION) return true;
+    const singular = String(obj?.singular || '').toLowerCase().trim();
+    const foodLike = obj.cls === 'food' || obj.otyp === FOOD_CLASS || obj.glyph === '%';
+    return foodLike && (kind === 'food ration' || singular === 'food ration');
+}
+
+function objectInstanceNameKey(obj) {
+    return String(obj?._wish_object_name || obj?.oname || obj?.oextra?.oname || '').trim();
+}
+
+function objectInstanceNamesMergeCompatible(target, source) {
+    const targetName = objectInstanceNameKey(target);
+    const sourceName = objectInstanceNameKey(source);
+    return !targetName || !sourceName || targetName === sourceName;
+}
+
+function copyObjectInstanceNameForMerge(target, source) {
+    if (objectInstanceNameKey(target)) return;
+    const sourceName = objectInstanceNameKey(source);
+    if (!sourceName) return;
+    if (source?._wish_object_name) target._wish_object_name = source._wish_object_name;
+    else target.oname = sourceName;
+}
+
 function pickupObjectCanInventoryMerge(obj) {
     if (!obj || shopBillableGold(obj) || globContents(obj).length || isGlobbyObject(obj)) return false;
     if (obj.otyp === CORPSE || obj.otyp === 'corpse' || obj.otyp === EGG || isTinObject(obj)) return false;
+    if (isOrdinaryFoodRationObject(obj)) return true;
     if (obj.cls === 'food' || obj.otyp === FOOD_CLASS) return false;
     const cls = shopObjectClassCode(obj);
     if (cls === SCROLL_CLASS || cls === POTION_CLASS || cls === GEM_CLASS) return true;
@@ -16637,9 +16667,11 @@ function pickedObjectInventoryMergeCompatible(target, source, sourceWillBeUnpaid
     if (target.nomerge || source.nomerge || target.artifact || source.artifact) return false;
     const targetUnpaid = !!(target.unpaid || shopBillEntryForObject(shkp, target));
     if (targetUnpaid !== !!sourceWillBeUnpaid) return false;
-    if (!!target.no_charge !== !!source.no_charge) return false;
+    const sourceNoCharge = sourceWillBeUnpaid ? !!source.no_charge : false;
+    if (!!target.no_charge !== sourceNoCharge) return false;
     if (!!target.blessed !== !!source.blessed || !!target.cursed !== !!source.cursed) return false;
     if ((target.spe ?? 0) !== (source.spe ?? 0)) return false;
+    if ((target.oeaten ?? 0) !== (source.oeaten ?? 0) || (target.orotten ?? 0) !== (source.orotten ?? 0)) return false;
     if ((target.obroken ?? false) !== (source.obroken ?? false)) return false;
     if ((target.lamplit ?? false) !== (source.lamplit ?? false)) return false;
     if ((target.odiluted ?? false) !== (source.odiluted ?? false)) return false;
@@ -16652,6 +16684,11 @@ function pickedObjectInventoryMergeCompatible(target, source, sourceWillBeUnpaid
     if ((target.gemDescription ?? null) !== (source.gemDescription ?? null)) return false;
     if ((target.actualKind || target.kind || '') !== (source.actualKind || source.kind || '')
         && pickupMergeName(target) !== pickupMergeName(source)) return false;
+    if ((isOrdinaryFoodRationObject(target) || isOrdinaryFoodRationObject(source))
+        && (!isOrdinaryFoodRationObject(target)
+            || !isOrdinaryFoodRationObject(source)
+            || !objectInstanceNamesMergeCompatible(target, source)))
+        return false;
     if (isCandleObject(source) && Math.trunc((target.age || 0) / 25) !== Math.trunc((source.age || 0) / 25))
         return false;
     return true;
@@ -16673,14 +16710,24 @@ function findPickedObjectInventoryMergeTarget(source, sourcePrice = null) {
 
 function mergePickedObjectIntoInventory(source, target) {
     const pickedCount = Math.max(1, Math.trunc(Number(source?.quan || 1)));
-    target.quan = Math.max(1, Math.trunc(Number(target.quan || 1))) + pickedCount;
+    const targetCount = Math.max(1, Math.trunc(Number(target.quan || 1)));
+    if (isOrdinaryFoodRationObject(target) && isOrdinaryFoodRationObject(source)) {
+        const targetAge = Number.isFinite(Number(target.age)) ? Number(target.age) : 0;
+        const sourceAge = Number.isFinite(Number(source.age)) ? Number(source.age) : 0;
+        if (target.age != null || source.age != null)
+            target.age = Math.trunc(((targetAge * targetCount) + (sourceAge * pickedCount)) / (targetCount + pickedCount));
+        copyObjectInstanceNameForMerge(target, source);
+    }
+    target.quan = targetCount + pickedCount;
     if (source.plural && !target.plural) target.plural = source.plural;
     if (source.known !== target.known) target.known = true;
     if (source.bknown !== target.bknown && game._startup_role !== 'Priest') target.bknown = true;
     if (source.rknown !== target.rknown) target.rknown = true;
     target.line = normalInventoryLine({ ...target, line: '' });
     if (target.unpaid) syncUnpaidBillLine(target);
-    const pickedPhrase = pickupObjectPhrase({ ...source, line: '', quan: pickedCount });
+    const pickedPhrase = isOrdinaryFoodRationObject(target) && isOrdinaryFoodRationObject(source)
+        ? normalInventoryLine({ ...target, line: '', quan: pickedCount }).replace(/^[^ ]+ - /, '')
+        : pickupObjectPhrase({ ...source, line: '', quan: pickedCount });
     return `${target.letter} - ${pickedPhrase} (${target.quan} in total).`;
 }
 
@@ -18132,31 +18179,8 @@ function findFloorPickupInventoryMergeTargetForPreflight(source, sourcePrice = n
 }
 
 function findFloorPickupFoodMergeTargetForPreflight(source, sourcePrice = null) {
-    if (!(source?.otyp === FOOD_CLASS || source?.cls === 'food') || isEggItem(source)) return null;
-    const name = pickupObjectName({ ...source, quan: 1 });
-    const x = source?.ox ?? game.u?.ux;
-    const y = source?.oy ?? game.u?.uy;
-    const shkp = x == null || y == null ? null : shopkeeperForCostlySpot(x, y);
-    const price = sourcePrice != null ? Number(sourcePrice) : shopItemPrice(source, x, y);
-    const sourceBillable = Number.isFinite(price) && price > 0 && shopkeeperInHisShop(shkp);
-    const sourceCount = Math.max(1, Math.trunc(Number(source?.quan || 1)));
-    for (const target of game.inventory || []) {
-        if (target?.cls !== 'food' || target.worn || target.wielded || isEggItem(target)) continue;
-        if (pickupObjectName({ ...target, quan: 1 }) !== name) continue;
-        const entry = shopBillEntryForObject(shkp, target);
-        const targetUnpaid = !!(target.unpaid || entry);
-        if (!sourceBillable) {
-            if (!targetUnpaid) return target;
-            continue;
-        }
-        if (!targetUnpaid) continue;
-        if (!entry) continue;
-        const targetCount = Math.max(1, Math.trunc(Number(target.quan || 1)));
-        const existingTotal = shopBillEntryTotal(entry);
-        if (existingTotal > 0 && existingTotal * sourceCount === price * targetCount)
-            return target;
-    }
-    return null;
+    if (!isOrdinaryFoodRationObject(source)) return null;
+    return findFloorPickupInventoryMergeTargetForPreflight(source, sourcePrice);
 }
 
 async function floorPickupPreflight(obj, { shopPrice = null, prompt = true, scareSpecial = true } = {}) {
@@ -44599,32 +44623,11 @@ export async function rhack(_cmd) {
                 : liftedPriceInfo?.itemPrice ?? shopItemPrice(pickupObj);
             const amount = pickupObjectPhrase(pickupObj);
             const name = pickupObjectName({ ...pickupObj, quan: 1 });
-            let existingFood = (pickupObj.otyp === FOOD_CLASS || pickupObj.cls === 'food')
-                && (game.inventory || []).find(item =>
-                    item.cls === 'food' && !item.worn && !item.wielded
-                    && !(isEggItem(item) || isEggItem(pickupObj))
-                    && pickupObjectName({ ...item, quan: 1 }) === name);
-            if (existingFood && !mergePickedObjectIntoShopBill(pickupObj, existingFood, liftedShopPrice).canMerge)
-                existingFood = null;
-            if (existingFood) {
-                const pickedKnown = pickupObj.bknown === true;
-                const carriedKnown = existingFood.bknown !== false;
-                const learnedByComparing = pickedKnown !== carriedKnown;
-                const pickedCount = pickupObj.quan || 1;
-                existingFood.quan = (existingFood.quan || 1) + pickedCount;
-                if (pickupObj.plural && !existingFood.plural) existingFood.plural = pickupObj.plural;
-                if (learnedByComparing) existingFood.bknown = true;
-                const buc = existingFood.bknown === false
-                    ? ''
-                    : existingFood.blessed ? 'blessed ' : existingFood.cursed ? 'cursed ' : 'uncursed ';
-                const totalName = pickupObjectName(existingFood);
-                existingFood.line = `${existingFood.letter} - ${existingFood.quan} ${buc}${totalName}`;
-                if (existingFood.unpaid) syncUnpaidBillLine(existingFood);
-                const pickedName = pickupObjectName({ ...existingFood, quan: pickedCount });
-                const pickedPhrase = pickedCount > 1
-                    ? `${pickedCount} ${buc}${pickedName}`
-                    : `${/^[aeiou]/i.test(`${buc}${pickedName}`) ? 'an' : 'a'} ${buc}${pickedName}`;
-                const pickupMessage = `${existingFood.letter} - ${pickedPhrase} (${existingFood.quan} in total).`;
+            const mergeTarget = findPickedObjectInventoryMergeTarget(pickupObj, liftedShopPrice);
+            if (mergeTarget) {
+                const learnedByComparing = isOrdinaryFoodRationObject(pickupObj)
+                    && (pickupObj.bknown === true) !== (mergeTarget.target.bknown !== false);
+                const pickupMessage = mergePickedObjectIntoInventory(pickupObj, mergeTarget.target);
                 game._pet_food_scan_inventory = game.inventory;
                 objectIceEffect(pickupObj, game.u?.ux || 0, game.u?.uy || 0, { onLevel: false });
                 game.level.objects = (game.level.objects || []).filter(obj => obj !== pickupObj);
@@ -44634,17 +44637,6 @@ export async function rhack(_cmd) {
                     game._queued_message_after_more = pickupMessages.join('  ');
                     await setMessage('You learn more about your items by comparing them.', true);
                 } else await setMessage(pickupMessages.join('  '));
-                game.context.move = 1;
-                return;
-            }
-            const mergeTarget = findPickedObjectInventoryMergeTarget(pickupObj, liftedShopPrice);
-            if (mergeTarget) {
-                const pickupMessage = mergePickedObjectIntoInventory(pickupObj, mergeTarget.target);
-                game._pet_food_scan_inventory = game.inventory;
-                objectIceEffect(pickupObj, game.u?.ux || 0, game.u?.uy || 0, { onLevel: false });
-                game.level.objects = (game.level.objects || []).filter(obj => obj !== pickupObj);
-                newsym(game.u?.ux || 0, game.u?.uy || 0);
-                await setMessage([...preflightMessages, pickupMessage].join('  '));
                 game.context.move = 1;
                 return;
             }

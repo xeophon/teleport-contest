@@ -8461,6 +8461,211 @@ test('non-food pickup merges compatible paid inventory stacks', () => {
     assert.match(message, /2 in total/);
 });
 
+test('food-ration floor pickup merges compatible paid inventory stacks', async () => {
+    installNonShopFloorState();
+    const carried = { ...foodRation(7051, 'a'), bknown: false };
+    const floorObj = { ...foodRation(7052), letter: undefined, line: undefined, bknown: false };
+    game.inventory = [carried];
+    game.level.objects = [floorObj];
+
+    await rhack(',');
+
+    assert.equal(game.inventory.length, 1);
+    assert.equal(game.inventory[0], carried);
+    assert.equal(carried.quan, 2);
+    assert.match(carried.line, /^a - 2 food rations/);
+    assert.equal(game.level.objects.includes(floorObj), false);
+    assert.match(game._pending_message, /a - a food ration \(2 in total\)\./);
+    assert.equal(game.context.move, 1);
+});
+
+test('food-ration pickup merge rejects actual BUC mismatches even when unknown', () => {
+    installShopState();
+    const carried = foodRation(7061, 'a');
+    const floorObj = { ...foodRation(7062), letter: undefined, line: undefined, cursed: true, bknown: false };
+    carried.bknown = false;
+    game.inventory = [carried];
+
+    assert.equal(shop.findPickedObjectInventoryMergeTarget(floorObj, 0), null);
+    assert.equal(carried.quan, 1);
+});
+
+test('food-ration pickup merge averages source and target ages', () => {
+    installShopState();
+    const carried = { ...foodRation(7071, 'a'), age: 100 };
+    const floorObj = { ...foodRation(7072), letter: undefined, line: undefined, age: 300 };
+    game.inventory = [carried];
+
+    const merge = shop.findPickedObjectInventoryMergeTarget(floorObj, 0);
+    assert.equal(merge.target, carried);
+    shop.mergePickedObjectIntoInventory(floorObj, carried);
+
+    assert.equal(carried.quan, 2);
+    assert.equal(carried.age, 200);
+});
+
+test('food-ration pickup merge describes learned uncursed source state', () => {
+    installShopState();
+    const carried = { ...foodRation(7073, 'a'), bknown: true };
+    const floorObj = { ...foodRation(7074), letter: undefined, line: undefined, bknown: false };
+    game.inventory = [carried];
+
+    const merge = shop.findPickedObjectInventoryMergeTarget(floorObj, 0);
+    assert.equal(merge.target, carried);
+    const message = shop.mergePickedObjectIntoInventory(floorObj, carried);
+
+    assert.equal(message, 'a - an uncursed food ration (2 in total).');
+});
+
+test('food-ration pickup merge follows C object-name compatibility', () => {
+    installShopState();
+    const namedTarget = { ...foodRation(7081, 'a'), oname: 'lunch' };
+    const differentNamedSource = { ...foodRation(7082), letter: undefined, line: undefined, oname: 'dinner' };
+    game.inventory = [namedTarget];
+
+    assert.equal(shop.findPickedObjectInventoryMergeTarget(differentNamedSource, 0), null);
+
+    const unnamedTarget = foodRation(7083, 'b');
+    const namedSource = { ...foodRation(7084), letter: undefined, line: undefined, oname: 'lunch' };
+    game.inventory = [unnamedTarget];
+    const merge = shop.findPickedObjectInventoryMergeTarget(namedSource, 0);
+    assert.equal(merge.target, unnamedTarget);
+    shop.mergePickedObjectIntoInventory(namedSource, unnamedTarget);
+
+    assert.equal(unnamedTarget.quan, 2);
+    assert.equal(unnamedTarget.oname, 'lunch');
+    assert.match(unnamedTarget.line, /food rations named lunch/);
+});
+
+test('food-ration shop pickup merge rejects paid targets and combines same-shop unpaid bills', () => {
+    const { shkp } = installShopState();
+    const paidStack = foodRation(7091, 'a');
+    const billableSource = { ...foodRation(7092), letter: undefined, line: undefined };
+    game.inventory = [paidStack];
+
+    assert.equal(shop.findPickedObjectInventoryMergeTarget(billableSource, 45), null);
+    assert.equal(shkp.billct, 0);
+
+    const unpaidStack = foodRation(7093, 'b');
+    shop.addObjectToShopBill(shkp, unpaidStack, 45);
+    game.inventory = [unpaidStack];
+    const merge = shop.findPickedObjectInventoryMergeTarget(billableSource, 45);
+    assert.equal(merge.target, unpaidStack);
+    shop.mergePickedObjectIntoInventory(billableSource, unpaidStack);
+
+    assert.equal(unpaidStack.quan, 2);
+    assert.equal(unpaidStack.unpaidPrice, 90);
+    assert.equal(shop.shopBillEntryTotal(merge.billMerge.billEntry), 90);
+    assert.match(unpaidStack.line, /unpaid, 90 zorkmids/);
+    assert.equal(shkp.billct, 1);
+});
+
+test('food-ration pickup merge keeps other food outside the narrow slice', () => {
+    installShopState();
+    const carriedPie = creamPie(7101, 'p');
+    const floorPie = { ...creamPie(7102), letter: undefined, line: undefined };
+    game.inventory = [carriedPie];
+
+    assert.equal(shop.findPickedObjectInventoryMergeTarget(floorPie, 0), null);
+
+    const carriedMeatRing = {
+        ...foodRation(7103, 'm'),
+        kind: 'meat ring',
+        actualKind: 'meat ring',
+        plural: 'meat rings',
+    };
+    const floorMeatRing = { ...carriedMeatRing, id: 7104, letter: undefined, line: undefined };
+    game.inventory = [carriedMeatRing];
+
+    assert.equal(shop.findPickedObjectInventoryMergeTarget(floorMeatRing, 0), null);
+});
+
+test('food-ration pickup full-inventory preflight allows no-charge merge', async () => {
+    const { shkp } = installCommandShopState();
+    const carried = { ...foodRation(7111, 'a'), bknown: false };
+    const floorObj = { ...foodRation(7112), letter: undefined, line: undefined, bknown: false, no_charge: true };
+    fillInventoryLetters();
+    game.inventory[0] = carried;
+    game.level.objects = [floorObj];
+
+    await rhack(',');
+
+    assert.equal(game.inventory.length, INVENTORY_LETTERS.length);
+    assert.equal(carried.quan, 2);
+    assert.equal(game.level.objects.includes(floorObj), false);
+    assert.doesNotMatch(game._pending_message, /knapsack cannot accommodate/);
+    assert.equal(shkp.billct, 0);
+    assert.equal(game.context.move, 1);
+});
+
+test('food-ration pickup full-inventory preflight rejects BUC mismatch', async () => {
+    const { shkp } = installCommandShopState();
+    const carried = { ...foodRation(7121, 'a'), blessed: true, bknown: false };
+    const floorObj = {
+        ...foodRation(7122),
+        letter: undefined,
+        line: undefined,
+        cursed: true,
+        bknown: false,
+        no_charge: true,
+    };
+    fillInventoryLetters();
+    game.inventory[0] = carried;
+    game.level.objects = [floorObj];
+
+    await rhack(',');
+
+    assert.equal(carried.quan, 1);
+    assert.equal(game.level.objects.includes(floorObj), true);
+    assert.match(game._pending_message, /knapsack cannot accommodate any more items/);
+    assert.equal(shkp.billct, 0);
+});
+
+test('food-ration pickup full-inventory preflight rejects billable source into paid stack', async () => {
+    const { shkp } = installCommandShopState();
+    const carried = { ...foodRation(7131, 'a'), bknown: false };
+    const floorObj = { ...foodRation(7132), letter: undefined, line: undefined, bknown: false };
+    fillInventoryLetters();
+    game.inventory[0] = carried;
+    game.level.objects = [floorObj];
+
+    await rhack(',');
+
+    assert.equal(carried.quan, 1);
+    assert.equal(game.level.objects.includes(floorObj), true);
+    assert.notEqual(game._command_mode, 'pickupShopQuote');
+    assert.match(game._pending_message, /knapsack cannot accommodate any more items/);
+    assert.equal(shkp.billct, 0);
+});
+
+test('food-ration pickup full-inventory preflight allows billable same-shop unpaid merge', async () => {
+    const { shkp } = installCommandShopState();
+    const carried = { ...foodRation(7141, 'a'), bknown: false };
+    const floorObj = { ...foodRation(7142), letter: undefined, line: undefined, bknown: false };
+    const unitPrice = shop.shopItemPrice(floorObj, floorObj.ox, floorObj.oy);
+    shop.addObjectToShopBill(shkp, carried, unitPrice);
+    fillInventoryLetters();
+    game.inventory[0] = carried;
+    game.level.objects = [floorObj];
+
+    await rhack(',');
+
+    assert.equal(game._command_mode, 'pickupShopQuote');
+
+    await rhack(' ');
+
+    const entry = shop.shopBillEntryForObject(shkp, carried);
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game.inventory.length, INVENTORY_LETTERS.length);
+    assert.equal(carried.quan, 2);
+    assert.equal(game.level.objects.includes(floorObj), false);
+    assert.equal(shkp.billct, 1);
+    assert.equal(entry.bquan, 2);
+    assert.equal(shop.shopBillEntryTotal(entry), unitPrice * 2);
+    assert.match(carried.line, new RegExp(`unpaid, ${unitPrice * 2} zorkmids`));
+    assert.equal(game.context.move, 1);
+});
+
 test('non-food shop pickup merge rejects unpaid into paid stacks', () => {
     const { shkp } = installShopState();
     const paidStack = dagger(7101, 'd');
