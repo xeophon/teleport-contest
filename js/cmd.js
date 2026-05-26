@@ -3145,6 +3145,22 @@ function impactDropFloorObjects(x, y, trap, options = {}) {
         else
             message = `${fallenCount === 1 ? 'One of the' : 'Some of the'} adjacent ${fallenCount === 1 ? 'objects falls' : what} ${gateText}.`;
     }
+    let debitDelta = 0;
+    let robbedDelta = 0;
+    let debtShkp = null;
+    for (const obj of fallen) {
+        const debt = shipObjectShopDebt(obj, x, y, { shopFloorObj: true, silent: true });
+        debitDelta += debt.debitDelta || 0;
+        robbedDelta += debt.robbedDelta || 0;
+        if (debt.shkp) debtShkp = debt.shkp;
+    }
+    if (debitDelta > 0)
+        message = [message, `You owe ${shopkeeperDisplayName(debtShkp)} ${debitDelta} ${shopCurrency(debitDelta)} for goods lost.`]
+            .filter(Boolean).join('  ');
+    if (robbedDelta > 0)
+        message = [message, `You removed ${robbedDelta} ${shopCurrency(robbedDelta)} worth of goods!`]
+            .filter(Boolean).join('  ');
+
     if (!options.withHero) {
         queueImpactDroppedObjects(options.targetLevel, fallen);
         return { message, objects: [] };
@@ -16206,10 +16222,9 @@ function lostShopMerchandiseValueForObject(source, obj, shkp, seen = new Set()) 
     return value;
 }
 
-function chargeShopkeeperForLostMerchandise(shkp, value) {
+function chargeShopkeeperForLostMerchandise(shkp, value, { peaceful = shopkeeperPeacefulForDebt(shkp) } = {}) {
     let remaining = Math.max(0, Math.trunc(Number(value || 0)));
     if (!shkp || !remaining) return 0;
-    const peaceful = shopkeeperPeacefulForDebt(shkp);
     if (peaceful) {
         const credit = Math.max(0, Math.trunc(Number(shkp.credit || 0)));
         const covered = Math.min(credit, remaining);
@@ -16224,6 +16239,50 @@ function chargeShopkeeperForLostMerchandise(shkp, value) {
         }
     }
     return remaining;
+}
+
+function heroInShopOwnedBy(shkp) {
+    return sameShopkeeper(shopkeeperForCostlySpot(game.u?.ux, game.u?.uy), shkp);
+}
+
+function shopDebtDeltas(shkp, beforeDebit, beforeRobbed) {
+    return {
+        debitDelta: Math.max(0, Math.trunc(Number(shkp?.debit || 0)) - beforeDebit),
+        robbedDelta: Math.max(0, Math.trunc(Number(shkp?.robbed || 0)) - beforeRobbed),
+    };
+}
+
+function shipObjectShopDebt(obj, x, y, { shopFloorObj = false, silent = false } = {}) {
+    if (!obj || shopBillableGold(obj)) return { charged: false, value: 0, shkp: null, message: '', debitDelta: 0, robbedDelta: 0 };
+
+    if (!shopFloorObj && shopObjectOrContentsUnpaid(obj)) {
+        const { shkp } = shopkeeperOwningObjectOrContentsBillEntry(obj);
+        const beforeDebit = Math.max(0, Math.trunc(Number(shkp?.debit || 0)));
+        const beforeRobbed = Math.max(0, Math.trunc(Number(shkp?.robbed || 0)));
+        const charged = convertUnpaidObjectToShopDebt(obj, { silent });
+        if (charged.charged || shopObjectOrContentsUnpaid(obj)) clearNoChargeRecursively(obj);
+        return { ...charged, ...shopDebtDeltas(charged.shkp || shkp, beforeDebit, beforeRobbed) };
+    }
+
+    if (!shopFloorObj) return { charged: false, value: 0, shkp: null, message: '', debitDelta: 0, robbedDelta: 0 };
+
+    const shkp = shopkeeperForCostlySpot(x, y);
+    if (!shopkeeperInHisShop(shkp)) return { charged: false, value: 0, shkp: null, message: '', debitDelta: 0, robbedDelta: 0 };
+    const beforeDebit = Math.max(0, Math.trunc(Number(shkp.debit || 0)));
+    const beforeRobbed = Math.max(0, Math.trunc(Number(shkp.robbed || 0)));
+    const value = lostShopMerchandiseValueForObject({ ox: x, oy: y }, obj, shkp);
+    clearNoChargeRecursively(obj);
+    const peaceful = heroInShopOwnedBy(shkp);
+    const remaining = chargeShopkeeperForLostMerchandise(shkp, value, { peaceful });
+    const deltas = shopDebtDeltas(shkp, beforeDebit, beforeRobbed);
+    let message = '';
+    if (!silent && remaining > 0) {
+        if (deltas.robbedDelta > 0)
+            message = `You removed ${deltas.robbedDelta} ${shopCurrency(deltas.robbedDelta)} worth of goods!`;
+        else if (deltas.debitDelta > 0)
+            message = `You owe ${shopkeeperDisplayName(shkp)} ${deltas.debitDelta} ${shopCurrency(deltas.debitDelta)} for goods lost.`;
+    }
+    return { charged: value > 0, value, shkp, message, ...deltas };
 }
 
 function billLostMagicBagShopItem(source, obj) {
@@ -16521,6 +16580,7 @@ export const __shopBillingTestHooks = {
     findPickedObjectInventoryMergeTarget,
     finishDroppedObjectSale,
     finishShopFloorContainerPutSale,
+    impactDropFloorObjects,
     mergePickedObjectIntoInventory,
     mergePickedObjectIntoShopBill,
     landProjectileObjectWithShopHandling,
@@ -16540,6 +16600,7 @@ export const __shopBillingTestHooks = {
     costlyShopGoldAtSpot,
     containerTakeoutPreflight,
     sellobjReturnUnpaidToShop,
+    shipObjectShopDebt,
     sellobjDroppedGoldAt,
     stackMonsterThrownObject,
     splitCarriedObjectShopBill,
@@ -16867,6 +16928,8 @@ function droppedObjectPitHoleFloorEffects(obj, x, y, messages) {
         const gate = trap.ttyp === TRAPDOOR ? 'through the trap door' : 'through the hole';
         messages.push(`${floorObjectSubject(obj)} ${floorEffectsObjectVerb(obj, 'falls', 'fall')} ${gate}.`);
     }
+    const debt = shipObjectShopDebt(obj, x, y);
+    if (debt.message) messages.push(debt.message);
     queueImpactDroppedObjects(target, [obj]);
     newsym(x, y);
     return { handled: true, consumed: true };

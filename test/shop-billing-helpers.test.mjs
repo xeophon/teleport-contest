@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { burnFloorObjectsByFire, finishForceLock, processSpellbookStudyOccupation, rhack, __shopBillingTestHooks as shop } from '../js/cmd.js';
+import { burnFloorObjectsByFire, earthFloorEffects, finishForceLock, processSpellbookStudyOccupation, rhack, __shopBillingTestHooks as shop } from '../js/cmd.js';
 import { game, resetGame } from '../js/gstate.js';
 import { initRng } from '../js/rng.js';
-import { CANDLESHOP, DB_EAST, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, LAVAPOOL, ROOM, ROOMOFFSET, SHOPBASE } from '../js/const.js';
+import { CANDLESHOP, DB_EAST, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, HOLE, LAVAPOOL, ROOM, ROOMOFFSET, SHOPBASE } from '../js/const.js';
 
 const BRASS_LANTERN = 226;
 const OIL_LAMP = 227;
@@ -80,6 +80,18 @@ function installNonShopFloorState() {
     game.level.flags = {};
     game.level.at = () => ({ roomno: 0, typ: ROOM });
     return state;
+}
+
+function installSeenHoleAtHero() {
+    game.u.uz = { dnum: 0, dlevel: 1 };
+    game.dungeons = [{ num_dunlevs: 3 }];
+    game.level.flags = {};
+    game.level.traps = [{ ttyp: HOLE, tx: 5, ty: 5, tseen: true }];
+    return game.level.traps[0];
+}
+
+function queuedImpactDropsFor(level = { dnum: 0, dlevel: 2 }) {
+    return game._impact_drop_migrations?.get(`${level.dnum}:${level.dlevel}`) || [];
 }
 
 function makeCrystalBallGazeDeterministic() {
@@ -3218,6 +3230,86 @@ test('ordinary carried-container drop does not run hard-landing impact', async (
     assert.ok(dropped);
     assert.equal(dropped.contents.includes(potion), true);
     assert.equal(dropped.cknown, true);
+});
+
+test('unpaid carried object falling through a hole converts bill row to shop debt', () => {
+    const { shkp } = installShopState();
+    installSeenHoleAtHero();
+    initRng(1);
+    const blade = dagger(51201, 'd');
+    shop.addObjectToShopBill(shkp, blade, 15);
+    const messages = [];
+
+    const consumed = earthFloorEffects(blade, 5, 5, messages, 'drop');
+
+    assert.equal(consumed, true);
+    assert.match(messages.join(' '), /owe Izchak 15 zorkmids? for it/);
+    assert.equal(queuedImpactDropsFor().includes(blade), true);
+    assert.equal(shkp.debit, 15);
+    assert.equal(shkp.billct, 0);
+    assert.equal(shop.shopBillEntryForObject(shkp, blade), null);
+    assert.equal(blade.unpaid, false);
+    assert.equal(blade.no_charge, false);
+});
+
+test('shop-floor stock falling through a hole charges stolen value before migration', () => {
+    const { shkp } = installShopState();
+    installSeenHoleAtHero();
+    initRng(1);
+    const blade = { ...dagger(51202), letter: undefined, line: undefined, ox: 5, oy: 5 };
+    const expected = shop.shopItemPrice(blade, 5, 5);
+    game.level.objects = [blade];
+
+    const impact = shop.impactDropFloorObjects(5, 5, game.level.traps[0], { targetLevel: { dnum: 0, dlevel: 2 } });
+
+    assert.match(impact.message, new RegExp(`owe Izchak ${expected} zorkmids? for goods lost`));
+    assert.equal(game.level.objects.includes(blade), false);
+    assert.equal(queuedImpactDropsFor().includes(blade), true);
+    assert.equal(shkp.debit, expected);
+    assert.equal(shkp.billct, 0);
+    assert.equal(blade.no_charge, false);
+});
+
+test('shop-floor stock falling through a hole routes angry shopkeeper value to robbed', () => {
+    const { shkp } = installShopState();
+    installSeenHoleAtHero();
+    initRng(1);
+    shkp.angry = true;
+    const blade = { ...dagger(512021), letter: undefined, line: undefined, ox: 5, oy: 5 };
+    const expected = shop.shopItemPrice(blade, 5, 5);
+    game.level.objects = [blade];
+
+    shop.impactDropFloorObjects(5, 5, game.level.traps[0], { targetLevel: { dnum: 0, dlevel: 2 } });
+
+    assert.equal(shkp.robbed, expected);
+    assert.equal(shkp.debit || 0, 0);
+    assert.equal(queuedImpactDropsFor().includes(blade), true);
+    assert.equal(blade.no_charge, false);
+});
+
+test('shop-floor container falling through a hole charges contents and clears no-charge', () => {
+    const { shkp } = installShopState();
+    installSeenHoleAtHero();
+    initRng(1);
+    const bag = sack(51203);
+    bag.ox = 5;
+    bag.oy = 5;
+    bag.no_charge = true;
+    const blade = putObjectInContainer(bag, dagger(51204));
+    const free = putObjectInContainer(bag, foodRation(51205));
+    free.no_charge = true;
+    const coins = putObjectInContainer(bag, goldPieces(51206, 7));
+    const expected = shop.shopItemPrice(blade, 5, 5) + 7;
+    game.level.objects = [bag];
+
+    shop.impactDropFloorObjects(5, 5, game.level.traps[0], { targetLevel: { dnum: 0, dlevel: 2 } });
+
+    assert.equal(shkp.debit, expected);
+    assert.equal(queuedImpactDropsFor().includes(bag), true);
+    assert.equal(bag.no_charge, false);
+    assert.equal(blade.no_charge, false);
+    assert.equal(free.no_charge, false);
+    assert.equal(coins.no_charge, undefined);
 });
 
 test('angry shopkeeper takes dropped container contents without sale or no-charge marking', () => {
