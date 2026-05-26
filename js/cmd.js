@@ -21672,7 +21672,7 @@ function isTipSourceObject(obj) {
 }
 
 function isFloorTipSourceObject(obj) {
-    return isTipContainerObject(obj) || isBagOfTricksObject(obj) || isHornOfPlentyObject(obj);
+    return isTipContainerObject(obj) || isBagOfTricksObject(obj);
 }
 
 function tipSpillageKind(obj) {
@@ -22399,6 +22399,24 @@ async function applyBagOfTricksOnce(bag, { tipping = false } = {}) {
     if (seecount && bag.dknown) identifyChargedToolKind(bag, 'bag of tricks');
     if (!tipping && !seecount) messages.push(moncount ? 'Nothing seems to happen.' : 'Nothing happens.');
     return messages;
+}
+
+async function lootFloorBagOfTricks(bag) {
+    bag.lknown = true;
+    const bagName = articlelessObjectName(bag);
+    const damage = rnd(10);
+    if (game.u) {
+        game.u.uhp = Math.max(0, (game.u.uhp || 0) - damage);
+        if ((game.u.uhp || 0) <= 0) game._death_cause = 'killed by a carnivorous bag';
+    }
+    identifyChargedToolKind(bag, 'bag of tricks');
+    const messages = [
+        `You carefully open the ${bagName}...`,
+        'It develops a huge set of teeth and bites you!',
+    ];
+    if ((game.u?.uhp || 0) <= 0) messages.push('You die...');
+    await setMessage(messages.join('  '), messages.length > 1);
+    game.context.move = 1;
 }
 
 async function tipBagOfTricks(bag) {
@@ -41447,7 +41465,9 @@ export async function rhack(_cmd) {
                     (obj.kind === 'chest' || obj.otyp === CHEST || obj.kind === 'large box' || obj.otyp === LARGE_BOX)
                     && obj.ox === game.u?.ux && obj.oy === game.u?.uy);
                 const iceBox = game.level?.objects?.find(obj => obj.otyp === ICE_BOX && obj.ox === game.u?.ux && obj.oy === game.u?.uy);
-                const bag = game.level?.objects?.find(obj => BAG_OBJECT_TYPES.has(obj.otyp) && obj.ox === game.u?.ux && obj.oy === game.u?.uy);
+                const bag = game.level?.objects?.find(obj =>
+                    (BAG_OBJECT_TYPES.has(obj.otyp) || isBagOfTricksObject(obj))
+                    && obj.ox === game.u?.ux && obj.oy === game.u?.uy);
                 if (game.u?._glyph === 'D') await setMessage('You have no hands!');
                 else if (chest?.locked || chest?.olocked) {
                     chest.lknown = true;
@@ -41468,6 +41488,11 @@ export async function rhack(_cmd) {
                     setIceBoxActionMenu(iceBox);
                     return;
                 } else if (bag) {
+                    if (isBagOfTricksObject(bag)) {
+                        await lootFloorBagOfTricks(bag);
+                        game._command_mode = null;
+                        return;
+                    }
                     game._floor_container_object = bag;
                     const lossMessages = [];
                     const lossDetails = { lost: 0, lostMerchandise: 0 };

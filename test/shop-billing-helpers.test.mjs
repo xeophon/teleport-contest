@@ -16,6 +16,8 @@ const INVENTORY_LETTERS = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'
 const SCR_SCARE_MONSTER = 279;
 const LOADSTONE = 10165;
 const BOULDER = 465;
+const HORN_OF_PLENTY = 957;
+const BAG_OF_TRICKS = 10158;
 
 function installShopState() {
     const g = resetGame();
@@ -828,6 +830,67 @@ test('alternate unpaid horn emptying charges full use fee', () => {
     assert.equal(shkp.billct, 1);
     assert.equal(shop.shopBillEntryForObject(shkp, horn).useup, false);
     assert.match(messages[0], /Emptying that will cost you 50 zorkmids/);
+});
+
+test('floor horn of plenty is not selected as a #tip source', async () => {
+    installCommandShopState();
+    const horn = { ...chargedTool(3062, 'horn of plenty', 'h', 4), otyp: HORN_OF_PLENTY };
+    const carried = sack(3063, 's');
+    game.level.objects = [horn];
+    game.inventory = [carried];
+
+    await rhack('#');
+    for (const ch of 'tip') await rhack(ch);
+    await rhack('\n');
+
+    assert.equal(game._command_mode, 'tipConfirm');
+    assert.equal(game._tip_container_object, carried);
+    assert.match(game._pending_message, /Tip a sack/);
+    assert.doesNotMatch(game._pending_message, /horn of plenty/);
+});
+
+test('floor bag of tricks #loot bites without shop usage billing', async () => {
+    const { shkp } = installCommandShopState();
+    const bag = { ...chargedTool(3064, 'bag of tricks', 'b', 3), otyp: BAG_OF_TRICKS };
+    game.level.objects = [bag];
+    game.inventory = [];
+    game.u.uhp = 100;
+
+    await rhack('#');
+    await rhack('l');
+    await rhack('\n');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game._floor_container_object || null, null);
+    assert.match(game._pending_message, /You carefully open the bag of tricks/);
+    assert.match(game._pending_message, /huge set of teeth and bites you/);
+    assert.equal(bag.known, true);
+    assert.ok(game.u.uhp < 100);
+    assert.equal(shkp.debit || 0, 0);
+    assert.equal(shkp.robbed || 0, 0);
+    assert.equal(shkp.billct, 0);
+});
+
+test('cursed floor bag of tricks #loot does not lose contained shop merchandise', async () => {
+    const { shkp } = installCommandShopState();
+    const bag = { ...chargedTool(3065, 'bag of tricks', 'b', 3), otyp: BAG_OF_TRICKS, cursed: true, contents: [] };
+    const blade = putObjectInContainer(bag, dagger(3066));
+    game.level.objects = [bag];
+    game.inventory = [];
+    game.u.uhp = 100;
+
+    await rhack('#');
+    await rhack('l');
+    await rhack('\n');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(bag.contents.includes(blade), true);
+    assert.doesNotMatch(game._pending_message, /vanished|lost merchandise/);
+    assert.equal(shkp.debit || 0, 0);
+    assert.equal(shkp.robbed || 0, 0);
+    assert.equal(shkp.billct, 0);
 });
 
 test('charged instrument use follows C quarter-price rule when more than one charge remains', () => {
