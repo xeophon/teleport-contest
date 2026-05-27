@@ -791,6 +791,8 @@ const GLOB_OF_GRAY_OOZE = 10180;
 const GLOB_OF_BROWN_PUDDING = 10181;
 const GLOB_OF_GREEN_SLIME = 10182;
 const GLOB_OF_BLACK_PUDDING = 10183;
+const BLINDING_VENOM = 10184;
+const ACID_VENOM = 10185;
 const GLOB_TYPES = new Map([
     ['gray ooze', { otyp: GLOB_OF_GRAY_OOZE, name: 'glob of gray ooze', color: CLR_GRAY }],
     ['brown pudding', { otyp: GLOB_OF_BROWN_PUDDING, name: 'glob of brown pudding', color: CLR_BROWN }],
@@ -4910,6 +4912,7 @@ const CLASS_WEIGHTS = {
     gem: 1,
     food: 20,
     amulet: 20,
+    venom: 1,
 };
 const SHOP_OBJECT_COSTS = {
     'arrow': 2,
@@ -13293,6 +13296,61 @@ function makeOilLampFromMagicLampWishObject() {
         actualKind: 'oil lamp',
         wishedfor: true,
     });
+}
+
+const WISH_VENOM_TYPES = {
+    blinding: { otyp: BLINDING_VENOM, kind: 'splash of blinding venom' },
+    acid: { otyp: ACID_VENOM, kind: 'splash of acid venom' },
+};
+
+function wishedRandomVenomType() {
+    return rnd(1000) <= 500 ? WISH_VENOM_TYPES.blinding : WISH_VENOM_TYPES.acid;
+}
+
+function wishedDescriptionVenomType() {
+    return rn2(1002) < 501 ? WISH_VENOM_TYPES.blinding : WISH_VENOM_TYPES.acid;
+}
+
+function wishedVenomType(lowerName) {
+    const name = String(lowerName || '').trim().replace(/\s+/g, ' ');
+    if (name === 'venom')
+        return wishedRandomVenomType();
+    if (name === 'splash of venom' || name === 'splashes of venom')
+        return wishedDescriptionVenomType();
+    if (name === 'splash of blinding venom' || name === 'splashes of blinding venom'
+        || name === 'blinding venom') {
+        rn2(501);
+        return WISH_VENOM_TYPES.blinding;
+    }
+    if (name === 'splash of acid venom' || name === 'splashes of acid venom'
+        || name === 'acid venom') {
+        rn2(501);
+        return WISH_VENOM_TYPES.acid;
+    }
+    return null;
+}
+
+function makeWishedVenomObject(lowerName) {
+    const venom = wishedVenomType(lowerName);
+    if (!venom) return null;
+    if (!game.flags?.debug) return noFittingWishObject();
+    return {
+        id: next_ident(),
+        otyp: venom.otyp,
+        cls: 'venom',
+        glyph: '.',
+        color: CLR_BROWN,
+        _display_color: CLR_BROWN,
+        kind: venom.kind,
+        actualKind: venom.kind,
+        singular: venom.kind,
+        known: true,
+        dknown: true,
+        quan: 1,
+        spe: 1,
+        owt: 1,
+        wishedfor: true,
+    };
 }
 
 function makeWizardSpecialWishObject(lowerName) {
@@ -22205,6 +22263,9 @@ function wishedBaseObjectFromName(lowerName, qualifiers = {}, originalName = low
 
     const eggWish = parseWishedEggName(lowerName, qualifiers);
     if (eggWish) return makeWishedEggObject(eggWish, qualifiers);
+
+    const venomWish = makeWishedVenomObject(lowerName);
+    if (venomWish) return venomWish;
 
     const wizardSpecial = makeWizardSpecialWishObject(lowerName);
     if (wizardSpecial) return wizardSpecial;

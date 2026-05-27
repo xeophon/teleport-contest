@@ -1242,6 +1242,107 @@ test('non-wizard unique description wishes use C substitutions', async () => {
     assert.equal(game.u.uconduct?.wisharti || 0, 0);
 });
 
+test('non-wizard exact unique and magic-lamp wishes use C substitutions', async () => {
+    for (const wish of ['Candelabrum of Invocation']) {
+        installWishState(7, { debug: false });
+        beginWishDirectly();
+        await submitWish(wish);
+
+        const item = game.inventory[0];
+        assert.equal(game._command_mode, null, wish);
+        assert.ok([TALLOW_CANDLE, WAX_CANDLE].includes(item.otyp), wish);
+        assert.match(item.kind, /candle/, wish);
+        assert.notEqual(item.actualKind, 'Candelabrum of Invocation', wish);
+        assert.equal(game.u.uconduct?.wishes, 1, wish);
+        assert.equal(game.u.uconduct?.wisharti || 0, 0, wish);
+    }
+
+    for (const wish of ['Book of the Dead']) {
+        installWishState(7, { debug: false });
+        beginWishDirectly();
+        await submitWish(wish);
+
+        const item = game.inventory[0];
+        assert.equal(game._command_mode, null, wish);
+        assert.equal(item.cls, 'spellbook', wish);
+        assert.equal(item.kind, 'spellbook of blank paper', wish);
+        assert.notEqual(item.actualKind, 'Book of the Dead', wish);
+        assert.equal(game.u.uconduct?.wishes, 1, wish);
+        assert.equal(game.u.uconduct?.wisharti || 0, 0, wish);
+    }
+
+    for (const wish of ['Bell of Opening', 'silver bell']) {
+        installWishState(7, { debug: false });
+        beginWishDirectly();
+        await submitWish(wish);
+
+        const item = game.inventory[0];
+        assert.equal(game._command_mode, null, wish);
+        assert.equal(item.otyp, BELL, wish);
+        assert.equal(item.kind, 'bell', wish);
+        assert.notEqual(item.actualKind, 'bell of opening', wish);
+        assert.equal(game.u.uconduct?.wishes, 1, wish);
+        assert.equal(game.u.uconduct?.wisharti || 0, 0, wish);
+    }
+
+    installWishState(7, { debug: false });
+    beginWishDirectly();
+    await submitWish('magic lamp');
+    assert.equal(game.inventory[0].kind, 'oil lamp');
+    assert.notEqual(game.inventory[0].actualKind, 'magic lamp');
+    assert.equal(game.u.uconduct?.wishes, 1);
+
+    installWishState(7, { debug: false });
+    beginWishDirectly();
+    await submitWish('real Amulet of Yendor');
+    assert.equal(game.inventory[0].fakeAmuletOfYendor, true);
+    assert.equal(game.inventory[0].realAmuletOfYendor, undefined);
+    assert.equal(game.u.uconduct?.wishes, 1);
+});
+
+test('wizard-only venom wishes follow C oc_nowish policy', async () => {
+    installWishState();
+    beginWishDirectly();
+    await submitWish('splash of acid venom');
+
+    let item = game.inventory[0];
+    assert.equal(game._command_mode, null);
+    assert.equal(item.cls, 'venom');
+    assert.equal(item.kind, 'splash of acid venom');
+    assert.equal(item.actualKind, 'splash of acid venom');
+    assert.equal(item.spe, 1);
+    assert.equal(item.owt, 1);
+    assert.equal(game.u.uconduct?.wishes, 1);
+    assert.equal(game.u.uconduct?.wisharti || 0, 0);
+    assert.match(item.line, /^a - a splash of acid venom$/);
+
+    installWishState();
+    beginWishDirectly();
+    await submitWish('acid venom');
+    item = game.inventory[0];
+    assert.equal(item.kind, 'splash of acid venom');
+    assert.equal(item.glyph, '.');
+    assert.equal(item.owt, 1);
+
+    installWishState();
+    beginWishDirectly();
+    await submitWish('venom');
+    item = game.inventory[0];
+    assert.equal(item.cls, 'venom');
+    assert.ok(['splash of blinding venom', 'splash of acid venom'].includes(item.kind));
+    assert.equal(item.spe, 1);
+
+    installWishState(7, { debug: false });
+    beginWishDirectly();
+    await submitWish('splash of blinding venom');
+
+    assert.equal(game._command_mode, 'wizardWish');
+    assert.equal(game._wish_tries, 1);
+    assert.equal(game.inventory.length, 0);
+    assert.equal(game.u.uconduct?.wishes || 0, 0);
+    assert.match(game._pending_message, /Nothing fitting that description exists in the game\./);
+});
+
 test('denied quest artifact wish records artifact conduct without ordinary wish conduct', async () => {
     installWishState(5, { debug: false });
     game._startup_role = 'Wizard';
