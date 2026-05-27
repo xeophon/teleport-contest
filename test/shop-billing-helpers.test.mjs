@@ -3126,6 +3126,138 @@ test('applying an unpaid potion of oil charges fuel tax and keeps a used-up bill
     assert.match(game._pending_message, /in addition to the cost of the potion/);
 });
 
+test('dipping an oil lamp into unpaid oil refuels and bills fuel tax', async () => {
+    const { shkp } = installCommandShopState();
+    const target = lamp(30921, 'oil lamp', 'l');
+    const potion = oilPotion(30922, 'o');
+    target.age = 0;
+    game.inventory = [target, potion];
+    shop.addObjectToShopBill(shkp, potion, 100);
+    const expectedFee = expectedUnpaidUsageFee(potion);
+
+    await rhack('#');
+    for (const ch of 'dip') await rhack(ch);
+    await rhack('\n');
+
+    assert.equal(game._command_mode, 'dipObject');
+
+    await rhack('l');
+
+    assert.equal(game._command_mode, 'dipOilSource');
+    assert.match(game._pending_message, /What do you want to dip .*lamp into\? \[o or \?\*\]/);
+
+    await rhack('o');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(target.age, 800);
+    assert.equal(target.spe, 1);
+    assert.equal(game.inventory.includes(potion), false);
+    assert.equal(potion.known, true);
+    assert.equal(potion.unpaid, false);
+    assert.equal(shkp.debit, expectedFee);
+    assert.equal(shkp.billct, 1);
+    const entry = shop.shopBillEntryForObject(shkp, potion);
+    assert.ok(entry);
+    assert.equal(entry.useup, true);
+    assert.equal(shop.shopBillEntryTotal(entry), 100);
+    assert.match(game._pending_message, /You fill your lamp with oil\./);
+    assert.match(game._pending_message, /Yendorian Fuel Tax/);
+    assert.doesNotMatch(game._pending_message, /in addition to the cost/);
+});
+
+test('dipping a full oil lamp into unpaid oil keeps the live potion bill', async () => {
+    const { shkp } = installCommandShopState();
+    const target = lamp(30923, 'oil lamp', 'l');
+    const potion = oilPotion(30924, 'o');
+    target.age = 1500;
+    game.inventory = [target, potion];
+    shop.addObjectToShopBill(shkp, potion, 100);
+
+    await rhack('#');
+    for (const ch of 'dip') await rhack(ch);
+    await rhack('\n');
+    await rhack('l');
+    await rhack('o');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(target.age, 1500);
+    assert.equal(target.spe, 1);
+    assert.equal(game.inventory.includes(potion), true);
+    assert.equal(shkp.debit || 0, 0);
+    const entry = shop.shopBillEntryForObject(shkp, potion);
+    assert.ok(entry);
+    assert.equal(entry.useup, false);
+    assert.equal(shop.shopBillEntryTotal(entry), 100);
+    assert.match(game._pending_message, /Your lamp is full\./);
+    assert.doesNotMatch(game._pending_message, /Yendorian Fuel Tax|in addition to the cost/);
+});
+
+test('dipping an empty magic lamp into oil converts it before refuel billing', async () => {
+    const { shkp } = installCommandShopState();
+    const target = lamp(30925, 'magic lamp', 'm', 0);
+    const potion = oilPotion(30926, 'o');
+    target.age = 1500;
+    game.inventory = [target, potion];
+    shop.addObjectToShopBill(shkp, potion, 100);
+    const expectedFee = expectedUnpaidUsageFee(potion);
+
+    await rhack('#');
+    for (const ch of 'dip') await rhack(ch);
+    await rhack('\n');
+    await rhack('m');
+    await rhack('o');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(target.otyp, OIL_LAMP);
+    assert.equal(target.kind, 'oil lamp');
+    assert.equal(target.actualKind, 'oil lamp');
+    assert.equal(target.age, 800);
+    assert.equal(target.spe, 1);
+    assert.equal(game.inventory.includes(potion), false);
+    assert.equal(shkp.debit, expectedFee);
+    const entry = shop.shopBillEntryForObject(shkp, potion);
+    assert.ok(entry);
+    assert.equal(entry.useup, true);
+    assert.match(game._pending_message, /You fill your lamp with oil\./);
+    assert.match(game._pending_message, /Yendorian Fuel Tax/);
+});
+
+test('dipping an unpaid oil stack into a lamp preserves residual stack billing', async () => {
+    const { shkp } = installCommandShopState();
+    const target = lamp(30927, 'oil lamp', 'l');
+    const potion = oilPotion(30928, 'o', 2);
+    target.age = 0;
+    game.inventory = [target, potion];
+    shop.addObjectToShopBill(shkp, potion, 100);
+    const expectedFee = expectedUnpaidUsageFee(potion);
+
+    await rhack('#');
+    for (const ch of 'dip') await rhack(ch);
+    await rhack('\n');
+    await rhack('l');
+    await rhack('o');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(target.age, 800);
+    assert.equal(potion.quan, 1);
+    assert.equal(game.inventory.includes(potion), true);
+    assert.equal(potion.unpaid, true);
+    assert.equal(shkp.debit, expectedFee);
+    const entry = shop.shopBillEntryForObject(shkp, potion);
+    assert.ok(entry);
+    assert.equal(entry.useup, false);
+    assert.equal(entry.bquan, 2);
+    const debts = shop.collectPayableShopDebts(shkp);
+    assert.equal(debts.some(debt => debt.billPortion === 'partlyUsedUp' && debt.price === 50), true);
+    assert.equal(debts.some(debt => debt.billPortion === 'intact' && debt.price === 50), true);
+    assert.match(game._pending_message, /You fill your lamp with oil\./);
+    assert.match(game._pending_message, /Yendorian Fuel Tax/);
+});
+
 test('applying an unpaid cream pie to yourself bills a dummy used-up pie', async () => {
     const { shkp } = installCommandShopState();
     const pie = creamPie(3094, 'p');

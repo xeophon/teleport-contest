@@ -10477,6 +10477,12 @@ function isLampObject(item) {
         || kind === 'oil lamp' || kind === 'magic lamp' || kind === 'brass lantern';
 }
 
+function isOilRefuelLampObject(item) {
+    const kind = objectKindKey(item);
+    return item?.otyp === OIL_LAMP || item?.otyp === MAGIC_LAMP
+        || kind === 'oil lamp' || kind === 'magic lamp';
+}
+
 function isCrystalBallObject(item) {
     const kind = toolChargeKind(item);
     return item?.otyp === CRYSTAL_BALL || kind === 'crystal ball'
@@ -11442,6 +11448,57 @@ async function applyPotionOfOil(item) {
     }
     await setMessage(messages.join('  '), messages.length > 1);
     game.context.move = 1;
+}
+
+function oilPotionDipSources(target) {
+    return (game.inventory || []).filter(item => item !== target && isPotionOfOil(item));
+}
+
+function oilRefuelAmount(potion) {
+    return Math.trunc(((potion?.odiluted ? 3 : 4) * (potion?.age ?? 400)) / 2);
+}
+
+function dipLampIntoOilPotion(lamp, potion) {
+    const messages = [];
+    if (!isOilRefuelLampObject(lamp) || !isPotionOfOil(potion)) return messages;
+    if (potion.lamplit || potion.burning) {
+        messages.push('The lit potion burns away.');
+        useUpInventoryItem(potion, 1);
+        identifyPotionOfOil(potion);
+        return messages;
+    }
+    if (potion.cursed) {
+        messages.push(`The potion spills and covers your ${fingersOrGloves()} with oil.`);
+        addHeroGlibTimeout(d(2, 10));
+        useUpInventoryItem(potion, 1);
+        identifyPotionOfOil(potion);
+        return messages;
+    }
+    if (lamp.lamplit || lamp.burning) {
+        messages.push('Boom!  The oil catches fire.');
+        useUpInventoryItem(potion, 1);
+        identifyPotionOfOil(potion);
+        return messages;
+    }
+    const kind = objectKindKey(lamp);
+    if ((lamp.otyp === MAGIC_LAMP || kind === 'magic lamp') && (lamp.spe ?? 1) === 0) {
+        lamp.otyp = OIL_LAMP;
+        lamp.kind = 'oil lamp';
+        lamp.actualKind = 'oil lamp';
+        lamp.age = 0;
+    }
+    if ((lamp.age ?? 1500) > 1000) {
+        messages.push(`Your ${lampNoun(lamp)} is full.`);
+    } else {
+        messages.push(`You fill your ${lampNoun(lamp)} with oil.`);
+        checkUnpaidUsage(potion, messages);
+        lamp.age = Math.min(1500, (lamp.age ?? 0) + oilRefuelAmount(potion));
+        useUpInventoryItem(potion, 1);
+        identifyPotionOfOil(potion);
+    }
+    lamp.spe = 1;
+    refreshLightSourceLine(lamp);
+    return messages;
 }
 
 function removeMonsterFromLevel(mon) {
@@ -43947,10 +44004,36 @@ export async function rhack(_cmd) {
             }
             game._dip_object = ch;
             game._dip_item = item;
+            const oilSources = isOilRefuelLampObject(item) ? oilPotionDipSources(item) : [];
+            if (oilSources.length) {
+                const sourceLetters = oilSources.map(source => source.letter).filter(Boolean).sort().join('');
+                await setMessage(`What do you want to dip ${article}${description} into? [${inventoryLetterMenu(sourceLetters)} or ?*]`);
+                game._command_mode = 'dipOilSource';
+                return;
+            }
             await setMessage(`Dip ${article}${description} into the fountain? [yn] (n)`);
             game._command_mode = 'dipConfirm';
             return;
         }
+        game._command_mode = null;
+        return;
+    }
+
+    if (game._command_mode === 'dipOilSource') {
+        if (ch === '\x1b') {
+            game._keep_pending_message = 1;
+            game._command_mode = null;
+            return;
+        }
+        const lamp = game._dip_item || (game.inventory || []).find(invItem => invItem.letter === game._dip_object);
+        const potion = (game.inventory || []).find(invItem => invItem.letter === ch);
+        if (lamp && potion && isPotionOfOil(potion)) {
+            const messages = dipLampIntoOilPotion(lamp, potion);
+            await setMessage(messages.join('  ') || 'Nothing happens.', messages.length > 1);
+            game.context.move = 1;
+        }
+        game._dip_object = '';
+        game._dip_item = null;
         game._command_mode = null;
         return;
     }
