@@ -10,7 +10,8 @@ This note records the fresh read-only subagent audits run after the hot-ground a
 - C `breakchestlock()` extracts each live contained object, rolls once per content object, always destroys potions after that roll, emits `chest_shatter_msg()`, and destroys one unit from a stack before placing survivors at the hero and stacking them (`nethack-c/upstream/src/lock.c:162-204`).
 - C `chest_shatter_msg()` prints `You see/hear a <bottle> shatter!` for potions and calls direct `potionbreathe()` without the broken-potion odor prelude (`nethack-c/upstream/src/lock.c:1276-1285`).
 - JS currently snapshots and removes all chest contents in `finishForceLock()`, then the delayed content loop gives potions the generic torn-to-shreds message, loses full stacks, clones survivors, and consumes an extra survivor `rn2(100)` (`js/cmd.js:9010-9035`, `js/cmd.js:36654-36684`).
-- Smallest next slice: fix the blade destroy-roll short-circuit, add chest-specific potion shatter wording plus direct `potionBreathe()`, destroy only one unit from potion stacks, place live survivors, and then add shop loss/debt for destroyed box and contents as a later billing extension if needed.
+- Audit 46 implements this slice: blade forcing now skips the destroy roll in helper and command paths, forced chest potion contents use chest-specific bottle wording plus direct `potionBreathe()`, one potion stack unit is destroyed, survivors are placed/stacked at the hero, and destroyed shop contents plus the box produce post-credit aggregate debt.
+- Remaining forced-chest work is blade weapon breakage, blunt wake-nearby occupation behavior, and material-specific non-potion shatter wording.
 
 ## Direct Potionhit Delivery
 
@@ -42,7 +43,7 @@ This note records the fresh read-only subagent audits run after the hot-ground a
 
 ## Ranking
 
-1. Forced chest-content potion shattering is the closest continuation of the current vapor work.
+1. Direct `potionhit()` is high impact but should be split into smaller hit-delivery rows.
 2. Statue shatter shop debt is a compact non-potion shop-debt slice.
 3. Broader stone to flesh remains useful after Audit 45, but it should follow registry-backed material/object metadata.
-4. Direct `potionhit()` is high impact but should be split into smaller hit-delivery rows.
+4. Remaining forced-chest occupation/material details can follow after higher-impact visible delivery/debt rows.

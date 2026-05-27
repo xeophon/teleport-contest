@@ -4,7 +4,7 @@ import test from 'node:test';
 import { interruptEatingOccupation, processEatingOccupationTick } from '../js/allmain.js';
 import { burnFloorObjectsByFire, earthFloorEffects, finishForceLock, processCorpseTimers, processGlobShrinkTimers, processSpellbookStudyOccupation, rhack, __shopBillingTestHooks as shop } from '../js/cmd.js';
 import { game, resetGame } from '../js/gstate.js';
-import { initRng } from '../js/rng.js';
+import { enableRngLog, getRngLog, initRng } from '../js/rng.js';
 import { BILLSZ, CANDLESHOP, COULD_SEE, DB_EAST, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, FOUNTAIN, HOLE, IN_SIGHT, LAVAPOOL, POOL, ROOM, ROOMOFFSET, SHOPBASE, SQKY_BOARD } from '../js/const.js';
 import { currentFruitId, setCurrentFruitName } from '../js/fruit.js';
 
@@ -105,6 +105,25 @@ function acknowledgePendingMessage() {
 
 function acknowledgeMoreForOccupation() {
     acknowledgePendingMessage();
+}
+
+async function drainQueuedMessagesAfterMore(limit = 20) {
+    const messages = [];
+    for (let i = 0; i < limit && (game._queued_message_after_more
+        || game._queued_messages_after_more?.length
+        || game._break_chest_contents_after_more); i++) {
+        const current = game._pending_message
+            || game._queued_message_after_more
+            || game._queued_messages_after_more?.[0]?.text
+            || game._break_chest_destroyed_message
+            || 'More';
+        game._pending_message = current;
+        game._topline_after_more = '';
+        game._message_more = 1;
+        await rhack(' ');
+        if (game._pending_message) messages.push(game._pending_message);
+    }
+    return messages;
 }
 
 async function castStoneToFleshAtSelf() {
@@ -1261,6 +1280,16 @@ async function startRubCommand() {
     await rhack('r');
     await rhack('u');
     await rhack('b');
+    await rhack('\n');
+}
+
+async function startForceCommand() {
+    await rhack('#');
+    await rhack('f');
+    await rhack('o');
+    await rhack('r');
+    await rhack('c');
+    await rhack('e');
     await rhack('\n');
 }
 
@@ -9534,6 +9563,158 @@ test('forcing a shop-floor box lock bills only the altered box as a dummy bill',
     assert.equal((game._usedUpShopBills || []).length, 1);
     assert.equal(game._usedUpShopBills[0].bo_id, shkp.bill[0].bo_id);
     assert.equal(game._usedUpShopBills[0].price, expected);
+});
+
+test('blade-forced box lock does not consume the chest destruction roll', () => {
+    const { shkp } = installCommandShopState();
+    initRng(1);
+    enableRngLog({ reset: true });
+    const box = shopFloorContainer(6110);
+    box.locked = true;
+    box.olocked = true;
+    box.lknown = true;
+    putObjectInContainer(box, dagger(6111));
+    game.level.objects = [box];
+
+    const destroyed = finishForceLock({ chest: box, picktyp: true });
+
+    assert.equal(destroyed, false);
+    assert.deepEqual(getRngLog().filter(entry => entry.startsWith('rn2(3)=')), []);
+    assert.equal(shkp.billct, 1);
+});
+
+test('dagger #force command uses blade prying and skips chest destruction roll', async () => {
+    const { shkp } = installCommandShopState();
+    initRng(1);
+    const box = shopFloorContainer(6122);
+    box.locked = true;
+    box.olocked = true;
+    box.lknown = true;
+    game.level.objects = [box];
+    const blade = dagger(6123, 'd');
+    blade.wielded = true;
+    blade.line = 'd - a dagger (weapon in right hand)';
+    game.inventory = [blade];
+
+    await startForceCommand();
+    assert.equal(game._command_mode, 'forceConfirm');
+    await rhack('y');
+
+    assert.match(game._pending_message, /You force your dagger into a crack and pry\./);
+    assert.equal(game._force_lock_occupation?.picktyp, true);
+    enableRngLog({ reset: true });
+    const destroyed = finishForceLock(game._force_lock_occupation);
+    game._force_lock_occupation = null;
+
+    assert.equal(destroyed, false);
+    assert.deepEqual(getRngLog().filter(entry => entry.startsWith('rn2(3)=')), []);
+    assert.equal(shkp.billct, 1);
+});
+
+test('destroyed box shatters potion contents with direct vapor and stack survivor', async () => {
+    installNonShopFloorState();
+    initRng(5);
+    const box = shopFloorContainer(6112);
+    box.locked = true;
+    box.olocked = true;
+    const potion = putObjectInContainer(box, confusionPotion(6113, undefined, 3));
+    delete potion.letter;
+    delete potion.line;
+    game.level.objects = [box];
+
+    const destroyed = finishForceLock({ chest: box, picktyp: false });
+    const messages = await drainQueuedMessagesAfterMore();
+    const text = messages.join('  ');
+
+    assert.equal(destroyed, true);
+    assert.match(text, /In fact, you've totally destroyed the large box\./);
+    assert.match(text, /You see (?:a|an) (?:bottle|phial|flagon|carafe|flask|jar|vial) shatter!/);
+    assert.match(text, /You feel somewhat dizzy\./);
+    assert.doesNotMatch(text, /peculiar odor|Your eyes water/);
+    assert.equal(game.level.objects.includes(box), false);
+    const survivor = game.level.objects.find(obj => obj.kind === 'confusion');
+    assert.ok(survivor);
+    assert.equal(survivor.quan, 2);
+    assert.equal(survivor.ox, 5);
+    assert.equal(survivor.oy, 5);
+});
+
+test('destroyed shop-floor box charges shattered contents and box as one loss', async () => {
+    const { shkp } = installCommandShopState();
+    initRng(5);
+    const box = shopFloorContainer(6114);
+    box.locked = true;
+    box.olocked = true;
+    const potion = putObjectInContainer(box, confusionPotion(6115, undefined, 1));
+    delete potion.letter;
+    delete potion.line;
+    game.level.objects = [box];
+    const expectedLoss = shop.shopItemPrice(potion, 5, 5)
+        + shop.shopItemPrice({ ...box, contents: [], cobj: [] }, 5, 5);
+
+    const destroyed = finishForceLock({ chest: box, picktyp: false });
+    const messages = await drainQueuedMessagesAfterMore();
+    const text = messages.join('  ');
+
+    assert.equal(destroyed, true);
+    assert.match(text, new RegExp(`You owe ${expectedLoss} zorkmids for objects destroyed\\.`));
+    assert.ok(text.indexOf('shatter!') < text.indexOf('You owe'));
+    assert.equal(shkp.debit, expectedLoss);
+    assert.equal(shkp.billct, 0);
+    assert.equal(game.level.objects.includes(box), false);
+    assert.equal(game.level.objects.some(obj => obj.id === potion.id), false);
+});
+
+test('destroyed shop-floor box loss message uses post-credit debt', async () => {
+    const { shkp } = installCommandShopState();
+    initRng(5);
+    const box = shopFloorContainer(6116);
+    box.locked = true;
+    box.olocked = true;
+    const potion = putObjectInContainer(box, confusionPotion(6117, undefined, 1));
+    delete potion.letter;
+    delete potion.line;
+    game.level.objects = [box];
+    const expectedLoss = shop.shopItemPrice(potion, 5, 5)
+        + shop.shopItemPrice({ ...box, contents: [], cobj: [] }, 5, 5);
+    const uncovered = Math.max(1, Math.trunc(expectedLoss / 3));
+    shkp.credit = expectedLoss - uncovered;
+
+    const destroyed = finishForceLock({ chest: box, picktyp: false });
+    const messages = await drainQueuedMessagesAfterMore();
+
+    assert.equal(destroyed, true);
+    assert.match(messages.join('  '), new RegExp(`You owe ${uncovered} zorkmids for objects destroyed\\.`));
+    assert.equal(shkp.credit, 0);
+    assert.equal(shkp.debit, uncovered);
+});
+
+test('destroyed box values contained containers like inventory contents', async () => {
+    const { shkp } = installCommandShopState();
+    initRng(5);
+    const box = shopFloorContainer(6118);
+    box.locked = true;
+    box.olocked = true;
+    const bag = putObjectInContainer(box, sack(6119));
+    const nestedGold = putObjectInContainer(bag, goldPieces(6120, 50));
+    const nestedDagger = putObjectInContainer(bag, dagger(6121));
+    game.level.objects = [box];
+    const expectedLoss = shop.shopItemPrice(bag, 5, 5)
+        + shop.shopItemPrice({ ...box, contents: [], cobj: [] }, 5, 5);
+    const excludedNestedLoss = 50 + shop.shopItemPrice(nestedDagger, 5, 5);
+
+    const destroyed = finishForceLock({ chest: box, picktyp: false });
+    const messages = await drainQueuedMessagesAfterMore();
+
+    assert.equal(destroyed, true);
+    assert.match(messages.join('  '), /A (?:sack|bag) is torn to shreds!/);
+    assert.match(messages.join('  '), new RegExp(`You owe ${expectedLoss} zorkmids for objects destroyed\\.`));
+    assert.equal(shkp.debit, expectedLoss);
+    assert.ok(excludedNestedLoss > 0);
+    assert.notEqual(shkp.debit, expectedLoss + excludedNestedLoss);
+    assert.equal(game.level.objects.includes(bag), false);
+    assert.equal(game.level.objects.includes(nestedGold), false);
+    assert.equal(game.level.objects.includes(nestedDagger), false);
 });
 
 test('pickup menu prices billable contents of a no-charge floor container', async () => {

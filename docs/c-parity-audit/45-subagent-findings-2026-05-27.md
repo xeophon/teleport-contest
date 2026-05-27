@@ -33,14 +33,14 @@ The JS path now branches before generic healing-spell handling, replaces each ca
 - Broaden stone to flesh from the covered carried marble-wand row to rings, gems/stones, boulders, statues, figurines, floor/beam targets, golem effects, and petrification rescue.
 - Replace the local material/name guard with registry-backed material and object-class metadata instead of recognizing this one ordinary wand row in command code.
 - Fill out full `poly_obj()` result initialization, object resistance, attached-data cleanup, display/discovery behavior, and shop routing for non-inventory transformations.
-- Keep forced chest potion shattering as the next compact vapor/destruction candidate: fix the blade destroy-roll short-circuit, call direct potion vapor for potion contents, decrement one stack unit, place survivors, and then add destroyed-content shop loss.
+- Audit 46 implements the compact forced chest potion shatter/destruction candidate: blade destroy-roll short-circuit, direct potion vapor for potion contents, one-unit stack destruction, survivor placement, and destroyed-content/box shop loss.
 - Keep direct hero-thrown `potionhit()` as a larger hit-delivery slice, starting with a known confusion potion hitting a visible ordinary monster before widening.
 - Keep statue-trap shatter debt as a compact shop slice: charge statue and contents before moving contents to the animated monster when `shatter` is true.
 - Defer lycanthropy water vapor until the local were-form runtime model is source-shaped enough to support `you_were()`/`you_unwere()` semantics.
 
 ## Ranking
 
-1. Forced chest-content potion shattering is still the closest continuation of the recent vapor work.
+1. Direct hero-thrown `potionhit()` is high impact but should start with one monster-hit row.
 2. Statue-trap shatter debt is isolated and source-backed in one trap path.
-3. Direct hero-thrown `potionhit()` is high impact but should start with one monster-hit row.
-4. Broader stone-to-flesh transformations should wait for registry-backed material/object metadata after the marble-wand row.
+3. Broader stone-to-flesh transformations should wait for registry-backed material/object metadata after the marble-wand row.
+4. Remaining forced-chest occupation/material details can follow the Audit 46 shatter/debt slice.

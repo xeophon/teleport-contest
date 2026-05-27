@@ -8924,10 +8924,22 @@ function fireDamageInventory(origDamage, forceDestroyItems = false, rollIgniteIt
 }
 
 function forceWeaponName(item) {
+    if (!item) return 'weapon';
     return inventoryItemName(item)
         .replace(/^an? /, '')
         .replace(/^(?:\d+ )?(?:blessed|uncursed|cursed) /, '')
         .replace(/^[+-]\d+ /, '');
+}
+
+const FORCE_BLADE_NAME_RE = /\b(?:athame|axe|battle-axe|crysknife|dagger|knife|katana|saber|sabre|scalpel|short sword|broadsword|long sword|two-handed sword|tsurugi|wakizashi)\b/;
+
+function forceWeaponIsPick(item) {
+    return PICK_DIG_NAME_RE.test(forceWeaponName(item).toLowerCase());
+}
+
+function forceWeaponIsBlade(item) {
+    const name = forceWeaponName(item).toLowerCase();
+    return !forceWeaponIsPick(item) && FORCE_BLADE_NAME_RE.test(name);
 }
 
 function forceLockChance(item) {
@@ -8975,6 +8987,16 @@ function syncBrokenBoxContentDisplay(content) {
         content.cls = 'armor';
         content.glyph = '[';
     }
+    if (content.glyph === '+'
+        || content.cls === 'spellbook'
+        || content.otyp === SPBOOK_NO_NOVEL
+        || content.otyp === BOOK_OF_THE_DEAD
+        || (content.otyp >= SPE_HEALING && content.otyp < DART)
+        || /\bspellbook\b/i.test(kind)) {
+        content.cls = 'spellbook';
+        content.glyph = '+';
+        if (content.color == null || content.color === NO_COLOR) content.color = CLR_WHITE;
+    }
     if (OBJECT_CLASS_GLYPHS[content.cls]) content.glyph = OBJECT_CLASS_GLYPHS[content.cls];
 }
 
@@ -9007,13 +9029,130 @@ function billDummyAlteredShopObject(obj) {
     return true;
 }
 
+const CHEST_SHATTER_BOTTLE_NAMES = ['bottle', 'phial', 'flagon', 'carafe', 'flask', 'jar', 'vial'];
+const CHEST_SHATTER_HALLUCINATED_BOTTLE_NAMES = [
+    'jug', 'pitcher', 'barrel', 'tin', 'bag', 'box', 'glass', 'beaker',
+    'tumbler', 'vase', 'flowerpot', 'pan', 'thingy', 'mug', 'teacup',
+    'teapot', 'keg', 'bucket', 'thermos', 'amphora', 'wineskin', 'parcel',
+    'bowl', 'ampoule',
+];
+
+function chestShatterBottleName() {
+    const names = heroIsHallucinating() ? CHEST_SHATTER_HALLUCINATED_BOTTLE_NAMES : CHEST_SHATTER_BOTTLE_NAMES;
+    return names[rn2(names.length)] || 'bottle';
+}
+
+function breakChestSourceSpot() {
+    return {
+        ox: game._break_chest_x ?? game.u?.ux ?? 0,
+        oy: game._break_chest_y ?? game.u?.uy ?? 0,
+    };
+}
+
+function recordBreakChestShopLoss(obj, options = {}) {
+    const shkp = game._break_chest_shopkeeper;
+    if (!obj || !shopkeeperInHisShop(shkp)) return 0;
+    const value = lostShopMerchandiseValueForObject(breakChestSourceSpot(), obj, shkp, new Set(), options);
+    game._break_chest_shop_loss = Math.max(0, Math.trunc(Number(game._break_chest_shop_loss || 0))) + value;
+    return value;
+}
+
+function finishBreakChestShopDebtMessage() {
+    const shkp = game._break_chest_shopkeeper;
+    const box = game._break_chest_destroyed_box;
+    if (box) recordBreakChestShopLoss(box);
+    const loss = Math.max(0, Math.trunc(Number(game._break_chest_shop_loss || 0)));
+    game._break_chest_shopkeeper = null;
+    game._break_chest_destroyed_box = null;
+    game._break_chest_shop_loss = 0;
+    game._break_chest_x = null;
+    game._break_chest_y = null;
+    if (!shopkeeperInHisShop(shkp) || !(loss > 0)) return '';
+    const charged = chargeShopkeeperForLostMerchandise(shkp, loss, { peaceful: shopkeeperPeacefulForDebt(shkp) });
+    if (!(charged > 0)) return '';
+    return `You owe ${charged} ${shopCurrency(charged)} for objects destroyed.`;
+}
+
+function brokenChestContentDestroyedMessage(content, messages) {
+    if (isPotionObject(content)) {
+        const sense = game.u?.blind ? 'hear' : 'see';
+        const bottle = chestShatterBottleName();
+        messages.push(`You ${sense} ${articleFor(bottle)} shatter!`);
+        potionBreathe(content, messages);
+        return messages.join('  ');
+    }
+    const name = content.otyp === 11 || content.cls === 'spellbook' || String(content.kind || '').startsWith('spellbook')
+        ? 'spellbook'
+        : pickupObjectName(content);
+    return `${/^[aeiou]/i.test(name) ? 'An' : 'A'} ${name} is torn to shreds!`;
+}
+
+function placeBrokenChestContentAtHero(content) {
+    if (!content || !game.level) return;
+    content.ox = game.u?.ux || 0;
+    content.oy = game.u?.uy || 0;
+    content.contained = false;
+    content.container = null;
+    content.line = undefined;
+    syncBrokenBoxContentDisplay(content);
+    content.owt = globObjectWeight(content);
+    const placed = placeStackableFloorObject(content);
+    if (placed && placed !== content) syncBrokenBoxContentDisplay(placed);
+    newsym(placed?.ox ?? content.ox, placed?.oy ?? content.oy);
+}
+
+function consumeOneBrokenChestContent(content) {
+    const quantity = Math.max(1, Math.trunc(Number(content?.quan || 1)));
+    if (quantity <= 1) return false;
+    content.quan = quantity - 1;
+    content.owt = globObjectWeight(content);
+    return true;
+}
+
+function hasPendingBreakChestContents() {
+    return !!game._break_chest_contents_after_more?.length;
+}
+
+function clearBreakChestContentState() {
+    game._break_chest_contents_after_more = null;
+    game._break_chest_destroyed_message = '';
+    game._break_chest_content_message_active = 0;
+    game._break_chest_finish_after_content_message = 0;
+}
+
+function appendBreakChestFinalDebt(message) {
+    clearBreakChestContentState();
+    const debtMessage = finishBreakChestShopDebtMessage();
+    rn2(100);
+    return debtMessage ? (message ? `${message}  ${debtMessage}` : debtMessage) : message;
+}
+
+function nextBreakChestDestroyedContentMessage() {
+    while (hasPendingBreakChestContents()) {
+        const content = game._break_chest_contents_after_more.shift();
+        const destroyed = !rn2(3) || isPotionObject(content);
+        if (destroyed) {
+            const shatterMessages = [];
+            const message = brokenChestContentDestroyedMessage(content, shatterMessages);
+            recordBreakChestShopLoss(content, {
+                includeContainedGold: false,
+                inventoryLikeContents: true,
+            });
+            if (consumeOneBrokenChestContent(content)) placeBrokenChestContentAtHero(content);
+            return message;
+        }
+
+        placeBrokenChestContentAtHero(content);
+    }
+    return '';
+}
+
 export function finishForceLock(force) {
     const chest = force?.chest;
     if (!chest) return false;
 
     rn2(19);
-    const destroyRoll = rn2(3);
-    const destroyed = !force.picktyp && !destroyRoll;
+    const destroyed = !force.picktyp && !rn2(3);
     if (!destroyed) {
         billDummyAlteredShopObject(chest);
         chest.locked = false;
@@ -9026,6 +9165,12 @@ export function finishForceLock(force) {
 
     const contents = [...liquidFlowContainerContents(chest)];
     const boxName = forceBoxSimpleName(chest);
+    game._break_chest_shopkeeper = shopkeeperForCostlySpot(game.u?.ux, game.u?.uy);
+    if (!shopkeeperInHisShop(game._break_chest_shopkeeper)) game._break_chest_shopkeeper = null;
+    game._break_chest_destroyed_box = chest;
+    game._break_chest_shop_loss = 0;
+    game._break_chest_x = game.u?.ux ?? chest.ox ?? 0;
+    game._break_chest_y = game.u?.uy ?? chest.oy ?? 0;
     game.level.objects = (game.level?.objects || []).filter(obj => obj !== chest);
     newsym(chest.ox, chest.oy);
     game._queued_message_after_more = `In fact, you've totally destroyed the ${boxName}.`;
@@ -36558,6 +36703,29 @@ export async function rhack(_cmd) {
                         ];
                     }
                 }
+                if (next.breakChestContinue) {
+                    let followMessage = nextBreakChestDestroyedContentMessage();
+                    if (followMessage) {
+                        const done = !hasPendingBreakChestContents();
+                        if (done) followMessage = appendBreakChestFinalDebt(followMessage);
+                        game._queued_messages_after_more = [
+                            {
+                                text: followMessage,
+                                more: false,
+                                processTime: true,
+                                breakChestContentMessage: true,
+                                breakChestContinue: !done,
+                            },
+                            ...(game._queued_messages_after_more || []),
+                        ];
+                        next.more = true;
+                        next.processTime = false;
+                    } else if (!hasPendingBreakChestContents()) {
+                        const debtMessage = appendBreakChestFinalDebt('');
+                        if (debtMessage) nextText = nextText ? `${nextText}  ${debtMessage}` : debtMessage;
+                        next.processTime = true;
+                    }
+                }
                 if (next.text === 'You die...' || next.text === 'You die.') prepareDeathBones();
                 await setMessage(nextText, !!next.more);
                 if (next.clearOnlyNext && !next.more) game._clear_pending_message_only_once = 1;
@@ -36619,6 +36787,10 @@ export async function rhack(_cmd) {
                     game.context.move = 0;
                     game._process_command_time_now = 1;
                     game._process_time_with_more = !!next.more;
+                    if (next.breakChestContentMessage) {
+                        game._continue_monsters_after_more = 1;
+                        game._resume_time_after_more = 0;
+                    }
                 }
                 return;
             }
@@ -36776,54 +36948,32 @@ export async function rhack(_cmd) {
                 let finishedBreakChestContents = false;
                 if (game._break_chest_contents_after_more
                     && (next === game._break_chest_destroyed_message || game._break_chest_content_message_active)) {
-                    let destroyedMessage = '';
-                    while (game._break_chest_contents_after_more.length) {
-                        const content = game._break_chest_contents_after_more.shift();
-                        const destroyed = !rn2(3) || content.cls === 'potion' || content.otyp === POTION_CLASS;
-                        if (destroyed) {
-                            const name = content.otyp === 11 || content.cls === 'spellbook' || String(content.kind || '').startsWith('spellbook')
-                                ? 'spellbook'
-                                : pickupObjectName(content);
-                            destroyedMessage = `${/^[aeiou]/i.test(name) ? 'An' : 'A'} ${name} is torn to shreds!`;
-                            break;
-                        }
-
-                        rn2(100);
-                        const isSpellbook = content.otyp === 11 || (content.otyp >= 327 && content.otyp < 349)
-                            || content.cls === 'spellbook'
-                            || String(content.kind || '').startsWith('spellbook');
-                        const glyph = isSpellbook ? '+'
-                            : content.otyp === 1 ? ')'
-                                : content.otyp === 2 ? '['
-                                    : content.otyp === RING_CLASS ? '='
-                                        : content.otyp === FOOD_CLASS ? '%'
-                                            : content.otyp === SCROLL_CLASS ? '?'
-                                                : content.otyp === POTION_CLASS ? '!'
-                                                    : content.otyp === WAND_CLASS ? '/'
-                                                        : content.otyp === TOOL_CLASS ? '('
-                                                            : content.otyp === GEM_CLASS ? '*'
-                                                                : content.otyp === AMULET_CLASS ? '"'
-                                                                    : OBJECT_CLASS_GLYPHS[content.cls] || content.glyph || '?';
-                        game.level?.objects?.push({
-                            ...content,
-                            ox: game.u?.ux || 0,
-                            oy: game.u?.uy || 0,
-                            glyph,
-                            color: isSpellbook ? CLR_WHITE : content.color,
-                            line: undefined,
-                        });
-                        newsym(game.u?.ux || 0, game.u?.uy || 0);
-                    }
+                    let destroyedMessage = nextBreakChestDestroyedContentMessage();
                     if (destroyedMessage) {
+                        const done = !hasPendingBreakChestContents();
+                        if (done) destroyedMessage = appendBreakChestFinalDebt(destroyedMessage);
+                        game._queued_messages_after_more = [
+                            {
+                                text: destroyedMessage,
+                                more: false,
+                                processTime: true,
+                                breakChestContentMessage: true,
+                                breakChestContinue: !done,
+                            },
+                            ...(game._queued_messages_after_more || []),
+                        ];
                         queuedMore = true;
-                        game._break_chest_content_message_active = 1;
-                        game._queued_message_after_more = destroyedMessage;
-                    }
-                    if (!game._break_chest_contents_after_more.length) {
-                        game._break_chest_contents_after_more = null;
-                        game._break_chest_destroyed_message = '';
-                        game._break_chest_content_message_active = 0;
-                        finishedBreakChestContents = true;
+                    } else if (!hasPendingBreakChestContents()) {
+                        const debtMessage = appendBreakChestFinalDebt('');
+                        if (debtMessage) {
+                            game._queued_messages_after_more = [
+                                { text: debtMessage, more: false, processTime: true, breakChestContentMessage: true },
+                                ...(game._queued_messages_after_more || []),
+                            ];
+                            queuedMore = true;
+                        } else {
+                            finishedBreakChestContents = true;
+                        }
                     }
                 }
                 if (game._armor_takeoff_after_more && next.startsWith('You finish taking off your ')) {
@@ -45726,13 +45876,16 @@ export async function rhack(_cmd) {
             const weapon = (game.inventory || []).find(item => item.wielded || item.line?.includes('weapon in'));
             if (chest) {
                 const weaponName = forceWeaponName(weapon);
+                const picktyp = forceWeaponIsBlade(weapon);
                 game._force_lock_occupation = {
                     chest,
                     chance: forceLockChance(weapon),
-                    picktyp: false,
+                    picktyp,
                     usedtime: 0,
                 };
-                await setMessage(`You start bashing it with your ${weaponName}.`, true);
+                await setMessage(picktyp
+                    ? `You force your ${weaponName} into a crack and pry.`
+                    : `You start bashing it with your ${weaponName}.`, true);
                 game._pending_force_lock_start_message = 1;
                 game.context.move = 1;
                 game._process_time_with_more = 1;

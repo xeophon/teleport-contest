@@ -11,7 +11,8 @@ This note records the fresh read-only subagent findings gathered while implement
 - Potion chest shatter prints `You see/hear a <bottle> shatter!` and calls direct `potionbreathe()` with no broken-potion odor prelude (`nethack-c/upstream/src/lock.c:1282-1285`).
 - C charges destroyed contents silently before stack decrement, then the destroyed box, then prints one aggregate destroyed-objects debt line (`nethack-c/upstream/src/lock.c:188-206`, `nethack-c/upstream/src/shk.c:3753-3818`).
 - JS still consumes the destroy roll even for `picktyp`, snapshots/removes all contents, gives destroyed potions generic torn-to-shreds wording, loses full potion stacks, clones survivors, and has no destroyed-content/box debt conversion (`js/cmd.js:9013-9034`, `js/cmd.js:36657-36683`).
-- Smallest safe slice: fix the blade destroy-roll short-circuit, add chest-specific potion shatter wording plus direct `potionBreathe()`, destroy one potion from stacks, place/stack live survivors, and then add a narrow destroyed-objects shop-loss accumulator.
+- Audit 46 implements the safe slice: blade forcing now short-circuits the destroy roll in the helper and real `#force` command path, potion contents use chest-specific bottle wording plus direct `potionBreathe()`, one stack unit is destroyed, survivors are placed/stacked at the hero, and destroyed contents plus the box use a narrow post-credit shop-loss accumulator.
+- Remaining forced-chest work is blade weapon breakage, blunt wake-nearby occupation behavior, and C's material-specific non-potion shatter messages.
 
 ## Stone To Flesh Marble Wand
 
@@ -38,7 +39,7 @@ This note records the fresh read-only subagent findings gathered while implement
 
 ## Ranking
 
-1. Forced chest-content potion shattering is the closest continuation of the potion vapor work and has precise tests.
+1. Direct hero-thrown `potionhit()` is high impact but should start with one monster-hit row before broadening.
 2. Statue trap shatter debt is compact and isolated in one trap path.
 3. Broader stone to flesh remains high-value after Audit 45 but should wait for registry-backed material/object metadata.
-4. Direct hero-thrown `potionhit()` is high impact but should start with one monster-hit row before broadening.
+4. Remaining forced-chest occupation/material details are smaller follow-ups after the Audit 46 shatter/debt slice.
