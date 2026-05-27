@@ -52,7 +52,7 @@ The pickup-focused audit confirmed the implemented slice and ranked the remainin
 
 - `add_to_container()` in C (`mkobj.c:2676`) uses `merged()`; JS `mklev.js:4762` still uses `sameStackableObject()`, which does not share the pickup predicate.
 - JS inventory pickup still excludes globs even though C has `glob` absorption through `merged()` and `globby_bill_fixup()`.
-- JS simple-food pickup coverage still omits some low-risk C food rows such as `tripe ration`, `candy bar`, and `meat stick`.
+- At this audit stage, JS simple-food pickup coverage still omitted low-risk C food rows such as `tripe ration`, `candy bar`, and `meat stick`; audits 25 and 27 close those specific rows.
 - The next clean merge slice is to move pure merge predicates into a shared helper used by `cmd.js` and `mklev.js`, then add container insertion checks for meat-ring nonmerge, `oeaten`, `orotten`, species, hatch timers, revivers, names, and age averaging.
 
 ## Floor And Level-Generation Stack Audit

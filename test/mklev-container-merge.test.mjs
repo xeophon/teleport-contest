@@ -14,6 +14,7 @@ const TIN = 10004;
 const WAX_CANDLE = 371;
 const POT_OIL = 252;
 const MEAT_RING = 10164;
+const MEAT_STICK = 11014;
 
 function installContainerTestGame() {
     const g = resetGame();
@@ -255,6 +256,17 @@ test('add_to_container keeps meat rings separate', () => {
     assert.deepEqual(container.contents, [second, first]);
     assert.equal(first.quan, 1);
     assert.equal(second.quan, 1);
+});
+
+test('add_to_container merges meat sticks by C food metadata', () => {
+    installContainerTestGame();
+    const first = food(32, 'meat stick', { otyp: MEAT_STICK });
+    const second = food(33, 'meat stick', { otyp: MEAT_STICK });
+    const container = box([first]);
+
+    assert.equal(add_to_container(container, second), first);
+    assert.deepEqual(container.contents, [first]);
+    assert.equal(first.quan, 2);
 });
 
 test('add_to_container respects modeled C oc_merge metadata', () => {

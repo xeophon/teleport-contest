@@ -50,6 +50,7 @@ const KELP_FROND = 172;
 const SLIME_MOLD = 11009;
 const LUMP_OF_ROYAL_JELLY = 10089;
 const MEATBALL = 11012;
+const MEAT_STICK = 11014;
 const ENORMOUS_MEATBALL = 11013;
 
 function testCell(typ = ROOM) {
@@ -632,6 +633,7 @@ test('wished ration foods use concrete C object metadata', async () => {
         ['1 slime mold', SLIME_MOLD, 'slime mold', 'slime molds', 250, 5, 17],
         ['1 lump of royal jelly', LUMP_OF_ROYAL_JELLY, 'lump of royal jelly', 'lumps of royal jelly', 200, 2, 15],
         ['1 meatball', MEATBALL, 'meatball', 'meatballs', 5, 1, 5],
+        ['1 meat stick', MEAT_STICK, 'meat stick', 'meat sticks', 5, 1, 5],
         ['1 enormous meatball', ENORMOUS_MEATBALL, 'enormous meatball', 'enormous meatballs', 2000, 400, 105],
         ['1 K-ration', K_RATION, 'K-ration', 'K-rations', 400, 10, 25],
         ['1 C-ration', C_RATION, 'C-ration', 'C-rations', 300, 10, 20],
@@ -663,6 +665,7 @@ test('plural wished ration foods keep C plural metadata and weights', async () =
         ['slime molds', SLIME_MOLD, 'slime mold', 'slime molds', 2, 10],
         ['lumps of royal jelly', LUMP_OF_ROYAL_JELLY, 'lump of royal jelly', 'lumps of royal jelly', 2, 4],
         ['meatballs', MEATBALL, 'meatball', 'meatballs', 2, 2],
+        ['meat sticks', MEAT_STICK, 'meat stick', 'meat sticks', 2, 2],
         ['enormous meatballs', ENORMOUS_MEATBALL, 'enormous meatball', 'enormous meatballs', 2, 800],
         ['K-rations', K_RATION, 'K-ration', 'K-rations', 2, 20],
         ['C-rations', C_RATION, 'C-ration', 'C-rations', 2, 20],

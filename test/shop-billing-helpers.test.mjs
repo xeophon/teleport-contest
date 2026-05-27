@@ -25,6 +25,7 @@ const BAG_OF_TRICKS = 10158;
 const POT_WATER = 253;
 const SLIME_MOLD = 11009;
 const MEAT_RING = 10164;
+const MEAT_STICK = 11014;
 const DART = 353;
 
 function installShopState() {
@@ -361,6 +362,7 @@ function simpleFood(id, kind, letter = 'f', extra = {}) {
         'fortune cookie': 'fortune cookies',
         'lump of royal jelly': 'lumps of royal jelly',
         meatball: 'meatballs',
+        'meat stick': 'meat sticks',
         'enormous meatball': 'enormous meatballs',
         'kelp frond': 'kelp fronds',
         'sprig of wolfsbane': 'sprigs of wolfsbane',
@@ -6034,21 +6036,30 @@ test('carried delay-one cream pie and candy bar use victual path and animal-prod
 });
 
 test('carried meatball uses C delay-one flesh conduct and nutrition', async () => {
-    installNonShopFloorState();
-    const food = simpleFood(31886, 'meatball', 'm');
-    game.inventory = [food];
+    const cases = [
+        ['meatball', 'm'],
+        ['meat stick', 's'],
+    ];
 
-    await rhack('e');
-    await rhack('m');
+    for (const [index, [kind, letter]] of cases.entries()) {
+        installNonShopFloorState();
+        const food = simpleFood(31886 + index, kind, letter, {
+            otyp: kind === 'meat stick' ? MEAT_STICK : undefined,
+        });
+        game.inventory = [food];
 
-    assert.equal(game._pending_message, 'This meatball is delicious!');
-    assert.equal(game.inventory.includes(food), false);
-    assert.equal(game.u.uhunger, 905);
-    assert.equal(game.u.uconduct?.food, 1);
-    assert.equal(game.u.uconduct?.unvegan, 1);
-    assert.equal(game.u.uconduct?.unvegetarian, 1);
-    assert.equal(game._eating_turns_remaining || 0, 0);
-    assert.equal(game.context.move, 1);
+        await rhack('e');
+        await rhack(letter);
+
+        assert.equal(game._pending_message, `This ${kind} is delicious!`, kind);
+        assert.equal(game.inventory.includes(food), false, kind);
+        assert.equal(game.u.uhunger, 905, kind);
+        assert.equal(game.u.uconduct?.food, 1, kind);
+        assert.equal(game.u.uconduct?.unvegan, 1, kind);
+        assert.equal(game.u.uconduct?.unvegetarian, 1, kind);
+        assert.equal(game._eating_turns_remaining || 0, 0, kind);
+        assert.equal(game.context.move, 1, kind);
+    }
 });
 
 test('carried K-ration and C-ration use C delay-one bland victual path', async () => {
@@ -11948,6 +11959,7 @@ test('expanded simple food floor pickup merges compatible paid inventory stacks'
         ['eucalyptus leaf', 'eucalyptus leaves', 'e'],
         ['lump of royal jelly', 'lumps of royal jelly', 'j'],
         ['meatball', 'meatballs', 's'],
+        ['meat stick', 'meat sticks', 'i'],
         ['enormous meatball', 'enormous meatballs', 'n'],
         ['tripe ration', 'tripe rations', 't'],
         ['candy bar', 'candy bars', 'y'],
@@ -12206,6 +12218,16 @@ test('covered simple food pickup merge excludes remaining special food exception
     assert.equal(carriedMeatball.quan, 2);
     assert.match(carriedMeatball.line, /^s - 2 meatballs/);
 
+    const carriedMeatStick = simpleFood(7145, 'meat stick', 'i', { otyp: MEAT_STICK });
+    const floorMeatStick = { ...simpleFood(7146, 'meat stick'), otyp: MEAT_STICK, letter: undefined, line: undefined };
+    game.inventory = [carriedMeatStick];
+
+    const meatStickMerge = shop.findPickedObjectInventoryMergeTarget(floorMeatStick, 0);
+    assert.equal(meatStickMerge.target, carriedMeatStick);
+    shop.mergePickedObjectIntoInventory(floorMeatStick, carriedMeatStick);
+    assert.equal(carriedMeatStick.quan, 2);
+    assert.match(carriedMeatStick.line, /^i - 2 meat sticks/);
+
     const carriedEnormousMeatball = simpleFood(7141, 'enormous meatball', 'n');
     const floorEnormousMeatball = { ...simpleFood(7142, 'enormous meatball'), letter: undefined, line: undefined };
     game.inventory = [carriedEnormousMeatball];
@@ -12369,6 +12391,7 @@ test('expanded simple food pickup full-inventory preflight allows no-charge merg
         ['eucalyptus leaf', 'e'],
         ['lump of royal jelly', 'j'],
         ['meatball', 's'],
+        ['meat stick', 'i'],
         ['enormous meatball', 'n'],
         ['tripe ration', 't'],
         ['candy bar', 'y'],
@@ -12410,6 +12433,7 @@ test('shopBaseCost returns C prices for covered simple foods', () => {
     assert.equal(shop.shopBaseCost(slimeMoldFood(7137)), 17);
     assert.equal(shop.shopBaseCost(simpleFood(7134, 'lump of royal jelly')), 15);
     assert.equal(shop.shopBaseCost(simpleFood(7135, 'meatball')), 5);
+    assert.equal(shop.shopBaseCost(simpleFood(7145, 'meat stick')), 5);
     assert.equal(shop.shopBaseCost(meatRingFood(7138)), 1);
     assert.equal(shop.shopBaseCost(simpleFood(7136, 'enormous meatball')), 105);
     assert.equal(shop.shopBaseCost(simpleFood(7133, 'fortune cookie')), 7);
@@ -12455,6 +12479,10 @@ test('simple food pickup full-inventory preflight rejects billable source into p
         [
             (id, letter) => simpleFood(id, 'meatball', letter),
             id => simpleFood(id, 'meatball'),
+        ],
+        [
+            (id, letter) => simpleFood(id, 'meat stick', letter, { otyp: MEAT_STICK }),
+            id => simpleFood(id, 'meat stick', undefined, { otyp: MEAT_STICK }),
         ],
         [
             (id, letter) => simpleFood(id, 'enormous meatball', letter),
@@ -12517,6 +12545,10 @@ test('simple food pickup full-inventory preflight rejects billable source before
         [
             (id, letter) => simpleFood(id, 'meatball', letter),
             id => simpleFood(id, 'meatball'),
+        ],
+        [
+            (id, letter) => simpleFood(id, 'meat stick', letter, { otyp: MEAT_STICK }),
+            id => simpleFood(id, 'meat stick', undefined, { otyp: MEAT_STICK }),
         ],
         [
             (id, letter) => simpleFood(id, 'enormous meatball', letter),
