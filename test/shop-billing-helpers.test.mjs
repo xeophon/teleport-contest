@@ -2,10 +2,10 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { interruptEatingOccupation, processEatingOccupationTick } from '../js/allmain.js';
-import { burnFloorObjectsByFire, earthFloorEffects, finishForceLock, processCorpseTimers, processGlobShrinkTimers, processSpellbookStudyOccupation, rhack, __shopBillingTestHooks as shop } from '../js/cmd.js';
+import { activateStatueTrap, burnFloorObjectsByFire, earthFloorEffects, finishForceLock, processCorpseTimers, processGlobShrinkTimers, processSpellbookStudyOccupation, rhack, __shopBillingTestHooks as shop } from '../js/cmd.js';
 import { game, resetGame } from '../js/gstate.js';
 import { enableRngLog, getRngLog, initRng } from '../js/rng.js';
-import { A_DEX, BILLSZ, CANDLESHOP, COULD_SEE, DB_EAST, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, FOUNTAIN, HOLE, IN_SIGHT, LAVAPOOL, POOL, ROOM, ROOMOFFSET, SHOPBASE, SQKY_BOARD } from '../js/const.js';
+import { A_DEX, BILLSZ, CANDLESHOP, COULD_SEE, DB_EAST, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, FOUNTAIN, HOLE, IN_SIGHT, LAVAPOOL, POOL, ROOM, ROOMOFFSET, SHOPBASE, SQKY_BOARD, STATUE_TRAP } from '../js/const.js';
 import { currentFruitId, setCurrentFruitName } from '../js/fruit.js';
 
 const BRASS_LANTERN = 226;
@@ -29,6 +29,7 @@ const MEAT_RING = 10164;
 const MEAT_STICK = 11014;
 const DART = 353;
 const WAN_MAKE_INVISIBLE = 10091;
+const STATUE = 472;
 
 function installShopState() {
     const g = resetGame();
@@ -1024,6 +1025,35 @@ function corpse(id, letter = 'c', name = 'newt', nutrition = 20) {
         corpsenm: { name, cnutrit: nutrition },
         known: true,
         dknown: true,
+    };
+}
+
+function statueTrapStatue(id, x = 7, y = 5, name = 'goblin') {
+    return {
+        id,
+        otyp: STATUE,
+        cls: 'rock',
+        glyph: '`',
+        kind: 'statue',
+        actualKind: 'statue',
+        singular: 'statue',
+        plural: 'statues',
+        quan: 1,
+        ox: x,
+        oy: y,
+        known: true,
+        dknown: true,
+        contents: [],
+        corpsenm: {
+            name,
+            mlet: 'o',
+            glyph: 'o',
+            color: 3,
+            mlevel: 1,
+            hpLevel: 1,
+            mmove: 9,
+            maligntyp: -3,
+        },
     };
 }
 
@@ -9730,6 +9760,99 @@ test('destroyed box values contained containers like inventory contents', async 
     assert.equal(game.level.objects.includes(bag), false);
     assert.equal(game.level.objects.includes(nestedGold), false);
     assert.equal(game.level.objects.includes(nestedDagger), false);
+});
+
+test('shattering shop-floor statue trap charges contents before animation inventory transfer', async () => {
+    const { shkp } = installCommandShopState();
+    initRng(6);
+    const statue = statueTrapStatue(6124);
+    const ration = putObjectInContainer(statue, foodRation(6125));
+    const blade = putObjectInContainer(statue, dagger(6126));
+    const trap = { ttyp: STATUE_TRAP, tx: 7, ty: 5 };
+    game.level.objects = [statue];
+    game.level.traps = [trap];
+    const expectedLoss = (shop.shopItemPrice(statue, 7, 5) || 0)
+        + shop.shopItemPrice(ration, 7, 5)
+        + shop.shopItemPrice(blade, 7, 5);
+
+    const message = await activateStatueTrap(trap, 7, 5, { shatter: true });
+
+    assert.match(message, /Instead of shattering, .* suddenly comes to life!/);
+    assert.match(message, new RegExp(`You owe Izchak ${expectedLoss} zorkmids for its contents!`));
+    assert.ok(message.indexOf('Instead of shattering') < message.indexOf('You owe Izchak'));
+    assert.equal(shkp.debit, expectedLoss);
+    assert.equal(shkp.robbed || 0, 0);
+    assert.equal(shkp.billct, 0);
+    assert.equal(game.level.traps.includes(trap), false);
+    assert.equal(game.level.objects.includes(statue), false);
+    const mon = game.level.monsters.find(candidate => !candidate.isshk && candidate.data?.name === 'goblin');
+    assert.ok(mon);
+    assert.equal(mon.minvent.length, 2);
+    assert.equal(mon.minvent.includes(ration), true);
+    assert.equal(mon.minvent.includes(blade), true);
+});
+
+test('normal shop-floor statue trap activation does not charge transferred contents', async () => {
+    const { shkp } = installCommandShopState();
+    initRng(6);
+    const statue = statueTrapStatue(6127);
+    const ration = putObjectInContainer(statue, foodRation(6128));
+    const trap = { ttyp: STATUE_TRAP, tx: 7, ty: 5 };
+    game.level.objects = [statue];
+    game.level.traps = [trap];
+
+    const message = await activateStatueTrap(trap, 7, 5, { normal: true });
+
+    assert.match(message, /posing as a statue/);
+    assert.equal(shkp.debit || 0, 0);
+    assert.equal(shkp.robbed || 0, 0);
+    assert.equal(shkp.billct, 0);
+    assert.equal(game.level.objects.includes(statue), false);
+    const mon = game.level.monsters.find(candidate => !candidate.isshk && candidate.data?.name === 'goblin');
+    assert.ok(mon);
+    assert.equal(mon.minvent.includes(ration), true);
+});
+
+test('shattering no-charge shop-floor statue trap does not charge contents', async () => {
+    const { shkp } = installCommandShopState();
+    initRng(6);
+    const statue = statueTrapStatue(6129);
+    statue.no_charge = true;
+    const ration = putObjectInContainer(statue, foodRation(6130));
+    const trap = { ttyp: STATUE_TRAP, tx: 7, ty: 5 };
+    game.level.objects = [statue];
+    game.level.traps = [trap];
+
+    const message = await activateStatueTrap(trap, 7, 5, { shatter: true });
+
+    assert.match(message, /Instead of shattering, .* suddenly comes to life!/);
+    assert.doesNotMatch(message, /You owe|Thief/);
+    assert.equal(shkp.debit || 0, 0);
+    assert.equal(shkp.robbed || 0, 0);
+    const mon = game.level.monsters.find(candidate => !candidate.isshk && candidate.data?.name === 'goblin');
+    assert.ok(mon);
+    assert.equal(mon.minvent.includes(ration), true);
+});
+
+test('shattering statue trap does not charge when resident shopkeeper is dead', async () => {
+    const { shkp } = installCommandShopState();
+    initRng(6);
+    shkp.dead = true;
+    const statue = statueTrapStatue(6131);
+    const ration = putObjectInContainer(statue, foodRation(6132));
+    const trap = { ttyp: STATUE_TRAP, tx: 7, ty: 5 };
+    game.level.objects = [statue];
+    game.level.traps = [trap];
+
+    const message = await activateStatueTrap(trap, 7, 5, { shatter: true });
+
+    assert.match(message, /Instead of shattering, .* suddenly comes to life!/);
+    assert.doesNotMatch(message, /You owe|Thief/);
+    assert.equal(shkp.debit || 0, 0);
+    assert.equal(shkp.robbed || 0, 0);
+    const mon = game.level.monsters.find(candidate => !candidate.isshk && candidate.data?.name === 'goblin');
+    assert.ok(mon);
+    assert.equal(mon.minvent.includes(ration), true);
 });
 
 test('pickup menu prices billable contents of a no-charge floor container', async () => {

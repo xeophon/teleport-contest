@@ -14352,6 +14352,55 @@ function moveStatueContentsToMonster(statue, mon) {
     mon.hasInventory = !!(mon.minvent || []).length;
 }
 
+function countStatueShopContentsForMessage(obj, x, y, everything = true, seen = new Set()) {
+    if (!obj || seen.has(obj)) return 0;
+    seen.add(obj);
+    const shoppy = !everything && !!shopkeeperForCostlySpot(x, y);
+    let count = 0;
+    for (const child of globContents(obj)) {
+        count += countStatueShopContentsForMessage(child, x, y, everything, seen);
+        if (everything || child.unpaid || (shoppy && !child.no_charge)) count++;
+    }
+    return count;
+}
+
+function statueShatterShopDebtMessage(statue, x, y, mon) {
+    if (!statue || statue.no_charge || game._monster_moving) return '';
+    const shkp = shopkeeperForCostlySpot(x, y);
+    if (!shkp || !shopkeeperInHisShop(shkp) || mon === shkp) return '';
+    const beforeCredit = Math.max(0, Math.trunc(Number(shkp.credit || 0)));
+    const wasUnpaid = !!statue.unpaid;
+    const contentCount = countStatueShopContentsForMessage(statue, x, y, true);
+    const unpaidContentCount = countStatueShopContentsForMessage(statue, x, y, false);
+    const value = lostShopMerchandiseValueForObject({ ox: x, oy: y }, statue, shkp);
+    if (!(value > 0)) return '';
+
+    const peaceful = shkp.mpeaceful !== 0;
+    const remaining = chargeShopkeeperForLostMerchandise(shkp, value, { peaceful });
+    if (!peaceful) {
+        if (!game.u?.blind && couldsee(shkp.mx, shkp.my))
+            return `${shopkeeperDisplayName(shkp)} booms: "${game.plname || 'Hero'}, you are a thief!"`;
+        if (!heroIsDeaf()) return 'You hear a scream, "Thief!"';
+        return '';
+    }
+
+    if (beforeCredit > 0 && !remaining) {
+        const credit = Math.max(0, Math.trunc(Number(shkp.credit || 0)));
+        return credit > 0
+            ? `You have ${credit} ${shopCurrency(credit)} credit remaining.`
+            : 'You have no credit remaining.';
+    }
+
+    if (!(remaining > 0)) return '';
+    let message = `You ${beforeCredit > 0 ? 'still ' : ''}owe ${shopkeeperDisplayName(shkp)} ${remaining} ${shopCurrency(remaining)}`;
+    if (unpaidContentCount > 0) {
+        message += ` for ${wasUnpaid ? 'it and ' : ''}${contentCount > unpaidContentCount ? 'some of ' : ''}its contents`;
+    } else if (!shopBillableGold(statue)) {
+        message += ` for ${(statue.quan || 1) > 1 ? 'them' : 'it'}`;
+    }
+    return `${message}!`;
+}
+
 function randomHallucinatedMonsterName() {
     let halluIndex;
     do {
@@ -14563,12 +14612,13 @@ export async function activateStatueTrap(trap, x, y, { prefix = '', shatter = fa
         : shatter
         ? `Instead of shattering, ${game.u?.blind || !couldsee(x, y) ? 'a statue' : `the ${statueName}`} suddenly ${verb}!`
         : `${upstartText(`the ${statueName}`)} ${verb}!`;
+    const debtMessage = shatter ? statueShatterShopDebtMessage(statue, x, y, mon) : '';
 
     moveStatueContentsToMonster(statue, mon);
     game.level.objects = (game.level?.objects || []).filter(obj => obj !== statue);
     newsym(x, y);
     newsym(mon.mx, mon.my);
-    return prefix ? `${prefix}  ${body}` : body;
+    return [prefix, body, debtMessage].filter(Boolean).join('  ');
 }
 
 function noFittingWishObject() {
