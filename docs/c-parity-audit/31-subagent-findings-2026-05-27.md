@@ -23,12 +23,12 @@ This slice brings poisoned weapon display closer to C `doname()` ordering for in
 
 ## Parallel Follow-Up Audits
 
-- Water BUC effects are now covered in audit 32 for blessed/cursed water source selection, BUC mutation, source consumption, visible glow/aura learning, and unpaid water devaluation billing. Neutral-water `water_damage()` remains open.
-- Unicorn horn and amethyst neutralization: C `mixtype()` maps unicorn horn plus sickness to fruit juice, horn plus hallucination/blindness/confusion to water, and amethyst plus booze to fruit juice, transforming one potion from a stack while leaving the target horn/gem unchanged. JS has no horn/amethyst `#dip` branch yet.
+- Water BUC effects are now covered in audit 32 for blessed/cursed water source selection, BUC mutation, source consumption, visible glow/aura learning, and unpaid water devaluation billing. Neutral-water `water_damage()` is covered in audit 34, with shared primitives still open.
+- Unicorn horn and amethyst neutralization is covered in audit 33 for the local `mixtype()` rows, split-one source stacks, `COST_NUTRLZ`, mutation, and no-effect fallbacks.
 - Stone-to-flesh self-cast: C routes stone-to-flesh through the wand-like directional path; self-cast transforms only mineral/gemstone inventory objects into meat ring, meat stick, or meatball as appropriate, then repeatedly merges eligible food results. JS currently treats healing-category spells generically, so stone-to-flesh does not transform inventory yet.
 
 ## Remaining Follow-Ups
 
-- Full C `#dip` source/target menu parity, neutral-water damage, potion-potion alchemy, unicorn horn/amethyst mixtures, and poison lifecycle outside dipping remain separate slices.
+- Broad non-self carried potion `#dip` source/target menu parity, neutral-water damage, and horn/amethyst mixtures are covered in later audits. Potion-potion alchemy, real `?*` menu rendering, full `poly_obj()` fidelity, self-potion/Klein-bottle handling, and poison lifecycle outside dipping remain separate slices.
 - Broader naming parity should eventually flow through a C-shaped `xname()`/`doname()` split instead of local display helpers.
 - Stone-to-flesh object transforms remain a separate spell/object-registry slice.

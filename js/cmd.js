@@ -871,6 +871,7 @@ const SCR_SCARE_MONSTER = 279;
 const SCR_BLANK_PAPER = 293;
 const POTION_CLASS = 9;
 const POT_ACID = 238;
+const POT_POLYMORPH = 248;
 const POT_OIL = 252;
 const POT_WATER = 253;
 const WAND_CLASS = 10;
@@ -10496,7 +10497,7 @@ function wishObjectMetadataForItem(item) {
 
 function isPotionObject(item) {
     return item?.cls === 'potion' || item?.otyp === POTION_CLASS || item?.otyp === POT_ACID
-        || item?.otyp === POT_OIL || item?.otyp === POT_WATER;
+        || item?.otyp === POT_POLYMORPH || item?.otyp === POT_OIL || item?.otyp === POT_WATER;
 }
 
 function isWaterPotion(item) {
@@ -10515,6 +10516,12 @@ function isPotionOfAcid(item) {
     if (!isPotionObject(item)) return false;
     return item?.otyp === POT_ACID || item?.potionIndex === 23
         || objectKindKey(item).replace(/^potion of /, '') === 'acid';
+}
+
+function isPotionOfPolymorph(item) {
+    if (!isPotionObject(item)) return false;
+    return item?.otyp === POT_POLYMORPH || item?.potionIndex === 19
+        || objectKindKey(item).replace(/^potion of /, '') === 'polymorph';
 }
 
 function potionDipKind(item) {
@@ -11498,6 +11505,16 @@ function identifyPotionOfOil(item) {
     learnObjectScore('Potions', 'potion of oil');
 }
 
+function identifyPotionOfPolymorph(item) {
+    if (!item) return;
+    item.known = true;
+    item.actualKind = 'potion of polymorph';
+    item.kind = 'polymorph';
+    item.potionIndex = 19;
+    recordKnownPotionDiscovery(item, 'polymorph');
+    learnObjectScore('Potions', 'potion of polymorph');
+}
+
 function recordKnownToolDiscovery(toolName) {
     const name = String(toolName || '').trim();
     if (!name) return;
@@ -11588,13 +11605,7 @@ function isNeutralWaterDipSource(item) {
 function dipPotionSources(target) {
     return (game.inventory || []).filter(item => {
         if (item === target || !isPotionObject(item)) return false;
-        if (isBlessedOrCursedWaterDipSource(item) && isWaterDipTargetObject(target)) return true;
-        if (isNeutralWaterDipSource(item) && isWaterDipTargetObject(target)) return true;
-        if (isPotionOfAcid(item) && isAcidCorrosionDipTargetObject(target)) return true;
-        if (isPotionOfOil(item) && (isOilRefuelLampObject(target) || isOilWeaponDipTargetObject(target))) return true;
-        if (isPoisonableWeaponObject(target) && (isPotionOfSickness(item) || isHealingFamilyPotion(item))) return true;
-        if (isPotionNeutralizationTarget(target)) return true;
-        return false;
+        return isWaterDipTargetObject(target);
     });
 }
 
@@ -11653,6 +11664,179 @@ function consumeDipOilPotion(potion) {
 
 function consumeDipPotion(potion) {
     useUpInventoryItem(potion, 1);
+}
+
+function polymorphObjectClassCode(item) {
+    const cls = itemClassKey(item);
+    if (isPotionObject(item)) return POTION_CLASS;
+    if (cls === 'weapon' || item?.glyph === ')') return WEAPON_CLASS;
+    if (cls === 'armor' || item?.glyph === '[') return ARMOR_CLASS;
+    if (cls === 'ring' || item?.glyph === '=') return RING_CLASS;
+    if (cls === 'food' || item?.glyph === '%') return FOOD_CLASS;
+    if (cls === 'scroll' || item?.glyph === '?') return SCROLL_CLASS;
+    if (cls === 'wand' || item?.glyph === '/') return WAND_CLASS;
+    if (cls === 'spellbook' || item?.glyph === '+') return SPBOOK_CLASS;
+    if (cls === 'tool' || item?.glyph === '(') return TOOL_CLASS;
+    if (cls === 'gem' || item?.glyph === '*') return GEM_CLASS;
+    if (cls === 'amulet' || item?.glyph === '"') return AMULET_CLASS;
+    return null;
+}
+
+function isWandOfPolymorphObject(item) {
+    if (!item || (itemClassKey(item) !== 'wand' && item?.glyph !== '/' && item?.otyp !== WAND_CLASS)) return false;
+    const kind = objectKindKey(item).replace(/^wand of /, '');
+    return item?.wand === 'polymorph' || item?.wandIndex === 12 || kind === 'polymorph';
+}
+
+function isSpellbookOfPolymorphObject(item) {
+    if (!item || (itemClassKey(item) !== 'spellbook' && item?.glyph !== '+' && item?.otyp !== SPBOOK_NO_NOVEL)) return false;
+    const kind = objectKindKey(item).replace(/^spellbook of /, '');
+    return item?.spellName === 'polymorph' || item?.spellbookIndex === 10 || kind === 'polymorph';
+}
+
+function isAmuletOfUnchangingObject(item) {
+    if (!item || (itemClassKey(item) !== 'amulet' && item?.glyph !== '"' && item?.otyp !== AMULET_CLASS)) return false;
+    const kind = objectKindKey(item).replace(/^amulet of /, '');
+    return item?.amuletIndex === 6 || kind === 'unchanging';
+}
+
+function isPotionDipUnpolyableObject(item) {
+    return isPotionOfPolymorph(item) || isWandOfPolymorphObject(item)
+        || isSpellbookOfPolymorphObject(item) || isAmuletOfUnchangingObject(item);
+}
+
+function potionDipPolymorphSubjectResists(item) {
+    return isPotionDipUnpolyableObject(item) || rn2(100) < (item?.artifact ? 95 : 5);
+}
+
+function polymorphObjectClassName(item) {
+    switch (polymorphObjectClassCode(item)) {
+    case WEAPON_CLASS: return 'weapon';
+    case ARMOR_CLASS: return 'armor';
+    case RING_CLASS: return 'ring';
+    case FOOD_CLASS: return 'food';
+    case SCROLL_CLASS: return 'scroll';
+    case POTION_CLASS: return 'potion';
+    case WAND_CLASS: return 'wand';
+    case SPBOOK_CLASS: return 'spellbook';
+    case TOOL_CLASS: return 'tool';
+    case GEM_CLASS: return 'gem';
+    case AMULET_CLASS: return 'amulet';
+    default: return itemClassKey(item) || '';
+    }
+}
+
+function polymorphObjectTypeKey(item) {
+    const cls = polymorphObjectClassName(item);
+    const kind = objectKindKey(item);
+    if (cls === 'potion' || isPotionObject(item))
+        return `potion:${item?.potionIndex ?? ''}:${item?.otyp ?? ''}:${kind}`;
+    if (cls === 'scroll')
+        return `scroll:${item?.scrollIndex ?? ''}:${item?.otyp ?? ''}:${kind}`;
+    if (cls === 'wand')
+        return `wand:${item?.wandIndex ?? ''}:${item?.otyp ?? ''}:${kind}`;
+    if (cls === 'spellbook')
+        return `spellbook:${item?.spellbookIndex ?? ''}:${item?.spellName ?? ''}:${item?.otyp ?? ''}:${kind}`;
+    if (cls === 'ring')
+        return `ring:${item?.ringRoll ?? ''}:${item?.otyp ?? ''}:${kind}`;
+    if (cls === 'amulet')
+        return `amulet:${item?.amuletIndex ?? ''}:${item?.otyp ?? ''}:${kind}`;
+    if (cls === 'gem')
+        return `gem:${item?.gemDescription ?? ''}:${item?.otyp ?? ''}:${kind}`;
+    return `${cls}:${kind || item?.otyp || ''}`;
+}
+
+function polymorphReplacementDisallowed(item) {
+    return isPotionOfPolymorph(item) || isWandOfPolymorphObject(item) || isSpellbookOfPolymorphObject(item);
+}
+
+function polymorphReplacementForDipTarget(target) {
+    const classCode = polymorphObjectClassCode(target);
+    if (classCode == null) return null;
+    let replacement = null;
+    for (let tryCount = 0; tryCount < 20; tryCount++) {
+        replacement = mkobj(classCode, false);
+        Object.assign(replacement, object_display(replacement));
+        if (!polymorphReplacementDisallowed(replacement)) break;
+    }
+    if (!replacement || polymorphReplacementDisallowed(replacement)) return null;
+
+    replacement.quan = Math.max(1, Math.trunc(Number(target?.quan || 1)));
+    if (replacement.quan > 1 && replacement.quan > rn2(1000)) replacement.quan = 1;
+    replacement.letter = target.letter;
+    replacement.blessed = !!target.blessed;
+    replacement.cursed = !!target.cursed;
+    if (target.no_charge) replacement.no_charge = true;
+    if ([WEAPON_CLASS, ARMOR_CLASS, WAND_CLASS].includes(polymorphObjectClassCode(replacement)) && target.spe != null)
+        replacement.spe = target.spe;
+    if (target.recharged != null) replacement.recharged = target.recharged;
+    if (target.oeroded) replacement.oeroded = target.oeroded;
+    if (target.oeroded2) replacement.oeroded2 = target.oeroded2;
+    if (target.oerodeproof) replacement.oerodeproof = target.oerodeproof;
+    if (target.otrapped && /box|chest/.test(objectKindKey(replacement))) replacement.otrapped = true;
+    if (target.opoisoned && isPoisonableWeaponObject(replacement)) replacement.opoisoned = true;
+    delete replacement.contents;
+    return replacement;
+}
+
+function replaceInventoryObjectWithPolymorphResult(target, replacement) {
+    const preservedLetter = target.letter;
+    for (const key of Object.keys(target)) delete target[key];
+    Object.assign(target, replacement);
+    target.letter = preservedLetter;
+    syncCarriedFigurineTransformTimer(target);
+    refreshInventoryObjectLine(target);
+    if (target.unpaid) syncUnpaidBillLine(target);
+}
+
+function learnPotionPolymorphDiscovery(item) {
+    if (item && (game.inventory || []).includes(item)) {
+        identifyPotionOfPolymorph(item);
+        return;
+    }
+    recordKnownPotionDiscovery({ potionIndex: 19 }, 'polymorph');
+    learnObjectScore('Potions', 'potion of polymorph');
+}
+
+function incrementPolymorphedItemConduct() {
+    game.u ??= {};
+    game.u.uconduct ??= {};
+    game.u.uconduct.polypiles = (game.u.uconduct.polypiles || 0) + 1;
+}
+
+function dipObjectIntoPolymorphPotion(target, potion) {
+    const messages = [];
+    if (!isPotionOfPolymorph(target) && !isPotionOfPolymorph(potion)) return messages;
+
+    const resistSubject = isPotionOfPolymorph(target) ? potion : target;
+    if (potionDipPolymorphSubjectResists(resistSubject)) {
+        messages.push('Nothing happens.');
+        return messages;
+    }
+
+    const oldType = polymorphObjectTypeKey(target);
+    const discoveryItem = isPotionOfPolymorph(potion)
+        ? potion
+        : isPotionOfPolymorph(target) ? { potionIndex: 19 } : null;
+    const replacement = polymorphReplacementForDipTarget(target);
+    if (!replacement) {
+        messages.push('Nothing happens.');
+        return messages;
+    }
+
+    incrementPolymorphedItemConduct();
+    markObjectShopBillUsedUp(target);
+    replaceInventoryObjectWithPolymorphResult(target, replacement);
+    const changedType = polymorphObjectTypeKey(target) !== oldType;
+    if (changedType) {
+        learnPotionPolymorphDiscovery(discoveryItem);
+        consumeDipPotion(potion);
+        messages.push(normalInventoryLine(target));
+    } else {
+        consumeDipPotion(potion);
+        messages.push('Nothing seems to happen.');
+    }
+    return messages;
 }
 
 function acidDipTargetName(item) {
@@ -12024,6 +12208,7 @@ function dipObjectIntoOilPotion(target, potion) {
 
 function dipObjectIntoPotion(target, potion) {
     if (isWaterPotion(potion)) return dipObjectIntoWaterPotion(target, potion);
+    if (isPotionOfPolymorph(target) || isPotionOfPolymorph(potion)) return dipObjectIntoPolymorphPotion(target, potion);
     if (isPotionOfAcid(potion)) return dipObjectIntoAcidPotion(target, potion);
     if (isPotionOfOil(potion)) return dipObjectIntoOilPotion(target, potion);
     if (isPoisonableWeaponObject(target)) return dipPoisonableWeaponIntoPotion(target, potion);

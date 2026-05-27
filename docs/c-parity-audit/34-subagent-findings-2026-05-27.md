@@ -2,7 +2,7 @@
 
 ## Scope
 
-This slice adds the early neutral-water branch of `potion_dip()` for carried objects. It covers direct neutral-water `water_damage()` effects for scroll blanking, blank-scroll no effect, spellbook blanking, acid destruction, potion dilution and further dilution into water, grease protection, rust erosion, towel soaking, and carried container leakage/protection. Potion-potion alchemy, polymorph-potion dipping, full C menu exposure, and deeper potion discovery/type-call behavior remain separate work.
+This slice adds the early neutral-water branch of `potion_dip()` for carried objects. It covers direct neutral-water `water_damage()` effects for scroll blanking, blank-scroll no effect, spellbook blanking, acid destruction, potion dilution and further dilution into water, grease protection, rust erosion, towel soaking, and carried container leakage/protection. Potion-potion alchemy, full C `poly_obj()` fidelity, shared water-damage primitives, real `?*` menu rendering, self-potion/Klein-bottle handling, and deeper potion discovery/type-call behavior remain separate work; broad non-self carried potion menus and bounded polymorph-potion dipping are covered in Audit 35.
 
 ## C Source Notes
 
@@ -24,4 +24,4 @@ This slice adds the early neutral-water branch of `potion_dip()` for carried obj
 
 - Neutral water still reuses local rust-trap/floor-effect helpers instead of a fully shared C-shaped `water_damage()` primitive. That is acceptable for this slice but should eventually move under the broader trap/liquid/material-damage subsystem.
 - Full source/target menu parity remains incomplete. The JS source list now exposes neutral water broadly for carried targets, but unsupported branches still fall through to `Interesting...` rather than using a complete C `getobj()` matrix.
-- Potion-potion alchemy and polymorph-potion dipping remain larger slices because they need stack splitting, bad-mixture/explosion handling, object reinsertion/merge, discovery state, and shop billing around transformed sources.
+- Potion-potion alchemy remains a larger slice because it needs stack splitting, bad-mixture/explosion handling, object reinsertion/merge, discovery state, and shop billing around transformed sources. Audit 35 covers the bounded carried-object polymorph branch, but full `poly_obj()` fidelity still belongs with object-registry work.

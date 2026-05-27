@@ -2,7 +2,7 @@
 
 ## Scope
 
-This slice covers the potion-of-sickness and healing-family branches for carried poisonable weapon `#dip`. It intentionally stays short of the full `potion_dip()` matrix: generic source menus for every potion/target, alchemy, unicorn horn/amethyst mixtures, combat poison wear-off, and exact poisoned inventory name ordering remain separate work. The bounded acid corrosion branch is covered in audit 29, and source-first inventory action `#altdip` for implemented effects is covered in audit 30.
+This slice covers the potion-of-sickness and healing-family branches for carried poisonable weapon `#dip`. It intentionally stays short of the full `potion_dip()` matrix: alchemy, full `poly_obj()` fidelity, combat poison wear-off, and exact poisoned inventory name ordering remain separate work. Later audits cover acid corrosion, poisoned `doname()` ordering, horn/amethyst neutralization, source-first inventory action `#altdip`, broad non-self carried potion menus, and bounded polymorph dipping.
 
 ## C Source Notes
 
@@ -24,7 +24,7 @@ This slice covers the potion-of-sickness and healing-family branches for carried
 
 ## Remaining Follow-Ups
 
-- Implement the full C `drink_ok` source menu and broader `potion_dip()` matrix instead of offering only locally implemented potion sources.
-- Add alchemy and unicorn horn/amethyst behavior; acid corrosion is covered in audit 29, and source-first `#altdip` for implemented effects is covered in audit 30.
+- Broad C `drink_ok`/`dip_ok` carried menus are covered in audit 35; real `?*` menu rendering still belongs with command/menu infrastructure.
+- Add alchemy; acid corrosion is covered in audit 29, source-first `#altdip` in audit 30, horn/amethyst in audit 33, neutral water in audit 34, and bounded polymorph dipping in audit 35.
 - Poisoned weapon naming has since moved toward C `doname()` ordering for inventory and `#dip` prompts in audit 31; broader xname/doname unification remains open.
 - Port poison combat application/wear-off and trap/projectile poison lifecycle outside the narrow dip branch.

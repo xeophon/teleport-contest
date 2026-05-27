@@ -16,6 +16,7 @@ const CRYSTAL_BALL = 10088;
 const CANDELABRUM_OF_INVOCATION = 10076;
 const BELL = 358;
 const POT_ACID = 238;
+const POT_POLYMORPH = 248;
 const INVENTORY_LETTERS = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
 const SCR_SCARE_MONSTER = 279;
 const LOADSTONE = 10165;
@@ -1028,6 +1029,22 @@ function wishingWand(id, letter = 'w') {
     };
 }
 
+function polymorphWand(id, letter = 'w') {
+    return {
+        id,
+        cls: 'wand',
+        glyph: '/',
+        kind: 'wand of polymorph',
+        actualKind: 'wand of polymorph',
+        wand: 'polymorph',
+        wandIndex: 12,
+        quan: 1,
+        spe: 1,
+        letter,
+        line: `${letter} - a wand of polymorph`,
+    };
+}
+
 function lamp(id, kind = 'oil lamp', letter = 'l', spe = 1) {
     const otyp = kind === 'brass lantern' ? BRASS_LANTERN : kind === 'magic lamp' ? MAGIC_LAMP : OIL_LAMP;
     return {
@@ -1123,6 +1140,7 @@ const POTION_INDEX_BY_NAME = {
     confusion: 2,
     blindness: 3,
     hallucination: 7,
+    polymorph: 19,
     booze: 20,
     sickness: 21,
     'fruit juice': 22,
@@ -1143,6 +1161,10 @@ function namedPotion(id, name, letter, quan = 1, extra = {}) {
         line: `${letter} - ${quan > 1 ? `${quan} potions of ${name}` : `a potion of ${name}`}`,
         ...extra,
     };
+}
+
+function polymorphPotion(id, letter = 'p', quan = 1) {
+    return namedPotion(id, 'polymorph', letter, quan, { otyp: POT_POLYMORPH });
 }
 
 function sicknessPotion(id, letter = 's', quan = 1, extra = {}) {
@@ -3970,6 +3992,101 @@ test('dipping poisonable darts into sickness coats the stack', async () => {
     assert.doesNotMatch(target.line, /\+0 poisoned/);
     assert.equal(game.inventory.includes(potion), false);
     assert.match(game._pending_message, /The potion of sickness forms a coating on the darts\./);
+});
+
+test('ordinary dip offers non-effect potion sources and keeps them after Interesting', async () => {
+    installCommandShopState();
+    const target = dagger(30972, 'd');
+    const potion = healingPotion(30973, 'h');
+    game.inventory = [target, potion];
+
+    await rhack('#');
+    for (const ch of 'dip') await rhack(ch);
+    await rhack('\n');
+    await rhack('d');
+    await rhack('n');
+
+    assert.equal(game._command_mode, 'dipOilSource');
+    assert.match(game._pending_message, /What do you want to dip a dagger into\? \[h or \?\*\]/);
+
+    await rhack('h');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.inventory.includes(potion), true);
+    assert.equal(target.opoisoned || false, false);
+    assert.match(game._pending_message, /Interesting\.\.\./);
+});
+
+test('source-first potion action offers unsupported ordinary targets', async () => {
+    installCommandShopState();
+    const target = dagger(30974, 'd');
+    const potion = healingPotion(30975, 'h');
+    game.inventory = [target, potion];
+    game.level.at = () => ({ roomno: ROOMOFFSET, typ: FOUNTAIN });
+
+    await rhack('i');
+    await rhack('h');
+    await rhack('a');
+
+    assert.equal(game._command_mode, 'dipIntoTarget');
+    assert.match(game._pending_message, /What do you want to dip into a potion of healing\? \[d or \?\*\]/);
+    assert.doesNotMatch(game._pending_message, /fountain/);
+
+    await rhack('d');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.inventory.includes(potion), true);
+    assert.equal(target.opoisoned || false, false);
+    assert.match(game._pending_message, /Interesting\.\.\./);
+});
+
+test('dipping a polymorph potion target into another potion polymorphs the carried target', async () => {
+    installCommandShopState();
+    initRng(1);
+    const target = polymorphPotion(30976, 'p');
+    const source = healingPotion(30977, 'h');
+    game.inventory = [target, source];
+
+    await rhack('#');
+    for (const ch of 'dip') await rhack(ch);
+    await rhack('\n');
+    await rhack('p');
+    await rhack('n');
+    await rhack('h');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.inventory.includes(source), false);
+    assert.equal(game.inventory.includes(target), true);
+    assert.equal(target.letter, 'p');
+    assert.notEqual(target.id, 30976);
+    assert.notEqual(target.potionIndex, 19);
+    assert.match(game._pending_message, /^p - /);
+    assert.equal(game.u.uconduct.polypiles, 1);
+    assert.ok(game._discoveries.some(entry => entry.section === 'Potions' && entry.name === 'potion of polymorph'));
+});
+
+test('dipping an unpolyable object into polymorph potion keeps the potion', async () => {
+    installCommandShopState();
+    const target = polymorphWand(30978, 'w');
+    const source = polymorphPotion(30979, 'p');
+    game.inventory = [target, source];
+
+    await rhack('#');
+    for (const ch of 'dip') await rhack(ch);
+    await rhack('\n');
+    await rhack('w');
+    await rhack('n');
+    await rhack('p');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.inventory.includes(source), true);
+    assert.equal(target.id, 30978);
+    assert.equal(target.kind, 'wand of polymorph');
+    assert.match(game._pending_message, /Nothing happens\./);
 });
 
 test('dipping poisoned darts into healing-family potions removes the coating', async () => {

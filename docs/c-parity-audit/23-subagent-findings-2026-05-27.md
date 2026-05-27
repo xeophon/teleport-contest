@@ -22,6 +22,6 @@ This slice covers the narrow `#dip` path where the hero dips a carried oil lamp 
 
 ## Remaining Follow-Ups
 
-- Full generic `potion_dip()` behavior: water effects, potion mixing/alchemy, oiling weapons, acid/corrosion, poison coating, unicorn horn/amethyst mixtures, and exact source menus for non-oil potions.
+- Later audits cover water, oiling weapons, acid/corrosion, poison coating, unicorn horn/amethyst mixtures, broad non-self carried potion menus, and bounded polymorph dipping. Remaining generic `potion_dip()` work is potion-potion alchemy, full `poly_obj()` fidelity, real `?*` menu rendering, self-potion/Klein-bottle handling, and shared damage/discovery primitives.
 - Exact C fire/explosion and damage side effects for lit oil or lit target lamps.
-- `#altdip` reversed source-first command flow.
+- `#altdip` reversed source-first command flow is covered for carried potion effects; broader command/menu infrastructure still needs real C-style menu rendering.

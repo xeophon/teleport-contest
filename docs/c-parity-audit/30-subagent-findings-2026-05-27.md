@@ -21,7 +21,7 @@ This slice adds the bounded source-first potion item-action path for already imp
 
 ## Remaining Follow-Ups
 
-- Full C `drink_ok`/`dip_ok` menu parity remains broader than this slice; JS still only offers source-first targets for locally implemented effects instead of all legal target/potion pairs.
-- Blessed/cursed water BUC effects are covered in audit 32. Neutral-water damage, potion-potion alchemy, unicorn horn/amethyst mixtures, and generic unsupported no-effect pairs remain separate potion matrix work.
+- Broad C `drink_ok`/`dip_ok` carried menu parity and generic unsupported no-effect pairs are covered in audit 35; real `?*` menu rendering remains command/menu work.
+- Blessed/cursed water BUC effects are covered in audit 32, horn/amethyst in audit 33, neutral-water damage in audit 34, and bounded polymorph dipping in audit 35. Potion-potion alchemy remains separate potion matrix work.
 - Poisoned weapon display ordering was handled in audit 31: inventory and `#dip` prompts now use `doname()`-style `poisoned +0 dart`, while coating/removal messages keep `xname()` style `poisoned dart`.
 - Stone-to-flesh object transforms remain a separate spell/object-registry slice.

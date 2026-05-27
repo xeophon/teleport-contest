@@ -2,7 +2,7 @@
 
 ## Scope
 
-This slice adds the bounded `H2Opotion_dip()` branch for carried-object potion `#dip`: blessed water can uncurse or bless a target, cursed water can unbless or curse a target, and the source water is consumed only when the target BUC state actually changes. Neutral water damage, potion-potion alchemy, polymorph potion dipping, and the full C source/target menu remain separate work. Unicorn horn/amethyst neutralization was implemented afterward in audit 33.
+This slice adds the bounded `H2Opotion_dip()` branch for carried-object potion `#dip`: blessed water can uncurse or bless a target, cursed water can unbless or curse a target, and the source water is consumed only when the target BUC state actually changes. Neutral water damage was implemented afterward in Audit 34; unicorn horn/amethyst neutralization in Audit 33; and broad non-self carried potion menus plus bounded polymorph potion dipping in Audit 35. Potion-potion alchemy, shared water-damage primitives, self-potion/Klein-bottle handling, and deeper discovery/type-call behavior remain separate work.
 
 ## C Source Notes
 
@@ -15,7 +15,7 @@ This slice adds the bounded `H2Opotion_dip()` branch for carried-object potion `
 
 ## JS Status
 
-- `js/cmd.js:11557-11582`: blessed/cursed water is now an eligible source for non-coin carried targets in both target-first and source-first potion dip menus; neutral water is intentionally withheld until `water_damage()` parity lands.
+- `js/cmd.js:11557-11582`: blessed/cursed water is now an eligible source for non-coin carried targets in both target-first and source-first potion dip menus. Neutral water was added later in Audit 34, and broader non-self carried potion menu exposure was added in Audit 35.
 - `js/cmd.js:11720-11798`: `dipObjectIntoWaterPotion()` implements the four blessed/cursed water BUC transitions, visible glow/aura messages before mutation, target BUC learning/forgetting, source consumption only on successful mutation, and no-consume `Interesting...` for already-best/worst targets.
 - `js/cmd.js:11731-11743`: water targets are normalized back to plain water identity and inventory/shop display is refreshed after BUC changes.
 - `js/cmd.js:11754-11757` and `js/cmd.js:11792-11796`: unpaid water devaluation uses the existing dummy alteration billing path before state removal, while blessed/cursed price increases refresh the live bill after mutation.
@@ -29,6 +29,6 @@ This slice adds the bounded `H2Opotion_dip()` branch for carried-object potion `
 
 ## Remaining Follow-Ups
 
-- Neutral-water `water_damage()` through potion `#dip`, including material damage and water discovery, is still open.
-- Potion-potion alchemy, polymorph potion dipping, and broader generic no-effect matrix/menu parity remain separate potion slices. Unicorn horn/amethyst neutralization is covered by audit 33.
-- Broader C-shaped target validation should still replace the local carried-object source filter once more of `potion_dip()` is implemented.
+- Neutral-water `water_damage()` through potion `#dip` is covered in Audit 34; shared water-damage primitives and water discovery/type-call behavior remain open.
+- Potion-potion alchemy remains a separate potion slice. Unicorn horn/amethyst neutralization is covered by Audit 33, and bounded polymorph dipping plus broad non-self carried menus/generic no-effect fallback are covered by Audit 35.
+- Broader C-shaped target validation now exists for carried non-coin dip targets, but real `?*` menu rendering and full command/menu infrastructure remain open.

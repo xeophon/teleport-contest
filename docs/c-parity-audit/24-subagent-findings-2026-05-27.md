@@ -22,5 +22,4 @@ This slice covers generic potion-of-oil dipping for carried weapons and C weapon
 ## Remaining Follow-Ups
 
 - Exact `fire_damage()` behavior for lit oil and lit targets.
-- Full generic `potion_dip()` source menus and non-oil potion effects.
-- `#altdip` reversed source-first command flow.
+- Later audits cover broad non-self carried potion menus, source-first `#altdip`, water, acid, poison coating, horn/amethyst, and bounded polymorph effects. Remaining generic potion work is potion-potion alchemy, full `poly_obj()` fidelity, shared damage/discovery primitives, self-potion/Klein-bottle handling, and real `?*` menu rendering.

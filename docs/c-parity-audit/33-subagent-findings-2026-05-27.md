@@ -2,7 +2,7 @@
 
 ## Scope
 
-This slice adds the bounded late `potion_dip()` neutralization branch for unicorn horns and amethyst stones. It covers the C `mixtype()` rows for sickness, hallucination, blindness, confusion, and booze; one-potion stack splitting; `COST_NUTRLZ` shop billing before mutation; result BUC/dilution state; visible and blind message behavior; no-effect `Interesting...` fallback for nonmatching pairs; and source-first inventory action routing through the same matrix. Neutral water damage, potion-potion alchemy, polymorph-potion dipping, and full source/target menu parity remain separate work.
+This slice adds the bounded late `potion_dip()` neutralization branch for unicorn horns and amethyst stones. It covers the C `mixtype()` rows for sickness, hallucination, blindness, confusion, and booze; one-potion stack splitting; `COST_NUTRLZ` shop billing before mutation; result BUC/dilution state; visible and blind message behavior; no-effect `Interesting...` fallback for nonmatching pairs; and source-first inventory action routing through the same matrix. Neutral water damage is covered in Audit 34, and broad non-self carried menus plus bounded polymorph dipping are covered in Audit 35. Potion-potion alchemy, real `?*` menu rendering, self-potion/Klein-bottle handling, and deeper discovery/type-call behavior remain separate work.
 
 ## C Source Notes
 
@@ -25,11 +25,11 @@ This slice adds the bounded late `potion_dip()` neutralization branch for unicor
 
 ## Parallel Follow-Up Audits
 
-- Neutral water should land before potion-potion alchemy. C routes neutral water through `water_damage()` early in `potion_dip()`, and JS already has partial floor/liquid and rust-trap damage helpers that can be consolidated for carried-object `#dip`.
+- Neutral water landed before potion-potion alchemy in Audit 34. Its local implementation should still be consolidated with a shared `water_damage()` primitive.
 - Potion-potion alchemy is larger than horn/amethyst because it needs the full `mixtype()` potion table, source and target stack splitting, bad-mixture/explosion handling, result mutation, discovery state, and reinsert/merge behavior.
 
 ## Remaining Follow-Ups
 
 - Neutral-water carried-object `water_damage()` through potion `#dip` is covered in Audit 34, including grease, acid destruction, potion dilution, scroll/spellbook blanking, container contents, rust erosion, and towels. Shared water-damage primitives and deeper water discovery/type-call behavior remain open.
-- Potion-potion alchemy, polymorph potion dipping, broader source/target menus, and generic unsupported matrix branches remain separate potion slices.
+- Polymorph potion dipping and broader non-self carried potion source/target menus are now covered in Audit 35. Potion-potion alchemy, real `?*` menu rendering, self-potion/Klein-bottle handling, and deeper generic unsupported matrix behavior remain separate potion slices.
 - The current JS still exposes potion identities more directly than C's appearance/type discovery split; deeper potion work should eventually centralize description, type-call, `dknown`, and discovery handling.

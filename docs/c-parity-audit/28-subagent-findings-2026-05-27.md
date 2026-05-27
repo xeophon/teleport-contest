@@ -26,6 +26,6 @@ Parallel source audits also identified bounded follow-up slices for acid `#dip`,
 
 - Magic-bag work is still local rather than a central C-shaped `obfree()`/`stolen_value()` subsystem; remaining source/target cases and debt naming should converge on shared ownership helpers.
 - Acid `#dip` is now covered in audit 29 for carried corrodeable targets, grease, proof/no-effect, and unpaid stack use-up billing. Broader acid/material parity still belongs with the object registry and remaining potion matrix work.
-- Source-first `#altdip` is now covered in audit 30 for implemented potion effects and the known-oil apply exception. Full source/target menu parity and unsupported potion-target pairs remain part of the broader potion matrix.
+- Source-first `#altdip` is now covered in audit 30 for implemented potion effects and the known-oil apply exception; broad non-self carried source/target menus and unsupported no-effect pairs are covered in audit 35. Real `?*` menu rendering remains command/menu work.
 - Poisoned weapon display ordering was handled in audit 31 for inventory and `#dip` prompts. Broader C-shaped `xname()`/`doname()` unification remains separate.
 - Stone-to-flesh object transforms remain separate. C `zap.c:2076-2085` transforms rings into meat rings, wands into meat sticks, and gems/stones into meatballs; JS has meat-stick metadata but not the transformation pipeline.
