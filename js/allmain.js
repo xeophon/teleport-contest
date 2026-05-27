@@ -3499,20 +3499,42 @@ function reportEggHatch(entry, mon, hatchcount, x, y, yours) {
     }
 }
 
+function containedObjectChildren(obj) {
+    const lists = [];
+    if (Array.isArray(obj?.contents)) lists.push(obj.contents);
+    if (Array.isArray(obj?.cobj) && obj.cobj !== obj.contents) lists.push(obj.cobj);
+    return lists.flat();
+}
+
+function appendContainedDueEggEntries(entries, container, context, seen, moves) {
+    for (const child of containedObjectChildren(container)) {
+        if (!child || seen.has(child)) continue;
+        seen.add(child);
+        if (isEggObject(child) && eggHasHatchTimer(child) && child.eggHatchTurn <= moves)
+            entries.push({ egg: child, source: 'contained', container, ...context });
+        appendContainedDueEggEntries(entries, child, context, seen, moves);
+    }
+}
+
 function dueEggEntries(g) {
     const entries = [];
+    const containedSeen = new Set();
+    const moves = g.moves || 0;
     for (const egg of [...(g.inventory || [])]) {
-        if (isEggObject(egg) && eggHasHatchTimer(egg) && egg.eggHatchTurn <= g.moves)
+        if (isEggObject(egg) && eggHasHatchTimer(egg) && egg.eggHatchTurn <= moves)
             entries.push({ egg, source: 'inventory' });
+        appendContainedDueEggEntries(entries, egg, { containerSource: 'inventory' }, containedSeen, moves);
     }
     for (const egg of [...(g.level?.objects || [])]) {
-        if (isEggObject(egg) && eggHasHatchTimer(egg) && egg.eggHatchTurn <= g.moves)
+        if (isEggObject(egg) && eggHasHatchTimer(egg) && egg.eggHatchTurn <= moves)
             entries.push({ egg, source: 'floor' });
+        appendContainedDueEggEntries(entries, egg, { containerSource: 'floor' }, containedSeen, moves);
     }
     for (const carrier of [...(g.level?.monsters || [])]) {
         for (const egg of [...(carrier.minvent || [])]) {
-            if (isEggObject(egg) && eggHasHatchTimer(egg) && egg.eggHatchTurn <= g.moves)
+            if (isEggObject(egg) && eggHasHatchTimer(egg) && egg.eggHatchTurn <= moves)
                 entries.push({ egg, source: 'minvent', carrier });
+            appendContainedDueEggEntries(entries, egg, { containerSource: 'minvent', carrier }, containedSeen, moves);
         }
     }
     return entries.sort((a, b) => ((a.egg.eggHatchTurn || 0) - (b.egg.eggHatchTurn || 0))
@@ -3524,7 +3546,7 @@ export async function processEggHatchTimeouts(g = game) {
         const egg = entry.egg;
         killEggHatchTimer(egg);
         const data = eggHatchMonsterData(egg, g);
-        if (!data) continue;
+        if (!data || entry.source === 'contained') continue;
 
         const yours = !!egg.spe || (entry.source === 'inventory' && !game.flags?.female && !rn2(2));
         const { x, y } = eggObjectLocation(entry);

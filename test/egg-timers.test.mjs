@@ -38,6 +38,12 @@ function timedEgg(name, extra = {}) {
     };
 }
 
+function assertEggHatchTimerCleared(egg) {
+    assert.equal(egg.eggHatchTurn, undefined);
+    assert.equal(egg._egg_hatch_seq, undefined);
+    assert.equal(egg._egg_hatch_consumed, undefined);
+}
+
 test('genocide cleanup clears hatchling-species egg timers while preserving egg species', () => {
     const g = installTimerTestGame();
     const redDragonEgg = timedEgg('red dragon');
@@ -82,10 +88,56 @@ test('extinction does not proactively clear egg timers but blocks due hatching',
 
     await processEggHatchTimeouts(g);
 
-    assert.equal(egg.eggHatchTurn, undefined);
-    assert.equal(egg._egg_hatch_seq, undefined);
-    assert.equal(egg._egg_hatch_consumed, undefined);
+    assertEggHatchTimerCleared(egg);
     assert.equal(egg.quan, 3);
     assert.deepEqual(g.inventory, [egg]);
+    assert.equal(g._egg_hatch_processed || 0, 0);
+});
+
+test('contained due egg consumes hatch timer without hatching or leaving container', async () => {
+    const g = installTimerTestGame();
+    const egg = timedEgg('newt', { quan: 2 });
+    const box = { kind: 'box', contents: [egg] };
+    g.inventory = [box];
+
+    await processEggHatchTimeouts(g);
+
+    assertEggHatchTimerCleared(egg);
+    assert.equal(egg.quan, 2);
+    assert.deepEqual(box.contents, [egg]);
+    assert.equal(g.level.monsters.length, 0);
+    assert.equal(g._egg_hatch_processed || 0, 0);
+});
+
+test('contained due egg scan recurses through active carried floor and monster containers', async () => {
+    const g = installTimerTestGame();
+    const carriedEgg = timedEgg('newt', { quan: 2 });
+    const floorEgg = timedEgg('newt');
+    const heldEgg = timedEgg('newt');
+    const futureEgg = timedEgg('newt', { eggHatchTurn: 125, _egg_hatch_seq: 8 });
+    const siblingFood = { kind: 'food ration' };
+    const carriedInner = { kind: 'sack', contents: [carriedEgg, futureEgg] };
+    const carriedOuter = { kind: 'box', contents: [carriedInner, siblingFood] };
+    const floorBox = { kind: 'box', ox: 3, oy: 4, cobj: [floorEgg] };
+    const monsterBox = { kind: 'box', contents: [heldEgg] };
+    const carrier = { mx: 8, my: 5, minvent: [monsterBox] };
+    g.inventory = [carriedOuter];
+    g.level.objects = [floorBox];
+    g.level.monsters = [carrier];
+
+    await processEggHatchTimeouts(g);
+
+    for (const egg of [carriedEgg, floorEgg, heldEgg]) {
+        assertEggHatchTimerCleared(egg);
+        assert.equal(egg.quan, egg === carriedEgg ? 2 : 1);
+    }
+    assert.equal(futureEgg.eggHatchTurn, 125);
+    assert.equal(futureEgg._egg_hatch_seq, 8);
+    assert.deepEqual(carriedOuter.contents, [carriedInner, siblingFood]);
+    assert.deepEqual(carriedInner.contents, [carriedEgg, futureEgg]);
+    assert.deepEqual(floorBox.cobj, [floorEgg]);
+    assert.deepEqual(monsterBox.contents, [heldEgg]);
+    assert.deepEqual(carrier.minvent, [monsterBox]);
+    assert.equal(g.level.monsters.length, 1);
     assert.equal(g._egg_hatch_processed || 0, 0);
 });
