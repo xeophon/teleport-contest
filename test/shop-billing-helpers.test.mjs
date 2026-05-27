@@ -180,6 +180,17 @@ function makeShopkeeper(id, name, x, y, overrides = {}) {
     };
 }
 
+function addSecondShopkeeper(name = 'Asidonhopo') {
+    const shkp = makeShopkeeper(2, name, 10, 5, { shoproom: ROOMOFFSET + 1 });
+    game.level.rooms[1] = { rtype: SHOPBASE, resident: shkp };
+    game.level.monsters.push(shkp);
+    game.level.at = (x) => ({
+        roomno: x >= 9 ? ROOMOFFSET + 1 : ROOMOFFSET,
+        typ: ROOM,
+    });
+    return shkp;
+}
+
 function installNonShopFloorState() {
     const state = installCommandShopState();
     game.level.rooms = [];
@@ -10661,6 +10672,102 @@ test('tipping unpaid lost merchandise from a cursed shop-floor magic bag removes
     assert.equal(shkp.debit, 35);
     assert.equal(shkp.loan || 0, 0);
     assert.equal(shkp.billct, 0);
+});
+
+test('tipping owner-billed item lost from cursed shop-floor magic bag charges row owner', () => {
+    const { shkp: sourceShkp } = installShopState();
+    const owner = addSecondShopkeeper();
+    initRng(17);
+    const source = bagOfHolding(69321);
+    source.cursed = true;
+    source.ox = 5;
+    source.oy = 5;
+    const ration = putObjectInContainer(source, foodRation(69322));
+    shop.addObjectToShopBill(owner, ration, 45);
+    game.level.objects = [source];
+
+    const messages = shop.tipContainerToFloor(source);
+
+    assert.match(messages.join(' '), /owe 45 zorkmids? for lost merchandise/);
+    assert.equal(shop.shopBillEntryForObject(owner, ration), null);
+    assert.equal(owner.debit, 45);
+    assert.equal(owner.billct, 0);
+    assert.equal(sourceShkp.debit || 0, 0);
+    assert.equal(sourceShkp.robbed || 0, 0);
+    assert.equal(sourceShkp.billct, 0);
+});
+
+test('tipping no-charge owner-billed item lost from cursed shop-floor magic bag still charges row owner', () => {
+    const { shkp: sourceShkp } = installShopState();
+    const owner = addSecondShopkeeper();
+    initRng(17);
+    const source = bagOfHolding(69323);
+    source.cursed = true;
+    source.ox = 5;
+    source.oy = 5;
+    const ration = putObjectInContainer(source, foodRation(69324));
+    shop.addObjectToShopBill(owner, ration, 45);
+    ration.no_charge = true;
+    game.level.objects = [source];
+
+    const messages = shop.tipContainerToFloor(source);
+
+    assert.match(messages.join(' '), /owe 45 zorkmids? for lost merchandise/);
+    assert.equal(shop.shopBillEntryForObject(owner, ration), null);
+    assert.equal(owner.debit, 45);
+    assert.equal(owner.billct, 0);
+    assert.equal(sourceShkp.debit || 0, 0);
+    assert.equal(sourceShkp.robbed || 0, 0);
+    assert.equal(sourceShkp.billct, 0);
+});
+
+test('tipping nested owner-billed item lost from cursed shop-floor magic bag charges nested row owner', () => {
+    const { shkp: sourceShkp } = installShopState();
+    const owner = addSecondShopkeeper();
+    initRng(17);
+    const source = bagOfHolding(69325);
+    source.cursed = true;
+    source.ox = 5;
+    source.oy = 5;
+    const nested = putObjectInContainer(source, sack(69326));
+    nested.no_charge = true;
+    const ration = putObjectInContainer(nested, foodRation(69327));
+    shop.addObjectToShopBill(owner, ration, 45);
+    game.level.objects = [source];
+
+    const messages = shop.tipContainerToFloor(source);
+
+    assert.match(messages.join(' '), /owe 45 zorkmids? for lost merchandise/);
+    assert.equal(shop.shopBillEntryForObject(owner, ration), null);
+    assert.equal(owner.debit, 45);
+    assert.equal(owner.billct, 0);
+    assert.equal(sourceShkp.debit || 0, 0);
+    assert.equal(sourceShkp.robbed || 0, 0);
+    assert.equal(sourceShkp.billct, 0);
+});
+
+test('tipping owner-billed item lost from angry-source magic bag charges owner robbed value', () => {
+    const { shkp: sourceShkp } = installShopState();
+    const owner = addSecondShopkeeper();
+    initRng(17);
+    sourceShkp.angry = true;
+    sourceShkp.mpeaceful = 0;
+    const source = bagOfHolding(69328);
+    source.cursed = true;
+    source.ox = 5;
+    source.oy = 5;
+    const ration = putObjectInContainer(source, foodRation(69329));
+    shop.addObjectToShopBill(owner, ration, 45);
+    game.level.objects = [source];
+
+    const messages = shop.tipContainerToFloor(source);
+
+    assert.match(messages.join(' '), /owe 45 zorkmids? for lost merchandise/);
+    assert.equal(shop.shopBillEntryForObject(owner, ration), null);
+    assert.equal(owner.robbed, 45);
+    assert.equal(owner.debit || 0, 0);
+    assert.equal(sourceShkp.debit || 0, 0);
+    assert.equal(sourceShkp.robbed || 0, 0);
 });
 
 test('tipping lost merchandise from a cursed shop-floor magic bag routes angry shopkeeper value to robbed', () => {

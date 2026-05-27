@@ -18694,14 +18694,57 @@ function shipObjectShopDebt(obj, x, y, { shopFloorObj = false, silent = false } 
     return { charged: value > 0, value, shkp, message, ...deltas };
 }
 
+function addLostMagicBagShopCharge(charges, shkp, value) {
+    const amount = Math.max(0, Math.trunc(Number(value || 0)));
+    if (!shkp || !amount) return;
+    charges.set(shkp, (charges.get(shkp) || 0) + amount);
+}
+
+function lostMagicBagShopChargesForObject(source, obj, defaultShkp, seen = new Set(), options = {}) {
+    const charges = new Map();
+    if (!source || !obj || !defaultShkp || seen.has(obj)) return charges;
+    seen.add(obj);
+    if (shopBillableGold(obj)) {
+        if (options.topLevel !== false || options.includeContainedGold !== false)
+            addLostMagicBagShopCharge(charges, defaultShkp, Math.max(1, Math.trunc(Number(obj.quan || 1))));
+        return charges;
+    }
+
+    const inventoryLikeNestedContent = options.inventoryLikeContents && options.topLevel === false;
+    const owner = shopkeeperOwningBillEntry(obj);
+    const billShkp = owner.entry ? (owner.shkp || defaultShkp) : defaultShkp;
+    const entry = owner.entry || shopBillEntryForObject(defaultShkp, obj);
+    if (entry) {
+        addLostMagicBagShopCharge(charges, billShkp, shopBillEntryTotal(entry));
+        subOneFromShopBill(obj, billShkp);
+    } else if (!obj.no_charge && (!inventoryLikeNestedContent || obj.unpaid)) {
+        addLostMagicBagShopCharge(charges, defaultShkp,
+            shopItemPrice(obj, source.ox ?? game.u?.ux, source.oy ?? game.u?.uy));
+    }
+
+    for (const child of globContents(obj)) {
+        const childCharges = lostMagicBagShopChargesForObject(source, child, defaultShkp, seen, {
+            ...options,
+            topLevel: false,
+        });
+        for (const [shkp, value] of childCharges)
+            addLostMagicBagShopCharge(charges, shkp, value);
+    }
+    return charges;
+}
+
 function billLostMagicBagShopItem(source, obj) {
-    const shkp = shopFloorContainerShopkeeper(source);
-    if (!shkp || !obj) return 0;
-    const value = lostShopMerchandiseValueForObject(source, obj, shkp, new Set(), {
+    const sourceShkp = shopFloorContainerShopkeeper(source);
+    if (!sourceShkp || !obj) return 0;
+    const charges = lostMagicBagShopChargesForObject(source, obj, sourceShkp, new Set(), {
         includeContainedGold: false,
         inventoryLikeContents: true,
     });
-    return chargeShopkeeperForLostMerchandise(shkp, value);
+    let charged = 0;
+    const peaceful = shopkeeperPeacefulForDebt(sourceShkp);
+    for (const [shkp, value] of charges)
+        charged += chargeShopkeeperForLostMerchandise(shkp, value, { peaceful });
+    return charged;
 }
 
 function objectCarriedByHero(obj, seen = new Set()) {
