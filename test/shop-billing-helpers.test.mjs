@@ -335,6 +335,7 @@ function simpleFood(id, kind, letter = 'f', extra = {}) {
         'C-ration': 'C-rations',
         pancake: 'pancakes',
         'cream pie': 'cream pies',
+        'candy bar': 'candy bars',
         'cram ration': 'cram rations',
         'fortune cookie': 'fortune cookies',
         'lump of royal jelly': 'lumps of royal jelly',
@@ -11763,6 +11764,8 @@ test('expanded simple food floor pickup merges compatible paid inventory stacks'
         ['lump of royal jelly', 'lumps of royal jelly', 'j'],
         ['meatball', 'meatballs', 's'],
         ['enormous meatball', 'enormous meatballs', 'n'],
+        ['tripe ration', 'tripe rations', 't'],
+        ['candy bar', 'candy bars', 'y'],
         ['fortune cookie', 'fortune cookies', 'f'],
     ];
 
@@ -11887,6 +11890,36 @@ test('cream pie shop pickup merge rejects paid targets and combines same-shop un
     assert.equal(shop.shopBillEntryTotal(merge.billMerge.billEntry), 20);
     assert.match(unpaidStack.line, /unpaid, 20 zorkmids/);
     assert.equal(shkp.billct, 1);
+});
+
+test('tripe and candy shop pickup merge rejects paid targets and combines same-shop unpaid bills', () => {
+    const cases = [
+        ['tripe ration', 't', 15],
+        ['candy bar', 'c', 10],
+    ];
+
+    for (const [index, [kind, letter, price]] of cases.entries()) {
+        const { shkp } = installShopState();
+        const paidStack = simpleFood(7105 + (index * 4), kind, letter);
+        const billableSource = { ...simpleFood(7106 + (index * 4), kind), letter: undefined, line: undefined };
+        game.inventory = [paidStack];
+
+        assert.equal(shop.findPickedObjectInventoryMergeTarget(billableSource, price), null, kind);
+        assert.equal(shkp.billct, 0, kind);
+
+        const unpaidStack = simpleFood(7107 + (index * 4), kind, String.fromCharCode(letter.charCodeAt(0) + 1));
+        shop.addObjectToShopBill(shkp, unpaidStack, price);
+        game.inventory = [unpaidStack];
+        const merge = shop.findPickedObjectInventoryMergeTarget(billableSource, price);
+        assert.equal(merge.target, unpaidStack, kind);
+        shop.mergePickedObjectIntoInventory(billableSource, unpaidStack);
+
+        assert.equal(unpaidStack.quan, 2, kind);
+        assert.equal(unpaidStack.unpaidPrice, price * 2, kind);
+        assert.equal(shop.shopBillEntryTotal(merge.billMerge.billEntry), price * 2, kind);
+        assert.match(unpaidStack.line, new RegExp(`unpaid, ${price * 2} zorkmids`), kind);
+        assert.equal(shkp.billct, 1, kind);
+    }
 });
 
 test('K-ration and C-ration pickup merge only with exact ration kind', () => {
@@ -12152,6 +12185,8 @@ test('expanded simple food pickup full-inventory preflight allows no-charge merg
         ['lump of royal jelly', 'j'],
         ['meatball', 's'],
         ['enormous meatball', 'n'],
+        ['tripe ration', 't'],
+        ['candy bar', 'y'],
         ['fortune cookie', 'f'],
     ];
 
@@ -12182,6 +12217,7 @@ test('shopBaseCost returns C prices for covered simple foods', () => {
     assert.equal(shop.shopBaseCost(simpleFood(7126, 'C-ration')), 20);
     assert.equal(shop.shopBaseCost(simpleFood(7127, 'tripe ration')), 15);
     assert.equal(shop.shopBaseCost({ ...simpleFood(7128, 'tripe'), foodRoll: 140 }), 15);
+    assert.equal(shop.shopBaseCost(simpleFood(7139, 'candy bar')), 10);
     assert.equal(shop.shopBaseCost(simpleFood(7132, 'kelp frond')), 6);
     assert.equal(shop.shopBaseCost(simpleFood(7129, 'sprig of wolfsbane')), 7);
     assert.equal(shop.shopBaseCost(simpleFood(7130, 'clove of garlic')), 7);
