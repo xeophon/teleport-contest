@@ -27,7 +27,7 @@ import {
 import { createGasCloud } from './region.js';
 import { figurineLocationCheck, isFigurineObject, makeFigurineFamiliar, maybeAttachCarriedFigurineTimeout, stopFigurineTransformTimeout, syncCarriedFigurineTransformTimer } from './figurine.js';
 import { applyMonsterLiquidEffectsAt } from './monster_liquid.js';
-import { applySlimeMoldFruitFields, currentFruitJuiceName, currentFruitName, fruitWishMatch, setCurrentFruitName, slimeMoldNameForObject } from './fruit.js';
+import { applySlimeMoldFruitFields, currentFruitId, currentFruitJuiceName, currentFruitName, fruitWishMatch, setCurrentFruitName, slimeMoldNameForObject } from './fruit.js';
 
 const DIR_DX = { h: -1, l: 1, j: 0, k: 0, y: -1, u: 1, b: -1, n: 1 };
 const DIR_DY = { h: 0, l: 0, j: 1, k: -1, y: -1, u: -1, b: 1, n: 1 };
@@ -1227,6 +1227,7 @@ const DELAY_ONE_FOOD_VICTUALS = new Map([
     ['carrot', { delay: 1, finishName: 'carrot' }],
     ['sprig of wolfsbane', { delay: 1, finishName: 'sprig of wolfsbane' }],
     ['clove of garlic', { delay: 1, finishName: 'clove of garlic' }],
+    ['slime mold', { otyp: SLIME_MOLD, delay: 1, finishName: 'slime mold' }],
     ['cream pie', { otyp: CREAM_PIE, delay: 1, finishName: 'cream pie' }],
     ['candy bar', { delay: 1, finishName: 'candy bar' }],
     ['fortune cookie', { otyp: FORTUNE_COOKIE, delay: 1, finishName: 'fortune cookie' }],
@@ -11850,10 +11851,10 @@ function delayOneFoodVictualSpec(item) {
     if (!item) return null;
     const kind = objectKindKey(item).replace(/^partly eaten /, '');
     const spec = DELAY_ONE_FOOD_VICTUALS.get(kind);
-    if (spec) return { ...spec, kind };
+    if (spec) return { ...spec, kind, finishName: kind === 'slime mold' ? slimeMoldNameForObject(item) : spec.finishName };
     for (const [entryKind, entrySpec] of DELAY_ONE_FOOD_VICTUALS) {
         if (entrySpec.otyp != null && item.otyp === entrySpec.otyp)
-            return { ...entrySpec, kind: entryKind };
+            return { ...entrySpec, kind: entryKind, finishName: entryKind === 'slime mold' ? slimeMoldNameForObject(item) : entrySpec.finishName };
     }
     return null;
 }
@@ -12034,7 +12035,7 @@ function adjustedDelayedFoodBiteHunger(spec, baseNutrition) {
     return Math.max(nutrition, 1);
 }
 
-function delayedFoodFirstBiteMessage(spec, hunger, { reqtime = spec?.delay || 1 } = {}) {
+function delayedFoodFirstBiteMessage(spec, hunger, { reqtime = spec?.delay || 1, food = null } = {}) {
     if (!spec) return '';
     if (spec.rationFeedback) {
         if ((hunger ?? 900) <= 200) return 'This food really hits the spot!';
@@ -12050,6 +12051,8 @@ function delayedFoodFirstBiteMessage(spec, hunger, { reqtime = spec?.delay || 1 
     if (spec.kind === 'apple') return 'Delicious!  Must be a Macintosh!';
     if (spec.kind === 'pear') return delayedPearFirstBiteMessage();
     if (spec.kind === 'clove of garlic') return delayedGarlicFirstBiteMessage(reqtime);
+    if (spec.kind === 'slime mold' && !food?.cursed && Number(food?.spe) === currentFruitId())
+        return `My, this is a ${heroIsHallucinating() ? 'primo' : 'yummy'} ${slimeMoldNameForObject(food)}!`;
     return `This ${spec.finishName || spec.kind} is ${spec.bland ? 'bland.' : heroIsHallucinating() ? 'gnarly!' : 'delicious!'}`;
 }
 
@@ -12292,7 +12295,7 @@ function startDelayedFoodVictual(item, spec, { floorObject = false } = {}) {
 
     const { reqtime, biteNutrition, biteHunger } = delayedFoodVictualState(touched, spec);
     if (!alreadyPartlyEaten && !rottenFirstBite)
-        message = delayedFoodFirstBiteMessage(spec, hungerBeforeBite, { reqtime });
+        message = delayedFoodFirstBiteMessage(spec, hungerBeforeBite, { reqtime, food: touched });
     game._eating_canchoke = heroIsSatiatedForEating();
     game._eating_fullwarn = 0;
     game._eating_nomovemsg = '';

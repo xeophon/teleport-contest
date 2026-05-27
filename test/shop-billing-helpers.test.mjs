@@ -4892,6 +4892,59 @@ test('carried delay-one plant foods use shared C victual path', async () => {
     }
 });
 
+test('carried current fruit slime mold uses C delay-one feedback', async () => {
+    installNonShopFloorState();
+    setCurrentFruitName('durian');
+    const mold = slimeMoldFood(31946, 'd', 'durian', currentFruitId());
+    game.inventory = [mold];
+
+    await rhack('e');
+    await rhack('d');
+
+    assert.equal(game._pending_message, 'My, this is a yummy durian!');
+    assert.equal(game.inventory.includes(mold), false);
+    assert.equal(game.u.uhunger, 1150);
+    assert.equal(game.u.uconduct?.food, 1);
+    assert.equal(game.u.uconduct?.unvegan || 0, 0);
+    assert.equal(game.u.uconduct?.unvegetarian || 0, 0);
+    assert.equal(game._eating_turns_remaining || 0, 0);
+    assert.equal(game.context.move, 1);
+});
+
+test('carried non-current fruit slime mold uses its own fruit name', async () => {
+    installNonShopFloorState();
+    setCurrentFruitName('mango');
+    const mangoId = currentFruitId();
+    setCurrentFruitName('durian');
+    const mold = slimeMoldFood(31947, 'm', 'mango', mangoId);
+    game.inventory = [mold];
+
+    await rhack('e');
+    await rhack('m');
+
+    assert.equal(game._pending_message, 'This mango is delicious!');
+    assert.equal(game.inventory.includes(mold), false);
+    assert.equal(game.u.uhunger, 1150);
+    assert.equal(game._eating_turns_remaining || 0, 0);
+});
+
+test('cursed current fruit slime mold rots before the delay-one bite', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    setCurrentFruitName('durian');
+    const mold = slimeMoldFood(31948, 'd', 'durian', currentFruitId(), { cursed: true });
+    game.inventory = [mold];
+
+    await rhack('e');
+    await rhack('d');
+
+    assert.equal(game._pending_message, 'Blecch!  Rotten food!');
+    assert.equal(game.inventory.includes(mold), false);
+    assert.equal(game.u.uhunger, 1025);
+    assert.doesNotMatch(game._pending_message, /durian|yummy|primo/);
+    assert.equal(game._eating_turns_remaining || 0, 0);
+});
+
 test('carrot clears temporary blindness after the delay-one bite', async () => {
     installNonShopFloorState();
     const carrot = simpleFood(31940, 'carrot', 'c');
@@ -5187,6 +5240,35 @@ test('shop-floor delay-one food stacks bill the touched unit before immediate fi
         assert.equal(shop.shopBillEntryTotal(bite), expected, entry.kind);
         assert.equal(game._eating_turns_remaining || 0, 0, entry.kind);
     }
+});
+
+test('shop-floor current fruit slime mold stack bills the touched unit before immediate finish', async () => {
+    const { shkp } = installCommandShopState();
+    setCurrentFruitName('durian');
+    const stack = slimeMoldFood(31960, undefined, 'durian', currentFruitId(), {
+        quan: 2,
+        plural: 'durians',
+    });
+    delete stack.letter;
+    delete stack.line;
+    game.level.objects = [stack];
+    const expected = shop.shopItemPrice({ ...stack, quan: 1 }, 5, 5);
+
+    await rhack('e');
+    await rhack('y');
+
+    assert.equal(game._pending_message, 'My, this is a yummy durian!');
+    assert.equal(game.u.uhunger, 1150);
+    assert.equal(game.level.objects.includes(stack), false);
+    const rest = game.level.objects.find(obj => obj.actualKind === 'slime mold' && obj.spe === currentFruitId());
+    assert.ok(rest);
+    assert.equal(rest.quan, 1);
+    assert.equal(rest.no_charge || false, false);
+    const bite = shop.shopBillEntryForObject(shkp, stack);
+    assert.ok(bite);
+    assert.equal(bite.useup, true);
+    assert.equal(shop.shopBillEntryTotal(bite), expected);
+    assert.equal(game._eating_turns_remaining || 0, 0);
 });
 
 test('floor delayed ordinary foods use C bite timing and finish removal', async () => {
