@@ -25,6 +25,7 @@ const BAG_OF_TRICKS = 10158;
 const POT_WATER = 253;
 const SLIME_MOLD = 11009;
 const MEAT_RING = 10164;
+const DART = 353;
 
 function installShopState() {
     const g = resetGame();
@@ -256,6 +257,26 @@ function dagger(id, letter = 'd') {
         line: `${letter} - a dagger`,
         dknown: true,
         known: true,
+    };
+}
+
+function dartStack(id, letter = 'd', quan = 3, extra = {}) {
+    return {
+        id,
+        otyp: DART,
+        cls: 'weapon',
+        glyph: ')',
+        kind: 'dart',
+        actualKind: 'dart',
+        plural: 'darts',
+        quan,
+        ox: 5,
+        oy: 5,
+        letter,
+        known: true,
+        dknown: true,
+        line: `${letter} - ${quan > 1 ? `${quan} darts` : 'a dart'}`,
+        ...extra,
     };
 }
 
@@ -1059,6 +1080,33 @@ function healingPotion(id, letter = 'h', quan = 1) {
         letter,
         line: `${letter} - ${quan > 1 ? `${quan} potions of healing` : 'a potion of healing'}`,
     };
+}
+
+function namedPotion(id, name, letter, quan = 1) {
+    return {
+        id,
+        cls: 'potion',
+        glyph: '!',
+        kind: name,
+        actualKind: `potion of ${name}`,
+        quan,
+        ox: 5,
+        oy: 5,
+        letter,
+        line: `${letter} - ${quan > 1 ? `${quan} potions of ${name}` : `a potion of ${name}`}`,
+    };
+}
+
+function sicknessPotion(id, letter = 's', quan = 1) {
+    return namedPotion(id, 'sickness', letter, quan);
+}
+
+function extraHealingPotion(id, letter = 'e', quan = 1) {
+    return namedPotion(id, 'extra healing', letter, quan);
+}
+
+function fullHealingPotion(id, letter = 'f', quan = 1) {
+    return namedPotion(id, 'full healing', letter, quan);
 }
 
 async function startRubCommand() {
@@ -3425,6 +3473,143 @@ test('dipping a weapon into cursed oil spills before repairing rust', async () =
     assert.ok((game.u._glibTimeout || 0) > 0);
     assert.equal(game.inventory.includes(potion), false);
     assert.match(game._pending_message, /The potion spills and covers your fingers with oil\./);
+});
+
+test('dipping poisonable darts into sickness coats the stack', async () => {
+    installCommandShopState();
+    const target = dartStack(30941, 'd', 3);
+    const potion = sicknessPotion(30942, 's');
+    game.inventory = [target, potion];
+
+    await rhack('#');
+    for (const ch of 'dip') await rhack(ch);
+    await rhack('\n');
+    await rhack('d');
+
+    assert.equal(game._command_mode, 'dipConfirm');
+    assert.match(game._pending_message, /Dip 3 darts into the fountain\? \[yn\] \(n\)/);
+
+    await rhack('n');
+
+    assert.equal(game._command_mode, 'dipOilSource');
+    assert.match(game._pending_message, /What do you want to dip 3 darts into\? \[s or \?\*\]/);
+
+    await rhack('s');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(target.opoisoned, true);
+    assert.match(target.line, /poisoned darts/);
+    assert.equal(game.inventory.includes(potion), false);
+    assert.match(game._pending_message, /The potion of sickness forms a coating on the darts\./);
+});
+
+test('dipping poisoned darts into healing-family potions removes the coating', async () => {
+    const cases = [
+        ['healing', healingPotion],
+        ['extra healing', extraHealingPotion],
+        ['full healing', fullHealingPotion],
+    ];
+
+    for (const [index, [name, factory]] of cases.entries()) {
+        installCommandShopState();
+        const target = dartStack(30943 + (index * 2), 'd', 2, { opoisoned: true });
+        const potion = factory(30944 + (index * 2), name[0]);
+        game.inventory = [target, potion];
+
+        await rhack('#');
+        for (const ch of 'dip') await rhack(ch);
+        await rhack('\n');
+        await rhack('d');
+        await rhack('n');
+        await rhack(name[0]);
+
+        assert.equal(game._command_mode, null, name);
+        assert.equal(game.context.move, 1, name);
+        assert.equal(target.opoisoned, false, name);
+        assert.doesNotMatch(target.line, /poisoned/, name);
+        assert.equal(game.inventory.includes(potion), false, name);
+        assert.match(game._pending_message, /A coating wears off the poisoned darts\./, name);
+    }
+});
+
+test('dipping already poisoned darts into sickness does not consume the potion', async () => {
+    installCommandShopState();
+    const target = dartStack(30949, 'd', 2, { opoisoned: true });
+    const potion = sicknessPotion(30950, 's');
+    game.inventory = [target, potion];
+
+    await rhack('#');
+    for (const ch of 'dip') await rhack(ch);
+    await rhack('\n');
+    await rhack('d');
+    await rhack('n');
+    await rhack('s');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(target.opoisoned, true);
+    assert.equal(game.inventory.includes(potion), true);
+    assert.match(game._pending_message, /Interesting\.\.\./);
+});
+
+test('dipping unpaid sickness stack into darts preserves residual billing without usage debit', async () => {
+    const { shkp } = installCommandShopState();
+    const target = dartStack(30951, 'd', 3);
+    const potion = sicknessPotion(30952, 's', 2);
+    game.inventory = [target, potion];
+    shop.addObjectToShopBill(shkp, potion, 100);
+
+    await rhack('#');
+    for (const ch of 'dip') await rhack(ch);
+    await rhack('\n');
+    await rhack('d');
+    await rhack('n');
+    await rhack('s');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(target.opoisoned, true);
+    assert.equal(potion.quan, 1);
+    assert.equal(game.inventory.includes(potion), true);
+    assert.equal(potion.unpaid, true);
+    assert.equal(shkp.debit || 0, 0);
+    const entry = shop.shopBillEntryForObject(shkp, potion);
+    assert.ok(entry);
+    assert.equal(entry.useup, false);
+    assert.equal(entry.bquan, 2);
+    const debts = shop.collectPayableShopDebts(shkp);
+    assert.equal(debts.some(debt => debt.billPortion === 'partlyUsedUp' && debt.price === 50), true);
+    assert.equal(debts.some(debt => debt.billPortion === 'intact' && debt.price === 50), true);
+    assert.match(game._pending_message, /forms a coating on the darts/);
+    assert.doesNotMatch(game._pending_message, /Yendorian Fuel Tax|in addition to the cost/);
+});
+
+test('dipping permapoisoned Grimtooth into healing does not remove poison', async () => {
+    installCommandShopState();
+    const target = {
+        ...dagger(30953, 'g'),
+        kind: 'orcish dagger',
+        actualKind: 'orcish dagger',
+        artifact: 'Grimtooth',
+        opoisoned: true,
+        line: 'g - Grimtooth',
+    };
+    const potion = healingPotion(30954, 'h');
+    game.inventory = [target, potion];
+
+    await rhack('#');
+    for (const ch of 'dip') await rhack(ch);
+    await rhack('\n');
+    await rhack('g');
+    await rhack('n');
+    await rhack('h');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(target.opoisoned, true);
+    assert.equal(game.inventory.includes(potion), true);
+    assert.match(game._pending_message, /Interesting\.\.\./);
 });
 
 test('applying an unpaid cream pie to yourself bills a dummy used-up pie', async () => {

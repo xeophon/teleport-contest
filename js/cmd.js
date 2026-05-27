@@ -10470,6 +10470,20 @@ function isPotionOfOil(item) {
         || objectKindKey(item).replace(/^potion of /, '') === 'oil';
 }
 
+function potionDipKind(item) {
+    if (!isPotionObject(item)) return '';
+    return objectKindKey(item).replace(/^potion of /, '').trim();
+}
+
+function isHealingFamilyPotion(item) {
+    const kind = potionDipKind(item);
+    return kind === 'healing' || kind === 'extra healing' || kind === 'full healing';
+}
+
+function isPotionOfSickness(item) {
+    return potionDipKind(item) === 'sickness';
+}
+
 function maybeDilutedPotionName(obj, name) {
     if (!obj?.odiluted || isWaterPotion(obj) || name.startsWith('diluted ')) return name;
     return `diluted ${name}`;
@@ -11471,6 +11485,33 @@ function isOilWeaponDipTargetObject(item) {
     return cls === 'weapon' || item?.glyph === ')' || item?.otyp === WEAPON_CLASS || isWeaponTool(item);
 }
 
+function isPermanentPoisonedWeaponObject(item) {
+    const artifact = String(item?.artifact || item?.oartifact || '').toLowerCase().replace(/^the /, '');
+    return artifact === 'grimtooth';
+}
+
+function isPoisonableWeaponObject(item) {
+    if (isPermanentPoisonedWeaponObject(item)) return true;
+    if (!item || itemClassKey(item) !== 'weapon') return false;
+    return POISONABLE_WISH_WEAPONS.has(objectKindKey(item));
+}
+
+function poisonedWeaponObjectName(item) {
+    const name = pickupObjectName(item);
+    if (item?.opoisoned && isPoisonableWeaponObject(item) && !/^poisoned\b/.test(name))
+        return `poisoned ${name}`;
+    return name;
+}
+
+function dipPotionSources(target) {
+    return (game.inventory || []).filter(item => {
+        if (item === target || !isPotionObject(item)) return false;
+        if (isPotionOfOil(item) && (isOilRefuelLampObject(target) || isOilWeaponDipTargetObject(target))) return true;
+        if (isPoisonableWeaponObject(target) && (isPotionOfSickness(item) || isHealingFamilyPotion(item))) return true;
+        return false;
+    });
+}
+
 function oilDipTargetName(item) {
     return dipItemDescription(item).replace(/\s+\(being worn\)$/, '');
 }
@@ -11498,6 +11539,41 @@ function refreshOilDipTargetLine(item) {
 function consumeDipOilPotion(potion) {
     if (potion?.dknown) identifyPotionOfOil(potion);
     useUpInventoryItem(potion, 1);
+}
+
+function consumeDipPotion(potion) {
+    useUpInventoryItem(potion, 1);
+}
+
+function dipPoisonableWeaponIntoPotion(target, potion) {
+    const messages = [];
+    if (!isPoisonableWeaponObject(target) || !isPotionObject(potion)) return messages;
+    if (isPotionOfSickness(potion)) {
+        if (!target.opoisoned) {
+            const potionName = pickupObjectName(potion);
+            const source = (potion.quan || 1) > 1 ? `One of the ${potionName}` : `The ${potionName}`;
+            messages.push(`${source} forms a coating on the ${poisonedWeaponObjectName(target)}.`);
+            target.opoisoned = true;
+            refreshInventoryObjectLine(target);
+            if (target.unpaid) syncUnpaidBillLine(target);
+            consumeDipPotion(potion);
+        } else {
+            messages.push('Interesting...');
+        }
+        return messages;
+    }
+    if (isHealingFamilyPotion(potion)) {
+        if (target.opoisoned && !isPermanentPoisonedWeaponObject(target)) {
+            messages.push(`A coating wears off the ${poisonedWeaponObjectName(target)}.`);
+            target.opoisoned = false;
+            refreshInventoryObjectLine(target);
+            if (target.unpaid) syncUnpaidBillLine(target);
+            consumeDipPotion(potion);
+        } else {
+            messages.push('Interesting...');
+        }
+    }
+    return messages;
 }
 
 function dipWeaponIntoOilPotion(target, potion) {
@@ -11538,6 +11614,12 @@ function dipWeaponIntoOilPotion(target, potion) {
 function dipObjectIntoOilPotion(target, potion) {
     if (isOilWeaponDipTargetObject(target)) return dipWeaponIntoOilPotion(target, potion);
     return dipLampIntoOilPotion(target, potion);
+}
+
+function dipObjectIntoPotion(target, potion) {
+    if (isPotionOfOil(potion)) return dipObjectIntoOilPotion(target, potion);
+    if (isPoisonableWeaponObject(target)) return dipPoisonableWeaponIntoPotion(target, potion);
+    return [];
 }
 
 function oilRefuelAmount(potion) {
@@ -23220,11 +23302,12 @@ export function pickupObjectName(obj) {
     }
     if (obj.cls === 'weapon' || obj.otyp === WEAPON_CLASS || obj.glyph === ')') {
         const kind = String(obj.actualKind || obj.kind || '').toLowerCase();
+        const poisoned = obj.opoisoned && isPoisonableWeaponObject(obj) ? 'poisoned ' : '';
         if (kind === 'orcish dagger' || obj.otyp === ORCISH_DAGGER) {
             const known = obj.known === true || (game._discoveries || [])
                 .some(entry => entry.section === 'Weapons' && entry.name === 'orcish dagger' && entry.starred);
-            if (known) return named((obj.quan || 1) > 1 ? 'orcish daggers' : 'orcish dagger');
-            return named((obj.quan || 1) > 1 ? 'crude daggers' : 'crude dagger');
+            if (known) return named((obj.quan || 1) > 1 ? `${poisoned}orcish daggers` : `${poisoned}orcish dagger`);
+            return named((obj.quan || 1) > 1 ? `${poisoned}crude daggers` : `${poisoned}crude dagger`);
         }
         if ((obj.quan || 1) > 1 && kind) {
             const plural = {
@@ -23234,8 +23317,9 @@ export function pickupObjectName(obj) {
                 'crossbow bolt': 'crossbow bolts',
                 shuriken: 'shuriken',
             }[kind] || (kind.endsWith('s') ? kind : `${kind}s`);
-            return named(plural);
+            return named(`${poisoned}${plural}`);
         }
+        if (kind) return named(`${poisoned}${kind}`);
     }
     if (obj.otyp === FOOD_CLASS || obj.cls === 'food') {
         const buc = foodBucPrefix(obj);
@@ -44108,11 +44192,11 @@ export async function rhack(_cmd) {
             game._command_mode = null;
             return;
         }
-        const lamp = game._dip_item || (game.inventory || []).find(invItem => invItem.letter === game._dip_object);
+        const target = game._dip_item || (game.inventory || []).find(invItem => invItem.letter === game._dip_object);
         const potion = (game.inventory || []).find(invItem => invItem.letter === ch);
-        if (lamp && potion && isPotionOfOil(potion)) {
-            const messages = dipObjectIntoOilPotion(lamp, potion);
-            await setMessage(messages.join('  ') || 'Nothing happens.', messages.length > 1);
+        if (target && potion && dipPotionSources(target).includes(potion)) {
+            const messages = dipObjectIntoPotion(target, potion);
+            await setMessage(messages.join('  ') || 'Interesting...', messages.length > 1);
             game.context.move = 1;
         }
         game._dip_object = '';
@@ -44229,10 +44313,10 @@ export async function rhack(_cmd) {
             }
         } else {
             const item = game._dip_item || (game.inventory || []).find(invItem => invItem.letter === game._dip_object);
-            const oilSources = ch === 'n' && isOilWeaponDipTargetObject(item) ? oilPotionDipSources(item) : [];
-            if (oilSources.length) {
+            const potionSources = ch === 'n' ? dipPotionSources(item) : [];
+            if (potionSources.length) {
                 const { article, description } = dipItemPromptParts(item);
-                const sourceLetters = oilSources.map(source => source.letter).filter(Boolean).sort().join('');
+                const sourceLetters = potionSources.map(source => source.letter).filter(Boolean).sort().join('');
                 await setMessage(`What do you want to dip ${article}${description} into? [${inventoryLetterMenu(sourceLetters)} or ?*]`);
                 game._command_mode = 'dipOilSource';
                 return;
