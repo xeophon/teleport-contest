@@ -7411,17 +7411,47 @@ function erosionPrefix(item) {
     return pieces.length ? `${pieces.join(' ')} ` : '';
 }
 
+function weaponLineEnchantmentPrefix(item) {
+    const match = String(item?.line || '').match(/(?:^| )([+-]\d+) /);
+    return match ? `${match[1]} ` : '';
+}
+
+function weaponEnchantmentPrefix(item) {
+    if (item?.spe != null) {
+        const spe = item.spe;
+        return `${spe >= 0 ? '+' : ''}${spe} `;
+    }
+    return weaponLineEnchantmentPrefix(item);
+}
+
+function isWeaponDisplayObject(item) {
+    const cls = itemClassKey(item);
+    return cls === 'weapon' || item?.otyp === DART || item?.glyph === ')' || item?.wielded || item?.alternate;
+}
+
+function poisonedWeaponDisplayParts(item, rawName = pickupObjectName(item)) {
+    if (item?.opoisoned && isPoisonableWeaponObject(item) && /^poisoned\s+/.test(rawName))
+        return { poisonPrefix: 'poisoned ', name: rawName.replace(/^poisoned\s+/, '') };
+    return { poisonPrefix: '', name: rawName };
+}
+
 function dipItemDescription(item, shortened = false) {
+    const quan = item.quan || 1;
     let baseName = pickupObjectName(item);
-    if ((item.quan || 1) > 1)
-        baseName = `${item.quan} ${item.plural || (baseName.endsWith('s') ? baseName : `${baseName}s`)}`;
     const rust = shortened ? '' : erosionPrefix(item);
     const showBuc = !shortened && item.bknown === true && !/holy water|unholy water/.test(baseName);
     const buc = showBuc
         ? item.cursed ? 'cursed ' : item.blessed ? 'blessed ' : ''
         : '';
-    const spe = item.spe == null || (item.quan || 1) > 1 ? '' : `${item.spe >= 0 ? '+' : ''}${item.spe} `;
     const worn = item.worn || item.line?.includes('being worn') ? ' (being worn)' : '';
+    if (isWeaponDisplayObject(item)) {
+        const parts = poisonedWeaponDisplayParts(item, baseName);
+        const quantity = quan > 1 ? `${quan} ` : '';
+        return `${quantity}${buc}${parts.poisonPrefix}${rust}${weaponEnchantmentPrefix(item)}${parts.name}${worn}`;
+    }
+    if (quan > 1)
+        baseName = `${quan} ${item.plural || (baseName.endsWith('s') ? baseName : `${baseName}s`)}`;
+    const spe = item.spe == null || quan > 1 ? '' : `${item.spe >= 0 ? '+' : ''}${item.spe} `;
     return `${buc}${rust}${spe}${baseName}${worn}`;
 }
 
@@ -27698,7 +27728,8 @@ function identifiedInventoryLine(item) {
         const lineShowsBuc = /\b(?:blessed|uncursed|cursed)\b/.test(String(item.line || ''));
         const knownBuc = item.blessed || item.cursed || item.bknown === true || lineShowsBuc;
         const bucPrefix = knownBuc && buc !== 'uncursed' ? `${buc} ` : '';
-        phrase = `${bucPrefix}${enchantment}${pickupObjectName(item)}`;
+        const { poisonPrefix, name } = poisonedWeaponDisplayParts(item);
+        phrase = `${bucPrefix}${poisonPrefix}${enchantment}${name}`;
         if (item.wielded) {
             const kind = String(item.kind || '').toLowerCase();
             suffix = ` (weapon in ${/quarterstaff|two-handed sword|battle-axe/.test(kind) ? 'hands' : `${game.u?.uhandedness || 'right'} hand`})`;
@@ -27875,7 +27906,10 @@ function normalInventoryLine(item) {
         const buc = knownBlessCursePrefix(item)
             || ((item.bknown === true || lineShowsBuc) && (item.blessed || item.cursed) ? blessedState : '');
         const erosion = erosionPrefix(item);
-        phrase = quan > 1 ? `${quan} ${buc}${erosion}${enchantment}${name}` : `${buc}${erosion}${enchantment}${name}`;
+        const parts = poisonedWeaponDisplayParts(item, name);
+        phrase = quan > 1
+            ? `${quan} ${buc}${parts.poisonPrefix}${erosion}${enchantment}${parts.name}`
+            : `${buc}${parts.poisonPrefix}${erosion}${enchantment}${parts.name}`;
         if (item.wielded) {
             const hand = /quarterstaff|two-handed sword|battle-axe/.test(kind) ? 'hands' : `${game.u?.uhandedness || 'right'} hand`;
             suffix = ` (weapon in ${hand})`;

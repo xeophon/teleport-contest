@@ -23,6 +23,6 @@ This slice adds the bounded carried-object acid `#dip` branch. It covers corrosi
 ## Remaining Follow-Ups
 
 - Source-first `#altdip` is now covered in audit 30 for implemented potion effects and the known-oil apply exception; full C source/target menu parity remains separate.
-- Poisoned weapon display ordering remains separate. C `xname()` and `doname()` differ, so inventory and `#dip` prompts should eventually show `poisoned +0 dart` while coating messages keep `poisoned dart`.
+- Poisoned weapon display ordering was handled in audit 31 for inventory and `#dip` prompts, while coating/removal messages still keep `xname()` wording.
 - Full potion matrix work remains: alchemy, unicorn horn/amethyst mixtures, water/Bless/curse paths beyond covered local cases, and source menus for unsupported potion/target pairs.
 - Acid corrosion currently uses the existing JS damage-profile heuristic rather than a central C object-material registry; broad material parity still belongs with the object registry work.

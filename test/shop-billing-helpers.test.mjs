@@ -3654,7 +3654,8 @@ test('inventory action on a non-oil potion starts source-first dip and skips fou
     assert.equal(game._command_mode, null);
     assert.equal(game.context.move, 1);
     assert.equal(target.opoisoned, true);
-    assert.match(target.line, /poisoned darts/);
+    assert.match(target.line, /3 poisoned \+0 darts/);
+    assert.doesNotMatch(target.line, /\+0 poisoned/);
     assert.equal(game.inventory.includes(potion), false);
     assert.match(game._pending_message, /The potion of sickness forms a coating on the darts\./);
 });
@@ -3672,6 +3673,22 @@ test('inventory action on a known oil potion applies it instead of source-first 
     assert.equal(game.context.move, 1);
     assert.equal(game.inventory.includes(potion), true);
     assert.match(game._pending_message, /You light your potion/);
+});
+
+test('dipping a known poisoned dart prompts with doname poison ordering', async () => {
+    installCommandShopState();
+    const target = dartStack(30970, 'd', 1, { opoisoned: true, spe: 0, line: 'd - a +0 poisoned dart' });
+    const potion = healingPotion(30971, 'h');
+    game.inventory = [target, potion];
+
+    await rhack('#');
+    for (const ch of 'dip') await rhack(ch);
+    await rhack('\n');
+    await rhack('d');
+
+    assert.equal(game._command_mode, 'dipConfirm');
+    assert.match(game._pending_message, /Dip a poisoned \+0 dart into the fountain\? \[yn\] \(n\)/);
+    assert.doesNotMatch(game._pending_message, /\+0 poisoned/);
 });
 
 test('dipping poisonable darts into sickness coats the stack', async () => {
@@ -3698,7 +3715,8 @@ test('dipping poisonable darts into sickness coats the stack', async () => {
     assert.equal(game._command_mode, null);
     assert.equal(game.context.move, 1);
     assert.equal(target.opoisoned, true);
-    assert.match(target.line, /poisoned darts/);
+    assert.match(target.line, /3 poisoned \+0 darts/);
+    assert.doesNotMatch(target.line, /\+0 poisoned/);
     assert.equal(game.inventory.includes(potion), false);
     assert.match(game._pending_message, /The potion of sickness forms a coating on the darts\./);
 });

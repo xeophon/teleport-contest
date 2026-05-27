@@ -30,4 +30,4 @@ This slice adds JS object identity for C's `MEAT_STICK` food row and wires it th
 - Replace local food tables with a registry-backed source for `oc_merge`, material, cost, weight, delay, nutrition, color, and creation policy.
 - Magic-bag loss owner routing is now covered in audit 28 for floor-source cursed magic-bag losses; remaining magic-bag work should converge that local helper with a central `obfree()`/`stolen_value()` subsystem.
 - Potion-dip follow-ups remain separate: bounded acid corrosion, inventory-action `#altdip` source-first flow, full `drink_ok` source menus, and the broader alchemy/unicorn horn/amethyst matrix.
-- Poisoned weapon display ordering remains separate: C `xname()` wants `poisoned arrow`, while `doname()` strips and re-adds poison so known items display like `poisoned +0 arrow`.
+- Poisoned weapon display ordering was handled in audit 31 for inventory and `#dip` prompts; broader C-shaped `xname()`/`doname()` unification remains separate.
