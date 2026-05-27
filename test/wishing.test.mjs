@@ -3,7 +3,14 @@ import test from 'node:test';
 
 import { rhack, __shopBillingTestHooks as shop } from '../js/cmd.js';
 import { game, resetGame } from '../js/gstate.js';
-import { BEAR_TRAP, FOUNTAIN, F_LOOTED, LANDMINE, PIT, ROOM, SINK, S_LDWASHER, S_LPUDDING, S_LRING, THRONE, T_LOOTED } from '../js/const.js';
+import {
+    A_LAWFUL, ALTAR, Align2amask, BEAR_TRAP, CLOUD, CORR, DB_EAST, DB_FLOOR,
+    DB_ICE, DB_LAVA, DB_MOAT, DB_UNDER, DOOR, DRAWBRIDGE_DOWN, D_BROKEN,
+    D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, D_TRAPPED, FOUNTAIN, F_LOOTED,
+    GRAVE, HWALL, ICE, ICED_POOL, IRONBARS, LANDMINE, LAVAPOOL, LAVAWALL,
+    MOAT, PIT, POOL, ROOM, SCORR, SDOOR, SINK, S_LDWASHER, S_LPUDDING,
+    S_LRING, THRONE, TREE, TREE_LOOTED, TREE_SWARM, T_LOOTED, WATER,
+} from '../js/const.js';
 import { initRng } from '../js/rng.js';
 import { mksobj } from '../js/mklev.js';
 
@@ -39,7 +46,7 @@ const MEATBALL = 11012;
 const ENORMOUS_MEATBALL = 11013;
 
 function testCell(typ = ROOM) {
-    return { roomno: 0, typ, flags: 0, doormask: 0, horizontal: false, wall_info: 0 };
+    return { roomno: 0, typ, flags: 0, altarmask: 0, doormask: 0, horizontal: false, wall_info: 0 };
 }
 
 function installWishState(seed = 1, { debug = true, luck = 0 } = {}) {
@@ -64,6 +71,8 @@ function installWishState(seed = 1, { debug = true, luck = 0 } = {}) {
         monsters: [],
         objects: [],
         traps: [],
+        engravings: [],
+        meltIceTimers: [],
         at: (x, y) => x === g.u.ux && y === g.u.uy ? heroCell : testCell(),
     };
     return g;
@@ -399,8 +408,134 @@ test('wizard terrain and furniture wish qualifiers set C map flags', async () =>
     }
 });
 
+test('wizard terrain wishes create broader C non-object map results', async () => {
+    for (const { wish, typ, flags = 0, altarmask = 0, message } of [
+        { wish: 'pool', typ: POOL, message: /^A pool of water\.$/ },
+        { wish: 'moat', typ: MOAT, message: /^A moat\.$/ },
+        { wish: 'wall of water', typ: WATER, message: /^A wall of water\.$/ },
+        { wish: 'molten lava', typ: LAVAPOOL, message: /^A pool of molten lava\.$/ },
+        { wish: 'wall of lava', typ: LAVAWALL, message: /^A wall of molten lava\.$/ },
+        { wish: 'ice', typ: ICE, flags: ICED_POOL, message: /^Ice\.$/ },
+        { wish: 'lawful altar', typ: ALTAR, flags: Align2amask(A_LAWFUL), altarmask: Align2amask(A_LAWFUL), message: /^A lawful altar\.$/ },
+        { wish: 'disturbed grave', typ: GRAVE, flags: 1, message: /^A disturbed grave\.$/ },
+        { wish: 'looted tree', typ: TREE, flags: TREE_LOOTED | TREE_SWARM, message: /^A tree\.$/ },
+        { wish: 'iron bars', typ: IRONBARS, message: /^Iron bars\.$/ },
+        { wish: 'stone wall', typ: HWALL, message: /^A wall\.$/ },
+        { wish: 'cloud', typ: CLOUD, message: /^A cloud\.$/ },
+    ]) {
+        installWishState();
+        beginWishDirectly();
+        await submitWish(wish);
+
+        assert.equal(game._command_mode, null, wish);
+        assert.equal(cellAtHero().typ, typ, wish);
+        assert.equal(cellAtHero().flags || 0, flags, wish);
+        assert.equal(cellAtHero().altarmask || 0, altarmask, wish);
+        assert.equal(cellAtHero().doormask || 0, D_NODOOR, wish);
+        assert.equal(game.inventory.length, 0, wish);
+        assert.equal(game.level.traps.length, 0, wish);
+        assert.equal(game.u.uconduct?.wishes || 0, 0, wish);
+        assert.equal(game.u.uconduct?.wisharti || 0, 0, wish);
+        assert.equal(game.u.ublesscnt, 0, wish);
+        assert.match(game._pending_message, message, wish);
+    }
+
+    installWishState();
+    beginWishDirectly();
+    await submitWish('melting ice');
+    assert.equal(cellAtHero().typ, ICE);
+    assert.equal(cellAtHero().flags || 0, ICED_POOL);
+    assert.equal(game.level.meltIceTimers.length, 1);
+    assert.equal(game.level.meltIceTimers[0].x, game.u.ux);
+    assert.equal(game.level.meltIceTimers[0].y, game.u.uy);
+});
+
+test('wizard terrain door wishes honor C masks and location restrictions', async () => {
+    for (const { wish, typ = DOOR, doormask, message } of [
+        { wish: 'trapped locked door', doormask: D_LOCKED | D_TRAPPED, message: /^A trapped locked door\.$/ },
+        { wish: 'open door', doormask: D_ISOPEN, message: /^An open door\.$/ },
+        { wish: 'broken door', doormask: D_BROKEN, message: /^A broken door\.$/ },
+        { wish: 'doorless doorway', doormask: D_NODOOR, message: /^A doorless doorway\.$/ },
+        { wish: 'secret door', typ: SDOOR, doormask: D_NODOOR, message: /^A secret door\.$/ },
+        { wish: 'trapped secret door', typ: SDOOR, doormask: D_TRAPPED, message: /^A trapped secret door\.$/ },
+    ]) {
+        installWishState();
+        cellAtHero().typ = HWALL;
+        cellAtHero().horizontal = true;
+        beginWishDirectly();
+        await submitWish(wish);
+
+        assert.equal(game._command_mode, null, wish);
+        assert.equal(cellAtHero().typ, typ, wish);
+        assert.equal(cellAtHero().doormask, doormask, wish);
+        assert.equal(cellAtHero().horizontal, true, wish);
+        assert.equal(game.inventory.length, 0, wish);
+        assert.equal(game.u.uconduct?.wishes || 0, 0, wish);
+        assert.equal(game.u.ublesscnt, 0, wish);
+        assert.match(game._pending_message, message, wish);
+    }
+
+    installWishState();
+    beginWishDirectly();
+    await submitWish('door');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(cellAtHero().typ, ROOM);
+    assert.equal(game.inventory.length, 0);
+    assert.equal(game.u.uconduct?.wishes || 0, 0);
+    assert.match(game._pending_message, /^Door requires door or wall location\.$/);
+});
+
+test('wizard terrain corridor room and drawbridge wishes follow C map rules', async () => {
+    installWishState();
+    cellAtHero().typ = CORR;
+    beginWishDirectly();
+    await submitWish('secret corridor');
+    assert.equal(cellAtHero().typ, SCORR);
+    assert.match(game._pending_message, /^Secret corridor\.$/);
+
+    installWishState();
+    beginWishDirectly();
+    await submitWish('secret corridor');
+    assert.equal(cellAtHero().typ, ROOM);
+    assert.match(game._pending_message, /^Secret corridor requires corridor location\.$/);
+
+    installWishState();
+    cellAtHero().typ = FOUNTAIN;
+    game.level.flags.nfountains = 1;
+    beginWishDirectly();
+    await submitWish('floor');
+    assert.equal(cellAtHero().typ, ROOM);
+    assert.equal(game.level.flags.nfountains || 0, 0);
+    assert.match(game._pending_message, /^Room floor\.$/);
+
+    for (const { wish, under, message } of [
+        { wish: 'moat', under: DB_MOAT, message: /^Moat under the drawbridge\.$/ },
+        { wish: 'lava', under: DB_LAVA, message: /^Lava under the drawbridge\.$/ },
+        { wish: 'ice', under: DB_ICE, message: /^Ice under the drawbridge\.$/ },
+        { wish: 'floor', under: DB_FLOOR, message: /^Floor under the drawbridge\.$/ },
+    ]) {
+        installWishState();
+        cellAtHero().typ = DRAWBRIDGE_DOWN;
+        cellAtHero().flags = DB_EAST | DB_MOAT;
+        beginWishDirectly();
+        await submitWish(wish);
+
+        assert.equal(cellAtHero().typ, DRAWBRIDGE_DOWN, wish);
+        assert.equal(cellAtHero().flags & DB_EAST, DB_EAST, wish);
+        assert.equal(cellAtHero().flags & DB_UNDER, under, wish);
+        assert.equal(game.inventory.length, 0, wish);
+        assert.equal(game.u.uconduct?.wishes || 0, 0, wish);
+        assert.match(game._pending_message, message, wish);
+    }
+});
+
 test('non-wizard terrain and furniture wish words remain bad descriptions', async () => {
-    for (const wish of ['throne', 'fountain', 'magic fountain', 'looted throne', 'sink']) {
+    for (const wish of [
+        'throne', 'fountain', 'magic fountain', 'looted throne', 'sink',
+        'cloud', 'lawful altar', 'disturbed grave', 'looted tree', 'trapped locked door',
+        'wall of water', 'secret corridor',
+    ]) {
         installWishState(1, { debug: false });
         beginWishDirectly();
         await submitWish(wish);

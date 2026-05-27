@@ -20466,7 +20466,7 @@ function wall_cleanup(x1, y1, x2, y2) {
                 loc.typ = STONE;
         }
 }
-function fix_wall_spines(x1, y1, x2, y2) {
+export function fix_wall_spines(x1, y1, x2, y2) {
     const spineArray = [VWALL, HWALL, HWALL, HWALL,
         VWALL, TRCORNER, TLCORNER, TDWALL,
         VWALL, BRCORNER, BLCORNER, TUWALL,
