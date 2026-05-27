@@ -3258,6 +3258,174 @@ test('dipping an unpaid oil stack into a lamp preserves residual stack billing',
     assert.match(game._pending_message, /Yendorian Fuel Tax/);
 });
 
+test('dipping a rusty weapon into unpaid oil repairs rust without fuel tax', async () => {
+    const { shkp } = installCommandShopState();
+    const target = dagger(30929, 'd');
+    const potion = oilPotion(30930, 'o');
+    target.oeroded = 1;
+    game.inventory = [target, potion];
+    shop.addObjectToShopBill(shkp, potion, 100);
+
+    await rhack('#');
+    for (const ch of 'dip') await rhack(ch);
+    await rhack('\n');
+    await rhack('d');
+
+    assert.equal(game._command_mode, 'dipConfirm');
+    assert.match(game._pending_message, /Dip a rusty dagger into the fountain\? \[yn\] \(n\)/);
+
+    await rhack('n');
+
+    assert.equal(game._command_mode, 'dipOilSource');
+    assert.match(game._pending_message, /What do you want to dip a rusty dagger into\? \[o or \?\*\]/);
+
+    await rhack('o');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(target.oeroded, 0);
+    assert.equal(target.greased, undefined);
+    assert.equal(game.inventory.includes(potion), false);
+    assert.equal(potion.unpaid, false);
+    assert.equal(shkp.debit || 0, 0);
+    assert.equal(shkp.billct, 1);
+    const entry = shop.shopBillEntryForObject(shkp, potion);
+    assert.ok(entry);
+    assert.equal(entry.useup, true);
+    assert.equal(shop.shopBillEntryTotal(entry), 100);
+    assert.match(game._pending_message, /Your rusty dagger is less rusty\./);
+    assert.doesNotMatch(game._pending_message, /Yendorian Fuel Tax|in addition to the cost/);
+});
+
+test('dipping a rusty corroded weapon into oil repairs both erosion counters', async () => {
+    installCommandShopState();
+    const target = dagger(30931, 'd');
+    const potion = oilPotion(30932, 'o');
+    target.oeroded = 1;
+    target.oeroded2 = 1;
+    game.inventory = [target, potion];
+
+    await rhack('#');
+    for (const ch of 'dip') await rhack(ch);
+    await rhack('\n');
+    await rhack('d');
+    await rhack('n');
+    await rhack('o');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(target.oeroded, 0);
+    assert.equal(target.oeroded2, 0);
+    assert.equal(game.inventory.includes(potion), false);
+    assert.match(game._pending_message, /less corroded and rusty\./);
+});
+
+test('dipping a clean weapon into oil consumes oil without greasing it', async () => {
+    installCommandShopState();
+    const target = dagger(30933, 'd');
+    const potion = oilPotion(30934, 'o');
+    game.inventory = [target, potion];
+
+    await rhack('#');
+    for (const ch of 'dip') await rhack(ch);
+    await rhack('\n');
+    await rhack('d');
+    await rhack('n');
+    await rhack('o');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(target.greased, undefined);
+    assert.equal(game.inventory.includes(potion), false);
+    assert.match(game._pending_message, /Your dagger gleams with an oily sheen\./);
+});
+
+test('dipping a rusty weapon-tool into oil repairs it', async () => {
+    installCommandShopState();
+    const target = {
+        id: 30939,
+        cls: 'tool',
+        glyph: '(',
+        kind: 'pick-axe',
+        actualKind: 'pick-axe',
+        quan: 1,
+        letter: 'p',
+        line: 'p - a pick-axe',
+        oeroded: 1,
+    };
+    const potion = oilPotion(30940, 'o');
+    game.inventory = [target, potion];
+
+    await rhack('#');
+    for (const ch of 'dip') await rhack(ch);
+    await rhack('\n');
+    await rhack('p');
+    await rhack('n');
+    await rhack('o');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(target.oeroded, 0);
+    assert.equal(game.inventory.includes(potion), false);
+    assert.match(game._pending_message, /Your rusty pick-axe is less rusty\./);
+});
+
+test('dipping an unpaid oil stack into a weapon preserves residual billing without fuel tax', async () => {
+    const { shkp } = installCommandShopState();
+    const target = dagger(30935, 'd');
+    const potion = oilPotion(30936, 'o', 2);
+    target.oeroded = 1;
+    game.inventory = [target, potion];
+    shop.addObjectToShopBill(shkp, potion, 100);
+
+    await rhack('#');
+    for (const ch of 'dip') await rhack(ch);
+    await rhack('\n');
+    await rhack('d');
+    await rhack('n');
+    await rhack('o');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(target.oeroded, 0);
+    assert.equal(potion.quan, 1);
+    assert.equal(game.inventory.includes(potion), true);
+    assert.equal(potion.unpaid, true);
+    assert.equal(shkp.debit || 0, 0);
+    const entry = shop.shopBillEntryForObject(shkp, potion);
+    assert.ok(entry);
+    assert.equal(entry.useup, false);
+    assert.equal(entry.bquan, 2);
+    const debts = shop.collectPayableShopDebts(shkp);
+    assert.equal(debts.some(debt => debt.billPortion === 'partlyUsedUp' && debt.price === 50), true);
+    assert.equal(debts.some(debt => debt.billPortion === 'intact' && debt.price === 50), true);
+    assert.match(game._pending_message, /Your rusty dagger is less rusty\./);
+    assert.doesNotMatch(game._pending_message, /Yendorian Fuel Tax|in addition to the cost/);
+});
+
+test('dipping a weapon into cursed oil spills before repairing rust', async () => {
+    installCommandShopState();
+    const target = dagger(30937, 'd');
+    const potion = oilPotion(30938, 'o');
+    target.oeroded = 1;
+    potion.cursed = true;
+    game.inventory = [target, potion];
+
+    await rhack('#');
+    for (const ch of 'dip') await rhack(ch);
+    await rhack('\n');
+    await rhack('d');
+    await rhack('n');
+    await rhack('o');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(target.oeroded, 1);
+    assert.ok((game.u._glibTimeout || 0) > 0);
+    assert.equal(game.inventory.includes(potion), false);
+    assert.match(game._pending_message, /The potion spills and covers your fingers with oil\./);
+});
+
 test('applying an unpaid cream pie to yourself bills a dummy used-up pie', async () => {
     const { shkp } = installCommandShopState();
     const pie = creamPie(3094, 'p');

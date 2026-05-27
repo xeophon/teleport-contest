@@ -7418,6 +7418,16 @@ function dipItemDescription(item, shortened = false) {
     return `${buc}${rust}${spe}${baseName}${worn}`;
 }
 
+function dipItemPromptParts(item) {
+    let description = dipItemDescription(item);
+    let article = (item.quan || 1) > 1 ? '' : `${/^[aeiou]/i.test(description) ? 'an' : 'a'} `;
+    if (`${article}${description}`.length > 49) {
+        description = dipItemDescription(item, true);
+        article = (item.quan || 1) > 1 ? '' : `${/^[aeiou]/i.test(description) ? 'an' : 'a'} `;
+    }
+    return { article, description };
+}
+
 function nextToDoor(x, y) {
     for (let dy = -1; dy <= 1; dy++) {
         for (let dx = -1; dx <= 1; dx++) {
@@ -11452,6 +11462,82 @@ async function applyPotionOfOil(item) {
 
 function oilPotionDipSources(target) {
     return (game.inventory || []).filter(item => item !== target && isPotionOfOil(item));
+}
+
+const OIL_DIP_AMMO_RE = /\b(?:arrow|arrows|ya|bolt|bolts|dart|darts|shuriken|throwing star|throwing stars)\b/;
+
+function isOilWeaponDipTargetObject(item) {
+    const cls = itemClassKey(item);
+    return cls === 'weapon' || item?.glyph === ')' || item?.otyp === WEAPON_CLASS || isWeaponTool(item);
+}
+
+function oilDipTargetName(item) {
+    return dipItemDescription(item).replace(/\s+\(being worn\)$/, '');
+}
+
+function oilDipVerb(item, singular, plural) {
+    return (item?.quan || 1) > 1 ? plural : singular;
+}
+
+function oilDipRepairKind(item) {
+    if (!isOilWeaponDipTargetObject(item) || OIL_DIP_AMMO_RE.test(objectKindKey(item))) return '';
+    const profile = wishedDamageProfile(item);
+    const rusty = profile.primaryWord === 'rusty' && (item.oeroded || 0) > 0;
+    const corroded = profile.secondaryWord === 'corroded' && (item.oeroded2 || 0) > 0;
+    if (rusty && corroded) return 'corroded and rusty';
+    if (rusty) return 'rusty';
+    if (corroded) return 'corroded';
+    return '';
+}
+
+function refreshOilDipTargetLine(item) {
+    refreshInventoryObjectLine(item);
+    if (item?.unpaid) syncUnpaidBillLine(item);
+}
+
+function consumeDipOilPotion(potion) {
+    if (potion?.dknown) identifyPotionOfOil(potion);
+    useUpInventoryItem(potion, 1);
+}
+
+function dipWeaponIntoOilPotion(target, potion) {
+    const messages = [];
+    if (!isOilWeaponDipTargetObject(target) || !isPotionOfOil(potion)) return messages;
+    if (potion.lamplit || potion.burning) {
+        messages.push('The lit potion burns away.');
+        consumeDipOilPotion(potion);
+        exerciseAttribute(A_WIS, false);
+        return messages;
+    }
+    if (potion.cursed) {
+        messages.push(`The potion spills and covers your ${fingersOrGloves()} with oil.`);
+        addHeroGlibTimeout(d(2, 10));
+        consumeDipOilPotion(potion);
+        exerciseAttribute(A_WIS, false);
+        return messages;
+    }
+
+    const name = oilDipTargetName(target);
+    const repairKind = oilDipRepairKind(target);
+    if (repairKind) {
+        messages.push(`Your ${name} ${oilDipVerb(target, game.u?.blind ? 'feels' : 'is', game.u?.blind ? 'feel' : 'are')} less ${repairKind}.`);
+        if ((target.oeroded || 0) > 0) target.oeroded--;
+        if ((target.oeroded2 || 0) > 0) target.oeroded2--;
+        exerciseAttribute(A_WIS, true);
+    } else {
+        messages.push(game.u?.blind
+            ? `Your ${name} ${oilDipVerb(target, 'feels', 'feel')} oily.`
+            : `Your ${name} ${oilDipVerb(target, 'gleams', 'gleam')} with an oily sheen.`);
+        exerciseAttribute(A_WIS, false);
+    }
+    refreshOilDipTargetLine(target);
+    consumeDipOilPotion(potion);
+    return messages;
+}
+
+function dipObjectIntoOilPotion(target, potion) {
+    if (isOilWeaponDipTargetObject(target)) return dipWeaponIntoOilPotion(target, potion);
+    return dipLampIntoOilPotion(target, potion);
 }
 
 function oilRefuelAmount(potion) {
@@ -43996,12 +44082,7 @@ export async function rhack(_cmd) {
         }
         const item = (game.inventory || []).find(invItem => invItem.letter === ch);
         if (item) {
-            let description = dipItemDescription(item);
-            let article = (item.quan || 1) > 1 ? '' : `${/^[aeiou]/i.test(description) ? 'an' : 'a'} `;
-            if (`${article}${description}`.length > 49) {
-                description = dipItemDescription(item, true);
-                article = (item.quan || 1) > 1 ? '' : `${/^[aeiou]/i.test(description) ? 'an' : 'a'} `;
-            }
+            const { article, description } = dipItemPromptParts(item);
             game._dip_object = ch;
             game._dip_item = item;
             const oilSources = isOilRefuelLampObject(item) ? oilPotionDipSources(item) : [];
@@ -44028,7 +44109,7 @@ export async function rhack(_cmd) {
         const lamp = game._dip_item || (game.inventory || []).find(invItem => invItem.letter === game._dip_object);
         const potion = (game.inventory || []).find(invItem => invItem.letter === ch);
         if (lamp && potion && isPotionOfOil(potion)) {
-            const messages = dipLampIntoOilPotion(lamp, potion);
+            const messages = dipObjectIntoOilPotion(lamp, potion);
             await setMessage(messages.join('  ') || 'Nothing happens.', messages.length > 1);
             game.context.move = 1;
         }
@@ -44145,6 +44226,15 @@ export async function rhack(_cmd) {
                 game.context.move = 1;
             }
         } else {
+            const item = game._dip_item || (game.inventory || []).find(invItem => invItem.letter === game._dip_object);
+            const oilSources = ch === 'n' && isOilWeaponDipTargetObject(item) ? oilPotionDipSources(item) : [];
+            if (oilSources.length) {
+                const { article, description } = dipItemPromptParts(item);
+                const sourceLetters = oilSources.map(source => source.letter).filter(Boolean).sort().join('');
+                await setMessage(`What do you want to dip ${article}${description} into? [${inventoryLetterMenu(sourceLetters)} or ?*]`);
+                game._command_mode = 'dipOilSource';
+                return;
+            }
             await setMessage('Never mind.');
         }
         game._dip_object = '';
