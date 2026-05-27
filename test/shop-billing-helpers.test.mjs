@@ -12149,6 +12149,40 @@ test('floor stacking merges compatible nontimed same-species eggs', () => {
     assert.equal(floorStack.quan, 2);
 });
 
+test('floor stacking follows C object-name compatibility', () => {
+    installShopState();
+    const namedFloorStack = { ...dagger(89101), letter: undefined, line: undefined, quan: 1, ox: 7, oy: 5, oname: 'alpha' };
+    const differentlyNamedThrown = { ...dagger(89102), letter: undefined, line: undefined, quan: 1, ox: 7, oy: 5, oname: 'beta' };
+    game.level.objects = [namedFloorStack];
+
+    const rejected = shop.placeStackableFloorObject(differentlyNamedThrown);
+
+    assert.equal(rejected, differentlyNamedThrown);
+    assert.equal(game.level.objects.length, 2);
+    assert.equal(namedFloorStack.quan, 1);
+
+    const unnamedStack = { ...dagger(89103), letter: undefined, line: undefined, quan: 1, ox: 7, oy: 5 };
+    const namedThrown = { ...dagger(89104), letter: undefined, line: undefined, quan: 1, ox: 7, oy: 5, oname: 'alpha' };
+    game.level.objects = [unnamedStack];
+
+    const merged = shop.placeStackableFloorObject(namedThrown);
+
+    assert.equal(merged, unnamedStack);
+    assert.equal(game.level.objects.length, 1);
+    assert.equal(unnamedStack.quan, 2);
+    assert.equal(unnamedStack.oname, 'alpha');
+
+    const unnamedCorpse = { ...corpse(89105, undefined, 'newt'), ox: 7, oy: 5 };
+    const namedCorpse = { ...corpse(89106, undefined, 'newt'), ox: 7, oy: 5, oname: 'snack' };
+    game.level.objects = [unnamedCorpse];
+
+    const corpseRejected = shop.placeStackableFloorObject(namedCorpse);
+
+    assert.equal(corpseRejected, namedCorpse);
+    assert.equal(game.level.objects.length, 2);
+    assert.equal(unnamedCorpse.quan, 1);
+});
+
 test('floor stacking rejects revivable corpse stacks', () => {
     installShopState();
     const floorStack = { ...corpse(8911, undefined, 'troll'), ox: 7, oy: 5 };

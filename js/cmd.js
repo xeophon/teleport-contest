@@ -18590,6 +18590,17 @@ function specialFoodInstanceNamesMergeCompatible(target, source) {
     return !targetName || !sourceName || targetName === sourceName;
 }
 
+function stackedObjectInstanceNamesMergeCompatible(target, source) {
+    if (isCorpseItem(target) || isCorpseItem(source))
+        return specialFoodInstanceNamesMergeCompatible(target, source);
+    return objectInstanceNamesMergeCompatible(target, source);
+}
+
+function copyStackedObjectInstanceNameForMerge(target, source) {
+    if (isCorpseItem(target) || isCorpseItem(source)) return;
+    copyObjectInstanceNameForMerge(target, source);
+}
+
 function copyObjectInstanceNameForMerge(target, source) {
     if (objectInstanceNameKey(target)) return;
     const sourceName = objectInstanceNameKey(source);
@@ -20789,6 +20800,7 @@ function sameMonsterThrownStackObject(existing, obj) {
         && existing.glyph === obj.glyph
         && objectStackColor(existing) === objectStackColor(obj)
         && (existing.spe || 0) === (obj.spe || 0)
+        && stackedObjectInstanceNamesMergeCompatible(existing, obj)
         && !!existing.blessed === !!obj.blessed
         && !!existing.cursed === !!obj.cursed
         && !!existing.opoisoned === !!obj.opoisoned
@@ -20804,6 +20816,7 @@ function stackMonsterThrownObject(obj) {
     const stack = (game.level?.objects || []).find(existing => sameMonsterThrownStackObject(existing, obj));
     if (!stack) return obj;
     mergeStackedShopBillEntries(stack, obj);
+    copyStackedObjectInstanceNameForMerge(stack, obj);
     stack.quan = (stack.quan || 1) + (obj.quan || 1);
     return stack;
 }
@@ -20823,6 +20836,7 @@ function stackDroppedFloorObject(obj) {
     const stack = objects.find(existing => existing !== obj && sameDroppedFloorStackObject(obj, existing));
     if (!stack) return obj;
     mergeStackedShopBillEntries(obj, stack);
+    copyStackedObjectInstanceNameForMerge(obj, stack);
     obj.quan = (obj.quan || 1) + (stack.quan || 1);
     stack.quan = 0;
     game.level.objects = objects.filter(existing => existing !== stack);
