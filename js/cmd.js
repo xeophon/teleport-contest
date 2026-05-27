@@ -18561,6 +18561,17 @@ function isSimpleMergeableFoodObject(obj) {
     return foodLike && !!kind;
 }
 
+function isSpecialFoodMergeObject(obj) {
+    return isCorpseItem(obj) || isEggItem(obj) || isTinObject(obj);
+}
+
+function specialFoodCanInventoryMerge(obj) {
+    if (!isSpecialFoodMergeObject(obj)) return false;
+    if (isEggItem(obj)) return !eggHasHatchTimer(obj);
+    if (isCorpseItem(obj)) return !corpseIsReviverForMerge(obj);
+    return true;
+}
+
 function objectInstanceNameKey(obj) {
     return String(obj?._wish_object_name || obj?.oname || obj?.oextra?.oname || '').trim();
 }
@@ -18568,6 +18579,14 @@ function objectInstanceNameKey(obj) {
 function objectInstanceNamesMergeCompatible(target, source) {
     const targetName = objectInstanceNameKey(target);
     const sourceName = objectInstanceNameKey(source);
+    return !targetName || !sourceName || targetName === sourceName;
+}
+
+function specialFoodInstanceNamesMergeCompatible(target, source) {
+    const targetName = objectInstanceNameKey(target);
+    const sourceName = objectInstanceNameKey(source);
+    if (isCorpseItem(target) || isCorpseItem(source))
+        return targetName === sourceName;
     return !targetName || !sourceName || targetName === sourceName;
 }
 
@@ -18581,7 +18600,8 @@ function copyObjectInstanceNameForMerge(target, source) {
 
 function pickupObjectCanInventoryMerge(obj) {
     if (!obj || shopBillableGold(obj) || globContents(obj).length || isGlobbyObject(obj)) return false;
-    if (obj.otyp === CORPSE || obj.otyp === 'corpse' || obj.otyp === EGG || isTinObject(obj)) return false;
+    if (specialFoodCanInventoryMerge(obj)) return true;
+    if (isSpecialFoodMergeObject(obj)) return false;
     if (isSimpleMergeableFoodObject(obj)) return true;
     if (obj.cls === 'food' || obj.otyp === FOOD_CLASS) return false;
     const cls = shopObjectClassCode(obj);
@@ -18604,6 +18624,10 @@ function pickedObjectInventoryMergeCompatible(target, source, sourceWillBeUnpaid
     if ((target.oeaten ?? 0) !== (source.oeaten ?? 0) || (target.orotten ?? 0) !== (source.orotten ?? 0)) return false;
     if ((target.obroken ?? false) !== (source.obroken ?? false)) return false;
     if ((target.lamplit ?? false) !== (source.lamplit ?? false)) return false;
+    if (!sameStackCorpseEggTinFields(target, source)) return false;
+    if ((isSpecialFoodMergeObject(target) || isSpecialFoodMergeObject(source))
+        && !specialFoodInstanceNamesMergeCompatible(target, source))
+        return false;
     if ((target.odiluted ?? false) !== (source.odiluted ?? false)) return false;
     if ((target.oeroded ?? 0) !== (source.oeroded ?? 0) || (target.oeroded2 ?? 0) !== (source.oeroded2 ?? 0)) return false;
     if ((target.greased ?? false) !== (source.greased ?? false)) return false;
@@ -18642,11 +18666,17 @@ function findPickedObjectInventoryMergeTarget(source, sourcePrice = null) {
 function mergePickedObjectIntoInventory(source, target) {
     const pickedCount = Math.max(1, Math.trunc(Number(source?.quan || 1)));
     const targetCount = Math.max(1, Math.trunc(Number(target.quan || 1)));
-    if (isSimpleMergeableFoodObject(target) && isSimpleMergeableFoodObject(source)) {
+    const ageAveragedMerge = (isSimpleMergeableFoodObject(target) && isSimpleMergeableFoodObject(source))
+        || (isSpecialFoodMergeObject(target) && isSpecialFoodMergeObject(source));
+    if (ageAveragedMerge) {
         const targetAge = Number.isFinite(Number(target.age)) ? Number(target.age) : 0;
         const sourceAge = Number.isFinite(Number(source.age)) ? Number(source.age) : 0;
         if (target.age != null || source.age != null)
             target.age = Math.trunc(((targetAge * targetCount) + (sourceAge * pickedCount)) / (targetCount + pickedCount));
+    }
+    if (isSimpleMergeableFoodObject(target) && isSimpleMergeableFoodObject(source)) {
+        copyObjectInstanceNameForMerge(target, source);
+    } else if (isSpecialFoodMergeObject(target) && isSpecialFoodMergeObject(source) && !isCorpseItem(target)) {
         copyObjectInstanceNameForMerge(target, source);
     }
     target.quan = targetCount + pickedCount;
@@ -22821,7 +22851,7 @@ export function pickupObjectName(obj) {
     if (isBoulderObject(obj)) return named((obj.quan || 1) > 1 ? 'boulders' : 'boulder');
     if (obj.artifact) return artifactObjectName(obj) || obj.kind;
     if (obj.otyp === 'corpse' || obj.otyp === CORPSE) return corpseObjectName(obj);
-    if (obj.otyp === EGG) return named(eggObjectName(obj));
+    if (isEggItem(obj)) return named(eggObjectName(obj));
     if (obj.globby) return named(globObjectName(obj));
     if (isSlimeMoldObject(obj))
         return named(slimeMoldNameForObject(obj, (obj.quan || 1) > 1));

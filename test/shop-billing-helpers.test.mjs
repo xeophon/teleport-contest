@@ -11209,6 +11209,120 @@ test('covered simple food pickup merge excludes remaining special food exception
     assert.equal(shop.findPickedObjectInventoryMergeTarget(floorMeatRing, 0), null);
 });
 
+test('special food pickup merge accepts compatible nontimed eggs and rejects hatch timers', () => {
+    installShopState();
+    const carried = { ...egg(7151, 'e'), corpsenm: { name: 'newt' }, age: 100 };
+    const floorObj = { ...egg(7152), letter: undefined, line: undefined, corpsenm: { name: 'newt' }, age: 300 };
+    game.inventory = [carried];
+
+    const merge = shop.findPickedObjectInventoryMergeTarget(floorObj, 0);
+    assert.equal(merge.target, carried);
+    shop.mergePickedObjectIntoInventory(floorObj, carried);
+
+    assert.equal(carried.quan, 2);
+    assert.equal(carried.age, 200);
+    assert.match(carried.line, /^e - 2 eggs/);
+
+    const timedEgg = {
+        ...egg(7153),
+        letter: undefined,
+        line: undefined,
+        corpsenm: { name: 'newt' },
+        eggHatchTurn: game.moves + 5,
+        _egg_hatch_seq: 1,
+    };
+    game.inventory = [{ ...egg(7154, 'f'), corpsenm: { name: 'newt' } }];
+
+    assert.equal(shop.findPickedObjectInventoryMergeTarget(timedEgg, 0), null);
+});
+
+test('special food pickup merge requires matching tin species', () => {
+    installShopState();
+    const carried = { ...tin(7161, 't'), corpsenm: { name: 'newt' } };
+    const sameSpecies = { ...tin(7162), letter: undefined, line: undefined, corpsenm: { name: 'newt' } };
+    game.inventory = [carried];
+
+    const merge = shop.findPickedObjectInventoryMergeTarget(sameSpecies, 0);
+    assert.equal(merge.target, carried);
+    shop.mergePickedObjectIntoInventory(sameSpecies, carried);
+
+    assert.equal(carried.quan, 2);
+    assert.match(carried.line, /^t - 2 tins/);
+
+    const otherSpecies = { ...tin(7163), letter: undefined, line: undefined, corpsenm: { name: 'red dragon' } };
+    assert.equal(shop.findPickedObjectInventoryMergeTarget(otherSpecies, 0), null);
+});
+
+test('special food pickup merge accepts ordinary corpses but rejects revivers', () => {
+    installShopState();
+    const carried = { ...corpse(7171, 'c', 'newt'), age: 20 };
+    const floorObj = { ...corpse(7172, undefined, 'newt'), letter: undefined, line: undefined, age: 60 };
+    game.inventory = [carried];
+
+    const merge = shop.findPickedObjectInventoryMergeTarget(floorObj, 0);
+    assert.equal(merge.target, carried);
+    shop.mergePickedObjectIntoInventory(floorObj, carried);
+
+    assert.equal(carried.quan, 2);
+    assert.equal(carried.age, 40);
+    assert.match(carried.line, /^c - 2 newt corpses/);
+
+    const trollStack = { ...corpse(7173, 'd', 'troll') };
+    const otherTroll = { ...corpse(7174, undefined, 'troll'), letter: undefined, line: undefined };
+    game.inventory = [trollStack];
+
+    assert.equal(shop.findPickedObjectInventoryMergeTarget(otherTroll, 0), null);
+});
+
+test('special food shop pickup merge rejects paid targets and combines same-shop unpaid bills', () => {
+    const { shkp } = installShopState();
+    const paidStack = { ...egg(7181, 'e'), corpsenm: { name: 'newt' } };
+    const billableSource = { ...egg(7182), letter: undefined, line: undefined, corpsenm: { name: 'newt' } };
+    game.inventory = [paidStack];
+
+    assert.equal(shop.findPickedObjectInventoryMergeTarget(billableSource, 9), null);
+    assert.equal(shkp.billct, 0);
+
+    const unpaidStack = { ...egg(7183, 'f'), corpsenm: { name: 'newt' } };
+    shop.addObjectToShopBill(shkp, unpaidStack, 9);
+    game.inventory = [unpaidStack];
+    const merge = shop.findPickedObjectInventoryMergeTarget(billableSource, 9);
+    assert.equal(merge.target, unpaidStack);
+    shop.mergePickedObjectIntoInventory(billableSource, unpaidStack);
+
+    assert.equal(unpaidStack.quan, 2);
+    assert.equal(unpaidStack.unpaidPrice, 18);
+    assert.equal(shop.shopBillEntryTotal(merge.billMerge.billEntry), 18);
+    assert.match(unpaidStack.line, /unpaid, 18 zorkmids/);
+    assert.equal(shkp.billct, 1);
+});
+
+test('special food pickup merge follows C object-name compatibility', () => {
+    installShopState();
+    const namedEgg = { ...egg(7191, 'e'), corpsenm: { name: 'newt' }, oname: 'breakfast' };
+    const differentNamedEgg = { ...egg(7192), letter: undefined, line: undefined, corpsenm: { name: 'newt' }, oname: 'dinner' };
+    game.inventory = [namedEgg];
+
+    assert.equal(shop.findPickedObjectInventoryMergeTarget(differentNamedEgg, 0), null);
+
+    const unnamedEgg = { ...egg(7193, 'f'), corpsenm: { name: 'newt' } };
+    const namedSourceEgg = { ...egg(7194), letter: undefined, line: undefined, corpsenm: { name: 'newt' }, oname: 'breakfast' };
+    game.inventory = [unnamedEgg];
+    const eggMerge = shop.findPickedObjectInventoryMergeTarget(namedSourceEgg, 0);
+    assert.equal(eggMerge.target, unnamedEgg);
+    shop.mergePickedObjectIntoInventory(namedSourceEgg, unnamedEgg);
+
+    assert.equal(unnamedEgg.quan, 2);
+    assert.equal(unnamedEgg.oname, 'breakfast');
+    assert.match(unnamedEgg.line, /eggs named breakfast/);
+
+    const unnamedCorpse = { ...corpse(7195, 'c', 'newt') };
+    const namedCorpse = { ...corpse(7196, undefined, 'newt'), letter: undefined, line: undefined, oname: 'snack' };
+    game.inventory = [unnamedCorpse];
+
+    assert.equal(shop.findPickedObjectInventoryMergeTarget(namedCorpse, 0), null);
+});
+
 test('food-ration pickup full-inventory preflight allows no-charge merge', async () => {
     const { shkp } = installCommandShopState();
     const carried = { ...foodRation(7111, 'a'), bknown: false };
