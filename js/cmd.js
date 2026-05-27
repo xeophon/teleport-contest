@@ -13737,6 +13737,10 @@ function tinVariety(item, display = false) {
     return r;
 }
 
+function heroIsMetallivorous() {
+    return !!(polyselfForm()?.metallivorous || game.u?.metallivorous);
+}
+
 function wieldedItem() {
     return (game.inventory || []).find(item =>
         item.wielded || item.line?.includes('weapon in') || item.line?.includes('(wielded)')) || null;
@@ -13883,7 +13887,7 @@ async function explodeTinTrap(tin, floorObject = false) {
     game.context.move = 1;
 }
 
-async function finishTinContents(tin, floorObject = false, eat = true, knownVariety = null) {
+async function finishTinContents(tin, floorObject = false, eat = true, knownVariety = null, options = {}) {
     if (!eat) {
         tin = costlyTinAlteration(tin, { floorObject });
         consumeTinObject(tin, floorObject);
@@ -13895,6 +13899,7 @@ async function finishTinContents(tin, floorObject = false, eat = true, knownVari
 
     const r = knownVariety == null ? tinVariety(tin, false) : knownVariety;
     const messages = [];
+    if (options.openingMessage) messages.push(options.openingMessage);
     if (r === SPINACH_TIN) {
         if (tin.cursed) messages.push('It contains some decaying green substance.');
         else {
@@ -13910,7 +13915,8 @@ async function finishTinContents(tin, floorObject = false, eat = true, knownVari
         }
         tin = costlyTinAlteration(tin, { floorObject });
         consumeTinObject(tin, floorObject);
-        const nutrition = tin.blessed ? 600 : !tin.cursed ? 400 + rnd(200) : 200 + rnd(400);
+        let nutrition = tin.blessed ? 600 : !tin.cursed ? 400 + rnd(200) : 200 + rnd(400);
+        if (options.ateTin) nutrition += 5;
         addHeroNutrition(nutrition);
         await setMessage(messages.join('  '), messages.length > 1);
         game._command_mode = null;
@@ -13922,7 +13928,9 @@ async function finishTinContents(tin, floorObject = false, eat = true, knownVari
         tin.known = true;
         tin = costlyTinAlteration(tin, { floorObject });
         consumeTinObject(tin, floorObject);
-        await setMessage("It turns out to be empty.");
+        if (options.ateTin) addHeroNutrition(5);
+        messages.push("It turns out to be empty.");
+        await setMessage(messages.join('  '), messages.length > 1);
         game._command_mode = null;
         game.context.move = 1;
         return;
@@ -13941,6 +13949,7 @@ async function finishTinContents(tin, floorObject = false, eat = true, knownVari
         nutrition = TIN_VARIETY_NUTRITION[r] || 0;
         if (r === HOMEMADE_TIN)
             nutrition = Math.min(nutrition, CORPSE_NUTRITION.get(monsterName) || nutrition);
+        if (options.ateTin) nutrition += 5;
     }
     if (TIN_GREASY_VARIETIES.has(r)) {
         const already = game.u?._glibTimeout || 0;
@@ -13958,6 +13967,7 @@ async function finishTinContents(tin, floorObject = false, eat = true, knownVari
 async function consumeOpenedTin(tin, floorObject = false, openMessage = 'You succeed in opening the tin.') {
     if (!tin) return false;
     const r = tinVariety(tin, false);
+    const alwaysEat = heroIsMetallivorous();
     if (tin.otrapped || (tin.cursed && r !== HOMEMADE_TIN && !rn2(8))) {
         await explodeTinTrap(tin, floorObject);
         return true;
@@ -13967,9 +13977,15 @@ async function consumeOpenedTin(tin, floorObject = false, openMessage = 'You suc
         tin.known = true;
         tin = costlyTinAlteration(tin, { floorObject });
         consumeTinObject(tin, floorObject);
+        if (alwaysEat) addHeroNutrition(5);
         await setMessage(`${openMessage}  It turns out to be empty.`, true);
         game._command_mode = null;
         game.context.move = 1;
+        return true;
+    }
+
+    if (alwaysEat) {
+        await finishTinContents(tin, floorObject, true, r, { openingMessage: openMessage, ateTin: true });
         return true;
     }
 
@@ -14024,7 +14040,7 @@ async function startTinOpening(tin, floorObject = false) {
     let message = '';
     let delay = null;
     let instantMessage = null;
-    if (form?.metallivorous || game.u?.metallivorous) {
+    if (heroIsMetallivorous()) {
         message = 'You bite right into the metal tin...';
         delay = 0;
     } else if (polyselfNoHands() || form?.verysmall) {

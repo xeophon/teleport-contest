@@ -807,6 +807,15 @@ function installThrowsRocksForm() {
     };
 }
 
+function installMetallivorousForm() {
+    game.u._polyself_form = {
+        name: 'rock mole',
+        metallivorous: true,
+        nohands: false,
+        verysmall: false,
+    };
+}
+
 function tin(id, letter = 't', quan = 1) {
     return {
         id,
@@ -3793,6 +3802,75 @@ test('costly tin ignores no-charge shop-floor tins', () => {
     assert.equal(shkp.billct, 0);
     assert.equal(shkp.bill.length, 0);
     assert.deepEqual(game._usedUpShopBills || [], []);
+});
+
+test('metallivorous carried meat tin skips contents prompt and eats the tin', async () => {
+    installCommandShopState();
+    installMetallivorousForm();
+    const can = tin(30941, 't');
+    can.spe = -6;
+    can.corpsenm = { name: 'lichen' };
+    game.inventory = [can];
+
+    await rhack('e');
+    await rhack('t');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game._tin_opened_pending || null, null);
+    assert.equal(game.inventory.includes(can), false);
+    assert.equal(game.u.uhunger, 955);
+    assert.equal(game.context.move, 1);
+    assert.match(game._pending_message, /You bite right into the metal tin\.\.\./);
+    assert.match(game._pending_message, /You consume boiled lichen\./);
+    assert.doesNotMatch(game._pending_message, /Eat it\?|smells like/);
+});
+
+test('metallivorous carried empty tin gives metal nutrition', async () => {
+    installCommandShopState();
+    installMetallivorousForm();
+    const can = tin(30942, 't');
+    can.spe = 0;
+    can.corpsenm = null;
+    can.emptyTin = true;
+    can.kind = 'empty tin';
+    can.singular = 'empty tin';
+    can.plural = 'empty tins';
+    game.inventory = [can];
+
+    await rhack('e');
+    await rhack('t');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.inventory.includes(can), false);
+    assert.equal(game.u.uhunger, 905);
+    assert.match(game._pending_message, /You bite right into the metal tin\.\.\./);
+    assert.match(game._pending_message, /It turns out to be empty\./);
+    assert.doesNotMatch(game._pending_message, /Eat it\?|smells like/);
+});
+
+test('metallivorous carried spinach tin skips prompt and adds metal nutrition', async () => {
+    installCommandShopState();
+    installMetallivorousForm();
+    const can = tin(30943, 't');
+    can.spe = 1;
+    can.corpsenm = null;
+    can.blessed = true;
+    can.kind = 'tin:spinach';
+    can.singular = 'tin of spinach';
+    can.plural = 'tins of spinach';
+    game.inventory = [can];
+
+    await rhack('e');
+    await rhack('t');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game._tin_opened_pending || null, null);
+    assert.equal(game.inventory.includes(can), false);
+    assert.equal(game.u.uhunger, 1505);
+    assert.match(game._pending_message, /You bite right into the metal tin\.\.\./);
+    assert.match(game._pending_message, /It contains spinach\./);
+    assert.match(game._pending_message, /This makes you feel like Popeye!/);
+    assert.doesNotMatch(game._pending_message, /Eat it\?|smells like/);
 });
 
 test('first bite of unpaid carried food stack splits live and used-up bill rows', () => {

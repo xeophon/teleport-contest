@@ -82,8 +82,9 @@ This note preserves the latest parallel source audits. These are implementation 
 
 4. Tin follow-up.
    - C refs: `nethack-c/upstream/src/eat.c:1389`, `nethack-c/upstream/src/eat.c:1514-1721`.
-   - JS refs: `js/cmd.js:11992-12235`.
-   - Narrow slice: handle metallivorous empty/meat/spinach tin nutrition and prompt bypass exactly, after ordinary victual runtime is stable.
+   - JS refs: `js/cmd.js:13740`, `js/cmd.js:13890`, `js/cmd.js:13967`, `js/cmd.js:14037`; tests at `test/shop-billing-helpers.test.mjs:3807`.
+   - Status: metallivorous empty/meat/spinach tin handling is covered. C computes `always_eat = metallivorous(...)` in `consume_tin()`, skips meat/spinach `Eat it?` prompts for metallivorous heroes, adds `lesshungry(5)` for empty tins, adds `+5` after non-rotten meat-tin nutrition and homemade caps, and adds `+5` after spinach BUC nutrition while trapped and rotten meat tins remain no-nutrition paths (`nethack-c/upstream/src/eat.c:1533`, `nethack-c/upstream/src/eat.c:1559`, `nethack-c/upstream/src/eat.c:1583`, `nethack-c/upstream/src/eat.c:1627`, `nethack-c/upstream/src/eat.c:1657`, `nethack-c/upstream/src/eat.c:1690`, `nethack-c/upstream/src/eat.c:1729`). JS now checks metallivory at consumption time, preserves immediate bite-open timing, bypasses contents prompts, consumes exactly one tin, and covers carried empty, meat, and spinach command flows.
+   - Remaining tin work: full corpse pre/post effects for tinned meat, special tinning corpse hazards, and broader shared `costly_tin()`/use-up integration beyond the currently covered billing and prompt/nutrition paths.
 
 5. Wish parser and object finalization.
    - C refs: `nethack-c/upstream/src/objnam.c:3978-3996`, `nethack-c/upstream/src/objnam.c:4177-4237`, `nethack-c/upstream/src/objnam.c:5037-5189`, `nethack-c/upstream/src/objnam.c:5255-5268`, `nethack-c/upstream/include/objclass.h:52`, `nethack-c/upstream/include/objclass.h:60`, `nethack-c/upstream/include/obj.h:49`, `nethack-c/upstream/src/zap.c:6360`.
