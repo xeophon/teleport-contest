@@ -1182,6 +1182,7 @@ const FOOD_NUTRITION = new Map([
     ['tripe', 200],
     ['egg', 80],
     ['meatball', 5],
+    ['meat ring', 5],
     ['enormous meatball', 2000],
     ['kelp frond', 30],
     ['eucalyptus leaf', 1],
@@ -1225,6 +1226,7 @@ const DELAY_ONE_FOOD_VICTUALS = new Map([
     ['melon', { delay: 1, finishName: 'melon' }],
     ['banana', { delay: 1, finishName: 'banana' }],
     ['carrot', { delay: 1, finishName: 'carrot' }],
+    ['meat ring', { otyp: MEAT_RING, delay: 1, finishName: 'meat ring' }],
     ['sprig of wolfsbane', { delay: 1, finishName: 'sprig of wolfsbane' }],
     ['clove of garlic', { delay: 1, finishName: 'clove of garlic' }],
     ['slime mold', { otyp: SLIME_MOLD, delay: 1, finishName: 'slime mold' }],
@@ -5084,6 +5086,7 @@ const SHOP_OBJECT_COSTS = {
     'slime mold': 17,
     'lump of royal jelly': 15,
     'meatball': 5,
+    'meat ring': 1,
     'enormous meatball': 105,
     'cream pie': 10,
     'candy bar': 10,
@@ -11668,7 +11671,8 @@ function recordFoodConduct(item) {
     if ((isCorpseItem(item) || isGlobFood(item) || /\bcorpse$/.test(kind)) && !veganCorpse) {
         conduct.unvegan = (conduct.unvegan || 0) + 1;
         conduct.unvegetarian = (conduct.unvegetarian || 0) + 1;
-    } else if (kind === 'tripe ration' || kind === 'tripe' || kind === 'meatball' || kind === 'enormous meatball' || (item?.foodRoll || 1000) <= 140) {
+    } else if (kind === 'tripe ration' || kind === 'tripe' || kind === 'meatball'
+        || kind === 'meat ring' || kind === 'enormous meatball' || (item?.foodRoll || 1000) <= 140) {
         conduct.unvegan = (conduct.unvegan || 0) + 1;
         conduct.unvegetarian = (conduct.unvegetarian || 0) + 1;
     } else if (isEggItem(item) || isRoyalJelly(item)

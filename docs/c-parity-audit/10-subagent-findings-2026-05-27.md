@@ -1,0 +1,23 @@
+# Subagent Findings - 2026-05-27
+
+This note preserves the latest read-only source audits used to choose narrow C-parity slices. It records code-backed facts only; private tests were not inspected.
+
+## Meat Ring Eating
+
+- C object metadata: `MEAT_RING` is a `FOOD_CLASS` object with `oc_merge=0`, material `FLESH`, generation probability `0`, delay `1`, weight `5`, cost `1`, and nutrition `5` (`nethack-c/upstream/include/objects.h:1061-1064`; field order at `nethack-c/upstream/include/objects.h:48-51` and `nethack-c/upstream/include/objclass.h:89-106`).
+- C selection: `doeat()` calls `floorfood("eat", 0)` before inventory selection; `is_edible()` accepts `FOOD_CLASS`, so an unworn carried or floor meat ring follows ordinary food handling (`nethack-c/upstream/src/eat.c:120`, `nethack-c/upstream/src/eat.c:2829`, `nethack-c/upstream/src/eat.c:3515`, `nethack-c/upstream/src/eat.c:3674`, `nethack-c/upstream/src/eat.c:3711`).
+- C conduct: first ordinary food bite increments `uconduct.food`; because meat ring material is `FLESH`, eating it increments `unvegan` and violates vegetarian conduct (`nethack-c/upstream/src/eat.c:2961-2966`, `nethack-c/upstream/src/eat.c:2998-3013`, `nethack-c/upstream/src/eat.c:1375-1378`).
+- C first bite: `touchfood()` bills `COST_BITE`, sets `oeaten = obj_nutrition()`, then `fprefx()` routes `MEAT_RING` through generic feedback, normally `This meat ring is delicious!` (`nethack-c/upstream/src/eat.c:358-372`, `nethack-c/upstream/src/eat.c:2157-2161`, `nethack-c/upstream/src/eat.c:2204-2212`).
+- C finish: delay `1` means `start_eating()` takes the bite immediately and calls `done_eating(FALSE)`, then `useup()` or `useupf()` removes the object; meat ring has no special `fpostfx()` case (`nethack-c/upstream/src/eat.c:2048-2069`, `nethack-c/upstream/src/eat.c:543-570`, `nethack-c/upstream/src/eat.c:2513-2580`).
+- C rotten path: meat ring is not exempted by `nonrotting_food()`, so cursed or aged meat rings take the normal non-corpse rotten branch before feedback; after halving 5 nutrition, `rounddiv(1 * 2, 5)` yields no bite nutrition before immediate use-up (`nethack-c/upstream/src/eat.c:63-66`, `nethack-c/upstream/src/eat.c:1811-1879`, `nethack-c/upstream/src/eat.c:3026-3036`, `nethack-c/upstream/src/eat.c:3050-3074`).
+- C shop billing: `touchfood()` calls `costly_alteration(..., COST_BITE)` before marking `oeaten`; carried unpaid meat rings create a used-up dummy bill, and shop-floor meat rings are billed before `useupf()` removes them (`nethack-c/upstream/src/eat.c:370-372`, `nethack-c/upstream/src/mkobj.c:697-744`, `nethack-c/upstream/src/mkobj.c:752-826`, `nethack-c/upstream/src/shk.c:3307-3348`).
+- JS pre-slice state: meat ring existed as non-mergeable food/wish metadata and could be selected by `#eat`, but it was missing from `FOOD_NUTRITION`, `SHOP_OBJECT_COSTS`, `DELAY_ONE_FOOD_VICTUALS`, and the FLESH conduct branch (`js/cmd.js:1336`, `js/cmd.js:18506`, `js/cmd.js:21947`, `js/cmd.js:11661-11678`, `js/cmd.js:1180-1208`, `js/cmd.js:1218-1235`, `js/cmd.js:45613-45623`, `js/cmd.js:45799-45810`).
+- Implemented status: JS now gives unworn carried/floor meat rings C cost/nutrition metadata, routes them through delay-one victual eating, records food/unvegan/unvegetarian conduct, preserves rotten-first-bite precedence, and bills shop-floor bites before immediate removal. Worn meat-ring eating, worn-ring hunger exemption, and ring-intrinsic digestion remain separate slices.
+
+## Royal Jelly Follow-up
+
+- C object metadata: lump of royal jelly is delay `1`, weight `2`, nutrition `200`, and cost `15` (`nethack-c/upstream/include/objects.h:1098`).
+- C runtime: royal jelly still passes through `touchfood()`, `victual`, `bite()`, `done_eating()`, and `fpostfx()` like other delay-one foods (`nethack-c/upstream/src/eat.c:2968-3036`, `nethack-c/upstream/src/eat.c:2048-2069`, `nethack-c/upstream/src/eat.c:3138-3155`, `nethack-c/upstream/src/eat.c:544-570`, `nethack-c/upstream/src/eat.c:2529-2557`).
+- JS gap: royal jelly is currently handled by a special immediate path instead of `DELAY_ONE_FOOD_VICTUALS`, so satiated choking, rotten first-bite ordering, and `oeaten` timing can still diverge from C (`js/cmd.js:1218-1235`, `js/cmd.js:45609-45610`, `js/cmd.js:45795-45796`, `js/cmd.js:27868-27909`).
+- JS gap: polymorphed royal-jelly HP effects use base hero HP, while C adjusts monster HP and can rehumanize when polymorphed (`nethack-c/upstream/src/eat.c:2536-2544`, `nethack-c/upstream/src/eat.c:2545-2554`, `js/cmd.js:27810-27835`).
+- Candidate slice: move royal jelly onto the delay-one victual path while preserving its existing post-effect hook, then isolate polymorphed HP behavior as a follow-up if needed.

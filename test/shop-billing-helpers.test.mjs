@@ -24,6 +24,7 @@ const HORN_OF_PLENTY = 957;
 const BAG_OF_TRICKS = 10158;
 const POT_WATER = 253;
 const SLIME_MOLD = 11009;
+const MEAT_RING = 10164;
 
 function installShopState() {
     const g = resetGame();
@@ -376,6 +377,27 @@ function slimeMoldFood(id, letter = 's', fname = 'slime mold', fid = 1, extra = 
         oy: 5,
         letter,
         line: `${letter} - a ${fname}`,
+        ...extra,
+    };
+}
+
+function meatRingFood(id, letter = 'm', extra = {}) {
+    return {
+        id,
+        otyp: MEAT_RING,
+        cls: 'food',
+        glyph: '%',
+        kind: 'meat ring',
+        actualKind: 'meat ring',
+        singular: 'meat ring',
+        plural: 'meat rings',
+        quan: 1,
+        nutrition: 5,
+        owt: 5,
+        ox: 5,
+        oy: 5,
+        letter,
+        line: `${letter} - a meat ring`,
         ...extra,
     };
 }
@@ -4945,6 +4967,61 @@ test('cursed current fruit slime mold rots before the delay-one bite', async () 
     assert.equal(game._eating_turns_remaining || 0, 0);
 });
 
+test('carried meat ring uses C delay-one flesh conduct', async () => {
+    installNonShopFloorState();
+    const ring = meatRingFood(31961, 'm');
+    game.inventory = [ring];
+
+    await rhack('e');
+    await rhack('m');
+
+    assert.equal(game._pending_message, 'This meat ring is delicious!');
+    assert.equal(game.inventory.includes(ring), false);
+    assert.equal(game.u.uhunger, 905);
+    assert.equal(game.u.uconduct?.food, 1);
+    assert.equal(game.u.uconduct?.unvegan, 1);
+    assert.equal(game.u.uconduct?.unvegetarian, 1);
+    assert.equal(game._eating_turns_remaining || 0, 0);
+    assert.equal(game.context.move, 1);
+});
+
+test('cursed carried meat ring rots before the one-bite finish', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    const ring = meatRingFood(31962, 'm', { cursed: true });
+    game.inventory = [ring];
+
+    await rhack('e');
+    await rhack('m');
+
+    assert.equal(game._pending_message, 'Blecch!  Rotten food!');
+    assert.equal(game.inventory.includes(ring), false);
+    assert.equal(game.u.uhunger, 900);
+    assert.equal(game.u.uconduct?.food, 1);
+    assert.equal(game.u.uconduct?.unvegan, 1);
+    assert.equal(game.u.uconduct?.unvegetarian, 1);
+    assert.equal(game._eating_turns_remaining || 0, 0);
+});
+
+test('floor meat ring uses C delay-one flesh conduct', async () => {
+    installNonShopFloorState();
+    const ring = meatRingFood(31963);
+    delete ring.letter;
+    delete ring.line;
+    game.level.objects = [ring];
+
+    await rhack('e');
+    await rhack('y');
+
+    assert.equal(game._pending_message, 'This meat ring is delicious!');
+    assert.equal(game.level.objects.includes(ring), false);
+    assert.equal(game.u.uhunger, 905);
+    assert.equal(game.u.uconduct?.food, 1);
+    assert.equal(game.u.uconduct?.unvegan, 1);
+    assert.equal(game.u.uconduct?.unvegetarian, 1);
+    assert.equal(game._eating_turns_remaining || 0, 0);
+});
+
 test('carrot clears temporary blindness after the delay-one bite', async () => {
     installNonShopFloorState();
     const carrot = simpleFood(31940, 'carrot', 'c');
@@ -5268,6 +5345,26 @@ test('shop-floor current fruit slime mold stack bills the touched unit before im
     assert.ok(bite);
     assert.equal(bite.useup, true);
     assert.equal(shop.shopBillEntryTotal(bite), expected);
+    assert.equal(game._eating_turns_remaining || 0, 0);
+});
+
+test('shop-floor meat ring bills the bite before immediate finish', async () => {
+    const { shkp } = installCommandShopState();
+    const ring = meatRingFood(31964);
+    delete ring.letter;
+    delete ring.line;
+    game.level.objects = [ring];
+    const expected = shop.shopItemPrice(ring, 5, 5);
+
+    await rhack('e');
+    await rhack('y');
+
+    assert.equal(game._pending_message, 'This meat ring is delicious!');
+    assert.equal(game.u.uhunger, 905);
+    assert.equal(game.level.objects.includes(ring), false);
+    assert.equal(game.u.uconduct?.unvegan, 1);
+    assert.equal(game.u.uconduct?.unvegetarian, 1);
+    assertUsedUpBillForObject(shkp, ring, expected);
     assert.equal(game._eating_turns_remaining || 0, 0);
 });
 
@@ -10848,6 +10945,7 @@ test('shopBaseCost returns C prices for covered simple foods', () => {
     assert.equal(shop.shopBaseCost(slimeMoldFood(7137)), 17);
     assert.equal(shop.shopBaseCost(simpleFood(7134, 'lump of royal jelly')), 15);
     assert.equal(shop.shopBaseCost(simpleFood(7135, 'meatball')), 5);
+    assert.equal(shop.shopBaseCost(meatRingFood(7138)), 1);
     assert.equal(shop.shopBaseCost(simpleFood(7136, 'enormous meatball')), 105);
     assert.equal(shop.shopBaseCost(simpleFood(7133, 'fortune cookie')), 7);
 });
