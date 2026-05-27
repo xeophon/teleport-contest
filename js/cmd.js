@@ -3474,6 +3474,7 @@ function deliverImpactDroppedObjects(objects) {
                 const verb = many ? 'shatter' : 'shatters';
                 messages.push(`${subject} ${verb}${breakKind === 'pieces' ? ' into a thousand pieces' : ''}!`);
             }
+            brokenPotionBreathe(obj, game.u.ux || 0, game.u.uy || 0, messages);
             continue;
         }
         game.level.objects.push(obj);
@@ -20166,6 +20167,7 @@ export const __shopBillingTestHooks = {
     finishDroppedObjectSale,
     finishShopFloorContainerPutSale,
     impactDropFloorObjects,
+    deliverImpactDroppedObjects,
     mergePickedObjectIntoInventory,
     mergePickedObjectIntoShopBill,
     containerTakeoutBillMergeCompatible,

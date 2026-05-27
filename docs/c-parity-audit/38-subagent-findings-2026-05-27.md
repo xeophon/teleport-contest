@@ -4,7 +4,7 @@
 
 This slice extends the bounded vapor helper from Audit 37 to top-level hard-landing projectile potion breakage. When a potion projectile breaks on a hard square next to the hero, JS now delivers C-style broken-potion vapor before shop debt conversion and before the object is discarded. The modeled branch adds the generic broken-potion smell or eye-watering message, wet towel shielding, and the existing vapor effects and `kn` discovery behavior.
 
-This is not full `potionhit()` parity. Direct potion hits on the hero or monsters, wielded-potion bash, tossed-up head/ceiling cases, kicked objects, impact-drop arrival, chest-content shattering, inventory fire/zap destruction, and non-`kn` `trycall()` prompting remain separate work.
+This is not full `potionhit()` parity. Direct potion hits on the hero or monsters, wielded-potion bash, tossed-up head/ceiling cases, kicked objects, chest-content shattering, inventory fire/zap destruction, and non-`kn` `trycall()` prompting remain separate work. Impact-drop arrival with the hero is covered in Audit 39.
 
 ## C Source Anchors
 
@@ -25,5 +25,5 @@ This is not full `potionhit()` parity. Direct potion hits on the hero or monster
 
 - Add direct `potionhit()` handling for thrown potions striking the hero or monsters, including distance/Dex vapor gating and monster potion effects.
 - Add non-`kn` `trycall()` prompting once potion call-name discovery can represent C `oc_uname` semantics.
-- Wire other `breakobj()`-like callers where semantics are clear: impact-drop arrival with the hero present, chest-content potion shattering, and inventory fire/zap destruction.
+- Audit 39 covers impact-drop arrival with the hero present; remaining `breakobj()`-like callers with clear semantics include chest-content potion shattering, hot-ground breakage, and inventory fire destruction.
 - Keep migration-preflight breakage without vapor where C uses `obfree()` before migration instead of `breaks()`.

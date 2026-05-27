@@ -8878,6 +8878,21 @@ test('shop-floor fragile stock falling through a hole migrates without ship-obje
     assert.equal(shkp.billct, 0);
 });
 
+test('impact-dropped potion arriving with hero applies breakage vapor', () => {
+    installShopState();
+    initRng(1);
+    const potion = { ...confusionPotion(512023), letter: undefined, line: undefined };
+
+    const message = shop.deliverImpactDroppedObjects([potion]);
+
+    assert.equal(game.level.objects.includes(potion), false);
+    assert.ok(game.u._confusionTimeout > 0);
+    assert.match(game.u._statusSuffix || '', /Conf/);
+    assert.match(message, /potion of confusion shatters!/);
+    assert.match(message, /You smell a peculiar odor\.\.\./);
+    assert.match(message, /You feel somewhat dizzy\./);
+});
+
 test('shop-floor stock falling through a hole routes angry shopkeeper value to robbed', () => {
     const { shkp } = installShopState();
     installSeenHoleAtHero();
