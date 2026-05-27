@@ -2,7 +2,7 @@
 
 ## Scope
 
-This slice adds the bounded `H2Opotion_dip()` branch for carried-object potion `#dip`: blessed water can uncurse or bless a target, cursed water can unbless or curse a target, and the source water is consumed only when the target BUC state actually changes. Neutral water damage, potion-potion alchemy, unicorn horn/amethyst mixtures, and the full C source/target menu remain separate work.
+This slice adds the bounded `H2Opotion_dip()` branch for carried-object potion `#dip`: blessed water can uncurse or bless a target, cursed water can unbless or curse a target, and the source water is consumed only when the target BUC state actually changes. Neutral water damage, potion-potion alchemy, polymorph potion dipping, and the full C source/target menu remain separate work. Unicorn horn/amethyst neutralization was implemented afterward in audit 33.
 
 ## C Source Notes
 
@@ -24,11 +24,11 @@ This slice adds the bounded `H2Opotion_dip()` branch for carried-object potion `
 
 ## Parallel Follow-Up Audits
 
-- Unicorn horn and amethyst neutralization: C `mixtype()` maps unicorn horn plus sickness to fruit juice, horn plus hallucination/blindness/confusion to water, and amethyst plus booze to fruit juice. A future slice should split one source potion from stacks, bill `COST_NUTRLZ` before mutation, clear discovery/BUC knowledge as C does, then reinsert/merge the result.
+- Unicorn horn and amethyst neutralization: C `mixtype()` maps unicorn horn plus sickness to fruit juice, horn plus hallucination/blindness/confusion to water, and amethyst plus booze to fruit juice. Audit 33 implements the local split-one source stack, `COST_NUTRLZ` billing, mutation, and reinsertion path.
 - Stone-to-flesh self-cast: C transforms eligible mineral/gemstone inventory objects into meat ring, meat stick, or meatball and repeatedly merges compatible results. JS still treats stone-to-flesh as a generic healing spell.
 
 ## Remaining Follow-Ups
 
 - Neutral-water `water_damage()` through potion `#dip`, including material damage and water discovery, is still open.
-- Potion-potion alchemy, unicorn horn/amethyst neutralization, and broader generic no-effect matrix/menu parity remain separate potion slices.
+- Potion-potion alchemy, polymorph potion dipping, and broader generic no-effect matrix/menu parity remain separate potion slices. Unicorn horn/amethyst neutralization is covered by audit 33.
 - Broader C-shaped target validation should still replace the local carried-object source filter once more of `potion_dip()` is implemented.

@@ -646,6 +646,29 @@ function ordinaryTool(id, kind, letter = 't') {
     return tool;
 }
 
+function unicornHorn(id, letter = 'u', extra = {}) {
+    return {
+        ...ordinaryTool(id, 'unicorn horn', letter),
+        ...extra,
+    };
+}
+
+function amethystStone(id, letter = 'a', extra = {}) {
+    return {
+        id,
+        cls: 'gem',
+        glyph: '*',
+        kind: 'amethyst stone',
+        actualKind: 'amethyst stone',
+        quan: 1,
+        ox: 5,
+        oy: 5,
+        letter,
+        line: `${letter} - an amethyst stone`,
+        ...extra,
+    };
+}
+
 function sleepingMonster(name, x = 7, y = 5, data = {}) {
     return {
         mx: x,
@@ -1095,23 +1118,51 @@ function healingPotion(id, letter = 'h', quan = 1) {
     };
 }
 
-function namedPotion(id, name, letter, quan = 1) {
+const POTION_INDEX_BY_NAME = {
+    healing: 1,
+    confusion: 2,
+    blindness: 3,
+    hallucination: 7,
+    booze: 20,
+    sickness: 21,
+    'fruit juice': 22,
+};
+
+function namedPotion(id, name, letter, quan = 1, extra = {}) {
     return {
         id,
         cls: 'potion',
         glyph: '!',
         kind: name,
         actualKind: `potion of ${name}`,
+        potionIndex: POTION_INDEX_BY_NAME[name],
         quan,
         ox: 5,
         oy: 5,
         letter,
         line: `${letter} - ${quan > 1 ? `${quan} potions of ${name}` : `a potion of ${name}`}`,
+        ...extra,
     };
 }
 
-function sicknessPotion(id, letter = 's', quan = 1) {
-    return namedPotion(id, 'sickness', letter, quan);
+function sicknessPotion(id, letter = 's', quan = 1, extra = {}) {
+    return namedPotion(id, 'sickness', letter, quan, extra);
+}
+
+function confusionPotion(id, letter = 'c', quan = 1, extra = {}) {
+    return namedPotion(id, 'confusion', letter, quan, extra);
+}
+
+function blindnessPotion(id, letter = 'b', quan = 1, extra = {}) {
+    return namedPotion(id, 'blindness', letter, quan, extra);
+}
+
+function hallucinationPotion(id, letter = 'h', quan = 1, extra = {}) {
+    return namedPotion(id, 'hallucination', letter, quan, extra);
+}
+
+function boozePotion(id, letter = 'b', quan = 1, extra = {}) {
+    return namedPotion(id, 'booze', letter, quan, extra);
 }
 
 function extraHealingPotion(id, letter = 'e', quan = 1) {
@@ -3658,6 +3709,206 @@ test('inventory action on a non-oil potion starts source-first dip and skips fou
     assert.doesNotMatch(target.line, /\+0 poisoned/);
     assert.equal(game.inventory.includes(potion), false);
     assert.match(game._pending_message, /The potion of sickness forms a coating on the darts\./);
+});
+
+test('inventory action on sickness offers unicorn horn as dip target', async () => {
+    installCommandShopState();
+    const horn = unicornHorn(30990, 'u');
+    const potion = sicknessPotion(30991, 's');
+    game.inventory = [horn, potion];
+    game.level.at = () => ({ roomno: ROOMOFFSET, typ: FOUNTAIN });
+
+    await rhack('i');
+    await rhack('s');
+    await rhack('a');
+
+    assert.equal(game._command_mode, 'dipIntoTarget');
+    assert.match(game._pending_message, /What do you want to dip into a potion of sickness\? \[u or \?\*\]/);
+    assert.doesNotMatch(game._pending_message, /fountain/);
+
+    await rhack('u');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(potion.kind, 'fruit juice');
+    assert.equal(potion.actualKind, 'potion of fruit juice');
+    assert.equal(potion.potionIndex, 22);
+    assert.match(game._pending_message, /The potion turns/);
+});
+
+test('dipping unicorn horn into sickness stack neutralizes one potion into fruit juice', async () => {
+    installCommandShopState();
+    const horn = unicornHorn(30992, 'u');
+    const potion = sicknessPotion(30993, 's', 2);
+    game.inventory = [horn, potion];
+
+    await rhack('#');
+    for (const ch of 'dip') await rhack(ch);
+    await rhack('\n');
+    await rhack('u');
+    await rhack('n');
+    await rhack('s');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(potion.quan, 1);
+    assert.equal(potion.kind, 'sickness');
+    const fruit = game.inventory.find(item => item !== potion && item.kind === 'fruit juice');
+    assert.ok(fruit);
+    assert.equal(fruit.actualKind, 'potion of fruit juice');
+    assert.equal(fruit.potionIndex, 22);
+    assert.equal(fruit.blessed, false);
+    assert.equal(fruit.cursed, false);
+    assert.equal(game.inventory.includes(horn), true);
+    assert.match(game._pending_message, /The potion that you dipped into turns/);
+});
+
+test('unicorn horn turns confusion blindness and hallucination into uncursed undiluted water', async () => {
+    const cases = [
+        ['confusion', confusionPotion, 'c'],
+        ['blindness', blindnessPotion, 'b'],
+        ['hallucination', hallucinationPotion, 'h'],
+    ];
+
+    for (const [index, [name, factory, letter]] of cases.entries()) {
+        installCommandShopState();
+        const horn = unicornHorn(30994 + (index * 2), 'u');
+        const potion = factory(30995 + (index * 2), letter, 1, { cursed: true, odiluted: true });
+        game.inventory = [horn, potion];
+
+        await rhack('#');
+        for (const ch of 'dip') await rhack(ch);
+        await rhack('\n');
+        await rhack('u');
+        await rhack('n');
+        await rhack(letter);
+
+        assert.equal(game._command_mode, null, name);
+        assert.equal(game.context.move, 1, name);
+        assert.equal(potion.otyp, POT_WATER, name);
+        assert.equal(potion.kind, 'water', name);
+        assert.equal(potion.actualKind, 'potion of water', name);
+        assert.equal(potion.potionIndex, null, name);
+        assert.equal(potion.blessed, false, name);
+        assert.equal(potion.cursed, false, name);
+        assert.equal(potion.odiluted, false, name);
+        assert.match(game._pending_message, /The potion clears\./, name);
+    }
+});
+
+test('cursed unicorn horn makes sickness neutralization fruit juice cursed', async () => {
+    installCommandShopState();
+    const horn = unicornHorn(31000, 'u', { cursed: true, bknown: true, line: 'u - a cursed unicorn horn' });
+    const potion = sicknessPotion(31001, 's', 1, { blessed: true });
+    game.inventory = [horn, potion];
+
+    await rhack('#');
+    for (const ch of 'dip') await rhack(ch);
+    await rhack('\n');
+    await rhack('u');
+    await rhack('n');
+    await rhack('s');
+
+    assert.equal(potion.kind, 'fruit juice');
+    assert.equal(potion.blessed, false);
+    assert.equal(potion.cursed, true);
+    assert.match(game._pending_message, /The potion turns/);
+});
+
+test('amethyst turns booze into fruit juice with amethyst curse state', async () => {
+    installCommandShopState();
+    const amethyst = amethystStone(31002, 'a', { cursed: true, bknown: true, line: 'a - a cursed amethyst stone' });
+    const potion = boozePotion(31003, 'b');
+    game.inventory = [amethyst, potion];
+
+    await rhack('#');
+    for (const ch of 'dip') await rhack(ch);
+    await rhack('\n');
+    await rhack('a');
+    await rhack('n');
+    await rhack('b');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(potion.kind, 'fruit juice');
+    assert.equal(potion.actualKind, 'potion of fruit juice');
+    assert.equal(potion.potionIndex, 22);
+    assert.equal(potion.blessed, false);
+    assert.equal(potion.cursed, true);
+    assert.match(game._pending_message, /The potion turns/);
+});
+
+test('nonmatching horn dip is Interesting and does not mutate source', async () => {
+    installCommandShopState();
+    const horn = unicornHorn(31004, 'u');
+    const potion = boozePotion(31005, 'b');
+    game.inventory = [horn, potion];
+
+    await rhack('#');
+    for (const ch of 'dip') await rhack(ch);
+    await rhack('\n');
+    await rhack('u');
+    await rhack('n');
+    await rhack('b');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(potion.kind, 'booze');
+    assert.equal(game.inventory.includes(potion), true);
+    assert.match(game._pending_message, /Interesting\.\.\./);
+});
+
+test('unpaid sickness stack neutralization preserves residual and used-up bills', async () => {
+    const { shkp } = installCommandShopState();
+    const horn = unicornHorn(31006, 'u');
+    const potion = sicknessPotion(31007, 's', 2);
+    game.inventory = [horn, potion];
+    shop.addObjectToShopBill(shkp, potion, 100);
+
+    await rhack('#');
+    for (const ch of 'dip') await rhack(ch);
+    await rhack('\n');
+    await rhack('u');
+    await rhack('n');
+    await rhack('s');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(potion.quan, 1);
+    assert.equal(potion.kind, 'sickness');
+    assert.equal(potion.unpaid, true);
+    assert.equal(shkp.debit || 0, 0);
+    const entry = shop.shopBillEntryForObject(shkp, potion);
+    assert.ok(entry);
+    assert.equal(entry.useup, false);
+    assert.equal(entry.bquan, 1);
+    assert.equal(shop.shopBillEntryTotal(entry), 50);
+    const debts = shop.collectPayableShopDebts(shkp);
+    assert.equal(debts.some(debt => debt.billPortion === 'fullyUsedUp' && debt.price === 50), true);
+    assert.equal(debts.some(debt => debt.billPortion === 'intact' && debt.price === 50), true);
+    assert.match(game._pending_message, /You neutralize that potion of sickness, you pay for it!/);
+    assert.match(game._pending_message, /The potion that you dipped into turns/);
+});
+
+test('blind unicorn horn neutralization mutates without visible transformation text', async () => {
+    installCommandShopState();
+    game.u.blind = true;
+    const horn = unicornHorn(31008, 'u');
+    const potion = confusionPotion(31009, 'c');
+    game.inventory = [horn, potion];
+
+    await rhack('#');
+    for (const ch of 'dip') await rhack(ch);
+    await rhack('\n');
+    await rhack('u');
+    await rhack('n');
+    await rhack('c');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(potion.kind, 'water');
+    assert.equal(potion.dknown, false);
+    assert.doesNotMatch(game._pending_message, /turns|clears|Interesting/);
 });
 
 test('inventory action on a known oil potion applies it instead of source-first dipping', async () => {
