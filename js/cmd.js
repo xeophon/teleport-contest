@@ -12537,15 +12537,29 @@ const RANDOM_MONSTER_BY_LOWER_NAME = new Map(
     [...RANDOM_MONSTER_BY_NAME.entries()].map(([name, data]) => [String(name).toLowerCase(), data]),
 );
 
+const WISHED_MONSTER_FALLBACKS = new Map([
+    ['human', { name: 'human', mlet: '@', glyph: '@', human: true, neuter: false }],
+    ['mail daemon', { name: 'mail daemon', mlet: '&', glyph: '&', noCorpse: true, neuter: false }],
+    ['medusa', { name: 'Medusa', mlet: '@', glyph: '@', human: true, unique: true, female: true }],
+    ['wizard of yendor', { name: 'Wizard of Yendor', mlet: '@', glyph: '@', human: true, unique: true, male: true }],
+    ['lord surtur', { name: 'Lord Surtur', mlet: 'H', glyph: 'H', unique: true, male: true }],
+    ['chromatic dragon', { name: 'Chromatic Dragon', mlet: 'D', glyph: 'D', unique: true, female: true }],
+    ['student', { name: 'student', mlet: '@', glyph: '@', human: true, guardian: true, neuter: false }],
+]);
+
 function wishedMonsterByName(name) {
     const raw = String(name || '').trim();
     if (!raw) return null;
     const lower = raw.toLowerCase();
     if (lower === 'elf') return { name: 'elf', weight: 800, mlet: '@', glyph: '@', color: CLR_BRIGHT_GREEN, neuter: false, elf: true };
+    if (lower === 'human wererat') return { ...(monsterByRndName('wererat') || {}), name: 'wererat', wereHuman: true };
+    if (lower === 'human werejackal') return { ...(monsterByRndName('werejackal') || {}), name: 'werejackal', wereHuman: true };
+    if (lower === 'human werewolf') return { ...(monsterByRndName('werewolf') || {}), name: 'werewolf', wereHuman: true };
     return monsterByRndName(raw)
         || RANDOM_MONSTER_BY_NAME.get(raw)
         || RANDOM_MONSTER_BY_LOWER_NAME.get(lower)
         || RANDOM_MONSTER_BY_LOWER_NAME.get(lower.replace(/\s+/g, '-'))
+        || WISHED_MONSTER_FALLBACKS.get(lower)
         || null;
 }
 
@@ -12893,7 +12907,7 @@ function parseWishedFigurineName(lowerName, qualifiers = {}) {
 
 function canWishedFigurineUseMonster(monster) {
     if (!monster || monster.unique || monster.name === 'mail daemon') return false;
-    const human = monster.mlet === '@' || monster.glyph === '@';
+    const human = monster.human || monster.mlet === '@' || monster.glyph === '@' || monster.mlet === 'human';
     return !human || monster.wereHuman;
 }
 

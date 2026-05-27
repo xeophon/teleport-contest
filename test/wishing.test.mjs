@@ -19,6 +19,7 @@ const GOLD_PIECE = 466;
 const TOOL_CLASS = 12;
 const LAND_MINE_OBJECT = 10160;
 const BEARTRAP_OBJECT = 10161;
+const FIGURINE = 795;
 const TALLOW_CANDLE = 370;
 const WAX_CANDLE = 371;
 const CANDELABRUM_OF_INVOCATION = 10076;
@@ -1341,6 +1342,51 @@ test('wizard-only venom wishes follow C oc_nowish policy', async () => {
     assert.equal(game.inventory.length, 0);
     assert.equal(game.u.uconduct?.wishes || 0, 0);
     assert.match(game._pending_message, /Nothing fitting that description exists in the game\./);
+});
+
+test('figurine wishes apply C monster-type restrictions', async () => {
+    installWishState(11);
+    beginWishDirectly();
+    await submitWish('figurine of newt');
+    let item = game.inventory[0];
+    assert.equal(item.otyp, FIGURINE);
+    assert.equal(item.kind, 'figurine');
+    assert.equal(item.corpsenm?.name, 'newt');
+    assert.equal(game.u.uconduct?.wishes, 1);
+
+    installWishState(11);
+    beginWishDirectly();
+    await submitWish('figurine of werewolf');
+    item = game.inventory[0];
+    assert.equal(item.otyp, FIGURINE);
+    assert.equal(item.corpsenm?.name, 'werewolf');
+
+    installWishState(11);
+    beginWishDirectly();
+    await submitWish('figurine of human werewolf');
+    item = game.inventory[0];
+    assert.equal(item.otyp, FIGURINE);
+    assert.equal(item.corpsenm?.name, 'werewolf');
+
+    for (const wish of [
+        'figurine of human',
+        'figurine of soldier',
+        'figurine of mail daemon',
+        'figurine of Wizard of Yendor',
+        'figurine of Medusa',
+        'figurine of student',
+    ]) {
+        installWishState(11);
+        beginWishDirectly();
+        await submitWish(wish);
+        item = game.inventory[0];
+        assert.equal(game._command_mode, null, wish);
+        assert.equal(item.otyp, FIGURINE, wish);
+        assert.equal(item.kind, 'figurine', wish);
+        assert.ok(item.corpsenm?.name, wish);
+        assert.notEqual(item.corpsenm.name.toLowerCase(), wish.replace(/^figurine of /, '').toLowerCase(), wish);
+        assert.equal(game.u.uconduct?.wishes, 1, wish);
+    }
 });
 
 test('denied quest artifact wish records artifact conduct without ordinary wish conduct', async () => {
