@@ -2,9 +2,9 @@
 
 ## Scope
 
-This slice adds the first local potion-potion alchemy branch for carried inventory `#dip`. It covers C's `mixtype()` recipe table for represented potion identities, target-stack affected-count selection, source potion consumption before instability checks, cursed/acid/lit-oil/random alchemic explosions, result BUC/dilution reset, deterministic recipe mutation, bad-mixture random water/sickness/random-potion/evaporation outcomes, visible result messages, and carried result re-merge through the existing potion-stack compatibility helper.
+This slice adds the first local potion-potion alchemy branch for carried inventory `#dip`. It covers C's `mixtype()` recipe table for represented potion identities, target-stack affected-count selection, source potion consumption before instability checks, cursed/acid/lit-oil/random alchemic explosions, result BUC/dilution reset, deterministic recipe mutation, bad-mixture random water/sickness/random-potion/evaporation outcomes, visible result messages, and carried result re-merge through the existing potion-stack compatibility helper. Audit 37 adds bounded alchemy-explosion `potionbreathe()` vapor effects on top of this branch.
 
-It intentionally remains short of full alchemy fidelity for `potionbreathe()` side effects, exact object-registry `otyp`/appearance metadata, fumbling drop behavior from `hold_another_object()`, and exact shop repricing for every altered unpaid target potion.
+It intentionally remains short of full alchemy fidelity for exact object-registry `otyp`/appearance metadata, fumbling drop behavior from `hold_another_object()`, exact shop repricing for every altered unpaid target potion, thrown/broken potion vapor delivery, and non-`kn` `trycall()` prompt parity.
 
 ## C Source Anchors
 
@@ -20,14 +20,14 @@ It intentionally remains short of full alchemy fidelity for `potionbreathe()` si
 ## JS Implementation Notes
 
 - `js/cmd.js:7790-7808`: added a carried inventory split helper for affected sub-stacks larger than one item while preserving split shop bill rows.
-- `js/cmd.js:11862-12028`: added local alchemy identity, `mixtype()` recipe, affected-count, instability, mutation, bad-mixture, and message helpers.
-- `js/cmd.js:12029-12062`: `dipPotionIntoPotion()` now consumes the source potion, handles alchemic explosions, mutates or evaporates the affected target stack, refreshes inventory/bill display, and tries to merge compatible results.
-- `js/cmd.js:12431-12439`: potion `#dip` dispatch now keeps C ordering: water, polymorph, potion-potion alchemy, then acid/oil/weapon/horn-amethyst branches.
-- `test/shop-billing-helpers.test.mjs:4102-4152`: focused public tests cover healing plus speed producing diluted extra healing and cursed bad-mixture explosion after source consumption.
+- `js/cmd.js:11862-12140`: added local alchemy identity, `mixtype()` recipe, affected-count, instability, mutation, bad-mixture, message helpers, and Audit 37 vapor helpers.
+- `js/cmd.js:12142-12240`: `dipPotionIntoPotion()` now consumes the source potion, handles alchemic explosions, mutates or evaporates the affected target stack, refreshes inventory/bill display, and tries to merge compatible results.
+- `js/cmd.js:12609-12617`: potion `#dip` dispatch now keeps C ordering: water, polymorph, potion-potion alchemy, then acid/oil/weapon/horn-amethyst branches.
+- `test/shop-billing-helpers.test.mjs:4102-4211`: focused public tests cover healing plus speed producing diluted extra healing, cursed bad-mixture explosion after source consumption, and Audit 37 vapor effects.
 
 ## Follow-Ups
 
-- Add `potionbreathe()` effects for alchemic explosions so blindness, hallucination, invisibility, and other inhaled potion effects follow C instead of only damaging/removing the stack.
+- Add thrown/broken `potionhit()` vapor delivery, non-`kn` `trycall()` prompt parity, water vapor gremlin/lycanthropy transformations, and exact status-property mapping beyond Audit 37's bounded alchemy-explosion vapor effects.
 - Replace the local potion identity table with registry-backed object metadata so all result `otyp`, appearance, cost, magicness, and merge rules come from one source.
 - Finish exact `hold_another_object()` behavior for mutated potion stacks, especially fumbling drops and inventory capacity edge cases.
 - Extend shop billing around altered unpaid target potions once object-registry pricing is centralized; source-stack consumption currently follows the existing residual used-up bill behavior.

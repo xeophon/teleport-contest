@@ -11962,6 +11962,183 @@ function heroWearsAlchemySmock() {
         && /alchemy smock/.test(objectKindKey(item) || inventoryItemName(item)));
 }
 
+function heroCanReceivePotionVapor() {
+    const form = polyselfForm() || {};
+    return !form.breathless || !form.noeyes;
+}
+
+function heroBreathesPotionVapor() {
+    return !((polyselfForm() || {}).breathless);
+}
+
+function heroHasPotionVaporEyes() {
+    return !((polyselfForm() || {}).noeyes);
+}
+
+function heroHasWetWornTowel() {
+    return (game.inventory || []).some(item =>
+        isWornInventoryItem(item) && objectKindKey(item) === 'towel' && towelWetness(item) > 0);
+}
+
+function heroHasFreeAction() {
+    return !!(game.u?.freeAction || game.u?.Free_action || (game.inventory || []).some(item =>
+        isWornInventoryItem(item) && (item.actualKind === 'ring of free action'
+            || item.kind === 'ring of free action' || item.ringRoll === 20)));
+}
+
+function heroHasSleepResistance() {
+    return !!(game.u?.sleepResistance || game.u?.Sleep_resistance || polyselfForm()?.sleepResistance);
+}
+
+function clearPotionVaporBlindness(messages) {
+    if (!game.u) return;
+    const wasBlind = heroIsBlind();
+    game.u.blind = false;
+    game.u._blindTimeout = 0;
+    game.u.ucreamed = 0;
+    game.u._statusSuffix = (game.u._statusSuffix || '').replace(' Blind', '');
+    game.u._deafTimeout = 0;
+    game.u._statusSuffix = (game.u._statusSuffix || '').replace(' Deaf', '');
+    if (wasBlind) messages.push(heroIsHallucinating()
+        ? 'Far out!  Everything is all cosmic again!'
+        : 'You can see again.');
+}
+
+function incrementAbilityFromPotionVapor(blessed) {
+    const stats = game.u?.acurr?.a;
+    if (!stats) return;
+    const maxStats = game.u?.amax?.a || [];
+    let attr = rn2(A_MAX);
+    for (let checked = 0; checked < A_MAX; checked++) {
+        const max = maxStats[attr] ?? stats[attr] ?? 10;
+        if ((stats[attr] ?? 10) < max) {
+            stats[attr]++;
+            if (!blessed) break;
+        }
+        attr = (attr + 1) % A_MAX;
+    }
+}
+
+function healHeroFromPotionVapor(amount) {
+    if (!game.u) return;
+    if (game.u._polyself_base && game.u.mh != null && game.u.mhmax != null)
+        game.u.mh = Math.min(game.u.mhmax, game.u.mh + amount);
+    game.u.uhp = Math.min(game.u.uhpmax || game.u.uhp || 1, (game.u.uhp || 1) + amount);
+}
+
+function learnPotionVaporEffect(potion, name, knownEffect) {
+    if (!potion?.dknown || !knownEffect || !name) return;
+    recordKnownPotionDiscovery(potion, name);
+    learnObjectScore('Potions', `potion of ${name}`);
+}
+
+function potionBreathe(potion, messages) {
+    if (!heroCanReceivePotionVapor()) return;
+    const name = alchemyPotionName(potion);
+    let knownEffect = false;
+
+    if (heroHasWetWornTowel()) {
+        messages.push('Some vapor passes harmlessly around you.');
+        return;
+    }
+
+    switch (name) {
+    case 'restore ability':
+    case 'gain ability':
+        if (potion.cursed) {
+            if (heroBreathesPotionVapor()) messages.push('Ulch!  That potion smells terrible!');
+            else if (heroHasPotionVaporEyes()) messages.push('Your eyes sting!');
+        } else {
+            incrementAbilityFromPotionVapor(!!potion.blessed);
+        }
+        break;
+    case 'full healing':
+        healHeroFromPotionVapor(1);
+        clearPotionVaporBlindness(messages);
+        // fall through
+    case 'extra healing':
+        healHeroFromPotionVapor(1);
+        if (!potion.cursed) clearPotionVaporBlindness(messages);
+        // fall through
+    case 'healing':
+        healHeroFromPotionVapor(1);
+        if (potion.blessed) clearPotionVaporBlindness(messages);
+        exerciseAttribute(A_CON, true);
+        break;
+    case 'sickness':
+        if ((game.urole?.name?.m || game._startup_role) !== 'Healer' && game.u) {
+            game.u.uhp = game.u.uhp <= 5 ? 1 : game.u.uhp - 5;
+            exerciseAttribute(A_CON, false);
+        }
+        break;
+    case 'hallucination':
+        messages.push('You have a momentary vision.');
+        break;
+    case 'confusion':
+    case 'booze':
+        if (!heroIsConfused()) messages.push('You feel somewhat dizzy.');
+        addHeroConfusion(rnd(5));
+        break;
+    case 'invisibility':
+        if (!heroIsBlind() && !game.u?.invisible) {
+            knownEffect = true;
+            messages.push(`For an instant you ${game.u?.seeInvisible
+                ? 'could see right through yourself'
+                : "couldn't see yourself"}!`);
+        }
+        break;
+    case 'paralysis':
+        knownEffect = true;
+        if (!heroHasFreeAction()) {
+            messages.push('Something seems to be holding you.');
+            game._helpless_time = Math.max(game._helpless_time || 0, rnd(5));
+            game._wake_message = 'You can move again.';
+            exerciseAttribute(A_DEX, false);
+        } else {
+            messages.push('You stiffen momentarily.');
+        }
+        break;
+    case 'sleeping':
+        knownEffect = true;
+        if (!heroHasFreeAction() && !heroHasSleepResistance()) {
+            messages.push('You feel rather tired.');
+            const duration = rnd(5);
+            game._helpless_time = Math.max(game._helpless_time || 0, duration);
+            game._sleeping_time = Math.max(game._sleeping_time || 0, duration + 1);
+            game._wake_message = 'You can move again.';
+            exerciseAttribute(A_DEX, false);
+        } else {
+            messages.push('You yawn.');
+        }
+        break;
+    case 'speed':
+        if (!game.u?.fast && !game.u?.veryfast) messages.push('Your knees seem more flexible now.');
+        if (game.u) {
+            game.u._veryfastTimeout = (game.u._veryfastTimeout || 0) + rnd(5);
+            syncHeroSpeedState();
+        }
+        exerciseAttribute(A_DEX, true);
+        break;
+    case 'blindness':
+        if (!heroIsBlind() && !(game._helpless_time > 0 && game._sleeping_time > 0)) {
+            knownEffect = true;
+            messages.push('It suddenly gets dark.');
+        }
+        if (game.u) {
+            game.u.blind = true;
+            game.u._blindTimeout = (game.u._blindTimeout || 0) + rnd(5);
+        }
+        break;
+    case 'acid':
+    case 'polymorph':
+        exerciseAttribute(A_CON, false);
+        break;
+    default:
+        break;
+    }
+    learnPotionVaporEffect(potion, name, knownEffect);
+}
+
 function dipPotionAlchemyExplosion(target, amount, messages) {
     const damage = amount + rnd(9);
     const explodes = target.cursed || isPotionOfAcid(target)
@@ -11970,6 +12147,7 @@ function dipPotionAlchemyExplosion(target, amount, messages) {
     if (!explodes) return false;
     messages.push(`${heroIsDeaf() ? '' : 'BOOM!  '}They explode!`);
     exerciseAttribute(A_STR, false);
+    potionBreathe(target, messages);
     useUpInventoryItem(target, target.quan || 1);
     if (game.u) {
         game.u.uhp = Math.max(0, (game.u.uhp || 0) - damage);

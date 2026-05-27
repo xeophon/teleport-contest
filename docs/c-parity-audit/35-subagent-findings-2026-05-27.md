@@ -4,7 +4,7 @@
 
 This slice broadens carried potion `#dip` and source-first inventory action menus toward C `drink_ok()`/`dip_ok()` behavior, then implements the early polymorph-potion branch of `potion_dip()` for carried inventory objects. It covers non-self non-coin target exposure, source-first floor-feature skipping, polymorph target/source asymmetry, unpolyable object resistance, same-class replacement, source consumption only after non-resistant polymorph attempts, polymorph discovery on changed type, inventory-letter preservation, BUC/quantity/charge/erosion poison carryover where represented locally, conduct counting, and unimplemented ordinary matrix branches falling through to `Interesting...`.
 
-Potion-potion alchemy recipes and bad-mixture explosion/evaporation paths are covered in Audit 36. Full `poly_obj()` fidelity, worn-object side effects, self-potion/Klein-bottle handling, container-content deletion edge cases outside local object representation, shared `water_damage()` consolidation, `potionbreathe()` explosion side effects, and deeper potion description/type-call discovery remain separate work.
+Potion-potion alchemy recipes and bad-mixture explosion/evaporation paths are covered in Audit 36, and alchemy-explosion vapor effects are covered in Audit 37. Full `poly_obj()` fidelity, worn-object side effects, self-potion/Klein-bottle handling, container-content deletion edge cases outside local object representation, shared `water_damage()` consolidation, thrown/broken potion vapor delivery, non-`kn` `trycall()` prompt parity, water vapor gremlin/lycanthropy transformations, exact status-property mapping, and deeper potion description/type-call discovery remain separate work.
 
 ## C Source Anchors
 
@@ -27,7 +27,7 @@ Potion-potion alchemy recipes and bad-mixture explosion/evaporation paths are co
 
 ## Follow-Ups
 
-- Audit 36 covers the first potion-potion alchemy slice. Remaining alchemy work is `potionbreathe()` explosion side effects, exact object-registry result metadata, fumbling drop behavior, and complete altered-target shop repricing.
+- Audit 36 covers the first potion-potion alchemy slice, and Audit 37 adds bounded alchemy-explosion vapor effects. Remaining alchemy work is exact object-registry result metadata, fumbling drop behavior, complete altered-target shop repricing, thrown/broken potion vapor delivery, non-`kn` `trycall()` prompt parity, and water vapor gremlin/lycanthropy transformations.
 - Replace local `poly_obj()` approximation with registry-backed object classes and metadata so magic/nonmagic matching, concrete `otyp` comparisons, merge collapse, tool/wand/spellbook degradation, worn-object changes, and container deletion follow C without ad hoc field checks.
 - Add the C self-potion/Klein-bottle path once potion-stack and container semantics are ready; the broadened menus currently keep source and target as distinct inventory objects.
 - Add real `?*` menu rendering for the broadened source/target prompts instead of only advertising those keys in the prompt text.

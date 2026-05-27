@@ -1143,12 +1143,14 @@ const POTION_INDEX_BY_NAME = {
     speed: 5,
     levitation: 6,
     hallucination: 7,
+    invisibility: 8,
     'see invisible': 9,
     healing: 10,
     'extra healing': 11,
     'gain level': 12,
     enlightenment: 13,
     'gain energy': 16,
+    sleeping: 17,
     'full healing': 18,
     polymorph: 19,
     booze: 20,
@@ -4147,8 +4149,65 @@ test('cursed potion alchemy explodes after consuming the source potion', async (
     assert.equal(game.context.move, 1);
     assert.equal(game.inventory.includes(source), false);
     assert.equal(game.inventory.includes(target), false);
+    assert.ok(game.u._confusionTimeout > 0);
+    assert.match(game.u._statusSuffix || '', /Conf/);
     assert.ok(game.u.uhp < 50);
+    assert.match(game._pending_message, /You feel somewhat dizzy\./);
     assert.match(game._pending_message, /BOOM!  They explode!/);
+});
+
+test('wet worn towel blocks alchemy explosion vapor effects', async () => {
+    installCommandShopState();
+    initRng(1);
+    game.u.uhp = 50;
+    const target = confusionPotion(30984, 'c', 1, { cursed: true });
+    const source = boozePotion(30985, 'b');
+    const towel = ordinaryTool(30986, 'towel', 't');
+    towel.spe = 3;
+    towel.wetness = 3;
+    towel.worn = true;
+    towel.line = 't - a towel (being worn)';
+    game.inventory = [target, source, towel];
+
+    await rhack('#');
+    for (const ch of 'dip') await rhack(ch);
+    await rhack('\n');
+    await rhack('c');
+    await rhack('n');
+    await rhack('b');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.inventory.includes(source), false);
+    assert.equal(game.inventory.includes(target), false);
+    assert.equal(game.inventory.includes(towel), true);
+    assert.equal(game.u._confusionTimeout || 0, 0);
+    assert.doesNotMatch(game.u._statusSuffix || '', /Conf/);
+    assert.ok(game.u.uhp < 50);
+    assert.match(game._pending_message, /Some vapor passes harmlessly around you\./);
+});
+
+test('known blindness vapor from alchemy explosion discovers the potion', async () => {
+    installCommandShopState();
+    initRng(1);
+    game.u.uhp = 50;
+    const target = blindnessPotion(30987, 'b', 1, { cursed: true, dknown: true });
+    const source = boozePotion(30988, 'z');
+    game.inventory = [target, source];
+
+    await rhack('#');
+    for (const ch of 'dip') await rhack(ch);
+    await rhack('\n');
+    await rhack('b');
+    await rhack('n');
+    await rhack('z');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.inventory.includes(source), false);
+    assert.equal(game.inventory.includes(target), false);
+    assert.equal(game.u.blind, true);
+    assert.ok(game.u._blindTimeout > 0);
+    assert.match(game._pending_message, /It suddenly gets dark\./);
+    assert.equal(game._discoveries?.some(entry => entry.section === 'Potions' && entry.name === 'potion of blindness'), true);
 });
 
 test('dipping poisoned darts into healing-family potions removes the coating', async () => {
