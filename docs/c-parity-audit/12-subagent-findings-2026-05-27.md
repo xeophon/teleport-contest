@@ -25,9 +25,9 @@ Remaining caveat:
 
 - JS still does not split and remove the selected royal jelly before the target prompt. Current visible cancellation and success billing match the intended C behavior, but the internal prompt-time inventory shape is not C-shaped yet. The C audit found conflicting source behavior: `use_royal_jelly()` intends `unsplitobj()` restoration after `freeinv()`, but this checkout's `unsplitobj()` appears to reject `OBJ_FREE` objects.
 
-## Egg Timer Candidate Slice
+## Egg Timer Slice
 
-A separate audit identified genocide/extinction-aware egg timer handling as a bounded next target.
+A separate audit identified genocide/extinction-aware egg timer handling as a bounded next target. That slice is now implemented for the current JS object graph.
 
 C source behavior:
 
@@ -37,8 +37,16 @@ C source behavior:
 - `mon.c:kill_genocided_monsters()` proactively kills egg timers for newly dead species across inventory, floor, buried/migrating objects, and monster inventories.
 - `allmain.c` runs object timeouts from the central timeout queue once per turn.
 
-JS status and risk:
+Implemented JS status:
 
 - JS egg hatch timers are local object fields (`eggHatchTurn`, `_egg_hatch_seq`, `_egg_hatch_consumed`) rather than central object timers.
-- JS hatch processing checks genocided monsters late in the current-level scan, but genocide does not proactively clear hatch timers and egg hatching does not consistently consult extinct species.
-- A bounded implementation can add a shared `killEggHatchTimer()` and dead-species helper, then use it from genocide and hatch timeout processing while preserving egg species.
+- `js/egg_timers.js` now owns the hatchling species map, `killEggHatchTimer()`, source/hatchling genocide checks, hatch-time unique/genocided/extinct blocking, and recursive egg scans.
+- Genocide now runs egg cleanup before and after monster removal so timers are stopped for newly dead source or hatchling species while preserving `corpsenm`.
+- Cleanup scans carried inventory, floor objects, buried objects, current and saved monster inventories, containers, and JS impact-drop migration queues.
+- Due hatch processing now stops all local timer bookkeeping before checking hatchability; if the hatchling is unique, genocided, extinct, or otherwise unavailable, the egg stack is left unconsumed.
+- Extinction intentionally does not proactively clear timers; it only blocks hatching when the timer fires, matching `hatch_egg()`.
+- Public tests in `test/egg-timers.test.mjs` cover hatchling-genocide cleanup, recursive/location scans, and extinction-blocked due hatching.
+
+Remaining caveat:
+
+- This is still a local-field timer implementation. Full parity still needs a central object timer registry with save/restore, migration, and timeout catch-up semantics.

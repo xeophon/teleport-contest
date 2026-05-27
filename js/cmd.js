@@ -28,6 +28,7 @@ import { createGasCloud } from './region.js';
 import { figurineLocationCheck, isFigurineObject, makeFigurineFamiliar, maybeAttachCarriedFigurineTimeout, stopFigurineTransformTimeout, syncCarriedFigurineTransformTimer } from './figurine.js';
 import { applyMonsterLiquidEffectsAt } from './monster_liquid.js';
 import { applySlimeMoldFruitFields, currentFruitId, currentFruitJuiceName, currentFruitName, fruitWishMatch, setCurrentFruitName, slimeMoldNameForObject } from './fruit.js';
+import { eggSpeciesGenocidedForHatching, killDeadSpeciesEggHatchTimers } from './egg_timers.js';
 
 const DIR_DX = { h: -1, l: 1, j: 0, k: 0, y: -1, u: 1, b: -1, n: 1 };
 const DIR_DY = { h: 0, l: 0, j: 1, k: -1, y: -1, u: -1, b: 1, n: 1 };
@@ -15194,7 +15195,9 @@ function genocideMonsterType(data, messages, { killPlayer = false, cause = 'scro
     markMonsterGenocided(name);
     game._chronicle_genocide_count = (game._chronicle_genocide_count || 0) + 1;
     messages.push(`Wiped out all ${pluralizeMonsterName(name)}.`);
+    killDeadSpeciesEggHatchTimers(game);
     killGenocidedMonsters();
+    killDeadSpeciesEggHatchTimers(game);
     if (killPlayer) finishHeroGenocide(messages, cause);
 }
 
@@ -29639,7 +29642,7 @@ function removeDeadbookRevivedItem(item, source) {
 
 function deadbookAttachEggHatchTimer(item) {
     if (!isEggItem(item) || !item.corpsenm?.name || item.eggHatchTurn) return false;
-    if ((game._genocided_monsters || []).includes(item.corpsenm.name)) return false;
+    if (eggSpeciesGenocidedForHatching(item, game)) return false;
     for (let i = 151; i <= 200; i++) {
         if (rnd(i) > 150) {
             item.eggHatchTurn = (game.moves || 1) + i;

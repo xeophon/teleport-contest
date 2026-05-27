@@ -15,7 +15,7 @@ This folder records source-backed audits against `nethack-c/upstream`. The notes
 - [09-subagent-findings-2026-05-26.md](09-subagent-findings-2026-05-26.md): latest parallel C-source audit findings and ranked narrow follow-up slices.
 - [10-subagent-findings-2026-05-27.md](10-subagent-findings-2026-05-27.md): meat-ring and royal-jelly eating audits plus implemented status.
 - [11-subagent-findings-2026-05-27.md](11-subagent-findings-2026-05-27.md): royal-jelly `#rub` egg audit and implemented status.
-- [12-subagent-findings-2026-05-27.md](12-subagent-findings-2026-05-27.md): `#rub` prompt parity follow-up and egg timer candidate slice.
+- [12-subagent-findings-2026-05-27.md](12-subagent-findings-2026-05-27.md): `#rub` prompt parity follow-up and implemented egg timer slice.
 
 ## Cross-Cutting Themes
 
@@ -46,5 +46,6 @@ Continue with the shop area because it combines visible current behavior with a 
 - Finish remaining `sellobj()` parity around recursive `subfrombill()` integration, less ordinary projectile ownership branches, and shared-helper use in less ordinary transfer paths.
 - Continue replacing wish parser/finalizer local tables with registry-backed `oc_merge`, `oc_charged`, `oc_nowish`, artifact provenance, and canonical `weight()`; exact no-wish declines, wished-gold quantity bounds, selected wizard trap non-object results including beartrap/land-mine ambiguity, wizard terrain/furniture map results, denied quest-artifact conduct, selected Candelabrum/Book/Bell/magic-lamp substitutions, wish-local venom `oc_nowish`, concrete food rows including current-fruit slime molds, and charged-tool metadata for bag of tricks, expensive camera, tinning kit, can of grease, magic marker, crystal ball, charged instruments, horn of plenty, drum of earthquake, and the Bell of Opening path are covered, so remaining work now focuses on replacing parser-local policy with the registry/factory, remaining unique/invocation-object policy, terrain side effects such as liquid object damage and wall-property qualifiers, save/bones fruit-chain remapping, and artifact/object-factory provenance.
 - Latest wish-local additions: figurine requested-monster restrictions now cover unique, human/non-were, werecreature, and mail-daemon cases, and corpse/statue/tin/egg requested-monster binding now covers the C creation-first distinctions for wereforms, rejected corpse/tin targets, statue permissiveness, and egg hatchability. Full registry/factory/timer parity remains open.
+- Latest timer-local addition: egg hatch timers now use a shared kill/dead-species helper; genocide proactively stops source/hatchling timers across modeled object graphs while preserving species, and due hatch blocks unique, genocided, or extinct hatch targets without consuming the egg stack. Full central timer registry parity remains open.
 
 Every code slice should be followed by source-derived smoke checks plus `npm run score`.
