@@ -986,6 +986,40 @@ function installMetallivorousForm() {
     };
 }
 
+function installStoneGolemPolyself() {
+    Object.assign(game.u, {
+        uhp: 100,
+        uhpmax: 100,
+        uen: 0,
+        uenmax: 0,
+        uac: 5,
+        ulevel: 1,
+        _polyself_base: {
+            uhp: 12,
+            uhpmax: 12,
+            uen: 0,
+            uenmax: 0,
+            uac: 10,
+            ulevel: 1,
+            rank: { m: 'Wizard', f: 'Wizard' },
+        },
+        _polyself_form: {
+            name: 'stone golem',
+            mlet: "'",
+            glyph: "'",
+            mlevel: 14,
+            hpLevel: 14,
+            mmove: 6,
+            mac: 5,
+            strong: true,
+            neuter: true,
+            fixedHp: 100,
+            stoneResistance: true,
+        },
+    });
+    game.urole = { ...(game.urole || {}), rank: { m: 'Stone Golem', f: 'Stone Golem' } };
+}
+
 function tin(id, letter = 't', quan = 1) {
     return {
         id,
@@ -3362,6 +3396,73 @@ test('self-cast stone to flesh marks unpaid transformed wand used up', async () 
         String(bill.bo_id) === String(31007)
         && bill.price === 150
         && /wand of make invisible/.test(bill.name)), true);
+});
+
+test('self-cast stone to flesh clears active petrification', async () => {
+    installCommandShopState();
+    initRng(1);
+    game.inventory = [];
+    game.u._stonedTimeout = 4;
+    game.u._stonedKiller = 'cockatrice corpse';
+    game.u._statusSuffix = ' Stone';
+
+    await castStoneToFleshAtSelf();
+
+    assert.equal(game.u._stonedTimeout, 0);
+    assert.equal(game.u._stonedKiller, '');
+    assert.doesNotMatch(game.u._statusSuffix || '', /Stone/);
+    assert.equal(game._pending_message, 'You feel limber!');
+});
+
+test('self-cast stone to flesh uses hallucinated petrification rescue message', async () => {
+    installCommandShopState();
+    initRng(1);
+    game.inventory = [];
+    game.u._stonedTimeout = 4;
+    game.u._stonedKiller = 'cockatrice corpse';
+    game.u._statusSuffix = ' Hallu Stone';
+    game.u.hallucinating = true;
+    game.u.acurr.a[5] = 16;
+
+    await castStoneToFleshAtSelf();
+
+    assert.equal(game.u._stonedTimeout, 0);
+    assert.equal(game.u._stonedKiller, '');
+    assert.equal(game.u._statusSuffix, ' Hallu');
+    assert.equal(game._pending_message, 'What a pity--you just ruined a future piece of fine art!');
+});
+
+test('self-cast stone to flesh rescues stoning before transforming inventory', async () => {
+    installCommandShopState();
+    initRng(1);
+    const wand = makeInvisibleWand(31008, 'a', 6);
+    game.inventory = [wand];
+    game.u._stonedTimeout = 4;
+    game.u._stonedKiller = 'cockatrice corpse';
+    game.u._statusSuffix = ' Stone';
+
+    await castStoneToFleshAtSelf();
+
+    assert.equal(game.u._stonedTimeout, 0);
+    assert.equal(game.u._stonedKiller, '');
+    assert.equal(game.inventory[0].otyp, MEAT_STICK);
+    assert.equal(game._pending_message, 'You feel limber!  You smell the odor of meat.');
+});
+
+test('self-cast stone to flesh turns stone golem polyself into flesh golem', async () => {
+    installCommandShopState();
+    initRng(1);
+    game.inventory = [];
+    installStoneGolemPolyself();
+
+    await castStoneToFleshAtSelf();
+
+    assert.equal(game.u._polyself_form?.name, 'flesh golem');
+    assert.equal(game.u.uhp, 40);
+    assert.equal(game.u.uhpmax, 40);
+    assert.equal(game.u.uac, 9);
+    assert.equal(game.u._statusSuffix || '', '');
+    assert.match(game._pending_message, /You turn into a flesh golem!/);
 });
 
 test('failed read that leaves an unpaid spellbook intact does not mark it used-up', async () => {

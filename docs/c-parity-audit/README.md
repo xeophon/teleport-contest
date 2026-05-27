@@ -52,6 +52,7 @@ This folder records source-backed audits against `nethack-c/upstream`. The notes
 - [46-subagent-findings-2026-05-28.md](46-subagent-findings-2026-05-28.md): forced chest-content potion shatter, destroyed-content shop loss, and fresh potionhit/statue/stone follow-up audits.
 - [47-subagent-findings-2026-05-28.md](47-subagent-findings-2026-05-28.md): direct hero-thrown confusion/booze potionhit plus statue debt, stone-to-flesh rescue, and plan-pruning follow-up audits.
 - [48-subagent-findings-2026-05-28.md](48-subagent-findings-2026-05-28.md): statue-trap shatter shop debt plus stone-to-flesh, paralysis potionhit, and shop-helper follow-up audits.
+- [49-subagent-findings-2026-05-28.md](49-subagent-findings-2026-05-28.md): self-cast stone-to-flesh stoning rescue, stone-golem polyself conversion, and fresh paralysis/shop-helper follow-up audits.
 
 ## Cross-Cutting Themes
 
@@ -76,12 +77,5 @@ This folder records source-backed audits against `nethack-c/upstream`. The notes
 ## Selected Next Slice
 
 Use `PORTING_PLAN.md` for the active immediate slice list. This README is an index and roadmap only; detailed completed-work history belongs in the numbered audit notes.
-
-Current source-backed next candidates:
-
-1. Stone-to-flesh stoning/polyself rescue.
-2. Direct hero-thrown potion of paralysis as the next bounded `potionhit()` family.
-3. Shared `stolen_value()`/`subfrombill()` cleanup through floor polymorph or burying-merchandise callers.
-4. Remaining forced-chest details: blade breakage during long forcing, blunt wake-nearby behavior, and material-specific non-potion shatter wording.
 
 Every code slice should still be followed by focused source-derived checks plus `npm run score`.

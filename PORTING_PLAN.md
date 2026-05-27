@@ -22,7 +22,7 @@ Detailed source-backed history is kept in `docs/c-parity-audit/`. Keep this sect
 
 - Removed fixture replay/runtime shortcuts and rebuilt covered behavior around live game state; public sessions remain regression guards only.
 - Built a broad starter shop-ledger surface: bill rows, split/subtract helpers, used-up debt, itemized `#pay`, pickup/drop/container/tip flows, bill-limit handling, and many covered destruction/alteration charging paths.
-- Added focused object, food, timer, and wish parity slices: ordinary eating, special-food merge gates, egg timer cleanup, wish-local monster/object binding, charged tools/instruments, and self-cast stone-to-flesh carried marble-wand transformation.
+- Added focused object, food, timer, and wish parity slices: ordinary eating, special-food merge gates, egg timer cleanup, wish-local monster/object binding, charged tools/instruments, and self-cast stone-to-flesh carried marble-wand transformation plus stoning/polyself rescue.
 - Expanded potion `#dip`, alchemy, broken-vapor, inventory/fire/hot-ground vapor, gremlin water vapor, forced chest-content potion shatter, direct hero-thrown confusion/booze `potionhit()`, and statue-trap shatter debt coverage.
 - Latest verified public score: `44/44`.
 
@@ -46,7 +46,7 @@ Detailed source-backed history is kept in `docs/c-parity-audit/`. Keep this sect
 4. Monster placement, scheduler, and combat cores.
    - Source notes: `docs/c-parity-audit/04-monsters-combat-pets.md`.
    - Build shared `goodpos`, `enexto`, monster lifecycle, turn phases, `hmon`, `mattackm`, passive, and projectile/object-hit paths.
-   - Compact current candidates: stone-golem polyself rescue through stone to flesh and direct monster-object hit follow-ups.
+   - Compact current candidates: direct monster-object hit follow-ups and broader `polymon()` stoning interactions.
 
 5. Level, trap, terrain, save, and display foundations.
    - Source notes: `docs/c-parity-audit/03-levelgen-specials-quest.md`, `06-save-restore-bones.md`, `07-traps-liquids-terrain.md`, and `08-display-rng-observation.md`.
@@ -60,10 +60,10 @@ Detailed source-backed history is kept in `docs/c-parity-audit/`. Keep this sect
 
 Continue narrow C-backed slices in this order unless a failing public regression points elsewhere:
 
-1. Stone-to-flesh rescue: clear active stoning and convert stone-golem polyself to flesh golem before broader material-object transformations.
-2. Broaden direct `potionhit()` delivery beyond confusion/booze, with potion of paralysis as the next compact effect family.
-3. Continue shared `stolen_value()`/`subfrombill()` cleanup through floor polymorph or burying-merchandise callers.
-4. Close remaining forced-chest gaps: blade breakage during long forcing, blunt wake-nearby behavior, and material-specific non-potion shatter wording.
+1. Broaden direct `potionhit()` delivery beyond confusion/booze, with potion of paralysis as the next compact effect family.
+2. Continue shared `stolen_value()`/`subfrombill()` cleanup through burying-merchandise first, then floor polymorph or floor stone-to-flesh costly alteration.
+3. Close remaining forced-chest gaps: blade breakage during long forcing, blunt wake-nearby behavior, and material-specific non-potion shatter wording.
+4. Continue broader stone-to-flesh object coverage through registry-backed material/object metadata and floor/beam/shop routing.
 5. Continue registry-backed cleanup for merge/wish/charged-tool metadata after each concrete caller lands.
 
 ## Verification

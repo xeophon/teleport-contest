@@ -1620,6 +1620,7 @@ const WATER_MOCCASIN = {
 };
 const POLYSELF_EXTRA_FORMS = new Map([
     ['red dragon', { name: 'red dragon', mlet: 'D', glyph: 'D', color: CLR_RED, mlevel: 15, hpLevel: 15, mmove: 9, strong: true, inAir: true, nohands: true }],
+    ['flesh golem', { name: 'flesh golem', mlet: "'", glyph: "'", color: CLR_RED, mlevel: 9, hpLevel: 9, mmove: 8, mac: 9, strong: true, neuter: true, fixedHp: 40 }],
     ['stone golem', { name: 'stone golem', mlet: "'", glyph: "'", color: CLR_GRAY, mlevel: 14, hpLevel: 14, mmove: 6, mac: 5, strong: true, neuter: true, noCorpse: true, fixedHp: 100, stoneResistance: true }],
 ]);
 const SPEED_AT_SEVEN_ROLES = new Set(['Barbarian', 'Caveman', 'Knight', 'Valkyrie']);
@@ -12030,7 +12031,31 @@ function mergeStoneToFleshInventoryResults() {
     } while (didMerge);
 }
 
+function fixHeroPetrification(message = null) {
+    if (!game.u?._stonedTimeout) return '';
+    const rescueMessage = message ?? (heroIsHallucinating()
+        ? `What a pity--you just ruined a future piece of ${(game.u.acurr?.a?.[A_CHA] || 0) > 15 ? 'fine ' : ''}art!`
+        : 'You feel limber!');
+    game.u._stonedTimeout = 0;
+    game.u._stonedKiller = '';
+    removeHeroStatusSuffix('Stone');
+    return rescueMessage;
+}
+
 function stoneToFleshInventoryEffect(messages = []) {
+    let rescued = false;
+    const form = game.u?._polyself_form;
+    if (form?.name === 'stone golem') {
+        const result = becomeMonster('flesh golem');
+        if (result?.message) messages.push(result.message);
+        rescued = true;
+    }
+    const petrificationMessage = fixHeroPetrification();
+    if (petrificationMessage) {
+        messages.push(petrificationMessage);
+        rescued = true;
+    }
+
     let transformed = false;
     for (const item of [...(game.inventory || [])]) {
         if (!isStoneToFleshMarbleWandObject(item)) continue;
@@ -12042,7 +12067,7 @@ function stoneToFleshInventoryEffect(messages = []) {
         mergeStoneToFleshInventoryResults();
         messages.push('You smell the odor of meat.');
     }
-    return { transformed, messages };
+    return { transformed: transformed || rescued, messages };
 }
 
 function learnPotionPolymorphDiscovery(item) {
@@ -29580,11 +29605,7 @@ function startHeroSliming() {
 }
 
 function fixHeroPetrificationFromAcidicFood() {
-    if (!game.u?._stonedTimeout) return '';
-    game.u._stonedTimeout = 0;
-    game.u._stonedKiller = '';
-    removeHeroStatusSuffix('Stone');
-    return 'You feel limber!';
+    return fixHeroPetrification();
 }
 
 function globCpostfxIntrinsicForMonster(monsterName) {
