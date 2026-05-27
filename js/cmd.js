@@ -27,6 +27,7 @@ import {
 import { createGasCloud } from './region.js';
 import { figurineLocationCheck, isFigurineObject, makeFigurineFamiliar, maybeAttachCarriedFigurineTimeout, stopFigurineTransformTimeout, syncCarriedFigurineTransformTimer } from './figurine.js';
 import { applyMonsterLiquidEffectsAt } from './monster_liquid.js';
+import { applySlimeMoldFruitFields, currentFruitJuiceName, currentFruitName, fruitWishMatch, setCurrentFruitName, slimeMoldNameForObject } from './fruit.js';
 
 const DIR_DX = { h: -1, l: 1, j: 0, k: 0, y: -1, u: 1, b: -1, n: 1 };
 const DIR_DY = { h: 0, l: 0, j: 1, k: -1, y: -1, u: -1, b: 1, n: 1 };
@@ -1085,6 +1086,7 @@ const MIRROR = 10006;
 const CREAM_PIE = 10081;
 const LUMP_OF_ROYAL_JELLY = 10089;
 const KELP_FROND = 172;
+const SLIME_MOLD = 11009;
 const EUCALYPTUS_LEAF = 11000;
 const APPLE = 11001;
 const PANCAKE = 11011;
@@ -4876,6 +4878,7 @@ const OBJECT_WEIGHTS = {
     'pancake': 2,
     'pear': 2,
     'sprig of wolfsbane': 1,
+    'slime mold': 5,
     'tripe': 10,
     'tripe ration': 10,
     'meat ring': 5,
@@ -5378,7 +5381,7 @@ function toggleFlag(name, fallback = false) {
 
 function optionsPage1Lines() {
     const pickupTypes = game._autopickup_types || game.flags?.pickup_types || 'all';
-    const fruit = game._fruit || game.flags?.fruit || 'slime mold';
+    const fruit = currentFruitName();
     return [
         [0, 0, ' '],
         [0, 1, 'Options', 1],
@@ -18379,6 +18382,7 @@ const COVERED_SIMPLE_MERGEABLE_FOOD_KINDS = new Set([
     'kelp frond',
     'sprig of wolfsbane',
     'clove of garlic',
+    'slime mold',
     'eucalyptus leaf',
     'lump of royal jelly',
     'meatball',
@@ -22213,9 +22217,13 @@ function normalizeWishedGroupPhrase(name, quantity) {
 function applyWishedPluralQuantity(name, quantity) {
     if (quantity !== 1) return quantity;
     const rawLowerName = String(name || '').trim().toLowerCase();
+    const rawFruit = fruitWishMatch(rawLowerName);
+    if (rawFruit?.plural) return 2;
     const rawBaseObject = WISH_BASE_OBJECTS.get(rawLowerName);
     if (rawBaseObject?.plural && rawLowerName === String(rawBaseObject.plural).toLowerCase()) return 2;
     const lowerName = resolveWishedSpellingAlias(rawLowerName).name;
+    const fruit = fruitWishMatch(lowerName);
+    if (fruit?.plural) return 2;
     const baseObject = WISH_BASE_OBJECTS.get(lowerName);
     if (baseObject?.plural && lowerName === String(baseObject.plural).toLowerCase()) return 2;
     if (/^(?:worthless\s+)?pieces\s+of\s+.+\s+glass$/.test(lowerName)) return 2;
@@ -22239,6 +22247,14 @@ function makeWishedBaseObject(baseObject, metadata) {
     } finally {
         if (forceBagOfTricksTool) game._mkobj_force_bag_of_tricks = false;
     }
+}
+
+function makeWishedFruitObject(lowerName) {
+    const fruit = fruitWishMatch(lowerName);
+    if (!fruit) return null;
+    const otmp = mksobj(SLIME_MOLD, true, false);
+    applySlimeMoldFruitFields(otmp, fruit.fid);
+    return Object.assign(otmp, { wishedfor: true });
 }
 
 function wishedObjectFromName(name, qualifiers = {}) {
@@ -22320,6 +22336,9 @@ function wishedBaseObjectFromName(lowerName, qualifiers = {}, originalName = low
 
     const gemWish = makeWishedGemObject(lowerName);
     if (gemWish) return gemWish;
+
+    const fruitWish = makeWishedFruitObject(lowerName);
+    if (fruitWish) return fruitWish;
 
     const baseObject = WISH_BASE_OBJECTS.get(lowerName);
     if (baseObject) {
@@ -22618,6 +22637,10 @@ function maybeWishedInstanceName(obj, baseName) {
     return `${name} named ${objectName}`;
 }
 
+function isSlimeMoldObject(obj) {
+    return obj?.otyp === SLIME_MOLD || String(obj?.actualKind || '').toLowerCase() === 'slime mold';
+}
+
 export function pickupObjectName(obj) {
     const named = name => maybeWishedInstanceName(obj, name);
     const archeologist = (game.urole?.name?.m || game._startup_role) === 'Archeologist';
@@ -22628,6 +22651,8 @@ export function pickupObjectName(obj) {
     if (obj.otyp === 'corpse' || obj.otyp === CORPSE) return corpseObjectName(obj);
     if (obj.otyp === EGG) return named(eggObjectName(obj));
     if (obj.globby) return named(globObjectName(obj));
+    if (isSlimeMoldObject(obj))
+        return named(slimeMoldNameForObject(obj, (obj.quan || 1) > 1));
     if ((obj.kind === 'statue' || obj.otyp === STATUE) && obj.corpsenm?.name) {
         const historic = archeologist && (((obj.spe || 0) & CORPSTAT_HISTORIC) || obj.historic);
         return named(`${historic ? 'historic ' : ''}statue of ${monsterIndefiniteName(corpstatDisplayMonsterName(obj))}`);
@@ -36755,14 +36780,13 @@ export async function rhack(_cmd) {
                 game._call_potion_appearance = item.kind.replace(/ potion$/, '');
                 game._command_mode = 'callPotionAfterMore';
             }
-            await setMessage('This tastes like slime mold juice.', true);
+            await setMessage(`This tastes like ${currentFruitJuiceName()}.`, true);
             return;
         }
         if (potionName.includes('sickness')) {
             learnObjectScore('Potions', 'potion of sickness');
             if (item.blessed) {
-                const fruit = game.flags?.fruit || 'slime mold';
-                game._queued_message_after_more = `(But in fact it was mildly stale ${fruit} juice.)`;
+                game._queued_message_after_more = `(But in fact it was mildly stale ${currentFruitJuiceName()}.)`;
                 game._potion_sickness_after_more = 1;
                 await setMessage('Yecch!  This stuff tastes like poison.', true);
                 game.context.move = 1;
@@ -40399,10 +40423,7 @@ export async function rhack(_cmd) {
 
     if (game._command_mode === 'optionsFruit') {
         if (ch === '\r' || ch === '\n') {
-            const fruit = game._options_fruit_text || 'slime mold';
-            game._fruit = fruit;
-            game.flags = game.flags || {};
-            game.flags.fruit = fruit;
+            setCurrentFruitName(game._options_fruit_text || 'slime mold');
             game._options_fruit_text = '';
             game._overlay_hide_status_only = 0;
             game._options_page = 1;

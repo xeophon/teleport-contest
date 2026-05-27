@@ -13,6 +13,7 @@ import {
 } from '../js/const.js';
 import { initRng } from '../js/rng.js';
 import { mksobj } from '../js/mklev.js';
+import { currentFruitId, setCurrentFruitName } from '../js/fruit.js';
 
 const BELL = 358;
 const GOLD_PIECE = 466;
@@ -42,6 +43,7 @@ const C_RATION = 10036;
 const CRAM_RATION = 145;
 const PANCAKE = 11011;
 const KELP_FROND = 172;
+const SLIME_MOLD = 11009;
 const LUMP_OF_ROYAL_JELLY = 10089;
 const MEATBALL = 11012;
 const ENORMOUS_MEATBALL = 11013;
@@ -623,6 +625,7 @@ test('wished ration foods use concrete C object metadata', async () => {
         ['1 pancake', PANCAKE, 'pancake', 'pancakes', 200, 2, 15],
         ['1 cram ration', CRAM_RATION, 'cram ration', 'cram rations', 600, 15, 35],
         ['1 kelp frond', KELP_FROND, 'kelp frond', 'kelp fronds', 30, 1, 6],
+        ['1 slime mold', SLIME_MOLD, 'slime mold', 'slime molds', 250, 5, 17],
         ['1 lump of royal jelly', LUMP_OF_ROYAL_JELLY, 'lump of royal jelly', 'lumps of royal jelly', 200, 2, 15],
         ['1 meatball', MEATBALL, 'meatball', 'meatballs', 5, 1, 5],
         ['1 enormous meatball', ENORMOUS_MEATBALL, 'enormous meatball', 'enormous meatballs', 2000, 400, 105],
@@ -653,6 +656,7 @@ test('plural wished ration foods keep C plural metadata and weights', async () =
         ['pancakes', PANCAKE, 'pancake', 'pancakes', 2, 4],
         ['cram rations', CRAM_RATION, 'cram ration', 'cram rations', 2, 30],
         ['kelp fronds', KELP_FROND, 'kelp frond', 'kelp fronds', 2, 2],
+        ['slime molds', SLIME_MOLD, 'slime mold', 'slime molds', 2, 10],
         ['lumps of royal jelly', LUMP_OF_ROYAL_JELLY, 'lump of royal jelly', 'lumps of royal jelly', 2, 4],
         ['meatballs', MEATBALL, 'meatball', 'meatballs', 2, 2],
         ['enormous meatballs', ENORMOUS_MEATBALL, 'enormous meatball', 'enormous meatballs', 2, 800],
@@ -674,6 +678,36 @@ test('plural wished ration foods keep C plural metadata and weights', async () =
         assert.equal(item.owt, weight);
         assert.match(item.line, new RegExp(`${quantity} ${plural}`));
     }
+});
+
+test('custom fruit wishes bind slime mold spe and display fruit name', async () => {
+    installWishState();
+    setCurrentFruitName('kumquat');
+    const fid = currentFruitId();
+    beginWishDirectly();
+    await submitWish('fruit');
+
+    let item = game.inventory[0];
+    assert.equal(game._command_mode, null);
+    assert.equal(item.otyp, SLIME_MOLD);
+    assert.equal(item.actualKind, 'slime mold');
+    assert.equal(item.kind, 'kumquat');
+    assert.equal(item.spe, fid);
+    assert.equal(item.owt, 5);
+    assert.equal(shop.shopBaseCost(item), 17);
+    assert.match(item.line, /kumquat/);
+
+    installWishState();
+    setCurrentFruitName('kumquat');
+    beginWishDirectly();
+    await submitWish('kumquats');
+
+    item = game.inventory[0];
+    assert.equal(item.otyp, SLIME_MOLD);
+    assert.equal(item.kind, 'kumquat');
+    assert.equal(item.quan, 2);
+    assert.equal(item.owt, 10);
+    assert.match(item.line, /2 kumquats/);
 });
 
 test('covered food wishes tolerate C aliases and fuzzy hyphen spacing', async () => {
@@ -708,6 +742,21 @@ test('mksobj initializes kelp frond quantity from C rnd(2)', () => {
     }
 
     assert.deepEqual([...quantities].sort(), [1, 2]);
+});
+
+test('mksobj initializes slime mold with current fruit id', () => {
+    installWishState(1);
+    setCurrentFruitName('kumquat');
+    const fid = currentFruitId();
+    const item = mksobj(SLIME_MOLD, true, false);
+
+    assert.equal(item.otyp, SLIME_MOLD);
+    assert.equal(item.actualKind, 'slime mold');
+    assert.equal(item.kind, 'kumquat');
+    assert.equal(item.plural, 'kumquats');
+    assert.equal(item.spe, fid);
+    assert.equal(item.nutrition, 250);
+    assert.equal(item.owt, 5);
 });
 
 test('mksobj initializes exact charged instruments with C charge ranges', () => {

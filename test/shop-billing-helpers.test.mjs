@@ -6,6 +6,7 @@ import { burnFloorObjectsByFire, earthFloorEffects, finishForceLock, processCorp
 import { game, resetGame } from '../js/gstate.js';
 import { initRng } from '../js/rng.js';
 import { CANDLESHOP, DB_EAST, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, HOLE, IN_SIGHT, LAVAPOOL, POOL, ROOM, ROOMOFFSET, SHOPBASE } from '../js/const.js';
+import { currentFruitId, setCurrentFruitName } from '../js/fruit.js';
 
 const BRASS_LANTERN = 226;
 const OIL_LAMP = 227;
@@ -22,6 +23,7 @@ const BOULDER = 465;
 const HORN_OF_PLENTY = 957;
 const BAG_OF_TRICKS = 10158;
 const POT_WATER = 253;
+const SLIME_MOLD = 11009;
 
 function installShopState() {
     const g = resetGame();
@@ -351,6 +353,29 @@ function simpleFood(id, kind, letter = 'f', extra = {}) {
         oy: 5,
         letter,
         line: `${letter} - ${article} ${kind}`,
+        ...extra,
+    };
+}
+
+function slimeMoldFood(id, letter = 's', fname = 'slime mold', fid = 1, extra = {}) {
+    const plural = fname.endsWith('s') ? `${fname}es` : `${fname}s`;
+    return {
+        id,
+        otyp: SLIME_MOLD,
+        cls: 'food',
+        glyph: '%',
+        kind: fname,
+        actualKind: 'slime mold',
+        singular: fname,
+        plural,
+        spe: fid,
+        quan: 1,
+        nutrition: 250,
+        owt: 5,
+        ox: 5,
+        oy: 5,
+        letter,
+        line: `${letter} - a ${fname}`,
         ...extra,
     };
 }
@@ -10344,6 +10369,7 @@ test('expanded simple food floor pickup merges compatible paid inventory stacks'
         ['banana', 'bananas', 'b'],
         ['carrot', 'carrots', 't'],
         ['kelp frond', 'kelp fronds', 'd'],
+        ['slime mold', 'slime molds', 's'],
         ['sprig of wolfsbane', 'sprigs of wolfsbane', 'w'],
         ['clove of garlic', 'cloves of garlic', 'g'],
         ['eucalyptus leaf', 'eucalyptus leaves', 'e'],
@@ -10510,6 +10536,30 @@ test('fruit pickup merge accepts same fruit and rejects different fruit', () => 
     assert.match(carriedApple.line, /^a - 2 apples/);
 });
 
+test('slime mold pickup merge requires same custom fruit id', () => {
+    installShopState();
+    setCurrentFruitName('kumquat');
+    const kumquatId = currentFruitId();
+    const carried = slimeMoldFood(7124, 'k', 'kumquat', kumquatId);
+    const floorSame = { ...slimeMoldFood(7125, undefined, 'kumquat', kumquatId), letter: undefined, line: undefined };
+    game.inventory = [carried];
+
+    const merge = shop.findPickedObjectInventoryMergeTarget(floorSame, 0);
+    assert.equal(merge.target, carried);
+    shop.mergePickedObjectIntoInventory(floorSame, carried);
+
+    assert.equal(carried.quan, 2);
+    assert.match(carried.line, /^k - 2 kumquats/);
+
+    setCurrentFruitName('grapefruit');
+    const grapefruitId = currentFruitId();
+    const floorOther = { ...slimeMoldFood(7126, undefined, 'grapefruit', grapefruitId), letter: undefined, line: undefined };
+    game.inventory = [carried];
+
+    assert.equal(shop.findPickedObjectInventoryMergeTarget(floorOther, 0), null);
+    assert.equal(carried.quan, 2);
+});
+
 test('covered simple food pickup merge excludes remaining special food exceptions', () => {
     installShopState();
     const carriedPancake = simpleFood(7131, 'pancake', 'p');
@@ -10635,6 +10685,7 @@ test('shopBaseCost returns C prices for covered simple foods', () => {
     assert.equal(shop.shopBaseCost(simpleFood(7129, 'sprig of wolfsbane')), 7);
     assert.equal(shop.shopBaseCost(simpleFood(7130, 'clove of garlic')), 7);
     assert.equal(shop.shopBaseCost(simpleFood(7131, 'eucalyptus leaf')), 5);
+    assert.equal(shop.shopBaseCost(slimeMoldFood(7137)), 17);
     assert.equal(shop.shopBaseCost(simpleFood(7134, 'lump of royal jelly')), 15);
     assert.equal(shop.shopBaseCost(simpleFood(7135, 'meatball')), 5);
     assert.equal(shop.shopBaseCost(simpleFood(7136, 'enormous meatball')), 105);
