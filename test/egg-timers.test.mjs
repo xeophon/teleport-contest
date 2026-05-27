@@ -141,3 +141,52 @@ test('contained due egg scan recurses through active carried floor and monster c
     assert.equal(g.level.monsters.length, 1);
     assert.equal(g._egg_hatch_processed || 0, 0);
 });
+
+test('buried due egg consumes hatch timer without hatching or unburying', async () => {
+    const g = installTimerTestGame();
+    const buriedEgg = timedEgg('newt', { quan: 2, buried: true, ox: 4, oy: 7 });
+    const buriedBoxEgg = timedEgg('newt');
+    const futureBuriedEgg = timedEgg('newt', { eggHatchTurn: 125, _egg_hatch_seq: 8, buried: true });
+    const buriedBox = { kind: 'box', buried: true, ox: 4, oy: 7, contents: [buriedBoxEgg, futureBuriedEgg] };
+    g.level.buriedobjlist = [buriedEgg, buriedBox];
+
+    await processEggHatchTimeouts(g);
+
+    assertEggHatchTimerCleared(buriedEgg);
+    assertEggHatchTimerCleared(buriedBoxEgg);
+    assert.equal(futureBuriedEgg.eggHatchTurn, 125);
+    assert.equal(futureBuriedEgg._egg_hatch_seq, 8);
+    assert.equal(buriedEgg.quan, 2);
+    assert.deepEqual(g.level.buriedobjlist, [buriedEgg, buriedBox]);
+    assert.deepEqual(buriedBox.contents, [buriedBoxEgg, futureBuriedEgg]);
+    assert.equal(g.level.objects.length, 0);
+    assert.equal(g.level.monsters.length, 0);
+    assert.equal(g._egg_hatch_processed || 0, 0);
+});
+
+test('migrating due egg consumes hatch timer without hatching or dequeuing', async () => {
+    const g = installTimerTestGame();
+    const impactEgg = timedEgg('newt', { quan: 3 });
+    const directMigratingEgg = timedEgg('newt');
+    const queuedBoxEgg = timedEgg('newt');
+    const queuedFutureEgg = timedEgg('newt', { eggHatchTurn: 125, _egg_hatch_seq: 8 });
+    const queuedBox = { kind: 'sack', contents: [queuedBoxEgg, queuedFutureEgg] };
+    const carriedByMigratingMonster = timedEgg('newt');
+    const migratingMonster = { mx: 0, my: 0, minvent: [carriedByMigratingMonster] };
+    g._impact_drop_migrations = new Map([['0:2', [impactEgg, queuedBox]]]);
+    g.migrating_objs = [directMigratingEgg];
+    g.migrating_mons = [migratingMonster];
+
+    await processEggHatchTimeouts(g);
+
+    for (const egg of [impactEgg, directMigratingEgg, queuedBoxEgg, carriedByMigratingMonster])
+        assertEggHatchTimerCleared(egg);
+    assert.equal(queuedFutureEgg.eggHatchTurn, 125);
+    assert.equal(queuedFutureEgg._egg_hatch_seq, 8);
+    assert.equal(impactEgg.quan, 3);
+    assert.deepEqual(g._impact_drop_migrations.get('0:2'), [impactEgg, queuedBox]);
+    assert.deepEqual(g.migrating_objs, [directMigratingEgg]);
+    assert.deepEqual(migratingMonster.minvent, [carriedByMigratingMonster]);
+    assert.equal(g.level.monsters.length, 0);
+    assert.equal(g._egg_hatch_processed || 0, 0);
+});

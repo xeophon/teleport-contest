@@ -19,10 +19,11 @@ This folder records source-backed audits against `nethack-c/upstream`. The notes
 - [13-subagent-findings-2026-05-27.md](13-subagent-findings-2026-05-27.md): special-food merge and timer follow-up audits plus implemented floor/drop stacking status.
 - [14-subagent-findings-2026-05-27.md](14-subagent-findings-2026-05-27.md): special-food pickup merge parity plus container/timer/billing/eating follow-up audits.
 - [15-subagent-findings-2026-05-27.md](15-subagent-findings-2026-05-27.md): container, level-generation floor, and monster-inventory merge parity plus bill-limit and timer follow-up audits.
-- [16-subagent-findings-2026-05-27.md](16-subagent-findings-2026-05-27.md): full shop-bill limit parity plus remaining mid-recursion billing and timer follow-ups.
+- [16-subagent-findings-2026-05-27.md](16-subagent-findings-2026-05-27.md): full shop-bill limit parity plus later recursive/dummy follow-up status.
 - [17-subagent-findings-2026-05-27.md](17-subagent-findings-2026-05-27.md): contained egg hatch timer expiration parity plus remaining timer queue follow-ups.
 - [18-subagent-findings-2026-05-27.md](18-subagent-findings-2026-05-27.md): recursive shop bill saturation parity.
 - [19-subagent-findings-2026-05-27.md](19-subagent-findings-2026-05-27.md): dummy alteration billing behavior when `BILLSZ` is full.
+- [20-subagent-findings-2026-05-27.md](20-subagent-findings-2026-05-27.md): buried and migrating egg due-timer expiration parity.
 
 ## Cross-Cutting Themes
 
@@ -54,6 +55,6 @@ Continue with the shop area because it combines visible current behavior with a 
 - Finish remaining `sellobj()` parity around recursive `subfrombill()` integration, less ordinary projectile ownership branches, and shared-helper use in less ordinary transfer paths.
 - Continue replacing wish parser/finalizer local tables with registry-backed `oc_merge`, `oc_charged`, `oc_nowish`, artifact provenance, and canonical `weight()`; exact no-wish declines, wished-gold quantity bounds, selected wizard trap non-object results including beartrap/land-mine ambiguity, wizard terrain/furniture map results, denied quest-artifact conduct, selected Candelabrum/Book/Bell/magic-lamp substitutions, wish-local venom `oc_nowish`, concrete food rows including current-fruit slime molds, and charged-tool metadata for bag of tricks, expensive camera, tinning kit, can of grease, magic marker, crystal ball, charged instruments, horn of plenty, drum of earthquake, and the Bell of Opening path are covered, so remaining work now focuses on replacing parser-local policy with the registry/factory, remaining unique/invocation-object policy, terrain side effects such as liquid object damage and wall-property qualifiers, save/bones fruit-chain remapping, and artifact/object-factory provenance.
 - Latest wish-local additions: figurine requested-monster restrictions now cover unique, human/non-were, werecreature, and mail-daemon cases, and corpse/statue/tin/egg requested-monster binding now covers the C creation-first distinctions for wereforms, rejected corpse/tin targets, statue permissiveness, and egg hatchability. Full registry/factory/timer parity remains open.
-- Latest timer-local addition: egg hatch timers now use a shared kill/dead-species helper; genocide proactively stops source/hatchling timers across modeled object graphs while preserving species; due hatch blocks unique, genocided, or extinct hatch targets without consuming the egg stack; and contained due eggs now consume their hatch timer without hatching or leaving their container. Full central timer registry parity remains open.
+- Latest timer-local addition: egg hatch timers now use a shared kill/dead-species helper; genocide proactively stops source/hatchling timers across modeled object graphs while preserving species; due hatch blocks unique, genocided, or extinct hatch targets without consuming the egg stack; and contained, buried, and migrating due eggs now consume hatch timers without hatching or moving. Saved-level catch-up and full central timer registry parity remain open.
 
 Every code slice should be followed by source-derived smoke checks plus `npm run score`.

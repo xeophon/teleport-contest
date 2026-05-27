@@ -3516,9 +3516,32 @@ function appendContainedDueEggEntries(entries, container, context, seen, moves) 
     }
 }
 
+function appendInertDueEggEntries(entries, objects, source, seen, moves, context = {}) {
+    if (!Array.isArray(objects)) return;
+    for (const obj of objects) {
+        if (!obj || seen.has(obj)) continue;
+        seen.add(obj);
+        if (isEggObject(obj) && eggHasHatchTimer(obj) && obj.eggHatchTurn <= moves)
+            entries.push({ egg: obj, source, ...context });
+        appendInertDueEggEntries(entries, containedObjectChildren(obj), source, seen, moves, context);
+    }
+}
+
+function appendMigratingDueEggEntries(entries, g, seen, moves) {
+    if (g._impact_drop_migrations instanceof Map) {
+        for (const objects of g._impact_drop_migrations.values())
+            appendInertDueEggEntries(entries, objects, 'migrating', seen, moves);
+    }
+    appendInertDueEggEntries(entries, g.migrating_objs, 'migrating', seen, moves);
+    appendInertDueEggEntries(entries, g._migrating_objs, 'migrating', seen, moves);
+    for (const carrier of [...(g.migrating_mons || []), ...(g._migrating_mons || [])])
+        appendInertDueEggEntries(entries, carrier?.minvent, 'migrating', seen, moves, { carrier });
+}
+
 function dueEggEntries(g) {
     const entries = [];
     const containedSeen = new Set();
+    const inertSeen = new Set();
     const moves = g.moves || 0;
     for (const egg of [...(g.inventory || [])]) {
         if (isEggObject(egg) && eggHasHatchTimer(egg) && egg.eggHatchTurn <= moves)
@@ -3537,6 +3560,8 @@ function dueEggEntries(g) {
             appendContainedDueEggEntries(entries, egg, { containerSource: 'minvent', carrier }, containedSeen, moves);
         }
     }
+    appendInertDueEggEntries(entries, g.level?.buriedobjlist, 'buried', inertSeen, moves);
+    appendMigratingDueEggEntries(entries, g, inertSeen, moves);
     return entries.sort((a, b) => ((a.egg.eggHatchTurn || 0) - (b.egg.eggHatchTurn || 0))
         || ((b.egg._egg_hatch_seq || 0) - (a.egg._egg_hatch_seq || 0)));
 }
@@ -3546,7 +3571,7 @@ export async function processEggHatchTimeouts(g = game) {
         const egg = entry.egg;
         killEggHatchTimer(egg);
         const data = eggHatchMonsterData(egg, g);
-        if (!data || entry.source === 'contained') continue;
+        if (!data || entry.source === 'contained' || entry.source === 'buried' || entry.source === 'migrating') continue;
 
         const yours = !!egg.spe || (entry.source === 'inventory' && !game.flags?.female && !rn2(2));
         const { x, y } = eggObjectLocation(entry);

@@ -29,10 +29,10 @@ This note records the C-source and JS audits for due egg hatch timers on contain
 
 ## Remaining Follow-Ups
 
-- C also consumes due hatch timers for buried and migrating eggs because `hatch_egg()` cannot locate them with flags `0`; JS still only processes active inventory/floor/monster/container graphs for due hatching.
+- Buried and migrating due hatch timers are now covered in `20-subagent-findings-2026-05-27.md`: they clear without hatching, unburying, dequeuing, quantity changes, or messages.
 - Saved-level timer catch-up remains broader save/restore work: C saves local object timers with their level and runs expired timers on restore with silent hatch semantics.
 - The JS timer model is still field-based rather than a central object timer queue, so split/move/merge timer behavior is only modeled in covered paths.
 
 ## Follow-Up Status
 
-The proposed shop-billing continuation is now covered in `18-subagent-findings-2026-05-27.md`. Remaining timer follow-ups above are still open.
+The proposed shop-billing continuation is now covered in `18-subagent-findings-2026-05-27.md`, and buried/migrating due egg timers are covered in `20-subagent-findings-2026-05-27.md`. Saved-level catch-up and central timer identity work remain open.
