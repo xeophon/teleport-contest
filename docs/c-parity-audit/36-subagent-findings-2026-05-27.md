@@ -4,7 +4,7 @@
 
 This slice adds the first local potion-potion alchemy branch for carried inventory `#dip`. It covers C's `mixtype()` recipe table for represented potion identities, target-stack affected-count selection, source potion consumption before instability checks, cursed/acid/lit-oil/random alchemic explosions, result BUC/dilution reset, deterministic recipe mutation, bad-mixture random water/sickness/random-potion/evaporation outcomes, visible result messages, and carried result re-merge through the existing potion-stack compatibility helper. Audit 37 adds bounded alchemy-explosion `potionbreathe()` vapor effects on top of this branch.
 
-It intentionally remains short of full alchemy fidelity for exact object-registry `otyp`/appearance metadata, fumbling drop behavior from `hold_another_object()`, exact shop repricing for every altered unpaid target potion, thrown/broken potion vapor delivery, and non-`kn` `trycall()` prompt parity.
+It intentionally remains short of full alchemy fidelity for exact object-registry `otyp`/appearance metadata, fumbling drop behavior from `hold_another_object()`, exact shop repricing for every altered unpaid target potion, direct `potionhit()` thrown/bash delivery, other broken-potion callers outside Audit 38, and non-`kn` `trycall()` prompt parity.
 
 ## C Source Anchors
 

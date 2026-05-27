@@ -14304,6 +14304,55 @@ test('hard-landing top-level paid projectile breaks without sale or floor placem
     assert.equal(landing.shopSale.handled, false);
 });
 
+test('hard-landing broken potion near hero applies vapor after shattering', () => {
+    installShopState();
+    initRng(1);
+    const potion = confusionPotion(8747);
+
+    const landing = shop.landProjectileObjectWithShopHandling(potion, 5, 6, { breakRoll: 50, silent: true });
+
+    assert.equal(landing.topBreak.broke, true);
+    assert.equal(landing.object, null);
+    assert.ok(game.u._confusionTimeout > 0);
+    assert.match(game.u._statusSuffix || '', /Conf/);
+    assert.match(landing.messages.join(' '), /You smell a peculiar odor\.\.\./);
+    assert.match(landing.messages.join(' '), /You feel somewhat dizzy\./);
+});
+
+test('wet worn towel blocks broken potion vapor effects', () => {
+    installShopState();
+    initRng(1);
+    const potion = confusionPotion(8748);
+    const towel = ordinaryTool(8749, 'towel', 't');
+    towel.spe = 3;
+    towel.wetness = 3;
+    towel.worn = true;
+    towel.line = 't - a towel (being worn)';
+    game.inventory = [towel];
+
+    const landing = shop.landProjectileObjectWithShopHandling(potion, 5, 6, { breakRoll: 50, silent: true });
+
+    assert.equal(landing.topBreak.broke, true);
+    assert.equal(game.u._confusionTimeout || 0, 0);
+    assert.doesNotMatch(game.u._statusSuffix || '', /Conf/);
+    assert.doesNotMatch(landing.messages.join(' '), /You smell a peculiar odor/);
+    assert.match(landing.messages.join(' '), /Some vapor passes harmlessly around you\./);
+});
+
+test('known blindness vapor from broken potion discovers the potion', () => {
+    installShopState();
+    initRng(1);
+    const potion = blindnessPotion(8750, 'b', 1, { dknown: true });
+
+    const landing = shop.landProjectileObjectWithShopHandling(potion, 5, 6, { breakRoll: 50, silent: true });
+
+    assert.equal(landing.topBreak.broke, true);
+    assert.equal(game.u.blind, true);
+    assert.ok(game.u._blindTimeout > 0);
+    assert.match(landing.messages.join(' '), /It suddenly gets dark\./);
+    assert.equal(game._discoveries?.some(entry => entry.section === 'Potions' && entry.name === 'potion of blindness'), true);
+});
+
 test('same-shop paid projectile auto-sells before stacking', () => {
     const { shkp } = installShopState();
     const floorStack = { ...dagger(8747), letter: undefined, line: undefined, quan: 1, ox: 5, oy: 5 };

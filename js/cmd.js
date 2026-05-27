@@ -12139,6 +12139,21 @@ function potionBreathe(potion, messages) {
     learnPotionVaporEffect(potion, name, knownEffect);
 }
 
+function heroIsNextToPotionVapor(x, y) {
+    const ux = game.u?.ux ?? 0;
+    const uy = game.u?.uy ?? 0;
+    return Math.max(Math.abs((x ?? ux) - ux), Math.abs((y ?? uy) - uy)) <= 1;
+}
+
+function brokenPotionBreathe(potion, x, y, messages) {
+    if (!isPotionObject(potion) || !heroIsNextToPotionVapor(x, y) || !heroCanReceivePotionVapor()) return;
+    if (!isWaterPotion(potion) && !heroHasWetWornTowel()) {
+        if (heroBreathesPotionVapor()) messages.push('You smell a peculiar odor...');
+        else if (heroHasPotionVaporEyes()) messages.push('Your eyes water.');
+    }
+    potionBreathe(potion, messages);
+}
+
 function dipPotionAlchemyExplosion(target, amount, messages) {
     const damage = amount + rnd(9);
     const explodes = target.cursed || isPotionOfAcid(target)
@@ -18702,6 +18717,7 @@ function landProjectileObjectWithShopHandling(obj, x, y, options = {}) {
         const breakKind = projectileTopLevelBreakKind(obj, options);
         if (breakKind) {
             if (!options.silent) projectileTopLevelBreakMessage(obj, breakKind, messages);
+            brokenPotionBreathe(obj, x, y, messages);
             const shopLanding = convertUnpaidObjectToShopDebt(obj, { ...options, broken: true });
             if (!shopLanding.charged) obj.no_charge = true;
             if (shopLanding.message) messages.push(shopLanding.message);

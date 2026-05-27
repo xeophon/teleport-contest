@@ -2,7 +2,7 @@
 
 ## Scope
 
-This slice adds the bounded `H2Opotion_dip()` branch for carried-object potion `#dip`: blessed water can uncurse or bless a target, cursed water can unbless or curse a target, and the source water is consumed only when the target BUC state actually changes. Neutral water damage was implemented afterward in Audit 34; unicorn horn/amethyst neutralization in Audit 33; broad non-self carried potion menus plus bounded polymorph potion dipping in Audit 35; potion-potion alchemy recipes/bad mixtures in Audit 36; and alchemy-explosion vapor effects in Audit 37. Shared water-damage primitives, self-potion/Klein-bottle handling, thrown/broken potion vapor delivery, non-`kn` `trycall()` prompt parity, water vapor gremlin/lycanthropy transformations, and deeper discovery/type-call behavior remain separate work.
+This slice adds the bounded `H2Opotion_dip()` branch for carried-object potion `#dip`: blessed water can uncurse or bless a target, cursed water can unbless or curse a target, and the source water is consumed only when the target BUC state actually changes. Neutral water damage was implemented afterward in Audit 34; unicorn horn/amethyst neutralization in Audit 33; broad non-self carried potion menus plus bounded polymorph potion dipping in Audit 35; potion-potion alchemy recipes/bad mixtures in Audit 36; alchemy-explosion vapor effects in Audit 37; and hard-landing projectile broken-potion vapor effects in Audit 38. Shared water-damage primitives, self-potion/Klein-bottle handling, direct `potionhit()` thrown/bash delivery, other broken-potion callers, non-`kn` `trycall()` prompt parity, water vapor gremlin/lycanthropy transformations, and deeper discovery/type-call behavior remain separate work.
 
 ## C Source Notes
 

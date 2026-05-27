@@ -4,7 +4,7 @@
 
 This slice adds bounded `potionbreathe()` parity for potion-potion alchemy explosions in carried inventory `#dip`. It preserves C's ordering where the source potion is consumed, the affected target stack explodes, target-stack vapor effects happen before the target stack is used up, and alchemic blast damage follows. The modeled vapor effects cover wet towel shielding, monster-form breath/eye gating, ability restoration/gain, healing-family HP and blindness/deafness cures, sickness, hallucination, confusion/booze, momentary invisibility, paralysis, sleeping, speed, blindness, and acid/polymorph constitution exercise.
 
-This is not the full vapor subsystem. Thrown/broken `potionhit()` vapor delivery, non-`kn` `trycall()` prompt parity, water vapor gremlin/lycanthropy transformations, exact C intrinsic/status-property mapping, and a shared potion discovery/call-name primitive remain separate work.
+This is not the full vapor subsystem. Hard-landing projectile broken-potion vapor is covered in Audit 38; direct `potionhit()` thrown/bash delivery, other broken-potion callers, non-`kn` `trycall()` prompt parity, water vapor gremlin/lycanthropy transformations, exact C intrinsic/status-property mapping, and a shared potion discovery/call-name primitive remain separate work.
 
 ## C Source Anchors
 
@@ -25,7 +25,7 @@ This is not the full vapor subsystem. Thrown/broken `potionhit()` vapor delivery
 
 ## Follow-Ups
 
-- Add thrown/broken `potionhit()` vapor delivery and visible-object fallback `trycall()` prompting outside alchemy.
+- Add direct `potionhit()` thrown/bash vapor delivery, other broken-potion callers outside Audit 38, and visible-object fallback `trycall()` prompting outside alchemy.
 - Implement water vapor's gremlin split and lycanthropy transformation paths.
 - Replace the local discovery bridge with a shared potion discovery/call-name primitive that can express both `makeknown()` and `trycall()`.
 - Tighten C status-property mapping for speed, sleep resistance, free action, polymorphed HP loss, and related intrinsics as the shared property model improves.

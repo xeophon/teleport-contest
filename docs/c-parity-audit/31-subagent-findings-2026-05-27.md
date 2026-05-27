@@ -29,6 +29,6 @@ This slice brings poisoned weapon display closer to C `doname()` ordering for in
 
 ## Remaining Follow-Ups
 
-- Broad non-self carried potion `#dip` source/target menu parity, neutral-water damage, horn/amethyst mixtures, potion-potion alchemy recipes/bad mixtures, and alchemy-explosion vapor effects are covered in later audits. Real `?*` menu rendering, full `poly_obj()` fidelity, self-potion/Klein-bottle handling, thrown/broken potion vapor delivery, non-`kn` `trycall()` prompt parity, water vapor gremlin/lycanthropy transformations, exact status-property mapping, and poison lifecycle outside dipping remain separate slices.
+- Broad non-self carried potion `#dip` source/target menu parity, neutral-water damage, horn/amethyst mixtures, potion-potion alchemy recipes/bad mixtures, alchemy-explosion vapor effects, and hard-landing projectile broken-potion vapor effects are covered in later audits. Real `?*` menu rendering, full `poly_obj()` fidelity, self-potion/Klein-bottle handling, direct `potionhit()` thrown/bash delivery, other broken-potion callers, non-`kn` `trycall()` prompt parity, water vapor gremlin/lycanthropy transformations, exact status-property mapping, and poison lifecycle outside dipping remain separate slices.
 - Broader naming parity should eventually flow through a C-shaped `xname()`/`doname()` split instead of local display helpers.
 - Stone-to-flesh object transforms remain a separate spell/object-registry slice.
