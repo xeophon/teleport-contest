@@ -13,7 +13,7 @@ This folder records source-backed audits against `nethack-c/upstream`. The notes
 - [07-traps-liquids-terrain.md](07-traps-liquids-terrain.md): traps, water/lava/sinks, floor effects, ray terrain hooks, burial, ice, and material damage.
 - [08-display-rng-observation.md](08-display-rng-observation.md): display/window lifecycle, glyphs, discovery, hallucination redraws, message/status ordering, and RNG trace diagnostics.
 - [09-subagent-findings-2026-05-26.md](09-subagent-findings-2026-05-26.md): latest parallel C-source audit findings and ranked narrow follow-up slices.
-- [10-subagent-findings-2026-05-27.md](10-subagent-findings-2026-05-27.md): meat-ring eating audit, implemented status, and royal-jelly follow-up candidates.
+- [10-subagent-findings-2026-05-27.md](10-subagent-findings-2026-05-27.md): meat-ring and royal-jelly eating audits plus implemented status.
 
 ## Cross-Cutting Themes
 

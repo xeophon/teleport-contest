@@ -1227,6 +1227,7 @@ const DELAY_ONE_FOOD_VICTUALS = new Map([
     ['banana', { delay: 1, finishName: 'banana' }],
     ['carrot', { delay: 1, finishName: 'carrot' }],
     ['meat ring', { otyp: MEAT_RING, delay: 1, finishName: 'meat ring' }],
+    ['lump of royal jelly', { otyp: LUMP_OF_ROYAL_JELLY, delay: 1, finishName: 'lump of royal jelly' }],
     ['sprig of wolfsbane', { delay: 1, finishName: 'sprig of wolfsbane' }],
     ['clove of garlic', { delay: 1, finishName: 'clove of garlic' }],
     ['slime mold', { otyp: SLIME_MOLD, delay: 1, finishName: 'slime mold' }],
@@ -12026,6 +12027,43 @@ function eucalyptusPostEffect(touched) {
     return messages.length ? { message: messages.join('  ') } : {};
 }
 
+function royalJellyFatalPostEffect(messages) {
+    if (consumeLifeSavingAmulet()) {
+        if (game.u) game.u.uhp = 0;
+        game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
+        game._command_mode = 'lifeSavingMore';
+        return {
+            message: [...messages, 'You die...', 'But wait...  Your medallion begins to glow!'].join('  '),
+            more: true,
+            fatal: true,
+            lifesaved: true,
+            commandMode: 'lifeSavingMore',
+            move: 0,
+        };
+    }
+
+    if (game.u) game.u.uhp = 0;
+    game._pending_time_passed = 0;
+    if (game.context) game.context.move = 0;
+    game._process_command_time_now = 0;
+    game._run_steps_remaining = 0;
+    game._command_mode = 'deathDieMore';
+    prepareDeathBones();
+    return {
+        message: [...messages, 'You die...'].join('  '),
+        more: true,
+        fatal: true,
+        commandMode: 'deathDieMore',
+        move: 0,
+    };
+}
+
+function royalJellyDelayedPostEffect(touched) {
+    const result = royalJellyPostEffects(touched);
+    if (result.died) return royalJellyFatalPostEffect(result.messages || []);
+    return result.messages?.length ? { message: result.messages.join('  ') } : {};
+}
+
 function adjustedDelayedFoodBiteHunger(spec, baseNutrition) {
     let nutrition = Math.trunc(baseNutrition || 0);
     if (!(nutrition > 0)) return 0;
@@ -12073,6 +12111,8 @@ function applyDelayedFoodPostEffect(touched, spec) {
         return wolfsbanePostEffect();
     if (spec?.kind === 'eucalyptus leaf')
         return eucalyptusPostEffect(touched);
+    if (spec?.kind === 'lump of royal jelly')
+        return royalJellyDelayedPostEffect(touched);
     return {};
 }
 
@@ -12344,19 +12384,25 @@ function startDelayedFoodVictual(item, spec, { floorObject = false } = {}) {
 
     if (reqtime <= 1 || biteNutrition <= 0) {
         const postEffect = applyDelayedFoodPostEffect(touched, spec);
-        if (postEffect.message) message = `${message}  ${postEffect.message}`;
+        let finishMessage = reqtime <= 1 && alreadyPartlyEaten && !rottenFirstBite
+            ? `You eat the partly eaten ${finishName}.`
+            : message;
+        if (postEffect.message) finishMessage = [finishMessage, postEffect.message].filter(Boolean).join('  ');
         if (postEffect.more) more = true;
         if (postEffect.duration) move = postEffect.duration;
-        if (floorObject) consumeOneFloorObject(touched);
-        else {
-            removeInventoryItem(touched);
-            game._pet_food_scan_inventory = game.inventory || [];
+        if (!(postEffect.fatal && !postEffect.lifesaved)) {
+            if (floorObject) consumeOneFloorObject(touched);
+            else {
+                removeInventoryItem(touched);
+                game._pet_food_scan_inventory = game.inventory || [];
+            }
         }
         return {
-            message: reqtime <= 1 && alreadyPartlyEaten && !rottenFirstBite ? `You eat the partly eaten ${finishName}.` : message,
+            message: finishMessage,
             more,
-            processTimeWithMore,
-            move,
+            processTimeWithMore: postEffect.fatal ? false : processTimeWithMore,
+            commandMode: postEffect.commandMode || null,
+            move: postEffect.move ?? move,
             finished: true,
         };
     }
@@ -27811,6 +27857,31 @@ function healWoundedLegsFromRoyalJelly() {
     game.u._woundedLegSide = '';
 }
 
+function rehumanizeAfterRoyalJelly() {
+    if (!game.u) return '';
+    const base = game.u._polyself_base || {};
+    const hpmax = Math.max(1, base.uhpmax ?? game.u.uhpmax ?? 1);
+    game.u.uhpmax = hpmax;
+    game.u.uhp = Math.max(1, Math.min(base.uhp ?? hpmax, hpmax));
+    if (base.uenmax != null) game.u.uenmax = base.uenmax;
+    if (base.uen != null) game.u.uen = Math.max(0, Math.min(base.uen, game.u.uenmax ?? base.uen));
+    if (base.uac != null) game.u.uac = base.uac;
+    if (base.ulevel != null) game.u.ulevel = base.ulevel;
+    if (base.uhpinc) game.u.uhpinc = [...base.uhpinc];
+    if (base.ueninc) game.u.ueninc = [...base.ueninc];
+    if (base.rank && game.urole) game.urole.rank = base.rank;
+    game.u._glyph = null;
+    game.u._glyphColor = undefined;
+    game.u._monsterHd = null;
+    game.u._monsterMove = null;
+    game.u._polyself_form = null;
+    game.u._polyself_base = null;
+    game.u.umovement = NORMAL_SPEED;
+    game.u._statusSuffix = '';
+    game.u._strDisplay = null;
+    return 'You return to human form!';
+}
+
 function royalJellyPostEffects(item) {
     if (game.u?._polyself_form?.name === 'killer bee' && !heroHasUnchanging()) {
         const result = becomeMonster('queen bee');
@@ -27829,6 +27900,11 @@ function royalJellyPostEffects(item) {
             if (!rn2(17)) game.u.uhpmax = (game.u.uhpmax || 1) + 1;
             game.u.uhp = game.u.uhpmax || 1;
         } else if ((game.u.uhp || 0) <= 0) {
+            if (game.u._polyself_form) {
+                const message = rehumanizeAfterRoyalJelly();
+                if (message) messages.push(message);
+                return { messages, died: false };
+            }
             game._death_cause = 'poisoned by a rotten lump of royal jelly';
             return { messages, died: true };
         }
@@ -45610,10 +45686,6 @@ export async function rhack(_cmd) {
                 await eatRottenNonCorpseFood(item);
                 return;
             }
-            if (isRoyalJelly(item)) {
-                await eatRoyalJelly(item);
-                return;
-            }
             const delayedFoodVictual = ordinaryFoodVictualSpec(item);
             if (delayedFoodVictual) {
                 const result = startCarriedDelayedFoodVictual(item, delayedFoodVictual);
@@ -45794,10 +45866,6 @@ export async function rhack(_cmd) {
             }
             if (!ordinaryFoodVictualSpec(food) && shouldUseGenericRottenFoodPath(food)) {
                 await eatRottenNonCorpseFood(food, true);
-                return;
-            }
-            if (isRoyalJelly(food)) {
-                await eatRoyalJelly(food, true);
                 return;
             }
             const delayedFoodVictual = ordinaryFoodVictualSpec(food);

@@ -4985,6 +4985,122 @@ test('carried meat ring uses C delay-one flesh conduct', async () => {
     assert.equal(game.context.move, 1);
 });
 
+test('carried royal jelly uses C delay-one food effects and animal-product conduct', async () => {
+    installNonShopFloorState();
+    const jelly = simpleFood(31965, 'lump of royal jelly', 'j');
+    game.inventory = [jelly];
+
+    await rhack('e');
+    await rhack('j');
+
+    assert.equal(game._pending_message, 'This lump of royal jelly is delicious!  You feel strong!');
+    assert.equal(game.inventory.includes(jelly), false);
+    assert.equal(game.u.uhunger, 1100);
+    assert.equal(game.u.acurr.a[0], 11);
+    assert.equal(game.u.uconduct?.food, 1);
+    assert.equal(game.u.uconduct?.unvegan, 1);
+    assert.equal(game.u.uconduct?.unvegetarian || 0, 0);
+    assert.equal(game._eating_turns_remaining || 0, 0);
+    assert.equal(game.context.move, 1);
+});
+
+test('cursed carried royal jelly rots before the one-bite post effects', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.u.uhp = 40;
+    game.u.uhpmax = 40;
+    const jelly = simpleFood(31966, 'lump of royal jelly', 'j', { cursed: true });
+    game.inventory = [jelly];
+
+    await rhack('e');
+    await rhack('j');
+
+    assert.equal(game._pending_message, 'Blecch!  Rotten food!  You feel weak!');
+    assert.equal(game.inventory.includes(jelly), false);
+    assert.equal(game.u.uhunger, 1000);
+    assert.equal(game.u.acurr.a[0], 9);
+    assert.equal(game.u.uconduct?.food, 1);
+    assert.equal(game.u.uconduct?.unvegan, 1);
+    assert.equal(game.u.uconduct?.unvegetarian || 0, 0);
+    assert.equal(game._eating_turns_remaining || 0, 0);
+});
+
+test('fatal cursed royal jelly runs post effects before useup', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.u.uhp = 1;
+    game.u.uhpmax = 1;
+    const jelly = simpleFood(31969, 'lump of royal jelly', 'j', { cursed: true });
+    game.inventory = [jelly];
+
+    await rhack('e');
+    await rhack('j');
+
+    assert.equal(game._pending_message, 'Blecch!  Rotten food!  You feel weak!  You die...');
+    assert.equal(game._message_more, 1);
+    assert.equal(game._command_mode, 'deathDieMore');
+    assert.equal(game.context.move, 0);
+    assert.equal(game._process_time_with_more || 0, 0);
+    assert.equal(game.inventory.includes(jelly), true);
+    assert.equal(game.u.uhunger, 1000);
+    assert.equal(game.u.uhp, 0);
+    assert.equal(game._death_cause, 'poisoned by a rotten lump of royal jelly');
+});
+
+test('cursed royal jelly rehumanizes a fatally damaged polyself', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.u.uhp = 1;
+    game.u.uhpmax = 6;
+    game.u._polyself_form = { name: 'newt' };
+    game.u._polyself_base = {
+        uhp: 7,
+        uhpmax: 12,
+        uen: 0,
+        uenmax: 0,
+        uac: 10,
+        ulevel: 1,
+        rank: { m: 'Wizard', f: 'Wizard' },
+    };
+    game.urole = { ...(game.urole || {}), rank: game.urole?.rank || { m: 'Newt', f: 'Newt' } };
+    const jelly = simpleFood(31970, 'lump of royal jelly', 'j', { cursed: true });
+    game.inventory = [jelly];
+
+    await rhack('e');
+    await rhack('j');
+
+    assert.equal(game._pending_message, 'Blecch!  Rotten food!  You feel weak!  You return to human form!');
+    assert.equal(game._command_mode, null);
+    assert.equal(game.inventory.includes(jelly), false);
+    assert.equal(game.u._polyself_form, null);
+    assert.equal(game.u._polyself_base, null);
+    assert.equal(game.u.uhp, 7);
+    assert.equal(game.u.uhpmax, 12);
+    assert.equal(game.u.uhunger, 1000);
+    assert.equal(game.u.acurr.a[0], 9);
+});
+
+test('killer bee eating royal jelly becomes a queen bee after the C delay-one bite', async () => {
+    installNonShopFloorState();
+    const jelly = simpleFood(31967, 'lump of royal jelly', 'j');
+    game.inventory = [jelly];
+    game.u._polyself_form = { name: 'killer bee' };
+    game.urole = { ...(game.urole || {}), rank: game.urole?.rank || { m: 'Wizard', f: 'Wizard' } };
+
+    await rhack('e');
+    await rhack('j');
+
+    assert.equal(game._pending_message, 'This lump of royal jelly is delicious!  You turn into a queen bee!');
+    assert.equal(game.inventory.includes(jelly), false);
+    assert.equal(game.u.uhunger, 1100);
+    assert.equal(game.u._polyself_form?.name, 'queen bee');
+    assert.equal(game.u.acurr.a[0], 10);
+    assert.equal(game.u.uconduct?.food, 1);
+    assert.equal(game.u.uconduct?.unvegan, 1);
+    assert.equal(game.u.uconduct?.polyselfs, 1);
+    assert.equal(game._eating_turns_remaining || 0, 0);
+});
+
 test('cursed carried meat ring rots before the one-bite finish', async () => {
     installNonShopFloorState();
     initRng(2);
@@ -5264,6 +5380,7 @@ test('shop-floor delay-one food stacks bill the touched unit before immediate fi
         { kind: 'sprig of wolfsbane', id: 31956, message: 'This sprig of wolfsbane is delicious!', hunger: 940 },
         { kind: 'clove of garlic', id: 31957, message: 'This clove of garlic is delicious!', hunger: 940 },
         { kind: 'eucalyptus leaf', id: 31958, message: 'This eucalyptus leaf is delicious!', hunger: 901 },
+        { kind: 'lump of royal jelly', id: 31968, message: 'This lump of royal jelly is delicious!  You feel strong!', hunger: 1100, conduct: 'unvegan' },
         { kind: 'fortune cookie', id: 31894, message: 'This fortune cookie is delicious!', hunger: 940, more: 1, conduct: 'unvegan' },
         { kind: 'cream pie', id: 31895, message: 'This cream pie is delicious!', hunger: 1000, conduct: 'unvegan' },
         { kind: 'candy bar', id: 31896, message: 'This candy bar is delicious!', hunger: 1000, conduct: 'unvegan' },
@@ -5289,6 +5406,7 @@ test('shop-floor delay-one food stacks bill the touched unit before immediate fi
             'sprig of wolfsbane': 'sprigs of wolfsbane',
             'clove of garlic': 'cloves of garlic',
             'eucalyptus leaf': 'eucalyptus leaves',
+            'lump of royal jelly': 'lumps of royal jelly',
         };
         const stack = simpleFood(entry.id, entry.kind, undefined, {
             quan: 2,
