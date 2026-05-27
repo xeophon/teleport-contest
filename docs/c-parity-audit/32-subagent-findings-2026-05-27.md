@@ -2,7 +2,7 @@
 
 ## Scope
 
-This slice adds the bounded `H2Opotion_dip()` branch for carried-object potion `#dip`: blessed water can uncurse or bless a target, cursed water can unbless or curse a target, and the source water is consumed only when the target BUC state actually changes. Neutral water damage was implemented afterward in Audit 34; unicorn horn/amethyst neutralization in Audit 33; and broad non-self carried potion menus plus bounded polymorph potion dipping in Audit 35. Potion-potion alchemy, shared water-damage primitives, self-potion/Klein-bottle handling, and deeper discovery/type-call behavior remain separate work.
+This slice adds the bounded `H2Opotion_dip()` branch for carried-object potion `#dip`: blessed water can uncurse or bless a target, cursed water can unbless or curse a target, and the source water is consumed only when the target BUC state actually changes. Neutral water damage was implemented afterward in Audit 34; unicorn horn/amethyst neutralization in Audit 33; broad non-self carried potion menus plus bounded polymorph potion dipping in Audit 35; and potion-potion alchemy recipes/bad mixtures in Audit 36. Shared water-damage primitives, self-potion/Klein-bottle handling, `potionbreathe()` side effects, and deeper discovery/type-call behavior remain separate work.
 
 ## C Source Notes
 
@@ -30,5 +30,5 @@ This slice adds the bounded `H2Opotion_dip()` branch for carried-object potion `
 ## Remaining Follow-Ups
 
 - Neutral-water `water_damage()` through potion `#dip` is covered in Audit 34; shared water-damage primitives and water discovery/type-call behavior remain open.
-- Potion-potion alchemy remains a separate potion slice. Unicorn horn/amethyst neutralization is covered by Audit 33, and bounded polymorph dipping plus broad non-self carried menus/generic no-effect fallback are covered by Audit 35.
+- Potion-potion alchemy recipes and bad mixtures are covered by Audit 36. Unicorn horn/amethyst neutralization is covered by Audit 33, and bounded polymorph dipping plus broad non-self carried menus/generic no-effect fallback are covered by Audit 35.
 - Broader C-shaped target validation now exists for carried non-coin dip targets, but real `?*` menu rendering and full command/menu infrastructure remain open.

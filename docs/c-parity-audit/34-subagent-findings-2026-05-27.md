@@ -2,7 +2,7 @@
 
 ## Scope
 
-This slice adds the early neutral-water branch of `potion_dip()` for carried objects. It covers direct neutral-water `water_damage()` effects for scroll blanking, blank-scroll no effect, spellbook blanking, acid destruction, potion dilution and further dilution into water, grease protection, rust erosion, towel soaking, and carried container leakage/protection. Potion-potion alchemy, full C `poly_obj()` fidelity, shared water-damage primitives, real `?*` menu rendering, self-potion/Klein-bottle handling, and deeper potion discovery/type-call behavior remain separate work; broad non-self carried potion menus and bounded polymorph-potion dipping are covered in Audit 35.
+This slice adds the early neutral-water branch of `potion_dip()` for carried objects. It covers direct neutral-water `water_damage()` effects for scroll blanking, blank-scroll no effect, spellbook blanking, acid destruction, potion dilution and further dilution into water, grease protection, rust erosion, towel soaking, and carried container leakage/protection. Potion-potion alchemy recipes and bad-mixture explosion/evaporation paths are covered in Audit 36. Full C `poly_obj()` fidelity, shared water-damage primitives, real `?*` menu rendering, self-potion/Klein-bottle handling, `potionbreathe()` explosion side effects, and deeper potion discovery/type-call behavior remain separate work; broad non-self carried potion menus and bounded polymorph-potion dipping are covered in Audit 35.
 
 ## C Source Notes
 
@@ -24,4 +24,4 @@ This slice adds the early neutral-water branch of `potion_dip()` for carried obj
 
 - Neutral water still reuses local rust-trap/floor-effect helpers instead of a fully shared C-shaped `water_damage()` primitive. That is acceptable for this slice but should eventually move under the broader trap/liquid/material-damage subsystem.
 - Full source/target menu parity remains incomplete. The JS source list now exposes neutral water broadly for carried targets, but unsupported branches still fall through to `Interesting...` rather than using a complete C `getobj()` matrix.
-- Potion-potion alchemy remains a larger slice because it needs stack splitting, bad-mixture/explosion handling, object reinsertion/merge, discovery state, and shop billing around transformed sources. Audit 35 covers the bounded carried-object polymorph branch, but full `poly_obj()` fidelity still belongs with object-registry work.
+- Audit 36 covers the first potion-potion alchemy slice with recipes, affected stack splitting, instability, mutation, and evaporation. Remaining alchemy work is `potionbreathe()` side effects, exact object-registry metadata, fumbling drop behavior, and complete altered-target shop repricing.

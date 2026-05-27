@@ -1126,7 +1126,7 @@ function healingPotion(id, letter = 'h', quan = 1) {
         glyph: '!',
         kind: 'healing',
         actualKind: 'potion of healing',
-        potionIndex: 1,
+        potionIndex: 10,
         quan,
         ox: 5,
         oy: 5,
@@ -1136,10 +1136,20 @@ function healingPotion(id, letter = 'h', quan = 1) {
 }
 
 const POTION_INDEX_BY_NAME = {
-    healing: 1,
+    'gain ability': 0,
+    'restore ability': 1,
     confusion: 2,
     blindness: 3,
+    speed: 5,
+    levitation: 6,
     hallucination: 7,
+    'see invisible': 9,
+    healing: 10,
+    'extra healing': 11,
+    'gain level': 12,
+    enlightenment: 13,
+    'gain energy': 16,
+    'full healing': 18,
     polymorph: 19,
     booze: 20,
     sickness: 21,
@@ -4087,6 +4097,58 @@ test('dipping an unpolyable object into polymorph potion keeps the potion', asyn
     assert.equal(target.id, 30978);
     assert.equal(target.kind, 'wand of polymorph');
     assert.match(game._pending_message, /Nothing happens\./);
+});
+
+test('potion alchemy mixes healing and speed into diluted extra healing', async () => {
+    installCommandShopState();
+    initRng(1);
+    const target = healingPotion(30980, 'h');
+    const source = namedPotion(30981, 'speed', 's');
+    game.inventory = [target, source];
+
+    await rhack('#');
+    for (const ch of 'dip') await rhack(ch);
+    await rhack('\n');
+    await rhack('h');
+    await rhack('n');
+    await rhack('s');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.inventory.includes(source), false);
+    assert.equal(game.inventory.includes(target), true);
+    assert.equal(target.kind, 'extra healing');
+    assert.equal(target.actualKind, 'potion of extra healing');
+    assert.equal(target.potionIndex, 11);
+    assert.equal(target.odiluted, true);
+    assert.equal(target.blessed, false);
+    assert.equal(target.cursed, false);
+    assert.equal(target.bknown, false);
+    assert.match(game._pending_message, /potion of healing mixes with potion of speed/);
+    assert.match(game._pending_message, /The mixture looks/);
+});
+
+test('cursed potion alchemy explodes after consuming the source potion', async () => {
+    installCommandShopState();
+    initRng(1);
+    game.u.uhp = 50;
+    const target = confusionPotion(30982, 'c', 1, { cursed: true });
+    const source = boozePotion(30983, 'b');
+    game.inventory = [target, source];
+
+    await rhack('#');
+    for (const ch of 'dip') await rhack(ch);
+    await rhack('\n');
+    await rhack('c');
+    await rhack('n');
+    await rhack('b');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.inventory.includes(source), false);
+    assert.equal(game.inventory.includes(target), false);
+    assert.ok(game.u.uhp < 50);
+    assert.match(game._pending_message, /BOOM!  They explode!/);
 });
 
 test('dipping poisoned darts into healing-family potions removes the coating', async () => {

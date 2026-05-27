@@ -2,7 +2,7 @@
 
 ## Scope
 
-This slice adds the bounded carried-object acid `#dip` branch. It covers corrosion of corrodeable inventory targets, grease protection before material checks with acid consumption, no-consume proofed/maxed no-effect cases, and unpaid acid potion use-up billing through the existing inventory consumption path. It intentionally does not implement alchemy, unicorn horn/amethyst mixtures, or the full C source menu. Source-first `#altdip` for implemented effects is covered in audit 30.
+This slice adds the bounded carried-object acid `#dip` branch. It covers corrosion of corrodeable inventory targets, grease protection before material checks with acid consumption, no-consume proofed/maxed no-effect cases, and unpaid acid potion use-up billing through the existing inventory consumption path. It intentionally does not implement the rest of the potion matrix; source-first `#altdip` for implemented effects is covered in audit 30, horn/amethyst mixtures in audit 33, and potion-potion alchemy recipes/bad mixtures in audit 36.
 
 ## C Source Notes
 
@@ -24,5 +24,5 @@ This slice adds the bounded carried-object acid `#dip` branch. It covers corrosi
 
 - Source-first `#altdip` is now covered in audit 30 for implemented potion effects and the known-oil apply exception; broad non-self carried potion source/target menus are covered in audit 35.
 - Poisoned weapon display ordering was handled in audit 31 for inventory and `#dip` prompts, while coating/removal messages still keep `xname()` wording.
-- Remaining potion matrix work is potion-potion alchemy, full `poly_obj()` fidelity, shared water-damage/discovery primitives, real `?*` menu rendering, and poison lifecycle outside dipping; horn/amethyst, water, broad menus, unsupported no-effect pairs, and bounded polymorph dipping are covered in audits 32-35.
+- Remaining potion matrix work is `potionbreathe()` explosion side effects, full `poly_obj()` fidelity, shared water-damage/discovery primitives, real `?*` menu rendering, self-potion/Klein-bottle handling, and poison lifecycle outside dipping; horn/amethyst, water, broad menus, unsupported no-effect pairs, bounded polymorph dipping, and potion-potion alchemy recipes/bad mixtures are covered in audits 32-36.
 - Acid corrosion currently uses the existing JS damage-profile heuristic rather than a central C object-material registry; broad material parity still belongs with the object registry work.
