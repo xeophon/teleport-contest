@@ -16837,6 +16837,17 @@ function shopkeeperDisplayName(shkp) {
 
 const SHOP_BILL_LIMIT = 200;
 
+function shopBillEntryCount(shkp) {
+    if (!shkp) return 0;
+    if (Array.isArray(shkp.bill)) return shkp.bill.length;
+    const billct = Math.trunc(Number(shkp.billct || 0));
+    return Number.isFinite(billct) && billct > 0 ? billct : 0;
+}
+
+function shopBillIsFull(shkp) {
+    return shopBillEntryCount(shkp) >= SHOP_BILL_LIMIT;
+}
+
 function shopBillObjectId(obj) {
     if (!obj) return null;
     const id = obj.o_id ?? obj.id ?? obj._shopBillObjectId;
@@ -17459,14 +17470,7 @@ function containedShopGold(obj, seen = new Set()) {
 
 function addShopBillEntryOrMark(shkp, obj, totalPrice) {
     if (!shkp || !obj || shopBillableGold(obj) || !(totalPrice > 0)) return null;
-    const billEntry = addObjectToShopBill(shkp, obj, totalPrice);
-    if (!billEntry) {
-        obj.unpaid = true;
-        obj.unpaidPrice = totalPrice;
-        syncUnpaidBillLine(obj);
-        shkp.billct = Math.max(0, Math.trunc(Number(shkp.billct || 0))) + 1;
-    }
-    return billEntry;
+    return addObjectToShopBill(shkp, obj, totalPrice);
 }
 
 function liveUnpaidBillOwnerOrClear(shkp, obj) {
@@ -17491,8 +17495,11 @@ function addContainedObjectsToShopBill(shkp, obj, x, y, seen = new Set()) {
         } else if (!child.no_charge) {
             const childPrice = shopItemPrice(child, x, y);
             if (childPrice > 0) {
-                billEntries.push(addShopBillEntryOrMark(shkp, child, childPrice));
-                price += childPrice;
+                const childEntry = addShopBillEntryOrMark(shkp, child, childPrice);
+                if (childEntry) {
+                    billEntries.push(childEntry);
+                    price += childPrice;
+                }
             }
         }
         const nested = addContainedObjectsToShopBill(shkp, child, x, y, seen);
@@ -17505,11 +17512,24 @@ function addContainedObjectsToShopBill(shkp, obj, x, y, seen = new Set()) {
 function addContainerAndContentsToShopBill(container, sourceObj, pickedItem, shkp, x, y) {
     let price = 0;
     let billEntry = null;
+    if (shopBillIsFull(shkp)) {
+        return {
+            shkp,
+            price: 0,
+            itemPrice: 0,
+            goldCharged: 0,
+            goldMessages: [],
+            billEntry: null,
+            billEntries: [],
+            free: true,
+            messages: ['You got that for free!'],
+        };
+    }
     if (!sourceObj.no_charge) {
         const topPrice = shopItemPrice(sourceObj, x, y);
         if (topPrice > 0) {
             billEntry = addShopBillEntryOrMark(shkp, pickedItem, topPrice);
-            price += topPrice;
+            if (billEntry) price += topPrice;
         }
     }
     const nested = addContainedObjectsToShopBill(shkp, sourceObj, x, y);
@@ -18225,12 +18245,7 @@ function addPickedObjectToShopBill(source, pickedItem) {
     const price = shopItemPrice(source, x, y);
     if (!(price > 0)) return { shkp, price: 0, billEntry: null };
     const billEntry = addObjectToShopBill(shkp, pickedItem, price);
-    if (!billEntry) {
-        pickedItem.unpaid = true;
-        pickedItem.unpaidPrice = price;
-        syncUnpaidBillLine(pickedItem);
-        shkp.billct = Math.max(0, Math.trunc(Number(shkp.billct || 0))) + 1;
-    }
+    if (!billEntry) return { shkp, price: 0, billEntry: null, free: true, messages: ['You got that for free!'] };
     return { shkp, price, billEntry };
 }
 
@@ -18277,12 +18292,7 @@ function addContainerTakeoutObjectToShopBill(container, sourceObj, pickedItem = 
     const price = shopItemPrice(pickedItem, x, y);
     if (!(price > 0)) return { shkp, price: 0, billEntry: null };
     const billEntry = addObjectToShopBill(shkp, pickedItem, price);
-    if (!billEntry) {
-        pickedItem.unpaid = true;
-        pickedItem.unpaidPrice = price;
-        syncUnpaidBillLine(pickedItem);
-        shkp.billct = Math.max(0, Math.trunc(Number(shkp.billct || 0))) + 1;
-    }
+    if (!billEntry) return { shkp, price: 0, billEntry: null, free: true, messages: ['You got that for free!'] };
     return { shkp, price, billEntry };
 }
 
@@ -18483,7 +18493,7 @@ function mergePickedObjectIntoShopBill(source, target, sourcePrice = null) {
     const y = source?.oy ?? game.u?.uy;
     const shkp = x == null || y == null ? null : shopkeeperForCostlySpot(x, y);
     const price = sourcePrice != null ? Number(sourcePrice) : shopItemPrice(source, x, y);
-    const sourceBillable = Number.isFinite(price) && price > 0 && shopkeeperInHisShop(shkp);
+    const sourceBillable = Number.isFinite(price) && price > 0 && shopkeeperInHisShop(shkp) && !shopBillIsFull(shkp);
     const existingEntry = shopBillEntryForObject(shkp, target);
     const targetUnpaid = !!(target?.unpaid || existingEntry);
 
@@ -18665,7 +18675,7 @@ function findPickedObjectInventoryMergeTarget(source, sourcePrice = null) {
     const y = source?.oy ?? game.u?.uy;
     const shkp = x == null || y == null ? null : shopkeeperForCostlySpot(x, y);
     const price = sourcePrice != null ? Number(sourcePrice) : shopItemPrice(source, x, y);
-    const sourceWillBeUnpaid = Number.isFinite(price) && price > 0 && shopkeeperInHisShop(shkp);
+    const sourceWillBeUnpaid = Number.isFinite(price) && price > 0 && shopkeeperInHisShop(shkp) && !shopBillIsFull(shkp);
     for (const target of game.inventory || []) {
         if (!pickedObjectInventoryMergeCompatible(target, source, sourceWillBeUnpaid, shkp)) continue;
         const billMerge = mergePickedObjectIntoShopBill(source, target, price);
@@ -18726,7 +18736,7 @@ function containerTakeoutMergeBilling(container, obj) {
     return {
         shkp,
         price,
-        sourceWillBeUnpaid: price > 0 && shopkeeperInHisShop(shkp),
+        sourceWillBeUnpaid: price > 0 && shopkeeperInHisShop(shkp) && !shopBillIsFull(shkp),
     };
 }
 
@@ -18768,7 +18778,9 @@ function mergeContainerTakeoutObjectIntoInventory(container, obj, mergeInfo) {
     }
     const line = mergePickedObjectIntoInventory(obj, target);
     maybeAttachCarriedFigurineTimeout(target);
-    return line;
+    return !billing.sourceWillBeUnpaid && billing.price > 0 && shopBillIsFull(billing.shkp)
+        ? `You got that for free!  ${line}`
+        : line;
 }
 
 function sellobjReturnUnpaidToShop(obj, x, y) {
@@ -23905,11 +23917,12 @@ function addContainerTakeoutObjectToInventory(container, obj, options = {}) {
         kind: obj.kind || pickupObjectName({ ...obj, quan: 1 }),
     });
     obj.line = normalInventoryLine({ ...obj, line: '' });
-    addContainerTakeoutObjectToShopBill(container, billingSource, obj);
+    const billing = addContainerTakeoutObjectToShopBill(container, billingSource, obj);
     game.inventory = [...(game.inventory || []), obj];
     maybeAttachCarriedFigurineTimeout(obj);
     game._pet_food_scan_inventory = game.inventory;
-    return obj.line || `${letter} - ${pickupObjectPhrase(obj)}`;
+    const line = obj.line || `${letter} - ${pickupObjectPhrase(obj)}`;
+    return billing.messages?.length ? `${billing.messages.join('  ')}  ${line}` : line;
 }
 
 function splitContainerTakeoutObjectForLift(obj, count) {
@@ -24923,11 +24936,7 @@ function billHornCreatedObject(horn, obj, messages, { silent = false } = {}) {
     if (!shkp) return 0;
     const price = shopItemPrice(obj, game.u?.ux, game.u?.uy);
     if (!(price > 0)) return 0;
-    if (!addObjectToShopBill(shkp, obj, price)) {
-        obj.unpaid = true;
-        obj.unpaidPrice = price;
-        shkp.billct = Math.max(0, Math.trunc(Number(shkp.billct || 0))) + 1;
-    }
+    if (!addObjectToShopBill(shkp, obj, price)) return 0;
     if (!silent && !heroIsDeaf()) messages?.push(hornCreatedObjectBillMessage(obj, price));
     return price;
 }
@@ -26630,6 +26639,7 @@ function pickupListHandleObject(obj, preflight, state) {
     pickedItem.line = replaceShopPriceLineSuffix(pickedItem.line, unpaidSuffix);
     game.inventory = [...(game.inventory || []), pickedItem];
     maybeAttachCarriedFigurineTimeout(pickedItem);
+    if (billing.messages?.length) state.messages.push(...billing.messages);
     if (billedPrice > 0) state.messages.push(shopPickupQuoteMessage(pickupObj, billedPrice, priceInfo));
     if (billing.goldMessages?.length) state.messages.push(...billing.goldMessages);
     state.messages.push(`${letter} - ${amount}${unpaidSuffix}.`);
@@ -47322,7 +47332,7 @@ export async function rhack(_cmd) {
                 return;
             }
             const pickupMessage = `${letter} - ${amount}${unpaidSuffix}.`;
-            const pickupMessages = [...preflightMessages, ...(billing.goldMessages || []), pickupMessage];
+            const pickupMessages = [...preflightMessages, ...(billing.messages || []), ...(billing.goldMessages || []), pickupMessage];
             await setMessage(pickupMessages.join('  '), !!pickupObj.wasStolen || pickupMessages.join('  ').length >= (game.nhDisplay?.cols || 80) - 8);
             game.context.move = 1;
             return;

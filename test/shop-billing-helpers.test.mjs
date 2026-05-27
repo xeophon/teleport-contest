@@ -5,7 +5,7 @@ import { interruptEatingOccupation, processEatingOccupationTick } from '../js/al
 import { burnFloorObjectsByFire, earthFloorEffects, finishForceLock, processCorpseTimers, processGlobShrinkTimers, processSpellbookStudyOccupation, rhack, __shopBillingTestHooks as shop } from '../js/cmd.js';
 import { game, resetGame } from '../js/gstate.js';
 import { initRng } from '../js/rng.js';
-import { CANDLESHOP, DB_EAST, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, HOLE, IN_SIGHT, LAVAPOOL, POOL, ROOM, ROOMOFFSET, SHOPBASE } from '../js/const.js';
+import { BILLSZ, CANDLESHOP, DB_EAST, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, HOLE, IN_SIGHT, LAVAPOOL, POOL, ROOM, ROOMOFFSET, SHOPBASE } from '../js/const.js';
 import { currentFruitId, setCurrentFruitName } from '../js/fruit.js';
 
 const BRASS_LANTERN = 226;
@@ -1181,6 +1181,16 @@ function assertBillRowsFor(shkp, objects) {
     }
 }
 
+function fillShopBill(shkp, count = BILLSZ) {
+    shkp.bill = Array.from({ length: count }, (_, index) => ({
+        bo_id: `full-${index}`,
+        price: 1,
+        bquan: 1,
+        totalPrice: 1,
+    }));
+    shkp.billct = shkp.bill.length;
+}
+
 test('picked shop item enters the bill before inventory display compatibility', () => {
     const { shkp } = installShopState();
     const floorObj = foodRation(1001, 'a');
@@ -1193,6 +1203,47 @@ test('picked shop item enters the bill before inventory display compatibility', 
     assert.equal(shkp.bill[0].bo_id, String(carried.id));
     assert.equal(carried.unpaid, true);
     assert.match(carried.line, /unpaid, \d+ zorkmids?/);
+});
+
+test('full shop bill leaves direct pickup free instead of synthesizing unpaid state', () => {
+    const { shkp } = installShopState();
+    fillShopBill(shkp);
+    const floorObj = foodRation(1002, 'a');
+    const carried = { ...floorObj, line: 'a - a food ration' };
+
+    const result = shop.addPickedObjectToShopBill(floorObj, carried);
+
+    assert.equal(result.price, 0);
+    assert.equal(result.billEntry, null);
+    assert.equal(result.free, true);
+    assert.deepEqual(result.messages, ['You got that for free!']);
+    assert.equal(shkp.billct, BILLSZ);
+    assert.equal(shkp.bill.length, BILLSZ);
+    assert.equal(carried.unpaid, undefined);
+    assert.equal(carried.unpaidPrice, undefined);
+    assert.doesNotMatch(carried.line, /unpaid/);
+});
+
+test('full shop bill leaves shop-floor container takeout free', () => {
+    const { shkp } = installShopState();
+    fillShopBill(shkp);
+    const container = shopFloorContainer(1003);
+    const source = foodRation(1004);
+    container.contents = [source];
+    source.contained = true;
+    source.container = container;
+    game.level.objects = [container];
+
+    const result = shop.addContainerTakeoutObjectToShopBill(container, source, source);
+
+    assert.equal(result.price, 0);
+    assert.equal(result.billEntry, null);
+    assert.equal(result.free, true);
+    assert.deepEqual(result.messages, ['You got that for free!']);
+    assert.equal(shkp.billct, BILLSZ);
+    assert.equal(shkp.bill.length, BILLSZ);
+    assert.equal(source.unpaid, undefined);
+    assert.equal(source.unpaidPrice, undefined);
 });
 
 test('dropping unpaid non-container merchandise in the shop returns it to the bill', () => {
@@ -1221,6 +1272,21 @@ test('multiple bill entries can be removed by object or saved bill id', () => {
     assert.equal(shop.removeObjectFromShopBill(shkp, first), true);
     assert.equal(shop.removeObjectFromShopBillById(shkp, second.id), true);
     assert.equal(shkp.billct, 0);
+});
+
+test('addObjectToShopBill refuses a full bill without marking unpaid', () => {
+    const { shkp } = installShopState();
+    fillShopBill(shkp);
+    const extra = foodRation(2003, 'a');
+
+    const entry = shop.addObjectToShopBill(shkp, extra, 45);
+
+    assert.equal(entry, null);
+    assert.equal(shkp.billct, BILLSZ);
+    assert.equal(shkp.bill.length, BILLSZ);
+    assert.equal(shop.shopBillEntryForObject(shkp, extra), null);
+    assert.notEqual(extra.unpaid, true);
+    assert.equal(extra.unpaidPrice, undefined);
 });
 
 test('shop-created carried objects use the same ledger representation', () => {
@@ -1484,6 +1550,36 @@ test('floor shop bag of tricks #tip charges emptying fee through a temporary bil
     assert.notEqual(bag.unpaid, true);
     assert.equal(bag.unpaidPrice, undefined);
     assert.match(game._pending_message, new RegExp(`Emptying that will cost you ${expectedFee} zorkmids`));
+});
+
+test('full shop bill prevents floor bag of tricks #tip temporary usage fee', async () => {
+    const { shkp } = installCommandShopState();
+    fillShopBill(shkp);
+    const bag = floorBagOfTricks(3065, 3);
+    game.level.objects = [bag];
+    game.inventory = [];
+
+    await rhack('#');
+    for (const ch of 'tip') await rhack(ch);
+    await rhack('\n');
+
+    assert.equal(game._command_mode, 'tipConfirm');
+    assert.equal(game._tip_container_object, bag);
+
+    await rhack('y');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(bag.spe, 0);
+    assert.equal(shkp.debit || 0, 0);
+    assert.equal(shkp.robbed || 0, 0);
+    assert.equal(shkp.billct, BILLSZ);
+    assert.equal(shkp.bill.length, BILLSZ);
+    assert.equal(shop.shopBillEntryForObject(shkp, bag), null);
+    assert.notEqual(bag.unpaid, true);
+    assert.equal(bag.unpaidPrice, undefined);
+    assert.doesNotMatch(game._pending_message, /Emptying that will cost/);
+    assert.doesNotMatch(game._pending_message, /got that for free/);
 });
 
 test('zero-charge floor bag of tricks #tip creates no usage debt or persistent bill row', async () => {
@@ -11458,6 +11554,26 @@ test('simple food pickup full-inventory preflight rejects billable source into p
     }
 });
 
+test('full bill does not bypass C full-inventory shop pickup preflight', async () => {
+    const { shkp } = installCommandShopState();
+    fillShopBill(shkp);
+    const carried = { ...foodRation(7139, 'a'), bknown: false };
+    const floorObj = { ...foodRation(7140), letter: undefined, line: undefined, bknown: false };
+    fillInventoryLetters();
+    game.inventory[0] = carried;
+    game.level.objects = [floorObj];
+
+    await rhack(',');
+
+    assert.equal(carried.quan, 1);
+    assert.equal(game.level.objects.includes(floorObj), true);
+    assert.notEqual(game._command_mode, 'pickupShopQuote');
+    assert.match(game._pending_message, /knapsack cannot accommodate any more items/);
+    assert.equal(shkp.billct, BILLSZ);
+    assert.equal(shkp.bill.length, BILLSZ);
+    assert.equal(game.context.move, 0);
+});
+
 test('simple food pickup full-inventory preflight rejects billable source before same-shop unpaid merge', async () => {
     const cases = [
         [
@@ -11518,6 +11634,25 @@ test('non-food shop pickup merge rejects unpaid into paid stacks', () => {
     assert.equal(shkp.billct, 0);
 });
 
+test('full shop bill lets pickup merge into paid inventory stack as free', () => {
+    const { shkp } = installShopState();
+    fillShopBill(shkp);
+    const paidStack = foodRation(7103, 'd');
+    const floorObj = { ...foodRation(7104), letter: undefined, line: undefined };
+    game.inventory = [paidStack];
+
+    const merge = shop.findPickedObjectInventoryMergeTarget(floorObj, 45);
+
+    assert.equal(merge.target, paidStack);
+    assert.equal(merge.billMerge.price, 0);
+    shop.mergePickedObjectIntoInventory(floorObj, paidStack);
+    assert.equal(paidStack.quan, 2);
+    assert.equal(paidStack.unpaid, undefined);
+    assert.equal(paidStack.unpaidPrice, undefined);
+    assert.equal(shkp.billct, BILLSZ);
+    assert.equal(shkp.bill.length, BILLSZ);
+});
+
 test('non-food shop pickup merge combines compatible unpaid bill entries', () => {
     const { shkp } = installShopState();
     const unpaidStack = dagger(7201, 'd');
@@ -11554,6 +11689,44 @@ test('split shop bill entry preserves parent and child unit prices', () => {
     assert.equal(shop.shopBillEntryTotal(childEntry), 5);
     assert.equal(child.unpaidPrice, 5);
     assert.equal(shkp.billct, 2);
+});
+
+test('full shop bill split clears the child while shrinking the parent row', () => {
+    const { shkp } = installShopState();
+    const parent = { ...dagger(8003, 'd'), quan: 3, line: 'd - 3 +0 daggers' };
+    shop.addObjectToShopBill(shkp, parent, 15);
+    for (let index = 0; index < 199; index++) {
+        shkp.bill.push({
+            bo_id: `full-split-${index}`,
+            price: 1,
+            bquan: 1,
+            totalPrice: 1,
+        });
+    }
+    shkp.billct = shkp.bill.length;
+    const child = {
+        ...parent,
+        id: 8004,
+        quan: 1,
+        letter: 'e',
+        line: 'e - a +0 dagger (unpaid, 5 zorkmids)',
+        unpaid: true,
+        unpaidPrice: 5,
+    };
+
+    const childEntry = shop.splitShopBillEntry(shkp, parent, child, 1);
+    const parentEntry = shop.shopBillEntryForObject(shkp, parent);
+
+    assert.equal(childEntry, null);
+    assert.equal(parentEntry.bquan, 2);
+    assert.equal(shop.shopBillEntryTotal(parentEntry), 10);
+    assert.equal(parent.unpaid, true);
+    assert.equal(parent.unpaidPrice, 10);
+    assert.equal(child.unpaid, false);
+    assert.equal(child.unpaidPrice, undefined);
+    assert.doesNotMatch(child.line, /unpaid/);
+    assert.equal(shkp.billct, BILLSZ);
+    assert.equal(shkp.bill.length, BILLSZ);
 });
 
 test('returning a split unpaid child leaves the parent bill entry intact', () => {
