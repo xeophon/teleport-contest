@@ -21,6 +21,10 @@ const TOOL_CLASS = 12;
 const LAND_MINE_OBJECT = 10160;
 const BEARTRAP_OBJECT = 10161;
 const FIGURINE = 795;
+const CORPSE = 471;
+const STATUE = 472;
+const EGG = 10001;
+const TIN = 10004;
 const TALLOW_CANDLE = 370;
 const WAX_CANDLE = 371;
 const CANDELABRUM_OF_INVOCATION = 10076;
@@ -1409,6 +1413,7 @@ test('figurine wishes apply C monster-type restrictions', async () => {
     item = game.inventory[0];
     assert.equal(item.otyp, FIGURINE);
     assert.equal(item.corpsenm?.name, 'werewolf');
+    assert.equal(item.corpsenm?.wereBeast, true);
 
     installWishState(11);
     beginWishDirectly();
@@ -1416,6 +1421,7 @@ test('figurine wishes apply C monster-type restrictions', async () => {
     item = game.inventory[0];
     assert.equal(item.otyp, FIGURINE);
     assert.equal(item.corpsenm?.name, 'werewolf');
+    assert.equal(item.corpsenm?.wereHuman, true);
 
     for (const wish of [
         'figurine of human',
@@ -1436,6 +1442,96 @@ test('figurine wishes apply C monster-type restrictions', async () => {
         assert.notEqual(item.corpsenm.name.toLowerCase(), wish.replace(/^figurine of /, '').toLowerCase(), wish);
         assert.equal(game.u.uconduct?.wishes, 1, wish);
     }
+});
+
+test('corpse and tin wishes apply C non-figurine wereform conversion', async () => {
+    installWishState(11);
+    beginWishDirectly();
+    await submitWish('corpse of werewolf');
+    let item = game.inventory[0];
+    assert.equal(item.otyp, CORPSE);
+    assert.equal(item.corpsenm?.name, 'werewolf');
+    assert.equal(item.corpsenm?.wereHuman, true);
+    assert.notEqual(item.corpsenm?.wereBeast, true);
+    assert.notEqual(item.corpsenm?.noCorpse, true);
+
+    installWishState(11);
+    beginWishDirectly();
+    await submitWish('tin of werewolf meat');
+    item = game.inventory[0];
+    assert.equal(item.otyp, TIN);
+    assert.equal(item.corpsenm?.name, 'werewolf');
+    assert.equal(item.corpsenm?.wereHuman, true);
+    assert.notEqual(item.corpsenm?.wereBeast, true);
+    assert.notEqual(item.corpsenm?.noCorpse, true);
+});
+
+test('disallowed corpse and tin species preserve randomized fallback objects', async () => {
+    for (const [wish, otyp, rejectedName] of [
+        ['corpse of mail daemon', CORPSE, 'mail daemon'],
+        ['corpse of Medusa', CORPSE, 'medusa'],
+        ['tin of mail daemon meat', TIN, 'mail daemon'],
+        ['tin of Medusa meat', TIN, 'medusa'],
+    ]) {
+        installWishState(23, { debug: false });
+        beginWishDirectly();
+        await submitWish(wish);
+        const item = game.inventory[0];
+        assert.equal(game._command_mode, null, wish);
+        assert.equal(item.otyp, otyp, wish);
+        assert.notEqual(item.corpsenm?.name?.toLowerCase(), rejectedName, wish);
+        assert.equal(game.u.uconduct?.wishes, 1, wish);
+    }
+});
+
+test('statue wishes bind human unique and no-corpse monsters like C', async () => {
+    for (const [wish, monsterName] of [
+        ['statue of human', 'human'],
+        ['statue of mail daemon', 'mail daemon'],
+        ['statue of Wizard of Yendor', 'Wizard of Yendor'],
+    ]) {
+        installWishState(17, { debug: false });
+        beginWishDirectly();
+        await submitWish(wish);
+        const item = game.inventory[0];
+        assert.equal(item.otyp, STATUE, wish);
+        assert.equal(item.corpsenm?.name, monsterName, wish);
+        assert.equal(game.u.uconduct?.wishes, 1, wish);
+    }
+});
+
+test('egg wishes use C hatchability mapping and clear generic hatch timers', async () => {
+    installWishState(29);
+    beginWishDirectly();
+    await submitWish('egg of human');
+    let item = game.inventory[0];
+    assert.equal(item.otyp, EGG);
+    assert.equal(item.corpsenm, null);
+    assert.equal(item.eggHatchTurn, undefined);
+
+    installWishState(29);
+    beginWishDirectly();
+    await submitWish('egg of Scorpius');
+    item = game.inventory[0];
+    assert.equal(item.otyp, EGG);
+    assert.equal(item.corpsenm?.name, 'scorpion');
+    assert.ok(item.eggHatchTurn > (game.moves || 0));
+
+    installWishState(29);
+    beginWishDirectly();
+    await submitWish('egg of killer bee');
+    item = game.inventory[0];
+    assert.equal(item.otyp, EGG);
+    assert.equal(item.corpsenm?.name, 'killer bee');
+    assert.ok(item.eggHatchTurn > (game.moves || 0));
+
+    installWishState(29);
+    beginWishDirectly();
+    await submitWish('egg of baby red dragon');
+    item = game.inventory[0];
+    assert.equal(item.otyp, EGG);
+    assert.equal(item.corpsenm?.name, 'red dragon');
+    assert.ok(item.eggHatchTurn > (game.moves || 0));
 });
 
 test('denied quest artifact wish records artifact conduct without ordinary wish conduct', async () => {

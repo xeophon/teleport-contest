@@ -12550,6 +12550,37 @@ const WISHED_MONSTER_FALLBACKS = new Map([
     ['student', { name: 'student', mlet: '@', glyph: '@', human: true, guardian: true, neuter: false }],
 ]);
 
+const WISHED_WERE_BEAST_FORMS = new Map([
+    ['rat wererat', 'wererat'],
+    ['jackal werejackal', 'werejackal'],
+    ['wolf werewolf', 'werewolf'],
+    ['wererat', 'wererat'],
+    ['werejackal', 'werejackal'],
+    ['werewolf', 'werewolf'],
+]);
+
+const WISHED_WERE_BEAST_DATA = new Map([
+    ['wererat', { glyph: 'r', mlet: 'r', color: CLR_BROWN, verysmall: true }],
+    ['werejackal', { glyph: 'd', mlet: 'd', color: CLR_BROWN }],
+    ['werewolf', { glyph: 'd', mlet: 'd', color: CLR_GRAY }],
+]);
+
+function wishedWereBeastByName(lowerName) {
+    const wereName = WISHED_WERE_BEAST_FORMS.get(lowerName);
+    if (!wereName) return null;
+    const human = monsterByRndName(wereName) || RANDOM_MONSTER_BY_NAME.get(wereName) || {};
+    return {
+        ...human,
+        ...WISHED_WERE_BEAST_DATA.get(wereName),
+        name: wereName,
+        noCorpse: true,
+        nohands: true,
+        animal: true,
+        wereHuman: false,
+        wereBeast: true,
+    };
+}
+
 function wishedMonsterByName(name) {
     const raw = String(name || '').trim();
     if (!raw) return null;
@@ -12558,6 +12589,8 @@ function wishedMonsterByName(name) {
     if (lower === 'human wererat') return { ...(monsterByRndName('wererat') || {}), name: 'wererat', wereHuman: true };
     if (lower === 'human werejackal') return { ...(monsterByRndName('werejackal') || {}), name: 'werejackal', wereHuman: true };
     if (lower === 'human werewolf') return { ...(monsterByRndName('werewolf') || {}), name: 'werewolf', wereHuman: true };
+    const wereBeast = wishedWereBeastByName(lower);
+    if (wereBeast) return wereBeast;
     return monsterByRndName(raw)
         || RANDOM_MONSTER_BY_NAME.get(raw)
         || RANDOM_MONSTER_BY_LOWER_NAME.get(lower)
@@ -12880,9 +12913,10 @@ function makeWishedStatueObject(statueWish, qualifiers = {}) {
     if (resolved.monsterName && !monster) return null;
     const otmp = mksobj(STATUE, true, false);
     if (monster) {
-        otmp.corpsenm = monster;
+        const statueMonster = wishedNonFigurineCorpstatMonster(monster);
+        otmp.corpsenm = statueMonster;
         otmp.spe = wishedCorpstatSpe(monster, resolved.requestedGender);
-        if (monster.verysmall) delete otmp.contents;
+        if (statueMonster.verysmall) delete otmp.contents;
     }
     if (qualifiers.historic) {
         otmp.spe = (otmp.spe || 0) | CORPSTAT_HISTORIC;
@@ -13085,10 +13119,21 @@ function makeWishedDragonArmorObject(dragonWish = {}) {
     });
 }
 
-function wishedCorpseOverrideMonster(monster) {
+function wishedHumanWereCounterpart(monster) {
+    if (!monster?.wereBeast) return null;
+    return wishedMonsterByName(`human ${monster.name}`) || null;
+}
+
+function wishedNonFigurineCorpstatMonster(monster) {
     if (!monster) return null;
     if (monster.name === 'long worm tail')
         return wishedMonsterByName('long worm') || monster;
+    return wishedHumanWereCounterpart(monster) || monster;
+}
+
+function wishedCorpseOverrideMonster(monster) {
+    monster = wishedNonFigurineCorpstatMonster(monster);
+    if (!monster) return null;
     if (monster.guardian)
         return wishedMonsterByName('human') || monster;
     if (monster.unique && !game.flags?.debug) return null;
@@ -13235,9 +13280,15 @@ function makeWishedEggObject(eggWish, qualifiers = {}) {
 
     const otmp = mksobj(EGG, true, false);
     const hadHatchTimer = !!otmp.corpsenm;
-    const eggMonster = monster ? canWishedEggBeHatched(monster) : otmp.corpsenm;
+    const requestedMonster = monster ? wishedNonFigurineCorpstatMonster(monster) : null;
+    const eggMonster = requestedMonster ? canWishedEggBeHatched(requestedMonster) : otmp.corpsenm;
     otmp.corpsenm = eggMonster || null;
     if (eggMonster && !hadHatchTimer) consumeWishedEggHatchTimer(otmp);
+    if (!eggMonster) {
+        delete otmp.eggHatchTurn;
+        delete otmp._egg_hatch_consumed;
+        delete otmp._egg_hatch_seq;
+    }
     Object.assign(otmp, {
         cls: 'food',
         glyph: '%',
@@ -13470,6 +13521,24 @@ function setTinMonster(item, monster, varietyIndex = null) {
     item.actualKind = 'tin';
     item.emptyTin = false;
     setTinDisplayName(item, tinNameWithVariety(name, varietyIndex));
+}
+
+function wishedTinMonsterHasNutrition(monster) {
+    if (!monster?.name) return false;
+    if (typeof monster.cnutrit === 'number') return monster.cnutrit !== 0;
+    if (typeof monster.nutrition === 'number') return monster.nutrition !== 0;
+    const known = CORPSE_NUTRITION.get(String(monster.name).toLowerCase());
+    return known == null ? true : known !== 0;
+}
+
+function wishedTinMonsterBinding(monster) {
+    const tinMonster = wishedNonFigurineCorpstatMonster(monster);
+    if (!tinMonster) return { monster: null, empty: false };
+    if (isMonsterGenocidedName(tinMonster.name)) return { monster: null, empty: true };
+    if (tinMonster.unique && !game.flags?.debug) return { monster: null, empty: false };
+    if (tinMonster.noCorpse) return { monster: null, empty: false };
+    if (!wishedTinMonsterHasNutrition(tinMonster)) return { monster: null, empty: false };
+    return { monster: tinMonster, empty: false };
 }
 
 function corpseMonsterName(item) {
@@ -14064,8 +14133,8 @@ function parseWishedTinName(lowerName) {
     }
 
     const monsterName = rest.replace(/\s+meat$/, '').replace(/^(?:a|an|the)\s+/, '');
-    const monster = monsterByRndName(monsterName);
-    if (!monster || monster.noCorpse) return { content: 'plain', varietyIndex };
+    const monster = wishedMonsterByName(monsterName);
+    if (!monster) return { content: 'plain', varietyIndex };
     return { content: 'monster', monster, varietyIndex };
 }
 
@@ -14087,8 +14156,14 @@ function makeWishedTinObject(tinWish) {
         setTinSpinach(otmp);
         otmp._wish_tin_explicit_content = true;
     } else if (tinWish?.content === 'monster') {
-        setTinMonster(otmp, tinWish.monster);
-        otmp._wish_tin_explicit_content = true;
+        const binding = wishedTinMonsterBinding(tinWish.monster);
+        if (binding.empty) {
+            setTinEmpty(otmp);
+            otmp._wish_tin_explicit_content = true;
+        } else if (binding.monster) {
+            setTinMonster(otmp, binding.monster);
+            otmp._wish_tin_explicit_content = true;
+        }
         if (tinWish.varietyIndex != null)
             otmp._wish_tin_requested_variety = tinWish.varietyIndex;
     } else if (tinWish?.varietyIndex != null) {
