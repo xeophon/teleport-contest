@@ -28,7 +28,7 @@ import { createGasCloud } from './region.js';
 import { figurineLocationCheck, isFigurineObject, makeFigurineFamiliar, maybeAttachCarriedFigurineTimeout, stopFigurineTransformTimeout, syncCarriedFigurineTransformTimer } from './figurine.js';
 import { applyMonsterLiquidEffectsAt } from './monster_liquid.js';
 import { applySlimeMoldFruitFields, currentFruitId, currentFruitJuiceName, currentFruitName, fruitWishMatch, setCurrentFruitName, slimeMoldNameForObject } from './fruit.js';
-import { eggSpeciesGenocidedForHatching, killDeadSpeciesEggHatchTimers } from './egg_timers.js';
+import { eggHasHatchTimer, eggSpeciesGenocidedForHatching, killDeadSpeciesEggHatchTimers } from './egg_timers.js';
 
 const DIR_DX = { h: -1, l: 1, j: 0, k: 0, y: -1, u: 1, b: -1, n: 1 };
 const DIR_DY = { h: 0, l: 0, j: 1, k: -1, y: -1, u: -1, b: 1, n: 1 };
@@ -20721,6 +20721,30 @@ function objectStackColor(obj) {
     return NO_COLOR;
 }
 
+function stackMonsterNameKey(obj) {
+    return String(obj?.corpsenm?.name || '').toLowerCase();
+}
+
+function corpseIsReviverForMerge(obj) {
+    if (!isCorpseItem(obj)) return false;
+    const name = stackMonsterNameKey(obj);
+    const glyph = obj?.corpsenm?.glyph || obj?.corpsenm?.mlet;
+    return !!(obj?.corpsenm?.rider || glyph === 'T' || name.includes('troll')
+        || name === 'death' || name === 'pestilence' || name === 'famine');
+}
+
+function sameStackCorpseEggTinFields(existing, obj) {
+    const existingSpecial = isCorpseItem(existing) || isEggItem(existing) || isTinObject(existing);
+    const objSpecial = isCorpseItem(obj) || isEggItem(obj) || isTinObject(obj);
+    if (!existingSpecial && !objSpecial) return true;
+    if (existingSpecial !== objSpecial) return false;
+    if (stackMonsterNameKey(existing) !== stackMonsterNameKey(obj)) return false;
+    if ((isEggItem(existing) || isEggItem(obj)) && (eggHasHatchTimer(existing) || eggHasHatchTimer(obj)))
+        return false;
+    if (corpseIsReviverForMerge(existing) || corpseIsReviverForMerge(obj)) return false;
+    return true;
+}
+
 function sameMonsterThrownStackObject(existing, obj) {
     if (!existing || !obj || existing === obj) return false;
     if (existing.hidden || existing.buried || existing.transientProjectile) return false;
@@ -20731,6 +20755,7 @@ function sameMonsterThrownStackObject(existing, obj) {
         && existing.cls === obj.cls
         && existing.kind === obj.kind
         && existing.actualKind === obj.actualKind
+        && sameStackCorpseEggTinFields(existing, obj)
         && existing.glyph === obj.glyph
         && objectStackColor(existing) === objectStackColor(obj)
         && (existing.spe || 0) === (obj.spe || 0)

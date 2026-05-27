@@ -11972,6 +11972,82 @@ test('floor stacking merges compatible unpaid bill rows', () => {
     assert.equal(shkp.billct, 1);
 });
 
+test('floor stacking keeps hatching eggs separate from compatible egg stacks', () => {
+    installShopState();
+    const floorStack = { ...egg(8903), letter: undefined, line: undefined, corpsenm: { name: 'red dragon' }, ox: 7, oy: 5 };
+    const hatching = {
+        ...egg(8904),
+        letter: undefined,
+        line: undefined,
+        corpsenm: { name: 'red dragon' },
+        eggHatchTurn: game.moves + 10,
+        _egg_hatch_seq: 1,
+        _egg_hatch_consumed: true,
+        ox: 7,
+        oy: 5,
+    };
+    game.level.objects = [floorStack];
+
+    const stacked = shop.placeStackableFloorObject(hatching);
+
+    assert.equal(stacked, hatching);
+    assert.equal(game.level.objects.length, 2);
+    assert.equal(floorStack.quan, 1);
+    assert.equal(hatching.eggHatchTurn, game.moves + 10);
+});
+
+test('floor stacking requires matching egg corpse species', () => {
+    installShopState();
+    const floorStack = { ...egg(8905), letter: undefined, line: undefined, corpsenm: { name: 'newt' }, ox: 7, oy: 5 };
+    const otherSpecies = { ...egg(8906), letter: undefined, line: undefined, corpsenm: { name: 'red dragon' }, ox: 7, oy: 5 };
+    game.level.objects = [floorStack];
+
+    const stacked = shop.placeStackableFloorObject(otherSpecies);
+
+    assert.equal(stacked, otherSpecies);
+    assert.equal(game.level.objects.length, 2);
+    assert.equal(floorStack.quan, 1);
+});
+
+test('floor stacking requires matching tin corpse species', () => {
+    installShopState();
+    const floorStack = { ...tin(8907), letter: undefined, line: undefined, corpsenm: { name: 'newt' }, ox: 7, oy: 5 };
+    const otherSpecies = { ...tin(8908), letter: undefined, line: undefined, corpsenm: { name: 'red dragon' }, ox: 7, oy: 5 };
+    game.level.objects = [floorStack];
+
+    const stacked = shop.placeStackableFloorObject(otherSpecies);
+
+    assert.equal(stacked, otherSpecies);
+    assert.equal(game.level.objects.length, 2);
+    assert.equal(floorStack.quan, 1);
+});
+
+test('floor stacking merges compatible nontimed same-species eggs', () => {
+    installShopState();
+    const floorStack = { ...egg(8909), letter: undefined, line: undefined, corpsenm: { name: 'newt' }, ox: 7, oy: 5 };
+    const sameSpecies = { ...egg(8910), letter: undefined, line: undefined, corpsenm: { name: 'newt' }, ox: 7, oy: 5 };
+    game.level.objects = [floorStack];
+
+    const stacked = shop.placeStackableFloorObject(sameSpecies);
+
+    assert.equal(stacked, floorStack);
+    assert.equal(game.level.objects.length, 1);
+    assert.equal(floorStack.quan, 2);
+});
+
+test('floor stacking rejects revivable corpse stacks', () => {
+    installShopState();
+    const floorStack = { ...corpse(8911, undefined, 'troll'), ox: 7, oy: 5 };
+    const otherTroll = { ...corpse(8912, undefined, 'troll'), ox: 7, oy: 5 };
+    game.level.objects = [floorStack];
+
+    const stacked = shop.placeStackableFloorObject(otherTroll);
+
+    assert.equal(stacked, otherTroll);
+    assert.equal(game.level.objects.length, 2);
+    assert.equal(floorStack.quan, 1);
+});
+
 test('ordinary inventory drop stacks with compatible floor objects after placement', async () => {
     const { shkp } = installCommandShopState();
     game.level.at = () => ({ roomno: 0, typ: ROOM });
