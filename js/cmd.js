@@ -28032,6 +28032,7 @@ function royalJellyRubTargetLetters() {
 
 function royalJellyRubPrompt() {
     const letters = royalJellyRubTargetLetters();
+    if (!letters) return 'What do you want to rub the royal jelly on? [*]';
     return `What do you want to rub the royal jelly on? [${getobjPromptLetters(letters)} or ?*]`;
 }
 
@@ -28042,7 +28043,9 @@ function rubObjectLetters() {
 }
 
 function rubObjectPrompt() {
-    return `What do you want to rub? [${getobjPromptLetters(rubObjectLetters())} or ?*]`;
+    const letters = rubObjectLetters();
+    if (!letters) return 'What do you want to rub? [*]';
+    return `What do you want to rub? [${getobjPromptLetters(letters)} or ?*]`;
 }
 
 async function beginRoyalJellyRub(item) {
@@ -42442,6 +42445,11 @@ export async function rhack(_cmd) {
     }
 
     if (game._command_mode === 'rubObject') {
+        if (ch === '\x1b' || ch === ' ' || ch === '\r' || ch === '\n') {
+            game._command_mode = null;
+            await setMessage('Never mind.');
+            return;
+        }
         if (ch === '?' || ch === '*') {
             const rubItems = (game.inventory || []).filter(item => {
                 return isLampObject(item) || isRoyalJelly(item);
@@ -42458,10 +42466,6 @@ export async function rhack(_cmd) {
         }
         if (item && isLampObject(item)) {
             await rubLampObject(item);
-            return;
-        }
-        if (ch === '\x1b') {
-            game._command_mode = null;
             return;
         }
         await setMessage(rubObjectPrompt());
@@ -44537,8 +44541,13 @@ export async function rhack(_cmd) {
                 return;
             }
             if (command === 'rub') {
-                await setMessage(rubObjectPrompt());
-                game._command_mode = 'rubObject';
+                if (!rubObjectLetters()) {
+                    game._command_mode = null;
+                    await setMessage("You don't have anything to rub.");
+                } else {
+                    await setMessage(rubObjectPrompt());
+                    game._command_mode = 'rubObject';
+                }
                 return;
             }
             if (command === 'quit') {

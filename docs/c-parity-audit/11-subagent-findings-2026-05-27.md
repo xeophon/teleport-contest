@@ -20,10 +20,11 @@ This note records the source-backed follow-up after the royal-jelly eating slice
 - Cursed rub clears all JS hatch timer bookkeeping fields while preserving the transformed species, matching C's timer-only `kill_egg()` effect.
 - Blessed rub now marks only fertile eggs with `spe = 2`; generic eggs stay infertile and report no apparent effect.
 - Royal jelly rub consumption now uses a stack-aware used-up billing helper so unpaid single lumps and split stack lumps preserve shop debt like C `obfree()`.
+- `#rub` prompt handling now follows C `getobj()` quitchars for space, Enter, and Escape at both the first object prompt and the royal-jelly target prompt, including no-turn `Never mind.` cancellation.
+- Empty royal-jelly target selection now uses the C forced-prompt `[*]` form, and `#rub` with no rub-suitable object reports `You don't have anything to rub.`
 - Public tests in `test/shop-billing-helpers.test.mjs` now cover target prompting, killer-bee stack conversion/timing, blessed fertile vs generic eggs, cursed timer cancellation, and unpaid stack split billing.
 
 ## Remaining Gaps
 
 - The JS path does not physically split and remove one jelly lump before the egg-target prompt, so cancellation restoration is not internally C-shaped yet. The visible successful path and no-consumption cancellation behavior remain covered by the command flow.
-- First-prompt cancellation semantics for `#rub` still deserve a separate command/prompt audit.
 - Broader object timer parity still needs a central timer registry rather than local `eggHatchTurn` fields.

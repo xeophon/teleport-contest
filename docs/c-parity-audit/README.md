@@ -15,6 +15,7 @@ This folder records source-backed audits against `nethack-c/upstream`. The notes
 - [09-subagent-findings-2026-05-26.md](09-subagent-findings-2026-05-26.md): latest parallel C-source audit findings and ranked narrow follow-up slices.
 - [10-subagent-findings-2026-05-27.md](10-subagent-findings-2026-05-27.md): meat-ring and royal-jelly eating audits plus implemented status.
 - [11-subagent-findings-2026-05-27.md](11-subagent-findings-2026-05-27.md): royal-jelly `#rub` egg audit and implemented status.
+- [12-subagent-findings-2026-05-27.md](12-subagent-findings-2026-05-27.md): `#rub` prompt parity follow-up and egg timer candidate slice.
 
 ## Cross-Cutting Themes
 
