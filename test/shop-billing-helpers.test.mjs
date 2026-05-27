@@ -1068,6 +1068,18 @@ async function invokeRub(letter) {
     await rhack(letter);
 }
 
+async function startRoyalJellyRub(letter = 'j') {
+    await invokeRub(letter);
+
+    assert.equal(game._command_mode, 'rubRoyalJellyTarget');
+    assert.match(game._pending_message, /What do you want to rub the royal jelly on\?/);
+}
+
+async function invokeRoyalJellyRub(jellyLetter = 'j', eggLetter = 'e') {
+    await startRoyalJellyRub(jellyLetter);
+    await rhack(eggLetter);
+}
+
 function healingSpellbook(id, letter = 'b') {
     return {
         id,
@@ -2891,6 +2903,112 @@ test('rubbing wielded oil and brass lamps follows C lamp messages', async () => 
     assert.equal(game.context.move, 1);
     assert.match(game._pending_message, /Rubbing the electric lamp is not particularly rewarding\./);
     assert.match(game._pending_message, /Anyway, nothing exciting happens\./);
+});
+
+test('rubbing royal jelly prompts for an egg target', async () => {
+    installCommandShopState();
+    const jelly = simpleFood(3104, 'lump of royal jelly', 'j');
+    const target = egg(3105, 'e');
+    game.inventory = [jelly, target];
+
+    await startRoyalJellyRub('j');
+
+    assert.match(game._pending_message, /\[e or \?\*\]/);
+});
+
+test('uncursed royal jelly changes a killer bee egg stack and starts its hatch timer', async () => {
+    installCommandShopState();
+    const jelly = simpleFood(3106, 'lump of royal jelly', 'j');
+    const target = egg(3107, 'e', 2);
+    target.corpsenm = { name: 'killer bee', oviparous: true };
+    game.inventory = [jelly, target];
+
+    await invokeRoyalJellyRub('j', 'e');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.inventory.includes(jelly), false);
+    assert.equal(target.quan, 2);
+    assert.equal(target.corpsenm.name, 'queen bee');
+    assert.ok(target.eggHatchTurn > (game.moves || 0));
+    assert.equal(target._egg_hatch_consumed, true);
+    assert.match(game._pending_message, /You smear royal jelly all over .*eggs?\./);
+    assert.match(game._pending_message, /quivers? briefly\./);
+});
+
+test('blessed royal jelly marks fertile eggs as parented but leaves generic eggs infertile', async () => {
+    installCommandShopState();
+    const fertileJelly = simpleFood(3108, 'lump of royal jelly', 'j', { blessed: true });
+    const fertile = egg(3109, 'e');
+    fertile.corpsenm = { name: 'killer bee', oviparous: true };
+    game.inventory = [fertileJelly, fertile];
+
+    await invokeRoyalJellyRub('j', 'e');
+
+    assert.equal(fertile.spe, 2);
+    assert.ok(fertile.eggHatchTurn > (game.moves || 0));
+    assert.match(game._pending_message, /quivers? briefly\./);
+    acknowledgePendingMessage();
+
+    const genericJelly = simpleFood(3110, 'lump of royal jelly', 'j', { blessed: true });
+    const generic = egg(3111, 'e');
+    game.inventory = [genericJelly, generic];
+
+    await invokeRoyalJellyRub('j', 'e');
+
+    assert.equal(generic.spe, undefined);
+    assert.equal(generic.eggHatchTurn, undefined);
+    assert.equal(generic._egg_hatch_consumed, undefined);
+    assert.match(game._pending_message, /Nothing seems to happen\./);
+});
+
+test('cursed royal jelly stops an egg hatch timer without clearing the species', async () => {
+    installCommandShopState();
+    const jelly = simpleFood(3112, 'lump of royal jelly', 'j', { cursed: true });
+    const target = egg(3113, 'e');
+    target.corpsenm = { name: 'killer bee', oviparous: true };
+    target.eggHatchTurn = (game.moves || 0) + 180;
+    target._egg_hatch_seq = 7;
+    target._egg_hatch_consumed = true;
+    game.inventory = [jelly, target];
+
+    await invokeRoyalJellyRub('j', 'e');
+
+    assert.equal(target.corpsenm.name, 'queen bee');
+    assert.equal(target.eggHatchTurn, undefined);
+    assert.equal(target._egg_hatch_seq, undefined);
+    assert.equal(target._egg_hatch_consumed, undefined);
+    assert.match(game._pending_message, /quivers? feebly\./);
+});
+
+test('rubbing one unpaid royal jelly from a stack preserves live and used-up bill rows', async () => {
+    const { shkp } = installCommandShopState();
+    const jelly = simpleFood(3114, 'lump of royal jelly', 'j', {
+        quan: 2,
+        line: 'j - 2 lumps of royal jelly',
+    });
+    const target = egg(3115, 'e');
+    target.corpsenm = { name: 'killer bee', oviparous: true };
+    game.inventory = [jelly, target];
+    shop.addObjectToShopBill(shkp, jelly, 30);
+
+    await invokeRoyalJellyRub('j', 'e');
+
+    assert.equal(game.inventory.includes(jelly), true);
+    assert.equal(jelly.quan, 1);
+    const liveEntry = shop.shopBillEntryForObject(shkp, jelly);
+    assert.ok(liveEntry);
+    assert.equal(liveEntry.useup, false);
+    assert.equal(shop.shopBillEntryTotal(liveEntry), 15);
+    const usedEntry = shkp.bill.find(entry => entry !== liveEntry);
+    assert.ok(usedEntry);
+    assert.equal(usedEntry.useup, true);
+    assert.notEqual(String(usedEntry.bo_id), String(jelly.id));
+    assert.equal(shop.shopBillEntryTotal(usedEntry), 15);
+    assert.equal(shkp.billct, 2);
+    assert.equal((game._usedUpShopBills || []).length, 1);
+    assert.equal(game._usedUpShopBills[0].bo_id, usedEntry.bo_id);
+    assert.equal(game._usedUpShopBills[0].price, 15);
 });
 
 test('applying unpaid can of grease bills usage and greases the selected object', async () => {

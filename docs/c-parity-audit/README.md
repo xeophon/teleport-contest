@@ -14,6 +14,7 @@ This folder records source-backed audits against `nethack-c/upstream`. The notes
 - [08-display-rng-observation.md](08-display-rng-observation.md): display/window lifecycle, glyphs, discovery, hallucination redraws, message/status ordering, and RNG trace diagnostics.
 - [09-subagent-findings-2026-05-26.md](09-subagent-findings-2026-05-26.md): latest parallel C-source audit findings and ranked narrow follow-up slices.
 - [10-subagent-findings-2026-05-27.md](10-subagent-findings-2026-05-27.md): meat-ring and royal-jelly eating audits plus implemented status.
+- [11-subagent-findings-2026-05-27.md](11-subagent-findings-2026-05-27.md): royal-jelly `#rub` egg audit and implemented status.
 
 ## Cross-Cutting Themes
 

@@ -28082,16 +28082,19 @@ async function rubRoyalJellyOnEgg(jelly, egg) {
         else messages.push('Nothing seems to happen.');
         delete egg.eggHatchTurn;
         delete egg._egg_hatch_seq;
+        delete egg._egg_hatch_consumed;
     } else {
         const wasTimed = !!egg.eggHatchTurn;
-        if (egg.corpsenm?.name && !egg.eggHatchTurn) attachEggHatchTimer(egg);
-        if (jelly?.blessed && !egg.spe) egg.spe = 2;
+        if (egg.corpsenm?.name) {
+            if (!egg.eggHatchTurn) attachEggHatchTimer(egg);
+            if (jelly?.blessed && !egg.spe) egg.spe = 2;
+        }
         if ((egg.eggHatchTurn && !wasTimed) || egg.spe === 2 || changedType)
             messages.push(`The ${effectName} ${eggQuiverVerb(egg)} briefly.`);
         else messages.push('Nothing seems to happen.');
     }
 
-    consumeOneInventoryFood(jelly);
+    consumeOneInventoryFoodUsedUp(jelly);
     refreshInventoryObjectLine(egg);
     game._royal_jelly_rub_letter = '';
     game._pet_food_scan_inventory = game.inventory || [];
@@ -29520,6 +29523,29 @@ function consumeOneInventoryFood(item) {
         clearPretouchedFood(item);
     }
     removeInventoryItem(item);
+}
+
+function consumeOneInventoryFoodUsedUp(item) {
+    if (!item) return false;
+    const rawQuantity = Math.trunc(Number(item.quan || 1));
+    const quantity = Number.isFinite(rawQuantity) ? Math.max(1, rawQuantity) : 1;
+    if (quantity <= 1) return useUpInventoryItem(item, 1);
+
+    const usedId = takePretouchedFoodId(item) ?? next_ident();
+    const used = { ...item, id: usedId, quan: 1, letter: undefined, line: '' };
+    delete used.o_id;
+    delete used._shopBillObjectId;
+    clearPretouchedFood(used);
+
+    if (item.unpaid && !splitCarriedObjectShopBill(item, used, 1))
+        clearObjectShopBillState(used);
+    item.quan = quantity - 1;
+    refreshInventoryObjectLine(item);
+    if (item.unpaid) syncUnpaidBillLine(item);
+    markObjectShopBillUsedUp(used);
+    updateWornDisplacement();
+    game._pet_food_scan_inventory = game.inventory;
+    return true;
 }
 
 function consumeOneEatenFood(item, floorObject = false) {
