@@ -11579,10 +11579,17 @@ function isBlessedOrCursedWaterDipSource(item) {
     return !!(item.blessed || item.cursed || kind === 'holy water' || kind === 'unholy water');
 }
 
+function isNeutralWaterDipSource(item) {
+    if (!isWaterPotion(item)) return false;
+    const kind = objectKindKey(item).replace(/^potion of /, '');
+    return !item.blessed && !item.cursed && kind !== 'holy water' && kind !== 'unholy water';
+}
+
 function dipPotionSources(target) {
     return (game.inventory || []).filter(item => {
         if (item === target || !isPotionObject(item)) return false;
         if (isBlessedOrCursedWaterDipSource(item) && isWaterDipTargetObject(target)) return true;
+        if (isNeutralWaterDipSource(item) && isWaterDipTargetObject(target)) return true;
         if (isPotionOfAcid(item) && isAcidCorrosionDipTargetObject(target)) return true;
         if (isPotionOfOil(item) && (isOilRefuelLampObject(target) || isOilWeaponDipTargetObject(target))) return true;
         if (isPoisonableWeaponObject(target) && (isPotionOfSickness(item) || isHealingFamilyPotion(item))) return true;
@@ -11866,9 +11873,78 @@ function waterDipDevaluationPayment(target, verb) {
     return costlyAlterationPaymentMessage(target, verb);
 }
 
+function isTowelObject(item) {
+    return objectKindKey(item) === 'towel';
+}
+
+function wetTowelWithNeutralWater(towel, messages) {
+    if (!isTowelObject(towel) || (towel.spe || 0) >= 7) return false;
+    const wetness = Math.max(0, towel.spe || 0);
+    towel.spe = wetness + rnd(7 - wetness);
+    towel.wetness = towel.spe;
+    refreshInventoryObjectLine(towel);
+    if (towel.unpaid) syncUnpaidBillLine(towel);
+    messages.push('The towel soaks it up!');
+    return true;
+}
+
+function normalizeWaterDamagedPotionIdentity(item) {
+    if (!item || item.otyp !== POT_WATER) return;
+    item.kind = 'water';
+    item.actualKind = 'potion of water';
+    item.potionIndex = null;
+    item.dknown = false;
+}
+
+function refreshNeutralWaterDamagedTarget(item) {
+    if (!item || !(game.inventory || []).includes(item)) return;
+    normalizeWaterDamagedPotionIdentity(item);
+    refreshInventoryObjectLine(item);
+    if (item.unpaid) syncUnpaidBillLine(item);
+}
+
+function neutralWaterContainerDamage(container, messages) {
+    if (!isLiquidFlowContainer(container)) return false;
+    const name = pickupObjectName(container);
+    const waterproof = isLiquidFlowWaterproofContainer(container);
+    if (waterproof && (!container.cursed || rn2(3))) {
+        if (!game.u?.blind && !(game.u?.underwater || game.u?.uunderwater))
+            messages.push(`The water cannot get into your ${name}.`);
+        return true;
+    }
+    messages.push(`Some water gets into your ${name}!`);
+    const acidContext = { count: 0 };
+    for (const content of [...liquidFlowContainerContents(container)]) {
+        waterDamageFloorItem(content, messages, false, acidContext, {
+            removeObject: item => removeContainedObject(container, item),
+            usedUpShopBillOnDestroy: true,
+        });
+    }
+    return true;
+}
+
+function neutralWaterDamageCarriedTarget(target, messages) {
+    if (!target) return false;
+    if (objectKindKey(target) === 'can of grease' && (target.spe || 0) > 0) return false;
+    if (wetTowelWithNeutralWater(target, messages)) return true;
+    const changed = rustTrapWaterDamageItem(target, messages);
+    if (changed) refreshNeutralWaterDamagedTarget(target);
+    if (changed) return true;
+    return neutralWaterContainerDamage(target, messages);
+}
+
+function dipObjectIntoNeutralWaterPotion(target, potion) {
+    const messages = [];
+    if (!isNeutralWaterDipSource(potion) || !isWaterDipTargetObject(target)) return messages;
+    if (!neutralWaterDamageCarriedTarget(target, messages)) return messages;
+    consumeDipPotion(potion);
+    return handledDipMessages(messages);
+}
+
 function dipObjectIntoWaterPotion(target, potion) {
     const messages = [];
     if (!isWaterPotion(potion) || !isWaterDipTargetObject(target)) return messages;
+    if (isNeutralWaterDipSource(potion)) return dipObjectIntoNeutralWaterPotion(target, potion);
 
     let effect = '';
     if (potion.blessed) {
@@ -29706,7 +29782,7 @@ function rustTrapDestroyAcidPotion(item, messages, name, described = false) {
     messages.push(described
         ? `The potion${plural ? 's' : ''} ${plural ? 'explode' : 'explodes'}!`
         : `Your ${name} ${rustTrapNameVerb(name, 'explodes', 'explode')}!`);
-    removeInventoryItem(item, item.quan || 1);
+    useUpInventoryItem(item, item.quan || 1);
 }
 
 function rustTrapWaterDamageReadable(item, messages, cls, name) {

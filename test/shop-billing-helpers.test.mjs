@@ -4272,6 +4272,238 @@ test('dipping unpaid holy water stack into an item preserves residual source bil
     assert.doesNotMatch(game._pending_message, /Yendorian Fuel Tax|in addition to the cost/);
 });
 
+test('dipping a scroll into neutral water blanks it and consumes the water', async () => {
+    installCommandShopState();
+    const scroll = scrollOfCharging(31010, 's');
+    const water = waterPotion(31011, 'w');
+    game.inventory = [scroll, water];
+
+    await rhack('#');
+    for (const ch of 'dip') await rhack(ch);
+    await rhack('\n');
+    await rhack('s');
+    await rhack('n');
+    await rhack('w');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(scroll.kind, 'blank paper');
+    assert.equal(scroll.known, false);
+    assert.equal(scroll.spe, 0);
+    assert.equal(game.inventory.includes(water), false);
+    assert.match(game._pending_message, /Your scroll of charging fades\./);
+});
+
+test('dipping a blank scroll into neutral water is Interesting and keeps the water', async () => {
+    installCommandShopState();
+    const scroll = blankScroll(31012, 's');
+    const water = waterPotion(31013, 'w');
+    game.inventory = [scroll, water];
+
+    await rhack('#');
+    for (const ch of 'dip') await rhack(ch);
+    await rhack('\n');
+    await rhack('s');
+    await rhack('n');
+    await rhack('w');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(scroll.kind, 'blank paper');
+    assert.equal(game.inventory.includes(water), true);
+    assert.match(game._pending_message, /Interesting\.\.\./);
+});
+
+test('dipping a spellbook into neutral water blanks spell data and consumes the water', async () => {
+    installCommandShopState();
+    const book = healingSpellbook(31014, 'b');
+    const water = waterPotion(31015, 'w');
+    game.inventory = [book, water];
+
+    await rhack('#');
+    for (const ch of 'dip') await rhack(ch);
+    await rhack('\n');
+    await rhack('b');
+    await rhack('n');
+    await rhack('w');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(book.kind, 'spellbook of blank paper');
+    assert.equal(book.spellName, '');
+    assert.equal(book.spell, null);
+    assert.equal(book.known, false);
+    assert.equal(game.inventory.includes(water), false);
+    assert.match(game._pending_message, /Your spellbook of healing fades\./);
+});
+
+test('dipping unpaid acid into neutral water destroys acid and leaves a used-up bill', async () => {
+    const { shkp } = installCommandShopState();
+    const acid = acidPotion(31016, 'a');
+    const water = waterPotion(31017, 'w');
+    game.inventory = [acid, water];
+    shop.addObjectToShopBill(shkp, acid, 100);
+
+    await rhack('#');
+    for (const ch of 'dip') await rhack(ch);
+    await rhack('\n');
+    await rhack('a');
+    await rhack('n');
+    await rhack('w');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.inventory.includes(acid), false);
+    assert.equal(game.inventory.includes(water), false);
+    assertUsedUpBillForObject(shkp, acid, 100);
+    assert.match(game._pending_message, /Your potion of acid explodes!/);
+});
+
+test('dipping potions into neutral water dilutes then turns diluted potions into water', async () => {
+    installCommandShopState();
+    const potion = healingPotion(31018, 'h');
+    const firstWater = waterPotion(31019, 'w');
+    game.inventory = [potion, firstWater];
+
+    await rhack('#');
+    for (const ch of 'dip') await rhack(ch);
+    await rhack('\n');
+    await rhack('h');
+    await rhack('n');
+    await rhack('w');
+
+    assert.equal(potion.kind, 'healing');
+    assert.equal(potion.odiluted, true);
+    assert.equal(game.inventory.includes(firstWater), false);
+    assert.match(game._pending_message, /Your potion of healing dilutes\./);
+
+    const secondWater = waterPotion(31020, 'w');
+    secondWater.letter = 'w';
+    secondWater.line = 'w - a potion of water';
+    game.inventory.push(secondWater);
+
+    await rhack('#');
+    for (const ch of 'dip') await rhack(ch);
+    await rhack('\n');
+    await rhack('h');
+    await rhack('n');
+    await rhack('w');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(potion.otyp, POT_WATER);
+    assert.equal(potion.kind, 'water');
+    assert.equal(potion.actualKind, 'potion of water');
+    assert.equal(potion.blessed, false);
+    assert.equal(potion.cursed, false);
+    assert.equal(potion.odiluted, false);
+    assert.equal(game.inventory.includes(secondWater), false);
+    assert.match(game._pending_message, /Your diluted potion of healing dilutes further\./);
+});
+
+test('dipping a greased scroll into neutral water protects it and consumes the water', async () => {
+    installCommandShopState();
+    const scroll = { ...scrollOfCharging(31021, 's'), greased: true };
+    const water = waterPotion(31022, 'w');
+    game.inventory = [scroll, water];
+
+    await rhack('#');
+    for (const ch of 'dip') await rhack(ch);
+    await rhack('\n');
+    await rhack('s');
+    await rhack('n');
+    await rhack('w');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(scroll.kind, 'scroll of charging');
+    assert.equal(game.inventory.includes(water), false);
+    assert.doesNotMatch(game._pending_message, /fades/);
+});
+
+test('dipping a rustable weapon into neutral water rusts it and consumes the water', async () => {
+    installCommandShopState();
+    const target = dagger(31023, 'd');
+    const water = waterPotion(31024, 'w');
+    game.inventory = [target, water];
+
+    await rhack('#');
+    for (const ch of 'dip') await rhack(ch);
+    await rhack('\n');
+    await rhack('d');
+    await rhack('n');
+    await rhack('w');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(target.oeroded, 1);
+    assert.equal(game.inventory.includes(water), false);
+    assert.match(game._pending_message, /Your dagger rusts!/);
+});
+
+test('dipping a dry towel into neutral water wets it and consumes the water', async () => {
+    installCommandShopState();
+    const towel = ordinaryTool(31025, 'towel', 't');
+    towel.spe = 0;
+    const water = waterPotion(31026, 'w');
+    game.inventory = [towel, water];
+
+    await rhack('#');
+    for (const ch of 'dip') await rhack(ch);
+    await rhack('\n');
+    await rhack('t');
+    await rhack('n');
+    await rhack('w');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.ok(towel.spe > 0);
+    assert.equal(game.inventory.includes(water), false);
+    assert.match(game._pending_message, /The towel soaks it up!/);
+});
+
+test('dipping a sack into neutral water damages contained scrolls and consumes the water', async () => {
+    installCommandShopState();
+    const bag = sack(31027, 'b');
+    const scroll = putObjectInContainer(bag, scrollOfCharging(31028));
+    const water = waterPotion(31029, 'w');
+    game.inventory = [bag, water];
+
+    await rhack('#');
+    for (const ch of 'dip') await rhack(ch);
+    await rhack('\n');
+    await rhack('b');
+    await rhack('n');
+    await rhack('w');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(scroll.kind, 'blank paper');
+    assert.equal(game.inventory.includes(water), false);
+    assert.match(game._pending_message, /Some water gets into your bag!/);
+});
+
+test('dipping a greased sack into neutral water protects contents and consumes the water', async () => {
+    installCommandShopState();
+    const bag = { ...sack(31030, 'b'), greased: true };
+    const scroll = putObjectInContainer(bag, scrollOfCharging(31031));
+    const water = waterPotion(31032, 'w');
+    game.inventory = [bag, water];
+
+    await rhack('#');
+    for (const ch of 'dip') await rhack(ch);
+    await rhack('\n');
+    await rhack('b');
+    await rhack('n');
+    await rhack('w');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(scroll.kind, 'scroll of charging');
+    assert.equal(game.inventory.includes(water), false);
+    assert.doesNotMatch(game._pending_message, /Some water gets into your bag!/);
+});
+
 test('applying an unpaid cream pie to yourself bills a dummy used-up pie', async () => {
     const { shkp } = installCommandShopState();
     const pie = creamPie(3094, 'p');

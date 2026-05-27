@@ -30,6 +30,6 @@ This slice adds the bounded late `potion_dip()` neutralization branch for unicor
 
 ## Remaining Follow-Ups
 
-- Neutral-water `water_damage()` through potion `#dip`, including grease, acid destruction, potion dilution, scroll/spellbook blanking, container contents, rust erosion, and water discovery, remains open.
+- Neutral-water carried-object `water_damage()` through potion `#dip` is covered in Audit 34, including grease, acid destruction, potion dilution, scroll/spellbook blanking, container contents, rust erosion, and towels. Shared water-damage primitives and deeper water discovery/type-call behavior remain open.
 - Potion-potion alchemy, polymorph potion dipping, broader source/target menus, and generic unsupported matrix branches remain separate potion slices.
 - The current JS still exposes potion identities more directly than C's appearance/type discovery split; deeper potion work should eventually centralize description, type-call, `dknown`, and discovery handling.
