@@ -25,7 +25,7 @@ The JS change calls `brokenPotionBreathe()` in `deliverImpactDroppedObjects()` a
 
 - Direct `potionhit()` remains the larger potion gap. C routes hero-thrown potion hits and wielded-potion bash through `potionhit()` rather than floor landing breakage (`dothrow.c:2262`, `uhitm.c:1094`, `potion.c:1623-1913`). JS still treats thrown potions as generic misses/landing objects and wielded potions as generic weapons.
 - Non-`kn` vapor `trycall()` is implementable but should be a dedicated display/discovery slice. C stores `oc_uname` through `trycall()`/`docall()` (`do.c:392`, `do_name.c:654`, `objnam.c:832`); JS has `_called_potions` prompt storage but does not yet render called potions or add discovery entries from vapor.
-- Water vapor can be split safely. Gremlin split is feasible now through `potionBreathe()`; lycanthropy should wait for a source-shaped `you_were()`/`you_unwere()` runtime model (`potion.c:2080`, `were.c:192`, `were.c:213`).
+- Audit 43 implements gremlin-only water vapor through `potionBreathe()`. Lycanthropy should wait for a source-shaped `you_were()`/`you_unwere()` runtime model (`potion.c:2080`, `were.c:192`, `were.c:213`).
 - Broken-potion vapor should stay call-site-specific. Audit 40 covers hot-ground `breakobj()` and Audit 41 covers inventory fire direct `potionbreathe()`; C also has vapor for forced chest content shattering, but intentionally no vapor for cold, lava/floor fire boil, electrical destruction, random/non-hero migration, and generic object deletion (`zap.c:5917`, `do.c:352`, `lock.c:1285`).
 - A non-potion high-impact shop slice is statue animation from shattering: C charges shop-owned statues and contents through `stolen_value()` before moving contents to the monster (`trap.c:854`, `trap.c:880`, `shk.c:3712`); JS `activateStatueTrap()` transfers contents with no charge.
 - Stone-to-flesh remains a compact object-transform candidate. C turns mineral wands into meat sticks through `poly_obj()` (`zap.c:2002`, `zap.c:2076`); JS currently routes `stone to flesh` through generic healing spell behavior.
@@ -34,6 +34,6 @@ The JS change calls `brokenPotionBreathe()` in `deliverImpactDroppedObjects()` a
 
 - Implement direct hero-thrown and wielded-potion `potionhit()` for monster targets, preserving C hit chance, consume/no-floor behavior, vapor/trycall order, and shop lifetime.
 - Add non-`kn` potion vapor `trycall()` plus called-potion display/discovery entries.
-- Add the gremlin-only water vapor slice; defer lycanthropy until runtime were-form support exists.
+- Add lycanthropy water vapor transformations after runtime were-form support exists.
 - Audits 40 and 41 cover hot-ground vapor and inventory-fire direct vapor. Add call-site-specific vapor for forced chest content shattering; keep lava, cold, non-hero migration, and generic destruction no-vapor.
 - Consider statue-shatter shop debt and stone-to-flesh wand-to-meat-stick as next non-potion slices.

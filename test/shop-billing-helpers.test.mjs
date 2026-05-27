@@ -2995,6 +2995,72 @@ test('wet worn towel blocks inventory fire potion vapor effects', () => {
     assert.match(result.messages.join(' '), /Some vapor passes harmlessly around you\./);
 });
 
+test('water vapor from destroyed carried potion splits gremlin polyself', () => {
+    installShopState();
+    initRng(1);
+    game.plname = 'Ada';
+    Object.assign(game.u, {
+        uhp: 7,
+        uhpmax: 11,
+        _polyself_base: { uhp: 12, uhpmax: 12 },
+        _polyself_form: { name: 'gremlin', mlet: 'g', mlevel: 5, mmove: 12, mac: 2 },
+    });
+    game.level.at = () => ({ roomno: ROOMOFFSET, typ: ROOM });
+    const potion = waterPotion(30986, 'w');
+    game.inventory = [potion];
+
+    const result = shop.fireDamageInventoryForTest(20, true, false, {
+        preburnedArmor: { bodyHit: true, message: '' },
+    });
+
+    const clone = game.level.monsters.find(mon => mon.data?.name === 'gremlin');
+    assert.equal(game.inventory.includes(potion), false);
+    assert.equal(result.messages[0], 'Your potion of water boils and explodes!');
+    assert.equal(result.messages[1], 'You multiply!');
+    assert.equal(game.u.uhp, 4);
+    assert.equal(game.u.uhpmax, 6);
+    assert.ok(clone);
+    assert.equal(clone.mhp, 3);
+    assert.equal(clone.mhpmax, 5);
+    assert.equal(clone.mcloned, 1);
+    assert.equal(clone.pet, true);
+    assert.equal(clone.mtame, 5);
+    assert.equal(clone.mpeaceful, 1);
+    assert.equal(clone.givenName, 'Ada');
+    assert.ok(clone.mextra?.edog);
+    assert.doesNotMatch(result.messages.join(' '), /peculiar odor|eyes water/);
+});
+
+test('wet worn towel blocks water vapor gremlin split', () => {
+    installShopState();
+    initRng(1);
+    Object.assign(game.u, {
+        uhp: 7,
+        uhpmax: 11,
+        _polyself_base: { uhp: 12, uhpmax: 12 },
+        _polyself_form: { name: 'gremlin', mlet: 'g', mlevel: 5, mmove: 12, mac: 2 },
+    });
+    game.level.at = () => ({ roomno: ROOMOFFSET, typ: ROOM });
+    const potion = waterPotion(30987, 'w');
+    const towel = ordinaryTool(30988, 'towel', 't');
+    towel.spe = 3;
+    towel.wetness = 3;
+    towel.worn = true;
+    towel.line = 't - a towel (being worn)';
+    game.inventory = [potion, towel];
+
+    const result = shop.fireDamageInventoryForTest(20, true, false, {
+        preburnedArmor: { bodyHit: true, message: '' },
+    });
+
+    assert.equal(game.inventory.includes(potion), false);
+    assert.equal(game.level.monsters.some(mon => mon.data?.name === 'gremlin'), false);
+    assert.equal(game.u.uhp, 7);
+    assert.equal(game.u.uhpmax, 11);
+    assert.match(result.messages.join(' '), /Some vapor passes harmlessly around you\./);
+    assert.doesNotMatch(result.messages.join(' '), /You multiply!/);
+});
+
 test('unpaid spellbook study usage charges four fifths of current shop price', () => {
     const { shkp } = installShopState();
     const book = healingSpellbook(3093, 'b');
@@ -14402,6 +14468,34 @@ test('hard-landing broken potion near hero applies vapor after shattering', () =
     assert.match(game.u._statusSuffix || '', /Conf/);
     assert.match(landing.messages.join(' '), /You smell a peculiar odor\.\.\./);
     assert.match(landing.messages.join(' '), /You feel somewhat dizzy\./);
+});
+
+test('hard-landing broken water potion near gremlin polyself splits without odor prelude', () => {
+    installShopState();
+    initRng(1);
+    game.plname = 'Ada';
+    Object.assign(game.u, {
+        uhp: 7,
+        uhpmax: 11,
+        _polyself_base: { uhp: 12, uhpmax: 12 },
+        _polyself_form: { name: 'gremlin', mlet: 'g', mlevel: 5, mmove: 12, mac: 2 },
+    });
+    game.level.at = () => ({ roomno: ROOMOFFSET, typ: ROOM });
+    const potion = waterPotion(8751);
+
+    const landing = shop.landProjectileObjectWithShopHandling(potion, 5, 6, { breakRoll: 50, silent: true });
+
+    const clone = game.level.monsters.find(mon => mon.data?.name === 'gremlin');
+    assert.equal(landing.topBreak.broke, true);
+    assert.equal(landing.object, null);
+    assert.equal(game.u.uhp, 4);
+    assert.equal(game.u.uhpmax, 6);
+    assert.ok(clone);
+    assert.equal(clone.mhp, 3);
+    assert.equal(clone.mhpmax, 5);
+    assert.equal(clone.givenName, 'Ada');
+    assert.match(landing.messages.join(' '), /You multiply!/);
+    assert.doesNotMatch(landing.messages.join(' '), /peculiar odor|eyes water/);
 });
 
 test('wet worn towel blocks broken potion vapor effects', () => {

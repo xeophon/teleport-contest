@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This note records the fresh read-only subagent audits run after the hot-ground and inventory-fire vapor work. Audit 41 implements inventory-fire direct `potionbreathe()`; the findings below are source-backed candidates for later slices.
+This note records the fresh read-only subagent audits run after the hot-ground and inventory-fire vapor work. Audit 41 implements inventory-fire direct `potionbreathe()`, and Audit 43 implements gremlin-only water vapor splitting; the remaining findings below are source-backed candidates for later slices.
 
 ## Forced Chest-Content Potion Shattering
 
@@ -24,8 +24,7 @@ This note records the fresh read-only subagent audits run after the hot-ground a
 - C `potionbreathe()` handles `POT_WATER` by splitting the hero only when `u.umonnum == PM_GREMLIN`; lycanthropy is a separate `else if` branch (`nethack-c/upstream/src/potion.c:2080`).
 - The wet worn towel gate happens before potion-specific effects, so it blocks water vapor splitting too (`nethack-c/upstream/src/potion.c:1943`, `nethack-c/upstream/include/youprop.h:405`).
 - C gremlin split uses polyform HP through `split_mon(&youmonst)` and `cloneu()`, creating a tame named gremlin clone and splitting current/max monster-form HP (`nethack-c/upstream/src/mhitu.c:2615-2630`).
-- JS `potionBreathe()` still has no water case, while current JS polyself HP lives in `u.uhp`/`u.uhpmax` with `_polyself_base` preserving the base form (`js/cmd.js:12044-12149`, `js/cmd.js:9745`).
-- Smallest next slice: add water vapor only for gremlin polyself, use current JS poly HP fields, create one adjacent tame named gremlin clone, split odd HP toward the hero, and keep lycanthropy deferred.
+- Audit 43 adds the gremlin-only JS water case using current JS poly HP fields, an adjacent tame named gremlin clone, odd HP split toward the hero, and wet towel shielding across direct and broken-potion vapor callers. Lycanthropy remains deferred (`js/cmd.js:12051-12195`, `test/shop-billing-helpers.test.mjs:2998-3062`, `test/shop-billing-helpers.test.mjs:14473-14499`).
 
 ## Stone To Flesh
 
@@ -44,7 +43,6 @@ This note records the fresh read-only subagent audits run after the hot-ground a
 ## Ranking
 
 1. Forced chest-content potion shattering is the closest continuation of the current vapor work.
-2. Gremlin water vapor is compact and isolated once adjacent clone placement is settled.
-3. Statue shatter shop debt is a compact non-potion shop-debt slice.
-4. Stone to flesh is compact at the first marble-wand self-cast row but touches spell dispatch and inventory merge.
-5. Direct `potionhit()` is high impact but should be split into smaller hit-delivery rows.
+2. Statue shatter shop debt is a compact non-potion shop-debt slice.
+3. Stone to flesh is compact at the first marble-wand self-cast row but touches spell dispatch and inventory merge.
+4. Direct `potionhit()` is high impact but should be split into smaller hit-delivery rows.

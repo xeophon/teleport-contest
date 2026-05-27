@@ -24,12 +24,12 @@ The implementation now calls direct `potionBreathe()` after the inventory destru
 ## Fresh Follow-Up Audits
 
 - Direct `potionhit()` delivery remains a larger missing subsystem. C handles hero-thrown potion hits, wielded potion bashes, monster-thrown hero hits, direct monster effects, and acid through iron bars in `potion.c`, `dothrow.c`, `uhitm.c`, and `mthrowu.c`; current JS mostly routes hero-thrown potions through landing/breakage and has only bespoke monster-thrown hero effects.
-- Water vapor's gremlin split is still missing. C `POT_WATER` in `potionbreathe()` calls the gremlin split only when the hero is in gremlin form and the wet towel gate did not intercept the vapor; lycanthropy is a separate later branch.
+- Audit 43 implements gremlin-only water vapor. C `POT_WATER` in `potionbreathe()` calls the gremlin split only when the hero is in gremlin form and the wet towel gate did not intercept the vapor; lycanthropy is a separate later branch.
 - Statue shatter shop debt remains a compact non-potion follow-up. C `animate_statue()` charges `stolen_value()` before moving statue contents to the animated monster; JS still moves contents directly.
 
 ## Remaining Follow-Ups
 
 - Add forced chest-content potion shattering with direct `potionbreathe()` and potion-specific shatter wording.
-- Add gremlin-only water vapor splitting before broader lycanthropy vapor transformations.
+- Add broader lycanthropy water vapor transformations separately.
 - Add direct `potionhit()` thrown/bash delivery as a separate, larger potion subsystem slice.
 - Keep lava/floor fire boil, cold destruction, electrical destruction, random/non-hero migration, and generic object deletion no-vapor unless a C caller explicitly reaches `breakobj()` or `potionbreathe()`.

@@ -12048,6 +12048,52 @@ function learnPotionVaporEffect(potion, name, knownEffect) {
     learnObjectScore('Potions', `potion of ${name}`);
 }
 
+function splitGremlinPolyselfFromWaterVapor(messages) {
+    const form = polyselfForm();
+    if (String(form?.name || '').toLowerCase() !== 'gremlin' || !game.u || !game.level) return false;
+    const currentHp = Math.min(game.u.uhp || 0, game.u.uhpmax || game.u.uhp || 0);
+    if (currentHp <= 1) return false;
+    const maxHp = Math.max(currentHp, game.u.uhpmax || currentHp);
+    const data = { ...(polyselfFormByName('gremlin') || {}), ...form };
+    const spot = enextoMonsterSpot(game.u.ux || 0, game.u.uy || 0, data);
+    if (!spot) return false;
+
+    const cloneHp = Math.trunc(currentHp / 2);
+    const cloneMaxHp = Math.trunc(maxHp / 2);
+    game.u.uhp = currentHp - cloneHp;
+    game.u.uhpmax = Math.max(1, maxHp - cloneMaxHp);
+
+    const clone = {
+        mx: spot.x,
+        my: spot.y,
+        m_id: next_ident(),
+        data,
+        name: data.name || 'gremlin',
+        mlet: data.mlet || 'g',
+        m_lev: data.mlevel ?? data.m_lev ?? 5,
+        mhp: Math.max(1, cloneHp),
+        mhpmax: Math.max(1, cloneMaxHp),
+        msleeping: 0,
+        mpeaceful: 1,
+        mtame: Math.max(5, baseScrollTameness({ data })),
+        pet: true,
+        mcanmove: true,
+        mcansee: true,
+        minvent: [],
+        mcloned: 1,
+        givenName: game.plname || 'wizard',
+    };
+    ensurePetExtension(clone);
+    set_malign(clone);
+    game.u.uconduct ??= {};
+    game.u.uconduct.pets = (game.u.uconduct.pets || 0) + 1;
+    game.level.monsters ??= [];
+    game.level.monsters.push(clone);
+    messages.push('You multiply!');
+    newsym(spot.x, spot.y);
+    return true;
+}
+
 function potionBreathe(potion, messages) {
     if (!heroCanReceivePotionVapor()) return;
     const name = alchemyPotionName(potion);
@@ -12144,6 +12190,9 @@ function potionBreathe(potion, messages) {
             game.u.blind = true;
             game.u._blindTimeout = (game.u._blindTimeout || 0) + rnd(5);
         }
+        break;
+    case 'water':
+        splitGremlinPolyselfFromWaterVapor(messages);
         break;
     case 'acid':
     case 'polymorph':
