@@ -1287,6 +1287,7 @@ const POTION_INDEX_BY_NAME = {
     'restore ability': 1,
     confusion: 2,
     blindness: 3,
+    paralysis: 4,
     speed: 5,
     levitation: 6,
     hallucination: 7,
@@ -1344,6 +1345,10 @@ function hallucinationPotion(id, letter = 'h', quan = 1, extra = {}) {
 
 function boozePotion(id, letter = 'b', quan = 1, extra = {}) {
     return namedPotion(id, 'booze', letter, quan, extra);
+}
+
+function paralysisPotion(id, letter = 'p', quan = 1, extra = {}) {
+    return namedPotion(id, 'paralysis', letter, quan, extra);
 }
 
 function extraHealingPotion(id, letter = 'e', quan = 1) {
@@ -15128,6 +15133,152 @@ test('adjacent hero-thrown confusion potion can apply direct vapor after monster
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
         'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(5)', 'rn2(105)', 'rn2(13)', 'rnd(5)',
     ]);
+});
+
+test('hero-thrown paralysis potion paralyzes visible monster without resistance roll', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.u.acurr.a[A_DEX] = 25;
+    const potion = paralysisPotion(8762, 'p', 1, { dknown: true });
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, {
+        meating: 4,
+        waiting: true,
+        mstrategy: 'waitforu',
+        mr: 100,
+    });
+    game.inventory = [potion];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('p');
+    await rhack('l');
+
+    assert.match(game._pending_message, /The (?:bottle|phial|flagon|carafe|flask|jar|vial) crashes on the goblin's head and breaks into shards\./);
+    assert.match(game._pending_message, /The potion of paralysis evaporates\./);
+    assert.doesNotMatch(game._pending_message, /misses|peculiar odor|seems to be holding/);
+    assert.equal(goblin.mcanmove, false);
+    assert.ok(goblin.mfrozen >= 1 && goblin.mfrozen <= 25);
+    assert.equal(goblin.meating, 0);
+    assert.equal(goblin.waiting, false);
+    assert.equal(goblin.mstrategy, 0);
+    assert.equal(goblin.msleeping, 0);
+    assert.equal(goblin.mpeaceful, false);
+    assert.equal(game.inventory.includes(potion), false);
+    assert.equal(game.level.objects.length, 0);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(5)', 'rnd(25)',
+    ]);
+});
+
+test('adjacent hero-thrown paralysis potion applies monster paralysis before direct vapor', async () => {
+    installNonShopFloorState();
+    initRng(3);
+    game.u.acurr.a[A_DEX] = 25;
+    const potion = paralysisPotion(8763, 'p', 1, { dknown: true });
+    const goblin = ordinaryThrowTarget('goblin', 6, 5);
+    game.inventory = [potion];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('p');
+    await rhack('l');
+
+    assert.match(game._pending_message, /The potion of paralysis evaporates\./);
+    assert.match(game._pending_message, /Something seems to be holding you\./);
+    assert.doesNotMatch(game._pending_message, /peculiar odor/);
+    assert.equal(goblin.mcanmove, false);
+    assert.ok(goblin.mfrozen >= 1 && goblin.mfrozen <= 25);
+    assert.ok((game._helpless_time || 0) > 0);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(5)', 'rnd(25)', 'rn2(13)', 'rnd(5)', 'rn2(2)',
+    ]);
+});
+
+test('hero-thrown paralysis potion does not extend an already immobile monster', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.u.acurr.a[A_DEX] = 25;
+    const potion = paralysisPotion(8764, 'p', 1, { dknown: true });
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, {
+        mcanmove: false,
+        mfrozen: 7,
+        meating: 4,
+        waiting: true,
+        mstrategy: 'waitforu',
+    });
+    game.inventory = [potion];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('p');
+    await rhack('l');
+
+    assert.equal(goblin.mcanmove, false);
+    assert.equal(goblin.mfrozen, 7);
+    assert.equal(goblin.meating, 4);
+    assert.equal(goblin.waiting, true);
+    assert.equal(goblin.mstrategy, 'waitforu');
+    assert.equal(goblin.msleeping, 0);
+    assert.equal(goblin.mpeaceful, false);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(5)',
+    ]);
+});
+
+test('hero-thrown paralysis potion treats numeric zero mcanmove as immobile', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.u.acurr.a[A_DEX] = 25;
+    const potion = paralysisPotion(8765, 'p', 1, { dknown: true });
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, {
+        mcanmove: 0,
+        mfrozen: 6,
+    });
+    game.inventory = [potion];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('p');
+    await rhack('l');
+
+    assert.equal(goblin.mcanmove, 0);
+    assert.equal(goblin.mfrozen, 6);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(5)',
+    ]);
+});
+
+test('hero-thrown paralysis potion effect can come from potion index', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.u.acurr.a[A_DEX] = 25;
+    const potion = {
+        id: 8766,
+        cls: 'potion',
+        glyph: '!',
+        kind: 'pink potion',
+        potionIndex: 4,
+        quan: 1,
+        ox: 5,
+        oy: 5,
+        letter: 'p',
+        line: 'p - a pink potion',
+    };
+    const goblin = ordinaryThrowTarget('goblin', 7, 5);
+    game.inventory = [potion];
+    game.level.monsters = [goblin];
+
+    await rhack('t');
+    await rhack('p');
+    await rhack('l');
+
+    assert.equal(goblin.mcanmove, false);
+    assert.ok(goblin.mfrozen >= 1 && goblin.mfrozen <= 25);
+    assert.equal(game.inventory.includes(potion), false);
 });
 
 test('known blindness vapor from broken potion discovers the potion', () => {

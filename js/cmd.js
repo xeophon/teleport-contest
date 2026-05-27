@@ -12472,8 +12472,28 @@ function thrownPotionHitTargetName(mon) {
 
 function supportsHeroThrownPotionHit(potion) {
     if (!isPotionObject(potion)) return false;
-    const kind = potionDipKind(potion);
-    return kind === 'confusion' || kind === 'booze';
+    const kind = thrownPotionEffectKind(potion);
+    return kind === 'confusion' || kind === 'booze' || kind === 'paralysis';
+}
+
+function thrownPotionEffectKind(potion) {
+    const name = alchemyPotionName(potion);
+    if (name && name !== 'potion' && !name.endsWith(' potion')) return name;
+    if (potion?.potionIndex != null) return IDENTIFIED_POTION_NAMES[potion.potionIndex] || name;
+    return name;
+}
+
+function monsterCanMoveForPotionParalysis(mon) {
+    return mon.mcanmove !== false && mon.mcanmove !== 0;
+}
+
+function paralyzeMonsterFromPotion(mon, duration) {
+    if (!monsterCanMoveForPotionParalysis(mon)) return;
+    mon.mcanmove = false;
+    mon.mfrozen = Math.min(127, duration);
+    mon.meating = 0;
+    if (mon.mstrategy === 'waitforu') mon.mstrategy = 0;
+    mon.waiting = false;
 }
 
 function heroThrownPotionHitMonster(potion, mon) {
@@ -12484,9 +12504,11 @@ function heroThrownPotionHitMonster(potion, mon) {
     if (!isPotionOfOil(potion))
         messages.push(`The ${pickupObjectName({ ...potion, quan: 1 })} evaporates.`);
 
-    const kind = potionDipKind(potion);
+    const kind = thrownPotionEffectKind(potion);
     if (kind === 'confusion' || kind === 'booze') {
         if (!monsterResistsEffect(mon, 6)) mon.mconf = true;
+    } else if (kind === 'paralysis') {
+        if (monsterCanMoveForPotionParalysis(mon)) paralyzeMonsterFromPotion(mon, rnd(25));
     }
 
     if ((mon.mhp || 1) > 0) {
