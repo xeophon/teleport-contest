@@ -20126,19 +20126,19 @@ function shipObjectShopDebt(obj, x, y, { shopFloorObj = false, silent = false } 
     return { charged: value > 0, value, shkp, message, ...deltas };
 }
 
-function addLostMagicBagShopCharge(charges, shkp, value) {
+function addLostShopMerchandiseCharge(charges, shkp, value) {
     const amount = Math.max(0, Math.trunc(Number(value || 0)));
     if (!shkp || !amount) return;
     charges.set(shkp, (charges.get(shkp) || 0) + amount);
 }
 
-function lostMagicBagShopChargesForObject(source, obj, defaultShkp, seen = new Set(), options = {}) {
+function lostShopMerchandiseChargesForObject(source, obj, defaultShkp, seen = new Set(), options = {}) {
     const charges = new Map();
     if (!source || !obj || !defaultShkp || seen.has(obj)) return charges;
     seen.add(obj);
     if (shopBillableGold(obj)) {
         if (options.topLevel !== false || options.includeContainedGold !== false)
-            addLostMagicBagShopCharge(charges, defaultShkp, Math.max(1, Math.trunc(Number(obj.quan || 1))));
+            addLostShopMerchandiseCharge(charges, defaultShkp, Math.max(1, Math.trunc(Number(obj.quan || 1))));
         return charges;
     }
 
@@ -20147,22 +20147,26 @@ function lostMagicBagShopChargesForObject(source, obj, defaultShkp, seen = new S
     const billShkp = owner.entry ? (owner.shkp || defaultShkp) : defaultShkp;
     const entry = owner.entry || shopBillEntryForObject(defaultShkp, obj);
     if (entry) {
-        addLostMagicBagShopCharge(charges, billShkp, shopBillEntryTotal(entry));
+        addLostShopMerchandiseCharge(charges, billShkp, shopBillEntryTotal(entry));
         subOneFromShopBill(obj, billShkp);
     } else if (!obj.no_charge && (!inventoryLikeNestedContent || obj.unpaid)) {
-        addLostMagicBagShopCharge(charges, defaultShkp,
+        addLostShopMerchandiseCharge(charges, defaultShkp,
             shopItemPrice(obj, source.ox ?? game.u?.ux, source.oy ?? game.u?.uy));
     }
 
     for (const child of globContents(obj)) {
-        const childCharges = lostMagicBagShopChargesForObject(source, child, defaultShkp, seen, {
+        const childCharges = lostShopMerchandiseChargesForObject(source, child, defaultShkp, seen, {
             ...options,
             topLevel: false,
         });
         for (const [shkp, value] of childCharges)
-            addLostMagicBagShopCharge(charges, shkp, value);
+            addLostShopMerchandiseCharge(charges, shkp, value);
     }
     return charges;
+}
+
+function lostMagicBagShopChargesForObject(source, obj, defaultShkp, seen = new Set(), options = {}) {
+    return lostShopMerchandiseChargesForObject(source, obj, defaultShkp, seen, options);
 }
 
 function billLostMagicBagShopItem(source, obj) {
@@ -20645,20 +20649,22 @@ export const __shopBillingTestHooks = {
 
 function buriedMerchandiseDebtMessage(x, y, ignoredObject = null) {
     const shkp = shopkeeperForCostlySpot(x, y);
-    if (!shkp || game._monster_moving) return '';
+    if (!shopkeeperInHisShop(shkp) || game._monster_moving) return '';
     let loss = 0;
+    const seen = new Set();
+    const source = { ox: x, oy: y };
+    const peaceful = shkp.mpeaceful !== 0;
     for (const obj of game.level?.objects || []) {
-        if (!obj || obj === ignoredObject || obj.transientProjectile || obj.no_charge) continue;
+        if (!obj || obj === ignoredObject || obj.transientProjectile) continue;
         if (obj.ox !== x || obj.oy !== y) continue;
-        const price = shopItemPrice(obj, x, y);
-        if (!(price > 0)) continue;
-        loss += price;
-        if (!(obj.otyp === GOLD_PIECE || obj.cls === 'coin' || obj.glyph === '$'))
+        const charges = lostShopMerchandiseChargesForObject(source, obj, shkp, seen);
+        for (const [chargedShkp, value] of charges)
+            loss += chargeShopkeeperForLostMerchandise(chargedShkp, value, { peaceful });
+        if (!shopBillableGold(obj))
             obj.no_charge = true;
     }
     if (!loss) return '';
-    shkp.debit = (shkp.debit || 0) + loss;
-    return `You owe ${shopkeeperDisplayName(shkp)} ${loss} zorkmid${loss === 1 ? '' : 's'} for burying merchandise.`;
+    return `You owe ${shopkeeperDisplayName(shkp)} ${loss} ${shopCurrency(loss)} for burying merchandise.`;
 }
 
 function clearHeroSlimeFromMoltenLava() {

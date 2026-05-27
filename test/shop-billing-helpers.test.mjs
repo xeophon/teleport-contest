@@ -9310,6 +9310,101 @@ test('shop-floor stock falling through a hole charges stolen value before migrat
     assert.equal(blade.no_charge, false);
 });
 
+test('boulder burial converts unpaid shop-floor object to post-credit debt', () => {
+    const { shkp } = installShopState();
+    installSeenHoleAtHero();
+    initRng(1);
+    shkp.credit = 5;
+    const blade = { ...dagger(512030), letter: undefined, line: undefined, ox: 5, oy: 5 };
+    shop.addObjectToShopBill(shkp, blade, 15);
+    game.level.objects = [blade];
+    const messages = [];
+
+    const consumed = earthFloorEffects(floorBoulder(512031), 5, 5, messages, 'fall');
+
+    assert.equal(consumed, true);
+    assert.match(messages.join(' '), /owe Izchak 10 zorkmids? for burying merchandise/);
+    assert.equal(game.level.objects.includes(blade), false);
+    assert.equal(game.level.buriedobjlist.includes(blade), true);
+    assert.equal(shkp.credit, 0);
+    assert.equal(shkp.debit, 10);
+    assert.equal(shkp.billct, 0);
+    assert.equal(shop.shopBillEntryForObject(shkp, blade), null);
+    assert.equal(blade.unpaid, false);
+    assert.equal(blade.unpaidPrice, undefined);
+    assert.equal(blade.no_charge, true);
+});
+
+test('boulder burial charges owner-billed no-charge merchandise to bill owner', () => {
+    const { shkp } = installShopState();
+    const owner = addSecondShopkeeper();
+    installSeenHoleAtHero();
+    initRng(1);
+    const ration = { ...foodRation(512032), letter: undefined, line: undefined, ox: 5, oy: 5 };
+    shop.addObjectToShopBill(owner, ration, 45);
+    ration.no_charge = true;
+    game.level.objects = [ration];
+    const messages = [];
+
+    const consumed = earthFloorEffects(floorBoulder(512033), 5, 5, messages, 'fall');
+
+    assert.equal(consumed, true);
+    assert.match(messages.join(' '), /owe Izchak 45 zorkmids? for burying merchandise/);
+    assert.equal(owner.debit, 45);
+    assert.equal(shkp.debit || 0, 0);
+    assert.equal(owner.billct, 0);
+    assert.equal(shop.shopBillEntryForObject(owner, ration), null);
+    assert.equal(ration.unpaid, false);
+    assert.equal(ration.no_charge, true);
+    assert.equal(game.level.buriedobjlist.includes(ration), true);
+});
+
+test('boulder burial charges no-charge container contents and contained gold', () => {
+    const { shkp } = installShopState();
+    installSeenHoleAtHero();
+    initRng(1);
+    const box = shopFloorContainer(512034);
+    box.no_charge = true;
+    const blade = putObjectInContainer(box, dagger(512035));
+    const free = putObjectInContainer(box, foodRation(512036));
+    free.no_charge = true;
+    putObjectInContainer(box, goldPieces(512037, 7));
+    const expected = shop.shopItemPrice(blade, 5, 5) + 7;
+    game.level.objects = [box];
+    const messages = [];
+
+    const consumed = earthFloorEffects(floorBoulder(512038), 5, 5, messages, 'fall');
+
+    assert.equal(consumed, true);
+    assert.match(messages.join(' '), new RegExp(`owe Izchak ${expected} zorkmids? for burying merchandise`));
+    assert.equal(shkp.debit, expected);
+    assert.equal(game.level.objects.includes(box), false);
+    assert.equal(game.level.buriedobjlist.includes(box), true);
+    assert.equal(box.no_charge, true);
+    assert.notEqual(blade.no_charge, true);
+    assert.equal(free.no_charge, true);
+});
+
+test('boulder burial routes angry shopkeeper loss to robbed', () => {
+    const { shkp } = installShopState();
+    installSeenHoleAtHero();
+    initRng(1);
+    shkp.angry = true;
+    const blade = { ...dagger(512039), letter: undefined, line: undefined, ox: 5, oy: 5 };
+    const expected = shop.shopItemPrice(blade, 5, 5);
+    game.level.objects = [blade];
+    const messages = [];
+
+    const consumed = earthFloorEffects(floorBoulder(512040), 5, 5, messages, 'fall');
+
+    assert.equal(consumed, true);
+    assert.match(messages.join(' '), new RegExp(`owe Izchak ${expected} zorkmids? for burying merchandise`));
+    assert.equal(shkp.robbed, expected);
+    assert.equal(shkp.debit || 0, 0);
+    assert.equal(blade.no_charge, true);
+    assert.equal(game.level.buriedobjlist.includes(blade), true);
+});
+
 test('shop-floor fragile stock falling through a hole migrates without ship-object breakage', () => {
     const { shkp } = installShopState();
     installSeenHoleAtHero();

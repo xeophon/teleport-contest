@@ -54,6 +54,7 @@ This folder records source-backed audits against `nethack-c/upstream`. The notes
 - [48-subagent-findings-2026-05-28.md](48-subagent-findings-2026-05-28.md): statue-trap shatter shop debt plus stone-to-flesh, paralysis potionhit, and shop-helper follow-up audits.
 - [49-subagent-findings-2026-05-28.md](49-subagent-findings-2026-05-28.md): self-cast stone-to-flesh stoning rescue, stone-golem polyself conversion, and fresh paralysis/shop-helper follow-up audits.
 - [50-subagent-findings-2026-05-28.md](50-subagent-findings-2026-05-28.md): direct hero-thrown paralysis potionhit plus fresh sleeping/shop-helper follow-up audits.
+- [51-subagent-findings-2026-05-28.md](51-subagent-findings-2026-05-28.md): burying-merchandise shop-helper cleanup plus fresh floor-alteration, ice-burial, and sleeping-potionhit follow-up audits.
 
 ## Cross-Cutting Themes
 
