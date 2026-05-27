@@ -11511,6 +11511,7 @@ function isPoisonableWeaponObject(item) {
 
 function isAcidCorrosionDipTargetObject(item) {
     if (!item || isPotionObject(item)) return false;
+    if (itemClassKey(item) === 'coin' || item?.glyph === '$') return false;
     if (item.greased) return true;
     const profile = wishedDamageProfile(item);
     return !!profile.erosionMatters && profile.secondaryWord === 'corroded';
@@ -11531,6 +11532,30 @@ function dipPotionSources(target) {
         if (isPoisonableWeaponObject(target) && (isPotionOfSickness(item) || isHealingFamilyPotion(item))) return true;
         return false;
     });
+}
+
+function dipTargetsForSource(source) {
+    if (!isPotionObject(source) || isPotionOfOil(source)) return [];
+    return (game.inventory || []).filter(item => item !== source && dipPotionSources(item).includes(source));
+}
+
+function dipSourceDescription(source) {
+    if (!source) return 'that';
+    const base = pickupObjectName({ ...source, quan: 1 }).replace(/^(?:a|an|the)\s+/i, '');
+    if ((source.quan || 1) > 1) {
+        const plural = source.plural || (base.endsWith('s') ? base : `${base}s`);
+        return `one of ${plural}`;
+    }
+    return `${/^[aeiou]/i.test(base) ? 'an' : 'a'} ${base}`;
+}
+
+function inventoryActionApplyText(item) {
+    if (isPotionObject(item) && !isPotionOfOil(item)) {
+        return (item.quan || 1) > 1
+            ? 'a - Dip something into one of these potions'
+            : 'a - Dip something into this potion';
+    }
+    return item.cls === 'ring' ? 'P - Put this ring on' : 'a - Apply this item';
 }
 
 function oilDipTargetName(item) {
@@ -40887,7 +40912,7 @@ export async function rhack(_cmd) {
                 [3, 34, 'd - Drop this item'],
                 [4, 34, 'E - Write on the floor with this item'],
                 [5, 34, 'i - Adjust inventory by assigning new letter'],
-                [6, 34, item.cls === 'ring' ? 'P - Put this ring on' : 'a - Apply this item'],
+                [6, 34, inventoryActionApplyText(item)],
                 [7, 34, 't - Throw this item'],
                 [8, 34, 'w - Wield this item in your hands'],
                 [9, 34, '\/ - Look up information about this'],
@@ -40916,6 +40941,28 @@ export async function rhack(_cmd) {
             game._overlay_hide_status_only = 0;
             await setMessage('In what direction?');
             game._command_mode = 'throwDirection';
+        }
+        if (ch === 'a' && isPotionObject(item)) {
+            game._inventory_action_letter = '';
+            game._overlay_lines = null;
+            game._overlay_hide_status = 0;
+            game._overlay_hide_status_only = 0;
+            if (isPotionOfOil(item)) {
+                game._command_mode = null;
+                await applyPotionOfOil(item);
+                return;
+            }
+            const targets = dipTargetsForSource(item);
+            if (!targets.length) {
+                game._command_mode = null;
+                await setMessage('Never mind.');
+                return;
+            }
+            game._dip_source_item = item;
+            game._dip_source_object = item.letter || '';
+            const targetLetters = targets.map(target => target.letter).filter(Boolean).sort().join('');
+            await setMessage(`What do you want to dip into ${dipSourceDescription(item)}? [${inventoryLetterMenu(targetLetters)} or ?*]`);
+            game._command_mode = 'dipIntoTarget';
         }
         return;
     }
@@ -44276,6 +44323,27 @@ export async function rhack(_cmd) {
             }
         }
         clearTipState();
+        game._command_mode = null;
+        return;
+    }
+
+    if (game._command_mode === 'dipIntoTarget') {
+        if (ch === '\x1b') {
+            game._keep_pending_message = 1;
+            game._dip_source_object = '';
+            game._dip_source_item = null;
+            game._command_mode = null;
+            return;
+        }
+        const source = game._dip_source_item || (game.inventory || []).find(invItem => invItem.letter === game._dip_source_object);
+        const target = (game.inventory || []).find(invItem => invItem.letter === ch);
+        if (source && target && dipTargetsForSource(source).includes(target)) {
+            const messages = dipObjectIntoPotion(target, source);
+            await setMessage(messages.join('  ') || 'Interesting...', messages.length > 1);
+            game.context.move = 1;
+        }
+        game._dip_source_object = '';
+        game._dip_source_item = null;
         game._command_mode = null;
         return;
     }

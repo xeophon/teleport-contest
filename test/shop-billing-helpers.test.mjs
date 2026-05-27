@@ -5,7 +5,7 @@ import { interruptEatingOccupation, processEatingOccupationTick } from '../js/al
 import { burnFloorObjectsByFire, earthFloorEffects, finishForceLock, processCorpseTimers, processGlobShrinkTimers, processSpellbookStudyOccupation, rhack, __shopBillingTestHooks as shop } from '../js/cmd.js';
 import { game, resetGame } from '../js/gstate.js';
 import { initRng } from '../js/rng.js';
-import { BILLSZ, CANDLESHOP, DB_EAST, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, HOLE, IN_SIGHT, LAVAPOOL, POOL, ROOM, ROOMOFFSET, SHOPBASE, SQKY_BOARD } from '../js/const.js';
+import { BILLSZ, CANDLESHOP, DB_EAST, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, FOUNTAIN, HOLE, IN_SIGHT, LAVAPOOL, POOL, ROOM, ROOMOFFSET, SHOPBASE, SQKY_BOARD } from '../js/const.js';
 import { currentFruitId, setCurrentFruitName } from '../js/fruit.js';
 
 const BRASS_LANTERN = 226;
@@ -3628,6 +3628,50 @@ test('dipping an unpaid acid stack into a dagger preserves residual billing with
     assert.equal(debts.some(debt => debt.billPortion === 'intact' && debt.price === 50), true);
     assert.match(game._pending_message, /Your dagger corrodes!/);
     assert.doesNotMatch(game._pending_message, /Yendorian Fuel Tax|in addition to the cost/);
+});
+
+test('inventory action on a non-oil potion starts source-first dip and skips fountains', async () => {
+    installCommandShopState();
+    const target = dartStack(30967, 'd', 3);
+    const potion = sicknessPotion(30968, 's');
+    game.inventory = [target, potion];
+    game.level.at = () => ({ roomno: ROOMOFFSET, typ: FOUNTAIN });
+
+    await rhack('i');
+    await rhack('s');
+
+    assert.equal(game._command_mode, 'inventoryAction');
+    assert.equal(game._overlay_lines.some(([, , text]) => /a - Dip something into this potion/.test(String(text))), true);
+
+    await rhack('a');
+
+    assert.equal(game._command_mode, 'dipIntoTarget');
+    assert.match(game._pending_message, /What do you want to dip into a potion of sickness\? \[d or \?\*\]/);
+    assert.doesNotMatch(game._pending_message, /fountain/);
+
+    await rhack('d');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(target.opoisoned, true);
+    assert.match(target.line, /poisoned darts/);
+    assert.equal(game.inventory.includes(potion), false);
+    assert.match(game._pending_message, /The potion of sickness forms a coating on the darts\./);
+});
+
+test('inventory action on a known oil potion applies it instead of source-first dipping', async () => {
+    installCommandShopState();
+    const potion = oilPotion(30969, 'o');
+    game.inventory = [potion];
+
+    await rhack('i');
+    await rhack('o');
+    await rhack('a');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.inventory.includes(potion), true);
+    assert.match(game._pending_message, /You light your potion/);
 });
 
 test('dipping poisonable darts into sickness coats the stack', async () => {

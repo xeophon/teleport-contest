@@ -2,7 +2,7 @@
 
 ## Scope
 
-This slice covers the potion-of-sickness and healing-family branches for carried poisonable weapon `#dip`. It intentionally stays short of the full `potion_dip()` matrix: generic source menus for every potion/target, alchemy, unicorn horn/amethyst mixtures, `#altdip`, combat poison wear-off, and exact poisoned inventory name ordering remain separate work. The bounded acid corrosion branch is now covered in audit 29.
+This slice covers the potion-of-sickness and healing-family branches for carried poisonable weapon `#dip`. It intentionally stays short of the full `potion_dip()` matrix: generic source menus for every potion/target, alchemy, unicorn horn/amethyst mixtures, combat poison wear-off, and exact poisoned inventory name ordering remain separate work. The bounded acid corrosion branch is covered in audit 29, and source-first inventory action `#altdip` for implemented effects is covered in audit 30.
 
 ## C Source Notes
 
@@ -25,6 +25,6 @@ This slice covers the potion-of-sickness and healing-family branches for carried
 ## Remaining Follow-Ups
 
 - Implement the full C `drink_ok` source menu and broader `potion_dip()` matrix instead of offering only locally implemented potion sources.
-- Add alchemy, unicorn horn/amethyst, and `#altdip` behavior; acid corrosion is now covered in audit 29.
+- Add alchemy and unicorn horn/amethyst behavior; acid corrosion is covered in audit 29, and source-first `#altdip` for implemented effects is covered in audit 30.
 - Move poisoned weapon naming toward C `doname()` ordering, such as `poisoned +0 arrow` rather than the current modeled `+0 poisoned darts` inventory line shape.
 - Port poison combat application/wear-off and trap/projectile poison lifecycle outside the narrow dip branch.

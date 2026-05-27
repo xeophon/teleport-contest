@@ -2,7 +2,7 @@
 
 ## Scope
 
-This slice adds the bounded carried-object acid `#dip` branch. It covers corrosion of corrodeable inventory targets, grease protection before material checks with acid consumption, no-consume proofed/maxed no-effect cases, and unpaid acid potion use-up billing through the existing inventory consumption path. It intentionally does not implement alchemy, unicorn horn/amethyst mixtures, source-first `#altdip`, or the full C source menu.
+This slice adds the bounded carried-object acid `#dip` branch. It covers corrosion of corrodeable inventory targets, grease protection before material checks with acid consumption, no-consume proofed/maxed no-effect cases, and unpaid acid potion use-up billing through the existing inventory consumption path. It intentionally does not implement alchemy, unicorn horn/amethyst mixtures, or the full C source menu. Source-first `#altdip` for implemented effects is covered in audit 30.
 
 ## C Source Notes
 
@@ -17,12 +17,12 @@ This slice adds the bounded carried-object acid `#dip` branch. It covers corrosi
 
 - `js/cmd.js:10480-10484` now identifies potion of acid as a potion source.
 - `js/cmd.js:11512-11530` now offers acid for carried corrodeable targets or greased non-potion targets alongside the existing oil/sickness/healing source selection.
-- `js/cmd.js:11582-11694` now handles acid corrosion: greased targets consume acid without corrosion, proofed or already thoroughly corroded targets report no-effect without consuming acid, successful corrosion increments `oeroded2`, and unpaid acid stacks are consumed through `useUpInventoryItem()` without `checkUnpaidUsage()`.
+- `js/cmd.js:11607-11719` now handles acid corrosion: greased targets consume acid without corrosion, proofed or already thoroughly corroded targets report no-effect without consuming acid, successful corrosion increments `oeroded2`, and unpaid acid stacks are consumed through `useUpInventoryItem()` without `checkUnpaidUsage()`.
 - `test/shop-billing-helpers.test.mjs:3491-3632` covers acid corrosion, max-corrosion no-consume behavior, grease protection including the grease-before-material branch, corrodeproof no-consume behavior, and unpaid acid stack residual billing without usage debit.
 
 ## Remaining Follow-Ups
 
-- Source-first `#altdip` remains separate. C selects the source potion first through `potion.c:2374` and inventory item actions queue `dip_into` through `iactions.c:159/371`; JS inventory actions still need an `a` action for non-oil potions and should skip floor-water prompts.
+- Source-first `#altdip` is now covered in audit 30 for implemented potion effects and the known-oil apply exception; full C source/target menu parity remains separate.
 - Poisoned weapon display ordering remains separate. C `xname()` and `doname()` differ, so inventory and `#dip` prompts should eventually show `poisoned +0 dart` while coating messages keep `poisoned dart`.
 - Full potion matrix work remains: alchemy, unicorn horn/amethyst mixtures, water/Bless/curse paths beyond covered local cases, and source menus for unsupported potion/target pairs.
 - Acid corrosion currently uses the existing JS damage-profile heuristic rather than a central C object-material registry; broad material parity still belongs with the object registry work.
