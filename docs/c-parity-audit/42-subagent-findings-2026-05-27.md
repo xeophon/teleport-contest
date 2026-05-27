@@ -31,8 +31,8 @@ This note records the fresh read-only subagent audits run after the hot-ground a
 - C spell dispatch routes the actual `SPE_STONE_TO_FLESH` pseudo object through wand-style directional handling (`nethack-c/upstream/src/spell.c:1400-1513`).
 - Self-cast stone to flesh walks every inventory object through `bhito()`, then repeatedly merges compatible non-worn inventory (`nethack-c/upstream/src/zap.c:2966-2990`).
 - `stone_to_flesh_obj()` gates on mineral or gemstone material, applies `obj_resists(obj, 2, 98)`, and maps mineral wands to `MEAT_STICK`; the ordinary mineral wand row is the marble wand of make invisible (`nethack-c/upstream/src/zap.c:2002-2084`, `nethack-c/upstream/include/objects.h:1466`).
-- JS knows the spell but hardcodes the pseudo object as healing and routes all healing-category spells to HP healing, so stone to flesh never transforms inventory or reaches shop billing (`js/cmd.js:39683-39694`).
-- Smallest next slice: self-cast known stone to flesh on a carried marble wand of make invisible, transform it to `MEAT_STICK`, preserve quantity/BUC/letter/no-charge where local metadata allows, merge compatible inventory meat sticks, and preserve unpaid carried wand debt as a used-up row.
+- Audit 45 covers this first JS slice: self-cast known stone to flesh on a carried marble wand of make invisible now transforms it to `MEAT_STICK`, preserves quantity/BUC/letter/no-charge/recharged where local metadata allows, merges compatible inventory meat sticks, and preserves unpaid carried wand debt as a used-up row.
+- Remaining stone-to-flesh work is broader object-transform parity: rings, gems/stones, boulders, statues, figurines, floor/beam targets, golem effects, petrification rescue, and registry-backed material/object metadata.
 
 ## Statue Trap Shatter Shop Debt
 
@@ -44,5 +44,5 @@ This note records the fresh read-only subagent audits run after the hot-ground a
 
 1. Forced chest-content potion shattering is the closest continuation of the current vapor work.
 2. Statue shatter shop debt is a compact non-potion shop-debt slice.
-3. Stone to flesh is compact at the first marble-wand self-cast row but touches spell dispatch and inventory merge.
+3. Broader stone to flesh remains useful after Audit 45, but it should follow registry-backed material/object metadata.
 4. Direct `potionhit()` is high impact but should be split into smaller hit-delivery rows.

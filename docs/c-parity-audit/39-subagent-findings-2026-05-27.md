@@ -28,7 +28,7 @@ The JS change calls `brokenPotionBreathe()` in `deliverImpactDroppedObjects()` a
 - Audit 43 implements gremlin-only water vapor through `potionBreathe()`. Lycanthropy should wait for a source-shaped `you_were()`/`you_unwere()` runtime model (`potion.c:2080`, `were.c:192`, `were.c:213`).
 - Broken-potion vapor should stay call-site-specific. Audit 40 covers hot-ground `breakobj()` and Audit 41 covers inventory fire direct `potionbreathe()`; C also has vapor for forced chest content shattering, but intentionally no vapor for cold, lava/floor fire boil, electrical destruction, random/non-hero migration, and generic object deletion (`zap.c:5917`, `do.c:352`, `lock.c:1285`).
 - A non-potion high-impact shop slice is statue animation from shattering: C charges shop-owned statues and contents through `stolen_value()` before moving contents to the monster (`trap.c:854`, `trap.c:880`, `shk.c:3712`); JS `activateStatueTrap()` transfers contents with no charge.
-- Stone-to-flesh remains a compact object-transform candidate. C turns mineral wands into meat sticks through `poly_obj()` (`zap.c:2002`, `zap.c:2076`); JS currently routes `stone to flesh` through generic healing spell behavior.
+- Audit 45 covers the first compact stone-to-flesh object-transform row: self-cast carried marble/make-invisible wands now become meat sticks through a focused replacement and merge pass. Broader stone-to-flesh transforms still need registry-backed material metadata.
 
 ## Remaining Follow-Ups
 
@@ -36,4 +36,4 @@ The JS change calls `brokenPotionBreathe()` in `deliverImpactDroppedObjects()` a
 - Add non-`kn` potion vapor `trycall()` plus called-potion display/discovery entries.
 - Add lycanthropy water vapor transformations after runtime were-form support exists.
 - Audits 40 and 41 cover hot-ground vapor and inventory-fire direct vapor. Add call-site-specific vapor for forced chest content shattering; keep lava, cold, non-hero migration, and generic destruction no-vapor.
-- Consider statue-shatter shop debt and stone-to-flesh wand-to-meat-stick as next non-potion slices.
+- Consider statue-shatter shop debt as the next compact non-potion slice; broader stone-to-flesh rows should follow registry-backed material metadata.

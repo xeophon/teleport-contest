@@ -25,7 +25,7 @@ This slice adds the bounded `H2Opotion_dip()` branch for carried-object potion `
 ## Parallel Follow-Up Audits
 
 - Unicorn horn and amethyst neutralization: C `mixtype()` maps unicorn horn plus sickness to fruit juice, horn plus hallucination/blindness/confusion to water, and amethyst plus booze to fruit juice. Audit 33 implements the local split-one source stack, `COST_NUTRLZ` billing, mutation, and reinsertion path.
-- Stone-to-flesh self-cast: C transforms eligible mineral/gemstone inventory objects into meat ring, meat stick, or meatball and repeatedly merges compatible results. JS still treats stone-to-flesh as a generic healing spell.
+- Stone-to-flesh self-cast: C transforms eligible mineral/gemstone inventory objects into meat ring, meat stick, or meatball and repeatedly merges compatible results. Audit 45 covers the first carried marble-wand to meat-stick row; broader object transforms remain separate.
 
 ## Remaining Follow-Ups
 

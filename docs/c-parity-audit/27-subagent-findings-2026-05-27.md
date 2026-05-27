@@ -2,7 +2,7 @@
 
 ## Scope
 
-This slice adds JS object identity for C's `MEAT_STICK` food row and wires it through eating, wishing, simple-food pickup merging, `mklev.js` container merging, pet object weight, and shop base cost. It intentionally does not implement stone-to-flesh object transformation, because the current JS spell path has no source-shaped object polymorph pipeline to extend narrowly.
+This slice adds JS object identity for C's `MEAT_STICK` food row and wires it through eating, wishing, simple-food pickup merging, `mklev.js` container merging, pet object weight, and shop base cost. Audit 45 later adds the first focused stone-to-flesh transformation row for carried marble wands, while broader object-polymorph parity remains separate.
 
 ## C Source Notes
 
@@ -26,7 +26,7 @@ This slice adds JS object identity for C's `MEAT_STICK` food row and wires it th
 
 ## Remaining Follow-Ups
 
-- Add a real stone-to-flesh object transform pipeline so `WAND_CLASS` mineral objects can become `MEAT_STICK` and merge through the normal inventory/floor paths.
+- Broaden the Audit 45 stone-to-flesh marble-wand slice into a real object transform pipeline so other `WAND_CLASS` mineral rows, rings, and stones can transform and merge through normal inventory/floor paths.
 - Replace local food tables with a registry-backed source for `oc_merge`, material, cost, weight, delay, nutrition, color, and creation policy.
 - Magic-bag loss owner routing is now covered in audit 28 for floor-source cursed magic-bag losses; remaining magic-bag work should converge that local helper with a central `obfree()`/`stolen_value()` subsystem.
 - Potion-dip follow-ups remain separate: bounded acid corrosion, inventory-action `#altdip` source-first flow, and full `drink_ok` source menus are now covered in later potion audits, including potion-potion alchemy recipes/bad mixtures in audit 36; remaining potion-dip gaps are tracked in the audit index.

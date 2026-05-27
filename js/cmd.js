@@ -1151,6 +1151,7 @@ const PANCAKE = 11011;
 const MEATBALL = 11012;
 const MEAT_STICK = 11014;
 const ENORMOUS_MEATBALL = 11013;
+const WAN_MAKE_INVISIBLE = 10091;
 const CRAM_RATION = 145;
 const LEMBAS_WAFER = 146;
 const K_RATION = 10035;
@@ -11823,6 +11824,80 @@ function replaceInventoryObjectWithPolymorphResult(target, replacement) {
     syncCarriedFigurineTransformTimer(target);
     refreshInventoryObjectLine(target);
     if (target.unpaid) syncUnpaidBillLine(target);
+}
+
+function isStoneToFleshMarbleWandObject(item) {
+    if (!item || (itemClassKey(item) !== 'wand' && item?.glyph !== '/' && item?.otyp !== WAND_CLASS && item?.otyp !== WAN_MAKE_INVISIBLE))
+        return false;
+    const kind = objectKindKey(item).replace(/^wand of /, '');
+    const appearance = String(item?.appearance || '').toLowerCase();
+    return item?.otyp === WAN_MAKE_INVISIBLE
+        || item?.wandIndex === 8
+        || item?.wand === 'make invisible'
+        || kind === 'make invisible'
+        || appearance === 'marble';
+}
+
+function stoneToFleshMeatStickReplacement(target) {
+    const replacement = mksobj(MEAT_STICK, false, false);
+    Object.assign(replacement, object_display(replacement), {
+        quan: Math.max(1, Math.trunc(Number(target?.quan || 1))),
+        letter: target?.letter,
+        blessed: !!target?.blessed,
+        cursed: !!target?.cursed,
+        no_charge: !!target?.no_charge,
+        recharged: target?.recharged ?? 0,
+        cls: 'food',
+        glyph: '%',
+        otyp: MEAT_STICK,
+        kind: 'meat stick',
+        actualKind: 'meat stick',
+        singular: 'meat stick',
+        plural: 'meat sticks',
+        nutrition: 5,
+        owt: Math.max(1, Math.trunc(Number(target?.quan || 1))),
+    });
+    return replacement;
+}
+
+function stoneToFleshMergeSkipItem(item) {
+    return !!(item?.worn || item?.wielded || item?.alternate || item?.quivered);
+}
+
+function mergeStoneToFleshInventoryResults() {
+    let didMerge = false;
+    do {
+        didMerge = false;
+        const inventory = game.inventory || [];
+        for (let i = 0; !didMerge && i < inventory.length; i++) {
+            const target = inventory[i];
+            if (stoneToFleshMergeSkipItem(target)) continue;
+            for (let j = i + 1; j < inventory.length; j++) {
+                const source = inventory[j];
+                if (stoneToFleshMergeSkipItem(source)) continue;
+                if (!pickedObjectInventoryMergeCompatible(target, source, false, null)) continue;
+                mergePickedObjectIntoInventory(source, target);
+                game.inventory = (game.inventory || []).filter(item => item !== source);
+                didMerge = true;
+                break;
+            }
+        }
+    } while (didMerge);
+}
+
+function stoneToFleshInventoryEffect(messages = []) {
+    let transformed = false;
+    for (const item of [...(game.inventory || [])]) {
+        if (!isStoneToFleshMarbleWandObject(item)) continue;
+        markObjectShopBillUsedUp(item);
+        replaceInventoryObjectWithPolymorphResult(item, stoneToFleshMeatStickReplacement(item));
+        transformed = true;
+    }
+    if (transformed) {
+        mergeStoneToFleshInventoryResults();
+        messages.push('You smell the odor of meat.');
+    }
+    return { transformed, messages };
 }
 
 function learnPotionPolymorphDiscovery(item) {
@@ -39749,7 +39824,19 @@ export async function rhack(_cmd) {
     if (game._command_mode === 'spellDirection') {
         const spell = game._casting_spell;
         game._casting_spell = null;
-        if (spell?.category === 'healing') {
+        if (spell?.name === 'stone to flesh') {
+            if (ch === '.') {
+                const result = stoneToFleshInventoryEffect();
+                if (result.messages.length) await setMessage(result.messages.join('  '));
+                else {
+                    game._pending_message = '';
+                    game._message_more = 0;
+                    game._keep_pending_message = 1;
+                }
+            } else {
+                await setMessage(`You cast ${spell?.name || 'a spell'}.`);
+            }
+        } else if (spell?.category === 'healing') {
             game.u.uhp = Math.min(game.u.uhpmax || game.u.uhp || 1, (game.u.uhp || 1) + d(6, 4));
             await setMessage('You feel better.');
         } else if (spell?.name === 'force bolt') {

@@ -18,8 +18,8 @@ This note records the fresh read-only subagent findings gathered while implement
 - C self-cast `SPE_STONE_TO_FLESH` routes through `zapyourself()`, walks inventory through `bhito()`, and restarts inventory merges until stable (`nethack-c/upstream/src/spell.c:1478-1500`, `nethack-c/upstream/src/zap.c:2966-2990`).
 - `stone_to_flesh_obj()` gates on mineral/gemstone material; mineral `WAND_CLASS` maps to `MEAT_STICK`, and the marble wand of make invisible is the ordinary mineral wand row (`nethack-c/upstream/src/zap.c:2002-2080`, `nethack-c/upstream/include/objects.h:1466`).
 - C `poly_obj()` preserves quantity, inventory letter, `no_charge`, BUC, and `recharged` while dropping wand charge metadata; deleting an unpaid old wand leaves the old bill row used-up (`nethack-c/upstream/src/zap.c:1702-1903`, `nethack-c/upstream/src/zap.c:1987`, `nethack-c/upstream/src/shk.c:1224`).
-- JS still classifies the spell as healing and hardcodes healing pseudo-object handling, so self-cast stone to flesh heals instead of transforming inventory (`js/cmd.js:1045`, `js/cmd.js:39695-39703`).
-- Smallest safe slice: before the generic healing branch, handle self-cast stone to flesh for carried marble/make-invisible wands only, replace each with `MEAT_STICK`, preserve C fields, mark old unpaid rows used-up, and run a post-scan meat-stick merge pass.
+- Audit 45 implements this first row: before the generic healing branch, self-cast stone to flesh now handles carried marble/make-invisible wands only, replaces each with `MEAT_STICK`, preserves C fields where local metadata allows, marks old unpaid rows used-up, and runs a post-scan meat-stick merge pass.
+- Remaining stone-to-flesh work is broader object-transform parity beyond the covered marble-wand row.
 
 ## Direct Hero-Thrown Potionhit
 
@@ -40,5 +40,5 @@ This note records the fresh read-only subagent findings gathered while implement
 
 1. Forced chest-content potion shattering is the closest continuation of the potion vapor work and has precise tests.
 2. Statue trap shatter debt is compact and isolated in one trap path.
-3. Stone to flesh is a high-value object-transform slice but touches spell dispatch and inventory merging.
+3. Broader stone to flesh remains high-value after Audit 45 but should wait for registry-backed material/object metadata.
 4. Direct hero-thrown `potionhit()` is high impact but should start with one monster-hit row before broadening.

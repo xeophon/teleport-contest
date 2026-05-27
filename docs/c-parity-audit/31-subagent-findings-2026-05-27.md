@@ -25,10 +25,10 @@ This slice brings poisoned weapon display closer to C `doname()` ordering for in
 
 - Water BUC effects are now covered in audit 32 for blessed/cursed water source selection, BUC mutation, source consumption, visible glow/aura learning, and unpaid water devaluation billing. Neutral-water `water_damage()` is covered in audit 34, with shared primitives still open.
 - Unicorn horn and amethyst neutralization is covered in audit 33 for the local `mixtype()` rows, split-one source stacks, `COST_NUTRLZ`, mutation, and no-effect fallbacks.
-- Stone-to-flesh self-cast: C routes stone-to-flesh through the wand-like directional path; self-cast transforms only mineral/gemstone inventory objects into meat ring, meat stick, or meatball as appropriate, then repeatedly merges eligible food results. JS currently treats healing-category spells generically, so stone-to-flesh does not transform inventory yet.
+- Stone-to-flesh self-cast: C routes stone-to-flesh through the wand-like directional path; self-cast transforms only mineral/gemstone inventory objects into meat ring, meat stick, or meatball as appropriate, then repeatedly merges eligible food results. Audit 45 covers the first carried marble-wand to meat-stick row; broader object transforms remain separate.
 
 ## Remaining Follow-Ups
 
 - Broad non-self carried potion `#dip` source/target menu parity, neutral-water damage, horn/amethyst mixtures, potion-potion alchemy recipes/bad mixtures, alchemy-explosion vapor effects, and hard-landing projectile broken-potion vapor effects are covered in later audits. Real `?*` menu rendering, full `poly_obj()` fidelity, self-potion/Klein-bottle handling, direct `potionhit()` thrown/bash delivery, other broken-potion callers, non-`kn` `trycall()` prompt parity, water vapor gremlin/lycanthropy transformations, exact status-property mapping, and poison lifecycle outside dipping remain separate slices.
 - Broader naming parity should eventually flow through a C-shaped `xname()`/`doname()` split instead of local display helpers.
-- Stone-to-flesh object transforms remain a separate spell/object-registry slice.
+- Broader stone-to-flesh object transforms remain a separate spell/object-registry slice beyond Audit 45's marble-wand row.

@@ -28,6 +28,7 @@ const SLIME_MOLD = 11009;
 const MEAT_RING = 10164;
 const MEAT_STICK = 11014;
 const DART = 353;
+const WAN_MAKE_INVISIBLE = 10091;
 
 function installShopState() {
     const g = resetGame();
@@ -104,6 +105,25 @@ function acknowledgePendingMessage() {
 
 function acknowledgeMoreForOccupation() {
     acknowledgePendingMessage();
+}
+
+async function castStoneToFleshAtSelf() {
+    game._known_spells = [{ name: 'stone to flesh', level: 3, skill: 'healing', learnedTurn: game.moves || 1 }];
+    game.u.uen = 50;
+    game.u.uenmax = 50;
+    game.nhDisplay = { cols: 200 };
+
+    await rhack('Z');
+    assert.equal(game._command_mode, 'castSpell');
+    assert.equal(game._spell_menu_spells?.[0]?.name, 'stone to flesh');
+    game._spell_menu_spells[0].successChance = 100;
+
+    await rhack('a');
+    assert.equal(game._command_mode, 'spellDirection');
+    assert.match(game._pending_message, /In what direction\?/);
+
+    await rhack('.');
+    assert.equal(game._command_mode, null);
 }
 
 function installAngryNotRobbedPayState({ gold = 0, seed = 1, player = 'Hero', customer = 'PreviousCustomer' } = {}) {
@@ -644,6 +664,29 @@ function chargeableRing(id, letter = 'r', spe = 0) {
         oy: 5,
         letter,
         line: `${letter} - a ring of protection`,
+    };
+}
+
+function makeInvisibleWand(id, letter = 'w', spe = 6, extra = {}) {
+    return {
+        id,
+        otyp: WAN_MAKE_INVISIBLE,
+        cls: 'wand',
+        glyph: '/',
+        kind: 'make invisible',
+        actualKind: 'wand of make invisible',
+        wandIndex: 8,
+        quan: 1,
+        spe,
+        recharged: 0,
+        chargeKnown: true,
+        known: true,
+        dknown: true,
+        ox: 5,
+        oy: 5,
+        letter,
+        line: `${letter} - a wand of make invisible (0:${spe})`,
+        ...extra,
     };
 }
 
@@ -3148,6 +3191,103 @@ test('failed read that crumbles an unpaid spellbook preserves full used-up bill'
     assert.equal(debts.some(debt => debt.billPortion === 'fullyUsedUp' && debt.price === 100), true);
     assert.match(game._pending_message, /The spellbook crumbles to dust!/);
     assert.doesNotMatch(game._pending_message, /free library/);
+});
+
+test('self-cast stone to flesh turns carried marble wand into meat stick', async () => {
+    installCommandShopState();
+    initRng(1);
+    const wand = makeInvisibleWand(31003, 'a', 6);
+    game.inventory = [wand];
+
+    await castStoneToFleshAtSelf();
+
+    assert.equal(game.inventory.length, 1);
+    const result = game.inventory[0];
+    assert.equal(result.letter, 'a');
+    assert.equal(result.cls, 'food');
+    assert.equal(result.otyp, MEAT_STICK);
+    assert.equal(result.kind, 'meat stick');
+    assert.equal(result.actualKind, 'meat stick');
+    assert.equal(result.quan, 1);
+    assert.notEqual(result.id, 31003);
+    assert.equal(result.wandIndex, undefined);
+    assert.equal(result.wand, undefined);
+    assert.equal(result.chargeKnown, undefined);
+    assert.notEqual(result.spe, 6);
+    assert.equal(result.line, 'a - a meat stick');
+    assert.match(game._pending_message, /You smell the odor of meat\./);
+});
+
+test('self-cast stone to flesh preserves C fields on wand to meat stick', async () => {
+    installCommandShopState();
+    initRng(1);
+    const wand = makeInvisibleWand(31004, 'a', 6, {
+        quan: 2,
+        cursed: true,
+        bknown: true,
+        no_charge: true,
+        recharged: 3,
+        line: 'a - 2 cursed wands of make invisible (3:6)',
+    });
+    game.inventory = [wand];
+
+    await castStoneToFleshAtSelf();
+
+    const result = game.inventory[0];
+    assert.equal(result.letter, 'a');
+    assert.equal(result.cls, 'food');
+    assert.equal(result.otyp, MEAT_STICK);
+    assert.equal(result.quan, 2);
+    assert.equal(result.cursed, true);
+    assert.equal(result.blessed, false);
+    assert.equal(result.bknown, undefined);
+    assert.equal(result.no_charge, true);
+    assert.equal(result.recharged, 3);
+    assert.equal(result.spe, 0);
+    assert.equal(result.line, 'a - 2 meat sticks');
+});
+
+test('self-cast stone to flesh merges resulting meat sticks', async () => {
+    installCommandShopState();
+    initRng(1);
+    const food = simpleFood(31005, 'meat stick', 'a', { otyp: MEAT_STICK });
+    const wand = makeInvisibleWand(31006, 'b', 4);
+    game.inventory = [food, wand];
+
+    await castStoneToFleshAtSelf();
+
+    assert.equal(game.inventory.length, 1);
+    assert.equal(game.inventory[0], food);
+    assert.equal(food.quan, 2);
+    assert.equal(food.line, 'a - 2 meat sticks');
+    assert.equal(game.inventory.some(item => item.cls === 'wand' || item.kind === 'make invisible'), false);
+});
+
+test('self-cast stone to flesh marks unpaid transformed wand used up', async () => {
+    const { shkp } = installCommandShopState();
+    initRng(1);
+    const wand = makeInvisibleWand(31007, 'a', 5);
+    game.inventory = [wand];
+    shop.addObjectToShopBill(shkp, wand, 150);
+
+    await castStoneToFleshAtSelf();
+
+    const result = game.inventory[0];
+    assert.equal(result.cls, 'food');
+    assert.equal(result.otyp, MEAT_STICK);
+    assert.equal(result.unpaid, undefined);
+    assert.equal(result.unpaidPrice, undefined);
+    assert.equal(shkp.debit || 0, 0);
+    assert.equal(shkp.billct, 1);
+    const entry = shkp.bill[0];
+    assert.ok(entry);
+    assert.equal(entry.useup, true);
+    assert.equal(shop.shopBillEntryTotal(entry), 150);
+    assert.equal(shop.shopBillEntryForObject(shkp, result), null);
+    assert.equal(game._usedUpShopBills.some(bill =>
+        String(bill.bo_id) === String(31007)
+        && bill.price === 150
+        && /wand of make invisible/.test(bill.name)), true);
 });
 
 test('failed read that leaves an unpaid spellbook intact does not mark it used-up', async () => {
