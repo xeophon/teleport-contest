@@ -14871,8 +14871,11 @@ function removeCurseScrollEffect(item) {
             const selected = item.blessed || removeCurseActiveTarget(obj);
             if (!selected) continue;
             if (confused) {
+                const shopWater = isWaterPotion(obj) && !!shopkeeperOwningBillEntry(obj).entry;
                 removeCurseBlessOrCurse(obj);
                 obj.bknown = false;
+                if (shopWater && (obj.blessed || obj.cursed))
+                    alterShopBillCostIfHigher(obj);
                 refreshInventoryLineAfterBucChange(obj);
             } else if (obj.cursed) {
                 if (obj.bknown === true) learned = true;
@@ -16753,6 +16756,26 @@ function shopkeeperOwningBillEntry(obj) {
         if (entry) return { shkp, entry };
     }
     return { shkp: null, entry: null };
+}
+
+function alterShopBillCostIfHigher(obj, amount = 0) {
+    const entry = shopkeeperOwningBillEntry(obj).entry;
+    if (!entry || entry.useup) return false;
+    const forced = Number(amount || 0);
+    const newTotal = forced
+        ? Math.abs(Math.trunc(forced))
+        : shopItemPrice(obj, game.u?.ux, game.u?.uy)
+            || (shopBaseCost(obj) || 0) * shopPricingUnits(obj);
+    if (!(newTotal > 0)) return false;
+    const oldTotal = shopBillEntryTotal(entry);
+    if (newTotal <= oldTotal && forced >= 0) return false;
+    entry.price = newTotal;
+    entry.totalPrice = newTotal;
+    entry.bquan = obj.quan || entry.bquan || 1;
+    obj.unpaid = true;
+    obj.unpaidPrice = shopBillEntryTotal(entry);
+    syncUnpaidBillLine(obj);
+    return true;
 }
 
 function shopkeeperIdentity(shkp) {

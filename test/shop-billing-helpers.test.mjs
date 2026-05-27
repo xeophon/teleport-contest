@@ -2172,6 +2172,53 @@ test('unblessed remove curse does not alter inactive unpaid unholy water', async
     assert.doesNotMatch(game._pending_message, /you pay for it/);
 });
 
+test('confused remove curse raises live unpaid water bill when BUC changes', async () => {
+    const { shkp } = installCommandShopState();
+    game.u._confusionTimeout = 10;
+    const scroll = scrollOfRemoveCurse(30907, 's', true);
+    const water = waterPotion(30909, 'w', { bknown: true });
+    game.inventory = [scroll, water];
+    shop.addObjectToShopBill(shkp, water, 5);
+
+    await rhack('r');
+    await rhack('s');
+
+    const entry = shop.shopBillEntryForObject(shkp, water);
+    const expectedPrice = shop.shopItemPrice(water, 5, 5);
+    assert.equal(game.context.move, 1);
+    assert.equal(water.blessed || water.cursed, true);
+    assert.equal(water.bknown, false);
+    assert.equal(water.unpaid, true);
+    assert.equal(entry?.useup, false);
+    assert.equal(shop.shopBillEntryTotal(entry), expectedPrice);
+    assert.equal(water.unpaidPrice, expectedPrice);
+    assert.equal(shkp.billct, 1);
+    assert.equal((game._usedUpShopBills || []).length, 0);
+    assert.doesNotMatch(game._pending_message, /you pay for it/);
+});
+
+test('confused remove curse ignores stale field-only unpaid water', async () => {
+    const { shkp } = installCommandShopState();
+    game.u._confusionTimeout = 10;
+    const scroll = scrollOfRemoveCurse(30910, 's', true);
+    const water = waterPotion(30911, 'w', { bknown: true });
+    water.unpaid = true;
+    water.unpaidPrice = 5;
+    game.inventory = [scroll, water];
+
+    await rhack('r');
+    await rhack('s');
+
+    assert.equal(water.blessed || water.cursed, true);
+    assert.equal(water.bknown, false);
+    assert.equal(water.unpaid, true);
+    assert.equal(water.unpaidPrice, 5);
+    assert.equal(shop.shopBillEntryForObject(shkp, water), null);
+    assert.equal(shkp.billct || 0, 0);
+    assert.equal((game._usedUpShopBills || []).length, 0);
+    assert.doesNotMatch(game._pending_message, /you pay for it/);
+});
+
 test('unpaid camera grease and tinning kit use charge one tenth price', () => {
     for (const [index, kind] of ['expensive camera', 'can of grease', 'tinning kit'].entries()) {
         const { shkp } = installShopState();
