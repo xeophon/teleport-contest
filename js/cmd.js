@@ -7715,6 +7715,13 @@ function billDummyAlteredCarriedObject(obj) {
     return true;
 }
 
+function markAlteredShopObjectNoCharge(obj) {
+    if (!obj || shopBillableGold(obj)) return false;
+    obj.no_charge = true;
+    clearObjectShopBillState(obj);
+    return true;
+}
+
 function finishCreamPieSplat(item) {
     if (!item) return false;
     const pie = splitCarriedCreamPieForSplat(item);
@@ -8849,11 +8856,10 @@ function billDummyAlteredShopObject(obj) {
         oy: undefined,
     };
     const entry = addObjectToShopBill(shkp, dummy, price, { useup: true });
-    if (!entry) return false;
+    if (!entry)
+        return shopBillIsFull(shkp) ? markAlteredShopObjectNoCharge(obj) : false;
     rememberUsedUpShopBillEntry(obj, entry, price, shkp);
-    obj.no_charge = true;
-    clearObjectShopBillState(obj);
-    obj.no_charge = true;
+    markAlteredShopObjectNoCharge(obj);
     return true;
 }
 
@@ -11779,7 +11785,8 @@ function costlyBiteFood(item, { floorObject = false } = {}) {
         const entry = shopBillEntryForObject(shkp, item);
         const price = entry ? shopBillEntryTotal(entry) : shopItemPrice(item, x, y);
         if (!(price > 0)) return false;
-        if (!entry && !addObjectToShopBill(shkp, item, price, { useup: true })) return false;
+        if (!entry && !addObjectToShopBill(shkp, item, price, { useup: true }))
+            return shopBillIsFull(shkp) ? markAlteredShopObjectNoCharge(item) : false;
         const billed = markObjectShopBillUsedUp(item, shkp);
         if (billed) item.no_charge = true;
         return billed;
@@ -13882,9 +13889,14 @@ function costlyTinAlteration(tin, { floorObject = false, alterType = 'open' } = 
         const shkp = shopkeeperForCostlySpot(x, y);
         const entry = shopBillEntryForObject(shkp, chargedTin);
         const price = entry ? shopBillEntryTotal(entry) : shopItemPrice(chargedTin, x, y);
-        if (price > 0 && (entry || addObjectToShopBill(shkp, chargedTin, price, { useup: true }))) {
-            markObjectShopBillUsedUp(chargedTin, shkp);
-            chargedTin.no_charge = true;
+        if (price > 0) {
+            const billEntry = entry || addObjectToShopBill(shkp, chargedTin, price, { useup: true });
+            if (billEntry) {
+                markObjectShopBillUsedUp(chargedTin, shkp);
+                chargedTin.no_charge = true;
+            } else if (shopBillIsFull(shkp)) {
+                markAlteredShopObjectNoCharge(chargedTin);
+            }
         }
         return chargedTin;
     }

@@ -38,7 +38,7 @@ This note records the C-source and JS audits for `BILLSZ` shop-bill capacity beh
 ## Remaining Follow-Ups
 
 - Recursive container saturation is now covered in `18-subagent-findings-2026-05-27.md`: overflowed contents stay paid/free, the C free message is emitted, contained gold remains chargeable, and quote pricing keeps the precomputed contents value.
-- Generic dummy billing from `costly_alteration()` still needs a full-bill audit separate from floor bag-of-tricks `#tip`; C can print alteration pay messages before a dummy row is refused.
+- Dummy billing from covered `costly_alteration()` paths at full `BILLSZ` is now covered in `19-subagent-findings-2026-05-27.md`: existing carried rows can convert to used-up dummy rows, split carried children stay free after parent-row shrinkage, and same-shop floor alterations become no-charge when the dummy row is refused.
 - Full registry-backed ownership work is still needed so all less ordinary `addtobill()` and `subfrombill()` callers share one bill authority instead of path-local helpers.
 
 ## Ranked Next Slice

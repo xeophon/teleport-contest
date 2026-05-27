@@ -1246,6 +1246,153 @@ test('full shop bill leaves shop-floor container takeout free', () => {
     assert.equal(source.unpaidPrice, undefined);
 });
 
+test('full bill still converts an existing live row into a dummy used-up row', () => {
+    const { shkp } = installShopState();
+    fillShopBill(shkp, BILLSZ - 1);
+    const blade = dagger(1005, 'd');
+    game.inventory = [blade];
+    const liveEntry = shop.addObjectToShopBill(shkp, blade, 80);
+
+    const result = shop.billDummyAlteredCarriedObjectForTest(blade);
+
+    assert.equal(result, true);
+    assert.equal(shkp.billct, BILLSZ);
+    assert.equal(shkp.bill.length, BILLSZ);
+    assert.equal(shop.shopBillEntryForObject(shkp, blade), null);
+    assert.equal(shkp.bill.some(entry => String(entry.bo_id) === String(liveEntry.bo_id)), false);
+    const usedRows = shkp.bill.filter(entry => entry.useup && shop.shopBillEntryTotal(entry) === 80);
+    assert.equal(usedRows.length, 1);
+    assert.notEqual(String(usedRows[0].bo_id), String(blade.id));
+    assert.equal(blade.unpaid, false);
+    assert.equal(blade.unpaidPrice, undefined);
+    assert.equal((game._usedUpShopBills || []).length, 1);
+    assert.equal(game._usedUpShopBills[0].bo_id, usedRows[0].bo_id);
+    assert.equal(game._usedUpShopBills[0].price, 80);
+});
+
+test('full bill makes split carried food bites free after shrinking the parent bill', () => {
+    const { shkp } = installShopState();
+    fillShopBill(shkp, BILLSZ - 1);
+    const stack = foodRation(10051, 'a');
+    stack.quan = 2;
+    stack.line = 'a - 2 food rations';
+    game.inventory = [stack];
+    shop.addObjectToShopBill(shkp, stack, 90);
+
+    const touched = shop.touchFoodForBiteTest(stack, false);
+
+    assert.notEqual(touched, stack);
+    assert.equal(shkp.billct, BILLSZ);
+    assert.equal(shkp.bill.length, BILLSZ);
+    assert.equal(stack.quan, 1);
+    assert.equal(touched.quan, 1);
+    assert.equal(touched.oeaten, 800);
+    assert.equal(stack.unpaid, true);
+    assert.equal(stack.unpaidPrice, 45);
+    assert.notEqual(touched.unpaid, true);
+    assert.equal(touched.unpaidPrice, undefined);
+    assert.equal(shop.shopBillEntryForObject(shkp, touched), null);
+    const parentEntry = shop.shopBillEntryForObject(shkp, stack);
+    assert.ok(parentEntry);
+    assert.equal(parentEntry.useup, false);
+    assert.equal(shop.shopBillEntryTotal(parentEntry), 45);
+    assert.equal((game._usedUpShopBills || []).length, 0);
+});
+
+test('full bill makes split carried tin alterations free after shrinking the parent bill', () => {
+    const { shkp } = installShopState();
+    fillShopBill(shkp, BILLSZ - 1);
+    const stack = tin(10052, 't', 2);
+    game.inventory = [stack];
+    shop.addObjectToShopBill(shkp, stack, 90);
+
+    const opened = shop.costlyTinForTest(stack, { floorObject: false, alterType: 'open' });
+
+    assert.notEqual(opened, stack);
+    assert.equal(shkp.billct, BILLSZ);
+    assert.equal(shkp.bill.length, BILLSZ);
+    assert.equal(stack.quan, 1);
+    assert.equal(opened.quan, 1);
+    assert.equal(stack.unpaid, true);
+    assert.equal(stack.unpaidPrice, 45);
+    assert.notEqual(opened.unpaid, true);
+    assert.equal(opened.unpaidPrice, undefined);
+    assert.equal(shop.shopBillEntryForObject(shkp, opened), null);
+    const parentEntry = shop.shopBillEntryForObject(shkp, stack);
+    assert.ok(parentEntry);
+    assert.equal(parentEntry.useup, false);
+    assert.equal(shop.shopBillEntryTotal(parentEntry), 45);
+    assert.equal((game._usedUpShopBills || []).length, 0);
+});
+
+test('full bill marks a force-locked shop-floor box no-charge without a dummy row', () => {
+    const { shkp } = installCommandShopState();
+    initRng(1);
+    fillShopBill(shkp);
+    const box = shopFloorContainer(1006);
+    box.locked = true;
+    box.olocked = true;
+    box.lknown = true;
+    const blade = putObjectInContainer(box, dagger(1007));
+    game.level.objects = [box];
+
+    const destroyed = finishForceLock({ chest: box, picktyp: true });
+
+    assert.equal(destroyed, false);
+    assert.equal(box.locked, false);
+    assert.equal(box.olocked, false);
+    assert.equal(box.obroken, true);
+    assert.equal(box.no_charge, true);
+    assert.equal(box.unpaid, false);
+    assert.equal(shop.shopBillEntryForObject(shkp, box), null);
+    assert.equal(shop.shopBillEntryForObject(shkp, blade), null);
+    assert.notEqual(blade.unpaid, true);
+    assert.equal(shkp.billct, BILLSZ);
+    assert.equal(shkp.bill.length, BILLSZ);
+    assert.equal((game._usedUpShopBills || []).length, 0);
+});
+
+test('full bill marks opened shop-floor tins no-charge without a dummy row', () => {
+    const { shkp } = installShopState();
+    fillShopBill(shkp);
+    const floorTin = tin(1008, undefined, 1);
+    delete floorTin.letter;
+    delete floorTin.line;
+    game.level.objects = [floorTin];
+
+    const opened = shop.costlyTinForTest(floorTin, { floorObject: true, alterType: 'open' });
+
+    assert.equal(opened, floorTin);
+    assert.equal(floorTin.no_charge, true);
+    assert.equal(floorTin.unpaid, false);
+    assert.equal(floorTin.unpaidPrice, undefined);
+    assert.equal(shop.shopBillEntryForObject(shkp, floorTin), null);
+    assert.equal(shkp.billct, BILLSZ);
+    assert.equal(shkp.bill.length, BILLSZ);
+    assert.equal((game._usedUpShopBills || []).length, 0);
+});
+
+test('full bill marks first-bitten shop-floor food no-charge without a dummy row', () => {
+    const { shkp } = installShopState();
+    fillShopBill(shkp);
+    const floor = foodRation(1009);
+    delete floor.letter;
+    delete floor.line;
+    game.level.objects = [floor];
+
+    const touched = shop.touchFoodForBiteTest(floor, true);
+
+    assert.equal(touched, floor);
+    assert.equal(floor.oeaten, 800);
+    assert.equal(floor.no_charge, true);
+    assert.equal(floor.unpaid, false);
+    assert.equal(floor.unpaidPrice, undefined);
+    assert.equal(shop.shopBillEntryForObject(shkp, floor), null);
+    assert.equal(shkp.billct, BILLSZ);
+    assert.equal(shkp.bill.length, BILLSZ);
+    assert.equal((game._usedUpShopBills || []).length, 0);
+});
+
 test('whole-container pickup keeps billing contents after the bill fills', () => {
     const { shkp } = installShopState();
     fillShopBill(shkp, BILLSZ - 2);
