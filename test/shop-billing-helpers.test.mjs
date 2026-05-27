@@ -3488,6 +3488,148 @@ test('dipping a weapon into cursed oil spills before repairing rust', async () =
     assert.match(game._pending_message, /The potion spills and covers your fingers with oil\./);
 });
 
+test('dipping a dagger into acid corrodes it and consumes the potion', async () => {
+    installCommandShopState();
+    const target = dagger(30955, 'd');
+    const potion = acidPotion(30956, 'a');
+    game.inventory = [target, potion];
+
+    await rhack('#');
+    for (const ch of 'dip') await rhack(ch);
+    await rhack('\n');
+    await rhack('d');
+    await rhack('n');
+
+    assert.equal(game._command_mode, 'dipOilSource');
+    assert.match(game._pending_message, /What do you want to dip a dagger into\? \[a or \?\*\]/);
+
+    await rhack('a');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(target.oeroded2, 1);
+    assert.equal(game.inventory.includes(potion), false);
+    assert.match(target.line, /corroded \+0 dagger/);
+    assert.match(game._pending_message, /Your dagger corrodes!/);
+});
+
+test('dipping an already thoroughly corroded dagger into acid does not consume the potion', async () => {
+    installCommandShopState();
+    const target = dagger(30957, 'd');
+    const potion = acidPotion(30958, 'a');
+    target.oeroded2 = 3;
+    game.inventory = [target, potion];
+
+    await rhack('#');
+    for (const ch of 'dip') await rhack(ch);
+    await rhack('\n');
+    await rhack('d');
+    await rhack('n');
+    await rhack('a');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(target.oeroded2, 3);
+    assert.equal(game.inventory.includes(potion), true);
+    assert.match(game._pending_message, /Interesting\.\.\./);
+});
+
+test('dipping a greased dagger into acid consumes acid without corrosion', async () => {
+    installCommandShopState();
+    const target = dagger(30959, 'd');
+    const potion = acidPotion(30960, 'a');
+    target.greased = true;
+    game.inventory = [target, potion];
+
+    await rhack('#');
+    for (const ch of 'dip') await rhack(ch);
+    await rhack('\n');
+    await rhack('d');
+    await rhack('n');
+    await rhack('a');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(target.oeroded2 || 0, 0);
+    assert.equal(game.inventory.includes(potion), false);
+    assert.match(game._pending_message, /protected by the layer of grease/);
+});
+
+test('dipping greased non-corrodeable armor into acid consumes acid before material checks', async () => {
+    installCommandShopState();
+    const target = wornArmor(30965, 'leather armor', 'd', 0, { greased: true });
+    const potion = acidPotion(30966, 'a');
+    game.inventory = [target, potion];
+
+    await rhack('#');
+    for (const ch of 'dip') await rhack(ch);
+    await rhack('\n');
+    await rhack('d');
+    await rhack('n');
+    await rhack('a');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(target.oeroded2 || 0, 0);
+    assert.equal(game.inventory.includes(potion), false);
+    assert.match(game._pending_message, /protected by the layer of grease/);
+});
+
+test('dipping a corrodeproof dagger into acid does not consume acid and reveals proofing', async () => {
+    installCommandShopState();
+    const target = dagger(30961, 'd');
+    const potion = acidPotion(30962, 'a');
+    target.oerodeproof = true;
+    game.inventory = [target, potion];
+
+    await rhack('#');
+    for (const ch of 'dip') await rhack(ch);
+    await rhack('\n');
+    await rhack('d');
+    await rhack('n');
+    await rhack('a');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(target.oeroded2 || 0, 0);
+    assert.equal(target.rknown, true);
+    assert.equal(game.inventory.includes(potion), true);
+    assert.match(game._pending_message, /not affected by the corrosion/);
+    assert.match(game._pending_message, /Interesting\.\.\./);
+});
+
+test('dipping an unpaid acid stack into a dagger preserves residual billing without usage debit', async () => {
+    const { shkp } = installCommandShopState();
+    const target = dagger(30963, 'd');
+    const potion = acidPotion(30964, 'a', 2);
+    game.inventory = [target, potion];
+    shop.addObjectToShopBill(shkp, potion, 100);
+
+    await rhack('#');
+    for (const ch of 'dip') await rhack(ch);
+    await rhack('\n');
+    await rhack('d');
+    await rhack('n');
+    await rhack('a');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(target.oeroded2, 1);
+    assert.equal(potion.quan, 1);
+    assert.equal(game.inventory.includes(potion), true);
+    assert.equal(potion.unpaid, true);
+    assert.equal(shkp.debit || 0, 0);
+    const entry = shop.shopBillEntryForObject(shkp, potion);
+    assert.ok(entry);
+    assert.equal(entry.useup, false);
+    assert.equal(entry.bquan, 2);
+    const debts = shop.collectPayableShopDebts(shkp);
+    assert.equal(debts.some(debt => debt.billPortion === 'partlyUsedUp' && debt.price === 50), true);
+    assert.equal(debts.some(debt => debt.billPortion === 'intact' && debt.price === 50), true);
+    assert.match(game._pending_message, /Your dagger corrodes!/);
+    assert.doesNotMatch(game._pending_message, /Yendorian Fuel Tax|in addition to the cost/);
+});
+
 test('dipping poisonable darts into sickness coats the stack', async () => {
     installCommandShopState();
     const target = dartStack(30941, 'd', 3);

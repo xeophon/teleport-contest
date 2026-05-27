@@ -10477,6 +10477,12 @@ function isPotionOfOil(item) {
         || objectKindKey(item).replace(/^potion of /, '') === 'oil';
 }
 
+function isPotionOfAcid(item) {
+    if (!isPotionObject(item)) return false;
+    return item?.otyp === POT_ACID || item?.potionIndex === 23
+        || objectKindKey(item).replace(/^potion of /, '') === 'acid';
+}
+
 function potionDipKind(item) {
     if (!isPotionObject(item)) return '';
     return objectKindKey(item).replace(/^potion of /, '').trim();
@@ -11503,6 +11509,13 @@ function isPoisonableWeaponObject(item) {
     return POISONABLE_WISH_WEAPONS.has(objectKindKey(item));
 }
 
+function isAcidCorrosionDipTargetObject(item) {
+    if (!item || isPotionObject(item)) return false;
+    if (item.greased) return true;
+    const profile = wishedDamageProfile(item);
+    return !!profile.erosionMatters && profile.secondaryWord === 'corroded';
+}
+
 function poisonedWeaponObjectName(item) {
     const name = pickupObjectName(item);
     if (item?.opoisoned && isPoisonableWeaponObject(item) && !/^poisoned\b/.test(name))
@@ -11513,6 +11526,7 @@ function poisonedWeaponObjectName(item) {
 function dipPotionSources(target) {
     return (game.inventory || []).filter(item => {
         if (item === target || !isPotionObject(item)) return false;
+        if (isPotionOfAcid(item) && isAcidCorrosionDipTargetObject(target)) return true;
         if (isPotionOfOil(item) && (isOilRefuelLampObject(target) || isOilWeaponDipTargetObject(target))) return true;
         if (isPoisonableWeaponObject(target) && (isPotionOfSickness(item) || isHealingFamilyPotion(item))) return true;
         return false;
@@ -11550,6 +11564,59 @@ function consumeDipOilPotion(potion) {
 
 function consumeDipPotion(potion) {
     useUpInventoryItem(potion, 1);
+}
+
+function acidDipTargetName(item) {
+    return dipItemDescription(item).replace(/\s+\(being worn\)$/, '');
+}
+
+function acidCorrosionVerb(item) {
+    return oilDipVerb(item, 'corrodes', 'corrode');
+}
+
+function refreshAcidDipTargetLine(item) {
+    refreshInventoryObjectLine(item);
+    if (item?.unpaid) syncUnpaidBillLine(item);
+}
+
+function dipObjectIntoAcidPotion(target, potion) {
+    const messages = [];
+    if (!isAcidCorrosionDipTargetObject(target) || !isPotionOfAcid(potion)) return messages;
+    const name = acidDipTargetName(target);
+    if (target.greased) {
+        messages.push(`Your ${name} ${oilDipVerb(target, 'is', 'are')} protected by the layer of grease!`);
+        if (!rn2(2)) {
+            target.greased = false;
+            messages.push('The grease dissolves.');
+        }
+        refreshAcidDipTargetLine(target);
+        consumeDipPotion(potion);
+        return messages;
+    }
+    if (target.oerodeproof) {
+        if (!target.rknown) {
+            messages.push(`Somehow, your ${name} ${oilDipVerb(target, 'is', 'are')} not affected by the corrosion.`);
+            target.rknown = true;
+            refreshAcidDipTargetLine(target);
+        }
+        messages.push('Interesting...');
+        return messages;
+    }
+    if (target.blessed && !rnl(4)) {
+        messages.push('Interesting...');
+        return messages;
+    }
+    const current = Math.min(3, target.oeroded2 || 0);
+    if (current >= 3) {
+        messages.push('Interesting...');
+        return messages;
+    }
+    target.oeroded2 = current + 1;
+    const adverb = target.oeroded2 === 3 ? ' completely' : current ? ' further' : '';
+    messages.push(`Your ${name} ${acidCorrosionVerb(target)}${adverb}!`);
+    refreshAcidDipTargetLine(target);
+    consumeDipPotion(potion);
+    return messages;
 }
 
 function dipPoisonableWeaponIntoPotion(target, potion) {
@@ -11624,6 +11691,7 @@ function dipObjectIntoOilPotion(target, potion) {
 }
 
 function dipObjectIntoPotion(target, potion) {
+    if (isPotionOfAcid(potion)) return dipObjectIntoAcidPotion(target, potion);
     if (isPotionOfOil(potion)) return dipObjectIntoOilPotion(target, potion);
     if (isPoisonableWeaponObject(target)) return dipPoisonableWeaponIntoPotion(target, potion);
     return [];

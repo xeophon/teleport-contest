@@ -25,7 +25,7 @@ Parallel source audits also identified bounded follow-up slices for acid `#dip`,
 ## Remaining Follow-Ups
 
 - Magic-bag work is still local rather than a central C-shaped `obfree()`/`stolen_value()` subsystem; remaining source/target cases and debt naming should converge on shared ownership helpers.
-- Acid `#dip` has a bounded carried-object corrosion slice. C reaches the acid case through `potion.c:2638`, uses erosion helpers around `trap.c:170`, and does not route potion use through `check_unpaid_usage()`; JS should consume the acid with the existing inventory use-up path.
+- Acid `#dip` is now covered in audit 29 for carried corrodeable targets, grease, proof/no-effect, and unpaid stack use-up billing. Broader acid/material parity still belongs with the object registry and remaining potion matrix work.
 - Source-first `#altdip` remains separate. C selects the source potion first through `potion.c:2374` and `iactions.c:159/371`, with the potion-of-oil exception at `iactions.c:368`; JS inventory actions currently cover only the `t` inventory action.
 - Poisoned weapon display ordering remains separate. C `xname()` and `doname()` differ: raw names can say `poisoned arrow`, while known inventory display re-adds poison before enchantment so it reads like `poisoned +0 arrow`. JS currently has covered dip behavior but still needs display-order parity.
 - Stone-to-flesh object transforms remain separate. C `zap.c:2076-2085` transforms rings into meat rings, wands into meat sticks, and gems/stones into meatballs; JS has meat-stick metadata but not the transformation pipeline.
