@@ -12439,6 +12439,52 @@ function brokenPotionBreathe(potion, x, y, messages) {
     potionBreathe(potion, messages);
 }
 
+function thrownPotionHitTargetName(mon) {
+    const name = mon?.givenName || `the ${mon?.data?.name || 'monster'}`;
+    if (mon?.data?.nohead) return name;
+    return `${name}'s head`;
+}
+
+function supportsHeroThrownPotionHit(potion) {
+    if (!isPotionObject(potion)) return false;
+    const kind = potionDipKind(potion);
+    return kind === 'confusion' || kind === 'booze';
+}
+
+function heroThrownPotionHitMonster(potion, mon) {
+    const messages = [];
+    const bottle = chestShatterBottleName();
+    messages.push(`The ${bottle} crashes on ${thrownPotionHitTargetName(mon)} and breaks into shards.`);
+    if (rn2(5) && (mon.mhp || 1) > 1) mon.mhp--;
+    if (!isPotionOfOil(potion))
+        messages.push(`The ${pickupObjectName({ ...potion, quan: 1 })} evaporates.`);
+
+    const kind = potionDipKind(potion);
+    if (kind === 'confusion' || kind === 'booze') {
+        if (!monsterResistsEffect(mon, 6)) mon.mconf = true;
+    }
+
+    if ((mon.mhp || 1) > 0) {
+        mon.msleeping = 0;
+        mon.mpeaceful = false;
+    }
+
+    const dx = (mon.mx || 0) - (game.u?.ux || 0);
+    const dy = (mon.my || 0) - (game.u?.uy || 0);
+    const distance = dx * dx + dy * dy;
+    const dex = game.u?.acurr?.a?.[A_DEX] ?? 10;
+    if ((distance === 0 || (distance < 3 && !rn2(Math.max(1, Math.trunc((1 + dex) / 2)))))
+        && heroCanReceivePotionVapor()) {
+        potionBreathe(potion, messages);
+    } else if (potion.dknown) {
+        learnPotionVaporEffect(potion, kind, false);
+    }
+
+    const shopDebt = convertUnpaidObjectToShopDebt(potion, { silent: true, broken: true });
+    if (!shopDebt.charged) potion.no_charge = true;
+    return messages;
+}
+
 function dipPotionAlchemyExplosion(target, amount, messages) {
     const damage = amount + rnd(9);
     const explodes = target.cursed || isPotionOfAcid(target)
@@ -48434,6 +48480,20 @@ export async function rhack(_cmd) {
             if (item.otyp === DART || /\bdarts?\b/.test(lowerName)) rnd(1); // C throw_obj: multishot count.
             thrownId = next_ident(); // C splitobj: nextoid()/next_ident() for the thrown unit.
         }
+        const thrownObject = {
+            ...item,
+            letter: undefined,
+            line: undefined,
+            wielded: false,
+            worn: false,
+            quivered: false,
+            ox,
+            oy,
+            id: thrownId ?? item.id,
+            quan: 1,
+            glyph: item.cls === 'food' ? '%' : item.glyph || (item.cls === 'gem' ? '*' : ')'),
+            color: item.cls === 'food' ? CLR_ORANGE : item.color || (item.cls === 'gem' ? CLR_GRAY : CLR_CYAN),
+        };
 	        const combatObject = item.cls === 'weapon' || item.cls === 'gem' || item.glyph === ')' || item.otyp === GEM_CLASS;
 	        let impactMessage = '';
 	        if (targetMon && (item.otyp === CREAM_PIE || lowerName === 'cream pie')) {
@@ -48454,6 +48514,25 @@ export async function rhack(_cmd) {
 	                return;
 	            }
 	            impactMessage = `The cream pie misses the ${targetMon.data?.name || 'creature'}.`;
+	        } else if (targetMon && supportsHeroThrownPotionHit(item)) {
+	            rnd(20);
+	            const dex = game.u?.acurr?.a?.[A_DEX] ?? 10;
+	            if (dex > rnd(25)) {
+	                if ((item.quan || 1) > 1) splitCarriedObjectShopBill(item, thrownObject, 1);
+	                const messages = heroThrownPotionHitMonster(thrownObject, targetMon);
+	                removeInventoryItem(item, 1);
+	                newsym(targetMon.mx, targetMon.my);
+	                await setMessage(messages.join('  '));
+	                game._command_mode = null;
+	                game._throw_item_letter = null;
+	                game._resume_time_after_more = 0;
+	                game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
+	                game.context.move = 0;
+	                return;
+	            }
+	            const thrownName = pickupObjectName({ ...item, quan: 1 });
+	            impactMessage = `The ${thrownName} misses the ${targetMon.data?.name || 'creature'}.`;
+	            if (!rn2(3)) targetMon.msleeping = 0;
 	        } else if (targetMon && !combatObject) {
 	            rnd(20);
 	            const thrownName = pickupObjectName({ ...item, quan: 1 });
@@ -48462,20 +48541,6 @@ export async function rhack(_cmd) {
 	            if (!rn2(3)) targetMon.msleeping = 0;
 	        }
 	        const projectileBreakRoll = projectileLandingIsSoft(ox, oy) ? null : rn2(100); // C breaktest: obj_resists() on hard landing.
-        const thrownObject = {
-            ...item,
-            letter: undefined,
-            line: undefined,
-            wielded: false,
-            worn: false,
-            quivered: false,
-            ox,
-            oy,
-            id: thrownId ?? item.id,
-            quan: 1,
-            glyph: item.cls === 'food' ? '%' : item.glyph || (item.cls === 'gem' ? '*' : ')'),
-            color: item.cls === 'food' ? CLR_ORANGE : item.color || (item.cls === 'gem' ? CLR_GRAY : CLR_CYAN),
-        };
         curseLoadstoneLeavingInventory(thrownObject);
         if ((item.quan || 1) > 1) splitCarriedObjectShopBill(item, thrownObject, 1);
         stopCarriedFigurineTimerOnLeave(thrownObject);

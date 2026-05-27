@@ -50,6 +50,7 @@ This folder records source-backed audits against `nethack-c/upstream`. The notes
 - [44-subagent-findings-2026-05-27.md](44-subagent-findings-2026-05-27.md): fresh forced-chest, stone-to-flesh, potionhit, and statue-shatter follow-up audits.
 - [45-subagent-findings-2026-05-27.md](45-subagent-findings-2026-05-27.md): self-cast stone-to-flesh marble wand to meat stick transform plus follow-up audits.
 - [46-subagent-findings-2026-05-28.md](46-subagent-findings-2026-05-28.md): forced chest-content potion shatter, destroyed-content shop loss, and fresh potionhit/statue/stone follow-up audits.
+- [47-subagent-findings-2026-05-28.md](47-subagent-findings-2026-05-28.md): direct hero-thrown confusion/booze potionhit plus statue debt, stone-to-flesh rescue, and plan-pruning follow-up audits.
 
 ## Cross-Cutting Themes
 
