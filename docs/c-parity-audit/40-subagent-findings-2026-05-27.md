@@ -24,6 +24,6 @@ The implementation calls the shared `brokenPotionBreathe()` helper after the hot
 
 ## Remaining Follow-Ups
 
-- Add inventory fire potion vapor, which C routes through `maybe_destroy_item()` and direct `potionbreathe()` without the broken-potion smell prelude.
+- Audit 41 covers inventory fire potion vapor, which C routes through `maybe_destroy_item()` and direct `potionbreathe()` without the broken-potion smell prelude.
 - Add forced chest-content potion shattering with direct `potionbreathe()` and potion-specific shatter wording.
 - Keep lava/floor fire boil, cold destruction, electrical destruction, random/non-hero migration, and generic object deletion no-vapor unless a C caller explicitly reaches `breakobj()` or `potionbreathe()`.

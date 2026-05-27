@@ -8891,11 +8891,17 @@ function fireDamageInventory(origDamage, forceDestroyItems = false, rollIgniteIt
                     : quan === 2 ? `Both of your ${name}`
                         : `All of your ${name}`;
         const event = { text: '', damage: 0 };
+        const vaporMessages = [];
         const message = `${subject} ${fireInventoryDestroyVerb(cls, item, plural)}!`;
         if (cls === 'potion' || cls === 'slime') {
+            if (cls === 'potion') {
+                potionBreathe(item, vaporMessages);
+                if (vaporMessages.length) {
+                    const insertAfter = vaporMessages.map(text => ({ text, more: true }));
+                    event.insertAfter = insertAfter;
+                }
+            }
             event.damage = itemDamage;
-            if (cls === 'potion' && (item.potionIndex === 8 || /invisibility/i.test(item.actualKind || item.kind || inventoryItemName(item))))
-                event.breatheMessage = "For an instant you couldn't see yourself!";
             damage += itemDamage;
             deathCause = fireInventoryDeathCause(cls, item, plural);
             useUpInventoryItem(item, destroyed);
@@ -8909,6 +8915,7 @@ function fireDamageInventory(origDamage, forceDestroyItems = false, rollIgniteIt
             }
         }
         addFireInventoryMessage(messages, events, message, event, armor, joinState);
+        if (vaporMessages.length) messages.push(...vaporMessages);
     }
     if (rollIgniteAfterDestroy) igniteItems = !rn2(3);
     if (igniteItems) igniteFireInventoryItems(messages, events, armor, joinState);
@@ -39344,14 +39351,16 @@ export async function rhack(_cmd) {
                                     if (fireInventory.events?.length) {
                                         const entries = fireInventory.events.map(event => {
                                             const entry = { text: event.text, damageAfter: event.damage || 0 };
-                                            if (event.breatheMessage)
-                                                entry.insertAfter = [{ text: event.breatheMessage, more: true }];
+                                            if (event.insertAfter?.length)
+                                                entry.insertAfter = event.insertAfter.map(next => ({ ...next }));
                                             return entry;
                                         });
-                                        const assignedDamage = entries.reduce((sum, entry) => sum + (entry.damageAfter || 0), 0);
+                                        const assignedDamage = entries.reduce((sum, entry) => sum
+                                            + (entry.damageAfter || 0)
+                                            + (entry.insertAfter || []).reduce((inner, next) => inner + (next.damageAfter || 0), 0), 0);
                                         const remainingDamage = Math.max(0, damage - assignedDamage);
                                         if (remainingDamage) {
-                                            const breatheEntry = entries.find(entry => entry.insertAfter?.length)?.insertAfter[0];
+                                            const breatheEntry = entries.flatMap(entry => entry.insertAfter || [])[0];
                                             if (lethal && breatheEntry) breatheEntry.damageAfter = (breatheEntry.damageAfter || 0) + remainingDamage;
                                             else entries[entries.length - 1].damageAfter = (entries[entries.length - 1].damageAfter || 0) + remainingDamage;
                                         }

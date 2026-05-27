@@ -2943,6 +2943,58 @@ test('unpaid carried lamp catching fire outside a shop keeps the live bill row',
     assert.equal((game._usedUpShopBills || []).length, 0);
 });
 
+test('inventory fire destroying an unpaid carried potion applies vapor before use-up and preserves the bill', () => {
+    const { shkp } = installShopState();
+    initRng(1);
+    Object.assign(game.u, { uhp: 20, uhpmax: 20 });
+    const potion = confusionPotion(30983, 'c');
+    game.inventory = [potion];
+    shop.addObjectToShopBill(shkp, potion, 80);
+
+    const result = shop.fireDamageInventoryForTest(20, true, false, {
+        preburnedArmor: { bodyHit: true, message: '' },
+    });
+
+    assert.equal(game.inventory.includes(potion), false);
+    assert.equal(result.messages[0], 'Your potion of confusion boils and explodes!');
+    assert.equal(result.messages[1], 'You feel somewhat dizzy.');
+    assert.ok(game.u._confusionTimeout > 0);
+    assert.match(game.u._statusSuffix || '', /Conf/);
+    assert.equal(result.events[0].damage, result.damage);
+    assert.equal(result.events[0].insertAfter[0].text, 'You feel somewhat dizzy.');
+    assert.equal(result.events[0].insertAfter[0].damageAfter, undefined);
+    assert.equal(shkp.debit || 0, 0);
+    const entry = shop.shopBillEntryForObject(shkp, potion);
+    assert.ok(entry);
+    assert.equal(entry.useup, true);
+    assert.equal(shop.shopBillEntryTotal(entry), 80);
+    assert.equal(potion.unpaid, false);
+    assert.equal(game._usedUpShopBills.some(bill => String(bill.bo_id) === String(potion.id)), true);
+});
+
+test('wet worn towel blocks inventory fire potion vapor effects', () => {
+    installShopState();
+    initRng(1);
+    Object.assign(game.u, { uhp: 20, uhpmax: 20 });
+    const potion = confusionPotion(30984, 'c');
+    const towel = ordinaryTool(30985, 'towel', 't');
+    towel.spe = 3;
+    towel.wetness = 3;
+    towel.worn = true;
+    towel.line = 't - a towel (being worn)';
+    game.inventory = [potion, towel];
+
+    const result = shop.fireDamageInventoryForTest(20, true, false, {
+        preburnedArmor: { bodyHit: true, message: '' },
+    });
+
+    assert.equal(game.inventory.includes(potion), false);
+    assert.equal(game.inventory.includes(towel), true);
+    assert.equal(game.u._confusionTimeout || 0, 0);
+    assert.doesNotMatch(game.u._statusSuffix || '', /Conf/);
+    assert.match(result.messages.join(' '), /Some vapor passes harmlessly around you\./);
+});
+
 test('unpaid spellbook study usage charges four fifths of current shop price', () => {
     const { shkp } = installShopState();
     const book = healingSpellbook(3093, 'b');
