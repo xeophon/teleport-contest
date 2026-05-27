@@ -2,7 +2,7 @@
 
 ## Scope
 
-This slice covers successful `#untrap` repair of a seen `SQKY_BOARD` with a carried can of grease, including the C `check_unpaid_usage()` billing order for an unpaid charged can. It does not claim generic `#untrap` parity, potion-of-oil selection, non-squeaky traps, or full failure side effects.
+This slice covers successful `#untrap` repair of a seen `SQKY_BOARD` with a carried can of grease, including the C `check_unpaid_usage()` billing order for an unpaid charged can. Potion-of-oil selection and `useup()` billing are covered by audit 22. This does not claim generic `#untrap` parity, non-squeaky traps, or full failure side effects.
 
 ## C Source Notes
 
@@ -21,7 +21,7 @@ This slice covers successful `#untrap` repair of a seen `SQKY_BOARD` with a carr
 
 ## Remaining Follow-Ups
 
-- Potion of oil and downplayed potion selection from C `unsqueak_ok()`.
+- Exact downplayed-potion menu presentation from C `unsqueak_ok()`.
 - Full `try_disarm()` side effects, including `Whoops...` movement/trigger behavior.
 - Generic `#untrap` trap handling beyond the squeaky-board can-of-grease path.
 - Broader command/menu centralization for `getobj()` prompts.

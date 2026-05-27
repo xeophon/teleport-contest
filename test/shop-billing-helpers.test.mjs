@@ -3555,6 +3555,95 @@ test('untrapping a squeaky board with stale unpaid grease spends charge without 
     assert.doesNotMatch(game._pending_message, /Usage fee/);
 });
 
+test('untrapping a squeaky board with unpaid oil consumes the potion as used-up stock', async () => {
+    const { shkp } = installCommandShopState();
+    const trap = installSeenSqueakyBoardEast();
+    const potion = oilPotion(3098, 'o');
+    game.inventory = [potion];
+    shop.addObjectToShopBill(shkp, potion, 100);
+
+    await rhack('#');
+    for (const ch of 'untrap') await rhack(ch);
+    await rhack('\n');
+    await rhack('l');
+
+    assert.equal(game._command_mode, 'untrapSqueakyTool');
+    assert.match(game._pending_message, /What do you want to untrap with\? \[o or \?\*\]/);
+
+    await rhack('o');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.inventory.includes(potion), false);
+    assert.equal(game.level.traps.includes(trap), false);
+    assert.equal(potion.known, true);
+    assert.equal(potion.unpaid, false);
+    assert.equal(shkp.debit || 0, 0);
+    assert.equal(shkp.billct, 1);
+    const entry = shop.shopBillEntryForObject(shkp, potion);
+    assert.ok(entry);
+    assert.equal(entry.useup, true);
+    assert.equal(shop.shopBillEntryTotal(entry), 100);
+    assert.match(game._pending_message, /You repair the squeaky board\./);
+    assert.doesNotMatch(game._pending_message, /Usage fee|Yendorian Fuel Tax|in addition to the cost/);
+});
+
+test('untrapping a squeaky board with lit oil fails without consuming it', async () => {
+    const { shkp } = installCommandShopState();
+    const trap = installSeenSqueakyBoardEast();
+    const potion = oilPotion(3099, 'o');
+    potion.lamplit = true;
+    potion.burning = true;
+    game.inventory = [potion];
+    shop.addObjectToShopBill(shkp, potion, 100);
+
+    await rhack('#');
+    for (const ch of 'untrap') await rhack(ch);
+    await rhack('\n');
+    await rhack('l');
+    await rhack('o');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.inventory.includes(potion), true);
+    assert.equal(game.level.traps.includes(trap), true);
+    assert.equal(potion.lamplit, true);
+    assert.equal(shkp.debit || 0, 0);
+    const entry = shop.shopBillEntryForObject(shkp, potion);
+    assert.ok(entry);
+    assert.equal(entry.useup, false);
+    assert.match(game._pending_message, /That squeaky board is difficult to disarm\./);
+});
+
+test('untrapping a squeaky board with a non-oil potion fails without consuming it', async () => {
+    const { shkp } = installCommandShopState();
+    const trap = installSeenSqueakyBoardEast();
+    const potion = waterPotion(3100, 'w');
+    game.inventory = [potion];
+    shop.addObjectToShopBill(shkp, potion, 100);
+
+    await rhack('#');
+    for (const ch of 'untrap') await rhack(ch);
+    await rhack('\n');
+    await rhack('l');
+
+    assert.equal(game._command_mode, 'untrapSqueakyTool');
+    assert.match(game._pending_message, /What do you want to untrap with\? \[\*\]/);
+
+    await rhack('w');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.inventory.includes(potion), true);
+    assert.equal(game.level.traps.includes(trap), true);
+    assert.equal(shkp.debit || 0, 0);
+    const entry = shop.shopBillEntryForObject(shkp, potion);
+    assert.ok(entry);
+    assert.equal(entry.useup, false);
+    assert.equal(shop.shopBillEntryTotal(entry), 100);
+    assert.match(game._pending_message, /That squeaky board is difficult to disarm\./);
+});
+
 test('tipping an unpaid can of grease spills first then bills one charge', async () => {
     const { shkp } = installCommandShopState();
     const grease = chargedTool(3096, 'can of grease', 'g', 4);

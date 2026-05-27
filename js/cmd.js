@@ -246,8 +246,42 @@ function canSelectGreaseObject(item) {
     return !!item && item.cls !== 'coin' && item.letter !== '$';
 }
 
-function isSqueakyBoardUntrapTool(item) {
+function isSqueakyBoardGreaseTool(item) {
     return !!item && item.cls === 'tool' && toolChargeKind(item) === 'can of grease';
+}
+
+function isKnownSqueakyBoardOil(item) {
+    if (!isPotionOfOil(item)) return false;
+    const kind = objectKindKey(item).replace(/^potion of /, '');
+    return item.known === true || kind === 'oil'
+        || (game._discoveries || []).some(entry =>
+            entry.section === 'Potions' && entry.name === 'potion of oil' && entry.known !== false);
+}
+
+function isSqueakyBoardSuggestedUntrapTool(item) {
+    return isSqueakyBoardGreaseTool(item) || isKnownSqueakyBoardOil(item);
+}
+
+function isSqueakyBoardUntrapTool(item) {
+    return isSqueakyBoardSuggestedUntrapTool(item) || isPotionObject(item);
+}
+
+function isBadSqueakyBoardUntrapTool(item) {
+    if (!item || item.cursed) return true;
+    if (isPotionOfOil(item)) return !!(item.lamplit || item.burning);
+    if (isSqueakyBoardGreaseTool(item)) return (item.spe ?? 0) <= 0;
+    return true;
+}
+
+function useSqueakyBoardUntrapTool(item, messages) {
+    if (isSqueakyBoardGreaseTool(item))
+        return spendChargedToolUse(item, messages);
+    if (isPotionOfOil(item)) {
+        useUpInventoryItem(item, 1);
+        identifyPotionOfOil(item);
+        return true;
+    }
+    return false;
 }
 
 function squeakyBoardUntrapChance(trap) {
@@ -261,7 +295,7 @@ function squeakyBoardUntrapChance(trap) {
 }
 
 function squeakyBoardUntrapPrompt() {
-    const letters = inventoryLetters(isSqueakyBoardUntrapTool);
+    const letters = inventoryLetters(isSqueakyBoardSuggestedUntrapTool);
     return letters
         ? `What do you want to untrap with? [${getobjPromptLetters(letters)} or ?*]`
         : 'What do you want to untrap with? [*]';
@@ -45310,9 +45344,9 @@ export async function rhack(_cmd) {
             game._command_mode = 'untrapSqueakyInventoryOverlay';
             return;
         }
-        const grease = (game.inventory || []).find(invItem =>
+        const tool = (game.inventory || []).find(invItem =>
             invItem.letter === ch && isSqueakyBoardUntrapTool(invItem));
-        if (!grease) {
+        if (!tool) {
             game._topline_after_more = squeakyBoardUntrapPrompt();
             await setMessage("You don't have that object.", true);
             return;
@@ -45326,13 +45360,13 @@ export async function rhack(_cmd) {
             await setMessage('And just how do you expect to do that?');
             return;
         }
-        if (grease.cursed || (grease.spe ?? 0) <= 0 || rn2(squeakyBoardUntrapChance(trap))) {
+        if (isBadSqueakyBoardUntrapTool(tool) || rn2(squeakyBoardUntrapChance(trap))) {
             await setMessage('That squeaky board is difficult to disarm.');
             game.context.move = 1;
             return;
         }
         const messages = [];
-        if (!spendChargedToolUse(grease, messages)) {
+        if (!useSqueakyBoardUntrapTool(tool, messages)) {
             await setMessage('That squeaky board is difficult to disarm.');
             game.context.move = 1;
             return;
