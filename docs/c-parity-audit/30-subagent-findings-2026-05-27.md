@@ -2,7 +2,7 @@
 
 ## Scope
 
-This slice adds the bounded source-first potion item-action path for already implemented `#dip` effects. Non-oil potions selected from the inventory action menu now start a source-first target prompt, skip fountain/sink/pool handling, and reuse the existing oil/sickness/healing/acid effect helpers. Known potion of oil remains on the apply/light path. This intentionally does not implement the full C source menu, potion-potion alchemy, water BUC effects, unicorn horn/amethyst mixtures, or unsupported generic potion-target pairs.
+This slice adds the bounded source-first potion item-action path for already implemented `#dip` effects. Non-oil potions selected from the inventory action menu now start a source-first target prompt, skip fountain/sink/pool handling, and reuse the existing oil/sickness/healing/acid effect helpers. Known potion of oil remains on the apply/light path. Blessed/cursed water was added later in audit 32. This intentionally does not implement the full C source menu, potion-potion alchemy, neutral-water damage, unicorn horn/amethyst mixtures, or unsupported generic potion-target pairs.
 
 ## C Source Notes
 
@@ -22,6 +22,6 @@ This slice adds the bounded source-first potion item-action path for already imp
 ## Remaining Follow-Ups
 
 - Full C `drink_ok`/`dip_ok` menu parity remains broader than this slice; JS still only offers source-first targets for locally implemented effects instead of all legal target/potion pairs.
-- Water BUC effects, potion-potion alchemy, unicorn horn/amethyst mixtures, and generic unsupported no-effect pairs remain separate potion matrix work.
+- Blessed/cursed water BUC effects are covered in audit 32. Neutral-water damage, potion-potion alchemy, unicorn horn/amethyst mixtures, and generic unsupported no-effect pairs remain separate potion matrix work.
 - Poisoned weapon display ordering was handled in audit 31: inventory and `#dip` prompts now use `doname()`-style `poisoned +0 dart`, while coating/removal messages keep `xname()` style `poisoned dart`.
 - Stone-to-flesh object transforms remain a separate spell/object-registry slice.

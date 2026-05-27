@@ -11554,9 +11554,21 @@ function poisonedWeaponObjectName(item) {
     return name;
 }
 
+function isWaterDipTargetObject(item) {
+    if (!item) return false;
+    return !(itemClassKey(item) === 'coin' || item?.otyp === GOLD_PIECE || item?.glyph === '$');
+}
+
+function isBlessedOrCursedWaterDipSource(item) {
+    if (!isWaterPotion(item)) return false;
+    const kind = objectKindKey(item).replace(/^potion of /, '');
+    return !!(item.blessed || item.cursed || kind === 'holy water' || kind === 'unholy water');
+}
+
 function dipPotionSources(target) {
     return (game.inventory || []).filter(item => {
         if (item === target || !isPotionObject(item)) return false;
+        if (isBlessedOrCursedWaterDipSource(item) && isWaterDipTargetObject(target)) return true;
         if (isPotionOfAcid(item) && isAcidCorrosionDipTargetObject(target)) return true;
         if (isPotionOfOil(item) && (isOilRefuelLampObject(target) || isOilWeaponDipTargetObject(target))) return true;
         if (isPoisonableWeaponObject(target) && (isPotionOfSickness(item) || isHealingFamilyPotion(item))) return true;
@@ -11705,6 +11717,86 @@ function dipPoisonableWeaponIntoPotion(target, potion) {
     return messages;
 }
 
+function waterDipObjectGlowPhrase(item) {
+    const name = dipItemDescription(item, false).replace(/\s+\(being worn\)$/, '');
+    const verb = (item?.quan || 1) > 1 ? 'glow' : 'glows';
+    return `Your ${name} ${verb}`;
+}
+
+function waterDipBucAuraMessage(item, color) {
+    const article = /^[aeiou]/i.test(color) ? 'an' : 'a';
+    return `${waterDipObjectGlowPhrase(item)} with ${article} ${color} aura.`;
+}
+
+function normalizeWaterPotionIdentity(item) {
+    if (!isWaterPotion(item)) return;
+    item.kind = 'water';
+    item.actualKind = 'potion of water';
+    item.potionIndex = null;
+    item.plural = undefined;
+}
+
+function refreshWaterDipTargetLine(item) {
+    normalizeWaterPotionIdentity(item);
+    syncCarriedFigurineTransformTimer(item);
+    refreshInventoryLineAfterBucChange(item);
+    if (item?.unpaid) syncUnpaidBillLine(item);
+}
+
+function learnWaterDipBuc(target, potion) {
+    if (!game.u?.blind) {
+        target.bknown = !heroIsHallucinating();
+    } else if (!potion.bknown || !potion.dknown) {
+        target.bknown = false;
+    }
+}
+
+function waterDipDevaluationPayment(target, verb) {
+    if (!target?.unpaid || !isWaterPotion(target)) return '';
+    target.bknown = true;
+    return costlyAlterationPaymentMessage(target, verb);
+}
+
+function dipObjectIntoWaterPotion(target, potion) {
+    const messages = [];
+    if (!isWaterPotion(potion) || !isWaterDipTargetObject(target)) return messages;
+
+    let effect = '';
+    if (potion.blessed) {
+        if (target.cursed) {
+            messages.push(`${waterDipObjectGlowPhrase(target)} amber.`);
+            messages.push(waterDipDevaluationPayment(target, 'uncurse'));
+            target.cursed = false;
+            effect = 'uncurse';
+        } else if (!target.blessed) {
+            messages.push(waterDipBucAuraMessage(target, 'light blue'));
+            target.blessed = true;
+            target.cursed = false;
+            effect = 'bless';
+        }
+    } else if (potion.cursed) {
+        if (target.blessed) {
+            messages.push(`${waterDipObjectGlowPhrase(target)} brown.`);
+            messages.push(waterDipDevaluationPayment(target, 'unbless'));
+            target.blessed = false;
+            effect = 'unbless';
+        } else if (!target.cursed) {
+            messages.push(waterDipBucAuraMessage(target, 'black'));
+            target.cursed = true;
+            target.blessed = false;
+            effect = 'curse';
+        }
+    }
+    if (!effect) return messages;
+
+    learnWaterDipBuc(target, potion);
+    refreshWaterDipTargetLine(target);
+    if ((effect === 'bless' || effect === 'curse') && target.unpaid && isWaterPotion(target))
+        alterShopBillCostIfHigher(target);
+    consumeDipPotion(potion);
+    return messages.filter(Boolean);
+}
+
 function dipWeaponIntoOilPotion(target, potion) {
     const messages = [];
     if (!isOilWeaponDipTargetObject(target) || !isPotionOfOil(potion)) return messages;
@@ -11746,6 +11838,7 @@ function dipObjectIntoOilPotion(target, potion) {
 }
 
 function dipObjectIntoPotion(target, potion) {
+    if (isWaterPotion(potion)) return dipObjectIntoWaterPotion(target, potion);
     if (isPotionOfAcid(potion)) return dipObjectIntoAcidPotion(target, potion);
     if (isPotionOfOil(potion)) return dipObjectIntoOilPotion(target, potion);
     if (isPoisonableWeaponObject(target)) return dipPoisonableWeaponIntoPotion(target, potion);

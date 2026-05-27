@@ -3770,6 +3770,29 @@ test('dipping already poisoned darts into sickness does not consume the potion',
     assert.match(game._pending_message, /Interesting\.\.\./);
 });
 
+test('inventory action on blessed water starts source-first dip and skips fountains', async () => {
+    installCommandShopState();
+    const target = { ...dagger(30984, 'd'), cursed: true, bknown: true, line: 'd - a cursed dagger' };
+    const water = waterPotion(30985, 'w', { blessed: true, bknown: true });
+    game.inventory = [target, water];
+    game.level.at = () => ({ roomno: ROOMOFFSET, typ: FOUNTAIN });
+
+    await rhack('i');
+    await rhack('w');
+    await rhack('a');
+
+    assert.equal(game._command_mode, 'dipIntoTarget');
+    assert.match(game._pending_message, /What do you want to dip into a potion of holy water\? \[d or \?\*\]/);
+    assert.doesNotMatch(game._pending_message, /fountain/);
+
+    await rhack('d');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(target.cursed, false);
+    assert.equal(game.inventory.includes(water), false);
+    assert.match(game._pending_message, /Your cursed dagger glows amber\./);
+});
+
 test('dipping unpaid sickness stack into darts preserves residual billing without usage debit', async () => {
     const { shkp } = installCommandShopState();
     const target = dartStack(30951, 'd', 3);
@@ -3827,6 +3850,175 @@ test('dipping permapoisoned Grimtooth into healing does not remove poison', asyn
     assert.equal(target.opoisoned, true);
     assert.equal(game.inventory.includes(potion), true);
     assert.match(game._pending_message, /Interesting\.\.\./);
+});
+
+test('dipping cursed items into blessed water uncurses and consumes the water', async () => {
+    installCommandShopState();
+    const target = { ...dagger(30972, 'd'), cursed: true, bknown: true, line: 'd - a cursed dagger' };
+    const water = waterPotion(30973, 'w', { blessed: true, bknown: true });
+    game.inventory = [target, water];
+
+    await rhack('#');
+    for (const ch of 'dip') await rhack(ch);
+    await rhack('\n');
+    await rhack('d');
+    await rhack('n');
+    await rhack('w');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(target.cursed, false);
+    assert.equal(target.blessed, undefined);
+    assert.equal(target.bknown, true);
+    assert.equal(game.inventory.includes(water), false);
+    assert.match(game._pending_message, /Your cursed dagger glows amber\./);
+});
+
+test('dipping uncursed items into blessed water blesses them', async () => {
+    installCommandShopState();
+    const target = { ...dagger(30974, 'd'), bknown: true };
+    const water = waterPotion(30975, 'w', { blessed: true, bknown: true });
+    game.inventory = [target, water];
+
+    await rhack('#');
+    for (const ch of 'dip') await rhack(ch);
+    await rhack('\n');
+    await rhack('d');
+    await rhack('n');
+    await rhack('w');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(target.blessed, true);
+    assert.equal(target.cursed, false);
+    assert.equal(target.bknown, true);
+    assert.equal(game.inventory.includes(water), false);
+    assert.match(game._pending_message, /Your dagger glows with a light blue aura\./);
+});
+
+test('dipping already blessed items into blessed water keeps the water', async () => {
+    installCommandShopState();
+    const target = { ...dagger(30976, 'd'), blessed: true, bknown: true, line: 'd - a blessed dagger' };
+    const water = waterPotion(30977, 'w', { blessed: true, bknown: true });
+    game.inventory = [target, water];
+
+    await rhack('#');
+    for (const ch of 'dip') await rhack(ch);
+    await rhack('\n');
+    await rhack('d');
+    await rhack('n');
+    await rhack('w');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(target.blessed, true);
+    assert.equal(game.inventory.includes(water), true);
+    assert.match(game._pending_message, /Interesting\.\.\./);
+});
+
+test('dipping blessed items into cursed water unblesses and consumes the water', async () => {
+    installCommandShopState();
+    const target = { ...dagger(30978, 'd'), blessed: true, bknown: true, line: 'd - a blessed dagger' };
+    const water = waterPotion(30979, 'w', { cursed: true, bknown: true });
+    game.inventory = [target, water];
+
+    await rhack('#');
+    for (const ch of 'dip') await rhack(ch);
+    await rhack('\n');
+    await rhack('d');
+    await rhack('n');
+    await rhack('w');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(target.blessed, false);
+    assert.equal(target.cursed, undefined);
+    assert.equal(target.bknown, true);
+    assert.equal(game.inventory.includes(water), false);
+    assert.match(game._pending_message, /Your blessed dagger glows brown\./);
+});
+
+test('dipping uncursed items into cursed water curses them', async () => {
+    installCommandShopState();
+    const target = { ...dagger(30980, 'd'), bknown: true };
+    const water = waterPotion(30981, 'w', { cursed: true, bknown: true });
+    game.inventory = [target, water];
+
+    await rhack('#');
+    for (const ch of 'dip') await rhack(ch);
+    await rhack('\n');
+    await rhack('d');
+    await rhack('n');
+    await rhack('w');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(target.blessed, false);
+    assert.equal(target.cursed, true);
+    assert.equal(target.bknown, true);
+    assert.equal(game.inventory.includes(water), false);
+    assert.match(game._pending_message, /Your dagger glows with a black aura\./);
+});
+
+test('dipping unpaid holy water into cursed water preserves a used-up devaluation bill', async () => {
+    const { shkp } = installCommandShopState();
+    const target = waterPotion(30982, 'h', { blessed: true, bknown: true });
+    const water = waterPotion(30983, 'c', { cursed: true, bknown: true });
+    game.inventory = [target, water];
+    shop.addObjectToShopBill(shkp, target, 100);
+
+    await rhack('#');
+    for (const ch of 'dip') await rhack(ch);
+    await rhack('\n');
+    await rhack('h');
+    await rhack('n');
+    await rhack('c');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(target.blessed, false);
+    assert.equal(target.cursed, false);
+    assert.equal(target.bknown, true);
+    assert.equal(game.inventory.includes(water), false);
+    assert.equal(target.unpaid, false);
+    assert.equal(shop.shopBillEntryForObject(shkp, target), null);
+    assert.equal(shkp.billct, 1);
+    assert.equal(shkp.bill[0].useup, true);
+    assert.equal(shop.shopBillEntryTotal(shkp.bill[0]), 100);
+    assert.match(game._pending_message, /Your potion of holy water glows brown\./);
+    assert.match(game._pending_message, /You unbless that potion of holy water, you pay for it!/);
+});
+
+test('dipping unpaid holy water stack into an item preserves residual source billing', async () => {
+    const { shkp } = installCommandShopState();
+    const target = { ...dagger(30986, 'd'), cursed: true, bknown: true, line: 'd - a cursed dagger' };
+    const water = waterPotion(30987, 'w', { blessed: true, bknown: true, quan: 2 });
+    game.inventory = [target, water];
+    shop.addObjectToShopBill(shkp, water, 200);
+
+    await rhack('#');
+    for (const ch of 'dip') await rhack(ch);
+    await rhack('\n');
+    await rhack('d');
+    await rhack('n');
+    await rhack('w');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(target.cursed, false);
+    assert.equal(water.quan, 1);
+    assert.equal(game.inventory.includes(water), true);
+    assert.equal(water.unpaid, true);
+    assert.equal(shkp.debit || 0, 0);
+    const entry = shop.shopBillEntryForObject(shkp, water);
+    assert.ok(entry);
+    assert.equal(entry.useup, false);
+    assert.equal(entry.bquan, 2);
+    const debts = shop.collectPayableShopDebts(shkp);
+    assert.equal(debts.some(debt => debt.billPortion === 'partlyUsedUp' && debt.price === 100), true);
+    assert.equal(debts.some(debt => debt.billPortion === 'intact' && debt.price === 100), true);
+    assert.match(game._pending_message, /Your cursed dagger glows amber\./);
+    assert.doesNotMatch(game._pending_message, /Yendorian Fuel Tax|in addition to the cost/);
 });
 
 test('applying an unpaid cream pie to yourself bills a dummy used-up pie', async () => {
