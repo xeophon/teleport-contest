@@ -321,6 +321,7 @@ function addHeroGlibTimeout(duration) {
 function dropCarriedObjectAtHero(item, messages = []) {
     const dropped = {
         ...item,
+        invlet: item.invlet ?? item.letter,
         letter: undefined,
         line: undefined,
         wielded: false,
@@ -8388,6 +8389,12 @@ function floorObjectTheName(obj) {
     return /^the\b/i.test(name) ? name : `the ${name}`;
 }
 
+function floorObjectTheSubject(obj) {
+    const quan = Math.max(1, obj?.quan || 1);
+    const name = pickupObjectName({ ...obj, line: '', quan }).replace(/ \(lit\)$/, '');
+    return upstartText(/^the\b/i.test(name) ? name : `the ${name}`);
+}
+
 function floorObjectVerb(obj, singular, plural) {
     const name = floorObjectBaseName(obj);
     return (obj?.quan || 1) > 1 ? plural : rustTrapNameVerb(name, singular, plural);
@@ -8729,14 +8736,15 @@ function hotGroundPotionFloorEffect(obj, x, y, messages, visible, {
 
     const plural = (obj?.quan || 1) > 1;
     if (visible) {
-        messages.push(`${floorObjectSubject(obj)} ${floorObjectVerb(obj, 'heats', 'heat')} up as ${plural ? 'they hit' : 'it hits'} the hot ground.`);
+        messages.push(`${floorObjectTheSubject(obj)} ${floorObjectVerb(obj, 'heats', 'heat')} up as ${plural ? 'they hit' : 'it hits'} the hot ground.`);
     }
     let survival = obj?.blessed ? 70 : 50;
-    if (obj?.invlet) survival += ((game.u?.uluck || 0) + (game.u?.moreluck || 0)) * 2;
+    if (obj?.invlet || obj?.letter) survival += ((game.u?.uluck || 0) + (game.u?.moreluck || 0)) * 2;
     if (isPotionOfOil(obj)) survival = 100;
     if (rn2(100) < ((obj?.artifact || obj?.oartifact) ? 100 : survival)) return false;
     if (visible) messages.push(plural ? 'They shatter from the heat!' : 'It shatters from the heat!');
     else if (!heroIsDeaf()) messages.push('You hear a shattering noise.');
+    brokenPotionBreathe(obj, x, y, messages);
     destroyObject(obj);
     return true;
 }
@@ -43815,6 +43823,7 @@ export async function rhack(_cmd) {
             game._pet_food_scan_inventory = game.inventory;
             const dropped = {
                 ...item,
+                invlet: item.invlet ?? item.letter,
                 letter: undefined,
                 line: undefined,
                 known: item.known || /(?:^| )[-+]\d+ /.test(String(item.line || '')),

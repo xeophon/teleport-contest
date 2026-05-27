@@ -5,7 +5,7 @@ import { interruptEatingOccupation, processEatingOccupationTick } from '../js/al
 import { burnFloorObjectsByFire, earthFloorEffects, finishForceLock, processCorpseTimers, processGlobShrinkTimers, processSpellbookStudyOccupation, rhack, __shopBillingTestHooks as shop } from '../js/cmd.js';
 import { game, resetGame } from '../js/gstate.js';
 import { initRng } from '../js/rng.js';
-import { BILLSZ, CANDLESHOP, DB_EAST, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, FOUNTAIN, HOLE, IN_SIGHT, LAVAPOOL, POOL, ROOM, ROOMOFFSET, SHOPBASE, SQKY_BOARD } from '../js/const.js';
+import { BILLSZ, CANDLESHOP, COULD_SEE, DB_EAST, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, FOUNTAIN, HOLE, IN_SIGHT, LAVAPOOL, POOL, ROOM, ROOMOFFSET, SHOPBASE, SQKY_BOARD } from '../js/const.js';
 import { currentFruitId, setCurrentFruitName } from '../js/fruit.js';
 
 const BRASS_LANTERN = 226;
@@ -217,6 +217,12 @@ function installSeenSqueakyBoardEast() {
 
 function queuedImpactDropsFor(level = { dnum: 0, dlevel: 2 }) {
     return game._impact_drop_migrations?.get(`${level.dnum}:${level.dlevel}`) || [];
+}
+
+function markHeroSquareVisible() {
+    game.viz_array = [];
+    game.viz_array[game.u.uy] = [];
+    game.viz_array[game.u.uy][game.u.ux] = COULD_SEE | IN_SIGHT;
 }
 
 function assertUsedUpBillForObject(shkp, obj, price) {
@@ -8765,19 +8771,25 @@ test('ordinary unpaid carried potion shattering on hot ground preserves a used-u
     initRng(4);
     game.level.flags = { temperature: 1 };
     game.level.at = () => ({ roomno: ROOMOFFSET, typ: ROOM });
-    const potion = healingPotion(51204, 'h');
+    markHeroSquareVisible();
+    const potion = confusionPotion(51204, 'c');
     game.inventory = [potion];
     shop.addObjectToShopBill(shkp, potion, 80);
 
     await rhack('d');
-    await rhack('h');
+    await rhack('c');
 
     assert.equal(game._command_mode, null);
     assert.equal(game.context.move, 1);
     assert.equal(game.inventory.length, 0);
     assert.equal(game.level.objects.some(obj => obj.id === potion.id), false);
     assert.equal(potion.unpaid, false);
+    assert.match(game._pending_message, /The potion of confusion heats up as it hits the hot ground\./);
     assert.match(game._pending_message, /shattering noise|shatters from the heat/);
+    assert.match(game._pending_message, /You smell a peculiar odor\.\.\./);
+    assert.match(game._pending_message, /You feel somewhat dizzy\./);
+    assert.ok(game.u._confusionTimeout > 0);
+    assert.match(game.u._statusSuffix || '', /Conf/);
     assertUsedUpBillForObject(shkp, potion, 80);
 });
 
@@ -11627,14 +11639,20 @@ test('tipping shop-floor potion onto hot ground preserves a used-up bill row', (
     initRng(4);
     game.level.flags = { temperature: 1 };
     game.level.at = () => ({ roomno: ROOMOFFSET, typ: ROOM });
+    markHeroSquareVisible();
     const container = shopFloorContainer(6909);
-    const contained = putObjectInContainer(container, healingPotion(6910));
+    const contained = putObjectInContainer(container, confusionPotion(6910));
     game.level.objects = [container];
     const price = shop.shopItemPrice(contained, 5, 5);
 
     const messages = shop.tipContainerToFloor(container);
 
+    assert.match(messages.join(' '), /The potion of confusion heats up as it hits the hot ground\./);
     assert.match(messages.join(' '), /shattering noise|shatters from the heat/);
+    assert.match(messages.join(' '), /You smell a peculiar odor\.\.\./);
+    assert.match(messages.join(' '), /You feel somewhat dizzy\./);
+    assert.ok(game.u._confusionTimeout > 0);
+    assert.match(game.u._statusSuffix || '', /Conf/);
     assert.equal(container.contents.length, 0);
     assert.equal(game.level.objects.includes(contained), false);
     assert.equal(contained.unpaid, false);

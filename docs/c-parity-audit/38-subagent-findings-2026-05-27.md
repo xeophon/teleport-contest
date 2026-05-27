@@ -25,5 +25,5 @@ This is not full `potionhit()` parity. Direct potion hits on the hero or monster
 
 - Add direct `potionhit()` handling for thrown potions striking the hero or monsters, including distance/Dex vapor gating and monster potion effects.
 - Add non-`kn` `trycall()` prompting once potion call-name discovery can represent C `oc_uname` semantics.
-- Audit 39 covers impact-drop arrival with the hero present; remaining `breakobj()`-like callers with clear semantics include chest-content potion shattering, hot-ground breakage, and inventory fire destruction.
+- Audit 39 covers impact-drop arrival with the hero present, and Audit 40 covers hot-ground breakage; remaining `breakobj()`-like callers with clear semantics include chest-content potion shattering and inventory fire destruction.
 - Keep migration-preflight breakage without vapor where C uses `obfree()` before migration instead of `breaks()`.
