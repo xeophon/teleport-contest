@@ -246,6 +246,27 @@ function canSelectGreaseObject(item) {
     return !!item && item.cls !== 'coin' && item.letter !== '$';
 }
 
+function isSqueakyBoardUntrapTool(item) {
+    return !!item && item.cls === 'tool' && toolChargeKind(item) === 'can of grease';
+}
+
+function squeakyBoardUntrapChance(trap) {
+    let chance = 3;
+    if (heroIsConfused() || heroIsHallucinating()) chance++;
+    if (game.u?.blind || game.u?.Blind) chance++;
+    if (heroIsStunned()) chance += 2;
+    if (heroIsFumbling()) chance *= 2;
+    if (trap?.madeby_u) chance--;
+    return Math.max(1, chance);
+}
+
+function squeakyBoardUntrapPrompt() {
+    const letters = inventoryLetters(isSqueakyBoardUntrapTool);
+    return letters
+        ? `What do you want to untrap with? [${getobjPromptLetters(letters)} or ?*]`
+        : 'What do you want to untrap with? [*]';
+}
+
 function greaseTargetPrompt() {
     const letters = inventoryLetters(canGreaseObject);
     const display = letters ? `- ${getobjPromptLetters(letters)}` : '-';
@@ -45241,7 +45262,86 @@ export async function rhack(_cmd) {
             await setMessage('');
             return;
         }
+        const dir = ch === '.' ? { dx: 0, dy: 0 } : movementDirection(ch);
+        if (dir) {
+            const x = (game.u?.ux || 0) + dir.dx;
+            const y = (game.u?.uy || 0) + dir.dy;
+            if (!isok(x, y)) {
+                await setMessage('The perils lurking there are beyond your grasp.');
+                return;
+            }
+            const trap = (game.level?.traps || []).find(candidate =>
+                candidate.tx === x && candidate.ty === y && candidate.tseen && candidate.ttyp === SQKY_BOARD);
+            if (trap) {
+                game._untrap_squeaky_target = { x, y };
+                await setMessage(squeakyBoardUntrapPrompt());
+                game._command_mode = 'untrapSqueakyTool';
+                return;
+            }
+        }
         await setMessage('And just how do you expect to do that?');
+        return;
+    }
+
+    if (game._command_mode === 'untrapSqueakyInventoryOverlay') {
+        game._overlay_lines = null;
+        game._overlay_hide_status = 0;
+        if (ch === ' ' || ch === '\x1b' || ch === '\r' || ch === '\n') {
+            await setMessage(squeakyBoardUntrapPrompt());
+            game._command_mode = 'untrapSqueakyTool';
+            return;
+        }
+        if (!(game.inventory || []).some(invItem => invItem.letter === ch && isSqueakyBoardUntrapTool(invItem))) {
+            game._keep_pending_message = 1;
+            return;
+        }
+        game._command_mode = 'untrapSqueakyTool';
+    }
+
+    if (game._command_mode === 'untrapSqueakyTool') {
+        if (ch === '\x1b' || ch === ' ' || ch === '\r' || ch === '\n') {
+            game._untrap_squeaky_target = null;
+            game._command_mode = null;
+            await setMessage('Never mind.');
+            return;
+        }
+        if (ch === '?' || ch === '*') {
+            setOverlay(inventoryOverlayLines(0, false, isSqueakyBoardUntrapTool), 24, true);
+            game._command_mode = 'untrapSqueakyInventoryOverlay';
+            return;
+        }
+        const grease = (game.inventory || []).find(invItem =>
+            invItem.letter === ch && isSqueakyBoardUntrapTool(invItem));
+        if (!grease) {
+            game._topline_after_more = squeakyBoardUntrapPrompt();
+            await setMessage("You don't have that object.", true);
+            return;
+        }
+        const target = game._untrap_squeaky_target;
+        const trap = target && (game.level?.traps || []).find(candidate =>
+            candidate.tx === target.x && candidate.ty === target.y && candidate.tseen && candidate.ttyp === SQKY_BOARD);
+        game._untrap_squeaky_target = null;
+        game._command_mode = null;
+        if (!trap) {
+            await setMessage('And just how do you expect to do that?');
+            return;
+        }
+        if (grease.cursed || (grease.spe ?? 0) <= 0 || rn2(squeakyBoardUntrapChance(trap))) {
+            await setMessage('That squeaky board is difficult to disarm.');
+            game.context.move = 1;
+            return;
+        }
+        const messages = [];
+        if (!spendChargedToolUse(grease, messages)) {
+            await setMessage('That squeaky board is difficult to disarm.');
+            game.context.move = 1;
+            return;
+        }
+        messages.push('You repair the squeaky board.');
+        game.level.traps = (game.level?.traps || []).filter(candidate => candidate !== trap);
+        newsym(trap.tx, trap.ty);
+        await setMessage(messages.join('  '), messages.length > 1);
+        game.context.move = 1;
         return;
     }
 

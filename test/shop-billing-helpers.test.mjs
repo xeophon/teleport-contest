@@ -5,7 +5,7 @@ import { interruptEatingOccupation, processEatingOccupationTick } from '../js/al
 import { burnFloorObjectsByFire, earthFloorEffects, finishForceLock, processCorpseTimers, processGlobShrinkTimers, processSpellbookStudyOccupation, rhack, __shopBillingTestHooks as shop } from '../js/cmd.js';
 import { game, resetGame } from '../js/gstate.js';
 import { initRng } from '../js/rng.js';
-import { BILLSZ, CANDLESHOP, DB_EAST, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, HOLE, IN_SIGHT, LAVAPOOL, POOL, ROOM, ROOMOFFSET, SHOPBASE } from '../js/const.js';
+import { BILLSZ, CANDLESHOP, DB_EAST, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, HOLE, IN_SIGHT, LAVAPOOL, POOL, ROOM, ROOMOFFSET, SHOPBASE, SQKY_BOARD } from '../js/const.js';
 import { currentFruitId, setCurrentFruitName } from '../js/fruit.js';
 
 const BRASS_LANTERN = 226;
@@ -193,6 +193,11 @@ function installSeenHoleAtHero() {
     game.dungeons = [{ num_dunlevs: 3 }];
     game.level.flags = {};
     game.level.traps = [{ ttyp: HOLE, tx: 5, ty: 5, tseen: true }];
+    return game.level.traps[0];
+}
+
+function installSeenSqueakyBoardEast() {
+    game.level.traps = [{ ttyp: SQKY_BOARD, tx: 6, ty: 5, tseen: true, tnote: 0 }];
     return game.level.traps[0];
 }
 
@@ -3482,6 +3487,72 @@ test('applying unpaid can of grease bills usage and greases the selected object'
     assert.equal(grease.unpaid, true);
     assert.match(game._pending_message, new RegExp(`Usage fee, ${expectedFee} zorkmids`));
     assert.match(game._pending_message, /You cover a dagger with a thick layer of grease/);
+});
+
+test('untrapping a squeaky board with unpaid grease bills one charge before repair', async () => {
+    const { shkp } = installCommandShopState();
+    const trap = installSeenSqueakyBoardEast();
+    const grease = chargedTool(3096, 'can of grease', 'g', 4);
+    game.inventory = [grease];
+    shop.addObjectToShopBill(shkp, grease, 100);
+    const expectedFee = expectedUnpaidUsageFee(grease);
+
+    await rhack('#');
+    for (const ch of 'untrap') await rhack(ch);
+    await rhack('\n');
+
+    assert.equal(game._command_mode, 'untrapDirection');
+    assert.match(game._pending_message, /In what direction\?/);
+
+    await rhack('l');
+
+    assert.equal(game._command_mode, 'untrapSqueakyTool');
+    assert.match(game._pending_message, /What do you want to untrap with\? \[g or \?\*\]/);
+    assert.equal(grease.spe, 4);
+    assert.equal(game.level.traps.includes(trap), true);
+    assert.equal(shkp.debit || 0, 0);
+
+    await rhack('g');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(grease.spe, 3);
+    assert.equal(game.level.traps.includes(trap), false);
+    assert.equal(shkp.debit, expectedFee);
+    assert.equal(shkp.billct, 1);
+    const entry = shop.shopBillEntryForObject(shkp, grease);
+    assert.ok(entry);
+    assert.equal(entry.useup, false);
+    assert.equal(shop.shopBillEntryTotal(entry), 100);
+    assert.equal(grease.unpaid, true);
+    assert.match(game._pending_message, new RegExp(`Usage fee, ${expectedFee} zorkmids`));
+    assert.match(game._pending_message, /You repair the squeaky board\./);
+    assert.ok(game._pending_message.indexOf('Usage fee') < game._pending_message.indexOf('You repair'));
+});
+
+test('untrapping a squeaky board with stale unpaid grease spends charge without debt', async () => {
+    const { shkp } = installCommandShopState();
+    const trap = installSeenSqueakyBoardEast();
+    const grease = chargedTool(3097, 'can of grease', 'g', 4);
+    grease.unpaid = true;
+    grease.unpaidPrice = 100;
+    game.inventory = [grease];
+
+    await rhack('#');
+    for (const ch of 'untrap') await rhack(ch);
+    await rhack('\n');
+    await rhack('l');
+    await rhack('g');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(grease.spe, 3);
+    assert.equal(game.level.traps.includes(trap), false);
+    assert.equal(shkp.debit || 0, 0);
+    assert.equal(shkp.billct, 0);
+    assert.equal(shop.shopBillEntryForObject(shkp, grease), null);
+    assert.match(game._pending_message, /You repair the squeaky board\./);
+    assert.doesNotMatch(game._pending_message, /Usage fee/);
 });
 
 test('tipping an unpaid can of grease spills first then bills one charge', async () => {
