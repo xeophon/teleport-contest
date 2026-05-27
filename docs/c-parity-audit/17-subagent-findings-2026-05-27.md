@@ -33,6 +33,6 @@ This note records the C-source and JS audits for due egg hatch timers on contain
 - Saved-level timer catch-up remains broader save/restore work: C saves local object timers with their level and runs expired timers on restore with silent hatch semantics.
 - The JS timer model is still field-based rather than a central object timer queue, so split/move/merge timer behavior is only modeled in covered paths.
 
-## Ranked Next Slice
+## Follow-Up Status
 
-The next bounded continuation should return to shop billing: mid-recursion full-bill container saturation is a narrow follow-up from the previous bill-limit audit, with clear C `addtobill()`/`add_one_tobill()` behavior and small regression coverage.
+The proposed shop-billing continuation is now covered in `18-subagent-findings-2026-05-27.md`. Remaining timer follow-ups above are still open.

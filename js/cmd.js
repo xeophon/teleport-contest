@@ -17468,9 +17468,12 @@ function containedShopGold(obj, seen = new Set()) {
     return total;
 }
 
-function addShopBillEntryOrMark(shkp, obj, totalPrice) {
+function addShopBillEntryOrMark(shkp, obj, totalPrice, { messages = null } = {}) {
     if (!shkp || !obj || shopBillableGold(obj) || !(totalPrice > 0)) return null;
-    return addObjectToShopBill(shkp, obj, totalPrice);
+    const entry = addObjectToShopBill(shkp, obj, totalPrice);
+    if (!entry && shopBillIsFull(shkp) && Array.isArray(messages))
+        messages.push('You got that for free!');
+    return entry;
 }
 
 function liveUnpaidBillOwnerOrClear(shkp, obj) {
@@ -17483,30 +17486,30 @@ function liveUnpaidBillOwnerOrClear(shkp, obj) {
     return { shkp: null, entry: null };
 }
 
-function addContainedObjectsToShopBill(shkp, obj, x, y, seen = new Set()) {
+function addContainedObjectsToShopBill(shkp, obj, x, y, seen = new Set(), messages = []) {
     let price = 0;
     const billEntries = [];
     for (const child of globContents(obj)) {
         if (!child || seen.has(child)) continue;
         seen.add(child);
         if (shopBillableGold(child)) continue;
+        const childPrice = child.no_charge ? 0 : shopItemPrice(child, x, y);
+        if (childPrice > 0) price += childPrice;
         if (liveUnpaidBillOwnerOrClear(shkp, child).entry) {
             syncUnpaidBillLine(child);
         } else if (!child.no_charge) {
-            const childPrice = shopItemPrice(child, x, y);
             if (childPrice > 0) {
-                const childEntry = addShopBillEntryOrMark(shkp, child, childPrice);
+                const childEntry = addShopBillEntryOrMark(shkp, child, childPrice, { messages });
                 if (childEntry) {
                     billEntries.push(childEntry);
-                    price += childPrice;
                 }
             }
         }
-        const nested = addContainedObjectsToShopBill(shkp, child, x, y, seen);
+        const nested = addContainedObjectsToShopBill(shkp, child, x, y, seen, messages);
         price += nested.price;
         billEntries.push(...nested.billEntries);
     }
-    return { price, billEntries };
+    return { price, billEntries, messages };
 }
 
 function addContainerAndContentsToShopBill(container, sourceObj, pickedItem, shkp, x, y) {
@@ -17529,10 +17532,11 @@ function addContainerAndContentsToShopBill(container, sourceObj, pickedItem, shk
         const topPrice = shopItemPrice(sourceObj, x, y);
         if (topPrice > 0) {
             billEntry = addShopBillEntryOrMark(shkp, pickedItem, topPrice);
-            if (billEntry) price += topPrice;
+            price += topPrice;
         }
     }
-    const nested = addContainedObjectsToShopBill(shkp, sourceObj, x, y);
+    const messages = [];
+    const nested = addContainedObjectsToShopBill(shkp, sourceObj, x, y, new Set(), messages);
     price += nested.price;
     const itemPrice = price;
     const gold = containedShopGold(sourceObj);
@@ -17555,6 +17559,7 @@ function addContainerAndContentsToShopBill(container, sourceObj, pickedItem, shk
         goldMessages,
         billEntry,
         billEntries: [billEntry, ...nested.billEntries].filter(Boolean),
+        messages,
     };
 }
 

@@ -1246,6 +1246,104 @@ test('full shop bill leaves shop-floor container takeout free', () => {
     assert.equal(source.unpaidPrice, undefined);
 });
 
+test('whole-container pickup keeps billing contents after the bill fills', () => {
+    const { shkp } = installShopState();
+    fillShopBill(shkp, BILLSZ - 2);
+    const bag = sack(1010, 'b');
+    bag.ox = 5;
+    bag.oy = 5;
+    const blade = putObjectInContainer(bag, dagger(1011));
+    const ration = putObjectInContainer(bag, foodRation(1012));
+    game.level.objects = [bag];
+    const expectedPrice = shop.shopItemPrice(bag, 5, 5)
+        + shop.shopItemPrice(blade, 5, 5)
+        + shop.shopItemPrice(ration, 5, 5);
+
+    const result = shop.addPickedObjectToShopBill(bag, bag);
+
+    assert.equal(shkp.billct, BILLSZ);
+    assert.equal(shkp.bill.length, BILLSZ);
+    assert.ok(shop.shopBillEntryForObject(shkp, bag));
+    assert.ok(shop.shopBillEntryForObject(shkp, blade));
+    assert.equal(shop.shopBillEntryForObject(shkp, ration), null);
+    assert.equal(bag.unpaid, true);
+    assert.equal(blade.unpaid, true);
+    assert.notEqual(ration.unpaid, true);
+    assert.equal(ration.unpaidPrice, undefined);
+    assert.equal(result.itemPrice, expectedPrice);
+    assert.equal(result.price, expectedPrice);
+    assert.equal(result.billEntries.length, 2);
+    assert.deepEqual(result.messages, ['You got that for free!']);
+});
+
+test('mid-recursion bill saturation still charges contained gold', () => {
+    const { shkp } = installShopState();
+    fillShopBill(shkp, BILLSZ - 1);
+    const bag = sack(1020, 'b');
+    bag.no_charge = true;
+    bag.ox = 5;
+    bag.oy = 5;
+    const blade = putObjectInContainer(bag, dagger(1021));
+    const ration = putObjectInContainer(bag, foodRation(1022));
+    const coins = putObjectInContainer(bag, goldPieces(1023, 7));
+    game.level.objects = [bag];
+    const itemPrice = shop.shopItemPrice(blade, 5, 5) + shop.shopItemPrice(ration, 5, 5);
+
+    const result = shop.addPickedObjectToShopBill(bag, bag);
+
+    assert.equal(shkp.billct, BILLSZ);
+    assert.equal(shkp.bill.length, BILLSZ);
+    assert.equal(shop.shopBillEntryForObject(shkp, bag), null);
+    assert.ok(shop.shopBillEntryForObject(shkp, blade));
+    assert.equal(shop.shopBillEntryForObject(shkp, ration), null);
+    assert.equal(shop.shopBillEntryForObject(shkp, coins), null);
+    assert.notEqual(bag.unpaid, true);
+    assert.equal(bag.no_charge, false);
+    assert.equal(blade.unpaid, true);
+    assert.notEqual(ration.unpaid, true);
+    assert.equal(result.itemPrice, itemPrice);
+    assert.equal(result.goldCharged, 7);
+    assert.equal(result.price, itemPrice + 7);
+    assert.equal(result.billEntries.length, 1);
+    assert.deepEqual(result.messages, ['You got that for free!']);
+    assert.deepEqual(result.goldMessages, ['You owe Izchak 7 zorkmids.']);
+    assert.notEqual(result.free, true);
+    assert.equal(shkp.debit, 7);
+    assert.equal(shkp.loan, 7);
+});
+
+test('nested container billing continues after saturation without marking grandchildren unpaid', () => {
+    const { shkp } = installShopState();
+    fillShopBill(shkp, BILLSZ - 2);
+    const outer = sack(1030, 'b');
+    outer.ox = 5;
+    outer.oy = 5;
+    const inner = putObjectInContainer(outer, sack(1031));
+    const blade = putObjectInContainer(inner, dagger(1032));
+    game.level.objects = [outer];
+    const expectedPrice = shop.shopItemPrice(outer, 5, 5)
+        + shop.shopItemPrice(inner, 5, 5)
+        + shop.shopItemPrice(blade, 5, 5);
+
+    const result = shop.addPickedObjectToShopBill(outer, outer);
+
+    assert.equal(shkp.billct, BILLSZ);
+    assert.equal(shkp.bill.length, BILLSZ);
+    assert.ok(shop.shopBillEntryForObject(shkp, outer));
+    assert.ok(shop.shopBillEntryForObject(shkp, inner));
+    assert.equal(shop.shopBillEntryForObject(shkp, blade), null);
+    assert.equal(outer.unpaid, true);
+    assert.equal(inner.unpaid, true);
+    assert.notEqual(blade.unpaid, true);
+    assert.equal(blade.unpaidPrice, undefined);
+    assert.equal(outer.contents.includes(inner), true);
+    assert.equal(inner.contents.includes(blade), true);
+    assert.equal(blade.container, inner);
+    assert.equal(result.itemPrice, expectedPrice);
+    assert.equal(result.billEntries.length, 2);
+    assert.deepEqual(result.messages, ['You got that for free!']);
+});
+
 test('dropping unpaid non-container merchandise in the shop returns it to the bill', () => {
     const { shkp } = installShopState();
     const floorObj = foodRation(1001, 'a');
