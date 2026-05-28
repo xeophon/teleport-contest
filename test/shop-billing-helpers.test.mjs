@@ -16193,6 +16193,56 @@ test('hero-thrown unlit oil potion hits through potionhit without evaporating', 
     ]);
 });
 
+test('hero-thrown neutral water potion uses direct potionhit on ordinary monsters', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.u.acurr.a[A_DEX] = 25;
+    const potion = waterPotion(8812, 'w');
+    potion.dknown = true;
+    const goblin = ordinaryThrowTarget('goblin', 7, 5);
+    game.inventory = [potion];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('w');
+    markSquareVisible(goblin.mx, goblin.my);
+    await rhack('l');
+
+    assert.match(game._pending_message, /The (?:bottle|phial|flagon|carafe|flask|jar|vial) crashes on the goblin's head and breaks into shards\./);
+    assert.match(game._pending_message, /The potion of water evaporates\./);
+    assert.doesNotMatch(game._pending_message, /misses|shatters|peculiar odor|writhes|shrieks|rusts|looks healthier/);
+    assert.equal(goblin.mhp, 4);
+    assert.equal(goblin.msleeping, 0);
+    assert.equal(goblin.mpeaceful, false);
+    assert.equal(game.inventory.includes(potion), false);
+    assert.equal(game.level.objects.length, 0);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(5)',
+    ]);
+});
+
+test('hero-thrown water potion defers special monster branches', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.u.acurr.a[A_DEX] = 25;
+    const potion = waterPotion(8813, 'w', { blessed: true, bknown: true });
+    potion.dknown = true;
+    const demon = ordinaryThrowTarget('water demon', 7, 5, {
+        data: { name: 'water demon', mlevel: 8, mlet: '&', demon: true },
+    });
+    game.inventory = [potion];
+    game.level.monsters = [demon];
+
+    await rhack('t');
+    await rhack('w');
+    markSquareVisible(demon.mx, demon.my);
+    await rhack('l');
+
+    assert.match(game._pending_message, /misses the water demon/);
+    assert.doesNotMatch(game._pending_message, /crashes on .*water demon.*breaks into shards|writhes|shrieks|looks healthier|rusts/);
+});
+
 test('hero-thrown sickness potion makes ordinary monsters ill and angry', async () => {
     installNonShopFloorState();
     initRng(2);

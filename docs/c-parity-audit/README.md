@@ -74,6 +74,7 @@ This folder records source-backed audits against `nethack-c/upstream`. The notes
 - [68-subagent-findings-2026-05-28.md](68-subagent-findings-2026-05-28.md): direct hero-thrown common no-effect potionhit routing for levitation, detection, gain-level, gain-energy, enlightenment, see-invisible, and fruit-juice potions.
 - [69-subagent-findings-2026-05-28.md](69-subagent-findings-2026-05-28.md): direct hero-thrown unlit oil potionhit routing through C's common crash, chip, wake/anger, and no-evaporation path.
 - [70-subagent-findings-2026-05-28.md](70-subagent-findings-2026-05-28.md): direct hero-thrown sickness potionhit for ordinary illness, resistance feedback, and Pestilence healing inversion.
+- [71-subagent-findings-2026-05-28.md](71-subagent-findings-2026-05-28.md): target-aware direct neutral-water potionhit routing for ordinary unsaddled monsters while deferring special water branches.
 
 ## Cross-Cutting Themes
 
