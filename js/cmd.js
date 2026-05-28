@@ -12553,6 +12553,17 @@ function stoneToFleshAnimatableCarriedFigurineData(item) {
     return item.corpsenm;
 }
 
+function stoneToFleshAnimatableFloorFigurineData(item, x, y) {
+    if (!isFigurineObject(item) || !item?.corpsenm) return null;
+    if (shopObjectOrContentsUnpaid(item) || shopkeeperForCostlySpot(x, y)) return null;
+    const material = stoneToFleshObjectMaterial(item);
+    if (material !== 'mineral' && material !== 'gemstone') return null;
+    if (stoneToFleshCorpstatMonsterIsGolem(item.corpsenm)
+        || stoneToFleshCorpstatMonsterIsVegetarian(item.corpsenm))
+        return null;
+    return item.corpsenm;
+}
+
 async function stoneToFleshAnimateCarriedFigurine(item) {
     const data = stoneToFleshAnimatableCarriedFigurineData(item);
     if (!data || stoneToFleshObjectResists(item)) return null;
@@ -12560,6 +12571,16 @@ async function stoneToFleshAnimateCarriedFigurine(item) {
     if (!mon) return null;
     stopFigurineTransformTimeout(item);
     removeInventoryItem(item, 1);
+    return cansee(mon.mx, mon.my) ? 'The figurine animates!' : '';
+}
+
+async function stoneToFleshAnimateFloorFigurine(item, x, y) {
+    const data = stoneToFleshAnimatableFloorFigurineData(item, x, y);
+    if (!data || stoneToFleshObjectResists(item)) return null;
+    const mon = await makemon(data, x, y, NO_MINVENT | MM_NOMSG);
+    if (!mon) return null;
+    stopFigurineTransformTimeout(item);
+    newsym(x, y);
     return cansee(mon.mx, mon.my) ? 'The figurine animates!' : '';
 }
 
@@ -12665,27 +12686,42 @@ async function stoneToFleshInventoryEffect(messages = []) {
     return { transformed: transformed || rescued, messages };
 }
 
-function stoneToFleshFloorEffect(x = game.u?.ux || 0, y = game.u?.uy || 0) {
+async function stoneToFleshFloorEffect(x = game.u?.ux || 0, y = game.u?.uy || 0) {
     const messages = [];
     const alterationMessages = [];
     let transformed = false;
-    game.level.objects = (game.level?.objects || []).map(obj => {
-        if (!obj || obj.hidden || obj.transientProjectile || obj.ox !== x || obj.oy !== y)
-            return obj;
+    let meatTransformed = false;
+    const floorObjects = [];
+    for (const obj of (game.level?.objects || [])) {
+        if (!obj || obj.hidden || obj.transientProjectile || obj.ox !== x || obj.oy !== y) {
+            floorObjects.push(obj);
+            continue;
+        }
         const replacement = stoneToFleshReplacementForObject(obj);
-        if (!replacement) return obj;
-        replacement.ox = x;
-        replacement.oy = y;
-        prepareFloorPolymorphReplacement(obj, replacement);
-        const angerMessage = floorPolymorphShopkeeperAngerMessage(obj, x, y);
-        if (angerMessage && !alterationMessages.includes(angerMessage))
-            alterationMessages.push(angerMessage);
-        transformed = true;
-        return replacement;
-    });
+        if (replacement) {
+            replacement.ox = x;
+            replacement.oy = y;
+            prepareFloorPolymorphReplacement(obj, replacement);
+            const angerMessage = floorPolymorphShopkeeperAngerMessage(obj, x, y);
+            if (angerMessage && !alterationMessages.includes(angerMessage))
+                alterationMessages.push(angerMessage);
+            transformed = true;
+            meatTransformed = true;
+            floorObjects.push(replacement);
+            continue;
+        }
+        const animationMessage = await stoneToFleshAnimateFloorFigurine(obj, x, y);
+        if (animationMessage != null) {
+            if (animationMessage) messages.push(animationMessage);
+            transformed = true;
+            continue;
+        }
+        floorObjects.push(obj);
+    }
+    game.level.objects = floorObjects;
     if (transformed) {
         newsym(x, y);
-        messages.push(stoneToFleshSmellMessage());
+        if (meatTransformed) messages.push(stoneToFleshSmellMessage());
         messages.push(...alterationMessages);
     }
     return { transformed, messages };
@@ -43248,7 +43284,7 @@ export async function rhack(_cmd) {
                     game._keep_pending_message = 1;
                 }
             } else if (ch === '>') {
-                const result = stoneToFleshFloorEffect();
+                const result = await stoneToFleshFloorEffect();
                 if (result.messages.length) await setMessage(result.messages.join('  '));
                 else await setMessage(`You cast ${spell?.name || 'a spell'}.`);
             } else {

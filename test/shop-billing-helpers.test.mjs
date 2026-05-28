@@ -4252,6 +4252,63 @@ test('downward stone to flesh turns floor boulder into enormous meatball', async
     assertNoStoneToFleshScoreSideEffects();
 });
 
+test('downward stone to flesh animates non-shop floor nonvegetarian figurine', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    markHeroNeighborhoodVisible();
+    const figurine = stoneToFleshFigurine(31035, undefined,
+        vegetarianCorpstatMonster('goblin', 'o', { neuter: false, mmove: 6 }));
+    figurine.ox = 5;
+    figurine.oy = 5;
+    figurine.line = undefined;
+    figurine.cursed = true;
+    figurine.figurineTransformTurn = 42;
+    figurine._figurine_transform_seq = 7;
+    game.inventory = [];
+    game.level.objects = [figurine];
+
+    await castStoneToFleshDown();
+
+    assert.equal(game.level.objects.includes(figurine), false);
+    assert.equal(figurine.figurineTransformTurn, undefined);
+    assert.equal(figurine._figurine_transform_seq, undefined);
+    const monster = (game.level.monsters || []).find(mon => mon.data?.name === 'goblin');
+    assert.ok(monster);
+    assert.equal(monster.pet || false, false);
+    assert.equal(monster.mtame || 0, 0);
+    assert.equal(monster.minvent?.length || 0, 0);
+    assert.match(game._pending_message || '', /The figurine animates!/);
+    assert.doesNotMatch(game._pending_message || '', /odor of meat|delicious smell/);
+    assertNoStoneToFleshScoreSideEffects();
+});
+
+test('downward stone to flesh checks floor figurine resistance before animation', async () => {
+    installNonShopFloorState();
+    initRng(40);
+    enableRngLog({ reset: true });
+    markHeroNeighborhoodVisible();
+    const figurine = stoneToFleshFigurine(31036, undefined,
+        vegetarianCorpstatMonster('goblin', 'o', { neuter: false, mmove: 6 }));
+    figurine.ox = 5;
+    figurine.oy = 5;
+    figurine.line = undefined;
+    figurine.figurineTransformTurn = 42;
+    figurine._figurine_transform_seq = 7;
+    game.inventory = [];
+    game.level.objects = [figurine];
+
+    await castStoneToFleshDown();
+
+    assert.equal(game.level.objects.length, 1);
+    assert.equal(game.level.objects[0], figurine);
+    assert.equal(figurine.figurineTransformTurn, 42);
+    assert.equal(figurine._figurine_transform_seq, 7);
+    assert.equal((game.level.monsters || []).some(mon => mon.data?.name === 'goblin'), false);
+    assert.deepEqual(getRngLog().filter(entry => entry.startsWith('rn2(100)=')), ['rn2(100)=0']);
+    assert.doesNotMatch(game._pending_message || '', /figurine animates|odor of meat|delicious smell/);
+    assertNoStoneToFleshScoreSideEffects();
+});
+
 test('downward stone to flesh turns floor gemstone stack into meatballs', async () => {
     installCommandShopState();
     initRng(1);
@@ -4280,6 +4337,40 @@ test('downward stone to flesh turns floor gemstone stack into meatballs', async 
     assert.equal(result.oy, 5);
     assert.notEqual(result.id, 31018);
     assert.match(game._pending_message, /You smell the odor of meat\./);
+    assertNoStoneToFleshScoreSideEffects();
+});
+
+test('downward stone to flesh turns floor vegetarian figurine into meatball', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    const figurine = stoneToFleshFigurine(31037, undefined);
+    figurine.ox = 5;
+    figurine.oy = 5;
+    figurine.line = undefined;
+    figurine.cursed = true;
+    figurine.figurineTransformTurn = 42;
+    figurine._figurine_transform_seq = 7;
+    game.inventory = [];
+    game.level.objects = [figurine];
+
+    await castStoneToFleshDown();
+
+    assert.equal(game.level.objects.includes(figurine), false);
+    assert.equal(game.level.objects.length, 1);
+    const result = game.level.objects[0];
+    assert.equal(result.cls, 'food');
+    assert.equal(result.otyp, MEATBALL);
+    assert.equal(result.kind, 'meatball');
+    assert.equal(result.actualKind, 'meatball');
+    assert.equal(result.quan, 1);
+    assert.equal(result.ox, 5);
+    assert.equal(result.oy, 5);
+    assert.equal(result.corpsenm, null);
+    assert.equal(result.figurineTransformTurn, undefined);
+    assert.equal(result._figurine_transform_seq, undefined);
+    assert.equal((game.level.monsters || []).length, 0);
+    assert.match(game._pending_message, /You smell the odor of meat\./);
+    assert.doesNotMatch(game._pending_message || '', /figurine animates/);
     assertNoStoneToFleshScoreSideEffects();
 });
 
