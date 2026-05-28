@@ -12111,11 +12111,19 @@ function polymorphReplacementForDipTarget(target) {
     return replacement;
 }
 
-function replaceInventoryObjectWithPolymorphResult(target, replacement) {
+function replaceInventoryObjectWithPolymorphResult(target, replacement, options = {}) {
     const preservedLetter = target.letter;
+    const preservedEquipment = options.preserveEquipment ? {
+        wielded: !!target.wielded,
+        alternate: !!target.alternate,
+        quivered: !!target.quivered,
+        worn: target.worn,
+        owornmask: target.owornmask,
+    } : null;
     for (const key of Object.keys(target)) delete target[key];
     Object.assign(target, replacement);
     target.letter = preservedLetter;
+    if (preservedEquipment) options.preserveEquipment(target, preservedEquipment);
     syncCarriedFigurineTransformTimer(target);
     refreshInventoryObjectLine(target);
     if (target.unpaid) syncUnpaidBillLine(target);
@@ -12340,6 +12348,32 @@ function stoneToFleshReplacementForObject(item) {
     return null;
 }
 
+function isMeatRingObject(item) {
+    return item?.otyp === MEAT_RING || objectKindKey(item) === 'meat ring';
+}
+
+function preserveStoneToFleshEquipmentState(target, state) {
+    if (state.wielded) target.wielded = true;
+    if (state.alternate) target.alternate = true;
+    if (state.quivered) target.quivered = true;
+    if (!isMeatRingObject(target)) return;
+    if (state.worn === 'left' || state.worn === 'right') target.worn = state.worn;
+    if (state.owornmask != null) target.owornmask = state.owornmask;
+}
+
+function heroPolyselfCarnivorous() {
+    const form = polyselfForm() || {};
+    return !!(form.carnivorous || form.carnivore);
+}
+
+function stoneToFleshSmellMessage() {
+    const role = String(game.urole?.name?.m || game._startup_role || '').toLowerCase();
+    const brokeVegetarian = (game.u?.uconduct?.unvegetarian || 0) > 0;
+    return role !== 'monk' && brokeVegetarian && heroPolyselfCarnivorous()
+        ? 'You smell a delicious smell.'
+        : 'You smell the odor of meat.';
+}
+
 function stoneToFleshMergeSkipItem(item) {
     return !!(item?.worn || item?.wielded || item?.alternate || item?.quivered);
 }
@@ -12395,12 +12429,14 @@ function stoneToFleshInventoryEffect(messages = []) {
         const replacement = stoneToFleshReplacementForObject(item);
         if (!replacement) continue;
         markObjectShopBillUsedUp(item);
-        replaceInventoryObjectWithPolymorphResult(item, replacement);
+        replaceInventoryObjectWithPolymorphResult(item, replacement, {
+            preserveEquipment: preserveStoneToFleshEquipmentState,
+        });
         transformed = true;
     }
     if (transformed) {
         mergeStoneToFleshInventoryResults();
-        messages.push('You smell the odor of meat.');
+        messages.push(stoneToFleshSmellMessage());
     }
     return { transformed: transformed || rescued, messages };
 }
@@ -12425,7 +12461,7 @@ function stoneToFleshFloorEffect(x = game.u?.ux || 0, y = game.u?.uy || 0) {
     });
     if (transformed) {
         newsym(x, y);
-        messages.push('You smell the odor of meat.');
+        messages.push(stoneToFleshSmellMessage());
         messages.push(...alterationMessages);
     }
     return { transformed, messages };
@@ -30808,6 +30844,10 @@ function identifiedInventoryLine(item) {
             name = `homemade tin of ${meat}`;
         }
         phrase = `${buc} ${name}`;
+        if (isMeatRingObject(item)) {
+            if (item.worn === 'right' || item.line?.includes('(on right hand)')) suffix = ' (on right hand)';
+            else if (item.worn === 'left' || item.line?.includes('(on left hand)')) suffix = ' (on left hand)';
+        } else if (item.quivered) suffix = quiverSuffix(item);
     } else if (cls === 'gem') {
         const gem = item.actualKind || (item.gemRoll
             ? IDENTIFIED_GEM_NAMES.find(([upper]) => item.gemRoll <= upper)?.[1]
@@ -30948,10 +30988,13 @@ function normalInventoryLine(item) {
     } else {
         const namedWater = cls === 'potion' && kind === 'water' && (item.blessed || item.cursed);
         phrase = kind === 'sack' || kind === 'holy water' || kind === 'unholy water' || namedWater ? name : `${knownState}${name}`;
-        if (item.quivered) suffix = quiverSuffix(item);
+        if (isMeatRingObject(item)) {
+            if (item.worn === 'right' || item.line?.includes('(on right hand)')) suffix = ' (on right hand)';
+            else if (item.worn === 'left' || item.line?.includes('(on left hand)')) suffix = ' (on left hand)';
+        } else if (item.quivered) suffix = quiverSuffix(item);
     }
 
-    if (quan > 1 && cls !== 'weapon') phrase = `${quan} ${phrase}`;
+    if (quan > 1 && cls !== 'weapon' && !item.wielded && !item.alternate) phrase = `${quan} ${phrase}`;
     else if (quan === 1) phrase = `${/^[aeiou]/i.test(phrase) ? 'an' : 'a'} ${phrase}`;
     return `${letter} - ${phrase}${suffix}`;
 }

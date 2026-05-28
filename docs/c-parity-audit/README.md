@@ -90,6 +90,7 @@ This folder records source-backed audits against `nethack-c/upstream`. The notes
 - [84-subagent-findings-2026-05-28.md](84-subagent-findings-2026-05-28.md): stone-to-flesh object resistance plus carried/floor boulder and eligible gem meatball rows.
 - [85-subagent-findings-2026-05-28.md](85-subagent-findings-2026-05-28.md): direct potionhit unseen crash, evaporation, trycall, and saddle-feedback visibility wording.
 - [86-subagent-findings-2026-05-28.md](86-subagent-findings-2026-05-28.md): direct potionhit concrete-otyp identity fallback and adjacent common no-effect vapor trycall coverage.
+- [87-subagent-findings-2026-05-28.md](87-subagent-findings-2026-05-28.md): stone-to-flesh smell wording, carried replacement equipment-state preservation, and fresh forced-chest/projectile/potionhit follow-up audits.
 
 ## Cross-Cutting Themes
 

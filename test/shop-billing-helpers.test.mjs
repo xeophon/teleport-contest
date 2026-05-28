@@ -3567,6 +3567,90 @@ test('self-cast stone to flesh turns carried mineral ring into meat ring', async
     assert.match(game._pending_message, /You smell the odor of meat\./);
 });
 
+test('self-cast stone to flesh uses delicious smell for carnivorous meat eater', async () => {
+    installCommandShopState();
+    initRng(1);
+    game._startup_role = 'Wizard';
+    game.urole = { name: { m: 'Wizard' } };
+    game.u.uconduct = { unvegetarian: 1 };
+    game.u._polyself_form = { name: 'wolf', carnivorous: true };
+    const wand = makeInvisibleWand(31021, 'a', 6);
+    game.inventory = [wand];
+
+    await castStoneToFleshAtSelf();
+
+    assert.equal(game.inventory[0].otyp, MEAT_STICK);
+    assert.equal(game._pending_message, 'You smell a delicious smell.');
+});
+
+test('self-cast stone to flesh keeps Monk carnivores on odor wording', async () => {
+    installCommandShopState();
+    initRng(1);
+    game._startup_role = 'Monk';
+    game.urole = { name: { m: 'Monk' } };
+    game.u.uconduct = { unvegetarian: 1 };
+    game.u._polyself_form = { name: 'wolf', carnivorous: true };
+    const wand = makeInvisibleWand(31022, 'a', 6);
+    game.inventory = [wand];
+
+    await castStoneToFleshAtSelf();
+
+    assert.equal(game.inventory[0].otyp, MEAT_STICK);
+    assert.equal(game._pending_message, 'You smell the odor of meat.');
+});
+
+test('self-cast stone to flesh preserves wielded meat stick state and skips merge', async () => {
+    installCommandShopState();
+    initRng(1);
+    const food = simpleFood(31023, 'meat stick', 'a', { otyp: MEAT_STICK });
+    const wand = makeInvisibleWand(31024, 'b', 4, { wielded: true });
+    game.inventory = [food, wand];
+
+    await castStoneToFleshAtSelf();
+
+    assert.equal(game.inventory.length, 2);
+    assert.equal(food.quan, 1);
+    const result = game.inventory[1];
+    assert.equal(result.otyp, MEAT_STICK);
+    assert.equal(result.wielded, true);
+    assert.equal(result.line, 'b - a meat stick (weapon in right hand)');
+});
+
+test('self-cast stone to flesh preserves quivered meat stick state and skips merge', async () => {
+    installCommandShopState();
+    initRng(1);
+    const food = simpleFood(31025, 'meat stick', 'a', { otyp: MEAT_STICK });
+    const wand = makeInvisibleWand(31026, 'b', 4, { quivered: true });
+    game.inventory = [food, wand];
+
+    await castStoneToFleshAtSelf();
+
+    assert.equal(game.inventory.length, 2);
+    assert.equal(food.quan, 1);
+    const result = game.inventory[1];
+    assert.equal(result.otyp, MEAT_STICK);
+    assert.equal(result.quivered, true);
+    assert.equal(result.line, 'b - a meat stick (at the ready)');
+});
+
+test('self-cast stone to flesh preserves worn meat ring hand and skips merge', async () => {
+    installCommandShopState();
+    initRng(1);
+    const food = simpleFood(31027, 'meat ring', 'a', { otyp: MEAT_RING });
+    const ring = chargeableRing(31028, 'b', 2);
+    ring.worn = 'left';
+    game.inventory = [food, ring];
+
+    await castStoneToFleshAtSelf();
+
+    assert.equal(game.inventory.length, 2);
+    assert.equal(food.quan, 1);
+    const result = game.inventory[1];
+    assert.equal(result.otyp, MEAT_RING);
+    assert.equal(result.worn, 'left');
+    assert.equal(result.line, 'b - a meat ring (on left hand)');
+});
+
 test('self-cast stone to flesh turns carried boulder into enormous meatball', async () => {
     installCommandShopState();
     initRng(1);
