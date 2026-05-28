@@ -37,4 +37,4 @@ Regression coverage:
 - Lit oil self-hit and ceiling break still need `explode_oil()`/burning-oil fallout ordering, including blast terrain/object collateral and shop cleanup.
 - Polymorph self-hit needs `You feel a little strange/normal`, unchanging/antimagic gates, and `polyself()` fallout before vapor.
 - `Maybe_Half_Phys()` mitigation is not modeled for the covered head/acid damage path yet.
-- No-ceiling/underwater wording, non-potion upward impacts, cream pies, petrifying eggs/corpses, and heavier falling-object damage remain separate C-backed slices.
+- No-ceiling/underwater wording is covered in `docs/c-parity-audit/106-subagent-findings-2026-05-28.md`; non-potion upward impacts, cream pies, petrifying eggs/corpses, and heavier falling-object damage remain separate C-backed slices.

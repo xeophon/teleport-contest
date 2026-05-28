@@ -106,6 +106,10 @@ This folder records source-backed audits against `nethack-c/upstream`. The notes
 - [100-subagent-findings-2026-05-28.md](100-subagent-findings-2026-05-28.md): remote non-gold hero projectile `ship_object()` down-gate parity plus remaining projectile/kick/gold shipping follow-up audits.
 - [101-subagent-findings-2026-05-28.md](101-subagent-findings-2026-05-28.md): remote projectile floor-pile `impact_drop()` parity plus remaining gold/kick/stairs/monster-thrown shipping follow-up audits.
 - [102-subagent-findings-2026-05-28.md](102-subagent-findings-2026-05-28.md): remote thrown-gold seen-shaft `ship_object()` parity plus upward potion self-hit, figurine animation, and ice-box survivor follow-up audits.
+- [103-subagent-findings-2026-05-28.md](103-subagent-findings-2026-05-28.md): first upward hero-thrown potion self-hit path through `toss_up()` and self `potionhit()`.
+- [104-subagent-findings-2026-05-28.md](104-subagent-findings-2026-05-28.md): upward non-special vapor-only potion self-hit expansion and throw-letter command coverage.
+- [105-subagent-findings-2026-05-28.md](105-subagent-findings-2026-05-28.md): upward acid and unlit-oil self-hit parity.
+- [106-subagent-findings-2026-05-28.md](106-subagent-findings-2026-05-28.md): upward throw ceiling/no-ceiling/underwater wording parity.
 
 ## Cross-Cutting Themes
 

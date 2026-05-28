@@ -6,7 +6,7 @@ import { nhgetch } from './input.js';
 import { bot, cls, docrt, flush_screen, newsym, pline, recordObservedObjectDiscovery, refreshHallucinatedMap, seeNearbyObjects, show_glyph_cell, strengthString } from './display.js';
 import { cansee, couldsee, vision_recalc, vision_reset } from './vision.js';
 import { RANDOM_MONSTER_BY_NAME, SHOP_TYPES, STALKER_MONSTERS, add_to_container, add_to_minv, adjustedMonsterLevel, artifactDefinitionForName, artifactObjectName, enextoMonsterSpot, make_tutorial1_level, makemon, makeArtifactWishObject, maketrap, mkcorpstat, mklev, mkobj, mkobj_at, mksobj, monsterByRndName, monster_hp, morgueMonster, nameObjectAsArtifact, next_ident, object_display, potionIndexForRoll, resurrectWizardOfYendor, rndmonnum, scrollIndexForRoll, set_mimic_sym_rng, syncDungeonContext, u_on_dnstairs, u_on_rndspot, u_on_upstairs, wipe_engr_at, dropMonsterInventory as dropMonsterInventoryRaw, l_nhcore_init, getrumor, getbogusmon, level_difficulty, set_malign, somexyspace, fumaroles, fix_wall_spines, createMonsterCorpseOrGlob, monsterCorpseDropSucceeds, monsterLeavesCorpseLikeDrop, movebubbles } from './mklev.js';
-import { ACCESSIBLE, A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_MAX, A_NEUTRAL, A_NONE, A_STR, A_WIS, ALTAR, AM_SANCTUM, AM_SHRINE, Align2amask, Amask2align, BC_BALL, BC_CHAIN, BEAR_TRAP, BLCORNER, BOLT_LIM, BRCORNER, CANDLESHOP, CLOUD, COLNO, CORPSTAT_FEMALE, CORPSTAT_GENDER, CORPSTAT_HISTORIC, CORPSTAT_MALE, CORPSTAT_NEUTER, CORR, DB_DIR, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DB_NORTH, DB_SOUTH, DB_UNDER, DB_WEST, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, BURN, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, D_TRAPPED, DUST, ENGRAVE, ENGR_BLOOD, FOUNTAIN, F_LOOTED, GRAVE, HEADSTONE, HWALL, ICE, ICED_MOAT, ICED_POOL, IN_SIGHT, IRONBARS, IS_AIR, IS_FURNITURE, IS_LAVA, IS_OBSTRUCTED, IS_POOL, IS_ROOM, IS_TREE, IS_WALL, In_endgame, In_quest, In_sokoban, In_V_tower, Is_airlevel, Is_astralevel, Is_botlevel, Is_earthlevel, Is_rogue_level, Is_stronghold, Is_waterlevel, LADDER, LAVAPOOL, LAVAWALL, MAGIC_PORTAL, MARK, MAX_EGG_HATCH_TIME, MM_EDOG, MM_NOCOUNTBIRTH, MM_NOMSG, MM_NOWAIT, MOAT, MORGUE, M_AP_TYPE, N_DIRS, NO_MINVENT, NORMAL_SPEED, OVERLOADED, P_BASIC, P_UNSKILLED, PIT, POOL, ROLLING_BOULDER_TRAP, ROOM, ROOMOFFSET, ROWNO, SCORR, SDOOR, SHARED, SHARED_PLUS, SHOPBASE, SINK, SPIKED_PIT, STAIRS, STONE, STRAT_WAITMASK, S_LDWASHER, S_LPUDDING, S_LRING, TDWALL, TEMPLE, THRONE, TLCORNER, TRCORNER, TREE, TREE_LOOTED, TREE_SWARM, TT_BEARTRAP, TT_BURIEDBALL, TT_INFLOOR, TT_LAVA, TT_PIT, TT_WEB, TUWALL, T_LOOTED, VAULT, VIBRATING_SQUARE, VWALL, WAND_BACKFIRE_CHANCE, WATER, WEB, WM_MASK, WT_IRON_BALL_BASE, WT_IRON_BALL_INCR, W_NONDIGGABLE, W_SADDLE, ZAP_POS, isok, xdir, ydir } from './const.js';
+import { ACCESSIBLE, A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_MAX, A_NEUTRAL, A_NONE, A_STR, A_WIS, ALTAR, AM_SANCTUM, AM_SHRINE, Align2amask, Amask2align, BC_BALL, BC_CHAIN, BEAR_TRAP, BLCORNER, BOLT_LIM, BRCORNER, CANDLESHOP, CLOUD, COLNO, CORPSTAT_FEMALE, CORPSTAT_GENDER, CORPSTAT_HISTORIC, CORPSTAT_MALE, CORPSTAT_NEUTER, CORR, DB_DIR, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DB_NORTH, DB_SOUTH, DB_UNDER, DB_WEST, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, BURN, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, D_TRAPPED, DUST, ENGRAVE, ENGR_BLOOD, FOUNTAIN, F_LOOTED, GRAVE, HEADSTONE, HWALL, ICE, ICED_MOAT, ICED_POOL, IN_SIGHT, IRONBARS, IS_AIR, IS_FURNITURE, IS_LAVA, IS_OBSTRUCTED, IS_POOL, IS_ROOM, IS_TREE, IS_WALL, In_endgame, In_quest, In_sokoban, In_V_tower, Is_airlevel, Is_astralevel, Is_botlevel, Is_earthlevel, Is_firelevel, Is_rogue_level, Is_stronghold, Is_waterlevel, LADDER, LAVAPOOL, LAVAWALL, MAGIC_PORTAL, MARK, MAX_EGG_HATCH_TIME, MM_EDOG, MM_NOCOUNTBIRTH, MM_NOMSG, MM_NOWAIT, MOAT, MORGUE, M_AP_TYPE, N_DIRS, NO_MINVENT, NORMAL_SPEED, OVERLOADED, P_BASIC, P_UNSKILLED, PIT, POOL, ROLLING_BOULDER_TRAP, ROOM, ROOMOFFSET, ROWNO, SCORR, SDOOR, SHARED, SHARED_PLUS, SHOPBASE, SINK, SPIKED_PIT, STAIRS, STONE, STRAT_WAITMASK, S_LDWASHER, S_LPUDDING, S_LRING, TDWALL, TEMPLE, THRONE, TLCORNER, TRCORNER, TREE, TREE_LOOTED, TREE_SWARM, TT_BEARTRAP, TT_BURIEDBALL, TT_INFLOOR, TT_LAVA, TT_PIT, TT_WEB, TUWALL, T_LOOTED, VAULT, VIBRATING_SQUARE, VWALL, WAND_BACKFIRE_CHANCE, WATER, WEB, WM_MASK, WT_IRON_BALL_BASE, WT_IRON_BALL_INCR, W_NONDIGGABLE, W_SADDLE, ZAP_POS, isok, xdir, ydir } from './const.js';
 import { d, rn1, rn2, rn2_on_display_rng, rnd, rnl, rnz } from './rng.js';
 import { CLR_BLACK, CLR_BLUE, CLR_BRIGHT_BLUE, CLR_BRIGHT_CYAN, CLR_BRIGHT_GREEN, CLR_BROWN, CLR_CYAN, CLR_GRAY, CLR_GREEN, CLR_MAGENTA, CLR_ORANGE, CLR_RED, CLR_YELLOW, CLR_WHITE, NO_COLOR } from './terminal.js';
 import { vfsDeleteFile, vfsReadFile, vfsWriteFile } from './storage.js';
@@ -14319,10 +14319,38 @@ function heroAcidPotionSelfHitMessages(potion, messages) {
     }
 }
 
-function heroThrownPotionSelfHitMessages(potion, action) {
+function heroIsUnderwaterForThrow() {
+    return !!(game.u?.uinwater || game.u?.underwater || game.u?.uunderwater);
+}
+
+function heroHasThrowCeiling() {
+    const uz = game.u?.uz || null;
+    return !(uz && In_endgame(uz) && !Is_earthlevel(uz));
+}
+
+function heroThrowCeilingName(x = game.u?.ux ?? 0, y = game.u?.uy ?? 0) {
+    const uz = game.u?.uz || null;
+    const loc = game.level?.at?.(x, y) || {};
+    const room = levelRoomByRoomno(loc.roomno || 0);
+    if (room?.rtype === VAULT) return "vault's ceiling";
+    if (room?.rtype === TEMPLE) return "temple's ceiling";
+    if (room?.rtype >= SHOPBASE) return "shop's ceiling";
+    if (uz && Is_waterlevel(uz)) return 'water above';
+    if (IS_AIR(loc.typ)) return 'sky';
+    if (uz && Is_firelevel(uz)) return 'flames above';
+    if (uz && In_quest(uz)) return 'expanse above';
+    if (heroIsUnderwaterForThrow()) return "water's surface";
+    if ((IS_ROOM(loc.typ) && !(uz && Is_earthlevel(uz)))
+        || IS_WALL(loc.typ) || loc.typ === DOOR || loc.typ === SDOOR) {
+        return 'ceiling';
+    }
+    return 'rock cavern';
+}
+
+function heroThrownPotionSelfHitMessages(potion, action, ceilingName = heroThrowCeilingName()) {
     const messages = [];
     const kind = thrownPotionEffectKind(potion);
-    messages.push(`${floorObjectSubject({ ...potion, quan: 1 })} ${action} the ceiling, then falls back on top of your head.`);
+    messages.push(`${floorObjectSubject({ ...potion, quan: 1 })} ${action} the ${ceilingName}, then falls back on top of your head.`);
     const bottle = chestShatterBottleName();
     messages.push(`The ${bottle} crashes on your head and breaks into shards.`);
     if (game.u) {
@@ -14343,8 +14371,8 @@ function heroThrownPotionSelfHitMessages(potion, action) {
     return messages;
 }
 
-function heroThrownPotionCeilingBreakMessages(potion, breakKind) {
-    const messages = [`${floorObjectSubject({ ...potion, quan: 1 })} hits the ceiling.`];
+function heroThrownPotionCeilingBreakMessages(potion, breakKind, ceilingName = heroThrowCeilingName()) {
+    const messages = [`${floorObjectSubject({ ...potion, quan: 1 })} hits the ${ceilingName}.`];
     projectileTopLevelBreakMessage(potion, breakKind, messages);
     brokenPotionBreathe(potion, game.u?.ux ?? potion.ox ?? 0, game.u?.uy ?? potion.oy ?? 0, messages);
     const shopDebt = convertUnpaidObjectToShopDebt(potion, { silent: true, broken: true });
@@ -14353,12 +14381,17 @@ function heroThrownPotionCeilingBreakMessages(potion, breakKind) {
 }
 
 function heroThrownPotionUpwardMessages(potion) {
-    if (rn2(5)) {
+    const ceilingName = heroThrowCeilingName();
+    const hasCeiling = heroHasThrowCeiling();
+    const hitsRoof = !!(rn2(5) && !heroIsUnderwaterForThrow());
+    if (!hasCeiling)
+        return heroThrownPotionSelfHitMessages(potion, 'flies up into', ceilingName);
+    if (hitsRoof) {
         const breakKind = projectileTopLevelBreakKind(potion);
-        if (breakKind) return heroThrownPotionCeilingBreakMessages(potion, breakKind);
-        return heroThrownPotionSelfHitMessages(potion, 'hits');
+        if (breakKind) return heroThrownPotionCeilingBreakMessages(potion, breakKind, ceilingName);
+        return heroThrownPotionSelfHitMessages(potion, 'hits', ceilingName);
     }
-    return heroThrownPotionSelfHitMessages(potion, 'almost hits');
+    return heroThrownPotionSelfHitMessages(potion, 'almost hits', ceilingName);
 }
 
 function dipPotionAlchemyExplosion(target, amount, messages) {

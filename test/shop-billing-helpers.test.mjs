@@ -6,7 +6,7 @@ import { activateStatueTrap, burnFloorObjectsByFire, earthFloorEffects, finishFo
 import { game, resetGame } from '../js/gstate.js';
 import { pushKey, resetInputState } from '../js/input.js';
 import { enableRngLog, getRngLog, initRng } from '../js/rng.js';
-import { A_DEX, A_STR, BILLSZ, CANDLESHOP, COULD_SEE, DB_EAST, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, FOUNTAIN, HOLE, ICE, ICED_POOL, IN_SIGHT, LAVAPOOL, MOAT, PIT, POOL, ROOM, ROOMOFFSET, SHOPBASE, SQKY_BOARD, STATUE_TRAP, STRAT_WAITFORU, TRAPDOOR, TT_WEB, WEB, W_SADDLE } from '../js/const.js';
+import { A_DEX, A_STR, BILLSZ, CANDLESHOP, CLOUD, COULD_SEE, DB_EAST, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, FOUNTAIN, HOLE, ICE, ICED_POOL, IN_SIGHT, LAVAPOOL, MOAT, PIT, POOL, ROOM, ROOMOFFSET, SHOPBASE, SQKY_BOARD, STATUE_TRAP, STRAT_WAITFORU, TRAPDOOR, TT_WEB, WEB, W_SADDLE } from '../js/const.js';
 import { currentFruitId, setCurrentFruitName } from '../js/fruit.js';
 
 const BRASS_LANTERN = 226;
@@ -17375,6 +17375,74 @@ test('upward hero-thrown unlit oil potion self-hits without evaporation', async 
     assert.ok(hpBefore - game.u.uhp <= 2);
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
         'rn2(5)', 'rn2(7)', 'rnd(2)',
+    ]);
+});
+
+test('upward hero-thrown potion underwater almost hits the water surface', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, {
+        uhp: 40,
+        uhpmax: 40,
+        uinwater: 1,
+        underwater: true,
+        uunderwater: true,
+    });
+    const potion = confusionPotion(87666, 'p', 1, { dknown: true });
+    game.inventory = [potion];
+    const hpBefore = game.u.uhp;
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('p');
+    await rhack('<');
+
+    assert.equal(game._command_mode, null);
+    assert.match(game._pending_message, /almost hits the water's surface, then falls back on top of your head\./);
+    assert.doesNotMatch(game._pending_message, /hits the ceiling|almost hits the ceiling/);
+    assert.match(game._pending_message, /crashes on your head and breaks into shards\./);
+    assert.match(game._pending_message, /The potion of confusion evaporates\./);
+    assert.equal(game.inventory.includes(potion), false);
+    assert.equal(game.level.objects.length, 0);
+    assert.ok(game.u.uhp < hpBefore);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rn2(5)', 'rn2(7)', 'rnd(2)', 'rnd(5)',
+    ]);
+});
+
+test('upward hero-thrown potion on no-ceiling air level flies into the sky', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, {
+        uhp: 40,
+        uhpmax: 40,
+        uz: { dnum: 8, dlevel: 1 },
+    });
+    game.astral_level = { dnum: 8, dlevel: 5 };
+    game.air_level = { dnum: 8, dlevel: 1 };
+    game.earth_level = { dnum: 8, dlevel: 3 };
+    game.water_level = { dnum: 8, dlevel: 2 };
+    game.fire_level = { dnum: 8, dlevel: 4 };
+    game.level.at = () => ({ roomno: 0, typ: CLOUD });
+    const potion = confusionPotion(87667, 'p', 1, { dknown: true });
+    game.inventory = [potion];
+    const hpBefore = game.u.uhp;
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('p');
+    await rhack('<');
+
+    assert.equal(game._command_mode, null);
+    assert.match(game._pending_message, /flies up into the sky, then falls back on top of your head\./);
+    assert.doesNotMatch(game._pending_message, /almost hits|hits the ceiling|shatters/);
+    assert.match(game._pending_message, /crashes on your head and breaks into shards\./);
+    assert.match(game._pending_message, /The potion of confusion evaporates\./);
+    assert.equal(game.inventory.includes(potion), false);
+    assert.equal(game.level.objects.length, 0);
+    assert.ok(game.u.uhp < hpBefore);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rn2(5)', 'rn2(7)', 'rnd(2)', 'rnd(5)',
     ]);
 });
 
