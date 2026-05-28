@@ -3492,6 +3492,65 @@ test('self-cast stone to flesh turns carried marble wand into meat stick', async
     assert.match(game._pending_message, /You smell the odor of meat\./);
 });
 
+test('self-cast stone to flesh turns carried mineral ring into meat ring', async () => {
+    installCommandShopState();
+    initRng(1);
+    const ring = chargeableRing(31012, 'a', 2);
+    game.inventory = [ring];
+
+    await castStoneToFleshAtSelf();
+
+    assert.equal(game.inventory.length, 1);
+    const result = game.inventory[0];
+    assert.equal(result.letter, 'a');
+    assert.equal(result.cls, 'food');
+    assert.equal(result.otyp, MEAT_RING);
+    assert.equal(result.kind, 'meat ring');
+    assert.equal(result.actualKind, 'meat ring');
+    assert.equal(result.quan, 1);
+    assert.notEqual(result.id, 31012);
+    assert.equal(result.ringRoll, undefined);
+    assert.equal(result.charged, undefined);
+    assert.equal(result.known, undefined);
+    assert.equal(result.dknown, undefined);
+    assert.notEqual(result.spe, 2);
+    assert.equal(result.line, 'a - a meat ring');
+    assert.match(game._pending_message, /You smell the odor of meat\./);
+});
+
+test('self-cast stone to flesh leaves carried wooden ring unchanged', async () => {
+    installCommandShopState();
+    initRng(1);
+    const ring = {
+        id: 31013,
+        cls: 'ring',
+        glyph: '=',
+        kind: 'ring of adornment',
+        actualKind: 'ring of adornment',
+        appearance: 'wooden',
+        ringRoll: 1,
+        charged: true,
+        known: true,
+        dknown: true,
+        quan: 1,
+        spe: 0,
+        ox: 5,
+        oy: 5,
+        letter: 'a',
+        line: 'a - a ring of adornment',
+    };
+    game.inventory = [ring];
+
+    await castStoneToFleshAtSelf();
+
+    assert.equal(game.inventory.length, 1);
+    assert.equal(game.inventory[0], ring);
+    assert.equal(ring.cls, 'ring');
+    assert.equal(ring.kind, 'ring of adornment');
+    assert.equal(ring.otyp, undefined);
+    assert.doesNotMatch(game._pending_message || '', /odor of meat|delicious smell/);
+});
+
 test('self-cast stone to flesh preserves C fields on wand to meat stick', async () => {
     installCommandShopState();
     initRng(1);
@@ -3658,6 +3717,47 @@ test('downward stone to flesh marks unpaid floor wand used up before replacement
         && bill.price === 150
         && /wand of make invisible/.test(bill.name)), true);
     assert.match(game._pending_message, /Izchak gets angry!/);
+});
+
+test('downward stone to flesh turns floor gemstone ring into meat ring', async () => {
+    installCommandShopState();
+    initRng(1);
+    const ring = {
+        id: 31015,
+        cls: 'ring',
+        glyph: '=',
+        kind: 'ring of levitation',
+        actualKind: 'ring of levitation',
+        ringRoll: 11,
+        known: true,
+        dknown: true,
+        quan: 1,
+        spe: 0,
+        ox: 5,
+        oy: 5,
+        unpaid: true,
+        unpaidPrice: 200,
+        no_charge: true,
+    };
+    game.inventory = [];
+    game.level.objects = [ring];
+
+    await castStoneToFleshDown();
+
+    assert.equal(game.level.objects.includes(ring), false);
+    assert.equal(game.level.objects.length, 1);
+    const result = game.level.objects[0];
+    assert.equal(result.cls, 'food');
+    assert.equal(result.otyp, MEAT_RING);
+    assert.equal(result.kind, 'meat ring');
+    assert.equal(result.ox, 5);
+    assert.equal(result.oy, 5);
+    assert.equal(result.unpaid, undefined);
+    assert.equal(result.unpaidPrice, undefined);
+    assert.equal(result.no_charge, true);
+    assert.equal(result.ringRoll, undefined);
+    assert.equal(result.line, undefined);
+    assert.match(game._pending_message, /You smell the odor of meat\./);
 });
 
 test('self-cast stone to flesh clears active petrification', async () => {

@@ -12128,6 +12128,61 @@ function isStoneToFleshMarbleWandObject(item) {
         || appearance === 'marble';
 }
 
+const STONE_TO_FLESH_RING_MATERIALS = new Set(['mineral', 'gemstone']);
+const STONE_TO_FLESH_RING_APPEARANCE_MATERIALS = new Map([
+    ['wooden', 'wood'], ['granite', 'mineral'], ['opal', 'mineral'], ['clay', 'mineral'],
+    ['coral', 'mineral'], ['black onyx', 'mineral'], ['moonstone', 'mineral'],
+    ['tiger eye', 'gemstone'], ['jade', 'gemstone'], ['bronze', 'copper'],
+    ['agate', 'gemstone'], ['topaz', 'gemstone'], ['sapphire', 'gemstone'],
+    ['ruby', 'gemstone'], ['diamond', 'gemstone'], ['pearl', 'bone'],
+    ['iron', 'iron'], ['brass', 'copper'], ['copper', 'copper'], ['twisted', 'iron'],
+    ['steel', 'iron'], ['silver', 'silver'], ['gold', 'gold'], ['ivory', 'bone'],
+    ['emerald', 'gemstone'], ['wire', 'iron'], ['engagement', 'iron'], ['shiny', 'iron'],
+]);
+const STONE_TO_FLESH_RING_KIND_MATERIALS = new Map([
+    ['ring of adornment', 'wood'], ['ring of gain strength', 'mineral'],
+    ['ring of gain constitution', 'mineral'], ['ring of increase accuracy', 'mineral'],
+    ['ring of increase damage', 'mineral'], ['ring of protection', 'mineral'],
+    ['ring of regeneration', 'mineral'], ['ring of searching', 'gemstone'],
+    ['ring of stealth', 'gemstone'], ['ring of sustain ability', 'copper'],
+    ['ring of levitation', 'gemstone'], ['ring of hunger', 'gemstone'],
+    ['ring of aggravate monster', 'gemstone'], ['ring of conflict', 'gemstone'],
+    ['ring of warning', 'gemstone'], ['ring of poison resistance', 'bone'],
+    ['ring of fire resistance', 'iron'], ['ring of cold resistance', 'copper'],
+    ['ring of shock resistance', 'copper'], ['ring of free action', 'iron'],
+    ['ring of slow digestion', 'iron'], ['ring of teleportation', 'silver'],
+    ['ring of teleport control', 'gold'], ['ring of polymorph', 'bone'],
+    ['ring of polymorph control', 'gemstone'], ['ring of invisibility', 'iron'],
+    ['ring of see invisible', 'iron'], ['ring of protection from shape changers', 'iron'],
+]);
+
+function normalizeStoneToFleshMaterial(material) {
+    const text = String(material || '').toLowerCase().replace(/^hi_/, '');
+    if (text === 'steel') return 'iron';
+    if (text === 'brass' || text === 'bronze') return 'copper';
+    return text;
+}
+
+function stoneToFleshRingMaterial(item) {
+    const explicit = normalizeStoneToFleshMaterial(item?.oc_material || item?.material);
+    if (explicit) return explicit;
+    const ringName = objectKindKey(item);
+    const appearance = String(item?.appearance || (
+        typeof item?.kind === 'string' && /\bring$/.test(item.kind) && !/^ring of /.test(item.kind)
+            ? item.kind.replace(/\s+ring$/, '')
+            : ''
+    ) || (item?.ringRoll ? game._object_descriptions?.rings?.[item.ringRoll - 1] : '') || '').toLowerCase();
+    return normalizeStoneToFleshMaterial(STONE_TO_FLESH_RING_APPEARANCE_MATERIALS.get(appearance)
+        || STONE_TO_FLESH_RING_KIND_MATERIALS.get(ringName)
+        || '');
+}
+
+function isStoneToFleshMineralRingObject(item) {
+    if (!item || (itemClassKey(item) !== 'ring' && item?.glyph !== '=' && item?.otyp !== RING_CLASS))
+        return false;
+    return STONE_TO_FLESH_RING_MATERIALS.has(stoneToFleshRingMaterial(item));
+}
+
 function stoneToFleshMeatStickReplacement(target) {
     const replacement = mksobj(MEAT_STICK, false, false);
     Object.assign(replacement, object_display(replacement), {
@@ -12148,6 +12203,33 @@ function stoneToFleshMeatStickReplacement(target) {
         owt: Math.max(1, Math.trunc(Number(target?.quan || 1))),
     });
     return replacement;
+}
+
+function stoneToFleshMeatRingReplacement(target) {
+    const replacement = mksobj(MEAT_RING, false, false);
+    Object.assign(replacement, object_display(replacement), {
+        quan: 1,
+        letter: target?.letter,
+        blessed: !!target?.blessed,
+        cursed: !!target?.cursed,
+        no_charge: !!target?.no_charge,
+        cls: 'food',
+        glyph: '%',
+        otyp: MEAT_RING,
+        kind: 'meat ring',
+        actualKind: 'meat ring',
+        singular: 'meat ring',
+        plural: 'meat rings',
+        nutrition: 5,
+        owt: 5,
+    });
+    return replacement;
+}
+
+function stoneToFleshReplacementForObject(item) {
+    if (isStoneToFleshMarbleWandObject(item)) return stoneToFleshMeatStickReplacement(item);
+    if (isStoneToFleshMineralRingObject(item)) return stoneToFleshMeatRingReplacement(item);
+    return null;
 }
 
 function stoneToFleshMergeSkipItem(item) {
@@ -12202,9 +12284,10 @@ function stoneToFleshInventoryEffect(messages = []) {
 
     let transformed = false;
     for (const item of [...(game.inventory || [])]) {
-        if (!isStoneToFleshMarbleWandObject(item)) continue;
+        const replacement = stoneToFleshReplacementForObject(item);
+        if (!replacement) continue;
         markObjectShopBillUsedUp(item);
-        replaceInventoryObjectWithPolymorphResult(item, stoneToFleshMeatStickReplacement(item));
+        replaceInventoryObjectWithPolymorphResult(item, replacement);
         transformed = true;
     }
     if (transformed) {
@@ -12221,8 +12304,8 @@ function stoneToFleshFloorEffect(x = game.u?.ux || 0, y = game.u?.uy || 0) {
     game.level.objects = (game.level?.objects || []).map(obj => {
         if (!obj || obj.hidden || obj.transientProjectile || obj.ox !== x || obj.oy !== y)
             return obj;
-        if (!isStoneToFleshMarbleWandObject(obj)) return obj;
-        const replacement = stoneToFleshMeatStickReplacement(obj);
+        const replacement = stoneToFleshReplacementForObject(obj);
+        if (!replacement) return obj;
         replacement.ox = x;
         replacement.oy = y;
         prepareFloorPolymorphReplacement(obj, replacement);
