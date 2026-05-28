@@ -21,17 +21,17 @@ The current audit source of truth is `docs/c-parity-audit/`.
 Detailed source-backed history is kept in `docs/c-parity-audit/`. Keep this section short; completed slice details belong in the audit files.
 
 - Removed fixture replay/runtime shortcuts and rebuilt covered behavior around live game state; public sessions remain regression guards only.
-- Built a broad starter shop-ledger surface: bill rows, split/subtract helpers, shared lost-merchandise debt for covered projectile/magic-bag/hole/statue/burial/floor-polymorph callers, used-up debt, itemized `#pay`, pickup/drop/container/tip flows, bill-limit handling, and many covered destruction/alteration charging paths.
-- Added focused object, food, timer, and wish parity slices: ordinary eating, special-food merge gates, egg timer cleanup, wish-local monster/object binding, charged tools/instruments, and self-cast stone-to-flesh carried marble-wand transformation plus stoning/polyself rescue.
+- Built a broad starter shop-ledger surface: bill rows, split/subtract helpers, shared lost-merchandise debt for covered projectile/magic-bag/hole/statue/burial/floor-polymorph/floor-stone-to-flesh callers, used-up debt, itemized `#pay`, pickup/drop/container/tip flows, bill-limit handling, and many covered destruction/alteration charging paths.
+- Added focused object, food, timer, and wish parity slices: ordinary eating, special-food merge gates, egg timer cleanup, wish-local monster/object binding, charged tools/instruments, and stone-to-flesh carried/floor marble-wand transformations plus stoning/polyself rescue.
 - Expanded potion `#dip`, alchemy, broken-vapor, inventory/fire/hot-ground vapor, gremlin water vapor, forced chest-content potion shatter, direct hero-thrown confusion/booze/paralysis `potionhit()`, and statue-trap shatter debt coverage.
 - Latest verified public score: `44/44`.
 
 ## Current Priorities
 
 1. Shared shop ownership helpers.
-   - Source notes: `docs/c-parity-audit/05-food-inventory-containers-shops.md`, `docs/c-parity-audit/51-subagent-findings-2026-05-28.md`, and `docs/c-parity-audit/52-subagent-findings-2026-05-28.md`.
+   - Source notes: `docs/c-parity-audit/05-food-inventory-containers-shops.md`, `docs/c-parity-audit/51-subagent-findings-2026-05-28.md`, `docs/c-parity-audit/52-subagent-findings-2026-05-28.md`, and `docs/c-parity-audit/53-subagent-findings-2026-05-28.md`.
    - Replace remaining field-only paths with C-shaped `addtobill`, `subfrombill`, `stolen_value`, `obfree`, and `sellobj` routing.
-   - Near-term callers: floor stone-to-flesh costly alteration, direct ice/cold-ray burial plumbing, boulder push shop-boundary transitions, remaining magic-bag valuation/source/target cases, less ordinary projectile/container loss, shared `sellobj()` integration, generic `obfree()` preservation, and broader costly-alteration paths.
+   - Near-term callers: direct ice/cold-ray burial plumbing, boulder push shop-boundary transitions, remaining magic-bag valuation/source/target cases, less ordinary projectile/container loss, shared `sellobj()` integration, generic `obfree()` preservation, broader costly-alteration paths, and remaining stone-to-flesh object rows.
 
 2. Direct object-hit and potion delivery.
    - Source notes: `docs/c-parity-audit/04-monsters-combat-pets.md`, `docs/c-parity-audit/47-subagent-findings-2026-05-28.md`, and `docs/c-parity-audit/50-subagent-findings-2026-05-28.md`.
@@ -60,10 +60,10 @@ Detailed source-backed history is kept in `docs/c-parity-audit/`. Keep this sect
 
 Continue narrow C-backed slices in this order unless a failing public regression points elsewhere:
 
-1. Continue shared `stolen_value()`/`subfrombill()` cleanup through floor stone-to-flesh costly alteration after the floor polymorph cleanup.
+1. Continue shared `stolen_value()`/`subfrombill()` cleanup through direct ice/cold-ray burial plumbing or the next compact shop-helper caller.
 2. Broaden direct `potionhit()` delivery beyond confusion/booze/paralysis, with potion of sleeping as the next compact monster-effect family.
 3. Close remaining forced-chest gaps: blade breakage during long forcing, blunt wake-nearby behavior, and material-specific non-potion shatter wording.
-4. Continue broader stone-to-flesh object coverage through registry-backed material/object metadata and floor/beam/shop routing.
+4. Continue broader stone-to-flesh object coverage through registry-backed material/object metadata, object resistance, remaining object rows, and floor/beam/shop routing.
 5. Continue registry-backed cleanup for merge/wish/charged-tool metadata after each concrete caller lands.
 
 ## Verification

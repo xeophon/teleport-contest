@@ -12070,6 +12070,32 @@ function stoneToFleshInventoryEffect(messages = []) {
     return { transformed: transformed || rescued, messages };
 }
 
+function stoneToFleshFloorEffect(x = game.u?.ux || 0, y = game.u?.uy || 0) {
+    const messages = [];
+    const alterationMessages = [];
+    let transformed = false;
+    game.level.objects = (game.level?.objects || []).map(obj => {
+        if (!obj || obj.hidden || obj.transientProjectile || obj.ox !== x || obj.oy !== y)
+            return obj;
+        if (!isStoneToFleshMarbleWandObject(obj)) return obj;
+        const replacement = stoneToFleshMeatStickReplacement(obj);
+        replacement.ox = x;
+        replacement.oy = y;
+        prepareFloorPolymorphReplacement(obj, replacement);
+        const angerMessage = floorPolymorphShopkeeperAngerMessage(obj, x, y);
+        if (angerMessage && !alterationMessages.includes(angerMessage))
+            alterationMessages.push(angerMessage);
+        transformed = true;
+        return replacement;
+    });
+    if (transformed) {
+        newsym(x, y);
+        messages.push('You smell the odor of meat.');
+        messages.push(...alterationMessages);
+    }
+    return { transformed, messages };
+}
+
 function learnPotionPolymorphDiscovery(item) {
     if (item && (game.inventory || []).includes(item)) {
         identifyPotionOfPolymorph(item);
@@ -40203,6 +40229,10 @@ export async function rhack(_cmd) {
                     game._message_more = 0;
                     game._keep_pending_message = 1;
                 }
+            } else if (ch === '>') {
+                const result = stoneToFleshFloorEffect();
+                if (result.messages.length) await setMessage(result.messages.join('  '));
+                else await setMessage(`You cast ${spell?.name || 'a spell'}.`);
             } else {
                 await setMessage(`You cast ${spell?.name || 'a spell'}.`);
             }

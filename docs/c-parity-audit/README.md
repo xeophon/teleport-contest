@@ -56,6 +56,7 @@ This folder records source-backed audits against `nethack-c/upstream`. The notes
 - [50-subagent-findings-2026-05-28.md](50-subagent-findings-2026-05-28.md): direct hero-thrown paralysis potionhit plus fresh sleeping/shop-helper follow-up audits.
 - [51-subagent-findings-2026-05-28.md](51-subagent-findings-2026-05-28.md): burying-merchandise shop-helper cleanup plus fresh floor-alteration, ice-burial, and sleeping-potionhit follow-up audits.
 - [52-subagent-findings-2026-05-28.md](52-subagent-findings-2026-05-28.md): floor polymorph shop-helper cleanup plus remaining floor stone-to-flesh, ice-burial, and sleeping-potionhit follow-up audits.
+- [53-subagent-findings-2026-05-28.md](53-subagent-findings-2026-05-28.md): floor stone-to-flesh marble-wand cleanup plus remaining beam, resistance, statue, and object-row follow-up audits.
 
 ## Cross-Cutting Themes
 

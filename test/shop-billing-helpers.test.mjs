@@ -127,7 +127,7 @@ async function drainQueuedMessagesAfterMore(limit = 20) {
     return messages;
 }
 
-async function castStoneToFleshAtSelf() {
+async function castStoneToFleshDirection(direction) {
     game._known_spells = [{ name: 'stone to flesh', level: 3, skill: 'healing', learnedTurn: game.moves || 1 }];
     game.u.uen = 50;
     game.u.uenmax = 50;
@@ -142,8 +142,17 @@ async function castStoneToFleshAtSelf() {
     assert.equal(game._command_mode, 'spellDirection');
     assert.match(game._pending_message, /In what direction\?/);
 
-    await rhack('.');
+    await rhack(direction);
     assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+}
+
+async function castStoneToFleshAtSelf() {
+    await castStoneToFleshDirection('.');
+}
+
+async function castStoneToFleshDown() {
+    await castStoneToFleshDirection('>');
 }
 
 function installAngryNotRobbedPayState({ gold = 0, seed = 1, player = 'Hero', customer = 'PreviousCustomer' } = {}) {
@@ -3401,6 +3410,102 @@ test('self-cast stone to flesh marks unpaid transformed wand used up', async () 
         String(bill.bo_id) === String(31007)
         && bill.price === 150
         && /wand of make invisible/.test(bill.name)), true);
+});
+
+test('downward stone to flesh turns floor marble wand into meat stick and angers shopkeeper', async () => {
+    const { shkp } = installCommandShopState();
+    initRng(1);
+    const wand = { ...makeInvisibleWand(31009), letter: undefined, line: undefined, ox: 5, oy: 5 };
+    game.inventory = [];
+    game.level.objects = [wand];
+
+    await castStoneToFleshDown();
+
+    assert.equal(game.level.objects.includes(wand), false);
+    assert.equal(game.level.objects.length, 1);
+    const result = game.level.objects[0];
+    assert.equal(result.cls, 'food');
+    assert.equal(result.otyp, MEAT_STICK);
+    assert.equal(result.kind, 'meat stick');
+    assert.equal(result.ox, 5);
+    assert.equal(result.oy, 5);
+    assert.notEqual(result.id, 31009);
+    assert.equal(result.wandIndex, undefined);
+    assert.equal(result.wand, undefined);
+    assert.equal(result.unpaid, undefined);
+    assert.equal(result.unpaidPrice, undefined);
+    assert.equal(shkp.billct, 0);
+    assert.equal(shkp.debit || 0, 0);
+    assert.equal(shkp.robbed || 0, 0);
+    assert.equal(shkp.angry, true);
+    assert.equal(shkp.hostile, true);
+    assert.equal(shkp.mpeaceful, 0);
+    assert.match(game._pending_message, /You smell the odor of meat\./);
+    assert.match(game._pending_message, /Izchak gets angry!/);
+});
+
+test('downward stone to flesh preserves C fields on floor wand to meat stick', async () => {
+    installCommandShopState();
+    initRng(1);
+    const wand = makeInvisibleWand(31010, undefined, 6, {
+        ox: 5,
+        oy: 5,
+        letter: undefined,
+        line: undefined,
+        quan: 2,
+        cursed: true,
+        bknown: true,
+        no_charge: true,
+        recharged: 3,
+    });
+    game.inventory = [];
+    game.level.objects = [wand];
+
+    await castStoneToFleshDown();
+
+    const result = game.level.objects[0];
+    assert.equal(result.cls, 'food');
+    assert.equal(result.otyp, MEAT_STICK);
+    assert.equal(result.quan, 2);
+    assert.equal(result.cursed, true);
+    assert.equal(result.blessed, false);
+    assert.equal(result.bknown, undefined);
+    assert.equal(result.no_charge, true);
+    assert.equal(result.recharged, 3);
+    assert.equal(result.ox, 5);
+    assert.equal(result.oy, 5);
+    assert.equal(result.line, undefined);
+    assert.doesNotMatch(game._pending_message, /gets angry|furious/);
+});
+
+test('downward stone to flesh marks unpaid floor wand used up before replacement', async () => {
+    const { shkp } = installCommandShopState();
+    initRng(1);
+    const wand = { ...makeInvisibleWand(31011), letter: undefined, line: undefined, ox: 5, oy: 5 };
+    game.inventory = [];
+    game.level.objects = [wand];
+    shop.addObjectToShopBill(shkp, wand, 150);
+
+    await castStoneToFleshDown();
+
+    const result = game.level.objects[0];
+    assert.equal(result.cls, 'food');
+    assert.equal(result.otyp, MEAT_STICK);
+    assert.equal(result.unpaid, undefined);
+    assert.equal(result.unpaidPrice, undefined);
+    assert.equal(shop.shopBillEntryForObject(shkp, result), null);
+    assert.equal(shkp.debit || 0, 0);
+    assert.equal(shkp.robbed || 0, 0);
+    assert.equal(shkp.billct, 1);
+    const entry = shop.shopBillEntryForObject(shkp, wand);
+    assert.ok(entry);
+    assert.equal(entry.useup, true);
+    assert.equal(shop.shopBillEntryTotal(entry), 150);
+    assert.equal((game._usedUpShopBills || []).some(bill =>
+        String(bill.bo_id) === String(wand.id)
+        && bill.price === 150
+        && /wand of make invisible/.test(bill.name)), true);
+    assert.match(game._pending_message, /Izchak gets angry!/);
 });
 
 test('self-cast stone to flesh clears active petrification', async () => {
