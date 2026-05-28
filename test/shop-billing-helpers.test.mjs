@@ -29,8 +29,11 @@ const SLIME_MOLD = 11009;
 const MEAT_RING = 10164;
 const MEAT_STICK = 11014;
 const DART = 353;
+const TALLOW_CANDLE = 370;
+const MIRROR = 10006;
 const WAN_MAKE_INVISIBLE = 10091;
 const STATUE = 472;
+const LOCK_PICK = 10167;
 
 function installShopState() {
     const g = resetGame();
@@ -1513,6 +1516,23 @@ function shopFloorIceBox(id, x = 5, y = 5) {
         contents: [],
         cknown: true,
     };
+}
+
+async function destroyedBoxContentText(content, id) {
+    installNonShopFloorState();
+    initRng(5);
+    const box = shopFloorContainer(id);
+    box.locked = true;
+    box.olocked = true;
+    putObjectInContainer(box, content);
+    game.level.objects = [box];
+
+    const destroyed = finishForceLock({ chest: box, picktyp: false });
+    const messages = await drainQueuedMessagesAfterMore();
+
+    assert.equal(destroyed, true);
+    assert.equal(game.level.objects.includes(box), false);
+    return messages.join('  ');
 }
 
 function putObjectInContainer(container, obj) {
@@ -10243,6 +10263,23 @@ test('destroyed box shatters potion contents with direct vapor and stack survivo
     assert.equal(survivor.oy, 5);
 });
 
+test('destroyed box uses C material wording for non-potion contents', async () => {
+    const cases = [
+        [blankScroll(6141), /A scroll of blank paper is torn to shreds!/],
+        [{ id: 6142, otyp: TALLOW_CANDLE, cls: 'tool', glyph: '(', kind: 'tallow candle', actualKind: 'tallow candle', quan: 1 }, /A tallow candle is crushed!/],
+        [creamPie(6143), /A cream pie is pulped!/],
+        [meatRingFood(6144), /A meat ring is mashed!/],
+        [{ id: 6145, otyp: MIRROR, cls: 'tool', glyph: '(', kind: 'looking glass', actualKind: 'mirror', quan: 1 }, /A looking glass shatters!/],
+        [{ id: 6146, cls: 'weapon', glyph: ')', kind: 'quarterstaff', actualKind: 'quarterstaff', quan: 1 }, /A quarterstaff splinters to fragments!/],
+        [{ id: 6147, otyp: LOCK_PICK, cls: 'tool', glyph: '(', kind: 'lock pick', actualKind: 'lock pick', quan: 1 }, /A lock pick is destroyed!/],
+    ];
+
+    for (const [content, expected] of cases) {
+        const text = await destroyedBoxContentText(content, content.id + 100);
+        assert.match(text, expected);
+    }
+});
+
 test('destroyed shop-floor box charges shattered contents and box as one loss', async () => {
     const { shkp } = installCommandShopState();
     initRng(5);
@@ -10340,7 +10377,7 @@ test('destroyed box values contained containers like inventory contents', async 
     const messages = await drainQueuedMessagesAfterMore();
 
     assert.equal(destroyed, true);
-    assert.match(messages.join('  '), /A (?:sack|bag) is torn to shreds!/);
+    assert.match(messages.join('  '), /A (?:sack|bag) is destroyed!/);
     assert.match(messages.join('  '), new RegExp(`You owe ${expectedLoss} zorkmids for objects destroyed\\.`));
     assert.equal(shkp.debit, expectedLoss);
     assert.ok(excludedNestedLoss > 0);

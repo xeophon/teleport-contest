@@ -9103,7 +9103,63 @@ function brokenChestContentDestroyedMessage(content, messages) {
     const name = content.otyp === 11 || content.cls === 'spellbook' || String(content.kind || '').startsWith('spellbook')
         ? 'spellbook'
         : pickupObjectName(content);
-    return `${/^[aeiou]/i.test(name) ? 'An' : 'A'} ${name} is torn to shreds!`;
+    const disposition = brokenChestContentShatterDisposition(content);
+    return `${/^[aeiou]/i.test(name) ? 'An' : 'A'} ${name} ${disposition}!`;
+}
+
+function brokenChestContentMaterial(content) {
+    const explicit = String(content?.material || content?.oc_material || '')
+        .toLowerCase()
+        .replace(/^hi[_-]?/, '')
+        .replace(/[\s_-]+/g, '');
+    const explicitMaterials = {
+        paper: 'paper',
+        wax: 'wax',
+        veggie: 'veggy',
+        vegetable: 'veggy',
+        flesh: 'flesh',
+        glass: 'glass',
+        wood: 'wood',
+        wooden: 'wood',
+    };
+    if (explicitMaterials[explicit]) return explicitMaterials[explicit];
+
+    const kind = objectKindKey(content);
+    if (content?.otyp === SCR_BLANK_PAPER || content?.cls === 'scroll'
+        || content?.cls === 'spellbook' || String(content?.kind || '').startsWith('spellbook'))
+        return 'paper';
+    if (content?.otyp === TALLOW_CANDLE || content?.otyp === WAX_CANDLE || /\bcandle$/.test(kind))
+        return 'wax';
+    if (content?.otyp === CREAM_PIE || /\b(?:cream pie|fruit|vegetable|veggie|ration|pancake|wafer|cookie|carrot|apple|orange|pear|melon|banana|kelp|garlic|wolfsbane|eucalyptus|slime mold)\b/.test(kind))
+        return 'veggy';
+    if (content?.otyp === MEAT_RING || content?.otyp === CORPSE || content?.otyp === EGG
+        || /\b(?:meat|corpse|egg)\b/.test(kind))
+        return 'flesh';
+    if (content?.otyp === MIRROR || content?.otyp === CRYSTAL_BALL
+        || /\b(?:glass|mirror|looking glass|crystal ball)\b/.test(kind))
+        return 'glass';
+    if (/\b(?:wood|wooden|quarterstaff|staff|club|bow|arrow|crossbow|aklys|sling|harp|flute|drum)\b/.test(kind))
+        return 'wood';
+    return '';
+}
+
+function brokenChestContentShatterDisposition(content) {
+    switch (brokenChestContentMaterial(content)) {
+    case 'paper':
+        return 'is torn to shreds';
+    case 'wax':
+        return 'is crushed';
+    case 'veggy':
+        return 'is pulped';
+    case 'flesh':
+        return 'is mashed';
+    case 'glass':
+        return 'shatters';
+    case 'wood':
+        return 'splinters to fragments';
+    default:
+        return 'is destroyed';
+    }
 }
 
 function placeBrokenChestContentAtHero(content) {
