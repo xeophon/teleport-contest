@@ -65,6 +65,7 @@ This folder records source-backed audits against `nethack-c/upstream`. The notes
 - [59-subagent-findings-2026-05-28.md](59-subagent-findings-2026-05-28.md): direct hero-thrown invisibility potionhit, monster visibility state, and adjacent vapor discovery.
 - [60-subagent-findings-2026-05-28.md](60-subagent-findings-2026-05-28.md): magic-bag trigger explosion billing with held/floor `do_boh_explosion()` context.
 - [61-subagent-findings-2026-05-28.md](61-subagent-findings-2026-05-28.md): kicked container impact shop billing through C's `frominv` distinction.
+- [62-subagent-findings-2026-05-28.md](62-subagent-findings-2026-05-28.md): force-destroyed shop box owner-aware `stolen_value()` billing plus next shop-helper candidates.
 
 ## Cross-Cutting Themes
 

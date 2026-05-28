@@ -9050,10 +9050,22 @@ function breakChestSourceSpot() {
     };
 }
 
+function breakChestShopCharges() {
+    if (!(game._break_chest_shop_charges instanceof Map))
+        game._break_chest_shop_charges = new Map();
+    return game._break_chest_shop_charges;
+}
+
 function recordBreakChestShopLoss(obj, options = {}) {
     const shkp = game._break_chest_shopkeeper;
     if (!obj || !shopkeeperInHisShop(shkp)) return 0;
-    const value = lostShopMerchandiseValueForObject(breakChestSourceSpot(), obj, shkp, new Set(), options);
+    const charges = lostShopMerchandiseChargesForObject(breakChestSourceSpot(), obj, shkp, new Set(), options);
+    let value = 0;
+    const aggregate = breakChestShopCharges();
+    for (const [owner, charge] of charges) {
+        value += charge;
+        addLostShopMerchandiseCharge(aggregate, owner, charge);
+    }
     game._break_chest_shop_loss = Math.max(0, Math.trunc(Number(game._break_chest_shop_loss || 0))) + value;
     return value;
 }
@@ -9062,14 +9074,20 @@ function finishBreakChestShopDebtMessage() {
     const shkp = game._break_chest_shopkeeper;
     const box = game._break_chest_destroyed_box;
     if (box) recordBreakChestShopLoss(box);
-    const loss = Math.max(0, Math.trunc(Number(game._break_chest_shop_loss || 0)));
+    const charges = game._break_chest_shop_charges instanceof Map
+        ? game._break_chest_shop_charges
+        : new Map();
     game._break_chest_shopkeeper = null;
     game._break_chest_destroyed_box = null;
+    game._break_chest_shop_charges = null;
     game._break_chest_shop_loss = 0;
     game._break_chest_x = null;
     game._break_chest_y = null;
-    if (!shopkeeperInHisShop(shkp) || !(loss > 0)) return '';
-    const charged = chargeShopkeeperForLostMerchandise(shkp, loss, { peaceful: shopkeeperPeacefulForDebt(shkp) });
+    if (!shopkeeperInHisShop(shkp) || !charges.size) return '';
+    let charged = 0;
+    const peaceful = shopkeeperPeacefulForDebt(shkp);
+    for (const [owner, value] of charges)
+        charged += chargeShopkeeperForLostMerchandise(owner, value, { peaceful });
     if (!(charged > 0)) return '';
     return `You owe ${charged} ${shopCurrency(charged)} for objects destroyed.`;
 }
@@ -9169,6 +9187,7 @@ export function finishForceLock(force) {
     game._break_chest_shopkeeper = shopkeeperForCostlySpot(game.u?.ux, game.u?.uy);
     if (!shopkeeperInHisShop(game._break_chest_shopkeeper)) game._break_chest_shopkeeper = null;
     game._break_chest_destroyed_box = chest;
+    game._break_chest_shop_charges = new Map();
     game._break_chest_shop_loss = 0;
     game._break_chest_x = game.u?.ux ?? chest.ox ?? 0;
     game._break_chest_y = game.u?.uy ?? chest.oy ?? 0;

@@ -10269,6 +10269,35 @@ test('destroyed shop-floor box charges shattered contents and box as one loss', 
     assert.equal(game.level.objects.some(obj => obj.id === potion.id), false);
 });
 
+test('destroyed shop-floor box charges billed contents to their bill owner', async () => {
+    const { shkp } = installCommandShopState();
+    const owner = addSecondShopkeeper('Asidonhopo');
+    initRng(5);
+    const box = shopFloorContainer(6131);
+    box.locked = true;
+    box.olocked = true;
+    const potion = putObjectInContainer(box, confusionPotion(6132, undefined, 1));
+    delete potion.letter;
+    delete potion.line;
+    shop.addObjectToShopBill(owner, potion, 77);
+    potion.no_charge = true;
+    game.level.objects = [box];
+    const boxLoss = shop.shopItemPrice({ ...box, contents: [], cobj: [] }, 5, 5);
+
+    const destroyed = finishForceLock({ chest: box, picktyp: false });
+    const messages = await drainQueuedMessagesAfterMore();
+
+    assert.equal(destroyed, true);
+    assert.match(messages.join('  '), new RegExp(`You owe ${boxLoss + 77} zorkmids for objects destroyed\\.`));
+    assert.equal(shkp.debit, boxLoss);
+    assert.equal(owner.debit, 77);
+    assert.equal(shkp.billct, 0);
+    assert.equal(owner.billct, 0);
+    assert.equal(shop.shopBillEntryForObject(owner, potion), null);
+    assert.equal(game.level.objects.includes(box), false);
+    assert.equal(game.level.objects.some(obj => obj.id === potion.id), false);
+});
+
 test('destroyed shop-floor box loss message uses post-credit debt', async () => {
     const { shkp } = installCommandShopState();
     initRng(5);
