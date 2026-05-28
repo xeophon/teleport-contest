@@ -16049,6 +16049,74 @@ test('hero-thrown confusion potion hits visible monster through potionhit', asyn
     ]);
 });
 
+test('hero-thrown confusion potion hitting a saddle wets it and skips confusion', async () => {
+    installNonShopFloorState();
+    initRng(5);
+    game.u.acurr.a[A_DEX] = 25;
+    const potion = confusionPotion(8762, 'p', 1, { dknown: true });
+    const saddle = wornSaddle(87621, { blessed: false, cursed: false, bknown: true });
+    const pony = ordinaryThrowTarget('pony', 7, 5, {
+        saddled: true,
+        misc_worn_check: W_SADDLE,
+        minvent: [saddle],
+    });
+    game.inventory = [potion];
+    game.level.monsters = [pony];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('p');
+    markSquareVisible(pony.mx, pony.my);
+    await rhack('l');
+
+    assert.match(game._pending_message, /crashes on the pony's saddle and breaks into shards\./);
+    assert.match(game._pending_message, /The pony's saddle gets wet\./);
+    assert.doesNotMatch(game._pending_message, /evaporates|peculiar odor|misses|head/);
+    assert.equal(pony.mconf || false, false);
+    assert.equal(pony.mhp, 5);
+    assert.equal(pony.msleeping, 1);
+    assert.equal(pony.mpeaceful, true);
+    assert.equal(game.inventory.includes(potion), false);
+    assert.equal(game.level.objects.length, 0);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(10)', 'rn2(5)',
+    ]);
+});
+
+test('hero-thrown confusion potion can miss the saddle and confuse the monster', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    game.u.acurr.a[A_DEX] = 25;
+    const potion = confusionPotion(8763, 'p', 1, { dknown: true });
+    const saddle = wornSaddle(87631, { blessed: false, cursed: false, bknown: true });
+    const pony = ordinaryThrowTarget('pony', 7, 5, {
+        saddled: true,
+        misc_worn_check: W_SADDLE,
+        minvent: [saddle],
+    });
+    game.inventory = [potion];
+    game.level.monsters = [pony];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('p');
+    markSquareVisible(pony.mx, pony.my);
+    await rhack('l');
+
+    assert.match(game._pending_message, /crashes on the pony's head and breaks into shards\./);
+    assert.match(game._pending_message, /The potion of confusion evaporates\./);
+    assert.doesNotMatch(game._pending_message, /saddle gets wet|peculiar odor|misses/);
+    assert.equal(pony.mconf, true);
+    assert.equal(pony.mhp, 4);
+    assert.equal(pony.msleeping, 0);
+    assert.equal(pony.mpeaceful, false);
+    assert.equal(game.inventory.includes(potion), false);
+    assert.equal(game.level.objects.length, 0);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(10)', 'rn2(5)', 'rn2(105)',
+    ]);
+});
+
 test('adjacent hero-thrown confusion potion can apply direct vapor after monster hit', async () => {
     installNonShopFloorState();
     initRng(3);
@@ -16395,7 +16463,7 @@ test('hero-thrown lit oil does not explode when it hits a worn saddle', async ()
     assert.equal(pony.mpeaceful, true);
     assert.equal(game.inventory.includes(potion), false);
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
-        'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(10)',
+        'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(10)', 'rn2(5)',
     ]);
 });
 
@@ -16666,7 +16734,7 @@ test('hero-thrown blessed water potion can uncurse a worn saddle', async () => {
     assert.equal(pony.mpeaceful, true);
     assert.equal(game.inventory.includes(potion), false);
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
-        'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(10)', 'rnl(10)', 'rnl(10)',
+        'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(10)', 'rnl(10)', 'rnl(10)', 'rn2(5)',
     ]);
 });
 
@@ -16702,7 +16770,7 @@ test('hero-thrown cursed water potion can curse a worn saddle', async () => {
     assert.equal(pony.mpeaceful, true);
     assert.equal(game.inventory.includes(potion), false);
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
-        'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(10)', 'rnl(10)',
+        'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(10)', 'rnl(10)', 'rn2(5)',
     ]);
 });
 
@@ -16738,7 +16806,7 @@ test('hero-thrown neutral water potion wets an unaffected worn saddle', async ()
     assert.equal(pony.mpeaceful, true);
     assert.equal(game.inventory.includes(potion), false);
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
-        'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(10)',
+        'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(10)', 'rn2(5)',
     ]);
 });
 
@@ -17234,7 +17302,7 @@ test('hero-thrown polymorph potion hitting a saddle wets it and skips polymorph'
     assert.equal(game.inventory.includes(potion), false);
     assert.equal(game.level.objects.length, 0);
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
-        'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(10)',
+        'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(10)', 'rn2(5)',
     ]);
 });
 

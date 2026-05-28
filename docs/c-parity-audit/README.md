@@ -83,6 +83,7 @@ This folder records source-backed audits against `nethack-c/upstream`. The notes
 - [77-subagent-findings-2026-05-28.md](77-subagent-findings-2026-05-28.md): direct hero-thrown water potionhit for werecreature and vampire-shifter body effects, including nonlethal `new_were()`-style transformations.
 - [78-subagent-findings-2026-05-28.md](78-subagent-findings-2026-05-28.md): direct hero-thrown lit-oil potionhit, including burning-oil explosion damage, adjacent hero blast, and oil saddle-hit bypass.
 - [79-subagent-findings-2026-05-28.md](79-subagent-findings-2026-05-28.md): direct hero-thrown polymorph potionhit, including `bhitm()` resistance ordering, system shock, random monster form replacement, and polymorph saddle-hit bypass.
+- [80-subagent-findings-2026-05-28.md](80-subagent-findings-2026-05-28.md): generic worn-saddle interception for all currently supported direct hero-thrown potionhit identities.
 
 ## Cross-Cutting Themes
 

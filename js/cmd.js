@@ -12755,11 +12755,6 @@ function isBlessingHaterWaterPotionHit(potion, mon, kind = thrownPotionEffectKin
         && monsterHatesBlessingsForWaterHit(mon) && !monsterIsWereOrVampireForWaterHit(mon);
 }
 
-function isSaddlePotionHit(potion, mon, kind = thrownPotionEffectKind(potion)) {
-    return (kind === 'water' || kind === 'oil' || kind === 'polymorph')
-        && !!monsterWornSaddleForPotionHit(mon);
-}
-
 function isShapechangerWaterPotionHit(potion, mon, kind = thrownPotionEffectKind(potion), options = {}) {
     return kind === 'water' && (options.ignoreSaddle || !monsterHasWornSaddle(mon))
         && monsterIsWereOrVampireForWaterHit(mon);
@@ -12778,23 +12773,33 @@ function isNeutralOrdinaryWaterPotionHit(potion, mon, kind = thrownPotionEffectK
         && !monsterNeedsDeferredWaterPotionHit(mon, options);
 }
 
-function supportsHeroThrownPotionHit(potion, mon = null) {
-    if (!isPotionObject(potion)) return false;
-    const kind = thrownPotionEffectKind(potion);
+function supportsHeroThrownPotionBodyHit(potion, mon = null, kind = thrownPotionEffectKind(potion), options = {}) {
     return kind === 'confusion' || kind === 'booze' || kind === 'paralysis'
         || kind === 'sleeping' || kind === 'blindness' || kind === 'speed'
         || kind === 'invisibility' || kind === 'hallucination'
         || kind === 'healing' || kind === 'extra healing' || kind === 'full healing'
         || kind === 'restore ability' || kind === 'gain ability' || kind === 'sickness'
         || kind === 'acid' || kind === 'polymorph'
-        || isSaddlePotionHit(potion, mon, kind)
-        || isShapechangerWaterPotionHit(potion, mon, kind)
-        || isBlessingHaterWaterPotionHit(potion, mon, kind)
-        || isSpecialMonsterWaterPotionHit(potion, mon, kind)
-        || isNeutralOrdinaryWaterPotionHit(potion, mon, kind)
+        || isShapechangerWaterPotionHit(potion, mon, kind, options)
+        || isBlessingHaterWaterPotionHit(potion, mon, kind, options)
+        || isSpecialMonsterWaterPotionHit(potion, mon, kind, options)
+        || isNeutralOrdinaryWaterPotionHit(potion, mon, kind, options)
         || COMMON_NO_MONSTER_EFFECT_POTION_HIT_KINDS.has(kind)
         || isUnlitOilPotionHit(potion, kind)
         || isLitOilPotionHit(potion, kind);
+}
+
+function isSaddlePotionHit(potion, mon, kind = thrownPotionEffectKind(potion)) {
+    return isPotionObject(potion) && !!monsterWornSaddleForPotionHit(mon)
+        && (kind === 'water'
+            || supportsHeroThrownPotionBodyHit(potion, mon, kind, { ignoreSaddle: true }));
+}
+
+function supportsHeroThrownPotionHit(potion, mon = null) {
+    if (!isPotionObject(potion)) return false;
+    const kind = thrownPotionEffectKind(potion);
+    return supportsHeroThrownPotionBodyHit(potion, mon, kind)
+        || isSaddlePotionHit(potion, mon, kind);
 }
 
 function thrownPotionEffectKind(potion) {
@@ -13599,7 +13604,10 @@ function heroThrownPotionHitMonster(potion, mon) {
     const waterBranchOptions = { ignoreSaddle: saddlePotion };
     let angerMon = true;
     messages.push(`The ${bottle} crashes on ${hitSaddle ? saddlePotionHitTargetName(mon) : thrownPotionHitTargetName(mon)} and breaks into shards.`);
-    if (!hitSaddle && rn2(5) && (mon.mhp || 1) > 1) mon.mhp--;
+    if ((mon.mhp || 1) > 1) {
+        const chipRoll = rn2(5);
+        if (!hitSaddle && chipRoll) mon.mhp--;
+    }
     if (!hitSaddle && !isPotionOfOil(potion))
         messages.push(`The ${pickupObjectName({ ...potion, quan: 1 })} evaporates.`);
 
