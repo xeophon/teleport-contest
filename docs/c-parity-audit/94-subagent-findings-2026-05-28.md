@@ -18,17 +18,17 @@ C source:
 
 JS now mirrors the floor-object part of that path:
 
-- `js/cmd.js:13812`: `burnFloorObjectsFromBurningOilExplosion()` walks the 3x3 blast area.
-- `js/cmd.js:13817`: each square uses the existing `burnFloorObjectsByFire()` helper with `heroCaused: true`.
-- `js/cmd.js:13819`: per-object burn feedback is disabled, matching C's `give_feedback == FALSE`.
-- `js/cmd.js:13822`: visible burned squares produce the smoke feedback.
-- `js/cmd.js:13838`: floor-object fire runs before monster and hero damage in `explodeBurningOilPotion()`.
+- `js/cmd.js:13843`: `burnFloorObjectsFromBurningOilExplosion()` walks the 3x3 blast area.
+- `js/cmd.js:13848`: each square uses the existing `burnFloorObjectsByFire()` helper with `heroCaused: true`.
+- `js/cmd.js:13850`: per-object burn feedback is disabled, matching C's `give_feedback == FALSE`.
+- `js/cmd.js:13853`: visible burned squares produce the smoke feedback.
+- `js/cmd.js:13869`: floor-object fire runs before monster and hero damage in `explodeBurningOilPotion()`.
 - `js/cmd.js:8216`: `burnFloorObjectsByFire()` already implements the scroll, spellbook, green-slime, `rn2(3)`, ignition, redraw, and hero-caused shop billing behavior.
 
 Regression coverage:
 
-- `test/shop-billing-helpers.test.mjs:17266`: a direct lit-oil hit burns center and adjacent spellbooks before monster damage.
-- `test/shop-billing-helpers.test.mjs:17301`: hero-caused burning-oil floor collateral bills burned shop-floor stock through used-up billing.
+- `test/shop-billing-helpers.test.mjs:17378`: a direct lit-oil hit burns center and adjacent spellbooks before monster damage.
+- `test/shop-billing-helpers.test.mjs:17413`: hero-caused burning-oil floor collateral bills burned shop-floor stock through used-up billing.
 
 This deliberately does not broaden the explosion terrain pipeline. Webs, ice, water, fountains, doors, monster inventory ignition gaps, and hero sliming cleanup remain separate `zap_over_floor()`/explosion work.
 
@@ -48,7 +48,8 @@ C source:
 - `nethack-c/upstream/src/zap.c:2002`: stone-to-flesh first gates mineral/gemstone objects.
 - `nethack-c/upstream/src/zap.c:2006`: `obj_resists(obj, 2, 98)` can block transformation.
 - `nethack-c/upstream/src/zap.c:2017`: statue and figurine rows are handled after boulders.
-- `nethack-c/upstream/src/zap.c:2021`: vegetarian or non-flesh statue/figurine species become meatballs.
+- `nethack-c/upstream/src/zap.c:2019`: golem statue/figurine species are handled before the meatball row.
+- `nethack-c/upstream/src/zap.c:2021`: non-golem vegetarian statue/figurine species become meatballs.
 - `nethack-c/upstream/src/zap.c:2027`: eligible statues animate through `animate_statue(..., ANIMATE_SPELL)`.
 - `nethack-c/upstream/src/zap.c:2030`: eligible figurines create a monster with `makemon(..., NO_MINVENT|MM_NOMSG)`.
 - `nethack-c/upstream/src/zap.c:2035`: figurine animation bills, stops timers, and consumes the figurine.
@@ -58,15 +59,15 @@ C source:
 
 JS anchors:
 
-- `js/cmd.js:12390`: current stone-to-flesh paths cover wands, rings, boulders, and gems, but not statues or figurines.
-- `js/cmd.js:12381`: covered object rows already use the C-shaped resistance roll.
-- `js/cmd.js:12498`: downward floor replacement paths already cover local shop/billing and replacement shape.
+- `js/cmd.js:12419`: current stone-to-flesh paths cover wands, rings, boulders, and gems, but not statues or figurines.
+- `js/cmd.js:12386`: covered object rows already use the C-shaped resistance roll.
+- `js/cmd.js:12529`: downward floor replacement paths already cover local shop/billing and replacement shape.
 - `js/figurine.js:19`: figurines already have local transformation timers.
-- `js/cmd.js:16247`: statue animation exists for statue traps and wand-of-striking.
+- `js/cmd.js:16296`: statue animation exists for statue traps and wand-of-striking.
 - `test/wishing.test.mjs:1403`: figurine wish restrictions are covered.
 - `test/wishing.test.mjs:1490`: statue wish monster binding is covered.
 
-Smallest safe slice: add only the non-animation row first. If a statue or figurine has a vegetarian or non-flesh monster identity, stone-to-flesh should turn it into a meatball through the existing inventory/floor replacement paths after the mineral and resistance gates. Defer live animation, golem statue behavior, failed-animation corpse fallback, contents transfer, figurine timer stopping, and animation-specific shop billing.
+Smallest safe slice: add only the non-animation row first. If a statue or figurine has a non-golem vegetarian monster identity, stone-to-flesh should turn it into a meatball through the existing inventory/floor replacement paths after the mineral and resistance gates. Defer live animation, golem/flesh-golem animation, failed-animation corpse fallback, contents transfer, figurine timer stopping, and animation-specific shop billing.
 
 ### Monster Diet Metadata
 
@@ -89,7 +90,7 @@ JS anchors:
 - `js/mklev.js:5360`: monster-row decoding can attach diet booleans.
 - `js/mklev.js:5395`: metallivorous status is currently patched by hand.
 - `js/allmain.js:1843`: pet food still uses name heuristics.
-- `js/cmd.js:12418`: stone-to-flesh smell relies on ad hoc polyself carnivore metadata.
+- `js/cmd.js:12449`: stone-to-flesh smell relies on ad hoc polyself carnivore metadata.
 - `js/allmain.js:2160`: metallivore food handling is another local diet caller.
 
 Smallest safe slice: add a generated diet field to monster rows and decode C-shaped `carnivorous`, `herbivorous`, and `metallivorous` booleans. Then move one caller, preferably pet food desirability or the stone-to-flesh smell helper, from name heuristics to metadata. Treat `M1_OMNIVORE` as both carnivorous and herbivorous.
@@ -113,11 +114,11 @@ C source:
 
 JS anchors:
 
-- `js/cmd.js:20898`: `landProjectileObjectWithShopHandling()` handles current hard break, floor effects, shop return/debt, sale, stacking, and placement.
-- `js/cmd.js:20920`: floor effects already run before placement.
-- `js/cmd.js:20931`: placement currently happens without `ship_object()` pile impact handling.
+- `js/cmd.js:20947`: `landProjectileObjectWithShopHandling()` handles current hard break, floor effects, shop return/debt, sale, stacking, and placement.
+- `js/cmd.js:20969`: floor effects already run before placement.
+- `js/cmd.js:20980`: placement currently happens without `ship_object()` pile impact handling.
 - `js/cmd.js:3365`: `impactDropFloorObjects()` exists for other contexts but is not wired to projectile landing.
-- `js/cmd.js:21865`: shop-debt conversion helper shape already exists.
+- `js/cmd.js:21914`: shop-debt conversion helper shape already exists.
 
 Smallest safe slice: after the remote non-gold projectile down-gate lands, add pile-impact loss for existing floor objects on the destination square. Preserve C ordering: projectile fall roll first, projectile shop debt and breakage before migration, then pile impact rolls and pile billing. Exclude gold, kicked objects, monster-thrown objects, and broader migration message fidelity until the first remote projectile gate is in place.
 

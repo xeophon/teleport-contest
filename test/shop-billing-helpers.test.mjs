@@ -37,6 +37,7 @@ const TALLOW_CANDLE = 370;
 const MIRROR = 10006;
 const WAN_MAKE_INVISIBLE = 10091;
 const STATUE = 472;
+const FIGURINE = 795;
 const LOCK_PICK = 10167;
 
 function installShopState() {
@@ -1184,6 +1185,45 @@ function statueTrapStatue(id, x = 7, y = 5, name = 'goblin') {
             maligntyp: -3,
         },
     };
+}
+
+function vegetarianCorpstatMonster(name = 'acid blob', mlet = 'b', props = {}) {
+    return {
+        name,
+        mlet,
+        glyph: props.glyph || (String(mlet).length === 1 ? mlet : '?'),
+        color: props.color ?? 2,
+        mlevel: props.mlevel ?? 1,
+        hpLevel: props.hpLevel ?? 1,
+        mmove: props.mmove ?? 3,
+        neuter: props.neuter ?? true,
+        ...props,
+    };
+}
+
+function stoneToFleshFigurine(id, letter = 'f', monster = vegetarianCorpstatMonster()) {
+    return {
+        id,
+        otyp: FIGURINE,
+        cls: 'tool',
+        glyph: '(',
+        kind: 'figurine',
+        actualKind: 'figurine',
+        singular: 'figurine',
+        plural: 'figurines',
+        quan: 1,
+        letter,
+        line: `${letter} - a figurine of an ${monster.name}`,
+        known: true,
+        dknown: true,
+        corpsenm: monster,
+    };
+}
+
+function stoneToFleshStatue(id, x = 5, y = 5, monster = vegetarianCorpstatMonster('brown pudding', 'P')) {
+    const statue = statueTrapStatue(id, x, y, monster.name);
+    statue.corpsenm = monster;
+    return statue;
 }
 
 function egg(id, letter = 'e', quan = 1) {
@@ -3729,6 +3769,51 @@ test('self-cast stone to flesh respects ordinary object resistance', async () =>
     assertNoStoneToFleshScoreSideEffects();
 });
 
+test('self-cast stone to flesh turns vegetarian figurine into meatball', async () => {
+    installCommandShopState();
+    initRng(1);
+    const figurine = stoneToFleshFigurine(31031, 'a');
+    figurine.cursed = true;
+    figurine.figurineTransformTurn = 42;
+    figurine._figurine_transform_seq = 7;
+    game.inventory = [figurine];
+
+    await castStoneToFleshAtSelf();
+
+    assert.equal(game.inventory.length, 1);
+    const result = game.inventory[0];
+    assert.equal(result.letter, 'a');
+    assert.equal(result.cls, 'food');
+    assert.equal(result.otyp, MEATBALL);
+    assert.equal(result.kind, 'meatball');
+    assert.equal(result.actualKind, 'meatball');
+    assert.equal(result.quan, 1);
+    assert.notEqual(result.id, 31031);
+    assert.equal(result.corpsenm, null);
+    assert.equal(result.figurineTransformTurn, undefined);
+    assert.equal(result._figurine_transform_seq, undefined);
+    assert.equal(result.line, 'a - a meatball');
+    assert.match(game._pending_message, /You smell the odor of meat\./);
+    assertNoStoneToFleshScoreSideEffects();
+});
+
+test('self-cast stone to flesh checks figurine resistance before meatball conversion', async () => {
+    installCommandShopState();
+    initRng(40);
+    enableRngLog({ reset: true });
+    const figurine = stoneToFleshFigurine(31032, 'a');
+    game.inventory = [figurine];
+
+    await castStoneToFleshAtSelf();
+
+    assert.equal(game.inventory.length, 1);
+    assert.equal(game.inventory[0], figurine);
+    assert.equal(figurine.otyp, FIGURINE);
+    assert.deepEqual(getRngLog().filter(entry => entry.startsWith('rn2(100)=')), ['rn2(100)=0']);
+    assert.doesNotMatch(game._pending_message || '', /odor of meat|delicious smell/);
+    assertNoStoneToFleshScoreSideEffects();
+});
+
 test('self-cast stone to flesh leaves carried wooden ring unchanged', async () => {
     installCommandShopState();
     initRng(1);
@@ -4030,6 +4115,33 @@ test('downward stone to flesh turns floor gemstone stack into meatballs', async 
     assert.equal(result.ox, 5);
     assert.equal(result.oy, 5);
     assert.notEqual(result.id, 31018);
+    assert.match(game._pending_message, /You smell the odor of meat\./);
+    assertNoStoneToFleshScoreSideEffects();
+});
+
+test('downward stone to flesh turns vegetarian statue into meatball', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    const statue = stoneToFleshStatue(31033, 5, 5);
+    statue.contents = [simpleFood(31034, 'food ration')];
+    game.inventory = [];
+    game.level.objects = [statue];
+
+    await castStoneToFleshDown();
+
+    assert.equal(game.level.objects.includes(statue), false);
+    assert.equal(game.level.objects.length, 1);
+    const result = game.level.objects[0];
+    assert.equal(result.cls, 'food');
+    assert.equal(result.otyp, MEATBALL);
+    assert.equal(result.kind, 'meatball');
+    assert.equal(result.actualKind, 'meatball');
+    assert.equal(result.quan, 1);
+    assert.equal(result.ox, 5);
+    assert.equal(result.oy, 5);
+    assert.equal(result.contents, undefined);
+    assert.equal(result.corpsenm, null);
+    assert.notEqual(result.id, 31033);
     assert.match(game._pending_message, /You smell the odor of meat\./);
     assertNoStoneToFleshScoreSideEffects();
 });

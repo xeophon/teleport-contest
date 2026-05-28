@@ -12306,6 +12306,7 @@ const STONE_TO_FLESH_MINERAL_GEM_NAMES = new Set([
 ]);
 
 function stoneToFleshObjectMaterial(item) {
+    if (item?.otyp === STATUE || isFigurineObject(item)) return 'mineral';
     const explicit = normalizeStoneToFleshMaterial(item?.oc_material || item?.material);
     if (explicit) return explicit;
     if (isBoulderObject(item)) return 'mineral';
@@ -12387,6 +12388,34 @@ function stoneToFleshObjectResists(item) {
     return rn2(100) < (item?.artifact || item?.oartifact ? 98 : 2);
 }
 
+function stoneToFleshCorpstatMonsterIsGolem(data = {}) {
+    const name = String(data.name || '').toLowerCase();
+    const mlet = data.mlet ?? data.glyph ?? '';
+    return name.endsWith(' golem') || mlet === "'";
+}
+
+function stoneToFleshCorpstatMonsterIsVegetarian(data = {}) {
+    if (!data || stoneToFleshCorpstatMonsterIsGolem(data)) return false;
+    if (data.noncorporeal) return true;
+    const name = String(data.name || '').toLowerCase();
+    const mlet = data.mlet ?? data.glyph ?? '';
+    const lowerMlet = String(mlet).toLowerCase();
+    if (['b', 'j', 'f', 'v', 'y', 'blob', 'jelly', 'fungus', 'vortex', 'light'].includes(lowerMlet))
+        return true;
+    if ((mlet === 'E' || lowerMlet === 'elemental') && name !== 'stalker')
+        return true;
+    if ((mlet === 'P' || lowerMlet === 'pudding') && name !== 'black pudding')
+        return true;
+    return false;
+}
+
+function isStoneToFleshVegetarianCorpstatObject(item) {
+    if (!(item?.otyp === STATUE || isFigurineObject(item))) return false;
+    const material = stoneToFleshObjectMaterial(item);
+    return (material === 'mineral' || material === 'gemstone')
+        && stoneToFleshCorpstatMonsterIsVegetarian(item.corpsenm);
+}
+
 function stoneToFleshReplacementForObject(item) {
     if (isStoneToFleshMarbleWandObject(item))
         return stoneToFleshObjectResists(item) ? null : stoneToFleshMeatStickReplacement(item);
@@ -12397,6 +12426,8 @@ function stoneToFleshReplacementForObject(item) {
         applySokobanGuilt();
         return stoneToFleshEnormousMeatballReplacement(item);
     }
+    if (isStoneToFleshVegetarianCorpstatObject(item))
+        return stoneToFleshObjectResists(item) ? null : stoneToFleshMeatballReplacement(item);
     if (isStoneToFleshGemObject(item))
         return stoneToFleshObjectResists(item) ? null : stoneToFleshMeatballReplacement(item);
     return null;
