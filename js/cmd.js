@@ -48,7 +48,8 @@ const DEATH_CORPSE_BY_RACE = {
 };
 const CORPSE_WEIGHTS = new Map([
     ['jackal', 300], ['coyote', 300], ['kobold', 400], ['lichen', 20],
-    ['lizard', 10], ['newt', 10], ['bugbear', 1250],
+    ['lizard', 10], ['newt', 10], ['chickatrice', 10], ['cockatrice', 30],
+    ['bugbear', 1250],
 ]);
 const CORPSE_NUTRITION = new Map([
     ['lichen', 200], ['jackal', 250], ['coyote', 250], ['bugbear', 250],
@@ -14455,6 +14456,8 @@ function damageHeroFromFallingCrackableArmor(obj, messages) {
     if ((game.u.uhp || 0) <= 0) {
         game._death_cause = 'killed by a falling object';
         messages.push('You die...');
+        messages.fatal = true;
+        messages.more = true;
     }
 }
 
@@ -14817,11 +14820,11 @@ function heroPetrifyingEggPolyselfRescueMessage() {
     return maybeTurnPolyselfIntoStoneGolem();
 }
 
-function finishHeroPetrifiedByTossUpEgg(messages, egg = null) {
-    if (egg) {
-        prepareProjectileFloorObject(egg, game.u?.ux || egg.ox || 0, game.u?.uy || egg.oy || 0);
-        placeUnstackedFloorObject(egg);
-        newsym(egg.ox, egg.oy);
+function finishHeroPetrifiedByTossUpObject(messages, obj = null) {
+    if (obj) {
+        prepareProjectileFloorObject(obj, game.u?.ux || obj.ox || 0, game.u?.uy || obj.oy || 0);
+        placeUnstackedFloorObject(obj);
+        newsym(obj.ox, obj.oy);
     }
     messages.push('You turn to stone.');
     if (game.u) game.u.uhp = 0;
@@ -14848,7 +14851,7 @@ function breakHeroThrownTouchPetrifyingEgg(egg, messages, { selfHit = false } = 
     } else if (!game.u?.stoneResistance && !heroPolyselfResistsStoning()) {
         const helmet = wornTossUpHelmet();
         if (helmet) messages.push(`Your ${simpleTossUpHelmetName(helmet)} fails to protect you.`);
-        return finishHeroPetrifiedByTossUpEgg(messages);
+        return finishHeroPetrifiedByTossUpObject(messages);
     }
 
     messages.push("You've got it all over your face!");
@@ -14863,7 +14866,7 @@ function heroThrownTouchPetrifyingEggSelfHitMessages(egg, action, ceilingName = 
     const rescue = heroPetrifyingEggPolyselfRescueMessage();
     if (rescue) messages.push(rescue);
     else if (!wornTossUpHelmet() && !game.u?.stoneResistance && !heroPolyselfResistsStoning())
-        return finishHeroPetrifiedByTossUpEgg(messages, egg);
+        return finishHeroPetrifiedByTossUpObject(messages, egg);
 
     const helmet = wornTossUpHelmet();
     if (helmet && hardEarthHelmet(helmet))
@@ -14878,6 +14881,108 @@ function heroThrownTouchPetrifyingEggSelfHitMessages(egg, action, ceilingName = 
     const landing = landProjectileObjectWithShopHandling(egg, game.u?.ux || egg.ox || 0, game.u?.uy || egg.oy || 0, {});
     messages.push(...landing.messages);
     return messages;
+}
+
+function petrifyingCorpseMonsterName(obj) {
+    return corpseMonsterName(obj) || 'cockatrice';
+}
+
+function petrifyingCorpseTheName(obj) {
+    return `the ${petrifyingCorpseMonsterName(obj)} corpse`;
+}
+
+function petrifyingCorpseArticleName(obj) {
+    return `${/^[aeiou]/i.test(petrifyingCorpseMonsterName(obj)) ? 'an' : 'a'} ${petrifyingCorpseMonsterName(obj)} corpse`;
+}
+
+function finishHeroPetrifiedByBareHandCorpseThrow(messages, corpse) {
+    messages.push('You turn to stone...');
+    if (game.u) game.u.uhp = 0;
+    game._death_cause = `petrified by throwing ${petrifyingCorpseArticleName(corpse)} bare-handed`;
+    game._death_bones_body = 'statue';
+    if (consumeLifeSavingAmulet({ clearStoning: true })) {
+        messages.push('You die...  But wait...  Your medallion begins to glow!');
+        messages.lifeSaving = true;
+    } else {
+        messages.fatal = true;
+    }
+    messages.more = true;
+    return messages;
+}
+
+function heroThrowPetrifyingCorpseBareHandPrecheck(corpse) {
+    if (!isPetrifyingCorpseObject(corpse) || wornGlovesItem()
+        || game.u?.stoneResistance || heroPolyselfResistsStoning())
+        return { ok: true, messages: [] };
+
+    const messages = [`You throw ${petrifyingCorpseTheName(corpse)} with your bare hands.`];
+    const rescue = maybeTurnPolyselfIntoStoneGolem();
+    if (rescue) {
+        messages.push(rescue);
+        return { ok: true, messages };
+    }
+    return { ok: false, messages: finishHeroPetrifiedByBareHandCorpseThrow(messages, corpse) };
+}
+
+function heroThrownCorpseWeight(corpse) {
+    const explicit = Math.trunc(Number(corpse?.owt || corpse?.weight || 0));
+    if (explicit > 0) return explicit;
+    const corpseName = petrifyingCorpseMonsterName(corpse);
+    return CORPSE_WEIGHTS.get(corpseName) || Math.max(1, Math.trunc(Number(corpse?.corpsenm?.cwt || 20)));
+}
+
+function heroThrownCorpseFallingDamage(corpse, helmet = null) {
+    const weightDamage = Math.max(1, Math.ceil(heroThrownCorpseWeight(corpse) / 100));
+    let damage = weightDamage <= 1 ? 1 : rnd(weightDamage);
+    if (damage > 6) damage = 6;
+    if (helmet && hardEarthHelmet(helmet) && damage > 1) damage = 1;
+    damage += Math.trunc(Number(game.u?.udaminc || 0));
+    return Math.max(0, damage);
+}
+
+function applyHeroThrownCorpseFallingDamage(damage, messages) {
+    if (!game.u || damage <= 0) return;
+    game.u.uhp = Math.max(0, (game.u.uhp || 0) - damage);
+    if ((game.u.uhp || 0) <= 0) {
+        game._death_cause = 'killed by a falling object';
+        messages.push('You die...');
+        messages.fatal = true;
+        messages.more = true;
+    }
+}
+
+function heroThrownTouchPetrifyingCorpseSelfHitMessages(corpse, action, ceilingName = heroThrowCeilingName(), prefixMessages = []) {
+    const messages = [...prefixMessages,
+        `${floorObjectSubject({ ...corpse, quan: 1 })} ${action} the ${ceilingName}, then falls back on top of your head.`];
+    projectileTopLevelBreakKind(corpse); // C breaktest consumes obj_resists() even though corpses do not break.
+
+    const helmet = wornTossUpHelmet();
+    const damage = heroThrownCorpseFallingDamage(corpse, helmet);
+    if (!helmet && !game.u?.stoneResistance && !heroPolyselfResistsStoning()) {
+        const rescue = maybeTurnPolyselfIntoStoneGolem();
+        if (rescue) messages.push(rescue);
+        else return finishHeroPetrifiedByTossUpObject(messages, corpse);
+    }
+    if (helmet && hardEarthHelmet(helmet) && damage < (game.u?.uhp || 0))
+        messages.push('Fortunately, you are wearing a hard helmet.');
+
+    const landing = landProjectileObjectWithShopHandling(corpse, game.u?.ux || corpse.ox || 0, game.u?.uy || corpse.oy || 0, {});
+    messages.push(...landing.messages);
+    applyHeroThrownCorpseFallingDamage(damage, messages);
+    return messages;
+}
+
+function heroThrownTouchPetrifyingCorpseUpwardMessages(corpse, prefixMessages = []) {
+    const ceilingName = heroThrowCeilingName();
+    const hasCeiling = heroHasThrowCeiling();
+    const hitsRoof = !!(rn2(5) && !heroIsUnderwaterForThrow());
+    if (!hasCeiling)
+        return heroThrownTouchPetrifyingCorpseSelfHitMessages(corpse, 'flies up into', ceilingName, prefixMessages);
+    if (hitsRoof) {
+        projectileTopLevelBreakKind(corpse); // C tests for ceiling breakage before choosing the "hits" wording.
+        return heroThrownTouchPetrifyingCorpseSelfHitMessages(corpse, 'hits', ceilingName, prefixMessages);
+    }
+    return heroThrownTouchPetrifyingCorpseSelfHitMessages(corpse, 'almost hits', ceilingName, prefixMessages);
 }
 
 function heroThrownTouchPetrifyingEggCeilingBreakMessages(egg, ceilingName = heroThrowCeilingName()) {
@@ -51637,6 +51742,68 @@ export async function rhack(_cmd) {
             if ((item.quan || 1) > 1) splitCarriedObjectShopBill(item, thrownObject, 1);
             removeInventoryItem(item, 1);
             const messages = heroThrownTouchPetrifyingEggUpwardMessages(thrownObject);
+            newsym(game.u?.ux || 0, game.u?.uy || 0);
+            await setMessage(messages.join('  '), !!messages.more);
+            game._throw_item_letter = null;
+            game._resume_time_after_more = 0;
+            game.context.move = 0;
+            if (messages.lifeSaving) {
+                game._command_mode = 'lifeSavingMore';
+                game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
+                return;
+            }
+            if (messages.fatal) {
+                game._command_mode = 'deathDieMore';
+                game._pending_time_passed = 0;
+                game._process_command_time_now = 0;
+                game._run_steps_remaining = 0;
+                prepareDeathBones();
+                return;
+            }
+            game._command_mode = null;
+            game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
+            return;
+        }
+        if (ch === '<' && isPetrifyingCorpseObject(item)) {
+            const precheck = heroThrowPetrifyingCorpseBareHandPrecheck(item);
+            if (!precheck.ok) {
+                const messages = precheck.messages;
+                await setMessage(messages.join('  '), !!messages.more);
+                game._throw_item_letter = null;
+                game._resume_time_after_more = 0;
+                game.context.move = 0;
+                if (messages.lifeSaving) {
+                    game._command_mode = 'lifeSavingMore';
+                    game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
+                    return;
+                }
+                game._command_mode = 'deathDieMore';
+                game._pending_time_passed = 0;
+                game._process_command_time_now = 0;
+                game._run_steps_remaining = 0;
+                prepareDeathBones();
+                return;
+            }
+
+            let thrownId = null;
+            if ((item.quan || 1) > 1) thrownId = next_ident();
+            const thrownObject = {
+                ...item,
+                letter: undefined,
+                line: undefined,
+                wielded: false,
+                worn: false,
+                quivered: false,
+                ox: game.u?.ux || 0,
+                oy: game.u?.uy || 0,
+                id: thrownId ?? item.id,
+                quan: 1,
+                glyph: '%',
+                color: item.color || CLR_BROWN,
+            };
+            if ((item.quan || 1) > 1) splitCarriedObjectShopBill(item, thrownObject, 1);
+            removeInventoryItem(item, 1);
+            const messages = heroThrownTouchPetrifyingCorpseUpwardMessages(thrownObject, precheck.messages);
             newsym(game.u?.ux || 0, game.u?.uy || 0);
             await setMessage(messages.join('  '), !!messages.more);
             game._throw_item_letter = null;

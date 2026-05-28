@@ -18173,6 +18173,98 @@ test('upward hero-thrown cockatrice egg can break on the ceiling without petrify
     ]);
 });
 
+test('upward hero-thrown bare-handed cockatrice corpse petrifies before toss-up', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, { uhp: 50, uhpmax: 50 });
+    const body = corpse(876786, 'c', 'cockatrice');
+    game.inventory = [body];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('c');
+    await rhack('<');
+
+    const message = game._pending_message || '';
+    assert.equal(game._command_mode, 'deathDieMore');
+    assert.match(message, /You throw the cockatrice corpse with your bare hands\./);
+    assert.match(message, /You turn to stone\.\.\./);
+    assert.doesNotMatch(message, /almost hits|hits the ceiling|falls back/);
+    assert.equal(game.inventory.includes(body), true);
+    assert.equal(game.level.objects.length, 0);
+    assert.equal(game.u.uhp, 0);
+    assert.equal(game._death_cause, 'petrified by throwing a cockatrice corpse bare-handed');
+    assert.equal(game._death_bones_body, 'statue');
+    assert.equal(getRngLog().some(entry => entry.startsWith('rn2(5)')), false);
+});
+
+test('upward hero-thrown gloved cockatrice corpse self-hit petrifies by elementary physics', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, { uhp: 50, uhpmax: 50 });
+    const body = corpse(876787, 'c', 'cockatrice');
+    const gloves = wornArmor(876788, 'leather gloves', 'g');
+    game.inventory = [body, gloves];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('c');
+    await rhack('<');
+
+    const message = game._pending_message || '';
+    assert.equal(game._command_mode, 'deathDieMore');
+    assert.match(message, /A cockatrice corpse almost hits the ceiling, then falls back on top of your head\./);
+    assert.match(message, /You turn to stone\./);
+    assert.doesNotMatch(message, /bare hands|Fortunately|fails to protect/);
+    assert.equal(game.inventory.includes(body), false);
+    assert.equal(game.inventory.includes(gloves), true);
+    assert.equal(game.level.objects.length, 1);
+    const landed = game.level.objects[0];
+    assert.equal(landed.otyp, 'corpse');
+    assert.equal(landed.corpsenm?.name, 'cockatrice');
+    assert.equal(landed.ox, game.u.ux);
+    assert.equal(landed.oy, game.u.uy);
+    assert.equal(game.u.uhp, 0);
+    assert.equal(game._death_cause, 'petrified by elementary physics');
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 2), [
+        'rn2(5)', 'rn2(100)',
+    ]);
+});
+
+test('upward hero-thrown cockatrice corpse is blocked by hard helmet and lands', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, { uhp: 50, uhpmax: 50 });
+    const body = corpse(876789, 'c', 'cockatrice');
+    const gloves = wornArmor(876888, 'leather gloves', 'g');
+    const helmet = wornArmor(876889, 'orcish helm', 'h', 0);
+    game.inventory = [body, gloves, helmet];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('c');
+    await rhack('<');
+
+    const message = game._pending_message || '';
+    assert.equal(game._command_mode, null);
+    assert.match(message, /A cockatrice corpse hits the ceiling, then falls back on top of your head\./);
+    assert.match(message, /Fortunately, you are wearing a hard helmet\./);
+    assert.doesNotMatch(message, /bare hands|turn to stone|fails to protect/);
+    assert.equal(game.u.uhp, 49);
+    assert.equal(game.inventory.includes(body), false);
+    assert.equal(game.inventory.includes(gloves), true);
+    assert.equal(game.inventory.includes(helmet), true);
+    assert.equal(game.level.objects.length, 1);
+    const landed = game.level.objects[0];
+    assert.equal(landed.otyp, 'corpse');
+    assert.equal(landed.corpsenm?.name, 'cockatrice');
+    assert.equal(landed.ox, game.u.ux);
+    assert.equal(landed.oy, game.u.uy);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rn2(5)', 'rn2(100)', 'rn2(100)', 'rn2(100)',
+    ]);
+});
+
 test('upward hero-thrown unpaid ordinary egg from a stack bills one broken unit', async () => {
     const { shkp } = installCommandShopState();
     initRng(5);
