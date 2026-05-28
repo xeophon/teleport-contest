@@ -17378,6 +17378,82 @@ test('upward hero-thrown unlit oil potion self-hits without evaporation', async 
     ]);
 });
 
+test('upward hero-thrown cream pie self-hits and blinds the hero', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    const pie = creamPie(87671, 'p');
+    game.inventory = [pie];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('p');
+    await rhack('<');
+
+    assert.equal(game._command_mode, null);
+    assert.match(game._pending_message, /A cream pie almost hits the ceiling, then falls back on top of your head\./);
+    assert.match(game._pending_message, /What a mess!/);
+    assert.match(game._pending_message, /You've got it all over your face!/);
+    assert.doesNotMatch(game._pending_message, /cmdassist|In what direction|crashes on your head|evaporates/);
+    assert.equal(game.inventory.includes(pie), false);
+    assert.equal(game.level.objects.length, 0);
+    assert.equal(game.u.blind, true);
+    assert.ok((game.u.ucreamed || 0) > 0);
+    assert.ok((game.u._blindTimeout || 0) > 0);
+    assert.match(game.u._statusSuffix || '', /Blind/);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rn2(5)', 'rn2(100)', 'rnd(25)',
+    ]);
+});
+
+test('upward hero-thrown cream pie can break on the ceiling without face splat', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    const pie = creamPie(87672, 'p');
+    game.inventory = [pie];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('p');
+    await rhack('<');
+
+    assert.equal(game._command_mode, null);
+    assert.match(game._pending_message, /A cream pie hits the ceiling\./);
+    assert.match(game._pending_message, /What a mess!/);
+    assert.doesNotMatch(game._pending_message, /falls back|You've got it all over your face|cmdassist|evaporates/);
+    assert.equal(game.inventory.includes(pie), false);
+    assert.equal(game.level.objects.length, 0);
+    assert.notEqual(game.u.blind, true);
+    assert.equal(game.u.ucreamed || 0, 0);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rn2(5)', 'rn2(100)',
+    ]);
+});
+
+test('upward hero-thrown unpaid cream pie from a stack bills one broken unit', async () => {
+    const { shkp } = installCommandShopState();
+    initRng(5);
+    const pies = creamPie(87673, 'p', 2);
+    game.inventory = [pies];
+    shop.addObjectToShopBill(shkp, pies, 20);
+
+    await rhack('t');
+    await rhack('p');
+    await rhack('<');
+
+    assert.match(game._pending_message, /What a mess!/);
+    assert.match(game._pending_message, /You've got it all over your face!/);
+    assert.equal(pies.quan, 1);
+    assert.equal(game.inventory.includes(pies), true);
+    assert.equal(game.level.objects.length, 0);
+    const liveEntry = shop.shopBillEntryForObject(shkp, pies);
+    assert.ok(liveEntry);
+    assert.equal(liveEntry.bquan, 1);
+    assert.equal(shop.shopBillEntryTotal(liveEntry), 10);
+    assert.equal(pies.unpaidPrice, 10);
+    assert.equal(shkp.debit, 10);
+    assert.equal(shkp.billct, 1);
+});
+
 test('upward hero-thrown polymorph potion self-hits and polymorphs the hero', async () => {
     installNonShopFloorState();
     initRng(1);

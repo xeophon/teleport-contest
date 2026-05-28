@@ -14304,6 +14304,28 @@ function supportsHeroThrownPotionUpwardHit(potion) {
     return !!kind && kind !== 'potion' && !kind.endsWith(' potion');
 }
 
+function isCreamPieObject(obj) {
+    if (!obj) return false;
+    return obj.otyp === CREAM_PIE || objectKindKey(obj) === 'cream pie'
+        || String(obj.kind || obj.actualKind || pickupObjectName(obj)).toLowerCase() === 'cream pie';
+}
+
+function heroCanBeBlindedByCreamPie() {
+    if (!game.u) return false;
+    if (game.u.blindfolded || game.u.Blindfolded) return false;
+    const wornBlindfold = (game.inventory || []).some(item => {
+        if (!(item.worn || item.owornmask || item.line?.includes('being worn'))) return false;
+        const kind = objectKindKey(item);
+        return kind === 'blindfold' || kind === 'towel';
+    });
+    return !wornBlindfold;
+}
+
+function markThrownBrokenObjectDebt(obj) {
+    const shopDebt = convertUnpaidObjectToShopDebt(obj, { silent: true, broken: true });
+    if (!shopDebt.charged) obj.no_charge = true;
+}
+
 function heroAcidPotionSelfHitMessages(potion, messages) {
     if (heroHasAcidResistance()) return;
     messages.push(`This burns${potion?.blessed ? ' a little' : potion?.cursed ? ' a lot' : ''}!`);
@@ -14388,9 +14410,8 @@ function heroThrownPotionSelfHitMessages(potion, action, ceilingName = heroThrow
 function heroThrownPotionCeilingBreakMessages(potion, breakKind, ceilingName = heroThrowCeilingName()) {
     const messages = [`${floorObjectSubject({ ...potion, quan: 1 })} hits the ${ceilingName}.`];
     projectileTopLevelBreakMessage(potion, breakKind, messages);
-    brokenPotionBreathe(potion, game.u?.ux ?? potion.ox ?? 0, game.u?.uy ?? potion.oy ?? 0, messages);
-    const shopDebt = convertUnpaidObjectToShopDebt(potion, { silent: true, broken: true });
-    if (!shopDebt.charged) potion.no_charge = true;
+    if (isPotionObject(potion)) brokenPotionBreathe(potion, game.u?.ux ?? potion.ox ?? 0, game.u?.uy ?? potion.oy ?? 0, messages);
+    markThrownBrokenObjectDebt(potion);
     return messages;
 }
 
@@ -14406,6 +14427,52 @@ function heroThrownPotionUpwardMessages(potion) {
         return heroThrownPotionSelfHitMessages(potion, 'hits', ceilingName);
     }
     return heroThrownPotionSelfHitMessages(potion, 'almost hits', ceilingName);
+}
+
+function heroThrownCreamPieSelfHitMessages(pie, action, ceilingName = heroThrowCeilingName()) {
+    const messages = [`${floorObjectSubject({ ...pie, quan: 1 })} ${action} the ${ceilingName}, then falls back on top of your head.`];
+    const breakKind = projectileTopLevelBreakKind(pie);
+    if (breakKind) {
+        const blindinc = heroCanBeBlindedByCreamPie() ? rnd(25) : 0;
+        projectileTopLevelBreakMessage(pie, breakKind, messages);
+        messages.push("You've got it all over your face!");
+        if (blindinc && game.u) {
+            game.u.ucreamed = (game.u.ucreamed || 0) + blindinc;
+            game.u._blindTimeout = (game.u._blindTimeout || 0) + blindinc;
+            game.u.blind = true;
+            addHeroStatusSuffix('Blind');
+            for (const mon of game.level?.monsters || []) newsym(mon.mx, mon.my);
+        }
+        markThrownBrokenObjectDebt(pie);
+        return messages;
+    }
+
+    if (game.u) {
+        game.u.uhp = Math.max(0, (game.u.uhp || 0) - rnd(1));
+        if ((game.u.uhp || 0) <= 0) {
+            game._death_cause = 'killed by a falling object';
+            messages.push('You die...');
+        }
+    } else {
+        rnd(1);
+    }
+    const landing = landProjectileObjectWithShopHandling(pie, game.u?.ux || pie.ox || 0, game.u?.uy || pie.oy || 0, {});
+    messages.push(...landing.messages);
+    return messages;
+}
+
+function heroThrownCreamPieUpwardMessages(pie) {
+    const ceilingName = heroThrowCeilingName();
+    const hasCeiling = heroHasThrowCeiling();
+    const hitsRoof = !!(rn2(5) && !heroIsUnderwaterForThrow());
+    if (!hasCeiling)
+        return heroThrownCreamPieSelfHitMessages(pie, 'flies up into', ceilingName);
+    if (hitsRoof) {
+        const breakKind = projectileTopLevelBreakKind(pie);
+        if (breakKind) return heroThrownPotionCeilingBreakMessages(pie, breakKind, ceilingName);
+        return heroThrownCreamPieSelfHitMessages(pie, 'hits', ceilingName);
+    }
+    return heroThrownCreamPieSelfHitMessages(pie, 'almost hits', ceilingName);
 }
 
 function dipPotionAlchemyExplosion(target, amount, messages) {
@@ -50835,6 +50902,35 @@ export async function rhack(_cmd) {
             const keepPotionCallPrompt = game._command_mode === 'callPotionAfterMore';
             await setMessage(messages.join('  '), keepPotionCallPrompt || !!messages.more);
             if (!keepPotionCallPrompt) game._command_mode = null;
+            game._throw_item_letter = null;
+            game._resume_time_after_more = 0;
+            game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
+            game.context.move = 0;
+            return;
+        }
+        if (ch === '<' && isCreamPieObject(item)) {
+            let thrownId = null;
+            if ((item.quan || 1) > 1) thrownId = next_ident();
+            const thrownObject = {
+                ...item,
+                letter: undefined,
+                line: undefined,
+                wielded: false,
+                worn: false,
+                quivered: false,
+                ox: game.u?.ux || 0,
+                oy: game.u?.uy || 0,
+                id: thrownId ?? item.id,
+                quan: 1,
+                glyph: '%',
+                color: item.color || CLR_ORANGE,
+            };
+            if ((item.quan || 1) > 1) splitCarriedObjectShopBill(item, thrownObject, 1);
+            const messages = heroThrownCreamPieUpwardMessages(thrownObject);
+            removeInventoryItem(item, 1);
+            newsym(game.u?.ux || 0, game.u?.uy || 0);
+            await setMessage(messages.join('  '));
+            game._command_mode = null;
             game._throw_item_letter = null;
             game._resume_time_after_more = 0;
             game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);

@@ -37,4 +37,4 @@ Regression coverage:
 - Lit oil self-hit and ceiling break still need `explode_oil()`/burning-oil fallout ordering, including blast terrain/object collateral and shop cleanup.
 - Full `polyself()` fidelity remains broader work: exact C form selection, controlled polymorph prompts, armor/body fallout, sex/race/role interactions, `newman()` details, and all `polymon()` side effects are only covered where existing JS helpers already model them.
 - `Maybe_Half_Phys()` mitigation is not modeled for the covered head/acid damage path yet.
-- Non-potion upward impacts, cream pies, petrifying eggs/corpses, and heavier falling-object damage remain separate C-backed slices.
+- Upward cream pies are covered in `docs/c-parity-audit/108-subagent-findings-2026-05-28.md`; other non-potion upward impacts, petrifying eggs/corpses, and heavier falling-object damage remain separate C-backed slices.
