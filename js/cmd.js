@@ -3508,6 +3508,7 @@ function impactDropBreakKind(obj) {
     const cls = impactDropObjectClass(obj);
     const name = String(obj?.actualKind || obj?.kind || pickupObjectName(obj)).toLowerCase();
     if (cls === 'potion') return 'shatter';
+    if (isVenomObject(obj)) return 'splash';
     if (obj?.otyp === EGG || name === 'egg') return 'splat';
     if (name.includes('melon')) return 'splat';
     if (name.includes('cream pie')) return 'mess';
@@ -3529,7 +3530,7 @@ function impactDropObjectBreaks(obj) {
 }
 
 function shipObjectMuffledBreakResult(breakKind) {
-    return breakKind === 'splat' ? 'splat' : 'crash';
+    return breakKind === 'splat' || breakKind === 'splash' ? breakKind : 'crash';
 }
 
 function impactDropLandingIsSoft() {
@@ -3551,6 +3552,7 @@ function deliverImpactDroppedObjects(objects) {
         const breakKind = hardLanding ? impactDropObjectBreaks(obj) : '';
         if (breakKind) {
             if (breakKind === 'splat') messages.push('Splat!');
+            else if (breakKind === 'splash') messages.push('Splash!');
             else if (breakKind === 'mess') messages.push('What a mess!');
             else if (game.u.blind) messages.push('You hear something shatter!');
             else {
@@ -7775,7 +7777,8 @@ function isReadySuggestItem(item) {
 function isThrowSuggestItem(item) {
     if (!item.letter) return false;
     if (item.wielded || item.line?.includes('weapon in')) return false;
-    return item.cls === 'coin' || item.cls === 'weapon' || item.cls === 'gem' || item.otyp === FLINT_STONE;
+    return item.cls === 'coin' || item.cls === 'weapon' || item.cls === 'gem'
+        || item.cls === 'venom' || item.otyp === FLINT_STONE;
 }
 
 function updateWornDisplacement() {
@@ -10967,6 +10970,20 @@ function wishObjectMetadataForItem(item) {
 function isPotionObject(item) {
     return item?.cls === 'potion' || item?.otyp === POTION_CLASS || item?.otyp === POT_WATER
         || POTION_INDEX_BY_OTYP.has(item?.otyp);
+}
+
+function isBlindingVenomObject(item) {
+    const kind = objectKindKey(item).replace(/^splash of /, '');
+    return item?.otyp === BLINDING_VENOM || kind === 'blinding venom';
+}
+
+function isAcidVenomObject(item) {
+    const kind = objectKindKey(item).replace(/^splash of /, '');
+    return item?.otyp === ACID_VENOM || kind === 'acid venom';
+}
+
+function isVenomObject(item) {
+    return !!item && (item.cls === 'venom' || isBlindingVenomObject(item) || isAcidVenomObject(item));
 }
 
 function potionIdentityName(item) {
@@ -14350,6 +14367,20 @@ function heroCanBeBlindedByCreamPie() {
     return !wornBlindfold;
 }
 
+function heroWearsVisoredHelmet() {
+    return (game.inventory || []).some(item => {
+        if (!isWornInventoryItem(item) || armorSlot(item) !== 'helm') return false;
+        return armorKind(item) === 'helm of telepathy'
+            || String(item.appearance || '').toLowerCase() === 'visored helmet';
+    });
+}
+
+function heroCanBeBlindedByBlindingVenom() {
+    if (!heroCanBeBlindedByCreamPie()) return false;
+    if ((game.u?.ucreamed || 0) > 0) return false;
+    return !heroWearsVisoredHelmet();
+}
+
 function markThrownBrokenObjectDebt(obj) {
     const shopDebt = convertUnpaidObjectToShopDebt(obj, { silent: true, broken: true });
     if (!shopDebt.charged) obj.no_charge = true;
@@ -14488,6 +14519,54 @@ function heroThrownCreamPieSelfHitMessages(pie, action, ceilingName = heroThrowC
     const landing = landProjectileObjectWithShopHandling(pie, game.u?.ux || pie.ox || 0, game.u?.uy || pie.oy || 0, {});
     messages.push(...landing.messages);
     return messages;
+}
+
+function heroThrownVenomSelfHitMessages(venom, action, ceilingName = heroThrowCeilingName()) {
+    const messages = [`${floorObjectSubject({ ...venom, quan: 1 })} ${action} the ${ceilingName}, then falls back on top of your head.`];
+    const breakKind = projectileTopLevelBreakKind(venom);
+    if (breakKind) {
+        const wasBlind = !!game.u?.blind;
+        const blindinc = isBlindingVenomObject(venom) && heroCanBeBlindedByBlindingVenom() ? rnd(25) : 0;
+        projectileTopLevelBreakMessage(venom, breakKind, messages);
+        if (isBlindingVenomObject(venom)) {
+            messages.push("You've got it all over your face!");
+            if (blindinc && game.u) {
+                if (!wasBlind) messages.push('It blinds you!');
+                game.u.ucreamed = (game.u.ucreamed || 0) + blindinc;
+                game.u._blindTimeout = (game.u._blindTimeout || 0) + blindinc;
+                game.u.blind = true;
+                addHeroStatusSuffix('Blind');
+                for (const mon of game.level?.monsters || []) newsym(mon.mx, mon.my);
+            }
+        }
+        markThrownBrokenObjectDebt(venom);
+        return messages;
+    }
+
+    if (game.u) {
+        game.u.uhp = Math.max(0, (game.u.uhp || 0) - 1);
+        if ((game.u.uhp || 0) <= 0) {
+            game._death_cause = 'killed by a falling object';
+            messages.push('You die...');
+        }
+    }
+    const landing = landProjectileObjectWithShopHandling(venom, game.u?.ux || venom.ox || 0, game.u?.uy || venom.oy || 0, {});
+    messages.push(...landing.messages);
+    return messages;
+}
+
+function heroThrownVenomUpwardMessages(venom) {
+    const ceilingName = heroThrowCeilingName();
+    const hasCeiling = heroHasThrowCeiling();
+    const hitsRoof = !!(rn2(5) && !heroIsUnderwaterForThrow());
+    if (!hasCeiling)
+        return heroThrownVenomSelfHitMessages(venom, 'flies up into', ceilingName);
+    if (hitsRoof) {
+        const breakKind = projectileTopLevelBreakKind(venom);
+        if (breakKind) return heroThrownPotionCeilingBreakMessages(venom, breakKind, ceilingName);
+        return heroThrownVenomSelfHitMessages(venom, 'hits', ceilingName);
+    }
+    return heroThrownVenomSelfHitMessages(venom, 'almost hits', ceilingName);
 }
 
 function heroThrownMelonSelfHitMessages(melon, action, ceilingName = heroThrowCeilingName()) {
@@ -21263,6 +21342,10 @@ function projectileTopLevelBreakMessage(obj, breakKind, messages) {
     if (!breakKind) return;
     if (breakKind === 'splat') {
         messages.push('Splat!');
+        return;
+    }
+    if (breakKind === 'splash') {
+        messages.push('Splash!');
         return;
     }
     if (breakKind === 'mess') {
@@ -28610,6 +28693,10 @@ function magicBagScatterBreakMessage(obj, breakKind, messages) {
     if (!breakKind) return;
     if (breakKind === 'splat') {
         messages.push('Splat!');
+        return;
+    }
+    if (breakKind === 'splash') {
+        messages.push('Splash!');
         return;
     }
     if (breakKind === 'mess') {
@@ -51113,6 +51200,35 @@ export async function rhack(_cmd) {
             };
             if ((item.quan || 1) > 1) splitCarriedObjectShopBill(item, thrownObject, 1);
             const messages = heroThrownCreamPieUpwardMessages(thrownObject);
+            removeInventoryItem(item, 1);
+            newsym(game.u?.ux || 0, game.u?.uy || 0);
+            await setMessage(messages.join('  '));
+            game._command_mode = null;
+            game._throw_item_letter = null;
+            game._resume_time_after_more = 0;
+            game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
+            game.context.move = 0;
+            return;
+        }
+        if (ch === '<' && isVenomObject(item)) {
+            let thrownId = null;
+            if ((item.quan || 1) > 1) thrownId = next_ident();
+            const thrownObject = {
+                ...item,
+                letter: undefined,
+                line: undefined,
+                wielded: false,
+                worn: false,
+                quivered: false,
+                ox: game.u?.ux || 0,
+                oy: game.u?.uy || 0,
+                id: thrownId ?? item.id,
+                quan: 1,
+                glyph: item.glyph || '.',
+                color: item.color || CLR_BROWN,
+            };
+            if ((item.quan || 1) > 1) splitCarriedObjectShopBill(item, thrownObject, 1);
+            const messages = heroThrownVenomUpwardMessages(thrownObject);
             removeInventoryItem(item, 1);
             newsym(game.u?.ux || 0, game.u?.uy || 0);
             await setMessage(messages.join('  '));

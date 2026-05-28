@@ -42,6 +42,8 @@ const LOCK_PICK = 10167;
 const ROCK = 467;
 const EGG = 10001;
 const EXPENSIVE_CAMERA = 10082;
+const BLINDING_VENOM = 10184;
+const ACID_VENOM = 10185;
 
 function installShopState() {
     const g = resetGame();
@@ -551,6 +553,37 @@ function creamPie(id, letter = 'p', quan = 1) {
         letter,
         line: `${letter} - ${quan > 1 ? `${quan} cream pies` : 'a cream pie'}`,
     };
+}
+
+function venomSplash(id, adjective, otyp, letter = 'v', quan = 1, extra = {}) {
+    const singular = `splash of ${adjective} venom`;
+    const plural = `splashes of ${adjective} venom`;
+    return {
+        id,
+        otyp,
+        cls: 'venom',
+        glyph: '.',
+        kind: singular,
+        actualKind: singular,
+        singular,
+        plural,
+        quan,
+        spe: 1,
+        owt: 1,
+        ox: 5,
+        oy: 5,
+        letter,
+        line: `${letter} - ${quan > 1 ? `${quan} ${plural}` : `a ${singular}`}`,
+        ...extra,
+    };
+}
+
+function blindingVenom(id, letter = 'v', quan = 1, extra = {}) {
+    return venomSplash(id, 'blinding', BLINDING_VENOM, letter, quan, extra);
+}
+
+function acidVenom(id, letter = 'a', quan = 1, extra = {}) {
+    return venomSplash(id, 'acid', ACID_VENOM, letter, quan, extra);
 }
 
 function chargedTool(id, kind, letter = 't', spe = 3) {
@@ -17503,6 +17536,168 @@ test('upward hero-thrown unpaid cream pie from a stack bills one broken unit', a
     assert.equal(liveEntry.bquan, 1);
     assert.equal(shop.shopBillEntryTotal(liveEntry), 10);
     assert.equal(pies.unpaidPrice, 10);
+    assert.equal(shkp.debit, 10);
+    assert.equal(shkp.billct, 1);
+});
+
+test('upward hero-thrown blinding venom self-hits and blinds the hero', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    const venom = blindingVenom(87690, 'v');
+    game.inventory = [venom];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('v');
+    await rhack('<');
+
+    assert.equal(game._command_mode, null);
+    assert.match(game._pending_message, /A splash of blinding venom almost hits the ceiling, then falls back on top of your head\./);
+    assert.match(game._pending_message, /Splash!/);
+    assert.match(game._pending_message, /You've got it all over your face!/);
+    assert.match(game._pending_message, /It blinds you!/);
+    assert.doesNotMatch(game._pending_message, /crashes on your head|evaporates|What a mess|This burns/);
+    assert.equal(game.inventory.includes(venom), false);
+    assert.equal(game.level.objects.length, 0);
+    assert.equal(game.u.blind, true);
+    assert.ok((game.u.ucreamed || 0) > 0);
+    assert.ok((game.u._blindTimeout || 0) > 0);
+    assert.match(game.u._statusSuffix || '', /Blind/);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rn2(5)', 'rn2(100)', 'rnd(25)',
+    ]);
+});
+
+test('upward hero-thrown blinding venom can break on the ceiling without blinding', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    const venom = blindingVenom(87691, 'v');
+    game.inventory = [venom];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('v');
+    await rhack('<');
+
+    assert.equal(game._command_mode, null);
+    assert.match(game._pending_message, /A splash of blinding venom hits the ceiling\./);
+    assert.match(game._pending_message, /Splash!/);
+    assert.doesNotMatch(game._pending_message, /falls back|You've got it all over your face|It blinds you|evaporates|crashes on your head/);
+    assert.equal(game.inventory.includes(venom), false);
+    assert.equal(game.level.objects.length, 0);
+    assert.notEqual(game.u.blind, true);
+    assert.equal(game.u.ucreamed || 0, 0);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rn2(5)', 'rn2(100)',
+    ]);
+});
+
+test('upward hero-thrown blinding venom extends blindness without repeat blind message', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, { blind: true, _blindTimeout: 10, ucreamed: 0 });
+    const venom = blindingVenom(87692, 'v');
+    game.inventory = [venom];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('v');
+    await rhack('<');
+
+    assert.match(game._pending_message, /Splash!/);
+    assert.match(game._pending_message, /You've got it all over your face!/);
+    assert.doesNotMatch(game._pending_message, /It blinds you!/);
+    assert.equal(game.inventory.includes(venom), false);
+    assert.ok((game.u.ucreamed || 0) > 0);
+    assert.ok((game.u._blindTimeout || 0) > 10);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rn2(5)', 'rn2(100)', 'rnd(25)',
+    ]);
+});
+
+test('upward hero-thrown acid venom self-hit only splashes', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, { uhp: 40, uhpmax: 40 });
+    const venom = acidVenom(87693, 'a');
+    game.inventory = [venom];
+    const hpBefore = game.u.uhp;
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('a');
+    await rhack('<');
+
+    assert.equal(game._command_mode, null);
+    assert.match(game._pending_message, /A splash of acid venom almost hits the ceiling, then falls back on top of your head\./);
+    assert.match(game._pending_message, /Splash!/);
+    assert.doesNotMatch(game._pending_message, /You've got it all over your face|It blinds you|This burns|evaporates|crashes on your head/);
+    assert.equal(game.inventory.includes(venom), false);
+    assert.equal(game.level.objects.length, 0);
+    assert.equal(game.u.uhp, hpBefore);
+    assert.notEqual(game.u.blind, true);
+    assert.equal(game.u.ucreamed || 0, 0);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rn2(5)', 'rn2(100)',
+    ]);
+});
+
+test('upward hero-thrown acid venom on no-ceiling air level flies into the sky and splashes', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, {
+        uhp: 40,
+        uhpmax: 40,
+        uz: { dnum: 8, dlevel: 1 },
+    });
+    game.astral_level = { dnum: 8, dlevel: 5 };
+    game.air_level = { dnum: 8, dlevel: 1 };
+    game.earth_level = { dnum: 8, dlevel: 3 };
+    game.water_level = { dnum: 8, dlevel: 2 };
+    game.fire_level = { dnum: 8, dlevel: 4 };
+    game.level.at = () => ({ roomno: 0, typ: CLOUD });
+    const venom = acidVenom(87694, 'a');
+    game.inventory = [venom];
+    const hpBefore = game.u.uhp;
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('a');
+    await rhack('<');
+
+    assert.equal(game._command_mode, null);
+    assert.match(game._pending_message, /flies up into the sky, then falls back on top of your head\./);
+    assert.match(game._pending_message, /Splash!/);
+    assert.doesNotMatch(game._pending_message, /hits the ceiling|almost hits|This burns|evaporates|crashes on your head/);
+    assert.equal(game.inventory.includes(venom), false);
+    assert.equal(game.level.objects.length, 0);
+    assert.equal(game.u.uhp, hpBefore);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rn2(5)', 'rn2(100)',
+    ]);
+});
+
+test('upward hero-thrown unpaid blinding venom from a stack bills one broken unit', async () => {
+    const { shkp } = installCommandShopState();
+    initRng(5);
+    const venoms = blindingVenom(87695, 'v', 2);
+    game.inventory = [venoms];
+    shop.addObjectToShopBill(shkp, venoms, 20);
+
+    await rhack('t');
+    await rhack('v');
+    await rhack('<');
+
+    assert.match(game._pending_message, /Splash!/);
+    assert.match(game._pending_message, /You've got it all over your face!/);
+    assert.equal(venoms.quan, 1);
+    assert.equal(game.inventory.includes(venoms), true);
+    assert.equal(game.level.objects.length, 0);
+    const liveEntry = shop.shopBillEntryForObject(shkp, venoms);
+    assert.ok(liveEntry);
+    assert.equal(liveEntry.bquan, 1);
+    assert.equal(shop.shopBillEntryTotal(liveEntry), 10);
+    assert.equal(venoms.unpaidPrice, 10);
     assert.equal(shkp.debit, 10);
     assert.equal(shkp.billct, 1);
 });
