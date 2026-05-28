@@ -14804,6 +14804,100 @@ function heroThrownEggSelfHitMessages(egg, action, ceilingName = heroThrowCeilin
     return messages;
 }
 
+function wornTossUpHelmet() {
+    return wornEarthHelmet();
+}
+
+function simpleTossUpHelmetName(helmet) {
+    return hardEarthHelmet(helmet) ? 'helm' : 'hat';
+}
+
+function heroPetrifyingEggPolyselfRescueMessage() {
+    if (game.u?.stoneResistance || heroPolyselfResistsStoning()) return '';
+    return maybeTurnPolyselfIntoStoneGolem();
+}
+
+function finishHeroPetrifiedByTossUpEgg(messages, egg = null) {
+    if (egg) {
+        prepareProjectileFloorObject(egg, game.u?.ux || egg.ox || 0, game.u?.uy || egg.oy || 0);
+        placeUnstackedFloorObject(egg);
+        newsym(egg.ox, egg.oy);
+    }
+    messages.push('You turn to stone.');
+    if (game.u) game.u.uhp = 0;
+    game._death_cause = 'petrified by elementary physics';
+    game._death_bones_body = 'statue';
+    if (consumeLifeSavingAmulet({ clearStoning: true })) {
+        messages.push('You die...  But wait...  Your medallion begins to glow!');
+        messages.lifeSaving = true;
+    } else {
+        messages.fatal = true;
+    }
+    messages.more = true;
+    return messages;
+}
+
+function breakHeroThrownTouchPetrifyingEgg(egg, messages, { selfHit = false } = {}) {
+    projectileTopLevelBreakMessage(egg, 'splat', messages);
+    markThrownBrokenObjectDebt(egg);
+    if (!selfHit) return messages;
+
+    const rescue = heroPetrifyingEggPolyselfRescueMessage();
+    if (rescue) {
+        messages.push(rescue);
+    } else if (!game.u?.stoneResistance && !heroPolyselfResistsStoning()) {
+        const helmet = wornTossUpHelmet();
+        if (helmet) messages.push(`Your ${simpleTossUpHelmetName(helmet)} fails to protect you.`);
+        return finishHeroPetrifiedByTossUpEgg(messages);
+    }
+
+    messages.push("You've got it all over your face!");
+    return messages;
+}
+
+function heroThrownTouchPetrifyingEggSelfHitMessages(egg, action, ceilingName = heroThrowCeilingName()) {
+    const messages = [`${floorObjectSubject({ ...egg, quan: 1 })} ${action} the ${ceilingName}, then falls back on top of your head.`];
+    const breakKind = projectileTopLevelBreakKind(egg);
+    if (breakKind) return breakHeroThrownTouchPetrifyingEgg(egg, messages, { selfHit: true });
+
+    const rescue = heroPetrifyingEggPolyselfRescueMessage();
+    if (rescue) messages.push(rescue);
+    else if (!wornTossUpHelmet() && !game.u?.stoneResistance && !heroPolyselfResistsStoning())
+        return finishHeroPetrifiedByTossUpEgg(messages, egg);
+
+    const helmet = wornTossUpHelmet();
+    if (helmet && hardEarthHelmet(helmet))
+        messages.push('Fortunately, you are wearing a hard helmet.');
+    if (game.u) {
+        game.u.uhp = Math.max(0, (game.u.uhp || 0) - 1);
+        if ((game.u.uhp || 0) <= 0) {
+            game._death_cause = 'killed by a falling object';
+            messages.push('You die...');
+        }
+    }
+    const landing = landProjectileObjectWithShopHandling(egg, game.u?.ux || egg.ox || 0, game.u?.uy || egg.oy || 0, {});
+    messages.push(...landing.messages);
+    return messages;
+}
+
+function heroThrownTouchPetrifyingEggCeilingBreakMessages(egg, ceilingName = heroThrowCeilingName()) {
+    return breakHeroThrownTouchPetrifyingEgg(egg, [`${floorObjectSubject({ ...egg, quan: 1 })} hits the ${ceilingName}.`]);
+}
+
+function heroThrownTouchPetrifyingEggUpwardMessages(egg) {
+    const ceilingName = heroThrowCeilingName();
+    const hasCeiling = heroHasThrowCeiling();
+    const hitsRoof = !!(rn2(5) && !heroIsUnderwaterForThrow());
+    if (!hasCeiling)
+        return heroThrownTouchPetrifyingEggSelfHitMessages(egg, 'flies up into', ceilingName);
+    if (hitsRoof) {
+        const breakKind = projectileTopLevelBreakKind(egg);
+        if (breakKind) return heroThrownTouchPetrifyingEggCeilingBreakMessages(egg, ceilingName);
+        return heroThrownTouchPetrifyingEggSelfHitMessages(egg, 'hits', ceilingName);
+    }
+    return heroThrownTouchPetrifyingEggSelfHitMessages(egg, 'almost hits', ceilingName);
+}
+
 function breakHeroThrownPyroliskEgg(egg, messages, { selfHit = false } = {}) {
     projectileTopLevelBreakMessage(egg, 'splat', messages);
     markThrownBrokenObjectDebt(egg);
@@ -51521,6 +51615,48 @@ export async function rhack(_cmd) {
             game._resume_time_after_more = 0;
             game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
             game.context.move = 0;
+            return;
+        }
+        if (ch === '<' && isTouchPetrifyingEgg(item)) {
+            let thrownId = null;
+            if ((item.quan || 1) > 1) thrownId = next_ident();
+            const thrownObject = {
+                ...item,
+                letter: undefined,
+                line: undefined,
+                wielded: false,
+                worn: false,
+                quivered: false,
+                ox: game.u?.ux || 0,
+                oy: game.u?.uy || 0,
+                id: thrownId ?? item.id,
+                quan: 1,
+                glyph: '%',
+                color: item.color || CLR_WHITE,
+            };
+            if ((item.quan || 1) > 1) splitCarriedObjectShopBill(item, thrownObject, 1);
+            removeInventoryItem(item, 1);
+            const messages = heroThrownTouchPetrifyingEggUpwardMessages(thrownObject);
+            newsym(game.u?.ux || 0, game.u?.uy || 0);
+            await setMessage(messages.join('  '), !!messages.more);
+            game._throw_item_letter = null;
+            game._resume_time_after_more = 0;
+            game.context.move = 0;
+            if (messages.lifeSaving) {
+                game._command_mode = 'lifeSavingMore';
+                game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
+                return;
+            }
+            if (messages.fatal) {
+                game._command_mode = 'deathDieMore';
+                game._pending_time_passed = 0;
+                game._process_command_time_now = 0;
+                game._run_steps_remaining = 0;
+                prepareDeathBones();
+                return;
+            }
+            game._command_mode = null;
+            game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
             return;
         }
         if (ch === '<' && isPyroliskEgg(item)) {

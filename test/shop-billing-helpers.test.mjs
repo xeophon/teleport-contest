@@ -18056,6 +18056,123 @@ test('upward hero-thrown ordinary egg can break on the ceiling', async () => {
     ]);
 });
 
+test('upward hero-thrown cockatrice egg breaks on self-hit and petrifies through helmet', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, { uhp: 50, uhpmax: 50 });
+    const eggItem = { ...egg(876780, 'e'), otyp: EGG, corpsenm: { name: 'cockatrice' } };
+    const helmet = wornArmor(876781, 'orcish helm', 'h', 0);
+    game.inventory = [eggItem, helmet];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('e');
+    await rhack('<');
+
+    const message = game._pending_message || '';
+    assert.equal(game._command_mode, 'deathDieMore');
+    assert.match(message, /An egg almost hits the ceiling, then falls back on top of your head\./);
+    assert.match(message, /Splat!/);
+    assert.match(message, /Your helm fails to protect you\./);
+    assert.match(message, /You turn to stone\./);
+    assert.doesNotMatch(message, /You've got it all over your face|Fortunately/);
+    assert.equal(game.inventory.includes(eggItem), false);
+    assert.equal(game.inventory.includes(helmet), true);
+    assert.equal(game.level.objects.length, 0);
+    assert.equal(game.u.uhp, 0);
+    assert.equal(game._death_cause, 'petrified by elementary physics');
+    assert.equal(game._death_bones_body, 'statue');
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 2), [
+        'rn2(5)', 'rn2(100)',
+    ]);
+});
+
+test('upward hero-thrown cockatrice egg with stone resistance splats without petrifying', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, { uhp: 50, uhpmax: 50, stoneResistance: true });
+    const eggItem = { ...egg(876782, 'e'), otyp: EGG, corpsenm: { name: 'cockatrice' } };
+    game.inventory = [eggItem];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('e');
+    await rhack('<');
+
+    const message = game._pending_message || '';
+    assert.equal(game._command_mode, null);
+    assert.match(message, /An egg almost hits the ceiling, then falls back on top of your head\./);
+    assert.match(message, /Splat!/);
+    assert.match(message, /You've got it all over your face!/);
+    assert.doesNotMatch(message, /turn to stone|fails to protect|Fortunately/);
+    assert.equal(game.inventory.includes(eggItem), false);
+    assert.equal(game.level.objects.length, 0);
+    assert.equal(game.u.uhp, 50);
+    assert.equal(game._death_cause || '', '');
+    assert.doesNotMatch(game.u._statusSuffix || '', /Stone/);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 2), [
+        'rn2(5)', 'rn2(100)',
+    ]);
+});
+
+test('upward hero-thrown intact cockatrice egg is blocked by hard helmet and lands', async () => {
+    installNonShopFloorState();
+    initRng(46249);
+    Object.assign(game.u, { uhp: 50, uhpmax: 50 });
+    const eggItem = { ...egg(876783, 'e'), otyp: EGG, corpsenm: { name: 'cockatrice' } };
+    const helmet = wornArmor(876784, 'orcish helm', 'h', 0);
+    game.inventory = [eggItem, helmet];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('e');
+    await rhack('<');
+
+    const message = game._pending_message || '';
+    assert.equal(game._command_mode, null);
+    assert.match(message, /An egg almost hits the ceiling, then falls back on top of your head\./);
+    assert.match(message, /Fortunately, you are wearing a hard helmet\./);
+    assert.doesNotMatch(message, /Splat!|turn to stone|fails to protect|all over your face/);
+    assert.equal(game.u.uhp, 49);
+    assert.equal(game.inventory.includes(eggItem), false);
+    assert.equal(game.inventory.includes(helmet), true);
+    assert.equal(game.level.objects.length, 1);
+    const landed = game.level.objects[0];
+    assert.equal(landed.otyp, EGG);
+    assert.equal(landed.corpsenm?.name, 'cockatrice');
+    assert.equal(landed.ox, game.u.ux);
+    assert.equal(landed.oy, game.u.uy);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 3), [
+        'rn2(5)', 'rn2(100)', 'rn2(100)',
+    ]);
+});
+
+test('upward hero-thrown cockatrice egg can break on the ceiling without petrifying', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, { uhp: 50, uhpmax: 50 });
+    const eggItem = { ...egg(876785, 'e'), otyp: EGG, corpsenm: { name: 'cockatrice' } };
+    game.inventory = [eggItem];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('e');
+    await rhack('<');
+
+    const message = game._pending_message || '';
+    assert.equal(game._command_mode, null);
+    assert.match(message, /An egg hits the ceiling\./);
+    assert.match(message, /Splat!/);
+    assert.doesNotMatch(message, /falls back|top of your head|all over your face|turn to stone|fails to protect/);
+    assert.equal(game.inventory.includes(eggItem), false);
+    assert.equal(game.level.objects.length, 0);
+    assert.equal(game.u.uhp, 50);
+    assert.equal(game._death_cause || '', '');
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 2), [
+        'rn2(5)', 'rn2(100)',
+    ]);
+});
+
 test('upward hero-thrown unpaid ordinary egg from a stack bills one broken unit', async () => {
     const { shkp } = installCommandShopState();
     initRng(5);
