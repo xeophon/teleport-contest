@@ -79,6 +79,7 @@ This folder records source-backed audits against `nethack-c/upstream`. The notes
 - [73-subagent-findings-2026-05-28.md](73-subagent-findings-2026-05-28.md): direct hero-thrown special-water potionhit for unsaddled gremlin splitting and iron golem rust damage/death.
 - [74-subagent-findings-2026-05-28.md](74-subagent-findings-2026-05-28.md): direct hero-thrown water potionhit for non-shapechanging blessing-haters, including blessed damage, cursed healing, and neutral wake/anger behavior.
 - [75-subagent-findings-2026-05-28.md](75-subagent-findings-2026-05-28.md): direct hero-thrown water potionhit for worn-saddle interception, including saddle-hit RNG, BUC mutation, wet-saddle feedback, and no wake/anger behavior.
+- [76-subagent-findings-2026-05-28.md](76-subagent-findings-2026-05-28.md): water-vapor lycanthropy effects for cursed were-beast transformation and blessed non-curing reversion.
 
 ## Cross-Cutting Themes
 

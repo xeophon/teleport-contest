@@ -1622,6 +1622,9 @@ const POLYSELF_EXTRA_FORMS = new Map([
     ['red dragon', { name: 'red dragon', mlet: 'D', glyph: 'D', color: CLR_RED, mlevel: 15, hpLevel: 15, mmove: 9, strong: true, inAir: true, nohands: true }],
     ['flesh golem', { name: 'flesh golem', mlet: "'", glyph: "'", color: CLR_RED, mlevel: 9, hpLevel: 9, mmove: 8, mac: 9, strong: true, neuter: true, fixedHp: 40 }],
     ['stone golem', { name: 'stone golem', mlet: "'", glyph: "'", color: CLR_GRAY, mlevel: 14, hpLevel: 14, mmove: 6, mac: 5, strong: true, neuter: true, noCorpse: true, fixedHp: 100, stoneResistance: true }],
+    ['wererat', { name: 'wererat', mlet: 'r', glyph: 'r', color: CLR_BROWN, mlevel: 2, hpLevel: 2, mmove: 12, mac: 6, nohands: true, animal: true, verysmall: true, wereBeast: true, noCorpse: true }],
+    ['werejackal', { name: 'werejackal', mlet: 'd', glyph: 'd', color: CLR_BROWN, mlevel: 2, hpLevel: 2, mmove: 12, mac: 7, nohands: true, animal: true, wereBeast: true, noCorpse: true }],
+    ['werewolf', { name: 'werewolf', mlet: 'd', glyph: 'd', color: CLR_GRAY, mlevel: 5, hpLevel: 5, mmove: 12, mac: 4, nohands: true, animal: true, wereBeast: true, noCorpse: true }],
 ]);
 const SPEED_AT_SEVEN_ROLES = new Set(['Barbarian', 'Caveman', 'Knight', 'Valkyrie']);
 const ROLE_LEVEL_ABILITIES = {
@@ -10021,7 +10024,7 @@ function becomeMonster(name) {
 	            game.u.ulevel = newLevel;
 	            game.u.uexp = newExp;
 	            game.u.uhunger = hunger;
-            game.urole.rank = base.rank;
+            if (base.rank && game.urole) game.urole.rank = base.rank;
         }
         game.u._glyph = null;
         game.u._glyphColor = undefined;
@@ -10051,7 +10054,7 @@ function becomeMonster(name) {
 	            ueninc: [...(game.u.ueninc || [])],
 	            initialHp: game._initialHp,
 	            initialEnergy: game._initialEnergy,
-	            rank: game.urole.rank,
+	            rank: game.urole?.rank || null,
 	        };
     }
     if (!alreadyPolymorphed) rn2(2);
@@ -10078,7 +10081,7 @@ function becomeMonster(name) {
     }
     game.u._strDisplay = form.strong ? '18/**' : null;
     const rank = form.name.replace(/\b\w/g, ch => ch.toUpperCase());
-    game.urole.rank = { m: rank, f: rank };
+    if (game.urole) game.urole.rank = { m: rank, f: rank };
     const article = /^[aeiou]/i.test(form.name) ? 'an' : 'a';
     let message = `You turn into ${article} ${form.name}!`;
     if (isBuriedBallTrapActive()) {
@@ -12506,6 +12509,47 @@ function splitGremlinPolyselfFromWaterVapor(messages) {
     return true;
 }
 
+function heroLycanthropeBeastName() {
+    const lycanthrope = game.u?.ulycn;
+    if (lycanthrope == null || lycanthrope === -1 || lycanthrope === false) return '';
+    const source = typeof lycanthrope === 'object'
+        ? lycanthrope.name
+        : typeof lycanthrope === 'string'
+            ? lycanthrope
+            : game.u?.ulycnName || game.u?.lycanthropeName || game.u?.wereForm;
+    const lower = String(source || '').toLowerCase().replace(/^human\s+/, '');
+    const beastMatch = lower.match(/^(?:rat|jackal|wolf)\s+(were(?:rat|jackal|wolf))$/);
+    return beastMatch ? beastMatch[1] : lower;
+}
+
+function hostileMonsterNearHeroForWereChange() {
+    const ux = game.u?.ux ?? 0;
+    const uy = game.u?.uy ?? 0;
+    return (game.level?.monsters || []).some(mon => {
+        if (!mon || mon.dead || mon.mpeaceful || mon.mundetected) return false;
+        if (mon.mhp != null && mon.mhp <= 0) return false;
+        return Math.abs((mon.mx ?? ux) - ux) <= 1 && Math.abs((mon.my ?? uy) - uy) <= 1
+            && cansee(mon.mx, mon.my);
+    });
+}
+
+function waterVaporLycanthropyEffect(potion, messages) {
+    const beastName = heroLycanthropeBeastName();
+    if (!beastName || heroHasUnchanging()) return false;
+    if (potion?.blessed && polyselfFormName() === beastName && !hostileMonsterNearHeroForWereChange()) {
+        const message = rehumanizeAfterRoyalJelly();
+        if (message) messages.push(message);
+        return !!message;
+    }
+    if (potion?.cursed && !game.u?._polyself_form && !hostileMonsterNearHeroForWereChange()
+        && !(game.u?.polymorphControl || game.u?.polycontrol || game.u?.Polymorph_control)) {
+        const result = becomeMonster(beastName);
+        if (result?.message) messages.push(result.message);
+        return !!result?.message;
+    }
+    return false;
+}
+
 function potionBreathe(potion, messages) {
     if (!heroCanReceivePotionVapor()) return;
     const name = alchemyPotionName(potion);
@@ -12604,7 +12648,8 @@ function potionBreathe(potion, messages) {
         }
         break;
     case 'water':
-        splitGremlinPolyselfFromWaterVapor(messages);
+        if (!splitGremlinPolyselfFromWaterVapor(messages))
+            waterVaporLycanthropyEffect(potion, messages);
         break;
     case 'acid':
     case 'polymorph':

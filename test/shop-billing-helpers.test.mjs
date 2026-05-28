@@ -3309,6 +3309,75 @@ test('wet worn towel blocks water vapor gremlin split', () => {
     assert.doesNotMatch(result.messages.join(' '), /You multiply!/);
 });
 
+test('cursed water vapor transforms a non-polymorphed lycanthrope', () => {
+    installShopState();
+    initRng(1);
+    Object.assign(game.u, {
+        uhp: 12,
+        uhpmax: 12,
+        uen: 7,
+        uenmax: 7,
+        uac: 10,
+        ulevel: 3,
+        uhpinc: [12],
+        ueninc: [7],
+        ulycn: 'werewolf',
+        lycanthrope: true,
+    });
+    game.level.at = () => ({ roomno: ROOMOFFSET, typ: ROOM });
+    const potion = waterPotion(30989, 'w', { cursed: true, bknown: true });
+    game.inventory = [potion];
+
+    const result = shop.fireDamageInventoryForTest(20, true, false, {
+        preburnedArmor: { bodyHit: true, message: '' },
+    });
+
+    assert.equal(game.inventory.includes(potion), false);
+    assert.equal(result.messages[0], 'Your potion of unholy water boils and explodes!');
+    assert.match(result.messages.join(' '), /You turn into a werewolf!/);
+    assert.equal(game.u.ulycn, 'werewolf');
+    assert.equal(game.u._polyself_form?.name, 'werewolf');
+    assert.equal(game.u._polyself_form?.wereBeast, true);
+    assert.equal(game.u.uac, 4);
+    assert.ok(game.u._polyself_base);
+    assert.doesNotMatch(result.messages.join(' '), /peculiar odor|eyes water/);
+});
+
+test('blessed water vapor reverts matching were-beast form without curing lycanthropy', () => {
+    installShopState();
+    initRng(1);
+    Object.assign(game.u, {
+        uhp: 5,
+        uhpmax: 8,
+        uen: 3,
+        uenmax: 4,
+        uac: 6,
+        ulevel: 2,
+        ulycn: 'werewolf',
+        lycanthrope: true,
+        _polyself_base: { uhp: 13, uhpmax: 15, uen: 7, uenmax: 9, uac: 4, ulevel: 3 },
+        _polyself_form: { name: 'werewolf', mlet: 'd', glyph: 'd', wereBeast: true, nohands: true },
+    });
+    game.level.at = () => ({ roomno: ROOMOFFSET, typ: ROOM });
+    const potion = waterPotion(30990, 'w', { blessed: true, bknown: true });
+    game.inventory = [potion];
+
+    const result = shop.fireDamageInventoryForTest(20, true, false, {
+        preburnedArmor: { bodyHit: true, message: '' },
+    });
+
+    assert.equal(game.inventory.includes(potion), false);
+    assert.equal(result.messages[0], 'Your potion of holy water boils and explodes!');
+    assert.match(result.messages.join(' '), /You return to human form!/);
+    assert.equal(game.u.ulycn, 'werewolf');
+    assert.equal(game.u.lycanthrope, true);
+    assert.equal(game.u._polyself_form, null);
+    assert.equal(game.u._polyself_base, null);
+    assert.equal(game.u.uhp, 13);
+    assert.equal(game.u.uhpmax, 15);
+    assert.doesNotMatch(result.messages.join(' '), /You feel purified|peculiar odor|eyes water/);
+});
+
 test('unpaid spellbook study usage charges four fifths of current shop price', () => {
     const { shkp } = installShopState();
     const book = healingSpellbook(3093, 'b');
