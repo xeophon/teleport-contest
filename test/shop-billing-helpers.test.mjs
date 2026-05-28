@@ -11554,6 +11554,99 @@ test('shop menu pickup by throws-rocks hero bills normal item and carries boulde
     assert.equal(game.context.move, 1);
 });
 
+test('pushing boulder from costly shop square bills it after movement', async () => {
+    const { shkp } = installCommandShopState();
+    Object.assign(shkp, { mx: 4, my: 5, shk: { x: 4, y: 5 } });
+    const rock = floorBoulder(6067, { ox: 6, oy: 5, known: true, dknown: true });
+    game.level.objects = [rock];
+    game.level.at = (x) => ({ roomno: x <= 6 ? ROOMOFFSET : 0, typ: ROOM });
+
+    await rhack('l');
+
+    const entry = shop.shopBillEntryForObject(shkp, rock);
+    assert.equal(rock.ox, 7);
+    assert.equal(rock.oy, 5);
+    assert.ok(entry);
+    assert.equal(shop.shopBillEntryTotal(entry), 7);
+    assert.equal(rock.unpaid, true);
+    assert.equal(shkp.billct, 1);
+    assert.match(game._pending_message, /With great effort you move the boulder\./);
+    assert.match(game._pending_message, /The boulder will cost you 7 zorkmids\./);
+    assert.equal(game.context.move, 1);
+});
+
+test('pushing billed boulder back into owner shop removes the bill row', async () => {
+    const { shkp } = installCommandShopState();
+    Object.assign(shkp, { mx: 4, my: 5, shk: { x: 4, y: 5 } });
+    Object.assign(game.u, { ux: 7, uy: 5 });
+    const rock = floorBoulder(6068, { ox: 6, oy: 5, known: true, dknown: true });
+    game.level.objects = [rock];
+    game.level.at = (x) => ({ roomno: x <= 5 ? ROOMOFFSET : 0, typ: ROOM });
+    shop.addObjectToShopBill(shkp, rock, 7);
+
+    await rhack('h');
+
+    assert.equal(rock.ox, 5);
+    assert.equal(rock.oy, 5);
+    assert.equal(shop.shopBillEntryForObject(shkp, rock), null);
+    assert.equal(rock.unpaid, false);
+    assert.equal(shkp.billct, 0);
+    assert.doesNotMatch(game._pending_message, /will cost/);
+    assert.equal(game.context.move, 1);
+});
+
+test('pushing billed boulder along shop boundary charges only when fully outside', async () => {
+    const { shkp } = installCommandShopState();
+    Object.assign(shkp, { mx: 4, my: 5, shk: { x: 4, y: 5 }, debit: 0, credit: 0 });
+    const rock = floorBoulder(6069, { ox: 6, oy: 5, known: true, dknown: true });
+    game.level.objects = [rock];
+    game.level.at = (x) => {
+        if (x <= 5) return { roomno: ROOMOFFSET, typ: ROOM };
+        if (x <= 7) return { roomno: ROOMOFFSET, typ: ROOM, edge: true };
+        return { roomno: 0, typ: ROOM };
+    };
+    shop.addObjectToShopBill(shkp, rock, 7);
+
+    await rhack('l');
+
+    assert.equal(rock.ox, 7);
+    assert.ok(shop.shopBillEntryForObject(shkp, rock));
+    assert.equal(rock.unpaid, true);
+    assert.equal(shkp.debit || 0, 0);
+
+    acknowledgePendingMessage();
+    await rhack('l');
+
+    assert.equal(rock.ox, 8);
+    assert.equal(shop.shopBillEntryForObject(shkp, rock), null);
+    assert.equal(rock.unpaid, false);
+    assert.equal(shkp.billct, 0);
+    assert.equal(shkp.debit, 7);
+    assert.match(game._pending_message, /owe Izchak 7 zorkmids for it/);
+});
+
+test('pushing billed boulder into second owner shop removes that owner row', async () => {
+    const { shkp } = installCommandShopState();
+    Object.assign(shkp, { mx: 10, my: 5, shk: { x: 10, y: 5 } });
+    const secondShopkeeper = makeShopkeeper(2, 'Asidonhopo', 4, 5, { shoproom: ROOMOFFSET + 1 });
+    game.level.rooms[1] = { rtype: SHOPBASE, resident: secondShopkeeper };
+    game.level.monsters.push(secondShopkeeper);
+    Object.assign(game.u, { ux: 7, uy: 5 });
+    const rock = floorBoulder(6070, { ox: 6, oy: 5, known: true, dknown: true });
+    game.level.objects = [rock];
+    game.level.at = (x) => ({ roomno: x <= 5 ? ROOMOFFSET + 1 : 0, typ: ROOM });
+    shop.addObjectToShopBill(secondShopkeeper, rock, 7);
+
+    await rhack('h');
+
+    assert.equal(rock.ox, 5);
+    assert.equal(shop.shopBillEntryForObject(secondShopkeeper, rock), null);
+    assert.equal(shop.shopBillEntryForObject(shkp, rock), null);
+    assert.equal(rock.unpaid, false);
+    assert.equal(secondShopkeeper.billct, 0);
+    assert.equal(shkp.billct, 0);
+});
+
 test('multi-pickup keeps earlier shop item when later selection runs out of slots', async () => {
     const { shkp } = installCommandShopState();
     fillInventoryLetters();

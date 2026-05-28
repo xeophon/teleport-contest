@@ -42,9 +42,6 @@ The next compact direct `potionhit()` families are still invisibility and acid. 
 
 ## Boulder-Push Follow-Up
 
-The best next shop-ledger slice is boulder push billing only:
+Superseded by `58-subagent-findings-2026-05-28.md`: the best next shop-ledger slice was boulder push billing. A follow-up C audit corrected the initial zero-price-row assumption: boulder `oc_cost` is zero, but `get_cost()` floors that to a positive 5-zorkmid base before charisma/knowledge adjustment.
 
-- Add a C-shaped transition around the existing boulder push branch in `js/cmd.js`.
-- Support zero-price bill ownership rows for pushed boulders without weakening general positive-price bill assumptions.
-- Use bill-owner priority for shared shop/boundary coordinates rather than selecting the first adjacent shopkeeper.
-- Public tests should cover inside-shop to boundary/free spot `addtobill()`, boundary back into the owner shop `subfrombill()`, and shared/boundary movement where a second shopkeeper owns the row.
+The implemented follow-up kept `addObjectToShopBill()` positive-price-only and added a boulder-specific C-shaped push transition instead.
