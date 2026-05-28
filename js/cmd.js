@@ -14340,7 +14340,6 @@ function heroThrownPotionHitMonster(potion, mon) {
 function supportsHeroThrownPotionUpwardHit(potion) {
     if (!isPotionObject(potion)) return false;
     const kind = thrownPotionEffectKind(potion);
-    if (isLitOilPotionHit(potion, kind)) return false;
     return !!kind && kind !== 'potion' && !kind.endsWith(' potion');
 }
 
@@ -14607,6 +14606,8 @@ function heroThrownPotionSelfHitMessages(potion, action, ceilingName = heroThrow
         messages.push(`The ${pickupObjectName({ ...potion, quan: 1 })} evaporates.`);
     if (kind === 'acid') heroAcidPotionSelfHitMessages(potion, messages);
     if (kind === 'polymorph') heroPolymorphPotionSelfHitMessages(messages);
+    if (isLitOilPotionHit(potion, kind))
+        explodeBurningOilPotion(potion, game.u?.ux ?? potion.ox ?? 0, game.u?.uy ?? potion.oy ?? 0, messages);
     potionBreathe(potion, messages);
     const shopDebt = convertUnpaidObjectToShopDebt(potion, { silent: true, broken: true });
     if (!shopDebt.charged) potion.no_charge = true;
@@ -14616,7 +14617,10 @@ function heroThrownPotionSelfHitMessages(potion, action, ceilingName = heroThrow
 function heroThrownPotionCeilingBreakMessages(potion, breakKind, ceilingName = heroThrowCeilingName()) {
     const messages = [`${floorObjectSubject({ ...potion, quan: 1 })} hits the ${ceilingName}.`];
     projectileTopLevelBreakMessage(potion, breakKind, messages);
-    if (isPotionObject(potion)) brokenPotionBreathe(potion, game.u?.ux ?? potion.ox ?? 0, game.u?.uy ?? potion.oy ?? 0, messages);
+    if (isLitOilPotionHit(potion))
+        explodeBurningOilPotion(potion, game.u?.ux ?? potion.ox ?? 0, game.u?.uy ?? potion.oy ?? 0, messages);
+    else if (isPotionObject(potion))
+        brokenPotionBreathe(potion, game.u?.ux ?? potion.ox ?? 0, game.u?.uy ?? potion.oy ?? 0, messages);
     markThrownBrokenObjectDebt(potion);
     return messages;
 }
@@ -51389,8 +51393,10 @@ export async function rhack(_cmd) {
                 color: item.color || CLR_MAGENTA,
             };
             if ((item.quan || 1) > 1) splitCarriedObjectShopBill(item, thrownObject, 1);
+            const removeBeforeImpact = isLitOilPotionHit(thrownObject);
+            if (removeBeforeImpact) removeInventoryItem(item, 1);
             const messages = heroThrownPotionUpwardMessages(thrownObject);
-            removeInventoryItem(item, 1);
+            if (!removeBeforeImpact) removeInventoryItem(item, 1);
             newsym(game.u?.ux || 0, game.u?.uy || 0);
             const keepPotionCallPrompt = game._command_mode === 'callPotionAfterMore';
             await setMessage(messages.join('  '), keepPotionCallPrompt || !!messages.more);

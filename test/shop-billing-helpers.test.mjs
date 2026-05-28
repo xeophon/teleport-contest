@@ -17485,6 +17485,93 @@ test('upward hero-thrown unlit oil potion self-hits without evaporation', async 
     ]);
 });
 
+test('upward hero-thrown lit oil potion self-hit explodes in burning oil', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, { uhp: 50, uhpmax: 50 });
+    markHeroSquareVisible();
+    const potion = oilPotion(87666, 'o');
+    potion.dknown = true;
+    potion.lamplit = true;
+    potion.burning = true;
+    game.inventory = [potion];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('o');
+    await rhack('<');
+
+    const message = game._pending_message || '';
+    assert.equal(game._command_mode, null);
+    assert.match(message, /almost hits the ceiling, then falls back on top of your head\./);
+    assert.match(message, /The (?:bottle|phial|flagon|carafe|flask|jar|vial) crashes on your head and breaks into shards\./);
+    assert.match(message, /Boom!/);
+    assert.match(message, /You are caught in the burning oil!/);
+    assert.doesNotMatch(message, /evaporates|peculiar odor|misses|In what direction/);
+    assert.equal(game.inventory.includes(potion), false);
+    assert.equal(game.level.objects.length, 0);
+    assert.equal(game.u.uhp < 50, true);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 4), [
+        'rn2(5)', 'rn2(7)', 'rnd(2)', 'd(4,4)',
+    ]);
+});
+
+test('upward hero-thrown lit oil potion can explode on the ceiling', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, { uhp: 50, uhpmax: 50 });
+    markHeroSquareVisible();
+    const potion = oilPotion(87667, 'o');
+    potion.dknown = true;
+    potion.lamplit = true;
+    potion.burning = true;
+    game.inventory = [potion];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('o');
+    await rhack('<');
+
+    const message = game._pending_message || '';
+    assert.equal(game._command_mode, null);
+    assert.match(message, /A potion of oil(?: \(lit\))? hits the ceiling\./);
+    assert.match(message, /A potion of oil(?: \(lit\))? shatters!/);
+    assert.match(message, /Boom!/);
+    assert.match(message, /You are caught in the burning oil!/);
+    assert.doesNotMatch(message, /falls back|crashes on your head|evaporates|peculiar odor|misses/);
+    assert.equal(game.inventory.includes(potion), false);
+    assert.equal(game.level.objects.length, 0);
+    assert.equal(game.u.uhp < 50, true);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 3), [
+        'rn2(5)', 'rn2(100)', 'd(4,4)',
+    ]);
+});
+
+test('upward hero-thrown unpaid lit oil potion bills the exploded potion', async () => {
+    const { shkp } = installCommandShopState();
+    Object.assign(shkp, { mx: 20, my: 20, shk: { x: 20, y: 20 } });
+    initRng(1);
+    Object.assign(game.u, { uhp: 50, uhpmax: 50 });
+    markHeroSquareVisible();
+    const potion = oilPotion(87668, 'o');
+    potion.dknown = true;
+    potion.lamplit = true;
+    potion.burning = true;
+    game.inventory = [potion];
+    shop.addObjectToShopBill(shkp, potion, 50);
+
+    await rhack('t');
+    await rhack('o');
+    await rhack('<');
+
+    assert.match(game._pending_message || '', /Boom!/);
+    assert.match(game._pending_message || '', /You are caught in the burning oil!/);
+    assert.equal(game.inventory.includes(potion), false);
+    assert.equal(shop.shopBillEntryForObject(shkp, potion), null);
+    assert.equal(shkp.debit, 50);
+    assert.equal(shkp.billct, 0);
+});
+
 test('upward hero-thrown cream pie self-hits and blinds the hero', async () => {
     installNonShopFloorState();
     initRng(1);
