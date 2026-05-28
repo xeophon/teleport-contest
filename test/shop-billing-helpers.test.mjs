@@ -17083,6 +17083,161 @@ test('hero-thrown acid potion can be blocked by potion resistance', async () => 
     ]);
 });
 
+test('hero-thrown polymorph potion polymorphs an ordinary monster', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.u.acurr.a[A_DEX] = 25;
+    const potion = polymorphPotion(8823, 'p');
+    potion.dknown = true;
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, { mhp: 10, mhpmax: 10 });
+    game.inventory = [potion];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('p');
+    markSquareVisible(goblin.mx, goblin.my);
+    await rhack('l');
+
+    assert.match(game._pending_message, /The potion of polymorph evaporates\./);
+    assert.match(game._pending_message, /The goblin turns into an? .*!/);
+    assert.doesNotMatch(game._pending_message, /misses|shatters|peculiar odor|shudders/);
+    assert.notEqual(goblin.data.name, 'goblin');
+    assert.equal(goblin.msleeping, 0);
+    assert.equal(goblin.mpeaceful, false);
+    assert.equal(game.inventory.includes(potion), false);
+    assert.equal(game.level.objects.length, 0);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 6), [
+        'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(5)', 'rn2(105)', 'rn2(25)',
+    ]);
+});
+
+test('hero-thrown polymorph potion is blocked by magic resistance', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.u.acurr.a[A_DEX] = 25;
+    const potion = polymorphPotion(8824, 'p');
+    potion.dknown = true;
+    const dragon = ordinaryThrowTarget('gray dragon', 7, 5, {
+        mhp: 30,
+        mhpmax: 30,
+        magicResistance: true,
+        data: { name: 'gray dragon', mlevel: 15, resistsMagic: true },
+    });
+    game.inventory = [potion];
+    game.level.monsters = [dragon];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('p');
+    markSquareVisible(dragon.mx, dragon.my);
+    await rhack('l');
+
+    assert.match(game._pending_message, /The potion of polymorph evaporates\./);
+    assert.doesNotMatch(game._pending_message, /turns into|shudders|peculiar odor|misses/);
+    assert.equal(dragon.data.name, 'gray dragon');
+    assert.equal(dragon.mhp, 29);
+    assert.equal(dragon.msleeping, 0);
+    assert.equal(dragon.mpeaceful, false);
+    assert.equal(game.inventory.includes(potion), false);
+    assert.equal(game.level.objects.length, 0);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(5)',
+    ]);
+});
+
+test('hero-thrown polymorph potion can be resisted by potion-class resistance', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.u.acurr.a[A_DEX] = 25;
+    const potion = polymorphPotion(8825, 'p');
+    potion.dknown = true;
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, { mr: 100 });
+    game.inventory = [potion];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('p');
+    markSquareVisible(goblin.mx, goblin.my);
+    await rhack('l');
+
+    assert.match(game._pending_message, /The potion of polymorph evaporates\./);
+    assert.doesNotMatch(game._pending_message, /turns into|shudders|peculiar odor|misses/);
+    assert.equal(goblin.data.name, 'goblin');
+    assert.equal(goblin.mhp, 4);
+    assert.equal(goblin.msleeping, 0);
+    assert.equal(goblin.mpeaceful, false);
+    assert.equal(game.inventory.includes(potion), false);
+    assert.equal(game.level.objects.length, 0);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(5)', 'rn2(105)',
+    ]);
+});
+
+test('hero-thrown polymorph potion system shock kills an ordinary monster', async () => {
+    installNonShopFloorState();
+    initRng(30);
+    game.u.acurr.a[A_DEX] = 25;
+    const potion = polymorphPotion(8826, 'p');
+    potion.dknown = true;
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, { mhp: 10, mhpmax: 10 });
+    game.inventory = [potion];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('p');
+    markSquareVisible(goblin.mx, goblin.my);
+    await rhack('l');
+
+    assert.match(game._pending_message, /The potion of polymorph evaporates\./);
+    assert.match(game._pending_message, /The goblin shudders!/);
+    assert.match(game._pending_message, /You kill the goblin!/);
+    assert.equal(game.level.monsters.includes(goblin), false);
+    assert.equal(game._vanquished_counts?.goblin, 1);
+    assert.equal(game.inventory.includes(potion), false);
+    assert.equal(game.level.objects.length, 0);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 6), [
+        'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(5)', 'rn2(105)', 'rn2(25)',
+    ]);
+});
+
+test('hero-thrown polymorph potion hitting a saddle wets it and skips polymorph', async () => {
+    installNonShopFloorState();
+    initRng(5);
+    game.u.acurr.a[A_DEX] = 25;
+    const potion = polymorphPotion(8827, 'p');
+    potion.dknown = true;
+    const saddle = wornSaddle(88271, { blessed: false, cursed: false, bknown: true });
+    const pony = ordinaryThrowTarget('pony', 7, 5, {
+        saddled: true,
+        misc_worn_check: W_SADDLE,
+        minvent: [saddle],
+    });
+    game.inventory = [potion];
+    game.level.monsters = [pony];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('p');
+    markSquareVisible(pony.mx, pony.my);
+    await rhack('l');
+
+    assert.match(game._pending_message, /crashes on the pony's saddle and breaks into shards\./);
+    assert.match(game._pending_message, /The pony's saddle gets wet\./);
+    assert.doesNotMatch(game._pending_message, /evaporates|turns into|shudders|misses|peculiar odor/);
+    assert.equal(pony.data.name, 'pony');
+    assert.equal(pony.mhp, 5);
+    assert.equal(pony.msleeping, 1);
+    assert.equal(pony.mpeaceful, true);
+    assert.equal(game.inventory.includes(potion), false);
+    assert.equal(game.level.objects.length, 0);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(10)',
+    ]);
+});
+
 test('hero-thrown acid potion can kill and remove the target monster', async () => {
     installNonShopFloorState();
     initRng(2);
