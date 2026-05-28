@@ -17702,6 +17702,120 @@ test('upward hero-thrown unpaid blinding venom from a stack bills one broken uni
     assert.equal(shkp.billct, 1);
 });
 
+test('upward hero-thrown scroll almost hits and falls back harmlessly', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    const scroll = scrollOfCharging(87700, 's');
+    game.inventory = [scroll];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('s');
+    await rhack('<');
+
+    assert.equal(game._command_mode, null);
+    assert.match(game._pending_message, /A scroll of charging almost hits the ceiling, then falls back on top of your head\./);
+    assert.match(game._pending_message, /It doesn't hurt\./);
+    assert.doesNotMatch(game._pending_message, /cmdassist|In what direction|crashes|shatters|Splat|What a mess/);
+    assert.equal(game.inventory.includes(scroll), false);
+    assert.equal(game.level.objects.length, 1);
+    assert.equal(game.level.objects[0].kind, 'scroll of charging');
+    assert.equal(game.level.objects[0].ox, game.u.ux);
+    assert.equal(game.level.objects[0].oy, game.u.uy);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rn2(5)', 'rn2(100)', 'rn2(100)',
+    ]);
+});
+
+test('upward hero-thrown scroll can hit the ceiling and fall back harmlessly', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    const scroll = scrollOfCharging(87701, 's');
+    game.inventory = [scroll];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('s');
+    await rhack('<');
+
+    assert.equal(game._command_mode, null);
+    assert.match(game._pending_message, /A scroll of charging hits the ceiling, then falls back on top of your head\./);
+    assert.match(game._pending_message, /It doesn't hurt\./);
+    assert.doesNotMatch(game._pending_message, /cmdassist|In what direction|crashes|shatters|Splat|What a mess/);
+    assert.equal(game.inventory.includes(scroll), false);
+    assert.equal(game.level.objects.length, 1);
+    assert.equal(game.level.objects[0].kind, 'scroll of charging');
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rn2(5)', 'rn2(100)', 'rn2(100)', 'rn2(100)',
+    ]);
+});
+
+test('upward hero-thrown harmless food does not damage the hero', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, { uhp: 30, uhpmax: 30 });
+    const pancake = simpleFood(87702, 'pancake', 'p');
+    game.inventory = [pancake];
+    const hpBefore = game.u.uhp;
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('p');
+    await rhack('<');
+
+    assert.equal(game._command_mode, null);
+    assert.match(game._pending_message, /A pancake hits the ceiling, then falls back on top of your head\./);
+    assert.match(game._pending_message, /It doesn't hurt\./);
+    assert.doesNotMatch(game._pending_message, /crashes|shatters|Splat|What a mess|cmdassist|In what direction/);
+    assert.equal(game.inventory.includes(pancake), false);
+    assert.equal(game.level.objects.length, 1);
+    assert.equal(game.level.objects[0].kind, 'pancake');
+    assert.equal(game.u.uhp, hpBefore);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rn2(5)', 'rn2(100)', 'rn2(100)', 'rn2(100)',
+    ]);
+});
+
+test('upward hero-thrown unpaid harmless stack item returns one unit to the shop floor', async () => {
+    const { shkp } = installCommandShopState();
+    initRng(1);
+    const pancakes = simpleFood(87703, 'pancake', 'p', {
+        quan: 2,
+        line: 'p - 2 pancakes',
+    });
+    game.inventory = [pancakes];
+    shop.addObjectToShopBill(shkp, pancakes, 30);
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('p');
+    await rhack('<');
+
+    assert.equal(game._command_mode, null);
+    assert.match(game._pending_message, /A pancake hits the shop's ceiling, then falls back on top of your head\./);
+    assert.match(game._pending_message, /It doesn't hurt\./);
+    assert.doesNotMatch(game._pending_message, /owe|Thief|cost|sell|crashes|shatters/);
+    assert.equal(pancakes.quan, 1);
+    assert.equal(game.inventory.includes(pancakes), true);
+    assert.equal(game.level.objects.length, 1);
+    const landed = game.level.objects[0];
+    assert.equal(landed.kind, 'pancake');
+    assert.equal(landed.ox, game.u.ux);
+    assert.equal(landed.oy, game.u.uy);
+    assert.notEqual(landed.unpaid, true);
+    assert.equal(shop.shopBillEntryForObject(shkp, landed), null);
+    const liveEntry = shop.shopBillEntryForObject(shkp, pancakes);
+    assert.ok(liveEntry);
+    assert.equal(liveEntry.bquan, 1);
+    assert.equal(shop.shopBillEntryTotal(liveEntry), 15);
+    assert.equal(pancakes.unpaidPrice, 15);
+    assert.equal(shkp.debit || 0, 0);
+    assert.equal(shkp.billct, 1);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rnd(2)', 'rn2(5)', 'rn2(100)', 'rn2(100)', 'rn2(100)',
+    ]);
+});
+
 test('upward hero-thrown melon self-hits and splats', async () => {
     installNonShopFloorState();
     initRng(1);

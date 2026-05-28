@@ -14356,6 +14356,31 @@ function isMelonObject(obj) {
         || String(obj.kind || obj.actualKind || pickupObjectName(obj)).toLowerCase() === 'melon';
 }
 
+const HERO_THROWN_HARMLESS_UPWARD_KINDS = new Set([
+    'sling',
+    'eucalyptus leaf',
+    'kelp frond',
+    'sprig of wolfsbane',
+    'fortune cookie',
+    'pancake',
+]);
+
+function isHeroThrownHarmlessUpwardObject(obj) {
+    if (!obj) return false;
+    const kind = objectKindKey(obj).replace(/^partly eaten\s+/, '');
+    if (obj.otyp === SCROLL_CLASS || obj.cls === 'scroll' || obj.glyph === '?') return true;
+    if (obj.otyp === EUCALYPTUS_LEAF || obj.otyp === KELP_FROND
+        || obj.otyp === FORTUNE_COOKIE || obj.otyp === PANCAKE
+        || HERO_THROWN_HARMLESS_UPWARD_KINDS.has(kind))
+        return true;
+    if (kind === 'rubber hose') return (obj.spe ?? 0) < 1;
+    if (isBagOfTricksObject(obj)) return (obj.spe ?? 0) < 1;
+    if (BAG_OBJECT_TYPES.has(obj.otyp) || kind === 'sack' || kind === 'oilskin sack' || kind === 'bag of holding')
+        return globContents(obj).length === 0;
+    const material = String(obj.material || obj.oc_material || '').toLowerCase().replace(/^hi_/, '');
+    return material === 'cloth';
+}
+
 function heroCanBeBlindedByCreamPie() {
     if (!game.u) return false;
     if (game.u.blindfolded || game.u.Blindfolded) return false;
@@ -14567,6 +14592,34 @@ function heroThrownVenomUpwardMessages(venom) {
         return heroThrownVenomSelfHitMessages(venom, 'hits', ceilingName);
     }
     return heroThrownVenomSelfHitMessages(venom, 'almost hits', ceilingName);
+}
+
+function heroThrownHarmlessObjectSelfHitMessages(obj, action, ceilingName = heroThrowCeilingName()) {
+    const messages = [`${floorObjectSubject({ ...obj, quan: 1 })} ${action} the ${ceilingName}, then falls back on top of your head.`];
+    const breakKind = projectileTopLevelBreakKind(obj);
+    if (breakKind) {
+        projectileTopLevelBreakMessage(obj, breakKind, messages);
+        markThrownBrokenObjectDebt(obj);
+        return messages;
+    }
+    messages.push("It doesn't hurt.");
+    const landing = landProjectileObjectWithShopHandling(obj, game.u?.ux || obj.ox || 0, game.u?.uy || obj.oy || 0, {});
+    messages.push(...landing.messages);
+    return messages;
+}
+
+function heroThrownHarmlessObjectUpwardMessages(obj) {
+    const ceilingName = heroThrowCeilingName();
+    const hasCeiling = heroHasThrowCeiling();
+    const hitsRoof = !!(rn2(5) && !heroIsUnderwaterForThrow());
+    if (!hasCeiling)
+        return heroThrownHarmlessObjectSelfHitMessages(obj, 'flies up into', ceilingName);
+    if (hitsRoof) {
+        const breakKind = projectileTopLevelBreakKind(obj);
+        if (breakKind) return heroThrownPotionCeilingBreakMessages(obj, breakKind, ceilingName);
+        return heroThrownHarmlessObjectSelfHitMessages(obj, 'hits', ceilingName);
+    }
+    return heroThrownHarmlessObjectSelfHitMessages(obj, 'almost hits', ceilingName);
 }
 
 function heroThrownMelonSelfHitMessages(melon, action, ceilingName = heroThrowCeilingName()) {
@@ -51316,6 +51369,35 @@ export async function rhack(_cmd) {
             };
             if ((item.quan || 1) > 1) splitCarriedObjectShopBill(item, thrownObject, 1);
             const messages = await heroThrownFragileObjectUpwardMessages(thrownObject);
+            removeInventoryItem(item, 1);
+            newsym(game.u?.ux || 0, game.u?.uy || 0);
+            await setMessage(messages.join('  '));
+            game._command_mode = null;
+            game._throw_item_letter = null;
+            game._resume_time_after_more = 0;
+            game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
+            game.context.move = 0;
+            return;
+        }
+        if (ch === '<' && isHeroThrownHarmlessUpwardObject(item)) {
+            let thrownId = null;
+            if ((item.quan || 1) > 1) thrownId = next_ident();
+            const thrownObject = {
+                ...item,
+                letter: undefined,
+                line: undefined,
+                wielded: false,
+                worn: false,
+                quivered: false,
+                ox: game.u?.ux || 0,
+                oy: game.u?.uy || 0,
+                id: thrownId ?? item.id,
+                quan: 1,
+                glyph: item.cls === 'food' ? '%' : item.glyph || (item.cls === 'scroll' ? '?' : item.cls === 'gem' ? '*' : ')'),
+                color: item.cls === 'food' ? CLR_ORANGE : item.color || (item.cls === 'gem' ? CLR_GRAY : CLR_WHITE),
+            };
+            if ((item.quan || 1) > 1) splitCarriedObjectShopBill(item, thrownObject, 1);
+            const messages = heroThrownHarmlessObjectUpwardMessages(thrownObject);
             removeInventoryItem(item, 1);
             newsym(game.u?.ux || 0, game.u?.uy || 0);
             await setMessage(messages.join('  '));
