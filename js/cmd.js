@@ -12722,9 +12722,11 @@ function monsterHatesBlessingsForWaterHit(mon) {
 function monsterIsWereOrVampireForWaterHit(mon) {
     const data = mon?.data || {};
     const name = String(data.name || mon?.name || '').toLowerCase();
+    const cham = String(mon?.chamName || mon?.cham || data.chamName || data.cham || '').toLowerCase();
     return !!(data.were || data.isWere || mon?.were || mon?.isWere
         || data.vampshifter || mon?.vampshifter || data.vampireLeader || mon?.vampireLeader
-        || /^were/.test(name) || /\bvampire\b/.test(name));
+        || /^were/.test(name) || /\bvampire\b/.test(name)
+        || /\bvampire|vlad/.test(cham));
 }
 
 function monsterNameForWaterHit(mon) {
@@ -12750,8 +12752,12 @@ function isBlessingHaterWaterPotionHit(potion, mon, kind = thrownPotionEffectKin
 }
 
 function isSaddleWaterPotionHit(potion, mon, kind = thrownPotionEffectKind(potion)) {
-    return kind === 'water' && !!monsterWornSaddleForPotionHit(mon)
-        && !monsterIsWereOrVampireForWaterHit(mon);
+    return kind === 'water' && !!monsterWornSaddleForPotionHit(mon);
+}
+
+function isShapechangerWaterPotionHit(potion, mon, kind = thrownPotionEffectKind(potion), options = {}) {
+    return kind === 'water' && (options.ignoreSaddle || !monsterHasWornSaddle(mon))
+        && monsterIsWereOrVampireForWaterHit(mon);
 }
 
 function monsterNeedsDeferredWaterPotionHit(mon, options = {}) {
@@ -12777,6 +12783,7 @@ function supportsHeroThrownPotionHit(potion, mon = null) {
         || kind === 'restore ability' || kind === 'gain ability' || kind === 'sickness'
         || kind === 'acid'
         || isSaddleWaterPotionHit(potion, mon, kind)
+        || isShapechangerWaterPotionHit(potion, mon, kind)
         || isBlessingHaterWaterPotionHit(potion, mon, kind)
         || isSpecialMonsterWaterPotionHit(potion, mon, kind)
         || isNeutralOrdinaryWaterPotionHit(potion, mon, kind)
@@ -13127,6 +13134,110 @@ function acidPotionHitMonster(potion, mon, messages) {
     return true;
 }
 
+const WERE_WATER_FORM_DATA = new Map([
+    ['wererat', {
+        human: { name: 'wererat', mlet: '@', glyph: '@', color: CLR_BROWN, mlevel: 2, mmove: 12, mac: 10, were: true, wereHuman: true },
+        beast: { name: 'wererat', mlet: 'r', glyph: 'r', color: CLR_BROWN, mlevel: 2, mmove: 12, mac: 6, nohands: true, animal: true, verysmall: true, were: true, wereBeast: true, noCorpse: true },
+        beastNoun: 'rat',
+    }],
+    ['werejackal', {
+        human: { name: 'werejackal', mlet: '@', glyph: '@', color: CLR_RED, mlevel: 2, mmove: 12, mac: 10, were: true, wereHuman: true },
+        beast: { name: 'werejackal', mlet: 'd', glyph: 'd', color: CLR_BROWN, mlevel: 2, mmove: 12, mac: 7, nohands: true, animal: true, were: true, wereBeast: true, noCorpse: true },
+        beastNoun: 'jackal',
+    }],
+    ['werewolf', {
+        human: { name: 'werewolf', mlet: '@', glyph: '@', color: CLR_ORANGE, mlevel: 5, mmove: 12, mac: 10, were: true, wereHuman: true },
+        beast: { name: 'werewolf', mlet: 'd', glyph: 'd', color: CLR_GRAY, mlevel: 5, mmove: 12, mac: 4, nohands: true, animal: true, were: true, wereBeast: true, noCorpse: true },
+        beastNoun: 'wolf',
+    }],
+]);
+
+function wereSpeciesNameForWaterHit(mon) {
+    const name = String(mon?.data?.name || mon?.name || '').toLowerCase();
+    const match = name.match(/\b(were(?:rat|jackal|wolf))\b/);
+    return match?.[1] || '';
+}
+
+function monsterIsWereForWaterHit(mon) {
+    return !!wereSpeciesNameForWaterHit(mon)
+        && !!(mon?.data?.were || mon?.data?.isWere || mon?.were || mon?.isWere
+            || /^were/.test(String(mon?.data?.name || mon?.name || '').toLowerCase()));
+}
+
+function monsterIsHumanWereForWaterHit(mon) {
+    if (!monsterIsWereForWaterHit(mon)) return false;
+    const data = mon?.data || {};
+    if (data.wereHuman || mon?.wereHuman || data.humanWere || mon?.humanWere) return true;
+    if (data.wereBeast || mon?.wereBeast) return false;
+    const mlet = data.mlet || mon?.mlet || data.glyph || mon?.glyph;
+    return mlet === '@' || data.human === true || data.humanoid === true;
+}
+
+function heroHasProtectionFromShapeChangers() {
+    if (game.u?.protectionFromShapeChangers || game.u?.Protection_from_shape_changers) return true;
+    return (game.inventory || []).some(item => {
+        if (!(item.worn || item.line?.includes('being worn'))) return false;
+        return /protection from shape (?:changers|shifters)/i
+            .test(String(item.kind || item.actualKind || item.line || ''));
+    });
+}
+
+function transformWereMonsterFromWater(mon, messages) {
+    const species = wereSpeciesNameForWaterHit(mon);
+    const forms = WERE_WATER_FORM_DATA.get(species);
+    if (!forms) return false;
+    const toHuman = !monsterIsHumanWereForWaterHit(mon);
+    const nextData = { ...(toHuman ? forms.human : forms.beast) };
+    if (monsterCanBeSeenForPotionEffect(mon) && !heroIsHallucinating())
+        messages.push(`${potionHitMonsterName(mon)} changes into a ${toHuman ? 'human' : forms.beastNoun}.`);
+    mon.data = nextData;
+    mon.name = nextData.name;
+    mon.mlet = nextData.mlet;
+    mon.glyph = nextData.glyph;
+    mon.color = nextData.color;
+    mon.m_lev = nextData.mlevel;
+    mon.mlevel = nextData.mlevel;
+    mon.were = true;
+    mon.isWere = true;
+    mon.wereHuman = !!nextData.wereHuman;
+    mon.wereBeast = !!nextData.wereBeast;
+    if (mon.msleeping || mon.mfrozen || mon.mcanmove === false || mon.mcanmove === 0) {
+        mon.msleeping = 0;
+        mon.mfrozen = 0;
+        mon.mcanmove = true;
+    }
+    const lostHp = Math.max(0, (mon.mhpmax || mon.mhp || 1) - (mon.mhp || 1));
+    if (lostHp > 0) mon.mhp = Math.min(mon.mhpmax || mon.mhp || 1, (mon.mhp || 1) + Math.trunc(lostHp / 4));
+    newsym(mon.mx, mon.my);
+    return true;
+}
+
+function waterPotionHitShapechanger(potion, mon, messages) {
+    if (potion?.blessed) {
+        const silent = monsterIsSilentForPotionHit(mon);
+        messages.push(`${potionHitMonsterName(mon)} ${silent ? 'writhes' : 'shrieks'} in pain!`);
+        if (!silent) wakeNearbyMonstersFromPotionHit(mon);
+        mon.mhp = (mon.mhp || 1) - d(2, 6);
+        if ((mon.mhp || 0) <= 0) {
+            killMonsterFromPotionHit(mon, messages);
+        } else if (monsterIsWereForWaterHit(mon) && !monsterIsHumanWereForWaterHit(mon)) {
+            transformWereMonsterFromWater(mon, messages);
+        }
+        return true;
+    }
+    if (potion?.cursed) {
+        const maxHp = Math.max(1, mon.mhpmax || mon.mhp || 1);
+        if (monsterCanBeSeenForPotionEffect(mon))
+            messages.push(`${potionHitMonsterName(mon)} looks healthier.`);
+        mon.mhp = Math.min(maxHp, (mon.mhp || maxHp) + d(2, 6));
+        if (monsterIsWereForWaterHit(mon) && monsterIsHumanWereForWaterHit(mon)
+            && !heroHasProtectionFromShapeChangers())
+            transformWereMonsterFromWater(mon, messages);
+        return false;
+    }
+    return true;
+}
+
 function waterPotionHitSpecialMonster(mon, messages) {
     if (monsterIsGremlinForWaterHit(mon)) {
         splitGremlinFromPotionWaterHit(mon, messages);
@@ -13269,6 +13380,8 @@ function heroThrownPotionHitMonster(potion, mon) {
     } else if (kind === 'healing' || kind === 'extra healing' || kind === 'full healing'
         || kind === 'restore ability' || kind === 'gain ability') {
         angerMon = healingPotionHitMonster(potion, mon, kind, messages);
+    } else if (isShapechangerWaterPotionHit(potion, mon, kind, waterBranchOptions)) {
+        angerMon = waterPotionHitShapechanger(potion, mon, messages);
     } else if (isBlessingHaterWaterPotionHit(potion, mon, kind, waterBranchOptions)) {
         angerMon = waterPotionHitBlessingHater(potion, mon, messages);
     } else if (isSpecialMonsterWaterPotionHit(potion, mon, kind, waterBranchOptions)) {

@@ -16396,25 +16396,115 @@ test('hero-thrown neutral water potion hits blessing-hating monsters without spe
     ]);
 });
 
-test('hero-thrown water potion still defers were and vampire shape branches', async () => {
+test('hero-thrown blessed water potion reverts a were-beast after damage', async () => {
     installNonShopFloorState();
     initRng(2);
     game.u.acurr.a[A_DEX] = 25;
     const potion = waterPotion(8816, 'w', { blessed: true, bknown: true });
     potion.dknown = true;
     const werewolf = ordinaryThrowTarget('werewolf', 7, 5, {
-        data: { name: 'werewolf', mlevel: 5, were: true },
+        mhp: 20,
+        mhpmax: 24,
+        data: { name: 'werewolf', mlevel: 5, mlet: 'd', were: true, wereBeast: true, animal: true, nohands: true },
+        mlet: 'd',
+        were: true,
+        wereBeast: true,
     });
     game.inventory = [potion];
     game.level.monsters = [werewolf];
+    enableRngLog({ reset: true });
 
     await rhack('t');
     await rhack('w');
     markSquareVisible(werewolf.mx, werewolf.my);
     await rhack('l');
 
-    assert.match(game._pending_message, /misses the werewolf/);
-    assert.doesNotMatch(game._pending_message, /crashes on .*werewolf.*breaks into shards|writhes|shrieks|looks healthier|rusts/);
+    assert.match(game._pending_message, /The potion of (?:holy )?water evaporates\./);
+    assert.match(game._pending_message, /The werewolf shrieks in pain!/);
+    assert.match(game._pending_message, /The werewolf changes into a human\./);
+    assert.doesNotMatch(game._pending_message, /misses|looks healthier|rusts/);
+    assert.equal(werewolf.data.wereHuman, true);
+    assert.equal(werewolf.data.wereBeast, undefined);
+    assert.equal(werewolf.mlet, '@');
+    assert.equal(werewolf.msleeping, 0);
+    assert.equal(werewolf.mpeaceful, false);
+    assert.equal(game.inventory.includes(potion), false);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(5)', 'd(2,6)',
+    ]);
+});
+
+test('hero-thrown cursed water potion transforms human werecreatures without angering them', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.u.acurr.a[A_DEX] = 25;
+    const potion = waterPotion(88161, 'w', { cursed: true, bknown: true });
+    potion.dknown = true;
+    const werewolf = ordinaryThrowTarget('werewolf', 7, 5, {
+        mhp: 4,
+        mhpmax: 20,
+        data: { name: 'werewolf', mlevel: 5, mlet: '@', were: true, wereHuman: true, human: true },
+        mlet: '@',
+        were: true,
+        wereHuman: true,
+    });
+    game.inventory = [potion];
+    game.level.monsters = [werewolf];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('w');
+    markSquareVisible(werewolf.mx, werewolf.my);
+    await rhack('l');
+
+    assert.match(game._pending_message, /The potion of (?:unholy )?water evaporates\./);
+    assert.match(game._pending_message, /The werewolf looks healthier\./);
+    assert.match(game._pending_message, /The werewolf changes into a wolf\./);
+    assert.doesNotMatch(game._pending_message, /misses|writhes|shrieks|rusts/);
+    assert.equal(werewolf.data.wereBeast, true);
+    assert.equal(werewolf.data.wereHuman, undefined);
+    assert.equal(werewolf.mlet, 'd');
+    assert.equal(werewolf.mhp > 4, true);
+    assert.equal(werewolf.mpeaceful, true);
+    assert.equal(game.inventory.includes(potion), false);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(5)', 'd(2,6)',
+    ]);
+});
+
+test('hero-thrown cursed water potion heals vampire shifters without shape change', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.u.acurr.a[A_DEX] = 25;
+    const potion = waterPotion(88162, 'w', { cursed: true, bknown: true });
+    potion.dknown = true;
+    const bat = ordinaryThrowTarget('vampire bat', 7, 5, {
+        mhp: 3,
+        mhpmax: 12,
+        data: { name: 'vampire bat', mlevel: 5, mlet: 'B', vampshifter: true },
+        mlet: 'B',
+        chamName: 'vampire',
+        vampshifter: true,
+    });
+    game.inventory = [potion];
+    game.level.monsters = [bat];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('w');
+    markSquareVisible(bat.mx, bat.my);
+    await rhack('l');
+
+    assert.match(game._pending_message, /The potion of (?:unholy )?water evaporates\./);
+    assert.match(game._pending_message, /The vampire bat looks healthier\./);
+    assert.doesNotMatch(game._pending_message, /misses|writhes|shrieks|changes into|rusts/);
+    assert.equal(bat.data.name, 'vampire bat');
+    assert.equal(bat.mhp > 3, true);
+    assert.equal(bat.mpeaceful, true);
+    assert.equal(game.inventory.includes(potion), false);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(5)', 'd(2,6)',
+    ]);
 });
 
 test('hero-thrown blessed water potion can uncurse a worn saddle', async () => {
