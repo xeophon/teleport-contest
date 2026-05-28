@@ -20579,6 +20579,30 @@ function billMagicBagLostItem(source, obj) {
     return 0;
 }
 
+function billMagicBagLostItemFromExplosionContext(obj, { held, x = game.u?.ux, y = game.u?.uy } = {}) {
+    if (held) return billHeldMagicBagLostItem(obj);
+    const shkp = shopkeeperForCostlySpot(x, y);
+    if (!shopkeeperInHisShop(shkp)) {
+        markObjectTreeShopBillsUsedUp(obj);
+        return 0;
+    }
+    const charges = lostMagicBagShopChargesForObject({ ox: x, oy: y }, obj, shkp, new Set(), {
+        includeContainedGold: false,
+        inventoryLikeContents: true,
+    });
+    let charged = 0;
+    const peaceful = shopkeeperPeacefulForDebt(shkp);
+    for (const [owner, value] of charges)
+        charged += chargeShopkeeperForLostMerchandise(owner, value, { peaceful });
+    return charged;
+}
+
+function billMagicBagLostItemWithContext(source, obj, context = null) {
+    if (context && Object.hasOwn(context, 'held'))
+        return billMagicBagLostItemFromExplosionContext(obj, context);
+    return billMagicBagLostItem(source, obj);
+}
+
 function billShopFloorMagicBagExplosionTarget(targetBag) {
     const shkp = shopFloorContainerShopkeeper(targetBag);
     if (!shkp || !targetBag || shopBillableGold(targetBag)) return { shkp: null, billEntry: null };
@@ -25674,7 +25698,7 @@ function putInventoryObjectIntoBag(bag, item, amount = item?.quan || 1) {
     curseLoadstoneLeavingInventory(putItem);
     if (isMagicBagObject(bag) && magicBagExplodesWithObject(putItem)) {
         removeInventoryItem(item, count);
-        return explodeMagicBagTransfer(bag, putItem, []);
+        return explodeMagicBagTransfer(bag, putItem, [], { triggerHeld: true });
     }
     removeInventoryItem(item, count);
     add_to_container(bag, putItem);
@@ -25786,7 +25810,7 @@ function putInventoryObjectIntoContainer(container, item, amount = item?.quan ||
         billShopFloorMagicBagExplosionTarget(container);
         removeInventoryItem(item, count);
         const messages = sellobjResult?.message ? [sellobjResult.message] : [];
-        return explodeMagicBagTransfer(container, putItem, messages);
+        return explodeMagicBagTransfer(container, putItem, messages, { triggerHeld: true });
     }
     const billing = billShopFloorContainerPutObject(container, putItem, {
         acceptedSale: !!options.acceptedSale,
@@ -26783,13 +26807,13 @@ function scatterOneMagicBagObject(scatterObj, sx, sy, messages, shopContext = nu
         maybeBillMagicBagScatterGold(scatterObj, sx, sy, x, y, shopContext);
 }
 
-function scatterMagicBagContents(container, messages) {
+function scatterMagicBagContents(container, messages, { lostContext = null } = {}) {
     const x = game.u?.ux ?? container?.ox ?? 0;
     const y = game.u?.uy ?? container?.oy ?? 0;
     const shopContext = magicBagScatterShopContext(x, y);
     for (const obj of [...liquidFlowContainerContents(container)]) {
         if (!rn2(13)) {
-            billMagicBagLostItem(container, obj);
+            billMagicBagLostItemWithContext(container, obj, lostContext);
             removeContainedObject(container, obj);
             destroyMagicBagItem(obj, messages, { silent: true });
             continue;
@@ -26820,9 +26844,12 @@ function damageHeroWithMagicBagExplosion(messages) {
     }
 }
 
-function explodeMagicBagTransfer(targetBag, triggerObj, messages, { tumble = false } = {}) {
+function explodeMagicBagTransfer(targetBag, triggerObj, messages, { tumble = false, triggerHeld = null } = {}) {
     messages.push(magicBagExplosionMessage(triggerObj, tumble));
-    if (isBagOfHoldingObject(triggerObj)) scatterMagicBagContents(triggerObj, messages);
+    if (isBagOfHoldingObject(triggerObj)) {
+        const lostContext = triggerHeld == null ? null : { held: !!triggerHeld };
+        scatterMagicBagContents(triggerObj, messages, { lostContext });
+    }
     destroyMagicBagItem(triggerObj, messages, { silent: true, usedUpShopBill: true });
     scatterMagicBagContents(targetBag, messages);
     destroyMagicBagItem(targetBag, messages, { silent: true, usedUpShopBill: true });
@@ -27187,6 +27214,7 @@ function tipContainerIntoContainer(source, targetBox) {
     if (!contents.length) return [tipContainerEmptyMessage(source)];
     targetBox.contents ??= [];
     const cursedMagicBag = isMagicBagObject(source) && source.cursed;
+    const sourceHeld = objectCarriedByHero(source);
     let lostMerchandise = 0;
     const messages = [contents.length === 1
         ? `An object tumbles into ${tipTargetPhrase(targetBox)}.`
@@ -27203,7 +27231,7 @@ function tipContainerIntoContainer(source, targetBox) {
         addTippedContainerObjectToShopBill(source, obj);
         prepareTippedObjectForContainer(obj);
         if (isMagicBagObject(targetBox) && magicBagExplodesWithObject(obj)) {
-            explodeMagicBagTransfer(targetBox, obj, messages, { tumble: true });
+            explodeMagicBagTransfer(targetBox, obj, messages, { tumble: true, triggerHeld: sourceHeld });
             targetGone = true;
             break;
         }

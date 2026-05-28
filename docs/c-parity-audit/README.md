@@ -63,6 +63,7 @@ This folder records source-backed audits against `nethack-c/upstream`. The notes
 - [57-subagent-findings-2026-05-28.md](57-subagent-findings-2026-05-28.md): direct hero-thrown speed potionhit plus boulder-push shop-boundary follow-up audit.
 - [58-subagent-findings-2026-05-28.md](58-subagent-findings-2026-05-28.md): boulder push shop-boundary billing, owner return, and outside-shop debt conversion.
 - [59-subagent-findings-2026-05-28.md](59-subagent-findings-2026-05-28.md): direct hero-thrown invisibility potionhit, monster visibility state, and adjacent vapor discovery.
+- [60-subagent-findings-2026-05-28.md](60-subagent-findings-2026-05-28.md): magic-bag trigger explosion billing with held/floor `do_boh_explosion()` context.
 
 ## Cross-Cutting Themes
 

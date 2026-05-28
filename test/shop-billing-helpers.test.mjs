@@ -14087,6 +14087,57 @@ test('tipping shop-floor nested cancellation trigger into carried magic bag pres
     assert.equal(game._usedUpShopBills.some(entry => String(entry.bo_id) === String(wand.id)), true);
 });
 
+test('tipping shop-floor bag of holding into carried magic bag charges vanished trigger contents', () => {
+    const { shkp } = installShopState();
+    initRng(13);
+    const source = shopFloorContainer(69565);
+    const target = bagOfHolding(69566, 'b');
+    const trigger = putObjectInContainer(source, bagOfHolding(69567));
+    const blade = putObjectInContainer(trigger, dagger(69568));
+    const triggerPrice = shop.shopItemPrice(trigger, 5, 5);
+    const bladePrice = shop.shopItemPrice(blade, 5, 5);
+    game.u.uhp = 100;
+    game.inventory = [target];
+    game.level.objects = [source];
+
+    const messages = shop.tipContainerIntoContainer(source, target);
+
+    assert.match(messages.join(' '), /As a bag tumbles inside, you are blasted by a magical explosion/);
+    assert.equal(game.inventory.includes(target), false);
+    assert.equal(source.contents.includes(trigger), false);
+    assert.equal(game.level.objects.includes(trigger), false);
+    assert.equal(game.level.objects.includes(blade), false);
+    assert.equal(shop.shopBillEntryForObject(shkp, blade), null);
+    assert.notEqual(blade.unpaid, true);
+    assert.equal(shkp.debit, bladePrice);
+    assertUsedUpBillForObject(shkp, trigger, triggerPrice);
+    assert.equal(game._usedUpShopBills.some(entry => String(entry.bo_id) === String(blade.id)), false);
+});
+
+test('tipping carried bag of holding into carried magic bag charges vanished unpaid trigger contents', () => {
+    const { shkp } = installShopState();
+    initRng(13);
+    const source = sack(69569, 's');
+    const target = bagOfHolding(69570, 'b');
+    const trigger = putObjectInContainer(source, bagOfHolding(69571));
+    const blade = putObjectInContainer(trigger, dagger(69572));
+    shop.addObjectToShopBill(shkp, blade, 45);
+    game.u.uhp = 100;
+    game.inventory = [source, target];
+
+    const messages = shop.tipContainerIntoContainer(source, target);
+
+    assert.match(messages.join(' '), /magical explosion/);
+    assert.equal(game.inventory.includes(target), false);
+    assert.equal(source.contents.includes(trigger), false);
+    assert.equal(game.level.objects.includes(blade), false);
+    assert.equal(shop.shopBillEntryForObject(shkp, blade), null);
+    assert.notEqual(blade.unpaid, true);
+    assert.equal(shkp.debit, 45);
+    assert.equal(shkp.billct, 0);
+    assert.equal((game._usedUpShopBills || []).some(entry => String(entry.bo_id) === String(blade.id)), false);
+});
+
 test('tipping into a magic bag explosion leaves later source contents in source', () => {
     installShopState();
     const source = sack(6962, 's');
