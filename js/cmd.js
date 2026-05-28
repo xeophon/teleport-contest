@@ -19322,6 +19322,7 @@ function projectileContainerImpactDmg(obj, fromX, fromY, options = {}) {
     const shkp = shopkeeperForCostlySpot(fromX, fromY);
     const costly = shopkeeperInHisShop(shkp);
     const insider = costly && sameShopkeeper(shkp, shopkeeperForShopRoom(game.u?.ux, game.u?.uy));
+    const fromInventory = options.fromInventory !== false;
     let loss = 0;
     let broke = false;
     for (const child of [...globContents(obj)]) {
@@ -19329,9 +19330,16 @@ function projectileContainerImpactDmg(obj, fromX, fromY, options = {}) {
         if (!breakKind) continue;
         const brokenChild = splitImpactBrokenStackItem(obj, child, shkp);
         if (costly) {
-            if (!brokenChild.unpaid) brokenChild.no_charge = true;
-            const charged = convertUnpaidObjectToShopDebt(brokenChild, { silent: true, broken: true });
-            loss += charged.value || 0;
+            if (fromInventory) {
+                if (!brokenChild.unpaid) brokenChild.no_charge = true;
+                const charged = convertUnpaidObjectToShopDebt(brokenChild, { silent: true, broken: true });
+                loss += charged.value || 0;
+            } else {
+                const charges = lostShopMerchandiseChargesForObject({ ox: fromX, oy: fromY }, brokenChild, shkp);
+                const peaceful = shopkeeperPeacefulForDebt(shkp);
+                for (const [owner, value] of charges)
+                    loss += chargeShopkeeperForLostMerchandise(owner, value, { peaceful });
+            }
         }
         if (brokenChild === child) removeContainedObject(obj, child);
         brokenChild.contained = false;
