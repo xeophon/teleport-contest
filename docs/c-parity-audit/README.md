@@ -110,6 +110,7 @@ This folder records source-backed audits against `nethack-c/upstream`. The notes
 - [104-subagent-findings-2026-05-28.md](104-subagent-findings-2026-05-28.md): upward non-special vapor-only potion self-hit expansion and throw-letter command coverage.
 - [105-subagent-findings-2026-05-28.md](105-subagent-findings-2026-05-28.md): upward acid and unlit-oil self-hit parity.
 - [106-subagent-findings-2026-05-28.md](106-subagent-findings-2026-05-28.md): upward throw ceiling/no-ceiling/underwater wording parity.
+- [107-subagent-findings-2026-05-28.md](107-subagent-findings-2026-05-28.md): upward polymorph potion self-hit parity.
 
 ## Cross-Cutting Themes
 

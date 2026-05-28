@@ -6,7 +6,7 @@ import { activateStatueTrap, burnFloorObjectsByFire, earthFloorEffects, finishFo
 import { game, resetGame } from '../js/gstate.js';
 import { pushKey, resetInputState } from '../js/input.js';
 import { enableRngLog, getRngLog, initRng } from '../js/rng.js';
-import { A_DEX, A_STR, BILLSZ, CANDLESHOP, CLOUD, COULD_SEE, DB_EAST, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, FOUNTAIN, HOLE, ICE, ICED_POOL, IN_SIGHT, LAVAPOOL, MOAT, PIT, POOL, ROOM, ROOMOFFSET, SHOPBASE, SQKY_BOARD, STATUE_TRAP, STRAT_WAITFORU, TRAPDOOR, TT_WEB, WEB, W_SADDLE } from '../js/const.js';
+import { A_CON, A_DEX, A_STR, BILLSZ, CANDLESHOP, CLOUD, COULD_SEE, DB_EAST, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, FOUNTAIN, HOLE, ICE, ICED_POOL, IN_SIGHT, LAVAPOOL, MOAT, PIT, POOL, ROOM, ROOMOFFSET, SHOPBASE, SQKY_BOARD, STATUE_TRAP, STRAT_WAITFORU, TRAPDOOR, TT_WEB, WEB, W_SADDLE } from '../js/const.js';
 import { currentFruitId, setCurrentFruitName } from '../js/fruit.js';
 
 const BRASS_LANTERN = 226;
@@ -17375,6 +17375,101 @@ test('upward hero-thrown unlit oil potion self-hits without evaporation', async 
     assert.ok(hpBefore - game.u.uhp <= 2);
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
         'rn2(5)', 'rn2(7)', 'rnd(2)',
+    ]);
+});
+
+test('upward hero-thrown polymorph potion self-hits and polymorphs the hero', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, {
+        uhp: 40,
+        uhpmax: 40,
+        uen: 0,
+        uenmax: 0,
+        ulevel: 1,
+        uac: 10,
+    });
+    game.u.acurr.a[A_CON] = 25;
+    const potion = polymorphPotion(87668, 'p');
+    potion.dknown = true;
+    game.inventory = [potion];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('p');
+    await rhack('<');
+
+    assert.equal(game._command_mode, null);
+    assert.match(game._pending_message, /almost hits the ceiling, then falls back on top of your head\./);
+    assert.match(game._pending_message, /crashes on your head and breaks into shards\./);
+    assert.match(game._pending_message, /The potion of polymorph evaporates\./);
+    assert.match(game._pending_message, /You feel a little strange\./);
+    assert.match(game._pending_message, /You turn into an? .*!/);
+    assert.doesNotMatch(game._pending_message, /peculiar odor|cmdassist|misses|shatters/);
+    assert.equal(game.inventory.includes(potion), false);
+    assert.equal(game.level.objects.length, 0);
+    assert.ok(game.u._polyself_base);
+    assert.ok(game.u._polyself_form?.name);
+    assert.equal(game.u.uconduct?.polyselfs, 1);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 4), [
+        'rn2(5)', 'rn2(7)', 'rnd(2)', 'rn2(20)',
+    ]);
+});
+
+test('upward hero-thrown polymorph potion system shock does not polyself', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, { uhp: 40, uhpmax: 40 });
+    const potion = polymorphPotion(87669, 'p');
+    potion.dknown = true;
+    game.inventory = [potion];
+    const hpBefore = game.u.uhp;
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('p');
+    await rhack('<');
+
+    assert.equal(game._command_mode, null);
+    assert.match(game._pending_message, /crashes on your head and breaks into shards\./);
+    assert.match(game._pending_message, /The potion of polymorph evaporates\./);
+    assert.match(game._pending_message, /You feel a little strange\./);
+    assert.match(game._pending_message, /You shudder for a moment\./);
+    assert.doesNotMatch(game._pending_message, /You turn into|peculiar odor|cmdassist|misses/);
+    assert.equal(game.inventory.includes(potion), false);
+    assert.equal(game.level.objects.length, 0);
+    assert.equal(game.u._polyself_base || null, null);
+    assert.equal(game.u._polyself_form || null, null);
+    assert.ok(game.u.uhp < hpBefore);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rn2(5)', 'rn2(7)', 'rnd(2)', 'rn2(20)', 'rnd(30)', 'rn2(2)', 'rn2(2)',
+    ]);
+});
+
+test('upward hero-thrown polymorph potion is blocked by unchanging after feeling strange', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, { uhp: 40, uhpmax: 40, unchanging: true });
+    const potion = polymorphPotion(87670, 'p');
+    potion.dknown = true;
+    game.inventory = [potion];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('p');
+    await rhack('<');
+
+    assert.equal(game._command_mode, null);
+    assert.match(game._pending_message, /crashes on your head and breaks into shards\./);
+    assert.match(game._pending_message, /The potion of polymorph evaporates\./);
+    assert.match(game._pending_message, /You feel a little strange\./);
+    assert.doesNotMatch(game._pending_message, /You fail to transform|You shudder|You turn into|peculiar odor/);
+    assert.equal(game.inventory.includes(potion), false);
+    assert.equal(game.level.objects.length, 0);
+    assert.equal(game.u._polyself_base || null, null);
+    assert.equal(game.u._polyself_form || null, null);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rn2(5)', 'rn2(7)', 'rnd(2)', 'rn2(2)',
     ]);
 });
 

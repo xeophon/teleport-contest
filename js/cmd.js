@@ -14297,14 +14297,11 @@ function heroThrownPotionHitMonster(potion, mon) {
     return messages;
 }
 
-const DEFERRED_SPECIAL_UPWARD_POTION_KINDS = new Set(['polymorph']);
-
 function supportsHeroThrownPotionUpwardHit(potion) {
     if (!isPotionObject(potion)) return false;
     const kind = thrownPotionEffectKind(potion);
     if (isLitOilPotionHit(potion, kind)) return false;
-    return !!kind && kind !== 'potion' && !kind.endsWith(' potion')
-        && !DEFERRED_SPECIAL_UPWARD_POTION_KINDS.has(kind);
+    return !!kind && kind !== 'potion' && !kind.endsWith(' potion');
 }
 
 function heroAcidPotionSelfHitMessages(potion, messages) {
@@ -14347,6 +14344,22 @@ function heroThrowCeilingName(x = game.u?.ux ?? 0, y = game.u?.uy ?? 0) {
     return 'rock cavern';
 }
 
+function heroPolymorphPotionSelfHitMessages(messages) {
+    messages.push(`You feel a little ${heroIsHallucinating() ? 'normal' : 'strange'}.`);
+    if (heroHasUnchanging() || heroHasAntimagic()) return;
+    const shock = polymorphSystemShock();
+    if (shock) {
+        messages.push(shock.message);
+        if (shock.more) messages.more = true;
+        return;
+    }
+    const formName = randomPolyselfMonsterName();
+    const result = rn2(5) ? becomeMonster(formName) : becomeMonster('human');
+    if (result?.message) messages.push(result.message);
+    if (result?.more) messages.more = true;
+    newsym(game.u?.ux || 0, game.u?.uy || 0);
+}
+
 function heroThrownPotionSelfHitMessages(potion, action, ceilingName = heroThrowCeilingName()) {
     const messages = [];
     const kind = thrownPotionEffectKind(potion);
@@ -14365,6 +14378,7 @@ function heroThrownPotionSelfHitMessages(potion, action, ceilingName = heroThrow
     if (!isPotionOfOil(potion))
         messages.push(`The ${pickupObjectName({ ...potion, quan: 1 })} evaporates.`);
     if (kind === 'acid') heroAcidPotionSelfHitMessages(potion, messages);
+    if (kind === 'polymorph') heroPolymorphPotionSelfHitMessages(messages);
     potionBreathe(potion, messages);
     const shopDebt = convertUnpaidObjectToShopDebt(potion, { silent: true, broken: true });
     if (!shopDebt.charged) potion.no_charge = true;
@@ -50819,7 +50833,7 @@ export async function rhack(_cmd) {
             removeInventoryItem(item, 1);
             newsym(game.u?.ux || 0, game.u?.uy || 0);
             const keepPotionCallPrompt = game._command_mode === 'callPotionAfterMore';
-            await setMessage(messages.join('  '), keepPotionCallPrompt);
+            await setMessage(messages.join('  '), keepPotionCallPrompt || !!messages.more);
             if (!keepPotionCallPrompt) game._command_mode = null;
             game._throw_item_letter = null;
             game._resume_time_after_more = 0;
