@@ -12226,9 +12226,112 @@ function stoneToFleshMeatRingReplacement(target) {
     return replacement;
 }
 
+const STONE_TO_FLESH_GEMSTONE_NAMES = new Set([
+    'dilithium crystal', 'diamond', 'ruby', 'jacinth', 'jacinth stone',
+    'sapphire', 'black opal', 'emerald', 'turquoise', 'turquoise stone',
+    'citrine', 'citrine stone', 'aquamarine', 'aquamarine stone',
+    'amber', 'amber stone', 'topaz', 'topaz stone', 'jet', 'jet stone',
+    'opal', 'chrysoberyl', 'chrysoberyl stone', 'garnet', 'garnet stone',
+    'amethyst', 'amethyst stone', 'jasper', 'jasper stone', 'fluorite',
+    'fluorite stone', 'obsidian', 'obsidian stone', 'agate', 'agate stone',
+    'jade', 'jade stone',
+]);
+const STONE_TO_FLESH_MINERAL_GEM_NAMES = new Set([
+    'rock', 'rocks', 'luckstone', 'loadstone', 'touchstone', 'flint',
+    'flint stone', 'gray stone', 'grey stone',
+]);
+
+function stoneToFleshObjectMaterial(item) {
+    const explicit = normalizeStoneToFleshMaterial(item?.oc_material || item?.material);
+    if (explicit) return explicit;
+    if (isBoulderObject(item)) return 'mineral';
+    const cls = itemClassKey(item);
+    if (cls !== 'gem' && item?.glyph !== '*' && item?.otyp !== GEM_CLASS)
+        return '';
+    const values = [
+        objectKindKey(item),
+        item?.actualKind,
+        item?.kind,
+        item?.gemDescription,
+        item?.displayName,
+    ].map(value => String(value || '').toLowerCase().trim()).filter(Boolean);
+    if (values.some(value => /\bworthless piece of\b.*\bglass\b/.test(value) || value === 'glass'))
+        return 'glass';
+    if (values.some(value => STONE_TO_FLESH_GEMSTONE_NAMES.has(value)))
+        return 'gemstone';
+    if (values.some(value => STONE_TO_FLESH_MINERAL_GEM_NAMES.has(value)))
+        return 'mineral';
+    return '';
+}
+
+function isStoneToFleshGemObject(item) {
+    if (!item || (itemClassKey(item) !== 'gem' && item?.glyph !== '*' && item?.otyp !== GEM_CLASS))
+        return false;
+    const material = stoneToFleshObjectMaterial(item);
+    return material === 'mineral' || material === 'gemstone';
+}
+
+function stoneToFleshMeatballReplacement(target) {
+    const quantity = Math.max(1, Math.trunc(Number(target?.quan || 1)));
+    const replacement = mksobj(MEATBALL, false, false);
+    Object.assign(replacement, object_display(replacement), {
+        quan: quantity,
+        letter: target?.letter,
+        blessed: !!target?.blessed,
+        cursed: !!target?.cursed,
+        no_charge: !!target?.no_charge,
+        cls: 'food',
+        glyph: '%',
+        otyp: MEATBALL,
+        kind: 'meatball',
+        actualKind: 'meatball',
+        singular: 'meatball',
+        plural: 'meatballs',
+        nutrition: 5,
+        owt: quantity,
+    });
+    return replacement;
+}
+
+function stoneToFleshEnormousMeatballReplacement(target) {
+    const replacement = mksobj(ENORMOUS_MEATBALL, false, false);
+    Object.assign(replacement, object_display(replacement), {
+        quan: 1,
+        letter: target?.letter,
+        blessed: !!target?.blessed,
+        cursed: !!target?.cursed,
+        no_charge: !!target?.no_charge,
+        cls: 'food',
+        glyph: '%',
+        otyp: ENORMOUS_MEATBALL,
+        kind: 'enormous meatball',
+        actualKind: 'enormous meatball',
+        singular: 'enormous meatball',
+        plural: 'enormous meatballs',
+        nutrition: 2000,
+        owt: 400,
+    });
+    return replacement;
+}
+
+function stoneToFleshObjectAlwaysResists(item) {
+    return !!(item?.invocation || item?.riderCorpse || lavaObjResistsHard(item));
+}
+
+function stoneToFleshObjectResists(item) {
+    if (stoneToFleshObjectAlwaysResists(item)) return true;
+    return rn2(100) < (item?.artifact || item?.oartifact ? 98 : 2);
+}
+
 function stoneToFleshReplacementForObject(item) {
-    if (isStoneToFleshMarbleWandObject(item)) return stoneToFleshMeatStickReplacement(item);
-    if (isStoneToFleshMineralRingObject(item)) return stoneToFleshMeatRingReplacement(item);
+    if (isStoneToFleshMarbleWandObject(item))
+        return stoneToFleshObjectResists(item) ? null : stoneToFleshMeatStickReplacement(item);
+    if (isStoneToFleshMineralRingObject(item))
+        return stoneToFleshObjectResists(item) ? null : stoneToFleshMeatRingReplacement(item);
+    if (isBoulderObject(item))
+        return stoneToFleshObjectResists(item) ? null : stoneToFleshEnormousMeatballReplacement(item);
+    if (isStoneToFleshGemObject(item))
+        return stoneToFleshObjectResists(item) ? null : stoneToFleshMeatballReplacement(item);
     return null;
 }
 

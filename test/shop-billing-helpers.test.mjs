@@ -27,6 +27,8 @@ const BAG_OF_TRICKS = 10158;
 const POT_WATER = 253;
 const SLIME_MOLD = 11009;
 const MEAT_RING = 10164;
+const MEATBALL = 11012;
+const ENORMOUS_MEATBALL = 11013;
 const MEAT_STICK = 11014;
 const DART = 353;
 const TALLOW_CANDLE = 370;
@@ -157,6 +159,11 @@ async function castStoneToFleshAtSelf() {
 
 async function castStoneToFleshDown() {
     await castStoneToFleshDirection('>');
+}
+
+function assertNoStoneToFleshScoreSideEffects() {
+    assert.equal(game.u.uconduct?.polypiles || 0, 0);
+    assert.equal(game.u.urexp || 0, 0);
 }
 
 function installAngryNotRobbedPayState({ gold = 0, seed = 1, player = 'Hero', customer = 'PreviousCustomer' } = {}) {
@@ -1004,6 +1011,24 @@ function floorBoulder(id, props = {}) {
         ox: 5,
         oy: 5,
         owt: 6000,
+        ...props,
+    };
+}
+
+function floorGem(id, kind, props = {}) {
+    return {
+        id,
+        otyp: 14,
+        cls: 'gem',
+        glyph: '*',
+        kind,
+        actualKind: kind,
+        gemDescription: `${kind} gem`,
+        quan: 1,
+        ox: 5,
+        oy: 5,
+        known: true,
+        dknown: true,
         ...props,
     };
 }
@@ -3540,6 +3565,57 @@ test('self-cast stone to flesh turns carried mineral ring into meat ring', async
     assert.match(game._pending_message, /You smell the odor of meat\./);
 });
 
+test('self-cast stone to flesh turns carried boulder into enormous meatball', async () => {
+    installCommandShopState();
+    initRng(1);
+    const boulder = floorBoulder(31016, {
+        letter: 'a',
+        line: 'a - a boulder',
+    });
+    delete boulder.ox;
+    delete boulder.oy;
+    game.inventory = [boulder];
+
+    await castStoneToFleshAtSelf();
+
+    assert.equal(game.inventory.length, 1);
+    const result = game.inventory[0];
+    assert.equal(result.letter, 'a');
+    assert.equal(result.cls, 'food');
+    assert.equal(result.otyp, ENORMOUS_MEATBALL);
+    assert.equal(result.kind, 'enormous meatball');
+    assert.equal(result.actualKind, 'enormous meatball');
+    assert.equal(result.quan, 1);
+    assert.equal(result.nutrition, 2000);
+    assert.equal(result.owt, 400);
+    assert.notEqual(result.id, 31016);
+    assert.equal(result.line, 'a - an enormous meatball');
+    assert.match(game._pending_message, /You smell the odor of meat\./);
+    assertNoStoneToFleshScoreSideEffects();
+});
+
+test('self-cast stone to flesh respects ordinary object resistance', async () => {
+    installCommandShopState();
+    initRng(40);
+    enableRngLog({ reset: true });
+    const boulder = floorBoulder(31017, {
+        letter: 'a',
+        line: 'a - a boulder',
+    });
+    delete boulder.ox;
+    delete boulder.oy;
+    game.inventory = [boulder];
+
+    await castStoneToFleshAtSelf();
+
+    assert.equal(game.inventory.length, 1);
+    assert.equal(game.inventory[0], boulder);
+    assert.equal(boulder.otyp, BOULDER);
+    assert.deepEqual(getRngLog().filter(entry => entry.startsWith('rn2(100)=')), ['rn2(100)=0']);
+    assert.doesNotMatch(game._pending_message || '', /odor of meat|delicious smell/);
+    assertNoStoneToFleshScoreSideEffects();
+});
+
 test('self-cast stone to flesh leaves carried wooden ring unchanged', async () => {
     installCommandShopState();
     initRng(1);
@@ -3780,6 +3856,86 @@ test('downward stone to flesh turns floor gemstone ring into meat ring', async (
     assert.equal(result.ringRoll, undefined);
     assert.equal(result.line, undefined);
     assert.match(game._pending_message, /You smell the odor of meat\./);
+});
+
+test('downward stone to flesh turns floor boulder into enormous meatball', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    const boulder = floorBoulder(31020);
+    game.inventory = [];
+    game.level.objects = [boulder];
+
+    await castStoneToFleshDown();
+
+    assert.equal(game.level.objects.includes(boulder), false);
+    assert.equal(game.level.objects.length, 1);
+    const result = game.level.objects[0];
+    assert.equal(result.cls, 'food');
+    assert.equal(result.otyp, ENORMOUS_MEATBALL);
+    assert.equal(result.kind, 'enormous meatball');
+    assert.equal(result.actualKind, 'enormous meatball');
+    assert.equal(result.quan, 1);
+    assert.equal(result.nutrition, 2000);
+    assert.equal(result.owt, 400);
+    assert.equal(result.ox, 5);
+    assert.equal(result.oy, 5);
+    assert.equal(result.line, undefined);
+    assert.notEqual(result.id, 31020);
+    assert.match(game._pending_message, /You smell the odor of meat\./);
+    assertNoStoneToFleshScoreSideEffects();
+});
+
+test('downward stone to flesh turns floor gemstone stack into meatballs', async () => {
+    installCommandShopState();
+    initRng(1);
+    const ruby = floorGem(31018, 'ruby', {
+        gemDescription: 'red gem',
+        quan: 3,
+        no_charge: true,
+    });
+    game.inventory = [];
+    game.level.objects = [ruby];
+
+    await castStoneToFleshDown();
+
+    assert.equal(game.level.objects.includes(ruby), false);
+    assert.equal(game.level.objects.length, 1);
+    const result = game.level.objects[0];
+    assert.equal(result.cls, 'food');
+    assert.equal(result.otyp, MEATBALL);
+    assert.equal(result.kind, 'meatball');
+    assert.equal(result.actualKind, 'meatball');
+    assert.equal(result.quan, 3);
+    assert.equal(result.nutrition, 5);
+    assert.equal(result.owt, 3);
+    assert.equal(result.no_charge, true);
+    assert.equal(result.ox, 5);
+    assert.equal(result.oy, 5);
+    assert.notEqual(result.id, 31018);
+    assert.match(game._pending_message, /You smell the odor of meat\./);
+    assertNoStoneToFleshScoreSideEffects();
+});
+
+test('downward stone to flesh leaves worthless glass gems untouched without resistance roll', async () => {
+    installCommandShopState();
+    initRng(1);
+    enableRngLog({ reset: true });
+    const glass = floorGem(31019, 'worthless piece of red glass', {
+        gemDescription: 'red gem',
+        material: 'glass',
+        quan: 2,
+    });
+    game.inventory = [];
+    game.level.objects = [glass];
+
+    await castStoneToFleshDown();
+
+    assert.equal(game.level.objects.length, 1);
+    assert.equal(game.level.objects[0], glass);
+    assert.equal(glass.kind, 'worthless piece of red glass');
+    assert.deepEqual(getRngLog().filter(entry => entry.startsWith('rn2(100)=')), []);
+    assert.doesNotMatch(game._pending_message || '', /odor of meat|delicious smell/);
+    assertNoStoneToFleshScoreSideEffects();
 });
 
 test('self-cast stone to flesh clears active petrification', async () => {

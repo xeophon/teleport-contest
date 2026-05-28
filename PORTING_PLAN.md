@@ -29,7 +29,7 @@ Detailed source-backed history is kept in `docs/c-parity-audit/`. Keep this sect
 - Added statue shatter owner billing: hero-caused statue trap shatter now charges an existing live statue bill row to its owning shopkeeper before contents move to the animated monster.
 - Added forced chest material wording: non-potion contents destroyed by a shattered box now use C's paper/wax/veggy/flesh/glass/wood/default destruction verbs.
 - Added forced chest occupation parity: blade forcing can break the wielded weapon before the success roll, and blunt forcing wakes nearby sleepers without angering them.
-- Added focused object, food, timer, and wish parity slices: ordinary eating, special-food merge gates, egg timer cleanup, wish-local monster/object binding, charged tools/instruments, and stone-to-flesh carried/floor marble-wand plus mineral/gemstone-ring transformations plus stoning/polyself rescue.
+- Added focused object, food, timer, and wish parity slices: ordinary eating, special-food merge gates, egg timer cleanup, wish-local monster/object binding, charged tools/instruments, and stone-to-flesh carried/floor marble-wand, mineral/gemstone-ring, object-resistance, boulder, and eligible-gem transformations plus stoning/polyself rescue.
 - Expanded potion `#dip`, alchemy, broken-vapor, inventory/fire/hot-ground vapor, gremlin/lycanthropy water vapor, forced chest-content potion shatter, direct hero-thrown confusion/booze/paralysis/sleeping/blindness/speed/invisibility/hallucination/healing-family/restore-gain/common-no-effect/oil/sickness/neutral-water/acid/special-water-shapechanger-saddle/polymorph `potionhit()`, generic saddle interception for supported direct potion hits, wielded-potion bash delivery, non-`kn` potion `trycall()` prompts, and statue-trap shatter debt coverage.
 - Latest verified public score: `44/44`.
 
@@ -38,7 +38,7 @@ Detailed source-backed history is kept in `docs/c-parity-audit/`. Keep this sect
 1. Shared shop ownership helpers.
    - Source notes: `docs/c-parity-audit/05-food-inventory-containers-shops.md`, `docs/c-parity-audit/51-subagent-findings-2026-05-28.md`, `docs/c-parity-audit/52-subagent-findings-2026-05-28.md`, `docs/c-parity-audit/53-subagent-findings-2026-05-28.md`, `docs/c-parity-audit/54-subagent-findings-2026-05-28.md`, `docs/c-parity-audit/57-subagent-findings-2026-05-28.md`, `docs/c-parity-audit/58-subagent-findings-2026-05-28.md`, `docs/c-parity-audit/60-subagent-findings-2026-05-28.md`, `docs/c-parity-audit/61-subagent-findings-2026-05-28.md`, `docs/c-parity-audit/62-subagent-findings-2026-05-28.md`, `docs/c-parity-audit/63-subagent-findings-2026-05-28.md`, and `docs/c-parity-audit/64-subagent-findings-2026-05-28.md`.
    - Replace remaining field-only paths with C-shaped `addtobill`, `subfrombill`, `stolen_value`, `obfree`, and `sellobj` routing.
-   - Near-term callers: remaining magic-bag valuation edges outside covered held/floor trigger context, projectile/kick `ship_object()` down-gate and floor-pile loss, generic `obfree()` preservation, broader costly-alteration paths, and remaining stone-to-flesh boulder/gem/statue/figurine rows plus object resistance.
+   - Near-term callers: remaining magic-bag valuation edges outside covered held/floor trigger context, projectile/kick `ship_object()` down-gate and floor-pile loss, generic `obfree()` preservation, broader costly-alteration paths, and remaining stone-to-flesh statue/figurine rows plus exact smell/worn-state/lifecycle details.
    - Note: ordinary drop `sellobj()` is square-selected in C and should not be converted to owner-first routing without a new source anchor.
 
 2. Direct object-hit and potion delivery.
@@ -68,8 +68,8 @@ Detailed source-backed history is kept in `docs/c-parity-audit/`. Keep this sect
 
 Continue narrow C-backed slices in this order unless a failing public regression points elsewhere:
 
-1. Continue stone-to-flesh coverage through object resistance and carried/floor boulder/gem rows. Statue and figurine rows should wait for monster/statue lifecycle work unless a smaller source-backed route emerges.
-2. Broaden direct `potionhit()` delivery through the next compact C-backed edge: exact unseen crash/evaporation/saddle visibility wording. Full burning-oil explosion collateral belongs with broader explosion work, shifted-vampire lethal revival belongs with broader monster death lifecycle work, and full `newcham()` fidelity belongs with the monster lifecycle/equipment core.
+1. Broaden direct `potionhit()` delivery through the next compact C-backed edge: exact unseen crash/evaporation/saddle visibility wording. Full burning-oil explosion collateral belongs with broader explosion work, shifted-vampire lethal revival belongs with broader monster death lifecycle work, and full `newcham()` fidelity belongs with the monster lifecycle/equipment core.
+2. Keep remaining stone-to-flesh work narrow: statue/figurine rows should wait for monster/statue lifecycle work; exact smell wording, worn/wielded/quivered preservation, Sokoban boulder guilt, and broader `poly_obj()` fallout need source-backed tests before implementation.
 3. Continue registry-backed cleanup for merge/wish/charged-tool metadata after each concrete caller lands.
 4. Keep forced-chest follow-ups narrow and source-backed: exact 50-turn/no-hands occupation cleanup, registry-backed weapon `oc_wldam` chance, buried-zombie wake disturbance, mimic/disguise wake reveal, and ice-box corpse timer details.
 
