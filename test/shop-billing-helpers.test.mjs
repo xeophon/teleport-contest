@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { interruptEatingOccupation, processEatingOccupationTick } from '../js/allmain.js';
+import { interruptEatingOccupation, moveloop_core, processEatingOccupationTick } from '../js/allmain.js';
 import { activateStatueTrap, burnFloorObjectsByFire, earthFloorEffects, finishForceLock, processCorpseTimers, processGlobShrinkTimers, processSpellbookStudyOccupation, rhack, __shopBillingTestHooks as shop } from '../js/cmd.js';
 import { game, resetGame } from '../js/gstate.js';
+import { pushKey, resetInputState } from '../js/input.js';
 import { enableRngLog, getRngLog, initRng } from '../js/rng.js';
 import { A_DEX, BILLSZ, CANDLESHOP, COULD_SEE, DB_EAST, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, FOUNTAIN, HOLE, ICE, ICED_POOL, IN_SIGHT, LAVAPOOL, POOL, ROOM, ROOMOFFSET, SHOPBASE, SQKY_BOARD, STATUE_TRAP } from '../js/const.js';
 import { currentFruitId, setCurrentFruitName } from '../js/fruit.js';
@@ -15879,6 +15880,201 @@ test('adjacent hero-thrown sleeping potion applies monster sleep before direct v
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
         'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(5)', 'rnd(12)', 'rn2(105)', 'rn2(13)', 'rnd(5)', 'rn2(2)',
     ]);
+});
+
+test('hero-thrown blindness potion blinds visible monster through potionhit', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.u.acurr.a[A_DEX] = 25;
+    const potion = blindnessPotion(8772, 'b', 1, { dknown: true });
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, { mcansee: true });
+    game.inventory = [potion];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('b');
+    await rhack('l');
+
+    assert.match(game._pending_message, /The (?:bottle|phial|flagon|carafe|flask|jar|vial) crashes on the goblin's head and breaks into shards\./);
+    assert.match(game._pending_message, /The potion of blindness evaporates\./);
+    assert.doesNotMatch(game._pending_message, /misses|shatters|suddenly gets dark/);
+    assert.equal(goblin.mcansee, false);
+    assert.equal(goblin.mblinded, 102);
+    assert.equal(goblin.msleeping, 0);
+    assert.equal(goblin.mpeaceful, false);
+    assert.equal(goblin.mhp, 4);
+    assert.equal(game.inventory.includes(potion), false);
+    assert.equal(game.level.objects.length, 0);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(5)', 'rn2(32)', 'rn2(32)', 'rn2(105)',
+    ]);
+});
+
+test('hero-thrown blindness potion reduces bonus duration when resisted', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.u.acurr.a[A_DEX] = 25;
+    const potion = blindnessPotion(8773, 'b', 1, { dknown: true });
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, {
+        mcansee: true,
+        mr: 999,
+    });
+    game.inventory = [potion];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('b');
+    await rhack('l');
+
+    assert.match(game._pending_message, /The potion of blindness evaporates\./);
+    assert.equal(goblin.mcansee, false);
+    assert.equal(goblin.mblinded, 79);
+    assert.equal(goblin.msleeping, 0);
+    assert.equal(goblin.mpeaceful, false);
+    assert.equal(game.inventory.includes(potion), false);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(5)', 'rn2(32)', 'rn2(32)', 'rn2(105)',
+    ]);
+});
+
+test('hero-thrown blindness potion does not affect eyeless monsters', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.u.acurr.a[A_DEX] = 25;
+    const potion = blindnessPotion(8774, 'b', 1, { dknown: true });
+    const jelly = ordinaryThrowTarget('jelly', 7, 5, {
+        mcansee: true,
+        data: { name: 'jelly', mlevel: 1, noeyes: true },
+    });
+    game.inventory = [potion];
+    game.level.monsters = [jelly];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('b');
+    await rhack('l');
+
+    assert.match(game._pending_message, /The potion of blindness evaporates\./);
+    assert.equal(jelly.mcansee, true);
+    assert.equal(jelly.mblinded || 0, 0);
+    assert.equal(jelly.msleeping, 0);
+    assert.equal(jelly.mpeaceful, false);
+    assert.equal(game.inventory.includes(potion), false);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(5)',
+    ]);
+});
+
+test('hero-thrown blindness potion does not alter permanently blind monsters', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.u.acurr.a[A_DEX] = 25;
+    const potion = blindnessPotion(8775, 'b', 1, { dknown: true });
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, {
+        mcansee: false,
+        mblinded: 0,
+    });
+    game.inventory = [potion];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('b');
+    await rhack('l');
+
+    assert.match(game._pending_message, /The potion of blindness evaporates\./);
+    assert.equal(goblin.mcansee, false);
+    assert.equal(goblin.mblinded || 0, 0);
+    assert.equal(goblin.msleeping, 0);
+    assert.equal(goblin.mpeaceful, false);
+    assert.equal(game.inventory.includes(potion), false);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(5)',
+    ]);
+});
+
+test('adjacent hero-thrown blindness potion applies monster blindness before direct vapor', async () => {
+    installNonShopFloorState();
+    initRng(3);
+    game.u.acurr.a[A_DEX] = 25;
+    const potion = blindnessPotion(8776, 'b', 1, { dknown: true });
+    const goblin = ordinaryThrowTarget('goblin', 6, 5, { mcansee: true });
+    game.inventory = [potion];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('b');
+    await rhack('l');
+
+    assert.match(game._pending_message, /The potion of blindness evaporates\./);
+    assert.match(game._pending_message, /It suddenly gets dark\./);
+    assert.equal(goblin.mcansee, false);
+    assert.equal(goblin.mblinded, 118);
+    assert.equal(game.u.blind, true);
+    assert.ok((game.u._blindTimeout || 0) > 0);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(5)', 'rn2(32)', 'rn2(32)', 'rn2(105)', 'rn2(13)', 'rnd(5)',
+    ]);
+});
+
+test('hero-thrown blindness potion effect can come from potion index', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.u.acurr.a[A_DEX] = 25;
+    const potion = {
+        id: 8777,
+        cls: 'potion',
+        glyph: '!',
+        kind: 'white potion',
+        potionIndex: 3,
+        quan: 1,
+        ox: 5,
+        oy: 5,
+        letter: 'w',
+        line: 'w - a white potion',
+    };
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, { mcansee: true });
+    game.inventory = [potion];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('w');
+    await rhack('l');
+
+    assert.match(game._pending_message, /The white potion evaporates\./);
+    assert.equal(goblin.mcansee, false);
+    assert.equal(goblin.mblinded, 102);
+    assert.equal(game.inventory.includes(potion), false);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(5)', 'rn2(32)', 'rn2(32)', 'rn2(105)',
+    ]);
+});
+
+test('monster temporary blindness times out during moveloop turn processing', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    const goblin = ordinaryThrowTarget('goblin', 12, 5, {
+        mcansee: false,
+        mblinded: 1,
+        msleeping: 0,
+        mpeaceful: true,
+    });
+    game.level.monsters = [goblin];
+
+    await rhack('s');
+    game._pending_time_passed = (game._pending_time_passed || 0) + (game.context?.move || 0);
+    if (game.context) game.context.move = 0;
+    resetInputState();
+    pushKey('\x1b');
+    await moveloop_core();
+    resetInputState();
+
+    assert.equal(goblin.mblinded, 0);
+    assert.equal(goblin.mcansee, true);
 });
 
 test('known blindness vapor from broken potion discovers the potion', () => {

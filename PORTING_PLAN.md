@@ -23,7 +23,7 @@ Detailed source-backed history is kept in `docs/c-parity-audit/`. Keep this sect
 - Removed fixture replay/runtime shortcuts and rebuilt covered behavior around live game state; public sessions remain regression guards only.
 - Built a broad starter shop-ledger surface: bill rows, split/subtract helpers, shared lost-merchandise debt for covered projectile/magic-bag/hole/statue/burial/direct-ice/floor-polymorph/floor-stone-to-flesh callers, used-up debt, itemized `#pay`, pickup/drop/container/tip flows, bill-limit handling, and many covered destruction/alteration charging paths.
 - Added focused object, food, timer, and wish parity slices: ordinary eating, special-food merge gates, egg timer cleanup, wish-local monster/object binding, charged tools/instruments, and stone-to-flesh carried/floor marble-wand transformations plus stoning/polyself rescue.
-- Expanded potion `#dip`, alchemy, broken-vapor, inventory/fire/hot-ground vapor, gremlin water vapor, forced chest-content potion shatter, direct hero-thrown confusion/booze/paralysis `potionhit()`, and statue-trap shatter debt coverage.
+- Expanded potion `#dip`, alchemy, broken-vapor, inventory/fire/hot-ground vapor, gremlin water vapor, forced chest-content potion shatter, direct hero-thrown confusion/booze/paralysis/sleeping/blindness `potionhit()`, and statue-trap shatter debt coverage.
 - Latest verified public score: `44/44`.
 
 ## Current Priorities
@@ -35,8 +35,8 @@ Detailed source-backed history is kept in `docs/c-parity-audit/`. Keep this sect
 
 2. Direct object-hit and potion delivery.
    - Source notes: `docs/c-parity-audit/04-monsters-combat-pets.md`, `docs/c-parity-audit/47-subagent-findings-2026-05-28.md`, and `docs/c-parity-audit/50-subagent-findings-2026-05-28.md`.
-   - Broaden the new hero-thrown confusion/booze/paralysis hit path toward full `potionhit()` one effect family at a time.
-   - Remaining gaps include bash delivery, non-`kn` `trycall()` prompts, exact visibility/discovery handling, blindness/sleeping/hallucination/healing/harming/water/oil/acid/polymorph effects, and lycanthropy water vapor.
+   - Broaden the new hero-thrown confusion/booze/paralysis/sleeping/blindness hit path toward full `potionhit()` one effect family at a time.
+   - Remaining gaps include bash delivery, non-`kn` `trycall()` prompts, exact visibility/discovery handling, hallucination/healing/harming/water/oil/acid/polymorph effects, and lycanthropy water vapor.
 
 3. Object registry and canonical object factory.
    - Source notes: `docs/c-parity-audit/02-objects-wishing-readobjnam.md`.
@@ -61,7 +61,7 @@ Detailed source-backed history is kept in `docs/c-parity-audit/`. Keep this sect
 Continue narrow C-backed slices in this order unless a failing public regression points elsewhere:
 
 1. Continue shared `stolen_value()`/`subfrombill()` cleanup through boulder push shop-boundary transitions or the next compact shop-helper caller.
-2. Broaden direct `potionhit()` delivery beyond confusion/booze/paralysis/sleeping through the next compact C-backed monster-effect family.
+2. Broaden direct `potionhit()` delivery beyond confusion/booze/paralysis/sleeping/blindness through the next compact C-backed monster-effect family.
 3. Close remaining forced-chest gaps: blade breakage during long forcing, blunt wake-nearby behavior, and material-specific non-potion shatter wording.
 4. Continue broader stone-to-flesh object coverage through registry-backed material/object metadata, object resistance, remaining object rows, and floor/beam/shop routing.
 5. Continue registry-backed cleanup for merge/wish/charged-tool metadata after each concrete caller lands.

@@ -12499,7 +12499,8 @@ function thrownPotionHitTargetName(mon) {
 function supportsHeroThrownPotionHit(potion) {
     if (!isPotionObject(potion)) return false;
     const kind = thrownPotionEffectKind(potion);
-    return kind === 'confusion' || kind === 'booze' || kind === 'paralysis' || kind === 'sleeping';
+    return kind === 'confusion' || kind === 'booze' || kind === 'paralysis'
+        || kind === 'sleeping' || kind === 'blindness';
 }
 
 function thrownPotionEffectKind(potion) {
@@ -12543,6 +12544,25 @@ function sleepMonsterFromPotion(mon, duration) {
     return true;
 }
 
+function monsterHasEyesForPotionBlindness(mon) {
+    const data = mon?.data || {};
+    return !(data.noeyes || data.noEyes);
+}
+
+function monsterIsPermanentlyBlind(mon) {
+    return mon?.mcansee === false && !(mon.mblinded || 0);
+}
+
+function blindMonsterFromPotion(mon) {
+    if (!monsterHasEyesForPotionBlindness(mon) || monsterIsPermanentlyBlind(mon)) return false;
+    const baseDuration = 64 + rn2(32);
+    const resistedBonus = rn2(32);
+    const bonus = monsterResistsEffect(mon, 6) ? 0 : resistedBonus;
+    mon.mblinded = Math.min(127, (mon.mblinded || 0) + baseDuration + bonus);
+    mon.mcansee = false;
+    return true;
+}
+
 function heroThrownPotionHitMonster(potion, mon) {
     const messages = [];
     const bottle = chestShatterBottleName();
@@ -12559,6 +12579,8 @@ function heroThrownPotionHitMonster(potion, mon) {
     } else if (kind === 'sleeping') {
         if (sleepMonsterFromPotion(mon, rnd(12)))
             messages.push(`${potionHitMonsterName(mon)} falls asleep.`);
+    } else if (kind === 'blindness') {
+        blindMonsterFromPotion(mon);
     }
 
     if ((mon.mhp || 1) > 0) {
