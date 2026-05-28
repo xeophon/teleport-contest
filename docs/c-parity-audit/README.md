@@ -62,6 +62,7 @@ This folder records source-backed audits against `nethack-c/upstream`. The notes
 - [56-subagent-findings-2026-05-28.md](56-subagent-findings-2026-05-28.md): direct hero-thrown blindness potionhit plus monster temporary-blindness timeout coverage.
 - [57-subagent-findings-2026-05-28.md](57-subagent-findings-2026-05-28.md): direct hero-thrown speed potionhit plus boulder-push shop-boundary follow-up audit.
 - [58-subagent-findings-2026-05-28.md](58-subagent-findings-2026-05-28.md): boulder push shop-boundary billing, owner return, and outside-shop debt conversion.
+- [59-subagent-findings-2026-05-28.md](59-subagent-findings-2026-05-28.md): direct hero-thrown invisibility potionhit, monster visibility state, and adjacent vapor discovery.
 
 ## Cross-Cutting Themes
 

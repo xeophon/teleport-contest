@@ -12500,7 +12500,8 @@ function supportsHeroThrownPotionHit(potion) {
     if (!isPotionObject(potion)) return false;
     const kind = thrownPotionEffectKind(potion);
     return kind === 'confusion' || kind === 'booze' || kind === 'paralysis'
-        || kind === 'sleeping' || kind === 'blindness' || kind === 'speed';
+        || kind === 'sleeping' || kind === 'blindness' || kind === 'speed'
+        || kind === 'invisibility';
 }
 
 function thrownPotionEffectKind(potion) {
@@ -12573,6 +12574,11 @@ function monsterCanBeSeenForPotionEffect(mon) {
     return !!mon && !game.u?.blind && !mon.minvis && !mon.mundetected && cansee(mon.mx, mon.my);
 }
 
+function monsterCanBeSpottedForPotionHit(mon) {
+    return !!mon && !game.u?.blind && !mon.mundetected
+        && (!mon.minvis || game.u?.seeInvisible) && cansee(mon.mx, mon.my);
+}
+
 function speedMonsterFromPotion(mon) {
     const oldState = monsterSpeedState(mon);
     if (oldState === 'slow') {
@@ -12583,6 +12589,39 @@ function speedMonsterFromPotion(mon) {
         mon.mspeed = 'fast';
     }
     return monsterSpeedState(mon) !== oldState;
+}
+
+function mapInvisibleMonsterAt(mon) {
+    const loc = game.level?.at(mon.mx, mon.my);
+    if (!loc) return;
+    loc.map_invisible = true;
+    loc.waslit = true;
+    loc.remembered_glyph = { ch: 'I', color: NO_COLOR, dec: false };
+    newsym(mon.mx, mon.my);
+}
+
+function setMonsterMinvisFromPotion(mon, cursedPotion) {
+    mon.perminvis = cursedPotion ? 0 : 1;
+    if (mon.invis_blkd) return;
+    mon.minvis = mon.perminvis;
+    newsym(mon.mx, mon.my);
+}
+
+function invisibilityPotionHitMonster(potion, mon, messages) {
+    const sawIt = monsterCanBeSpottedForPotionHit(mon);
+    const cursedPotion = !!potion.cursed;
+    const angerMon = !!mon.minvis && cursedPotion;
+    setMonsterMinvisFromPotion(mon, cursedPotion);
+    const canSpotNow = monsterCanBeSpottedForPotionHit(mon);
+
+    if (sawIt && !canSpotNow) {
+        if (cansee(mon.mx, mon.my)) mapInvisibleMonsterAt(mon);
+    } else if (sawIt && cursedPotion) {
+        messages.push(`${potionHitMonsterName(mon)} briefly seems to be transparent.`);
+    } else if (!sawIt && canSpotNow) {
+        messages.push(`${potionHitMonsterName(mon)} appears!`);
+    }
+    return angerMon;
 }
 
 function heroThrownPotionHitMonster(potion, mon) {
@@ -12612,6 +12651,8 @@ function heroThrownPotionHitMonster(potion, mon) {
             messages.push(`${potionHitMonsterName(mon)} is suddenly moving faster.`);
             learnPotionVaporEffect(potion, kind, true);
         }
+    } else if (kind === 'invisibility') {
+        angerMon = invisibilityPotionHitMonster(potion, mon, messages);
     }
 
     if ((mon.mhp || 1) > 0) {

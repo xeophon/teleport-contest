@@ -45,4 +45,4 @@ Focused verification:
 
 ## Remaining Work
 
-The next compact shop-ledger candidates are remaining magic-bag valuation/source/target cases, less ordinary projectile/container loss, shared `sellobj()` integration, generic `obfree()` preservation, broader costly-alteration paths, and remaining stone-to-flesh object rows. The next compact direct `potionhit()` families remain invisibility and acid.
+The next compact shop-ledger candidates are remaining magic-bag valuation/source/target cases, less ordinary projectile/container loss, shared `sellobj()` integration, generic `obfree()` preservation, broader costly-alteration paths, and remaining stone-to-flesh object rows. The next compact direct `potionhit()` families include acid, hallucination, healing/harming, water/oil, and polymorph.

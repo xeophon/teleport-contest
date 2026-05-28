@@ -1403,6 +1403,10 @@ function sleepingPotion(id, letter = 's', quan = 1, extra = {}) {
     return namedPotion(id, 'sleeping', letter, quan, extra);
 }
 
+function invisibilityPotion(id, letter = 'i', quan = 1, extra = {}) {
+    return namedPotion(id, 'invisibility', letter, quan, extra);
+}
+
 function speedPotion(id, letter = 's', quan = 1, extra = {}) {
     return namedPotion(id, 'speed', letter, quan, extra);
 }
@@ -16172,6 +16176,161 @@ test('monster temporary blindness times out during moveloop turn processing', as
 
     assert.equal(goblin.mblinded, 0);
     assert.equal(goblin.mcansee, true);
+});
+
+test('hero-thrown invisibility potion hides visible monster without angering it', async () => {
+    installNonShopFloorState();
+    const targetLoc = { roomno: 0, typ: ROOM };
+    game.level.at = (x, y) => (x === 7 && y === 5 ? targetLoc : { roomno: 0, typ: ROOM });
+    initRng(2);
+    game.u.acurr.a[A_DEX] = 25;
+    game.u.seeInvisible = false;
+    const potion = invisibilityPotion(8790, 'i', 1, { dknown: true });
+    const goblin = ordinaryThrowTarget('goblin', 7, 5);
+    game.inventory = [potion];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('i');
+    markSquareVisible(goblin.mx, goblin.my);
+    await rhack('l');
+
+    assert.match(game._pending_message, /The (?:bottle|phial|flagon|carafe|flask|jar|vial) crashes on the goblin's head and breaks into shards\./);
+    assert.match(game._pending_message, /The potion of invisibility evaporates\./);
+    assert.doesNotMatch(game._pending_message, /briefly seems|appears|couldn't see yourself|suddenly disappears/);
+    assert.equal(goblin.minvis, 1);
+    assert.equal(goblin.perminvis, 1);
+    assert.equal(goblin.msleeping, 0);
+    assert.equal(goblin.mpeaceful, true);
+    assert.equal(goblin.mhp, 4);
+    assert.equal(targetLoc.map_invisible, true);
+    assert.equal(game.inventory.includes(potion), false);
+    assert.equal(game.level.objects.length, 0);
+    assert.equal(game._discoveries?.some(entry => entry.section === 'Potions' && entry.name === 'potion of invisibility') ?? false, false);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(5)',
+    ]);
+});
+
+test('cursed hero-thrown invisibility potion briefly marks visible monster transparent', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.u.acurr.a[A_DEX] = 25;
+    const potion = invisibilityPotion(8791, 'i', 1, { cursed: true, dknown: true });
+    const goblin = ordinaryThrowTarget('goblin', 7, 5);
+    game.inventory = [potion];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('i');
+    markSquareVisible(goblin.mx, goblin.my);
+    await rhack('l');
+
+    assert.match(game._pending_message, /The goblin briefly seems to be transparent\./);
+    assert.equal(goblin.minvis, 0);
+    assert.equal(goblin.perminvis, 0);
+    assert.equal(goblin.msleeping, 0);
+    assert.equal(goblin.mpeaceful, true);
+    assert.equal(game.inventory.includes(potion), false);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(5)',
+    ]);
+});
+
+test('cursed hero-thrown invisibility potion reveals unseen invisible monster and angers it', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.u.acurr.a[A_DEX] = 25;
+    game.u.seeInvisible = false;
+    const potion = invisibilityPotion(8792, 'i', 1, { cursed: true, dknown: true });
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, {
+        minvis: 1,
+        perminvis: 1,
+    });
+    game.inventory = [potion];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('i');
+    markSquareVisible(goblin.mx, goblin.my);
+    await rhack('l');
+
+    assert.match(game._pending_message, /The goblin appears!/);
+    assert.equal(goblin.minvis, 0);
+    assert.equal(goblin.perminvis, 0);
+    assert.equal(goblin.msleeping, 0);
+    assert.equal(goblin.mpeaceful, false);
+    assert.equal(game.inventory.includes(potion), false);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(5)',
+    ]);
+});
+
+test('invisibility-blocked monster only gains permanent invisibility from uncursed potionhit', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.u.acurr.a[A_DEX] = 25;
+    const potion = invisibilityPotion(8793, 'i', 1, { dknown: true });
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, {
+        invis_blkd: true,
+        minvis: 0,
+        perminvis: 0,
+    });
+    game.inventory = [potion];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('i');
+    markSquareVisible(goblin.mx, goblin.my);
+    await rhack('l');
+
+    assert.match(game._pending_message, /The potion of invisibility evaporates\./);
+    assert.doesNotMatch(game._pending_message, /briefly seems|appears|couldn't see yourself/);
+    assert.equal(goblin.minvis, 0);
+    assert.equal(goblin.perminvis, 1);
+    assert.equal(goblin.msleeping, 0);
+    assert.equal(goblin.mpeaceful, true);
+    assert.equal(game.inventory.includes(potion), false);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(5)',
+    ]);
+});
+
+test('adjacent hero-thrown invisibility potion applies monster invisibility before vapor discovery', async () => {
+    installNonShopFloorState();
+    const targetLoc = { roomno: 0, typ: ROOM };
+    game.level.at = (x, y) => (x === 6 && y === 5 ? targetLoc : { roomno: 0, typ: ROOM });
+    initRng(4);
+    game.u.acurr.a[A_DEX] = 25;
+    game.u.seeInvisible = false;
+    const potion = invisibilityPotion(8794, 'i', 1, { dknown: true });
+    const goblin = ordinaryThrowTarget('goblin', 6, 5);
+    game.inventory = [potion];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('i');
+    markSquareVisible(goblin.mx, goblin.my);
+    await rhack('l');
+
+    const message = game._pending_message;
+    assert.match(message, /The potion of invisibility evaporates\./);
+    assert.match(message, /For an instant you couldn't see yourself!/);
+    assert.ok(message.indexOf('The potion of invisibility evaporates.') < message.indexOf("For an instant you couldn't see yourself!"));
+    assert.equal(goblin.minvis, 1);
+    assert.equal(goblin.perminvis, 1);
+    assert.equal(goblin.mpeaceful, true);
+    assert.equal(game.u.invisible || false, false);
+    assert.equal(targetLoc.map_invisible, true);
+    assert.equal(game._discoveries?.some(entry => entry.section === 'Potions' && entry.name === 'potion of invisibility'), true);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(5)', 'rn2(13)',
+    ]);
 });
 
 test('hero-thrown speed potion speeds visible monster without angering it', async () => {
