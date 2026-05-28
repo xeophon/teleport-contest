@@ -16243,6 +16243,98 @@ test('hero-thrown water potion defers special monster branches', async () => {
     assert.doesNotMatch(game._pending_message, /crashes on .*water demon.*breaks into shards|writhes|shrieks|looks healthier|rusts/);
 });
 
+test('hero-thrown blessed water potion splits an unsaddled gremlin without angering it', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.u.acurr.a[A_DEX] = 25;
+    const potion = waterPotion(8819, 'w', { blessed: true, bknown: true });
+    potion.dknown = true;
+    const gremlin = ordinaryThrowTarget('gremlin', 7, 5, { mhp: 8, mhpmax: 10 });
+    game.inventory = [potion];
+    game.level.monsters = [gremlin];
+
+    await rhack('t');
+    await rhack('w');
+    markSquareVisible(gremlin.mx, gremlin.my);
+    await rhack('l');
+
+    const clone = game.level.monsters.find(mon => mon !== gremlin && mon.data?.name === 'gremlin');
+    assert.match(game._pending_message, /The potion of (?:holy )?water evaporates\./);
+    assert.match(game._pending_message, /The gremlin multiplies!/);
+    assert.doesNotMatch(game._pending_message, /misses|shatters|peculiar odor|rusts|writhes|shrieks/);
+    assert.ok(clone);
+    assert.equal(game.level.monsters.includes(gremlin), true);
+    assert.equal(game.level.monsters.length, 2);
+    assert.equal(gremlin.mhp + clone.mhp, 7);
+    assert.equal(gremlin.mhpmax + clone.mhpmax, 10);
+    assert.equal(clone.mcloned, 1);
+    assert.deepEqual(clone.minvent, []);
+    assert.equal(gremlin.msleeping, 0);
+    assert.equal(gremlin.mpeaceful, true);
+    assert.equal(game.inventory.includes(potion), false);
+    assert.equal(game.level.objects.length, 0);
+});
+
+test('hero-thrown cursed water potion rusts an unsaddled iron golem', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.u.acurr.a[A_DEX] = 25;
+    const potion = waterPotion(8820, 'w', { cursed: true, bknown: true });
+    potion.dknown = true;
+    const golem = ordinaryThrowTarget('iron golem', 7, 5, {
+        mhp: 12,
+        mhpmax: 12,
+        data: { name: 'iron golem', mlevel: 18, nonliving: true },
+    });
+    game.inventory = [potion];
+    game.level.monsters = [golem];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('w');
+    markSquareVisible(golem.mx, golem.my);
+    await rhack('l');
+
+    assert.match(game._pending_message, /The potion of (?:unholy )?water evaporates\./);
+    assert.match(game._pending_message, /The iron golem rusts\./);
+    assert.doesNotMatch(game._pending_message, /misses|shatters|peculiar odor|looks healthier/);
+    assert.equal(golem.mhp < 11, true);
+    assert.equal(golem.mhp >= 5, true);
+    assert.equal(golem.msleeping, 0);
+    assert.equal(golem.mpeaceful, false);
+    assert.equal(game.inventory.includes(potion), false);
+    assert.equal(game.level.objects.length, 0);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(5)', 'd(1,6)',
+    ]);
+});
+
+test('hero-thrown water potion can destroy an unsaddled iron golem', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.u.acurr.a[A_DEX] = 25;
+    const potion = waterPotion(8821, 'w');
+    potion.dknown = true;
+    const golem = ordinaryThrowTarget('iron golem', 7, 5, {
+        mhp: 1,
+        mhpmax: 1,
+        data: { name: 'iron golem', mlevel: 18, nonliving: true },
+    });
+    game.inventory = [potion];
+    game.level.monsters = [golem];
+
+    await rhack('t');
+    await rhack('w');
+    markSquareVisible(golem.mx, golem.my);
+    await rhack('l');
+
+    assert.match(game._pending_message, /The iron golem rusts\./);
+    assert.match(game._pending_message, /You destroy the iron golem!/);
+    assert.equal(game.level.monsters.includes(golem), false);
+    assert.equal(game._vanquished_counts?.['iron golem'], 1);
+    assert.equal(game.inventory.includes(potion), false);
+});
+
 test('hero-thrown sickness potion makes ordinary monsters ill and angry', async () => {
     installNonShopFloorState();
     initRng(2);

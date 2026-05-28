@@ -12667,6 +12667,23 @@ function monsterIsWereOrVampireForWaterHit(mon) {
         || /^were/.test(name) || /\bvampire\b/.test(name));
 }
 
+function monsterNameForWaterHit(mon) {
+    return String(mon?.data?.name || mon?.name || '').toLowerCase();
+}
+
+function monsterIsGremlinForWaterHit(mon) {
+    return monsterNameForWaterHit(mon) === 'gremlin';
+}
+
+function monsterIsIronGolemForWaterHit(mon) {
+    return monsterNameForWaterHit(mon) === 'iron golem';
+}
+
+function isSpecialMonsterWaterPotionHit(potion, mon, kind = thrownPotionEffectKind(potion)) {
+    return kind === 'water' && !monsterHasWornSaddle(mon)
+        && (monsterIsGremlinForWaterHit(mon) || monsterIsIronGolemForWaterHit(mon));
+}
+
 function monsterNeedsDeferredWaterPotionHit(mon) {
     if (!mon || monsterHasWornSaddle(mon)) return true;
     const name = String(mon?.data?.name || mon?.name || '').toLowerCase();
@@ -12689,6 +12706,7 @@ function supportsHeroThrownPotionHit(potion, mon = null) {
         || kind === 'healing' || kind === 'extra healing' || kind === 'full healing'
         || kind === 'restore ability' || kind === 'gain ability' || kind === 'sickness'
         || kind === 'acid'
+        || isSpecialMonsterWaterPotionHit(potion, mon, kind)
         || isNeutralOrdinaryWaterPotionHit(potion, mon, kind)
         || COMMON_NO_MONSTER_EFFECT_POTION_HIT_KINDS.has(kind)
         || isUnlitOilPotionHit(potion, kind);
@@ -12903,6 +12921,62 @@ function killMonsterFromPotionHit(mon, messages) {
     newsym(mon.mx, mon.my);
 }
 
+function splitGremlinFromPotionWaterHit(mon, messages) {
+    if (!game.level || !mon) return false;
+    const maxHp = Math.max(1, mon.mhpmax || mon.mhp || 1);
+    const currentHp = Math.min(mon.mhp || maxHp, maxHp);
+    if (currentHp <= 1) return false;
+
+    const data = mon.data || {};
+    const spot = enextoMonsterSpot(mon.mx || 0, mon.my || 0, data);
+    if (!spot) return false;
+
+    const cloneHp = Math.trunc(currentHp / 2);
+    const cloneMaxHp = Math.trunc(maxHp / 2);
+    mon.mhp = currentHp - cloneHp;
+    mon.mhpmax = Math.max(1, maxHp - cloneMaxHp);
+
+    const clone = {
+        ...mon,
+        mx: spot.x,
+        my: spot.y,
+        m_id: next_ident(),
+        mhp: Math.max(1, cloneHp),
+        mhpmax: Math.max(1, cloneMaxHp),
+        mundetected: false,
+        mtrapped: 0,
+        mcloned: 1,
+        minvent: [],
+        mleashed: 0,
+        isshk: 0,
+        isgd: 0,
+        ispriest: 0,
+    };
+    delete clone.mextra;
+
+    if (!game._monster_moving && mon.mpeaceful) {
+        const peaceRoll = Math.max(2 + Math.trunc(game.u?.uluck || 0), 2);
+        if (mon.mtame) {
+            if (!rn2(peaceRoll)) {
+                clone.mtame = 0;
+                clone.pet = false;
+            } else {
+                ensurePetExtension(clone);
+            }
+        } else {
+            clone.mpeaceful = rn2(peaceRoll) ? 1 : 0;
+        }
+    }
+
+    set_malign(clone);
+    game.level.monsters ??= [];
+    game.level.monsters.push(clone);
+    if (monsterCanBeSpottedForPotionHit(mon))
+        messages.push(`${potionHitMonsterName(mon)} multiplies!`);
+    newsym(spot.x, spot.y);
+    return true;
+}
+
 function kindIsHealingFamilyPotion(kind) {
     return kind === 'healing' || kind === 'extra healing' || kind === 'full healing';
 }
@@ -12981,6 +13055,20 @@ function acidPotionHitMonster(potion, mon, messages) {
     return true;
 }
 
+function waterPotionHitSpecialMonster(mon, messages) {
+    if (monsterIsGremlinForWaterHit(mon)) {
+        splitGremlinFromPotionWaterHit(mon, messages);
+        return false;
+    }
+    if (monsterIsIronGolemForWaterHit(mon)) {
+        if (monsterCanBeSeenForPotionEffect(mon))
+            messages.push(`${potionHitMonsterName(mon)} rusts.`);
+        mon.mhp = (mon.mhp || 1) - d(1, 6);
+        if ((mon.mhp || 0) <= 0) killMonsterFromPotionHit(mon, messages);
+    }
+    return true;
+}
+
 function heroThrownPotionHitMonster(potion, mon) {
     const messages = [];
     const bottle = chestShatterBottleName();
@@ -13017,6 +13105,8 @@ function heroThrownPotionHitMonster(potion, mon) {
     } else if (kind === 'healing' || kind === 'extra healing' || kind === 'full healing'
         || kind === 'restore ability' || kind === 'gain ability') {
         angerMon = healingPotionHitMonster(potion, mon, kind, messages);
+    } else if (isSpecialMonsterWaterPotionHit(potion, mon, kind)) {
+        angerMon = waterPotionHitSpecialMonster(mon, messages);
     } else if (isNeutralOrdinaryWaterPotionHit(potion, mon, kind)) {
         // Ordinary water has no monster-specific case for this gated target set.
     } else if (COMMON_NO_MONSTER_EFFECT_POTION_HIT_KINDS.has(kind)) {
