@@ -6,7 +6,7 @@ import { activateStatueTrap, burnFloorObjectsByFire, earthFloorEffects, finishFo
 import { game, resetGame } from '../js/gstate.js';
 import { pushKey, resetInputState } from '../js/input.js';
 import { enableRngLog, getRngLog, initRng } from '../js/rng.js';
-import { A_DEX, A_STR, BILLSZ, CANDLESHOP, COULD_SEE, DB_EAST, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, FOUNTAIN, HOLE, ICE, ICED_POOL, IN_SIGHT, LAVAPOOL, MOAT, PIT, POOL, ROOM, ROOMOFFSET, SHOPBASE, SQKY_BOARD, STATUE_TRAP, STRAT_WAITFORU, TT_WEB, WEB, W_SADDLE } from '../js/const.js';
+import { A_DEX, A_STR, BILLSZ, CANDLESHOP, COULD_SEE, DB_EAST, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, FOUNTAIN, HOLE, ICE, ICED_POOL, IN_SIGHT, LAVAPOOL, MOAT, PIT, POOL, ROOM, ROOMOFFSET, SHOPBASE, SQKY_BOARD, STATUE_TRAP, STRAT_WAITFORU, TRAPDOOR, TT_WEB, WEB, W_SADDLE } from '../js/const.js';
 import { currentFruitId, setCurrentFruitName } from '../js/fruit.js';
 
 const BRASS_LANTERN = 226;
@@ -270,6 +270,16 @@ function installSeenHoleAtHero() {
     game.dungeons = [{ num_dunlevs: 3 }];
     game.level.flags = {};
     game.level.traps = [{ ttyp: HOLE, tx: 5, ty: 5, tseen: true }];
+    return game.level.traps[0];
+}
+
+function installSeenRemoteShaft(ttyp = HOLE, x = 7, y = 5) {
+    game.u.uz = { dnum: 0, dlevel: 1 };
+    game.dungeons = [{ num_dunlevs: 3 }];
+    game.level.flags = {};
+    game.level.traps = [{ ttyp, tx: x, ty: y, tseen: true }];
+    game.level.at = () => ({ roomno: ROOMOFFSET, typ: ROOM });
+    markSquareVisible(x, y);
     return game.level.traps[0];
 }
 
@@ -16632,6 +16642,127 @@ test('projectile landing runs hole floor effects before placement or shop handli
     assert.equal(shkp.debit, 15);
     assert.equal(shkp.billct, 0);
     assert.match(landing.messages.join(' '), /owe Izchak 15 zorkmids? for it/);
+});
+
+for (const [trapType, namePattern] of [[HOLE, /through the hole/], [TRAPDOOR, /through the trap door/]]) {
+    test(`paid same-shop projectile falling through remote ${trapType === HOLE ? 'hole' : 'trap door'} ships before sale`, () => {
+        const { shkp } = installShopState();
+        installSeenRemoteShaft(trapType);
+        initRng(1);
+        const floorStack = { ...dagger(874311), letter: undefined, line: undefined, quan: 1, ox: 7, oy: 5 };
+        const thrown = { ...dagger(874312), letter: undefined, line: undefined, quan: 1, ox: 7, oy: 5 };
+        game.level.objects = [floorStack];
+        const cashBefore = shop.shopkeeperCash(shkp);
+
+        const landing = shop.landProjectileObjectWithShopHandling(thrown, 7, 5, { breakRoll: 0, silent: true });
+
+        assert.equal(landing.shipObject.handled, true);
+        assert.equal(landing.floorEffects.consumed, false);
+        assert.equal(landing.object, null);
+        assert.equal(game.level.objects.includes(thrown), false);
+        assert.equal(game.level.objects.includes(floorStack), true);
+        assert.equal(floorStack.quan, 1);
+        assert.equal(queuedImpactDropsFor().includes(thrown), true);
+        assert.equal(landing.shopLanding.handled, false);
+        assert.equal(landing.shopSale.handled, false);
+        assert.equal(game._goldCount || 0, 0);
+        assert.equal(shop.shopkeeperCash(shkp), cashBefore);
+        assert.equal(shkp.debit || 0, 0);
+        assert.match(landing.messages.join(' '), namePattern);
+    });
+}
+
+test('unpaid remote projectile falling through a shaft converts bill row to debt before shipping', () => {
+    const { shkp } = installShopState();
+    installSeenRemoteShaft(HOLE);
+    initRng(1);
+    const blade = { ...dagger(874313), letter: undefined, line: undefined, ox: 7, oy: 5 };
+    shop.addObjectToShopBill(shkp, blade, 15);
+
+    const landing = shop.landProjectileObjectWithShopHandling(blade, 7, 5, { breakRoll: 0, silent: true });
+
+    assert.equal(landing.shipObject.handled, true);
+    assert.equal(landing.shipObject.broke, false);
+    assert.equal(landing.object, null);
+    assert.equal(game.level.objects.includes(blade), false);
+    assert.equal(queuedImpactDropsFor().includes(blade), true);
+    assert.equal(landing.shopLanding.handled, false);
+    assert.equal(landing.shopSale.handled, false);
+    assert.equal(shkp.debit, 15);
+    assert.equal(shkp.billct, 0);
+    assert.equal(shop.shopBillEntryForObject(shkp, blade), null);
+    assert.equal(blade.unpaid, false);
+    assert.equal(blade.unpaidPrice, undefined);
+    assert.equal(blade.no_charge, false);
+    assert.match(landing.messages.join(' '), /A dagger falls through the hole\./);
+    assert.match(landing.messages.join(' '), /owe Izchak 15 zorkmids? for it/);
+});
+
+test('fragile remote projectile falling through a shaft breaks after debt and before migration', () => {
+    const { shkp } = installShopState();
+    installSeenRemoteShaft(HOLE);
+    initRng(1);
+    enableRngLog({ reset: true });
+    const potion = { ...oilPotion(874314), letter: undefined, line: undefined, ox: 7, oy: 5 };
+    shop.addObjectToShopBill(shkp, potion, 60);
+
+    const landing = shop.landProjectileObjectWithShopHandling(potion, 7, 5, { breakRoll: 0, silent: true });
+    const text = landing.messages.join('  ');
+
+    assert.equal(landing.shipObject.handled, true);
+    assert.equal(landing.shipObject.broke, true);
+    assert.equal(landing.shipObject.breakKind, 'shatter');
+    assert.equal(landing.topBreak.broke, false);
+    assert.equal(landing.object, null);
+    assert.equal(game.level.objects.includes(potion), false);
+    assert.equal(queuedImpactDropsFor().some(obj => obj.id === potion.id), false);
+    assert.equal(shkp.debit, 60);
+    assert.equal(shkp.billct, 0);
+    assert.equal(shop.shopBillEntryForObject(shkp, potion), null);
+    assert.match(text, /A potion of oil falls through the hole\./);
+    assert.match(text, /owe Izchak 60 zorkmids? for it/);
+    assert.match(text, /You hear a muffled crash\./);
+    assert.ok(text.indexOf('owe Izchak 60') < text.indexOf('muffled crash'));
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(3)', 'rn2(100)']);
+});
+
+test('fragile remote projectile hard-landing break preempts shaft shipping', () => {
+    installShopState();
+    installSeenRemoteShaft(HOLE);
+    initRng(1);
+    const potion = { ...oilPotion(874317), letter: undefined, line: undefined, ox: 7, oy: 5 };
+
+    const landing = shop.landProjectileObjectWithShopHandling(potion, 7, 5, { breakRoll: 50, silent: true });
+
+    assert.equal(landing.topBreak.broke, true);
+    assert.equal(landing.shipObject.handled, false);
+    assert.equal(landing.object, null);
+    assert.equal(queuedImpactDropsFor().some(obj => obj.id === potion.id), false);
+    assert.doesNotMatch(landing.messages.join(' '), /through the hole|muffled crash/);
+});
+
+test('remote projectile shaft no-drop roll continues into normal sale and stacking', () => {
+    const { shkp } = installShopState();
+    installSeenRemoteShaft(HOLE);
+    initRng(2);
+    const floorStack = { ...dagger(874315), letter: undefined, line: undefined, quan: 1, ox: 7, oy: 5 };
+    const thrown = { ...dagger(874316), letter: undefined, line: undefined, quan: 1, ox: 7, oy: 5 };
+    game.level.objects = [floorStack];
+    const expectedOffer = shop.shopSaleOffer(thrown, shkp);
+    const cashBefore = shop.shopkeeperCash(shkp);
+
+    const landing = shop.landProjectileObjectWithShopHandling(thrown, 7, 5, { breakRoll: 0, silent: true });
+
+    assert.equal(landing.shipObject.handled, false);
+    assert.equal(landing.floorEffects.consumed, false);
+    assert.equal(queuedImpactDropsFor().length, 0);
+    assert.equal(landing.shopSale.handled, true);
+    assert.equal(landing.shopSale.sold, true);
+    assert.equal(landing.object, floorStack);
+    assert.equal(game.level.objects.length, 1);
+    assert.equal(floorStack.quan, 2);
+    assert.equal(game._goldCount, expectedOffer);
+    assert.equal(shop.shopkeeperCash(shkp), cashBefore - expectedOffer);
 });
 
 test('projectile landing runs lava floor effects before sale or stacking', () => {

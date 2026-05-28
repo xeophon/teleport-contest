@@ -3485,12 +3485,11 @@ function impactDropBreakKind(obj) {
 }
 
 function impactDropObjectBreaks(obj) {
-    const kind = impactDropBreakKind(obj);
-    if (!kind) return '';
+    if (!obj) return '';
     const ordinaryResistChance = 1;
     const artifactResistChance = 99;
     if (rn2(100) < (obj?.artifact ? artifactResistChance : ordinaryResistChance)) return '';
-    return kind;
+    return impactDropBreakKind(obj);
 }
 
 function shipObjectMuffledBreakResult(breakKind) {
@@ -21026,6 +21025,53 @@ function autoSellProjectileLandingObject(obj, x, y, options = {}) {
     return { ...sale, sold: true, prompt: false, message, messages: message ? [message] : [] };
 }
 
+function projectileShipObjectResult(overrides = {}) {
+    return {
+        handled: false,
+        broke: false,
+        breakKind: '',
+        target: null,
+        debt: null,
+        ...overrides,
+    };
+}
+
+function remoteProjectileShaftTrapAt(obj, x, y) {
+    if (!obj || shopBillableGold(obj)) return null;
+    if (obj === game.u?.uball || obj === game.u?.uchain) return null;
+    if (game.u?.ux === x && game.u?.uy === y) return null;
+    const mon = (game.level?.monsters || []).find(candidate =>
+        candidate.mx === x && candidate.my === y && !candidate.dead
+        && (candidate.mhp == null || candidate.mhp > 0));
+    if (mon) return null;
+    const trap = boulderFillTrapAt(x, y);
+    if (!trap?.tseen || (trap.ttyp !== HOLE && trap.ttyp !== TRAPDOOR)) return null;
+    if (!canFallThroughLevel(game.u?.uz)) return null;
+    return trap;
+}
+
+function maybeShipRemoteProjectileObject(obj, x, y, messages) {
+    const trap = remoteProjectileShaftTrapAt(obj, x, y);
+    if (!trap) return projectileShipObjectResult();
+    if (rn2(3)) return projectileShipObjectResult();
+    const target = sitFallTargetLevel(trap);
+    if (!target) return projectileShipObjectResult();
+    const gateText = impactDropGateText(trap);
+    if (gateText && !game.u?.blind && cansee(x, y))
+        messages.push(`${floorObjectSubject(obj)} ${floorEffectsObjectVerb(obj, 'falls', 'fall')} ${gateText}.`);
+    const debt = shipObjectShopDebt(obj, x, y);
+    if (debt.message) messages.push(debt.message);
+    const breakKind = impactDropObjectBreaks(obj);
+    if (breakKind) {
+        messages.push(`You hear a muffled ${shipObjectMuffledBreakResult(breakKind)}.`);
+        newsym(x, y);
+        return projectileShipObjectResult({ handled: true, broke: true, breakKind, target, debt });
+    }
+    queueImpactDroppedObjects(target, [obj]);
+    newsym(x, y);
+    return projectileShipObjectResult({ handled: true, target, debt });
+}
+
 function landProjectileObjectWithShopHandling(obj, x, y, options = {}) {
     const messages = [];
     prepareProjectileFloorObject(obj, x, y);
@@ -21042,6 +21088,7 @@ function landProjectileObjectWithShopHandling(obj, x, y, options = {}) {
                 object: null,
                 impact: { loss: 0, broke: false, messages },
                 topBreak: { broke: true, breakKind, value: shopLanding.value || 0 },
+                shipObject: projectileShipObjectResult(),
                 shopLanding: { ...shopLanding, handled: shopLanding.charged, returned: false },
                 shopSale: { handled: false, shkp: null, message: '', messages: [] },
                 messages,
@@ -21054,6 +21101,20 @@ function landProjectileObjectWithShopHandling(obj, x, y, options = {}) {
             impact: { loss: 0, broke: false, messages },
             topBreak: { broke: false, breakKind: '', value: 0 },
             floorEffects: { consumed: true },
+            shipObject: projectileShipObjectResult(),
+            shopLanding: { handled: false, shkp: null, message: '', messages: [], returned: false, charged: false },
+            shopSale: { handled: false, shkp: null, message: '', messages: [] },
+            messages,
+        };
+    }
+    const shipObject = maybeShipRemoteProjectileObject(obj, x, y, messages);
+    if (shipObject.handled) {
+        return {
+            object: null,
+            impact: { loss: 0, broke: false, messages },
+            topBreak: { broke: false, breakKind: '', value: 0 },
+            floorEffects: { consumed: false },
+            shipObject,
             shopLanding: { handled: false, shkp: null, message: '', messages: [], returned: false, charged: false },
             shopSale: { handled: false, shkp: null, message: '', messages: [] },
             messages,
@@ -21069,7 +21130,7 @@ function landProjectileObjectWithShopHandling(obj, x, y, options = {}) {
         : autoSellProjectileLandingObject(placed, x, y, options);
     if (shopSale.message) messages.push(shopSale.message);
     const stacked = stackPlacedProjectileObject(placed);
-    return { object: stacked, impact, topBreak: { broke: false, breakKind: '', value: 0 }, floorEffects: { consumed: false }, shopLanding, shopSale, messages };
+    return { object: stacked, impact, topBreak: { broke: false, breakKind: '', value: 0 }, floorEffects: { consumed: false }, shipObject, shopLanding, shopSale, messages };
 }
 
 function markNoChargeRecursively(obj) {

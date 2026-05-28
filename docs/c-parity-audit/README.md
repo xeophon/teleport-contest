@@ -103,6 +103,7 @@ This folder records source-backed audits against `nethack-c/upstream`. The notes
 - [97-subagent-findings-2026-05-28.md](97-subagent-findings-2026-05-28.md): burning-oil ice melting plus remote projectile down-gate, stone-to-flesh figurine animation, and polyself diet metadata follow-up audits.
 - [98-subagent-findings-2026-05-28.md](98-subagent-findings-2026-05-28.md): polyself diet overlay for stone-to-flesh, tripe, and tin callers plus fresh projectile, figurine, and burning-oil water follow-up audits.
 - [99-subagent-findings-2026-05-28.md](99-subagent-findings-2026-05-28.md): burning-oil water and pool evaporation plus projectile, figurine, and pet-food diet follow-up audits.
+- [100-subagent-findings-2026-05-28.md](100-subagent-findings-2026-05-28.md): remote non-gold hero projectile `ship_object()` down-gate parity plus remaining projectile/kick/gold shipping follow-up audits.
 
 ## Cross-Cutting Themes
 
