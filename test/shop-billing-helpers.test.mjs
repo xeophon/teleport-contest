@@ -17994,6 +17994,113 @@ test('upward hero-thrown unpaid ordinary egg from a stack bills one broken unit'
     assert.equal(shkp.billct, 1);
 });
 
+test('upward hero-thrown pyrolisk egg self-hit explodes before face message', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, { uhp: 50, uhpmax: 50 });
+    const eggItem = { ...egg(876790, 'e'), otyp: EGG, corpsenm: { name: 'pyrolisk' } };
+    game.inventory = [eggItem];
+    const hpBefore = game.u.uhp;
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('e');
+    await rhack('<');
+
+    const message = game._pending_message || '';
+    assert.equal(game._command_mode, null);
+    assert.match(message, /An egg almost hits the ceiling, then falls back on top of your head\./);
+    assert.match(message, /Splat!/);
+    assert.match(message, /Boom!/);
+    assert.match(message, /You are caught in the fireball!/);
+    assert.match(message, /You've got it all over your face!/);
+    assert.equal(message.indexOf('Splat!') < message.indexOf('Boom!'), true);
+    assert.equal(message.indexOf('You are caught in the fireball!') < message.indexOf("You've got it all over your face!"), true);
+    assert.equal(game.inventory.includes(eggItem), false);
+    assert.equal(game.level.objects.length, 0);
+    assert.equal(game.u.uhp < hpBefore, true);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 3), [
+        'rn2(5)', 'rn2(100)', 'd(3,6)',
+    ]);
+});
+
+test('upward hero-thrown pyrolisk egg can explode on the ceiling', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, { uhp: 50, uhpmax: 50 });
+    const eggItem = { ...egg(876791, 'e'), otyp: EGG, corpsenm: { name: 'pyrolisk' } };
+    game.inventory = [eggItem];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('e');
+    await rhack('<');
+
+    const message = game._pending_message || '';
+    assert.equal(game._command_mode, null);
+    assert.match(message, /An egg hits the ceiling\./);
+    assert.match(message, /Splat!/);
+    assert.match(message, /Boom!/);
+    assert.match(message, /You are caught in the fireball!/);
+    assert.doesNotMatch(message, /falls back|top of your head|all over your face|What a mess|evaporates/);
+    assert.equal(game.inventory.includes(eggItem), false);
+    assert.equal(game.level.objects.length, 0);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 3), [
+        'rn2(5)', 'rn2(100)', 'd(3,6)',
+    ]);
+});
+
+test('upward hero-thrown pyrolisk egg can survive self-hit and land', async () => {
+    installNonShopFloorState();
+    initRng(46249);
+    Object.assign(game.u, { uhp: 50, uhpmax: 50 });
+    const eggItem = { ...egg(876792, 'e'), otyp: EGG, corpsenm: { name: 'pyrolisk' } };
+    game.inventory = [eggItem];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('e');
+    await rhack('<');
+
+    const message = game._pending_message || '';
+    assert.equal(game._command_mode, null);
+    assert.match(message, /An egg almost hits the ceiling, then falls back on top of your head\./);
+    assert.doesNotMatch(message, /Splat!|Boom!|fireball|all over your face/);
+    assert.equal(game.u.uhp, 49);
+    assert.equal(game.inventory.includes(eggItem), false);
+    assert.equal(game.level.objects.length, 1);
+    const landed = game.level.objects[0];
+    assert.equal(landed.otyp, EGG);
+    assert.equal(landed.corpsenm?.name, 'pyrolisk');
+    assert.equal(landed.ox, game.u.ux);
+    assert.equal(landed.oy, game.u.uy);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rn2(5)', 'rn2(100)', 'rn2(100)',
+    ]);
+});
+
+test('upward hero-thrown unpaid pyrolisk egg bills the broken egg before explosion', async () => {
+    const { shkp } = installCommandShopState();
+    Object.assign(shkp, { mx: 20, my: 20, shk: { x: 20, y: 20 } });
+    initRng(1);
+    Object.assign(game.u, { uhp: 50, uhpmax: 50 });
+    const eggItem = { ...egg(876793, 'e'), otyp: EGG, corpsenm: { name: 'pyrolisk' } };
+    game.inventory = [eggItem];
+    shop.addObjectToShopBill(shkp, eggItem, 9);
+
+    await rhack('t');
+    await rhack('e');
+    await rhack('<');
+
+    assert.match(game._pending_message, /Splat!/);
+    assert.match(game._pending_message, /Boom!/);
+    assert.match(game._pending_message, /You've got it all over your face!/);
+    assert.equal(game.inventory.includes(eggItem), false);
+    assert.equal(shop.shopBillEntryForObject(shkp, eggItem), null);
+    assert.equal(shkp.debit, 9);
+    assert.equal(shkp.billct, 0);
+});
+
 test('upward hero-thrown mirror self-hits and shatters with bad luck', async () => {
     installNonShopFloorState();
     initRng(1);
