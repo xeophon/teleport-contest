@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { interruptEatingOccupation, moveloop_core, processEatingOccupationTick, processForceLockOccupation } from '../js/allmain.js';
-import { activateStatueTrap, burnFloorObjectsByFire, earthFloorEffects, finishForceLock, processCorpseTimers, processForceLockOccupationTick, processGlobShrinkTimers, processSpellbookStudyOccupation, rhack, __shopBillingTestHooks as shop } from '../js/cmd.js';
+import { activateStatueTrap, burnFloorObjectsByFire, earthFloorEffects, finishForceLock, landMonsterThrownObject, processCorpseTimers, processForceLockOccupationTick, processGlobShrinkTimers, processSpellbookStudyOccupation, rhack, __shopBillingTestHooks as shop } from '../js/cmd.js';
 import { game, resetGame } from '../js/gstate.js';
 import { pushKey, resetInputState } from '../js/input.js';
 import { enableRngLog, getRngLog, initRng } from '../js/rng.js';
@@ -17335,6 +17335,105 @@ test('rock projectile impact cannot knock boulders through a remote shaft', () =
     assert.match(landing.messages.join(' '), /A rock hits another object and falls through the hole\./);
     assert.doesNotMatch(landing.messages.join(' '), /From the impact/);
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(3)', 'rn2(100)']);
+});
+
+test('monster-thrown dagger falling through remote seen hole ships before floor effects', () => {
+    installNonShopFloorState();
+    installSeenRemoteShaft(HOLE);
+    game.level.at = () => ({ roomno: 0, typ: LAVAPOOL });
+    initRng(1);
+    enableRngLog({ reset: true });
+    const missile = { ...dagger(874327), letter: undefined, line: undefined };
+
+    const landing = landMonsterThrownObject(missile, 7, 5, { messages: [] });
+
+    assert.equal(landing.consumed, true);
+    assert.equal(landing.object, null);
+    assert.equal(landing.shipObject.handled, true);
+    assert.equal(landing.floorEffects.consumed, false);
+    assert.equal(game.level.objects.some(obj => obj.id === missile.id), false);
+    assert.equal(queuedImpactDropsFor().some(obj => obj.id === missile.id), true);
+    assert.match(landing.messages.join(' '), /A dagger falls through the hole\./);
+    assert.doesNotMatch(landing.messages.join(' '), /burn|lava|bursts into flame/i);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(3)', 'rn2(100)']);
+});
+
+test('monster-thrown dagger falling through remote seen trap door uses trap door wording', () => {
+    installNonShopFloorState();
+    installSeenRemoteShaft(TRAPDOOR);
+    initRng(1);
+    const missile = { ...dagger(874328), letter: undefined, line: undefined };
+
+    const landing = landMonsterThrownObject(missile, 7, 5, { messages: [] });
+
+    assert.equal(landing.shipObject.handled, true);
+    assert.equal(landing.object, null);
+    assert.equal(queuedImpactDropsFor().some(obj => obj.id === missile.id), true);
+    assert.match(landing.messages.join(' '), /A dagger falls through the trap door\./);
+});
+
+test('monster-thrown remote shaft no-drop continues into normal placement and stacking', () => {
+    installNonShopFloorState();
+    installSeenRemoteShaft(HOLE);
+    initRng(4);
+    enableRngLog({ reset: true });
+    const floorStack = { ...dagger(874329), letter: undefined, line: undefined, quan: 1, ox: 7, oy: 5 };
+    const missile = { ...dagger(874330), letter: undefined, line: undefined, quan: 1 };
+    game.level.objects = [floorStack];
+
+    const landing = landMonsterThrownObject(missile, 7, 5, { messages: [] });
+
+    assert.equal(landing.consumed, false);
+    assert.equal(landing.shipObject.handled, false);
+    assert.equal(landing.shipObject.noDrop, true);
+    assert.equal(queuedImpactDropsFor().length, 0);
+    assert.equal(landing.object, floorStack);
+    assert.equal(game.level.objects.length, 1);
+    assert.equal(floorStack.quan, 2);
+    assert.match(landing.messages.join(' '), /A dagger hits another object\./);
+    assert.doesNotMatch(landing.messages.join(' '), /through the hole/);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(3)', 'rn2(3)']);
+});
+
+test('monster-thrown dagger ignores unseen remote trap door', () => {
+    installNonShopFloorState();
+    const trap = installSeenRemoteShaft(TRAPDOOR);
+    trap.tseen = false;
+    initRng(1);
+    enableRngLog({ reset: true });
+    const missile = { ...dagger(874331), letter: undefined, line: undefined, quan: 1 };
+
+    const landing = landMonsterThrownObject(missile, 7, 5, { messages: [] });
+
+    assert.equal(landing.consumed, false);
+    assert.equal(landing.shipObject.handled, false);
+    assert.equal(queuedImpactDropsFor().length, 0);
+    assert.ok(landing.object);
+    assert.equal(landing.object.ox, 7);
+    assert.equal(landing.object.oy, 5);
+    assert.equal(game.level.objects.includes(landing.object), true);
+    assert.deepEqual(getRngLog().filter(entry => entry.startsWith('rn2(3)=')), []);
+    assert.doesNotMatch(landing.messages.join(' '), /through the trap door/);
+});
+
+test('monster-thrown boulder plugs remote seen hole instead of shipping', () => {
+    installNonShopFloorState();
+    const trap = installSeenRemoteShaft(HOLE);
+    initRng(1);
+    enableRngLog({ reset: true });
+    const boulder = floorBoulder(874332, { ox: 7, oy: 5 });
+
+    const landing = landMonsterThrownObject(boulder, 7, 5, { messages: [] });
+
+    assert.equal(landing.consumed, true);
+    assert.equal(landing.object, null);
+    assert.equal(landing.shipObject.handled, false);
+    assert.equal(landing.floorEffects.consumed, true);
+    assert.equal(queuedImpactDropsFor().length, 0);
+    assert.equal(game.level.objects.some(obj => obj.id === boulder.id), false);
+    assert.equal(game.level.traps.includes(trap), false);
+    assert.match(landing.messages.join(' '), /boulder/i);
+    assert.deepEqual(getRngLog().filter(entry => entry.startsWith('rn2(3)=')), []);
 });
 
 test('projectile landing runs lava floor effects before sale or stacking', () => {

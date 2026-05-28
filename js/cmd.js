@@ -25805,15 +25805,39 @@ export function landMonsterThrownObject(missile, x, y, {
         transientProjectile: false,
     };
     delete landing.line;
+    const shipObject = landing.otyp === BOULDER
+        ? projectileShipObjectResult()
+        : maybeShipRemoteProjectileObject(landing, x, y, floorMessages);
+    if (shipObject.handled) {
+        return {
+            consumed: true,
+            object: null,
+            messages: floorMessages,
+            shipObject,
+            floorEffects: { consumed: false },
+        };
+    }
     const consumed = monsterThrownFloorEffects(landing, x, y, floorMessages, verb);
     if (consumed) {
         newsym(x, y);
-        return { consumed: true, object: null, messages: floorMessages };
+        return {
+            consumed: true,
+            object: null,
+            messages: floorMessages,
+            shipObject,
+            floorEffects: { consumed: true },
+        };
     }
     const stacked = stackMonsterThrownObject(landing);
     if (stacked === landing) game.level.objects.push(landing);
     newsym(x, y);
-    return { consumed: false, object: stacked, messages: floorMessages };
+    return {
+        consumed: false,
+        object: stacked,
+        messages: floorMessages,
+        shipObject,
+        floorEffects: { consumed: false },
+    };
 }
 
 function appendToplineAfterMoreMessages(messages) {
