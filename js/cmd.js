@@ -12885,6 +12885,30 @@ function supportsHeroThrownPotionHit(potion, mon = null) {
         || isSaddlePotionHit(potion, mon, kind);
 }
 
+function wieldedPotionBashObject(potion) {
+    if (!potion || !isPotionObject(potion)) return null;
+    const bashObject = {
+        ...potion,
+        id: (potion.quan || 1) > 1 ? next_ident() : potion.id,
+        quan: 1,
+        letter: undefined,
+        line: undefined,
+        wielded: false,
+        alternate: false,
+        worn: false,
+        quivered: false,
+    };
+    if ((potion.quan || 1) > 1) splitCarriedObjectShopBill(potion, bashObject, 1);
+    return bashObject;
+}
+
+function refreshSurvivingWieldedPotionStack(potion) {
+    if (!potion || !(game.inventory || []).includes(potion) || !potion.wielded) return;
+    const baseName = normalInventoryLine({ ...potion, line: '', wielded: false, alternate: false })
+        .replace(/^[a-zA-Z$] - /, '');
+    potion.line = `${potion.letter || '?'} - ${baseName} (wielded)`;
+}
+
 function thrownPotionEffectKind(potion) {
     const name = alchemyPotionName(potion);
     const effectName = String(name || '').replace(/^potion of /, '');
@@ -34361,6 +34385,34 @@ async function moveHero(dx, dy) {
             if (wokeFromSleep && mon.msleeping) {
                 mon.msleeping = 0;
                 wokeByHit = true;
+            }
+            if (attackWeapon && isPotionObject(attackWeapon)) {
+                const bashPotion = wieldedPotionBashObject(attackWeapon);
+                const potionMessages = bashPotion ? heroThrownPotionHitMonster(bashPotion, mon) : [];
+                removeInventoryItem(attackWeapon, 1);
+                refreshSurvivingWieldedPotionStack(attackWeapon);
+                killed = !!(mon.dead || (mon.mhp || 0) <= 0);
+                if (!killed) {
+                    const potionBashDamage = (mon.data?.name === 'shade') ? 0
+                        : Math.max(1, 1 + strengthDamageBonus + (game.u?.udaminc || 0));
+                    if (potionBashDamage > 0) {
+                        mon.mhp = (mon.mhp || 1) - potionBashDamage;
+                        killed = (mon.mhp || 0) <= 0;
+                    }
+                }
+                messages.push(...potionMessages);
+                if (killed) break;
+                if (attackIndex === 0 && !deferSleepingTwoWeapon) {
+                    const fleeRoll = rn2(25);
+                    if (!fleeRoll && (mon.mhp || 0) < Math.trunc((mon.mhpmax || 0) / 2)
+                        && !(game.u?.uswallow && game.u?.ustuck === mon)) {
+                        const fleeTime = rn2(3) ? 0 : rnd(100);
+                        mon.mflee = 1;
+                        mon.mfleetim = fleeTime ? Math.min(fleeTime + (mon.mfleetim || 0), 127) : 0;
+                        clearMonsterTrack(mon);
+                    }
+                }
+                continue;
             }
             if (attackWeapon && !game._chronicle_first_weapon_hit) {
                 game._chronicle_entries ??= [];

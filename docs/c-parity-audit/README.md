@@ -85,6 +85,7 @@ This folder records source-backed audits against `nethack-c/upstream`. The notes
 - [79-subagent-findings-2026-05-28.md](79-subagent-findings-2026-05-28.md): direct hero-thrown polymorph potionhit, including `bhitm()` resistance ordering, system shock, random monster form replacement, and polymorph saddle-hit bypass.
 - [80-subagent-findings-2026-05-28.md](80-subagent-findings-2026-05-28.md): generic worn-saddle interception for all currently supported direct hero-thrown potionhit identities.
 - [81-subagent-findings-2026-05-28.md](81-subagent-findings-2026-05-28.md): stone-to-flesh mineral/gemstone ring transform plus potion bash, trycall, oil collateral, shifted-vampire, and vapor follow-up audits.
+- [82-subagent-findings-2026-05-28.md](82-subagent-findings-2026-05-28.md): wielded-potion bash delivery plus remaining trycall, oil collateral, stone-to-flesh, and shifted-vampire follow-up audits.
 
 ## Cross-Cutting Themes
 

@@ -6,7 +6,7 @@ import { activateStatueTrap, burnFloorObjectsByFire, earthFloorEffects, finishFo
 import { game, resetGame } from '../js/gstate.js';
 import { pushKey, resetInputState } from '../js/input.js';
 import { enableRngLog, getRngLog, initRng } from '../js/rng.js';
-import { A_DEX, BILLSZ, CANDLESHOP, COULD_SEE, DB_EAST, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, FOUNTAIN, HOLE, ICE, ICED_POOL, IN_SIGHT, LAVAPOOL, POOL, ROOM, ROOMOFFSET, SHOPBASE, SQKY_BOARD, STATUE_TRAP, STRAT_WAITFORU, W_SADDLE } from '../js/const.js';
+import { A_DEX, A_STR, BILLSZ, CANDLESHOP, COULD_SEE, DB_EAST, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, FOUNTAIN, HOLE, ICE, ICED_POOL, IN_SIGHT, LAVAPOOL, POOL, ROOM, ROOMOFFSET, SHOPBASE, SQKY_BOARD, STATUE_TRAP, STRAT_WAITFORU, W_SADDLE } from '../js/const.js';
 import { currentFruitId, setCurrentFruitName } from '../js/fruit.js';
 
 const BRASS_LANTERN = 226;
@@ -16147,6 +16147,58 @@ test('hero-thrown confusion potion hits visible monster through potionhit', asyn
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
         'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(5)', 'rn2(105)',
     ]);
+});
+
+test('wielded confusion potion bash routes through potionhit', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.u.acurr.a[A_STR] = 10;
+    game.u.acurr.a[A_DEX] = 25;
+    const potion = confusionPotion(8764, 'p', 1, { dknown: true });
+    potion.wielded = true;
+    potion.line = 'p - a potion of confusion (wielded)';
+    const goblin = ordinaryThrowTarget('goblin', 6, 5, { mhp: 10, mhpmax: 10, mpeaceful: false });
+    game.inventory = [potion];
+    game.level.monsters = [goblin];
+    markSquareVisible(6, 5);
+
+    await rhack('l');
+
+    assert.match(game._pending_message, /The (?:bottle|phial|flagon|carafe|flask|jar|vial) crashes on the goblin's head and breaks into shards\./);
+    assert.match(game._pending_message, /The potion of confusion evaporates\./);
+    assert.doesNotMatch(game._pending_message, /You hit|misses|shatters/);
+    assert.equal(goblin.mconf, true);
+    assert.equal(goblin.msleeping, 0);
+    assert.equal(goblin.mpeaceful, false);
+    assert.equal(game.inventory.includes(potion), false);
+    assert.equal(game.level.objects.length, 0);
+    assert.equal(game.u.uconduct?.weaphit || 0, 0);
+    assert.equal(game._chronicle_first_weapon_hit || 0, 0);
+});
+
+test('wielded potion stack bash consumes one and keeps the stack wielded', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.u.acurr.a[A_STR] = 10;
+    game.u.acurr.a[A_DEX] = 25;
+    const potion = confusionPotion(8765, 'p', 2, { dknown: true });
+    potion.wielded = true;
+    potion.line = 'p - 2 potions of confusion (wielded)';
+    const goblin = ordinaryThrowTarget('goblin', 6, 5, { mhp: 10, mhpmax: 10, mpeaceful: false });
+    game.inventory = [potion];
+    game.level.monsters = [goblin];
+    markSquareVisible(6, 5);
+
+    await rhack('l');
+
+    assert.match(game._pending_message, /crashes on the goblin's head and breaks into shards/);
+    assert.equal(goblin.mconf, true);
+    assert.equal(game.inventory.length, 1);
+    assert.equal(game.inventory[0], potion);
+    assert.equal(potion.quan, 1);
+    assert.equal(potion.wielded, true);
+    assert.equal(potion.line, 'p - a potion of confusion (wielded)');
+    assert.equal(game.u.uconduct?.weaphit || 0, 0);
 });
 
 test('hero-thrown confusion potion hitting a saddle wets it and skips confusion', async () => {
