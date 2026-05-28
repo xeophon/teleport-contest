@@ -20246,6 +20246,68 @@ test('thrown gold landing on shopkeeper square does not donate', () => {
     assert.equal(shkp.credit || 0, 0);
 });
 
+test('thrown gold falling through remote shaft ships before donation and stacking', () => {
+    const { shkp } = installShopState();
+    installSeenRemoteShaft(HOLE);
+    initRng(1);
+    enableRngLog({ reset: true });
+    shkp.debit = 7;
+    shkp.loan = 7;
+    const floorGold = { ...goldPieces(8755, 4), letter: undefined, line: undefined, ox: 7, oy: 5 };
+    const thrownGold = { ...goldPieces(8756, 10), letter: undefined, line: undefined, ox: 7, oy: 5 };
+    game.level.objects = [floorGold];
+
+    const landing = shop.landProjectileObjectWithShopHandling(thrownGold, 7, 5, { breakRoll: 0, silent: true });
+    const text = landing.messages.join('  ');
+
+    assert.equal(landing.shipObject.handled, true);
+    assert.equal(landing.shopSale.handled, false);
+    assert.equal(landing.object, null);
+    assert.deepEqual(queuedImpactDropsFor().map(obj => obj.id), [thrownGold.id, floorGold.id]);
+    assert.equal(game.level.objects.includes(thrownGold), false);
+    assert.equal(game.level.objects.includes(floorGold), false);
+    assert.equal(shkp.debit, 7);
+    assert.equal(shkp.loan, 7);
+    assert.equal(shkp.credit || 0, 0);
+    assert.match(text, /gold pieces hit other objects and fall through the hole\./);
+    assert.match(text, /From the impact, the other objects fall\./);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(3)', 'rn2(100)', 'rn2(3)']);
+});
+
+test('thrown gold no-drop shaft impact precedes normal shop donation', () => {
+    const { shkp } = installShopState();
+    installSeenRemoteShaft(HOLE);
+    initRng(2);
+    enableRngLog({ reset: true });
+    shkp.debit = 7;
+    shkp.loan = 7;
+    const floorGold = { ...goldPieces(8757, 4), letter: undefined, line: undefined, ox: 7, oy: 5 };
+    const thrownGold = { ...goldPieces(8758, 10), letter: undefined, line: undefined, ox: 7, oy: 5 };
+    game.level.objects = [floorGold];
+
+    const landing = shop.landProjectileObjectWithShopHandling(thrownGold, 7, 5, { breakRoll: 0, silent: true });
+    const text = landing.messages.join('  ');
+
+    assert.equal(landing.shipObject.handled, false);
+    assert.equal(landing.shipObject.noDrop, true);
+    assert.equal(landing.shipObject.impact.objectCount, 4);
+    assert.equal(landing.shipObject.impact.fallenCount, 4);
+    assert.equal(landing.shopSale.handled, true);
+    assert.equal(landing.shopSale.gold, true);
+    assert.equal(queuedImpactDropsFor().includes(floorGold), true);
+    assert.equal(queuedImpactDropsFor().includes(thrownGold), false);
+    assert.equal(game.level.objects.includes(floorGold), false);
+    assert.equal(landing.object, thrownGold);
+    assert.equal(game.level.objects.includes(thrownGold), true);
+    assert.equal(shkp.debit, 0);
+    assert.equal(shkp.loan, 0);
+    assert.equal(shkp.credit, 3);
+    assert.match(text, /gold pieces hit other objects\./);
+    assert.match(text, /From the impact, the other objects fall\./);
+    assert.doesNotMatch(text, /through the hole/);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(3)', 'rn2(3)']);
+});
+
 test('throwing gold from inventory donates the whole purse and updates wallet state', async () => {
     const { shkp } = installCommandShopState();
     shkp.debit = 5;

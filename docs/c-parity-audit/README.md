@@ -105,6 +105,7 @@ This folder records source-backed audits against `nethack-c/upstream`. The notes
 - [99-subagent-findings-2026-05-28.md](99-subagent-findings-2026-05-28.md): burning-oil water and pool evaporation plus projectile, figurine, and pet-food diet follow-up audits.
 - [100-subagent-findings-2026-05-28.md](100-subagent-findings-2026-05-28.md): remote non-gold hero projectile `ship_object()` down-gate parity plus remaining projectile/kick/gold shipping follow-up audits.
 - [101-subagent-findings-2026-05-28.md](101-subagent-findings-2026-05-28.md): remote projectile floor-pile `impact_drop()` parity plus remaining gold/kick/stairs/monster-thrown shipping follow-up audits.
+- [102-subagent-findings-2026-05-28.md](102-subagent-findings-2026-05-28.md): remote thrown-gold seen-shaft `ship_object()` parity plus upward potion self-hit, figurine animation, and ice-box survivor follow-up audits.
 
 ## Cross-Cutting Themes
 

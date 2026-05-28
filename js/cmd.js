@@ -21062,8 +21062,8 @@ function projectileShipObjectResult(overrides = {}) {
     };
 }
 
-function remoteProjectileShaftTrapAt(obj, x, y) {
-    if (!obj || shopBillableGold(obj)) return null;
+function remoteProjectileShaftTrapAt(obj, x, y, { allowGold = false } = {}) {
+    if (!obj || (!allowGold && shopBillableGold(obj))) return null;
     if (obj === game.u?.uball || obj === game.u?.uchain) return null;
     if (game.u?.ux === x && game.u?.uy === y) return null;
     const mon = (game.level?.monsters || []).find(candidate =>
@@ -21076,8 +21076,8 @@ function remoteProjectileShaftTrapAt(obj, x, y) {
     return trap;
 }
 
-function maybeShipRemoteProjectileObject(obj, x, y, messages) {
-    const trap = remoteProjectileShaftTrapAt(obj, x, y);
+function maybeShipRemoteProjectileObject(obj, x, y, messages, options = {}) {
+    const trap = remoteProjectileShaftTrapAt(obj, x, y, options);
     if (!trap) return projectileShipObjectResult();
     const target = sitFallTargetLevel(trap);
     if (!target) return projectileShipObjectResult();
@@ -21142,19 +21142,37 @@ function landProjectileObjectWithShopHandling(obj, x, y, options = {}) {
             };
         }
     }
+    let shipObject = projectileShipObjectResult();
+    if (shopBillableGold(obj)) {
+        shipObject = maybeShipRemoteProjectileObject(obj, x, y, messages, { allowGold: true });
+        if (shipObject.handled) {
+            return {
+                object: null,
+                impact: { loss: 0, broke: false, messages },
+                topBreak: { broke: false, breakKind: '', value: 0 },
+                floorEffects: { consumed: false },
+                shipObject,
+                shopLanding: { handled: false, shkp: null, message: '', messages: [], returned: false, charged: false },
+                shopSale: { handled: false, shkp: null, message: '', messages: [] },
+                messages,
+            };
+        }
+    }
     if (earthFloorEffects(obj, x, y, messages, 'fall', { usedUpShopBillOnDestroy: true })) {
         return {
             object: null,
             impact: { loss: 0, broke: false, messages },
             topBreak: { broke: false, breakKind: '', value: 0 },
             floorEffects: { consumed: true },
-            shipObject: projectileShipObjectResult(),
+            shipObject,
             shopLanding: { handled: false, shkp: null, message: '', messages: [], returned: false, charged: false },
             shopSale: { handled: false, shkp: null, message: '', messages: [] },
             messages,
         };
     }
-    const shipObject = maybeShipRemoteProjectileObject(obj, x, y, messages);
+    if (!shopBillableGold(obj)) {
+        shipObject = maybeShipRemoteProjectileObject(obj, x, y, messages);
+    }
     if (shipObject.handled) {
         return {
             object: null,
