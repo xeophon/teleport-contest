@@ -5,7 +5,7 @@ import { interruptEatingOccupation, processEatingOccupationTick } from '../js/al
 import { activateStatueTrap, burnFloorObjectsByFire, earthFloorEffects, finishForceLock, processCorpseTimers, processGlobShrinkTimers, processSpellbookStudyOccupation, rhack, __shopBillingTestHooks as shop } from '../js/cmd.js';
 import { game, resetGame } from '../js/gstate.js';
 import { enableRngLog, getRngLog, initRng } from '../js/rng.js';
-import { A_DEX, BILLSZ, CANDLESHOP, COULD_SEE, DB_EAST, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, FOUNTAIN, HOLE, IN_SIGHT, LAVAPOOL, POOL, ROOM, ROOMOFFSET, SHOPBASE, SQKY_BOARD, STATUE_TRAP } from '../js/const.js';
+import { A_DEX, BILLSZ, CANDLESHOP, COULD_SEE, DB_EAST, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, FOUNTAIN, HOLE, ICE, ICED_POOL, IN_SIGHT, LAVAPOOL, POOL, ROOM, ROOMOFFSET, SHOPBASE, SQKY_BOARD, STATUE_TRAP } from '../js/const.js';
 import { currentFruitId, setCurrentFruitName } from '../js/fruit.js';
 
 const BRASS_LANTERN = 226;
@@ -272,6 +272,12 @@ function markHeroSquareVisible() {
     game.viz_array = [];
     game.viz_array[game.u.uy] = [];
     game.viz_array[game.u.uy][game.u.ux] = COULD_SEE | IN_SIGHT;
+}
+
+function markSquareVisible(x, y) {
+    game.viz_array ??= [];
+    game.viz_array[y] ??= [];
+    game.viz_array[y][x] = COULD_SEE | IN_SIGHT;
 }
 
 function assertUsedUpBillForObject(shkp, obj, price) {
@@ -1198,6 +1204,38 @@ function polymorphWand(id, letter = 'w') {
         spe: 1,
         letter,
         line: `${letter} - a wand of polymorph`,
+    };
+}
+
+function coldWand(id, letter = 'w') {
+    return {
+        id,
+        cls: 'wand',
+        glyph: '/',
+        kind: 'cold',
+        actualKind: 'wand of cold',
+        wand: 'cold',
+        wandIndex: 21,
+        quan: 1,
+        spe: 1,
+        letter,
+        line: `${letter} - a wand of cold`,
+    };
+}
+
+function fireWand(id, letter = 'w') {
+    return {
+        id,
+        cls: 'wand',
+        glyph: '/',
+        kind: 'fire',
+        actualKind: 'wand of fire',
+        wand: 'fire',
+        wandIndex: 20,
+        quan: 1,
+        spe: 1,
+        letter,
+        line: `${letter} - a wand of fire`,
     };
 }
 
@@ -9613,6 +9651,103 @@ test('boulder burial routes angry shopkeeper loss to robbed', () => {
     assert.equal(shkp.debit || 0, 0);
     assert.equal(blade.no_charge, true);
     assert.equal(game.level.buriedobjlist.includes(blade), true);
+});
+
+async function zapColdWandNorthAtShopPool(pool) {
+    const cells = new Map();
+    cells.set('5,4', pool);
+    game.level.at = (x, y) => cells.get(`${x},${y}`) || { roomno: ROOMOFFSET, typ: ROOM };
+    game.level.buriedobjlist = [];
+    markSquareVisible(5, 4);
+    game.inventory = [coldWand(512041, 'w')];
+
+    await rhack('z');
+    await rhack('w');
+    await rhack('k');
+}
+
+test('cold ray freezing shop water charges buried merchandise before burial', async () => {
+    const { shkp } = installCommandShopState();
+    initRng(1);
+    const pool = { roomno: ROOMOFFSET, typ: POOL, flags: 0 };
+    const blade = { ...dagger(512042), letter: undefined, line: undefined, ox: 5, oy: 4 };
+    const expected = shop.shopItemPrice(blade, 5, 4);
+    game.level.objects = [blade];
+
+    await zapColdWandNorthAtShopPool(pool);
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(pool.typ, ICE);
+    assert.equal(pool.icedpool, ICED_POOL);
+    assert.match(game._pending_message, new RegExp(`owe Izchak ${expected} zorkmids? for burying merchandise`));
+    assert.match(game._pending_message, /The water freezes\./);
+    assert.equal(game.level.objects.includes(blade), false);
+    assert.equal(game.level.buriedobjlist.includes(blade), true);
+    assert.equal(shkp.debit, expected);
+    assert.equal(shkp.billct, 0);
+    assert.equal(shop.shopBillEntryForObject(shkp, blade), null);
+    assert.equal(blade.no_charge, true);
+});
+
+test('cold ray burial charges owner-billed no-charge merchandise to bill owner', async () => {
+    installCommandShopState();
+    const owner = addSecondShopkeeper();
+    initRng(1);
+    const pool = { roomno: ROOMOFFSET, typ: POOL, flags: 0 };
+    const ration = { ...foodRation(512043), letter: undefined, line: undefined, ox: 5, oy: 4 };
+    shop.addObjectToShopBill(owner, ration, 45);
+    ration.no_charge = true;
+    game.level.objects = [ration];
+
+    await zapColdWandNorthAtShopPool(pool);
+
+    assert.equal(pool.typ, ICE);
+    assert.match(game._pending_message, /owe Izchak 45 zorkmids? for burying merchandise/);
+    assert.equal(owner.debit, 45);
+    assert.equal(owner.billct, 0);
+    assert.equal(shop.shopBillEntryForObject(owner, ration), null);
+    assert.equal(ration.unpaid, false);
+    assert.equal(ration.no_charge, true);
+    assert.equal(game.level.objects.includes(ration), false);
+    assert.equal(game.level.buriedobjlist.includes(ration), true);
+});
+
+async function zapFireWandNorthAtShopIce(iceLoc) {
+    const cells = new Map();
+    cells.set('5,4', iceLoc);
+    game.level.at = (x, y) => cells.get(`${x},${y}`) || { roomno: ROOMOFFSET, typ: ROOM };
+    game.level.buriedobjlist = [];
+    markSquareVisible(5, 4);
+    game.inventory = [fireWand(512044, 'w')];
+
+    await rhack('z');
+    await rhack('w');
+    await rhack('k');
+}
+
+test('hero fire ray melting shop ice charges stock buried by settling boulder', async () => {
+    const { shkp } = installCommandShopState();
+    initRng(2);
+    const iceLoc = { roomno: ROOMOFFSET, typ: ICE, icedpool: ICED_POOL, flags: 0 };
+    const boulder = floorBoulder(512045, { ox: 5, oy: 4 });
+    const blade = { ...dagger(512046), letter: undefined, line: undefined, ox: 5, oy: 4 };
+    const expected = shop.shopItemPrice(blade, 5, 4);
+    game.level.objects = [boulder, blade];
+
+    await zapFireWandNorthAtShopIce(iceLoc);
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(iceLoc.typ, ROOM);
+    assert.match(game._pending_message, /The ice crackles and melts\./);
+    assert.match(game._pending_message, /A boulder settles\./);
+    assert.match(game._pending_message, new RegExp(`owe Izchak ${expected} zorkmids? for burying merchandise`));
+    assert.equal(game.level.objects.includes(boulder), false);
+    assert.equal(game.level.objects.includes(blade), false);
+    assert.equal(game.level.buriedobjlist.includes(blade), true);
+    assert.equal(shkp.debit, expected);
+    assert.equal(blade.no_charge, true);
 });
 
 test('shop-floor fragile stock falling through a hole migrates without ship-object breakage', () => {

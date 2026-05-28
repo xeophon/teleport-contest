@@ -39596,7 +39596,7 @@ export async function rhack(_cmd) {
                     if (!bounceNow) {
                         beamCells.push({ x: sx, y: sy, ch: zapBeamGlyph(dx, dy), color: CLR_CYAN });
 
-                        const terrain = applyColdRayTerrain(sx, sy);
+                        const terrain = applyColdRayTerrain(sx, sy, { buriedMerchandiseDebtMessage });
                         messages.push(...terrain.messages);
                         range += terrain.rangeMod;
                         if (terrain.stopped || range < 0) break;
@@ -39782,7 +39782,11 @@ export async function rhack(_cmd) {
                         messages.push(...burnFireRayWebTrap(sx, sy, {
                             previousMessage: messages[messages.length - 1] || '',
                         }));
-                        const ice = applyFireRayIceTerrain(sx, sy, { heroRay: true, recordKill: recordVanquished });
+                        const ice = applyFireRayIceTerrain(sx, sy, {
+                            heroRay: true,
+                            recordKill: recordVanquished,
+                            buriedMerchandiseDebtMessage,
+                        });
                         messages.push(...ice.messages);
                         if (!ice.handled) {
                             const terrain = applyFireRayWaterTerrain(sx, sy, {
