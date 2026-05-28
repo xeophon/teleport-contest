@@ -16166,6 +16166,33 @@ test('hero-thrown common no-effect potion can come from potion index', async () 
     ]);
 });
 
+test('hero-thrown unlit oil potion hits through potionhit without evaporating', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.u.acurr.a[A_DEX] = 25;
+    const potion = oilPotion(8807, 'p');
+    potion.dknown = true;
+    const goblin = ordinaryThrowTarget('goblin', 7, 5);
+    game.inventory = [potion];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('p');
+    await rhack('l');
+
+    assert.match(game._pending_message, /The (?:bottle|phial|flagon|carafe|flask|jar|vial) crashes on the goblin's head and breaks into shards\./);
+    assert.doesNotMatch(game._pending_message, /evaporates|misses|BOOM|explodes|peculiar odor/);
+    assert.equal(goblin.mhp, 4);
+    assert.equal(goblin.msleeping, 0);
+    assert.equal(goblin.mpeaceful, false);
+    assert.equal(game.inventory.includes(potion), false);
+    assert.equal(game.level.objects.length, 0);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(5)',
+    ]);
+});
+
 test('hero-thrown healing potion heals visible monster without angering it', async () => {
     installNonShopFloorState();
     game.level.at = () => ({ roomno: 0, typ: ROOM, lit: true });

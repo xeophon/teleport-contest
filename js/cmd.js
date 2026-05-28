@@ -12642,6 +12642,10 @@ const COMMON_NO_MONSTER_EFFECT_POTION_HIT_KINDS = new Set([
     'monster detection', 'object detection', 'gain energy', 'fruit juice',
 ]);
 
+function isUnlitOilPotionHit(potion, kind = thrownPotionEffectKind(potion)) {
+    return kind === 'oil' && !(potion?.lamplit || potion?.burning);
+}
+
 function supportsHeroThrownPotionHit(potion) {
     if (!isPotionObject(potion)) return false;
     const kind = thrownPotionEffectKind(potion);
@@ -12650,7 +12654,8 @@ function supportsHeroThrownPotionHit(potion) {
         || kind === 'invisibility' || kind === 'hallucination'
         || kind === 'healing' || kind === 'extra healing' || kind === 'full healing'
         || kind === 'restore ability' || kind === 'gain ability'
-        || COMMON_NO_MONSTER_EFFECT_POTION_HIT_KINDS.has(kind);
+        || COMMON_NO_MONSTER_EFFECT_POTION_HIT_KINDS.has(kind)
+        || isUnlitOilPotionHit(potion, kind);
 }
 
 function thrownPotionEffectKind(potion) {
@@ -12850,6 +12855,8 @@ function heroThrownPotionHitMonster(potion, mon) {
         angerMon = healingPotionHitMonster(potion, mon, kind, messages);
     } else if (COMMON_NO_MONSTER_EFFECT_POTION_HIT_KINDS.has(kind)) {
         // C has no monster-specific case for these potions; keep the common hit and anger tail.
+    } else if (isUnlitOilPotionHit(potion, kind)) {
+        // Unlit oil has no monster-specific case; lit oil explosion is handled by a later slice.
     }
 
     if ((mon.mhp || 1) > 0) {
