@@ -3493,6 +3493,17 @@ function impactDropObjectClass(obj) {
                 : obj?.glyph === '*' ? 'gem' : '');
 }
 
+function isGlassMaterialWandObject(obj) {
+    if (!obj || !isWandItem(obj) || obj.artifact || obj.oartifact) return false;
+    const material = String(obj.material || obj.oc_material || '').toLowerCase().replace(/^hi_/, '');
+    if (material === 'glass' || material === 'crystal') return true;
+    const appearance = String(
+        obj.appearance || obj.wandAppearance || (obj.wandIndex != null ? game._object_descriptions?.wands?.[obj.wandIndex]?.description : ''),
+    ).toLowerCase();
+    if (appearance === 'glass' || appearance === 'crystal') return true;
+    return /^(glass|crystal) wand$/.test(objectKindKey(obj));
+}
+
 function impactDropBreakKind(obj) {
     const cls = impactDropObjectClass(obj);
     const name = String(obj?.actualKind || obj?.kind || pickupObjectName(obj)).toLowerCase();
@@ -3500,6 +3511,7 @@ function impactDropBreakKind(obj) {
     if (obj?.otyp === EGG || name === 'egg') return 'splat';
     if (name.includes('melon')) return 'splat';
     if (name.includes('cream pie')) return 'mess';
+    if (isGlassMaterialWandObject(obj)) return 'pieces';
     if (obj?.otyp === EXPENSIVE_CAMERA || obj?.otyp === MIRROR
         || name.includes('mirror') || name.includes('looking glass')
         || name.includes('crystal ball') || name.includes('lenses'))
@@ -27197,7 +27209,7 @@ export function pickupObjectName(obj) {
     }
     if (obj.otyp === WAND_CLASS || obj.cls === 'wand') {
         if (obj.known === false) {
-            const appearance = game._object_descriptions?.wands?.[obj.wandIndex]?.description;
+            const appearance = obj.appearance || game._object_descriptions?.wands?.[obj.wandIndex]?.description;
             return named(appearance ? `${appearance} wand` : 'wand');
         }
         if (obj.wand === 'sleep' || obj.wandIndex === 22) return named('wand of sleep');

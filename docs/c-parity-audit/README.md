@@ -116,6 +116,7 @@ This folder records source-backed audits against `nethack-c/upstream`. The notes
 - [110-subagent-findings-2026-05-28.md](110-subagent-findings-2026-05-28.md): upward ordinary egg ceiling break, self-hit face splat, and broken-unit shop debt parity.
 - [111-subagent-findings-2026-05-28.md](111-subagent-findings-2026-05-28.md): upward mirror, crystal-ball, and lenses breakage with thousand-pieces wording, mirror luck loss, and broken-unit shop debt parity.
 - [112-subagent-findings-2026-05-28.md](112-subagent-findings-2026-05-28.md): upward expensive-camera breakage with picture-painting demon release, curse-driven peacefulness, and broken-unit shop debt parity.
+- [113-subagent-findings-2026-05-28.md](113-subagent-findings-2026-05-28.md): upward glass/crystal material wand breakage with shuffled appearance/material recognition, thousand-pieces wording, and broken-unit shop debt parity.
 
 ## Cross-Cutting Themes
 

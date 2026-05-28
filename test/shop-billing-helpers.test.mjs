@@ -1345,6 +1345,42 @@ function polymorphWand(id, letter = 'w') {
     };
 }
 
+function lightWand(id, letter = 'w', extra = {}) {
+    return {
+        id,
+        cls: 'wand',
+        glyph: '/',
+        kind: 'light',
+        actualKind: 'wand of light',
+        wand: 'light',
+        wandIndex: 0,
+        quan: 1,
+        spe: 6,
+        letter,
+        line: `${letter} - a wand of light`,
+        ...extra,
+    };
+}
+
+function unknownAppearanceWand(id, appearance, letter = 'w', extra = {}) {
+    const wandIndex = (game._object_descriptions?.wands || [])
+        .findIndex(entry => entry.description === appearance);
+    return {
+        id,
+        cls: 'wand',
+        glyph: '/',
+        known: false,
+        dknown: true,
+        appearance,
+        ...(wandIndex >= 0 ? { wandIndex } : {}),
+        quan: 1,
+        spe: 6,
+        letter,
+        line: `${letter} - a ${appearance} wand`,
+        ...extra,
+    };
+}
+
 function expensiveCamera(id, letter = 'c', extra = {}) {
     return {
         ...chargedTool(id, 'expensive camera', letter, 3),
@@ -17809,6 +17845,72 @@ test('upward hero-thrown unpaid expensive camera bills without forced demon rele
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 3), [
         'rn2(5)', 'rn2(100)', 'rn2(3)',
     ]);
+});
+
+test('upward hero-thrown unknown glass wand self-hit shatters into pieces', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, { uhp: 30, uhpmax: 30 });
+    const wand = unknownAppearanceWand(87687, 'glass', 'w');
+    game.inventory = [wand];
+    enableRngLog({ reset: true });
+    const hpBefore = game.u.uhp;
+
+    await rhack('t');
+    await rhack('w');
+    await rhack('<');
+
+    assert.equal(game._command_mode, null);
+    assert.match(game._pending_message, /A glass wand almost hits the ceiling, then falls back on top of your head\./);
+    assert.match(game._pending_message, /A glass wand shatters into a thousand pieces!/);
+    assert.doesNotMatch(game._pending_message, /crashes on your head|evaporates|Splat|What a mess/);
+    assert.equal(game.inventory.includes(wand), false);
+    assert.equal(game.level.objects.length, 0);
+    assert.equal(game.u.uhp, hpBefore);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rn2(5)', 'rn2(100)',
+    ]);
+});
+
+test('upward hero-thrown known glass-material wand can break on the ceiling', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    const wand = lightWand(87688, 'w', { material: 'glass' });
+    game.inventory = [wand];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('w');
+    await rhack('<');
+
+    assert.equal(game._command_mode, null);
+    assert.match(game._pending_message, /A wand of light hits the ceiling\./);
+    assert.match(game._pending_message, /A wand of light shatters into a thousand pieces!/);
+    assert.doesNotMatch(game._pending_message, /falls back|top of your head|crashes on your head|evaporates|Splat|What a mess/);
+    assert.equal(game.inventory.includes(wand), false);
+    assert.equal(game.level.objects.length, 0);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rn2(5)', 'rn2(100)',
+    ]);
+});
+
+test('upward hero-thrown unpaid glass-material wand bills the broken object', async () => {
+    const { shkp } = installCommandShopState();
+    initRng(1);
+    const wand = unknownAppearanceWand(87689, 'glass', 'w');
+    game.inventory = [wand];
+    shop.addObjectToShopBill(shkp, wand, 100);
+
+    await rhack('t');
+    await rhack('w');
+    await rhack('<');
+
+    assert.match(game._pending_message, /A glass wand shatters into a thousand pieces!/);
+    assert.equal(game.inventory.includes(wand), false);
+    assert.equal(game.level.objects.length, 0);
+    assert.equal(shop.shopBillEntryForObject(shkp, wand), null);
+    assert.equal(shkp.debit, 100);
+    assert.equal(shkp.billct, 0);
 });
 
 test('upward hero-thrown polymorph potion self-hits and polymorphs the hero', async () => {

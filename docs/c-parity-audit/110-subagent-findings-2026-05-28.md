@@ -36,7 +36,7 @@ Regression coverage:
 ## Remaining Upward Throw Gaps
 
 - Lit oil self-hit and ceiling break still need `explode_oil()`/burning-oil fallout ordering, including blast terrain/object collateral and shop cleanup.
-- Mirror, crystal ball, and lenses breakage is covered in `111-subagent-findings-2026-05-28.md`; expensive-camera breakage is covered in `112-subagent-findings-2026-05-28.md`; blinding venom, glass/crystal wands, crackable glass armor, and broader glass/crystal object breakage remain separate non-potion `toss_up()` slices.
+- Mirror, crystal ball, and lenses breakage is covered in `111-subagent-findings-2026-05-28.md`; expensive-camera breakage is covered in `112-subagent-findings-2026-05-28.md`; glass/crystal wand breakage is covered in `113-subagent-findings-2026-05-28.md`; blinding venom, crackable glass armor, and broader glass/crystal object breakage remain separate non-potion `toss_up()` slices.
 - Pyrolisk eggs need the `breakobj()` explosion branch before they are safe to fold into egg handling.
 - Touch-petrifying eggs/corpses need stone-resistance, stone-golem polymorph rescue, and helmet wording before they are safe to implement.
 - Generic non-breakable upward impacts still need `dmgval()`, weight-derived damage, hard-helmet mitigation, `Maybe_Half_Phys()`, silver/blessed bonuses, harmless missiles, and survivor `hitfloor()` disposition.
