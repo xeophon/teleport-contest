@@ -12691,6 +12691,10 @@ function isUnlitOilPotionHit(potion, kind = thrownPotionEffectKind(potion)) {
     return kind === 'oil' && !(potion?.lamplit || potion?.burning);
 }
 
+function isLitOilPotionHit(potion, kind = thrownPotionEffectKind(potion)) {
+    return kind === 'oil' && !!(potion?.lamplit || potion?.burning);
+}
+
 function monsterHasWornSaddle(mon) {
     if (!mon) return false;
     if (mon.saddled || ((mon.misc_worn_check || 0) & W_SADDLE)) return true;
@@ -12751,8 +12755,8 @@ function isBlessingHaterWaterPotionHit(potion, mon, kind = thrownPotionEffectKin
         && monsterHatesBlessingsForWaterHit(mon) && !monsterIsWereOrVampireForWaterHit(mon);
 }
 
-function isSaddleWaterPotionHit(potion, mon, kind = thrownPotionEffectKind(potion)) {
-    return kind === 'water' && !!monsterWornSaddleForPotionHit(mon);
+function isSaddlePotionHit(potion, mon, kind = thrownPotionEffectKind(potion)) {
+    return (kind === 'water' || kind === 'oil') && !!monsterWornSaddleForPotionHit(mon);
 }
 
 function isShapechangerWaterPotionHit(potion, mon, kind = thrownPotionEffectKind(potion), options = {}) {
@@ -12782,13 +12786,14 @@ function supportsHeroThrownPotionHit(potion, mon = null) {
         || kind === 'healing' || kind === 'extra healing' || kind === 'full healing'
         || kind === 'restore ability' || kind === 'gain ability' || kind === 'sickness'
         || kind === 'acid'
-        || isSaddleWaterPotionHit(potion, mon, kind)
+        || isSaddlePotionHit(potion, mon, kind)
         || isShapechangerWaterPotionHit(potion, mon, kind)
         || isBlessingHaterWaterPotionHit(potion, mon, kind)
         || isSpecialMonsterWaterPotionHit(potion, mon, kind)
         || isNeutralOrdinaryWaterPotionHit(potion, mon, kind)
         || COMMON_NO_MONSTER_EFFECT_POTION_HIT_KINDS.has(kind)
-        || isUnlitOilPotionHit(potion, kind);
+        || isUnlitOilPotionHit(potion, kind)
+        || isLitOilPotionHit(potion, kind);
 }
 
 function thrownPotionEffectKind(potion) {
@@ -13134,6 +13139,106 @@ function acidPotionHitMonster(potion, mon, messages) {
     return true;
 }
 
+function monsterResistsFire(mon) {
+    const data = mon?.data || {};
+    return !!(mon?.fireResistance || mon?.resistsFire || mon?.resists_fire
+        || data.fireResistance || data.resistsFire || data.resists_fire);
+}
+
+function monsterResistsCold(mon) {
+    const data = mon?.data || {};
+    return !!(mon?.coldResistance || mon?.resistsCold || mon?.resists_cold
+        || data.coldResistance || data.resistsCold || data.resists_cold);
+}
+
+function wakeNearbyMonstersFromExplosion(x, y, damage) {
+    const distance = Math.max(damage * damage, 50);
+    for (const sleeper of game.level?.monsters || []) {
+        if (!sleeper || sleeper.dead || (sleeper.mhp != null && sleeper.mhp <= 0)) continue;
+        const dx = (sleeper.mx || 0) - x;
+        const dy = (sleeper.my || 0) - y;
+        if (dx * dx + dy * dy >= distance) continue;
+        sleeper.msleeping = 0;
+        if (!(sleeper.data?.unique || sleeper.data?.uniq)) sleeper.mstrategy = 0;
+    }
+}
+
+function burningOilExplosionVisible(x, y) {
+    if (game.u?.blind) return false;
+    for (let dx = -1; dx <= 1; dx++)
+        for (let dy = -1; dy <= 1; dy++)
+            if (cansee(x + dx, y + dy)) return true;
+    return false;
+}
+
+function damageMonsterFromBurningOilExplosion(mon, damage, messages) {
+    const visible = !game.u?.blind && cansee(mon.mx, mon.my);
+    const name = fireScrollMonsterName(mon);
+    if (visible) messages.push(`${name} is caught in the burning oil!`);
+
+    const itemDamage = (mon.minvent || []).length
+        ? monsterFireInventoryDamage(mon, damage, messages, visible)
+        : 0;
+    let monDamage = 0;
+    if (!monsterResistsFire(mon)) {
+        monDamage = damage;
+        if (monsterResistsEffect(mon, game.u?.ulevel || 1)) {
+            if (visible) messages.push(`${name} resists the burning oil!`);
+            monDamage = Math.trunc((monDamage + 1) / 2);
+        }
+        if (monsterResistsCold(mon)) monDamage *= 2;
+    }
+
+    mon.mhp = (mon.mhp || 1) - monDamage - itemDamage;
+    if ((mon.mhp || 0) <= 0) killMonsterFromPotionHit(mon, messages);
+    else mon.mpeaceful = false;
+}
+
+function damageHeroFromBurningOilExplosion(damage, messages) {
+    const ux = game.u?.ux ?? -99;
+    const uy = game.u?.uy ?? -99;
+    messages.push('You are caught in the burning oil!');
+    const fireInventory = fireDamageInventory(damage, true);
+    messages.push(...fireInventory.messages);
+    const totalDamage = (game.u?.fireResistance ? 0 : damage) + (fireInventory.damage || 0);
+    if (totalDamage && game.u) game.u.uhp = Math.max(0, (game.u.uhp || 0) - totalDamage);
+    if ((game.u?.uhp || 0) <= 0) {
+        game._death_cause = fireInventory.deathCause || 'caught yourself in your own burning oil';
+        messages.push('It is fatal.');
+        messages.push('You die...');
+    }
+    exerciseAttribute(A_STR, false);
+    newsym(ux, uy);
+}
+
+function explodeBurningOilPotion(potion, x, y, messages) {
+    const damage = d(potion?.odiluted ? 3 : 4, 4);
+    potion.lamplit = false;
+    potion.burning = false;
+    delete potion._burnTimer;
+    delete potion.litRadius;
+
+    if (!heroIsDeaf())
+        messages.push(burningOilExplosionVisible(x, y) ? 'Boom!' : 'You hear a blast.');
+
+    for (const target of [...(game.level?.monsters || [])]) {
+        if (!target || target.dead || (target.mhp ?? 1) <= 0) continue;
+        if (Math.abs((target.mx ?? -99) - x) > 1 || Math.abs((target.my ?? -99) - y) > 1)
+            continue;
+        damageMonsterFromBurningOilExplosion(target, damage, messages);
+    }
+
+    if (Math.abs((game.u?.ux ?? -99) - x) <= 1 && Math.abs((game.u?.uy ?? -99) - y) <= 1)
+        damageHeroFromBurningOilExplosion(damage, messages);
+
+    wakeNearbyMonstersFromExplosion(x, y, damage);
+}
+
+function litOilPotionHitMonster(potion, mon, messages) {
+    explodeBurningOilPotion(potion, mon.mx || 0, mon.my || 0, messages);
+    return true;
+}
+
 const WERE_WATER_FORM_DATA = new Map([
     ['wererat', {
         human: { name: 'wererat', mlet: '@', glyph: '@', color: CLR_BROWN, mlevel: 2, mmove: 12, mac: 10, were: true, wereHuman: true },
@@ -13271,8 +13376,9 @@ function waterPotionHitBlessingHater(potion, mon, messages) {
     return true;
 }
 
-function waterPotionHitsSaddle(potion) {
+function potionHitsSaddle(potion, kind = thrownPotionEffectKind(potion)) {
     if (!rn2(10)) return true;
+    if (kind !== 'water') return false;
     if (rnl(10) > 7 && potion?.cursed) return true;
     if (rnl(10) < 4 && potion?.blessed) return true;
     return !rn2(3);
@@ -13339,13 +13445,20 @@ function waterPotionHitSaddle(potion, mon, messages) {
     return affected;
 }
 
+function potionHitSaddle(potion, mon, messages, kind = thrownPotionEffectKind(potion)) {
+    if (kind === 'water') return waterPotionHitSaddle(potion, mon, messages);
+    const visible = monsterCanBeSeenForPotionEffect(mon);
+    if (visible) messages.push(`${sentenceCase(saddlePotionHitTargetName(mon))} gets wet.`);
+    return false;
+}
+
 function heroThrownPotionHitMonster(potion, mon) {
     const messages = [];
     const bottle = chestShatterBottleName();
     const kind = thrownPotionEffectKind(potion);
-    const saddleWater = isSaddleWaterPotionHit(potion, mon, kind);
-    const hitSaddle = saddleWater && waterPotionHitsSaddle(potion);
-    const waterBranchOptions = { ignoreSaddle: saddleWater };
+    const saddlePotion = isSaddlePotionHit(potion, mon, kind);
+    const hitSaddle = saddlePotion && potionHitsSaddle(potion, kind);
+    const waterBranchOptions = { ignoreSaddle: saddlePotion };
     let angerMon = true;
     messages.push(`The ${bottle} crashes on ${hitSaddle ? saddlePotionHitTargetName(mon) : thrownPotionHitTargetName(mon)} and breaks into shards.`);
     if (!hitSaddle && rn2(5) && (mon.mhp || 1) > 1) mon.mhp--;
@@ -13353,7 +13466,7 @@ function heroThrownPotionHitMonster(potion, mon) {
         messages.push(`The ${pickupObjectName({ ...potion, quan: 1 })} evaporates.`);
 
     if (hitSaddle) {
-        waterPotionHitSaddle(potion, mon, messages);
+        potionHitSaddle(potion, mon, messages, kind);
     } else if (kind === 'confusion' || kind === 'booze') {
         if (!monsterResistsEffect(mon, 6)) mon.mconf = true;
     } else if (kind === 'paralysis') {
@@ -13390,8 +13503,10 @@ function heroThrownPotionHitMonster(potion, mon) {
         // Ordinary water has no monster-specific case for this gated target set.
     } else if (COMMON_NO_MONSTER_EFFECT_POTION_HIT_KINDS.has(kind)) {
         // C has no monster-specific case for these potions; keep the common hit and anger tail.
+    } else if (isLitOilPotionHit(potion, kind)) {
+        angerMon = litOilPotionHitMonster(potion, mon, messages);
     } else if (isUnlitOilPotionHit(potion, kind)) {
-        // Unlit oil has no monster-specific case; lit oil explosion is handled by a later slice.
+        // Unlit oil has no monster-specific case.
     }
 
     if (!hitSaddle && !mon.dead && (mon.mhp ?? 1) > 0) {

@@ -16272,6 +16272,133 @@ test('hero-thrown unlit oil potion hits through potionhit without evaporating', 
     ]);
 });
 
+test('hero-thrown lit oil potion explodes on a direct monster hit', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.u.acurr.a[A_DEX] = 25;
+    const potion = oilPotion(88071, 'p');
+    potion.dknown = true;
+    potion.lamplit = true;
+    potion.burning = true;
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, { mhp: 30, mhpmax: 30 });
+    game.inventory = [potion];
+    game.level.monsters = [goblin];
+    markSquareVisible(goblin.mx, goblin.my);
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('p');
+    await rhack('l');
+
+    assert.match(game._pending_message, /crashes on the goblin's head and breaks into shards\./);
+    assert.match(game._pending_message, /Boom!/);
+    assert.match(game._pending_message, /The goblin is caught in the burning oil!/);
+    assert.doesNotMatch(game._pending_message, /evaporates|misses|shatters|peculiar odor/);
+    assert.equal(goblin.mhp < 29, true);
+    assert.equal(goblin.msleeping, 0);
+    assert.equal(goblin.mpeaceful, false);
+    assert.equal(game.inventory.includes(potion), false);
+    assert.equal(game.level.objects.length, 0);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(5)', 'd(4,4)', 'rn2(100)',
+    ]);
+});
+
+test('hero-thrown diluted lit oil uses the smaller burning-oil damage dice', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.u.acurr.a[A_DEX] = 25;
+    const potion = oilPotion(88072, 'p');
+    potion.dknown = true;
+    potion.lamplit = true;
+    potion.burning = true;
+    potion.odiluted = true;
+    const elemental = ordinaryThrowTarget('fire elemental', 7, 5, {
+        mhp: 30,
+        mhpmax: 30,
+        fireResistance: true,
+        data: { name: 'fire elemental', mlevel: 8, resistsFire: true },
+    });
+    game.inventory = [potion];
+    game.level.monsters = [elemental];
+    markSquareVisible(elemental.mx, elemental.my);
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('p');
+    await rhack('l');
+
+    assert.match(game._pending_message, /The fire elemental is caught in the burning oil!/);
+    assert.doesNotMatch(game._pending_message, /evaporates|resists the burning oil|misses/);
+    assert.equal(elemental.mhp, 29);
+    assert.equal(elemental.mpeaceful, false);
+    assert.equal(game.inventory.includes(potion), false);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(5)', 'd(3,4)',
+    ]);
+});
+
+test('adjacent hero-thrown lit oil catches the hero in the burning-oil blast', async () => {
+    installNonShopFloorState();
+    initRng(3);
+    game.u.acurr.a[A_DEX] = 25;
+    game.u.uhp = 50;
+    game.u.uhpmax = 50;
+    const potion = oilPotion(88073, 'p');
+    potion.dknown = true;
+    potion.lamplit = true;
+    potion.burning = true;
+    const goblin = ordinaryThrowTarget('goblin', 6, 5, { mhp: 30, mhpmax: 30 });
+    game.inventory = [potion];
+    game.level.monsters = [goblin];
+    markSquareVisible(goblin.mx, goblin.my);
+
+    await rhack('t');
+    await rhack('p');
+    await rhack('l');
+
+    assert.match(game._pending_message, /The goblin is caught in the burning oil!/);
+    assert.match(game._pending_message, /You are caught in the burning oil!/);
+    assert.doesNotMatch(game._pending_message, /evaporates|peculiar odor/);
+    assert.equal(game.u.uhp < 50, true);
+    assert.equal(game.inventory.includes(potion), false);
+});
+
+test('hero-thrown lit oil does not explode when it hits a worn saddle', async () => {
+    installNonShopFloorState();
+    initRng(5);
+    game.u.acurr.a[A_DEX] = 25;
+    const potion = oilPotion(88074, 'p');
+    potion.dknown = true;
+    potion.lamplit = true;
+    potion.burning = true;
+    const saddle = wornSaddle(880741, { blessed: false, cursed: false, bknown: true });
+    const pony = ordinaryThrowTarget('pony', 7, 5, {
+        saddled: true,
+        misc_worn_check: W_SADDLE,
+        minvent: [saddle],
+    });
+    game.inventory = [potion];
+    game.level.monsters = [pony];
+    markSquareVisible(pony.mx, pony.my);
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('p');
+    await rhack('l');
+
+    assert.match(game._pending_message, /crashes on the pony's saddle and breaks into shards\./);
+    assert.match(game._pending_message, /The pony's saddle gets wet\./);
+    assert.doesNotMatch(game._pending_message, /Boom|burning oil|evaporates|misses/);
+    assert.equal(pony.mhp, 5);
+    assert.equal(pony.msleeping, 1);
+    assert.equal(pony.mpeaceful, true);
+    assert.equal(game.inventory.includes(potion), false);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(10)',
+    ]);
+});
+
 test('hero-thrown neutral water potion uses direct potionhit on ordinary monsters', async () => {
     installNonShopFloorState();
     initRng(2);
