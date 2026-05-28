@@ -41,6 +41,7 @@ const FIGURINE = 795;
 const LOCK_PICK = 10167;
 const ROCK = 467;
 const EGG = 10001;
+const EXPENSIVE_CAMERA = 10082;
 
 function installShopState() {
     const g = resetGame();
@@ -304,6 +305,12 @@ function markSquareVisible(x, y) {
     game.viz_array ??= [];
     game.viz_array[y] ??= [];
     game.viz_array[y][x] = COULD_SEE | IN_SIGHT;
+}
+
+function markHeroNeighborhoodVisible() {
+    for (let y = (game.u?.uy || 0) - 1; y <= (game.u?.uy || 0) + 1; y++)
+        for (let x = (game.u?.ux || 0) - 1; x <= (game.u?.ux || 0) + 1; x++)
+            markSquareVisible(x, y);
 }
 
 function assertUsedUpBillForObject(shkp, obj, price) {
@@ -1335,6 +1342,15 @@ function polymorphWand(id, letter = 'w') {
         spe: 1,
         letter,
         line: `${letter} - a wand of polymorph`,
+    };
+}
+
+function expensiveCamera(id, letter = 'c', extra = {}) {
+    return {
+        ...chargedTool(id, 'expensive camera', letter, 3),
+        otyp: EXPENSIVE_CAMERA,
+        line: `${letter} - an expensive camera`,
+        ...extra,
     };
 }
 
@@ -17714,6 +17730,85 @@ test('upward hero-thrown unpaid crystal ball bills the broken object', async () 
     assert.equal(shop.shopBillEntryForObject(shkp, ball), null);
     assert.equal(shkp.debit, 60);
     assert.equal(shkp.billct, 0);
+});
+
+test('upward hero-thrown expensive camera self-hit can release a peaceful homunculus', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    markHeroNeighborhoodVisible();
+    const camera = expensiveCamera(87684, 'c');
+    game.inventory = [camera];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('c');
+    await rhack('<');
+
+    const released = game.level.monsters.find(mon => mon.data?.name === 'homunculus');
+    assert.equal(game._command_mode, null);
+    assert.match(game._pending_message, /An expensive camera almost hits the ceiling, then falls back on top of your head\./);
+    assert.match(game._pending_message, /An expensive camera shatters into a thousand pieces!/);
+    assert.match(game._pending_message, /The picture-painting demon is released!/);
+    assert.ok(released);
+    assert.equal(released.mpeaceful, 1);
+    assert.notDeepEqual([released.mx, released.my], [game.u.ux, game.u.uy]);
+    assert.equal(game.inventory.includes(camera), false);
+    assert.equal(game.level.objects.length, 0);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 4), [
+        'rn2(5)', 'rn2(100)', 'rn2(3)', 'rn2(3)',
+    ]);
+});
+
+test('upward hero-thrown cursed expensive camera ceiling break releases a hostile imp', async () => {
+    installNonShopFloorState();
+    initRng(5);
+    markHeroNeighborhoodVisible();
+    const camera = expensiveCamera(87685, 'c', { cursed: true });
+    game.inventory = [camera];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('c');
+    await rhack('<');
+
+    const released = game.level.monsters.find(mon => mon.data?.name === 'imp');
+    assert.equal(game._command_mode, null);
+    assert.match(game._pending_message, /An expensive camera hits the ceiling\./);
+    assert.match(game._pending_message, /An expensive camera shatters into a thousand pieces!/);
+    assert.match(game._pending_message, /The picture-painting demon is released!/);
+    assert.doesNotMatch(game._pending_message, /falls back|top of your head/);
+    assert.ok(released);
+    assert.equal(released.mpeaceful, 0);
+    assert.equal(game.inventory.includes(camera), false);
+    assert.equal(game.level.objects.length, 0);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 4), [
+        'rn2(5)', 'rn2(100)', 'rn2(3)', 'rn2(3)',
+    ]);
+});
+
+test('upward hero-thrown unpaid expensive camera bills without forced demon release', async () => {
+    const { shkp } = installCommandShopState();
+    initRng(2);
+    const camera = expensiveCamera(87686, 'c');
+    game.inventory = [camera];
+    shop.addObjectToShopBill(shkp, camera, 200);
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('c');
+    await rhack('<');
+
+    assert.match(game._pending_message, /An expensive camera hits the shop's ceiling\./);
+    assert.match(game._pending_message, /An expensive camera shatters into a thousand pieces!/);
+    assert.doesNotMatch(game._pending_message, /picture-painting demon is released/);
+    assert.equal(game.inventory.includes(camera), false);
+    assert.equal(game.level.objects.length, 0);
+    assert.equal(shop.shopBillEntryForObject(shkp, camera), null);
+    assert.equal(shkp.debit, 200);
+    assert.equal(shkp.billct, 0);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 3), [
+        'rn2(5)', 'rn2(100)', 'rn2(3)',
+    ]);
 });
 
 test('upward hero-thrown polymorph potion self-hits and polymorphs the hero', async () => {

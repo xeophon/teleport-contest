@@ -38,7 +38,7 @@ Regression coverage:
 
 - Lit oil self-hit and ceiling break still need `explode_oil()`/burning-oil fallout ordering, including blast terrain/object collateral and shop cleanup.
 - Blinding venom remains a separate non-potion `toss_up()` slice because C applies cream-pie-like blindness and venom splash wording through venom object delivery.
-- Expensive cameras remain separate because `breakobj()` calls `release_camera_demon()` before object deletion and shop cleanup.
+- Expensive camera breakage and picture-painting demon release are covered in `112-subagent-findings-2026-05-28.md`.
 - Glass/crystal wands, crackable glass armor, and generic glass/crystal objects remain separate because they need exact wand/default `breakmsg()`, armor erosion, and broader object registry/material coverage.
 - Pyrolisk eggs need the `breakobj()` explosion branch before they are safe to fold into egg handling.
 - Touch-petrifying eggs/corpses need stone-resistance, stone-golem polymorph rescue, and helmet wording before they are safe to implement.

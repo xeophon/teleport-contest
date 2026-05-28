@@ -14561,20 +14561,34 @@ function isMirrorObject(obj) {
 
 function supportsHeroThrownFragileObjectUpwardHit(obj) {
     if (!obj || isPotionObject(obj) || isCreamPieObject(obj) || isMelonObject(obj) || isEggItem(obj)) return false;
-    if (isExpensiveCameraObject(obj)) return false;
     return impactDropBreakKind(obj) === 'pieces';
 }
 
-function applyHeroThrownFragileBreakSideEffects(obj) {
-    if (isMirrorObject(obj) && game.u) game.u.uluck = (game.u.uluck || 0) - 2;
+async function releaseBrokenCameraDemon(obj, messages) {
+    if (!isExpensiveCameraObject(obj) || rn2(3)) return null;
+    const data = monsterByRndName(rn2(3) ? 'homunculus' : 'imp') || { name: 'imp', mlet: 'i', glyph: 'i', mlevel: 3, hpLevel: 4 };
+    const mon = await makemon(data, game.u?.ux || obj.ox || 0, game.u?.uy || obj.oy || 0, MM_NOMSG);
+    if (!mon) return null;
+    if (!game.u?.blind && cansee(mon.mx, mon.my)) {
+        const released = heroIsHallucinating() ? sentenceCase(articleFor(getbogusmon())) : 'The picture-painting demon';
+        messages.push(`${released} is released!`);
+    }
+    mon.mpeaceful = obj.cursed ? 0 : 1;
+    set_malign(mon);
+    return mon;
 }
 
-function heroThrownFragileObjectSelfHitMessages(obj, action, ceilingName = heroThrowCeilingName()) {
+async function applyHeroThrownFragileBreakSideEffects(obj, messages) {
+    if (isMirrorObject(obj) && game.u) game.u.uluck = (game.u.uluck || 0) - 2;
+    await releaseBrokenCameraDemon(obj, messages);
+}
+
+async function heroThrownFragileObjectSelfHitMessages(obj, action, ceilingName = heroThrowCeilingName()) {
     const messages = [`${floorObjectSubject({ ...obj, quan: 1 })} ${action} the ${ceilingName}, then falls back on top of your head.`];
     const breakKind = projectileTopLevelBreakKind(obj);
     if (breakKind) {
         projectileTopLevelBreakMessage(obj, breakKind, messages);
-        applyHeroThrownFragileBreakSideEffects(obj);
+        await applyHeroThrownFragileBreakSideEffects(obj, messages);
         markThrownBrokenObjectDebt(obj);
         return messages;
     }
@@ -14591,7 +14605,15 @@ function heroThrownFragileObjectSelfHitMessages(obj, action, ceilingName = heroT
     return messages;
 }
 
-function heroThrownFragileObjectUpwardMessages(obj) {
+async function heroThrownFragileObjectCeilingBreakMessages(obj, breakKind, ceilingName = heroThrowCeilingName()) {
+    const messages = [`${floorObjectSubject({ ...obj, quan: 1 })} hits the ${ceilingName}.`];
+    projectileTopLevelBreakMessage(obj, breakKind, messages);
+    await applyHeroThrownFragileBreakSideEffects(obj, messages);
+    markThrownBrokenObjectDebt(obj);
+    return messages;
+}
+
+async function heroThrownFragileObjectUpwardMessages(obj) {
     const ceilingName = heroThrowCeilingName();
     const hasCeiling = heroHasThrowCeiling();
     const hitsRoof = !!(rn2(5) && !heroIsUnderwaterForThrow());
@@ -14599,11 +14621,7 @@ function heroThrownFragileObjectUpwardMessages(obj) {
         return heroThrownFragileObjectSelfHitMessages(obj, 'flies up into', ceilingName);
     if (hitsRoof) {
         const breakKind = projectileTopLevelBreakKind(obj);
-        if (breakKind) {
-            const messages = heroThrownPotionCeilingBreakMessages(obj, breakKind, ceilingName);
-            applyHeroThrownFragileBreakSideEffects(obj);
-            return messages;
-        }
+        if (breakKind) return heroThrownFragileObjectCeilingBreakMessages(obj, breakKind, ceilingName);
         return heroThrownFragileObjectSelfHitMessages(obj, 'hits', ceilingName);
     }
     return heroThrownFragileObjectSelfHitMessages(obj, 'almost hits', ceilingName);
@@ -51169,7 +51187,7 @@ export async function rhack(_cmd) {
                 color: item.color || CLR_WHITE,
             };
             if ((item.quan || 1) > 1) splitCarriedObjectShopBill(item, thrownObject, 1);
-            const messages = heroThrownFragileObjectUpwardMessages(thrownObject);
+            const messages = await heroThrownFragileObjectUpwardMessages(thrownObject);
             removeInventoryItem(item, 1);
             newsym(game.u?.ux || 0, game.u?.uy || 0);
             await setMessage(messages.join('  '));
