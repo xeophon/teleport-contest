@@ -14502,6 +14502,42 @@ function heroThrownMelonUpwardMessages(melon) {
     return heroThrownMelonSelfHitMessages(melon, 'almost hits', ceilingName);
 }
 
+function heroThrownEggSelfHitMessages(egg, action, ceilingName = heroThrowCeilingName()) {
+    const messages = [`${floorObjectSubject({ ...egg, quan: 1 })} ${action} the ${ceilingName}, then falls back on top of your head.`];
+    const breakKind = projectileTopLevelBreakKind(egg);
+    if (breakKind) {
+        projectileTopLevelBreakMessage(egg, breakKind, messages);
+        messages.push("You've got it all over your face!");
+        markThrownBrokenObjectDebt(egg);
+        return messages;
+    }
+
+    if (game.u) {
+        game.u.uhp = Math.max(0, (game.u.uhp || 0) - 1);
+        if ((game.u.uhp || 0) <= 0) {
+            game._death_cause = 'killed by a falling object';
+            messages.push('You die...');
+        }
+    }
+    const landing = landProjectileObjectWithShopHandling(egg, game.u?.ux || egg.ox || 0, game.u?.uy || egg.oy || 0, {});
+    messages.push(...landing.messages);
+    return messages;
+}
+
+function heroThrownEggUpwardMessages(egg) {
+    const ceilingName = heroThrowCeilingName();
+    const hasCeiling = heroHasThrowCeiling();
+    const hitsRoof = !!(rn2(5) && !heroIsUnderwaterForThrow());
+    if (!hasCeiling)
+        return heroThrownEggSelfHitMessages(egg, 'flies up into', ceilingName);
+    if (hitsRoof) {
+        const breakKind = projectileTopLevelBreakKind(egg);
+        if (breakKind) return heroThrownPotionCeilingBreakMessages(egg, breakKind, ceilingName);
+        return heroThrownEggSelfHitMessages(egg, 'hits', ceilingName);
+    }
+    return heroThrownEggSelfHitMessages(egg, 'almost hits', ceilingName);
+}
+
 function heroThrownCreamPieUpwardMessages(pie) {
     const ceilingName = heroThrowCeilingName();
     const hasCeiling = heroHasThrowCeiling();
@@ -31860,6 +31896,14 @@ function eggMonsterName(item) {
 
 function isPyroliskEgg(item) {
     return isEggItem(item) && eggMonsterName(item) === 'pyrolisk';
+}
+
+function isTouchPetrifyingEgg(item) {
+    return isEggItem(item) && ['chickatrice', 'cockatrice'].includes(eggMonsterName(item));
+}
+
+function supportsHeroThrownEggUpwardHit(item) {
+    return isEggItem(item) && !isTouchPetrifyingEgg(item) && !isPyroliskEgg(item);
 }
 
 function isPetrifyingEgg(item) {
@@ -50997,6 +51041,35 @@ export async function rhack(_cmd) {
             };
             if ((item.quan || 1) > 1) splitCarriedObjectShopBill(item, thrownObject, 1);
             const messages = heroThrownMelonUpwardMessages(thrownObject);
+            removeInventoryItem(item, 1);
+            newsym(game.u?.ux || 0, game.u?.uy || 0);
+            await setMessage(messages.join('  '));
+            game._command_mode = null;
+            game._throw_item_letter = null;
+            game._resume_time_after_more = 0;
+            game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
+            game.context.move = 0;
+            return;
+        }
+        if (ch === '<' && supportsHeroThrownEggUpwardHit(item)) {
+            let thrownId = null;
+            if ((item.quan || 1) > 1) thrownId = next_ident();
+            const thrownObject = {
+                ...item,
+                letter: undefined,
+                line: undefined,
+                wielded: false,
+                worn: false,
+                quivered: false,
+                ox: game.u?.ux || 0,
+                oy: game.u?.uy || 0,
+                id: thrownId ?? item.id,
+                quan: 1,
+                glyph: '%',
+                color: item.color || CLR_WHITE,
+            };
+            if ((item.quan || 1) > 1) splitCarriedObjectShopBill(item, thrownObject, 1);
+            const messages = heroThrownEggUpwardMessages(thrownObject);
             removeInventoryItem(item, 1);
             newsym(game.u?.ux || 0, game.u?.uy || 0);
             await setMessage(messages.join('  '));

@@ -31,6 +31,6 @@ Regression coverage:
 ## Remaining Upward Throw Gaps
 
 - Lit oil self-hit and ceiling break still need `explode_oil()`/burning-oil fallout ordering, including blast terrain/object collateral and shop cleanup.
-- Eggs, blinding venom, expensive cameras, and glass/crystal object breakage remain separate non-potion `toss_up()` slices.
-- Petrifying eggs/corpses need stone-resistance, stone-golem polymorph rescue, and helmet wording before they are safe to implement.
+- Ordinary eggs are covered in `110-subagent-findings-2026-05-28.md`; blinding venom, expensive cameras, and glass/crystal object breakage remain separate non-potion `toss_up()` slices.
+- Pyrolisk eggs and touch-petrifying eggs/corpses need explosion, stone-resistance, stone-golem polymorph rescue, and helmet wording before they are safe to implement.
 - Generic non-breakable upward impacts still need `dmgval()`, weight-derived damage, hard-helmet mitigation, `Maybe_Half_Phys()`, silver/blessed bonuses, harmless missiles, and survivor `hitfloor()` disposition.

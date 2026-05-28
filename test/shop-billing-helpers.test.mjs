@@ -40,6 +40,7 @@ const STATUE = 472;
 const FIGURINE = 795;
 const LOCK_PICK = 10167;
 const ROCK = 467;
+const EGG = 10001;
 
 function installShopState() {
     const g = resetGame();
@@ -17530,6 +17531,84 @@ test('upward hero-thrown unpaid melon from a stack bills one broken unit', async
     assert.equal(shop.shopBillEntryTotal(liveEntry), 5);
     assert.equal(melons.unpaidPrice, 5);
     assert.equal(shkp.debit, 5);
+    assert.equal(shkp.billct, 1);
+});
+
+test('upward hero-thrown ordinary egg self-hits and splats on face', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    const eggItem = { ...egg(87677, 'e'), otyp: EGG };
+    game.inventory = [eggItem];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('e');
+    await rhack('<');
+
+    assert.equal(game._command_mode, null);
+    assert.match(game._pending_message, /An egg almost hits the ceiling, then falls back on top of your head\./);
+    assert.match(game._pending_message, /Splat!/);
+    assert.match(game._pending_message, /You've got it all over your face!/);
+    assert.doesNotMatch(game._pending_message, /What a mess|crashes on your head|evaporates|cmdassist|In what direction/);
+    assert.equal(game.inventory.includes(eggItem), false);
+    assert.equal(game.level.objects.length, 0);
+    assert.notEqual(game.u.blind, true);
+    assert.equal(game.u.ucreamed || 0, 0);
+    assert.equal(game.u._blindTimeout || 0, 0);
+    assert.doesNotMatch(game.u._statusSuffix || '', /Blind/);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rn2(5)', 'rn2(100)',
+    ]);
+});
+
+test('upward hero-thrown ordinary egg can break on the ceiling', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    const eggItem = { ...egg(87678, 'e'), otyp: EGG };
+    game.inventory = [eggItem];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('e');
+    await rhack('<');
+
+    assert.equal(game._command_mode, null);
+    assert.match(game._pending_message, /An egg hits the ceiling\./);
+    assert.match(game._pending_message, /Splat!/);
+    assert.doesNotMatch(game._pending_message, /falls back|top of your head|You've got it all over your face|What a mess|evaporates/);
+    assert.equal(game.inventory.includes(eggItem), false);
+    assert.equal(game.level.objects.length, 0);
+    assert.notEqual(game.u.blind, true);
+    assert.equal(game.u.ucreamed || 0, 0);
+    assert.equal(game.u._blindTimeout || 0, 0);
+    assert.doesNotMatch(game.u._statusSuffix || '', /Blind/);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rn2(5)', 'rn2(100)',
+    ]);
+});
+
+test('upward hero-thrown unpaid ordinary egg from a stack bills one broken unit', async () => {
+    const { shkp } = installCommandShopState();
+    initRng(5);
+    const eggs = { ...egg(87679, 'e', 2), otyp: EGG };
+    game.inventory = [eggs];
+    shop.addObjectToShopBill(shkp, eggs, 18);
+
+    await rhack('t');
+    await rhack('e');
+    await rhack('<');
+
+    assert.match(game._pending_message, /Splat!/);
+    assert.match(game._pending_message, /You've got it all over your face!/);
+    assert.equal(eggs.quan, 1);
+    assert.equal(game.inventory.includes(eggs), true);
+    assert.equal(game.level.objects.length, 0);
+    const liveEntry = shop.shopBillEntryForObject(shkp, eggs);
+    assert.ok(liveEntry);
+    assert.equal(liveEntry.bquan, 1);
+    assert.equal(shop.shopBillEntryTotal(liveEntry), 9);
+    assert.equal(eggs.unpaidPrice, 9);
+    assert.equal(shkp.debit, 9);
     assert.equal(shkp.billct, 1);
 });
 
