@@ -4545,6 +4545,111 @@ test('dipping an unpolyable object into polymorph potion keeps the potion', asyn
     assert.match(game._pending_message, /Nothing happens\./);
 });
 
+test('floor polymorph shudder destroys shop-floor stock and leaves a used-up bill row', async () => {
+    const { shkp } = installCommandShopState();
+    initRng(4);
+    const wand = polymorphWand(32001, 'w');
+    const ration = { ...foodRation(32002), ox: 5, oy: 4, letter: undefined, line: undefined };
+    game.inventory = [wand];
+    game.level.objects = [ration];
+    const expectedPrice = shop.shopItemPrice(ration, 5, 4);
+
+    await rhack('z');
+    await rhack('w');
+    await rhack('k');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.level.objects.includes(ration), false);
+    assert.equal(shkp.debit || 0, 0);
+    assert.equal(shkp.robbed || 0, 0);
+    assertUsedUpBillForObject(shkp, ration, expectedPrice);
+    const debts = shop.collectPayableShopDebts(shkp);
+    assert.equal(debts.some(debt => debt.billPortion === 'fullyUsedUp' && debt.price === expectedPrice), true);
+    assert.match(game._pending_message, /You feel shuddering vibrations\./);
+});
+
+test('floor polymorph shudder outside shop records robbed value instead of a bill row', async () => {
+    const { shkp } = installCommandShopState();
+    initRng(4);
+    const wand = polymorphWand(32003, 'w');
+    const ration = { ...foodRation(32004), ox: 5, oy: 5, letter: undefined, line: undefined };
+    game.inventory = [wand];
+    game.level.objects = [ration];
+    game.u.ux = 5;
+    game.u.uy = 6;
+    game.level.at = (x, y) => ({
+        roomno: (x === 5 && y === 5) || (x === 6 && y === 5) ? ROOMOFFSET : 0,
+        typ: ROOM,
+    });
+    const expectedPrice = shop.shopItemPrice(ration, 5, 5);
+
+    await rhack('z');
+    await rhack('w');
+    await rhack('k');
+
+    assert.equal(game.level.objects.includes(ration), false);
+    assert.equal(shkp.billct, 0);
+    assert.equal(shkp.debit || 0, 0);
+    assert.equal(shkp.robbed, expectedPrice);
+    assert.deepEqual(game._usedUpShopBills || [], []);
+});
+
+test('floor polymorph shudder bills only one unit from a shop-floor stack', async () => {
+    const { shkp } = installCommandShopState();
+    initRng(4);
+    const wand = polymorphWand(32005, 'w');
+    const stack = { ...foodRationStack(32006, 2), ox: 5, oy: 4, letter: undefined, line: undefined };
+    game.inventory = [wand];
+    game.level.objects = [stack];
+    const expectedPrice = shop.shopItemPrice({ ...stack, quan: 1 }, 5, 4);
+
+    await rhack('z');
+    await rhack('w');
+    await rhack('k');
+
+    assert.equal(game.level.objects.includes(stack), true);
+    assert.equal(stack.quan, 1);
+    assert.equal(stack.unpaid, undefined);
+    assert.equal(shop.shopBillEntryForObject(shkp, stack), null);
+    assert.equal(shkp.billct, 1);
+    const entry = shkp.bill[0];
+    assert.equal(entry.useup, true);
+    assert.equal(shop.shopBillEntryTotal(entry), expectedPrice);
+    assert.equal((game._usedUpShopBills || []).some(bill =>
+        String(bill.bo_id) === String(entry.bo_id) && bill.price === expectedPrice), true);
+});
+
+test('successful floor polymorph of shop stock angers shopkeeper without immediate debt', async () => {
+    const { shkp } = installCommandShopState();
+    initRng(1);
+    const wand = polymorphWand(32007, 'w');
+    const ration = { ...foodRation(32008), ox: 5, oy: 4, letter: undefined, line: undefined };
+    game.inventory = [wand];
+    game.level.objects = [ration];
+
+    await rhack('z');
+    await rhack('w');
+    await rhack('k');
+
+    assert.equal(game.level.objects.includes(ration), false);
+    assert.equal(game.level.objects.length, 1);
+    const replacement = game.level.objects[0];
+    assert.notEqual(replacement, ration);
+    assert.notEqual(replacement.id, ration.id);
+    assert.equal(replacement.unpaid, undefined);
+    assert.equal(replacement.unpaidPrice, undefined);
+    assert.equal(shkp.billct, 0);
+    assert.equal(shkp.debit || 0, 0);
+    assert.equal(shkp.robbed || 0, 0);
+    assert.deepEqual(game._usedUpShopBills || [], []);
+    assert.equal(shkp.angry, true);
+    assert.equal(shkp.hostile, true);
+    assert.equal(shkp.mpeaceful, 0);
+    assert.equal(shkp.following, 1);
+    assert.equal(game.u.uconduct.polypiles, 1);
+    assert.match(game._pending_message, /Izchak gets angry!/);
+});
+
 test('potion alchemy mixes healing and speed into diluted extra healing', async () => {
     installCommandShopState();
     initRng(1);

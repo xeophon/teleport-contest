@@ -20223,6 +20223,75 @@ function markObjectTreeShopBillsUsedUp(obj, seen = new Set()) {
     return markObjectShopBillUsedUp(obj) || marked;
 }
 
+function useUpPolymorphShudderFloorObject(obj, x, y) {
+    if (!obj) return null;
+    const usedObj = splitFloorObjectForUseUp(obj, 1);
+    const shkp = shopkeeperForCostlySpot(x, y);
+    if (shopkeeperInHisShop(shkp)) {
+        const heroShkp = shopkeeperForShopRoom(game.u?.ux, game.u?.uy);
+        if (sameShopkeeper(shkp, heroShkp)) {
+            addContainerAndContentsToShopBill(usedObj, usedObj, usedObj, shkp, x, y);
+            markObjectTreeShopBillsUsedUp(usedObj);
+        } else {
+            shipObjectShopDebt(usedObj, x, y, { shopFloorObj: true, silent: true });
+        }
+    }
+    removeFloorObject(usedObj);
+    return usedObj;
+}
+
+function floorPolymorphContentsHaveShopCost(obj, shkp, x, y, seen = new Set()) {
+    if (!obj || seen.has(obj)) return false;
+    seen.add(obj);
+    for (const child of globContents(obj)) {
+        if (!child || seen.has(child)) continue;
+        if (shopBillableGold(child) && Math.max(1, Math.trunc(Number(child.quan || 1))) > 0)
+            return true;
+        const owner = shopkeeperOwningBillEntry(child);
+        const entry = owner.entry && sameShopkeeper(owner.shkp, shkp)
+            ? owner.entry
+            : shopBillEntryForObject(shkp, child);
+        if (entry && shopBillEntryTotal(entry) > 0) return true;
+        if (!child.no_charge && shopItemPrice(child, x, y) > 0) return true;
+        if (floorPolymorphContentsHaveShopCost(child, shkp, x, y, seen)) return true;
+    }
+    return false;
+}
+
+function floorPolymorphShopkeeperAngerMessage(obj, x, y) {
+    const shkp = shopkeeperForCostlySpot(x, y);
+    if (!shopkeeperInHisShop(shkp)) return '';
+    if (obj?.no_charge && !floorPolymorphContentsHaveShopCost(obj, shkp, x, y))
+        return '';
+    const name = shopkeeperDisplayName(shkp);
+    if (shopkeeperPeacefulForDebt(shkp)) {
+        shkp.angry = true;
+        shkp.hostile = true;
+        shkp.mpeaceful = 0;
+        shkp.following = 1;
+        return `${name} gets angry!`;
+    }
+    shkp.angry = true;
+    shkp.hostile = true;
+    shkp.mpeaceful = 0;
+    shkp.following = 1;
+    return `${name} is furious!`;
+}
+
+function prepareFloorPolymorphReplacement(oldObj, newObj) {
+    markObjectTreeShopBillsUsedUp(oldObj);
+    delete newObj.contents;
+    delete newObj.cobj;
+    delete newObj.container;
+    delete newObj.contained;
+    delete newObj._shopBillObjectId;
+    delete newObj.unpaid;
+    delete newObj.unpaidPrice;
+    if (typeof newObj.line === 'string')
+        newObj.line = newObj.line.replace(/ \(unpaid, \d+ zorkmids?\)/, '');
+    return newObj;
+}
+
 function billHeldMagicBagLostItem(obj) {
     const owner = shopkeeperOwningBillEntry(obj);
     if (owner.entry) {
@@ -40009,16 +40078,18 @@ export async function rhack(_cmd) {
             game.context.move = 1;
             return;
         }
+        const removeTargets = new Set();
         const replacements = [];
+        const alterationMessages = [];
         for (const obj of [...targetObjects].reverse()) {
             if ((obj.cls === 'wand' || obj.cls === 'potion' || obj.cls === 'spellbook') && obj.kind === 'polymorph') {
-                replacements.unshift(obj);
                 continue;
             }
             if (rn2(100) < (obj.artifact ? 95 : 5)) {
-                replacements.unshift(obj);
                 continue;
             }
+            game.u.uconduct ??= {};
+            game.u.uconduct.polypiles = Math.max(0, Math.trunc(Number(game.u.uconduct.polypiles || 0))) + 1;
             const shudderOdds = obj.cls === 'wand' || obj.cursed ? 3 : obj.blessed ? 12 : 8;
             if (!rn2(shudderOdds)) {
                 rn2(45 + (game.u?.uluck || 0));
@@ -40027,6 +40098,7 @@ export async function rhack(_cmd) {
                     rn2(19);
                     game._polymorph_wand_learned = 1;
                 }
+                useUpPolymorphShudderFloorObject(obj, x, y);
                 continue;
             }
             const roll = rnd(1000);
@@ -40046,15 +40118,18 @@ export async function rhack(_cmd) {
             } else {
                 newObj.kind = obj.kind || obj.cls;
             }
+            prepareFloorPolymorphReplacement(obj, newObj);
+            const angerMessage = floorPolymorphShopkeeperAngerMessage(obj, x, y);
+            if (angerMessage && !alterationMessages.includes(angerMessage))
+                alterationMessages.push(angerMessage);
+            removeTargets.add(obj);
             replacements.unshift(newObj);
             rn2(100);
         }
-        game.level.objects = (game.level?.objects || []).filter(obj =>
-            obj.hidden || obj.transientProjectile || obj.ox !== x || obj.oy !== y || obj.otyp === BOULDER
-        );
+        game.level.objects = (game.level?.objects || []).filter(obj => !removeTargets.has(obj));
         game.level.objects.push(...replacements);
         newsym(x, y);
-        await setMessage('You feel shuddering vibrations.');
+        await setMessage(['You feel shuddering vibrations.', ...alterationMessages].join('  '));
         game.context.move = 1;
         return;
     }
