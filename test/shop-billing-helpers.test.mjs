@@ -3671,6 +3671,9 @@ test('self-cast stone to flesh preserves worn meat ring hand and skips merge', a
 test('self-cast stone to flesh turns carried boulder into enormous meatball', async () => {
     installCommandShopState();
     initRng(1);
+    game.level.flags = { sokoban_rules: true };
+    game.u.uluck = 2;
+    game.u.uconduct = { sokocheat: 4 };
     const boulder = floorBoulder(31016, {
         letter: 'a',
         line: 'a - a boulder',
@@ -3694,6 +3697,8 @@ test('self-cast stone to flesh turns carried boulder into enormous meatball', as
     assert.notEqual(result.id, 31016);
     assert.equal(result.line, 'a - an enormous meatball');
     assert.match(game._pending_message, /You smell the odor of meat\./);
+    assert.equal(game.u.uconduct.sokocheat, 5);
+    assert.equal(game.u.uluck, 1);
     assertNoStoneToFleshScoreSideEffects();
 });
 
@@ -3701,6 +3706,9 @@ test('self-cast stone to flesh respects ordinary object resistance', async () =>
     installCommandShopState();
     initRng(40);
     enableRngLog({ reset: true });
+    game.level.flags = { sokoban_rules: true };
+    game.u.uluck = 2;
+    game.u.uconduct = { sokocheat: 4 };
     const boulder = floorBoulder(31017, {
         letter: 'a',
         line: 'a - a boulder',
@@ -3716,6 +3724,8 @@ test('self-cast stone to flesh respects ordinary object resistance', async () =>
     assert.equal(boulder.otyp, BOULDER);
     assert.deepEqual(getRngLog().filter(entry => entry.startsWith('rn2(100)=')), ['rn2(100)=0']);
     assert.doesNotMatch(game._pending_message || '', /odor of meat|delicious smell/);
+    assert.equal(game.u.uconduct.sokocheat, 4);
+    assert.equal(game.u.uluck, 2);
     assertNoStoneToFleshScoreSideEffects();
 });
 
@@ -3964,6 +3974,9 @@ test('downward stone to flesh turns floor gemstone ring into meat ring', async (
 test('downward stone to flesh turns floor boulder into enormous meatball', async () => {
     installNonShopFloorState();
     initRng(1);
+    game.level.flags = { sokoban_rules: true };
+    game.u.uluck = 0;
+    game.u.uconduct = {};
     const boulder = floorBoulder(31020);
     game.inventory = [];
     game.level.objects = [boulder];
@@ -3985,6 +3998,8 @@ test('downward stone to flesh turns floor boulder into enormous meatball', async
     assert.equal(result.line, undefined);
     assert.notEqual(result.id, 31020);
     assert.match(game._pending_message, /You smell the odor of meat\./);
+    assert.equal(game.u.uconduct.sokocheat, 1);
+    assert.equal(game.u.uluck, -1);
     assertNoStoneToFleshScoreSideEffects();
 });
 

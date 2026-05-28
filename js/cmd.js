@@ -12392,8 +12392,11 @@ function stoneToFleshReplacementForObject(item) {
         return stoneToFleshObjectResists(item) ? null : stoneToFleshMeatStickReplacement(item);
     if (isStoneToFleshMineralRingObject(item))
         return stoneToFleshObjectResists(item) ? null : stoneToFleshMeatRingReplacement(item);
-    if (isBoulderObject(item))
-        return stoneToFleshObjectResists(item) ? null : stoneToFleshEnormousMeatballReplacement(item);
+    if (isBoulderObject(item)) {
+        if (stoneToFleshObjectResists(item)) return null;
+        applySokobanGuilt();
+        return stoneToFleshEnormousMeatballReplacement(item);
+    }
     if (isStoneToFleshGemObject(item))
         return stoneToFleshObjectResists(item) ? null : stoneToFleshMeatballReplacement(item);
     return null;
