@@ -13827,6 +13827,7 @@ function damageHeroFromBurningOilExplosion(damage, messages) {
     const ux = game.u?.ux ?? -99;
     const uy = game.u?.uy ?? -99;
     messages.push('You are caught in the burning oil!');
+    burnAwayHeroSlime(messages);
     const fireInventory = fireDamageInventory(damage, true);
     messages.push(...fireInventory.messages);
     const totalDamage = (game.u?.fireResistance ? 0 : damage) + (fireInventory.damage || 0);
@@ -13840,11 +13841,31 @@ function damageHeroFromBurningOilExplosion(damage, messages) {
     newsym(ux, uy);
 }
 
+function heroIsSliming() {
+    return !!(game.u?._slimingTimeout || game.u?.sliming || game.u?.slimed
+        || /\bSlime(?:d)?\b/.test(game.u?._statusSuffix || ''));
+}
+
+function burnAwayHeroSlime(messages = []) {
+    if (!heroIsSliming()) return false;
+    game.u._slimingTimeout = 0;
+    game.u.sliming = false;
+    game.u.slimed = false;
+    removeHeroStatusSuffix('Slime');
+    removeHeroStatusSuffix('Slimed');
+    messages.push('The slime that covers you is burned away!');
+    return true;
+}
+
 function burnFloorObjectsFromBurningOilExplosion(x, y, messages) {
     for (let dx = -1; dx <= 1; dx++) {
         for (let dy = -1; dy <= 1; dy++) {
             const sx = x + dx;
             const sy = y + dy;
+            const webMessages = burnFireRayWebTrap(sx, sy, {
+                previousMessage: messages[messages.length - 1] || '',
+            });
+            if (webMessages.length) messages.push(...webMessages);
             const floorFire = burnFloorObjectsByFire(sx, sy, {
                 heroCaused: true,
                 igniteFeedback: false,

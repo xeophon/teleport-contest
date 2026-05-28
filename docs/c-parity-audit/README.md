@@ -99,6 +99,7 @@ This folder records source-backed audits against `nethack-c/upstream`. The notes
 - [93-subagent-findings-2026-05-28.md](93-subagent-findings-2026-05-28.md): themed buried-zombie generation timers plus fresh lit-oil floor-collateral and projectile `ship_object()` follow-up audits.
 - [94-subagent-findings-2026-05-28.md](94-subagent-findings-2026-05-28.md): lit-oil explosion floor-object collateral plus fresh stone-to-flesh statue/figurine, diet metadata, projectile impact-drop, and forced-chest follow-up audits.
 - [95-subagent-findings-2026-05-28.md](95-subagent-findings-2026-05-28.md): stone-to-flesh vegetarian statue/figurine meatballs plus fresh burning-oil terrain, projectile `ship_object()`, and diet metadata follow-up audits.
+- [96-subagent-findings-2026-05-28.md](96-subagent-findings-2026-05-28.md): burning-oil web deletion and hero slime cleanup plus terrain, projectile, stone-to-flesh, and diet metadata follow-up audits.
 
 ## Cross-Cutting Themes
 

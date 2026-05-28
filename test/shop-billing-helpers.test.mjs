@@ -6,7 +6,7 @@ import { activateStatueTrap, burnFloorObjectsByFire, earthFloorEffects, finishFo
 import { game, resetGame } from '../js/gstate.js';
 import { pushKey, resetInputState } from '../js/input.js';
 import { enableRngLog, getRngLog, initRng } from '../js/rng.js';
-import { A_DEX, A_STR, BILLSZ, CANDLESHOP, COULD_SEE, DB_EAST, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, FOUNTAIN, HOLE, ICE, ICED_POOL, IN_SIGHT, LAVAPOOL, POOL, ROOM, ROOMOFFSET, SHOPBASE, SQKY_BOARD, STATUE_TRAP, STRAT_WAITFORU, W_SADDLE } from '../js/const.js';
+import { A_DEX, A_STR, BILLSZ, CANDLESHOP, COULD_SEE, DB_EAST, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, FOUNTAIN, HOLE, ICE, ICED_POOL, IN_SIGHT, LAVAPOOL, POOL, ROOM, ROOMOFFSET, SHOPBASE, SQKY_BOARD, STATUE_TRAP, STRAT_WAITFORU, TT_WEB, WEB, W_SADDLE } from '../js/const.js';
 import { currentFruitId, setCurrentFruitName } from '../js/fruit.js';
 
 const BRASS_LANTERN = 226;
@@ -17410,6 +17410,93 @@ test('hero-thrown lit oil explosion burns floor objects across the blast before 
     ]);
 });
 
+test('hero-thrown lit oil explosion burns visible webs before monster damage', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.u.acurr.a[A_DEX] = 25;
+    const potion = oilPotion(880755, 'p');
+    potion.dknown = true;
+    potion.lamplit = true;
+    potion.burning = true;
+    const centerWeb = { ttyp: WEB, tx: 7, ty: 5, tseen: true };
+    const adjacentWeb = { ttyp: WEB, tx: 8, ty: 5, tseen: true };
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, { mhp: 30, mhpmax: 30 });
+    goblin.mtrapped = 1;
+    game.inventory = [potion];
+    game.level.traps = [centerWeb, adjacentWeb];
+    game.level.monsters = [goblin];
+    markSquareVisible(7, 5);
+    markSquareVisible(8, 5);
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('p');
+    await rhack('l');
+
+    const message = game._pending_message || '';
+    assert.equal(game.level.traps.includes(centerWeb), false);
+    assert.equal(game.level.traps.includes(adjacentWeb), false);
+    assert.equal(goblin.mtrapped, 0);
+    assert.equal((message.match(/A web bursts into flames!/g) || []).length, 1);
+    assert.equal(message.indexOf('A web bursts into flames!') < message.indexOf('The goblin is caught in the burning oil!'), true);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(5)', 'd(4,4)', 'rn2(100)',
+    ]);
+});
+
+test('hero-thrown lit oil explosion clears hero web trap state', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.u.acurr.a[A_DEX] = 25;
+    game.u.utrap = 4;
+    game.u.utraptype = TT_WEB;
+    const potion = oilPotion(880756, 'p');
+    potion.dknown = true;
+    potion.lamplit = true;
+    potion.burning = true;
+    const web = { ttyp: WEB, tx: 5, ty: 5, tseen: true };
+    const goblin = ordinaryThrowTarget('goblin', 6, 5, { mhp: 30, mhpmax: 30 });
+    game.inventory = [potion];
+    game.level.traps = [web];
+    game.level.monsters = [goblin];
+    markSquareVisible(5, 5);
+    markSquareVisible(6, 5);
+
+    await rhack('t');
+    await rhack('p');
+    await rhack('l');
+
+    assert.equal(game.level.traps.includes(web), false);
+    assert.equal(game.u.utrap, 0);
+    assert.equal(game.u.utraptype, null);
+    assert.match(game._pending_message || '', /A web bursts into flames!/);
+    assert.match(game._pending_message || '', /You are caught in the burning oil!/);
+});
+
+test('hero-thrown lit oil explosion silently burns unseen webs', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.u.acurr.a[A_DEX] = 25;
+    game.u.blind = true;
+    const potion = oilPotion(880757, 'p');
+    potion.dknown = true;
+    potion.lamplit = true;
+    potion.burning = true;
+    const web = { ttyp: WEB, tx: 7, ty: 5, tseen: true };
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, { mhp: 30, mhpmax: 30 });
+    game.inventory = [potion];
+    game.level.traps = [web];
+    game.level.monsters = [goblin];
+
+    await rhack('t');
+    await rhack('p');
+    await rhack('l');
+
+    assert.equal(game.level.traps.includes(web), false);
+    assert.doesNotMatch(game._pending_message || '', /A web bursts into flames!/);
+    assert.match(game._pending_message || '', /You hear a blast\./);
+});
+
 test('hero-thrown lit oil explosion bills burned shop-floor objects', async () => {
     const { shkp } = installCommandShopState();
     initRng(8);
@@ -17503,6 +17590,38 @@ test('adjacent hero-thrown lit oil catches the hero in the burning-oil blast', a
     assert.doesNotMatch(game._pending_message, /evaporates|peculiar odor/);
     assert.equal(game.u.uhp < 50, true);
     assert.equal(game.inventory.includes(potion), false);
+});
+
+test('adjacent hero-thrown lit oil burns away hero slime before inventory fire', async () => {
+    installNonShopFloorState();
+    initRng(3);
+    game.u.acurr.a[A_DEX] = 25;
+    game.u.uhp = 50;
+    game.u.uhpmax = 50;
+    game.u._slimingTimeout = 10;
+    game.u.sliming = true;
+    game.u._statusSuffix = ' Slime';
+    const potion = oilPotion(880735, 'p');
+    potion.dknown = true;
+    potion.lamplit = true;
+    potion.burning = true;
+    const goblin = ordinaryThrowTarget('goblin', 6, 5, { mhp: 30, mhpmax: 30 });
+    game.inventory = [potion];
+    game.level.monsters = [goblin];
+    markSquareVisible(goblin.mx, goblin.my);
+
+    await rhack('t');
+    await rhack('p');
+    await rhack('l');
+
+    const message = game._pending_message || '';
+    assert.match(message, /You are caught in the burning oil!/);
+    assert.match(message, /The slime that covers you is burned away!/);
+    assert.equal(message.indexOf('You are caught in the burning oil!') < message.indexOf('The slime that covers you is burned away!'), true);
+    assert.equal(game.u._slimingTimeout, 0);
+    assert.equal(game.u.sliming, false);
+    assert.doesNotMatch(game.u._statusSuffix || '', /Slime/);
+    assert.equal(game.u.uhp < 50, true);
 });
 
 test('hero-thrown lit oil does not explode when it hits a worn saddle', async () => {
