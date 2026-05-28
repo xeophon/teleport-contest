@@ -69,6 +69,51 @@ function polyselfForm() {
     return game.u?._polyself_form || null;
 }
 
+function addPolyselfDietOverlay(map, names, diet) {
+    for (const name of names) map.set(String(name).toLowerCase(), diet);
+}
+
+const POLYSELF_DIET_OVERLAY = new Map();
+addPolyselfDietOverlay(POLYSELF_DIET_OVERLAY, [
+    'little dog', 'dog', 'large dog',
+    'kitten', 'housecat', 'large cat',
+    'wolf', 'winter wolf cub', 'winter wolf', 'warg',
+    'hell hound pup', 'hell hound',
+    'baby gray dragon', 'baby gold dragon', 'baby silver dragon',
+    'baby shimmering dragon', 'baby red dragon', 'baby white dragon',
+    'baby orange dragon', 'baby black dragon', 'baby blue dragon',
+    'baby green dragon', 'baby yellow dragon',
+    'gray dragon', 'gold dragon', 'silver dragon', 'shimmering dragon',
+    'red dragon', 'white dragon', 'orange dragon', 'black dragon',
+    'blue dragon', 'green dragon', 'yellow dragon',
+    'carnivorous ape',
+    'piranha', 'shark', 'giant eel', 'electric eel', 'kraken',
+    'wererat', 'werejackal', 'werewolf',
+], { carnivorous: true, humanoid: false });
+addPolyselfDietOverlay(POLYSELF_DIET_OVERLAY, [
+    'dwarf', 'dwarf lord', 'dwarf king',
+    'goblin', 'hobgoblin', 'hill orc', 'Mordor orc', 'Uruk-hai', 'orc shaman', 'orc-captain',
+], { carnivorous: true, herbivorous: true, humanoid: true });
+addPolyselfDietOverlay(POLYSELF_DIET_OVERLAY, [
+    'pony', 'horse', 'warhorse',
+], { herbivorous: true, humanoid: false });
+addPolyselfDietOverlay(POLYSELF_DIET_OVERLAY, [
+    'rock mole', 'rust monster', 'xorn',
+], { metallivorous: true, humanoid: false });
+
+function polyselfFormWithDiet() {
+    const form = polyselfForm();
+    if (!form) return null;
+    const name = String(form.name || '').toLowerCase();
+    const overlay = POLYSELF_DIET_OVERLAY.get(name);
+    if (!overlay) return form;
+    const result = { ...overlay, ...form };
+    if (!Object.prototype.hasOwnProperty.call(result, 'carnivorous')
+        && Object.prototype.hasOwnProperty.call(form, 'carnivore'))
+        result.carnivorous = form.carnivore;
+    return result;
+}
+
 function polyselfNoHands() {
     return !!polyselfForm()?.nohands;
 }
@@ -12447,7 +12492,7 @@ function preserveStoneToFleshEquipmentState(target, state) {
 }
 
 function heroPolyselfCarnivorous() {
-    const form = polyselfForm() || {};
+    const form = polyselfFormWithDiet() || {};
     return !!(form.carnivorous || form.carnivore);
 }
 
@@ -15280,7 +15325,7 @@ function heroFoodIsWereForm() {
 }
 
 function heroFoodIsCarnivorousNonHumanoid() {
-    const form = polyselfForm() || {};
+    const form = polyselfFormWithDiet() || {};
     return !!(form.carnivorous || form.carnivore) && form.humanoid === false;
 }
 
@@ -17211,7 +17256,7 @@ function tinVariety(item, display = false) {
 }
 
 function heroIsMetallivorous() {
-    return !!(polyselfForm()?.metallivorous || game.u?.metallivorous);
+    return !!(polyselfFormWithDiet()?.metallivorous || game.u?.metallivorous);
 }
 
 function wieldedItem() {

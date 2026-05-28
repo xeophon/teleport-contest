@@ -1076,7 +1076,6 @@ function installThrowsRocksForm() {
 function installMetallivorousForm() {
     game.u._polyself_form = {
         name: 'rock mole',
-        metallivorous: true,
         nohands: false,
         verysmall: false,
     };
@@ -3624,20 +3623,22 @@ test('self-cast stone to flesh turns carried mineral ring into meat ring', async
     assert.match(game._pending_message, /You smell the odor of meat\./);
 });
 
-test('self-cast stone to flesh uses delicious smell for carnivorous meat eater', async () => {
-    installCommandShopState();
-    initRng(1);
-    game._startup_role = 'Wizard';
-    game.urole = { name: { m: 'Wizard' } };
-    game.u.uconduct = { unvegetarian: 1 };
-    game.u._polyself_form = { name: 'wolf', carnivorous: true };
-    const wand = makeInvisibleWand(31021, 'a', 6);
-    game.inventory = [wand];
+test('self-cast stone to flesh uses delicious smell for carnivorous and omnivorous forms', async () => {
+    for (const formName of ['wolf', 'dwarf']) {
+        installCommandShopState();
+        initRng(1);
+        game._startup_role = 'Wizard';
+        game.urole = { name: { m: 'Wizard' } };
+        game.u.uconduct = { unvegetarian: 1 };
+        game.u._polyself_form = { name: formName };
+        const wand = makeInvisibleWand(31021, 'a', 6);
+        game.inventory = [wand];
 
-    await castStoneToFleshAtSelf();
+        await castStoneToFleshAtSelf();
 
-    assert.equal(game.inventory[0].otyp, MEAT_STICK);
-    assert.equal(game._pending_message, 'You smell a delicious smell.');
+        assert.equal(game.inventory[0].otyp, MEAT_STICK, formName);
+        assert.equal(game._pending_message, 'You smell a delicious smell.', formName);
+    }
 });
 
 test('self-cast stone to flesh keeps Monk carnivores on odor wording', async () => {
@@ -3646,7 +3647,7 @@ test('self-cast stone to flesh keeps Monk carnivores on odor wording', async () 
     game._startup_role = 'Monk';
     game.urole = { name: { m: 'Monk' } };
     game.u.uconduct = { unvegetarian: 1 };
-    game.u._polyself_form = { name: 'wolf', carnivorous: true };
+    game.u._polyself_form = { name: 'wolf' };
     const wand = makeInvisibleWand(31022, 'a', 6);
     game.inventory = [wand];
 
@@ -7537,6 +7538,31 @@ test('metallivorous carried spinach tin skips prompt and adds metal nutrition', 
     assert.doesNotMatch(game._pending_message, /Eat it\?|smells like/);
 });
 
+test('named metallivorous polyself forms eat metal tins through diet overlay', async () => {
+    for (const formName of ['rust monster', 'xorn']) {
+        installCommandShopState();
+        game.u._polyself_form = { name: formName, nohands: false, verysmall: false };
+        const can = tin(30944, 't');
+        can.spe = 0;
+        can.corpsenm = null;
+        can.emptyTin = true;
+        can.kind = 'empty tin';
+        can.singular = 'empty tin';
+        can.plural = 'empty tins';
+        game.inventory = [can];
+
+        await rhack('e');
+        await rhack('t');
+
+        assert.equal(game._command_mode, null, formName);
+        assert.equal(game.inventory.includes(can), false, formName);
+        assert.equal(game.u.uhunger, 905, formName);
+        assert.match(game._pending_message, /You bite right into the metal tin\.\.\./, formName);
+        assert.match(game._pending_message, /It turns out to be empty\./, formName);
+        assert.doesNotMatch(game._pending_message, /Eat it\?|smells like/, formName);
+    }
+});
+
 test('first bite of unpaid carried food stack splits live and used-up bill rows', () => {
     const { shkp } = installShopState();
     const stack = foodRation(3101, 'a');
@@ -8113,6 +8139,31 @@ test('carried delayed ordinary foods use C bite timing and messages', async () =
         assert.equal(game._eating_bite_hunger || 0, 0, entry.kind);
         if (entry.finish) assert.equal(game._pending_message, entry.finish, entry.kind);
         else assert.match(game._pending_message || '', new RegExp(`You finish eating the ${entry.kind.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\.`), entry.kind);
+    }
+});
+
+test('polyself diet overlay drives tripe first-bite wording', async () => {
+    const cases = [
+        { formName: 'wolf', message: 'This tripe ration is surprisingly good!', experience: 0 },
+        { formName: 'orc-captain', message: 'Mmm, tripe... not bad!', experience: 0 },
+    ];
+
+    for (const entry of cases) {
+        installCommandShopState();
+        game.u._polyself_form = { name: entry.formName };
+        const food = simpleFood(31886, 'tripe ration', 't');
+        game.inventory = [food];
+
+        await rhack('e');
+        await rhack('t');
+
+        assert.equal(game._pending_message, entry.message, entry.formName);
+        assert.equal(game.inventory.includes(food), true, entry.formName);
+        assert.equal(food.oeaten, 100, entry.formName);
+        assert.equal(game.u.uhunger, 1000, entry.formName);
+        assert.equal(game._eating_turns_remaining, 2, entry.formName);
+        assert.equal(game.u.uexp || 0, entry.experience, entry.formName);
+        assert.equal(game.u.vomiting || 0, 0, entry.formName);
     }
 });
 
