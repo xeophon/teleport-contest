@@ -8936,6 +8936,24 @@ function forceWeaponName(item) {
 }
 
 const FORCE_BLADE_NAME_RE = /\b(?:athame|axe|battle-axe|crysknife|dagger|knife|katana|saber|sabre|scalpel|short sword|broadsword|long sword|two-handed sword|tsurugi|wakizashi)\b/;
+const FORCE_WEAPON_LDAM_BY_NAME = new Map([
+    ['two-handed sword', 6], ['silver saber', 8], ['dwarvish spear', 8],
+    ['elven short sword', 8], ['orcish short sword', 8], ['dwarvish short sword', 8],
+    ['elven broadsword', 6], ['bill-guisarme', 10], ['lucern hammer', 6],
+    ['bec de corbin', 6], ['war hammer', 4], ['morning star', 6],
+    ['silver mace', 6], ['quarterstaff', 6], ['rubber hose', 3],
+    ['crysknife', 10], ['short sword', 8], ['broadsword', 6],
+    ['long sword', 12], ['runesword', 6], ['scimitar', 8],
+    ['wakizashi', 8], ['athame', 3], ['scalpel', 3], ['stiletto', 2],
+    ['worm tooth', 2], ['battle-axe', 6], ['partisan', 6],
+    ['ranseur', 4], ['spetum', 6], ['glaive', 10], ['halberd', 6],
+    ['bardiche', 4], ['voulge', 4], ['fauchard', 8], ['guisarme', 8],
+    ['mattock', 12], ['trident', 6], ['javelin', 6], ['spear', 8],
+    ['dagger', 3], ['knife', 2], ['katana', 12], ['tsurugi', 8],
+    ['saber', 8], ['sabre', 8], ['mace', 6], ['club', 3],
+    ['aklys', 3], ['flail', 4], ['axe', 4], ['lance', 10],
+    ['mjollnir', 4],
+]);
 
 function forceWeaponIsPick(item) {
     return PICK_DIG_NAME_RE.test(forceWeaponName(item).toLowerCase());
@@ -8947,11 +8965,15 @@ function forceWeaponIsBlade(item) {
 }
 
 function forceLockChance(item) {
-    const name = forceWeaponName(item).toLowerCase();
-    if (name.includes('dwarvish spear')) return 16;
-    if (name.includes('spear')) return 12;
-    if (name.includes('war hammer') || name.includes('mjollnir')) return 8;
-    if (name.includes('mace') || name.includes('club')) return 12;
+    const explicit = Number(item?.oc_wldam ?? item?.wldam ?? item?.ldam);
+    if (Number.isFinite(explicit) && explicit > 0) return Math.trunc(explicit) * 2;
+    const name = forceWeaponName(item).toLowerCase()
+        .replace(/\b(?:very|thoroughly|rusty|corroded|burnt|rotted|greased|fixed|fireproof|rustproof)\b/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+    for (const [weaponName, ldam] of FORCE_WEAPON_LDAM_BY_NAME) {
+        if (name === weaponName || name.endsWith(` ${weaponName}`)) return ldam * 2;
+    }
     return 8;
 }
 
@@ -8998,11 +9020,11 @@ function wakeNearbyFromForceLock(messages) {
 export function processForceLockOccupationTick(force) {
     const messages = [];
     if (!force) return { stop: false, messages };
-    const weapon = force.weapon;
-    if (!weapon || !(game.inventory || []).includes(weapon)) {
+    if (forceLockOccupationShouldGiveUp(force)) {
         messages.push('You give up your attempt to force the lock.');
         return { stop: true, messages };
     }
+    const weapon = force.weapon;
     if (!force.picktyp) {
         wakeNearbyFromForceLock(messages);
         return { stop: false, messages };
@@ -9019,6 +9041,11 @@ export function processForceLockOccupationTick(force) {
     messages.push('You give up your attempt to force the lock.');
     exerciseAttribute(A_DEX, true);
     return { stop: true, messages };
+}
+
+export function forceLockOccupationShouldGiveUp(force) {
+    const weapon = force?.weapon;
+    return !weapon || !(game.inventory || []).includes(weapon) || !itemIsWielded(weapon) || polyselfNoHands();
 }
 
 function isForceableBoxObject(obj) {
@@ -9295,7 +9322,7 @@ export function finishForceLock(force) {
     const chest = force?.chest;
     if (!chest) return false;
 
-    rn2(19);
+    exerciseAttribute(force.picktyp ? A_DEX : A_STR, true);
     const destroyed = !force.picktyp && !rn2(3);
     if (!destroyed) {
         billDummyAlteredShopObject(chest);
