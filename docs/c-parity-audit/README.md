@@ -112,6 +112,7 @@ This folder records source-backed audits against `nethack-c/upstream`. The notes
 - [106-subagent-findings-2026-05-28.md](106-subagent-findings-2026-05-28.md): upward throw ceiling/no-ceiling/underwater wording parity.
 - [107-subagent-findings-2026-05-28.md](107-subagent-findings-2026-05-28.md): upward polymorph potion self-hit parity.
 - [108-subagent-findings-2026-05-28.md](108-subagent-findings-2026-05-28.md): upward cream-pie ceiling break, self-hit splatter, blindness, and broken-unit shop debt parity.
+- [109-subagent-findings-2026-05-28.md](109-subagent-findings-2026-05-28.md): upward melon ceiling break, self-hit splat without face effects, and broken-unit shop debt parity.
 
 ## Cross-Cutting Themes
 

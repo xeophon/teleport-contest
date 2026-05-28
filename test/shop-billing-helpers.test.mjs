@@ -17454,6 +17454,85 @@ test('upward hero-thrown unpaid cream pie from a stack bills one broken unit', a
     assert.equal(shkp.billct, 1);
 });
 
+test('upward hero-thrown melon self-hits and splats', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, { uhp: 30, uhpmax: 30 });
+    const melon = simpleFood(87674, 'melon', 'm');
+    game.inventory = [melon];
+    enableRngLog({ reset: true });
+    const hpBefore = game.u.uhp;
+
+    await rhack('t');
+    await rhack('m');
+    await rhack('<');
+
+    assert.equal(game._command_mode, null);
+    assert.match(game._pending_message, /A melon almost hits the ceiling, then falls back on top of your head\./);
+    assert.match(game._pending_message, /Splat!/);
+    assert.doesNotMatch(game._pending_message, /You've got it all over your face|What a mess|crashes on your head|evaporates|cmdassist|In what direction/);
+    assert.equal(game.inventory.includes(melon), false);
+    assert.equal(game.level.objects.length, 0);
+    assert.notEqual(game.u.blind, true);
+    assert.equal(game.u.ucreamed || 0, 0);
+    assert.equal(game.u.uhp, hpBefore);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rn2(5)', 'rn2(100)',
+    ]);
+});
+
+test('upward hero-thrown melon can break on the ceiling', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    const melon = simpleFood(87675, 'melon', 'm');
+    game.inventory = [melon];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('m');
+    await rhack('<');
+
+    assert.equal(game._command_mode, null);
+    assert.match(game._pending_message, /A melon hits the ceiling\./);
+    assert.match(game._pending_message, /Splat!/);
+    assert.doesNotMatch(game._pending_message, /falls back|top of your head|You've got it all over your face|What a mess|evaporates/);
+    assert.equal(game.inventory.includes(melon), false);
+    assert.equal(game.level.objects.length, 0);
+    assert.notEqual(game.u.blind, true);
+    assert.equal(game.u.ucreamed || 0, 0);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rn2(5)', 'rn2(100)',
+    ]);
+});
+
+test('upward hero-thrown unpaid melon from a stack bills one broken unit', async () => {
+    const { shkp } = installCommandShopState();
+    initRng(5);
+    const melons = simpleFood(87676, 'melon', 'm', {
+        quan: 2,
+        line: 'm - 2 melons',
+    });
+    game.inventory = [melons];
+    shop.addObjectToShopBill(shkp, melons, 10);
+
+    await rhack('t');
+    await rhack('m');
+    await rhack('<');
+
+    assert.match(game._pending_message, /Splat!/);
+    assert.doesNotMatch(game._pending_message, /You've got it all over your face|What a mess/);
+    assert.equal(melons.quan, 1);
+    assert.equal(game.inventory.includes(melons), true);
+    assert.equal(game.level.objects.length, 0);
+    const liveEntry = shop.shopBillEntryForObject(shkp, melons);
+    assert.ok(liveEntry);
+    assert.equal(liveEntry.bquan, 1);
+    assert.equal(shop.shopBillEntryTotal(liveEntry), 5);
+    assert.equal(melons.unpaidPrice, 5);
+    assert.equal(shkp.debit, 5);
+    assert.equal(shkp.billct, 1);
+});
+
 test('upward hero-thrown polymorph potion self-hits and polymorphs the hero', async () => {
     installNonShopFloorState();
     initRng(1);
