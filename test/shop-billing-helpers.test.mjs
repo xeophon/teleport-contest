@@ -949,6 +949,28 @@ async function answerScrollTryCall(label, name = 'fear') {
     );
 }
 
+async function answerPotionTryCall(appearance, name = 'visions') {
+    assert.equal(game._command_mode, 'callPotionAfterMore');
+    assert.equal(game._call_potion_appearance, appearance);
+
+    await rhack(' ');
+    assert.equal(game._command_mode, 'callPotionText');
+    assert.match(game._pending_message, new RegExp(`Call a ${appearance} potion:`));
+
+    for (const ch of name) await rhack(ch);
+    await rhack('\n');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game._called_potions?.[appearance], name);
+    assert.equal(
+        game._discoveries.some(entry =>
+            entry.section === 'Potions'
+            && entry.name === `potion called ${name}`
+            && entry.text === `potion called ${name} (${appearance})`),
+        true,
+    );
+}
+
 function floorLoadstone(id, props = {}) {
     return {
         id,
@@ -16121,6 +16143,36 @@ test('wet worn towel blocks broken potion vapor effects', () => {
     assert.match(landing.messages.join(' '), /Some vapor passes harmlessly around you\./);
 });
 
+test('wet worn towel still offers a call for unknown broken potion vapor', () => {
+    installShopState();
+    initRng(1);
+    const potion = {
+        id: 8751,
+        cls: 'potion',
+        glyph: '!',
+        kind: 'magenta potion',
+        potionIndex: 7,
+        quan: 1,
+        ox: 5,
+        oy: 5,
+        dknown: true,
+    };
+    const towel = ordinaryTool(8752, 'towel', 't');
+    towel.spe = 3;
+    towel.wetness = 3;
+    towel.worn = true;
+    towel.line = 't - a towel (being worn)';
+    game.inventory = [towel];
+
+    const landing = shop.landProjectileObjectWithShopHandling(potion, 5, 6, { breakRoll: 50, silent: true });
+
+    assert.equal(landing.topBreak.broke, true);
+    assert.doesNotMatch(landing.messages.join(' '), /momentary vision|You smell a peculiar odor/);
+    assert.match(landing.messages.join(' '), /Some vapor passes harmlessly around you\./);
+    assert.equal(game._command_mode, 'callPotionAfterMore');
+    assert.equal(game._call_potion_appearance, 'magenta');
+});
+
 test('hero-thrown confusion potion hits visible monster through potionhit', async () => {
     installNonShopFloorState();
     initRng(2);
@@ -16383,6 +16435,75 @@ test('hero-thrown hallucination potion effect can come from potion index', async
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
         'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(5)',
     ]);
+});
+
+test('visible dknown no-vapor potion hit offers an appearance call', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.u.acurr.a[A_DEX] = 25;
+    const potion = {
+        id: 87971,
+        cls: 'potion',
+        glyph: '!',
+        kind: 'magenta potion',
+        potionIndex: 7,
+        quan: 1,
+        ox: 5,
+        oy: 5,
+        letter: 'h',
+        line: 'h - a magenta potion',
+        dknown: true,
+    };
+    const goblin = ordinaryThrowTarget('goblin', 7, 5);
+    game.inventory = [potion];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('h');
+    markSquareVisible(goblin.mx, goblin.my);
+    await rhack('l');
+
+    assert.match(game._pending_message, /The magenta potion evaporates\./);
+    assert.doesNotMatch(game._pending_message, /momentary vision|potion of hallucination/);
+    assert.equal(game._message_more, 1);
+    await answerPotionTryCall('magenta', 'visions');
+    assert.equal(game._discoveries?.some(entry => entry.section === 'Potions' && entry.name === 'potion of hallucination') ?? false, false);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(5)',
+    ]);
+});
+
+test('visible no-vapor potion hit skips call for already-called appearance', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.u.acurr.a[A_DEX] = 25;
+    game._called_potions = { magenta: 'visions' };
+    const potion = {
+        id: 87972,
+        cls: 'potion',
+        glyph: '!',
+        kind: 'magenta potion',
+        potionIndex: 7,
+        quan: 1,
+        ox: 5,
+        oy: 5,
+        letter: 'h',
+        line: 'h - a magenta potion',
+        dknown: true,
+    };
+    const goblin = ordinaryThrowTarget('goblin', 7, 5);
+    game.inventory = [potion];
+    game.level.monsters = [goblin];
+
+    await rhack('t');
+    await rhack('h');
+    markSquareVisible(goblin.mx, goblin.my);
+    await rhack('l');
+
+    assert.match(game._pending_message, /The magenta potion evaporates\./);
+    assert.equal(game._command_mode, null);
+    assert.equal(game._message_more || 0, 0);
 });
 
 test('hero-thrown common no-effect potions use shared potionhit crash path', async () => {
@@ -18453,7 +18574,7 @@ test('hero-thrown speed potion speeds visible monster without angering it', asyn
     assert.equal(goblin.mpeaceful, true);
     assert.equal(goblin.mhp, 4);
     assert.equal(game.inventory.includes(potion), false);
-    assert.equal(game._discoveries?.some(entry => entry.section === 'Potions' && entry.name === 'potion of speed'), true);
+    assert.equal(game._discoveries?.some(entry => entry.section === 'Potions' && entry.name === 'potion of speed') ?? false, false);
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
         'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(5)',
     ]);
