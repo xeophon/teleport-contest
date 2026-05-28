@@ -1398,6 +1398,10 @@ function paralysisPotion(id, letter = 'p', quan = 1, extra = {}) {
     return namedPotion(id, 'paralysis', letter, quan, extra);
 }
 
+function sleepingPotion(id, letter = 's', quan = 1, extra = {}) {
+    return namedPotion(id, 'sleeping', letter, quan, extra);
+}
+
 function extraHealingPotion(id, letter = 'e', quan = 1) {
     return namedPotion(id, 'extra healing', letter, quan);
 }
@@ -15719,6 +15723,162 @@ test('hero-thrown paralysis potion effect can come from potion index', async () 
     assert.equal(goblin.mcanmove, false);
     assert.ok(goblin.mfrozen >= 1 && goblin.mfrozen <= 25);
     assert.equal(game.inventory.includes(potion), false);
+});
+
+test('hero-thrown sleeping potion puts visible monster into timed sleep', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.u.acurr.a[A_DEX] = 25;
+    const potion = sleepingPotion(8767, 's', 1, { dknown: true });
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, {
+        mcanmove: true,
+        meating: 4,
+        waiting: true,
+        mstrategy: 'waitforu',
+    });
+    game.inventory = [potion];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('s');
+    await rhack('l');
+
+    assert.match(game._pending_message, /The (?:bottle|phial|flagon|carafe|flask|jar|vial) crashes on the goblin's head and breaks into shards\./);
+    assert.match(game._pending_message, /The potion of sleeping evaporates\./);
+    assert.match(game._pending_message, /The goblin falls asleep\./);
+    assert.doesNotMatch(game._pending_message, /misses|peculiar odor|rather tired/);
+    assert.equal(goblin.mcanmove, false);
+    assert.ok(goblin.mfrozen >= 1 && goblin.mfrozen <= 12);
+    assert.equal(goblin.meating, 0);
+    assert.equal(goblin.waiting, true);
+    assert.equal(goblin.mstrategy, 'waitforu');
+    assert.equal(goblin.msleeping, 0);
+    assert.equal(goblin.mpeaceful, false);
+    assert.equal(goblin.mhp, 4);
+    assert.equal(game.inventory.includes(potion), false);
+    assert.equal(game.level.objects.length, 0);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(5)', 'rnd(12)', 'rn2(105)',
+    ]);
+});
+
+test('hero-thrown sleeping potion respects monster sleep resistance', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.u.acurr.a[A_DEX] = 25;
+    const potion = sleepingPotion(8768, 's', 1, { dknown: true });
+    const golem = ordinaryThrowTarget('golem', 7, 5, {
+        mcanmove: true,
+        data: { name: 'golem', mlevel: 1, resistsSleep: true },
+    });
+    game.inventory = [potion];
+    game.level.monsters = [golem];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('s');
+    await rhack('l');
+
+    assert.match(game._pending_message, /The potion of sleeping evaporates\./);
+    assert.doesNotMatch(game._pending_message, /falls asleep|rather tired/);
+    assert.equal(golem.mcanmove, true);
+    assert.equal(golem.mfrozen || 0, 0);
+    assert.equal(golem.msleeping, 0);
+    assert.equal(golem.mpeaceful, false);
+    assert.equal(game.inventory.includes(potion), false);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(5)', 'rnd(12)',
+    ]);
+});
+
+test('hero-thrown sleeping potion can be resisted by potion resistance', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.u.acurr.a[A_DEX] = 25;
+    const potion = sleepingPotion(8769, 's', 1, { dknown: true });
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, {
+        mcanmove: true,
+        mr: 999,
+    });
+    game.inventory = [potion];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('s');
+    await rhack('l');
+
+    assert.match(game._pending_message, /The potion of sleeping evaporates\./);
+    assert.doesNotMatch(game._pending_message, /falls asleep|rather tired/);
+    assert.equal(goblin.mcanmove, true);
+    assert.equal(goblin.mfrozen || 0, 0);
+    assert.equal(goblin.msleeping, 0);
+    assert.equal(goblin.mpeaceful, false);
+    assert.equal(game.inventory.includes(potion), false);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(5)', 'rnd(12)', 'rn2(105)',
+    ]);
+});
+
+test('hero-thrown sleeping potion does not extend an already immobile monster', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.u.acurr.a[A_DEX] = 25;
+    const potion = sleepingPotion(8771, 's', 1, { dknown: true });
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, {
+        mcanmove: false,
+        mfrozen: 7,
+        meating: 4,
+    });
+    game.inventory = [potion];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('s');
+    await rhack('l');
+
+    assert.match(game._pending_message, /The potion of sleeping evaporates\./);
+    assert.doesNotMatch(game._pending_message, /falls asleep|rather tired/);
+    assert.equal(goblin.mcanmove, false);
+    assert.equal(goblin.mfrozen, 7);
+    assert.equal(goblin.meating, 4);
+    assert.equal(goblin.msleeping, 0);
+    assert.equal(goblin.mpeaceful, false);
+    assert.equal(game.inventory.includes(potion), false);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(5)', 'rnd(12)', 'rn2(105)',
+    ]);
+});
+
+test('adjacent hero-thrown sleeping potion applies monster sleep before direct vapor', async () => {
+    installNonShopFloorState();
+    initRng(17);
+    game.u.acurr.a[A_DEX] = 25;
+    const potion = sleepingPotion(8770, 's', 1, { dknown: true });
+    const goblin = ordinaryThrowTarget('goblin', 6, 5, { mcanmove: true });
+    game.inventory = [potion];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('s');
+    await rhack('l');
+
+    const message = game._pending_message;
+    assert.match(game._pending_message, /The goblin falls asleep\./);
+    assert.match(game._pending_message, /The potion of sleeping evaporates\./);
+    assert.match(game._pending_message, /You feel rather tired\./);
+    assert.doesNotMatch(game._pending_message, /peculiar odor/);
+    assert.ok(message.indexOf('The goblin falls asleep.') < message.indexOf('You feel rather tired.'));
+    assert.equal(goblin.mcanmove, false);
+    assert.ok(goblin.mfrozen >= 1 && goblin.mfrozen <= 12);
+    assert.ok((game._helpless_time || 0) > 0);
+    assert.ok((game._sleeping_time || 0) > 0);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(5)', 'rnd(12)', 'rn2(105)', 'rn2(13)', 'rnd(5)', 'rn2(2)',
+    ]);
 });
 
 test('known blindness vapor from broken potion discovers the potion', () => {

@@ -12499,7 +12499,7 @@ function thrownPotionHitTargetName(mon) {
 function supportsHeroThrownPotionHit(potion) {
     if (!isPotionObject(potion)) return false;
     const kind = thrownPotionEffectKind(potion);
-    return kind === 'confusion' || kind === 'booze' || kind === 'paralysis';
+    return kind === 'confusion' || kind === 'booze' || kind === 'paralysis' || kind === 'sleeping';
 }
 
 function thrownPotionEffectKind(potion) {
@@ -12522,6 +12522,27 @@ function paralyzeMonsterFromPotion(mon, duration) {
     mon.waiting = false;
 }
 
+function monsterResistsSleepEffect(mon) {
+    const data = mon?.data || {};
+    return !!(mon?.resistsSleep || mon?.sleepResistance || data.resistsSleep
+        || data.sleepResistance || data.defendsSleep);
+}
+
+function potionHitMonsterName(mon) {
+    const name = mon?.givenName || mon?.shknam || `the ${mon?.data?.name || 'monster'}`;
+    return sentenceCase(name);
+}
+
+function sleepMonsterFromPotion(mon, duration) {
+    if (monsterResistsSleepEffect(mon)) return false;
+    if (monsterResistsEffect(mon, 6)) return false;
+    if (mon.mcanmove === false || mon.mcanmove === 0) return false;
+    mon.mcanmove = false;
+    mon.mfrozen = Math.min(127, (mon.mfrozen || 0) + duration);
+    mon.meating = 0;
+    return true;
+}
+
 function heroThrownPotionHitMonster(potion, mon) {
     const messages = [];
     const bottle = chestShatterBottleName();
@@ -12535,6 +12556,9 @@ function heroThrownPotionHitMonster(potion, mon) {
         if (!monsterResistsEffect(mon, 6)) mon.mconf = true;
     } else if (kind === 'paralysis') {
         if (monsterCanMoveForPotionParalysis(mon)) paralyzeMonsterFromPotion(mon, rnd(25));
+    } else if (kind === 'sleeping') {
+        if (sleepMonsterFromPotion(mon, rnd(12)))
+            messages.push(`${potionHitMonsterName(mon)} falls asleep.`);
     }
 
     if ((mon.mhp || 1) > 0) {

@@ -61,7 +61,7 @@ Detailed source-backed history is kept in `docs/c-parity-audit/`. Keep this sect
 Continue narrow C-backed slices in this order unless a failing public regression points elsewhere:
 
 1. Continue shared `stolen_value()`/`subfrombill()` cleanup through boulder push shop-boundary transitions or the next compact shop-helper caller.
-2. Broaden direct `potionhit()` delivery beyond confusion/booze/paralysis, with potion of sleeping as the next compact monster-effect family.
+2. Broaden direct `potionhit()` delivery beyond confusion/booze/paralysis/sleeping through the next compact C-backed monster-effect family.
 3. Close remaining forced-chest gaps: blade breakage during long forcing, blunt wake-nearby behavior, and material-specific non-potion shatter wording.
 4. Continue broader stone-to-flesh object coverage through registry-backed material/object metadata, object resistance, remaining object rows, and floor/beam/shop routing.
 5. Continue registry-backed cleanup for merge/wish/charged-tool metadata after each concrete caller lands.
