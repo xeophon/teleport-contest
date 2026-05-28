@@ -10380,6 +10380,28 @@ test('shattering shop-floor statue trap charges contents before animation invent
     assert.equal(mon.minvent.includes(blade), true);
 });
 
+test('shattering shop-floor statue trap charges an existing bill owner', async () => {
+    const { shkp } = installCommandShopState();
+    const owner = addSecondShopkeeper('Asidonhopo');
+    initRng(6);
+    const statue = statueTrapStatue(6133);
+    const trap = { ttyp: STATUE_TRAP, tx: 7, ty: 5 };
+    game.level.objects = [statue];
+    game.level.traps = [trap];
+    shop.addObjectToShopBill(owner, statue, 123);
+
+    const message = await activateStatueTrap(trap, 7, 5, { shatter: true });
+
+    assert.match(message, /Instead of shattering, .* suddenly comes to life!/);
+    assert.match(message, /You owe Asidonhopo 123 zorkmids for it!/);
+    assert.equal(shkp.debit || 0, 0);
+    assert.equal(owner.debit, 123);
+    assert.equal(owner.billct, 0);
+    assert.equal(shop.shopBillEntryForObject(owner, statue), null);
+    assert.equal(game.level.traps.includes(trap), false);
+    assert.equal(game.level.objects.includes(statue), false);
+});
+
 test('normal shop-floor statue trap activation does not charge transferred contents', async () => {
     const { shkp } = installCommandShopState();
     initRng(6);

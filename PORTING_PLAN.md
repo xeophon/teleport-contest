@@ -26,6 +26,7 @@ Detailed source-backed history is kept in `docs/c-parity-audit/`. Keep this sect
 - Added magic-bag trigger explosion billing: a bag of holding that triggers a target magic-bag explosion now carries C's held/floor `do_boh_explosion()` context into vanished-content `stolen_value()`/used-up billing.
 - Added kicked-container impact billing: hard impacts from thrown inventory containers keep paid contents no-charge, while kicked shop-floor containers bill broken shop-owned contents through `stolen_value()`-style routing.
 - Added force-destroyed shop box owner billing: shattered contents now charge the shopkeeper who owns the bill row before the box itself is charged to the source shop.
+- Added statue shatter owner billing: hero-caused statue trap shatter now charges an existing live statue bill row to its owning shopkeeper before contents move to the animated monster.
 - Added focused object, food, timer, and wish parity slices: ordinary eating, special-food merge gates, egg timer cleanup, wish-local monster/object binding, charged tools/instruments, and stone-to-flesh carried/floor marble-wand transformations plus stoning/polyself rescue.
 - Expanded potion `#dip`, alchemy, broken-vapor, inventory/fire/hot-ground vapor, gremlin water vapor, forced chest-content potion shatter, direct hero-thrown confusion/booze/paralysis/sleeping/blindness/speed/invisibility `potionhit()`, and statue-trap shatter debt coverage.
 - Latest verified public score: `44/44`.
@@ -33,9 +34,9 @@ Detailed source-backed history is kept in `docs/c-parity-audit/`. Keep this sect
 ## Current Priorities
 
 1. Shared shop ownership helpers.
-   - Source notes: `docs/c-parity-audit/05-food-inventory-containers-shops.md`, `docs/c-parity-audit/51-subagent-findings-2026-05-28.md`, `docs/c-parity-audit/52-subagent-findings-2026-05-28.md`, `docs/c-parity-audit/53-subagent-findings-2026-05-28.md`, `docs/c-parity-audit/54-subagent-findings-2026-05-28.md`, `docs/c-parity-audit/57-subagent-findings-2026-05-28.md`, `docs/c-parity-audit/58-subagent-findings-2026-05-28.md`, `docs/c-parity-audit/60-subagent-findings-2026-05-28.md`, `docs/c-parity-audit/61-subagent-findings-2026-05-28.md`, and `docs/c-parity-audit/62-subagent-findings-2026-05-28.md`.
+   - Source notes: `docs/c-parity-audit/05-food-inventory-containers-shops.md`, `docs/c-parity-audit/51-subagent-findings-2026-05-28.md`, `docs/c-parity-audit/52-subagent-findings-2026-05-28.md`, `docs/c-parity-audit/53-subagent-findings-2026-05-28.md`, `docs/c-parity-audit/54-subagent-findings-2026-05-28.md`, `docs/c-parity-audit/57-subagent-findings-2026-05-28.md`, `docs/c-parity-audit/58-subagent-findings-2026-05-28.md`, `docs/c-parity-audit/60-subagent-findings-2026-05-28.md`, `docs/c-parity-audit/61-subagent-findings-2026-05-28.md`, `docs/c-parity-audit/62-subagent-findings-2026-05-28.md`, and `docs/c-parity-audit/63-subagent-findings-2026-05-28.md`.
    - Replace remaining field-only paths with C-shaped `addtobill`, `subfrombill`, `stolen_value`, `obfree`, and `sellobj` routing.
-   - Near-term callers: statue shatter charge-map cleanup, shared `sellobj()` integration, remaining magic-bag valuation edges outside covered held/floor trigger context, projectile/kick `ship_object()` down-gate and floor-pile loss, generic `obfree()` preservation, broader costly-alteration paths, and remaining stone-to-flesh object rows.
+   - Near-term callers: shared `sellobj()` integration, remaining magic-bag valuation edges outside covered held/floor trigger context, projectile/kick `ship_object()` down-gate and floor-pile loss, generic `obfree()` preservation, broader costly-alteration paths, and remaining stone-to-flesh object rows.
 
 2. Direct object-hit and potion delivery.
    - Source notes: `docs/c-parity-audit/04-monsters-combat-pets.md`, `docs/c-parity-audit/47-subagent-findings-2026-05-28.md`, `docs/c-parity-audit/50-subagent-findings-2026-05-28.md`, `docs/c-parity-audit/55-subagent-findings-2026-05-28.md`, `docs/c-parity-audit/56-subagent-findings-2026-05-28.md`, `docs/c-parity-audit/57-subagent-findings-2026-05-28.md`, and `docs/c-parity-audit/59-subagent-findings-2026-05-28.md`.
@@ -64,12 +65,11 @@ Detailed source-backed history is kept in `docs/c-parity-audit/`. Keep this sect
 
 Continue narrow C-backed slices in this order unless a failing public regression points elsewhere:
 
-1. Convert `statueShatterShopDebtMessage()` to the owner-aware `stolen_value()` charge-map helper.
+1. Route ordinary drop `sellobj()`/recursive `subfrombill()` through owner-aware shared-shop helpers.
 2. Broaden direct `potionhit()` delivery beyond confusion/booze/paralysis/sleeping/blindness/speed/invisibility through the next compact C-backed monster-effect family.
 3. Close remaining forced-chest gaps: blade breakage during long forcing, blunt wake-nearby behavior, and material-specific non-potion shatter wording.
-4. Route ordinary drop `sellobj()`/recursive `subfrombill()` through owner-aware shared-shop helpers.
-5. Continue broader stone-to-flesh object coverage through registry-backed material/object metadata, object resistance, remaining object rows, and floor/beam/shop routing.
-6. Continue registry-backed cleanup for merge/wish/charged-tool metadata after each concrete caller lands.
+4. Continue broader stone-to-flesh object coverage through registry-backed material/object metadata, object resistance, remaining object rows, and floor/beam/shop routing.
+5. Continue registry-backed cleanup for merge/wish/charged-tool metadata after each concrete caller lands.
 
 ## Verification
 

@@ -14578,31 +14578,37 @@ function statueShatterShopDebtMessage(statue, x, y, mon) {
     if (!statue || statue.no_charge || game._monster_moving) return '';
     const shkp = shopkeeperForCostlySpot(x, y);
     if (!shkp || !shopkeeperInHisShop(shkp) || mon === shkp) return '';
-    const beforeCredit = Math.max(0, Math.trunc(Number(shkp.credit || 0)));
     const wasUnpaid = !!statue.unpaid;
     const contentCount = countStatueShopContentsForMessage(statue, x, y, true);
     const unpaidContentCount = countStatueShopContentsForMessage(statue, x, y, false);
-    const value = lostShopMerchandiseValueForObject({ ox: x, oy: y }, statue, shkp);
-    if (!(value > 0)) return '';
+    const charges = lostShopMerchandiseChargesForObject({ ox: x, oy: y }, statue, shkp);
+    if (!charges.size) return '';
+    const chargeEntries = [...charges.entries()];
+    const displayShkp = chargeEntries.length === 1
+        ? chargeEntries[0][0]
+        : charges.has(shkp) ? shkp : chargeEntries[0][0];
+    const beforeCredit = Math.max(0, Math.trunc(Number(displayShkp.credit || 0)));
 
     const peaceful = shkp.mpeaceful !== 0;
-    const remaining = chargeShopkeeperForLostMerchandise(shkp, value, { peaceful });
+    let remaining = 0;
+    for (const [owner, value] of chargeEntries)
+        remaining += chargeShopkeeperForLostMerchandise(owner, value, { peaceful });
     if (!peaceful) {
-        if (!game.u?.blind && couldsee(shkp.mx, shkp.my))
-            return `${shopkeeperDisplayName(shkp)} booms: "${game.plname || 'Hero'}, you are a thief!"`;
+        if (!game.u?.blind && couldsee(displayShkp.mx, displayShkp.my))
+            return `${shopkeeperDisplayName(displayShkp)} booms: "${game.plname || 'Hero'}, you are a thief!"`;
         if (!heroIsDeaf()) return 'You hear a scream, "Thief!"';
         return '';
     }
 
     if (beforeCredit > 0 && !remaining) {
-        const credit = Math.max(0, Math.trunc(Number(shkp.credit || 0)));
+        const credit = Math.max(0, Math.trunc(Number(displayShkp.credit || 0)));
         return credit > 0
             ? `You have ${credit} ${shopCurrency(credit)} credit remaining.`
             : 'You have no credit remaining.';
     }
 
     if (!(remaining > 0)) return '';
-    let message = `You ${beforeCredit > 0 ? 'still ' : ''}owe ${shopkeeperDisplayName(shkp)} ${remaining} ${shopCurrency(remaining)}`;
+    let message = `You ${beforeCredit > 0 ? 'still ' : ''}owe ${shopkeeperDisplayName(displayShkp)} ${remaining} ${shopCurrency(remaining)}`;
     if (unpaidContentCount > 0) {
         message += ` for ${wasUnpaid ? 'it and ' : ''}${contentCount > unpaidContentCount ? 'some of ' : ''}its contents`;
     } else if (!shopBillableGold(statue)) {
