@@ -20629,8 +20629,7 @@ function isProjectileImpactContainer(obj) {
 function projectileLandingIsSoft(x, y) {
     const loc = game.level?.at?.(x, y);
     if (!loc) return false;
-    return IS_POOL(loc.typ) || loc.typ === WATER || loc.typ === MOAT
-        || loc.typ === LAVAPOOL || loc.typ === LAVAWALL;
+    return IS_POOL(loc.typ) || loc.typ === WATER || loc.typ === MOAT;
 }
 
 function projectileImpactGlassCandidate(obj) {
@@ -20748,6 +20747,20 @@ function placeUnstackedFloorObject(obj) {
     return obj;
 }
 
+function prepareProjectileFloorObject(obj, x, y) {
+    if (!obj) return obj;
+    obj.contained = false;
+    obj.container = null;
+    obj.ox = x;
+    obj.oy = y;
+    obj.hidden = false;
+    obj.buried = false;
+    obj.transientProjectile = false;
+    delete obj.nobj;
+    delete obj.nexthere;
+    return obj;
+}
+
 function stackPlacedProjectileObject(obj) {
     const objects = game.level?.objects || [];
     if (!objects.includes(obj)) return obj;
@@ -20794,6 +20807,7 @@ function autoSellProjectileLandingObject(obj, x, y, options = {}) {
 
 function landProjectileObjectWithShopHandling(obj, x, y, options = {}) {
     const messages = [];
+    prepareProjectileFloorObject(obj, x, y);
     const hardLanding = !projectileLandingIsSoft(x, y);
     if (hardLanding) {
         const breakKind = projectileTopLevelBreakKind(obj, options);
@@ -20813,6 +20827,17 @@ function landProjectileObjectWithShopHandling(obj, x, y, options = {}) {
             };
         }
     }
+    if (earthFloorEffects(obj, x, y, messages, 'fall', { usedUpShopBillOnDestroy: true })) {
+        return {
+            object: null,
+            impact: { loss: 0, broke: false, messages },
+            topBreak: { broke: false, breakKind: '', value: 0 },
+            floorEffects: { consumed: true },
+            shopLanding: { handled: false, shkp: null, message: '', messages: [], returned: false, charged: false },
+            shopSale: { handled: false, shkp: null, message: '', messages: [] },
+            messages,
+        };
+    }
     const placed = placeUnstackedFloorObject(obj);
     const impact = !hardLanding
         ? { loss: 0, broke: false, messages }
@@ -20823,7 +20848,7 @@ function landProjectileObjectWithShopHandling(obj, x, y, options = {}) {
         : autoSellProjectileLandingObject(placed, x, y, options);
     if (shopSale.message) messages.push(shopSale.message);
     const stacked = stackPlacedProjectileObject(placed);
-    return { object: stacked, impact, topBreak: { broke: false, breakKind: '', value: 0 }, shopLanding, shopSale, messages };
+    return { object: stacked, impact, topBreak: { broke: false, breakKind: '', value: 0 }, floorEffects: { consumed: false }, shopLanding, shopSale, messages };
 }
 
 function markNoChargeRecursively(obj) {

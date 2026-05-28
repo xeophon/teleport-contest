@@ -16349,7 +16349,7 @@ test('kicked shop-floor container impact bills broken shop-owned contents', () =
 test('soft-landing projectile container skips content impact before shop return', () => {
     const { shkp } = installShopState();
     initRng(1);
-    game.level.at = () => ({ roomno: ROOMOFFSET, typ: LAVAPOOL });
+    game.level.at = () => ({ roomno: ROOMOFFSET, typ: POOL });
     const bag = sack(8741);
     const potion = putObjectInContainer(bag, oilPotion(8742));
     const blade = putObjectInContainer(bag, dagger(8743));
@@ -16365,6 +16365,60 @@ test('soft-landing projectile container skips content impact before shop return'
     assert.equal(potion.unpaid, false);
     assert.equal(blade.unpaid, false);
     assert.equal(bag.cknown, true);
+});
+
+test('projectile landing runs hole floor effects before placement or shop handling', () => {
+    const { shkp } = installShopState();
+    installSeenHoleAtHero();
+    initRng(1);
+    const blade = dagger(87431);
+    shop.addObjectToShopBill(shkp, blade, 15);
+
+    const landing = shop.landProjectileObjectWithShopHandling(blade, 5, 5, { breakRoll: 0, silent: true });
+
+    assert.equal(landing.floorEffects.consumed, true);
+    assert.equal(landing.object, null);
+    assert.equal(game.level.objects.includes(blade), false);
+    assert.equal(queuedImpactDropsFor().includes(blade), true);
+    assert.equal(landing.shopLanding.handled, false);
+    assert.equal(landing.shopSale.handled, false);
+    assert.equal(shkp.debit, 15);
+    assert.equal(shkp.billct, 0);
+    assert.match(landing.messages.join(' '), /owe Izchak 15 zorkmids? for it/);
+});
+
+test('projectile landing runs lava floor effects before sale or stacking', () => {
+    const { shkp } = installShopState();
+    game.level.at = () => ({ roomno: ROOMOFFSET, typ: LAVAPOOL });
+    const floorStack = { ...foodRation(87432), letter: undefined, line: undefined, quan: 1, ox: 5, oy: 5 };
+    const thrown = { ...foodRation(87433), letter: undefined, line: undefined, quan: 1, ox: 5, oy: 5 };
+    game.level.objects = [floorStack];
+    const cashBefore = shop.shopkeeperCash(shkp);
+
+    const landing = shop.landProjectileObjectWithShopHandling(thrown, 5, 5, { breakRoll: 0, silent: true });
+
+    assert.equal(landing.floorEffects.consumed, true);
+    assert.equal(landing.object, null);
+    assert.equal(game.level.objects.includes(thrown), false);
+    assert.equal(floorStack.quan, 1);
+    assert.equal(landing.shopSale.handled, false);
+    assert.equal(game._goldCount || 0, 0);
+    assert.equal(shop.shopkeeperCash(shkp), cashBefore);
+    assert.equal(shkp.billct, 0);
+});
+
+test('projectile landing treats lava as hard terrain before floor effects', () => {
+    const { shkp } = installShopState();
+    game.level.at = () => ({ roomno: ROOMOFFSET, typ: LAVAPOOL });
+    const potion = oilPotion(87434);
+
+    const landing = shop.landProjectileObjectWithShopHandling(potion, 5, 5, { breakRoll: 50, silent: true });
+
+    assert.equal(landing.topBreak.broke, true);
+    assert.equal(landing.object, null);
+    assert.equal(game.level.objects.includes(potion), false);
+    assert.equal(landing.shopSale.handled, false);
+    assert.equal(shkp.billct, 0);
 });
 
 test('hard-landing top-level unpaid projectile breaks before same-shop return', () => {
