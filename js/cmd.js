@@ -12555,7 +12555,6 @@ function stoneToFleshAnimatableCarriedFigurineData(item) {
 
 function stoneToFleshAnimatableFloorFigurineData(item, x, y) {
     if (!isFigurineObject(item) || !item?.corpsenm) return null;
-    if (shopObjectOrContentsUnpaid(item) || shopkeeperForCostlySpot(x, y)) return null;
     const material = stoneToFleshObjectMaterial(item);
     if (material !== 'mineral' && material !== 'gemstone') return null;
     if (stoneToFleshCorpstatMonsterIsGolem(item.corpsenm)
@@ -12574,14 +12573,42 @@ async function stoneToFleshAnimateCarriedFigurine(item) {
     return cansee(mon.mx, mon.my) ? 'The figurine animates!' : '';
 }
 
+function stoneToFleshChargeFloorFigurineAnimation(item, x, y) {
+    if (!item || item.no_charge || shopBillableGold(item)) return '';
+    const shkp = shopkeeperForCostlySpot(x, y);
+    if (!shopkeeperInHisShop(shkp)) return '';
+    const beforeCredit = Math.max(0, Math.trunc(Number(shkp.credit || 0)));
+    const value = lostShopMerchandiseValueForObject({ ox: x, oy: y }, item, shkp);
+    if (!(value > 0)) return '';
+    const peaceful = shopkeeperPeacefulForDebt(shkp);
+    const remaining = chargeShopkeeperForLostMerchandise(shkp, value, { peaceful });
+    if (heroIsDeaf()) return '';
+    if (!peaceful) {
+        if (!game.u?.blind && cansee(shkp.mx, shkp.my))
+            return `${shopkeeperDisplayName(shkp)} booms: "${game.plname || 'Hero'}, you are a thief!"`;
+        return 'You hear a scream, "Thief!"';
+    }
+    const usedCredit = beforeCredit > Math.max(0, Math.trunc(Number(shkp.credit || 0)));
+    if (usedCredit && shkp.credit > 0)
+        return `You have ${shkp.credit} ${shopCurrency(shkp.credit)} credit remaining.`;
+    if (usedCredit && !remaining)
+        return 'You have no credit remaining.';
+    const still = usedCredit ? 'still ' : '';
+    return `You ${still}owe ${shopkeeperDisplayName(shkp)} ${remaining} ${shopCurrency(remaining)} for ${shopDebtObjectPronoun(item)}!`;
+}
+
 async function stoneToFleshAnimateFloorFigurine(item, x, y) {
     const data = stoneToFleshAnimatableFloorFigurineData(item, x, y);
     if (!data || stoneToFleshObjectResists(item)) return null;
     const mon = await makemon(data, x, y, NO_MINVENT | MM_NOMSG);
     if (!mon) return null;
+    const messages = [];
+    const chargeMessage = stoneToFleshChargeFloorFigurineAnimation(item, x, y);
+    if (chargeMessage) messages.push(chargeMessage);
     stopFigurineTransformTimeout(item);
     newsym(x, y);
-    return cansee(mon.mx, mon.my) ? 'The figurine animates!' : '';
+    if (cansee(mon.mx, mon.my)) messages.push('The figurine animates!');
+    return messages;
 }
 
 function isMeatRingObject(item) {
@@ -12712,7 +12739,8 @@ async function stoneToFleshFloorEffect(x = game.u?.ux || 0, y = game.u?.uy || 0)
         }
         const animationMessage = await stoneToFleshAnimateFloorFigurine(obj, x, y);
         if (animationMessage != null) {
-            if (animationMessage) messages.push(animationMessage);
+            if (Array.isArray(animationMessage)) messages.push(...animationMessage);
+            else if (animationMessage) messages.push(animationMessage);
             transformed = true;
             continue;
         }

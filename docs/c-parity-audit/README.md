@@ -131,6 +131,7 @@ This folder records source-backed audits against `nethack-c/upstream`. The notes
 - [125-subagent-findings-2026-05-29.md](125-subagent-findings-2026-05-29.md): burning-oil blast secret-door reveal and closed-door fire terrain.
 - [126-subagent-findings-2026-05-29.md](126-subagent-findings-2026-05-29.md): floor figurine stone-to-flesh animation.
 - [127-subagent-findings-2026-05-29.md](127-subagent-findings-2026-05-29.md): monster-thrown remote seen-shaft shipping.
+- [128-subagent-findings-2026-05-29.md](128-subagent-findings-2026-05-29.md): shop-billed floor figurine stone-to-flesh animation.
 
 ## Cross-Cutting Themes
 
