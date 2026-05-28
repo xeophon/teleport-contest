@@ -13903,6 +13903,7 @@ function burnAwayHeroSlime(messages = []) {
 }
 
 function burnFloorObjectsFromBurningOilExplosion(x, y, messages) {
+    let heardGas = false;
     for (let dx = -1; dx <= 1; dx++) {
         for (let dy = -1; dy <= 1; dy++) {
             const sx = x + dx;
@@ -13917,6 +13918,15 @@ function burnFloorObjectsFromBurningOilExplosion(x, y, messages) {
                 buriedMerchandiseDebtMessage,
             });
             if (ice.messages.length) messages.push(...ice.messages);
+            if (!ice.handled) {
+                const terrain = applyFireRayWaterTerrain(sx, sy, {
+                    previousMessage: messages[messages.length - 1] || '',
+                    heardGas,
+                    heroRay: true,
+                });
+                if (terrain.messages.length) messages.push(...terrain.messages);
+                heardGas = terrain.heardGas;
+            }
             const floorFire = burnFloorObjectsByFire(sx, sy, {
                 heroCaused: true,
                 igniteFeedback: false,

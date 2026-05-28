@@ -6,7 +6,7 @@ import { activateStatueTrap, burnFloorObjectsByFire, earthFloorEffects, finishFo
 import { game, resetGame } from '../js/gstate.js';
 import { pushKey, resetInputState } from '../js/input.js';
 import { enableRngLog, getRngLog, initRng } from '../js/rng.js';
-import { A_DEX, A_STR, BILLSZ, CANDLESHOP, COULD_SEE, DB_EAST, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, FOUNTAIN, HOLE, ICE, ICED_POOL, IN_SIGHT, LAVAPOOL, POOL, ROOM, ROOMOFFSET, SHOPBASE, SQKY_BOARD, STATUE_TRAP, STRAT_WAITFORU, TT_WEB, WEB, W_SADDLE } from '../js/const.js';
+import { A_DEX, A_STR, BILLSZ, CANDLESHOP, COULD_SEE, DB_EAST, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, FOUNTAIN, HOLE, ICE, ICED_POOL, IN_SIGHT, LAVAPOOL, MOAT, PIT, POOL, ROOM, ROOMOFFSET, SHOPBASE, SQKY_BOARD, STATUE_TRAP, STRAT_WAITFORU, TT_WEB, WEB, W_SADDLE } from '../js/const.js';
 import { currentFruitId, setCurrentFruitName } from '../js/fruit.js';
 
 const BRASS_LANTERN = 226;
@@ -17513,6 +17513,84 @@ test('hero-thrown lit oil explosion melts blast ice before monster damage', asyn
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
         'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(5)', 'd(4,4)', 'rn2(100)',
     ]);
+});
+
+test('hero-thrown lit oil explosion evaporates blast pools before floor-object fire', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.u.acurr.a[A_DEX] = 25;
+    const potion = oilPotion(880746, 'p');
+    potion.dknown = true;
+    potion.lamplit = true;
+    potion.burning = true;
+    const poolLoc = { roomno: 0, typ: POOL, flags: 7, doormask: 3, wall_info: 5 };
+    const cells = new Map([['8,5', poolLoc]]);
+    const book = floorHealingSpellbook(880747);
+    Object.assign(book, { ox: 8, oy: 5 });
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, { mhp: 30, mhpmax: 30 });
+    game.inventory = [potion];
+    game.level.objects = [book];
+    game.level.monsters = [goblin];
+    game.level.at = (x, y) => cells.get(`${x},${y}`) || { roomno: 0, typ: ROOM };
+    markSquareVisible(7, 5);
+    markSquareVisible(8, 5);
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('p');
+    await rhack('l');
+
+    const message = game._pending_message || '';
+    const rngNames = getRngLog().map(entry => entry.replace(/=.*/, ''));
+    const pit = (game.level.traps || []).find(trap => trap.tx === 8 && trap.ty === 5);
+    assert.equal(poolLoc.typ, ROOM);
+    assert.equal(poolLoc.flags, 0);
+    assert.equal(poolLoc.doormask, 0);
+    assert.equal(poolLoc.wall_info, 0);
+    assert.equal(pit?.ttyp, PIT);
+    assert.equal(game.level.objects.includes(book), false);
+    assert.equal((game.level.regions || []).some(region =>
+        region.type === 'gas_cloud' && region.coords.some(coord => coord.x === 8 && coord.y === 5)), true);
+    assert.match(message, /The water evaporates\./);
+    assert.equal(message.indexOf('The water evaporates.') < message.indexOf('You see a puff of smoke.'), true);
+    assert.equal(message.indexOf('You see a puff of smoke.') < message.indexOf('The goblin is caught in the burning oil!'), true);
+    assert.equal(rngNames.includes('rnd(5)'), true);
+    assert.equal(rngNames.indexOf('rnd(5)') < rngNames.lastIndexOf('rn2(100)'), true);
+});
+
+test('hero-thrown lit oil explosion evaporates moat water without changing terrain', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.u.acurr.a[A_DEX] = 25;
+    const potion = oilPotion(880748, 'p');
+    potion.dknown = true;
+    potion.lamplit = true;
+    potion.burning = true;
+    const moatLoc = { roomno: 0, typ: MOAT, flags: 11 };
+    const cells = new Map([['8,5', moatLoc]]);
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, { mhp: 30, mhpmax: 30 });
+    game.inventory = [potion];
+    game.level.monsters = [goblin];
+    game.level.at = (x, y) => cells.get(`${x},${y}`) || { roomno: 0, typ: ROOM };
+    markSquareVisible(7, 5);
+    markSquareVisible(8, 5);
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('p');
+    await rhack('l');
+
+    const message = game._pending_message || '';
+    const rngNames = getRngLog().map(entry => entry.replace(/=.*/, ''));
+    assert.equal(moatLoc.typ, MOAT);
+    assert.equal(moatLoc.flags, 11);
+    assert.equal((game.level.traps || []).some(trap => trap.tx === 8 && trap.ty === 5), false);
+    assert.equal((game.level.regions || []).some(region =>
+        region.type === 'gas_cloud' && region.coords.some(coord => coord.x === 8 && coord.y === 5)), true);
+    assert.match(message, /Some water evaporates\./);
+    assert.equal(message.indexOf('Some water evaporates.') < message.indexOf('The goblin is caught in the burning oil!'), true);
+    assert.equal(rngNames.includes('rnd(5)'), true);
+    assert.equal(rngNames.indexOf('rnd(5)') < rngNames.lastIndexOf('rn2(100)'), true);
 });
 
 test('hero-thrown lit oil explosion burns visible webs before monster damage', async () => {
