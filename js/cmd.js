@@ -10823,32 +10823,37 @@ function wishObjectMetadataForItem(item) {
 }
 
 function isPotionObject(item) {
-    return item?.cls === 'potion' || item?.otyp === POTION_CLASS || item?.otyp === POT_ACID
-        || item?.otyp === POT_POLYMORPH || item?.otyp === POT_OIL || item?.otyp === POT_WATER;
+    return item?.cls === 'potion' || item?.otyp === POTION_CLASS || item?.otyp === POT_WATER
+        || POTION_INDEX_BY_OTYP.has(item?.otyp);
+}
+
+function potionIdentityName(item) {
+    if (!item || !isPotionObject(item)) return '';
+    if (item.potionIndex != null) return IDENTIFIED_POTION_NAMES[item.potionIndex] || '';
+    if (item.otyp === POT_WATER) return 'water';
+    const index = POTION_INDEX_BY_OTYP.get(item.otyp);
+    return index != null ? IDENTIFIED_POTION_NAMES[index] || '' : '';
 }
 
 function isWaterPotion(item) {
     if (!isPotionObject(item)) return false;
     const kind = objectKindKey(item).replace(/^potion of /, '');
-    return item?.otyp === POT_WATER || kind === 'water' || kind === 'holy water' || kind === 'unholy water';
+    return potionIdentityName(item) === 'water' || kind === 'water' || kind === 'holy water' || kind === 'unholy water';
 }
 
 function isPotionOfOil(item) {
     if (!isPotionObject(item)) return false;
-    return item?.otyp === POT_OIL || item?.potionIndex === 24
-        || objectKindKey(item).replace(/^potion of /, '') === 'oil';
+    return potionIdentityName(item) === 'oil' || objectKindKey(item).replace(/^potion of /, '') === 'oil';
 }
 
 function isPotionOfAcid(item) {
     if (!isPotionObject(item)) return false;
-    return item?.otyp === POT_ACID || item?.potionIndex === 23
-        || objectKindKey(item).replace(/^potion of /, '') === 'acid';
+    return potionIdentityName(item) === 'acid' || objectKindKey(item).replace(/^potion of /, '') === 'acid';
 }
 
 function isPotionOfPolymorph(item) {
     if (!isPotionObject(item)) return false;
-    return item?.otyp === POT_POLYMORPH || item?.potionIndex === 19
-        || objectKindKey(item).replace(/^potion of /, '') === 'polymorph';
+    return potionIdentityName(item) === 'polymorph' || objectKindKey(item).replace(/^potion of /, '') === 'polymorph';
 }
 
 function potionDipKind(item) {
@@ -12478,6 +12483,8 @@ function dipObjectIntoPolymorphPotion(target, potion) {
 
 function alchemyPotionName(item) {
     if (!item) return '';
+    const identityName = potionIdentityName(item);
+    if (identityName) return identityName;
     let name = potionDipKind(item);
     if (name === 'holy water' || name === 'unholy water') name = 'water';
     if (!name && item.potionIndex != null) name = IDENTIFIED_POTION_NAMES[item.potionIndex] || '';
@@ -12669,6 +12676,8 @@ function potionObjectNameIsKnown(potion, potionName) {
 }
 
 function potionEffectNameFromAppearance(potion, rawName) {
+    const identityName = potionIdentityName(potion);
+    if (identityName) return identityName;
     const name = String(rawName || '').replace(/^potion of /, '').trim();
     if (name && name !== 'potion' && !name.endsWith(' potion')) return name;
     if (potion?.potionIndex != null) return IDENTIFIED_POTION_NAMES[potion.potionIndex] || name;
@@ -13094,6 +13103,8 @@ function refreshSurvivingWieldedPotionStack(potion) {
 }
 
 function thrownPotionEffectKind(potion) {
+    const identityName = potionIdentityName(potion);
+    if (identityName) return identityName;
     const name = alchemyPotionName(potion);
     const effectName = String(name || '').replace(/^potion of /, '');
     if (effectName && effectName !== 'potion' && !effectName.endsWith(' potion')) return effectName;
@@ -30662,6 +30673,13 @@ const IDENTIFIED_POTION_NAMES = [
     'full healing', 'polymorph', 'booze', 'sickness', 'fruit juice', 'acid',
     'oil',
 ];
+const POTION_INDEX_BY_OTYP = new Map([
+    [239, 2], [242, 3], [244, 4], [245, 5],
+    [247, 8], [POT_POLYMORPH, 19],
+    [235, 10], [236, 11], [237, 12], [249, 15],
+    [250, 16], [243, 17], [246, 18], [240, 20],
+    [241, 22], [POT_ACID, 23], [POT_OIL, 24],
+]);
 const POTION_WISH_PROBS = [
     40, 40, 40, 30, 40, 40, 40, 30, 40, 40, 115, 45, 20, 20, 40, 40,
     40, 40, 10, 10, 40, 40, 40, 10, 30,

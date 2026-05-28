@@ -89,6 +89,7 @@ This folder records source-backed audits against `nethack-c/upstream`. The notes
 - [83-subagent-findings-2026-05-28.md](83-subagent-findings-2026-05-28.md): non-`kn` potion trycall implementation plus remaining visibility, stone-to-flesh, oil collateral, shifted-vampire, and identity-independent potionhit audits.
 - [84-subagent-findings-2026-05-28.md](84-subagent-findings-2026-05-28.md): stone-to-flesh object resistance plus carried/floor boulder and eligible gem meatball rows.
 - [85-subagent-findings-2026-05-28.md](85-subagent-findings-2026-05-28.md): direct potionhit unseen crash, evaporation, trycall, and saddle-feedback visibility wording.
+- [86-subagent-findings-2026-05-28.md](86-subagent-findings-2026-05-28.md): direct potionhit concrete-otyp identity fallback and adjacent common no-effect vapor trycall coverage.
 
 ## Cross-Cutting Themes
 

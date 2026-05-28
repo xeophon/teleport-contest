@@ -17,7 +17,9 @@ const CRYSTAL_BALL = 10088;
 const CANDELABRUM_OF_INVOCATION = 10076;
 const BELL = 358;
 const POT_ACID = 238;
+const POT_PARALYSIS = 244;
 const POT_POLYMORPH = 248;
+const POT_OBJECT_DETECTION = 249;
 const INVENTORY_LETTERS = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
 const SCR_SCARE_MONSTER = 279;
 const LOADSTONE = 10165;
@@ -16803,6 +16805,87 @@ test('hero-thrown common no-effect potion can come from potion index', async () 
     ]);
 });
 
+test('hero-thrown common no-effect potion can come from concrete otyp', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.u.acurr.a[A_DEX] = 25;
+    const potion = {
+        id: 88061,
+        cls: 'potion',
+        glyph: '!',
+        otyp: POT_OBJECT_DETECTION,
+        kind: 'puce potion',
+        quan: 1,
+        ox: 5,
+        oy: 5,
+        letter: 'p',
+        line: 'p - a puce potion',
+        dknown: true,
+    };
+    const goblin = ordinaryThrowTarget('goblin', 7, 5);
+    game.inventory = [potion];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('p');
+    await rhack('l');
+
+    assert.match(game._pending_message, /The puce potion evaporates\./);
+    assert.doesNotMatch(game._pending_message, /object detection|peculiar odor|momentary vision/);
+    assert.equal(goblin.mhp, 4);
+    assert.equal(goblin.msleeping, 0);
+    assert.equal(goblin.mpeaceful, false);
+    assert.equal(game.inventory.includes(potion), false);
+    assert.equal(game.level.objects.length, 0);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(5)',
+    ]);
+});
+
+test('adjacent hero-thrown common no-effect otyp potion offers vapor trycall', async () => {
+    installNonShopFloorState();
+    initRng(4);
+    game.u.acurr.a[A_DEX] = 25;
+    const potion = {
+        id: 88062,
+        cls: 'potion',
+        glyph: '!',
+        otyp: POT_OBJECT_DETECTION,
+        kind: 'puce potion',
+        quan: 1,
+        ox: 5,
+        oy: 5,
+        letter: 'p',
+        line: 'p - a puce potion',
+        dknown: true,
+    };
+    const goblin = ordinaryThrowTarget('goblin', 6, 5);
+    game.inventory = [potion];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('p');
+    await rhack('l');
+
+    const message = game._pending_message || '';
+    assert.match(message, /crashes on the goblin's head and breaks into shards\./);
+    assert.match(message, /The puce potion evaporates\./);
+    assert.doesNotMatch(message, /object detection|momentary vision|peculiar odor|misses|shatters/);
+    assert.equal(goblin.mhp, 4);
+    assert.equal(goblin.msleeping, 0);
+    assert.equal(goblin.mpeaceful, false);
+    assert.equal(game.inventory.includes(potion), false);
+    assert.equal(game.level.objects.length, 0);
+    assert.equal(game._command_mode, 'callPotionAfterMore');
+    assert.equal(game._call_potion_appearance, 'puce');
+    assert.equal(game._discoveries?.some(entry => entry.section === 'Potions' && entry.name === 'potion of object detection') ?? false, false);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(5)', 'rn2(13)',
+    ]);
+});
+
 test('hero-thrown unlit oil potion hits through potionhit without evaporating', async () => {
     installNonShopFloorState();
     initRng(2);
@@ -18351,6 +18434,45 @@ test('hero-thrown paralysis potion effect can come from potion index', async () 
     assert.equal(goblin.mcanmove, false);
     assert.ok(goblin.mfrozen >= 1 && goblin.mfrozen <= 25);
     assert.equal(game.inventory.includes(potion), false);
+});
+
+test('hero-thrown paralysis potion effect can come from concrete otyp', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.u.acurr.a[A_DEX] = 25;
+    const potion = {
+        id: 87661,
+        cls: 'potion',
+        glyph: '!',
+        otyp: POT_PARALYSIS,
+        kind: 'emerald potion',
+        quan: 1,
+        ox: 5,
+        oy: 5,
+        letter: 'p',
+        line: 'p - an emerald potion',
+        dknown: true,
+    };
+    const goblin = ordinaryThrowTarget('goblin', 7, 5);
+    game.inventory = [potion];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('p');
+    await rhack('l');
+
+    assert.match(game._pending_message, /The emerald potion evaporates\./);
+    assert.doesNotMatch(game._pending_message, /potion of paralysis|peculiar odor|misses|shatters/);
+    assert.equal(goblin.mcanmove, false);
+    assert.ok(goblin.mfrozen >= 1 && goblin.mfrozen <= 25);
+    assert.equal(goblin.msleeping, 0);
+    assert.equal(goblin.mpeaceful, false);
+    assert.equal(game.inventory.includes(potion), false);
+    assert.equal(game.level.objects.length, 0);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(5)', 'rnd(25)',
+    ]);
 });
 
 test('hero-thrown sleeping potion puts visible monster into timed sleep', async () => {
