@@ -14297,6 +14297,52 @@ function heroThrownPotionHitMonster(potion, mon) {
     return messages;
 }
 
+function supportsHeroThrownPotionUpwardHit(potion) {
+    if (!isPotionObject(potion)) return false;
+    const kind = thrownPotionEffectKind(potion);
+    return kind === 'confusion' || kind === 'booze';
+}
+
+function heroThrownPotionSelfHitMessages(potion, action) {
+    const messages = [];
+    messages.push(`${floorObjectSubject({ ...potion, quan: 1 })} ${action} the ceiling, then falls back on top of your head.`);
+    const bottle = chestShatterBottleName();
+    messages.push(`The ${bottle} crashes on your head and breaks into shards.`);
+    if (game.u) {
+        game.u.uhp = Math.max(0, (game.u.uhp || 0) - rnd(2));
+        if ((game.u.uhp || 0) <= 0) {
+            game._death_cause = 'killed by a thrown potion';
+            messages.push('You die...');
+        }
+    } else {
+        rnd(2);
+    }
+    if (!isPotionOfOil(potion))
+        messages.push(`The ${pickupObjectName({ ...potion, quan: 1 })} evaporates.`);
+    potionBreathe(potion, messages);
+    const shopDebt = convertUnpaidObjectToShopDebt(potion, { silent: true, broken: true });
+    if (!shopDebt.charged) potion.no_charge = true;
+    return messages;
+}
+
+function heroThrownPotionCeilingBreakMessages(potion, breakKind) {
+    const messages = [`${floorObjectSubject({ ...potion, quan: 1 })} hits the ceiling.`];
+    projectileTopLevelBreakMessage(potion, breakKind, messages);
+    brokenPotionBreathe(potion, game.u?.ux ?? potion.ox ?? 0, game.u?.uy ?? potion.oy ?? 0, messages);
+    const shopDebt = convertUnpaidObjectToShopDebt(potion, { silent: true, broken: true });
+    if (!shopDebt.charged) potion.no_charge = true;
+    return messages;
+}
+
+function heroThrownPotionUpwardMessages(potion) {
+    if (rn2(5)) {
+        const breakKind = projectileTopLevelBreakKind(potion);
+        if (breakKind) return heroThrownPotionCeilingBreakMessages(potion, breakKind);
+        return heroThrownPotionSelfHitMessages(potion, 'hits');
+    }
+    return heroThrownPotionSelfHitMessages(potion, 'almost hits');
+}
+
 function dipPotionAlchemyExplosion(target, amount, messages) {
     const damage = amount + rnd(9);
     const explodes = target.cursed || isPotionOfAcid(target)
@@ -50699,6 +50745,37 @@ export async function rhack(_cmd) {
             game._throw_item_letter = null;
             return;
         }
+        const item = (game.inventory || []).find(invItem => invItem.letter === game._throw_item_letter);
+        if (ch === '<' && item && supportsHeroThrownPotionUpwardHit(item)) {
+            let thrownId = null;
+            if ((item.quan || 1) > 1) thrownId = next_ident();
+            const thrownObject = {
+                ...item,
+                letter: undefined,
+                line: undefined,
+                wielded: false,
+                worn: false,
+                quivered: false,
+                ox: game.u?.ux || 0,
+                oy: game.u?.uy || 0,
+                id: thrownId ?? item.id,
+                quan: 1,
+                glyph: item.glyph || '!',
+                color: item.color || CLR_MAGENTA,
+            };
+            if ((item.quan || 1) > 1) splitCarriedObjectShopBill(item, thrownObject, 1);
+            const messages = heroThrownPotionUpwardMessages(thrownObject);
+            removeInventoryItem(item, 1);
+            newsym(game.u?.ux || 0, game.u?.uy || 0);
+            const keepPotionCallPrompt = game._command_mode === 'callPotionAfterMore';
+            await setMessage(messages.join('  '), keepPotionCallPrompt);
+            if (!keepPotionCallPrompt) game._command_mode = null;
+            game._throw_item_letter = null;
+            game._resume_time_after_more = 0;
+            game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
+            game.context.move = 0;
+            return;
+        }
         const dir = movementDirection(ch);
         if (!dir) {
             game._throw_item_letter = null;
@@ -50706,7 +50783,6 @@ export async function rhack(_cmd) {
             game._command_mode = 'cmdassistMore';
             return;
         }
-        const item = (game.inventory || []).find(invItem => invItem.letter === game._throw_item_letter);
         if (!item) {
             game._command_mode = null;
             game._throw_item_letter = null;

@@ -17226,6 +17226,92 @@ test('adjacent hero-thrown confusion potion can apply direct vapor after monster
     ]);
 });
 
+test('upward hero-thrown confusion potion self-hits through potionhit', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    const potion = confusionPotion(8766, 'p', 1, { dknown: true });
+    game.inventory = [potion];
+    const hpBefore = game.u.uhp;
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('p');
+    await rhack('<');
+
+    assert.equal(game._command_mode, null);
+    assert.match(game._pending_message, /almost hits the ceiling, then falls back on top of your head\./);
+    assert.match(game._pending_message, /The (?:bottle|phial|flagon|carafe|flask|jar|vial) crashes on your head and breaks into shards\./);
+    assert.match(game._pending_message, /The potion of confusion evaporates\./);
+    assert.match(game._pending_message, /You feel somewhat dizzy\./);
+    assert.doesNotMatch(game._pending_message, /peculiar odor|cmdassist/);
+    assert.equal(game.inventory.includes(potion), false);
+    assert.equal(game.level.objects.length, 0);
+    assert.ok(game.u.uhp < hpBefore);
+    assert.ok(hpBefore - game.u.uhp <= 2);
+    assert.ok((game.u._confusionTimeout || 0) > 0);
+    assert.match(game.u._statusSuffix || '', /Conf/);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rn2(5)', 'rn2(7)', 'rnd(2)', 'rnd(5)',
+    ]);
+});
+
+test('upward hero-thrown unpaid confusion potion from a stack bills one unit', async () => {
+    const { shkp } = installCommandShopState();
+    initRng(5);
+    Object.assign(game.u, { uhp: 20, uhpmax: 20 });
+    const stack = confusionPotion(8767, 'p', 2, { dknown: true });
+    game.inventory = [stack];
+    shop.addObjectToShopBill(shkp, stack, 100);
+    const beforeEntry = shop.shopBillEntryForObject(shkp, stack);
+    const beforeTotal = shop.shopBillEntryTotal(beforeEntry);
+    const unitPrice = Math.max(1, Math.trunc(beforeTotal / beforeEntry.bquan));
+
+    await rhack('t');
+    await rhack('p');
+    await rhack('<');
+
+    assert.match(game._pending_message, /breaks into shards/);
+    assert.match(game._pending_message, /The potion of confusion evaporates\./);
+    assert.match(game._pending_message, /You feel somewhat dizzy\./);
+    assert.equal(stack.quan, 1);
+    assert.equal(game.inventory.includes(stack), true);
+    assert.equal(game.level.objects.length, 0);
+    const afterEntry = shop.shopBillEntryForObject(shkp, stack);
+    assert.ok(afterEntry);
+    assert.equal(afterEntry.bquan, 1);
+    assert.equal(shop.shopBillEntryTotal(afterEntry), beforeTotal - unitPrice);
+    assert.equal(stack.unpaidPrice, beforeTotal - unitPrice);
+    assert.equal(shkp.debit, unitPrice);
+    assert.equal(shkp.billct, 1);
+    assert.equal(game._usedUpShopBills || null, null);
+});
+
+test('wet worn towel blocks upward thrown confusion potion vapor', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    const potion = confusionPotion(8768, 'p', 1, { dknown: true });
+    const towel = ordinaryTool(8769, 'towel', 't');
+    towel.spe = 3;
+    towel.wetness = 3;
+    towel.worn = true;
+    towel.line = 't - a towel (being worn)';
+    game.inventory = [potion, towel];
+
+    await rhack('t');
+    await rhack('p');
+    await rhack('<');
+
+    assert.match(game._pending_message, /crashes on your head and breaks into shards\./);
+    assert.match(game._pending_message, /The potion of confusion evaporates\./);
+    assert.match(game._pending_message, /Some vapor passes harmlessly around you\./);
+    assert.doesNotMatch(game._pending_message, /You feel somewhat dizzy|peculiar odor/);
+    assert.equal(game.inventory.includes(potion), false);
+    assert.equal(game.inventory.includes(towel), true);
+    assert.equal(game.level.objects.length, 0);
+    assert.equal(game.u._confusionTimeout || 0, 0);
+    assert.doesNotMatch(game.u._statusSuffix || '', /Conf/);
+});
+
 test('hero-thrown hallucination potion uses common potionhit without monster effect', async () => {
     installNonShopFloorState();
     initRng(2);
