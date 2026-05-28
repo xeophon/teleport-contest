@@ -6,7 +6,7 @@ import { activateStatueTrap, burnFloorObjectsByFire, earthFloorEffects, finishFo
 import { game, resetGame } from '../js/gstate.js';
 import { pushKey, resetInputState } from '../js/input.js';
 import { enableRngLog, getRngLog, initRng } from '../js/rng.js';
-import { A_CON, A_DEX, A_STR, BILLSZ, CANDLESHOP, CLOUD, COULD_SEE, DB_EAST, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, FOUNTAIN, HOLE, ICE, ICED_POOL, IN_SIGHT, LAVAPOOL, MOAT, PIT, POOL, ROOM, ROOMOFFSET, SHOPBASE, SQKY_BOARD, STATUE_TRAP, STRAT_WAITFORU, TRAPDOOR, TT_WEB, WEB, W_SADDLE } from '../js/const.js';
+import { A_CON, A_DEX, A_STR, BILLSZ, CANDLESHOP, CLOUD, COULD_SEE, DB_EAST, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, FOUNTAIN, HOLE, ICE, ICED_POOL, IN_SIGHT, LAVAPOOL, MOAT, NORMAL_SPEED, PIT, POOL, ROOM, ROOMOFFSET, SHOPBASE, SQKY_BOARD, STATUE_TRAP, STRAT_WAITFORU, TRAPDOOR, TT_WEB, WEB, W_SADDLE } from '../js/const.js';
 import { currentFruitId, setCurrentFruitName } from '../js/fruit.js';
 
 const BRASS_LANTERN = 226;
@@ -9001,6 +9001,135 @@ test('floor meat ring uses C delay-one flesh conduct', async () => {
     assert.equal(game.u.uconduct?.unvegan, 1);
     assert.equal(game.u.uconduct?.unvegetarian, 1);
     assert.equal(game._eating_turns_remaining || 0, 0);
+});
+
+test('carnivorous pets treat stone-to-flesh meat as dog food', async () => {
+    const cases = [
+        ['meatball', () => simpleFood(31964, 'meatball', undefined, { otyp: MEATBALL })],
+        ['meat ring', () => meatRingFood(31965, undefined)],
+        ['meat stick', () => simpleFood(31966, 'meat stick', undefined, { otyp: MEAT_STICK })],
+        ['enormous meatball', () => simpleFood(31967, 'enormous meatball', undefined, { otyp: ENORMOUS_MEATBALL })],
+        ['otyp-only meatball', () => {
+            const food = simpleFood(31968, 'meatball', undefined, { otyp: MEATBALL });
+            delete food.kind;
+            delete food.actualKind;
+            return food;
+        }],
+    ];
+    const petCases = [
+        ['dog', { name: 'dog', cwt: 400, mmove: NORMAL_SPEED }],
+        ['wolf', { name: 'wolf', cwt: 500, mmove: NORMAL_SPEED }],
+    ];
+
+    for (const [petName, petData] of petCases) {
+        for (const [name, makeFood] of cases) {
+            const label = `${petName} ${name}`;
+            installNonShopFloorState();
+            initRng(1);
+            resetInputState();
+            pushKey('\x1b');
+            game.moves = 1;
+            game.context = {};
+            game.u.umovement = NORMAL_SPEED;
+            for (let x = 5; x <= 8; x++) markSquareVisible(x, 5);
+            const pet = {
+                mx: 7,
+                my: 5,
+                movement: NORMAL_SPEED,
+                data: {
+                    mlet: 'd',
+                    attack: { dice: 1, sides: 6, verb: 'bites' },
+                    ...petData,
+                },
+                pet: true,
+                mtame: 10,
+                mpeaceful: true,
+                mhp: 10,
+                mhpmax: 10,
+                mcansee: true,
+                mextra: {
+                    edog: {
+                        apport: 3,
+                        hungrytime: 1000,
+                        whistletime: 0,
+                        ogoal: { x: 0, y: 0 },
+                    },
+                },
+                minvent: [],
+            };
+            const food = makeFood();
+            Object.assign(food, { ox: 8, oy: 5 });
+            delete food.letter;
+            delete food.line;
+            game.level.monsters = [pet];
+            game.level.objects = [food];
+            game._pending_time_passed = 1;
+
+            await moveloop_core();
+            resetInputState();
+
+            assert.equal(pet.mx, 8, label);
+            assert.equal(pet.my, 5, label);
+            assert.equal(game.level.objects.includes(food), false, label);
+            assert.ok((pet.meating || 0) > 0, label);
+            assert.ok(pet.mextra.edog.hungrytime > 1000, label);
+        }
+    }
+});
+
+test('diet flags let carnivorous pets eat stone-to-flesh meat', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    resetInputState();
+    pushKey('\x1b');
+    game.moves = 1;
+    game.context = {};
+    game.u.umovement = NORMAL_SPEED;
+    for (let x = 5; x <= 8; x++) markSquareVisible(x, 5);
+    const pet = {
+        mx: 7,
+        my: 5,
+        movement: NORMAL_SPEED,
+        data: {
+            name: 'custom carnivore',
+            mlet: 'Y',
+            mmove: NORMAL_SPEED,
+            cwt: 700,
+            carnivorous: true,
+            attack: { dice: 1, sides: 6, verb: 'bites' },
+        },
+        pet: true,
+        mtame: 10,
+        mpeaceful: true,
+        mhp: 10,
+        mhpmax: 10,
+        mcansee: true,
+        mextra: {
+            edog: {
+                apport: 3,
+                hungrytime: 1000,
+                whistletime: 0,
+                ogoal: { x: 0, y: 0 },
+            },
+        },
+        minvent: [],
+    };
+    const food = simpleFood(31969, 'meat stick', undefined, { otyp: MEAT_STICK });
+    Object.assign(food, { ox: 8, oy: 5 });
+    delete food.letter;
+    delete food.line;
+    game.level.monsters = [pet];
+    game.level.objects = [food];
+    game._pending_time_passed = 1;
+
+    await moveloop_core();
+    resetInputState();
+
+    assert.equal(pet.mx, 8);
+    assert.equal(pet.my, 5);
+    assert.equal(game.level.objects.includes(food), false);
+    assert.ok((pet.meating || 0) > 0);
+    assert.ok(pet.mextra.edog.hungrytime > 1000);
 });
 
 test('carrot clears temporary blindness after the delay-one bite', async () => {
