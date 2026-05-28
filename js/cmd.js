@@ -13352,8 +13352,71 @@ function wakeNearbyMonstersFromPotionHit(mon) {
     }
 }
 
+function vampshifterRevivalBaseName(mon) {
+    const data = mon?.data || {};
+    const rawBase = mon?.vampBase || data.vampBase || mon?.chamName || data.chamName
+        || mon?.cham || data.cham || '';
+    const base = String(rawBase || '').toLowerCase();
+    if (base.includes('vlad')) return 'Vlad the Impaler';
+    if (base === 'vampire lord' || base === 'vampire leader' || base === 'vampire lady')
+        return base === 'vampire lady' ? 'vampire leader' : base;
+    if (base === 'vampire') return 'vampire';
+    if ((mon?.vampshifter || data.vampshifter) && String(data.name || mon?.name || '').toLowerCase() !== 'vampire')
+        return 'vampire';
+    return '';
+}
+
+function reviveVampshifterFromPotionKill(mon, messages) {
+    const baseName = vampshifterRevivalBaseName(mon);
+    if (!baseName) return false;
+    const currentName = String(mon?.data?.name || mon?.name || '').toLowerCase();
+    if (currentName === String(baseName).toLowerCase()) return false;
+    if ((game._genocided_monsters || []).includes(baseName)) return false;
+
+    const oldData = mon.data || {};
+    const targetName = mon.givenName || `the ${oldData.name || mon.name || 'monster'}`;
+    const nonliving = oldData.nonliving || oldData.mlet === 'Z' || oldData.glyph === 'Z'
+        || String(oldData.name || '').includes('zombie') || String(oldData.name || '').endsWith(' golem');
+    messages.push(`You ${nonliving ? 'destroy' : 'kill'} ${targetName}!`);
+
+    const baseData = monsterByRndName(baseName) || RANDOM_MONSTER_BY_NAME.get(baseName);
+    if (!baseData) return false;
+    const oldVisible = monsterCanBeSeenForPotionEffect(mon);
+    const oldDisplayName = potionHitMonsterName(mon);
+    const specialDeath = oldData.nonliving || oldData.noncorporeal || oldData.amorphous
+        || oldData.name === 'fog cloud' || oldData.mlet === 'ghost';
+    const level = adjustedMonsterLevel(baseData);
+    const maxHp = Math.max(10, monster_hp(baseData, level));
+    mon.dead = false;
+    mon.data = { ...baseData, hpLevel: level };
+    mon.name = baseData.name;
+    mon.mlet = baseData.mlet;
+    mon.glyph = baseData.glyph;
+    mon.color = baseData.color;
+    mon.m_lev = level;
+    mon.mlevel = level;
+    mon.mhpmax = maxHp;
+    mon.mhp = maxHp;
+    mon.mcanmove = true;
+    mon.mfrozen = 0;
+    mon.msleeping = 0;
+    mon.vampshifter = false;
+    delete mon.vampBase;
+    delete mon.chamName;
+    delete mon.cham;
+    if (oldVisible && monsterCanBeSeenForPotionEffect(mon) && !heroIsHallucinating()) {
+        const before = specialDeath ? oldDisplayName : oldDisplayName.replace(/^The /, 'The seemingly dead ');
+        const action = specialDeath ? 'suddenly reconstitutes' : 'suddenly transforms';
+        messages.push(`${before} ${action} and rises as ${indefiniteArticle(baseData.name)} ${baseData.name}!`);
+    }
+    set_malign(mon);
+    newsym(mon.mx, mon.my);
+    return true;
+}
+
 function killMonsterFromPotionHit(mon, messages) {
     if (!mon || mon.dead) return;
+    if (reviveVampshifterFromPotionKill(mon, messages)) return;
     mon.dead = true;
     const data = mon.data || {};
     const targetName = mon.givenName || `the ${data.name || mon.name || 'monster'}`;

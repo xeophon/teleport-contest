@@ -17509,6 +17509,50 @@ test('hero-thrown cursed water potion heals vampire shifters without shape chang
     ]);
 });
 
+test('hero-thrown blessed water revives lethal vampire shifter hits in base form', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.u.acurr.a[A_DEX] = 25;
+    const potion = waterPotion(88163, 'w', { blessed: true, bknown: true });
+    potion.dknown = true;
+    const bat = ordinaryThrowTarget('vampire bat', 7, 5, {
+        mhp: 1,
+        mhpmax: 8,
+        data: { name: 'vampire bat', mlevel: 5, mlet: 'B', vampshifter: true },
+        mlet: 'B',
+        chamName: 'vampire',
+        vampshifter: true,
+    });
+    game.inventory = [potion];
+    game.level.monsters = [bat];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('w');
+    markSquareVisible(bat.mx, bat.my);
+    await rhack('l');
+
+    assert.match(game._pending_message, /The potion of (?:holy )?water evaporates\./);
+    assert.match(game._pending_message, /The vampire bat shrieks in pain!/);
+    assert.match(game._pending_message, /You kill the vampire bat!/);
+    assert.match(game._pending_message, /The seemingly dead vampire bat suddenly transforms and rises as a vampire!/);
+    assert.equal(game.level.monsters.includes(bat), true);
+    assert.equal(bat.dead, false);
+    assert.equal(bat.data.name, 'vampire');
+    assert.equal(bat.mlet, 'V');
+    assert.equal(bat.mhp, bat.mhpmax);
+    assert.equal(bat.mhp >= 10, true);
+    assert.equal(bat.vampshifter, false);
+    assert.equal(bat.chamName, undefined);
+    assert.equal(bat.msleeping, 0);
+    assert.equal(bat.mpeaceful, false);
+    assert.equal(game._vanquished_counts?.['vampire bat'], undefined);
+    assert.equal(game.inventory.includes(potion), false);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rnd(20)', 'rnd(25)', 'rn2(7)', 'd(2,6)', 'd(9,8)',
+    ]);
+});
+
 test('hero-thrown blessed water potion can uncurse a worn saddle', async () => {
     installNonShopFloorState();
     initRng(2);
