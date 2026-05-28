@@ -13996,6 +13996,33 @@ function burnAwayHeroSlime(messages = []) {
     return true;
 }
 
+function applyBurningOilDoorTerrain(x, y, messages) {
+    if (!isok(x, y)) return false;
+    const loc = game.level?.at(x, y);
+    if (!loc) return false;
+    const visible = !game.u?.blind && cansee(x, y);
+    let changed = false;
+
+    if (loc.typ === SDOOR) {
+        loc.typ = DOOR;
+        newsym(x, y);
+        changed = true;
+        if (visible) messages.push('The blast reveals a secret door.');
+    }
+    if (loc.typ === DOOR && (loc.doormask & (D_CLOSED | D_LOCKED))) {
+        loc.doormask = D_NODOOR;
+        loc.flags = 0;
+        newsym(x, y);
+        changed = true;
+        messages.push(visible ? 'The door is consumed in flames!' : 'You smell smoke.');
+    }
+    if (changed) {
+        vision_reset();
+        vision_recalc(0);
+    }
+    return changed;
+}
+
 function burnFloorObjectsFromBurningOilExplosion(x, y, messages) {
     let heardGas = false;
     for (let dx = -1; dx <= 1; dx++) {
@@ -14023,6 +14050,7 @@ function burnFloorObjectsFromBurningOilExplosion(x, y, messages) {
                 const fountain = applyFireRayFountainTerrain(sx, sy, { heroRay: true });
                 if (fountain.messages.length) messages.push(...fountain.messages);
             }
+            applyBurningOilDoorTerrain(sx, sy, messages);
             const floorFire = burnFloorObjectsByFire(sx, sy, {
                 heroCaused: true,
                 igniteFeedback: false,

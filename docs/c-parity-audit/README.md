@@ -117,6 +117,18 @@ This folder records source-backed audits against `nethack-c/upstream`. The notes
 - [111-subagent-findings-2026-05-28.md](111-subagent-findings-2026-05-28.md): upward mirror, crystal-ball, and lenses breakage with thousand-pieces wording, mirror luck loss, and broken-unit shop debt parity.
 - [112-subagent-findings-2026-05-28.md](112-subagent-findings-2026-05-28.md): upward expensive-camera breakage with picture-painting demon release, curse-driven peacefulness, and broken-unit shop debt parity.
 - [113-subagent-findings-2026-05-28.md](113-subagent-findings-2026-05-28.md): upward glass/crystal material wand breakage with shuffled appearance/material recognition, thousand-pieces wording, and broken-unit shop debt parity.
+- [114-subagent-findings-2026-05-28.md](114-subagent-findings-2026-05-28.md): upward acid and blinding venom toss-up break/self-hit behavior with shop debt coverage.
+- [115-subagent-findings-2026-05-28.md](115-subagent-findings-2026-05-28.md): upward harmless missile toss-up break/self-hit/landing behavior.
+- [116-subagent-findings-2026-05-28.md](116-subagent-findings-2026-05-28.md): upward crackable glass armor toss-up shatter, break wording, and billing behavior.
+- [117-subagent-findings-2026-05-28.md](117-subagent-findings-2026-05-28.md): upward pyrolisk egg toss-up hatching and self-hit behavior.
+- [118-subagent-findings-2026-05-28.md](118-subagent-findings-2026-05-28.md): upward lit-oil potion toss-up explosion and burning-oil fallout ordering.
+- [119-subagent-findings-2026-05-28.md](119-subagent-findings-2026-05-28.md): upward touch-petrifying egg toss-up self-hit, landing, and petrification behavior.
+- [120-subagent-findings-2026-05-29.md](120-subagent-findings-2026-05-29.md): upward touch-petrifying corpse toss-up self-hit and petrification behavior.
+- [121-subagent-findings-2026-05-29.md](121-subagent-findings-2026-05-29.md): carried figurine stone-to-flesh animation plus compact follow-up audits.
+- [122-subagent-findings-2026-05-29.md](122-subagent-findings-2026-05-29.md): pet-food stone-to-flesh meat classification for carnivores and explicit diet flags.
+- [123-subagent-findings-2026-05-29.md](123-subagent-findings-2026-05-29.md): burning-oil fountain terrain and dry-up collateral.
+- [124-subagent-findings-2026-05-29.md](124-subagent-findings-2026-05-29.md): ghoul pet `dogfood()` old-corpse/stale-egg branch.
+- [125-subagent-findings-2026-05-29.md](125-subagent-findings-2026-05-29.md): burning-oil blast secret-door reveal and closed-door fire terrain.
 
 ## Cross-Cutting Themes
 

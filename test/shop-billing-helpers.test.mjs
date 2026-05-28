@@ -6,7 +6,7 @@ import { activateStatueTrap, burnFloorObjectsByFire, earthFloorEffects, finishFo
 import { game, resetGame } from '../js/gstate.js';
 import { pushKey, resetInputState } from '../js/input.js';
 import { enableRngLog, getRngLog, initRng } from '../js/rng.js';
-import { A_CON, A_DEX, A_STR, BILLSZ, CANDLESHOP, CLOUD, COULD_SEE, DB_EAST, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, FOUNTAIN, HOLE, ICE, ICED_POOL, IN_SIGHT, LAVAPOOL, MOAT, NORMAL_SPEED, PIT, POOL, ROOM, ROOMOFFSET, SHOPBASE, SQKY_BOARD, STATUE_TRAP, STRAT_WAITFORU, TRAPDOOR, TT_WEB, WEB, W_SADDLE } from '../js/const.js';
+import { A_CON, A_DEX, A_STR, BILLSZ, CANDLESHOP, CLOUD, COULD_SEE, DB_EAST, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, D_CLOSED, D_NODOOR, FOUNTAIN, HOLE, ICE, ICED_POOL, IN_SIGHT, LAVAPOOL, MOAT, NORMAL_SPEED, PIT, POOL, ROOM, ROOMOFFSET, SDOOR, SHOPBASE, SQKY_BOARD, STATUE_TRAP, STRAT_WAITFORU, TRAPDOOR, TT_WEB, WEB, W_SADDLE } from '../js/const.js';
 import { currentFruitId, setCurrentFruitName } from '../js/fruit.js';
 
 const BRASS_LANTERN = 226;
@@ -19652,6 +19652,109 @@ test('hero-thrown lit oil potion explodes on a direct monster hit', async () => 
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
         'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(5)', 'd(4,4)', 'rn2(100)',
     ]);
+});
+
+test('hero-thrown lit oil explosion consumes closed doors before floor-object fire and monster damage', async () => {
+    installNonShopFloorState();
+    initRng(8);
+    game.u.acurr.a[A_DEX] = 25;
+    const potion = oilPotion(880711, 'p');
+    potion.dknown = true;
+    potion.lamplit = true;
+    potion.burning = true;
+    const doorLoc = { roomno: 0, typ: DOOR, doormask: D_CLOSED, flags: 7, lit: true };
+    const cells = new Map([['8,5', doorLoc]]);
+    const book = floorHealingSpellbook(880712);
+    Object.assign(book, { ox: 8, oy: 5 });
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, { mhp: 30, mhpmax: 30 });
+    game.inventory = [potion];
+    game.level.objects = [book];
+    game.level.monsters = [goblin];
+    game.level.at = (x, y) => cells.get(`${x},${y}`) || { roomno: 0, typ: ROOM, lit: true };
+    markSquareVisible(7, 5);
+    markSquareVisible(8, 5);
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('p');
+    await rhack('l');
+
+    const message = game._pending_message || '';
+    assert.equal(doorLoc.typ, DOOR);
+    assert.equal(doorLoc.doormask, D_NODOOR);
+    assert.equal(doorLoc.flags, 0);
+    assert.equal(game.level.objects.includes(book), false);
+    assert.match(message, /The door is consumed in flames!/);
+    assert.match(message, /You see a puff of smoke\./);
+    assert.equal(message.indexOf('The door is consumed in flames!') < message.indexOf('You see a puff of smoke.'), true);
+    assert.equal(message.indexOf('You see a puff of smoke.') < message.indexOf('The goblin is caught in the burning oil!'), true);
+    assert.equal(goblin.mhp < 30, true);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(5)', 'd(4,4)', 'rn2(3)', 'rn2(100)',
+    ]);
+});
+
+test('hero-thrown lit oil explosion reveals then consumes closed secret doors', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.u.acurr.a[A_DEX] = 25;
+    const potion = oilPotion(880713, 'p');
+    potion.dknown = true;
+    potion.lamplit = true;
+    potion.burning = true;
+    const secretLoc = { roomno: 0, typ: SDOOR, doormask: D_CLOSED, flags: 7, lit: true };
+    const cells = new Map([['8,5', secretLoc]]);
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, { mhp: 30, mhpmax: 30 });
+    game.inventory = [potion];
+    game.level.monsters = [goblin];
+    game.level.at = (x, y) => cells.get(`${x},${y}`) || { roomno: 0, typ: ROOM, lit: true };
+    markSquareVisible(7, 5);
+    markSquareVisible(8, 5);
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('p');
+    await rhack('l');
+
+    const message = game._pending_message || '';
+    assert.equal(secretLoc.typ, DOOR);
+    assert.equal(secretLoc.doormask, D_NODOOR);
+    assert.equal(secretLoc.flags, 0);
+    assert.match(message, /The blast reveals a secret door\./);
+    assert.match(message, /The door is consumed in flames!/);
+    assert.equal(message.indexOf('The blast reveals a secret door.') < message.indexOf('The door is consumed in flames!'), true);
+    assert.equal(message.indexOf('The door is consumed in flames!') < message.indexOf('The goblin is caught in the burning oil!'), true);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(5)', 'd(4,4)', 'rn2(100)',
+    ]);
+});
+
+test('deaf blind hero-thrown lit oil explosion still smells consumed doors', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.u.acurr.a[A_DEX] = 25;
+    game.u.blind = true;
+    game.u._deafTimeout = 10;
+    game.u._statusSuffix = ' Deaf';
+    const potion = oilPotion(880714, 'p');
+    potion.dknown = true;
+    potion.lamplit = true;
+    potion.burning = true;
+    const doorLoc = { roomno: 0, typ: DOOR, doormask: D_CLOSED, flags: 7, lit: true };
+    const cells = new Map([['8,5', doorLoc]]);
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, { mhp: 30, mhpmax: 30 });
+    game.inventory = [potion];
+    game.level.monsters = [goblin];
+    game.level.at = (x, y) => cells.get(`${x},${y}`) || { roomno: 0, typ: ROOM, lit: true };
+
+    await rhack('t');
+    await rhack('p');
+    await rhack('l');
+
+    const message = game._pending_message || '';
+    assert.equal(doorLoc.doormask, D_NODOOR);
+    assert.match(message, /You smell smoke\./);
+    assert.doesNotMatch(message, /Boom!|You hear a blast|The door is consumed in flames!/);
 });
 
 test('hero-thrown lit oil explosion burns floor objects across the blast before monster damage', async () => {
