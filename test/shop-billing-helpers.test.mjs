@@ -15857,6 +15857,98 @@ test('adjacent hero-thrown confusion potion can apply direct vapor after monster
     ]);
 });
 
+test('hero-thrown hallucination potion uses common potionhit without monster effect', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.u.acurr.a[A_DEX] = 25;
+    const potion = hallucinationPotion(8795, 'h', 1, { dknown: true });
+    const goblin = ordinaryThrowTarget('goblin', 7, 5);
+    game.inventory = [potion];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('h');
+    await rhack('l');
+
+    assert.match(game._pending_message, /The (?:bottle|phial|flagon|carafe|flask|jar|vial) crashes on the goblin's head and breaks into shards\./);
+    assert.match(game._pending_message, /The potion of hallucination evaporates\./);
+    assert.doesNotMatch(game._pending_message, /misses|shatters|peculiar odor|momentary vision/);
+    assert.equal(goblin.mconf || false, false);
+    assert.equal(goblin.msleeping, 0);
+    assert.equal(goblin.mpeaceful, false);
+    assert.equal(goblin.mhp, 4);
+    assert.equal(game.inventory.includes(potion), false);
+    assert.equal(game.level.objects.length, 0);
+    assert.equal(game._discoveries?.some(entry => entry.section === 'Potions' && entry.name === 'potion of hallucination') ?? false, false);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(5)',
+    ]);
+});
+
+test('adjacent hero-thrown hallucination potion applies direct vapor after common hit', async () => {
+    installNonShopFloorState();
+    initRng(4);
+    game.u.acurr.a[A_DEX] = 25;
+    const potion = hallucinationPotion(8796, 'h', 1, { dknown: true });
+    const goblin = ordinaryThrowTarget('goblin', 6, 5);
+    game.inventory = [potion];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('h');
+    await rhack('l');
+
+    const message = game._pending_message;
+    assert.match(message, /The potion of hallucination evaporates\./);
+    assert.match(message, /You have a momentary vision\./);
+    assert.ok(message.indexOf('The potion of hallucination evaporates.') < message.indexOf('You have a momentary vision.'));
+    assert.equal(goblin.msleeping, 0);
+    assert.equal(goblin.mpeaceful, false);
+    assert.equal(game._discoveries?.some(entry => entry.section === 'Potions' && entry.name === 'potion of hallucination') ?? false, false);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(5)', 'rn2(13)',
+    ]);
+});
+
+test('hero-thrown hallucination potion effect can come from potion index', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.u.acurr.a[A_DEX] = 25;
+    const potion = {
+        id: 8797,
+        cls: 'potion',
+        glyph: '!',
+        kind: 'magenta potion',
+        potionIndex: 7,
+        quan: 1,
+        ox: 5,
+        oy: 5,
+        letter: 'h',
+        line: 'h - a magenta potion',
+        dknown: true,
+    };
+    const goblin = ordinaryThrowTarget('goblin', 7, 5);
+    game.inventory = [potion];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('h');
+    await rhack('l');
+
+    assert.match(game._pending_message, /The magenta potion evaporates\./);
+    assert.doesNotMatch(game._pending_message, /momentary vision|peculiar odor/);
+    assert.equal(goblin.msleeping, 0);
+    assert.equal(goblin.mpeaceful, false);
+    assert.equal(game.inventory.includes(potion), false);
+    assert.equal(game._discoveries?.some(entry => entry.section === 'Potions' && entry.name === 'potion of hallucination') ?? false, false);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(5)',
+    ]);
+});
+
 test('hero-thrown paralysis potion paralyzes visible monster without resistance roll', async () => {
     installNonShopFloorState();
     initRng(2);

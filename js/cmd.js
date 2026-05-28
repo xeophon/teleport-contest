@@ -12576,7 +12576,7 @@ function supportsHeroThrownPotionHit(potion) {
     const kind = thrownPotionEffectKind(potion);
     return kind === 'confusion' || kind === 'booze' || kind === 'paralysis'
         || kind === 'sleeping' || kind === 'blindness' || kind === 'speed'
-        || kind === 'invisibility';
+        || kind === 'invisibility' || kind === 'hallucination';
 }
 
 function thrownPotionEffectKind(potion) {
