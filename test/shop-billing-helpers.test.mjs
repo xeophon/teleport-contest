@@ -17410,6 +17410,60 @@ test('hero-thrown lit oil explosion burns floor objects across the blast before 
     ]);
 });
 
+test('hero-thrown lit oil explosion melts blast ice before monster damage', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.u.acurr.a[A_DEX] = 25;
+    const potion = oilPotion(880745, 'p');
+    potion.dknown = true;
+    potion.lamplit = true;
+    potion.burning = true;
+    const iceLoc = {
+        roomno: 0,
+        typ: ICE,
+        icedpool: ICED_POOL,
+        flags: 0,
+        meltIceTurn: 200,
+        meltIceTimeout: 200,
+        meltIceAwayTurn: 200,
+    };
+    const otherIceLoc = { roomno: 0, typ: ICE, icedpool: ICED_POOL, flags: 0 };
+    const cells = new Map([
+        ['8,5', iceLoc],
+        ['2,2', otherIceLoc],
+    ]);
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, { mhp: 30, mhpmax: 30 });
+    game.inventory = [potion];
+    game.level.monsters = [goblin];
+    game.level.meltIceTimers = [
+        { x: 8, y: 5, turn: 200, seq: 1 },
+        { x: 2, y: 2, turn: 300, seq: 2 },
+    ];
+    game.level.at = (x, y) => cells.get(`${x},${y}`) || { roomno: 0, typ: ROOM };
+    markSquareVisible(7, 5);
+    markSquareVisible(8, 5);
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('p');
+    await rhack('l');
+
+    const message = game._pending_message || '';
+    assert.equal(iceLoc.typ, POOL);
+    assert.equal(iceLoc.icedpool, undefined);
+    assert.equal(iceLoc.meltIceTurn, undefined);
+    assert.equal(iceLoc.meltIceTimeout, undefined);
+    assert.equal(iceLoc.meltIceAwayTurn, undefined);
+    assert.deepEqual(game.level.meltIceTimers, [{ x: 2, y: 2, turn: 300, seq: 2 }]);
+    assert.equal(otherIceLoc.typ, ICE);
+    assert.match(message, /The ice crackles and melts\./);
+    assert.equal(message.indexOf('Boom!') < message.indexOf('The ice crackles and melts.'), true);
+    assert.equal(message.indexOf('The ice crackles and melts.') < message.indexOf('The goblin is caught in the burning oil!'), true);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(5)', 'd(4,4)', 'rn2(100)',
+    ]);
+});
+
 test('hero-thrown lit oil explosion burns visible webs before monster damage', async () => {
     installNonShopFloorState();
     initRng(2);

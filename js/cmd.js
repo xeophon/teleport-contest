@@ -13866,6 +13866,12 @@ function burnFloorObjectsFromBurningOilExplosion(x, y, messages) {
                 previousMessage: messages[messages.length - 1] || '',
             });
             if (webMessages.length) messages.push(...webMessages);
+            const ice = applyFireRayIceTerrain(sx, sy, {
+                heroRay: true,
+                recordKill: recordVanquished,
+                buriedMerchandiseDebtMessage,
+            });
+            if (ice.messages.length) messages.push(...ice.messages);
             const floorFire = burnFloorObjectsByFire(sx, sy, {
                 heroCaused: true,
                 igniteFeedback: false,
