@@ -17296,6 +17296,88 @@ test('upward hero-thrown paralysis potion selected from r self-hits', async () =
     assert.equal(game._wake_message, 'You can move again.');
 });
 
+test('upward hero-thrown acid potion self-hits and burns the hero', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, { uhp: 40, uhpmax: 40 });
+    const potion = acidPotion(87663, 'a');
+    potion.dknown = true;
+    game.inventory = [potion];
+    const hpBefore = game.u.uhp;
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('a');
+    await rhack('<');
+
+    assert.equal(game._command_mode, null);
+    assert.match(game._pending_message, /crashes on your head and breaks into shards\./);
+    assert.match(game._pending_message, /The potion of acid evaporates\./);
+    assert.match(game._pending_message, /This burns!/);
+    assert.doesNotMatch(game._pending_message, /peculiar odor|BOOM|You feel a little/);
+    assert.equal(game.inventory.includes(potion), false);
+    assert.equal(game.level.objects.length, 0);
+    assert.ok(game.u.uhp < hpBefore - 1);
+    assert.ok(hpBefore - game.u.uhp <= 10);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rn2(5)', 'rn2(7)', 'rnd(2)', 'd(1,8)', 'rn2(2)',
+    ]);
+});
+
+test('upward hero-thrown acid potion respects hero acid resistance', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, { uhp: 40, uhpmax: 40, acidResistance: true });
+    const potion = acidPotion(87664, 'a');
+    potion.dknown = true;
+    game.inventory = [potion];
+    const hpBefore = game.u.uhp;
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('a');
+    await rhack('<');
+
+    assert.equal(game._command_mode, null);
+    assert.match(game._pending_message, /crashes on your head and breaks into shards\./);
+    assert.match(game._pending_message, /The potion of acid evaporates\./);
+    assert.doesNotMatch(game._pending_message, /This burns|peculiar odor|BOOM|You feel a little/);
+    assert.equal(game.inventory.includes(potion), false);
+    assert.equal(game.level.objects.length, 0);
+    assert.ok(game.u.uhp < hpBefore);
+    assert.ok(hpBefore - game.u.uhp <= 2);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rn2(5)', 'rn2(7)', 'rnd(2)', 'rn2(2)',
+    ]);
+});
+
+test('upward hero-thrown unlit oil potion self-hits without evaporation', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, { uhp: 40, uhpmax: 40 });
+    const potion = oilPotion(87665, 'o');
+    potion.dknown = true;
+    game.inventory = [potion];
+    const hpBefore = game.u.uhp;
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('o');
+    await rhack('<');
+
+    assert.equal(game._command_mode, null);
+    assert.match(game._pending_message, /almost hits the ceiling, then falls back on top of your head\./);
+    assert.match(game._pending_message, /The (?:bottle|phial|flagon|carafe|flask|jar|vial) crashes on your head and breaks into shards\./);
+    assert.doesNotMatch(game._pending_message, /evaporates|BOOM|explodes|peculiar odor|In what direction/);
+    assert.equal(game.inventory.includes(potion), false);
+    assert.equal(game.level.objects.length, 0);
+    assert.ok(game.u.uhp < hpBefore);
+    assert.ok(hpBefore - game.u.uhp <= 2);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rn2(5)', 'rn2(7)', 'rnd(2)',
+    ]);
+});
+
 test('upward hero-thrown unpaid confusion potion from a stack bills one unit', async () => {
     const { shkp } = installCommandShopState();
     initRng(5);

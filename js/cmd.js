@@ -14297,17 +14297,31 @@ function heroThrownPotionHitMonster(potion, mon) {
     return messages;
 }
 
-const DEFERRED_SPECIAL_UPWARD_POTION_KINDS = new Set(['oil', 'acid', 'polymorph']);
+const DEFERRED_SPECIAL_UPWARD_POTION_KINDS = new Set(['polymorph']);
 
 function supportsHeroThrownPotionUpwardHit(potion) {
     if (!isPotionObject(potion)) return false;
     const kind = thrownPotionEffectKind(potion);
+    if (isLitOilPotionHit(potion, kind)) return false;
     return !!kind && kind !== 'potion' && !kind.endsWith(' potion')
         && !DEFERRED_SPECIAL_UPWARD_POTION_KINDS.has(kind);
 }
 
+function heroAcidPotionSelfHitMessages(potion, messages) {
+    if (heroHasAcidResistance()) return;
+    messages.push(`This burns${potion?.blessed ? ' a little' : potion?.cursed ? ' a lot' : ''}!`);
+    const damage = d(potion?.cursed ? 2 : 1, potion?.blessed ? 4 : 8);
+    if (!game.u) return;
+    game.u.uhp = Math.max(0, (game.u.uhp || 0) - damage);
+    if ((game.u.uhp || 0) <= 0) {
+        game._death_cause = 'killed by a potion of acid';
+        messages.push('You die...');
+    }
+}
+
 function heroThrownPotionSelfHitMessages(potion, action) {
     const messages = [];
+    const kind = thrownPotionEffectKind(potion);
     messages.push(`${floorObjectSubject({ ...potion, quan: 1 })} ${action} the ceiling, then falls back on top of your head.`);
     const bottle = chestShatterBottleName();
     messages.push(`The ${bottle} crashes on your head and breaks into shards.`);
@@ -14322,6 +14336,7 @@ function heroThrownPotionSelfHitMessages(potion, action) {
     }
     if (!isPotionOfOil(potion))
         messages.push(`The ${pickupObjectName({ ...potion, quan: 1 })} evaporates.`);
+    if (kind === 'acid') heroAcidPotionSelfHitMessages(potion, messages);
     potionBreathe(potion, messages);
     const shopDebt = convertUnpaidObjectToShopDebt(potion, { silent: true, broken: true });
     if (!shopDebt.charged) potion.no_charge = true;

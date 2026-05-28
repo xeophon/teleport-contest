@@ -2,7 +2,7 @@
 
 ## Implemented Slice: Non-Special Upward Potion Self-Hit And Throw-Letter Prompting
 
-Broadened the upward hero-thrown potion self-hit path from confusion/booze to the C-compatible non-special vapor-only potion set. The shared wrapper still handles `toss_up()` ordering, bottle crash, `rnd(2)` head damage, evaporation, direct `potionbreathe()` vapor, and shop debt conversion. Direct special self effects for oil, acid, and polymorph remain gated off.
+Broadened the upward hero-thrown potion self-hit path from confusion/booze to the C-compatible non-special vapor-only potion set. The shared wrapper still handles `toss_up()` ordering, bottle crash, `rnd(2)` head damage, evaporation, direct `potionbreathe()` vapor, and shop debt conversion. At this point direct special self effects for oil, acid, and polymorph remained gated off; Audit 105 adds acid and unlit-oil follow-up coverage.
 
 C source:
 
@@ -19,7 +19,7 @@ C source:
 
 Covered JS behavior:
 
-- `js/cmd.js`: upward support now accepts known potion kinds except deferred special `oil`, `acid`, and `polymorph`.
+- `js/cmd.js`: this slice accepted known potion kinds except the then-deferred special `oil`, `acid`, and `polymorph` cases.
 - `js/cmd.js`: `potionBreathe()` is reused for paralysis, hallucination, blindness, sleeping, speed, invisibility, healing-family, restore/gain ability, sickness, water, and common no-effect vapor/trycall behavior.
 - `js/cmd.js`: throw-object selection now lets inventory letters `c` and `r` reach `throwObject`/`throwInventory` before global close/read handlers.
 
@@ -31,7 +31,7 @@ Regression coverage:
 
 ## Remaining Upward Throw Gaps
 
-- Acid self-hit needs the direct `This burns...` branch, acid resistance, extra acid damage, and acid death cause before vapor.
+- Follow-up note: `docs/c-parity-audit/105-subagent-findings-2026-05-28.md` adds acid self-hit and unlit-oil self-hit coverage.
 - Polymorph self-hit needs `You feel a little strange/normal`, unchanging/antimagic gates, and `polyself()` fallout before vapor.
-- Lit oil self-hit and ceiling break need `explode_oil()`/burning-oil fallout. Unlit oil has no direct damage, but is still deferred with oil until the lit branch is wired safely.
+- Lit oil self-hit and ceiling break need `explode_oil()`/burning-oil fallout.
 - No-ceiling/underwater wording, non-potion upward impacts, cream pies, petrifying eggs/corpses, and heavier falling-object damage remain separate C-backed slices.
