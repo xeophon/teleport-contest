@@ -9132,6 +9132,95 @@ test('diet flags let carnivorous pets eat stone-to-flesh meat', async () => {
     assert.ok(pet.mextra.edog.hungrytime > 1000);
 });
 
+function ghoulFoodTestPet({ hungrytime = 1000, mhpmaxPenalty = 0 } = {}) {
+    return {
+        mx: 7,
+        my: 5,
+        movement: NORMAL_SPEED,
+        data: {
+            name: 'ghoul',
+            mlet: 'Z',
+            mmove: NORMAL_SPEED,
+            cwt: 400,
+            attack: { dice: 1, sides: 6, verb: 'bites' },
+        },
+        pet: true,
+        mtame: 10,
+        mpeaceful: true,
+        mhp: 10,
+        mhpmax: 10,
+        mcansee: true,
+        mextra: {
+            edog: {
+                apport: 3,
+                hungrytime,
+                whistletime: 0,
+                ogoal: { x: 0, y: 0 },
+                mhpmax_penalty: mhpmaxPenalty,
+            },
+        },
+        minvent: [],
+    };
+}
+
+async function runPetFoodTurn(pet, food, { moves = 1 } = {}) {
+    installNonShopFloorState();
+    initRng(1);
+    resetInputState();
+    pushKey('\x1b');
+    game.moves = moves;
+    game.context = {};
+    game.u.umovement = NORMAL_SPEED;
+    for (let x = 5; x <= 8; x++) markSquareVisible(x, 5);
+    Object.assign(food, { ox: 8, oy: 5 });
+    delete food.letter;
+    delete food.line;
+    game.level.monsters = [pet];
+    game.level.objects = [food];
+    game._pending_time_passed = 1;
+
+    await moveloop_core();
+    resetInputState();
+}
+
+test('ghoul pets prefer old corpses and stale eggs', async () => {
+    const cases = [
+        ['old corpse', { ...corpse(31970, undefined, 'newt', 20), oldCorpse: true }, { moves: 200 }],
+        ['stale egg', { ...egg(31971), otyp: EGG, age: 1, corpsenm: { name: 'newt' } }, { moves: 500 }],
+    ];
+
+    for (const [label, food, options] of cases) {
+        const pet = ghoulFoodTestPet();
+
+        await runPetFoodTurn(pet, food, options);
+
+        assert.equal(pet.mx, 8, label);
+        assert.equal(pet.my, 5, label);
+        assert.equal(game.level.objects.includes(food), false, label);
+        assert.ok((pet.meating || 0) > 0, label);
+    }
+});
+
+test('ghoul pets only take fresh corpses when starving and reject stone-to-flesh meat', async () => {
+    const freshCorpse = corpse(31972, undefined, 'newt', 20);
+    const starvingGhoul = ghoulFoodTestPet({ hungrytime: 0, mhpmaxPenalty: 1 });
+
+    await runPetFoodTurn(starvingGhoul, freshCorpse);
+
+    assert.equal(starvingGhoul.mx, 8);
+    assert.equal(starvingGhoul.my, 5);
+    assert.equal(game.level.objects.includes(freshCorpse), false);
+    assert.ok((starvingGhoul.meating || 0) > 0);
+
+    const meat = simpleFood(31973, 'meatball', undefined, { otyp: MEATBALL });
+    const satedGhoul = ghoulFoodTestPet();
+
+    await runPetFoodTurn(satedGhoul, meat);
+
+    assert.equal(game.level.objects.includes(meat), true);
+    assert.equal(satedGhoul.meating || 0, 0);
+});
+
 test('carrot clears temporary blindness after the delay-one bite', async () => {
     installNonShopFloorState();
     const carrot = simpleFood(31940, 'carrot', 'c');

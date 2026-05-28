@@ -1887,6 +1887,32 @@ function monsterHerbivorous(mon, name = monsterDietName(mon)) {
     return !!(data.herbivorous || data.herbivore) || HERBIVOROUS_PET_NAMES.has(name);
 }
 
+function dogFoodCorpseIsOld(obj) {
+    if (obj?.oldCorpse) return true;
+    if (obj?.age == null) return false;
+    return (game.moves || 1) - Number(obj.age || 0) >= 50;
+}
+
+function dogFoodEggIsStale(obj) {
+    if (obj?.staleEgg || obj?.oldEgg) return true;
+    if (obj?.age == null) return false;
+    return (game.moves || 1) - Number(obj.age || 0) > 400;
+}
+
+function dogFoodCorpseIsVegan(data = {}) {
+    const name = String(data?.name || '').toLowerCase();
+    const mlet = data?.mlet ?? data?.glyph ?? '';
+    const lowerMlet = String(mlet).toLowerCase();
+    if (data?.vegan || data?.noncorporeal) return true;
+    if (['b', 'j', 'f', 'v', 'y', 'blob', 'jelly', 'fungus', 'vortex', 'light'].includes(lowerMlet))
+        return true;
+    if ((mlet === 'E' || lowerMlet === 'elemental') && name !== 'stalker')
+        return true;
+    if ((mlet === '\'' || lowerMlet === 'golem') && name !== 'flesh golem' && name !== 'leather golem')
+        return true;
+    return false;
+}
+
 function dogFood(mon, obj) {
     const objectName = String(obj.actualKind || obj.kind || obj.spellName || obj.spell?.name || '').toLowerCase();
     if (objectName === 'bell of opening' || objectName === 'book of the dead'
@@ -1896,9 +1922,23 @@ function dogFood(mon, obj) {
     const petName = monsterDietName(mon);
     const herbivore = monsterHerbivorous(mon, petName);
     const carnivore = monsterCarnivorous(mon, petName);
+    const starving = !!(mon?.mtame && !mon?.isminion && mon?.mextra?.edog?.mhpmax_penalty);
     const foodRoll = obj.foodRoll || 1000;
 
     if (obj.otyp === BOULDER || obj.otyp === STATUE) return UNDEF;
+    if (petName === 'ghoul') {
+        const kind = String(obj.kind || obj.actualKind || '').toLowerCase();
+        if (obj.otyp === 'corpse' || obj.otyp === CORPSE) {
+            const corpseName = String(obj.corpsenm?.name || '').toLowerCase();
+            if (dogFoodCorpseIsOld(obj) && corpseName !== 'lizard' && corpseName !== 'lichen')
+                return DOGFOOD;
+            return starving && !dogFoodCorpseIsVegan(obj.corpsenm) ? ACCFOOD : POISON;
+        }
+        if (obj.otyp === EGG || kind === 'egg')
+            return dogFoodEggIsStale(obj) ? CADAVER : starving ? ACCFOOD : POISON;
+        if (obj.otyp === FOOD_CLASS || obj.cls === 'food' || obj.foodRoll)
+            return TABU;
+    }
     if (obj.otyp === 'corpse' || obj.otyp === CORPSE) {
         const corpseName = obj.corpsenm?.name || '';
         if (obj.oldCorpse && corpseName !== 'lichen' && corpseName !== 'lizard') return POISON;
@@ -9693,8 +9733,8 @@ function movePet(mon, resumeAfterInventory = false, conflictActive = false) {
         && hereCandidate.oldCorpse
         && hereCandidate.corpsenm?.name !== 'lichen'
         && hereCandidate.corpsenm?.name !== 'lizard';
-    if (staleHereCorpse) dogFood(mon, hereCandidate);
-    const hereObj = staleHereCorpse ? null : hereCandidate;
+    if (staleHereCorpse && monsterDietName(mon) !== 'ghoul') dogFood(mon, hereCandidate);
+    const hereObj = staleHereCorpse && monsterDietName(mon) !== 'ghoul' ? null : hereCandidate;
     if (hereObj) {
         const pickupVisible = !!(game.viz_array?.[mon.my]?.[mon.mx] & IN_SIGHT);
         const hereFood = dogFood(mon, hereObj);
