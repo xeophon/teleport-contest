@@ -13809,6 +13809,22 @@ function damageHeroFromBurningOilExplosion(damage, messages) {
     newsym(ux, uy);
 }
 
+function burnFloorObjectsFromBurningOilExplosion(x, y, messages) {
+    for (let dx = -1; dx <= 1; dx++) {
+        for (let dy = -1; dy <= 1; dy++) {
+            const sx = x + dx;
+            const sy = y + dy;
+            const floorFire = burnFloorObjectsByFire(sx, sy, {
+                heroCaused: true,
+                igniteFeedback: false,
+            });
+            if (floorFire.messages.length) messages.push(...floorFire.messages);
+            if (floorFire.count && couldsee(sx, sy))
+                messages.push(`You ${game.u?.blind ? 'smell a whiff' : 'see a puff'} of smoke.`);
+        }
+    }
+}
+
 function explodeBurningOilPotion(potion, x, y, messages) {
     const damage = d(potion?.odiluted ? 3 : 4, 4);
     potion.lamplit = false;
@@ -13818,6 +13834,8 @@ function explodeBurningOilPotion(potion, x, y, messages) {
 
     if (!heroIsDeaf())
         messages.push(burningOilExplosionVisible(x, y) ? 'Boom!' : 'You hear a blast.');
+
+    burnFloorObjectsFromBurningOilExplosion(x, y, messages);
 
     for (const target of [...(game.level?.monsters || [])]) {
         if (!target || target.dead || (target.mhp ?? 1) <= 0) continue;

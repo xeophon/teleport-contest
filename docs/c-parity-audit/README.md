@@ -97,6 +97,7 @@ This folder records source-backed audits against `nethack-c/upstream`. The notes
 - [91-subagent-findings-2026-05-28.md](91-subagent-findings-2026-05-28.md): forced-chest buried zombie wake disturbance plus fresh stone-to-flesh, projectile shipping, and diet metadata follow-up audits.
 - [92-subagent-findings-2026-05-28.md](92-subagent-findings-2026-05-28.md): stone-to-flesh Sokoban boulder guilt plus fresh lit-oil, projectile shipping, themed-zombie, and diet metadata follow-up audits.
 - [93-subagent-findings-2026-05-28.md](93-subagent-findings-2026-05-28.md): themed buried-zombie generation timers plus fresh lit-oil floor-collateral and projectile `ship_object()` follow-up audits.
+- [94-subagent-findings-2026-05-28.md](94-subagent-findings-2026-05-28.md): lit-oil explosion floor-object collateral plus fresh stone-to-flesh statue/figurine, diet metadata, projectile impact-drop, and forced-chest follow-up audits.
 
 ## Cross-Cutting Themes
 

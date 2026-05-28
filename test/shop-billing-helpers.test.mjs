@@ -17263,6 +17263,76 @@ test('hero-thrown lit oil potion explodes on a direct monster hit', async () => 
     ]);
 });
 
+test('hero-thrown lit oil explosion burns floor objects across the blast before monster damage', async () => {
+    installNonShopFloorState();
+    initRng(8);
+    game.u.acurr.a[A_DEX] = 25;
+    const potion = oilPotion(88075, 'p');
+    potion.dknown = true;
+    potion.lamplit = true;
+    potion.burning = true;
+    const centerBook = floorHealingSpellbook(880751);
+    Object.assign(centerBook, { ox: 7, oy: 5 });
+    const adjacentBook = floorHealingSpellbook(880752);
+    Object.assign(adjacentBook, { ox: 8, oy: 5 });
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, { mhp: 30, mhpmax: 30 });
+    game.inventory = [potion];
+    game.level.objects = [centerBook, adjacentBook];
+    game.level.monsters = [goblin];
+    markSquareVisible(7, 5);
+    markSquareVisible(8, 5);
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('p');
+    await rhack('l');
+
+    const message = game._pending_message || '';
+    assert.equal(game.level.objects.includes(centerBook), false);
+    assert.equal(game.level.objects.includes(adjacentBook), false);
+    assert.equal((message.match(/You see a puff of smoke\./g) || []).length, 2);
+    assert.equal(message.indexOf('You see a puff of smoke.') < message.indexOf('The goblin is caught in the burning oil!'), true);
+    assert.equal(goblin.mhp < 30, true);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(5)', 'd(4,4)', 'rn2(3)', 'rn2(3)', 'rn2(100)',
+    ]);
+});
+
+test('hero-thrown lit oil explosion bills burned shop-floor objects', async () => {
+    const { shkp } = installCommandShopState();
+    initRng(8);
+    game.u.acurr.a[A_DEX] = 25;
+    shkp.mx = 1;
+    shkp.my = 1;
+    shkp.shk = { x: 1, y: 1 };
+    const potion = oilPotion(88076, 'p');
+    potion.dknown = true;
+    potion.lamplit = true;
+    potion.burning = true;
+    const book = floorHealingSpellbook(880761);
+    Object.assign(book, { ox: 7, oy: 5 });
+    const expectedPrice = shop.shopItemPrice(book, 7, 5);
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, { mhp: 30, mhpmax: 30 });
+    game.inventory = [potion];
+    game.level.objects = [book];
+    game.level.monsters = [shkp, goblin];
+    markSquareVisible(7, 5);
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('p');
+    await rhack('l');
+
+    assert.equal(game.level.objects.includes(book), false);
+    assertUsedUpBillForObject(shkp, book, expectedPrice);
+    assert.equal(shkp.debit || 0, 0);
+    assert.equal(shkp.robbed || 0, 0);
+    assert.match(game._pending_message || '', /You see a puff of smoke\./);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(5)', 'd(4,4)', 'rn2(3)', 'rn2(100)',
+    ]);
+});
+
 test('hero-thrown diluted lit oil uses the smaller burning-oil damage dice', async () => {
     installNonShopFloorState();
     initRng(2);
