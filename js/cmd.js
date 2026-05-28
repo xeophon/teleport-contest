@@ -12542,6 +12542,27 @@ function stoneToFleshReplacementForObject(item) {
     return null;
 }
 
+function stoneToFleshAnimatableCarriedFigurineData(item) {
+    if (!isFigurineObject(item) || !item?.corpsenm) return null;
+    if (shopObjectOrContentsUnpaid(item)) return null;
+    const material = stoneToFleshObjectMaterial(item);
+    if (material !== 'mineral' && material !== 'gemstone') return null;
+    if (stoneToFleshCorpstatMonsterIsGolem(item.corpsenm)
+        || stoneToFleshCorpstatMonsterIsVegetarian(item.corpsenm))
+        return null;
+    return item.corpsenm;
+}
+
+async function stoneToFleshAnimateCarriedFigurine(item) {
+    const data = stoneToFleshAnimatableCarriedFigurineData(item);
+    if (!data || stoneToFleshObjectResists(item)) return null;
+    const mon = await makemon(data, game.u?.ux || 0, game.u?.uy || 0, NO_MINVENT | MM_NOMSG);
+    if (!mon) return null;
+    stopFigurineTransformTimeout(item);
+    removeInventoryItem(item, 1);
+    return cansee(mon.mx, mon.my) ? 'The figurine animates!' : '';
+}
+
 function isMeatRingObject(item) {
     return item?.otyp === MEAT_RING || objectKindKey(item) === 'meat ring';
 }
@@ -12604,7 +12625,7 @@ function fixHeroPetrification(message = null) {
     return rescueMessage;
 }
 
-function stoneToFleshInventoryEffect(messages = []) {
+async function stoneToFleshInventoryEffect(messages = []) {
     let rescued = false;
     const form = game.u?._polyself_form;
     if (form?.name === 'stone golem') {
@@ -12619,16 +12640,25 @@ function stoneToFleshInventoryEffect(messages = []) {
     }
 
     let transformed = false;
+    let meatTransformed = false;
     for (const item of [...(game.inventory || [])]) {
         const replacement = stoneToFleshReplacementForObject(item);
-        if (!replacement) continue;
-        markObjectShopBillUsedUp(item);
-        replaceInventoryObjectWithPolymorphResult(item, replacement, {
-            preserveEquipment: preserveStoneToFleshEquipmentState,
-        });
-        transformed = true;
+        if (replacement) {
+            markObjectShopBillUsedUp(item);
+            replaceInventoryObjectWithPolymorphResult(item, replacement, {
+                preserveEquipment: preserveStoneToFleshEquipmentState,
+            });
+            transformed = true;
+            meatTransformed = true;
+            continue;
+        }
+        const animationMessage = await stoneToFleshAnimateCarriedFigurine(item);
+        if (animationMessage != null) {
+            if (animationMessage) messages.push(animationMessage);
+            transformed = true;
+        }
     }
-    if (transformed) {
+    if (meatTransformed) {
         mergeStoneToFleshInventoryResults();
         messages.push(stoneToFleshSmellMessage());
     }
@@ -43180,7 +43210,7 @@ export async function rhack(_cmd) {
         game._casting_spell = null;
         if (spell?.name === 'stone to flesh') {
             if (ch === '.') {
-                const result = stoneToFleshInventoryEffect();
+                const result = await stoneToFleshInventoryEffect();
                 if (result.messages.length) await setMessage(result.messages.join('  '));
                 else {
                     game._pending_message = '';

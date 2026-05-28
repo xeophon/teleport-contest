@@ -3916,6 +3916,51 @@ test('self-cast stone to flesh turns vegetarian figurine into meatball', async (
     assertNoStoneToFleshScoreSideEffects();
 });
 
+test('self-cast stone to flesh animates carried nonvegetarian figurine', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    markHeroNeighborhoodVisible();
+    const figurine = stoneToFleshFigurine(31033, 'a',
+        vegetarianCorpstatMonster('goblin', 'o', { neuter: false, mmove: 6 }));
+    figurine.cursed = true;
+    figurine.figurineTransformTurn = 42;
+    figurine._figurine_transform_seq = 7;
+    game.inventory = [figurine];
+
+    await castStoneToFleshAtSelf();
+
+    assert.equal(game.inventory.includes(figurine), false);
+    assert.equal(figurine.figurineTransformTurn, undefined);
+    assert.equal(figurine._figurine_transform_seq, undefined);
+    const monster = (game.level.monsters || []).find(mon => mon.data?.name === 'goblin');
+    assert.ok(monster);
+    assert.equal(monster.pet || false, false);
+    assert.equal(monster.mtame || 0, 0);
+    assert.equal(monster.minvent?.length || 0, 0);
+    assert.match(game._pending_message || '', /The figurine animates!/);
+    assert.doesNotMatch(game._pending_message || '', /odor of meat|delicious smell/);
+    assertNoStoneToFleshScoreSideEffects();
+});
+
+test('self-cast stone to flesh checks figurine resistance before animation', async () => {
+    installNonShopFloorState();
+    initRng(40);
+    enableRngLog({ reset: true });
+    markHeroNeighborhoodVisible();
+    const figurine = stoneToFleshFigurine(31034, 'a',
+        vegetarianCorpstatMonster('goblin', 'o', { neuter: false, mmove: 6 }));
+    game.inventory = [figurine];
+
+    await castStoneToFleshAtSelf();
+
+    assert.equal(game.inventory.length, 1);
+    assert.equal(game.inventory[0], figurine);
+    assert.equal((game.level.monsters || []).some(mon => mon.data?.name === 'goblin'), false);
+    assert.deepEqual(getRngLog().filter(entry => entry.startsWith('rn2(100)=')), ['rn2(100)=0']);
+    assert.doesNotMatch(game._pending_message || '', /figurine animates|odor of meat|delicious smell/);
+    assertNoStoneToFleshScoreSideEffects();
+});
+
 test('self-cast stone to flesh checks figurine resistance before meatball conversion', async () => {
     installCommandShopState();
     initRng(40);
