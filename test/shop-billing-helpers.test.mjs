@@ -428,6 +428,27 @@ function wornArmor(id, kind = 'leather armor', letter = 'a', spe = 0, extra = {}
     };
 }
 
+function carriedGlassArmor(id, letter = 'a', extra = {}) {
+    return {
+        id,
+        cls: 'armor',
+        glyph: '[',
+        kind: 'crystal plate mail',
+        actualKind: 'crystal plate mail',
+        material: 'glass',
+        quan: 1,
+        spe: 0,
+        ox: 5,
+        oy: 5,
+        letter,
+        known: true,
+        dknown: true,
+        owt: 450,
+        line: `${letter} - a +0 crystal plate mail`,
+        ...extra,
+    };
+}
+
 function foodRation(id, letter = 'a') {
     return {
         id,
@@ -18220,6 +18241,89 @@ test('upward hero-thrown unpaid glass-material wand bills the broken object', as
     assert.equal(shop.shopBillEntryForObject(shkp, wand), null);
     assert.equal(shkp.debit, 100);
     assert.equal(shkp.billct, 0);
+});
+
+test('upward hero-thrown crystal plate mail self-hit cracks and lands', async () => {
+    installNonShopFloorState();
+    initRng(11);
+    Object.assign(game.u, { uhp: 30, uhpmax: 30 });
+    const armor = carriedGlassArmor(87690, 'a');
+    game.inventory = [armor];
+    const hpBefore = game.u.uhp;
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('a');
+    await rhack('<');
+
+    assert.equal(game._command_mode, null);
+    assert.match(game._pending_message, /A crystal plate mail almost hits the ceiling, then falls back on top of your head\./);
+    assert.match(game._pending_message, /The mail cracks!/);
+    assert.doesNotMatch(game._pending_message, /shatters into a thousand pieces|It doesn't hurt|crashes on your head|cmdassist|In what direction/);
+    assert.equal(game.inventory.includes(armor), false);
+    assert.equal(game.level.objects.length, 1);
+    const landed = game.level.objects[0];
+    assert.equal(landed.kind, 'crystal plate mail');
+    assert.equal(landed.oeroded, 1);
+    assert.equal(landed.ox, game.u.ux);
+    assert.equal(landed.oy, game.u.uy);
+    assert.equal(game.u.uhp, hpBefore);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rn2(5)', 'rn2(100)', 'rn2(100)',
+    ]);
+});
+
+test('upward hero-thrown fully cracked crystal plate mail shatters on ceiling', async () => {
+    installNonShopFloorState();
+    initRng(5);
+    const armor = carriedGlassArmor(87691, 'a', { oeroded: 3 });
+    game.inventory = [armor];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('a');
+    await rhack('<');
+
+    assert.equal(game._command_mode, null);
+    assert.match(game._pending_message, /A crystal plate mail hits the ceiling\./);
+    assert.match(game._pending_message, /The mail shatters!/);
+    assert.doesNotMatch(game._pending_message, /falls back|top of your head|thousand pieces|crashes on your head/);
+    assert.equal(game.inventory.includes(armor), false);
+    assert.equal(game.level.objects.length, 0);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rn2(5)', 'rn2(100)',
+    ]);
+});
+
+test('upward hero-thrown unpaid crystal plate mail crack returns to shop floor without debt', async () => {
+    const { shkp } = installCommandShopState();
+    initRng(11);
+    const armor = carriedGlassArmor(87692, 'a');
+    game.inventory = [armor];
+    shop.addObjectToShopBill(shkp, armor, 820);
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('a');
+    await rhack('<');
+
+    assert.equal(game._command_mode, null);
+    assert.match(game._pending_message, /A crystal plate mail almost hits the shop's ceiling, then falls back on top of your head\./);
+    assert.match(game._pending_message, /The mail cracks!/);
+    assert.doesNotMatch(game._pending_message, /owe|Thief|objects destroyed|you pay|thousand pieces/);
+    assert.equal(game.inventory.includes(armor), false);
+    assert.equal(game.level.objects.length, 1);
+    const landed = game.level.objects[0];
+    assert.equal(landed.kind, 'crystal plate mail');
+    assert.equal(landed.oeroded, 1);
+    assert.notEqual(landed.unpaid, true);
+    assert.equal(shop.shopBillEntryForObject(shkp, landed), null);
+    assert.equal(shkp.debit || 0, 0);
+    assert.equal(shkp.robbed || 0, 0);
+    assert.equal(shkp.billct, 0);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rn2(5)', 'rn2(100)', 'rn2(100)',
+    ]);
 });
 
 test('upward hero-thrown polymorph potion self-hits and polymorphs the hero', async () => {

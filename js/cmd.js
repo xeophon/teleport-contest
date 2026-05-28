@@ -14381,6 +14381,127 @@ function isHeroThrownHarmlessUpwardObject(obj) {
     return material === 'cloth';
 }
 
+const CRACKABLE_ARMOR_THROW_WEIGHTS = new Map([
+    ['crystal plate mail', 450],
+    ['helm of brilliance', 50],
+    ['crystal helmet', 50],
+]);
+
+function isHeroThrownCrackableArmorObject(obj) {
+    if (!obj || !(obj.cls === 'armor' || obj.glyph === '[' || obj.otyp === ARMOR_CLASS)) return false;
+    const profile = wishedDamageProfile(obj);
+    if (profile.primaryWord === 'cracked') return true;
+    const material = String(obj.material || obj.oc_material || '').toLowerCase().replace(/^hi_/, '');
+    return material === 'glass';
+}
+
+function crackableArmorSimpleName(obj) {
+    const kind = armorKind(obj);
+    switch (armorSlot(obj)) {
+    case 'body':
+        if (/\bmail\b/.test(kind)) return 'mail';
+        if (/\bjacket\b/.test(kind)) return 'jacket';
+        return 'suit';
+    case 'cloak': return 'cloak';
+    case 'helm': return 'helm';
+    case 'gloves': return 'gloves';
+    case 'boots': return 'boots';
+    case 'shield': return 'shield';
+    case 'shirt': return 'shirt';
+    default: return armorMessageName(obj);
+    }
+}
+
+function crackableArmorBreaktest(obj) {
+    const roll = rn2(100);
+    return !(obj?.artifact || obj?.oartifact) && roll >= 90;
+}
+
+function erodeCrackableArmorImpact(obj, messages) {
+    const simple = crackableArmorSimpleName(obj);
+    if (obj.oerodeproof && obj.rknown) return { broke: true, destroyed: false };
+    if (obj.oerodeproof || (obj.blessed && !rnl(4))) {
+        messages.push(`Somehow, the ${simple} ${armorNameIsPlural(simple) ? 'are' : 'is'} not affected by the impact.`);
+        if (obj.oerodeproof) obj.rknown = true;
+        return { broke: true, destroyed: false };
+    }
+    const current = Math.min(3, obj.oeroded || 0);
+    if (current < 3) {
+        const adverb = current + 1 === 3 ? ' completely' : current ? ' further' : '';
+        messages.push(`The ${simple} ${armorNameIsPlural(simple) ? 'crack' : 'cracks'}${adverb}!`);
+        obj.oeroded = current + 1;
+        return { broke: true, destroyed: false };
+    }
+    messages.push(`The ${simple} ${armorNameIsPlural(simple) ? 'shatter' : 'shatters'}!`);
+    markObjectShopBillUsedUp(obj);
+    return { broke: true, destroyed: true };
+}
+
+function crackableArmorImpact(obj, messages) {
+    if (!crackableArmorBreaktest(obj)) return { broke: false, destroyed: false };
+    return erodeCrackableArmorImpact(obj, messages);
+}
+
+function crackableArmorThrowWeight(obj) {
+    const explicit = Math.trunc(Number(obj?.owt || obj?.weight || 0));
+    if (explicit > 0) return explicit;
+    return CRACKABLE_ARMOR_THROW_WEIGHTS.get(armorKind(obj)) || 50;
+}
+
+function damageHeroFromFallingCrackableArmor(obj, messages) {
+    const weightDamage = Math.max(1, Math.ceil(crackableArmorThrowWeight(obj) / 100));
+    const damage = Math.min(6, weightDamage <= 1 ? 1 : rnd(weightDamage));
+    if (!game.u || damage <= 0) return;
+    game.u.uhp = Math.max(0, (game.u.uhp || 0) - damage);
+    if ((game.u.uhp || 0) <= 0) {
+        game._death_cause = 'killed by a falling object';
+        messages.push('You die...');
+    }
+}
+
+function landCrackableArmorObjectWithShopHandling(obj, messages, { verboseFloor = false } = {}) {
+    const x = game.u?.ux || obj.ox || 0;
+    const y = game.u?.uy || obj.oy || 0;
+    if (verboseFloor && !projectileLandingIsSoft(x, y))
+        messages.push(`${floorObjectSubject({ ...obj, quan: 1 })} hits the floor.`);
+    if (!projectileLandingIsSoft(x, y)) {
+        const impact = crackableArmorImpact(obj, messages);
+        if (impact.destroyed) return null;
+    }
+    const landing = landProjectileObjectWithShopHandling(obj, x, y, { skipTopBreak: true });
+    messages.push(...landing.messages);
+    return landing.object;
+}
+
+function heroThrownCrackableArmorSelfHitMessages(obj, action, ceilingName = heroThrowCeilingName()) {
+    const messages = [`${floorObjectSubject({ ...obj, quan: 1 })} ${action} the ${ceilingName}, then falls back on top of your head.`];
+    const impact = crackableArmorImpact(obj, messages);
+    if (impact.destroyed) return messages;
+    if (!impact.broke) damageHeroFromFallingCrackableArmor(obj, messages);
+    landCrackableArmorObjectWithShopHandling(obj, messages, { verboseFloor: !impact.broke });
+    return messages;
+}
+
+function heroThrownCrackableArmorCeilingBreakMessages(obj, ceilingName = heroThrowCeilingName()) {
+    const messages = [`${floorObjectSubject({ ...obj, quan: 1 })} hits the ${ceilingName}.`];
+    const impact = erodeCrackableArmorImpact(obj, messages);
+    if (!impact.destroyed) landCrackableArmorObjectWithShopHandling(obj, messages);
+    return messages;
+}
+
+function heroThrownCrackableArmorUpwardMessages(obj) {
+    const ceilingName = heroThrowCeilingName();
+    const hasCeiling = heroHasThrowCeiling();
+    const hitsRoof = !!(rn2(5) && !heroIsUnderwaterForThrow());
+    if (!hasCeiling)
+        return heroThrownCrackableArmorSelfHitMessages(obj, 'flies up into', ceilingName);
+    if (hitsRoof) {
+        if (crackableArmorBreaktest(obj)) return heroThrownCrackableArmorCeilingBreakMessages(obj, ceilingName);
+        return heroThrownCrackableArmorSelfHitMessages(obj, 'hits', ceilingName);
+    }
+    return heroThrownCrackableArmorSelfHitMessages(obj, 'almost hits', ceilingName);
+}
+
 function heroCanBeBlindedByCreamPie() {
     if (!game.u) return false;
     if (game.u.blindfolded || game.u.Blindfolded) return false;
@@ -21615,7 +21736,7 @@ function landProjectileObjectWithShopHandling(obj, x, y, options = {}) {
     const messages = [];
     prepareProjectileFloorObject(obj, x, y);
     const hardLanding = !projectileLandingIsSoft(x, y);
-    if (hardLanding) {
+    if (hardLanding && !options.skipTopBreak) {
         const breakKind = projectileTopLevelBreakKind(obj, options);
         if (breakKind) {
             if (!options.silent) projectileTopLevelBreakMessage(obj, breakKind, messages);
@@ -51340,6 +51461,35 @@ export async function rhack(_cmd) {
             };
             if ((item.quan || 1) > 1) splitCarriedObjectShopBill(item, thrownObject, 1);
             const messages = heroThrownEggUpwardMessages(thrownObject);
+            removeInventoryItem(item, 1);
+            newsym(game.u?.ux || 0, game.u?.uy || 0);
+            await setMessage(messages.join('  '));
+            game._command_mode = null;
+            game._throw_item_letter = null;
+            game._resume_time_after_more = 0;
+            game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
+            game.context.move = 0;
+            return;
+        }
+        if (ch === '<' && isHeroThrownCrackableArmorObject(item)) {
+            let thrownId = null;
+            if ((item.quan || 1) > 1) thrownId = next_ident();
+            const thrownObject = {
+                ...item,
+                letter: undefined,
+                line: undefined,
+                wielded: false,
+                worn: false,
+                quivered: false,
+                ox: game.u?.ux || 0,
+                oy: game.u?.uy || 0,
+                id: thrownId ?? item.id,
+                quan: 1,
+                glyph: item.glyph || '[',
+                color: item.color || CLR_WHITE,
+            };
+            if ((item.quan || 1) > 1) splitCarriedObjectShopBill(item, thrownObject, 1);
+            const messages = heroThrownCrackableArmorUpwardMessages(thrownObject);
             removeInventoryItem(item, 1);
             newsym(game.u?.ux || 0, game.u?.uy || 0);
             await setMessage(messages.join('  '));
