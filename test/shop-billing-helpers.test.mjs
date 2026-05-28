@@ -2,11 +2,11 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { interruptEatingOccupation, moveloop_core, processEatingOccupationTick } from '../js/allmain.js';
-import { activateStatueTrap, burnFloorObjectsByFire, earthFloorEffects, finishForceLock, processCorpseTimers, processGlobShrinkTimers, processSpellbookStudyOccupation, rhack, __shopBillingTestHooks as shop } from '../js/cmd.js';
+import { activateStatueTrap, burnFloorObjectsByFire, earthFloorEffects, finishForceLock, processCorpseTimers, processForceLockOccupationTick, processGlobShrinkTimers, processSpellbookStudyOccupation, rhack, __shopBillingTestHooks as shop } from '../js/cmd.js';
 import { game, resetGame } from '../js/gstate.js';
 import { pushKey, resetInputState } from '../js/input.js';
 import { enableRngLog, getRngLog, initRng } from '../js/rng.js';
-import { A_DEX, BILLSZ, CANDLESHOP, COULD_SEE, DB_EAST, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, FOUNTAIN, HOLE, ICE, ICED_POOL, IN_SIGHT, LAVAPOOL, POOL, ROOM, ROOMOFFSET, SHOPBASE, SQKY_BOARD, STATUE_TRAP } from '../js/const.js';
+import { A_DEX, BILLSZ, CANDLESHOP, COULD_SEE, DB_EAST, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, FOUNTAIN, HOLE, ICE, ICED_POOL, IN_SIGHT, LAVAPOOL, POOL, ROOM, ROOMOFFSET, SHOPBASE, SQKY_BOARD, STATUE_TRAP, STRAT_WAITFORU } from '../js/const.js';
 import { currentFruitId, setCurrentFruitName } from '../js/fruit.js';
 
 const BRASS_LANTERN = 226;
@@ -10207,6 +10207,140 @@ test('blade-forced box lock does not consume the chest destruction roll', () => 
     assert.equal(shkp.billct, 1);
 });
 
+test('blade force can break one weapon before the success roll', () => {
+    installCommandShopState();
+    initRng(31);
+    const box = shopFloorContainer(6148);
+    box.locked = true;
+    box.olocked = true;
+    const blade = dagger(6149, 'd');
+    blade.wielded = true;
+    blade.line = 'd - a very corroded dagger (weapon in right hand)';
+    blade.oeroded2 = 3;
+    game.inventory = [blade];
+    game.level.objects = [box];
+    enableRngLog({ reset: true });
+
+    const result = processForceLockOccupationTick({
+        chest: box,
+        weapon: blade,
+        picktyp: true,
+        chance: 100,
+    });
+
+    assert.equal(result.stop, true);
+    assert.match(result.messages.join('  '), /Your dagger broke!  You give up your attempt to force the lock\./);
+    assert.equal(game.inventory.includes(blade), false);
+    assert.equal(box.locked, true);
+    assert.equal(box.olocked, true);
+    assert.notEqual(box.obroken, true);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rn2(1000)', 'rn2(100)', 'rn2(19)',
+    ]);
+});
+
+test('cursed blade force cannot break and does not roll object resistance', () => {
+    installCommandShopState();
+    initRng(31);
+    const box = shopFloorContainer(6150);
+    box.locked = true;
+    box.olocked = true;
+    const blade = dagger(6151, 'd');
+    blade.wielded = true;
+    blade.cursed = true;
+    blade.oeroded2 = 3;
+    game.inventory = [blade];
+    game.level.objects = [box];
+    enableRngLog({ reset: true });
+
+    const result = processForceLockOccupationTick({
+        chest: box,
+        weapon: blade,
+        picktyp: true,
+        chance: 0,
+    });
+
+    assert.equal(result.stop, false);
+    assert.deepEqual(result.messages, []);
+    assert.equal(game.inventory.includes(blade), true);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(1000)']);
+});
+
+test('blunt force wakes nearby sleepers without anger or paralysis cleanup', () => {
+    installCommandShopState();
+    game.u.blind = true;
+    game.u.ulevel = 1;
+    const weapon = wieldedWeapon(6153, 'mace', 'm');
+    const sleeper = sleepingMonster('orc', 8, 5);
+    sleeper.mstrategy = STRAT_WAITFORU;
+    sleeper.waiting = true;
+    const uniqueSleeper = sleepingMonster('Medusa', 6, 5, { unique: true });
+    uniqueSleeper.mstrategy = STRAT_WAITFORU;
+    uniqueSleeper.waiting = true;
+    const farSleeper = sleepingMonster('gnome', 10, 5);
+    game.inventory = [weapon];
+    game.level.monsters.push(sleeper, uniqueSleeper, farSleeper);
+
+    const result = processForceLockOccupationTick({
+        chest: shopFloorContainer(6152),
+        weapon,
+        picktyp: false,
+        chance: 0,
+    });
+
+    assert.equal(result.stop, false);
+    assert.deepEqual(result.messages, []);
+    assert.equal(sleeper.msleeping, 0);
+    assert.equal(sleeper.mpeaceful, true);
+    assert.equal(sleeper.mfrozen, 3);
+    assert.equal(sleeper.mcanmove, false);
+    assert.equal(sleeper.mstrategy, 0);
+    assert.equal(sleeper.waiting, false);
+    assert.equal(uniqueSleeper.msleeping, 0);
+    assert.equal(uniqueSleeper.mstrategy, STRAT_WAITFORU);
+    assert.equal(uniqueSleeper.waiting, true);
+    assert.equal(farSleeper.msleeping, 1);
+});
+
+test('blunt force gives up if the weapon is gone before waking sleepers', () => {
+    installCommandShopState();
+    const sleeper = sleepingMonster('orc', 8, 5);
+    game.level.monsters.push(sleeper);
+
+    const result = processForceLockOccupationTick({
+        chest: shopFloorContainer(6156),
+        weapon: wieldedWeapon(6157, 'mace', 'm'),
+        picktyp: false,
+        chance: 100,
+    });
+
+    assert.equal(result.stop, true);
+    assert.deepEqual(result.messages, ['You give up your attempt to force the lock.']);
+    assert.equal(sleeper.msleeping, 1);
+});
+
+test('blade force does not wake nearby sleepers on an unbroken tick', () => {
+    installCommandShopState();
+    initRng(1);
+    game.u.ulevel = 1;
+    const sleeper = sleepingMonster('orc', 8, 5);
+    const blade = dagger(6154, 'd');
+    blade.wielded = true;
+    game.inventory = [blade];
+    game.level.monsters.push(sleeper);
+
+    const result = processForceLockOccupationTick({
+        chest: shopFloorContainer(6155),
+        weapon: blade,
+        picktyp: true,
+        chance: 0,
+    });
+
+    assert.equal(result.stop, false);
+    assert.deepEqual(result.messages, []);
+    assert.equal(sleeper.msleeping, 1);
+});
+
 test('dagger #force command uses blade prying and skips chest destruction roll', async () => {
     const { shkp } = installCommandShopState();
     initRng(1);
@@ -10226,6 +10360,7 @@ test('dagger #force command uses blade prying and skips chest destruction roll',
 
     assert.match(game._pending_message, /You force your dagger into a crack and pry\./);
     assert.equal(game._force_lock_occupation?.picktyp, true);
+    assert.equal(game._force_lock_occupation?.weapon, blade);
     enableRngLog({ reset: true });
     const destroyed = finishForceLock(game._force_lock_occupation);
     game._force_lock_occupation = null;

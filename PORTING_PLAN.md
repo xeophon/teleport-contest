@@ -28,6 +28,7 @@ Detailed source-backed history is kept in `docs/c-parity-audit/`. Keep this sect
 - Added force-destroyed shop box owner billing: shattered contents now charge the shopkeeper who owns the bill row before the box itself is charged to the source shop.
 - Added statue shatter owner billing: hero-caused statue trap shatter now charges an existing live statue bill row to its owning shopkeeper before contents move to the animated monster.
 - Added forced chest material wording: non-potion contents destroyed by a shattered box now use C's paper/wax/veggy/flesh/glass/wood/default destruction verbs.
+- Added forced chest occupation parity: blade forcing can break the wielded weapon before the success roll, and blunt forcing wakes nearby sleepers without angering them.
 - Added focused object, food, timer, and wish parity slices: ordinary eating, special-food merge gates, egg timer cleanup, wish-local monster/object binding, charged tools/instruments, and stone-to-flesh carried/floor marble-wand transformations plus stoning/polyself rescue.
 - Expanded potion `#dip`, alchemy, broken-vapor, inventory/fire/hot-ground vapor, gremlin water vapor, forced chest-content potion shatter, direct hero-thrown confusion/booze/paralysis/sleeping/blindness/speed/invisibility/hallucination/healing-family/restore-gain `potionhit()`, and statue-trap shatter debt coverage.
 - Latest verified public score: `44/44`.
@@ -60,7 +61,7 @@ Detailed source-backed history is kept in `docs/c-parity-audit/`. Keep this sect
    - Centralize special-level generation, saved-level/migration/timer state, trap/liquid/material-damage pipelines, glyph/discovery/redraw ordering, and RNG diagnostics.
 
 6. Command, prompt, and menu contracts.
-   - Source notes: `docs/c-parity-audit/01-input-commands-windows.md`.
+   - Source notes: `docs/c-parity-audit/01-input-commands-windows.md` and `docs/c-parity-audit/67-subagent-findings-2026-05-28.md`.
    - Add reusable command registry/binding, count parsing, `getlin`, `yn_function`, `getobj`, `getpos`, and menu-selection primitives.
 
 ## Immediate Slice
@@ -68,9 +69,9 @@ Detailed source-backed history is kept in `docs/c-parity-audit/`. Keep this sect
 Continue narrow C-backed slices in this order unless a failing public regression points elsewhere:
 
 1. Broaden direct `potionhit()` delivery beyond confusion/booze/paralysis/sleeping/blindness/speed/invisibility/hallucination/healing-family through the next compact C-backed family; sickness/harming and acid need resistance/damage/death plumbing, while water/oil/polymorph need saddle and object-effect coverage.
-2. Close remaining forced-chest gaps: blade breakage during long forcing and blunt wake-nearby behavior.
-3. Continue broader stone-to-flesh object coverage through registry-backed material/object metadata, object resistance, remaining object rows, and floor/beam/shop routing.
-4. Continue registry-backed cleanup for merge/wish/charged-tool metadata after each concrete caller lands.
+2. Continue broader stone-to-flesh object coverage through registry-backed material/object metadata, object resistance, remaining object rows, and floor/beam/shop routing.
+3. Continue registry-backed cleanup for merge/wish/charged-tool metadata after each concrete caller lands.
+4. Keep forced-chest follow-ups narrow and source-backed: exact 50-turn/no-hands occupation cleanup, registry-backed weapon `oc_wldam` chance, buried-zombie wake disturbance, mimic/disguise wake reveal, and ice-box corpse timer details.
 
 ## Verification
 

@@ -6,7 +6,7 @@ import { nhgetch } from './input.js';
 import { bot, cls, docrt, flush_screen, newsym, pline, recordObservedObjectDiscovery, refreshHallucinatedMap, seeNearbyObjects, show_glyph_cell, strengthString } from './display.js';
 import { cansee, couldsee, vision_recalc, vision_reset } from './vision.js';
 import { RANDOM_MONSTER_BY_NAME, SHOP_TYPES, STALKER_MONSTERS, add_to_container, add_to_minv, artifactDefinitionForName, artifactObjectName, enextoMonsterSpot, make_tutorial1_level, makemon, makeArtifactWishObject, maketrap, mkcorpstat, mklev, mkobj, mkobj_at, mksobj, monsterByRndName, morgueMonster, nameObjectAsArtifact, next_ident, object_display, potionIndexForRoll, resurrectWizardOfYendor, rndmonnum, scrollIndexForRoll, set_mimic_sym_rng, syncDungeonContext, u_on_dnstairs, u_on_rndspot, u_on_upstairs, wipe_engr_at, dropMonsterInventory as dropMonsterInventoryRaw, l_nhcore_init, getrumor, getbogusmon, level_difficulty, set_malign, somexyspace, fumaroles, fix_wall_spines, createMonsterCorpseOrGlob, monsterCorpseDropSucceeds, monsterLeavesCorpseLikeDrop, movebubbles } from './mklev.js';
-import { ACCESSIBLE, A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_MAX, A_NEUTRAL, A_NONE, A_STR, A_WIS, ALTAR, AM_SANCTUM, AM_SHRINE, Align2amask, Amask2align, BC_BALL, BC_CHAIN, BEAR_TRAP, BLCORNER, BOLT_LIM, BRCORNER, CANDLESHOP, CLOUD, COLNO, CORPSTAT_FEMALE, CORPSTAT_GENDER, CORPSTAT_HISTORIC, CORPSTAT_MALE, CORPSTAT_NEUTER, CORR, DB_DIR, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DB_NORTH, DB_SOUTH, DB_UNDER, DB_WEST, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, BURN, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, D_TRAPPED, DUST, ENGRAVE, ENGR_BLOOD, FOUNTAIN, F_LOOTED, GRAVE, HEADSTONE, HWALL, ICE, ICED_MOAT, ICED_POOL, IN_SIGHT, IRONBARS, IS_AIR, IS_FURNITURE, IS_LAVA, IS_OBSTRUCTED, IS_POOL, IS_ROOM, IS_TREE, IS_WALL, In_endgame, In_quest, In_sokoban, In_V_tower, Is_airlevel, Is_astralevel, Is_botlevel, Is_earthlevel, Is_rogue_level, Is_stronghold, Is_waterlevel, LADDER, LAVAPOOL, LAVAWALL, MAGIC_PORTAL, MARK, MAX_EGG_HATCH_TIME, MM_EDOG, MM_NOCOUNTBIRTH, MM_NOMSG, MM_NOWAIT, MOAT, MORGUE, M_AP_TYPE, N_DIRS, NO_MINVENT, NORMAL_SPEED, OVERLOADED, P_BASIC, P_UNSKILLED, PIT, POOL, ROLLING_BOULDER_TRAP, ROOM, ROOMOFFSET, ROWNO, SCORR, SDOOR, SHARED, SHARED_PLUS, SHOPBASE, SINK, SPIKED_PIT, STAIRS, STONE, S_LDWASHER, S_LPUDDING, S_LRING, TDWALL, TEMPLE, THRONE, TLCORNER, TRCORNER, TREE, TREE_LOOTED, TREE_SWARM, TT_BEARTRAP, TT_BURIEDBALL, TT_INFLOOR, TT_LAVA, TT_PIT, TT_WEB, TUWALL, T_LOOTED, VAULT, VIBRATING_SQUARE, VWALL, WAND_BACKFIRE_CHANCE, WATER, WEB, WM_MASK, WT_IRON_BALL_BASE, WT_IRON_BALL_INCR, W_NONDIGGABLE, ZAP_POS, isok, xdir, ydir } from './const.js';
+import { ACCESSIBLE, A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_MAX, A_NEUTRAL, A_NONE, A_STR, A_WIS, ALTAR, AM_SANCTUM, AM_SHRINE, Align2amask, Amask2align, BC_BALL, BC_CHAIN, BEAR_TRAP, BLCORNER, BOLT_LIM, BRCORNER, CANDLESHOP, CLOUD, COLNO, CORPSTAT_FEMALE, CORPSTAT_GENDER, CORPSTAT_HISTORIC, CORPSTAT_MALE, CORPSTAT_NEUTER, CORR, DB_DIR, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DB_NORTH, DB_SOUTH, DB_UNDER, DB_WEST, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, BURN, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, D_TRAPPED, DUST, ENGRAVE, ENGR_BLOOD, FOUNTAIN, F_LOOTED, GRAVE, HEADSTONE, HWALL, ICE, ICED_MOAT, ICED_POOL, IN_SIGHT, IRONBARS, IS_AIR, IS_FURNITURE, IS_LAVA, IS_OBSTRUCTED, IS_POOL, IS_ROOM, IS_TREE, IS_WALL, In_endgame, In_quest, In_sokoban, In_V_tower, Is_airlevel, Is_astralevel, Is_botlevel, Is_earthlevel, Is_rogue_level, Is_stronghold, Is_waterlevel, LADDER, LAVAPOOL, LAVAWALL, MAGIC_PORTAL, MARK, MAX_EGG_HATCH_TIME, MM_EDOG, MM_NOCOUNTBIRTH, MM_NOMSG, MM_NOWAIT, MOAT, MORGUE, M_AP_TYPE, N_DIRS, NO_MINVENT, NORMAL_SPEED, OVERLOADED, P_BASIC, P_UNSKILLED, PIT, POOL, ROLLING_BOULDER_TRAP, ROOM, ROOMOFFSET, ROWNO, SCORR, SDOOR, SHARED, SHARED_PLUS, SHOPBASE, SINK, SPIKED_PIT, STAIRS, STONE, STRAT_WAITMASK, S_LDWASHER, S_LPUDDING, S_LRING, TDWALL, TEMPLE, THRONE, TLCORNER, TRCORNER, TREE, TREE_LOOTED, TREE_SWARM, TT_BEARTRAP, TT_BURIEDBALL, TT_INFLOOR, TT_LAVA, TT_PIT, TT_WEB, TUWALL, T_LOOTED, VAULT, VIBRATING_SQUARE, VWALL, WAND_BACKFIRE_CHANCE, WATER, WEB, WM_MASK, WT_IRON_BALL_BASE, WT_IRON_BALL_INCR, W_NONDIGGABLE, ZAP_POS, isok, xdir, ydir } from './const.js';
 import { d, rn1, rn2, rn2_on_display_rng, rnd, rnl, rnz } from './rng.js';
 import { CLR_BLACK, CLR_BLUE, CLR_BRIGHT_BLUE, CLR_BRIGHT_CYAN, CLR_BRIGHT_GREEN, CLR_BROWN, CLR_CYAN, CLR_GRAY, CLR_GREEN, CLR_MAGENTA, CLR_ORANGE, CLR_RED, CLR_YELLOW, CLR_WHITE, NO_COLOR } from './terminal.js';
 import { vfsDeleteFile, vfsReadFile, vfsWriteFile } from './storage.js';
@@ -8950,6 +8950,72 @@ function forceLockChance(item) {
     if (name.includes('war hammer') || name.includes('mjollnir')) return 8;
     if (name.includes('mace') || name.includes('club')) return 12;
     return 8;
+}
+
+function forceBladeGreatestErosion(item) {
+    return Math.max(0, Math.trunc(Number(item?.oeroded || 0)), Math.trunc(Number(item?.oeroded2 || 0)));
+}
+
+function forceBladeObjectResistsBreak(item) {
+    const kind = objectKindKey(item);
+    if (item?.invocation || item?.riderCorpse || item?.otyp === BOOK_OF_THE_DEAD
+        || item?.otyp === CANDELABRUM_OF_INVOCATION || item?.otyp === BELL
+        || kind === 'amulet of yendor')
+        return true;
+    const roll = rn2(100);
+    return roll < (item?.artifact || item?.oartifact ? 99 : 0);
+}
+
+function forceBladeBreakMessage(item) {
+    const quantity = Math.max(1, Math.trunc(Number(item?.quan || 1)));
+    const name = pickupObjectName({ ...item, line: '', quan: quantity });
+    return quantity > 1 ? `One of your ${name} broke!` : `Your ${name} broke!`;
+}
+
+function wakeNearbyFromForceLock(messages) {
+    const ux = game.u?.ux || 0;
+    const uy = game.u?.uy || 0;
+    const distance = Math.max(0, Math.trunc(Number(game.u?.ulevel || 1)) * 20);
+    for (const mon of game.level?.monsters || []) {
+        if (!mon || mon.dead || (mon.mhp || 1) <= 0) continue;
+        const dx = (mon.mx || 0) - ux;
+        const dy = (mon.my || 0) - uy;
+        if (dx * dx + dy * dy >= distance) continue;
+        if (mon.msleeping && monsterCanBeSeenForPotionEffect(mon))
+            messages.push(`${potionHitMonsterName(mon)} wakes up.`);
+        mon.msleeping = 0;
+        if (!(mon.unique || mon.data?.unique)) {
+            if (typeof mon.mstrategy === 'number') mon.mstrategy &= ~STRAT_WAITMASK;
+            else if (mon.mstrategy === 'waitforu') mon.mstrategy = 0;
+            mon.waiting = false;
+        }
+    }
+}
+
+export function processForceLockOccupationTick(force) {
+    const messages = [];
+    if (!force) return { stop: false, messages };
+    const weapon = force.weapon;
+    if (!weapon || !(game.inventory || []).includes(weapon)) {
+        messages.push('You give up your attempt to force the lock.');
+        return { stop: true, messages };
+    }
+    if (!force.picktyp) {
+        wakeNearbyFromForceLock(messages);
+        return { stop: false, messages };
+    }
+
+    const spe = Math.trunc(Number(weapon.spe || 0));
+    const breakRoll = rn2(Math.max(1, 1000 - spe));
+    const threshold = 992 - forceBladeGreatestErosion(weapon) * 10;
+    if (breakRoll <= threshold || weapon.cursed || forceBladeObjectResistsBreak(weapon))
+        return { stop: false, messages };
+
+    messages.push(forceBladeBreakMessage(weapon));
+    useUpInventoryItem(weapon, 1);
+    messages.push('You give up your attempt to force the lock.');
+    exerciseAttribute(A_DEX, true);
+    return { stop: true, messages };
 }
 
 function isForceableBoxObject(obj) {
@@ -46539,6 +46605,7 @@ export async function rhack(_cmd) {
                 const picktyp = forceWeaponIsBlade(weapon);
                 game._force_lock_occupation = {
                     chest,
+                    weapon,
                     chance: forceLockChance(weapon),
                     picktyp,
                     usedtime: 0,

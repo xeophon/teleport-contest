@@ -70,6 +70,7 @@ This folder records source-backed audits against `nethack-c/upstream`. The notes
 - [64-subagent-findings-2026-05-28.md](64-subagent-findings-2026-05-28.md): forced chest material-specific content destruction wording and ordinary-drop `sellobj()` owner-routing correction.
 - [65-subagent-findings-2026-05-28.md](65-subagent-findings-2026-05-28.md): direct hero-thrown hallucination potionhit routing through C's common no-monster-effect branch.
 - [66-subagent-findings-2026-05-28.md](66-subagent-findings-2026-05-28.md): direct hero-thrown healing-family and restore/gain ability potionhit monster effects.
+- [67-subagent-findings-2026-05-28.md](67-subagent-findings-2026-05-28.md): forced chest occupation tick parity for blade breakage and blunt wake-nearby behavior.
 
 ## Cross-Cutting Themes
 
