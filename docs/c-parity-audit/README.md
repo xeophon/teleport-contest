@@ -104,6 +104,7 @@ This folder records source-backed audits against `nethack-c/upstream`. The notes
 - [98-subagent-findings-2026-05-28.md](98-subagent-findings-2026-05-28.md): polyself diet overlay for stone-to-flesh, tripe, and tin callers plus fresh projectile, figurine, and burning-oil water follow-up audits.
 - [99-subagent-findings-2026-05-28.md](99-subagent-findings-2026-05-28.md): burning-oil water and pool evaporation plus projectile, figurine, and pet-food diet follow-up audits.
 - [100-subagent-findings-2026-05-28.md](100-subagent-findings-2026-05-28.md): remote non-gold hero projectile `ship_object()` down-gate parity plus remaining projectile/kick/gold shipping follow-up audits.
+- [101-subagent-findings-2026-05-28.md](101-subagent-findings-2026-05-28.md): remote projectile floor-pile `impact_drop()` parity plus remaining gold/kick/stairs/monster-thrown shipping follow-up audits.
 
 ## Cross-Cutting Themes
 

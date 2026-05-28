@@ -39,6 +39,7 @@ const WAN_MAKE_INVISIBLE = 10091;
 const STATUE = 472;
 const FIGURINE = 795;
 const LOCK_PICK = 10167;
+const ROCK = 467;
 
 function installShopState() {
     const g = resetGame();
@@ -16648,7 +16649,7 @@ for (const [trapType, namePattern] of [[HOLE, /through the hole/], [TRAPDOOR, /t
     test(`paid same-shop projectile falling through remote ${trapType === HOLE ? 'hole' : 'trap door'} ships before sale`, () => {
         const { shkp } = installShopState();
         installSeenRemoteShaft(trapType);
-        initRng(1);
+        initRng(6);
         const floorStack = { ...dagger(874311), letter: undefined, line: undefined, quan: 1, ox: 7, oy: 5 };
         const thrown = { ...dagger(874312), letter: undefined, line: undefined, quan: 1, ox: 7, oy: 5 };
         game.level.objects = [floorStack];
@@ -16668,9 +16669,35 @@ for (const [trapType, namePattern] of [[HOLE, /through the hole/], [TRAPDOOR, /t
         assert.equal(game._goldCount || 0, 0);
         assert.equal(shop.shopkeeperCash(shkp), cashBefore);
         assert.equal(shkp.debit || 0, 0);
-        assert.match(landing.messages.join(' '), namePattern);
+        assert.match(landing.messages.join(' '), new RegExp(`hits another object and falls ${namePattern.source}`));
     });
 }
+
+test('remote projectile fall impacts a floor pile after projectile migration', () => {
+    installNonShopFloorState();
+    installSeenRemoteShaft(HOLE);
+    initRng(1);
+    enableRngLog({ reset: true });
+    const pile = { ...foodRation(874318), letter: undefined, line: undefined, ox: 7, oy: 5 };
+    const thrown = { ...dagger(874319), letter: undefined, line: undefined, ox: 7, oy: 5 };
+    game.level.objects = [pile];
+
+    const landing = shop.landProjectileObjectWithShopHandling(thrown, 7, 5, { breakRoll: 0, silent: true });
+    const queued = queuedImpactDropsFor();
+    const text = landing.messages.join('  ');
+
+    assert.equal(landing.shipObject.handled, true);
+    assert.equal(landing.shipObject.impact.objectCount, 1);
+    assert.equal(landing.shipObject.impact.fallenCount, 1);
+    assert.equal(queued.includes(thrown), true);
+    assert.equal(queued.includes(pile), true);
+    assert.deepEqual(queued.map(obj => obj.id), [thrown.id, pile.id]);
+    assert.equal(game.level.objects.includes(thrown), false);
+    assert.equal(game.level.objects.includes(pile), false);
+    assert.match(text, /A dagger hits another object and falls through the hole\./);
+    assert.match(text, /From the impact, the other object falls\./);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(3)', 'rn2(100)', 'rn2(3)']);
+});
 
 test('unpaid remote projectile falling through a shaft converts bill row to debt before shipping', () => {
     const { shkp } = installShopState();
@@ -16726,6 +16753,34 @@ test('fragile remote projectile falling through a shaft breaks after debt and be
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(3)', 'rn2(100)']);
 });
 
+test('remote projectile fall bills impacted shop-floor pile without ship breakage', () => {
+    const { shkp } = installShopState();
+    installSeenRemoteShaft(HOLE);
+    initRng(1);
+    enableRngLog({ reset: true });
+    const pile = { ...oilPotion(874320), letter: undefined, line: undefined, ox: 7, oy: 5 };
+    const thrown = { ...dagger(874321), letter: undefined, line: undefined, ox: 7, oy: 5 };
+    const expected = shop.shopItemPrice(pile, 7, 5);
+    game.level.objects = [pile];
+
+    const landing = shop.landProjectileObjectWithShopHandling(thrown, 7, 5, { breakRoll: 0, silent: true });
+    const text = landing.messages.join('  ');
+
+    assert.equal(landing.shipObject.handled, true);
+    assert.equal(landing.shipObject.impact.fallenCount, 1);
+    assert.equal(queuedImpactDropsFor().includes(thrown), true);
+    assert.equal(queuedImpactDropsFor().includes(pile), true);
+    assert.equal(game.level.objects.includes(pile), false);
+    assert.equal(shkp.debit, expected);
+    assert.equal(shkp.billct, 0);
+    assert.match(text, /A dagger hits another object and falls through the hole\./);
+    assert.match(text, /From the impact, the other object falls\./);
+    assert.match(text, new RegExp(`owe Izchak ${expected} zorkmids? for goods lost`));
+    assert.doesNotMatch(text, /muffled/);
+    assert.deepEqual(queuedImpactDropsFor().map(obj => obj.id), [thrown.id, pile.id]);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(3)', 'rn2(100)', 'rn2(3)']);
+});
+
 test('fragile remote projectile hard-landing break preempts shaft shipping', () => {
     installShopState();
     installSeenRemoteShaft(HOLE);
@@ -16744,7 +16799,7 @@ test('fragile remote projectile hard-landing break preempts shaft shipping', () 
 test('remote projectile shaft no-drop roll continues into normal sale and stacking', () => {
     const { shkp } = installShopState();
     installSeenRemoteShaft(HOLE);
-    initRng(2);
+    initRng(4);
     const floorStack = { ...dagger(874315), letter: undefined, line: undefined, quan: 1, ox: 7, oy: 5 };
     const thrown = { ...dagger(874316), letter: undefined, line: undefined, quan: 1, ox: 7, oy: 5 };
     game.level.objects = [floorStack];
@@ -16763,6 +16818,62 @@ test('remote projectile shaft no-drop roll continues into normal sale and stacki
     assert.equal(floorStack.quan, 2);
     assert.equal(game._goldCount, expectedOffer);
     assert.equal(shop.shopkeeperCash(shkp), cashBefore - expectedOffer);
+});
+
+test('remote projectile no-drop impact can migrate pile before normal sale', () => {
+    const { shkp } = installShopState();
+    installSeenRemoteShaft(HOLE);
+    initRng(2);
+    enableRngLog({ reset: true });
+    const pile = { ...foodRation(874322), letter: undefined, line: undefined, ox: 7, oy: 5, no_charge: true };
+    const floorStack = { ...dagger(874324), letter: undefined, line: undefined, quan: 1, ox: 7, oy: 5 };
+    const thrown = { ...dagger(874323), letter: undefined, line: undefined, ox: 7, oy: 5 };
+    game.level.objects = [pile, floorStack];
+    const expectedOffer = shop.shopSaleOffer(thrown, shkp);
+
+    const landing = shop.landProjectileObjectWithShopHandling(thrown, 7, 5, { breakRoll: 0, silent: true });
+    const text = landing.messages.join('  ');
+
+    assert.equal(landing.shipObject.handled, false);
+    assert.equal(landing.shipObject.noDrop, true);
+    assert.equal(landing.shipObject.impact.objectCount, 2);
+    assert.equal(landing.shipObject.impact.fallenCount, 1);
+    assert.equal(queuedImpactDropsFor().includes(pile), true);
+    assert.equal(queuedImpactDropsFor().includes(thrown), false);
+    assert.equal(game.level.objects.includes(pile), false);
+    assert.equal(landing.object, floorStack);
+    assert.equal(floorStack.quan, 2);
+    assert.equal(game.level.objects.includes(thrown), false);
+    assert.equal(landing.shopSale.handled, true);
+    assert.equal(landing.shopSale.sold, true);
+    assert.equal(game._goldCount, expectedOffer);
+    assert.equal(shkp.debit || 0, 0);
+    assert.match(text, /A dagger hits other objects\./);
+    assert.match(text, /From the impact, another object falls\./);
+    assert.doesNotMatch(text, /through the hole/);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(3)', 'rn2(3)', 'rn2(3)']);
+});
+
+test('rock projectile impact cannot knock boulders through a remote shaft', () => {
+    installNonShopFloorState();
+    installSeenRemoteShaft(HOLE);
+    initRng(1);
+    enableRngLog({ reset: true });
+    const boulder = floorBoulder(874325, { ox: 7, oy: 5 });
+    const rock = { id: 874326, otyp: ROCK, cls: 'gem', glyph: '*', kind: 'rock', actualKind: 'rock', quan: 1, ox: 7, oy: 5 };
+    game.level.objects = [boulder];
+
+    const landing = shop.landProjectileObjectWithShopHandling(rock, 7, 5, { breakRoll: 0, silent: true });
+
+    assert.equal(landing.shipObject.handled, true);
+    assert.equal(landing.shipObject.impact.objectCount, 1);
+    assert.equal(landing.shipObject.impact.fallenCount, 0);
+    assert.equal(queuedImpactDropsFor().includes(rock), true);
+    assert.equal(queuedImpactDropsFor().includes(boulder), false);
+    assert.equal(game.level.objects.includes(boulder), true);
+    assert.match(landing.messages.join(' '), /A rock hits another object and falls through the hole\./);
+    assert.doesNotMatch(landing.messages.join(' '), /From the impact/);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(3)', 'rn2(100)']);
 });
 
 test('projectile landing runs lava floor effects before sale or stacking', () => {

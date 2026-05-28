@@ -3378,6 +3378,16 @@ function queueImpactDroppedObjects(targetLevel, objects) {
     game._impact_drop_migrations.set(key, queued);
 }
 
+function emptyImpactDropResult(overrides = {}) {
+    return {
+        message: '',
+        objects: [],
+        objectCount: 0,
+        fallenCount: 0,
+        ...overrides,
+    };
+}
+
 function impactDropRandomLandingSpot() {
     const candidates = [];
     for (let x = 1; x < COLNO; x++)
@@ -3407,13 +3417,21 @@ function deliverQueuedImpactDroppedObjects(targetLevel) {
     }
 }
 
+function impactDropCandidatePile(x, y, { missile = null } = {}) {
+    return (game.level?.objects || []).filter(obj =>
+        obj !== missile && !obj.hidden && !obj.transientProjectile && obj.ox === x && obj.oy === y);
+}
+
+function impactDropPileQuantity(pile) {
+    return pile.reduce((sum, obj) => sum + (obj.quan || 1), 0);
+}
+
 function impactDropFloorObjects(x, y, trap, options = {}) {
     const gateText = impactDropGateText(trap);
-    if (!gateText || !game.level?.objects?.length) return { message: '', objects: [] };
-    if (!options.withHero && !options.targetLevel) return { message: '', objects: [] };
-    const pile = (game.level.objects || []).filter(obj =>
-        !obj.hidden && !obj.transientProjectile && obj.ox === x && obj.oy === y);
-    if (!pile.length) return { message: '', objects: [] };
+    if (!gateText || !game.level?.objects?.length) return emptyImpactDropResult();
+    if (!options.withHero && !options.targetLevel) return emptyImpactDropResult();
+    const pile = impactDropCandidatePile(x, y, { missile: options.missile });
+    if (!pile.length) return emptyImpactDropResult();
 
     let objectCount = 0;
     let fallenCount = 0;
@@ -3422,22 +3440,28 @@ function impactDropFloorObjects(x, y, trap, options = {}) {
         const quantity = obj.quan || 1;
         objectCount += quantity;
         if (obj === game.u?.uball || obj === game.u?.uchain) continue;
+        if (options.missileImpact && options.missile?.otyp === ROCK && obj.otyp === BOULDER) continue;
         if (rn2(obj.otyp === BOULDER ? 30 : 3)) continue;
         fallen.push(obj);
         fallenCount += quantity;
     }
-    if (!fallen.length) return { message: '', objects: [] };
+    if (!fallen.length) return emptyImpactDropResult({ objectCount });
 
     game.level.objects = (game.level.objects || []).filter(obj => !fallen.includes(obj));
     newsym(x, y);
 
     let message = '';
-    if (!game.u?.blind && couldsee(x, y)) {
+    const visible = !game.u?.blind && (options.missileImpact ? cansee(x, y) : couldsee(x, y));
+    if (visible) {
         const what = fallenCount === 1 ? 'object falls' : 'objects fall';
-        if (fallenCount === objectCount)
+        if (options.missileImpact) {
+            const qualifier = fallenCount === objectCount ? 'the ' : fallenCount === 1 ? 'an' : '';
+            message = `From the impact, ${qualifier}other ${what}.`;
+        } else if (fallenCount === objectCount) {
             message = `${fallenCount === 1 ? 'The' : 'All the'} adjacent ${what} ${gateText}.`;
-        else
+        } else {
             message = `${fallenCount === 1 ? 'One of the' : 'Some of the'} adjacent ${fallenCount === 1 ? 'objects falls' : what} ${gateText}.`;
+        }
     }
     let debitDelta = 0;
     let robbedDelta = 0;
@@ -3457,9 +3481,9 @@ function impactDropFloorObjects(x, y, trap, options = {}) {
 
     if (!options.withHero) {
         queueImpactDroppedObjects(options.targetLevel, fallen);
-        return { message, objects: [] };
+        return emptyImpactDropResult({ message, objectCount, fallenCount });
     }
-    return { message, objects: fallen };
+    return emptyImpactDropResult({ message, objects: fallen, objectCount, fallenCount });
 }
 
 function impactDropObjectClass(obj) {
@@ -21030,8 +21054,10 @@ function projectileShipObjectResult(overrides = {}) {
         handled: false,
         broke: false,
         breakKind: '',
+        noDrop: false,
         target: null,
         debt: null,
+        impact: emptyImpactDropResult(),
         ...overrides,
     };
 }
@@ -21053,12 +21079,29 @@ function remoteProjectileShaftTrapAt(obj, x, y) {
 function maybeShipRemoteProjectileObject(obj, x, y, messages) {
     const trap = remoteProjectileShaftTrapAt(obj, x, y);
     if (!trap) return projectileShipObjectResult();
-    if (rn2(3)) return projectileShipObjectResult();
     const target = sitFallTargetLevel(trap);
     if (!target) return projectileShipObjectResult();
     const gateText = impactDropGateText(trap);
-    if (gateText && !game.u?.blind && cansee(x, y))
-        messages.push(`${floorObjectSubject(obj)} ${floorEffectsObjectVerb(obj, 'falls', 'fall')} ${gateText}.`);
+    const impactQuantity = impactDropPileQuantity(impactDropCandidatePile(x, y, { missile: obj }));
+    const noDrop = !!rn2(3);
+    if (gateText && !game.u?.blind && cansee(x, y)) {
+        const subject = floorObjectSubject(obj);
+        if (impactQuantity) {
+            const other = impactQuantity === 1 ? 'another object' : 'other objects';
+            const hit = floorEffectsObjectVerb(obj, 'hits', 'hit');
+            const suffix = noDrop ? '' : ` and ${floorEffectsObjectVerb(obj, 'falls', 'fall')} ${gateText}`;
+            messages.push(`${subject} ${hit} ${other}${suffix}.`);
+        } else if (!noDrop) {
+            messages.push(`${subject} ${floorEffectsObjectVerb(obj, 'falls', 'fall')} ${gateText}.`);
+        }
+    }
+    if (noDrop) {
+        const impact = impactQuantity
+            ? impactDropFloorObjects(x, y, trap, { targetLevel: target, missile: obj, missileImpact: true })
+            : emptyImpactDropResult();
+        if (impact.message) messages.push(impact.message);
+        return projectileShipObjectResult({ noDrop: true, target, impact });
+    }
     const debt = shipObjectShopDebt(obj, x, y);
     if (debt.message) messages.push(debt.message);
     const breakKind = impactDropObjectBreaks(obj);
@@ -21068,8 +21111,12 @@ function maybeShipRemoteProjectileObject(obj, x, y, messages) {
         return projectileShipObjectResult({ handled: true, broke: true, breakKind, target, debt });
     }
     queueImpactDroppedObjects(target, [obj]);
+    const impact = impactQuantity
+        ? impactDropFloorObjects(x, y, trap, { targetLevel: target, missile: obj, missileImpact: true })
+        : emptyImpactDropResult();
+    if (impact.message) messages.push(impact.message);
     newsym(x, y);
-    return projectileShipObjectResult({ handled: true, target, debt });
+    return projectileShipObjectResult({ handled: true, target, debt, impact });
 }
 
 function landProjectileObjectWithShopHandling(obj, x, y, options = {}) {
