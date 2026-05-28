@@ -60,6 +60,7 @@ This folder records source-backed audits against `nethack-c/upstream`. The notes
 - [54-subagent-findings-2026-05-28.md](54-subagent-findings-2026-05-28.md): direct cold-ray and hero fire-ray ice burial shop-helper cleanup plus remaining shop ownership follow-up audits.
 - [55-subagent-findings-2026-05-28.md](55-subagent-findings-2026-05-28.md): direct hero-thrown sleeping potionhit plus remaining potionhit and shop-helper follow-up audits.
 - [56-subagent-findings-2026-05-28.md](56-subagent-findings-2026-05-28.md): direct hero-thrown blindness potionhit plus monster temporary-blindness timeout coverage.
+- [57-subagent-findings-2026-05-28.md](57-subagent-findings-2026-05-28.md): direct hero-thrown speed potionhit plus boulder-push shop-boundary follow-up audit.
 
 ## Cross-Cutting Themes
 

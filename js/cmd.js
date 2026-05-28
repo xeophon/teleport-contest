@@ -12500,7 +12500,7 @@ function supportsHeroThrownPotionHit(potion) {
     if (!isPotionObject(potion)) return false;
     const kind = thrownPotionEffectKind(potion);
     return kind === 'confusion' || kind === 'booze' || kind === 'paralysis'
-        || kind === 'sleeping' || kind === 'blindness';
+        || kind === 'sleeping' || kind === 'blindness' || kind === 'speed';
 }
 
 function thrownPotionEffectKind(potion) {
@@ -12563,9 +12563,32 @@ function blindMonsterFromPotion(mon) {
     return true;
 }
 
+function monsterSpeedState(mon) {
+    if (mon?.mspeed === 'fast' || mon?.mspeed === 2 || mon?.permspeed === 'fast') return 'fast';
+    if (mon?.mspeed === 'slow' || mon?.mspeed === 1 || mon?.permspeed === 'slow') return 'slow';
+    return 'normal';
+}
+
+function monsterCanBeSeenForPotionEffect(mon) {
+    return !!mon && !game.u?.blind && !mon.minvis && !mon.mundetected && cansee(mon.mx, mon.my);
+}
+
+function speedMonsterFromPotion(mon) {
+    const oldState = monsterSpeedState(mon);
+    if (oldState === 'slow') {
+        mon.permspeed = 0;
+        mon.mspeed = 0;
+    } else {
+        mon.permspeed = 'fast';
+        mon.mspeed = 'fast';
+    }
+    return monsterSpeedState(mon) !== oldState;
+}
+
 function heroThrownPotionHitMonster(potion, mon) {
     const messages = [];
     const bottle = chestShatterBottleName();
+    let angerMon = true;
     messages.push(`The ${bottle} crashes on ${thrownPotionHitTargetName(mon)} and breaks into shards.`);
     if (rn2(5) && (mon.mhp || 1) > 1) mon.mhp--;
     if (!isPotionOfOil(potion))
@@ -12581,11 +12604,19 @@ function heroThrownPotionHitMonster(potion, mon) {
             messages.push(`${potionHitMonsterName(mon)} falls asleep.`);
     } else if (kind === 'blindness') {
         blindMonsterFromPotion(mon);
+    } else if (kind === 'speed') {
+        angerMon = false;
+        const changed = speedMonsterFromPotion(mon);
+        if (changed && (mon.data?.mmove ?? NORMAL_SPEED) && !(mon.mfrozen || mon.msleeping)
+            && monsterCanBeSeenForPotionEffect(mon)) {
+            messages.push(`${potionHitMonsterName(mon)} is suddenly moving faster.`);
+            learnPotionVaporEffect(potion, kind, true);
+        }
     }
 
     if ((mon.mhp || 1) > 0) {
         mon.msleeping = 0;
-        mon.mpeaceful = false;
+        if (angerMon) mon.mpeaceful = false;
     }
 
     const dx = (mon.mx || 0) - (game.u?.ux || 0);

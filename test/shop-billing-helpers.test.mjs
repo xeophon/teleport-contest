@@ -1403,6 +1403,10 @@ function sleepingPotion(id, letter = 's', quan = 1, extra = {}) {
     return namedPotion(id, 'sleeping', letter, quan, extra);
 }
 
+function speedPotion(id, letter = 's', quan = 1, extra = {}) {
+    return namedPotion(id, 'speed', letter, quan, extra);
+}
+
 function extraHealingPotion(id, letter = 'e', quan = 1) {
     return namedPotion(id, 'extra healing', letter, quan);
 }
@@ -16075,6 +16079,95 @@ test('monster temporary blindness times out during moveloop turn processing', as
 
     assert.equal(goblin.mblinded, 0);
     assert.equal(goblin.mcansee, true);
+});
+
+test('hero-thrown speed potion speeds visible monster without angering it', async () => {
+    installNonShopFloorState();
+    game.level.at = () => ({ roomno: 0, typ: ROOM, lit: true });
+    initRng(2);
+    game.u.acurr.a[A_DEX] = 25;
+    const potion = speedPotion(8778, 's', 1, { dknown: true });
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, { msleeping: 0 });
+    game.inventory = [potion];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('s');
+    markSquareVisible(goblin.mx, goblin.my);
+    await rhack('l');
+
+    assert.match(game._pending_message, /The potion of speed evaporates\./);
+    assert.match(game._pending_message, /The goblin is suddenly moving faster\./);
+    assert.doesNotMatch(game._pending_message, /knees seem|peculiar odor/);
+    assert.equal(goblin.mspeed, 'fast');
+    assert.equal(goblin.permspeed, 'fast');
+    assert.equal(goblin.msleeping, 0);
+    assert.equal(goblin.mpeaceful, true);
+    assert.equal(goblin.mhp, 4);
+    assert.equal(game.inventory.includes(potion), false);
+    assert.equal(game._discoveries?.some(entry => entry.section === 'Potions' && entry.name === 'potion of speed'), true);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(5)',
+    ]);
+});
+
+test('hero-thrown speed potion does not describe an already fast monster', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.u.acurr.a[A_DEX] = 25;
+    const potion = speedPotion(8779, 's', 1, { dknown: true });
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, {
+        msleeping: 0,
+        mspeed: 'fast',
+        permspeed: 'fast',
+    });
+    game.inventory = [potion];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('s');
+    await rhack('l');
+
+    assert.match(game._pending_message, /The potion of speed evaporates\./);
+    assert.doesNotMatch(game._pending_message, /suddenly moving faster|knees seem/);
+    assert.equal(goblin.mspeed, 'fast');
+    assert.equal(goblin.permspeed, 'fast');
+    assert.equal(goblin.msleeping, 0);
+    assert.equal(goblin.mpeaceful, true);
+    assert.equal(game._discoveries?.some(entry => entry.section === 'Potions' && entry.name === 'potion of speed') ?? false, false);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(5)',
+    ]);
+});
+
+test('adjacent hero-thrown speed potion applies monster speed before direct vapor', async () => {
+    installNonShopFloorState();
+    initRng(4);
+    game.u.acurr.a[A_DEX] = 25;
+    const potion = speedPotion(8780, 's', 1, { dknown: true });
+    const goblin = ordinaryThrowTarget('goblin', 6, 5, { msleeping: 0 });
+    game.inventory = [potion];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('s');
+    markSquareVisible(goblin.mx, goblin.my);
+    await rhack('l');
+
+    const message = game._pending_message;
+    assert.match(message, /The goblin is suddenly moving faster\./);
+    assert.match(message, /Your knees seem more flexible now\./);
+    assert.ok(message.indexOf('The goblin is suddenly moving faster.') < message.indexOf('Your knees seem more flexible now.'));
+    assert.equal(goblin.mspeed, 'fast');
+    assert.equal(goblin.mpeaceful, true);
+    assert.equal(game.u.veryfast, true);
+    assert.ok((game.u._veryfastTimeout || 0) > 0);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(5)', 'rn2(13)', 'rnd(5)', 'rn2(19)',
+    ]);
 });
 
 test('known blindness vapor from broken potion discovers the potion', () => {
