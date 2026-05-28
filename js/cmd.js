@@ -14297,10 +14297,13 @@ function heroThrownPotionHitMonster(potion, mon) {
     return messages;
 }
 
+const DEFERRED_SPECIAL_UPWARD_POTION_KINDS = new Set(['oil', 'acid', 'polymorph']);
+
 function supportsHeroThrownPotionUpwardHit(potion) {
     if (!isPotionObject(potion)) return false;
     const kind = thrownPotionEffectKind(potion);
-    return kind === 'confusion' || kind === 'booze';
+    return !!kind && kind !== 'potion' && !kind.endsWith(' potion')
+        && !DEFERRED_SPECIAL_UPWARD_POTION_KINDS.has(kind);
 }
 
 function heroThrownPotionSelfHitMessages(potion, action) {
@@ -50623,7 +50626,7 @@ export async function rhack(_cmd) {
         return;
     }
 
-    if (ch === 'r') {
+    if (ch === 'r' && game._command_mode !== 'throwObject' && game._command_mode !== 'throwInventory') {
         if ((game.u?._statusSuffix || '').includes('Overloaded')) {
             await setMessage("You can't do that while carrying so much stuff.");
             return;
@@ -50634,7 +50637,7 @@ export async function rhack(_cmd) {
         return;
     }
 
-    if (ch === 'c') {
+    if (ch === 'c' && game._command_mode !== 'throwObject' && game._command_mode !== 'throwInventory') {
         if (polyselfNoHands()) {
             await setMessage("You can't close anything -- you have no hands!");
             return;

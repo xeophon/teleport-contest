@@ -38,7 +38,7 @@ Regression coverage:
 
 ## Remaining Upward Throw Gaps
 
-- Only confusion/booze potion self-hit is enabled. Other ordinary vapor-only potions can be added as small follow-ups after checking `trycall()` and discovery side effects.
+- Follow-up note: `docs/c-parity-audit/104-subagent-findings-2026-05-28.md` broadens this from confusion/booze to the supported non-special vapor-only potion set.
 - Lit oil, acid, and polymorph self-hit branches remain separate because C has special direct hero effects before or around vapor.
 - Non-potion upward object hits, cream pies, eggs/corpses with petrification, falling damage for heavier objects, no-ceiling wording, and underwater handling remain separate.
 - The general command-mode issue where inventory letter `c` is intercepted by the close command before `throwObject` remains an input-command slice; tests use a non-conflicting inventory letter.

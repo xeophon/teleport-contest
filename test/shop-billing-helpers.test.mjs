@@ -17255,6 +17255,47 @@ test('upward hero-thrown confusion potion self-hits through potionhit', async ()
     ]);
 });
 
+test('upward hero-thrown hallucination potion selected from c self-hits', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    const potion = hallucinationPotion(87661, 'c', 1, { dknown: true });
+    game.inventory = [potion];
+
+    await rhack('t');
+    await rhack('c');
+    await rhack('<');
+
+    assert.equal(game._command_mode, null);
+    assert.match(game._pending_message, /almost hits the ceiling, then falls back on top of your head\./);
+    assert.match(game._pending_message, /crashes on your head and breaks into shards\./);
+    assert.match(game._pending_message, /The potion of hallucination evaporates\./);
+    assert.match(game._pending_message, /You have a momentary vision\./);
+    assert.doesNotMatch(game._pending_message, /In what direction\?|close|peculiar odor/);
+    assert.equal(game.inventory.includes(potion), false);
+    assert.equal(game.level.objects.length, 0);
+});
+
+test('upward hero-thrown paralysis potion selected from r self-hits', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    const potion = paralysisPotion(87662, 'r', 1, { dknown: true });
+    game.inventory = [potion];
+
+    await rhack('t');
+    await rhack('r');
+    await rhack('<');
+
+    assert.equal(game._command_mode, null);
+    assert.match(game._pending_message, /crashes on your head and breaks into shards\./);
+    assert.match(game._pending_message, /The potion of paralysis evaporates\./);
+    assert.match(game._pending_message, /Something seems to be holding you\./);
+    assert.doesNotMatch(game._pending_message, /What do you want to read|peculiar odor/);
+    assert.equal(game.inventory.includes(potion), false);
+    assert.equal(game.level.objects.length, 0);
+    assert.ok((game._helpless_time || 0) > 0);
+    assert.equal(game._wake_message, 'You can move again.');
+});
+
 test('upward hero-thrown unpaid confusion potion from a stack bills one unit', async () => {
     const { shkp } = installCommandShopState();
     initRng(5);
