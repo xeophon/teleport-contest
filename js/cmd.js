@@ -13841,10 +13841,16 @@ function learnSaddleWaterDipBuc(saddle, potion, visible) {
     }
 }
 
-function waterPotionHitSaddle(potion, mon, messages) {
+function potionHitTargetSquareVisible(mon) {
+    if (!mon || game.u?.blind) return false;
+    // Isolated unit tests may exercise potion hits before full vision init.
+    if (!game.viz_array) return true;
+    return cansee(mon.mx, mon.my);
+}
+
+function waterPotionHitSaddle(potion, mon, messages, visible = monsterCanBeSeenForPotionEffect(mon)) {
     const saddle = monsterWornSaddleForPotionHit(mon);
     if (!saddle) return false;
-    const visible = monsterCanBeSeenForPotionEffect(mon);
     let affected = false;
 
     if (potion?.blessed) {
@@ -13879,9 +13885,8 @@ function waterPotionHitSaddle(potion, mon, messages) {
     return affected;
 }
 
-function potionHitSaddle(potion, mon, messages, kind = thrownPotionEffectKind(potion)) {
-    if (kind === 'water') return waterPotionHitSaddle(potion, mon, messages);
-    const visible = monsterCanBeSeenForPotionEffect(mon);
+function potionHitSaddle(potion, mon, messages, kind = thrownPotionEffectKind(potion), visible = monsterCanBeSeenForPotionEffect(mon)) {
+    if (kind === 'water') return waterPotionHitSaddle(potion, mon, messages, visible);
     if (visible) messages.push(`${sentenceCase(saddlePotionHitTargetName(mon))} gets wet.`);
     return false;
 }
@@ -13892,18 +13897,24 @@ function heroThrownPotionHitMonster(potion, mon) {
     const kind = thrownPotionEffectKind(potion);
     const saddlePotion = isSaddlePotionHit(potion, mon, kind);
     const hitSaddle = saddlePotion && potionHitsSaddle(potion, kind);
+    const targetSquareVisible = potionHitTargetSquareVisible(mon);
+    const saddleVisible = targetSquareVisible && monsterCanBeSpottedForPotionHit(mon);
     const waterBranchOptions = { ignoreSaddle: saddlePotion };
     let angerMon = true;
-    messages.push(`The ${bottle} crashes on ${hitSaddle ? saddlePotionHitTargetName(mon) : thrownPotionHitTargetName(mon)} and breaks into shards.`);
+    if (targetSquareVisible) {
+        messages.push(`The ${bottle} crashes on ${hitSaddle ? saddlePotionHitTargetName(mon) : thrownPotionHitTargetName(mon)} and breaks into shards.`);
+    } else {
+        messages.push('Crash!');
+    }
     if ((mon.mhp || 1) > 1) {
         const chipRoll = rn2(5);
         if (!hitSaddle && chipRoll) mon.mhp--;
     }
-    if (!hitSaddle && !isPotionOfOil(potion))
+    if (!hitSaddle && !isPotionOfOil(potion) && targetSquareVisible)
         messages.push(`The ${pickupObjectName({ ...potion, quan: 1 })} evaporates.`);
 
     if (hitSaddle) {
-        potionHitSaddle(potion, mon, messages, kind);
+        potionHitSaddle(potion, mon, messages, kind, saddleVisible);
     } else if (kind === 'confusion' || kind === 'booze') {
         if (!monsterResistsEffect(mon, 6)) mon.mconf = true;
     } else if (kind === 'paralysis') {

@@ -16630,6 +16630,67 @@ test('visible dknown no-vapor potion hit offers an appearance call', async () =>
     ]);
 });
 
+test('non-visible dknown no-vapor potion hit shows crash without evaporation or call prompt', async () => {
+    const cases = [
+        {
+            name: 'blind',
+            prepare(goblin) {
+                markSquareVisible(goblin.mx, goblin.my);
+                game.u.blind = true;
+            },
+        },
+        {
+            name: 'out-of-sight',
+            prepare() {
+                game.viz_array = [];
+            },
+        },
+    ];
+
+    for (const { name, prepare } of cases) {
+        installNonShopFloorState();
+        initRng(2);
+        game.u.acurr.a[A_DEX] = 25;
+        const potion = {
+            id: 87973,
+            cls: 'potion',
+            glyph: '!',
+            kind: 'magenta potion',
+            potionIndex: 7,
+            quan: 1,
+            ox: 5,
+            oy: 5,
+            letter: 'h',
+            line: 'h - a magenta potion',
+            dknown: true,
+        };
+        const goblin = ordinaryThrowTarget('goblin', 7, 5);
+        game.inventory = [potion];
+        game.level.monsters = [goblin];
+        enableRngLog({ reset: true });
+
+        await rhack('t');
+        await rhack('h');
+        prepare(goblin);
+        await rhack('l');
+
+        const message = game._pending_message || '';
+        assert.match(message, /^Crash!$/, name);
+        assert.doesNotMatch(message, /crashes on|evaporates|momentary vision|peculiar odor|misses|shatters/, name);
+        assert.equal(goblin.mhp, 4, name);
+        assert.equal(goblin.msleeping, 0, name);
+        assert.equal(goblin.mpeaceful, false, name);
+        assert.equal(game._command_mode, null, name);
+        assert.equal(game._message_more || 0, 0, name);
+        assert.equal(game._call_potion_appearance || '', '', name);
+        assert.equal(game.inventory.includes(potion), false, name);
+        assert.equal(game.level.objects.length, 0, name);
+        assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+            'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(5)',
+        ], name);
+    }
+});
+
 test('visible no-vapor potion hit skips call for already-called appearance', async () => {
     installNonShopFloorState();
     initRng(2);
@@ -17227,6 +17288,99 @@ test('hero-thrown neutral water potion wets an unaffected worn saddle', async ()
     assert.match(game._pending_message, /crashes on the pony's saddle and breaks into shards\./);
     assert.match(game._pending_message, /The pony's saddle gets wet\./);
     assert.doesNotMatch(game._pending_message, /evaporates|peculiar odor|misses|glows|writhes|shrieks|looks healthier|rusts/);
+    assert.equal(saddle.cursed, false);
+    assert.equal(saddle.blessed, false);
+    assert.equal(saddle.bknown, true);
+    assert.equal(pony.mhp, 5);
+    assert.equal(pony.msleeping, 1);
+    assert.equal(pony.mpeaceful, true);
+    assert.equal(game.inventory.includes(potion), false);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(10)', 'rn2(5)',
+    ]);
+});
+
+test('non-visible water potion saddle hit mutates saddle without visible feedback', async () => {
+    const cases = [
+        {
+            name: 'blind',
+            prepare(pony) {
+                markSquareVisible(pony.mx, pony.my);
+                game.u.blind = true;
+            },
+        },
+        {
+            name: 'out-of-sight',
+            prepare() {
+                game.viz_array = [];
+            },
+        },
+    ];
+
+    for (const { name, prepare } of cases) {
+        installNonShopFloorState();
+        initRng(2);
+        game.u.acurr.a[A_DEX] = 25;
+        const potion = waterPotion(88212, 'w', { blessed: true, bknown: false });
+        const saddle = wornSaddle(88213, { cursed: true, blessed: false, bknown: true });
+        const pony = ordinaryThrowTarget('pony', 7, 5, {
+            saddled: true,
+            misc_worn_check: W_SADDLE,
+            minvent: [saddle],
+        });
+        game.inventory = [potion];
+        game.level.monsters = [pony];
+        enableRngLog({ reset: true });
+
+        await rhack('t');
+        await rhack('w');
+        prepare(pony);
+        await rhack('l');
+
+        const message = game._pending_message || '';
+        assert.match(message, /^Crash!$/, name);
+        assert.doesNotMatch(message, /crashes on|saddle glows|saddle gets wet|evaporates|head|peculiar odor/, name);
+        assert.equal(saddle.cursed, false, name);
+        assert.equal(saddle.blessed, false, name);
+        assert.equal(saddle.bknown, false, name);
+        assert.equal(pony.mhp, 5, name);
+        assert.equal(pony.msleeping, 1, name);
+        assert.equal(pony.mpeaceful, true, name);
+        assert.equal(game.inventory.includes(potion), false, name);
+        assert.equal(game.level.objects.length, 0, name);
+        assert.equal(game._command_mode, null, name);
+        assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+            'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(10)', 'rnl(10)', 'rnl(10)', 'rn2(5)',
+        ], name);
+    }
+});
+
+test('see-invisible hero gets saddle feedback for invisible monster hit', async () => {
+    installNonShopFloorState();
+    initRng(5);
+    game.u.acurr.a[A_DEX] = 25;
+    game.u.seeInvisible = true;
+    const potion = waterPotion(88214, 'w');
+    potion.dknown = true;
+    const saddle = wornSaddle(88215, { blessed: false, cursed: false, bknown: true });
+    const pony = ordinaryThrowTarget('pony', 7, 5, {
+        minvis: 1,
+        saddled: true,
+        misc_worn_check: W_SADDLE,
+        minvent: [saddle],
+    });
+    game.inventory = [potion];
+    game.level.monsters = [pony];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('w');
+    markSquareVisible(pony.mx, pony.my);
+    await rhack('l');
+
+    assert.match(game._pending_message, /crashes on the pony's saddle and breaks into shards\./);
+    assert.match(game._pending_message, /The pony's saddle gets wet\./);
+    assert.doesNotMatch(game._pending_message, /evaporates|peculiar odor|head/);
     assert.equal(saddle.cursed, false);
     assert.equal(saddle.blessed, false);
     assert.equal(saddle.bknown, true);
