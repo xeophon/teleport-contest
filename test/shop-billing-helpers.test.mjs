@@ -16222,25 +16222,120 @@ test('hero-thrown neutral water potion uses direct potionhit on ordinary monster
     ]);
 });
 
-test('hero-thrown water potion defers special monster branches', async () => {
+test('hero-thrown blessed water potion damages blessing-hating monsters', async () => {
     installNonShopFloorState();
     initRng(2);
     game.u.acurr.a[A_DEX] = 25;
     const potion = waterPotion(8813, 'w', { blessed: true, bknown: true });
     potion.dknown = true;
     const demon = ordinaryThrowTarget('water demon', 7, 5, {
+        mhp: 20,
+        mhpmax: 20,
         data: { name: 'water demon', mlevel: 8, mlet: '&', demon: true },
     });
     game.inventory = [potion];
     game.level.monsters = [demon];
+    enableRngLog({ reset: true });
 
     await rhack('t');
     await rhack('w');
     markSquareVisible(demon.mx, demon.my);
     await rhack('l');
 
-    assert.match(game._pending_message, /misses the water demon/);
-    assert.doesNotMatch(game._pending_message, /crashes on .*water demon.*breaks into shards|writhes|shrieks|looks healthier|rusts/);
+    assert.match(game._pending_message, /The potion of (?:holy )?water evaporates\./);
+    assert.match(game._pending_message, /The water demon shrieks in pain!/);
+    assert.doesNotMatch(game._pending_message, /misses|shatters|peculiar odor|looks healthier|rusts/);
+    assert.equal(demon.mhp < 19, true);
+    assert.equal(demon.mhp >= 7, true);
+    assert.equal(demon.msleeping, 0);
+    assert.equal(demon.mpeaceful, false);
+    assert.equal(game.inventory.includes(potion), false);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(5)', 'd(2,6)',
+    ]);
+});
+
+test('hero-thrown cursed water potion heals blessing-hating monsters without angering them', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.u.acurr.a[A_DEX] = 25;
+    const potion = waterPotion(8814, 'w', { cursed: true, bknown: true });
+    potion.dknown = true;
+    const demon = ordinaryThrowTarget('water demon', 7, 5, {
+        mhp: 4,
+        mhpmax: 12,
+        data: { name: 'water demon', mlevel: 8, mlet: '&', demon: true },
+    });
+    game.inventory = [potion];
+    game.level.monsters = [demon];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('w');
+    markSquareVisible(demon.mx, demon.my);
+    await rhack('l');
+
+    assert.match(game._pending_message, /The potion of (?:unholy )?water evaporates\./);
+    assert.match(game._pending_message, /The water demon looks healthier\./);
+    assert.doesNotMatch(game._pending_message, /misses|shatters|peculiar odor|writhes|shrieks|rusts/);
+    assert.equal(demon.mhp > 3, true);
+    assert.equal(demon.mhp <= 12, true);
+    assert.equal(demon.msleeping, 0);
+    assert.equal(demon.mpeaceful, true);
+    assert.equal(game.inventory.includes(potion), false);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(5)', 'd(2,6)',
+    ]);
+});
+
+test('hero-thrown neutral water potion hits blessing-hating monsters without special effect', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.u.acurr.a[A_DEX] = 25;
+    const potion = waterPotion(8815, 'w');
+    potion.dknown = true;
+    const zombie = ordinaryThrowTarget('human zombie', 7, 5, {
+        data: { name: 'human zombie', mlevel: 4, mlet: 'Z' },
+    });
+    game.inventory = [potion];
+    game.level.monsters = [zombie];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('w');
+    markSquareVisible(zombie.mx, zombie.my);
+    await rhack('l');
+
+    assert.match(game._pending_message, /The potion of water evaporates\./);
+    assert.doesNotMatch(game._pending_message, /misses|shatters|peculiar odor|writhes|shrieks|looks healthier|rusts/);
+    assert.equal(zombie.mhp, 4);
+    assert.equal(zombie.msleeping, 0);
+    assert.equal(zombie.mpeaceful, false);
+    assert.equal(game.inventory.includes(potion), false);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(5)',
+    ]);
+});
+
+test('hero-thrown water potion still defers were and vampire shape branches', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.u.acurr.a[A_DEX] = 25;
+    const potion = waterPotion(8816, 'w', { blessed: true, bknown: true });
+    potion.dknown = true;
+    const werewolf = ordinaryThrowTarget('werewolf', 7, 5, {
+        data: { name: 'werewolf', mlevel: 5, were: true },
+    });
+    game.inventory = [potion];
+    game.level.monsters = [werewolf];
+
+    await rhack('t');
+    await rhack('w');
+    markSquareVisible(werewolf.mx, werewolf.my);
+    await rhack('l');
+
+    assert.match(game._pending_message, /misses the werewolf/);
+    assert.doesNotMatch(game._pending_message, /crashes on .*werewolf.*breaks into shards|writhes|shrieks|looks healthier|rusts/);
 });
 
 test('hero-thrown blessed water potion splits an unsaddled gremlin without angering it', async () => {

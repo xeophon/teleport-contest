@@ -12656,7 +12656,11 @@ function monsterHasWornSaddle(mon) {
 function monsterHatesBlessingsForWaterHit(mon) {
     const data = mon?.data || {};
     const mlet = data.mlet || mon?.mlet || data.glyph || mon?.glyph;
-    return !!(data.demon || mon?.demon || mlet === '&' || isDeadbookUndead(mon));
+    const name = String(data.name || mon?.name || '').toLowerCase();
+    const undead = mlet === 'L' || mlet === 'M' || mlet === 'V' || mlet === 'W'
+        || mlet === 'Z' || mlet === 'ghost' || data.vampshifter || mon?.vampshifter
+        || /\b(?:ghost|shade|lich|mummy|zombie|vampire|wraith|nazgul|skeleton|ghoul)\b/.test(name);
+    return !!(data.demon || mon?.demon || mlet === '&' || undead);
 }
 
 function monsterIsWereOrVampireForWaterHit(mon) {
@@ -12684,6 +12688,11 @@ function isSpecialMonsterWaterPotionHit(potion, mon, kind = thrownPotionEffectKi
         && (monsterIsGremlinForWaterHit(mon) || monsterIsIronGolemForWaterHit(mon));
 }
 
+function isBlessingHaterWaterPotionHit(potion, mon, kind = thrownPotionEffectKind(potion)) {
+    return kind === 'water' && !monsterHasWornSaddle(mon)
+        && monsterHatesBlessingsForWaterHit(mon) && !monsterIsWereOrVampireForWaterHit(mon);
+}
+
 function monsterNeedsDeferredWaterPotionHit(mon) {
     if (!mon || monsterHasWornSaddle(mon)) return true;
     const name = String(mon?.data?.name || mon?.name || '').toLowerCase();
@@ -12706,6 +12715,7 @@ function supportsHeroThrownPotionHit(potion, mon = null) {
         || kind === 'healing' || kind === 'extra healing' || kind === 'full healing'
         || kind === 'restore ability' || kind === 'gain ability' || kind === 'sickness'
         || kind === 'acid'
+        || isBlessingHaterWaterPotionHit(potion, mon, kind)
         || isSpecialMonsterWaterPotionHit(potion, mon, kind)
         || isNeutralOrdinaryWaterPotionHit(potion, mon, kind)
         || COMMON_NO_MONSTER_EFFECT_POTION_HIT_KINDS.has(kind)
@@ -13069,6 +13079,25 @@ function waterPotionHitSpecialMonster(mon, messages) {
     return true;
 }
 
+function waterPotionHitBlessingHater(potion, mon, messages) {
+    if (potion?.blessed) {
+        const silent = monsterIsSilentForPotionHit(mon);
+        messages.push(`${potionHitMonsterName(mon)} ${silent ? 'writhes' : 'shrieks'} in pain!`);
+        if (!silent) wakeNearbyMonstersFromPotionHit(mon);
+        mon.mhp = (mon.mhp || 1) - d(2, 6);
+        if ((mon.mhp || 0) <= 0) killMonsterFromPotionHit(mon, messages);
+        return true;
+    }
+    if (potion?.cursed) {
+        const maxHp = Math.max(1, mon.mhpmax || mon.mhp || 1);
+        if (monsterCanBeSeenForPotionEffect(mon))
+            messages.push(`${potionHitMonsterName(mon)} looks healthier.`);
+        mon.mhp = Math.min(maxHp, (mon.mhp || maxHp) + d(2, 6));
+        return false;
+    }
+    return true;
+}
+
 function heroThrownPotionHitMonster(potion, mon) {
     const messages = [];
     const bottle = chestShatterBottleName();
@@ -13105,6 +13134,8 @@ function heroThrownPotionHitMonster(potion, mon) {
     } else if (kind === 'healing' || kind === 'extra healing' || kind === 'full healing'
         || kind === 'restore ability' || kind === 'gain ability') {
         angerMon = healingPotionHitMonster(potion, mon, kind, messages);
+    } else if (isBlessingHaterWaterPotionHit(potion, mon, kind)) {
+        angerMon = waterPotionHitBlessingHater(potion, mon, messages);
     } else if (isSpecialMonsterWaterPotionHit(potion, mon, kind)) {
         angerMon = waterPotionHitSpecialMonster(mon, messages);
     } else if (isNeutralOrdinaryWaterPotionHit(potion, mon, kind)) {
