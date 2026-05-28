@@ -12688,6 +12688,7 @@ function supportsHeroThrownPotionHit(potion, mon = null) {
         || kind === 'invisibility' || kind === 'hallucination'
         || kind === 'healing' || kind === 'extra healing' || kind === 'full healing'
         || kind === 'restore ability' || kind === 'gain ability' || kind === 'sickness'
+        || kind === 'acid'
         || isNeutralOrdinaryWaterPotionHit(potion, mon, kind)
         || COMMON_NO_MONSTER_EFFECT_POTION_HIT_KINDS.has(kind)
         || isUnlitOilPotionHit(potion, kind);
@@ -12851,6 +12852,57 @@ function monsterResistsSicknessPotion(mon) {
         || monsterHasDamageType(mon, new Set(['dise', 'disease', 'pest', 'pestilence']));
 }
 
+function monsterIsSilentForPotionHit(mon) {
+    const data = mon?.data || {};
+    const msound = String(data.msound || data.sound || mon?.msound || '').toLowerCase();
+    return !!(mon?.silent || data.silent || msound === 'silent' || msound === 'ms_silent');
+}
+
+function monsterResistsAcid(mon) {
+    const data = mon?.data || {};
+    const name = String(data.name || mon?.name || '').toLowerCase();
+    return !!(mon?.acidResistance || mon?.resistsAcid || mon?.resists_acid
+        || data.acidResistance || data.resistsAcid || data.resists_acid
+        || data.acidic || name === 'acid blob' || name === 'gelatinous cube');
+}
+
+function wakeNearbyMonstersFromPotionHit(mon) {
+    const data = mon?.data || {};
+    const distance = (data.mlevel ?? mon?.m_lev ?? mon?.mlevel ?? 1) * 10;
+    for (const sleeper of game.level?.monsters || []) {
+        if (!sleeper || sleeper.dead || (sleeper.mhp != null && sleeper.mhp <= 0)) continue;
+        const dx = (sleeper.mx || 0) - (mon?.mx || 0);
+        const dy = (sleeper.my || 0) - (mon?.my || 0);
+        if (distance !== 0 && dx * dx + dy * dy >= distance) continue;
+        sleeper.msleeping = 0;
+        if (!(sleeper.data?.unique || sleeper.data?.uniq)) sleeper.mstrategy = 0;
+    }
+}
+
+function killMonsterFromPotionHit(mon, messages) {
+    if (!mon || mon.dead) return;
+    mon.dead = true;
+    const data = mon.data || {};
+    const targetName = mon.givenName || `the ${data.name || mon.name || 'monster'}`;
+    const nonliving = data.nonliving || data.mlet === 'Z' || data.glyph === 'Z'
+        || String(data.name || '').includes('zombie') || String(data.name || '').endsWith(' golem');
+    messages.push(`You ${nonliving ? 'destroy' : 'kill'} ${targetName}!`);
+    recordVanquished(mon);
+    dropMonsterInventory(mon, messages);
+
+    const corpseData = data.corpse
+        || (data.name?.endsWith(' zombie') ? monsterByRndName(data.name.replace(/ zombie$/, '')) : null)
+        || data;
+    const loc = game.level?.at?.(mon.mx, mon.my);
+    if (loc && (ACCESSIBLE(loc.typ) || IS_POOL(loc.typ))
+        && !mon.mcloned && monsterCorpseDropSucceeds(mon, data)
+        && monsterLeavesCorpseLikeDrop(corpseData)) {
+        createMonsterCorpseOrGlob(mon, corpseData, mon.mx, mon.my, { messages });
+    }
+    game.level.monsters = (game.level?.monsters || []).filter(candidate => candidate !== mon);
+    newsym(mon.mx, mon.my);
+}
+
 function kindIsHealingFamilyPotion(kind) {
     return kind === 'healing' || kind === 'extra healing' || kind === 'full healing';
 }
@@ -12915,6 +12967,20 @@ function sicknessPotionHitMonster(mon, messages) {
     return true;
 }
 
+function acidPotionHitMonster(potion, mon, messages) {
+    if (monsterResistsAcid(mon) || monsterResistsEffect(mon, 6)) return true;
+
+    const silent = monsterIsSilentForPotionHit(mon);
+    messages.push(`${potionHitMonsterName(mon)} ${silent ? 'writhes' : 'shrieks'} in pain!`);
+    if (!silent) wakeNearbyMonstersFromPotionHit(mon);
+
+    const dice = potion?.cursed ? 2 : 1;
+    const sides = potion?.blessed ? 4 : 8;
+    mon.mhp = (mon.mhp || 1) - d(dice, sides);
+    if ((mon.mhp || 0) <= 0) killMonsterFromPotionHit(mon, messages);
+    return true;
+}
+
 function heroThrownPotionHitMonster(potion, mon) {
     const messages = [];
     const bottle = chestShatterBottleName();
@@ -12946,6 +13012,8 @@ function heroThrownPotionHitMonster(potion, mon) {
         angerMon = invisibilityPotionHitMonster(potion, mon, messages);
     } else if (kind === 'sickness') {
         angerMon = sicknessPotionHitMonster(mon, messages);
+    } else if (kind === 'acid') {
+        angerMon = acidPotionHitMonster(potion, mon, messages);
     } else if (kind === 'healing' || kind === 'extra healing' || kind === 'full healing'
         || kind === 'restore ability' || kind === 'gain ability') {
         angerMon = healingPotionHitMonster(potion, mon, kind, messages);
@@ -12957,7 +13025,7 @@ function heroThrownPotionHitMonster(potion, mon) {
         // Unlit oil has no monster-specific case; lit oil explosion is handled by a later slice.
     }
 
-    if ((mon.mhp || 1) > 0) {
+    if (!mon.dead && (mon.mhp ?? 1) > 0) {
         mon.msleeping = 0;
         if (angerMon) mon.mpeaceful = false;
     }

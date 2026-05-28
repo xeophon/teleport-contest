@@ -16371,6 +16371,142 @@ test('hero-thrown sickness potion effect can come from potion index', async () =
     ]);
 });
 
+test('hero-thrown acid potion damages ordinary monsters and wakes nearby sleepers', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.u.acurr.a[A_DEX] = 25;
+    const potion = acidPotion(8814, 'a');
+    potion.dknown = true;
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, { mhp: 12, mhpmax: 12 });
+    const sleeper = ordinaryThrowTarget('jackal', 8, 5, { msleeping: 1 });
+    game.inventory = [potion];
+    game.level.monsters = [goblin, sleeper];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('a');
+    markSquareVisible(goblin.mx, goblin.my);
+    await rhack('l');
+
+    assert.match(game._pending_message, /The potion of acid evaporates\./);
+    assert.match(game._pending_message, /The goblin shrieks in pain!/);
+    assert.doesNotMatch(game._pending_message, /misses|shatters|peculiar odor|looks unharmed/);
+    assert.equal(goblin.mhp < 11, true);
+    assert.equal(goblin.mhp >= 3, true);
+    assert.equal(goblin.msleeping, 0);
+    assert.equal(sleeper.msleeping, 0);
+    assert.equal(goblin.mpeaceful, false);
+    assert.equal(game.inventory.includes(potion), false);
+    assert.equal(game.level.objects.length, 0);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(5)', 'rn2(105)', 'd(1,8)',
+    ]);
+});
+
+test('hero-thrown acid potion respects monster acid resistance', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.u.acurr.a[A_DEX] = 25;
+    const potion = acidPotion(8815, 'a');
+    potion.dknown = true;
+    const blob = ordinaryThrowTarget('acid blob', 7, 5, {
+        data: { name: 'acid blob', mlevel: 1, acidResistance: true, silent: true },
+    });
+    game.inventory = [potion];
+    game.level.monsters = [blob];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('a');
+    markSquareVisible(blob.mx, blob.my);
+    await rhack('l');
+
+    assert.match(game._pending_message, /The potion of acid evaporates\./);
+    assert.doesNotMatch(game._pending_message, /shrieks|writhes|in pain|peculiar odor/);
+    assert.equal(blob.mhp, 4);
+    assert.equal(blob.msleeping, 0);
+    assert.equal(blob.mpeaceful, false);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(5)',
+    ]);
+});
+
+test('hero-thrown acid potion can be blocked by potion resistance', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.u.acurr.a[A_DEX] = 25;
+    const potion = acidPotion(8816, 'a');
+    potion.dknown = true;
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, { mr: 100 });
+    game.inventory = [potion];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('a');
+    markSquareVisible(goblin.mx, goblin.my);
+    await rhack('l');
+
+    assert.match(game._pending_message, /The potion of acid evaporates\./);
+    assert.doesNotMatch(game._pending_message, /shrieks|writhes|in pain|peculiar odor/);
+    assert.equal(goblin.mhp, 4);
+    assert.equal(goblin.msleeping, 0);
+    assert.equal(goblin.mpeaceful, false);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(5)', 'rn2(105)',
+    ]);
+});
+
+test('hero-thrown acid potion can kill and remove the target monster', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.u.acurr.a[A_DEX] = 25;
+    const potion = acidPotion(8817, 'a');
+    potion.dknown = true;
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, { mhp: 2, mhpmax: 2 });
+    game.inventory = [potion];
+    game.level.monsters = [goblin];
+
+    await rhack('t');
+    await rhack('a');
+    markSquareVisible(goblin.mx, goblin.my);
+    await rhack('l');
+
+    assert.match(game._pending_message, /The goblin shrieks in pain!/);
+    assert.match(game._pending_message, /You kill the goblin!/);
+    assert.equal(game.level.monsters.includes(goblin), false);
+    assert.equal(game._vanquished_counts?.goblin, 1);
+    assert.equal(game.inventory.includes(potion), false);
+});
+
+test('hero-thrown unpaid acid potion from a stack charges the thrown unit only', async () => {
+    const { shkp } = installCommandShopState();
+    initRng(2);
+    game.u.acurr.a[A_DEX] = 25;
+    const stack = acidPotion(8818, 'a', 2);
+    stack.dknown = true;
+    const goblin = ordinaryThrowTarget('goblin', 5, 7, { mhp: 12, mhpmax: 12 });
+    game.inventory = [stack];
+    game.level.monsters.push(goblin);
+    shop.addObjectToShopBill(shkp, stack, 100);
+
+    await rhack('t');
+    await rhack('a');
+    markSquareVisible(goblin.mx, goblin.my);
+    await rhack('j');
+
+    assert.match(game._pending_message, /The potion of acid evaporates\./);
+    assert.match(game._pending_message, /The goblin shrieks in pain!/);
+    assert.equal(stack.quan, 1);
+    assert.equal(game.inventory.includes(stack), true);
+    const parentEntry = shop.shopBillEntryForObject(shkp, stack);
+    assert.equal(parentEntry.bquan, 1);
+    assert.equal(shop.shopBillEntryTotal(parentEntry), 50);
+    assert.equal(stack.unpaidPrice, 50);
+    assert.equal(shkp.debit, 50);
+    assert.equal(shkp.billct, 1);
+});
+
 test('hero-thrown healing potion heals visible monster without angering it', async () => {
     installNonShopFloorState();
     game.level.at = () => ({ roomno: 0, typ: ROOM, lit: true });
