@@ -17612,6 +17612,110 @@ test('upward hero-thrown unpaid ordinary egg from a stack bills one broken unit'
     assert.equal(shkp.billct, 1);
 });
 
+test('upward hero-thrown mirror self-hits and shatters with bad luck', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, { uhp: 30, uhpmax: 30, uluck: 0 });
+    const mirror = {
+        id: 87680,
+        otyp: MIRROR,
+        cls: 'tool',
+        glyph: '(',
+        kind: 'looking glass',
+        actualKind: 'mirror',
+        quan: 1,
+        ox: 5,
+        oy: 5,
+        letter: 'm',
+        line: 'm - a looking glass',
+    };
+    game.inventory = [mirror];
+    enableRngLog({ reset: true });
+    const hpBefore = game.u.uhp;
+
+    await rhack('t');
+    await rhack('m');
+    await rhack('<');
+
+    assert.equal(game._command_mode, null);
+    assert.match(game._pending_message, /A looking glass almost hits the ceiling, then falls back on top of your head\./);
+    assert.match(game._pending_message, /A looking glass shatters into a thousand pieces!/);
+    assert.doesNotMatch(game._pending_message, /crashes on your head|evaporates|Splat|What a mess|cmdassist/);
+    assert.equal(game.inventory.includes(mirror), false);
+    assert.equal(game.level.objects.length, 0);
+    assert.equal(game.u.uhp, hpBefore);
+    assert.equal(game.u.uluck, -2);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rn2(5)', 'rn2(100)',
+    ]);
+});
+
+test('upward hero-thrown crystal ball can break on the ceiling', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    const ball = crystalBall(87681, 'c');
+    game.inventory = [ball];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('c');
+    await rhack('<');
+
+    assert.equal(game._command_mode, null);
+    assert.match(game._pending_message, /A crystal ball hits the ceiling\./);
+    assert.match(game._pending_message, /A crystal ball shatters into a thousand pieces!/);
+    assert.doesNotMatch(game._pending_message, /falls back|top of your head|crashes on your head|evaporates|Splat|What a mess/);
+    assert.equal(game.inventory.includes(ball), false);
+    assert.equal(game.level.objects.length, 0);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rn2(5)', 'rn2(100)',
+    ]);
+});
+
+test('upward hero-thrown lenses self-hit uses pair wording and shatters', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    const lenses = {
+        ...chargedTool(87682, 'lenses', 'l', 0),
+        line: 'l - a pair of lenses',
+    };
+    game.inventory = [lenses];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('l');
+    await rhack('<');
+
+    assert.equal(game._command_mode, null);
+    assert.match(game._pending_message, /A pair of lenses almost hits the ceiling, then falls back on top of your head\./);
+    assert.match(game._pending_message, /A pair of lenses shatters into a thousand pieces!/);
+    assert.doesNotMatch(game._pending_message, /a lenses|crashes on your head|evaporates|Splat|What a mess/);
+    assert.equal(game.inventory.includes(lenses), false);
+    assert.equal(game.level.objects.length, 0);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rn2(5)', 'rn2(100)',
+    ]);
+});
+
+test('upward hero-thrown unpaid crystal ball bills the broken object', async () => {
+    const { shkp } = installCommandShopState();
+    initRng(1);
+    const ball = crystalBall(87683, 'c');
+    game.inventory = [ball];
+    shop.addObjectToShopBill(shkp, ball, 60);
+
+    await rhack('t');
+    await rhack('c');
+    await rhack('<');
+
+    assert.match(game._pending_message, /A crystal ball shatters into a thousand pieces!/);
+    assert.equal(game.inventory.includes(ball), false);
+    assert.equal(game.level.objects.length, 0);
+    assert.equal(shop.shopBillEntryForObject(shkp, ball), null);
+    assert.equal(shkp.debit, 60);
+    assert.equal(shkp.billct, 0);
+});
+
 test('upward hero-thrown polymorph potion self-hits and polymorphs the hero', async () => {
     installNonShopFloorState();
     initRng(1);

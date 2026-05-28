@@ -8441,16 +8441,27 @@ function floorObjectVisible(x, y) {
     return !game.u?.blind && couldsee(x, y);
 }
 
+function objectArticleName(name) {
+    const text = String(name || '').trim();
+    if (!text) return 'a thing';
+    if (/^(?:the|a|an)\b/i.test(text)) return text;
+    if (/^pair of\b/i.test(text)) return `${/^[aeiou]/i.test(text) ? 'an' : 'a'} ${text}`;
+    const buc = text.match(/^(blessed|uncursed|cursed)\s+(.+)$/i);
+    if (buc && pairArticleObjectName(buc[2])) return `${/^[aeiou]/i.test(text) ? 'an' : 'a'} ${buc[1]} pair of ${buc[2]}`;
+    if (pairArticleObjectName(text)) return `a pair of ${text}`;
+    return articleFor(text);
+}
+
 function floorObjectSubject(obj) {
     const quan = Math.max(1, obj?.quan || 1);
     const name = pickupObjectName({ ...obj, line: '', quan });
-    return quan > 1 ? name : sentenceCase(articleFor(name));
+    return quan > 1 ? name : sentenceCase(objectArticleName(name));
 }
 
 function floorObjectArticleName(obj) {
     const quan = Math.max(1, obj?.quan || 1);
     const name = pickupObjectName({ ...obj, line: '', quan });
-    return quan > 1 ? name : articleFor(name);
+    return quan > 1 ? name : objectArticleName(name);
 }
 
 function floorObjectBaseName(obj) {
@@ -14536,6 +14547,66 @@ function heroThrownEggUpwardMessages(egg) {
         return heroThrownEggSelfHitMessages(egg, 'hits', ceilingName);
     }
     return heroThrownEggSelfHitMessages(egg, 'almost hits', ceilingName);
+}
+
+function isExpensiveCameraObject(obj) {
+    const kind = objectKindKey(obj);
+    return obj?.otyp === EXPENSIVE_CAMERA || kind === 'expensive camera';
+}
+
+function isMirrorObject(obj) {
+    const kind = objectKindKey(obj);
+    return obj?.otyp === MIRROR || kind === 'looking glass' || kind === 'mirror';
+}
+
+function supportsHeroThrownFragileObjectUpwardHit(obj) {
+    if (!obj || isPotionObject(obj) || isCreamPieObject(obj) || isMelonObject(obj) || isEggItem(obj)) return false;
+    if (isExpensiveCameraObject(obj)) return false;
+    return impactDropBreakKind(obj) === 'pieces';
+}
+
+function applyHeroThrownFragileBreakSideEffects(obj) {
+    if (isMirrorObject(obj) && game.u) game.u.uluck = (game.u.uluck || 0) - 2;
+}
+
+function heroThrownFragileObjectSelfHitMessages(obj, action, ceilingName = heroThrowCeilingName()) {
+    const messages = [`${floorObjectSubject({ ...obj, quan: 1 })} ${action} the ${ceilingName}, then falls back on top of your head.`];
+    const breakKind = projectileTopLevelBreakKind(obj);
+    if (breakKind) {
+        projectileTopLevelBreakMessage(obj, breakKind, messages);
+        applyHeroThrownFragileBreakSideEffects(obj);
+        markThrownBrokenObjectDebt(obj);
+        return messages;
+    }
+
+    if (game.u) {
+        game.u.uhp = Math.max(0, (game.u.uhp || 0) - 1);
+        if ((game.u.uhp || 0) <= 0) {
+            game._death_cause = 'killed by a falling object';
+            messages.push('You die...');
+        }
+    }
+    const landing = landProjectileObjectWithShopHandling(obj, game.u?.ux || obj.ox || 0, game.u?.uy || obj.oy || 0, {});
+    messages.push(...landing.messages);
+    return messages;
+}
+
+function heroThrownFragileObjectUpwardMessages(obj) {
+    const ceilingName = heroThrowCeilingName();
+    const hasCeiling = heroHasThrowCeiling();
+    const hitsRoof = !!(rn2(5) && !heroIsUnderwaterForThrow());
+    if (!hasCeiling)
+        return heroThrownFragileObjectSelfHitMessages(obj, 'flies up into', ceilingName);
+    if (hitsRoof) {
+        const breakKind = projectileTopLevelBreakKind(obj);
+        if (breakKind) {
+            const messages = heroThrownPotionCeilingBreakMessages(obj, breakKind, ceilingName);
+            applyHeroThrownFragileBreakSideEffects(obj);
+            return messages;
+        }
+        return heroThrownFragileObjectSelfHitMessages(obj, 'hits', ceilingName);
+    }
+    return heroThrownFragileObjectSelfHitMessages(obj, 'almost hits', ceilingName);
 }
 
 function heroThrownCreamPieUpwardMessages(pie) {
@@ -21174,7 +21245,7 @@ function projectileTopLevelBreakMessage(obj, breakKind, messages) {
     }
     const name = pickupObjectName({ ...obj, quan: obj.quan || 1 });
     const many = (obj.quan || 1) > 1;
-    const subject = many ? `The ${name}` : articleFor(name, true);
+    const subject = many ? `The ${name}` : sentenceCase(objectArticleName(name));
     const verb = many ? 'shatter' : 'shatters';
     messages.push(`${subject} ${verb}${breakKind === 'pieces' ? ' into a thousand pieces' : ''}!`);
 }
@@ -51070,6 +51141,35 @@ export async function rhack(_cmd) {
             };
             if ((item.quan || 1) > 1) splitCarriedObjectShopBill(item, thrownObject, 1);
             const messages = heroThrownEggUpwardMessages(thrownObject);
+            removeInventoryItem(item, 1);
+            newsym(game.u?.ux || 0, game.u?.uy || 0);
+            await setMessage(messages.join('  '));
+            game._command_mode = null;
+            game._throw_item_letter = null;
+            game._resume_time_after_more = 0;
+            game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
+            game.context.move = 0;
+            return;
+        }
+        if (ch === '<' && supportsHeroThrownFragileObjectUpwardHit(item)) {
+            let thrownId = null;
+            if ((item.quan || 1) > 1) thrownId = next_ident();
+            const thrownObject = {
+                ...item,
+                letter: undefined,
+                line: undefined,
+                wielded: false,
+                worn: false,
+                quivered: false,
+                ox: game.u?.ux || 0,
+                oy: game.u?.uy || 0,
+                id: thrownId ?? item.id,
+                quan: 1,
+                glyph: item.glyph || '(',
+                color: item.color || CLR_WHITE,
+            };
+            if ((item.quan || 1) > 1) splitCarriedObjectShopBill(item, thrownObject, 1);
+            const messages = heroThrownFragileObjectUpwardMessages(thrownObject);
             removeInventoryItem(item, 1);
             newsym(game.u?.ux || 0, game.u?.uy || 0);
             await setMessage(messages.join('  '));
