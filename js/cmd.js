@@ -8997,6 +8997,29 @@ function forceBladeBreakMessage(item) {
     return quantity > 1 ? `One of your ${name} broke!` : `Your ${name} broke!`;
 }
 
+function disturbBuriedZombieCorpseTimersAt(x, y) {
+    const level = game.level;
+    if (!level) return;
+    const moves = game.moves || 0;
+    const seen = new Set();
+    const scan = (obj, fromBuriedList = false) => {
+        if (!obj || seen.has(obj)) return;
+        seen.add(obj);
+        if (!fromBuriedList && !obj.buried) return;
+        if (!isCorpseItem(obj)) return;
+        if (obj.ox == null || obj.oy == null) return;
+        const ox = Number(obj.ox);
+        const oy = Number(obj.oy);
+        if (!Number.isFinite(ox) || !Number.isFinite(oy)) return;
+        if (Math.abs(ox - x) > 1 || Math.abs(oy - y) > 1) return;
+        if (typeof obj.zombifyTurn !== 'number' || obj.zombifyTurn <= moves) return;
+        const remaining = obj.zombifyTurn - moves;
+        obj.zombifyTurn = moves + Math.max(1, Math.trunc((remaining * 2) / 3));
+    };
+    for (const obj of level.buriedobjlist || []) scan(obj, true);
+    for (const obj of level.objects || []) scan(obj, false);
+}
+
 function wakeNearbyFromForceLock(messages) {
     const ux = game.u?.ux || 0;
     const uy = game.u?.uy || 0;
@@ -9015,6 +9038,7 @@ function wakeNearbyFromForceLock(messages) {
             mon.waiting = false;
         }
     }
+    disturbBuriedZombieCorpseTimersAt(ux, uy);
 }
 
 export function processForceLockOccupationTick(force) {

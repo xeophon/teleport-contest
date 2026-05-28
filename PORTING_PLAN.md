@@ -28,7 +28,7 @@ Detailed source-backed history is kept in `docs/c-parity-audit/`. Keep this sect
 - Added force-destroyed shop box owner billing: shattered contents now charge the shopkeeper who owns the bill row before the box itself is charged to the source shop.
 - Added statue shatter owner billing: hero-caused statue trap shatter now charges an existing live statue bill row to its owning shopkeeper before contents move to the animated monster.
 - Added forced chest material wording: non-potion contents destroyed by a shattered box now use C's paper/wax/veggy/flesh/glass/wood/default destruction verbs.
-- Added forced chest occupation parity: blade forcing can break the wielded weapon before the success roll, blunt forcing wakes nearby sleepers without angering them, 50-turn/no-hands give-up uses C's exercise ordering, and `#force` chance follows weapon large-damage metadata.
+- Added forced chest occupation parity: blade forcing can break the wielded weapon before the success roll, blunt forcing wakes nearby sleepers without angering them and disturbs nearby buried zombie timers, 50-turn/no-hands give-up uses C's exercise ordering, and `#force` chance follows weapon large-damage metadata.
 - Added projectile landing floor-effect parity: hero-thrown objects now run pre-placement floor effects, consumed floor-effect landings skip impact/shop/sale/stacking, and lava is treated as hard landing terrain.
 - Added focused object, food, timer, and wish parity slices: ordinary eating, special-food merge gates, egg timer cleanup, wish-local monster/object binding, charged tools/instruments, and stone-to-flesh carried/floor marble-wand, mineral/gemstone-ring, object-resistance, boulder, and eligible-gem transformations plus stoning/polyself rescue, explicit carnivorous-polyform smell wording, and carried replacement equipment-state preservation.
 - Expanded potion `#dip`, alchemy, broken-vapor, inventory/fire/hot-ground vapor, gremlin/lycanthropy water vapor, forced chest-content potion shatter, direct hero-thrown confusion/booze/paralysis/sleeping/blindness/speed/invisibility/hallucination/healing-family/restore-gain/common-no-effect/oil/sickness/neutral-water/acid/special-water-shapechanger-saddle/polymorph `potionhit()`, lethal shifted-vampire blessed-water revival, generic saddle interception for supported direct potion hits, wielded-potion bash delivery, non-`kn` potion `trycall()` prompts, direct potionhit unseen crash/evaporation/saddle-feedback visibility wording, concrete-otyp identity fallback with adjacent common no-effect vapor trycall coverage, and statue-trap shatter debt coverage.
@@ -37,7 +37,7 @@ Detailed source-backed history is kept in `docs/c-parity-audit/`. Keep this sect
 ## Current Priorities
 
 1. Shared shop ownership helpers.
-   - Source notes: `docs/c-parity-audit/05-food-inventory-containers-shops.md`, `docs/c-parity-audit/51-subagent-findings-2026-05-28.md`, `docs/c-parity-audit/52-subagent-findings-2026-05-28.md`, `docs/c-parity-audit/53-subagent-findings-2026-05-28.md`, `docs/c-parity-audit/54-subagent-findings-2026-05-28.md`, `docs/c-parity-audit/57-subagent-findings-2026-05-28.md`, `docs/c-parity-audit/58-subagent-findings-2026-05-28.md`, `docs/c-parity-audit/60-subagent-findings-2026-05-28.md`, `docs/c-parity-audit/61-subagent-findings-2026-05-28.md`, `docs/c-parity-audit/62-subagent-findings-2026-05-28.md`, `docs/c-parity-audit/63-subagent-findings-2026-05-28.md`, `docs/c-parity-audit/64-subagent-findings-2026-05-28.md`, and `docs/c-parity-audit/89-subagent-findings-2026-05-28.md`.
+   - Source notes: `docs/c-parity-audit/05-food-inventory-containers-shops.md`, `docs/c-parity-audit/51-subagent-findings-2026-05-28.md`, `docs/c-parity-audit/52-subagent-findings-2026-05-28.md`, `docs/c-parity-audit/53-subagent-findings-2026-05-28.md`, `docs/c-parity-audit/54-subagent-findings-2026-05-28.md`, `docs/c-parity-audit/57-subagent-findings-2026-05-28.md`, `docs/c-parity-audit/58-subagent-findings-2026-05-28.md`, `docs/c-parity-audit/60-subagent-findings-2026-05-28.md`, `docs/c-parity-audit/61-subagent-findings-2026-05-28.md`, `docs/c-parity-audit/62-subagent-findings-2026-05-28.md`, `docs/c-parity-audit/63-subagent-findings-2026-05-28.md`, `docs/c-parity-audit/64-subagent-findings-2026-05-28.md`, `docs/c-parity-audit/89-subagent-findings-2026-05-28.md`, and `docs/c-parity-audit/91-subagent-findings-2026-05-28.md`.
    - Replace remaining field-only paths with C-shaped `addtobill`, `subfrombill`, `stolen_value`, `obfree`, and `sellobj` routing.
    - Near-term callers: remaining magic-bag valuation edges outside covered held/floor trigger context, remaining projectile/kick `ship_object()` down-gate and floor-pile loss, generic `obfree()` preservation, broader costly-alteration paths, and remaining stone-to-flesh statue/figurine rows, Sokoban boulder guilt, canonical `M1_CARNIVORE` polyself metadata, and broader `poly_obj()` lifecycle details.
    - Note: ordinary drop `sellobj()` is square-selected in C and should not be converted to owner-first routing without a new source anchor.
@@ -62,7 +62,7 @@ Detailed source-backed history is kept in `docs/c-parity-audit/`. Keep this sect
    - Centralize special-level generation, saved-level/migration/timer state, trap/liquid/material-damage pipelines, glyph/discovery/redraw ordering, and RNG diagnostics.
 
 6. Command, prompt, and menu contracts.
-   - Source notes: `docs/c-parity-audit/01-input-commands-windows.md`, `docs/c-parity-audit/67-subagent-findings-2026-05-28.md`, and `docs/c-parity-audit/88-subagent-findings-2026-05-28.md`.
+   - Source notes: `docs/c-parity-audit/01-input-commands-windows.md`, `docs/c-parity-audit/67-subagent-findings-2026-05-28.md`, `docs/c-parity-audit/88-subagent-findings-2026-05-28.md`, and `docs/c-parity-audit/91-subagent-findings-2026-05-28.md`.
    - Add reusable command registry/binding, count parsing, `getlin`, `yn_function`, `getobj`, `getpos`, and menu-selection primitives.
 
 ## Immediate Slice
@@ -70,10 +70,10 @@ Detailed source-backed history is kept in `docs/c-parity-audit/`. Keep this sect
 Continue narrow C-backed slices in this order unless a failing public regression points elsewhere:
 
 1. Broaden direct `potionhit()` delivery only through a newly selected compact C-backed edge. Full burning-oil explosion collateral belongs with broader explosion work, other shifted-vampire death channels belong with monster death lifecycle work, and full `newcham()` fidelity belongs with the monster lifecycle/equipment core.
-2. Keep remaining stone-to-flesh work narrow: statue/figurine rows should wait for monster/statue lifecycle work; Sokoban boulder guilt, canonical `M1_CARNIVORE` polyself metadata, and broader `poly_obj()` fallout still need source-backed tests before implementation.
-3. Continue registry-backed cleanup for merge/wish/charged-tool metadata after each concrete caller lands.
-4. Continue projectile landing only through remaining C-backed `ship_object()` down-gate, floor-pile loss, gold-throw shipping, and monster-thrown ordering; pre-placement floor effects and lava hard landing are covered.
-5. Keep forced-chest follow-ups narrow and source-backed: buried-zombie wake disturbance, mimic/disguise wake reveal, and ice-box corpse timer details.
+2. Keep remaining stone-to-flesh work narrow: add Sokoban boulder guilt only after object resistance fails; statue/figurine rows should wait for monster/statue lifecycle work, and broader `poly_obj()` fallout still needs source-backed tests before implementation.
+3. Continue registry-backed cleanup for merge/wish/charged-tool metadata, and add compact C diet metadata for pet food/polyself callers, after each concrete caller lands.
+4. Continue projectile landing only through the remote non-gold hero projectile `ship_object()` down-gate first, then floor-pile loss, gold-throw shipping, and monster-thrown ordering; pre-placement floor effects and lava hard landing are covered.
+5. Keep forced-chest follow-ups narrow and source-backed: themed-room buried zombie timer creation, mimic/disguise apparent-name details, and ice-box corpse timer details.
 
 ## Verification
 

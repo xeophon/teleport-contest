@@ -94,6 +94,7 @@ This folder records source-backed audits against `nethack-c/upstream`. The notes
 - [88-subagent-findings-2026-05-28.md](88-subagent-findings-2026-05-28.md): forced chest 50-turn/no-hands exercise cleanup, source-backed force chance, and fresh projectile/potionhit/diet follow-up audits.
 - [89-subagent-findings-2026-05-28.md](89-subagent-findings-2026-05-28.md): hero projectile pre-placement floor-effects gate, lava hard-landing parity, and fresh potionhit/diet/forced-chest follow-up audits.
 - [90-subagent-findings-2026-05-28.md](90-subagent-findings-2026-05-28.md): direct hero-thrown blessed-water lethal shifted-vampire revival plus fresh projectile/diet/forced-chest/stone-to-flesh follow-up audits.
+- [91-subagent-findings-2026-05-28.md](91-subagent-findings-2026-05-28.md): forced-chest buried zombie wake disturbance plus fresh stone-to-flesh, projectile shipping, and diet metadata follow-up audits.
 
 ## Cross-Cutting Themes
 

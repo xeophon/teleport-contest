@@ -782,6 +782,23 @@ function sleepingMonster(name, x = 7, y = 5, data = {}) {
     };
 }
 
+function zombieCorpse(id, x = 5, y = 5, extra = {}) {
+    return {
+        id,
+        otyp: 'corpse',
+        cls: 'food',
+        glyph: '%',
+        kind: 'kobold corpse',
+        actualKind: 'kobold corpse',
+        corpsenm: { name: 'kobold' },
+        quan: 1,
+        ox: x,
+        oy: y,
+        buried: true,
+        ...extra,
+    };
+}
+
 function ordinaryThrowTarget(name = 'goblin', x = 7, y = 5, extra = {}) {
     return {
         mx: x,
@@ -10722,9 +10739,12 @@ test('blunt force wakes nearby sleepers without anger or paralysis cleanup', () 
     const uniqueSleeper = sleepingMonster('Medusa', 6, 5, { unique: true });
     uniqueSleeper.mstrategy = STRAT_WAITFORU;
     uniqueSleeper.waiting = true;
+    const mimicSleeper = sleepingMonster('large mimic', 7, 6);
+    mimicSleeper.appearObj = 'door';
+    mimicSleeper.appearGlyph = '+';
     const farSleeper = sleepingMonster('gnome', 10, 5);
     game.inventory = [weapon];
-    game.level.monsters.push(sleeper, uniqueSleeper, farSleeper);
+    game.level.monsters.push(sleeper, uniqueSleeper, mimicSleeper, farSleeper);
 
     const result = processForceLockOccupationTick({
         chest: shopFloorContainer(6152),
@@ -10744,13 +10764,52 @@ test('blunt force wakes nearby sleepers without anger or paralysis cleanup', () 
     assert.equal(uniqueSleeper.msleeping, 0);
     assert.equal(uniqueSleeper.mstrategy, STRAT_WAITFORU);
     assert.equal(uniqueSleeper.waiting, true);
+    assert.equal(mimicSleeper.msleeping, 0);
+    assert.equal(mimicSleeper.appearObj, 'door');
+    assert.equal(mimicSleeper.appearGlyph, '+');
     assert.equal(farSleeper.msleeping, 1);
+});
+
+test('blunt force disturbs nearby buried zombie corpse timers', () => {
+    installCommandShopState();
+    game.moves = 100;
+    const weapon = wieldedWeapon(61620, 'mace', 'm');
+    const listCorpse = zombieCorpse(61621, 6, 5, { buried: false, zombifyTurn: 190, rotAwayTurn: 130, reviveTurn: 140 });
+    const floorBuried = zombieCorpse(61622, 5, 6, { zombifyTurn: 160 });
+    const farBuried = zombieCorpse(61623, 7, 5, { zombifyTurn: 190 });
+    const rotOnly = zombieCorpse(61624, 5, 4, { rotAwayTurn: 190, reviveTurn: 180 });
+    const unburiedFloorCorpse = zombieCorpse(61625, 5, 5, { buried: false, zombifyTurn: 190 });
+    const dueCorpse = zombieCorpse(61626, 4, 5, { zombifyTurn: 100 });
+    game.inventory = [weapon];
+    game.level.buriedobjlist = [listCorpse, dueCorpse];
+    game.level.objects = [listCorpse, floorBuried, farBuried, rotOnly, unburiedFloorCorpse];
+
+    const result = processForceLockOccupationTick({
+        chest: shopFloorContainer(61627),
+        weapon,
+        picktyp: false,
+        chance: 0,
+    });
+
+    assert.equal(result.stop, false);
+    assert.deepEqual(result.messages, []);
+    assert.equal(listCorpse.zombifyTurn, 160);
+    assert.equal(listCorpse.rotAwayTurn, 130);
+    assert.equal(listCorpse.reviveTurn, 140);
+    assert.equal(floorBuried.zombifyTurn, 140);
+    assert.equal(farBuried.zombifyTurn, 190);
+    assert.equal(rotOnly.rotAwayTurn, 190);
+    assert.equal(rotOnly.reviveTurn, 180);
+    assert.equal(unburiedFloorCorpse.zombifyTurn, 190);
+    assert.equal(dueCorpse.zombifyTurn, 100);
 });
 
 test('blunt force gives up if the weapon is gone before waking sleepers', () => {
     installCommandShopState();
     const sleeper = sleepingMonster('orc', 8, 5);
+    const corpse = zombieCorpse(61629, 5, 5, { zombifyTurn: 190 });
     game.level.monsters.push(sleeper);
+    game.level.buriedobjlist = [corpse];
 
     const result = processForceLockOccupationTick({
         chest: shopFloorContainer(6156),
@@ -10762,6 +10821,7 @@ test('blunt force gives up if the weapon is gone before waking sleepers', () => 
     assert.equal(result.stop, true);
     assert.deepEqual(result.messages, ['You give up your attempt to force the lock.']);
     assert.equal(sleeper.msleeping, 1);
+    assert.equal(corpse.zombifyTurn, 190);
 });
 
 test('blunt force gives up with no hands before waking sleepers or rolling success', () => {
@@ -10770,8 +10830,10 @@ test('blunt force gives up with no hands before waking sleepers or rolling succe
     game.u._polyself_form = { name: 'gas spore', nohands: true };
     const weapon = wieldedWeapon(6158, 'mace', 'm');
     const sleeper = sleepingMonster('orc', 8, 5);
+    const corpse = zombieCorpse(61630, 5, 5, { zombifyTurn: 190 });
     game.inventory = [weapon];
     game.level.monsters.push(sleeper);
+    game.level.buriedobjlist = [corpse];
     enableRngLog({ reset: true });
 
     const result = processForceLockOccupationTick({
@@ -10784,6 +10846,7 @@ test('blunt force gives up with no hands before waking sleepers or rolling succe
     assert.equal(result.stop, true);
     assert.deepEqual(result.messages, ['You give up your attempt to force the lock.']);
     assert.equal(sleeper.msleeping, 1);
+    assert.equal(corpse.zombifyTurn, 190);
     assert.deepEqual(getRngLog(), []);
 });
 
@@ -10794,8 +10857,10 @@ test('blade force does not wake nearby sleepers on an unbroken tick', () => {
     const sleeper = sleepingMonster('orc', 8, 5);
     const blade = dagger(6154, 'd');
     blade.wielded = true;
+    const corpse = zombieCorpse(61628, 5, 5, { zombifyTurn: 190 });
     game.inventory = [blade];
     game.level.monsters.push(sleeper);
+    game.level.buriedobjlist = [corpse];
 
     const result = processForceLockOccupationTick({
         chest: shopFloorContainer(6155),
@@ -10807,6 +10872,7 @@ test('blade force does not wake nearby sleepers on an unbroken tick', () => {
     assert.equal(result.stop, false);
     assert.deepEqual(result.messages, []);
     assert.equal(sleeper.msleeping, 1);
+    assert.equal(corpse.zombifyTurn, 190);
 });
 
 test('force occupation give-up after real effort exercises the matching attribute', () => {
@@ -10815,7 +10881,9 @@ test('force occupation give-up after real effort exercises the matching attribut
     const box = shopFloorContainer(6160);
     box.locked = true;
     box.olocked = true;
+    const corpse = zombieCorpse(61631, 5, 5, { zombifyTurn: 190 });
     game.level.objects = [box];
+    game.level.buriedobjlist = [corpse];
     game.u.acurr.a[A_STR] = -1;
     game._force_lock_occupation = {
         chest: box,
@@ -10831,6 +10899,7 @@ test('force occupation give-up after real effort exercises the matching attribut
     assert.equal(game._force_lock_occupation, null);
     assert.equal(game._pending_message, 'You give up your attempt to force the lock.');
     assert.equal(game.u._aexe[A_STR], 1);
+    assert.equal(corpse.zombifyTurn, 190);
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(19)']);
 });
 
