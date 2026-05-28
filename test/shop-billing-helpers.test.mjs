@@ -15949,6 +15949,274 @@ test('hero-thrown hallucination potion effect can come from potion index', async
     ]);
 });
 
+test('hero-thrown healing potion heals visible monster without angering it', async () => {
+    installNonShopFloorState();
+    game.level.at = () => ({ roomno: 0, typ: ROOM, lit: true });
+    initRng(2);
+    game.u.acurr.a[A_DEX] = 25;
+    const potion = healingPotion(8800, 'h');
+    potion.dknown = true;
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, {
+        mhp: 2,
+        mhpmax: 10,
+    });
+    game.inventory = [potion];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('h');
+    markSquareVisible(goblin.mx, goblin.my);
+    await rhack('l');
+
+    assert.match(game._pending_message, /The (?:bottle|phial|flagon|carafe|flask|jar|vial) crashes on the goblin's head and breaks into shards\./);
+    assert.match(game._pending_message, /The potion of healing evaporates\./);
+    assert.match(game._pending_message, /The goblin looks sound and hale again\./);
+    assert.doesNotMatch(game._pending_message, /peculiar odor|You feel better|can see again/);
+    assert.equal(goblin.mhp, 10);
+    assert.equal(goblin.mhpmax, 10);
+    assert.equal(goblin.msleeping, 0);
+    assert.equal(goblin.mpeaceful, true);
+    assert.equal(game.inventory.includes(potion), false);
+    assert.equal(game.level.objects.length, 0);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(5)',
+    ]);
+});
+
+test('hero-thrown blessed healing potion cures monster blindness', async () => {
+    installNonShopFloorState();
+    game.level.at = () => ({ roomno: 0, typ: ROOM, lit: true });
+    initRng(5);
+    game.u.acurr.a[A_DEX] = 25;
+    const potion = healingPotion(8801, 'h');
+    potion.blessed = true;
+    potion.dknown = true;
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, {
+        mcansee: false,
+        mblinded: 7,
+    });
+    game.inventory = [potion];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('h');
+    markSquareVisible(goblin.mx, goblin.my);
+    await rhack('l');
+
+    assert.match(game._pending_message, /The potion of healing evaporates\./);
+    assert.match(game._pending_message, /The goblin can see again\./);
+    assert.doesNotMatch(game._pending_message, /looks sound and hale/);
+    assert.equal(goblin.mcansee, true);
+    assert.equal(goblin.mblinded, 0);
+    assert.equal(goblin.mpeaceful, true);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(5)',
+    ]);
+});
+
+test('hero-thrown uncursed healing potion does not cure monster blindness', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.u.acurr.a[A_DEX] = 25;
+    const potion = healingPotion(8802, 'h');
+    potion.dknown = true;
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, {
+        mcansee: false,
+        mblinded: 7,
+    });
+    game.inventory = [potion];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('h');
+    await rhack('l');
+
+    assert.match(game._pending_message, /The potion of healing evaporates\./);
+    assert.doesNotMatch(game._pending_message, /can see again/);
+    assert.equal(goblin.mcansee, false);
+    assert.equal(goblin.mblinded, 7);
+    assert.equal(goblin.mpeaceful, true);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(5)',
+    ]);
+});
+
+test('hero-thrown cursed extra healing potion heals but does not cure blindness', async () => {
+    installNonShopFloorState();
+    game.level.at = () => ({ roomno: 0, typ: ROOM, lit: true });
+    initRng(2);
+    game.u.acurr.a[A_DEX] = 25;
+    const potion = extraHealingPotion(8803, 'e');
+    potion.cursed = true;
+    potion.dknown = true;
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, {
+        mhp: 2,
+        mhpmax: 10,
+        mcansee: false,
+        mblinded: 7,
+    });
+    game.inventory = [potion];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('e');
+    markSquareVisible(goblin.mx, goblin.my);
+    await rhack('l');
+
+    assert.match(game._pending_message, /The potion of extra healing evaporates\./);
+    assert.match(game._pending_message, /The goblin looks sound and hale again\./);
+    assert.doesNotMatch(game._pending_message, /can see again/);
+    assert.equal(goblin.mhp, 10);
+    assert.equal(goblin.mcansee, false);
+    assert.equal(goblin.mblinded, 7);
+    assert.equal(goblin.mpeaceful, true);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(5)',
+    ]);
+});
+
+test('hero-thrown cursed full healing potion still cures monster blindness', async () => {
+    installNonShopFloorState();
+    game.level.at = () => ({ roomno: 0, typ: ROOM, lit: true });
+    initRng(2);
+    game.u.acurr.a[A_DEX] = 25;
+    const potion = fullHealingPotion(8804, 'f');
+    potion.cursed = true;
+    potion.dknown = true;
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, {
+        mcansee: false,
+        mblinded: 7,
+    });
+    game.inventory = [potion];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('f');
+    markSquareVisible(goblin.mx, goblin.my);
+    await rhack('l');
+
+    assert.match(game._pending_message, /The potion of full healing evaporates\./);
+    assert.match(game._pending_message, /The goblin can see again\./);
+    assert.equal(goblin.mcansee, true);
+    assert.equal(goblin.mblinded, 0);
+    assert.equal(goblin.mpeaceful, true);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(5)',
+    ]);
+});
+
+test('hero-thrown restore ability potion heals but does not cure monster blindness', async () => {
+    installNonShopFloorState();
+    game.level.at = () => ({ roomno: 0, typ: ROOM, lit: true });
+    initRng(2);
+    game.u.acurr.a[A_DEX] = 25;
+    const potion = namedPotion(8805, 'restore ability', 'p', 1, { dknown: true });
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, {
+        mhp: 2,
+        mhpmax: 10,
+        mcansee: false,
+        mblinded: 7,
+    });
+    game.inventory = [potion];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('p');
+    markSquareVisible(goblin.mx, goblin.my);
+    await rhack('l');
+
+    assert.match(game._pending_message, /The potion of restore ability evaporates\./);
+    assert.match(game._pending_message, /The goblin looks sound and hale again\./);
+    assert.doesNotMatch(game._pending_message, /can see again/);
+    assert.equal(goblin.mhp, 10);
+    assert.equal(goblin.mcansee, false);
+    assert.equal(goblin.mblinded, 7);
+    assert.equal(goblin.mpeaceful, true);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(5)',
+    ]);
+});
+
+test('hero-thrown healing potion makes Pestilence ill and angry', async () => {
+    installNonShopFloorState();
+    game.level.at = () => ({ roomno: 0, typ: ROOM, lit: true });
+    initRng(2);
+    game.u.acurr.a[A_DEX] = 25;
+    const potion = healingPotion(8806, 'h');
+    potion.dknown = true;
+    const pestilence = ordinaryThrowTarget('Pestilence', 7, 5, {
+        mhp: 21,
+        mhpmax: 40,
+        mcansee: false,
+        mblinded: 7,
+        data: { name: 'Pestilence', mlevel: 30 },
+    });
+    game.inventory = [potion];
+    game.level.monsters = [pestilence];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('h');
+    markSquareVisible(pestilence.mx, pestilence.my);
+    await rhack('l');
+
+    assert.match(game._pending_message, /The potion of healing evaporates\./);
+    assert.match(game._pending_message, /The Pestilence looks rather ill\./);
+    assert.doesNotMatch(game._pending_message, /looks sound and hale|can see again/);
+    assert.equal(pestilence.mhp, 10);
+    assert.equal(pestilence.mcansee, false);
+    assert.equal(pestilence.mblinded, 7);
+    assert.equal(pestilence.msleeping, 0);
+    assert.equal(pestilence.mpeaceful, false);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(5)',
+    ]);
+});
+
+test('adjacent hero-thrown full healing potion applies monster healing before vapor', async () => {
+    installNonShopFloorState();
+    game.level.at = () => ({ roomno: 0, typ: ROOM, lit: true });
+    initRng(4);
+    game.u.acurr.a[A_DEX] = 25;
+    game.u.uhp = 6;
+    game.u.uhpmax = 10;
+    const potion = fullHealingPotion(8807, 'f');
+    potion.dknown = true;
+    const goblin = ordinaryThrowTarget('goblin', 6, 5, {
+        mhp: 2,
+        mhpmax: 10,
+        mcansee: false,
+        mblinded: 7,
+    });
+    game.inventory = [potion];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('f');
+    markSquareVisible(goblin.mx, goblin.my);
+    await rhack('l');
+
+    const message = game._pending_message;
+    assert.match(message, /The goblin looks sound and hale again\./);
+    assert.match(message, /The goblin can see again\./);
+    assert.ok(message.indexOf('The goblin looks sound and hale again.') < message.indexOf('The goblin can see again.'));
+    assert.doesNotMatch(message, /You feel better|You can see again/);
+    assert.equal(goblin.mhp, 10);
+    assert.equal(goblin.mcansee, true);
+    assert.equal(game.u.uhp, 9);
+    assert.equal(goblin.mpeaceful, true);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(5)', 'rn2(13)', 'rn2(19)',
+    ]);
+});
+
 test('hero-thrown paralysis potion paralyzes visible monster without resistance roll', async () => {
     installNonShopFloorState();
     initRng(2);

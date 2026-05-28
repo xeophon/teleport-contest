@@ -12576,7 +12576,9 @@ function supportsHeroThrownPotionHit(potion) {
     const kind = thrownPotionEffectKind(potion);
     return kind === 'confusion' || kind === 'booze' || kind === 'paralysis'
         || kind === 'sleeping' || kind === 'blindness' || kind === 'speed'
-        || kind === 'invisibility' || kind === 'hallucination';
+        || kind === 'invisibility' || kind === 'hallucination'
+        || kind === 'healing' || kind === 'extra healing' || kind === 'full healing'
+        || kind === 'restore ability' || kind === 'gain ability';
 }
 
 function thrownPotionEffectKind(potion) {
@@ -12699,6 +12701,49 @@ function invisibilityPotionHitMonster(potion, mon, messages) {
     return angerMon;
 }
 
+function monsterIsPestilence(mon) {
+    return String(mon?.data?.name || mon?.name || '').toLowerCase() === 'pestilence';
+}
+
+function kindIsHealingFamilyPotion(kind) {
+    return kind === 'healing' || kind === 'extra healing' || kind === 'full healing';
+}
+
+function healingPotionCuresMonsterBlindness(kind, potion) {
+    if (kind === 'full healing') return true;
+    if (kind === 'extra healing') return !potion.cursed;
+    return kind === 'healing' && !!potion.blessed;
+}
+
+function cureMonsterBlindnessFromPotion(mon, messages) {
+    if (mon?.mcansee !== false && mon?.mcansee !== 0) return;
+    mon.mcansee = true;
+    mon.mblinded = 0;
+    if (monsterCanBeSeenForPotionEffect(mon) && monsterHasEyesForPotionBlindness(mon))
+        messages.push(`${potionHitMonsterName(mon)} can see again.`);
+}
+
+function healingPotionHitMonster(potion, mon, kind, messages) {
+    if (kindIsHealingFamilyPotion(kind) && monsterIsPestilence(mon)) {
+        if ((mon.mhp || 0) > 2) {
+            mon.mhp = Math.trunc(mon.mhp / 2);
+            if (monsterCanBeSeenForPotionEffect(mon))
+                messages.push(`${potionHitMonsterName(mon)} looks rather ill.`);
+        }
+        return true;
+    }
+
+    const maxHp = Math.max(1, mon.mhpmax || mon.mhp || 1);
+    if ((mon.mhp || 0) < maxHp) {
+        mon.mhp = maxHp;
+        if (monsterCanBeSeenForPotionEffect(mon))
+            messages.push(`${potionHitMonsterName(mon)} looks sound and hale again.`);
+    }
+    if (healingPotionCuresMonsterBlindness(kind, potion))
+        cureMonsterBlindnessFromPotion(mon, messages);
+    return false;
+}
+
 function heroThrownPotionHitMonster(potion, mon) {
     const messages = [];
     const bottle = chestShatterBottleName();
@@ -12728,6 +12773,9 @@ function heroThrownPotionHitMonster(potion, mon) {
         }
     } else if (kind === 'invisibility') {
         angerMon = invisibilityPotionHitMonster(potion, mon, messages);
+    } else if (kind === 'healing' || kind === 'extra healing' || kind === 'full healing'
+        || kind === 'restore ability' || kind === 'gain ability') {
+        angerMon = healingPotionHitMonster(potion, mon, kind, messages);
     }
 
     if ((mon.mhp || 1) > 0) {

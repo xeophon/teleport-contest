@@ -69,6 +69,7 @@ This folder records source-backed audits against `nethack-c/upstream`. The notes
 - [63-subagent-findings-2026-05-28.md](63-subagent-findings-2026-05-28.md): statue shatter owner-aware `stolen_value()` billing plus dropped-object `sellobj()` and chest wording follow-ups.
 - [64-subagent-findings-2026-05-28.md](64-subagent-findings-2026-05-28.md): forced chest material-specific content destruction wording and ordinary-drop `sellobj()` owner-routing correction.
 - [65-subagent-findings-2026-05-28.md](65-subagent-findings-2026-05-28.md): direct hero-thrown hallucination potionhit routing through C's common no-monster-effect branch.
+- [66-subagent-findings-2026-05-28.md](66-subagent-findings-2026-05-28.md): direct hero-thrown healing-family and restore/gain ability potionhit monster effects.
 
 ## Cross-Cutting Themes
 

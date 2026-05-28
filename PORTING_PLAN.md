@@ -29,7 +29,7 @@ Detailed source-backed history is kept in `docs/c-parity-audit/`. Keep this sect
 - Added statue shatter owner billing: hero-caused statue trap shatter now charges an existing live statue bill row to its owning shopkeeper before contents move to the animated monster.
 - Added forced chest material wording: non-potion contents destroyed by a shattered box now use C's paper/wax/veggy/flesh/glass/wood/default destruction verbs.
 - Added focused object, food, timer, and wish parity slices: ordinary eating, special-food merge gates, egg timer cleanup, wish-local monster/object binding, charged tools/instruments, and stone-to-flesh carried/floor marble-wand transformations plus stoning/polyself rescue.
-- Expanded potion `#dip`, alchemy, broken-vapor, inventory/fire/hot-ground vapor, gremlin water vapor, forced chest-content potion shatter, direct hero-thrown confusion/booze/paralysis/sleeping/blindness/speed/invisibility/hallucination `potionhit()`, and statue-trap shatter debt coverage.
+- Expanded potion `#dip`, alchemy, broken-vapor, inventory/fire/hot-ground vapor, gremlin water vapor, forced chest-content potion shatter, direct hero-thrown confusion/booze/paralysis/sleeping/blindness/speed/invisibility/hallucination/healing-family/restore-gain `potionhit()`, and statue-trap shatter debt coverage.
 - Latest verified public score: `44/44`.
 
 ## Current Priorities
@@ -41,9 +41,9 @@ Detailed source-backed history is kept in `docs/c-parity-audit/`. Keep this sect
    - Note: ordinary drop `sellobj()` is square-selected in C and should not be converted to owner-first routing without a new source anchor.
 
 2. Direct object-hit and potion delivery.
-   - Source notes: `docs/c-parity-audit/04-monsters-combat-pets.md`, `docs/c-parity-audit/47-subagent-findings-2026-05-28.md`, `docs/c-parity-audit/50-subagent-findings-2026-05-28.md`, `docs/c-parity-audit/55-subagent-findings-2026-05-28.md`, `docs/c-parity-audit/56-subagent-findings-2026-05-28.md`, `docs/c-parity-audit/57-subagent-findings-2026-05-28.md`, `docs/c-parity-audit/59-subagent-findings-2026-05-28.md`, and `docs/c-parity-audit/65-subagent-findings-2026-05-28.md`.
-   - Broaden the new hero-thrown confusion/booze/paralysis/sleeping/blindness/speed/invisibility/hallucination hit path toward full `potionhit()` one effect family at a time.
-   - Remaining gaps include bash delivery, non-`kn` `trycall()` prompts, exact visibility/discovery handling beyond covered direct/vapor cases, healing/harming/water/oil/acid/polymorph effects, and lycanthropy water vapor.
+   - Source notes: `docs/c-parity-audit/04-monsters-combat-pets.md`, `docs/c-parity-audit/47-subagent-findings-2026-05-28.md`, `docs/c-parity-audit/50-subagent-findings-2026-05-28.md`, `docs/c-parity-audit/55-subagent-findings-2026-05-28.md`, `docs/c-parity-audit/56-subagent-findings-2026-05-28.md`, `docs/c-parity-audit/57-subagent-findings-2026-05-28.md`, `docs/c-parity-audit/59-subagent-findings-2026-05-28.md`, `docs/c-parity-audit/65-subagent-findings-2026-05-28.md`, and `docs/c-parity-audit/66-subagent-findings-2026-05-28.md`.
+   - Broaden the new hero-thrown confusion/booze/paralysis/sleeping/blindness/speed/invisibility/hallucination/healing-family hit path toward full `potionhit()` one effect family at a time.
+   - Remaining gaps include bash delivery, non-`kn` `trycall()` prompts, exact visibility/discovery handling beyond covered direct/vapor cases, sickness/harming/water/oil/acid/polymorph effects, and lycanthropy water vapor.
 
 3. Object registry and canonical object factory.
    - Source notes: `docs/c-parity-audit/02-objects-wishing-readobjnam.md`.
@@ -67,7 +67,7 @@ Detailed source-backed history is kept in `docs/c-parity-audit/`. Keep this sect
 
 Continue narrow C-backed slices in this order unless a failing public regression points elsewhere:
 
-1. Broaden direct `potionhit()` delivery beyond confusion/booze/paralysis/sleeping/blindness/speed/invisibility/hallucination through the next compact C-backed state-changing family, likely healing before the larger water/oil/acid/polymorph branches.
+1. Broaden direct `potionhit()` delivery beyond confusion/booze/paralysis/sleeping/blindness/speed/invisibility/hallucination/healing-family through the next compact C-backed family; sickness/harming and acid need resistance/damage/death plumbing, while water/oil/polymorph need saddle and object-effect coverage.
 2. Close remaining forced-chest gaps: blade breakage during long forcing and blunt wake-nearby behavior.
 3. Continue broader stone-to-flesh object coverage through registry-backed material/object metadata, object resistance, remaining object rows, and floor/beam/shop routing.
 4. Continue registry-backed cleanup for merge/wish/charged-tool metadata after each concrete caller lands.
