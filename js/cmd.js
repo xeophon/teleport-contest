@@ -14020,6 +14020,8 @@ function burnFloorObjectsFromBurningOilExplosion(x, y, messages) {
                 });
                 if (terrain.messages.length) messages.push(...terrain.messages);
                 heardGas = terrain.heardGas;
+                const fountain = applyFireRayFountainTerrain(sx, sy, { heroRay: true });
+                if (fountain.messages.length) messages.push(...fountain.messages);
             }
             const floorFire = burnFloorObjectsByFire(sx, sy, {
                 heroCaused: true,

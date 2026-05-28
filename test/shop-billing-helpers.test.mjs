@@ -19732,6 +19732,52 @@ test('hero-thrown lit oil explosion evaporates moat water without changing terra
     assert.equal(rngNames.indexOf('rnd(5)') < rngNames.lastIndexOf('rn2(100)'), true);
 });
 
+test('hero-thrown lit oil explosion steams and dries blast fountains before monster damage', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.u.acurr.a[A_DEX] = 25;
+    const potion = oilPotion(880749, 'p');
+    potion.dknown = true;
+    potion.lamplit = true;
+    potion.burning = true;
+    const fountainLoc = {
+        roomno: 0,
+        typ: FOUNTAIN,
+        flags: 7,
+        blessedftn: 1,
+        fountainWarned: true,
+    };
+    const cells = new Map([['8,5', fountainLoc]]);
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, { mhp: 30, mhpmax: 30 });
+    game.inventory = [potion];
+    game.level.monsters = [goblin];
+    game.level.flags.nfountains = 1;
+    game.level.at = (x, y) => cells.get(`${x},${y}`) || { roomno: 0, typ: ROOM };
+    markSquareVisible(7, 5);
+    markSquareVisible(8, 5);
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('p');
+    await rhack('l');
+
+    const message = game._pending_message || '';
+    const rngNames = getRngLog().map(entry => entry.replace(/=.*/, ''));
+    assert.equal(fountainLoc.typ, ROOM);
+    assert.equal(fountainLoc.flags, 0);
+    assert.equal(fountainLoc.blessedftn, 0);
+    assert.equal(game.level.flags.nfountains, 0);
+    assert.equal((game.level.regions || []).some(region =>
+        region.type === 'gas_cloud' && region.coords.some(coord => coord.x === 8 && coord.y === 5)), true);
+    assert.match(message, /Steam billows from the fountain\./);
+    assert.match(message, /The fountain dries up!/);
+    assert.equal(message.indexOf('Boom!') < message.indexOf('Steam billows from the fountain.'), true);
+    assert.equal(message.indexOf('Steam billows from the fountain.') < message.indexOf('The fountain dries up!'), true);
+    assert.equal(message.indexOf('The fountain dries up!') < message.indexOf('The goblin is caught in the burning oil!'), true);
+    assert.equal(rngNames.includes('rnd(3)'), true);
+    assert.equal(rngNames.indexOf('rnd(3)') < rngNames.lastIndexOf('rn2(100)'), true);
+});
+
 test('hero-thrown lit oil explosion burns visible webs before monster damage', async () => {
     installNonShopFloorState();
     initRng(2);
