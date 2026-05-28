@@ -1348,6 +1348,8 @@ const POTION_INDEX_BY_NAME = {
     'extra healing': 11,
     'gain level': 12,
     enlightenment: 13,
+    'monster detection': 14,
+    'object detection': 15,
     'gain energy': 16,
     sleeping: 17,
     'full healing': 18,
@@ -16079,6 +16081,86 @@ test('hero-thrown hallucination potion effect can come from potion index', async
     assert.equal(goblin.mpeaceful, false);
     assert.equal(game.inventory.includes(potion), false);
     assert.equal(game._discoveries?.some(entry => entry.section === 'Potions' && entry.name === 'potion of hallucination') ?? false, false);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(5)',
+    ]);
+});
+
+test('hero-thrown common no-effect potions use shared potionhit crash path', async () => {
+    const commonNoEffectPotions = [
+        'levitation',
+        'see invisible',
+        'gain level',
+        'enlightenment',
+        'monster detection',
+        'object detection',
+        'gain energy',
+        'fruit juice',
+    ];
+
+    for (const [index, name] of commonNoEffectPotions.entries()) {
+        installNonShopFloorState();
+        initRng(2);
+        game.u.acurr.a[A_DEX] = 25;
+        const potion = namedPotion(8798 + index, name, 'p', 1, { dknown: true });
+        const goblin = ordinaryThrowTarget('goblin', 7, 5);
+        game.inventory = [potion];
+        game.level.monsters = [goblin];
+        enableRngLog({ reset: true });
+
+        await rhack('t');
+        await rhack('p');
+        await rhack('l');
+
+        const message = game._pending_message || '';
+        assert.match(message, /The (?:bottle|phial|flagon|carafe|flask|jar|vial) crashes on the goblin's head and breaks into shards\./, name);
+        assert.ok(message.includes(`The potion of ${name} evaporates.`), name);
+        assert.doesNotMatch(message, /misses|shatters|peculiar odor|momentary vision|looks sound|falls asleep/, name);
+        assert.equal(goblin.mhp, 4, name);
+        assert.equal(goblin.msleeping, 0, name);
+        assert.equal(goblin.mpeaceful, false, name);
+        assert.equal(game.inventory.includes(potion), false, name);
+        assert.equal(game.level.objects.length, 0, name);
+        assert.equal(game._discoveries?.some(entry => entry.section === 'Potions' && entry.name === `potion of ${name}`) ?? false, false, name);
+        assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+            'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(5)',
+        ], name);
+    }
+});
+
+test('hero-thrown common no-effect potion can come from potion index', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.u.acurr.a[A_DEX] = 25;
+    const potion = {
+        id: 8806,
+        cls: 'potion',
+        glyph: '!',
+        kind: 'puce potion',
+        potionIndex: 15,
+        quan: 1,
+        ox: 5,
+        oy: 5,
+        letter: 'p',
+        line: 'p - a puce potion',
+        dknown: true,
+    };
+    const goblin = ordinaryThrowTarget('goblin', 7, 5);
+    game.inventory = [potion];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('p');
+    await rhack('l');
+
+    assert.match(game._pending_message, /The puce potion evaporates\./);
+    assert.doesNotMatch(game._pending_message, /object detection|peculiar odor|momentary vision/);
+    assert.equal(goblin.mhp, 4);
+    assert.equal(goblin.msleeping, 0);
+    assert.equal(goblin.mpeaceful, false);
+    assert.equal(game.inventory.includes(potion), false);
+    assert.equal(game.level.objects.length, 0);
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
         'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(5)',
     ]);

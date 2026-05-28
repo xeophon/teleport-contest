@@ -12637,6 +12637,11 @@ function thrownPotionHitTargetName(mon) {
     return `${name}'s head`;
 }
 
+const COMMON_NO_MONSTER_EFFECT_POTION_HIT_KINDS = new Set([
+    'levitation', 'see invisible', 'gain level', 'enlightenment',
+    'monster detection', 'object detection', 'gain energy', 'fruit juice',
+]);
+
 function supportsHeroThrownPotionHit(potion) {
     if (!isPotionObject(potion)) return false;
     const kind = thrownPotionEffectKind(potion);
@@ -12644,7 +12649,8 @@ function supportsHeroThrownPotionHit(potion) {
         || kind === 'sleeping' || kind === 'blindness' || kind === 'speed'
         || kind === 'invisibility' || kind === 'hallucination'
         || kind === 'healing' || kind === 'extra healing' || kind === 'full healing'
-        || kind === 'restore ability' || kind === 'gain ability';
+        || kind === 'restore ability' || kind === 'gain ability'
+        || COMMON_NO_MONSTER_EFFECT_POTION_HIT_KINDS.has(kind);
 }
 
 function thrownPotionEffectKind(potion) {
@@ -12842,6 +12848,8 @@ function heroThrownPotionHitMonster(potion, mon) {
     } else if (kind === 'healing' || kind === 'extra healing' || kind === 'full healing'
         || kind === 'restore ability' || kind === 'gain ability') {
         angerMon = healingPotionHitMonster(potion, mon, kind, messages);
+    } else if (COMMON_NO_MONSTER_EFFECT_POTION_HIT_KINDS.has(kind)) {
+        // C has no monster-specific case for these potions; keep the common hit and anger tail.
     }
 
     if ((mon.mhp || 1) > 0) {
