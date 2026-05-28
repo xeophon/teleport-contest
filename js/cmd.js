@@ -12653,6 +12653,17 @@ function monsterHasWornSaddle(mon) {
         && (item.worn || item.owornmask || item.oslot === 'saddle'));
 }
 
+function monsterWornSaddleForPotionHit(mon) {
+    if (!mon) return null;
+    const saddle = (mon.minvent || []).find(item => objectKindKey(item) === 'saddle'
+        && (item.worn || item.owornmask || item.oslot === 'saddle'));
+    if (saddle) return saddle;
+    if (objectKindKey(mon.saddle) === 'saddle'
+        && (mon.saddle.worn || mon.saddle.owornmask || mon.saddle.oslot === 'saddle'))
+        return mon.saddle;
+    return null;
+}
+
 function monsterHatesBlessingsForWaterHit(mon) {
     const data = mon?.data || {};
     const mlet = data.mlet || mon?.mlet || data.glyph || mon?.glyph;
@@ -12683,27 +12694,32 @@ function monsterIsIronGolemForWaterHit(mon) {
     return monsterNameForWaterHit(mon) === 'iron golem';
 }
 
-function isSpecialMonsterWaterPotionHit(potion, mon, kind = thrownPotionEffectKind(potion)) {
-    return kind === 'water' && !monsterHasWornSaddle(mon)
+function isSpecialMonsterWaterPotionHit(potion, mon, kind = thrownPotionEffectKind(potion), options = {}) {
+    return kind === 'water' && (options.ignoreSaddle || !monsterHasWornSaddle(mon))
         && (monsterIsGremlinForWaterHit(mon) || monsterIsIronGolemForWaterHit(mon));
 }
 
-function isBlessingHaterWaterPotionHit(potion, mon, kind = thrownPotionEffectKind(potion)) {
-    return kind === 'water' && !monsterHasWornSaddle(mon)
+function isBlessingHaterWaterPotionHit(potion, mon, kind = thrownPotionEffectKind(potion), options = {}) {
+    return kind === 'water' && (options.ignoreSaddle || !monsterHasWornSaddle(mon))
         && monsterHatesBlessingsForWaterHit(mon) && !monsterIsWereOrVampireForWaterHit(mon);
 }
 
-function monsterNeedsDeferredWaterPotionHit(mon) {
-    if (!mon || monsterHasWornSaddle(mon)) return true;
+function isSaddleWaterPotionHit(potion, mon, kind = thrownPotionEffectKind(potion)) {
+    return kind === 'water' && !!monsterWornSaddleForPotionHit(mon)
+        && !monsterIsWereOrVampireForWaterHit(mon);
+}
+
+function monsterNeedsDeferredWaterPotionHit(mon, options = {}) {
+    if (!mon || (!options.ignoreSaddle && monsterHasWornSaddle(mon))) return true;
     const name = String(mon?.data?.name || mon?.name || '').toLowerCase();
     return name === 'gremlin' || name === 'iron golem'
         || monsterHatesBlessingsForWaterHit(mon)
         || monsterIsWereOrVampireForWaterHit(mon);
 }
 
-function isNeutralOrdinaryWaterPotionHit(potion, mon, kind = thrownPotionEffectKind(potion)) {
+function isNeutralOrdinaryWaterPotionHit(potion, mon, kind = thrownPotionEffectKind(potion), options = {}) {
     return kind === 'water' && isNeutralWaterDipSource(potion)
-        && !monsterNeedsDeferredWaterPotionHit(mon);
+        && !monsterNeedsDeferredWaterPotionHit(mon, options);
 }
 
 function supportsHeroThrownPotionHit(potion, mon = null) {
@@ -12715,6 +12731,7 @@ function supportsHeroThrownPotionHit(potion, mon = null) {
         || kind === 'healing' || kind === 'extra healing' || kind === 'full healing'
         || kind === 'restore ability' || kind === 'gain ability' || kind === 'sickness'
         || kind === 'acid'
+        || isSaddleWaterPotionHit(potion, mon, kind)
         || isBlessingHaterWaterPotionHit(potion, mon, kind)
         || isSpecialMonsterWaterPotionHit(potion, mon, kind)
         || isNeutralOrdinaryWaterPotionHit(potion, mon, kind)
@@ -13098,17 +13115,90 @@ function waterPotionHitBlessingHater(potion, mon, messages) {
     return true;
 }
 
+function waterPotionHitsSaddle(potion) {
+    if (!rn2(10)) return true;
+    if (rnl(10) > 7 && potion?.cursed) return true;
+    if (rnl(10) < 4 && potion?.blessed) return true;
+    return !rn2(3);
+}
+
+function saddlePotionHitTargetName(mon) {
+    const name = mon?.givenName || `the ${mon?.data?.name || 'monster'}`;
+    return `${name}'s saddle`;
+}
+
+function saddleGlowPhrase(mon) {
+    return `${sentenceCase(saddlePotionHitTargetName(mon))} glows`;
+}
+
+function saddleGlowAuraMessage(mon, color) {
+    const article = /^[aeiou]/i.test(color) ? 'an' : 'a';
+    return `${saddleGlowPhrase(mon)} with ${article} ${color} aura.`;
+}
+
+function learnSaddleWaterDipBuc(saddle, potion, visible) {
+    if (!saddle) return;
+    if (visible) {
+        saddle.bknown = !heroIsHallucinating();
+    } else if (!potion?.bknown || !potion?.dknown) {
+        saddle.bknown = false;
+    }
+}
+
+function waterPotionHitSaddle(potion, mon, messages) {
+    const saddle = monsterWornSaddleForPotionHit(mon);
+    if (!saddle) return false;
+    const visible = monsterCanBeSeenForPotionEffect(mon);
+    let affected = false;
+
+    if (potion?.blessed) {
+        if (saddle.cursed) {
+            if (visible) messages.push(`${saddleGlowPhrase(mon)} amber.`);
+            saddle.cursed = false;
+            affected = true;
+        } else if (!saddle.blessed) {
+            if (visible) messages.push(saddleGlowAuraMessage(mon, 'light blue'));
+            saddle.blessed = true;
+            saddle.cursed = false;
+            affected = true;
+        }
+    } else if (potion?.cursed) {
+        if (saddle.blessed) {
+            if (visible) messages.push(`${saddleGlowPhrase(mon)} brown.`);
+            saddle.blessed = false;
+            affected = true;
+        } else if (!saddle.cursed) {
+            if (visible) messages.push(saddleGlowAuraMessage(mon, 'black'));
+            saddle.cursed = true;
+            saddle.blessed = false;
+            affected = true;
+        }
+    }
+
+    if (affected) {
+        learnSaddleWaterDipBuc(saddle, potion, visible);
+    } else if (visible) {
+        messages.push(`${sentenceCase(saddlePotionHitTargetName(mon))} gets wet.`);
+    }
+    return affected;
+}
+
 function heroThrownPotionHitMonster(potion, mon) {
     const messages = [];
     const bottle = chestShatterBottleName();
+    const kind = thrownPotionEffectKind(potion);
+    const saddleWater = isSaddleWaterPotionHit(potion, mon, kind);
+    const hitSaddle = saddleWater && waterPotionHitsSaddle(potion);
+    const waterBranchOptions = { ignoreSaddle: saddleWater };
     let angerMon = true;
-    messages.push(`The ${bottle} crashes on ${thrownPotionHitTargetName(mon)} and breaks into shards.`);
-    if (rn2(5) && (mon.mhp || 1) > 1) mon.mhp--;
-    if (!isPotionOfOil(potion))
+    messages.push(`The ${bottle} crashes on ${hitSaddle ? saddlePotionHitTargetName(mon) : thrownPotionHitTargetName(mon)} and breaks into shards.`);
+    if (!hitSaddle && rn2(5) && (mon.mhp || 1) > 1) mon.mhp--;
+    if (!hitSaddle && !isPotionOfOil(potion))
         messages.push(`The ${pickupObjectName({ ...potion, quan: 1 })} evaporates.`);
 
-    const kind = thrownPotionEffectKind(potion);
-    if (kind === 'confusion' || kind === 'booze') {
+    if (hitSaddle) {
+        waterPotionHitSaddle(potion, mon, messages);
+    } else if (kind === 'confusion' || kind === 'booze') {
         if (!monsterResistsEffect(mon, 6)) mon.mconf = true;
     } else if (kind === 'paralysis') {
         if (monsterCanMoveForPotionParalysis(mon)) paralyzeMonsterFromPotion(mon, rnd(25));
@@ -13134,11 +13224,11 @@ function heroThrownPotionHitMonster(potion, mon) {
     } else if (kind === 'healing' || kind === 'extra healing' || kind === 'full healing'
         || kind === 'restore ability' || kind === 'gain ability') {
         angerMon = healingPotionHitMonster(potion, mon, kind, messages);
-    } else if (isBlessingHaterWaterPotionHit(potion, mon, kind)) {
+    } else if (isBlessingHaterWaterPotionHit(potion, mon, kind, waterBranchOptions)) {
         angerMon = waterPotionHitBlessingHater(potion, mon, messages);
-    } else if (isSpecialMonsterWaterPotionHit(potion, mon, kind)) {
+    } else if (isSpecialMonsterWaterPotionHit(potion, mon, kind, waterBranchOptions)) {
         angerMon = waterPotionHitSpecialMonster(mon, messages);
-    } else if (isNeutralOrdinaryWaterPotionHit(potion, mon, kind)) {
+    } else if (isNeutralOrdinaryWaterPotionHit(potion, mon, kind, waterBranchOptions)) {
         // Ordinary water has no monster-specific case for this gated target set.
     } else if (COMMON_NO_MONSTER_EFFECT_POTION_HIT_KINDS.has(kind)) {
         // C has no monster-specific case for these potions; keep the common hit and anger tail.
@@ -13146,7 +13236,7 @@ function heroThrownPotionHitMonster(potion, mon) {
         // Unlit oil has no monster-specific case; lit oil explosion is handled by a later slice.
     }
 
-    if (!mon.dead && (mon.mhp ?? 1) > 0) {
+    if (!hitSaddle && !mon.dead && (mon.mhp ?? 1) > 0) {
         mon.msleeping = 0;
         if (angerMon) mon.mpeaceful = false;
     }

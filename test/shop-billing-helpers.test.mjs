@@ -6,7 +6,7 @@ import { activateStatueTrap, burnFloorObjectsByFire, earthFloorEffects, finishFo
 import { game, resetGame } from '../js/gstate.js';
 import { pushKey, resetInputState } from '../js/input.js';
 import { enableRngLog, getRngLog, initRng } from '../js/rng.js';
-import { A_DEX, BILLSZ, CANDLESHOP, COULD_SEE, DB_EAST, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, FOUNTAIN, HOLE, ICE, ICED_POOL, IN_SIGHT, LAVAPOOL, POOL, ROOM, ROOMOFFSET, SHOPBASE, SQKY_BOARD, STATUE_TRAP, STRAT_WAITFORU } from '../js/const.js';
+import { A_DEX, BILLSZ, CANDLESHOP, COULD_SEE, DB_EAST, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, FOUNTAIN, HOLE, ICE, ICED_POOL, IN_SIGHT, LAVAPOOL, POOL, ROOM, ROOMOFFSET, SHOPBASE, SQKY_BOARD, STATUE_TRAP, STRAT_WAITFORU, W_SADDLE } from '../js/const.js';
 import { currentFruitId, setCurrentFruitName } from '../js/fruit.js';
 
 const BRASS_LANTERN = 226;
@@ -784,6 +784,16 @@ function ordinaryThrowTarget(name = 'goblin', x = 7, y = 5, extra = {}) {
         msleeping: 1,
         mpeaceful: true,
         data: { name, mlevel: 1 },
+        ...extra,
+    };
+}
+
+function wornSaddle(id, extra = {}) {
+    return {
+        ...ordinaryTool(id, 'saddle', 's'),
+        worn: true,
+        owornmask: W_SADDLE,
+        oslot: 'saddle',
         ...extra,
     };
 }
@@ -16336,6 +16346,149 @@ test('hero-thrown water potion still defers were and vampire shape branches', as
 
     assert.match(game._pending_message, /misses the werewolf/);
     assert.doesNotMatch(game._pending_message, /crashes on .*werewolf.*breaks into shards|writhes|shrieks|looks healthier|rusts/);
+});
+
+test('hero-thrown blessed water potion can uncurse a worn saddle', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.u.acurr.a[A_DEX] = 25;
+    const potion = waterPotion(8817, 'w', { blessed: true, bknown: true });
+    potion.dknown = true;
+    const saddle = wornSaddle(88171, { cursed: true, blessed: false, bknown: true });
+    const pony = ordinaryThrowTarget('pony', 7, 5, {
+        saddled: true,
+        misc_worn_check: W_SADDLE,
+        minvent: [saddle],
+    });
+    game.inventory = [potion];
+    game.level.monsters = [pony];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('w');
+    markSquareVisible(pony.mx, pony.my);
+    await rhack('l');
+
+    assert.match(game._pending_message, /crashes on the pony's saddle and breaks into shards\./);
+    assert.match(game._pending_message, /The pony's saddle glows amber\./);
+    assert.doesNotMatch(game._pending_message, /evaporates|peculiar odor|misses|shrieks|looks healthier|rusts|gets wet/);
+    assert.equal(saddle.cursed, false);
+    assert.equal(saddle.blessed, false);
+    assert.equal(saddle.bknown, true);
+    assert.equal(pony.mhp, 5);
+    assert.equal(pony.msleeping, 1);
+    assert.equal(pony.mpeaceful, true);
+    assert.equal(game.inventory.includes(potion), false);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(10)', 'rnl(10)', 'rnl(10)',
+    ]);
+});
+
+test('hero-thrown cursed water potion can curse a worn saddle', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    game.u.acurr.a[A_DEX] = 25;
+    const potion = waterPotion(8818, 'w', { cursed: true, bknown: true });
+    potion.dknown = true;
+    const saddle = wornSaddle(88181, { blessed: false, cursed: false, bknown: true });
+    const pony = ordinaryThrowTarget('pony', 7, 5, {
+        saddled: true,
+        misc_worn_check: W_SADDLE,
+        minvent: [saddle],
+    });
+    game.inventory = [potion];
+    game.level.monsters = [pony];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('w');
+    markSquareVisible(pony.mx, pony.my);
+    await rhack('l');
+
+    assert.match(game._pending_message, /crashes on the pony's saddle and breaks into shards\./);
+    assert.match(game._pending_message, /The pony's saddle glows with a black aura\./);
+    assert.doesNotMatch(game._pending_message, /evaporates|peculiar odor|misses|writhes|shrieks|looks healthier|rusts|gets wet/);
+    assert.equal(saddle.cursed, true);
+    assert.equal(saddle.blessed, false);
+    assert.equal(saddle.bknown, true);
+    assert.equal(pony.mhp, 5);
+    assert.equal(pony.msleeping, 1);
+    assert.equal(pony.mpeaceful, true);
+    assert.equal(game.inventory.includes(potion), false);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(10)', 'rnl(10)',
+    ]);
+});
+
+test('hero-thrown neutral water potion wets an unaffected worn saddle', async () => {
+    installNonShopFloorState();
+    initRng(5);
+    game.u.acurr.a[A_DEX] = 25;
+    const potion = waterPotion(8821, 'w');
+    potion.dknown = true;
+    const saddle = wornSaddle(88211, { blessed: false, cursed: false, bknown: true });
+    const pony = ordinaryThrowTarget('pony', 7, 5, {
+        saddled: true,
+        misc_worn_check: W_SADDLE,
+        minvent: [saddle],
+    });
+    game.inventory = [potion];
+    game.level.monsters = [pony];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('w');
+    markSquareVisible(pony.mx, pony.my);
+    await rhack('l');
+
+    assert.match(game._pending_message, /crashes on the pony's saddle and breaks into shards\./);
+    assert.match(game._pending_message, /The pony's saddle gets wet\./);
+    assert.doesNotMatch(game._pending_message, /evaporates|peculiar odor|misses|glows|writhes|shrieks|looks healthier|rusts/);
+    assert.equal(saddle.cursed, false);
+    assert.equal(saddle.blessed, false);
+    assert.equal(saddle.bknown, true);
+    assert.equal(pony.mhp, 5);
+    assert.equal(pony.msleeping, 1);
+    assert.equal(pony.mpeaceful, true);
+    assert.equal(game.inventory.includes(potion), false);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(10)',
+    ]);
+});
+
+test('hero-thrown water potion can miss the saddle and hit the monster', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    game.u.acurr.a[A_DEX] = 25;
+    const potion = waterPotion(8822, 'w', { blessed: true, bknown: true });
+    potion.dknown = true;
+    const saddle = wornSaddle(88221, { cursed: true, blessed: false, bknown: true });
+    const pony = ordinaryThrowTarget('pony', 7, 5, {
+        saddled: true,
+        misc_worn_check: W_SADDLE,
+        minvent: [saddle],
+    });
+    game.inventory = [potion];
+    game.level.monsters = [pony];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('w');
+    markSquareVisible(pony.mx, pony.my);
+    await rhack('l');
+
+    assert.match(game._pending_message, /crashes on the pony's head and breaks into shards\./);
+    assert.match(game._pending_message, /The potion of (?:holy )?water evaporates\./);
+    assert.doesNotMatch(game._pending_message, /saddle glows|saddle gets wet|peculiar odor|misses|writhes|shrieks|looks healthier|rusts/);
+    assert.equal(saddle.cursed, true);
+    assert.equal(saddle.blessed, false);
+    assert.equal(pony.mhp, 4);
+    assert.equal(pony.msleeping, 0);
+    assert.equal(pony.mpeaceful, false);
+    assert.equal(game.inventory.includes(potion), false);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(10)', 'rnl(10)', 'rnl(10)', 'rn2(3)', 'rn2(5)',
+    ]);
 });
 
 test('hero-thrown blessed water potion splits an unsaddled gremlin without angering it', async () => {

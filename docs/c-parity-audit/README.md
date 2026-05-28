@@ -78,6 +78,7 @@ This folder records source-backed audits against `nethack-c/upstream`. The notes
 - [72-subagent-findings-2026-05-28.md](72-subagent-findings-2026-05-28.md): direct hero-thrown acid potionhit for resistance, pain damage, wake-nearby behavior, lethal cleanup, and unpaid stack consumption.
 - [73-subagent-findings-2026-05-28.md](73-subagent-findings-2026-05-28.md): direct hero-thrown special-water potionhit for unsaddled gremlin splitting and iron golem rust damage/death.
 - [74-subagent-findings-2026-05-28.md](74-subagent-findings-2026-05-28.md): direct hero-thrown water potionhit for non-shapechanging blessing-haters, including blessed damage, cursed healing, and neutral wake/anger behavior.
+- [75-subagent-findings-2026-05-28.md](75-subagent-findings-2026-05-28.md): direct hero-thrown water potionhit for worn-saddle interception, including saddle-hit RNG, BUC mutation, wet-saddle feedback, and no wake/anger behavior.
 
 ## Cross-Cutting Themes
 
