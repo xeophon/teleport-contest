@@ -16193,6 +16193,134 @@ test('hero-thrown unlit oil potion hits through potionhit without evaporating', 
     ]);
 });
 
+test('hero-thrown sickness potion makes ordinary monsters ill and angry', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.u.acurr.a[A_DEX] = 25;
+    const potion = sicknessPotion(8808, 's', 1, { dknown: true });
+    const goblin = ordinaryThrowTarget('goblin', 7, 5);
+    game.inventory = [potion];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('s');
+    markSquareVisible(goblin.mx, goblin.my);
+    await rhack('l');
+
+    assert.match(game._pending_message, /The potion of sickness evaporates\./);
+    assert.match(game._pending_message, /The goblin looks rather ill\./);
+    assert.doesNotMatch(game._pending_message, /misses|shatters|peculiar odor|looks unharmed/);
+    assert.equal(goblin.mhp, 2);
+    assert.equal(goblin.msleeping, 0);
+    assert.equal(goblin.mpeaceful, false);
+    assert.equal(game.inventory.includes(potion), false);
+    assert.equal(game.level.objects.length, 0);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(5)',
+    ]);
+});
+
+test('hero-thrown sickness potion leaves resistant monsters unharmed but angry', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.u.acurr.a[A_DEX] = 25;
+    const potion = sicknessPotion(8809, 's', 1, { dknown: true });
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, {
+        data: { name: 'goblin', mlevel: 1, poisonResistance: true },
+    });
+    game.inventory = [potion];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('s');
+    markSquareVisible(goblin.mx, goblin.my);
+    await rhack('l');
+
+    assert.match(game._pending_message, /The potion of sickness evaporates\./);
+    assert.match(game._pending_message, /The goblin looks unharmed\./);
+    assert.doesNotMatch(game._pending_message, /looks rather ill|peculiar odor/);
+    assert.equal(goblin.mhp, 4);
+    assert.equal(goblin.msleeping, 0);
+    assert.equal(goblin.mpeaceful, false);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(5)',
+    ]);
+});
+
+test('hero-thrown sickness potion heals Pestilence without angering it', async () => {
+    installNonShopFloorState();
+    game.level.at = () => ({ roomno: 0, typ: ROOM, lit: true });
+    initRng(2);
+    game.u.acurr.a[A_DEX] = 25;
+    const potion = sicknessPotion(8810, 's', 1, { dknown: true });
+    const pestilence = ordinaryThrowTarget('Pestilence', 7, 5, {
+        mhp: 3,
+        mhpmax: 12,
+        mblinded: 7,
+        data: { name: 'Pestilence', mlevel: 30 },
+    });
+    game.inventory = [potion];
+    game.level.monsters = [pestilence];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('s');
+    markSquareVisible(pestilence.mx, pestilence.my);
+    await rhack('l');
+
+    assert.match(game._pending_message, /The potion of sickness evaporates\./);
+    assert.match(game._pending_message, /The Pestilence looks sound and hale again\./);
+    assert.doesNotMatch(game._pending_message, /looks rather ill|can see again|peculiar odor/);
+    assert.equal(pestilence.mhp, 12);
+    assert.equal(pestilence.mblinded, 7);
+    assert.equal(pestilence.msleeping, 0);
+    assert.equal(pestilence.mpeaceful, true);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(5)',
+    ]);
+});
+
+test('hero-thrown sickness potion effect can come from potion index', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.u.acurr.a[A_DEX] = 25;
+    const potion = {
+        id: 8811,
+        cls: 'potion',
+        glyph: '!',
+        kind: 'emerald potion',
+        potionIndex: 21,
+        quan: 1,
+        ox: 5,
+        oy: 5,
+        letter: 's',
+        line: 's - an emerald potion',
+        dknown: true,
+    };
+    const goblin = ordinaryThrowTarget('goblin', 7, 5);
+    game.inventory = [potion];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('s');
+    markSquareVisible(goblin.mx, goblin.my);
+    await rhack('l');
+
+    assert.match(game._pending_message, /The emerald potion evaporates\./);
+    assert.match(game._pending_message, /The goblin looks rather ill\./);
+    assert.doesNotMatch(game._pending_message, /potion of sickness|peculiar odor/);
+    assert.equal(goblin.mhp, 2);
+    assert.equal(goblin.mpeaceful, false);
+    assert.equal(game.inventory.includes(potion), false);
+    assert.equal(game.level.objects.length, 0);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(5)',
+    ]);
+});
+
 test('hero-thrown healing potion heals visible monster without angering it', async () => {
     installNonShopFloorState();
     game.level.at = () => ({ roomno: 0, typ: ROOM, lit: true });

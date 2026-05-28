@@ -12653,14 +12653,15 @@ function supportsHeroThrownPotionHit(potion) {
         || kind === 'sleeping' || kind === 'blindness' || kind === 'speed'
         || kind === 'invisibility' || kind === 'hallucination'
         || kind === 'healing' || kind === 'extra healing' || kind === 'full healing'
-        || kind === 'restore ability' || kind === 'gain ability'
+        || kind === 'restore ability' || kind === 'gain ability' || kind === 'sickness'
         || COMMON_NO_MONSTER_EFFECT_POTION_HIT_KINDS.has(kind)
         || isUnlitOilPotionHit(potion, kind);
 }
 
 function thrownPotionEffectKind(potion) {
     const name = alchemyPotionName(potion);
-    if (name && name !== 'potion' && !name.endsWith(' potion')) return name;
+    const effectName = String(name || '').replace(/^potion of /, '');
+    if (effectName && effectName !== 'potion' && !effectName.endsWith(' potion')) return effectName;
     if (potion?.potionIndex != null) return IDENTIFIED_POTION_NAMES[potion.potionIndex] || name;
     return name;
 }
@@ -12782,6 +12783,39 @@ function monsterIsPestilence(mon) {
     return String(mon?.data?.name || mon?.name || '').toLowerCase() === 'pestilence';
 }
 
+function normalizedMonsterDamageType(type) {
+    return String(type || '').toLowerCase().replace(/^ad_/, '');
+}
+
+function monsterHasDamageType(mon, expectedTypes) {
+    const data = mon?.data || {};
+    const attacks = [];
+    if (mon?.attack) attacks.push(mon.attack);
+    if (data.attack) attacks.push(data.attack);
+    if (Array.isArray(mon?.attacks)) attacks.push(...mon.attacks);
+    if (Array.isArray(data.attacks)) attacks.push(...data.attacks);
+
+    const damageTypes = [
+        mon?.adtyp, mon?.damageType, mon?.dmgtype,
+        data.adtyp, data.damageType, data.dmgtype,
+        ...(Array.isArray(mon?.damageTypes) ? mon.damageTypes : []),
+        ...(Array.isArray(data.damageTypes) ? data.damageTypes : []),
+        ...attacks.map(attack => attack?.adtyp),
+    ];
+    return damageTypes.some(type => expectedTypes.has(normalizedMonsterDamageType(type)));
+}
+
+function monsterResistsPoison(mon) {
+    const data = mon?.data || {};
+    return !!(mon?.poisonResistance || mon?.resistsPoison || mon?.resists_poison
+        || data.poisonResistance || data.resistsPoison || data.resists_poison);
+}
+
+function monsterResistsSicknessPotion(mon) {
+    return monsterResistsPoison(mon)
+        || monsterHasDamageType(mon, new Set(['dise', 'disease', 'pest', 'pestilence']));
+}
+
 function kindIsHealingFamilyPotion(kind) {
     return kind === 'healing' || kind === 'extra healing' || kind === 'full healing';
 }
@@ -12821,6 +12855,31 @@ function healingPotionHitMonster(potion, mon, kind, messages) {
     return false;
 }
 
+function sicknessPotionHitMonster(mon, messages) {
+    if (monsterIsPestilence(mon)) {
+        const maxHp = Math.max(1, mon.mhpmax || mon.mhp || 1);
+        if ((mon.mhp || 0) < maxHp) {
+            mon.mhp = maxHp;
+            if (monsterCanBeSeenForPotionEffect(mon))
+                messages.push(`${potionHitMonsterName(mon)} looks sound and hale again.`);
+        }
+        return false;
+    }
+
+    if (monsterResistsSicknessPotion(mon)) {
+        if (monsterCanBeSeenForPotionEffect(mon))
+            messages.push(`${potionHitMonsterName(mon)} looks unharmed.`);
+        return true;
+    }
+
+    if ((mon.mhp || 0) > 2) {
+        mon.mhp = Math.trunc(mon.mhp / 2);
+        if (monsterCanBeSeenForPotionEffect(mon))
+            messages.push(`${potionHitMonsterName(mon)} looks rather ill.`);
+    }
+    return true;
+}
+
 function heroThrownPotionHitMonster(potion, mon) {
     const messages = [];
     const bottle = chestShatterBottleName();
@@ -12850,6 +12909,8 @@ function heroThrownPotionHitMonster(potion, mon) {
         }
     } else if (kind === 'invisibility') {
         angerMon = invisibilityPotionHitMonster(potion, mon, messages);
+    } else if (kind === 'sickness') {
+        angerMon = sicknessPotionHitMonster(mon, messages);
     } else if (kind === 'healing' || kind === 'extra healing' || kind === 'full healing'
         || kind === 'restore ability' || kind === 'gain ability') {
         angerMon = healingPotionHitMonster(potion, mon, kind, messages);
