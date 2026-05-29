@@ -8700,6 +8700,98 @@ test('named metallivorous polyself forms eat metal tins through diet overlay', a
     }
 });
 
+test('metallivorous carried non-food metal is offered and eaten', async () => {
+    installCommandShopState();
+    installMetallivorousForm();
+    const blade = dagger(30945, 'd');
+    game.inventory = [blade];
+
+    await rhack('e');
+
+    assert.equal(game._command_mode, 'eatObject');
+    assert.match(game._pending_message, /What do you want to eat\? \[d or \?\*\]/);
+
+    await rhack('d');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.inventory.includes(blade), false);
+    assert.equal(game.u.uhunger, 910);
+    assert.equal(game.context.move, 1);
+    assert.match(game._pending_message, /This dagger is delicious!/);
+});
+
+test('non-metallivores do not offer carried non-food metal for eating', async () => {
+    installCommandShopState();
+    const blade = dagger(30946, 'd');
+    game.inventory = [blade];
+
+    await rhack('e');
+
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game.inventory.includes(blade), true);
+    assert.equal(game.u.uhunger, 900);
+    assert.match(game._pending_message, /You don't have anything to eat\./);
+});
+
+test('rust monster polyself only offers iron metal', async () => {
+    installCommandShopState();
+    game.u._polyself_form = { name: 'rust monster', nohands: false, verysmall: false };
+    const copperBlade = { ...dagger(30947, 'd'), material: 'copper', line: 'd - a copper dagger' };
+    game.inventory = [copperBlade];
+
+    await rhack('e');
+
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game.inventory.includes(copperBlade), true);
+    assert.match(game._pending_message, /You don't have anything to eat\./);
+});
+
+test('rust monster eating rustproof carried iron strips and spits it onto the floor', async () => {
+    installCommandShopState();
+    game.u._polyself_form = { name: 'rust monster', nohands: false, verysmall: false };
+    const blade = { ...dagger(30948, 'd'), oerodeproof: true, rustproof: true, line: 'd - a rustproof dagger' };
+    game.inventory = [blade];
+    game.level.objects = [];
+
+    await rhack('e');
+    await rhack('d');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.inventory.includes(blade), false);
+    assert.equal(game.u.uhunger, 900);
+    assert.equal(game.context.move, 1);
+    assert.match(game._pending_message, /Ulch - that dagger was rustproofed!/);
+    assert.match(game._pending_message, /You spit the dagger out onto the floor\./);
+    assert.equal(game.level.objects.length, 1);
+    assert.equal(game.level.objects[0].kind, 'dagger');
+    assert.equal(game.level.objects[0].oerodeproof, false);
+    assert.equal(game.level.objects[0].rustproof, false);
+    assert.equal(game.level.objects[0].rknown, true);
+});
+
+test('metallivorous floor non-food metal can be eaten from the hero square', async () => {
+    installCommandShopState();
+    installMetallivorousForm();
+    const blade = dagger(30949, undefined);
+    delete blade.letter;
+    delete blade.line;
+    game.inventory = [];
+    game.level.objects = [blade];
+
+    await rhack('e');
+
+    assert.equal(game._command_mode, 'eatFloorObject');
+    assert.match(game._pending_message, /There is a dagger here; eat it\? \[ynq\] \(n\)/);
+
+    await rhack('y');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.level.objects.includes(blade), false);
+    assert.equal(game.u.uhunger, 910);
+    assert.equal(game.context.move, 1);
+    assert.match(game._pending_message, /This dagger is delicious!/);
+});
+
 test('first bite of unpaid carried food stack splits live and used-up bill rows', () => {
     const { shkp } = installShopState();
     const stack = foodRation(3101, 'a');

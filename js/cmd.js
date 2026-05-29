@@ -29,6 +29,7 @@ import { figurineLocationCheck, isFigurineObject, makeFigurineFamiliar, maybeAtt
 import { applyMonsterLiquidEffectsAt } from './monster_liquid.js';
 import { applySlimeMoldFruitFields, currentFruitId, currentFruitJuiceName, currentFruitName, fruitWishMatch, setCurrentFruitName, slimeMoldNameForObject } from './fruit.js';
 import { eggHasHatchTimer, eggSpeciesGenocidedForHatching, killDeadSpeciesEggHatchTimers, killEggHatchTimer } from './egg_timers.js';
+import { METALLIC_MATERIALS, metallivoreObjectAlwaysResists, objectIsAmuletLike, objectIsRingLike, objectIsSlowDigestionRing, objectMaterialForMetallivore } from './metallivore.js';
 
 const DIR_DX = { h: -1, l: 1, j: 0, k: 0, y: -1, u: 1, b: -1, n: 1 };
 const DIR_DY = { h: 0, l: 0, j: 1, k: -1, y: -1, u: -1, b: 1, n: 1 };
@@ -7452,7 +7453,7 @@ const CMDASSIST_DIRECTION_LINES = [
 ];
 
 function eatingPrompt() {
-    const letters = inventoryLetters(item => item.cls === 'food' || item.otyp === FOOD_CLASS || item.otyp === 'corpse' || item.otyp === CORPSE);
+    const letters = inventoryLetters(heroInventoryEatCandidate);
     const contiguous = [...letters].every((ch, i) => !i || ch.charCodeAt(0) === letters.charCodeAt(i - 1) + 1);
     const display = contiguous && letters.length > 5 ? `${letters[0]}-${letters[letters.length - 1]}` : letters;
     return `What do you want to eat? [${display || '-'} or ?*]`;
@@ -18710,6 +18711,161 @@ function tinVariety(item, display = false) {
 
 function heroIsMetallivorous() {
     return !!(polyselfFormWithDiet()?.metallivorous || game.u?.metallivorous);
+}
+
+function heroIsRustMonsterPolyself() {
+    const form = polyselfFormWithDiet();
+    return String(form?.name || game.u?.umonster || '').toLowerCase() === 'rust monster';
+}
+
+function isFoodOrCorpseObject(item) {
+    return item?.cls === 'food' || item?.otyp === FOOD_CLASS || item?.otyp === 'corpse' || item?.otyp === CORPSE;
+}
+
+function heroInventoryEatCandidate(item) {
+    return isFoodOrCorpseObject(item) || heroCanEatNonFoodMetal(item);
+}
+
+function heroCanEatNonFoodMetal(item) {
+    if (!heroIsMetallivorous() || !item || isFoodOrCorpseObject(item) || isTinObject(item)) return false;
+    if (metallivoreObjectAlwaysResists(item)) return false;
+    const material = objectMaterialForMetallivore(item);
+    if (!METALLIC_MATERIALS.has(material)) return false;
+    return !(heroIsRustMonsterPolyself() && material !== 'iron');
+}
+
+function heroMetalEatingWornBlock(item) {
+    if (!isWornInventoryItem(item) || objectIsRingLike(item)) return false;
+    return item.cls === 'armor' || item.otyp === ARMOR_CLASS || item.glyph === '['
+        || item.cls === 'tool' || item.otyp === TOOL_CLASS || item.glyph === '('
+        || objectIsAmuletLike(item)
+        || item.otyp === W_SADDLE || item.kind === 'saddle';
+}
+
+function refreshInventoryLineAfterMetalSplit(item) {
+    if (!item || !game.inventory?.includes(item)) return;
+    delete item.line;
+    item.line = normalInventoryLine(item);
+}
+
+function splitCarriedMetalUnit(item) {
+    const quantity = item?.quan || 1;
+    if (quantity <= 1) return item;
+    const split = { ...item, id: next_ident(), quan: 1 };
+    item.quan = quantity - 1;
+    refreshInventoryLineAfterMetalSplit(item);
+    return split;
+}
+
+function splitFloorMetalUnit(item) {
+    const quantity = item?.quan || 1;
+    if (quantity <= 1 || !game.level?.objects?.includes(item)) return item;
+    const rest = { ...item, id: next_ident(), quan: quantity - 1 };
+    item.quan = 1;
+    game.level.objects.push(rest);
+    return item;
+}
+
+function removeEatenFloorMetalObject(item) {
+    if (!game.level || !item) return;
+    removeFloorObject(item);
+    newsym(item.ox ?? game.u?.ux ?? 0, item.oy ?? game.u?.uy ?? 0);
+}
+
+function dropMetalObjectAtHero(item) {
+    if (!item || !game.level) return;
+    Object.assign(item, {
+        ox: game.u?.ux ?? 0,
+        oy: game.u?.uy ?? 0,
+        hidden: false,
+        buried: false,
+        contained: false,
+        transientProjectile: false,
+    });
+    delete item.letter;
+    delete item.line;
+    placeStackableFloorObject(item);
+    newsym(item.ox, item.oy);
+}
+
+function heroMetalNonFoodNutrition(item) {
+    if (!item) return 0;
+    if (item.otyp === GOLD_PIECE || item.cls === 'coin' || item.glyph === '$')
+        return Math.min(2000, Math.trunc((item.quan || 1) / 100));
+    if (item.cls === 'ball' || item.cls === 'chain' || item.otyp === BC_BALL || item.otyp === BC_CHAIN)
+        return globObjectWeight(item);
+    const explicit = item.oc_nutrition ?? item.nutrition;
+    if (explicit != null) return Math.max(0, Math.trunc(Number(explicit) || 0));
+    return globObjectWeight({ ...item, quan: 1 });
+}
+
+async function eatHeroNonFoodMetal(item, { floorObject = false } = {}) {
+    if (!item) return false;
+    if (!floorObject && heroMetalEatingWornBlock(item)) {
+        await setMessage("You can't eat something you're wearing.");
+        game._command_mode = null;
+        return true;
+    }
+
+    if (heroIsRustMonsterPolyself() && (item.oerodeproof || item.rustproof)) {
+        const spat = floorObject ? splitFloorMetalUnit(item) : splitCarriedMetalUnit(item);
+        spat.rknown = true;
+        spat.oerodeproof = false;
+        spat.rustproof = false;
+        const stunTurns = rn2(10);
+        if (stunTurns > 0) addHeroStun(stunTurns);
+        const name = pickupObjectName({ ...spat, quan: 1 });
+        if (!floorObject && !(spat.cursed && objectIsRingLike(spat))) {
+            if ((game.inventory || []).includes(spat)) removeInventoryItem(spat, spat.quan || 1);
+            dropMetalObjectAtHero(spat);
+            await setMessage(`Ulch - that ${name} was rustproofed!  You spit the ${name} out onto the floor.`);
+        } else {
+            if (!floorObject && (game.inventory || []).includes(spat)) refreshInventoryLineAfterMetalSplit(spat);
+            await setMessage(`Ulch - that ${name} was rustproofed!  You spit out the ${name}.`);
+        }
+        game._command_mode = null;
+        game.context.move = 1;
+        return true;
+    }
+
+    if (objectIsSlowDigestionRing(item)) {
+        await setMessage('This ring is indigestible!');
+        game._command_mode = null;
+        game.context.move = 1;
+        return true;
+    }
+
+    const name = pickupObjectName({ ...item, quan: 1 });
+    const messages = [];
+    if (item.opoisoned && isPoisonableWeaponObject(item)) {
+        messages.push('Ecch - that must have been poisonous!');
+        if (heroHasPoisonResistance()) {
+            messages.push('You seem unaffected by the poison.');
+        } else {
+            const strengthDamage = rnd(4);
+            const hpDamage = rnd(15);
+            if (game.u?.acurr?.a) {
+                game.u.acurr.a[A_STR] = Math.max(3, (game.u.acurr.a[A_STR] ?? 10) - strengthDamage);
+                exerciseAttribute(A_STR, false);
+            }
+            if (game.u) game.u.uhp = Math.max(0, (game.u.uhp || 0) - hpDamage);
+            if ((game.u?.uhp || 0) <= 0) {
+                game._death_cause = `killed by a poisonous ${name}`;
+                messages.push('You die...');
+            }
+        }
+    } else if (!item.cursed) {
+        messages.push(`This ${name} is delicious!`);
+    }
+
+    addHeroNutrition(heroMetalNonFoodNutrition(item));
+    if (floorObject) removeEatenFloorMetalObject(item);
+    else removeInventoryItem(item, item.quan || 1);
+    game._pet_food_scan_inventory = game.inventory || [];
+    await setMessage(messages.join('  ') || `This ${name} is delicious!`, messages.length > 1);
+    game._command_mode = null;
+    game.context.move = 1;
+    return true;
 }
 
 function wieldedItem() {
@@ -51449,6 +51605,10 @@ export async function rhack(_cmd) {
             game._command_mode = null;
             return;
         }
+        if (heroCanEatNonFoodMetal(item)) {
+            await eatHeroNonFoodMetal(item);
+            return;
+        }
         if (item?.cls === 'food' || item?.otyp === FOOD_CLASS || item?.otyp === 'corpse' || item?.otyp === CORPSE) {
             const name = item.singular || pickupObjectName({ ...item, quan: 1 });
             const fortuneCookie = isFortuneCookieFood(item);
@@ -51543,6 +51703,10 @@ export async function rhack(_cmd) {
             game._eating_floor_object_direct_useup = 0;
             if (isTinObject(food)) {
                 await startTinOpening(food, true);
+                return;
+            }
+            if (heroCanEatNonFoodMetal(food)) {
+                await eatHeroNonFoodMetal(food, { floorObject: true });
                 return;
             }
             if ((food?.otyp === 'corpse' || food?.otyp === CORPSE) && food?.corpsenm?.name === 'lichen') {
@@ -53176,7 +53340,7 @@ export async function rhack(_cmd) {
             !obj.hidden
             && obj.ox === game.u?.ux
             && obj.oy === game.u?.uy
-            && (obj.cls === 'food' || obj.otyp === FOOD_CLASS || obj.otyp === 'corpse' || obj.otyp === CORPSE));
+            && (isFoodOrCorpseObject(obj) || heroCanEatNonFoodMetal(obj)));
         if (floorFood) {
             const name = pickupObjectName(floorFood);
             const article = /^[aeiou]/i.test(name) ? 'an' : 'a';
@@ -53188,7 +53352,7 @@ export async function rhack(_cmd) {
             game._command_mode = 'eatFloorObject';
             return;
         }
-        const letters = inventoryLetters(item => item.cls === 'food' || item.otyp === FOOD_CLASS || item.otyp === 'corpse' || item.otyp === CORPSE);
+        const letters = inventoryLetters(heroInventoryEatCandidate);
         if (!letters) {
             await setMessage("You don't have anything to eat.");
             return;
