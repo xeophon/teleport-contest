@@ -18853,6 +18853,7 @@ function parseWishedDragonArmorName(lowerName) {
         type: match[2] === 'scales' ? 'scales' : 'mail',
         spec: DRAGON_ARMOR_BY_COLOR.get(match[1]),
         armorAlias: match[2] === 'scale armor',
+        alternateSpelling: match[1] === 'grey',
     };
 }
 
@@ -18862,8 +18863,8 @@ function makeWishedDragonArmorObject(dragonWish = {}) {
         : dragonWish.spec;
     if (!spec) return null;
     const mail = dragonWish.type === 'mail';
-    if (mail && !dragonWish.random)
-        rn2(dragonWish.armorAlias ? 1 : 67);
+    if (mail && !dragonWish.random && !dragonWish.alternateSpelling)
+        rn2(67);
     const kind = `${spec.colorName} dragon ${mail ? 'scale mail' : 'scales'}`;
     const otmp = mksobj(mail ? spec.mailOtyp : spec.scalesOtyp, true, false);
     return Object.assign(otmp, {

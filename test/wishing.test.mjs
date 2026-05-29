@@ -11,7 +11,7 @@ import {
     MOAT, PIT, POOL, ROOM, SCORR, SDOOR, SINK, S_LDWASHER, S_LPUDDING,
     S_LRING, THRONE, TREE, TREE_LOOTED, TREE_SWARM, T_LOOTED, WATER,
 } from '../js/const.js';
-import { initRng } from '../js/rng.js';
+import { enableRngLog, getRngLog, initRng } from '../js/rng.js';
 import { mksobj } from '../js/mklev.js';
 import { currentFruitId, setCurrentFruitName } from '../js/fruit.js';
 
@@ -41,6 +41,26 @@ const EXPENSIVE_CAMERA = 10082;
 const MAGIC_MARKER = 10084;
 const TINNING_KIT = 10170;
 const CAN_OF_GREASE = 10171;
+const GRAY_DRAGON_SCALE_MAIL = 10085;
+const SILVER_DRAGON_SCALE_MAIL = 10086;
+const GOLD_DRAGON_SCALE_MAIL = 10140;
+const RED_DRAGON_SCALE_MAIL = 10141;
+const WHITE_DRAGON_SCALE_MAIL = 10142;
+const ORANGE_DRAGON_SCALE_MAIL = 10143;
+const BLACK_DRAGON_SCALE_MAIL = 10144;
+const BLUE_DRAGON_SCALE_MAIL = 10145;
+const GREEN_DRAGON_SCALE_MAIL = 10146;
+const YELLOW_DRAGON_SCALE_MAIL = 10147;
+const GRAY_DRAGON_SCALES = 10148;
+const GOLD_DRAGON_SCALES = 10149;
+const SILVER_DRAGON_SCALES = 10150;
+const RED_DRAGON_SCALES = 10151;
+const WHITE_DRAGON_SCALES = 10152;
+const ORANGE_DRAGON_SCALES = 10153;
+const BLACK_DRAGON_SCALES = 10154;
+const BLUE_DRAGON_SCALES = 10155;
+const GREEN_DRAGON_SCALES = 10156;
+const YELLOW_DRAGON_SCALES = 10157;
 const SHORT_SWORD = 10031;
 const ELVEN_SHORT_SWORD = 10186;
 const ORCISH_SHORT_SWORD = 10187;
@@ -70,6 +90,18 @@ const LUMP_OF_ROYAL_JELLY = 10089;
 const MEATBALL = 11012;
 const MEAT_STICK = 11014;
 const ENORMOUS_MEATBALL = 11013;
+const DRAGON_SCALE_MAIL_OTYPES = new Set([
+    GRAY_DRAGON_SCALE_MAIL, GOLD_DRAGON_SCALE_MAIL, SILVER_DRAGON_SCALE_MAIL,
+    RED_DRAGON_SCALE_MAIL, WHITE_DRAGON_SCALE_MAIL, ORANGE_DRAGON_SCALE_MAIL,
+    BLACK_DRAGON_SCALE_MAIL, BLUE_DRAGON_SCALE_MAIL, GREEN_DRAGON_SCALE_MAIL,
+    YELLOW_DRAGON_SCALE_MAIL,
+]);
+const DRAGON_SCALES_OTYPES = new Set([
+    GRAY_DRAGON_SCALES, GOLD_DRAGON_SCALES, SILVER_DRAGON_SCALES,
+    RED_DRAGON_SCALES, WHITE_DRAGON_SCALES, ORANGE_DRAGON_SCALES,
+    BLACK_DRAGON_SCALES, BLUE_DRAGON_SCALES, GREEN_DRAGON_SCALES,
+    YELLOW_DRAGON_SCALES,
+]);
 
 function testCell(typ = ROOM) {
     return { roomno: 0, typ, flags: 0, altarmask: 0, doormask: 0, horizontal: false, wall_info: 0 };
@@ -1058,6 +1090,57 @@ test('generic wished object ranges use C rnd_class candidates', async () => {
         }
         assert.ok(seen.size > 1, `${wish} should not collapse to one concrete object`);
     }
+});
+
+test('dragon armor wishes follow C range and namedesc RNG paths', async () => {
+    async function wishedDragon(text) {
+        installWishState(1);
+        enableRngLog({ reset: true });
+        beginWishDirectly();
+        await submitWish(text);
+        return { item: game.inventory[0], log: [...getRngLog()] };
+    }
+
+    let result = await wishedDragon('dragon scales');
+    assert.ok(DRAGON_SCALES_OTYPES.has(result.item.otyp), `dragon scales produced ${result.item.otyp}`);
+    assert.equal(result.item.dragonArmorKind, 'scales');
+    assert.match(result.log[0], /^rn2\(10\)=/);
+    assert.ok(!result.log.some(entry => /^rn2\(67\)=/.test(entry)));
+
+    result = await wishedDragon('dragon scale mail');
+    assert.ok(DRAGON_SCALE_MAIL_OTYPES.has(result.item.otyp), `dragon scale mail produced ${result.item.otyp}`);
+    assert.equal(result.item.dragonArmorKind, 'mail');
+    assert.match(result.log[0], /^rn2\(10\)=/);
+    assert.ok(!result.log.some(entry => /^rn2\(67\)=/.test(entry)));
+
+    result = await wishedDragon('dragon scale armor');
+    assert.ok(DRAGON_SCALE_MAIL_OTYPES.has(result.item.otyp), `dragon scale armor produced ${result.item.otyp}`);
+    assert.equal(result.item.dragonArmorKind, 'mail');
+    assert.match(result.log[0], /^rn2\(10\)=/);
+    assert.ok(!result.log.some(entry => /^rn2\(67\)=/.test(entry)));
+
+    result = await wishedDragon('red dragon scale mail');
+    assert.equal(result.item.otyp, RED_DRAGON_SCALE_MAIL);
+    assert.equal(result.item.kind, 'red dragon scale mail');
+    assert.match(result.log[0], /^rn2\(67\)=/);
+
+    result = await wishedDragon('red dragon scale armor');
+    assert.equal(result.item.otyp, RED_DRAGON_SCALE_MAIL);
+    assert.equal(result.item.kind, 'red dragon scale mail');
+    assert.match(result.log[0], /^rn2\(67\)=/);
+    assert.ok(!result.log.some(entry => /^rn2\(1\)=/.test(entry)));
+
+    result = await wishedDragon('grey dragon scale mail');
+    assert.equal(result.item.otyp, GRAY_DRAGON_SCALE_MAIL);
+    assert.equal(result.item.kind, 'gray dragon scale mail');
+    assert.match(result.log[0], /^rnd\(2\)=/);
+    assert.ok(!result.log.some(entry => /^rn2\(67\)=/.test(entry)));
+
+    result = await wishedDragon('grey dragon scale armor');
+    assert.equal(result.item.otyp, GRAY_DRAGON_SCALE_MAIL);
+    assert.equal(result.item.kind, 'gray dragon scale mail');
+    assert.match(result.log[0], /^rnd\(2\)=/);
+    assert.ok(!result.log.some(entry => /^rn2\(67\)=/.test(entry)));
 });
 
 test('generic wished lamp range substitutes magic lamp after C range roll outside wizard mode', async () => {
