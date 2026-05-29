@@ -1298,6 +1298,19 @@ function stoneToFleshStatue(id, x = 5, y = 5, monster = vegetarianCorpstatMonste
     return statue;
 }
 
+function golemCorpstatMonster(name = 'stone golem', props = {}) {
+    return vegetarianCorpstatMonster(name, "'", {
+        color: props.color ?? 7,
+        mlevel: props.mlevel ?? 14,
+        hpLevel: props.hpLevel ?? 14,
+        mmove: props.mmove ?? 6,
+        neuter: true,
+        strong: true,
+        stoneResistance: name === 'stone golem',
+        ...props,
+    });
+}
+
 function egg(id, letter = 'e', quan = 1) {
     return {
         id,
@@ -3942,6 +3955,50 @@ test('self-cast stone to flesh animates carried nonvegetarian figurine', async (
     assertNoStoneToFleshScoreSideEffects();
 });
 
+test('self-cast stone to flesh turns carried stone-golem figurine into flesh golem', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    markHeroNeighborhoodVisible();
+    const figurine = stoneToFleshFigurine(31101, 'a', golemCorpstatMonster('stone golem'));
+    figurine.cursed = true;
+    figurine.figurineTransformTurn = 42;
+    figurine._figurine_transform_seq = 7;
+    game.inventory = [figurine];
+
+    await castStoneToFleshAtSelf();
+
+    assert.equal(game.inventory.includes(figurine), false);
+    assert.equal(figurine.figurineTransformTurn, undefined);
+    assert.equal(figurine._figurine_transform_seq, undefined);
+    const monster = (game.level.monsters || []).find(mon => mon.data?.name === 'flesh golem');
+    assert.ok(monster);
+    assert.equal((game.level.monsters || []).some(mon => mon.data?.name === 'stone golem'), false);
+    assert.match(game._pending_message || '', /The figurine turns to flesh and animates!/);
+    assert.doesNotMatch(game._pending_message || '', /odor of meat|delicious smell/);
+    assertNoStoneToFleshScoreSideEffects();
+});
+
+test('self-cast stone to flesh animates carried flesh-golem figurine without transform wording', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    markHeroNeighborhoodVisible();
+    const figurine = stoneToFleshFigurine(31102, 'a', golemCorpstatMonster('flesh golem', {
+        mlevel: 9,
+        hpLevel: 9,
+        mmove: 8,
+        stoneResistance: false,
+    }));
+    game.inventory = [figurine];
+
+    await castStoneToFleshAtSelf();
+
+    assert.equal(game.inventory.includes(figurine), false);
+    assert.ok((game.level.monsters || []).find(mon => mon.data?.name === 'flesh golem'));
+    assert.match(game._pending_message || '', /The figurine animates!/);
+    assert.doesNotMatch(game._pending_message || '', /turns to flesh|odor of meat|delicious smell/);
+    assertNoStoneToFleshScoreSideEffects();
+});
+
 test('self-cast stone to flesh checks figurine resistance before animation', async () => {
     installNonShopFloorState();
     initRng(40);
@@ -4282,6 +4339,33 @@ test('downward stone to flesh animates non-shop floor nonvegetarian figurine', a
     assertNoStoneToFleshScoreSideEffects();
 });
 
+test('downward stone to flesh turns floor stone-golem figurine into flesh golem', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    markHeroNeighborhoodVisible();
+    const figurine = stoneToFleshFigurine(31103, undefined, golemCorpstatMonster('stone golem'));
+    Object.assign(figurine, {
+        ox: 5,
+        oy: 5,
+        line: undefined,
+        figurineTransformTurn: 42,
+        _figurine_transform_seq: 7,
+    });
+    game.inventory = [];
+    game.level.objects = [figurine];
+
+    await castStoneToFleshDown();
+
+    assert.equal(game.level.objects.includes(figurine), false);
+    assert.equal(figurine.figurineTransformTurn, undefined);
+    assert.equal(figurine._figurine_transform_seq, undefined);
+    assert.ok((game.level.monsters || []).find(mon => mon.data?.name === 'flesh golem'));
+    assert.equal((game.level.monsters || []).some(mon => mon.data?.name === 'stone golem'), false);
+    assert.match(game._pending_message || '', /The figurine turns to flesh and animates!/);
+    assert.doesNotMatch(game._pending_message || '', /odor of meat|delicious smell/);
+    assertNoStoneToFleshScoreSideEffects();
+});
+
 test('downward stone to flesh animates shop-floor figurine and charges stolen value', async () => {
     const { shkp } = installCommandShopState();
     game.level.at = () => ({ roomno: ROOMOFFSET, typ: ROOM });
@@ -4537,6 +4621,54 @@ test('downward stone to flesh turns vegetarian statue into meatball', async () =
     assert.equal(result.corpsenm, null);
     assert.notEqual(result.id, 31033);
     assert.match(game._pending_message, /You smell the odor of meat\./);
+    assertNoStoneToFleshScoreSideEffects();
+});
+
+test('downward stone to flesh turns floor stone-golem statue into flesh golem and transfers contents', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    markHeroNeighborhoodVisible();
+    const statue = stoneToFleshStatue(31104, 5, 5, golemCorpstatMonster('stone golem'));
+    const ration = simpleFood(31105, 'food ration');
+    statue.contents = [ration];
+    game.inventory = [];
+    game.level.objects = [statue];
+
+    await castStoneToFleshDown();
+
+    assert.equal(game.level.objects.includes(statue), false);
+    assert.equal(game.level.objects.some(obj => obj === ration), false);
+    const monster = (game.level.monsters || []).find(mon => mon.data?.name === 'flesh golem');
+    assert.ok(monster);
+    assert.equal((game.level.monsters || []).some(mon => mon.data?.name === 'stone golem'), false);
+    assert.equal(monster.minvent?.[0], ration);
+    assert.equal(ration.contained, false);
+    assert.equal(ration.ox, undefined);
+    assert.equal(ration.oy, undefined);
+    assert.match(game._pending_message || '', /The statue of a stone golem turns into flesh!/);
+    assert.doesNotMatch(game._pending_message || '', /odor of meat|delicious smell/);
+    assertNoStoneToFleshScoreSideEffects();
+});
+
+test('downward stone to flesh animates floor flesh-golem statue with moves wording', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    markHeroNeighborhoodVisible();
+    const statue = stoneToFleshStatue(31106, 5, 5, golemCorpstatMonster('flesh golem', {
+        mlevel: 9,
+        hpLevel: 9,
+        mmove: 8,
+        stoneResistance: false,
+    }));
+    game.inventory = [];
+    game.level.objects = [statue];
+
+    await castStoneToFleshDown();
+
+    assert.equal(game.level.objects.includes(statue), false);
+    assert.ok((game.level.monsters || []).find(mon => mon.data?.name === 'flesh golem'));
+    assert.match(game._pending_message || '', /The statue of a flesh golem moves!/);
+    assert.doesNotMatch(game._pending_message || '', /turns into flesh|odor of meat|delicious smell/);
     assertNoStoneToFleshScoreSideEffects();
 });
 
