@@ -13227,6 +13227,157 @@ test('unpaid fragile carried object falling through a hole charges before breaki
     assert.equal(shop.shopBillEntryForObject(shkp, potion), null);
 });
 
+test('command carried drop down stairs uses stair gate before same-square hole', async () => {
+    installNonShopFloorState();
+    installRemoteDownStairGate({ x: 5, y: 5, trap: { ttyp: HOLE } });
+    initRng(1);
+    const blade = dagger(512013, 'd');
+    game.inventory = [blade];
+
+    await rhack('d');
+    await rhack('d');
+
+    const queued = queuedImpactDropsFor({ dnum: 0, dlevel: 2 });
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.inventory.length, 0);
+    assert.equal(game.level.objects.some(obj => obj.id === blade.id), false);
+    assert.equal(queued.some(obj => obj.id === blade.id), true);
+    const dropped = queued.find(obj => obj.id === blade.id);
+    assert.deepEqual(dropped._impactDropMigration?.fromLevel, { dnum: 0, dlevel: 1 });
+    assert.equal(dropped._impactDropMigration?.where, MIGR_STAIRS_UP);
+    assert.match(game._pending_message, /You drop a dagger\./);
+    assert.match(game._pending_message, /A dagger falls down the stairs\./);
+    assert.doesNotMatch(game._pending_message, /through the hole/);
+});
+
+test('command carried drop down ladder skips stay roll and delivers on reciprocal ladder', async () => {
+    installNonShopFloorState();
+    installRemoteDownStairGate({ x: 5, y: 5, isladder: true });
+    initRng(4);
+    enableRngLog({ reset: true });
+    const blade = dagger(512014, 'd');
+    game.inventory = [blade];
+
+    await rhack('d');
+    await rhack('d');
+
+    const queued = queuedImpactDropsFor({ dnum: 0, dlevel: 2 });
+    assert.equal(queued.length, 1);
+    const dropped = queued[0];
+    assert.equal(dropped.id, blade.id);
+    assert.equal(dropped._impactDropMigration?.where, MIGR_LADDER_UP);
+    assert.match(game._pending_message, /A dagger falls down the ladder\./);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(100)']);
+
+    game.u.uz = { dnum: 0, dlevel: 2 };
+    game.level.objects = [];
+    game.stairs = {
+        sx: 12,
+        sy: 6,
+        up: true,
+        isladder: true,
+        tolev: { dnum: 0, dlevel: 1 },
+        next: null,
+    };
+    game.level.at = (x, y) => ({
+        roomno: 0,
+        typ: x === 12 && y === 6 ? LADDER : ROOM,
+        ladder: x === 12 && y === 6 ? 1 : 0,
+    });
+
+    shop.deliverQueuedImpactDroppedObjectsForTest({ dnum: 0, dlevel: 2 });
+
+    assert.equal(game.level.objects.includes(dropped), true);
+    assert.equal(dropped.ox, 12);
+    assert.equal(dropped.oy, 6);
+    assert.equal(dropped._impactDropMigration, undefined);
+});
+
+test('command carried drop down branch stairs records special-stair metadata', async () => {
+    installNonShopFloorState();
+    installRemoteDownStairGate({ x: 5, y: 5, targetLevel: { dnum: 1, dlevel: 1 } });
+    initRng(1);
+    const blade = dagger(512015, 'd');
+    game.inventory = [blade];
+
+    await rhack('d');
+    await rhack('d');
+
+    const queued = queuedImpactDropsFor({ dnum: 1, dlevel: 1 });
+    assert.equal(queued.length, 1);
+    assert.equal(queued[0].id, blade.id);
+    assert.equal(queued[0]._impactDropMigration?.where, MIGR_SSTAIRS);
+    assert.deepEqual(queued[0]._impactDropMigration?.targetLevel, { dnum: 1, dlevel: 1 });
+    assert.match(game._pending_message, /A dagger falls down the stairs\./);
+});
+
+test('command carried drop down stairs can stay and place locally', async () => {
+    installNonShopFloorState();
+    installRemoteDownStairGate({ x: 5, y: 5 });
+    initRng(4);
+    enableRngLog({ reset: true });
+    const blade = dagger(512016, 'd');
+    game.inventory = [blade];
+
+    await rhack('d');
+    await rhack('d');
+
+    assert.equal(queuedImpactDropsFor({ dnum: 0, dlevel: 2 }).length, 0);
+    assert.equal(game.level.objects.some(obj => obj.id === blade.id), true);
+    assert.match(game._pending_message, /You drop a dagger\./);
+    assert.doesNotMatch(game._pending_message, /falls down the stairs/);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(3)']);
+});
+
+test('unpaid fragile carried potion down stairs charges before muffled break', async () => {
+    const { shkp } = installCommandShopState();
+    installRemoteDownStairGate({ x: 5, y: 5 });
+    initRng(1);
+    const potion = oilPotion(512017, 'o');
+    game.inventory = [potion];
+    shop.addObjectToShopBill(shkp, potion, 60);
+
+    await rhack('d');
+    await rhack('o');
+
+    const text = game._pending_message;
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.inventory.length, 0);
+    assert.equal(game.level.objects.some(obj => obj.id === potion.id), false);
+    assert.equal(queuedImpactDropsFor({ dnum: 0, dlevel: 2 }).some(obj => obj.id === potion.id), false);
+    assert.match(text, /A potion of oil falls down the stairs\./);
+    assert.match(text, /owe Izchak 60 zorkmids? for it/);
+    assert.match(text, /You hear a muffled crash\./);
+    assert.ok(text.indexOf('owe Izchak 60') < text.indexOf('muffled crash'));
+    assert.equal(shkp.debit, 60);
+    assert.equal(shkp.billct, 0);
+    assert.equal(shop.shopBillEntryForObject(shkp, potion), null);
+    assert.equal(potion.unpaid, false);
+});
+
+test('slippery grease drop uses carried down-stair shipping helper', async () => {
+    installNonShopFloorState();
+    installRemoteDownStairGate({ x: 5, y: 5 });
+    initRng(1);
+    game.u._glibTimeout = 3;
+    const grease = chargedTool(512018, 'can of grease', 'g', 4);
+    game.inventory = [grease];
+
+    await rhack('a');
+    await rhack('g');
+
+    const queued = queuedImpactDropsFor({ dnum: 0, dlevel: 2 });
+    assert.equal(game.context.move, 1);
+    assert.equal(game.inventory.length, 0);
+    assert.equal(game.level.objects.some(obj => obj.id === grease.id), false);
+    assert.equal(queued.some(obj => obj.id === grease.id), true);
+    assert.equal(queued.find(obj => obj.id === grease.id)._impactDropMigration?.where, MIGR_STAIRS_UP);
+    assert.match(game._pending_message, /slips from your fingers/);
+    assert.match(game._pending_message, /A can of grease falls down the stairs\./);
+});
+
 test('shop-floor stock falling through a hole charges stolen value before migration', () => {
     const { shkp } = installShopState();
     installSeenHoleAtHero();

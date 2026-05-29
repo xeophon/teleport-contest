@@ -386,9 +386,12 @@ function dropCarriedObjectAtHero(item, messages = []) {
     if (Array.isArray(dropped.cobj)) dropped.cobj = [...dropped.cobj];
     normalizeContainedObjectParents(dropped);
     removeInventoryItem(item, item.quan || 1);
-    const placed = placeObjectOnFloorWithEffects(dropped, dropped.ox, dropped.oy, messages, 'drop', {
-        usedUpShopBillOnDestroy: true,
-    });
+    const shipObject = maybeShipCarriedDropObject(dropped, dropped.ox, dropped.oy, messages);
+    const placed = shipObject.handled
+        ? false
+        : placeObjectOnFloorWithEffects(dropped, dropped.ox, dropped.oy, messages, 'drop', {
+            usedUpShopBillOnDestroy: true,
+        });
     if (!placed) clearObjectShopBillState(item);
     let shopSale = null;
     if (placed && !sellobjReturnUnpaidToShop(dropped, dropped.ox, dropped.oy)) {
@@ -23836,6 +23839,60 @@ function remoteProjectileDownGateAt(obj, x, y, { allowGold = false } = {}) {
         && (candidate.mhp == null || candidate.mhp > 0));
     if (mon) return null;
     return downGateAt(x, y);
+}
+
+function carriedDropDownGateAt(obj, x, y) {
+    if (!obj || shopBillableGold(obj)) return null;
+    if (obj === game.u?.uball || obj === game.u?.uchain) return null;
+    if (game.u?.uswallow) return null;
+    return downGateAt(x, y);
+}
+
+function maybeShipCarriedDropObject(obj, x, y, messages) {
+    const gate = carriedDropDownGateAt(obj, x, y);
+    if (!gate) return projectileShipObjectResult();
+    if (isBoulderObject(obj) && gate.where === MIGR_RANDOM && gate.trap) {
+        const boulderImpact = impactDropFloorObjects(x, y, gate, { targetLevel: gate.targetLevel, route: gate });
+        if (boulderImpact.message) messages.push(boulderImpact.message);
+        return projectileShipObjectResult({ impact: boulderImpact });
+    }
+    const target = gate.targetLevel;
+    const gateText = impactDropGateText(gate);
+    const impactQuantity = impactDropPileQuantity(impactDropCandidatePile(x, y, { missile: obj }));
+    const noDrop = gate.where !== MIGR_LADDER_UP && !!rn2(3);
+    if (gateText && !game.u?.blind && cansee(x, y)) {
+        const subject = floorObjectSubject(obj);
+        if (impactQuantity) {
+            const other = impactQuantity === 1 ? 'another object' : 'other objects';
+            const hit = floorEffectsObjectVerb(obj, 'hits', 'hit');
+            const suffix = noDrop ? '' : ` and ${floorEffectsObjectVerb(obj, 'falls', 'fall')} ${gateText}`;
+            messages.push(`${subject} ${hit} ${other}${suffix}.`);
+        } else if (!noDrop) {
+            messages.push(`${subject} ${floorEffectsObjectVerb(obj, 'falls', 'fall')} ${gateText}.`);
+        }
+    }
+    if (noDrop) {
+        const impact = impactQuantity
+            ? impactDropFloorObjects(x, y, gate, { targetLevel: target, route: gate })
+            : emptyImpactDropResult();
+        if (impact.message) messages.push(impact.message);
+        return projectileShipObjectResult({ noDrop: true, target, where: gate.where, gateText, impact });
+    }
+    const debt = shipObjectShopDebt(obj, x, y);
+    if (debt.message) messages.push(debt.message);
+    const breakKind = impactDropObjectBreaks(obj);
+    if (breakKind) {
+        messages.push(`You hear a muffled ${shipObjectMuffledBreakResult(breakKind)}.`);
+        newsym(x, y);
+        return projectileShipObjectResult({ handled: true, broke: true, breakKind, target, where: gate.where, gateText, debt });
+    }
+    queueImpactDroppedObjects(target, [obj], gate);
+    const impact = impactQuantity
+        ? impactDropFloorObjects(x, y, gate, { targetLevel: target, route: gate })
+        : emptyImpactDropResult();
+    if (impact.message) messages.push(impact.message);
+    newsym(x, y);
+    return projectileShipObjectResult({ handled: true, target, where: gate.where, gateText, debt, impact });
 }
 
 function maybeShipRemoteProjectileObject(obj, x, y, messages, options = {}) {
@@ -49620,11 +49677,17 @@ export async function rhack(_cmd) {
             normalizeContainedObjectParents(dropped);
             const floorMessages = [];
             let shopSale = null;
-            const consumedByFloor = earthFloorEffects(dropped, dropped.ox, dropped.oy, floorMessages, 'drop', {
-                usedUpShopBillOnDestroy: true,
-            });
-            if (consumedByFloor) clearObjectShopBillState(item);
-            if (!consumedByFloor) {
+            const shipObject = maybeShipCarriedDropObject(dropped, dropped.ox, dropped.oy, floorMessages);
+            let consumedByFloor = false;
+            if (shipObject.handled) {
+                clearObjectShopBillState(item);
+            } else {
+                consumedByFloor = earthFloorEffects(dropped, dropped.ox, dropped.oy, floorMessages, 'drop', {
+                    usedUpShopBillOnDestroy: true,
+                });
+                if (consumedByFloor) clearObjectShopBillState(item);
+            }
+            if (!shipObject.handled && !consumedByFloor) {
                 game.level.objects.push(dropped);
                 if (!sellobjReturnUnpaidToShop(dropped, dropped.ox, dropped.oy))
                     shopSale = beginDroppedPaidObjectSale(dropped, dropped.ox, dropped.oy);
