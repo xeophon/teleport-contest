@@ -147,6 +147,7 @@ This folder records source-backed audits against `nethack-c/upstream`. The notes
 - [141-subagent-findings-2026-05-29.md](141-subagent-findings-2026-05-29.md): ordinary upward corpse toss-up damage plus fresh down-gate, shop-door, metallivore, doppelganger, and monster-thrown audits.
 - [142-metallivorous-nonfood-eat-2026-05-29.md](142-metallivorous-nonfood-eat-2026-05-29.md): metallivorous non-food `#eat`, rustproof iron spit-out, and refreshed adjacent gaps.
 - [143-burning-oil-shop-door-damage-2026-05-29.md](143-burning-oil-shop-door-damage-2026-05-29.md): burning-oil shop-door damage records, post-blast shop debt, and delayed shopkeeper repair.
+- [144-metal-accessory-eataccessory-2026-05-29.md](144-metal-accessory-eataccessory-2026-05-29.md): metallivorous metal ring/amulet taste discovery, chance-gated accessory effects, and refreshed adjacent C-backed gaps.
 
 ## Cross-Cutting Themes
 

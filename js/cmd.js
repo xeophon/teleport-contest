@@ -4866,9 +4866,28 @@ function recordKnownAmuletDiscovery(kind, item = null) {
     if (existing) {
         existing.text = text;
         existing.starred = false;
+        existing.known = true;
         return;
     }
     game._discoveries.push({ section: 'Amulets', name, text, starred: false, known: true });
+}
+
+function recordKnownRingDiscovery(kind, item = null) {
+    const raw = String(kind || '').toLowerCase().replace(/^ring of /, '');
+    if (!raw) return;
+    const ringIndex = item?.ringRoll != null ? item.ringRoll - 1 : IDENTIFIED_RING_NAMES.indexOf(raw);
+    const appearance = item?.appearance || game._object_descriptions?.rings?.[ringIndex] || '';
+    const name = `ring of ${raw}`;
+    const text = appearance ? `${name} (${appearance})` : name;
+    game._discoveries ??= [];
+    const existing = game._discoveries.find(entry => entry.section === 'Rings' && entry.name === name);
+    if (existing) {
+        existing.text = text;
+        existing.starred = false;
+        existing.known = true;
+        return;
+    }
+    game._discoveries.push({ section: 'Rings', name, text, starred: false, known: true });
 }
 const MAGICAL_ARMOR_KINDS = new Set([
     'cloak of displacement', 'cloak of invisibility', 'cloak of magic resistance',
@@ -16423,6 +16442,7 @@ function wornItemKindIncludes(text) {
 function heroIsBreathlessForChoke() {
     const form = polyselfForm() || {};
     return !!(game.u?.breathless || game.u?.Breathless
+        || game.u?.magicalBreathing || game.u?.Magical_breathing
         || form.breathless
         || wornItemKindIncludes('amulet of magical breathing'));
 }
@@ -18798,7 +18818,234 @@ function heroMetalNonFoodNutrition(item) {
         return globObjectWeight(item);
     const explicit = item.oc_nutrition ?? item.nutrition;
     if (explicit != null) return Math.max(0, Math.trunc(Number(explicit) || 0));
+    if (objectIsRingLike(item)) return 15;
     return globObjectWeight({ ...item, quan: 1 });
+}
+
+function eatenRingName(item) {
+    if (!objectIsRingLike(item)) return '';
+    const raw = item?.ringRoll ? IDENTIFIED_RING_NAMES[item.ringRoll - 1] || ''
+        : String(item?.actualKind || item?.kind || '').toLowerCase().replace(/^ring of /, '');
+    return raw.replace(/^ring of /, '');
+}
+
+function eatenAmuletName(item) {
+    if (!objectIsAmuletLike(item)) return '';
+    return String(item?.actualKind
+        || (item?.amuletIndex != null ? IDENTIFIED_AMULET_NAMES[item.amuletIndex] : '')
+        || item?.kind || '').toLowerCase();
+}
+
+function eatenAccessoryHasEffect(item, messages) {
+    messages.push(`Magic spreads through your body as you digest the ${objectIsRingLike(item) ? 'ring' : 'amulet'}.`);
+}
+
+function adjustHeroAttribute(attr, delta) {
+    if (!game.u?.acurr?.a || !delta) return false;
+    const before = game.u.acurr.a[attr] ?? 10;
+    const after = Math.max(3, Math.min(125, before + delta));
+    game.u.acurr.a[attr] = after;
+    if (delta > 0 && game.u.amax?.a) game.u.amax.a[attr] = Math.max(game.u.amax.a[attr] || after, after);
+    return after !== before;
+}
+
+function boundedAccessoryIncrease(oldValue, inc) {
+    const old = Math.trunc(Number(oldValue || 0));
+    let amount = Math.trunc(Number(inc || 0));
+    const absOld = Math.abs(old);
+    let absInc = Math.abs(amount);
+    const sameSign = Math.sign(old) === Math.sign(amount);
+    if (absInc !== 0 && sameSign && absOld + absInc >= 10) {
+        if (absOld + absInc < 20) {
+            absInc = rnd(absInc);
+            if (absOld + absInc < 10) absInc = 10 - absOld;
+            amount = Math.sign(amount) * absInc;
+        } else if (absOld + absInc < 40) {
+            absInc = rn2(absInc) ? 1 : 0;
+            if (absOld + absInc < 20) absInc = rnd(20 - absOld);
+            amount = Math.sign(amount) * absInc;
+        } else amount = 0;
+    }
+    return old + amount;
+}
+
+const EATEN_RING_PROPERTY_FIELDS = new Map([
+    ['regeneration', 'regeneration'],
+    ['searching', 'searching'],
+    ['stealth', 'stealth'],
+    ['hunger', 'hunger'],
+    ['aggravate monster', 'aggravateMonster'],
+    ['conflict', 'conflict'],
+    ['warning', 'warning'],
+    ['poison resistance', 'poisonResistance'],
+    ['fire resistance', 'fireResistance'],
+    ['cold resistance', 'coldResistance'],
+    ['shock resistance', 'shockResistance'],
+    ['teleportation', 'teleportation'],
+    ['teleport control', 'teleportControl'],
+    ['polymorph', 'polymorph'],
+    ['polymorph control', 'polymorphControl'],
+    ['see invisible', 'seeInvisible'],
+    ['invisibility', 'invisible'],
+    ['protection from shape changers', 'protectionFromShapeChangers'],
+]);
+
+function applyEatenRingEffect(item, messages) {
+    const name = eatenRingName(item);
+    const spe = Math.trunc(Number(item?.spe ?? 0));
+    switch (name) {
+    case 'adornment':
+        eatenAccessoryHasEffect(item, messages);
+        if (adjustHeroAttribute(A_CHA, spe)) recordKnownRingDiscovery(name, item);
+        return true;
+    case 'gain strength':
+        eatenAccessoryHasEffect(item, messages);
+        if (adjustHeroAttribute(A_STR, spe)) recordKnownRingDiscovery(name, item);
+        return true;
+    case 'gain constitution':
+        eatenAccessoryHasEffect(item, messages);
+        if (adjustHeroAttribute(A_CON, spe)) recordKnownRingDiscovery(name, item);
+        return true;
+    case 'increase accuracy':
+        eatenAccessoryHasEffect(item, messages);
+        if (game.u) game.u.uhitinc = boundedAccessoryIncrease(game.u.uhitinc, spe);
+        return true;
+    case 'increase damage':
+        eatenAccessoryHasEffect(item, messages);
+        if (game.u) game.u.udaminc = boundedAccessoryIncrease(game.u.udaminc, spe);
+        return true;
+    case 'protection':
+        eatenAccessoryHasEffect(item, messages);
+        if (game.u) {
+            game.u.protection = true;
+            game.u.ublessed = boundedAccessoryIncrease(game.u.ublessed, spe);
+        }
+        return true;
+    case 'free action':
+        if (!game.u?.sleepResistance) eatenAccessoryHasEffect(item, messages);
+        if (game.u) {
+            if (!game.u.sleepResistance) messages.push('You feel wide awake.');
+            game.u.sleepResistance = true;
+        }
+        return true;
+    case 'levitation':
+        if (game.u && !game.u.levitation && !game.u.Levitation) {
+            eatenAccessoryHasEffect(item, messages);
+            game.u.levitation = true;
+            game.u._levitationTimeout = (game.u._levitationTimeout || 0) + d(10, 20);
+            recordKnownRingDiscovery(name, item);
+        }
+        return true;
+    case 'sustain ability':
+        return false;
+    default: {
+        const field = EATEN_RING_PROPERTY_FIELDS.get(name);
+        if (!field || !game.u) return false;
+        if (!game.u[field]) eatenAccessoryHasEffect(item, messages);
+        const oldInvisible = !!game.u.invisible;
+        const oldSeeInvisible = !!game.u.seeInvisible;
+        game.u[field] = true;
+        if (name === 'invisibility' && !oldInvisible && !game.u.blind) {
+            messages.push(`Your body takes on a ${heroIsHallucinating() ? 'normal' : 'strange'} transparency...`);
+            recordKnownRingDiscovery(name, item);
+        }
+        if (name === 'see invisible' && game.u.invisible && !oldSeeInvisible && !game.u.blind) {
+            messages.push('Suddenly you can see yourself.');
+            recordKnownRingDiscovery(name, item);
+        }
+        return true;
+    }
+    }
+}
+
+const EATEN_AMULET_PROPERTY_FIELDS = new Map([
+    ['amulet of esp', 'telepathy'],
+    ['amulet versus poison', 'poisonResistance'],
+    ['amulet of magical breathing', 'magicalBreathing'],
+]);
+
+function applyEatenAmuletEffect(item, messages) {
+    const name = eatenAmuletName(item);
+    switch (name) {
+    case 'amulet of guarding':
+        eatenAccessoryHasEffect(item, messages);
+        if (game.u) {
+            game.u.protection = true;
+            game.u.ublessed = boundedAccessoryIncrease(game.u.ublessed, 2);
+        }
+        return true;
+    case 'amulet of restful sleep': {
+        if (!game.u) return false;
+        if (!game.u.sleepy) eatenAccessoryHasEffect(item, messages);
+        game.u.sleepy = true;
+        const newNap = rnd(100);
+        const oldNap = game.u.sleepyTimeout || 0;
+        if (!oldNap || newNap < oldNap) game.u.sleepyTimeout = newNap;
+        return true;
+    }
+    case 'amulet of change':
+        eatenAccessoryHasEffect(item, messages);
+        recordKnownAmuletDiscovery(name, item);
+        if (game.u) {
+            game.u.female = !game.u.female;
+            messages.push(`You are suddenly very ${game.u.female ? 'feminine' : 'masculine'}!`);
+        }
+        return true;
+    case 'amulet of unchanging':
+        if (game.u?._polyself_form || game.u?.Upolyd || game.u?.polymorphed) {
+            eatenAccessoryHasEffect(item, messages);
+            recordKnownAmuletDiscovery(name, item);
+            game.u._polyself_form = null;
+            game.u.Upolyd = false;
+            game.u.polymorphed = false;
+        }
+        return true;
+    case 'amulet of strangulation':
+        if (game.u) {
+            game.u.uhp = 0;
+            game.u.strangled = true;
+            game._death_cause = 'killed by strangulation';
+            messages.push('You choke over your food.');
+            messages.push('You die...');
+        }
+        return true;
+    case 'amulet of life saving':
+    case 'amulet of flying':
+    case 'amulet of reflection':
+        return false;
+    default: {
+        const field = EATEN_AMULET_PROPERTY_FIELDS.get(name);
+        if (!field || !game.u) return false;
+        if (!game.u[field]) eatenAccessoryHasEffect(item, messages);
+        game.u[field] = true;
+        if (field === 'magicalBreathing') game.u.Magical_breathing = true;
+        return true;
+    }
+    }
+}
+
+function markEatenAccessoryTasted(item) {
+    item.known = true;
+    item.dknown = true;
+    recordObservedObjectDiscovery(item);
+}
+
+function applyEatenMetalAccessoryEffects(item, messages) {
+    if (objectIsRingLike(item)) {
+        const name = eatenRingName(item);
+        if (!name) return false;
+        markEatenAccessoryTasted(item);
+        if (rn2(3)) return false;
+        return applyEatenRingEffect(item, messages);
+    }
+    if (objectIsAmuletLike(item)) {
+        const name = eatenAmuletName(item);
+        if (!name) return false;
+        markEatenAccessoryTasted(item);
+        if (rn2(5)) return false;
+        return applyEatenAmuletEffect(item, messages);
+    }
+    return false;
 }
 
 async function eatHeroNonFoodMetal(item, { floorObject = false } = {}) {
@@ -18861,6 +19108,7 @@ async function eatHeroNonFoodMetal(item, { floorObject = false } = {}) {
     }
 
     addHeroNutrition(heroMetalNonFoodNutrition(item));
+    applyEatenMetalAccessoryEffects(item, messages);
     if (floorObject) removeEatenFloorMetalObject(item);
     else removeInventoryItem(item, item.quan || 1);
     game._pet_food_scan_inventory = game.inventory || [];

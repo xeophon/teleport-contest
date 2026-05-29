@@ -790,6 +790,63 @@ function chargeableRing(id, letter = 'r', spe = 0) {
     };
 }
 
+const METAL_RING_APPEARANCES = new Map([
+    ['fire resistance', 'iron'],
+    ['teleportation', 'silver'],
+    ['invisibility', 'wire'],
+]);
+
+const METAL_AMULET_APPEARANCES = new Map([
+    ['amulet of change', 'square'],
+    ['amulet of guarding', 'perforated'],
+    ['amulet of magical breathing', 'octagonal'],
+]);
+
+function metalRing(id, name, ringRoll, letter = 'r', extra = {}) {
+    const appearance = extra.appearance || METAL_RING_APPEARANCES.get(name) || 'iron';
+    const article = /^[aeiou]/i.test(appearance) ? 'an' : 'a';
+    return {
+        id,
+        cls: 'ring',
+        glyph: '=',
+        kind: `${appearance} ring`,
+        actualKind: `ring of ${name}`,
+        appearance,
+        ringRoll,
+        known: false,
+        dknown: false,
+        quan: 1,
+        spe: 0,
+        ox: 5,
+        oy: 5,
+        letter,
+        line: `${letter} - ${article} ${appearance} ring`,
+        ...extra,
+    };
+}
+
+function metalAmulet(id, name, amuletIndex, letter = 'a', extra = {}) {
+    const appearance = extra.appearance || METAL_AMULET_APPEARANCES.get(name) || 'circular';
+    const article = /^[aeiou]/i.test(appearance) ? 'an' : 'a';
+    return {
+        id,
+        cls: 'amulet',
+        glyph: '"',
+        kind: `${appearance} amulet`,
+        actualKind: name,
+        appearance,
+        amuletIndex,
+        known: false,
+        dknown: false,
+        quan: 1,
+        ox: 5,
+        oy: 5,
+        letter,
+        line: `${letter} - ${article} ${appearance} amulet`,
+        ...extra,
+    };
+}
+
 function makeInvisibleWand(id, letter = 'w', spe = 6, extra = {}) {
     return {
         id,
@@ -8790,6 +8847,94 @@ test('metallivorous floor non-food metal can be eaten from the hero square', asy
     assert.equal(game.u.uhunger, 910);
     assert.equal(game.context.move, 1);
     assert.match(game._pending_message, /This dagger is delicious!/);
+});
+
+test('metallivorous metal ring eating can grant C accessory intrinsics', async () => {
+    installCommandShopState();
+    installMetallivorousForm();
+    initRng(1);
+    const ring = metalRing(30950, 'fire resistance', 17, 'r');
+    game.inventory = [ring];
+    game.u.fireResistance = false;
+
+    await rhack('e');
+    await rhack('r');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.inventory.includes(ring), false);
+    assert.equal(game.u.uhunger, 915);
+    assert.equal(game.u.fireResistance, true);
+    assert.equal(ring.known, true);
+    assert.equal(ring.dknown, true);
+    assert.match(game._pending_message, /This iron ring is delicious!/);
+    assert.match(game._pending_message, /Magic spreads through your body as you digest the ring\./);
+    assert.equal(game._discoveries.some(entry => entry.section === 'Rings' && entry.name === 'ring' && entry.text === 'ring (iron)'), true);
+    assert.equal(game._discoveries.some(entry => entry.section === 'Rings' && entry.name === 'ring of fire resistance' && entry.known), false);
+});
+
+test('metallivorous metal ring eating identifies by taste even when effect chance fails', async () => {
+    installCommandShopState();
+    installMetallivorousForm();
+    initRng(2);
+    const ring = metalRing(30951, 'teleportation', 22, 'r');
+    game.inventory = [ring];
+    game.u.teleportation = false;
+
+    await rhack('e');
+    await rhack('r');
+
+    assert.equal(game.inventory.includes(ring), false);
+    assert.equal(game.u.teleportation, false);
+    assert.equal(ring.known, true);
+    assert.equal(ring.dknown, true);
+    assert.match(game._pending_message, /This silver ring is delicious!/);
+    assert.doesNotMatch(game._pending_message, /Magic spreads through your body/);
+    assert.equal(game._discoveries.some(entry => entry.section === 'Rings' && entry.name === 'ring' && entry.text === 'ring (silver)'), true);
+    assert.equal(game._discoveries.some(entry => entry.section === 'Rings' && entry.name === 'ring of teleportation' && entry.known), false);
+});
+
+test('metallivorous metal amulet eating can grant guarding protection', async () => {
+    installCommandShopState();
+    installMetallivorousForm();
+    initRng(1);
+    const amulet = metalAmulet(30952, 'amulet of guarding', 9, 'a');
+    game.inventory = [amulet];
+    game.u.ublessed = 0;
+    game.u.protection = false;
+
+    await rhack('e');
+    await rhack('a');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.inventory.includes(amulet), false);
+    assert.equal(game.u.uhunger, 920);
+    assert.equal(game.u.protection, true);
+    assert.equal(game.u.ublessed, 2);
+    assert.equal(amulet.known, true);
+    assert.equal(amulet.dknown, true);
+    assert.match(game._pending_message, /This perforated amulet is delicious!/);
+    assert.match(game._pending_message, /Magic spreads through your body as you digest the amulet\./);
+    assert.equal(game._discoveries.some(entry => entry.section === 'Amulets' && entry.name === 'amulet' && entry.text === 'amulet (perforated)'), true);
+    assert.equal(game._discoveries.some(entry => entry.section === 'Amulets' && entry.name === 'amulet of guarding' && entry.known), false);
+});
+
+test('metallivorous metal amulet of change eating uses the C makeknown branch', async () => {
+    installCommandShopState();
+    installMetallivorousForm();
+    initRng(1);
+    const amulet = metalAmulet(30953, 'amulet of change', 5, 'a');
+    game.inventory = [amulet];
+    game.u.female = false;
+
+    await rhack('e');
+    await rhack('a');
+
+    assert.equal(game.inventory.includes(amulet), false);
+    assert.equal(game.u.uhunger, 920);
+    assert.equal(game.u.female, true);
+    assert.match(game._pending_message, /This square amulet is delicious!/);
+    assert.match(game._pending_message, /You are suddenly very feminine!/);
+    assert.equal(game._discoveries.some(entry => entry.section === 'Amulets' && entry.name === 'amulet of change' && entry.known), true);
 });
 
 test('first bite of unpaid carried food stack splits live and used-up bill rows', () => {
