@@ -43,6 +43,8 @@ const TINNING_KIT = 10170;
 const CAN_OF_GREASE = 10171;
 const LOW_BOOTS = 10048;
 const IRON_SHOES = 10105;
+const HAWAIIAN_SHIRT = 10188;
+const T_SHIRT = 10189;
 const GRAY_DRAGON_SCALE_MAIL = 10085;
 const SILVER_DRAGON_SCALE_MAIL = 10086;
 const GOLD_DRAGON_SCALE_MAIL = 10140;
@@ -1141,6 +1143,65 @@ test('wished shoes range uses C low and iron shoe candidates', async () => {
     assert.doesNotMatch(result.item.line, /^a - 2 /);
     assert.match(result.item.line, /a pair of hard shoes/);
     assert.match(result.log[0], /^rnd\(30\)=/);
+});
+
+test('wished shirt range uses C Hawaiian and T-shirt candidates', async () => {
+    async function wishedShirt(text, seed = 1) {
+        installWishState(seed);
+        enableRngLog({ reset: true });
+        beginWishDirectly();
+        await submitWish(text);
+        return { item: game.inventory[0], log: [...getRngLog()] };
+    }
+
+    let result = await wishedShirt('shirt', 1);
+    assert.equal(result.item.otyp, HAWAIIAN_SHIRT);
+    assert.equal(result.item.cls, 'armor');
+    assert.equal(result.item.kind, 'Hawaiian shirt');
+    assert.equal(result.item.actualKind, 'Hawaiian shirt');
+    assert.equal(result.item.quan, 1);
+    assert.equal(result.item.owt, 5);
+    assert.equal(shop.shopBaseCost(result.item), 3);
+    assert.match(result.item.line, /a Hawaiian shirt/);
+    assert.match(result.log[0], /^rnd\(10\)=6$/);
+
+    result = await wishedShirt('shirt', 4);
+    assert.equal(result.item.otyp, T_SHIRT);
+    assert.equal(result.item.cls, 'armor');
+    assert.equal(result.item.kind, 'T-shirt');
+    assert.equal(result.item.actualKind, 'T-shirt');
+    assert.equal(result.item.quan, 1);
+    assert.equal(result.item.owt, 5);
+    assert.equal(shop.shopBaseCost(result.item), 2);
+    assert.match(result.item.line, /a T-shirt/);
+    assert.match(result.log[0], /^rnd\(10\)=9$/);
+
+    result = await wishedShirt('Hawaiian shirt');
+    assert.equal(result.item.otyp, HAWAIIAN_SHIRT);
+    assert.match(result.item.line, /a Hawaiian shirt/);
+    assert.match(result.log[0], /^rn2\(9\)=/);
+
+    result = await wishedShirt('T-shirt');
+    assert.equal(result.item.otyp, T_SHIRT);
+    assert.match(result.item.line, /a T-shirt/);
+    assert.match(result.log[0], /^rn2\(3\)=/);
+
+    result = await wishedShirt('t shirt');
+    assert.equal(result.item.otyp, T_SHIRT);
+    assert.match(result.item.line, /a T-shirt/);
+    assert.match(result.log[0], /^rn2\(3\)=/);
+
+    result = await wishedShirt('tee shirt');
+    assert.equal(result.item.otyp, T_SHIRT);
+    assert.match(result.item.line, /a T-shirt/);
+    assert.doesNotMatch(result.log[0], /^rn2\(3\)=/);
+
+    result = await wishedShirt('2 shirts', 4);
+    assert.equal(result.item.otyp, T_SHIRT);
+    assert.equal(result.item.quan, 1);
+    assert.doesNotMatch(result.item.line, /^a - 2 /);
+    assert.match(result.item.line, /a T-shirt/);
+    assert.match(result.log[0], /^rnd\(10\)=9$/);
 });
 
 test('dragon armor wishes follow C range and namedesc RNG paths', async () => {

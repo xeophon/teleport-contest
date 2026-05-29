@@ -49,39 +49,40 @@ Detailed source-backed history is kept in `docs/c-parity-audit/`. This section i
   - `docs/c-parity-audit/178-wish-venom-aliases-2026-05-29.md`
   - `docs/c-parity-audit/179-wish-dragon-armor-rng-2026-05-29.md`
   - `docs/c-parity-audit/180-wish-shoes-range-2026-05-29.md`
-- Latest compact/source note: `docs/c-parity-audit/180-wish-shoes-range-2026-05-29.md`.
+  - `docs/c-parity-audit/181-wish-shirt-range-2026-05-29.md`
+- Latest compact/source note: `docs/c-parity-audit/181-wish-shirt-range-2026-05-29.md`.
 - Latest verified public score: `44/44`.
 
 ## Current Priorities
 
 1. Shared shop ownership helpers.
-   - Source notes: `docs/c-parity-audit/05-food-inventory-containers-shops.md` and latest compact note `docs/c-parity-audit/180-wish-shoes-range-2026-05-29.md`.
+   - Source notes: `docs/c-parity-audit/05-food-inventory-containers-shops.md` and latest compact note `docs/c-parity-audit/181-wish-shirt-range-2026-05-29.md`.
    - Replace remaining field-only paths with C-shaped `addtobill`, `subfrombill`, `stolen_value`, `obfree`, and `sellobj` routing.
    - Compact candidates: remaining magic-bag valuation/discovery edges, kicked-object floor selection/down-gate shipping, monster-thrown hit-state egg/mulch/passive follow-ups, floor-statue saved-traits/cant-revive rows, costly-alteration paths, and remaining stone-to-flesh/object-polymorph lifecycle rows.
    - Note: ordinary drop `sellobj()` is square-selected in C and should not be converted to owner-first routing without a new source anchor.
 
 2. Direct object-hit and potion delivery.
-   - Source notes: `docs/c-parity-audit/04-monsters-combat-pets.md` and latest compact note `docs/c-parity-audit/180-wish-shoes-range-2026-05-29.md`.
+   - Source notes: `docs/c-parity-audit/04-monsters-combat-pets.md` and latest compact note `docs/c-parity-audit/181-wish-shirt-range-2026-05-29.md`.
    - Continue broadening `potionhit()`, `toss_up()`, direct object-hit, and passive-object delivery one source-backed edge at a time.
    - Compact candidates: broader glass/crystal breakage, wielded/melee egg `hmon()` paths, generic falling-object damage, shifted-vampire death channels, full `newcham()`/`polyself()` fallout, and monster-thrown `drop_throw(ohit)` mulch/passive behavior.
 
 3. Object registry and canonical object factory.
-   - Source notes: `docs/c-parity-audit/02-objects-wishing-readobjnam.md` and latest compact note `docs/c-parity-audit/180-wish-shoes-range-2026-05-29.md`.
+   - Source notes: `docs/c-parity-audit/02-objects-wishing-readobjnam.md` and latest compact note `docs/c-parity-audit/181-wish-shirt-range-2026-05-29.md`.
    - Consolidate object metadata for type, class, material, weight, cost, probability, wishability, merge rules, damage predicates, timers, and charged-tool policy.
-   - Generic C `readobjnam` object ranges for `bag`, `lamp`, `candle`, `horn`, `sword`, and `shoes` are covered; venom plural aliases, wizard-only `spe=1` policy, and dragon armor RNG paths are covered in parser-local paths. Continue replacing parser-local wish and merge tables with registry-backed finalization, artifact provenance, save/bones fruit-id handling, remaining armor/clothing ranges such as `shirt` and full `boots`, and dragon armor metadata consolidation.
+   - Generic C `readobjnam` object ranges for `bag`, `lamp`, `candle`, `horn`, `sword`, `shoes`, and `shirt` are covered; venom plural aliases, wizard-only `spe=1` policy, and dragon armor RNG paths are covered in parser-local paths. Continue replacing parser-local wish and merge tables with registry-backed finalization, artifact provenance, save/bones fruit-id handling, remaining armor/clothing ranges including the full `boots` range, and dragon armor metadata consolidation.
 
 4. Monster placement, scheduler, and combat cores.
-   - Source notes: `docs/c-parity-audit/04-monsters-combat-pets.md` and latest compact note `docs/c-parity-audit/180-wish-shoes-range-2026-05-29.md`.
+   - Source notes: `docs/c-parity-audit/04-monsters-combat-pets.md` and latest compact note `docs/c-parity-audit/181-wish-shirt-range-2026-05-29.md`.
    - Build shared `goodpos`, `enexto`, monster lifecycle, turn phases, `hmon`, `mattackm`, passive, and projectile/object-hit paths.
    - Compact candidates: direct monster-object hit follow-ups, monster-thrown `drop_throw(ohit)` egg/mulch/passive follow-ups, full monster diet flag generation, and broader `polymon()`/stoning interactions.
 
 5. Level, trap, terrain, save, and display foundations.
-   - Source notes: `docs/c-parity-audit/03-levelgen-specials-quest.md`, `docs/c-parity-audit/06-save-restore-bones.md`, `docs/c-parity-audit/07-traps-liquids-terrain.md`, `docs/c-parity-audit/08-display-rng-observation.md`, and latest compact note `docs/c-parity-audit/180-wish-shoes-range-2026-05-29.md`.
+   - Source notes: `docs/c-parity-audit/03-levelgen-specials-quest.md`, `docs/c-parity-audit/06-save-restore-bones.md`, `docs/c-parity-audit/07-traps-liquids-terrain.md`, `docs/c-parity-audit/08-display-rng-observation.md`, and latest compact note `docs/c-parity-audit/181-wish-shirt-range-2026-05-29.md`.
    - Centralize special-level generation, saved-level/migration/timer state, trap/liquid/material-damage pipelines, glyph/discovery/redraw ordering, and RNG diagnostics.
    - Compact candidates: kicked-object floor selection plus stairs/ladders/special-stairs migration, floor statue saved-traits/cant-revive animation, broader hero-on-liquid fallout, and display/discovery ordering around object observation.
 
 6. Command, prompt, and menu contracts.
-   - Source notes: `docs/c-parity-audit/01-input-commands-windows.md` and latest compact note `docs/c-parity-audit/180-wish-shoes-range-2026-05-29.md`.
+   - Source notes: `docs/c-parity-audit/01-input-commands-windows.md` and latest compact note `docs/c-parity-audit/181-wish-shirt-range-2026-05-29.md`.
    - Add reusable command registry/binding, count parsing, `getlin`, `yn_function`, `getobj`, `getpos`, and menu-selection primitives.
    - Covered locally: apply `?`/`*` candidate splitting, downplayed apply candidates, coin apply/flip, gray-stone `use_stone()` prompt/cancel routing, carried `#tip` suggested/downplayed/full-inventory selection, `#rub` gray-stone routing with cursed-touchstone shatter, `#rub` no-hands ordering, `#rub` star full-inventory widening and silly direct-selection wording, effective touchstone ruby identification/streaks/gold-ring scratch/material rows, worn helmet `tiphat()` entry/self handling, visible humanoid `tiphat()` wave/tip/grasp/rude conflict rows, and direct throw-prompt count parsing for non-gold rejection plus counted gold.
    - Remaining command candidates: throw menu-count/downplayed-fallback details, remaining `tiphat()` scan/noise reactions, and reusable `getobj()` extraction.
@@ -94,7 +95,7 @@ Continue narrow C-backed slices in this order unless a failing public regression
 2. Projectile and migration work: seen-hole/trapdoor shipping, projectile/gold/monster-thrown down-stairs/down-ladder/special-stairs route metadata, carried non-gold plus carried-gold command/helper down-gate shipping, and queued delivery silent breakage/arrival stacking are covered; next slices should add kicked-object floor selection/down-gate shipping or monster-thrown hit-state egg/mulch/passive-object follow-ups.
 3. Command/menu work: apply, carried `#tip`, `#rub` gray-stone sharing, `#rub` no-hands ordering, `#rub` star full-inventory widening and invalid direct-selection wording, touchstone ruby/effective-identification/material rows, worn-helmet `tiphat()` entry, visible humanoid `tiphat()` target reactions, and direct throw-prompt count parsing are covered; next slices should target throw menu-count/downplayed-fallback details, reusable `getobj()` primitives, or remaining `tiphat()` scan/noise reactions.
 4. Direct delivery work: broaden `potionhit()`/`toss_up()` and direct object-hit only through newly selected compact C-backed edges; avoid broad monster lifecycle rewrites without tests.
-5. Registry/diet work: C `readobjnam` object ranges for `bag`, `lamp`, `candle`, `horn`, `sword`, and `shoes` are covered, and venom plural aliases, wizard-only `spe=1` policy, plus dragon armor RNG paths are covered; remaining object registry work includes armor/clothing ranges such as `shirt` and full `boots`, plus registry-backed consolidation of dragon armor and other parser-local metadata. Remaining diet metadata should be caller-led, including full monster diet flag generation and remaining metal-accessory fullness/cursed/worn-ring/strangulation cleanup.
+5. Registry/diet work: C `readobjnam` object ranges for `bag`, `lamp`, `candle`, `horn`, `sword`, `shoes`, and `shirt` are covered, and venom plural aliases, wizard-only `spe=1` policy, plus dragon armor RNG paths are covered; remaining object registry work includes armor/clothing ranges including the full `boots` range, plus registry-backed consolidation of dragon armor and other parser-local metadata. Remaining diet metadata should be caller-led, including full monster diet flag generation and remaining metal-accessory fullness/cursed/worn-ring/strangulation cleanup.
 6. Forced-chest follow-ups should remain source-backed and narrow; visible object/furniture mimic wake preservation remains open.
 
 ## Verification

@@ -1229,6 +1229,8 @@ const SHIELD_OF_REFLECTION = 10074;
 const PLATE_MAIL = 10037;
 const HELMET = 10044;
 const LOW_BOOTS = 10048;
+const HAWAIIAN_SHIRT = 10188;
+const T_SHIRT = 10189;
 const RING_MAIL = 10041;
 const STUDDED_LEATHER_ARMOR = 10042;
 const LEATHER_ARMOR = 10043;
@@ -1489,6 +1491,8 @@ const WISH_BASE_OBJECTS = new Map([
     ['cloak of displacement', { otyp: CLOAK_OF_DISPLACEMENT, cls: 'armor', glyph: '[', kind: 'cloak of displacement', actualKind: 'cloak of displacement', known: false }],
     ['low boots', { otyp: LOW_BOOTS, cls: 'armor', glyph: '[', kind: 'low boots', actualKind: 'low boots', appearance: 'walking shoes', known: false, owt: 10 }],
     ['iron shoes', { otyp: IRON_SHOES, cls: 'armor', glyph: '[', kind: 'iron shoes', actualKind: 'iron shoes', appearance: 'hard shoes', known: false, owt: 50 }],
+    ['hawaiian shirt', { otyp: HAWAIIAN_SHIRT, cls: 'armor', glyph: '[', kind: 'Hawaiian shirt', actualKind: 'Hawaiian shirt', plural: 'Hawaiian shirts', owt: 5 }],
+    ['t-shirt', { otyp: T_SHIRT, cls: 'armor', glyph: '[', kind: 'T-shirt', actualKind: 'T-shirt', plural: 'T-shirts', owt: 5 }],
     ['speed boots', { otyp: SPEED_BOOTS, cls: 'armor', glyph: '[', kind: 'speed boots', actualKind: 'speed boots', known: false }],
 ]);
 const WIZARD_ONLY_WISH_NAMEDESC_BOUNDS = new Map([
@@ -1535,6 +1539,7 @@ const WISH_BASE_NAMEDESC_BOUNDS = new Map([
     ['shield of reflection', 8],
     ['gauntlets of power', 9], ['cloak of displacement', 13],
     ['low boots', 24], ['iron shoes', 8],
+    ['hawaiian shirt', 9], ['t-shirt', 3],
     ['speed boots', 13],
     ['crystal ball', 495], ['glass orb', 495],
 ]);
@@ -1652,6 +1657,10 @@ const WISH_OBJECT_RANGES = new Map([
     ['shoes', [
         ['low boots', 23],
         ['iron shoes', 7],
+    ]],
+    ['shirt', [
+        ['hawaiian shirt', 8],
+        ['t-shirt', 2],
     ]],
     ['sword', [
         ['short sword', 8],
@@ -5142,6 +5151,8 @@ const OBJECT_WEIGHTS = {
     'blue dragon scales': 40,
     'green dragon scales': 40,
     'yellow dragon scales': 40,
+    'hawaiian shirt': 5,
+    't-shirt': 5,
     'helmet': 30,
     'gauntlets of power': 30,
     'high boots': 20,
@@ -29166,6 +29177,9 @@ const WISH_NAME_ALIASES = new Map([
     ['gloves of power', 'gauntlets of power'],
     ['walking shoes', 'low boots'],
     ['hard shoes', 'iron shoes'],
+    ['shirts', 'shirt'],
+    ['t shirt', 't-shirt'],
+    ['t shirts', 't-shirt'],
     ['ring of protection from shape shifters', 'ring of protection from shape changers'],
     ['flint stone', 'flint'],
 ]);
@@ -29197,7 +29211,7 @@ const WISH_EXPLICIT_SPELLING_ALIASES = new Map([
     ['recharging', 'scroll of charging'],
     ['stone', 'rock'],
     ['tee shirt', 't-shirt'],
-    ['t shirt', 't-shirt'],
+    ['tee shirts', 't-shirt'],
     ['kelp', 'kelp frond'],
     ['eucalyptus', 'eucalyptus leaf'],
     ['lembas', 'lembas wafer'],
