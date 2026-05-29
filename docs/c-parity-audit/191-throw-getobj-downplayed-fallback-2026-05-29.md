@@ -31,7 +31,7 @@ Date: 2026-05-29
 
 ## Remaining Gaps
 
-- Throw menu count return and prompt count backspace/delete editing remain open reusable `getobj()` work.
+- Throw menu count return remains open reusable `getobj()` work.
 - A broader reusable `getobj()` primitive would still need to model direct-letter validation, menu count return, hands/self rows, and command-queue behavior across commands.
 
 ## Verification

@@ -47,6 +47,8 @@ const EGG = 10001;
 const EXPENSIVE_CAMERA = 10082;
 const BLINDING_VENOM = 10184;
 const ACID_VENOM = 10185;
+const KEY_BACKSPACE = 8;
+const KEY_DELETE = 127;
 
 function installShopState() {
     const g = resetGame();
@@ -21020,6 +21022,78 @@ test('throw prompt count rejects multi-count non-gold stack before direction', a
     assert.equal(darts.quan, 3);
     assert.equal(game.level.objects.length, 0);
     assert.equal(game.context.move || 0, 0);
+});
+
+test('throw prompt count backspace removes last digit before validation', async () => {
+    installNonShopFloorState();
+    const darts = dartStack(876046, 'd', 3);
+    game.inventory = [darts];
+
+    await rhack('t');
+    await rhack('1');
+    await rhack('2');
+    assert.match(game._pending_message, /Count: 12/);
+
+    await rhack(KEY_BACKSPACE);
+
+    assert.equal(game._command_mode, 'throwObject');
+    assert.equal(game._throw_count_text, '1');
+    assert.match(game._pending_message, /Count: 1/);
+
+    await rhack('d');
+
+    assert.equal(game._command_mode, 'throwDirection');
+    assert.doesNotMatch(game._pending_message || '', /can only throw one at a time/);
+
+    await rhack('\x1b');
+});
+
+test('throw prompt count delete removes last digit before counted gold throw', async () => {
+    installNonShopFloorState();
+    const gold = goldPieces(876047, 5);
+    game.inventory = [gold];
+    game._goldCount = 5;
+
+    await rhack('t');
+    await rhack('2');
+    await rhack('3');
+    assert.match(game._pending_message, /Count: 23/);
+
+    await rhack(KEY_DELETE);
+    assert.equal(game._throw_count_text, '2');
+    assert.match(game._pending_message, /Count: 2/);
+
+    await rhack('$');
+    assert.equal(game._command_mode, 'throwDirection');
+
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game._goldCount, 3);
+    assert.equal(gold.quan, 3);
+    assert.equal(game.level.objects.length, 1);
+    assert.equal(game.level.objects[0].quan, 2);
+});
+
+test('throw prompt count backspace clears single digit count state', async () => {
+    installNonShopFloorState();
+    const darts = dartStack(876048, 'd', 3);
+    game.inventory = [darts];
+
+    await rhack('t');
+    await rhack('2');
+    await rhack(KEY_BACKSPACE);
+
+    assert.equal(game._command_mode, 'throwObject');
+    assert.equal(game._throw_count_text, '');
+    assert.match(game._pending_message, /Count: $/);
+
+    await rhack('d');
+
+    assert.equal(game._command_mode, 'throwDirection');
+    assert.doesNotMatch(game._pending_message || '', /can only throw one at a time/);
+
+    await rhack('\x1b');
 });
 
 test('throw prompt count limits gold stack', async () => {

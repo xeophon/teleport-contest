@@ -65,6 +65,6 @@ A parallel monster-thrown audit selected `drop_throw(ohit)` hit-state fallout:
 ## Remaining Gaps
 
 - Inventory-menu count return paths are not implemented for throw selection.
-- Prompt-count backspace editing is not implemented.
+- Prompt-count backspace editing is covered by audit 192.
 - Top-level throw shot limits remain separate from this prompt-count slice.
 - Kicked floor-object shipping, monster-thrown `drop_throw(ohit)`, floor-statue saved traits, and generic `lamp` object-range wishes remain separate slices.

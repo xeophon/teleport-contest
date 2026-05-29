@@ -56,7 +56,7 @@ A parallel armor/clothing range audit confirmed remaining non-dragon object rang
 A parallel throw `getobj()` audit confirmed remaining command-menu work:
 
 - C `*` can return counted menu selections, and backspace/delete edit prompt counts: `nethack-c/upstream/src/invent.c:1979`, `nethack-c/upstream/src/cmd.c:5055`.
-- JS direct throw prompt counts and `?` downplayed fallback are covered, but menu-count return and count editing remain open.
+- JS direct throw prompt counts, prompt-count backspace/delete, and `?` downplayed fallback are covered, but menu-count return remains open.
 
 A parallel floor-object kick audit confirmed ordinary adjacent object kicking is absent:
 
@@ -73,6 +73,6 @@ A parallel monster-thrown `drop_throw(ohit)` audit confirmed hit-state gaps:
 
 - Generic dragon scale/mail range RNG and colored `dragon scale armor` retry RNG remain open.
 - Generic armor/clothing object ranges remain open.
-- Throw menu-count/backspace behavior remains open reusable `getobj()` work.
+- Throw menu-count return remains open reusable `getobj()` work.
 - Ordinary adjacent floor-object `#kick` shipping remains open.
 - Monster-thrown `drop_throw(ohit)` hit-state fallout remains open.
