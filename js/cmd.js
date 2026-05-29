@@ -19024,6 +19024,12 @@ function heroMetalNonFoodNutrition(item) {
     return globObjectWeight({ ...item, quan: 1 });
 }
 
+function metallivoreFoodWord(item) {
+    const material = objectMaterialForMetallivore(item);
+    if (['silver', 'gold', 'platinum', 'mithril'].includes(material)) return material;
+    return 'metal';
+}
+
 function eatenRingName(item) {
     if (!objectIsRingLike(item)) return '';
     const raw = item?.ringRoll ? IDENTIFIED_RING_NAMES[item.ringRoll - 1] || ''
@@ -19280,9 +19286,11 @@ async function eatHeroNonFoodMetal(item, { floorObject = false } = {}) {
     }
 
     if (objectIsSlowDigestionRing(item)) {
-        await setMessage('This ring is indigestible!');
+        const rotten = rottenFoodEffect({ adjective: 'Awful', foodWord: metallivoreFoodWord(item) });
+        await setMessage(`This ring is indigestible!  ${rotten.message}`, true);
         game._command_mode = null;
-        game.context.move = 1;
+        game._process_time_with_more = 1;
+        game.context.move = rotten.rottenSleepDuration ? rotten.rottenSleepDuration + 1 : 1;
         return true;
     }
 
@@ -34017,9 +34025,9 @@ function shouldUseGenericRottenFoodPath(item) {
     return (game.moves || 1) - item.age > ageLimit && (item.orotten || !rn2(7));
 }
 
-function rottenFoodEffect() {
+function rottenFoodEffect({ adjective = 'Rotten', foodWord = 'food' } = {}) {
     let rottenSleepDuration = 0;
-    let message = 'Blecch!  Rotten food!';
+    let message = `Blecch!  ${adjective} ${foodWord}!`;
     if (!rn2(4)) {
         const confusionDuration = d(2, 4);
         if (game.u) game.u._confusionTimeout = (game.u._confusionTimeout || 0) + confusionDuration;

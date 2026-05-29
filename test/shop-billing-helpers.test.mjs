@@ -9312,6 +9312,66 @@ test('metallivorous metal ring eating identifies by taste even when effect chanc
     assert.equal(game._discoveries.some(entry => entry.section === 'Rings' && entry.name === 'ring of teleportation' && entry.known), false);
 });
 
+test('metallivorous slow digestion ring is indigestible but causes rotten metal effect', async () => {
+    installCommandShopState();
+    installMetallivorousForm();
+    initRng(2);
+    const ring = metalRing(30954, 'slow digestion', 21, 'r');
+    game.inventory = [ring];
+
+    await rhack('e');
+    await rhack('r');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.inventory.includes(ring), true);
+    assert.equal(game.u.uhunger, 900);
+    assert.equal(game.context.move, 1);
+    assert.match(game._pending_message, /This ring is indigestible!/);
+    assert.match(game._pending_message, /Blecch!  Awful metal!/);
+    assert.doesNotMatch(game._pending_message, /Magic spreads through your body/);
+});
+
+test('metallivorous slow digestion ring rotten metal can confuse without eating it', async () => {
+    installCommandShopState();
+    installMetallivorousForm();
+    initRng(5);
+    const ring = metalRing(30955, 'slow digestion', 21, 'r');
+    game.inventory = [ring];
+
+    await rhack('e');
+    await rhack('r');
+
+    assert.equal(game.inventory.includes(ring), true);
+    assert.equal(game.u.uhunger, 900);
+    assert.ok((game.u._confusionTimeout || 0) > 0);
+    assert.match(game._pending_message, /Blecch!  Awful metal!/);
+});
+
+test('metallivorous floor slow digestion ring remains on the floor after rotten metal effect', async () => {
+    installCommandShopState();
+    installMetallivorousForm();
+    initRng(2);
+    const ring = metalRing(30956, 'slow digestion', 21, undefined);
+    delete ring.letter;
+    delete ring.line;
+    game.inventory = [];
+    game.level.objects = [ring];
+
+    await rhack('e');
+
+    assert.equal(game._command_mode, 'eatFloorObject');
+    assert.match(game._pending_message, /There is an iron ring here; eat it\? \[ynq\] \(n\)/);
+
+    await rhack('y');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.level.objects.includes(ring), true);
+    assert.equal(game.u.uhunger, 900);
+    assert.equal(game.context.move, 1);
+    assert.match(game._pending_message, /This ring is indigestible!/);
+    assert.match(game._pending_message, /Blecch!  Awful metal!/);
+});
+
 test('metallivorous metal amulet eating can grant guarding protection', async () => {
     installCommandShopState();
     installMetallivorousForm();
