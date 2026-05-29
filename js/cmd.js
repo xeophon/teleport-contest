@@ -9183,6 +9183,7 @@ function forceableLockedBoxAtHero() {
 
 function forceBoxSimpleName(box) {
     const kind = objectKindKey(box);
+    if (box?.otyp === ICE_BOX || kind === 'ice box') return 'ice box';
     if (box?.otyp === LARGE_BOX || kind === 'large box') return 'large box';
     return 'chest';
 }
@@ -9377,6 +9378,24 @@ function brokenChestContentShatterDisposition(content) {
     }
 }
 
+function brokenChestSourceIsIceBox() {
+    const box = game._break_chest_destroyed_box;
+    const kind = objectKindKey(box);
+    return !!box && (box.otyp === ICE_BOX || kind === 'ice box');
+}
+
+function thawBrokenIceBoxCorpseSurvivor(content) {
+    if (!brokenChestSourceIsIceBox() || !isCorpseItem(content)) return;
+    const moves = Math.max(game.moves || 0, 1);
+    const frozenAge = Math.max(0, Math.trunc(Number(content.age ?? 0)));
+    content.age = moves - frozenAge;
+    content.inIceBox = false;
+    content.fromIceBox = false;
+    content.onIce = false;
+    content.on_ice = 0;
+    startCorpseTimeout(content);
+}
+
 function placeBrokenChestContentAtHero(content) {
     if (!content || !game.level) return;
     content.ox = game.u?.ux || 0;
@@ -9384,11 +9403,14 @@ function placeBrokenChestContentAtHero(content) {
     content.contained = false;
     content.container = null;
     content.line = undefined;
+    thawBrokenIceBoxCorpseSurvivor(content);
     syncBrokenBoxContentDisplay(content);
     content.owt = globObjectWeight(content);
     const placed = placeStackableFloorObject(content);
     if (placed && placed !== content) syncBrokenBoxContentDisplay(placed);
-    newsym(placed?.ox ?? content.ox, placed?.oy ?? content.oy);
+    const finalContent = placed || content;
+    objectIceEffect(finalContent, finalContent.ox ?? content.ox, finalContent.oy ?? content.oy);
+    newsym(finalContent.ox ?? content.ox, finalContent.oy ?? content.oy);
 }
 
 function consumeOneBrokenChestContent(content) {

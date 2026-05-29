@@ -12417,6 +12417,25 @@ test('#force command stores C oc_wldam chance for common blunt and piercing weap
     }
 });
 
+test('#force command does not target locked ice boxes', async () => {
+    installCommandShopState();
+    const iceBox = shopFloorIceBox(61720);
+    iceBox.locked = true;
+    iceBox.olocked = true;
+    game.level.objects = [iceBox];
+    const weapon = wieldedWeapon(61721, 'mace', 'm');
+    game.inventory = [weapon];
+
+    await startForceCommand();
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game._force_lock_occupation ?? null, null);
+    assert.match(game._pending_message, /You decide not to force the issue\./);
+    assert.equal(game.context.move, 1);
+    assert.equal(iceBox.locked, true);
+    assert.equal(iceBox.olocked, true);
+});
+
 test('destroyed box shatters potion contents with direct vapor and stack survivor', async () => {
     installNonShopFloorState();
     initRng(5);
@@ -12460,6 +12479,92 @@ test('destroyed box uses C material wording for non-potion contents', async () =
         const text = await destroyedBoxContentText(content, content.id + 100);
         assert.match(text, expected);
     }
+});
+
+test('destroyed ice box thaws surviving corpse contents without takeout norevive', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.moves = 1000;
+    const box = shopFloorIceBox(61722);
+    box.locked = true;
+    box.olocked = true;
+    const body = putObjectInContainer(box, corpse(61723, undefined, 'newt'));
+    body.age = 25;
+    body.inIceBox = true;
+    body.fromIceBox = true;
+    game.level.objects = [box];
+
+    const destroyed = finishForceLock({ chest: box, picktyp: false });
+    const messages = await drainQueuedMessagesAfterMore();
+
+    assert.equal(destroyed, true);
+    assert.match(messages.join('  '), /In fact, you've totally destroyed the ice box\./);
+    assert.equal(game.level.objects.includes(box), false);
+    const survivor = game.level.objects.find(obj => obj.id === body.id);
+    assert.ok(survivor);
+    assert.equal(survivor.age, 975);
+    assert.equal(survivor.inIceBox, false);
+    assert.equal(survivor.fromIceBox, false);
+    assert.equal(survivor.onIce, false);
+    assert.equal(survivor.on_ice, 0);
+    assert.notEqual(survivor.norevive, true);
+    assert.ok(survivor.rotAwayTurn > game.moves);
+});
+
+test('destroyed ice box thaws stacked corpse survivor after one shatters', async () => {
+    installNonShopFloorState();
+    initRng(5);
+    game.moves = 1000;
+    const box = shopFloorIceBox(61724);
+    box.locked = true;
+    box.olocked = true;
+    const body = putObjectInContainer(box, corpse(61725, undefined, 'newt'));
+    body.quan = 2;
+    body.age = 40;
+    body.inIceBox = true;
+    body.fromIceBox = true;
+    game.level.objects = [box];
+
+    const destroyed = finishForceLock({ chest: box, picktyp: false });
+    const messages = await drainQueuedMessagesAfterMore();
+
+    assert.equal(destroyed, true);
+    assert.match(messages.join('  '), /mashed!/);
+    const survivor = game.level.objects.find(obj => obj.id === body.id);
+    assert.ok(survivor);
+    assert.equal(survivor.quan, 1);
+    assert.equal(survivor.age, 960);
+    assert.equal(survivor.inIceBox, false);
+    assert.equal(survivor.fromIceBox, false);
+    assert.notEqual(survivor.norevive, true);
+    assert.ok(survivor.rotAwayTurn > game.moves);
+});
+
+test('destroyed ice box corpse survivor placed on ice gets ice timer adjustment', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.moves = 1000;
+    const iceLoc = { roomno: 0, typ: ICE, icedpool: ICED_POOL, flags: 0 };
+    game.level.at = (x, y) => (x === 5 && y === 5 ? iceLoc : { roomno: 0, typ: ROOM });
+    const box = shopFloorIceBox(61726);
+    box.locked = true;
+    box.olocked = true;
+    const body = putObjectInContainer(box, corpse(61727, undefined, 'newt'));
+    body.age = 20;
+    body.inIceBox = true;
+    body.fromIceBox = true;
+    game.level.objects = [box];
+
+    const destroyed = finishForceLock({ chest: box, picktyp: false });
+    await drainQueuedMessagesAfterMore();
+
+    assert.equal(destroyed, true);
+    const survivor = game.level.objects.find(obj => obj.id === body.id);
+    assert.ok(survivor);
+    assert.equal(survivor.onIce, true);
+    assert.equal(survivor.on_ice, 1);
+    assert.equal(survivor.age, 960);
+    assert.ok(survivor.rotAwayTurn > game.moves);
 });
 
 test('destroyed shop-floor box charges shattered contents and box as one loss', async () => {
