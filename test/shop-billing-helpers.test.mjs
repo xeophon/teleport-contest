@@ -1996,6 +1996,73 @@ test('full bill still converts an existing live row into a dummy used-up row', (
     assert.equal(game._usedUpShopBills[0].price, 80);
 });
 
+test('generic carried container use-up preserves nested shop bills as used-up rows', () => {
+    const { shkp } = installShopState();
+    const bag = sack(10052, 'b');
+    const ration = foodRation(10053, 'r');
+    bag.contents = [ration];
+    ration.contained = true;
+    ration.container = bag;
+    game.inventory = [bag];
+    shop.addObjectToShopBill(shkp, ration, 45);
+
+    const result = shop.useUpInventoryItemForTest(bag);
+
+    assert.equal(result, true);
+    assert.equal(game.inventory.includes(bag), false);
+    const entry = shop.shopBillEntryForObject(shkp, ration);
+    assert.ok(entry);
+    assert.equal(entry.useup, true);
+    assert.equal(shop.shopBillEntryTotal(entry), 45);
+    assert.equal(shkp.billct, 1);
+    assert.equal(shkp.debit || 0, 0);
+    assert.equal(shkp.robbed || 0, 0);
+    assert.equal(ration.unpaid, false);
+    assert.equal((game._usedUpShopBills || []).some(bill =>
+        String(bill.bo_id) === String(entry.bo_id) && bill.price === 45), true);
+});
+
+test('generic carried container use-up preserves container and contents bill rows', () => {
+    const { shkp } = installShopState();
+    const bag = sack(10054, 'b');
+    const ration = foodRation(10055, 'r');
+    bag.contents = [ration];
+    ration.contained = true;
+    ration.container = bag;
+    game.inventory = [bag];
+    shop.addObjectToShopBill(shkp, bag, 80);
+    shop.addObjectToShopBill(shkp, ration, 45);
+
+    shop.useUpInventoryItemForTest(bag);
+
+    const bagEntry = shop.shopBillEntryForObject(shkp, bag);
+    const rationEntry = shop.shopBillEntryForObject(shkp, ration);
+    assert.ok(bagEntry);
+    assert.ok(rationEntry);
+    assert.equal(bagEntry.useup, true);
+    assert.equal(rationEntry.useup, true);
+    assert.equal(shop.shopBillEntryTotal(bagEntry), 80);
+    assert.equal(shop.shopBillEntryTotal(rationEntry), 45);
+    assert.equal(shkp.billct, 2);
+    assert.equal((game._usedUpShopBills || []).filter(bill =>
+        [String(bagEntry.bo_id), String(rationEntry.bo_id)].includes(String(bill.bo_id))).length, 2);
+});
+
+test('generic carried container use-up does not synthesize stale nested unpaid bills', () => {
+    installShopState();
+    const bag = sack(10056, 'b');
+    const ration = { ...foodRation(10057, 'r'), unpaid: true, unpaidPrice: 45 };
+    bag.contents = [ration];
+    ration.contained = true;
+    ration.container = bag;
+    game.inventory = [bag];
+
+    shop.useUpInventoryItemForTest(bag);
+
+    assert.equal(game.inventory.includes(bag), false);
+    assert.deepEqual(game._usedUpShopBills || [], []);
+});
+
 test('full bill makes split carried food bites free after shrinking the parent bill', () => {
     const { shkp } = installShopState();
     fillShopBill(shkp, BILLSZ - 1);

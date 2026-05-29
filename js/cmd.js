@@ -8066,10 +8066,7 @@ function useUpInventoryItem(item, amount = 1) {
     if (!item) return false;
     const usedCount = Math.max(1, Math.trunc(Number(amount || 1)));
     const quantity = Math.max(1, Math.trunc(Number(item.quan || 1)));
-    if (usedCount >= quantity) {
-        const { shkp } = shopkeeperOwningBillEntry(item);
-        markObjectShopBillUsedUp(item, shkp || heroShopkeeper());
-    }
+    if (usedCount >= quantity) markObjectTreeShopBillsUsedUp(item);
     removeInventoryItem(item, usedCount);
     return true;
 }
@@ -24990,6 +24987,7 @@ export const __shopBillingTestHooks = {
     removeInventoryItem,
     resolveUnpaidProjectileShopLanding,
     returnUnpaidObjectToShopBillOwnerAt,
+    useUpInventoryItemForTest: useUpInventoryItem,
     costlyShopGoldAtSpot,
     containerTakeoutPreflight,
     sellobjReturnUnpaidToShop,
