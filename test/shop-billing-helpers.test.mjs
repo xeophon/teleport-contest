@@ -7847,6 +7847,53 @@ test('floor wand of polymorph is unpolyable by identity', async () => {
     assert.doesNotMatch(game._pending_message || '', /You feel shuddering vibrations\./);
 });
 
+test('floor amulet of unchanging is unpolyable by wand polymorph', async () => {
+    installCommandShopState();
+    initRng(1);
+    const wand = polymorphWand(32017, 'w');
+    const amulet = {
+        ...metalAmulet(32018, 'amulet of unchanging', 6),
+        ox: 5,
+        oy: 4,
+        letter: undefined,
+        line: undefined,
+    };
+    game.inventory = [wand];
+    game.level.objects = [amulet];
+
+    await rhack('z');
+    await rhack('w');
+    await rhack('k');
+
+    assert.equal(game.level.objects.length, 1);
+    assert.equal(game.level.objects[0], amulet);
+    assert.equal(amulet.actualKind, 'amulet of unchanging');
+    assert.equal(game.u.uconduct?.polypiles || 0, 0);
+    assert.doesNotMatch(game._pending_message || '', /shuddering|gets angry|is furious/);
+});
+
+test('floor polymorph reports no affected pile for wholly unpolyable objects', async () => {
+    installCommandShopState();
+    initRng(1);
+    const amulet = {
+        ...metalAmulet(32019, 'amulet of unchanging', 6),
+        ox: 5,
+        oy: 4,
+        letter: undefined,
+        line: undefined,
+    };
+    game.level.objects = [amulet];
+
+    const affected = await shop.polymorphFloorPileAtForTest(5, 4);
+
+    assert.equal(affected, false);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.level.objects.length, 1);
+    assert.equal(game.level.objects[0], amulet);
+    assert.equal(game.u.uconduct?.polypiles || 0, 0);
+    assert.equal(game._pending_message, '');
+});
+
 test('floor polymorph downward hits the hero-square pile', async () => {
     installCommandShopState();
     initRng(1);

@@ -12981,7 +12981,8 @@ function polymorphObjectTypeKey(item) {
 }
 
 function polymorphReplacementDisallowed(item) {
-    return isPotionOfPolymorph(item) || isWandOfPolymorphObject(item) || isSpellbookOfPolymorphObject(item);
+    return isPotionOfPolymorph(item) || isWandOfPolymorphObject(item)
+        || isSpellbookOfPolymorphObject(item) || isAmuletOfUnchangingObject(item);
 }
 
 function polymorphReplacementForDipTarget(target) {
@@ -25176,6 +25177,7 @@ async function polymorphFloorPileAt(x, y, { consumeRangeRoll = false } = {}) {
     if (!targetObjects.length) {
         game._pending_message = '';
         game._message_more = 0;
+        game.context ??= {};
         game.context.move = 1;
         return false;
     }
@@ -25183,6 +25185,7 @@ async function polymorphFloorPileAt(x, y, { consumeRangeRoll = false } = {}) {
     const replacements = [];
     const alterationMessages = [];
     let didObjectShudder = false;
+    let affected = false;
     for (const obj of [...targetObjects].reverse()) {
         if (polymorphReplacementDisallowed(obj)) continue;
         if (rn2(100) < (obj.artifact ? 95 : 5)) {
@@ -25200,6 +25203,7 @@ async function polymorphFloorPileAt(x, y, { consumeRangeRoll = false } = {}) {
             }
             useUpPolymorphShudderFloorObject(obj, x, y);
             didObjectShudder = true;
+            affected = true;
             continue;
         }
         const roll = rnd(1000);
@@ -25225,16 +25229,20 @@ async function polymorphFloorPileAt(x, y, { consumeRangeRoll = false } = {}) {
             alterationMessages.push(angerMessage);
         removeTargets.add(obj);
         replacements.unshift(newObj);
+        affected = true;
         rn2(100);
     }
-    game.level.objects = (game.level?.objects || []).filter(obj => !removeTargets.has(obj));
-    game.level.objects.push(...replacements);
-    newsym(x, y);
+    if (affected) {
+        game.level.objects = (game.level?.objects || []).filter(obj => !removeTargets.has(obj));
+        game.level.objects.push(...replacements);
+        newsym(x, y);
+    }
     const messages = didObjectShudder ? ['You feel shuddering vibrations.'] : [];
     messages.push(...alterationMessages);
     await setMessage(messages.join('  '));
+    game.context ??= {};
     game.context.move = 1;
-    return true;
+    return affected;
 }
 
 function billHeldMagicBagLostItem(obj) {
@@ -25647,6 +25655,7 @@ export const __shopBillingTestHooks = {
     projectileContainerImpactDmg,
     pickUpFloorGoldObject,
     prepareContainerTakeoutObject,
+    polymorphFloorPileAtForTest: polymorphFloorPileAt,
     hasRobbedOnlyShopPayment,
     putInventoryObjectIntoBag,
     putInventoryObjectIntoContainer,
