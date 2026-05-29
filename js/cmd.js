@@ -1226,6 +1226,14 @@ const GRAY_DRAGON_SCALE_MAIL = 10085;
 const SILVER_DRAGON_SCALE_MAIL = 10086;
 const SPEED_BOOTS = 10087;
 const SHIELD_OF_REFLECTION = 10074;
+const SMALL_SHIELD = 10046;
+const SHIELD_OF_DRAIN_RESISTANCE = 10206;
+const SHIELD_OF_SHOCK_RESISTANCE = 10207;
+const ELVEN_SHIELD = 10208;
+const URUK_HAI_SHIELD = 10209;
+const ORCISH_SHIELD = 10210;
+const LARGE_SHIELD = 10047;
+const DWARVISH_ROUNDSHIELD = 10106;
 const PLATE_MAIL = 10037;
 const HELMET = 10044;
 const LOW_BOOTS = 10048;
@@ -1505,7 +1513,15 @@ const WISH_BASE_OBJECTS = new Map([
     ['studded leather armor', { otyp: STUDDED_LEATHER_ARMOR, cls: 'armor', glyph: '[', kind: 'studded leather armor', actualKind: 'studded leather armor' }],
     ['leather armor', { otyp: LEATHER_ARMOR, cls: 'armor', glyph: '[', kind: 'leather armor', actualKind: 'leather armor' }],
     ['elven mithril-coat', { otyp: ELVEN_MITHRIL_COAT, cls: 'armor', glyph: '[', kind: 'elven mithril-coat', actualKind: 'elven mithril-coat' }],
-    ['shield of reflection', { otyp: SHIELD_OF_REFLECTION, cls: 'armor', glyph: '[', kind: 'shield of reflection', actualKind: 'shield of reflection', appearance: 'polished silver shield', known: false }],
+    ['small shield', { otyp: SMALL_SHIELD, cls: 'armor', glyph: '[', kind: 'small shield', actualKind: 'small shield', appearance: 'wooden shield', known: false, owt: 30 }],
+    ['shield of drain resistance', { otyp: SHIELD_OF_DRAIN_RESISTANCE, cls: 'armor', glyph: '[', kind: 'shield of drain resistance', actualKind: 'shield of drain resistance', appearance: 'wooden shield', known: false, owt: 30 }],
+    ['shield of shock resistance', { otyp: SHIELD_OF_SHOCK_RESISTANCE, cls: 'armor', glyph: '[', kind: 'shield of shock resistance', actualKind: 'shield of shock resistance', appearance: 'wooden shield', known: false, owt: 30 }],
+    ['elven shield', { otyp: ELVEN_SHIELD, cls: 'armor', glyph: '[', kind: 'elven shield', actualKind: 'elven shield', appearance: 'blue and green shield', known: false, owt: 40 }],
+    ['uruk-hai shield', { otyp: URUK_HAI_SHIELD, cls: 'armor', glyph: '[', kind: 'uruk-hai shield', actualKind: 'uruk-hai shield', appearance: 'white-handed shield', known: false, owt: 50 }],
+    ['orcish shield', { otyp: ORCISH_SHIELD, cls: 'armor', glyph: '[', kind: 'orcish shield', actualKind: 'orcish shield', appearance: 'red-eyed shield', known: false, owt: 50 }],
+    ['large shield', { otyp: LARGE_SHIELD, cls: 'armor', glyph: '[', kind: 'large shield', actualKind: 'large shield', owt: 100 }],
+    ['dwarvish roundshield', { otyp: DWARVISH_ROUNDSHIELD, cls: 'armor', glyph: '[', kind: 'dwarvish roundshield', actualKind: 'dwarvish roundshield', appearance: 'large round shield', known: false, owt: 100 }],
+    ['shield of reflection', { otyp: SHIELD_OF_REFLECTION, cls: 'armor', glyph: '[', kind: 'shield of reflection', actualKind: 'shield of reflection', appearance: 'polished silver shield', known: false, owt: 50 }],
     ['leather gloves', { otyp: LEATHER_GLOVES, cls: 'armor', glyph: '[', kind: 'leather gloves', actualKind: 'leather gloves', known: false }],
     ['gauntlets of fumbling', { otyp: GAUNTLETS_OF_FUMBLING, cls: 'armor', glyph: '[', kind: 'gauntlets of fumbling', actualKind: 'gauntlets of fumbling', known: false, owt: 10 }],
     ['gauntlets of power', { otyp: GAUNTLETS_OF_POWER, cls: 'armor', glyph: '[', kind: 'gauntlets of power', actualKind: 'gauntlets of power', known: false }],
@@ -1576,6 +1592,10 @@ const WISH_BASE_NAMEDESC_BOUNDS = new Map([
     ['plate mail', 41], ['helmet', 11], ['helm of telepathy', 5],
     ['ring mail', 67], ['studded leather armor', 67],
     ['leather armor', 76], ['elven mithril-coat', 16],
+    ['small shield', 7], ['shield of drain resistance', 13],
+    ['shield of shock resistance', 13], ['elven shield', 3],
+    ['uruk-hai shield', 3], ['orcish shield', 3],
+    ['large shield', 5], ['dwarvish roundshield', 4],
     ['shield of reflection', 8],
     ['gauntlets of fumbling', 9], ['gauntlets of power', 9],
     ['gauntlets of dexterity', 9],
@@ -1703,6 +1723,17 @@ const WISH_OBJECT_RANGES = new Map([
         ['frost horn', 2],
         ['fire horn', 2],
         ['horn of plenty', 2],
+    ]],
+    ['shield', [
+        ['small shield', 6],
+        ['shield of drain resistance', 12],
+        ['shield of shock resistance', 12],
+        ['elven shield', 2],
+        ['uruk-hai shield', 2],
+        ['orcish shield', 2],
+        ['large shield', 4],
+        ['dwarvish roundshield', 3],
+        ['shield of reflection', 7],
     ]],
     ['gloves', [
         ['leather gloves', 15],
@@ -5068,6 +5099,8 @@ const ARMOR_WISH_APPEARANCES = {
     'cloak of magic resistance': ['cloaks', 2, 'ornamental cope'],
     'cloak of displacement': ['cloaks', 3, 'piece of cloth'],
     'small shield': ['', 0, 'wooden shield'],
+    'shield of drain resistance': ['', 0, 'wooden shield'],
+    'shield of shock resistance': ['', 0, 'wooden shield'],
     'elven shield': ['', 0, 'blue and green shield'],
     'uruk-hai shield': ['', 0, 'white-handed shield'],
     'orcish shield': ['', 0, 'red-eyed shield'],
@@ -5145,7 +5178,8 @@ const MAGICAL_ARMOR_KINDS = new Set([
     'helm of opposite alignment', 'helm of telepathy', 'dunce cap',
     'gauntlets of dexterity', 'gauntlets of fumbling', 'gauntlets of power',
     'jumping boots', 'fumble boots', 'levitation boots', 'speed boots',
-    'water walking boots', 'shield of reflection',
+    'water walking boots', 'shield of drain resistance',
+    'shield of shock resistance', 'shield of reflection',
     'gray dragon scale mail', 'gold dragon scale mail', 'silver dragon scale mail',
     'red dragon scale mail', 'white dragon scale mail', 'orange dragon scale mail',
     'black dragon scale mail', 'blue dragon scale mail', 'green dragon scale mail',
@@ -29308,6 +29342,18 @@ const WISH_NAME_ALIASES = new Map([
     ['invisibility cloak', 'cloak of invisibility'],
     ['magic resistance cloak', 'cloak of magic resistance'],
     ['displacement cloak', 'cloak of displacement'],
+    ['shields', 'shield'],
+    ['reflection shield', 'shield of reflection'],
+    ['drain resistance shield', 'shield of drain resistance'],
+    ['shock resistance shield', 'shield of shock resistance'],
+    ['elvish shield', 'elven shield'],
+    ['elfin shield', 'elven shield'],
+    ['dwarven roundshield', 'dwarvish roundshield'],
+    ['dwarvish round shield', 'dwarvish roundshield'],
+    ['dwarven round shield', 'dwarvish roundshield'],
+    ['uruk hai shield', 'uruk-hai shield'],
+    ['uruk-hai shields', 'uruk-hai shield'],
+    ['uruk hai shields', 'uruk-hai shield'],
     ['walking shoes', 'low boots'],
     ['hard shoes', 'iron shoes'],
     ['shirts', 'shirt'],
@@ -29385,6 +29431,14 @@ const WISH_EXPLICIT_SPELLING_ALIASES = new Map([
     ['flintstone', 'flint'],
 ]);
 
+const WISH_NAMEDESC_RANGES = new Map([
+    ['wooden shield', [
+        ['small shield', 7],
+        ['shield of drain resistance', 13],
+        ['shield of shock resistance', 13],
+    ]],
+]);
+
 function normalizeWishedSpelling(name) {
     return String(name || '').replace(/armour/ig, match => match[0] === 'A' ? 'Armor' : 'armor');
 }
@@ -29396,6 +29450,9 @@ function wishedFuzzyObjectKey(text) {
 function resolveWishedArmorAppearanceAlias(normalized) {
     const key = wishedFuzzyObjectKey(normalized);
     if (!key) return '';
+    for (const name of WISH_NAMEDESC_RANGES.keys()) {
+        if (wishedFuzzyObjectKey(name) === key) return name;
+    }
     for (const [kind, armorAppearance] of Object.entries(ARMOR_WISH_APPEARANCES)) {
         const [group, index, fallback] = armorAppearance;
         const appearance = group ? game._object_descriptions?.[group]?.[index] || fallback : fallback;
@@ -29452,6 +29509,30 @@ function makeWishedGrayStoneObject(lowerName) {
         _display_color: CLR_GRAY,
         wishedfor: true,
     });
+}
+
+function wishedNamedescRangeName(lowerName) {
+    const range = WISH_NAMEDESC_RANGES.get(lowerName);
+    if (!range) return '';
+    const total = range.reduce((sum, [, prob]) => sum + prob, 0);
+    let roll = rn2(total);
+    for (const [name, prob] of range) {
+        roll -= prob;
+        if (roll < 0) return name;
+    }
+    return range[0]?.[0] || '';
+}
+
+function makeWishedNamedescRangeObject(lowerName) {
+    const rangeName = wishedNamedescRangeName(lowerName);
+    if (!rangeName) return null;
+    const baseObject = WISH_BASE_OBJECTS.get(rangeName);
+    if (!baseObject) return null;
+    const baseFields = { ...baseObject };
+    delete baseFields.wishSpeRn1;
+    const metadata = wishObjectMetadataForName(rangeName) ?? wishObjectMetadataForItem(baseFields);
+    const otmp = makeWishedBaseObject(baseObject, metadata);
+    return Object.assign(otmp, baseFields, { wishedfor: true });
 }
 
 const WISH_GEM_COLORS = new Map([
@@ -29731,6 +29812,9 @@ function wishedBaseObjectFromName(lowerName, qualifiers = {}, originalName = low
 
     const rangeWish = makeWishedObjectRangeObject(lowerName);
     if (rangeWish) return rangeWish;
+
+    const namedescRangeWish = makeWishedNamedescRangeObject(lowerName);
+    if (namedescRangeWish) return namedescRangeWish;
 
     const dragonArmorWish = parseWishedDragonArmorName(lowerName);
     if (dragonArmorWish) return makeWishedDragonArmorObject(dragonArmorWish);

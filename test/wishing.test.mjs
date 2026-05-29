@@ -18,6 +18,7 @@ import { currentFruitId, setCurrentFruitName } from '../js/fruit.js';
 const BELL = 358;
 const GOLD_PIECE = 466;
 const WEAPON_CLASS = 1;
+const ARMOR_CLASS = 2;
 const TOOL_CLASS = 12;
 const SACK = 217;
 const OILSKIN_SACK = 218;
@@ -67,6 +68,15 @@ const MUMMY_WRAPPING = 10202;
 const ORCISH_CLOAK = 10203;
 const OILSKIN_CLOAK = 10204;
 const ALCHEMY_SMOCK = 10205;
+const SMALL_SHIELD = 10046;
+const SHIELD_OF_DRAIN_RESISTANCE = 10206;
+const SHIELD_OF_SHOCK_RESISTANCE = 10207;
+const ELVEN_SHIELD = 10208;
+const URUK_HAI_SHIELD = 10209;
+const ORCISH_SHIELD = 10210;
+const LARGE_SHIELD = 10047;
+const DWARVISH_ROUNDSHIELD = 10106;
+const SHIELD_OF_REFLECTION = 10074;
 const HAWAIIAN_SHIRT = 10188;
 const T_SHIRT = 10189;
 const GRAY_DRAGON_SCALE_MAIL = 10085;
@@ -1371,6 +1381,94 @@ test('wished cloak range uses C cloak candidates', async () => {
     assert.doesNotMatch(result.item.line, /^a - 2 /);
     assert.match(result.item.line, /a piece of cloth/);
     assert.equal(result.log[0], 'rnd(98)=93');
+});
+
+test('wished shield range uses C shield candidates', async () => {
+    async function wishedShield(text, seed = 1) {
+        installWishState(seed);
+        enableRngLog({ reset: true });
+        beginWishDirectly();
+        await submitWish(text);
+        return { item: game.inventory[0], log: [...getRngLog()] };
+    }
+
+    const rangeCases = [
+        [10, 'rnd(50)=5', SMALL_SHIELD, 'small shield', 'wooden shield', 30, 3],
+        [4, 'rnd(50)=9', SHIELD_OF_DRAIN_RESISTANCE, 'shield of drain resistance', 'wooden shield', 30, 50],
+        [6, 'rnd(50)=20', SHIELD_OF_SHOCK_RESISTANCE, 'shield of shock resistance', 'wooden shield', 30, 50],
+        [3, 'rnd(50)=32', ELVEN_SHIELD, 'elven shield', 'blue and green shield', 40, 7],
+        [2, 'rnd(50)=34', URUK_HAI_SHIELD, 'uruk-hai shield', 'white-handed shield', 50, 7],
+        [20, 'rnd(50)=36', ORCISH_SHIELD, 'orcish shield', 'red-eyed shield', 50, 7],
+        [22, 'rnd(50)=39', LARGE_SHIELD, 'large shield', 'large shield', 100, 10],
+        [11, 'rnd(50)=41', DWARVISH_ROUNDSHIELD, 'dwarvish roundshield', 'large round shield', 100, 10],
+        [1, 'rnd(50)=46', SHIELD_OF_REFLECTION, 'shield of reflection', 'polished silver shield', 50, 50],
+    ];
+
+    for (const [seed, firstRoll, otyp, kind, display, weight, cost] of rangeCases) {
+        const result = await wishedShield('shield', seed);
+        assert.equal(result.log[0], firstRoll, kind);
+        assert.equal(result.item.otyp, otyp, kind);
+        assert.notEqual(result.item.otyp, ARMOR_CLASS, kind);
+        assert.equal(result.item.cls, 'armor', kind);
+        assert.equal(result.item.kind, kind);
+        assert.equal(result.item.actualKind, kind);
+        assert.equal(result.item.quan, 1, kind);
+        assert.equal(result.item.owt, weight, kind);
+        assert.equal(shop.shopBaseCost(result.item), cost, kind);
+        assert.match(result.item.line, new RegExp(`a(?:n)? ${display}`), kind);
+    }
+
+    for (const [wish, otyp, namedesc, display] of [
+        ['small shield', SMALL_SHIELD, /^rn2\(7\)=/, 'wooden shield'],
+        ['shield of drain resistance', SHIELD_OF_DRAIN_RESISTANCE, /^rn2\(13\)=/, 'wooden shield'],
+        ['shield called drain resistance', SHIELD_OF_DRAIN_RESISTANCE, /^rn2\(13\)=/, 'wooden shield'],
+        ['drain resistance shield', SHIELD_OF_DRAIN_RESISTANCE, /^rn2\(13\)=/, 'wooden shield'],
+        ['shield of shock resistance', SHIELD_OF_SHOCK_RESISTANCE, /^rn2\(13\)=/, 'wooden shield'],
+        ['shock resistance shield', SHIELD_OF_SHOCK_RESISTANCE, /^rn2\(13\)=/, 'wooden shield'],
+        ['elven shield', ELVEN_SHIELD, /^rn2\(3\)=/, 'blue and green shield'],
+        ['elvish shield', ELVEN_SHIELD, /^rn2\(3\)=/, 'blue and green shield'],
+        ['blue and green shield', ELVEN_SHIELD, /^rn2\(3\)=/, 'blue and green shield'],
+        ['Uruk hai shield', URUK_HAI_SHIELD, /^rn2\(3\)=/, 'white-handed shield'],
+        ['white-handed shield', URUK_HAI_SHIELD, /^rn2\(3\)=/, 'white-handed shield'],
+        ['red-eyed shield', ORCISH_SHIELD, /^rn2\(3\)=/, 'red-eyed shield'],
+        ['large shield', LARGE_SHIELD, /^rn2\(5\)=/, 'large shield'],
+        ['dwarven round shield', DWARVISH_ROUNDSHIELD, /^rn2\(4\)=/, 'large round shield'],
+        ['large round shield', DWARVISH_ROUNDSHIELD, /^rn2\(4\)=/, 'large round shield'],
+        ['shield of reflection', SHIELD_OF_REFLECTION, /^rn2\(8\)=/, 'polished silver shield'],
+        ['shield called reflection', SHIELD_OF_REFLECTION, /^rn2\(8\)=/, 'polished silver shield'],
+        ['reflection shield', SHIELD_OF_REFLECTION, /^rn2\(8\)=/, 'polished silver shield'],
+        ['polished silver shield', SHIELD_OF_REFLECTION, /^rn2\(8\)=/, 'polished silver shield'],
+    ]) {
+        const result = await wishedShield(wish);
+        assert.equal(result.item.otyp, otyp, wish);
+        assert.match(result.log[0], namedesc, wish);
+        assert.match(result.item.line, new RegExp(`a(?:n)? ${display}`), wish);
+    }
+
+    for (const [wish, seed, firstRoll, otyp, display] of [
+        ['wooden shield', 14, 'rn2(33)=0', SMALL_SHIELD, 'wooden shield'],
+        ['wooden shield', 7, 'rn2(33)=7', SHIELD_OF_DRAIN_RESISTANCE, 'wooden shield'],
+        ['wooden shield', 13, 'rn2(33)=20', SHIELD_OF_SHOCK_RESISTANCE, 'wooden shield'],
+    ]) {
+        const result = await wishedShield(wish, seed);
+        assert.equal(result.log[0], firstRoll, `${wish} seed ${seed}`);
+        assert.equal(result.item.otyp, otyp, `${wish} seed ${seed}`);
+        assert.match(result.item.line, new RegExp(`a(?:n)? ${display}`), `${wish} seed ${seed}`);
+    }
+
+    for (const wish of ['smooth shield', 'silver shield']) {
+        const result = await wishedShield(wish);
+        assert.equal(result.item.otyp, SHIELD_OF_REFLECTION, wish);
+        assert.ok(!result.log.some(entry => /^rn2\(8\)=/.test(entry)), wish);
+        assert.match(result.item.line, /a polished silver shield/, wish);
+    }
+
+    const result = await wishedShield('2 shields', 1);
+    assert.equal(result.item.otyp, SHIELD_OF_REFLECTION);
+    assert.equal(result.item.quan, 1);
+    assert.doesNotMatch(result.item.line, /^a - 2 /);
+    assert.match(result.item.line, /a polished silver shield/);
+    assert.equal(result.log[0], 'rnd(50)=46');
 });
 
 test('wished shirt range uses C Hawaiian and T-shirt candidates', async () => {
