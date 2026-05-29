@@ -2721,6 +2721,98 @@ test('ordinary carried tip selections use C no-effect branches without a move', 
     assert.match(game._pending_message, /Nothing happens\./);
 });
 
+test('worn uncursed helmet tip prompts for direction then self doffs', async () => {
+    installCommandShopState();
+    const helmet = wornArmor(306350, 'orcish helm', 'h', 0);
+    game.inventory = [helmet];
+
+    await enterTipCommand();
+
+    assert.equal(game._command_mode, 'tipContainerObject');
+    assert.match(game._pending_message, /What do you want to tip\? \[\*\]/);
+
+    await rhack('h');
+
+    assert.equal(game._command_mode, 'tipHatDirection');
+    assert.notEqual(game.context.move, 1);
+    assert.match(game._pending_message, /At whom\? \(in what direction\)/);
+
+    await rhack('.');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.match(game._pending_message, /You briefly doff your helm\./);
+    assert.match(game._pending_message, /The lout here doesn't acknowledge you\.\.\./);
+});
+
+test('worn soft hat tip uses hat wording', async () => {
+    installCommandShopState();
+    const hat = wornArmor(306351, 'fedora', 'f', 0);
+    game.inventory = [hat];
+
+    await enterTipCommand();
+    await rhack('f');
+    await rhack('.');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.match(game._pending_message, /You briefly doff your hat\./);
+});
+
+test('unknown cursed worn helmet tip learns curse and spends action', async () => {
+    installCommandShopState();
+    const helmet = wornArmor(306352, 'orcish helm', 'h', 0, {
+        cursed: true,
+        bknown: false,
+        line: 'h - a +0 orcish helm (being worn)',
+    });
+    game.inventory = [helmet];
+
+    await enterTipCommand();
+    await rhack('h');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(helmet.bknown, true);
+    assert.match(game._pending_message, /You can't\.  It is cursed\./);
+    assert.doesNotMatch(game._pending_message, /At whom/);
+});
+
+test('known cursed worn helmet tip blocks without spending action', async () => {
+    installCommandShopState();
+    const helmet = wornArmor(306353, 'orcish helm', 'h', 0, {
+        cursed: true,
+        bknown: true,
+        line: 'h - a cursed +0 orcish helm (being worn)',
+    });
+    game.inventory = [helmet];
+
+    await enterTipCommand();
+    await rhack('h');
+
+    assert.equal(game._command_mode, null);
+    assert.notEqual(game.context.move, 1);
+    assert.equal(helmet.bknown, true);
+    assert.match(game._pending_message, /You can't\.  It is cursed\./);
+});
+
+test('non-worn helmet tip remains ordinary no-effect', async () => {
+    installCommandShopState();
+    const helmet = wornArmor(306354, 'orcish helm', 'h', 0, {
+        worn: false,
+        line: 'h - a +0 orcish helm',
+    });
+    game.inventory = [helmet];
+
+    await enterTipCommand();
+    await rhack('h');
+
+    assert.equal(game._command_mode, null);
+    assert.notEqual(game.context.move, 1);
+    assert.match(game._pending_message, /Nothing happens\./);
+    assert.doesNotMatch(game._pending_message, /At whom/);
+});
+
 test('potion tip selections report sealed bottles without a move', async () => {
     installCommandShopState();
     const potion = waterPotion(30636, 'w');
@@ -6354,6 +6446,21 @@ test('blind #rub gray stone source does not observe the gray-stone appearance', 
     assert.equal(game._command_mode, 'applyStoneObject');
     assert.equal(stone.dknown, false);
     assert.equal(hasGemStoneDiscovery('gray stone', { knownOnly: false }), false);
+});
+
+test('#rub no-hands form blocks before gray-stone selection or observation', async () => {
+    installCommandShopState();
+    const stone = carriedGrayStone(305773, 'g', 'touchstone', { otyp: TOUCHSTONE });
+    game.inventory = [stone];
+    game.u._polyself_form = { name: 'werewolf', nohands: true };
+
+    await startRubCommand();
+
+    assert.equal(game._command_mode, null);
+    assert.notEqual(game.context.move, 1);
+    assert.equal(stone.dknown, false);
+    assert.equal(hasGemStoneDiscovery('gray stone', { knownOnly: false }), false);
+    assert.match(game._pending_message, /You aren't able to rub anything without hands\./);
 });
 
 test('cursed touchstone shatters non-gray gems before the blind fallback', async () => {

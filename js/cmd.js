@@ -30700,6 +30700,141 @@ function tipOrdinaryObjectMessages(obj) {
     return ['Nothing happens.'];
 }
 
+function tipWornHelmet() {
+    return wornArmorInSlot('helm');
+}
+
+function isTipWornHelmet(obj) {
+    return !!obj && obj === tipWornHelmet();
+}
+
+function tipHatSimpleName(helmet) {
+    return hardEarthHelmet(helmet) ? 'helm' : 'hat';
+}
+
+function tipHatDirectionPrompt() {
+    return 'At whom? (in what direction)';
+}
+
+async function beginTipHat(helmet) {
+    const cancelMove = helmet?.bknown ? 0 : 1;
+    if (helmet?.cursed) {
+        helmet.bknown = true;
+        refreshInventoryObjectLine(helmet);
+        await setMessage("You can't.  It is cursed.");
+        game.context.move = cancelMove;
+        game._command_mode = null;
+        return;
+    }
+    game._tip_hat_letter = helmet?.letter || '';
+    game._tip_hat_cancel_move = cancelMove;
+    await setMessage(tipHatDirectionPrompt());
+    game._command_mode = 'tipHatDirection';
+}
+
+function tipHatDirectionFromKey(ch) {
+    if (ch === '.') return { dx: 0, dy: 0, dz: 0 };
+    if (ch === '<') return { dx: 0, dy: 0, dz: -1 };
+    if (ch === '>') return { dx: 0, dy: 0, dz: 1 };
+    const dir = movementDirection(ch);
+    return dir ? { ...dir, dz: 0 } : null;
+}
+
+function tipHatMonsterVisible(mon) {
+    return !!mon && !game.u?.blind && !mon.minvis && !mon.mundetected && couldsee(mon.mx, mon.my);
+}
+
+function tipHatMonsterResponsive(mon) {
+    if (!mon || mon.dead) return false;
+    if (mon.helpless || mon.mcanmove === false || mon.mcansee === false || mon.blind) return false;
+    return true;
+}
+
+function tipHatMonsterHumanoid(mon) {
+    const data = mon?.data || {};
+    const mlet = data.mlet || mon?.mlet || '';
+    return !!(data.humanoid || data.human || mlet === 'humanoid' || mlet === 'human' || mlet === '@'
+        || data.name === 'human');
+}
+
+function tipHatMonsterPossessive(mon) {
+    const data = mon?.data || {};
+    if (mon?.female || data.female) return 'her';
+    if (mon?.male || data.male) return 'his';
+    return 'its';
+}
+
+function tipHatDirectedResponse(dir) {
+    if (!dir.dx && !dir.dy) {
+        if (dir.dz) return `There's no one ${dir.dz < 0 ? 'up' : 'down'} there.`;
+        return "The lout here doesn't acknowledge you...";
+    }
+
+    let x = game.u?.ux || 0;
+    let y = game.u?.uy || 0;
+    let target = null;
+    for (let range = 1; range <= BOLT_LIM + 1; range++) {
+        x += dir.dx;
+        y += dir.dy;
+        if (!isok(x, y) || (range > 1 && !couldsee(x, y))) break;
+        target = (game.level?.monsters || []).find(mon => mon.mx === x && mon.my === y && !mon.dead);
+        if (target) break;
+        const loc = game.level?.at?.(x, y);
+        if (!loc || (!(ACCESSIBLE(loc.typ) || loc.typ === IRONBARS))) break;
+    }
+    if (!target || !tipHatMonsterResponsive(target)) return 'Nothing happens.';
+
+    if (Number.isInteger(target.mstrategy)) target.mstrategy &= ~STRAT_WAITMASK;
+    const visible = tipHatMonsterVisible(target);
+    const name = fireScrollMonsterName(target);
+    if (visible && tipHatMonsterHumanoid(target) && target.mpeaceful && !game.u?.conflict) {
+        const helmet = monsterEarthHelmet(target);
+        if (!helmet) return `${name} waves.`;
+        const simple = tipHatSimpleName(helmet);
+        const poss = tipHatMonsterPossessive(target);
+        if (helmet.cursed) {
+            helmet.bknown = true;
+            return `${name} grasps ${poss} ${simple} but can't remove it.`;
+        }
+        return `${name} tips ${poss} ${simple} in response.`;
+    }
+    if (visible && tipHatMonsterHumanoid(target))
+        return `${name} gestures rudely at you...`;
+    if (visible) return `${name} doesn't respond.`;
+    return 'Nothing happens.';
+}
+
+async function finishTipHatDirection(ch) {
+    const helmet = (game.inventory || []).find(item => item.letter === game._tip_hat_letter);
+    const cancelMove = game._tip_hat_cancel_move || 0;
+    if (ch === '\x1b' || ch === ' ' || ch === '\r' || ch === '\n' || ch === 'q') {
+        game._tip_hat_letter = '';
+        game._tip_hat_cancel_move = 0;
+        game._command_mode = null;
+        game.context.move = cancelMove;
+        await setMessage('Never mind.');
+        return;
+    }
+    const dir = tipHatDirectionFromKey(ch);
+    if (!dir) {
+        await setMessage(tipHatDirectionPrompt());
+        return;
+    }
+    game._tip_hat_letter = '';
+    game._tip_hat_cancel_move = 0;
+    game._command_mode = null;
+    if (!helmet || !isTipWornHelmet(helmet)) {
+        await setMessage('Nothing happens.');
+        return;
+    }
+    const messages = [
+        `You briefly doff your ${tipHatSimpleName(helmet)}.`,
+        tipHatDirectedResponse(dir),
+    ];
+    await setMessage(messages.filter(Boolean).join('  '), messages.length > 1);
+    game.context.move = 1;
+}
+
 function isTipTargetContainer(obj) {
     return isTipContainerObject(obj) || isUnknownBagOfTricksObject(obj);
 }
@@ -31655,6 +31790,10 @@ async function tipContainerContents(source, targetBox = null) {
 async function finishCarriedTipSelection(tipTarget) {
     game._overlay_lines = null;
     game._overlay_hide_status = 0;
+    if (isTipWornHelmet(tipTarget)) {
+        await beginTipHat(tipTarget);
+        return;
+    }
     if (isTipSourceObject(tipTarget)) {
         game._tip_container_object = tipTarget;
         if (beginTipDestinationSelection(tipTarget)) return;
@@ -50425,6 +50564,11 @@ export async function rhack(_cmd) {
         return;
     }
 
+    if (game._command_mode === 'tipHatDirection') {
+        await finishTipHatDirection(ch);
+        return;
+    }
+
     if (game._command_mode === 'tipContainerObject') {
         if (ch === '\x1b' || ch === 'q' || ch === ' ' || ch === '\r' || ch === '\n') {
             game._overlay_lines = null;
@@ -51333,7 +51477,10 @@ export async function rhack(_cmd) {
                 return;
             }
             if (command === 'rub') {
-                if (!rubObjectLetters()) {
+                if (polyselfNoHands()) {
+                    game._command_mode = null;
+                    await setMessage("You aren't able to rub anything without hands.");
+                } else if (!rubObjectLetters()) {
                     game._command_mode = null;
                     await setMessage("You don't have anything to rub.");
                 } else {
