@@ -18456,6 +18456,28 @@ test('hero-thrown ordinary egg hits visible monster through egg hmon path', asyn
     ]);
 });
 
+test('hero-thrown fertile egg direct hit applies C luck penalty', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, { uluck: 2 });
+    game.u.acurr.a[A_DEX] = 25;
+    const eggItem = { ...egg(876068, 'e'), otyp: EGG, spe: 1, corpsenm: { name: 'newt' } };
+    const goblin = ordinaryThrowTarget('goblin', 7, 5);
+    game.inventory = [eggItem];
+    game.level.monsters = [goblin];
+
+    await rhack('t');
+    await rhack('e');
+    await rhack('l');
+
+    assert.match(game._pending_message, /You hit the goblin with an egg\./);
+    assert.match(game._pending_message, /Splat!/);
+    assert.equal(game.u.uluck, 1);
+    assert.equal(goblin.mhp, 4);
+    assert.equal(game.inventory.includes(eggItem), false);
+    assert.equal(game.level.objects.length, 0);
+});
+
 test('hero-thrown unpaid ordinary egg from a stack bills the splatted unit', async () => {
     const { shkp } = installCommandShopState();
     initRng(2);
@@ -18529,6 +18551,159 @@ test('hero-thrown live ordinary egg hitting cockatrice becomes rock', async () =
     assert.equal(rock._egg_hatch_consumed, undefined);
     assert.equal(rock.corpsenm, undefined);
     assert.equal(cockatrice.mhp, 4);
+});
+
+test('hero-thrown cockatrice egg petrifies direct-hit monster', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.u.acurr.a[A_DEX] = 25;
+    const eggItem = { ...egg(876063, 'e'), otyp: EGG, corpsenm: { name: 'cockatrice' } };
+    const goblin = ordinaryThrowTarget('goblin', 7, 5);
+    game.inventory = [eggItem];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('e');
+    await rhack('l');
+
+    assert.match(game._pending_message, /Splat!  You hit the goblin with a petrifying egg!/);
+    assert.match(game._pending_message, /The goblin turns to stone\./);
+    assert.doesNotMatch(game._pending_message, /isn't alive|misses|top of your head/);
+    assert.equal(game.inventory.includes(eggItem), false);
+    assert.equal(game.level.monsters.includes(goblin), false);
+    assert.equal(goblin.dead, true);
+    assert.equal(game.level.objects.length, 1);
+    const statue = game.level.objects[0];
+    assert.equal(statue.otyp, STATUE);
+    assert.equal(statue.kind, 'statue');
+    assert.equal(statue.corpsenm?.name, 'goblin');
+    assert.equal(statue.ox, 7);
+    assert.equal(statue.oy, 5);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 2), [
+        'rnd(20)', 'rnd(25)',
+    ]);
+});
+
+test('hero-thrown cockatrice egg splats on stone-resistant monster with nominal damage', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.u.acurr.a[A_DEX] = 25;
+    const eggItem = { ...egg(876064, 'e'), otyp: EGG, corpsenm: { name: 'cockatrice' } };
+    const stoneGolem = ordinaryThrowTarget('stone golem', 7, 5, {
+        data: { name: 'stone golem', mlevel: 14, mlet: "'", glyph: "'", stoneResistance: true },
+        stoneResistance: true,
+    });
+    game.inventory = [eggItem];
+    game.level.monsters = [stoneGolem];
+
+    await rhack('t');
+    await rhack('e');
+    await rhack('l');
+
+    assert.match(game._pending_message, /Splat!  You hit the stone golem with a petrifying egg!/);
+    assert.doesNotMatch(game._pending_message, /turns to stone|solidifies|isn't alive|misses/);
+    assert.equal(stoneGolem.mhp, 4);
+    assert.equal(stoneGolem.msleeping, 0);
+    assert.equal(stoneGolem.mpeaceful, false);
+    assert.equal(game.inventory.includes(eggItem), false);
+    assert.equal(game.level.monsters.includes(stoneGolem), true);
+    assert.equal(game.level.objects.length, 0);
+});
+
+test('hero-thrown cockatrice egg polymorphs golem to stone golem before damage', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.u.acurr.a[A_DEX] = 25;
+    const eggItem = { ...egg(876065, 'e'), otyp: EGG, corpsenm: { name: 'cockatrice' } };
+    const fleshGolem = ordinaryThrowTarget('flesh golem', 7, 5, {
+        data: { name: 'flesh golem', mlevel: 9, hpLevel: 9, mlet: "'", glyph: "'", neuter: true },
+    });
+    game.inventory = [eggItem];
+    game.level.monsters = [fleshGolem];
+
+    await rhack('t');
+    await rhack('e');
+    await rhack('l');
+
+    assert.match(game._pending_message, /Splat!  You hit the flesh golem with a petrifying egg!/);
+    assert.match(game._pending_message, /The flesh golem solidifies\.\.\./);
+    assert.match(game._pending_message, /Now it's a stone golem\./);
+    assert.doesNotMatch(game._pending_message, /turns to stone|misses/);
+    assert.equal(fleshGolem.data?.name, 'stone golem');
+    assert.equal(fleshGolem.mhp, fleshGolem.mhpmax - 1);
+    assert.equal(fleshGolem.msleeping, 0);
+    assert.equal(fleshGolem.mpeaceful, false);
+    assert.equal(game.inventory.includes(eggItem), false);
+    assert.equal(game.level.monsters.includes(fleshGolem), true);
+    assert.equal(game.level.objects.length, 0);
+});
+
+test('hero-thrown unpaid cockatrice egg from a stack bills petrifying hit unit', async () => {
+    const { shkp } = installCommandShopState();
+    initRng(2);
+    game.u.acurr.a[A_DEX] = 25;
+    const eggs = { ...egg(876066, 'e', 2), otyp: EGG, corpsenm: { name: 'cockatrice' } };
+    const goblin = ordinaryThrowTarget('goblin', 7, 5);
+    game.inventory = [eggs];
+    game.level.monsters = [goblin];
+    shop.addObjectToShopBill(shkp, eggs, 18);
+
+    await rhack('t');
+    await rhack('e');
+    await rhack('l');
+
+    assert.match(game._pending_message, /Splat!  You hit the goblin with a petrifying egg!/);
+    assert.match(game._pending_message, /The goblin turns to stone\./);
+    assert.equal(eggs.quan, 1);
+    assert.equal(game.inventory.includes(eggs), true);
+    assert.equal(game.level.monsters.includes(goblin), false);
+    assert.equal(game.level.objects.length, 1);
+    const liveEntry = shop.shopBillEntryForObject(shkp, eggs);
+    assert.ok(liveEntry);
+    assert.equal(liveEntry.useup, false);
+    assert.equal(liveEntry.bquan, 1);
+    assert.equal(shop.shopBillEntryTotal(liveEntry), 9);
+    const usedEntry = shkp.bill.find(entry => entry !== liveEntry);
+    assert.ok(usedEntry);
+    assert.equal(usedEntry.useup, true);
+    assert.equal(usedEntry.bquan, 1);
+    assert.equal(shop.shopBillEntryTotal(usedEntry), 9);
+    assert.equal((game._usedUpShopBills || []).some(bill => String(bill.bo_id) === String(usedEntry.bo_id)), true);
+    assert.equal(eggs.unpaidPrice, 9);
+    assert.equal(shkp.debit || 0, 0);
+    assert.equal(shkp.billct, 2);
+});
+
+test('hero-thrown pyrolisk egg direct hit explodes at monster square', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, { uhp: 50, uhpmax: 50 });
+    game.u.acurr.a[A_DEX] = 25;
+    const eggItem = { ...egg(876067, 'e'), otyp: EGG, corpsenm: { name: 'pyrolisk' } };
+    const goblin = ordinaryThrowTarget('goblin', 6, 5);
+    game.inventory = [eggItem];
+    game.level.monsters = [goblin];
+    markSquareVisible(6, 5);
+    const hpBefore = game.u.uhp;
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('e');
+    await rhack('l');
+
+    assert.match(game._pending_message, /You hit the goblin with an egg\./);
+    assert.match(game._pending_message, /Boom!/);
+    assert.match(game._pending_message, /The goblin is caught in the fireball!/);
+    assert.match(game._pending_message, /You are caught in the fireball!/);
+    assert.doesNotMatch(game._pending_message, /Splat!|misses|top of your head/);
+    assert.equal(game.inventory.includes(eggItem), false);
+    assert.equal(game.level.monsters.includes(goblin), false);
+    assert.equal(game.level.objects.length, 0);
+    assert.equal(game.u.uhp < hpBefore, true);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 3), [
+        'rnd(20)', 'rnd(25)', 'd(3,6)',
+    ]);
 });
 
 test('wielded confusion potion bash routes through potionhit', async () => {

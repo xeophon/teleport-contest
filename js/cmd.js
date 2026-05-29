@@ -15385,6 +15385,21 @@ function thrownEggHitArticle(egg) {
     return count > 1 ? 'some' : 'an';
 }
 
+function thrownPetrifyingEggHitArticle(egg) {
+    const count = Math.max(1, Math.trunc(Number(egg?.quan || 1)));
+    if (egg?.known && egg?.corpsenm?.name) return `the ${egg.corpsenm.name}`;
+    return count > 1 ? 'some petrifying' : 'a petrifying';
+}
+
+function thrownEggTargetName(mon) {
+    return mon?.data?.name || mon?.name || 'creature';
+}
+
+function thrownEggTargetTheName(mon) {
+    const name = thrownEggTargetName(mon);
+    return /^the\b/i.test(name) ? name : `the ${name}`;
+}
+
 function placeThrownEggPetrifiedRock(egg, mon) {
     killEggHatchTimer(egg);
     Object.assign(egg, {
@@ -15420,9 +15435,91 @@ function applyThrownEggNominalDamage(mon, messages) {
     if ((mon.mhp || 0) <= 0) killMonsterFromPotionHit(mon, messages);
 }
 
+function applyThrownEggLuckPenalty(egg) {
+    if (!egg?.spe || !egg?.corpsenm?.name || !game.u) return;
+    const count = Math.max(1, Math.trunc(Number(egg?.quan || 1)));
+    game.u.uluck = (game.u.uluck || 0) - Math.min(count, 5);
+}
+
+function monsterResistsStoning(mon) {
+    const data = mon?.data || {};
+    const name = String(data.name || mon?.name || '').toLowerCase();
+    return !!(mon?.stoneResistance || mon?.resistsStoning || mon?.resistsStone
+        || data.stoneResistance || data.resistsStoning || data.resistsStone
+        || name === 'stone golem');
+}
+
+function monsterPolyWhenStoned(mon) {
+    const data = mon?.data || {};
+    return !monsterResistsStoning(mon)
+        && data.name !== 'stone golem'
+        && (data.mlet === '\'' || data.glyph === '\'')
+        && !(game._genocided_monsters || []).includes('stone golem');
+}
+
+function polymorphMonsterIntoStoneGolem(mon, messages) {
+    const stoneData = monsterByRndName('stone golem');
+    if (!mon || !stoneData) return false;
+    messages.push(`${fireScrollMonsterName(mon)} solidifies...`);
+    const oldHp = mon.mhp || 1;
+    const oldMax = mon.mhpmax || oldHp;
+    const shiftedLevel = adjustedMonsterLevel(stoneData);
+    const shiftedHp = monster_hp(stoneData, shiftedLevel);
+    Object.assign(mon, {
+        data: { ...stoneData, hpLevel: shiftedLevel },
+        m_lev: shiftedLevel,
+        mlevel: shiftedLevel,
+        mhp: Math.max(1, Math.min(shiftedHp, Math.trunc((oldHp * shiftedHp) / oldMax))),
+        mhpmax: shiftedHp,
+        msleeping: 0,
+    });
+    messages.push(`Now it's a stone golem.`);
+    newsym(mon.mx, mon.my);
+    return true;
+}
+
+function petrifyMonsterFromThrownEgg(mon, messages) {
+    if (!mon || mon.dead || monsterResistsStoning(mon)) return false;
+    if (monsterPolyWhenStoned(mon) && polymorphMonsterIntoStoneGolem(mon, messages)) return false;
+    messages.push(`${fireScrollMonsterName(mon)} turns to stone.`);
+    stoneMonster(mon, messages, { awardExperience: true });
+    return true;
+}
+
+function heroThrownPetrifyingEggHitMonster(egg, mon) {
+    const messages = [];
+    const count = Math.max(1, Math.trunc(Number(egg?.quan || 1)));
+    const plural = count === 1 ? '' : 's';
+    messages.push(`Splat!  You hit ${thrownEggTargetTheName(mon)} with ${thrownPetrifyingEggHitArticle(egg)} egg${plural}!`);
+    egg.known = true;
+    markObjectShopBillUsedUp(egg);
+    if (!petrifyMonsterFromThrownEgg(mon, messages))
+        applyThrownEggNominalDamage(mon, messages);
+    return messages;
+}
+
+function heroThrownPyroliskEggHitMonster(egg, mon) {
+    const messages = [];
+    const count = Math.max(1, Math.trunc(Number(egg?.quan || 1)));
+    const plural = count === 1 ? '' : 's';
+    messages.push(`You hit ${thrownEggTargetTheName(mon)} with ${thrownEggHitArticle(egg)} egg${plural}.`);
+    markObjectShopBillUsedUp(egg);
+    const explosion = resolvePyroliskEggExplosion(mon.mx, mon.my, d(3, 6));
+    messages.push(...explosion.messages);
+    messages.more = explosion.more;
+    return messages;
+}
+
+function heroThrownEggHitMonster(egg, mon) {
+    applyThrownEggLuckPenalty(egg);
+    if (isTouchPetrifyingEgg(egg)) return heroThrownPetrifyingEggHitMonster(egg, mon);
+    if (isPyroliskEgg(egg)) return heroThrownPyroliskEggHitMonster(egg, mon);
+    return heroThrownOrdinaryEggHitMonster(egg, mon);
+}
+
 function heroThrownOrdinaryEggHitMonster(egg, mon) {
     const messages = [];
-    const targetName = mon?.data?.name || mon?.name || 'creature';
+    const targetName = thrownEggTargetName(mon);
     const count = Math.max(1, Math.trunc(Number(egg?.quan || 1)));
     const plural = count === 1 ? '' : 's';
     messages.push(`You hit the ${targetName} with ${thrownEggHitArticle(egg)} egg${plural}.`);
@@ -52502,15 +52599,15 @@ export async function rhack(_cmd) {
 	                return;
 	            }
 	            impactMessage = `The cream pie misses the ${targetMon.data?.name || 'creature'}.`;
-	        } else if (targetMon && isEggItem(item) && !isTouchPetrifyingEgg(item) && !isPyroliskEgg(item)) {
+	        } else if (targetMon && isEggItem(item)) {
 	            rnd(20);
 	            const dex = game.u?.acurr?.a?.[A_DEX] ?? 10;
 	            if (dex > rnd(25)) {
 	                if ((item.quan || 1) > 1) splitCarriedObjectShopBill(item, thrownObject, 1);
-	                const messages = heroThrownOrdinaryEggHitMonster(thrownObject, targetMon);
+	                const messages = heroThrownEggHitMonster(thrownObject, targetMon);
 	                removeInventoryItem(item, 1);
 	                newsym(targetMon.mx, targetMon.my);
-	                await setMessage(messages.join('  '));
+	                await setMessage(messages.join('  '), !!messages.more);
 	                game._command_mode = null;
 	                game._throw_item_letter = null;
 	                game._resume_time_after_more = 0;
