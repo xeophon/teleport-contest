@@ -80,6 +80,15 @@ const SHIELD_OF_REFLECTION = 10074;
 const FEDORA = 10078;
 const CORNUTHAUM = 10211;
 const DUNCE_CAP = 10212;
+const ELVEN_LEATHER_HELM = 10213;
+const ORCISH_HELM = 10022;
+const DWARVISH_IRON_HELM = 10107;
+const DENTED_POT = 10045;
+const HELM_OF_BRILLIANCE = 10131;
+const HELMET = 10044;
+const HELM_OF_CAUTION = 10214;
+const HELM_OF_OPPOSITE_ALIGNMENT = 10215;
+const HELM_OF_TELEPATHY = 10216;
 const HAWAIIAN_SHIRT = 10188;
 const T_SHIRT = 10189;
 const GRAY_DRAGON_SCALE_MAIL = 10085;
@@ -1538,6 +1547,96 @@ test('wished hat range uses C hat candidates', async () => {
         assert.equal(result.item, undefined, wish);
         assert.match(game._pending_message, /Nothing fitting that description exists in the game\./, wish);
     }
+});
+
+test('wished helm range uses C helm candidates', async () => {
+    async function wishedHelm(text, seed = 1) {
+        installWishState(seed);
+        enableRngLog({ reset: true });
+        beginWishDirectly();
+        await submitWish(text);
+        return { item: game.inventory[0], log: [...getRngLog()] };
+    }
+
+    const rangeCases = [
+        [6, 'rnd(66)=4', ELVEN_LEATHER_HELM, 'elven leather helm', 'leather hat', 3, 8],
+        [7, 'rnd(66)=8', ORCISH_HELM, 'orcish helm', 'iron skull cap', 30, 10],
+        [5, 'rnd(66)=17', DWARVISH_IRON_HELM, 'dwarvish iron helm', 'hard hat', 40, 20],
+        [1, 'rnd(66)=22', CORNUTHAUM, 'cornuthaum', 'conical hat', 4, 80],
+        [3, 'rnd(66)=28', DUNCE_CAP, 'dunce cap', 'conical hat', 4, 1],
+        [21, 'rnd(66)=29', DENTED_POT, 'dented pot', 'dented pot', 10, 8],
+        [22, 'rnd(66)=33', HELM_OF_BRILLIANCE, 'helm of brilliance', 'crystal helmet', 40, 50],
+        [4, 'rnd(66)=39', HELMET, 'helmet', 'plumed helmet', 30, 10],
+        [33, 'rnd(66)=49', HELM_OF_CAUTION, 'helm of caution', 'etched helmet', 50, 50],
+        [2, 'rnd(66)=56', HELM_OF_OPPOSITE_ALIGNMENT, 'helm of opposite alignment', 'crested helmet', 50, 50],
+        [32, 'rnd(66)=63', HELM_OF_TELEPATHY, 'helm of telepathy', 'visored helmet', 50, 50],
+    ];
+
+    for (const [seed, firstRoll, otyp, kind, display, weight, cost] of rangeCases) {
+        const result = await wishedHelm('helm', seed);
+        assert.equal(result.log[0], firstRoll, kind);
+        assert.equal(result.item.otyp, otyp, kind);
+        assert.notEqual(result.item.otyp, FEDORA, kind);
+        assert.notEqual(result.item.otyp, ARMOR_CLASS, kind);
+        assert.equal(result.item.cls, 'armor', kind);
+        assert.equal(result.item.kind, kind);
+        assert.equal(result.item.actualKind, kind);
+        assert.equal(result.item.quan, 1, kind);
+        assert.equal(result.item.owt, weight, kind);
+        assert.equal(shop.shopBaseCost(result.item), cost, kind);
+        assert.match(result.item.line, new RegExp(`a(?:n)? ${display}`), kind);
+    }
+
+    for (const [wish, otyp, namedesc, display, weight, cost] of [
+        ['elven leather helm', ELVEN_LEATHER_HELM, /^rn2\(7\)=/, 'leather hat', 3, 8],
+        ['leather hat', ELVEN_LEATHER_HELM, /^rn2\(7\)=/, 'leather hat', 3, 8],
+        ['orcish helm', ORCISH_HELM, /^rn2\(7\)=/, 'iron skull cap', 30, 10],
+        ['iron skull cap', ORCISH_HELM, /^rn2\(7\)=/, 'iron skull cap', 30, 10],
+        ['dwarvish iron helm', DWARVISH_IRON_HELM, /^rn2\(7\)=/, 'hard hat', 40, 20],
+        ['hard hat', DWARVISH_IRON_HELM, /^rn2\(7\)=/, 'hard hat', 40, 20],
+        ['dented pot', DENTED_POT, /^rn2\(3\)=/, 'dented pot', 10, 8],
+        ['helm of brilliance', HELM_OF_BRILLIANCE, /^rn2\(7\)=/, 'crystal helmet', 40, 50],
+        ['helmet of brilliance', HELM_OF_BRILLIANCE, /^rn2\(7\)=/, 'crystal helmet', 40, 50],
+        ['crystal helmet', HELM_OF_BRILLIANCE, /^rn2\(7\)=/, 'crystal helmet', 40, 50],
+        ['helmet', HELMET, /^rn2\(11\)=/, 'plumed helmet', 30, 10],
+        ['plumed helmet', HELMET, /^rn2\(11\)=/, 'plumed helmet', 30, 10],
+        ['helm of caution', HELM_OF_CAUTION, /^rn2\(7\)=/, 'etched helmet', 50, 50],
+        ['helmet of caution', HELM_OF_CAUTION, /^rn2\(7\)=/, 'etched helmet', 50, 50],
+        ['etched helmet', HELM_OF_CAUTION, /^rn2\(7\)=/, 'etched helmet', 50, 50],
+        ['helm of opposite alignment', HELM_OF_OPPOSITE_ALIGNMENT, /^rn2\(11\)=/, 'crested helmet', 50, 50],
+        ['helmet of opposite alignment', HELM_OF_OPPOSITE_ALIGNMENT, /^rn2\(11\)=/, 'crested helmet', 50, 50],
+        ['crested helmet', HELM_OF_OPPOSITE_ALIGNMENT, /^rn2\(11\)=/, 'crested helmet', 50, 50],
+        ['helm of telepathy', HELM_OF_TELEPATHY, /^rn2\(5\)=/, 'visored helmet', 50, 50],
+        ['helmet of telepathy', HELM_OF_TELEPATHY, /^rn2\(5\)=/, 'visored helmet', 50, 50],
+        ['visored helmet', HELM_OF_TELEPATHY, /^rn2\(5\)=/, 'visored helmet', 50, 50],
+    ]) {
+        const result = await wishedHelm(wish);
+        assert.equal(result.item.otyp, otyp, wish);
+        assert.match(result.log[0], namedesc, wish);
+        assert.equal(result.item.owt, weight, wish);
+        assert.equal(shop.shopBaseCost(result.item), cost, wish);
+        assert.match(result.item.line, new RegExp(`a(?:n)? ${display}`), wish);
+    }
+
+    for (const wish of ['helm of esp', 'helmet of esp', 'kabuto']) {
+        const result = await wishedHelm(wish);
+        assert.equal(result.item.otyp, wish === 'kabuto' ? HELMET : HELM_OF_TELEPATHY, wish);
+        if (wish !== 'kabuto')
+            assert.ok(!result.log.some(entry => entry.startsWith('rn2(5)=')), wish);
+    }
+
+    const result = await wishedHelm('2 helms', 32);
+    assert.equal(result.item.otyp, HELM_OF_TELEPATHY);
+    assert.equal(result.item.quan, 1);
+    assert.doesNotMatch(result.item.line, /^a - 2 /);
+    assert.match(result.item.line, /a visored helmet/);
+    assert.equal(result.log[0], 'rnd(66)=63');
+
+    const pluralExact = await wishedHelm('helmets');
+    assert.equal(pluralExact.item.otyp, HELMET);
+    assert.equal(pluralExact.item.quan, 1);
+    assert.match(pluralExact.item.line, /a plumed helmet/);
+    assert.match(pluralExact.log[0], /^rn2\(11\)=/);
 });
 
 test('wished shirt range uses C Hawaiian and T-shirt candidates', async () => {

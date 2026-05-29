@@ -1235,6 +1235,14 @@ const ORCISH_SHIELD = 10210;
 const FEDORA = 10078;
 const CORNUTHAUM = 10211;
 const DUNCE_CAP = 10212;
+const ELVEN_LEATHER_HELM = 10213;
+const ORCISH_HELM = 10022;
+const DWARVISH_IRON_HELM = 10107;
+const DENTED_POT = 10045;
+const HELM_OF_BRILLIANCE = 10131;
+const HELM_OF_CAUTION = 10214;
+const HELM_OF_OPPOSITE_ALIGNMENT = 10215;
+const HELM_OF_TELEPATHY = 10216;
 const LARGE_SHIELD = 10047;
 const DWARVISH_ROUNDSHIELD = 10106;
 const PLATE_MAIL = 10037;
@@ -1511,10 +1519,18 @@ const WISH_BASE_OBJECTS = new Map([
     ['tooled horn', { otyp: TOOLED_HORN, cls: 'tool', glyph: '(', kind: 'horn', actualKind: 'tooled horn', known: false }],
     ['grappling hook', { otyp: GRAPPLING_HOOK, cls: 'tool', glyph: '(', kind: 'grappling hook', actualKind: 'grappling hook' }],
     ['plate mail', { otyp: PLATE_MAIL, cls: 'armor', glyph: '[', kind: 'plate mail', actualKind: 'plate mail' }],
-    ['helmet', { otyp: HELMET, cls: 'armor', glyph: '[', kind: 'helmet', actualKind: 'helmet', appearance: 'plumed helmet', known: false }],
+    ['helmet', { otyp: HELMET, cls: 'armor', glyph: '[', kind: 'helmet', actualKind: 'helmet', appearance: 'plumed helmet', known: false, owt: 30 }],
+    ['elven leather helm', { otyp: ELVEN_LEATHER_HELM, cls: 'armor', glyph: '[', kind: 'elven leather helm', actualKind: 'elven leather helm', appearance: 'leather hat', known: false, owt: 3 }],
+    ['orcish helm', { otyp: ORCISH_HELM, cls: 'armor', glyph: '[', kind: 'orcish helm', actualKind: 'orcish helm', appearance: 'iron skull cap', known: false, owt: 30 }],
+    ['dwarvish iron helm', { otyp: DWARVISH_IRON_HELM, cls: 'armor', glyph: '[', kind: 'dwarvish iron helm', actualKind: 'dwarvish iron helm', appearance: 'hard hat', known: false, owt: 40 }],
     ['fedora', { otyp: FEDORA, cls: 'armor', glyph: '[', kind: 'fedora', actualKind: 'fedora', owt: 3 }],
     ['cornuthaum', { otyp: CORNUTHAUM, cls: 'armor', glyph: '[', kind: 'cornuthaum', actualKind: 'cornuthaum', appearance: 'conical hat', known: false, owt: 4 }],
     ['dunce cap', { otyp: DUNCE_CAP, cls: 'armor', glyph: '[', kind: 'dunce cap', actualKind: 'dunce cap', appearance: 'conical hat', known: false, owt: 4 }],
+    ['dented pot', { otyp: DENTED_POT, cls: 'armor', glyph: '[', kind: 'dented pot', actualKind: 'dented pot', owt: 10 }],
+    ['helm of brilliance', { otyp: HELM_OF_BRILLIANCE, cls: 'armor', glyph: '[', kind: 'helm of brilliance', actualKind: 'helm of brilliance', appearance: 'crystal helmet', known: false, owt: 40 }],
+    ['helm of caution', { otyp: HELM_OF_CAUTION, cls: 'armor', glyph: '[', kind: 'helm of caution', actualKind: 'helm of caution', appearance: 'etched helmet', known: false, owt: 50 }],
+    ['helm of opposite alignment', { otyp: HELM_OF_OPPOSITE_ALIGNMENT, cls: 'armor', glyph: '[', kind: 'helm of opposite alignment', actualKind: 'helm of opposite alignment', appearance: 'crested helmet', known: false, owt: 50 }],
+    ['helm of telepathy', { otyp: HELM_OF_TELEPATHY, cls: 'armor', glyph: '[', kind: 'helm of telepathy', actualKind: 'helm of telepathy', appearance: 'visored helmet', known: false, owt: 50 }],
     ['ring mail', { otyp: RING_MAIL, cls: 'armor', glyph: '[', kind: 'ring mail', actualKind: 'ring mail' }],
     ['studded leather armor', { otyp: STUDDED_LEATHER_ARMOR, cls: 'armor', glyph: '[', kind: 'studded leather armor', actualKind: 'studded leather armor' }],
     ['leather armor', { otyp: LEATHER_ARMOR, cls: 'armor', glyph: '[', kind: 'leather armor', actualKind: 'leather armor' }],
@@ -1596,7 +1612,11 @@ const WISH_BASE_NAMEDESC_BOUNDS = new Map([
     ['land mine', 1], ['bag of tricks', 21], ['tooled horn', 6],
     ['grappling hook', 6],
     ['plate mail', 41], ['helmet', 11],
+    ['elven leather helm', 7], ['orcish helm', 7],
+    ['dwarvish iron helm', 7],
     ['fedora', 1], ['cornuthaum', 6], ['dunce cap', 6],
+    ['dented pot', 3], ['helm of brilliance', 7],
+    ['helm of caution', 7], ['helm of opposite alignment', 11],
     ['helm of telepathy', 5],
     ['ring mail', 67], ['studded leather armor', 67],
     ['leather armor', 76], ['elven mithril-coat', 16],
@@ -1747,6 +1767,20 @@ const WISH_OBJECT_RANGES = new Map([
         ['fedora', 0],
         ['cornuthaum', 5],
         ['dunce cap', 5],
+    ]],
+    ['helm', [
+        ['elven leather helm', 6],
+        ['orcish helm', 6],
+        ['dwarvish iron helm', 6],
+        ['fedora', 0],
+        ['cornuthaum', 5],
+        ['dunce cap', 5],
+        ['dented pot', 2],
+        ['helm of brilliance', 6],
+        ['helmet', 10],
+        ['helm of caution', 6],
+        ['helm of opposite alignment', 10],
+        ['helm of telepathy', 4],
     ]],
     ['gloves', [
         ['leather gloves', 15],
@@ -4954,6 +4988,11 @@ const ARMOR_AC_BONUS = {
     fedora: 0,
     cornuthaum: 0,
     'dunce cap': 0,
+    'dented pot': 1,
+    'helm of brilliance': 1,
+    'helm of caution': 1,
+    'helm of opposite alignment': 1,
+    'helm of telepathy': 1,
     'small shield': 1,
     'large shield': 2,
     'elven shield': 2,
@@ -5072,6 +5111,10 @@ const ARMOR_WEAR_DELAY = {
     'orcish helm': 1,
     'elven leather helm': 1,
     'dwarvish iron helm': 1,
+    'helm of brilliance': 1,
+    'helm of caution': 1,
+    'helm of opposite alignment': 1,
+    'helm of telepathy': 1,
     'leather gloves': 1,
     'gauntlets of fumbling': 1,
     'gauntlets of power': 1,
@@ -5280,6 +5323,11 @@ const OBJECT_WEIGHTS = {
     'fedora': 3,
     'cornuthaum': 4,
     'dunce cap': 4,
+    'dented pot': 10,
+    'helm of brilliance': 40,
+    'helm of caution': 50,
+    'helm of opposite alignment': 50,
+    'helm of telepathy': 50,
     'gray dragon scale mail': 40,
     'gold dragon scale mail': 40,
     'silver dragon scale mail': 40,
@@ -29364,6 +29412,12 @@ const WISH_NAME_ALIASES = new Map([
     ['drain resistance shield', 'shield of drain resistance'],
     ['shock resistance shield', 'shield of shock resistance'],
     ['hats', 'hat'],
+    ['helms', 'helm'],
+    ['helmets', 'helmet'],
+    ['helmet of brilliance', 'helm of brilliance'],
+    ['helmet of caution', 'helm of caution'],
+    ['helmet of opposite alignment', 'helm of opposite alignment'],
+    ['helmet of telepathy', 'helm of telepathy'],
     ['elvish shield', 'elven shield'],
     ['elfin shield', 'elven shield'],
     ['dwarven roundshield', 'dwarvish roundshield'],
@@ -29403,6 +29457,7 @@ const WISH_EXPLICIT_SPELLING_ALIASES = new Map([
     ['amulet of protection', 'amulet of guarding'],
     ['amulet of telepathy', 'amulet of esp'],
     ['helm of esp', 'helm of telepathy'],
+    ['helmet of esp', 'helm of telepathy'],
     ['potion of sleep', 'potion of sleeping'],
     ['scroll of recharging', 'scroll of charging'],
     ['recharging', 'scroll of charging'],

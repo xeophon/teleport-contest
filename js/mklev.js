@@ -125,6 +125,10 @@ const URUK_HAI_SHIELD = 10209;
 const ORCISH_SHIELD = 10210;
 const CORNUTHAUM = 10211;
 const DUNCE_CAP = 10212;
+const ELVEN_LEATHER_HELM = 10213;
+const HELM_OF_CAUTION = 10214;
+const HELM_OF_OPPOSITE_ALIGNMENT = 10215;
+const HELM_OF_TELEPATHY = 10216;
 const RIN_LEVITATION = 10028;
 const ORCISH_DAGGER = 10020;
 const SCIMITAR = 10021;
@@ -1463,7 +1467,7 @@ const HORN_OF_PLENTY = 957;
 
 const SPECIFIC_ARMOR = new Set([
     PLATE_MAIL, CRYSTAL_PLATE_MAIL, SPLINT_MAIL, BANDED_MAIL, RING_MAIL,
-    STUDDED_LEATHER_ARMOR, LEATHER_ARMOR, HELMET, DENTED_POT, SMALL_SHIELD,
+    STUDDED_LEATHER_ARMOR, LEATHER_ARMOR, ELVEN_LEATHER_HELM, HELMET, DENTED_POT, SMALL_SHIELD,
     SHIELD_OF_DRAIN_RESISTANCE, SHIELD_OF_SHOCK_RESISTANCE, ELVEN_SHIELD,
     URUK_HAI_SHIELD, ORCISH_SHIELD, LARGE_SHIELD, LOW_BOOTS, HIGH_BOOTS,
     LEATHER_GLOVES, MUMMY_WRAPPING,
@@ -1471,7 +1475,8 @@ const SPECIFIC_ARMOR = new Set([
     ALCHEMY_SMOCK, LEATHER_CLOAK, CHAIN_MAIL, CLOAK_OF_PROTECTION,
     CLOAK_OF_INVISIBILITY, CLOAK_OF_MAGIC_RESISTANCE, CLOAK_OF_DISPLACEMENT,
     SHIELD_OF_REFLECTION, GAUNTLETS_OF_FUMBLING, GAUNTLETS_OF_POWER,
-    GAUNTLETS_OF_DEXTERITY, HELM_OF_BRILLIANCE,
+    GAUNTLETS_OF_DEXTERITY, HELM_OF_BRILLIANCE, HELM_OF_CAUTION,
+    HELM_OF_OPPOSITE_ALIGNMENT, HELM_OF_TELEPATHY,
     LEATHER_JACKET, FEDORA, CORNUTHAUM, DUNCE_CAP, ELVEN_MITHRIL_COAT,
     IRON_SHOES, DWARVISH_ROUNDSHIELD, DWARVISH_IRON_HELM, DWARVISH_MITHRIL_COAT,
     WATER_WALKING_BOOTS, JUMPING_BOOTS, ELVEN_BOOTS, KICKING_BOOTS,
@@ -1486,11 +1491,18 @@ const SPECIFIC_ARMOR = new Set([
     SPEED_BOOTS, ORCISH_HELM,
 ]);
 const SPECIFIC_ARMOR_COLORS = new Map([
+    [ELVEN_LEATHER_HELM, CLR_BROWN],
     [ORCISH_HELM, CLR_BLACK],
     [DWARVISH_IRON_HELM, CLR_CYAN],
     [FEDORA, CLR_BROWN],
     [CORNUTHAUM, CLR_BLUE],
     [DUNCE_CAP, CLR_BLUE],
+    [DENTED_POT, CLR_BLACK],
+    [HELM_OF_BRILLIANCE, CLR_WHITE],
+    [HELMET, CLR_CYAN],
+    [HELM_OF_CAUTION, CLR_GREEN],
+    [HELM_OF_OPPOSITE_ALIGNMENT, CLR_CYAN],
+    [HELM_OF_TELEPATHY, CLR_CYAN],
     [MUMMY_WRAPPING, CLR_GRAY],
     [ELVEN_MITHRIL_COAT, CLR_GRAY],
     [ELVEN_CLOAK, CLR_BLACK],
@@ -1552,7 +1564,8 @@ const SPECIFIC_ARMOR_COLORS = new Map([
 const ARMOR_AC_BONUS = new Map([
     [PLATE_MAIL, 7], [CRYSTAL_PLATE_MAIL, 7], [SPLINT_MAIL, 6],
     [BANDED_MAIL, 6], [RING_MAIL, 3], [STUDDED_LEATHER_ARMOR, 3],
-    [LEATHER_ARMOR, 2], [HELMET, 1], [DENTED_POT, 1],
+    [LEATHER_ARMOR, 2], [ELVEN_LEATHER_HELM, 1], [ORCISH_HELM, 1],
+    [DWARVISH_IRON_HELM, 2], [HELMET, 1], [DENTED_POT, 1],
     [SMALL_SHIELD, 1], [SHIELD_OF_DRAIN_RESISTANCE, 1],
     [SHIELD_OF_SHOCK_RESISTANCE, 1], [ELVEN_SHIELD, 2],
     [URUK_HAI_SHIELD, 1], [ORCISH_SHIELD, 1],
@@ -1568,7 +1581,9 @@ const ARMOR_AC_BONUS = new Map([
     [CLOAK_OF_PROTECTION, 3], [CLOAK_OF_INVISIBILITY, 1],
     [CLOAK_OF_MAGIC_RESISTANCE, 1], [CLOAK_OF_DISPLACEMENT, 1],
     [SHIELD_OF_REFLECTION, 2], [LEATHER_JACKET, 1], [FEDORA, 0],
-    [CORNUTHAUM, 0], [DUNCE_CAP, 0],
+    [CORNUTHAUM, 0], [DUNCE_CAP, 0], [HELM_OF_BRILLIANCE, 1],
+    [HELM_OF_CAUTION, 1], [HELM_OF_OPPOSITE_ALIGNMENT, 1],
+    [HELM_OF_TELEPATHY, 1],
     [GRAY_DRAGON_SCALE_MAIL, 9], [GOLD_DRAGON_SCALE_MAIL, 9],
     [SILVER_DRAGON_SCALE_MAIL, 9], [RED_DRAGON_SCALE_MAIL, 9],
     [WHITE_DRAGON_SCALE_MAIL, 9], [ORANGE_DRAGON_SCALE_MAIL, 9],
@@ -6009,7 +6024,8 @@ function mongets(otyp, erodes = true) {
     if (otyp === ORCISH_HELM) game._fixed_armor_no_erosion = !erodes;
     const otmp = mksobj(otyp, true, false);
     Object.assign(otmp, object_display(otmp));
-    if (otyp === ORCISH_HELM) Object.assign(otmp, { cls: 'armor', kind: 'orcish helm' });
+    if (otyp === ORCISH_HELM) Object.assign(otmp, { cls: 'armor', kind: 'orcish helm', appearance: 'iron skull cap' });
+    else if (otyp === ELVEN_LEATHER_HELM) Object.assign(otmp, { cls: 'armor', kind: 'elven leather helm', appearance: 'leather hat' });
     else if (otyp === ELVEN_MITHRIL_COAT) Object.assign(otmp, { cls: 'armor', kind: 'elven mithril-coat' });
     else if (otyp === ELVEN_CLOAK) Object.assign(otmp, { cls: 'armor', kind: 'elven cloak', appearance: 'faded pall' });
     else if (otyp === DWARVISH_CLOAK) Object.assign(otmp, { cls: 'armor', kind: 'dwarvish cloak', appearance: 'hooded cloak' });
@@ -6025,6 +6041,11 @@ function mongets(otyp, erodes = true) {
     else if (otyp === FEDORA) Object.assign(otmp, { cls: 'armor', kind: 'fedora' });
     else if (otyp === CORNUTHAUM) Object.assign(otmp, { cls: 'armor', kind: 'cornuthaum', appearance: 'conical hat' });
     else if (otyp === DUNCE_CAP) Object.assign(otmp, { cls: 'armor', kind: 'dunce cap', appearance: 'conical hat' });
+    else if (otyp === DENTED_POT) Object.assign(otmp, { cls: 'armor', kind: 'dented pot' });
+    else if (otyp === HELM_OF_BRILLIANCE) Object.assign(otmp, { cls: 'armor', kind: 'helm of brilliance', appearance: 'crystal helmet' });
+    else if (otyp === HELM_OF_CAUTION) Object.assign(otmp, { cls: 'armor', kind: 'helm of caution', appearance: 'etched helmet' });
+    else if (otyp === HELM_OF_OPPOSITE_ALIGNMENT) Object.assign(otmp, { cls: 'armor', kind: 'helm of opposite alignment', appearance: 'crested helmet' });
+    else if (otyp === HELM_OF_TELEPATHY) Object.assign(otmp, { cls: 'armor', kind: 'helm of telepathy', appearance: 'visored helmet' });
     else if (otyp === ORCISH_DAGGER) Object.assign(otmp, { cls: 'weapon', kind: 'orcish dagger' });
     else if (otyp === SCIMITAR) Object.assign(otmp, { cls: 'weapon', kind: 'scimitar' });
     else if (otyp === DAGGER) Object.assign(otmp, { cls: 'weapon', kind: 'dagger' });
