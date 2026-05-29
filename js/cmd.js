@@ -1611,6 +1611,10 @@ const WISH_OBJECT_RANGES = new Map([
         ['bag of holding', 20],
         ['bag of tricks', 20],
     ]],
+    ['lamp', [
+        ['oil lamp', 45],
+        ['magic lamp', 15],
+    ]],
     ['candle', [
         ['tallow candle', 20],
         ['wax candle', 5],
@@ -29416,6 +29420,8 @@ function wishedObjectRangeName(lowerName) {
 function makeWishedObjectRangeObject(lowerName) {
     const rangeName = wishedObjectRangeName(lowerName);
     if (!rangeName) return null;
+    if (rangeName === 'magic lamp' && !game.flags?.debug)
+        return makeOilLampFromMagicLampWishObject();
     const baseObject = WISH_BASE_OBJECTS.get(rangeName);
     if (!baseObject) return null;
     const baseFields = { ...baseObject };

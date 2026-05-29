@@ -21,6 +21,8 @@ const TOOL_CLASS = 12;
 const SACK = 217;
 const OILSKIN_SACK = 218;
 const BAG_OF_HOLDING = 219;
+const OIL_LAMP = 227;
+const MAGIC_LAMP = 228;
 const LAND_MINE_OBJECT = 10160;
 const BEARTRAP_OBJECT = 10161;
 const FIGURINE = 795;
@@ -1043,6 +1045,32 @@ test('generic wished object ranges use C rnd_class candidates', async () => {
             }
         }
         assert.ok(seen.size > 1, `${wish} should not collapse to one concrete object`);
+    }
+});
+
+test('generic wished lamp range substitutes magic lamp after C range roll outside wizard mode', async () => {
+    const debugSeen = new Set();
+    for (let seed = 1; seed <= 30; seed++) {
+        installWishState(seed, { debug: true });
+        beginWishDirectly();
+        await submitWish('lamp');
+
+        const item = game.inventory[0];
+        assert.ok(new Set([OIL_LAMP, MAGIC_LAMP]).has(item.otyp), `lamp produced ${item.otyp}`);
+        debugSeen.add(item.otyp);
+    }
+    assert.ok(debugSeen.has(OIL_LAMP), 'wizard-mode lamp range should include oil lamps');
+    assert.ok(debugSeen.has(MAGIC_LAMP), 'wizard-mode lamp range should include magic lamps');
+
+    for (let seed = 1; seed <= 30; seed++) {
+        installWishState(seed, { debug: false });
+        beginWishDirectly();
+        await submitWish('lamp');
+
+        const item = game.inventory[0];
+        assert.equal(item.otyp, OIL_LAMP);
+        assert.equal(item.kind, 'oil lamp');
+        assert.notEqual(item.actualKind, 'magic lamp');
     }
 });
 
