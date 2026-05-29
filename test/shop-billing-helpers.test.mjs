@@ -21180,6 +21180,107 @@ test('top-level throw count does not leak into prompt count', async () => {
     assert.equal(game.level.objects[0].quan, 5);
 });
 
+test('throw star inventory menu count limits gold stack', async () => {
+    installNonShopFloorState();
+    const gold = goldPieces(876049, 5);
+    game.inventory = [gold];
+    game._goldCount = 5;
+
+    await rhack('t');
+    await rhack('*');
+    assert.equal(game._command_mode, 'throwInventory');
+
+    await rhack('2');
+    assert.equal(game._command_mode, 'throwInventory');
+    assert.match(game._pending_message, /Count: 2/);
+    assert.ok((game._overlay_lines || []).length > 0);
+
+    await rhack('$');
+    assert.equal(game._command_mode, 'throwDirection');
+
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game._goldCount, 3);
+    assert.equal(gold.quan, 3);
+    assert.equal(game.level.objects.length, 1);
+    assert.equal(game.level.objects[0].quan, 2);
+    assert.equal(game.level.objects[0].glyph, '$');
+});
+
+test('throw question inventory menu count rejects multi-count non-gold stack before direction', async () => {
+    installNonShopFloorState();
+    const darts = dartStack(876050, 'd', 3);
+    game.inventory = [darts];
+
+    await rhack('t');
+    await rhack('?');
+    assert.equal(game._command_mode, 'throwInventory');
+
+    await rhack('2');
+    assert.equal(game._command_mode, 'throwInventory');
+    assert.match(game._pending_message, /Count: 2/);
+
+    await rhack('d');
+
+    assert.equal(game._command_mode, 'throwObject');
+    assert.match(game._pending_message, /can only throw one at a time/);
+    assert.equal(darts.quan, 3);
+    assert.equal(game.level.objects.length, 0);
+    assert.equal(game.context.move || 0, 0);
+});
+
+test('throw prompt count survives inventory menu selection', async () => {
+    installNonShopFloorState();
+    const gold = goldPieces(876051, 5);
+    game.inventory = [gold];
+    game._goldCount = 5;
+
+    await rhack('t');
+    await rhack('2');
+    await rhack('?');
+    assert.equal(game._command_mode, 'throwInventory');
+
+    await rhack('$');
+    assert.equal(game._command_mode, 'throwDirection');
+
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game._goldCount, 3);
+    assert.equal(gold.quan, 3);
+    assert.equal(game.level.objects.length, 1);
+    assert.equal(game.level.objects[0].quan, 2);
+});
+
+test('throw inventory menu count clears on menu cancel', async () => {
+    installNonShopFloorState();
+    const gold = goldPieces(876052, 5);
+    game.inventory = [gold];
+    game._goldCount = 5;
+
+    await rhack('t');
+    await rhack('*');
+    await rhack('2');
+    await rhack('\x1b');
+
+    assert.equal(game._command_mode, 'throwInventory');
+    assert.equal(game._throw_menu_count_text, '');
+
+    await rhack('\x1b');
+    assert.equal(game._command_mode, null);
+
+    await rhack('t');
+    await rhack('$');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game._goldCount, 0);
+    assert.equal(game.inventory.some(item => item.letter === '$'), false);
+    assert.equal(game.level.objects.length, 1);
+    assert.equal(game.level.objects[0].quan, 5);
+});
+
 test('hero-thrown confusion potion hits visible monster through potionhit', async () => {
     installNonShopFloorState();
     initRng(2);

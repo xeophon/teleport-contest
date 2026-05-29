@@ -58,12 +58,12 @@ A parallel monster-thrown audit selected `drop_throw(ohit)` hit-state fallout:
 A parallel throw `getobj()` audit selected remaining menu and prompt behavior:
 
 - C `*` can return a counted menu selection, and prompt backspace edits the typed count: `nethack-c/upstream/src/invent.c:1979`, `nethack-c/upstream/src/cmd.c:5055`.
-- JS direct throw prompt counts, prompt-count backspace/delete, and `?` downplayed fallback are covered, but `*` menu-count return remains open.
+- JS direct throw prompt counts, prompt-count backspace/delete, `?` downplayed fallback, and throw `?`/`*` inventory-menu count return are covered locally; reusable `getobj()` extraction remains open.
 
 ## Remaining Gaps
 
 - Generic armor/clothing object ranges and `sword` should replace parser-local placeholder or no-match behavior.
 - Dragon scale/mail zero-prob uniform ranges need dedicated coverage.
 - Venom range aliases and wizard-only `spe=1` behavior should stay pinned as a separate source-backed slice.
-- Throw menu-count return remains open reusable `getobj()` work.
+- Reusable `getobj()` extraction remains open; throw menu-count return is covered only in the throw-selection path.
 - Kicked floor-object down-gate shipping, monster-thrown `drop_throw(ohit)`, and floor-statue saved traits remain separate slices.

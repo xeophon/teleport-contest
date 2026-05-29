@@ -31,8 +31,8 @@ Date: 2026-05-29
 
 ## Remaining Gaps
 
-- Throw menu count return remains open reusable `getobj()` work.
-- A broader reusable `getobj()` primitive would still need to model direct-letter validation, menu count return, hands/self rows, and command-queue behavior across commands.
+- Throw inventory-menu count return is covered locally for throw selection by audit 193.
+- A broader reusable `getobj()` primitive still needs cross-command direct-letter validation, generalized menu-count plumbing, hands/self rows, and command-queue behavior.
 
 ## Verification
 
