@@ -6,7 +6,7 @@ import { activateStatueTrap, burnFloorObjectsByFire, earthFloorEffects, finishFo
 import { game, resetGame } from '../js/gstate.js';
 import { pushKey, resetInputState } from '../js/input.js';
 import { enableRngLog, getRngLog, initRng } from '../js/rng.js';
-import { A_CON, A_DEX, A_STR, BILLSZ, CANDLESHOP, CLOUD, COULD_SEE, DB_EAST, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, D_CLOSED, D_NODOOR, FOUNTAIN, HOLE, ICE, ICED_POOL, IN_SIGHT, LAVAPOOL, MOAT, NORMAL_SPEED, PIT, POOL, ROOM, ROOMOFFSET, SDOOR, SHOPBASE, SQKY_BOARD, STATUE_TRAP, STRAT_WAITFORU, TRAPDOOR, TT_WEB, WEB, W_SADDLE } from '../js/const.js';
+import { A_CON, A_DEX, A_STR, BILLSZ, CANDLESHOP, CLOUD, COULD_SEE, DB_EAST, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, D_CLOSED, D_NODOOR, FOUNTAIN, HOLE, ICE, ICED_POOL, IN_SIGHT, LAVAPOOL, MOAT, NORMAL_SPEED, PIT, POOL, ROOM, ROOMOFFSET, SDOOR, SHOPBASE, SQKY_BOARD, STATUE_TRAP, STONE, STRAT_WAITFORU, TRAPDOOR, TT_WEB, WEB, W_SADDLE } from '../js/const.js';
 import { currentFruitId, setCurrentFruitName } from '../js/fruit.js';
 
 const BRASS_LANTERN = 226;
@@ -36,6 +36,7 @@ const DART = 353;
 const TALLOW_CANDLE = 370;
 const MIRROR = 10006;
 const WAN_MAKE_INVISIBLE = 10091;
+const CORPSE = 471;
 const STATUE = 472;
 const FIGURINE = 795;
 const LOCK_PICK = 10167;
@@ -4175,6 +4176,84 @@ test('self-cast stone to flesh checks figurine resistance before animation', asy
     assertNoStoneToFleshScoreSideEffects();
 });
 
+test('self-cast stone to flesh failed carried figurine animation becomes corpse', async () => {
+    installNonShopFloorState();
+    game.level.at = (x, y) => ({ roomno: 0, typ: x === 5 && y === 5 ? ROOM : STONE });
+    initRng(1);
+    markHeroNeighborhoodVisible();
+    const figurine = stoneToFleshFigurine(31122, 'a',
+        vegetarianCorpstatMonster('goblin', 'o', { neuter: false, mmove: 6 }));
+    figurine.figurineTransformTurn = 42;
+    figurine._figurine_transform_seq = 7;
+    game.inventory = [figurine];
+
+    await castStoneToFleshAtSelf();
+
+    assert.equal(game.inventory.length, 1);
+    const corpse = game.inventory[0];
+    assert.equal(corpse, figurine);
+    assert.equal(corpse.otyp, CORPSE);
+    assert.equal(corpse.corpsenm?.name, 'goblin');
+    assert.equal(corpse.letter, 'a');
+    assert.equal(corpse.figurineTransformTurn, undefined);
+    assert.equal(corpse._figurine_transform_seq, undefined);
+    assert.equal(Number.isFinite(corpse.rotAwayTurn) && corpse.rotAwayTurn > 0, true);
+    assert.equal((game.level.monsters || []).some(mon => mon.data?.name === 'goblin'), false);
+    assert.doesNotMatch(game._pending_message || '', /figurine animates|odor of meat|delicious smell/);
+    assertNoStoneToFleshScoreSideEffects();
+});
+
+test('self-cast stone to flesh failed unpaid carried figurine animation preserves used-up bill', async () => {
+    const { shkp } = installCommandShopState();
+    game.level.at = (x, y) => ({ roomno: ROOMOFFSET, typ: x === 5 && y === 5 ? ROOM : STONE });
+    initRng(1);
+    markHeroNeighborhoodVisible();
+    const figurine = stoneToFleshFigurine(31128, 'a',
+        vegetarianCorpstatMonster('goblin', 'o', { neuter: false, mmove: 6 }));
+    game.inventory = [figurine];
+    const figurineId = figurine.id;
+    shop.addObjectToShopBill(shkp, figurine, 123);
+
+    await castStoneToFleshAtSelf();
+
+    const corpse = game.inventory[0];
+    assert.equal(corpse.otyp, CORPSE);
+    assert.equal(corpse.corpsenm?.name, 'goblin');
+    assert.equal(corpse.unpaid, undefined);
+    assert.equal(corpse.unpaidPrice, undefined);
+    assert.equal(shkp.debit || 0, 0);
+    assert.equal(shkp.robbed || 0, 0);
+    assert.equal(shkp.billct, 1);
+    assert.equal(shkp.bill[0].useup, true);
+    assert.equal(shop.shopBillEntryForObject(shkp, corpse), null);
+    assert.equal((game._usedUpShopBills || []).some(bill =>
+        String(bill.bo_id) === String(figurineId) && bill.price === 123), true);
+    assert.doesNotMatch(game._pending_message || '', /figurine animates|owe|goods lost|odor of meat|delicious smell/);
+});
+
+test('self-cast stone to flesh failed no-corpse figurine animation preserves figurine', async () => {
+    installNonShopFloorState();
+    game.level.at = (x, y) => ({ roomno: 0, typ: x === 5 && y === 5 ? ROOM : STONE });
+    initRng(1);
+    markHeroNeighborhoodVisible();
+    const figurine = stoneToFleshFigurine(31123, 'a',
+        vegetarianCorpstatMonster('mail daemon', 'o', { neuter: false, mmove: 6, noCorpse: true }));
+    figurine.figurineTransformTurn = 42;
+    figurine._figurine_transform_seq = 7;
+    game.inventory = [figurine];
+
+    await castStoneToFleshAtSelf();
+
+    assert.equal(game.inventory.length, 1);
+    assert.equal(game.inventory[0], figurine);
+    assert.equal(figurine.otyp, FIGURINE);
+    assert.equal(figurine.figurineTransformTurn, 42);
+    assert.equal(figurine._figurine_transform_seq, 7);
+    assert.equal((game.level.monsters || []).some(mon => mon.data?.name === 'mail daemon'), false);
+    assert.doesNotMatch(game._pending_message || '', /figurine animates|corpse|odor of meat|delicious smell/);
+    assertNoStoneToFleshScoreSideEffects();
+});
+
 test('self-cast stone to flesh checks figurine resistance before meatball conversion', async () => {
     installCommandShopState();
     initRng(40);
@@ -4854,6 +4933,91 @@ test('downward stone to flesh checks ordinary statue resistance before animation
     assert.equal((game.level.monsters || []).some(mon => mon.data?.name === 'goblin'), false);
     assert.deepEqual(getRngLog().filter(entry => entry.startsWith('rn2(100)=')), ['rn2(100)=0']);
     assert.doesNotMatch(game._pending_message || '', /statue of a goblin|comes to life|odor of meat|delicious smell/);
+    assertNoStoneToFleshScoreSideEffects();
+});
+
+test('downward stone to flesh failed floor statue animation becomes corpse and drops contents', async () => {
+    installNonShopFloorState();
+    game.level.at = (x, y) => ({ roomno: 0, typ: x === 5 && y === 5 ? ROOM : STONE });
+    initRng(1);
+    markHeroNeighborhoodVisible();
+    const statue = stoneToFleshStatue(31124, 5, 5,
+        vegetarianCorpstatMonster('goblin', 'o', { neuter: false, mmove: 6 }));
+    const ration = simpleFood(31125, 'food ration');
+    statue.contents = [ration];
+    game.inventory = [];
+    game.level.objects = [statue];
+
+    await castStoneToFleshDown();
+
+    assert.equal(game.level.objects.includes(statue), false);
+    assert.equal((game.level.monsters || []).some(mon => mon.data?.name === 'goblin'), false);
+    const corpse = game.level.objects.find(obj => obj.otyp === CORPSE);
+    assert.ok(corpse);
+    assert.equal(corpse.corpsenm?.name, 'goblin');
+    assert.equal(corpse.ox, 5);
+    assert.equal(corpse.oy, 5);
+    assert.equal(Number.isFinite(corpse.rotAwayTurn) && corpse.rotAwayTurn > 0, true);
+    assert.equal(game.level.objects.includes(ration), true);
+    assert.equal(ration.contained, false);
+    assert.equal(ration.ox, 5);
+    assert.equal(ration.oy, 5);
+    assert.doesNotMatch(game._pending_message || '', /statue of a goblin|comes to life|odor of meat|delicious smell/);
+    assertNoStoneToFleshScoreSideEffects();
+});
+
+test('downward stone to flesh failed shop-floor statue animation keeps dropped content bill live', async () => {
+    const { shkp } = installCommandShopState();
+    game.level.at = (x, y) => ({ roomno: ROOMOFFSET, typ: x === 5 && y === 5 ? ROOM : STONE });
+    initRng(1);
+    markHeroNeighborhoodVisible();
+    const statue = stoneToFleshStatue(31129, 5, 5,
+        vegetarianCorpstatMonster('goblin', 'o', { neuter: false, mmove: 6 }));
+    const ration = simpleFood(31130, 'food ration');
+    statue.contents = [ration];
+    game.inventory = [];
+    game.level.objects = [statue];
+    shop.addObjectToShopBill(shkp, ration, 45);
+
+    await castStoneToFleshDown();
+
+    assert.equal(game.level.objects.includes(statue), false);
+    assert.equal(game.level.objects.includes(ration), true);
+    assert.equal(ration.ox, 5);
+    assert.equal(ration.oy, 5);
+    assert.equal(shkp.billct, 1);
+    const rationEntry = shop.shopBillEntryForObject(shkp, ration);
+    assert.ok(rationEntry);
+    assert.notEqual(rationEntry.useup, true);
+    assert.equal(shop.shopBillEntryTotal(rationEntry), 45);
+    assert.equal((game._usedUpShopBills || []).some(bill => String(bill.bo_id) === String(ration.id)), false);
+    assert.equal(shkp.angry, true);
+    assert.match(game._pending_message || '', /Izchak gets angry!/);
+    assert.doesNotMatch(game._pending_message || '', /statue of a goblin|comes to life|odor of meat|delicious smell/);
+});
+
+test('downward stone to flesh animates ordinary statue trap without disarming trap', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    markHeroNeighborhoodVisible();
+    const trap = { ttyp: STATUE_TRAP, tx: 5, ty: 5, tseen: true };
+    game.level.traps = [trap];
+    const statue = stoneToFleshStatue(31126, 5, 5,
+        vegetarianCorpstatMonster('goblin', 'o', { neuter: false, mmove: 6 }));
+    const ration = simpleFood(31127, 'food ration');
+    statue.contents = [ration];
+    game.inventory = [];
+    game.level.objects = [statue];
+
+    await castStoneToFleshDown();
+
+    assert.equal(game.level.objects.includes(statue), false);
+    assert.deepEqual(game.level.traps, [trap]);
+    const monster = (game.level.monsters || []).find(mon => mon.data?.name === 'goblin');
+    assert.ok(monster);
+    assert.equal(monster.minvent?.[0], ration);
+    assert.match(game._pending_message || '', /The statue of a goblin comes to life!/);
+    assert.doesNotMatch(game._pending_message || '', /posing as a statue|Instead of shattering|odor of meat|delicious smell/);
     assertNoStoneToFleshScoreSideEffects();
 });
 
