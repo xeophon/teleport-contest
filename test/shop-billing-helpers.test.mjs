@@ -4905,6 +4905,26 @@ test('downward stone to flesh animates ordinary floor statue and transfers conte
     assertNoStoneToFleshScoreSideEffects();
 });
 
+test('downward stone to flesh gives a named ordinary statue name to the monster', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    markHeroNeighborhoodVisible();
+    const statue = stoneToFleshStatue(311130, 5, 5,
+        vegetarianCorpstatMonster('goblin', 'o', { neuter: false, mmove: 6 }));
+    statue.oname = 'Ada';
+    game.inventory = [];
+    game.level.objects = [statue];
+
+    await castStoneToFleshDown();
+
+    assert.equal(game.level.objects.includes(statue), false);
+    const monster = (game.level.monsters || []).find(mon => mon.data?.name === 'goblin');
+    assert.ok(monster);
+    assert.equal(monster.givenName, 'Ada');
+    assert.match(game._pending_message || '', /The statue of a goblin named Ada comes to life!/);
+    assertNoStoneToFleshScoreSideEffects();
+});
+
 test('downward stone to flesh ordinary statue may animate adjacent to blocker', async () => {
     installNonShopFloorState();
     initRng(1);

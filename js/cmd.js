@@ -12772,11 +12772,18 @@ function stoneToFleshGolemStatueVerb(info, mon) {
     return statueAnimationVerb(mon);
 }
 
+function stoneToFleshChristenAnimatedStatueMonster(item, mon) {
+    const name = objectInstanceNameKey(item);
+    if (!name || !mon || mon.data?.unique || mon.data?.nemesis || mon.data?.rider) return;
+    mon.givenName = name;
+}
+
 async function stoneToFleshAnimateFloorStatue(item, x, y) {
     const info = stoneToFleshFloorStatueAnimationInfo(item, x, y);
     if (!info || stoneToFleshObjectResists(item)) return null;
     const mon = await makemon(info.data, x, y, NO_MINVENT | MM_NOMSG | MM_ADJACENTOK);
     if (!mon) return stoneToFleshAnimationFailure(info);
+    stoneToFleshChristenAnimatedStatueMonster(item, mon);
     mon.msleeping = 0;
     mon.mundetected = false;
     const messages = [];
