@@ -2210,6 +2210,23 @@ test('normal unpaid charged tool use adds debit without changing the bill row', 
     assert.match(messages[0], new RegExp(`Usage fee, ${expectedFee} zorkmids`));
 });
 
+test('mute shopkeeper charges unpaid usage without speaking', () => {
+    const { shkp } = installShopState();
+    shkp.data = { silent: true };
+    const bag = chargedTool(30510, 'bag of tricks', 'b', 3);
+    game.inventory = [bag];
+    shop.addObjectToShopBill(shkp, bag, 100);
+    const messages = [];
+    const expectedFee = Math.trunc(shop.shopItemPrice(bag, 5, 5) / 5);
+
+    const fee = shop.checkUnpaidUsageForTest(bag, messages);
+
+    assert.equal(fee, expectedFee);
+    assert.equal(shkp.debit, expectedFee);
+    assert.deepEqual(messages, []);
+    assert.equal(shop.shopBillEntryForObject(shkp, bag).useup, false);
+});
+
 test('Bell of Opening uses the C unique shop price', () => {
     installShopState();
     const bell = bellOfOpening(30511, 'b', 3);
@@ -24062,6 +24079,40 @@ test('pay command traditional itemized prompt n buys all billed items', async ()
     assert.equal(blade.unpaid, false);
 });
 
+test('pay command thanks deaf hero with a nod', async () => {
+    installTraditionalPayPromptState();
+    game.u._deafTimeout = 10;
+
+    await rhack('p');
+    await rhack('n');
+
+    assert.equal(game._pending_message, 'You bought 2 items for 55 gold pieces.');
+    assert.equal(game._queued_message_after_more, "Izchak nods appreciatively at you for shopping in Izchak's general store!");
+});
+
+test('pay command thanks mute shopkeeper payment with a nod', async () => {
+    const { shkp } = installTraditionalPayPromptState();
+    shkp.data = { silent: true };
+
+    await rhack('p');
+    await rhack('n');
+
+    assert.equal(game._pending_message, 'You bought 2 items for 55 gold pieces.');
+    assert.equal(game._queued_message_after_more, "Izchak nods appreciatively at you for shopping in Izchak's general store!");
+});
+
+test('pay command skips thank-you while shopkeeper is angry', async () => {
+    const { shkp } = installTraditionalPayPromptState();
+    shkp.angry = true;
+
+    await rhack('p');
+    await rhack('n');
+
+    assert.equal(game._pending_message, 'You bought 2 items for 55 gold pieces.');
+    assert.equal(game._queued_message_after_more, '');
+    assert.equal(shkp.billct, 0);
+});
+
 test('pay command traditional itemized prompt m opens the pay menu without mutation', async () => {
     const { shkp, ration, blade } = installTraditionalPayPromptState();
 
@@ -25004,6 +25055,73 @@ test('payable debts aggregate an unpaid floor container with its unpaid contents
     assert.equal(shop.shopBillEntryForObject(shkp, blade), null);
     assert.equal(box.unpaid, false);
     assert.equal(blade.unpaid, false);
+});
+
+function blockedLoosePartlyUsedPayment({
+    shkpState = {},
+    shkpData = null,
+    deaf = false,
+    billedQuantity = 2,
+    liveQuantity = 1,
+} = {}) {
+    const { shkp } = installShopState();
+    Object.assign(shkp, shkpState);
+    if (shkpData) shkp.data = shkpData;
+    if (deaf) game.u._deafTimeout = 10;
+    const stack = { ...dagger(9465, 'a'), quan: billedQuantity, line: `a - ${billedQuantity} +0 daggers` };
+    game.inventory = [stack];
+    game._goldCount = 100;
+    shop.addObjectToShopBill(shkp, stack, billedQuantity * 5);
+    stack.quan = liveQuantity;
+
+    const entries = shop.collectPayableShopDebts(shkp);
+    const intact = entries.find(entry => entry.billPortion === 'intact');
+    return {
+        shkp,
+        stack,
+        entries,
+        blocked: shop.finishShopPaymentSelection(shkp, [intact]),
+    };
+}
+
+test('partly used loose bill blocks intact payment with C wording', () => {
+    const { blocked } = blockedLoosePartlyUsedPayment();
+
+    assert.equal(blocked.paid, false);
+    assert.equal(blocked.blocked, true);
+    assert.equal(blocked.message, 'Please pay for the other dagger before buying this one.');
+});
+
+test('partly used loose bill uses plural C blocker wording', () => {
+    const { blocked } = blockedLoosePartlyUsedPayment({ billedQuantity: 3, liveQuantity: 2 });
+
+    assert.equal(blocked.paid, false);
+    assert.equal(blocked.blocked, true);
+    assert.equal(blocked.message, 'Please pay for the other dagger before buying these.');
+});
+
+test('angry shopkeeper demands payment for loose partly used stack first', () => {
+    const { blocked } = blockedLoosePartlyUsedPayment({ shkpState: { angry: true } });
+
+    assert.equal(blocked.paid, false);
+    assert.equal(blocked.blocked, true);
+    assert.equal(blocked.message, 'Pay for the other dagger before buying this one.');
+});
+
+test('deaf hero gets nonverbal loose partly used payment block', () => {
+    const { blocked } = blockedLoosePartlyUsedPayment({ deaf: true });
+
+    assert.equal(blocked.paid, false);
+    assert.equal(blocked.blocked, true);
+    assert.equal(blocked.message, 'Izchak points out your bill for the other dagger first.');
+});
+
+test('limbless mute shopkeeper motions for loose partly used payment block', () => {
+    const { blocked } = blockedLoosePartlyUsedPayment({ shkpData: { silent: true, nolimbs: true } });
+
+    assert.equal(blocked.paid, false);
+    assert.equal(blocked.blocked, true);
+    assert.equal(blocked.message, 'Izchak motions to your bill for the other dagger first.');
 });
 
 test('partly used contained bill blocks container payment until used-up portion is paid', () => {

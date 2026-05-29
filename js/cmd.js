@@ -20965,6 +20965,49 @@ function heroIsDeaf() {
     return (game.u?._statusSuffix || '').includes('Deaf') || (game.u?._deafTimeout || 0) > 0;
 }
 
+const ANIMAL_MSOUND_NAMES = new Set([
+    'silent', 'ms_silent',
+    'bark', 'ms_bark',
+    'mew', 'ms_mew',
+    'roar', 'ms_roar',
+    'bellow', 'ms_bellow',
+    'growl', 'ms_growl',
+    'sqeek', 'ms_sqeek',
+    'squeak', 'ms_squeak',
+    'sqawk', 'ms_sqawk',
+    'squawk', 'ms_squawk',
+    'chirp', 'ms_chirp',
+    'hiss', 'ms_hiss',
+    'buzz', 'ms_buzz',
+    'grunt', 'ms_grunt',
+    'neigh', 'ms_neigh',
+    'moo', 'ms_moo',
+    'wail', 'ms_wail',
+    'gurgle', 'ms_gurgle',
+    'burble', 'ms_burble',
+    'trumpet', 'ms_trumpet',
+    'animal', 'ms_animal',
+]);
+
+function shopkeeperMuteForSpeech(shkp) {
+    if (!shkp) return false;
+    const data = shkp.data || shkp.mdata || {};
+    if (shkp.mute || shkp.silent || shkp.helpless || data.mute || data.silent || data.helpless) return true;
+    const msound = shkp.msound ?? shkp.sound ?? data.msound ?? data.sound;
+    if (typeof msound === 'number') return msound <= 17;
+    return ANIMAL_MSOUND_NAMES.has(String(msound || '').toLowerCase());
+}
+
+function shopkeeperCanSpeakToHero(shkp) {
+    return !heroIsDeaf() && !shopkeeperMuteForSpeech(shkp);
+}
+
+function shopkeeperNoLimbsForSpeech(shkp) {
+    const data = shkp?.data || shkp?.mdata || {};
+    return !!(shkp?.nolimbs || shkp?.noLimbs || shkp?.nohands || shkp?.noHands
+        || data.nolimbs || data.noLimbs || data.nohands || data.noHands);
+}
+
 function fireDestroyableInventoryClass(item) {
     if (isGreenSlimeGlobItem(item)) return 'slime';
     const cls = item?.cls || (item?.otyp === POTION_CLASS || item?.otyp === POT_ACID
@@ -29965,7 +30008,7 @@ function checkUnpaidUsage(obj, messages, { altusage = false, chargeCount = null 
     if (!(fee > 0)) return 0;
     const message = chargedToolUsageFeeMessage(obj, fee, altusage, shkp);
     shkp.debit = Math.max(0, Math.trunc(Number(shkp.debit || 0))) + fee;
-    if (!heroIsDeaf()) messages?.push(message);
+    if (shopkeeperCanSpeakToHero(shkp)) messages?.push(message);
     return fee;
 }
 
@@ -30984,16 +31027,29 @@ function shopPaymentEntryBlocked(entry, selected) {
     return !!blockedShopPaymentBillItem(entry, selected);
 }
 
-function blockedShopPaymentMessage(entry, selected) {
+function blockedShopPaymentMessage(entry, selected, shkp = null) {
     const blocker = blockedShopPaymentBillItem(entry, selected);
     if (!blocker?.item || !blocker.billEntry) return "You can't buy that yet.";
     const liveQuantity = Math.max(1, Math.trunc(Number(blocker.item.quan || 1)));
     const usedQuantity = Math.max(1, shopBillEntryQuantity(blocker.billEntry) - liveQuantity);
     const usedName = pickupObjectName({ ...blocker.item, quan: usedQuantity, line: '' });
-    const container = entry?.item || blocker.item.container;
-    const containerName = pickupObjectName({ ...(container || {}), quan: 1, line: '' }).replace(/^empty /, '');
-    const liveWord = liveQuantity > 1 ? 'ones' : 'one';
-    return `Please pay for the other ${usedName} before buying the ${liveWord} in the ${containerName}.`;
+    if (!shopkeeperCanSpeakToHero(shkp)) {
+        const name = shopkeeperDisplayName(shkp);
+        const angry = shopkeeperAngryForSellobj(shkp) ? ' angrily' : '';
+        const action = shopkeeperNoLimbsForSpeech(shkp) ? 'motions to' : 'points out';
+        return `${name}${angry} ${action} your bill for the other ${usedName} first.`;
+    }
+    const prefix = shopkeeperAngryForSellobj(shkp) ? 'Pay' : 'Please pay';
+    const container = entry?.containerPayment || entry?.billPortion === 'containerContents'
+        ? entry?.item || blocker.item.container
+        : blocker.item.container;
+    if (container) {
+        const containerName = pickupObjectName({ ...(container || {}), quan: 1, line: '' }).replace(/^empty /, '');
+        const liveWord = liveQuantity > 1 ? 'ones' : 'one';
+        return `${prefix} for the other ${usedName} before buying the ${liveWord} in the ${containerName}.`;
+    }
+    const liveWord = liveQuantity > 1 ? 'these' : 'this one';
+    return `${prefix} for the other ${usedName} before buying ${liveWord}.`;
 }
 
 function payableShopPaymentEntries(selected) {
@@ -31156,7 +31212,7 @@ function payContainerShopBillEntry(shkp, entry) {
         removedLedger: false,
         legacy: false,
         blocked: true,
-        message: blockedShopPaymentMessage(entry, [entry]),
+        message: blockedShopPaymentMessage(entry, [entry], shkp),
     };
     applyShopPaymentValue(shkp, entry.price);
     const container = entry.item;
@@ -31213,7 +31269,7 @@ function finishShopPaymentSelection(shkp, selected) {
             blocked: true,
             cashTotal: 0,
             payableEntries,
-            message: blockedShopPaymentMessage(blockedEntry, selected || []),
+            message: blockedShopPaymentMessage(blockedEntry, selected || [], shkp),
         };
         return { paid: false, skipped: true, cashTotal: 0, payableEntries, message: '' };
     }
@@ -31250,7 +31306,7 @@ function finishShopPaymentSelection(shkp, selected) {
         if (result.blocked) {
             if (paidEntries.length) {
                 stoppedShort = true;
-                stopMessage = result.message || blockedShopPaymentMessage(entry, selected || []);
+                stopMessage = result.message || blockedShopPaymentMessage(entry, selected || [], paymentShopkeeper);
                 break;
             }
             return {
@@ -31258,7 +31314,7 @@ function finishShopPaymentSelection(shkp, selected) {
                 blocked: true,
                 cashTotal: 0,
                 payableEntries,
-                message: result.message || blockedShopPaymentMessage(entry, selected || []),
+                message: result.message || blockedShopPaymentMessage(entry, selected || [], paymentShopkeeper),
             };
         }
         remainingGold -= cashDue;
@@ -31349,10 +31405,13 @@ function clearShopPaymentPromptState({ clearShopkeeper = true } = {}) {
 }
 
 function shopPaymentThankYouMessage(shkp) {
+    if (shopkeeperAngryForSellobj(shkp)) return '';
     const shopIndex = (shkp?.shoptype || 0) - SHOPBASE;
     const shopName = SHOP_TYPES[shopIndex]?.name || 'shop';
     const shopkeeperName = shkp?.shknam || 'shopkeeper';
     const possessive = shopkeeperName.endsWith('s') ? `${shopkeeperName}'` : `${shopkeeperName}'s`;
+    if (!shopkeeperCanSpeakToHero(shkp))
+        return `${shopkeeperDisplayName(shkp)} nods appreciatively at you for shopping in ${possessive} ${shopName}!`;
     return `"Thank you for shopping in ${possessive} ${shopName}!"`;
 }
 
