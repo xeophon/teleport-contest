@@ -6,7 +6,7 @@ import { activateStatueTrap, burnFloorObjectsByFire, earthFloorEffects, finishFo
 import { game, resetGame } from '../js/gstate.js';
 import { pushKey, resetInputState } from '../js/input.js';
 import { enableRngLog, getRngLog, initRng } from '../js/rng.js';
-import { A_CON, A_DEX, A_STR, BILLSZ, CANDLESHOP, CLOUD, CORPSTAT_HISTORIC, COULD_SEE, DB_EAST, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, D_CLOSED, D_NODOOR, FOUNTAIN, HOLE, ICE, ICED_POOL, IN_SIGHT, LAVAPOOL, MOAT, NORMAL_SPEED, PIT, POOL, ROOM, ROOMOFFSET, SDOOR, SHOPBASE, SQKY_BOARD, STATUE_TRAP, STONE, STRAT_WAITFORU, TRAPDOOR, TT_WEB, WEB, W_SADDLE } from '../js/const.js';
+import { A_CON, A_DEX, A_STR, BILLSZ, CANDLESHOP, CLOUD, CORPSTAT_HISTORIC, COULD_SEE, DB_EAST, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, D_CLOSED, D_NODOOR, FOUNTAIN, HOLE, ICE, ICED_POOL, IN_SIGHT, LAVAPOOL, MOAT, NORMAL_SPEED, PIT, POOL, REPAIR_DELAY, ROOM, ROOMOFFSET, SDOOR, SHOPBASE, SHOP_DOOR_COST, SQKY_BOARD, STATUE_TRAP, STONE, STRAT_WAITFORU, TRAPDOOR, TT_WEB, WEB, W_SADDLE } from '../js/const.js';
 import { currentFruitId, setCurrentFruitName } from '../js/fruit.js';
 
 const BRASS_LANTERN = 226;
@@ -21477,6 +21477,71 @@ test('deaf blind hero-thrown lit oil explosion still smells consumed doors', asy
     assert.equal(doorLoc.doormask, D_NODOOR);
     assert.match(message, /You smell smoke\./);
     assert.doesNotMatch(message, /Boom!|You hear a blast|The door is consumed in flames!/);
+});
+
+test('hero-thrown lit oil explosion records real shop-door damage before monster damage', async () => {
+    const { shkp } = installCommandShopState();
+    initRng(2);
+    game.u.acurr.a[A_DEX] = 25;
+    Object.assign(shkp, { mx: 1, my: 1, shk: { x: 1, y: 1 }, shd: { x: 8, y: 5 } });
+    const potion = oilPotion(880715, 'p');
+    potion.dknown = true;
+    potion.lamplit = true;
+    potion.burning = true;
+    const doorLoc = { roomno: ROOMOFFSET, typ: DOOR, doormask: D_CLOSED, flags: D_CLOSED, lit: true };
+    const cells = new Map([['8,5', doorLoc]]);
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, { mhp: 30, mhpmax: 30 });
+    game.inventory = [potion];
+    game.level.monsters = [shkp, goblin];
+    game.level.at = (x, y) => cells.get(`${x},${y}`) || { roomno: ROOMOFFSET, typ: ROOM, lit: true };
+    markSquareVisible(7, 5);
+    markSquareVisible(8, 5);
+
+    await rhack('t');
+    await rhack('p');
+    await rhack('l');
+
+    const message = game._pending_message || '';
+    assert.equal(doorLoc.doormask, D_NODOOR);
+    assert.equal(game.level.damagelist.length, 1);
+    assert.equal(game.level.damagelist[0].cost, SHOP_DOOR_COST);
+    assert.equal(game.level.damagelist[0].paid, true);
+    assert.equal(shkp.debit, SHOP_DOOR_COST);
+    assert.match(message, /The door is consumed in flames!/);
+    assert.match(message, /The goblin is caught in the burning oil!/);
+    assert.match(message, /You did 400 zorkmids worth of damage!/);
+    assert.equal(message.indexOf('The goblin is caught in the burning oil!') < message.indexOf('You did 400 zorkmids worth of damage!'), true);
+});
+
+test('shopkeeper repairs burned shop entrance door after C repair delay', () => {
+    const { shkp } = installCommandShopState();
+    Object.assign(shkp, { mx: 1, my: 1, shk: { x: 1, y: 1 }, shd: { x: 8, y: 5 } });
+    const doorLoc = { roomno: ROOMOFFSET, typ: DOOR, doormask: D_CLOSED, flags: D_CLOSED, lit: true };
+    const cells = new Map([['8,5', doorLoc]]);
+    game.level.at = (x, y) => cells.get(`${x},${y}`) || { roomno: ROOMOFFSET, typ: ROOM, lit: true };
+    markSquareVisible(1, 1);
+    markSquareVisible(8, 5);
+    game.moves = 10;
+
+    assert.equal(shop.addShopTerrainDamage(8, 5, SHOP_DOOR_COST), true);
+    doorLoc.doormask = D_NODOOR;
+    doorLoc.flags = 0;
+
+    const earlyMessages = [];
+    game.moves = 10 + REPAIR_DELAY - 1;
+    assert.equal(shop.repairShopDamageForShopkeeper(shkp, earlyMessages), false);
+    assert.equal(doorLoc.doormask, D_NODOOR);
+    assert.equal(game.level.damagelist.length, 1);
+
+    const messages = [];
+    game.moves = 10 + REPAIR_DELAY;
+    assert.equal(shop.repairShopDamageForShopkeeper(shkp, messages), true);
+    assert.equal(doorLoc.typ, DOOR);
+    assert.equal(doorLoc.doormask, D_CLOSED);
+    assert.equal(doorLoc.flags, D_CLOSED);
+    assert.deepEqual(game.level.damagelist, []);
+    assert.equal(messages.some(message => /Izchak whispers (?:an incantation|something)\./.test(message)), true);
+    assert.equal(messages.some(message => /Suddenly, the shop door reappears!/.test(message)), true);
 });
 
 test('hero-thrown lit oil explosion burns floor objects across the blast before monster damage', async () => {

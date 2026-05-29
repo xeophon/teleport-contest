@@ -140,6 +140,13 @@ This folder records source-backed audits against `nethack-c/upstream`. The notes
 - [134-subagent-findings-2026-05-29.md](134-subagent-findings-2026-05-29.md): ordinary horizontal thrown-egg monster hits, used-up billing, and live-egg rock conversion.
 - [135-subagent-findings-2026-05-29.md](135-subagent-findings-2026-05-29.md): shopkeeper payment speech/nonverbal feedback plus fresh follow-up audits.
 - [136-subagent-findings-2026-05-29.md](136-subagent-findings-2026-05-29.md): special horizontal thrown-egg monster hits, petrification, pyrolisk explosion, and fresh follow-up audits.
+- [137-subagent-findings-2026-05-29.md](137-subagent-findings-2026-05-29.md): force-destroyed ice-box survivor timers plus fresh projectile, mimic, terrain, and stone-to-flesh follow-up audits.
+- [138-subagent-findings-2026-05-29.md](138-subagent-findings-2026-05-29.md): named stone-to-flesh floor statues and fresh burning-oil, projectile, drawbridge, and historic-statue follow-up audits.
+- [139-subagent-findings-2026-05-29.md](139-subagent-findings-2026-05-29.md): historic Archeologist stone-to-flesh statue guilt plus fresh diet, shop terrain, doppelganger, drawbridge, and monster-thrown audits.
+- [140-subagent-findings-2026-05-29.md](140-subagent-findings-2026-05-29.md): monster-thrown `drop_throw()` prelude, monster-moving historic statue regret, and fresh force/projectile/kick/toss-up follow-up audits.
+- [141-subagent-findings-2026-05-29.md](141-subagent-findings-2026-05-29.md): ordinary upward corpse toss-up damage plus fresh down-gate, shop-door, metallivore, doppelganger, and monster-thrown audits.
+- [142-metallivorous-nonfood-eat-2026-05-29.md](142-metallivorous-nonfood-eat-2026-05-29.md): metallivorous non-food `#eat`, rustproof iron spit-out, and refreshed adjacent gaps.
+- [143-burning-oil-shop-door-damage-2026-05-29.md](143-burning-oil-shop-door-damage-2026-05-29.md): burning-oil shop-door damage records, post-blast shop debt, and delayed shopkeeper repair.
 
 ## Cross-Cutting Themes
 

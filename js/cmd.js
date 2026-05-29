@@ -6,7 +6,7 @@ import { nhgetch } from './input.js';
 import { bot, cls, docrt, flush_screen, newsym, pline, recordObservedObjectDiscovery, refreshHallucinatedMap, seeNearbyObjects, show_glyph_cell, strengthString } from './display.js';
 import { cansee, couldsee, vision_recalc, vision_reset } from './vision.js';
 import { RANDOM_MONSTER_BY_NAME, SHOP_TYPES, STALKER_MONSTERS, add_to_container, add_to_minv, adjustedMonsterLevel, artifactDefinitionForName, artifactObjectName, enextoMonsterSpot, make_tutorial1_level, makemon, makeArtifactWishObject, maketrap, mkcorpstat, mklev, mkobj, mkobj_at, mksobj, monsterByRndName, monster_hp, morgueMonster, nameObjectAsArtifact, next_ident, object_display, potionIndexForRoll, resurrectWizardOfYendor, rndmonnum, scrollIndexForRoll, set_mimic_sym_rng, syncDungeonContext, u_on_dnstairs, u_on_rndspot, u_on_upstairs, wipe_engr_at, dropMonsterInventory as dropMonsterInventoryRaw, l_nhcore_init, getrumor, getbogusmon, level_difficulty, set_malign, somexyspace, fumaroles, fix_wall_spines, createMonsterCorpseOrGlob, monsterCorpseDropSucceeds, monsterLeavesCorpseLikeDrop, movebubbles } from './mklev.js';
-import { ACCESSIBLE, A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_MAX, A_NEUTRAL, A_NONE, A_STR, A_WIS, ALTAR, AM_SANCTUM, AM_SHRINE, Align2amask, Amask2align, BC_BALL, BC_CHAIN, BEAR_TRAP, BLCORNER, BOLT_LIM, BRCORNER, CANDLESHOP, CLOUD, COLNO, CORPSTAT_FEMALE, CORPSTAT_GENDER, CORPSTAT_HISTORIC, CORPSTAT_MALE, CORPSTAT_NEUTER, CORR, DB_DIR, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DB_NORTH, DB_SOUTH, DB_UNDER, DB_WEST, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, BURN, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, D_TRAPPED, DUST, ENGRAVE, ENGR_BLOOD, FOUNTAIN, F_LOOTED, GRAVE, HEADSTONE, HWALL, ICE, ICED_MOAT, ICED_POOL, IN_SIGHT, IRONBARS, IS_AIR, IS_FURNITURE, IS_LAVA, IS_OBSTRUCTED, IS_POOL, IS_ROOM, IS_TREE, IS_WALL, In_endgame, In_quest, In_sokoban, In_V_tower, Is_airlevel, Is_astralevel, Is_botlevel, Is_earthlevel, Is_firelevel, Is_rogue_level, Is_stronghold, Is_waterlevel, LADDER, LAVAPOOL, LAVAWALL, MAGIC_PORTAL, MARK, MAX_EGG_HATCH_TIME, MM_ADJACENTOK, MM_EDOG, MM_NOCOUNTBIRTH, MM_NOMSG, MM_NOWAIT, MOAT, MORGUE, M_AP_TYPE, N_DIRS, NO_MINVENT, NORMAL_SPEED, OVERLOADED, P_BASIC, P_UNSKILLED, PIT, POOL, ROLLING_BOULDER_TRAP, ROOM, ROOMOFFSET, ROWNO, SCORR, SDOOR, SHARED, SHARED_PLUS, SHOPBASE, SINK, SPIKED_PIT, STAIRS, STONE, STRAT_WAITMASK, S_LDWASHER, S_LPUDDING, S_LRING, TDWALL, TEMPLE, THRONE, TLCORNER, TRCORNER, TREE, TREE_LOOTED, TREE_SWARM, TT_BEARTRAP, TT_BURIEDBALL, TT_INFLOOR, TT_LAVA, TT_PIT, TT_WEB, TUWALL, T_LOOTED, VAULT, VIBRATING_SQUARE, VWALL, WAND_BACKFIRE_CHANCE, WATER, WEB, WM_MASK, WT_IRON_BALL_BASE, WT_IRON_BALL_INCR, WT_TO_DMG, W_NONDIGGABLE, W_SADDLE, ZAP_POS, isok, xdir, ydir } from './const.js';
+import { ACCESSIBLE, A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_MAX, A_NEUTRAL, A_NONE, A_STR, A_WIS, ALTAR, AM_SANCTUM, AM_SHRINE, Align2amask, Amask2align, BC_BALL, BC_CHAIN, BEAR_TRAP, BLCORNER, BOLT_LIM, BRCORNER, CANDLESHOP, CLOUD, COLNO, CORPSTAT_FEMALE, CORPSTAT_GENDER, CORPSTAT_HISTORIC, CORPSTAT_MALE, CORPSTAT_NEUTER, CORR, DB_DIR, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DB_NORTH, DB_SOUTH, DB_UNDER, DB_WEST, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, BURN, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, D_TRAPPED, DUST, ENGRAVE, ENGR_BLOOD, FOUNTAIN, F_LOOTED, GRAVE, HEADSTONE, HWALL, ICE, ICED_MOAT, ICED_POOL, IN_SIGHT, IRONBARS, IS_AIR, IS_FURNITURE, IS_LAVA, IS_OBSTRUCTED, IS_POOL, IS_ROOM, IS_TREE, IS_WALL, In_endgame, In_quest, In_sokoban, In_V_tower, Is_airlevel, Is_astralevel, Is_botlevel, Is_earthlevel, Is_firelevel, Is_rogue_level, Is_stronghold, Is_waterlevel, LADDER, LAVAPOOL, LAVAWALL, MAGIC_PORTAL, MARK, MAX_EGG_HATCH_TIME, MM_ADJACENTOK, MM_EDOG, MM_NOCOUNTBIRTH, MM_NOMSG, MM_NOWAIT, MOAT, MORGUE, M_AP_TYPE, N_DIRS, NO_MINVENT, NORMAL_SPEED, OVERLOADED, P_BASIC, P_UNSKILLED, PIT, POOL, REPAIR_DELAY, ROLLING_BOULDER_TRAP, ROOM, ROOMOFFSET, ROWNO, SCORR, SDOOR, SHARED, SHARED_PLUS, SHOPBASE, SHOP_DOOR_COST, SINK, SPIKED_PIT, STAIRS, STONE, STRAT_WAITMASK, S_LDWASHER, S_LPUDDING, S_LRING, TDWALL, TEMPLE, THRONE, TLCORNER, TRCORNER, TREE, TREE_LOOTED, TREE_SWARM, TT_BEARTRAP, TT_BURIEDBALL, TT_INFLOOR, TT_LAVA, TT_PIT, TT_WEB, TUWALL, T_LOOTED, VAULT, VIBRATING_SQUARE, VWALL, WAND_BACKFIRE_CHANCE, WATER, WEB, WM_MASK, WT_IRON_BALL_BASE, WT_IRON_BALL_INCR, WT_TO_DMG, W_NONDIGGABLE, W_SADDLE, ZAP_POS, isok, xdir, ydir } from './const.js';
 import { d, rn1, rn2, rn2_on_display_rng, rnd, rnl, rnz } from './rng.js';
 import { CLR_BLACK, CLR_BLUE, CLR_BRIGHT_BLUE, CLR_BRIGHT_CYAN, CLR_BRIGHT_GREEN, CLR_BROWN, CLR_CYAN, CLR_GRAY, CLR_GREEN, CLR_MAGENTA, CLR_ORANGE, CLR_RED, CLR_YELLOW, CLR_WHITE, NO_COLOR } from './terminal.js';
 import { vfsDeleteFile, vfsReadFile, vfsWriteFile } from './storage.js';
@@ -14308,6 +14308,7 @@ function applyBurningOilDoorTerrain(x, y, messages) {
         if (visible) messages.push('The blast reveals a secret door.');
     }
     if (loc.typ === DOOR && (loc.doormask & (D_CLOSED | D_LOCKED))) {
+        addShopTerrainDamage(x, y, SHOP_DOOR_COST);
         loc.doormask = D_NODOOR;
         loc.flags = 0;
         newsym(x, y);
@@ -14382,6 +14383,7 @@ function explodeBurningOilPotion(potion, x, y, messages) {
     if (Math.abs((game.u?.ux ?? -99) - x) <= 1 && Math.abs((game.u?.uy ?? -99) - y) <= 1)
         damageHeroFromBurningOilExplosion(damage, messages);
 
+    payForCurrentShopTerrainDamage('burn away', messages);
     wakeNearbyMonstersFromExplosion(x, y, damage);
 }
 
@@ -21748,6 +21750,159 @@ function liveShopkeeper(mon) {
     return !!mon?.isshk && !mon.dead && (mon.mhp == null || mon.mhp > 0);
 }
 
+function shopDamageList() {
+    if (!game.level) game.level = {};
+    if (!Array.isArray(game.level.damagelist)) game.level.damagelist = [];
+    return game.level.damagelist;
+}
+
+function shopkeeperForShopDoorAt(x, y) {
+    for (const roomno of shopRoomnosAt(x, y, SHOPBASE)) {
+        const shkp = shopkeeperForRoomno(roomno);
+        if (!liveShopkeeper(shkp)) continue;
+        if ((shkp.shd?.x ?? null) === x && (shkp.shd?.y ?? null) === y) return shkp;
+    }
+    return null;
+}
+
+function addShopTerrainDamage(x, y, cost) {
+    const loc = game.level?.at?.(x, y);
+    if (!loc || loc.typ !== DOOR) return false;
+    const shkp = shopkeeperForShopDoorAt(x, y);
+    if (!shkp) return false;
+
+    const damage = shopDamageList();
+    const when = Math.max(0, Math.trunc(Number(game.moves || 0)));
+    const entry = damage.find(dam => dam.x === x && dam.y === y);
+    if (entry) {
+        entry.cost = Math.max(0, Math.trunc(Number(entry.cost || 0))) + Math.max(0, Math.trunc(Number(cost || 0)));
+        entry.when = when;
+        entry.shoproom = shkp.shoproom;
+        entry.shopkeeperId = shopkeeperIdentity(shkp);
+        return true;
+    }
+
+    damage.push({
+        x,
+        y,
+        cost: Math.max(0, Math.trunc(Number(cost || 0))),
+        when,
+        typ: loc.typ,
+        flags: loc.doormask ?? D_CLOSED,
+        shoproom: shkp.shoproom,
+        shopkeeperId: shopkeeperIdentity(shkp),
+    });
+    return true;
+}
+
+function shopkeeperForDamageEntry(dam) {
+    if (!dam) return null;
+    if (dam.shoproom != null) {
+        const byRoom = shopkeeperForRoomno(dam.shoproom);
+        if (liveShopkeeper(byRoom)) return byRoom;
+    }
+    if (dam.shopkeeperId != null) {
+        const found = (game.level?.monsters || []).find(mon =>
+            liveShopkeeper(mon) && String(shopkeeperIdentity(mon)) === String(dam.shopkeeperId));
+        if (found) return found;
+    }
+    return shopkeeperForShopDoorAt(dam.x, dam.y);
+}
+
+function currentShopTerrainDamageEntries() {
+    const when = Math.max(0, Math.trunc(Number(game.moves || 0)));
+    return shopDamageList().filter(dam => dam.when === when && Math.max(0, Math.trunc(Number(dam.cost || 0))) > 0 && !dam.paid);
+}
+
+function payForCurrentShopTerrainDamage(dmgstr, messages = []) {
+    const totals = new Map();
+    for (const dam of currentShopTerrainDamageEntries()) {
+        const shkp = shopkeeperForDamageEntry(dam);
+        if (!shopkeeperInHisShop(shkp)) continue;
+        totals.set(shkp, (totals.get(shkp) || 0) + Math.max(0, Math.trunc(Number(dam.cost || 0))));
+        dam.paid = true;
+        dam.damageVerb = dmgstr;
+    }
+
+    for (const [shkp, amount] of totals) {
+        const beforeDebit = Math.max(0, Math.trunc(Number(shkp.debit || 0)));
+        const beforeRobbed = Math.max(0, Math.trunc(Number(shkp.robbed || 0)));
+        const peaceful = heroInShopOwnedBy(shkp);
+        const charged = chargeShopkeeperForLostMerchandise(shkp, amount, { peaceful });
+        if (!charged) continue;
+        const deltas = shopDebtDeltas(shkp, beforeDebit, beforeRobbed);
+        if (deltas.debitDelta > 0)
+            messages.push(`You did ${deltas.debitDelta} ${shopCurrency(deltas.debitDelta)} worth of damage!`);
+        else if (deltas.robbedDelta > 0)
+            messages.push(`You caused ${deltas.robbedDelta} ${shopCurrency(deltas.robbedDelta)} worth of damage!`);
+    }
+    return totals.size > 0;
+}
+
+function monsterPassesWallsForRepair(mon) {
+    const data = mon?.data || {};
+    return !!(mon?.passesWalls || mon?.passes_walls || mon?.wallwalk
+        || data.passesWalls || data.passes_walls || data.wallwalk || data.noncorporeal || data.whirly);
+}
+
+function repairableShopDamage(dam, shkp) {
+    if (!dam || !shopkeeperInHisShop(shkp)) return false;
+    const moves = Math.max(0, Math.trunc(Number(game.moves || 0)));
+    if (moves - Math.max(0, Math.trunc(Number(dam.when || 0))) < REPAIR_DELAY) return false;
+    if (!shopRoomnosAt(dam.x, dam.y, SHOPBASE).includes(shkp.shoproom)) return false;
+
+    if (!IS_ROOM(dam.typ)) {
+        if (game.u?.ux === dam.x && game.u?.uy === dam.y && !game.u?.passesWalls && !game.u?.passes_walls)
+            return false;
+        if ((shkp.mx ?? null) === dam.x && (shkp.my ?? null) === dam.y) return false;
+        const blocker = (game.level?.monsters || []).find(mon =>
+            mon !== shkp && !mon.dead && (mon.mhp == null || mon.mhp > 0)
+            && mon.mx === dam.x && mon.my === dam.y && !monsterPassesWallsForRepair(mon));
+        if (blocker) return false;
+    }
+    return true;
+}
+
+export function repairShopDamageForShopkeeper(shkp, messages = []) {
+    const damage = shopDamageList();
+    const dam = damage.find(entry => repairableShopDamage(entry, shkp));
+    if (!dam) return false;
+
+    const loc = game.level?.at?.(dam.x, dam.y);
+    if (!loc) return false;
+    const visibleShopkeeper = !game.u?.blind && cansee(shkp.mx, shkp.my);
+    const closeToHero = ((shkp.mx ?? 0) - (game.u?.ux ?? 0)) ** 2 + ((shkp.my ?? 0) - (game.u?.uy ?? 0)) ** 2
+        <= (BOLT_LIM / 2) * (BOLT_LIM / 2);
+    if (visibleShopkeeper) {
+        messages.push(`${shopkeeperDisplayName(shkp)} whispers ${closeToHero ? 'an incantation' : 'something'}.`);
+    } else if (!heroIsDeaf() && closeToHero) {
+        messages.push('You hear someone muttering an incantation.');
+    }
+
+    const wasAlreadyRepaired = dam.typ === loc.typ && (dam.typ !== DOOR || (loc.doormask & (D_CLOSED | D_LOCKED)));
+    if (!wasAlreadyRepaired) {
+        loc.typ = dam.typ;
+        if (dam.typ === DOOR) {
+            loc.doormask = D_CLOSED;
+            loc.flags = D_CLOSED;
+        } else {
+            loc.flags = dam.flags ?? loc.flags ?? 0;
+        }
+        if (!game.u?.blind && cansee(dam.x, dam.y)) {
+            messages.push(dam.typ === DOOR
+                ? 'Suddenly, the shop door reappears!'
+                : 'Suddenly, a section of the wall closes up!');
+        }
+        vision_reset();
+        vision_recalc(0);
+        newsym(dam.x, dam.y);
+    }
+
+    const idx = damage.indexOf(dam);
+    if (idx >= 0) damage.splice(idx, 1);
+    return true;
+}
+
 function shopkeeperNextToHero(shkp, ux = game.u?.ux || 0, uy = game.u?.uy || 0) {
     if (!shkp) return false;
     return Math.max(Math.abs((shkp.mx ?? 0) - ux), Math.abs((shkp.my ?? 0) - uy)) <= 1;
@@ -24380,6 +24535,9 @@ export const __shopBillingTestHooks = {
     shopBillEntryForObject,
     shopBillEntryQuantity,
     shopBillEntryTotal,
+    addShopTerrainDamage,
+    payForCurrentShopTerrainDamage,
+    repairShopDamageForShopkeeper,
     shopkeeperDebitPayment,
     shopkeeperCash,
     shopBaseCost,
