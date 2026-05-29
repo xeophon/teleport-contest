@@ -55,6 +55,18 @@ const LEATHER_GLOVES = 10050;
 const GAUNTLETS_OF_POWER = 10112;
 const GAUNTLETS_OF_FUMBLING = 10114;
 const GAUNTLETS_OF_DEXTERITY = 10115;
+const LEATHER_CLOAK = 10051;
+const ROBE = 10063;
+const CLOAK_OF_PROTECTION = 10064;
+const CLOAK_OF_MAGIC_RESISTANCE = 10065;
+const DWARVISH_CLOAK = 10080;
+const ELVEN_CLOAK = 10110;
+const CLOAK_OF_DISPLACEMENT = 10111;
+const CLOAK_OF_INVISIBILITY = 10201;
+const MUMMY_WRAPPING = 10202;
+const ORCISH_CLOAK = 10203;
+const OILSKIN_CLOAK = 10204;
+const ALCHEMY_SMOCK = 10205;
 const HAWAIIAN_SHIRT = 10188;
 const T_SHIRT = 10189;
 const GRAY_DRAGON_SCALE_MAIL = 10085;
@@ -1292,6 +1304,73 @@ test('wished gloves and gauntlets ranges use C candidates', async () => {
     assert.doesNotMatch(result.item.line, /^a - 2 /);
     assert.match(result.item.line, /a pair of fencing gloves/);
     assert.equal(result.log[0], 'rnd(39)=35');
+});
+
+test('wished cloak range uses C cloak candidates', async () => {
+    async function wishedCloak(text, seed = 1) {
+        installWishState(seed);
+        enableRngLog({ reset: true });
+        beginWishDirectly();
+        await submitWish(text);
+        return { item: game.inventory[0], log: [...getRngLog()] };
+    }
+
+    const rangeCases = [
+        [3, 'rnd(98)=2', ELVEN_CLOAK, 'elven cloak', 'faded pall', 10, 60],
+        [9, 'rnd(98)=12', ORCISH_CLOAK, 'orcish cloak', 'coarse mantelet', 10, 40],
+        [12, 'rnd(98)=20', DWARVISH_CLOAK, 'dwarvish cloak', 'hooded cloak', 10, 50],
+        [6, 'rnd(98)=28', OILSKIN_CLOAK, 'oilskin cloak', 'slippery cloak', 10, 50],
+        [4, 'rnd(98)=37', ROBE, 'robe', 'robe', 15, 50],
+        [5, 'rnd(98)=41', ALCHEMY_SMOCK, 'alchemy smock', 'apron', 10, 50],
+        [14, 'rnd(98)=53', LEATHER_CLOAK, 'leather cloak', 'leather cloak', 15, 40],
+        [2, 'rnd(98)=58', CLOAK_OF_PROTECTION, 'cloak of protection', 'tattered cape', 10, 50],
+        [1, 'rnd(98)=76', CLOAK_OF_INVISIBILITY, 'cloak of invisibility', 'opera cloak', 10, 60],
+        [34, 'rnd(98)=86', CLOAK_OF_MAGIC_RESISTANCE, 'cloak of magic resistance', 'ornamental cope', 10, 60],
+        [11, 'rnd(98)=93', CLOAK_OF_DISPLACEMENT, 'cloak of displacement', 'piece of cloth', 10, 50],
+    ];
+
+    for (const [seed, firstRoll, otyp, kind, display, weight, cost] of rangeCases) {
+        const result = await wishedCloak('cloak', seed);
+        assert.equal(result.log[0], firstRoll, kind);
+        assert.equal(result.item.otyp, otyp, kind);
+        assert.equal(result.item.cls, 'armor', kind);
+        assert.equal(result.item.kind, kind);
+        assert.equal(result.item.actualKind, kind);
+        assert.equal(result.item.quan, 1, kind);
+        assert.equal(result.item.owt, weight, kind);
+        assert.equal(shop.shopBaseCost(result.item), cost, kind);
+        assert.match(result.item.line, new RegExp(`a(?:n)? ${display}`), kind);
+    }
+
+    for (const [wish, otyp, namedesc, display] of [
+        ['mummy wrapping', MUMMY_WRAPPING, /^rn2\(1\)=/, 'mummy wrapping'],
+        ['elven cloak', ELVEN_CLOAK, /^rn2\(9\)=/, 'faded pall'],
+        ['faded pall', ELVEN_CLOAK, /^rn2\(9\)=/, 'faded pall'],
+        ['dwarven cloak', DWARVISH_CLOAK, /^rn2\(9\)=/, 'hooded cloak'],
+        ['robe', ROBE, /^rn2\(7\)=/, 'robe'],
+        ['alchemy smock', ALCHEMY_SMOCK, /^rn2\(12\)=/, 'apron'],
+        ['apron', ALCHEMY_SMOCK, /^rn2\(12\)=/, 'apron'],
+        ['cloak of protection', CLOAK_OF_PROTECTION, /^rn2\(12\)=/, 'tattered cape'],
+        ['protection cloak', CLOAK_OF_PROTECTION, /^rn2\(12\)=/, 'tattered cape'],
+        ['cloak of invisibility', CLOAK_OF_INVISIBILITY, /^rn2\(13\)=/, 'opera cloak'],
+        ['invisibility cloak', CLOAK_OF_INVISIBILITY, /^rn2\(13\)=/, 'opera cloak'],
+        ['cloak of magic resistance', CLOAK_OF_MAGIC_RESISTANCE, /^rn2\(7\)=/, 'ornamental cope'],
+        ['magic resistance cloak', CLOAK_OF_MAGIC_RESISTANCE, /^rn2\(7\)=/, 'ornamental cope'],
+        ['cloak of displacement', CLOAK_OF_DISPLACEMENT, /^rn2\(13\)=/, 'piece of cloth'],
+        ['piece of cloth', CLOAK_OF_DISPLACEMENT, /^rn2\(13\)=/, 'piece of cloth'],
+    ]) {
+        const result = await wishedCloak(wish);
+        assert.equal(result.item.otyp, otyp, wish);
+        assert.match(result.log[0], namedesc, wish);
+        assert.match(result.item.line, new RegExp(`a(?:n)? ${display}`), wish);
+    }
+
+    const result = await wishedCloak('2 cloaks', 11);
+    assert.equal(result.item.otyp, CLOAK_OF_DISPLACEMENT);
+    assert.equal(result.item.quan, 1);
+    assert.doesNotMatch(result.item.line, /^a - 2 /);
+    assert.match(result.item.line, /a piece of cloth/);
+    assert.equal(result.log[0], 'rnd(98)=93');
 });
 
 test('wished shirt range uses C Hawaiian and T-shirt candidates', async () => {
