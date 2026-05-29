@@ -6940,6 +6940,44 @@ test('floor wand of polymorph is unpolyable by identity', async () => {
     assert.doesNotMatch(game._pending_message || '', /You feel shuddering vibrations\./);
 });
 
+test('floor polymorph downward hits the hero-square pile', async () => {
+    installCommandShopState();
+    initRng(1);
+    const wand = polymorphWand(32013, 'w');
+    const ration = { ...foodRation(32014), ox: game.u.ux, oy: game.u.uy, letter: undefined, line: undefined };
+    game.inventory = [wand];
+    game.level.objects = [ration];
+
+    await rhack('z');
+    await rhack('w');
+    await rhack('>');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.level.objects.includes(ration), false);
+    assert.equal(game.u.uconduct.polypiles, 1);
+});
+
+test('floor polymorph upward without hiding does not hit the hero-square pile', async () => {
+    installCommandShopState();
+    initRng(1);
+    const wand = polymorphWand(32015, 'w');
+    const ration = { ...foodRation(32016), ox: game.u.ux, oy: game.u.uy, letter: undefined, line: undefined };
+    game.inventory = [wand];
+    game.level.objects = [ration];
+
+    await rhack('z');
+    await rhack('w');
+    await rhack('<');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.level.objects.length, 1);
+    assert.equal(game.level.objects[0], ration);
+    assert.equal(game.u.uconduct?.polypiles || 0, 0);
+    assert.doesNotMatch(game._pending_message || '', /shuddering|Izchak gets angry|is furious/);
+});
+
 test('successful floor polymorph of shop stock angers shopkeeper without immediate debt', async () => {
     const { shkp } = installCommandShopState();
     initRng(1);

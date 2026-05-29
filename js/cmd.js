@@ -24584,6 +24584,75 @@ function prepareFloorPolymorphReplacement(oldObj, newObj) {
     return newObj;
 }
 
+async function polymorphFloorPileAt(x, y, { consumeRangeRoll = false } = {}) {
+    const targetObjects = (game.level?.objects || [])
+        .filter(obj => !obj.hidden && !obj.transientProjectile && obj.ox === x && obj.oy === y && obj.otyp !== BOULDER);
+    rn2(19);
+    if (consumeRangeRoll) rn2(8);
+    if (!targetObjects.length) {
+        game._pending_message = '';
+        game._message_more = 0;
+        game.context.move = 1;
+        return false;
+    }
+    const removeTargets = new Set();
+    const replacements = [];
+    const alterationMessages = [];
+    let didObjectShudder = false;
+    for (const obj of [...targetObjects].reverse()) {
+        if (polymorphReplacementDisallowed(obj)) continue;
+        if (rn2(100) < (obj.artifact ? 95 : 5)) {
+            continue;
+        }
+        game.u.uconduct ??= {};
+        game.u.uconduct.polypiles = Math.max(0, Math.trunc(Number(game.u.uconduct.polypiles || 0))) + 1;
+        const shudderOdds = polymorphShudderOdds(obj);
+        if (!rn2(shudderOdds)) {
+            rn2(45 + (game.u?.uluck || 0));
+            rn2(100);
+            if (!game._polymorph_wand_learned) {
+                rn2(19);
+                game._polymorph_wand_learned = 1;
+            }
+            useUpPolymorphShudderFloorObject(obj, x, y);
+            didObjectShudder = true;
+            continue;
+        }
+        const roll = rnd(1000);
+        const newObjId = next_ident();
+        if (obj.cls === 'potion' || obj.cls === 'scroll') {
+            if (!rn2(4)) rn2(2);
+        }
+        const newObj = { ...obj, id: newObjId, ox: x, oy: y, quan: obj.quan || 1, cursed: obj.cursed, blessed: obj.blessed };
+        if (obj.cls === 'potion') {
+            Object.assign(newObj, { cls: 'potion', glyph: '!', otyp: 'potion', color: NO_COLOR });
+            const appearance = game._object_descriptions?.potions?.[potionIndexForRoll(roll)]?.description || 'clear';
+            newObj.kind = `${appearance} potion`;
+        } else if (obj.cls === 'scroll') {
+            Object.assign(newObj, { cls: 'scroll', glyph: '?', otyp: 'scroll', color: CLR_WHITE });
+            const label = game._object_descriptions?.scrolls?.[scrollIndexForRoll(roll)] || 'ELBIB YLOH';
+            newObj.kind = `scroll labeled ${label}`;
+        } else {
+            newObj.kind = obj.kind || obj.cls;
+        }
+        prepareFloorPolymorphReplacement(obj, newObj);
+        const angerMessage = floorPolymorphShopkeeperAngerMessage(obj, x, y);
+        if (angerMessage && !alterationMessages.includes(angerMessage))
+            alterationMessages.push(angerMessage);
+        removeTargets.add(obj);
+        replacements.unshift(newObj);
+        rn2(100);
+    }
+    game.level.objects = (game.level?.objects || []).filter(obj => !removeTargets.has(obj));
+    game.level.objects.push(...replacements);
+    newsym(x, y);
+    const messages = didObjectShudder ? ['You feel shuddering vibrations.'] : [];
+    messages.push(...alterationMessages);
+    await setMessage(messages.join('  '));
+    game.context.move = 1;
+    return true;
+}
+
 function billHeldMagicBagLostItem(obj) {
     const owner = shopkeeperOwningBillEntry(obj);
     if (owner.entry) {
@@ -44505,6 +44574,8 @@ export async function rhack(_cmd) {
 
     if (game._command_mode === 'zapPolymorphDirection') {
         const dir = movementDirection(ch);
+        const verticalDir = !dir && ch === '<' ? { dx: 0, dy: 0, dz: -1 }
+            : !dir && ch === '>' ? { dx: 0, dy: 0, dz: 1 } : null;
         const selfZap = ch === '.';
         const item = game._zap_item;
         game._zap_item = null;
@@ -44530,74 +44601,17 @@ export async function rhack(_cmd) {
             await setMessage(result?.message || 'Nothing happens.', !!result?.more);
             return;
         }
-        if (!dir) return;
-        const x = (game.u?.ux || 0) + dir.dx;
-        const y = (game.u?.uy || 0) + dir.dy;
-        const targetObjects = (game.level?.objects || [])
-            .filter(obj => !obj.hidden && !obj.transientProjectile && obj.ox === x && obj.oy === y && obj.otyp !== BOULDER);
-        rn2(19);
-        rn2(8);
-        if (!targetObjects.length) {
+        if (!dir && !verticalDir) return;
+        if (verticalDir?.dz < 0) {
+            rn2(19);
             game._pending_message = '';
             game._message_more = 0;
             game.context.move = 1;
             return;
         }
-        const removeTargets = new Set();
-        const replacements = [];
-        const alterationMessages = [];
-        let didObjectShudder = false;
-        for (const obj of [...targetObjects].reverse()) {
-            if (polymorphReplacementDisallowed(obj)) continue;
-            if (rn2(100) < (obj.artifact ? 95 : 5)) {
-                continue;
-            }
-            game.u.uconduct ??= {};
-            game.u.uconduct.polypiles = Math.max(0, Math.trunc(Number(game.u.uconduct.polypiles || 0))) + 1;
-            const shudderOdds = polymorphShudderOdds(obj);
-            if (!rn2(shudderOdds)) {
-                rn2(45 + (game.u?.uluck || 0));
-                rn2(100);
-                if (!game._polymorph_wand_learned) {
-                    rn2(19);
-                    game._polymorph_wand_learned = 1;
-                }
-                useUpPolymorphShudderFloorObject(obj, x, y);
-                didObjectShudder = true;
-                continue;
-            }
-            const roll = rnd(1000);
-            const newObjId = next_ident();
-            if (obj.cls === 'potion' || obj.cls === 'scroll') {
-                if (!rn2(4)) rn2(2);
-            }
-            const newObj = { ...obj, id: newObjId, ox: x, oy: y, quan: obj.quan || 1, cursed: obj.cursed, blessed: obj.blessed };
-            if (obj.cls === 'potion') {
-                Object.assign(newObj, { cls: 'potion', glyph: '!', otyp: 'potion', color: NO_COLOR });
-                const appearance = game._object_descriptions?.potions?.[potionIndexForRoll(roll)]?.description || 'clear';
-                newObj.kind = `${appearance} potion`;
-            } else if (obj.cls === 'scroll') {
-                Object.assign(newObj, { cls: 'scroll', glyph: '?', otyp: 'scroll', color: CLR_WHITE });
-                const label = game._object_descriptions?.scrolls?.[scrollIndexForRoll(roll)] || 'ELBIB YLOH';
-                newObj.kind = `scroll labeled ${label}`;
-            } else {
-                newObj.kind = obj.kind || obj.cls;
-            }
-            prepareFloorPolymorphReplacement(obj, newObj);
-            const angerMessage = floorPolymorphShopkeeperAngerMessage(obj, x, y);
-            if (angerMessage && !alterationMessages.includes(angerMessage))
-                alterationMessages.push(angerMessage);
-            removeTargets.add(obj);
-            replacements.unshift(newObj);
-            rn2(100);
-        }
-        game.level.objects = (game.level?.objects || []).filter(obj => !removeTargets.has(obj));
-        game.level.objects.push(...replacements);
-        newsym(x, y);
-        const messages = didObjectShudder ? ['You feel shuddering vibrations.'] : [];
-        messages.push(...alterationMessages);
-        await setMessage(messages.join('  '));
-        game.context.move = 1;
+        const x = verticalDir ? (game.u?.ux || 0) : (game.u?.ux || 0) + dir.dx;
+        const y = verticalDir ? (game.u?.uy || 0) : (game.u?.uy || 0) + dir.dy;
+        await polymorphFloorPileAt(x, y, { consumeRangeRoll: !verticalDir });
         return;
     }
 
