@@ -53918,6 +53918,13 @@ export async function rhack(_cmd) {
         if (ch === '\x1b' || ch === ' ') {
             await setMessage('Never mind.');
             game._command_mode = null;
+            game._throw_count_text = '';
+            game._throw_count = null;
+            return;
+        }
+        if (/^\d$/.test(ch)) {
+            game._throw_count_text = `${game._throw_count_text || ''}${ch}`;
+            if (game._throw_count_text.length > 1) await setMessage(`Count: ${game._throw_count_text}`);
             return;
         }
         if (ch === '*') {
@@ -53925,6 +53932,8 @@ export async function rhack(_cmd) {
             showInventoryOverlay();
             game._throw_inventory_filter = null;
             game._command_mode = 'throwInventory';
+            game._throw_count_text = '';
+            game._throw_count = null;
             return;
         }
         if (ch === '?') {
@@ -53932,15 +53941,43 @@ export async function rhack(_cmd) {
             showInventoryOverlay(0, false, isThrowSuggestItem);
             game._throw_inventory_filter = 'suggest';
             game._command_mode = 'throwInventory';
+            game._throw_count_text = '';
+            game._throw_count = null;
             return;
         }
         const item = (game.inventory || []).find(invItem => invItem.letter === ch);
+        const throwCount = Math.trunc(Number(game._throw_count_text || 0));
+        const countGiven = throwCount > 0;
         if (!item) {
+            if (countGiven) {
+                game._command_mode = null;
+                game._throw_count_text = '';
+                game._throw_count = null;
+                game._pending_message = '';
+                game._message_more = 0;
+                return;
+            }
             await setMessage("You don't have that object.", true);
             game._command_mode = 'throwInvalidMore';
             return;
         }
+        if (countGiven && throwCount > 1) {
+            const available = Math.max(0, Math.trunc(Number(item.quan || 1)));
+            const coins = shopBillableGold(item);
+            if (!coins || throwCount > available) {
+                const onlyOne = 'can only throw one at a time';
+                const message = throwCount > available
+                    ? `You only have ${available}${!coins && available > 1 ? ` and ${onlyOne}` : ''}.`
+                    : `You ${onlyOne}.`;
+                game._throw_count_text = '';
+                game._throw_count = null;
+                await setMessage(message);
+                return;
+            }
+        }
         game._throw_item_letter = ch;
+        game._throw_count = countGiven && shopBillableGold(item) ? throwCount : null;
+        game._throw_count_text = '';
         await setMessage('In what direction?');
         game._command_mode = 'throwDirection';
         return;
@@ -53986,6 +54023,8 @@ export async function rhack(_cmd) {
             game._overlay_hide_status = 0;
             await setMessage('Never mind.');
             game._command_mode = null;
+            game._throw_count_text = '';
+            game._throw_count = null;
             return;
         }
         const item = (game.inventory || []).find(invItem => invItem.letter === ch);
@@ -53996,6 +54035,8 @@ export async function rhack(_cmd) {
             game._overlay_hide_status = 0;
             await setMessage("You don't have that object.");
             game._command_mode = null;
+            game._throw_count_text = '';
+            game._throw_count = null;
             return;
         }
         game._throw_inventory_page = 0;
@@ -54003,16 +54044,28 @@ export async function rhack(_cmd) {
         game._overlay_lines = null;
         game._overlay_hide_status = 0;
         game._throw_item_letter = ch;
+        game._throw_count_text = '';
+        game._throw_count = null;
         await setMessage('In what direction?');
         game._command_mode = 'throwDirection';
         return;
     }
 
     if (game._command_mode === 'throwDirection') {
+        if (ch === '\x1b' || ch === ' ') {
+            await setMessage('Never mind.');
+            game._command_mode = null;
+            game._throw_item_letter = null;
+            game._throw_count = null;
+            game._throw_count_text = '';
+            return;
+        }
         if (ch === '.') {
             await setMessage('You cannot throw an object at yourself.');
             game._command_mode = null;
             game._throw_item_letter = null;
+            game._throw_count = null;
+            game._throw_count_text = '';
             return;
         }
         const item = (game.inventory || []).find(invItem => invItem.letter === game._throw_item_letter);
@@ -54424,6 +54477,8 @@ export async function rhack(_cmd) {
         const dir = movementDirection(ch);
         if (!dir) {
             game._throw_item_letter = null;
+            game._throw_count = null;
+            game._throw_count_text = '';
             setOverlay(CMDASSIST_DIRECTION_LINES, 24, true);
             game._command_mode = 'cmdassistMore';
             return;
@@ -54431,12 +54486,16 @@ export async function rhack(_cmd) {
         if (!item) {
             game._command_mode = null;
             game._throw_item_letter = null;
+            game._throw_count = null;
+            game._throw_count_text = '';
             return;
         }
         if (isLoadstoneObject(item) && item.cursed) {
             await setMessage(cursedLoadstoneLetGoMessage(item, 'throw'));
             game._command_mode = null;
             game._throw_item_letter = null;
+            game._throw_count = null;
+            game._throw_count_text = '';
             game.context.move = 0;
             return;
         }
@@ -54458,7 +54517,7 @@ export async function rhack(_cmd) {
 	            if (targetMon) break;
 	        }
         if (shopBillableGold(item)) {
-            const amount = Math.max(1, Math.trunc(Number(game._goldCount || item.quan || 1)));
+            const amount = Math.max(1, Math.trunc(Number(game._throw_count || game._goldCount || item.quan || 1)));
             const thrownGold = {
                 ...item,
                 letter: undefined,
@@ -54480,6 +54539,8 @@ export async function rhack(_cmd) {
             }
             game._command_mode = null;
             game._throw_item_letter = null;
+            game._throw_count = null;
+            game._throw_count_text = '';
             game._resume_time_after_more = 0;
             game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
             game.context.move = 0;
@@ -54616,6 +54677,8 @@ export async function rhack(_cmd) {
         }
         game._command_mode = null;
         game._throw_item_letter = null;
+        game._throw_count = null;
+        game._throw_count_text = '';
         game._resume_time_after_more = 0;
         game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
         game.context.move = 0;
@@ -54636,6 +54699,9 @@ export async function rhack(_cmd) {
         game._throw_prompt = letters
             ? `What do you want to throw? [${promptLetters} or ?*]`
             : 'What do you want to throw? [*]';
+        game._count_prefix = '';
+        game._throw_count_text = '';
+        game._throw_count = null;
         await setMessage(game._throw_prompt);
         game._command_mode = 'throwObject';
         return;
