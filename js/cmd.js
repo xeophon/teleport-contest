@@ -1229,6 +1229,13 @@ const SHIELD_OF_REFLECTION = 10074;
 const PLATE_MAIL = 10037;
 const HELMET = 10044;
 const LOW_BOOTS = 10048;
+const HIGH_BOOTS = 10049;
+const WATER_WALKING_BOOTS = 10132;
+const JUMPING_BOOTS = 10133;
+const ELVEN_BOOTS = 10134;
+const KICKING_BOOTS = 10135;
+const FUMBLE_BOOTS = 10136;
+const LEVITATION_BOOTS = 10137;
 const HAWAIIAN_SHIRT = 10188;
 const T_SHIRT = 10189;
 const RING_MAIL = 10041;
@@ -1491,9 +1498,16 @@ const WISH_BASE_OBJECTS = new Map([
     ['cloak of displacement', { otyp: CLOAK_OF_DISPLACEMENT, cls: 'armor', glyph: '[', kind: 'cloak of displacement', actualKind: 'cloak of displacement', known: false }],
     ['low boots', { otyp: LOW_BOOTS, cls: 'armor', glyph: '[', kind: 'low boots', actualKind: 'low boots', appearance: 'walking shoes', known: false, owt: 10 }],
     ['iron shoes', { otyp: IRON_SHOES, cls: 'armor', glyph: '[', kind: 'iron shoes', actualKind: 'iron shoes', appearance: 'hard shoes', known: false, owt: 50 }],
+    ['high boots', { otyp: HIGH_BOOTS, cls: 'armor', glyph: '[', kind: 'high boots', actualKind: 'high boots', appearance: 'jackboots', known: false, owt: 20 }],
     ['hawaiian shirt', { otyp: HAWAIIAN_SHIRT, cls: 'armor', glyph: '[', kind: 'Hawaiian shirt', actualKind: 'Hawaiian shirt', plural: 'Hawaiian shirts', owt: 5 }],
     ['t-shirt', { otyp: T_SHIRT, cls: 'armor', glyph: '[', kind: 'T-shirt', actualKind: 'T-shirt', plural: 'T-shirts', owt: 5 }],
-    ['speed boots', { otyp: SPEED_BOOTS, cls: 'armor', glyph: '[', kind: 'speed boots', actualKind: 'speed boots', known: false }],
+    ['speed boots', { otyp: SPEED_BOOTS, cls: 'armor', glyph: '[', kind: 'speed boots', actualKind: 'speed boots', known: false, owt: 20 }],
+    ['water walking boots', { otyp: WATER_WALKING_BOOTS, cls: 'armor', glyph: '[', kind: 'water walking boots', actualKind: 'water walking boots', known: false, owt: 15 }],
+    ['jumping boots', { otyp: JUMPING_BOOTS, cls: 'armor', glyph: '[', kind: 'jumping boots', actualKind: 'jumping boots', known: false, owt: 20 }],
+    ['elven boots', { otyp: ELVEN_BOOTS, cls: 'armor', glyph: '[', kind: 'elven boots', actualKind: 'elven boots', known: false, owt: 15 }],
+    ['kicking boots', { otyp: KICKING_BOOTS, cls: 'armor', glyph: '[', kind: 'kicking boots', actualKind: 'kicking boots', known: false, owt: 50 }],
+    ['fumble boots', { otyp: FUMBLE_BOOTS, cls: 'armor', glyph: '[', kind: 'fumble boots', actualKind: 'fumble boots', known: false, owt: 20 }],
+    ['levitation boots', { otyp: LEVITATION_BOOTS, cls: 'armor', glyph: '[', kind: 'levitation boots', actualKind: 'levitation boots', known: false, owt: 15 }],
 ]);
 const WIZARD_ONLY_WISH_NAMEDESC_BOUNDS = new Map([
     ['bell of opening', 1],
@@ -1538,9 +1552,12 @@ const WISH_BASE_NAMEDESC_BOUNDS = new Map([
     ['leather armor', 76], ['elven mithril-coat', 16],
     ['shield of reflection', 8],
     ['gauntlets of power', 9], ['cloak of displacement', 13],
-    ['low boots', 24], ['iron shoes', 8],
+    ['low boots', 24], ['iron shoes', 8], ['high boots', 15],
     ['hawaiian shirt', 9], ['t-shirt', 3],
-    ['speed boots', 13],
+    ['speed boots', 13], ['water walking boots', 13],
+    ['jumping boots', 13], ['elven boots', 13],
+    ['kicking boots', 13], ['fumble boots', 13],
+    ['levitation boots', 13],
     ['crystal ball', 495], ['glass orb', 495],
 ]);
 const WISH_OBJECT_METADATA = new Map([
@@ -1657,6 +1674,18 @@ const WISH_OBJECT_RANGES = new Map([
     ['shoes', [
         ['low boots', 23],
         ['iron shoes', 7],
+    ]],
+    ['boots', [
+        ['low boots', 23],
+        ['iron shoes', 7],
+        ['high boots', 14],
+        ['speed boots', 12],
+        ['water walking boots', 12],
+        ['jumping boots', 12],
+        ['elven boots', 12],
+        ['kicking boots', 12],
+        ['fumble boots', 12],
+        ['levitation boots', 12],
     ]],
     ['shirt', [
         ['hawaiian shirt', 8],
@@ -4833,8 +4862,8 @@ const ARMOR_AC_BONUS = {
     'leather gloves': 1,
     'gauntlets of power': 1,
     'low boots': 1,
-    'iron shoes': 1,
-    'high boots': 1,
+    'iron shoes': 2,
+    'high boots': 2,
     'speed boots': 1,
     'water walking boots': 1,
     'jumping boots': 1,
@@ -5178,7 +5207,12 @@ const OBJECT_WEIGHTS = {
     'splint mail': 400,
     'uruk-hai shield': 50,
     'studded leather armor': 200,
-    'water walking boots': 20,
+    'water walking boots': 15,
+    'jumping boots': 20,
+    'elven boots': 15,
+    'kicking boots': 50,
+    'fumble boots': 20,
+    'levitation boots': 15,
     'brass lantern': 30,
     'can of grease': 15,
     'credit card': 1,
@@ -29154,6 +29188,22 @@ function resolveCalledWishName(baseName, calledName) {
 const WISH_NAME_ALIASES = new Map([
     ['speedboots', 'speed boots'],
     ['boots of speed', 'speed boots'],
+    ['boots of water walking', 'water walking boots'],
+    ['boots of jumping', 'jumping boots'],
+    ['boots of kicking', 'kicking boots'],
+    ['boots of levitation', 'levitation boots'],
+    ['water-walking boots', 'water walking boots'],
+    ['waterwalking boots', 'water walking boots'],
+    ['jackboots', 'high boots'],
+    ['combat boots', 'speed boots'],
+    ['jungle boots', 'water walking boots'],
+    ['hiking boots', 'jumping boots'],
+    ['mud boots', 'elven boots'],
+    ['buckled boots', 'kicking boots'],
+    ['riding boots', 'fumble boots'],
+    ['snow boots', 'levitation boots'],
+    ['elvish boots', 'elven boots'],
+    ['elfin boots', 'elven boots'],
     ['plate armor', 'plate mail'],
     ['scroll of detect food', 'scroll of food detection'],
     ['detect food scroll', 'scroll of food detection'],
@@ -29256,10 +29306,27 @@ function normalizeWishedSpelling(name) {
     return String(name || '').replace(/armour/ig, match => match[0] === 'A' ? 'Armor' : 'armor');
 }
 
+function wishedFuzzyObjectKey(text) {
+    return wishedLabelKey(text).replace(/[\s-]+/g, '');
+}
+
+function resolveWishedArmorAppearanceAlias(normalized) {
+    const key = wishedFuzzyObjectKey(normalized);
+    if (!key) return '';
+    for (const [kind, armorAppearance] of Object.entries(ARMOR_WISH_APPEARANCES)) {
+        const [group, index, fallback] = armorAppearance;
+        const appearance = group ? game._object_descriptions?.[group]?.[index] || fallback : fallback;
+        if (appearance && wishedFuzzyObjectKey(appearance) === key) return kind;
+    }
+    return '';
+}
+
 function resolveWishedSpellingAlias(lowerName) {
     const normalized = String(lowerName || '').trim().replace(/\s+/g, ' ');
     const explicit = WISH_EXPLICIT_SPELLING_ALIASES.get(normalized);
     if (explicit) return { name: explicit, skipNamedesc: true };
+    const appearance = resolveWishedArmorAppearanceAlias(normalized);
+    if (appearance) return { name: appearance, skipNamedesc: false };
     const alias = WISH_NAME_ALIASES.get(normalized);
     if (alias) return { name: alias, skipNamedesc: false };
     return { name: singularizeWishedPluralName(normalized), skipNamedesc: false };

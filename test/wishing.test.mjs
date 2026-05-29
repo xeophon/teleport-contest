@@ -42,7 +42,15 @@ const MAGIC_MARKER = 10084;
 const TINNING_KIT = 10170;
 const CAN_OF_GREASE = 10171;
 const LOW_BOOTS = 10048;
+const HIGH_BOOTS = 10049;
 const IRON_SHOES = 10105;
+const SPEED_BOOTS = 10087;
+const WATER_WALKING_BOOTS = 10132;
+const JUMPING_BOOTS = 10133;
+const ELVEN_BOOTS = 10134;
+const KICKING_BOOTS = 10135;
+const FUMBLE_BOOTS = 10136;
+const LEVITATION_BOOTS = 10137;
 const HAWAIIAN_SHIRT = 10188;
 const T_SHIRT = 10189;
 const GRAY_DRAGON_SCALE_MAIL = 10085;
@@ -1143,6 +1151,68 @@ test('wished shoes range uses C low and iron shoe candidates', async () => {
     assert.doesNotMatch(result.item.line, /^a - 2 /);
     assert.match(result.item.line, /a pair of hard shoes/);
     assert.match(result.log[0], /^rnd\(30\)=/);
+});
+
+test('wished boots range uses full C boot candidates', async () => {
+    async function wishedBoots(text, seed = 1) {
+        installWishState(seed);
+        enableRngLog({ reset: true });
+        beginWishDirectly();
+        await submitWish(text);
+        return { item: game.inventory[0], log: [...getRngLog()] };
+    }
+
+    const cases = [
+        [3, 'rnd(128)=12', LOW_BOOTS, 'low boots', 'walking shoes', 10, 8],
+        [18, 'rnd(128)=29', IRON_SHOES, 'iron shoes', 'hard shoes', 50, 16],
+        [6, 'rnd(128)=42', HIGH_BOOTS, 'high boots', 'jackboots', 20, 12],
+        [1, 'rnd(128)=46', SPEED_BOOTS, 'speed boots', 'combat boots', 20, 50],
+        [20, 'rnd(128)=58', WATER_WALKING_BOOTS, 'water walking boots', 'jungle boots', 15, 50],
+        [7, 'rnd(128)=78', JUMPING_BOOTS, 'jumping boots', 'hiking boots', 20, 50],
+        [9, 'rnd(128)=86', ELVEN_BOOTS, 'elven boots', 'mud boots', 15, 8],
+        [2, 'rnd(128)=94', KICKING_BOOTS, 'kicking boots', 'buckled boots', 50, 8],
+        [8, 'rnd(128)=110', FUMBLE_BOOTS, 'fumble boots', 'riding boots', 20, 30],
+        [5, 'rnd(128)=125', LEVITATION_BOOTS, 'levitation boots', 'snow boots', 15, 30],
+    ];
+
+    for (const [seed, firstRoll, otyp, kind, appearance, weight, cost] of cases) {
+        const result = await wishedBoots('boots', seed);
+        assert.equal(result.log[0], firstRoll, kind);
+        assert.equal(result.item.otyp, otyp, kind);
+        assert.equal(result.item.cls, 'armor', kind);
+        assert.equal(result.item.kind, kind);
+        assert.equal(result.item.actualKind, kind);
+        assert.equal(result.item.quan, 1, kind);
+        assert.equal(result.item.owt, weight, kind);
+        assert.equal(shop.shopBaseCost(result.item), cost, kind);
+        assert.match(result.item.line, new RegExp(`a pair of ${appearance}`), kind);
+    }
+
+    let result = await wishedBoots('high boots');
+    assert.equal(result.item.otyp, HIGH_BOOTS);
+    assert.match(result.log[0], /^rn2\(15\)=/);
+    assert.match(result.item.line, /a pair of jackboots/);
+
+    for (const [wish, otyp, appearance] of [
+        ['boots of speed', SPEED_BOOTS, 'combat boots'],
+        ['water walking boots', WATER_WALKING_BOOTS, 'jungle boots'],
+        ['boots of jumping', JUMPING_BOOTS, 'hiking boots'],
+        ['elvish boots', ELVEN_BOOTS, 'mud boots'],
+        ['buckled boots', KICKING_BOOTS, 'buckled boots'],
+        ['snow boots', LEVITATION_BOOTS, 'snow boots'],
+    ]) {
+        result = await wishedBoots(wish);
+        assert.equal(result.item.otyp, otyp, wish);
+        assert.match(result.log[0], /^rn2\(13\)=/, wish);
+        assert.match(result.item.line, new RegExp(`a pair of ${appearance}`), wish);
+    }
+
+    result = await wishedBoots('2 pairs of boots', 5);
+    assert.equal(result.item.otyp, LEVITATION_BOOTS);
+    assert.equal(result.item.quan, 1);
+    assert.doesNotMatch(result.item.line, /^a - 2 /);
+    assert.match(result.item.line, /a pair of snow boots/);
+    assert.equal(result.log[0], 'rnd(128)=125');
 });
 
 test('wished shirt range uses C Hawaiian and T-shirt candidates', async () => {
