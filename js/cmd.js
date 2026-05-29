@@ -23842,15 +23842,15 @@ function remoteProjectileDownGateAt(obj, x, y, { allowGold = false } = {}) {
     return downGateAt(x, y);
 }
 
-function carriedDropDownGateAt(obj, x, y) {
-    if (!obj || shopBillableGold(obj)) return null;
+function carriedDropDownGateAt(obj, x, y, { allowGold = false } = {}) {
+    if (!obj || (!allowGold && shopBillableGold(obj))) return null;
     if (obj === game.u?.uball || obj === game.u?.uchain) return null;
     if (game.u?.uswallow) return null;
     return downGateAt(x, y);
 }
 
-function maybeShipCarriedDropObject(obj, x, y, messages) {
-    const gate = carriedDropDownGateAt(obj, x, y);
+function maybeShipCarriedDropObject(obj, x, y, messages, options = {}) {
+    const gate = carriedDropDownGateAt(obj, x, y, options);
     if (!gate) return projectileShipObjectResult();
     if (isBoulderObject(obj) && gate.where === MIGR_RANDOM && gate.trap) {
         const boulderImpact = impactDropFloorObjects(x, y, gate, { targetLevel: gate.targetLevel, route: gate });
@@ -49629,6 +49629,7 @@ export async function rhack(_cmd) {
             const amount = game._goldCount || (game.inventory || []).find(item => item.letter === '$' || item.cls === 'coin')?.quan || 0;
             game._goldCount = 0;
             game.inventory = (game.inventory || []).filter(item => item.letter !== '$' && item.cls !== 'coin');
+            const goldMessages = [];
             const floorGold = {
                 otyp: GOLD_PIECE,
                 cls: 'coin',
@@ -49638,13 +49639,22 @@ export async function rhack(_cmd) {
                 oy: game.u?.uy || 0,
                 quan: amount,
             };
-            placeStackableFloorObject(floorGold);
-            const shopGold = sellobjDroppedGoldAt(floorGold.ox, floorGold.oy, amount);
+            const shipObject = maybeShipCarriedDropObject(floorGold, floorGold.ox, floorGold.oy, goldMessages, { allowGold: true });
+            let consumedByFloor = false;
+            if (!shipObject.handled) {
+                consumedByFloor = earthFloorEffects(floorGold, floorGold.ox, floorGold.oy, goldMessages, 'drop');
+            }
+            let shopGold = { messages: [] };
+            if (!shipObject.handled && !consumedByFloor) {
+                placeStackableFloorObject(floorGold);
+                shopGold = sellobjDroppedGoldAt(floorGold.ox, floorGold.oy, amount);
+            }
             const guard = (game.level?.monsters || []).find(mon => mon.isgd || mon.data?.name === 'guard');
             if (guard) prepareVaultGuardEscort(guard);
             newsym(game.u?.ux || 0, game.u?.uy || 0);
             const messages = [
                 ...(game.flags?.verbose === false ? [] : [`You drop ${amount} gold piece${amount === 1 ? '' : 's'}.`]),
+                ...goldMessages,
                 ...(shopGold.messages || []),
             ];
             if (messages.length) {

@@ -13383,6 +13383,121 @@ test('command carried drop down branch stairs records special-stair metadata', a
     assert.match(game._pending_message, /A dagger falls down the stairs\./);
 });
 
+test('command carried gold drop down stairs ships before same-square hole or donation', async () => {
+    const { shkp } = installCommandShopState();
+    installRemoteDownStairGate({ x: 5, y: 5, trap: { ttyp: HOLE } });
+    initRng(1);
+    shkp.debit = 7;
+    shkp.loan = 7;
+    const gold = goldPieces(512052, 10);
+    game.inventory = [gold];
+    game._goldCount = 10;
+
+    await rhack('d');
+    await rhack('$');
+
+    const queued = queuedImpactDropsFor({ dnum: 0, dlevel: 2 });
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game._goldCount, 0);
+    assert.equal(game.inventory.length, 0);
+    assert.equal(game.level.objects.some(obj => obj.otyp === 466), false);
+    assert.equal(queued.some(obj => obj.otyp === 466 && obj.quan === 10), true);
+    const dropped = queued.find(obj => obj.otyp === 466 && obj.quan === 10);
+    assert.equal(dropped._impactDropMigration?.where, MIGR_STAIRS_UP);
+    assert.equal(shkp.debit, 7);
+    assert.equal(shkp.loan, 7);
+    assert.equal(shkp.credit || 0, 0);
+    assert.match(game._pending_message, /You drop 10 gold pieces\./);
+    assert.match(game._pending_message, /gold pieces fall down the stairs\./);
+    assert.doesNotMatch(game._pending_message, /through the hole|credit|debt is paid/);
+});
+
+test('command carried gold drop down ladder skips stay roll and ships before donation', async () => {
+    const { shkp } = installCommandShopState();
+    installRemoteDownStairGate({ x: 5, y: 5, isladder: true });
+    initRng(4);
+    enableRngLog({ reset: true });
+    shkp.debit = 7;
+    shkp.loan = 7;
+    const gold = goldPieces(512053, 10);
+    game.inventory = [gold];
+    game._goldCount = 10;
+
+    await rhack('d');
+    await rhack('$');
+
+    const queued = queuedImpactDropsFor({ dnum: 0, dlevel: 2 });
+    assert.equal(queued.length, 1);
+    assert.equal(queued[0].otyp, 466);
+    assert.equal(queued[0].quan, 10);
+    assert.equal(queued[0]._impactDropMigration?.where, MIGR_LADDER_UP);
+    assert.equal(shkp.debit, 7);
+    assert.equal(shkp.loan, 7);
+    assert.equal(shkp.credit || 0, 0);
+    assert.match(game._pending_message, /gold pieces fall down the ladder\./);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(100)']);
+});
+
+test('command carried gold drop down stairs can stay and donate locally', async () => {
+    const { shkp } = installCommandShopState();
+    installRemoteDownStairGate({ x: 5, y: 5 });
+    initRng(4);
+    enableRngLog({ reset: true });
+    shkp.debit = 7;
+    shkp.loan = 7;
+    shkp.credit = 2;
+    const gold = goldPieces(512054, 10);
+    game.inventory = [gold];
+    game._goldCount = 10;
+
+    await rhack('d');
+    await rhack('$');
+
+    const floorGold = game.level.objects.find(obj => obj.otyp === 466 && obj.ox === 5 && obj.oy === 5);
+    assert.ok(floorGold);
+    assert.equal(floorGold.quan, 10);
+    assert.equal(queuedImpactDropsFor({ dnum: 0, dlevel: 2 }).length, 0);
+    assert.equal(shkp.debit, 0);
+    assert.equal(shkp.loan, 0);
+    assert.equal(shkp.credit, 5);
+    assert.match(game._pending_message, /You drop 10 gold pieces\./);
+    assert.match(game._pending_message, /Your debt is paid off\./);
+    assert.match(game._pending_message, /3 zorkmids added to your credit; total is now 5 zorkmids\./);
+    assert.doesNotMatch(game._pending_message, /falls down the stairs/);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(3)']);
+});
+
+test('command carried gold seen hole stay roll can still floor-effect ship before donation', async () => {
+    const { shkp } = installCommandShopState();
+    installSeenHoleAtHero();
+    markHeroSquareVisible();
+    initRng(2);
+    enableRngLog({ reset: true });
+    shkp.debit = 7;
+    shkp.loan = 7;
+    const gold = goldPieces(512055, 10);
+    game.inventory = [gold];
+    game._goldCount = 10;
+
+    await rhack('d');
+    await rhack('$');
+
+    const queued = queuedImpactDropsFor({ dnum: 0, dlevel: 2 });
+    assert.equal(queued.length, 1);
+    assert.equal(queued[0].otyp, 466);
+    assert.equal(queued[0].quan, 10);
+    assert.equal(queued[0]._impactDropMigration, undefined);
+    assert.equal(game.level.objects.some(obj => obj.otyp === 466), false);
+    assert.equal(shkp.debit, 7);
+    assert.equal(shkp.loan, 7);
+    assert.equal(shkp.credit || 0, 0);
+    assert.match(game._pending_message, /You drop 10 gold pieces\./);
+    assert.match(game._pending_message, /gold pieces fall through the hole\./);
+    assert.doesNotMatch(game._pending_message, /credit|debt is paid/);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(3)', 'rn2(3)', 'rn2(100)']);
+});
+
 test('command carried drop down stairs can stay and place locally', async () => {
     installNonShopFloorState();
     installRemoteDownStairGate({ x: 5, y: 5 });
