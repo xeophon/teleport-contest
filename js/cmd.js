@@ -24195,21 +24195,44 @@ function shipObjectShopDebt(obj, x, y, { shopFloorObj = false, silent = false } 
 
     const shkp = shopkeeperForCostlySpot(x, y);
     if (!shopkeeperInHisShop(shkp)) return { charged: false, value: 0, shkp: null, message: '', debitDelta: 0, robbedDelta: 0 };
-    const beforeDebit = Math.max(0, Math.trunc(Number(shkp.debit || 0)));
-    const beforeRobbed = Math.max(0, Math.trunc(Number(shkp.robbed || 0)));
-    const value = lostShopMerchandiseValueForObject({ ox: x, oy: y }, obj, shkp);
+    const charges = lostShopMerchandiseChargesForObject({ ox: x, oy: y }, obj, shkp);
+    const beforeDebt = new Map();
+    const trackShopkeeperDebt = target => {
+        if (!target || beforeDebt.has(target)) return;
+        beforeDebt.set(target, {
+            debit: Math.max(0, Math.trunc(Number(target.debit || 0))),
+            robbed: Math.max(0, Math.trunc(Number(target.robbed || 0))),
+        });
+    };
+    trackShopkeeperDebt(shkp);
+    for (const chargedShkp of charges.keys()) trackShopkeeperDebt(chargedShkp);
     clearNoChargeRecursively(obj);
     const peaceful = heroInShopOwnedBy(shkp);
-    const remaining = chargeShopkeeperForLostMerchandise(shkp, value, { peaceful });
-    const deltas = shopDebtDeltas(shkp, beforeDebit, beforeRobbed);
+    let value = 0;
+    let remaining = 0;
+    for (const [chargedShkp, charge] of charges) {
+        value += Math.max(0, Math.trunc(Number(charge || 0)));
+        remaining += chargeShopkeeperForLostMerchandise(chargedShkp, charge, { peaceful });
+    }
+    let debitDelta = 0;
+    let robbedDelta = 0;
+    let messageShkp = null;
+    for (const [chargedShkp, before] of beforeDebt) {
+        const deltas = shopDebtDeltas(chargedShkp, before.debit, before.robbed);
+        debitDelta += deltas.debitDelta;
+        robbedDelta += deltas.robbedDelta;
+        if (!messageShkp && (deltas.debitDelta > 0 || deltas.robbedDelta > 0))
+            messageShkp = chargedShkp;
+    }
+    messageShkp ||= charges.keys().next().value || shkp;
     let message = '';
     if (!silent && remaining > 0) {
-        if (deltas.robbedDelta > 0)
-            message = `You removed ${deltas.robbedDelta} ${shopCurrency(deltas.robbedDelta)} worth of goods!`;
-        else if (deltas.debitDelta > 0)
-            message = `You owe ${shopkeeperDisplayName(shkp)} ${deltas.debitDelta} ${shopCurrency(deltas.debitDelta)} for goods lost.`;
+        if (robbedDelta > 0)
+            message = `You removed ${robbedDelta} ${shopCurrency(robbedDelta)} worth of goods!`;
+        else if (debitDelta > 0)
+            message = `You owe ${shopkeeperDisplayName(messageShkp)} ${debitDelta} ${shopCurrency(debitDelta)} for goods lost.`;
     }
-    return { charged: value > 0, value, shkp, message, ...deltas };
+    return { charged: value > 0, value, shkp: messageShkp, message, debitDelta, robbedDelta };
 }
 
 function addLostShopMerchandiseCharge(charges, shkp, value) {

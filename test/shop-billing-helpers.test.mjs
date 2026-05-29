@@ -11901,6 +11901,57 @@ test('shop-floor stock falling through a hole charges stolen value before migrat
     assert.equal(blade.no_charge, false);
 });
 
+test('shop-floor billed stock falling through a hole charges live bill owner before square owner', () => {
+    const { shkp } = installShopState();
+    const owner = addSecondShopkeeper();
+    installSeenHoleAtHero();
+    initRng(1);
+    const ration = { ...foodRation(512024), letter: undefined, line: undefined, ox: 5, oy: 5 };
+    shop.addObjectToShopBill(owner, ration, 45);
+    ration.no_charge = true;
+    game.level.objects = [ration];
+
+    const impact = shop.impactDropFloorObjects(5, 5, game.level.traps[0], { targetLevel: { dnum: 0, dlevel: 2 } });
+
+    assert.match(impact.message, /owe Asidonhopo 45 zorkmids? for goods lost/);
+    assert.doesNotMatch(impact.message, /owe Izchak/);
+    assert.equal(game.level.objects.includes(ration), false);
+    assert.equal(queuedImpactDropsFor().includes(ration), true);
+    assert.equal(owner.debit, 45);
+    assert.equal(shkp.debit || 0, 0);
+    assert.equal(owner.billct, 0);
+    assert.equal(shop.shopBillEntryForObject(owner, ration), null);
+    assert.equal(ration.unpaid, false);
+    assert.equal(ration.no_charge, false);
+});
+
+test('shop-floor container falling through a hole charges nested live bill owner', () => {
+    const { shkp } = installShopState();
+    const owner = addSecondShopkeeper();
+    installSeenHoleAtHero();
+    initRng(1);
+    const box = shopFloorContainer(512025);
+    box.no_charge = true;
+    const blade = putObjectInContainer(box, dagger(512026));
+    shop.addObjectToShopBill(owner, blade, 15);
+    blade.no_charge = true;
+    game.level.objects = [box];
+
+    const impact = shop.impactDropFloorObjects(5, 5, game.level.traps[0], { targetLevel: { dnum: 0, dlevel: 2 } });
+
+    assert.match(impact.message, /owe Asidonhopo 15 zorkmids? for goods lost/);
+    assert.doesNotMatch(impact.message, /owe Izchak/);
+    assert.equal(game.level.objects.includes(box), false);
+    assert.equal(queuedImpactDropsFor().includes(box), true);
+    assert.equal(owner.debit, 15);
+    assert.equal(shkp.debit || 0, 0);
+    assert.equal(owner.billct, 0);
+    assert.equal(shop.shopBillEntryForObject(owner, blade), null);
+    assert.equal(blade.unpaid, false);
+    assert.equal(box.no_charge, false);
+    assert.equal(blade.no_charge, false);
+});
+
 test('boulder burial converts unpaid shop-floor object to post-credit debt', () => {
     const { shkp } = installShopState();
     installSeenHoleAtHero();
