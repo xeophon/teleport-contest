@@ -6644,6 +6644,131 @@ test('gold ring rubbed on touchstone makes golden scratch marks', async () => {
     assert.doesNotMatch(game._pending_message, /scritch|streaks/);
 });
 
+test('flimsy paper rubbed on touchstone leaves color streaks', async () => {
+    installCommandShopState();
+    const stone = carriedGrayStone(30588, 't', 'touchstone', {
+        otyp: TOUCHSTONE,
+        kind: 'touchstone',
+        actualKind: 'touchstone',
+        known: true,
+        dknown: true,
+        line: 't - an uncursed touchstone',
+    });
+    const scroll = blankScroll(30589, 's');
+    game.inventory = [stone, scroll];
+
+    await startRubCommand();
+    await rhack('t');
+    await rhack('s');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game._pending_message, 'You see white streaks on the stone.');
+});
+
+test('potions rubbed on touchstones are glass and do not use the wetstone branch', async () => {
+    installCommandShopState();
+    const stone = carriedGrayStone(30590, 't', 'touchstone', {
+        otyp: TOUCHSTONE,
+        kind: 'touchstone',
+        actualKind: 'touchstone',
+        known: true,
+        dknown: true,
+        line: 't - an uncursed touchstone',
+    });
+    const potion = waterPotion(30591, 'w');
+    game.inventory = [stone, potion];
+
+    await startRubCommand();
+    await rhack('t');
+    await rhack('w');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game._pending_message, '"scritch, scritch"');
+    assert.doesNotMatch(game._pending_message, /wetstone|wetter/);
+});
+
+test('liquid venom rubbed on touchstone uses wetstone wording', async () => {
+    installCommandShopState();
+    const stone = carriedGrayStone(30592, 't', 'touchstone', {
+        otyp: TOUCHSTONE,
+        kind: 'touchstone',
+        actualKind: 'touchstone',
+        known: true,
+        dknown: true,
+        line: 't - an uncursed touchstone',
+    });
+    const venom = {
+        id: 30593,
+        otyp: BLINDING_VENOM,
+        cls: 'venom',
+        glyph: '*',
+        kind: 'splash of blinding venom',
+        actualKind: 'splash of blinding venom',
+        material: 'liquid',
+        known: true,
+        dknown: true,
+        quan: 1,
+        letter: 'v',
+        line: 'v - a splash of blinding venom',
+    };
+    game.inventory = [stone, venom];
+
+    await startRubCommand();
+    await rhack('t');
+    await rhack('v');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game._pending_message, 'The touchstone is a little wetter now.');
+});
+
+test('touchstone material canaries use object material instead of display name only', async () => {
+    const cases = [
+        [{
+            id: 30595, cls: 'tool', glyph: '(', kind: 'sack', actualKind: 'sack',
+            quan: 1, letter: 's', line: 's - a sack',
+        }, 'The touchstone looks a little more polished now.'],
+        [{
+            id: 30596, otyp: TALLOW_CANDLE, cls: 'tool', glyph: '(',
+            kind: 'tallow candle', actualKind: 'tallow candle', quan: 1,
+            letter: 'c', line: 'c - a tallow candle',
+        }, 'You see waxy streaks on the stone.'],
+        [{
+            id: 30597, otyp: BELL, cls: 'tool', glyph: '(',
+            kind: 'bell', actualKind: 'bell of opening', quan: 1,
+            letter: 'b', line: 'b - a bell',
+        }, 'You make silvery scratch marks on the stone.'],
+        [{
+            id: 30598, otyp: CANDELABRUM_OF_INVOCATION, cls: 'tool', glyph: '(',
+            kind: 'candelabrum of invocation', actualKind: 'candelabrum of invocation',
+            quan: 1, letter: 'c', line: 'c - a candelabrum of invocation',
+        }, 'You make golden scratch marks on the stone.'],
+    ];
+
+    for (const [index, [target, expected]] of cases.entries()) {
+        installCommandShopState();
+        const stone = carriedGrayStone(305940 + index, 't', 'touchstone', {
+            otyp: TOUCHSTONE,
+            kind: 'touchstone',
+            actualKind: 'touchstone',
+            known: true,
+            dknown: true,
+            line: 't - an uncursed touchstone',
+        });
+        game.inventory = [stone, target];
+
+        await startRubCommand();
+        await rhack('t');
+        await rhack(target.letter);
+
+        assert.equal(game._command_mode, null);
+        assert.equal(game.context.move, 1);
+        assert.equal(game._pending_message, expected);
+    }
+});
+
 test('dipping an oil lamp into unpaid oil refuels and bills fuel tax', async () => {
     const { shkp } = installCommandShopState();
     const target = lamp(30921, 'oil lamp', 'l');

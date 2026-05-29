@@ -7979,6 +7979,28 @@ const USE_STONE_RING_APPEARANCE_COLORS = new Map([
     ['gold', 'yellow'], ['ivory', 'white'], ['emerald', 'green'], ['wire', 'cyan'],
     ['engagement', 'cyan'], ['shiny', 'cyan'],
 ]);
+const USE_STONE_FLIMSY_MATERIALS = new Set([
+    'liquid', 'wax', 'veggy', 'flesh', 'paper', 'cloth', 'leather', 'rubber',
+]);
+const USE_STONE_MATERIAL_COLORS = new Map([
+    ['paper', 'white'], ['leather', 'brown'], ['veggy', 'brown'],
+    ['flesh', 'brown'], ['rubber', 'brown'],
+]);
+const USE_STONE_OTYP_MATERIALS = new Map([
+    [SACK, 'cloth'], [OILSKIN_SACK, 'cloth'], [BAG_OF_HOLDING, 'cloth'],
+    [BLINDFOLD, 'cloth'], [TALLOW_CANDLE, 'wax'], [WAX_CANDLE, 'wax'],
+    [MAGIC_FLUTE, 'wood'], [MAGIC_HARP, 'wood'], [CHEST, 'wood'],
+    [BELL, 'silver'], [CANDELABRUM_OF_INVOCATION, 'gold'],
+]);
+const USE_STONE_KIND_MATERIALS = new Map([
+    ['sack', 'cloth'], ['oilskin sack', 'cloth'], ['bag of holding', 'cloth'],
+    ['bag', 'cloth'], ['towel', 'cloth'], ['blindfold', 'cloth'],
+    ['tallow candle', 'wax'], ['wax candle', 'wax'], ['magic flute', 'wood'],
+    ['wooden flute', 'wood'], ['magic harp', 'wood'], ['wooden harp', 'wood'],
+    ['chest', 'wood'], ['large box', 'wood'], ['leather drum', 'leather'],
+    ['drum', 'leather'], ['drum of earthquake', 'leather'],
+    ['bell of opening', 'silver'], ['candelabrum of invocation', 'gold'],
+]);
 
 function useStoneSurfaceName(stone) {
     return `stone${Math.max(1, Math.trunc(Number(stone?.quan || 1))) > 1 ? 's' : ''}`;
@@ -8017,18 +8039,33 @@ function useStoneObjectMaterial(item) {
     const explicit = normalizeStoneToFleshMaterial(item?.oc_material || item?.material);
     if (explicit) return explicit;
     if (isApplyCoinObject(item)) return 'gold';
+    if (USE_STONE_OTYP_MATERIALS.has(item?.otyp)) return USE_STONE_OTYP_MATERIALS.get(item.otyp);
+    if (item?.otyp === BLINDING_VENOM || item?.otyp === ACID_VENOM || cls === 'venom') return 'liquid';
+    if (item?.otyp === POTION_CLASS || cls === 'potion' || item?.glyph === '!') return 'glass';
+    if (item?.otyp === SCROLL_CLASS || cls === 'scroll' || item?.glyph === '?') return 'paper';
+    if (item?.otyp === SPBOOK_CLASS || cls === 'spellbook' || item?.glyph === '+') return 'paper';
     const kind = objectKindKey(item);
+    if (USE_STONE_KIND_MATERIALS.has(kind)) return USE_STONE_KIND_MATERIALS.get(kind);
+    if (/\bvenom\b/.test(kind)) return 'liquid';
     if (/\bgold(?:en)?\b/.test(kind)) return 'gold';
     if (/\bsilver\b/.test(kind)) return 'silver';
     if (/\bwax\b/.test(kind)) return 'wax';
     if (/\bwood(?:en)?\b/.test(kind)) return 'wood';
     if (/\bcloth\b/.test(kind)) return 'cloth';
-    if (/\b(?:water|potion)\b/.test(kind) && item?.cls === 'potion') return 'liquid';
+    if (/\bpaper\b|\bscroll\b|\bspellbook\b/.test(kind)) return 'paper';
+    if (/\bleather\b/.test(kind)) return 'leather';
+    if (/\brubber hose\b/.test(kind)) return 'rubber';
     return '';
 }
 
 function useStoneColorName(item) {
     const numeric = item?._display_color ?? item?.color;
+    if (typeof numeric === 'string') {
+        const normalized = numeric.toLowerCase().replace(/^hi_/, '').trim();
+        if (USE_STONE_DESCRIPTION_COLORS.has(normalized))
+            return USE_STONE_DESCRIPTION_COLORS.get(normalized);
+        if ([...USE_STONE_COLOR_NAMES.values()].includes(normalized)) return normalized;
+    }
     if (USE_STONE_COLOR_NAMES.has(numeric)) return USE_STONE_COLOR_NAMES.get(numeric);
     const cls = useStoneObjectClass(item);
     if (cls === 'ring') {
@@ -8051,6 +8088,10 @@ function useStoneColorName(item) {
         const gemDescription = value.match(/^(.+) gem$/)?.[1];
         if (gemDescription) return USE_STONE_DESCRIPTION_COLORS.get(gemDescription) || gemDescription;
     }
+    const material = useStoneObjectMaterial(item);
+    if (USE_STONE_MATERIAL_COLORS.has(material)) return USE_STONE_MATERIAL_COLORS.get(material);
+    const displayColor = item ? object_display(item)?.color : undefined;
+    if (USE_STONE_COLOR_NAMES.has(displayColor)) return USE_STONE_COLOR_NAMES.get(displayColor);
     return '';
 }
 
@@ -8178,7 +8219,7 @@ function useStoneEffectMessage(stone, target) {
         if (material === 'cloth')
             return `The ${useStoneSubjectName(stone)} ${useStoneSurfaceVerb(stone, 'looks', 'look')} a little more polished now.`;
         if (material === 'liquid') {
-            if (target?.known === false) return 'You must think this is a wetstone, do you?';
+            if (!target?.known) return 'You must think this is a wetstone, do you?';
             return `The ${useStoneSubjectName(stone)} ${useStoneSurfaceVerb(stone, 'is', 'are')} a little wetter now.`;
         }
         if (material === 'wax') streakColor = 'waxy';
@@ -8190,7 +8231,8 @@ function useStoneEffectMessage(stone, target) {
             doScratch = true;
             streakColor = 'silvery';
         } else {
-            doScratch = !stoneIsTouchstone;
+            if (USE_STONE_FLIMSY_MATERIALS.has(material)) streakColor = useStoneColorName(target);
+            else doScratch = !stoneIsTouchstone;
         }
     }
 
