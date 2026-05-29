@@ -1228,10 +1228,12 @@ const SPEED_BOOTS = 10087;
 const SHIELD_OF_REFLECTION = 10074;
 const PLATE_MAIL = 10037;
 const HELMET = 10044;
+const LOW_BOOTS = 10048;
 const RING_MAIL = 10041;
 const STUDDED_LEATHER_ARMOR = 10042;
 const LEATHER_ARMOR = 10043;
 const ELVEN_MITHRIL_COAT = 10079;
+const IRON_SHOES = 10105;
 const GOLD_DRAGON_SCALE_MAIL = 10140;
 const RED_DRAGON_SCALE_MAIL = 10141;
 const WHITE_DRAGON_SCALE_MAIL = 10142;
@@ -1485,6 +1487,8 @@ const WISH_BASE_OBJECTS = new Map([
     ['leather gloves', { otyp: LEATHER_GLOVES, cls: 'armor', glyph: '[', kind: 'leather gloves', actualKind: 'leather gloves', known: false }],
     ['gauntlets of power', { otyp: GAUNTLETS_OF_POWER, cls: 'armor', glyph: '[', kind: 'gauntlets of power', actualKind: 'gauntlets of power', known: false }],
     ['cloak of displacement', { otyp: CLOAK_OF_DISPLACEMENT, cls: 'armor', glyph: '[', kind: 'cloak of displacement', actualKind: 'cloak of displacement', known: false }],
+    ['low boots', { otyp: LOW_BOOTS, cls: 'armor', glyph: '[', kind: 'low boots', actualKind: 'low boots', appearance: 'walking shoes', known: false, owt: 10 }],
+    ['iron shoes', { otyp: IRON_SHOES, cls: 'armor', glyph: '[', kind: 'iron shoes', actualKind: 'iron shoes', appearance: 'hard shoes', known: false, owt: 50 }],
     ['speed boots', { otyp: SPEED_BOOTS, cls: 'armor', glyph: '[', kind: 'speed boots', actualKind: 'speed boots', known: false }],
 ]);
 const WIZARD_ONLY_WISH_NAMEDESC_BOUNDS = new Map([
@@ -1530,6 +1534,7 @@ const WISH_BASE_NAMEDESC_BOUNDS = new Map([
     ['leather armor', 76], ['elven mithril-coat', 16],
     ['shield of reflection', 8],
     ['gauntlets of power', 9], ['cloak of displacement', 13],
+    ['low boots', 24], ['iron shoes', 8],
     ['speed boots', 13],
     ['crystal ball', 495], ['glass orb', 495],
 ]);
@@ -1643,6 +1648,10 @@ const WISH_OBJECT_RANGES = new Map([
         ['frost horn', 2],
         ['fire horn', 2],
         ['horn of plenty', 2],
+    ]],
+    ['shoes', [
+        ['low boots', 23],
+        ['iron shoes', 7],
     ]],
     ['sword', [
         ['short sword', 8],
@@ -29155,6 +29164,8 @@ const WISH_NAME_ALIASES = new Map([
     ['royal jelly', 'lump of royal jelly'],
     ['can', 'tin'],
     ['gloves of power', 'gauntlets of power'],
+    ['walking shoes', 'low boots'],
+    ['hard shoes', 'iron shoes'],
     ['ring of protection from shape shifters', 'ring of protection from shape changers'],
     ['flint stone', 'flint'],
 ]);
@@ -29397,7 +29408,7 @@ function normalizeWishedGroupPhrase(name, quantity) {
     const match = String(name || '').match(/^(pair|pairs|set|sets)\s+of\s+/i);
     if (!match) return { name, quantity, matched: false };
     const objectName = String(name).slice(match[0].length);
-    const nonStackingPairObject = /\b(?:boots|gloves|lenses)\b/i.test(objectName);
+    const nonStackingPairObject = /\b(?:boots|shoes|gloves|lenses)\b/i.test(objectName);
     let wishedQuantity = quantity;
     const group = match[1].toLowerCase();
     if (nonStackingPairObject) wishedQuantity = 1;

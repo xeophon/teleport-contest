@@ -41,6 +41,8 @@ const EXPENSIVE_CAMERA = 10082;
 const MAGIC_MARKER = 10084;
 const TINNING_KIT = 10170;
 const CAN_OF_GREASE = 10171;
+const LOW_BOOTS = 10048;
+const IRON_SHOES = 10105;
 const GRAY_DRAGON_SCALE_MAIL = 10085;
 const SILVER_DRAGON_SCALE_MAIL = 10086;
 const GOLD_DRAGON_SCALE_MAIL = 10140;
@@ -1090,6 +1092,55 @@ test('generic wished object ranges use C rnd_class candidates', async () => {
         }
         assert.ok(seen.size > 1, `${wish} should not collapse to one concrete object`);
     }
+});
+
+test('wished shoes range uses C low and iron shoe candidates', async () => {
+    async function wishedShoes(text, seed = 1) {
+        installWishState(seed);
+        enableRngLog({ reset: true });
+        beginWishDirectly();
+        await submitWish(text);
+        return { item: game.inventory[0], log: [...getRngLog()] };
+    }
+
+    let result = await wishedShoes('shoes', 1);
+    assert.equal(result.item.otyp, LOW_BOOTS);
+    assert.equal(result.item.kind, 'low boots');
+    assert.equal(result.item.actualKind, 'low boots');
+    assert.equal(result.item.appearance, 'walking shoes');
+    assert.equal(result.item.quan, 1);
+    assert.equal(result.item.owt, 10);
+    assert.equal(shop.shopBaseCost(result.item), 8);
+    assert.match(result.item.line, /a pair of walking shoes/);
+    assert.match(result.log[0], /^rnd\(30\)=/);
+
+    result = await wishedShoes('shoes', 7);
+    assert.equal(result.item.otyp, IRON_SHOES);
+    assert.equal(result.item.kind, 'iron shoes');
+    assert.equal(result.item.actualKind, 'iron shoes');
+    assert.equal(result.item.appearance, 'hard shoes');
+    assert.equal(result.item.quan, 1);
+    assert.equal(result.item.owt, 50);
+    assert.equal(shop.shopBaseCost(result.item), 16);
+    assert.match(result.item.line, /a pair of hard shoes/);
+    assert.match(result.log[0], /^rnd\(30\)=/);
+
+    result = await wishedShoes('low boots');
+    assert.equal(result.item.otyp, LOW_BOOTS);
+    assert.match(result.item.line, /a pair of walking shoes/);
+    assert.match(result.log[0], /^rn2\(24\)=/);
+
+    result = await wishedShoes('hard shoes');
+    assert.equal(result.item.otyp, IRON_SHOES);
+    assert.match(result.item.line, /a pair of hard shoes/);
+    assert.match(result.log[0], /^rn2\(8\)=/);
+
+    result = await wishedShoes('2 pairs of shoes', 7);
+    assert.equal(result.item.otyp, IRON_SHOES);
+    assert.equal(result.item.quan, 1);
+    assert.doesNotMatch(result.item.line, /^a - 2 /);
+    assert.match(result.item.line, /a pair of hard shoes/);
+    assert.match(result.log[0], /^rnd\(30\)=/);
 });
 
 test('dragon armor wishes follow C range and namedesc RNG paths', async () => {
