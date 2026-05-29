@@ -6,7 +6,7 @@ import { nhgetch } from './input.js';
 import { bot, cls, docrt, flush_screen, newsym, pline, recordObservedObjectDiscovery, refreshHallucinatedMap, seeNearbyObjects, show_glyph_cell, strengthString } from './display.js';
 import { cansee, couldsee, vision_recalc, vision_reset } from './vision.js';
 import { RANDOM_MONSTER_BY_NAME, SHOP_TYPES, STALKER_MONSTERS, add_to_container, add_to_minv, adjustedMonsterLevel, artifactDefinitionForName, artifactObjectName, enextoMonsterSpot, make_tutorial1_level, makemon, makeArtifactWishObject, maketrap, mkcorpstat, mklev, mkobj, mkobj_at, mksobj, monsterByRndName, monster_hp, morgueMonster, nameObjectAsArtifact, next_ident, object_display, potionIndexForRoll, resurrectWizardOfYendor, rndmonnum, scrollIndexForRoll, set_mimic_sym_rng, syncDungeonContext, u_on_dnstairs, u_on_rndspot, u_on_upstairs, wipe_engr_at, dropMonsterInventory as dropMonsterInventoryRaw, l_nhcore_init, getrumor, getbogusmon, level_difficulty, set_malign, somexyspace, fumaroles, fix_wall_spines, createMonsterCorpseOrGlob, monsterCorpseDropSucceeds, monsterLeavesCorpseLikeDrop, movebubbles } from './mklev.js';
-import { ACCESSIBLE, A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_MAX, A_NEUTRAL, A_NONE, A_STR, A_WIS, ALTAR, AM_SANCTUM, AM_SHRINE, Align2amask, Amask2align, BC_BALL, BC_CHAIN, BEAR_TRAP, BLCORNER, BOLT_LIM, BRCORNER, CANDLESHOP, CLOUD, COLNO, CORPSTAT_FEMALE, CORPSTAT_GENDER, CORPSTAT_HISTORIC, CORPSTAT_MALE, CORPSTAT_NEUTER, CORR, DB_DIR, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DB_NORTH, DB_SOUTH, DB_UNDER, DB_WEST, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, BURN, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, D_TRAPPED, DUST, ENGRAVE, ENGR_BLOOD, FOUNTAIN, F_LOOTED, GRAVE, HEADSTONE, HWALL, ICE, ICED_MOAT, ICED_POOL, IN_SIGHT, IRONBARS, IS_AIR, IS_FURNITURE, IS_LAVA, IS_OBSTRUCTED, IS_POOL, IS_ROOM, IS_TREE, IS_WALL, In_endgame, In_quest, In_sokoban, In_V_tower, Is_airlevel, Is_astralevel, Is_botlevel, Is_earthlevel, Is_firelevel, Is_rogue_level, Is_stronghold, Is_waterlevel, LADDER, LAVAPOOL, LAVAWALL, MAGIC_PORTAL, MARK, MAX_EGG_HATCH_TIME, MM_ADJACENTOK, MM_EDOG, MM_NOCOUNTBIRTH, MM_NOMSG, MM_NOWAIT, MOAT, MORGUE, M_AP_TYPE, N_DIRS, NO_MINVENT, NORMAL_SPEED, OVERLOADED, P_BASIC, P_UNSKILLED, PIT, POOL, REPAIR_DELAY, ROLLING_BOULDER_TRAP, ROOM, ROOMOFFSET, ROWNO, SCORR, SDOOR, SHARED, SHARED_PLUS, SHOPBASE, SHOP_DOOR_COST, SINK, SPIKED_PIT, STAIRS, STONE, STRAT_WAITMASK, S_LDWASHER, S_LPUDDING, S_LRING, TDWALL, TEMPLE, THRONE, TLCORNER, TRCORNER, TREE, TREE_LOOTED, TREE_SWARM, TT_BEARTRAP, TT_BURIEDBALL, TT_INFLOOR, TT_LAVA, TT_PIT, TT_WEB, TUWALL, T_LOOTED, VAULT, VIBRATING_SQUARE, VWALL, WAND_BACKFIRE_CHANCE, WATER, WEB, WM_MASK, WT_IRON_BALL_BASE, WT_IRON_BALL_INCR, WT_TO_DMG, W_NONDIGGABLE, W_SADDLE, ZAP_POS, isok, xdir, ydir } from './const.js';
+import { ACCESSIBLE, A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_MAX, A_NEUTRAL, A_NONE, A_STR, A_WIS, ALTAR, AM_SANCTUM, AM_SHRINE, Align2amask, Amask2align, BC_BALL, BC_CHAIN, BEAR_TRAP, BLCORNER, BOLT_LIM, BRCORNER, CANDLESHOP, CLOUD, COLNO, CORPSTAT_FEMALE, CORPSTAT_GENDER, CORPSTAT_HISTORIC, CORPSTAT_MALE, CORPSTAT_NEUTER, CORR, DB_DIR, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DB_NORTH, DB_SOUTH, DB_UNDER, DB_WEST, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, BURN, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, D_TRAPPED, DUST, ENGRAVE, ENGR_BLOOD, FOUNTAIN, F_LOOTED, GRAVE, HEADSTONE, HWALL, ICE, ICED_MOAT, ICED_POOL, IN_SIGHT, IRONBARS, IS_AIR, IS_FURNITURE, IS_LAVA, IS_OBSTRUCTED, IS_POOL, IS_ROOM, IS_TREE, IS_WALL, In_endgame, In_quest, In_sokoban, In_V_tower, Is_airlevel, Is_astralevel, Is_botlevel, Is_earthlevel, Is_firelevel, Is_rogue_level, Is_stronghold, Is_waterlevel, LADDER, LAVAPOOL, LAVAWALL, MAGIC_PORTAL, MARK, MAX_EGG_HATCH_TIME, MIGR_LADDER_UP, MIGR_RANDOM, MIGR_SSTAIRS, MIGR_STAIRS_UP, MM_ADJACENTOK, MM_EDOG, MM_NOCOUNTBIRTH, MM_NOMSG, MM_NOWAIT, MOAT, MORGUE, M_AP_TYPE, N_DIRS, NO_MINVENT, NORMAL_SPEED, OVERLOADED, P_BASIC, P_UNSKILLED, PIT, POOL, REPAIR_DELAY, ROLLING_BOULDER_TRAP, ROOM, ROOMOFFSET, ROWNO, SCORR, SDOOR, SHARED, SHARED_PLUS, SHOPBASE, SHOP_DOOR_COST, SINK, SPIKED_PIT, STAIRS, STONE, STRAT_WAITMASK, S_LDWASHER, S_LPUDDING, S_LRING, TDWALL, TEMPLE, THRONE, TLCORNER, TRCORNER, TREE, TREE_LOOTED, TREE_SWARM, TT_BEARTRAP, TT_BURIEDBALL, TT_INFLOOR, TT_LAVA, TT_PIT, TT_WEB, TUWALL, T_LOOTED, VAULT, VIBRATING_SQUARE, VWALL, WAND_BACKFIRE_CHANCE, WATER, WEB, WM_MASK, WT_IRON_BALL_BASE, WT_IRON_BALL_INCR, WT_TO_DMG, W_NONDIGGABLE, W_SADDLE, ZAP_POS, isok, xdir, ydir } from './const.js';
 import { d, rn1, rn2, rn2_on_display_rng, rnd, rnl, rnz } from './rng.js';
 import { CLR_BLACK, CLR_BLUE, CLR_BRIGHT_BLUE, CLR_BRIGHT_CYAN, CLR_BRIGHT_GREEN, CLR_BRIGHT_MAGENTA, CLR_BROWN, CLR_CYAN, CLR_GRAY, CLR_GREEN, CLR_MAGENTA, CLR_ORANGE, CLR_RED, CLR_YELLOW, CLR_WHITE, NO_COLOR } from './terminal.js';
 import { vfsDeleteFile, vfsReadFile, vfsWriteFile } from './storage.js';
@@ -3362,6 +3362,7 @@ function removeCarriedPunishmentObjects(objects) {
 }
 
 function impactDropGateText(trap) {
+    if (trap?.gateText) return trap.gateText;
     if (!trap?.tseen || (trap.ttyp !== HOLE && trap.ttyp !== TRAPDOOR))
         return '';
     return trap.ttyp === TRAPDOOR ? 'through the trap door' : 'through the hole';
@@ -3371,11 +3372,29 @@ function impactDropLevelKey(level) {
     return level ? `${level.dnum}:${level.dlevel}` : '';
 }
 
-function queueImpactDroppedObjects(targetLevel, objects) {
+function currentMigrationSourceLevel() {
+    return {
+        dnum: game.u?.uz?.dnum ?? 0,
+        dlevel: game.u?.uz?.dlevel ?? 1,
+    };
+}
+
+function markImpactDropMigration(obj, route = {}) {
+    if (!obj || !route.where || route.where === MIGR_RANDOM) return;
+    obj._impactDropMigration = {
+        where: route.where,
+        fromLevel: { ...(route.fromLevel || currentMigrationSourceLevel()) },
+        targetLevel: route.targetLevel ? { ...route.targetLevel } : null,
+        isLadder: !!route.isLadder,
+    };
+}
+
+function queueImpactDroppedObjects(targetLevel, objects, route = {}) {
     if (!targetLevel || !objects?.length) return;
     game._impact_drop_migrations ??= new Map();
     const key = impactDropLevelKey(targetLevel);
     const queued = game._impact_drop_migrations.get(key) || [];
+    for (const obj of objects) markImpactDropMigration(obj, { ...route, targetLevel });
     queued.push(...objects);
     game._impact_drop_migrations.set(key, queued);
 }
@@ -3402,6 +3421,19 @@ function impactDropRandomLandingSpot() {
         : { x: game.u?.ux || 0, y: game.u?.uy || 0 };
 }
 
+function impactDropMigrationLandingSpot(migration) {
+    if (!migration || migration.where === MIGR_RANDOM) return null;
+    const from = migration.fromLevel;
+    if (!from) return null;
+    const needLadder = migration.where === MIGR_LADDER_UP || migration.isLadder;
+    for (let stair = game.stairs; stair; stair = stair.next) {
+        if (!!stair.isladder !== !!needLadder) continue;
+        if (stair.tolev?.dnum === from.dnum && stair.tolev?.dlevel === from.dlevel)
+            return { x: stair.sx, y: stair.sy };
+    }
+    return null;
+}
+
 function deliverQueuedImpactDroppedObjects(targetLevel) {
     const key = impactDropLevelKey(targetLevel);
     const queued = game._impact_drop_migrations?.get?.(key) || [];
@@ -3409,7 +3441,9 @@ function deliverQueuedImpactDroppedObjects(targetLevel) {
     game._impact_drop_migrations.delete(key);
     game.level.objects ??= [];
     for (const obj of queued) {
-        const spot = impactDropRandomLandingSpot();
+        const spot = impactDropMigrationLandingSpot(obj._impactDropMigration)
+            || impactDropRandomLandingSpot();
+        delete obj._impactDropMigration;
         obj.ox = spot.x;
         obj.oy = spot.y;
         obj.hidden = false;
@@ -3482,7 +3516,7 @@ function impactDropFloorObjects(x, y, trap, options = {}) {
             .filter(Boolean).join('  ');
 
     if (!options.withHero) {
-        queueImpactDroppedObjects(options.targetLevel, fallen);
+        queueImpactDroppedObjects(options.targetLevel, fallen, options.route || {});
         return emptyImpactDropResult({ message, objectCount, fallenCount });
     }
     return emptyImpactDropResult({ message, objects: fallen, objectCount, fallenCount });
@@ -23753,13 +23787,47 @@ function projectileShipObjectResult(overrides = {}) {
         breakKind: '',
         noDrop: false,
         target: null,
+        where: MIGR_RANDOM,
+        gateText: '',
         debt: null,
         impact: emptyImpactDropResult(),
         ...overrides,
     };
 }
 
-function remoteProjectileShaftTrapAt(obj, x, y, { allowGold = false } = {}) {
+function downGateAt(x, y) {
+    const fromLevel = currentMigrationSourceLevel();
+    for (let stair = game.stairs; stair; stair = stair.next) {
+        if (stair.sx !== x || stair.sy !== y || stair.up) continue;
+        const targetLevel = stair.tolev ? { ...stair.tolev } : null;
+        if (!targetLevel) return null;
+        const isLadder = !!stair.isladder;
+        return {
+            where: isLadder ? MIGR_LADDER_UP
+                : targetLevel.dnum === fromLevel.dnum ? MIGR_STAIRS_UP : MIGR_SSTAIRS,
+            targetLevel,
+            fromLevel,
+            gateText: isLadder ? 'down the ladder' : 'down the stairs',
+            isLadder,
+            stair,
+        };
+    }
+    const trap = boulderFillTrapAt(x, y);
+    if (!trap?.tseen || (trap.ttyp !== HOLE && trap.ttyp !== TRAPDOOR)) return null;
+    if (!canFallThroughLevel(game.u?.uz)) return null;
+    const targetLevel = sitFallTargetLevel(trap);
+    if (!targetLevel) return null;
+    return {
+        where: MIGR_RANDOM,
+        targetLevel,
+        fromLevel,
+        gateText: impactDropGateText(trap),
+        isLadder: false,
+        trap,
+    };
+}
+
+function remoteProjectileDownGateAt(obj, x, y, { allowGold = false } = {}) {
     if (!obj || (!allowGold && shopBillableGold(obj))) return null;
     if (obj === game.u?.uball || obj === game.u?.uchain) return null;
     if (game.u?.ux === x && game.u?.uy === y) return null;
@@ -23767,20 +23835,18 @@ function remoteProjectileShaftTrapAt(obj, x, y, { allowGold = false } = {}) {
         candidate.mx === x && candidate.my === y && !candidate.dead
         && (candidate.mhp == null || candidate.mhp > 0));
     if (mon) return null;
-    const trap = boulderFillTrapAt(x, y);
-    if (!trap?.tseen || (trap.ttyp !== HOLE && trap.ttyp !== TRAPDOOR)) return null;
-    if (!canFallThroughLevel(game.u?.uz)) return null;
-    return trap;
+    return downGateAt(x, y);
 }
 
 function maybeShipRemoteProjectileObject(obj, x, y, messages, options = {}) {
-    const trap = remoteProjectileShaftTrapAt(obj, x, y, options);
-    if (!trap) return projectileShipObjectResult();
-    const target = sitFallTargetLevel(trap);
-    if (!target) return projectileShipObjectResult();
-    const gateText = impactDropGateText(trap);
+    const gate = remoteProjectileDownGateAt(obj, x, y, options);
+    if (!gate) return projectileShipObjectResult();
+    if (isBoulderObject(obj) && gate.where === MIGR_RANDOM && gate.trap)
+        return projectileShipObjectResult();
+    const target = gate.targetLevel;
+    const gateText = impactDropGateText(gate);
     const impactQuantity = impactDropPileQuantity(impactDropCandidatePile(x, y, { missile: obj }));
-    const noDrop = !!rn2(3);
+    const noDrop = gate.where !== MIGR_LADDER_UP && !!rn2(3);
     if (gateText && !game.u?.blind && cansee(x, y)) {
         const subject = floorObjectSubject(obj);
         if (impactQuantity) {
@@ -23794,10 +23860,10 @@ function maybeShipRemoteProjectileObject(obj, x, y, messages, options = {}) {
     }
     if (noDrop) {
         const impact = impactQuantity
-            ? impactDropFloorObjects(x, y, trap, { targetLevel: target, missile: obj, missileImpact: true })
+            ? impactDropFloorObjects(x, y, gate, { targetLevel: target, missile: obj, missileImpact: true, route: gate })
             : emptyImpactDropResult();
         if (impact.message) messages.push(impact.message);
-        return projectileShipObjectResult({ noDrop: true, target, impact });
+        return projectileShipObjectResult({ noDrop: true, target, where: gate.where, gateText, impact });
     }
     const debt = shipObjectShopDebt(obj, x, y);
     if (debt.message) messages.push(debt.message);
@@ -23805,15 +23871,15 @@ function maybeShipRemoteProjectileObject(obj, x, y, messages, options = {}) {
     if (breakKind) {
         messages.push(`You hear a muffled ${shipObjectMuffledBreakResult(breakKind)}.`);
         newsym(x, y);
-        return projectileShipObjectResult({ handled: true, broke: true, breakKind, target, debt });
+        return projectileShipObjectResult({ handled: true, broke: true, breakKind, target, where: gate.where, gateText, debt });
     }
-    queueImpactDroppedObjects(target, [obj]);
+    queueImpactDroppedObjects(target, [obj], gate);
     const impact = impactQuantity
-        ? impactDropFloorObjects(x, y, trap, { targetLevel: target, missile: obj, missileImpact: true })
+        ? impactDropFloorObjects(x, y, gate, { targetLevel: target, missile: obj, missileImpact: true, route: gate })
         : emptyImpactDropResult();
     if (impact.message) messages.push(impact.message);
     newsym(x, y);
-    return projectileShipObjectResult({ handled: true, target, debt, impact });
+    return projectileShipObjectResult({ handled: true, target, where: gate.where, gateText, debt, impact });
 }
 
 function landProjectileObjectWithShopHandling(obj, x, y, options = {}) {
@@ -25514,6 +25580,7 @@ export const __shopBillingTestHooks = {
     finishShopFloorContainerPutSale,
     impactDropFloorObjects,
     deliverImpactDroppedObjects,
+    deliverQueuedImpactDroppedObjectsForTest: deliverQueuedImpactDroppedObjects,
     mergePickedObjectIntoInventory,
     mergePickedObjectIntoShopBill,
     containerTakeoutBillMergeCompatible,
@@ -55069,6 +55136,7 @@ export async function rhack(_cmd) {
                 if (game.u?.uchain) game.level.objects.push(game.u.uchain);
             }
             placeFollowerAfterLevelChange(carriedPet);
+            deliverQueuedImpactDroppedObjects(game.u?.uz);
             vision_reset();
             game._redraw_level_after_more = 1;
             await setMessage(fallDownStairs ? 'You fall down the stairs.' : 'You descend the stairs.', true);
@@ -55108,6 +55176,7 @@ export async function rhack(_cmd) {
             if (game.u?.uchain) game.level.objects.push(game.u.uchain);
         }
         placeFollowerAfterLevelChange(carriedPet);
+        deliverQueuedImpactDroppedObjects(game.u?.uz);
         game._utrack = [];
         vision_reset();
         game._redraw_level_after_more = 1;
@@ -55185,6 +55254,7 @@ export async function rhack(_cmd) {
             placeFollowerAfterLevelChange(follower);
             follower.movement = Math.max(follower.movement || 0, 12);
         }
+        deliverQueuedImpactDroppedObjects(game.u?.uz);
         vision_reset();
         game._redraw_level_after_more = 1;
         game._stairs_arrival_after_more = { fromLevel, silent: !ballAndChain.length };

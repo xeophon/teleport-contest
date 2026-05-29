@@ -6,7 +6,7 @@ import { activateStatueTrap, burnFloorObjectsByFire, earthFloorEffects, finishFo
 import { game, resetGame } from '../js/gstate.js';
 import { pushKey, resetInputState } from '../js/input.js';
 import { enableRngLog, getRngLog, initRng } from '../js/rng.js';
-import { A_CON, A_DEX, A_STR, BILLSZ, CANDLESHOP, CLOUD, CORPSTAT_HISTORIC, COULD_SEE, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, D_CLOSED, D_NODOOR, FOUNTAIN, HOLE, ICE, ICED_POOL, IN_SIGHT, LAVAPOOL, MOAT, NORMAL_SPEED, PIT, POOL, REPAIR_DELAY, ROOM, ROOMOFFSET, SDOOR, SHOPBASE, SHOP_DOOR_COST, SQKY_BOARD, STATUE_TRAP, STONE, STRAT_WAITFORU, TRAPDOOR, TT_WEB, WEB, W_SADDLE } from '../js/const.js';
+import { A_CON, A_DEX, A_STR, BILLSZ, CANDLESHOP, CLOUD, CORPSTAT_HISTORIC, COULD_SEE, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, D_CLOSED, D_NODOOR, FOUNTAIN, HOLE, ICE, ICED_POOL, IN_SIGHT, LADDER, LAVAPOOL, MIGR_LADDER_UP, MIGR_SSTAIRS, MIGR_STAIRS_UP, MOAT, NORMAL_SPEED, PIT, POOL, REPAIR_DELAY, ROOM, ROOMOFFSET, SDOOR, SHOPBASE, SHOP_DOOR_COST, SQKY_BOARD, STAIRS, STATUE_TRAP, STONE, STRAT_WAITFORU, TRAPDOOR, TT_WEB, WEB, W_SADDLE } from '../js/const.js';
 import { currentFruitId, setCurrentFruitName } from '../js/fruit.js';
 import { vision_reset } from '../js/vision.js';
 
@@ -309,6 +309,34 @@ function installSeenRemoteShaft(ttyp = HOLE, x = 7, y = 5) {
     game.level.at = () => ({ roomno: ROOMOFFSET, typ: ROOM });
     markSquareVisible(x, y);
     return game.level.traps[0];
+}
+
+function installRemoteDownStairGate({
+    x = 7,
+    y = 5,
+    isladder = false,
+    targetLevel = { dnum: 0, dlevel: 2 },
+    trap = null,
+} = {}) {
+    game.u.uz = { dnum: 0, dlevel: 1 };
+    game.dungeons = [{ num_dunlevs: 3 }];
+    game.level.flags = {};
+    game.level.traps = trap ? [{ ...trap, tx: x, ty: y, tseen: true }] : [];
+    game.stairs = {
+        sx: x,
+        sy: y,
+        up: false,
+        isladder,
+        tolev: { ...targetLevel },
+        next: null,
+    };
+    game.level.at = (xx, yy) => ({
+        roomno: ROOMOFFSET,
+        typ: xx === x && yy === y ? (isladder ? LADDER : STAIRS) : ROOM,
+        ladder: xx === x && yy === y && isladder ? 2 : 0,
+    });
+    markSquareVisible(x, y);
+    return game.stairs;
 }
 
 function installSeenSqueakyBoardEast() {
@@ -19897,6 +19925,79 @@ test('rock projectile impact cannot knock boulders through a remote shaft', () =
     assert.match(landing.messages.join(' '), /A rock hits another object and falls through the hole\./);
     assert.doesNotMatch(landing.messages.join(' '), /From the impact/);
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(3)', 'rn2(100)']);
+});
+
+test('projectile down stairs uses stair gate before trap and queues reciprocal migration', () => {
+    installNonShopFloorState();
+    installRemoteDownStairGate({ trap: { ttyp: HOLE } });
+    initRng(1);
+    const thrown = { ...dagger(874329), letter: undefined, line: undefined, ox: 7, oy: 5 };
+
+    const landing = shop.landProjectileObjectWithShopHandling(thrown, 7, 5, { breakRoll: 0, silent: true });
+    const queued = queuedImpactDropsFor({ dnum: 0, dlevel: 2 });
+
+    assert.equal(landing.shipObject.handled, true);
+    assert.equal(landing.shipObject.where, MIGR_STAIRS_UP);
+    assert.equal(landing.shipObject.gateText, 'down the stairs');
+    assert.equal(queued.includes(thrown), true);
+    assert.deepEqual(thrown._impactDropMigration?.fromLevel, { dnum: 0, dlevel: 1 });
+    assert.equal(thrown._impactDropMigration?.where, MIGR_STAIRS_UP);
+    assert.match(landing.messages.join(' '), /A dagger falls down the stairs\./);
+    assert.doesNotMatch(landing.messages.join(' '), /through the hole/);
+});
+
+test('projectile down ladder always falls and delivers on reciprocal ladder', () => {
+    installNonShopFloorState();
+    installRemoteDownStairGate({ isladder: true });
+    initRng(4);
+    enableRngLog({ reset: true });
+    const thrown = { ...dagger(874330), letter: undefined, line: undefined, ox: 7, oy: 5 };
+
+    const landing = shop.landProjectileObjectWithShopHandling(thrown, 7, 5, { breakRoll: 0, silent: true });
+
+    assert.equal(landing.shipObject.handled, true);
+    assert.equal(landing.shipObject.noDrop, false);
+    assert.equal(landing.shipObject.where, MIGR_LADDER_UP);
+    assert.match(landing.messages.join(' '), /A dagger falls down the ladder\./);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(100)']);
+
+    game.u.uz = { dnum: 0, dlevel: 2 };
+    game.level.objects = [];
+    game.stairs = {
+        sx: 12,
+        sy: 6,
+        up: true,
+        isladder: true,
+        tolev: { dnum: 0, dlevel: 1 },
+        next: null,
+    };
+    game.level.at = (x, y) => ({
+        roomno: 0,
+        typ: x === 12 && y === 6 ? LADDER : ROOM,
+        ladder: x === 12 && y === 6 ? 1 : 0,
+    });
+
+    shop.deliverQueuedImpactDroppedObjectsForTest({ dnum: 0, dlevel: 2 });
+
+    assert.equal(game.level.objects.includes(thrown), true);
+    assert.equal(thrown.ox, 12);
+    assert.equal(thrown.oy, 6);
+    assert.equal(thrown._impactDropMigration, undefined);
+});
+
+test('branch stairs queue special-stair migration metadata', () => {
+    installNonShopFloorState();
+    installRemoteDownStairGate({ targetLevel: { dnum: 1, dlevel: 1 } });
+    initRng(1);
+    const thrown = { ...dagger(874331), letter: undefined, line: undefined, ox: 7, oy: 5 };
+
+    const landing = shop.landProjectileObjectWithShopHandling(thrown, 7, 5, { breakRoll: 0, silent: true });
+
+    assert.equal(landing.shipObject.handled, true);
+    assert.equal(landing.shipObject.where, MIGR_SSTAIRS);
+    assert.equal(queuedImpactDropsFor({ dnum: 1, dlevel: 1 }).includes(thrown), true);
+    assert.equal(thrown._impactDropMigration?.where, MIGR_SSTAIRS);
+    assert.match(landing.messages.join(' '), /A dagger falls down the stairs\./);
 });
 
 test('monster-thrown dagger falling through remote seen hole ships before floor effects', () => {
