@@ -24500,6 +24500,13 @@ function markObjectTreeShopBillsUsedUp(obj, seen = new Set()) {
     return markObjectShopBillUsedUp(obj) || marked;
 }
 
+function polymorphShudderOdds(obj) {
+    let odds = obj?.cls === 'wand' || obj?.cursed ? 3 : obj?.blessed ? 12 : 8;
+    const quantity = Math.max(1, Math.trunc(Number(obj?.quan || 1)));
+    if (quantity > 4) odds = Math.trunc(odds / 2);
+    return Math.max(1, odds);
+}
+
 function useUpPolymorphShudderFloorObject(obj, x, y) {
     if (!obj) return null;
     const usedObj = splitFloorObjectForUseUp(obj, 1);
@@ -44531,16 +44538,15 @@ export async function rhack(_cmd) {
         const removeTargets = new Set();
         const replacements = [];
         const alterationMessages = [];
+        let didObjectShudder = false;
         for (const obj of [...targetObjects].reverse()) {
-            if ((obj.cls === 'wand' || obj.cls === 'potion' || obj.cls === 'spellbook') && obj.kind === 'polymorph') {
-                continue;
-            }
+            if (polymorphReplacementDisallowed(obj)) continue;
             if (rn2(100) < (obj.artifact ? 95 : 5)) {
                 continue;
             }
             game.u.uconduct ??= {};
             game.u.uconduct.polypiles = Math.max(0, Math.trunc(Number(game.u.uconduct.polypiles || 0))) + 1;
-            const shudderOdds = obj.cls === 'wand' || obj.cursed ? 3 : obj.blessed ? 12 : 8;
+            const shudderOdds = polymorphShudderOdds(obj);
             if (!rn2(shudderOdds)) {
                 rn2(45 + (game.u?.uluck || 0));
                 rn2(100);
@@ -44549,6 +44555,7 @@ export async function rhack(_cmd) {
                     game._polymorph_wand_learned = 1;
                 }
                 useUpPolymorphShudderFloorObject(obj, x, y);
+                didObjectShudder = true;
                 continue;
             }
             const roll = rnd(1000);
@@ -44579,7 +44586,9 @@ export async function rhack(_cmd) {
         game.level.objects = (game.level?.objects || []).filter(obj => !removeTargets.has(obj));
         game.level.objects.push(...replacements);
         newsym(x, y);
-        await setMessage(['You feel shuddering vibrations.', ...alterationMessages].join('  '));
+        const messages = didObjectShudder ? ['You feel shuddering vibrations.'] : [];
+        messages.push(...alterationMessages);
+        await setMessage(messages.join('  '));
         game.context.move = 1;
         return;
     }

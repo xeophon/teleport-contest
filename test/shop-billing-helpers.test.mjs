@@ -6900,6 +6900,46 @@ test('floor polymorph shudder bills only one unit from a shop-floor stack', asyn
         String(bill.bo_id) === String(entry.bo_id) && bill.price === expectedPrice), true);
 });
 
+test('floor polymorph shudder halves odds for large stacks like C', async () => {
+    const { shkp } = installCommandShopState();
+    initRng(9);
+    const wand = polymorphWand(32009, 'w');
+    const stack = { ...foodRationStack(32010, 5), ox: 5, oy: 4, letter: undefined, line: undefined };
+    game.inventory = [wand];
+    game.level.objects = [stack];
+    const expectedPrice = shop.shopItemPrice({ ...stack, quan: 1 }, 5, 4);
+
+    await rhack('z');
+    await rhack('w');
+    await rhack('k');
+
+    assert.equal(game.level.objects.includes(stack), true);
+    assert.equal(stack.quan, 4);
+    assert.equal(shkp.billct, 1);
+    const entry = shkp.bill[0];
+    assert.equal(entry.useup, true);
+    assert.equal(shop.shopBillEntryTotal(entry), expectedPrice);
+    assert.match(game._pending_message, /You feel shuddering vibrations\./);
+});
+
+test('floor wand of polymorph is unpolyable by identity', async () => {
+    installCommandShopState();
+    initRng(1);
+    const wand = polymorphWand(32011, 'w');
+    const floorWand = { ...polymorphWand(32012), ox: 5, oy: 4, letter: undefined, line: undefined };
+    game.inventory = [wand];
+    game.level.objects = [floorWand];
+
+    await rhack('z');
+    await rhack('w');
+    await rhack('k');
+
+    assert.equal(game.level.objects.length, 1);
+    assert.equal(game.level.objects[0], floorWand);
+    assert.equal(game.u.uconduct?.polypiles || 0, 0);
+    assert.doesNotMatch(game._pending_message || '', /You feel shuddering vibrations\./);
+});
+
 test('successful floor polymorph of shop stock angers shopkeeper without immediate debt', async () => {
     const { shkp } = installCommandShopState();
     initRng(1);
@@ -6929,6 +6969,7 @@ test('successful floor polymorph of shop stock angers shopkeeper without immedia
     assert.equal(shkp.following, 1);
     assert.equal(game.u.uconduct.polypiles, 1);
     assert.match(game._pending_message, /Izchak gets angry!/);
+    assert.doesNotMatch(game._pending_message, /You feel shuddering vibrations\./);
 });
 
 test('potion alchemy mixes healing and speed into diluted extra healing', async () => {
