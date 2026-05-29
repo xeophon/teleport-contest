@@ -64,7 +64,6 @@ A parallel monster-thrown audit selected `drop_throw(ohit)` hit-state fallout:
 
 ## Remaining Gaps
 
-- Throw prompt `?` still does not fall back to downplayed inventory when there are no suggested throw items.
 - Inventory-menu count return paths are not implemented for throw selection.
 - Prompt-count backspace editing is not implemented.
 - Top-level throw shot limits remain separate from this prompt-count slice.

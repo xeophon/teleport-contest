@@ -49,8 +49,8 @@ A parallel dragon/venom audit split off two smaller registry follow-ups:
 
 A parallel throw `getobj()` audit selected remaining prompt/menu behavior:
 
-- C `?` falls back to downplayed inventory when there are no suggested throw items, `*` can return a counted menu selection, and prompt backspace edits the typed count: `nethack-c/upstream/src/invent.c:1963`, `nethack-c/upstream/src/invent.c:1979`, `nethack-c/upstream/src/cmd.c:5055`.
-- JS direct throw prompt counts are covered, but `?` downplayed fallback, `*` menu-count return, and prompt-count backspace remain open.
+- C `*` can return a counted menu selection, and prompt backspace edits the typed count: `nethack-c/upstream/src/invent.c:1979`, `nethack-c/upstream/src/cmd.c:5055`.
+- JS direct throw prompt counts and `?` downplayed fallback are covered, but `*` menu-count return and prompt-count backspace remain open.
 
 A parallel kicked-object audit confirmed ordinary adjacent floor-object `#kick` is absent:
 
@@ -72,5 +72,5 @@ A parallel monster-thrown audit selected `drop_throw(ohit)` hit-state fallout:
 - Generic armor/clothing object ranges remain open.
 - Dragon scale/mail zero-prob uniform ranges need dedicated coverage.
 - Venom plural/range aliases and wizard-mode `spe=1` policy remain separate.
-- Throw menu-count/downplayed-fallback/backspace behavior remains open reusable `getobj()` work.
+- Throw menu-count/backspace behavior remains open reusable `getobj()` work.
 - Kicked floor-object down-gate shipping, monster-thrown `drop_throw(ohit)`, and floor-statue saved traits remain separate slices.

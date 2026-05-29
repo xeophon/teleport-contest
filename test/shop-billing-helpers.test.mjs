@@ -20932,6 +20932,65 @@ test('wet worn towel still offers a call for unknown broken potion vapor', () =>
     assert.equal(game._call_potion_appearance, 'magenta');
 });
 
+test('throw question menu falls back to downplayed inventory when no suggestions exist', async () => {
+    installNonShopFloorState();
+    const ration = foodRation(876700, 'f');
+    const scroll = scrollOfCharging(876701, 's');
+    game.inventory = [ration, scroll];
+
+    await rhack('t');
+
+    assert.equal(game._command_mode, 'throwObject');
+    assert.match(game._pending_message, /What do you want to throw\? \[\*\]/);
+
+    await rhack('?');
+
+    assert.equal(game._command_mode, 'throwInventory');
+    let menuText = (game._overlay_lines || []).map(row => row[2]).join('\n');
+    assert.match(menuText, /f - a food ration/);
+    assert.match(menuText, /s - a scroll of charging/);
+    assert.doesNotMatch(menuText, /You are not carrying anything/);
+
+    await rhack('*');
+
+    assert.equal(game._command_mode, 'throwInventory');
+    menuText = (game._overlay_lines || []).map(row => row[2]).join('\n');
+    assert.match(menuText, /f - a food ration/);
+    assert.match(menuText, /s - a scroll of charging/);
+});
+
+test('throw question menu keeps suggested subset when suggestions exist', async () => {
+    installNonShopFloorState();
+    const blade = dagger(876702, 'd');
+    const ration = foodRation(876703, 'f');
+    game.inventory = [blade, ration];
+
+    await rhack('t');
+
+    assert.equal(game._command_mode, 'throwObject');
+    assert.match(game._pending_message, /What do you want to throw\? \[d or \?\*\]/);
+
+    await rhack('?');
+
+    assert.equal(game._command_mode, 'throwInventory');
+    let menuText = (game._overlay_lines || []).map(row => row[2]).join('\n');
+    assert.match(menuText, /d - a dagger/);
+    assert.doesNotMatch(menuText, /f - a food ration/);
+
+    await rhack('*');
+
+    menuText = (game._overlay_lines || []).map(row => row[2]).join('\n');
+    assert.match(menuText, /d - a dagger/);
+    assert.doesNotMatch(menuText, /f - a food ration/);
+
+    await rhack(' ');
+    await rhack('*');
+
+    menuText = (game._overlay_lines || []).map(row => row[2]).join('\n');
+    assert.match(menuText, /d - a dagger/);
+    assert.match(menuText, /f - a food ration/);
+});
+
 test('throw prompt count digit is not treated as an inventory letter', async () => {
     installNonShopFloorState();
     const darts = dartStack(876040, 'd', 3);

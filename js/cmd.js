@@ -8813,6 +8813,16 @@ function isThrowSuggestItem(item) {
         || item.cls === 'venom' || item.otyp === FLINT_STONE;
 }
 
+function isThrowDownplayItem(item) {
+    return !!item?.letter && !isThrowSuggestItem(item);
+}
+
+function throwInventoryFilterMatch() {
+    if (game._throw_inventory_filter === 'suggest') return isThrowSuggestItem;
+    if (game._throw_inventory_filter === 'downplay') return isThrowDownplayItem;
+    return null;
+}
+
 function updateWornDisplacement() {
     game._has_displacement = (game.inventory || []).some(item => {
         const name = String(item.kind || item.line || '').toLowerCase();
@@ -54426,8 +54436,9 @@ export async function rhack(_cmd) {
         }
         if (ch === '?') {
             game._throw_inventory_page = 0;
-            showInventoryOverlay(0, false, isThrowSuggestItem);
-            game._throw_inventory_filter = 'suggest';
+            const suggestLetters = inventoryLetters(isThrowSuggestItem);
+            game._throw_inventory_filter = suggestLetters ? 'suggest' : 'downplay';
+            showInventoryOverlay(0, false, throwInventoryFilterMatch());
             game._command_mode = 'throwInventory';
             game._throw_count_text = '';
             game._throw_count = null;
@@ -54482,13 +54493,12 @@ export async function rhack(_cmd) {
     }
 
     if (game._command_mode === 'throwInventory') {
-        if (ch === '*' && game._throw_inventory_filter === 'suggest') return;
+        if (ch === '*' && game._throw_inventory_filter) return;
         if (ch === ' ') {
             const page = (game._throw_inventory_page || 0) + 1;
             if (page < (game._inventory_overlay_total_pages || 1)) {
                 game._throw_inventory_page = page;
-                const match = game._throw_inventory_filter === 'suggest' ? isThrowSuggestItem : null;
-                showInventoryOverlay(page, false, match);
+                showInventoryOverlay(page, false, throwInventoryFilterMatch());
                 return;
             }
             game._throw_inventory_page = 0;
