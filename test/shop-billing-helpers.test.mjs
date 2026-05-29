@@ -6,8 +6,9 @@ import { activateStatueTrap, burnFloorObjectsByFire, earthFloorEffects, finishFo
 import { game, resetGame } from '../js/gstate.js';
 import { pushKey, resetInputState } from '../js/input.js';
 import { enableRngLog, getRngLog, initRng } from '../js/rng.js';
-import { A_CON, A_DEX, A_STR, BILLSZ, CANDLESHOP, CLOUD, CORPSTAT_HISTORIC, COULD_SEE, DB_EAST, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, D_CLOSED, D_NODOOR, FOUNTAIN, HOLE, ICE, ICED_POOL, IN_SIGHT, LAVAPOOL, MOAT, NORMAL_SPEED, PIT, POOL, REPAIR_DELAY, ROOM, ROOMOFFSET, SDOOR, SHOPBASE, SHOP_DOOR_COST, SQKY_BOARD, STATUE_TRAP, STONE, STRAT_WAITFORU, TRAPDOOR, TT_WEB, WEB, W_SADDLE } from '../js/const.js';
+import { A_CON, A_DEX, A_STR, BILLSZ, CANDLESHOP, CLOUD, CORPSTAT_HISTORIC, COULD_SEE, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, D_CLOSED, D_NODOOR, FOUNTAIN, HOLE, ICE, ICED_POOL, IN_SIGHT, LAVAPOOL, MOAT, NORMAL_SPEED, PIT, POOL, REPAIR_DELAY, ROOM, ROOMOFFSET, SDOOR, SHOPBASE, SHOP_DOOR_COST, SQKY_BOARD, STATUE_TRAP, STONE, STRAT_WAITFORU, TRAPDOOR, TT_WEB, WEB, W_SADDLE } from '../js/const.js';
 import { currentFruitId, setCurrentFruitName } from '../js/fruit.js';
+import { vision_reset } from '../js/vision.js';
 
 const BRASS_LANTERN = 226;
 const OIL_LAMP = 227;
@@ -269,6 +270,26 @@ function installNonShopFloorState() {
     game.level.flags = {};
     game.level.at = () => ({ roomno: 0, typ: ROOM });
     return state;
+}
+
+function installDrawbridgeMoveState(targetUnder, { oldUnder = null } = {}) {
+    installNonShopFloorState();
+    const cells = new Map();
+    const key = (x, y) => `${x},${y}`;
+    const oldLoc = oldUnder == null
+        ? { roomno: 0, typ: ROOM, lit: true }
+        : { roomno: 0, typ: DRAWBRIDGE_UP, flags: DB_EAST | oldUnder, lit: true };
+    const targetLoc = { roomno: 0, typ: DRAWBRIDGE_UP, flags: DB_EAST | targetUnder, lit: true };
+    cells.set(key(5, 5), oldLoc);
+    cells.set(key(6, 5), targetLoc);
+    cells.set(key(7, 5), { roomno: 0, typ: ROOM, lit: true });
+    game.u.ux = 5;
+    game.u.uy = 5;
+    game.u.uhp = 30;
+    game.u.uhpmax = 30;
+    game.level.at = (x, y) => cells.get(key(x, y)) || { roomno: 0, typ: ROOM, lit: true };
+    vision_reset();
+    return { targetLoc };
 }
 
 function installSeenHoleAtHero() {
@@ -8514,6 +8535,63 @@ test('manual instrument tune normalizes notes and opens the stronghold drawbridg
     assert.equal(game.u.uevent.uopened_dbridge, 1);
     assert.equal(bridge.typ, DRAWBRIDGE_DOWN);
     assert.equal(wall.typ, DOOR);
+});
+
+test('movement treats raised drawbridge over floor as dry ground', async () => {
+    installDrawbridgeMoveState(DB_FLOOR);
+
+    await rhack('l');
+
+    assert.equal(game.u.ux, 6);
+    assert.equal(game.u.uy, 5);
+    assert.equal(game.context.move, 1);
+    assert.doesNotMatch(game._pending_message || '', /avoid stepping|pool of water|molten/);
+});
+
+test('movement treats raised drawbridge over ice as ice, not water', async () => {
+    installDrawbridgeMoveState(DB_ICE);
+
+    await rhack('l');
+
+    assert.equal(game.u.ux, 6);
+    assert.equal(game.u.uy, 5);
+    assert.equal(game.context.move, 1);
+    assert.doesNotMatch(game._pending_message || '', /avoid stepping|pool of water|molten/);
+});
+
+test('movement avoids raised drawbridge over lava as molten lava', async () => {
+    installDrawbridgeMoveState(DB_LAVA);
+
+    await rhack('l');
+
+    assert.equal(game.u.ux, 5);
+    assert.equal(game.u.uy, 5);
+    assert.equal(game.context.move, 0);
+    assert.match(game._pending_message, /You avoid stepping into the molten lava\./);
+});
+
+test('m-prefix into raised drawbridge over lava uses lava fallout', async () => {
+    installDrawbridgeMoveState(DB_LAVA);
+
+    await rhack('m');
+    await rhack('l');
+
+    assert.equal(game.u.ux, 6);
+    assert.equal(game.u.uy, 5);
+    assert.equal(game._command_mode, 'lavaDeathMore');
+    assert.equal(game._death_cause, 'burned by molten lava');
+    assert.match(game._pending_message, /You fall into the molten lava!  You burn to a crisp\.\.\./);
+});
+
+test('movement compares raised drawbridge under-terrain transitions', async () => {
+    installDrawbridgeMoveState(DB_MOAT, { oldUnder: DB_FLOOR });
+
+    await rhack('l');
+
+    assert.equal(game.u.ux, 5);
+    assert.equal(game.u.uy, 5);
+    assert.equal(game.context.move, 0);
+    assert.match(game._pending_message, /You avoid stepping into the moat\./);
 });
 
 test('known passtune prompt can cancel or play the castle tune', async () => {

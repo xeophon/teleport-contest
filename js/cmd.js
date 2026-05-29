@@ -3798,6 +3798,40 @@ function drawbridgeUnder(loc) {
     return (loc?.flags || 0) & DB_UNDER;
 }
 
+function movementSurfaceTerrain(loc) {
+    if (!loc) return undefined;
+    if (loc.typ !== DRAWBRIDGE_UP) return loc.typ;
+    switch (drawbridgeUnder(loc)) {
+    case DB_LAVA:
+        return LAVAPOOL;
+    case DB_ICE:
+        return ICE;
+    case DB_FLOOR:
+        return ROOM;
+    case DB_MOAT:
+    default:
+        return MOAT;
+    }
+}
+
+function movementIsPoolAt(x, y, loc = game.level?.at(x, y)) {
+    if (!loc) return false;
+    if (loc.typ === POOL || loc.typ === MOAT || loc.typ === WATER) return true;
+    return loc.typ === DRAWBRIDGE_UP
+        && drawbridgeUnder(loc) === DB_MOAT
+        && currentSpecialLevelName() !== 'juiblex';
+}
+
+function movementIsLavaAt(x, y, loc = game.level?.at(x, y)) {
+    if (!loc) return false;
+    return loc.typ === LAVAPOOL || loc.typ === LAVAWALL
+        || (loc.typ === DRAWBRIDGE_UP && drawbridgeUnder(loc) === DB_LAVA);
+}
+
+function movementIsLiquidAt(x, y, loc = game.level?.at(x, y)) {
+    return movementIsPoolAt(x, y, loc) || movementIsLavaAt(x, y, loc);
+}
+
 function earthquakeIsMoatAt(x, y) {
     const loc = game.level?.at(x, y);
     if (!loc || currentSpecialLevelName() === 'juiblex') return false;
@@ -36671,6 +36705,8 @@ async function moveHero(dx, dy) {
     game._move_nopick_prefix = 0;
     game._request_menu_prefix = 0;
     const targetTyp = target?.typ;
+    const targetMoveTyp = movementSurfaceTerrain(target);
+    const oldMoveTyp = movementSurfaceTerrain(oldLoc);
     const doorlessTarget = targetTyp === DOOR && (target.doormask === D_NODOOR || target.doormask === D_BROKEN);
     const afterDoor = doorlessTarget ? game.level?.at(newx + dx, newy + dy) : null;
     if (game._doorway_message_run && game._running_continuation && doorlessTarget && oldLoc?.typ === CORR && afterDoor?.typ === ROOM) {
@@ -36680,7 +36716,7 @@ async function moveHero(dx, dy) {
         game.context.move = 0;
         return;
     }
-    const liquidTarget = IS_POOL(targetTyp) || targetTyp === LAVAPOOL || targetTyp === LAVAWALL;
+    const liquidTarget = movementIsLiquidAt(newx, newy, target);
     const targetBoulder = game.level?.objects?.find(obj =>
         !obj.transientProjectile && obj.ox === newx && obj.oy === newy && obj.otyp === BOULDER);
 
@@ -37563,8 +37599,8 @@ async function moveHero(dx, dy) {
     }
     game._suppress_obstructed_message_once = 0;
 
-    if (liquidTarget && oldLoc?.typ !== targetTyp && !nopick) {
-        const liquidDefault = targetTyp === LAVAPOOL || targetTyp === LAVAWALL ? 'lava' : 'water';
+    if (liquidTarget && oldMoveTyp !== targetMoveTyp && !nopick) {
+        const liquidDefault = targetMoveTyp === LAVAPOOL || targetMoveTyp === LAVAWALL ? 'lava' : 'water';
         const liquid = (game.u?._statusSuffix || '').includes('Hallu')
             ? HALLUCINATED_LIQUIDS[rn2_on_display_rng(HALLUCINATED_LIQUIDS.length + 1)] || liquidDefault
             : liquidDefault;
@@ -37573,16 +37609,16 @@ async function moveHero(dx, dy) {
         const juiblex = game.specialLevels?.find(level => level.name === 'juiblex');
         const onJuiblexLevel = juiblex && game.u?.uz?.dnum === juiblex.dnum && game.u?.uz?.dlevel === juiblex.dlevel;
         const moatName = onMedusaLevel ? 'shallow sea' : onJuiblexLevel ? 'swamp' : 'moat';
-        const msg = targetTyp === WATER
+        const msg = targetMoveTyp === WATER
             ? `You avoid stepping into the wall of ${liquid}.`
-            : targetTyp === LAVAWALL
+            : targetMoveTyp === LAVAWALL
                 ? `You avoid stepping into the wall of ${liquid}.`
-                : targetTyp === LAVAPOOL
+                : targetMoveTyp === LAVAPOOL
                     ? `You avoid stepping into the molten ${liquid}.`
-                    : targetTyp === MOAT
+                    : targetMoveTyp === MOAT
                         ? `You avoid stepping into the ${moatName}.`
                         : `You avoid stepping into the pool of ${liquid}.`;
-        const showSwimTip = targetTyp !== WATER && targetTyp !== LAVAWALL && targetTyp !== MOAT && !game._swim_tip_shown;
+        const showSwimTip = targetMoveTyp !== WATER && targetMoveTyp !== LAVAWALL && targetMoveTyp !== MOAT && !game._swim_tip_shown;
         await setMessage(msg, showSwimTip);
         if (showSwimTip) {
             game._topline_after_more = "(Tip: use 'm' prefix to step in if you really want to.)";
@@ -37752,9 +37788,9 @@ async function moveHero(dx, dy) {
     for (const guard of (game.level?.monsters || []).filter(mon => mon.isgd && mon._vault_escort_active && mon.mx))
         newsym(guard.mx, guard.my);
     const steppedTrap = game.level?.traps?.find(trap => trap.tx === newx && trap.ty === newy);
-    if (liquidTarget && nopick && (targetTyp === LAVAPOOL || targetTyp === LAVAWALL)) {
+    if (liquidTarget && nopick && (targetMoveTyp === LAVAPOOL || targetMoveTyp === LAVAWALL)) {
         d(6, 6);
-        await setMessage(targetTyp === LAVAWALL
+        await setMessage(targetMoveTyp === LAVAWALL
             ? 'You fall into the wall of lava!  You burn to a crisp...'
             : 'You fall into the molten lava!  You burn to a crisp...', true);
         game._death_cause = 'burned by molten lava';
@@ -37763,7 +37799,7 @@ async function moveHero(dx, dy) {
         game._pending_time_passed = 0;
         return;
     }
-    if (liquidTarget && nopick && targetTyp !== LAVAPOOL && targetTyp !== LAVAWALL) {
+    if (liquidTarget && nopick && targetMoveTyp !== LAVAPOOL && targetMoveTyp !== LAVAWALL) {
         const dirs = LANDING_DIRS.map((_, i) => i);
         for (let i = dirs.length; i > 0; i--) {
             const j = rn2(i);
@@ -37775,15 +37811,16 @@ async function moveHero(dx, dy) {
             const x = newx + LANDING_DIRS[idx].dx;
             const y = newy + LANDING_DIRS[idx].dy;
             const loc = game.level?.at(x, y);
-            if (!loc || IS_OBSTRUCTED(loc.typ) || IS_POOL(loc.typ)) continue;
+            const locMoveTyp = movementSurfaceTerrain(loc);
+            if (!loc || IS_OBSTRUCTED(locMoveTyp) || movementIsLiquidAt(x, y, loc)) continue;
             if ((game.level?.monsters || []).some(mon => mon.mx === x && mon.my === y)) continue;
             game._relocate_after_more = { fromX: newx, fromY: newy, x, y };
-            game._topline_after_more = targetTyp === WATER
+            game._topline_after_more = targetMoveTyp === WATER
                 ? 'Pheew!  That was close.'
                 : 'You try to crawl out of the water.  Pheew!  That was close.';
             break;
         }
-        const msg = targetTyp === WATER
+        const msg = targetMoveTyp === WATER
             ? 'You plunge into the wall of water!  You try to crawl out of the water.'
             : 'You fall into the pool of water!  You sink like a rock.';
         await setMessage(msg, true);
