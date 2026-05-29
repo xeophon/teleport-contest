@@ -1232,6 +1232,9 @@ const SHIELD_OF_SHOCK_RESISTANCE = 10207;
 const ELVEN_SHIELD = 10208;
 const URUK_HAI_SHIELD = 10209;
 const ORCISH_SHIELD = 10210;
+const FEDORA = 10078;
+const CORNUTHAUM = 10211;
+const DUNCE_CAP = 10212;
 const LARGE_SHIELD = 10047;
 const DWARVISH_ROUNDSHIELD = 10106;
 const PLATE_MAIL = 10037;
@@ -1509,6 +1512,9 @@ const WISH_BASE_OBJECTS = new Map([
     ['grappling hook', { otyp: GRAPPLING_HOOK, cls: 'tool', glyph: '(', kind: 'grappling hook', actualKind: 'grappling hook' }],
     ['plate mail', { otyp: PLATE_MAIL, cls: 'armor', glyph: '[', kind: 'plate mail', actualKind: 'plate mail' }],
     ['helmet', { otyp: HELMET, cls: 'armor', glyph: '[', kind: 'helmet', actualKind: 'helmet', appearance: 'plumed helmet', known: false }],
+    ['fedora', { otyp: FEDORA, cls: 'armor', glyph: '[', kind: 'fedora', actualKind: 'fedora', owt: 3 }],
+    ['cornuthaum', { otyp: CORNUTHAUM, cls: 'armor', glyph: '[', kind: 'cornuthaum', actualKind: 'cornuthaum', appearance: 'conical hat', known: false, owt: 4 }],
+    ['dunce cap', { otyp: DUNCE_CAP, cls: 'armor', glyph: '[', kind: 'dunce cap', actualKind: 'dunce cap', appearance: 'conical hat', known: false, owt: 4 }],
     ['ring mail', { otyp: RING_MAIL, cls: 'armor', glyph: '[', kind: 'ring mail', actualKind: 'ring mail' }],
     ['studded leather armor', { otyp: STUDDED_LEATHER_ARMOR, cls: 'armor', glyph: '[', kind: 'studded leather armor', actualKind: 'studded leather armor' }],
     ['leather armor', { otyp: LEATHER_ARMOR, cls: 'armor', glyph: '[', kind: 'leather armor', actualKind: 'leather armor' }],
@@ -1589,7 +1595,9 @@ const WISH_BASE_NAMEDESC_BOUNDS = new Map([
     ['meat ring', 1], ['tin opener', 36], ['beartrap', 1],
     ['land mine', 1], ['bag of tricks', 21], ['tooled horn', 6],
     ['grappling hook', 6],
-    ['plate mail', 41], ['helmet', 11], ['helm of telepathy', 5],
+    ['plate mail', 41], ['helmet', 11],
+    ['fedora', 1], ['cornuthaum', 6], ['dunce cap', 6],
+    ['helm of telepathy', 5],
     ['ring mail', 67], ['studded leather armor', 67],
     ['leather armor', 76], ['elven mithril-coat', 16],
     ['small shield', 7], ['shield of drain resistance', 13],
@@ -1734,6 +1742,11 @@ const WISH_OBJECT_RANGES = new Map([
         ['large shield', 4],
         ['dwarvish roundshield', 3],
         ['shield of reflection', 7],
+    ]],
+    ['hat', [
+        ['fedora', 0],
+        ['cornuthaum', 5],
+        ['dunce cap', 5],
     ]],
     ['gloves', [
         ['leather gloves', 15],
@@ -4939,6 +4952,8 @@ const ARMOR_AC_BONUS = {
     'elven leather helm': 1,
     'dwarvish iron helm': 2,
     fedora: 0,
+    cornuthaum: 0,
+    'dunce cap': 0,
     'small shield': 1,
     'large shield': 2,
     'elven shield': 2,
@@ -5175,7 +5190,7 @@ function recordKnownRingDiscovery(kind, item = null) {
 const MAGICAL_ARMOR_KINDS = new Set([
     'cloak of displacement', 'cloak of invisibility', 'cloak of magic resistance',
     'cloak of protection', 'helm of brilliance', 'helm of caution',
-    'helm of opposite alignment', 'helm of telepathy', 'dunce cap',
+    'helm of opposite alignment', 'helm of telepathy', 'cornuthaum', 'dunce cap',
     'gauntlets of dexterity', 'gauntlets of fumbling', 'gauntlets of power',
     'jumping boots', 'fumble boots', 'levitation boots', 'speed boots',
     'water walking boots', 'shield of drain resistance',
@@ -5263,6 +5278,8 @@ const OBJECT_WEIGHTS = {
     'elven leather helm': 3,
     'elven shield': 40,
     'fedora': 3,
+    'cornuthaum': 4,
+    'dunce cap': 4,
     'gray dragon scale mail': 40,
     'gold dragon scale mail': 40,
     'silver dragon scale mail': 40,
@@ -29346,6 +29363,7 @@ const WISH_NAME_ALIASES = new Map([
     ['reflection shield', 'shield of reflection'],
     ['drain resistance shield', 'shield of drain resistance'],
     ['shock resistance shield', 'shield of shock resistance'],
+    ['hats', 'hat'],
     ['elvish shield', 'elven shield'],
     ['elfin shield', 'elven shield'],
     ['dwarven roundshield', 'dwarvish roundshield'],
@@ -29436,6 +29454,10 @@ const WISH_NAMEDESC_RANGES = new Map([
         ['small shield', 7],
         ['shield of drain resistance', 13],
         ['shield of shock resistance', 13],
+    ]],
+    ['conical hat', [
+        ['cornuthaum', 6],
+        ['dunce cap', 6],
     ]],
 ]);
 

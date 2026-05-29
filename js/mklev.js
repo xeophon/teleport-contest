@@ -123,6 +123,8 @@ const SHIELD_OF_SHOCK_RESISTANCE = 10207;
 const ELVEN_SHIELD = 10208;
 const URUK_HAI_SHIELD = 10209;
 const ORCISH_SHIELD = 10210;
+const CORNUTHAUM = 10211;
+const DUNCE_CAP = 10212;
 const RIN_LEVITATION = 10028;
 const ORCISH_DAGGER = 10020;
 const SCIMITAR = 10021;
@@ -1470,7 +1472,7 @@ const SPECIFIC_ARMOR = new Set([
     CLOAK_OF_INVISIBILITY, CLOAK_OF_MAGIC_RESISTANCE, CLOAK_OF_DISPLACEMENT,
     SHIELD_OF_REFLECTION, GAUNTLETS_OF_FUMBLING, GAUNTLETS_OF_POWER,
     GAUNTLETS_OF_DEXTERITY, HELM_OF_BRILLIANCE,
-    LEATHER_JACKET, FEDORA, ELVEN_MITHRIL_COAT,
+    LEATHER_JACKET, FEDORA, CORNUTHAUM, DUNCE_CAP, ELVEN_MITHRIL_COAT,
     IRON_SHOES, DWARVISH_ROUNDSHIELD, DWARVISH_IRON_HELM, DWARVISH_MITHRIL_COAT,
     WATER_WALKING_BOOTS, JUMPING_BOOTS, ELVEN_BOOTS, KICKING_BOOTS,
     FUMBLE_BOOTS, LEVITATION_BOOTS,
@@ -1487,6 +1489,8 @@ const SPECIFIC_ARMOR_COLORS = new Map([
     [ORCISH_HELM, CLR_BLACK],
     [DWARVISH_IRON_HELM, CLR_CYAN],
     [FEDORA, CLR_BROWN],
+    [CORNUTHAUM, CLR_BLUE],
+    [DUNCE_CAP, CLR_BLUE],
     [MUMMY_WRAPPING, CLR_GRAY],
     [ELVEN_MITHRIL_COAT, CLR_GRAY],
     [ELVEN_CLOAK, CLR_BLACK],
@@ -1564,6 +1568,7 @@ const ARMOR_AC_BONUS = new Map([
     [CLOAK_OF_PROTECTION, 3], [CLOAK_OF_INVISIBILITY, 1],
     [CLOAK_OF_MAGIC_RESISTANCE, 1], [CLOAK_OF_DISPLACEMENT, 1],
     [SHIELD_OF_REFLECTION, 2], [LEATHER_JACKET, 1], [FEDORA, 0],
+    [CORNUTHAUM, 0], [DUNCE_CAP, 0],
     [GRAY_DRAGON_SCALE_MAIL, 9], [GOLD_DRAGON_SCALE_MAIL, 9],
     [SILVER_DRAGON_SCALE_MAIL, 9], [RED_DRAGON_SCALE_MAIL, 9],
     [WHITE_DRAGON_SCALE_MAIL, 9], [ORANGE_DRAGON_SCALE_MAIL, 9],
@@ -6018,6 +6023,8 @@ function mongets(otyp, erodes = true) {
     else if (otyp === HIGH_BOOTS) Object.assign(otmp, { cls: 'armor', kind: 'high boots' });
     else if (otyp === LEATHER_JACKET) Object.assign(otmp, { cls: 'armor', kind: 'leather jacket' });
     else if (otyp === FEDORA) Object.assign(otmp, { cls: 'armor', kind: 'fedora' });
+    else if (otyp === CORNUTHAUM) Object.assign(otmp, { cls: 'armor', kind: 'cornuthaum', appearance: 'conical hat' });
+    else if (otyp === DUNCE_CAP) Object.assign(otmp, { cls: 'armor', kind: 'dunce cap', appearance: 'conical hat' });
     else if (otyp === ORCISH_DAGGER) Object.assign(otmp, { cls: 'weapon', kind: 'orcish dagger' });
     else if (otyp === SCIMITAR) Object.assign(otmp, { cls: 'weapon', kind: 'scimitar' });
     else if (otyp === DAGGER) Object.assign(otmp, { cls: 'weapon', kind: 'dagger' });

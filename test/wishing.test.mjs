@@ -77,6 +77,9 @@ const ORCISH_SHIELD = 10210;
 const LARGE_SHIELD = 10047;
 const DWARVISH_ROUNDSHIELD = 10106;
 const SHIELD_OF_REFLECTION = 10074;
+const FEDORA = 10078;
+const CORNUTHAUM = 10211;
+const DUNCE_CAP = 10212;
 const HAWAIIAN_SHIRT = 10188;
 const T_SHIRT = 10189;
 const GRAY_DRAGON_SCALE_MAIL = 10085;
@@ -1469,6 +1472,72 @@ test('wished shield range uses C shield candidates', async () => {
     assert.doesNotMatch(result.item.line, /^a - 2 /);
     assert.match(result.item.line, /a polished silver shield/);
     assert.equal(result.log[0], 'rnd(50)=46');
+});
+
+test('wished hat range uses C hat candidates', async () => {
+    async function wishedHat(text, seed = 1) {
+        installWishState(seed);
+        enableRngLog({ reset: true });
+        beginWishDirectly();
+        await submitWish(text);
+        return { item: game.inventory[0], log: [...getRngLog()] };
+    }
+
+    const rangeCases = [
+        [2, 'rnd(10)=4', CORNUTHAUM, 'cornuthaum', 'conical hat', 4, 80],
+        [1, 'rnd(10)=6', DUNCE_CAP, 'dunce cap', 'conical hat', 4, 1],
+    ];
+
+    for (const [seed, firstRoll, otyp, kind, display, weight, cost] of rangeCases) {
+        const result = await wishedHat('hat', seed);
+        assert.equal(result.log[0], firstRoll, kind);
+        assert.equal(result.item.otyp, otyp, kind);
+        assert.notEqual(result.item.otyp, FEDORA, kind);
+        assert.notEqual(result.item.otyp, ARMOR_CLASS, kind);
+        assert.equal(result.item.cls, 'armor', kind);
+        assert.equal(result.item.kind, kind);
+        assert.equal(result.item.actualKind, kind);
+        assert.equal(result.item.quan, 1, kind);
+        assert.equal(result.item.owt, weight, kind);
+        assert.equal(shop.shopBaseCost(result.item), cost, kind);
+        assert.match(result.item.line, new RegExp(`a(?:n)? ${display}`), kind);
+    }
+
+    for (const [wish, otyp, namedesc, display, weight, cost] of [
+        ['fedora', FEDORA, /^rn2\(1\)=/, 'fedora', 3, 1],
+        ['cornuthaum', CORNUTHAUM, /^rn2\(6\)=/, 'conical hat', 4, 80],
+        ['dunce cap', DUNCE_CAP, /^rn2\(6\)=/, 'conical hat', 4, 1],
+    ]) {
+        const result = await wishedHat(wish);
+        assert.equal(result.item.otyp, otyp, wish);
+        assert.match(result.log[0], namedesc, wish);
+        assert.equal(result.item.owt, weight, wish);
+        assert.equal(shop.shopBaseCost(result.item), cost, wish);
+        assert.match(result.item.line, new RegExp(`a(?:n)? ${display}`), wish);
+    }
+
+    for (const [wish, seed, firstRoll, otyp] of [
+        ['conical hat', 2, 'rn2(12)=1', CORNUTHAUM],
+        ['conical hat', 1, 'rn2(12)=9', DUNCE_CAP],
+    ]) {
+        const result = await wishedHat(wish, seed);
+        assert.equal(result.log[0], firstRoll, `${wish} seed ${seed}`);
+        assert.equal(result.item.otyp, otyp, `${wish} seed ${seed}`);
+        assert.match(result.item.line, /a conical hat/, `${wish} seed ${seed}`);
+    }
+
+    let result = await wishedHat('2 hats', 1);
+    assert.equal(result.item.otyp, DUNCE_CAP);
+    assert.equal(result.item.quan, 1);
+    assert.doesNotMatch(result.item.line, /^a - 2 /);
+    assert.match(result.item.line, /a conical hat/);
+    assert.equal(result.log[0], 'rnd(10)=6');
+
+    for (const wish of ['wizard cap', 'wizzard cap']) {
+        result = await wishedHat(wish);
+        assert.equal(result.item, undefined, wish);
+        assert.match(game._pending_message, /Nothing fitting that description exists in the game\./, wish);
+    }
 });
 
 test('wished shirt range uses C Hawaiian and T-shirt candidates', async () => {
