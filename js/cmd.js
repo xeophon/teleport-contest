@@ -12560,15 +12560,24 @@ function stoneToFleshReplacementForObject(item) {
     return null;
 }
 
+function stoneToFleshCorpstatAnimationInfo(data = {}) {
+    const golemInfo = stoneToFleshCorpstatGolemAnimationInfo(data);
+    if (golemInfo) return golemInfo;
+    if (stoneToFleshCorpstatMonsterIsVegetarian(data))
+        return null;
+    return { data, golemXform: false };
+}
+
+function stoneToFleshFloorStatueDeferredCorpstat(data = {}) {
+    return !stoneToFleshCorpstatMonsterIsGolem(data)
+        && !!(data.unique || data.noCorpse || data.cantRevive || data.noCorpstat);
+}
+
 function stoneToFleshFigurineAnimationInfo(item) {
     if (!isFigurineObject(item) || !item?.corpsenm) return null;
     const material = stoneToFleshObjectMaterial(item);
     if (material !== 'mineral' && material !== 'gemstone') return null;
-    const golemInfo = stoneToFleshCorpstatGolemAnimationInfo(item.corpsenm);
-    if (golemInfo) return golemInfo;
-    if (stoneToFleshCorpstatMonsterIsVegetarian(item.corpsenm))
-        return null;
-    return { data: item.corpsenm, golemXform: false };
+    return stoneToFleshCorpstatAnimationInfo(item.corpsenm);
 }
 
 function stoneToFleshCarriedFigurineHasUnpaidContents(item, seen = new Set()) {
@@ -12654,12 +12663,13 @@ async function stoneToFleshAnimateFloorFigurine(item, x, y) {
     return messages;
 }
 
-function stoneToFleshGolemStatueAnimationInfo(item, x, y) {
+function stoneToFleshFloorStatueAnimationInfo(item, x, y) {
     if (!(item?.otyp === STATUE || item?.kind === 'statue') || !item?.corpsenm) return null;
     if (statueTrapAt(x, y) || shopkeeperForCostlySpot(x, y)) return null;
     const material = stoneToFleshObjectMaterial(item);
     if (material !== 'mineral' && material !== 'gemstone') return null;
-    return stoneToFleshCorpstatGolemAnimationInfo(item.corpsenm);
+    if (stoneToFleshFloorStatueDeferredCorpstat(item.corpsenm)) return null;
+    return stoneToFleshCorpstatAnimationInfo(item.corpsenm);
 }
 
 function stoneToFleshGolemStatueVerb(info, mon) {
@@ -12669,7 +12679,7 @@ function stoneToFleshGolemStatueVerb(info, mon) {
 }
 
 async function stoneToFleshAnimateFloorStatue(item, x, y) {
-    const info = stoneToFleshGolemStatueAnimationInfo(item, x, y);
+    const info = stoneToFleshFloorStatueAnimationInfo(item, x, y);
     if (!info || stoneToFleshObjectResists(item)) return null;
     const mon = await makemon(info.data, x, y, NO_MINVENT | MM_NOMSG | MM_ADJACENTOK);
     if (!mon) return null;

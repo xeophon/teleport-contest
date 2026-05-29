@@ -4781,6 +4781,82 @@ test('downward stone to flesh turns vegetarian statue into meatball', async () =
     assertNoStoneToFleshScoreSideEffects();
 });
 
+test('downward stone to flesh animates ordinary floor statue and transfers contents', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    markHeroNeighborhoodVisible();
+    const statue = stoneToFleshStatue(31113, 5, 5,
+        vegetarianCorpstatMonster('goblin', 'o', { neuter: false, mmove: 6 }));
+    const ration = simpleFood(31114, 'food ration');
+    statue.contents = [ration];
+    game.inventory = [];
+    game.level.objects = [statue];
+
+    await castStoneToFleshDown();
+
+    assert.equal(game.level.objects.includes(statue), false);
+    assert.equal(game.level.objects.some(obj => obj === ration), false);
+    const monster = (game.level.monsters || []).find(mon => mon.data?.name === 'goblin');
+    assert.ok(monster);
+    assert.equal(monster.msleeping, 0);
+    assert.equal(monster.mundetected, false);
+    assert.equal(monster.minvent?.[0], ration);
+    assert.equal(ration.contained, false);
+    assert.equal(ration.ox, undefined);
+    assert.equal(ration.oy, undefined);
+    assert.match(game._pending_message || '', /The statue of a goblin comes to life!/);
+    assert.doesNotMatch(game._pending_message || '', /turns into flesh|odor of meat|delicious smell/);
+    assertNoStoneToFleshScoreSideEffects();
+});
+
+test('downward stone to flesh ordinary statue may animate adjacent to blocker', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    markHeroNeighborhoodVisible();
+    const blocker = {
+        mx: 5,
+        my: 5,
+        data: vegetarianCorpstatMonster('newt', 'l', { neuter: false, mmove: 6 }),
+        mhp: 1,
+        mhpmax: 1,
+    };
+    game.level.monsters = [blocker];
+    const statue = stoneToFleshStatue(31115, 5, 5,
+        vegetarianCorpstatMonster('goblin', 'o', { neuter: false, mmove: 6 }));
+    game.inventory = [];
+    game.level.objects = [statue];
+
+    await castStoneToFleshDown();
+
+    assert.equal(game.level.objects.includes(statue), false);
+    const monster = (game.level.monsters || []).find(mon => mon !== blocker && mon.data?.name === 'goblin');
+    assert.ok(monster);
+    assert.notDeepEqual([monster.mx, monster.my], [5, 5]);
+    assert.equal(Math.max(Math.abs(monster.mx - 5), Math.abs(monster.my - 5)) <= 1, true);
+    assert.match(game._pending_message || '', /The statue of a goblin comes to life!/);
+    assert.doesNotMatch(game._pending_message || '', /odor of meat|delicious smell/);
+    assertNoStoneToFleshScoreSideEffects();
+});
+
+test('downward stone to flesh checks ordinary statue resistance before animation', async () => {
+    installNonShopFloorState();
+    initRng(40);
+    enableRngLog({ reset: true });
+    markHeroNeighborhoodVisible();
+    const statue = stoneToFleshStatue(31116, 5, 5,
+        vegetarianCorpstatMonster('goblin', 'o', { neuter: false, mmove: 6 }));
+    game.inventory = [];
+    game.level.objects = [statue];
+
+    await castStoneToFleshDown();
+
+    assert.equal(game.level.objects[0], statue);
+    assert.equal((game.level.monsters || []).some(mon => mon.data?.name === 'goblin'), false);
+    assert.deepEqual(getRngLog().filter(entry => entry.startsWith('rn2(100)=')), ['rn2(100)=0']);
+    assert.doesNotMatch(game._pending_message || '', /statue of a goblin|comes to life|odor of meat|delicious smell/);
+    assertNoStoneToFleshScoreSideEffects();
+});
+
 test('downward stone to flesh turns floor stone-golem statue into flesh golem and transfers contents', async () => {
     installNonShopFloorState();
     initRng(1);

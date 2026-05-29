@@ -134,6 +134,7 @@ This folder records source-backed audits against `nethack-c/upstream`. The notes
 - [128-subagent-findings-2026-05-29.md](128-subagent-findings-2026-05-29.md): shop-billed floor figurine stone-to-flesh animation.
 - [129-subagent-findings-2026-05-29.md](129-subagent-findings-2026-05-29.md): golem stone-to-flesh figurine and statue animation.
 - [130-subagent-findings-2026-05-29.md](130-subagent-findings-2026-05-29.md): carried shop-billed figurine stone-to-flesh animation.
+- [131-subagent-findings-2026-05-29.md](131-subagent-findings-2026-05-29.md): ordinary floor statue stone-to-flesh animation.
 
 ## Cross-Cutting Themes
 
