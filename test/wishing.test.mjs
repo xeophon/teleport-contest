@@ -1142,6 +1142,39 @@ test('generic wished object ranges use C rnd_class candidates', async () => {
     }
 });
 
+test('called wished range bases use C namedesc tail lookup', async () => {
+    async function wishedCalledRange(text, seed = 1) {
+        installWishState(seed);
+        enableRngLog({ reset: true });
+        beginWishDirectly();
+        await submitWish(text);
+        return { item: game.inventory[0], log: [...getRngLog()] };
+    }
+
+    for (const [wish, otyp, namedesc, kind, actualKind, line, weight, cost] of [
+        ['bag called holding', BAG_OF_HOLDING, /^rn2\(21\)=/, 'bag of holding', undefined, /a bag/, 15, 100],
+        ['bag called tricks', BAG_OF_TRICKS, /^rn2\(21\)=/, 'bag of tricks', 'bag of tricks', /a bag of tricks/, 15, 100],
+        ['horn called plenty', HORN_OF_PLENTY, /^rn2\(3\)=/, 'horn', 'horn of plenty', /a horn/, 18, 50],
+        ['gauntlets called power', GAUNTLETS_OF_POWER, /^rn2\(9\)=/, 'gauntlets of power', 'gauntlets of power', /riding gloves/, 30, 50],
+        ['gloves called dexterity', GAUNTLETS_OF_DEXTERITY, /^rn2\(9\)=/, 'gauntlets of dexterity', 'gauntlets of dexterity', /fencing gloves/, 10, 50],
+        ['cloak called magic resistance', CLOAK_OF_MAGIC_RESISTANCE, /^rn2\(7\)=/, 'cloak of magic resistance', 'cloak of magic resistance', /ornamental cope/, 10, 60],
+        ['hat called conical hat', DUNCE_CAP, /^rn2\(12\)=/, 'dunce cap', 'dunce cap', /conical hat/, 4, 1],
+        ['helm called telepathy', HELM_OF_TELEPATHY, /^rn2\(5\)=/, 'helm of telepathy', 'helm of telepathy', /visored helmet/, 50, 50],
+    ]) {
+        const result = await wishedCalledRange(wish);
+        assert.match(result.log[0], namedesc, wish);
+        assert.equal(result.item.otyp, otyp, wish);
+        assert.notEqual(result.item.otyp, TOOL_CLASS, wish);
+        assert.notEqual(result.item.otyp, ARMOR_CLASS, wish);
+        assert.equal(result.item.kind, kind, wish);
+        assert.equal(result.item.actualKind, actualKind, wish);
+        assert.equal(result.item.quan, 1, wish);
+        assert.equal(result.item.owt, weight, wish);
+        assert.equal(shop.shopBaseCost(result.item), cost, wish);
+        assert.match(result.item.line, line, wish);
+    }
+});
+
 test('wished shoes range uses C low and iron shoe candidates', async () => {
     async function wishedShoes(text, seed = 1) {
         installWishState(seed);
@@ -1637,6 +1670,12 @@ test('wished helm range uses C helm candidates', async () => {
     assert.equal(pluralExact.item.quan, 1);
     assert.match(pluralExact.item.line, /a plumed helmet/);
     assert.match(pluralExact.log[0], /^rn2\(11\)=/);
+
+    const calledHelmet = await wishedHelm('helmet called telepathy');
+    assert.equal(calledHelmet.item.otyp, HELMET);
+    assert.equal(calledHelmet.item.quan, 1);
+    assert.match(calledHelmet.item.line, /a plumed helmet/);
+    assert.match(calledHelmet.log[0], /^rn2\(11\)=/);
 });
 
 test('wished shirt range uses C Hawaiian and T-shirt candidates', async () => {

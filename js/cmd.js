@@ -29323,6 +29323,41 @@ function wishedLabelKey(text) {
     return unquoteWishedText(text).toLowerCase().replace(/\s+/g, ' ');
 }
 
+function calledWishymatch(userText, objectText) {
+    return wishedFuzzyObjectKey(userText) === wishedFuzzyObjectKey(objectText);
+}
+
+function calledTailMatchesObjectName(called, objectName) {
+    if (calledWishymatch(called, objectName)) return true;
+    const of = String(objectName || '').toLowerCase().indexOf(' of ');
+    return of >= 0 && calledWishymatch(called, String(objectName).slice(of + 4));
+}
+
+function calledRangeNamedescName(base, called) {
+    const range = WISH_OBJECT_RANGES.get(base);
+    if (!range) return '';
+    const rangeNames = new Set(range.map(([name]) => name));
+    for (const [namedesc, candidates] of WISH_NAMEDESC_RANGES) {
+        if (!calledWishymatch(called, namedesc)) continue;
+        if (candidates.every(([name]) => rangeNames.has(name))) return namedesc;
+    }
+    for (const [name] of range) {
+        if (calledTailMatchesObjectName(called, name)) return name;
+        const baseObject = WISH_BASE_OBJECTS.get(name);
+        if (baseObject?.actualKind && calledTailMatchesObjectName(called, baseObject.actualKind))
+            return name;
+        const armorAppearance = ARMOR_WISH_APPEARANCES[name];
+        if (armorAppearance) {
+            const [group, index, fallback] = armorAppearance;
+            const appearance = group ? game._object_descriptions?.[group]?.[index] || fallback : fallback;
+            if (appearance && calledTailMatchesObjectName(called, appearance)) return name;
+        }
+        const toolAppearance = WISH_TOOL_APPEARANCES.get(name);
+        if (toolAppearance && calledTailMatchesObjectName(called, toolAppearance)) return name;
+    }
+    return '';
+}
+
 function parseWishedScrollLabel(name) {
     const match = String(name || '').trim().match(/^scrolls?\s+labell?ed\s+(.+)$/i);
     return match ? unquoteWishedText(match[1]) : '';
@@ -29334,7 +29369,6 @@ function resolveCalledWishName(baseName, calledName) {
     const explicit = new Map([
         ['shield:reflection', 'shield of reflection'],
         ['helm:telepathy', 'helm of telepathy'],
-        ['helmet:telepathy', 'helm of telepathy'],
         ['amulet:life saving', 'amulet of life saving'],
         ['amulet:esp', 'amulet of esp'],
         ['amulet:guarding', 'amulet of guarding'],
@@ -29344,9 +29378,10 @@ function resolveCalledWishName(baseName, calledName) {
         ['ring:protection from shape shifters', 'ring of protection from shape changers'],
     ]).get(`${base}:${called}`);
     if (explicit) return explicit;
-    if (base === 'shield' || base === 'helm' || base === 'helmet'
-        || base === 'amulet' || base === 'ring') {
-        const candidate = `${base === 'helmet' ? 'helm' : base} of ${called}`;
+    const rangeCalled = calledRangeNamedescName(base, called);
+    if (rangeCalled) return rangeCalled;
+    if (base === 'amulet' || base === 'ring') {
+        const candidate = `${base} of ${called}`;
         return WISH_BASE_OBJECTS.has(candidate)
             || WISH_NAME_ALIASES.has(candidate)
             || IDENTIFIED_AMULET_NAMES.includes(candidate)
