@@ -5776,6 +5776,161 @@ test('applying an unpaid potion of oil charges fuel tax and keeps a used-up bill
     assert.match(game._pending_message, /in addition to the cost of the potion/);
 });
 
+test('apply accepts downplayed gold and flips a coin', async () => {
+    installCommandShopState();
+    const gold = goldPieces(30560, 4);
+    game.inventory = [gold];
+    game._goldCount = 4;
+
+    await rhack('a');
+
+    assert.equal(game._command_mode, 'applyObject');
+    assert.match(game._pending_message, /What do you want to use or apply\? \[\*\]/);
+
+    await rhack('$');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game._goldCount, 4);
+    assert.equal(gold.quan, 4);
+    assert.match(game._pending_message, /You flip a gold piece\./);
+    assert.match(game._pending_message, /It comes up (heads|tails)\./);
+});
+
+test('flipping a coin underwater drops one carried gold piece without a toss result', async () => {
+    installCommandShopState();
+    const gold = goldPieces(30561, 3);
+    game.inventory = [gold];
+    game._goldCount = 3;
+    game.u.underwater = true;
+
+    await rhack('a');
+    await rhack('$');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game._goldCount, 2);
+    assert.equal(gold.quan, 2);
+    const floorGold = game.level.objects.find(obj => obj.otyp === 466 && obj.ox === 5 && obj.oy === 5);
+    assert.ok(floorGold);
+    assert.equal(floorGold.quan, 1);
+    assert.match(game._pending_message, /You flip a gold piece\./);
+    assert.match(game._pending_message, /It tumbles away\./);
+    assert.doesNotMatch(game._pending_message, /It comes up/);
+});
+
+test('apply question menu shows suggestions while star menu exposes all inventory', async () => {
+    installCommandShopState();
+    const tool = lamp(30562, 'oil lamp', 'l', 3);
+    const gold = goldPieces(30563, 7);
+    const scroll = scrollOfCharging(30564, 's');
+    const potion = namedPotion(30565, 'healing', 'p', 1, {
+        known: false,
+        kind: 'puce',
+        line: 'p - a puce potion',
+    });
+    game.inventory = [tool, gold, scroll, potion];
+    game._goldCount = 7;
+
+    await rhack('a');
+
+    assert.match(game._pending_message, /What do you want to use or apply\? \[l or \?\*\]/);
+
+    await rhack('?');
+
+    let menuText = (game._overlay_lines || []).map(row => row[2]).join('\n');
+    assert.match(menuText, /l - an oil lamp/);
+    assert.doesNotMatch(menuText, /\$ - 7 gold pieces/);
+    assert.doesNotMatch(menuText, /s - a scroll of charging/);
+    assert.doesNotMatch(menuText, /p - a puce potion/);
+
+    await rhack('*');
+
+    menuText = (game._overlay_lines || []).map(row => row[2]).join('\n');
+    assert.match(menuText, /l - an oil lamp/);
+    assert.match(menuText, /\$ - 7 gold pieces/);
+    assert.match(menuText, /s - a scroll of charging/);
+    assert.match(menuText, /p - a puce potion/);
+});
+
+test('unknown potion of oil is downplayed but still applies by direct letter', async () => {
+    installCommandShopState();
+    const item = {
+        ...oilPotion(30566, 'o'),
+        known: false,
+        kind: 'puce',
+        line: 'o - a puce potion',
+    };
+    game.inventory = [item];
+
+    await rhack('a');
+
+    assert.equal(game._command_mode, 'applyObject');
+    assert.match(game._pending_message, /What do you want to use or apply\? \[\*\]/);
+
+    await rhack('o');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(item.lamplit, true);
+    assert.equal(item.known, true);
+    assert.match(game._pending_message, /You light your potion/);
+});
+
+test('unknown non-oil potion selected for apply is rejected without a move', async () => {
+    installCommandShopState();
+    const item = namedPotion(30567, 'healing', 'p', 1, {
+        known: false,
+        kind: 'puce',
+        line: 'p - a puce potion',
+    });
+    game.inventory = [item];
+
+    await rhack('a');
+
+    assert.equal(game._command_mode, 'applyObject');
+    assert.match(game._pending_message, /What do you want to use or apply\? \[\*\]/);
+
+    await rhack('p');
+
+    assert.equal(game._command_mode, null);
+    assert.notEqual(game.context.move, 1);
+    assert.match(game._pending_message, /Sorry, I don't know how to use that\./);
+});
+
+test('known invalid apply objects stay out of the prompt but star-select rejects them', async () => {
+    installCommandShopState();
+    const tool = lamp(30568, 'oil lamp', 'l', 3);
+    const scroll = scrollOfCharging(30569, 's');
+    game.inventory = [tool, scroll];
+
+    await rhack('a');
+
+    assert.match(game._pending_message, /What do you want to use or apply\? \[l or \?\*\]/);
+
+    await rhack('*');
+
+    const menuText = (game._overlay_lines || []).map(row => row[2]).join('\n');
+    assert.match(menuText, /l - an oil lamp/);
+    assert.match(menuText, /s - a scroll of charging/);
+
+    await rhack('s');
+
+    assert.equal(game._command_mode, null);
+    assert.notEqual(game.context.move, 1);
+    assert.match(game._pending_message, /Sorry, I don't know how to use that\./);
+});
+
+test('apply has no object prompt for known invalid inventory alone', async () => {
+    installCommandShopState();
+    game.inventory = [scrollOfCharging(30570, 's')];
+
+    await rhack('a');
+
+    assert.equal(game._command_mode || null, null);
+    assert.match(game._pending_message, /You don't have anything to use or apply\./);
+});
+
 test('dipping an oil lamp into unpaid oil refuels and bills fuel tax', async () => {
     const { shkp } = installCommandShopState();
     const target = lamp(30921, 'oil lamp', 'l');

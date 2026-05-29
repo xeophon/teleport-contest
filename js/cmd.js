@@ -7697,6 +7697,165 @@ function getobjPromptLetters(letters) {
     return text.length > 5 ? compactInventoryLetters(text) : text;
 }
 
+function isApplyCoinObject(item) {
+    return shopBillableGold(item);
+}
+
+function applyInventoryItems() {
+    const items = [...(game.inventory || [])];
+    const goldCount = Math.max(0, Math.trunc(Number(game._goldCount || 0)));
+    if (goldCount > 0 && !items.some(isApplyCoinObject)) {
+        items.unshift({
+            letter: '$',
+            cls: 'coin',
+            otyp: GOLD_PIECE,
+            glyph: '$',
+            quan: goldCount,
+        });
+    }
+    return items;
+}
+
+function potionIdentityKnownForApply(item, identity) {
+    const name = inventoryItemName(item).toLowerCase();
+    const visibleKind = String(item?.kind || '').toLowerCase().replace(/^potion of /, '');
+    return item?.known === true
+        || potionDiscoveryKnown(identity)
+        || name.includes(`potion of ${identity}`)
+        || (item?.known !== false && visibleKind === identity);
+}
+
+function applySelectionKind(item) {
+    if (!item) return 'exclude';
+    if (isApplyCoinObject(item)) return 'downplay';
+
+    const name = inventoryItemName(item).toLowerCase();
+    const cls = itemClassKey(item);
+    if (cls === 'tool' || item.section === 'Tools' || isIceBoxObject(item)) return 'suggest';
+    if (isWandItem(item) || cls === 'wand' || item.kind === 'wand of sleep' || item.otyp === WAND_CLASS) return 'suggest';
+    if (cls === 'spellbook') return 'suggest';
+    if (cls === 'weapon' && APPLY_WEAPON_NAME_RE.test(name)) return 'suggest';
+    if (/lamp|camera|card|bag|sack|cream pie/.test(name)) return 'suggest';
+    if (isRoyalJelly(item)) return 'suggest';
+    if (isPotionObject(item)) {
+        const identity = potionIdentityName(item) || objectKindKey(item).replace(/^potion of /, '');
+        if (isPotionOfOil(item) && potionIdentityKnownForApply(item, 'oil')) return 'suggest';
+        if (!identity || !potionIdentityKnownForApply(item, identity)) return 'downplay';
+        return 'selectableInvalid';
+    }
+    if (heroIsHallucinating() && /banana/.test(name)) return 'downplay';
+    return 'selectableInvalid';
+}
+
+function applyItemsBySelectionKind(kind) {
+    return applyInventoryItems().filter(item => applySelectionKind(item) === kind && item.letter);
+}
+
+function applyPromptMessage() {
+    const suggested = applyItemsBySelectionKind('suggest').map(item => item.letter).join('');
+    if (suggested) return `What do you want to use or apply? [${getobjPromptLetters(suggested)} or ?*]`;
+    if (applyItemsBySelectionKind('downplay').length) return 'What do you want to use or apply? [*]';
+    return '';
+}
+
+function applyMenuItems(ch) {
+    if (ch === '*') return applyInventoryItems().filter(item => item.letter);
+    const suggested = applyItemsBySelectionKind('suggest');
+    return suggested.length ? suggested : applyItemsBySelectionKind('downplay');
+}
+
+function applyMenuSection(item) {
+    const cls = itemClassKey(item);
+    if (isApplyCoinObject(item)) return 'Coins';
+    if (cls === 'spellbook') return 'Spellbooks';
+    if (isWandItem(item) || cls === 'wand' || item.kind === 'wand of sleep' || item.otyp === WAND_CLASS) return 'Wands';
+    if (cls === 'tool' || item.section === 'Tools' || isIceBoxObject(item)) return 'Tools';
+    if (cls === 'weapon') return 'Weapons';
+    if (isPotionObject(item)) return 'Potions';
+    if (cls === 'scroll') return 'Scrolls';
+    if (cls === 'armor') return 'Armor';
+    if (cls === 'food') return 'Comestibles';
+    return 'Other Items';
+}
+
+function setApplyObjectMenu(items) {
+    const order = ['Spellbooks', 'Wands', 'Tools', 'Weapons', 'Potions', 'Scrolls', 'Armor', 'Comestibles', 'Coins', 'Other Items'];
+    const sorted = [...items].sort((a, b) => {
+        const sectionDiff = order.indexOf(applyMenuSection(a)) - order.indexOf(applyMenuSection(b));
+        return sectionDiff || String(a.letter || '').localeCompare(String(b.letter || ''));
+    });
+    const rows = [];
+    let row = 0, lastSection = '';
+    for (const item of sorted) {
+        const section = applyMenuSection(item);
+        if (section !== lastSection) {
+            rows.push([row, 40, ' ']);
+            rows.push([row++, 41, section, 1]);
+            lastSection = section;
+        }
+        rows.push([row++, 40, ` ${normalInventoryLine(item)}`.padEnd(40, ' ')]);
+    }
+    rows.push([row, 40, ' (end)'.padEnd(40, ' ')]);
+    setOverlay(rows, 2, false, 0);
+}
+
+function findApplyInventoryItem(letter) {
+    return applyInventoryItems().find(invItem => invItem.letter === letter);
+}
+
+function dropFlippedCoinAtHero(item) {
+    if (!removeGoldFromHero(1)) return false;
+    const x = game.u?.ux || 0;
+    const y = game.u?.uy || 0;
+    game.level ??= {};
+    game.level.objects ??= [];
+    const pile = game.level.objects.find(obj => isApplyCoinObject(obj)
+        && !obj.hidden && !obj.buried && obj.ox === x && obj.oy === y);
+    if (pile) {
+        pile.quan = Math.max(0, Math.trunc(Number(pile.quan || 0))) + 1;
+        Object.assign(pile, object_display(pile), { ox: x, oy: y });
+    } else {
+        const coin = {
+            id: next_ident(),
+            cls: 'coin',
+            otyp: GOLD_PIECE,
+            glyph: '$',
+            quan: 1,
+            ox: x,
+            oy: y,
+            color: item?.color,
+        };
+        Object.assign(coin, object_display(coin), { ox: x, oy: y });
+        game.level.objects.push(coin);
+    }
+    newsym(x, y);
+    return true;
+}
+
+function applyCoinFlip(item) {
+    const messages = ['You flip a gold piece.'];
+    if (game.u?.underwater || game.u?.uunderwater) {
+        messages.push('It tumbles away.');
+        dropFlippedCoinAtHero(item);
+        return messages;
+    }
+    const dex = Math.max(1, Math.trunc(Number(game.u?.acurr?.a?.[A_DEX] ?? game.u?.dex ?? 10)));
+    const cursedGloves = !!wornGlovesItem()?.cursed;
+    const slips = cursedGloves || heroHasSlipperyFingers() || heroIsFumbling()
+        || (dex < 10 && !rn2(dex));
+    if (slips) {
+        messages.push(`It slips between your ${fingersOrGloves()}.`);
+        dropFlippedCoinAtHero(item);
+        return messages;
+    }
+    if (heroIsHallucinating()) {
+        messages.push(rn2(100) ? 'Wow, a double header!' : 'The coin miraculously lands on its edge!');
+        return messages;
+    }
+    messages.push(`It comes up ${rn2(2) ? 'heads' : 'tails'}.`);
+    return messages;
+}
+
 export function inventoryLetterRank(item) {
     const letter = typeof item === 'string' ? item : item?.letter || '';
     return letter ? letter.charCodeAt(0) ^ 0x20 : 200;
@@ -47005,61 +47164,32 @@ export async function rhack(_cmd) {
             return;
         }
         if (ch === '?' || ch === '*') {
-            const applyItems = (game.inventory || []).filter(invItem => {
-                const name = inventoryItemName(invItem).toLowerCase();
-                return invItem.cls === 'tool' || invItem.cls === 'wand' || invItem.kind === 'wand of sleep'
-                    || invItem.otyp === WAND_CLASS || invItem.cls === 'spellbook'
-                    || invItem.section === 'Tools' || /lamp|camera|card|bag|sack|cream pie/.test(name)
-                    || isPotionOfOil(invItem)
-                    || isIceBoxObject(invItem)
-                    || isRoyalJelly(invItem)
-                    || (invItem.cls === 'weapon' && APPLY_WEAPON_NAME_RE.test(name));
-            }).sort((a, b) => {
-                const section = item => item.cls === 'spellbook' ? 'Spellbooks'
-                    : item.cls === 'tool' || item.section === 'Tools' ? 'Tools'
-                    : item.cls === 'wand' || item.kind === 'wand of sleep' || item.otyp === WAND_CLASS ? 'Wands'
-                    : 'Other Items';
-                const order = ['Spellbooks', 'Wands', 'Tools', 'Other Items'];
-                return order.indexOf(section(a)) - order.indexOf(section(b))
-                    || String(a.letter || '').localeCompare(String(b.letter || ''));
-            });
-            const rows = [];
-            let row = 0, lastSection = '';
-            for (const item of applyItems) {
-                const section = item.cls === 'spellbook' ? 'Spellbooks'
-                    : item.cls === 'tool' || item.section === 'Tools' ? 'Tools'
-                    : item.cls === 'wand' || item.kind === 'wand of sleep' || item.otyp === WAND_CLASS ? 'Wands'
-                    : 'Other Items';
-                if (section !== lastSection) {
-                    rows.push([row, 40, ' ']);
-                    rows.push([row++, 41, section, 1]);
-                    lastSection = section;
-                }
-                rows.push([row++, 40, ` ${normalInventoryLine(item)}`.padEnd(40, ' ')]);
-            }
-            rows.push([row, 40, ' (end)'.padEnd(40, ' ')]);
-            setOverlay(rows, 2, false, 0);
+            setApplyObjectMenu(applyMenuItems(ch));
             game._command_mode = 'applyObject';
             return;
         }
-        const item = (game.inventory || []).find(invItem => invItem.letter === ch);
+        const item = findApplyInventoryItem(ch);
         if (!item) {
-            const applyLetters = inventoryLetters(invItem => {
-                const name = inventoryItemName(invItem).toLowerCase();
-                return invItem.cls === 'tool' || invItem.cls === 'wand' || invItem.kind === 'wand of sleep'
-                    || invItem.otyp === WAND_CLASS || invItem.cls === 'spellbook'
-                    || invItem.section === 'Tools' || /lamp|camera|card|bag|sack|cream pie/.test(name)
-                    || isPotionOfOil(invItem)
-                    || isIceBoxObject(invItem)
-                    || isRoyalJelly(invItem)
-                    || (invItem.cls === 'weapon' && APPLY_WEAPON_NAME_RE.test(name));
-            });
-            game._topline_after_more = `What do you want to use or apply? [${getobjPromptLetters(applyLetters)} or ?*]`;
+            game._topline_after_more = applyPromptMessage();
             await setMessage("You don't have that object.", true);
             return;
         }
         const name = inventoryItemName(item).toLowerCase();
         game._command_mode = null;
+        if (isApplyCoinObject(item)) {
+            const messages = applyCoinFlip(item);
+            await setMessage(messages.join('  '), messages.length > 1);
+            game.context.move = 1;
+            return;
+        }
+        if (isPotionObject(item) && !isPotionOfOil(item)) {
+            await setMessage("Sorry, I don't know how to use that.");
+            return;
+        }
+        if (applySelectionKind(item) === 'selectableInvalid' && !isPotionOfOil(item)) {
+            await setMessage("Sorry, I don't know how to use that.");
+            return;
+        }
         if (isFigurineObject(item)) {
             game._apply_figurine_letter = item.letter;
             await setMessage('In what direction?');
@@ -53796,20 +53926,12 @@ export async function rhack(_cmd) {
             await setMessage("You aren't able to use or apply tools in your current form.");
             return;
         }
-        const letters = inventoryLetters(item => {
-            const name = inventoryItemName(item).toLowerCase();
-            return item.cls === 'tool' || item.cls === 'wand' || item.kind === 'wand of sleep'
-                || item.otyp === WAND_CLASS || item.cls === 'spellbook'
-                || item.section === 'Tools' || /lamp|camera|card|bag|sack|cream pie/.test(name)
-                || isPotionOfOil(item)
-                || isRoyalJelly(item)
-                || (item.cls === 'weapon' && APPLY_WEAPON_NAME_RE.test(name));
-        });
-        if (!letters) {
+        const prompt = applyPromptMessage();
+        if (!prompt) {
             await setMessage("You don't have anything to use or apply.");
             return;
         }
-        await setMessage(`What do you want to use or apply? [${getobjPromptLetters(letters)} or ?*]`);
+        await setMessage(prompt);
         game._command_mode = 'applyObject';
         return;
     }
