@@ -671,6 +671,11 @@ function floorBagOfTricks(id, spe = 3, extra = {}) {
     return bag;
 }
 
+function hasToolDiscovery(name) {
+    return (game._discoveries || []).some(entry =>
+        entry.section === 'Tools' && entry.name === name && entry.known !== false);
+}
+
 function testObjectKind(item) {
     return String(item?.actualKind || item?.kind || '').toLowerCase()
         .replace(/^(?:blessed|uncursed|cursed) /, '');
@@ -2472,6 +2477,40 @@ test('tipping into an unpaid unknown bag of tricks bills target before locked so
     assert.doesNotMatch(messages.join('  '), /locked/);
 });
 
+test('known bag of tricks is excluded as a #tip destination', async () => {
+    installCommandShopState();
+    game._discoveries = [{ section: 'Tools', name: 'bag of tricks', text: 'bag of tricks', known: true }];
+    const source = sack(30520, 's');
+    const ration = putObjectInContainer(source, foodRation(30521));
+    const target = {
+        ...chargedTool(30522, 'bag', 'b', 3),
+        otyp: BAG_OF_TRICKS,
+        actualKind: 'bag of tricks',
+        known: false,
+        dknown: true,
+    };
+    game.inventory = [source, target];
+
+    await rhack('#');
+    for (const ch of 'tip') await rhack(ch);
+    await rhack('\n');
+
+    assert.equal(game._command_mode, 'tipContainerObject');
+
+    await rhack('s');
+
+    assert.equal(game._command_mode, 'tipConfirm');
+
+    await rhack('y');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(target.spe, 3);
+    assert.equal(source.contents?.includes(ration), false);
+    assert.equal(game.level.objects.includes(ration), true);
+    assert.match(game._pending_message, /spills out/);
+});
+
 test('alternate unpaid horn emptying charges full use fee', () => {
     const { shkp } = installShopState();
     const horn = chargedTool(3061, 'horn of plenty', 'h', 4);
@@ -2580,7 +2619,45 @@ test('zero-charge floor bag of tricks #tip creates no usage debt or persistent b
     assert.equal(shop.shopBillEntryForObject(shkp, bag), null);
     assert.notEqual(bag.unpaid, true);
     assert.equal(bag.unpaidPrice, undefined);
+    assert.equal(bag.cknown, true);
     assert.doesNotMatch(messages.join('  '), /Usage fee|Emptying that will cost|zorkmid/);
+});
+
+test('zero-charge undiscovered bag of tricks #tip does not learn empty contents', async () => {
+    const { shkp } = installShopState();
+    const bag = floorBagOfTricks(30650, 0, {
+        kind: 'bag',
+        actualKind: 'bag of tricks',
+        known: false,
+        dknown: true,
+    });
+    game.level.objects = [bag];
+
+    const messages = await shop.tipContainerContents(bag);
+
+    assert.deepEqual(messages, ['Nothing happens.']);
+    assert.equal(bag.cknown ?? false, false);
+    assert.equal(hasToolDiscovery('bag of tricks'), false);
+    assert.equal(shkp.debit || 0, 0);
+    assert.equal(shkp.billct, 0);
+});
+
+test('zero-charge globally known bag of tricks #tip learns empty contents', async () => {
+    installShopState();
+    game._discoveries = [{ section: 'Tools', name: 'bag of tricks', text: 'bag of tricks', known: true }];
+    const bag = floorBagOfTricks(30651, 0, {
+        kind: 'bag',
+        actualKind: 'bag of tricks',
+        known: false,
+        dknown: true,
+    });
+    game.level.objects = [bag];
+
+    const messages = await shop.tipContainerContents(bag);
+
+    assert.deepEqual(messages, ['Nothing happens.']);
+    assert.equal(bag.cknown, true);
+    assert.equal(hasToolDiscovery('bag of tricks'), true);
 });
 
 test('no-charge floor bag of tricks #tip spends charges without shop usage billing', async () => {
@@ -2617,6 +2694,7 @@ test('floor bag of tricks #loot bites without shop usage billing', async () => {
     assert.match(game._pending_message, /You carefully open the bag of tricks/);
     assert.match(game._pending_message, /huge set of teeth and bites you/);
     assert.equal(bag.known, true);
+    assert.equal(hasToolDiscovery('bag of tricks'), true);
     assert.ok(game.u.uhp < 100);
     assert.equal(shkp.debit || 0, 0);
     assert.equal(shkp.robbed || 0, 0);

@@ -12087,9 +12087,21 @@ function recordKnownToolDiscovery(toolName) {
     const name = String(toolName || '').trim();
     if (!name) return;
     game._discoveries ??= [];
-    if (!game._discoveries.some(entry => entry.section === 'Tools' && entry.name === name))
+    const existing = game._discoveries.find(entry => entry.section === 'Tools' && entry.name === name);
+    if (existing) {
+        existing.text = name;
+        existing.starred = false;
+        existing.known = true;
+    } else {
         game._discoveries.push({ section: 'Tools', name, text: name, starred: false, known: true });
+    }
     learnObjectScore('Tools', name);
+}
+
+function toolDiscoveryKnown(toolName) {
+    const name = String(toolName || '').trim();
+    return !!name && (game._discoveries || []).some(entry =>
+        entry.section === 'Tools' && entry.name === name && entry.known !== false);
 }
 
 async function applyPotionOfOil(item) {
@@ -30149,9 +30161,13 @@ function isBagOfTricksObject(obj) {
         || pickupObjectName({ ...obj, quan: 1 }).toLowerCase() === 'bag of tricks');
 }
 
+function isKnownBagOfTricksObject(obj) {
+    return isBagOfTricksObject(obj) && obj.dknown === true
+        && (obj.known === true || toolDiscoveryKnown('bag of tricks'));
+}
+
 function isUnknownBagOfTricksObject(obj) {
-    return isBagOfTricksObject(obj) && obj.known !== true
-        && String(obj.kind || '').toLowerCase() === 'bag';
+    return isBagOfTricksObject(obj) && !isKnownBagOfTricksObject(obj);
 }
 
 function isHornOfPlentyObject(obj) {
@@ -30255,6 +30271,7 @@ function identifyChargedToolKind(item, knownKind) {
     item.known = true;
     item.actualKind = knownKind;
     item.kind = knownKind;
+    recordKnownToolDiscovery(knownKind);
     updateChargedItemLine(item);
 }
 
@@ -30886,7 +30903,7 @@ function beginFloorSpecialSourceUsageBill(source) {
 async function applyBagOfTricksOnce(bag, { tipping = false } = {}) {
     if (tipChargeCount(bag) < 1) {
         if (tipping && bag.cknown) return ["It's empty."];
-        if (bag.dknown || bag.known) bag.cknown = true;
+        if (isKnownBagOfTricksObject(bag)) bag.cknown = true;
         return ['Nothing happens.'];
     }
 
