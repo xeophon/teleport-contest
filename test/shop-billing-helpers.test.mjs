@@ -6574,7 +6574,8 @@ test('#rub suggests known non-touchstone gray stones and lists them with other r
     const lampItem = lamp(305770, 'oil lamp', 'l', 1);
     const stone = carriedLoadstone(305771, 's', { cursed: false, known: true, dknown: true, line: 's - an uncursed loadstone' });
     const jelly = simpleFood(305772, 'lump of royal jelly', 'j');
-    game.inventory = [lampItem, stone, jelly];
+    const blade = dagger(305773, 'd');
+    game.inventory = [lampItem, stone, jelly, blade];
 
     await startRubCommand();
 
@@ -6587,6 +6588,29 @@ test('#rub suggests known non-touchstone gray stones and lists them with other r
     assert.match(menuText, /l - an oil lamp/);
     assert.match(menuText, /s - a uncursed loadstone/);
     assert.match(menuText, /j - a lump of royal jelly/);
+    assert.doesNotMatch(menuText, /d - a dagger/);
+
+    await rhack('*');
+
+    const fullMenuText = (game._overlay_lines || []).map(row => row[2]).join('\n');
+    assert.match(fullMenuText, /l - an oil lamp/);
+    assert.match(fullMenuText, /s - a uncursed loadstone/);
+    assert.match(fullMenuText, /j - a lump of royal jelly/);
+    assert.match(fullMenuText, /d - a dagger/);
+});
+
+test('#rub direct non-candidate selection uses C silly thing wording', async () => {
+    installCommandShopState();
+    const lampItem = lamp(305774, 'oil lamp', 'l', 1);
+    const blade = dagger(305775, 'd');
+    game.inventory = [lampItem, blade];
+
+    await startRubCommand();
+    await rhack('d');
+
+    assert.equal(game._command_mode, null);
+    assert.notEqual(game.context.move, 1);
+    assert.match(game._pending_message, /That is a silly thing to rub\./);
 });
 
 test('blind #rub gray stone source does not observe the gray-stone appearance', async () => {

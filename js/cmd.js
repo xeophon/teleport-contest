@@ -35305,16 +35305,24 @@ function royalJellyRubPrompt() {
     return `What do you want to rub the royal jelly on? [${getobjPromptLetters(letters)} or ?*]`;
 }
 
+function isRubObjectCandidate(item) {
+    return isLampObject(item) || isRoyalJelly(item) || isGrayStoneApplyItem(item);
+}
+
 function rubObjectLetters() {
-    return inventoryLetters(item => {
-        return isLampObject(item) || isRoyalJelly(item) || isGrayStoneApplyItem(item);
-    });
+    return inventoryLetters(isRubObjectCandidate);
 }
 
 function rubObjectPrompt() {
     const letters = rubObjectLetters();
     if (!letters) return 'What do you want to rub? [*]';
     return `What do you want to rub? [${getobjPromptLetters(letters)} or ?*]`;
+}
+
+function rubObjectMenuItems(ch) {
+    const inventory = game.inventory || [];
+    if (ch === '*') return inventory;
+    return inventory.filter(isRubObjectCandidate);
 }
 
 async function beginRoyalJellyRub(item) {
@@ -49774,9 +49782,7 @@ export async function rhack(_cmd) {
             return;
         }
         if (ch === '?' || ch === '*') {
-            const rubItems = (game.inventory || []).filter(item => {
-                return isLampObject(item) || isRoyalJelly(item) || isGrayStoneApplyItem(item);
-            });
+            const rubItems = rubObjectMenuItems(ch);
             const rows = rubItems.map((item, index) => [index, 40, ` ${normalInventoryLine(item)}`.padEnd(40, ' ')]);
             rows.push([rows.length, 40, ' (end)'.padEnd(40, ' ')]);
             setOverlay(rows, 2, false, 0);
@@ -49793,6 +49799,11 @@ export async function rhack(_cmd) {
         }
         if (item && isGrayStoneApplyItem(item)) {
             await beginUseStone(item);
+            return;
+        }
+        if (item) {
+            game._command_mode = null;
+            await setMessage('That is a silly thing to rub.');
             return;
         }
         await setMessage(rubObjectPrompt());
