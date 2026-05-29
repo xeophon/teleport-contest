@@ -29906,7 +29906,10 @@ function makeWishedRangeObjectByName(rangeName) {
 function makeWishedObjectClassObject(oclass) {
     if (!oclass) return null;
     const otmp = mkobj(oclass, false);
-    return Object.assign(otmp, object_display(otmp), { wishedfor: true });
+    const classFields = {};
+    if (oclass === SCROLL_CLASS) classFields.cls = 'scroll';
+    else if (oclass === SPBOOK_CLASS) classFields.cls = 'spellbook';
+    return Object.assign(otmp, object_display(otmp), classFields, { wishedfor: true });
 }
 
 function makeWishedFruitObject(lowerName) {
@@ -30145,16 +30148,9 @@ function wishedBaseObjectFromName(lowerName, qualifiers = {}, originalName = low
                 return makeWishedKnownScrollObject(scrollIndex, wishedLabel);
             }
             if (scrollIndex >= IDENTIFIED_SCROLL_NAMES.length) {
-                const otmp = mksobj(SCROLL_CLASS, true, false);
-                const label = game._object_descriptions?.scrolls?.[scrollIndex] || wishedLabel;
-                return Object.assign(otmp, {
-                    cls: 'scroll',
-                    glyph: '?',
-                    kind: `scroll labeled ${label}`,
-                    known: false,
-                    wishedfor: true,
-                });
+                return makeWishedObjectClassObject(SCROLL_CLASS);
             }
+            if (/^scrolls?$/.test(lowerName)) return makeWishedObjectClassObject(SCROLL_CLASS);
         }
         const scrollName = lowerName.replace(/^scrolls?(?: of)?\s+/, '');
         if ((qualifiers.unlabeled && /^scrolls?$/.test(lowerName)) || scrollName === 'blank paper')
@@ -30202,6 +30198,7 @@ function wishedBaseObjectFromName(lowerName, qualifiers = {}, originalName = low
                     wishedfor: true,
                 });
             }
+            if (/^spell\s*books?$/.test(lowerName)) return makeWishedObjectClassObject(SPBOOK_CLASS);
         }
         const spellbookIndex = spellbookNames.indexOf(spellName);
         const namedescBound = WISH_SPELLBOOK_NAMEDESC_BOUNDS.get(spellName);

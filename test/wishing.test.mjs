@@ -1175,6 +1175,84 @@ test('called wished range bases use C namedesc tail lookup', async () => {
     }
 });
 
+test('labeled wished scrolls and spellbooks use C description lookup', async () => {
+    async function wishedLabeledObject(text, configureDescriptions, seed = 1) {
+        installWishState(seed);
+        configureDescriptions();
+        enableRngLog({ reset: true });
+        beginWishDirectly();
+        await submitWish(text);
+        return { item: game.inventory[0], log: [...getRngLog()] };
+    }
+
+    for (const spelling of ['labeled', 'labelled']) {
+        const scrollResult = await wishedLabeledObject(`scroll ${spelling} "ELAM EBOW"`, () => {
+            game._object_descriptions = { scrolls: Array.from({ length: 41 }, (_, i) => `scroll label ${i}`) };
+            game._object_descriptions.scrolls[14] = 'ELAM EBOW';
+        });
+        assert.match(scrollResult.log[0], /^rn2\(46\)=/, spelling);
+        assert.equal(scrollResult.item.cls, 'scroll', spelling);
+        assert.equal(scrollResult.item.glyph, '?', spelling);
+        assert.equal(scrollResult.item.scrollIndex, 14, spelling);
+        assert.equal(scrollResult.item.actualKind, 'scroll of magic mapping', spelling);
+        assert.equal(scrollResult.item.kind, 'scroll labeled ELAM EBOW', spelling);
+        assert.match(scrollResult.item.line, /scroll labeled ELAM EBOW/, spelling);
+        assert.equal(game._command_mode, null, spelling);
+        assert.equal(game._wish_tries, 0, spelling);
+        assert.equal(game.u.uconduct?.wishes, 1, spelling);
+
+        const spellbookResult = await wishedLabeledObject(`spellbook ${spelling} ragged`, () => {
+            game._object_descriptions = {
+                spellbooks: Array.from({ length: 41 }, (_, i) => `spellbook label ${i}`),
+                spellbookColors: Array.from({ length: 41 }, () => 7),
+            };
+            game._object_descriptions.spellbooks[1] = 'ragged';
+        });
+        assert.match(spellbookResult.log[0], /^rn2\(46\)=/, spelling);
+        assert.equal(spellbookResult.item.cls, 'spellbook', spelling);
+        assert.equal(spellbookResult.item.glyph, '+', spelling);
+        assert.equal(spellbookResult.item.spellbookIndex, 1, spelling);
+        assert.equal(spellbookResult.item.spellName, 'magic missile', spelling);
+        assert.equal(spellbookResult.item.appearance, 'ragged', spelling);
+        assert.match(spellbookResult.item.line, /ragged spellbook/, spelling);
+        assert.equal(game._command_mode, null, spelling);
+        assert.equal(game._wish_tries, 0, spelling);
+        assert.equal(game.u.uconduct?.wishes, 1, spelling);
+    }
+});
+
+test('unknown labeled wished scrolls and spellbooks fall back to random class creation', async () => {
+    async function wishedUnknownLabel(text, seed = 1) {
+        installWishState(seed);
+        enableRngLog({ reset: true });
+        beginWishDirectly();
+        await submitWish(text);
+        return { item: game.inventory[0], log: [...getRngLog()] };
+    }
+
+    const scrollResult = await wishedUnknownLabel('scroll labeled "NOT A REAL LABEL"');
+    assert.match(scrollResult.log[0], /^rnd\(1000\)=/);
+    assert.equal(scrollResult.item.cls, 'scroll');
+    assert.equal(scrollResult.item.glyph, '?');
+    assert.notEqual(scrollResult.item.scrollIndex, -1);
+    assert.notEqual(scrollResult.item.actualKind, 'scroll');
+    assert.doesNotMatch(scrollResult.item.line, /scroll of scroll/);
+    assert.equal(game._command_mode, null);
+    assert.equal(game._wish_tries, 0);
+    assert.equal(game.u.uconduct?.wishes, 1);
+
+    const spellbookResult = await wishedUnknownLabel('spellbook labelled "NOT A REAL LABEL"');
+    assert.match(spellbookResult.log[0], /^rnd\(1000\)=/);
+    assert.equal(spellbookResult.item.cls, 'spellbook');
+    assert.equal(spellbookResult.item.glyph, '+');
+    assert.notEqual(spellbookResult.item.spellbookIndex, -1);
+    assert.notEqual(spellbookResult.item.kind, 'spellbook of spellbook');
+    assert.doesNotMatch(spellbookResult.item.line, /spellbook of spellbook/);
+    assert.equal(game._command_mode, null);
+    assert.equal(game._wish_tries, 0);
+    assert.equal(game.u.uconduct?.wishes, 1);
+});
+
 test('unresolved called range bases try C base namedesc before class fallback', async () => {
     async function wishedUnresolvedCalledRange(text, seed = 1) {
         installWishState(seed);
