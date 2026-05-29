@@ -376,6 +376,15 @@ function assertUsedUpBillForObject(shkp, obj, price) {
         String(bill.bo_id) === String(entry.bo_id) && bill.price === price), true);
 }
 
+function assertUsedUpTrackedBillForObject(shkp, obj, price) {
+    const entry = shop.shopBillEntryForObject(shkp, obj);
+    assert.ok(entry);
+    assert.equal(entry.useup, true);
+    assert.equal(shop.shopBillEntryTotal(entry), price);
+    assert.equal((game._usedUpShopBills || []).some(bill =>
+        String(bill.bo_id) === String(entry.bo_id) && bill.price === price), true);
+}
+
 function makeCrystalBallGazeDeterministic() {
     initRng(1);
     game.u.acurr.a[1] = 25;
@@ -13235,6 +13244,52 @@ test('ordinary unpaid carried potion shattering on hot ground preserves a used-u
     assert.ok(game.u._confusionTimeout > 0);
     assert.match(game.u._statusSuffix || '', /Conf/);
     assertUsedUpBillForObject(shkp, potion, 80);
+});
+
+test('floor-effect intact deletion preserves nested bill rows as used-up', () => {
+    const { shkp } = installShopState();
+    initRng(4);
+    game.level.flags = { temperature: 1 };
+    game.level.at = () => ({ roomno: ROOMOFFSET, typ: ROOM });
+    markHeroSquareVisible();
+    const potion = { ...confusionPotion(512050), letter: undefined, line: undefined, contents: [] };
+    const blade = putObjectInContainer(potion, dagger(512051));
+    shop.addObjectToShopBill(shkp, potion, 80);
+    shop.addObjectToShopBill(shkp, blade, 15);
+    const messages = [];
+
+    const consumed = earthFloorEffects(potion, 5, 5, messages, 'drop', { usedUpShopBillOnDestroy: true });
+
+    assert.equal(consumed, true);
+    assert.match(messages.join(' '), /The potion of confusion heats up as it hits the hot ground\./);
+    assertUsedUpTrackedBillForObject(shkp, blade, 15);
+    assertUsedUpTrackedBillForObject(shkp, potion, 80);
+    assert.equal(shkp.billct, 2);
+    assert.equal(blade.unpaid, false);
+    assert.equal(potion.unpaid, false);
+});
+
+test('lava-burned floor container does not mark surviving spilled child used-up', () => {
+    const { shkp } = installShopState();
+    game.level.at = () => ({ roomno: ROOMOFFSET, typ: LAVAPOOL });
+    const bag = { ...sack(512052), letter: undefined, line: undefined, ox: 5, oy: 5 };
+    const blade = putObjectInContainer(bag, dagger(512053));
+    shop.addObjectToShopBill(shkp, bag, 20);
+    shop.addObjectToShopBill(shkp, blade, 15);
+    const messages = [];
+
+    const consumed = earthFloorEffects(bag, 5, 5, messages, 'drop', { usedUpShopBillOnDestroy: true });
+
+    assert.equal(consumed, true);
+    assert.equal(bag.contents.length, 0);
+    assert.equal(game.level.objects.includes(blade), true);
+    assertUsedUpTrackedBillForObject(shkp, bag, 20);
+    const bladeEntry = shop.shopBillEntryForObject(shkp, blade);
+    assert.ok(bladeEntry);
+    assert.notEqual(bladeEntry.useup, true);
+    assert.equal(blade.unpaid, true);
+    assert.equal((game._usedUpShopBills || []).some(bill => String(bill.bo_id) === String(bladeEntry.bo_id)), false);
+    assert.equal(shkp.billct, 2);
 });
 
 test('unpaid carried object falling through a hole converts bill row to shop debt', () => {

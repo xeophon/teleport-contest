@@ -9108,7 +9108,7 @@ function useUpFloorObject(obj, count, { heroCaused = false } = {}) {
 function floorEffectRemoveObject(removeObject, usedUpShopBillOnDestroy = false) {
     if (!usedUpShopBillOnDestroy) return removeObject;
     return obj => {
-        markObjectShopBillUsedUp(obj);
+        markObjectTreeShopBillsUsedUp(obj);
         removeObject(obj);
     };
 }
@@ -9391,7 +9391,6 @@ function fireDamageFloorContainer(obj, messages, visible, {
     const contents = [...liquidFlowContainerContents(obj)];
     if (visible) messages.push(`${floorObjectSubject(obj)} catches fire and burns.`);
     if (contents.length && visible) messages.push('Its contents fall out.');
-    removeObject(obj);
     for (const content of contents) {
         removeContainedObject(obj, content);
         placeLiquidFlowFloorObject(content, x, y);
@@ -9399,6 +9398,7 @@ function fireDamageFloorContainer(obj, messages, visible, {
         else spillQueue.push({ obj: content, mode: 'flooreffects' });
     }
     clearLiquidFlowContainerContents(obj);
+    removeObject(obj);
     return true;
 }
 
