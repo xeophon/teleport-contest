@@ -6,7 +6,7 @@ import { nhgetch } from './input.js';
 import { bot, cls, docrt, flush_screen, newsym, pline, recordObservedObjectDiscovery, refreshHallucinatedMap, seeNearbyObjects, show_glyph_cell, strengthString } from './display.js';
 import { cansee, couldsee, vision_recalc, vision_reset } from './vision.js';
 import { RANDOM_MONSTER_BY_NAME, SHOP_TYPES, STALKER_MONSTERS, add_to_container, add_to_minv, adjustedMonsterLevel, artifactDefinitionForName, artifactObjectName, enextoMonsterSpot, make_tutorial1_level, makemon, makeArtifactWishObject, maketrap, mkcorpstat, mklev, mkobj, mkobj_at, mksobj, monsterByRndName, monster_hp, morgueMonster, nameObjectAsArtifact, next_ident, object_display, potionIndexForRoll, resurrectWizardOfYendor, rndmonnum, scrollIndexForRoll, set_mimic_sym_rng, syncDungeonContext, u_on_dnstairs, u_on_rndspot, u_on_upstairs, wipe_engr_at, dropMonsterInventory as dropMonsterInventoryRaw, l_nhcore_init, getrumor, getbogusmon, level_difficulty, set_malign, somexyspace, fumaroles, fix_wall_spines, createMonsterCorpseOrGlob, monsterCorpseDropSucceeds, monsterLeavesCorpseLikeDrop, movebubbles } from './mklev.js';
-import { ACCESSIBLE, A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_MAX, A_NEUTRAL, A_NONE, A_STR, A_WIS, ALTAR, AM_SANCTUM, AM_SHRINE, Align2amask, Amask2align, BC_BALL, BC_CHAIN, BEAR_TRAP, BLCORNER, BOLT_LIM, BRCORNER, CANDLESHOP, CLOUD, COLNO, CORPSTAT_FEMALE, CORPSTAT_GENDER, CORPSTAT_HISTORIC, CORPSTAT_MALE, CORPSTAT_NEUTER, CORR, DB_DIR, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DB_NORTH, DB_SOUTH, DB_UNDER, DB_WEST, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, BURN, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, D_TRAPPED, DUST, ENGRAVE, ENGR_BLOOD, FOUNTAIN, F_LOOTED, GRAVE, HEADSTONE, HWALL, ICE, ICED_MOAT, ICED_POOL, IN_SIGHT, IRONBARS, IS_AIR, IS_FURNITURE, IS_LAVA, IS_OBSTRUCTED, IS_POOL, IS_ROOM, IS_TREE, IS_WALL, In_endgame, In_quest, In_sokoban, In_V_tower, Is_airlevel, Is_astralevel, Is_botlevel, Is_earthlevel, Is_firelevel, Is_rogue_level, Is_stronghold, Is_waterlevel, LADDER, LAVAPOOL, LAVAWALL, MAGIC_PORTAL, MARK, MAX_EGG_HATCH_TIME, MM_ADJACENTOK, MM_EDOG, MM_NOCOUNTBIRTH, MM_NOMSG, MM_NOWAIT, MOAT, MORGUE, M_AP_TYPE, N_DIRS, NO_MINVENT, NORMAL_SPEED, OVERLOADED, P_BASIC, P_UNSKILLED, PIT, POOL, ROLLING_BOULDER_TRAP, ROOM, ROOMOFFSET, ROWNO, SCORR, SDOOR, SHARED, SHARED_PLUS, SHOPBASE, SINK, SPIKED_PIT, STAIRS, STONE, STRAT_WAITMASK, S_LDWASHER, S_LPUDDING, S_LRING, TDWALL, TEMPLE, THRONE, TLCORNER, TRCORNER, TREE, TREE_LOOTED, TREE_SWARM, TT_BEARTRAP, TT_BURIEDBALL, TT_INFLOOR, TT_LAVA, TT_PIT, TT_WEB, TUWALL, T_LOOTED, VAULT, VIBRATING_SQUARE, VWALL, WAND_BACKFIRE_CHANCE, WATER, WEB, WM_MASK, WT_IRON_BALL_BASE, WT_IRON_BALL_INCR, W_NONDIGGABLE, W_SADDLE, ZAP_POS, isok, xdir, ydir } from './const.js';
+import { ACCESSIBLE, A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_MAX, A_NEUTRAL, A_NONE, A_STR, A_WIS, ALTAR, AM_SANCTUM, AM_SHRINE, Align2amask, Amask2align, BC_BALL, BC_CHAIN, BEAR_TRAP, BLCORNER, BOLT_LIM, BRCORNER, CANDLESHOP, CLOUD, COLNO, CORPSTAT_FEMALE, CORPSTAT_GENDER, CORPSTAT_HISTORIC, CORPSTAT_MALE, CORPSTAT_NEUTER, CORR, DB_DIR, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DB_NORTH, DB_SOUTH, DB_UNDER, DB_WEST, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, BURN, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, D_TRAPPED, DUST, ENGRAVE, ENGR_BLOOD, FOUNTAIN, F_LOOTED, GRAVE, HEADSTONE, HWALL, ICE, ICED_MOAT, ICED_POOL, IN_SIGHT, IRONBARS, IS_AIR, IS_FURNITURE, IS_LAVA, IS_OBSTRUCTED, IS_POOL, IS_ROOM, IS_TREE, IS_WALL, In_endgame, In_quest, In_sokoban, In_V_tower, Is_airlevel, Is_astralevel, Is_botlevel, Is_earthlevel, Is_firelevel, Is_rogue_level, Is_stronghold, Is_waterlevel, LADDER, LAVAPOOL, LAVAWALL, MAGIC_PORTAL, MARK, MAX_EGG_HATCH_TIME, MM_ADJACENTOK, MM_EDOG, MM_NOCOUNTBIRTH, MM_NOMSG, MM_NOWAIT, MOAT, MORGUE, M_AP_TYPE, N_DIRS, NO_MINVENT, NORMAL_SPEED, OVERLOADED, P_BASIC, P_UNSKILLED, PIT, POOL, ROLLING_BOULDER_TRAP, ROOM, ROOMOFFSET, ROWNO, SCORR, SDOOR, SHARED, SHARED_PLUS, SHOPBASE, SINK, SPIKED_PIT, STAIRS, STONE, STRAT_WAITMASK, S_LDWASHER, S_LPUDDING, S_LRING, TDWALL, TEMPLE, THRONE, TLCORNER, TRCORNER, TREE, TREE_LOOTED, TREE_SWARM, TT_BEARTRAP, TT_BURIEDBALL, TT_INFLOOR, TT_LAVA, TT_PIT, TT_WEB, TUWALL, T_LOOTED, VAULT, VIBRATING_SQUARE, VWALL, WAND_BACKFIRE_CHANCE, WATER, WEB, WM_MASK, WT_IRON_BALL_BASE, WT_IRON_BALL_INCR, WT_TO_DMG, W_NONDIGGABLE, W_SADDLE, ZAP_POS, isok, xdir, ydir } from './const.js';
 import { d, rn1, rn2, rn2_on_display_rng, rnd, rnl, rnz } from './rng.js';
 import { CLR_BLACK, CLR_BLUE, CLR_BRIGHT_BLUE, CLR_BRIGHT_CYAN, CLR_BRIGHT_GREEN, CLR_BROWN, CLR_CYAN, CLR_GRAY, CLR_GREEN, CLR_MAGENTA, CLR_ORANGE, CLR_RED, CLR_YELLOW, CLR_WHITE, NO_COLOR } from './terminal.js';
 import { vfsDeleteFile, vfsReadFile, vfsWriteFile } from './storage.js';
@@ -15288,13 +15288,27 @@ function heroThrownCorpseWeight(corpse) {
     return CORPSE_WEIGHTS.get(corpseName) || Math.max(1, Math.trunc(Number(corpse?.corpsenm?.cwt || 20)));
 }
 
+function heroHasHalfPhysicalDamage() {
+    return !!(game.u?.halfPhysicalDamage
+        || game.u?.half_physical_damage
+        || game.u?.halfPhysical
+        || game.u?.halfPhysicalDamageTimeout
+        || game.u?.extrinsics?.halfPhysicalDamage
+        || game.u?.intrinsics?.halfPhysicalDamage);
+}
+
+function maybeHalfPhysicalDamage(damage) {
+    return heroHasHalfPhysicalDamage() ? Math.trunc((damage + 1) / 2) : damage;
+}
+
 function heroThrownCorpseFallingDamage(corpse, helmet = null) {
-    const weightDamage = Math.max(1, Math.ceil(heroThrownCorpseWeight(corpse) / 100));
+    const weightDamage = Math.max(1, Math.ceil(heroThrownCorpseWeight(corpse) / WT_TO_DMG));
     let damage = weightDamage <= 1 ? 1 : rnd(weightDamage);
     if (damage > 6) damage = 6;
     if (helmet && hardEarthHelmet(helmet) && damage > 1) damage = 1;
-    damage += Math.trunc(Number(game.u?.udaminc || 0));
-    return Math.max(0, damage);
+    if (damage > 0) damage += Math.trunc(Number(game.u?.udaminc || 0));
+    if (damage < 0) damage = 0;
+    return maybeHalfPhysicalDamage(damage);
 }
 
 function applyHeroThrownCorpseFallingDamage(damage, messages) {
@@ -15340,6 +15354,36 @@ function heroThrownTouchPetrifyingCorpseUpwardMessages(corpse, prefixMessages = 
         return heroThrownTouchPetrifyingCorpseSelfHitMessages(corpse, 'hits', ceilingName, prefixMessages);
     }
     return heroThrownTouchPetrifyingCorpseSelfHitMessages(corpse, 'almost hits', ceilingName, prefixMessages);
+}
+
+function heroThrownOrdinaryCorpseSelfHitMessages(corpse, action, ceilingName = heroThrowCeilingName()) {
+    const messages = [
+        `${floorObjectSubject({ ...corpse, quan: 1 })} ${action} the ${ceilingName}, then falls back on top of your head.`,
+    ];
+    projectileTopLevelBreakKind(corpse); // C breaktest consumes obj_resists() even though corpses do not break.
+
+    const helmet = wornTossUpHelmet();
+    const damage = heroThrownCorpseFallingDamage(corpse, helmet);
+    if (helmet && hardEarthHelmet(helmet) && damage < (game.u?.uhp || 0))
+        messages.push('Fortunately, you are wearing a hard helmet.');
+
+    const landing = landProjectileObjectWithShopHandling(corpse, game.u?.ux || corpse.ox || 0, game.u?.uy || corpse.oy || 0, {});
+    messages.push(...landing.messages);
+    applyHeroThrownCorpseFallingDamage(damage, messages);
+    return messages;
+}
+
+function heroThrownOrdinaryCorpseUpwardMessages(corpse) {
+    const ceilingName = heroThrowCeilingName();
+    const hasCeiling = heroHasThrowCeiling();
+    const hitsRoof = !!(rn2(5) && !heroIsUnderwaterForThrow());
+    if (!hasCeiling)
+        return heroThrownOrdinaryCorpseSelfHitMessages(corpse, 'flies up into', ceilingName);
+    if (hitsRoof) {
+        projectileTopLevelBreakKind(corpse); // C tests for ceiling breakage before choosing the "hits" wording.
+        return heroThrownOrdinaryCorpseSelfHitMessages(corpse, 'hits', ceilingName);
+    }
+    return heroThrownOrdinaryCorpseSelfHitMessages(corpse, 'almost hits', ceilingName);
 }
 
 function heroThrownTouchPetrifyingEggCeilingBreakMessages(egg, ceilingName = heroThrowCeilingName()) {
@@ -25436,6 +25480,12 @@ function isPetrifyingCorpseObject(obj) {
     if (!(obj?.otyp === CORPSE || obj?.otyp === 'corpse')) return false;
     const name = corpseMonsterName(obj).toLowerCase();
     return name === 'cockatrice' || name === 'chickatrice' || !!obj?.corpsenm?.touchPetrifies;
+}
+
+function isRiderCorpseObject(obj) {
+    if (!(obj?.otyp === CORPSE || obj?.otyp === 'corpse')) return false;
+    const name = corpseMonsterName(obj).toLowerCase();
+    return name === 'death' || name === 'famine' || name === 'pestilence';
 }
 
 function containerTakeoutFatalCorpseMessage(obj) {
@@ -52434,6 +52484,43 @@ export async function rhack(_cmd) {
                 game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
                 return;
             }
+            if (messages.fatal) {
+                game._command_mode = 'deathDieMore';
+                game._pending_time_passed = 0;
+                game._process_command_time_now = 0;
+                game._run_steps_remaining = 0;
+                prepareDeathBones();
+                return;
+            }
+            game._command_mode = null;
+            game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
+            return;
+        }
+        if (ch === '<' && isCorpseItem(item) && !isRiderCorpseObject(item)) {
+            let thrownId = null;
+            if ((item.quan || 1) > 1) thrownId = next_ident();
+            const thrownObject = {
+                ...item,
+                letter: undefined,
+                line: undefined,
+                wielded: false,
+                worn: false,
+                quivered: false,
+                ox: game.u?.ux || 0,
+                oy: game.u?.uy || 0,
+                id: thrownId ?? item.id,
+                quan: 1,
+                glyph: '%',
+                color: item.color || CLR_BROWN,
+            };
+            if ((item.quan || 1) > 1) splitCarriedObjectShopBill(item, thrownObject, 1);
+            removeInventoryItem(item, 1);
+            const messages = heroThrownOrdinaryCorpseUpwardMessages(thrownObject);
+            newsym(game.u?.ux || 0, game.u?.uy || 0);
+            await setMessage(messages.join('  '), !!messages.more);
+            game._throw_item_letter = null;
+            game._resume_time_after_more = 0;
+            game.context.move = 0;
             if (messages.fatal) {
                 game._command_mode = 'deathDieMore';
                 game._pending_time_passed = 0;

@@ -20037,6 +20037,127 @@ test('upward hero-thrown cockatrice corpse is blocked by hard helmet and lands',
     ]);
 });
 
+test('upward hero-thrown ordinary corpse self-hits, damages, and lands', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, { uhp: 30, uhpmax: 30 });
+    const body = corpse(876890, 'n', 'newt');
+    game.inventory = [body];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('n');
+    await rhack('<');
+
+    const message = game._pending_message || '';
+    assert.equal(game._command_mode, null);
+    assert.match(message, /A newt corpse almost hits the ceiling, then falls back on top of your head\./);
+    assert.doesNotMatch(message, /cmdassist|In what direction|Splat|turn to stone|Fortunately/);
+    assert.equal(game.u.uhp, 29);
+    assert.equal(game.inventory.includes(body), false);
+    assert.equal(game.level.objects.length, 1);
+    const landed = game.level.objects[0];
+    assert.equal(landed.otyp, 'corpse');
+    assert.equal(landed.corpsenm?.name, 'newt');
+    assert.equal(landed.ox, game.u.ux);
+    assert.equal(landed.oy, game.u.uy);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rn2(5)', 'rn2(100)', 'rn2(100)',
+    ]);
+});
+
+test('upward hero-thrown heavy ordinary corpse hard helmet caps falling damage', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, { uhp: 30, uhpmax: 30 });
+    const body = { ...corpse(876891, 'b', 'bugbear'), owt: 600 };
+    const helmet = wornArmor(876892, 'orcish helm', 'h', 0);
+    game.inventory = [body, helmet];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('b');
+    await rhack('<');
+
+    const message = game._pending_message || '';
+    assert.equal(game._command_mode, null);
+    assert.match(message, /A bugbear corpse hits the ceiling, then falls back on top of your head\./);
+    assert.match(message, /Fortunately, you are wearing a hard helmet\./);
+    assert.doesNotMatch(message, /cmdassist|In what direction|Splat|turn to stone/);
+    assert.equal(game.u.uhp, 29);
+    assert.equal(game.inventory.includes(body), false);
+    assert.equal(game.inventory.includes(helmet), true);
+    assert.equal(game.level.objects.length, 1);
+    const landed = game.level.objects[0];
+    assert.equal(landed.otyp, 'corpse');
+    assert.equal(landed.corpsenm?.name, 'bugbear');
+    assert.equal(landed.ox, game.u.ux);
+    assert.equal(landed.oy, game.u.uy);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rn2(5)', 'rn2(100)', 'rn2(100)', 'rnd(6)', 'rn2(100)',
+    ]);
+});
+
+test('upward hero-thrown ordinary corpse applies half physical damage after bonuses', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, {
+        uhp: 30,
+        uhpmax: 30,
+        udaminc: 2,
+        halfPhysicalDamage: true,
+    });
+    const body = corpse(876893, 'n', 'newt');
+    game.inventory = [body];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('n');
+    await rhack('<');
+
+    const message = game._pending_message || '';
+    assert.equal(game._command_mode, null);
+    assert.match(message, /A newt corpse almost hits the ceiling, then falls back on top of your head\./);
+    assert.doesNotMatch(message, /cmdassist|In what direction|Splat|turn to stone|Fortunately/);
+    assert.equal(game.u.uhp, 28);
+    assert.equal(game.inventory.includes(body), false);
+    assert.equal(game.level.objects.length, 1);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rn2(5)', 'rn2(100)', 'rn2(100)',
+    ]);
+});
+
+test('upward hero-thrown ordinary corpse lands before fatal falling-object damage', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, { uhp: 1, uhpmax: 1 });
+    const body = corpse(876894, 'n', 'newt');
+    game.inventory = [body];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('n');
+    await rhack('<');
+
+    const message = game._pending_message || '';
+    assert.equal(game._command_mode, 'deathDieMore');
+    assert.match(message, /A newt corpse almost hits the ceiling, then falls back on top of your head\./);
+    assert.match(message, /You die\.\.\./);
+    assert.doesNotMatch(message, /cmdassist|In what direction|Splat|turn to stone/);
+    assert.equal(game.u.uhp, 0);
+    assert.equal(game._death_cause, 'killed by a falling object');
+    assert.equal(game.inventory.includes(body), false);
+    assert.equal(game.level.objects.length, 1);
+    const landed = game.level.objects[0];
+    assert.equal(landed.otyp, 'corpse');
+    assert.equal(landed.corpsenm?.name, 'newt');
+    assert.equal(landed.ox, game.u.ux);
+    assert.equal(landed.oy, game.u.uy);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 3), [
+        'rn2(5)', 'rn2(100)', 'rn2(100)',
+    ]);
+});
+
 test('upward hero-thrown unpaid ordinary egg from a stack bills one broken unit', async () => {
     const { shkp } = installCommandShopState();
     initRng(5);
