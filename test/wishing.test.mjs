@@ -18,6 +18,9 @@ import { currentFruitId, setCurrentFruitName } from '../js/fruit.js';
 const BELL = 358;
 const GOLD_PIECE = 466;
 const TOOL_CLASS = 12;
+const SACK = 217;
+const OILSKIN_SACK = 218;
+const BAG_OF_HOLDING = 219;
 const LAND_MINE_OBJECT = 10160;
 const BEARTRAP_OBJECT = 10161;
 const FIGURINE = 795;
@@ -36,6 +39,7 @@ const MAGIC_MARKER = 10084;
 const TINNING_KIT = 10170;
 const CAN_OF_GREASE = 10171;
 const MAGIC_FLUTE = 946;
+const TOOLED_HORN = 10162;
 const FROST_HORN = 953;
 const FIRE_HORN = 955;
 const MAGIC_HARP = 10169;
@@ -1006,6 +1010,40 @@ test('wished charged tools use C object metadata rows', async () => {
     assert.equal(item.owt, 150);
     assert.equal(shop.shopBaseCost(item), 60);
     assert.match(item.line, /glass orb/);
+});
+
+test('generic wished object ranges use C rnd_class candidates', async () => {
+    const cases = [
+        ['bag', new Set([SACK, OILSKIN_SACK, BAG_OF_HOLDING, BAG_OF_TRICKS])],
+        ['candle', new Set([TALLOW_CANDLE, WAX_CANDLE])],
+        ['horn', new Set([TOOLED_HORN, FROST_HORN, FIRE_HORN, HORN_OF_PLENTY])],
+    ];
+
+    for (const [wish, allowed] of cases) {
+        const seen = new Set();
+        for (let seed = 1; seed <= 30; seed++) {
+            installWishState(seed, { debug: false });
+            beginWishDirectly();
+            await submitWish(wish);
+
+            const item = game.inventory[0];
+            assert.equal(game._command_mode, null, wish);
+            assert.ok(allowed.has(item.otyp), `${wish} produced ${item.otyp}`);
+            assert.notEqual(item.otyp, TOOL_CLASS, wish);
+            seen.add(item.otyp);
+
+            if (item.otyp === BAG_OF_TRICKS || item.otyp === HORN_OF_PLENTY) {
+                assert.ok(item.spe >= 3 && item.spe <= 20, wish);
+                assert.equal(item.owt, item.otyp === BAG_OF_TRICKS ? 15 : 18, wish);
+                assert.equal(shop.shopBaseCost(item), item.otyp === BAG_OF_TRICKS ? 100 : 50, wish);
+            } else if (item.otyp === FROST_HORN || item.otyp === FIRE_HORN) {
+                assert.ok(item.spe >= 4 && item.spe <= 8, wish);
+                assert.equal(item.owt, 18, wish);
+                assert.equal(shop.shopBaseCost(item), 50, wish);
+            }
+        }
+        assert.ok(seen.size > 1, `${wish} should not collapse to one concrete object`);
+    }
 });
 
 test('wished camera tinning kit and grease use C charged-tool metadata rows', async () => {

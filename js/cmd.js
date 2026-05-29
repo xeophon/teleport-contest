@@ -1604,6 +1604,24 @@ const WISH_TOOL_OTYPES = new Map([
 const WISH_TOOL_NAMEDESC_BOUNDS = new Map([
     ['magic harp', 3], ['leash', 66], ['lenses', 6],
 ]);
+const WISH_OBJECT_RANGES = new Map([
+    ['bag', [
+        ['sack', 35],
+        ['oilskin sack', 5],
+        ['bag of holding', 20],
+        ['bag of tricks', 20],
+    ]],
+    ['candle', [
+        ['tallow candle', 20],
+        ['wax candle', 5],
+    ]],
+    ['horn', [
+        ['tooled horn', 5],
+        ['frost horn', 2],
+        ['fire horn', 2],
+        ['horn of plenty', 2],
+    ]],
+]);
 const WISH_AMULET_NAMEDESC_BOUNDS = new Map([
     ['amulet of esp', 121],
     ['amulet of life saving', 76],
@@ -29382,6 +29400,31 @@ function makeWishedBaseObject(baseObject, metadata) {
     }
 }
 
+function wishedObjectRangeName(lowerName) {
+    const range = WISH_OBJECT_RANGES.get(lowerName);
+    if (!range) return '';
+    const total = range.reduce((sum, [, prob]) => sum + prob, 0);
+    if (total <= 0) return range[rn2(range.length)]?.[0] || '';
+    let roll = rnd(total);
+    for (const [name, prob] of range) {
+        roll -= prob;
+        if (roll <= 0) return name;
+    }
+    return range[0]?.[0] || '';
+}
+
+function makeWishedObjectRangeObject(lowerName) {
+    const rangeName = wishedObjectRangeName(lowerName);
+    if (!rangeName) return null;
+    const baseObject = WISH_BASE_OBJECTS.get(rangeName);
+    if (!baseObject) return null;
+    const baseFields = { ...baseObject };
+    delete baseFields.wishSpeRn1;
+    const metadata = wishObjectMetadataForName(rangeName) ?? wishObjectMetadataForItem(baseFields);
+    const otmp = makeWishedBaseObject(baseObject, metadata);
+    return Object.assign(otmp, baseFields, { wishedfor: true });
+}
+
 function makeWishedFruitObject(lowerName) {
     const fruit = fruitWishMatch(lowerName);
     if (!fruit) return null;
@@ -29460,6 +29503,9 @@ function wishedBaseObjectFromName(lowerName, qualifiers = {}, originalName = low
     if (specialSubstitution) return specialSubstitution;
     const localWishMetadata = wishObjectMetadataForName(lowerName);
     if (localWishMetadata?.ocNowish && !game.flags?.debug) return noFittingWishObject();
+
+    const rangeWish = makeWishedObjectRangeObject(lowerName);
+    if (rangeWish) return rangeWish;
 
     const dragonArmorWish = parseWishedDragonArmorName(lowerName);
     if (dragonArmorWish) return makeWishedDragonArmorObject(dragonArmorWish);
