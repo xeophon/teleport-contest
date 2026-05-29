@@ -677,6 +677,12 @@ function hasToolDiscovery(name) {
         entry.section === 'Tools' && entry.name === name && entry.known !== false);
 }
 
+async function enterTipCommand() {
+    await rhack('#');
+    for (const ch of 'tip') await rhack(ch);
+    await rhack('\n');
+}
+
 function testObjectKind(item) {
     return String(item?.actualKind || item?.kind || '').toLowerCase()
         .replace(/^(?:blessed|uncursed|cursed) /, '');
@@ -2579,17 +2585,12 @@ test('known bag of tricks is excluded as a #tip destination', async () => {
     };
     game.inventory = [source, target];
 
-    await rhack('#');
-    for (const ch of 'tip') await rhack(ch);
-    await rhack('\n');
+    await enterTipCommand();
 
     assert.equal(game._command_mode, 'tipContainerObject');
+    assert.match(game._pending_message, /What do you want to tip\? \[sb or \?\*\]/);
 
     await rhack('s');
-
-    assert.equal(game._command_mode, 'tipConfirm');
-
-    await rhack('y');
 
     assert.equal(game._command_mode, null);
     assert.equal(game.context.move, 1);
@@ -2623,14 +2624,194 @@ test('floor horn of plenty is not selected as a #tip source', async () => {
     game.level.objects = [horn];
     game.inventory = [carried];
 
-    await rhack('#');
-    for (const ch of 'tip') await rhack(ch);
-    await rhack('\n');
+    await enterTipCommand();
 
-    assert.equal(game._command_mode, 'tipConfirm');
-    assert.equal(game._tip_container_object, carried);
-    assert.match(game._pending_message, /Tip a sack/);
+    assert.equal(game._command_mode, 'tipContainerObject');
+    assert.equal(game._tip_container_object || null, null);
+    assert.match(game._pending_message, /What do you want to tip\? \[s or \?\*\]/);
     assert.doesNotMatch(game._pending_message, /horn of plenty/);
+});
+
+test('tip question menu shows suggested sources while star menu exposes downplayed inventory', async () => {
+    installCommandShopState();
+    const source = sack(30630, 's');
+    const towel = ordinaryTool(30631, 'towel', 't');
+    game.inventory = [source, towel];
+
+    await enterTipCommand();
+
+    assert.equal(game._command_mode, 'tipContainerObject');
+    assert.match(game._pending_message, /What do you want to tip\? \[s or \?\*\]/);
+
+    await rhack('?');
+
+    let menuText = (game._overlay_lines || []).map(row => row[2]).join('\n');
+    assert.match(menuText, /s - a sack/);
+    assert.doesNotMatch(menuText, /t - a towel/);
+
+    await rhack('*');
+
+    menuText = (game._overlay_lines || []).map(row => row[2]).join('\n');
+    assert.match(menuText, /s - a sack/);
+    assert.match(menuText, /t - a towel/);
+});
+
+test('unknown horn of plenty is downplayed but directly selectable for tip', async () => {
+    installCommandShopState();
+    const horn = { ...chargedTool(30632, 'horn', 'h', 0), otyp: HORN_OF_PLENTY, actualKind: 'horn of plenty', known: false, dknown: true };
+    game.inventory = [horn];
+
+    await enterTipCommand();
+
+    assert.equal(game._command_mode, 'tipContainerObject');
+    assert.match(game._pending_message, /What do you want to tip\? \[\*\]/);
+
+    await rhack('?');
+
+    const menuText = (game._overlay_lines || []).map(row => row[2]).join('\n');
+    assert.match(menuText, /h - a horn/);
+
+    await rhack('h');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.match(game._pending_message, /Nothing happens\./);
+});
+
+test('known horn of plenty is suggested as a tip source', async () => {
+    installCommandShopState();
+    game._discoveries = [{ section: 'Tools', name: 'horn of plenty', text: 'horn of plenty', known: true }];
+    const horn = { ...chargedTool(30633, 'horn of plenty', 'h', 0), otyp: HORN_OF_PLENTY, known: false, dknown: true };
+    const towel = ordinaryTool(30634, 'towel', 't');
+    game.inventory = [horn, towel];
+
+    await enterTipCommand();
+
+    assert.equal(game._command_mode, 'tipContainerObject');
+    assert.match(game._pending_message, /What do you want to tip\? \[h or \?\*\]/);
+
+    await rhack('?');
+
+    const menuText = (game._overlay_lines || []).map(row => row[2]).join('\n');
+    assert.match(menuText, /h - a horn of plenty/);
+    assert.doesNotMatch(menuText, /t - a towel/);
+});
+
+test('ordinary carried tip selections use C no-effect branches without a move', async () => {
+    installCommandShopState();
+    const towel = ordinaryTool(30635, 'towel', 't');
+    game.inventory = [towel];
+
+    await enterTipCommand();
+
+    assert.equal(game._command_mode, 'tipContainerObject');
+    assert.match(game._pending_message, /What do you want to tip\? \[\*\]/);
+
+    await rhack('t');
+
+    assert.equal(game._command_mode, null);
+    assert.notEqual(game.context.move, 1);
+    assert.match(game._pending_message, /Nothing happens\./);
+});
+
+test('potion tip selections report sealed bottles without a move', async () => {
+    installCommandShopState();
+    const potion = waterPotion(30636, 'w');
+    game.inventory = [potion];
+
+    await enterTipCommand();
+
+    assert.equal(game._command_mode, 'tipContainerObject');
+    assert.match(game._pending_message, /What do you want to tip\? \[\*\]/);
+
+    await rhack('w');
+
+    assert.equal(game._command_mode, null);
+    assert.notEqual(game.context.move, 1);
+    assert.match(game._pending_message, /The potion of water is securely sealed\./);
+});
+
+test('tip excludes gold and rejects direct gold selection', async () => {
+    installCommandShopState();
+    const gold = { id: 30637, otyp: 466, cls: 'coin', glyph: '$', kind: 'gold piece', actualKind: 'gold piece', quan: 7, letter: '$', line: '$ - 7 gold pieces' };
+    const source = sack(30638, 's');
+    game.inventory = [gold, source];
+
+    await enterTipCommand();
+
+    assert.equal(game._command_mode, 'tipContainerObject');
+    assert.match(game._pending_message, /What do you want to tip\? \[s or \?\*\]/);
+
+    await rhack('*');
+
+    const menuText = (game._overlay_lines || []).map(row => row[2]).join('\n');
+    assert.match(menuText, /s - a sack/);
+    assert.doesNotMatch(menuText, /gold/);
+
+    await rhack('$');
+
+    assert.equal(game._command_mode, null);
+    assert.notEqual(game.context.move, 1);
+    assert.match(game._pending_message, /You cannot tip gold\./);
+});
+
+test('tip with only gold has no carried source prompt', async () => {
+    installCommandShopState();
+    const gold = { id: 30639, otyp: 466, cls: 'coin', glyph: '$', kind: 'gold piece', actualKind: 'gold piece', quan: 7, letter: '$', line: '$ - 7 gold pieces' };
+    game.inventory = [gold];
+
+    await enterTipCommand();
+
+    assert.equal(game._command_mode || null, null);
+    assert.notEqual(game.context.move, 1);
+    assert.match(game._pending_message, /You don't have anything to tip\./);
+});
+
+test('canceling tip destination after source selection spends the action', async () => {
+    installCommandShopState();
+    const source = sack(30640, 's');
+    const ration = putObjectInContainer(source, foodRation(30641));
+    const target = sack(30642, 'b');
+    game.inventory = [source, target];
+
+    await enterTipCommand();
+    await rhack('s');
+
+    assert.equal(game._command_mode, 'tipDestination');
+
+    await rhack('\x1b');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(source.contents.includes(ration), true);
+    assert.equal(game.level.objects.includes(ration), false);
+});
+
+test('tip crumbs use plural water and lava spillage verbs', async () => {
+    installCommandShopState();
+    const ration = foodRation(30643, 'f');
+    game.inventory = [ration];
+    game.level.at = () => ({ typ: POOL, roomno: ROOMOFFSET });
+
+    await enterTipCommand();
+    await rhack('f');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.match(game._pending_message, /Some crumbs spill onto the water and gradually dissipate\./);
+
+    resetInputState();
+    installCommandShopState();
+    const lavaRation = foodRation(30644, 'f');
+    game.inventory = [lavaRation];
+    game.level.at = () => ({ typ: LAVAPOOL, roomno: ROOMOFFSET });
+
+    await enterTipCommand();
+    await rhack('f');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.match(game._pending_message, /Some crumbs spill onto the lava and immediately burn away\./);
 });
 
 test('floor shop bag of tricks #tip charges emptying fee through a temporary bill row', async () => {
@@ -8287,16 +8468,14 @@ test('tipping an unpaid can of grease spills first then bills one charge', async
     shop.addObjectToShopBill(shkp, grease, 100);
     const expectedFee = expectedUnpaidUsageFee(grease);
 
-    await rhack('#');
-    for (const ch of 'tip') await rhack(ch);
-    await rhack('\n');
+    await enterTipCommand();
 
-    assert.equal(game._command_mode, 'tipConfirm');
-    assert.match(game._pending_message, /Tip a can of grease/);
+    assert.equal(game._command_mode, 'tipContainerObject');
+    assert.match(game._pending_message, /What do you want to tip\? \[\*\]/);
     assert.equal(grease.spe, 4);
     assert.equal(shkp.debit || 0, 0);
 
-    await rhack('y');
+    await rhack('g');
 
     assert.equal(game._command_mode, null);
     assert.equal(game.context.move, 1);
