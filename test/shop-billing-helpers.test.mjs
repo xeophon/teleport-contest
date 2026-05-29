@@ -6,7 +6,7 @@ import { activateStatueTrap, burnFloorObjectsByFire, earthFloorEffects, finishFo
 import { game, resetGame } from '../js/gstate.js';
 import { pushKey, resetInputState } from '../js/input.js';
 import { enableRngLog, getRngLog, initRng } from '../js/rng.js';
-import { A_CON, A_DEX, A_STR, BILLSZ, CANDLESHOP, CLOUD, COULD_SEE, DB_EAST, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, D_CLOSED, D_NODOOR, FOUNTAIN, HOLE, ICE, ICED_POOL, IN_SIGHT, LAVAPOOL, MOAT, NORMAL_SPEED, PIT, POOL, ROOM, ROOMOFFSET, SDOOR, SHOPBASE, SQKY_BOARD, STATUE_TRAP, STONE, STRAT_WAITFORU, TRAPDOOR, TT_WEB, WEB, W_SADDLE } from '../js/const.js';
+import { A_CON, A_DEX, A_STR, BILLSZ, CANDLESHOP, CLOUD, CORPSTAT_HISTORIC, COULD_SEE, DB_EAST, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, D_CLOSED, D_NODOOR, FOUNTAIN, HOLE, ICE, ICED_POOL, IN_SIGHT, LAVAPOOL, MOAT, NORMAL_SPEED, PIT, POOL, ROOM, ROOMOFFSET, SDOOR, SHOPBASE, SQKY_BOARD, STATUE_TRAP, STONE, STRAT_WAITFORU, TRAPDOOR, TT_WEB, WEB, W_SADDLE } from '../js/const.js';
 import { currentFruitId, setCurrentFruitName } from '../js/fruit.js';
 
 const BRASS_LANTERN = 226;
@@ -4922,6 +4922,54 @@ test('downward stone to flesh gives a named ordinary statue name to the monster'
     assert.ok(monster);
     assert.equal(monster.givenName, 'Ada');
     assert.match(game._pending_message || '', /The statue of a goblin named Ada comes to life!/);
+    assertNoStoneToFleshScoreSideEffects();
+});
+
+test('downward stone to flesh historic statue makes Archeologist feel guilty', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    markHeroNeighborhoodVisible();
+    game._startup_role = 'Archeologist';
+    game.urole = { name: { m: 'Archeologist' } };
+    game.u.ualign = { type: 1, record: 4, abuse: 2 };
+    const statue = stoneToFleshStatue(311131, 5, 5,
+        vegetarianCorpstatMonster('goblin', 'o', { neuter: false, mmove: 6 }));
+    statue.spe = (statue.spe || 0) | CORPSTAT_HISTORIC;
+    game.inventory = [];
+    game.level.objects = [statue];
+
+    await castStoneToFleshDown();
+
+    assert.equal(game.level.objects.includes(statue), false);
+    const monster = (game.level.monsters || []).find(mon => mon.data?.name === 'goblin');
+    assert.ok(monster);
+    assert.match(game._pending_message || '', /The historic statue of a goblin comes to life!/);
+    assert.match(game._pending_message || '', /You feel guilty that the historic statue is now gone\./);
+    assert.equal(game.u.ualign.record, 3);
+    assert.equal(game.u.ualign.abuse, 3);
+    assertNoStoneToFleshScoreSideEffects();
+});
+
+test('downward stone to flesh historic statue does not penalize non-Archeologist', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    markHeroNeighborhoodVisible();
+    game._startup_role = 'Wizard';
+    game.urole = { name: { m: 'Wizard' } };
+    game.u.ualign = { type: -1, record: 4, abuse: 2 };
+    const statue = stoneToFleshStatue(311132, 5, 5,
+        vegetarianCorpstatMonster('goblin', 'o', { neuter: false, mmove: 6 }));
+    statue.spe = (statue.spe || 0) | CORPSTAT_HISTORIC;
+    game.inventory = [];
+    game.level.objects = [statue];
+
+    await castStoneToFleshDown();
+
+    assert.equal(game.level.objects.includes(statue), false);
+    assert.match(game._pending_message || '', /The statue of a goblin comes to life!/);
+    assert.doesNotMatch(game._pending_message || '', /historic statue|feel guilty/);
+    assert.equal(game.u.ualign.record, 4);
+    assert.equal(game.u.ualign.abuse, 2);
     assertNoStoneToFleshScoreSideEffects();
 });
 

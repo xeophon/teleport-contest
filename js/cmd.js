@@ -12778,6 +12778,19 @@ function stoneToFleshChristenAnimatedStatueMonster(item, mon) {
     mon.givenName = name;
 }
 
+function stoneToFleshHistoricStatueGoneMessage(item) {
+    const role = game.urole?.name?.m || game._startup_role;
+    if (role !== 'Archeologist') return '';
+    if (!(((item?.spe || 0) & CORPSTAT_HISTORIC) || item?.historic)) return '';
+    if (game.u?.ualign) {
+        const record = game.u.ualign.record || 0;
+        const newRecord = record - 1;
+        if (newRecord < record) game.u.ualign.record = newRecord;
+        game.u.ualign.abuse = (game.u.ualign.abuse || 0) + 1;
+    }
+    return 'You feel guilty that the historic statue is now gone.';
+}
+
 async function stoneToFleshAnimateFloorStatue(item, x, y) {
     const info = stoneToFleshFloorStatueAnimationInfo(item, x, y);
     if (!info || stoneToFleshObjectResists(item)) return null;
@@ -12791,6 +12804,8 @@ async function stoneToFleshAnimateFloorStatue(item, x, y) {
     messages.push(`${upstartText(`the ${pickupObjectName(item)}`)} ${verb}!`);
     const chargeMessage = statueShatterShopDebtMessage(item, x, y, mon);
     if (chargeMessage) messages.push(chargeMessage);
+    const historicMessage = stoneToFleshHistoricStatueGoneMessage(item);
+    if (historicMessage) messages.push(historicMessage);
     moveStatueContentsToMonster(item, mon);
     newsym(x, y);
     newsym(mon.mx, mon.my);
