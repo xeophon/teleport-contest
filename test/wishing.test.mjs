@@ -51,6 +51,10 @@ const ELVEN_BOOTS = 10134;
 const KICKING_BOOTS = 10135;
 const FUMBLE_BOOTS = 10136;
 const LEVITATION_BOOTS = 10137;
+const LEATHER_GLOVES = 10050;
+const GAUNTLETS_OF_POWER = 10112;
+const GAUNTLETS_OF_FUMBLING = 10114;
+const GAUNTLETS_OF_DEXTERITY = 10115;
 const HAWAIIAN_SHIRT = 10188;
 const T_SHIRT = 10189;
 const GRAY_DRAGON_SCALE_MAIL = 10085;
@@ -1213,6 +1217,81 @@ test('wished boots range uses full C boot candidates', async () => {
     assert.doesNotMatch(result.item.line, /^a - 2 /);
     assert.match(result.item.line, /a pair of snow boots/);
     assert.equal(result.log[0], 'rnd(128)=125');
+});
+
+test('wished gloves and gauntlets ranges use C candidates', async () => {
+    async function wishedGloves(text, seed = 1) {
+        installWishState(seed);
+        enableRngLog({ reset: true });
+        beginWishDirectly();
+        await submitWish(text);
+        return { item: game.inventory[0], log: [...getRngLog()] };
+    }
+
+    const rangeCases = [
+        [1, 'rnd(39)=10', LEATHER_GLOVES, 'leather gloves', 'old gloves', 10, 8],
+        [2, 'rnd(39)=17', GAUNTLETS_OF_FUMBLING, 'gauntlets of fumbling', 'padded gloves', 10, 50],
+        [7, 'rnd(39)=29', GAUNTLETS_OF_POWER, 'gauntlets of power', 'riding gloves', 30, 50],
+        [9, 'rnd(39)=35', GAUNTLETS_OF_DEXTERITY, 'gauntlets of dexterity', 'fencing gloves', 10, 50],
+    ];
+
+    for (const [seed, firstRoll, otyp, kind, appearance, weight, cost] of rangeCases) {
+        const result = await wishedGloves('gloves', seed);
+        assert.equal(result.log[0], firstRoll, kind);
+        assert.equal(result.item.otyp, otyp, kind);
+        assert.equal(result.item.cls, 'armor', kind);
+        assert.equal(result.item.kind, kind);
+        assert.equal(result.item.actualKind, kind);
+        assert.equal(result.item.quan, 1, kind);
+        assert.equal(result.item.owt, weight, kind);
+        assert.equal(shop.shopBaseCost(result.item), cost, kind);
+        assert.match(result.item.line, new RegExp(`a pair of ${appearance}`), kind);
+    }
+
+    let result = await wishedGloves('gauntlets', 1);
+    assert.equal(result.log[0], 'rnd(39)=10');
+    assert.equal(result.item.otyp, LEATHER_GLOVES);
+    assert.match(result.item.line, /a pair of old gloves/);
+
+    result = await wishedGloves('gauntlets', 9);
+    assert.equal(result.log[0], 'rnd(39)=35');
+    assert.equal(result.item.otyp, GAUNTLETS_OF_DEXTERITY);
+    assert.match(result.item.line, /a pair of fencing gloves/);
+
+    for (const [wish, otyp, namedesc, appearance] of [
+        ['leather gloves', LEATHER_GLOVES, /^rn2\(16\)=/, 'old gloves'],
+        ['old gloves', LEATHER_GLOVES, /^rn2\(16\)=/, 'old gloves'],
+        ['gauntlets of fumbling', GAUNTLETS_OF_FUMBLING, /^rn2\(9\)=/, 'padded gloves'],
+        ['padded gloves', GAUNTLETS_OF_FUMBLING, /^rn2\(9\)=/, 'padded gloves'],
+        ['gloves of power', GAUNTLETS_OF_POWER, /^rn2\(9\)=/, 'riding gloves'],
+        ['riding gloves', GAUNTLETS_OF_POWER, /^rn2\(9\)=/, 'riding gloves'],
+        ['gauntlets of dexterity', GAUNTLETS_OF_DEXTERITY, /^rn2\(9\)=/, 'fencing gloves'],
+        ['fencing gloves', GAUNTLETS_OF_DEXTERITY, /^rn2\(9\)=/, 'fencing gloves'],
+    ]) {
+        result = await wishedGloves(wish);
+        assert.equal(result.item.otyp, otyp, wish);
+        assert.match(result.log[0], namedesc, wish);
+        assert.match(result.item.line, new RegExp(`a pair of ${appearance}`), wish);
+    }
+
+    result = await wishedGloves('gloves of ogre power');
+    assert.equal(result.item.otyp, GAUNTLETS_OF_POWER);
+    assert.ok(!result.log.some(entry => /^rn2\(9\)=/.test(entry)));
+    assert.match(result.item.line, /a pair of riding gloves/);
+
+    result = await wishedGloves('2 pairs of gloves', 9);
+    assert.equal(result.item.otyp, GAUNTLETS_OF_DEXTERITY);
+    assert.equal(result.item.quan, 1);
+    assert.doesNotMatch(result.item.line, /^a - 2 /);
+    assert.match(result.item.line, /a pair of fencing gloves/);
+    assert.equal(result.log[0], 'rnd(39)=35');
+
+    result = await wishedGloves('2 pairs of gauntlets', 9);
+    assert.equal(result.item.otyp, GAUNTLETS_OF_DEXTERITY);
+    assert.equal(result.item.quan, 1);
+    assert.doesNotMatch(result.item.line, /^a - 2 /);
+    assert.match(result.item.line, /a pair of fencing gloves/);
+    assert.equal(result.log[0], 'rnd(39)=35');
 });
 
 test('wished shirt range uses C Hawaiian and T-shirt candidates', async () => {

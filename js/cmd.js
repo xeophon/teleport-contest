@@ -1265,6 +1265,8 @@ const FOOD_RATION = 143;
 const LEATHER_GLOVES = 10050;
 const CLOAK_OF_DISPLACEMENT = 10111;
 const GAUNTLETS_OF_POWER = 10112;
+const GAUNTLETS_OF_FUMBLING = 10114;
+const GAUNTLETS_OF_DEXTERITY = 10115;
 const BAG_OBJECT_TYPES = new Set([SACK, OILSKIN_SACK, BAG_OF_HOLDING]);
 const PICKUP_SECTION_ORDER = [
     'Coins', 'Amulets', 'Weapons', 'Armor', 'Comestibles', 'Scrolls',
@@ -1494,7 +1496,9 @@ const WISH_BASE_OBJECTS = new Map([
     ['elven mithril-coat', { otyp: ELVEN_MITHRIL_COAT, cls: 'armor', glyph: '[', kind: 'elven mithril-coat', actualKind: 'elven mithril-coat' }],
     ['shield of reflection', { otyp: SHIELD_OF_REFLECTION, cls: 'armor', glyph: '[', kind: 'shield of reflection', actualKind: 'shield of reflection', appearance: 'polished silver shield', known: false }],
     ['leather gloves', { otyp: LEATHER_GLOVES, cls: 'armor', glyph: '[', kind: 'leather gloves', actualKind: 'leather gloves', known: false }],
+    ['gauntlets of fumbling', { otyp: GAUNTLETS_OF_FUMBLING, cls: 'armor', glyph: '[', kind: 'gauntlets of fumbling', actualKind: 'gauntlets of fumbling', known: false, owt: 10 }],
     ['gauntlets of power', { otyp: GAUNTLETS_OF_POWER, cls: 'armor', glyph: '[', kind: 'gauntlets of power', actualKind: 'gauntlets of power', known: false }],
+    ['gauntlets of dexterity', { otyp: GAUNTLETS_OF_DEXTERITY, cls: 'armor', glyph: '[', kind: 'gauntlets of dexterity', actualKind: 'gauntlets of dexterity', known: false, owt: 10 }],
     ['cloak of displacement', { otyp: CLOAK_OF_DISPLACEMENT, cls: 'armor', glyph: '[', kind: 'cloak of displacement', actualKind: 'cloak of displacement', known: false }],
     ['low boots', { otyp: LOW_BOOTS, cls: 'armor', glyph: '[', kind: 'low boots', actualKind: 'low boots', appearance: 'walking shoes', known: false, owt: 10 }],
     ['iron shoes', { otyp: IRON_SHOES, cls: 'armor', glyph: '[', kind: 'iron shoes', actualKind: 'iron shoes', appearance: 'hard shoes', known: false, owt: 50 }],
@@ -1551,7 +1555,8 @@ const WISH_BASE_NAMEDESC_BOUNDS = new Map([
     ['ring mail', 67], ['studded leather armor', 67],
     ['leather armor', 76], ['elven mithril-coat', 16],
     ['shield of reflection', 8],
-    ['gauntlets of power', 9], ['cloak of displacement', 13],
+    ['gauntlets of fumbling', 9], ['gauntlets of power', 9],
+    ['gauntlets of dexterity', 9], ['cloak of displacement', 13],
     ['low boots', 24], ['iron shoes', 8], ['high boots', 15],
     ['hawaiian shirt', 9], ['t-shirt', 3],
     ['speed boots', 13], ['water walking boots', 13],
@@ -1670,6 +1675,18 @@ const WISH_OBJECT_RANGES = new Map([
         ['frost horn', 2],
         ['fire horn', 2],
         ['horn of plenty', 2],
+    ]],
+    ['gloves', [
+        ['leather gloves', 15],
+        ['gauntlets of fumbling', 8],
+        ['gauntlets of power', 8],
+        ['gauntlets of dexterity', 8],
+    ]],
+    ['gauntlets', [
+        ['leather gloves', 15],
+        ['gauntlets of fumbling', 8],
+        ['gauntlets of power', 8],
+        ['gauntlets of dexterity', 8],
     ]],
     ['shoes', [
         ['low boots', 23],
@@ -4860,7 +4877,9 @@ const ARMOR_AC_BONUS = {
     'dwarvish roundshield': 2,
     'shield of reflection': 2,
     'leather gloves': 1,
+    'gauntlets of fumbling': 1,
     'gauntlets of power': 1,
+    'gauntlets of dexterity': 1,
     'low boots': 1,
     'iron shoes': 2,
     'high boots': 2,
@@ -4966,7 +4985,9 @@ const ARMOR_WEAR_DELAY = {
     'elven leather helm': 1,
     'dwarvish iron helm': 1,
     'leather gloves': 1,
+    'gauntlets of fumbling': 1,
     'gauntlets of power': 1,
+    'gauntlets of dexterity': 1,
     'low boots': 2,
     'iron shoes': 2,
     'high boots': 2,
@@ -5183,7 +5204,9 @@ const OBJECT_WEIGHTS = {
     'hawaiian shirt': 5,
     't-shirt': 5,
     'helmet': 30,
+    'gauntlets of fumbling': 10,
     'gauntlets of power': 30,
+    'gauntlets of dexterity': 10,
     'high boots': 20,
     'iron shoes': 50,
     'large shield': 100,
@@ -29224,7 +29247,9 @@ const WISH_NAME_ALIASES = new Map([
     ['garlic', 'clove of garlic'],
     ['royal jelly', 'lump of royal jelly'],
     ['can', 'tin'],
+    ['gloves of fumbling', 'gauntlets of fumbling'],
     ['gloves of power', 'gauntlets of power'],
+    ['gloves of dexterity', 'gauntlets of dexterity'],
     ['walking shoes', 'low boots'],
     ['hard shoes', 'iron shoes'],
     ['shirts', 'shirt'],
@@ -29489,7 +29514,7 @@ function normalizeWishedGroupPhrase(name, quantity) {
     const match = String(name || '').match(/^(pair|pairs|set|sets)\s+of\s+/i);
     if (!match) return { name, quantity, matched: false };
     const objectName = String(name).slice(match[0].length);
-    const nonStackingPairObject = /\b(?:boots|shoes|gloves|lenses)\b/i.test(objectName);
+    const nonStackingPairObject = /\b(?:boots|shoes|gloves|gauntlets|lenses)\b/i.test(objectName);
     let wishedQuantity = quantity;
     const group = match[1].toLowerCase();
     if (nonStackingPairObject) wishedQuantity = 1;
