@@ -957,7 +957,15 @@ const ORCISH_DAGGER = 10020;
 const DAGGER = 10023;
 const KNIFE = 10026;
 const SHORT_SWORD = 10031;
+const ELVEN_SHORT_SWORD = 10186;
+const ORCISH_SHORT_SWORD = 10187;
+const DWARVISH_SHORT_SWORD = 10103;
+const SCIMITAR = 10021;
 const BROADSWORD = 10032;
+const ELVEN_BROADSWORD = 10122;
+const LONG_SWORD = 10033;
+const TWO_HANDED_SWORD = 10059;
+const KATANA = 10125;
 const PICK_AXE = 10025;
 const GLAIVE = 10057;
 const FLAIL = 10060;
@@ -1377,8 +1385,16 @@ const WISH_BASE_OBJECTS = new Map([
     ['dagger', { otyp: DAGGER, cls: 'weapon', glyph: ')', kind: 'dagger', plural: 'daggers' }],
     ['daggers', { otyp: DAGGER, cls: 'weapon', glyph: ')', kind: 'dagger', plural: 'daggers' }],
     ['knife', { otyp: KNIFE, cls: 'weapon', glyph: ')', kind: 'knife', actualKind: 'knife' }],
-    ['short sword', { otyp: SHORT_SWORD, cls: 'weapon', glyph: ')', kind: 'short sword', actualKind: 'short sword' }],
-    ['broadsword', { otyp: BROADSWORD, cls: 'weapon', glyph: ')', kind: 'broadsword', actualKind: 'broadsword' }],
+    ['short sword', { otyp: SHORT_SWORD, cls: 'weapon', glyph: ')', kind: 'short sword', actualKind: 'short sword', owt: 30 }],
+    ['elven short sword', { otyp: ELVEN_SHORT_SWORD, cls: 'weapon', glyph: ')', kind: 'runed short sword', actualKind: 'elven short sword', known: false, owt: 30 }],
+    ['orcish short sword', { otyp: ORCISH_SHORT_SWORD, cls: 'weapon', glyph: ')', kind: 'crude short sword', actualKind: 'orcish short sword', known: false, owt: 30 }],
+    ['dwarvish short sword', { otyp: DWARVISH_SHORT_SWORD, cls: 'weapon', glyph: ')', kind: 'broad short sword', actualKind: 'dwarvish short sword', known: false, owt: 30 }],
+    ['scimitar', { otyp: SCIMITAR, cls: 'weapon', glyph: ')', kind: 'curved sword', actualKind: 'scimitar', known: false, owt: 40 }],
+    ['broadsword', { otyp: BROADSWORD, cls: 'weapon', glyph: ')', kind: 'broadsword', actualKind: 'broadsword', owt: 70 }],
+    ['elven broadsword', { otyp: ELVEN_BROADSWORD, cls: 'weapon', glyph: ')', kind: 'runed broadsword', actualKind: 'elven broadsword', known: false, owt: 70 }],
+    ['long sword', { otyp: LONG_SWORD, cls: 'weapon', glyph: ')', kind: 'long sword', actualKind: 'long sword', owt: 40 }],
+    ['two-handed sword', { otyp: TWO_HANDED_SWORD, cls: 'weapon', glyph: ')', kind: 'two-handed sword', actualKind: 'two-handed sword', owt: 150 }],
+    ['katana', { otyp: KATANA, cls: 'weapon', glyph: ')', kind: 'samurai sword', actualKind: 'katana', known: false, owt: 40 }],
     ['flail', { otyp: FLAIL, cls: 'weapon', glyph: ')', kind: 'flail', actualKind: 'flail' }],
     ['glaive', { otyp: GLAIVE, cls: 'weapon', glyph: ')', kind: 'glaive', actualKind: 'glaive' }],
     ['bullwhip', { otyp: BULLWHIP, cls: 'weapon', glyph: ')', kind: 'bullwhip', actualKind: 'bullwhip' }],
@@ -1480,7 +1496,10 @@ const WIZARD_ONLY_WISH_NAMEDESC_BOUNDS = new Map([
 ]);
 const WISH_BASE_NAMEDESC_BOUNDS = new Map([
     ['dart', 61], ['darts', 61], ['dagger', 31], ['daggers', 31],
-    ['knife', 21], ['short sword', 9], ['broadsword', 9],
+    ['knife', 21], ['short sword', 9], ['elven short sword', 3],
+    ['orcish short sword', 4], ['dwarvish short sword', 3],
+    ['scimitar', 16], ['broadsword', 9], ['elven broadsword', 5],
+    ['long sword', 51], ['two-handed sword', 23], ['katana', 5],
     ['flail', 41], ['glaive', 9],
     ['bullwhip', 3], ['silver saber', 7], ['dwarvish mattock', 14],
     ['pick-axe', 21], ['pick axe', 21], ['pickaxe', 21], ['pickax', 21], ['pick-ax', 21],
@@ -1624,6 +1643,19 @@ const WISH_OBJECT_RANGES = new Map([
         ['frost horn', 2],
         ['fire horn', 2],
         ['horn of plenty', 2],
+    ]],
+    ['sword', [
+        ['short sword', 8],
+        ['elven short sword', 2],
+        ['orcish short sword', 3],
+        ['dwarvish short sword', 2],
+        ['scimitar', 15],
+        ['silver saber', 6],
+        ['broadsword', 8],
+        ['elven broadsword', 4],
+        ['long sword', 50],
+        ['two-handed sword', 22],
+        ['katana', 4],
     ]],
 ]);
 const WISH_AMULET_NAMEDESC_BOUNDS = new Map([

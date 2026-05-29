@@ -17,6 +17,7 @@ import { currentFruitId, setCurrentFruitName } from '../js/fruit.js';
 
 const BELL = 358;
 const GOLD_PIECE = 466;
+const WEAPON_CLASS = 1;
 const TOOL_CLASS = 12;
 const SACK = 217;
 const OILSKIN_SACK = 218;
@@ -40,6 +41,17 @@ const EXPENSIVE_CAMERA = 10082;
 const MAGIC_MARKER = 10084;
 const TINNING_KIT = 10170;
 const CAN_OF_GREASE = 10171;
+const SHORT_SWORD = 10031;
+const ELVEN_SHORT_SWORD = 10186;
+const ORCISH_SHORT_SWORD = 10187;
+const DWARVISH_SHORT_SWORD = 10103;
+const SCIMITAR = 10021;
+const BROADSWORD = 10032;
+const ELVEN_BROADSWORD = 10122;
+const LONG_SWORD = 10033;
+const TWO_HANDED_SWORD = 10059;
+const SILVER_SABER = 10062;
+const KATANA = 10125;
 const MAGIC_FLUTE = 946;
 const TOOLED_HORN = 10162;
 const FROST_HORN = 953;
@@ -1072,6 +1084,38 @@ test('generic wished lamp range substitutes magic lamp after C range roll outsid
         assert.equal(item.kind, 'oil lamp');
         assert.notEqual(item.actualKind, 'magic lamp');
     }
+});
+
+test('generic wished sword range uses C rnd_class candidates', async () => {
+    const allowed = new Set([
+        SHORT_SWORD, ELVEN_SHORT_SWORD, ORCISH_SHORT_SWORD, DWARVISH_SHORT_SWORD,
+        SCIMITAR, SILVER_SABER, BROADSWORD, ELVEN_BROADSWORD, LONG_SWORD,
+        TWO_HANDED_SWORD, KATANA,
+    ]);
+    const weights = new Map([
+        [SHORT_SWORD, 30], [ELVEN_SHORT_SWORD, 30], [ORCISH_SHORT_SWORD, 30],
+        [DWARVISH_SHORT_SWORD, 30], [SCIMITAR, 40], [SILVER_SABER, 40],
+        [BROADSWORD, 70], [ELVEN_BROADSWORD, 70], [LONG_SWORD, 40],
+        [TWO_HANDED_SWORD, 150], [KATANA, 40],
+    ]);
+    const seen = new Set();
+
+    for (let seed = 1; seed <= 60; seed++) {
+        installWishState(seed, { debug: false });
+        beginWishDirectly();
+        await submitWish('sword');
+
+        const item = game.inventory[0];
+        assert.equal(game._command_mode, null);
+        assert.ok(allowed.has(item.otyp), `sword produced ${item.otyp}`);
+        assert.notEqual(item.otyp, WEAPON_CLASS);
+        assert.notEqual(item.kind, 'sword');
+        assert.notEqual(item.actualKind, 'sword');
+        assert.equal(item.owt, weights.get(item.otyp));
+        seen.add(item.otyp);
+    }
+
+    assert.ok(seen.size > 1, 'sword should not collapse to one concrete object');
 });
 
 test('wished camera tinning kit and grease use C charged-tool metadata rows', async () => {
