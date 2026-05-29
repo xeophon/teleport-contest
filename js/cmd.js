@@ -28,7 +28,7 @@ import { createGasCloud } from './region.js';
 import { figurineLocationCheck, isFigurineObject, makeFigurineFamiliar, maybeAttachCarriedFigurineTimeout, stopFigurineTransformTimeout, syncCarriedFigurineTransformTimer } from './figurine.js';
 import { applyMonsterLiquidEffectsAt } from './monster_liquid.js';
 import { applySlimeMoldFruitFields, currentFruitId, currentFruitJuiceName, currentFruitName, fruitWishMatch, setCurrentFruitName, slimeMoldNameForObject } from './fruit.js';
-import { eggHasHatchTimer, eggSpeciesGenocidedForHatching, killDeadSpeciesEggHatchTimers } from './egg_timers.js';
+import { eggHasHatchTimer, eggSpeciesGenocidedForHatching, killDeadSpeciesEggHatchTimers, killEggHatchTimer } from './egg_timers.js';
 
 const DIR_DX = { h: -1, l: 1, j: 0, k: 0, y: -1, u: 1, b: -1, n: 1 };
 const DIR_DY = { h: 0, l: 0, j: 1, k: -1, y: -1, u: -1, b: 1, n: 1 };
@@ -15371,6 +15371,70 @@ function heroThrownEggUpwardMessages(egg) {
         return heroThrownEggSelfHitMessages(egg, 'hits', ceilingName);
     }
     return heroThrownEggSelfHitMessages(egg, 'almost hits', ceilingName);
+}
+
+function monsterTouchPetrifies(mon) {
+    const data = mon?.data || {};
+    const name = String(data.name || mon?.name || '').toLowerCase();
+    return !!(data.touchPetrifies || mon?.touchPetrifies || name === 'cockatrice' || name === 'chickatrice');
+}
+
+function thrownEggHitArticle(egg) {
+    const count = Math.max(1, Math.trunc(Number(egg?.quan || 1)));
+    if (egg?.known && egg?.corpsenm?.name) return `the ${egg.corpsenm.name}`;
+    return count > 1 ? 'some' : 'an';
+}
+
+function placeThrownEggPetrifiedRock(egg, mon) {
+    killEggHatchTimer(egg);
+    Object.assign(egg, {
+        otyp: ROCK,
+        cls: 'gem',
+        glyph: '*',
+        kind: 'rock',
+        actualKind: 'rock',
+        singular: 'rock',
+        plural: 'rocks',
+        quan: 1,
+        spe: 0,
+        known: false,
+        dknown: false,
+        bknown: false,
+        ox: mon.mx,
+        oy: mon.my,
+        color: CLR_GRAY,
+    });
+    delete egg.corpsenm;
+    delete egg.eggKnown;
+    delete egg.line;
+    Object.assign(egg, object_display(egg));
+    placeStackableFloorObject(egg);
+    newsym(mon.mx, mon.my);
+}
+
+function applyThrownEggNominalDamage(mon, messages) {
+    if (!mon || mon.dead) return;
+    mon.msleeping = 0;
+    if (!mon.pet) mon.mpeaceful = false;
+    mon.mhp = (mon.mhp || 1) - 1;
+    if ((mon.mhp || 0) <= 0) killMonsterFromPotionHit(mon, messages);
+}
+
+function heroThrownOrdinaryEggHitMonster(egg, mon) {
+    const messages = [];
+    const targetName = mon?.data?.name || mon?.name || 'creature';
+    const count = Math.max(1, Math.trunc(Number(egg?.quan || 1)));
+    const plural = count === 1 ? '' : 's';
+    messages.push(`You hit the ${targetName} with ${thrownEggHitArticle(egg)} egg${plural}.`);
+    if (monsterTouchPetrifies(mon) && !isStaleEggItem(egg)) {
+        messages.push(`The egg${plural} ${count === 1 ? "isn't" : "aren't"} alive any more...`);
+        placeThrownEggPetrifiedRock(egg, mon);
+    } else {
+        messages.push('Splat!');
+        markObjectShopBillUsedUp(egg);
+    }
+    applyThrownEggNominalDamage(mon, messages);
+    return messages;
 }
 
 function isExpensiveCameraObject(obj) {
@@ -52379,6 +52443,25 @@ export async function rhack(_cmd) {
 	                return;
 	            }
 	            impactMessage = `The cream pie misses the ${targetMon.data?.name || 'creature'}.`;
+	        } else if (targetMon && isEggItem(item) && !isTouchPetrifyingEgg(item) && !isPyroliskEgg(item)) {
+	            rnd(20);
+	            const dex = game.u?.acurr?.a?.[A_DEX] ?? 10;
+	            if (dex > rnd(25)) {
+	                if ((item.quan || 1) > 1) splitCarriedObjectShopBill(item, thrownObject, 1);
+	                const messages = heroThrownOrdinaryEggHitMonster(thrownObject, targetMon);
+	                removeInventoryItem(item, 1);
+	                newsym(targetMon.mx, targetMon.my);
+	                await setMessage(messages.join('  '));
+	                game._command_mode = null;
+	                game._throw_item_letter = null;
+	                game._resume_time_after_more = 0;
+	                game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
+	                game.context.move = 0;
+	                return;
+	            }
+	            const thrownName = pickupObjectName({ ...item, quan: 1 });
+	            impactMessage = `The ${thrownName} misses the ${targetMon.data?.name || 'creature'}.`;
+	            if (!rn2(3)) targetMon.msleeping = 0;
 	        } else if (targetMon && supportsHeroThrownPotionHit(item, targetMon)) {
 	            rnd(20);
 	            const dex = game.u?.acurr?.a?.[A_DEX] ?? 10;

@@ -137,6 +137,7 @@ This folder records source-backed audits against `nethack-c/upstream`. The notes
 - [131-subagent-findings-2026-05-29.md](131-subagent-findings-2026-05-29.md): ordinary floor statue stone-to-flesh animation.
 - [132-subagent-findings-2026-05-29.md](132-subagent-findings-2026-05-29.md): shop-floor statue stone-to-flesh animation.
 - [133-subagent-findings-2026-05-29.md](133-subagent-findings-2026-05-29.md): stone-to-flesh failed animation fallback and trap statues.
+- [134-subagent-findings-2026-05-29.md](134-subagent-findings-2026-05-29.md): ordinary horizontal thrown-egg monster hits, used-up billing, and live-egg rock conversion.
 
 ## Cross-Cutting Themes
 

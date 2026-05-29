@@ -18412,6 +18412,108 @@ test('hero-thrown confusion potion hits visible monster through potionhit', asyn
     ]);
 });
 
+test('hero-thrown ordinary egg hits visible monster through egg hmon path', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.u.acurr.a[A_DEX] = 25;
+    const eggItem = { ...egg(876060, 'e'), otyp: EGG };
+    const goblin = ordinaryThrowTarget('goblin', 7, 5);
+    game.inventory = [eggItem];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('e');
+    await rhack('l');
+
+    assert.match(game._pending_message, /You hit the goblin with an egg\./);
+    assert.match(game._pending_message, /Splat!/);
+    assert.doesNotMatch(game._pending_message, /misses|crashes|evaporates|top of your head/);
+    assert.equal(goblin.mhp, 4);
+    assert.equal(goblin.msleeping, 0);
+    assert.equal(goblin.mpeaceful, false);
+    assert.equal(game.inventory.includes(eggItem), false);
+    assert.equal(game.level.objects.length, 0);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rnd(20)', 'rnd(25)',
+    ]);
+});
+
+test('hero-thrown unpaid ordinary egg from a stack bills the splatted unit', async () => {
+    const { shkp } = installCommandShopState();
+    initRng(2);
+    game.u.acurr.a[A_DEX] = 25;
+    const eggs = { ...egg(876061, 'e', 2), otyp: EGG };
+    const goblin = ordinaryThrowTarget('goblin', 7, 5);
+    game.inventory = [eggs];
+    game.level.monsters = [goblin];
+    shop.addObjectToShopBill(shkp, eggs, 18);
+
+    await rhack('t');
+    await rhack('e');
+    await rhack('l');
+
+    assert.match(game._pending_message, /You hit the goblin with an egg\./);
+    assert.match(game._pending_message, /Splat!/);
+    assert.equal(eggs.quan, 1);
+    assert.equal(game.inventory.includes(eggs), true);
+    assert.equal(game.level.objects.length, 0);
+    const liveEntry = shop.shopBillEntryForObject(shkp, eggs);
+    assert.ok(liveEntry);
+    assert.equal(liveEntry.useup, false);
+    assert.equal(liveEntry.bquan, 1);
+    assert.equal(shop.shopBillEntryTotal(liveEntry), 9);
+    const usedEntry = shkp.bill.find(entry => entry !== liveEntry);
+    assert.ok(usedEntry);
+    assert.equal(usedEntry.useup, true);
+    assert.equal(usedEntry.bquan, 1);
+    assert.equal(shop.shopBillEntryTotal(usedEntry), 9);
+    assert.equal((game._usedUpShopBills || []).some(bill => String(bill.bo_id) === String(usedEntry.bo_id)), true);
+    assert.equal(eggs.unpaidPrice, 9);
+    assert.equal(shkp.debit || 0, 0);
+    assert.equal(shkp.billct, 2);
+});
+
+test('hero-thrown live ordinary egg hitting cockatrice becomes rock', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.u.acurr.a[A_DEX] = 25;
+    const eggItem = {
+        ...egg(876062, 'e'),
+        otyp: EGG,
+        corpsenm: { name: 'newt' },
+        eggHatchTurn: (game.moves || 1) + 50,
+        _egg_hatch_seq: 3,
+        _egg_hatch_consumed: true,
+        age: game.moves || 1,
+    };
+    const cockatrice = ordinaryThrowTarget('cockatrice', 7, 5, {
+        data: { name: 'cockatrice', mlevel: 5, touchPetrifies: true },
+    });
+    game.inventory = [eggItem];
+    game.level.monsters = [cockatrice];
+
+    await rhack('t');
+    await rhack('e');
+    await rhack('l');
+
+    assert.match(game._pending_message, /You hit the cockatrice with an egg\./);
+    assert.match(game._pending_message, /The egg isn't alive any more\.\.\./);
+    assert.doesNotMatch(game._pending_message, /Splat!|misses|top of your head/);
+    assert.equal(game.inventory.includes(eggItem), false);
+    assert.equal(game.level.objects.length, 1);
+    const rock = game.level.objects[0];
+    assert.equal(rock.otyp, ROCK);
+    assert.equal(rock.kind, 'rock');
+    assert.equal(rock.ox, 7);
+    assert.equal(rock.oy, 5);
+    assert.equal(rock.eggHatchTurn, undefined);
+    assert.equal(rock._egg_hatch_seq, undefined);
+    assert.equal(rock._egg_hatch_consumed, undefined);
+    assert.equal(rock.corpsenm, undefined);
+    assert.equal(cockatrice.mhp, 4);
+});
+
 test('wielded confusion potion bash routes through potionhit', async () => {
     installNonShopFloorState();
     initRng(2);
