@@ -4973,6 +4973,34 @@ test('downward stone to flesh historic statue does not penalize non-Archeologist
     assertNoStoneToFleshScoreSideEffects();
 });
 
+test('monster-moving stone to flesh historic statue gives regret without alignment penalty', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    markHeroNeighborhoodVisible();
+    game._startup_role = 'Archeologist';
+    game.urole = { name: { m: 'Archeologist' } };
+    game.u.ualign = { type: 1, record: 4, abuse: 2 };
+    game._monster_moving = 1;
+    const statue = stoneToFleshStatue(311133, 5, 5,
+        vegetarianCorpstatMonster('goblin', 'o', { neuter: false, mmove: 6 }));
+    statue.spe = (statue.spe || 0) | CORPSTAT_HISTORIC;
+    game.inventory = [];
+    game.level.objects = [statue];
+
+    try {
+        await castStoneToFleshDown();
+    } finally {
+        delete game._monster_moving;
+    }
+
+    assert.equal(game.level.objects.includes(statue), false);
+    assert.match(game._pending_message || '', /You feel regret that the historic statue is now gone\./);
+    assert.doesNotMatch(game._pending_message || '', /feel guilty/);
+    assert.equal(game.u.ualign.record, 4);
+    assert.equal(game.u.ualign.abuse, 2);
+    assertNoStoneToFleshScoreSideEffects();
+});
+
 test('downward stone to flesh ordinary statue may animate adjacent to blocker', async () => {
     installNonShopFloorState();
     initRng(1);
@@ -18394,6 +18422,60 @@ test('monster-thrown boulder plugs remote seen hole instead of shipping', () => 
     assert.equal(game.level.traps.includes(trap), false);
     assert.match(landing.messages.join(' '), /boulder/i);
     assert.deepEqual(getRngLog().filter(entry => entry.startsWith('rn2(3)=')), []);
+});
+
+test('monster-thrown cream pie breaks before remote shaft shipping or floor effects', () => {
+    installNonShopFloorState();
+    installSeenRemoteShaft(HOLE);
+    game.level.at = () => ({ roomno: 0, typ: LAVAPOOL });
+    initRng(1);
+    enableRngLog({ reset: true });
+    const pie = { ...creamPie(874333), letter: undefined, line: undefined };
+
+    const landing = landMonsterThrownObject(pie, 7, 5, { messages: [] });
+
+    assert.equal(landing.consumed, true);
+    assert.equal(landing.object, null);
+    assert.equal(landing.dropThrow.broken, true);
+    assert.equal(landing.shipObject.handled, false);
+    assert.equal(landing.floorEffects.consumed, false);
+    assert.equal(game.level.objects.some(obj => obj.id === pie.id), false);
+    assert.equal(queuedImpactDropsFor().some(obj => obj.id === pie.id), false);
+    assert.equal(landing.messages.join(' '), '');
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
+});
+
+test('monster-thrown venom breaks before ordinary floor placement', () => {
+    installNonShopFloorState();
+    initRng(1);
+    enableRngLog({ reset: true });
+    const venom = { ...blindingVenom(874334), letter: undefined, line: undefined };
+
+    const landing = landMonsterThrownObject(venom, 7, 5, { messages: [] });
+
+    assert.equal(landing.consumed, true);
+    assert.equal(landing.object, null);
+    assert.equal(landing.dropThrow.broken, true);
+    assert.equal(game.level.objects.some(obj => obj.id === venom.id), false);
+    assert.equal(landing.messages.join(' '), '');
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
+});
+
+test('monster-thrown egg miss still lands instead of drop-throw breaking', () => {
+    installNonShopFloorState();
+    initRng(1);
+    enableRngLog({ reset: true });
+    const eggItem = { ...egg(874335), otyp: EGG, letter: undefined, line: undefined };
+
+    const landing = landMonsterThrownObject(eggItem, 7, 5, { messages: [] });
+
+    assert.equal(landing.consumed, false);
+    assert.equal(landing.dropThrow.broken, false);
+    assert.ok(landing.object);
+    assert.equal(landing.object.ox, 7);
+    assert.equal(landing.object.oy, 5);
+    assert.equal(game.level.objects.some(obj => obj.id === eggItem.id), true);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
 });
 
 test('projectile landing runs lava floor effects before sale or stacking', () => {

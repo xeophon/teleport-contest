@@ -12778,10 +12778,13 @@ function stoneToFleshChristenAnimatedStatueMonster(item, mon) {
     mon.givenName = name;
 }
 
-function stoneToFleshHistoricStatueGoneMessage(item) {
+function stoneToFleshHistoricStatueGoneMessage(item, x, y) {
     const role = game.urole?.name?.m || game._startup_role;
     if (role !== 'Archeologist') return '';
     if (!(((item?.spe || 0) & CORPSTAT_HISTORIC) || item?.historic)) return '';
+    if (game._monster_moving) {
+        return cansee(x, y) ? 'You feel regret that the historic statue is now gone.' : '';
+    }
     if (game.u?.ualign) {
         const record = game.u.ualign.record || 0;
         const newRecord = record - 1;
@@ -12804,7 +12807,7 @@ async function stoneToFleshAnimateFloorStatue(item, x, y) {
     messages.push(`${upstartText(`the ${pickupObjectName(item)}`)} ${verb}!`);
     const chargeMessage = statueShatterShopDebtMessage(item, x, y, mon);
     if (chargeMessage) messages.push(chargeMessage);
-    const historicMessage = stoneToFleshHistoricStatueGoneMessage(item);
+    const historicMessage = stoneToFleshHistoricStatueGoneMessage(item, x, y);
     if (historicMessage) messages.push(historicMessage);
     moveStatueContentsToMonster(item, mon);
     newsym(x, y);
@@ -26250,10 +26253,26 @@ export function landMonsterThrownObject(missile, x, y, {
     messages = null,
     verb = 'fall',
     quan = 1,
+    ohit = false,
 } = {}) {
     if (!missile || !game.level) return { consumed: false, object: null, messages: [] };
     game.level.objects ??= [];
     const floorMessages = Array.isArray(messages) ? messages : [];
+    const dropThrow = {
+        broken: isCreamPieObject(missile) || isVenomObject(missile) || (!!ohit && isEggItem(missile)),
+        ohit: !!ohit,
+    };
+    if (dropThrow.broken) {
+        newsym(x, y);
+        return {
+            consumed: true,
+            object: null,
+            messages: floorMessages,
+            shipObject: projectileShipObjectResult(),
+            floorEffects: { consumed: false },
+            dropThrow,
+        };
+    }
     const landing = {
         ...missile,
         ox: x,
@@ -26277,6 +26296,7 @@ export function landMonsterThrownObject(missile, x, y, {
             messages: floorMessages,
             shipObject,
             floorEffects: { consumed: false },
+            dropThrow,
         };
     }
     const consumed = monsterThrownFloorEffects(landing, x, y, floorMessages, verb);
@@ -26288,6 +26308,7 @@ export function landMonsterThrownObject(missile, x, y, {
             messages: floorMessages,
             shipObject,
             floorEffects: { consumed: true },
+            dropThrow,
         };
     }
     const stacked = stackMonsterThrownObject(landing);
@@ -26299,6 +26320,7 @@ export function landMonsterThrownObject(missile, x, y, {
         messages: floorMessages,
         shipObject,
         floorEffects: { consumed: false },
+        dropThrow,
     };
 }
 
