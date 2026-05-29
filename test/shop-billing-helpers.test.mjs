@@ -3955,6 +3955,163 @@ test('self-cast stone to flesh animates carried nonvegetarian figurine', async (
     assertNoStoneToFleshScoreSideEffects();
 });
 
+test('self-cast stone to flesh animates carried shop-billed figurine and charges stolen value', async () => {
+    const { shkp } = installCommandShopState();
+    game.level.at = () => ({ roomno: ROOMOFFSET, typ: ROOM });
+    initRng(1);
+    markHeroNeighborhoodVisible();
+    const figurine = stoneToFleshFigurine(31107, 'a',
+        vegetarianCorpstatMonster('goblin', 'o', { neuter: false, mmove: 6 }));
+    figurine.cursed = true;
+    figurine.figurineTransformTurn = 42;
+    figurine._figurine_transform_seq = 7;
+    game.inventory = [figurine];
+    const expectedPrice = shop.shopItemPrice(figurine, game.u.ux, game.u.uy);
+    shop.addObjectToShopBill(shkp, figurine, expectedPrice);
+
+    await castStoneToFleshAtSelf();
+
+    assert.equal(game.inventory.includes(figurine), false);
+    assert.equal(figurine.figurineTransformTurn, undefined);
+    assert.equal(figurine._figurine_transform_seq, undefined);
+    assert.ok((game.level.monsters || []).find(mon => mon.data?.name === 'goblin'));
+    assert.equal(shkp.debit, expectedPrice);
+    assert.equal(shkp.robbed || 0, 0);
+    assert.equal(shkp.billct, 0);
+    assert.deepEqual(shkp.bill, []);
+    assert.equal(shop.shopBillEntryForObject(shkp, figurine), null);
+    assert.equal((game._usedUpShopBills || []).some(bill => String(bill.bo_id) === String(figurine.id)), false);
+    assert.match(game._pending_message || '', new RegExp(`You owe Izchak ${expectedPrice} zorkmid`));
+    assert.match(game._pending_message || '', /The figurine animates!/);
+    assert.doesNotMatch(game._pending_message || '', /used-up|odor of meat|delicious smell/);
+});
+
+test('self-cast stone to flesh uses carried figurine bill price even when no-charge', async () => {
+    const { shkp } = installCommandShopState();
+    game.level.at = () => ({ roomno: ROOMOFFSET, typ: ROOM });
+    initRng(1);
+    markHeroNeighborhoodVisible();
+    const figurine = stoneToFleshFigurine(31108, 'a',
+        vegetarianCorpstatMonster('goblin', 'o', { neuter: false, mmove: 6 }));
+    figurine.no_charge = true;
+    game.inventory = [figurine];
+    shop.addObjectToShopBill(shkp, figurine, 123);
+
+    await castStoneToFleshAtSelf();
+
+    assert.equal(game.inventory.includes(figurine), false);
+    assert.ok((game.level.monsters || []).find(mon => mon.data?.name === 'goblin'));
+    assert.equal(shkp.debit, 123);
+    assert.equal(shkp.robbed || 0, 0);
+    assert.equal(shkp.billct, 0);
+    assert.deepEqual(shkp.bill, []);
+    assert.equal((game._usedUpShopBills || []).some(bill => String(bill.bo_id) === String(figurine.id)), false);
+    assert.match(game._pending_message || '', /You owe Izchak 123 zorkmids for it!/);
+    assert.match(game._pending_message || '', /The figurine animates!/);
+});
+
+test('self-cast stone to flesh applies shop credit to carried figurine animation debt', async () => {
+    const { shkp } = installCommandShopState();
+    game.level.at = () => ({ roomno: ROOMOFFSET, typ: ROOM });
+    Object.assign(shkp, { credit: 200 });
+    initRng(1);
+    markHeroNeighborhoodVisible();
+    const figurine = stoneToFleshFigurine(31109, 'a',
+        vegetarianCorpstatMonster('goblin', 'o', { neuter: false, mmove: 6 }));
+    game.inventory = [figurine];
+    shop.addObjectToShopBill(shkp, figurine, 123);
+
+    await castStoneToFleshAtSelf();
+
+    assert.equal(game.inventory.includes(figurine), false);
+    assert.equal(shkp.credit, 77);
+    assert.equal(shkp.debit || 0, 0);
+    assert.equal(shkp.robbed || 0, 0);
+    assert.equal(shkp.billct, 0);
+    assert.equal((game._usedUpShopBills || []).some(bill => String(bill.bo_id) === String(figurine.id)), false);
+    assert.match(game._pending_message || '', /You have 77 zorkmids credit remaining\./);
+    assert.match(game._pending_message || '', /The figurine animates!/);
+});
+
+test('self-cast stone to flesh charges angry shopkeeper carried figurine animation as robbed', async () => {
+    const { shkp } = installCommandShopState();
+    game.level.at = () => ({ roomno: ROOMOFFSET, typ: ROOM });
+    Object.assign(shkp, { angry: true, hostile: true, mpeaceful: 0 });
+    initRng(1);
+    markHeroNeighborhoodVisible();
+    const figurine = stoneToFleshFigurine(31110, 'a',
+        vegetarianCorpstatMonster('goblin', 'o', { neuter: false, mmove: 6 }));
+    game.inventory = [figurine];
+    const expectedPrice = shop.shopItemPrice(figurine, game.u.ux, game.u.uy);
+    shop.addObjectToShopBill(shkp, figurine, expectedPrice);
+
+    await castStoneToFleshAtSelf();
+
+    assert.equal(game.inventory.includes(figurine), false);
+    assert.equal(shkp.debit || 0, 0);
+    assert.equal(shkp.robbed, expectedPrice);
+    assert.equal(shkp.billct, 0);
+    assert.equal((game._usedUpShopBills || []).some(bill => String(bill.bo_id) === String(figurine.id)), false);
+    assert.match(game._pending_message || '', /Izchak booms: "Hero, you are a thief!"|The figurine animates!/);
+    assert.doesNotMatch(game._pending_message || '', /goods lost|used-up|odor of meat|delicious smell/);
+});
+
+test('self-cast stone to flesh checks carried shop-billed figurine resistance before billing', async () => {
+    const { shkp } = installCommandShopState();
+    game.level.at = () => ({ roomno: ROOMOFFSET, typ: ROOM });
+    initRng(40);
+    enableRngLog({ reset: true });
+    markHeroNeighborhoodVisible();
+    const figurine = stoneToFleshFigurine(31111, 'a',
+        vegetarianCorpstatMonster('goblin', 'o', { neuter: false, mmove: 6 }));
+    figurine.figurineTransformTurn = 42;
+    figurine._figurine_transform_seq = 7;
+    game.inventory = [figurine];
+    shop.addObjectToShopBill(shkp, figurine, 123);
+
+    await castStoneToFleshAtSelf();
+
+    assert.equal(game.inventory[0], figurine);
+    assert.equal(figurine.figurineTransformTurn, 42);
+    assert.equal(figurine._figurine_transform_seq, 7);
+    assert.equal((game.level.monsters || []).some(mon => mon.data?.name === 'goblin'), false);
+    assert.equal(shkp.debit || 0, 0);
+    assert.equal(shkp.robbed || 0, 0);
+    assert.equal(shkp.billct, 1);
+    assert.equal(shop.shopBillEntryTotal(shkp.bill[0]), 123);
+    assert.deepEqual(getRngLog().filter(entry => entry.startsWith('rn2(100)=')), ['rn2(100)=0']);
+    assert.doesNotMatch(game._pending_message || '', /figurine animates|owe|Thief|odor of meat|delicious smell/);
+});
+
+test('self-cast stone to flesh animates carried shop-billed figurine outside shop as used-up bill', async () => {
+    const { shkp } = installCommandShopState();
+    game.level.at = () => ({ roomno: 0, typ: ROOM });
+    initRng(1);
+    markHeroNeighborhoodVisible();
+    const figurine = stoneToFleshFigurine(31112, 'a',
+        vegetarianCorpstatMonster('goblin', 'o', { neuter: false, mmove: 6 }));
+    figurine.figurineTransformTurn = 42;
+    figurine._figurine_transform_seq = 7;
+    game.inventory = [figurine];
+    shop.addObjectToShopBill(shkp, figurine, 123);
+
+    await castStoneToFleshAtSelf();
+
+    assert.equal(game.inventory.includes(figurine), false);
+    assert.equal(figurine.figurineTransformTurn, undefined);
+    assert.equal(figurine._figurine_transform_seq, undefined);
+    assert.ok((game.level.monsters || []).find(mon => mon.data?.name === 'goblin'));
+    assert.equal(shkp.debit || 0, 0);
+    assert.equal(shkp.robbed || 0, 0);
+    assert.equal(shkp.billct, 1);
+    assert.equal(shkp.bill[0].useup, true);
+    assert.equal(shop.shopBillEntryForObject(shkp, figurine), shkp.bill[0]);
+    assert.equal((game._usedUpShopBills || []).some(bill =>
+        String(bill.bo_id) === String(figurine.id) && bill.price === 123), true);
+    assert.match(game._pending_message || '', /The figurine animates!/);
+    assert.doesNotMatch(game._pending_message || '', /owe|goods lost|Thief|odor of meat|delicious smell/);
+});
+
 test('self-cast stone to flesh turns carried stone-golem figurine into flesh golem', async () => {
     installNonShopFloorState();
     initRng(1);

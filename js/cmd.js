@@ -12571,8 +12571,20 @@ function stoneToFleshFigurineAnimationInfo(item) {
     return { data: item.corpsenm, golemXform: false };
 }
 
+function stoneToFleshCarriedFigurineHasUnpaidContents(item, seen = new Set()) {
+    if (!item || seen.has(item)) return false;
+    seen.add(item);
+    return globContents(item).some(child => shopObjectOrContentsUnpaid(child));
+}
+
+function stoneToFleshCarriedFigurineShopkeeper(item) {
+    const shkp = shopkeeperForCostlySpot(game.u?.ux, game.u?.uy);
+    if (!shopkeeperInHisShop(shkp)) return null;
+    return item?.unpaid || shopBillEntryForObject(shkp, item) ? shkp : null;
+}
+
 function stoneToFleshAnimatableCarriedFigurineInfo(item) {
-    if (shopObjectOrContentsUnpaid(item)) return null;
+    if (stoneToFleshCarriedFigurineHasUnpaidContents(item)) return null;
     return stoneToFleshFigurineAnimationInfo(item);
 }
 
@@ -12585,27 +12597,29 @@ async function stoneToFleshAnimateCarriedFigurine(item) {
     if (!info || stoneToFleshObjectResists(item)) return null;
     const mon = await makemon(info.data, game.u?.ux || 0, game.u?.uy || 0, NO_MINVENT | MM_NOMSG);
     if (!mon) return null;
+    const messages = [];
+    const chargeMessage = stoneToFleshChargeCarriedFigurineAnimation(item);
+    if (chargeMessage) messages.push(chargeMessage);
     stopFigurineTransformTimeout(item);
-    removeInventoryItem(item, 1);
-    return cansee(mon.mx, mon.my)
-        ? `The figurine ${info.golemXform ? 'turns to flesh and ' : ''}animates!`
-        : '';
+    useUpInventoryItem(item, 1);
+    if (cansee(mon.mx, mon.my))
+        messages.push(`The figurine ${info.golemXform ? 'turns to flesh and ' : ''}animates!`);
+    return messages;
 }
 
-function stoneToFleshChargeFloorFigurineAnimation(item, x, y) {
-    if (!item || item.no_charge || shopBillableGold(item)) return '';
-    const shkp = shopkeeperForCostlySpot(x, y);
+function stoneToFleshChargeFigurineAnimation(item, x, y, shkp, { carried = false } = {}) {
+    if (!item || shopBillableGold(item) || (!carried && item.no_charge)) return '';
     if (!shopkeeperInHisShop(shkp)) return '';
+    if (carried && !(item.unpaid || shopBillEntryForObject(shkp, item))) return '';
     const beforeCredit = Math.max(0, Math.trunc(Number(shkp.credit || 0)));
     const value = lostShopMerchandiseValueForObject({ ox: x, oy: y }, item, shkp);
     if (!(value > 0)) return '';
     const peaceful = shopkeeperPeacefulForDebt(shkp);
     const remaining = chargeShopkeeperForLostMerchandise(shkp, value, { peaceful });
-    if (heroIsDeaf()) return '';
     if (!peaceful) {
         if (!game.u?.blind && cansee(shkp.mx, shkp.my))
             return `${shopkeeperDisplayName(shkp)} booms: "${game.plname || 'Hero'}, you are a thief!"`;
-        return 'You hear a scream, "Thief!"';
+        return heroIsDeaf() ? '' : 'You hear a scream, "Thief!"';
     }
     const usedCredit = beforeCredit > Math.max(0, Math.trunc(Number(shkp.credit || 0)));
     if (usedCredit && shkp.credit > 0)
@@ -12614,6 +12628,15 @@ function stoneToFleshChargeFloorFigurineAnimation(item, x, y) {
         return 'You have no credit remaining.';
     const still = usedCredit ? 'still ' : '';
     return `You ${still}owe ${shopkeeperDisplayName(shkp)} ${remaining} ${shopCurrency(remaining)} for ${shopDebtObjectPronoun(item)}!`;
+}
+
+function stoneToFleshChargeCarriedFigurineAnimation(item) {
+    const shkp = stoneToFleshCarriedFigurineShopkeeper(item);
+    return stoneToFleshChargeFigurineAnimation(item, game.u?.ux, game.u?.uy, shkp, { carried: true });
+}
+
+function stoneToFleshChargeFloorFigurineAnimation(item, x, y) {
+    return stoneToFleshChargeFigurineAnimation(item, x, y, shopkeeperForCostlySpot(x, y));
 }
 
 async function stoneToFleshAnimateFloorFigurine(item, x, y) {
@@ -12750,7 +12773,8 @@ async function stoneToFleshInventoryEffect(messages = []) {
         }
         const animationMessage = await stoneToFleshAnimateCarriedFigurine(item);
         if (animationMessage != null) {
-            if (animationMessage) messages.push(animationMessage);
+            if (Array.isArray(animationMessage)) messages.push(...animationMessage);
+            else if (animationMessage) messages.push(animationMessage);
             transformed = true;
         }
     }
