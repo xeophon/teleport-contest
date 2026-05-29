@@ -13420,6 +13420,47 @@ test('command carried drop down ladder skips stay roll and delivers on reciproca
     assert.equal(dropped._impactDropMigration, undefined);
 });
 
+test('command carried drop down ladder stacks on reciprocal ladder arrival', async () => {
+    installNonShopFloorState();
+    installRemoteDownStairGate({ x: 5, y: 5, isladder: true });
+    initRng(4);
+    const ration = foodRation(512019, 'e');
+    game.inventory = [ration];
+
+    await rhack('d');
+    await rhack('e');
+
+    const queued = queuedImpactDropsFor({ dnum: 0, dlevel: 2 });
+    assert.equal(queued.length, 1);
+    const queuedRation = queued[0];
+
+    const floorRation = { ...foodRation(512020), letter: undefined, line: undefined, quan: 2, ox: 12, oy: 6 };
+    game.u.uz = { dnum: 0, dlevel: 2 };
+    game.level.objects = [floorRation];
+    game.stairs = {
+        sx: 12,
+        sy: 6,
+        up: true,
+        isladder: true,
+        tolev: { dnum: 0, dlevel: 1 },
+        next: null,
+    };
+    game.level.at = (x, y) => ({
+        roomno: 0,
+        typ: x === 12 && y === 6 ? LADDER : ROOM,
+        ladder: x === 12 && y === 6 ? 1 : 0,
+    });
+
+    shop.deliverQueuedImpactDroppedObjectsForTest({ dnum: 0, dlevel: 2 });
+
+    assert.equal(game.level.objects.length, 1);
+    assert.equal(game.level.objects[0], queuedRation);
+    assert.equal(queuedRation.quan, 3);
+    assert.equal(floorRation.quan, 0);
+    assert.equal(game.level.objects.includes(floorRation), false);
+    assert.equal(queuedRation._impactDropMigration, undefined);
+});
+
 test('command carried drop down branch stairs records special-stair metadata', async () => {
     installNonShopFloorState();
     installRemoteDownStairGate({ x: 5, y: 5, targetLevel: { dnum: 1, dlevel: 1 } });
@@ -20483,6 +20524,66 @@ test('projectile down ladder always falls and delivers on reciprocal ladder', ()
     assert.equal(thrown.ox, 12);
     assert.equal(thrown.oy, 6);
     assert.equal(thrown._impactDropMigration, undefined);
+});
+
+test('queued exact down-gate delivery silently breaks fragile impacted pile', () => {
+    installNonShopFloorState();
+    installRemoteDownStairGate({ x: 7, y: 5 });
+    initRng(1);
+    const pile = { ...oilPotion(8743301), letter: undefined, line: undefined, ox: 7, oy: 5 };
+    const thrown = { ...dagger(8743302), letter: undefined, line: undefined, ox: 7, oy: 5 };
+    game.level.objects = [pile];
+
+    const landing = shop.landProjectileObjectWithShopHandling(thrown, 7, 5, { breakRoll: 0, silent: true });
+    const queued = queuedImpactDropsFor({ dnum: 0, dlevel: 2 });
+    assert.equal(landing.shipObject.handled, true);
+    assert.deepEqual(queued.map(obj => obj.id), [thrown.id, pile.id]);
+
+    game.u.uz = { dnum: 0, dlevel: 2 };
+    game.level.objects = [];
+    game.stairs = {
+        sx: 12,
+        sy: 6,
+        up: true,
+        isladder: false,
+        tolev: { dnum: 0, dlevel: 1 },
+        next: null,
+    };
+    game.level.at = (x, y) => ({
+        roomno: 0,
+        typ: x === 12 && y === 6 ? STAIRS : ROOM,
+    });
+
+    shop.deliverQueuedImpactDroppedObjectsForTest({ dnum: 0, dlevel: 2 });
+
+    assert.equal(game.level.objects.includes(thrown), true);
+    assert.equal(thrown.ox, 12);
+    assert.equal(thrown.oy, 6);
+    assert.equal(game.level.objects.includes(pile), false);
+    assert.equal(pile._impactDropMigration, undefined);
+});
+
+test('queued random delivery silently breaks fragile object after landing roll', () => {
+    installNonShopFloorState();
+    initRng(1);
+    enableRngLog({ reset: true });
+    const potion = { ...oilPotion(8743303), letter: undefined, line: undefined };
+    game._impact_drop_migrations = new Map([['0:2', [potion]]]);
+    game.u.uz = { dnum: 0, dlevel: 2 };
+    game.level.objects = [];
+    game.level.at = (x, y) => ({
+        roomno: 0,
+        typ: x === 9 && y === 8 ? ROOM : STONE,
+    });
+    game._pending_message = 'arrival is quiet';
+
+    shop.deliverQueuedImpactDroppedObjectsForTest({ dnum: 0, dlevel: 2 });
+
+    assert.equal(game.level.objects.includes(potion), false);
+    assert.equal(game._impact_drop_migrations.has('0:2'), false);
+    assert.equal(potion._impactDropMigration, undefined);
+    assert.equal(game._pending_message, 'arrival is quiet');
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(1)', 'rn2(100)']);
 });
 
 test('branch stairs queue special-stair migration metadata', () => {
