@@ -1253,6 +1253,25 @@ function carriedGrayStone(id, letter = 'g', actualKind = 'loadstone', props = {}
     };
 }
 
+function carriedRuby(id, letter = 'r', props = {}) {
+    return {
+        id,
+        otyp: 10070,
+        cls: 'gem',
+        glyph: '*',
+        kind: 'red gem',
+        actualKind: 'ruby',
+        gemDescription: 'red gem',
+        quan: 1,
+        letter,
+        line: `${letter} - a red gem`,
+        known: false,
+        dknown: true,
+        bknown: false,
+        ...props,
+    };
+}
+
 function installThrowsRocksForm() {
     game.u._polyself_form = {
         name: 'stone giant',
@@ -6500,6 +6519,129 @@ test('cursed touchstone shatters non-gray gems before the blind fallback', async
     assert.equal(game.inventory.includes(gem), false);
     assert.match(game._pending_message, /You feel something shatter\./);
     assert.doesNotMatch(game._pending_message, /scritch/);
+});
+
+test('blessed touchstone identifies carried ruby and touchstone discovery', async () => {
+    installCommandShopState();
+    const stone = carriedGrayStone(30580, 't', 'touchstone', {
+        otyp: TOUCHSTONE,
+        kind: 'touchstone',
+        actualKind: 'touchstone',
+        known: true,
+        dknown: true,
+        blessed: true,
+        line: 't - a blessed touchstone',
+    });
+    const ruby = carriedRuby(30581, 'r');
+    game.inventory = [stone, ruby];
+
+    await startRubCommand();
+    await rhack('t');
+    await rhack('r');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.inventory.includes(ruby), true);
+    assert.equal(stone.known, true);
+    assert.equal(ruby.known, true);
+    assert.equal(ruby.kind, 'ruby');
+    assert.equal(hasGemStoneDiscovery('touchstone'), true);
+    assert.equal(hasGemStoneDiscovery('ruby'), true);
+    assert.match(game._pending_message, /r - a ruby/);
+    assert.doesNotMatch(game._pending_message, /scritch|streaks/);
+});
+
+test('uncursed Archeologist touchstone identifies carried ruby', async () => {
+    installCommandShopState();
+    game._startup_role = 'Archeologist';
+    game.urole = { name: { m: 'Archeologist' } };
+    const stone = carriedGrayStone(30582, 't', 'touchstone', {
+        otyp: TOUCHSTONE,
+        kind: 'touchstone',
+        actualKind: 'touchstone',
+        known: true,
+        dknown: true,
+        line: 't - an uncursed touchstone',
+    });
+    const ruby = carriedRuby(30583, 'r');
+    game.inventory = [stone, ruby];
+
+    await startRubCommand();
+    await rhack('t');
+    await rhack('r');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(ruby.known, true);
+    assert.equal(hasGemStoneDiscovery('touchstone'), true);
+    assert.equal(hasGemStoneDiscovery('ruby'), true);
+    assert.match(game._pending_message, /r - a ruby/);
+});
+
+test('sighted ineffective touchstone leaves red streaks on ruby', async () => {
+    installCommandShopState();
+    game._startup_role = 'Wizard';
+    game.urole = { name: { m: 'Wizard' } };
+    game._startup_race = 'human';
+    game.urace = { noun: 'human' };
+    const stone = carriedGrayStone(30584, 't', 'touchstone', {
+        otyp: TOUCHSTONE,
+        kind: 'touchstone',
+        actualKind: 'touchstone',
+        known: true,
+        dknown: true,
+        line: 't - an uncursed touchstone',
+    });
+    const ruby = carriedRuby(30585, 'r');
+    game.inventory = [stone, ruby];
+
+    await startRubCommand();
+    await rhack('t');
+    await rhack('r');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.inventory.includes(ruby), true);
+    assert.equal(ruby.known, false);
+    assert.equal(hasGemStoneDiscovery('ruby'), false);
+    assert.equal(game._pending_message, 'You see red streaks on the stone.');
+});
+
+test('gold ring rubbed on touchstone makes golden scratch marks', async () => {
+    installCommandShopState();
+    const stone = carriedGrayStone(30586, 't', 'touchstone', {
+        otyp: TOUCHSTONE,
+        kind: 'touchstone',
+        actualKind: 'touchstone',
+        known: true,
+        dknown: true,
+        line: 't - an uncursed touchstone',
+    });
+    const ring = {
+        id: 30587,
+        cls: 'ring',
+        glyph: '=',
+        kind: 'gold ring',
+        actualKind: 'ring of teleport control',
+        appearance: 'gold',
+        material: 'gold',
+        quan: 1,
+        letter: 'g',
+        line: 'g - a gold ring',
+        known: false,
+        dknown: true,
+    };
+    game.inventory = [stone, ring];
+
+    await startRubCommand();
+    await rhack('t');
+    await rhack('g');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.inventory.includes(ring), true);
+    assert.equal(game._pending_message, 'You make golden scratch marks on the stone.');
+    assert.doesNotMatch(game._pending_message, /scritch|streaks/);
 });
 
 test('dipping an oil lamp into unpaid oil refuels and bills fuel tax', async () => {

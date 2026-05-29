@@ -8,7 +8,7 @@ import { cansee, couldsee, vision_recalc, vision_reset } from './vision.js';
 import { RANDOM_MONSTER_BY_NAME, SHOP_TYPES, STALKER_MONSTERS, add_to_container, add_to_minv, adjustedMonsterLevel, artifactDefinitionForName, artifactObjectName, enextoMonsterSpot, make_tutorial1_level, makemon, makeArtifactWishObject, maketrap, mkcorpstat, mklev, mkobj, mkobj_at, mksobj, monsterByRndName, monster_hp, morgueMonster, nameObjectAsArtifact, next_ident, object_display, potionIndexForRoll, resurrectWizardOfYendor, rndmonnum, scrollIndexForRoll, set_mimic_sym_rng, syncDungeonContext, u_on_dnstairs, u_on_rndspot, u_on_upstairs, wipe_engr_at, dropMonsterInventory as dropMonsterInventoryRaw, l_nhcore_init, getrumor, getbogusmon, level_difficulty, set_malign, somexyspace, fumaroles, fix_wall_spines, createMonsterCorpseOrGlob, monsterCorpseDropSucceeds, monsterLeavesCorpseLikeDrop, movebubbles } from './mklev.js';
 import { ACCESSIBLE, A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_MAX, A_NEUTRAL, A_NONE, A_STR, A_WIS, ALTAR, AM_SANCTUM, AM_SHRINE, Align2amask, Amask2align, BC_BALL, BC_CHAIN, BEAR_TRAP, BLCORNER, BOLT_LIM, BRCORNER, CANDLESHOP, CLOUD, COLNO, CORPSTAT_FEMALE, CORPSTAT_GENDER, CORPSTAT_HISTORIC, CORPSTAT_MALE, CORPSTAT_NEUTER, CORR, DB_DIR, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DB_NORTH, DB_SOUTH, DB_UNDER, DB_WEST, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, BURN, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, D_TRAPPED, DUST, ENGRAVE, ENGR_BLOOD, FOUNTAIN, F_LOOTED, GRAVE, HEADSTONE, HWALL, ICE, ICED_MOAT, ICED_POOL, IN_SIGHT, IRONBARS, IS_AIR, IS_FURNITURE, IS_LAVA, IS_OBSTRUCTED, IS_POOL, IS_ROOM, IS_TREE, IS_WALL, In_endgame, In_quest, In_sokoban, In_V_tower, Is_airlevel, Is_astralevel, Is_botlevel, Is_earthlevel, Is_firelevel, Is_rogue_level, Is_stronghold, Is_waterlevel, LADDER, LAVAPOOL, LAVAWALL, MAGIC_PORTAL, MARK, MAX_EGG_HATCH_TIME, MM_ADJACENTOK, MM_EDOG, MM_NOCOUNTBIRTH, MM_NOMSG, MM_NOWAIT, MOAT, MORGUE, M_AP_TYPE, N_DIRS, NO_MINVENT, NORMAL_SPEED, OVERLOADED, P_BASIC, P_UNSKILLED, PIT, POOL, REPAIR_DELAY, ROLLING_BOULDER_TRAP, ROOM, ROOMOFFSET, ROWNO, SCORR, SDOOR, SHARED, SHARED_PLUS, SHOPBASE, SHOP_DOOR_COST, SINK, SPIKED_PIT, STAIRS, STONE, STRAT_WAITMASK, S_LDWASHER, S_LPUDDING, S_LRING, TDWALL, TEMPLE, THRONE, TLCORNER, TRCORNER, TREE, TREE_LOOTED, TREE_SWARM, TT_BEARTRAP, TT_BURIEDBALL, TT_INFLOOR, TT_LAVA, TT_PIT, TT_WEB, TUWALL, T_LOOTED, VAULT, VIBRATING_SQUARE, VWALL, WAND_BACKFIRE_CHANCE, WATER, WEB, WM_MASK, WT_IRON_BALL_BASE, WT_IRON_BALL_INCR, WT_TO_DMG, W_NONDIGGABLE, W_SADDLE, ZAP_POS, isok, xdir, ydir } from './const.js';
 import { d, rn1, rn2, rn2_on_display_rng, rnd, rnl, rnz } from './rng.js';
-import { CLR_BLACK, CLR_BLUE, CLR_BRIGHT_BLUE, CLR_BRIGHT_CYAN, CLR_BRIGHT_GREEN, CLR_BROWN, CLR_CYAN, CLR_GRAY, CLR_GREEN, CLR_MAGENTA, CLR_ORANGE, CLR_RED, CLR_YELLOW, CLR_WHITE, NO_COLOR } from './terminal.js';
+import { CLR_BLACK, CLR_BLUE, CLR_BRIGHT_BLUE, CLR_BRIGHT_CYAN, CLR_BRIGHT_GREEN, CLR_BRIGHT_MAGENTA, CLR_BROWN, CLR_CYAN, CLR_GRAY, CLR_GREEN, CLR_MAGENTA, CLR_ORANGE, CLR_RED, CLR_YELLOW, CLR_WHITE, NO_COLOR } from './terminal.js';
 import { vfsDeleteFile, vfsReadFile, vfsWriteFile } from './storage.js';
 import { encodeBonesLevel, encodeSaveState } from './save.js';
 import { depth as depth_of_level, distmin } from './hacklib.js';
@@ -7927,6 +7927,199 @@ function observeUseStoneSource(stone) {
     }
 }
 
+const USE_STONE_COLOR_NAMES = new Map([
+    [CLR_BLACK, 'black'], [CLR_RED, 'red'], [CLR_GREEN, 'green'], [CLR_BROWN, 'brown'],
+    [CLR_BLUE, 'blue'], [CLR_MAGENTA, 'magenta'], [CLR_CYAN, 'cyan'], [CLR_GRAY, 'gray'],
+    [NO_COLOR, 'transparent'], [CLR_ORANGE, 'orange'], [CLR_BRIGHT_GREEN, 'bright green'],
+    [CLR_YELLOW, 'yellow'], [CLR_BRIGHT_BLUE, 'bright blue'],
+    [CLR_BRIGHT_MAGENTA, 'bright magenta'], [CLR_BRIGHT_CYAN, 'bright cyan'],
+    [CLR_WHITE, 'white'],
+]);
+const USE_STONE_GEM_COLORS = new Map([
+    ['dilithium crystal', 'white'], ['diamond', 'white'], ['ruby', 'red'],
+    ['jacinth', 'orange'], ['jacinth stone', 'orange'], ['sapphire', 'blue'],
+    ['black opal', 'black'], ['emerald', 'green'], ['turquoise', 'green'],
+    ['turquoise stone', 'green'], ['citrine', 'yellow'], ['citrine stone', 'yellow'],
+    ['aquamarine', 'green'], ['aquamarine stone', 'green'], ['amber', 'brown'],
+    ['amber stone', 'brown'], ['topaz', 'brown'],
+    ['topaz stone', 'brown'], ['jet', 'black'], ['jet stone', 'black'],
+    ['opal', 'white'], ['chrysoberyl', 'yellow'], ['chrysoberyl stone', 'yellow'],
+    ['garnet', 'red'], ['garnet stone', 'red'], ['amethyst', 'magenta'],
+    ['amethyst stone', 'magenta'], ['jasper', 'red'], ['jasper stone', 'red'],
+    ['fluorite', 'magenta'], ['fluorite stone', 'magenta'], ['obsidian', 'black'],
+    ['obsidian stone', 'black'], ['agate', 'orange'], ['agate stone', 'orange'],
+    ['jade', 'green'], ['jade stone', 'green'],
+    ['worthless piece of white glass', 'white'], ['worthless piece of blue glass', 'blue'],
+    ['worthless piece of red glass', 'red'],
+    ['worthless piece of yellowish brown glass', 'brown'],
+    ['worthless piece of orange glass', 'orange'], ['worthless piece of yellow glass', 'yellow'],
+    ['worthless piece of black glass', 'black'], ['worthless piece of green glass', 'green'],
+    ['worthless piece of violet glass', 'magenta'],
+]);
+const USE_STONE_DESCRIPTION_COLORS = new Map([
+    ['yellowish brown', 'brown'],
+    ['violet', 'magenta'],
+]);
+const USE_STONE_GEM_DISPLAY_NAMES = new Map([
+    ['jacinth', 'jacinth stone'], ['turquoise', 'turquoise stone'],
+    ['citrine', 'citrine stone'], ['aquamarine', 'aquamarine stone'],
+    ['amber', 'amber stone'], ['topaz', 'topaz stone'], ['jet', 'jet stone'],
+    ['chrysoberyl', 'chrysoberyl stone'], ['garnet', 'garnet stone'],
+    ['amethyst', 'amethyst stone'], ['jasper', 'jasper stone'],
+    ['fluorite', 'fluorite stone'], ['obsidian', 'obsidian stone'],
+    ['agate', 'agate stone'], ['jade', 'jade stone'],
+]);
+const USE_STONE_RING_APPEARANCE_COLORS = new Map([
+    ['wooden', 'brown'], ['granite', 'gray'], ['opal', 'gray'], ['clay', 'red'],
+    ['coral', 'orange'], ['black onyx', 'black'], ['moonstone', 'gray'],
+    ['tiger eye', 'brown'], ['jade', 'green'], ['bronze', 'yellow'],
+    ['agate', 'red'], ['topaz', 'cyan'], ['sapphire', 'blue'], ['ruby', 'red'],
+    ['diamond', 'white'], ['pearl', 'white'], ['iron', 'cyan'], ['brass', 'yellow'],
+    ['copper', 'yellow'], ['twisted', 'cyan'], ['steel', 'cyan'], ['silver', 'gray'],
+    ['gold', 'yellow'], ['ivory', 'white'], ['emerald', 'green'], ['wire', 'cyan'],
+    ['engagement', 'cyan'], ['shiny', 'cyan'],
+]);
+
+function useStoneSurfaceName(stone) {
+    return `stone${Math.max(1, Math.trunc(Number(stone?.quan || 1))) > 1 ? 's' : ''}`;
+}
+
+function useStoneSubjectName(stone) {
+    return pickupObjectName(stone) || useStoneSurfaceName(stone);
+}
+
+function useStoneSurfaceVerb(stone, singular, plural = singular) {
+    return Math.max(1, Math.trunc(Number(stone?.quan || 1))) > 1 ? plural : singular;
+}
+
+function useStoneHeroCanIdentify(stone) {
+    if (!isTouchstoneApplyItem(stone)) return false;
+    if (stone?.blessed) return true;
+    if (stone?.cursed) return false;
+    const role = String(game.urole?.name?.m || game._startup_role || '').toLowerCase();
+    const race = String(game.urace?.noun || game.urace?.adj || game._startup_race || '').toLowerCase();
+    return role === 'archeologist' || race === 'gnome';
+}
+
+function useStoneObjectClass(item) {
+    const cls = itemClassKey(item);
+    if (cls) return cls;
+    if (item?.otyp === RING_CLASS || item?.glyph === '=') return 'ring';
+    if (item?.otyp === GEM_CLASS || item?.glyph === '*') return 'gem';
+    if (isApplyCoinObject(item)) return 'coin';
+    return '';
+}
+
+function useStoneObjectMaterial(item) {
+    const cls = useStoneObjectClass(item);
+    if (cls === 'ring') return stoneToFleshRingMaterial(item);
+    if (cls === 'gem') return stoneToFleshObjectMaterial(item);
+    const explicit = normalizeStoneToFleshMaterial(item?.oc_material || item?.material);
+    if (explicit) return explicit;
+    if (isApplyCoinObject(item)) return 'gold';
+    const kind = objectKindKey(item);
+    if (/\bgold(?:en)?\b/.test(kind)) return 'gold';
+    if (/\bsilver\b/.test(kind)) return 'silver';
+    if (/\bwax\b/.test(kind)) return 'wax';
+    if (/\bwood(?:en)?\b/.test(kind)) return 'wood';
+    if (/\bcloth\b/.test(kind)) return 'cloth';
+    if (/\b(?:water|potion)\b/.test(kind) && item?.cls === 'potion') return 'liquid';
+    return '';
+}
+
+function useStoneColorName(item) {
+    const numeric = item?._display_color ?? item?.color;
+    if (USE_STONE_COLOR_NAMES.has(numeric)) return USE_STONE_COLOR_NAMES.get(numeric);
+    const cls = useStoneObjectClass(item);
+    if (cls === 'ring') {
+        const appearance = String(item?.appearance || (
+            typeof item?.kind === 'string' && /\bring$/.test(item.kind) && !/^ring of /.test(item.kind)
+                ? item.kind.replace(/\s+ring$/, '')
+                : ''
+        ) || (item?.ringRoll ? game._object_descriptions?.rings?.[item.ringRoll - 1] : '') || '').toLowerCase();
+        if (USE_STONE_RING_APPEARANCE_COLORS.has(appearance))
+            return USE_STONE_RING_APPEARANCE_COLORS.get(appearance);
+    }
+    const values = [
+        item?.actualKind,
+        item?.kind,
+        item?.gemDescription,
+        item?.displayName,
+    ].map(value => String(value || '').toLowerCase().trim()).filter(Boolean);
+    for (const value of values) {
+        if (USE_STONE_GEM_COLORS.has(value)) return USE_STONE_GEM_COLORS.get(value);
+        const gemDescription = value.match(/^(.+) gem$/)?.[1];
+        if (gemDescription) return USE_STONE_DESCRIPTION_COLORS.get(gemDescription) || gemDescription;
+    }
+    return '';
+}
+
+function useStoneGemIdentityName(item) {
+    const values = [
+        item?.actualKind,
+        item?.kind,
+        item?.displayName,
+        item?.gemDescription,
+    ].map(value => String(value || '').toLowerCase().trim()
+        .replace(/^an? /, '')
+        .replace(/^uncursed |^blessed |^cursed /, ''))
+        .filter(Boolean);
+    for (const value of values) {
+        if (value === 'gray stone' || value === 'grey stone') continue;
+        if (USE_STONE_GEM_DISPLAY_NAMES.has(value)) return USE_STONE_GEM_DISPLAY_NAMES.get(value);
+        if (USE_STONE_GEM_COLORS.has(value) || GRAY_STONE_APPLY_NAMES.has(value)) return value;
+    }
+    return '';
+}
+
+function recordKnownGemStoneDiscovery(name, appearance = '') {
+    const discoveryName = String(name || '').toLowerCase().trim();
+    if (!discoveryName) return;
+    const suffix = appearance ? ` (${appearance})` : '';
+    game._discoveries ??= [];
+    const existing = game._discoveries.find(entry =>
+        entry.section === 'Gems/Stones' && String(entry.name || '').toLowerCase() === discoveryName);
+    if (existing) {
+        existing.name = discoveryName;
+        existing.text = `${discoveryName}${suffix}`;
+        existing.starred = false;
+        existing.known = true;
+    } else {
+        game._discoveries.push({
+            section: 'Gems/Stones',
+            name: discoveryName,
+            text: `${discoveryName}${suffix}`,
+            starred: false,
+            known: true,
+        });
+    }
+    learnObjectScore('Gems/Stones', discoveryName);
+}
+
+function identifyUseStoneSource(stone) {
+    if (!stone) return;
+    stone.known = true;
+    stone.dknown = true;
+    stone.kind = 'touchstone';
+    stone.actualKind = 'touchstone';
+    recordKnownGemStoneDiscovery('touchstone', 'gray');
+    refreshInventoryObjectLine(stone);
+}
+
+function identifyUseStoneGem(target) {
+    const name = useStoneGemIdentityName(target);
+    if (!target || !name) return;
+    const appearance = useStoneColorName(target);
+    target.known = true;
+    target.dknown = true;
+    target.kind = name;
+    target.actualKind = name;
+    target.gemDescription = name;
+    recordKnownGemStoneDiscovery(name, appearance);
+    refreshInventoryObjectLine(target);
+    if (target.unpaid) syncUnpaidBillLine(target);
+}
+
 async function beginUseStone(stone) {
     game._apply_stone_letter = stone?.letter || null;
     observeUseStoneSource(stone);
@@ -7961,6 +8154,52 @@ async function shatterUseStoneTarget(stone, target) {
     return true;
 }
 
+function useStoneEffectMessage(stone, target) {
+    const stoneIsTouchstone = isTouchstoneApplyItem(stone);
+    let cls = useStoneObjectClass(target);
+    const material = useStoneObjectMaterial(target);
+    let doScratch = false;
+    let streakColor = '';
+
+    if (cls === 'ring' && material !== 'gemstone' && material !== 'mineral') cls = '';
+
+    if (cls === 'gem' || cls === 'ring') {
+        if (!stoneIsTouchstone) {
+            doScratch = true;
+        } else if (cls === 'gem' && useStoneHeroCanIdentify(stone)) {
+            identifyUseStoneSource(stone);
+            identifyUseStoneGem(target);
+            return normalInventoryLine(target);
+        } else if (material === 'glass') {
+            doScratch = true;
+        }
+        streakColor = useStoneColorName(target);
+    } else {
+        if (material === 'cloth')
+            return `The ${useStoneSubjectName(stone)} ${useStoneSurfaceVerb(stone, 'looks', 'look')} a little more polished now.`;
+        if (material === 'liquid') {
+            if (target?.known === false) return 'You must think this is a wetstone, do you?';
+            return `The ${useStoneSubjectName(stone)} ${useStoneSurfaceVerb(stone, 'is', 'are')} a little wetter now.`;
+        }
+        if (material === 'wax') streakColor = 'waxy';
+        else if (material === 'wood') streakColor = 'wooden';
+        else if (material === 'gold') {
+            doScratch = true;
+            streakColor = 'golden';
+        } else if (material === 'silver') {
+            doScratch = true;
+            streakColor = 'silvery';
+        } else {
+            doScratch = !stoneIsTouchstone;
+        }
+    }
+
+    const surface = useStoneSurfaceName(stone);
+    if (doScratch) return `You make ${streakColor ? `${streakColor} ` : ''}scratch marks on the ${surface}.`;
+    if (streakColor) return `You see ${streakColor} streaks on the ${surface}.`;
+    return '"scritch, scritch"';
+}
+
 async function finishUseStone(stone, target) {
     game._apply_stone_letter = null;
     game._command_mode = null;
@@ -7979,7 +8218,7 @@ async function finishUseStone(stone, target) {
         game.context.move = 1;
         return;
     }
-    await setMessage('"scritch, scritch"');
+    await setMessage(useStoneEffectMessage(stone, target));
     game.context.move = 1;
 }
 
