@@ -31112,6 +31112,33 @@ function tipHatMonsterPossessive(mon) {
     return 'its';
 }
 
+function heroHasConflict() {
+    const u = game.u || {};
+    if (u.conflict || u.HConflict || u.EConflict || u._intrinsicConflict || u._extrinsicConflict)
+        return true;
+    const intrinsics = u.intrinsics || {};
+    const extrinsics = u.extrinsics || {};
+    const uprops = u.uprops || {};
+    if (intrinsics.conflict || intrinsics.Conflict || extrinsics.conflict || extrinsics.Conflict)
+        return true;
+    if (uprops.conflict?.intrinsic || uprops.conflict?.extrinsic
+        || uprops.CONFLICT?.intrinsic || uprops.CONFLICT?.extrinsic)
+        return true;
+    return (game.inventory || []).some(item => wornRingItem(item)
+        && (Number(item.ringRoll ?? item.roll ?? 0) === 14
+            || /\bring of conflict\b/i.test(String(item.actualKind || item.kind || item.line || ''))));
+}
+
+function tipHatRudeHumanoidResponse(name) {
+    const reaction = ['curses', 'gestures rudely', 'gestures offensively'];
+    const deaf = heroIsDeaf();
+    const which = deaf ? rn1(2, 1) : rn2(3);
+    let twice = 0;
+    if (!deaf && which === 0 && !rn2(3))
+        twice = rn1(2, 1);
+    return `${name} ${reaction[which]}${twice ? ` and ${reaction[twice]}` : ''} at you...`;
+}
+
 function tipHatDirectedResponse(dir) {
     if (!dir.dx && !dir.dy) {
         if (dir.dz) return `There's no one ${dir.dz < 0 ? 'up' : 'down'} there.`;
@@ -31133,9 +31160,10 @@ function tipHatDirectedResponse(dir) {
     if (!target || !tipHatMonsterResponsive(target)) return 'Nothing happens.';
 
     if (Number.isInteger(target.mstrategy)) target.mstrategy &= ~STRAT_WAITMASK;
+    else if (target.mstrategy === 'waitforu') target.mstrategy = 0;
     const visible = tipHatMonsterVisible(target);
     const name = fireScrollMonsterName(target);
-    if (visible && tipHatMonsterHumanoid(target) && target.mpeaceful && !game.u?.conflict) {
+    if (visible && tipHatMonsterHumanoid(target) && target.mpeaceful && !heroHasConflict()) {
         const helmet = monsterEarthHelmet(target);
         if (!helmet) return `${name} waves.`;
         const simple = tipHatSimpleName(helmet);
@@ -31147,7 +31175,7 @@ function tipHatDirectedResponse(dir) {
         return `${name} tips ${poss} ${simple} in response.`;
     }
     if (visible && tipHatMonsterHumanoid(target))
-        return `${name} gestures rudely at you...`;
+        return tipHatRudeHumanoidResponse(name);
     if (visible) return `${name} doesn't respond.`;
     return 'Nothing happens.';
 }

@@ -2860,6 +2860,114 @@ test('non-worn helmet tip remains ordinary no-effect', async () => {
     assert.doesNotMatch(game._pending_message, /At whom/);
 });
 
+test('worn helmet tip makes a peaceful humanoid without helm wave and clears wait strategy', async () => {
+    installNonShopFloorState();
+    const helmet = wornArmor(306355, 'orcish helm', 'h');
+    const soldier = ordinaryThrowTarget('soldier', 6, 5, {
+        msleeping: 0,
+        mcanmove: true,
+        mcansee: true,
+        mstrategy: 'waitforu',
+        data: { name: 'soldier', mlevel: 1, humanoid: true },
+    });
+    game.inventory = [helmet];
+    game.level.monsters = [soldier];
+    markSquareVisible(6, 5);
+
+    await enterTipCommand();
+    await rhack('h');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(soldier.mstrategy, 0);
+    assert.match(game._pending_message, /You briefly doff your helm\./);
+    assert.match(game._pending_message, /The soldier waves\./);
+});
+
+test('worn helmet tip gets peaceful humanoid uncursed helm response', async () => {
+    installNonShopFloorState();
+    const helmet = wornArmor(306356, 'orcish helm', 'h');
+    const monsterHelmet = wornArmor(306357, 'orcish helm', 'm');
+    const soldier = ordinaryThrowTarget('soldier', 6, 5, {
+        msleeping: 0,
+        mcanmove: true,
+        mcansee: true,
+        male: true,
+        data: { name: 'soldier', mlevel: 1, humanoid: true, male: true },
+        minvent: [monsterHelmet],
+    });
+    game.inventory = [helmet];
+    game.level.monsters = [soldier];
+    markSquareVisible(6, 5);
+
+    await enterTipCommand();
+    await rhack('h');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.match(game._pending_message, /The soldier tips his helm in response\./);
+});
+
+test('worn helmet tip learns cursed monster helm from grasp response', async () => {
+    installNonShopFloorState();
+    const helmet = wornArmor(306358, 'orcish helm', 'h');
+    const monsterHelmet = wornArmor(306359, 'orcish helm', 'm', 0, {
+        cursed: true,
+        bknown: false,
+    });
+    const soldier = ordinaryThrowTarget('soldier', 6, 5, {
+        msleeping: 0,
+        mcanmove: true,
+        mcansee: true,
+        male: true,
+        data: { name: 'soldier', mlevel: 1, humanoid: true, male: true },
+        minvent: [monsterHelmet],
+    });
+    game.inventory = [helmet];
+    game.level.monsters = [soldier];
+    markSquareVisible(6, 5);
+
+    await enterTipCommand();
+    await rhack('h');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(monsterHelmet.bknown, true);
+    assert.match(game._pending_message, /The soldier grasps his helm but can't remove it\./);
+});
+
+test('worn ring of conflict routes peaceful humanoid tip into rude reaction RNG', async () => {
+    installNonShopFloorState();
+    initRng(3);
+    const helmet = wornArmor(306360, 'orcish helm', 'h');
+    const conflict = metalRing(306361, 'conflict', 14, 'r', {
+        worn: 'left',
+        line: 'r - an iron ring (on left hand)',
+    });
+    const soldier = ordinaryThrowTarget('soldier', 6, 5, {
+        msleeping: 0,
+        mcanmove: true,
+        mcansee: true,
+        mpeaceful: true,
+        data: { name: 'soldier', mlevel: 1, humanoid: true },
+    });
+    game.inventory = [helmet, conflict];
+    game.level.monsters = [soldier];
+    markSquareVisible(6, 5);
+
+    await enterTipCommand();
+    await rhack('h');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.match(game._pending_message, /The soldier curses and gestures rudely at you\.\.\./);
+    assert.doesNotMatch(game._pending_message, /waves|tips .* in response/);
+});
+
 test('potion tip selections report sealed bottles without a move', async () => {
     installCommandShopState();
     const potion = waterPotion(30636, 'w');
