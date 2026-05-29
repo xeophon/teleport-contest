@@ -12665,7 +12665,7 @@ async function stoneToFleshAnimateFloorFigurine(item, x, y) {
 
 function stoneToFleshFloorStatueAnimationInfo(item, x, y) {
     if (!(item?.otyp === STATUE || item?.kind === 'statue') || !item?.corpsenm) return null;
-    if (statueTrapAt(x, y) || shopkeeperForCostlySpot(x, y)) return null;
+    if (statueTrapAt(x, y)) return null;
     const material = stoneToFleshObjectMaterial(item);
     if (material !== 'mineral' && material !== 'gemstone') return null;
     if (stoneToFleshFloorStatueDeferredCorpstat(item.corpsenm)) return null;
@@ -12685,11 +12685,15 @@ async function stoneToFleshAnimateFloorStatue(item, x, y) {
     if (!mon) return null;
     mon.msleeping = 0;
     mon.mundetected = false;
+    const messages = [];
+    const verb = cansee(mon.mx, mon.my) ? stoneToFleshGolemStatueVerb(info, mon) : 'disappears';
+    messages.push(`${upstartText(`the ${pickupObjectName(item)}`)} ${verb}!`);
+    const chargeMessage = statueShatterShopDebtMessage(item, x, y, mon);
+    if (chargeMessage) messages.push(chargeMessage);
     moveStatueContentsToMonster(item, mon);
     newsym(x, y);
     newsym(mon.mx, mon.my);
-    const verb = cansee(mon.mx, mon.my) ? stoneToFleshGolemStatueVerb(info, mon) : 'disappears';
-    return `${upstartText(`the ${pickupObjectName(item)}`)} ${verb}!`;
+    return messages;
 }
 
 function isMeatRingObject(item) {
@@ -12828,7 +12832,8 @@ async function stoneToFleshFloorEffect(x = game.u?.ux || 0, y = game.u?.uy || 0)
         }
         const statueAnimationMessage = await stoneToFleshAnimateFloorStatue(obj, x, y);
         if (statueAnimationMessage != null) {
-            if (statueAnimationMessage) messages.push(statueAnimationMessage);
+            if (Array.isArray(statueAnimationMessage)) messages.push(...statueAnimationMessage);
+            else if (statueAnimationMessage) messages.push(statueAnimationMessage);
             transformed = true;
             continue;
         }

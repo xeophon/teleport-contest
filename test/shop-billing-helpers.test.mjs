@@ -4857,6 +4857,108 @@ test('downward stone to flesh checks ordinary statue resistance before animation
     assertNoStoneToFleshScoreSideEffects();
 });
 
+test('downward stone to flesh animates shop-floor ordinary statue and charges existing bill after animation text', async () => {
+    const { shkp } = installCommandShopState();
+    game.level.at = () => ({ roomno: ROOMOFFSET, typ: ROOM });
+    initRng(1);
+    markHeroNeighborhoodVisible();
+    const statue = stoneToFleshStatue(31117, 5, 5,
+        vegetarianCorpstatMonster('goblin', 'o', { neuter: false, mmove: 6 }));
+    const ration = simpleFood(31121, 'food ration');
+    statue.contents = [ration];
+    game.inventory = [];
+    game.level.objects = [statue];
+    const expectedPrice = 123 + shop.shopItemPrice(ration, 5, 5);
+    shop.addObjectToShopBill(shkp, statue, 123);
+
+    await castStoneToFleshDown();
+
+    assert.equal(game.level.objects.includes(statue), false);
+    assert.equal(game.level.objects.some(obj => obj === ration), false);
+    const monster = (game.level.monsters || []).find(mon => mon.data?.name === 'goblin');
+    assert.ok(monster);
+    assert.equal(monster.minvent?.[0], ration);
+    assert.equal(shkp.debit, expectedPrice);
+    assert.equal(shkp.robbed || 0, 0);
+    assert.equal(shkp.billct, 0);
+    assert.deepEqual(shkp.bill, []);
+    assert.equal((game._usedUpShopBills || []).some(bill => String(bill.bo_id) === String(statue.id)), false);
+    const message = game._pending_message || '';
+    assert.match(message, /The statue of a goblin comes to life!/);
+    assert.match(message, new RegExp(`You owe Izchak ${expectedPrice} zorkmids? for it and its contents!`));
+    assert.equal(message.indexOf('comes to life!') < message.indexOf('You owe Izchak'), true);
+    assert.doesNotMatch(message, /used-up|odor of meat|delicious smell/);
+});
+
+test('downward stone to flesh animates unbilled zero-price shop-floor ordinary statue without debt', async () => {
+    const { shkp } = installCommandShopState();
+    game.level.at = () => ({ roomno: ROOMOFFSET, typ: ROOM });
+    initRng(1);
+    markHeroNeighborhoodVisible();
+    const statue = stoneToFleshStatue(31118, 5, 5,
+        vegetarianCorpstatMonster('goblin', 'o', { neuter: false, mmove: 6 }));
+    game.inventory = [];
+    game.level.objects = [statue];
+
+    await castStoneToFleshDown();
+
+    assert.equal(game.level.objects.includes(statue), false);
+    assert.ok((game.level.monsters || []).find(mon => mon.data?.name === 'goblin'));
+    assert.equal(shkp.debit || 0, 0);
+    assert.equal(shkp.robbed || 0, 0);
+    assert.equal(shkp.billct, 0);
+    assert.deepEqual(shkp.bill || [], []);
+    assert.equal(shop.shopBillEntryForObject(shkp, statue), null);
+    assert.equal((game._usedUpShopBills || []).some(bill => String(bill.bo_id) === String(statue.id)), false);
+    assert.match(game._pending_message || '', /The statue of a goblin comes to life!/);
+    assert.doesNotMatch(game._pending_message || '', /owe|goods lost|used-up|odor of meat|delicious smell/);
+});
+
+test('downward stone to flesh animates no-charge shop-floor ordinary statue without debt', async () => {
+    const { shkp } = installCommandShopState();
+    game.level.at = () => ({ roomno: ROOMOFFSET, typ: ROOM });
+    initRng(1);
+    markHeroNeighborhoodVisible();
+    const statue = stoneToFleshStatue(31119, 5, 5,
+        vegetarianCorpstatMonster('goblin', 'o', { neuter: false, mmove: 6 }));
+    statue.no_charge = true;
+    game.inventory = [];
+    game.level.objects = [statue];
+
+    await castStoneToFleshDown();
+
+    assert.equal(game.level.objects.includes(statue), false);
+    assert.ok((game.level.monsters || []).find(mon => mon.data?.name === 'goblin'));
+    assert.equal(shkp.debit || 0, 0);
+    assert.equal(shkp.robbed || 0, 0);
+    assert.equal(shkp.billct, 0);
+    assert.deepEqual(game._usedUpShopBills || [], []);
+    assert.match(game._pending_message || '', /The statue of a goblin comes to life!/);
+    assert.doesNotMatch(game._pending_message || '', /owe|goods lost|used-up|odor of meat|delicious smell/);
+});
+
+test('downward stone to flesh checks shop-floor ordinary statue resistance before debt', async () => {
+    const { shkp } = installCommandShopState();
+    game.level.at = () => ({ roomno: ROOMOFFSET, typ: ROOM });
+    initRng(40);
+    enableRngLog({ reset: true });
+    markHeroNeighborhoodVisible();
+    const statue = stoneToFleshStatue(31120, 5, 5,
+        vegetarianCorpstatMonster('goblin', 'o', { neuter: false, mmove: 6 }));
+    game.inventory = [];
+    game.level.objects = [statue];
+
+    await castStoneToFleshDown();
+
+    assert.equal(game.level.objects[0], statue);
+    assert.equal((game.level.monsters || []).some(mon => mon.data?.name === 'goblin'), false);
+    assert.equal(shkp.debit || 0, 0);
+    assert.equal(shkp.robbed || 0, 0);
+    assert.equal(shkp.billct, 0);
+    assert.deepEqual(getRngLog().filter(entry => entry.startsWith('rn2(100)=')), ['rn2(100)=0']);
+    assert.doesNotMatch(game._pending_message || '', /statue of a goblin|comes to life|owe|goods lost|odor of meat|delicious smell/);
+});
+
 test('downward stone to flesh turns floor stone-golem statue into flesh golem and transfers contents', async () => {
     installNonShopFloorState();
     initRng(1);
