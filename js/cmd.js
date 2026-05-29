@@ -7725,6 +7725,68 @@ function potionIdentityKnownForApply(item, identity) {
         || (item?.known !== false && visibleKind === identity);
 }
 
+const GRAY_STONE_APPLY_NAMES = new Set(['luckstone', 'loadstone', 'touchstone', 'flint', 'flint stone']);
+
+function grayStoneNameForApply(item) {
+    const values = [
+        item?.actualKind,
+        item?.kind,
+        objectKindKey(item),
+        item?.gemDescription,
+        item?.displayName,
+    ].map(value => String(value || '').toLowerCase().trim()).filter(Boolean);
+    if (item?.otyp === LUCKSTONE) return 'luckstone';
+    if (item?.otyp === LOADSTONE) return 'loadstone';
+    if (item?.otyp === TOUCHSTONE) return 'touchstone';
+    if (item?.otyp === FLINT) return 'flint';
+    for (const value of values) {
+        if (GRAY_STONE_APPLY_NAMES.has(value)) return value === 'flint stone' ? 'flint' : value;
+    }
+    if (values.some(value => value === 'gray stone' || value === 'grey stone'))
+        return String(item?.actualKind || item?.kind || '').toLowerCase().trim();
+    return '';
+}
+
+function isGrayStoneApplyItem(item) {
+    if (!item) return false;
+    if ([LUCKSTONE, LOADSTONE, TOUCHSTONE, FLINT].includes(item.otyp)) return true;
+    if (GRAY_STONE_APPLY_NAMES.has(grayStoneNameForApply(item))) return true;
+    const description = String(item.gemDescription || '').toLowerCase();
+    return (itemClassKey(item) === 'gem' || item.glyph === '*')
+        && (description === 'gray stone' || description === 'grey stone');
+}
+
+function gemStoneDiscoveryKnown(name) {
+    const key = String(name || '').toLowerCase().trim();
+    if (!key) return false;
+    return (game._discoveries || []).some(entry =>
+        ['Gems/Stones', 'Gems'].includes(entry.section)
+        && String(entry.name || '').toLowerCase() === key
+        && entry.known !== false);
+}
+
+function isTouchstoneApplyItem(item) {
+    return !!item && (item.otyp === TOUCHSTONE || grayStoneNameForApply(item) === 'touchstone');
+}
+
+function touchstoneKnownForApply(item) {
+    return isTouchstoneApplyItem(item)
+        && item?.dknown !== false
+        && (item?.known === true
+            || gemStoneDiscoveryKnown('touchstone')
+            || (String(item?.kind || '').toLowerCase() === 'touchstone' && item?.known !== false));
+}
+
+function grayStoneSelectionKind(item) {
+    if (!isGrayStoneApplyItem(item)) return '';
+    if (item?.dknown === false) return 'suggest';
+    if (isTouchstoneApplyItem(item)) return 'suggest';
+    const name = grayStoneNameForApply(item);
+    if (item?.known === true || gemStoneDiscoveryKnown('touchstone') || gemStoneDiscoveryKnown(name))
+        return 'selectableInvalid';
+    return 'suggest';
+}
+
 function applySelectionKind(item) {
     if (!item) return 'exclude';
     if (isApplyCoinObject(item)) return 'downplay';
@@ -7743,6 +7805,8 @@ function applySelectionKind(item) {
         if (!identity || !potionIdentityKnownForApply(item, identity)) return 'downplay';
         return 'selectableInvalid';
     }
+    const grayStoneKind = grayStoneSelectionKind(item);
+    if (grayStoneKind) return grayStoneKind;
     if (heroIsHallucinating() && /banana/.test(name)) return 'downplay';
     return 'selectableInvalid';
 }
@@ -7801,6 +7865,75 @@ function setApplyObjectMenu(items) {
 
 function findApplyInventoryItem(letter) {
     return applyInventoryItems().find(invItem => invItem.letter === letter);
+}
+
+function useStonePromptAction(stone) {
+    const count = Math.max(1, Math.trunc(Number(stone?.quan || 1)));
+    return `rub on the stone${count > 1 ? 's' : ''}`;
+}
+
+function useStoneTargetSelectionKind(item, stone) {
+    if (!item) return 'exclude';
+    if (!touchstoneKnownForApply(stone)) return 'suggest';
+    if (isApplyCoinObject(item)) return 'suggest';
+    const cls = itemClassKey(item);
+    const gemKnown = item?.dknown !== false
+        && (item?.known === true || gemStoneDiscoveryKnown(grayStoneNameForApply(item) || item?.actualKind || item?.kind));
+    if ((cls === 'gem' || item.glyph === '*') && !gemKnown) return 'suggest';
+    return 'downplay';
+}
+
+function useStoneTargetItemsBySelectionKind(kind, stone) {
+    return applyInventoryItems().filter(item => useStoneTargetSelectionKind(item, stone) === kind && item.letter);
+}
+
+function useStonePromptMessage(stone) {
+    const action = useStonePromptAction(stone);
+    const suggested = useStoneTargetItemsBySelectionKind('suggest', stone).map(item => item.letter).join('');
+    if (suggested) return `What do you want to ${action}? [${getobjPromptLetters(suggested)} or ?*]`;
+    if (useStoneTargetItemsBySelectionKind('downplay', stone).length) return `What do you want to ${action}? [*]`;
+    return `What do you want to ${action}?`;
+}
+
+function useStoneMenuItems(ch, stone) {
+    if (ch === '*') return applyInventoryItems().filter(item => item.letter);
+    const suggested = useStoneTargetItemsBySelectionKind('suggest', stone);
+    return suggested.length ? suggested : useStoneTargetItemsBySelectionKind('downplay', stone);
+}
+
+function setUseStoneObjectMenu(items) {
+    setApplyObjectMenu(items);
+}
+
+function theUseStoneObjectName(item) {
+    return `the ${pickupObjectName(item)}`;
+}
+
+async function beginUseStone(stone) {
+    game._apply_stone_letter = stone?.letter || null;
+    await setMessage(useStonePromptMessage(stone));
+    game._command_mode = 'applyStoneObject';
+}
+
+async function finishUseStone(stone, target) {
+    game._apply_stone_letter = null;
+    game._command_mode = null;
+    if (target === stone && Math.max(1, Math.trunc(Number(target?.quan || 1))) === 1) {
+        await setMessage(`You can't rub ${theUseStoneObjectName(target)} on itself.`);
+        return;
+    }
+    if (game.u?.blind) {
+        await setMessage('"scritch, scritch"');
+        game.context.move = 1;
+        return;
+    }
+    if (heroIsHallucinating()) {
+        await setMessage('Oh wow, man: Fractals!');
+        game.context.move = 1;
+        return;
+    }
+    await setMessage('"scritch, scritch"');
+    game.context.move = 1;
 }
 
 function dropFlippedCoinAtHero(item) {
@@ -47186,6 +47319,35 @@ export async function rhack(_cmd) {
         return;
     }
 
+    if (game._command_mode === 'applyStoneObject') {
+        const stone = findApplyInventoryItem(game._apply_stone_letter);
+        if (ch === '\x1b' || ch === ' ' || ch === '\r' || ch === '\n') {
+            game._apply_stone_letter = null;
+            game._command_mode = null;
+            await setMessage('Never mind.');
+            return;
+        }
+        if (!stone || !isGrayStoneApplyItem(stone)) {
+            game._apply_stone_letter = null;
+            game._command_mode = null;
+            await setMessage('Never mind.');
+            return;
+        }
+        if (ch === '?' || ch === '*') {
+            setUseStoneObjectMenu(useStoneMenuItems(ch, stone));
+            game._command_mode = 'applyStoneObject';
+            return;
+        }
+        const target = findApplyInventoryItem(ch);
+        if (!target) {
+            game._topline_after_more = useStonePromptMessage(stone);
+            await setMessage("You don't have that object.", true);
+            return;
+        }
+        await finishUseStone(stone, target);
+        return;
+    }
+
     if (game._command_mode === 'applyObject') {
         if (ch === '\x1b' || ch === ' ' || ch === '\r' || ch === '\n') {
             await setMessage('Never mind.');
@@ -47213,6 +47375,10 @@ export async function rhack(_cmd) {
         }
         if (isPotionObject(item) && !isPotionOfOil(item)) {
             await setMessage("Sorry, I don't know how to use that.");
+            return;
+        }
+        if (isGrayStoneApplyItem(item)) {
+            await beginUseStone(item);
             return;
         }
         if (applySelectionKind(item) === 'selectableInvalid' && !isPotionOfOil(item)) {

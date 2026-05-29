@@ -33,6 +33,7 @@ const MEAT_RING = 10164;
 const MEATBALL = 11012;
 const ENORMOUS_MEATBALL = 11013;
 const MEAT_STICK = 11014;
+const TOUCHSTONE = 473;
 const DART = 353;
 const TALLOW_CANDLE = 370;
 const MIRROR = 10006;
@@ -1217,6 +1218,26 @@ function carriedLoadstone(id, letter = 'l', props = {}) {
     stone.letter = letter;
     stone.line = `${letter} - a ${stone.cursed ? 'cursed ' : 'uncursed '}loadstone`;
     return stone;
+}
+
+function carriedGrayStone(id, letter = 'g', actualKind = 'loadstone', props = {}) {
+    const otyp = actualKind === 'touchstone' ? TOUCHSTONE : LOADSTONE;
+    return {
+        id,
+        otyp,
+        cls: 'gem',
+        glyph: '*',
+        kind: 'gray stone',
+        actualKind,
+        gemDescription: 'gray stone',
+        quan: 1,
+        letter,
+        line: `${letter} - a gray stone`,
+        known: false,
+        dknown: false,
+        bknown: false,
+        ...props,
+    };
 }
 
 function installThrowsRocksForm() {
@@ -5991,6 +6012,96 @@ test('known invalid apply objects stay out of the prompt but star-select rejects
 test('apply has no object prompt for known invalid inventory alone', async () => {
     installCommandShopState();
     game.inventory = [scrollOfCharging(30570, 's')];
+
+    await rhack('a');
+
+    assert.equal(game._command_mode || null, null);
+    assert.match(game._pending_message, /You don't have anything to use or apply\./);
+});
+
+test('unknown gray stone is suggested by apply and opens stone target prompt', async () => {
+    installCommandShopState();
+    const stone = carriedGrayStone(30571, 'g', 'loadstone');
+    game.inventory = [stone];
+
+    await rhack('a');
+
+    assert.equal(game._command_mode, 'applyObject');
+    assert.match(game._pending_message, /What do you want to use or apply\? \[g or \?\*\]/);
+
+    await rhack('g');
+
+    assert.equal(game._command_mode, 'applyStoneObject');
+    assert.match(game._pending_message, /What do you want to rub on the stone\? \[g or \?\*\]/);
+
+    await rhack(' ');
+
+    assert.equal(game._command_mode, null);
+    assert.notEqual(game.context.move, 1);
+    assert.match(game._pending_message, /Never mind\./);
+});
+
+test('known touchstone opens stone target prompt with downplayed self fallback', async () => {
+    installCommandShopState();
+    const stone = carriedGrayStone(30572, 't', 'touchstone', {
+        otyp: TOUCHSTONE,
+        kind: 'touchstone',
+        known: true,
+        dknown: true,
+        line: 't - an uncursed touchstone',
+    });
+    game.inventory = [stone];
+
+    await rhack('a');
+
+    assert.equal(game._command_mode, 'applyObject');
+    assert.match(game._pending_message, /What do you want to use or apply\? \[t or \?\*\]/);
+
+    await rhack('t');
+
+    assert.equal(game._command_mode, 'applyStoneObject');
+    assert.match(game._pending_message, /What do you want to rub on the stone\? \[\*\]/);
+
+    await rhack('t');
+
+    assert.equal(game._command_mode, null);
+    assert.notEqual(game.context.move, 1);
+    assert.match(game._pending_message, /You can't rub the touchstone on itself\./);
+});
+
+test('known non-touchstone gray stone hides from apply prompt but star-selects stone handling', async () => {
+    installCommandShopState();
+    const lampItem = lamp(30573, 'oil lamp', 'l', 3);
+    const stone = carriedLoadstone(30574, 's', { cursed: false, known: true, dknown: true, line: 's - an uncursed loadstone' });
+    game.inventory = [lampItem, stone];
+
+    await rhack('a');
+
+    assert.equal(game._command_mode, 'applyObject');
+    assert.match(game._pending_message, /What do you want to use or apply\? \[l or \?\*\]/);
+
+    await rhack('?');
+
+    let menuText = (game._overlay_lines || []).map(row => row[2]).join('\n');
+    assert.match(menuText, /l - an oil lamp/);
+    assert.doesNotMatch(menuText, /loadstone/);
+
+    await rhack('*');
+
+    menuText = (game._overlay_lines || []).map(row => row[2]).join('\n');
+    assert.match(menuText, /l - an oil lamp/);
+    assert.match(menuText, /s - a uncursed loadstone/);
+
+    await rhack('s');
+
+    assert.equal(game._command_mode, 'applyStoneObject');
+    assert.match(game._pending_message, /What do you want to rub on the stone\?/);
+});
+
+test('known non-touchstone gray stone alone has no apply prompt', async () => {
+    installCommandShopState();
+    const stone = carriedLoadstone(30575, 's', { cursed: false, known: true, dknown: true, line: 's - an uncursed loadstone' });
+    game.inventory = [stone];
 
     await rhack('a');
 
