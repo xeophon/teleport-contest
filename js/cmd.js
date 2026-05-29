@@ -19175,11 +19175,14 @@ function makeWishedVenomObject(lowerName) {
         kind: venom.kind,
         actualKind: venom.kind,
         singular: venom.kind,
+        plural: venom.kind.replace(/^splash\b/, 'splashes'),
         known: true,
         dknown: true,
         quan: 1,
         spe: 1,
         owt: 1,
+        ocMerge: true,
+        _wish_ignore_requested_spe: true,
         wishedfor: true,
     };
 }
@@ -29039,6 +29042,7 @@ function wishQuantityMergeable(item) {
     if (cls === 'scroll' || cls === 'potion' || cls === 'gem') return true;
     if (cls === 'food' && objectKindKey(item) !== 'meat ring') return true;
     if (cls === 'weapon') return true;
+    if (cls === 'venom') return true;
     if (isCandleObject(item)) return true;
     return false;
 }
@@ -29236,6 +29240,10 @@ function resolveWishedSpellingAlias(lowerName) {
 }
 
 function singularizeWishedPluralName(normalized) {
+    if (normalized === 'venoms') return 'venom';
+    if (normalized === 'splashes of venom') return 'splash of venom';
+    if (normalized === 'splashes of blinding venom') return 'splash of blinding venom';
+    if (normalized === 'splashes of acid venom') return 'splash of acid venom';
     for (const [name, baseObject] of WISH_BASE_OBJECTS.entries()) {
         if (String(baseObject?.plural || '').toLowerCase() === normalized) return name;
     }
@@ -29404,6 +29412,9 @@ function normalizeWishedGroupPhrase(name, quantity) {
 function applyWishedPluralQuantity(name, quantity) {
     if (quantity !== 1) return quantity;
     const rawLowerName = String(name || '').trim().toLowerCase();
+    if (rawLowerName === 'venoms' || rawLowerName === 'splashes of venom'
+        || rawLowerName === 'splashes of blinding venom' || rawLowerName === 'splashes of acid venom')
+        return 2;
     const rawFruit = fruitWishMatch(rawLowerName);
     if (rawFruit?.plural) return 2;
     const rawBaseObject = WISH_BASE_OBJECTS.get(rawLowerName);

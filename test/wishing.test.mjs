@@ -1499,6 +1499,71 @@ test('wizard-only venom wishes follow C oc_nowish policy', async () => {
     assert.ok(['splash of blinding venom', 'splash of acid venom'].includes(item.kind));
     assert.equal(item.spe, 1);
 
+    installWishState();
+    beginWishDirectly();
+    await submitWish('splash of venom');
+    item = game.inventory[0];
+    assert.equal(item.cls, 'venom');
+    assert.ok(['splash of blinding venom', 'splash of acid venom'].includes(item.kind));
+    assert.equal(item.quan, 1);
+    assert.equal(item.spe, 1);
+
+    installWishState();
+    beginWishDirectly();
+    await submitWish('splashes of venom');
+    item = game.inventory[0];
+    assert.equal(item.cls, 'venom');
+    assert.ok(['splash of blinding venom', 'splash of acid venom'].includes(item.kind));
+    assert.equal(item.quan, 2);
+    assert.equal(item.owt, 2);
+    assert.match(item.line, /^a - 2 splashes of (?:blinding|acid) venom$/);
+
+    installWishState();
+    beginWishDirectly();
+    await submitWish('splash of blinding venom');
+    item = game.inventory[0];
+    assert.equal(item.kind, 'splash of blinding venom');
+    assert.equal(item.spe, 1);
+
+    installWishState();
+    beginWishDirectly();
+    await submitWish('blinding venom');
+    item = game.inventory[0];
+    assert.equal(item.kind, 'splash of blinding venom');
+    assert.equal(item.spe, 1);
+
+    installWishState();
+    beginWishDirectly();
+    await submitWish('+7 venom');
+    item = game.inventory[0];
+    assert.equal(item.cls, 'venom');
+    assert.equal(item.spe, 1);
+
+    installWishState();
+    beginWishDirectly();
+    await submitWish('venom (7)');
+    item = game.inventory[0];
+    assert.equal(item.cls, 'venom');
+    assert.equal(item.spe, 1);
+
+    installWishState();
+    beginWishDirectly();
+    await submitWish('venoms');
+    item = game.inventory[0];
+    assert.equal(item.cls, 'venom');
+    assert.equal(item.quan, 2);
+    assert.equal(item.owt, 2);
+    assert.match(item.line, /^a - 2 splashes of (?:blinding|acid) venom$/);
+
+    installWishState();
+    beginWishDirectly();
+    await submitWish('splashes of acid venom');
+    item = game.inventory[0];
+    assert.equal(item.kind, 'splash of acid venom');
+    assert.equal(item.quan, 2);
+    assert.equal(item.spe, 1);
+    assert.match(item.line, /^a - 2 splashes of acid venom$/);
+
     installWishState(7, { debug: false });
     beginWishDirectly();
     await submitWish('splash of blinding venom');
@@ -1508,6 +1573,33 @@ test('wizard-only venom wishes follow C oc_nowish policy', async () => {
     assert.equal(game.inventory.length, 0);
     assert.equal(game.u.uconduct?.wishes || 0, 0);
     assert.match(game._pending_message, /Nothing fitting that description exists in the game\./);
+
+    installWishState(7, { debug: false });
+    beginWishDirectly();
+    await submitWish('venom');
+
+    assert.equal(game._command_mode, 'wizardWish');
+    assert.equal(game._wish_tries, 1);
+    assert.equal(game.inventory.length, 0);
+    assert.equal(game.u.uconduct?.wishes || 0, 0);
+
+    installWishState(7, { debug: false });
+    beginWishDirectly();
+    await submitWish('splash of venom');
+
+    assert.equal(game._command_mode, 'wizardWish');
+    assert.equal(game._wish_tries, 1);
+    assert.equal(game.inventory.length, 0);
+    assert.equal(game.u.uconduct?.wishes || 0, 0);
+
+    installWishState(7, { debug: false });
+    beginWishDirectly();
+    await submitWish('venoms');
+
+    assert.equal(game._command_mode, 'wizardWish');
+    assert.equal(game._wish_tries, 1);
+    assert.equal(game.inventory.length, 0);
+    assert.equal(game.u.uconduct?.wishes || 0, 0);
 });
 
 test('figurine wishes apply C monster-type restrictions', async () => {
