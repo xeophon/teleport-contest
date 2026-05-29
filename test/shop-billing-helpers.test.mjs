@@ -677,6 +677,13 @@ function hasToolDiscovery(name) {
         entry.section === 'Tools' && entry.name === name && entry.known !== false);
 }
 
+function hasGemStoneDiscovery(name, { knownOnly = true } = {}) {
+    return (game._discoveries || []).some(entry =>
+        entry.section === 'Gems/Stones'
+        && entry.name === name
+        && (!knownOnly || entry.known !== false));
+}
+
 async function enterTipCommand() {
     await rhack('#');
     for (const ch of 'tip') await rhack(ch);
@@ -6288,6 +6295,104 @@ test('known non-touchstone gray stone alone has no apply prompt', async () => {
 
     assert.equal(game._command_mode || null, null);
     assert.match(game._pending_message, /You don't have anything to use or apply\./);
+});
+
+test('#rub includes unknown gray stones and observes the source when sighted', async () => {
+    installCommandShopState();
+    const stone = carriedGrayStone(30576, 'g', 'loadstone');
+    game.inventory = [stone];
+
+    await startRubCommand();
+
+    assert.equal(game._command_mode, 'rubObject');
+    assert.match(game._pending_message, /What do you want to rub\? \[g or \?\*\]/);
+
+    await rhack('g');
+
+    assert.equal(game._command_mode, 'applyStoneObject');
+    assert.equal(stone.dknown, true);
+    assert.equal(hasGemStoneDiscovery('gray stone', { knownOnly: false }), true);
+    assert.equal(hasGemStoneDiscovery('loadstone'), false);
+    assert.match(game._pending_message, /What do you want to rub on the stone\? \[g or \?\*\]/);
+
+    await rhack(' ');
+
+    assert.equal(game._command_mode, null);
+    assert.notEqual(game.context.move, 1);
+    assert.match(game._pending_message, /Never mind\./);
+});
+
+test('#rub suggests known non-touchstone gray stones and lists them with other rub candidates', async () => {
+    installCommandShopState();
+    const lampItem = lamp(305770, 'oil lamp', 'l', 1);
+    const stone = carriedLoadstone(305771, 's', { cursed: false, known: true, dknown: true, line: 's - an uncursed loadstone' });
+    const jelly = simpleFood(305772, 'lump of royal jelly', 'j');
+    game.inventory = [lampItem, stone, jelly];
+
+    await startRubCommand();
+
+    assert.equal(game._command_mode, 'rubObject');
+    assert.match(game._pending_message, /What do you want to rub\? \[lsj or \?\*\]/);
+
+    await rhack('?');
+
+    const menuText = (game._overlay_lines || []).map(row => row[2]).join('\n');
+    assert.match(menuText, /l - an oil lamp/);
+    assert.match(menuText, /s - a uncursed loadstone/);
+    assert.match(menuText, /j - a lump of royal jelly/);
+});
+
+test('blind #rub gray stone source does not observe the gray-stone appearance', async () => {
+    installCommandShopState();
+    const stone = carriedGrayStone(30577, 'g', 'touchstone', { otyp: TOUCHSTONE });
+    game.inventory = [stone];
+    game.u.blind = true;
+
+    await startRubCommand();
+    await rhack('g');
+
+    assert.equal(game._command_mode, 'applyStoneObject');
+    assert.equal(stone.dknown, false);
+    assert.equal(hasGemStoneDiscovery('gray stone', { knownOnly: false }), false);
+});
+
+test('cursed touchstone shatters non-gray gems before the blind fallback', async () => {
+    installCommandShopState();
+    initRng(11);
+    const stone = carriedGrayStone(30578, 't', 'touchstone', {
+        otyp: TOUCHSTONE,
+        kind: 'touchstone',
+        actualKind: 'touchstone',
+        known: true,
+        dknown: true,
+        cursed: true,
+        line: 't - a cursed touchstone',
+    });
+    const gem = {
+        id: 30579,
+        cls: 'gem',
+        glyph: '*',
+        kind: 'ruby',
+        actualKind: 'ruby',
+        gemDescription: 'ruby',
+        quan: 1,
+        letter: 'r',
+        line: 'r - a ruby',
+        known: false,
+        dknown: true,
+    };
+    game.inventory = [stone, gem];
+    game.u.blind = true;
+
+    await startRubCommand();
+    await rhack('t');
+    await rhack('r');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.inventory.includes(gem), false);
+    assert.match(game._pending_message, /You feel something shatter\./);
+    assert.doesNotMatch(game._pending_message, /scritch/);
 });
 
 test('dipping an oil lamp into unpaid oil refuels and bills fuel tax', async () => {

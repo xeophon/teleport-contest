@@ -7909,10 +7909,56 @@ function theUseStoneObjectName(item) {
     return `the ${pickupObjectName(item)}`;
 }
 
+function observeUseStoneSource(stone) {
+    if (!stone || game.u?.blind) return;
+    stone.dknown = true;
+    const name = grayStoneNameForApply(stone);
+    if (stone.known === true || gemStoneDiscoveryKnown(name)) return;
+    game._discoveries ??= [];
+    if (!(game._discoveries || []).some(entry =>
+        entry.section === 'Gems/Stones' && entry.name === 'gray stone')) {
+        game._discoveries.push({
+            section: 'Gems/Stones',
+            name: 'gray stone',
+            text: 'gray stone',
+            starred: false,
+            known: false,
+        });
+    }
+}
+
 async function beginUseStone(stone) {
     game._apply_stone_letter = stone?.letter || null;
+    observeUseStoneSource(stone);
     await setMessage(useStonePromptMessage(stone));
     game._command_mode = 'applyStoneObject';
+}
+
+function useStoneGemShatterTarget(item) {
+    return !!item && (itemClassKey(item) === 'gem' || item.glyph === '*') && !isGrayStoneApplyItem(item);
+}
+
+function useStoneTargetResistsShatter(item) {
+    const chance = item?.artifact || item?.oartifact ? 100 : 80;
+    return rn2(100) < chance;
+}
+
+async function shatterUseStoneTarget(stone, target) {
+    if (!isTouchstoneApplyItem(stone) || !stone?.cursed || !useStoneGemShatterTarget(target))
+        return false;
+    if (useStoneTargetResistsShatter(target)) return false;
+
+    if (game.u?.blind) {
+        await setMessage('You feel something shatter.');
+    } else if (heroIsHallucinating()) {
+        await setMessage('Oh, wow, look at the pretty shards.');
+    } else {
+        const oneOf = Math.max(1, Math.trunc(Number(target?.quan || 1))) > 1 ? 'one of ' : '';
+        await setMessage(`A sharp crack shatters ${oneOf}${theUseStoneObjectName(target)}.`);
+    }
+    useUpInventoryItem(target, 1);
+    game.context.move = 1;
+    return true;
 }
 
 async function finishUseStone(stone, target) {
@@ -7922,6 +7968,7 @@ async function finishUseStone(stone, target) {
         await setMessage(`You can't rub ${theUseStoneObjectName(target)} on itself.`);
         return;
     }
+    if (await shatterUseStoneTarget(stone, target)) return;
     if (game.u?.blind) {
         await setMessage('"scritch, scritch"');
         game.context.move = 1;
@@ -34679,7 +34726,7 @@ function royalJellyRubPrompt() {
 
 function rubObjectLetters() {
     return inventoryLetters(item => {
-        return isLampObject(item) || isRoyalJelly(item);
+        return isLampObject(item) || isRoyalJelly(item) || isGrayStoneApplyItem(item);
     });
 }
 
@@ -49141,7 +49188,7 @@ export async function rhack(_cmd) {
         }
         if (ch === '?' || ch === '*') {
             const rubItems = (game.inventory || []).filter(item => {
-                return isLampObject(item) || isRoyalJelly(item);
+                return isLampObject(item) || isRoyalJelly(item) || isGrayStoneApplyItem(item);
             });
             const rows = rubItems.map((item, index) => [index, 40, ` ${normalInventoryLine(item)}`.padEnd(40, ' ')]);
             rows.push([rows.length, 40, ' (end)'.padEnd(40, ' ')]);
@@ -49155,6 +49202,10 @@ export async function rhack(_cmd) {
         }
         if (item && isLampObject(item)) {
             await rubLampObject(item);
+            return;
+        }
+        if (item && isGrayStoneApplyItem(item)) {
+            await beginUseStone(item);
             return;
         }
         await setMessage(rubObjectPrompt());

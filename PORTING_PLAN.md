@@ -30,7 +30,8 @@ Detailed source-backed history is kept in `docs/c-parity-audit/`. This section i
   - `docs/c-parity-audit/148-apply-getobj-coin-flip-2026-05-29.md`
   - `docs/c-parity-audit/156-gray-stone-apply-use-stone-2026-05-29.md`
   - `docs/c-parity-audit/158-tip-carried-getobj-selection-2026-05-29.md`
-- Latest compact source note: `docs/c-parity-audit/159-subagent-findings-2026-05-29.md`.
+  - `docs/c-parity-audit/160-rub-gray-stone-touchstone-shatter-2026-05-29.md`
+- Latest compact source note: `docs/c-parity-audit/161-subagent-findings-2026-05-29.md`.
 - Latest verified public score: `44/44`.
 
 ## Current Priorities
@@ -64,8 +65,8 @@ Detailed source-backed history is kept in `docs/c-parity-audit/`. This section i
 6. Command, prompt, and menu contracts.
    - Source notes: `docs/c-parity-audit/01-input-commands-windows.md` and latest compact note `docs/c-parity-audit/159-subagent-findings-2026-05-29.md`.
    - Add reusable command registry/binding, count parsing, `getlin`, `yn_function`, `getobj`, `getpos`, and menu-selection primitives.
-   - Covered locally: apply `?`/`*` candidate splitting, downplayed apply candidates, coin apply/flip, gray-stone `use_stone()` prompt/cancel routing, and carried `#tip` suggested/downplayed/full-inventory selection.
-   - Remaining command candidates: `#rub` gray-stone sharing, touchstone effects, helmet `tiphat()`, and reusable `getobj()` extraction.
+   - Covered locally: apply `?`/`*` candidate splitting, downplayed apply candidates, coin apply/flip, gray-stone `use_stone()` prompt/cancel routing, carried `#tip` suggested/downplayed/full-inventory selection, and `#rub` gray-stone routing with cursed-touchstone shatter.
+   - Remaining command candidates: full touchstone effect matrix, helmet `tiphat()`, no-hands `#rub` confirmation, and reusable `getobj()` extraction.
 
 ## Immediate Slice
 
@@ -73,7 +74,7 @@ Continue narrow C-backed slices in this order unless a failing public regression
 
 1. Keep remaining stone-to-flesh/object-polymorph work narrow: cover one saved-trait/content edge, directed doppelganger/cant-revive row, lateral wand-polymorph range row, monster-first wand-polymorph row, upward hiding-under row, boulder/restack row, or broader `poly_obj()` fallout row at a time.
 2. Projectile and migration work: seen-hole/trapdoor shipping is covered; next slices should add ordinary stairs/ladders migration metadata and reciprocal delivery, kicked-object shipping, or monster-thrown hit-state egg/mulch/passive-object follow-ups.
-3. Command/menu work: apply and carried `#tip` candidate splitting are covered; next slices should target reusable `getobj()` primitives, `#rub` gray-stone sharing, touchstone effect bodies, or helmet `tiphat()`.
+3. Command/menu work: apply, carried `#tip`, and `#rub` gray-stone sharing are covered; next slices should target reusable `getobj()` primitives, remaining touchstone effect bodies, or helmet `tiphat()`.
 4. Direct delivery work: broaden `potionhit()`/`toss_up()` and direct object-hit only through newly selected compact C-backed edges; avoid broad monster lifecycle rewrites without tests.
 5. Registry/diet work: remaining diet metadata should be caller-led, including full monster diet flag generation and remaining metal-accessory fullness/cursed/worn-ring/strangulation cleanup.
 6. Forced-chest follow-ups should remain source-backed and narrow; visible object/furniture mimic wake preservation remains open.
