@@ -1175,6 +1175,36 @@ test('called wished range bases use C namedesc tail lookup', async () => {
     }
 });
 
+test('unresolved called range bases try C base namedesc before class fallback', async () => {
+    async function wishedUnresolvedCalledRange(text, seed = 1) {
+        installWishState(seed);
+        enableRngLog({ reset: true });
+        beginWishDirectly();
+        await submitWish(text);
+        return { item: game.inventory[0], log: [...getRngLog()] };
+    }
+
+    for (const [wish, firstRoll, cls, glyph, allowed] of [
+        ['bag called plaid', /^rn2\(84\)=/, 'tool', '(', new Set([SACK, OILSKIN_SACK, BAG_OF_HOLDING, BAG_OF_TRICKS])],
+        ['lamp called magic', /^rn2\(62\)=/, 'tool', '(', new Set([OIL_LAMP])],
+        ['candle called wax', /^rn2\(27\)=/, 'tool', '(', new Set([TALLOW_CANDLE, WAX_CANDLE])],
+        ['horn called brass', /^rn2\(15\)=/, 'tool', '(', new Set([TOOLED_HORN, FROST_HORN, FIRE_HORN, HORN_OF_PLENTY])],
+        ['boots called speed', /^rnd\(1000\)=/, 'armor', '[', null],
+        ['shoes called iron', /^rnd\(1000\)=/, 'armor', '[', null],
+        ['sword called long', /^rnd\(1002\)=/, 'weapon', ')', null],
+    ]) {
+        const result = await wishedUnresolvedCalledRange(wish);
+        assert.match(result.log[0], firstRoll, wish);
+        assert.equal(result.item.cls, cls, wish);
+        assert.equal(result.item.glyph, glyph, wish);
+        if (allowed) assert.ok(allowed.has(result.item.otyp), `${wish} produced ${result.item.otyp}`);
+        assert.equal(result.item.quan, 1, wish);
+        assert.equal(game._command_mode, null, wish);
+        assert.equal(game._wish_tries, 0, wish);
+        assert.equal(game.u.uconduct?.wishes, 1, wish);
+    }
+});
+
 test('wished shoes range uses C low and iron shoe candidates', async () => {
     async function wishedShoes(text, seed = 1) {
         installWishState(seed);

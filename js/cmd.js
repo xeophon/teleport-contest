@@ -1842,6 +1842,32 @@ const WISH_OBJECT_RANGES = new Map([
         ['katana', 4],
     ]],
 ]);
+const WISH_OBJECT_RANGE_CLASSES = new Map([
+    ['bag', TOOL_CLASS],
+    ['lamp', TOOL_CLASS],
+    ['candle', TOOL_CLASS],
+    ['horn', TOOL_CLASS],
+    ['shield', ARMOR_CLASS],
+    ['hat', ARMOR_CLASS],
+    ['helm', ARMOR_CLASS],
+    ['gloves', ARMOR_CLASS],
+    ['gauntlets', ARMOR_CLASS],
+    ['cloak', ARMOR_CLASS],
+    ['shoes', ARMOR_CLASS],
+    ['boots', ARMOR_CLASS],
+    ['shirt', ARMOR_CLASS],
+    ['sword', WEAPON_CLASS],
+]);
+const WISH_RANGE_BASE_DESCRIPTIONS = new Map([
+    ['sack', 'bag'],
+    ['oilskin sack', 'bag'],
+    ['bag of holding', 'bag'],
+    ['bag of tricks', 'bag'],
+    ['oil lamp', 'lamp'],
+    ['magic lamp', 'lamp'],
+    ['tallow candle', 'candle'],
+    ['wax candle', 'candle'],
+]);
 const WISH_AMULET_NAMEDESC_BOUNDS = new Map([
     ['amulet of esp', 121],
     ['amulet of life saving', 76],
@@ -29358,6 +29384,36 @@ function calledRangeNamedescName(base, called) {
     return '';
 }
 
+function calledRangeBaseNamedescName(base) {
+    const range = WISH_OBJECT_RANGES.get(base);
+    if (!range) return '';
+    const matches = [];
+    for (const [name, prob] of range) {
+        let matched = calledTailMatchesObjectName(base, name);
+        const baseObject = WISH_BASE_OBJECTS.get(name);
+        if (!matched && baseObject?.actualKind)
+            matched = calledTailMatchesObjectName(base, baseObject.actualKind);
+        const armorAppearance = ARMOR_WISH_APPEARANCES[name];
+        if (!matched && armorAppearance) {
+            const [group, index, fallback] = armorAppearance;
+            const appearance = group ? game._object_descriptions?.[group]?.[index] || fallback : fallback;
+            matched = appearance && calledTailMatchesObjectName(base, appearance);
+        }
+        const toolAppearance = WISH_TOOL_APPEARANCES.get(name) || WISH_RANGE_BASE_DESCRIPTIONS.get(name);
+        if (!matched && toolAppearance)
+            matched = calledTailMatchesObjectName(base, toolAppearance);
+        if (matched) matches.push([name, prob + 1]);
+    }
+    const total = matches.reduce((sum, [, prob]) => sum + prob, 0);
+    if (total <= 0) return '';
+    let roll = rn2(total);
+    for (const [name, prob] of matches) {
+        roll -= prob;
+        if (roll < 0) return name;
+    }
+    return matches[0]?.[0] || '';
+}
+
 function parseWishedScrollLabel(name) {
     const match = String(name || '').trim().match(/^scrolls?\s+labell?ed\s+(.+)$/i);
     return match ? unquoteWishedText(match[1]) : '';
@@ -29832,6 +29888,10 @@ function wishedObjectRangeName(lowerName) {
 function makeWishedObjectRangeObject(lowerName) {
     const rangeName = wishedObjectRangeName(lowerName);
     if (!rangeName) return null;
+    return makeWishedRangeObjectByName(rangeName);
+}
+
+function makeWishedRangeObjectByName(rangeName) {
     if (rangeName === 'magic lamp' && !game.flags?.debug)
         return makeOilLampFromMagicLampWishObject();
     const baseObject = WISH_BASE_OBJECTS.get(rangeName);
@@ -29841,6 +29901,12 @@ function makeWishedObjectRangeObject(lowerName) {
     const metadata = wishObjectMetadataForName(rangeName) ?? wishObjectMetadataForItem(baseFields);
     const otmp = makeWishedBaseObject(baseObject, metadata);
     return Object.assign(otmp, baseFields, { wishedfor: true });
+}
+
+function makeWishedObjectClassObject(oclass) {
+    if (!oclass) return null;
+    const otmp = mkobj(oclass, false);
+    return Object.assign(otmp, object_display(otmp), { wishedfor: true });
 }
 
 function makeWishedFruitObject(lowerName) {
@@ -29882,6 +29948,10 @@ function wishedBaseObjectFromName(lowerName, qualifiers = {}, originalName = low
         const calledWish = resolveCalledWishName(lowerName, qualifiers.wishCalledName);
         if (calledWish)
             return wishedBaseObjectFromName(calledWish, { ...qualifiers, wishCalledName: '' }, calledWish);
+        const rangeBaseWish = calledRangeBaseNamedescName(lowerName);
+        if (rangeBaseWish) return makeWishedRangeObjectByName(rangeBaseWish);
+        const rangeClass = WISH_OBJECT_RANGE_CLASSES.get(lowerName);
+        if (rangeClass) return makeWishedObjectClassObject(rangeClass);
     }
     if (lowerName === 'spell') return noFittingWishObject();
     if (lowerName === 'paperback' || lowerName === 'paperback book') return makeNovelWishObject();
