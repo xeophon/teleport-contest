@@ -15149,6 +15149,37 @@ test('normal shop-floor statue trap activation does not charge transferred conte
     assert.equal(mon.minvent.includes(ration), true);
 });
 
+test('statue trap animates unique no-traits statue as directed doppelganger', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    markSquareVisible(7, 5);
+    const medusa = vegetarianCorpstatMonster('Medusa', '@', {
+        unique: true,
+        human: true,
+        female: true,
+        neuter: false,
+        mlevel: 20,
+        hpLevel: 20,
+        mmove: 12,
+    });
+    const statue = stoneToFleshStatue(6134, 7, 5, medusa);
+    const trap = { ttyp: STATUE_TRAP, tx: 7, ty: 5 };
+    game.level.objects = [statue];
+    game.level.traps = [trap];
+
+    const message = await activateStatueTrap(trap, 7, 5, { normal: true });
+
+    assert.equal(game.level.objects.includes(statue), false);
+    assert.equal(game.level.traps.includes(trap), false);
+    const monster = (game.level.monsters || []).find(mon => mon.data?.name === 'Medusa');
+    assert.ok(monster);
+    assert.equal(monster.chamBase, 'doppelganger');
+    assert.equal(monster.msleeping, 0);
+    assert.equal(monster.mundetected, false);
+    assert.equal(monster.mpeaceful, 0);
+    assert.match(message || '', /You find Medusa posing as a statue\./);
+});
+
 test('shattering no-charge shop-floor statue trap does not charge contents', async () => {
     const { shkp } = installCommandShopState();
     initRng(6);

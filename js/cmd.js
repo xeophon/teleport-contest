@@ -13707,7 +13707,7 @@ function stoneToFleshCantReviveZombieSubstitute(data = {}) {
         || name === 'guard' || name === 'high cleric' || name === 'aligned cleric' || name === 'angel';
 }
 
-function stoneToFleshFloorStatueCantReviveInfo(item, data = {}) {
+function stoneToFleshStatueCantReviveInfo(item, data = {}) {
     const name = String(data.name || '').toLowerCase();
     if (stoneToFleshCantReviveZombieSubstitute(data))
         return { data: stoneToFleshHumanZombieData(), failureData: data, golemXform: false };
@@ -13731,10 +13731,17 @@ function stoneToFleshFloorStatueAnimationInfo(item, x, y) {
     if (!(item?.otyp === STATUE || item?.kind === 'statue') || !item?.corpsenm) return null;
     const material = stoneToFleshObjectMaterial(item);
     if (material !== 'mineral' && material !== 'gemstone') return null;
-    if (stoneToFleshStatueHasAttachedMonsterTraits(item) || item.corpsenm.noCorpstat) return null;
-    const cantReviveInfo = stoneToFleshFloorStatueCantReviveInfo(item, item.corpsenm);
+    const cantReviveInfo = stoneToFleshStatueCantReviveInfo(item, item.corpsenm);
     if (cantReviveInfo) return cantReviveInfo;
+    if (stoneToFleshStatueHasAttachedMonsterTraits(item) || item.corpsenm.noCorpstat) return null;
     return stoneToFleshCorpstatAnimationInfo(item.corpsenm);
+}
+
+function statueTrapAnimationInfo(item) {
+    if (!(item?.otyp === STATUE || item?.kind === 'statue') || !item?.corpsenm) return null;
+    const cantReviveInfo = stoneToFleshStatueCantReviveInfo(item, item.corpsenm);
+    if (cantReviveInfo) return cantReviveInfo;
+    return { data: item.corpsenm, golemXform: false };
 }
 
 function stoneToFleshFigurineAnimationInfo(item) {
@@ -18751,6 +18758,12 @@ function statueAnimationVerb(mon) {
     return 'comes to life';
 }
 
+function animatedMonsterIndefiniteName(mon, fallback = 'monster') {
+    const data = mon?.data || {};
+    const name = data.name || fallback;
+    return data.unique ? name : monsterIndefiniteName(name);
+}
+
 function moveStatueContentsToMonster(statue, mon) {
     const contents = statue?.contents || [];
     while (contents.length) {
@@ -18835,7 +18848,7 @@ function statueSearchAnimationMessage(statue, mon) {
     const spotted = !game.u?.blind && !mon.mundetected
         && (!mon.minvis || game.u?.seeInvisible)
         && couldsee(mon.mx, mon.my);
-    const name = spotted ? monsterIndefiniteName(mon.data?.name || corpstatDisplayMonsterName(statue)) : 'something';
+    const name = spotted ? animatedMonsterIndefiniteName(mon, corpstatDisplayMonsterName(statue)) : 'something';
     return `You find ${name} posing as a statue.`;
 }
 
@@ -19004,18 +19017,23 @@ export async function activateStatueTrap(trap, x, y, { prefix = '', shatter = fa
 
     const statue = (game.level?.objects || []).find(obj =>
         !obj.transientProjectile && obj.otyp === STATUE && obj.ox === x && obj.oy === y);
-    const data = statue?.corpsenm;
-    if (!statue || !data?.name) {
+    const info = statueTrapAnimationInfo(statue);
+    if (!statue || !info?.data?.name) {
         newsym(x, y);
         return prefix || '';
     }
 
-    const mon = await makemon(data, x, y, NO_MINVENT | MM_NOMSG | MM_NOCOUNTBIRTH);
+    const flags = NO_MINVENT | MM_NOMSG
+        | (info.noCountBirth ? MM_NOCOUNTBIRTH : 0)
+        | (info.directedDoppelganger ? MM_ADJACENTOK : 0);
+    const mon = await makemon(info.data, x, y, flags);
     if (!mon) {
         newsym(x, y);
         return prefix || '';
     }
 
+    stoneToFleshApplyDirectedDoppelgangerForm(mon, info);
+    stoneToFleshChristenAnimatedStatueMonster(statue, mon);
     mon.mtame = 0;
     mon.pet = false;
     mon.mpeaceful = 0;
@@ -19024,19 +19042,20 @@ export async function activateStatueTrap(trap, x, y, { prefix = '', shatter = fa
     set_malign(mon);
 
     const statueName = pickupObjectName(statue);
-    const verb = statueAnimationVerb(mon);
+    const verb = stoneToFleshGolemStatueVerb(info, mon);
     const body = search || normal
         ? statueSearchAnimationMessage(statue, mon)
         : shatter
         ? `Instead of shattering, ${game.u?.blind || !couldsee(x, y) ? 'a statue' : `the ${statueName}`} suddenly ${verb}!`
         : `${upstartText(`the ${statueName}`)} ${verb}!`;
     const debtMessage = shatter ? statueShatterShopDebtMessage(statue, x, y, mon) : '';
+    const historicMessage = stoneToFleshHistoricStatueGoneMessage(statue, x, y);
 
     moveStatueContentsToMonster(statue, mon);
     game.level.objects = (game.level?.objects || []).filter(obj => obj !== statue);
     newsym(x, y);
     newsym(mon.mx, mon.my);
-    return [prefix, body, debtMessage].filter(Boolean).join('  ');
+    return [prefix, body, debtMessage, historicMessage].filter(Boolean).join('  ');
 }
 
 function noFittingWishObject() {
