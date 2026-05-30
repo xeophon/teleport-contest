@@ -4022,6 +4022,65 @@ test('nonhallucinating worn helmet tip at gecko squeaks normally', async () => {
     assert.doesNotMatch(game._pending_message, /15 minutes|zorkmids|doesn't respond|Nothing happens|waves/);
 });
 
+test('worn helmet tip makes visible leocrotta imitate instead of neigh', async () => {
+    installNonShopFloorState();
+    const helmet = wornArmor(3063549, 'orcish helm', 'h');
+    const leocrotta = ordinaryThrowTarget('leocrotta', 6, 5, {
+        msleeping: 0,
+        mcanmove: true,
+        mcansee: true,
+        mpeaceful: false,
+        mstrategy: 'waitforu',
+        data: { name: 'leocrotta', mlevel: 6, mlet: 'quadruped' },
+    });
+    game.inventory = [helmet];
+    game.level.monsters = [leocrotta];
+    markSquareVisible(6, 5);
+
+    await enterTipCommand();
+    await rhack('h');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(leocrotta.mstrategy, 0);
+    assert.match(game._pending_message, /You briefly doff your helm\./);
+    assert.match(game._pending_message, /The leocrotta imitates you\./);
+    assert.doesNotMatch(game._pending_message, /neighs|whickers|doesn't respond|Nothing happens|waves/);
+});
+
+test('worn helmet tip makes adjacent invisible doppelganger imitate and maps it', async () => {
+    installStableNonShopFloorState();
+    game.u.seeInvisible = false;
+    const targetLoc = game.level.at(6, 5);
+    const helmet = wornArmor(3063550, 'orcish helm', 'h');
+    const doppelganger = ordinaryThrowTarget('doppelganger', 6, 5, {
+        minvis: 1,
+        perminvis: 1,
+        msleeping: 0,
+        mcanmove: true,
+        mcansee: true,
+        mpeaceful: false,
+        mstrategy: 'waitforu',
+        data: { name: 'doppelganger', mlevel: 9, mlet: '@', humanoid: true },
+    });
+    game.inventory = [helmet];
+    game.level.monsters = [doppelganger];
+    markSquareVisible(6, 5);
+
+    await enterTipCommand();
+    await rhack('h');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(doppelganger.mstrategy, 0);
+    assert.equal(targetLoc.map_invisible, true);
+    assert.match(game._pending_message, /You briefly doff your helm\./);
+    assert.match(game._pending_message, /It imitates you\./);
+    assert.doesNotMatch(game._pending_message, /The doppelganger|doesn't respond|Nothing happens|waves/);
+});
+
 test('unknown cursed worn helmet tip learns curse and spends action', async () => {
     installCommandShopState();
     const helmet = wornArmor(306352, 'orcish helm', 'h', 0, {

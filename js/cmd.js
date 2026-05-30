@@ -33777,6 +33777,7 @@ function tipHatMonsterSound(mon) {
     if (/^(mumak|mastodon)$/.test(name)) return 'trumpet';
     if (/^(rothe|minotaur)$/.test(name)) return 'moo';
     if (/^(raven|tengu)$/.test(name)) return 'sqawk';
+    if (/^(leocrotta|aleax|doppelganger)$/.test(name)) return 'imitate';
     if (/^(pony|horse|warhorse|white unicorn|gray unicorn|black unicorn)$/.test(name)
         || mlet === 'quadruped' || mlet === 'unicorn')
         return 'neigh';
@@ -33954,6 +33955,8 @@ function tipHatMonsterNoise(mon, { visible = tipHatMonsterVisible(mon) } = {}) {
         const laughMessages = ['giggles.', 'chuckles.', 'snickers.', 'laughs.'];
         return { handled: true, message: `${name} ${laughMessages[rn2(4)]}` };
     }
+    case 'imitate':
+        return { handled: true, message: `${name} imitates you.` };
     default:
         return { handled: false, message: '' };
     }
