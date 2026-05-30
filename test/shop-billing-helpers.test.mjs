@@ -52,6 +52,7 @@ const BLINDING_VENOM = 10184;
 const ACID_VENOM = 10185;
 const KEY_BACKSPACE = 8;
 const KEY_DELETE = 127;
+const WATER_WALKING_BOOTS = 10132;
 
 function installShopState() {
     const g = resetGame();
@@ -9181,6 +9182,99 @@ test('successful centaur polyself pushes off unpaid speed boots in shop', async 
     assert.equal(floorBoots.ox, game.u.ux);
     assert.equal(floorBoots.oy, game.u.uy);
     assert.equal(shop.shopBillEntryForObject(shkp, floorBoots), null);
+});
+
+test('successful centaur polyself losing water walking boots falls into pool and crawls out', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 40,
+        uhpmax: 40,
+        uen: 0,
+        uenmax: 0,
+        ulevel: 1,
+        uac: 9,
+    });
+    const cells = new Map();
+    const key = (x, y) => `${x},${y}`;
+    game.level.at = (x, y) => {
+        const cellKey = key(x, y);
+        if (!cells.has(cellKey)) cells.set(cellKey, { roomno: 0, typ: ROOM });
+        return cells.get(cellKey);
+    };
+    cells.set(key(5, 5), { roomno: 0, typ: POOL });
+    for (const [dx, dy] of [[-1, 0], [-1, -1], [0, -1], [1, -1], [1, 1], [0, 1], [-1, 1]]) {
+        cells.set(key(5 + dx, 5 + dy), { roomno: 0, typ: POOL });
+    }
+    cells.set(key(6, 5), { roomno: 0, typ: ROOM });
+    vision_reset();
+    const boots = wornArmor(32116, 'water walking boots', 'b', 0, {
+        otyp: WATER_WALKING_BOOTS,
+        known: false,
+    });
+    game.inventory = [boots];
+
+    await debugPolyselfInto('plains centaur');
+
+    const pending = game._pending_message || '';
+    assert.equal(game.u._polyself_form?.name, 'plains centaur');
+    assert.match(pending, /Your boots are pushed off your feet!/);
+    assert.match(pending, /You fall into the pool of water!/);
+    assert.match(pending, /You sink like a rock\./);
+    assert.equal(game._message_more, 1);
+    assert.deepEqual(game._relocate_after_more, { fromX: 5, fromY: 5, x: 6, y: 5 });
+    assert.equal(game.u.ux, 5);
+    assert.equal(game.u.uy, 5);
+    assert.equal(game.inventory.includes(boots), false);
+    assert.equal(boots.known, true);
+    assert.equal(game.level.objects.length, 1);
+    assert.equal(game.level.objects[0].kind, 'water walking boots');
+    assert.equal(game.level.objects[0].worn, false);
+    assert.equal(game.level.objects[0].ox, 5);
+    assert.equal(game.level.objects[0].oy, 5);
+
+    await rhack(' ');
+
+    assert.equal(game.u.ux, 6);
+    assert.equal(game.u.uy, 5);
+    assert.equal(game._relocate_after_more, null);
+    assert.match(game._pending_message || '', /Pheew!  That was close\./);
+    assert.equal(game.level.objects[0].ox, 5);
+    assert.equal(game.level.objects[0].oy, 5);
+});
+
+test('successful centaur polyself dropping water walking boots on dry ground has no water fallout', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, {
+        uhp: 40,
+        uhpmax: 40,
+        uen: 0,
+        uenmax: 0,
+        ulevel: 1,
+        uac: 9,
+    });
+    const boots = wornArmor(32117, 'water walking boots', 'b', 0, {
+        otyp: WATER_WALKING_BOOTS,
+        known: false,
+    });
+    game.inventory = [boots];
+
+    await debugPolyselfInto('plains centaur');
+
+    const pending = game._pending_message || '';
+    assert.equal(game.u._polyself_form?.name, 'plains centaur');
+    assert.match(pending, /Your boots are pushed off your feet!/);
+    assert.doesNotMatch(pending, /fall into the pool of water|sink like a rock|crawl out/);
+    assert.equal(game._message_more, 0);
+    assert.equal(game._relocate_after_more || null, null);
+    assert.equal(game.inventory.includes(boots), false);
+    assert.equal(boots.known, false);
+    assert.equal(game.level.objects.length, 1);
+    assert.equal(game.level.objects[0].kind, 'water walking boots');
+    assert.equal(game.level.objects[0].worn, false);
 });
 
 test('successful horned polyself pierces flimsy helm without dropping it', async () => {

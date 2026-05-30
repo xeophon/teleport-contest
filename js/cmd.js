@@ -11693,8 +11693,60 @@ function restoreHeroOppositeAlignment(messages) {
     messages.push(`Your mind is ${heroIsHallucinating() ? 'much of a muchness' : 'back in sync with your body'}.`);
 }
 
+function heroFloatsOverPolyselfBootFallout() {
+    const form = polyselfForm();
+    return !!(game.u?.levitating || game.u?.levitation || game.u?.Levitation
+        || game.u?.flying || game.u?.Flying || form?.clinger);
+}
+
+function polyselfWaterFallLanding(x, y, targetMoveTyp) {
+    const dirs = LANDING_DIRS.map((_, i) => i);
+    for (let i = dirs.length; i > 0; i--) {
+        const j = rn2(i);
+        const k = dirs[j];
+        dirs[j] = dirs[i - 1];
+        dirs[i - 1] = k;
+    }
+    for (const idx of dirs) {
+        const lx = x + LANDING_DIRS[idx].dx;
+        const ly = y + LANDING_DIRS[idx].dy;
+        const loc = game.level?.at(lx, ly);
+        const locMoveTyp = movementSurfaceTerrain(loc);
+        if (!loc || IS_OBSTRUCTED(locMoveTyp) || movementIsLiquidAt(lx, ly, loc)) continue;
+        if ((game.level?.monsters || []).some(mon => mon.mx === lx && mon.my === ly)) continue;
+        game._relocate_after_more = { fromX: x, fromY: y, x: lx, y: ly };
+        game._topline_after_more = targetMoveTyp === WATER
+            ? 'Pheew!  That was close.'
+            : 'You try to crawl out of the water.  Pheew!  That was close.';
+        return true;
+    }
+    if (game.u) {
+        game.u.uinwater = 1;
+        game.u.underwater = true;
+        game.u.uunderwater = true;
+    }
+    return false;
+}
+
+function addPolyselfWaterWalkingBootsOffSideEffects(item, messages) {
+    if (objectKindKey(item) !== 'water walking boots' || !game.u || heroFloatsOverPolyselfBootFallout()) return;
+    const x = game.u.ux || 0;
+    const y = game.u.uy || 0;
+    const loc = game.level?.at(x, y);
+    const targetMoveTyp = movementSurfaceTerrain(loc);
+    if (!movementIsPoolAt(x, y, loc)) return;
+    item.known = true;
+    recordKnownArmorDiscovery('water walking boots', false);
+    polyselfWaterFallLanding(x, y, targetMoveTyp);
+    messages.push(targetMoveTyp === WATER
+        ? 'You plunge into the wall of water!  You try to crawl out of the water.'
+        : 'You fall into the pool of water!  You sink like a rock.');
+}
+
 function addPolyselfBootsOffSideEffects(item, messages) {
-    if (objectKindKey(item) !== 'speed boots' || !game.u) return;
+    const kind = objectKindKey(item);
+    if (kind === 'water walking boots') addPolyselfWaterWalkingBootsOffSideEffects(item, messages);
+    if (kind !== 'speed boots' || !game.u) return;
     if (otherWornFastEquipment(item) || (game.u._veryfastTimeout || 0) > 0) return;
     messages.push(`You feel yourself slow down${heroHasIntrinsicFast() ? ' a bit' : ''}.`);
 }
@@ -11758,6 +11810,10 @@ function applyPolyselfEquipmentFallout(fallout, floorMessages = [], form = polys
 
 function polyselfFalloutHasEffects(fallout) {
     return !!(fallout?.items?.length || fallout?.destroyedItems?.length || fallout?.releasedItems?.length || fallout?.messages?.length);
+}
+
+function polyselfFalloutNeedsMore() {
+    return !!game._relocate_after_more;
 }
 
 function polyselfBasePersistentBlindness(base) {
@@ -11946,6 +12002,7 @@ function becomeMonster(name) {
             applyPolyselfEquipmentFallout(fallout, floorMessages, form);
             recomputePolyselfArmorClass(form);
             message += `  ${[...fallout.messages, ...floorMessages].filter(Boolean).join('  ')}`;
+            if (polyselfFalloutNeedsMore()) return { message, more: true };
         }
     }
     const cloak = polyselfWornCloakItem();
@@ -11982,6 +12039,7 @@ function becomeMonster(name) {
         applyPolyselfEquipmentFallout(fallout, floorMessages, form);
         recomputePolyselfArmorClass(form);
         message += `  ${[...fallout.messages, ...floorMessages].filter(Boolean).join('  ')}`;
+        if (polyselfFalloutNeedsMore()) return { message, more: true };
     }
     const wieldedTool = (game.inventory || []).find(item =>
         item.cls === 'tool' && (item.wielded || item.line?.includes('weapon in')));
@@ -44309,7 +44367,7 @@ export async function rhack(_cmd) {
                     ...floorMessages,
                 ].filter(Boolean).join('  ');
                 game._polyself_drop_items_after_overload_message = '';
-                game._message_more = 0;
+                game._message_more = polyselfFalloutNeedsMore() ? 1 : 0;
                 game._keep_pending_message = 1;
                 game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
                 game.context.move = 0;
