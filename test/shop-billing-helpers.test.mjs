@@ -20894,8 +20894,9 @@ test('monster-thrown dart hit can mulch before ordinary floor placement', () => 
     assert.equal(landing.consumed, true);
     assert.equal(landing.object, null);
     assert.equal(landing.dropThrow.broken, true);
+    assert.equal(landing.dropThrow.mulched, true);
     assert.equal(game.level.objects.some(obj => obj.id === dart.id), false);
-    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(3)']);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(3)', 'rn2(100)']);
 });
 
 test('monster-thrown dart hit survives mulch roll and lands', () => {
@@ -20995,6 +20996,51 @@ test('monster-thrown dagger miss skips rust monster passive object erosion and s
     assert.equal(cleanStack.quan, 2);
     assert.equal(game.level.objects.length, 1);
     assert.doesNotMatch(landing.messages.join(' '), /rusts/);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
+});
+
+test('monster-thrown dagger hit applies rust monster polyself passive object erosion before stacking', () => {
+    installNonShopFloorState();
+    initRng(1);
+    enableRngLog({ reset: true });
+    game.u.ux = 7;
+    game.u.uy = 5;
+    game.u._polyself_form = { name: 'rust monster' };
+    markSquareVisible(7, 5);
+    const cleanStack = { ...dagger(8743431), letter: undefined, line: undefined, ox: 7, oy: 5 };
+    const thrown = { ...dagger(8743432), letter: undefined, line: undefined };
+    game.level.objects = [cleanStack];
+
+    const landing = landMonsterThrownObject(thrown, 7, 5, { messages: [], ohit: true });
+
+    assert.equal(landing.passiveObj.type, 'rust');
+    assert.equal(landing.passiveObj.damaged, true);
+    assert.equal(landing.object.oeroded, 1);
+    assert.notEqual(landing.object, cleanStack);
+    assert.equal(cleanStack.quan, 1);
+    assert.equal(game.level.objects.length, 2);
+    assert.match(landing.messages.join(' '), /The dagger rusts!/);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
+});
+
+test('monster-thrown dagger miss skips rust monster polyself passive object erosion and stacks', () => {
+    installNonShopFloorState();
+    initRng(1);
+    enableRngLog({ reset: true });
+    game.u.ux = 7;
+    game.u.uy = 5;
+    game.u._polyself_form = { name: 'rust monster' };
+    const cleanStack = { ...dagger(8743433), letter: undefined, line: undefined, ox: 7, oy: 5 };
+    const thrown = { ...dagger(8743434), letter: undefined, line: undefined };
+    game.level.objects = [cleanStack];
+
+    const landing = landMonsterThrownObject(thrown, 7, 5, { messages: [], ohit: false });
+
+    assert.equal(landing.passiveObj.handled, false);
+    assert.equal(cleanStack.oeroded || 0, 0);
+    assert.equal(landing.object, cleanStack);
+    assert.equal(cleanStack.quan, 2);
+    assert.equal(game.level.objects.length, 1);
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
 });
 
@@ -21207,6 +21253,48 @@ async function runMonsterSlingRockLanding({ uac }) {
     return { rock, thrower, rng: getRngLog().map(entry => entry.replace(/=.*/, '')) };
 }
 
+async function runMonsterDartHitLanding({ seed = 8 } = {}) {
+    installNonShopFloorState();
+    resetInputState();
+    pushKey('\x1b');
+    initRng(seed);
+    enableRngLog({ reset: true });
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        ux0: 5,
+        uy0: 5,
+        blind: true,
+        uhp: 20,
+        uhpmax: 20,
+        uac: 10,
+        umovement: NORMAL_SPEED,
+        acurr: { a: [10, 10, 10, 10, 10, 10] },
+    });
+    game.moves = 1;
+    game.context = {};
+    for (let x = 5; x <= 8; x++) markSquareVisible(x, 5);
+    const dart = { ...dartStack(874356, 'd', 1), letter: undefined, line: undefined, spe: 0 };
+    const thrower = {
+        mx: 8,
+        my: 5,
+        movement: NORMAL_SPEED,
+        data: { name: 'kobold', mlet: 'k', mmove: NORMAL_SPEED, armed: true, mlevel: 0 },
+        mpeaceful: false,
+        mhp: 5,
+        mhpmax: 5,
+        minvent: [dart],
+        missile: dart,
+        mcansee: true,
+    };
+    game.level.monsters = [thrower];
+    game._pending_time_passed = 1;
+
+    await moveloop_core();
+    resetInputState();
+    return { dart, thrower, rng: getRngLog() };
+}
+
 async function runMonsterCrudeDaggerCatch() {
     installNonShopFloorState();
     resetInputState();
@@ -21267,6 +21355,24 @@ test('production monster sling rock miss keeps ohit false and skips mulch check'
 
     assert.equal(game.level.objects.some(obj => obj.id === rock.id), true);
     assert.equal(rng.filter(entry => entry === 'rn2(3)').length, 0);
+});
+
+test('production kobold dart hit lands surviving dart with ohit mulch', async () => {
+    const { dart, thrower, rng } = await runMonsterDartHitLanding({ seed: 8 });
+
+    assert.equal(game.u.uhp, 18);
+    assert.equal(thrower.missile, null);
+    assert.equal(thrower.minvent.some(obj => obj.id === dart.id), false);
+
+    const landed = game.level.objects.find(obj => obj.id === dart.id);
+    assert.ok(landed);
+    assert.equal(landed.ox, 5);
+    assert.equal(landed.oy, 5);
+    assert.equal(landed.quan, 1);
+    assert.equal(landed.kind, 'dart');
+
+    assert.ok(rng.includes('rnd(20)=12'));
+    assert.ok(rng.includes('rn2(3)=0'));
 });
 
 test('production monster crude dagger catch does not queue drop-throw landing', async () => {

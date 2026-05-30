@@ -28354,8 +28354,13 @@ function passiveObjectAttackForMonster(mon) {
 }
 
 function monsterAtSquareForPassiveObject(x, y) {
-    return (game.level?.monsters || []).find(mon =>
-        mon && mon.mx === x && mon.my === y && !mon.dead && (mon.mhp == null || mon.mhp > 0)) || null;
+    const mon = (game.level?.monsters || []).find(candidate =>
+        candidate && candidate.mx === x && candidate.my === y && !candidate.dead
+        && (candidate.mhp == null || candidate.mhp > 0));
+    if (mon) return mon;
+    if (game.u && game.u.ux === x && game.u.uy === y)
+        return { ...game.u, data: polyselfForm() || game.u.data || {} };
+    return null;
 }
 
 function erodeMonsterThrownPassiveObject(obj, type, messages) {
@@ -28419,12 +28424,15 @@ export function landMonsterThrownObject(missile, x, y, {
     if (!missile || !game.level) return { consumed: false, object: null, messages: [] };
     game.level.objects ??= [];
     const floorMessages = Array.isArray(messages) ? messages : [];
+    const breaksOnContact = isCreamPieObject(missile) || isVenomObject(missile) || (!!ohit && isEggItem(missile));
+    const mulched = !breaksOnContact && !!ohit && shouldMulchMonsterThrownMissile(missile);
     const dropThrow = {
-        broken: isCreamPieObject(missile) || isVenomObject(missile) || (!!ohit && isEggItem(missile))
-            || (!!ohit && shouldMulchMonsterThrownMissile(missile)),
+        broken: breaksOnContact || mulched,
         ohit: !!ohit,
+        mulched,
     };
     if (dropThrow.broken) {
+        if (mulched) rn2(100);
         newsym(x, y);
         return {
             consumed: true,
