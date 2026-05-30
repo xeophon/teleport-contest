@@ -11199,6 +11199,20 @@ function polymorphSystemShock() {
     return { message: 'You shudder for a moment.', more: false };
 }
 
+function polymorphSelfZapResult(item = null) {
+    if (heroHasUnchanging()) return { message: '', more: false };
+    if (item) setKnownWandLine(item, 'polymorph');
+    const shock = polymorphSystemShock();
+    if (shock) return shock;
+    const formName = randomPolyselfMonsterName();
+    const result = rn2(5) ? becomeMonster(formName) : becomeMonster('human');
+    newsym(game.u?.ux || 0, game.u?.uy || 0);
+    return {
+        message: result?.message || 'Nothing happens.',
+        more: !!result?.more,
+    };
+}
+
 function becomeMonster(name) {
     const base = game.u._polyself_base;
     if (name === 'human' || name === game.urace?.noun || name === game._startup_race) {
@@ -26276,15 +26290,12 @@ async function polymorphSpellDirection(ch) {
     const verticalDir = !dir && ch === '<' ? { dx: 0, dy: 0, dz: -1 }
         : !dir && ch === '>' ? { dx: 0, dy: 0, dz: 1 } : null;
     if (ch === '.') {
-        const shock = polymorphSystemShock();
-        if (shock) {
-            await setMessage(shock.message, !!shock.more);
-            return true;
+        const result = polymorphSelfZapResult();
+        if (result.message) await setMessage(result.message, result.more);
+        else {
+            game._pending_message = '';
+            game._message_more = 0;
         }
-        const formName = randomPolyselfMonsterName();
-        const result = rn2(5) ? becomeMonster(formName) : becomeMonster('human');
-        newsym(game.u.ux, game.u.uy);
-        await setMessage(result?.message || 'Nothing happens.', !!result?.more);
         return true;
     }
     if (!dir && !verticalDir) return false;
@@ -46906,24 +46917,13 @@ export async function rhack(_cmd) {
         game._zap_item = null;
         game._command_mode = null;
         if (selfZap) {
-            const shock = polymorphSystemShock();
-            if (shock) {
-                game.context.move = 1;
-                await setMessage(shock.message, !!shock.more);
-                return;
-            }
-            const formName = randomPolyselfMonsterName();
-            const result = rn2(5) ? becomeMonster(formName) : becomeMonster('human');
-            if (item) {
-                item.wand = 'polymorph';
-                item.kind = 'polymorph';
-                item.wandIndex = 12;
-                item.known = true;
-                item.line = normalInventoryLine({ ...item, line: '' });
-            }
-            newsym(game.u.ux, game.u.uy);
+            const result = polymorphSelfZapResult(item);
             game.context.move = 1;
-            await setMessage(result?.message || 'Nothing happens.', !!result?.more);
+            if (result.message) await setMessage(result.message, result.more);
+            else {
+                game._pending_message = '';
+                game._message_more = 0;
+            }
             return;
         }
         if (!dir && !verticalDir) return;

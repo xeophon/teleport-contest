@@ -8143,6 +8143,80 @@ test('lateral floor polymorph ray reaches a nonadjacent floor pile', async () =>
     assert.match(game._pending_message, /Izchak gets angry!/);
 });
 
+test('self-cast polymorph spell is blocked silently by unchanging', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, { uhp: 40, uhpmax: 40, unchanging: true });
+    const hpBefore = game.u.uhp;
+    enableRngLog({ reset: true });
+
+    await castPolymorphDirection('.');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.u.uhp, hpBefore);
+    assert.equal(game.u._polyself_base || null, null);
+    assert.equal(game.u._polyself_form || null, null);
+    assert.doesNotMatch(game._pending_message || '', /fail to transform|shudder|turn into|feel a little/);
+    const rngCalls = getRngLog().map(entry => entry.replace(/=.*/, ''));
+    assert.deepEqual(rngCalls.slice(0, 2), [
+        'rnd(100)', 'rn2(19)',
+    ]);
+    assert.equal(rngCalls.includes('rn2(20)'), false);
+    assert.equal(rngCalls.includes('rnd(30)'), false);
+});
+
+test('self-zapped polymorph wand is blocked silently by unchanging without discovery', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, { uhp: 40, uhpmax: 40, unchanging: true });
+    const wand = unknownAppearanceWand(32044, 'glass', 'w', { wand: 'polymorph', wandIndex: 12 });
+    game.inventory = [wand];
+    enableRngLog({ reset: true });
+
+    await rhack('z');
+    await rhack('w');
+    await rhack('.');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(wand.known, false);
+    assert.equal(wand.kind || '', '');
+    assert.match(wand.line, /glass wand/);
+    assert.equal(game.u._polyself_base || null, null);
+    assert.equal(game.u._polyself_form || null, null);
+    assert.doesNotMatch(game._pending_message || '', /fail to transform|shudder|turn into/);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
+});
+
+test('self-zapped polymorph wand system shock still discovers the wand', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, { uhp: 40, uhpmax: 40 });
+    game.u.acurr.a[A_CON] = 0;
+    const wand = unknownAppearanceWand(32045, 'glass', 'w', { wand: 'polymorph', wandIndex: 12 });
+    game.inventory = [wand];
+    const hpBefore = game.u.uhp;
+    enableRngLog({ reset: true });
+
+    await rhack('z');
+    await rhack('w');
+    await rhack('.');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(wand.known, true);
+    assert.equal(wand.kind, 'polymorph');
+    assert.match(wand.line, /wand of polymorph/);
+    assert.match(game._pending_message, /You shudder for a moment\./);
+    assert.equal(game.u._polyself_base || null, null);
+    assert.equal(game.u._polyself_form || null, null);
+    assert.ok(game.u.uhp < hpBefore);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rn2(20)', 'rnd(30)', 'rn2(2)',
+    ]);
+});
+
 test('spell polymorph lateral ray reaches a nonadjacent floor pile', async () => {
     installNonShopFloorState();
     initRng(1);
