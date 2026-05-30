@@ -24,7 +24,7 @@ Date: 2026-05-30
 
 ## Remaining Gaps
 
-- This does not cover steed `domonnoise()`, adjacent unseen responsive monsters, hallucinated/statue behavior, mimic object/furniture filtering, or the broader nonhumanoid sound table.
+- This does not cover steed `domonnoise()`, adjacent unseen responsive monsters, hallucinated/statue behavior, or the broader nonhumanoid sound table. Visible object/furniture mimic scan filtering is covered separately in audit 246.
 
 ## Verification
 

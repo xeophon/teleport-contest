@@ -8,7 +8,7 @@ import { game, resetGame } from '../js/gstate.js';
 import { pushKey, resetInputState } from '../js/input.js';
 import { createMonsterCorpseOrGlob, mkcorpstat } from '../js/mklev.js';
 import { enableRngLog, getRngLog, initRng } from '../js/rng.js';
-import { A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_STR, A_WIS, BILLSZ, CANDLESHOP, CLOUD, CORPSTAT_HISTORIC, COULD_SEE, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, D_CLOSED, D_NODOOR, FOUNTAIN, HOLE, ICE, ICED_POOL, IN_SIGHT, LADDER, LAVAPOOL, MIGR_LADDER_UP, MIGR_SSTAIRS, MIGR_STAIRS_UP, MOAT, NORMAL_SPEED, PIT, POOL, REPAIR_DELAY, ROOM, ROOMOFFSET, SDOOR, SHOPBASE, SHOP_DOOR_COST, SQKY_BOARD, STAIRS, STATUE_TRAP, STONE, STRAT_WAITFORU, TRAPDOOR, TT_WEB, WEB, W_SADDLE } from '../js/const.js';
+import { A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_STR, A_WIS, BILLSZ, CANDLESHOP, CLOUD, CORPSTAT_HISTORIC, COULD_SEE, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, D_CLOSED, D_NODOOR, FOUNTAIN, HOLE, ICE, ICED_POOL, IN_SIGHT, LADDER, LAVAPOOL, MIGR_LADDER_UP, MIGR_SSTAIRS, MIGR_STAIRS_UP, MOAT, M_AP_FURNITURE, M_AP_OBJECT, NORMAL_SPEED, PIT, POOL, REPAIR_DELAY, ROOM, ROOMOFFSET, SDOOR, SHOPBASE, SHOP_DOOR_COST, SQKY_BOARD, STAIRS, STATUE_TRAP, STONE, STRAT_WAITFORU, TRAPDOOR, TT_WEB, WEB, W_SADDLE } from '../js/const.js';
 import { currentFruitId, setCurrentFruitName } from '../js/fruit.js';
 import { CLR_BRIGHT_MAGENTA, CLR_BROWN, CLR_WHITE } from '../js/terminal.js';
 import { vision_reset } from '../js/vision.js';
@@ -2993,6 +2993,71 @@ test('worn helmet tip recognizes remembered invisible target', async () => {
     assert.equal(game.context.move, 1);
     assert.match(game._pending_message, /You briefly doff your helm\./);
     assert.match(game._pending_message, /That unseen creature is ignoring you!/);
+});
+
+test('worn helmet tip skips visible object mimic while scanning', async () => {
+    installNonShopFloorState();
+    const helmet = wornArmor(3063512, 'orcish helm', 'h');
+    const mimic = ordinaryThrowTarget('large mimic', 6, 5, {
+        m_ap_type: M_AP_OBJECT,
+        appearObj: 215,
+        appearGlyph: '(',
+        mstrategy: 'waitforu',
+        data: { name: 'large mimic', mlevel: 8, mlet: 'mimic' },
+    });
+    const soldier = ordinaryThrowTarget('soldier', 7, 5, {
+        msleeping: 0,
+        mcanmove: true,
+        mcansee: true,
+        mstrategy: 'waitforu',
+        data: { name: 'soldier', mlevel: 1, humanoid: true },
+    });
+    game.inventory = [helmet];
+    game.level.monsters = [mimic, soldier];
+    markSquareVisible(6, 5);
+    markSquareVisible(7, 5);
+
+    await enterTipCommand();
+    await rhack('h');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(mimic.mstrategy, 'waitforu');
+    assert.equal(mimic.m_ap_type, M_AP_OBJECT);
+    assert.equal(mimic.appearObj, 215);
+    assert.equal(mimic.appearGlyph, '(');
+    assert.equal(soldier.mstrategy, 0);
+    assert.match(game._pending_message, /You briefly doff your helm\./);
+    assert.match(game._pending_message, /The soldier waves\./);
+    assert.doesNotMatch(game._pending_message, /large mimic|doesn't respond|really/);
+});
+
+test('worn helmet tip skips visible furniture mimic and falls through', async () => {
+    installNonShopFloorState();
+    const helmet = wornArmor(3063513, 'orcish helm', 'h');
+    const mimic = ordinaryThrowTarget('large mimic', 6, 5, {
+        m_ap_type: M_AP_FURNITURE,
+        appearGlyph: '{',
+        mstrategy: 'waitforu',
+        data: { name: 'large mimic', mlevel: 8, mlet: 'mimic' },
+    });
+    game.inventory = [helmet];
+    game.level.monsters = [mimic];
+    markSquareVisible(6, 5);
+
+    await enterTipCommand();
+    await rhack('h');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(mimic.mstrategy, 'waitforu');
+    assert.equal(mimic.m_ap_type, M_AP_FURNITURE);
+    assert.equal(mimic.appearGlyph, '{');
+    assert.match(game._pending_message, /You briefly doff your helm\./);
+    assert.match(game._pending_message, /Nothing happens\./);
+    assert.doesNotMatch(game._pending_message, /large mimic|doesn't respond|really/);
 });
 
 test('unknown cursed worn helmet tip learns curse and spends action', async () => {
