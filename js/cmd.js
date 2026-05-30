@@ -11327,6 +11327,7 @@ function polyselfWornHelmItem() {
 }
 
 const POLYSELF_BREAKARM_FORM_NAMES = new Set([
+    'large dog',
     'xorn',
     'marilith',
     'winged gargoyle',
@@ -11426,6 +11427,12 @@ function polyselfCloakSimpleName(cloak) {
     if (kind === 'mummy wrapping') return 'wrapping';
     if (kind === 'alchemy smock') return cloak?.known && cloak?.dknown ? 'smock' : 'apron';
     return 'cloak';
+}
+
+function addPolyselfCloakOffMessages(cloak, messages) {
+    if (objectKindKey(cloak) !== 'mummy wrapping' || !game.u?.invisible || game.u?.blind) return;
+    newsym(game.u.ux, game.u.uy);
+    messages.push(`You can ${game.u.seeInvisible ? 'see through yourself' : 'no longer see yourself'}.`);
 }
 
 function polyselfHelmSimpleName(helm) {
@@ -11530,6 +11537,7 @@ function polyselfEquipmentFalloutForForm(form, { bodyArmor = null } = {}) {
                 messages.push(`The clasp on your ${cloakName} breaks open!`);
                 addItem(cloak);
             }
+            addPolyselfCloakOffMessages(cloak, messages);
         }
 
         const shirt = polyselfWornShirtItem();
@@ -11550,6 +11558,7 @@ function polyselfEquipmentFalloutForForm(form, { bodyArmor = null } = {}) {
                 messages.push(whirly
                     ? `Your ${polyselfCloakSimpleName(cloak)} falls, unsupported!`
                     : `You shrink out of your ${polyselfCloakSimpleName(cloak)}!`);
+                addPolyselfCloakOffMessages(cloak, messages);
                 addItem(cloak);
             }
             const shirt = polyselfWornShirtItem();
@@ -12051,9 +12060,11 @@ function becomeMonster(name) {
         }
     }
     const cloak = polyselfWornCloakItem();
-    if (cloak && (form.verysmall
+    if (cloak && !polyselfMummyWrappingAllowed(form, cloak) && (form.verysmall
         || (form.name === 'gnome' && !polyselfWornBodyArmorItem() && !polyselfWornShirtItem()))) {
-        message += '  You shrink out of your cloak!';
+        const cloakMessages = [`You shrink out of your ${polyselfCloakSimpleName(cloak)}!`];
+        addPolyselfCloakOffMessages(cloak, cloakMessages);
+        message += `  ${cloakMessages.join('  ')}`;
         game._polyself_cloak_after_more_letter = cloak.letter;
         game._topline_after_more = 'Your movements are slowed slightly because of your load.';
         game.u._statusSuffix = `${game.u._statusSuffix || ''} Burdened`;
@@ -30056,7 +30067,7 @@ function armorSubject(item) {
 
 function armorSlot(item) {
     const name = armorKind(item);
-    if (/\b(?:cloak|robe|mantelet|pall|cape|cope|cloth|smock|apron)\b/.test(name)) return 'cloak';
+    if (/\b(?:cloak|robe|wrapping|mantelet|pall|cape|cope|cloth|smock|apron)\b/.test(name)) return 'cloak';
     if (/\b(?:mail|armor|jacket|coat|dragon scales?)\b/.test(name)) return 'body';
     if (/\bshirt\b/.test(name)) return 'shirt';
     if (/\b(?:helm|helmet|hat|fedora|cornuthaum|cap|pot)\b/.test(name)) return 'helm';

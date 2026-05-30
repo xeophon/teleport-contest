@@ -8569,6 +8569,34 @@ test('successful breakarm polyself destroys body armor and shirt but drops cloak
     assert.equal(game.level.objects.some(obj => obj.kind === 'leather armor' || obj.kind === 'T-shirt'), false);
 });
 
+test('successful large dog polyself breaks body armor instead of overloading', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, {
+        uhp: 40,
+        uhpmax: 40,
+        uen: 0,
+        uenmax: 0,
+        ulevel: 1,
+        uac: 8,
+    });
+    const body = wornArmor(32125, 'leather armor', 'a');
+    game.inventory = [body];
+
+    await debugPolyselfInto('large dog');
+
+    const pending = game._pending_message || '';
+    assert.equal(game.u._polyself_form?.name, 'large dog');
+    assert.match(pending, /You turn into a large dog!/);
+    assert.match(pending, /You break out of your armor!/);
+    assert.doesNotMatch(pending, /Your armor falls around you|handspan|Overloaded/);
+    assert.equal(game._polyself_drop_items_after_overload_more || 0, 0);
+    assert.equal(game._message_more, 0);
+    assert.equal(game.inventory.includes(body), false);
+    assert.equal(game.level.objects.some(obj => obj.kind === 'leather armor'), false);
+    assert.equal(game.u.uac, game.u._polyself_form?.mac ?? 10);
+});
+
 test('successful small polyself slips out of body armor cloak and shirt', async () => {
     installNonShopFloorState();
     initRng(1);
@@ -8638,6 +8666,76 @@ test('successful small polyself keeps adaptive mummy wrapping', async () => {
         'leather armor',
         'T-shirt',
     ]);
+});
+
+test('successful breakarm polyself tearing mummy wrapping reveals intrinsic invisibility', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, {
+        uhp: 40,
+        uhpmax: 40,
+        uen: 0,
+        uenmax: 0,
+        ulevel: 1,
+        uac: 10,
+        invisible: true,
+        seeInvisible: false,
+        blind: false,
+    });
+    const wrapping = wornArmor(32123, 'mummy wrapping', 'm');
+    game.inventory = [wrapping];
+
+    await debugPolyselfInto('xorn');
+
+    const pending = game._pending_message || '';
+    assert.equal(game.u._polyself_form?.name, 'xorn');
+    assert.match(pending, /Your wrapping tears apart!/);
+    assert.match(pending, /You can no longer see yourself\./);
+    assert.ok(pending.indexOf('Your wrapping tears apart!')
+        < pending.indexOf('You can no longer see yourself.'));
+    assert.equal(game.u.invisible, true);
+    assert.equal(game.inventory.includes(wrapping), false);
+    assert.equal(game.level.objects.some(obj => obj.kind === 'mummy wrapping'), false);
+});
+
+test('successful very small polyself dropping mummy wrapping shows see-through feedback', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, {
+        uhp: 40,
+        uhpmax: 40,
+        uen: 0,
+        uenmax: 0,
+        ulevel: 1,
+        uac: 10,
+        invisible: true,
+        seeInvisible: true,
+        blind: false,
+    });
+    const wrapping = wornArmor(32124, 'mummy wrapping', 'm');
+    game.inventory = [wrapping];
+
+    await debugPolyselfInto('wererat');
+
+    const pending = game._pending_message || '';
+    assert.equal(game.u._polyself_form?.name, 'wererat');
+    assert.match(pending, /You shrink out of your wrapping!/);
+    assert.match(pending, /You can see through yourself\./);
+    assert.ok(pending.indexOf('You shrink out of your wrapping!')
+        < pending.indexOf('You can see through yourself.'));
+    assert.equal(game.u.invisible, true);
+    assert.equal(game.inventory.includes(wrapping), true);
+    assert.equal(game._message_more, 1);
+    assert.equal(game._polyself_cloak_after_more_letter, 'm');
+    assert.equal(game.level.objects.length, 0);
+
+    await rhack(' ');
+
+    assert.equal(game.inventory.includes(wrapping), false);
+    assert.equal(game._polyself_cloak_after_more_letter, '');
+    assert.equal(game.level.objects.length, 1);
+    assert.equal(game.level.objects[0].kind, 'mummy wrapping');
+    assert.equal(game.level.objects[0].worn, false);
 });
 
 test('successful cloak-only gnome polyself returns deferred unpaid cloak to shop stock', async () => {
