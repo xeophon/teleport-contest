@@ -31,7 +31,8 @@ Added focused coverage in `test/shop-billing-helpers.test.mjs`:
 - The helper remains `tiphat()`-local and still does not replace full shared `domonnoise()`/`#chat` behavior.
 - Focused squawk, bellow-promotion, and no-message hiss canaries are covered by `docs/c-parity-audit/251-tiphat-sqawk-moo-hiss-2026-05-31.md`.
 - Focused trumpet wake and shriek aggravation canaries are covered by `docs/c-parity-audit/252-tiphat-wake-aggravate-2026-05-31.md`.
-- Shopkeeper, priest, quest, vampire, werecreature, Rider, Oracle, random laugh/groan, and hallucinated gecko branches remain open.
+- Focused laugh and groan canaries are covered by `docs/c-parity-audit/253-tiphat-laugh-groan-2026-05-31.md`.
+- Shopkeeper, priest, quest, vampire, werecreature, Rider, Oracle, and hallucinated gecko branches remain open.
 
 ## Verification
 

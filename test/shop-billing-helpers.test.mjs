@@ -3800,6 +3800,137 @@ test('deaf worn helmet tip at shrieker does not aggravate sleepers', async () =>
     assert.doesNotMatch(game._pending_message, /shrieks|Nothing happens|waves/);
 });
 
+test('worn helmet tip makes adjacent invisible leprechaun laugh randomly', async () => {
+    installStableNonShopFloorState();
+    initRng(5);
+    enableRngLog({ reset: true });
+    game.u.seeInvisible = false;
+    const targetLoc = game.level.at(6, 5);
+    const helmet = wornArmor(3063542, 'orcish helm', 'h');
+    const leprechaun = ordinaryThrowTarget('leprechaun', 6, 5, {
+        minvis: 1,
+        perminvis: 1,
+        msleeping: 0,
+        mcanmove: true,
+        mcansee: true,
+        mpeaceful: false,
+        mstrategy: 'waitforu',
+        data: { name: 'leprechaun', mlevel: 5, mlet: 'leprechaun' },
+    });
+    game.inventory = [helmet];
+    game.level.monsters = [leprechaun];
+    markSquareVisible(6, 5);
+
+    await enterTipCommand();
+    await rhack('h');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(leprechaun.mstrategy, 0);
+    assert.equal(targetLoc.map_invisible, true);
+    assert.match(game._pending_message, /You briefly doff your helm\./);
+    assert.match(game._pending_message, /It giggles\./);
+    assert.doesNotMatch(game._pending_message, /The leprechaun|doesn't respond|Nothing happens|waves/);
+    assert.deepEqual(getRngLog(), ['rn2(4)=0']);
+});
+
+test('worn helmet tip visible leprechaun uses humanoid response before laugh', async () => {
+    installNonShopFloorState();
+    const helmet = wornArmor(3063543, 'orcish helm', 'h');
+    const leprechaun = ordinaryThrowTarget('leprechaun', 6, 5, {
+        msleeping: 0,
+        mcanmove: true,
+        mcansee: true,
+        mpeaceful: false,
+        mstrategy: 'waitforu',
+        data: { name: 'leprechaun', mlevel: 5, mlet: 'leprechaun' },
+    });
+    game.inventory = [helmet];
+    game.level.monsters = [leprechaun];
+    markSquareVisible(6, 5);
+
+    await enterTipCommand();
+    await rhack('h');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(leprechaun.mstrategy, 0);
+    assert.match(game._pending_message, /You briefly doff your helm\./);
+    assert.match(game._pending_message, /The leprechaun .* at you\.\.\./);
+    assert.doesNotMatch(game._pending_message, /giggles|chuckles|snickers|laughs|doesn't respond|waves/);
+});
+
+test('worn helmet tip adjacent invisible zombie may groan', async () => {
+    installStableNonShopFloorState();
+    initRng(1);
+    enableRngLog({ reset: true });
+    game.u.seeInvisible = false;
+    const targetLoc = game.level.at(6, 5);
+    const helmet = wornArmor(3063544, 'orcish helm', 'h');
+    const zombie = ordinaryThrowTarget('human zombie', 6, 5, {
+        minvis: 1,
+        perminvis: 1,
+        msleeping: 0,
+        mcanmove: true,
+        mcansee: true,
+        mpeaceful: false,
+        mstrategy: 'waitforu',
+        data: { name: 'human zombie', mlevel: 4, mlet: 'Z' },
+    });
+    game.inventory = [helmet];
+    game.level.monsters = [zombie];
+    markSquareVisible(6, 5);
+
+    await enterTipCommand();
+    await rhack('h');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(zombie.mstrategy, 0);
+    assert.equal(targetLoc.map_invisible, true);
+    assert.match(game._pending_message, /You briefly doff your helm\./);
+    assert.match(game._pending_message, /It groans\./);
+    assert.doesNotMatch(game._pending_message, /The human zombie|doesn't respond|Nothing happens|waves/);
+    assert.deepEqual(getRngLog(), ['rn2(3)=0']);
+});
+
+test('worn helmet tip adjacent invisible zombie silent groan roll still consumes response', async () => {
+    installStableNonShopFloorState();
+    initRng(2);
+    enableRngLog({ reset: true });
+    game.u.seeInvisible = false;
+    const targetLoc = game.level.at(6, 5);
+    const helmet = wornArmor(3063545, 'orcish helm', 'h');
+    const zombie = ordinaryThrowTarget('human zombie', 6, 5, {
+        minvis: 1,
+        perminvis: 1,
+        msleeping: 0,
+        mcanmove: true,
+        mcansee: true,
+        mpeaceful: false,
+        mstrategy: 'waitforu',
+        data: { name: 'human zombie', mlevel: 4, mlet: 'Z' },
+    });
+    game.inventory = [helmet];
+    game.level.monsters = [zombie];
+    markSquareVisible(6, 5);
+
+    await enterTipCommand();
+    await rhack('h');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(zombie.mstrategy, 0);
+    assert.equal(targetLoc.map_invisible, true);
+    assert.match(game._pending_message, /^You briefly doff your helm\.$/);
+    assert.doesNotMatch(game._pending_message, /groans|doesn't respond|Nothing happens|waves/);
+    assert.deepEqual(getRngLog(), ['rn2(3)=1']);
+});
+
 test('unknown cursed worn helmet tip learns curse and spends action', async () => {
     installCommandShopState();
     const helmet = wornArmor(306352, 'orcish helm', 'h', 0, {

@@ -33720,8 +33720,9 @@ function tipHatMonsterResponsive(mon) {
 function tipHatMonsterHumanoid(mon) {
     const data = mon?.data || {};
     const mlet = data.mlet || mon?.mlet || '';
+    const name = String(data.name || mon?.name || '').toLowerCase();
     return !!(data.humanoid || data.human || mlet === 'humanoid' || mlet === 'human' || mlet === '@'
-        || data.name === 'human');
+        || data.name === 'human' || /^(gremlin|leprechaun)$/.test(name) || /\bzombie$/.test(name));
 }
 
 function tipHatMonsterPossessive(mon) {
@@ -33770,6 +33771,8 @@ function tipHatMonsterSound(mon) {
     if (explicit != null) return String(explicit).toLowerCase().replace(/^ms_/, '');
     const name = String(data.name || mon?.name || '').toLowerCase();
     const mlet = String(data.mlet || mon?.mlet || '').toLowerCase();
+    if (/^(gremlin|leprechaun)$/.test(name)) return 'laugh';
+    if (/\bzombie$/.test(name) || (mlet === 'zombie' && name !== 'ghoul')) return 'groan';
     if (name === 'shrieker') return 'shriek';
     if (/^(mumak|mastodon)$/.test(name)) return 'trumpet';
     if (/^(rothe|minotaur)$/.test(name)) return 'moo';
@@ -33919,6 +33922,8 @@ function tipHatMonsterNoise(mon, { visible = tipHatMonsterVisible(mon) } = {}) {
         return { handled: true, message: `${name} chirps.` };
     case 'wail':
         return { handled: true, message: `${name} wails mournfully.` };
+    case 'groan':
+        return { handled: true, message: rn2(3) ? '' : `${name} groans.` };
     case 'gurgle':
         return { handled: true, message: `${name} gurgles.` };
     case 'burble':
@@ -33930,6 +33935,10 @@ function tipHatMonsterNoise(mon, { visible = tipHatMonsterVisible(mon) } = {}) {
     case 'shriek':
         tipHatAggravateMonsters();
         return { handled: true, message: `${name} shrieks.` };
+    case 'laugh': {
+        const laughMessages = ['giggles.', 'chuckles.', 'snickers.', 'laughs.'];
+        return { handled: true, message: `${name} ${laughMessages[rn2(4)]}` };
+    }
     default:
         return { handled: false, message: '' };
     }

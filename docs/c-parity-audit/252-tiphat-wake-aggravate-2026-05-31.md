@@ -32,7 +32,8 @@ Added focused coverage in `test/shop-billing-helpers.test.mjs`:
 
 - The helper remains `tiphat()`-local and still does not replace full shared `domonnoise()`/`#chat` behavior.
 - The local aggravate helper operates over current level monsters; broader dungeon partition modeling such as the Wizard Tower split remains outside this slice.
-- Broader shopkeeper, priest, quest, vampire, werecreature, Rider, Oracle, random laugh/groan, and hallucinated gecko branches remain open.
+- Focused laugh and groan canaries are covered by `docs/c-parity-audit/253-tiphat-laugh-groan-2026-05-31.md`.
+- Broader shopkeeper, priest, quest, vampire, werecreature, Rider, Oracle, and hallucinated gecko branches remain open.
 - Generic monster-data `msound` generation remains incomplete; this slice only adds narrow source-backed name fallbacks for covered species.
 
 ## Verification

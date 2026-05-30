@@ -30,7 +30,8 @@ These canaries cover the C split between a real adjacent unseen responder with n
 - Focused full-moon, tame hunger, and dingo no-bark animal canaries are covered by `docs/c-parity-audit/250-tiphat-animal-hunger-moon-2026-05-31.md`.
 - Focused squawk, bellow-promotion, and no-message hiss canaries are covered by `docs/c-parity-audit/251-tiphat-sqawk-moo-hiss-2026-05-31.md`.
 - Focused trumpet wake and shriek aggravation canaries are covered by `docs/c-parity-audit/252-tiphat-wake-aggravate-2026-05-31.md`.
-- Broader shopkeeper, priest, quest, vampire, werecreature, Rider, Oracle, random laugh/groan, and hallucinated gecko special cases remain open.
+- Focused laugh and groan canaries are covered by `docs/c-parity-audit/253-tiphat-laugh-groan-2026-05-31.md`.
+- Broader shopkeeper, priest, quest, vampire, werecreature, Rider, Oracle, and hallucinated gecko special cases remain open.
 
 ## Verification
 
