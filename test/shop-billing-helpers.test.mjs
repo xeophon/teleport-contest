@@ -20899,6 +20899,55 @@ test('monster-thrown dart miss skips mulch check and lands', () => {
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
 });
 
+test('monster-thrown dagger hit applies rust monster passive object erosion before stacking', () => {
+    installNonShopFloorState();
+    initRng(1);
+    enableRngLog({ reset: true });
+    const cleanStack = { ...dagger(874340), letter: undefined, line: undefined, ox: 7, oy: 5 };
+    const thrown = { ...dagger(874341), letter: undefined, line: undefined };
+    game.level.objects = [cleanStack];
+    game.level.monsters = [ordinaryThrowTarget('rust monster', 7, 5, {
+        data: { name: 'rust monster', mlevel: 5 },
+    })];
+    markSquareVisible(7, 5);
+
+    const landing = landMonsterThrownObject(thrown, 7, 5, { messages: [], ohit: true });
+
+    assert.equal(landing.consumed, false);
+    assert.equal(landing.dropThrow.broken, false);
+    assert.equal(landing.passiveObj.type, 'rust');
+    assert.equal(landing.passiveObj.damaged, true);
+    assert.equal(landing.object.oeroded, 1);
+    assert.notEqual(landing.object, cleanStack);
+    assert.equal(cleanStack.quan, 1);
+    assert.equal(game.level.objects.length, 2);
+    assert.match(landing.messages.join(' '), /The dagger rusts!/);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
+});
+
+test('monster-thrown dagger miss skips rust monster passive object erosion and stacks', () => {
+    installNonShopFloorState();
+    initRng(1);
+    enableRngLog({ reset: true });
+    const cleanStack = { ...dagger(874342), letter: undefined, line: undefined, ox: 7, oy: 5 };
+    const thrown = { ...dagger(874343), letter: undefined, line: undefined };
+    game.level.objects = [cleanStack];
+    game.level.monsters = [ordinaryThrowTarget('rust monster', 7, 5, {
+        data: { name: 'rust monster', mlevel: 5 },
+    })];
+
+    const landing = landMonsterThrownObject(thrown, 7, 5, { messages: [], ohit: false });
+
+    assert.equal(landing.consumed, false);
+    assert.equal(landing.passiveObj.damaged, false);
+    assert.equal(cleanStack.oeroded || 0, 0);
+    assert.equal(landing.object, cleanStack);
+    assert.equal(cleanStack.quan, 2);
+    assert.equal(game.level.objects.length, 1);
+    assert.doesNotMatch(landing.messages.join(' '), /rusts/);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
+});
+
 test('projectile landing runs lava floor effects before sale or stacking', () => {
     const { shkp } = installShopState();
     game.level.at = () => ({ roomno: ROOMOFFSET, typ: LAVAPOOL });

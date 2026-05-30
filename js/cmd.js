@@ -28243,6 +28243,91 @@ function shouldMulchMonsterThrownMissile(obj) {
     return broken;
 }
 
+const MONSTER_PASSIVE_OBJECT_ATTACK_FALLBACKS = new Map([
+    ['acid blob', 'acid'],
+    ['green mold', 'acid'],
+    ['fire elemental', 'fire'],
+    ['fire vortex', 'fire'],
+    ['red mold', 'fire'],
+    ['rust monster', 'rust'],
+    ['black pudding', 'corr'],
+]);
+
+function normalizedPassiveObjectAttackType(type) {
+    const key = String(type || '').toLowerCase();
+    if (key === 'ad_fire' || key === 'fire') return 'fire';
+    if (key === 'ad_acid' || key === 'acid') return 'acid';
+    if (key === 'ad_rust' || key === 'rust') return 'rust';
+    if (key === 'ad_corr' || key === 'corr' || key === 'corrode') return 'corr';
+    if (key === 'ad_ench' || key === 'ench' || key === 'disenchant') return 'ench';
+    return '';
+}
+
+function passiveObjectAttackForMonster(mon) {
+    if (!mon) return '';
+    const attacks = [];
+    if (mon.attack) attacks.push(mon.attack);
+    if (Array.isArray(mon.attacks)) attacks.push(...mon.attacks);
+    if (mon.data?.attack) attacks.push(mon.data.attack);
+    if (Array.isArray(mon.data?.attacks)) attacks.push(...mon.data.attacks);
+    for (const attack of attacks) {
+        const aatyp = String(attack?.aatyp || attack?.type || '').toLowerCase();
+        if (aatyp !== 'none' && aatyp !== 'at_none' && aatyp !== 'passive') continue;
+        const adtyp = normalizedPassiveObjectAttackType(attack?.adtyp || attack?.damageType);
+        if (adtyp) return adtyp;
+    }
+    return MONSTER_PASSIVE_OBJECT_ATTACK_FALLBACKS.get(String(mon.data?.name || mon.name || '').toLowerCase()) || '';
+}
+
+function monsterAtSquareForPassiveObject(x, y) {
+    return (game.level?.monsters || []).find(mon =>
+        mon && mon.mx === x && mon.my === y && !mon.dead && (mon.mhp == null || mon.mhp > 0)) || null;
+}
+
+function erodeMonsterThrownPassiveObject(obj, type, messages) {
+    const profile = wishedDamageProfile(obj);
+    const erosion = type === 'rust'
+        ? { field: 'oeroded', word: 'rusty', action: 'rust' }
+        : type === 'corr' || type === 'acid'
+            ? { field: 'oeroded2', word: 'corroded', action: 'corrode' }
+            : type === 'fire'
+                ? { field: 'oeroded', word: 'burnt', action: 'smoulder' }
+                : null;
+    if (!erosion || !profile.erosionMatters || (erosion.field === 'oeroded' ? profile.primaryWord : profile.secondaryWord) !== erosion.word)
+        return { handled: !!erosion, damaged: false };
+    if ((type === 'rust' || type === 'corr' || type === 'acid') && obj.greased) {
+        if (!rn2(2)) obj.greased = false;
+        return { handled: true, damaged: false };
+    }
+    if (obj.oerodeproof || obj.rustproof) {
+        obj.rknown = true;
+        return { handled: true, damaged: false };
+    }
+    if (obj.blessed && !rnl(4)) return { handled: true, damaged: false };
+    const current = Math.min(3, obj[erosion.field] || 0);
+    if (current >= 3) return { handled: true, damaged: false };
+    const name = floorObjectBaseName(obj);
+    obj[erosion.field] = current + 1;
+    if (floorObjectVisible(obj.ox, obj.oy)) {
+        const adverb = obj[erosion.field] === 3 ? ' completely' : current ? ' further' : '';
+        messages.push(`The ${name} ${rustTrapNameVerb(name, `${erosion.action}s`, erosion.action)}${adverb}!`);
+    }
+    return { handled: true, damaged: true };
+}
+
+function applyMonsterThrownPassiveObject(landing, target, ohit, messages) {
+    if (!landing || !target || !ohit) return { handled: false, damaged: false };
+    const type = passiveObjectAttackForMonster(target);
+    if (!type || type === 'ench') return { handled: !!type, damaged: false, type };
+    if (type === 'fire' && (target.mcan || String(target.data?.name || target.name || '').toLowerCase() === 'steam vortex'))
+        return { handled: true, damaged: false, type };
+    if ((type === 'rust' || type === 'corr') && target.mcan)
+        return { handled: true, damaged: false, type };
+    if ((type === 'fire' || type === 'acid') && rn2(6))
+        return { handled: true, damaged: false, type };
+    return { ...erodeMonsterThrownPassiveObject(landing, type, messages), type };
+}
+
 export function landMonsterThrownObject(missile, x, y, {
     glyph = missile?.glyph || ')',
     color = missile?.color ?? CLR_CYAN,
@@ -28271,6 +28356,7 @@ export function landMonsterThrownObject(missile, x, y, {
             dropThrow,
         };
     }
+    const passiveTarget = monsterAtSquareForPassiveObject(x, y);
     const landing = {
         ...missile,
         ox: x,
@@ -28309,6 +28395,7 @@ export function landMonsterThrownObject(missile, x, y, {
             dropThrow,
         };
     }
+    const passiveObj = applyMonsterThrownPassiveObject(landing, passiveTarget, !!ohit, floorMessages);
     const stacked = stackMonsterThrownObject(landing);
     if (stacked === landing) game.level.objects.push(landing);
     newsym(x, y);
@@ -28319,6 +28406,7 @@ export function landMonsterThrownObject(missile, x, y, {
         shipObject,
         floorEffects: { consumed: false },
         dropThrow,
+        passiveObj,
     };
 }
 
