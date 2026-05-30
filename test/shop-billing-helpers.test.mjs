@@ -3262,6 +3262,179 @@ test('remembered invisible marker masks adjacent invisible dog response', async 
     assert.doesNotMatch(game._pending_message, /barks|growls|doesn't respond|waves/);
 });
 
+test('worn helmet tip makes dog howl on full moon at night', async () => {
+    installNonShopFloorState();
+    game.flags.moonphase = 4;
+    game._datetime = '20260531220000';
+    const helmet = wornArmor(3063523, 'orcish helm', 'h');
+    const dog = ordinaryThrowTarget('dog', 6, 5, {
+        msleeping: 0,
+        mcanmove: true,
+        mcansee: true,
+        mpeaceful: true,
+        mstrategy: 'waitforu',
+        data: { name: 'dog', mlevel: 4, mlet: 'dog', msound: 'bark' },
+    });
+    game.inventory = [helmet];
+    game.level.monsters = [dog];
+    markSquareVisible(6, 5);
+
+    await enterTipCommand();
+    await rhack('h');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(dog.mstrategy, 0);
+    assert.match(game._pending_message, /You briefly doff your helm\./);
+    assert.match(game._pending_message, /The dog howls\./);
+    assert.doesNotMatch(game._pending_message, /barks|growls|whines|doesn't respond|waves/);
+});
+
+test('worn helmet tip at peaceful dingo consumes silent no-bark response', async () => {
+    installNonShopFloorState();
+    const helmet = wornArmor(3063528, 'orcish helm', 'h');
+    const dingo = ordinaryThrowTarget('dingo', 6, 5, {
+        msleeping: 0,
+        mcanmove: true,
+        mcansee: true,
+        mpeaceful: true,
+        mstrategy: 'waitforu',
+        data: { name: 'dingo', mlevel: 4, mlet: 'dog', msound: 'bark' },
+    });
+    game.inventory = [helmet];
+    game.level.monsters = [dingo];
+    markSquareVisible(6, 5);
+
+    await enterTipCommand();
+    await rhack('h');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(dingo.mstrategy, 0);
+    assert.match(game._pending_message, /You briefly doff your helm\./);
+    assert.doesNotMatch(game._pending_message, /dingo|barks|growls|doesn't respond|Nothing happens|waves/);
+});
+
+test('worn helmet tip makes hungry tame dog whine', async () => {
+    installNonShopFloorState();
+    game.moves = 100;
+    const helmet = wornArmor(3063524, 'orcish helm', 'h');
+    const dog = ordinaryThrowTarget('dog', 6, 5, {
+        msleeping: 0,
+        mcanmove: true,
+        mcansee: true,
+        mtame: 5,
+        mpeaceful: true,
+        mstrategy: 'waitforu',
+        mextra: { edog: { hungrytime: 50 } },
+        data: { name: 'dog', mlevel: 4, mlet: 'dog', msound: 'bark' },
+    });
+    game.inventory = [helmet];
+    game.level.monsters = [dog];
+    markSquareVisible(6, 5);
+
+    await enterTipCommand();
+    await rhack('h');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(dog.mstrategy, 0);
+    assert.match(game._pending_message, /You briefly doff your helm\./);
+    assert.match(game._pending_message, /The dog whines\./);
+    assert.doesNotMatch(game._pending_message, /barks|yips|doesn't respond|waves/);
+});
+
+test('worn helmet tip makes well-fed tame dog yip', async () => {
+    installNonShopFloorState();
+    game.moves = 100;
+    const helmet = wornArmor(3063525, 'orcish helm', 'h');
+    const dog = ordinaryThrowTarget('dog', 6, 5, {
+        msleeping: 0,
+        mcanmove: true,
+        mcansee: true,
+        mtame: 5,
+        mpeaceful: true,
+        mstrategy: 'waitforu',
+        mextra: { edog: { hungrytime: 1200 } },
+        data: { name: 'dog', mlevel: 4, mlet: 'dog', msound: 'bark' },
+    });
+    game.inventory = [helmet];
+    game.level.monsters = [dog];
+    markSquareVisible(6, 5);
+
+    await enterTipCommand();
+    await rhack('h');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(dog.mstrategy, 0);
+    assert.match(game._pending_message, /You briefly doff your helm\./);
+    assert.match(game._pending_message, /The dog yips\./);
+    assert.doesNotMatch(game._pending_message, /barks|whines|doesn't respond|waves/);
+});
+
+test('worn helmet tip uses tame cat hunger and satiety noises', async () => {
+    installNonShopFloorState();
+    game.moves = 100;
+    const helmet = wornArmor(3063526, 'orcish helm', 'h');
+    const kitten = ordinaryThrowTarget('kitten', 6, 5, {
+        msleeping: 0,
+        mcanmove: true,
+        mcansee: true,
+        mtame: 5,
+        mpeaceful: true,
+        mstrategy: 'waitforu',
+        mextra: { edog: { hungrytime: 50 } },
+        data: { name: 'kitten', mlevel: 2, mlet: 'feline', msound: 'mew' },
+    });
+    game.inventory = [helmet];
+    game.level.monsters = [kitten];
+    markSquareVisible(6, 5);
+
+    await enterTipCommand();
+    await rhack('h');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(kitten.mstrategy, 0);
+    assert.match(game._pending_message, /You briefly doff your helm\./);
+    assert.match(game._pending_message, /The kitten meows\./);
+    assert.doesNotMatch(game._pending_message, /mews|purrs|yowls|doesn't respond|waves/);
+
+    installNonShopFloorState();
+    game.moves = 100;
+    const otherHelmet = wornArmor(3063527, 'orcish helm', 'h');
+    const satiatedKitten = ordinaryThrowTarget('kitten', 6, 5, {
+        msleeping: 0,
+        mcanmove: true,
+        mcansee: true,
+        mtame: 5,
+        mpeaceful: true,
+        mstrategy: 'waitforu',
+        mextra: { edog: { hungrytime: 1200 } },
+        data: { name: 'kitten', mlevel: 2, mlet: 'feline', msound: 'mew' },
+    });
+    game.inventory = [otherHelmet];
+    game.level.monsters = [satiatedKitten];
+    markSquareVisible(6, 5);
+
+    await enterTipCommand();
+    await rhack('h');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(satiatedKitten.mstrategy, 0);
+    assert.match(game._pending_message, /You briefly doff your helm\./);
+    assert.match(game._pending_message, /The kitten purrs\./);
+    assert.doesNotMatch(game._pending_message, /mews|meows|yowls|doesn't respond|waves/);
+});
+
 test('unknown cursed worn helmet tip learns curse and spends action', async () => {
     installCommandShopState();
     const helmet = wornArmor(306352, 'orcish helm', 'h', 0, {

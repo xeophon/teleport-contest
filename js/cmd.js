@@ -33784,26 +33784,53 @@ function tipHatMonsterSound(mon) {
     return '';
 }
 
+function tipHatIsNight() {
+    if (game.flags?.night || game.flags?.isnight) return true;
+    const hourValue = game.flags?.hour ?? game.hour ?? game.context?.hour;
+    const datetime = String(game._datetime || '');
+    const hour = hourValue == null
+        ? (/^\d{10}/.test(datetime) ? Number(datetime.slice(8, 10)) : NaN)
+        : Number(hourValue);
+    return Number.isFinite(hour) && (hour < 6 || hour > 21);
+}
+
+function tipHatMonsterHungryTime(mon) {
+    return Number(mon?.hungrytime ?? mon?.hungryTime ?? mon?.edog?.hungrytime
+        ?? mon?.mextra?.edog?.hungrytime ?? NaN);
+}
+
 function tipHatMonsterNoise(mon, { visible = tipHatMonsterVisible(mon) } = {}) {
     if (!mon || heroIsDeaf() || tipHatMonsterSilent(mon)) return { handled: false, message: '' };
     const name = visible ? fireScrollMonsterName(mon) : 'It';
     const sound = tipHatMonsterSound(mon);
     const peaceful = !!mon.mpeaceful;
+    const tame = Number(mon.mtame || 0);
+    const moves = Number(game.moves ?? game.context?.moves ?? 0);
+    const hungryTime = tipHatMonsterHungryTime(mon);
     switch (sound) {
     case 'bark': {
         const monName = String(mon?.data?.name || mon?.name || '').toLowerCase();
+        if (game.flags?.moonphase === 4 && tipHatIsNight())
+            return { handled: true, message: `${name} howls.` };
         if (peaceful) {
             if (monName === 'dingo') return { handled: true, message: '' };
-            if (mon.mtame && (mon.mconf || mon.mflee || mon.mtrapped || mon.mtame < 5))
+            if (tame && (mon.mconf || mon.mflee || mon.mtrapped
+                || (Number.isFinite(hungryTime) && moves > hungryTime) || tame < 5))
                 return { handled: true, message: `${name} whines.` };
+            if (tame && Number.isFinite(hungryTime) && hungryTime > moves + 1000)
+                return { handled: true, message: `${name} yips.` };
             return { handled: true, message: `${name} barks.` };
         }
         return { handled: true, message: `${name} growls.` };
     }
     case 'mew':
-        if (mon.mtame) {
-            if (mon.mconf || mon.mflee || mon.mtrapped || mon.mtame < 5)
+        if (tame) {
+            if (mon.mconf || mon.mflee || mon.mtrapped || tame < 5)
                 return { handled: true, message: `${name} yowls.` };
+            if (Number.isFinite(hungryTime) && moves > hungryTime)
+                return { handled: true, message: `${name} meows.` };
+            if (Number.isFinite(hungryTime) && hungryTime > moves + 1000)
+                return { handled: true, message: `${name} purrs.` };
             return { handled: true, message: `${name} mews.` };
         }
         return { handled: true, message: `${name} ${peaceful ? 'snarls.' : 'growls!'}` };
@@ -33823,9 +33850,6 @@ function tipHatMonsterNoise(mon, { visible = tipHatMonsterVisible(mon) } = {}) {
     case 'grunt':
         return { handled: true, message: `${name} grunts.` };
     case 'neigh': {
-        const tame = Number(mon.mtame || 0);
-        const moves = Number(game.moves ?? game.context?.moves ?? 0);
-        const hungryTime = Number(mon.hungrytime ?? mon.hungryTime ?? mon.edog?.hungrytime ?? NaN);
         if (tame < 5) return { handled: true, message: `${name} neighs.` };
         if (Number.isFinite(hungryTime) && moves > hungryTime)
             return { handled: true, message: `${name} whinnies.` };
