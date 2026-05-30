@@ -8694,6 +8694,39 @@ test('successful no-hands polyself drops shield helm and boots but keeps amulet'
     assert.equal(game.level.objects.some(obj => obj.cls === 'amulet'), false);
 });
 
+test('successful no-hands polyself drops Archeologist fedora and removes luck', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    game._startup_role = 'Archeologist';
+    game.urole = { name: { m: 'Archeologist' } };
+    Object.assign(game.u, {
+        uhp: 40,
+        uhpmax: 40,
+        uen: 0,
+        uenmax: 0,
+        ulevel: 1,
+        uac: 9,
+        uluck: 0,
+    });
+    const fedora = wornArmor(32086, 'fedora', 'f');
+    game.inventory = [fedora];
+
+    await debugPolyselfInto('wererat');
+
+    const pending = game._pending_message || '';
+    assert.equal(game.u._polyself_form?.name, 'wererat');
+    assert.match(pending, /Your hat falls to the ground!/);
+    assert.equal(game.u.uluck, -1);
+    assert.equal(game.inventory.includes(fedora), false);
+    assert.equal(game.u.uac, game.u._polyself_form?.mac ?? 10);
+    assert.equal(game.level.objects.length, 1);
+    const floorHat = game.level.objects[0];
+    assert.equal(floorHat.kind, 'fedora');
+    assert.equal(floorHat.worn, false);
+    assert.equal(floorHat.ox, game.u.ux);
+    assert.equal(floorHat.oy, game.u.uy);
+});
+
 test('successful centaur polyself pushes off unpaid speed boots in shop', async () => {
     const { shkp } = installCommandShopState();
     initRng(1);
