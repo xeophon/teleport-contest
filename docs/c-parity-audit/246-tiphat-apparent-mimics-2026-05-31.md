@@ -22,7 +22,8 @@ Added focused coverage in `test/shop-billing-helpers.test.mjs`:
 
 ## Remaining Gaps
 
-- Steed `domonnoise()`, adjacent unseen responsive monsters, hallucinated/statue behavior, and the broader nonhumanoid sound table remain incomplete.
+- Steed `domonnoise()`, adjacent unseen responsive monsters, and the broader nonhumanoid sound table remain incomplete.
+- Hallucinated actual floor-statue scan behavior is covered separately in `docs/c-parity-audit/247-tiphat-hallucinated-statues-2026-05-31.md`.
 - Furniture mimic generation is still only partially modeled; the canary covers the directed `tiphat()` filter for existing `m_ap_type` state.
 - Forced-chest mimic wake-preservation follow-ups remain separate from this command scan behavior.
 

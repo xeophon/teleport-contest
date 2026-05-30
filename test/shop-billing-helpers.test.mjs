@@ -3060,6 +3060,58 @@ test('worn helmet tip skips visible furniture mimic and falls through', async ()
     assert.doesNotMatch(game._pending_message, /large mimic|doesn't respond|really/);
 });
 
+test('hallucinating worn helmet tip treats floor statue as ignoring creature', async () => {
+    installNonShopFloorState();
+    game.u.hallucinating = true;
+    const helmet = wornArmor(3063514, 'orcish helm', 'h');
+    const statue = statueTrapStatue(3063515, 6, 5, 'goblin');
+    game.inventory = [helmet];
+    game.level.objects = [statue];
+    markSquareVisible(6, 5);
+
+    await enterTipCommand();
+    await rhack('h');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.level.objects.includes(statue), true);
+    assert.match(game._pending_message, /You briefly doff your helm\./);
+    assert.match(game._pending_message, /That creature is ignoring you!/);
+    assert.doesNotMatch(game._pending_message, /Nothing happens|unseen creature/);
+});
+
+test('nonhallucinating worn helmet tip scans past floor statue', async () => {
+    installNonShopFloorState();
+    game.u.hallucinating = false;
+    const helmet = wornArmor(3063516, 'orcish helm', 'h');
+    const statue = statueTrapStatue(3063517, 6, 5, 'goblin');
+    const soldier = ordinaryThrowTarget('soldier', 7, 5, {
+        msleeping: 0,
+        mcanmove: true,
+        mcansee: true,
+        mstrategy: 'waitforu',
+        data: { name: 'soldier', mlevel: 1, humanoid: true },
+    });
+    game.inventory = [helmet];
+    game.level.objects = [statue];
+    game.level.monsters = [soldier];
+    markSquareVisible(6, 5);
+    markSquareVisible(7, 5);
+
+    await enterTipCommand();
+    await rhack('h');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.level.objects.includes(statue), true);
+    assert.equal(soldier.mstrategy, 0);
+    assert.match(game._pending_message, /You briefly doff your helm\./);
+    assert.match(game._pending_message, /The soldier waves\./);
+    assert.doesNotMatch(game._pending_message, /creature is ignoring|Nothing happens/);
+});
+
 test('unknown cursed worn helmet tip learns curse and spends action', async () => {
     installCommandShopState();
     const helmet = wornArmor(306352, 'orcish helm', 'h', 0, {

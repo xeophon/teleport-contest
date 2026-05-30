@@ -33768,9 +33768,11 @@ function tipHatDirectedResponse(dir) {
     let y = game.u?.uy || 0;
     let target = null;
     let unseen = false;
+    let statue = false;
     for (let range = 1; range <= BOLT_LIM + 1; range++) {
         x += dir.dx;
         y += dir.dy;
+        statue = false;
         if (!isok(x, y) || (range > 1 && !couldsee(x, y))) break;
         const monHere = (game.level?.monsters || []).find(mon => mon.mx === x && mon.my === y && !mon.dead);
         if (monHere) {
@@ -33783,9 +33785,12 @@ function tipHatDirectedResponse(dir) {
         const loc = game.level?.at?.(x, y);
         unseen = !!loc?.map_invisible;
         if (unseen) break;
+        statue = !!floorStatueAt(x, y);
+        if (statue && heroIsHallucinating()) break;
         if (!loc || (!(ACCESSIBLE(loc.typ) || loc.typ === IRONBARS))) break;
     }
-    if (unseen) return 'That unseen creature is ignoring you!';
+    if (unseen || (statue && heroIsHallucinating()))
+        return `That ${unseen ? 'unseen ' : ''}creature is ignoring you!`;
     if (!target || !tipHatMonsterResponsive(target)) return 'Nothing happens.';
 
     if (Number.isInteger(target.mstrategy)) target.mstrategy &= ~STRAT_WAITMASK;
