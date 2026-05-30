@@ -11242,6 +11242,16 @@ function polyselfWornBlindfoldOrTowelItem() {
         isWornInventoryItem(item) && ['blindfold', 'towel'].includes(objectKindKey(item)));
 }
 
+function polyselfWornShirtItem() {
+    return (game.inventory || []).find(item =>
+        item?.cls === 'armor' && isWornInventoryItem(item)
+        && ['hawaiian shirt', 't-shirt'].includes(objectKindKey(item)));
+}
+
+function polyselfFormSlipsArmor(form) {
+    return !!(form?.verysmall || form?.whirly || form?.noncorporeal);
+}
+
 function polyselfEyewearFalloffName(item) {
     const kind = objectKindKey(item);
     if (kind === 'lenses') return 'lenses';
@@ -11264,6 +11274,14 @@ function polyselfEquipmentFalloutForForm(form, { bodyArmor = null } = {}) {
     };
 
     addItem(bodyArmor);
+    if (polyselfFormSlipsArmor(form)) {
+        const shirt = polyselfWornShirtItem();
+        if (shirt) {
+            messages.push(form?.whirly ? 'You seep right through your shirt!' : 'You become much too small for your shirt!');
+            addItem(shirt);
+        }
+    }
+
     if (form?.nohands || form?.verysmall) {
         const gloves = polyselfWornArmorMatching(/glove|gauntlet/);
         const weapon = polyselfWieldedWeaponItem();

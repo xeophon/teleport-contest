@@ -8327,6 +8327,40 @@ test('successful no-hands polyself drops worn gloves and wielded weapon but keep
     assert.equal(game.level.objects.some(obj => obj.cls === 'ring'), false);
 });
 
+test('successful very small polyself slips out of worn shirt before no-hands fallout', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, {
+        uhp: 40,
+        uhpmax: 40,
+        uen: 0,
+        uenmax: 0,
+        ulevel: 1,
+        uac: 10,
+    });
+    const shirt = wornArmor(32057, 'T-shirt', 't');
+    const shield = wornArmor(32058, 'small shield', 's');
+    game.inventory = [shirt, shield];
+
+    await debugPolyselfInto('wererat');
+
+    assert.equal(game.u._polyself_form?.name, 'wererat');
+    assert.match(game._pending_message || '', /You become much too small for your shirt!/);
+    assert.match(game._pending_message || '', /You can no longer hold your shield!/);
+    assert.ok((game._pending_message || '').indexOf('You become much too small for your shirt!')
+        < (game._pending_message || '').indexOf('You can no longer hold your shield!'));
+    assert.equal(game.inventory.includes(shirt), false);
+    assert.equal(game.inventory.includes(shield), false);
+    assert.deepEqual(game.level.objects.map(obj => obj.kind || obj.actualKind).sort(), [
+        'T-shirt',
+        'small shield',
+    ]);
+    for (const obj of game.level.objects) {
+        assert.equal(obj.ox, game.u.ux);
+        assert.equal(obj.oy, game.u.uy);
+    }
+});
+
 test('successful no-hands polyself drops shield helm and boots but keeps amulet', async () => {
     installNonShopFloorState();
     initRng(1);
