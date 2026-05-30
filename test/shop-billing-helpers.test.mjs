@@ -8340,6 +8340,160 @@ test('successful no-hands polyself drops worn gloves and wielded weapon but keep
     assert.equal(game.level.objects.some(obj => obj.cls === 'ring'), false);
 });
 
+test('successful no-hands polyself names droppable wielded dagger', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, {
+        uhp: 40,
+        uhpmax: 40,
+        uen: 0,
+        uenmax: 0,
+        ulevel: 1,
+        uac: 10,
+    });
+    const dagger = wieldedWeapon(32110, 'dagger', 'w');
+    game.inventory = [dagger];
+
+    await debugPolyselfInto('wererat');
+
+    const pending = game._pending_message || '';
+    assert.match(pending, /You turn into a wererat!/);
+    assert.match(pending, /You find you must drop your dagger!/);
+    assert.equal(game.inventory.includes(dagger), false);
+    assert.equal(game.level.objects.length, 1);
+    assert.equal(game.level.objects[0].kind, 'dagger');
+    assert.equal(game.level.objects[0].wielded, false);
+});
+
+test('successful no-hands polyself releases cursed wielded dagger', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, {
+        uhp: 40,
+        uhpmax: 40,
+        uen: 0,
+        uenmax: 0,
+        ulevel: 1,
+        uac: 10,
+    });
+    const dagger = {
+        ...wieldedWeapon(32111, 'dagger', 'w'),
+        cursed: true,
+        bknown: false,
+        line: 'w - a +0 dagger (weapon in right hand)',
+    };
+    game.inventory = [dagger];
+
+    await debugPolyselfInto('wererat');
+
+    const pending = game._pending_message || '';
+    assert.match(pending, /You turn into a wererat!/);
+    assert.match(pending, /You find you must release your dagger!/);
+    assert.equal(game.inventory.includes(dagger), true);
+    assert.equal(dagger.wielded, false);
+    assert.equal(dagger.bknown, true);
+    assert.match(dagger.line, /cursed \+0 dagger/);
+    assert.doesNotMatch(dagger.line, /weapon in/);
+    assert.equal(game.level.objects.some(obj => obj.kind === 'dagger'), false);
+});
+
+test('successful no-hands polyself releases cursed wielded dagger while dropping gloves', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, {
+        uhp: 40,
+        uhpmax: 40,
+        uen: 0,
+        uenmax: 0,
+        ulevel: 1,
+        uac: 10,
+    });
+    const gloves = wornArmor(32112, 'leather gloves', 'g');
+    const dagger = {
+        ...wieldedWeapon(32113, 'dagger', 'w'),
+        cursed: true,
+        bknown: false,
+        line: 'w - a +0 dagger (weapon in right hand)',
+    };
+    game.inventory = [gloves, dagger];
+
+    await debugPolyselfInto('wererat');
+
+    const pending = game._pending_message || '';
+    assert.match(pending, /You turn into a wererat!/);
+    assert.match(pending, /You drop your gloves and weapon!/);
+    assert.equal(game.inventory.includes(gloves), false);
+    assert.equal(game.inventory.includes(dagger), true);
+    assert.equal(dagger.wielded, false);
+    assert.equal(dagger.bknown, true);
+    assert.equal(game.level.objects.length, 1);
+    assert.equal(game.level.objects[0].kind, 'leather gloves');
+});
+
+test('successful no-hands polyself drops uncursed wielded loadstone as cursed stone', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, {
+        uhp: 40,
+        uhpmax: 40,
+        uen: 0,
+        uenmax: 0,
+        ulevel: 1,
+        uac: 10,
+    });
+    const stone = carriedLoadstone(32114, 'l', {
+        cursed: false,
+        bknown: false,
+        wielded: true,
+        line: 'l - a loadstone (weapon in right hand)',
+    });
+    game.inventory = [stone];
+
+    await debugPolyselfInto('wererat');
+
+    const pending = game._pending_message || '';
+    assert.match(pending, /You turn into a wererat!/);
+    assert.match(pending, /You find you must drop your stone!/);
+    assert.equal(game.inventory.includes(stone), false);
+    assert.equal(game.level.objects.length, 1);
+    assert.equal(game.level.objects[0].kind, 'loadstone');
+    assert.equal(game.level.objects[0].wielded, false);
+    assert.equal(game.level.objects[0].cursed, true);
+    assert.equal(game.level.objects[0].bknown, false);
+});
+
+test('successful no-hands polyself releases cursed wielded loadstone', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, {
+        uhp: 40,
+        uhpmax: 40,
+        uen: 0,
+        uenmax: 0,
+        ulevel: 1,
+        uac: 10,
+    });
+    const stone = carriedLoadstone(32115, 'l', {
+        cursed: true,
+        bknown: false,
+        wielded: true,
+        line: 'l - a loadstone (weapon in right hand)',
+    });
+    game.inventory = [stone];
+
+    await debugPolyselfInto('wererat');
+
+    const pending = game._pending_message || '';
+    assert.match(pending, /You turn into a wererat!/);
+    assert.match(pending, /You find you must release your stone!/);
+    assert.equal(game.inventory.includes(stone), true);
+    assert.equal(stone.wielded, false);
+    assert.equal(stone.cursed, true);
+    assert.equal(stone.bknown, true);
+    assert.doesNotMatch(stone.line, /weapon in/);
+    assert.equal(game.level.objects.some(obj => obj.kind === 'loadstone'), false);
+});
+
 test('successful very small polyself slips out of worn shirt before no-hands fallout', async () => {
     installNonShopFloorState();
     initRng(1);
@@ -8636,7 +8790,7 @@ test('successful whirly polyself drops no-hands gear after sliparm fallout', asy
     assert.match(pending, /You can no longer hold your shield!/);
     assert.match(pending, /Your helm falls to the floor!/);
     assert.match(pending, /Your boots fall away!/);
-    assert.match(pending, /You find you must drop your weapon!/);
+    assert.match(pending, /You find you must drop your dagger!/);
     assert.ok(pending.indexOf('Your armor falls around you!')
         < pending.indexOf('Your cloak falls, unsupported!'));
     assert.ok(pending.indexOf('Your cloak falls, unsupported!')
@@ -8648,7 +8802,7 @@ test('successful whirly polyself drops no-hands gear after sliparm fallout', asy
     assert.ok(pending.indexOf('Your helm falls to the floor!')
         < pending.indexOf('Your boots fall away!'));
     assert.ok(pending.indexOf('Your boots fall away!')
-        < pending.indexOf('You find you must drop your weapon!'));
+        < pending.indexOf('You find you must drop your dagger!'));
     for (const item of [body, cloak, shirt, shield, helm, boots, dagger]) {
         assert.equal(game.inventory.includes(item), false);
     }

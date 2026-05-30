@@ -11262,7 +11262,32 @@ function polyselfWornArmorMatching(pattern) {
 
 function polyselfWieldedWeaponItem() {
     return (game.inventory || []).find(item =>
-        item && item.cls === 'weapon' && itemIsWielded(item));
+        item && (item.cls === 'weapon' || isLoadstoneObject(item)) && itemIsWielded(item));
+}
+
+function polyselfWieldedWeaponCanDrop(item) {
+    if (!item) return false;
+    if ((item.cls === 'weapon' || isLoadstoneObject(item)) && item.cursed) {
+        item.bknown = true;
+        return false;
+    }
+    return true;
+}
+
+function polyselfWieldedWeaponDescription(item) {
+    const kind = objectKindKey(item);
+    if (isLoadstoneObject(item)) return 'stone';
+    if (/\bsword\b/.test(kind)) return 'sword';
+    if (/\bdagger\b/.test(kind)) return 'dagger';
+    if (/\bcorpse\b/.test(kind)) return 'corpse';
+    return 'weapon';
+}
+
+function releasePolyselfWieldedItem(item) {
+    if (!item) return;
+    item.wielded = false;
+    item.alternate = false;
+    refreshInventoryObjectLine(item);
 }
 
 function polyselfFormHasNoHead(form) {
@@ -11467,12 +11492,21 @@ function clearPolyselfEyewearState(item, form) {
 function polyselfEquipmentFalloutForForm(form, { bodyArmor = null } = {}) {
     const items = [];
     const destroyedItems = [];
+    const releasedItems = [];
     const messages = [];
     const addItem = item => {
         if (item && !items.includes(item)) items.push(item);
     };
     const addDestroyedItem = item => {
         if (item && !destroyedItems.includes(item)) destroyedItems.push(item);
+    };
+    const addReleasedItem = item => {
+        if (item && !releasedItems.includes(item)) releasedItems.push(item);
+    };
+    const addDroppedOrReleasedWeapon = weapon => {
+        if (!weapon) return;
+        if (polyselfWieldedWeaponCanDrop(weapon)) addItem(weapon);
+        else addReleasedItem(weapon);
     };
 
     if (polyselfFormBreaksArmor(form)) {
@@ -11547,7 +11581,7 @@ function polyselfEquipmentFalloutForForm(form, { bodyArmor = null } = {}) {
         const weapon = polyselfWieldedWeaponItem();
         if (gloves) {
             messages.push(`You drop your gloves${weapon ? ' and weapon' : ''}!`);
-            addItem(weapon);
+            addDroppedOrReleasedWeapon(weapon);
             addItem(gloves);
         }
 
@@ -11577,8 +11611,11 @@ function polyselfEquipmentFalloutForForm(form, { bodyArmor = null } = {}) {
         const gloves = polyselfWornArmorMatching(/glove|gauntlet/);
         const weapon = polyselfWieldedWeaponItem();
         if (!gloves && weapon) {
-            messages.push('You find you must drop your weapon!');
-            addItem(weapon);
+            const canDrop = polyselfWieldedWeaponCanDrop(weapon);
+            const which = polyselfWieldedWeaponDescription(weapon);
+            messages.push(`You find you must ${canDrop ? 'drop' : 'release'} ${which === 'corpse' ? 'the' : 'your'} ${which}!`);
+            if (canDrop) addItem(weapon);
+            else addReleasedItem(weapon);
         }
     }
 
@@ -11591,7 +11628,7 @@ function polyselfEquipmentFalloutForForm(form, { bodyArmor = null } = {}) {
         }
     }
 
-    return { items, destroyedItems, messages };
+    return { items, destroyedItems, releasedItems, messages };
 }
 
 function otherWornFastEquipment(item) {
@@ -11706,13 +11743,21 @@ function destroyPolyselfEquipmentItems(items) {
     if (changed) updateReflectionFromInventory();
 }
 
+function releasePolyselfEquipmentItems(items) {
+    for (const item of items || []) {
+        if (!(game.inventory || []).includes(item)) continue;
+        releasePolyselfWieldedItem(item);
+    }
+}
+
 function applyPolyselfEquipmentFallout(fallout, floorMessages = [], form = polyselfForm()) {
     destroyPolyselfEquipmentItems(fallout?.destroyedItems);
+    releasePolyselfEquipmentItems(fallout?.releasedItems);
     dropPolyselfEquipmentItems(fallout?.items, floorMessages, form);
 }
 
 function polyselfFalloutHasEffects(fallout) {
-    return !!(fallout?.items?.length || fallout?.destroyedItems?.length || fallout?.messages?.length);
+    return !!(fallout?.items?.length || fallout?.destroyedItems?.length || fallout?.releasedItems?.length || fallout?.messages?.length);
 }
 
 function polyselfBasePersistentBlindness(base) {
@@ -11921,6 +11966,7 @@ function becomeMonster(name) {
         game._topline_more_after_more = 1;
         game._polyself_drop_items_after_overload_more = 1;
         game._polyself_drop_items_after_overload_items = fallout.items;
+        game._polyself_release_items_after_overload_items = fallout.releasedItems;
         game._polyself_drop_items_after_overload_message = fallout.messages.join('  ');
         game._polyself_drop_items_after_overload_ac = 9;
         game.u.uac = game.u._polyself_base?.uac ?? game.u.uac ?? 10;
@@ -44246,8 +44292,13 @@ export async function rhack(_cmd) {
                 const dropItems = Array.isArray(queuedItems)
                     ? queuedItems
                     : [...(game.inventory || [])].filter(item => new Set(['c', 'd', 'f', 'z']).has(item.letter));
+                const releaseItems = Array.isArray(game._polyself_release_items_after_overload_items)
+                    ? game._polyself_release_items_after_overload_items
+                    : [];
+                releasePolyselfEquipmentItems(releaseItems);
                 dropPolyselfEquipmentItems(dropItems, floorMessages);
                 game._polyself_drop_items_after_overload_items = null;
+                game._polyself_release_items_after_overload_items = null;
                 if (game.u) game.u.uac = game._polyself_drop_items_after_overload_ac ?? 9;
                 game._polyself_drop_items_after_overload_ac = null;
                 newsym(game.u?.ux || 0, game.u?.uy || 0);
