@@ -29,8 +29,8 @@ Added focused coverage in `test/shop-billing-helpers.test.mjs`:
 ## Remaining Gaps
 
 - The helper remains `tiphat()`-local and still does not replace full shared `domonnoise()`/`#chat` behavior.
-- Shopkeeper, priest, quest, vampire, werecreature, Rider, Oracle, wake/aggravate, squawk, bellow-promotion, random laugh/groan, and hallucinated gecko branches remain open.
-- Invisible no-message responder mapping before silent/peaceful no-sound branches remains open outside the covered dingo visible path.
+- Focused squawk, bellow-promotion, and no-message hiss canaries are covered by `docs/c-parity-audit/251-tiphat-sqawk-moo-hiss-2026-05-31.md`.
+- Shopkeeper, priest, quest, vampire, werecreature, Rider, Oracle, wake/aggravate, random laugh/groan, and hallucinated gecko branches remain open.
 
 ## Verification
 

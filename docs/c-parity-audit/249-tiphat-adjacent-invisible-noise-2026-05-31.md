@@ -28,7 +28,8 @@ These canaries cover the C split between a real adjacent unseen responder with n
 
 - The helper remains `tiphat()`-local and still does not implement full shared `domonnoise()`/`#chat` behavior.
 - Focused full-moon, tame hunger, and dingo no-bark animal canaries are covered by `docs/c-parity-audit/250-tiphat-animal-hunger-moon-2026-05-31.md`.
-- Broader shopkeeper, priest, quest, vampire, werecreature, Rider, Oracle, wake/aggravate, squawk, bellow-promotion, random laugh/groan, and hallucinated gecko special cases remain open.
+- Focused squawk, bellow-promotion, and no-message hiss canaries are covered by `docs/c-parity-audit/251-tiphat-sqawk-moo-hiss-2026-05-31.md`.
+- Broader shopkeeper, priest, quest, vampire, werecreature, Rider, Oracle, wake/aggravate, random laugh/groan, and hallucinated gecko special cases remain open.
 
 ## Verification
 

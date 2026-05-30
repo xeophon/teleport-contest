@@ -3312,6 +3312,7 @@ test('worn helmet tip at peaceful dingo consumes silent no-bark response', async
 
     assert.equal(game._command_mode, null);
     assert.equal(game.context.move, 1);
+    assert.equal(game._message_more || 0, 0);
     assert.equal(dingo.mstrategy, 0);
     assert.match(game._pending_message, /You briefly doff your helm\./);
     assert.doesNotMatch(game._pending_message, /dingo|barks|growls|doesn't respond|Nothing happens|waves/);
@@ -3433,6 +3434,236 @@ test('worn helmet tip uses tame cat hunger and satiety noises', async () => {
     assert.match(game._pending_message, /You briefly doff your helm\./);
     assert.match(game._pending_message, /The kitten purrs\./);
     assert.doesNotMatch(game._pending_message, /mews|meows|yowls|doesn't respond|waves/);
+});
+
+test('worn helmet tip makes hostile raven say nevermore', async () => {
+    installNonShopFloorState();
+    const helmet = wornArmor(3063529, 'orcish helm', 'h');
+    const raven = ordinaryThrowTarget('raven', 6, 5, {
+        msleeping: 0,
+        mcanmove: true,
+        mcansee: true,
+        mpeaceful: false,
+        mstrategy: 'waitforu',
+        data: { name: 'raven', mlevel: 4, mlet: 'bird' },
+    });
+    game.inventory = [helmet];
+    game.level.monsters = [raven];
+    markSquareVisible(6, 5);
+
+    await enterTipCommand();
+    await rhack('h');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(raven.mstrategy, 0);
+    assert.match(game._pending_message, /You briefly doff your helm\./);
+    assert.match(game._pending_message, /"Nevermore!"/);
+    assert.doesNotMatch(game._pending_message, /The raven squawks|doesn't respond|waves/);
+});
+
+test('worn helmet tip makes peaceful raven squawk', async () => {
+    installNonShopFloorState();
+    const helmet = wornArmor(3063535, 'orcish helm', 'h');
+    const raven = ordinaryThrowTarget('raven', 6, 5, {
+        msleeping: 0,
+        mcanmove: true,
+        mcansee: true,
+        mpeaceful: true,
+        mstrategy: 'waitforu',
+        data: { name: 'raven', mlevel: 4, mlet: 'bird' },
+    });
+    game.inventory = [helmet];
+    game.level.monsters = [raven];
+    markSquareVisible(6, 5);
+
+    await enterTipCommand();
+    await rhack('h');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(raven.mstrategy, 0);
+    assert.match(game._pending_message, /You briefly doff your helm\./);
+    assert.match(game._pending_message, /The raven squawks\./);
+    assert.doesNotMatch(game._pending_message, /Nevermore|doesn't respond|waves/);
+});
+
+test('worn helmet tip makes peaceful tengu squawk', async () => {
+    installNonShopFloorState();
+    const helmet = wornArmor(3063530, 'orcish helm', 'h');
+    const tengu = ordinaryThrowTarget('tengu', 6, 5, {
+        msleeping: 0,
+        mcanmove: true,
+        mcansee: true,
+        mpeaceful: true,
+        mstrategy: 'waitforu',
+        data: { name: 'tengu', mlevel: 6, mlet: 'bird' },
+    });
+    game.inventory = [helmet];
+    game.level.monsters = [tengu];
+    markSquareVisible(6, 5);
+
+    await enterTipCommand();
+    await rhack('h');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(tengu.mstrategy, 0);
+    assert.match(game._pending_message, /You briefly doff your helm\./);
+    assert.match(game._pending_message, /The tengu squawks\./);
+    assert.doesNotMatch(game._pending_message, /Nevermore|doesn't respond|waves/);
+});
+
+test('worn helmet tip promotes non-tame mooing monsters to bellow', async () => {
+    installNonShopFloorState();
+    const helmet = wornArmor(3063531, 'orcish helm', 'h');
+    const rothe = ordinaryThrowTarget('rothe', 6, 5, {
+        msleeping: 0,
+        mcanmove: true,
+        mcansee: true,
+        mtame: 0,
+        mpeaceful: false,
+        mstrategy: 'waitforu',
+        data: { name: 'rothe', mlevel: 2, mlet: 'quadruped' },
+    });
+    game.inventory = [helmet];
+    game.level.monsters = [rothe];
+    markSquareVisible(6, 5);
+
+    await enterTipCommand();
+    await rhack('h');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(rothe.mstrategy, 0);
+    assert.match(game._pending_message, /You briefly doff your helm\./);
+    assert.match(game._pending_message, /The rothe bellows!/);
+    assert.doesNotMatch(game._pending_message, /moos|neighs|doesn't respond|waves/);
+});
+
+test('worn helmet tip maps invisible non-tame mooing monster after bellow', async () => {
+    installStableNonShopFloorState();
+    game.u.seeInvisible = false;
+    const targetLoc = game.level.at(6, 5);
+    const helmet = wornArmor(3063536, 'orcish helm', 'h');
+    const rothe = ordinaryThrowTarget('rothe', 6, 5, {
+        minvis: 1,
+        perminvis: 1,
+        msleeping: 0,
+        mcanmove: true,
+        mcansee: true,
+        mtame: 0,
+        mpeaceful: false,
+        mstrategy: 'waitforu',
+        data: { name: 'rothe', mlevel: 2, mlet: 'quadruped' },
+    });
+    game.inventory = [helmet];
+    game.level.monsters = [rothe];
+    markSquareVisible(6, 5);
+
+    await enterTipCommand();
+    await rhack('h');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(rothe.mstrategy, 0);
+    assert.equal(targetLoc.map_invisible, true);
+    assert.match(game._pending_message, /You briefly doff your helm\./);
+    assert.match(game._pending_message, /It bellows!/);
+    assert.doesNotMatch(game._pending_message, /The rothe|moos|neighs|doesn't respond|waves/);
+});
+
+test('worn helmet tip leaves tame mooing monsters as moo', async () => {
+    installNonShopFloorState();
+    const helmet = wornArmor(3063532, 'orcish helm', 'h');
+    const rothe = ordinaryThrowTarget('rothe', 6, 5, {
+        msleeping: 0,
+        mcanmove: true,
+        mcansee: true,
+        mtame: 5,
+        mpeaceful: true,
+        mstrategy: 'waitforu',
+        data: { name: 'rothe', mlevel: 2, mlet: 'quadruped' },
+    });
+    game.inventory = [helmet];
+    game.level.monsters = [rothe];
+    markSquareVisible(6, 5);
+
+    await enterTipCommand();
+    await rhack('h');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(rothe.mstrategy, 0);
+    assert.match(game._pending_message, /You briefly doff your helm\./);
+    assert.match(game._pending_message, /The rothe moos\./);
+    assert.doesNotMatch(game._pending_message, /bellows|neighs|doesn't respond|waves/);
+});
+
+test('worn helmet tip maps invisible peaceful hiss before fallback message', async () => {
+    installStableNonShopFloorState();
+    game.u.seeInvisible = false;
+    const targetLoc = game.level.at(6, 5);
+    const helmet = wornArmor(3063533, 'orcish helm', 'h');
+    const snake = ordinaryThrowTarget('garter snake', 6, 5, {
+        minvis: 1,
+        perminvis: 1,
+        msleeping: 0,
+        mcanmove: true,
+        mcansee: true,
+        mpeaceful: true,
+        mstrategy: 'waitforu',
+        data: { name: 'garter snake', mlevel: 1, mlet: 'snake' },
+    });
+    game.inventory = [helmet];
+    game.level.monsters = [snake];
+    markSquareVisible(6, 5);
+
+    await enterTipCommand();
+    await rhack('h');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(snake.mstrategy, 0);
+    assert.equal(targetLoc.map_invisible, true);
+    assert.match(game._pending_message, /You briefly doff your helm\./);
+    assert.match(game._pending_message, /Nothing happens\./);
+    assert.doesNotMatch(game._pending_message,
+        /garter snake|hisses|doesn't respond|unseen creature is ignoring|waves/);
+});
+
+test('worn helmet tip makes visible peaceful hiss fall back to nonresponse', async () => {
+    installNonShopFloorState();
+    const helmet = wornArmor(3063534, 'orcish helm', 'h');
+    const snake = ordinaryThrowTarget('garter snake', 6, 5, {
+        msleeping: 0,
+        mcanmove: true,
+        mcansee: true,
+        mpeaceful: true,
+        mstrategy: 'waitforu',
+        data: { name: 'garter snake', mlevel: 1, mlet: 'snake' },
+    });
+    game.inventory = [helmet];
+    game.level.monsters = [snake];
+    markSquareVisible(6, 5);
+
+    await enterTipCommand();
+    await rhack('h');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(snake.mstrategy, 0);
+    assert.match(game._pending_message, /You briefly doff your helm\./);
+    assert.match(game._pending_message, /The garter snake doesn't respond\./);
+    assert.doesNotMatch(game._pending_message, /hisses|Nothing happens|waves/);
 });
 
 test('unknown cursed worn helmet tip learns curse and spends action', async () => {

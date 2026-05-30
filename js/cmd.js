@@ -33770,6 +33770,8 @@ function tipHatMonsterSound(mon) {
     if (explicit != null) return String(explicit).toLowerCase().replace(/^ms_/, '');
     const name = String(data.name || mon?.name || '').toLowerCase();
     const mlet = String(data.mlet || mon?.mlet || '').toLowerCase();
+    if (/^(rothe|minotaur)$/.test(name)) return 'moo';
+    if (/^(raven|tengu)$/.test(name)) return 'sqawk';
     if (/^(pony|horse|warhorse|white unicorn|gray unicorn|black unicorn)$/.test(name)
         || mlet === 'quadruped' || mlet === 'unicorn')
         return 'neigh';
@@ -33802,11 +33804,12 @@ function tipHatMonsterHungryTime(mon) {
 function tipHatMonsterNoise(mon, { visible = tipHatMonsterVisible(mon) } = {}) {
     if (!mon || heroIsDeaf() || tipHatMonsterSilent(mon)) return { handled: false, message: '' };
     const name = visible ? fireScrollMonsterName(mon) : 'It';
-    const sound = tipHatMonsterSound(mon);
+    let sound = tipHatMonsterSound(mon);
     const peaceful = !!mon.mpeaceful;
     const tame = Number(mon.mtame || 0);
     const moves = Number(game.moves ?? game.context?.moves ?? 0);
     const hungryTime = tipHatMonsterHungryTime(mon);
+    if (sound === 'moo' && !tame) sound = 'bellow';
     switch (sound) {
     case 'bark': {
         const monName = String(mon?.data?.name || mon?.name || '').toLowerCase();
@@ -33841,9 +33844,15 @@ function tipHatMonsterNoise(mon, { visible = tipHatMonsterVisible(mon) } = {}) {
     case 'sqeek':
     case 'squeak':
         return { handled: true, message: `${name} squeaks.` };
+    case 'sqawk':
+    case 'squawk': {
+        const monName = String(mon?.data?.name || mon?.name || '').toLowerCase();
+        if (monName === 'raven' && !peaceful) return { handled: true, message: '"Nevermore!"' };
+        return { handled: true, message: `${name} squawks.` };
+    }
     case 'hiss':
         return peaceful
-            ? { handled: false, message: '' }
+            ? { handled: false, message: '', mapInvisible: !visible }
             : { handled: true, message: `${name} hisses!` };
     case 'buzz':
         return { handled: true, message: `${name} ${peaceful ? 'drones.' : 'buzzes angrily.'}` };
@@ -33946,6 +33955,11 @@ function tipHatDirectedResponse(dir) {
         return tipHatRudeHumanoidResponse(name);
     if (tipHatMonsterAdjacent(target)) {
         const noise = tipHatMonsterNoise(target, { visible });
+        if (!visible && noise.mapInvisible) {
+            const loc = game.level?.at?.(target.mx, target.my);
+            if (loc) loc.map_invisible = true;
+            newsym(target.mx, target.my);
+        }
         if (noise.handled) {
             if (!visible) {
                 const loc = game.level?.at?.(target.mx, target.my);
@@ -33985,8 +33999,8 @@ async function finishTipHatDirection(ch) {
     const messages = [
         `You briefly doff your ${tipHatSimpleName(helmet)}.`,
         tipHatDirectedResponse(dir),
-    ];
-    await setMessage(messages.filter(Boolean).join('  '), messages.length > 1);
+    ].filter(Boolean);
+    await setMessage(messages.join('  '), messages.length > 1);
     game.context.move = 1;
 }
 
