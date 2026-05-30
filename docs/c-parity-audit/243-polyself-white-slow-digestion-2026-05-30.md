@@ -30,7 +30,7 @@ Added or extended focused coverage in `test/shop-billing-helpers.test.mjs`:
 
 ## Remaining Gaps
 
-- Digest combat and monster stomach behavior still need separate source-backed coverage for slow-digestion interactions.
+- Digest combat and monster stomach slow-digestion interactions are covered separately in `docs/c-parity-audit/245-slow-digestion-digest-combat-2026-05-30.md`.
 - Enlightenment/status display of slow digestion is covered separately in `docs/c-parity-audit/244-slow-digestion-enlightenment-2026-05-30.md`.
 - Broader `set_uasmon()` property parity remains incomplete beyond currently modeled form antimagic, reflection, and cold-resistance slices.
 

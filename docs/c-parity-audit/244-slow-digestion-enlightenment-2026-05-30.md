@@ -29,7 +29,7 @@ Added focused coverage in `test/shop-billing-helpers.test.mjs`:
 
 - Full wizard-mode `from_what()` source priority and source wording are still only partially modeled across the attributes page.
 - Magic-only enlightenment from potions, wands, and fountains remains incomplete beyond currently modeled attribute-page routes.
-- Digest combat and monster stomach behavior still need separate source-backed slow-digestion coverage.
+- Digest combat and monster stomach slow-digestion interactions are covered separately in `docs/c-parity-audit/245-slow-digestion-digest-combat-2026-05-30.md`.
 - Broader `set_uasmon()` property parity remains incomplete beyond currently modeled form antimagic, reflection, and cold-resistance slices.
 
 ## Verification

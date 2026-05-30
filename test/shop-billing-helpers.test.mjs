@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { interruptEatingOccupation, moveloop_core, processEatingOccupationTick, processForceLockOccupation } from '../js/allmain.js';
+import { interruptEatingOccupation, moveloop_core, processEatingOccupationTick, processForceLockOccupation, processMonsterTurns } from '../js/allmain.js';
 import { activateStatueTrap, burnFloorObjectsByFire, earthFloorEffects, finishForceLock, landMonsterThrownObject, processCorpseTimers, processForceLockOccupationTick, processGlobShrinkTimers, processSpellbookStudyOccupation, rhack, __shopBillingTestHooks as shop } from '../js/cmd.js';
 import { newsym } from '../js/display.js';
 import { game, resetGame } from '../js/gstate.js';
@@ -390,6 +390,15 @@ function markHeroNeighborhoodVisible() {
     for (let y = (game.u?.uy || 0) - 1; y <= (game.u?.uy || 0) + 1; y++)
         for (let x = (game.u?.ux || 0) - 1; x <= (game.u?.ux || 0) + 1; x++)
             markSquareVisible(x, y);
+}
+
+function queueEscapeForMonsterTurn() {
+    resetInputState();
+    pushKey('\x1b');
+    vision_reset();
+    game.moves = game.moves || 1;
+    game.context = {};
+    if (game.u) game.u.umovement = NORMAL_SPEED;
 }
 
 function assertUsedUpBillForObject(shkp, obj, price) {
@@ -1122,6 +1131,25 @@ function ordinaryThrowTarget(name = 'goblin', x = 7, y = 5, extra = {}) {
         data: { name, mlevel: 1 },
         ...extra,
     };
+}
+
+function purpleWormDigestAttacker(x = 6, y = 5, extra = {}) {
+    return ordinaryThrowTarget('purple worm', x, y, {
+        mhp: 40,
+        mhpmax: 40,
+        m_lev: 15,
+        movement: NORMAL_SPEED,
+        msleeping: 0,
+        mpeaceful: false,
+        mcanmove: true,
+        data: {
+            name: 'purple worm',
+            mlevel: 15,
+            hpLevel: 15,
+            attack: { aatyp: 'engl', adtyp: 'dgst', dice: 1, sides: 10, verb: 'swallows you whole' },
+        },
+        ...extra,
+    });
 }
 
 function disenchanterTarget(x = 7, y = 5, extra = {}) {
@@ -8963,6 +8991,158 @@ test('debug attributes omit slow digestion for white dragon form alone', async (
     const text = await attributesOverlayText();
 
     assert.doesNotMatch(text, /slower digestion/);
+});
+
+test('monster digest attack regurgitates hero with white dragon armor slow digestion', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    game.u.uhp = 30;
+    game.u.uhpmax = 30;
+    game.u.uac = 10;
+    game.inventory = [wornArmor(32157, 'white dragon scale mail', 'a')];
+    const worm = purpleWormDigestAttacker();
+    game.level.monsters = [worm];
+    markSquareVisible(6, 5);
+    assert.equal(shop.heroHasSlowDigestionForTest(), true);
+
+    queueEscapeForMonsterTurn();
+    await processMonsterTurns();
+    assert.match(game._pending_message, /The purple worm swallows you whole!/);
+
+    await rhack(' ');
+    assert.match(game._pending_message, /You get regurgitated!/);
+    assert.match(game._pending_message, /Obviously the purple worm doesn't like your taste\./);
+    assert.equal(game.u.uhp, 30);
+
+    await rhack(' ');
+    assert.equal(game.u.uswallow || 0, 0);
+    assert.equal(game.u.ustuck || null, null);
+    assert.equal(game.level.monsters.includes(worm), true);
+    assert.doesNotMatch(game._pending_message, /expelled|digests you/);
+});
+
+test('monster digest attack regurgitates hero with slow digestion ring', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    game.u.uhp = 30;
+    game.u.uhpmax = 30;
+    game.u.uac = 10;
+    game.inventory = [metalRing(32158, 'slow digestion', 21, 'r', {
+        worn: true,
+        line: 'r - a ring of slow digestion (on right hand)',
+    })];
+    const worm = purpleWormDigestAttacker();
+    game.level.monsters = [worm];
+    markSquareVisible(6, 5);
+
+    queueEscapeForMonsterTurn();
+    await processMonsterTurns();
+    await rhack(' ');
+
+    assert.match(game._pending_message, /You get regurgitated!/);
+    assert.match(game._pending_message, /Obviously the purple worm doesn't like your taste\./);
+    assert.equal(game.u.uhp, 30);
+});
+
+test('already swallowed slow digestion hero is regurgitated on digest tick', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    game.u.uhp = 30;
+    game.u.uhpmax = 30;
+    game.u.uac = 10;
+    game.inventory = [metalRing(32159, 'slow digestion', 21, 'r', {
+        worn: true,
+        line: 'r - a ring of slow digestion (on left hand)',
+    })];
+    const worm = purpleWormDigestAttacker(5, 5);
+    game.level.monsters = [worm];
+    game.u.ustuck = worm;
+    game.u.uswallow = 1;
+    game.u.uswldtim = 5;
+
+    queueEscapeForMonsterTurn();
+    await processMonsterTurns();
+
+    assert.match(game._pending_message, /You get regurgitated!/);
+    assert.match(game._pending_message, /Obviously the purple worm doesn't like your taste\./);
+    assert.equal(game.u.uhp, 30);
+
+    await rhack(' ');
+    assert.equal(game.u.uswallow || 0, 0);
+    assert.equal(game.u.ustuck || null, null);
+});
+
+test('slow digestion does not reject non-digest engulfers', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    game.u.uhp = 30;
+    game.u.uhpmax = 30;
+    game.inventory = [metalRing(32160, 'slow digestion', 21, 'r', {
+        worn: true,
+        line: 'r - a ring of slow digestion (on left hand)',
+    })];
+    const vortex = ordinaryThrowTarget('ice vortex', 6, 5, {
+        mhp: 20,
+        mhpmax: 20,
+        m_lev: 5,
+        movement: NORMAL_SPEED,
+        msleeping: 0,
+        mpeaceful: false,
+        mcanmove: true,
+        data: {
+            name: 'ice vortex',
+            mlevel: 5,
+            hpLevel: 5,
+            attack: { aatyp: 'engl', adtyp: 'cold', dice: 1, sides: 1, verb: 'engulfs you' },
+        },
+    });
+    game.level.monsters = [vortex];
+    markSquareVisible(6, 5);
+
+    queueEscapeForMonsterTurn();
+    await processMonsterTurns();
+    await rhack(' ');
+
+    assert.equal(game.u.uswallow, 1);
+    assert.equal(game.u.ustuck, vortex);
+    assert.doesNotMatch(game._pending_message || '', /regurgitated|doesn't like your taste/);
+});
+
+test('polyself purple worm with slow digestion regurgitates live monster', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    game.u.uhunger = 900;
+    game.u._polyself_form = {
+        name: 'purple worm',
+        nohands: true,
+        attacks: [
+            { aatyp: 'bite', adtyp: 'phys', dice: 2, sides: 8 },
+            { aatyp: 'engl', adtyp: 'dgst', dice: 1, sides: 10 },
+        ],
+    };
+    game.inventory = [metalRing(32161, 'slow digestion', 21, 'r', {
+        worn: true,
+        line: 'r - a ring of slow digestion (on right hand)',
+    })];
+    const goblin = ordinaryThrowTarget('goblin', 6, 5, {
+        msleeping: 0,
+        mpeaceful: false,
+        mhp: 12,
+        mhpmax: 12,
+    });
+    game.level.monsters = [goblin];
+    markSquareVisible(6, 5);
+
+    await rhack('l');
+
+    assert.match(game._pending_message, /You swallow the goblin whole!/);
+    assert.match(game._pending_message, /You regurgitate the goblin!/);
+    assert.match(game._pending_message, /Obviously, you didn't like the goblin's taste\./);
+    assert.equal(game.level.monsters.includes(goblin), true);
+    assert.equal(goblin.mhp, 12);
+    assert.equal(game.u.uhunger, 900);
+    assert.equal(game.u.uconduct?.food || 0, 0);
+    assert.doesNotMatch(game._pending_message, /totally digest/);
 });
 
 test('white dragon cold resistance suppresses ice chill while sitting', async () => {

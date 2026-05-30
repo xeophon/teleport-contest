@@ -3,7 +3,7 @@
 
 import { game } from './gstate.js';
 import { mklev, l_nhcore_init, u_on_upstairs, makemon, mkcorpstat, mksobj, wipe_engr_at, dropMonsterInventory, wandIndexForRoll, scrollIndexForRoll, potionIndexForRoll, RANDOM_MONSTER_BY_NAME, STONE_RESISTANT_MONSTERS, adjustedMonsterLevel, monsterByRndName, monster_hp, rndmonnum, syncDungeonContext, next_ident, set_malign, enextoMonsterSpot, getbogusmon, pickNasty, chameleonAnimalForm, doppelgangerHumanoidForm, noteleportLevelForMonster, rlocNoMsg, rlocToCoreNoMsg, somexyspace, fumaroles, createMonsterCorpseOrGlob, monsterCorpseDropSucceeds, monsterLeavesCorpseLikeDrop, movebubbles, add_to_minv } from './mklev.js';
-import { rhack, pickupObjectName, inventoryItemName, inventoryLetterRank, recordVanquished, finishForceLock, loseExperienceLevel, finishLevelTeleport, finishPickDigDownwardHole, finishPickDigDownwardPit, maybeQueueQuestLeaderTalk, monsterGrowUp, processForceLockOccupationTick, forceLockOccupationShouldGiveUp, processSpellbookStudyOccupation, processTinOpeningOccupation, finishTinOpeningOccupation, refreshSwallowOverlay, travelPathKeys, updateGauntletsOfPowerStrength, consumeLifeSavingAmulet, activateStatueTrap, breakStatueObject, burnFloorObjectsByFire, burnRayFloorObjectsByFire, erodeArmorByFireTrap, dryWetTowelFromFire, igniteMonsterFireInventoryItems, monsterFireInventoryDamage, dropMonsterObject, earthFloorEffects, landMonsterThrownObject, stoneMonster, processCorpseTimers, processGlobShrinkTimers, addDelayedFoodBiteNutrition, repairShopDamageForShopkeeper, heroHasAntimagic, heroHasSlowDigestion, applyHeroOrdinaryHunger } from './cmd.js';
+import { rhack, pickupObjectName, inventoryItemName, inventoryLetterRank, recordVanquished, finishForceLock, loseExperienceLevel, finishLevelTeleport, finishPickDigDownwardHole, finishPickDigDownwardPit, maybeQueueQuestLeaderTalk, monsterGrowUp, processForceLockOccupationTick, forceLockOccupationShouldGiveUp, processSpellbookStudyOccupation, processTinOpeningOccupation, finishTinOpeningOccupation, refreshSwallowOverlay, finishSwallowExpel, travelPathKeys, updateGauntletsOfPowerStrength, consumeLifeSavingAmulet, activateStatueTrap, breakStatueObject, burnFloorObjectsByFire, burnRayFloorObjectsByFire, erodeArmorByFireTrap, dryWetTowelFromFire, igniteMonsterFireInventoryItems, monsterFireInventoryDamage, dropMonsterObject, earthFloorEffects, landMonsterThrownObject, stoneMonster, processCorpseTimers, processGlobShrinkTimers, addDelayedFoodBiteNutrition, repairShopDamageForShopkeeper, heroHasAntimagic, heroHasSlowDigestion, applyHeroOrdinaryHunger } from './cmd.js';
 import { docrt, cls, bot, flush_screen, pline, newsym, refreshHallucinatedMap, show_glyph_cell } from './display.js';
 import { vision_recalc, vision_reset, init_vision_globals, cansee, couldsee, view_from } from './vision.js';
 import { init_objects } from './o_init.js';
@@ -2542,6 +2542,20 @@ function monsterDisplayName(mon, hallucinate = false, bareBogus = false) {
     return mon.givenName || `The ${name}`;
 }
 
+function normalizedAttackCode(value) {
+    return String(value || '').toLowerCase().replace(/^(?:ad|at)_/, '');
+}
+
+function isDigestEngulfAttack(attack) {
+    return normalizedAttackCode(attack?.aatyp) === 'engl'
+        && normalizedAttackCode(attack?.adtyp) === 'dgst';
+}
+
+function digestTasteMessage(mon) {
+    const name = monsterDisplayName(mon).replace(/^The /, 'the ');
+    return `Obviously ${name} doesn't like your taste.`;
+}
+
 function covetousMonsterNextToHero(mon) {
     const spot = enextoMonsterSpot(game.u?.ux || 0, game.u?.uy || 0, mon.data || {});
     if (!spot) return false;
@@ -3655,7 +3669,7 @@ function maybeShapeshiftVampire(mon) {
     newsym(mon.mx, mon.my);
 }
 
-async function processMonsterTurns() {
+export async function processMonsterTurns() {
     if (game._stale_queued_kill_pet && game._pending_message !== game._stale_queued_kill_pet.message) {
         const stale = game._stale_queued_kill_pet;
         game._stale_queued_kill_pet = null;
@@ -4509,7 +4523,8 @@ async function processMonsterTurns() {
                                 verb: elemental ? 'touches you' : 'hits',
                             };
                         }
-                        const swallowedEngulf = game.u?.uswallow && mon === game.u?.ustuck && attack.aatyp === 'engl';
+                        const swallowedEngulf = game.u?.uswallow && mon === game.u?.ustuck
+                            && normalizedAttackCode(attack.aatyp) === 'engl';
                         const targetAc = game.u?.uac ?? 10;
                         let acValue = targetAc;
                         const occupationToHitBonus = game._armor_wear_occupation || game._eating_turns_remaining
@@ -4780,14 +4795,16 @@ async function processMonsterTurns() {
 			                game._monster_resume_somebody_can_move = somebodyCanMove;
 			            }
 	                        } else {
-	                                if (attack.aatyp === 'engl') {
+	                                if (normalizedAttackCode(attack.aatyp) === 'engl') {
 	                                    const damage = d(attack.dice ?? 1, attack.sides ?? 2);
+                                        const digestAttack = isDigestEngulfAttack(attack);
 	                                    if (!game.u?.uswallow) {
 	                                        const swallowLevel = mon.m_lev ?? data.hpLevel ?? data.mlevel ?? 1;
 	                                        game._swallow_after_more = {
 	                                            mon,
 	                                            damage,
 	                                            coldCheck: attack.adtyp === 'cold' && !mon.mcan,
+                                                digestAttack,
 	                                            swallowLevel,
 	                                            resumeIndex: monIndex + 1,
 	                                            somebodyCanMove,
@@ -4796,6 +4813,29 @@ async function processMonsterTurns() {
 			                                        swallowedEngulferActed = true;
 			                                        swallowedEngulferActedThisTurn = true;
 			                                        if ((game.u.uswldtim || 0) > 0) game.u.uswldtim--;
+                                            let slowDigestRegurgitation = false;
+                                            if (digestAttack) {
+                                                if (heroHasSlowDigestion()) {
+                                                    slowDigestRegurgitation = true;
+                                                    game.u.uswldtim = 0;
+                                                    if ((game.u.uac ?? 10) < 0)
+                                                        game.u.uhp = Math.max(0, (game.u?.uhp || 0) - 1);
+                                                } else if ((game.u.uswldtim || 0) <= 0) {
+                                                    addToplineMessage(`${monsterDisplayName(mon)} totally digests you!`);
+                                                    game.u.uhp = 0;
+                                                    game._death_cause = `killed by ${/^[aeiou]/i.test(data.name || '') ? 'an' : 'a'} ${data.name || 'monster'}`;
+                                                    game._death_current_move = true;
+                                                    game._queued_message_after_more = 'You die...';
+                                                    game._message_more = 1;
+                                                    game._process_time_with_more = 0;
+                                                    return false;
+                                                } else {
+                                                    const adverb = game.u.uswldtim === 2 ? ' thoroughly'
+                                                        : game.u.uswldtim === 1 ? ' utterly' : '';
+                                                    addToplineMessage(`${monsterDisplayName(mon)}${adverb} digests you!`);
+                                                    game.u.uhp = Math.max(0, (game.u?.uhp || 0) - damage);
+                                                }
+                                            }
 			                                        const coldHits = attack.adtyp === 'cold' && !mon.mcan && rn2(2);
 			                                        if (coldHits) {
 		                                            if (game._command_mode === 'swallowColdMore')
@@ -4842,7 +4882,9 @@ async function processMonsterTurns() {
 	                                            }
 	                                        }
 				                                        if ((game.u.uswldtim || 0) <= 0) {
-		                                            const expelMessage = 'You get expelled!';
+                                            const expelMessage = digestAttack
+                                                ? `You get regurgitated!  ${digestTasteMessage(mon)}`
+                                                : 'You get expelled!';
 		                                            const width = game.nhDisplay?.cols || 80;
                                             if (game._pending_message
                                                 && game._pending_message.length + expelMessage.length + 3 < width - 8) {
@@ -4856,7 +4898,10 @@ async function processMonsterTurns() {
                                             game._keep_pending_message = 1;
                                             game._message_more = 1;
                                             game._process_time_with_more = 0;
-                                            game._swallow_expel_after_more = { mon };
+                                            if (slowDigestRegurgitation)
+                                                await finishSwallowExpel(mon);
+                                            else
+                                                game._swallow_expel_after_more = { mon };
                                             game._monster_resume_index = monIndex + 1;
                                             game._monster_resume_somebody_can_move = somebodyCanMove;
                                             const prompt = `${game._pending_message || ''}--More--`;

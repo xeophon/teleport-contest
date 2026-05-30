@@ -71,6 +71,23 @@ function polyselfForm() {
     return game.u?._polyself_form || null;
 }
 
+function normalizedAttackCode(value) {
+    return String(value || '').toLowerCase().replace(/^(?:ad|at)_/, '');
+}
+
+function heroPolyselfDigestAttack() {
+    const form = polyselfForm();
+    if (!form) return false;
+    const attacks = [];
+    if (form.attack) attacks.push(form.attack);
+    if (Array.isArray(form.attacks)) attacks.push(...form.attacks);
+    if (attacks.some(attack =>
+        normalizedAttackCode(attack?.aatyp) === 'engl'
+        && normalizedAttackCode(attack?.adtyp) === 'dgst'))
+        return true;
+    return String(form.name || '').toLowerCase() === 'purple worm';
+}
+
 function addPolyselfDietOverlay(map, names, diet) {
     for (const name of names) map.set(String(name).toLowerCase(), diet);
 }
@@ -590,6 +607,41 @@ export function refreshSwallowOverlay(more = !!game._message_more) {
     game._pending_message = message;
     game._message_more = more ? 1 : 0;
     game._swallow_overlay_active = 1;
+}
+
+export async function finishSwallowExpel(mon) {
+    if (game.u && mon) {
+        const heroX = game.u.ux || mon.mx;
+        const heroY = game.u.uy || mon.my;
+        game.u.ux = mon.mx;
+        game.u.uy = mon.my;
+        game.u.uswallow = 0;
+        game.u.uswldtim = 0;
+        game.u.ustuck = null;
+        game._swallow_overlay_active = 0;
+        game._swallow_overlay_before_command = null;
+        game._overlay_lines = null;
+        game._overlay_hide_status = 0;
+        game._overlay_hide_status_only = 0;
+        game._display_hallucinated_redraw = 1;
+        vision_recalc(2);
+        await docrt();
+        vision_recalc(0);
+        mon.mspec_used = rnd(2);
+        const spot = enextoMonsterSpot(mon.mx, mon.my, mon.data || {});
+        if (spot) {
+            newsym(mon.mx, mon.my);
+            mon.mx = spot.x;
+            mon.my = spot.y;
+            newsym(mon.mx, mon.my);
+        }
+        newsym(heroX, heroY);
+        newsym(game.u.ux, game.u.uy);
+        game._hallu_display_after_expel = 1;
+        game._hallu_refresh_after_expel = 1;
+        game._simple_swallow_expel_prompt = 0;
+        game._display_hallucinated_redraw = 0;
+    }
 }
 
 const MIN_QUEST_LEVEL = 14;
@@ -23937,6 +23989,10 @@ function monsterPossessiveName(mon) {
     return owner.endsWith('s') ? `${owner}'` : `${owner}'s`;
 }
 
+function monsterTasteSubject(mon) {
+    return fireScrollMonsterName(mon).replace(/^The /, 'the ');
+}
+
 function coldRayMonsterName(mon) {
     return fireScrollMonsterName(mon).replace(/^The /, 'the ');
 }
@@ -40774,6 +40830,16 @@ async function moveHero(dx, dy) {
         const targetPhrase = hiddenTarget ? 'it'
             : mon.givenName && data.name === 'ghost' ? `${mon.givenName}'s ghost`
                 : mon.isshk && mon.shknam && shownName === name ? name : `the ${shownName}`;
+        if (!weapon && !swallowedMove && heroHasSlowDigestion() && heroPolyselfDigestAttack()) {
+            messages.push(`You swallow ${targetPhrase} whole!`);
+            messages.push(`You regurgitate ${targetPhrase}!`);
+            messages.push(`Obviously, you didn't like ${monsterPossessiveName(mon)} taste.`);
+            await setMessage(messages.join('  '), true);
+            game._run_stop_now = 1;
+            game._run_steps_remaining = 0;
+            game.context.move = 1;
+            return;
+        }
         const attackWeapons = twoWeaponActive && !wokeFromSleep ? [weapon, secondWeapon] : [weapon];
         const deferSleepingTwoWeapon = wokeFromSleep && twoWeaponActive;
         let deferredMeleeWeaponHit = false;
@@ -44562,10 +44628,17 @@ export async function rhack(_cmd) {
 	                }
 		                const swallowTurns = Math.max(2, rnd((swallow.swallowLevel ?? mon?.m_lev ?? mon?.data?.mlevel ?? 1) + 5));
 		                if (game.u) game.u.uswldtim = Math.max(1, swallowTurns - 1);
-		                const swallowDamage = swallow.coldCheck && !rn2(2) ? 0 : swallow.damage || 0;
-		                game._pending_message = swallowDamage ? 'You are freezing to death!' : '';
-		                game._message_more = 0;
-		                game._process_time_with_more = 1;
+		                const slowDigestRegurgitation = !!(swallow.digestAttack && heroHasSlowDigestion());
+		                if (slowDigestRegurgitation && game.u) game.u.uswldtim = 0;
+		                const slowDigestDamage = slowDigestRegurgitation && (game.u?.uac ?? 10) < 0 ? 1 : 0;
+		                const swallowDamage = slowDigestRegurgitation ? slowDigestDamage
+		                    : swallow.coldCheck && !rn2(2) ? 0 : swallow.damage || 0;
+		                game._pending_message = slowDigestRegurgitation
+		                    ? `You get regurgitated!  Obviously ${monsterTasteSubject(mon)} doesn't like your taste.`
+		                    : swallow.digestAttack && swallowDamage ? `${fireScrollMonsterName(mon)} digests you!`
+		                        : swallowDamage ? 'You are freezing to death!' : '';
+		                game._message_more = slowDigestRegurgitation ? 1 : 0;
+		                game._process_time_with_more = slowDigestRegurgitation ? 0 : 1;
 		                game._keep_pending_message = 1;
 		                if (swallowDamage && game.u)
 		                    game.u.uhp = Math.max(0, (game.u?.uhp || 0) - swallowDamage);
@@ -44574,6 +44647,11 @@ export async function rhack(_cmd) {
 		                    refreshSwallowOverlay(false);
 		                }
 		                refreshSwallowOverlay(false);
+		                if (slowDigestRegurgitation) {
+		                    await finishSwallowExpel(mon);
+		                    game._message_more = 1;
+		                    game._process_time_with_more = 0;
+		                }
 		                game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
 		                if (swallow.resumeIndex != null) game._monster_resume_index = swallow.resumeIndex;
 		                game._monster_resume_somebody_can_move = !!swallow.somebodyCanMove;
@@ -45337,38 +45415,7 @@ export async function rhack(_cmd) {
 	            if (game._swallow_expel_after_more) {
 	                const { mon } = game._swallow_expel_after_more;
 	                game._swallow_expel_after_more = null;
-	                if (game.u && mon) {
-	                    const heroX = game.u.ux || mon.mx;
-	                    const heroY = game.u.uy || mon.my;
-	                    game.u.ux = mon.mx;
-	                    game.u.uy = mon.my;
-	                    game.u.uswallow = 0;
-	                    game.u.uswldtim = 0;
-	                    game.u.ustuck = null;
-	                    game._swallow_overlay_active = 0;
-	                    game._swallow_overlay_before_command = null;
-	                    game._overlay_lines = null;
-	                    game._overlay_hide_status = 0;
-	                    game._overlay_hide_status_only = 0;
-	                    game._display_hallucinated_redraw = 1;
-	                    vision_recalc(2);
-	                    await docrt();
-	                    vision_recalc(0);
-	                    mon.mspec_used = rnd(2);
-	                    const spot = enextoMonsterSpot(mon.mx, mon.my, mon.data || {});
-	                    if (spot) {
-	                        newsym(mon.mx, mon.my);
-	                        mon.mx = spot.x;
-	                        mon.my = spot.y;
-	                        newsym(mon.mx, mon.my);
-	                    }
-	                    newsym(heroX, heroY);
-	                    newsym(game.u.ux, game.u.uy);
-	                    game._hallu_display_after_expel = 1;
-	                    game._hallu_refresh_after_expel = 1;
-	                    game._simple_swallow_expel_prompt = 0;
-	                    game._display_hallucinated_redraw = 0;
-	                }
+	                await finishSwallowExpel(mon);
 	                game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
 	                game.context.move = 0;
 	                game._process_command_time_now = 1;
