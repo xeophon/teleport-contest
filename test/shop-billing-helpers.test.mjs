@@ -8622,7 +8622,7 @@ test('successful whirly polyself drops no-hands gear after sliparm fallout', asy
     assert.match(pending, /Your cloak falls, unsupported!/);
     assert.match(pending, /You seep right through your shirt!/);
     assert.match(pending, /You can no longer hold your shield!/);
-    assert.match(pending, /Your helm falls to the ground!/);
+    assert.match(pending, /Your helm falls to the floor!/);
     assert.match(pending, /Your boots fall away!/);
     assert.match(pending, /You find you must drop your weapon!/);
     assert.ok(pending.indexOf('Your armor falls around you!')
@@ -8632,8 +8632,8 @@ test('successful whirly polyself drops no-hands gear after sliparm fallout', asy
     assert.ok(pending.indexOf('You seep right through your shirt!')
         < pending.indexOf('You can no longer hold your shield!'));
     assert.ok(pending.indexOf('You can no longer hold your shield!')
-        < pending.indexOf('Your helm falls to the ground!'));
-    assert.ok(pending.indexOf('Your helm falls to the ground!')
+        < pending.indexOf('Your helm falls to the floor!'));
+    assert.ok(pending.indexOf('Your helm falls to the floor!')
         < pending.indexOf('Your boots fall away!'));
     assert.ok(pending.indexOf('Your boots fall away!')
         < pending.indexOf('You find you must drop your weapon!'));
@@ -8679,7 +8679,7 @@ test('successful no-hands polyself drops shield helm and boots but keeps amulet'
 
     assert.equal(game.u._polyself_form?.name, 'wererat');
     assert.match(game._pending_message || '', /You can no longer hold your shield!/);
-    assert.match(game._pending_message || '', /Your helm falls to the ground!/);
+    assert.match(game._pending_message || '', /Your helm falls to the floor!/);
     assert.match(game._pending_message || '', /Your boots slide off your feet!/);
     assert.equal(game.inventory.includes(shield), false);
     assert.equal(game.inventory.includes(helm), false);
@@ -8692,6 +8692,35 @@ test('successful no-hands polyself drops shield helm and boots but keeps amulet'
         'speed boots',
     ]);
     assert.equal(game.level.objects.some(obj => obj.cls === 'amulet'), false);
+});
+
+test('successful no-hands polyself uses hero surface for helm falloff', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    game.level.at = () => ({ roomno: 0, typ: ICE });
+    Object.assign(game.u, {
+        uhp: 40,
+        uhpmax: 40,
+        uen: 0,
+        uenmax: 0,
+        ulevel: 1,
+        uac: 8,
+    });
+    const helm = wornArmor(32091, 'orcish helm', 'h');
+    const boots = wornArmor(32092, 'speed boots', 'b');
+    game.inventory = [helm, boots];
+
+    await debugPolyselfInto('wererat');
+
+    const pending = game._pending_message || '';
+    assert.equal(game.u._polyself_form?.name, 'wererat');
+    assert.match(pending, /Your helm falls to the ice!/);
+    assert.match(pending, /Your boots slide off your feet!/);
+    assert.doesNotMatch(pending, /boots .* ice/);
+    assert.deepEqual(game.level.objects.map(obj => obj.kind || obj.actualKind).sort(), [
+        'orcish helm',
+        'speed boots',
+    ]);
 });
 
 test('successful no-hands polyself drops Archeologist fedora and removes luck', async () => {
@@ -8715,7 +8744,7 @@ test('successful no-hands polyself drops Archeologist fedora and removes luck', 
 
     const pending = game._pending_message || '';
     assert.equal(game.u._polyself_form?.name, 'wererat');
-    assert.match(pending, /Your hat falls to the ground!/);
+    assert.match(pending, /Your hat falls to the floor!/);
     assert.equal(game.u.uluck, -1);
     assert.equal(game.inventory.includes(fedora), false);
     assert.equal(game.u.uac, game.u._polyself_form?.mac ?? 10);
@@ -8749,7 +8778,7 @@ test('successful no-hands polyself drops Wizard cornuthaum and removes charisma 
 
     const pending = game._pending_message || '';
     assert.equal(game.u._polyself_form?.name, 'wererat');
-    assert.match(pending, /Your hat falls to the ground!/);
+    assert.match(pending, /Your hat falls to the floor!/);
     assert.equal(game.u.acurr.a[A_CHA], 10);
     assert.equal(game.u.amax.a[A_CHA], 10);
     assert.equal(game.inventory.includes(cornuthaum), false);
@@ -8782,7 +8811,7 @@ test('successful no-hands polyself drops non-Wizard cornuthaum and restores char
 
     await debugPolyselfInto('wererat');
 
-    assert.match(game._pending_message || '', /Your hat falls to the ground!/);
+    assert.match(game._pending_message || '', /Your hat falls to the floor!/);
     assert.equal(game.u.acurr.a[A_CHA], 10);
     assert.equal(game.u.amax.a[A_CHA], 10);
     assert.equal(game.inventory.includes(cornuthaum), false);
@@ -8814,7 +8843,7 @@ test('successful no-hands polyself drops helm of brilliance and removes mental b
 
     const pending = game._pending_message || '';
     assert.equal(game.u._polyself_form?.name, 'wererat');
-    assert.match(pending, /Your helm falls to the ground!/);
+    assert.match(pending, /Your helm falls to the floor!/);
     assert.equal(game.u.acurr.a[A_INT], 10);
     assert.equal(game.u.acurr.a[A_WIS], 11);
     assert.equal(game.u.amax.a[A_INT], 10);
@@ -8858,7 +8887,7 @@ test('successful no-hands polyself drops helm of opposite alignment and restores
     const pending = game._pending_message || '';
     assert.equal(game.u._polyself_form?.name, 'wererat');
     assert.match(pending, /You turn into a wererat!/);
-    assert.match(pending, /Your helm falls to the ground!/);
+    assert.match(pending, /Your helm falls to the floor!/);
     assert.match(pending, /Your mind is back in sync with your body\./);
     assert.equal(game._startup_align, 'lawful');
     assert.equal(game.u.ualign.type, A_LAWFUL);
@@ -8962,7 +8991,7 @@ test('successful horned polyself drops hard unpaid helm in shop', async () => {
     const pending = game._pending_message || '';
     assert.equal(game.u._polyself_form?.name, 'minotaur');
     assert.match(pending, /You turn into a minotaur!/);
-    assert.match(pending, /Your helm falls to the ground!/);
+    assert.match(pending, /Your helm falls to the floor!/);
     assert.doesNotMatch(pending, /can no longer hold your shield|boots .* off your feet|find you must drop your weapon/);
     assert.equal(game.inventory.includes(helm), false);
     assert.equal(game.u.uac, game.u._polyself_form?.mac ?? 10);
@@ -8976,6 +9005,33 @@ test('successful horned polyself drops hard unpaid helm in shop', async () => {
     assert.equal(floorHelm.ox, game.u.ux);
     assert.equal(floorHelm.oy, game.u.uy);
     assert.equal(shop.shopBillEntryForObject(shkp, floorHelm), null);
+});
+
+test('successful horned polyself uses hero surface for hard helm falloff', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    game.level.at = () => ({ roomno: 0, typ: FOUNTAIN });
+    Object.assign(game.u, {
+        uhp: 40,
+        uhpmax: 40,
+        uen: 0,
+        uenmax: 0,
+        ulevel: 1,
+        uac: 9,
+    });
+    const helm = wornArmor(32093, 'orcish helm', 'h');
+    game.inventory = [helm];
+
+    await debugPolyselfInto('minotaur');
+
+    const pending = game._pending_message || '';
+    assert.equal(game.u._polyself_form?.name, 'minotaur');
+    assert.match(pending, /You turn into a minotaur!/);
+    assert.match(pending, /Your helm falls to the fountain!/);
+    assert.doesNotMatch(pending, /Your helm falls to the floor!/);
+    assert.equal(game.inventory.includes(helm), false);
+    assert.equal(game.level.objects.length, 1);
+    assert.equal(game.level.objects[0].kind, 'orcish helm');
 });
 
 test('successful no-hands polyself returns deferred unpaid wielded tool to shop stock', async () => {

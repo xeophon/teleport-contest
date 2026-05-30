@@ -11407,6 +11407,24 @@ function polyselfHelmSimpleName(helm) {
     return POLYSELF_HARD_HELM_KINDS.has(objectKindKey(helm)) ? 'helm' : 'hat';
 }
 
+function polyselfFalloffSurfaceName(x = game.u?.ux, y = game.u?.uy) {
+    const loc = game.level?.at?.(x, y);
+    const typ = movementSurfaceTerrain(loc && loc.typ == null ? { ...loc, typ: ROOM } : loc);
+    if (IS_AIR(typ)) return Is_waterlevel(game.u?.uz) ? 'air bubble' : typ === CLOUD ? 'cloud' : 'air';
+    if (IS_POOL(typ) || typ === WATER) return (game.u?.underwater || game.u?.uunderwater) && !Is_waterlevel(game.u?.uz) ? 'bottom' : 'water';
+    if (typ === ICE) return 'ice';
+    if (IS_LAVA(typ)) return 'lava';
+    if (typ === DRAWBRIDGE_DOWN) return 'bridge';
+    if (typ === ALTAR) return 'altar';
+    if (typ === GRAVE) return 'headstone';
+    if (typ === FOUNTAIN) return 'fountain';
+    if (typ === STAIRS || typ === LADDER) return 'stairs';
+    if (IS_WALL(typ) || typ === SDOOR) return 'wall';
+    if (typ === DOOR) return 'doorway';
+    if (IS_ROOM(typ) && !Is_earthlevel(game.u?.uz)) return 'floor';
+    return 'ground';
+}
+
 function polyselfHeadgearIsFlimsy(helm) {
     const material = String(helm?.material || helm?.oc_material || '').toLowerCase().replace(/^hi_/, '');
     if (POLYSELF_FLIMSY_MATERIALS.has(material)) return true;
@@ -11518,7 +11536,7 @@ function polyselfEquipmentFalloutForForm(form, { bodyArmor = null } = {}) {
                 const horns = hornCount === 1 ? 'horn' : 'horns';
                 messages.push(`Your ${horns} ${hornCount === 1 ? 'pierces' : 'pierce'} through ${ownedEquipmentName(helm)}.`);
             } else {
-                messages.push(`Your ${polyselfHelmSimpleName(helm)} falls to the ground!`);
+                messages.push(`Your ${polyselfHelmSimpleName(helm)} falls to the ${polyselfFalloffSurfaceName()}!`);
                 addItem(helm);
             }
         }
@@ -11541,7 +11559,7 @@ function polyselfEquipmentFalloutForForm(form, { bodyArmor = null } = {}) {
 
         const helm = polyselfWornHelmItem();
         if (helm && !items.includes(helm)) {
-            messages.push(`Your ${polyselfHelmSimpleName(helm)} falls to the ground!`);
+            messages.push(`Your ${polyselfHelmSimpleName(helm)} falls to the ${polyselfFalloffSurfaceName()}!`);
             addItem(helm);
         }
 
