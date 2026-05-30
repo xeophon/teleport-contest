@@ -8278,6 +8278,55 @@ test('floor polymorph upward without hiding does not hit the hero-square pile', 
     assert.doesNotMatch(game._pending_message || '', /shuddering|Izchak gets angry|is furious/);
 });
 
+test('floor polymorph upward while hiding under objects hits only the top cover', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    const wand = unknownAppearanceWand(32031, 'glass', 'w', { wand: 'polymorph', wandIndex: 12 });
+    const lower = { ...foodRation(32032), letter: undefined, line: undefined };
+    const cover = { ...blankScroll(32033), letter: undefined, line: undefined };
+    game.inventory = [wand];
+    game.level.objects = [lower, cover];
+    game.u._polyself_form = { name: 'water moccasin', hidesUnder: true };
+    game.u.uundetected = 1;
+    markHeroSquareVisible();
+
+    await rhack('z');
+    await rhack('w');
+    await rhack('<');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.level.objects.includes(lower), true);
+    assert.equal(game.level.objects.includes(cover), false);
+    assert.equal(game.u.uconduct.polypiles, 1);
+    assert.equal(game.u.uundetected, 1);
+    assert.equal(wand.known, true);
+});
+
+test('floor polymorph downward while hiding under objects skips the top cover', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    const wand = polymorphWand(32034, 'w');
+    const lower = { ...foodRation(32035), letter: undefined, line: undefined };
+    const cover = { ...blankScroll(32036), letter: undefined, line: undefined };
+    game.inventory = [wand];
+    game.level.objects = [lower, cover];
+    game.u._polyself_form = { name: 'water moccasin', hidesUnder: true };
+    game.u.uundetected = 1;
+
+    await rhack('z');
+    await rhack('w');
+    await rhack('>');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.level.objects.includes(lower), false);
+    assert.equal(game.level.objects.includes(cover), true);
+    assert.equal(game.level.objects.filter(obj => obj.ox === 5 && obj.oy === 5).at(-1), cover);
+    assert.equal(game.u.uconduct.polypiles, 1);
+    assert.equal(game.u.uundetected, 1);
+});
+
 test('successful floor polymorph of shop stock angers shopkeeper without immediate debt', async () => {
     const { shkp } = installCommandShopState();
     initRng(1);

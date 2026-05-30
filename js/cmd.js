@@ -26049,13 +26049,15 @@ function prepareFloorPolymorphReplacement(oldObj, newObj) {
     return newObj;
 }
 
-function polymorphFloorPileResultAt(x, y, { skipObjects = null } = {}) {
+function polymorphFloorPileResultAt(x, y, { skipObjects = null, onlyObjects = null, omitObjects = null } = {}) {
     const targetObjects = (game.level?.objects || [])
         .filter(obj => !skipObjects?.has(obj)
+            && (!onlyObjects || onlyObjects.has(obj))
+            && !omitObjects?.has(obj)
             && !obj.hidden && !obj.transientProjectile && obj.ox === x && obj.oy === y && obj.otyp !== BOULDER);
     if (!targetObjects.length) return { affected: false, messages: [] };
     const removeTargets = new Set();
-    const replacements = [];
+    const replacementByOld = new Map();
     const alterationMessages = [];
     let didObjectShudder = false;
     let affected = false;
@@ -26101,13 +26103,16 @@ function polymorphFloorPileResultAt(x, y, { skipObjects = null } = {}) {
         if (angerMessage && !alterationMessages.includes(angerMessage))
             alterationMessages.push(angerMessage);
         removeTargets.add(obj);
-        replacements.unshift(newObj);
+        replacementByOld.set(obj, newObj);
         affected = true;
         rn2(100);
     }
     if (affected) {
-        game.level.objects = (game.level?.objects || []).filter(obj => !removeTargets.has(obj));
-        game.level.objects.push(...replacements);
+        game.level.objects = (game.level?.objects || []).flatMap(obj => {
+            if (!removeTargets.has(obj)) return [obj];
+            const replacement = replacementByOld.get(obj);
+            return replacement ? [replacement] : [];
+        });
         newsym(x, y);
     }
     const messages = didObjectShudder ? ['You feel shuddering vibrations.'] : [];
@@ -26122,10 +26127,41 @@ async function finishPolymorphFloorPileResult(result) {
     return result.affected;
 }
 
-async function polymorphFloorPileAt(x, y, { consumeRangeRoll = false } = {}) {
+function heroCanHideUnderObjects() {
+    const form = game.u?._polyself_form || game.u?.youmonst?.data || game.u?.data || {};
+    return !!form.hidesUnder;
+}
+
+function heroHidingUnderObjects() {
+    return !!(game.u?.uundetected && heroCanHideUnderObjects());
+}
+
+function topFloorObjectAt(x, y) {
+    return [...(game.level?.objects || [])].reverse().find(obj =>
+        obj && !obj.hidden && !obj.transientProjectile && obj.ox === x && obj.oy === y) || null;
+}
+
+function refreshHeroHidingUnderObjectsAt(x, y) {
+    if (!heroCanHideUnderObjects()) return;
+    const hasCover = (game.level?.objects || []).some(obj =>
+        obj && !obj.hidden && !obj.transientProjectile && obj.ox === x && obj.oy === y);
+    game.u.uundetected = hasCover ? 1 : 0;
+}
+
+async function polymorphFloorPileAt(x, y, {
+    consumeRangeRoll = false,
+    onlyObjects = null,
+    omitObjects = null,
+    item = null,
+    learnOnAffected = false,
+    refreshHiding = false,
+} = {}) {
     rn2(19);
     if (consumeRangeRoll) rn2(8);
-    const result = polymorphFloorPileResultAt(x, y);
+    const result = polymorphFloorPileResultAt(x, y, { onlyObjects, omitObjects });
+    if (refreshHiding) refreshHeroHidingUnderObjectsAt(x, y);
+    if (learnOnAffected && result.affected && item)
+        setKnownWandLine(item, 'polymorph');
     return finishPolymorphFloorPileResult(result);
 }
 
@@ -46785,6 +46821,18 @@ export async function rhack(_cmd) {
         }
         if (!dir && !verticalDir) return;
         if (verticalDir?.dz < 0) {
+            if (heroHidingUnderObjects()) {
+                const topObject = topFloorObjectAt(game.u?.ux || 0, game.u?.uy || 0);
+                if (topObject) {
+                    await polymorphFloorPileAt(game.u?.ux || 0, game.u?.uy || 0, {
+                        onlyObjects: new Set([topObject]),
+                        item,
+                        learnOnAffected: true,
+                        refreshHiding: true,
+                    });
+                    return;
+                }
+            }
             rn2(19);
             game._pending_message = '';
             game._message_more = 0;
@@ -46797,7 +46845,11 @@ export async function rhack(_cmd) {
         }
         const x = game.u?.ux || 0;
         const y = game.u?.uy || 0;
-        await polymorphFloorPileAt(x, y);
+        const topObject = heroHidingUnderObjects() ? topFloorObjectAt(x, y) : null;
+        await polymorphFloorPileAt(x, y, {
+            omitObjects: topObject ? new Set([topObject]) : null,
+            refreshHiding: !!topObject,
+        });
         return;
     }
 
