@@ -3197,6 +3197,71 @@ test('worn helmet tip makes adjacent visible dog bark instead of generic nonresp
     assert.doesNotMatch(game._pending_message, /doesn't respond|waves|tips .* in response|curses|gestures/);
 });
 
+test('worn helmet tip makes adjacent invisible dog bark and remembers invisible', async () => {
+    installStableNonShopFloorState();
+    game.u.seeInvisible = false;
+    const targetLoc = game.level.at(6, 5);
+    const helmet = wornArmor(3063521, 'orcish helm', 'h');
+    const dog = ordinaryThrowTarget('dog', 6, 5, {
+        minvis: 1,
+        perminvis: 1,
+        msleeping: 0,
+        mcanmove: true,
+        mcansee: true,
+        mpeaceful: true,
+        mstrategy: 'waitforu',
+        data: { name: 'dog', mlevel: 4, mlet: 'dog', msound: 'bark' },
+    });
+    game.inventory = [helmet];
+    game.level.monsters = [dog];
+    markSquareVisible(6, 5);
+
+    await enterTipCommand();
+    await rhack('h');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(dog.mstrategy, 0);
+    assert.equal(targetLoc.map_invisible, true);
+    assert.match(game._pending_message, /You briefly doff your helm\./);
+    assert.match(game._pending_message, /It barks\./);
+    assert.doesNotMatch(game._pending_message, /unseen creature is ignoring|The dog barks|doesn't respond|waves/);
+});
+
+test('remembered invisible marker masks adjacent invisible dog response', async () => {
+    installStableNonShopFloorState();
+    game.u.seeInvisible = false;
+    const targetLoc = game.level.at(6, 5);
+    targetLoc.map_invisible = true;
+    const helmet = wornArmor(3063522, 'orcish helm', 'h');
+    const dog = ordinaryThrowTarget('dog', 6, 5, {
+        minvis: 1,
+        perminvis: 1,
+        msleeping: 0,
+        mcanmove: true,
+        mcansee: true,
+        mpeaceful: true,
+        mstrategy: 'waitforu',
+        data: { name: 'dog', mlevel: 4, mlet: 'dog', msound: 'bark' },
+    });
+    game.inventory = [helmet];
+    game.level.monsters = [dog];
+    markSquareVisible(6, 5);
+
+    await enterTipCommand();
+    await rhack('h');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(dog.mstrategy, 'waitforu');
+    assert.equal(targetLoc.map_invisible, true);
+    assert.match(game._pending_message, /You briefly doff your helm\./);
+    assert.match(game._pending_message, /That unseen creature is ignoring you!/);
+    assert.doesNotMatch(game._pending_message, /barks|growls|doesn't respond|waves/);
+});
+
 test('unknown cursed worn helmet tip learns curse and spends action', async () => {
     installCommandShopState();
     const helmet = wornArmor(306352, 'orcish helm', 'h', 0, {

@@ -27,7 +27,7 @@ Added focused coverage in `test/shop-billing-helpers.test.mjs`:
 
 - The helper is intentionally local to `tiphat()` and does not replace full `domonnoise()`/`#chat` behavior.
 - Full tame hunger, full moon, shopkeeper, priest, quest, vampire, werecreature, Rider, Oracle, wake/aggravate, and hallucinated gecko special cases remain open.
-- Adjacent invisible responder display canaries remain open even though the command path now marks remembered invisible after local animal noise.
+- Adjacent invisible responder display canaries are covered by `docs/c-parity-audit/249-tiphat-adjacent-invisible-noise-2026-05-31.md`.
 
 ## Verification
 

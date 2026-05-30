@@ -33784,9 +33784,9 @@ function tipHatMonsterSound(mon) {
     return '';
 }
 
-function tipHatMonsterNoise(mon) {
+function tipHatMonsterNoise(mon, { visible = tipHatMonsterVisible(mon) } = {}) {
     if (!mon || heroIsDeaf() || tipHatMonsterSilent(mon)) return { handled: false, message: '' };
-    const name = fireScrollMonsterName(mon);
+    const name = visible ? fireScrollMonsterName(mon) : 'It';
     const sound = tipHatMonsterSound(mon);
     const peaceful = !!mon.mpeaceful;
     switch (sound) {
@@ -33865,7 +33865,7 @@ function tipHatDirectedResponse(dir) {
         if (game.u?.usteed && dir.dz > 0) {
             if (tipHatMonsterHelpless(game.u.usteed))
                 return `${fireScrollMonsterName(game.u.usteed)} doesn't notice.`;
-            return tipHatMonsterNoise(game.u.usteed).message;
+            return tipHatMonsterNoise(game.u.usteed, { visible: true }).message;
         }
         if (dir.dz) return `There's no one ${dir.dz < 0 ? 'up' : 'down'} there.`;
         return "The lout here doesn't acknowledge you...";
@@ -33921,7 +33921,7 @@ function tipHatDirectedResponse(dir) {
     if (visible && tipHatMonsterHumanoid(target))
         return tipHatRudeHumanoidResponse(name);
     if (tipHatMonsterAdjacent(target)) {
-        const noise = tipHatMonsterNoise(target);
+        const noise = tipHatMonsterNoise(target, { visible });
         if (noise.handled) {
             if (!visible) {
                 const loc = game.level?.at?.(target.mx, target.my);
