@@ -451,6 +451,44 @@ function dartStack(id, letter = 'd', quan = 3, extra = {}) {
     };
 }
 
+function monsterThrownRock(id, extra = {}) {
+    return {
+        id,
+        otyp: ROCK,
+        cls: 'gem',
+        glyph: '*',
+        kind: 'rock',
+        actualKind: 'rock',
+        plural: 'rocks',
+        quan: 1,
+        spe: 0,
+        ...extra,
+    };
+}
+
+function monsterSling(id) {
+    return {
+        id,
+        cls: 'weapon',
+        glyph: ')',
+        kind: 'sling',
+        actualKind: 'sling',
+        quan: 1,
+    };
+}
+
+function monsterOrcishDagger(id) {
+    return {
+        id,
+        cls: 'weapon',
+        glyph: ')',
+        kind: 'orcish dagger',
+        actualKind: 'orcish dagger',
+        quan: 1,
+        spe: 0,
+    };
+}
+
 function wieldedWeapon(id, kind, letter = 'w', spe = 0) {
     return {
         id,
@@ -20946,6 +20984,170 @@ test('monster-thrown dagger miss skips rust monster passive object erosion and s
     assert.equal(game.level.objects.length, 1);
     assert.doesNotMatch(landing.messages.join(' '), /rusts/);
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
+});
+
+test('deferred monster-thrown hit egg honors threaded ohit and breaks', async () => {
+    installNonShopFloorState();
+    resetInputState();
+    initRng(1);
+    enableRngLog({ reset: true });
+    const eggItem = { ...egg(874344), otyp: EGG, letter: undefined, line: undefined };
+    game._topline_after_more = 'You are hit by an egg.';
+    game._pending_message = game._topline_after_more;
+    game._message_more = 1;
+    game._process_time_with_more = 0;
+    game._monster_throw_after_more = {
+        missile: eggItem,
+        x: 5,
+        y: 5,
+        glyph: '%',
+        ohit: true,
+    };
+
+    await rhack('\x1b');
+
+    assert.equal(game._monster_throw_after_more, null);
+    assert.equal(game.level.objects.some(obj => obj.id === eggItem.id), false);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
+});
+
+test('deferred monster-thrown missed egg keeps ohit false and lands', async () => {
+    installNonShopFloorState();
+    resetInputState();
+    initRng(1);
+    enableRngLog({ reset: true });
+    const eggItem = { ...egg(874345), otyp: EGG, letter: undefined, line: undefined };
+    game._topline_after_more = 'An egg misses you.';
+    game._pending_message = game._topline_after_more;
+    game._message_more = 1;
+    game._process_time_with_more = 0;
+    game._monster_throw_after_more = {
+        missile: eggItem,
+        x: 5,
+        y: 5,
+        glyph: '%',
+        ohit: false,
+    };
+
+    await rhack('\x1b');
+
+    assert.equal(game._monster_throw_after_more, null);
+    assert.equal(game.level.objects.some(obj => obj.id === eggItem.id), true);
+    assert.equal(game.level.objects.find(obj => obj.id === eggItem.id).ox, 5);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
+});
+
+async function runMonsterSlingRockLanding({ uac }) {
+    installNonShopFloorState();
+    resetInputState();
+    pushKey('\x1b');
+    initRng(1);
+    enableRngLog({ reset: true });
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        ux0: 5,
+        uy0: 5,
+        blind: true,
+        uhp: 20,
+        uhpmax: 20,
+        uac,
+        umovement: NORMAL_SPEED,
+        acurr: { a: [10, 10, 10, 10, 10, 10] },
+    });
+    game.moves = 1;
+    game.context = {};
+    for (let x = 5; x <= 10; x++) markSquareVisible(x, 5);
+    const rock = monsterThrownRock(874346);
+    const sling = monsterSling(874347);
+    const thrower = {
+        mx: 10,
+        my: 5,
+        movement: NORMAL_SPEED,
+        data: { name: 'goblin', mlet: 'o', mmove: NORMAL_SPEED, armed: true, mlevel: 0 },
+        mpeaceful: false,
+        mhp: 5,
+        mhpmax: 5,
+        minvent: [sling, rock],
+        missile: rock,
+        mcansee: true,
+    };
+    game.level.monsters = [thrower];
+    game._pending_time_passed = 1;
+
+    await moveloop_core();
+    resetInputState();
+    return { rock, thrower, rng: getRngLog().map(entry => entry.replace(/=.*/, '')) };
+}
+
+async function runMonsterCrudeDaggerCatch() {
+    installNonShopFloorState();
+    resetInputState();
+    pushKey('\x1b');
+    initRng(1);
+    enableRngLog({ reset: true });
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        ux0: 5,
+        uy0: 5,
+        blind: false,
+        confusion: false,
+        stunned: false,
+        fumbling: false,
+        uhp: 20,
+        uhpmax: 20,
+        uac: 100,
+        umovement: NORMAL_SPEED,
+        acurr: { a: [10, 10, 10, 100, 10, 10] },
+    });
+    game.moves = 1;
+    game.context = {};
+    for (let x = 5; x <= 10; x++) markSquareVisible(x, 5);
+    const daggerItem = monsterOrcishDagger(874348);
+    const thrower = {
+        mx: 10,
+        my: 5,
+        movement: NORMAL_SPEED,
+        data: { name: 'goblin', mlet: 'o', mmove: NORMAL_SPEED, armed: true, mlevel: 0 },
+        mpeaceful: false,
+        mhp: 5,
+        mhpmax: 5,
+        minvent: [daggerItem],
+        missile: daggerItem,
+        mcansee: true,
+    };
+    game.level.monsters = [thrower];
+    game._pending_time_passed = 1;
+
+    await moveloop_core();
+    assert.match(`${game._pending_message || ''} ${game._topline_after_more || ''}`, /You catch the crude dagger/);
+    assert.equal(game._monster_throw_after_more ?? null, null);
+    await rhack('\x1b');
+    resetInputState();
+    return { daggerItem, thrower, rng: getRngLog().map(entry => entry.replace(/=.*/, '')) };
+}
+
+test('production monster sling rock hit threads ohit into drop-throw mulch check', async () => {
+    const { rock, thrower, rng } = await runMonsterSlingRockLanding({ uac: 100 });
+
+    assert.equal(thrower.minvent.some(obj => obj.id === rock.id), false);
+    assert.equal(rng.filter(entry => entry === 'rn2(3)').length, 1);
+});
+
+test('production monster sling rock miss keeps ohit false and skips mulch check', async () => {
+    const { rock, rng } = await runMonsterSlingRockLanding({ uac: -100 });
+
+    assert.equal(game.level.objects.some(obj => obj.id === rock.id), true);
+    assert.equal(rng.filter(entry => entry === 'rn2(3)').length, 0);
+});
+
+test('production monster crude dagger catch does not queue drop-throw landing', async () => {
+    const { daggerItem, thrower, rng } = await runMonsterCrudeDaggerCatch();
+
+    assert.equal(thrower.minvent.some(obj => obj.id === daggerItem.id), false);
+    assert.equal(game.level.objects.some(obj => obj.id === daggerItem.id), false);
+    assert.equal(rng.filter(entry => entry === 'rn2(3)').length, 0);
 });
 
 test('projectile landing runs lava floor effects before sale or stacking', () => {
