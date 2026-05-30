@@ -26005,21 +26005,105 @@ function polymorphShudderOdds(obj) {
     return Math.max(1, odds);
 }
 
-function useUpPolymorphShudderFloorObject(obj, x, y) {
-    if (!obj) return null;
-    const usedObj = splitFloorObjectForUseUp(obj, 1);
-    const shkp = shopkeeperForCostlySpot(x, y);
-    if (shopkeeperInHisShop(shkp)) {
-        const heroShkp = shopkeeperForShopRoom(game.u?.ux, game.u?.uy);
-        if (sameShopkeeper(shkp, heroShkp)) {
-            addContainerAndContentsToShopBill(usedObj, usedObj, usedObj, shkp, x, y);
-            markObjectTreeShopBillsUsedUp(usedObj);
-        } else {
-            shipObjectShopDebt(usedObj, x, y, { shopFloorObj: true, silent: true });
-        }
+function floorPolymorphObjectMaterial(obj) {
+    const explicit = String(obj?.oc_material || obj?.material || '').toLowerCase().replace(/^hi_/, '');
+    if (explicit) return explicit;
+    const kind = objectKindKey(obj);
+    if (obj?.otyp === CORPSE || obj?.otyp === 'corpse' || obj?.otyp === EGG
+        || obj?.otyp === MEATBALL || obj?.otyp === MEAT_STICK || obj?.otyp === ENORMOUS_MEATBALL
+        || /\b(?:corpse|egg|meat|tripe|glob)\b/.test(kind))
+        return 'flesh';
+    if (obj?.cls === 'food' || obj?.otyp === FOOD_CLASS || obj?.glyph === '%')
+        return 'veggy';
+    if (obj?.cls === 'scroll' || obj?.glyph === '?') return 'paper';
+    if (obj?.cls === 'spellbook' || obj?.glyph === '+') return 'paper';
+    return '';
+}
+
+function floorPolymorphGolemSpecForMaterial(material) {
+    const mat = String(material || '').toLowerCase().replace(/^hi_/, '');
+    if (['iron', 'metal', 'mithril'].includes(mat))
+        return { name: 'iron golem', prefix: 'metal ', cwt: 2000 };
+    if (['copper', 'silver', 'platinum', 'gemstone', 'mineral'].includes(mat)) {
+        const stone = rn2(2);
+        return stone
+            ? { name: 'stone golem', prefix: 'lithic ', cwt: 1900 }
+            : { name: 'clay golem', prefix: 'lithic ', cwt: 1550 };
     }
+    if (!mat || mat === '0' || mat === 'no_material' || mat === 'none' || mat === 'flesh')
+        return { name: 'flesh golem', prefix: 'organic ', cwt: 1400 };
+    if (mat === 'wood') return { name: 'wood golem', prefix: 'wood ', cwt: 900 };
+    if (mat === 'leather') return { name: 'leather golem', prefix: 'leather ', cwt: 800 };
+    if (mat === 'cloth') return { name: 'rope golem', prefix: 'cloth ', cwt: 450 };
+    if (mat === 'bone') return { name: 'skeleton', prefix: 'bony ', cwt: 300 };
+    if (mat === 'gold') return { name: 'gold golem', prefix: 'gold ', cwt: 450 };
+    if (mat === 'glass') return { name: 'glass golem', prefix: 'glassy ', cwt: 1800 };
+    if (mat === 'paper') return { name: 'paper golem', prefix: 'paper ', cwt: 400 };
+    return { name: 'straw golem', prefix: '', cwt: 400 };
+}
+
+function billPolymorphFloorUseUpObject(obj, x, y) {
+    const shkp = shopkeeperForCostlySpot(x, y);
+    if (!shopkeeperInHisShop(shkp)) return;
+    const heroShkp = shopkeeperForShopRoom(game.u?.ux, game.u?.uy);
+    if (sameShopkeeper(shkp, heroShkp)) {
+        addContainerAndContentsToShopBill(obj, obj, obj, shkp, x, y);
+        markObjectTreeShopBillsUsedUp(obj);
+    } else {
+        shipObjectShopDebt(obj, x, y, { shopFloorObj: true, silent: true });
+    }
+}
+
+function useUpPolymorphShudderFloorObject(obj, x, y, count = 1) {
+    if (!obj) return null;
+    const usedObj = splitFloorObjectForUseUp(obj, count);
+    billPolymorphFloorUseUpObject(usedObj, x, y);
     removeFloorObject(usedObj);
     return usedObj;
+}
+
+function floorPolymorphPolyuseResists(obj) {
+    if (isPotionDipUnpolyableObject(obj)) return true;
+    rn2(100);
+    return false;
+}
+
+function enoughFloorPileForPolymon(pile) {
+    if (!pile.length) return false;
+    return pile.length > 1 || Math.max(1, Math.trunc(Number(pile[0]?.quan || 1))) > 1;
+}
+
+function floorPolymorphPileObjectsAt(x, y, skipObjects = null) {
+    return (game.level?.objects || [])
+        .filter(obj => obj && !obj.hidden && !obj.transientProjectile && obj.ox === x && obj.oy === y
+            && !skipObjects?.has(obj));
+}
+
+function polyuseFloorPileForMaterial(x, y, material, minwt, skipObjects = null) {
+    let remaining = Math.max(0, Math.trunc(Number(minwt || 0)));
+    for (const obj of floorPolymorphPileObjectsAt(x, y, skipObjects)) {
+        if (remaining <= 0) break;
+        if (floorPolymorphPolyuseResists(obj)) continue;
+        const sameMaterial = floorPolymorphObjectMaterial(obj) === material;
+        if (sameMaterial === (rn2(remaining + 1) !== 0)) {
+            billPolymorphFloorUseUpObject(obj, x, y);
+            remaining -= Math.max(1, Math.trunc(Number(obj.quan || 1)));
+            removeFloorObject(obj);
+        }
+    }
+}
+
+async function createPolymonFromFloorPile(x, y, material, skipObjects = null) {
+    const pile = floorPolymorphPileObjectsAt(x, y, skipObjects);
+    if (!enoughFloorPileForPolymon(pile)) return [];
+    const spec = floorPolymorphGolemSpecForMaterial(material);
+    const genocided = (game._genocided_monsters || []).includes(spec.name);
+    const data = genocided ? null : monsterByRndName(spec.name);
+    const mon = await makemon(data, x, y, MM_NOMSG);
+    polyuseFloorPileForMaterial(x, y, material, spec.cwt, skipObjects);
+    if (mon && cansee(mon.mx, mon.my))
+        return [`Some ${spec.prefix}objects meld, and ${monsterIndefiniteName(mon.data?.name || 'monster')} arises from the pile!`];
+    return [];
 }
 
 function floorPolymorphContentsHaveShopCost(obj, shkp, x, y, seen = new Set()) {
@@ -26104,7 +26188,7 @@ function rockClassPolymorphReplacement(obj, x, y) {
     return newObj;
 }
 
-function polymorphFloorPileResultAt(x, y, {
+async function polymorphFloorPileResultAt(x, y, {
     skipObjects = null,
     onlyObjects = null,
     omitObjects = null,
@@ -26124,6 +26208,7 @@ function polymorphFloorPileResultAt(x, y, {
     const replacementByOld = new Map();
     const alterationMessages = [];
     let didObjectShudder = false;
+    let polyZappedMaterial = null;
     let affected = false;
     for (const obj of [...targetObjects].reverse()) {
         if (polymorphReplacementDisallowed(obj)) continue;
@@ -26134,13 +26219,23 @@ function polymorphFloorPileResultAt(x, y, {
         game.u.uconduct.polypiles = Math.max(0, Math.trunc(Number(game.u.uconduct.polypiles || 0))) + 1;
         const shudderOdds = polymorphShudderOdds(obj);
         if (!rn2(shudderOdds)) {
-            rn2(45 + (game.u?.uluck || 0));
+            if (polyZappedMaterial == null) {
+                const quantity = Math.max(1, Math.trunc(Number(obj.quan || 1)));
+                for (let i = 0; i < quantity; i++) {
+                    if (!rn2(45 + (game.u?.uluck || 0))) {
+                        polyZappedMaterial = floorPolymorphObjectMaterial(obj);
+                        break;
+                    }
+                }
+            }
+            const quantity = Math.max(1, Math.trunc(Number(obj.quan || 1)));
+            const usedCount = quantity > 1 ? rnd(quantity - 1) : 1;
             rn2(100);
             if (!game._polymorph_wand_learned) {
                 rn2(19);
                 game._polymorph_wand_learned = 1;
             }
-            useUpPolymorphShudderFloorObject(obj, x, y);
+            useUpPolymorphShudderFloorObject(obj, x, y, usedCount);
             didObjectShudder = true;
             affected = true;
             continue;
@@ -26187,7 +26282,12 @@ function polymorphFloorPileResultAt(x, y, {
     } else if (restackBoulders) {
         restackFloorBouldersAt(x, y);
     }
-    const messages = didObjectShudder ? ['You feel shuddering vibrations.'] : [];
+    const messages = [];
+    if (polyZappedMaterial != null) {
+        messages.push(...await createPolymonFromFloorPile(x, y, polyZappedMaterial, skipObjects));
+        if (restackBoulders) restackFloorBouldersAt(x, y);
+    }
+    if (didObjectShudder) messages.push('You feel shuddering vibrations.');
     messages.push(...alterationMessages);
     return { affected, messages };
 }
@@ -26231,7 +26331,7 @@ async function polymorphFloorPileAt(x, y, {
 } = {}) {
     rn2(19);
     if (consumeRangeRoll) rn2(8);
-    const result = polymorphFloorPileResultAt(x, y, { onlyObjects, omitObjects, restackBoulders });
+    const result = await polymorphFloorPileResultAt(x, y, { onlyObjects, omitObjects, restackBoulders });
     if (refreshHiding) refreshHeroHidingUnderObjectsAt(x, y);
     if (learnOnAffected && result.affected && item)
         setKnownWandLine(item, 'polymorph');
@@ -26274,7 +26374,7 @@ async function polymorphFloorPileRay(dir, item = null, { attackLevel = 12 } = {}
             affected = true;
             range -= 3;
         }
-        const result = polymorphFloorPileResultAt(x, y, { skipObjects: bypassObjects });
+        const result = await polymorphFloorPileResultAt(x, y, { skipObjects: bypassObjects });
         if (result.affected) {
             affected = true;
             range--;

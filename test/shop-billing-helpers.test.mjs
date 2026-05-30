@@ -8044,18 +8044,67 @@ test('floor polymorph shudder halves odds for large stacks like C', async () => 
     const stack = { ...foodRationStack(32010, 5), ox: 5, oy: 4, letter: undefined, line: undefined };
     game.inventory = [wand];
     game.level.objects = [stack];
-    const expectedPrice = shop.shopItemPrice({ ...stack, quan: 1 }, 5, 4);
+    const expectedUsedCount = 4;
+    const expectedPrice = shop.shopItemPrice({ ...stack, quan: expectedUsedCount }, 5, 4);
 
     await rhack('z');
     await rhack('w');
     await rhack('k');
 
     assert.equal(game.level.objects.includes(stack), true);
-    assert.equal(stack.quan, 4);
+    assert.equal(stack.quan, 5 - expectedUsedCount);
     assert.equal(shkp.billct, 1);
     const entry = shkp.bill[0];
     assert.equal(entry.useup, true);
     assert.equal(shop.shopBillEntryTotal(entry), expectedPrice);
+    assert.match(game._pending_message, /You feel shuddering vibrations\./);
+});
+
+test('floor polymorph shudder can meld flesh food into a flesh golem', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    game._polymorph_wand_learned = 0;
+    markSquareVisible(5, 4);
+    const stack = {
+        ...simpleFood(32046, 'meatball', undefined, { otyp: MEATBALL }),
+        quan: 20,
+        plural: 'meatballs',
+        ox: 5,
+        oy: 4,
+        letter: undefined,
+        line: undefined,
+    };
+    game.level.objects = [stack];
+
+    const affected = await shop.polymorphFloorPileAtForTest(5, 4);
+
+    assert.equal(affected, true);
+    assert.equal(game.level.objects.includes(stack), false);
+    const golem = game.level.monsters.find(mon => mon.data?.name === 'flesh golem');
+    assert.ok(golem);
+    assert.equal(golem.mx, 5);
+    assert.equal(golem.my, 4);
+    assert.match(game._pending_message, /Some organic objects meld, and a flesh golem arises from the pile!/);
+    assert.match(game._pending_message, /You feel shuddering vibrations\./);
+});
+
+test('floor polymorph shudder maps veggie food fallout to a straw golem', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    game._polymorph_wand_learned = 0;
+    markSquareVisible(5, 4);
+    const stack = { ...foodRationStack(32047, 20), ox: 5, oy: 4, letter: undefined, line: undefined };
+    game.level.objects = [stack];
+
+    const affected = await shop.polymorphFloorPileAtForTest(5, 4);
+
+    assert.equal(affected, true);
+    assert.equal(game.level.objects.includes(stack), false);
+    const golem = game.level.monsters.find(mon => mon.data?.name === 'straw golem');
+    assert.ok(golem);
+    assert.equal(golem.mx, 5);
+    assert.equal(golem.my, 4);
+    assert.match(game._pending_message, /Some objects meld, and a straw golem arises from the pile!/);
     assert.match(game._pending_message, /You feel shuddering vibrations\./);
 });
 
