@@ -33786,9 +33786,19 @@ function tipHatMonsterSound(mon) {
     if (/^(kitten|housecat|large cat|jaguar|lynx|panther)$/.test(name)
         || mlet === 'f' || mlet === 'feline')
         return 'mew';
+    if (name === 'gecko') return 'sqeek';
     if (mlet === 'rodent' || /rat|mouse/.test(name)) return 'sqeek';
     if (mlet === 'snake' || /snake|viper|cobra/.test(name)) return 'hiss';
     return '';
+}
+
+function tipHatMonsterAppearsAsGecko(mon) {
+    if (!mon) return false;
+    const name = String(mon.data?.name || mon.name || '').toLowerCase();
+    if (name === 'gecko') return true;
+    const loc = game.level?.at?.(mon.mx, mon.my);
+    const index = loc?.hallucinated_monster_index;
+    return Number.isInteger(index) && DISPLAY_MONSTER_HALLU_NAMES[index] === 'gecko';
 }
 
 function tipHatIsNight() {
@@ -33860,7 +33870,12 @@ function tipHatMonsterNoise(mon, { visible = tipHatMonsterVisible(mon) } = {}) {
     const moves = Number(game.moves ?? game.context?.moves ?? 0);
     const hungryTime = tipHatMonsterHungryTime(mon);
     if (sound === 'moo' && !tame) sound = 'bellow';
+    if (heroIsHallucinating() && tipHatMonsterAppearsAsGecko(mon)) sound = 'sell';
     switch (sound) {
+    case 'sell':
+        return heroIsHallucinating()
+            ? { handled: true, message: `"15 minutes could save you 15 ${shopCurrency(15)}."` }
+            : { handled: false, message: '' };
     case 'bark': {
         const monName = String(mon?.data?.name || mon?.name || '').toLowerCase();
         if (game.flags?.moonphase === 4 && tipHatIsNight())

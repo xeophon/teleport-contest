@@ -3,7 +3,7 @@ import test from 'node:test';
 
 import { interruptEatingOccupation, moveloop_core, processEatingOccupationTick, processForceLockOccupation, processMonsterTurns } from '../js/allmain.js';
 import { activateStatueTrap, burnFloorObjectsByFire, earthFloorEffects, finishForceLock, landMonsterThrownObject, processCorpseTimers, processForceLockOccupationTick, processGlobShrinkTimers, processSpellbookStudyOccupation, rhack, __shopBillingTestHooks as shop } from '../js/cmd.js';
-import { newsym } from '../js/display.js';
+import { newsym, refreshHallucinatedMap } from '../js/display.js';
 import { game, resetGame } from '../js/gstate.js';
 import { pushKey, resetInputState } from '../js/input.js';
 import { createMonsterCorpseOrGlob, mkcorpstat } from '../js/mklev.js';
@@ -3929,6 +3929,97 @@ test('worn helmet tip adjacent invisible zombie silent groan roll still consumes
     assert.match(game._pending_message, /^You briefly doff your helm\.$/);
     assert.doesNotMatch(game._pending_message, /groans|doesn't respond|Nothing happens|waves/);
     assert.deepEqual(getRngLog(), ['rn2(3)=1']);
+});
+
+test('hallucinating worn helmet tip at actual gecko uses sell speech', async () => {
+    installNonShopFloorState();
+    game.u.hallucinating = true;
+    const helmet = wornArmor(3063546, 'orcish helm', 'h');
+    const gecko = ordinaryThrowTarget('gecko', 6, 5, {
+        msleeping: 0,
+        mcanmove: true,
+        mcansee: true,
+        mpeaceful: true,
+        mstrategy: 'waitforu',
+        data: { name: 'gecko', mlevel: 1, mlet: 'lizard' },
+    });
+    game.inventory = [helmet];
+    game.level.monsters = [gecko];
+    markSquareVisible(6, 5);
+
+    await enterTipCommand();
+    await rhack('h');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(gecko.mstrategy, 0);
+    assert.match(game._pending_message, /You briefly doff your helm\./);
+    assert.match(game._pending_message, /"15 minutes could save you 15 zorkmids\."/);
+    assert.doesNotMatch(game._pending_message, /squeaks|doesn't respond|Nothing happens|waves/);
+});
+
+test('hallucinating worn helmet tip routes displayed gecko through sell speech', async () => {
+    installStableNonShopFloorState();
+    initRng(783);
+    game.u.hallucinating = true;
+    game.u._statusSuffix = ' Hallu';
+    const helmet = wornArmor(3063547, 'orcish helm', 'h');
+    const pony = ordinaryThrowTarget('pony', 6, 5, {
+        msleeping: 0,
+        mcanmove: true,
+        mcansee: true,
+        mpeaceful: true,
+        mstrategy: 'waitforu',
+        data: { name: 'pony', mlevel: 3, mlet: 'quadruped' },
+    });
+    game.inventory = [helmet];
+    game.level.monsters = [pony];
+    markSquareVisible(6, 5);
+    game._display_hallucinated_redraw = 1;
+    refreshHallucinatedMap();
+    game._display_hallucinated_redraw = 0;
+
+    assert.equal(game.level.at(6, 5).hallucinated_monster_index, 323);
+    await enterTipCommand();
+    await rhack('h');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(pony.mstrategy, 0);
+    assert.match(game._pending_message, /You briefly doff your helm\./);
+    assert.match(game._pending_message, /"15 minutes could save you 15 zorkmids\."/);
+    assert.doesNotMatch(game._pending_message, /neighs|whickers|doesn't respond|Nothing happens|waves/);
+});
+
+test('nonhallucinating worn helmet tip at gecko squeaks normally', async () => {
+    installNonShopFloorState();
+    game.u.hallucinating = false;
+    game.u._statusSuffix = '';
+    const helmet = wornArmor(3063548, 'orcish helm', 'h');
+    const gecko = ordinaryThrowTarget('gecko', 6, 5, {
+        msleeping: 0,
+        mcanmove: true,
+        mcansee: true,
+        mpeaceful: true,
+        mstrategy: 'waitforu',
+        data: { name: 'gecko', mlevel: 1, mlet: 'lizard' },
+    });
+    game.inventory = [helmet];
+    game.level.monsters = [gecko];
+    markSquareVisible(6, 5);
+
+    await enterTipCommand();
+    await rhack('h');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(gecko.mstrategy, 0);
+    assert.match(game._pending_message, /You briefly doff your helm\./);
+    assert.match(game._pending_message, /The gecko squeaks\./);
+    assert.doesNotMatch(game._pending_message, /15 minutes|zorkmids|doesn't respond|Nothing happens|waves/);
 });
 
 test('unknown cursed worn helmet tip learns curse and spends action', async () => {
