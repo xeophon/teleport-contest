@@ -5073,6 +5073,34 @@ function set_corpsenm(otmp, pm) {
     }
 }
 
+function savedMonsterTraitsForCorpstat(mtmp) {
+    if (!mtmp || typeof mtmp !== 'object') return null;
+    const data = mtmp.data || {};
+    const traits = {
+        data: typeof data === 'object' ? { ...data } : data,
+    };
+    const fields = [
+        'm_id', 'm_lev', 'mlevel', 'mhp', 'mhpmax',
+        'female', 'mtame', 'pet', 'mpeaceful', 'isminion', 'isshk', 'ispriest', 'isgd',
+        'givenName', 'chamBase', 'vampBase', 'perminvis', 'minvis', 'invisible', 'mspeed',
+        'mflee', 'mfleetim', 'mtrapseen', 'mstrategy', 'waiting', 'maligntyp',
+        'mundetected', 'm_ap_type', 'appearObj', 'appearGlyph',
+    ];
+    for (const field of fields) {
+        if (mtmp[field] !== undefined) traits[field] = mtmp[field];
+    }
+    traits.mhpmax = Math.max(1, Math.trunc(Number(traits.mhpmax || mtmp.mhpmax || 1)));
+    traits.mhp = Math.max(0, Math.min(traits.mhpmax, Math.trunc(Number(traits.mhp || mtmp.mhp || 0))));
+    return traits;
+}
+
+function attachSavedMonsterTraits(otmp, mtmp) {
+    const traits = savedMonsterTraitsForCorpstat(mtmp);
+    if (!traits) return;
+    otmp.oextra ??= {};
+    otmp.oextra.omonst = traits;
+}
+
 // mkcorpstat stub
 export function mkcorpstat(objtyp, mtmp, pm, x, y, flags) {
     // C ref: mkcorpstat calls mksobj(objtyp) then set_corpsenm.
@@ -5098,6 +5126,7 @@ export function mkcorpstat(objtyp, mtmp, pm, x, y, flags) {
             }
         }
     }
+    if (objtyp === STATUE && mtmp) attachSavedMonsterTraits(otmp, mtmp);
     Object.assign(otmp, object_display(otmp));
     return otmp;
 }

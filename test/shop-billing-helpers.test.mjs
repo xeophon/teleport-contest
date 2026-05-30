@@ -5714,6 +5714,73 @@ test('downward stone to flesh animates unique floor statue as directed doppelgan
     assertNoStoneToFleshScoreSideEffects();
 });
 
+test('downward stone to flesh restores saved traits from unique floor statue', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    markHeroNeighborhoodVisible();
+    const medusa = vegetarianCorpstatMonster('Medusa', '@', {
+        unique: true,
+        human: true,
+        female: true,
+        neuter: false,
+        mlevel: 20,
+        hpLevel: 20,
+        mmove: 12,
+    });
+    const statue = stoneToFleshStatue(311135, 5, 5, medusa);
+    const ration = simpleFood(311136, 'food ration');
+    const staleDagger = dagger(311137);
+    statue.contents = [ration];
+    statue.oextra = {
+        omonst: {
+            data: medusa,
+            m_id: 98765,
+            givenName: 'Ada',
+            mtame: 8,
+            pet: true,
+            mpeaceful: 1,
+            mhp: 3,
+            mhpmax: 17,
+            m_lev: 12,
+            msleeping: 1,
+            mfrozen: 5,
+            mcanmove: false,
+            mconf: 1,
+            mblinded: 3,
+            mundetected: true,
+            minvent: [staleDagger],
+        },
+    };
+    game.inventory = [];
+    game.level.objects = [statue];
+
+    await castStoneToFleshDown();
+
+    assert.equal(game.level.objects.includes(statue), false);
+    const monster = (game.level.monsters || []).find(mon => mon.data?.name === 'Medusa');
+    assert.ok(monster);
+    assert.equal(monster.chamBase, undefined);
+    assert.ok(monster.m_id);
+    assert.notEqual(monster.m_id, 98765);
+    assert.equal(monster.givenName, 'Ada');
+    assert.equal(monster.mtame, 8);
+    assert.equal(monster.pet, true);
+    assert.equal(monster.mpeaceful, 1);
+    assert.equal(monster.mhpmax, 21);
+    assert.equal(monster.mhp, monster.mhpmax);
+    assert.equal(monster.mrevived, true);
+    assert.equal(monster.msleeping, 0);
+    assert.equal(monster.mfrozen, 0);
+    assert.equal(monster.mcanmove, true);
+    assert.equal(monster.mconf, 0);
+    assert.equal(monster.mblinded, 0);
+    assert.equal(monster.mundetected, false);
+    assert.equal(monster.minvent.includes(ration), true);
+    assert.equal(monster.minvent.includes(staleDagger), false);
+    assert.match(game._pending_message || '', /The statue of Medusa comes to life!/);
+    assertNoStoneToFleshScoreSideEffects();
+});
+
 test('downward stone to flesh gives a named ordinary statue name to the monster', async () => {
     installNonShopFloorState();
     initRng(1);
@@ -15180,6 +15247,67 @@ test('statue trap animates unique no-traits statue as directed doppelganger', as
     assert.match(message || '', /You find Medusa posing as a statue\./);
 });
 
+test('statue trap restores saved traits before releasing hostile monster', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    markSquareVisible(7, 5);
+    const medusa = vegetarianCorpstatMonster('Medusa', '@', {
+        unique: true,
+        human: true,
+        female: true,
+        neuter: false,
+        mlevel: 20,
+        hpLevel: 20,
+        mmove: 12,
+    });
+    const statue = stoneToFleshStatue(61340, 7, 5, medusa);
+    const ration = putObjectInContainer(statue, foodRation(61341));
+    const staleDagger = dagger(61342);
+    statue.oextra = {
+        omonst: {
+            data: medusa,
+            m_id: 45678,
+            givenName: 'Ada',
+            mtame: 5,
+            pet: true,
+            mpeaceful: 1,
+            mhp: 2,
+            mhpmax: 17,
+            m_lev: 12,
+            msleeping: 1,
+            mtrapped: 1,
+            mconf: 1,
+            minvent: [staleDagger],
+        },
+    };
+    const trap = { ttyp: STATUE_TRAP, tx: 7, ty: 5 };
+    game.level.objects = [statue];
+    game.level.traps = [trap];
+
+    const message = await activateStatueTrap(trap, 7, 5, { normal: true });
+
+    assert.equal(game.level.objects.includes(statue), false);
+    assert.equal(game.level.traps.includes(trap), false);
+    const monster = (game.level.monsters || []).find(mon => mon.data?.name === 'Medusa');
+    assert.ok(monster);
+    assert.equal(monster.chamBase, undefined);
+    assert.ok(monster.m_id);
+    assert.notEqual(monster.m_id, 45678);
+    assert.equal(monster.givenName, 'Ada');
+    assert.equal(monster.mtame, 0);
+    assert.equal(monster.pet, false);
+    assert.equal(monster.mpeaceful, 0);
+    assert.equal(monster.mhpmax, 21);
+    assert.equal(monster.mhp, monster.mhpmax);
+    assert.equal(monster.mrevived, true);
+    assert.equal(monster.msleeping, 0);
+    assert.equal(monster.mtrapped, 0);
+    assert.equal(monster.mconf, 0);
+    assert.equal(monster.minvent.includes(ration), true);
+    assert.equal(monster.minvent.includes(staleDagger), false);
+    assert.match(message || '', /You find Medusa posing as a statue\./);
+});
+
 test('shattering no-charge shop-floor statue trap does not charge contents', async () => {
     const { shkp } = installCommandShopState();
     initRng(6);
@@ -22376,6 +22504,9 @@ test('hero-thrown cockatrice egg petrifies direct-hit monster', async () => {
     assert.equal(statue.otyp, STATUE);
     assert.equal(statue.kind, 'statue');
     assert.equal(statue.corpsenm?.name, 'goblin');
+    assert.equal(statue.oextra?.omonst?.data?.name, 'goblin');
+    assert.equal(statue.oextra?.omonst?.mpeaceful, true);
+    assert.equal(statue.oextra?.omonst?.minvent, undefined);
     assert.equal(statue.ox, 7);
     assert.equal(statue.oy, 5);
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 2), [
