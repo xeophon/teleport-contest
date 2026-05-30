@@ -8400,6 +8400,112 @@ test('successful breakarm polyself destroys body armor and shirt but drops cloak
     assert.equal(game.level.objects.some(obj => obj.kind === 'leather armor' || obj.kind === 'T-shirt'), false);
 });
 
+test('successful small polyself slips out of body armor cloak and shirt', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, {
+        uhp: 40,
+        uhpmax: 40,
+        uen: 0,
+        uenmax: 0,
+        ulevel: 1,
+        uac: 2,
+    });
+    const body = wornArmor(32072, 'leather armor', 'a');
+    const cloak = wornArmor(32073, 'cloak of displacement', 'c');
+    const shirt = wornArmor(32074, 'T-shirt', 't');
+    game.inventory = [body, cloak, shirt];
+
+    await debugPolyselfInto('gnome');
+
+    const pending = game._pending_message || '';
+    assert.equal(game.u._polyself_form?.name, 'gnome');
+    assert.match(pending, /You turn into a gnome!/);
+    assert.match(pending, /Your armor falls around you!/);
+    assert.match(pending, /You shrink out of your cloak!/);
+    assert.match(pending, /You become much too small for your shirt!/);
+    assert.ok(pending.indexOf('Your armor falls around you!')
+        < pending.indexOf('You shrink out of your cloak!'));
+    assert.ok(pending.indexOf('You shrink out of your cloak!')
+        < pending.indexOf('You become much too small for your shirt!'));
+    assert.equal(game.inventory.includes(body), false);
+    assert.equal(game.inventory.includes(cloak), false);
+    assert.equal(game.inventory.includes(shirt), false);
+    assert.equal(game.u.uac, 10);
+    assert.deepEqual(game.level.objects.map(obj => obj.kind || obj.actualKind), [
+        'leather armor',
+        'cloak of displacement',
+        'T-shirt',
+    ]);
+});
+
+test('successful small polyself keeps adaptive mummy wrapping', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, {
+        uhp: 40,
+        uhpmax: 40,
+        uen: 0,
+        uenmax: 0,
+        ulevel: 1,
+        uac: 2,
+    });
+    const body = wornArmor(32078, 'leather armor', 'a');
+    const wrapping = wornArmor(32079, 'mummy wrapping', 'm');
+    const shirt = wornArmor(32080, 'T-shirt', 't');
+    game.inventory = [body, wrapping, shirt];
+
+    await debugPolyselfInto('gnome');
+
+    const pending = game._pending_message || '';
+    assert.match(pending, /Your armor falls around you!/);
+    assert.doesNotMatch(pending, /shrink out of your wrapping|wrapping falls|wrapping tears/);
+    assert.match(pending, /You become much too small for your shirt!/);
+    assert.equal(game.inventory.includes(body), false);
+    assert.equal(game.inventory.includes(wrapping), true);
+    assert.equal(wrapping.worn, true);
+    assert.equal(game.inventory.includes(shirt), false);
+    assert.deepEqual(game.level.objects.map(obj => obj.kind || obj.actualKind), [
+        'leather armor',
+        'T-shirt',
+    ]);
+});
+
+test('successful hobbit polyself keeps elven body armor racial exception', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, {
+        uhp: 40,
+        uhpmax: 40,
+        uen: 0,
+        uenmax: 0,
+        ulevel: 1,
+        uac: 2,
+    });
+    const body = wornArmor(32075, 'elven mithril-coat', 'a');
+    const cloak = wornArmor(32076, 'cloak of displacement', 'c');
+    const shirt = wornArmor(32077, 'T-shirt', 't');
+    game.inventory = [body, cloak, shirt];
+
+    await debugPolyselfInto('hobbit');
+
+    const pending = game._pending_message || '';
+    assert.equal(game.u._polyself_form?.name, 'hobbit');
+    assert.doesNotMatch(pending, /Your armor falls around you!/);
+    assert.match(pending, /You shrink out of your cloak!/);
+    assert.match(pending, /You become much too small for your shirt!/);
+    assert.equal(game.inventory.includes(body), true);
+    assert.equal(body.worn, true);
+    assert.equal(game.inventory.includes(cloak), false);
+    assert.equal(game.inventory.includes(shirt), false);
+    assert.ok(game.u.uac < 10);
+    assert.deepEqual(game.level.objects.map(obj => obj.kind || obj.actualKind), [
+        'cloak of displacement',
+        'T-shirt',
+    ]);
+    assert.equal(game.level.objects.some(obj => obj.kind === 'elven mithril-coat'), false);
+});
+
 test('successful whirly polyself slips out of body armor cloak and shirt', async () => {
     installNonShopFloorState();
     initRng(1);

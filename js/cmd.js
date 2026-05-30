@@ -11249,7 +11249,12 @@ function polyselfWornShirtItem() {
 }
 
 function polyselfWornBodyArmorItem() {
-    return wornArmorInSlot('body');
+    const slotted = wornArmorInSlot('body');
+    if (slotted) return slotted;
+    return (game.inventory || []).find(item => {
+        if (!(item?.cls === 'armor' && isWornInventoryItem(item))) return false;
+        return /\bmithril-coat\b/.test(armorKind(item));
+    }) || null;
 }
 
 function polyselfWornCloakItem() {
@@ -11262,6 +11267,13 @@ const POLYSELF_BREAKARM_FORM_NAMES = new Set([
     'winged gargoyle',
 ]);
 
+const POLYSELF_SMALL_SLIPARM_FORM_NAMES = new Set([
+    'hobbit',
+    'gnome',
+    'gnome leader',
+    'gnome ruler',
+]);
+
 function polyselfFormLowerName(form) {
     return String(form?.name || '').toLowerCase();
 }
@@ -11271,8 +11283,19 @@ function polyselfFormWhirly(form) {
     return !!(form?.whirly || form?.mlet === 'v' || form?.glyph === 'v' || name === 'air elemental');
 }
 
+function polyselfFormNoncorporeal(form) {
+    const name = polyselfFormLowerName(form);
+    return !!(form?.noncorporeal || form?.mlet === 'ghost' || name === 'ghost' || name === 'shade');
+}
+
+function polyselfFormSmallEnoughForArmorSlip(form) {
+    const name = polyselfFormLowerName(form);
+    return !!(form?.verysmall || form?.tiny || form?.msize === 'tiny' || form?.msize === 'small'
+        || form?.size === 'tiny' || form?.size === 'small' || POLYSELF_SMALL_SLIPARM_FORM_NAMES.has(name));
+}
+
 function polyselfFormSlipsArmor(form) {
-    return !!(form?.verysmall || polyselfFormWhirly(form) || form?.noncorporeal);
+    return !!(polyselfFormSmallEnoughForArmorSlip(form) || polyselfFormWhirly(form) || polyselfFormNoncorporeal(form));
 }
 
 function polyselfFormNoHandsFallout(form) {
@@ -11289,6 +11312,14 @@ function polyselfFormIsMummy(form) {
     return !!(form && (form.mlet === 'M' || form.glyph === 'M' || /\bmummy\b/i.test(form.name || '')));
 }
 
+function polyselfFormHumanoidForWrapping(form) {
+    const name = polyselfFormLowerName(form);
+    return !!(form?.humanoid || form?.human || form?.mlet === 'humanoid' || form?.mlet === 'human'
+        || form?.mlet === '@' || form?.glyph === '@' || form?.mlet === 'G' || form?.glyph === 'G'
+        || name === 'hobbit' || name === 'dwarf' || name === 'gnome'
+        || name === 'gnome leader' || name === 'gnome ruler');
+}
+
 function polyselfCloakSimpleName(cloak) {
     const kind = objectKindKey(cloak);
     if (kind === 'robe') return 'robe';
@@ -11298,7 +11329,16 @@ function polyselfCloakSimpleName(cloak) {
 }
 
 function polyselfMummyWrappingAllowed(form, cloak) {
-    return objectKindKey(cloak) === 'mummy wrapping' && polyselfFormIsMummy(form);
+    const name = polyselfFormLowerName(form);
+    return objectKindKey(cloak) === 'mummy wrapping'
+        && !polyselfFormNoncorporeal(form)
+        && form?.mlet !== 'C' && form?.glyph !== 'C'
+        && name !== 'marilith' && name !== 'winged gargoyle'
+        && (polyselfFormIsMummy(form) || polyselfFormHumanoidForWrapping(form));
+}
+
+function polyselfRacialArmorException(form, armor) {
+    return polyselfFormLowerName(form) === 'hobbit' && /\belven\b/.test(objectKindKey(armor));
 }
 
 function polyselfEyewearFalloffName(item) {
@@ -11357,14 +11397,16 @@ function polyselfEquipmentFalloutForForm(form, { bodyArmor = null } = {}) {
     } else {
         if (polyselfFormSlipsArmor(form)) {
             const whirly = polyselfFormWhirly(form);
-            const armor = bodyArmor || (whirly ? polyselfWornBodyArmorItem() : null);
-            if (armor) {
+            const armor = bodyArmor || polyselfWornBodyArmorItem();
+            if (armor && !polyselfRacialArmorException(form, armor)) {
                 if (!bodyArmor) messages.push('Your armor falls around you!');
                 addItem(armor);
             }
-            const cloak = whirly ? polyselfWornCloakItem() : null;
+            const cloak = polyselfWornCloakItem();
             if (cloak && !polyselfMummyWrappingAllowed(form, cloak)) {
-                messages.push(`Your ${polyselfCloakSimpleName(cloak)} falls, unsupported!`);
+                messages.push(whirly
+                    ? `Your ${polyselfCloakSimpleName(cloak)} falls, unsupported!`
+                    : `You shrink out of your ${polyselfCloakSimpleName(cloak)}!`);
                 addItem(cloak);
             }
             const shirt = polyselfWornShirtItem();
@@ -11469,11 +11511,22 @@ function restorePolyselfBaseBlindness(base) {
     game.u._polyself_form_blinded = false;
 }
 
+const POLYSELF_ARMOR_AC_BONUS = {
+    'dwarvish mithril-coat': 6,
+    'elven mithril-coat': 5,
+};
+
+function polyselfArmorAcValue(item) {
+    const base = POLYSELF_ARMOR_AC_BONUS[armorKind(item)];
+    if (base == null) return wornArmorAcValueGreatestErosion(item);
+    return base + (item.spe ?? 0) - Math.min(Math.max(item.oeroded || 0, item.oeroded2 || 0), base);
+}
+
 function recomputePolyselfArmorClass(form = polyselfForm()) {
     if (!game.u) return;
     let ac = form?.mac ?? 10;
     for (const item of game.inventory || []) {
-        if (isWornArmorItem(item)) ac -= wornArmorAcValueGreatestErosion(item);
+        if (isWornArmorItem(item)) ac -= polyselfArmorAcValue(item);
     }
     game.u.uac = ac;
 }
@@ -11639,7 +11692,8 @@ function becomeMonster(name) {
         }
     }
     const cloak = polyselfWornCloakItem();
-    if (cloak && (form.name === 'gnome' || form.verysmall)) {
+    if (cloak && (form.verysmall
+        || (form.name === 'gnome' && !polyselfWornBodyArmorItem() && !polyselfWornShirtItem()))) {
         message += '  You shrink out of your cloak!';
         game._polyself_cloak_after_more_letter = cloak.letter;
         game._topline_after_more = 'Your movements are slowed slightly because of your load.';
