@@ -1416,16 +1416,16 @@ const POISONABLE_WISH_WEAPONS = new Set([
     'dart', 'darts', 'shuriken', 'throwing star', 'throwing stars',
 ]);
 const DRAGON_ARMOR_SPECS = [
-    { colorName: 'gray', aliases: ['gray', 'grey'], color: CLR_GRAY, mailOtyp: GRAY_DRAGON_SCALE_MAIL, scalesOtyp: GRAY_DRAGON_SCALES },
-    { colorName: 'gold', aliases: ['gold'], color: CLR_YELLOW, mailOtyp: GOLD_DRAGON_SCALE_MAIL, scalesOtyp: GOLD_DRAGON_SCALES },
-    { colorName: 'silver', aliases: ['silver'], color: CLR_BRIGHT_CYAN, mailOtyp: SILVER_DRAGON_SCALE_MAIL, scalesOtyp: SILVER_DRAGON_SCALES },
-    { colorName: 'red', aliases: ['red'], color: CLR_RED, mailOtyp: RED_DRAGON_SCALE_MAIL, scalesOtyp: RED_DRAGON_SCALES },
-    { colorName: 'white', aliases: ['white'], color: CLR_WHITE, mailOtyp: WHITE_DRAGON_SCALE_MAIL, scalesOtyp: WHITE_DRAGON_SCALES },
-    { colorName: 'orange', aliases: ['orange'], color: CLR_ORANGE, mailOtyp: ORANGE_DRAGON_SCALE_MAIL, scalesOtyp: ORANGE_DRAGON_SCALES },
-    { colorName: 'black', aliases: ['black'], color: CLR_BLACK, mailOtyp: BLACK_DRAGON_SCALE_MAIL, scalesOtyp: BLACK_DRAGON_SCALES },
-    { colorName: 'blue', aliases: ['blue'], color: CLR_BLUE, mailOtyp: BLUE_DRAGON_SCALE_MAIL, scalesOtyp: BLUE_DRAGON_SCALES },
-    { colorName: 'green', aliases: ['green'], color: CLR_GREEN, mailOtyp: GREEN_DRAGON_SCALE_MAIL, scalesOtyp: GREEN_DRAGON_SCALES },
-    { colorName: 'yellow', aliases: ['yellow'], color: CLR_YELLOW, mailOtyp: YELLOW_DRAGON_SCALE_MAIL, scalesOtyp: YELLOW_DRAGON_SCALES },
+    { colorName: 'gray', aliases: ['gray', 'grey'], color: CLR_GRAY, mailOtyp: GRAY_DRAGON_SCALE_MAIL, scalesOtyp: GRAY_DRAGON_SCALES, properties: ['antimagic'] },
+    { colorName: 'gold', aliases: ['gold'], color: CLR_YELLOW, mailOtyp: GOLD_DRAGON_SCALE_MAIL, scalesOtyp: GOLD_DRAGON_SCALES, properties: ['hallucination'] },
+    { colorName: 'silver', aliases: ['silver'], color: CLR_BRIGHT_CYAN, mailOtyp: SILVER_DRAGON_SCALE_MAIL, scalesOtyp: SILVER_DRAGON_SCALES, properties: ['reflection'] },
+    { colorName: 'red', aliases: ['red'], color: CLR_RED, mailOtyp: RED_DRAGON_SCALE_MAIL, scalesOtyp: RED_DRAGON_SCALES, properties: ['fire', 'infravision'] },
+    { colorName: 'white', aliases: ['white'], color: CLR_WHITE, mailOtyp: WHITE_DRAGON_SCALE_MAIL, scalesOtyp: WHITE_DRAGON_SCALES, properties: ['cold'] },
+    { colorName: 'orange', aliases: ['orange'], color: CLR_ORANGE, mailOtyp: ORANGE_DRAGON_SCALE_MAIL, scalesOtyp: ORANGE_DRAGON_SCALES, properties: ['sleep', 'freeAction'] },
+    { colorName: 'black', aliases: ['black'], color: CLR_BLACK, mailOtyp: BLACK_DRAGON_SCALE_MAIL, scalesOtyp: BLACK_DRAGON_SCALES, properties: ['disintegration', 'drainResistance'] },
+    { colorName: 'blue', aliases: ['blue'], color: CLR_BLUE, mailOtyp: BLUE_DRAGON_SCALE_MAIL, scalesOtyp: BLUE_DRAGON_SCALES, properties: ['shock', 'speed'] },
+    { colorName: 'green', aliases: ['green'], color: CLR_GREEN, mailOtyp: GREEN_DRAGON_SCALE_MAIL, scalesOtyp: GREEN_DRAGON_SCALES, properties: ['poison', 'sickness'] },
+    { colorName: 'yellow', aliases: ['yellow'], color: CLR_YELLOW, mailOtyp: YELLOW_DRAGON_SCALE_MAIL, scalesOtyp: YELLOW_DRAGON_SCALES, properties: ['acid', 'stone'] },
 ];
 const DRAGON_ARMOR_BY_COLOR = new Map();
 for (const spec of DRAGON_ARMOR_SPECS)
@@ -7293,11 +7293,10 @@ function buildGenericAttributesPage2Rows() {
             [row++, 0, alignmentLine],
             [row++, 0, `  Your alignment is ${alignRecord}.`],
         );
-        const magicResistanceSource = (game.inventory || []).find(item =>
-            item.worn && /gray dragon scale mail/i.test(String(item.kind || item.actualKind || inventoryItemName(item))))
-            || (game.inventory || []).find(item =>
-                item.worn && /cloak of magic resistance/i.test(inventoryItemName(item)));
-        if (magicResistanceSource)
+        const magicResistanceSource = activeAntimagicSource();
+        if (polyselfFormHasAntimagic())
+            rows.push([row++, 0, '  You are magic-protected from your creature form.']);
+        else if (magicResistanceSource)
             rows.push([row++, 0, `  You are magic-protected because of your ${pickupObjectName(magicResistanceSource)}.`]);
         if ((game.inventory || []).some(item => item.wielded && item.artifact === 'Grayswandir'))
             rows.push([row++, 0, '  You resist hallucinations because of Grayswandir.']);
@@ -8929,6 +8928,25 @@ function isBlueDragonArmorKind(kind) {
 
 function isSilverDragonArmorKind(kind) {
     return kind === 'silver dragon scale mail' || kind === 'silver dragon scales';
+}
+
+function dragonArmorKindHasProperty(kind, property) {
+    return !!DRAGON_ARMOR_SPEC_BY_KIND.get(kind)?.properties?.includes(property);
+}
+
+function polyselfFormHasAntimagic(form = game.u?._polyself_form) {
+    const name = String(form?.name || '').toLowerCase();
+    return !!(form?.magicResistance || form?.antimagic || form?.resistsMagic || form?.resists_magm
+        || name === 'gray dragon' || name === 'grey dragon'
+        || name === 'baby gray dragon' || name === 'baby grey dragon');
+}
+
+function activeAntimagicSource() {
+    return (game.inventory || []).find(item => {
+        if (!isActiveInventoryExtrinsicItem(item)) return false;
+        const kind = objectKindKey(item);
+        return dragonArmorKindHasProperty(kind, 'antimagic') || kind === 'cloak of magic resistance';
+    }) || null;
 }
 
 const ROLE_INTRINSIC_FAST_LEVELS = {
@@ -21987,13 +22005,10 @@ function readBlindBlockMessage(item, isScroll) {
     return '';
 }
 
-function heroHasAntimagic() {
+export function heroHasAntimagic() {
     if (game.u?.magicResistance || game.u?.antimagic) return true;
-    return (game.inventory || []).some(item => {
-        if (!isActiveInventoryExtrinsicItem(item)) return false;
-        return /cloak of magic resistance|gray dragon scale mail|gray dragon scales/i
-            .test(String(item.kind || item.actualKind || item.line || ''));
-    });
+    if (polyselfFormHasAntimagic()) return true;
+    return !!activeAntimagicSource();
 }
 
 function heroHasPoisonResistance() {
@@ -27687,6 +27702,7 @@ export const __shopBillingTestHooks = {
     findFloorPickupFoodMergeTargetForPreflight,
     finishDroppedObjectSale,
     finishShopFloorContainerPutSale,
+    heroHasAntimagicForTest: heroHasAntimagic,
     heroHasAcidResistanceForTest: heroHasAcidResistance,
     heroHasPoisonResistanceForTest: heroHasPoisonResistance,
     impactDropFloorObjects,
@@ -36599,7 +36615,7 @@ function deathAttributesPage2() {
     );
     if (game.u?.poisonResistance) rows.push([row++, 0, ' You were poison resistant.']);
     if (roleName === 'Ranger') rows.push([row++, 0, ' You had automatic searching.']);
-    if ((game.inventory || []).some(item => /cloak of magic resistance/i.test(item.kind || item.line || '')))
+    if (heroHasAntimagic())
         rows.push([row++, 0, ' You were magic-protected.']);
     if (['elf', 'gnome', 'dwarf', 'orc'].includes(game._startup_race)) rows.push([row++, 0, ' You had infravision.']);
     if (game.u?.stealth) rows.push([row++, 0, ' You were stealthy.']);

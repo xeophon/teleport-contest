@@ -8791,6 +8791,52 @@ test('successful matching blue dragon polyself keeps embedded armor speed source
     assert.equal(game.level.objects.length, 0);
 });
 
+test('successful gray dragon polyself grants form antimagic', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, {
+        uhp: 40,
+        uhpmax: 40,
+        uen: 0,
+        uenmax: 0,
+        ulevel: 1,
+        uac: 10,
+    });
+    game.inventory = [];
+
+    await debugPolyselfInto('gray dragon');
+
+    assert.equal(game.u._polyself_form?.name, 'gray dragon');
+    assert.equal(shop.heroHasAntimagicForTest(), true);
+});
+
+test('successful matching gray dragon polyself keeps embedded armor antimagic source', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, {
+        uhp: 40,
+        uhpmax: 40,
+        uen: 0,
+        uenmax: 0,
+        ulevel: 1,
+        uac: 10,
+    });
+    const body = wornArmor(32145, 'gray dragon scales', 'a');
+    game.inventory = [body];
+
+    await debugPolyselfInto('gray dragon');
+
+    const pending = game._pending_message || '';
+    assert.equal(game.u._polyself_form?.name, 'gray dragon');
+    assert.match(pending, /You merge with your scaly armor\./);
+    assert.doesNotMatch(pending, /Your armor falls around you|You break out of your armor/);
+    assert.equal(game.inventory.includes(body), true);
+    assert.equal(body.worn, false);
+    assert.equal(body._polyselfSkin, true);
+    assert.equal(shop.heroHasAntimagicForTest(), true);
+    assert.equal(game.level.objects.length, 0);
+});
+
 test('successful matching silver dragon polyself keeps embedded armor reflection source', async () => {
     installNonShopFloorState();
     initRng(1);
@@ -8913,6 +8959,69 @@ test('successful small polyself dropping silver dragon scales clears reflection'
     assert.equal(game.level.objects[0].kind, 'silver dragon scales');
     assert.equal(game.level.objects[0].worn, false);
     assert.equal(game.u.reflecting, false);
+});
+
+test('successful no-hands polyself clears gray dragon antimagic before overload more', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, {
+        uhp: 40,
+        uhpmax: 40,
+        uen: 0,
+        uenmax: 0,
+        ulevel: 1,
+        uac: 1,
+    });
+    const body = wornArmor(32146, 'gray dragon scale mail', 'a');
+    game.inventory = [body];
+    assert.equal(shop.heroHasAntimagicForTest(), true);
+
+    await debugPolyselfInto('wererat');
+
+    const first = game._pending_message || '';
+    assert.equal(game.u._polyself_form?.name, 'wererat');
+    assert.match(first, /Your armor falls around you!/);
+    assert.equal(game.inventory.includes(body), true);
+    assert.equal(body.worn, false);
+    assert.doesNotMatch(body.line || '', /being worn/);
+    assert.equal(shop.heroHasAntimagicForTest(), false);
+    assert.equal(game.level.objects.length, 0);
+
+    await rhack(' ');
+    await rhack(' ');
+
+    assert.equal(game.inventory.includes(body), false);
+    assert.equal(game.level.objects.length, 1);
+    assert.equal(game.level.objects[0].kind, 'gray dragon scale mail');
+    assert.equal(game.level.objects[0].worn, false);
+    assert.equal(shop.heroHasAntimagicForTest(), false);
+});
+
+test('successful small polyself dropping gray dragon scales clears antimagic', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, {
+        uhp: 40,
+        uhpmax: 40,
+        uen: 0,
+        uenmax: 0,
+        ulevel: 1,
+        uac: 7,
+    });
+    const body = wornArmor(32147, 'gray dragon scales', 'a');
+    game.inventory = [body];
+    assert.equal(shop.heroHasAntimagicForTest(), true);
+
+    await debugPolyselfInto('gnome');
+
+    const pending = game._pending_message || '';
+    assert.equal(game.u._polyself_form?.name, 'gnome');
+    assert.match(pending, /Your armor falls around you!/);
+    assert.equal(game.inventory.includes(body), false);
+    assert.equal(game.level.objects.length, 1);
+    assert.equal(game.level.objects[0].kind, 'gray dragon scales');
+    assert.equal(game.level.objects[0].worn, false);
+    assert.equal(shop.heroHasAntimagicForTest(), false);
 });
 
 test('successful large dog polyself breaks body armor instead of overloading', async () => {
