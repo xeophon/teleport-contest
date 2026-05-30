@@ -11224,6 +11224,33 @@ function polyselfWieldedWeaponItem() {
         item && item.cls === 'weapon' && itemIsWielded(item));
 }
 
+function polyselfFormHasNoHead(form) {
+    return !!(form && (form.nohead || form.noHead || form.headless || form.hasHead === false));
+}
+
+function polyselfIsEyewearItem(item) {
+    return item?.cls === 'tool' && ['blindfold', 'towel', 'lenses'].includes(objectKindKey(item));
+}
+
+function polyselfWornEyewearItem() {
+    return (game.inventory || []).find(item =>
+        polyselfIsEyewearItem(item) && isWornInventoryItem(item));
+}
+
+function polyselfEyewearFalloffName(item) {
+    const kind = objectKindKey(item);
+    if (kind === 'lenses') return 'lenses';
+    if (kind === 'blindfold' || kind === 'towel') return kind;
+    return inventoryItemName(item).replace(/^(?:an?|the) /i, '').replace(/^pair of /i, '');
+}
+
+function clearPolyselfEyewearState(item, form) {
+    if (!polyselfIsEyewearItem(item) || !game.u) return;
+    if (objectKindKey(item) !== 'lenses') game.u.blind = !!form?.noeyes;
+    game.u.blindfolded = false;
+    game.u.Blindfolded = false;
+}
+
 function polyselfEquipmentFalloutForForm(form, { bodyArmor = null } = {}) {
     const items = [];
     const messages = [];
@@ -11232,44 +11259,54 @@ function polyselfEquipmentFalloutForForm(form, { bodyArmor = null } = {}) {
     };
 
     addItem(bodyArmor);
-    if (!(form?.nohands || form?.verysmall)) return { items, messages };
+    if (form?.nohands || form?.verysmall) {
+        const gloves = polyselfWornArmorMatching(/glove|gauntlet/);
+        const weapon = polyselfWieldedWeaponItem();
+        if (gloves) {
+            messages.push(`You drop your gloves${weapon ? ' and weapon' : ''}!`);
+            addItem(weapon);
+            addItem(gloves);
+        } else if (weapon) {
+            messages.push('You find you must drop your weapon!');
+            addItem(weapon);
+        }
 
-    const gloves = polyselfWornArmorMatching(/glove|gauntlet/);
-    const weapon = polyselfWieldedWeaponItem();
-    if (gloves) {
-        messages.push(`You drop your gloves${weapon ? ' and weapon' : ''}!`);
-        addItem(weapon);
-        addItem(gloves);
-    } else if (weapon) {
-        messages.push('You find you must drop your weapon!');
-        addItem(weapon);
+        const shield = polyselfWornArmorMatching(/shield/);
+        if (shield) {
+            messages.push('You can no longer hold your shield!');
+            addItem(shield);
+        }
+
+        const helm = polyselfWornArmorMatching(/helm|helmet|hat|fedora|cornuthaum|cap|pot/);
+        if (helm) {
+            const helmName = /helm/.test(inventoryItemName(helm).toLowerCase()) ? 'helm' : 'helmet';
+            messages.push(`Your ${helmName} falls to the ground!`);
+            addItem(helm);
+        }
+
+        const boots = polyselfWornArmorMatching(/boot|shoe/);
+        if (boots) {
+            messages.push(`Your boots ${form.verysmall ? 'slide' : 'are pushed'} off your feet!`);
+            addItem(boots);
+        }
     }
 
-    const shield = polyselfWornArmorMatching(/shield/);
-    if (shield) {
-        messages.push('You can no longer hold your shield!');
-        addItem(shield);
-    }
-
-    const helm = polyselfWornArmorMatching(/helm|helmet|hat|fedora|cornuthaum|cap|pot/);
-    if (helm) {
-        const helmName = /helm/.test(inventoryItemName(helm).toLowerCase()) ? 'helm' : 'helmet';
-        messages.push(`Your ${helmName} falls to the ground!`);
-        addItem(helm);
-    }
-
-    const boots = polyselfWornArmorMatching(/boot|shoe/);
-    if (boots) {
-        messages.push(`Your boots ${form.verysmall ? 'slide' : 'are pushed'} off your feet!`);
-        addItem(boots);
+    if (polyselfFormHasNoHead(form)) {
+        const eyewear = polyselfWornEyewearItem();
+        if (eyewear) {
+            const eyewearName = polyselfEyewearFalloffName(eyewear);
+            messages.push(`Your ${eyewearName} ${eyewearName === 'lenses' ? 'fall' : 'falls'} off!`);
+            addItem(eyewear);
+        }
     }
 
     return { items, messages };
 }
 
-function dropPolyselfEquipmentItems(items, floorMessages = []) {
+function dropPolyselfEquipmentItems(items, floorMessages = [], form = polyselfForm()) {
     for (const item of items || []) {
         if (!(game.inventory || []).includes(item)) continue;
+        clearPolyselfEyewearState(item, form);
         dropCarriedObjectAtHero(item, floorMessages);
     }
 }

@@ -1011,6 +1011,16 @@ function ordinaryTool(id, kind, letter = 't') {
     return tool;
 }
 
+function wornTool(id, kind, letter = 't', extra = {}) {
+    const article = kind === 'lenses' ? 'a pair of' : /^[aeiou]/i.test(kind) ? 'an' : 'a';
+    return {
+        ...ordinaryTool(id, kind, letter),
+        worn: true,
+        line: `${letter} - ${article} ${kind} (being worn)`,
+        ...extra,
+    };
+}
+
 function unicornHorn(id, letter = 'u', extra = {}) {
     return {
         ...ordinaryTool(id, 'unicorn horn', letter),
@@ -8315,6 +8325,80 @@ test('successful no-hands polyself drops worn gloves and wielded weapon but keep
         assert.equal(obj.oy, game.u.uy);
     }
     assert.equal(game.level.objects.some(obj => obj.cls === 'ring'), false);
+});
+
+test('successful no-hands polyself drops shield helm and boots but keeps amulet', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, {
+        uhp: 40,
+        uhpmax: 40,
+        uen: 0,
+        uenmax: 0,
+        ulevel: 1,
+        uac: 4,
+    });
+    const shield = wornArmor(32051, 'small shield', 's');
+    const helm = wornArmor(32052, 'orcish helm', 'h');
+    const boots = wornArmor(32053, 'speed boots', 'b');
+    const amulet = metalAmulet(32054, 'amulet of guarding', 2, 'a', {
+        worn: true,
+        line: 'a - a perforated amulet (being worn)',
+    });
+    game.inventory = [shield, helm, boots, amulet];
+
+    await debugPolyselfInto('wererat');
+
+    assert.equal(game.u._polyself_form?.name, 'wererat');
+    assert.match(game._pending_message || '', /You can no longer hold your shield!/);
+    assert.match(game._pending_message || '', /Your helm falls to the ground!/);
+    assert.match(game._pending_message || '', /Your boots slide off your feet!/);
+    assert.equal(game.inventory.includes(shield), false);
+    assert.equal(game.inventory.includes(helm), false);
+    assert.equal(game.inventory.includes(boots), false);
+    assert.equal(game.inventory.includes(amulet), true);
+    assert.equal(amulet.worn, true);
+    assert.deepEqual(game.level.objects.map(obj => obj.kind || obj.actualKind).sort(), [
+        'orcish helm',
+        'small shield',
+        'speed boots',
+    ]);
+    assert.equal(game.level.objects.some(obj => obj.cls === 'amulet'), false);
+});
+
+test('successful no-head polyself drops worn lenses but keeps amulet', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, {
+        uhp: 40,
+        uhpmax: 40,
+        uen: 0,
+        uenmax: 0,
+        ulevel: 1,
+        uac: 10,
+        blind: false,
+    });
+    const lenses = wornTool(32055, 'lenses', 'l');
+    const amulet = metalAmulet(32056, 'amulet of magical breathing', 1, 'a', {
+        worn: true,
+        line: 'a - an octagonal amulet (being worn)',
+    });
+    game.inventory = [lenses, amulet];
+
+    await debugPolyselfInto('acid blob');
+
+    assert.equal(game.u._polyself_form?.name, 'acid blob');
+    assert.equal(game.u._polyself_form?.nohead, true);
+    assert.match(game._pending_message || '', /You turn into an acid blob!/);
+    assert.match(game._pending_message || '', /Your lenses fall off!/);
+    assert.equal(game.inventory.includes(lenses), false);
+    assert.equal(game.inventory.includes(amulet), true);
+    assert.equal(amulet.worn, true);
+    assert.deepEqual(game.level.objects.map(obj => obj.kind || obj.actualKind), ['lenses']);
+    assert.equal(game.level.objects[0].worn, false);
+    assert.equal(game.level.objects[0].ox, game.u.ux);
+    assert.equal(game.level.objects[0].oy, game.u.uy);
+    assert.equal(game.level.objects.some(obj => obj.cls === 'amulet'), false);
 });
 
 test('spell polymorph lateral ray reaches a nonadjacent floor pile', async () => {
