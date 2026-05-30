@@ -8389,6 +8389,8 @@ test('successful no-head polyself drops worn lenses but keeps amulet', async () 
 
     assert.equal(game.u._polyself_form?.name, 'acid blob');
     assert.equal(game.u._polyself_form?.nohead, true);
+    assert.equal(game.u._polyself_form?.noeyes, true);
+    assert.equal(game.u.blind, true);
     assert.match(game._pending_message || '', /You turn into an acid blob!/);
     assert.match(game._pending_message || '', /Your lenses fall off!/);
     assert.equal(game.inventory.includes(lenses), false);
@@ -8399,6 +8401,12 @@ test('successful no-head polyself drops worn lenses but keeps amulet', async () 
     assert.equal(game.level.objects[0].ox, game.u.ux);
     assert.equal(game.level.objects[0].oy, game.u.uy);
     assert.equal(game.level.objects.some(obj => obj.cls === 'amulet'), false);
+
+    await debugPolyselfInto('human');
+
+    assert.equal(game.u._polyself_form || null, null);
+    assert.equal(game.u._polyself_base || null, null);
+    assert.equal(game.u.blind, false);
 });
 
 test('spell polymorph lateral ray reaches a nonadjacent floor pile', async () => {

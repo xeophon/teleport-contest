@@ -11237,6 +11237,11 @@ function polyselfWornEyewearItem() {
         polyselfIsEyewearItem(item) && isWornInventoryItem(item));
 }
 
+function polyselfWornBlindfoldOrTowelItem() {
+    return (game.inventory || []).find(item =>
+        isWornInventoryItem(item) && ['blindfold', 'towel'].includes(objectKindKey(item)));
+}
+
 function polyselfEyewearFalloffName(item) {
     const kind = objectKindKey(item);
     if (kind === 'lenses') return 'lenses';
@@ -11311,6 +11316,25 @@ function dropPolyselfEquipmentItems(items, floorMessages = [], form = polyselfFo
     }
 }
 
+function polyselfBasePersistentBlindness(base) {
+    if (!base?.blind) return false;
+    if ((base._blindTimeout || 0) > 0 || (base.ucreamed || 0) > 0) return false;
+    return !base.blindFromWornBlindfold;
+}
+
+function polyselfNonFormBlindness(base) {
+    if (polyselfWornBlindfoldOrTowelItem()) return true;
+    if ((game.u?._blindTimeout || 0) > 0 || (game.u?.ucreamed || 0) > 0) return true;
+    return polyselfBasePersistentBlindness(base);
+}
+
+function restorePolyselfBaseBlindness(base) {
+    if (!game.u) return;
+    game.u.blind = polyselfNonFormBlindness(base);
+    game.u._blindAfterStatus = game.u.blind ? (base?._blindAfterStatus || 0) : 0;
+    game.u._polyself_form_blinded = false;
+}
+
 function recomputePolyselfArmorClass(form = polyselfForm()) {
     if (!game.u) return;
     let ac = form?.mac ?? 10;
@@ -11323,6 +11347,7 @@ function recomputePolyselfArmorClass(form = polyselfForm()) {
 function becomeMonster(name) {
     const base = game.u._polyself_base;
     if (name === 'human' || name === game.urace?.noun || name === game._startup_race) {
+        const wasFormBlinded = !!game.u._polyself_form_blinded;
         const newLevel = Math.max(1, Math.min(30, (game.u?.ulevel || 1) + rn2(5) - 2));
         rn2(10);
         const minExp = newLevel === 1 ? 0 : newLevel - 1 < 10 ? 10 * (2 ** (newLevel - 1))
@@ -11400,6 +11425,7 @@ function becomeMonster(name) {
         game.u.umovement = NORMAL_SPEED;
         game.u._statusSuffix = '';
         game.u._strDisplay = null;
+        if (wasFormBlinded) restorePolyselfBaseBlindness(base);
         game.u._polyself_base = null;
         return { message: game._startup_gender === 'female' ? 'You feel like a new woman!' : 'You feel like a new man!' };
     }
@@ -11409,19 +11435,24 @@ function becomeMonster(name) {
     const alreadyPolymorphed = !!game.u._polyself_base;
     addConductCount('polyselfs');
     if (!alreadyPolymorphed) {
-	        game.u._polyself_base = {
-	            uhp: game.u.uhp,
-	            uhpmax: game.u.uhpmax,
-	            uen: game.u.uen,
-	            uenmax: game.u.uenmax,
-	            uac: game.u.uac,
-	            ulevel: game.u.ulevel,
-	            uhpinc: [...(game.u.uhpinc || [])],
-	            ueninc: [...(game.u.ueninc || [])],
-	            initialHp: game._initialHp,
-	            initialEnergy: game._initialEnergy,
-	            rank: game.urole?.rank || null,
-	        };
+        game.u._polyself_base = {
+            uhp: game.u.uhp,
+            uhpmax: game.u.uhpmax,
+            uen: game.u.uen,
+            uenmax: game.u.uenmax,
+            uac: game.u.uac,
+            ulevel: game.u.ulevel,
+            blind: !!game.u.blind,
+            _blindTimeout: game.u._blindTimeout || 0,
+            _blindAfterStatus: game.u._blindAfterStatus || 0,
+            blindFromWornBlindfold: !!polyselfWornBlindfoldOrTowelItem(),
+            ucreamed: game.u.ucreamed || 0,
+            uhpinc: [...(game.u.uhpinc || [])],
+            ueninc: [...(game.u.ueninc || [])],
+            initialHp: game._initialHp,
+            initialEnergy: game._initialEnergy,
+            rank: game.urole?.rank || null,
+        };
     }
     if (!alreadyPolymorphed) rn2(2);
     rn2(19);
@@ -11431,6 +11462,7 @@ function becomeMonster(name) {
     const hp = form.fixedHp ?? (form.name.includes('dragon') && hpLevel ? 4 * hpLevel + d(hpLevel, 4)
         : hpLevel ? d(hpLevel, 8) : rnd(4));
     const glyph = form.glyph || (form.mlet?.length === 1 ? form.mlet : form.name[0]);
+    const wasFormBlinded = !!game.u._polyself_form_blinded;
     game.u.uhp = Math.max(1, hp);
     game.u.uhpmax = Math.max(1, hp);
     game.u.uac = form.mac ?? 10;
@@ -11444,6 +11476,9 @@ function becomeMonster(name) {
     if (form.noeyes) {
         game.u.blind = true;
         game.u._blindAfterStatus = 1;
+        game.u._polyself_form_blinded = true;
+    } else if (wasFormBlinded) {
+        restorePolyselfBaseBlindness(game.u._polyself_base);
     }
     game.u._strDisplay = form.strong ? '18/**' : null;
     const rank = form.name.replace(/\b\w/g, ch => ch.toUpperCase());
