@@ -22300,6 +22300,115 @@ function carriedDrainItemLessEffectiveMessage(item) {
     return `Your ${name} ${plural ? 'seem' : 'seems'} less effective.`;
 }
 
+function passiveObjectErosionSpec(type) {
+    if (type === 'rust') return {
+        field: 'oeroded',
+        word: 'rusty',
+        action: 'rust',
+        bythe: 'oxidation',
+        grease: true,
+    };
+    if (type === 'corr' || type === 'acid') return {
+        field: 'oeroded2',
+        word: 'corroded',
+        action: 'corrode',
+        bythe: 'corrosion',
+        grease: true,
+        resistType: 'acid',
+    };
+    if (type === 'fire') return {
+        field: 'oeroded',
+        word: 'burnt',
+        action: 'smoulder',
+        bythe: 'heat',
+        grease: false,
+        resistType: 'fire',
+    };
+    return null;
+}
+
+function activeInventoryResistanceKind(item) {
+    if (!item) return '';
+    const kind = objectKindKey(item);
+    const active = isWornInventoryItem(item) || item.wielded || item.line?.includes('(weapon)');
+    if (!active) return '';
+    if (item.fireResistance || kind === 'ring of fire resistance'
+        || kind === 'red dragon scale mail' || kind === 'red dragon scales'
+        || kind === 'fire brand')
+        return 'fire';
+    if (item.acidResistance || kind === 'alchemy smock'
+        || kind === 'yellow dragon scale mail' || kind === 'yellow dragon scales')
+        return 'acid';
+    return '';
+}
+
+function passiveObjectInventoryResistanceChance(type) {
+    const kind = type === 'fire' ? 'fire' : type === 'acid' || type === 'corr' ? 'acid' : '';
+    if (!kind) return 0;
+    if ((game.inventory || []).some(item => activeInventoryResistanceKind(item) === kind))
+        return 99;
+    if (kind === 'fire' && (game.inventory || []).some(item =>
+        isWornInventoryItem(item) && objectKindKey(item) === 'dwarvish cloak'))
+        return 90;
+    return 0;
+}
+
+function passiveObjectInventoryResists(type) {
+    const chance = passiveObjectInventoryResistanceChance(type);
+    return chance ? rn2(100) < chance : false;
+}
+
+function updatePassiveObjectItemLine(item) {
+    refreshInventoryObjectLine(item);
+    if (item?.unpaid) syncUnpaidBillLine(item);
+}
+
+function erodeDirectMeleePassiveObject(item, type, messages) {
+    const spec = passiveObjectErosionSpec(type);
+    if (!spec) return { handled: false, damaged: false };
+    if (spec.resistType && passiveObjectInventoryResists(spec.resistType))
+        return { handled: true, damaged: false, resisted: true };
+    const profile = wishedDamageProfile(item);
+    const profileWord = spec.field === 'oeroded' ? profile.primaryWord : profile.secondaryWord;
+    if (!profile.erosionMatters || profileWord !== spec.word)
+        return { handled: true, damaged: false };
+
+    const name = pickupObjectName(item);
+    if (spec.grease && item.greased) {
+        if (Array.isArray(messages))
+            messages.push(`Your ${name} ${rustTrapNameVerb(name, 'is', 'are')} protected by the layer of grease!`);
+        if (!rn2(2)) {
+            item.greased = false;
+            updatePassiveObjectItemLine(item);
+            if (Array.isArray(messages)) messages.push('The grease dissolves.');
+        }
+        return { handled: true, damaged: false, greased: true };
+    }
+
+    if (item.oerodeproof || item.rustproof) {
+        if (!item.rknown && game.flags?.verbose !== false && Array.isArray(messages))
+            messages.push(`Somehow, your ${name} ${rustTrapNameVerb(name, 'is', 'are')} not affected by the ${spec.bythe}.`);
+        item.rknown = true;
+        updatePassiveObjectItemLine(item);
+        return { handled: true, damaged: false, proof: true };
+    }
+    if (item.blessed && !rnl(4)) return { handled: true, damaged: false, blessed: true };
+
+    const current = Math.min(3, item[spec.field] || 0);
+    if (current >= 3) return { handled: true, damaged: false };
+    item[spec.field] = current + 1;
+    updatePassiveObjectItemLine(item);
+    if (Array.isArray(messages)) {
+        const adverb = item[spec.field] === 3 ? ' completely' : current ? ' further' : '';
+        messages.push(`Your ${name} ${rustTrapNameVerb(name, `${spec.action}s`, spec.action)}${adverb}!`);
+    }
+    return { handled: true, damaged: true };
+}
+
+function passiveObjectFireBlocked(mon) {
+    return !!(mon?.mcan || String(mon?.data?.name || mon?.name || '').toLowerCase() === 'steam vortex');
+}
+
 function applyDirectMeleePassiveObject(mon, weapon, messages) {
     const type = passiveObjectAttackForMonster(mon);
     if (!type) return { handled: false, damaged: false };
@@ -22314,7 +22423,16 @@ function applyDirectMeleePassiveObject(mon, weapon, messages) {
         }
         return { handled: true, damaged: drain.drained, type, object: targetObject, ...drain };
     }
-    return { handled: false, damaged: false, type, object: targetObject };
+    if (type === 'fire') {
+        if (rn2(6) || passiveObjectFireBlocked(mon))
+            return { handled: true, damaged: false, type, object: targetObject };
+    } else if (type === 'acid') {
+        if (rn2(6))
+            return { handled: true, damaged: false, type, object: targetObject };
+    } else if ((type === 'rust' || type === 'corr') && mon.mcan) {
+        return { handled: true, damaged: false, type, object: targetObject };
+    }
+    return { ...erodeDirectMeleePassiveObject(targetObject, type, messages), type, object: targetObject };
 }
 
 function wandRechargeLimit(item) {
@@ -39287,6 +39405,7 @@ async function moveHero(dx, dy) {
             const hitPunctuation = game.flags?.verbose === false || swallowedMove ? '.' : damage > 4 ? '!' : '.';
             messages.push(`You hit ${hitPhrase}${hitPunctuation}`);
             applyConfuseMonsterOnHit(mon, messages, targetPhrase);
+            let directPassiveObjectApplied = false;
             if (attackIndex === 0) {
                 if (attackWeapon && damage > 1 && !twoWeaponActive) {
                     rn2(3);
@@ -39301,10 +39420,13 @@ async function moveHero(dx, dy) {
 	                        mon.mfleetim = fleeTime ? Math.min(fleeTime + (mon.mfleetim || 0), 127) : 0;
 	                        clearMonsterTrack(mon);
 	                    }
+	                    applyDirectMeleePassiveObject(mon, attackWeapon, messages);
+	                    directPassiveObjectApplied = true;
 	                    rn2(3);
 	                }
             }
-            applyDirectMeleePassiveObject(mon, attackWeapon, messages);
+            if (!directPassiveObjectApplied)
+                applyDirectMeleePassiveObject(mon, attackWeapon, messages);
         }
 
         if (!killed) {

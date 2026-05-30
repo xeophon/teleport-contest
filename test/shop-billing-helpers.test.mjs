@@ -1075,6 +1075,25 @@ function disenchanterTarget(x = 7, y = 5, extra = {}) {
     });
 }
 
+function passiveObjectTarget(name, type, x = 7, y = 5, extra = {}) {
+    const adtyp = {
+        acid: 'AD_ACID',
+        corr: 'AD_CORR',
+        ench: 'AD_ENCH',
+        fire: 'AD_FIRE',
+        rust: 'AD_RUST',
+    }[type] || type;
+    return ordinaryThrowTarget(name, x, y, {
+        ...extra,
+        data: {
+            name,
+            mlevel: extra.m_lev || 5,
+            attacks: [{ aatyp: 'AT_NONE', adtyp }],
+            ...(extra.data || {}),
+        },
+    });
+}
+
 function wornSaddle(id, extra = {}) {
     return {
         ...ordinaryTool(id, 'saddle', 's'),
@@ -22401,6 +22420,39 @@ function installDirectDisenchanterMeleeState({
     return { shkp, blade, disenchanter };
 }
 
+function installDirectPassiveObjectMeleeState({
+    seed = 1,
+    type = 'rust',
+    targetName = 'rust monster',
+    weaponKind = 'dagger',
+    weaponExtra = {},
+    dex = 25,
+    spe = 0,
+    targetAc = 10,
+    mcan = false,
+} = {}) {
+    installNonShopFloorState();
+    initRng(seed);
+    game.flags.verbose = false;
+    game.u.acurr.a[A_DEX] = dex;
+    const blade = wieldedWeapon(876700 + seed + spe + dex + targetAc, weaponKind, 'd', spe);
+    Object.assign(blade, weaponExtra);
+    game.inventory = [blade];
+    const target = passiveObjectTarget(targetName, type, 6, 5, {
+        m_lev: 5,
+        mhp: 50,
+        mhpmax: 50,
+        msleeping: 0,
+        mpeaceful: false,
+        mcan,
+        data: { mac: targetAc },
+    });
+    game.level.monsters = [target];
+    markSquareVisible(6, 5);
+    enableRngLog({ reset: true });
+    return { blade, target };
+}
+
 test('direct hero melee against disenchanter drains unpaid enchanted weapon', async () => {
     const { shkp, blade } = installDirectDisenchanterMeleeState({ seed: 1, spe: 2 });
 
@@ -22416,7 +22468,10 @@ test('direct hero melee against disenchanter drains unpaid enchanted weapon', as
     assert.equal(shkp.bill[0].useup, true);
     assert.equal(shop.shopBillEntryTotal(shkp.bill[0]), 80);
     assert.equal((game._usedUpShopBills || []).length, 1);
-    assert.deepEqual(getRngLog().filter(entry => entry.startsWith('rn2(100)=')).map(entry => entry.replace(/=.*/, '')), ['rn2(100)']);
+    const log = getRngLog();
+    assert.deepEqual(log.filter(entry => entry.startsWith('rn2(100)=')).map(entry => entry.replace(/=.*/, '')), ['rn2(100)']);
+    assert.equal(log.findIndex(entry => entry.startsWith('rn2(100)=')) < log.length - 1, true);
+    assert.match(log[log.length - 1], /^rn2\(3\)=/);
 });
 
 test('direct hero melee miss skips disenchanter drain and keeps live bill', async () => {
@@ -22471,6 +22526,119 @@ test('direct hero melee respects cancelled disenchanter passive drain', async ()
     assert.equal((game._usedUpShopBills || []).length, 0);
     assert.doesNotMatch(game._pending_message, /seems less effective|you pay for it/i);
     assert.deepEqual(getRngLog().filter(entry => entry.startsWith('rn2(100)=')), []);
+});
+
+test('direct hero melee against rust monster rusts wielded weapon', async () => {
+    const { blade, target } = installDirectPassiveObjectMeleeState({
+        seed: 1,
+        type: 'rust',
+        targetName: 'rust monster',
+    });
+
+    await rhack('l');
+
+    assert.match(game._pending_message, /You hit it\./);
+    assert.match(game._pending_message, /Your dagger rusts!/);
+    assert.equal(blade.oeroded, 1);
+    assert.match(blade.line, /rusty \+0 dagger/);
+    assert.equal(target.mhp < 50, true);
+    assert.deepEqual(getRngLog().filter(entry => entry.startsWith('rn2(100)=')), []);
+});
+
+test('direct hero melee respects cancelled rust monster passive erosion', async () => {
+    const { blade, target } = installDirectPassiveObjectMeleeState({
+        seed: 1,
+        type: 'rust',
+        targetName: 'rust monster',
+        mcan: true,
+    });
+
+    await rhack('l');
+
+    assert.match(game._pending_message, /You hit it\./);
+    assert.equal(blade.oeroded || 0, 0);
+    assert.equal(target.mhp < 50, true);
+    assert.doesNotMatch(game._pending_message, /rusts|oxidation/);
+    assert.deepEqual(getRngLog().filter(entry => entry.startsWith('rn2(100)=')), []);
+});
+
+test('direct hero melee against black pudding corrodes wielded weapon', async () => {
+    const { blade, target } = installDirectPassiveObjectMeleeState({
+        seed: 1,
+        type: 'corr',
+        targetName: 'black pudding',
+    });
+
+    await rhack('l');
+
+    assert.match(game._pending_message, /You hit it\./);
+    assert.match(game._pending_message, /Your dagger corrodes!/);
+    assert.equal(blade.oeroded2, 1);
+    assert.match(blade.line, /corroded \+0 dagger/);
+    assert.equal(target.mhp < 50, true);
+    assert.deepEqual(getRngLog().filter(entry => entry.startsWith('rn2(100)=')), []);
+});
+
+test('direct hero melee against acid passive can corrode wielded weapon', async () => {
+    const { blade, target } = installDirectPassiveObjectMeleeState({
+        seed: 15,
+        type: 'acid',
+        targetName: 'green mold',
+    });
+
+    await rhack('l');
+
+    assert.match(game._pending_message, /You hit it\./);
+    assert.match(game._pending_message, /Your dagger corrodes!/);
+    assert.equal(blade.oeroded2, 1);
+    assert.match(blade.line, /corroded \+0 dagger/);
+    assert.equal(target.mhp < 50, true);
+    const log = getRngLog();
+    const passiveGate = log.lastIndexOf('rn2(6)=0');
+    assert.equal(passiveGate > -1 && passiveGate < log.length - 1, true);
+    assert.match(log[log.length - 1], /^rn2\(3\)=/);
+});
+
+test('direct hero melee against fire passive can burn flammable wielded weapon', async () => {
+    const { blade, target } = installDirectPassiveObjectMeleeState({
+        seed: 8,
+        type: 'fire',
+        targetName: 'fire elemental',
+        weaponKind: 'bow',
+    });
+
+    await rhack('l');
+
+    assert.match(game._pending_message, /You hit it\./);
+    assert.match(game._pending_message, /Your bow smoulders!/);
+    assert.equal(blade.oeroded, 1);
+    assert.match(blade.line, /burnt \+0 bow/);
+    assert.equal(target.mhp < 50, true);
+    const log = getRngLog();
+    const passiveGate = log.lastIndexOf('rn2(6)=0');
+    assert.equal(passiveGate > -1 && passiveGate < log.length - 1, true);
+    assert.match(log[log.length - 1], /^rn2\(3\)=/);
+});
+
+test('direct hero melee cancelled fire passive rolls but skips weapon burn', async () => {
+    const { blade, target } = installDirectPassiveObjectMeleeState({
+        seed: 8,
+        type: 'fire',
+        targetName: 'fire elemental',
+        weaponKind: 'bow',
+        mcan: true,
+    });
+
+    await rhack('l');
+
+    assert.match(game._pending_message, /You hit it\./);
+    assert.equal(blade.oeroded || 0, 0);
+    assert.equal(target.mhp < 50, true);
+    assert.doesNotMatch(game._pending_message, /smoulders|heat/);
+    const log = getRngLog();
+    const passiveGate = log.lastIndexOf('rn2(6)=0');
+    assert.equal(passiveGate > -1 && passiveGate < log.length - 1, true);
+    assert.match(log[log.length - 1], /^rn2\(3\)=/);
 });
 
 test('hero-thrown confusion potion hitting a saddle wets it and skips confusion', async () => {
