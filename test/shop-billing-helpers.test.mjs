@@ -3112,6 +3112,91 @@ test('nonhallucinating worn helmet tip scans past floor statue', async () => {
     assert.doesNotMatch(game._pending_message, /creature is ignoring|Nothing happens/);
 });
 
+test('worn helmet tip down at mounted pony uses steed noise', async () => {
+    installNonShopFloorState();
+    const helmet = wornArmor(3063518, 'orcish helm', 'h');
+    const pony = ordinaryThrowTarget('pony', 5, 5, {
+        msleeping: 0,
+        mcanmove: true,
+        mcansee: true,
+        mtame: 0,
+        pet: true,
+        saddled: true,
+        data: { name: 'pony', mlevel: 3, mlet: 'quadruped', msound: 'neigh' },
+    });
+    game.inventory = [helmet];
+    game.u.usteed = pony;
+    game.level.monsters = [pony];
+    markSquareVisible(5, 5);
+
+    await enterTipCommand();
+    await rhack('h');
+    await rhack('>');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.u.usteed, pony);
+    assert.match(game._pending_message, /You briefly doff your helm\./);
+    assert.match(game._pending_message, /The pony neighs\./);
+    assert.doesNotMatch(game._pending_message, /There's no one down there|doesn't respond|waves/);
+});
+
+test('worn helmet tip down at helpless mounted pony says it does not notice', async () => {
+    installNonShopFloorState();
+    const helmet = wornArmor(3063519, 'orcish helm', 'h');
+    const pony = ordinaryThrowTarget('pony', 5, 5, {
+        msleeping: 1,
+        mcanmove: true,
+        mcansee: true,
+        mtame: 0,
+        pet: true,
+        saddled: true,
+        data: { name: 'pony', mlevel: 3, mlet: 'quadruped', msound: 'neigh' },
+    });
+    game.inventory = [helmet];
+    game.u.usteed = pony;
+    game.level.monsters = [pony];
+    markSquareVisible(5, 5);
+
+    await enterTipCommand();
+    await rhack('h');
+    await rhack('>');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.u.usteed, pony);
+    assert.match(game._pending_message, /You briefly doff your helm\./);
+    assert.match(game._pending_message, /The pony doesn't notice\./);
+    assert.doesNotMatch(game._pending_message, /There's no one down there|neighs|doesn't respond/);
+});
+
+test('worn helmet tip makes adjacent visible dog bark instead of generic nonresponse', async () => {
+    installNonShopFloorState();
+    const helmet = wornArmor(3063520, 'orcish helm', 'h');
+    const dog = ordinaryThrowTarget('dog', 6, 5, {
+        msleeping: 0,
+        mcanmove: true,
+        mcansee: true,
+        mpeaceful: true,
+        mstrategy: 'waitforu',
+        data: { name: 'dog', mlevel: 4, mlet: 'dog', msound: 'bark' },
+    });
+    game.inventory = [helmet];
+    game.level.monsters = [dog];
+    markSquareVisible(6, 5);
+
+    await enterTipCommand();
+    await rhack('h');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(dog.mstrategy, 0);
+    assert.match(game._pending_message, /You briefly doff your helm\./);
+    assert.match(game._pending_message, /The dog barks\./);
+    assert.doesNotMatch(game._pending_message, /doesn't respond|waves|tips .* in response|curses|gestures/);
+});
+
 test('unknown cursed worn helmet tip learns curse and spends action', async () => {
     installCommandShopState();
     const helmet = wornArmor(306352, 'orcish helm', 'h', 0, {

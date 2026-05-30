@@ -21,7 +21,8 @@ Added focused coverage in `test/shop-billing-helpers.test.mjs`:
 
 ## Remaining Gaps
 
-- Steed `domonnoise()`, adjacent unseen responsive monsters, and the broader nonhumanoid sound table remain incomplete.
+- Mounted steed and adjacent visible animal-noise `tiphat()` handling are covered separately in `docs/c-parity-audit/248-tiphat-steed-animal-noise-2026-05-31.md`.
+- Adjacent unseen responsive monster canaries and the broader nonhumanoid sound table remain incomplete.
 - C also treats statue glyphs from hallucination/mimics as `statue`; this slice covers the current JS actual-floor-statue representation because statue glyph rendering is not fully modeled.
 - Furniture mimic generation and forced-chest wake-preservation follow-ups remain separate from this command scan behavior.
 

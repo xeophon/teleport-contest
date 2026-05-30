@@ -33713,7 +33713,7 @@ function tipHatMonsterVisible(mon) {
 
 function tipHatMonsterResponsive(mon) {
     if (!mon || mon.dead) return false;
-    if (mon.helpless || mon.mcanmove === false || mon.mcansee === false || mon.blind) return false;
+    if (tipHatMonsterHelpless(mon) || mon.mcansee === false || mon.blind) return false;
     return true;
 }
 
@@ -33748,6 +33748,108 @@ function heroHasConflict() {
             || /\bring of conflict\b/i.test(String(item.actualKind || item.kind || item.line || ''))));
 }
 
+function tipHatMonsterHelpless(mon) {
+    return !!(mon?.helpless || mon?.msleeping || mon?.mcanmove === false);
+}
+
+function tipHatMonsterSilent(mon) {
+    const data = mon?.data || {};
+    const msound = String(mon?.msound ?? mon?.sound ?? data.msound ?? data.sound ?? '').toLowerCase();
+    return !!(mon?.silent || data.silent || msound === 'silent' || msound === 'ms_silent');
+}
+
+function tipHatMonsterAdjacent(mon) {
+    if (!mon) return false;
+    return Math.max(Math.abs((mon.mx || 0) - (game.u?.ux || 0)),
+        Math.abs((mon.my || 0) - (game.u?.uy || 0))) <= 1;
+}
+
+function tipHatMonsterSound(mon) {
+    const data = mon?.data || {};
+    const explicit = mon?.msound ?? mon?.sound ?? data.msound ?? data.sound;
+    if (explicit != null) return String(explicit).toLowerCase().replace(/^ms_/, '');
+    const name = String(data.name || mon?.name || '').toLowerCase();
+    const mlet = String(data.mlet || mon?.mlet || '').toLowerCase();
+    if (/^(pony|horse|warhorse|white unicorn|gray unicorn|black unicorn)$/.test(name)
+        || mlet === 'quadruped' || mlet === 'unicorn')
+        return 'neigh';
+    if (/^(jackal|fox|coyote|little dog|dog|large dog|dingo|wolf|winter wolf cub|winter wolf|warg)$/.test(name)
+        || mlet === 'dog')
+        return 'bark';
+    if (/^(kitten|housecat|large cat|jaguar|lynx|panther)$/.test(name)
+        || mlet === 'f' || mlet === 'feline')
+        return 'mew';
+    if (mlet === 'rodent' || /rat|mouse/.test(name)) return 'sqeek';
+    if (mlet === 'snake' || /snake|viper|cobra/.test(name)) return 'hiss';
+    return '';
+}
+
+function tipHatMonsterNoise(mon) {
+    if (!mon || heroIsDeaf() || tipHatMonsterSilent(mon)) return { handled: false, message: '' };
+    const name = fireScrollMonsterName(mon);
+    const sound = tipHatMonsterSound(mon);
+    const peaceful = !!mon.mpeaceful;
+    switch (sound) {
+    case 'bark': {
+        const monName = String(mon?.data?.name || mon?.name || '').toLowerCase();
+        if (peaceful) {
+            if (monName === 'dingo') return { handled: true, message: '' };
+            if (mon.mtame && (mon.mconf || mon.mflee || mon.mtrapped || mon.mtame < 5))
+                return { handled: true, message: `${name} whines.` };
+            return { handled: true, message: `${name} barks.` };
+        }
+        return { handled: true, message: `${name} growls.` };
+    }
+    case 'mew':
+        if (mon.mtame) {
+            if (mon.mconf || mon.mflee || mon.mtrapped || mon.mtame < 5)
+                return { handled: true, message: `${name} yowls.` };
+            return { handled: true, message: `${name} mews.` };
+        }
+        return { handled: true, message: `${name} ${peaceful ? 'snarls.' : 'growls!'}` };
+    case 'growl':
+        return { handled: true, message: `${name} ${peaceful ? 'snarls.' : 'growls!'}` };
+    case 'roar':
+        return { handled: true, message: `${name} ${peaceful ? 'snarls.' : 'roars!'}` };
+    case 'sqeek':
+    case 'squeak':
+        return { handled: true, message: `${name} squeaks.` };
+    case 'hiss':
+        return peaceful
+            ? { handled: false, message: '' }
+            : { handled: true, message: `${name} hisses!` };
+    case 'buzz':
+        return { handled: true, message: `${name} ${peaceful ? 'drones.' : 'buzzes angrily.'}` };
+    case 'grunt':
+        return { handled: true, message: `${name} grunts.` };
+    case 'neigh': {
+        const tame = Number(mon.mtame || 0);
+        const moves = Number(game.moves ?? game.context?.moves ?? 0);
+        const hungryTime = Number(mon.hungrytime ?? mon.hungryTime ?? mon.edog?.hungrytime ?? NaN);
+        if (tame < 5) return { handled: true, message: `${name} neighs.` };
+        if (Number.isFinite(hungryTime) && moves > hungryTime)
+            return { handled: true, message: `${name} whinnies.` };
+        return { handled: true, message: `${name} whickers.` };
+    }
+    case 'moo':
+        return { handled: true, message: `${name} moos.` };
+    case 'bellow':
+        return { handled: true, message: `${name} bellows!` };
+    case 'chirp':
+        return { handled: true, message: `${name} chirps.` };
+    case 'wail':
+        return { handled: true, message: `${name} wails mournfully.` };
+    case 'gurgle':
+        return { handled: true, message: `${name} gurgles.` };
+    case 'burble':
+        return { handled: true, message: `${name} burbles.` };
+    case 'trumpet':
+        return { handled: true, message: `${name} trumpets!` };
+    default:
+        return { handled: false, message: '' };
+    }
+}
+
 function tipHatRudeHumanoidResponse(name) {
     const reaction = ['curses', 'gestures rudely', 'gestures offensively'];
     const deaf = heroIsDeaf();
@@ -33760,6 +33862,11 @@ function tipHatRudeHumanoidResponse(name) {
 
 function tipHatDirectedResponse(dir) {
     if (!dir.dx && !dir.dy) {
+        if (game.u?.usteed && dir.dz > 0) {
+            if (tipHatMonsterHelpless(game.u.usteed))
+                return `${fireScrollMonsterName(game.u.usteed)} doesn't notice.`;
+            return tipHatMonsterNoise(game.u.usteed).message;
+        }
         if (dir.dz) return `There's no one ${dir.dz < 0 ? 'up' : 'down'} there.`;
         return "The lout here doesn't acknowledge you...";
     }
@@ -33774,29 +33881,32 @@ function tipHatDirectedResponse(dir) {
         y += dir.dy;
         statue = false;
         if (!isok(x, y) || (range > 1 && !couldsee(x, y))) break;
-        const monHere = (game.level?.monsters || []).find(mon => mon.mx === x && mon.my === y && !mon.dead);
-        if (monHere) {
-            if (!(tipHatMonsterCanBeSeen(monHere) && tipHatApparentObjectOrFurniture(monHere))) {
-                target = monHere;
-                break;
-            }
-            target = null;
-        }
+        let monHere = (game.level?.monsters || []).find(mon => mon.mx === x && mon.my === y && !mon.dead);
+        const apparent = tipHatMonsterCanBeSeen(monHere) && tipHatApparentObjectOrFurniture(monHere);
+        if (apparent) monHere = null;
         const loc = game.level?.at?.(x, y);
         unseen = !!loc?.map_invisible;
-        if (unseen) break;
         statue = !!floorStatueAt(x, y);
-        if (statue && heroIsHallucinating()) break;
-        if (!loc || (!(ACCESSIBLE(loc.typ) || loc.typ === IRONBARS))) break;
+        const visibleTarget = tipHatMonsterVisible(monHere);
+        const adjacentResponder = range === 1 && monHere && tipHatMonsterResponsive(monHere)
+            && !tipHatMonsterSilent(monHere);
+        if (visibleTarget || unseen || (statue && heroIsHallucinating()) || adjacentResponder
+            || !loc || (!(ACCESSIBLE(loc.typ) || loc.typ === IRONBARS))) {
+            if (visibleTarget || adjacentResponder) target = monHere;
+            break;
+        }
     }
     if (unseen || (statue && heroIsHallucinating()))
         return `That ${unseen ? 'unseen ' : ''}creature is ignoring you!`;
-    if (!target || !tipHatMonsterResponsive(target)) return 'Nothing happens.';
+    const visible = tipHatMonsterVisible(target);
+    const name = fireScrollMonsterName(target);
+    if (!target || !tipHatMonsterResponsive(target)) {
+        if (target && visible) return `${name} seems not to notice you.`;
+        return 'Nothing happens.';
+    }
 
     if (Number.isInteger(target.mstrategy)) target.mstrategy &= ~STRAT_WAITMASK;
     else if (target.mstrategy === 'waitforu') target.mstrategy = 0;
-    const visible = tipHatMonsterVisible(target);
-    const name = fireScrollMonsterName(target);
     if (visible && tipHatMonsterHumanoid(target) && target.mpeaceful && !heroHasConflict()) {
         const helmet = monsterEarthHelmet(target);
         if (!helmet) return `${name} waves.`;
@@ -33810,6 +33920,17 @@ function tipHatDirectedResponse(dir) {
     }
     if (visible && tipHatMonsterHumanoid(target))
         return tipHatRudeHumanoidResponse(name);
+    if (tipHatMonsterAdjacent(target)) {
+        const noise = tipHatMonsterNoise(target);
+        if (noise.handled) {
+            if (!visible) {
+                const loc = game.level?.at?.(target.mx, target.my);
+                if (loc) loc.map_invisible = true;
+                newsym(target.mx, target.my);
+            }
+            return noise.message;
+        }
+    }
     if (visible) return `${name} doesn't respond.`;
     return 'Nothing happens.';
 }
