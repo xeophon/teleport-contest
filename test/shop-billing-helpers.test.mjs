@@ -2817,6 +2817,26 @@ test('worn soft hat tip uses hat wording', async () => {
     assert.match(game._pending_message, /You briefly doff your hat\./);
 });
 
+test('worn helmet tip recognizes remembered invisible target', async () => {
+    installNonShopFloorState();
+    const helmet = wornArmor(3063511, 'orcish helm', 'h');
+    const cells = new Map([
+        ['6,5', { roomno: 0, typ: ROOM, map_invisible: true }],
+    ]);
+    game.level.at = (x, y) => cells.get(`${x},${y}`) || { roomno: 0, typ: ROOM };
+    game.inventory = [helmet];
+    markSquareVisible(6, 5);
+
+    await enterTipCommand();
+    await rhack('h');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.match(game._pending_message, /You briefly doff your helm\./);
+    assert.match(game._pending_message, /That unseen creature is ignoring you!/);
+});
+
 test('unknown cursed worn helmet tip learns curse and spends action', async () => {
     installCommandShopState();
     const helmet = wornArmor(306352, 'orcish helm', 'h', 0, {
