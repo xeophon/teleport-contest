@@ -15400,6 +15400,60 @@ test('statue trap animates unique no-traits statue as directed doppelganger', as
     assert.match(message || '', /You find Medusa posing as a statue\./);
 });
 
+test('statue trap retries next same-square statue after unique animation failure', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    markSquareVisible(7, 5);
+    game._genocided_monsters = ['doppelganger'];
+    const medusa = vegetarianCorpstatMonster('Medusa', '@', {
+        unique: true,
+        human: true,
+        female: true,
+        neuter: false,
+        mlevel: 20,
+        hpLevel: 20,
+        mmove: 12,
+    });
+    const medusaStatue = stoneToFleshStatue(61343, 7, 5, medusa);
+    const goblinStatue = stoneToFleshStatue(61344, 7, 5,
+        vegetarianCorpstatMonster('goblin', 'o', { neuter: false, mmove: 6 }));
+    const trap = { ttyp: STATUE_TRAP, tx: 7, ty: 5 };
+    game.level.objects = [medusaStatue, goblinStatue];
+    game.level.traps = [trap];
+
+    const message = await activateStatueTrap(trap, 7, 5, { normal: true });
+
+    assert.equal(game.level.traps.includes(trap), false);
+    assert.equal(game.level.objects.includes(medusaStatue), true);
+    assert.equal(game.level.objects.includes(goblinStatue), false);
+    assert.equal(game.level.monsters.some(mon => mon.data?.name === 'Medusa'), false);
+    const goblin = game.level.monsters.find(mon => mon.data?.name === 'goblin');
+    assert.ok(goblin);
+    assert.equal(goblin.mpeaceful, 0);
+    assert.match(message || '', /You find a goblin posing as a statue\./);
+});
+
+test('statue trap stops after non-unique same-square statue animation failure', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    game._genocided_monsters = ['goblin'];
+    const goblinStatue = stoneToFleshStatue(61345, 7, 5,
+        vegetarianCorpstatMonster('goblin', 'o', { neuter: false, mmove: 6 }));
+    const newtStatue = stoneToFleshStatue(61346, 7, 5,
+        vegetarianCorpstatMonster('newt', 'l', { neuter: false, mmove: 6 }));
+    const trap = { ttyp: STATUE_TRAP, tx: 7, ty: 5 };
+    game.level.objects = [goblinStatue, newtStatue];
+    game.level.traps = [trap];
+
+    const message = await activateStatueTrap(trap, 7, 5, { normal: true });
+
+    assert.equal(message, '');
+    assert.equal(game.level.traps.includes(trap), false);
+    assert.equal(game.level.objects.includes(goblinStatue), true);
+    assert.equal(game.level.objects.includes(newtStatue), true);
+    assert.equal(game.level.monsters.length, 0);
+});
+
 test('statue trap restores saved traits before releasing hostile monster', async () => {
     installNonShopFloorState();
     initRng(1);

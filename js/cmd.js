@@ -13786,6 +13786,11 @@ function statueTrapAnimationInfo(item) {
     return { data: item.corpsenm, golemXform: false };
 }
 
+function statueTrapFailureRetriesNextStatue(statue, info) {
+    const data = info?.failureData || statue?.corpsenm || info?.data || {};
+    return !!(data.unique || data.nemesis || data.rider);
+}
+
 function stoneToFleshFigurineAnimationInfo(item) {
     if (!isFigurineObject(item) || !item?.corpsenm) return null;
     const material = stoneToFleshObjectMaterial(item);
@@ -19113,50 +19118,52 @@ export async function activateStatueTrap(trap, x, y, { prefix = '', shatter = fa
     if (trap?.ttyp !== STATUE_TRAP) return null;
     game.level.traps = (game.level?.traps || []).filter(candidate => candidate !== trap);
 
-    const statue = (game.level?.objects || []).find(obj =>
+    const statues = (game.level?.objects || []).filter(obj =>
         !obj.transientProjectile && obj.otyp === STATUE && obj.ox === x && obj.oy === y);
-    const info = statueTrapAnimationInfo(statue);
-    if (!statue || !info?.data?.name) {
+    for (const statue of statues) {
+        const info = statueTrapAnimationInfo(statue);
+        if (!info?.data?.name) break;
+
+        const flags = NO_MINVENT | MM_NOMSG
+            | (info.noCountBirth ? MM_NOCOUNTBIRTH : 0)
+            | (info.noTail ? MM_NOTAIL : 0)
+            | (info.noWait ? MM_NOWAIT : 0)
+            | (info.directedDoppelganger || info.adjacentOk ? MM_ADJACENTOK : 0);
+        const mon = await makemon(info.data, x, y, flags);
+        if (!mon) {
+            if (statueTrapFailureRetriesNextStatue(statue, info)) continue;
+            break;
+        }
+
+        stoneToFleshApplySavedMonsterTraits(mon, info);
+        stoneToFleshApplyDirectedDoppelgangerForm(mon, info);
+        stoneToFleshChristenAnimatedStatueMonster(statue, mon);
+        mon.mtame = 0;
+        mon.pet = false;
+        mon.mpeaceful = 0;
+        mon.msleeping = 0;
+        mon.mundetected = false;
+        set_malign(mon);
+
+        const statueName = pickupObjectName(statue);
+        const verb = stoneToFleshGolemStatueVerb(info, mon);
+        const body = search || normal
+            ? statueSearchAnimationMessage(statue, mon)
+            : shatter
+            ? `Instead of shattering, ${game.u?.blind || !couldsee(x, y) ? 'a statue' : `the ${statueName}`} suddenly ${verb}!`
+            : `${upstartText(`the ${statueName}`)} ${verb}!`;
+        const debtMessage = shatter ? statueShatterShopDebtMessage(statue, x, y, mon) : '';
+        const historicMessage = stoneToFleshHistoricStatueGoneMessage(statue, x, y);
+
+        moveStatueContentsToMonster(statue, mon);
+        game.level.objects = (game.level?.objects || []).filter(obj => obj !== statue);
         newsym(x, y);
-        return prefix || '';
+        newsym(mon.mx, mon.my);
+        return [prefix, body, debtMessage, historicMessage].filter(Boolean).join('  ');
     }
 
-    const flags = NO_MINVENT | MM_NOMSG
-        | (info.noCountBirth ? MM_NOCOUNTBIRTH : 0)
-        | (info.noTail ? MM_NOTAIL : 0)
-        | (info.noWait ? MM_NOWAIT : 0)
-        | (info.directedDoppelganger || info.adjacentOk ? MM_ADJACENTOK : 0);
-    const mon = await makemon(info.data, x, y, flags);
-    if (!mon) {
-        newsym(x, y);
-        return prefix || '';
-    }
-
-    stoneToFleshApplySavedMonsterTraits(mon, info);
-    stoneToFleshApplyDirectedDoppelgangerForm(mon, info);
-    stoneToFleshChristenAnimatedStatueMonster(statue, mon);
-    mon.mtame = 0;
-    mon.pet = false;
-    mon.mpeaceful = 0;
-    mon.msleeping = 0;
-    mon.mundetected = false;
-    set_malign(mon);
-
-    const statueName = pickupObjectName(statue);
-    const verb = stoneToFleshGolemStatueVerb(info, mon);
-    const body = search || normal
-        ? statueSearchAnimationMessage(statue, mon)
-        : shatter
-        ? `Instead of shattering, ${game.u?.blind || !couldsee(x, y) ? 'a statue' : `the ${statueName}`} suddenly ${verb}!`
-        : `${upstartText(`the ${statueName}`)} ${verb}!`;
-    const debtMessage = shatter ? statueShatterShopDebtMessage(statue, x, y, mon) : '';
-    const historicMessage = stoneToFleshHistoricStatueGoneMessage(statue, x, y);
-
-    moveStatueContentsToMonster(statue, mon);
-    game.level.objects = (game.level?.objects || []).filter(obj => obj !== statue);
     newsym(x, y);
-    newsym(mon.mx, mon.my);
-    return [prefix, body, debtMessage, historicMessage].filter(Boolean).join('  ');
+    return prefix || '';
 }
 
 function noFittingWishObject() {
