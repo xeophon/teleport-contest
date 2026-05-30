@@ -11213,6 +11213,76 @@ function polymorphSelfZapResult(item = null) {
     };
 }
 
+function polyselfWornArmorMatching(pattern) {
+    return (game.inventory || []).find(item =>
+        item?.cls === 'armor' && isWornInventoryItem(item)
+        && pattern.test(inventoryItemName(item).toLowerCase()));
+}
+
+function polyselfWieldedWeaponItem() {
+    return (game.inventory || []).find(item =>
+        item && item.cls === 'weapon' && itemIsWielded(item));
+}
+
+function polyselfEquipmentFalloutForForm(form, { bodyArmor = null } = {}) {
+    const items = [];
+    const messages = [];
+    const addItem = item => {
+        if (item && !items.includes(item)) items.push(item);
+    };
+
+    addItem(bodyArmor);
+    if (!(form?.nohands || form?.verysmall)) return { items, messages };
+
+    const gloves = polyselfWornArmorMatching(/glove|gauntlet/);
+    const weapon = polyselfWieldedWeaponItem();
+    if (gloves) {
+        messages.push(`You drop your gloves${weapon ? ' and weapon' : ''}!`);
+        addItem(weapon);
+        addItem(gloves);
+    } else if (weapon) {
+        messages.push('You find you must drop your weapon!');
+        addItem(weapon);
+    }
+
+    const shield = polyselfWornArmorMatching(/shield/);
+    if (shield) {
+        messages.push('You can no longer hold your shield!');
+        addItem(shield);
+    }
+
+    const helm = polyselfWornArmorMatching(/helm|helmet|hat|fedora|cornuthaum|cap|pot/);
+    if (helm) {
+        const helmName = /helm/.test(inventoryItemName(helm).toLowerCase()) ? 'helm' : 'helmet';
+        messages.push(`Your ${helmName} falls to the ground!`);
+        addItem(helm);
+    }
+
+    const boots = polyselfWornArmorMatching(/boot|shoe/);
+    if (boots) {
+        messages.push(`Your boots ${form.verysmall ? 'slide' : 'are pushed'} off your feet!`);
+        addItem(boots);
+    }
+
+    return { items, messages };
+}
+
+function dropPolyselfEquipmentItems(items, floorMessages = []) {
+    for (const item of items || []) {
+        if (!(game.inventory || []).includes(item)) continue;
+        dropCarriedObjectAtHero(item, floorMessages);
+    }
+}
+
+function recomputePolyselfArmorClass(form = polyselfForm()) {
+    if (!game.u) return;
+    let ac = form?.mac ?? 10;
+    for (const item of game.inventory || []) {
+        if (isWornArmorItem(item)) ac -= wornArmorAcValueGreatestErosion(item);
+    }
+    game.u.uac = ac;
+}
+
 function becomeMonster(name) {
     const base = game.u._polyself_base;
     if (name === 'human' || name === game.urace?.noun || name === game._startup_race) {
@@ -11370,10 +11440,13 @@ function becomeMonster(name) {
         return /armor|mail/.test(name) && !/helm|helmet|gloves|gauntlets|boots|shoes|shield|cloak|shirt/.test(name);
     });
     if (bodyArmor && (form.nohands || form.verysmall)) {
+        const fallout = polyselfEquipmentFalloutForForm(form, { bodyArmor });
         message += '  Your armor falls around you!';
         game._topline_after_more = "You can't even move a handspan with this load!";
         game._topline_more_after_more = 1;
         game._polyself_drop_items_after_overload_more = 1;
+        game._polyself_drop_items_after_overload_items = fallout.items;
+        game._polyself_drop_items_after_overload_message = fallout.messages.join('  ');
         game._polyself_drop_items_after_overload_ac = 9;
         game.u.uac = game.u._polyself_base?.uac ?? game.u.uac ?? 10;
         game._status_uac_before_more = game.u._polyself_base?.uac ?? game.u.uac ?? 10;
@@ -11381,6 +11454,13 @@ function becomeMonster(name) {
         if (!String(game.u._statusSuffix || '').includes('Overloaded'))
             game.u._statusSuffix = `${game.u._statusSuffix || ''} Overloaded`;
         return { message, more: true };
+    }
+    const fallout = polyselfEquipmentFalloutForForm(form);
+    if (fallout.items.length) {
+        const floorMessages = [];
+        dropPolyselfEquipmentItems(fallout.items, floorMessages);
+        recomputePolyselfArmorClass(form);
+        message += `  ${[...fallout.messages, ...floorMessages].filter(Boolean).join('  ')}`;
     }
     const wieldedTool = (game.inventory || []).find(item =>
         item.cls === 'tool' && (item.wielded || item.line?.includes('weapon in')));
@@ -43696,29 +43776,23 @@ export async function rhack(_cmd) {
             if (game._polyself_drop_items_after_overload_more) {
                 game._polyself_drop_items_after_overload_more = 0;
                 rn2(19);
-                const dropLetters = new Set(['c', 'd', 'f', 'z']);
-                for (const item of [...(game.inventory || [])]) {
-                    if (!dropLetters.has(item.letter)) continue;
-                    const dropped = {
-                        ...item,
-                        line: undefined,
-                        worn: false,
-                        wielded: false,
-                        ox: game.u?.ux || 0,
-                        oy: game.u?.uy || 0,
-                        glyph: item.cls === 'armor' ? '[' : item.glyph || ')',
-                        color: item.color ?? (item.cls === 'armor' ? CLR_BROWN : CLR_CYAN),
-                    };
-                    stopCarriedFigurineTimerOnLeave(dropped);
-                    removeInventoryItem(item);
-                    game.level?.objects?.push(dropped);
-                }
+                const floorMessages = [];
+                const queuedItems = game._polyself_drop_items_after_overload_items;
+                const dropItems = Array.isArray(queuedItems)
+                    ? queuedItems
+                    : [...(game.inventory || [])].filter(item => new Set(['c', 'd', 'f', 'z']).has(item.letter));
+                dropPolyselfEquipmentItems(dropItems, floorMessages);
+                game._polyself_drop_items_after_overload_items = null;
                 if (game.u) game.u.uac = game._polyself_drop_items_after_overload_ac ?? 9;
                 game._polyself_drop_items_after_overload_ac = null;
                 newsym(game.u?.ux || 0, game.u?.uy || 0);
                 const eye = (game.level?.monsters || []).find(mon => mon.data?.name === 'floating eye');
                 if (eye) newsym(eye.mx, eye.my);
-                game._pending_message = 'You drop your gloves and weapon!  Your helm falls to the ground!';
+                game._pending_message = [
+                    game._polyself_drop_items_after_overload_message,
+                    ...floorMessages,
+                ].filter(Boolean).join('  ');
+                game._polyself_drop_items_after_overload_message = '';
                 game._message_more = 0;
                 game._keep_pending_message = 1;
                 game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);

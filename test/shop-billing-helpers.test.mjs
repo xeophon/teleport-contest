@@ -776,6 +776,15 @@ async function enterTipCommand() {
     await rhack('\n');
 }
 
+async function debugPolyselfInto(name) {
+    game.flags.debug = true;
+    await rhack('#');
+    for (const ch of 'polyself') await rhack(ch);
+    await rhack('\n');
+    for (const ch of name) await rhack(ch.charCodeAt(0));
+    await rhack('\n');
+}
+
 function testObjectKind(item) {
     return String(item?.actualKind || item?.kind || '').toLowerCase()
         .replace(/^(?:blessed|uncursed|cursed) /, '');
@@ -8264,6 +8273,48 @@ test('self-zapped polymorph wand system shock still discovers the wand', async (
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
         'rn2(20)', 'rnd(30)', 'rn2(2)',
     ]);
+});
+
+test('successful no-hands polyself drops worn gloves and wielded weapon but keeps rings', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, {
+        uhp: 40,
+        uhpmax: 40,
+        uen: 0,
+        uenmax: 0,
+        ulevel: 1,
+        uac: 10,
+    });
+    const gloves = wornArmor(32048, 'leather gloves', 'g');
+    const dagger = wieldedWeapon(32049, 'dagger', 'w');
+    const ring = metalRing(32050, 'protection', 2, 'r', {
+        worn: 'left',
+        line: 'r - an iron ring (on left hand)',
+    });
+    game.inventory = [gloves, dagger, ring];
+
+    await debugPolyselfInto('wererat');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.u._polyself_form?.name, 'wererat');
+    assert.match(game._pending_message || '', /You turn into a wererat!/);
+    assert.match(game._pending_message || '', /You drop your gloves and weapon!/);
+    assert.equal(game.inventory.includes(gloves), false);
+    assert.equal(game.inventory.includes(dagger), false);
+    assert.equal(game.inventory.includes(ring), true);
+    assert.equal(ring.worn, 'left');
+    assert.equal(game.u.uac, 6);
+    assert.equal(game.level.objects.length, 2);
+    assert.deepEqual(game.level.objects.map(obj => obj.kind || obj.actualKind).sort(), [
+        'dagger',
+        'leather gloves',
+    ]);
+    for (const obj of game.level.objects) {
+        assert.equal(obj.ox, game.u.ux);
+        assert.equal(obj.oy, game.u.uy);
+    }
+    assert.equal(game.level.objects.some(obj => obj.cls === 'ring'), false);
 });
 
 test('spell polymorph lateral ray reaches a nonadjacent floor pile', async () => {
