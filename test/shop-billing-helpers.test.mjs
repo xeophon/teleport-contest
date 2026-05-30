@@ -21295,6 +21295,62 @@ async function runMonsterDartHitLanding({ seed = 8 } = {}) {
     return { dart, thrower, rng: getRngLog() };
 }
 
+async function runMonsterLauncherArrowLanding({ seed = 8, uac = 10 } = {}) {
+    installNonShopFloorState();
+    resetInputState();
+    pushKey('\x1b');
+    initRng(seed);
+    enableRngLog({ reset: true });
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        ux0: 5,
+        uy0: 5,
+        blind: true,
+        confusion: false,
+        stunned: false,
+        fumbling: false,
+        uhp: 20,
+        uhpmax: 20,
+        uac,
+        umovement: NORMAL_SPEED,
+        acurr: { a: [10, 10, 10, 10, 10, 10] },
+    });
+    game.moves = 1;
+    game.context = {};
+    for (let x = 5; x <= 10; x++) markSquareVisible(x, 5);
+    const bow = { id: 874357, cls: 'weapon', kind: 'bow', actualKind: 'bow', glyph: ')' };
+    const arrow = {
+        id: 874358,
+        cls: 'weapon',
+        kind: 'arrow',
+        actualKind: 'arrow',
+        plural: 'arrows',
+        glyph: ')',
+        quan: 1,
+        spe: 0,
+    };
+    const thrower = {
+        mx: 10,
+        my: 5,
+        movement: NORMAL_SPEED,
+        data: { name: 'gnome', mlet: 'G', mmove: NORMAL_SPEED, armed: true, mlevel: 1 },
+        mpeaceful: false,
+        mhp: 5,
+        mhpmax: 5,
+        minvent: [bow, arrow],
+        mw: bow,
+        missile: arrow,
+        mcansee: true,
+    };
+    game.level.monsters = [thrower];
+    game._pending_time_passed = 1;
+
+    await moveloop_core();
+    resetInputState();
+    return { arrow, thrower, rng: getRngLog() };
+}
+
 async function runMonsterCrudeDaggerCatch() {
     installNonShopFloorState();
     resetInputState();
@@ -21373,6 +21429,56 @@ test('production kobold dart hit lands surviving dart with ohit mulch', async ()
 
     assert.ok(rng.includes('rnd(20)=12'));
     assert.ok(rng.includes('rn2(3)=0'));
+});
+
+test('production monster launcher arrow hit lands surviving arrow with ohit mulch', async () => {
+    const { arrow, thrower, rng } = await runMonsterLauncherArrowLanding({ seed: 8 });
+
+    assert.equal(game._pending_message, 'You are hit by an arrow!');
+    assert.equal(game.u.uhp, 15);
+    assert.equal(thrower.minvent.some(obj => obj.id === arrow.id), false);
+    assert.equal(thrower.missile, null);
+
+    const landed = game.level.objects.find(obj => obj.id === arrow.id);
+    assert.ok(landed);
+    assert.equal(landed.ox, 5);
+    assert.equal(landed.oy, 5);
+    assert.equal(landed.quan, 1);
+    assert.equal(landed.kind, 'arrow');
+    assert.equal(landed.transientProjectile, false);
+
+    assert.ok(rng.includes('rnd(20)=12'));
+    assert.ok(rng.includes('rn2(3)=0'));
+    assert.equal(rng.some(entry => entry.startsWith('rn2(100)=')), false);
+});
+
+test('production monster launcher arrow hit can mulch before landing', async () => {
+    const { arrow, thrower, rng } = await runMonsterLauncherArrowLanding({ seed: 1 });
+
+    assert.equal(game._pending_message, 'You are hit by an arrow.');
+    assert.equal(game.u.uhp, 18);
+    assert.equal(thrower.minvent.some(obj => obj.id === arrow.id), false);
+    assert.equal(thrower.missile, null);
+    assert.equal(game.level.objects.some(obj => obj.id === arrow.id), false);
+    assert.equal(game.level.objects.some(obj => obj.transientProjectile), false);
+
+    assert.ok(rng.includes('rn2(3)=2'));
+    assert.ok(rng.some(entry => entry.startsWith('rn2(100)=')));
+});
+
+test('production monster launcher arrow miss lands without ohit mulch', async () => {
+    const { arrow, rng } = await runMonsterLauncherArrowLanding({ seed: 2 });
+
+    assert.equal(game._pending_message, 'An arrow misses you.');
+    assert.equal(game.u.uhp, 20);
+    const landed = game.level.objects.find(obj => obj.id === arrow.id);
+    assert.ok(landed);
+    assert.equal(landed.ox, 5);
+    assert.equal(landed.oy, 5);
+    assert.equal(landed.transientProjectile, false);
+
+    assert.ok(rng.includes('rnd(20)=20'));
+    assert.equal(rng.filter(entry => entry.startsWith('rn2(3)=')).length, 0);
 });
 
 test('production monster crude dagger catch does not queue drop-throw landing', async () => {

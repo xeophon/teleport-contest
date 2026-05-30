@@ -6114,19 +6114,23 @@ async function processMonsterTurns() {
                         && monsterLinedUp(mon, throwTargetX, throwTargetY)) {
                         const missile = mon.minvent[launcherAmmoIndex];
                         rnd(1);
+                        let thrownMissile = missile;
                         if ((missile.quan || 1) > 1) {
                             missile.quan--;
-                            next_ident();
+                            thrownMissile = { ...missile, id: next_ident(), quan: 1 };
                         } else {
                             mon.minvent.splice(launcherAmmoIndex, 1);
+                            if (mon.missile === missile) mon.missile = null;
                         }
+                        const sharedArrowLanding = !missile.blessed && !missile.cursed && !missile.greased
+                            && !(missile.spe || 0) && !(missile.oeroded || 0) && !(missile.oeroded2 || 0);
                         addToplineMessage(`${monsterDisplayName(mon, true)} shoots an arrow!`);
                         game._message_more = 1;
                         game._process_time_with_more = 0;
                         const flightX = (game.u?.ux || 0) - throwDx;
                         const flightY = (game.u?.uy || 0) - throwDy;
                         game.level.objects.push({
-                            ...missile,
+                            ...thrownMissile,
                             ox: flightX,
                             oy: flightY,
                             quan: 1,
@@ -6159,8 +6163,24 @@ async function processMonsterTurns() {
                                 } else {
                                     game._damage_after_topline_more = (game._damage_after_topline_more || 0) + damage;
                                     game._exercise_after_topline_more = (game._exercise_after_topline_more || 0) + 1;
-                                    game._arrow_mulch_after_topline_more = 1;
+                                    if (sharedArrowLanding) {
+                                        game._arrow_drop_throw_after_topline_more = {
+                                            missile: thrownMissile,
+                                            x: game.u?.ux || 0,
+                                            y: game.u?.uy || 0,
+                                            ohit: true,
+                                        };
+                                    } else {
+                                        game._arrow_mulch_after_topline_more = 1;
+                                    }
                                 }
+                            } else if (sharedArrowLanding) {
+                                game._arrow_drop_throw_after_topline_more = {
+                                    missile: thrownMissile,
+                                    x: game.u?.ux || 0,
+                                    y: game.u?.uy || 0,
+                                    ohit: false,
+                                };
                             }
                         }
                         game._search_pending_count = 0;

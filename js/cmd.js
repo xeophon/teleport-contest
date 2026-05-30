@@ -42420,6 +42420,18 @@ export async function rhack(_cmd) {
 			                    rn2(2);
 			                    game._exercise_after_topline_more--;
 			                }
+                if (game._arrow_drop_throw_after_topline_more) {
+                    const arrowDrop = game._arrow_drop_throw_after_topline_more;
+                    game._arrow_drop_throw_after_topline_more = null;
+                    const floorMessages = [];
+                    landMonsterThrownObject(arrowDrop.missile, arrowDrop.x, arrowDrop.y, {
+                        glyph: arrowDrop.glyph || ')',
+                        color: arrowDrop.color ?? CLR_CYAN,
+                        messages: floorMessages,
+                        ohit: !!arrowDrop.ohit,
+                    });
+                    appendToplineAfterMoreMessages(floorMessages);
+                }
                 if (game._arrow_mulch_after_topline_more) {
                     game._arrow_mulch_after_topline_more = 0;
                     rn2(2);
