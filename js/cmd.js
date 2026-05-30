@@ -11248,8 +11248,53 @@ function polyselfWornShirtItem() {
         && ['hawaiian shirt', 't-shirt'].includes(objectKindKey(item)));
 }
 
+function polyselfWornBodyArmorItem() {
+    return wornArmorInSlot('body');
+}
+
+function polyselfWornCloakItem() {
+    return wornArmorInSlot('cloak');
+}
+
+const POLYSELF_BREAKARM_FORM_NAMES = new Set([
+    'xorn',
+    'marilith',
+    'winged gargoyle',
+]);
+
+function polyselfFormLowerName(form) {
+    return String(form?.name || '').toLowerCase();
+}
+
+function polyselfFormWhirly(form) {
+    const name = polyselfFormLowerName(form);
+    return !!(form?.whirly || form?.mlet === 'v' || form?.glyph === 'v' || name === 'air elemental');
+}
+
 function polyselfFormSlipsArmor(form) {
-    return !!(form?.verysmall || form?.whirly || form?.noncorporeal);
+    return !!(form?.verysmall || polyselfFormWhirly(form) || form?.noncorporeal);
+}
+
+function polyselfFormBreaksArmor(form) {
+    if (!form || polyselfFormSlipsArmor(form)) return false;
+    const name = polyselfFormLowerName(form);
+    return !!(form.breakarm || form.breaksArmor || form.big || POLYSELF_BREAKARM_FORM_NAMES.has(name));
+}
+
+function polyselfFormIsMummy(form) {
+    return !!(form && (form.mlet === 'M' || form.glyph === 'M' || /\bmummy\b/i.test(form.name || '')));
+}
+
+function polyselfCloakSimpleName(cloak) {
+    const kind = objectKindKey(cloak);
+    if (kind === 'robe') return 'robe';
+    if (kind === 'mummy wrapping') return 'wrapping';
+    if (kind === 'alchemy smock') return cloak?.known && cloak?.dknown ? 'smock' : 'apron';
+    return 'cloak';
+}
+
+function polyselfMummyWrappingAllowed(form, cloak) {
+    return objectKindKey(cloak) === 'mummy wrapping' && polyselfFormIsMummy(form);
 }
 
 function polyselfEyewearFalloffName(item) {
@@ -11268,17 +11313,51 @@ function clearPolyselfEyewearState(item, form) {
 
 function polyselfEquipmentFalloutForForm(form, { bodyArmor = null } = {}) {
     const items = [];
+    const destroyedItems = [];
     const messages = [];
     const addItem = item => {
         if (item && !items.includes(item)) items.push(item);
     };
+    const addDestroyedItem = item => {
+        if (item && !destroyedItems.includes(item)) destroyedItems.push(item);
+    };
 
-    addItem(bodyArmor);
-    if (polyselfFormSlipsArmor(form)) {
+    if (polyselfFormBreaksArmor(form)) {
+        const armor = bodyArmor || polyselfWornBodyArmorItem();
+        if (armor) {
+            messages.push('You break out of your armor!');
+            addDestroyedItem(armor);
+        }
+
+        const cloak = polyselfWornCloakItem();
+        if (cloak && !polyselfMummyWrappingAllowed(form, cloak)) {
+            const cloakName = polyselfCloakSimpleName(cloak);
+            const cloakKind = objectKindKey(cloak);
+            if (cloakKind === 'mummy wrapping') {
+                messages.push(`Your ${cloakName} tears apart!`);
+                addDestroyedItem(cloak);
+            } else if (cloakKind === 'alchemy smock') {
+                messages.push(`The knot on your ${cloakName} is pulled apart!`);
+                addItem(cloak);
+            } else {
+                messages.push(`The clasp on your ${cloakName} breaks open!`);
+                addItem(cloak);
+            }
+        }
+
         const shirt = polyselfWornShirtItem();
         if (shirt) {
-            messages.push(form?.whirly ? 'You seep right through your shirt!' : 'You become much too small for your shirt!');
-            addItem(shirt);
+            messages.push('Your shirt rips to shreds!');
+            addDestroyedItem(shirt);
+        }
+    } else {
+        addItem(bodyArmor);
+        if (polyselfFormSlipsArmor(form)) {
+            const shirt = polyselfWornShirtItem();
+            if (shirt) {
+                messages.push(polyselfFormWhirly(form) ? 'You seep right through your shirt!' : 'You become much too small for your shirt!');
+                addItem(shirt);
+            }
         }
     }
 
@@ -11323,7 +11402,7 @@ function polyselfEquipmentFalloutForForm(form, { bodyArmor = null } = {}) {
         }
     }
 
-    return { items, messages };
+    return { items, destroyedItems, messages };
 }
 
 function dropPolyselfEquipmentItems(items, floorMessages = [], form = polyselfForm()) {
@@ -11332,6 +11411,25 @@ function dropPolyselfEquipmentItems(items, floorMessages = [], form = polyselfFo
         clearPolyselfEyewearState(item, form);
         dropCarriedObjectAtHero(item, floorMessages);
     }
+}
+
+function destroyPolyselfEquipmentItems(items) {
+    let changed = false;
+    for (const item of items || []) {
+        if (!(game.inventory || []).includes(item)) continue;
+        useUpInventoryItem(item, item.quan || 1);
+        changed = true;
+    }
+    if (changed) updateReflectionFromInventory();
+}
+
+function applyPolyselfEquipmentFallout(fallout, floorMessages = [], form = polyselfForm()) {
+    destroyPolyselfEquipmentItems(fallout?.destroyedItems);
+    dropPolyselfEquipmentItems(fallout?.items, floorMessages, form);
+}
+
+function polyselfFalloutHasItems(fallout) {
+    return !!(fallout?.items?.length || fallout?.destroyedItems?.length);
 }
 
 function polyselfBasePersistentBlindness(base) {
@@ -11513,9 +11611,16 @@ function becomeMonster(name) {
         unpunishHero();
         message += '  You slip out of the iron chain.';
     }
-    const cloak = (game.inventory || []).find(item =>
-        item.cls === 'armor' && (item.worn || item.line?.includes('being worn'))
-        && inventoryItemName(item).toLowerCase().includes('cloak'));
+    if (polyselfFormBreaksArmor(form)) {
+        const fallout = polyselfEquipmentFalloutForForm(form);
+        if (polyselfFalloutHasItems(fallout)) {
+            const floorMessages = [];
+            applyPolyselfEquipmentFallout(fallout, floorMessages, form);
+            recomputePolyselfArmorClass(form);
+            message += `  ${[...fallout.messages, ...floorMessages].filter(Boolean).join('  ')}`;
+        }
+    }
+    const cloak = polyselfWornCloakItem();
     if (cloak && (form.name === 'gnome' || form.verysmall)) {
         message += '  You shrink out of your cloak!';
         game._polyself_cloak_after_more_letter = cloak.letter;
@@ -11524,11 +11629,7 @@ function becomeMonster(name) {
         game.u.uac = (game.u.uac ?? 10) - 1;
         return { message, more: true };
     }
-    const bodyArmor = (game.inventory || []).find(item => {
-        if (!(item.cls === 'armor' && (item.worn || item.line?.includes('being worn')))) return false;
-        const name = inventoryItemName(item).toLowerCase();
-        return /armor|mail/.test(name) && !/helm|helmet|gloves|gauntlets|boots|shoes|shield|cloak|shirt/.test(name);
-    });
+    const bodyArmor = polyselfWornBodyArmorItem();
     if (bodyArmor && (form.nohands || form.verysmall)) {
         const fallout = polyselfEquipmentFalloutForForm(form, { bodyArmor });
         message += '  Your armor falls around you!';
@@ -11546,9 +11647,9 @@ function becomeMonster(name) {
         return { message, more: true };
     }
     const fallout = polyselfEquipmentFalloutForForm(form);
-    if (fallout.items.length) {
+    if (polyselfFalloutHasItems(fallout)) {
         const floorMessages = [];
-        dropPolyselfEquipmentItems(fallout.items, floorMessages);
+        applyPolyselfEquipmentFallout(fallout, floorMessages, form);
         recomputePolyselfArmorClass(form);
         message += `  ${[...fallout.messages, ...floorMessages].filter(Boolean).join('  ')}`;
     }

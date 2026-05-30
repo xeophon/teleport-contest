@@ -8361,6 +8361,45 @@ test('successful very small polyself slips out of worn shirt before no-hands fal
     }
 });
 
+test('successful breakarm polyself destroys body armor and shirt but drops cloak', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, {
+        uhp: 40,
+        uhpmax: 40,
+        uen: 0,
+        uenmax: 0,
+        ulevel: 1,
+        uac: 3,
+    });
+    const body = wornArmor(32059, 'leather armor', 'a');
+    const cloak = wornArmor(32060, 'cloak of displacement', 'c');
+    const shirt = wornArmor(32061, 'T-shirt', 't');
+    game.inventory = [body, cloak, shirt];
+
+    await debugPolyselfInto('xorn');
+
+    const pending = game._pending_message || '';
+    assert.equal(game.u._polyself_form?.name, 'xorn');
+    assert.match(pending, /You turn into a xorn!/);
+    assert.match(pending, /You break out of your armor!/);
+    assert.match(pending, /The clasp on your cloak breaks open!/);
+    assert.match(pending, /Your shirt rips to shreds!/);
+    assert.ok(pending.indexOf('You break out of your armor!')
+        < pending.indexOf('The clasp on your cloak breaks open!'));
+    assert.ok(pending.indexOf('The clasp on your cloak breaks open!')
+        < pending.indexOf('Your shirt rips to shreds!'));
+    assert.equal(game.inventory.includes(body), false);
+    assert.equal(game.inventory.includes(cloak), false);
+    assert.equal(game.inventory.includes(shirt), false);
+    assert.equal(game.u.uac, 10);
+    assert.deepEqual(game.level.objects.map(obj => obj.kind || obj.actualKind), ['cloak of displacement']);
+    assert.equal(game.level.objects[0].worn, false);
+    assert.equal(game.level.objects[0].ox, game.u.ux);
+    assert.equal(game.level.objects[0].oy, game.u.uy);
+    assert.equal(game.level.objects.some(obj => obj.kind === 'leather armor' || obj.kind === 'T-shirt'), false);
+});
+
 test('successful no-hands polyself drops shield helm and boots but keeps amulet', async () => {
     installNonShopFloorState();
     initRng(1);
