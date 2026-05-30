@@ -791,6 +791,12 @@ async function enterTipCommand() {
     await rhack('\n');
 }
 
+async function enterSitCommand() {
+    await rhack('#');
+    for (const ch of 'sit') await rhack(ch);
+    await rhack('\n');
+}
+
 async function debugPolyselfInto(name) {
     game.flags.debug = true;
     await rhack('#');
@@ -8837,6 +8843,79 @@ test('successful matching gray dragon polyself keeps embedded armor antimagic so
     assert.equal(game.level.objects.length, 0);
 });
 
+test('successful white dragon polyself grants form cold resistance', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, {
+        uhp: 40,
+        uhpmax: 40,
+        uen: 0,
+        uenmax: 0,
+        ulevel: 1,
+        uac: 10,
+        coldResistance: false,
+    });
+    game.inventory = [];
+
+    await debugPolyselfInto('white dragon');
+
+    assert.equal(game.u._polyself_form?.name, 'white dragon');
+    assert.equal(shop.heroHasColdResistanceForTest(), true);
+    assert.equal(shop.coldInventoryProtectionChanceForTest(), 0);
+});
+
+test('white dragon cold resistance suppresses ice chill while sitting', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    game.level.at = () => ({ roomno: 0, typ: ICE });
+    Object.assign(game.u, {
+        uhp: 40,
+        uhpmax: 40,
+        uen: 0,
+        uenmax: 0,
+        ulevel: 1,
+        uac: 10,
+        coldResistance: false,
+    });
+    game.inventory = [];
+
+    await debugPolyselfInto('white dragon');
+    await enterSitCommand();
+
+    assert.equal(game.u._polyself_form?.name, 'white dragon');
+    assert.match(game._pending_message || '', /You sit on the ice\./);
+    assert.doesNotMatch(game._pending_message || '', /The ice feels cold/);
+});
+
+test('successful matching white dragon polyself keeps embedded armor cold resistance source', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, {
+        uhp: 40,
+        uhpmax: 40,
+        uen: 0,
+        uenmax: 0,
+        ulevel: 1,
+        uac: 10,
+        coldResistance: false,
+    });
+    const body = wornArmor(32148, 'white dragon scales', 'a');
+    game.inventory = [body];
+
+    await debugPolyselfInto('white dragon');
+
+    const pending = game._pending_message || '';
+    assert.equal(game.u._polyself_form?.name, 'white dragon');
+    assert.match(pending, /You merge with your scaly armor\./);
+    assert.doesNotMatch(pending, /Your armor falls around you|You break out of your armor/);
+    assert.equal(game.inventory.includes(body), true);
+    assert.equal(body.worn, false);
+    assert.equal(body._polyselfSkin, true);
+    assert.equal(shop.heroHasColdResistanceForTest(), true);
+    assert.equal(shop.coldInventoryProtectionChanceForTest(), 99);
+    assert.equal(game.level.objects.length, 0);
+});
+
 test('successful matching silver dragon polyself keeps embedded armor reflection source', async () => {
     installNonShopFloorState();
     initRng(1);
@@ -9022,6 +9101,76 @@ test('successful small polyself dropping gray dragon scales clears antimagic', a
     assert.equal(game.level.objects[0].kind, 'gray dragon scales');
     assert.equal(game.level.objects[0].worn, false);
     assert.equal(shop.heroHasAntimagicForTest(), false);
+});
+
+test('successful no-hands polyself clears white dragon cold resistance before overload more', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, {
+        uhp: 40,
+        uhpmax: 40,
+        uen: 0,
+        uenmax: 0,
+        ulevel: 1,
+        uac: 1,
+        coldResistance: false,
+    });
+    const body = wornArmor(32149, 'white dragon scale mail', 'a');
+    game.inventory = [body];
+    assert.equal(shop.heroHasColdResistanceForTest(), true);
+    assert.equal(shop.coldInventoryProtectionChanceForTest(), 99);
+
+    await debugPolyselfInto('wererat');
+
+    const first = game._pending_message || '';
+    assert.equal(game.u._polyself_form?.name, 'wererat');
+    assert.match(first, /Your armor falls around you!/);
+    assert.equal(game.inventory.includes(body), true);
+    assert.equal(body.worn, false);
+    assert.doesNotMatch(body.line || '', /being worn/);
+    assert.equal(shop.heroHasColdResistanceForTest(), false);
+    assert.equal(shop.coldInventoryProtectionChanceForTest(), 0);
+    assert.equal(game.level.objects.length, 0);
+
+    await rhack(' ');
+    await rhack(' ');
+
+    assert.equal(game.inventory.includes(body), false);
+    assert.equal(game.level.objects.length, 1);
+    assert.equal(game.level.objects[0].kind, 'white dragon scale mail');
+    assert.equal(game.level.objects[0].worn, false);
+    assert.equal(shop.heroHasColdResistanceForTest(), false);
+    assert.equal(shop.coldInventoryProtectionChanceForTest(), 0);
+});
+
+test('successful small polyself dropping white dragon scales clears cold resistance', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, {
+        uhp: 40,
+        uhpmax: 40,
+        uen: 0,
+        uenmax: 0,
+        ulevel: 1,
+        uac: 7,
+        coldResistance: false,
+    });
+    const body = wornArmor(32150, 'white dragon scales', 'a');
+    game.inventory = [body];
+    assert.equal(shop.heroHasColdResistanceForTest(), true);
+    assert.equal(shop.coldInventoryProtectionChanceForTest(), 99);
+
+    await debugPolyselfInto('gnome');
+
+    const pending = game._pending_message || '';
+    assert.equal(game.u._polyself_form?.name, 'gnome');
+    assert.match(pending, /Your armor falls around you!/);
+    assert.equal(game.inventory.includes(body), false);
+    assert.equal(game.level.objects.length, 1);
+    assert.equal(game.level.objects[0].kind, 'white dragon scales');
+    assert.equal(game.level.objects[0].worn, false);
+    assert.equal(shop.heroHasColdResistanceForTest(), false);
+    assert.equal(shop.coldInventoryProtectionChanceForTest(), 0);
 });
 
 test('successful large dog polyself breaks body armor instead of overloading', async () => {

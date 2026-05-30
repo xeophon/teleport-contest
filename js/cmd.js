@@ -8941,6 +8941,12 @@ function polyselfFormHasAntimagic(form = game.u?._polyself_form) {
         || name === 'baby gray dragon' || name === 'baby grey dragon');
 }
 
+function polyselfFormHasColdResistance(form = game.u?._polyself_form) {
+    const name = String(form?.name || '').toLowerCase();
+    return !!(form?.coldResistance || form?.resistsCold || form?.resists_cold
+        || name === 'white dragon' || name === 'baby white dragon');
+}
+
 function activeAntimagicSource() {
     return (game.inventory || []).find(item => {
         if (!isActiveInventoryExtrinsicItem(item)) return false;
@@ -9296,16 +9302,7 @@ function coldDestroyablePotion(item) {
 }
 
 function coldInventoryProtectionChance() {
-    const coldGear = (game.inventory || []).some(item => {
-        const kind = objectKindKey(item);
-        const active = isWornInventoryItem(item) || item.wielded || item.line?.includes('(weapon)');
-        return active && (kind === 'ring of cold resistance'
-            || kind === 'cold resistance'
-            || kind === 'white dragon scale mail'
-            || kind === 'white dragon scales'
-            || kind === 'Frost Brand'.toLowerCase()
-            || item.coldResistance);
-    });
+    const coldGear = (game.inventory || []).some(item => activeInventoryResistanceKind(item) === 'cold');
     if (coldGear) return 99;
     const dwarvishCloak = (game.inventory || []).some(item =>
         isWornInventoryItem(item) && objectKindKey(item) === 'dwarvish cloak');
@@ -22011,6 +22008,12 @@ export function heroHasAntimagic() {
     return !!activeAntimagicSource();
 }
 
+export function heroHasColdResistance() {
+    if (game.u?.coldResistance) return true;
+    if (polyselfFormHasColdResistance()) return true;
+    return (game.inventory || []).some(item => activeInventoryResistanceKind(item) === 'cold');
+}
+
 function heroHasPoisonResistance() {
     if (game.u?.poisonResistance || heroWearsAlchemySmock()) return true;
     return (game.inventory || []).some(item => {
@@ -23469,6 +23472,11 @@ function activeInventoryResistanceKind(item) {
         || kind === 'red dragon scale mail' || kind === 'red dragon scales'
         || kind === 'fire brand')
         return 'fire';
+    if (item.coldResistance || kind === 'ring of cold resistance'
+        || kind === 'cold resistance'
+        || dragonArmorKindHasProperty(kind, 'cold')
+        || kind === 'frost brand')
+        return 'cold';
     if (item.acidResistance || kind === 'alchemy smock'
         || kind === 'yellow dragon scale mail' || kind === 'yellow dragon scales')
         return 'acid';
@@ -27703,6 +27711,8 @@ export const __shopBillingTestHooks = {
     finishDroppedObjectSale,
     finishShopFloorContainerPutSale,
     heroHasAntimagicForTest: heroHasAntimagic,
+    heroHasColdResistanceForTest: heroHasColdResistance,
+    coldInventoryProtectionChanceForTest: coldInventoryProtectionChance,
     heroHasAcidResistanceForTest: heroHasAcidResistance,
     heroHasPoisonResistanceForTest: heroHasPoisonResistance,
     impactDropFloorObjects,
@@ -39114,7 +39124,7 @@ async function sitOnTerrain(loc) {
     }
     if (typ === ICE) {
         const messages = ['You sit on the ice.'];
-        if (!game.u?.coldResistance) messages.push('The ice feels cold.');
+        if (!heroHasColdResistance()) messages.push('The ice feels cold.');
         await finishSitMessage(messages.join('  '));
         return true;
     }
@@ -47253,7 +47263,7 @@ export async function rhack(_cmd) {
         }
         if (selfZap && coldWand) {
             const origDamage = d(12, 6);
-            const resistsCold = !!game.u?.coldResistance;
+            const resistsCold = heroHasColdResistance();
             const coldInventory = coldDamageInventory(origDamage);
             const baseDamage = resistsCold ? 0 : origDamage;
             const damage = baseDamage + coldInventory.damage;
@@ -47471,8 +47481,9 @@ export async function rhack(_cmd) {
                                     dy = -dy;
                                 } else {
                                     const origDamage = d(6, 6);
-                                    const baseDamage = game.u?.coldResistance ? 0 : origDamage;
-                                    if (game.u?.coldResistance) messages.push("You don't feel cold.");
+                                    const resistsCold = heroHasColdResistance();
+                                    const baseDamage = resistsCold ? 0 : origDamage;
+                                    if (resistsCold) messages.push("You don't feel cold.");
                                     const coldInventory = !rn2(3)
                                         ? coldDamageInventory(origDamage)
                                         : { messages: [], damage: 0, deathCause: '' };
