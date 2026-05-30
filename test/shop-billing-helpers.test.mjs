@@ -3,6 +3,7 @@ import test from 'node:test';
 
 import { interruptEatingOccupation, moveloop_core, processEatingOccupationTick, processForceLockOccupation } from '../js/allmain.js';
 import { activateStatueTrap, burnFloorObjectsByFire, earthFloorEffects, finishForceLock, landMonsterThrownObject, processCorpseTimers, processForceLockOccupationTick, processGlobShrinkTimers, processSpellbookStudyOccupation, rhack, __shopBillingTestHooks as shop } from '../js/cmd.js';
+import { newsym } from '../js/display.js';
 import { game, resetGame } from '../js/gstate.js';
 import { pushKey, resetInputState } from '../js/input.js';
 import { createMonsterCorpseOrGlob, mkcorpstat } from '../js/mklev.js';
@@ -282,6 +283,17 @@ function installNonShopFloorState() {
     game.level.objects = [];
     game.level.flags = {};
     game.level.at = () => ({ roomno: 0, typ: ROOM });
+    return state;
+}
+
+function installStableNonShopFloorState() {
+    const state = installNonShopFloorState();
+    const cells = new Map();
+    game.level.at = (x, y) => {
+        const key = `${x},${y}`;
+        if (!cells.has(key)) cells.set(key, { roomno: 0, typ: ROOM });
+        return cells.get(key);
+    };
     return state;
 }
 
@@ -8902,6 +8914,78 @@ test('successful no-hands polyself drops helm of opposite alignment and restores
     assert.equal(floorHelm.worn, false);
     assert.equal(floorHelm.ox, game.u.ux);
     assert.equal(floorHelm.oy, game.u.uy);
+});
+
+test('successful no-hands polyself dropping helm of telepathy refreshes sensed monsters', async () => {
+    installStableNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, {
+        blind: true,
+        uhp: 40,
+        uhpmax: 40,
+        uen: 0,
+        uenmax: 0,
+        ulevel: 1,
+        uac: 9,
+    });
+    const mon = {
+        mx: 10,
+        my: 5,
+        mhp: 6,
+        m_lev: 0,
+        data: { name: 'newt', mlet: 'lizard', mlevel: 0 },
+    };
+    game.level.monsters = [mon];
+    const helm = wornArmor(32094, 'helm of telepathy', 'h');
+    game.inventory = [helm];
+
+    newsym(mon.mx, mon.my);
+    assert.equal(game.level.at(mon.mx, mon.my).disp_ch, ':');
+
+    await debugPolyselfInto('wererat');
+
+    assert.equal(game.u._polyself_form?.name, 'wererat');
+    assert.match(game._pending_message || '', /Your helm falls to the floor!/);
+    assert.equal(game.inventory.includes(helm), false);
+    assert.equal(game.level.at(mon.mx, mon.my).disp_ch, ' ');
+});
+
+test('successful no-hands polyself dropping helm of caution refreshes warning glyphs', async () => {
+    installStableNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, {
+        blind: false,
+        warning: 0,
+        uhp: 40,
+        uhpmax: 40,
+        uen: 0,
+        uenmax: 0,
+        ulevel: 1,
+        uac: 9,
+    });
+    game._warnlevel = 1;
+    const mon = {
+        mx: 10,
+        my: 5,
+        mhp: 12,
+        m_lev: 8,
+        mpeaceful: false,
+        pet: false,
+        data: { name: 'soldier ant', mlet: 'ant', mlevel: 8 },
+    };
+    game.level.monsters = [mon];
+    const helm = wornArmor(32095, 'helm of caution', 'h');
+    game.inventory = [helm];
+
+    newsym(mon.mx, mon.my);
+    assert.equal(game.level.at(mon.mx, mon.my).disp_ch, '2');
+
+    await debugPolyselfInto('wererat');
+
+    assert.equal(game.u._polyself_form?.name, 'wererat');
+    assert.match(game._pending_message || '', /Your helm falls to the floor!/);
+    assert.equal(game.inventory.includes(helm), false);
+    assert.equal(game.level.at(mon.mx, mon.my).disp_ch, ' ');
 });
 
 test('successful centaur polyself pushes off unpaid speed boots in shop', async () => {

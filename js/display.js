@@ -457,6 +457,20 @@ function telepathySourceCount() {
     return count;
 }
 
+function warningSourceCount() {
+    let count = 0;
+    for (const item of game.inventory || []) {
+        if (!itemIsWorn(item)) continue;
+        const name = `${item.kind || ''} ${item.actualKind || ''} ${item.line || ''}`.toLowerCase();
+        if (/\bhelm(?:et)? of caution\b/.test(name)) count++;
+    }
+    return count;
+}
+
+function warnsOfMonsters() {
+    return !!(game.u?.warning || game.u?.HWarning || game.u?.warn_of_monsters || warningSourceCount() > 0);
+}
+
 function sensesTelepathically(mon) {
     if (!mon || mon.mindless || mon.data?.mindless) return false;
     const sources = telepathySourceCount();
@@ -781,7 +795,7 @@ export function newsym(x, y) {
     const warningMon = game.level?.monsters?.find(candidate =>
         candidate.mx === x && candidate.my === y);
     let warning = null;
-    if (warningMon && game.u?.warning && !warningMon.mpeaceful && !warningMon.pet) {
+    if (warningMon && warnsOfMonsters() && !warningMon.mpeaceful && !warningMon.pet) {
         const dx = x - (game.u?.ux ?? 0);
         const dy = y - (game.u?.uy ?? 0);
         if (dx * dx + dy * dy < 100) {
@@ -965,6 +979,10 @@ function refreshSeenMonsterMap() {
     if (!game.u?.usteed) newsym(game.u?.ux, game.u?.uy);
 }
 
+export function seeMonsters() {
+    refreshSeenMonsterMap();
+}
+
 function redrawRememberedMap() {
     for (let y = 0; y < ROWNO; y++) {
         for (let x = 1; x < COLNO; x++) {
@@ -1036,7 +1054,7 @@ export function refreshHallucinatedMap(forward = false) {
             show_glyph_cell(x, y, glyph.ch, glyph.color, glyph.dec, game._hilite_pet && mon.pet ? 1 : 0);
             continue;
         }
-        if (mon.mpeaceful || mon.pet || !game.u?.warning) continue;
+        if (mon.mpeaceful || mon.pet || !warnsOfMonsters()) continue;
         const dx = x - (game.u?.ux ?? 0);
         const dy = y - (game.u?.uy ?? 0);
         if (dx * dx + dy * dy >= 100) continue;
