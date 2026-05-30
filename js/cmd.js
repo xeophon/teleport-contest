@@ -888,6 +888,7 @@ const BOULDER = 465;
 const GOLD_PIECE = 466;
 const CORPSE = 471;
 const STATUE = 472;
+const ROCK_CLASS = 13;
 const FLINT_STONE = 473;
 const HEAVY_IRON_BALL = 474;
 const IRON_CHAIN = 475;
@@ -13270,6 +13271,7 @@ function consumeDipPotion(potion) {
 
 function polymorphObjectClassCode(item) {
     const cls = itemClassKey(item);
+    if (item?.otyp === BOULDER || item?.otyp === STATUE || cls === 'rock' || item?.glyph === '`') return ROCK_CLASS;
     if (isPotionObject(item)) return POTION_CLASS;
     if (cls === 'weapon' || item?.glyph === ')') return WEAPON_CLASS;
     if (cls === 'armor' || item?.glyph === '[') return ARMOR_CLASS;
@@ -13324,6 +13326,7 @@ function polymorphObjectClassName(item) {
     case TOOL_CLASS: return 'tool';
     case GEM_CLASS: return 'gem';
     case AMULET_CLASS: return 'amulet';
+    case ROCK_CLASS: return 'rock';
     default: return itemClassKey(item) || '';
     }
 }
@@ -26049,13 +26052,52 @@ function prepareFloorPolymorphReplacement(oldObj, newObj) {
     return newObj;
 }
 
-function polymorphFloorPileResultAt(x, y, { skipObjects = null, onlyObjects = null, omitObjects = null } = {}) {
-    const targetObjects = (game.level?.objects || [])
+function restackFloorBouldersAt(x, y) {
+    const objects = game.level?.objects;
+    if (!objects?.length) return;
+    const sameSquare = objects.filter(obj =>
+        obj && !obj.transientProjectile && obj.ox === x && obj.oy === y);
+    if (sameSquare.length < 2 || !sameSquare.some(obj => obj.otyp === BOULDER)) return;
+    const restacked = [
+        ...sameSquare.filter(obj => obj.otyp !== BOULDER),
+        ...sameSquare.filter(obj => obj.otyp === BOULDER),
+    ];
+    if (sameSquare.every((obj, idx) => obj === restacked[idx])) return;
+    const sameSet = new Set(sameSquare);
+    let replacementIndex = 0;
+    game.level.objects = objects.map(obj =>
+        sameSet.has(obj) ? restacked[replacementIndex++] : obj);
+}
+
+function rockClassPolymorphReplacement(obj, x, y) {
+    const newObj = mkobj(ROCK_CLASS, false);
+    Object.assign(newObj, object_display(newObj), {
+        ox: x,
+        oy: y,
+        quan: obj.quan || 1,
+        cursed: obj.cursed,
+        blessed: obj.blessed,
+    });
+    if (obj.otyp === BOULDER) applySokobanGuilt();
+    return newObj;
+}
+
+function polymorphFloorPileResultAt(x, y, {
+    skipObjects = null,
+    onlyObjects = null,
+    omitObjects = null,
+    restackBoulders = true,
+} = {}) {
+    const pileObjects = (game.level?.objects || [])
+        .filter(obj => obj && !obj.hidden && !obj.transientProjectile && obj.ox === x && obj.oy === y);
+    const targetObjects = pileObjects
         .filter(obj => !skipObjects?.has(obj)
             && (!onlyObjects || onlyObjects.has(obj))
-            && !omitObjects?.has(obj)
-            && !obj.hidden && !obj.transientProjectile && obj.ox === x && obj.oy === y && obj.otyp !== BOULDER);
-    if (!targetObjects.length) return { affected: false, messages: [] };
+            && !omitObjects?.has(obj));
+    if (!targetObjects.length) {
+        if (restackBoulders && pileObjects.length) restackFloorBouldersAt(x, y);
+        return { affected: false, messages: [] };
+    }
     const removeTargets = new Set();
     const replacementByOld = new Map();
     const alterationMessages = [];
@@ -26081,22 +26123,27 @@ function polymorphFloorPileResultAt(x, y, { skipObjects = null, onlyObjects = nu
             affected = true;
             continue;
         }
-        const roll = rnd(1000);
-        const newObjId = next_ident();
-        if (obj.cls === 'potion' || obj.cls === 'scroll') {
-            if (!rn2(4)) rn2(2);
-        }
-        const newObj = { ...obj, id: newObjId, ox: x, oy: y, quan: obj.quan || 1, cursed: obj.cursed, blessed: obj.blessed };
-        if (obj.cls === 'potion') {
-            Object.assign(newObj, { cls: 'potion', glyph: '!', otyp: 'potion', color: NO_COLOR });
-            const appearance = game._object_descriptions?.potions?.[potionIndexForRoll(roll)]?.description || 'clear';
-            newObj.kind = `${appearance} potion`;
-        } else if (obj.cls === 'scroll') {
-            Object.assign(newObj, { cls: 'scroll', glyph: '?', otyp: 'scroll', color: CLR_WHITE });
-            const label = game._object_descriptions?.scrolls?.[scrollIndexForRoll(roll)] || 'ELBIB YLOH';
-            newObj.kind = `scroll labeled ${label}`;
+        let newObj;
+        if (polymorphObjectClassCode(obj) === ROCK_CLASS) {
+            newObj = rockClassPolymorphReplacement(obj, x, y);
         } else {
-            newObj.kind = obj.kind || obj.cls;
+            const roll = rnd(1000);
+            const newObjId = next_ident();
+            if (obj.cls === 'potion' || obj.cls === 'scroll') {
+                if (!rn2(4)) rn2(2);
+            }
+            newObj = { ...obj, id: newObjId, ox: x, oy: y, quan: obj.quan || 1, cursed: obj.cursed, blessed: obj.blessed };
+            if (obj.cls === 'potion') {
+                Object.assign(newObj, { cls: 'potion', glyph: '!', otyp: 'potion', color: NO_COLOR });
+                const appearance = game._object_descriptions?.potions?.[potionIndexForRoll(roll)]?.description || 'clear';
+                newObj.kind = `${appearance} potion`;
+            } else if (obj.cls === 'scroll') {
+                Object.assign(newObj, { cls: 'scroll', glyph: '?', otyp: 'scroll', color: CLR_WHITE });
+                const label = game._object_descriptions?.scrolls?.[scrollIndexForRoll(roll)] || 'ELBIB YLOH';
+                newObj.kind = `scroll labeled ${label}`;
+            } else {
+                newObj.kind = obj.kind || obj.cls;
+            }
         }
         prepareFloorPolymorphReplacement(obj, newObj);
         const angerMessage = floorPolymorphShopkeeperAngerMessage(obj, x, y);
@@ -26113,7 +26160,10 @@ function polymorphFloorPileResultAt(x, y, { skipObjects = null, onlyObjects = nu
             const replacement = replacementByOld.get(obj);
             return replacement ? [replacement] : [];
         });
+        if (restackBoulders) restackFloorBouldersAt(x, y);
         newsym(x, y);
+    } else if (restackBoulders) {
+        restackFloorBouldersAt(x, y);
     }
     const messages = didObjectShudder ? ['You feel shuddering vibrations.'] : [];
     messages.push(...alterationMessages);
@@ -26155,10 +26205,11 @@ async function polymorphFloorPileAt(x, y, {
     item = null,
     learnOnAffected = false,
     refreshHiding = false,
+    restackBoulders = true,
 } = {}) {
     rn2(19);
     if (consumeRangeRoll) rn2(8);
-    const result = polymorphFloorPileResultAt(x, y, { onlyObjects, omitObjects });
+    const result = polymorphFloorPileResultAt(x, y, { onlyObjects, omitObjects, restackBoulders });
     if (refreshHiding) refreshHeroHidingUnderObjectsAt(x, y);
     if (learnOnAffected && result.affected && item)
         setKnownWandLine(item, 'polymorph');
@@ -46829,6 +46880,7 @@ export async function rhack(_cmd) {
                         item,
                         learnOnAffected: true,
                         refreshHiding: true,
+                        restackBoulders: false,
                     });
                     return;
                 }

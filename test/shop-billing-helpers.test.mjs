@@ -8258,6 +8258,58 @@ test('floor polymorph downward hits the hero-square pile', async () => {
     assert.equal(game.u.uconduct.polypiles, 1);
 });
 
+test('floor polymorph can polymorph a boulder and applies Sokoban guilt', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    const wand = polymorphWand(32037, 'w');
+    const boulder = floorBoulder(32038);
+    game.inventory = [wand];
+    game.level.objects = [boulder];
+    game.level.flags.sokoban_rules = true;
+    game.u.uluck = 0;
+
+    await rhack('z');
+    await rhack('w');
+    await rhack('>');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.level.objects.includes(boulder), false);
+    assert.equal(game.level.objects.length, 1);
+    assert.notEqual(game.level.objects[0], boulder);
+    assert.equal(game.u.uconduct.polypiles, 1);
+    assert.equal(game.u.uconduct.sokocheat, 1);
+    assert.equal(game.u.uluck, -1);
+});
+
+test('floor polymorph restacks newly created boulders above lower pile objects', async () => {
+    installNonShopFloorState();
+    initRng(13);
+    const wand = polymorphWand(32039, 'w');
+    const statue = statueTrapStatue(32040, 5, 5);
+    const cover = {
+        ...metalAmulet(32041, 'amulet of unchanging', 6),
+        letter: undefined,
+        line: undefined,
+    };
+    game.inventory = [wand];
+    game.level.objects = [statue, cover];
+
+    await rhack('z');
+    await rhack('w');
+    await rhack('>');
+
+    const sameSquare = game.level.objects.filter(obj => obj.ox === 5 && obj.oy === 5);
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.level.objects.includes(statue), false);
+    assert.equal(game.level.objects.includes(cover), true);
+    assert.equal(sameSquare.length, 2);
+    assert.equal(sameSquare[0], cover);
+    assert.equal(sameSquare.at(-1).otyp, BOULDER);
+    assert.equal(game.u.uconduct.polypiles, 1);
+});
+
 test('floor polymorph upward without hiding does not hit the hero-square pile', async () => {
     installCommandShopState();
     initRng(1);
