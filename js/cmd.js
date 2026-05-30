@@ -11275,6 +11275,10 @@ function polyselfFormSlipsArmor(form) {
     return !!(form?.verysmall || polyselfFormWhirly(form) || form?.noncorporeal);
 }
 
+function polyselfFormNoHandsFallout(form) {
+    return !!(form?.nohands || form?.verysmall || polyselfFormWhirly(form));
+}
+
 function polyselfFormBreaksArmor(form) {
     if (!form || polyselfFormSlipsArmor(form)) return false;
     const name = polyselfFormLowerName(form);
@@ -11351,26 +11355,35 @@ function polyselfEquipmentFalloutForForm(form, { bodyArmor = null } = {}) {
             addDestroyedItem(shirt);
         }
     } else {
-        addItem(bodyArmor);
         if (polyselfFormSlipsArmor(form)) {
+            const whirly = polyselfFormWhirly(form);
+            const armor = bodyArmor || (whirly ? polyselfWornBodyArmorItem() : null);
+            if (armor) {
+                if (!bodyArmor) messages.push('Your armor falls around you!');
+                addItem(armor);
+            }
+            const cloak = whirly ? polyselfWornCloakItem() : null;
+            if (cloak && !polyselfMummyWrappingAllowed(form, cloak)) {
+                messages.push(`Your ${polyselfCloakSimpleName(cloak)} falls, unsupported!`);
+                addItem(cloak);
+            }
             const shirt = polyselfWornShirtItem();
             if (shirt) {
-                messages.push(polyselfFormWhirly(form) ? 'You seep right through your shirt!' : 'You become much too small for your shirt!');
+                messages.push(whirly ? 'You seep right through your shirt!' : 'You become much too small for your shirt!');
                 addItem(shirt);
             }
+        } else {
+            addItem(bodyArmor);
         }
     }
 
-    if (form?.nohands || form?.verysmall) {
+    if (polyselfFormNoHandsFallout(form)) {
         const gloves = polyselfWornArmorMatching(/glove|gauntlet/);
         const weapon = polyselfWieldedWeaponItem();
         if (gloves) {
             messages.push(`You drop your gloves${weapon ? ' and weapon' : ''}!`);
             addItem(weapon);
             addItem(gloves);
-        } else if (weapon) {
-            messages.push('You find you must drop your weapon!');
-            addItem(weapon);
         }
 
         const shield = polyselfWornArmorMatching(/shield/);
@@ -11388,8 +11401,13 @@ function polyselfEquipmentFalloutForForm(form, { bodyArmor = null } = {}) {
 
         const boots = polyselfWornArmorMatching(/boot|shoe/);
         if (boots) {
-            messages.push(`Your boots ${form.verysmall ? 'slide' : 'are pushed'} off your feet!`);
+            messages.push(polyselfFormWhirly(form) ? 'Your boots fall away!' : `Your boots ${form.verysmall ? 'slide' : 'are pushed'} off your feet!`);
             addItem(boots);
+        }
+
+        if (!gloves && weapon) {
+            messages.push('You find you must drop your weapon!');
+            addItem(weapon);
         }
     }
 

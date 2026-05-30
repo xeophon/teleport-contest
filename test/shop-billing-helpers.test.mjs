@@ -8400,6 +8400,111 @@ test('successful breakarm polyself destroys body armor and shirt but drops cloak
     assert.equal(game.level.objects.some(obj => obj.kind === 'leather armor' || obj.kind === 'T-shirt'), false);
 });
 
+test('successful whirly polyself slips out of body armor cloak and shirt', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, {
+        uhp: 40,
+        uhpmax: 40,
+        uen: 0,
+        uenmax: 0,
+        ulevel: 1,
+        uac: 2,
+    });
+    const body = wornArmor(32062, 'leather armor', 'a');
+    const cloak = wornArmor(32063, 'cloak of displacement', 'c');
+    const shirt = wornArmor(32064, 'T-shirt', 't');
+    game.inventory = [body, cloak, shirt];
+
+    await debugPolyselfInto('fog cloud');
+
+    const pending = game._pending_message || '';
+    assert.equal(game.u._polyself_form?.name, 'fog cloud');
+    assert.match(pending, /You turn into a fog cloud!/);
+    assert.match(pending, /Your armor falls around you!/);
+    assert.match(pending, /Your cloak falls, unsupported!/);
+    assert.match(pending, /You seep right through your shirt!/);
+    assert.ok(pending.indexOf('Your armor falls around you!')
+        < pending.indexOf('Your cloak falls, unsupported!'));
+    assert.ok(pending.indexOf('Your cloak falls, unsupported!')
+        < pending.indexOf('You seep right through your shirt!'));
+    assert.equal(game.inventory.includes(body), false);
+    assert.equal(game.inventory.includes(cloak), false);
+    assert.equal(game.inventory.includes(shirt), false);
+    assert.equal(game.u.uac, 10);
+    assert.deepEqual(game.level.objects.map(obj => obj.kind || obj.actualKind), [
+        'leather armor',
+        'cloak of displacement',
+        'T-shirt',
+    ]);
+    for (const obj of game.level.objects) {
+        assert.equal(obj.worn, false);
+        assert.equal(obj.ox, game.u.ux);
+        assert.equal(obj.oy, game.u.uy);
+    }
+});
+
+test('successful whirly polyself drops no-hands gear after sliparm fallout', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, {
+        uhp: 40,
+        uhpmax: 40,
+        uen: 0,
+        uenmax: 0,
+        ulevel: 1,
+        uac: 1,
+    });
+    const body = wornArmor(32065, 'leather armor', 'a');
+    const cloak = wornArmor(32066, 'cloak of displacement', 'c');
+    const shirt = wornArmor(32067, 'T-shirt', 't');
+    const shield = wornArmor(32068, 'small shield', 's');
+    const helm = wornArmor(32069, 'orcish helm', 'h');
+    const boots = wornArmor(32070, 'speed boots', 'b');
+    const dagger = wieldedWeapon(32071, 'dagger', 'w');
+    game.inventory = [body, cloak, shirt, shield, helm, boots, dagger];
+
+    await debugPolyselfInto('fog cloud');
+
+    const pending = game._pending_message || '';
+    assert.equal(game.u._polyself_form?.name, 'fog cloud');
+    assert.match(pending, /Your armor falls around you!/);
+    assert.match(pending, /Your cloak falls, unsupported!/);
+    assert.match(pending, /You seep right through your shirt!/);
+    assert.match(pending, /You can no longer hold your shield!/);
+    assert.match(pending, /Your helm falls to the ground!/);
+    assert.match(pending, /Your boots fall away!/);
+    assert.match(pending, /You find you must drop your weapon!/);
+    assert.ok(pending.indexOf('Your armor falls around you!')
+        < pending.indexOf('Your cloak falls, unsupported!'));
+    assert.ok(pending.indexOf('Your cloak falls, unsupported!')
+        < pending.indexOf('You seep right through your shirt!'));
+    assert.ok(pending.indexOf('You seep right through your shirt!')
+        < pending.indexOf('You can no longer hold your shield!'));
+    assert.ok(pending.indexOf('You can no longer hold your shield!')
+        < pending.indexOf('Your helm falls to the ground!'));
+    assert.ok(pending.indexOf('Your helm falls to the ground!')
+        < pending.indexOf('Your boots fall away!'));
+    assert.ok(pending.indexOf('Your boots fall away!')
+        < pending.indexOf('You find you must drop your weapon!'));
+    for (const item of [body, cloak, shirt, shield, helm, boots, dagger]) {
+        assert.equal(game.inventory.includes(item), false);
+    }
+    assert.deepEqual(game.level.objects.map(obj => obj.kind || obj.actualKind), [
+        'leather armor',
+        'cloak of displacement',
+        'T-shirt',
+        'small shield',
+        'orcish helm',
+        'speed boots',
+        'dagger',
+    ]);
+    for (const obj of game.level.objects) {
+        assert.equal(obj.ox, game.u.ux);
+        assert.equal(obj.oy, game.u.uy);
+    }
+});
+
 test('successful no-hands polyself drops shield helm and boots but keeps amulet', async () => {
     installNonShopFloorState();
     initRng(1);
