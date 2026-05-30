@@ -8791,6 +8791,34 @@ test('successful matching blue dragon polyself keeps embedded armor speed source
     assert.equal(game.level.objects.length, 0);
 });
 
+test('successful matching silver dragon polyself keeps embedded armor reflection source', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, {
+        uhp: 40,
+        uhpmax: 40,
+        uen: 0,
+        uenmax: 0,
+        ulevel: 1,
+        uac: 10,
+        reflecting: true,
+    });
+    const body = wornArmor(32142, 'silver dragon scales', 'a');
+    game.inventory = [body];
+
+    await debugPolyselfInto('silver dragon');
+
+    const pending = game._pending_message || '';
+    assert.equal(game.u._polyself_form?.name, 'silver dragon');
+    assert.match(pending, /You merge with your scaly armor\./);
+    assert.doesNotMatch(pending, /Your armor falls around you|You break out of your armor/);
+    assert.equal(game.inventory.includes(body), true);
+    assert.equal(body.worn, false);
+    assert.equal(body._polyselfSkin, true);
+    assert.equal(game.u.reflecting, true);
+    assert.equal(game.level.objects.length, 0);
+});
+
 test('successful nonmatching dragon polyself still forces dragon armor fallout', async () => {
     installNonShopFloorState();
     initRng(1);
@@ -8822,6 +8850,69 @@ test('successful nonmatching dragon polyself still forces dragon armor fallout',
     assert.equal(game.u.fast, false);
     assert.equal(game.u.veryfast, false);
     assert.equal(game.u._blueDragonFast, false);
+});
+
+test('successful no-hands polyself clears silver dragon reflection before overload more', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, {
+        uhp: 40,
+        uhpmax: 40,
+        uen: 0,
+        uenmax: 0,
+        ulevel: 1,
+        uac: 1,
+        reflecting: true,
+    });
+    const body = wornArmor(32143, 'silver dragon scale mail', 'a');
+    game.inventory = [body];
+
+    await debugPolyselfInto('wererat');
+
+    const first = game._pending_message || '';
+    assert.equal(game.u._polyself_form?.name, 'wererat');
+    assert.match(first, /Your armor falls around you!/);
+    assert.equal(game.inventory.includes(body), true);
+    assert.equal(body.worn, false);
+    assert.doesNotMatch(body.line || '', /being worn/);
+    assert.equal(game.u.reflecting, false);
+    assert.equal(game.level.objects.length, 0);
+
+    await rhack(' ');
+    await rhack(' ');
+
+    assert.equal(game.inventory.includes(body), false);
+    assert.equal(game.level.objects.length, 1);
+    assert.equal(game.level.objects[0].kind, 'silver dragon scale mail');
+    assert.equal(game.level.objects[0].worn, false);
+    assert.equal(game.u.reflecting, false);
+});
+
+test('successful small polyself dropping silver dragon scales clears reflection', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, {
+        uhp: 40,
+        uhpmax: 40,
+        uen: 0,
+        uenmax: 0,
+        ulevel: 1,
+        uac: 7,
+        reflecting: true,
+    });
+    const body = wornArmor(32144, 'silver dragon scales', 'a');
+    game.inventory = [body];
+
+    await debugPolyselfInto('gnome');
+
+    const pending = game._pending_message || '';
+    assert.equal(game.u._polyself_form?.name, 'gnome');
+    assert.match(pending, /Your armor falls around you!/);
+    assert.equal(game.inventory.includes(body), false);
+    assert.equal(game.level.objects.length, 1);
+    assert.equal(game.level.objects[0].kind, 'silver dragon scales');
+    assert.equal(game.level.objects[0].worn, false);
+    assert.equal(game.u.reflecting, false);
 });
 
 test('successful large dog polyself breaks body armor instead of overloading', async () => {
@@ -9322,6 +9413,32 @@ test('successful no-hands polyself drops shield helm and boots but keeps amulet'
         'speed boots',
     ]);
     assert.equal(game.level.objects.some(obj => obj.cls === 'amulet'), false);
+});
+
+test('successful no-hands polyself drops shield of reflection and clears reflection', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, {
+        uhp: 40,
+        uhpmax: 40,
+        uen: 0,
+        uenmax: 0,
+        ulevel: 1,
+        uac: 8,
+        reflecting: true,
+    });
+    const shield = wornArmor(32055, 'shield of reflection', 's');
+    game.inventory = [shield];
+
+    await debugPolyselfInto('wererat');
+
+    assert.equal(game.u._polyself_form?.name, 'wererat');
+    assert.match(game._pending_message || '', /You can no longer hold your shield!/);
+    assert.equal(game.inventory.includes(shield), false);
+    assert.equal(game.level.objects.length, 1);
+    assert.equal(game.level.objects[0].kind, 'shield of reflection');
+    assert.equal(game.level.objects[0].worn, false);
+    assert.equal(game.u.reflecting, false);
 });
 
 test('successful no-hands polyself uses hero surface for helm falloff', async () => {

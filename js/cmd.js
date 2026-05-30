@@ -7167,7 +7167,7 @@ function wornReflectionSource() {
     return (game.inventory || []).find(item => {
         if (!isActiveInventoryExtrinsicItem(item)) return false;
         const kind = armorKind(item);
-        return kind === 'silver dragon scale mail' || kind === 'silver dragon scales' || kind === 'shield of reflection'
+        return isSilverDragonArmorKind(kind) || kind === 'shield of reflection'
             || item.amuletIndex === 7 || kind === 'amulet of reflection';
     });
 }
@@ -8925,6 +8925,10 @@ function isActiveInventoryExtrinsicItem(item) {
 
 function isBlueDragonArmorKind(kind) {
     return kind === 'blue dragon scale mail' || kind === 'blue dragon scales';
+}
+
+function isSilverDragonArmorKind(kind) {
+    return kind === 'silver dragon scale mail' || kind === 'silver dragon scales';
 }
 
 const ROLE_INTRINSIC_FAST_LEVELS = {
@@ -11894,6 +11898,7 @@ function addPolyselfBodyArmorOffMessages(item, messages = []) {
 }
 
 function clearPolyselfDeferredArmorWearState(items) {
+    let changed = false;
     let speedChanged = false;
     let displacementChanged = false;
     for (const item of items || []) {
@@ -11907,7 +11912,9 @@ function clearPolyselfDeferredArmorWearState(items) {
         item.owornmask = 0;
         if (typeof item.line === 'string')
             item.line = item.line.replace(/\s+\(being worn\)/g, '');
+        changed = true;
     }
+    if (changed) updateReflectionFromInventory();
     if (speedChanged) syncHeroSpeedState();
     if (displacementChanged) updateWornDisplacement();
 }
@@ -11946,6 +11953,7 @@ function polyselfHelmetNeedsMonsterRefresh(item) {
 }
 
 function dropPolyselfEquipmentItems(items, floorMessages = [], form = polyselfForm()) {
+    let changed = false;
     for (const item of items || []) {
         if (!(game.inventory || []).includes(item)) continue;
         clearPolyselfEyewearState(item, form);
@@ -11955,8 +11963,10 @@ function dropPolyselfEquipmentItems(items, floorMessages = [], form = polyselfFo
         if (slot === 'gloves') addPolyselfGlovesOffSideEffects(item);
         if (slot === 'boots') addPolyselfBootsOffSideEffects(item, floorMessages);
         dropCarriedObjectAtHero(item, floorMessages);
+        changed = true;
         if (refreshMonsters) seeMonsters();
     }
+    if (changed) updateReflectionFromInventory();
 }
 
 function destroyPolyselfEquipmentItems(items) {
@@ -30282,7 +30292,7 @@ function updateReflectionFromInventory() {
     game.u.reflecting = (game.inventory || []).some(item => {
         if (!isActiveInventoryExtrinsicItem(item)) return false;
         const kind = armorKind(item);
-        return kind === 'silver dragon scale mail' || kind === 'silver dragon scales' || kind === 'shield of reflection'
+        return isSilverDragonArmorKind(kind) || kind === 'shield of reflection'
             || item.amuletIndex === 7 || kind === 'amulet of reflection';
     });
 }
@@ -46536,7 +46546,7 @@ export async function rhack(_cmd) {
                 if (game.u) game.u.uac = (game.u.uac ?? 10) - acBonus;
                 updateGauntletsOfPowerStrength(kind, true);
                 updateWornDisplacement();
-                if (kind === 'silver dragon scale mail' && game.u) game.u.reflecting = true;
+                if (isSilverDragonArmorKind(kind) && game.u) game.u.reflecting = true;
                 if (kind === 'shield of reflection' && game.u) game.u.reflecting = true;
                 if (kind === 'speed boots' && game.u) {
                     game.u.veryfast = true;
@@ -46548,7 +46558,7 @@ export async function rhack(_cmd) {
                     alreadyFast,
                     acBonus,
                     wornLine: `${ch} - ${wornName} (being worn)`,
-                    reflecting: kind === 'silver dragon scale mail' || kind === 'shield of reflection',
+                    reflecting: isSilverDragonArmorKind(kind) || kind === 'shield of reflection',
                     wearApplied: true,
                     wearAt: Math.max(0, delay - 2),
                     turns: delay,
@@ -46561,7 +46571,7 @@ export async function rhack(_cmd) {
             item.line = `${ch} - ${wornName} (being worn)`;
             if (game.u) game.u.uac = (game.u.uac ?? 10) - acBonus;
             updateWornDisplacement();
-            if (kind === 'silver dragon scale mail' && game.u) game.u.reflecting = true;
+            if (isSilverDragonArmorKind(kind) && game.u) game.u.reflecting = true;
             if (kind === 'shield of reflection' && game.u) game.u.reflecting = true;
             if (kind === 'cloak of displacement') {
                 item.known = true;
@@ -46970,7 +46980,7 @@ export async function rhack(_cmd) {
                 armor.line = `${ch} - ${wornName} (being worn)`;
                 if (game.u) game.u.uac = (game.u.uac ?? 10) - acBonus;
                 updateWornDisplacement();
-                if (kind === 'silver dragon scale mail' && game.u) game.u.reflecting = true;
+                if (isSilverDragonArmorKind(kind) && game.u) game.u.reflecting = true;
                 if (kind === 'shield of reflection' && game.u) game.u.reflecting = true;
                 if (kind === 'speed boots' && game.u) {
                     game.u.veryfast = true;
@@ -46982,7 +46992,7 @@ export async function rhack(_cmd) {
                     alreadyFast,
                     acBonus,
                     wornLine: `${ch} - ${wornName} (being worn)`,
-                    reflecting: kind === 'silver dragon scale mail' || kind === 'shield of reflection',
+                    reflecting: isSilverDragonArmorKind(kind) || kind === 'shield of reflection',
                     wearApplied: true,
                     wearAt: Math.max(0, delay - 2),
                     turns: delay,
@@ -46995,7 +47005,7 @@ export async function rhack(_cmd) {
             armor.line = `${ch} - ${wornName} (being worn)`;
             if (game.u) game.u.uac = (game.u.uac ?? 10) - acBonus;
             updateWornDisplacement();
-            if (kind === 'silver dragon scale mail' && game.u) game.u.reflecting = true;
+            if (isSilverDragonArmorKind(kind) && game.u) game.u.reflecting = true;
             if (kind === 'shield of reflection' && game.u) game.u.reflecting = true;
             if (kind.includes('boots')) {
                 const alreadyFast = !!(game.u?.fast || game.u?.veryfast);
