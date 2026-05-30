@@ -11297,6 +11297,10 @@ function polyselfWornCloakItem() {
     return wornArmorInSlot('cloak');
 }
 
+function polyselfWornHelmItem() {
+    return wornArmorInSlot('helm');
+}
+
 const POLYSELF_BREAKARM_FORM_NAMES = new Set([
     'xorn',
     'marilith',
@@ -11309,6 +11313,19 @@ const POLYSELF_SMALL_SLIPARM_FORM_NAMES = new Set([
     'gnome leader',
     'gnome ruler',
 ]);
+const POLYSELF_TWO_HORN_FORM_NAMES = new Set(['horned devil', 'minotaur', 'asmodeus', 'balrog']);
+const POLYSELF_ONE_HORN_FORM_NAMES = new Set(['white unicorn', 'gray unicorn', 'black unicorn', 'ki-rin']);
+const POLYSELF_HARD_HELM_KINDS = new Set([
+    'helmet',
+    'orcish helm',
+    'dwarvish iron helm',
+    'dented pot',
+    'helm of brilliance',
+    'helm of caution',
+    'helm of opposite alignment',
+    'helm of telepathy',
+]);
+const POLYSELF_FLIMSY_MATERIALS = new Set(['liquid', 'wax', 'veggy', 'vegetable', 'flesh', 'paper', 'cloth', 'leather', 'rubber']);
 
 function polyselfFormLowerName(form) {
     return String(form?.name || '').toLowerCase();
@@ -11351,6 +11368,15 @@ function polyselfFormBootFallout(form) {
     return !!(polyselfFormNoHandsFallout(form) || polyselfFormSlithy(form) || polyselfFormCentaur(form));
 }
 
+function polyselfFormHornCount(form) {
+    const explicit = Number(form?.horns ?? form?.numHorns);
+    if (Number.isFinite(explicit) && explicit > 0) return Math.trunc(explicit);
+    const name = polyselfFormLowerName(form);
+    if (POLYSELF_TWO_HORN_FORM_NAMES.has(name)) return 2;
+    if (POLYSELF_ONE_HORN_FORM_NAMES.has(name)) return 1;
+    return form?.hasHorns ? 1 : 0;
+}
+
 function polyselfFormBreaksArmor(form) {
     if (!form || polyselfFormSlipsArmor(form)) return false;
     const name = polyselfFormLowerName(form);
@@ -11375,6 +11401,22 @@ function polyselfCloakSimpleName(cloak) {
     if (kind === 'mummy wrapping') return 'wrapping';
     if (kind === 'alchemy smock') return cloak?.known && cloak?.dknown ? 'smock' : 'apron';
     return 'cloak';
+}
+
+function polyselfHelmSimpleName(helm) {
+    return POLYSELF_HARD_HELM_KINDS.has(objectKindKey(helm)) ? 'helm' : 'hat';
+}
+
+function polyselfHeadgearIsFlimsy(helm) {
+    const material = String(helm?.material || helm?.oc_material || '').toLowerCase().replace(/^hi_/, '');
+    if (POLYSELF_FLIMSY_MATERIALS.has(material)) return true;
+    const kind = objectKindKey(helm);
+    if (kind === 'elven leather helm' || kind === 'fedora' || kind === 'cornuthaum' || kind === 'dunce cap') return true;
+    return !POLYSELF_HARD_HELM_KINDS.has(kind);
+}
+
+function polyselfHeadgearBeingDonned(helm) {
+    return !!(helm?.donning || helm?._donning || helm?.takingOff);
 }
 
 function polyselfMummyWrappingAllowed(form, cloak) {
@@ -11468,6 +11510,20 @@ function polyselfEquipmentFalloutForForm(form, { bodyArmor = null } = {}) {
         }
     }
 
+    const hornCount = polyselfFormHornCount(form);
+    if (hornCount > 0) {
+        const helm = polyselfWornHelmItem();
+        if (helm) {
+            if (polyselfHeadgearIsFlimsy(helm) && !polyselfHeadgearBeingDonned(helm)) {
+                const horns = hornCount === 1 ? 'horn' : 'horns';
+                messages.push(`Your ${horns} ${hornCount === 1 ? 'pierces' : 'pierce'} through ${ownedEquipmentName(helm)}.`);
+            } else {
+                messages.push(`Your ${polyselfHelmSimpleName(helm)} falls to the ground!`);
+                addItem(helm);
+            }
+        }
+    }
+
     if (polyselfFormNoHandsFallout(form)) {
         const gloves = polyselfWornArmorMatching(/glove|gauntlet/);
         const weapon = polyselfWieldedWeaponItem();
@@ -11483,10 +11539,9 @@ function polyselfEquipmentFalloutForForm(form, { bodyArmor = null } = {}) {
             addItem(shield);
         }
 
-        const helm = polyselfWornArmorMatching(/helm|helmet|hat|fedora|cornuthaum|cap|pot/);
-        if (helm) {
-            const helmName = /helm/.test(inventoryItemName(helm).toLowerCase()) ? 'helm' : 'helmet';
-            messages.push(`Your ${helmName} falls to the ground!`);
+        const helm = polyselfWornHelmItem();
+        if (helm && !items.includes(helm)) {
+            messages.push(`Your ${polyselfHelmSimpleName(helm)} falls to the ground!`);
             addItem(helm);
         }
 
@@ -11556,8 +11611,8 @@ function applyPolyselfEquipmentFallout(fallout, floorMessages = [], form = polys
     dropPolyselfEquipmentItems(fallout?.items, floorMessages, form);
 }
 
-function polyselfFalloutHasItems(fallout) {
-    return !!(fallout?.items?.length || fallout?.destroyedItems?.length);
+function polyselfFalloutHasEffects(fallout) {
+    return !!(fallout?.items?.length || fallout?.destroyedItems?.length || fallout?.messages?.length);
 }
 
 function polyselfBasePersistentBlindness(base) {
@@ -11741,7 +11796,7 @@ function becomeMonster(name) {
     }
     if (polyselfFormBreaksArmor(form)) {
         const fallout = polyselfEquipmentFalloutForForm(form);
-        if (polyselfFalloutHasItems(fallout)) {
+        if (polyselfFalloutHasEffects(fallout)) {
             const floorMessages = [];
             applyPolyselfEquipmentFallout(fallout, floorMessages, form);
             recomputePolyselfArmorClass(form);
@@ -11776,7 +11831,7 @@ function becomeMonster(name) {
         return { message, more: true };
     }
     const fallout = polyselfEquipmentFalloutForForm(form);
-    if (polyselfFalloutHasItems(fallout)) {
+    if (polyselfFalloutHasEffects(fallout)) {
         const floorMessages = [];
         applyPolyselfEquipmentFallout(fallout, floorMessages, form);
         recomputePolyselfArmorClass(form);

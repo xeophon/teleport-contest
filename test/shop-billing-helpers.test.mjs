@@ -8735,6 +8735,68 @@ test('successful centaur polyself pushes off unpaid speed boots in shop', async 
     assert.equal(shop.shopBillEntryForObject(shkp, floorBoots), null);
 });
 
+test('successful horned polyself pierces flimsy helm without dropping it', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, {
+        uhp: 40,
+        uhpmax: 40,
+        uen: 0,
+        uenmax: 0,
+        ulevel: 1,
+        uac: 9,
+    });
+    const helm = wornArmor(32084, 'elven leather helm', 'h');
+    game.inventory = [helm];
+
+    await debugPolyselfInto('minotaur');
+
+    const pending = game._pending_message || '';
+    assert.equal(game.u._polyself_form?.name, 'minotaur');
+    assert.match(pending, /You turn into a minotaur!/);
+    assert.match(pending, /Your horns pierce through your \+0 elven leather helm\./);
+    assert.equal(game.inventory.includes(helm), true);
+    assert.equal(helm.worn, true);
+    assert.equal(game.level.objects.length, 0);
+    assert.equal(game.u.uac, 9);
+});
+
+test('successful horned polyself drops hard unpaid helm in shop', async () => {
+    const { shkp } = installCommandShopState();
+    initRng(1);
+    Object.assign(game.u, {
+        uhp: 40,
+        uhpmax: 40,
+        uen: 0,
+        uenmax: 0,
+        ulevel: 1,
+        uac: 9,
+    });
+    const helm = wornArmor(32085, 'orcish helm', 'h');
+    game.inventory = [helm];
+    shop.addObjectToShopBill(shkp, helm, 10);
+
+    await debugPolyselfInto('minotaur');
+
+    const pending = game._pending_message || '';
+    assert.equal(game.u._polyself_form?.name, 'minotaur');
+    assert.match(pending, /You turn into a minotaur!/);
+    assert.match(pending, /Your helm falls to the ground!/);
+    assert.doesNotMatch(pending, /can no longer hold your shield|boots .* off your feet|find you must drop your weapon/);
+    assert.equal(game.inventory.includes(helm), false);
+    assert.equal(game.u.uac, game.u._polyself_form?.mac ?? 10);
+    assert.equal(shkp.billct, 0);
+    assert.equal(shkp.bill.length, 0);
+    assert.equal(game.level.objects.length, 1);
+    const floorHelm = game.level.objects[0];
+    assert.equal(floorHelm.kind, 'orcish helm');
+    assert.equal(floorHelm.worn, false);
+    assert.equal(floorHelm.unpaid, false);
+    assert.equal(floorHelm.ox, game.u.ux);
+    assert.equal(floorHelm.oy, game.u.uy);
+    assert.equal(shop.shopBillEntryForObject(shkp, floorHelm), null);
+});
+
 test('successful no-hands polyself returns deferred unpaid wielded tool to shop stock', async () => {
     const { shkp } = installCommandShopState();
     Object.assign(game.u, {
