@@ -28217,6 +28217,32 @@ export function dropMonsterObject(mon, obj, messages = null, {
     return { consumed: false, object: stacked, messages: floorMessages };
 }
 
+function monsterThrownMulchCandidate(obj) {
+    if (!obj) return false;
+    const kind = objectKindKey(obj) || pickupObjectName({ ...obj, quan: 1 }).toLowerCase();
+    if (/\bboomerang\b/.test(kind)) return false;
+    if (obj.oc_magic || obj.magic || obj.magicStone) return false;
+    if (/\b(?:luckstone|loadstone|touchstone)\b/.test(kind)) return false;
+    return obj.otyp === DART
+        || /\b(?:arrow|arrows|ya|bolt|bolts|dart|darts|shuriken|throwing star|throwing stars|rock|rocks|flint)\b/.test(kind);
+}
+
+function monsterThrownHardGemMulchCandidate(obj) {
+    if (!obj) return false;
+    const kind = objectKindKey(obj) || pickupObjectName({ ...obj, quan: 1 }).toLowerCase();
+    return kind === 'flint' || obj.otyp === FLINT || (!!obj.gemTough && (obj.cls === 'gem' || obj.glyph === '*'));
+}
+
+function shouldMulchMonsterThrownMissile(obj) {
+    if (!monsterThrownMulchCandidate(obj)) return false;
+    const erosion = Math.max(0, Math.trunc(Number(obj.oeroded || 0)), Math.trunc(Number(obj.oeroded2 || 0)));
+    const chance = 3 + erosion - Math.trunc(Number(obj.spe || 0));
+    let broken = chance > 1 ? !!rn2(chance) : !rn2(4);
+    if (obj.blessed && !rn2(3)) broken = false;
+    if (monsterThrownHardGemMulchCandidate(obj) && !rn2(2)) broken = false;
+    return broken;
+}
+
 export function landMonsterThrownObject(missile, x, y, {
     glyph = missile?.glyph || ')',
     color = missile?.color ?? CLR_CYAN,
@@ -28230,7 +28256,8 @@ export function landMonsterThrownObject(missile, x, y, {
     game.level.objects ??= [];
     const floorMessages = Array.isArray(messages) ? messages : [];
     const dropThrow = {
-        broken: isCreamPieObject(missile) || isVenomObject(missile) || (!!ohit && isEggItem(missile)),
+        broken: isCreamPieObject(missile) || isVenomObject(missile) || (!!ohit && isEggItem(missile))
+            || (!!ohit && shouldMulchMonsterThrownMissile(missile)),
         ohit: !!ohit,
     };
     if (dropThrow.broken) {

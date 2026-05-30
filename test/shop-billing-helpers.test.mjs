@@ -20801,6 +20801,21 @@ test('monster-thrown venom breaks before ordinary floor placement', () => {
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
 });
 
+test('monster-thrown egg hit breaks before ordinary floor placement', () => {
+    installNonShopFloorState();
+    initRng(1);
+    enableRngLog({ reset: true });
+    const eggItem = { ...egg(8743341), otyp: EGG, letter: undefined, line: undefined };
+
+    const landing = landMonsterThrownObject(eggItem, 7, 5, { messages: [], ohit: true });
+
+    assert.equal(landing.consumed, true);
+    assert.equal(landing.object, null);
+    assert.equal(landing.dropThrow.broken, true);
+    assert.equal(game.level.objects.some(obj => obj.id === eggItem.id), false);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
+});
+
 test('monster-thrown egg miss still lands instead of drop-throw breaking', () => {
     installNonShopFloorState();
     initRng(1);
@@ -20815,6 +20830,72 @@ test('monster-thrown egg miss still lands instead of drop-throw breaking', () =>
     assert.equal(landing.object.ox, 7);
     assert.equal(landing.object.oy, 5);
     assert.equal(game.level.objects.some(obj => obj.id === eggItem.id), true);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
+});
+
+test('monster-thrown dart hit can mulch before ordinary floor placement', () => {
+    installNonShopFloorState();
+    initRng(2);
+    enableRngLog({ reset: true });
+    const dart = { ...dartStack(874336, 'd', 1), letter: undefined, line: undefined };
+
+    const landing = landMonsterThrownObject(dart, 7, 5, { messages: [], ohit: true });
+
+    assert.equal(landing.consumed, true);
+    assert.equal(landing.object, null);
+    assert.equal(landing.dropThrow.broken, true);
+    assert.equal(game.level.objects.some(obj => obj.id === dart.id), false);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(3)']);
+});
+
+test('monster-thrown dart hit survives mulch roll and lands', () => {
+    installNonShopFloorState();
+    initRng(1);
+    enableRngLog({ reset: true });
+    const dart = { ...dartStack(874337, 'd', 1), letter: undefined, line: undefined };
+
+    const landing = landMonsterThrownObject(dart, 7, 5, { messages: [], ohit: true });
+
+    assert.equal(landing.consumed, false);
+    assert.equal(landing.dropThrow.broken, false);
+    assert.ok(landing.object);
+    assert.equal(landing.object.ox, 7);
+    assert.equal(landing.object.oy, 5);
+    assert.equal(game.level.objects.some(obj => obj.id === dart.id), true);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(3)']);
+});
+
+test('monster-thrown blessed dart hit keeps C survival RNG after initial survival', () => {
+    installNonShopFloorState();
+    initRng(1);
+    enableRngLog({ reset: true });
+    const dart = { ...dartStack(874339, 'd', 1, { blessed: true }), letter: undefined, line: undefined };
+
+    const landing = landMonsterThrownObject(dart, 7, 5, { messages: [], ohit: true });
+
+    assert.equal(landing.consumed, false);
+    assert.equal(landing.dropThrow.broken, false);
+    assert.ok(landing.object);
+    assert.equal(landing.object.ox, 7);
+    assert.equal(landing.object.oy, 5);
+    assert.equal(game.level.objects.some(obj => obj.id === dart.id), true);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(3)', 'rn2(3)']);
+});
+
+test('monster-thrown dart miss skips mulch check and lands', () => {
+    installNonShopFloorState();
+    initRng(2);
+    enableRngLog({ reset: true });
+    const dart = { ...dartStack(874338, 'd', 1), letter: undefined, line: undefined };
+
+    const landing = landMonsterThrownObject(dart, 7, 5, { messages: [], ohit: false });
+
+    assert.equal(landing.consumed, false);
+    assert.equal(landing.dropThrow.broken, false);
+    assert.ok(landing.object);
+    assert.equal(landing.object.ox, 7);
+    assert.equal(landing.object.oy, 5);
+    assert.equal(game.level.objects.some(obj => obj.id === dart.id), true);
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
 });
 
