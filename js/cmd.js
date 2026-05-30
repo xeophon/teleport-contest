@@ -11038,7 +11038,7 @@ function heroIsConfused() {
 }
 
 function heroIsHallucinating() {
-    return !!game.u?.hallucinating || (game.u?._statusSuffix || '').includes('Hallu');
+    return !!game.u?.hallucinating || !!game.u?.hallu || (game.u?._statusSuffix || '').includes('Hallu');
 }
 
 function addHeroConfusion(turns) {
@@ -11597,13 +11597,54 @@ function heroRoleName() {
     return game.urole?.name?.m || game._startup_role || '';
 }
 
+function alignmentTypeFromValue(value) {
+    if (value === A_LAWFUL || value === A_NEUTRAL || value === A_CHAOTIC) return value;
+    const name = String(value ?? '').toLowerCase();
+    if (name === 'lawful') return A_LAWFUL;
+    if (name === 'neutral') return A_NEUTRAL;
+    if (name === 'chaotic') return A_CHAOTIC;
+    return null;
+}
+
+function startupAlignmentType() {
+    return alignmentTypeFromValue(game._startup_align) ?? A_NEUTRAL;
+}
+
+function currentAlignmentBaseType() {
+    const base = game.u?.ualignbase;
+    const candidates = [
+        game.u?._ualignbase_current,
+        base?.current,
+        base?.A_CURRENT,
+        base?.[0],
+        game._ualignbase_current,
+        game._startup_align,
+    ];
+    for (const candidate of candidates) {
+        const type = alignmentTypeFromValue(candidate);
+        if (type !== null) return type;
+    }
+    return startupAlignmentType();
+}
+
+function restoreHeroOppositeAlignment(messages) {
+    if (!game.u) return;
+    const newAlign = currentAlignmentBaseType();
+    const oldAlign = alignmentTypeFromValue(game.u.ualign?.type) ?? startupAlignmentType();
+    game.u.ublessed = 0;
+    game.u.ualign ??= { type: newAlign, record: 0 };
+    game.u.ualign.type = newAlign;
+    if (newAlign !== oldAlign) game.u.ualign.record = 0;
+    messages.push(`Your mind is ${heroIsHallucinating() ? 'much of a muchness' : 'back in sync with your body'}.`);
+}
+
 function addPolyselfBootsOffSideEffects(item, messages) {
     if (objectKindKey(item) !== 'speed boots' || !game.u) return;
     if (otherWornFastEquipment(item) || (game.u._veryfastTimeout || 0) > 0) return;
     messages.push(`You feel yourself slow down${heroHasIntrinsicFast() ? ' a bit' : ''}.`);
 }
 
-function addPolyselfHelmetOffSideEffects(item) {
+function addPolyselfHelmetOffSideEffects(item, messages = []) {
     const kind = objectKindKey(item);
     if (kind === 'fedora' && heroRoleName() === 'Archeologist') changeHeroLuck(-1);
     if (polyselfHeadgearBeingDonned(item)) return;
@@ -11614,6 +11655,8 @@ function addPolyselfHelmetOffSideEffects(item) {
         adjustHeroWornAttributeBonus(A_INT, delta);
         adjustHeroWornAttributeBonus(A_WIS, delta);
         if (delta) recordKnownArmorDiscovery(kind, false);
+    } else if (kind === 'helm of opposite alignment') {
+        restoreHeroOppositeAlignment(messages);
     }
 }
 
@@ -11621,7 +11664,7 @@ function dropPolyselfEquipmentItems(items, floorMessages = [], form = polyselfFo
     for (const item of items || []) {
         if (!(game.inventory || []).includes(item)) continue;
         clearPolyselfEyewearState(item, form);
-        if (armorSlot(item) === 'helm') addPolyselfHelmetOffSideEffects(item);
+        if (armorSlot(item) === 'helm') addPolyselfHelmetOffSideEffects(item, floorMessages);
         if (armorSlot(item) === 'boots') addPolyselfBootsOffSideEffects(item, floorMessages);
         dropCarriedObjectAtHero(item, floorMessages);
     }
