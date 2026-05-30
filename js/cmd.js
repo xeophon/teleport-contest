@@ -11587,6 +11587,12 @@ function changeHeroLuck(delta) {
     game.u.uluck = next < 0 ? Math.max(next, LUCKMIN) : next > 0 ? Math.min(next, LUCKMAX) : 0;
 }
 
+function adjustHeroWornAttributeBonus(attr, delta) {
+    if (!game.u?.acurr?.a || !delta) return;
+    const before = Number(game.u.acurr.a[attr] ?? 10);
+    game.u.acurr.a[attr] = Math.max(3, Math.min(25, before + delta));
+}
+
 function heroRoleName() {
     return game.urole?.name?.m || game._startup_role || '';
 }
@@ -11598,7 +11604,17 @@ function addPolyselfBootsOffSideEffects(item, messages) {
 }
 
 function addPolyselfHelmetOffSideEffects(item) {
-    if (objectKindKey(item) === 'fedora' && heroRoleName() === 'Archeologist') changeHeroLuck(-1);
+    const kind = objectKindKey(item);
+    if (kind === 'fedora' && heroRoleName() === 'Archeologist') changeHeroLuck(-1);
+    if (polyselfHeadgearBeingDonned(item)) return;
+    if (kind === 'cornuthaum') {
+        adjustHeroWornAttributeBonus(A_CHA, heroRoleName() === 'Wizard' ? -1 : 1);
+    } else if (kind === 'helm of brilliance') {
+        const delta = -Math.trunc(Number(item?.spe ?? 0));
+        adjustHeroWornAttributeBonus(A_INT, delta);
+        adjustHeroWornAttributeBonus(A_WIS, delta);
+        if (delta) recordKnownArmorDiscovery(kind, false);
+    }
 }
 
 function dropPolyselfEquipmentItems(items, floorMessages = [], form = polyselfForm()) {

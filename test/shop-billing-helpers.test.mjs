@@ -7,7 +7,7 @@ import { game, resetGame } from '../js/gstate.js';
 import { pushKey, resetInputState } from '../js/input.js';
 import { createMonsterCorpseOrGlob, mkcorpstat } from '../js/mklev.js';
 import { enableRngLog, getRngLog, initRng } from '../js/rng.js';
-import { A_CON, A_DEX, A_STR, BILLSZ, CANDLESHOP, CLOUD, CORPSTAT_HISTORIC, COULD_SEE, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, D_CLOSED, D_NODOOR, FOUNTAIN, HOLE, ICE, ICED_POOL, IN_SIGHT, LADDER, LAVAPOOL, MIGR_LADDER_UP, MIGR_SSTAIRS, MIGR_STAIRS_UP, MOAT, NORMAL_SPEED, PIT, POOL, REPAIR_DELAY, ROOM, ROOMOFFSET, SDOOR, SHOPBASE, SHOP_DOOR_COST, SQKY_BOARD, STAIRS, STATUE_TRAP, STONE, STRAT_WAITFORU, TRAPDOOR, TT_WEB, WEB, W_SADDLE } from '../js/const.js';
+import { A_CHA, A_CON, A_DEX, A_INT, A_STR, A_WIS, BILLSZ, CANDLESHOP, CLOUD, CORPSTAT_HISTORIC, COULD_SEE, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, D_CLOSED, D_NODOOR, FOUNTAIN, HOLE, ICE, ICED_POOL, IN_SIGHT, LADDER, LAVAPOOL, MIGR_LADDER_UP, MIGR_SSTAIRS, MIGR_STAIRS_UP, MOAT, NORMAL_SPEED, PIT, POOL, REPAIR_DELAY, ROOM, ROOMOFFSET, SDOOR, SHOPBASE, SHOP_DOOR_COST, SQKY_BOARD, STAIRS, STATUE_TRAP, STONE, STRAT_WAITFORU, TRAPDOOR, TT_WEB, WEB, W_SADDLE } from '../js/const.js';
 import { currentFruitId, setCurrentFruitName } from '../js/fruit.js';
 import { CLR_BRIGHT_MAGENTA, CLR_BROWN, CLR_WHITE } from '../js/terminal.js';
 import { vision_reset } from '../js/vision.js';
@@ -8725,6 +8725,108 @@ test('successful no-hands polyself drops Archeologist fedora and removes luck', 
     assert.equal(floorHat.worn, false);
     assert.equal(floorHat.ox, game.u.ux);
     assert.equal(floorHat.oy, game.u.uy);
+});
+
+test('successful no-hands polyself drops Wizard cornuthaum and removes charisma bonus', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    game._startup_role = 'Wizard';
+    game.urole = { name: { m: 'Wizard' } };
+    Object.assign(game.u, {
+        uhp: 40,
+        uhpmax: 40,
+        uen: 0,
+        uenmax: 0,
+        ulevel: 1,
+        uac: 10,
+        acurr: { a: [10, 10, 10, 10, 10, 11] },
+        amax: { a: [10, 10, 10, 10, 10, 10] },
+    });
+    const cornuthaum = wornArmor(32087, 'cornuthaum', 'h');
+    game.inventory = [cornuthaum];
+
+    await debugPolyselfInto('wererat');
+
+    const pending = game._pending_message || '';
+    assert.equal(game.u._polyself_form?.name, 'wererat');
+    assert.match(pending, /Your hat falls to the ground!/);
+    assert.equal(game.u.acurr.a[A_CHA], 10);
+    assert.equal(game.u.amax.a[A_CHA], 10);
+    assert.equal(game.inventory.includes(cornuthaum), false);
+    assert.equal(game.u.uac, game.u._polyself_form?.mac ?? 10);
+    assert.equal(game.level.objects.length, 1);
+    const floorHat = game.level.objects[0];
+    assert.equal(floorHat.kind, 'cornuthaum');
+    assert.equal(floorHat.worn, false);
+    assert.equal(floorHat.ox, game.u.ux);
+    assert.equal(floorHat.oy, game.u.uy);
+});
+
+test('successful no-hands polyself drops non-Wizard cornuthaum and restores charisma penalty', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    game._startup_role = 'Tourist';
+    game.urole = { name: { m: 'Tourist' } };
+    Object.assign(game.u, {
+        uhp: 40,
+        uhpmax: 40,
+        uen: 0,
+        uenmax: 0,
+        ulevel: 1,
+        uac: 10,
+        acurr: { a: [10, 10, 10, 10, 10, 9] },
+        amax: { a: [10, 10, 10, 10, 10, 10] },
+    });
+    const cornuthaum = wornArmor(32088, 'cornuthaum', 'h');
+    game.inventory = [cornuthaum];
+
+    await debugPolyselfInto('wererat');
+
+    assert.match(game._pending_message || '', /Your hat falls to the ground!/);
+    assert.equal(game.u.acurr.a[A_CHA], 10);
+    assert.equal(game.u.amax.a[A_CHA], 10);
+    assert.equal(game.inventory.includes(cornuthaum), false);
+    assert.equal(game.level.objects.length, 1);
+    assert.equal(game.level.objects[0].kind, 'cornuthaum');
+    assert.equal(game.level.objects[0].worn, false);
+});
+
+test('successful no-hands polyself drops helm of brilliance and removes mental bonus', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, {
+        uhp: 40,
+        uhpmax: 40,
+        uen: 0,
+        uenmax: 0,
+        ulevel: 1,
+        uac: 9,
+        acurr: { a: [10, 12, 13, 10, 10, 10] },
+        amax: { a: [10, 10, 11, 10, 10, 10] },
+    });
+    const helm = wornArmor(32089, 'helm of brilliance', 'h', 2, {
+        appearance: 'crystal helmet',
+        material: 'glass',
+    });
+    game.inventory = [helm];
+
+    await debugPolyselfInto('wererat');
+
+    const pending = game._pending_message || '';
+    assert.equal(game.u._polyself_form?.name, 'wererat');
+    assert.match(pending, /Your helm falls to the ground!/);
+    assert.equal(game.u.acurr.a[A_INT], 10);
+    assert.equal(game.u.acurr.a[A_WIS], 11);
+    assert.equal(game.u.amax.a[A_INT], 10);
+    assert.equal(game.u.amax.a[A_WIS], 11);
+    assert.equal(game.inventory.includes(helm), false);
+    assert.equal(game.u.uac, game.u._polyself_form?.mac ?? 10);
+    assert.equal(game.level.objects.length, 1);
+    const floorHelm = game.level.objects[0];
+    assert.equal(floorHelm.kind, 'helm of brilliance');
+    assert.equal(floorHelm.worn, false);
+    assert.equal(floorHelm.ox, game.u.ux);
+    assert.equal(floorHelm.oy, game.u.uy);
 });
 
 test('successful centaur polyself pushes off unpaid speed boots in shop', async () => {
