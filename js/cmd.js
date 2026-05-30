@@ -11338,6 +11338,19 @@ function polyselfFormNoHandsFallout(form) {
     return !!(form?.nohands || form?.verysmall || polyselfFormWhirly(form));
 }
 
+function polyselfFormSlithy(form) {
+    const name = polyselfFormLowerName(form);
+    return !!(form?.slithy || /\b(?:snake|eel|worm|naga|salamander)\b/.test(name));
+}
+
+function polyselfFormCentaur(form) {
+    return !!(form?.mlet === 'C' || form?.glyph === 'C' || /\bcentaur\b/.test(polyselfFormLowerName(form)));
+}
+
+function polyselfFormBootFallout(form) {
+    return !!(polyselfFormNoHandsFallout(form) || polyselfFormSlithy(form) || polyselfFormCentaur(form));
+}
+
 function polyselfFormBreaksArmor(form) {
     if (!form || polyselfFormSlipsArmor(form)) return false;
     const name = polyselfFormLowerName(form);
@@ -11477,12 +11490,19 @@ function polyselfEquipmentFalloutForForm(form, { bodyArmor = null } = {}) {
             addItem(helm);
         }
 
+    }
+
+    if (polyselfFormBootFallout(form)) {
         const boots = polyselfWornArmorMatching(/boot|shoe/);
         if (boots) {
             messages.push(polyselfFormWhirly(form) ? 'Your boots fall away!' : `Your boots ${form.verysmall ? 'slide' : 'are pushed'} off your feet!`);
             addItem(boots);
         }
+    }
 
+    if (polyselfFormNoHandsFallout(form)) {
+        const gloves = polyselfWornArmorMatching(/glove|gauntlet/);
+        const weapon = polyselfWieldedWeaponItem();
         if (!gloves && weapon) {
             messages.push('You find you must drop your weapon!');
             addItem(weapon);
@@ -11501,10 +11521,22 @@ function polyselfEquipmentFalloutForForm(form, { bodyArmor = null } = {}) {
     return { items, destroyedItems, messages };
 }
 
+function otherWornFastEquipment(item) {
+    return (game.inventory || []).some(candidate => candidate !== item && isWornInventoryItem(candidate)
+        && (objectKindKey(candidate) === 'speed boots' || isBlueDragonArmorKind(objectKindKey(candidate))));
+}
+
+function addPolyselfBootsOffSideEffects(item, messages) {
+    if (objectKindKey(item) !== 'speed boots' || !game.u) return;
+    if (otherWornFastEquipment(item) || (game.u._veryfastTimeout || 0) > 0) return;
+    messages.push(`You feel yourself slow down${heroHasIntrinsicFast() ? ' a bit' : ''}.`);
+}
+
 function dropPolyselfEquipmentItems(items, floorMessages = [], form = polyselfForm()) {
     for (const item of items || []) {
         if (!(game.inventory || []).includes(item)) continue;
         clearPolyselfEyewearState(item, form);
+        if (armorSlot(item) === 'boots') addPolyselfBootsOffSideEffects(item, floorMessages);
         dropCarriedObjectAtHero(item, floorMessages);
     }
 }

@@ -8694,6 +8694,47 @@ test('successful no-hands polyself drops shield helm and boots but keeps amulet'
     assert.equal(game.level.objects.some(obj => obj.cls === 'amulet'), false);
 });
 
+test('successful centaur polyself pushes off unpaid speed boots in shop', async () => {
+    const { shkp } = installCommandShopState();
+    initRng(1);
+    Object.assign(game.u, {
+        uhp: 40,
+        uhpmax: 40,
+        uen: 0,
+        uenmax: 0,
+        ulevel: 1,
+        uac: 9,
+        umovement: NORMAL_SPEED,
+        fast: true,
+        veryfast: true,
+    });
+    const boots = wornArmor(32083, 'speed boots', 'b');
+    game.inventory = [boots];
+    shop.addObjectToShopBill(shkp, boots, 50);
+
+    await debugPolyselfInto('plains centaur');
+
+    const pending = game._pending_message || '';
+    assert.equal(game.u._polyself_form?.name, 'plains centaur');
+    assert.match(pending, /You turn into a plains centaur!/);
+    assert.match(pending, /Your boots are pushed off your feet!/);
+    assert.match(pending, /You feel yourself slow down\./);
+    assert.equal(game.inventory.includes(boots), false);
+    assert.equal(game.u.fast, false);
+    assert.equal(game.u.veryfast, false);
+    assert.equal(game.u.uac, game.u._polyself_form?.mac ?? 10);
+    assert.equal(shkp.billct, 0);
+    assert.equal(shkp.bill.length, 0);
+    assert.equal(game.level.objects.length, 1);
+    const floorBoots = game.level.objects[0];
+    assert.equal(floorBoots.kind, 'speed boots');
+    assert.equal(floorBoots.worn, false);
+    assert.equal(floorBoots.unpaid, false);
+    assert.equal(floorBoots.ox, game.u.ux);
+    assert.equal(floorBoots.oy, game.u.uy);
+    assert.equal(shop.shopBillEntryForObject(shkp, floorBoots), null);
+});
+
 test('successful no-hands polyself returns deferred unpaid wielded tool to shop stock', async () => {
     const { shkp } = installCommandShopState();
     Object.assign(game.u, {
