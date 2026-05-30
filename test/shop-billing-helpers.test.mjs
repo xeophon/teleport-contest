@@ -8155,6 +8155,91 @@ test('lateral floor polymorph affected piles consume one extra range unit', asyn
     assert.equal(game.u.uconduct.polypiles, 1);
 });
 
+test('lateral wand polymorph hits a monster before the same-square pile', async () => {
+    installCommandShopState();
+    initRng(1);
+    const wand = unknownAppearanceWand(32025, 'glass', 'w', { wand: 'polymorph', wandIndex: 12 });
+    const goblin = ordinaryThrowTarget('goblin', 5, 6, { mhp: 10, mhpmax: 10 });
+    const ration = { ...foodRation(32026), ox: 5, oy: 6, letter: undefined, line: undefined };
+    game.inventory = [wand];
+    game.level.monsters.push(goblin);
+    game.level.objects = [ration];
+    markSquareVisible(5, 6);
+
+    await rhack('z');
+    await rhack('w');
+    await rhack('j');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.notEqual(goblin.data.name, 'goblin');
+    assert.equal(goblin.msleeping, 0);
+    assert.equal(goblin.mpeaceful, false);
+    assert.equal(game.level.objects.includes(ration), false);
+    assert.equal(game.u.uconduct.polypiles, 1);
+    assert.equal(wand.known, true);
+    assert.match(game._pending_message, /The goblin turns into an? .*!/);
+    assert.match(game._pending_message, /Izchak gets angry!/);
+    assert.equal(game._pending_message.indexOf('turns into') < game._pending_message.indexOf('Izchak gets angry!'), true);
+});
+
+test('lateral wand polymorph uses wand-class monster resistance', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    const wand = polymorphWand(32027, 'w');
+    const goblin = ordinaryThrowTarget('goblin', 5, 6, { mr: 100 });
+    const ration = { ...foodRation(32030), ox: 5, oy: 6, letter: undefined, line: undefined };
+    game.inventory = [wand];
+    game.level.monsters = [goblin];
+    game.level.objects = [ration];
+    enableRngLog({ reset: true });
+
+    await rhack('z');
+    await rhack('w');
+    await rhack('j');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(goblin.data.name, 'goblin');
+    assert.equal(goblin.msleeping, 0);
+    assert.equal(goblin.mpeaceful, false);
+    assert.equal(game.level.objects.includes(ration), false);
+    assert.equal(game.u.uconduct.polypiles, 1);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 3), [
+        'rn2(19)', 'rn2(8)', 'rn2(111)',
+    ]);
+});
+
+test('lateral wand polymorph bypasses inventory dropped by the same monster hit', async () => {
+    installNonShopFloorState();
+    initRng(5);
+    const wand = polymorphWand(32028, 'w');
+    const ration = foodRation(32029);
+    const goblin = ordinaryThrowTarget('goblin', 5, 6, {
+        mhp: 10,
+        mhpmax: 10,
+        minvent: [ration],
+    });
+    game.inventory = [wand];
+    game.level.monsters = [goblin];
+    markSquareVisible(5, 6);
+
+    await rhack('z');
+    await rhack('w');
+    await rhack('j');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.level.monsters.includes(goblin), false);
+    assert.equal(game.level.objects.includes(ration), true);
+    assert.equal(ration.ox, 5);
+    assert.equal(ration.oy, 6);
+    assert.equal(ration.kind, 'food ration');
+    assert.equal(game.u.uconduct?.polypiles || 0, 0);
+    assert.match(game._pending_message, /The goblin shudders!/);
+    assert.match(game._pending_message, /You kill the goblin!/);
+});
+
 test('floor polymorph downward hits the hero-square pile', async () => {
     installCommandShopState();
     initRng(1);

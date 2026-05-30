@@ -15443,9 +15443,9 @@ function killMonsterFromSystemShock(mon, messages) {
     newsym(mon.mx, mon.my);
 }
 
-function polymorphPotionHitMonster(mon, messages) {
+function polymorphPotionHitMonster(mon, messages, { attackLevel = 6 } = {}) {
     if (monsterHasMagicResistanceForPolymorph(mon)) return true;
-    if (monsterResistsEffect(mon, 6)) return true;
+    if (monsterResistsEffect(mon, attackLevel)) return true;
 
     const visible = monsterCanBeSeenForPotionEffect(mon);
     if (!monsterIsShapechangerForPolymorph(mon) && !rn2(25)) {
@@ -15484,6 +15484,25 @@ function polymorphPotionHitMonster(mon, messages) {
     dropInvalidSaddleAfterPolymorph(mon, messages, oldVisible);
     newsym(mon.mx, mon.my);
     return true;
+}
+
+function addMonsterPolymorphBypassObjects(mon, bypassObjects) {
+    if (!bypassObjects) return;
+    for (const obj of mon?.minvent || []) bypassObjects.add(obj);
+    if (mon?.missile) bypassObjects.add(mon.missile);
+    if (mon?.saddle) bypassObjects.add(mon.saddle);
+}
+
+function polymorphWandHitMonster(mon, messages, item = null, bypassObjects = null) {
+    const messageCount = messages.length;
+    addMonsterPolymorphBypassObjects(mon, bypassObjects);
+    polymorphPotionHitMonster(mon, messages, { attackLevel: 12 });
+    if (!mon.dead && (mon.mhp ?? 1) > 0) {
+        mon.msleeping = 0;
+        mon.mpeaceful = false;
+    }
+    if (item && messages.length > messageCount)
+        setKnownWandLine(item, 'polymorph');
 }
 
 function monsterResistsFire(mon) {
@@ -26030,9 +26049,10 @@ function prepareFloorPolymorphReplacement(oldObj, newObj) {
     return newObj;
 }
 
-function polymorphFloorPileResultAt(x, y) {
+function polymorphFloorPileResultAt(x, y, { skipObjects = null } = {}) {
     const targetObjects = (game.level?.objects || [])
-        .filter(obj => !obj.hidden && !obj.transientProjectile && obj.ox === x && obj.oy === y && obj.otyp !== BOULDER);
+        .filter(obj => !skipObjects?.has(obj)
+            && !obj.hidden && !obj.transientProjectile && obj.ox === x && obj.oy === y && obj.otyp !== BOULDER);
     if (!targetObjects.length) return { affected: false, messages: [] };
     const removeTargets = new Set();
     const replacements = [];
@@ -26109,6 +26129,11 @@ async function polymorphFloorPileAt(x, y, { consumeRangeRoll = false } = {}) {
     return finishPolymorphFloorPileResult(result);
 }
 
+function polymorphRayMonsterAt(x, y) {
+    return (game.level?.monsters || []).find(mon =>
+        mon && !mon.dead && (mon.mhp ?? 1) > 0 && mon.mx === x && mon.my === y) || null;
+}
+
 function addUniquePolymorphMessages(messages, additions) {
     for (const message of additions) {
         if (message && !messages.includes(message)) messages.push(message);
@@ -26122,20 +26147,25 @@ function polymorphRayBlockedAt(x, y) {
     return !ZAP_POS(typ) || (typ === DOOR && (loc.doormask & (D_CLOSED | D_LOCKED)));
 }
 
-async function polymorphFloorPileRay(dir) {
+async function polymorphFloorPileRay(dir, item = null) {
     rn2(19);
     let range = rn1(8, 6);
     let x = game.u?.ux || 0;
     let y = game.u?.uy || 0;
     const messages = [];
+    const bypassObjects = new Set();
     let affected = false;
     while (range-- > 0) {
         x += dir.dx;
         y += dir.dy;
         if (!isok(x, y)) break;
-        const monster = (game.level?.monsters || []).some(mon => mon.mx === x && mon.my === y);
-        if (monster) range -= 3;
-        const result = polymorphFloorPileResultAt(x, y);
+        const monster = polymorphRayMonsterAt(x, y);
+        if (monster) {
+            polymorphWandHitMonster(monster, messages, item, bypassObjects);
+            affected = true;
+            range -= 3;
+        }
+        const result = polymorphFloorPileResultAt(x, y, { skipObjects: bypassObjects });
         if (result.affected) {
             affected = true;
             range--;
@@ -46762,7 +46792,7 @@ export async function rhack(_cmd) {
             return;
         }
         if (!verticalDir) {
-            await polymorphFloorPileRay(dir);
+            await polymorphFloorPileRay(dir, item);
             return;
         }
         const x = game.u?.ux || 0;
