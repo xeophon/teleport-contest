@@ -1430,6 +1430,11 @@ const DRAGON_ARMOR_SPECS = [
 const DRAGON_ARMOR_BY_COLOR = new Map();
 for (const spec of DRAGON_ARMOR_SPECS)
     for (const alias of spec.aliases) DRAGON_ARMOR_BY_COLOR.set(alias, spec);
+const DRAGON_ARMOR_SPEC_BY_KIND = new Map();
+for (const spec of DRAGON_ARMOR_SPECS) {
+    DRAGON_ARMOR_SPEC_BY_KIND.set(`${spec.colorName} dragon scale mail`, { ...spec, armorKind: 'mail' });
+    DRAGON_ARMOR_SPEC_BY_KIND.set(`${spec.colorName} dragon scales`, { ...spec, armorKind: 'scales' });
+}
 
 const WISH_BASE_OBJECTS = new Map([
     ['dart', { otyp: DART, cls: 'weapon', glyph: ')', kind: 'dart', plural: 'darts' }],
@@ -7160,9 +7165,9 @@ function enlightenmentSourceForSpeed(roleName) {
 
 function wornReflectionSource() {
     return (game.inventory || []).find(item => {
-        if (!(item.worn || item.line?.includes('being worn'))) return false;
+        if (!isActiveInventoryExtrinsicItem(item)) return false;
         const kind = armorKind(item);
-        return kind === 'silver dragon scale mail' || kind === 'shield of reflection'
+        return kind === 'silver dragon scale mail' || kind === 'silver dragon scales' || kind === 'shield of reflection'
             || item.amuletIndex === 7 || kind === 'amulet of reflection';
     });
 }
@@ -8914,6 +8919,10 @@ function isWornInventoryItem(item) {
     return !!(item && (item.worn || item.line?.includes('being worn')));
 }
 
+function isActiveInventoryExtrinsicItem(item) {
+    return !!(item && (isWornInventoryItem(item) || item._polyselfSkin));
+}
+
 function isBlueDragonArmorKind(kind) {
     return kind === 'blue dragon scale mail' || kind === 'blue dragon scales';
 }
@@ -8939,7 +8948,7 @@ function syncHeroSpeedState() {
     const wearingSpeedBoots = (game.inventory || []).some(item =>
         isWornInventoryItem(item) && String(item.kind || item.actualKind || '').toLowerCase() === 'speed boots');
     const wearingBlueDragonArmor = (game.inventory || []).some(item =>
-        isWornInventoryItem(item) && isBlueDragonArmorKind(String(item.kind || item.actualKind || '').toLowerCase()));
+        isActiveInventoryExtrinsicItem(item) && isBlueDragonArmorKind(String(item.kind || item.actualKind || '').toLowerCase()));
     game.u._blueDragonFast = wearingBlueDragonArmor;
     const veryFast = !!(wearingSpeedBoots || wearingBlueDragonArmor || (game.u._veryfastTimeout || 0) > 0);
     game.u.veryfast = veryFast;
@@ -11403,10 +11412,16 @@ function polyselfFormHornCount(form) {
     return form?.hasHorns ? 1 : 0;
 }
 
+function polyselfFormAdultDragon(form) {
+    const name = polyselfFormLowerName(form);
+    return !!(name.endsWith(' dragon') && !name.startsWith('baby '));
+}
+
 function polyselfFormBreaksArmor(form) {
     if (!form || polyselfFormSlipsArmor(form)) return false;
     const name = polyselfFormLowerName(form);
-    return !!(form.breakarm || form.breaksArmor || form.big || POLYSELF_BREAKARM_FORM_NAMES.has(name));
+    return !!(form.breakarm || form.breaksArmor || form.big
+        || polyselfFormAdultDragon(form) || POLYSELF_BREAKARM_FORM_NAMES.has(name));
 }
 
 function polyselfFormIsMummy(form) {
@@ -11480,6 +11495,66 @@ function polyselfMummyWrappingAllowed(form, cloak) {
 
 function polyselfRacialArmorException(form, armor) {
     return polyselfFormLowerName(form) === 'hobbit' && /\belven\b/.test(objectKindKey(armor));
+}
+
+function dragonArmorSpecForItem(item) {
+    return DRAGON_ARMOR_SPEC_BY_KIND.get(objectKindKey(item)) || null;
+}
+
+function matchingPolyselfDragonArmor(form) {
+    const bodyArmor = polyselfWornBodyArmorItem();
+    const spec = dragonArmorSpecForItem(bodyArmor);
+    if (!spec || polyselfFormLowerName(form) !== `${spec.colorName} dragon`) return null;
+    return { armor: bodyArmor, spec };
+}
+
+function polyselfEmbeddedDragonSkinLine(item) {
+    const letter = item.letter ? `${item.letter} - ` : '';
+    const kind = objectKindKey(item);
+    const enchantment = item.spe == null ? '' : `${item.spe >= 0 ? '+' : ''}${item.spe} `;
+    const article = item.noArticle || armorNameIsPlural(kind) ? '' : /^[aeiou]/i.test(kind) ? 'an ' : 'a ';
+    return `${letter}${article}${enchantment}${kind} (embedded in your skin)`;
+}
+
+function mergePolyselfDragonArmorWithSkin(armor, spec) {
+    if (!armor || !spec) return '';
+    const wasMail = spec.armorKind === 'mail';
+    if (wasMail) {
+        const scalesKind = `${spec.colorName} dragon scales`;
+        armor.kind = scalesKind;
+        armor.actualKind = scalesKind;
+        armor.otyp = spec.scalesOtyp;
+        armor.dragonArmorKind = 'scales';
+        armor.noArticle = true;
+        armor.color = spec.color;
+        armor._display_color = spec.color;
+    }
+    armor.dragonArmor = true;
+    armor.otyp = spec.scalesOtyp;
+    armor.dragonArmorKind = 'scales';
+    armor.noArticle = true;
+    armor.color = spec.color;
+    armor._display_color = spec.color;
+    armor._polyselfSkin = true;
+    armor.worn = false;
+    armor.owornmask = 0;
+    armor.line = polyselfEmbeddedDragonSkinLine(armor);
+    return wasMail
+        ? `Your ${spec.colorName} scale mail reverts to scales as you merge with them.`
+        : 'You merge with your scaly armor.';
+}
+
+function polyselfSkinbackMessages(silently = false) {
+    const messages = [];
+    for (const item of game.inventory || []) {
+        if (!item?._polyselfSkin) continue;
+        delete item._polyselfSkin;
+        item.worn = true;
+        item.owornmask = 0;
+        item.line = normalInventoryLine({ ...item, line: '' });
+        if (!silently) messages.push('Your skin returns to its original form.');
+    }
+    return messages;
 }
 
 function polyselfEyewearFalloffName(item) {
@@ -11643,8 +11718,9 @@ function polyselfEquipmentFalloutForForm(form, { bodyArmor = null } = {}) {
 }
 
 function otherWornFastEquipment(item) {
-    return (game.inventory || []).some(candidate => candidate !== item && isWornInventoryItem(candidate)
-        && (objectKindKey(candidate) === 'speed boots' || isBlueDragonArmorKind(objectKindKey(candidate))));
+    return (game.inventory || []).some(candidate => candidate !== item
+        && ((isWornInventoryItem(candidate) && objectKindKey(candidate) === 'speed boots')
+            || (isActiveInventoryExtrinsicItem(candidate) && isBlueDragonArmorKind(objectKindKey(candidate)))));
 }
 
 function changeHeroLuck(delta) {
@@ -11946,6 +12022,7 @@ function becomeMonster(name) {
     const base = game.u._polyself_base;
     if (name === 'human' || name === game.urace?.noun || name === game._startup_race) {
         const wasFormBlinded = !!game.u._polyself_form_blinded;
+        const skinbackMessages = polyselfSkinbackMessages(false);
         const newLevel = Math.max(1, Math.min(30, (game.u?.ulevel || 1) + rn2(5) - 2));
         rn2(10);
         const minExp = newLevel === 1 ? 0 : newLevel - 1 < 10 ? 10 * (2 ** (newLevel - 1))
@@ -12025,7 +12102,8 @@ function becomeMonster(name) {
         game.u._strDisplay = null;
         if (wasFormBlinded) restorePolyselfBaseBlindness(base);
         game.u._polyself_base = null;
-        return { message: game._startup_gender === 'female' ? 'You feel like a new woman!' : 'You feel like a new man!' };
+        const humanMessage = game._startup_gender === 'female' ? 'You feel like a new woman!' : 'You feel like a new man!';
+        return { message: [...skinbackMessages, humanMessage].join('  ') };
     }
 
     const form = polyselfFormByName(name);
@@ -12082,7 +12160,11 @@ function becomeMonster(name) {
     const rank = form.name.replace(/\b\w/g, ch => ch.toUpperCase());
     if (game.urole) game.urole.rank = { m: rank, f: rank };
     const article = /^[aeiou]/i.test(form.name) ? 'an' : 'a';
-    let message = `You turn into ${article} ${form.name}!`;
+    const dragonMerge = matchingPolyselfDragonArmor(form);
+    const dragonMergeMessage = dragonMerge
+        ? mergePolyselfDragonArmorWithSkin(dragonMerge.armor, dragonMerge.spec)
+        : '';
+    let message = [dragonMergeMessage, `You turn into ${article} ${form.name}!`].filter(Boolean).join('  ');
     if (isBuriedBallTrapActive()) {
         if (form.passWalls && buriedBallToFreedom()) {
             message += '  The buried ball is no longer bound to you.';
@@ -21898,8 +21980,8 @@ function readBlindBlockMessage(item, isScroll) {
 function heroHasAntimagic() {
     if (game.u?.magicResistance || game.u?.antimagic) return true;
     return (game.inventory || []).some(item => {
-        if (!(item.worn || item.line?.includes('being worn'))) return false;
-        return /cloak of magic resistance|gray dragon scale mail/i
+        if (!isActiveInventoryExtrinsicItem(item)) return false;
+        return /cloak of magic resistance|gray dragon scale mail|gray dragon scales/i
             .test(String(item.kind || item.actualKind || item.line || ''));
     });
 }
@@ -23356,7 +23438,7 @@ function passiveObjectErosionSpec(type) {
 function activeInventoryResistanceKind(item) {
     if (!item) return '';
     const kind = objectKindKey(item);
-    const active = isWornInventoryItem(item) || item.wielded || item.line?.includes('(weapon)');
+    const active = isActiveInventoryExtrinsicItem(item) || item.wielded || item.line?.includes('(weapon)');
     if (!active) return '';
     if (item.fireResistance || kind === 'ring of fire resistance'
         || kind === 'red dragon scale mail' || kind === 'red dragon scales'
@@ -30198,9 +30280,9 @@ function updateArmorLine(item) {
 function updateReflectionFromInventory() {
     if (!game.u) return;
     game.u.reflecting = (game.inventory || []).some(item => {
-        if (!(item.worn || item.line?.includes('being worn'))) return false;
+        if (!isActiveInventoryExtrinsicItem(item)) return false;
         const kind = armorKind(item);
-        return kind === 'silver dragon scale mail' || kind === 'shield of reflection'
+        return kind === 'silver dragon scale mail' || kind === 'silver dragon scales' || kind === 'shield of reflection'
             || item.amuletIndex === 7 || kind === 'amulet of reflection';
     });
 }

@@ -8675,6 +8675,155 @@ test('successful breakarm polyself breaking blue dragon armor slows down before 
     assert.deepEqual(game.level.objects.map(obj => obj.kind || obj.actualKind), ['leather cloak']);
 });
 
+test('successful matching dragon polyself embeds dragon scale mail as scales', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, {
+        uhp: 40,
+        uhpmax: 40,
+        uen: 0,
+        uenmax: 0,
+        ulevel: 1,
+        uac: 10,
+    });
+    const body = wornArmor(32138, 'red dragon scale mail', 'a');
+    game.inventory = [body];
+
+    await debugPolyselfInto('red dragon');
+
+    const pending = game._pending_message || '';
+    assert.equal(game.u._polyself_form?.name, 'red dragon');
+    assert.match(pending, /Your red scale mail reverts to scales as you merge with them\./);
+    assert.match(pending, /You turn into a red dragon!/);
+    assert.ok(pending.indexOf('Your red scale mail reverts to scales as you merge with them.')
+        < pending.indexOf('You turn into a red dragon!'));
+    assert.doesNotMatch(pending, /Your armor falls around you|You break out of your armor|handspan|Overloaded/);
+    assert.equal(game.inventory.includes(body), true);
+    assert.equal(body.kind, 'red dragon scales');
+    assert.equal(body.actualKind, 'red dragon scales');
+    assert.equal(body.worn, false);
+    assert.equal(body._polyselfSkin, true);
+    assert.match(body.line || '', /embedded in your skin/);
+    assert.doesNotMatch(body.line || '', /being worn/);
+    assert.equal(game.level.objects.length, 0);
+    assert.equal(game._polyself_drop_items_after_overload_more || 0, 0);
+
+    await debugPolyselfInto('human');
+
+    const reverted = game._pending_message || '';
+    assert.match(reverted, /Your skin returns to its original form\./);
+    assert.match(reverted, /You feel like a new (?:man|woman)!/);
+    assert.ok(reverted.indexOf('Your skin returns to its original form.')
+        < reverted.indexOf('You feel like a new'));
+    assert.equal(game.u._polyself_form || null, null);
+    assert.equal(game.u._polyself_base || null, null);
+    assert.equal(game.inventory.includes(body), true);
+    assert.equal(body.kind, 'red dragon scales');
+    assert.equal(body.worn, true);
+    assert.equal(body._polyselfSkin || false, false);
+    assert.match(body.line || '', /being worn/);
+    assert.doesNotMatch(body.line || '', /embedded in your skin/);
+    assert.equal(game.u.uac, 7);
+    assert.equal(game.level.objects.length, 0);
+});
+
+test('successful matching dragon polyself embeds dragon scales intact', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, {
+        uhp: 40,
+        uhpmax: 40,
+        uen: 0,
+        uenmax: 0,
+        ulevel: 1,
+        uac: 10,
+    });
+    const body = wornArmor(32139, 'red dragon scales', 'a');
+    game.inventory = [body];
+
+    await debugPolyselfInto('red dragon');
+
+    const pending = game._pending_message || '';
+    assert.equal(game.u._polyself_form?.name, 'red dragon');
+    assert.match(pending, /You merge with your scaly armor\./);
+    assert.match(pending, /You turn into a red dragon!/);
+    assert.ok(pending.indexOf('You merge with your scaly armor.')
+        < pending.indexOf('You turn into a red dragon!'));
+    assert.doesNotMatch(pending, /reverts to scales|Your armor falls around you|handspan|Overloaded/);
+    assert.equal(game.inventory.includes(body), true);
+    assert.equal(body.kind, 'red dragon scales');
+    assert.equal(body.actualKind, 'red dragon scales');
+    assert.equal(body.worn, false);
+    assert.equal(body._polyselfSkin, true);
+    assert.match(body.line || '', /embedded in your skin/);
+    assert.equal(game.level.objects.length, 0);
+});
+
+test('successful matching blue dragon polyself keeps embedded armor speed source', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, {
+        uhp: 40,
+        uhpmax: 40,
+        uen: 0,
+        uenmax: 0,
+        ulevel: 1,
+        uac: 10,
+        fast: true,
+        veryfast: true,
+        _blueDragonFast: true,
+    });
+    const body = wornArmor(32141, 'blue dragon scales', 'a');
+    game.inventory = [body];
+
+    await debugPolyselfInto('blue dragon');
+
+    const pending = game._pending_message || '';
+    assert.equal(game.u._polyself_form?.name, 'blue dragon');
+    assert.match(pending, /You merge with your scaly armor\./);
+    assert.doesNotMatch(pending, /You slow down|Your armor falls around you|You break out of your armor/);
+    assert.equal(game.inventory.includes(body), true);
+    assert.equal(body.worn, false);
+    assert.equal(body._polyselfSkin, true);
+    assert.equal(game.u.fast, true);
+    assert.equal(game.u.veryfast, true);
+    assert.equal(game.u._blueDragonFast, true);
+    assert.equal(game.level.objects.length, 0);
+});
+
+test('successful nonmatching dragon polyself still forces dragon armor fallout', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, {
+        uhp: 40,
+        uhpmax: 40,
+        uen: 0,
+        uenmax: 0,
+        ulevel: 1,
+        uac: 1,
+        fast: true,
+        veryfast: true,
+        _blueDragonFast: true,
+    });
+    const body = wornArmor(32140, 'blue dragon scales', 'a');
+    game.inventory = [body];
+
+    await debugPolyselfInto('red dragon');
+
+    const pending = game._pending_message || '';
+    assert.equal(game.u._polyself_form?.name, 'red dragon');
+    assert.doesNotMatch(pending, /merge with your scaly armor|reverts to scales/);
+    assert.match(pending, /You break out of your armor!/);
+    assert.match(pending, /You slow down\./);
+    assert.doesNotMatch(pending, /Your armor falls around you|handspan|Overloaded/);
+    assert.equal(game.inventory.includes(body), false);
+    assert.equal(body._polyselfSkin || false, false);
+    assert.equal(game.level.objects.length, 0);
+    assert.equal(game.u.fast, false);
+    assert.equal(game.u.veryfast, false);
+    assert.equal(game.u._blueDragonFast, false);
+});
+
 test('successful large dog polyself breaks body armor instead of overloading', async () => {
     installNonShopFloorState();
     initRng(1);
