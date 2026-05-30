@@ -13679,9 +13679,62 @@ function stoneToFleshCorpstatAnimationInfo(data = {}) {
     return { data, golemXform: false };
 }
 
-function stoneToFleshFloorStatueDeferredCorpstat(data = {}) {
-    return !stoneToFleshCorpstatMonsterIsGolem(data)
-        && !!(data.unique || data.noCorpse || data.cantRevive || data.noCorpstat);
+function stoneToFleshStatueHasAttachedMonsterTraits(item) {
+    return !!(item?.omonst || item?.omid || item?.oextra?.omonst || item?.oextra?.omid);
+}
+
+function stoneToFleshHumanZombieData() {
+    return monsterByRndName('human zombie')
+        || RANDOM_MONSTER_BY_NAME.get('human zombie')
+        || { name: 'human zombie', mlet: 'Z', glyph: 'Z', mlevel: 4, hpLevel: 5, mmove: 6, noCorpse: true };
+}
+
+function stoneToFleshLongWormData() {
+    return monsterByRndName('long worm')
+        || RANDOM_MONSTER_BY_NAME.get('long worm')
+        || { name: 'long worm', mlet: 'w', glyph: 'w', mlevel: 8, hpLevel: 9, mmove: 3 };
+}
+
+function stoneToFleshDoppelgangerData() {
+    return monsterByRndName('doppelganger')
+        || RANDOM_MONSTER_BY_NAME.get('doppelganger')
+        || { name: 'doppelganger', mlet: '@', glyph: '@', mlevel: 9, hpLevel: 10, mmove: 12 };
+}
+
+function stoneToFleshCantReviveZombieSubstitute(data = {}) {
+    const name = String(data.name || '').toLowerCase();
+    return data.guard || data.highCleric || data.alignedCleric || data.angel
+        || name === 'guard' || name === 'high cleric' || name === 'aligned cleric' || name === 'angel';
+}
+
+function stoneToFleshFloorStatueCantReviveInfo(item, data = {}) {
+    const name = String(data.name || '').toLowerCase();
+    if (stoneToFleshCantReviveZombieSubstitute(data))
+        return { data: stoneToFleshHumanZombieData(), failureData: data, golemXform: false };
+    if (name === 'long worm tail' || data.longWormTail)
+        return { data: stoneToFleshLongWormData(), failureData: data, golemXform: false };
+    if ((data.unique || data.cantRevive) && !stoneToFleshStatueHasAttachedMonsterTraits(item)) {
+        return {
+            data: stoneToFleshDoppelgangerData(),
+            directedDoppelganger: true,
+            directedForm: data,
+            failureData: data,
+            golemXform: false,
+            noCountBirth: true,
+            preserveOriginalOnFailure: true,
+        };
+    }
+    return null;
+}
+
+function stoneToFleshFloorStatueAnimationInfo(item, x, y) {
+    if (!(item?.otyp === STATUE || item?.kind === 'statue') || !item?.corpsenm) return null;
+    const material = stoneToFleshObjectMaterial(item);
+    if (material !== 'mineral' && material !== 'gemstone') return null;
+    if (stoneToFleshStatueHasAttachedMonsterTraits(item) || item.corpsenm.noCorpstat) return null;
+    const cantReviveInfo = stoneToFleshFloorStatueCantReviveInfo(item, item.corpsenm);
+    if (cantReviveInfo) return cantReviveInfo;
+    return stoneToFleshCorpstatAnimationInfo(item.corpsenm);
 }
 
 function stoneToFleshFigurineAnimationInfo(item) {
@@ -13721,8 +13774,8 @@ function isStoneToFleshAnimationFailure(result) {
 }
 
 function stoneToFleshFailedAnimationPreservesOriginal(info) {
-    const data = info?.data || {};
-    return !!(data.unique || data.noCorpse);
+    const data = info?.failureData || info?.data || {};
+    return !!(info?.preserveOriginalOnFailure || data.unique || data.noCorpse);
 }
 
 function stoneToFleshFailedAnimationCorpse(item) {
@@ -13847,18 +13900,46 @@ async function stoneToFleshAnimateFloorFigurine(item, x, y) {
     return messages;
 }
 
-function stoneToFleshFloorStatueAnimationInfo(item, x, y) {
-    if (!(item?.otyp === STATUE || item?.kind === 'statue') || !item?.corpsenm) return null;
-    const material = stoneToFleshObjectMaterial(item);
-    if (material !== 'mineral' && material !== 'gemstone') return null;
-    if (stoneToFleshFloorStatueDeferredCorpstat(item.corpsenm)) return null;
-    return stoneToFleshCorpstatAnimationInfo(item.corpsenm);
-}
-
 function stoneToFleshGolemStatueVerb(info, mon) {
     if (info?.golemXform) return 'turns into flesh';
     if (stoneToFleshCorpstatMonsterIsGolem(mon?.data || {})) return 'moves';
     return statueAnimationVerb(mon);
+}
+
+function stoneToFleshRetargetMonsterForm(mon, data, { chamBase = null } = {}) {
+    if (!mon || !data) return;
+    if (data.male) mon.female = false;
+    else if (data.female) mon.female = true;
+    else if (!data.neuter && !rn2(10)) mon.female = !mon.female;
+    const level = data.hpLevel ?? adjustedMonsterLevel(data);
+    const hpMax = Math.max(1, monster_hp(data, level));
+    const oldHp = Math.max(1, mon.mhp || 1);
+    const oldMax = Math.max(1, mon.mhpmax || oldHp);
+    Object.assign(mon, {
+        data: { ...data, hpLevel: level },
+        name: data.name,
+        mlet: data.mlet,
+        glyph: data.glyph,
+        color: data.color,
+        m_lev: level,
+        mlevel: level,
+        mhpmax: hpMax,
+        mhp: Math.max(1, Math.min(hpMax, Math.trunc((oldHp * hpMax) / oldMax))),
+        meverseen: 0,
+    });
+    if (chamBase) mon.chamBase = chamBase;
+    else delete mon.chamBase;
+    set_malign(mon);
+}
+
+function stoneToFleshApplyDirectedDoppelgangerForm(mon, info) {
+    if (!info?.directedDoppelganger) return;
+    if (heroHasProtectionFromShapeChangers()) {
+        stoneToFleshRetargetMonsterForm(mon, info.data);
+        return;
+    }
+    if (isMonsterGenocidedName(info.directedForm?.name)) return;
+    stoneToFleshRetargetMonsterForm(mon, info.directedForm, { chamBase: 'doppelganger' });
 }
 
 function stoneToFleshChristenAnimatedStatueMonster(item, mon) {
@@ -13886,8 +13967,10 @@ function stoneToFleshHistoricStatueGoneMessage(item, x, y) {
 async function stoneToFleshAnimateFloorStatue(item, x, y) {
     const info = stoneToFleshFloorStatueAnimationInfo(item, x, y);
     if (!info || stoneToFleshObjectResists(item)) return null;
-    const mon = await makemon(info.data, x, y, NO_MINVENT | MM_NOMSG | MM_ADJACENTOK);
+    const flags = NO_MINVENT | MM_NOMSG | MM_ADJACENTOK | (info.noCountBirth ? MM_NOCOUNTBIRTH : 0);
+    const mon = await makemon(info.data, x, y, flags);
     if (!mon) return stoneToFleshAnimationFailure(info);
+    stoneToFleshApplyDirectedDoppelgangerForm(mon, info);
     stoneToFleshChristenAnimatedStatueMonster(item, mon);
     mon.msleeping = 0;
     mon.mundetected = false;
@@ -18650,6 +18733,11 @@ function corpseObjectName(obj) {
 function monsterIndefiniteName(name) {
     const monsterName = String(name || 'monster');
     return `${/^[aeiou]/i.test(monsterName) ? 'an' : 'a'} ${monsterName}`;
+}
+
+function corpstatMonsterIndefiniteName(obj) {
+    const name = corpstatDisplayMonsterName(obj);
+    return obj?.corpsenm?.unique ? name : monsterIndefiniteName(name);
 }
 
 function upstartText(text) {
@@ -30773,10 +30861,10 @@ export function pickupObjectName(obj) {
         return named(slimeMoldNameForObject(obj, (obj.quan || 1) > 1));
     if ((obj.kind === 'statue' || obj.otyp === STATUE) && obj.corpsenm?.name) {
         const historic = archeologist && (((obj.spe || 0) & CORPSTAT_HISTORIC) || obj.historic);
-        return named(`${historic ? 'historic ' : ''}statue of ${monsterIndefiniteName(corpstatDisplayMonsterName(obj))}`);
+        return named(`${historic ? 'historic ' : ''}statue of ${corpstatMonsterIndefiniteName(obj)}`);
     }
     if ((obj.kind === 'figurine' || obj.actualKind === 'figurine') && obj.corpsenm?.name)
-        return named(`figurine of ${monsterIndefiniteName(corpstatDisplayMonsterName(obj))}`);
+        return named(`figurine of ${corpstatMonsterIndefiniteName(obj)}`);
     if (isTinObject(obj)) return named(tinObjectName(obj));
     if (obj.otyp === LARGE_BOX) return named('large box');
     if (obj.otyp === CHEST) return named('chest');

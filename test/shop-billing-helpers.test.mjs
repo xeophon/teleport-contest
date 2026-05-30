@@ -5684,6 +5684,36 @@ test('downward stone to flesh animates ordinary floor statue and transfers conte
     assertNoStoneToFleshScoreSideEffects();
 });
 
+test('downward stone to flesh animates unique floor statue as directed doppelganger', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    markHeroNeighborhoodVisible();
+    const medusa = vegetarianCorpstatMonster('Medusa', '@', {
+        unique: true,
+        human: true,
+        female: true,
+        neuter: false,
+        mlevel: 20,
+        hpLevel: 20,
+        mmove: 12,
+    });
+    const statue = stoneToFleshStatue(311134, 5, 5, medusa);
+    game.inventory = [];
+    game.level.objects = [statue];
+
+    await castStoneToFleshDown();
+
+    assert.equal(game.level.objects.includes(statue), false);
+    const monster = (game.level.monsters || []).find(mon => mon.data?.name === 'Medusa');
+    assert.ok(monster);
+    assert.equal(monster.chamBase, 'doppelganger');
+    assert.equal(monster.msleeping, 0);
+    assert.equal(monster.mundetected, false);
+    assert.match(game._pending_message || '', /The statue of Medusa comes to life!/);
+    assert.doesNotMatch(game._pending_message || '', /odor of meat|delicious smell|turns into flesh/);
+    assertNoStoneToFleshScoreSideEffects();
+});
+
 test('downward stone to flesh gives a named ordinary statue name to the monster', async () => {
     installNonShopFloorState();
     initRng(1);
