@@ -8861,7 +8861,61 @@ test('successful white dragon polyself grants form cold resistance', async () =>
 
     assert.equal(game.u._polyself_form?.name, 'white dragon');
     assert.equal(shop.heroHasColdResistanceForTest(), true);
+    assert.equal(shop.heroHasSlowDigestionForTest(), false);
     assert.equal(shop.coldInventoryProtectionChanceForTest(), 0);
+});
+
+test('worn white dragon armor grants slow digestion and keeps C accessory hunger', () => {
+    installNonShopFloorState();
+    const plain = wornArmor(32151, 'leather armor', 'l');
+    game.inventory = [plain];
+    game.u.uhunger = 900;
+    game.u.slowDigestion = false;
+
+    assert.equal(shop.heroHasSlowDigestionForTest(), false);
+    shop.applyHeroOrdinaryHungerForTest();
+    assert.equal(game.u.uhunger, 899);
+
+    const body = wornArmor(32152, 'white dragon scale mail', 'a');
+    game.inventory = [body];
+    game.u.uhunger = 900;
+
+    assert.equal(shop.heroHasSlowDigestionForTest(), true);
+    shop.applyHeroOrdinaryHungerForTest();
+    assert.equal(game.u.uhunger, 900);
+    shop.applyAccessoryHungerForTest(0);
+    assert.equal(game.u.uhunger, 899);
+});
+
+test('worn slow digestion ring suppresses ordinary and accessory slow-digestion hunger', () => {
+    installNonShopFloorState();
+    const ring = metalRing(32153, 'slow digestion', 21, 'r', {
+        worn: 'left',
+        known: true,
+        dknown: true,
+        line: 'r - a ring of slow digestion (on left hand)',
+    });
+    game.inventory = [ring];
+    game.u.uhunger = 900;
+
+    assert.equal(shop.heroHasSlowDigestionForTest(), true);
+    shop.applyHeroOrdinaryHungerForTest();
+    assert.equal(game.u.uhunger, 900);
+    shop.applyAccessoryHungerForTest(0);
+    assert.equal(game.u.uhunger, 900);
+});
+
+test('worn white dragon scales grant slow digestion', () => {
+    installNonShopFloorState();
+    Object.assign(game.u, {
+        uhunger: 900,
+        slowDigestion: false,
+    });
+    game.inventory = [wornArmor(32154, 'white dragon scales', 'a')];
+
+    assert.equal(shop.heroHasSlowDigestionForTest(), true);
+    shop.applyHeroOrdinaryHungerForTest();
+    assert.equal(game.u.uhunger, 900);
 });
 
 test('white dragon cold resistance suppresses ice chill while sitting', async () => {
@@ -8912,6 +8966,7 @@ test('successful matching white dragon polyself keeps embedded armor cold resist
     assert.equal(body.worn, false);
     assert.equal(body._polyselfSkin, true);
     assert.equal(shop.heroHasColdResistanceForTest(), true);
+    assert.equal(shop.heroHasSlowDigestionForTest(), true);
     assert.equal(shop.coldInventoryProtectionChanceForTest(), 99);
     assert.equal(game.level.objects.length, 0);
 });
@@ -9129,6 +9184,7 @@ test('successful no-hands polyself clears white dragon cold resistance before ov
     assert.equal(body.worn, false);
     assert.doesNotMatch(body.line || '', /being worn/);
     assert.equal(shop.heroHasColdResistanceForTest(), false);
+    assert.equal(shop.heroHasSlowDigestionForTest(), false);
     assert.equal(shop.coldInventoryProtectionChanceForTest(), 0);
     assert.equal(game.level.objects.length, 0);
 
@@ -9140,6 +9196,7 @@ test('successful no-hands polyself clears white dragon cold resistance before ov
     assert.equal(game.level.objects[0].kind, 'white dragon scale mail');
     assert.equal(game.level.objects[0].worn, false);
     assert.equal(shop.heroHasColdResistanceForTest(), false);
+    assert.equal(shop.heroHasSlowDigestionForTest(), false);
     assert.equal(shop.coldInventoryProtectionChanceForTest(), 0);
 });
 
@@ -9170,6 +9227,7 @@ test('successful small polyself dropping white dragon scales clears cold resista
     assert.equal(game.level.objects[0].kind, 'white dragon scales');
     assert.equal(game.level.objects[0].worn, false);
     assert.equal(shop.heroHasColdResistanceForTest(), false);
+    assert.equal(shop.heroHasSlowDigestionForTest(), false);
     assert.equal(shop.coldInventoryProtectionChanceForTest(), 0);
 });
 

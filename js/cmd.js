@@ -1420,7 +1420,7 @@ const DRAGON_ARMOR_SPECS = [
     { colorName: 'gold', aliases: ['gold'], color: CLR_YELLOW, mailOtyp: GOLD_DRAGON_SCALE_MAIL, scalesOtyp: GOLD_DRAGON_SCALES, properties: ['hallucination'] },
     { colorName: 'silver', aliases: ['silver'], color: CLR_BRIGHT_CYAN, mailOtyp: SILVER_DRAGON_SCALE_MAIL, scalesOtyp: SILVER_DRAGON_SCALES, properties: ['reflection'] },
     { colorName: 'red', aliases: ['red'], color: CLR_RED, mailOtyp: RED_DRAGON_SCALE_MAIL, scalesOtyp: RED_DRAGON_SCALES, properties: ['fire', 'infravision'] },
-    { colorName: 'white', aliases: ['white'], color: CLR_WHITE, mailOtyp: WHITE_DRAGON_SCALE_MAIL, scalesOtyp: WHITE_DRAGON_SCALES, properties: ['cold'] },
+    { colorName: 'white', aliases: ['white'], color: CLR_WHITE, mailOtyp: WHITE_DRAGON_SCALE_MAIL, scalesOtyp: WHITE_DRAGON_SCALES, properties: ['cold', 'slowDigestion'] },
     { colorName: 'orange', aliases: ['orange'], color: CLR_ORANGE, mailOtyp: ORANGE_DRAGON_SCALE_MAIL, scalesOtyp: ORANGE_DRAGON_SCALES, properties: ['sleep', 'freeAction'] },
     { colorName: 'black', aliases: ['black'], color: CLR_BLACK, mailOtyp: BLACK_DRAGON_SCALE_MAIL, scalesOtyp: BLACK_DRAGON_SCALES, properties: ['disintegration', 'drainResistance'] },
     { colorName: 'blue', aliases: ['blue'], color: CLR_BLUE, mailOtyp: BLUE_DRAGON_SCALE_MAIL, scalesOtyp: BLUE_DRAGON_SCALES, properties: ['shock', 'speed'] },
@@ -2352,7 +2352,19 @@ function wornRingOnHand(hand) {
 }
 
 function heroWearsRingNamed(name) {
-    return (game.inventory || []).some(item => item.cls === 'ring' && item.worn && ringNutritionName(item) === name);
+    return (game.inventory || []).some(item =>
+        item.cls === 'ring'
+        && (item.worn || /\(on (?:left|right) hand\)/.test(item.line || ''))
+        && ringNutritionName(item) === name);
+}
+
+function heroWearsSlowDigestionRing() {
+    return (game.inventory || []).some(item => {
+        if (item?.cls !== 'ring' && item?.glyph !== '=') return false;
+        if (!item.worn && !/\(on (?:left|right) hand\)/.test(item.line || '')) return false;
+        return ringNutritionName(item) === 'slow digestion'
+            || objectKindKey(item) === 'ring of slow digestion';
+    });
 }
 
 function wornRingConsumesNutrition(hand) {
@@ -2373,7 +2385,9 @@ function applyAccessoryHunger(accessorytime) {
     }
     if (heroWearsRingNamed('hunger'))
         game.u.uhunger = (game.u.uhunger ?? 900) - 1;
-    if (accessorytime === 4 && wornRingConsumesNutrition('left'))
+    if (accessorytime === 0 && heroHasSlowDigestion() && !heroWearsSlowDigestionRing())
+        game.u.uhunger = (game.u.uhunger ?? 900) - 1;
+    else if (accessorytime === 4 && wornRingConsumesNutrition('left'))
         game.u.uhunger = (game.u.uhunger ?? 900) - 1;
     else if (accessorytime === 8 && heroWearsNutritionAmulet())
         game.u.uhunger = (game.u.uhunger ?? 900) - 1;
@@ -2723,7 +2737,7 @@ function clearSanctumScriptPending() {
 
 function sanctumConsumePostSummonFirstAttackRng() {
     rn2(20); // gethungry()
-    if (game.u) game.u.uhunger = (game.u.uhunger ?? 900) - 1;
+    applyHeroOrdinaryHunger();
     exerciseAttribute(A_STR, true);
 
     rnd(20); // hitum() to-hit against the adjacent summoned monster
@@ -8952,6 +8966,18 @@ function activeAntimagicSource() {
         if (!isActiveInventoryExtrinsicItem(item)) return false;
         const kind = objectKindKey(item);
         return dragonArmorKindHasProperty(kind, 'antimagic') || kind === 'cloak of magic resistance';
+    }) || null;
+}
+
+function activeSlowDigestionSource() {
+    return (game.inventory || []).find(item => {
+        const kind = objectKindKey(item);
+        if ((item?.cls === 'ring' || item?.glyph === '=')
+            && (item.worn || /\(on (?:left|right) hand\)/.test(item.line || ''))
+            && (kind === 'ring of slow digestion' || ringNutritionName(item) === 'slow digestion'))
+            return true;
+        if (!isActiveInventoryExtrinsicItem(item)) return false;
+        return item.slowDigestion || dragonArmorKindHasProperty(kind, 'slowDigestion');
     }) || null;
 }
 
@@ -22014,6 +22040,16 @@ export function heroHasColdResistance() {
     return (game.inventory || []).some(item => activeInventoryResistanceKind(item) === 'cold');
 }
 
+export function heroHasSlowDigestion() {
+    if (game.u?.slowDigestion) return true;
+    return !!activeSlowDigestionSource();
+}
+
+export function applyHeroOrdinaryHunger() {
+    if (!game.u || heroHasSlowDigestion()) return;
+    game.u.uhunger = (game.u.uhunger ?? 900) - 1;
+}
+
 function heroHasPoisonResistance() {
     if (game.u?.poisonResistance || heroWearsAlchemySmock()) return true;
     return (game.inventory || []).some(item => {
@@ -27712,6 +27748,9 @@ export const __shopBillingTestHooks = {
     finishShopFloorContainerPutSale,
     heroHasAntimagicForTest: heroHasAntimagic,
     heroHasColdResistanceForTest: heroHasColdResistance,
+    heroHasSlowDigestionForTest: heroHasSlowDigestion,
+    applyHeroOrdinaryHungerForTest: applyHeroOrdinaryHunger,
+    applyAccessoryHungerForTest: applyAccessoryHunger,
     coldInventoryProtectionChanceForTest: coldInventoryProtectionChance,
     heroHasAcidResistanceForTest: heroHasAcidResistance,
     heroHasPoisonResistanceForTest: heroHasPoisonResistance,
@@ -40699,7 +40738,7 @@ async function moveHero(dx, dy) {
         let wokeByHit = false;
 
         if (!game.u?.uinvulnerable) {
-            if (game.u) game.u.uhunger = (game.u.uhunger ?? 900) - 1;
+            applyHeroOrdinaryHunger();
             applyAccessoryHunger(rn2(20));
         }
         exerciseAttribute(A_STR, true);

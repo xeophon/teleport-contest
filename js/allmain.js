@@ -3,7 +3,7 @@
 
 import { game } from './gstate.js';
 import { mklev, l_nhcore_init, u_on_upstairs, makemon, mkcorpstat, mksobj, wipe_engr_at, dropMonsterInventory, wandIndexForRoll, scrollIndexForRoll, potionIndexForRoll, RANDOM_MONSTER_BY_NAME, STONE_RESISTANT_MONSTERS, adjustedMonsterLevel, monsterByRndName, monster_hp, rndmonnum, syncDungeonContext, next_ident, set_malign, enextoMonsterSpot, getbogusmon, pickNasty, chameleonAnimalForm, doppelgangerHumanoidForm, noteleportLevelForMonster, rlocNoMsg, rlocToCoreNoMsg, somexyspace, fumaroles, createMonsterCorpseOrGlob, monsterCorpseDropSucceeds, monsterLeavesCorpseLikeDrop, movebubbles, add_to_minv } from './mklev.js';
-import { rhack, pickupObjectName, inventoryItemName, inventoryLetterRank, recordVanquished, finishForceLock, loseExperienceLevel, finishLevelTeleport, finishPickDigDownwardHole, finishPickDigDownwardPit, maybeQueueQuestLeaderTalk, monsterGrowUp, processForceLockOccupationTick, forceLockOccupationShouldGiveUp, processSpellbookStudyOccupation, processTinOpeningOccupation, finishTinOpeningOccupation, refreshSwallowOverlay, travelPathKeys, updateGauntletsOfPowerStrength, consumeLifeSavingAmulet, activateStatueTrap, breakStatueObject, burnFloorObjectsByFire, burnRayFloorObjectsByFire, erodeArmorByFireTrap, dryWetTowelFromFire, igniteMonsterFireInventoryItems, monsterFireInventoryDamage, dropMonsterObject, earthFloorEffects, landMonsterThrownObject, stoneMonster, processCorpseTimers, processGlobShrinkTimers, addDelayedFoodBiteNutrition, repairShopDamageForShopkeeper, heroHasAntimagic } from './cmd.js';
+import { rhack, pickupObjectName, inventoryItemName, inventoryLetterRank, recordVanquished, finishForceLock, loseExperienceLevel, finishLevelTeleport, finishPickDigDownwardHole, finishPickDigDownwardPit, maybeQueueQuestLeaderTalk, monsterGrowUp, processForceLockOccupationTick, forceLockOccupationShouldGiveUp, processSpellbookStudyOccupation, processTinOpeningOccupation, finishTinOpeningOccupation, refreshSwallowOverlay, travelPathKeys, updateGauntletsOfPowerStrength, consumeLifeSavingAmulet, activateStatueTrap, breakStatueObject, burnFloorObjectsByFire, burnRayFloorObjectsByFire, erodeArmorByFireTrap, dryWetTowelFromFire, igniteMonsterFireInventoryItems, monsterFireInventoryDamage, dropMonsterObject, earthFloorEffects, landMonsterThrownObject, stoneMonster, processCorpseTimers, processGlobShrinkTimers, addDelayedFoodBiteNutrition, repairShopDamageForShopkeeper, heroHasAntimagic, heroHasSlowDigestion, applyHeroOrdinaryHunger } from './cmd.js';
 import { docrt, cls, bot, flush_screen, pline, newsym, refreshHallucinatedMap, show_glyph_cell } from './display.js';
 import { vision_recalc, vision_reset, init_vision_globals, cansee, couldsee, view_from } from './vision.js';
 import { init_objects } from './o_init.js';
@@ -473,7 +473,10 @@ function wornRingOnHand(hand) {
 }
 
 function heroWearsRingNamed(name) {
-    return (game.inventory || []).some(item => item.cls === 'ring' && item.worn && ringNutritionName(item) === name);
+    return (game.inventory || []).some(item =>
+        item.cls === 'ring'
+        && (item.worn || /\(on (?:left|right) hand\)/.test(item.line || ''))
+        && ringNutritionName(item) === name);
 }
 
 function wornRingConsumesNutrition(hand) {
@@ -494,7 +497,9 @@ function applyAccessoryHunger(accessorytime) {
     }
     if (heroWearsRingNamed('hunger'))
         game.u.uhunger = (game.u.uhunger ?? 900) - 1;
-    if (accessorytime === 4 && wornRingConsumesNutrition('left'))
+    if (accessorytime === 0 && heroHasSlowDigestion() && !heroWearsRingNamed('slow digestion'))
+        game.u.uhunger = (game.u.uhunger ?? 900) - 1;
+    else if (accessorytime === 4 && wornRingConsumesNutrition('left'))
         game.u.uhunger = (game.u.uhunger ?? 900) - 1;
     else if (accessorytime === 8 && heroWearsNutritionAmulet())
         game.u.uhunger = (game.u.uhunger ?? 900) - 1;
@@ -6880,7 +6885,7 @@ async function finishMonsterTurnTail() {
     if (!game._prayer_occupation || !game._prayer_debug_pleased) {
         const accessorytime = rn2(20);
         if (game.u) {
-            game.u.uhunger = (game.u.uhunger ?? 900) - 1;
+            applyHeroOrdinaryHunger();
             applyAccessoryHunger(accessorytime);
         }
     }
