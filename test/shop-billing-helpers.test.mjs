@@ -8,7 +8,7 @@ import { game, resetGame } from '../js/gstate.js';
 import { pushKey, resetInputState } from '../js/input.js';
 import { createMonsterCorpseOrGlob, mkcorpstat } from '../js/mklev.js';
 import { enableRngLog, getRngLog, initRng } from '../js/rng.js';
-import { A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_STR, A_WIS, BILLSZ, CANDLESHOP, CLOUD, CORPSTAT_HISTORIC, COULD_SEE, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, D_CLOSED, D_NODOOR, FOUNTAIN, HOLE, ICE, ICED_POOL, IN_SIGHT, LADDER, LAVAPOOL, MIGR_LADDER_UP, MIGR_SSTAIRS, MIGR_STAIRS_UP, MOAT, M_AP_FURNITURE, M_AP_OBJECT, NORMAL_SPEED, PIT, POOL, REPAIR_DELAY, ROOM, ROOMOFFSET, SDOOR, SHOPBASE, SHOP_DOOR_COST, SQKY_BOARD, STAIRS, STATUE_TRAP, STONE, STRAT_WAITFORU, TRAPDOOR, TT_WEB, WEB, W_SADDLE } from '../js/const.js';
+import { A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_STR, A_WIS, BILLSZ, CANDLESHOP, CLOUD, CORPSTAT_HISTORIC, COULD_SEE, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, D_CLOSED, D_NODOOR, FOUNTAIN, HOLE, ICE, ICED_POOL, IN_SIGHT, LADDER, LAVAPOOL, MIGR_LADDER_UP, MIGR_SSTAIRS, MIGR_STAIRS_UP, MOAT, M_AP_FURNITURE, M_AP_OBJECT, NORMAL_SPEED, PIT, POOL, REPAIR_DELAY, ROOM, ROOMOFFSET, SDOOR, SHOPBASE, SHOP_DOOR_COST, SQKY_BOARD, STAIRS, STATUE_TRAP, STONE, STRAT_APPEARMSG, STRAT_WAITFORU, TRAPDOOR, TT_WEB, WEB, W_SADDLE } from '../js/const.js';
 import { currentFruitId, setCurrentFruitName } from '../js/fruit.js';
 import { CLR_BRIGHT_MAGENTA, CLR_BROWN, CLR_WHITE } from '../js/terminal.js';
 import { vision_reset } from '../js/vision.js';
@@ -3664,6 +3664,140 @@ test('worn helmet tip makes visible peaceful hiss fall back to nonresponse', asy
     assert.match(game._pending_message, /You briefly doff your helm\./);
     assert.match(game._pending_message, /The garter snake doesn't respond\./);
     assert.doesNotMatch(game._pending_message, /hisses|Nothing happens|waves/);
+});
+
+test('worn helmet tip trumpet wakes nearby sleepers only', async () => {
+    installNonShopFloorState();
+    const helmet = wornArmor(3063537, 'orcish helm', 'h');
+    const mumak = ordinaryThrowTarget('mumak', 6, 5, {
+        msleeping: 0,
+        mcanmove: true,
+        mcansee: true,
+        mpeaceful: false,
+        mstrategy: 'waitforu',
+        data: { name: 'mumak', mlevel: 5, mlet: 'quadruped' },
+    });
+    const nearbySleeper = ordinaryThrowTarget('jackal', 11, 5, {
+        msleeping: 1,
+        mstrategy: STRAT_WAITFORU,
+        data: { name: 'jackal', mlevel: 0, mlet: 'dog' },
+    });
+    const uniqueSleeper = ordinaryThrowTarget('Medusa', 7, 6, {
+        msleeping: 1,
+        mstrategy: STRAT_WAITFORU,
+        data: { name: 'Medusa', mlevel: 20, humanoid: true, unique: true },
+    });
+    const farSleeper = ordinaryThrowTarget('goblin', 18, 5, {
+        msleeping: 1,
+        mstrategy: STRAT_WAITFORU,
+        data: { name: 'goblin', mlevel: 0, humanoid: true },
+    });
+    const buriedCorpse = zombieCorpse(3063540, 7, 5, { zombifyTurn: 190 });
+    const farBuriedCorpse = zombieCorpse(3063541, 9, 5, { zombifyTurn: 190 });
+    game.moves = 100;
+    game.inventory = [helmet];
+    game.level.monsters = [mumak, nearbySleeper, uniqueSleeper, farSleeper];
+    game.level.buriedobjlist = [buriedCorpse, farBuriedCorpse];
+    markSquareVisible(6, 5);
+    markSquareVisible(11, 5);
+
+    await enterTipCommand();
+    await rhack('h');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(mumak.mstrategy, 0);
+    assert.equal(nearbySleeper.msleeping, 0);
+    assert.equal(nearbySleeper.mstrategy, 0);
+    assert.equal(uniqueSleeper.msleeping, 0);
+    assert.equal(uniqueSleeper.mstrategy, STRAT_WAITFORU);
+    assert.equal(farSleeper.msleeping, 1);
+    assert.equal(farSleeper.mstrategy, STRAT_WAITFORU);
+    assert.equal(buriedCorpse.zombifyTurn, 160);
+    assert.equal(farBuriedCorpse.zombifyTurn, 190);
+    assert.match(game._pending_message, /You briefly doff your helm\./);
+    assert.match(game._pending_message, /The jackal wakes up\..*The mumak trumpets!/);
+    assert.match(game._pending_message, /The mumak trumpets!/);
+    assert.doesNotMatch(game._pending_message, /neighs|doesn't respond|waves/);
+});
+
+test('worn helmet tip shriek aggravates sleepers globally', async () => {
+    installNonShopFloorState();
+    const helmet = wornArmor(3063538, 'orcish helm', 'h');
+    const shrieker = ordinaryThrowTarget('shrieker', 6, 5, {
+        msleeping: 0,
+        mcanmove: true,
+        mcansee: true,
+        mpeaceful: false,
+        mstrategy: 'waitforu',
+        data: { name: 'shrieker', mlevel: 3, mlet: 'fungus' },
+    });
+    const farSleeper = ordinaryThrowTarget('goblin', 18, 5, {
+        msleeping: 1,
+        mcanmove: true,
+        mstrategy: STRAT_WAITFORU | STRAT_APPEARMSG,
+        data: { name: 'goblin', mlevel: 0, humanoid: true },
+    });
+    const uniqueSleeper = ordinaryThrowTarget('Medusa', 17, 5, {
+        msleeping: 1,
+        mcanmove: true,
+        mstrategy: STRAT_WAITFORU | STRAT_APPEARMSG,
+        data: { name: 'Medusa', mlevel: 20, humanoid: true, unique: true },
+    });
+    game.inventory = [helmet];
+    game.level.monsters = [shrieker, farSleeper, uniqueSleeper];
+    markSquareVisible(6, 5);
+
+    await enterTipCommand();
+    await rhack('h');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(shrieker.mstrategy, 0);
+    assert.equal(farSleeper.msleeping, 0);
+    assert.equal(farSleeper.mstrategy, 0);
+    assert.equal(uniqueSleeper.msleeping, 0);
+    assert.equal(uniqueSleeper.mstrategy, 0);
+    assert.match(game._pending_message, /You briefly doff your helm\./);
+    assert.match(game._pending_message, /The shrieker shrieks\./);
+    assert.doesNotMatch(game._pending_message, /doesn't respond|Nothing happens|waves/);
+});
+
+test('deaf worn helmet tip at shrieker does not aggravate sleepers', async () => {
+    installNonShopFloorState();
+    game.u._deafTimeout = 10;
+    const helmet = wornArmor(3063539, 'orcish helm', 'h');
+    const shrieker = ordinaryThrowTarget('shrieker', 6, 5, {
+        msleeping: 0,
+        mcanmove: true,
+        mcansee: true,
+        mpeaceful: false,
+        mstrategy: 'waitforu',
+        data: { name: 'shrieker', mlevel: 3, mlet: 'fungus' },
+    });
+    const farSleeper = ordinaryThrowTarget('goblin', 18, 5, {
+        msleeping: 1,
+        mstrategy: STRAT_WAITFORU,
+        data: { name: 'goblin', mlevel: 0, humanoid: true },
+    });
+    game.inventory = [helmet];
+    game.level.monsters = [shrieker, farSleeper];
+    markSquareVisible(6, 5);
+
+    await enterTipCommand();
+    await rhack('h');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(shrieker.mstrategy, 0);
+    assert.equal(farSleeper.msleeping, 1);
+    assert.equal(farSleeper.mstrategy, STRAT_WAITFORU);
+    assert.match(game._pending_message, /You briefly doff your helm\./);
+    assert.match(game._pending_message, /The shrieker doesn't respond\./);
+    assert.doesNotMatch(game._pending_message, /shrieks|Nothing happens|waves/);
 });
 
 test('unknown cursed worn helmet tip learns curse and spends action', async () => {

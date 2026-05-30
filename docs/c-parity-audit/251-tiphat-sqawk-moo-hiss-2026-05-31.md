@@ -36,7 +36,8 @@ Added focused coverage in `test/shop-billing-helpers.test.mjs`:
 ## Remaining Gaps
 
 - The helper remains `tiphat()`-local and still does not replace full shared `domonnoise()`/`#chat` behavior.
-- Broader shopkeeper, priest, quest, vampire, werecreature, Rider, Oracle, wake/aggravate, random laugh/groan, and hallucinated gecko branches remain open.
+- Focused trumpet wake and shriek aggravation canaries are covered by `docs/c-parity-audit/252-tiphat-wake-aggravate-2026-05-31.md`.
+- Broader shopkeeper, priest, quest, vampire, werecreature, Rider, Oracle, random laugh/groan, and hallucinated gecko branches remain open.
 - Generic monster-data `msound` generation remains incomplete; this slice only adds narrow source-backed name fallbacks for covered species.
 
 ## Verification
