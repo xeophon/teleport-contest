@@ -15496,16 +15496,24 @@ function addMonsterPolymorphBypassObjects(mon, bypassObjects) {
     if (mon?.saddle) bypassObjects.add(mon.saddle);
 }
 
-function polymorphWandHitMonster(mon, messages, item = null, bypassObjects = null) {
+function polymorphRayHitMonster(mon, messages, {
+    item = null,
+    bypassObjects = null,
+    attackLevel = 12,
+} = {}) {
     const messageCount = messages.length;
     addMonsterPolymorphBypassObjects(mon, bypassObjects);
-    polymorphPotionHitMonster(mon, messages, { attackLevel: 12 });
+    polymorphPotionHitMonster(mon, messages, { attackLevel });
     if (!mon.dead && (mon.mhp ?? 1) > 0) {
         mon.msleeping = 0;
         mon.mpeaceful = false;
     }
     if (item && messages.length > messageCount)
         setKnownWandLine(item, 'polymorph');
+}
+
+function polymorphWandHitMonster(mon, messages, item = null, bypassObjects = null) {
+    polymorphRayHitMonster(mon, messages, { item, bypassObjects, attackLevel: 12 });
 }
 
 function monsterResistsFire(mon) {
@@ -26234,7 +26242,7 @@ function polymorphRayBlockedAt(x, y) {
     return !ZAP_POS(typ) || (typ === DOOR && (loc.doormask & (D_CLOSED | D_LOCKED)));
 }
 
-async function polymorphFloorPileRay(dir, item = null) {
+async function polymorphFloorPileRay(dir, item = null, { attackLevel = 12 } = {}) {
     rn2(19);
     let range = rn1(8, 6);
     let x = game.u?.ux || 0;
@@ -26248,7 +26256,7 @@ async function polymorphFloorPileRay(dir, item = null) {
         if (!isok(x, y)) break;
         const monster = polymorphRayMonsterAt(x, y);
         if (monster) {
-            polymorphWandHitMonster(monster, messages, item, bypassObjects);
+            polymorphRayHitMonster(monster, messages, { item, bypassObjects, attackLevel });
             affected = true;
             range -= 3;
         }
@@ -26261,6 +26269,54 @@ async function polymorphFloorPileRay(dir, item = null) {
         if (polymorphRayBlockedAt(x, y)) break;
     }
     return finishPolymorphFloorPileResult({ affected, messages });
+}
+
+async function polymorphSpellDirection(ch) {
+    const dir = movementDirection(ch);
+    const verticalDir = !dir && ch === '<' ? { dx: 0, dy: 0, dz: -1 }
+        : !dir && ch === '>' ? { dx: 0, dy: 0, dz: 1 } : null;
+    if (ch === '.') {
+        const shock = polymorphSystemShock();
+        if (shock) {
+            await setMessage(shock.message, !!shock.more);
+            return true;
+        }
+        const formName = randomPolyselfMonsterName();
+        const result = rn2(5) ? becomeMonster(formName) : becomeMonster('human');
+        newsym(game.u.ux, game.u.uy);
+        await setMessage(result?.message || 'Nothing happens.', !!result?.more);
+        return true;
+    }
+    if (!dir && !verticalDir) return false;
+    if (verticalDir?.dz < 0) {
+        if (heroHidingUnderObjects()) {
+            const topObject = topFloorObjectAt(game.u?.ux || 0, game.u?.uy || 0);
+            if (topObject) {
+                await polymorphFloorPileAt(game.u?.ux || 0, game.u?.uy || 0, {
+                    onlyObjects: new Set([topObject]),
+                    refreshHiding: true,
+                    restackBoulders: false,
+                });
+                return true;
+            }
+        }
+        rn2(19);
+        game._pending_message = '';
+        game._message_more = 0;
+        return true;
+    }
+    if (!verticalDir) {
+        await polymorphFloorPileRay(dir, null, { attackLevel: game.u?.ulevel || 1 });
+        return true;
+    }
+    const x = game.u?.ux || 0;
+    const y = game.u?.uy || 0;
+    const topObject = heroHidingUnderObjects() ? topFloorObjectAt(x, y) : null;
+    await polymorphFloorPileAt(x, y, {
+        omitObjects: topObject ? new Set([topObject]) : null,
+        refreshHiding: !!topObject,
+    });
+    return true;
 }
 
 function billHeldMagicBagLostItem(obj) {
@@ -46981,6 +47037,9 @@ export async function rhack(_cmd) {
             } else {
                 await setMessage(`You cast ${spell?.name || 'a spell'}.`);
             }
+        } else if (spell?.name === 'polymorph') {
+            if (!(await polymorphSpellDirection(ch)))
+                await setMessage(`You cast ${spell?.name || 'a spell'}.`);
         } else if (spell?.category === 'healing') {
             game.u.uhp = Math.min(game.u.uhpmax || game.u.uhp || 1, (game.u.uhp || 1) + d(6, 4));
             await setMessage('You feel better.');

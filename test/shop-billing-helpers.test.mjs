@@ -147,15 +147,15 @@ async function drainQueuedMessagesAfterMore(limit = 20) {
     return messages;
 }
 
-async function castStoneToFleshDirection(direction) {
-    game._known_spells = [{ name: 'stone to flesh', level: 3, skill: 'healing', learnedTurn: game.moves || 1 }];
-    game.u.uen = 50;
-    game.u.uenmax = 50;
+async function castKnownSpellDirection(name, direction, { level = 3, skill = 'healing', energy = 80 } = {}) {
+    game._known_spells = [{ name, level, skill, learnedTurn: game.moves || 1 }];
+    game.u.uen = energy;
+    game.u.uenmax = energy;
     game.nhDisplay = { cols: 200 };
 
     await rhack('Z');
     assert.equal(game._command_mode, 'castSpell');
-    assert.equal(game._spell_menu_spells?.[0]?.name, 'stone to flesh');
+    assert.equal(game._spell_menu_spells?.[0]?.name, name);
     game._spell_menu_spells[0].successChance = 100;
 
     await rhack('a');
@@ -167,12 +167,20 @@ async function castStoneToFleshDirection(direction) {
     assert.equal(game.context.move, 1);
 }
 
+async function castStoneToFleshDirection(direction) {
+    await castKnownSpellDirection('stone to flesh', direction, { level: 3, skill: 'healing', energy: 50 });
+}
+
 async function castStoneToFleshAtSelf() {
     await castStoneToFleshDirection('.');
 }
 
 async function castStoneToFleshDown() {
     await castStoneToFleshDirection('>');
+}
+
+async function castPolymorphDirection(direction) {
+    await castKnownSpellDirection('polymorph', direction, { level: 6, skill: 'matter', energy: 80 });
 }
 
 function assertNoStoneToFleshScoreSideEffects() {
@@ -8135,6 +8143,20 @@ test('lateral floor polymorph ray reaches a nonadjacent floor pile', async () =>
     assert.match(game._pending_message, /Izchak gets angry!/);
 });
 
+test('spell polymorph lateral ray reaches a nonadjacent floor pile', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    const ration = { ...foodRation(32042), ox: 5, oy: 7, letter: undefined, line: undefined };
+    game.level.objects = [ration];
+
+    await castPolymorphDirection('j');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.level.objects.includes(ration), false);
+    assert.equal(game.u.uconduct.polypiles, 1);
+});
+
 test('lateral floor polymorph affected piles consume one extra range unit', async () => {
     installCommandShopState();
     initRng(1);
@@ -8251,6 +8273,20 @@ test('floor polymorph downward hits the hero-square pile', async () => {
     await rhack('z');
     await rhack('w');
     await rhack('>');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.level.objects.includes(ration), false);
+    assert.equal(game.u.uconduct.polypiles, 1);
+});
+
+test('spell polymorph downward hits the hero-square pile', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    const ration = { ...foodRation(32043), ox: game.u.ux, oy: game.u.uy, letter: undefined, line: undefined };
+    game.level.objects = [ration];
+
+    await castPolymorphDirection('>');
 
     assert.equal(game._command_mode, null);
     assert.equal(game.context.move, 1);
