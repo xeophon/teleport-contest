@@ -8116,6 +8116,45 @@ test('floor polymorph reports no affected pile for wholly unpolyable objects', a
     assert.equal(game._pending_message, '');
 });
 
+test('lateral floor polymorph ray reaches a nonadjacent floor pile', async () => {
+    installCommandShopState();
+    initRng(1);
+    const wand = polymorphWand(32020, 'w');
+    const ration = { ...foodRation(32021), ox: 5, oy: 7, letter: undefined, line: undefined };
+    game.inventory = [wand];
+    game.level.objects = [ration];
+
+    await rhack('z');
+    await rhack('w');
+    await rhack('j');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.level.objects.includes(ration), false);
+    assert.equal(game.u.uconduct.polypiles, 1);
+    assert.match(game._pending_message, /Izchak gets angry!/);
+});
+
+test('lateral floor polymorph affected piles consume one extra range unit', async () => {
+    installCommandShopState();
+    initRng(1);
+    const wand = polymorphWand(32022, 'w');
+    const near = { ...foodRation(32023), ox: 5, oy: 6, letter: undefined, line: undefined };
+    const far = { ...foodRation(32024), ox: 5, oy: 13, letter: undefined, line: undefined };
+    game.inventory = [wand];
+    game.level.objects = [near, far];
+
+    await rhack('z');
+    await rhack('w');
+    await rhack('j');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.level.objects.includes(near), false);
+    assert.equal(game.level.objects.includes(far), true);
+    assert.equal(game.u.uconduct.polypiles, 1);
+});
+
 test('floor polymorph downward hits the hero-square pile', async () => {
     installCommandShopState();
     initRng(1);

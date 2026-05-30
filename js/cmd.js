@@ -26030,18 +26030,10 @@ function prepareFloorPolymorphReplacement(oldObj, newObj) {
     return newObj;
 }
 
-async function polymorphFloorPileAt(x, y, { consumeRangeRoll = false } = {}) {
+function polymorphFloorPileResultAt(x, y) {
     const targetObjects = (game.level?.objects || [])
         .filter(obj => !obj.hidden && !obj.transientProjectile && obj.ox === x && obj.oy === y && obj.otyp !== BOULDER);
-    rn2(19);
-    if (consumeRangeRoll) rn2(8);
-    if (!targetObjects.length) {
-        game._pending_message = '';
-        game._message_more = 0;
-        game.context ??= {};
-        game.context.move = 1;
-        return false;
-    }
+    if (!targetObjects.length) return { affected: false, messages: [] };
     const removeTargets = new Set();
     const replacements = [];
     const alterationMessages = [];
@@ -26100,10 +26092,58 @@ async function polymorphFloorPileAt(x, y, { consumeRangeRoll = false } = {}) {
     }
     const messages = didObjectShudder ? ['You feel shuddering vibrations.'] : [];
     messages.push(...alterationMessages);
-    await setMessage(messages.join('  '));
+    return { affected, messages };
+}
+
+async function finishPolymorphFloorPileResult(result) {
+    await setMessage(result.messages.join('  '));
     game.context ??= {};
     game.context.move = 1;
-    return affected;
+    return result.affected;
+}
+
+async function polymorphFloorPileAt(x, y, { consumeRangeRoll = false } = {}) {
+    rn2(19);
+    if (consumeRangeRoll) rn2(8);
+    const result = polymorphFloorPileResultAt(x, y);
+    return finishPolymorphFloorPileResult(result);
+}
+
+function addUniquePolymorphMessages(messages, additions) {
+    for (const message of additions) {
+        if (message && !messages.includes(message)) messages.push(message);
+    }
+}
+
+function polymorphRayBlockedAt(x, y) {
+    const loc = game.level?.at?.(x, y);
+    if (!loc) return true;
+    const typ = loc.typ ?? ROOM;
+    return !ZAP_POS(typ) || (typ === DOOR && (loc.doormask & (D_CLOSED | D_LOCKED)));
+}
+
+async function polymorphFloorPileRay(dir) {
+    rn2(19);
+    let range = rn1(8, 6);
+    let x = game.u?.ux || 0;
+    let y = game.u?.uy || 0;
+    const messages = [];
+    let affected = false;
+    while (range-- > 0) {
+        x += dir.dx;
+        y += dir.dy;
+        if (!isok(x, y)) break;
+        const monster = (game.level?.monsters || []).some(mon => mon.mx === x && mon.my === y);
+        if (monster) range -= 3;
+        const result = polymorphFloorPileResultAt(x, y);
+        if (result.affected) {
+            affected = true;
+            range--;
+            addUniquePolymorphMessages(messages, result.messages);
+        }
+        if (polymorphRayBlockedAt(x, y)) break;
+    }
+    return finishPolymorphFloorPileResult({ affected, messages });
 }
 
 function billHeldMagicBagLostItem(obj) {
@@ -46721,9 +46761,13 @@ export async function rhack(_cmd) {
             game.context.move = 1;
             return;
         }
-        const x = verticalDir ? (game.u?.ux || 0) : (game.u?.ux || 0) + dir.dx;
-        const y = verticalDir ? (game.u?.uy || 0) : (game.u?.uy || 0) + dir.dy;
-        await polymorphFloorPileAt(x, y, { consumeRangeRoll: !verticalDir });
+        if (!verticalDir) {
+            await polymorphFloorPileRay(dir);
+            return;
+        }
+        const x = game.u?.ux || 0;
+        const y = game.u?.uy || 0;
+        await polymorphFloorPileAt(x, y);
         return;
     }
 
