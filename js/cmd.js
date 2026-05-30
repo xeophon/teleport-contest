@@ -22191,7 +22191,10 @@ function chargeGlowMessage(item, color = '', feeble = false) {
 function costlyAlterationPaymentMessage(item, verb) {
     const name = pickupObjectName(item);
     const plural = (item?.quan || 1) > 1;
-    if (!billDummyAlteredCarriedObject(item)) return '';
+    const billed = (game.inventory || []).includes(item)
+        ? billDummyAlteredCarriedObject(item)
+        : billDummyAlteredShopObject(item);
+    if (!billed) return '';
     return `You ${verb} ${plural ? 'those' : 'that'} ${name}, you pay for ${plural ? 'them' : 'it'}!`;
 }
 
@@ -22242,6 +22245,51 @@ function stripCharges(item) {
     if (isLampObject(item)) item.age = 0;
     updateChargedItemLine(item);
     return messages;
+}
+
+function drainItemProtectedByDrainResistance(item) {
+    if (!item) return false;
+    if (item.defendsDrain || item.drainResistance || item.drainResistant || item.artifactDefendsDrain || item.artifactCarryDrainDefense)
+        return true;
+    const kind = objectKindKey(item);
+    return item.otyp === BLACK_DRAGON_SCALE_MAIL || item.otyp === BLACK_DRAGON_SCALES
+        || /\bblack dragon (?:scale mail|scales)\b/.test(kind);
+}
+
+function drainItemAlwaysResists(item) {
+    const kind = objectKindKey(item);
+    return !!(item?.invocation || item?.riderCorpse || item?.realAmuletOfYendor
+        || item?.otyp === BOOK_OF_THE_DEAD || item?.otyp === CANDELABRUM_OF_INVOCATION || item?.otyp === BELL
+        || kind === 'book of the dead' || kind === 'candelabrum of invocation' || kind === 'bell of opening'
+        || kind === 'amulet of yendor');
+}
+
+function drainItemResists(item) {
+    if (drainItemAlwaysResists(item)) return true;
+    return rn2(100) < (item?.artifact || item?.oartifact ? 90 : 10);
+}
+
+function drainItemEligible(item) {
+    if (!item || (item.spe ?? 0) <= 0) return false;
+    const cls = itemClassKey(item);
+    return isWandItem(item)
+        || isChargeableRing(item)
+        || isChargedTool(item)
+        || cls === 'weapon'
+        || cls === 'armor'
+        || isWeaponTool(item);
+}
+
+function drainItem(item, { byYou = false, messages = null } = {}) {
+    if (!drainItemEligible(item)) return { drained: false, eligible: false, resisted: false };
+    if (drainItemProtectedByDrainResistance(item) || drainItemResists(item))
+        return { drained: false, eligible: true, resisted: true };
+    const payment = byYou ? costlyAlterationPaymentMessage(item, 'drain') : '';
+    if (payment && Array.isArray(messages)) messages.push(payment);
+    item.spe = Math.max(0, (item.spe || 0) - 1);
+    if (isWandItem(item)) item.charges = item.spe;
+    updateChargedItemLine(item);
+    return { drained: true, eligible: true, resisted: false, payment };
 }
 
 function wandRechargeLimit(item) {
@@ -28251,6 +28299,7 @@ const MONSTER_PASSIVE_OBJECT_ATTACK_FALLBACKS = new Map([
     ['red mold', 'fire'],
     ['rust monster', 'rust'],
     ['black pudding', 'corr'],
+    ['disenchanter', 'ench'],
 ]);
 
 function normalizedPassiveObjectAttackType(type) {
@@ -28318,7 +28367,12 @@ function erodeMonsterThrownPassiveObject(obj, type, messages) {
 function applyMonsterThrownPassiveObject(landing, target, ohit, messages) {
     if (!landing || !target || !ohit) return { handled: false, damaged: false };
     const type = passiveObjectAttackForMonster(target);
-    if (!type || type === 'ench') return { handled: !!type, damaged: false, type };
+    if (!type) return { handled: false, damaged: false, type };
+    if (type === 'ench') {
+        if (target.mcan) return { handled: true, damaged: false, type };
+        const drain = drainItem(landing, { byYou: true, messages });
+        return { handled: true, damaged: drain.drained, type, ...drain };
+    }
     if (type === 'fire' && (target.mcan || String(target.data?.name || target.name || '').toLowerCase() === 'steam vortex'))
         return { handled: true, damaged: false, type };
     if ((type === 'rust' || type === 'corr') && target.mcan)

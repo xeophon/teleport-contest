@@ -1063,6 +1063,18 @@ function ordinaryThrowTarget(name = 'goblin', x = 7, y = 5, extra = {}) {
     };
 }
 
+function disenchanterTarget(x = 7, y = 5, extra = {}) {
+    return ordinaryThrowTarget('disenchanter', x, y, {
+        ...extra,
+        data: {
+            name: 'disenchanter',
+            mlevel: 12,
+            attacks: [{ aatyp: 'AT_NONE', adtyp: 'AD_ENCH' }],
+            ...(extra.data || {}),
+        },
+    });
+}
+
 function wornSaddle(id, extra = {}) {
     return {
         ...ordinaryTool(id, 'saddle', 's'),
@@ -20984,6 +20996,121 @@ test('monster-thrown dagger miss skips rust monster passive object erosion and s
     assert.equal(game.level.objects.length, 1);
     assert.doesNotMatch(landing.messages.join(' '), /rusts/);
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
+});
+
+test('monster-thrown enchanted dagger hit drains on disenchanter before stacking', () => {
+    installNonShopFloorState();
+    initRng(1);
+    enableRngLog({ reset: true });
+    const cleanStack = { ...dagger(874345), letter: undefined, line: undefined, ox: 7, oy: 5, spe: 2 };
+    const thrown = { ...dagger(874346), letter: undefined, line: undefined, spe: 2 };
+    game.level.objects = [cleanStack];
+    game.level.monsters = [disenchanterTarget()];
+
+    const landing = landMonsterThrownObject(thrown, 7, 5, { messages: [], ohit: true });
+
+    assert.equal(landing.consumed, false);
+    assert.equal(landing.dropThrow.broken, false);
+    assert.equal(landing.passiveObj.type, 'ench');
+    assert.equal(landing.passiveObj.drained, true);
+    assert.equal(landing.passiveObj.damaged, true);
+    assert.equal(landing.object.spe, 1);
+    assert.notEqual(landing.object, cleanStack);
+    assert.equal(cleanStack.quan, 1);
+    assert.equal(game.level.objects.length, 2);
+    assert.equal(landing.messages.join(' '), '');
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(100)']);
+});
+
+test('monster-thrown enchanted dagger drain can make the landing stack', () => {
+    installNonShopFloorState();
+    initRng(1);
+    enableRngLog({ reset: true });
+    const drainedStack = { ...dagger(874347), letter: undefined, line: undefined, ox: 7, oy: 5, spe: 1 };
+    const thrown = { ...dagger(874348), letter: undefined, line: undefined, spe: 2 };
+    game.level.objects = [drainedStack];
+    game.level.monsters = [disenchanterTarget()];
+
+    const landing = landMonsterThrownObject(thrown, 7, 5, { messages: [], ohit: true });
+
+    assert.equal(landing.passiveObj.drained, true);
+    assert.equal(landing.object, drainedStack);
+    assert.equal(drainedStack.spe, 1);
+    assert.equal(drainedStack.quan, 2);
+    assert.equal(game.level.objects.length, 1);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(100)']);
+});
+
+test('monster-thrown enchanted dagger miss skips disenchanter drain and stacks', () => {
+    installNonShopFloorState();
+    initRng(1);
+    enableRngLog({ reset: true });
+    const cleanStack = { ...dagger(874349), letter: undefined, line: undefined, ox: 7, oy: 5, spe: 2 };
+    const thrown = { ...dagger(874350), letter: undefined, line: undefined, spe: 2 };
+    game.level.objects = [cleanStack];
+    game.level.monsters = [disenchanterTarget()];
+
+    const landing = landMonsterThrownObject(thrown, 7, 5, { messages: [], ohit: false });
+
+    assert.equal(landing.passiveObj.handled, false);
+    assert.equal(cleanStack.spe, 2);
+    assert.equal(landing.object, cleanStack);
+    assert.equal(cleanStack.quan, 2);
+    assert.equal(game.level.objects.length, 1);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
+});
+
+test('monster-thrown enchanted dagger hit respects disenchanter cancellation and resistance', () => {
+    installNonShopFloorState();
+    initRng(1);
+    enableRngLog({ reset: true });
+    const canceledStack = { ...dagger(874351), letter: undefined, line: undefined, ox: 7, oy: 5, spe: 2 };
+    const canceledThrown = { ...dagger(874352), letter: undefined, line: undefined, spe: 2 };
+    game.level.objects = [canceledStack];
+    game.level.monsters = [disenchanterTarget(7, 5, { mcan: true })];
+
+    const canceledLanding = landMonsterThrownObject(canceledThrown, 7, 5, { messages: [], ohit: true });
+
+    assert.equal(canceledLanding.passiveObj.drained, undefined);
+    assert.equal(canceledStack.spe, 2);
+    assert.equal(canceledLanding.object, canceledStack);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
+
+    installNonShopFloorState();
+    initRng(40);
+    enableRngLog({ reset: true });
+    const resistedStack = { ...dagger(874353), letter: undefined, line: undefined, ox: 7, oy: 5, spe: 2 };
+    const resistedThrown = { ...dagger(874354), letter: undefined, line: undefined, spe: 2 };
+    game.level.objects = [resistedStack];
+    game.level.monsters = [disenchanterTarget()];
+
+    const resistedLanding = landMonsterThrownObject(resistedThrown, 7, 5, { messages: [], ohit: true });
+
+    assert.equal(resistedLanding.passiveObj.drained, false);
+    assert.equal(resistedLanding.passiveObj.resisted, true);
+    assert.equal(resistedStack.spe, 2);
+    assert.equal(resistedLanding.object, resistedStack);
+    assert.equal(resistedStack.quan, 2);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(100)']);
+});
+
+test('monster-thrown enchanted dagger drain bills shop-floor alteration before mutation', () => {
+    const { shkp } = installShopState();
+    initRng(1);
+    enableRngLog({ reset: true });
+    const thrown = { ...dagger(874355), letter: undefined, line: undefined, spe: 2 };
+    game.level.monsters.push(disenchanterTarget());
+
+    const landing = landMonsterThrownObject(thrown, 7, 5, { messages: [], ohit: true });
+
+    assert.equal(landing.passiveObj.drained, true);
+    assert.equal(landing.object.spe, 1);
+    assert.equal(landing.object.no_charge, true);
+    assert.equal(shop.shopBillEntryForObject(shkp, landing.object), null);
+    assert.equal(shkp.billct, 1);
+    assert.equal((game._usedUpShopBills || []).length, 1);
+    assert.match(landing.messages.join(' '), /You drain that dagger, you pay for it!/);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(100)', 'rnd(2)']);
 });
 
 test('deferred monster-thrown hit egg honors threaded ohit and breaks', async () => {
