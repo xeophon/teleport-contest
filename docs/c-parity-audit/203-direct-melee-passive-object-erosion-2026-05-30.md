@@ -32,7 +32,7 @@ Added focused command-path coverage in `test/shop-billing-helpers.test.mjs`:
 - Direct passive-object grease/proof/blessed/resistance edge cases are implemented but only indirectly covered; add focused tests if hidden coverage starts probing those rows.
 - Worn-glove fallback for unarmed `AD_ENCH` remains implemented but still lacks a command-path regression test.
 - Monster-thrown passive object landing is covered for current slices, but broader launcher-arrow and lethal hit persistence remain separate risks.
-- The next launcher-arrow slice recommended by the subagent audit is unblessed/uncursed/ungreased/uneroded `+1` launcher arrows on nonlethal hit and miss; keep blessed, eroded, greased, cursed, and lethal cases separate until `seed0030` and bones/persistence ordering are verified.
+- Clean `+1` launcher arrows on nonlethal hit and miss are covered in `docs/c-parity-audit/204-plus-one-launcher-arrow-drop-throw-2026-05-30.md`; keep blessed, eroded, greased, cursed, higher-enchanted, and lethal cases separate until `seed0030` and bones/persistence ordering are verified.
 
 ## Verification
 

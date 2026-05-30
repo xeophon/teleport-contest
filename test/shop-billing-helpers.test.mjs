@@ -21314,7 +21314,13 @@ async function runMonsterDartHitLanding({ seed = 8 } = {}) {
     return { dart, thrower, rng: getRngLog() };
 }
 
-async function runMonsterLauncherArrowLanding({ seed = 8, uac = 10 } = {}) {
+async function runMonsterLauncherArrowLanding({
+    seed = 8,
+    uac = 10,
+    arrowSpe = 0,
+    arrowQuan = 1,
+    arrowOverrides = {},
+} = {}) {
     installNonShopFloorState();
     resetInputState();
     pushKey('\x1b');
@@ -21346,8 +21352,9 @@ async function runMonsterLauncherArrowLanding({ seed = 8, uac = 10 } = {}) {
         actualKind: 'arrow',
         plural: 'arrows',
         glyph: ')',
-        quan: 1,
-        spe: 0,
+        quan: arrowQuan,
+        spe: arrowSpe,
+        ...arrowOverrides,
     };
     const thrower = {
         mx: 10,
@@ -21498,6 +21505,104 @@ test('production monster launcher arrow miss lands without ohit mulch', async ()
 
     assert.ok(rng.includes('rnd(20)=20'));
     assert.equal(rng.filter(entry => entry.startsWith('rn2(3)=')).length, 0);
+});
+
+test('production monster plus-one launcher arrow hit uses shared drop-throw mulch', async () => {
+    const { arrow, thrower, rng } = await runMonsterLauncherArrowLanding({ seed: 8, arrowSpe: 1 });
+
+    assert.equal(game._pending_message, 'You are hit by an arrow!');
+    assert.equal(game.u.uhp, 14);
+    assert.equal(thrower.minvent.some(obj => obj.id === arrow.id), false);
+    assert.equal(thrower.missile, null);
+
+    const landed = game.level.objects.find(obj => obj.id === arrow.id);
+    assert.ok(landed);
+    assert.equal(landed.ox, 5);
+    assert.equal(landed.oy, 5);
+    assert.equal(landed.quan, 1);
+    assert.equal(landed.kind, 'arrow');
+    assert.equal(landed.spe, 1);
+    assert.equal(landed.transientProjectile, false);
+
+    assert.deepEqual(rng, [
+        'rn2(5)=4',
+        'rn2(5)=2',
+        'rnd(1)=1',
+        'rn2(5)=4',
+        'rn2(5)=4',
+        'rn2(5)=1',
+        'rnd(6)=5',
+        'rnd(20)=12',
+        'rn2(2)=0',
+        'rn2(2)=0',
+    ]);
+    assert.equal(rng.some(entry => entry.startsWith('rn2(100)=')), false);
+});
+
+test('production monster plus-one launcher arrow hit can mulch before landing', async () => {
+    const { arrow, thrower, rng } = await runMonsterLauncherArrowLanding({ seed: 3, arrowSpe: 1 });
+
+    assert.equal(game._pending_message, 'You are hit by an arrow!');
+    assert.equal(game.u.uhp, 13);
+    assert.equal(thrower.minvent.some(obj => obj.id === arrow.id), false);
+    assert.equal(thrower.missile, null);
+    assert.equal(game.level.objects.some(obj => obj.id === arrow.id), false);
+    assert.equal(game.level.objects.some(obj => obj.transientProjectile), false);
+
+    assert.deepEqual(rng, [
+        'rn2(5)=1',
+        'rn2(5)=4',
+        'rnd(1)=1',
+        'rn2(5)=2',
+        'rn2(5)=1',
+        'rn2(5)=0',
+        'rnd(6)=6',
+        'rnd(20)=6',
+        'rn2(2)=0',
+        'rn2(2)=1',
+        'rn2(100)=9',
+    ]);
+});
+
+test('production monster plus-one launcher arrow miss lands without ohit mulch', async () => {
+    const { arrow, rng } = await runMonsterLauncherArrowLanding({ seed: 2, arrowSpe: 1 });
+
+    assert.equal(game._pending_message, 'An arrow misses you.');
+    assert.equal(game.u.uhp, 20);
+    const landed = game.level.objects.find(obj => obj.id === arrow.id);
+    assert.ok(landed);
+    assert.equal(landed.ox, 5);
+    assert.equal(landed.oy, 5);
+    assert.equal(landed.spe, 1);
+    assert.equal(landed.transientProjectile, false);
+
+    assert.ok(rng.includes('rnd(20)=20'));
+    assert.equal(rng.filter(entry => entry.startsWith('rn2(2)=')).length, 0);
+    assert.equal(rng.filter(entry => entry.startsWith('rn2(3)=')).length, 0);
+});
+
+test('production monster plus-one launcher arrow split stack lands one projectile', async () => {
+    const { arrow, thrower, rng } = await runMonsterLauncherArrowLanding({
+        seed: 5,
+        arrowSpe: 1,
+        arrowQuan: 3,
+    });
+
+    const residual = thrower.minvent.find(obj => obj.id === arrow.id);
+    assert.ok(residual);
+    assert.equal(residual.quan, 2);
+    assert.equal(thrower.missile, residual);
+
+    const landed = game.level.objects.find(obj => obj.kind === 'arrow' && obj.id !== arrow.id);
+    assert.ok(landed);
+    assert.equal(landed.ox, 5);
+    assert.equal(landed.oy, 5);
+    assert.equal(landed.quan, 1);
+    assert.equal(landed.spe, 1);
+    assert.equal(landed.transientProjectile, false);
+
+    assert.notEqual(landed.id, arrow.id);
+    assert.ok(rng.includes('rnd(2)=1'));
 });
 
 test('production monster crude dagger catch does not queue drop-throw landing', async () => {
