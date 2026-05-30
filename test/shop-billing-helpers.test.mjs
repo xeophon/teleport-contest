@@ -13481,6 +13481,48 @@ test('command carried drop down branch stairs records special-stair metadata', a
     assert.match(game._pending_message, /A dagger falls down the stairs\./);
 });
 
+test('command kick ordinary floor object through seen remote hole', async () => {
+    installNonShopFloorState();
+    installSeenRemoteShaft(HOLE, 7, 5);
+    initRng(1);
+    const blade = { ...dagger(512016), letter: undefined, line: undefined, ox: 6, oy: 5 };
+    game.level.objects = [blade];
+
+    await rhack('\x04');
+    assert.equal(game._command_mode, 'kickDirection');
+    await rhack('l');
+
+    const queued = queuedImpactDropsFor({ dnum: 0, dlevel: 2 });
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.level.objects.includes(blade), false);
+    assert.equal(queued.includes(blade), true);
+    assert.equal(blade._impactDropMigration, undefined);
+    assert.match(game._pending_message, /You kick a dagger\./);
+    assert.match(game._pending_message, /A dagger falls through the hole\./);
+});
+
+test('command kick ordinary floor object down stairs records reciprocal metadata', async () => {
+    installNonShopFloorState();
+    installRemoteDownStairGate({ x: 7, y: 5 });
+    initRng(1);
+    const blade = { ...dagger(512017), letter: undefined, line: undefined, ox: 6, oy: 5 };
+    game.level.objects = [blade];
+
+    await rhack('\x04');
+    await rhack('l');
+
+    const queued = queuedImpactDropsFor({ dnum: 0, dlevel: 2 });
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.level.objects.includes(blade), false);
+    assert.equal(queued.includes(blade), true);
+    assert.deepEqual(blade._impactDropMigration?.fromLevel, { dnum: 0, dlevel: 1 });
+    assert.equal(blade._impactDropMigration?.where, MIGR_STAIRS_UP);
+    assert.match(game._pending_message, /You kick a dagger\./);
+    assert.match(game._pending_message, /A dagger falls down the stairs\./);
+});
+
 test('command carried gold drop down stairs ships before same-square hole or donation', async () => {
     const { shkp } = installCommandShopState();
     installRemoteDownStairGate({ x: 5, y: 5, trap: { ttyp: HOLE } });

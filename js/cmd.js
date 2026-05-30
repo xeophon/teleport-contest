@@ -24214,6 +24214,89 @@ function remoteProjectileDownGateAt(obj, x, y, { allowGold = false } = {}) {
     return downGateAt(x, y);
 }
 
+function kickFloorObjectAt(x, y) {
+    return (game.level?.objects || []).find(obj =>
+        obj && !obj.hidden && !obj.buried && !obj.transientProjectile
+        && obj.ox === x && obj.oy === y);
+}
+
+function kickFloorObjectSupported(obj, x, y) {
+    if (!obj || obj === game.u?.uball || obj === game.u?.uchain) return false;
+    if (isBoulderObject(obj) || shopBillableGold(obj)) return false;
+    if (Math.max(1, Math.trunc(Number(obj.quan || 1))) !== 1) return false;
+    if (isTipContainerObject(obj) || globContents(obj).length) return false;
+    if (shopkeeperForCostlySpot(x, y) || shopObjectOrContentsUnpaid(obj)) return false;
+    if (impactDropBreakKind(obj)) return false;
+    return true;
+}
+
+function kickFloorObjectRange(obj, x, y, dir) {
+    const stats = game.u?.acurr?.a || [];
+    const strength = Math.max(0, Math.trunc(Number(stats[A_STR] ?? 10)));
+    const weight = globObjectWeight({ ...obj, quan: 1 });
+    let range = Math.trunc(strength / 2) - Math.trunc(weight / 40);
+    const roleName = game.urole?.name?.m || game._startup_role || '';
+    if (roleName === 'Monk' || roleName === 'Samurai') range += rnd(3);
+
+    const loc = game.level?.at?.(x, y);
+    if (loc && IS_POOL(loc.typ)) {
+        range = Math.trunc(range / 3) + 1;
+    } else if (Is_airlevel(game.u?.uz) || Is_waterlevel(game.u?.uz)) {
+        range += rnd(3);
+    } else {
+        if (loc?.typ === ICE) range += rnd(3);
+        if (obj.greased) range += rnd(3);
+    }
+
+    const nextX = x + dir.dx;
+    const nextY = y + dir.dy;
+    const nextLoc = game.level?.at?.(nextX, nextY);
+    const closedDoor = nextLoc?.typ === DOOR && (nextLoc.doormask & (D_CLOSED | D_LOCKED));
+    if (!isok(nextX, nextY) || !nextLoc || !ZAP_POS(nextLoc.typ) || closedDoor) range = 1;
+    return range;
+}
+
+function placeKickedFloorObject(obj, x, y, messages) {
+    obj.ox = x;
+    obj.oy = y;
+    obj.hidden = false;
+    obj.buried = false;
+    obj.transientProjectile = false;
+    if (earthFloorEffects(obj, x, y, messages, 'fall', { usedUpShopBillOnDestroy: true }))
+        return null;
+    const placed = placeUnstackedFloorObject(obj);
+    const stacked = stackDroppedFloorObject(placed);
+    newsym(x, y);
+    return stacked;
+}
+
+function kickFloorObjectToward(dir, x, y) {
+    const obj = kickFloorObjectAt(x, y);
+    if (!kickFloorObjectSupported(obj, x, y)) return { handled: false };
+
+    const landX = x + dir.dx;
+    const landY = y + dir.dy;
+    const gate = remoteProjectileDownGateAt(obj, landX, landY);
+    if (!gate) return { handled: false };
+
+    const messages = [`You kick ${floorObjectArticleName(obj)}.`];
+    if (kickFloorObjectRange(obj, x, y, dir) < 2) {
+        messages.push('Thump!');
+        return { handled: true, messages, moved: false };
+    }
+
+    removeFloorObject(obj);
+    newsym(x, y);
+    obj.ox = landX;
+    obj.oy = landY;
+
+    const shipped = maybeShipRemoteProjectileObject(obj, landX, landY, messages);
+    if (!shipped.handled) {
+        placeKickedFloorObject(obj, landX, landY, messages);
+    }
+    return { handled: true, messages, moved: true, shipObject: shipped };
+}
+
 function carriedDropDownGateAt(obj, x, y, { allowGold = false } = {}) {
     if (!obj || (!allowGold && shopBillableGold(obj))) return null;
     if (obj === game.u?.uball || obj === game.u?.uchain) return null;
@@ -53416,6 +53499,13 @@ export async function rhack(_cmd) {
         if (statueTrap) {
             const message = await activateStatueTrap(statueTrap, x, y, { normal: true }) || '';
             await setMessage(message);
+            game._command_mode = null;
+            game.context.move = 1;
+            return;
+        }
+        const kickedObject = kickFloorObjectToward(dir, x, y);
+        if (kickedObject.handled) {
+            await setMessage(kickedObject.messages.join('  '), kickedObject.messages.length > 1);
             game._command_mode = null;
             game.context.move = 1;
             return;
