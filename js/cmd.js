@@ -7348,6 +7348,7 @@ function buildGenericAttributesPage2Rows() {
         const teleportControlRing = (game.inventory || []).find(item =>
             item.worn && (item.actualKind === 'ring of teleport control' || item.ringRoll === 23));
         if (teleportControlRing) rows.push([row++, 0, `  You have teleport control because of your ${pickupObjectName(teleportControlRing)}.`]);
+        if (heroHasSlowDigestion()) rows.push([row++, 0, '  You have slower digestion.']);
         if (magicNegation > 0) rows.push([row++, 0, '  You are warded.']);
         if (roleName === 'Knight' || game.u?.jumping) rows.push([row++, 0, '  You can jump intrinsically.']);
         if (game.u?.fast || game.u?.veryfast) {
@@ -7373,6 +7374,7 @@ function buildGenericAttributesPage2Rows() {
             [row++, 0, ' Attributes:'],
             [row++, 0, '  You are nominally aligned.'],
         );
+        if (heroHasSlowDigestion()) rows.push([row++, 0, '  You have slower digestion.']);
         if (magicNegation > 0) rows.push([row++, 0, '  You are warded.']);
         rows.push([row++, 0, "  You can't safely pray."]);
         row++;
@@ -36668,6 +36670,7 @@ function deathAttributesPage2() {
         rows.push([row++, 0, ' You were magic-protected.']);
     if (['elf', 'gnome', 'dwarf', 'orc'].includes(game._startup_race)) rows.push([row++, 0, ' You had infravision.']);
     if (game.u?.stealth) rows.push([row++, 0, ' You were stealthy.']);
+    if (heroHasSlowDigestion()) rows.push([row++, 0, ' You had slower digestion.']);
     if (!tutorialDeath && (game.inventory || []).some(item => item.worn && item.cls === 'armor')) rows.push([row++, 0, ' You were warded.']);
     if ((game.u?.uluck || 0) > 0) rows.push([row++, 0, ' You were lucky.']);
     rows.push(

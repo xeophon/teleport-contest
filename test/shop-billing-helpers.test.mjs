@@ -806,6 +806,18 @@ async function debugPolyselfInto(name) {
     await rhack('\n');
 }
 
+async function attributesOverlayText() {
+    await rhack('\x18');
+    const pages = [];
+    for (let i = 0; i < 4 && game._overlay_lines; i++) {
+        pages.push((game._overlay_lines || []).map(row => row[2]).join('\n'));
+        if (game._command_mode !== 'attributes' && game._command_mode !== 'attributes2') break;
+        await rhack(' ');
+    }
+    if (String(game._command_mode || '').startsWith('attributes')) await rhack('\x1b');
+    return pages.join('\n');
+}
+
 function testObjectKind(item) {
     return String(item?.actualKind || item?.kind || '').toLowerCase()
         .replace(/^(?:blessed|uncursed|cursed) /, '');
@@ -8916,6 +8928,41 @@ test('worn white dragon scales grant slow digestion', () => {
     assert.equal(shop.heroHasSlowDigestionForTest(), true);
     shop.applyHeroOrdinaryHungerForTest();
     assert.equal(game.u.uhunger, 900);
+});
+
+test('debug attributes list slow digestion from worn white dragon armor', async () => {
+    installNonShopFloorState();
+    game.flags.debug = true;
+    game.inventory = [wornArmor(32155, 'white dragon scale mail', 'a')];
+
+    const text = await attributesOverlayText();
+
+    assert.match(text, /Attributes:/);
+    assert.match(text, /You have slower digestion\./);
+});
+
+test('debug attributes list slow digestion from worn ring', async () => {
+    installNonShopFloorState();
+    game.flags.debug = true;
+    game.inventory = [metalRing(32156, 'slow digestion', 21, 'r', {
+        worn: 'right',
+        line: 'r - a ring of slow digestion (on right hand)',
+    })];
+
+    const text = await attributesOverlayText();
+
+    assert.match(text, /You have slower digestion\./);
+});
+
+test('debug attributes omit slow digestion for white dragon form alone', async () => {
+    installNonShopFloorState();
+    game.flags.debug = true;
+    game.u._polyself_form = { name: 'white dragon' };
+    game.inventory = [];
+
+    const text = await attributesOverlayText();
+
+    assert.doesNotMatch(text, /slower digestion/);
 });
 
 test('white dragon cold resistance suppresses ice chill while sitting', async () => {
