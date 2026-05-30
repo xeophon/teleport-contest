@@ -22159,6 +22159,108 @@ test('wielded potion stack bash consumes one and keeps the stack wielded', async
     assert.equal(game.u.uconduct?.weaphit || 0, 0);
 });
 
+function installDirectDisenchanterMeleeState({
+    seed = 1,
+    spe = 2,
+    dex = 25,
+    targetAc = 10,
+    mcan = false,
+} = {}) {
+    const { shkp } = installCommandShopState();
+    Object.assign(shkp, { mx: 20, my: 20, shk: { x: 20, y: 20 } });
+    initRng(seed);
+    game.flags.verbose = false;
+    game.u.acurr.a[A_DEX] = dex;
+    const blade = wieldedWeapon(876600 + seed + spe + dex + targetAc, 'dagger', 'd', spe);
+    game.inventory = [blade];
+    shop.addObjectToShopBill(shkp, blade, 80);
+    const disenchanter = disenchanterTarget(6, 5, {
+        m_lev: 12,
+        mhp: 50,
+        mhpmax: 50,
+        msleeping: 0,
+        mpeaceful: false,
+        mcan,
+        data: { mac: targetAc },
+    });
+    game.level.monsters.push(disenchanter);
+    markSquareVisible(6, 5);
+    enableRngLog({ reset: true });
+    return { shkp, blade, disenchanter };
+}
+
+test('direct hero melee against disenchanter drains unpaid enchanted weapon', async () => {
+    const { shkp, blade } = installDirectDisenchanterMeleeState({ seed: 1, spe: 2 });
+
+    await rhack('l');
+
+    assert.match(game._pending_message, /You hit it\./);
+    assert.match(game._pending_message, /You drain that dagger, you pay for it!/);
+    assert.match(game._pending_message, /Your dagger seems less effective\./);
+    assert.equal(blade.spe, 1);
+    assert.equal(blade.unpaid, false);
+    assert.equal(shop.shopBillEntryForObject(shkp, blade), null);
+    assert.equal(shkp.billct, 1);
+    assert.equal(shkp.bill[0].useup, true);
+    assert.equal(shop.shopBillEntryTotal(shkp.bill[0]), 80);
+    assert.equal((game._usedUpShopBills || []).length, 1);
+    assert.deepEqual(getRngLog().filter(entry => entry.startsWith('rn2(100)=')).map(entry => entry.replace(/=.*/, '')), ['rn2(100)']);
+});
+
+test('direct hero melee miss skips disenchanter drain and keeps live bill', async () => {
+    const { shkp, blade, disenchanter } = installDirectDisenchanterMeleeState({
+        seed: 1,
+        spe: 2,
+        dex: 3,
+        targetAc: -20,
+    });
+
+    await rhack('l');
+
+    assert.match(game._pending_message, /You miss the disenchanter\./);
+    assert.equal(blade.spe, 2);
+    assert.equal(disenchanter.mhp, 50);
+    assert.equal(blade.unpaid, true);
+    assert.equal(shop.shopBillEntryForObject(shkp, blade).useup, false);
+    assert.equal((game._usedUpShopBills || []).length, 0);
+    assert.doesNotMatch(game._pending_message, /seems less effective|you pay for it/i);
+    assert.deepEqual(getRngLog().filter(entry => entry.startsWith('rn2(100)=')), []);
+});
+
+test('direct hero melee plus-zero weapon hits disenchanter without drain', async () => {
+    const { shkp, blade, disenchanter } = installDirectDisenchanterMeleeState({ seed: 1, spe: 0 });
+
+    await rhack('l');
+
+    assert.match(game._pending_message, /You hit it\./);
+    assert.equal(blade.spe, 0);
+    assert.equal(disenchanter.mhp < 50, true);
+    assert.equal(blade.unpaid, true);
+    assert.equal(shop.shopBillEntryForObject(shkp, blade).useup, false);
+    assert.equal((game._usedUpShopBills || []).length, 0);
+    assert.doesNotMatch(game._pending_message, /seems less effective|you pay for it/i);
+    assert.deepEqual(getRngLog().filter(entry => entry.startsWith('rn2(100)=')), []);
+});
+
+test('direct hero melee respects cancelled disenchanter passive drain', async () => {
+    const { shkp, blade, disenchanter } = installDirectDisenchanterMeleeState({
+        seed: 1,
+        spe: 2,
+        mcan: true,
+    });
+
+    await rhack('l');
+
+    assert.match(game._pending_message, /You hit it\./);
+    assert.equal(blade.spe, 2);
+    assert.equal(disenchanter.mhp < 50, true);
+    assert.equal(blade.unpaid, true);
+    assert.equal(shop.shopBillEntryForObject(shkp, blade).useup, false);
+    assert.equal((game._usedUpShopBills || []).length, 0);
+    assert.doesNotMatch(game._pending_message, /seems less effective|you pay for it/i);
+    assert.deepEqual(getRngLog().filter(entry => entry.startsWith('rn2(100)=')), []);
+});
+
 test('hero-thrown confusion potion hitting a saddle wets it and skips confusion', async () => {
     installNonShopFloorState();
     initRng(5);

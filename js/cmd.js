@@ -22292,6 +22292,31 @@ function drainItem(item, { byYou = false, messages = null } = {}) {
     return { drained: true, eligible: true, resisted: false, payment };
 }
 
+function carriedDrainItemLessEffectiveMessage(item) {
+    if (!item || !(game.inventory || []).includes(item)) return '';
+    if (!(item.known || item.cls === 'armor' || item.glyph === '[' || item.otyp === ARMOR_CLASS)) return '';
+    const name = pickupObjectName(item);
+    const plural = (item.quan || 1) > 1 || armorNameIsPlural(name);
+    return `Your ${name} ${plural ? 'seem' : 'seems'} less effective.`;
+}
+
+function applyDirectMeleePassiveObject(mon, weapon, messages) {
+    const type = passiveObjectAttackForMonster(mon);
+    if (!type) return { handled: false, damaged: false };
+    const targetObject = weapon || (type === 'ench' ? wornGlovesItem() : null);
+    if (!targetObject) return { handled: false, damaged: false, type };
+    if (type === 'ench') {
+        if (mon.mcan) return { handled: true, damaged: false, type, object: targetObject };
+        const drain = drainItem(targetObject, { byYou: true, messages });
+        if (drain.drained) {
+            const message = carriedDrainItemLessEffectiveMessage(targetObject);
+            if (message && Array.isArray(messages)) messages.push(message);
+        }
+        return { handled: true, damaged: drain.drained, type, object: targetObject, ...drain };
+    }
+    return { handled: false, damaged: false, type, object: targetObject };
+}
+
 function wandRechargeLimit(item) {
     const name = wandTypeName(item);
     if (name === 'wishing' || isWishingWand(item)) return 1;
@@ -39131,6 +39156,8 @@ async function moveHero(dx, dy) {
         const deferSleepingTwoWeapon = wokeFromSleep && twoWeaponActive;
         let deferredMeleeWeaponHit = false;
         let killed = false;
+        let killingAttackWeapon = null;
+        let killedByNormalMelee = false;
         for (let attackIndex = 0; attackIndex < attackWeapons.length; attackIndex++) {
             const attackWeapon = attackWeapons[attackIndex];
             const weaponName = attackWeapon?.kind || attackWeapon?.name || (typeof attackWeapon?.otyp === 'string' ? attackWeapon.otyp : '');
@@ -39224,6 +39251,10 @@ async function moveHero(dx, dy) {
             if (!attackWeapon && damage > 1) rnd(100);
             mon.mhp = (mon.mhp || 1) - damage;
             killed = mon.mhp <= 0;
+            if (killed) {
+                killingAttackWeapon = attackWeapon;
+                killedByNormalMelee = true;
+            }
             if (mon.mtame && damage > 0) {
                 mon.mtame--;
                 mon.abuse = (mon.abuse || 0) + 1;
@@ -39265,6 +39296,7 @@ async function moveHero(dx, dy) {
 	                    rn2(3);
 	                }
             }
+            applyDirectMeleePassiveObject(mon, attackWeapon, messages);
         }
 
         if (!killed) {
@@ -39319,6 +39351,8 @@ async function moveHero(dx, dy) {
             }
         }
         messages.push(`You ${killVerb} ${killedPet ? `the poor ${killedName}` : targetPhrase}!`);
+        if (killedByNormalMelee)
+            applyDirectMeleePassiveObject(mon, killingAttackWeapon, messages);
         if (!game._chronicle_first_kill) {
             game._chronicle_entries ??= [];
             game._chronicle_entries.push({ turn: game.moves || 1, text: 'killed for the first time' });
