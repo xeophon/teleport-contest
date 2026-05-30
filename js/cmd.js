@@ -11743,9 +11743,40 @@ function addPolyselfWaterWalkingBootsOffSideEffects(item, messages) {
         : 'You fall into the pool of water!  You sink like a rock.');
 }
 
+function heroHasOtherLevitationSource(item) {
+    return !!(game.u?.levitation || game.u?.Levitation || (game.u?._levitationTimeout || 0) > 0
+        || (game.inventory || []).some(candidate => candidate !== item && isWornInventoryItem(candidate)
+            && (objectKindKey(candidate) === 'levitation boots' || objectKindKey(candidate) === 'ring of levitation')));
+}
+
+function ordinaryPolyselfLevitationFloatDownAllowed(x, y, loc) {
+    if (!game.u?.levitating || game.u?.flying || game.u?.Flying) return false;
+    if (game.u?.uswallow || game.u?.ustuck || game.u?.uinwater || game.u?.underwater || game.u?.uunderwater) return false;
+    if (Is_airlevel(game.u?.uz) || Is_waterlevel(game.u?.uz)) return false;
+    if (movementIsLiquidAt(x, y, loc)) return false;
+    const surfaceTyp = movementSurfaceTerrain(loc && loc.typ == null ? { ...loc, typ: ROOM } : loc);
+    if (surfaceTyp == null || IS_AIR(surfaceTyp)) return false;
+    return !(game.level?.traps || []).some(trap => trap.tx === x && trap.ty === y);
+}
+
+function addPolyselfLevitationBootsOffSideEffects(item, messages) {
+    if (objectKindKey(item) !== 'levitation boots' || !game.u || heroHasOtherLevitationSource(item)) return;
+    const x = game.u.ux || 0;
+    const y = game.u.uy || 0;
+    const loc = game.level?.at(x, y);
+    if (!ordinaryPolyselfLevitationFloatDownAllowed(x, y, loc)) return;
+    game.u.levitating = false;
+    game.u.levitation = false;
+    game.u.Levitation = false;
+    item.known = true;
+    recordKnownArmorDiscovery('levitation boots', false);
+    messages.push(`You float gently to the ${polyselfFalloffSurfaceName(x, y)}.`);
+}
+
 function addPolyselfBootsOffSideEffects(item, messages) {
     const kind = objectKindKey(item);
     if (kind === 'water walking boots') addPolyselfWaterWalkingBootsOffSideEffects(item, messages);
+    if (kind === 'levitation boots') addPolyselfLevitationBootsOffSideEffects(item, messages);
     if (kind !== 'speed boots' || !game.u) return;
     if (otherWornFastEquipment(item) || (game.u._veryfastTimeout || 0) > 0) return;
     messages.push(`You feel yourself slow down${heroHasIntrinsicFast() ? ' a bit' : ''}.`);
