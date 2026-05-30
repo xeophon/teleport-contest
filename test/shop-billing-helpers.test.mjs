@@ -9,6 +9,7 @@ import { createMonsterCorpseOrGlob, mkcorpstat } from '../js/mklev.js';
 import { enableRngLog, getRngLog, initRng } from '../js/rng.js';
 import { A_CON, A_DEX, A_STR, BILLSZ, CANDLESHOP, CLOUD, CORPSTAT_HISTORIC, COULD_SEE, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, D_CLOSED, D_NODOOR, FOUNTAIN, HOLE, ICE, ICED_POOL, IN_SIGHT, LADDER, LAVAPOOL, MIGR_LADDER_UP, MIGR_SSTAIRS, MIGR_STAIRS_UP, MOAT, NORMAL_SPEED, PIT, POOL, REPAIR_DELAY, ROOM, ROOMOFFSET, SDOOR, SHOPBASE, SHOP_DOOR_COST, SQKY_BOARD, STAIRS, STATUE_TRAP, STONE, STRAT_WAITFORU, TRAPDOOR, TT_WEB, WEB, W_SADDLE } from '../js/const.js';
 import { currentFruitId, setCurrentFruitName } from '../js/fruit.js';
+import { CLR_BRIGHT_MAGENTA, CLR_BROWN, CLR_WHITE } from '../js/terminal.js';
 import { vision_reset } from '../js/vision.js';
 
 const BRASS_LANTERN = 226;
@@ -8471,6 +8472,49 @@ test('successful small polyself keeps adaptive mummy wrapping', async () => {
     ]);
 });
 
+test('successful cloak-only gnome polyself returns deferred unpaid cloak to shop stock', async () => {
+    const { shkp } = installCommandShopState();
+    game._object_descriptions = {
+        cloakColors: [CLR_WHITE, CLR_BRIGHT_MAGENTA, CLR_BROWN, CLR_BROWN],
+    };
+    Object.assign(game.u, {
+        uhp: 40,
+        uhpmax: 40,
+        uen: 0,
+        uenmax: 0,
+        ulevel: 1,
+        uac: 10,
+    });
+    const cloak = wornArmor(32081, 'cloak of magic resistance', 'c');
+    game.inventory = [cloak];
+    shop.addObjectToShopBill(shkp, cloak, 60);
+
+    await debugPolyselfInto('gnome');
+
+    assert.equal(game._polyself_cloak_after_more_letter, 'c');
+    assert.equal(game.inventory.includes(cloak), true);
+    assert.equal(shkp.billct, 1);
+    assert.equal(game.level.objects.length, 0);
+
+    await rhack(' ');
+
+    assert.equal(game._polyself_cloak_after_more_letter || '', '');
+    assert.equal(game.inventory.includes(cloak), false);
+    assert.equal(shkp.billct, 0);
+    assert.equal(shkp.bill.length, 0);
+    assert.equal(game.u.uac, 10);
+    assert.equal(game.level.objects.length, 1);
+    const floorCloak = game.level.objects[0];
+    assert.equal(floorCloak.kind, 'cloak of magic resistance');
+    assert.equal(floorCloak.glyph, '[');
+    assert.equal(floorCloak.color, CLR_BROWN);
+    assert.equal(floorCloak.worn, false);
+    assert.equal(floorCloak.unpaid, false);
+    assert.equal(floorCloak.ox, game.u.ux);
+    assert.equal(floorCloak.oy, game.u.uy);
+    assert.equal(shop.shopBillEntryForObject(shkp, floorCloak), null);
+});
+
 test('successful hobbit polyself keeps elven body armor racial exception', async () => {
     installNonShopFloorState();
     initRng(1);
@@ -8648,6 +8692,59 @@ test('successful no-hands polyself drops shield helm and boots but keeps amulet'
         'speed boots',
     ]);
     assert.equal(game.level.objects.some(obj => obj.cls === 'amulet'), false);
+});
+
+test('successful no-hands polyself returns deferred unpaid wielded tool to shop stock', async () => {
+    const { shkp } = installCommandShopState();
+    Object.assign(game.u, {
+        uhp: 40,
+        uhpmax: 40,
+        uen: 0,
+        uenmax: 0,
+        ulevel: 1,
+        uac: 10,
+    });
+    const camera = {
+        id: 32082,
+        cls: 'tool',
+        glyph: '(',
+        otyp: EXPENSIVE_CAMERA,
+        kind: 'expensive camera',
+        actualKind: 'expensive camera',
+        quan: 1,
+        spe: 0,
+        ox: 5,
+        oy: 5,
+        letter: 't',
+        wielded: true,
+        known: true,
+        dknown: true,
+        line: 't - an expensive camera (weapon in right hand)',
+    };
+    game.inventory = [camera];
+    shop.addObjectToShopBill(shkp, camera, 100);
+
+    await debugPolyselfInto('red dragon');
+
+    assert.equal(game._polyself_tool_after_more_letter, 't');
+    assert.equal(game.inventory.includes(camera), true);
+    assert.equal(shkp.billct, 1);
+    assert.equal(game.level.objects.length, 0);
+
+    await rhack(' ');
+
+    assert.equal(game._polyself_tool_after_more_letter || '', '');
+    assert.equal(game.inventory.includes(camera), false);
+    assert.equal(shkp.billct, 0);
+    assert.equal(shkp.bill.length, 0);
+    assert.equal(game.level.objects.length, 1);
+    const floorCamera = game.level.objects[0];
+    assert.equal(floorCamera.kind, 'expensive camera');
+    assert.equal(floorCamera.wielded, false);
+    assert.equal(floorCamera.unpaid, false);
+    assert.equal(floorCamera.ox, game.u.ux);
+    assert.equal(floorCamera.oy, game.u.uy);
+    assert.equal(shop.shopBillEntryForObject(shkp, floorCamera), null);
 });
 
 test('successful no-head polyself drops worn lenses but keeps amulet', async () => {

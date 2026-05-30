@@ -365,6 +365,14 @@ function addHeroGlibTimeout(duration) {
     game.u._glibTimeout = (game.u._glibTimeout || 0) + duration;
 }
 
+function carriedDropDisplayColor(item) {
+    if (!item) return NO_COLOR;
+    if (item.color != null) return item.color;
+    if (item.cls === 'armor') return armorDisplayColor(item);
+    if (item.cls === 'scroll' || item.cls === 'spellbook') return CLR_WHITE;
+    return NO_COLOR;
+}
+
 function dropCarriedObjectAtHero(item, messages = []) {
     const dropped = {
         ...item,
@@ -376,10 +384,10 @@ function dropCarriedObjectAtHero(item, messages = []) {
         quivered: false,
         ox: game.u?.ux || 0,
         oy: game.u?.uy || 0,
-        glyph: item.glyph || (item.cls === 'weapon' ? ')' : item.cls === 'armor' ? '[' : item.cls === 'wand' ? '/'
+        glyph: item.cls === 'weapon' ? ')' : item.cls === 'armor' ? '[' : item.glyph || (item.cls === 'wand' ? '/'
             : item.cls === 'ring' ? '=' : item.cls === 'potion' ? '!' : item.cls === 'scroll' ? '?'
                 : item.cls === 'spellbook' ? '+' : '('),
-        color: item.color ?? (item.cls === 'scroll' || item.cls === 'spellbook' ? CLR_WHITE : NO_COLOR),
+        color: carriedDropDisplayColor(item),
     };
     curseLoadstoneLeavingInventory(dropped);
     if (Array.isArray(dropped.contents)) dropped.contents = [...dropped.contents];
@@ -5007,6 +5015,8 @@ const ARMOR_AC_BONUS = {
     'studded leather armor': 3,
     'banded mail': 6,
     'splint mail': 6,
+    'dwarvish mithril-coat': 6,
+    'elven mithril-coat': 5,
     'plate mail': 7,
     helmet: 1,
     'orcish helm': 1,
@@ -5202,6 +5212,37 @@ const ARMOR_WISH_APPEARANCES = {
     'fumble boots': ['boots', 5, 'riding boots'],
     'levitation boots': ['boots', 6, 'snow boots'],
 };
+const ARMOR_APPEARANCE_COLOR_GROUPS = {
+    cloaks: 'cloakColors',
+    gloves: 'gloveColors',
+    helms: 'helmColors',
+    boots: 'bootColors',
+};
+const ARMOR_KIND_DISPLAY_COLORS = {
+    'mummy wrapping': CLR_GRAY,
+    'elven cloak': CLR_BLACK,
+    'orcish cloak': CLR_BLACK,
+    'dwarvish cloak': CLR_BROWN,
+    'oilskin cloak': CLR_BROWN,
+    robe: CLR_RED,
+    'alchemy smock': CLR_WHITE,
+    'leather cloak': CLR_BROWN,
+    'cloak of protection': CLR_BROWN,
+    'cloak of invisibility': CLR_BRIGHT_MAGENTA,
+    'cloak of magic resistance': CLR_WHITE,
+    'cloak of displacement': CLR_BROWN,
+};
+function armorDisplayColor(item) {
+    const kind = String(item?.actualKind || item?.kind || '').toLowerCase();
+    const armorAppearance = ARMOR_WISH_APPEARANCES[kind];
+    if (armorAppearance) {
+        const [group, index] = armorAppearance;
+        const colorGroup = ARMOR_APPEARANCE_COLOR_GROUPS[group];
+        const shuffledColor = colorGroup ? game._object_descriptions?.[colorGroup]?.[index] : undefined;
+        if (shuffledColor != null) return shuffledColor;
+    }
+    return ARMOR_KIND_DISPLAY_COLORS[kind] ?? NO_COLOR;
+}
 function pairArmorDiscoveryName(name) {
     return /(?:boots|shoes|gloves)$/.test(name) || name.startsWith('gauntlets')
         ? `pair of ${name}` : name;
@@ -11249,12 +11290,7 @@ function polyselfWornShirtItem() {
 }
 
 function polyselfWornBodyArmorItem() {
-    const slotted = wornArmorInSlot('body');
-    if (slotted) return slotted;
-    return (game.inventory || []).find(item => {
-        if (!(item?.cls === 'armor' && isWornInventoryItem(item))) return false;
-        return /\bmithril-coat\b/.test(armorKind(item));
-    }) || null;
+    return wornArmorInSlot('body');
 }
 
 function polyselfWornCloakItem() {
@@ -11511,22 +11547,11 @@ function restorePolyselfBaseBlindness(base) {
     game.u._polyself_form_blinded = false;
 }
 
-const POLYSELF_ARMOR_AC_BONUS = {
-    'dwarvish mithril-coat': 6,
-    'elven mithril-coat': 5,
-};
-
-function polyselfArmorAcValue(item) {
-    const base = POLYSELF_ARMOR_AC_BONUS[armorKind(item)];
-    if (base == null) return wornArmorAcValueGreatestErosion(item);
-    return base + (item.spe ?? 0) - Math.min(Math.max(item.oeroded || 0, item.oeroded2 || 0), base);
-}
-
 function recomputePolyselfArmorClass(form = polyselfForm()) {
     if (!game.u) return;
     let ac = form?.mac ?? 10;
     for (const item of game.inventory || []) {
-        if (isWornArmorItem(item)) ac -= polyselfArmorAcValue(item);
+        if (isWornArmorItem(item)) ac -= wornArmorAcValueGreatestErosion(item);
     }
     game.u.uac = ac;
 }
@@ -11698,7 +11723,7 @@ function becomeMonster(name) {
         game._polyself_cloak_after_more_letter = cloak.letter;
         game._topline_after_more = 'Your movements are slowed slightly because of your load.';
         game.u._statusSuffix = `${game.u._statusSuffix || ''} Burdened`;
-        game.u.uac = (game.u.uac ?? 10) - 1;
+        game.u.uac = (game.u.uac ?? 10) - wornArmorAcValueGreatestErosion(cloak);
         return { message, more: true };
     }
     const bodyArmor = polyselfWornBodyArmorItem();
@@ -29696,7 +29721,7 @@ function armorSubject(item) {
 function armorSlot(item) {
     const name = armorKind(item);
     if (/\b(?:cloak|robe|mantelet|pall|cape|cope|cloth|smock|apron)\b/.test(name)) return 'cloak';
-    if (/\b(?:mail|armor|jacket|dragon scales?)\b/.test(name)) return 'body';
+    if (/\b(?:mail|armor|jacket|coat|dragon scales?)\b/.test(name)) return 'body';
     if (/\bshirt\b/.test(name)) return 'shirt';
     if (/\b(?:helm|helmet|hat|fedora|cornuthaum|cap|pot)\b/.test(name)) return 'helm';
     if (/\b(?:gloves|gauntlets)\b/.test(name)) return 'gloves';
@@ -32800,7 +32825,12 @@ function placeObjectOnFloorWithEffects(obj, x, y, messages, verb = 'drop', {
     delete obj.line;
     delete obj.nobj;
     delete obj.nexthere;
-    Object.assign(obj, object_display(obj));
+    const display = object_display(obj);
+    if (display.glyph === '?' && OBJECT_CLASS_GLYPHS[obj.cls]) {
+        display.glyph = OBJECT_CLASS_GLYPHS[obj.cls];
+        if (obj.cls === 'armor') display.color = carriedDropDisplayColor(obj);
+    }
+    Object.assign(obj, display);
     if (!earthFloorEffects(obj, x, y, messages, verb, { usedUpShopBillOnDestroy })) {
         game.level.objects ??= [];
         const stacked = stack ? stackMonsterThrownObject(obj) : obj;
@@ -43536,39 +43566,24 @@ export async function rhack(_cmd) {
                 if (game._polyself_cloak_after_more_letter) {
                     const cloak = (game.inventory || []).find(item => item.letter === game._polyself_cloak_after_more_letter);
                     if (cloak) {
-                        cloak.worn = false;
-                        const dropped = {
-                            ...cloak,
-                            line: undefined,
-                            ox: game.u?.ux || 0,
-                            oy: game.u?.uy || 0,
-                            glyph: '[',
-                            color: cloak.color ?? CLR_BROWN,
-                        };
-                        stopCarriedFigurineTimerOnLeave(dropped);
-                        removeInventoryItem(cloak);
-                        game.level?.objects?.push(dropped);
-                        if (game.u) game.u.uac = (game.u.uac ?? 10) + 1;
-                        newsym(dropped.ox, dropped.oy);
+                        const acBonus = wornArmorAcValueGreatestErosion(cloak);
+                        const floorMessages = [];
+                        const queuedBefore = game._queued_messages_after_more?.length || 0;
+                        dropCarriedObjectAtHero(cloak, floorMessages);
+                        if (game.u) game.u.uac = (game.u.uac ?? 10) + acBonus;
+                        appendToplineAfterMoreMessages(floorMessages);
+                        if ((game._queued_messages_after_more?.length || 0) > queuedBefore) keepMore = true;
                     }
                     game._polyself_cloak_after_more_letter = '';
                 }
                 if (game._polyself_tool_after_more_letter) {
                     const tool = (game.inventory || []).find(item => item.letter === game._polyself_tool_after_more_letter);
                     if (tool) {
-                        const dropped = {
-                            ...tool,
-                            line: undefined,
-                            wielded: false,
-                            ox: game.u?.ux || 0,
-                            oy: game.u?.uy || 0,
-                            glyph: tool.glyph || '(',
-                            color: tool.color ?? NO_COLOR,
-                        };
-                        stopCarriedFigurineTimerOnLeave(dropped);
-                        removeInventoryItem(tool);
-                        game.level?.objects?.push(dropped);
-                        newsym(dropped.ox, dropped.oy);
+                        const floorMessages = [];
+                        const queuedBefore = game._queued_messages_after_more?.length || 0;
+                        dropCarriedObjectAtHero(tool, floorMessages);
+                        appendToplineAfterMoreMessages(floorMessages);
+                        if ((game._queued_messages_after_more?.length || 0) > queuedBefore) keepMore = true;
                     }
 	                if (game._polyself_after_more_ac != null) {
 	                    game.u.uac = game._polyself_after_more_ac;
