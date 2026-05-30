@@ -13679,8 +13679,22 @@ function stoneToFleshCorpstatAnimationInfo(data = {}) {
     return { data, golemXform: false };
 }
 
-function stoneToFleshSavedMonsterTraits(item) {
+function savedCorpstatMonsterTraits(item) {
     return item?.omonst || item?.oextra?.omonst || null;
+}
+
+function clearSavedCorpstatMonsterTraits(item) {
+    if (!item) return;
+    delete item.omonst;
+    delete item.omid;
+    if (item.oextra) {
+        delete item.oextra.omonst;
+        delete item.oextra.omid;
+    }
+}
+
+function stoneToFleshSavedMonsterTraits(item) {
+    return savedCorpstatMonsterTraits(item);
 }
 
 function stoneToFleshStatueHasSavedMonsterTraits(item) {
@@ -13967,12 +13981,11 @@ function stoneToFleshRetargetMonsterForm(mon, data, { chamBase = null } = {}) {
     set_malign(mon);
 }
 
-function stoneToFleshApplySavedMonsterTraits(mon, info) {
-    const saved = info?.savedTraits;
+function applySavedCorpstatMonsterTraits(mon, saved, dataHint = null) {
     if (!mon || !saved) return;
     const data = saved.data && typeof saved.data === 'object'
         ? saved.data
-        : info.data || mon.data || {};
+        : dataHint || mon.data || {};
     const level = Math.max(0, Math.trunc(Number(saved.m_lev ?? saved.mlevel ?? mon.m_lev ?? mon.mlevel ?? data.mlevel ?? 1)));
     const baseMax = Math.max(1, Math.trunc(Number(saved.mhpmax || mon.mhpmax || monster_hp(data, data.hpLevel ?? level))));
     const hpMax = Math.max(baseMax, Math.trunc(Number((data.mlevel || 0) + 1)));
@@ -14014,6 +14027,10 @@ function stoneToFleshApplySavedMonsterTraits(mon, info) {
     mon.mw = null;
     mon.missile = null;
     set_malign(mon);
+}
+
+function stoneToFleshApplySavedMonsterTraits(mon, info) {
+    applySavedCorpstatMonsterTraits(mon, info?.savedTraits, info?.data);
 }
 
 function stoneToFleshApplyDirectedDoppelgangerForm(mon, info) {
@@ -27206,6 +27223,13 @@ function scheduleCorpseFallbackRot(obj) {
 }
 
 function corpseTimerMonsterData(obj) {
+    const saved = savedCorpstatMonsterTraits(obj);
+    if (saved?.data && typeof saved.data === 'object' && saved.data.name) return saved.data;
+    if (typeof saved?.data === 'string') {
+        const savedName = saved.data.toLowerCase();
+        const savedData = monsterByRndName(savedName) || RANDOM_MONSTER_BY_NAME.get(savedName);
+        if (savedData) return savedData;
+    }
     if (obj?.corpsenm?.name) return obj.corpsenm;
     const name = corpseName(obj);
     return name ? monsterByRndName(name) || RANDOM_MONSTER_BY_NAME.get(name) || null : null;
@@ -27271,17 +27295,25 @@ function handleCorpseRevivalFailure(entry, { zombified = false } = {}) {
 
 async function reviveCorpseTimerEntry(entry, data = corpseTimerMonsterData(entry.obj), options = {}) {
     const obj = entry.obj;
+    const savedTraits = savedCorpstatMonsterTraits(obj);
     clearCorpseTimeout(obj);
     if (!data?.name || obj.norevive || isMonsterGenocidedName(data.name))
         return handleCorpseRevivalFailure(entry, options);
     const spot = corpseRevivalSpot(entry, data);
     if (!spot) return handleCorpseRevivalFailure(entry, options);
-    const mon = await makemon(data, spot.x, spot.y, NO_MINVENT | MM_NOMSG | MM_NOCOUNTBIRTH | MM_NOWAIT);
+    const flags = NO_MINVENT | MM_NOMSG | MM_NOCOUNTBIRTH | MM_NOWAIT
+        | (savedTraits ? MM_NOTAIL : 0);
+    const mon = await makemon(data, spot.x, spot.y, flags);
     if (!mon) return handleCorpseRevivalFailure(entry, options);
 
+    if (savedTraits) applySavedCorpstatMonsterTraits(mon, savedTraits, data);
     mon.mrevived = 1;
     mon.mundetected = 0;
-    applyCorpseGenderToRevivedMonster(mon, obj);
+    mon.m_ap_type = 0;
+    mon.appearObj = null;
+    mon.appearGlyph = null;
+    mon.appearColor = null;
+    if (!savedTraits) applyCorpseGenderToRevivedMonster(mon, obj);
     removeCorpseTimerObject(entry);
     newsym(mon.mx, mon.my);
     return corpseRevivalMessages(entry, mon, data);
@@ -27294,6 +27326,7 @@ async function zombifyCorpseTimerEntry(entry) {
     clearCorpseTimeout(obj);
     if (!data?.name || isMonsterGenocidedName(data.name))
         return rotCorpseTimerEntry(entry, { silent: true });
+    clearSavedCorpstatMonsterTraits(obj);
     obj.corpsenm = data;
     obj.zombifying = false;
     Object.assign(obj, object_display(obj));
@@ -38124,18 +38157,25 @@ function deadbookAttachEggHatchTimer(item) {
 
 async function reviveDeadbookCorpseItem(item, source) {
     if (!isCorpseItem(item)) return null;
-    const data = deadbookCorpseMonster(item);
+    const savedTraits = savedCorpstatMonsterTraits(item);
+    const data = savedTraits ? corpseTimerMonsterData(item) : deadbookCorpseMonster(item);
     if (!data?.name) return null;
     const x = item.ox || game.u?.ux || 0;
     const y = item.oy || game.u?.uy || 0;
-    const flags = NO_MINVENT | MM_NOWAIT | MM_NOMSG | MM_NOCOUNTBIRTH;
+    const flags = NO_MINVENT | MM_NOWAIT | MM_NOMSG | MM_NOCOUNTBIRTH
+        | (savedTraits ? MM_NOTAIL : 0);
     const mon = await makemon(data, x, y, flags);
     if (!mon) return null;
 
-    if ((item.spe & CORPSTAT_GENDER) === CORPSTAT_MALE) mon.female = false;
+    if (savedTraits) applySavedCorpstatMonsterTraits(mon, savedTraits, data);
+    else if ((item.spe & CORPSTAT_GENDER) === CORPSTAT_MALE) mon.female = false;
     else if ((item.spe & CORPSTAT_GENDER) === CORPSTAT_FEMALE) mon.female = true;
     mon.mrevived = 1;
     mon.mundetected = 0;
+    mon.m_ap_type = 0;
+    mon.appearObj = null;
+    mon.appearGlyph = null;
+    mon.appearColor = null;
     removeDeadbookRevivedItem(item, source);
     newsym(mon.mx, mon.my);
     return mon;

@@ -5126,7 +5126,7 @@ export function mkcorpstat(objtyp, mtmp, pm, x, y, flags) {
             }
         }
     }
-    if (objtyp === STATUE && mtmp) attachSavedMonsterTraits(otmp, mtmp);
+    if ((objtyp === CORPSE || objtyp === STATUE) && mtmp) attachSavedMonsterTraits(otmp, mtmp);
     Object.assign(otmp, object_display(otmp));
     return otmp;
 }
@@ -5138,6 +5138,21 @@ function globTypeForMonsterCorpseData(data) {
 
 export function monsterLeavesCorpseLikeDrop(corpseData) {
     return !!corpseData && (!corpseData.noCorpse || !!globTypeForMonsterCorpseData(corpseData));
+}
+
+function monsterCorpseKeepsTraits(mon, corpseData) {
+    if (!mon) return false;
+    const data = mon.data || {};
+    const monName = String(data.name || '').toLowerCase();
+    const corpseName = String(corpseData?.name || '').toLowerCase();
+    if (mon.isshk || data.shopkeeper) return true;
+    if (mon.mtame || mon.pet) return true;
+    if (data.unique || corpseData?.unique || data.nemesis || data.rider || corpseData?.rider) return true;
+    if (data.questLeader || data.questLeaderId || mon.questLeader) return true;
+    if (data.seducer || data.seduction || mon.seducer) return true;
+    if ((data.glyph || data.mlet) === 'T' || (corpseData?.glyph || corpseData?.mlet) === 'T'
+        || monName.includes('troll') || corpseName.includes('troll')) return true;
+    return !!(monName && corpseName && monName !== corpseName);
 }
 
 export function monsterCorpseDropSucceeds(mon, data = mon?.data || {}) {
@@ -5373,7 +5388,8 @@ export function createMonsterCorpseOrGlob(mon, corpseData, x = mon?.mx || 0, y =
         return meldDeathGlobOnFloor(glob, messages);
     }
     if (!corpseData || corpseData.noCorpse) return null;
-    const corpse = mkcorpstat(CORPSE, mon, corpseData, x, y, 8);
+    const traitsSource = monsterCorpseKeepsTraits(mon, corpseData) ? mon : null;
+    const corpse = mkcorpstat(CORPSE, traitsSource, corpseData, x, y, 8);
     Object.assign(corpse, {
         otyp: 'corpse',
         glyph: '%',

@@ -5,6 +5,7 @@ import { interruptEatingOccupation, moveloop_core, processEatingOccupationTick, 
 import { activateStatueTrap, burnFloorObjectsByFire, earthFloorEffects, finishForceLock, landMonsterThrownObject, processCorpseTimers, processForceLockOccupationTick, processGlobShrinkTimers, processSpellbookStudyOccupation, rhack, __shopBillingTestHooks as shop } from '../js/cmd.js';
 import { game, resetGame } from '../js/gstate.js';
 import { pushKey, resetInputState } from '../js/input.js';
+import { createMonsterCorpseOrGlob, mkcorpstat } from '../js/mklev.js';
 import { enableRngLog, getRngLog, initRng } from '../js/rng.js';
 import { A_CON, A_DEX, A_STR, BILLSZ, CANDLESHOP, CLOUD, CORPSTAT_HISTORIC, COULD_SEE, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, D_CLOSED, D_NODOOR, FOUNTAIN, HOLE, ICE, ICED_POOL, IN_SIGHT, LADDER, LAVAPOOL, MIGR_LADDER_UP, MIGR_SSTAIRS, MIGR_STAIRS_UP, MOAT, NORMAL_SPEED, PIT, POOL, REPAIR_DELAY, ROOM, ROOMOFFSET, SDOOR, SHOPBASE, SHOP_DOOR_COST, SQKY_BOARD, STAIRS, STATUE_TRAP, STONE, STRAT_WAITFORU, TRAPDOOR, TT_WEB, WEB, W_SADDLE } from '../js/const.js';
 import { currentFruitId, setCurrentFruitName } from '../js/fruit.js';
@@ -12896,6 +12897,158 @@ test('corpse timer preserves a real bill row as used-up', async () => {
     assert.equal(game._usedUpShopBills.some(bill => String(bill.bo_id) === String(corpse.id)), true);
 });
 
+test('mkcorpstat stores saved monster traits on corpses', () => {
+    installCommandShopState();
+    const data = { name: 'troll', mlet: 'T', glyph: 'T', mlevel: 7, hpLevel: 7 };
+    const mon = {
+        data,
+        m_id: 4321,
+        m_lev: 8,
+        mlevel: 8,
+        mhp: 3,
+        mhpmax: 24,
+        mtame: 5,
+        pet: true,
+        mpeaceful: 1,
+        givenName: 'Grendel',
+    };
+
+    const body = mkcorpstat(CORPSE, mon, data, 0, 0, 8);
+
+    assert.equal(body.oextra?.omonst?.data?.name, 'troll');
+    assert.equal(body.oextra.omonst.givenName, 'Grendel');
+    assert.equal(body.oextra.omonst.mhp, 3);
+    assert.equal(body.oextra.omonst.mhpmax, 24);
+    assert.equal(body.oextra.omonst.mtame, 5);
+    assert.equal(body.oextra.omonst.minvent, undefined);
+});
+
+test('ordinary monster corpse creation does not save transient traits', () => {
+    installCommandShopState();
+    const data = { name: 'goblin', mlet: 'o', glyph: 'o', mlevel: 0, hpLevel: 1 };
+    const mon = {
+        mx: 6,
+        my: 5,
+        data,
+        m_id: 9876,
+        mhp: 1,
+        mhpmax: 5,
+        givenName: 'Ephemeral',
+    };
+
+    const body = createMonsterCorpseOrGlob(mon, data, 6, 5);
+
+    assert.ok(body);
+    assert.equal(body.oextra?.omonst, undefined);
+});
+
+test('tame monster corpse creation keeps saved traits', () => {
+    installCommandShopState();
+    const data = { name: 'troll', mlet: 'T', glyph: 'T', mlevel: 7, hpLevel: 7 };
+    const mon = {
+        mx: 6,
+        my: 5,
+        data,
+        m_id: 9877,
+        mhp: 1,
+        mhpmax: 21,
+        mtame: 6,
+        pet: true,
+        givenName: 'Terry',
+    };
+
+    const body = createMonsterCorpseOrGlob(mon, data, 6, 5);
+
+    assert.equal(body.oextra?.omonst?.data?.name, 'troll');
+    assert.equal(body.oextra.omonst.givenName, 'Terry');
+    assert.equal(body.oextra.omonst.mtame, 6);
+});
+
+test('corpse timer revival prefers saved monster traits over corpse species', async () => {
+    installCommandShopState();
+    game.moves = 20;
+    const body = corpse(4018, 'c', 'human');
+    const troll = { name: 'troll', mlet: 'T', glyph: 'T', mlevel: 7, hpLevel: 7 };
+    Object.assign(body, {
+        reviveTurn: 10,
+        oextra: {
+            omonst: {
+                data: troll,
+                m_id: 1234,
+                m_lev: 9,
+                mlevel: 9,
+                mhp: 1,
+                mhpmax: 26,
+                mtame: 4,
+                pet: true,
+                mpeaceful: 1,
+                givenName: 'Bridgekeeper',
+                msleeping: 1,
+                mfrozen: 7,
+                mcanmove: false,
+                mtrapped: 1,
+                mconf: 1,
+                minvent: [dagger(4019)],
+            },
+        },
+    });
+    game.level.objects = [body];
+    game.level.at = () => ({ roomno: ROOMOFFSET, typ: ROOM });
+
+    await processCorpseTimers(game);
+
+    const revived = game.level.monsters.find(mon => mon.data?.name === 'troll');
+    assert.ok(revived);
+    assert.equal(game.level.monsters.some(mon => mon.data?.name === 'human'), false);
+    assert.notEqual(revived.m_id, 1234);
+    assert.equal(revived.givenName, 'Bridgekeeper');
+    assert.equal(revived.m_lev, 9);
+    assert.equal(revived.mhpmax, 26);
+    assert.equal(revived.mhp, 26);
+    assert.equal(revived.mtame, 4);
+    assert.equal(revived.pet, true);
+    assert.equal(revived.mpeaceful, 1);
+    assert.equal(revived.mrevived, 1);
+    assert.equal(revived.msleeping, 0);
+    assert.equal(revived.mfrozen, 0);
+    assert.equal(revived.mcanmove, true);
+    assert.equal(revived.mtrapped, 0);
+    assert.equal(revived.mconf, 0);
+    assert.deepEqual(revived.minvent, []);
+    assert.equal(game.level.objects.includes(body), false);
+});
+
+test('corpse timer zombification discards saved monster traits', async () => {
+    installCommandShopState();
+    game.moves = 20;
+    const body = corpse(4020, 'c', 'human');
+    Object.assign(body, {
+        zombifyTurn: 10,
+        oextra: {
+            omonst: {
+                data: { name: 'troll', mlet: 'T', glyph: 'T', mlevel: 7, hpLevel: 7 },
+                m_id: 4322,
+                m_lev: 9,
+                mhpmax: 30,
+                mtame: 5,
+                givenName: 'Wrong Form',
+            },
+        },
+    });
+    game.level.objects = [body];
+    game.level.at = () => ({ roomno: ROOMOFFSET, typ: ROOM });
+
+    await processCorpseTimers(game);
+
+    const zombie = game.level.monsters.find(mon => mon.data?.name === 'human zombie');
+    assert.ok(zombie);
+    assert.equal(game.level.monsters.some(mon => mon.data?.name === 'troll'), false);
+    assert.equal(zombie.givenName, undefined);
+    assert.notEqual(zombie.m_id, 4322);
+    assert.equal(zombie.mrevived, 1);
+    assert.equal(game.level.objects.includes(body), false);
+});
+
 test('glob shrink used-up tracking ignores stale unpaid fields without bill rows', () => {
     const { shkp } = installShopState();
     game.moves = 20;
@@ -15548,6 +15701,89 @@ test('ordinary floor Rider corpse pickup revives before billing or inventory', a
     assert.match(game._pending_message, /At your touch, the corpse suddenly moves/);
     assert.ok(revived);
     assert.equal(revived.mrevived, 1);
+    assert.equal(game.level.objects.includes(body), false);
+    assert.equal(game.inventory.includes(body), false);
+    assert.equal(body.unpaid, undefined);
+    assert.equal(shkp.billct, 0);
+    assert.equal(shkp.bill.length, 0);
+});
+
+test('ordinary floor saved-trait Rider corpse pickup restores traits before billing', async () => {
+    const { shkp } = installCommandShopState();
+    const body = corpse(60101, 'c', 'Death');
+    const death = {
+        name: 'Death',
+        rider: true,
+        unique: true,
+        glyph: '&',
+        mlet: '&',
+        mlevel: 4,
+        hpLevel: 4,
+        mmove: 12,
+        ac: -5,
+        mr: 100,
+    };
+    body.corpsenm = death;
+    body.oextra = {
+        omonst: {
+            data: death,
+            m_id: 777,
+            m_lev: 6,
+            mlevel: 6,
+            mhp: 2,
+            mhpmax: 23,
+            female: true,
+            mtame: 8,
+            pet: true,
+            mpeaceful: 1,
+            givenName: 'Mort',
+            mspeed: 'fast',
+            mflee: 1,
+            mfleetim: 12,
+            mstrategy: 3,
+            waiting: true,
+            mundetected: 1,
+            m_ap_type: 1,
+            appearGlyph: ']',
+            msleeping: 1,
+            mfrozen: 5,
+            mcanmove: false,
+            mconf: 1,
+            mblinded: 3,
+            minvent: [dagger(60102)],
+        },
+    };
+    game.level.objects = [body];
+    game.level.at = () => ({ roomno: ROOMOFFSET, typ: ROOM });
+
+    await rhack(',');
+
+    const revived = game.level.monsters.find(mon => mon.data?.name === 'Death');
+    assert.match(game._pending_message, /At your touch, the corpse suddenly moves/);
+    assert.ok(revived);
+    assert.notEqual(revived.m_id, 777);
+    assert.equal(revived.givenName, 'Mort');
+    assert.equal(revived.m_lev, 6);
+    assert.equal(revived.mhpmax, 23);
+    assert.equal(revived.mhp, 23);
+    assert.equal(revived.female, true);
+    assert.equal(revived.mtame, 8);
+    assert.equal(revived.pet, true);
+    assert.equal(revived.mpeaceful, 1);
+    assert.equal(revived.mspeed, 'fast');
+    assert.equal(revived.mflee, 1);
+    assert.equal(revived.mfleetim, 12);
+    assert.equal(revived.waiting, true);
+    assert.equal(revived.mrevived, 1);
+    assert.equal(revived.mundetected, 0);
+    assert.equal(revived.m_ap_type, 0);
+    assert.equal(revived.appearGlyph, null);
+    assert.equal(revived.msleeping, 0);
+    assert.equal(revived.mfrozen, 0);
+    assert.equal(revived.mcanmove, true);
+    assert.equal(revived.mconf, 0);
+    assert.equal(revived.mblinded, 0);
+    assert.deepEqual(revived.minvent, []);
     assert.equal(game.level.objects.includes(body), false);
     assert.equal(game.inventory.includes(body), false);
     assert.equal(body.unpaid, undefined);
