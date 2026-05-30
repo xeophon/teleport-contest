@@ -8638,6 +8638,43 @@ test('successful breakarm polyself destroys body armor and shirt but drops cloak
     assert.equal(game.level.objects.some(obj => obj.kind === 'leather armor' || obj.kind === 'T-shirt'), false);
 });
 
+test('successful breakarm polyself breaking blue dragon armor slows down before cloak fallout', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, {
+        uhp: 40,
+        uhpmax: 40,
+        uen: 0,
+        uenmax: 0,
+        ulevel: 1,
+        uac: 1,
+        fast: true,
+        veryfast: true,
+        _blueDragonFast: true,
+    });
+    const body = wornArmor(32128, 'blue dragon scale mail', 'a');
+    const cloak = wornArmor(32129, 'leather cloak', 'c');
+    game.inventory = [body, cloak];
+
+    await debugPolyselfInto('xorn');
+
+    const pending = game._pending_message || '';
+    assert.equal(game.u._polyself_form?.name, 'xorn');
+    assert.match(pending, /You break out of your armor!/);
+    assert.match(pending, /You slow down\./);
+    assert.match(pending, /The clasp on your cloak breaks open!/);
+    assert.ok(pending.indexOf('You break out of your armor!')
+        < pending.indexOf('You slow down.'));
+    assert.ok(pending.indexOf('You slow down.')
+        < pending.indexOf('The clasp on your cloak breaks open!'));
+    assert.equal(game.inventory.includes(body), false);
+    assert.equal(game.inventory.includes(cloak), false);
+    assert.equal(game.u.fast, false);
+    assert.equal(game.u.veryfast, false);
+    assert.equal(game.u._blueDragonFast, false);
+    assert.deepEqual(game.level.objects.map(obj => obj.kind || obj.actualKind), ['leather cloak']);
+});
+
 test('successful large dog polyself breaks body armor instead of overloading', async () => {
     installNonShopFloorState();
     initRng(1);
@@ -8664,6 +8701,83 @@ test('successful large dog polyself breaks body armor instead of overloading', a
     assert.equal(game.inventory.includes(body), false);
     assert.equal(game.level.objects.some(obj => obj.kind === 'leather armor'), false);
     assert.equal(game.u.uac, game.u._polyself_form?.mac ?? 10);
+});
+
+test('successful no-hands polyself clears blue dragon armor speed before overload more', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, {
+        uhp: 40,
+        uhpmax: 40,
+        uen: 0,
+        uenmax: 0,
+        ulevel: 1,
+        uac: 1,
+        fast: true,
+        veryfast: true,
+        _blueDragonFast: true,
+    });
+    const body = wornArmor(32134, 'blue dragon scales', 'a');
+    game.inventory = [body];
+
+    await debugPolyselfInto('wererat');
+
+    const first = game._pending_message || '';
+    assert.equal(game.u._polyself_form?.name, 'wererat');
+    assert.match(first, /Your armor falls around you!/);
+    assert.match(first, /You slow down\./);
+    assert.equal(game.inventory.includes(body), true);
+    assert.equal(body.worn, false);
+    assert.doesNotMatch(body.line || '', /being worn/);
+    assert.equal(game.u.fast, false);
+    assert.equal(game.u.veryfast, false);
+    assert.equal(game.u._blueDragonFast, false);
+    assert.equal(game.level.objects.length, 0);
+
+    await rhack(' ');
+    await rhack(' ');
+
+    assert.equal(game.inventory.includes(body), false);
+    assert.equal(game.level.objects.length, 1);
+    assert.equal(game.level.objects[0].kind, 'blue dragon scales');
+    assert.equal(game.level.objects[0].worn, false);
+});
+
+test('successful very small polyself clears alchemy smock worn state before cloak more', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, {
+        uhp: 40,
+        uhpmax: 40,
+        uen: 0,
+        uenmax: 0,
+        ulevel: 1,
+        uac: 1,
+    });
+    const smock = wornArmor(32136, 'alchemy smock', 'c');
+    game.inventory = [smock];
+    assert.equal(shop.heroHasAcidResistanceForTest(), true);
+    assert.equal(shop.heroHasPoisonResistanceForTest(), true);
+
+    await debugPolyselfInto('wererat');
+
+    const first = game._pending_message || '';
+    assert.equal(game.u._polyself_form?.name, 'wererat');
+    assert.match(first, /You shrink out of your smock!/);
+    assert.equal(game.inventory.includes(smock), true);
+    assert.equal(smock.worn, false);
+    assert.doesNotMatch(smock.line || '', /being worn/);
+    assert.equal(shop.heroHasAcidResistanceForTest(), false);
+    assert.equal(shop.heroHasPoisonResistanceForTest(), false);
+    assert.equal(game.level.objects.length, 0);
+
+    await rhack(' ');
+
+    const second = game._pending_message || '';
+    assert.doesNotMatch(second, /You shrink out of your smock!/);
+    assert.equal(game.inventory.includes(smock), false);
+    assert.deepEqual(game.level.objects.map(obj => obj.kind || obj.actualKind), ['alchemy smock']);
+    assert.equal(game.level.objects[0].worn, false);
 });
 
 test('successful small polyself slips out of body armor cloak and shirt', async () => {
@@ -8703,6 +8817,38 @@ test('successful small polyself slips out of body armor cloak and shirt', async 
         'cloak of displacement',
         'T-shirt',
     ]);
+});
+
+test('successful small polyself dropping alchemy smock removes smock acid protection', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, {
+        uhp: 40,
+        uhpmax: 40,
+        uen: 0,
+        uenmax: 0,
+        ulevel: 1,
+        uac: 3,
+    });
+    const body = wornArmor(32131, 'leather armor', 'a');
+    const smock = wornArmor(32132, 'alchemy smock', 'c');
+    game.inventory = [body, smock];
+    assert.equal(shop.heroHasAcidResistanceForTest(), true);
+    assert.equal(shop.heroHasPoisonResistanceForTest(), true);
+
+    await debugPolyselfInto('gnome');
+
+    const pending = game._pending_message || '';
+    assert.equal(game.u._polyself_form?.name, 'gnome');
+    assert.match(pending, /Your armor falls around you!/);
+    assert.match(pending, /You shrink out of your smock!/);
+    assert.equal(game.inventory.includes(smock), false);
+    assert.deepEqual(game.level.objects.map(obj => obj.kind || obj.actualKind), [
+        'leather armor',
+        'alchemy smock',
+    ]);
+    assert.equal(shop.heroHasAcidResistanceForTest(), false);
+    assert.equal(shop.heroHasPoisonResistanceForTest(), false);
 });
 
 test('successful small polyself keeps adaptive mummy wrapping', async () => {
@@ -25376,6 +25522,34 @@ test('upward hero-thrown acid potion respects hero acid resistance', async () =>
     assert.doesNotMatch(game._pending_message, /This burns|peculiar odor|BOOM|You feel a little/);
     assert.equal(game.inventory.includes(potion), false);
     assert.equal(game.level.objects.length, 0);
+    assert.ok(game.u.uhp < hpBefore);
+    assert.ok(hpBefore - game.u.uhp <= 2);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rn2(5)', 'rn2(7)', 'rnd(2)', 'rn2(2)',
+    ]);
+});
+
+test('upward hero-thrown acid potion respects worn alchemy smock acid resistance', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, { uhp: 40, uhpmax: 40 });
+    const smock = wornArmor(87666, 'alchemy smock', 's');
+    const potion = acidPotion(87667, 'a');
+    potion.dknown = true;
+    game.inventory = [smock, potion];
+    const hpBefore = game.u.uhp;
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('a');
+    await rhack('<');
+
+    assert.equal(game._command_mode, null);
+    assert.match(game._pending_message, /crashes on your head and breaks into shards\./);
+    assert.match(game._pending_message, /The potion of acid evaporates\./);
+    assert.doesNotMatch(game._pending_message, /This burns|peculiar odor|BOOM|You feel a little/);
+    assert.equal(game.inventory.includes(potion), false);
+    assert.equal(game.inventory.includes(smock), true);
     assert.ok(game.u.uhp < hpBefore);
     assert.ok(hpBefore - game.u.uhp <= 2);
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [

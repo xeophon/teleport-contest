@@ -11520,6 +11520,7 @@ function polyselfEquipmentFalloutForForm(form, { bodyArmor = null } = {}) {
         const armor = bodyArmor || polyselfWornBodyArmorItem();
         if (armor) {
             messages.push('You break out of your armor!');
+            addPolyselfBodyArmorOffMessages(armor, messages);
             addDestroyedItem(armor);
         }
 
@@ -11551,6 +11552,7 @@ function polyselfEquipmentFalloutForForm(form, { bodyArmor = null } = {}) {
             const armor = bodyArmor || polyselfWornBodyArmorItem();
             if (armor && !polyselfRacialArmorException(form, armor)) {
                 if (!bodyArmor) messages.push('Your armor falls around you!');
+                addPolyselfBodyArmorOffMessages(armor, messages);
                 addItem(armor);
             }
             const cloak = polyselfWornCloakItem();
@@ -11803,6 +11805,35 @@ function addPolyselfBootsOffSideEffects(item, messages) {
     if (kind !== 'speed boots' || !game.u) return;
     if (otherWornFastEquipment(item) || (game.u._veryfastTimeout || 0) > 0) return;
     messages.push(`You feel yourself slow down${heroHasIntrinsicFast() ? ' a bit' : ''}.`);
+}
+
+function polyselfBodyArmorOffMessages(item) {
+    if (!game.u || !isBlueDragonArmorKind(objectKindKey(item))) return [];
+    if (otherWornFastEquipment(item) || (game.u._veryfastTimeout || 0) > 0) return [];
+    return ['You slow down.'];
+}
+
+function addPolyselfBodyArmorOffMessages(item, messages = []) {
+    messages.push(...polyselfBodyArmorOffMessages(item));
+}
+
+function clearPolyselfDeferredArmorWearState(items) {
+    let speedChanged = false;
+    let displacementChanged = false;
+    for (const item of items || []) {
+        if (!(game.inventory || []).includes(item)) continue;
+        const slot = armorSlot(item);
+        if (slot !== 'body' && slot !== 'cloak') continue;
+        if (!isWornInventoryItem(item)) continue;
+        if (slot === 'body' && isBlueDragonArmorKind(objectKindKey(item))) speedChanged = true;
+        if (slot === 'cloak') displacementChanged = true;
+        item.worn = false;
+        item.owornmask = 0;
+        if (typeof item.line === 'string')
+            item.line = item.line.replace(/\s+\(being worn\)/g, '');
+    }
+    if (speedChanged) syncHeroSpeedState();
+    if (displacementChanged) updateWornDisplacement();
 }
 
 function addPolyselfHelmetOffSideEffects(item, messages = []) {
@@ -12082,24 +12113,28 @@ function becomeMonster(name) {
         game._topline_after_more = 'Your movements are slowed slightly because of your load.';
         game.u._statusSuffix = `${game.u._statusSuffix || ''} Burdened`;
         game.u.uac = (game.u.uac ?? 10) - wornArmorAcValueGreatestErosion(cloak);
+        clearPolyselfDeferredArmorWearState([cloak]);
         return { message, more: true };
     }
     const bodyArmor = polyselfWornBodyArmorItem();
     if (bodyArmor && (form.nohands || form.verysmall)) {
         const fallout = polyselfEquipmentFalloutForForm(form, { bodyArmor });
-        message += '  Your armor falls around you!';
+        const bodyArmorMessages = polyselfBodyArmorOffMessages(bodyArmor);
+        message += `  ${['Your armor falls around you!', ...bodyArmorMessages].join('  ')}`;
         game._topline_after_more = "You can't even move a handspan with this load!";
         game._topline_more_after_more = 1;
         game._polyself_drop_items_after_overload_more = 1;
         game._polyself_drop_items_after_overload_items = fallout.items;
         game._polyself_release_items_after_overload_items = fallout.releasedItems;
-        game._polyself_drop_items_after_overload_message = fallout.messages.join('  ');
+        game._polyself_drop_items_after_overload_message = fallout.messages
+            .filter(entry => !bodyArmorMessages.includes(entry)).join('  ');
         game._polyself_drop_items_after_overload_ac = 9;
         game.u.uac = game.u._polyself_base?.uac ?? game.u.uac ?? 10;
         game._status_uac_before_more = game.u._polyself_base?.uac ?? game.u.uac ?? 10;
         game._status_uac_before_more_hold_count = 3;
         if (!String(game.u._statusSuffix || '').includes('Overloaded'))
             game.u._statusSuffix = `${game.u._statusSuffix || ''} Overloaded`;
+        clearPolyselfDeferredArmorWearState(fallout.items);
         return { message, more: true };
     }
     const fallout = polyselfEquipmentFalloutForForm(form);
@@ -15165,9 +15200,13 @@ function potionAlchemyMixMessage(target, source, splitFromStack) {
     return `${prefix} ${potionStackNameForAlchemyMessage(target)} ${verb} with ${sourcePrefix}${potionStackNameForAlchemyMessage(source)}...`;
 }
 
+function heroWornAlchemySmockItem() {
+    return (game.inventory || []).find(item => isWornInventoryItem(item)
+        && objectKindKey(item) === 'alchemy smock') || null;
+}
+
 function heroWearsAlchemySmock() {
-    return (game.inventory || []).some(item => (item.worn || item.line?.includes('being worn'))
-        && /alchemy smock/.test(objectKindKey(item) || inventoryItemName(item)));
+    return !!heroWornAlchemySmockItem();
 }
 
 function heroCanReceivePotionVapor() {
@@ -21866,7 +21905,7 @@ function heroHasAntimagic() {
 }
 
 function heroHasPoisonResistance() {
-    if (game.u?.poisonResistance) return true;
+    if (game.u?.poisonResistance || heroWearsAlchemySmock()) return true;
     return (game.inventory || []).some(item => {
         if (!(item.worn || item.line?.includes('being worn'))) return false;
         return /amulet (?:versus|of) poison|poison resistance/i
@@ -27556,6 +27595,8 @@ export const __shopBillingTestHooks = {
     findFloorPickupFoodMergeTargetForPreflight,
     finishDroppedObjectSale,
     finishShopFloorContainerPutSale,
+    heroHasAcidResistanceForTest: heroHasAcidResistance,
+    heroHasPoisonResistanceForTest: heroHasPoisonResistance,
     impactDropFloorObjects,
     deliverImpactDroppedObjects,
     deliverQueuedImpactDroppedObjectsForTest: deliverQueuedImpactDroppedObjects,
@@ -37301,7 +37342,7 @@ const GLOB_CPOSTFX_INTRINSICS = new Map([
 function heroHasAcidResistance() {
     const form = game.u?._polyself_form || {};
     return !!(game.u?.acidResistance || game.u?._acidResistanceTimeout
-        || form.acidResistance || form.resistsAcid);
+        || form.acidResistance || form.resistsAcid || heroWearsAlchemySmock());
 }
 
 function heroSlimeproof() {
