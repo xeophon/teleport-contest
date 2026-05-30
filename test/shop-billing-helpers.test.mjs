@@ -8342,6 +8342,75 @@ test('successful no-hands polyself drops worn gloves and wielded weapon but keep
     assert.equal(game.level.objects.some(obj => obj.cls === 'ring'), false);
 });
 
+test('successful no-hands polyself drops gauntlets of dexterity and removes dexterity bonus', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, {
+        uhp: 40,
+        uhpmax: 40,
+        uen: 0,
+        uenmax: 0,
+        ulevel: 1,
+        uac: 9,
+        acurr: { a: [10, 10, 10, 14, 10, 10] },
+        amax: { a: [10, 10, 10, 12, 10, 10] },
+    });
+    const gloves = wornArmor(32126, 'gauntlets of dexterity', 'g', 2, {
+        appearance: 'fencing gloves',
+    });
+    game.inventory = [gloves];
+
+    await debugPolyselfInto('wererat');
+
+    const pending = game._pending_message || '';
+    assert.equal(game.u._polyself_form?.name, 'wererat');
+    assert.match(pending, /You drop your gloves!/);
+    assert.equal(game.u.acurr.a[A_DEX], 12);
+    assert.equal(game.u.amax.a[A_DEX], 12);
+    assert.equal(game.inventory.includes(gloves), false);
+    assert.equal(game.level.objects.length, 1);
+    assert.equal(game.level.objects[0].kind, 'gauntlets of dexterity');
+    assert.equal(game.level.objects[0].worn, false);
+    assert.ok((game._discoveries || []).some(entry =>
+        entry.section === 'Armor'
+        && entry.name === 'pair of gauntlets of dexterity'
+        && /fencing gloves/.test(entry.text)));
+});
+
+test('successful no-hands polyself drops gauntlets of power and restores strength', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, {
+        uhp: 40,
+        uhpmax: 40,
+        uen: 0,
+        uenmax: 0,
+        ulevel: 1,
+        uac: 9,
+        acurr: { a: [125, 10, 10, 10, 10, 10] },
+        amax: { a: [18, 10, 10, 10, 10, 10] },
+        _baseStrengthBeforeGauntlets: 18,
+    });
+    const gloves = wornArmor(32127, 'gauntlets of power', 'g');
+    game.inventory = [gloves];
+
+    await debugPolyselfInto('wererat');
+
+    const pending = game._pending_message || '';
+    assert.equal(game.u._polyself_form?.name, 'wererat');
+    assert.match(pending, /You drop your gloves!/);
+    assert.equal(game.u.acurr.a[A_STR], 18);
+    assert.equal(game.u._baseStrengthBeforeGauntlets, undefined);
+    assert.equal(game.inventory.includes(gloves), false);
+    assert.equal(game.level.objects.length, 1);
+    assert.equal(game.level.objects[0].kind, 'gauntlets of power');
+    assert.equal(game.level.objects[0].worn, false);
+    assert.ok((game._discoveries || []).some(entry =>
+        entry.section === 'Armor'
+        && entry.name === 'pair of gauntlets of power'
+        && /riding gloves/.test(entry.text)));
+});
+
 test('successful no-hands polyself names droppable wielded dagger', async () => {
     installNonShopFloorState();
     initRng(1);

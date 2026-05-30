@@ -11821,6 +11821,18 @@ function addPolyselfHelmetOffSideEffects(item, messages = []) {
     }
 }
 
+function addPolyselfGlovesOffSideEffects(item) {
+    const kind = objectKindKey(item);
+    if (kind === 'gauntlets of dexterity') {
+        const delta = -Math.trunc(Number(item?.spe ?? 0));
+        adjustHeroWornAttributeBonus(A_DEX, delta);
+        if (delta) recordKnownArmorDiscovery(kind, false);
+    } else if (kind === 'gauntlets of power') {
+        updateGauntletsOfPowerStrength(kind, false);
+        recordKnownArmorDiscovery(kind, false);
+    }
+}
+
 function polyselfHelmetNeedsMonsterRefresh(item) {
     const kind = objectKindKey(item);
     return kind === 'helm of telepathy' || kind === 'helm of caution';
@@ -11833,6 +11845,7 @@ function dropPolyselfEquipmentItems(items, floorMessages = [], form = polyselfFo
         const slot = armorSlot(item);
         const refreshMonsters = slot === 'helm' && polyselfHelmetNeedsMonsterRefresh(item);
         if (slot === 'helm') addPolyselfHelmetOffSideEffects(item, floorMessages);
+        if (slot === 'gloves') addPolyselfGlovesOffSideEffects(item);
         if (slot === 'boots') addPolyselfBootsOffSideEffects(item, floorMessages);
         dropCarriedObjectAtHero(item, floorMessages);
         if (refreshMonsters) seeMonsters();
