@@ -11759,18 +11759,32 @@ function ordinaryPolyselfLevitationFloatDownAllowed(x, y, loc) {
     return !(game.level?.traps || []).some(trap => trap.tx === x && trap.ty === y);
 }
 
-function addPolyselfLevitationBootsOffSideEffects(item, messages) {
-    if (objectKindKey(item) !== 'levitation boots' || !game.u || heroHasOtherLevitationSource(item)) return;
-    const x = game.u.ux || 0;
-    const y = game.u.uy || 0;
-    const loc = game.level?.at(x, y);
-    if (!ordinaryPolyselfLevitationFloatDownAllowed(x, y, loc)) return;
+function clearPolyselfLevitationBootSource(item) {
     game.u.levitating = false;
     game.u.levitation = false;
     game.u.Levitation = false;
     item.known = true;
     recordKnownArmorDiscovery('levitation boots', false);
-    messages.push(`You float gently to the ${polyselfFalloffSurfaceName(x, y)}.`);
+}
+
+function polyselfLevitationFloatDownMessage(x, y, loc) {
+    if (!game.u?.levitating) return '';
+    if (game.u.flying || game.u.Flying) return 'You have stopped levitating and are now flying.';
+    if (Is_airlevel(game.u.uz)) return 'You begin to tumble in place.';
+    if (Is_waterlevel(game.u.uz)) return 'You feel heavier.';
+    if (!ordinaryPolyselfLevitationFloatDownAllowed(x, y, loc)) return '';
+    return `You float gently to the ${polyselfFalloffSurfaceName(x, y)}.`;
+}
+
+function addPolyselfLevitationBootsOffSideEffects(item, messages) {
+    if (objectKindKey(item) !== 'levitation boots' || !game.u || heroHasOtherLevitationSource(item)) return;
+    const x = game.u.ux || 0;
+    const y = game.u.uy || 0;
+    const loc = game.level?.at(x, y);
+    const floatDownMessage = polyselfLevitationFloatDownMessage(x, y, loc);
+    if (!floatDownMessage) return;
+    clearPolyselfLevitationBootSource(item);
+    messages.push(floatDownMessage);
 }
 
 function addPolyselfBootsOffSideEffects(item, messages) {

@@ -9352,6 +9352,122 @@ test('successful centaur polyself losing levitation boots keeps other levitation
     assert.equal(game.level.objects[0].worn, false);
 });
 
+test('successful centaur polyself losing levitation boots resumes controlled flight', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, {
+        uhp: 40,
+        uhpmax: 40,
+        uen: 0,
+        uenmax: 0,
+        ulevel: 1,
+        uac: 9,
+        levitating: true,
+        flying: true,
+    });
+    const boots = wornArmor(32120, 'levitation boots', 'b', 0, {
+        otyp: LEVITATION_BOOTS,
+        known: false,
+    });
+    game.inventory = [boots];
+
+    await debugPolyselfInto('plains centaur');
+
+    const pending = game._pending_message || '';
+    assert.equal(game.u._polyself_form?.name, 'plains centaur');
+    assert.match(pending, /Your boots are pushed off your feet!/);
+    assert.match(pending, /You have stopped levitating and are now flying\./);
+    assert.doesNotMatch(pending, /float gently/);
+    assert.equal(game._message_more, 0);
+    assert.equal(game._relocate_after_more || null, null);
+    assert.equal(game.u.levitating, false);
+    assert.equal(game.u.flying, true);
+    assert.equal(game.inventory.includes(boots), false);
+    assert.equal(boots.known, true);
+    assert.equal(game.level.objects.length, 1);
+    assert.equal(game.level.objects[0].kind, 'levitation boots');
+    assert.equal(game.level.objects[0].known, true);
+    assert.equal(game.level.objects[0].worn, false);
+});
+
+test('successful centaur polyself losing levitation boots tumbles on air level', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    const airLevel = { dnum: 0, dlevel: 7 };
+    game.air_level = airLevel;
+    game.u.uz = { ...airLevel };
+    Object.assign(game.u, {
+        uhp: 40,
+        uhpmax: 40,
+        uen: 0,
+        uenmax: 0,
+        ulevel: 1,
+        uac: 9,
+        levitating: true,
+    });
+    const boots = wornArmor(32121, 'levitation boots', 'b', 0, {
+        otyp: LEVITATION_BOOTS,
+        known: false,
+    });
+    game.inventory = [boots];
+
+    await debugPolyselfInto('plains centaur');
+
+    const pending = game._pending_message || '';
+    assert.equal(game.u._polyself_form?.name, 'plains centaur');
+    assert.match(pending, /Your boots are pushed off your feet!/);
+    assert.match(pending, /You begin to tumble in place\./);
+    assert.doesNotMatch(pending, /float gently|feel heavier/);
+    assert.equal(game._message_more, 0);
+    assert.equal(game._relocate_after_more || null, null);
+    assert.equal(game.u.levitating, false);
+    assert.equal(game.inventory.includes(boots), false);
+    assert.equal(boots.known, true);
+    assert.equal(game.level.objects.length, 1);
+    assert.equal(game.level.objects[0].kind, 'levitation boots');
+    assert.equal(game.level.objects[0].known, true);
+    assert.equal(game.level.objects[0].worn, false);
+});
+
+test('successful centaur polyself losing levitation boots feels heavier on water level', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    const waterLevel = { dnum: 0, dlevel: 8 };
+    game.water_level = waterLevel;
+    game.u.uz = { ...waterLevel };
+    Object.assign(game.u, {
+        uhp: 40,
+        uhpmax: 40,
+        uen: 0,
+        uenmax: 0,
+        ulevel: 1,
+        uac: 9,
+        levitating: true,
+    });
+    const boots = wornArmor(32122, 'levitation boots', 'b', 0, {
+        otyp: LEVITATION_BOOTS,
+        known: false,
+    });
+    game.inventory = [boots];
+
+    await debugPolyselfInto('plains centaur');
+
+    const pending = game._pending_message || '';
+    assert.equal(game.u._polyself_form?.name, 'plains centaur');
+    assert.match(pending, /Your boots are pushed off your feet!/);
+    assert.match(pending, /You feel heavier\./);
+    assert.doesNotMatch(pending, /float gently|tumble in place/);
+    assert.equal(game._message_more, 0);
+    assert.equal(game._relocate_after_more || null, null);
+    assert.equal(game.u.levitating, false);
+    assert.equal(game.inventory.includes(boots), false);
+    assert.equal(boots.known, true);
+    assert.equal(game.level.objects.length, 1);
+    assert.equal(game.level.objects[0].kind, 'levitation boots');
+    assert.equal(game.level.objects[0].known, true);
+    assert.equal(game.level.objects[0].worn, false);
+});
+
 test('successful horned polyself pierces flimsy helm without dropping it', async () => {
     installNonShopFloorState();
     initRng(1);
