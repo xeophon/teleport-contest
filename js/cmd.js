@@ -33807,6 +33807,98 @@ function tipHatMonsterIsMplayer(mon) {
         || data.mplayer || data.is_mplayer || data.isMplayer);
 }
 
+function tipHatMonsterMlet(mon) {
+    return String(mon?.data?.mlet ?? mon?.mlet ?? '').toLowerCase();
+}
+
+function tipHatMonsterHp(mon) {
+    const hp = Number(mon?.mhp ?? mon?.hp ?? mon?.data?.mhp ?? mon?.data?.hp ?? NaN);
+    const hpmax = Number(mon?.mhpmax ?? mon?.mhpMax ?? mon?.hpmax ?? mon?.hpMax
+        ?? mon?.data?.mhpmax ?? mon?.data?.hpmax ?? NaN);
+    return { hp, hpmax };
+}
+
+function tipHatMonsterTrapAt(mon) {
+    return (game.level?.traps || []).find(trap => trap.tx === mon?.mx && trap.ty === mon?.my) || null;
+}
+
+function tipHatMonsterIsElf(mon, name) {
+    const data = mon?.data || {};
+    return !!(mon?.elf || data.elf || data.isElf || /\belf\b|(?:^|-| )elf$|elven/.test(name));
+}
+
+function tipHatMonsterIsDwarf(mon, name) {
+    const data = mon?.data || {};
+    return !!(mon?.dwarf || data.dwarf || data.isDwarf || /\bdwarf\b/.test(name));
+}
+
+function tipHatMonsterIsGnome(mon, name) {
+    const data = mon?.data || {};
+    const mlet = tipHatMonsterMlet(mon);
+    return !!(mon?.gnome || data.gnome || data.isGnome || mlet === 'g' || /\b(?:gnome|gnomish)\b/.test(name));
+}
+
+function tipHatMonsterLikesMagic(mon) {
+    const data = mon?.data || {};
+    return !!(mon?.likesMagic || mon?.magic || mon?.spellcaster
+        || data.likesMagic || data.magic || data.spellcaster);
+}
+
+function tipHatMonsterIsMinion(mon) {
+    const data = mon?.data || {};
+    return !!(mon?.isminion || mon?.isMinion || mon?.lminion
+        || data.isminion || data.isMinion || data.lminion);
+}
+
+function tipHatPeacefulHumanoidNoise(mon, name, monName, moves, hungryTime) {
+    const { hp, hpmax } = tipHatMonsterHp(mon);
+    const action = text => ({ handled: true, message: `${name} ${text}` });
+    const verbal = text => ({ handled: true, message: `"${text}"` });
+    if (mon.mflee) return action('wants nothing to do with you.');
+    if (Number.isFinite(hp) && Number.isFinite(hpmax) && hp < hpmax / 4)
+        return action('moans.');
+    if (mon.mconf || mon.mstun) {
+        if (!rn2(3)) return verbal('Huh?');
+        return verbal(rn2(2) ? 'What?' : 'Eh?');
+    }
+    if (mon.mcansee === false) return verbal("I can't see!");
+    if (mon.mtrapped) {
+        const trap = tipHatMonsterTrapAt(mon);
+        if (trap) trap.tseen = true;
+        return verbal("I'm trapped!");
+    }
+    if (Number.isFinite(hp) && Number.isFinite(hpmax) && hp < hpmax / 2)
+        return action('asks for a potion of healing.');
+    if (Number(mon.mtame || 0) && !tipHatMonsterIsMinion(mon)
+        && Number.isFinite(hungryTime) && moves > hungryTime)
+        return verbal("I'm hungry.");
+    if (tipHatMonsterIsElf(mon, monName)) return action('curses orcs.');
+    if (tipHatMonsterIsDwarf(mon, monName)) return action('talks about mining.');
+    if (tipHatMonsterLikesMagic(mon)) return action('talks about spellcraft.');
+    if (tipHatMonsterMlet(mon) === 'centaur' || tipHatMonsterMlet(mon) === 'c')
+        return action('discusses hunting.');
+    if (tipHatMonsterIsGnome(mon, monName)) {
+        if (heroIsHallucinating()) {
+            const gnomeplan = rn2(4);
+            if (gnomeplan % 2)
+                return verbal(gnomeplan === 1
+                    ? 'Phase one, collect underpants.'
+                    : 'Phase three, profit!');
+        }
+        return verbal('Many enter the dungeon, and few return to the sunlit lands.');
+    }
+    if (monName === 'hobbit') {
+        return (Number.isFinite(hp) && Number.isFinite(hpmax) && hp < hpmax
+            && (hpmax <= 10 || hp <= hpmax - 10))
+            ? action('complains about unpleasant dungeon conditions.')
+            : action('asks you about the One Ring.');
+    }
+    if (monName === 'archeologist')
+        return action('describes a recent article in "Spelunker Today" magazine.');
+    if (monName === 'tourist') return verbal('Aloha.');
+    return action('discusses dungeon exploration.');
+}
+
 const TIPHAT_BOAST_MONSTER_NAMES = new Set([
     'giant', 'stone giant', 'hill giant', 'fire giant', 'frost giant', 'storm giant',
 ]);
@@ -34006,9 +34098,9 @@ function tipHatMonsterNoise(mon, { visible = tipHatMonsterVisible(mon) } = {}) {
                 return { handled: false, message: '' };
             return { handled: true, message: `${name} threatens you.` };
         }
-        return { handled: false, message: '' };
+        return tipHatPeacefulHumanoidNoise(mon, name, monName, moves, hungryTime);
     case 'boast':
-        if (peaceful) return { handled: false, message: '' };
+        if (peaceful) return tipHatPeacefulHumanoidNoise(mon, name, monName, moves, hungryTime);
         switch (rn2(4)) {
         case 0:
             return {

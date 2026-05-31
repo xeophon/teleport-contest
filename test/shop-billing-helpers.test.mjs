@@ -4223,10 +4223,16 @@ test('worn helmet tip makes peaceful lawful minion cuss about redemption', async
 });
 
 async function tipInvisibleExplicitSound({ name, sound, peaceful = false, tame = 0,
-    gold = 0, seed = null, rngLog = false, role = '', inventory = [], data = {}, extra = {} } = {}) {
+    gold = 0, seed = null, rngLog = false, role = '', inventory = [], data = {}, extra = {},
+    moves = null, traps = null } = {}) {
     installStableNonShopFloorState();
     if (seed != null) initRng(seed);
     if (rngLog) enableRngLog({ reset: true });
+    if (moves != null) {
+        game.moves = moves;
+        game.context ??= {};
+        game.context.moves = moves;
+    }
     if (role) {
         game._startup_role = role;
         game.urole = { ...(game.urole || {}), name: { m: role, f: role } };
@@ -4252,6 +4258,7 @@ async function tipInvisibleExplicitSound({ name, sound, peaceful = false, tame =
         game._goldCount = gold;
     }
     game.level.monsters = [target];
+    if (traps) game.level.traps = traps;
     markSquareVisible(6, 5);
 
     await enterTipCommand();
@@ -4263,7 +4270,7 @@ async function tipInvisibleExplicitSound({ name, sound, peaceful = false, tame =
     assert.equal(target.mstrategy, 0);
     assert.equal(targetLoc.map_invisible, true);
     assert.match(game._pending_message, /You briefly doff your helm\./);
-    assert.doesNotMatch(game._pending_message, /doesn't respond|Nothing happens|waves|tips .* in response|curses|gestures|unseen creature/);
+    assert.doesNotMatch(game._pending_message, /doesn't respond|Nothing happens|waves|tips .* in response|gestures|unseen creature/);
     return { target, targetLoc, message: game._pending_message };
 }
 
@@ -4417,6 +4424,167 @@ test('worn helmet tip keeps non-endgame mplayers on hostile humanoid threat', as
 
     assert.match(game._pending_message, /It threatens you\./);
     assert.doesNotMatch(game._pending_message, /Talk\? --|The wizard|doesn't respond|Nothing happens|waves/);
+    assert.deepEqual(getRngLog(), []);
+});
+
+test('worn helmet tip makes peaceful invisible humanoid discuss exploration by default', async () => {
+    await tipInvisibleExplicitSound({
+        name: 'soldier',
+        sound: 'MS_HUMANOID',
+        peaceful: true,
+        rngLog: true,
+        data: { mlevel: 6, mlet: '@', humanoid: true },
+    });
+
+    assert.match(game._pending_message, /It discusses dungeon exploration\./);
+    assert.doesNotMatch(game._pending_message, /The soldier|doesn't respond|Nothing happens|waves|curses|gestures/);
+    assert.deepEqual(getRngLog(), []);
+});
+
+test('worn helmet tip maps peaceful invisible humanoid distress branches', async () => {
+    await tipInvisibleExplicitSound({
+        name: 'soldier',
+        sound: 'MS_HUMANOID',
+        peaceful: true,
+        rngLog: true,
+        extra: { mflee: true, mhp: 1, mhpmax: 10, mconf: 1, mtrapped: 1 },
+        data: { mlevel: 6, mlet: '@', humanoid: true },
+    });
+    assert.match(game._pending_message, /It wants nothing to do with you\./);
+    assert.doesNotMatch(game._pending_message, /moans|Huh|What|Eh|trapped|potion of healing|waves/);
+    assert.deepEqual(getRngLog(), []);
+
+    await tipInvisibleExplicitSound({
+        name: 'soldier',
+        sound: 'MS_HUMANOID',
+        peaceful: true,
+        rngLog: true,
+        extra: { mconf: 1, mtrapped: 1, mhp: 5, mhpmax: 10 },
+        data: { mlevel: 6, mlet: '@', humanoid: true },
+    });
+    assert.match(game._pending_message, /"(Huh\?|What\?|Eh\?)"/);
+    assert.doesNotMatch(game._pending_message, /I can't see|trapped|potion of healing|waves/);
+    {
+        const calls = getRngLog().map(entry => entry.replace(/=.*/, ''));
+        assert.equal(calls[0], 'rn2(3)');
+        assert.ok(calls.length === 1 || (calls.length === 2 && calls[1] === 'rn2(2)'));
+    }
+
+    const pit = { ttyp: PIT, tx: 6, ty: 5, tseen: false };
+    await tipInvisibleExplicitSound({
+        name: 'soldier',
+        sound: 'MS_HUMANOID',
+        peaceful: true,
+        extra: { mtrapped: 1 },
+        traps: [pit],
+        data: { mlevel: 6, mlet: '@', humanoid: true },
+    });
+    assert.match(game._pending_message, /"I'm trapped!"/);
+    assert.equal(pit.tseen, true);
+});
+
+test('worn helmet tip maps peaceful invisible humanoid wounds and hunger', async () => {
+    await tipInvisibleExplicitSound({
+        name: 'soldier',
+        sound: 'MS_HUMANOID',
+        peaceful: true,
+        extra: { mhp: 2, mhpmax: 5 },
+        data: { mlevel: 6, mlet: '@', humanoid: true },
+    });
+    assert.match(game._pending_message, /It asks for a potion of healing\./);
+    assert.doesNotMatch(game._pending_message, /moans|hungry|waves/);
+
+    await tipInvisibleExplicitSound({
+        name: 'soldier',
+        sound: 'MS_HUMANOID',
+        peaceful: true,
+        tame: 5,
+        moves: 100,
+        extra: { mhp: 5, mhpmax: 5, mextra: { edog: { hungrytime: 50 } } },
+        data: { mlevel: 6, mlet: '@', humanoid: true },
+    });
+    assert.match(game._pending_message, /"I'm hungry\."/);
+    assert.doesNotMatch(game._pending_message, /potion of healing|discusses dungeon exploration|waves/);
+});
+
+test('worn helmet tip maps peaceful invisible humanoid interests', async () => {
+    await tipInvisibleExplicitSound({
+        name: 'elf-lord',
+        sound: 'MS_HUMANOID',
+        peaceful: true,
+        data: { mlevel: 8, mlet: '@', humanoid: true, elf: true },
+    });
+    assert.match(game._pending_message, /It curses orcs\./);
+    assert.doesNotMatch(game._pending_message, /dungeon exploration|waves/);
+
+    await tipInvisibleExplicitSound({
+        name: 'dwarf',
+        sound: 'MS_HUMANOID',
+        peaceful: true,
+        data: { mlevel: 2, mlet: 'humanoid', humanoid: true, dwarf: true },
+    });
+    assert.match(game._pending_message, /It talks about mining\./);
+
+    await tipInvisibleExplicitSound({
+        name: 'plains centaur',
+        sound: 'MS_HUMANOID',
+        peaceful: true,
+        data: { mlevel: 4, mlet: 'C', humanoid: true },
+    });
+    assert.match(game._pending_message, /It discusses hunting\./);
+
+    await tipInvisibleExplicitSound({
+        name: 'wizard',
+        sound: 'MS_HUMANOID',
+        peaceful: true,
+        data: { mlevel: 10, mlet: '@', humanoid: true, magic: true },
+    });
+    assert.match(game._pending_message, /It talks about spellcraft\./);
+
+    await tipInvisibleExplicitSound({
+        name: 'gnome',
+        sound: 'MS_HUMANOID',
+        peaceful: true,
+        data: { mlevel: 1, mlet: 'G', humanoid: true },
+    });
+    assert.match(game._pending_message, /"Many enter the dungeon, and few return to the sunlit lands\."/);
+
+    await tipInvisibleExplicitSound({
+        name: 'hobbit',
+        sound: 'MS_HUMANOID',
+        peaceful: true,
+        data: { mlevel: 1, mlet: 'humanoid', humanoid: true },
+    });
+    assert.match(game._pending_message, /It asks you about the One Ring\./);
+
+    await tipInvisibleExplicitSound({
+        name: 'archeologist',
+        sound: 'MS_HUMANOID',
+        peaceful: true,
+        data: { mlevel: 10, mlet: '@', humanoid: true, mplayer: true },
+    });
+    assert.match(game._pending_message, /It describes a recent article in "Spelunker Today" magazine\./);
+
+    await tipInvisibleExplicitSound({
+        name: 'tourist',
+        sound: 'MS_HUMANOID',
+        peaceful: true,
+        data: { mlevel: 10, mlet: '@', humanoid: true, mplayer: true },
+    });
+    assert.match(game._pending_message, /"Aloha\."/);
+});
+
+test('worn helmet tip routes peaceful boasting monsters through humanoid speech', async () => {
+    await tipInvisibleExplicitSound({
+        name: 'fire giant',
+        sound: 'MS_BOAST',
+        peaceful: true,
+        rngLog: true,
+        data: { mlevel: 9, mlet: 'giant', humanoid: true },
+    });
+
+    assert.match(game._pending_message, /It discusses dungeon exploration\./);
+    assert.doesNotMatch(game._pending_message, /boasts|mutton|Fee Fie|waves/);
     assert.deepEqual(getRngLog(), []);
 });
 
