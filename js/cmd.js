@@ -34338,6 +34338,10 @@ function tipHatMonsterIsVampireInOwnForm(monName) {
     return /^vampire(?: (?:lord|lady|leader|mage))?$/.test(monName) || monName === 'vlad the impaler';
 }
 
+const TIPHAT_MUMBLE_MONSTER_NAMES = new Set([
+    'lich', 'demilich', 'master lich', 'arch-lich', 'salamander',
+]);
+
 function tipHatMonsterSound(mon) {
     const data = mon?.data || {};
     const name = String(data.name || mon?.name || '').toLowerCase();
@@ -34355,7 +34359,7 @@ function tipHatMonsterSound(mon) {
     if (/^(rothe|minotaur)$/.test(name)) return 'moo';
     if (/^(raven|tengu)$/.test(name)) return 'sqawk';
     if (/^(leocrotta|aleax|doppelganger)$/.test(name)) return 'imitate';
-    if (/\bnaga\b/.test(name)) return 'mumble';
+    if (TIPHAT_MUMBLE_MONSTER_NAMES.has(name) || /\bnaga\b/.test(name)) return 'mumble';
     if (name === 'ki-rin') return 'spell';
     if (name === 'imp') return 'cuss';
     if (tipHatMonsterIsNymph(mon, name, mlet)) return 'seduce';

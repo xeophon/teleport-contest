@@ -4254,6 +4254,65 @@ test('worn helmet tip makes adjacent invisible naga mumble and maps it', async (
     assert.doesNotMatch(game._pending_message, /The black naga|hisses|doesn't respond|Nothing happens|waves/);
 });
 
+test('worn helmet tip makes invisible lich family mumble without RNG', async () => {
+    const liches = [
+        ['lich', 11],
+        ['demilich', 14],
+        ['master lich', 17],
+        ['arch-lich', 25],
+    ];
+    for (const [name, mlevel] of liches) {
+        const result = await tipInvisibleExplicitSound({
+            name,
+            rngLog: true,
+            data: { mlevel, mlet: 'L', humanoid: true, undead: true, magic: true },
+        });
+
+        assert.equal(result.message, 'You briefly doff your helm.  It mumbles incomprehensibly.');
+        assert.doesNotMatch(result.message, /The .*lich|threatens|doesn't respond|Nothing happens|waves/);
+        assert.deepEqual(getRngLog(), []);
+    }
+});
+
+test('worn helmet tip makes invisible salamander mumble without RNG', async () => {
+    const result = await tipInvisibleExplicitSound({
+        name: 'salamander',
+        rngLog: true,
+        data: { mlevel: 8, mlet: 'lizard', humanoid: true, slithy: true },
+    });
+
+    assert.equal(result.message, 'You briefly doff your helm.  It mumbles incomprehensibly.');
+    assert.doesNotMatch(result.message, /The salamander|threatens|hisses|doesn't respond|Nothing happens|waves/);
+    assert.deepEqual(getRngLog(), []);
+});
+
+test('worn helmet tip at visible hostile lich uses humanoid response before mumble', async () => {
+    installStableNonShopFloorState();
+    const helmet = wornArmor(3063560, 'orcish helm', 'h');
+    const lich = ordinaryThrowTarget('master lich', 6, 5, {
+        msleeping: 0,
+        mcanmove: true,
+        mcansee: true,
+        mpeaceful: false,
+        mstrategy: 'waitforu',
+        data: { name: 'master lich', mlevel: 17, mlet: 'L', humanoid: true, undead: true, magic: true },
+    });
+    game.inventory = [helmet];
+    game.level.monsters = [lich];
+    markSquareVisible(6, 5);
+
+    await enterTipCommand();
+    await rhack('h');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(lich.mstrategy, 0);
+    assert.match(game._pending_message,
+        /^You briefly doff your helm\.  The master lich (?:curses|gestures rudely|gestures offensively)(?: and (?:gestures rudely|gestures offensively))? at you\.\.\.$/);
+    assert.doesNotMatch(game._pending_message, /mumbles incomprehensibly|doesn't respond|Nothing happens|waves/);
+});
+
 test('worn helmet tip makes visible ki-rin mutter a cantrip', async () => {
     installNonShopFloorState();
     const helmet = wornArmor(3063553, 'orcish helm', 'h');
