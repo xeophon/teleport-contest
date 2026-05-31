@@ -32378,6 +32378,94 @@ test('hero-thrown blinding venom direct hit splashes on permanently blind monste
     ]);
 });
 
+test('hero-thrown acid venom direct hit burns monster through hmon path', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.u.acurr.a[A_DEX] = 25;
+    const venom = acidVenom(876066, 'a');
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, { mhp: 20, mhpmax: 20 });
+    game.inventory = [venom];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('a');
+    await rhack('l');
+
+    assert.match(game._pending_message, /Your venom burns the goblin!/);
+    assert.doesNotMatch(game._pending_message, /misses|crashes|evaporates|top of your head|harmlessly/);
+    assert.equal(goblin.msleeping, 0);
+    assert.equal(goblin.mpeaceful, 0);
+    assert.equal(goblin.mhp >= 8 && goblin.mhp <= 18, true);
+    assert.equal(game.inventory.includes(venom), false);
+    assert.equal(game.level.objects.length, 0);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rnd(20)', 'rnd(25)', 'rnd(6)', 'rnd(6)',
+    ]);
+});
+
+test('hero-thrown acid venom direct hit is harmless against acid resistance', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.u.acurr.a[A_DEX] = 25;
+    const venom = acidVenom(876067, 'a');
+    const blob = ordinaryThrowTarget('acid blob', 7, 5, {
+        mhp: 20,
+        mhpmax: 20,
+        data: { name: 'acid blob', mlevel: 1, acidResistance: true },
+    });
+    game.inventory = [venom];
+    game.level.monsters = [blob];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('a');
+    await rhack('l');
+
+    assert.match(game._pending_message, /Your venom hits the acid blob harmlessly\./);
+    assert.doesNotMatch(game._pending_message, /burns|misses|crashes|evaporates|top of your head/);
+    assert.equal(blob.msleeping, 0);
+    assert.equal(blob.mpeaceful, 0);
+    assert.equal(blob.mhp, 20);
+    assert.equal(game.inventory.includes(venom), false);
+    assert.equal(game.level.objects.length, 0);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rnd(20)', 'rnd(25)',
+    ]);
+});
+
+test('hero-thrown unpaid acid venom stack direct hit bills the burned unit', async () => {
+    const { shkp } = installCommandShopState();
+    initRng(2);
+    game.u.acurr.a[A_DEX] = 25;
+    const venoms = acidVenom(876069, 'a', 2);
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, { mhp: 20, mhpmax: 20 });
+    game.inventory = [venoms];
+    game.level.monsters = [goblin];
+    shop.addObjectToShopBill(shkp, venoms, 20);
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('a');
+    await rhack('l');
+
+    assert.match(game._pending_message, /Your venom burns the goblin!/);
+    assert.equal(venoms.quan, 1);
+    assert.equal(game.inventory.includes(venoms), true);
+    assert.equal(game.level.objects.length, 0);
+    const liveEntry = shop.shopBillEntryForObject(shkp, venoms);
+    assert.ok(liveEntry);
+    assert.equal(liveEntry.useup, false);
+    assert.equal(liveEntry.bquan, 1);
+    assert.equal(shop.shopBillEntryTotal(liveEntry), 10);
+    assert.equal(venoms.unpaidPrice, 10);
+    assert.equal(shkp.debit, 10);
+    assert.equal(shkp.billct, 1);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(-4), [
+        'rnd(20)', 'rnd(25)', 'rnd(6)', 'rnd(6)',
+    ]);
+});
+
 test('hero-thrown fertile egg direct hit applies C luck penalty', async () => {
     installNonShopFloorState();
     initRng(2);

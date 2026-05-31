@@ -17908,6 +17908,23 @@ function heroThrownBlindingVenomHitMonster(venom, mon) {
     return messages;
 }
 
+function heroThrownAcidVenomHitMonster(venom, mon) {
+    const messages = [];
+    if (monsterResistsAcid(mon)) {
+        messages.push(`Your venom hits ${heroThrownVenomTargetName(mon)} harmlessly.`);
+    } else {
+        messages.push(`Your venom burns ${heroThrownVenomTargetName(mon)}!`);
+        mon.mhp = (mon.mhp || 1) - rnd(6) - rnd(6);
+        if ((mon.mhp || 0) <= 0) killMonsterFromPotionHit(mon, messages);
+    }
+    if (!mon.dead) {
+        mon.msleeping = 0;
+        setHeroObjectHitMonsterAngry(mon);
+    }
+    markThrownBrokenObjectDebt(venom);
+    return messages;
+}
+
 function supportsHeroThrownPotionUpwardHit(potion) {
     if (!isPotionObject(potion)) return false;
     const kind = thrownPotionEffectKind(potion);
@@ -60004,12 +60021,14 @@ export async function rhack(_cmd) {
         };
 	        const combatObject = item.cls === 'weapon' || item.cls === 'gem' || item.glyph === ')' || item.otyp === GEM_CLASS;
 	        let impactMessage = '';
-	        if (targetMon && isBlindingVenomObject(item)) {
+	        if (targetMon && (isBlindingVenomObject(item) || isAcidVenomObject(item))) {
 	            rnd(20);
 	            const dex = game.u?.acurr?.a?.[A_DEX] ?? 10;
 	            if (dex > rnd(25)) {
 	                if ((item.quan || 1) > 1) splitCarriedObjectShopBill(item, thrownObject, 1);
-	                const messages = heroThrownBlindingVenomHitMonster(thrownObject, targetMon);
+	                const messages = isAcidVenomObject(item)
+	                    ? heroThrownAcidVenomHitMonster(thrownObject, targetMon)
+	                    : heroThrownBlindingVenomHitMonster(thrownObject, targetMon);
 	                removeInventoryItem(item, 1);
 	                newsym(targetMon.mx, targetMon.my);
 	                await setMessage(messages.join('  '));
