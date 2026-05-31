@@ -4224,7 +4224,7 @@ test('worn helmet tip makes peaceful lawful minion cuss about redemption', async
 
 async function tipInvisibleExplicitSound({ name, sound, peaceful = false, tame = 0,
     gold = 0, seed = null, rngLog = false, role = '', inventory = [], data = {}, extra = {},
-    moves = null, traps = null } = {}) {
+    moves = null, traps = null, endgame = false } = {}) {
     installStableNonShopFloorState();
     if (seed != null) initRng(seed);
     if (rngLog) enableRngLog({ reset: true });
@@ -4236,6 +4236,10 @@ async function tipInvisibleExplicitSound({ name, sound, peaceful = false, tame =
     if (role) {
         game._startup_role = role;
         game.urole = { ...(game.urole || {}), name: { m: role, f: role } };
+    }
+    if (endgame) {
+        game.astral_level = { dnum: 8, dlevel: 5 };
+        game.u.uz = { dnum: 8, dlevel: 1 };
     }
     game.u.seeInvisible = false;
     const targetLoc = game.level.at(6, 5);
@@ -4424,6 +4428,56 @@ test('worn helmet tip keeps non-endgame mplayers on hostile humanoid threat', as
 
     assert.match(game._pending_message, /It threatens you\./);
     assert.doesNotMatch(game._pending_message, /Talk\? --|The wizard|doesn't respond|Nothing happens|waves/);
+    assert.deepEqual(getRngLog(), []);
+});
+
+test('worn helmet tip makes hostile endgame mplayers use same-class talk', async () => {
+    await tipInvisibleExplicitSound({
+        name: 'wizard',
+        sound: 'MS_HUMANOID',
+        peaceful: false,
+        endgame: true,
+        role: 'Wizard',
+        rngLog: true,
+        data: { mlevel: 10, mlet: '@', humanoid: true, mplayer: true, mnum: 317 },
+    });
+
+    assert.match(game._pending_message,
+        /"Talk\? -- (I can't win, and neither will you!|You don't deserve to win!|Mine should be the honor, not yours!)"/);
+    assert.doesNotMatch(game._pending_message, /threatens you|The wizard|doesn't respond|Nothing happens|waves/);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(3)']);
+});
+
+test('worn helmet tip makes hostile endgame mplayers use other-class talk', async () => {
+    await tipInvisibleExplicitSound({
+        name: 'wizard',
+        sound: 'MS_HUMANOID',
+        peaceful: false,
+        endgame: true,
+        role: 'Tourist',
+        rngLog: true,
+        data: { mlevel: 10, mlet: '@', humanoid: true, mplayer: true, mnum: 317 },
+    });
+
+    assert.match(game._pending_message,
+        /"Talk\? -- (The low-life wants to talk, eh\?|Fight, scum!|Here is what I have to say!)"/);
+    assert.doesNotMatch(game._pending_message,
+        /I can't win|You don't deserve|Mine should|threatens you|doesn't respond|Nothing happens|waves/);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(3)']);
+});
+
+test('worn helmet tip keeps hostile endgame non-mplayer humanoids threatening', async () => {
+    await tipInvisibleExplicitSound({
+        name: 'soldier',
+        sound: 'MS_HUMANOID',
+        peaceful: false,
+        endgame: true,
+        rngLog: true,
+        data: { mlevel: 6, mlet: '@', humanoid: true },
+    });
+
+    assert.match(game._pending_message, /It threatens you\./);
+    assert.doesNotMatch(game._pending_message, /Talk\? --|doesn't respond|Nothing happens|waves/);
     assert.deepEqual(getRngLog(), []);
 });
 

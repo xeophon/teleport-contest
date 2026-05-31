@@ -33807,6 +33807,60 @@ function tipHatMonsterIsMplayer(mon) {
         || data.mplayer || data.is_mplayer || data.isMplayer);
 }
 
+const TIPHAT_MPLAYER_SAME_CLASS_MESSAGES = [
+    "I can't win, and neither will you!",
+    "You don't deserve to win!",
+    "Mine should be the honor, not yours!",
+];
+
+const TIPHAT_MPLAYER_OTHER_CLASS_MESSAGES = [
+    'The low-life wants to talk, eh?',
+    'Fight, scum!',
+    'Here is what I have to say!',
+];
+
+const TIPHAT_MPLAYER_ROLE_NAMES = [
+    'archeologist', 'barbarian', 'caveman', 'healer', 'knight', 'monk', 'priest',
+    'ranger', 'rogue', 'samurai', 'tourist', 'valkyrie', 'wizard',
+];
+
+function tipHatCanonicalRoleName(value) {
+    const role = String(value || '').toLowerCase().replace(/[^a-z]/g, '');
+    if (!role) return '';
+    if (role === 'cavewoman') return 'caveman';
+    if (role === 'priestess') return 'priest';
+    return TIPHAT_MPLAYER_ROLE_NAMES.find(name => name.replace(/[^a-z]/g, '') === role) || '';
+}
+
+function tipHatMplayerRoleFromIndex(index) {
+    if (!Number.isInteger(index)) return '';
+    if (index >= 305 && index <= 317) return TIPHAT_MPLAYER_ROLE_NAMES[index - 305] || '';
+    if (index >= 0 && index < TIPHAT_MPLAYER_ROLE_NAMES.length)
+        return TIPHAT_MPLAYER_ROLE_NAMES[index] || '';
+    return '';
+}
+
+function tipHatHeroRoleName() {
+    const numeric = game.player?.roleMnum ?? game.u?.roleMnum ?? game.urole?.mnum;
+    return tipHatMplayerRoleFromIndex(numeric)
+        || tipHatCanonicalRoleName(game.urole?.name?.m || game._startup_role || game.urole?.name?.f);
+}
+
+function tipHatMonsterMplayerRole(mon, monName) {
+    const data = mon?.data || {};
+    const numeric = mon?.roleMnum ?? mon?.mnum ?? data.roleMnum ?? data.mnum ?? data.monsndx;
+    return tipHatMplayerRoleFromIndex(numeric)
+        || tipHatCanonicalRoleName(mon?.role || mon?.roleName || data.role || data.roleName || monName);
+}
+
+function tipHatMplayerTalk(mon, monName) {
+    const monsterRole = tipHatMonsterMplayerRole(mon, monName);
+    const heroRole = tipHatHeroRoleName();
+    const sameClass = monsterRole && heroRole && monsterRole === heroRole;
+    const messages = sameClass ? TIPHAT_MPLAYER_SAME_CLASS_MESSAGES : TIPHAT_MPLAYER_OTHER_CLASS_MESSAGES;
+    return { handled: true, message: `"Talk? -- ${messages[rn2(3)]}"` };
+}
+
 function tipHatMonsterMlet(mon) {
     return String(mon?.data?.mlet ?? mon?.mlet ?? '').toLowerCase();
 }
@@ -34095,7 +34149,7 @@ function tipHatMonsterNoise(mon, { visible = tipHatMonsterVisible(mon) } = {}) {
     case 'humanoid':
         if (!peaceful) {
             if (tipHatMonsterIsMplayer(mon) && In_endgame(game.u?.uz))
-                return { handled: false, message: '' };
+                return tipHatMplayerTalk(mon, monName);
             return { handled: true, message: `${name} threatens you.` };
         }
         return tipHatPeacefulHumanoidNoise(mon, name, monName, moves, hungryTime);
