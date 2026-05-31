@@ -33874,6 +33874,52 @@ function chatMonsterName(mon, visible) {
     return name;
 }
 
+const CHAT_SILENT_POLYFORM_NAMES = new Set([
+    'acid blob', 'quivering blob', 'gelatinous cube',
+    'blue jelly', 'spotted jelly', 'ochre jelly',
+    'small mimic', 'large mimic', 'giant mimic',
+    'giant ant', 'soldier ant', 'fire ant', 'giant beetle',
+]);
+
+function chatHeroPolyform() {
+    return polyselfForm() || game.u?._polyself_form || game.u?.data || {};
+}
+
+function chatHeroIsSilent() {
+    const form = chatHeroPolyform();
+    const sound = form?.msound ?? form?.sound;
+    const soundName = String(sound ?? '').toLowerCase();
+    const name = String(form?.name || '').toLowerCase();
+    return !!(form?.silent || form?.msilent || sound === 0
+        || soundName === 'silent' || soundName === 'ms_silent'
+        || CHAT_SILENT_POLYFORM_NAMES.has(name));
+}
+
+function chatHeroPolyformArticleName() {
+    return articleFor(String(chatHeroPolyform()?.name || 'creature').toLowerCase());
+}
+
+function chatPreDirectionMessage() {
+    if (chatHeroIsSilent())
+        return `As ${chatHeroPolyformArticleName()}, you cannot speak.`;
+    if (heroIsStrangledForChoke()) return "You can't speak.  You're choking!";
+    if (game.u?.uswallow) return "They won't hear you out there.";
+    if (game.u?.uinwater || game.u?.underwater || game.u?.uunderwater)
+        return 'Your speech is unintelligible underwater.';
+    return '';
+}
+
+async function beginChatCommand() {
+    const preDirectionMessage = chatPreDirectionMessage();
+    if (preDirectionMessage) {
+        await setMessage(preDirectionMessage);
+        game._command_mode = null;
+        return;
+    }
+    await setMessage('Talk to whom? (in what direction)');
+    game._command_mode = 'chatDirection';
+}
+
 function chatConsumeTurn() {
     game._process_command_time_now = 1;
     game.context ??= {};
@@ -55532,8 +55578,7 @@ export async function rhack(_cmd) {
                 return;
             }
             if (command === 'chat') {
-                await setMessage('Talk to whom? (in what direction)');
-                game._command_mode = 'chatDirection';
+                await beginChatCommand();
                 return;
             }
             if (command === 'name') {

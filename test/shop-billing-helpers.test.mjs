@@ -4624,10 +4624,20 @@ async function chatAdjacentMonster({
 
 async function chatDirectionKey(ch, { setup = null } = {}) {
     installStableNonShopFloorState();
-    if (setup) setup();
+    if (setup) await setup();
 
     await enterChatCommand();
     await rhack(ch);
+
+    assert.equal(game._command_mode, null);
+    return game._pending_message;
+}
+
+async function startChatCommandOnly({ setup = null } = {}) {
+    installStableNonShopFloorState();
+    if (setup) await setup();
+
+    await enterChatCommand();
 
     assert.equal(game._command_mode, null);
     return game._pending_message;
@@ -5226,6 +5236,58 @@ test('chat with visible saddled tame eating pet uses C saddle wording', async ()
     assert.equal(game.context?.move || 0, 0);
     assert.doesNotMatch(result.message, /The pony is eating noisily|whickers|neighs|Nothing happens/);
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
+});
+
+test('silent polyform chat is blocked before direction prompt', async () => {
+    const message = await startChatCommandOnly({
+        setup: async () => {
+            await debugPolyselfInto('acid blob');
+        },
+    });
+
+    assert.equal(message, 'As an acid blob, you cannot speak.');
+    assert.equal(game.context?.move || 0, 0);
+    assert.doesNotMatch(message, /Talk to whom|speech is unintelligible|choking|out there/);
+});
+
+test('strangulation blocks chat before direction prompt', async () => {
+    const message = await startChatCommandOnly({
+        setup: () => {
+            game.u.strangled = true;
+            game.u._statusSuffix = `${game.u._statusSuffix || ''} Strngl`;
+        },
+    });
+
+    assert.equal(message, "You can't speak.  You're choking!");
+    assert.equal(game.context?.move || 0, 0);
+    assert.doesNotMatch(message, /Talk to whom|speech is unintelligible|out there/);
+});
+
+test('swallowed chat is blocked before direction prompt', async () => {
+    const message = await startChatCommandOnly({
+        setup: () => {
+            game.u.uswallow = 1;
+            game.u.ustuck = ordinaryThrowTarget('purple worm', 5, 5);
+        },
+    });
+
+    assert.equal(message, "They won't hear you out there.");
+    assert.equal(game.context?.move || 0, 0);
+    assert.doesNotMatch(message, /Talk to whom|speech is unintelligible|choking/);
+});
+
+test('underwater chat is blocked before direction prompt', async () => {
+    const message = await startChatCommandOnly({
+        setup: () => {
+            game.u.uinwater = true;
+            game.u.underwater = true;
+            game.u.uunderwater = true;
+        },
+    });
+
+    assert.equal(message, 'Your speech is unintelligible underwater.');
+    assert.equal(game.context?.move || 0, 0);
+    assert.doesNotMatch(message, /Talk to whom|out there|choking/);
 });
 
 test('chat up without a steed uses C vertical no-hear response without time', async () => {
