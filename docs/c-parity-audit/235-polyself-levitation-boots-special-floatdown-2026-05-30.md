@@ -25,7 +25,7 @@ Added focused coverage in `test/shop-billing-helpers.test.mjs`:
 
 ## Remaining Gaps
 
-- Pool, lava, trap, Sokoban, swallowed/engulfed, steed, hallucination, blocked levitation, and post-landing pickup/encumbrance effects from `float_down()` are still not modeled for polyself levitation boot loss.
+- Pool fallout and successful crawl-out placement are covered in audit 336; lava, trap, Sokoban, swallowed/engulfed, steed, hallucination, blocked levitation, and post-landing pickup/encumbrance effects from `float_down()` are still not modeled for polyself levitation boot loss.
 - JS levitation source tracking remains thinner than C's `HLevitation`, `ELevitation`, and `BLevitation` masks.
 
 ## Verification

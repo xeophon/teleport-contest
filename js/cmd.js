@@ -391,7 +391,9 @@ function carriedDropDisplayColor(item) {
     return NO_COLOR;
 }
 
-function dropCarriedObjectAtHero(item, messages = []) {
+function dropCarriedObjectAtHero(item, messages = [], dropTarget = null) {
+    const dropX = dropTarget?.x ?? game.u?.ux ?? 0;
+    const dropY = dropTarget?.y ?? game.u?.uy ?? 0;
     const dropped = {
         ...item,
         invlet: item.invlet ?? item.letter,
@@ -400,8 +402,8 @@ function dropCarriedObjectAtHero(item, messages = []) {
         wielded: false,
         worn: false,
         quivered: false,
-        ox: game.u?.ux || 0,
-        oy: game.u?.uy || 0,
+        ox: dropX,
+        oy: dropY,
         glyph: item.cls === 'weapon' ? ')' : item.cls === 'armor' ? '[' : item.glyph || (item.cls === 'wand' ? '/'
             : item.cls === 'ring' ? '=' : item.cls === 'potion' ? '!' : item.cls === 'scroll' ? '?'
                 : item.cls === 'spellbook' ? '+' : '('),
@@ -12743,6 +12745,13 @@ function heroHasOtherLevitationSource(item) {
             && (objectKindKey(candidate) === 'levitation boots' || objectKindKey(candidate) === 'ring of levitation')));
 }
 
+function heroAvoidsPolyselfLevitationPoolFallout() {
+    const form = polyselfForm();
+    return !!(game.u?.waterWalking || game.u?.Wwalking || game.u?.swimming || game.u?.Swimming
+        || game.u?.amphibious || game.u?.Amphibious || game.u?.breathless || game.u?.Breathless
+        || form?.swimmer || form?.amphibious || form?.breathless || form?.nonliving);
+}
+
 function ordinaryPolyselfLevitationFloatDownAllowed(x, y, loc) {
     if (!game.u?.levitating || game.u?.flying || game.u?.Flying) return false;
     if (game.u?.uswallow || game.u?.ustuck || game.u?.uinwater || game.u?.underwater || game.u?.uunderwater) return false;
@@ -12761,6 +12770,20 @@ function clearPolyselfLevitationBootSource(item) {
     recordKnownArmorDiscovery('levitation boots', false);
 }
 
+function addPolyselfLevitationPoolFallout(item, messages, x, y, loc) {
+    if (!game.u?.levitating || game.u?.flying || game.u?.Flying) return false;
+    if (game.u?.uswallow || game.u?.ustuck || game.u?.uinwater || game.u?.underwater || game.u?.uunderwater) return false;
+    if (Is_airlevel(game.u?.uz) || Is_waterlevel(game.u?.uz)) return false;
+    if (!movementIsPoolAt(x, y, loc) || heroAvoidsPolyselfLevitationPoolFallout()) return false;
+    const targetMoveTyp = movementSurfaceTerrain(loc);
+    clearPolyselfLevitationBootSource(item);
+    polyselfWaterFallLanding(x, y, targetMoveTyp);
+    messages.push(targetMoveTyp === WATER
+        ? 'You plunge into the wall of water!  You try to crawl out of the water.'
+        : 'You fall into the pool of water!  You sink like a rock.');
+    return true;
+}
+
 function polyselfLevitationFloatDownMessage(x, y, loc) {
     if (!game.u?.levitating) return '';
     if (game.u.flying || game.u.Flying) return 'You have stopped levitating and are now flying.';
@@ -12775,6 +12798,7 @@ function addPolyselfLevitationBootsOffSideEffects(item, messages) {
     const x = game.u.ux || 0;
     const y = game.u.uy || 0;
     const loc = game.level?.at(x, y);
+    if (addPolyselfLevitationPoolFallout(item, messages, x, y, loc)) return;
     const floatDownMessage = polyselfLevitationFloatDownMessage(x, y, loc);
     if (!floatDownMessage) return;
     clearPolyselfLevitationBootSource(item);
@@ -12862,10 +12886,15 @@ function dropPolyselfEquipmentItems(items, floorMessages = [], form = polyselfFo
         clearPolyselfEyewearState(item, form);
         const slot = armorSlot(item);
         const refreshMonsters = slot === 'helm' && polyselfHelmetNeedsMonsterRefresh(item);
+        const pendingRelocationBefore = game._relocate_after_more;
         if (slot === 'helm') addPolyselfHelmetOffSideEffects(item, floorMessages);
         if (slot === 'gloves') addPolyselfGlovesOffSideEffects(item);
         if (slot === 'boots') addPolyselfBootsOffSideEffects(item, floorMessages);
-        dropCarriedObjectAtHero(item, floorMessages);
+        const pendingRelocationAfter = game._relocate_after_more;
+        const dropTarget = pendingRelocationAfter && pendingRelocationAfter !== pendingRelocationBefore
+            ? { x: pendingRelocationAfter.x, y: pendingRelocationAfter.y }
+            : null;
+        dropCarriedObjectAtHero(item, floorMessages, dropTarget);
         changed = true;
         if (refreshMonsters) seeMonsters();
     }

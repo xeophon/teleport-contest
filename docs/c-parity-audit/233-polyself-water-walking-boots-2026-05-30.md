@@ -27,8 +27,8 @@ Added focused coverage in `test/shop-billing-helpers.test.mjs`:
 ## Remaining Gaps
 
 - Lava fallout from `Boots_off()` is still not modeled in polyself boot loss.
-- Levitation boots still do not run the C `float_down()` side-effect branch when pushed off by polyself.
-- This slice models the successful crawl-out path only; emergency disrobe, fatal drowning, amphibious/swimming/breathless handling, hallucinated Titanic wording, and exact C `rnd_nextto_goodpos()` selection remain broader water-entry gaps.
+- Levitation boot `float_down()` work is now split across audits 234, 235, and 336.
+- Successful crawl-out placement is covered in audit 336; emergency disrobe, fatal drowning, amphibious/swimming/breathless handling, hallucinated Titanic wording, and exact C `rnd_nextto_goodpos()` selection remain broader water-entry gaps.
 - Ceiling-clinger handling uses form metadata but does not yet model level-specific ceiling availability.
 
 ## Verification
