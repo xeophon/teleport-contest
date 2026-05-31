@@ -5563,6 +5563,164 @@ test('deaf chat down at mounted pony is silent and does not consume time', async
     assert.equal(game.context?.move || 0, 0);
 });
 
+test('chat at empty passable square is silent without time', async () => {
+    const message = await chatDirectionKey('l');
+
+    assert.equal(message, '');
+    assert.equal(game.context?.move || 0, 0);
+});
+
+test('chat at visible floor statue reports C no-notice response', async () => {
+    const message = await chatDirectionKey('l', {
+        setup: () => {
+            game.level.objects = [statueTrapStatue(3063601, 6, 5, 'goblin')];
+            markSquareVisible(6, 5);
+        },
+    });
+
+    assert.equal(message, 'The statue seems not to notice you.');
+    assert.equal(game.context?.move || 0, 0);
+});
+
+test('hallucinating chat at floor statue uses random monster no-notice response', async () => {
+    const message = await chatDirectionKey('l', {
+        setup: () => {
+            initRng(1);
+            game.u.hallucinating = true;
+            game.u._statusSuffix = ' Hallu';
+            game.level.objects = [statueTrapStatue(3063602, 6, 5, 'goblin')];
+            markSquareVisible(6, 5);
+        },
+    });
+
+    assert.match(message, /^The .+ seems not to notice you\.$/);
+    assert.notEqual(message, 'The statue seems not to notice you.');
+});
+
+test('blind chat at floor statue is silent', async () => {
+    const message = await chatDirectionKey('l', {
+        setup: () => {
+            game.u.blind = true;
+            game.u._statusSuffix = ' Blind';
+            game.level.objects = [statueTrapStatue(3063603, 6, 5, 'goblin')];
+            markSquareVisible(6, 5);
+        },
+    });
+
+    assert.equal(message, '');
+});
+
+test('chat at object mimic is silent and leaves wait strategy intact', async () => {
+    let mimic;
+    const message = await chatDirectionKey('l', {
+        setup: () => {
+            mimic = ordinaryThrowTarget('large mimic', 6, 5, {
+                msleeping: 0,
+                mcanmove: true,
+                mcansee: true,
+                mstrategy: 'waitforu',
+                m_ap_type: M_AP_OBJECT,
+                appearObj: MAGIC_LAMP,
+                appearGlyph: '(',
+                data: { name: 'large mimic', mlevel: 8, mlet: 'mimic' },
+            });
+            game.level.monsters = [mimic];
+            markSquareVisible(6, 5);
+        },
+    });
+
+    assert.equal(message, '');
+    assert.equal(mimic.mstrategy, 'waitforu');
+});
+
+test('chat at furniture mimic is silent and leaves wait strategy intact', async () => {
+    let mimic;
+    const message = await chatDirectionKey('l', {
+        setup: () => {
+            mimic = ordinaryThrowTarget('large mimic', 6, 5, {
+                msleeping: 0,
+                mcanmove: true,
+                mcansee: true,
+                mstrategy: 'waitforu',
+                m_ap_type: M_AP_FURNITURE,
+                appearGlyph: '{',
+                data: { name: 'large mimic', mlevel: 8, mlet: 'mimic' },
+            });
+            game.level.monsters = [mimic];
+            markSquareVisible(6, 5);
+        },
+    });
+
+    assert.equal(message, '');
+    assert.equal(mimic.mstrategy, 'waitforu');
+});
+
+test('chat at wall uses C wall response while stone remains silent', async () => {
+    const wallMessage = await chatDirectionKey('l', {
+        setup: () => {
+            game.level.at(6, 5).typ = DBWALL;
+        },
+    });
+
+    assert.equal(wallMessage, "It's like talking to a wall.");
+
+    const stoneMessage = await chatDirectionKey('l', {
+        setup: () => {
+            game.level.at(6, 5).typ = STONE;
+        },
+    });
+
+    assert.equal(stoneMessage, '');
+});
+
+test('hallucinating chat at wall uses C wall-talk table', async () => {
+    const message = await chatDirectionKey('l', {
+        setup: () => {
+            initRng(1);
+            game.u.hallucinating = true;
+            game.u._statusSuffix = ' Hallu';
+            game.level.at(6, 5).typ = DBWALL;
+        },
+    });
+
+    assert.match(message, /^The wall (gripes about its job\.|tells you a funny joke!|insults your heritage!|chuckles\.|guffaws merrily!|deprecates your exploration efforts\.|suggests a stint of rehab\.\.\.|doesn't seem to be interested\.)$/);
+});
+
+test('blind chat at wall requires mapped wall memory', async () => {
+    const unmappedMessage = await chatDirectionKey('l', {
+        setup: () => {
+            game.u.blind = true;
+            game.u._statusSuffix = ' Blind';
+            game.level.at(6, 5).typ = DBWALL;
+        },
+    });
+
+    assert.equal(unmappedMessage, '');
+
+    const mappedMessage = await chatDirectionKey('l', {
+        setup: () => {
+            game.u.blind = true;
+            game.u._statusSuffix = ' Blind';
+            const loc = game.level.at(6, 5);
+            loc.typ = DBWALL;
+            loc.lastseentyp = DBWALL;
+        },
+    });
+
+    assert.equal(mappedMessage, "It's like talking to a wall.");
+});
+
+test('deaf chat at wall is silent', async () => {
+    const message = await chatDirectionKey('l', {
+        setup: () => {
+            game.u._deafTimeout = 10;
+            game.level.at(6, 5).typ = DBWALL;
+        },
+    });
+
+    assert.equal(message, '');
+});
+
 test('chat with visible nymph uses C seduce wording', async () => {
     const result = await chatAdjacentMonster({
         name: 'wood nymph',

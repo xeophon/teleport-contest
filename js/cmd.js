@@ -33874,6 +33874,50 @@ function chatMonsterName(mon, visible) {
     return name;
 }
 
+function chatClearNoTarget() {
+    game._pending_message = '';
+    game._message_more = 0;
+    game._command_mode = null;
+}
+
+function chatTargetIsWall(loc) {
+    return !!loc && (IS_WALL(loc.typ) || loc.typ === SDOOR);
+}
+
+function chatVisibleStatueAt(x, y) {
+    const obj = topFloorObjectAt(x, y);
+    return obj && (obj.kind === 'statue' || obj.otyp === STATUE) ? obj : null;
+}
+
+function chatBlindHasMappedWall(loc) {
+    return IS_WALL(loc?.lastseentyp ?? 0);
+}
+
+function chatStatueTargetName() {
+    return heroIsHallucinating()
+        ? (rndmonnum()?.name || randomHallucinatedMonsterName())
+        : 'statue';
+}
+
+const CHAT_HALLUCINATED_WALL_TALK = [
+    'gripes about its job.',
+    'tells you a funny joke!',
+    'insults your heritage!',
+    'chuckles.',
+    'guffaws merrily!',
+    'deprecates your exploration efforts.',
+    'suggests a stint of rehab...',
+    "doesn't seem to be interested.",
+];
+
+function chatWallTargetMessage() {
+    if (!heroIsHallucinating()) return "It's like talking to a wall.";
+    let idx = rn2(10);
+    if (idx >= CHAT_HALLUCINATED_WALL_TALK.length)
+        idx = CHAT_HALLUCINATED_WALL_TALK.length - 1;
+    return `The wall ${CHAT_HALLUCINATED_WALL_TALK[idx]}`;
+}
+
 const CHAT_SILENT_POLYFORM_NAMES = new Set([
     'acid blob', 'quivering blob', 'gelatinous cube',
     'blue jelly', 'spotted jelly', 'ochre jelly',
@@ -57151,29 +57195,36 @@ export async function rhack(_cmd) {
         const tx = (game.u?.ux || 0) + dir.dx;
         const ty = (game.u?.uy || 0) + dir.dy;
         if (!isok(tx, ty)) {
-            game._command_mode = null;
-            game._pending_message = '';
-            game._message_more = 0;
+            chatClearNoTarget();
             return;
         }
         const target = dir ? game.level?.monsters?.find(mon => mon.mx === tx && mon.my === ty) : null;
+        const loc = dir ? game.level?.at(tx, ty) : null;
+        if (!target || target.mundetected) {
+            if (chatVisibleStatueAt(tx, ty)) {
+                if (!heroIsBlind()) await setMessage(`The ${chatStatueTargetName()} seems not to notice you.`);
+                else chatClearNoTarget();
+                game._command_mode = null;
+                return;
+            }
+            if (!heroIsDeaf() && chatTargetIsWall(loc)) {
+                if (heroIsBlind() && !chatBlindHasMappedWall(loc)) chatClearNoTarget();
+                else {
+                    await setMessage(chatWallTargetMessage());
+                    game._command_mode = null;
+                }
+                return;
+            }
+        }
+        if (!target || target.mundetected || tipHatApparentObjectOrFurniture(target)) {
+            chatClearNoTarget();
+            return;
+        }
         if (target && maybeQueueQuestLeaderTalk(target, { automatic: false })) {
             return;
         }
-        const targetSound = target ? tipHatMonsterSound(target) : '';
-        if (target) {
-            await finishChatMonsterTarget(target, targetSound);
-            return;
-        }
-        const loc = dir ? game.level?.at(tx, ty) : null;
-        if (loc && !IS_OBSTRUCTED(loc.typ)) {
-            game._pending_message = '';
-            game._message_more = 0;
-            game._command_mode = null;
-            return;
-        }
-        await setMessage("It's like talking to a wall.");
-        game._command_mode = null;
+        const targetSound = tipHatMonsterSound(target);
+        await finishChatMonsterTarget(target, targetSound);
         return;
     }
 
