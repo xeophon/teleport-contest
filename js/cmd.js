@@ -36579,6 +36579,12 @@ function tipHatMonsterHungryTime(mon) {
         ?? mon?.mextra?.edog?.hungrytime ?? NaN);
 }
 
+function tipHatMonsterPlineName(mon, visible, fallbackName) {
+    if (!visible) return 'It';
+    if (heroIsHallucinating()) return `The ${randomHallucinatedMonsterName()}`;
+    return fallbackName || fireScrollMonsterName(mon);
+}
+
 function tipHatLivingMonster(mon) {
     return !!mon && !mon.dead && (mon.mhp == null || mon.mhp > 0);
 }
@@ -36860,7 +36866,7 @@ function tipHatMonsterNoise(mon, { visible = tipHatMonsterVisible(mon), nameOver
         if (!peaceful) {
             if (tipHatMonsterIsMplayer(mon) && In_endgame(game.u?.uz))
                 return tipHatMplayerTalk(mon, monName);
-            return { handled: true, message: `${name} threatens you.` };
+            return { handled: true, message: `${tipHatMonsterPlineName(mon, visible, name)} threatens you.` };
         }
         return tipHatPeacefulHumanoidNoise(mon, name, monName, moves, hungryTime);
     case 'boast':

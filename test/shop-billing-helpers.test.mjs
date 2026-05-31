@@ -7,7 +7,7 @@ import { newsym, refreshHallucinatedMap } from '../js/display.js';
 import { game, resetGame } from '../js/gstate.js';
 import { pushKey, resetInputState } from '../js/input.js';
 import { createMonsterCorpseOrGlob, mkcorpstat } from '../js/mklev.js';
-import { enableRngLog, getRngLog, initRng } from '../js/rng.js';
+import { enableDisplayRngLog, enableRngLog, getRngLog, initRng } from '../js/rng.js';
 import { A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_STR, A_WIS, ALTAR, AM_SHRINE, Align2amask, BILLSZ, CANDLESHOP, CLOUD, CORPSTAT_HISTORIC, COULD_SEE, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, D_CLOSED, D_NODOOR, FOUNTAIN, HOLE, ICE, ICED_POOL, IN_SIGHT, LADDER, LAVAPOOL, MIGR_LADDER_UP, MIGR_SSTAIRS, MIGR_STAIRS_UP, MOAT, M_AP_FURNITURE, M_AP_OBJECT, NORMAL_SPEED, PIT, POOL, REPAIR_DELAY, ROOM, ROOMOFFSET, SDOOR, SHOPBASE, SHOP_DOOR_COST, SQKY_BOARD, STAIRS, STATUE_TRAP, STONE, STRAT_APPEARMSG, STRAT_WAITFORU, STRAT_WAITMASK, TEMPLE, TRAPDOOR, TT_LAVA, TT_WEB, WEB, W_SADDLE } from '../js/const.js';
 import { currentFruitId, setCurrentFruitName } from '../js/fruit.js';
 import { CLR_BRIGHT_MAGENTA, CLR_BROWN, CLR_WHITE } from '../js/terminal.js';
@@ -5642,19 +5642,51 @@ test('chat with visible generated-sound Yeenoghu grunts as MS_ORC', async () => 
 });
 
 test('hallucinating chat with visible generated-sound Orcus maps MS_ORC to humanoid threat', async () => {
-    const result = await chatAdjacentMonster({
-        name: 'Orcus',
-        peaceful: false,
-        hallucinating: true,
-        rngLog: true,
-        data: { name: 'Orcus', mlevel: 66, mlet: '&', demon: true, unique: true },
-    });
+    let result;
+    enableDisplayRngLog(true);
+    try {
+        result = await chatAdjacentMonster({
+            name: 'Orcus',
+            peaceful: false,
+            hallucinating: true,
+            rngLog: true,
+            data: { name: 'Orcus', mlevel: 66, mlet: '&', demon: true, unique: true },
+        });
+    } finally {
+        enableDisplayRngLog(false);
+    }
 
     assert.match(result.message, /threatens you\.$/);
     assert.equal(result.target.mstrategy, 0);
     assert.equal(game.context.move, 1);
     assert.doesNotMatch(result.message, /The Orcus|grunts|We're all doomed|Hell shall|Nothing happens|waves/);
-    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
+    const log = getRngLog();
+    assert.match(log[0], /^~drn2\(430\)=/);
+    assert.equal(log.some(entry => !entry.startsWith('~drn2(')), false);
+});
+
+test('hallucinating chat with visible hostile humanoid uses hallucinated Monnam subject', async () => {
+    let result;
+    enableDisplayRngLog(true);
+    try {
+        result = await chatAdjacentMonster({
+            name: 'soldier',
+            peaceful: false,
+            hallucinating: true,
+            rngLog: true,
+            data: { name: 'soldier', mlevel: 6, mlet: '@', humanoid: true, msound: 'MS_HUMANOID' },
+        });
+    } finally {
+        enableDisplayRngLog(false);
+    }
+
+    assert.match(result.message, /threatens you\.$/);
+    assert.equal(result.target.mstrategy, 0);
+    assert.equal(game.context.move, 1);
+    assert.doesNotMatch(result.message, /The soldier|grunts|Nothing happens|waves|gestures|curses/);
+    const log = getRngLog();
+    assert.match(log[0], /^~drn2\(430\)=/);
+    assert.equal(log.some(entry => !entry.startsWith('~drn2(')), false);
 });
 
 test('chat with same-race generated-sound magic MS_ORC monsters uses spellcraft', async () => {
