@@ -18680,11 +18680,31 @@ function heroThrownOrdinaryCorpseUpwardMessages(corpse) {
     return heroThrownOrdinaryCorpseSelfHitMessages(corpse, 'almost hits', ceilingName);
 }
 
-function isCleanPlainDaggerObject(obj) {
+const HERO_TOSS_UP_DAGGER_SMALL_DAMAGE = new Map([
+    ['dagger', 4],
+]);
+
+function plainDaggerObjectKey(obj) {
+    return obj?.otyp === DAGGER ? 'dagger' : objectKindKey(obj);
+}
+
+function isPlainDaggerObject(obj) {
     if (!obj) return false;
-    if (!(obj.otyp === DAGGER || objectKindKey(obj) === 'dagger')) return false;
-    return !obj.artifact && !obj.oartifact && !obj.blessed && !obj.cursed && !obj.opoisoned
-        && (obj.spe || 0) === 0 && !(obj.oeroded || 0) && !(obj.oeroded2 || 0);
+    if (plainDaggerObjectKey(obj) !== 'dagger') return false;
+    return !obj.artifact && !obj.oartifact;
+}
+
+function heroThrownGenericWeaponDamage(obj) {
+    const die = HERO_TOSS_UP_DAGGER_SMALL_DAMAGE.get(plainDaggerObjectKey(obj));
+    if (!die || !isPlainDaggerObject(obj)) return null;
+    let damage = rnd(die);
+    damage += Math.trunc(Number(obj.spe || 0));
+    if (damage < 0) damage = 0;
+    if (damage > 0) {
+        damage -= Math.max(0, Math.trunc(Number(obj.oeroded || 0)), Math.trunc(Number(obj.oeroded2 || 0)));
+        if (damage < 1) damage = 1;
+    }
+    return damage;
 }
 
 function isTinOpenerTossObject(obj) {
@@ -18692,12 +18712,11 @@ function isTinOpenerTossObject(obj) {
 }
 
 function isHeroThrownGenericDamagingUpwardObject(obj) {
-    return isTinOpenerTossObject(obj) || isCleanPlainDaggerObject(obj);
+    return isTinOpenerTossObject(obj) || isPlainDaggerObject(obj);
 }
 
 function heroThrownGenericObjectFallingDamage(obj, helmet = null) {
-    let damage = 0;
-    if (isCleanPlainDaggerObject(obj)) damage = rnd(4);
+    let damage = heroThrownGenericWeaponDamage(obj) ?? 0;
     if (!damage) {
         const weightDamage = Math.max(1, Math.ceil(globObjectWeight({ ...obj, quan: 1 }) / WT_TO_DMG));
         damage = weightDamage <= 1 ? 1 : rnd(weightDamage);
