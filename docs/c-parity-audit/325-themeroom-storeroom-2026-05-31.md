@@ -10,6 +10,11 @@
 - The selected points control the number of contents; the chest or mimic
   placement itself is random within the room because no explicit coordinate is
   passed to `des.object()` or `des.monster()`.
+- `des.monster()` defaults a missing `align` field to `random`
+  (`src/sp_lev.c:get_table_align()`), and `create_monster()` resolves that
+  random alignment before `mkclass()`. On unaligned Dungeons of Doom themed
+  rooms, `induced_align(80)` falls through to `rn2(3) - 1`
+  (`src/dungeon.c`).
 
 ## Previous JS behavior
 
@@ -21,9 +26,9 @@ use the shared selection helper.
 - Extracted the fill into `themeroom_storeroom()`.
 - The fill now uses `selection.room().percentage(30).iterate()` for the C
   selected-point count and ordering.
-- Preserved the existing pre-`mkclass` `rn2(3)` compatibility burn for mimic
-  setup. Removing it regresses public replay RNG; this should be revisited with
-  a fuller `des.monster({ class = "m", appear_as = ... })` and mimic-init audit.
+- Preserved the pre-`mkclass` `rn2(3)` as the source-backed default
+  special-level random-alignment roll for `des.monster({ class = "m",
+  appear_as = ... })`, rather than a replay-only compatibility burn.
 
 ## Tests
 

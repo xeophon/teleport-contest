@@ -512,8 +512,9 @@ Current validation snapshot:
   is positive.
 - `Storeroom` themed fills now use `selection.room():percentage(30)` to drive
   the chest/chest-mimic count, with structural coverage for chest mimic
-  appearances. Its existing mimic setup RNG compatibility burn remains pending
-  a fuller `des.monster({ class = "m", appear_as = ... })` audit.
+  appearances. Its mimic setup preserves the source-backed default
+  special-level random-alignment roll for `des.monster({ class = "m",
+  appear_as = ... })`.
 - `Buried treasure` themed fills now create the buried chest, replace random
   box contents with the scripted `d(3,4)` random loot, and queue the burned
   post-generation dig engraving that points back to the treasure with Lua's
