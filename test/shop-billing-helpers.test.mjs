@@ -4559,6 +4559,68 @@ test('worn helmet tip at frozen invisible skeleton does not rattle or freeze her
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
 });
 
+test('worn helmet tip makes invisible explicit non-Death Rider ask about War without RNG', async () => {
+    const result = await tipInvisibleExplicitSound({
+        name: 'Pestilence',
+        sound: 'MS_RIDER',
+        peaceful: false,
+        rngLog: true,
+        data: { mlevel: 30, mlet: 'demon', humanoid: true, unique: true },
+    });
+
+    assert.equal(result.message,
+        'You briefly doff your helm.  "Who do you think you are, War?"');
+    assert.doesNotMatch(result.message,
+        /The Pestilence|Nothing happens|doesn't respond|rattles|Sandman|copy of|misquoted/);
+    assert.equal(result.target.mstrategy, 0);
+    assert.equal(result.targetLoc.map_invisible, true);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
+});
+
+test('worn helmet tip infers invisible Famine rider speech without RNG', async () => {
+    const result = await tipInvisibleExplicitSound({
+        name: 'Famine',
+        peaceful: false,
+        rngLog: true,
+        data: { mlevel: 30, mlet: 'demon', humanoid: true, unique: true },
+    });
+
+    assert.equal(result.message,
+        'You briefly doff your helm.  "Who do you think you are, War?"');
+    assert.doesNotMatch(result.message,
+        /The Famine|Nothing happens|doesn't respond|rattles|Sandman|copy of|misquoted/);
+    assert.equal(result.target.mstrategy, 0);
+    assert.equal(result.targetLoc.map_invisible, true);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
+});
+
+test('worn helmet tip keeps visible Famine on humanoid response before rider speech', async () => {
+    installStableNonShopFloorState();
+    const helmet = wornArmor(3063560, 'orcish helm', 'h');
+    const famine = ordinaryThrowTarget('Famine', 6, 5, {
+        msleeping: 0,
+        mcanmove: true,
+        mcansee: true,
+        mpeaceful: false,
+        mstrategy: 'waitforu',
+        data: { name: 'Famine', mlevel: 30, mlet: 'demon', unique: true },
+    });
+    game.inventory = [helmet];
+    game.level.monsters = [famine];
+    markSquareVisible(6, 5);
+
+    await enterTipCommand();
+    await rhack('h');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.match(game._pending_message,
+        /^You briefly doff your helm\.  The Famine (?:curses|gestures rudely|gestures offensively)(?: and (?:gestures rudely|gestures offensively))? at you\.\.\.$/);
+    assert.doesNotMatch(game._pending_message, /Who do you think you are, War|Nothing happens|doesn't respond/);
+    assert.equal(famine.mstrategy, 0);
+});
+
 test('worn helmet tip infers invisible human werecreature whisper off full moon', async () => {
     const result = await tipInvisibleExplicitSound({
         name: 'werewolf',

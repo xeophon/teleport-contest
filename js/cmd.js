@@ -33722,7 +33722,8 @@ function tipHatMonsterHumanoid(mon) {
     const mlet = data.mlet || mon?.mlet || '';
     const name = String(data.name || mon?.name || '').toLowerCase();
     return !!(data.humanoid || data.human || mlet === 'humanoid' || mlet === 'human' || mlet === '@'
-        || data.name === 'human' || /^(gremlin|leprechaun|skeleton)$/.test(name) || /\bzombie$/.test(name));
+        || data.name === 'human' || /^(gremlin|leprechaun|skeleton|death|pestilence|famine)$/.test(name)
+        || /\bzombie$/.test(name));
 }
 
 function tipHatMonsterPossessive(mon) {
@@ -34143,6 +34144,7 @@ function tipHatMonsterSound(mon) {
     const mlet = String(data.mlet || mon?.mlet || '').toLowerCase();
     if (/^(gremlin|leprechaun)$/.test(name)) return 'laugh';
     if (name === 'skeleton') return 'bones';
+    if (/^(pestilence|famine)$/.test(name)) return 'rider';
     if (/\bzombie$/.test(name) || (mlet === 'zombie' && name !== 'ghoul')) return 'groan';
     if (name === 'shrieker') return 'shriek';
     if (/^(mumak|mastodon)$/.test(name)) return 'trumpet';
@@ -34386,6 +34388,9 @@ function tipHatMonsterNoise(mon, { visible = tipHatMonsterVisible(mon) } = {}) {
         const wakeMessages = tipHatWakeNearby(mon, 11 * 11);
         return { handled: true, message: [howlMessage, ...wakeMessages].filter(Boolean).join('  ') };
     }
+    case 'rider':
+        if (monName === 'death') return { handled: false, message: '' };
+        return { handled: true, message: '"Who do you think you are, War?"' };
     case 'cuss':
         if (peaceful) {
             return { handled: true, message: tipHatMonsterIsLawfulMinion(mon) ? `"It's not too late."` : `"We're all doomed."` };
