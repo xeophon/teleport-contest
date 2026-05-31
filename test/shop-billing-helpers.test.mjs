@@ -34764,6 +34764,152 @@ test('upward hero-thrown blessed dagger keeps ordinary toss-up flow', async () =
     ]);
 });
 
+test('upward hero-thrown elven dagger uses elven small-target damage', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, { uhp: 30, uhpmax: 30 });
+    const blade = {
+        ...dagger(876910, 'd'),
+        kind: 'elven dagger',
+        actualKind: 'elven dagger',
+        plural: 'elven daggers',
+        owt: 10,
+        line: 'd - an elven dagger',
+    };
+    game.inventory = [blade];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('d');
+    await rhack('<');
+
+    const message = game._pending_message || '';
+    assert.equal(game._command_mode, null);
+    assert.match(message, /An elven dagger almost hits the ceiling, then falls back on top of your head\./);
+    assert.match(message, /An elven dagger hits the floor\./);
+    assert.doesNotMatch(message, /cmdassist|In what direction|It doesn't hurt|shatters|Splat/);
+    assert.equal(game.u.uhp < 30, true);
+    assert.equal(game.u.uhp >= 25, true);
+    assert.equal(game.inventory.includes(blade), false);
+    assert.equal(game.level.objects.length, 1);
+    const landed = game.level.objects[0];
+    assert.equal(landed.actualKind, 'elven dagger');
+    assert.equal(landed.kind, 'elven dagger');
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rn2(5)', 'rn2(100)', 'rnd(5)', 'rn2(100)',
+    ]);
+});
+
+test('upward hero-thrown unknown orcish dagger uses crude dagger wording and orcish damage', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, { uhp: 30, uhpmax: 30 });
+    const blade = {
+        ...dagger(876911, 'd'),
+        kind: 'crude dagger',
+        actualKind: 'orcish dagger',
+        plural: 'crude daggers',
+        owt: 10,
+        known: false,
+        line: 'd - a crude dagger',
+    };
+    game.inventory = [blade];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('d');
+    await rhack('<');
+
+    const message = game._pending_message || '';
+    assert.equal(game._command_mode, null);
+    assert.match(message, /A crude dagger almost hits the ceiling, then falls back on top of your head\./);
+    assert.match(message, /A crude dagger hits the floor\./);
+    assert.doesNotMatch(message, /cmdassist|In what direction|It doesn't hurt|shatters|Splat/);
+    assert.equal(game.u.uhp < 30, true);
+    assert.equal(game.u.uhp >= 27, true);
+    assert.equal(game.inventory.includes(blade), false);
+    assert.equal(game.level.objects.length, 1);
+    const landed = game.level.objects[0];
+    assert.equal(landed.actualKind, 'orcish dagger');
+    assert.equal(landed.kind, 'crude dagger');
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rn2(5)', 'rn2(100)', 'rnd(3)', 'rn2(100)',
+    ]);
+});
+
+test('upward hero-thrown silver dagger uses ordinary damage without silver-hate bonus', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, { uhp: 30, uhpmax: 30 });
+    const blade = {
+        ...dagger(876912, 'd'),
+        kind: 'silver dagger',
+        actualKind: 'silver dagger',
+        plural: 'silver daggers',
+        material: 'silver',
+        owt: 12,
+        line: 'd - a silver dagger',
+    };
+    game.inventory = [blade];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('d');
+    await rhack('<');
+
+    const message = game._pending_message || '';
+    assert.equal(game._command_mode, null);
+    assert.match(message, /A silver dagger almost hits the ceiling, then falls back on top of your head\./);
+    assert.match(message, /A silver dagger hits the floor\./);
+    assert.doesNotMatch(message, /silver sears|cmdassist|In what direction|It doesn't hurt|shatters|Splat/);
+    assert.equal(game.u.uhp < 30, true);
+    assert.equal(game.u.uhp >= 26, true);
+    assert.equal(game.inventory.includes(blade), false);
+    assert.equal(game.level.objects.length, 1);
+    const landed = game.level.objects[0];
+    assert.equal(landed.actualKind, 'silver dagger');
+    assert.equal(landed.material, 'silver');
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rn2(5)', 'rn2(100)', 'rnd(4)', 'rn2(100)',
+    ]);
+});
+
+test('upward hero-thrown athame uses dagger-family small-target damage', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, { uhp: 30, uhpmax: 30 });
+    const blade = {
+        ...dagger(876913, 'd'),
+        kind: 'athame',
+        actualKind: 'athame',
+        plural: 'athames',
+        owt: 10,
+        line: 'd - an athame',
+    };
+    game.inventory = [blade];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('d');
+    await rhack('<');
+
+    const message = game._pending_message || '';
+    assert.equal(game._command_mode, null);
+    assert.match(message, /An athame almost hits the ceiling, then falls back on top of your head\./);
+    assert.match(message, /An athame hits the floor\./);
+    assert.doesNotMatch(message, /cmdassist|In what direction|It doesn't hurt|shatters|Splat/);
+    assert.equal(game.u.uhp < 30, true);
+    assert.equal(game.u.uhp >= 26, true);
+    assert.equal(game.inventory.includes(blade), false);
+    assert.equal(game.level.objects.length, 1);
+    const landed = game.level.objects[0];
+    assert.equal(landed.actualKind, 'athame');
+    assert.equal(landed.kind, 'athame');
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rn2(5)', 'rn2(100)', 'rnd(4)', 'rn2(100)',
+    ]);
+});
+
 test('upward hero-thrown plain dagger hard helmet caps falling damage', async () => {
     installNonShopFloorState();
     initRng(2);

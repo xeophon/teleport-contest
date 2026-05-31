@@ -18682,21 +18682,27 @@ function heroThrownOrdinaryCorpseUpwardMessages(corpse) {
 
 const HERO_TOSS_UP_DAGGER_SMALL_DAMAGE = new Map([
     ['dagger', 4],
+    ['elven dagger', 5],
+    ['orcish dagger', 3],
+    ['silver dagger', 4],
+    ['athame', 4],
 ]);
 
-function plainDaggerObjectKey(obj) {
-    return obj?.otyp === DAGGER ? 'dagger' : objectKindKey(obj);
+function tossUpDaggerObjectKey(obj) {
+    if (obj?.otyp === DAGGER) return 'dagger';
+    if (obj?.otyp === ORCISH_DAGGER) return 'orcish dagger';
+    return objectKindKey(obj);
 }
 
-function isPlainDaggerObject(obj) {
+function isSupportedTossUpDaggerObject(obj) {
     if (!obj) return false;
-    if (plainDaggerObjectKey(obj) !== 'dagger') return false;
+    if (!HERO_TOSS_UP_DAGGER_SMALL_DAMAGE.has(tossUpDaggerObjectKey(obj))) return false;
     return !obj.artifact && !obj.oartifact;
 }
 
 function heroThrownGenericWeaponDamage(obj) {
-    const die = HERO_TOSS_UP_DAGGER_SMALL_DAMAGE.get(plainDaggerObjectKey(obj));
-    if (!die || !isPlainDaggerObject(obj)) return null;
+    const die = HERO_TOSS_UP_DAGGER_SMALL_DAMAGE.get(tossUpDaggerObjectKey(obj));
+    if (!die || !isSupportedTossUpDaggerObject(obj)) return null;
     let damage = rnd(die);
     damage += Math.trunc(Number(obj.spe || 0));
     if (damage < 0) damage = 0;
@@ -18712,7 +18718,7 @@ function isTinOpenerTossObject(obj) {
 }
 
 function isHeroThrownGenericDamagingUpwardObject(obj) {
-    return isTinOpenerTossObject(obj) || isPlainDaggerObject(obj);
+    return isTinOpenerTossObject(obj) || isSupportedTossUpDaggerObject(obj);
 }
 
 function heroThrownGenericObjectFallingDamage(obj, helmet = null) {
