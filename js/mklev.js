@@ -3691,6 +3691,25 @@ function bad_location(x, y, nlx, nly, nhx, nhy) {
     return false;
 }
 
+function add_exclusion_zone(zonetype, lx, ly, hx, hy) {
+    if (!game.level) return null;
+    game.level.exclusionZones ??= [];
+    const zone = { zonetype, lx, ly, hx, hy };
+    game.level.exclusionZones.push(zone);
+    return zone;
+}
+
+function is_exclusion_zone(rtype, x, y) {
+    for (const zone of game.level?.exclusionZones || []) {
+        const blocks = (rtype === LR_DOWNTELE && (zone.zonetype === LR_DOWNTELE || zone.zonetype === LR_TELE))
+            || (rtype === LR_UPTELE && (zone.zonetype === LR_UPTELE || zone.zonetype === LR_TELE))
+            || rtype === zone.zonetype;
+        if (blocks && x >= zone.lx && x <= zone.hx && y >= zone.ly && y <= zone.hy)
+            return true;
+    }
+    return false;
+}
+
 // C ref: mkmaze.c place_lregion — place hero (LR_UPTELE/LR_DOWNTELE)
 export function place_lregion(lx, ly, hx, hy, nlx, nly, nhx, nhy, rtype, lev) {
     if (!lx) {
@@ -3719,7 +3738,9 @@ export function place_lregion(lx, ly, hx, hy, nlx, nly, nhx, nhy, rtype, lev) {
         const y = rn1((hy - ly) + 1, ly);
         const occupiedByMonster = rtype >= LR_TELE && rtype <= LR_DOWNTELE
             && game.level?.monsters?.some(mon => mon.mx === x && mon.my === y);
-        if (!bad_location(x, y, nlx, nly, nhx, nhy) && !occupiedByMonster) {
+        if (!bad_location(x, y, nlx, nly, nhx, nhy)
+            && !is_exclusion_zone(rtype, x, y)
+            && !occupiedByMonster) {
             if (rtype === LR_BRANCH) {
                 place_branch(is_branchlev(), x, y);
                 return;
@@ -3741,7 +3762,8 @@ export function place_lregion(lx, ly, hx, hy, nlx, nly, nhx, nhy, rtype, lev) {
     // Deterministic fallback
     for (let x = lx; x <= hx; x++)
         for (let y = ly; y <= hy; y++)
-            if (!bad_location(x, y, nlx, nly, nhx, nhy)) {
+            if (!bad_location(x, y, nlx, nly, nhx, nhy)
+                && !is_exclusion_zone(rtype, x, y)) {
                 if (rtype === LR_BRANCH) {
                     place_branch(is_branchlev(), x, y);
                     return;
@@ -20212,6 +20234,9 @@ export const __mklevTestHooks = {
     apply_themeroom_fill,
     run_themeroom_postprocess,
     setThemeroomAlign,
+    add_exclusion_zone,
+    is_exclusion_zone,
+    create_themeroom_map,
     create_themeroom_random_dungeon_feature,
     create_themeroom_fake_delphi,
     create_themeroom_room_in_room,
@@ -20663,8 +20688,10 @@ async function create_themeroom_map(rows, name) {
                 await apply_themeroom_fill(fill, croom, rows, startX, startY);
             }
             if (name === 'Water-surrounded vault') {
+                croom.rtype = THEMEROOM;
                 croom.needfill = 0;
                 croom.needjoining = false;
+                add_exclusion_zone(LR_TELE, startX + 2, startY + 2, startX + 3, startY + 3);
 
                 const chestSpots = [[2, 2], [3, 2], [2, 3], [3, 3]];
                 for (let n = chestSpots.length; n > 1; n--) {

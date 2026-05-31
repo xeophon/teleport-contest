@@ -45,6 +45,7 @@ export class GameMap {
         this.buriedobjlist = [];
         this.monsters = [];
         this.traps = [];
+        this.exclusionZones = [];
         this.flags = {
             nfountains: 0,
             nsinks: 0,

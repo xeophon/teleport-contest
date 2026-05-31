@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 import { GameMap } from '../js/game.js';
 import { resetGame } from '../js/gstate.js';
-import { __mklevTestHooks as mklevHooks } from '../js/mklev.js';
+import { __mklevTestHooks as mklevHooks, place_lregion } from '../js/mklev.js';
 import { processCorpseTimers } from '../js/cmd.js';
 import { init_rect } from '../js/rect.js';
 import {
@@ -14,6 +14,7 @@ import {
     MAXNROFROOMS,
     A_CHAOTIC, A_LAWFUL, A_NEUTRAL, Align2amask,
     SHOPBASE, CANDLESHOP, ARMORSHOP, WEAPONSHOP, MATCH_WALL, SET_LIT_RANDOM, SET_LIT_NOCHANGE,
+    LR_TELE, LR_UPTELE, LR_DOWNTELE, LR_MONGEN,
     ARROW_TRAP, DART_TRAP, ROCKTRAP, BEAR_TRAP, LANDMINE, ROLLING_BOULDER_TRAP,
     SLP_GAS_TRAP, RUST_TRAP, TELEP_TRAP, WEB, STATUE_TRAP, ANTI_MAGIC, BURN,
 } from '../js/const.js';
@@ -791,6 +792,61 @@ test('themed Twin businesses creates paired weapon and armor shops', () => {
         const [a, b] = shops;
         assert.equal(a.hx < b.lx || b.hx < a.lx || a.hy < b.ly || b.hy < a.ly, true);
     }
+});
+
+test('themed Water-surrounded vault records teleport exclusion for level arrivals', async () => {
+    const g = installThemeroomGenerationGame({ seed: 31, dlevel: 8 });
+    const rows = [
+        '}}}}}}',
+        '}----}',
+        '}|..|}',
+        '}|..|}',
+        '}----}',
+        '}}}}}}',
+    ];
+
+    assert.equal(await mklevHooks.create_themeroom_map(rows, 'Water-surrounded vault'), true);
+    assert.equal(g.level.nroom, 1);
+    const room = g.level.rooms[0];
+    assert.equal(room.rtype, THEMEROOM);
+    assert.equal(room.needfill, 0);
+    assert.equal(room.needjoining, false);
+    assert.equal(room.hx - room.lx + 1, 2);
+    assert.equal(room.hy - room.ly + 1, 2);
+    assert.deepEqual(g.level.exclusionZones, [{
+        zonetype: LR_TELE,
+        lx: room.lx,
+        ly: room.ly,
+        hx: room.hx,
+        hy: room.hy,
+    }]);
+});
+
+test('level-region exclusions follow C teleport direction matching', () => {
+    installMkmapGame();
+    mklevHooks.add_exclusion_zone(LR_TELE, 10, 10, 11, 11);
+    assert.equal(mklevHooks.is_exclusion_zone(LR_TELE, 10, 10), true);
+    assert.equal(mklevHooks.is_exclusion_zone(LR_UPTELE, 10, 10), true);
+    assert.equal(mklevHooks.is_exclusion_zone(LR_DOWNTELE, 10, 10), true);
+    assert.equal(mklevHooks.is_exclusion_zone(LR_MONGEN, 10, 10), false);
+
+    installMkmapGame();
+    mklevHooks.add_exclusion_zone(LR_UPTELE, 12, 10, 12, 10);
+    assert.equal(mklevHooks.is_exclusion_zone(LR_UPTELE, 12, 10), true);
+    assert.equal(mklevHooks.is_exclusion_zone(LR_DOWNTELE, 12, 10), false);
+    assert.equal(mklevHooks.is_exclusion_zone(LR_TELE, 12, 10), false);
+});
+
+test('place_lregion skips teleport-excluded arrival squares', () => {
+    const g = installMkmapGame({ seed: 1 });
+    for (let x = 10; x <= 11; x++) {
+        const loc = g.level.at(x, 10);
+        loc.typ = ROOM;
+    }
+    mklevHooks.add_exclusion_zone(LR_TELE, 10, 10, 10, 10);
+
+    place_lregion(10, 10, 11, 10, 0, 0, 0, 0, LR_UPTELE, null);
+    assert.deepEqual({ x: g.u.ux, y: g.u.uy }, { x: 11, y: 10 });
 });
 
 test('themed buried zombie corpses use buriedobjlist with explicit zombify timers', () => {
