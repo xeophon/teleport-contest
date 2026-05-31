@@ -5874,6 +5874,63 @@ test('worn helmet tip infers peaceful invisible vampire lord speech without RNG'
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
 });
 
+test('worn helmet tip gives hostile invisible vampire C random threat', async () => {
+    const result = await tipInvisibleExplicitSound({
+        name: 'vampire',
+        sound: 'MS_VAMPIRE',
+        peaceful: false,
+        rngLog: true,
+        race: 'elf',
+        data: { mlevel: 10, mlet: 'vampire', undead: true, humanoid: true },
+    });
+
+    assert.match(result.message,
+        /^You briefly doff your helm\.  "(?:I vant to suck your blood!|I vill come after an elf without regret!)"$/);
+    assert.doesNotMatch(result.message,
+        /The vampire|Nothing happens|doesn't respond|I only drink|growing craving|Good feeding|child of the night/);
+    assert.equal(result.target.mstrategy, 0);
+    assert.equal(result.targetLoc.map_invisible, true);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(2)']);
+});
+
+test('worn helmet tip hostile invisible vampire recognizes vampire polyself kindred without RNG', async () => {
+    const result = await tipInvisibleExplicitSound({
+        name: 'vampire',
+        sound: 'MS_VAMPIRE',
+        peaceful: false,
+        rngLog: true,
+        polyself: 'vampire',
+        data: { mlevel: 10, mlet: 'vampire', undead: true, humanoid: true },
+    });
+
+    assert.equal(result.message,
+        'You briefly doff your helm.  "This is my hunting ground that you dare to prowl!"');
+    assert.doesNotMatch(result.message,
+        /The vampire|Nothing happens|doesn't respond|vant to suck|vill come after|I only drink/);
+    assert.equal(result.target.mstrategy, 0);
+    assert.equal(result.targetLoc.map_invisible, true);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
+});
+
+test('worn helmet tip hostile invisible vampire recognizes silver dragon polyself without RNG', async () => {
+    const result = await tipInvisibleExplicitSound({
+        name: 'vampire',
+        sound: 'MS_VAMPIRE',
+        peaceful: false,
+        rngLog: true,
+        polyself: 'baby silver dragon',
+        data: { mlevel: 10, mlet: 'vampire', undead: true, humanoid: true },
+    });
+
+    assert.equal(result.message,
+        'You briefly doff your helm.  "Young Fool!  Your silver sheen does not frighten me!"');
+    assert.doesNotMatch(result.message,
+        /The vampire|Nothing happens|doesn't respond|vant to suck|vill come after|I only drink/);
+    assert.equal(result.target.mstrategy, 0);
+    assert.equal(result.targetLoc.map_invisible, true);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
+});
+
 test('worn helmet tip makes tame invisible vampire use day night and midnight craving speech', async () => {
     const daytime = await tipInvisibleExplicitSound({
         name: 'vampire',

@@ -34413,6 +34413,30 @@ function tipHatHeroNightChild() {
     return /^(?:wolf|winter wolf|winter wolf cub)$/.test(polyselfFormName());
 }
 
+function tipHatHeroRaceNoun() {
+    const race = game.urace || {};
+    const individual = race.individual || {};
+    if (game.flags?.female && individual.f) return individual.f;
+    return individual.m || race.noun || game._startup_race || 'human';
+}
+
+function tipHatHeroBloodPart() {
+    const form = polyselfForm() || {};
+    const name = polyselfFormName();
+    const mlet = String(form.mlet || form.glyph || '').toLowerCase();
+    if (form.light || mlet === 'light' || /^(?:yellow|black) light$/.test(name)) return 'beam';
+    if (form.spider || mlet === 'spider' || /spider/.test(name)) return 'hemolymph';
+    if (form.vortex || form.elemental || form.sphere || mlet === 'vortex'
+        || mlet === 'elemental' || mlet === 'eye' || /(?:vortex|elemental|sphere|eye)$/.test(name))
+        return 'life force';
+    if (form.fungus || mlet === 'fungus' || /(?:mold|lichen|fungus|toadstool)$/.test(name))
+        return 'juices';
+    if (form.jelly || form.pudding || form.blob || mlet === 'jelly'
+        || mlet === 'pudding' || mlet === 'blob' || /(?:jelly|pudding|blob|ooze)$/.test(name))
+        return 'juices';
+    return 'blood';
+}
+
 function tipHatMonsterHungryTime(mon) {
     return Number(mon?.hungrytime ?? mon?.hungryTime ?? mon?.edog?.hungrytime
         ?? mon?.mextra?.edog?.hungrytime ?? NaN);
@@ -34646,7 +34670,17 @@ function tipHatMonsterNoise(mon, { visible = tipHatMonsterVisible(mon) } = {}) {
                 return { handled: true, message: '"How nice to hear you, child of the night!"' };
             return { handled: true, message: '"I only drink... potions."' };
         }
-        return { handled: false, message: '' };
+        if (kindred)
+            return { handled: true, message: '"This is my hunting ground that you dare to prowl!"' };
+        const formName = polyselfFormName();
+        if (formName === 'silver dragon' || formName === 'baby silver dragon') {
+            const address = formName === 'silver dragon' ? 'Fool' : 'Young Fool';
+            return { handled: true, message: `"${address}!  Your silver sheen does not frighten me!"` };
+        }
+        if (rn2(2) === 0)
+            return { handled: true, message: `"I vant to suck your ${tipHatHeroBloodPart()}!"` };
+        const prey = polyselfForm() ? articleFor(polyselfFormName()) : articleFor(tipHatHeroRaceNoun());
+        return { handled: true, message: `"I vill come after ${prey} without regret!"` };
     }
     case 'rider':
         if (monName === 'death') return { handled: false, message: '' };
