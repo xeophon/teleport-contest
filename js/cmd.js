@@ -24947,6 +24947,11 @@ function shopBillEntryTotal(entry) {
     return Math.trunc(price * quantity);
 }
 
+function shopBillTotal(shkp) {
+    const ledger = Array.isArray(shkp?.bill) ? shkp.bill : [];
+    return ledger.reduce((sum, entry) => sum + shopBillEntryTotal(entry), 0);
+}
+
 function shopBillEntryQuantity(entry) {
     const quantity = Math.trunc(Number(entry?.bquan || 1));
     return Number.isFinite(quantity) && quantity > 0 ? quantity : 1;
@@ -34161,21 +34166,24 @@ function tipHatShopkeeperHasEarlierSellState(mon) {
     if (!mon) return false;
     if (mon.hostile || mon.mpeaceful === 0 || mon.mpeaceful === false || mon.angry) return true;
     if (mon.following) return true;
-    if (shopBillEntryCount(mon)) return true;
     return false;
 }
 
 function tipHatResidentShopkeeperSellNoise(mon) {
     if (tipHatShopkeeperHasEarlierSellState(mon)) return { handled: false, message: '' };
-    const shkmoney = shopkeeperCash(mon);
     const name = shopkeeperDisplayName(mon);
     const canSpeak = shopkeeperCanSpeakToHero(mon);
     const debit = Math.trunc(Number(mon?.debit || 0));
+    if (shopBillEntryCount(mon) > 0) {
+        const total = shopBillTotal(mon) + debit;
+        return { handled: true, message: `${name} ${canSpeak ? 'says' : 'indicates'} that your bill comes to ${total} ${shopCurrency(total)}.` };
+    }
     if (debit > 0)
         return { handled: true, message: `${name} ${canSpeak ? 'reminds you' : 'indicates'} that you owe ${shopkeeperObjectivePronoun(mon)} ${debit} ${shopCurrency(debit)}.` };
     const credit = Math.trunc(Number(mon?.credit || 0));
     if (credit > 0)
         return { handled: true, message: `${name} encourages you to use your ${credit} ${shopCurrency(credit)} of credit.` };
+    const shkmoney = shopkeeperCash(mon);
     if (Math.trunc(Number(mon?.robbed || 0)) > 0)
         return { handled: true, message: `${name} ${canSpeak ? 'complains' : 'indicates concern'} about a recent robbery.` };
     if (Math.trunc(Number(mon?.surcharge || 0)) > 0)
