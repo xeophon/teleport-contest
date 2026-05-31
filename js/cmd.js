@@ -33765,6 +33765,36 @@ function tipHatHeroHasTopLevelGold() {
         || item?.cls === 'coin' || item?.otyp === GOLD_PIECE || item?.glyph === '$');
 }
 
+function tipHatHeroIsHealer() {
+    return game._startup_role === 'Healer'
+        || game.urole?.name?.m === 'Healer' || game.urole?.name?.f === 'Healer';
+}
+
+function tipHatInventoryKind(item) {
+    return String(item?.actualKind || item?.kind || item?.line || '').toLowerCase();
+}
+
+function tipHatHeroWieldsNurseWeapon() {
+    return (game.inventory || []).some(item => {
+        if (!itemIsWielded(item)) return false;
+        if (item.cls === 'weapon' || item.glyph === ')' || item.otyp === WEAPON_CLASS) return true;
+        return item.cls === 'tool' && (isWeaponTool(item) || APPLY_WEAPON_NAME_RE.test(tipHatInventoryKind(item)));
+    });
+}
+
+function tipHatIsShirtArmor(item) {
+    return (item?.cls === 'armor' || item?.glyph === '[' || item?.otyp === ARMOR_CLASS)
+        && /\b(?:shirt|t-shirt)\b/.test(tipHatInventoryKind(item));
+}
+
+function tipHatHeroWearsNurseArmor() {
+    return (game.inventory || []).some(item => isWornArmorItem(item) && !tipHatIsShirtArmor(item));
+}
+
+function tipHatHeroWearsShirt() {
+    return (game.inventory || []).some(item => isWornArmorItem(item) && tipHatIsShirtArmor(item));
+}
+
 function tipHatMonsterAdjacent(mon) {
     if (!mon) return false;
     return Math.max(Math.abs((mon.mx || 0) - (game.u?.ux || 0)),
@@ -33999,6 +34029,17 @@ function tipHatMonsterNoise(mon, { visible = tipHatMonsterVisible(mon) } = {}) {
         return tipHatHeroHasTopLevelGold()
             ? { handled: true, message: `"Please drop that gold and follow me."` }
             : { handled: true, message: `"Please follow me."` };
+    case 'nurse':
+        if (mon.mcan) return { handled: true, message: `"I hate this job!"` };
+        if (tipHatHeroWieldsNurseWeapon())
+            return { handled: true, message: `"Put that weapon away before you hurt someone!"` };
+        if (tipHatHeroWearsNurseArmor()) {
+            return tipHatHeroIsHealer()
+                ? { handled: true, message: `"Doc, I can't help you unless you cooperate."` }
+                : { handled: true, message: `"Please undress so I can examine you."` };
+        }
+        if (tipHatHeroWearsShirt()) return { handled: true, message: `"Take off your shirt, please."` };
+        return { handled: true, message: `"Relax, this won't hurt a bit."` };
     case 'soldier': {
         const soldierMessages = peaceful
             ? [

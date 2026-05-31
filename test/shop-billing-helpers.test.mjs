@@ -4223,10 +4223,14 @@ test('worn helmet tip makes peaceful lawful minion cuss about redemption', async
 });
 
 async function tipInvisibleExplicitSound({ name, sound, peaceful = false, tame = 0,
-    gold = 0, seed = null, rngLog = false, data = {}, extra = {} } = {}) {
+    gold = 0, seed = null, rngLog = false, role = '', inventory = [], data = {}, extra = {} } = {}) {
     installStableNonShopFloorState();
     if (seed != null) initRng(seed);
     if (rngLog) enableRngLog({ reset: true });
+    if (role) {
+        game._startup_role = role;
+        game.urole = { ...(game.urole || {}), name: { m: role, f: role } };
+    }
     game.u.seeInvisible = false;
     const targetLoc = game.level.at(6, 5);
     const helmet = wornArmor(3063556, 'orcish helm', 'h');
@@ -4242,7 +4246,7 @@ async function tipInvisibleExplicitSound({ name, sound, peaceful = false, tame =
         data: { name, mlevel: 1, mlet: '@', humanoid: true, msound: sound, ...data },
         ...extra,
     });
-    game.inventory = [helmet];
+    game.inventory = [helmet, ...inventory];
     if (gold) {
         game.inventory.push(goldPieces(3063557, gold));
         game._goldCount = gold;
@@ -4386,6 +4390,73 @@ test('worn helmet tip makes invisible explicit orc sound grunt', async () => {
 
     assert.match(game._pending_message, /It grunts\./);
     assert.doesNotMatch(game._pending_message, /The goblin|doesn't respond|Nothing happens|waves/);
+});
+
+test('worn helmet tip maps invisible nurse weapon and cancellation advice', async () => {
+    const lineWieldedDagger = { ...wieldedWeapon(3063558, 'dagger', 'w'), wielded: false };
+    await tipInvisibleExplicitSound({
+        name: 'nurse',
+        sound: 'MS_NURSE',
+        peaceful: true,
+        inventory: [lineWieldedDagger],
+        data: { mlevel: 11, mlet: '@' },
+    });
+    assert.match(game._pending_message, /"Put that weapon away before you hurt someone!"/);
+    assert.doesNotMatch(game._pending_message, /The nurse|Relax|undress|waves/);
+
+    await tipInvisibleExplicitSound({
+        name: 'nurse',
+        sound: 'MS_NURSE',
+        peaceful: true,
+        extra: { mcan: true },
+        data: { mlevel: 11, mlet: '@' },
+    });
+    assert.match(game._pending_message, /"I hate this job!"/);
+    assert.doesNotMatch(game._pending_message, /The nurse|Relax|weapon away|waves/);
+});
+
+test('worn helmet tip maps invisible nurse armor advice by role', async () => {
+    await tipInvisibleExplicitSound({
+        name: 'nurse',
+        sound: 'MS_NURSE',
+        peaceful: true,
+        inventory: [wornArmor(3063559, 'leather armor', 'a')],
+        data: { mlevel: 11, mlet: '@' },
+    });
+    assert.match(game._pending_message, /"Please undress so I can examine you\."/);
+    assert.doesNotMatch(game._pending_message, /The nurse|Doc,|Relax|waves/);
+
+    await tipInvisibleExplicitSound({
+        name: 'nurse',
+        sound: 'MS_NURSE',
+        peaceful: true,
+        role: 'Healer',
+        inventory: [wornArmor(3063560, 'leather armor', 'a')],
+        data: { mlevel: 11, mlet: '@' },
+    });
+    assert.match(game._pending_message, /"Doc, I can't help you unless you cooperate\."/);
+    assert.doesNotMatch(game._pending_message, /The nurse|Please undress|Relax|waves/);
+});
+
+test('worn helmet tip keeps nurse shirt and relaxed branches masked by tipped helmet', async () => {
+    await tipInvisibleExplicitSound({
+        name: 'nurse',
+        sound: 'MS_NURSE',
+        peaceful: true,
+        inventory: [wornArmor(3063561, 'T-shirt', 't')],
+        data: { mlevel: 11, mlet: '@' },
+    });
+    assert.match(game._pending_message, /"Please undress so I can examine you\."/);
+    assert.doesNotMatch(game._pending_message, /The nurse|Take off your shirt|Relax|waves/);
+
+    await tipInvisibleExplicitSound({
+        name: 'nurse',
+        sound: 'MS_NURSE',
+        peaceful: true,
+        data: { mlevel: 11, mlet: '@' },
+    });
+    assert.match(game._pending_message, /"Please undress so I can examine you\."/);
+    assert.doesNotMatch(game._pending_message, /The nurse|Relax|weapon away|waves/);
 });
 
 test('unknown cursed worn helmet tip learns curse and spends action', async () => {
