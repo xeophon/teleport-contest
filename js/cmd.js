@@ -16844,6 +16844,27 @@ function monsterIsPermanentlyBlind(mon) {
     return mon?.mcansee === false && !(mon.mblinded || 0);
 }
 
+function monsterWearsVisoredHelmetForBlinding(mon) {
+    return (mon?.minvent || []).some(item => {
+        if (!(item.worn || item.owornmask || item.line?.includes('being worn'))) return false;
+        return armorKind(item) === 'helm of telepathy'
+            || String(item.appearance || '').toLowerCase() === 'visored helmet';
+    });
+}
+
+function heroRavenCannotBlindMonster(mon) {
+    const formName = String(polyselfForm()?.name || game.u?._polyself_form?.name || '').toLowerCase();
+    const targetName = String(mon?.data?.name || mon?.name || '').toLowerCase();
+    return formName === 'raven' && targetName === 'raven';
+}
+
+function monsterCanBeBlindedByBlindingVenom(mon) {
+    return monsterHasEyesForPotionBlindness(mon)
+        && !monsterIsPermanentlyBlind(mon)
+        && !heroRavenCannotBlindMonster(mon)
+        && !monsterWearsVisoredHelmetForBlinding(mon);
+}
+
 function blindMonsterFromPotion(mon) {
     if (!monsterHasEyesForPotionBlindness(mon) || monsterIsPermanentlyBlind(mon)) return false;
     const baseDuration = 64 + rn2(32);
@@ -17855,6 +17876,35 @@ function heroThrownPotionHitMonster(potion, mon) {
 
     const shopDebt = convertUnpaidObjectToShopDebt(potion, { silent: true, broken: true });
     if (!shopDebt.charged) potion.no_charge = true;
+    return messages;
+}
+
+function heroThrownVenomTargetName(mon) {
+    return fireScrollMonsterName(mon).replace(/^The /, 'the ');
+}
+
+function setHeroObjectHitMonsterAngry(mon) {
+    clearMonsterPotionWaitStrategy(mon);
+    if (mon.mpeaceful && !(mon.mtame || mon.pet)) mon.mpeaceful = 0;
+}
+
+function heroThrownBlindingVenomHitMonster(venom, mon) {
+    const messages = [];
+    mon.msleeping = 0;
+    if (monsterCanBeBlindedByBlindingVenom(mon)) {
+        if (game.u?.blind) {
+            messages.push('Splash!');
+        } else {
+            messages.push(`The venom blinds ${heroThrownVenomTargetName(mon)}${mon.mcansee === false ? ' further' : ''}!`);
+        }
+        const blindTime = 21 + rn2(25);
+        mon.mcansee = false;
+        mon.mblinded = Math.min(127, (mon.mblinded || 0) + blindTime);
+    } else {
+        messages.push('Splash!');
+    }
+    setHeroObjectHitMonsterAngry(mon);
+    markThrownBrokenObjectDebt(venom);
     return messages;
 }
 
@@ -59954,7 +60004,26 @@ export async function rhack(_cmd) {
         };
 	        const combatObject = item.cls === 'weapon' || item.cls === 'gem' || item.glyph === ')' || item.otyp === GEM_CLASS;
 	        let impactMessage = '';
-	        if (targetMon && (item.otyp === CREAM_PIE || lowerName === 'cream pie')) {
+	        if (targetMon && isBlindingVenomObject(item)) {
+	            rnd(20);
+	            const dex = game.u?.acurr?.a?.[A_DEX] ?? 10;
+	            if (dex > rnd(25)) {
+	                if ((item.quan || 1) > 1) splitCarriedObjectShopBill(item, thrownObject, 1);
+	                const messages = heroThrownBlindingVenomHitMonster(thrownObject, targetMon);
+	                removeInventoryItem(item, 1);
+	                newsym(targetMon.mx, targetMon.my);
+	                await setMessage(messages.join('  '));
+	                game._command_mode = null;
+	                game._throw_item_letter = null;
+	                game._resume_time_after_more = 0;
+	                game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
+	                game.context.move = 0;
+	                return;
+	            }
+	            const thrownName = pickupObjectName({ ...item, quan: 1 });
+	            impactMessage = `The ${thrownName} misses the ${targetMon.data?.name || 'creature'}.`;
+	            if (!rn2(3)) targetMon.msleeping = 0;
+	        } else if (targetMon && (item.otyp === CREAM_PIE || lowerName === 'cream pie')) {
 	            rnd(20);
 	            const dex = game.u?.acurr?.a?.[A_DEX] ?? 10;
 	            if (dex > rnd(25)) {

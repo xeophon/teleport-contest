@@ -32225,6 +32225,159 @@ test('hero-thrown ordinary egg hits visible monster through egg hmon path', asyn
     ]);
 });
 
+test('hero-thrown blinding venom direct hit blinds monster through hmon path', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.u.acurr.a[A_DEX] = 25;
+    const venom = blindingVenom(876061, 'v');
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, { mcansee: true });
+    game.inventory = [venom];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('v');
+    await rhack('l');
+
+    assert.match(game._pending_message, /The venom blinds the goblin!/);
+    assert.doesNotMatch(game._pending_message, /misses|crashes|evaporates|top of your head/);
+    assert.equal(goblin.msleeping, 0);
+    assert.equal(goblin.mpeaceful, 0);
+    assert.equal(goblin.mcansee, false);
+    assert.equal(goblin.mblinded >= 21 && goblin.mblinded <= 45, true);
+    assert.equal(game.inventory.includes(venom), false);
+    assert.equal(game.level.objects.length, 0);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rnd(20)', 'rnd(25)', 'rn2(25)',
+    ]);
+});
+
+test('hero-thrown blinding venom direct hit preserves tame peacefulness', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.u.acurr.a[A_DEX] = 25;
+    const venom = blindingVenom(876065, 'v');
+    const dog = ordinaryThrowTarget('little dog', 7, 5, {
+        mcansee: true,
+        mpeaceful: 1,
+        mtame: 5,
+        pet: true,
+        msleeping: 1,
+        mstrategy: 'waitforu',
+    });
+    game.inventory = [venom];
+    game.level.monsters = [dog];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('v');
+    await rhack('l');
+
+    assert.match(game._pending_message, /The venom blinds the little dog!/);
+    assert.equal(dog.msleeping, 0);
+    assert.equal(dog.mstrategy, 0);
+    assert.equal(dog.mpeaceful, 1);
+    assert.equal(dog.mtame, 5);
+    assert.equal(dog.pet, true);
+    assert.equal(dog.mcansee, false);
+    assert.equal(game.inventory.includes(venom), false);
+    assert.equal(game.level.objects.length, 0);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rnd(20)', 'rnd(25)', 'rn2(25)',
+    ]);
+});
+
+test('hero-thrown blinding venom direct hit extends temporary monster blindness', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.u.acurr.a[A_DEX] = 25;
+    const venom = blindingVenom(876062, 'v');
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, {
+        mcansee: false,
+        mblinded: 120,
+    });
+    game.inventory = [venom];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('v');
+    await rhack('l');
+
+    assert.match(game._pending_message, /The venom blinds the goblin further!/);
+    assert.doesNotMatch(game._pending_message, /Splash|misses|crashes|evaporates|top of your head/);
+    assert.equal(goblin.msleeping, 0);
+    assert.equal(goblin.mpeaceful, 0);
+    assert.equal(goblin.mcansee, false);
+    assert.equal(goblin.mblinded, 127);
+    assert.equal(game.inventory.includes(venom), false);
+    assert.equal(game.level.objects.length, 0);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rnd(20)', 'rnd(25)', 'rn2(25)',
+    ]);
+});
+
+test('hero-thrown blinding venom direct hit splashes on eyeless monster', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.u.acurr.a[A_DEX] = 25;
+    const venom = blindingVenom(876063, 'v');
+    const jelly = ordinaryThrowTarget('jelly', 7, 5, {
+        mcansee: true,
+        mblinded: 0,
+        data: { name: 'jelly', mlevel: 1, noeyes: true },
+    });
+    game.inventory = [venom];
+    game.level.monsters = [jelly];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('v');
+    await rhack('l');
+
+    assert.match(game._pending_message, /Splash!/);
+    assert.doesNotMatch(game._pending_message, /blinds|misses|crashes|evaporates|top of your head/);
+    assert.equal(jelly.msleeping, 0);
+    assert.equal(jelly.mpeaceful, 0);
+    assert.equal(jelly.mcansee, true);
+    assert.equal(jelly.mblinded, 0);
+    assert.equal(game.inventory.includes(venom), false);
+    assert.equal(game.level.objects.length, 0);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rnd(20)', 'rnd(25)',
+    ]);
+});
+
+test('hero-thrown blinding venom direct hit splashes on permanently blind monster', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.u.acurr.a[A_DEX] = 25;
+    const venom = blindingVenom(876064, 'v');
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, {
+        mcansee: false,
+        mblinded: 0,
+    });
+    game.inventory = [venom];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('v');
+    await rhack('l');
+
+    assert.match(game._pending_message, /Splash!/);
+    assert.doesNotMatch(game._pending_message, /blinds|further|misses|crashes|evaporates|top of your head/);
+    assert.equal(goblin.msleeping, 0);
+    assert.equal(goblin.mpeaceful, 0);
+    assert.equal(goblin.mcansee, false);
+    assert.equal(goblin.mblinded, 0);
+    assert.equal(game.inventory.includes(venom), false);
+    assert.equal(game.level.objects.length, 0);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rnd(20)', 'rnd(25)',
+    ]);
+});
+
 test('hero-thrown fertile egg direct hit applies C luck penalty', async () => {
     installNonShopFloorState();
     initRng(2);
