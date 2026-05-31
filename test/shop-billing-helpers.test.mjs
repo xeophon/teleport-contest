@@ -4222,6 +4222,172 @@ test('worn helmet tip makes peaceful lawful minion cuss about redemption', async
     assert.doesNotMatch(game._pending_message, /The imp|We're all doomed|doesn't respond|Nothing happens|waves/);
 });
 
+async function tipInvisibleExplicitSound({ name, sound, peaceful = false, tame = 0,
+    gold = 0, seed = null, rngLog = false, data = {}, extra = {} } = {}) {
+    installStableNonShopFloorState();
+    if (seed != null) initRng(seed);
+    if (rngLog) enableRngLog({ reset: true });
+    game.u.seeInvisible = false;
+    const targetLoc = game.level.at(6, 5);
+    const helmet = wornArmor(3063556, 'orcish helm', 'h');
+    const target = ordinaryThrowTarget(name, 6, 5, {
+        minvis: 1,
+        perminvis: 1,
+        msleeping: 0,
+        mcanmove: true,
+        mcansee: true,
+        mpeaceful: peaceful,
+        mtame: tame,
+        mstrategy: 'waitforu',
+        data: { name, mlevel: 1, mlet: '@', humanoid: true, msound: sound, ...data },
+        ...extra,
+    });
+    game.inventory = [helmet];
+    if (gold) {
+        game.inventory.push(goldPieces(3063557, gold));
+        game._goldCount = gold;
+    }
+    game.level.monsters = [target];
+    markSquareVisible(6, 5);
+
+    await enterTipCommand();
+    await rhack('h');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(target.mstrategy, 0);
+    assert.equal(targetLoc.map_invisible, true);
+    assert.match(game._pending_message, /You briefly doff your helm\./);
+    assert.doesNotMatch(game._pending_message, /doesn't respond|Nothing happens|waves|tips .* in response|curses|gestures|unseen creature/);
+    return { target, targetLoc, message: game._pending_message };
+}
+
+test('worn helmet tip makes peaceful invisible Kop give arrest address', async () => {
+    await tipInvisibleExplicitSound({
+        name: 'Keystone Kop',
+        sound: 'MS_ARREST',
+        peaceful: true,
+        data: { mlevel: 1, mlet: '@' },
+    });
+
+    assert.match(game._pending_message, /"Just the facts, Sir\."/);
+    assert.doesNotMatch(game._pending_message, /The Keystone Kop|under arrest|Stop in the name/);
+});
+
+test('worn helmet tip makes hostile invisible Kop use arrest warning table', async () => {
+    await tipInvisibleExplicitSound({
+        name: 'Keystone Kop',
+        sound: 'MS_ARREST',
+        peaceful: false,
+        seed: 1,
+        rngLog: true,
+        data: { mlevel: 1, mlet: '@' },
+    });
+
+    assert.match(game._pending_message, /"Anything you say can be used against you\."/);
+    assert.doesNotMatch(game._pending_message, /The Keystone Kop|Just the facts|waves/);
+    assert.deepEqual(getRngLog(), ['rn2(3)=0']);
+});
+
+test('worn helmet tip makes invisible guards mention carried gold only when present', async () => {
+    await tipInvisibleExplicitSound({
+        name: 'guard',
+        sound: 'MS_GUARD',
+        peaceful: true,
+        data: { mlevel: 12, mlet: '@' },
+    });
+    assert.match(game._pending_message, /"Please follow me\."/);
+    assert.doesNotMatch(game._pending_message, /drop that gold|The guard|waves/);
+
+    await tipInvisibleExplicitSound({
+        name: 'guard',
+        sound: 'MS_GUARD',
+        peaceful: true,
+        gold: 7,
+        data: { mlevel: 12, mlet: '@' },
+    });
+    assert.match(game._pending_message, /"Please drop that gold and follow me\."/);
+    assert.doesNotMatch(game._pending_message, /The guard|waves|Nothing happens/);
+});
+
+test('worn helmet tip makes invisible soldiers use peaceful and hostile tables', async () => {
+    await tipInvisibleExplicitSound({
+        name: 'soldier',
+        sound: 'MS_SOLDIER',
+        peaceful: false,
+        seed: 1,
+        rngLog: true,
+        data: { mlevel: 6, mlet: '@' },
+    });
+    assert.match(game._pending_message, /"Resistance is useless!"/);
+    assert.doesNotMatch(game._pending_message, /The soldier|lousy pay|waves/);
+    assert.deepEqual(getRngLog(), ['rn2(3)=0']);
+
+    await tipInvisibleExplicitSound({
+        name: 'watchman',
+        sound: 'MS_SOLDIER',
+        peaceful: true,
+        seed: 2,
+        rngLog: true,
+        data: { mlevel: 6, mlet: '@' },
+    });
+    assert.match(game._pending_message, /"The food's not fit for Orcs!"/);
+    assert.doesNotMatch(game._pending_message, /The watchman|Resistance is useless|waves/);
+    assert.deepEqual(getRngLog(), ['rn2(3)=1']);
+});
+
+test('worn helmet tip maps invisible djinni speech variants', async () => {
+    await tipInvisibleExplicitSound({
+        name: 'djinni',
+        sound: 'MS_DJINNI',
+        peaceful: true,
+        tame: 5,
+        data: { mlevel: 7, mlet: '@' },
+    });
+    assert.match(game._pending_message, /"Sorry, I'm all out of wishes\."/);
+    assert.doesNotMatch(game._pending_message, /The djinni|I'm free|waves/);
+
+    await tipInvisibleExplicitSound({
+        name: 'djinni',
+        sound: 'MS_DJINNI',
+        peaceful: true,
+        data: { mlevel: 7, mlet: '@' },
+    });
+    assert.match(game._pending_message, /"I'm free!"/);
+    assert.doesNotMatch(game._pending_message, /The djinni|all out of wishes|waves/);
+
+    await tipInvisibleExplicitSound({
+        name: 'water demon',
+        sound: 'MS_DJINNI',
+        peaceful: true,
+        data: { mlevel: 8, mlet: '&' },
+    });
+    assert.match(game._pending_message, /It gurgles\./);
+    assert.doesNotMatch(game._pending_message, /The water demon|I'm free|waves/);
+
+    await tipInvisibleExplicitSound({
+        name: 'prisoner',
+        sound: 'MS_DJINNI',
+        peaceful: false,
+        data: { mlevel: 12, mlet: '@' },
+    });
+    assert.match(game._pending_message, /"Get me out of here\."/);
+    assert.doesNotMatch(game._pending_message, /The prisoner|disturb me|waves/);
+});
+
+test('worn helmet tip makes invisible explicit orc sound grunt', async () => {
+    await tipInvisibleExplicitSound({
+        name: 'goblin',
+        sound: 'MS_ORC',
+        peaceful: false,
+        data: { mlevel: 0, mlet: 'orc', humanoid: true },
+    });
+
+    assert.match(game._pending_message, /It grunts\./);
+    assert.doesNotMatch(game._pending_message, /The goblin|doesn't respond|Nothing happens|waves/);
+});
+
 test('unknown cursed worn helmet tip learns curse and spends action', async () => {
     installCommandShopState();
     const helmet = wornArmor(306352, 'orcish helm', 'h', 0, {

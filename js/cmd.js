@@ -33759,6 +33759,12 @@ function tipHatMonsterSilent(mon) {
     return !!(mon?.silent || data.silent || msound === 'silent' || msound === 'ms_silent');
 }
 
+function tipHatHeroHasTopLevelGold() {
+    if ((game._goldCount || 0) > 0) return true;
+    return (game.inventory || []).some(item => item?.letter === '$'
+        || item?.cls === 'coin' || item?.otyp === GOLD_PIECE || item?.glyph === '$');
+}
+
 function tipHatMonsterAdjacent(mon) {
     if (!mon) return false;
     return Math.max(Math.abs((mon.mx || 0) - (game.u?.ux || 0)),
@@ -33868,6 +33874,7 @@ function tipHatAggravateMonsters() {
 function tipHatMonsterNoise(mon, { visible = tipHatMonsterVisible(mon) } = {}) {
     if (!mon || heroIsDeaf() || tipHatMonsterSilent(mon)) return { handled: false, message: '' };
     const name = visible ? fireScrollMonsterName(mon) : 'It';
+    const monName = String(mon?.data?.name || mon?.name || '').toLowerCase();
     let sound = tipHatMonsterSound(mon);
     const peaceful = !!mon.mpeaceful;
     const tame = Number(mon.mtame || 0);
@@ -33881,7 +33888,6 @@ function tipHatMonsterNoise(mon, { visible = tipHatMonsterVisible(mon) } = {}) {
             ? { handled: true, message: `"15 minutes could save you 15 ${shopCurrency(15)}."` }
             : { handled: false, message: '' };
     case 'bark': {
-        const monName = String(mon?.data?.name || mon?.name || '').toLowerCase();
         if (game.flags?.moonphase === 4 && tipHatIsNight())
             return { handled: true, message: `${name} howls.` };
         if (peaceful) {
@@ -33914,17 +33920,16 @@ function tipHatMonsterNoise(mon, { visible = tipHatMonsterVisible(mon) } = {}) {
     case 'squeak':
         return { handled: true, message: `${name} squeaks.` };
     case 'sqawk':
-    case 'squawk': {
-        const monName = String(mon?.data?.name || mon?.name || '').toLowerCase();
+    case 'squawk':
         if (monName === 'raven' && !peaceful) return { handled: true, message: '"Nevermore!"' };
         return { handled: true, message: `${name} squawks.` };
-    }
     case 'hiss':
         return peaceful
             ? { handled: false, message: '', mapInvisible: !visible }
             : { handled: true, message: `${name} hisses!` };
     case 'buzz':
         return { handled: true, message: `${name} ${peaceful ? 'drones.' : 'buzzes angrily.'}` };
+    case 'orc':
     case 'grunt':
         return { handled: true, message: `${name} grunts.` };
     case 'neigh': {
@@ -33945,6 +33950,15 @@ function tipHatMonsterNoise(mon, { visible = tipHatMonsterVisible(mon) } = {}) {
         return { handled: true, message: rn2(3) ? '' : `${name} groans.` };
     case 'gurgle':
         return { handled: true, message: `${name} gurgles.` };
+    case 'djinni':
+        if (tame) return { handled: true, message: `"Sorry, I'm all out of wishes."` };
+        if (peaceful)
+            return monName === 'water demon'
+                ? { handled: true, message: `${name} gurgles.` }
+                : { handled: true, message: `"I'm free!"` };
+        return monName === 'prisoner'
+            ? { handled: true, message: `"Get me out of here."` }
+            : { handled: true, message: `"This will teach you not to disturb me!"` };
     case 'burble':
         return { handled: true, message: `${name} burbles.` };
     case 'trumpet': {
@@ -33971,6 +33985,34 @@ function tipHatMonsterNoise(mon, { visible = tipHatMonsterVisible(mon) } = {}) {
             return { handled: true, message: lminion ? `"It's not too late."` : `"We're all doomed."` };
         }
         return { handled: false, message: '' };
+    case 'arrest': {
+        if (peaceful)
+            return { handled: true, message: `"Just the facts, ${game.flags?.female ? "Ma'am" : 'Sir'}."` };
+        const arrestMessages = [
+            'Anything you say can be used against you.',
+            "You're under arrest!",
+            'Stop in the name of the Law!',
+        ];
+        return { handled: true, message: `"${arrestMessages[rn2(3)]}"` };
+    }
+    case 'guard':
+        return tipHatHeroHasTopLevelGold()
+            ? { handled: true, message: `"Please drop that gold and follow me."` }
+            : { handled: true, message: `"Please follow me."` };
+    case 'soldier': {
+        const soldierMessages = peaceful
+            ? [
+                "What lousy pay we're getting here!",
+                "The food's not fit for Orcs!",
+                "My feet hurt, I've been on them all day!",
+            ]
+            : [
+                'Resistance is useless!',
+                "You're dog meat!",
+                'Surrender!',
+            ];
+        return { handled: true, message: `"${soldierMessages[rn2(3)]}"` };
+    }
     default:
         return { handled: false, message: '' };
     }
