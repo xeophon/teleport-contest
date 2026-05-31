@@ -7724,6 +7724,211 @@ test('automatic monster turn briber whispers at false image and relocates demon 
     assert.ok(calls.includes('rn2(21)'));
 });
 
+test('automatic monster turn true briber with no gold turns hostile silently', async () => {
+    installStableNonShopFloorState();
+    initRng(2);
+    enableRngLog({ reset: true });
+    game.inventory = [];
+    game._goldCount = 0;
+    markHeroNeighborhoodVisible();
+    const briber = ordinaryThrowTarget('Asmodeus', 6, 5, {
+        movement: NORMAL_SPEED,
+        msleeping: 0,
+        mcanmove: true,
+        mcansee: true,
+        mpeaceful: true,
+        mtame: 0,
+        minvis: 0,
+        perminvis: 0,
+        mux: game.u.ux,
+        muy: game.u.uy,
+        mhp: 80,
+        mhpmax: 80,
+        m_lev: 53,
+        data: {
+            name: 'Asmodeus',
+            msound: 'MS_BRIBE',
+            mlevel: 53,
+            mlet: '&',
+            demon: true,
+            demonPrince: true,
+            unique: true,
+            maligntyp: -20,
+            noattacks: true,
+        },
+    });
+    game.level.monsters = [briber];
+
+    queueEscapeForMonsterTurn();
+    await processMonsterTurns();
+
+    assert.equal(game._pending_message || '', '');
+    assert.equal(briber.mpeaceful, 0);
+    assert.equal(briber.mtame, 0);
+    assert.equal(briber.hostile, true);
+    assert.equal(briber._last_demon_bribe_demand, 0);
+    assert.equal(game._command_mode || null, null);
+    assert.doesNotMatch(game._pending_message || '', /demands|safe passage|How much/);
+    const calls = getRngLog().map(entry => entry.replace(/=.*/, ''));
+    assert.equal(calls.filter(call => call === 'rnd(80)').length, 1);
+    assert.equal(calls.at(-1), 'rnd(80)');
+});
+
+test('automatic monster turn unseen true briber with no gold turns hostile silently', async () => {
+    installStableNonShopFloorState();
+    initRng(2);
+    enableRngLog({ reset: true });
+    game.inventory = [];
+    game._goldCount = 0;
+    markHeroNeighborhoodVisible();
+    const briber = ordinaryThrowTarget('water demon', 6, 5, {
+        movement: NORMAL_SPEED,
+        msleeping: 0,
+        mcanmove: true,
+        mcansee: true,
+        mpeaceful: true,
+        mtame: 0,
+        minvis: 1,
+        perminvis: 1,
+        mux: game.u.ux,
+        muy: game.u.uy,
+        mhp: 30,
+        mhpmax: 30,
+        m_lev: 8,
+        data: {
+            name: 'water demon',
+            msound: 'MS_BRIBE',
+            mlevel: 8,
+            mlet: '&',
+            demon: true,
+            maligntyp: -7,
+            noattacks: true,
+        },
+    });
+    game.level.monsters = [briber];
+
+    queueEscapeForMonsterTurn();
+    await processMonsterTurns();
+
+    assert.equal(game._pending_message || '', '');
+    assert.equal(briber.mpeaceful, 0);
+    assert.equal(briber.mtame, 0);
+    assert.equal(briber.hostile, true);
+    assert.equal(briber.minvis, 1);
+    assert.equal(briber.perminvis, 1);
+    assert.equal(briber._last_demon_bribe_demand, 0);
+    assert.equal(game._command_mode || null, null);
+    const calls = getRngLog().map(entry => entry.replace(/=.*/, ''));
+    assert.equal(calls.filter(call => call === 'rnd(80)').length, 1);
+    assert.equal(calls.at(-1), 'rnd(80)');
+});
+
+test('automatic monster turn invisible demon prince no-gold briber appears before angering', async () => {
+    installStableNonShopFloorState();
+    initRng(2);
+    enableRngLog({ reset: true });
+    game.inventory = [];
+    game._goldCount = 0;
+    markHeroNeighborhoodVisible();
+    const briber = ordinaryThrowTarget('Asmodeus', 6, 5, {
+        movement: NORMAL_SPEED,
+        msleeping: 0,
+        mcanmove: true,
+        mcansee: true,
+        mpeaceful: true,
+        mtame: 0,
+        minvis: 1,
+        perminvis: 1,
+        mux: game.u.ux,
+        muy: game.u.uy,
+        mhp: 80,
+        mhpmax: 80,
+        m_lev: 53,
+        data: {
+            name: 'Asmodeus',
+            msound: 'MS_BRIBE',
+            mlevel: 53,
+            mlet: '&',
+            demon: true,
+            demonPrince: true,
+            unique: true,
+            maligntyp: -20,
+            noattacks: true,
+        },
+    });
+    game.level.monsters = [briber];
+
+    queueEscapeForMonsterTurn();
+    await processMonsterTurns();
+
+    assert.equal(game._pending_message, 'The Asmodeus appears before you.');
+    assert.equal(briber.mpeaceful, 0);
+    assert.equal(briber.mtame, 0);
+    assert.equal(briber.hostile, true);
+    assert.equal(briber.minvis, 0);
+    assert.equal(briber.perminvis, 0);
+    assert.equal(briber.invisible, 0);
+    assert.equal(briber._last_demon_bribe_demand, 0);
+    assert.equal(game._command_mode || null, null);
+    assert.doesNotMatch(game._pending_message || '', /demands|safe passage|How much/);
+    const calls = getRngLog().map(entry => entry.replace(/=.*/, ''));
+    assert.equal(calls.filter(call => call === 'rnd(80)').length, 1);
+    assert.equal(calls.at(-1), 'rnd(80)');
+});
+
+test('automatic monster turn true briber with no gold keeps acting after angering', async () => {
+    installStableNonShopFloorState();
+    initRng(2);
+    enableRngLog({ reset: true });
+    game.inventory = [];
+    game._goldCount = 0;
+    game.u.uhp = 20;
+    game.u.uac = 10;
+    markHeroNeighborhoodVisible();
+    const briber = ordinaryThrowTarget('Asmodeus', 6, 5, {
+        movement: NORMAL_SPEED,
+        msleeping: 0,
+        mcanmove: true,
+        mcansee: true,
+        mpeaceful: true,
+        mtame: 0,
+        minvis: 0,
+        perminvis: 0,
+        mux: game.u.ux,
+        muy: game.u.uy,
+        mhp: 80,
+        mhpmax: 80,
+        m_lev: 53,
+        data: {
+            name: 'Asmodeus',
+            msound: 'MS_BRIBE',
+            mlevel: 53,
+            mlet: '&',
+            demon: true,
+            demonPrince: true,
+            unique: true,
+            maligntyp: -20,
+            attack: { dice: 1, sides: 1, verb: 'hits' },
+        },
+    });
+    game.level.monsters = [briber];
+
+    queueEscapeForMonsterTurn();
+    await processMonsterTurns();
+
+    assert.match(game._pending_message || '', /The Asmodeus hits!/);
+    assert.equal(briber.mpeaceful, 0);
+    assert.equal(briber.hostile, true);
+    assert.equal(briber._last_demon_bribe_demand, 0);
+    assert.equal(game.u.uhp, 19);
+    assert.equal(game._command_mode || null, null);
+    assert.doesNotMatch(game._pending_message || '', /demands|safe passage|How much/);
+    const calls = getRngLog().map(entry => entry.replace(/=.*/, ''));
+    assert.equal(calls.filter(call => call === 'rnd(80)').length, 1);
+    assert.ok(calls.includes('rnd(20)'));
+    assert.ok(calls.includes('d(1,1)'));
+});
+
 test('invisible demon prince briber appears before demanding safe passage', async () => {
     const result = await chatAdjacentMonster({
         name: 'Asmodeus',

@@ -36006,6 +36006,19 @@ function tipHatDemonBribeDemand(mon, cash) {
     return demand;
 }
 
+export function monsterTurnDemonBribeNoGold(mon) {
+    if (!mon || tipHatHeroWieldsDemonBribeArtifact() || tipHatHeroIsDemonPolyself())
+        return false;
+    const cash = tipHatHeroGoldCount();
+    if (cash > 0) return false;
+    const revealMessage = tipHatDemonBribeReveal(mon);
+    const demand = tipHatDemonBribeDemand(mon, cash);
+    mon._last_demon_bribe_demand = demand;
+    if (demand) return false;
+    tipHatDemonBribeSetHostile(mon);
+    return { handled: true, message: revealMessage };
+}
+
 function tipHatDemonBribeIsPrince(mon) {
     const data = mon?.data || {};
     return !!(mon?.demonPrince || mon?.isDemonPrince || data.demonPrince || data.isDemonPrince);
