@@ -34162,8 +34162,7 @@ function tipHatShopkeeperHasEarlierSellState(mon) {
     if (mon.hostile || mon.mpeaceful === 0 || mon.mpeaceful === false || mon.angry) return true;
     if (mon.following) return true;
     if (shopBillEntryCount(mon)) return true;
-    return ['debit'].some(field =>
-        Math.trunc(Number(mon[field] || 0)) > 0);
+    return false;
 }
 
 function tipHatResidentShopkeeperSellNoise(mon) {
@@ -34171,6 +34170,9 @@ function tipHatResidentShopkeeperSellNoise(mon) {
     const shkmoney = shopkeeperCash(mon);
     const name = shopkeeperDisplayName(mon);
     const canSpeak = shopkeeperCanSpeakToHero(mon);
+    const debit = Math.trunc(Number(mon?.debit || 0));
+    if (debit > 0)
+        return { handled: true, message: `${name} ${canSpeak ? 'reminds you' : 'indicates'} that you owe ${shopkeeperObjectivePronoun(mon)} ${debit} ${shopCurrency(debit)}.` };
     const credit = Math.trunc(Number(mon?.credit || 0));
     if (credit > 0)
         return { handled: true, message: `${name} encourages you to use your ${credit} ${shopCurrency(credit)} of credit.` };
