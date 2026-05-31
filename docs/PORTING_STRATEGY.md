@@ -518,6 +518,9 @@ Current validation snapshot:
 - `Garden` themed fills now create sleeping wood nymphs and 30% fountains from
   the room selection count, then use post-generation grown-room replacement to
   turn walls into trees and secret doors into arboreal air.
+- `Ghost of an Adventurer` themed fills now work for ordinary themed rooms as
+  well as map-backed rooms, and the optional not-blessed loot is placed on the
+  selected ghost square instead of leaking to `(0,0)`.
 - The Brown Mold/post-heal route cleanup removed the last public-trace state
   machines named `_brown_mold*`, `_post_heal*`, and `POST_HEAL*` from runtime
   JS. Level teleporting, Quest-goal arrival, fountain quaffing, punishment

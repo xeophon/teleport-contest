@@ -811,6 +811,26 @@ test('themed Garden creates sleeping nymphs fountains and tree walls', async () 
     assert.equal(trees > 0, true);
 });
 
+test('themed Ghost of an Adventurer places ghost loot on the ghost square', async () => {
+    const { g, room } = installThemeroomGame({
+        dlevel: 8, moves: 200, seed: 46, width: 8, height: 6,
+    });
+    await mklevHooks.apply_themeroom_fill({ name: 'Ghost of an Adventurer' }, room);
+
+    const ghosts = g.level.monsters.filter(mon => mon.data?.name === 'ghost');
+    assert.equal(room.themeFillName, 'Ghost of an Adventurer');
+    assert.equal(ghosts.length, 1);
+    const [ghost] = ghosts;
+    assert.equal(ghost.msleeping, 1);
+    assert.equal(ghost.waiting, true);
+    assert.equal(ghost.mx >= room.lx && ghost.mx <= room.hx, true);
+    assert.equal(ghost.my >= room.ly && ghost.my <= room.hy, true);
+    assert.equal(g.level.objects.length > 0, true);
+    assert.equal(g.level.objects.every(obj => obj.ox === ghost.mx && obj.oy === ghost.my), true);
+    assert.equal(g.level.objects.every(obj => obj.blessed === false), true);
+    assert.equal(g.level.objects.some(obj => obj.ox === 0 && obj.oy === 0), false);
+});
+
 test('themed Ice room converts room terrain and gates C melt timers', async () => {
     const { g: stableGame, room: stableRoom } = installThemeroomGame({
         dlevel: 3, moves: 200, seed: 1, width: 3, height: 2,

@@ -19864,13 +19864,9 @@ function themeroom_fill_rng(lit) {
     return pick;
 }
 
-function themeroom_ghost_adventurer_rng(rows, startX, startY) {
-    const candidates = [];
-    for (let x = 0; x < rows[0].length; x++)
-        for (let y = 0; y < rows.length; y++)
-            if (rows[y][x] === '.') candidates.push({ x: startX + x, y: startY + y });
-
-    const loc = candidates[rn2(candidates.length)];
+function themeroom_ghost_adventurer(croom) {
+    const loc = splevSelection.room(croom).rndcoord(false);
+    if (loc.x < 0) return null;
     rn2(2); // find_montype("ghost") chooses a gender before makemon.
     inducedAlign80();
 
@@ -19896,15 +19892,33 @@ function themeroom_ghost_adventurer_rng(rows, startX, startY) {
     }
     rn2(100);
 
-    if (rn2(100) < 65) mksobj_at(DAGGER, 0, 0, true, true);
-    if (rn2(100) < 55) mkobj_at(WEAPON_CLASS, 0, 0, true);
-    if (rn2(100) < 45) {
-        mksobj_at(BOW, 0, 0, true, true);
-        mksobj_at(ARROW, 0, 0, true, true);
+    if (rn2(100) < 65) {
+        const obj = mksobj_at(DAGGER, loc.x, loc.y, true, true);
+        if (obj) obj.blessed = false;
     }
-    if (rn2(100) < 65) mkobj_at(ARMOR_CLASS, 0, 0, true);
-    if (rn2(100) < 20) mkobj_at(RING_CLASS, 0, 0, true);
-    if (rn2(100) < 20) mkobj_at(SCROLL_CLASS, 0, 0, true);
+    if (rn2(100) < 55) {
+        const obj = mkobj_at(WEAPON_CLASS, loc.x, loc.y, true);
+        if (obj) obj.blessed = false;
+    }
+    if (rn2(100) < 45) {
+        const bow = mksobj_at(BOW, loc.x, loc.y, true, true);
+        const arrow = mksobj_at(ARROW, loc.x, loc.y, true, true);
+        if (bow) bow.blessed = false;
+        if (arrow) arrow.blessed = false;
+    }
+    if (rn2(100) < 65) {
+        const obj = mkobj_at(ARMOR_CLASS, loc.x, loc.y, true);
+        if (obj) obj.blessed = false;
+    }
+    if (rn2(100) < 20) {
+        const obj = mkobj_at(RING_CLASS, loc.x, loc.y, true);
+        if (obj) obj.blessed = false;
+    }
+    if (rn2(100) < 20) {
+        const obj = mkobj_at(SCROLL_CLASS, loc.x, loc.y, true);
+        if (obj) obj.blessed = false;
+    }
+    return ghost;
 }
 
 function themeroomBuriedZombieSpecies() {
@@ -20211,7 +20225,7 @@ async function apply_themeroom_fill(fill, croom, rows = null, startX = 0, startY
     else if (fill?.name === 'Statuary') await themeroom_statuary(croom);
     else if (fill?.name === 'Light source') themeroom_light_source(croom);
     else if (fill?.name === 'Temple of the gods') themeroom_temple_of_the_gods(croom);
-    else if (fill?.name === 'Ghost of an Adventurer' && rows) themeroom_ghost_adventurer_rng(rows, startX, startY);
+    else if (fill?.name === 'Ghost of an Adventurer') themeroom_ghost_adventurer(croom);
     else if (fill?.name === 'Teleportation hub') themeroom_teleportation_hub(croom);
     else if (fill?.name === 'Buried treasure') themeroom_buried_treasure(croom);
     else if (fill?.name === 'Garden') await themeroom_garden(croom);
