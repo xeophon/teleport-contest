@@ -26404,6 +26404,16 @@ function shopkeeperIsIzchak(shkp) {
     return String(shkp?.shknam || shkp?.shopkeeperName || '').replace(/^[|+\-_]/, '').toLowerCase() === 'izchak';
 }
 
+function shopkeeperInTown(shkp) {
+    if (!game.level?.flags?.has_town) return false;
+    const townRooms = (game.level?.rooms || []).filter(room => room?.sbrooms?.length);
+    if (!townRooms.length) return true;
+    const x = Number(shkp?.mx ?? shkp?.x ?? NaN);
+    const y = Number(shkp?.my ?? shkp?.y ?? NaN);
+    return Number.isFinite(x) && Number.isFinite(y) && townRooms.some(room =>
+        x >= room.lx && x <= room.hx && y >= room.ly && y <= room.hy);
+}
+
 function shopkeeperPossessivePronoun(shkp) {
     if (shkp?.female) return 'her';
     if (shkp?.neuter || shkp?.data?.neuter) return 'its';
@@ -34105,6 +34115,18 @@ const TIPHAT_DEMON_CUSS_MESSAGES = [
     '"I should fart in thy direction, but it might improve thy smell!"',
 ];
 
+const TIPHAT_IZCHAK_SELL_MESSAGES = [
+    name => `${name} says: 'These shopping malls give me a headache.'`,
+    name => `${name} says: 'Slow down.  Think clearly.'`,
+    name => `${name} says: 'You need to take things one at a time.'`,
+    name => `${name} says: 'I don't like poofy coffee... give me Colombian Supremo.'`,
+    name => `${name} says that getting the devteam's agreement on anything is difficult.`,
+    name => `${name} says that he has noticed those who serve their deity will prosper.`,
+    name => `${name} says: 'Don't try to steal from me - I have friends in high places!'`,
+    name => `${name} says: 'You may well need something from this shop in the future.'`,
+    name => `${name} comments about the Valley of the Dead as being a gateway.`,
+];
+
 function tipHatLawfulDeityName() {
     const roleName = game.urole?.name?.m || game._startup_role || 'Archeologist';
     const pantheonRole = roleName === 'Priest' ? game._pantheon_role || roleName : roleName;
@@ -34219,11 +34241,13 @@ function tipHatResidentShopkeeperSellNoise(mon) {
         return { handled: true, message: `${name} ${canSpeak ? 'complains' : 'indicates'} that business is bad.` };
     if (shkmoney > 4000)
         return { handled: true, message: `${name} ${canSpeak ? 'says' : 'indicates'} that business is good.` };
-    if (!shopkeeperIsIzchak(mon)) {
+    if (shopkeeperIsIzchak(mon) && shopkeeperInTown(mon)) {
         if (!canSpeak) return { handled: true, message: '' };
-        return { handled: true, message: `${name} talks about the problem of shoplifters.` };
+        const message = TIPHAT_IZCHAK_SELL_MESSAGES[rn2(TIPHAT_IZCHAK_SELL_MESSAGES.length)](name);
+        return { handled: true, message };
     }
-    return { handled: false, message: '' };
+    if (!canSpeak) return { handled: true, message: '' };
+    return { handled: true, message: `${name} talks about the problem of shoplifters.` };
 }
 
 function tipHatShopkeeperSellNoise(mon, name) {

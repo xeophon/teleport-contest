@@ -4226,8 +4226,9 @@ async function tipInvisibleExplicitSound({ name, sound, peaceful = false, tame =
     gold = 0, seed = null, rngLog = false, role = '', inventory = [], data = {}, extra = {},
     moves = null, traps = null, endgame = false, race = '', hallucinating = false,
     polyself = null, bystanders = [], moonphase = null, datetime = null, night = null,
-    hour = null, heroFemale = null } = {}) {
+    hour = null, heroFemale = null, town = false } = {}) {
     installStableNonShopFloorState();
+    if (town) game.level.flags.has_town = true;
     if (seed != null) initRng(seed);
     if (rngLog) enableRngLog({ reset: true });
     if (heroFemale != null) {
@@ -5291,6 +5292,106 @@ test('worn helmet tip makes cash-rich invisible resident shopkeeper mention good
     assert.equal(result.target.mstrategy, 0);
     assert.equal(result.targetLoc.map_invisible, true);
     assert.equal(shop.shopkeeperCash(result.target), 4001);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
+});
+
+test('worn helmet tip makes ordinary invisible Izchak use C random shop chatter', async () => {
+    const result = await tipInvisibleExplicitSound({
+        name: 'shopkeeper',
+        sound: 'MS_SELL',
+        peaceful: true,
+        seed: 4,
+        rngLog: true,
+        town: true,
+        data: { mlevel: 12, mlet: '@', humanoid: true, shopkeeper: true },
+        extra: {
+            isshk: true,
+            shknam: 'Izchak',
+            bill: [],
+            billct: 0,
+            debit: 0,
+            credit: 0,
+            robbed: 0,
+            surcharge: 0,
+            following: 0,
+            minvent: [goldPieces(3063580, 100)],
+        },
+    });
+
+    assert.equal(result.message,
+        'You briefly doff your helm.  Izchak comments about the Valley of the Dead as being a gateway.');
+    assert.doesNotMatch(result.message,
+        /15 minutes|untended shops|business is|bill comes to|shoplifters|doesn't respond|Nothing happens|waves|gestures/);
+    assert.equal(result.target.isshk, true);
+    assert.equal(result.target.mstrategy, 0);
+    assert.equal(result.targetLoc.map_invisible, true);
+    assert.equal(shop.shopkeeperCash(result.target), 100);
+    assert.deepEqual(getRngLog(), ['rn2(9)=8']);
+});
+
+test('worn helmet tip makes mute ordinary invisible Izchak consume sell response without RNG', async () => {
+    const result = await tipInvisibleExplicitSound({
+        name: 'shopkeeper',
+        sound: 'MS_SELL',
+        peaceful: true,
+        rngLog: true,
+        town: true,
+        data: { mlevel: 12, mlet: '@', humanoid: true, shopkeeper: true },
+        extra: {
+            isshk: true,
+            shknam: 'Izchak',
+            mute: true,
+            bill: [],
+            billct: 0,
+            debit: 0,
+            credit: 0,
+            robbed: 0,
+            surcharge: 0,
+            following: 0,
+            minvent: [goldPieces(3063581, 100)],
+        },
+    });
+
+    assert.equal(result.message, 'You briefly doff your helm.');
+    assert.doesNotMatch(result.message,
+        /says|comments|15 minutes|untended shops|business is|bill comes to|shoplifters|doesn't respond|Nothing happens|waves|gestures/);
+    assert.equal(result.target.isshk, true);
+    assert.equal(result.target.mute, true);
+    assert.equal(result.target.mstrategy, 0);
+    assert.equal(result.targetLoc.map_invisible, true);
+    assert.equal(shop.shopkeeperCash(result.target), 100);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
+});
+
+test('worn helmet tip makes out-of-town ordinary invisible Izchak use shoplifter chatter without RNG', async () => {
+    const result = await tipInvisibleExplicitSound({
+        name: 'shopkeeper',
+        sound: 'MS_SELL',
+        peaceful: true,
+        rngLog: true,
+        data: { mlevel: 12, mlet: '@', humanoid: true, shopkeeper: true },
+        extra: {
+            isshk: true,
+            shknam: 'Izchak',
+            bill: [],
+            billct: 0,
+            debit: 0,
+            credit: 0,
+            robbed: 0,
+            surcharge: 0,
+            following: 0,
+            minvent: [goldPieces(3063582, 100)],
+        },
+    });
+
+    assert.equal(result.message,
+        'You briefly doff your helm.  Izchak talks about the problem of shoplifters.');
+    assert.doesNotMatch(result.message,
+        /15 minutes|untended shops|business is|bill comes to|Valley of the Dead|doesn't respond|Nothing happens|waves|gestures/);
+    assert.equal(result.target.isshk, true);
+    assert.equal(result.target.mstrategy, 0);
+    assert.equal(result.targetLoc.map_invisible, true);
+    assert.equal(shop.shopkeeperCash(result.target), 100);
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
 });
 
