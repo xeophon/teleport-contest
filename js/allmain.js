@@ -6173,7 +6173,7 @@ export async function processMonsterTurns() {
                         }
                         const missileSpe = missile.spe || 0;
                         const sharedArrowLanding = !missile.blessed && !missile.cursed && !missile.greased
-                            && (missileSpe === 0 || missileSpe === 1)
+                            && (missileSpe === 0 || missileSpe === 1 || missileSpe === 2)
                             && !(missile.oeroded || 0) && !(missile.oeroded2 || 0);
                         addToplineMessage(`${monsterDisplayName(mon, true)} shoots an arrow!`);
                         game._message_more = 1;
