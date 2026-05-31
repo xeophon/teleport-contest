@@ -6151,6 +6151,32 @@ const WIZARD_GUARDTALK_AFTER = [
     '"I, too, will venture into the world, because the Dark One was but one of many evils to be vanquished."',
 ];
 
+const ARCHEOLOGIST_NEMESIS_DISCOURAGE = [
+    '"Try your best, Hero.  You cannot defeat me."',
+    '"I shall rend the flesh from your body whilst you still breathe!"',
+    '"First you, Hero, then I shall destroy your mentor, Lord Carnarvon."',
+    '"Tiring yet, Hero?  I draw my power from my master and cannot falter!"',
+    '"I shall rend thy soul from thy body and consume it!"',
+    '"You are far too neutral -- it weakens you.  You shall die in this place."',
+    '"Camaxtli has forsaken you!  You are lost now!"',
+    '"A mere Digger cannot hope to defeat me!"',
+    '"If you are the best Lord Carnarvon can send, I have nothing to fear."',
+    '"Die Archeologist!  I shall exhibit your carcass as a trophy."',
+];
+
+const WIZARD_NEMESIS_DISCOURAGE = [
+    '"Your puny powers are no match for me, fool!"',
+    '"When you are defeated, your torment will last for a thousand years."',
+    '"After your downfall, Hero, I shall devour Neferet the Green for dessert!"',
+    '"Are you ready yet to beg for mercy?  I could be lenient..."',
+    '"Your soul shall join the enslaved multitude I command!"',
+    '"Your lack of will is evident, and you shall die as a result."',
+    '"Your faith in Thoth is for naught!  Come, submit to me now!"',
+    '"A mere Evoker is nothing compared to my skill!"',
+    '"So, you are the best hope of Neferet the Green?  How droll."',
+    '"Feel my power, Wizard!  My victory is imminent!"',
+];
+
 test('chat with visible role quest guardian uses guardtalk_before pager text', async () => {
     const result = await chatAdjacentMonster({
         name: 'student',
@@ -6221,6 +6247,78 @@ test('chat with another role guardian falls back to humanoid speech', async () =
     assert.equal(game.context.move, 1);
     assert.equal(result.target.mstrategy, 0);
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
+});
+
+test('chat with quest nemesis uses discourage pager text and marks nemesis met', async () => {
+    const result = await chatAdjacentMonster({
+        name: 'the Minion of Huhetotl',
+        peaceful: false,
+        rngLog: true,
+        data: { msound: 'MS_NEMESIS', mlet: '&', demon: true, nemesis: true },
+        setup: () => {
+            game._startup_role = 'Archeologist';
+            game.urole = { ...(game.urole || {}), name: { m: 'Archeologist', f: 'Archeologist' } };
+        },
+    });
+
+    assert.ok(ARCHEOLOGIST_NEMESIS_DISCOURAGE.includes(result.message), result.message);
+    assert.equal(game.quest_status.met_nemesis, true);
+    assert.equal(game.context.move, 1);
+    assert.equal(result.target.mstrategy, 0);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(10)']);
+});
+
+test('chat with quest nemesis data marker infers discourage pager text', async () => {
+    const result = await chatAdjacentMonster({
+        name: 'the Dark One',
+        peaceful: false,
+        rngLog: true,
+        data: { mlet: '&', demon: true, nemesis: true },
+        setup: () => {
+            game._startup_role = 'Wizard';
+            game.urole = { ...(game.urole || {}), name: { m: 'Wizard', f: 'Wizard' } };
+        },
+    });
+
+    assert.ok(WIZARD_NEMESIS_DISCOURAGE.includes(result.message), result.message);
+    assert.equal(game.quest_status.met_nemesis, true);
+    assert.equal(game.context.move, 1);
+    assert.equal(result.target.mstrategy, 0);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(10)']);
+});
+
+test('worn helmet tip with invisible quest nemesis infers nemesis speech', async () => {
+    const result = await tipInvisibleExplicitSound({
+        name: 'the Dark One',
+        peaceful: false,
+        role: 'Wizard',
+        rngLog: true,
+        data: { nemesis: true, mlet: '&', demon: true },
+    });
+    const nemesisMessage = result.message.replace(/^You briefly doff your helm\.  /, '');
+
+    assert.ok(WIZARD_NEMESIS_DISCOURAGE.includes(nemesisMessage), result.message);
+    assert.equal(game.quest_status.met_nemesis, true);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(10)']);
+});
+
+test('quest nemesis pager strips leader article with percent-t token', async () => {
+    const result = await chatAdjacentMonster({
+        name: 'Nalzok',
+        peaceful: false,
+        seed: 47,
+        rngLog: true,
+        data: { msound: 'MS_NEMESIS', mlet: '&', demon: true, nemesis: true },
+        setup: () => {
+            game._startup_role = 'Priest';
+            game.urole = { ...(game.urole || {}), name: { m: 'Priest', f: 'Priest' } };
+            game._pantheon_role = 'Priest';
+        },
+    });
+
+    assert.equal(result.message, '"Your precious Arch Priest will be my next victim."');
+    assert.equal(game.quest_status.met_nemesis, true);
+    assert.deepEqual(getRngLog(), ['rn2(10)=7']);
 });
 
 test('chat with peaceful non-tame briber and no gold spends turn and angers demon', async () => {

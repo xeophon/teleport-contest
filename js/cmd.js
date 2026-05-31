@@ -704,6 +704,18 @@ back only when you have purified yourself."`,
 quest.  A mere %r could not possibly face the rigors demanded and
 survive.  Go forth, and come here again when your adventures have further
 taught you."`,
+            discourage: [
+                '"Try your best, %p.  You cannot defeat me."',
+                '"I shall rend the flesh from your body whilst you still breathe!"',
+                '"First you, %p, then I shall destroy your mentor, %l."',
+                '"Tiring yet, %p?  I draw my power from my master and cannot falter!"',
+                '"I shall rend thy soul from thy body and consume it!"',
+                '"You are far too %a -- it weakens you.  You shall die in this place."',
+                '"%d has forsaken you!  You are lost now!"',
+                '"A mere %r cannot hope to defeat me!"',
+                '"If you are the best %l can send, I have nothing to fear."',
+                '"Die %c!  I shall exhibit your carcass as a trophy."',
+            ],
             guardtalk_after: [
                 `"Did you see Lash LaRue in 'Song of Old Wyoming' the other night?"`,
                 '"Hey man, got any potions of hallucination for sale?"',
@@ -780,6 +792,18 @@ Go forth, and return when you feel ready."`,
             badlevel: `"%p, I fear that you are as yet too inexperienced to face
 %n.  Only %Ra with the help of %d could ever hope to
 defeat %ni."`,
+            discourage: [
+                '"My pets will dine on your carcass tonight!"',
+                '"You are a sorry excuse for %ra."',
+                '"Run while you can, %c.  My next spell will be your last."',
+                '"I shall use your very skin to bind my next grimoire."',
+                '"%d cannot protect you now.  Here, you die."',
+                '"Your %a nature makes you weak.  You cannot defeat me."',
+                '"Come, %c.  I shall kill you, then unleash the horde on your tribe."',
+                '"Once you are dead, my horde shall finish off %l, and your tribe."',
+                '"Fight, %c, or are you afraid of the mighty %n?"',
+                '"You have failed, %c.  Now, my victory is complete."',
+            ],
             guardtalk_after: [
                 `"The battles here have been good -- our enemies' blood soaks the soil!"`,
                 '"Remember that glory is crushing your enemies beneath your feet!"',
@@ -835,6 +859,18 @@ side of a hill.  From within, you smell the foul stench of carrion.
 
 The pools on either side of the entrance are fouled with blood, and
 pieces of rusted metal and broken weapons show above the surface.`,
+            discourage: [
+                '"A mere %r can never withstand me!"',
+                '"I shall kill thee now, and feast!"',
+                '"Puny %c.  What manner of death dost thou wish?"',
+                '"First thee, %p, then I shall feast upon %l."',
+                '"Hah!  Thou hast failed, %r.  Now thou shalt die."',
+                '"Die, %c.  Thou art as nothing against my might."',
+                '"I shall suck the marrow from thy bones, %c."',
+                `"Let's see...  Baked?  No.  Fried?  Nay.  Broiled?  Yea verily, that is the way I like my %c for dinner."`,
+                '"Thy strength waneth, %p.  The time of thy death draweth near."',
+                '"Call upon thy precious %d, %p.  It shall not avail thee."',
+            ],
             guardtalk_after: [
                 '"Hail, %p!  Verily, thou lookest well."',
                 '"So, %p, didst thou find %n in the fens near %i?"',
@@ -899,6 +935,18 @@ you have purified yourself."`,
             badlevel: `"Alas, %p, it is not yet to be.  A mere %r could never
 withstand the might of %n.  Go forth, again into the world, and return
 when you have attained the post of %R."`,
+            discourage: [
+                '"Submit to my will, %c, and I shall spare you."',
+                '"Your puny powers are no match for me, %c."',
+                '"I shall have you turned into a zombie for my pleasure!"',
+                '"Despair now, %r.  %d cannot help you."',
+                '"I shall feast upon your soul for many days, %c."',
+                '"Your death will be slow and painful.  That I promise!"',
+                '"You cannot defeat %n, you fool.  I shall kill you now."',
+                '"Your precious %lt will be my next victim."',
+                '"I feel your powers failing you, %r.  You shall die now."',
+                '"With %o, nothing can stand in my way."',
+            ],
             guardtalk_after: [
                 '"Greetings, %r.  It is good to see you again."',
                 '"Ah, %p!  Our deepest gratitude for all of your help."',
@@ -977,6 +1025,18 @@ truly ready for this quest.  May %d guide you in this task."`,
 spellcaster.  As %ra, you would surely be overcome in the challenge
 ahead.  Go, now, expand your horizons, and return when you have attained
 renown as %Ra."`,
+            discourage: [
+                '"Your puny powers are no match for me, fool!"',
+                '"When you are defeated, your torment will last for a thousand years."',
+                '"After your downfall, %p, I shall devour %l for dessert!"',
+                '"Are you ready yet to beg for mercy?  I could be lenient..."',
+                '"Your soul shall join the enslaved multitude I command!"',
+                '"Your lack of will is evident, and you shall die as a result."',
+                '"Your faith in %d is for naught!  Come, submit to me now!"',
+                '"A mere %r is nothing compared to my skill!"',
+                '"So, you are the best hope of %l?  How droll."',
+                '"Feel my power, %c!  My victory is imminent!"',
+            ],
             guardtalk_after: [
                 `"I have some eye of newt to trade, do you have a spare blind-worm's sting?"`,
                 '"The magic portal now seems like it will remain stable for quite some time."',
@@ -3339,6 +3399,7 @@ function questPagerText(msgid, { initCore = true } = {}) {
     const child = game.flags?.female ? 'daughter' : 'son';
     const cap = text => `${text.charAt(0).toUpperCase()}${text.slice(1)}`;
     const article = text => /^(?:the|a|an)\b/i.test(text) ? text : `${/^[aeiou]/i.test(text) ? 'an' : 'a'} ${text}`;
+    const stripThe = text => String(text || '').replace(/^the\s+/i, '');
     const possessive = text => String(text || '').endsWith('s') ? `${text}'` : `${text}'s`;
     const roleClass = roleName || 'Adventurer';
     const malePronouns = { h: 'he', H: 'He', i: 'him', I: 'Him', j: 'his', J: 'His' };
@@ -3353,10 +3414,12 @@ function questPagerText(msgid, { initCore = true } = {}) {
         ['%x', game.u?.blind ? 'sense' : 'see'], ['%Z', 'The Dungeons of Doom'],
         ['%pC', cap(player)], ['%ra', article(rank)], ['%RC', cap(minRank)],
         ['%R', minRank], ['%r', rank], ['%ns', `${info.nemesis}'s`],
+        ['%nt', stripThe(info.nemesis)],
         ['%nC', cap(info.nemesis)], ['%na', article(info.nemesis)],
         ['%n', info.nemesis], ['%O', `the ${info.artifactShort}`],
-        ['%os', possessive(info.artifact)], ['%oC', cap(info.artifact)], ['%o', info.artifact],
-        ['%ls', possessive(leader)], ['%lC', cap(leader)], ['%l', leader],
+        ['%os', possessive(info.artifact)], ['%ot', stripThe(info.artifact)],
+        ['%oC', cap(info.artifact)], ['%o', info.artifact],
+        ['%ls', possessive(leader)], ['%lt', stripThe(leader)], ['%lC', cap(leader)], ['%l', leader],
         ['%S', child], ['%s', sibling],
         ['%i', info.intermed], ['%gP', cap(`${info.guardian}s`)], ['%g', info.guardian],
         ['%H', info.homebase], ['%ds', possessive(deity)], ['%d', deity], ['%a', alignName], ['%p', player],
@@ -35040,6 +35103,7 @@ function tipHatMonsterSound(mon) {
     if (mon?.isshk) return 'sell';
     const explicit = mon?.msound ?? mon?.sound ?? data.msound ?? data.sound;
     if (explicit != null) return String(explicit).toLowerCase().replace(/^ms_/, '');
+    if (mon?.nemesis || data.nemesis) return 'nemesis';
     if (tipHatMonsterIsShopkeeperType(mon, name)) return 'sell';
     if (tipHatMonsterIsPriestType(mon, name)) return 'priest';
     if (/^(gremlin|leprechaun)$/.test(name)) return 'laugh';
@@ -35316,6 +35380,13 @@ function tipHatQuestGuardianNoise() {
     return message ? { handled: true, message } : { handled: false, message: '' };
 }
 
+function tipHatQuestNemesisNoise() {
+    game.quest_status ??= {};
+    const message = questPagerText('discourage', { initCore: false });
+    if (!game.quest_status.met_nemesis) game.quest_status.met_nemesis = true;
+    return message ? { handled: true, message } : { handled: false, message: '' };
+}
+
 function tipHatMonsterNoise(mon, { visible = tipHatMonsterVisible(mon), nameOverride = null } = {}) {
     const silent = tipHatMonsterSilent(mon);
     if (!mon || heroIsDeaf() || (silent && !mon?.isshk)) return { handled: false, message: '' };
@@ -35525,6 +35596,8 @@ function tipHatMonsterNoise(mon, { visible = tipHatMonsterVisible(mon), nameOver
         return { handled: true, message: '"Who do you think you are, War?"' };
     case 'guardian':
         return tipHatQuestGuardianNoise();
+    case 'nemesis':
+        return tipHatQuestNemesisNoise();
     case 'bribe':
         if (peaceful && !tame) return tipHatDemonBribeNoise(mon, name, visible);
         if (peaceful) return tipHatPeacefulCussNoise(mon);
