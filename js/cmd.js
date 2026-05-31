@@ -34162,7 +34162,7 @@ function tipHatShopkeeperHasEarlierSellState(mon) {
     if (mon.hostile || mon.mpeaceful === 0 || mon.mpeaceful === false || mon.angry) return true;
     if (mon.following) return true;
     if (shopBillEntryCount(mon)) return true;
-    return ['debit', 'credit'].some(field =>
+    return ['debit'].some(field =>
         Math.trunc(Number(mon[field] || 0)) > 0);
 }
 
@@ -34171,6 +34171,9 @@ function tipHatResidentShopkeeperSellNoise(mon) {
     const shkmoney = shopkeeperCash(mon);
     const name = shopkeeperDisplayName(mon);
     const canSpeak = shopkeeperCanSpeakToHero(mon);
+    const credit = Math.trunc(Number(mon?.credit || 0));
+    if (credit > 0)
+        return { handled: true, message: `${name} encourages you to use your ${credit} ${shopCurrency(credit)} of credit.` };
     if (Math.trunc(Number(mon?.robbed || 0)) > 0)
         return { handled: true, message: `${name} ${canSpeak ? 'complains' : 'indicates concern'} about a recent robbery.` };
     if (Math.trunc(Number(mon?.surcharge || 0)) > 0)
