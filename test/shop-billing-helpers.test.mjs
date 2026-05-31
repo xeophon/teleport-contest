@@ -5290,6 +5290,230 @@ test('underwater chat is blocked before direction prompt', async () => {
     assert.doesNotMatch(message, /Talk to whom|out there|choking/);
 });
 
+test('chat on single shop-floor object quotes price before direction prompt', async () => {
+    const { shkp } = installCommandShopState();
+    const ration = foodRation(6201);
+    game.level.objects = [ration];
+    const expected = shop.shopItemPrice(ration, 5, 5);
+
+    await enterChatCommand();
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.match(game._pending_message,
+        new RegExp(`^A food ration, price ${expected} zorkmids?(?:\\.|, .*)$`));
+    assert.doesNotMatch(game._pending_message,
+        /Talk to whom|For you|bill comes to|shoplifters|talking to a wall/);
+    assert.equal(shkp.billct, 0);
+    assert.equal(shop.shopBillEntryForObject(shkp, ration), null);
+    assert.equal(ration.unpaid, undefined);
+    assert.equal(game.inventory.length, 0);
+});
+
+test('chat shop-floor quote uses C default cost for zero-base objects', async () => {
+    const { shkp } = installCommandShopState();
+    const rock = monsterThrownRock(6209, {
+        ox: 5,
+        oy: 5,
+        dknown: true,
+        known: true,
+        line: 'r - a rock',
+    });
+    game.u.acurr.a[A_CHA] = 11;
+    game.level.objects = [rock];
+
+    await enterChatCommand();
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.match(game._pending_message, /^A rock, price 5 zorkmids?(?:\.|, .*)$/);
+    assert.equal(shkp.billct, 0);
+    assert.equal(shop.shopBillEntryForObject(shkp, rock), null);
+});
+
+test('chat shop-floor quote uses C default cost for partly eaten food', async () => {
+    const { shkp } = installCommandShopState();
+    const ration = foodRation(6210);
+    ration.oeaten = 1;
+    game.u.acurr.a[A_CHA] = 11;
+    game.level.objects = [ration];
+
+    await enterChatCommand();
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.match(game._pending_message, /^A partly eaten food ration, price 5 zorkmids?(?:\.|, .*)$/);
+    assert.equal(shkp.billct, 0);
+});
+
+test('chat shop-floor quote applies C shopkeeper surcharge', async () => {
+    const { shkp } = installCommandShopState();
+    const ration = foodRation(6211);
+    shkp.surcharge = 1;
+    game.u.acurr.a[A_CHA] = 11;
+    game.level.objects = [ration];
+
+    await enterChatCommand();
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.match(game._pending_message, /^A food ration, price 60 zorkmids?(?:\.|, .*)$/);
+    assert.equal(shkp.billct, 0);
+});
+
+test('chat shop-floor quote uses C visible-shirt surcharge gates', async () => {
+    for (const { inventory, expected } of [
+        { inventory: [wornArmor(6212, 'T-shirt', 't')], expected: 60 },
+        { inventory: [wornArmor(6213, 'T-shirt', 't'), wornArmor(6214, 'orcish helm', 'h')], expected: 60 },
+        { inventory: [wornArmor(6215, 'T-shirt', 't'), wornArmor(6216, 'leather armor', 'a')], expected: 45 },
+        { inventory: [wornArmor(6217, 'T-shirt', 't'), wornArmor(6218, 'cloak of protection', 'c')], expected: 45 },
+    ]) {
+        const { shkp } = installCommandShopState();
+        const ration = foodRation(6219);
+        game.u.acurr.a[A_CHA] = 11;
+        game.inventory = inventory;
+        game.level.objects = [ration];
+
+        await enterChatCommand();
+
+        assert.equal(game._command_mode, null);
+        assert.equal(game.context.move, 1);
+        assert.match(game._pending_message,
+            new RegExp(`^A food ration, price ${expected} zorkmids?(?:\\.|, .*)$`));
+        assert.equal(shkp.billct, 0);
+    }
+});
+
+test('chat on no-charge shop-floor object quotes no charge before direction prompt', async () => {
+    const { shkp } = installCommandShopState();
+    const ration = foodRation(6220);
+    ration.no_charge = true;
+    game.level.objects = [ration];
+
+    await enterChatCommand();
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game._pending_message, 'A food ration, no charge!');
+    assert.equal(shkp.billct, 0);
+    assert.equal(shop.shopBillEntryForObject(shkp, ration), null);
+});
+
+test('chat on coins-only shop floor reaches direction prompt without quote', async () => {
+    const { shkp } = installCommandShopState();
+    const gold = goldPieces(6221, 7);
+    gold.ox = 5;
+    gold.oy = 5;
+    game.level.objects = [gold];
+
+    await enterChatCommand();
+
+    assert.equal(game._command_mode, 'chatDirection');
+    assert.equal(game._pending_message, 'Talk to whom? (in what direction)');
+    assert.equal(game.context?.move || 0, 0);
+    assert.doesNotMatch(game._pending_message, /price|Fine goods|no charge/);
+    assert.equal(shkp.billct, 0);
+});
+
+test('chat on multiple shop-floor objects shows C price list before direction prompt', async () => {
+    const { shkp } = installCommandShopState();
+    const ration = foodRation(6202);
+    const scroll = blankScroll(6203);
+    game.level.objects = [ration, scroll];
+    const rationPrice = shop.shopItemPrice(ration, 5, 5);
+    const scrollPrice = shop.shopItemPrice(scroll, 5, 5);
+
+    await enterChatCommand();
+
+    assert.equal(game._command_mode, 'chatPriceQuoteMenu');
+    assert.equal(game.context?.move || 0, 0);
+    const menuText = (game._overlay_lines || []).map(row => row[2]).join('\n');
+    assert.match(menuText, /^Fine goods for sale:/m);
+    assert.match(menuText, new RegExp(`a food ration, ${rationPrice} zorkmids?`));
+    assert.match(menuText, new RegExp(`a scroll of blank paper, ${scrollPrice} zorkmids?`));
+    assert.doesNotMatch(`${game._pending_message}\n${menuText}`, /Talk to whom|For you/);
+    assert.equal(shkp.billct, 0);
+
+    await rhack(' ');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game._overlay_lines, null);
+    assert.equal(game.context.move, 1);
+});
+
+test('chat shop-floor quote names priced contents of no-charge container', async () => {
+    const { shkp } = installCommandShopState();
+    const bag = sack(6204);
+    bag.no_charge = true;
+    bag.ox = 5;
+    bag.oy = 5;
+    const blade = putObjectInContainer(bag, dagger(6205));
+    game.level.objects = [bag];
+    const expected = shop.shopItemPrice(blade, 5, 5);
+
+    await enterChatCommand();
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game._pending_message, `The contents of a bag, price ${expected} zorkmids.`);
+    assert.doesNotMatch(game._pending_message, /and its contents|for this|For you|Talk to whom/);
+    assert.equal(shkp.billct, 0);
+    assert.equal(shop.shopBillEntryForObject(shkp, bag), null);
+    assert.equal(shop.shopBillEntryForObject(shkp, blade), null);
+});
+
+test('blind and deaf heroes reach chat direction instead of shop-floor quote', async () => {
+    for (const setup of [
+        () => { game.u.blind = true; },
+        () => { game.u._deafTimeout = 10; },
+    ]) {
+        const { shkp } = installCommandShopState();
+        game.level.objects = [foodRation(6206)];
+        setup();
+
+        await enterChatCommand();
+
+        assert.equal(game._command_mode, 'chatDirection');
+        assert.equal(game._pending_message, 'Talk to whom? (in what direction)');
+        assert.equal(game.context?.move || 0, 0);
+        assert.doesNotMatch(game._pending_message, /price|Fine goods|no charge/);
+        assert.equal(shkp.billct, 0);
+    }
+});
+
+test('strangled hero blocks chat before shop-floor quote', async () => {
+    const { shkp } = installCommandShopState();
+    game.level.objects = [foodRation(6207)];
+    game.u.strangled = true;
+
+    await enterChatCommand();
+
+    assert.equal(game._pending_message, "You can't speak.  You're choking!");
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context?.move || 0, 0);
+    assert.doesNotMatch(game._pending_message, /Talk to whom|price|Fine goods|no charge/);
+    assert.equal(shkp.billct, 0);
+});
+
+test('angry or helpless shopkeeper cannot quote chat shop-floor goods', async () => {
+    for (const setup of [
+        shkp => { shkp.mpeaceful = 0; },
+        shkp => { shkp.msleeping = 1; },
+    ]) {
+        const { shkp } = installCommandShopState();
+        game.level.objects = [foodRation(6208)];
+        setup(shkp);
+
+        await enterChatCommand();
+
+        assert.equal(game._command_mode, 'chatDirection');
+        assert.equal(game._pending_message, 'Talk to whom? (in what direction)');
+        assert.equal(game.context?.move || 0, 0);
+        assert.doesNotMatch(game._pending_message, /price|Fine goods|no charge/);
+        assert.equal(shkp.billct, 0);
+    }
+});
+
 test('chat up without a steed uses C vertical no-hear response without time', async () => {
     const message = await chatDirectionKey('<');
 

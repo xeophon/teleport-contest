@@ -33909,6 +33909,187 @@ function chatPreDirectionMessage() {
     return '';
 }
 
+function chatShopFloorObjects() {
+    const x = game.u?.ux;
+    const y = game.u?.uy;
+    return (game.level?.objects || [])
+        .filter(obj => obj && !obj.hidden && !obj.transientProjectile
+            && obj.ox === x && obj.oy === y
+            && !(obj.otyp === GOLD_PIECE || obj.cls === 'coin' || obj.glyph === '$'));
+}
+
+function chatShopkeeperCanQuoteFloor(shkp) {
+    return !!shkp && shopkeeperInHisShop(shkp)
+        && !shopkeeperAngryForSellobj(shkp)
+        && !shopkeeperMuteForSpeech(shkp)
+        && !tipHatMonsterHelpless(shkp);
+}
+
+function chatShopQuoteWearingSurcharge() {
+    const worn = (game.inventory || []).filter(isWornInventoryItem);
+    if (worn.some(item => objectKindKey(item) === 'dunce cap')) return true;
+    const role = game._startup_role || game.urole?.name?.m || '';
+    if (role === 'Tourist' && (game.u?.ulevel || 1) < 15) return true;
+    const wornArmor = worn.filter(item =>
+        item.cls === 'armor' || item.glyph === '[' || item.otyp === ARMOR_CLASS);
+    const visibleShirt = wornArmor.some(item => ['hawaiian shirt', 't-shirt'].includes(objectKindKey(item)))
+        && !wornArmor.some(item => ['body', 'cloak'].includes(armorSlot(item)));
+    return visibleShirt;
+}
+
+function chatShopQuoteUnitCost(obj, shkp) {
+    let price = shopBaseCost(obj);
+    if ((obj?.cls === 'food' || obj?.otyp === FOOD_CLASS || obj?.otyp === CORPSE || obj?.otyp === 'corpse')
+        && (game.u?.uhs || 0) >= 2)
+        price *= game.u.uhs;
+    if ((obj?.cls === 'food' || obj?.otyp === FOOD_CLASS || obj?.otyp === CORPSE || obj?.otyp === 'corpse')
+        && obj?.oeaten)
+        price = 0;
+    if ((obj?.cls === 'armor' || obj?.cls === 'weapon' || obj?.glyph === '[' || obj?.glyph === ')')
+        && (obj?.spe || 0) > 0)
+        price += 10 * obj.spe;
+    if (isCandleObject(obj) && obj?.age < 20 * price) price = Math.trunc(price / 2);
+    if (!price) price = 5;
+
+    let multiplier = 1;
+    let divisor = 1;
+    if ((obj?.dknown !== true || !shopObjectNameKnown(obj))
+        && ((obj?.id ?? obj?.o_id ?? 0) % 4) === 0) {
+        multiplier *= 4;
+        divisor *= 3;
+    }
+    if (chatShopQuoteWearingSurcharge()) {
+        multiplier *= 4;
+        divisor *= 3;
+    }
+    const cha = game.u?.acurr?.a?.[A_CHA] ?? 10;
+    if (cha > 18) divisor *= 2;
+    else if (cha === 18) { multiplier *= 2; divisor *= 3; }
+    else if (cha >= 16) { multiplier *= 3; divisor *= 4; }
+    else if (cha <= 5) multiplier *= 2;
+    else if (cha <= 7) { multiplier *= 3; divisor *= 2; }
+    else if (cha <= 10) { multiplier *= 4; divisor *= 3; }
+
+    price *= multiplier;
+    if (divisor > 1) price = Math.trunc((Math.trunc(price * 10 / divisor) + 5) / 10);
+    price = Math.max(1, Math.trunc(price));
+    if (obj?.artifact || obj?.oartifact) price *= 4;
+    if (shkp?.surcharge) price += Math.trunc((price + 2) / 3);
+    return price;
+}
+
+function chatShopQuoteTopCost(obj, shkp) {
+    if (!obj || obj.no_charge || obj === game.u?.uball || obj === game.u?.uchain) return 0;
+    let price = chatShopQuoteUnitCost(obj, shkp);
+    if (isGlobbyObject(obj)) price *= shopPricingUnits(obj);
+    return Math.max(0, Math.trunc(Number(price || 0)));
+}
+
+function chatShopQuoteContainedCost(obj, shkp, seen = new Set()) {
+    if (!obj || seen.has(obj)) return 0;
+    seen.add(obj);
+    let price = 0;
+    for (const child of globContents(obj)) {
+        if (!child || seen.has(child)) continue;
+        if (!shopBillableGold(child) && !child.no_charge)
+            price += chatShopQuoteUnitCost(child, shkp) * shopPricingUnits(child);
+        price += chatShopQuoteContainedCost(child, shkp, seen);
+    }
+    return Math.max(0, Math.trunc(price));
+}
+
+function chatShopQuoteMagicObject(obj, oclass) {
+    if (shopObjectNameKnown(obj))
+        return !!(obj?.oc_magic || obj?.magic || obj?.magicStone);
+    return [AMULET_CLASS, RING_CLASS, WAND_CLASS, POTION_CLASS, SCROLL_CLASS, SPBOOK_CLASS]
+        .includes(oclass);
+}
+
+function chatShopQuoteEmbellishment(obj, cost) {
+    if (!rn2(3)) {
+        let choice = rn2(5);
+        if (choice === 0) choice = cost < 100 ? 1 : cost < 500 ? 2 : 3;
+        switch (choice) {
+        case 4: {
+            if (cost < 10) break;
+            const oclass = shopObjectClassCode(obj);
+            if (oclass === FOOD_CLASS) return ", gourmets' delight!";
+            if (chatShopQuoteMagicObject(obj, oclass)) return ', painstakingly developed!';
+            return ', superb craftsmanship!';
+        }
+        case 3:
+            return ', finest quality.';
+        case 2:
+            return ', an excellent choice.';
+        case 1:
+            return ', a real bargain.';
+        default:
+            break;
+        }
+    } else if (obj?.artifact) {
+        return ', one of a kind!';
+    }
+    return '.';
+}
+
+function chatShopQuoteEntry(obj, shkp) {
+    const topCost = chatShopQuoteTopCost(obj, shkp);
+    let cost = topCost + (globContents(obj).length
+        ? chatShopQuoteContainedCost(obj, shkp)
+        : 0);
+    cost = Math.max(0, Math.trunc(Number(cost || 0)));
+    const contentsOnly = cost > 0 && topCost === 0;
+    const name = `${contentsOnly ? 'the contents of ' : ''}${pickupObjectPhrase(obj)}`;
+    const price = cost > 0
+        ? `${cost} ${shopCurrency(cost)}${(obj?.quan || 1) > 1 ? ' each' : ''}`
+        : 'no charge';
+    return { obj, cost, contentsOnly, line: `${name}, ${price}` };
+}
+
+function chatShopFloorQuote() {
+    if (heroIsDeaf() || heroIsBlind()) return null;
+    const x = game.u?.ux;
+    const y = game.u?.uy;
+    const shkp = shopkeeperForCostlySpot(x, y);
+    if (!chatShopkeeperCanQuoteFloor(shkp)) return null;
+    const objects = chatShopFloorObjects();
+    if (!objects.length) return null;
+    return { shkp, entries: objects.map(obj => chatShopQuoteEntry(obj, shkp)) };
+}
+
+async function finishChatShopFloorQuote(quote) {
+    const entries = quote?.entries || [];
+    if (!entries.length) return false;
+    if (entries.length > 1) {
+        const rows = [[0, 0, 'Fine goods for sale:'], [1, 0, '']];
+        for (let i = 0; i < entries.length; i++)
+            rows.push([i + 2, 0, entries[i].line]);
+        setOverlay(rows, rows.length);
+        game._command_mode = 'chatPriceQuoteMenu';
+        game._pending_message = '';
+        game._message_more = 0;
+        game._keep_pending_message = 0;
+        game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
+        game.context.move = 0;
+        return true;
+    }
+
+    const entry = entries[0];
+    let message = `${upstartText(entry.line)}!`;
+    if (entry.cost > 0) {
+        const name = upstartText(entry.contentsOnly
+            ? entry.line.replace(/, \d+ .*/, '')
+            : pickupObjectPhrase(entry.obj));
+        const stackEach = (entry.obj?.quan || 1) > 1 ? ' each' : '';
+        const suffix = entry.contentsOnly ? '.' : chatShopQuoteEmbellishment(entry.obj, entry.cost);
+        message = `${name}, price ${entry.cost} ${shopCurrency(entry.cost)}${stackEach}${suffix}`;
+    }
+    await setMessage(message, message.includes('  '));
+    game._command_mode = null;
+    chatConsumeTurn();
+    return true;
+}
+
 async function beginChatCommand() {
     const preDirectionMessage = chatPreDirectionMessage();
     if (preDirectionMessage) {
@@ -33916,6 +34097,7 @@ async function beginChatCommand() {
         game._command_mode = null;
         return;
     }
+    if (await finishChatShopFloorQuote(chatShopFloorQuote())) return;
     await setMessage('Talk to whom? (in what direction)');
     game._command_mode = 'chatDirection';
 }
@@ -56924,6 +57106,23 @@ export async function rhack(_cmd) {
         await setMessage('You kick at empty space.');
         game._command_mode = null;
         game.context.move = 1;
+        return;
+    }
+
+    if (game._command_mode === 'chatPriceQuoteMenu') {
+        if (ch === ' ' || ch === '\x1b' || ch === '\r' || ch === '\n') {
+            game._overlay_lines = null;
+            game._overlay_hide_status = 0;
+            game._pending_message = '';
+            game._message_more = 0;
+            game._command_mode = null;
+            if (game._pending_time_passed > 0) {
+                game._pending_time_passed--;
+                chatConsumeTurn();
+            } else {
+                game.context.move = 0;
+            }
+        }
         return;
     }
 
