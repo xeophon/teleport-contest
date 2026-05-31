@@ -35811,6 +35811,15 @@ const TIPHAT_GENERATED_SOUND_BY_MONSTER_NAME = new Map([
     ['wumpus', 'burble'], ['jabberwock', 'burble'],
     ['titanothere', 'bellow'], ['baluchitherium', 'bellow'], ['crocodile', 'bellow'],
     ['baby crocodile', 'chirp'], ['shade', 'wail'], ['juiblex', 'gurgle'],
+    ['keystone kop', 'arrest'], ['kop sergeant', 'arrest'],
+    ['kop lieutenant', 'arrest'], ['kop kaptain', 'arrest'],
+    ['guard', 'guard'], ['croesus', 'guard'],
+    ['soldier', 'soldier'], ['sergeant', 'soldier'], ['lieutenant', 'soldier'],
+    ['captain', 'soldier'], ['watchman', 'soldier'], ['watch captain', 'soldier'],
+    ['nurse', 'nurse'],
+    ['water demon', 'djinni'], ['prisoner', 'djinni'], ['djinni', 'djinni'],
+    ['titan', 'spell'], ['barrow wight', 'spell'], ['nazgul', 'spell'],
+    ['nalfeshnee', 'spell'],
 ]);
 
 function tipHatGeneratedMonsterSound(name) {

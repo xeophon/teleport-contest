@@ -5742,6 +5742,92 @@ test('chat with visible generated nonverbal sound monsters uses C msound rows', 
     }
 });
 
+test('chat with visible generated special sound monsters uses C msound rows', async () => {
+    const cases = [
+        {
+            name: 'Keystone Kop',
+            peaceful: false,
+            seed: 1,
+            data: { mlevel: 1, mlet: 'K', humanoid: true },
+            expected: '"Anything you say can be used against you."',
+            rng: ['rn2(3)=0'],
+            reject: /The Keystone Kop|threatens|waves|Nothing happens/,
+        },
+        {
+            name: 'guard',
+            data: { mlevel: 12, mlet: '@', humanoid: true, guard: true },
+            expected: '"Please follow me."',
+            reject: /The guard|threatens|waves|Nothing happens/,
+        },
+        {
+            name: 'soldier',
+            peaceful: false,
+            seed: 1,
+            data: { mlevel: 6, mlet: '@', humanoid: true },
+            expected: '"Resistance is useless!"',
+            rng: ['rn2(3)=0'],
+            reject: /The soldier|threatens|lousy pay|waves|Nothing happens/,
+        },
+        {
+            name: 'watchman',
+            seed: 2,
+            data: { mlevel: 6, mlet: '@', humanoid: true },
+            expected: '"The food\'s not fit for Orcs!"',
+            rng: ['rn2(3)=1'],
+            reject: /The watchman|threatens|Resistance is useless|waves|Nothing happens/,
+        },
+        {
+            name: 'nurse',
+            data: { mlevel: 11, mlet: '@', humanoid: true },
+            expected: '"Relax, this won\'t hurt a bit."',
+            reject: /The nurse|threatens|undress|waves|Nothing happens/,
+        },
+        {
+            name: 'water demon',
+            data: { mlevel: 8, mlet: '&', demon: true },
+            expected: 'The water demon gurgles.',
+            reject: /I'm free|threatens|waves|Nothing happens/,
+        },
+        {
+            name: 'prisoner',
+            peaceful: false,
+            data: { mlevel: 12, mlet: '@', humanoid: true },
+            expected: '"Get me out of here."',
+            reject: /The prisoner|disturb me|threatens|waves|Nothing happens/,
+        },
+        {
+            name: 'nalfeshnee',
+            peaceful: false,
+            data: { mlevel: 11, mlet: '&', demon: true, humanoid: true },
+            expected: 'The nalfeshnee seems to mutter a cantrip.',
+            reject: /threatens|growls|waves|Nothing happens/,
+        },
+        {
+            name: 'Nazgul',
+            peaceful: false,
+            data: { mlevel: 13, mlet: 'wraith', undead: true, humanoid: true },
+            expected: 'The Nazgul seems to mutter a cantrip.',
+            reject: /threatens|wails|waves|Nothing happens/,
+        },
+    ];
+
+    for (const { name, peaceful = true, seed = null, data, expected, rng = [], reject } of cases) {
+        const result = await chatAdjacentMonster({
+            name,
+            peaceful,
+            seed,
+            rngLog: true,
+            data: { name, ...data },
+        });
+
+        assert.equal(result.message, expected);
+        assert.equal(result.target.mstrategy, 0);
+        assert.equal(game.context.move, 1);
+        assert.doesNotMatch(result.message, reject);
+        assert.deepEqual(getRngLog(), rng);
+    }
+});
+
 test('chat with invisible tame eating pet maps it without consuming time', async () => {
     const result = await chatAdjacentMonster({
         visible: false,
