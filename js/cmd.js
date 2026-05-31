@@ -36002,7 +36002,7 @@ function tipHatDemonBribeDemand(mon, cash) {
     const homeBonus = tipHatDemonBribeAtHome(mon) ? 20 : 0;
     let demand = Math.trunc((cash * (rnd(80) + homeBonus))
         / (100 * tipHatDemonBribeAlignmentFactor(mon)));
-    if (demand > 0 && tipHatMonsterHasAmulet(mon)) demand = cash + rn1(1000, 125);
+    if (demand > 0 && (tipHatMonsterHasAmulet(mon) || heroIsDeaf())) demand = cash + rn1(1000, 125);
     return demand;
 }
 
@@ -36026,6 +36026,40 @@ export function monsterTurnDemonBribeArtifact(mon) {
         : 'You feel tension building.';
     tipHatDemonBribeSetHostile(mon);
     return { handled: true, message };
+}
+
+export function monsterTurnDemonBribeDemand(mon) {
+    if (!mon || tipHatHeroWieldsDemonBribeArtifact() || tipHatHeroIsDemonPolyself())
+        return false;
+    const cash = tipHatHeroGoldCount();
+    if (cash <= 0) return false;
+    const revealMessage = tipHatDemonBribeReveal(mon);
+    const demand = tipHatDemonBribeDemand(mon, cash);
+    mon._last_demon_bribe_demand = demand;
+    if (!demand || (game._helpless_time || 0) > 0) {
+        tipHatDemonBribeSetHostile(mon);
+        return { handled: true, message: revealMessage, continueTurn: true };
+    }
+
+    const speakerName = fireScrollMonsterName(mon);
+    if (heroIsDeaf()) {
+        const messages = [revealMessage];
+        if (tipHatMonsterVisible(mon))
+            messages.push(`${speakerName} seems to be demanding something.`);
+        messages.push(`${speakerName} gets angry...`);
+        tipHatDemonBribeSetHostile(mon);
+        return { handled: true, message: messages.filter(Boolean).join('  '), continueTurn: true };
+    }
+
+    const prompt = 'How much will you offer?';
+    mon._last_demon_bribe_prompt = prompt;
+    const demandMessage = `${speakerName} demands ${demand} ${shopCurrency(demand)} for safe passage.  ${prompt}`;
+    return {
+        handled: true,
+        message: [revealMessage, demandMessage].filter(Boolean).join('  '),
+        commandMode: 'demonBribeOffer',
+        demonBribe: { mon, demand },
+    };
 }
 
 function tipHatDemonBribeIsPrince(mon) {
@@ -36104,23 +36138,27 @@ function clearDemonBribeOfferState() {
     game._demon_bribe_demand = 0;
     game._demon_bribe_prompt = '';
     game._demon_bribe_text = '';
+    game._demon_bribe_monster_turn = null;
+    game._demon_bribe_offer_after_more = 0;
 }
 
 async function finishDemonBribeOffer() {
     const mon = game._demon_bribe_mon;
     const demand = Math.max(0, Math.trunc(Number(game._demon_bribe_demand || mon?._last_demon_bribe_demand || 0)));
     let offer = demonBribeOfferValue(game._demon_bribe_text);
+    const monsterTurn = game._demon_bribe_monster_turn || null;
     clearDemonBribeOfferState();
     game._command_mode = null;
     if (!mon || !demand) {
         await setMessage('');
-        chatConsumeTurn();
+        if (!monsterTurn) chatConsumeTurn();
         return;
     }
 
     const objectName = demonBribeObjectName(mon);
     const sentenceName = fireScrollMonsterName(mon);
     const messages = [];
+    let paidOff = false;
     if (offer < 0) {
         messages.push(`You try to shortchange ${objectName}, but fumble.`);
         offer = 0;
@@ -36140,17 +36178,42 @@ async function finishDemonBribeOffer() {
 
     if (offer >= demand) {
         messages.push(`${sentenceName} vanishes, laughing about cowardly mortals.`);
+        if (monsterTurn) {
+            game._monster_resume_index = adjustedMonsterResumeIndexForRemoval(mon, monsterTurn.nextIndex ?? 0);
+            game._monster_resume_somebody_can_move = !!monsterTurn.somebodyCanMove;
+        }
         demonBribeVanish(mon);
+        paidOff = true;
     } else if (offer > 0 && rnd(5 * (game.u?.acurr?.a?.[A_CHA] ?? 10)) > demand - offer) {
         messages.push(`${sentenceName} scowls at you menacingly, then vanishes.`);
+        if (monsterTurn) {
+            game._monster_resume_index = adjustedMonsterResumeIndexForRemoval(mon, monsterTurn.nextIndex ?? 0);
+            game._monster_resume_somebody_can_move = !!monsterTurn.somebodyCanMove;
+        }
         demonBribeVanish(mon);
+        paidOff = true;
     } else {
         messages.push(`${sentenceName} gets angry...`);
         tipHatDemonBribeSetHostile(mon);
+        if (monsterTurn) {
+            game._monster_resume_index = monsterTurn.resumeIndex ?? 0;
+            game._monster_resume_somebody_can_move = !!monsterTurn.somebodyCanMove;
+            game._monster_resume_same_index = 1;
+            game._monster_resume_after_preturn = 1;
+        }
     }
 
     await setMessage(messages.join('  '), messages.length > 1);
-    chatConsumeTurn();
+    if (monsterTurn) {
+        game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
+        game.context ??= {};
+        game.context.move = 0;
+        game._process_command_time_now = 1;
+        if (paidOff && !game._monster_resume_index)
+            game._monster_resume_somebody_can_move = !!monsterTurn.somebodyCanMove;
+    } else {
+        chatConsumeTurn();
+    }
 }
 
 function tipHatDemonBribeNoise(mon, name, visible, offerCommandMode = false) {
@@ -47823,8 +47886,13 @@ export async function rhack(_cmd) {
                     && !keepMore && !forceToplineMore && !game._fire_direction_pending_after_more ? 1 : 0;
 	                if (resumeHelplessAfterToplineMore && forceToplineMore)
 	                    forceToplineMore = false;
-	                game._message_more = keepMore || forceToplineMore || (resumePetInventory && game._fire_direction_pending_after_more ? 1 : 0);
+                const demonBribeOfferAfterMore = !!game._demon_bribe_offer_after_more;
+                game._message_more = keepMore || forceToplineMore || (resumePetInventory && game._fire_direction_pending_after_more ? 1 : 0);
                 game._keep_pending_message = 1;
+                if (demonBribeOfferAfterMore && !game._message_more) {
+                    game._demon_bribe_offer_after_more = 0;
+                    game._command_mode = 'demonBribeOffer';
+                }
                 if (game._message_more) {
 		                    game._process_time_with_more = !pauseAfterDeferredMultiattack
                                 && (resumeMonsters || resumeAttackMonsters || (resumePetInventory && game._fire_direction_pending_after_more)) ? 1 : 0;
@@ -48764,7 +48832,7 @@ export async function rhack(_cmd) {
                     game._keep_pending_message = 1;
                 }
             }
-            if (game._monster_resume_index && game._pending_time_passed > 0) {
+            if ((game._monster_resume_index || game._monster_resume_same_index) && game._pending_time_passed > 0) {
                 game.context.move = 0;
                 game._process_command_time_now = 1;
                 return;

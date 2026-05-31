@@ -3,7 +3,7 @@
 
 import { game } from './gstate.js';
 import { mklev, l_nhcore_init, u_on_upstairs, makemon, mkcorpstat, mksobj, wipe_engr_at, dropMonsterInventory, wandIndexForRoll, scrollIndexForRoll, potionIndexForRoll, RANDOM_MONSTER_BY_NAME, STONE_RESISTANT_MONSTERS, adjustedMonsterLevel, monsterByRndName, monster_hp, rndmonnum, syncDungeonContext, next_ident, set_malign, enextoMonsterSpot, getbogusmon, pickNasty, chameleonAnimalForm, doppelgangerHumanoidForm, noteleportLevelForMonster, rlocNoMsg, rlocToCoreNoMsg, somexyspace, fumaroles, createMonsterCorpseOrGlob, monsterCorpseDropSucceeds, monsterLeavesCorpseLikeDrop, movebubbles, add_to_minv } from './mklev.js';
-import { rhack, pickupObjectName, inventoryItemName, inventoryLetterRank, recordVanquished, finishForceLock, loseExperienceLevel, finishLevelTeleport, finishPickDigDownwardHole, finishPickDigDownwardPit, maybeQueueQuestTalk, monsterGrowUp, monsterHostileCussNoise, monsterTurnDemonBribeArtifact, monsterTurnDemonBribeNoGold, processForceLockOccupationTick, forceLockOccupationShouldGiveUp, processSpellbookStudyOccupation, processTinOpeningOccupation, finishTinOpeningOccupation, refreshSwallowOverlay, finishSwallowExpel, travelPathKeys, updateGauntletsOfPowerStrength, consumeLifeSavingAmulet, activateStatueTrap, breakStatueObject, burnFloorObjectsByFire, burnRayFloorObjectsByFire, erodeArmorByFireTrap, dryWetTowelFromFire, igniteMonsterFireInventoryItems, monsterFireInventoryDamage, dropMonsterObject, earthFloorEffects, landMonsterThrownObject, stoneMonster, processCorpseTimers, processGlobShrinkTimers, addDelayedFoodBiteNutrition, repairShopDamageForShopkeeper, heroHasAntimagic, heroHasSlowDigestion, applyHeroOrdinaryHunger } from './cmd.js';
+import { rhack, pickupObjectName, inventoryItemName, inventoryLetterRank, recordVanquished, finishForceLock, loseExperienceLevel, finishLevelTeleport, finishPickDigDownwardHole, finishPickDigDownwardPit, maybeQueueQuestTalk, monsterGrowUp, monsterHostileCussNoise, monsterTurnDemonBribeArtifact, monsterTurnDemonBribeDemand, monsterTurnDemonBribeNoGold, processForceLockOccupationTick, forceLockOccupationShouldGiveUp, processSpellbookStudyOccupation, processTinOpeningOccupation, finishTinOpeningOccupation, refreshSwallowOverlay, finishSwallowExpel, travelPathKeys, updateGauntletsOfPowerStrength, consumeLifeSavingAmulet, activateStatueTrap, breakStatueObject, burnFloorObjectsByFire, burnRayFloorObjectsByFire, erodeArmorByFireTrap, dryWetTowelFromFire, igniteMonsterFireInventoryItems, monsterFireInventoryDamage, dropMonsterObject, earthFloorEffects, landMonsterThrownObject, stoneMonster, processCorpseTimers, processGlobShrinkTimers, addDelayedFoodBiteNutrition, repairShopDamageForShopkeeper, heroHasAntimagic, heroHasSlowDigestion, applyHeroOrdinaryHunger } from './cmd.js';
 import { docrt, cls, bot, flush_screen, pline, newsym, refreshHallucinatedMap, show_glyph_cell } from './display.js';
 import { vision_recalc, vision_reset, init_vision_globals, cansee, couldsee, view_from } from './vision.js';
 import { init_objects } from './o_init.js';
@@ -3866,7 +3866,8 @@ export async function processMonsterTurns() {
 
 	    const storedMonsterMovementReady = mons.some(mon =>
 	        (game.level?.monsters || []).includes(mon) && (mon.movement || 0) >= NORMAL_SPEED);
-	    if ((game._monster_turns_started || storedMonsterMovementReady) && !finishingQueuedDeadTurn) {
+    if ((game._monster_turns_started || storedMonsterMovementReady || resumingSameMonster || startIndex)
+        && !finishingQueuedDeadTurn) {
 	        do {
 		            let swallowedEngulferActed = false;
 		            if ((!startIndex || stopAfterPickupResume) && !resumingSameMonster) somebodyCanMove = false;
@@ -4351,6 +4352,9 @@ export async function processMonsterTurns() {
                 }
                 if (!resumingPetInventory && !resumedAfterPreturn)
                     maybeDemonicBlackmailTrueTargetNoGold(mon);
+                if (!resumingPetInventory && !resumedAfterPreturn
+                    && maybeDemonicBlackmailTrueTargetDemand(mon, monIndex, somebodyCanMove))
+                    return false;
                 if (resumedAfterPreturn) resumeAfterPreturn = false;
                 if (!resumingPetInventory && !resumedAfterPreturn && maybeKillerBeeEatRoyalJelly(mon)) {
                     if (game._message_more && !game._process_time_with_more) {
@@ -7752,6 +7756,29 @@ function maybeDemonicBlackmailTrueTargetNoGold(mon) {
     const result = monsterTurnDemonBribeNoGold(mon);
     if (result?.message) addToplineMessage(result.message);
     return !!result?.handled;
+}
+
+function maybeDemonicBlackmailTrueTargetDemand(mon, monIndex, somebodyCanMove) {
+    if (!demonicBlackmailTrueTargetNearby(mon)) return false;
+    interruptDemonicBlackmailOccupation();
+    const result = monsterTurnDemonBribeDemand(mon);
+    if (!result?.handled) return false;
+    const demandMessageShown = result.message ? addToplineMessage(result.message) : true;
+    if (result.commandMode === 'demonBribeOffer' && result.demonBribe) {
+        game._demon_bribe_mon = result.demonBribe.mon;
+        game._demon_bribe_demand = result.demonBribe.demand;
+        game._demon_bribe_prompt = result.demonBribe.mon?._last_demon_bribe_prompt || 'How much will you offer?';
+        game._demon_bribe_text = '';
+        game._demon_bribe_monster_turn = {
+            resumeIndex: monIndex,
+            nextIndex: monIndex + 1,
+            somebodyCanMove,
+        };
+        if (demandMessageShown) game._command_mode = result.commandMode;
+        else game._demon_bribe_offer_after_more = 1;
+        return true;
+    }
+    return false;
 }
 
 function heroIsDeafForMonsterNoise() {
