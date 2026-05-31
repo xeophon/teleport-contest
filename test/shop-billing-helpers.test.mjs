@@ -6451,6 +6451,121 @@ test('converted quest leader rejection uses banished pager without wisdom exerci
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), QUEST_PAGER_LOAD_RNG);
 });
 
+test('already-pissed quest leader chat silently angers without rebanishing', async () => {
+    const result = await chatAdjacentMonster({
+        name: 'Neferet the Green',
+        peaceful: false,
+        rngLog: true,
+        data: { msound: 'MS_LEADER', mlet: '@', humanoid: true, unique: true },
+        extra: { angry: true, hostile: true },
+        setup: () => {
+            game._startup_role = 'Wizard';
+            game._startup_align = 'lawful';
+            game.urole = { ...(game.urole || {}), name: { m: 'Wizard', f: 'Wizard' } };
+            game.u.ulevel = 14;
+            game.u.ualign = { ...(game.u.ualign || {}), type: A_CHAOTIC, record: 20 };
+            game.u.ualignbase = [A_CHAOTIC, A_LAWFUL];
+            game.u.uz = { dnum: 1, dlevel: 1 };
+            game.dungeons = [
+                { name: 'The Dungeons of Doom', num_dunlevs: 20, depth_start: 1 },
+                { name: 'The Quest', num_dunlevs: 5, depth_start: 11 },
+            ];
+            game.branches = [{ end1: { dnum: 0, dlevel: 10 }, end2: { dnum: 1, dlevel: 1 } }];
+            game.specialLevels = [{ name: 'x-strt', dnum: 1, dlevel: 1 }];
+            game.quest_status = {
+                ...(game.quest_status || {}),
+                met_leader: true,
+                met_leader_once: true,
+                pissed_off: true,
+            };
+        },
+    });
+
+    assert.equal(result.message, '');
+    assert.equal(game._command_mode, null);
+    assert.equal(game._overlay_lines, null);
+    assert.equal(game.quest_status.pissed_off, true);
+    assert.equal(game.quest_status.got_quest || false, false);
+    assert.equal(game._quest_reject_exercise_wis || 0, 0);
+    assert.equal(result.target.mpeaceful, 0);
+    assert.equal(result.target.hostile, true);
+    assert.equal(result.target.mstrategy, 0);
+    assert.equal(game.context.move, 1);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
+});
+
+test('already-pissed peaceful quest leader chat turns hostile without pager', async () => {
+    const result = await chatAdjacentMonster({
+        name: 'Neferet the Green',
+        peaceful: true,
+        rngLog: true,
+        data: { msound: 'MS_LEADER', mlet: '@', humanoid: true, unique: true },
+        setup: () => {
+            game._startup_role = 'Wizard';
+            game._startup_align = 'lawful';
+            game.urole = { ...(game.urole || {}), name: { m: 'Wizard', f: 'Wizard' } };
+            game.u.ulevel = 14;
+            game.u.ualign = { ...(game.u.ualign || {}), type: A_CHAOTIC, record: 20 };
+            game.u.ualignbase = [A_CHAOTIC, A_LAWFUL];
+            game.u.uz = { dnum: 1, dlevel: 1 };
+            game.dungeons = [
+                { name: 'The Dungeons of Doom', num_dunlevs: 20, depth_start: 1 },
+                { name: 'The Quest', num_dunlevs: 5, depth_start: 11 },
+            ];
+            game.branches = [{ end1: { dnum: 0, dlevel: 10 }, end2: { dnum: 1, dlevel: 1 } }];
+            game.specialLevels = [{ name: 'x-strt', dnum: 1, dlevel: 1 }];
+            game.quest_status = {
+                ...(game.quest_status || {}),
+                met_leader: true,
+                met_leader_once: true,
+                pissed_off: true,
+            };
+        },
+    });
+
+    assert.equal(result.message, '');
+    assert.equal(game._command_mode, null);
+    assert.equal(game._overlay_lines, null);
+    assert.equal(game.quest_status.pissed_off, true);
+    assert.equal(result.target.mpeaceful, 0);
+    assert.equal(result.target.hostile, true);
+    assert.equal(result.target.mstrategy, 0);
+    assert.equal(game.context.move, 1);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
+});
+
+test('already-pissed converted leader intro helper is bypassed by direct chat', async () => {
+    const result = await beginQuestLeaderChat({
+        role: 'Wizard',
+        leader: 'Neferet the Green',
+        align: 'lawful',
+        currentAlign: A_CHAOTIC,
+        currentBaseAlign: A_CHAOTIC,
+        record: 20,
+        questStart: true,
+        rngLog: true,
+        setup: () => {
+            game.quest_status = {
+                ...(game.quest_status || {}),
+                met_leader: true,
+                met_leader_once: true,
+                pissed_off: true,
+            };
+        },
+    });
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game._overlay_lines, null);
+    assert.equal(game.quest_status.pissed_off, true);
+    assert.equal(game.quest_status.got_quest || false, false);
+    assert.equal(game._quest_reject_exercise_wis || 0, 0);
+    assert.equal(result.target.mpeaceful, 0);
+    assert.equal(result.target.hostile, true);
+    assert.equal(game.context.move, 1);
+    assert.equal(result.introText, '');
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
+});
+
 test('temporary opposite alignment quest leader rejection uses badalign, not banished', async () => {
     const result = await beginQuestLeaderChat({
         role: 'Wizard',

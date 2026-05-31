@@ -3734,6 +3734,21 @@ export function maybeQueueQuestLeaderTalk(mon, { automatic = true } = {}) {
     if (automatic && roleName === 'Priest' && currentSpecialLevelName() === 'x-strt') return false;
     game.quest_status ??= {};
     if (!automatic) chatClearTargetWaitStrategy(mon);
+    if (game.quest_status.pissed_off) {
+        if (!automatic) {
+            mon.mpeaceful = 0;
+            mon.angry = true;
+            mon.hostile = true;
+            game._overlay_lines = null;
+            game._overlay_hide_status = 0;
+            game._pending_message = '';
+            game._message_more = 0;
+            game._command_mode = null;
+            chatConsumeTurn();
+            return true;
+        }
+        return false;
+    }
     if (!automatic && game.quest_status.got_quest && !game.quest_status.got_thanks) {
         const message = questPagerText('encourage', { initCore: false });
         if (!message) return false;
