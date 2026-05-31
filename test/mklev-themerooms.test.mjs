@@ -7,7 +7,8 @@ import { __mklevTestHooks as mklevHooks } from '../js/mklev.js';
 import { processCorpseTimers } from '../js/cmd.js';
 import {
     COLNO, ROWNO, STONE, ROOM, CORR, ROOMOFFSET, TREE, ICE, ICED_POOL, ICED_MOAT,
-    VWALL, HWALL, POOL, LAVAPOOL, WATER, MATCH_WALL, SET_LIT_RANDOM,
+    VWALL, HWALL, POOL, LAVAPOOL, WATER, FOUNTAIN, ALTAR, AM_SHRINE, OROOM, TEMPLE,
+    SHOPBASE, CANDLESHOP, MATCH_WALL, SET_LIT_RANDOM,
 } from '../js/const.js';
 import { enableRngLog, getRngLog, initRng } from '../js/rng.js';
 
@@ -206,6 +207,21 @@ test('replace terrain accepts C mapchars and simple selection masks', () => {
     assert.equal(g.level.at(12, 10).lit, true);
 });
 
+test('replace terrain keeps explicit empty selections empty', () => {
+    const g = installMkmapGame();
+    g.level.at(10, 10).typ = ROOM;
+
+    const changed = mklevHooks.replaceDesTerrain({
+        selection: [],
+        fromterrain: '.',
+        toterrain: '#',
+        chance: 100,
+    });
+
+    assert.equal(changed, 0);
+    assert.equal(g.level.at(10, 10).typ, ROOM);
+});
+
 test('replace terrain mapfragments support transparent and wall wildcard cells', () => {
     const g = installMkmapGame();
     g.level.at(19, 10).typ = VWALL;
@@ -282,6 +298,51 @@ test('replace terrain random lit consumes lit RNG only for changed non-lava cell
     assert.equal(g.level.at(10, 10).typ, CORR);
     assert.equal(getRngLog().filter(entry => entry.startsWith('rn2(100)=')).length, 1);
     assert.equal(getRngLog().filter(entry => entry.startsWith('rn2(2)=')).length, 1);
+});
+
+test('Minetown-3 remains a room special level with fixed town structure', async () => {
+    const g = installMkmapGame({ seed: 17, dlevel: 6 });
+    g.u.ualign = { type: 0, record: 0 };
+    g.urace = { adj: 'human', noun: 'human' };
+    g.dungeons = [{ name: 'The Gnomish Mines', depth_start: 1, entry_lev: 1 }];
+    g.splev_align = [0, 0, 0];
+
+    await mklevHooks.make_minetn3_level();
+
+    assert.equal(g._level_populated, true);
+    assert.equal(g.level.flags.is_maze_lev, false);
+    assert.equal(g.level.flags.rndmongen, true);
+    assert.equal(g.level.flags.has_town, true);
+    assert.equal(g.level.flags.has_temple, true);
+    assert.ok(g.level.nroom >= 4);
+    assert.equal(g.level.subrooms.length, 16);
+    const stairs = [];
+    for (let stair = g.stairs; stair; stair = stair.next) stairs.push(stair);
+    assert.equal(stairs.filter(stair => stair.up).length, 1);
+    assert.equal(stairs.filter(stair => !stair.up).length, 1);
+
+    const outer = g.level.rooms.find(room =>
+        room.hx - room.lx + 1 === 31 && room.hy - room.ly + 1 === 15 && room.nsubrooms === 16);
+    assert.ok(outer);
+    assert.equal(outer.rlit, 1);
+
+    const subroomTypes = new Map();
+    for (const room of g.level.subrooms) subroomTypes.set(room.rtype, (subroomTypes.get(room.rtype) || 0) + 1);
+    assert.equal(subroomTypes.get(TEMPLE), 1);
+    assert.equal(subroomTypes.get(SHOPBASE), 1);
+    assert.equal(subroomTypes.get(CANDLESHOP), 1);
+    assert.ok((subroomTypes.get(OROOM) || 0) >= 9);
+
+    let fountains = 0;
+    let shrines = 0;
+    for (let y = 0; y < ROWNO; y++)
+        for (let x = 1; x < COLNO; x++) {
+            const loc = g.level.at(x, y);
+            if (loc?.typ === FOUNTAIN) fountains++;
+            if (loc?.typ === ALTAR && (loc.flags & AM_SHRINE)) shrines++;
+        }
+    assert.equal(fountains, 2);
+    assert.equal(shrines, 1);
 });
 
 test('themed buried zombie corpses use buriedobjlist with explicit zombify timers', () => {

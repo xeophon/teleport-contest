@@ -17642,6 +17642,10 @@ function parseSelectionPoint(item) {
     return null;
 }
 
+function emptyTerrainSelection() {
+    return { lx: 0, ly: 0, hx: COLNO - 1, hy: ROWNO - 1, has: () => false };
+}
+
 function terrainSelectionFromSpec(selection) {
     if (!selection) return null;
     if (typeof selection === 'function') {
@@ -17660,7 +17664,9 @@ function terrainSelectionFromSpec(selection) {
             hx = Math.max(hx, point.x);
             hy = Math.max(hy, point.y);
         }
-        if (points.size) return { lx, ly, hx, hy, has: (x, y) => points.has(`${x},${y}`) };
+        return points.size
+            ? { lx, ly, hx, hy, has: (x, y) => points.has(`${x},${y}`) }
+            : emptyTerrainSelection();
     }
     if (typeof selection.has === 'function') {
         return {
@@ -19625,6 +19631,7 @@ export const __mklevTestHooks = {
     mkmap_finish,
     replace_special_terrain,
     replaceDesTerrain,
+    make_minetn3_level,
     splevMinesLevelInit,
     themeroomBuriedZombieSpecies,
     themeroom_buried_zombies,

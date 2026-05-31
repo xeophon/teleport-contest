@@ -472,6 +472,10 @@ Current validation snapshot:
   mapchars, accepts `fromterrain`/`toterrain`, simple selection masks, and
   centered `mapfragment` matching with `x` transparency, `w` wall matching,
   live-map scans, and C-shaped mapfragment validation.
+- Explicit empty `replace_terrain` selections now stay empty instead of falling
+  through to whole-map replacement. New no-replay canaries also lock Minetown-3
+  as a room/corridor special level and keep deferred monster-turn fumble timeout
+  rerolls behind visible `--More--` dismissal.
 - The Brown Mold/post-heal route cleanup removed the last public-trace state
   machines named `_brown_mold*`, `_post_heal*`, and `POST_HEAL*` from runtime
   JS. Level teleporting, Quest-goal arrival, fountain quaffing, punishment

@@ -37389,6 +37389,49 @@ test('monster temporary blindness times out during moveloop turn processing', as
     assert.equal(goblin.mcansee, true);
 });
 
+test('deferred monster turn tail preserves fumble timeout until More is dismissed', async () => {
+    installStableNonShopFloorState();
+    initRng(3);
+    enableRngLog({ reset: true });
+    resetInputState();
+    pushKey('\x1b');
+    pushKey('\x1b');
+    game.moves = 10;
+    game.context = {};
+    Object.assign(game.u, {
+        umovement: NORMAL_SPEED,
+        umoved: true,
+        fumbling: true,
+        _fumblingTimeout: 0,
+    });
+    game._pending_time_passed = 1;
+    game._deferred_monster_turn_tail = 1;
+    game._finish_fumble_timeout = 1;
+    game._pending_message = 'The newt makes some noise.';
+    game._message_more = 1;
+    game._process_time_with_more = 0;
+
+    await moveloop_core();
+
+    assert.equal(game._deferred_monster_turn_tail, 1);
+    assert.equal(game._finish_fumble_timeout, 1);
+    assert.equal(game.u._fumblingTimeout, 0);
+    assert.equal(game.moves, 10);
+    assert.deepEqual(getRngLog(), []);
+
+    game._pending_message = '';
+    game._message_more = 0;
+    game._topline_after_more = '';
+
+    await moveloop_core();
+
+    assert.equal(game._deferred_monster_turn_tail, 0);
+    assert.equal(game._finish_fumble_timeout, 0);
+    assert.ok(game.u._fumblingTimeout >= 1 && game.u._fumblingTimeout <= 20);
+    assert.ok(game.moves > 10);
+    assert.equal(getRngLog()[0]?.startsWith('rnd(20)='), true);
+});
+
 test('hero-thrown invisibility potion hides visible monster without angering it', async () => {
     installNonShopFloorState();
     const targetLoc = { roomno: 0, typ: ROOM };
