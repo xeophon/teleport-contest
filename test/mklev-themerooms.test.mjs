@@ -8,6 +8,7 @@ import { processCorpseTimers } from '../js/cmd.js';
 import {
     COLNO, ROWNO, STONE, ROOM, CORR, ROOMOFFSET, TREE, ICE, ICED_POOL, ICED_MOAT,
     VWALL, HWALL, POOL, LAVAPOOL, WATER, FOUNTAIN, ALTAR, AM_SHRINE, OROOM, TEMPLE,
+    A_CHAOTIC, A_LAWFUL, A_NEUTRAL, Align2amask,
     SHOPBASE, CANDLESHOP, MATCH_WALL, SET_LIT_RANDOM, SET_LIT_NOCHANGE,
     ARROW_TRAP, DART_TRAP, ROCKTRAP, BEAR_TRAP, LANDMINE, ROLLING_BOULDER_TRAP,
     SLP_GAS_TRAP, RUST_TRAP, WEB, STATUE_TRAP, ANTI_MAGIC,
@@ -681,6 +682,30 @@ test('themed Statuary and Light source fills create C-shaped contents', async ()
     assert.equal(lamps.length, 1);
     assert.equal(lamps[0].lamplit, true);
     assert.equal(lamps[0].lit, true);
+});
+
+test('themed Temple of the gods places three plain shuffled-alignment altars', async () => {
+    const { g, room } = installThemeroomGame({
+        dlevel: 7, moves: 200, seed: 39, width: 6, height: 6,
+    });
+    mklevHooks.setThemeroomAlign(g.u.uz.dnum, [A_CHAOTIC, A_NEUTRAL, A_LAWFUL]);
+
+    await mklevHooks.apply_themeroom_fill({ name: 'Temple of the gods' }, room);
+
+    const altars = [];
+    for (let x = room.lx; x <= room.hx; x++)
+        for (let y = room.ly; y <= room.hy; y++) {
+            const loc = g.level.at(x, y);
+            if (loc.typ === ALTAR) altars.push(loc);
+        }
+
+    assert.equal(room.themeFillName, 'Temple of the gods');
+    assert.equal(altars.length, 3);
+    assert.deepEqual(
+        altars.map(loc => loc.altarmask).sort((a, b) => a - b),
+        [Align2amask(A_CHAOTIC), Align2amask(A_NEUTRAL), Align2amask(A_LAWFUL)].sort((a, b) => a - b),
+    );
+    assert.equal(altars.every(loc => !(loc.altarmask & AM_SHRINE)), true);
 });
 
 test('themed buried zombie timers raise zombies from the buried list', async () => {

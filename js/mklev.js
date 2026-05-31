@@ -18662,11 +18662,12 @@ async function makelevel() {
     const dnum = g.u?.uz?.dnum ?? 0;
     if (!g._luathemes_loaded) g._luathemes_loaded = {};
     if (!g._luathemes_loaded[dnum]) {
-        const themedAlign = ['law', 'neutral', 'chaos'];
+        const themedAlign = [A_LAWFUL, A_NEUTRAL, A_CHAOTIC];
         for (let i = themedAlign.length; i > 1; i--) {
             const j = rn2(i);
             [themedAlign[i - 1], themedAlign[j]] = [themedAlign[j], themedAlign[i - 1]];
         }
+        themeroomAlignMap(g).set(dnum, themedAlign);
         g._luathemes_loaded[dnum] = true;
     }
 
@@ -19824,6 +19825,26 @@ const THEMEROOM_FILL_META = [
     { name: 'Teleportation hub' },
 ];
 
+const themeroomAlignByGame = new WeakMap();
+
+function themeroomAlignMap(g = game) {
+    let alignByDnum = themeroomAlignByGame.get(g);
+    if (!alignByDnum) {
+        alignByDnum = new Map();
+        themeroomAlignByGame.set(g, alignByDnum);
+    }
+    return alignByDnum;
+}
+
+function setThemeroomAlign(dnum, align) {
+    themeroomAlignMap().set(dnum, [...align]);
+}
+
+function currentThemeroomAlign() {
+    const dnum = game.u?.uz?.dnum ?? 0;
+    return themeroomAlignMap().get(dnum) || [A_LAWFUL, A_NEUTRAL, A_CHAOTIC];
+}
+
 function is_themeroom_eligible(room, difficulty) {
     if (room.mindiff != null && difficulty < room.mindiff) return false;
     if (room.maxdiff != null && difficulty > room.maxdiff) return false;
@@ -19979,6 +20000,39 @@ function themeroom_light_source(croom) {
     return lamp;
 }
 
+function themeroomFreeRoomLoc(croom, pos) {
+    let cpt = 0;
+    do {
+        if (!somexy(croom, pos)) return false;
+        const loc = game.level.at(pos.x, pos.y);
+        if (loc && SPACE_POS(loc.typ) && !sobj_at(BOULDER, pos.x, pos.y)) break;
+    } while (++cpt < 100);
+
+    let loc = game.level.at(pos.x, pos.y);
+    if (loc?.typ !== ROOM) {
+        let trycnt = 0;
+        do {
+            if (!somexy(croom, pos)) return false;
+            loc = game.level.at(pos.x, pos.y);
+        } while (loc?.typ !== ROOM && ++trycnt <= 100);
+        if (trycnt > 100) return false;
+    }
+    return true;
+}
+
+function themeroom_temple_of_the_gods(croom) {
+    const align = currentThemeroomAlign();
+    const pos = { x: 0, y: 0 };
+    for (const al of align) {
+        if (!themeroomFreeRoomLoc(croom, pos)) continue;
+        const loc = game.level?.at(pos.x, pos.y);
+        if (!loc) continue;
+        loc.typ = ALTAR;
+        loc.altarmask = Align2amask(al);
+        loc.flags = loc.altarmask;
+    }
+}
+
 export const __mklevTestHooks = {
     mkmap_init,
     mkmap_run_passes,
@@ -19991,6 +20045,7 @@ export const __mklevTestHooks = {
     themeroomBuriedZombieSpecies,
     themeroom_buried_zombies,
     apply_themeroom_fill,
+    setThemeroomAlign,
 };
 
 async function apply_themeroom_fill(fill, croom, rows = null, startX = 0, startY = 0) {
@@ -20001,6 +20056,7 @@ async function apply_themeroom_fill(fill, croom, rows = null, startX = 0, startY
     else if (fill?.name === 'Buried zombies') themeroom_buried_zombies(croom);
     else if (fill?.name === 'Statuary') await themeroom_statuary(croom);
     else if (fill?.name === 'Light source') themeroom_light_source(croom);
+    else if (fill?.name === 'Temple of the gods') themeroom_temple_of_the_gods(croom);
     else if (fill?.name === 'Ghost of an Adventurer' && rows) themeroom_ghost_adventurer_rng(rows, startX, startY);
     else if (fill?.name === 'Teleportation hub') {
         const locs = [];
@@ -20213,11 +20269,6 @@ async function themerooms_generate(difficulty) {
         });
         if (!room) return false;
         const fill = themeroom_fill_rng(!!room.rlit);
-        if (fill?.name === 'Temple of the gods')
-            for (let i = 0; i < 4; i++) {
-                rn2(room.hx - room.lx + 1);
-                rn2(room.hy - room.ly + 1);
-            }
         await apply_themeroom_fill(fill, room);
         return true;
     }
