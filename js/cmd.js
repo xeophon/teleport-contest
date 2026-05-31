@@ -36456,6 +36456,11 @@ const TIPHAT_MUMBLE_MONSTER_NAMES = new Set([
     'lich', 'demilich', 'master lich', 'arch-lich', 'salamander',
 ]);
 
+function tipHatMonsterHasOrcSound(mon, name) {
+    const families = tipHatRaceFamiliesFrom(name, mon || {});
+    return families.has('orc') || families.has('gnome') || families.has('kobold');
+}
+
 function tipHatMonsterSound(mon) {
     const data = mon?.data || {};
     const name = String(data.name || mon?.name || '').toLowerCase();
@@ -36466,6 +36471,7 @@ function tipHatMonsterSound(mon) {
     if (mon?.nemesis || data.nemesis) return 'nemesis';
     if (tipHatMonsterIsShopkeeperType(mon, name)) return 'sell';
     if (tipHatMonsterIsPriestType(mon, name)) return 'priest';
+    if (tipHatMonsterHasOrcSound(mon, name)) return 'orc';
     if (/^(gremlin|leprechaun)$/.test(name)) return 'laugh';
     if (name === 'skeleton') return 'bones';
     if (/^(death|pestilence|famine)$/.test(name)) return 'rider';

@@ -5593,6 +5593,38 @@ test('chat with visible dog uses monster noise before empty-space fallback', asy
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
 });
 
+test('chat with visible generated-sound gnome grunts for non-gnome hero', async () => {
+    const result = await chatAdjacentMonster({
+        name: 'gnome',
+        rngLog: true,
+        data: { name: 'gnome', mlevel: 1, mlet: 'G', gnome: true, humanoid: true },
+    });
+
+    assert.equal(result.message, 'The gnome grunts.');
+    assert.equal(result.target.mstrategy, 0);
+    assert.equal(game.context.move, 1);
+    assert.doesNotMatch(result.message, /Many enter|discusses dungeon exploration|Nothing happens|waves/);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
+});
+
+test('chat with visible same-race generated-sound gnome uses gnome humanoid speech', async () => {
+    const result = await chatAdjacentMonster({
+        name: 'gnome',
+        rngLog: true,
+        data: { name: 'gnome', mlevel: 1, mlet: 'G', gnome: true, humanoid: true },
+        setup: () => {
+            game._startup_race = 'gnome';
+            game.urace = { ...(game.urace || {}), noun: 'gnome', adj: 'gnomish' };
+        },
+    });
+
+    assert.equal(result.message, '"Many enter the dungeon, and few return to the sunlit lands."');
+    assert.equal(result.target.mstrategy, 0);
+    assert.equal(game.context.move, 1);
+    assert.doesNotMatch(result.message, /grunts|The gnome|discusses dungeon exploration|Nothing happens|waves/);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
+});
+
 test('chat with invisible tame eating pet maps it without consuming time', async () => {
     const result = await chatAdjacentMonster({
         visible: false,
