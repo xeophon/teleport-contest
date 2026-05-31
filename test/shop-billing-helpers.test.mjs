@@ -769,6 +769,26 @@ function bellOfOpening(id, letter = 'b', spe = 3) {
     };
 }
 
+function wizardQuestArtifact(id, letter = 'e', extra = {}) {
+    return {
+        id,
+        cls: 'amulet',
+        glyph: '"',
+        kind: 'amulet of ESP',
+        actualKind: 'amulet of ESP',
+        artifact: 'The Eye of the Aethiopica',
+        quan: 1,
+        letter,
+        known: false,
+        bknown: false,
+        rknown: false,
+        cknown: false,
+        lknown: false,
+        line: `${letter} - an amulet of ESP named the Eye of the Aethiopica`,
+        ...extra,
+    };
+}
+
 function floorBagOfTricks(id, spe = 3, extra = {}) {
     const bag = {
         ...chargedTool(id, 'bag of tricks', 'b', spe),
@@ -1028,6 +1048,25 @@ function metalAmulet(id, name, amuletIndex, letter = 'a', extra = {}) {
         oy: 5,
         letter,
         line: `${letter} - ${article} ${appearance} amulet`,
+        ...extra,
+    };
+}
+
+function realAmuletOfYendor(id, letter = 'a', extra = {}) {
+    return {
+        id,
+        cls: 'amulet',
+        glyph: '"',
+        kind: 'Amulet of Yendor',
+        actualKind: 'Amulet of Yendor',
+        appearance: 'Amulet of Yendor',
+        realAmuletOfYendor: true,
+        unique: true,
+        known: false,
+        dknown: false,
+        quan: 1,
+        letter,
+        line: `${letter} - the Amulet of Yendor`,
         ...extra,
     };
 }
@@ -6491,6 +6530,183 @@ test('direct quest leader chat after thanks with Amulet uses hasamulet', async (
     assert.equal(game.quest_status.got_thanks, true);
     assert.equal(game.u.uhave.amulet, 1);
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
+});
+
+test('direct quest leader chat completes returned artifact without taking it', async () => {
+    const artifact = wizardQuestArtifact(3063700, 'e', { worn: 'amulet' });
+    const bell = bellOfOpening(3063701, 'b');
+    const result = await beginQuestLeaderChat({
+        role: 'Wizard',
+        leader: 'Neferet the Green',
+        align: 'lawful',
+        currentAlign: A_LAWFUL,
+        record: 20,
+        questStart: true,
+        rngLog: true,
+        setup: () => {
+            game.inventory = [artifact, bell];
+            game.u.uhave = { ...(game.u.uhave || {}), questart: 1 };
+            game.quest_status = {
+                ...(game.quest_status || {}),
+                met_leader: true,
+                met_leader_once: true,
+                met_nemesis: true,
+                got_quest: true,
+            };
+        },
+    });
+
+    assert.equal(game._command_mode, 'questLeaderFollowupMore');
+    assert.match(result.introText, /Neferet the Green notices the Eye of the Aethiopica in your possession/);
+    assert.match(result.introText, /Take it with you in your quest for the Amulet of Yendor/);
+    assert.doesNotMatch(result.introText, /silver bell/);
+    assert.equal(!!game._queued_overlay_after_more, false);
+    assert.equal(game.quest_status.got_thanks, true);
+    assert.equal(game.quest_status.qcompleted, true);
+    assert.equal(game.u.uevent.qcompleted, 1);
+    assert.equal(game.inventory.includes(artifact), true);
+    assert.equal(artifact.worn, 'amulet');
+    assert.equal(artifact.known, true);
+    assert.equal(artifact.bknown, true);
+    assert.equal(artifact.dknown, true);
+    assert.equal(result.target.mstrategy, 0);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), QUEST_PAGER_LOAD_RNG);
+
+    enableRngLog({ reset: true });
+    await rhack(' ');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
+});
+
+test('direct quest leader artifact return warns when Bell is missing', async () => {
+    const artifact = wizardQuestArtifact(3063702, 'e');
+    const result = await beginQuestLeaderChat({
+        role: 'Wizard',
+        leader: 'Neferet the Green',
+        align: 'lawful',
+        currentAlign: A_LAWFUL,
+        record: 20,
+        questStart: true,
+        rngLog: true,
+        setup: () => {
+            game.inventory = [artifact];
+            game.u.uhave = { ...(game.u.uhave || {}), questart: 1 };
+            game.quest_status = {
+                ...(game.quest_status || {}),
+                met_leader: true,
+                met_leader_once: true,
+                got_quest: true,
+            };
+        },
+    });
+
+    assert.equal(game._command_mode, 'questLeaderFollowupMore');
+    assert.match(result.introText, /brave service/);
+    assert.equal(game.quest_status.cheater, true);
+    assert.equal(game.quest_status.got_thanks, true);
+    assert.equal(game.quest_status.qcompleted, true);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [...QUEST_PAGER_LOAD_RNG, ...QUEST_PAGER_LOAD_RNG]);
+
+    enableRngLog({ reset: true });
+    await rhack(' ');
+
+    const bellText = (game._overlay_lines || []).map(row => row[2]).join('\n');
+    assert.equal(game._command_mode, 'questLeaderFollowupMore');
+    assert.match(bellText, /The silver bell which was hoarded by the Dark One/);
+    assert.match(bellText, /essential in locating the Amulet of Yendor/);
+    assert.equal(game.context.move || 0, 0);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
+
+    await rhack(' ');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+});
+
+test('direct quest leader artifact return with Amulet uses hasamulet and identifies both', async () => {
+    const artifact = wizardQuestArtifact(3063703, 'e');
+    const amulet = realAmuletOfYendor(3063704, 'a');
+    const result = await beginQuestLeaderChat({
+        role: 'Wizard',
+        leader: 'Neferet the Green',
+        align: 'lawful',
+        currentAlign: A_LAWFUL,
+        record: 20,
+        questStart: true,
+        rngLog: true,
+        setup: () => {
+            game.inventory = [artifact, amulet];
+            game.u.uhave = { ...(game.u.uhave || {}), questart: 1, amulet: 1 };
+            game.quest_status = {
+                ...(game.quest_status || {}),
+                met_leader: true,
+                met_leader_once: true,
+                met_nemesis: true,
+                got_quest: true,
+            };
+        },
+    });
+
+    assert.equal(game._command_mode, 'questLeaderFollowupMore');
+    assert.match(result.introText, /take the Amulet to the Astral Plane/);
+    assert.doesNotMatch(result.introText, /brave service|silver bell/);
+    assert.equal(!!game._queued_overlay_after_more, false);
+    assert.equal(game.quest_status.got_thanks, true);
+    assert.equal(game.quest_status.qcompleted, true);
+    assert.equal(game.u.uevent.qcompleted, 1);
+    assert.equal(game.inventory.includes(artifact), true);
+    assert.equal(artifact.known, true);
+    assert.equal(amulet.known, true);
+    assert.equal(amulet.dknown, true);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), QUEST_PAGER_LOAD_RNG);
+
+    enableRngLog({ reset: true });
+    await rhack(' ');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
+});
+
+test('direct quest leader chat after thanks ignores carried artifact without Amulet', async () => {
+    const artifact = wizardQuestArtifact(3063705, 'e');
+    const result = await beginQuestLeaderChat({
+        role: 'Wizard',
+        leader: 'Neferet the Green',
+        align: 'lawful',
+        currentAlign: A_LAWFUL,
+        record: 20,
+        questStart: true,
+        rngLog: true,
+        setup: () => {
+            game.inventory = [artifact];
+            game.u.uhave = { ...(game.u.uhave || {}), questart: 1 };
+            game.quest_status = {
+                ...(game.quest_status || {}),
+                met_leader: true,
+                met_leader_once: true,
+                got_quest: true,
+                got_thanks: true,
+            };
+        },
+    });
+
+    assert.equal(game._command_mode, 'questLeaderFollowupMore');
+    assert.match(result.introText, /Come near, my son/);
+    assert.doesNotMatch(result.introText, /brave service|other Amulet|silver bell/);
+    assert.equal(game.quest_status.cheater, true);
+    assert.equal(game.quest_status.qcompleted || false, false);
+    assert.equal(game.u.uevent?.qcompleted || 0, 0);
+    assert.equal(artifact.known, false);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), QUEST_PAGER_LOAD_RNG);
+
+    enableRngLog({ reset: true });
+    await rhack(' ');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
 });
 
 test('converted quest leader rejection uses banished pager without wisdom exercise', async () => {

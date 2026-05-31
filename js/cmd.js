@@ -658,6 +658,8 @@ you will never be able to enter the place where he who has the Amulet
 resides.
 
 Go now!  You are banished from this place.`,
+    quest_complete_no_bell: `"The silver bell which was hoarded by %n will be
+essential in locating the Amulet of Yendor."`,
     quest_portal: `You receive a faint telepathic message from %l:
 Your help is urgently needed at %H!
 Look for a ...ic transporter.
@@ -761,6 +763,21 @@ There you must find the altar of %d and sacrifice the
 Amulet on that altar to fulfill your destiny.
 
 "Remember, your path now should always be upwards."`,
+            offeredit: `%lC touches %o briefly, gazes into it,
+then smiles at you and says:
+
+"Well done, %p.  You have defeated %n and
+recovered %o.  But I fear that it shall never be safe
+here.
+
+Please take %o with you.  You, %p, can
+guard it now far better than I.
+
+May the blessings of %d follow you and guard you."`,
+            offeredit2: `"Careful, %p!  %oC might break, and that would be
+a tragic loss.  You are its keeper now, and the time has come to
+resume your search for the Amulet.  %Z await your
+return through the magic portal that brought you here."`,
             posthanks: `"Welcome back, %p.  Have you progressed with your quest to
 regain the Amulet of Yendor for %d?"`,
             assignquest: `"Grave times have befallen the college, for %na has
@@ -884,6 +901,26 @@ speaks of you.
     stand by %d as champion of all %cP for eternity.
 
 "This is all I know, %p.  I hope it will help you."`,
+            offeredit: `When %l sees %o, he smiles, and says:
+
+    Well done, %p.  You have saved the world from certain doom.
+    What, now, should be done with %o?
+
+    These people, brave as they are, cannot hope to guard it from
+    other sorcerers who will detect it, as surely as %n did.
+
+    Take %o with you, %p.  It will guard you in
+    your adventures, and you can best guard it.  You embark on a
+    quest far greater than you realize.
+
+    Remember me, %p, and return when you have triumphed.  I
+    will tell you then of what you must do.  You will understand when the
+    time comes.`,
+            offeredit2: `%l gazes reverently at %o, then back at you.
+
+"You are its keeper now, and the time has come to resume your search
+for the Amulet.  %Z await your return through the
+magic portal which brought you here."`,
             posthanks: `"You are indeed ready now, %p.  I shall tell you a tale of
 great suffering among your people:
 
@@ -988,6 +1025,21 @@ the Amulet to be sacrificed to %d in the Plane of the Astral.
 the Planes of the Elements, to achieve this goal.
 
 "Go with %d, %p."`,
+            offeredit: `As you approach %l, %lh beams at you and says:
+
+    "Well done!  Thou art truly the Champion of %H.  We
+    have received word that Merlin is recovering, and shall soon
+    rejoin Us.
+
+    "He hath instructed Us that thou art now to be the guardian of
+    %o.  He feeleth that thou mayst have need of
+    its powers in thine adventures.  It is Our wish that thou keepest
+    %o with thee as thou searchest for the fabled
+    Amulet of Yendor."`,
+            offeredit2: `"Careful, %p!  %oC might break, and that would
+be a tragic loss.  Thou art its keeper now, and the time hath come
+to resume thy search for the Amulet.  %Z await thy
+return through the magic portal that brought thee here."`,
             posthanks: `"Yes, %p.  You are truly ready now.  Attend to me and I shall
 tell you of what has transpired:
 
@@ -1096,6 +1148,20 @@ when you have attained the post of %R."`,
 you must take the amulet, and sacrifice it on %ds altar on
 the Astral Plane.  I suspect that I shall never see you again in this
 life, but I hope to at %ds feet."`,
+            offeredit: `"You have returned, %p.  And with %o, I see.
+Congratulations.
+
+"I have been in meditation, and have received direction from
+a minion of %d.  %d commands that you retain
+%o.  With it, you must recover the Amulet
+of Yendor.
+
+"Go forth, and let %d guide your steps."`,
+            offeredit2: `%lC reiterates that %o is yours now.
+
+"The time has come to resume your search for the Amulet.
+%Z await your return through the magic portal
+that brought you here."`,
             posthanks: `"You are indeed ready, %p.  I shall tell you what has transpired,
 and why we so desperately need your help:
 
@@ -1228,6 +1294,20 @@ the four Elemental Planes.  These planes are like nothing you have ever
 experienced before, so be prepared!
 
 "For this you were born, %s!  I am very proud of you."`,
+            offeredit: `%lC notices %o in your possession,
+beams at you and says:
+
+    "I knew you could defeat %n and retrieve
+    %o.  We shall never forget this
+    brave service.
+
+    "Take %oh with you in your quest for the Amulet of Yendor.
+    I can sense that it has attuned %oiself to you already.
+
+    "May %d guide you in your quest, and keep you from harm."`,
+            offeredit2: `"You are the keeper of %o now.  It is time to
+recover the /other/ Amulet.  %Z await your return through
+the magic portal which brought you here."`,
             posthanks: `"Come near, my %S, and share your adventures with me.
 So, have you succeeded in your quest for the Amulet of Yendor?"`,
             assignquest: `"Yes, %p, you truly are ready for this dire task.  Listen,
@@ -3635,6 +3715,85 @@ function showQuestPager(msgid, mode = 'questIntroMore', options = {}) {
     return true;
 }
 
+function questArtifactNameKey(name) {
+    return String(name || '')
+        .trim()
+        .replace(/^(?:an?|the)\s+/i, '')
+        .toLowerCase()
+        .replace(/[ -]+/g, '');
+}
+
+function carriedQuestArtifactForRole(info) {
+    const expected = questArtifactNameKey(info?.artifact);
+    if (!expected) return null;
+    return (game.inventory || []).find(item => {
+        const names = [
+            item?.artifact,
+            item?.oartifact,
+            artifactObjectName(item),
+            item?.actualKind,
+            item?.kind,
+            item?.name,
+        ];
+        return names.some(name => questArtifactNameKey(name) === expected);
+    }) || null;
+}
+
+function carriedRealAmuletOfYendor() {
+    return (game.inventory || []).find(item => {
+        const name = String(item?.actualKind || item?.kind || '').toLowerCase();
+        return item?.realAmuletOfYendor || name === 'amulet of yendor';
+    }) || null;
+}
+
+function recordKnownAmuletOfYendorDiscovery() {
+    game._discoveries ??= [];
+    if (!game._discoveries.some(entry => entry.section === 'Amulets' && entry.name === 'amulet (Amulet of Yendor)'))
+        game._discoveries.push({
+            section: 'Amulets',
+            name: 'amulet (Amulet of Yendor)',
+            text: 'amulet (Amulet of Yendor)',
+            starred: false,
+            known: true,
+        });
+}
+
+function identifyRealAmuletOfYendorForQuest() {
+    const amulet = carriedRealAmuletOfYendor();
+    if (!amulet) return;
+    amulet.realAmuletOfYendor = true;
+    amulet.kind = 'Amulet of Yendor';
+    amulet.actualKind = 'Amulet of Yendor';
+    amulet.appearance = 'Amulet of Yendor';
+    amulet.dknown = true;
+    identifyInventoryItem(amulet);
+    recordKnownAmuletOfYendorDiscovery();
+}
+
+function heroCarriesBellOfOpening() {
+    return (game.inventory || []).some(isBellOfOpeningItem);
+}
+
+function finishQuestLeaderArtifactReturn(info) {
+    const artifact = carriedQuestArtifactForRole(info);
+    const hasAmulet = heroHasAmuletOfYendor();
+    if (!showQuestPager(hasAmulet ? 'hasamulet' : 'offeredit', 'questLeaderFollowupMore'))
+        return false;
+    if (!hasAmulet && !heroCarriesBellOfOpening())
+        queueQuestPager('quest_complete_no_bell', 'questLeaderFollowupMore');
+    game.quest_status.got_thanks = true;
+    if (hasAmulet) identifyRealAmuletOfYendorForQuest();
+    if (artifact) {
+        game.u ??= {};
+        game.u.uevent ??= {};
+        game.u.uevent.qcompleted = 1;
+        game.quest_status.qcompleted = true;
+        artifact.dknown = true;
+        identifyInventoryItem(artifact);
+    }
+    return true;
+}
+
 function queueQuestPline(msgid, more = true) {
     const text = questPagerText(msgid);
     if (!text) return false;
@@ -3858,9 +4017,20 @@ export function maybeQueueQuestLeaderTalk(mon, { automatic = true } = {}) {
         }
         return false;
     }
+    if (game.u?.uhave?.questart && !game.quest_status.met_nemesis)
+        game.quest_status.cheater = true;
     if (!automatic && game.quest_status.got_thanks) {
-        const msgid = heroHasAmuletOfYendor() ? 'hasamulet' : 'posthanks';
+        const hasAmulet = heroHasAmuletOfYendor();
+        const msgid = hasAmulet ? 'hasamulet' : 'posthanks';
         if (!showQuestPager(msgid, 'questLeaderFollowupMore')) return false;
+        if (hasAmulet) {
+            game.quest_status.got_thanks = true;
+            identifyRealAmuletOfYendorForQuest();
+        }
+        return true;
+    }
+    if (!automatic && game.u?.uhave?.questart) {
+        if (!finishQuestLeaderArtifactReturn(info)) return false;
         return true;
     }
     if (!automatic && game.quest_status.got_quest && !game.quest_status.got_thanks) {
@@ -44555,6 +44725,17 @@ export async function rhack(_cmd) {
             game._overlay_hide_status = 0;
             game._pending_message = '';
             game._message_more = 0;
+            if (game._queued_overlay_after_more) {
+                const next = game._queued_overlay_after_more;
+                game._queued_overlay_after_more = null;
+                setOverlay(next.lines, next.clearRows ?? 24, !!next.hideStatus, next.clearCol ?? null);
+                const messageMore = next.messageMore ?? true;
+                game._pending_message = next.message ?? (messageMore ? 'text-window' : '');
+                game._message_more = messageMore ? 1 : 0;
+                game._keep_pending_message = 1;
+                game._command_mode = next.mode || 'questLeaderFollowupMore';
+                return;
+            }
             game._command_mode = null;
             chatConsumeTurn();
         }
