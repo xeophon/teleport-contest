@@ -122,6 +122,11 @@ const LONG_SWORD = 10033;
 const TWO_HANDED_SWORD = 10059;
 const SILVER_SABER = 10062;
 const KATANA = 10125;
+const RANSEUR = 10055;
+const PARTISAN = 10056;
+const GLAIVE = 10057;
+const SPETUM = 10058;
+const LUCERN_HAMMER = 10071;
 const MAGIC_FLUTE = 946;
 const TOOLED_HORN = 10162;
 const FROST_HORN = 953;
@@ -723,6 +728,60 @@ test('wish quantity only applies to mergeable object classes', async () => {
     assert.equal(game._command_mode, null);
     assert.equal(game.inventory[0].kind, 'food ration');
     assert.equal(game.inventory[0].quan, 2);
+});
+
+test('wished polearms use C appearance metadata', async () => {
+    const cases = [
+        ['partisan', PARTISAN, 'vulgar polearm', 'partisan', 80, 10],
+        ['ranseur', RANSEUR, 'hilted polearm', 'ranseur', 50, 6],
+        ['spetum', SPETUM, 'forked polearm', 'spetum', 50, 5],
+        ['glaive', GLAIVE, 'single-edged polearm', 'glaive', 75, 6],
+        ['lucern hammer', LUCERN_HAMMER, 'pronged polearm', 'lucern hammer', 150, 7],
+    ];
+
+    for (const [wish, otyp, kind, actualKind, weight, cost] of cases) {
+        installWishState(3, { debug: false });
+        beginWishDirectly();
+        await submitWish(wish);
+
+        const item = game.inventory[0];
+        assert.equal(game._command_mode, null, wish);
+        assert.equal(item.otyp, otyp, wish);
+        assert.equal(item.cls, 'weapon', wish);
+        assert.equal(item.glyph, ')', wish);
+        assert.equal(item.kind, kind, wish);
+        assert.equal(item.actualKind, actualKind, wish);
+        assert.equal(item.known, false, wish);
+        assert.equal(item.quan, 1, wish);
+        assert.equal(item.owt, weight, wish);
+        assert.equal(item.wishedfor, true, wish);
+        assert.equal(shop.shopBaseCost(item), cost, wish);
+        assert.match(item.line, new RegExp(kind), wish);
+        assert.doesNotMatch(game._pending_message || '', /Nothing fitting that description exists/, wish);
+    }
+});
+
+test('wished polearm appearances resolve to concrete C polearms', async () => {
+    const cases = [
+        ['vulgar polearm', PARTISAN, 'partisan'],
+        ['hilted polearm', RANSEUR, 'ranseur'],
+        ['forked polearm', SPETUM, 'spetum'],
+        ['single edged polearm', GLAIVE, 'glaive'],
+        ['pronged polearm', LUCERN_HAMMER, 'lucern hammer'],
+    ];
+
+    for (const [wish, otyp, actualKind] of cases) {
+        installWishState();
+        beginWishDirectly();
+        await submitWish(wish);
+
+        const item = game.inventory[0];
+        assert.equal(game._command_mode, null, wish);
+        assert.equal(item.otyp, otyp, wish);
+        assert.equal(item.actualKind, actualKind, wish);
+        assert.equal(item.known, false, wish);
+        assert.equal(item.wishedfor, true, wish);
+    }
 });
 
 test('wished ration foods use concrete C object metadata', async () => {

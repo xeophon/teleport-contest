@@ -1492,8 +1492,12 @@ const LONG_SWORD = 10033;
 const TWO_HANDED_SWORD = 10059;
 const KATANA = 10125;
 const PICK_AXE = 10025;
+const RANSEUR = 10055;
+const PARTISAN = 10056;
 const GLAIVE = 10057;
+const SPETUM = 10058;
 const FLAIL = 10060;
+const LUCERN_HAMMER = 10071;
 const DWARVISH_MATTOCK = 10104;
 const SILVER_SABER = 10062;
 const BULLWHIP = 10067;
@@ -1969,7 +1973,11 @@ const WISH_BASE_OBJECTS = new Map([
     ['two-handed sword', { otyp: TWO_HANDED_SWORD, cls: 'weapon', glyph: ')', kind: 'two-handed sword', actualKind: 'two-handed sword', owt: 150 }],
     ['katana', { otyp: KATANA, cls: 'weapon', glyph: ')', kind: 'samurai sword', actualKind: 'katana', known: false, owt: 40 }],
     ['flail', { otyp: FLAIL, cls: 'weapon', glyph: ')', kind: 'flail', actualKind: 'flail' }],
-    ['glaive', { otyp: GLAIVE, cls: 'weapon', glyph: ')', kind: 'glaive', actualKind: 'glaive' }],
+    ['partisan', { otyp: PARTISAN, cls: 'weapon', glyph: ')', kind: 'vulgar polearm', actualKind: 'partisan', known: false, owt: 80 }],
+    ['ranseur', { otyp: RANSEUR, cls: 'weapon', glyph: ')', kind: 'hilted polearm', actualKind: 'ranseur', known: false, owt: 50 }],
+    ['spetum', { otyp: SPETUM, cls: 'weapon', glyph: ')', kind: 'forked polearm', actualKind: 'spetum', known: false, owt: 50 }],
+    ['glaive', { otyp: GLAIVE, cls: 'weapon', glyph: ')', kind: 'single-edged polearm', actualKind: 'glaive', known: false, owt: 75 }],
+    ['lucern hammer', { otyp: LUCERN_HAMMER, cls: 'weapon', glyph: ')', kind: 'pronged polearm', actualKind: 'lucern hammer', known: false, owt: 150 }],
     ['bullwhip', { otyp: BULLWHIP, cls: 'weapon', glyph: ')', kind: 'bullwhip', actualKind: 'bullwhip' }],
     ['silver saber', { otyp: SILVER_SABER, cls: 'weapon', glyph: ')', kind: 'silver saber', actualKind: 'silver saber' }],
     ['dwarvish mattock', { otyp: DWARVISH_MATTOCK, cls: 'weapon', glyph: ')', kind: 'dwarvish mattock', actualKind: 'dwarvish mattock' }],
@@ -2116,7 +2124,8 @@ const WISH_BASE_NAMEDESC_BOUNDS = new Map([
     ['orcish short sword', 4], ['dwarvish short sword', 3],
     ['scimitar', 16], ['broadsword', 9], ['elven broadsword', 5],
     ['long sword', 51], ['two-handed sword', 23], ['katana', 5],
-    ['flail', 41], ['glaive', 9],
+    ['flail', 41], ['partisan', 6], ['ranseur', 6], ['spetum', 6], ['glaive', 9],
+    ['lucern hammer', 6],
     ['bullwhip', 3], ['silver saber', 7], ['dwarvish mattock', 14],
     ['pick-axe', 21], ['pick axe', 21], ['pickaxe', 21], ['pickax', 21], ['pick-ax', 21],
     ['cream pie', 26], ['lump of royal jelly', 1], ['lumps of royal jelly', 1], ['eucalyptus leaf', 4], ['kelp frond', 1], ['kelp fronds', 1],
@@ -6232,6 +6241,18 @@ const OBJECT_WEIGHTS = {
     'knife': 5,
     'lance': 180,
     'long sword': 40,
+    'partisan': 80,
+    'ranseur': 50,
+    'spetum': 50,
+    'glaive': 75,
+    'halberd': 150,
+    'bardiche': 120,
+    'voulge': 125,
+    'fauchard': 60,
+    'guisarme': 80,
+    'bill-guisarme': 120,
+    'lucern hammer': 150,
+    'bec de corbin': 100,
     'mace': 30,
     'orcish arrow': 1,
     'orcish bow': 30,
@@ -32773,6 +32794,12 @@ const WISH_NAME_ALIASES = new Map([
     ['accuracy', 'ring of increase accuracy'],
     ['bear trap', 'beartrap'],
     ['landmine', 'land mine'],
+    ['vulgar polearm', 'partisan'],
+    ['hilted polearm', 'ranseur'],
+    ['forked polearm', 'spetum'],
+    ['single-edged polearm', 'glaive'],
+    ['single edged polearm', 'glaive'],
+    ['pronged polearm', 'lucern hammer'],
     ['bags of tricks', 'bag of tricks'],
     ['wolfsbane', 'sprig of wolfsbane'],
     ['garlic', 'clove of garlic'],
@@ -33732,7 +33759,10 @@ export function pickupObjectName(obj) {
         return named((obj.quan || 1) > 1 ? `${poisoned}darts` : `${poisoned}dart`);
     }
     if (obj.cls === 'weapon' || obj.otyp === WEAPON_CLASS || obj.glyph === ')') {
-        const kind = String(obj.actualKind || obj.kind || '').toLowerCase();
+        const actualKind = String(obj.actualKind || '').toLowerCase();
+        const rawKind = String(obj.kind || '').toLowerCase();
+        const kind = actualKind || rawKind;
+        const displayKind = obj.known === false && rawKind && rawKind !== actualKind ? rawKind : kind;
         const poisoned = obj.opoisoned && isPoisonableWeaponObject(obj) ? 'poisoned ' : '';
         if (kind === 'orcish dagger' || obj.otyp === ORCISH_DAGGER) {
             const known = obj.known === true || (game._discoveries || [])
@@ -33740,17 +33770,17 @@ export function pickupObjectName(obj) {
             if (known) return named((obj.quan || 1) > 1 ? `${poisoned}orcish daggers` : `${poisoned}orcish dagger`);
             return named((obj.quan || 1) > 1 ? `${poisoned}crude daggers` : `${poisoned}crude dagger`);
         }
-        if ((obj.quan || 1) > 1 && kind) {
+        if ((obj.quan || 1) > 1 && displayKind) {
             const plural = {
                 knife: 'knives',
                 stiletto: 'stilettos',
                 ya: 'ya',
                 'crossbow bolt': 'crossbow bolts',
                 shuriken: 'shuriken',
-            }[kind] || (kind.endsWith('s') ? kind : `${kind}s`);
+            }[displayKind] || (displayKind.endsWith('s') ? displayKind : `${displayKind}s`);
             return named(`${poisoned}${plural}`);
         }
-        if (kind) return named(`${poisoned}${kind}`);
+        if (displayKind) return named(`${poisoned}${displayKind}`);
     }
     if (obj.otyp === FOOD_CLASS || obj.cls === 'food') {
         const buc = foodBucPrefix(obj);

@@ -35195,8 +35195,8 @@ test('upward hero-thrown elven broadsword keys exact variant and adds rnd4 bonus
 
     const message = game._pending_message || '';
     assert.equal(game._command_mode, null);
-    assert.match(message, /An elven broadsword almost hits the ceiling, then falls back on top of your head\./);
-    assert.match(message, /An elven broadsword hits the floor\./);
+    assert.match(message, /A runed broadsword almost hits the ceiling, then falls back on top of your head\./);
+    assert.match(message, /A runed broadsword hits the floor\./);
     assert.doesNotMatch(message, /cmdassist|In what direction|It doesn't hurt|shatters|Splat/);
     assert.equal(game.u.uhp, 20);
     assert.equal(game.inventory.includes(blade), false);
@@ -35329,8 +35329,8 @@ test('upward hero-thrown glaive uses polearm base small-target die', async () =>
 
     const message = game._pending_message || '';
     assert.equal(game._command_mode, null);
-    assert.match(message, /A glaive almost hits the ceiling, then falls back on top of your head\./);
-    assert.match(message, /A glaive hits the floor\./);
+    assert.match(message, /A single-edged polearm almost hits the ceiling, then falls back on top of your head\./);
+    assert.match(message, /A single-edged polearm hits the floor\./);
     assert.doesNotMatch(message, /cmdassist|In what direction|It doesn't hurt|shatters|Splat/);
     assert.equal(game.u.uhp, 24);
     assert.equal(game.inventory.includes(blade), false);
@@ -35364,8 +35364,8 @@ test('upward hero-thrown spetum adds flat small-target polearm bonus', async () 
 
     const message = game._pending_message || '';
     assert.equal(game._command_mode, null);
-    assert.match(message, /A spetum almost hits the ceiling, then falls back on top of your head\./);
-    assert.match(message, /A spetum hits the floor\./);
+    assert.match(message, /A forked polearm almost hits the ceiling, then falls back on top of your head\./);
+    assert.match(message, /A forked polearm hits the floor\./);
     assert.doesNotMatch(message, /cmdassist|In what direction|It doesn't hurt|shatters|Splat/);
     assert.equal(game.u.uhp, 23);
     assert.equal(game.inventory.includes(blade), false);
@@ -35398,8 +35398,8 @@ test('upward hero-thrown ranseur adds rnd4 small-target polearm bonus', async ()
 
     const message = game._pending_message || '';
     assert.equal(game._command_mode, null);
-    assert.match(message, /A ranseur almost hits the ceiling, then falls back on top of your head\./);
-    assert.match(message, /A ranseur hits the floor\./);
+    assert.match(message, /A hilted polearm almost hits the ceiling, then falls back on top of your head\./);
+    assert.match(message, /A hilted polearm hits the floor\./);
     assert.doesNotMatch(message, /cmdassist|In what direction|It doesn't hurt|shatters|Splat/);
     assert.equal(game.u.uhp, 22);
     assert.equal(game.inventory.includes(blade), false);
@@ -35432,8 +35432,8 @@ test('upward hero-thrown bill-guisarme keys hyphenated polearm actualKind', asyn
 
     const message = game._pending_message || '';
     assert.equal(game._command_mode, null);
-    assert.match(message, /A bill-guisarme almost hits the ceiling, then falls back on top of your head\./);
-    assert.match(message, /A bill-guisarme hits the floor\./);
+    assert.match(message, /A hooked polearm almost hits the ceiling, then falls back on top of your head\./);
+    assert.match(message, /A hooked polearm hits the floor\./);
     assert.doesNotMatch(message, /cmdassist|In what direction|It doesn't hurt|shatters|Splat/);
     assert.equal(game.u.uhp, 22);
     assert.equal(game.inventory.includes(blade), false);
@@ -35466,8 +35466,8 @@ test('upward hero-thrown bec de corbin uses polearm base d8 damage', async () =>
 
     const message = game._pending_message || '';
     assert.equal(game._command_mode, null);
-    assert.match(message, /A bec de corbin almost hits the ceiling, then falls back on top of your head\./);
-    assert.match(message, /A bec de corbin hits the floor\./);
+    assert.match(message, /A beaked polearm almost hits the ceiling, then falls back on top of your head\./);
+    assert.match(message, /A beaked polearm hits the floor\./);
     assert.doesNotMatch(message, /cmdassist|In what direction|It doesn't hurt|shatters|Splat/);
     assert.equal(game.u.uhp, 22);
     assert.equal(game.inventory.includes(blade), false);
