@@ -4392,6 +4392,97 @@ test('worn helmet tip makes invisible explicit orc sound grunt', async () => {
     assert.doesNotMatch(game._pending_message, /The goblin|doesn't respond|Nothing happens|waves/);
 });
 
+test('worn helmet tip makes hostile invisible boasting giant mention gems', async () => {
+    await tipInvisibleExplicitSound({
+        name: 'fire giant',
+        peaceful: false,
+        seed: 5,
+        rngLog: true,
+        data: { mlevel: 9, mlet: 'giant', humanoid: true },
+    });
+
+    assert.match(game._pending_message, /It boasts about its gem collection\./);
+    assert.doesNotMatch(game._pending_message, /The fire giant|mutton|Fee Fie|waves/);
+    assert.deepEqual(getRngLog(), ['rn2(4)=0']);
+
+    await tipInvisibleExplicitSound({
+        name: 'stone giant',
+        sound: 'MS_BOAST',
+        peaceful: false,
+        seed: 5,
+        rngLog: true,
+        extra: { female: true },
+        data: { mlevel: 6, mlet: 'giant', humanoid: true },
+    });
+    assert.match(game._pending_message, /It boasts about her gem collection\./);
+    assert.deepEqual(getRngLog(), ['rn2(4)=0']);
+});
+
+test('worn helmet tip makes hostile invisible boasting giant complain about mutton', async () => {
+    await tipInvisibleExplicitSound({
+        name: 'fire giant',
+        sound: 'MS_BOAST',
+        peaceful: false,
+        seed: 1,
+        rngLog: true,
+        data: { mlevel: 9, mlet: 'giant', humanoid: true },
+    });
+
+    assert.match(game._pending_message, /It complains about a diet of mutton\./);
+    assert.doesNotMatch(game._pending_message, /The fire giant|gem collection|Fee Fie|waves/);
+    assert.deepEqual(getRngLog(), ['rn2(4)=1']);
+});
+
+test('worn helmet tip makes hostile invisible boasting giant wake nearby sleepers', async () => {
+    installStableNonShopFloorState();
+    initRng(4);
+    enableRngLog({ reset: true });
+    game.u.seeInvisible = false;
+    const targetLoc = game.level.at(6, 5);
+    const helmet = wornArmor(3063562, 'orcish helm', 'h');
+    const giant = ordinaryThrowTarget('fire giant', 6, 5, {
+        minvis: 1,
+        perminvis: 1,
+        msleeping: 0,
+        mcanmove: true,
+        mcansee: true,
+        mpeaceful: false,
+        mstrategy: 'waitforu',
+        data: { name: 'fire giant', mlevel: 9, mlet: 'giant', humanoid: true, msound: 'MS_BOAST' },
+    });
+    const nearbySleeper = ordinaryThrowTarget('jackal', 10, 5, {
+        msleeping: 1,
+        mstrategy: STRAT_WAITFORU,
+        data: { name: 'jackal', mlevel: 0, mlet: 'dog' },
+    });
+    const edgeSleeper = ordinaryThrowTarget('goblin', 13, 5, {
+        msleeping: 1,
+        mstrategy: STRAT_WAITFORU,
+        data: { name: 'goblin', mlevel: 0, humanoid: true },
+    });
+    game.inventory = [helmet];
+    game.level.monsters = [giant, nearbySleeper, edgeSleeper];
+    markSquareVisible(6, 5);
+    markSquareVisible(10, 5);
+
+    await enterTipCommand();
+    await rhack('h');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(giant.mstrategy, 0);
+    assert.equal(targetLoc.map_invisible, true);
+    assert.equal(nearbySleeper.msleeping, 0);
+    assert.equal(nearbySleeper.mstrategy, 0);
+    assert.equal(edgeSleeper.msleeping, 1);
+    assert.equal(edgeSleeper.mstrategy, STRAT_WAITFORU);
+    assert.match(game._pending_message, /You briefly doff your helm\./);
+    assert.match(game._pending_message, /The jackal wakes up\..*It shouts "Fee Fie Foe Foo!" and guffaws\./);
+    assert.doesNotMatch(game._pending_message, /The fire giant|The goblin wakes up|doesn't respond|Nothing happens|waves/);
+    assert.deepEqual(getRngLog(), ['rn2(4)=2']);
+});
+
 test('worn helmet tip maps invisible nurse weapon and cancellation advice', async () => {
     const lineWieldedDagger = { ...wieldedWeapon(3063558, 'dagger', 'w'), wielded: false };
     await tipInvisibleExplicitSound({

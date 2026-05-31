@@ -33801,6 +33801,10 @@ function tipHatMonsterAdjacent(mon) {
         Math.abs((mon.my || 0) - (game.u?.uy || 0))) <= 1;
 }
 
+const TIPHAT_BOAST_MONSTER_NAMES = new Set([
+    'giant', 'stone giant', 'hill giant', 'fire giant', 'frost giant', 'storm giant',
+]);
+
 function tipHatMonsterSound(mon) {
     const data = mon?.data || {};
     const explicit = mon?.msound ?? mon?.sound ?? data.msound ?? data.sound;
@@ -33817,6 +33821,7 @@ function tipHatMonsterSound(mon) {
     if (/\bnaga\b/.test(name)) return 'mumble';
     if (name === 'ki-rin') return 'spell';
     if (name === 'imp') return 'cuss';
+    if (TIPHAT_BOAST_MONSTER_NAMES.has(name)) return 'boast';
     if (/^(pony|horse|warhorse|white unicorn|gray unicorn|black unicorn)$/.test(name)
         || mlet === 'quadruped' || mlet === 'unicorn')
         return 'neigh';
@@ -33989,6 +33994,24 @@ function tipHatMonsterNoise(mon, { visible = tipHatMonsterVisible(mon) } = {}) {
         return monName === 'prisoner'
             ? { handled: true, message: `"Get me out of here."` }
             : { handled: true, message: `"This will teach you not to disturb me!"` };
+    case 'boast':
+        if (peaceful) return { handled: false, message: '' };
+        switch (rn2(4)) {
+        case 0:
+            return {
+                handled: true,
+                message: `${name} boasts about ${tipHatMonsterPossessive(mon)} gem collection.`,
+            };
+        case 1:
+            return { handled: true, message: `${name} complains about a diet of mutton.` };
+        default: {
+            const wakeMessages = tipHatWakeNearby(mon, 7 * 7);
+            return {
+                handled: true,
+                message: [...wakeMessages, `${name} shouts "Fee Fie Foe Foo!" and guffaws.`].join('  '),
+            };
+        }
+        }
     case 'burble':
         return { handled: true, message: `${name} burbles.` };
     case 'trumpet': {
