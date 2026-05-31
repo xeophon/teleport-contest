@@ -37,7 +37,8 @@ import {
     DIR_N, DIR_S, DIR_E, DIR_W, DIR_180,
     IS_WALL, IS_STWALL, IS_DOOR, IS_ROOM, IS_OBSTRUCTED, IS_FURNITURE, IS_POOL, IS_LAVA,
     ACCESSIBLE, IN_SIGHT,
-    SPACE_POS, ZAP_POS, isok, W_NORTH, W_SOUTH, W_EAST, W_WEST, W_NONDIGGABLE, W_NONPASSWALL, FILL_NORMAL,
+    SPACE_POS, ZAP_POS, isok, W_RANDOM, W_NORTH, W_SOUTH, W_EAST, W_WEST, W_ANY,
+    W_NONDIGGABLE, W_NONPASSWALL, FILL_NORMAL,
     ICE, MOAT, POOL, WATER, LAVAPOOL, LAVAWALL, DBWALL, DRAWBRIDGE_UP, TREE, CLOUD,
     ICED_POOL, ICED_MOAT, MATCH_WALL, SET_LIT_RANDOM, SET_LIT_NOCHANGE,
     A_NONE, A_LAWFUL, A_NEUTRAL, A_CHAOTIC, AM_SHRINE, AM_SANCTUM, Align2amask, Amask2align,
@@ -17646,6 +17647,203 @@ function emptyTerrainSelection() {
     return { lx: 0, ly: 0, hx: COLNO - 1, hy: ROWNO - 1, has: () => false };
 }
 
+function selectionPointKey(x, y) {
+    return `${Math.trunc(Number(x))},${Math.trunc(Number(y))}`;
+}
+
+function randomWallDirection() {
+    return [W_NORTH, W_SOUTH, W_EAST, W_WEST][rn2(4)];
+}
+
+function selectionGrowDirection(dir = 'all') {
+    if (typeof dir === 'number') return dir === W_RANDOM ? randomWallDirection() : dir;
+    switch (dir) {
+    case 'all': return W_ANY;
+    case 'random': return randomWallDirection();
+    case 'north': return W_NORTH;
+    case 'west': return W_WEST;
+    case 'east': return W_EAST;
+    case 'south': return W_SOUTH;
+    default: throw new Error('selection.grow: invalid direction');
+    }
+}
+
+class SplevSelection {
+    constructor(points = []) {
+        this._points = new Set();
+        for (const point of points) {
+            const parsed = parseSelectionPoint(point);
+            if (parsed) this.set(parsed.x, parsed.y, true);
+        }
+    }
+
+    static area(x1, y1, x2, y2) {
+        const sel = new SplevSelection();
+        const ax1 = Math.trunc(Number(x1)), ay1 = Math.trunc(Number(y1));
+        const ax2 = Math.trunc(Number(x2)), ay2 = Math.trunc(Number(y2));
+        if ([ax1, ay1, ax2, ay2].some(value => !Number.isFinite(value))) {
+            throw new TypeError('selection.area: coordinates must be numeric');
+        }
+        for (let y = ay1; y <= ay2; y++) {
+            if (ax1 === ax2) {
+                sel.set(ax1, y, true);
+            } else {
+                const step = ax1 < ax2 ? 1 : -1;
+                for (let x = ax1; ; x += step) {
+                    sel.set(x, y, true);
+                    if (x === ax2) break;
+                }
+            }
+        }
+        return sel;
+    }
+
+    static match(mapfragment) {
+        const fragment = mapFragmentFromString(mapfragment);
+        const sel = new SplevSelection();
+        for (let y = 0; y < ROWNO; y++)
+            for (let x = 1; x < COLNO; x++)
+                if (mapFragmentMatches(fragment, x, y)) sel.set(x, y, true);
+        return sel;
+    }
+
+    clone() {
+        return new SplevSelection([...this._points]);
+    }
+
+    set(x, y, value = true) {
+        const px = Math.trunc(Number(x)), py = Math.trunc(Number(y));
+        if (!Number.isFinite(px) || !Number.isFinite(py)) return this;
+        if (px < 0 || py < 0 || px >= COLNO || py >= ROWNO) return this;
+        const key = selectionPointKey(px, py);
+        if (value) this._points.add(key);
+        else this._points.delete(key);
+        return this;
+    }
+
+    get(x, y) {
+        const point = y == null && (Array.isArray(x) || typeof x === 'object') ? parseSelectionPoint(x) : { x, y };
+        if (!point) return false;
+        const px = Math.trunc(Number(point.x)), py = Math.trunc(Number(point.y));
+        if (!Number.isFinite(px) || !Number.isFinite(py)) return false;
+        return this._points.has(selectionPointKey(px, py));
+    }
+
+    has(x, y) {
+        return this.get(x, y);
+    }
+
+    bounds() {
+        if (!this._points.size) return { lx: 0, ly: 0, hx: COLNO - 1, hy: ROWNO - 1 };
+        let lx = COLNO, ly = ROWNO, hx = 0, hy = 0;
+        for (const item of this._points) {
+            const point = parseSelectionPoint(item);
+            lx = Math.min(lx, point.x);
+            ly = Math.min(ly, point.y);
+            hx = Math.max(hx, point.x);
+            hy = Math.max(hy, point.y);
+        }
+        return { lx, ly, hx, hy };
+    }
+
+    iterate(callback) {
+        const rect = this.bounds();
+        const points = [];
+        for (let y = rect.ly; y <= rect.hy; y++) {
+            for (let x = Math.max(1, rect.lx); x <= rect.hx; x++) {
+                if (!this.get(x, y)) continue;
+                points.push([x, y]);
+                if (callback) callback(x, y);
+            }
+        }
+        return points;
+    }
+
+    numpoints() {
+        return this._points.size;
+    }
+
+    percentage(percent) {
+        const p = Math.trunc(Number(percent));
+        if (!Number.isFinite(p)) throw new TypeError('selection.percentage: percent must be numeric');
+        const ret = new SplevSelection();
+        const rect = this.bounds();
+        for (let x = rect.lx; x <= rect.hx; x++)
+            for (let y = rect.ly; y <= rect.hy; y++)
+                if (this.get(x, y) && rn2(100) < p) ret.set(x, y, true);
+        return ret;
+    }
+
+    grow(dir = 'all') {
+        const mask = selectionGrowDirection(dir);
+        const ret = this.clone();
+        const tmp = new SplevSelection();
+        const rect = this.bounds();
+        for (let x = Math.max(0, rect.lx - 1); x <= Math.min(COLNO - 1, rect.hx + 1); x++) {
+            for (let y = Math.max(0, rect.ly - 1); y <= Math.min(ROWNO - 1, rect.hy + 1); y++) {
+                if (((mask & W_WEST) && this.get(x + 1, y))
+                    || (((mask & (W_WEST | W_NORTH)) === (W_WEST | W_NORTH)) && this.get(x + 1, y + 1))
+                    || ((mask & W_NORTH) && this.get(x, y + 1))
+                    || (((mask & (W_NORTH | W_EAST)) === (W_NORTH | W_EAST)) && this.get(x - 1, y + 1))
+                    || ((mask & W_EAST) && this.get(x - 1, y))
+                    || (((mask & (W_EAST | W_SOUTH)) === (W_EAST | W_SOUTH)) && this.get(x - 1, y - 1))
+                    || ((mask & W_SOUTH) && this.get(x, y - 1))
+                    || (((mask & (W_SOUTH | W_WEST)) === (W_SOUTH | W_WEST)) && this.get(x + 1, y - 1))) {
+                    tmp.set(x, y, true);
+                }
+            }
+        }
+        for (const item of tmp._points) {
+            const point = parseSelectionPoint(item);
+            ret.set(point.x, point.y, true);
+        }
+        return ret;
+    }
+
+    or(other) {
+        const ret = this.clone();
+        for (const item of terrainSelectionToPoints(other)) ret.set(item.x, item.y, true);
+        return ret;
+    }
+
+    and(other) {
+        const otherPoints = new Set(terrainSelectionToPoints(other).map(point => selectionPointKey(point.x, point.y)));
+        return new SplevSelection([...this._points].filter(key => otherPoints.has(key)));
+    }
+
+    xor(other) {
+        const ret = this.clone();
+        for (const point of terrainSelectionToPoints(other)) {
+            const key = selectionPointKey(point.x, point.y);
+            if (ret._points.has(key)) ret._points.delete(key);
+            else ret.set(point.x, point.y, true);
+        }
+        return ret;
+    }
+
+    subtract(other) {
+        const ret = this.clone();
+        for (const point of terrainSelectionToPoints(other)) ret.set(point.x, point.y, false);
+        return ret;
+    }
+}
+
+function terrainSelectionToPoints(selection) {
+    const bounds = terrainSelectionFromSpec(selection);
+    const points = [];
+    for (let x = bounds.lx; x <= bounds.hx; x++)
+        for (let y = bounds.ly; y <= bounds.hy; y++)
+            if (bounds.has(x, y)) points.push({ x, y });
+    return points;
+}
+
+const splevSelection = {
+    new: () => new SplevSelection(),
+    fromPoints: points => new SplevSelection(points),
+    area: (x1, y1, x2, y2) => SplevSelection.area(x1, y1, x2, y2),
+    match: mapfragment => SplevSelection.match(mapfragment),
+};
+
 function terrainSelectionBounds(selection) {
     const rawBounds = typeof selection.bounds === 'function' ? selection.bounds() : selection.bounds;
     const bounds = rawBounds ?? selection;
@@ -17679,7 +17877,7 @@ function terrainSelectionHasPoint(selection, x, y) {
 }
 
 function terrainSelectionFromSpec(selection) {
-    if (!selection) return null;
+    if (selection == null) return null;
     if (typeof selection === 'function') {
         return { lx: 0, ly: 0, hx: COLNO - 1, hy: ROWNO - 1, has: selection };
     }
@@ -17718,9 +17916,14 @@ function terrainSelectionFromSpec(selection) {
 
 function regionBoundsFromSpec(spec) {
     let region = null;
-    if ([spec.x1, spec.y1, spec.x2, spec.y2].some(value => value != null)) {
+    const coordValues = [spec.x1, spec.y1, spec.x2, spec.y2];
+    if (coordValues.some(value => value != null)) {
+        if (coordValues.every(value => value === -1)) return null;
+        if (coordValues.some(value => value == null)) {
+            throw new TypeError('replace_terrain bounds must include x1, y1, x2, and y2');
+        }
         region = { x1: spec.x1, y1: spec.y1, x2: spec.x2, y2: spec.y2 };
-    } else if (spec.region) {
+    } else if (spec.region != null) {
         region = Array.isArray(spec.region)
             ? { x1: spec.region[0], y1: spec.region[1], x2: spec.region[2], y2: spec.region[3] }
             : {
@@ -17730,13 +17933,19 @@ function regionBoundsFromSpec(spec) {
                 y2: spec.region.y2 ?? spec.region.hy,
             };
     }
-    if (!region || [region.x1, region.y1, region.x2, region.y2].some(value => value == null)) return null;
+    if (!region) return null;
+    if ([region.x1, region.y1, region.x2, region.y2].some(value => value == null)) {
+        throw new TypeError('replace_terrain region must include x1, y1, x2, and y2');
+    }
     const originX = spec.originX ?? 0;
     const originY = spec.originY ?? 0;
     const x1 = Math.trunc(Number(region.x1) + originX);
     const y1 = Math.trunc(Number(region.y1) + originY);
     const x2 = Math.trunc(Number(region.x2) + originX);
     const y2 = Math.trunc(Number(region.y2) + originY);
+    if ([x1, y1, x2, y2].some(value => !Number.isFinite(value))) {
+        throw new TypeError('replace_terrain region bounds must be numeric');
+    }
     return {
         lx: Math.min(x1, x2),
         ly: Math.min(y1, y2),
@@ -19667,6 +19876,7 @@ export const __mklevTestHooks = {
     mkmap_finish,
     replace_special_terrain,
     replaceDesTerrain,
+    splevSelection,
     make_minetn3_level,
     splevMinesLevelInit,
     themeroomBuriedZombieSpecies,

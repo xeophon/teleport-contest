@@ -480,6 +480,12 @@ Current validation snapshot:
   predicate methods (`bounds()`/`get(x,y)` or `has(x,y)`) plus iterator masks,
   and invalid explicit selection objects fail instead of silently becoming
   whole-map replacements.
+- A reusable special-level selection mask now covers the first C/Lua producer
+  layer: inclusive `selection.area()`, live-map `selection.match()`, x-major
+  `percentage()` RNG filtering, all-direction `grow()`, iteration, bounds, and
+  set operations for future translated descriptors. Malformed explicit
+  `replace_terrain` selectors and bounds now fail instead of falling back to
+  whole-map mutation.
 - The Brown Mold/post-heal route cleanup removed the last public-trace state
   machines named `_brown_mold*`, `_post_heal*`, and `POST_HEAL*` from runtime
   JS. Level teleporting, Quest-goal arrival, fountain quaffing, punishment
