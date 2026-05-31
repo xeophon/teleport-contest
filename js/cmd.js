@@ -34157,9 +34157,32 @@ function tipHatMonsterIsShopkeeperType(mon, monName = '') {
     return !!(data.shopkeeper || mon?.shopkeeper || name === 'shopkeeper');
 }
 
+function tipHatShopkeeperHasEarlierSellState(mon) {
+    if (!mon) return false;
+    if (mon.hostile || mon.mpeaceful === 0 || mon.mpeaceful === false || mon.angry) return true;
+    if (mon.following) return true;
+    if (shopBillEntryCount(mon)) return true;
+    return ['debit', 'credit', 'robbed', 'surcharge'].some(field =>
+        Math.trunc(Number(mon[field] || 0)) > 0);
+}
+
+function tipHatResidentShopkeeperSellNoise(mon) {
+    if (tipHatShopkeeperHasEarlierSellState(mon)) return { handled: false, message: '' };
+    const shkmoney = shopkeeperCash(mon);
+    const name = shopkeeperDisplayName(mon);
+    const canSpeak = shopkeeperCanSpeakToHero(mon);
+    if (shkmoney < 50)
+        return { handled: true, message: `${name} ${canSpeak ? 'complains' : 'indicates'} that business is bad.` };
+    if (shkmoney > 4000)
+        return { handled: true, message: `${name} ${canSpeak ? 'says' : 'indicates'} that business is good.` };
+    return { handled: false, message: '' };
+}
+
 function tipHatShopkeeperSellNoise(mon, name) {
     if (!mon?.isshk && tipHatMonsterIsShopkeeperType(mon))
         return { handled: true, message: `${name} asks whether you've seen any untended shops recently.` };
+    if (mon?.isshk)
+        return tipHatResidentShopkeeperSellNoise(mon);
     return { handled: false, message: '' };
 }
 

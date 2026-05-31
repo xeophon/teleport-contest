@@ -4679,6 +4679,70 @@ test('worn helmet tip makes nonresident invisible shopkeeper ask about untended 
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
 });
 
+test('worn helmet tip makes cash-poor invisible resident shopkeeper complain without RNG', async () => {
+    const result = await tipInvisibleExplicitSound({
+        name: 'shopkeeper',
+        sound: 'MS_SELL',
+        peaceful: true,
+        rngLog: true,
+        data: { mlevel: 12, mlet: '@', humanoid: true, shopkeeper: true },
+        extra: {
+            isshk: true,
+            shknam: 'Izchak',
+            bill: [],
+            billct: 0,
+            debit: 0,
+            credit: 0,
+            robbed: 0,
+            surcharge: 0,
+            following: 0,
+            minvent: [goldPieces(3063558, 49)],
+        },
+    });
+
+    assert.equal(result.message,
+        'You briefly doff your helm.  Izchak complains that business is bad.');
+    assert.doesNotMatch(result.message,
+        /15 minutes|untended shops|zorkmids|talks about shoplifters|bill comes to|doesn't respond|Nothing happens|waves|gestures/);
+    assert.equal(result.target.isshk, true);
+    assert.equal(result.target.mstrategy, 0);
+    assert.equal(result.targetLoc.map_invisible, true);
+    assert.equal(shop.shopkeeperCash(result.target), 49);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
+});
+
+test('worn helmet tip makes cash-rich invisible resident shopkeeper mention good business without RNG', async () => {
+    const result = await tipInvisibleExplicitSound({
+        name: 'shopkeeper',
+        sound: 'MS_SELL',
+        peaceful: true,
+        rngLog: true,
+        data: { mlevel: 12, mlet: '@', humanoid: true, shopkeeper: true },
+        extra: {
+            isshk: true,
+            shknam: 'Izchak',
+            bill: [],
+            billct: 0,
+            debit: 0,
+            credit: 0,
+            robbed: 0,
+            surcharge: 0,
+            following: 0,
+            minvent: [goldPieces(3063559, 4001)],
+        },
+    });
+
+    assert.equal(result.message,
+        'You briefly doff your helm.  Izchak says that business is good.');
+    assert.doesNotMatch(result.message,
+        /15 minutes|untended shops|talks about shoplifters|bill comes to|doesn't respond|Nothing happens|waves|gestures/);
+    assert.equal(result.target.isshk, true);
+    assert.equal(result.target.mstrategy, 0);
+    assert.equal(result.targetLoc.map_invisible, true);
+    assert.equal(shop.shopkeeperCash(result.target), 4001);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
+});
+
 test('worn helmet tip keeps visible peaceful seducing nymph on humanoid wave before seduce sound', async () => {
     installStableNonShopFloorState();
     game.flags.female = true;
