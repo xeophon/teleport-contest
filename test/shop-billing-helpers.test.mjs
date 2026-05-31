@@ -4081,6 +4081,65 @@ test('worn helmet tip makes adjacent invisible doppelganger imitate and maps it'
     assert.doesNotMatch(game._pending_message, /The doppelganger|doesn't respond|Nothing happens|waves/);
 });
 
+test('worn helmet tip makes visible naga hatchling mumble', async () => {
+    installNonShopFloorState();
+    const helmet = wornArmor(3063551, 'orcish helm', 'h');
+    const naga = ordinaryThrowTarget('red naga hatchling', 6, 5, {
+        msleeping: 0,
+        mcanmove: true,
+        mcansee: true,
+        mpeaceful: false,
+        mstrategy: 'waitforu',
+        data: { name: 'red naga hatchling', mlevel: 3, mlet: 'naga' },
+    });
+    game.inventory = [helmet];
+    game.level.monsters = [naga];
+    markSquareVisible(6, 5);
+
+    await enterTipCommand();
+    await rhack('h');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(naga.mstrategy, 0);
+    assert.match(game._pending_message, /You briefly doff your helm\./);
+    assert.match(game._pending_message, /The red naga hatchling mumbles incomprehensibly\./);
+    assert.doesNotMatch(game._pending_message, /hisses|doesn't respond|Nothing happens|waves/);
+});
+
+test('worn helmet tip makes adjacent invisible naga mumble and maps it', async () => {
+    installStableNonShopFloorState();
+    game.u.seeInvisible = false;
+    const targetLoc = game.level.at(6, 5);
+    const helmet = wornArmor(3063552, 'orcish helm', 'h');
+    const naga = ordinaryThrowTarget('black naga', 6, 5, {
+        minvis: 1,
+        perminvis: 1,
+        msleeping: 0,
+        mcanmove: true,
+        mcansee: true,
+        mpeaceful: false,
+        mstrategy: 'waitforu',
+        data: { name: 'black naga', mlevel: 8, mlet: 'naga' },
+    });
+    game.inventory = [helmet];
+    game.level.monsters = [naga];
+    markSquareVisible(6, 5);
+
+    await enterTipCommand();
+    await rhack('h');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(naga.mstrategy, 0);
+    assert.equal(targetLoc.map_invisible, true);
+    assert.match(game._pending_message, /You briefly doff your helm\./);
+    assert.match(game._pending_message, /It mumbles incomprehensibly\./);
+    assert.doesNotMatch(game._pending_message, /The black naga|hisses|doesn't respond|Nothing happens|waves/);
+});
+
 test('unknown cursed worn helmet tip learns curse and spends action', async () => {
     installCommandShopState();
     const helmet = wornArmor(306352, 'orcish helm', 'h', 0, {
