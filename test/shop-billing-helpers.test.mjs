@@ -8,7 +8,7 @@ import { game, resetGame } from '../js/gstate.js';
 import { pushKey, resetInputState } from '../js/input.js';
 import { createMonsterCorpseOrGlob, mkcorpstat } from '../js/mklev.js';
 import { enableRngLog, getRngLog, initRng } from '../js/rng.js';
-import { A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_STR, A_WIS, ALTAR, AM_SHRINE, Align2amask, BILLSZ, CANDLESHOP, CLOUD, CORPSTAT_HISTORIC, COULD_SEE, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, D_CLOSED, D_NODOOR, FOUNTAIN, HOLE, ICE, ICED_POOL, IN_SIGHT, LADDER, LAVAPOOL, MIGR_LADDER_UP, MIGR_SSTAIRS, MIGR_STAIRS_UP, MOAT, M_AP_FURNITURE, M_AP_OBJECT, NORMAL_SPEED, PIT, POOL, REPAIR_DELAY, ROOM, ROOMOFFSET, SDOOR, SHOPBASE, SHOP_DOOR_COST, SQKY_BOARD, STAIRS, STATUE_TRAP, STONE, STRAT_APPEARMSG, STRAT_WAITFORU, TEMPLE, TRAPDOOR, TT_WEB, WEB, W_SADDLE } from '../js/const.js';
+import { A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_STR, A_WIS, ALTAR, AM_SHRINE, Align2amask, BILLSZ, CANDLESHOP, CLOUD, CORPSTAT_HISTORIC, COULD_SEE, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, D_CLOSED, D_NODOOR, FOUNTAIN, HOLE, ICE, ICED_POOL, IN_SIGHT, LADDER, LAVAPOOL, MIGR_LADDER_UP, MIGR_SSTAIRS, MIGR_STAIRS_UP, MOAT, M_AP_FURNITURE, M_AP_OBJECT, NORMAL_SPEED, PIT, POOL, REPAIR_DELAY, ROOM, ROOMOFFSET, SDOOR, SHOPBASE, SHOP_DOOR_COST, SQKY_BOARD, STAIRS, STATUE_TRAP, STONE, STRAT_APPEARMSG, STRAT_WAITFORU, STRAT_WAITMASK, TEMPLE, TRAPDOOR, TT_WEB, WEB, W_SADDLE } from '../js/const.js';
 import { currentFruitId, setCurrentFruitName } from '../js/fruit.js';
 import { CLR_BRIGHT_MAGENTA, CLR_BROWN, CLR_WHITE } from '../js/terminal.js';
 import { TRIBUTE_DEATH_QUOTES } from '../js/tribute.js';
@@ -35899,7 +35899,7 @@ test('hero-thrown blessed water revives lethal vampire shifter hits in base form
     assert.equal(game._vanquished_counts?.['vampire bat'], undefined);
     assert.equal(game.inventory.includes(potion), false);
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
-        'rnd(20)', 'rnd(25)', 'rn2(7)', 'd(2,6)', 'd(9,8)',
+        'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(5)', 'd(2,6)', 'd(9,8)',
     ]);
 });
 
@@ -36989,7 +36989,7 @@ test('hero-thrown paralysis potion does not extend an already immobile monster',
         mfrozen: 7,
         meating: 4,
         waiting: true,
-        mstrategy: 'waitforu',
+        mstrategy: STRAT_WAITFORU | STRAT_APPEARMSG,
     });
     game.inventory = [potion];
     game.level.monsters = [goblin];
@@ -37001,13 +37001,40 @@ test('hero-thrown paralysis potion does not extend an already immobile monster',
 
     assert.equal(goblin.mcanmove, false);
     assert.equal(goblin.mfrozen, 7);
-    assert.equal(goblin.meating, 4);
-    assert.equal(goblin.waiting, true);
-    assert.equal(goblin.mstrategy, 'waitforu');
+    assert.equal(goblin.meating, 0);
+    assert.equal(goblin.waiting, false);
+    assert.equal(goblin.mstrategy & STRAT_WAITMASK, 0);
+    assert.notEqual(goblin.mstrategy & STRAT_APPEARMSG, 0);
     assert.equal(goblin.msleeping, 0);
     assert.equal(goblin.mpeaceful, false);
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
         'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(5)',
+    ]);
+});
+
+test('hero-thrown one-hp paralysis potion hit still consumes chip RNG before duration', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.u.acurr.a[A_DEX] = 25;
+    const potion = paralysisPotion(8767, 'p', 1, { dknown: true });
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, {
+        mhp: 1,
+        mhpmax: 1,
+        mcanmove: true,
+    });
+    game.inventory = [potion];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('p');
+    await rhack('l');
+
+    assert.equal(goblin.mhp, 1);
+    assert.equal(goblin.mcanmove, false);
+    assert.ok(goblin.mfrozen >= 1 && goblin.mfrozen <= 25);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(5)', 'rnd(25)',
     ]);
 });
 
@@ -37129,8 +37156,8 @@ test('hero-thrown sleeping potion puts visible monster into timed sleep', async 
     assert.equal(goblin.mcanmove, false);
     assert.ok(goblin.mfrozen >= 1 && goblin.mfrozen <= 12);
     assert.equal(goblin.meating, 0);
-    assert.equal(goblin.waiting, true);
-    assert.equal(goblin.mstrategy, 'waitforu');
+    assert.equal(goblin.waiting, false);
+    assert.equal(goblin.mstrategy, 0);
     assert.equal(goblin.msleeping, 0);
     assert.equal(goblin.mpeaceful, false);
     assert.equal(goblin.mhp, 4);
@@ -37221,7 +37248,7 @@ test('hero-thrown sleeping potion does not extend an already immobile monster', 
     assert.doesNotMatch(game._pending_message, /falls asleep|rather tired/);
     assert.equal(goblin.mcanmove, false);
     assert.equal(goblin.mfrozen, 7);
-    assert.equal(goblin.meating, 4);
+    assert.equal(goblin.meating, 0);
     assert.equal(goblin.msleeping, 0);
     assert.equal(goblin.mpeaceful, false);
     assert.equal(game.inventory.includes(potion), false);

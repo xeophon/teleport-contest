@@ -16763,13 +16763,18 @@ function monsterCanMoveForPotionParalysis(mon) {
     return mon.mcanmove !== false && mon.mcanmove !== 0;
 }
 
+function clearMonsterPotionWaitStrategy(mon) {
+    if (Number.isInteger(mon?.mstrategy)) mon.mstrategy &= ~STRAT_WAITMASK;
+    else if (mon?.mstrategy === 'waitforu') mon.mstrategy = 0;
+    mon.waiting = false;
+}
+
 function paralyzeMonsterFromPotion(mon, duration) {
     if (!monsterCanMoveForPotionParalysis(mon)) return;
     mon.mcanmove = false;
     mon.mfrozen = Math.min(127, duration);
     mon.meating = 0;
-    if (mon.mstrategy === 'waitforu') mon.mstrategy = 0;
-    mon.waiting = false;
+    clearMonsterPotionWaitStrategy(mon);
 }
 
 function monsterResistsSleepEffect(mon) {
@@ -17741,10 +17746,8 @@ function heroThrownPotionHitMonster(potion, mon) {
     } else {
         messages.push('Crash!');
     }
-    if ((mon.mhp || 1) > 1) {
-        const chipRoll = rn2(5);
-        if (!hitSaddle && chipRoll) mon.mhp--;
-    }
+    const chipRoll = rn2(5);
+    if (!hitSaddle && chipRoll && (mon.mhp || 1) > 1) mon.mhp--;
     if (!hitSaddle && !isPotionOfOil(potion) && targetSquareVisible)
         messages.push(`The ${pickupObjectName({ ...potion, quan: 1 })} evaporates.`);
 
@@ -17795,7 +17798,11 @@ function heroThrownPotionHitMonster(potion, mon) {
 
     if (!hitSaddle && !mon.dead && (mon.mhp ?? 1) > 0) {
         mon.msleeping = 0;
-        if (angerMon) mon.mpeaceful = false;
+        if (angerMon) {
+            mon.meating = 0;
+            clearMonsterPotionWaitStrategy(mon);
+            mon.mpeaceful = false;
+        }
     }
 
     const dx = (mon.mx || 0) - (game.u?.ux || 0);

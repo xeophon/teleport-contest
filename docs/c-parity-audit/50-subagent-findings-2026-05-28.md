@@ -6,20 +6,23 @@ This note records the implemented direct hero-thrown potion of paralysis monster
 
 ## Implemented Slice
 
-C direct potion delivery first rolls the thrown-object hit with `rnd(20)`, then gives potions a direct-hit gate with `ACURR(A_DEX) > rnd(25)`. On a hit, `potionhit()` consumes `bottlename()` RNG, prints the visible crash message, possibly chips one monster HP with `rn2(5)`, prints evaporation for visible non-oil potion hits, then applies the potion effect.
+C direct potion delivery first rolls the thrown-object hit with `rnd(20)`, then gives potions a direct-hit gate with `ACURR(A_DEX) > rnd(25)`. On a hit, `potionhit()` consumes `bottlename()` RNG, prints the crash message, consumes the common `rn2(5)` chip roll before checking monster HP or saddle interception, prints evaporation for visible non-oil potion hits, then applies the potion effect.
 
-For potion of paralysis, C has no monster resistance roll. It only calls `paralyze_monst(mon, rnd(25))` when `mon->mcanmove` is true. `paralyze_monst()` sets `mcanmove` false, stores the frozen timeout, terminates eating, and clears wait-for-you strategy. After the monster effect and wake/anger handling, adjacent direct vapor can still affect the hero through `potionbreathe()`.
+For potion of paralysis, C has no monster resistance roll. It only calls `paralyze_monst(mon, rnd(25))` when `mon->mcanmove` is true. `paralyze_monst()` sets `mcanmove` false, stores the frozen timeout, terminates eating, and clears wait-for-you strategy. Even when the duration branch is skipped because the target is already immobile, the surviving angry-target tail still calls `wakeup(mon, TRUE)`, clearing eating and wait strategy without extending `mfrozen`. After the monster effect and wake/anger handling, adjacent direct vapor can still affect the hero through `potionbreathe()`.
 
-JS now includes paralysis in the existing direct hero-thrown potionhit path. The new branch skips `monsterResistsEffect()`, treats both `false` and numeric `0` `mcanmove` as already immobile, sets movable monsters to `mcanmove = false`, stores `mfrozen = rnd(25)`, clears local eating/waiting state, and preserves the existing crash/evaporation/direct-vapor order.
+JS now includes paralysis in the existing direct hero-thrown potionhit path. The branch skips `monsterResistsEffect()`, treats both `false` and numeric `0` `mcanmove` as already immobile, sets movable monsters to `mcanmove = false`, stores `mfrozen = rnd(25)`, clears local eating/waiting state on both new paralysis and angry wakeup, and preserves the existing crash/chip/evaporation/direct-vapor order.
 
 ## C Anchors
 
 - `nethack-c/upstream/src/dothrow.c:2152`: thrown-object hit roll consumes `rnd(20)`.
 - `nethack-c/upstream/src/dothrow.c:2262-2264`: hero-thrown potions use the `ACURR(A_DEX) > rnd(25)` direct-hit gate and call `potionhit()`.
 - `nethack-c/upstream/src/potion.c:1627`: `potionhit()` starts with `bottlename()`.
-- `nethack-c/upstream/src/potion.c:1671-1681`: visible monster hits print the crash line, consume `rn2(5)` for chip damage, and print evaporation for visible non-oil/non-saddle hits.
+- `nethack-c/upstream/src/potion.c:1671-1681`: monster hits print the crash line, consume `rn2(5)` before the HP and saddle gates can suppress damage, and print evaporation for visible non-oil/non-saddle hits.
 - `nethack-c/upstream/src/potion.c:1809-1815`: potion of paralysis applies `rnd(25)` only if `mon->mcanmove` is true and has no resistance roll.
 - `nethack-c/upstream/src/mhitm.c:1209-1218`: `paralyze_monst()` sets `mcanmove`, `mfrozen`, clears eating, and clears wait-for-you strategy.
+- `nethack-c/upstream/src/potion.c:1897-1900`: surviving angry body hits call `wakeup(mon, TRUE)` after the potion effect switch.
+- `nethack-c/upstream/src/mon.c:4337-4355`: `wakeup()` clears sleeping, finishes monster eating, and calls `setmangry()`.
+- `nethack-c/upstream/src/mon.c:4287-4288`: `setmangry()` clears `STRAT_WAITMASK`.
 - `nethack-c/upstream/src/mon.c:1200-1204`: monster frozen timeout later restores movement.
 - `nethack-c/upstream/src/potion.c:1906-1911`: adjacent direct vapor is checked after the monster effect.
 - `nethack-c/upstream/src/potion.c:2041-2048`: hero paralysis vapor message and `rnd(5)` helpless duration.
@@ -31,7 +34,7 @@ JS now includes paralysis in the existing direct hero-thrown potionhit path. The
 - `js/cmd.js`: direct-hit support/effect lookup uses a potion-effect helper that falls back to `potionIndex`, so appearance-only objects can still reach the covered effect families.
 - `js/cmd.js`: `monsterCanMoveForPotionParalysis()` handles both JS `false` and C-shaped numeric `0` immobility.
 - `js/cmd.js`: `heroThrownPotionHitMonster()` applies `paralyzeMonsterFromPotion(mon, rnd(25))` without calling `monsterResistsEffect()`.
-- `test/shop-billing-helpers.test.mjs`: focused tests assert visible hit messages, inventory consumption, no floor object, no resistance RNG, adjacent direct vapor ordering, no duration extension for already immobile monsters, and numeric `mcanmove: 0` handling.
+- `test/shop-billing-helpers.test.mjs`: focused tests assert visible hit messages, inventory consumption, no floor object, no resistance RNG, adjacent direct vapor ordering, one-HP chip-roll consumption, wakeup cleanup without duration extension for already immobile monsters, and numeric `mcanmove: 0` handling.
 
 ## Fresh Follow-Up Findings
 

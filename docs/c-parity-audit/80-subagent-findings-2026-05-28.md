@@ -2,13 +2,13 @@
 
 ## Scope
 
-Broaden direct hero-thrown `potionhit()` worn-saddle interception from the special water/oil/polymorph cases to every currently supported direct potion identity. This slice also fixes the common chip-damage RNG ordering on saddle hits.
+Broaden direct hero-thrown `potionhit()` worn-saddle interception from the special water/oil/polymorph cases to every currently supported direct potion identity. This slice also fixes the common chip-damage RNG ordering around saddle hits.
 
 ## Upstream C Anchors
 
 - `nethack-c/upstream/src/dothrow.c:2262` through `dothrow.c:2265` route a successful hero-thrown potion hit to `potionhit(mon, obj, POTHIT_HERO_THROW)`.
 - `nethack-c/upstream/src/potion.c:1644` through `potion.c:1650` roll saddle interception before all potion identity effects. Any potion can hit the worn saddle via `!rn2(10)`; water has extra cursed/blessed/neutral chances after that generic miss.
-- `nethack-c/upstream/src/potion.c:1675` still consumes the common `rn2(5)` chip roll before `!hit_saddle` prevents HP loss.
+- `nethack-c/upstream/src/potion.c:1675` consumes the common `rn2(5)` chip roll before `mon->mhp > 1` and `!hit_saddle` can prevent HP loss.
 - `nethack-c/upstream/src/potion.c:1679` skips visible evaporation text on saddle hits.
 - `nethack-c/upstream/src/potion.c:1706` through `potion.c:1726` enter the saddle branch instead of the monster-effect switch. Water calls `H2Opotion_dip()`, polymorph deliberately does nothing, and all other potion identities fall through to the visible saddle-wet message.
 - `nethack-c/upstream/src/potion.c:1897` keeps wake/anger inside the non-saddle monster branch, so saddle hits leave the monster asleep/peaceful.
@@ -19,7 +19,7 @@ Broaden direct hero-thrown `potionhit()` worn-saddle interception from the speci
 - `isSaddlePotionHit()` only admitted water, oil, and polymorph. That meant a direct supported potion like confusion or sickness could never use C's generic 10% saddle interception.
 - Simply treating any worn saddle as direct-potionhit support would over-broaden unknown/unsupported potion appearances: a missed saddle roll would then fall through an unimplemented body-effect path.
 - Water needs a special support exception. Blessed or cursed water on an ordinary saddled monster can have no monster body effect but still has a real saddle `H2Opotion_dip()` effect.
-- `heroThrownPotionHitMonster()` skipped the chip `rn2(5)` entirely on saddle hits. C consumes the roll and only suppresses the HP decrement.
+- `heroThrownPotionHitMonster()` skipped the chip `rn2(5)` entirely on saddle hits. C consumes the roll and only suppresses the HP decrement. Audit 337 later extended the same ordering to one-HP targets.
 
 ## Implementation
 
@@ -28,7 +28,7 @@ Broaden direct hero-thrown `potionhit()` worn-saddle interception from the speci
   - any water potion, because the saddle branch itself has water BUC handling;
   - any other direct potion identity whose body path is already implemented.
 - Left unsupported potion appearances outside the direct `potionhit()` route unless they already resolve to a supported effect by name or potion index.
-- Changed the common hit logic to consume `rn2(5)` whenever the target has more than 1 HP, then skip the HP decrement if the saddle was hit.
+- Changed the common hit logic to consume `rn2(5)` before saddle suppression. Current code consumes that roll before both the HP and saddle gates, matching the C condition order.
 - Kept saddle hits skipping evaporation, monster effects, and wake/anger, while preserving the existing vapor/trycall and shop-billing tail.
 
 ## Tests
