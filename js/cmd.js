@@ -34678,6 +34678,92 @@ function tipHatPeacefulCussNoise(mon) {
     };
 }
 
+function tipHatHeroWieldsDemonBribeArtifact() {
+    return (game.inventory || []).some(item => {
+        if (!itemIsWielded(item)) return false;
+        const name = String(item.artifact || item.oartifact || artifactObjectName(item)
+            || item.actualKind || item.kind || item.line || '').toLowerCase();
+        return /\b(?:excalibur|demonbane)\b/.test(name);
+    });
+}
+
+function tipHatHeroIsDemonPolyself() {
+    const form = polyselfForm();
+    if (!form) return false;
+    return tipHatRaceFamiliesFrom(form.name || form.race || form.roleName, form).has('demon');
+}
+
+function tipHatDemonBribeSetHostile(mon) {
+    if (!mon) return;
+    mon.mpeaceful = 0;
+    mon.peaceful = false;
+    mon.mtame = 0;
+    mon.tame = 0;
+    mon.hostile = true;
+    set_malign(mon);
+    newsym(mon.mx, mon.my);
+}
+
+function tipHatDemonBribeAtHome(mon) {
+    const inHell = !!game.inhell
+        || game.dungeons?.[game.u?.uz?.dnum]?.name === 'Gehennom'
+        || !!game.level?.flags?.gehennom;
+    return inHell && !(mon?.cham || mon?.mcham || mon?.data?.cham);
+}
+
+function tipHatDemonBribeAlignmentFactor(mon) {
+    const heroSign = Math.sign(Number(game.u?.ualign?.type ?? A_NEUTRAL));
+    const monSign = Math.sign(Number(mon?.data?.maligntyp ?? mon?.maligntyp ?? 0));
+    return 1 + (heroSign === monSign ? 1 : 0);
+}
+
+function tipHatMonsterHasAmulet(mon) {
+    return (mon?.minvent || []).some(item => {
+        const name = String(item.actualKind || item.kind || item.artifact || item.line || '').toLowerCase();
+        if (/\bcheap plastic imitation\b/.test(name)) return false;
+        return item.realAmuletOfYendor || name === 'amulet of yendor' || /\bamulet of yendor\b/.test(name);
+    });
+}
+
+function tipHatDemonBribeDemand(mon, cash) {
+    const homeBonus = tipHatDemonBribeAtHome(mon) ? 20 : 0;
+    let demand = Math.trunc((cash * (rnd(80) + homeBonus))
+        / (100 * tipHatDemonBribeAlignmentFactor(mon)));
+    if (demand > 0 && tipHatMonsterHasAmulet(mon)) demand = cash + rn1(1000, 125);
+    return demand;
+}
+
+function tipHatDemonBribeNoise(mon, name, visible) {
+    if (tipHatHeroWieldsDemonBribeArtifact()) {
+        tipHatDemonBribeSetHostile(mon);
+        return {
+            handled: true,
+            message: visible ? `${name} looks very angry.` : 'You feel tension building.',
+        };
+    }
+
+    if (tipHatHeroIsDemonPolyself()) {
+        return {
+            handled: true,
+            message: `${name} says, "Good hunting, ${game.flags?.female ? 'Sister' : 'Brother'}."`,
+        };
+    }
+
+    const cash = tipHatHeroGoldCount();
+    const demand = tipHatDemonBribeDemand(mon, cash);
+    mon._last_demon_bribe_demand = demand;
+    if (!demand) {
+        tipHatDemonBribeSetHostile(mon);
+        return { handled: true, message: '' };
+    }
+
+    mon._last_demon_bribe_prompt = 'How much will you offer?';
+    return {
+        handled: true,
+        message: `${name} demands ${demand} ${shopCurrency(demand)} for safe passage.`,
+    };
+}
+
 function tipHatMonsterIsShopkeeperType(mon, monName = '') {
     const data = mon?.data || {};
     const name = String(monName || data.name || mon?.name || '').toLowerCase();
@@ -35344,7 +35430,7 @@ function tipHatMonsterNoise(mon, { visible = tipHatMonsterVisible(mon), nameOver
         if (monName === 'death') return tipHatDeathRiderNoise(name);
         return { handled: true, message: '"Who do you think you are, War?"' };
     case 'bribe':
-        if (peaceful && !tame) return { handled: false, message: '' };
+        if (peaceful && !tame) return tipHatDemonBribeNoise(mon, name, visible);
         if (peaceful) return tipHatPeacefulCussNoise(mon);
         return tipHatHostileCussNoise(mon, name, monName);
     case 'cuss':
