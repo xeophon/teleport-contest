@@ -505,6 +505,9 @@ Current validation snapshot:
 - `Cloud room` themed fills now create sleeping fog clouds from the room point
   count and add a C-style selection gas-cloud region without point-cloud spread
   RNG or TTL rolls.
+- `Teleportation hub` themed fills now use the shared selection helpers and have
+  coverage for delayed seen teleport traps plus C's x/y-different destination
+  selection rule.
 - The Brown Mold/post-heal route cleanup removed the last public-trace state
   machines named `_brown_mold*`, `_post_heal*`, and `POST_HEAL*` from runtime
   JS. Level teleporting, Quest-goal arrival, fountain quaffing, punishment

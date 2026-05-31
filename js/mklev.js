@@ -20108,6 +20108,17 @@ function themeroom_temple_of_the_gods(croom) {
     }
 }
 
+function themeroom_teleportation_hub(croom) {
+    const locs = splevSelection.room(croom).filter_mapchar('.');
+    for (let i = 0, count = 2 + rn2(3); i < count; i++) {
+        const pos = locs.rndcoord(true);
+        if (pos.x > 0) {
+            game._themeroom_postprocess ??= [];
+            game._themeroom_postprocess.push({ type: 'teleportTrap', x: pos.x, y: pos.y });
+        }
+    }
+}
+
 export const __mklevTestHooks = {
     mkmap_init,
     mkmap_run_passes,
@@ -20120,6 +20131,7 @@ export const __mklevTestHooks = {
     themeroomBuriedZombieSpecies,
     themeroom_buried_zombies,
     apply_themeroom_fill,
+    run_themeroom_postprocess,
     setThemeroomAlign,
 };
 
@@ -20136,20 +20148,7 @@ async function apply_themeroom_fill(fill, croom, rows = null, startX = 0, startY
     else if (fill?.name === 'Light source') themeroom_light_source(croom);
     else if (fill?.name === 'Temple of the gods') themeroom_temple_of_the_gods(croom);
     else if (fill?.name === 'Ghost of an Adventurer' && rows) themeroom_ghost_adventurer_rng(rows, startX, startY);
-    else if (fill?.name === 'Teleportation hub') {
-        const locs = [];
-        for (let x = croom.lx; x <= croom.hx; x++)
-            for (let y = croom.ly; y <= croom.hy; y++)
-                if (game.level?.at(x, y)?.typ === ROOM) locs.push({ x, y });
-        for (let i = 0, count = 2 + rn2(3); i < count && locs.length; i++) {
-            const idx = rn2(locs.length);
-            const [pos] = locs.splice(idx, 1);
-            if (pos.x > 0) {
-                game._themeroom_postprocess ??= [];
-                game._themeroom_postprocess.push({ type: 'teleportTrap', x: pos.x, y: pos.y });
-            }
-        }
-    }
+    else if (fill?.name === 'Teleportation hub') themeroom_teleportation_hub(croom);
     else if (fill?.name === 'Storeroom') {
         const locs = [];
         for (let x = croom.lx; x <= croom.hx; x++)

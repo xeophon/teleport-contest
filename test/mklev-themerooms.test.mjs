@@ -11,7 +11,7 @@ import {
     A_CHAOTIC, A_LAWFUL, A_NEUTRAL, Align2amask,
     SHOPBASE, CANDLESHOP, MATCH_WALL, SET_LIT_RANDOM, SET_LIT_NOCHANGE,
     ARROW_TRAP, DART_TRAP, ROCKTRAP, BEAR_TRAP, LANDMINE, ROLLING_BOULDER_TRAP,
-    SLP_GAS_TRAP, RUST_TRAP, WEB, STATUE_TRAP, ANTI_MAGIC,
+    SLP_GAS_TRAP, RUST_TRAP, TELEP_TRAP, WEB, STATUE_TRAP, ANTI_MAGIC,
 } from '../js/const.js';
 import { enableRngLog, getRngLog, initRng } from '../js/rng.js';
 
@@ -668,6 +668,33 @@ test('themed Cloud room creates sleeping fog clouds and a room gas region', asyn
         }
     assert.equal(g.level.objects.length, 0);
     assert.equal(g.level.traps.length, 0);
+});
+
+test('themed Teleportation hub postprocess creates seen destination traps', async () => {
+    const { g, room } = installThemeroomGame({
+        dlevel: 7, moves: 200, seed: 42, width: 8, height: 6,
+    });
+    await mklevHooks.apply_themeroom_fill({ name: 'Teleportation hub' }, room);
+
+    assert.equal(room.themeFillName, 'Teleportation hub');
+    assert.ok(g._themeroom_postprocess.length >= 2 && g._themeroom_postprocess.length <= 4);
+    assert.deepEqual(g.level.traps, []);
+
+    await mklevHooks.run_themeroom_postprocess();
+
+    const traps = g.level.traps.filter(trap => trap.ttyp === TELEP_TRAP);
+    assert.equal(traps.length, g.level.traps.length);
+    assert.ok(traps.length >= 2 && traps.length <= 4);
+    assert.equal(g._themeroom_postprocess.length, 0);
+    for (const trap of traps) {
+        assert.equal(trap.tseen, true);
+        assert.equal(trap.tx >= room.lx && trap.tx <= room.hx, true);
+        assert.equal(trap.ty >= room.ly && trap.ty <= room.hy, true);
+        assert.equal(g.level.at(trap.tx, trap.ty).typ, ROOM);
+        assert.equal(g.level.at(trap.teledest.x, trap.teledest.y).typ, ROOM);
+        assert.notEqual(trap.teledest.x, trap.tx);
+        assert.notEqual(trap.teledest.y, trap.ty);
+    }
 });
 
 test('themed Ice room converts room terrain and gates C melt timers', async () => {
