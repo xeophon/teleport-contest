@@ -34129,6 +34129,13 @@ function tipHatHostileCussNoise(mon, name, monName) {
     return { handled: true, message: [message, ...wakeMessages].filter(Boolean).join('  ') };
 }
 
+function tipHatPeacefulCussNoise(mon) {
+    return {
+        handled: true,
+        message: tipHatMonsterIsLawfulMinion(mon) ? `"It's not too late."` : `"We're all doomed."`,
+    };
+}
+
 function tipHatMonsterIsHumanWereForm(mon, monName, mlet) {
     const data = mon?.data || {};
     if (!/^(?:were(?:rat|jackal|wolf))$/.test(monName)) return false;
@@ -34439,10 +34446,12 @@ function tipHatMonsterNoise(mon, { visible = tipHatMonsterVisible(mon) } = {}) {
     case 'rider':
         if (monName === 'death') return { handled: false, message: '' };
         return { handled: true, message: '"Who do you think you are, War?"' };
+    case 'bribe':
+        if (peaceful && !tame) return { handled: false, message: '' };
+        if (peaceful) return tipHatPeacefulCussNoise(mon);
+        return tipHatHostileCussNoise(mon, name, monName);
     case 'cuss':
-        if (peaceful) {
-            return { handled: true, message: tipHatMonsterIsLawfulMinion(mon) ? `"It's not too late."` : `"We're all doomed."` };
-        }
+        if (peaceful) return tipHatPeacefulCussNoise(mon);
         return tipHatHostileCussNoise(mon, name, monName);
     case 'arrest': {
         if (peaceful)

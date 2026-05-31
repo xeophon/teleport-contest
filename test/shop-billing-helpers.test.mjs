@@ -4577,6 +4577,45 @@ test('worn helmet tip makes invisible explicit non-Death Rider ask about War wit
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
 });
 
+test('worn helmet tip makes tame invisible briber fall through to doomed cuss without RNG', async () => {
+    const result = await tipInvisibleExplicitSound({
+        name: 'Asmodeus',
+        sound: 'MS_BRIBE',
+        peaceful: true,
+        tame: 5,
+        rngLog: true,
+        data: { mlevel: 53, mlet: '&', demon: true, demonPrince: true, unique: true },
+    });
+
+    assert.equal(result.message,
+        'You briefly doff your helm.  "We\'re all doomed."');
+    assert.doesNotMatch(result.message,
+        /The Asmodeus|Nothing happens|doesn't respond|demands|safe passage|gets angry|casts aspersions|How much|It's not too late/);
+    assert.equal(result.target.mstrategy, 0);
+    assert.equal(result.targetLoc.map_invisible, true);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
+});
+
+test('worn helmet tip makes tame invisible lawful briber fall through to lminion cuss without RNG', async () => {
+    const result = await tipInvisibleExplicitSound({
+        name: 'Angel',
+        sound: 'MS_BRIBE',
+        peaceful: true,
+        tame: 5,
+        rngLog: true,
+        extra: { lminion: true },
+        data: { mlevel: 14, mlet: 'A', humanoid: true, isminion: true, maligntyp: 12 },
+    });
+
+    assert.equal(result.message,
+        'You briefly doff your helm.  "It\'s not too late."');
+    assert.doesNotMatch(result.message,
+        /The Angel|Nothing happens|doesn't respond|We're all doomed|demands|safe passage|casts aspersions|How much/);
+    assert.equal(result.target.mstrategy, 0);
+    assert.equal(result.targetLoc.map_invisible, true);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
+});
+
 test('worn helmet tip infers invisible Famine rider speech without RNG', async () => {
     const result = await tipInvisibleExplicitSound({
         name: 'Famine',
