@@ -607,6 +607,36 @@ test('themed buried zombie corpses use buriedobjlist with explicit zombify timer
     }
 });
 
+test('themed Ice room converts room terrain and gates C melt timers', async () => {
+    const { g: stableGame, room: stableRoom } = installThemeroomGame({
+        dlevel: 3, moves: 200, seed: 1, width: 3, height: 2,
+    });
+    enableRngLog({ reset: true });
+    await mklevHooks.apply_themeroom_fill({ name: 'Ice room' }, stableRoom);
+
+    for (let x = stableRoom.lx; x <= stableRoom.hx; x++)
+        for (let y = stableRoom.ly; y <= stableRoom.hy; y++) {
+            const loc = stableGame.level.at(x, y);
+            assert.equal(loc.typ, ICE);
+            assert.equal(loc.icedpool, 0);
+        }
+    assert.equal(stableGame.level.meltIceTimers?.length || 0, 0);
+    assert.equal(getRngLog().filter(entry => entry.startsWith('rn2(100)=')).length, 1);
+    assert.equal(getRngLog().filter(entry => entry.startsWith('rn2(1000)=')).length, 0);
+
+    const { g: meltingGame, room: meltingRoom } = installThemeroomGame({
+        dlevel: 3, moves: 200, seed: 9, width: 3, height: 2,
+    });
+    enableRngLog({ reset: true });
+    await mklevHooks.apply_themeroom_fill({ name: 'Ice room' }, meltingRoom);
+
+    assert.equal(meltingGame.level.meltIceTimers.length, 6);
+    assert.equal(meltingGame.level.meltIceTimers.every(timer =>
+        timer.turn >= 900 && timer.turn <= 1899), true);
+    assert.equal(getRngLog().filter(entry => entry.startsWith('rn2(100)=')).length, 1);
+    assert.equal(getRngLog().filter(entry => entry.startsWith('rn2(1000)=')).length, 6);
+});
+
 test('themed Boulder and Trap rooms use C room selections', async () => {
     const { g: boulderGame, room: boulderRoom } = installThemeroomGame({
         dlevel: 7, moves: 200, seed: 33, width: 12, height: 8,

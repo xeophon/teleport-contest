@@ -20000,6 +20000,34 @@ function themeroom_light_source(croom) {
     return lamp;
 }
 
+function startThemeroomMeltIceTimer(x, y, timeout) {
+    const loc = game.level?.at(x, y);
+    if (!loc) return;
+    const turn = (game.moves || 0) + Math.trunc(timeout);
+    loc.meltIceTurn = turn;
+    loc.meltIceTimeout = turn;
+    loc.meltIceAwayTurn = turn;
+    game.level.meltIceTimers ??= [];
+    game._meltIceTimerSeq = (game._meltIceTimerSeq || 0) + 1;
+    game.level.meltIceTimers.push({ x, y, turn, seq: game._meltIceTimerSeq });
+}
+
+function themeroom_ice_room(croom) {
+    const points = [...splevSelection.room(croom).iterate()];
+    for (const [x, y] of points) {
+        const loc = game.level?.at(x, y);
+        if (!loc) continue;
+        loc.typ = ICE;
+        loc.flags = 0;
+        loc.icedpool = 0;
+    }
+    if (rn2(100) >= 25) return;
+
+    const mintime = 1000 - (level_difficulty() * 100);
+    for (const [x, y] of points)
+        startThemeroomMeltIceTimer(x, y, mintime + rn2(1000));
+}
+
 function themeroomFreeRoomLoc(croom, pos) {
     let cpt = 0;
     do {
@@ -20050,7 +20078,8 @@ export const __mklevTestHooks = {
 
 async function apply_themeroom_fill(fill, croom, rows = null, startX = 0, startY = 0) {
     if (fill?.name) croom.themeFillName = fill.name;
-    if (fill?.name === 'Boulder room') await themeroom_boulder_room(croom);
+    if (fill?.name === 'Ice room') themeroom_ice_room(croom);
+    else if (fill?.name === 'Boulder room') await themeroom_boulder_room(croom);
     else if (fill?.name === 'Spider nest') await themeroom_spider_nest(croom);
     else if (fill?.name === 'Trap room') await themeroom_trap_room(croom);
     else if (fill?.name === 'Buried zombies') themeroom_buried_zombies(croom);

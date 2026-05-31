@@ -496,6 +496,9 @@ Current validation snapshot:
 - The themed-room Lua `align` shuffle is now stored per branch, and `Temple of
   the gods` consumes that shuffled table to place three plain altars without
   shrine or sanctum bits.
+- `Ice room` themed fills now convert the room selection to ice and use the Lua
+  `percent(25)` melt-timer branch with one `rn2(1000)` timeout roll per room
+  point.
 - The Brown Mold/post-heal route cleanup removed the last public-trace state
   machines named `_brown_mold*`, `_post_heal*`, and `POST_HEAL*` from runtime
   JS. Level teleporting, Quest-goal arrival, fountain quaffing, punishment
