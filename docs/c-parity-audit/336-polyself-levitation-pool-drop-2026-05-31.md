@@ -21,5 +21,5 @@
 
 ## Remaining Gaps
 
-- Water-walking and levitation boot loss over lava remain separate slices.
+- Water-walking boot loss over lava is covered in audit 338; levitation boot loss over lava remains a separate slice.
 - Levitation `float_down()` trap, Sokoban, steed, swallowed/engulfed, blocked-levitation, hallucination, emergency-disrobe failure, and broader water-entry branches remain deferred.

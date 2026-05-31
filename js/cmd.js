@@ -10828,6 +10828,8 @@ function lavaDirectBurnMaterialObject(obj) {
         && !/\btin\b/.test(kind)) return true;
     if (obj?.otyp === CORPSE || obj?.otyp === 'corpse') return true;
     if (obj?.globby || GLOB_TYPES.has(kind.replace(/^glob of /, ''))) return true;
+    const profile = wishedDamageProfile(obj);
+    if (profile.erosionMatters && profile.primaryWord === 'burnt') return true;
     return /\b(?:wax|leather|cloth|wood|wooden|paper|bone|corpse|meat|ration|food|fruit|egg|sack|bag|box|chest|leash|rope|bow|arrow|club|quarterstaff|aklys|bullwhip|sling|flute|harp|drum|whistle|horn)\b/.test(kind);
 }
 
@@ -12724,12 +12726,43 @@ function polyselfWaterFallLanding(x, y, targetMoveTyp) {
     return false;
 }
 
+function polyselfLavaFalloutMessage(targetMoveTyp) {
+    return targetMoveTyp === LAVAWALL
+        ? 'You fall into the wall of lava!  You burn to a crisp...'
+        : 'You fall into the molten lava!  You burn to a crisp...';
+}
+
+function addPolyselfWaterWalkingLavaFallout(item, messages, targetMoveTyp) {
+    item.known = true;
+    recordKnownArmorDiscovery('water walking boots', false);
+    d(6, 6);
+    if (game.u?.fireResistance) {
+        game.u.utrap = rn1(4, 4) + (rn1(4, 12) << 8);
+        game.u.utraptype = TT_LAVA;
+        messages.push(targetMoveTyp === LAVAWALL
+            ? 'You sink into the wall of lava, but it only burns slightly!'
+            : 'You sink into the molten lava, but it only burns slightly!');
+        if ((game.u.uhp || 0) > 1) game.u.uhp--;
+        return true;
+    }
+    messages.push(polyselfLavaFalloutMessage(targetMoveTyp));
+    game._death_cause = 'burned by molten lava';
+    game._command_mode = 'lavaDeathMore';
+    game._polyself_lava_death_more = 1;
+    useUpInventoryItem(item, item.quan || 1);
+    return true;
+}
+
 function addPolyselfWaterWalkingBootsOffSideEffects(item, messages) {
     if (objectKindKey(item) !== 'water walking boots' || !game.u || heroFloatsOverPolyselfBootFallout()) return;
     const x = game.u.ux || 0;
     const y = game.u.uy || 0;
     const loc = game.level?.at(x, y);
     const targetMoveTyp = movementSurfaceTerrain(loc);
+    if (movementIsLavaAt(x, y, loc)) {
+        addPolyselfWaterWalkingLavaFallout(item, messages, targetMoveTyp);
+        return;
+    }
     if (!movementIsPoolAt(x, y, loc)) return;
     item.known = true;
     recordKnownArmorDiscovery('water walking boots', false);
@@ -12890,6 +12923,10 @@ function dropPolyselfEquipmentItems(items, floorMessages = [], form = polyselfFo
         if (slot === 'helm') addPolyselfHelmetOffSideEffects(item, floorMessages);
         if (slot === 'gloves') addPolyselfGlovesOffSideEffects(item);
         if (slot === 'boots') addPolyselfBootsOffSideEffects(item, floorMessages);
+        if (!(game.inventory || []).includes(item)) {
+            changed = true;
+            continue;
+        }
         const pendingRelocationAfter = game._relocate_after_more;
         const dropTarget = pendingRelocationAfter && pendingRelocationAfter !== pendingRelocationBefore
             ? { x: pendingRelocationAfter.x, y: pendingRelocationAfter.y }
@@ -12929,7 +12966,7 @@ function polyselfFalloutHasEffects(fallout) {
 }
 
 function polyselfFalloutNeedsMore() {
-    return !!game._relocate_after_more;
+    return !!(game._relocate_after_more || game._polyself_lava_death_more);
 }
 
 function polyselfBasePersistentBlindness(base) {
@@ -48460,6 +48497,7 @@ export async function rhack(_cmd) {
 
     if (game._command_mode === 'lavaDeathMore') {
         if (ch === ' ' || ch === '\x1b' || ch === '\r' || ch === '\n') {
+            game._polyself_lava_death_more = 0;
             game.u.uhp = 0;
             await setMessage('Do you want to see your attributes? [ynq] (n)');
             game._command_mode = 'deathAttributesPrompt';

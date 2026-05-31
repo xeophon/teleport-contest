@@ -8,7 +8,7 @@ import { game, resetGame } from '../js/gstate.js';
 import { pushKey, resetInputState } from '../js/input.js';
 import { createMonsterCorpseOrGlob, mkcorpstat } from '../js/mklev.js';
 import { enableRngLog, getRngLog, initRng } from '../js/rng.js';
-import { A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_STR, A_WIS, ALTAR, AM_SHRINE, Align2amask, BILLSZ, CANDLESHOP, CLOUD, CORPSTAT_HISTORIC, COULD_SEE, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, D_CLOSED, D_NODOOR, FOUNTAIN, HOLE, ICE, ICED_POOL, IN_SIGHT, LADDER, LAVAPOOL, MIGR_LADDER_UP, MIGR_SSTAIRS, MIGR_STAIRS_UP, MOAT, M_AP_FURNITURE, M_AP_OBJECT, NORMAL_SPEED, PIT, POOL, REPAIR_DELAY, ROOM, ROOMOFFSET, SDOOR, SHOPBASE, SHOP_DOOR_COST, SQKY_BOARD, STAIRS, STATUE_TRAP, STONE, STRAT_APPEARMSG, STRAT_WAITFORU, STRAT_WAITMASK, TEMPLE, TRAPDOOR, TT_WEB, WEB, W_SADDLE } from '../js/const.js';
+import { A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_STR, A_WIS, ALTAR, AM_SHRINE, Align2amask, BILLSZ, CANDLESHOP, CLOUD, CORPSTAT_HISTORIC, COULD_SEE, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, D_CLOSED, D_NODOOR, FOUNTAIN, HOLE, ICE, ICED_POOL, IN_SIGHT, LADDER, LAVAPOOL, MIGR_LADDER_UP, MIGR_SSTAIRS, MIGR_STAIRS_UP, MOAT, M_AP_FURNITURE, M_AP_OBJECT, NORMAL_SPEED, PIT, POOL, REPAIR_DELAY, ROOM, ROOMOFFSET, SDOOR, SHOPBASE, SHOP_DOOR_COST, SQKY_BOARD, STAIRS, STATUE_TRAP, STONE, STRAT_APPEARMSG, STRAT_WAITFORU, STRAT_WAITMASK, TEMPLE, TRAPDOOR, TT_LAVA, TT_WEB, WEB, W_SADDLE } from '../js/const.js';
 import { currentFruitId, setCurrentFruitName } from '../js/fruit.js';
 import { CLR_BRIGHT_MAGENTA, CLR_BROWN, CLR_WHITE } from '../js/terminal.js';
 import { TRIBUTE_DEATH_QUOTES } from '../js/tribute.js';
@@ -16885,6 +16885,92 @@ test('successful centaur polyself losing water walking boots falls into pool and
     assert.match(game._pending_message || '', /Pheew!  That was close\./);
     assert.equal(game.level.objects[0].ox, 6);
     assert.equal(game.level.objects[0].oy, 5);
+});
+
+test('successful centaur polyself losing water walking boots over lava burns before drop', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 40,
+        uhpmax: 40,
+        uen: 0,
+        uenmax: 0,
+        ulevel: 1,
+        uac: 9,
+    });
+    game.level.at = (x, y) => ({ roomno: 0, typ: x === 5 && y === 5 ? LAVAPOOL : ROOM });
+    vision_reset();
+    const boots = wornArmor(32124, 'water walking boots', 'b', 0, {
+        otyp: WATER_WALKING_BOOTS,
+        known: false,
+    });
+    game.inventory = [boots];
+    enableRngLog({ reset: true });
+
+    await debugPolyselfInto('plains centaur');
+
+    const pending = game._pending_message || '';
+    assert.equal(game.u._polyself_form?.name, 'plains centaur');
+    assert.match(pending, /Your boots are pushed off your feet!/);
+    assert.match(pending, /You fall into the molten lava!  You burn to a crisp\.\.\./);
+    assert.equal(game._message_more, 1);
+    assert.equal(game._command_mode, 'lavaDeathMore');
+    assert.equal(game._death_cause, 'burned by molten lava');
+    assert.equal(game.inventory.includes(boots), false);
+    assert.equal(boots.known, true);
+    assert.equal(game.level.objects.length, 0);
+    assert.ok(getRngLog().some(entry => entry.startsWith('d(6,6)')));
+
+    await rhack(' ');
+
+    assert.equal(game.u.uhp, 0);
+    assert.equal(game._polyself_lava_death_more || 0, 0);
+    assert.equal(game._command_mode, 'deathAttributesPrompt');
+    assert.match(game._pending_message || '', /Do you want to see your attributes\?/);
+});
+
+test('successful centaur polyself losing water walking boots over lava with fire resistance sinks', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 40,
+        uhpmax: 40,
+        uen: 0,
+        uenmax: 0,
+        ulevel: 1,
+        uac: 9,
+        fireResistance: true,
+    });
+    game.level.at = (x, y) => ({ roomno: 0, typ: x === 5 && y === 5 ? LAVAPOOL : ROOM });
+    vision_reset();
+    const boots = wornArmor(32125, 'water walking boots', 'b', 0, {
+        otyp: WATER_WALKING_BOOTS,
+        known: false,
+    });
+    game.inventory = [boots];
+    enableRngLog({ reset: true });
+
+    await debugPolyselfInto('plains centaur');
+
+    const pending = game._pending_message || '';
+    assert.equal(game.u._polyself_form?.name, 'plains centaur');
+    assert.match(pending, /Your boots are pushed off your feet!/);
+    assert.match(pending, /You sink into the molten lava, but it only burns slightly!/);
+    assert.doesNotMatch(pending, /burn to a crisp/);
+    assert.equal(game._message_more, 0);
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game._death_cause || null, null);
+    assert.equal(game.u.uhp, game.u.uhpmax - 1);
+    assert.equal(game.u.utraptype, TT_LAVA);
+    assert.ok((game.u.utrap || 0) > 0);
+    assert.equal(game.inventory.includes(boots), false);
+    assert.equal(boots.known, true);
+    assert.equal(game.level.objects.length, 0);
+    assert.ok(getRngLog().some(entry => entry.startsWith('d(6,6)')));
 });
 
 test('successful centaur polyself dropping water walking boots on dry ground has no water fallout', async () => {

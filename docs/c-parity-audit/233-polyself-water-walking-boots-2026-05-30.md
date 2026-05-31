@@ -14,7 +14,7 @@
 - Detects the hero standing on a pool, moat, or water wall when water-walking boots are pushed off, unless levitation, flight, or a clinging form prevents the fall.
 - Marks water-walking boots known when the fall is triggered, matching C's `makeknown()` before `spoteffects(TRUE)`.
 - Reuses the existing forced-water movement flow by queuing `_relocate_after_more` and `_topline_after_more`; the initial polyself message pauses at More, then the More handler moves the hero to the dry landing square and shows the crawl-out result.
-- Leaves lava and levitation boot fallout out of this slice so those branches can be handled with their own source-backed tests.
+- Lava fallout for water-walking boots is now covered separately in audit 338. Levitation boot fallout remains split across audits 234, 235, 336, and the still-open lava branch.
 
 ## Tests
 
