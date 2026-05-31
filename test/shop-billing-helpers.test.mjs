@@ -4591,6 +4591,37 @@ async function chatAdjacentShopkeeper({
     return { target: shkp, targetLoc, message: game._pending_message };
 }
 
+async function chatAdjacentMonster({
+    name = 'dog', visible = true, peaceful = true, seed = null, rngLog = false,
+    data = {}, extra = {}, setup = null,
+} = {}) {
+    installStableNonShopFloorState();
+    if (seed != null) initRng(seed);
+    if (rngLog) enableRngLog({ reset: true });
+    game.u.seeInvisible = false;
+    const targetLoc = game.level.at(6, 5);
+    const target = ordinaryThrowTarget(name, 6, 5, {
+        minvis: visible ? 0 : 1,
+        perminvis: visible ? 0 : 1,
+        msleeping: 0,
+        mcanmove: true,
+        mcansee: true,
+        mpeaceful: peaceful,
+        mstrategy: 'waitforu',
+        data: { name, mlevel: 4, mlet: 'dog', ...data },
+        ...extra,
+    });
+    game.level.monsters = [target];
+    if (setup) setup({ target, targetLoc });
+    markSquareVisible(6, 5);
+
+    await enterChatCommand();
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    return { target, targetLoc, message: game._pending_message };
+}
+
 test('worn helmet tip makes peaceful invisible Kop give arrest address', async () => {
     await tipInvisibleExplicitSound({
         name: 'Keystone Kop',
@@ -5123,6 +5154,116 @@ test('hallucinating chat with resident shopkeeper can use GEICO speech', async (
     assert.doesNotMatch(result.message,
         /briefly doff|untended shops|shoplifters|business is|bill comes to|Nothing happens|talking to a wall/);
     assert.deepEqual(getRngLog(), ['rn2(2)=1', 'rn2(21)=14']);
+});
+
+test('chat with visible dog uses monster noise before empty-space fallback', async () => {
+    const result = await chatAdjacentMonster({
+        rngLog: true,
+        data: { name: 'dog', mlevel: 4, mlet: 'dog', msound: 'MS_BARK' },
+    });
+
+    assert.equal(result.message, 'The dog barks.');
+    assert.equal(result.target.mstrategy, 0);
+    assert.equal(game.context.move, 1);
+    assert.doesNotMatch(result.message, /Nothing happens|talking to a wall|doesn't respond|waves/);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
+});
+
+test('chat with invisible tame eating pet maps it without consuming time', async () => {
+    const result = await chatAdjacentMonster({
+        visible: false,
+        rngLog: true,
+        data: { name: 'dog', mlevel: 4, mlet: 'dog', msound: 'MS_BARK' },
+        extra: { mtame: 5, meating: true },
+    });
+
+    assert.equal(result.message, 'It is eating noisily.');
+    assert.equal(result.targetLoc.map_invisible, true);
+    assert.equal(result.target.mstrategy, 0);
+    assert.equal(game.context?.move || 0, 0);
+    assert.doesNotMatch(result.message, /barks|falls on deaf ears|Nothing happens|talking to a wall/);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
+});
+
+test('chat with visible saddled tame eating pet uses C saddle wording', async () => {
+    const result = await chatAdjacentMonster({
+        name: 'pony',
+        rngLog: true,
+        data: { name: 'pony', mlevel: 3, mlet: 'quadruped', msound: 'MS_NEIGH' },
+        extra: { mtame: 5, pet: true, meating: true, saddled: true },
+    });
+
+    assert.equal(result.message, 'The saddled pony is eating noisily.');
+    assert.equal(result.target.mstrategy, 0);
+    assert.equal(game.context?.move || 0, 0);
+    assert.doesNotMatch(result.message, /The pony is eating noisily|whickers|neighs|Nothing happens/);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
+});
+
+test('chat with visible nymph uses C seduce wording', async () => {
+    const result = await chatAdjacentMonster({
+        name: 'wood nymph',
+        seed: 1,
+        rngLog: true,
+        data: { name: 'wood nymph', mlevel: 3, mlet: 'n', msound: 'MS_SEDUCE', female: true },
+        extra: { female: true },
+    });
+
+    assert.ok([
+        '"Hello, sailor."',
+        'The wood nymph comes on to you.',
+        'The wood nymph cajoles you.',
+    ].includes(result.message), result.message);
+    assert.equal(result.target.mstrategy, 0);
+    assert.equal(game.context.move, 1);
+    assert.doesNotMatch(result.message, /says: "Hello, sailor"|Nothing happens|talking to a wall/);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(3)']);
+});
+
+test('chat with invisible peaceful snake maps it without response or time', async () => {
+    const result = await chatAdjacentMonster({
+        name: 'snake',
+        visible: false,
+        rngLog: true,
+        data: { name: 'snake', mlevel: 4, mlet: 'S', msound: 'MS_HISS' },
+    });
+
+    assert.equal(result.message, '');
+    assert.equal(result.targetLoc.map_invisible, true);
+    assert.equal(result.target.mstrategy, 0);
+    assert.equal(game.context?.move || 0, 0);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
+});
+
+test('deaf chat with visible ordinary monster reports response before monster noise', async () => {
+    const result = await chatAdjacentMonster({
+        rngLog: true,
+        data: { name: 'dog', mlevel: 4, mlet: 'dog', msound: 'MS_BARK' },
+        setup: () => {
+            game.u._deafTimeout = 10;
+        },
+    });
+
+    assert.equal(result.message, 'Any response from the dog falls on deaf ears.');
+    assert.equal(result.target.mstrategy, 0);
+    assert.equal(game.context?.move || 0, 0);
+    assert.doesNotMatch(result.message, /barks|growls|Nothing happens|talking to a wall/);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
+});
+
+test('chat with helpless non-priest does not clear wait or consume time', async () => {
+    const result = await chatAdjacentMonster({
+        rngLog: true,
+        data: { name: 'dog', mlevel: 4, mlet: 'dog', msound: 'MS_BARK' },
+        extra: { msleeping: 1, mfrozen: 6, mcanmove: false, waiting: true },
+    });
+
+    assert.equal(result.message, 'The dog seems not to notice you.');
+    assert.equal(result.target.mstrategy, 'waitforu');
+    assert.equal(result.target.waiting, true);
+    assert.equal(game.context?.move || 0, 0);
+    assert.doesNotMatch(result.message, /barks|falls on deaf ears|Nothing happens|talking to a wall/);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
 });
 
 test('worn helmet tip makes hostile invisible imp cuss and wake nearby sleepers', async () => {

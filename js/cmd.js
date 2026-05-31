@@ -33852,6 +33852,67 @@ function chatDeafResponseMessage(mon, visible) {
     return `Any response${chatMonsterNameForDeafResponse(mon, visible)} ${response}.`;
 }
 
+function chatMapUnseenMonster(mon) {
+    const unseenLoc = game.level?.at?.(mon.mx, mon.my);
+    if (unseenLoc) unseenLoc.map_invisible = true;
+    newsym(mon.mx, mon.my);
+}
+
+function chatMonsterIsEating(mon) {
+    return Number(mon?.mtame || 0) > 0 && !!mon?.meating;
+}
+
+function chatEatingMonsterName(mon, visible) {
+    if (!visible) return 'It';
+    const name = fireScrollMonsterName(mon);
+    if (mon?.saddled && !mon?.givenName && !(mon?.isshk && mon?.shknam))
+        return name.replace(/^The /, 'The saddled ');
+    return name;
+}
+
+async function finishChatMonsterTarget(mon, sound) {
+    const visible = tipHatMonsterVisible(mon);
+    if (tipHatMonsterHelpless(mon) && sound !== 'priest') {
+        await setMessage(visible ? `${fireScrollMonsterName(mon)} seems not to notice you.` : '');
+        game._command_mode = null;
+        return;
+    }
+
+    chatClearTargetWaitStrategy(mon);
+    if (!heroIsDeaf() && chatMonsterIsEating(mon)) {
+        if (!visible) chatMapUnseenMonster(mon);
+        await setMessage(`${chatEatingMonsterName(mon, visible)} is eating noisily.`);
+        game._command_mode = null;
+        return;
+    }
+    if (heroIsDeaf()) {
+        await setMessage(chatDeafResponseMessage(mon, visible));
+        game._command_mode = null;
+        return;
+    }
+
+    const noise = tipHatMonsterNoise(mon, { visible });
+    if (!visible && (noise.handled || noise.message || noise.mapInvisible))
+        chatMapUnseenMonster(mon);
+
+    if (noise.handled) {
+        await setMessage(noise.message, noise.message.includes('  '));
+        game._command_mode = null;
+        game._process_command_time_now = 1;
+        game.context ??= {};
+        game.context.move = 1;
+        return;
+    }
+    if (noise.message) {
+        await setMessage(noise.message, noise.message.includes('  '));
+        game._command_mode = null;
+        return;
+    }
+    game._pending_message = '';
+    game._message_more = 0;
+    game._command_mode = null;
+}
+
 function heroHasConflict() {
     const u = game.u || {};
     if (u.conflict || u.HConflict || u.EConflict || u._intrinsicConflict || u._extrinsicConflict)
@@ -56799,79 +56860,8 @@ export async function rhack(_cmd) {
             return;
         }
         const targetSound = target ? tipHatMonsterSound(target) : '';
-        if (target && targetSound === 'sell') {
-            const visible = tipHatMonsterVisible(target);
-            if (tipHatMonsterHelpless(target)) {
-                await setMessage(visible ? `${fireScrollMonsterName(target)} seems not to notice you.` : '');
-                game._command_mode = null;
-                return;
-            }
-            chatClearTargetWaitStrategy(target);
-            if (heroIsDeaf()) {
-                await setMessage(chatDeafResponseMessage(target, visible));
-                game._command_mode = null;
-                return;
-            }
-            const noise = tipHatMonsterNoise(target, { visible });
-            if (!visible) {
-                const unseenLoc = game.level?.at?.(target.mx, target.my);
-                if (unseenLoc) unseenLoc.map_invisible = true;
-                newsym(target.mx, target.my);
-            }
-            await setMessage(noise.message, noise.message.includes('  '));
-            game._command_mode = null;
-            game._process_command_time_now = 1;
-            game.context ??= {};
-            game.context.move = 1;
-            return;
-        }
-        if (target?.pet) {
-            const petName = target.givenName || `The ${target.saddled ? 'saddled ' : ''}${target.data?.name || 'creature'}`;
-            if (target.meating) {
-                await setMessage(`${petName} is eating noisily.`);
-                game._command_mode = null;
-                return;
-            }
-            await setMessage(`${petName} barks.`);
-            game._command_mode = null;
-            game._process_command_time_now = 1;
-            game.context.move = 1;
-            return;
-        }
-        if (target?.data?.name?.includes('nymph')) {
-            const targetName = target.givenName || `The ${target.data.name}`;
-            const targetFemale = target.female ?? target.data?.female ?? false;
-            let message = `${targetName} cajoles you.`;
-            if (!!game.flags?.female !== !!targetFemale) {
-                const swval = rn2(3);
-                if (swval === 2) message = `${targetName} says: "Hello, sailor."`;
-                else if (swval === 1) message = `${targetName} comes on to you.`;
-            }
-            await setMessage(message);
-            game._command_mode = null;
-            game._process_command_time_now = 1;
-            game.context.move = 1;
-            return;
-        }
-        if (target && targetSound === 'priest') {
-            chatClearTargetWaitStrategy(target);
-            const visible = tipHatMonsterVisible(target);
-            if (heroIsDeaf()) {
-                await setMessage(chatDeafResponseMessage(target, visible));
-                game._command_mode = null;
-                return;
-            }
-            const noise = tipHatMonsterNoise(target, { visible });
-            if (!visible) {
-                const unseenLoc = game.level?.at?.(target.mx, target.my);
-                if (unseenLoc) unseenLoc.map_invisible = true;
-                newsym(target.mx, target.my);
-            }
-            await setMessage(noise.message, noise.message.includes('  '));
-            game._command_mode = null;
-            game._process_command_time_now = 1;
-            game.context ??= {};
-            game.context.move = 1;
+        if (target) {
+            await finishChatMonsterTarget(target, targetSound);
             return;
         }
         const loc = dir ? game.level?.at(tx, ty) : null;

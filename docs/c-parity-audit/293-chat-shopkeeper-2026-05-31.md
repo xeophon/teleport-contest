@@ -35,8 +35,7 @@ The tests assert branch ordering, state preservation, wait-strategy behavior, co
 ## Remaining Gaps
 
 - Standing on shop goods and using `#chat` should route to C `price_quote()` before direction; that remains separate prompt/shop work.
-- Broad non-shopkeeper, non-priest `#chat` still has local special cases instead of a shared `domonnoise()` implementation.
-- Silent-polyform, underwater, swallowed, wall hallucination, statue, steed, and generic monster sound `#chat` parity remain separate slices.
+- Silent-polyform, underwater, swallowed, wall hallucination, statue, steed, and individual generic monster sound refinements remain separate slices.
 - C hallucinated shopkeeper names and currency are still only partially modeled by the existing sell helper.
 
 ## Verification
