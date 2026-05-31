@@ -716,6 +716,18 @@ taught you."`,
                 '"If you are the best %l can send, I have nothing to fear."',
                 '"Die %c!  I shall exhibit your carcass as a trophy."',
             ],
+            encourage: [
+                '"Beware, for %n is powerful and cunning."',
+                '"To locate the entrance to %i, you must pass many traps."',
+                '"A %nt may be vulnerable to attacks by magical cold."',
+                '"Call upon %d when you encounter %n."',
+                '"You must destroy %n.  It will pursue you otherwise."',
+                '"%oC is a mighty talisman.  With it you can destroy %n."',
+                '"Go forth with the blessings of %d."',
+                '"I will have my %gP watch for your return."',
+                '"Remember not to stray from the true %a path."',
+                '"You may be able to sense %o when you are near."',
+            ],
             guardtalk_after: [
                 `"Did you see Lash LaRue in 'Song of Old Wyoming' the other night?"`,
                 '"Hey man, got any potions of hallucination for sale?"',
@@ -804,6 +816,18 @@ defeat %ni."`,
                 '"Fight, %c, or are you afraid of the mighty %n?"',
                 '"You have failed, %c.  Now, my victory is complete."',
             ],
+            encourage: [
+                '"%nC is strong in the dark arts, but not immune to cold steel."',
+                '"Remember that %n is a great sorcerer.  He lived in the time of Atlantis."',
+                '"If you fail, %p, I will not be able to protect these people long."',
+                '"To enter %i, you must be very stealthy.  The horde will be on guard."',
+                '"Call upon %d in your time of need."',
+                '"May %d protect you, and guide your steps."',
+                '"If you can lay hands upon %o, carry it for good fortune."',
+                '"I cannot stand against %ns sorcery.  But %d will help you."',
+                '"Do not fear %n.  I know you can defeat %ni."',
+                '"You have a great road to travel, %p, but only after you defeat %n."',
+            ],
             guardtalk_after: [
                 `"The battles here have been good -- our enemies' blood soaks the soil!"`,
                 '"Remember that glory is crushing your enemies beneath your feet!"',
@@ -870,6 +894,18 @@ pieces of rusted metal and broken weapons show above the surface.`,
                 `"Let's see...  Baked?  No.  Fried?  Nay.  Broiled?  Yea verily, that is the way I like my %c for dinner."`,
                 '"Thy strength waneth, %p.  The time of thy death draweth near."',
                 '"Call upon thy precious %d, %p.  It shall not avail thee."',
+            ],
+            encourage: [
+                '"Remember, %p, follow always the path of %d."',
+                '"Though %n is verily a mighty foe, We have confidence in thy victory."',
+                '"Beware, for %n hath surrounded %niself with hordes of foul creatures."',
+                `"Great treasure, 'tis said, is hoarded in the lair of %n."`,
+                '"If thou possessest %o, %p, %ns magic shall therewith be thwarted."',
+                '"The gates of %i are guarded by forces unseen, %p. Go carefully."',
+                '"Return %o to Us quickly, %p."',
+                '"Destroy %n, %p, else %H shall surely fall."',
+                '"Call upon %d when thou art in need."',
+                '"To find %i, thou must keep thy heart pure."',
             ],
             guardtalk_after: [
                 '"Hail, %p!  Verily, thou lookest well."',
@@ -946,6 +982,18 @@ when you have attained the post of %R."`,
                 '"Your precious %lt will be my next victim."',
                 '"I feel your powers failing you, %r.  You shall die now."',
                 '"With %o, nothing can stand in my way."',
+            ],
+            encourage: [
+                '"You can prevail, if you rely on %d."',
+                '"Remember that %n has great magic at his command."',
+                '"Be pure, my %S."',
+                '"Beware, %i is surrounded by a great graveyard."',
+                '"You may be able to affect %n with magical cold."',
+                '"Acquire and wear %o if you can.  It will aid you against %n."',
+                '"Call upon %d when your need is greatest.  You will be answered."',
+                '"The undead legions are weakest during the daylight hours."',
+                '"Do not lose faith, %p.  If you do so, %n will grow stronger."',
+                '"Wear %o.  It will assist you against the undead."',
             ],
             guardtalk_after: [
                 '"Greetings, %r.  It is good to see you again."',
@@ -1036,6 +1084,18 @@ renown as %Ra."`,
                 '"A mere %r is nothing compared to my skill!"',
                 '"So, you are the best hope of %l?  How droll."',
                 '"Feel my power, %c!  My victory is imminent!"',
+            ],
+            encourage: [
+                '"Beware, for %n is immune to most magical attacks."',
+                '"To enter %i you must pass many traps."',
+                '"%nC may be vulnerable to physical attacks."',
+                '"%d will come to your aid when you call."',
+                '"You must utterly destroy %n.  He will pursue you otherwise."',
+                '"%oC is a mighty artifact.  With it you can destroy %n."',
+                '"Go forth with the blessings of %d."',
+                '"I will have my %gP watch for your return."',
+                '"Feel free to take any items in that chest that might aid you."',
+                '"You will know when %o is near.  Proceed with care!"',
             ],
             guardtalk_after: [
                 `"I have some eye of newt to trade, do you have a spare blind-worm's sting?"`,
@@ -3642,10 +3702,23 @@ export function maybeQueueQuestLeaderTalk(mon, { automatic = true } = {}) {
     const roleName = game.urole?.name?.m || game._startup_role || '';
     const info = QUEST_ROLE_DATA[roleName];
     const adjacent = Math.max(Math.abs(mon.mx - (game.u?.ux || 0)), Math.abs(mon.my - (game.u?.uy || 0))) <= 1;
-    if (!info || mon.data?.name !== info.leader || !adjacent || mon.msleeping || mon.questTalked) return false;
+    if (!info || mon.data?.name !== info.leader || !adjacent || mon.msleeping || (automatic && mon.questTalked)) return false;
     if (automatic && roleName === 'Priest' && currentSpecialLevelName() === 'x-strt') return false;
     game.quest_status ??= {};
-    mon.questTalked = true;
+    if (!automatic) chatClearTargetWaitStrategy(mon);
+    if (!automatic && game.quest_status.got_quest && !game.quest_status.got_thanks) {
+        const message = questPagerText('encourage', { initCore: false });
+        if (!message) return false;
+        game._overlay_lines = null;
+        game._overlay_hide_status = 0;
+        game._pending_message = message;
+        game._message_more = 0;
+        game._keep_pending_message = 1;
+        game._command_mode = null;
+        chatConsumeTurn();
+        return true;
+    }
+    if (automatic) mon.questTalked = true;
     game.quest_status.met_leader = true;
     const pager = game._pending_message && game._message_more ? queueQuestPager : showQuestPager;
     if (!pager(game.quest_status.met_leader_once ? 'leader_next' : 'leader_first', 'questLeaderIntroMore'))

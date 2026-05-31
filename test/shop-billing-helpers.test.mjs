@@ -6177,6 +6177,19 @@ const WIZARD_NEMESIS_DISCOURAGE = [
     '"Feel my power, Wizard!  My victory is imminent!"',
 ];
 
+const WIZARD_LEADER_ENCOURAGE = [
+    '"Beware, for the Dark One is immune to most magical attacks."',
+    '"To enter the Tower of Darkness you must pass many traps."',
+    '"The Dark One may be vulnerable to physical attacks."',
+    '"Thoth will come to your aid when you call."',
+    '"You must utterly destroy the Dark One.  He will pursue you otherwise."',
+    '"The Eye of the Aethiopica is a mighty artifact.  With it you can destroy the Dark One."',
+    '"Go forth with the blessings of Thoth."',
+    '"I will have my Apprentices watch for your return."',
+    '"Feel free to take any items in that chest that might aid you."',
+    '"You will know when the Eye of the Aethiopica is near.  Proceed with care!"',
+];
+
 test('chat with visible role quest guardian uses guardtalk_before pager text', async () => {
     const result = await chatAdjacentMonster({
         name: 'student',
@@ -6319,6 +6332,45 @@ test('quest nemesis pager strips leader article with percent-t token', async () 
     assert.equal(result.message, '"Your precious Arch Priest will be my next victim."');
     assert.equal(game.quest_status.met_nemesis, true);
     assert.deepEqual(getRngLog(), ['rn2(10)=7']);
+});
+
+test('chat with assigned quest leader uses encourage pager text', async () => {
+    const result = await chatAdjacentMonster({
+        name: 'Neferet the Green',
+        peaceful: true,
+        rngLog: true,
+        data: { msound: 'MS_LEADER', mlet: '@', humanoid: true, unique: true },
+        setup: () => {
+            game._startup_role = 'Wizard';
+            game.urole = { ...(game.urole || {}), name: { m: 'Wizard', f: 'Wizard' } };
+            game.quest_status = { ...(game.quest_status || {}), got_quest: true, met_leader_once: true };
+        },
+    });
+
+    assert.ok(WIZARD_LEADER_ENCOURAGE.includes(result.message), result.message);
+    assert.equal(game.context.move, 1);
+    assert.equal(result.target.mstrategy, 0);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(10)']);
+});
+
+test('direct quest leader chat is not suppressed by prior automatic talk marker', async () => {
+    const result = await chatAdjacentMonster({
+        name: 'Neferet the Green',
+        peaceful: true,
+        rngLog: true,
+        data: { msound: 'MS_LEADER', mlet: '@', humanoid: true, unique: true },
+        extra: { questTalked: true },
+        setup: () => {
+            game._startup_role = 'Wizard';
+            game.urole = { ...(game.urole || {}), name: { m: 'Wizard', f: 'Wizard' } };
+            game.quest_status = { ...(game.quest_status || {}), got_quest: true, met_leader_once: true };
+        },
+    });
+
+    assert.ok(WIZARD_LEADER_ENCOURAGE.includes(result.message), result.message);
+    assert.equal(game.context.move, 1);
+    assert.equal(result.target.mstrategy, 0);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(10)']);
 });
 
 test('chat with peaceful non-tame briber and no gold spends turn and angers demon', async () => {
