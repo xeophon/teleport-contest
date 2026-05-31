@@ -15,6 +15,7 @@ import {
 } from '../js/const.js';
 import { enableRngLog, getRngLog, initRng } from '../js/rng.js';
 
+const CHEST = 215;
 const OIL_LAMP = 227;
 const BOULDER = 465;
 const CORPSE = 471;
@@ -695,6 +696,34 @@ test('themed Teleportation hub postprocess creates seen destination traps', asyn
         assert.notEqual(trap.teledest.x, trap.tx);
         assert.notEqual(trap.teledest.y, trap.ty);
     }
+});
+
+test('themed Storeroom creates only chests and chest mimics', async () => {
+    const { g, room } = installThemeroomGame({
+        dlevel: 7, moves: 200, seed: 43, width: 12, height: 8,
+    });
+    await mklevHooks.apply_themeroom_fill({ name: 'Storeroom' }, room);
+
+    const chests = g.level.objects.filter(obj => obj.otyp === CHEST);
+    const mimics = g.level.monsters.filter(mon => mon.data?.name?.includes('mimic'));
+    assert.equal(room.themeFillName, 'Storeroom');
+    assert.ok(chests.length + mimics.length > 0);
+    assert.equal(g.level.objects.length, chests.length);
+    assert.equal(g.level.monsters.length, mimics.length);
+    assert.equal(g.level.traps.length, 0);
+    for (const chest of chests) {
+        assert.equal(chest.ox >= room.lx && chest.ox <= room.hx, true);
+        assert.equal(chest.oy >= room.ly && chest.oy <= room.hy, true);
+    }
+    for (const mimic of mimics) {
+        assert.equal(mimic.appearObj, CHEST);
+        assert.equal(mimic.appearGlyph, '(');
+        assert.equal(mimic.mx >= room.lx && mimic.mx <= room.hx, true);
+        assert.equal(mimic.my >= room.ly && mimic.my <= room.hy, true);
+    }
+    for (let x = room.lx; x <= room.hx; x++)
+        for (let y = room.ly; y <= room.hy; y++)
+            assert.equal(g.level.at(x, y).typ, ROOM);
 });
 
 test('themed Ice room converts room terrain and gates C melt timers', async () => {

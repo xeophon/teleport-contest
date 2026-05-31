@@ -508,6 +508,10 @@ Current validation snapshot:
 - `Teleportation hub` themed fills now use the shared selection helpers and have
   coverage for delayed seen teleport traps plus C's x/y-different destination
   selection rule.
+- `Storeroom` themed fills now use `selection.room():percentage(30)` to drive
+  the chest/chest-mimic count, with structural coverage for chest mimic
+  appearances. Its existing mimic setup RNG compatibility burn remains pending
+  a fuller `des.monster({ class = "m", appear_as = ... })` audit.
 - The Brown Mold/post-heal route cleanup removed the last public-trace state
   machines named `_brown_mold*`, `_post_heal*`, and `POST_HEAL*` from runtime
   JS. Level teleporting, Quest-goal arrival, fountain quaffing, punishment

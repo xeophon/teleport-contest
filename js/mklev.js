@@ -20119,6 +20119,25 @@ function themeroom_teleportation_hub(croom) {
     }
 }
 
+async function themeroom_storeroom(croom) {
+    const locs = splevSelection.room(croom).percentage(30);
+    const pos = { x: 0, y: 0 };
+    for (const _point of locs.iterate()) {
+        if (rn2(100) < 25) {
+            if (somexyspace(croom, pos)) mksobj_at(CHEST, pos.x, pos.y, true, false);
+            continue;
+        }
+        rn2(3);
+        const mimic = mkclassMimic();
+        const mon = mimic && somexyspace(croom, pos) ? await makemon(mimic, pos.x, pos.y, 0) : null;
+        if (mon) {
+            mon.appearObj = CHEST;
+            mon.appearGlyph = '(';
+            mon.appearColor = CLR_BROWN;
+        }
+    }
+}
+
 export const __mklevTestHooks = {
     mkmap_init,
     mkmap_run_passes,
@@ -20149,30 +20168,7 @@ async function apply_themeroom_fill(fill, croom, rows = null, startX = 0, startY
     else if (fill?.name === 'Temple of the gods') themeroom_temple_of_the_gods(croom);
     else if (fill?.name === 'Ghost of an Adventurer' && rows) themeroom_ghost_adventurer_rng(rows, startX, startY);
     else if (fill?.name === 'Teleportation hub') themeroom_teleportation_hub(croom);
-    else if (fill?.name === 'Storeroom') {
-        const locs = [];
-        for (let x = croom.lx; x <= croom.hx; x++)
-            for (let y = croom.ly; y <= croom.hy; y++) {
-                const loc = game.level?.at(x, y);
-                if (loc?.typ === ROOM && rn2(100) < 30) locs.push({ x, y });
-        }
-        for (let i = 0; i < locs.length; i++) {
-            if (rn2(100) < 25) {
-                const pos = {};
-                if (somexyspace(croom, pos)) mksobj_at(CHEST, pos.x, pos.y, true, false);
-                continue;
-            }
-            rn2(3);
-            const mimic = mkclassMimic();
-            const pos = {};
-            const mon = mimic && somexyspace(croom, pos) ? await makemon(mimic, pos.x, pos.y, 0) : null;
-            if (mon) {
-                mon.appearObj = CHEST;
-                mon.appearGlyph = '(';
-                mon.appearColor = CLR_BROWN;
-            }
-        }
-    }
+    else if (fill?.name === 'Storeroom') await themeroom_storeroom(croom);
 }
 
 async function run_themeroom_postprocess() {
