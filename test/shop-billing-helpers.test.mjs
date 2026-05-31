@@ -4454,6 +4454,111 @@ test('worn helmet tip makes hostile invisible lawful minion use angel cuss', asy
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(14)']);
 });
 
+test('worn helmet tip infers invisible skeleton bones rattle and freezes hero', async () => {
+    const result = await tipInvisibleExplicitSound({
+        name: 'skeleton',
+        peaceful: false,
+        rngLog: true,
+        data: { mlevel: 12, mlet: 'zombie', humanoid: true, mindless: true },
+    });
+
+    assert.equal(result.message,
+        'You briefly doff your helm.  It rattles noisily.  You freeze for a moment.');
+    assert.doesNotMatch(result.message,
+        /groans|The skeleton|doesn't respond|Nothing happens|waves|gestures/);
+    assert.equal(game._helpless_time, 2);
+    assert.equal(game._wake_message, 'You can move again.');
+    assert.equal(result.target.mstrategy, 0);
+    assert.equal(result.target.mcanmove, true);
+    assert.equal(result.target.mfrozen || 0, 0);
+    assert.equal(result.targetLoc.map_invisible, true);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
+});
+
+test('worn helmet tip makes invisible explicit bones sound rattle without RNG', async () => {
+    const result = await tipInvisibleExplicitSound({
+        name: 'bone golem',
+        sound: 'MS_BONES',
+        peaceful: false,
+        rngLog: true,
+        data: { mlevel: 8, mlet: 'golem', humanoid: false },
+    });
+
+    assert.equal(result.message,
+        'You briefly doff your helm.  It rattles noisily.  You freeze for a moment.');
+    assert.doesNotMatch(result.message,
+        /The bone golem|groans|doesn't respond|Nothing happens|waves|gestures/);
+    assert.equal(game._helpless_time, 2);
+    assert.equal(game._wake_message, 'You can move again.');
+    assert.equal(result.target.mstrategy, 0);
+    assert.equal(result.targetLoc.map_invisible, true);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
+});
+
+test('worn helmet tip keeps visible skeleton on humanoid response before bones sound', async () => {
+    installStableNonShopFloorState();
+    const helmet = wornArmor(3063558, 'orcish helm', 'h');
+    const skeleton = ordinaryThrowTarget('skeleton', 6, 5, {
+        msleeping: 0,
+        mcanmove: true,
+        mcansee: true,
+        mpeaceful: false,
+        mstrategy: 'waitforu',
+        data: { name: 'skeleton', mlevel: 12, mlet: 'zombie', mindless: true },
+    });
+    game.inventory = [helmet];
+    game.level.monsters = [skeleton];
+    markSquareVisible(6, 5);
+
+    await enterTipCommand();
+    await rhack('h');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.match(game._pending_message,
+        /^You briefly doff your helm\.  The skeleton (?:curses|gestures rudely|gestures offensively)(?: and (?:gestures rudely|gestures offensively))? at you\.\.\.$/);
+    assert.doesNotMatch(game._pending_message, /rattles noisily|freeze for a moment|groans|Nothing happens/);
+    assert.equal(skeleton.mstrategy, 0);
+    assert.equal(game._helpless_time || 0, 0);
+});
+
+test('worn helmet tip at frozen invisible skeleton does not rattle or freeze hero', async () => {
+    installStableNonShopFloorState();
+    game.u.seeInvisible = false;
+    const targetLoc = game.level.at(6, 5);
+    const helmet = wornArmor(3063559, 'orcish helm', 'h');
+    const skeleton = ordinaryThrowTarget('skeleton', 6, 5, {
+        minvis: 1,
+        perminvis: 1,
+        msleeping: 0,
+        mcanmove: false,
+        mfrozen: 4,
+        mcansee: true,
+        mpeaceful: false,
+        mstrategy: 'waitforu',
+        data: { name: 'skeleton', mlevel: 12, mlet: 'zombie', humanoid: true, mindless: true },
+    });
+    game.inventory = [helmet];
+    game.level.monsters = [skeleton];
+    markSquareVisible(6, 5);
+    enableRngLog({ reset: true });
+
+    await enterTipCommand();
+    await rhack('h');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game._pending_message, 'You briefly doff your helm.  Nothing happens.');
+    assert.equal(skeleton.mstrategy, 'waitforu');
+    assert.equal(skeleton.mcanmove, false);
+    assert.equal(skeleton.mfrozen, 4);
+    assert.equal(game._helpless_time || 0, 0);
+    assert.equal(targetLoc.map_invisible || false, false);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
+});
+
 test('worn helmet tip infers invisible human werecreature whisper off full moon', async () => {
     const result = await tipInvisibleExplicitSound({
         name: 'werewolf',

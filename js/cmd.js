@@ -33722,7 +33722,7 @@ function tipHatMonsterHumanoid(mon) {
     const mlet = data.mlet || mon?.mlet || '';
     const name = String(data.name || mon?.name || '').toLowerCase();
     return !!(data.humanoid || data.human || mlet === 'humanoid' || mlet === 'human' || mlet === '@'
-        || data.name === 'human' || /^(gremlin|leprechaun)$/.test(name) || /\bzombie$/.test(name));
+        || data.name === 'human' || /^(gremlin|leprechaun|skeleton)$/.test(name) || /\bzombie$/.test(name));
 }
 
 function tipHatMonsterPossessive(mon) {
@@ -34142,6 +34142,7 @@ function tipHatMonsterSound(mon) {
     const name = String(data.name || mon?.name || '').toLowerCase();
     const mlet = String(data.mlet || mon?.mlet || '').toLowerCase();
     if (/^(gremlin|leprechaun)$/.test(name)) return 'laugh';
+    if (name === 'skeleton') return 'bones';
     if (/\bzombie$/.test(name) || (mlet === 'zombie' && name !== 'ghoul')) return 'groan';
     if (name === 'shrieker') return 'shriek';
     if (/^(mumak|mastodon)$/.test(name)) return 'trumpet';
@@ -34366,6 +34367,10 @@ function tipHatMonsterNoise(mon, { visible = tipHatMonsterVisible(mon) } = {}) {
     }
     case 'imitate':
         return { handled: true, message: `${name} imitates you.` };
+    case 'bones':
+        game._helpless_time = Math.max(game._helpless_time || 0, 2);
+        game._wake_message = 'You can move again.';
+        return { handled: true, message: `${name} rattles noisily.  You freeze for a moment.` };
     case 'mumble':
         return { handled: true, message: `${name} mumbles incomprehensibly.` };
     case 'spell':
