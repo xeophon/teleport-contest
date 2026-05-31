@@ -34361,6 +34361,7 @@ function tipHatMonsterSound(mon) {
     if (/^(leocrotta|aleax|doppelganger)$/.test(name)) return 'imitate';
     if (TIPHAT_MUMBLE_MONSTER_NAMES.has(name) || /\bnaga\b/.test(name)) return 'mumble';
     if (name === 'ki-rin') return 'spell';
+    if (name === 'oracle') return 'oracle';
     if (name === 'imp') return 'cuss';
     if (tipHatMonsterIsNymph(mon, name, mlet)) return 'seduce';
     if (tipHatMonsterIsHumanWereForm(mon, name, mlet)) return 'were';
@@ -34631,6 +34632,12 @@ function tipHatMonsterNoise(mon, { visible = tipHatMonsterVisible(mon) } = {}) {
         return { handled: true, message: `${name} mumbles incomprehensibly.` };
     case 'spell':
         return { handled: true, message: `${name} seems to mutter a cantrip.` };
+    case 'oracle':
+        if (!peaceful)
+            return { handled: false, message: `${name} is in no mood for consultations.`, mapInvisible: !visible };
+        if (!tipHatHeroHasTopLevelGold())
+            return { handled: false, message: 'You have no gold.', mapInvisible: !visible };
+        return { handled: false, message: '', mapInvisible: !visible };
     case 'seduce': {
         if (!tipHatMonsterIsNymph(mon, monName)) return { handled: false, message: '' };
         if (!!game.flags?.female !== tipHatMonsterFemale(mon)) {
@@ -34829,6 +34836,8 @@ function tipHatDirectedResponse(dir) {
             }
             return noise.message;
         }
+        if (noise.message)
+            return [noise.message, visible ? `${name} doesn't respond.` : 'Nothing happens.'].join('  ');
     }
     if (visible) return `${name} doesn't respond.`;
     return 'Nothing happens.';

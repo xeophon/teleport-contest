@@ -4399,7 +4399,7 @@ async function tipInvisibleExplicitSound({ name, sound, peaceful = false, tame =
     gold = 0, seed = null, rngLog = false, role = '', inventory = [], data = {}, extra = {},
     moves = null, traps = null, endgame = false, race = '', hallucinating = false,
     polyself = null, bystanders = [], moonphase = null, datetime = null, night = null,
-    hour = null, heroFemale = null, town = false } = {}) {
+    hour = null, heroFemale = null, town = false, allowFallback = false } = {}) {
     installStableNonShopFloorState();
     if (town) game.level.flags.has_town = true;
     if (seed != null) initRng(seed);
@@ -4469,7 +4469,10 @@ async function tipInvisibleExplicitSound({ name, sound, peaceful = false, tame =
     assert.equal(target.mstrategy, 0);
     assert.equal(targetLoc.map_invisible, true);
     assert.match(game._pending_message, /You briefly doff your helm\./);
-    assert.doesNotMatch(game._pending_message, /doesn't respond|Nothing happens|waves|tips .* in response|gestures|unseen creature/);
+    const unexpected = allowFallback
+        ? /doesn't respond|waves|tips .* in response|gestures|unseen creature/
+        : /doesn't respond|Nothing happens|waves|tips .* in response|gestures|unseen creature/;
+    assert.doesNotMatch(game._pending_message, unexpected);
     return { target, targetLoc, message: game._pending_message };
 }
 
@@ -4584,6 +4587,43 @@ test('worn helmet tip maps invisible djinni speech variants', async () => {
     });
     assert.match(game._pending_message, /"Get me out of here\."/);
     assert.doesNotMatch(game._pending_message, /The prisoner|disturb me|waves/);
+});
+
+test('worn helmet tip makes hostile invisible Oracle decline consultation before fallback', async () => {
+    const result = await tipInvisibleExplicitSound({
+        name: 'Oracle',
+        peaceful: false,
+        rngLog: true,
+        allowFallback: true,
+        data: { mlevel: 12, mlet: '@', humanoid: true, female: true, unique: true },
+    });
+
+    assert.equal(result.message,
+        'You briefly doff your helm.  It is in no mood for consultations.  Nothing happens.');
+    assert.doesNotMatch(result.message,
+        /The Oracle|You have no gold|minor consultation|major one|doesn't respond|waves|gestures/);
+    assert.equal(result.target.mstrategy, 0);
+    assert.equal(result.targetLoc.map_invisible, true);
+    assert.deepEqual(getRngLog(), []);
+});
+
+test('worn helmet tip makes peaceful invisible Oracle with no gold report it before fallback', async () => {
+    const result = await tipInvisibleExplicitSound({
+        name: 'Oracle',
+        sound: 'MS_ORACLE',
+        peaceful: true,
+        rngLog: true,
+        allowFallback: true,
+        data: { mlevel: 12, mlet: '@', humanoid: true, female: true, unique: true },
+    });
+
+    assert.equal(result.message,
+        'You briefly doff your helm.  You have no gold.  Nothing happens.');
+    assert.doesNotMatch(result.message,
+        /The Oracle|no mood|minor consultation|major one|doesn't respond|waves|gestures/);
+    assert.equal(result.target.mstrategy, 0);
+    assert.equal(result.targetLoc.map_invisible, true);
+    assert.deepEqual(getRngLog(), []);
 });
 
 test('worn helmet tip makes hostile invisible imp cuss and wake nearby sleepers', async () => {
