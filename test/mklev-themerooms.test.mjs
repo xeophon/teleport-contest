@@ -8,6 +8,7 @@ import { processCorpseTimers } from '../js/cmd.js';
 import {
     COLNO, ROWNO, STONE, ROOM, CORR, ROOMOFFSET, TREE, ICE, ICED_POOL, ICED_MOAT,
     VWALL, HWALL, POOL, LAVAPOOL, WATER, FOUNTAIN, ALTAR, AM_SHRINE, OROOM, TEMPLE,
+    SDOOR, AIR,
     A_CHAOTIC, A_LAWFUL, A_NEUTRAL, Align2amask,
     SHOPBASE, CANDLESHOP, MATCH_WALL, SET_LIT_RANDOM, SET_LIT_NOCHANGE,
     ARROW_TRAP, DART_TRAP, ROCKTRAP, BEAR_TRAP, LANDMINE, ROLLING_BOULDER_TRAP,
@@ -761,6 +762,53 @@ test('themed Buried treasure creates a buried loot chest and dig engraving', asy
         if (ty !== 0) expected += ` ${Math.abs(ty)} ${ty > 0 ? 'south' : 'north'}`;
     }
     assert.equal(engraving.text, expected);
+});
+
+test('themed Garden creates sleeping nymphs fountains and tree walls', async () => {
+    const { g, room } = installThemeroomGame({
+        dlevel: 8, moves: 200, seed: 45, width: 12, height: 6,
+    });
+    for (let x = room.lx - 1; x <= room.hx + 1; x++) {
+        for (let y = room.ly - 1; y <= room.hy + 1; y++) {
+            if (x >= room.lx && x <= room.hx && y >= room.ly && y <= room.hy) continue;
+            const loc = g.level.at(x, y);
+            loc.typ = (x === room.lx - 1 || x === room.hx + 1) ? VWALL : HWALL;
+        }
+    }
+    const secretDoorX = room.lx - 1;
+    const secretDoorY = room.ly + 1;
+    const secretDoor = g.level.at(secretDoorX, secretDoorY);
+    secretDoor.typ = SDOOR;
+
+    await mklevHooks.apply_themeroom_fill({ name: 'Garden' }, room);
+
+    const expectedNymphs = Math.trunc(((room.hx - room.lx + 1) * (room.hy - room.ly + 1)) / 6);
+    const nymphs = g.level.monsters.filter(mon => mon.data?.name === 'wood nymph');
+    assert.equal(room.themeFillName, 'Garden');
+    assert.equal(nymphs.length, expectedNymphs);
+    assert.equal(nymphs.every(mon => mon.msleeping === 1), true);
+    assert.equal(g.level.flags.nfountains > 0, true);
+    assert.equal(g._themeroom_postprocess.length, 1);
+    assert.equal(secretDoor.typ, SDOOR);
+
+    await mklevHooks.run_themeroom_postprocess();
+
+    assert.equal(g._themeroom_postprocess.length, 0);
+    assert.equal(secretDoor.typ, AIR);
+    assert.equal(g.level.flags.arboreal, true);
+    let trees = 0;
+    for (let x = room.lx - 1; x <= room.hx + 1; x++)
+        for (let y = room.ly - 1; y <= room.hy + 1; y++) {
+            const loc = g.level.at(x, y);
+            if (x >= room.lx && x <= room.hx && y >= room.ly && y <= room.hy) {
+                assert.equal(loc.typ === ROOM || loc.typ === FOUNTAIN, true);
+            } else if (x === secretDoorX && y === secretDoorY) {
+                assert.equal(loc.typ, AIR);
+            } else if (loc.typ === TREE) {
+                trees++;
+            }
+        }
+    assert.equal(trees > 0, true);
 });
 
 test('themed Ice room converts room terrain and gates C melt timers', async () => {

@@ -20144,6 +20144,26 @@ function themeroom_buried_treasure(croom) {
     return chest;
 }
 
+async function themeroom_garden(croom) {
+    const room = splevSelection.room(croom);
+    const pos = { x: 0, y: 0 };
+    for (let i = 0, count = Math.trunc(room.numpoints() / 6); i < count; i++) {
+        if (somexyspace(croom, pos)) {
+            const mon = await makemon(monsterByRndName('wood nymph'), pos.x, pos.y, 0);
+            if (mon) mon.msleeping = 1;
+        }
+        if (rn2(100) < 30 && somexyspace(croom, pos)) {
+            const loc = game.level?.at(pos.x, pos.y);
+            if (loc && loc.typ !== FOUNTAIN) {
+                loc.typ = FOUNTAIN;
+                game.level.flags.nfountains = (game.level.flags.nfountains || 0) + 1;
+            }
+        }
+    }
+    game._themeroom_postprocess ??= [];
+    game._themeroom_postprocess.push({ type: 'gardenWalls', selection: room });
+}
+
 async function themeroom_storeroom(croom) {
     const locs = splevSelection.room(croom).percentage(30);
     const pos = { x: 0, y: 0 };
@@ -20194,6 +20214,7 @@ async function apply_themeroom_fill(fill, croom, rows = null, startX = 0, startY
     else if (fill?.name === 'Ghost of an Adventurer' && rows) themeroom_ghost_adventurer_rng(rows, startX, startY);
     else if (fill?.name === 'Teleportation hub') themeroom_teleportation_hub(croom);
     else if (fill?.name === 'Buried treasure') themeroom_buried_treasure(croom);
+    else if (fill?.name === 'Garden') await themeroom_garden(croom);
     else if (fill?.name === 'Storeroom') await themeroom_storeroom(croom);
 }
 
@@ -20218,12 +20239,24 @@ function makeThemeroomDigEngraving(entry) {
     return pos;
 }
 
+function makeThemeroomGardenWalls(entry) {
+    const selection = entry.selection?.grow?.() || null;
+    if (!selection) return;
+    replaceDesTerrain({ selection, fromterrain: 'w', toterrain: 'T' });
+    if (replaceDesTerrain({ selection, fromterrain: 'S', toterrain: 'A' }) > 0)
+        game.level.flags.arboreal = true;
+}
+
 async function run_themeroom_postprocess() {
     const postprocess = game._themeroom_postprocess || [];
     game._themeroom_postprocess = [];
     for (const entry of postprocess) {
         if (entry.type === 'digEngraving') {
             makeThemeroomDigEngraving(entry);
+            continue;
+        }
+        if (entry.type === 'gardenWalls') {
+            makeThemeroomGardenWalls(entry);
             continue;
         }
         if (entry.type !== 'teleportTrap') continue;
