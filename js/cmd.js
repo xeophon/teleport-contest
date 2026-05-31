@@ -5,7 +5,7 @@ import { game } from './gstate.js';
 import { nhgetch } from './input.js';
 import { bot, cls, docrt, flush_screen, newsym, pline, recordObservedObjectDiscovery, refreshHallucinatedMap, seeMonsters, seeNearbyObjects, show_glyph_cell, strengthString } from './display.js';
 import { cansee, couldsee, vision_recalc, vision_reset } from './vision.js';
-import { RANDOM_MONSTER_BY_NAME, SHOP_TYPES, STALKER_MONSTERS, add_to_container, add_to_minv, adjustedMonsterLevel, artifactDefinitionForName, artifactObjectName, enextoMonsterSpot, make_tutorial1_level, makemon, makeArtifactWishObject, maketrap, mkcorpstat, mklev, mkobj, mkobj_at, mksobj, monsterByRndName, monster_hp, morgueMonster, nameObjectAsArtifact, next_ident, object_display, potionIndexForRoll, randomHallucinatedShopkeeperName, resurrectWizardOfYendor, rndmonnum, scrollIndexForRoll, set_mimic_sym_rng, syncDungeonContext, u_on_dnstairs, u_on_rndspot, u_on_upstairs, wipe_engr_at, dropMonsterInventory as dropMonsterInventoryRaw, l_nhcore_init, getrumor, getbogusmon, level_difficulty, set_malign, somexyspace, fumaroles, fix_wall_spines, createMonsterCorpseOrGlob, monsterCorpseDropSucceeds, monsterLeavesCorpseLikeDrop, movebubbles } from './mklev.js';
+import { RANDOM_MONSTER_BY_NAME, SHOP_TYPES, STALKER_MONSTERS, add_to_container, add_to_minv, adjustedMonsterLevel, artifactDefinitionForName, artifactObjectName, enextoMonsterSpot, make_tutorial1_level, makemon, makeArtifactWishObject, maketrap, mkcorpstat, mklev, mkobj, mkobj_at, mksobj, monsterByRndName, monster_hp, morgueMonster, nameObjectAsArtifact, next_ident, object_display, potionIndexForRoll, randomHallucinatedShopkeeperName, resurrectWizardOfYendor, rndmonnum, scrollIndexForRoll, set_mimic_sym_rng, syncDungeonContext, u_on_dnstairs, u_on_rndspot, u_on_upstairs, wipe_engr_at, dropMonsterInventory as dropMonsterInventoryRaw, l_nhcore_init, getrumor, getbogusmon, level_difficulty, set_malign, somexyspace, fumaroles, fix_wall_spines, createMonsterCorpseOrGlob, monsterCorpseDropSucceeds, monsterLeavesCorpseLikeDrop, movebubbles, noteleportLevelForMonster, rlocNoMsg } from './mklev.js';
 import { ACCESSIBLE, A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_MAX, A_NEUTRAL, A_NONE, A_STR, A_WIS, ALTAR, AM_SANCTUM, AM_SHRINE, Align2amask, Amask2align, BC_BALL, BC_CHAIN, BEAR_TRAP, BLCORNER, BOLT_LIM, BRCORNER, CANDLESHOP, CLOUD, COLNO, CORPSTAT_FEMALE, CORPSTAT_GENDER, CORPSTAT_HISTORIC, CORPSTAT_MALE, CORPSTAT_NEUTER, CORR, DB_DIR, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DB_NORTH, DB_SOUTH, DB_UNDER, DB_WEST, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, BURN, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, D_TRAPPED, DUST, ENGRAVE, ENGR_BLOOD, FOUNTAIN, F_LOOTED, GRAVE, HEADSTONE, HWALL, ICE, ICED_MOAT, ICED_POOL, IN_SIGHT, IRONBARS, IS_AIR, IS_FURNITURE, IS_LAVA, IS_OBSTRUCTED, IS_POOL, IS_ROOM, IS_SOFT, IS_TREE, IS_WALL, In_endgame, In_quest, In_sokoban, In_V_tower, Is_airlevel, Is_astralevel, Is_botlevel, Is_earthlevel, Is_firelevel, Is_rogue_level, Is_stronghold, Is_waterlevel, LADDER, LAVAPOOL, LAVAWALL, LUCKMAX, LUCKMIN, MAGIC_PORTAL, MARK, MAX_EGG_HATCH_TIME, MIGR_LADDER_UP, MIGR_RANDOM, MIGR_SSTAIRS, MIGR_STAIRS_UP, MM_ADJACENTOK, MM_EDOG, MM_NOCOUNTBIRTH, MM_NOMSG, MM_NOTAIL, MM_NOWAIT, MOAT, MORGUE, M_AP_FURNITURE, M_AP_OBJECT, M_AP_TYPE, N_DIRS, NO_MINVENT, NORMAL_SPEED, OVERLOADED, P_BASIC, P_UNSKILLED, PIT, POOL, REPAIR_DELAY, ROLLING_BOULDER_TRAP, ROOM, ROOMOFFSET, ROWNO, SCORR, SDOOR, SHARED, SHARED_PLUS, SHOPBASE, SHOP_DOOR_COST, SINK, SPIKED_PIT, STAIRS, STONE, STRAT_APPEARMSG, STRAT_WAITFORU, STRAT_WAITMASK, S_LDWASHER, S_LPUDDING, S_LRING, TDWALL, TEMPLE, THRONE, TLCORNER, TRCORNER, TREE, TREE_LOOTED, TREE_SWARM, TT_BEARTRAP, TT_BURIEDBALL, TT_INFLOOR, TT_LAVA, TT_PIT, TT_WEB, TUWALL, T_LOOTED, VAULT, VIBRATING_SQUARE, VWALL, WAND_BACKFIRE_CHANCE, WATER, WEB, WM_MASK, WT_IRON_BALL_BASE, WT_IRON_BALL_INCR, WT_TO_DMG, W_NONDIGGABLE, W_SADDLE, ZAP_POS, isok, xdir, ydir } from './const.js';
 import { d, rn1, rn2, rn2_on_display_rng, rnd, rnl, rnz } from './rng.js';
 import { CLR_BLACK, CLR_BLUE, CLR_BRIGHT_BLUE, CLR_BRIGHT_CYAN, CLR_BRIGHT_GREEN, CLR_BRIGHT_MAGENTA, CLR_BROWN, CLR_CYAN, CLR_GRAY, CLR_GREEN, CLR_MAGENTA, CLR_ORANGE, CLR_RED, CLR_YELLOW, CLR_WHITE, NO_COLOR } from './terminal.js';
@@ -35460,7 +35460,7 @@ async function finishChatMonsterTarget(mon, sound) {
     }
 
     const noise = tipHatMonsterNoise(mon, { visible, offerCommandMode: true });
-    if (!visible && (noise.handled || noise.message || noise.mapInvisible))
+    if (!visible && !tipHatMonsterVisible(mon) && (noise.handled || noise.message || noise.mapInvisible))
         chatMapUnseenMonster(mon);
 
     if (noise.handled) {
@@ -36001,6 +36001,55 @@ function tipHatDemonBribeDemand(mon, cash) {
     return demand;
 }
 
+function tipHatDemonBribeIsPrince(mon) {
+    const data = mon?.data || {};
+    return !!(mon?.demonPrince || mon?.isDemonPrince || data.demonPrince || data.isDemonPrince);
+}
+
+function tipHatDemonBribeReveal(mon) {
+    if (!tipHatDemonBribeIsPrince(mon) || !mon?.minvis) return '';
+    const wasUnseen = !tipHatMonsterVisible(mon);
+    mon.minvis = 0;
+    mon.perminvis = 0;
+    mon.invisible = 0;
+    if (Number.isInteger(mon.mstrategy)) mon.mstrategy &= ~STRAT_APPEARMSG;
+    newsym(mon.mx, mon.my);
+    if (wasUnseen && tipHatMonsterVisible(mon)) return `${fireScrollMonsterName(mon)} appears before you.`;
+    return '';
+}
+
+function tipHatDemonRelocationSuffix(x, y, oldX, oldY) {
+    const heroX = game.u?.ux ?? 0;
+    const heroY = game.u?.uy ?? 0;
+    const du = (x - heroX) * (x - heroX) + (y - heroY) * (y - heroY);
+    if (du <= 2) return ' next to you';
+    if (du <= BOLT_LIM * BOLT_LIM) return ' close by';
+    const oldDu = (oldX - heroX) * (oldX - heroX) + (oldY - heroY) * (oldY - heroY);
+    if (oldDu === du) return '';
+    return du < oldDu ? ' closer to you' : ' farther away';
+}
+
+function tipHatDemonBribeRelocate(mon) {
+    if (!mon) return '';
+    const name = fireScrollMonsterName(mon);
+    const wasVisible = tipHatMonsterVisible(mon);
+    if (noteleportLevelForMonster(mon))
+        return wasVisible ? `A mysterious force prevents ${demonBribeObjectName(mon)} from teleporting!` : '';
+
+    const oldX = mon.mx;
+    const oldY = mon.my;
+    if (!rlocNoMsg(mon)) return '';
+    newsym(oldX, oldY);
+    newsym(mon.mx, mon.my);
+
+    const nowVisible = tipHatMonsterVisible(mon);
+    if (wasVisible && nowVisible)
+        return `${name} vanishes and reappears${tipHatDemonRelocationSuffix(mon.mx, mon.my, oldX, oldY)}.`;
+    if (wasVisible) return `${name} vanishes!`;
+    if (nowVisible) return `${name} appears${tipHatDemonRelocationSuffix(mon.mx, mon.my, oldX, oldY)}!`;
+    return '';
+}
+
 function demonBribeOfferValue(text) {
     const match = String(text || '').match(/^\s*([+-]?\d+)/);
     return match ? Math.trunc(Number(match[1])) : 0;
@@ -36086,10 +36135,18 @@ function tipHatDemonBribeNoise(mon, name, visible, offerCommandMode = false) {
         };
     }
 
+    const revealMessage = tipHatDemonBribeReveal(mon);
+    const speakerName = revealMessage ? fireScrollMonsterName(mon) : name;
+
     if (tipHatHeroIsDemonPolyself()) {
+        const relocationMessage = tipHatDemonBribeRelocate(mon);
         return {
             handled: true,
-            message: `${name} says, "Good hunting, ${game.flags?.female ? 'Sister' : 'Brother'}."`,
+            message: [
+                revealMessage,
+                `${speakerName} says, "Good hunting, ${game.flags?.female ? 'Sister' : 'Brother'}."`,
+                relocationMessage,
+            ].filter(Boolean).join('  '),
         };
     }
 
@@ -36098,17 +36155,18 @@ function tipHatDemonBribeNoise(mon, name, visible, offerCommandMode = false) {
     mon._last_demon_bribe_demand = demand;
     if (!demand) {
         tipHatDemonBribeSetHostile(mon);
-        return { handled: true, message: '' };
+        return { handled: true, message: revealMessage };
     }
 
     if (offerCommandMode) mon._last_demon_bribe_prompt = 'How much will you offer?';
+    const demandMessage = `${speakerName} demands ${demand} ${shopCurrency(demand)} for safe passage.${offerCommandMode ? '  How much will you offer?' : ''}`;
     return {
         handled: true,
         ...(offerCommandMode ? {
             commandMode: 'demonBribeOffer',
             demonBribe: { mon, demand },
         } : {}),
-        message: `${name} demands ${demand} ${shopCurrency(demand)} for safe passage.${offerCommandMode ? '  How much will you offer?' : ''}`,
+        message: [revealMessage, demandMessage].filter(Boolean).join('  '),
     };
 }
 
@@ -36937,13 +36995,13 @@ function tipHatDirectedResponse(dir) {
         return tipHatRudeHumanoidResponse(name);
     if (tipHatMonsterAdjacent(target)) {
         const noise = tipHatMonsterNoise(target, { visible });
-        if (!visible && noise.mapInvisible) {
+        if (!visible && !tipHatMonsterVisible(target) && noise.mapInvisible) {
             const loc = game.level?.at?.(target.mx, target.my);
             if (loc) loc.map_invisible = true;
             newsym(target.mx, target.my);
         }
         if (noise.handled) {
-            if (!visible) {
+            if (!visible && !tipHatMonsterVisible(target)) {
                 const loc = game.level?.at?.(target.mx, target.my);
                 if (loc) loc.map_invisible = true;
                 newsym(target.mx, target.my);

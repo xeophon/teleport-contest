@@ -7457,6 +7457,44 @@ test('worn helmet tip reports positive briber demand without entering offer mode
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rnd(80)']);
 });
 
+test('worn helmet tip makes invisible demon prince briber appear before demand without mapping it', async () => {
+    installStableNonShopFloorState();
+    enableRngLog({ reset: true });
+    game.u.seeInvisible = false;
+    const targetLoc = game.level.at(6, 5);
+    const helmet = wornArmor(3063564, 'orcish helm', 'h');
+    const target = ordinaryThrowTarget('Asmodeus', 6, 5, {
+        minvis: 1,
+        perminvis: 1,
+        msleeping: 0,
+        mcanmove: true,
+        mcansee: true,
+        mpeaceful: true,
+        mstrategy: 'waitforu',
+        data: { name: 'Asmodeus', mlevel: 53, mlet: '&', demon: true, demonPrince: true, unique: true, maligntyp: -20, msound: 'MS_BRIBE' },
+    });
+    game.inventory = [helmet, goldPieces(3063565, 500)];
+    game._goldCount = 500;
+    game.level.monsters = [target];
+    markSquareVisible(6, 5);
+
+    await enterTipCommand();
+    await rhack('h');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(target.mstrategy, 0);
+    assert.equal(target.minvis, 0);
+    assert.equal(target.perminvis, 0);
+    assert.notEqual(targetLoc.map_invisible, true);
+    assert.match(game._pending_message, /^You briefly doff your helm\.  The Asmodeus appears before you\.  The Asmodeus demands \d+ zorkmids for safe passage\.$/);
+    assert.equal(target._last_demon_bribe_prompt, undefined);
+    assert.equal(target._last_demon_bribe_demand,
+        Number(game._pending_message.match(/demands (\d+) /)[1]));
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rnd(80)']);
+});
+
 test('chat with peaceful non-tame briber wielding Excalibur angers demon before demand RNG', async () => {
     const excalibur = { ...wieldedWeapon(3063560, 'long sword', 'w'), artifact: 'Excalibur' };
     const result = await chatAdjacentMonster({
@@ -7476,7 +7514,7 @@ test('chat with peaceful non-tame briber wielding Excalibur angers demon before 
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
 });
 
-test('chat with peaceful non-tame briber in demon polyself gives kindred greeting', async () => {
+test('chat with peaceful non-tame briber in demon polyself gives kindred greeting and relocates it', async () => {
     const result = await chatAdjacentMonster({
         name: 'Asmodeus',
         peaceful: true,
@@ -7489,11 +7527,63 @@ test('chat with peaceful non-tame briber in demon polyself gives kindred greetin
         },
     });
 
-    assert.equal(result.message, 'The Asmodeus says, "Good hunting, Sister."');
+    assert.equal(result.message, 'The Asmodeus says, "Good hunting, Sister."  The Asmodeus vanishes!');
     assert.equal(game.context.move, 1);
     assert.equal(result.target.mpeaceful, true);
     assert.equal(result.target.hostile, undefined);
     assert.equal(result.target._last_demon_bribe_demand, undefined);
+    assert.notDeepEqual([result.target.mx, result.target.my], [6, 5]);
+    assert.ok(game.level.monsters.includes(result.target));
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rnd(79)', 'rn2(21)']);
+});
+
+test('invisible demon prince briber appears before demanding safe passage', async () => {
+    const result = await chatAdjacentMonster({
+        name: 'Asmodeus',
+        visible: false,
+        peaceful: true,
+        rngLog: true,
+        expectedCommandMode: 'demonBribeOffer',
+        data: { msound: 'MS_BRIBE', mlevel: 53, mlet: '&', demon: true, demonPrince: true, unique: true, maligntyp: -20 },
+        setup: () => {
+            game.inventory = [goldPieces(3063562, 500)];
+            game._goldCount = 500;
+        },
+    });
+
+    assert.match(result.message, /^The Asmodeus appears before you\.  The Asmodeus demands \d+ zorkmids for safe passage\.  How much will you offer\?$/);
+    assert.equal(result.target.minvis, 0);
+    assert.equal(result.target.perminvis, 0);
+    assert.equal(result.target.invisible, 0);
+    assert.notEqual(result.targetLoc.map_invisible, true);
+    assert.equal(game.context.move || 0, 0);
+    assert.equal(result.target.mpeaceful, true);
+    assert.equal(result.target._last_demon_bribe_prompt, 'How much will you offer?');
+    assert.equal(result.target._last_demon_bribe_demand,
+        Number(result.message.match(/demands (\d+) /)[1]));
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rnd(80)']);
+});
+
+test('deaf chat with visible peaceful non-tame briber reports response before demon bribe', async () => {
+    const result = await chatAdjacentMonster({
+        name: 'Asmodeus',
+        peaceful: true,
+        rngLog: true,
+        data: { msound: 'MS_BRIBE', mlevel: 53, mlet: '&', demon: true, demonPrince: true, unique: true, maligntyp: -20 },
+        setup: () => {
+            game.u._deafTimeout = 10;
+            game.inventory = [goldPieces(3063563, 500)];
+            game._goldCount = 500;
+        },
+    });
+
+    assert.equal(result.message, 'Any response from the Asmodeus falls on deaf ears.');
+    assert.equal(result.target.mstrategy, 0);
+    assert.equal(game.context?.move || 0, 0);
+    assert.equal(result.target.mpeaceful, true);
+    assert.equal(result.target._last_demon_bribe_demand, undefined);
+    assert.equal(result.target._last_demon_bribe_prompt, undefined);
+    assert.doesNotMatch(result.message, /demands|safe passage|Good hunting|looks very angry/);
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
 });
 
