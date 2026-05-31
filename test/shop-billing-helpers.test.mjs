@@ -34593,6 +34593,130 @@ test('upward hero-thrown ordinary corpse lands before fatal falling-object damag
     ]);
 });
 
+test('upward hero-thrown tin opener self-hits, damages, and lands', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, { uhp: 30, uhpmax: 30 });
+    const opener = ordinaryTool(876895, 'tin opener', 't');
+    game.inventory = [opener];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('t');
+    await rhack('<');
+
+    const message = game._pending_message || '';
+    assert.equal(game._command_mode, null);
+    assert.match(message, /A tin opener almost hits the ceiling, then falls back on top of your head\./);
+    assert.match(message, /A tin opener hits the floor\./);
+    assert.doesNotMatch(message, /cmdassist|In what direction|It doesn't hurt|shatters|Splat/);
+    assert.equal(game.u.uhp, 29);
+    assert.equal(game.inventory.includes(opener), false);
+    assert.equal(game.level.objects.length, 1);
+    const landed = game.level.objects[0];
+    assert.equal(landed.kind, 'tin opener');
+    assert.equal(landed.ox, game.u.ux);
+    assert.equal(landed.oy, game.u.uy);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rn2(5)', 'rn2(100)', 'rn2(100)',
+    ]);
+});
+
+test('upward hero-thrown plain dagger self-hits, damages, and lands', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, { uhp: 30, uhpmax: 30 });
+    const blade = dagger(876896, 'd');
+    game.inventory = [blade];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('d');
+    await rhack('<');
+
+    const message = game._pending_message || '';
+    assert.equal(game._command_mode, null);
+    assert.match(message, /A dagger almost hits the ceiling, then falls back on top of your head\./);
+    assert.match(message, /A dagger hits the floor\./);
+    assert.doesNotMatch(message, /cmdassist|In what direction|It doesn't hurt|shatters|Splat/);
+    assert.equal(game.u.uhp < 30, true);
+    assert.equal(game.u.uhp >= 26, true);
+    assert.equal(game.inventory.includes(blade), false);
+    assert.equal(game.level.objects.length, 1);
+    const landed = game.level.objects[0];
+    assert.equal(landed.kind, 'dagger');
+    assert.equal(landed.ox, game.u.ux);
+    assert.equal(landed.oy, game.u.uy);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rn2(5)', 'rn2(100)', 'rnd(4)', 'rn2(100)',
+    ]);
+});
+
+test('upward hero-thrown plain dagger hard helmet caps falling damage', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, { uhp: 30, uhpmax: 30 });
+    const blade = dagger(876897, 'd');
+    const helmet = wornArmor(876898, 'orcish helm', 'h', 0);
+    game.inventory = [blade, helmet];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('d');
+    await rhack('<');
+
+    const message = game._pending_message || '';
+    assert.equal(game._command_mode, null);
+    assert.match(message, /A dagger hits the ceiling, then falls back on top of your head\./);
+    assert.match(message, /Fortunately, you are wearing a hard helmet\./);
+    assert.match(message, /A dagger hits the floor\./);
+    assert.doesNotMatch(message, /cmdassist|In what direction|It doesn't hurt|shatters|Splat/);
+    assert.equal(game.u.uhp, 29);
+    assert.equal(game.inventory.includes(blade), false);
+    assert.equal(game.inventory.includes(helmet), true);
+    assert.equal(game.level.objects.length, 1);
+    assert.equal(game.level.objects[0].kind, 'dagger');
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rn2(5)', 'rn2(100)', 'rn2(100)', 'rnd(4)', 'rn2(100)',
+    ]);
+});
+
+test('upward hero-thrown unpaid dagger stack returns one unit to shop floor', async () => {
+    const { shkp } = installCommandShopState();
+    initRng(1);
+    Object.assign(game.u, { uhp: 30, uhpmax: 30 });
+    const blades = { ...dagger(876899, 'd'), quan: 2, plural: 'daggers', line: 'd - 2 daggers' };
+    game.inventory = [blades];
+    shop.addObjectToShopBill(shkp, blades, 20);
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('d');
+    await rhack('<');
+
+    const message = game._pending_message || '';
+    assert.match(message, /A dagger hits the shop's ceiling, then falls back on top of your head\./);
+    assert.match(message, /A dagger hits the floor\./);
+    assert.equal(blades.quan, 1);
+    assert.equal(game.inventory.includes(blades), true);
+    assert.equal(game.level.objects.length, 1);
+    const landed = game.level.objects[0];
+    assert.equal(landed.kind, 'dagger');
+    assert.notEqual(landed.unpaid, true);
+    assert.equal(landed.ox, game.u.ux);
+    assert.equal(landed.oy, game.u.uy);
+    const liveEntry = shop.shopBillEntryForObject(shkp, blades);
+    assert.ok(liveEntry);
+    assert.equal(liveEntry.bquan, 1);
+    assert.equal(shop.shopBillEntryTotal(liveEntry), 10);
+    assert.equal(shop.shopBillEntryForObject(shkp, landed), null);
+    assert.equal(shkp.billct, 1);
+    assert.equal(shkp.debit || 0, 0);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rnd(2)', 'rn2(5)', 'rn2(100)', 'rn2(100)', 'rnd(4)', 'rn2(100)',
+    ]);
+});
+
 test('upward hero-thrown unpaid ordinary egg from a stack bills one broken unit', async () => {
     const { shkp } = installCommandShopState();
     initRng(5);

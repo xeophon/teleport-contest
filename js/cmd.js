@@ -18680,6 +18680,81 @@ function heroThrownOrdinaryCorpseUpwardMessages(corpse) {
     return heroThrownOrdinaryCorpseSelfHitMessages(corpse, 'almost hits', ceilingName);
 }
 
+function isCleanPlainDaggerObject(obj) {
+    if (!obj) return false;
+    if (!(obj.otyp === DAGGER || objectKindKey(obj) === 'dagger')) return false;
+    return !obj.artifact && !obj.oartifact && !obj.blessed && !obj.cursed && !obj.opoisoned
+        && (obj.spe || 0) === 0 && !(obj.oeroded || 0) && !(obj.oeroded2 || 0);
+}
+
+function isTinOpenerTossObject(obj) {
+    return !!obj && (obj.otyp === TIN_OPENER || objectKindKey(obj) === 'tin opener');
+}
+
+function isHeroThrownGenericDamagingUpwardObject(obj) {
+    return isTinOpenerTossObject(obj) || isCleanPlainDaggerObject(obj);
+}
+
+function heroThrownGenericObjectFallingDamage(obj, helmet = null) {
+    let damage = 0;
+    if (isCleanPlainDaggerObject(obj)) damage = rnd(4);
+    if (!damage) {
+        const weightDamage = Math.max(1, Math.ceil(globObjectWeight({ ...obj, quan: 1 }) / WT_TO_DMG));
+        damage = weightDamage <= 1 ? 1 : rnd(weightDamage);
+        if (damage > 6) damage = 6;
+    }
+    if (helmet && hardEarthHelmet(helmet) && damage > 1) damage = 1;
+    if (damage > 0) damage += Math.trunc(Number(game.u?.udaminc || 0));
+    if (damage < 0) damage = 0;
+    return maybeHalfPhysicalDamage(damage);
+}
+
+function heroThrownGenericObjectFloorMessage(obj, x, y) {
+    if (projectileLandingIsSoft(x, y)) return '';
+    return `${floorObjectSubject({ ...obj, quan: 1 })} hits the floor.`;
+}
+
+function heroThrownGenericObjectSelfHitMessages(obj, action, ceilingName = heroThrowCeilingName()) {
+    const messages = [`${floorObjectSubject({ ...obj, quan: 1 })} ${action} the ${ceilingName}, then falls back on top of your head.`];
+    const breakKind = projectileTopLevelBreakKind(obj);
+    if (breakKind) {
+        projectileTopLevelBreakMessage(obj, breakKind, messages);
+        markThrownBrokenObjectDebt(obj);
+        return messages;
+    }
+
+    const helmet = wornTossUpHelmet();
+    const damage = heroThrownGenericObjectFallingDamage(obj, helmet);
+    const heroHp = game.u?.uhp || 0;
+    if (helmet && hardEarthHelmet(helmet) && damage < heroHp)
+        messages.push('Fortunately, you are wearing a hard helmet.');
+    else if (helmet && !hardEarthHelmet(helmet))
+        messages.push(`Your ${simpleTossUpHelmetName(helmet)} does not protect you.`);
+
+    const x = game.u?.ux || obj.ox || 0;
+    const y = game.u?.uy || obj.oy || 0;
+    const floorMessage = heroThrownGenericObjectFloorMessage(obj, x, y);
+    if (floorMessage) messages.push(floorMessage);
+    const landing = landProjectileObjectWithShopHandling(obj, x, y, {});
+    messages.push(...landing.messages);
+    applyHeroThrownCorpseFallingDamage(damage, messages);
+    return messages;
+}
+
+function heroThrownGenericObjectUpwardMessages(obj) {
+    const ceilingName = heroThrowCeilingName();
+    const hasCeiling = heroHasThrowCeiling();
+    const hitsRoof = !!(rn2(5) && !heroIsUnderwaterForThrow());
+    if (!hasCeiling)
+        return heroThrownGenericObjectSelfHitMessages(obj, 'flies up into', ceilingName);
+    if (hitsRoof) {
+        const breakKind = projectileTopLevelBreakKind(obj);
+        if (breakKind) return heroThrownPotionCeilingBreakMessages(obj, breakKind, ceilingName);
+        return heroThrownGenericObjectSelfHitMessages(obj, 'hits', ceilingName);
+    }
+    return heroThrownGenericObjectSelfHitMessages(obj, 'almost hits', ceilingName);
+}
+
 function heroThrownTouchPetrifyingEggCeilingBreakMessages(egg, ceilingName = heroThrowCeilingName()) {
     return breakHeroThrownTouchPetrifyingEgg(egg, [`${floorObjectSubject({ ...egg, quan: 1 })} hits the ${ceilingName}.`]);
 }
@@ -60023,6 +60098,43 @@ export async function rhack(_cmd) {
             game._resume_time_after_more = 0;
             game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
             game.context.move = 0;
+            return;
+        }
+        if (ch === '<' && isHeroThrownGenericDamagingUpwardObject(item)) {
+            let thrownId = null;
+            if ((item.quan || 1) > 1) thrownId = next_ident();
+            const thrownObject = {
+                ...item,
+                letter: undefined,
+                line: undefined,
+                wielded: false,
+                worn: false,
+                quivered: false,
+                ox: game.u?.ux || 0,
+                oy: game.u?.uy || 0,
+                id: thrownId ?? item.id,
+                quan: 1,
+                glyph: item.glyph || (item.cls === 'tool' ? '(' : ')'),
+                color: item.color || CLR_WHITE,
+            };
+            if ((item.quan || 1) > 1) splitCarriedObjectShopBill(item, thrownObject, 1);
+            const messages = heroThrownGenericObjectUpwardMessages(thrownObject);
+            removeInventoryItem(item, 1);
+            newsym(game.u?.ux || 0, game.u?.uy || 0);
+            await setMessage(messages.join('  '), !!messages.more);
+            game._throw_item_letter = null;
+            game._resume_time_after_more = 0;
+            game.context.move = 0;
+            if (messages.fatal) {
+                game._command_mode = 'deathDieMore';
+                game._pending_time_passed = 0;
+                game._process_command_time_now = 0;
+                game._run_steps_remaining = 0;
+                prepareDeathBones();
+                return;
+            }
+            game._command_mode = null;
+            game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
             return;
         }
         if (ch === '<' && isHeroThrownHarmlessUpwardObject(item)) {
