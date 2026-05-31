@@ -34178,16 +34178,17 @@ function tipHatMonsterIsShopkeeperType(mon, monName = '') {
     return !!(data.shopkeeper || mon?.shopkeeper || name === 'shopkeeper');
 }
 
-function tipHatShopkeeperHasEarlierSellState(mon) {
-    if (!mon) return false;
-    if (mon.hostile || mon.mpeaceful === 0 || mon.mpeaceful === false || mon.angry) return true;
-    return false;
+function tipHatShopkeeperIsAngry(mon) {
+    return !!(mon?.hostile || mon?.mpeaceful === 0 || mon?.mpeaceful === false || mon?.angry);
 }
 
 function tipHatResidentShopkeeperSellNoise(mon) {
-    if (tipHatShopkeeperHasEarlierSellState(mon)) return { handled: false, message: '' };
     const name = shopkeeperDisplayName(mon);
     const canSpeak = shopkeeperCanSpeakToHero(mon);
+    if (tipHatShopkeeperIsAngry(mon)) {
+        const customerType = shopkeeperRobbedAmount(mon) > 0 ? 'non-paying' : 'rude';
+        return { handled: true, message: `${name} ${canSpeak ? 'mentions' : 'indicates'} how much ${shopkeeperSubjectPronoun(mon)} dislikes ${customerType} customers.` };
+    }
     if (mon?.following) {
         const player = String(game.plname || 'Hero');
         const customer = String(mon?.customer || '');
