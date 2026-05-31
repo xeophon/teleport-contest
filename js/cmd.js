@@ -33807,6 +33807,52 @@ function tipHatMonsterIsMplayer(mon) {
         || data.mplayer || data.is_mplayer || data.isMplayer);
 }
 
+function tipHatNameTokens(value) {
+    const name = String(value || '').toLowerCase();
+    return name.replace(/[^a-z]+/g, ' ').trim();
+}
+
+function tipHatRaceFamiliesFrom(value, meta = {}) {
+    const families = new Set();
+    const name = tipHatNameTokens(value || meta.name || meta.data?.name);
+    const rawMlet = String(meta.mlet || meta.data?.mlet || '');
+    const rawGlyph = String(meta.glyph || meta.data?.glyph || '');
+    const mlet = rawMlet.toLowerCase();
+    if (meta.orc || meta.isOrc || meta.data?.orc || name === 'orcish'
+        || /\b(?:orc|goblin|hobgoblin|uruk hai)\b/.test(name)
+        || mlet === 'orc' || rawMlet === 'o' || rawGlyph === 'o')
+        families.add('orc');
+    if (meta.gnome || meta.isGnome || meta.data?.gnome
+        || /\b(?:gnome|gnomish)\b/.test(name)
+        || mlet === 'gnome' || rawMlet === 'G' || rawGlyph === 'G')
+        families.add('gnome');
+    if (meta.kobold || meta.isKobold || meta.data?.kobold || /\bkobold\b/.test(name)
+        || mlet === 'kobold' || rawMlet === 'k' || rawGlyph === 'k')
+        families.add('kobold');
+    if (meta.demon || meta.isDemon || meta.data?.demon
+        || /\b(?:yeenoghu|orcus|demon)\b/.test(name)
+        || mlet === 'demon' || rawMlet === '&' || rawGlyph === '&')
+        families.add('demon');
+    return families;
+}
+
+function tipHatHeroRaceFamilies() {
+    const form = polyselfForm() || game.u?._polyself_form || {};
+    const families = tipHatRaceFamiliesFrom(form.name || form.race || form.roleName, form);
+    for (const family of tipHatRaceFamiliesFrom(game.urace?.noun || game.urace?.adj || game._startup_race))
+        families.add(family);
+    return families;
+}
+
+function tipHatMonsterSharesHeroRace(mon, monName) {
+    const heroFamilies = tipHatHeroRaceFamilies();
+    if (!heroFamilies.size) return false;
+    for (const family of tipHatRaceFamiliesFrom(monName, mon || {})) {
+        if (heroFamilies.has(family)) return true;
+    }
+    return false;
+}
+
 const TIPHAT_MPLAYER_SAME_CLASS_MESSAGES = [
     "I can't win, and neither will you!",
     "You don't deserve to win!",
@@ -34067,8 +34113,9 @@ function tipHatMonsterNoise(mon, { visible = tipHatMonsterVisible(mon) } = {}) {
     const tame = Number(mon.mtame || 0);
     const moves = Number(game.moves ?? game.context?.moves ?? 0);
     const hungryTime = tipHatMonsterHungryTime(mon);
-    if (sound === 'moo' && !tame) sound = 'bellow';
-    if (heroIsHallucinating() && tipHatMonsterAppearsAsGecko(mon)) sound = 'sell';
+    if (sound === 'orc' && (tipHatMonsterSharesHeroRace(mon, monName) || heroIsHallucinating())) sound = 'humanoid';
+    else if (sound === 'moo' && !tame) sound = 'bellow';
+    else if (heroIsHallucinating() && tipHatMonsterAppearsAsGecko(mon)) sound = 'sell';
     switch (sound) {
     case 'sell':
         return heroIsHallucinating()

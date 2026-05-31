@@ -4224,7 +4224,7 @@ test('worn helmet tip makes peaceful lawful minion cuss about redemption', async
 
 async function tipInvisibleExplicitSound({ name, sound, peaceful = false, tame = 0,
     gold = 0, seed = null, rngLog = false, role = '', inventory = [], data = {}, extra = {},
-    moves = null, traps = null, endgame = false } = {}) {
+    moves = null, traps = null, endgame = false, race = '', hallucinating = false, polyself = null } = {}) {
     installStableNonShopFloorState();
     if (seed != null) initRng(seed);
     if (rngLog) enableRngLog({ reset: true });
@@ -4233,9 +4233,20 @@ async function tipInvisibleExplicitSound({ name, sound, peaceful = false, tame =
         game.context ??= {};
         game.context.moves = moves;
     }
+    if (race) {
+        game._startup_race = race;
+        game.urace = { ...(game.urace || {}), noun: race, adj: race === 'orc' ? 'orcish' : race };
+    }
     if (role) {
         game._startup_role = role;
         game.urole = { ...(game.urole || {}), name: { m: role, f: role } };
+    }
+    if (hallucinating) {
+        game.u.hallucinating = true;
+        game.u._statusSuffix = ' Hallu';
+    }
+    if (polyself) {
+        game.u._polyself_form = typeof polyself === 'string' ? { name: polyself } : polyself;
     }
     if (endgame) {
         game.astral_level = { dnum: 8, dlevel: 5 };
@@ -4401,6 +4412,104 @@ test('worn helmet tip makes invisible explicit orc sound grunt', async () => {
 
     assert.match(game._pending_message, /It grunts\./);
     assert.doesNotMatch(game._pending_message, /The goblin|doesn't respond|Nothing happens|waves/);
+});
+
+test('worn helmet tip maps hallucinated invisible orc speech through humanoid threat', async () => {
+    await tipInvisibleExplicitSound({
+        name: 'goblin',
+        sound: 'MS_ORC',
+        peaceful: false,
+        hallucinating: true,
+        rngLog: true,
+        data: { mlevel: 0, mlet: 'orc', orc: true, humanoid: true },
+    });
+
+    assert.match(game._pending_message, /It threatens you\./);
+    assert.doesNotMatch(game._pending_message,
+        /grunts|15 minutes could save|The goblin|doesn't respond|Nothing happens|waves/);
+    assert.deepEqual(getRngLog(), []);
+});
+
+test('worn helmet tip maps same-race invisible orc speech through default humanoid speech', async () => {
+    await tipInvisibleExplicitSound({
+        name: 'goblin',
+        sound: 'MS_ORC',
+        peaceful: true,
+        race: 'orc',
+        rngLog: true,
+        data: { mlevel: 0, mlet: 'orc', orc: true, humanoid: true },
+    });
+
+    assert.match(game._pending_message, /It discusses dungeon exploration\./);
+    assert.doesNotMatch(game._pending_message,
+        /grunts|threatens|The goblin|doesn't respond|Nothing happens|waves/);
+    assert.deepEqual(getRngLog(), []);
+});
+
+test('worn helmet tip maps same-race invisible gnome orc-sound through gnome speech', async () => {
+    await tipInvisibleExplicitSound({
+        name: 'gnome',
+        sound: 'MS_ORC',
+        peaceful: true,
+        race: 'gnome',
+        rngLog: true,
+        data: { mlevel: 1, mlet: 'G', gnome: true, humanoid: true },
+    });
+
+    assert.match(game._pending_message, /"Many enter the dungeon, and few return to the sunlit lands\."/);
+    assert.doesNotMatch(game._pending_message,
+        /grunts|threatens|The gnome|doesn't respond|Nothing happens|waves/);
+    assert.deepEqual(getRngLog(), []);
+});
+
+test('worn helmet tip maps orc-form invisible orc speech through humanoid threat', async () => {
+    await tipInvisibleExplicitSound({
+        name: 'goblin',
+        sound: 'MS_ORC',
+        peaceful: false,
+        race: 'human',
+        polyself: { name: 'orc-captain', mlet: 'orc', orc: true },
+        rngLog: true,
+        data: { mlevel: 0, mlet: 'orc', orc: true, humanoid: true },
+    });
+
+    assert.match(game._pending_message, /It threatens you\./);
+    assert.doesNotMatch(game._pending_message,
+        /grunts|The goblin|doesn't respond|Nothing happens|waves|tips .* in response|gestures|curses/);
+    assert.deepEqual(getRngLog(), []);
+});
+
+test('worn helmet tip does not treat gremlin-form as gnome race for orc-sound', async () => {
+    await tipInvisibleExplicitSound({
+        name: 'gnome',
+        sound: 'MS_ORC',
+        peaceful: false,
+        race: 'human',
+        polyself: { name: 'gremlin', mlet: 'g', glyph: 'g' },
+        rngLog: true,
+        data: { mlevel: 1, mlet: 'G', glyph: 'G', gnome: true, humanoid: true },
+    });
+
+    assert.match(game._pending_message, /It grunts\./);
+    assert.doesNotMatch(game._pending_message,
+        /threatens|Many enter the dungeon|The gnome|doesn't respond|Nothing happens|waves/);
+    assert.deepEqual(getRngLog(), []);
+});
+
+test('worn helmet tip keeps nonmatching invisible kobold orc-sound on grunt', async () => {
+    await tipInvisibleExplicitSound({
+        name: 'kobold',
+        sound: 'MS_ORC',
+        peaceful: false,
+        race: 'orc',
+        rngLog: true,
+        data: { mlevel: 0, mlet: 'kobold', kobold: true, humanoid: true },
+    });
+
+    assert.match(game._pending_message, /It grunts\./);
+    assert.doesNotMatch(game._pending_message,
+        /threatens|discusses dungeon exploration|The kobold|doesn't respond|Nothing happens|waves/);
+    assert.deepEqual(getRngLog(), []);
 });
 
 test('worn helmet tip makes hostile invisible humanoid threaten without RNG', async () => {
