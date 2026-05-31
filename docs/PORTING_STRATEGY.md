@@ -512,6 +512,9 @@ Current validation snapshot:
   the chest/chest-mimic count, with structural coverage for chest mimic
   appearances. Its existing mimic setup RNG compatibility burn remains pending
   a fuller `des.monster({ class = "m", appear_as = ... })` audit.
+- `Buried treasure` themed fills now create the buried chest, replace random
+  box contents with the scripted `d(3,4)` random loot, and queue the burned
+  post-generation dig engraving that points back to the treasure.
 - The Brown Mold/post-heal route cleanup removed the last public-trace state
   machines named `_brown_mold*`, `_post_heal*`, and `POST_HEAL*` from runtime
   JS. Level teleporting, Quest-goal arrival, fountain quaffing, punishment

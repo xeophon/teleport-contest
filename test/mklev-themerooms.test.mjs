@@ -11,7 +11,7 @@ import {
     A_CHAOTIC, A_LAWFUL, A_NEUTRAL, Align2amask,
     SHOPBASE, CANDLESHOP, MATCH_WALL, SET_LIT_RANDOM, SET_LIT_NOCHANGE,
     ARROW_TRAP, DART_TRAP, ROCKTRAP, BEAR_TRAP, LANDMINE, ROLLING_BOULDER_TRAP,
-    SLP_GAS_TRAP, RUST_TRAP, TELEP_TRAP, WEB, STATUE_TRAP, ANTI_MAGIC,
+    SLP_GAS_TRAP, RUST_TRAP, TELEP_TRAP, WEB, STATUE_TRAP, ANTI_MAGIC, BURN,
 } from '../js/const.js';
 import { enableRngLog, getRngLog, initRng } from '../js/rng.js';
 
@@ -724,6 +724,43 @@ test('themed Storeroom creates only chests and chest mimics', async () => {
     for (let x = room.lx; x <= room.hx; x++)
         for (let y = room.ly; y <= room.hy; y++)
             assert.equal(g.level.at(x, y).typ, ROOM);
+});
+
+test('themed Buried treasure creates a buried loot chest and dig engraving', async () => {
+    const { g, room } = installThemeroomGame({
+        dlevel: 8, moves: 200, seed: 44, width: 8, height: 6,
+    });
+    await mklevHooks.apply_themeroom_fill({ name: 'Buried treasure' }, room);
+
+    assert.equal(room.themeFillName, 'Buried treasure');
+    assert.equal(g.level.objects.length, 0);
+    assert.equal(g.level.buriedobjlist.length, 1);
+    assert.equal(g._themeroom_postprocess.length, 1);
+    const [chest] = g.level.buriedobjlist;
+    assert.equal(chest.otyp, CHEST);
+    assert.equal(chest.buried, true);
+    assert.equal(chest.hidden, true);
+    assert.equal(chest.ox >= room.lx && chest.ox <= room.hx, true);
+    assert.equal(chest.oy >= room.ly && chest.oy <= room.hy, true);
+    assert.equal(chest.contents.length >= 3 && chest.contents.length <= 12, true);
+    assert.equal(chest.contents.every(obj => obj.contained && obj.container === chest), true);
+
+    await mklevHooks.run_themeroom_postprocess();
+
+    assert.equal(g._themeroom_postprocess.length, 0);
+    assert.equal(g.level.engravings.length, 1);
+    const [engraving] = g.level.engravings;
+    assert.equal(engraving.type, BURN);
+    assert.equal(g.level.at(engraving.x, engraving.y).typ, ROOM);
+    const tx = chest.ox - engraving.x;
+    const ty = chest.oy - engraving.y;
+    let expected = 'Dig';
+    if (tx === 0 && ty === 0) expected += ' here';
+    else {
+        if (tx !== 0) expected += ` ${Math.abs(tx)} ${tx > 0 ? 'east' : 'west'}`;
+        if (ty !== 0) expected += ` ${Math.abs(ty)} ${ty > 0 ? 'south' : 'north'}`;
+    }
+    assert.equal(engraving.text, expected);
 });
 
 test('themed Ice room converts room terrain and gates C melt timers', async () => {

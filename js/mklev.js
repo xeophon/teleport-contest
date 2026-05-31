@@ -20119,6 +20119,31 @@ function themeroom_teleportation_hub(croom) {
     }
 }
 
+function buryThemeroomObject(obj) {
+    if (!obj || !game.level) return null;
+    game.level.objects = (game.level.objects || []).filter(candidate => candidate !== obj);
+    obj.buried = true;
+    obj.hidden = true;
+    Object.assign(obj, object_display(obj));
+    game.level.buriedobjlist ??= [];
+    game.level.buriedobjlist.push(obj);
+    return obj;
+}
+
+function themeroom_buried_treasure(croom) {
+    const pos = { x: 0, y: 0 };
+    if (!somexyspace(croom, pos)) return null;
+    const chest = mksobj_at(CHEST, pos.x, pos.y, true, false);
+    if (!chest) return null;
+    delete_contents(chest);
+    for (let i = 0, count = d(3, 4); i < count; i++)
+        add_to_container(chest, mkobj(RANDOM_CLASS, true));
+    buryThemeroomObject(chest);
+    game._themeroom_postprocess ??= [];
+    game._themeroom_postprocess.push({ type: 'digEngraving', x: chest.ox, y: chest.oy });
+    return chest;
+}
+
 async function themeroom_storeroom(croom) {
     const locs = splevSelection.room(croom).percentage(30);
     const pos = { x: 0, y: 0 };
@@ -20168,13 +20193,39 @@ async function apply_themeroom_fill(fill, croom, rows = null, startX = 0, startY
     else if (fill?.name === 'Temple of the gods') themeroom_temple_of_the_gods(croom);
     else if (fill?.name === 'Ghost of an Adventurer' && rows) themeroom_ghost_adventurer_rng(rows, startX, startY);
     else if (fill?.name === 'Teleportation hub') themeroom_teleportation_hub(croom);
+    else if (fill?.name === 'Buried treasure') themeroom_buried_treasure(croom);
     else if (fill?.name === 'Storeroom') await themeroom_storeroom(croom);
+}
+
+function themeroomDigEngravingText(target, pos) {
+    const tx = target.x - pos.x;
+    const ty = target.y - pos.y;
+    if (tx === 0 && ty === 0) return 'Dig here';
+    let dig = 'Dig';
+    if (tx !== 0) dig += ` ${Math.abs(tx)} ${tx > 0 ? 'east' : 'west'}`;
+    if (ty !== 0) dig += ` ${Math.abs(ty)} ${ty > 0 ? 'south' : 'north'}`;
+    return dig;
+}
+
+function makeThemeroomDigEngraving(entry) {
+    const floors = [];
+    for (let x = 0; x < COLNO; x++)
+        for (let y = 0; y < ROWNO; y++)
+            if (game.level?.at(x, y)?.typ === ROOM) floors.push({ x, y });
+    if (!floors.length) return null;
+    const pos = floors[rn2(floors.length)];
+    make_engr_at(pos.x, pos.y, themeroomDigEngravingText(entry, pos), true, 0, BURN);
+    return pos;
 }
 
 async function run_themeroom_postprocess() {
     const postprocess = game._themeroom_postprocess || [];
     game._themeroom_postprocess = [];
     for (const entry of postprocess) {
+        if (entry.type === 'digEngraving') {
+            makeThemeroomDigEngraving(entry);
+            continue;
+        }
         if (entry.type !== 'teleportTrap') continue;
         const locs = [];
         for (let x = 0; x < COLNO; x++)
