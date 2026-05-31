@@ -4713,6 +4713,63 @@ async function submitDemonBribeOffer(text) {
     await rhack('\n');
 }
 
+function automaticAsmodeusBriber(extra = {}) {
+    const { data = {}, ...rest } = extra;
+    return ordinaryThrowTarget('Asmodeus', 6, 5, {
+        movement: NORMAL_SPEED,
+        msleeping: 0,
+        mcanmove: true,
+        mcansee: true,
+        mpeaceful: true,
+        mtame: 0,
+        minvis: 0,
+        perminvis: 0,
+        mux: game.u.ux,
+        muy: game.u.uy,
+        mhp: 80,
+        mhpmax: 80,
+        m_lev: 53,
+        ...rest,
+        data: {
+            name: 'Asmodeus',
+            msound: 'MS_BRIBE',
+            mlevel: 53,
+            mlet: '&',
+            demon: true,
+            demonPrince: true,
+            unique: true,
+            maligntyp: -20,
+            ...data,
+        },
+    });
+}
+
+function automaticGoblinAttacker(extra = {}) {
+    const { data = {}, ...rest } = extra;
+    return ordinaryThrowTarget('goblin', 5, 6, {
+        movement: NORMAL_SPEED,
+        msleeping: 0,
+        mcanmove: true,
+        mcansee: true,
+        mpeaceful: false,
+        mtame: 0,
+        mux: game.u.ux,
+        muy: game.u.uy,
+        mhp: 10,
+        mhpmax: 10,
+        m_lev: 1,
+        ...rest,
+        data: {
+            name: 'goblin',
+            mlevel: 1,
+            mlet: 'o',
+            maligntyp: -3,
+            attack: { dice: 1, sides: 1, verb: 'hits' },
+            ...data,
+        },
+    });
+}
+
 async function beginQuestLeaderChat({
     role = 'Wizard', leader = 'Neferet the Green', align = 'neutral',
     currentAlign = A_LAWFUL, currentBaseAlign = null, record = 20, level = 14,
@@ -8271,6 +8328,143 @@ test('automatic monster turn full bribe offer removes demon and schedules tail',
     assert.equal(briber.dead, true);
     assert.equal(briber._last_demon_bribe_offer, demand);
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
+});
+
+test('automatic monster turn Amulet carrier demands unpayable bribe and attacks after all-gold offer', async () => {
+    installStableNonShopFloorState();
+    initRng(2);
+    enableRngLog({ reset: true });
+    game.inventory = [goldPieces(3063571, 500)];
+    game._goldCount = 500;
+    game.u.uhp = 20;
+    game.u.uac = 10;
+    markHeroNeighborhoodVisible();
+    const amulet = realAmuletOfYendor(3063572, 'A');
+    const briber = automaticAsmodeusBriber({
+        minvent: [amulet],
+        data: { attack: { dice: 1, sides: 1, verb: 'hits' } },
+    });
+    game.level.monsters = [briber];
+
+    queueEscapeForMonsterTurn();
+    await processMonsterTurns();
+
+    assert.match(game._pending_message,
+        /^The Asmodeus demands \d+ zorkmids for safe passage\.  How much will you offer\?$/);
+    const demand = game._demon_bribe_demand;
+    assert.ok(demand > 500);
+    assert.equal(game._command_mode, 'demonBribeOffer');
+    assert.equal(briber._last_demon_bribe_demand, demand);
+    let calls = getRngLog().map(entry => entry.replace(/=.*/, ''));
+    assert.deepEqual(calls.slice(-2), ['rnd(80)', 'rn2(1000)']);
+
+    enableRngLog({ reset: true });
+    await submitDemonBribeOffer('500');
+
+    assert.equal(game._pending_message, 'You give Asmodeus all your gold.  The Asmodeus gets angry...');
+    assert.equal(game._goldCount, 0);
+    assert.equal(game.level.monsters.includes(briber), true);
+    assert.equal(briber.dead, undefined);
+    assert.equal(briber.mpeaceful, 0);
+    assert.equal(briber.hostile, true);
+    assert.equal(briber.minvent.includes(amulet), true);
+    assert.equal(briber.minvent.some(item => item.cls === 'coin' && item.quan === 500), true);
+    assert.equal(game._monster_resume_same_index, 1);
+    assert.equal(game._monster_resume_after_preturn, 1);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rnd(50)']);
+
+    await rhack(' ');
+    await processMonsterTurns();
+
+    assert.match(game._pending_message, /The Asmodeus hits!/);
+    assert.equal(game.u.uhp, 19);
+    assert.equal(game._command_mode || null, null);
+    calls = getRngLog().map(entry => entry.replace(/=.*/, ''));
+    assert.ok(calls.includes('rnd(20)'));
+    assert.ok(calls.includes('d(1,1)'));
+});
+
+test('automatic monster turn partial bribe failure transfers gold and resumes same demon attack', async () => {
+    installStableNonShopFloorState();
+    initRng(2);
+    enableRngLog({ reset: true });
+    game.inventory = [goldPieces(3063573, 5000)];
+    game._goldCount = 5000;
+    game.u.uhp = 20;
+    game.u.uac = 10;
+    game.u.acurr ??= { a: [] };
+    game.u.acurr.a[A_CHA] = 3;
+    markHeroNeighborhoodVisible();
+    const briber = automaticAsmodeusBriber({
+        data: { attack: { dice: 1, sides: 1, verb: 'hits' } },
+    });
+    game.level.monsters = [briber];
+
+    queueEscapeForMonsterTurn();
+    await processMonsterTurns();
+
+    assert.equal(game._command_mode, 'demonBribeOffer');
+    assert.ok(game._demon_bribe_demand > 16);
+
+    enableRngLog({ reset: true });
+    await submitDemonBribeOffer('1');
+
+    assert.equal(game._pending_message, 'You give Asmodeus 1 zorkmid.  The Asmodeus gets angry...');
+    assert.equal(game._goldCount, 4999);
+    assert.equal(briber.minvent?.[0]?.quan, 1);
+    assert.equal(game.level.monsters.includes(briber), true);
+    assert.equal(briber.mpeaceful, 0);
+    assert.equal(briber.hostile, true);
+    assert.equal(game._monster_resume_same_index, 1);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rnd(15)']);
+
+    await rhack(' ');
+    await processMonsterTurns();
+
+    assert.match(game._pending_message, /The Asmodeus hits!/);
+    assert.equal(game.u.uhp, 19);
+    assert.equal(game._monster_resume_same_index || 0, 0);
+    assert.equal(game._command_mode || null, null);
+});
+
+test('automatic monster turn partial bribe success removes demon and resumes following monster', async () => {
+    installStableNonShopFloorState();
+    initRng(2);
+    enableRngLog({ reset: true });
+    game.inventory = [goldPieces(3063574, 500)];
+    game._goldCount = 500;
+    game.u.uhp = 20;
+    game.u.uac = 10;
+    game.u.acurr ??= { a: [] };
+    game.u.acurr.a[A_CHA] = 25;
+    markHeroNeighborhoodVisible();
+    const briber = automaticAsmodeusBriber();
+    const goblin = automaticGoblinAttacker();
+    game.level.monsters = [goblin, briber];
+
+    queueEscapeForMonsterTurn();
+    await processMonsterTurns();
+    const demand = game._demon_bribe_demand;
+    const offer = demand - 1;
+
+    enableRngLog({ reset: true });
+    await submitDemonBribeOffer(String(offer));
+
+    assert.match(game._pending_message, new RegExp(`You give Asmodeus ${offer} zorkmids?\\.`));
+    assert.match(game._pending_message, /The Asmodeus scowls at you menacingly, then vanishes\./);
+    assert.equal(game._goldCount, 500 - offer);
+    assert.equal(game.level.monsters.includes(briber), false);
+    assert.equal(game.level.monsters.includes(goblin), true);
+    assert.equal(briber.dead, true);
+    assert.equal(game._monster_resume_same_index || 0, 0);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rnd(125)']);
+
+    await rhack(' ');
+    await processMonsterTurns();
+
+    assert.match(game._pending_message, /The goblin hits!/);
+    assert.equal(game.u.uhp, 19);
+    assert.equal(game._command_mode || null, null);
 });
 
 test('automatic monster turn bribe prompt waits for More before accepting offer input', async () => {
