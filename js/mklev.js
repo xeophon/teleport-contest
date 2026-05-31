@@ -1733,6 +1733,15 @@ export const SHOP_TYPES = [
     { name: 'lighting store', prob: 0, iprobs: [[30, -WAX_CANDLE], [44, -TALLOW_CANDLE], [5, -BRASS_LANTERN], [9, -OIL_LAMP], [3, -MAGIC_LAMP], [5, -POT_OIL], [2, -WAN_LIGHT], [1, -SCR_LIGHT], [1, -SPE_LIGHT]] },
 ];
 
+export function randomHallucinatedShopkeeperName() {
+    let shopTypeCount = SHOP_TYPES.findIndex(shop => !shop?.prob);
+    if (shopTypeCount < 0) shopTypeCount = SHOP_TYPES.length;
+    if (!(shopTypeCount > 0)) return '';
+    const names = SHOPKEEPER_NAME_LISTS[rn2(shopTypeCount)] || GENERAL_SHOPKEEPER_NAMES;
+    const rawName = names[rn2(names.length)] || '';
+    return rawName.replace(/^[^A-Za-z]/, '');
+}
+
 const XLIM = 4;
 const YLIM = 3;
 

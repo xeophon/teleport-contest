@@ -5457,13 +5457,45 @@ test('hallucinating worn helmet tip at town Izchak can use ordinary shk_chat', a
     });
 
     assert.equal(result.message,
-        'You briefly doff your helm.  Izchak talks about the problem of shoplifters.');
+        'You briefly doff your helm.  Niknar talks about the problem of shoplifters.');
     assert.doesNotMatch(result.message,
         /15 minutes|untended shops|business is|bill comes to|Valley of the Dead|doesn't respond|Nothing happens|waves|gestures/);
     assert.equal(result.target.isshk, true);
     assert.equal(result.target.mstrategy, 0);
     assert.equal(result.targetLoc.map_invisible, true);
     assert.equal(shop.shopkeeperCash(result.target), 100);
+    assert.deepEqual(getRngLog(), ['rn2(2)=0', 'rn2(11)=8', 'rn2(40)=33']);
+});
+
+test('hallucinating following resident shopkeeper greeting does not roll Shknam', async () => {
+    const result = await tipInvisibleExplicitSound({
+        name: 'shopkeeper',
+        sound: 'MS_SELL',
+        peaceful: true,
+        hallucinating: true,
+        seed: 4,
+        rngLog: true,
+        data: { mlevel: 12, mlet: '@', humanoid: true, shopkeeper: true },
+        extra: {
+            isshk: true,
+            shknam: 'Asidonhopo',
+            bill: [{ bo_id: 'lazy-name-bill', price: 1, bquan: 1, totalPrice: 1 }],
+            billct: 1,
+            debit: 25,
+            credit: 77,
+            robbed: 250,
+            surcharge: 1,
+            following: 1,
+            customer: 'PreviousCustomer',
+            minvent: [goldPieces(3063589, 100)],
+        },
+    });
+
+    assert.equal(result.message,
+        'You briefly doff your helm.  "Hello Hero!  I was looking for PreviousCustomer."');
+    assert.doesNotMatch(result.message,
+        /bill comes to|reminds you|credit|recent robbery|watching you carefully|business is|shoplifters|doesn't respond|Nothing happens|waves|gestures/);
+    assert.equal(result.target.following, 0);
     assert.deepEqual(getRngLog(), ['rn2(2)=0']);
 });
 
@@ -5525,13 +5557,13 @@ test('hallucinating worn helmet tip at billed resident shopkeeper uses singular 
     });
 
     assert.equal(result.message,
-        'You briefly doff your helm.  Asidonhopo says that your bill comes to 1 quatloo.');
+        'You briefly doff your helm.  Niknar says that your bill comes to 1 woolong.');
     assert.doesNotMatch(result.message,
         /15 minutes|reminds you|credit|recent robbery|watching you carefully|business is|talks about shoplifters|doesn't respond|Nothing happens|waves|gestures/);
     assert.equal(result.target.isshk, true);
     assert.equal(result.target.mstrategy, 0);
     assert.equal(result.targetLoc.map_invisible, true);
-    assert.deepEqual(getRngLog(), ['rn2(2)=0', 'rn2(21)=13']);
+    assert.deepEqual(getRngLog(), ['rn2(2)=0', 'rn2(11)=8', 'rn2(40)=33', 'rn2(21)=19']);
 });
 
 test('hallucinating worn helmet tip at debit resident shopkeeper randomizes no-it pronoun', async () => {
@@ -5558,13 +5590,61 @@ test('hallucinating worn helmet tip at debit resident shopkeeper randomizes no-i
     });
 
     assert.equal(result.message,
-        'You briefly doff your helm.  Asidonhopo reminds you that you owe them 123 Flanian Pobble Beads.');
+        'You briefly doff your helm.  Karangkobar reminds you that you owe him 123 simoleons.');
     assert.doesNotMatch(result.message,
         /15 minutes|credit|recent robbery|watching you carefully|business is|talks about shoplifters|doesn't respond|Nothing happens|waves|gestures/);
     assert.equal(result.target.isshk, true);
     assert.equal(result.target.mstrategy, 0);
     assert.equal(result.targetLoc.map_invisible, true);
-    assert.deepEqual(getRngLog(), ['rn2(2)=0', 'rn2(4)=3', 'rn2(21)=7']);
+    assert.deepEqual(getRngLog(), ['rn2(2)=0', 'rn2(11)=5', 'rn2(32)=18', 'rn2(4)=0', 'rn2(21)=14']);
+});
+
+test('worn helmet tip at visible silent polymorphed resident shopkeeper indicates bill total', async () => {
+    installNonShopFloorState();
+    const targetLoc = game.level.at(6, 5);
+    const helmet = wornArmor(3063587, 'orcish helm', 'h');
+    const shkp = ordinaryThrowTarget('lurker above', 6, 5, {
+        msleeping: 0,
+        mcanmove: true,
+        mcansee: true,
+        mpeaceful: true,
+        mstrategy: 'waitforu',
+        isshk: true,
+        shknam: 'Asidonhopo',
+        bill: [{ bo_id: 'silent-bill', price: 1, bquan: 1, totalPrice: 1 }],
+        billct: 1,
+        debit: 0,
+        credit: 0,
+        robbed: 0,
+        surcharge: 0,
+        following: 0,
+        minvent: [goldPieces(3063588, 100)],
+        data: {
+            name: 'lurker above',
+            mlevel: 10,
+            mlet: 'trapper',
+            msound: 'MS_SILENT',
+            silent: true,
+            humanoid: false,
+            shopkeeper: true,
+        },
+    });
+    game.inventory = [helmet];
+    game.level.monsters = [shkp];
+    markSquareVisible(6, 5);
+
+    await enterTipCommand();
+    await rhack('h');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(shkp.mstrategy, 0);
+    assert.notEqual(targetLoc.map_invisible, true);
+    assert.equal(game._pending_message,
+        'You briefly doff your helm.  Asidonhopo indicates that your bill comes to 1 zorkmid.');
+    assert.doesNotMatch(game._pending_message,
+        /15 minutes|doesn't respond|Nothing happens|waves|gestures|untended shops/);
 });
 
 test('worn helmet tip keeps visible peaceful seducing nymph on humanoid wave before seduce sound', async () => {

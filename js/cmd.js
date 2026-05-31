@@ -5,7 +5,7 @@ import { game } from './gstate.js';
 import { nhgetch } from './input.js';
 import { bot, cls, docrt, flush_screen, newsym, pline, recordObservedObjectDiscovery, refreshHallucinatedMap, seeMonsters, seeNearbyObjects, show_glyph_cell, strengthString } from './display.js';
 import { cansee, couldsee, vision_recalc, vision_reset } from './vision.js';
-import { RANDOM_MONSTER_BY_NAME, SHOP_TYPES, STALKER_MONSTERS, add_to_container, add_to_minv, adjustedMonsterLevel, artifactDefinitionForName, artifactObjectName, enextoMonsterSpot, make_tutorial1_level, makemon, makeArtifactWishObject, maketrap, mkcorpstat, mklev, mkobj, mkobj_at, mksobj, monsterByRndName, monster_hp, morgueMonster, nameObjectAsArtifact, next_ident, object_display, potionIndexForRoll, resurrectWizardOfYendor, rndmonnum, scrollIndexForRoll, set_mimic_sym_rng, syncDungeonContext, u_on_dnstairs, u_on_rndspot, u_on_upstairs, wipe_engr_at, dropMonsterInventory as dropMonsterInventoryRaw, l_nhcore_init, getrumor, getbogusmon, level_difficulty, set_malign, somexyspace, fumaroles, fix_wall_spines, createMonsterCorpseOrGlob, monsterCorpseDropSucceeds, monsterLeavesCorpseLikeDrop, movebubbles } from './mklev.js';
+import { RANDOM_MONSTER_BY_NAME, SHOP_TYPES, STALKER_MONSTERS, add_to_container, add_to_minv, adjustedMonsterLevel, artifactDefinitionForName, artifactObjectName, enextoMonsterSpot, make_tutorial1_level, makemon, makeArtifactWishObject, maketrap, mkcorpstat, mklev, mkobj, mkobj_at, mksobj, monsterByRndName, monster_hp, morgueMonster, nameObjectAsArtifact, next_ident, object_display, potionIndexForRoll, randomHallucinatedShopkeeperName, resurrectWizardOfYendor, rndmonnum, scrollIndexForRoll, set_mimic_sym_rng, syncDungeonContext, u_on_dnstairs, u_on_rndspot, u_on_upstairs, wipe_engr_at, dropMonsterInventory as dropMonsterInventoryRaw, l_nhcore_init, getrumor, getbogusmon, level_difficulty, set_malign, somexyspace, fumaroles, fix_wall_spines, createMonsterCorpseOrGlob, monsterCorpseDropSucceeds, monsterLeavesCorpseLikeDrop, movebubbles } from './mklev.js';
 import { ACCESSIBLE, A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_MAX, A_NEUTRAL, A_NONE, A_STR, A_WIS, ALTAR, AM_SANCTUM, AM_SHRINE, Align2amask, Amask2align, BC_BALL, BC_CHAIN, BEAR_TRAP, BLCORNER, BOLT_LIM, BRCORNER, CANDLESHOP, CLOUD, COLNO, CORPSTAT_FEMALE, CORPSTAT_GENDER, CORPSTAT_HISTORIC, CORPSTAT_MALE, CORPSTAT_NEUTER, CORR, DB_DIR, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DB_NORTH, DB_SOUTH, DB_UNDER, DB_WEST, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, BURN, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, D_TRAPPED, DUST, ENGRAVE, ENGR_BLOOD, FOUNTAIN, F_LOOTED, GRAVE, HEADSTONE, HWALL, ICE, ICED_MOAT, ICED_POOL, IN_SIGHT, IRONBARS, IS_AIR, IS_FURNITURE, IS_LAVA, IS_OBSTRUCTED, IS_POOL, IS_ROOM, IS_SOFT, IS_TREE, IS_WALL, In_endgame, In_quest, In_sokoban, In_V_tower, Is_airlevel, Is_astralevel, Is_botlevel, Is_earthlevel, Is_firelevel, Is_rogue_level, Is_stronghold, Is_waterlevel, LADDER, LAVAPOOL, LAVAWALL, LUCKMAX, LUCKMIN, MAGIC_PORTAL, MARK, MAX_EGG_HATCH_TIME, MIGR_LADDER_UP, MIGR_RANDOM, MIGR_SSTAIRS, MIGR_STAIRS_UP, MM_ADJACENTOK, MM_EDOG, MM_NOCOUNTBIRTH, MM_NOMSG, MM_NOTAIL, MM_NOWAIT, MOAT, MORGUE, M_AP_FURNITURE, M_AP_OBJECT, M_AP_TYPE, N_DIRS, NO_MINVENT, NORMAL_SPEED, OVERLOADED, P_BASIC, P_UNSKILLED, PIT, POOL, REPAIR_DELAY, ROLLING_BOULDER_TRAP, ROOM, ROOMOFFSET, ROWNO, SCORR, SDOOR, SHARED, SHARED_PLUS, SHOPBASE, SHOP_DOOR_COST, SINK, SPIKED_PIT, STAIRS, STONE, STRAT_APPEARMSG, STRAT_WAITFORU, STRAT_WAITMASK, S_LDWASHER, S_LPUDDING, S_LRING, TDWALL, TEMPLE, THRONE, TLCORNER, TRCORNER, TREE, TREE_LOOTED, TREE_SWARM, TT_BEARTRAP, TT_BURIEDBALL, TT_INFLOOR, TT_LAVA, TT_PIT, TT_WEB, TUWALL, T_LOOTED, VAULT, VIBRATING_SQUARE, VWALL, WAND_BACKFIRE_CHANCE, WATER, WEB, WM_MASK, WT_IRON_BALL_BASE, WT_IRON_BALL_INCR, WT_TO_DMG, W_NONDIGGABLE, W_SADDLE, ZAP_POS, isok, xdir, ydir } from './const.js';
 import { d, rn1, rn2, rn2_on_display_rng, rnd, rnl, rnz } from './rng.js';
 import { CLR_BLACK, CLR_BLUE, CLR_BRIGHT_BLUE, CLR_BRIGHT_CYAN, CLR_BRIGHT_GREEN, CLR_BRIGHT_MAGENTA, CLR_BROWN, CLR_CYAN, CLR_GRAY, CLR_GREEN, CLR_MAGENTA, CLR_ORANGE, CLR_RED, CLR_YELLOW, CLR_WHITE, NO_COLOR } from './terminal.js';
@@ -24904,6 +24904,12 @@ function shopkeeperDisplayName(shkp) {
     return shkp?.shknam || shkp?.shopkeeperName || 'the shopkeeper';
 }
 
+function shopkeeperSentenceName(shkp) {
+    if (!heroIsHallucinating()) return shopkeeperDisplayName(shkp);
+    randomHallucinatedMonsterName();
+    return upstartText(randomHallucinatedShopkeeperName() || shopkeeperDisplayName(shkp));
+}
+
 function shopkeeperHello(shkp) {
     const role = game.urole?.name?.m || game._startup_role || '';
     if (role === 'Knight') return 'Salutations';
@@ -34252,11 +34258,10 @@ function tipHatShopkeeperIsAngry(mon) {
 }
 
 function tipHatResidentShopkeeperSellNoise(mon) {
-    const name = shopkeeperDisplayName(mon);
     const canSpeak = shopkeeperCanSpeakToHero(mon);
     if (tipHatShopkeeperIsAngry(mon)) {
         const customerType = shopkeeperRobbedAmount(mon) > 0 ? 'non-paying' : 'rude';
-        return { handled: true, message: `${name} ${canSpeak ? 'mentions' : 'indicates'} how much ${tipHatShopkeeperSellSubjectPronoun(mon)} dislikes ${customerType} customers.` };
+        return { handled: true, message: `${shopkeeperSentenceName(mon)} ${canSpeak ? 'mentions' : 'indicates'} how much ${tipHatShopkeeperSellSubjectPronoun(mon)} dislikes ${customerType} customers.` };
     }
     if (mon?.following) {
         const player = String(game.plname || 'Hero');
@@ -34266,35 +34271,36 @@ function tipHatResidentShopkeeperSellNoise(mon) {
             if (!canSpeak) return { handled: true, message: '' };
             return { handled: true, message: `"${shopkeeperHello(mon)} ${player}!  I was looking for ${customer}."` };
         }
-        if (!canSpeak) return { handled: true, message: `${name} taps you on the arm.` };
+        if (!canSpeak) return { handled: true, message: `${shopkeeperSentenceName(mon)} taps you on the arm.` };
         return { handled: true, message: `"${shopkeeperHello(mon)} ${player}!  Didn't you forget to pay?"` };
     }
     const debit = Math.trunc(Number(mon?.debit || 0));
     if (shopBillEntryCount(mon) > 0) {
         const total = shopBillTotal(mon) + debit;
-        return { handled: true, message: `${name} ${canSpeak ? 'says' : 'indicates'} that your bill comes to ${total} ${shopCurrency(total)}.` };
+        return { handled: true, message: `${shopkeeperSentenceName(mon)} ${canSpeak ? 'says' : 'indicates'} that your bill comes to ${total} ${shopCurrency(total)}.` };
     }
     if (debit > 0)
-        return { handled: true, message: `${name} ${canSpeak ? 'reminds you' : 'indicates'} that you owe ${tipHatShopkeeperSellObjectivePronoun(mon)} ${debit} ${shopCurrency(debit)}.` };
+        return { handled: true, message: `${shopkeeperSentenceName(mon)} ${canSpeak ? 'reminds you' : 'indicates'} that you owe ${tipHatShopkeeperSellObjectivePronoun(mon)} ${debit} ${shopCurrency(debit)}.` };
     const credit = Math.trunc(Number(mon?.credit || 0));
     if (credit > 0)
-        return { handled: true, message: `${name} encourages you to use your ${credit} ${shopCurrency(credit)} of credit.` };
+        return { handled: true, message: `${shopkeeperSentenceName(mon)} encourages you to use your ${credit} ${shopCurrency(credit)} of credit.` };
     const shkmoney = shopkeeperCash(mon);
     if (Math.trunc(Number(mon?.robbed || 0)) > 0)
-        return { handled: true, message: `${name} ${canSpeak ? 'complains' : 'indicates concern'} about a recent robbery.` };
+        return { handled: true, message: `${shopkeeperSentenceName(mon)} ${canSpeak ? 'complains' : 'indicates concern'} about a recent robbery.` };
     if (Math.trunc(Number(mon?.surcharge || 0)) > 0)
-        return { handled: true, message: `${name} ${canSpeak ? 'warns you' : 'indicates'} that ${tipHatShopkeeperSellSubjectPronoun(mon)} is watching you carefully.` };
+        return { handled: true, message: `${shopkeeperSentenceName(mon)} ${canSpeak ? 'warns you' : 'indicates'} that ${tipHatShopkeeperSellSubjectPronoun(mon)} is watching you carefully.` };
     if (shkmoney < 50)
-        return { handled: true, message: `${name} ${canSpeak ? 'complains' : 'indicates'} that business is bad.` };
+        return { handled: true, message: `${shopkeeperSentenceName(mon)} ${canSpeak ? 'complains' : 'indicates'} that business is bad.` };
     if (shkmoney > 4000)
-        return { handled: true, message: `${name} ${canSpeak ? 'says' : 'indicates'} that business is good.` };
+        return { handled: true, message: `${shopkeeperSentenceName(mon)} ${canSpeak ? 'says' : 'indicates'} that business is good.` };
     if (!heroIsHallucinating() && shopkeeperIsIzchak(mon) && shopkeeperInTown(mon)) {
         if (!canSpeak) return { handled: true, message: '' };
+        const name = shopkeeperDisplayName(mon);
         const message = TIPHAT_IZCHAK_SELL_MESSAGES[rn2(TIPHAT_IZCHAK_SELL_MESSAGES.length)](name);
         return { handled: true, message };
     }
     if (!canSpeak) return { handled: true, message: '' };
-    return { handled: true, message: `${name} talks about the problem of shoplifters.` };
+    return { handled: true, message: `${shopkeeperSentenceName(mon)} talks about the problem of shoplifters.` };
 }
 
 function tipHatShopkeeperSellNoise(mon, name) {
@@ -34319,11 +34325,12 @@ function tipHatMonsterIsVampireInOwnForm(monName) {
 
 function tipHatMonsterSound(mon) {
     const data = mon?.data || {};
-    const explicit = mon?.msound ?? mon?.sound ?? data.msound ?? data.sound;
-    if (explicit != null) return String(explicit).toLowerCase().replace(/^ms_/, '');
     const name = String(data.name || mon?.name || '').toLowerCase();
     const mlet = String(data.mlet || mon?.mlet || '').toLowerCase();
-    if (mon?.isshk || tipHatMonsterIsShopkeeperType(mon, name)) return 'sell';
+    if (mon?.isshk) return 'sell';
+    const explicit = mon?.msound ?? mon?.sound ?? data.msound ?? data.sound;
+    if (explicit != null) return String(explicit).toLowerCase().replace(/^ms_/, '');
+    if (tipHatMonsterIsShopkeeperType(mon, name)) return 'sell';
     if (/^(gremlin|leprechaun)$/.test(name)) return 'laugh';
     if (name === 'skeleton') return 'bones';
     if (/^(pestilence|famine)$/.test(name)) return 'rider';
@@ -34442,7 +34449,8 @@ function tipHatAggravateMonsters() {
 }
 
 function tipHatMonsterNoise(mon, { visible = tipHatMonsterVisible(mon) } = {}) {
-    if (!mon || heroIsDeaf() || tipHatMonsterSilent(mon)) return { handled: false, message: '' };
+    const silent = tipHatMonsterSilent(mon);
+    if (!mon || heroIsDeaf() || (silent && !mon?.isshk)) return { handled: false, message: '' };
     const name = visible ? fireScrollMonsterName(mon) : 'It';
     const monName = String(mon?.data?.name || mon?.name || '').toLowerCase();
     let sound = tipHatMonsterSound(mon);
@@ -34456,7 +34464,7 @@ function tipHatMonsterNoise(mon, { visible = tipHatMonsterVisible(mon) } = {}) {
     switch (sound) {
     case 'sell':
         if (heroIsHallucinating()) {
-            if (mon?.isshk && !rn2(2)) return tipHatShopkeeperSellNoise(mon, name);
+            if (mon?.isshk && (silent || !rn2(2))) return tipHatShopkeeperSellNoise(mon, name);
             return { handled: true, message: `"15 minutes could save you 15 ${shopCurrency(15)}."` };
         }
         return tipHatShopkeeperSellNoise(mon, name);
