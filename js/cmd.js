@@ -33838,6 +33838,20 @@ function chatHeroHumanoidForDeafResponse() {
     return !!(form.human || mlet === '@' || mlet === 'human' || mlet === 'humanoid' || name === 'human');
 }
 
+function chatClearTargetWaitStrategy(mon) {
+    if (Number.isInteger(mon?.mstrategy)) mon.mstrategy &= ~STRAT_WAITMASK;
+    else if (mon?.mstrategy === 'waitforu') mon.mstrategy = 0;
+}
+
+function chatMonsterNameForDeafResponse(mon, visible) {
+    return visible ? ` from ${fireScrollMonsterName(mon).replace(/^The /, 'the ')}` : '';
+}
+
+function chatDeafResponseMessage(mon, visible) {
+    const response = chatHeroHumanoidForDeafResponse() ? 'falls on deaf ears' : 'is inaudible';
+    return `Any response${chatMonsterNameForDeafResponse(mon, visible)} ${response}.`;
+}
+
 function heroHasConflict() {
     const u = game.u || {};
     if (u.conflict || u.HConflict || u.EConflict || u._intrinsicConflict || u._extrinsicConflict)
@@ -56784,6 +56798,33 @@ export async function rhack(_cmd) {
         if (target && maybeQueueQuestLeaderTalk(target, { automatic: false })) {
             return;
         }
+        const targetSound = target ? tipHatMonsterSound(target) : '';
+        if (target && targetSound === 'sell') {
+            const visible = tipHatMonsterVisible(target);
+            if (tipHatMonsterHelpless(target)) {
+                await setMessage(visible ? `${fireScrollMonsterName(target)} seems not to notice you.` : '');
+                game._command_mode = null;
+                return;
+            }
+            chatClearTargetWaitStrategy(target);
+            if (heroIsDeaf()) {
+                await setMessage(chatDeafResponseMessage(target, visible));
+                game._command_mode = null;
+                return;
+            }
+            const noise = tipHatMonsterNoise(target, { visible });
+            if (!visible) {
+                const unseenLoc = game.level?.at?.(target.mx, target.my);
+                if (unseenLoc) unseenLoc.map_invisible = true;
+                newsym(target.mx, target.my);
+            }
+            await setMessage(noise.message, noise.message.includes('  '));
+            game._command_mode = null;
+            game._process_command_time_now = 1;
+            game.context ??= {};
+            game.context.move = 1;
+            return;
+        }
         if (target?.pet) {
             const petName = target.givenName || `The ${target.saddled ? 'saddled ' : ''}${target.data?.name || 'creature'}`;
             if (target.meating) {
@@ -56812,14 +56853,11 @@ export async function rhack(_cmd) {
             game.context.move = 1;
             return;
         }
-        if (target && tipHatMonsterSound(target) === 'priest') {
-            if (Number.isInteger(target.mstrategy)) target.mstrategy &= ~STRAT_WAITMASK;
-            else if (target.mstrategy === 'waitforu') target.mstrategy = 0;
+        if (target && targetSound === 'priest') {
+            chatClearTargetWaitStrategy(target);
             const visible = tipHatMonsterVisible(target);
             if (heroIsDeaf()) {
-                const from = visible ? ` from ${fireScrollMonsterName(target).replace(/^The /, 'the ')}` : '';
-                const response = chatHeroHumanoidForDeafResponse() ? 'falls on deaf ears' : 'is inaudible';
-                await setMessage(`Any response${from} ${response}.`);
+                await setMessage(chatDeafResponseMessage(target, visible));
                 game._command_mode = null;
                 return;
             }

@@ -27,7 +27,7 @@ Focused canaries in `test/shop-billing-helpers.test.mjs` cover:
 - C hallucinated `Shknam()` randomizes shopkeeper names in resident chatter; this slice keeps the JS shopkeeper display name stable.
 - C `currency()` randomizes currency names under hallucination; this slice keeps existing JS `shopCurrency()` behavior.
 - Silent/polymorphed actual shopkeeper handling is still incomplete in the directed helmet responder scan.
-- Broader shared `domonnoise()` and `#chat` are still not unified with directed helmet tipping.
+- Broader shared `domonnoise()` remains incomplete; adjacent shopkeeper `#chat` reuses this sell helper as of audit 293.
 
 ## Verification
 

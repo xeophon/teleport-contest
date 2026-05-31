@@ -4541,6 +4541,56 @@ async function chatAdjacentPriest({
     return { priest, targetLoc, message: game._pending_message };
 }
 
+async function chatAdjacentShopkeeper({
+    visible = true, peaceful = true, seed = null, rngLog = false, role = '',
+    hallucinating = false, town = false, data = {}, extra = {}, setup = null,
+} = {}) {
+    installStableNonShopFloorState();
+    if (town) game.level.flags.has_town = true;
+    if (seed != null) initRng(seed);
+    if (rngLog) enableRngLog({ reset: true });
+    if (role) {
+        game._startup_role = role;
+        game.urole = { ...(game.urole || {}), name: { m: role, f: role } };
+    }
+    if (hallucinating) {
+        game.u.hallucinating = true;
+        game.u._statusSuffix = ' Hallu';
+    }
+    game.u.seeInvisible = false;
+    const targetLoc = game.level.at(6, 5);
+    const shkp = ordinaryThrowTarget('shopkeeper', 6, 5, {
+        minvis: visible ? 0 : 1,
+        perminvis: visible ? 0 : 1,
+        msleeping: 0,
+        mcanmove: true,
+        mcansee: true,
+        mpeaceful: peaceful,
+        mstrategy: 'waitforu',
+        isshk: true,
+        shknam: 'Asidonhopo',
+        bill: [],
+        billct: 0,
+        debit: 0,
+        credit: 0,
+        robbed: 0,
+        surcharge: 0,
+        following: 0,
+        minvent: [goldPieces(3063592, 100)],
+        data: { name: 'shopkeeper', mlevel: 12, mlet: '@', humanoid: true, shopkeeper: true, msound: 'MS_SELL', ...data },
+        ...extra,
+    });
+    game.level.monsters = [shkp];
+    if (setup) setup({ target: shkp, targetLoc });
+    markSquareVisible(6, 5);
+
+    await enterChatCommand();
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    return { target: shkp, targetLoc, message: game._pending_message };
+}
+
 test('worn helmet tip makes peaceful invisible Kop give arrest address', async () => {
     await tipInvisibleExplicitSound({
         name: 'Keystone Kop',
@@ -4871,6 +4921,208 @@ test('chat with helpless priest wakes it before C cranky speech', async () => {
     assert.equal(game.context.move, 1);
     assert.equal(game.u.uconduct.gnostic, 1);
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(3)']);
+});
+
+test('chat with nonresident visible shopkeeper asks about untended shops', async () => {
+    const result = await chatAdjacentShopkeeper({
+        rngLog: true,
+        extra: { isshk: false, shknam: '', minvent: [] },
+    });
+
+    assert.equal(result.message,
+        "The shopkeeper asks whether you've seen any untended shops recently.");
+    assert.equal(result.target.isshk, false);
+    assert.equal(result.target.mstrategy, 0);
+    assert.equal(game.context.move, 1);
+    assert.doesNotMatch(result.message,
+        /briefly doff|15 minutes|bill comes to|talks about shoplifters|Nothing happens|talking to a wall/);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
+});
+
+test('chat with billed visible resident shopkeeper states total before later chatter', async () => {
+    const result = await chatAdjacentShopkeeper({
+        rngLog: true,
+        extra: {
+            bill: [
+                { bo_id: 'chat-bill-a', price: 20, bquan: 2, totalPrice: 40 },
+                { bo_id: 'chat-bill-b', price: 6, bquan: 1, totalPrice: 6 },
+            ],
+            billct: 2,
+            debit: 7,
+            credit: 77,
+            robbed: 250,
+            surcharge: 1,
+            minvent: [goldPieces(3063593, 49)],
+        },
+    });
+
+    assert.equal(result.message,
+        'Asidonhopo says that your bill comes to 53 zorkmids.');
+    assert.equal(result.target.billct, 2);
+    assert.equal(shop.shopBillEntryTotal(result.target.bill[0])
+        + shop.shopBillEntryTotal(result.target.bill[1]), 46);
+    assert.equal(result.target.debit, 7);
+    assert.equal(result.target.credit, 77);
+    assert.equal(result.target.robbed, 250);
+    assert.equal(result.target.surcharge, 1);
+    assert.equal(result.target.mstrategy, 0);
+    assert.equal(game.context.move, 1);
+    assert.doesNotMatch(result.message,
+        /briefly doff|owe him|credit|recent robbery|watching you carefully|business is bad|talks about shoplifters|Nothing happens|talking to a wall/);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
+});
+
+test('chat with following resident shopkeeper handles current and prior customer', async () => {
+    const current = await chatAdjacentShopkeeper({
+        rngLog: true,
+        role: 'Samurai',
+        extra: {
+            following: 1,
+            customer: 'Hero',
+            bill: [{ bo_id: 'chat-follow-bill', price: 20, bquan: 2, totalPrice: 40 }],
+            billct: 1,
+            debit: 7,
+            credit: 77,
+            robbed: 250,
+            surcharge: 1,
+            minvent: [goldPieces(3063594, 49)],
+        },
+    });
+
+    assert.equal(current.message, '"Irasshaimase Hero!  Didn\'t you forget to pay?"');
+    assert.equal(current.target.following, 1);
+    assert.equal(current.target.billct, 1);
+    assert.equal(current.target.mstrategy, 0);
+    assert.equal(game.context.move, 1);
+    assert.doesNotMatch(current.message,
+        /bill comes to|owe him|credit|recent robbery|watching you carefully|business is bad|talks about shoplifters|Nothing happens|talking to a wall/);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
+
+    const prior = await chatAdjacentShopkeeper({
+        rngLog: true,
+        extra: {
+            following: 1,
+            customer: 'PreviousCustomer',
+            bill: [{ bo_id: 'chat-prior-bill', price: 20, bquan: 2, totalPrice: 40 }],
+            billct: 1,
+            debit: 7,
+            credit: 77,
+            robbed: 250,
+            surcharge: 1,
+            minvent: [goldPieces(3063595, 4001)],
+        },
+    });
+
+    assert.equal(prior.message, '"Hello Hero!  I was looking for PreviousCustomer."');
+    assert.equal(prior.target.following, 0);
+    assert.equal(prior.target.billct, 1);
+    assert.equal(prior.target.mstrategy, 0);
+    assert.equal(game.context.move, 1);
+    assert.doesNotMatch(prior.message,
+        /bill comes to|owe him|credit|recent robbery|watching you carefully|business is good|talks about shoplifters|Nothing happens|talking to a wall/);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
+});
+
+test('chat with angry robbed resident shopkeeper wins before following and billing', async () => {
+    const result = await chatAdjacentShopkeeper({
+        peaceful: false,
+        rngLog: true,
+        extra: {
+            hostile: true,
+            angry: true,
+            following: 1,
+            customer: 'PreviousCustomer',
+            bill: [{ bo_id: 'chat-angry-bill', price: 20, bquan: 2, totalPrice: 40 }],
+            billct: 1,
+            debit: 7,
+            credit: 77,
+            robbed: 250,
+            surcharge: 1,
+            minvent: [goldPieces(3063596, 4001)],
+        },
+    });
+
+    assert.equal(result.message,
+        'Asidonhopo mentions how much he dislikes non-paying customers.');
+    assert.equal(result.target.following, 1);
+    assert.equal(result.target.billct, 1);
+    assert.equal(result.target.robbed, 250);
+    assert.equal(result.target.surcharge, 1);
+    assert.equal(result.target.mstrategy, 0);
+    assert.equal(game.context.move, 1);
+    assert.doesNotMatch(result.message,
+        /briefly doff|Didn't you forget|I was looking|bill comes to|owe him|credit|recent robbery|watching you carefully|business is good|talks about shoplifters|Nothing happens|talking to a wall/);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
+});
+
+test('deaf chat with visible resident shopkeeper reports response before shop speech', async () => {
+    const result = await chatAdjacentShopkeeper({
+        rngLog: true,
+        extra: {
+            following: 1,
+            customer: 'PreviousCustomer',
+            bill: [{ bo_id: 'chat-deaf-bill', price: 20, bquan: 2, totalPrice: 40 }],
+            billct: 1,
+            debit: 7,
+            minvent: [goldPieces(3063597, 100)],
+        },
+        setup: () => {
+            game.u._deafTimeout = 10;
+        },
+    });
+
+    assert.equal(result.message, 'Any response from Asidonhopo falls on deaf ears.');
+    assert.equal(result.target.following, 1);
+    assert.equal(result.target.billct, 1);
+    assert.equal(result.target.mstrategy, 0);
+    assert.equal(game.context?.move || 0, 0);
+    assert.doesNotMatch(result.message,
+        /I was looking|bill comes to|owe him|credit|recent robbery|Nothing happens|talking to a wall/);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
+});
+
+test('chat with helpless shopkeeper does not clear wait or reach shop speech', async () => {
+    const result = await chatAdjacentShopkeeper({
+        rngLog: true,
+        extra: {
+            msleeping: 1,
+            mfrozen: 6,
+            mcanmove: false,
+            following: 1,
+            customer: 'Hero',
+            bill: [{ bo_id: 'chat-helpless-bill', price: 20, bquan: 2, totalPrice: 40 }],
+            billct: 1,
+            debit: 7,
+            minvent: [goldPieces(3063598, 100)],
+        },
+    });
+
+    assert.equal(result.message, 'Asidonhopo seems not to notice you.');
+    assert.equal(result.target.following, 1);
+    assert.equal(result.target.billct, 1);
+    assert.equal(result.target.mstrategy, 'waitforu');
+    assert.equal(game.context?.move || 0, 0);
+    assert.doesNotMatch(result.message,
+        /Didn't you forget|bill comes to|owe him|credit|recent robbery|Nothing happens|talking to a wall/);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
+});
+
+test('hallucinating chat with resident shopkeeper can use GEICO speech', async () => {
+    const result = await chatAdjacentShopkeeper({
+        hallucinating: true,
+        seed: 1,
+        rngLog: true,
+        extra: {
+            minvent: [goldPieces(3063599, 100)],
+        },
+    });
+
+    assert.equal(result.message, '"15 minutes could save you 15 simoleons."');
+    assert.equal(result.target.mstrategy, 0);
+    assert.equal(game.context.move, 1);
+    assert.doesNotMatch(result.message,
+        /briefly doff|untended shops|shoplifters|business is|bill comes to|Nothing happens|talking to a wall/);
+    assert.deepEqual(getRngLog(), ['rn2(2)=1', 'rn2(21)=14']);
 });
 
 test('worn helmet tip makes hostile invisible imp cuss and wake nearby sleepers', async () => {

@@ -30,7 +30,7 @@ Focused canaries in `test/shop-billing-helpers.test.mjs` cover:
 - Izchak-specific random chatter remains deferred.
 - Hallucinating actual resident shopkeepers still need the C `rn2(2)` split between `shk_chat()` and GEICO-style speech.
 - Silent/polymorphed actual shopkeeper handling is still incomplete in the directed helmet responder scan.
-- Broader shared `domonnoise()` and `#chat` are still not unified with directed helmet tipping.
+- Broader shared `domonnoise()` remains incomplete; adjacent shopkeeper `#chat` reuses this sell helper as of audit 293.
 
 ## Verification
 
