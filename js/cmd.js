@@ -35723,10 +35723,14 @@ function tipHatMonsterIsGnome(mon, name) {
     return !!(mon?.gnome || data.gnome || data.isGnome || mlet === 'g' || /\b(?:gnome|gnomish)\b/.test(name));
 }
 
+const TIPHAT_MAGIC_MONSTER_NAMES = new Set(['kobold shaman', 'orc shaman', 'gnomish wizard']);
+
 function tipHatMonsterLikesMagic(mon) {
     const data = mon?.data || {};
+    const name = String(data.name || mon?.name || '').toLowerCase();
     return !!(mon?.likesMagic || mon?.magic || mon?.spellcaster
-        || data.likesMagic || data.magic || data.spellcaster);
+        || data.likesMagic || data.magic || data.spellcaster
+        || TIPHAT_MAGIC_MONSTER_NAMES.has(name));
 }
 
 function tipHatMonsterIsMinion(mon) {

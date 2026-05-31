@@ -5657,6 +5657,31 @@ test('hallucinating chat with visible generated-sound Orcus maps MS_ORC to human
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
 });
 
+test('chat with same-race generated-sound magic MS_ORC monsters uses spellcraft', async () => {
+    const cases = [
+        ['kobold shaman', 'kobold', { kobold: true, mlet: 'k' }],
+        ['orc shaman', 'orc', { orc: true, mlet: 'o' }],
+        ['gnomish wizard', 'gnome', { gnome: true, mlet: 'G' }],
+    ];
+
+    for (const [name, family, data] of cases) {
+        const result = await chatAdjacentMonster({
+            name,
+            rngLog: true,
+            data: { name, mlevel: 3, humanoid: true, ...data },
+            setup: () => {
+                game.u._polyself_form = { name: family, humanoid: true, [family]: true };
+            },
+        });
+
+        assert.equal(result.message, `The ${name} talks about spellcraft.`);
+        assert.equal(result.target.mstrategy, 0);
+        assert.equal(game.context.move, 1);
+        assert.doesNotMatch(result.message, /grunts|sunlit lands|dungeon exploration|Nothing happens|waves/);
+        assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
+    }
+});
+
 test('chat with invisible tame eating pet maps it without consuming time', async () => {
     const result = await chatAdjacentMonster({
         visible: false,
