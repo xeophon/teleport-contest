@@ -35939,6 +35939,11 @@ function tipHatHostileCussNoise(mon, name, monName) {
     return { handled: true, message: [message, ...wakeMessages].filter(Boolean).join('  ') };
 }
 
+export function monsterHostileCussNoise(mon, name = null) {
+    const monName = String(mon?.data?.name || mon?.name || '').toLowerCase();
+    return tipHatHostileCussNoise(mon, name || fireScrollMonsterName(mon), monName);
+}
+
 function tipHatPeacefulCussNoise(mon) {
     return {
         handled: true,

@@ -6162,6 +6162,94 @@ test('worn helmet tip makes hostile invisible lawful minion use angel cuss', asy
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(14)']);
 });
 
+test('automatic hostile MS_CUSS monster cusses and wakes nearby sleepers', async () => {
+    installStableNonShopFloorState();
+    initRng(47);
+    enableRngLog({ reset: true });
+    const sleeper = ordinaryThrowTarget('dog', 7, 5, {
+        msleeping: 1,
+        mcanmove: true,
+        mcansee: true,
+        mpeaceful: true,
+        mstrategy: 'waitforu',
+        data: { name: 'dog', mlevel: 4, mlet: 'dog' },
+    });
+    const cusser = ordinaryThrowTarget('imp', 6, 5, {
+        movement: NORMAL_SPEED,
+        msleeping: 0,
+        mcanmove: true,
+        mcansee: true,
+        mpeaceful: false,
+        mtame: 0,
+        mux: game.u.ux,
+        muy: game.u.uy,
+        data: { name: 'imp', msound: 'MS_CUSS', mlevel: 3, mlet: 'imp', noattacks: true },
+    });
+    game.level.monsters = [cusser, sleeper];
+
+    queueEscapeForMonsterTurn();
+    markHeroNeighborhoodVisible();
+    markSquareVisible(7, 5);
+    await processMonsterTurns();
+
+    assert.equal(game._pending_message,
+        'The imp casts aspersions on your ancestry.  The dog wakes up.');
+    assert.equal(sleeper.msleeping, 0);
+    assert.equal(sleeper.mstrategy, 0);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 3),
+        ['rn2(5)', 'rn2(5)', 'rn2(5)']);
+});
+
+async function runInvisibleAutomaticCussScenario(msound = 'MS_CUSS') {
+    installStableNonShopFloorState();
+    initRng(47);
+    enableRngLog({ reset: true });
+    const sleeper = ordinaryThrowTarget('dog', 7, 5, {
+        msleeping: 1,
+        mcanmove: true,
+        mcansee: true,
+        mpeaceful: true,
+        mstrategy: 'waitforu',
+        data: { name: 'dog', mlevel: 4, mlet: 'dog' },
+    });
+    const cusser = ordinaryThrowTarget('imp', 6, 5, {
+        movement: NORMAL_SPEED,
+        msleeping: 0,
+        mcanmove: true,
+        mcansee: true,
+        mpeaceful: false,
+        mtame: 0,
+        minvis: 1,
+        perminvis: 1,
+        mux: game.u.ux,
+        muy: game.u.uy,
+        data: { name: 'imp', msound, mlevel: 3, mlet: 'imp', noattacks: true },
+    });
+    game.level.monsters = [cusser, sleeper];
+
+    queueEscapeForMonsterTurn();
+    markHeroNeighborhoodVisible();
+    markSquareVisible(7, 5);
+    await processMonsterTurns();
+
+    return {
+        message: game._pending_message || '',
+        sleeping: sleeper.msleeping,
+        strategy: sleeper.mstrategy,
+        rng: getRngLog(),
+    };
+}
+
+test('automatic hostile MS_CUSS is suppressed while monster remains invisible', async () => {
+    const cuss = await runInvisibleAutomaticCussScenario('MS_CUSS');
+    const baseline = await runInvisibleAutomaticCussScenario('MS_SILENT');
+
+    assert.equal(cuss.message, '');
+    assert.equal(cuss.sleeping, 1);
+    assert.equal(cuss.strategy, 'waitforu');
+    assert.deepEqual(cuss.rng, baseline.rng);
+});
+
 test('worn helmet tip infers invisible skeleton bones rattle and freezes hero', async () => {
     const result = await tipInvisibleExplicitSound({
         name: 'skeleton',

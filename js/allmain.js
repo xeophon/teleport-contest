@@ -3,7 +3,7 @@
 
 import { game } from './gstate.js';
 import { mklev, l_nhcore_init, u_on_upstairs, makemon, mkcorpstat, mksobj, wipe_engr_at, dropMonsterInventory, wandIndexForRoll, scrollIndexForRoll, potionIndexForRoll, RANDOM_MONSTER_BY_NAME, STONE_RESISTANT_MONSTERS, adjustedMonsterLevel, monsterByRndName, monster_hp, rndmonnum, syncDungeonContext, next_ident, set_malign, enextoMonsterSpot, getbogusmon, pickNasty, chameleonAnimalForm, doppelgangerHumanoidForm, noteleportLevelForMonster, rlocNoMsg, rlocToCoreNoMsg, somexyspace, fumaroles, createMonsterCorpseOrGlob, monsterCorpseDropSucceeds, monsterLeavesCorpseLikeDrop, movebubbles, add_to_minv } from './mklev.js';
-import { rhack, pickupObjectName, inventoryItemName, inventoryLetterRank, recordVanquished, finishForceLock, loseExperienceLevel, finishLevelTeleport, finishPickDigDownwardHole, finishPickDigDownwardPit, maybeQueueQuestTalk, monsterGrowUp, processForceLockOccupationTick, forceLockOccupationShouldGiveUp, processSpellbookStudyOccupation, processTinOpeningOccupation, finishTinOpeningOccupation, refreshSwallowOverlay, finishSwallowExpel, travelPathKeys, updateGauntletsOfPowerStrength, consumeLifeSavingAmulet, activateStatueTrap, breakStatueObject, burnFloorObjectsByFire, burnRayFloorObjectsByFire, erodeArmorByFireTrap, dryWetTowelFromFire, igniteMonsterFireInventoryItems, monsterFireInventoryDamage, dropMonsterObject, earthFloorEffects, landMonsterThrownObject, stoneMonster, processCorpseTimers, processGlobShrinkTimers, addDelayedFoodBiteNutrition, repairShopDamageForShopkeeper, heroHasAntimagic, heroHasSlowDigestion, applyHeroOrdinaryHunger } from './cmd.js';
+import { rhack, pickupObjectName, inventoryItemName, inventoryLetterRank, recordVanquished, finishForceLock, loseExperienceLevel, finishLevelTeleport, finishPickDigDownwardHole, finishPickDigDownwardPit, maybeQueueQuestTalk, monsterGrowUp, monsterHostileCussNoise, processForceLockOccupationTick, forceLockOccupationShouldGiveUp, processSpellbookStudyOccupation, processTinOpeningOccupation, finishTinOpeningOccupation, refreshSwallowOverlay, finishSwallowExpel, travelPathKeys, updateGauntletsOfPowerStrength, consumeLifeSavingAmulet, activateStatueTrap, breakStatueObject, burnFloorObjectsByFire, burnRayFloorObjectsByFire, erodeArmorByFireTrap, dryWetTowelFromFire, igniteMonsterFireInventoryItems, monsterFireInventoryDamage, dropMonsterObject, earthFloorEffects, landMonsterThrownObject, stoneMonster, processCorpseTimers, processGlobShrinkTimers, addDelayedFoodBiteNutrition, repairShopDamageForShopkeeper, heroHasAntimagic, heroHasSlowDigestion, applyHeroOrdinaryHunger } from './cmd.js';
 import { docrt, cls, bot, flush_screen, pline, newsym, refreshHallucinatedMap, show_glyph_cell } from './display.js';
 import { vision_recalc, vision_reset, init_vision_globals, cansee, couldsee, view_from } from './vision.js';
 import { init_objects } from './o_init.js';
@@ -5446,6 +5446,7 @@ export async function processMonsterTurns() {
 	                        }
 	                        if (game._message_more && /^A mysterious force prevents .* from teleporting!$/.test(game._pending_message || ''))
 	                            game._process_time_with_more = 0;
+	                        maybeMonsterTurnHostileCuss(mon);
 	                        if (game._message_more && !game._process_time_with_more) return false;
                         continue;
                     }
@@ -5662,7 +5663,15 @@ export async function processMonsterTurns() {
 	                        || mon.data?.name === 'gas spore'
 	                        || mon.data?.name === 'shrieker';
 	                    if (preMoveNearby && preMoveNoAttack && !mon.mpeaceful && !mon.mflee
-	                        && !mon.mconf && !mon.mstun) continue;
+	                        && !mon.mconf && !mon.mstun) {
+	                        maybeMonsterTurnHostileCuss(mon);
+	                        if (game._message_more && !game._process_time_with_more) {
+	                            game._monster_resume_index = monIndex + 1;
+	                            game._monster_resume_somebody_can_move = somebodyCanMove;
+	                            return false;
+	                        }
+	                        continue;
+	                    }
 	                    const preMoveX = mon.mx;
 	                    const preMoveY = mon.my;
                     const searchOccupationActive = game._search_pending_count > 0;
@@ -6533,6 +6542,7 @@ export async function processMonsterTurns() {
                         && (mon.mx - (game.u?.ux || 0)) ** 2 + (mon.my - (game.u?.uy || 0)) ** 2 <= 64) {
                         rn2(mon.data?.mlet === 'orc' ? 2 : 4);
                     }
+	                    maybeMonsterTurnHostileCuss(mon);
 	                    if (game._message_more && !game._process_time_with_more) {
 	                        game._monster_resume_index = monIndex + 1;
 	                        game._monster_resume_somebody_can_move = somebodyCanMove;
@@ -7628,6 +7638,23 @@ function maybeDemonicBlackmailFalseImage(mon) {
         messages.push(`${monsterDisplayName(mon)} gets angry!`);
     }
     for (const message of messages) addToplineMessage(message);
+    return true;
+}
+
+function heroIsDeafForMonsterNoise() {
+    return (game.u?._statusSuffix || '').includes('Deaf') || (game.u?._deafTimeout || 0) > 0;
+}
+
+function maybeMonsterTurnHostileCuss(mon) {
+    if (!mon || monsterSoundKey(mon) !== 'cuss' || mon.mpeaceful || mon.minvis) return false;
+    const targetX = mon.mux ?? game.u?.ux ?? mon.mx;
+    const targetY = mon.muy ?? game.u?.uy ?? mon.my;
+    if ((mon.mx - targetX) ** 2 + (mon.my - targetY) ** 2 > BOLT_LIM * BOLT_LIM) return false;
+    if (!couldSeeCoord(mon.mx, mon.my)) return false;
+    if (rn2(5)) return false;
+    if (heroIsDeafForMonsterNoise()) return true;
+    const noise = monsterHostileCussNoise(mon, monsterDisplayName(mon));
+    if (noise.message) addToplineMessage(noise.message);
     return true;
 }
 
