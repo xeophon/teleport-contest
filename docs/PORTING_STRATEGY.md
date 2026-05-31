@@ -502,6 +502,9 @@ Current validation snapshot:
 - `Massacre` themed fills now create `d(5,5)` explicit role/guardian corpses,
   preserve the Lua species list and 10% reroll behavior, and leave the room's
   terrain/trap/monster state untouched.
+- `Cloud room` themed fills now create sleeping fog clouds from the room point
+  count and add a C-style selection gas-cloud region without point-cloud spread
+  RNG or TTL rolls.
 - The Brown Mold/post-heal route cleanup removed the last public-trace state
   machines named `_brown_mold*`, `_post_heal*`, and `POST_HEAL*` from runtime
   JS. Level teleporting, Quest-goal arrival, fountain quaffing, punishment

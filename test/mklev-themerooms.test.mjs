@@ -642,6 +642,34 @@ test('themed Massacre creates explicit role corpse piles without side effects', 
             assert.equal(g.level.at(x, y).typ, ROOM);
 });
 
+test('themed Cloud room creates sleeping fog clouds and a room gas region', async () => {
+    const { g, room } = installThemeroomGame({
+        dlevel: 7, moves: 200, seed: 41, width: 6, height: 4,
+    });
+    await mklevHooks.apply_themeroom_fill({ name: 'Cloud room' }, room);
+
+    const fogClouds = g.level.monsters.filter(mon => mon.data?.name === 'fog cloud');
+    const [region] = g.level.regions || [];
+    assert.equal(room.themeFillName, 'Cloud room');
+    assert.equal(fogClouds.length, 6);
+    assert.equal(fogClouds.every(mon => mon.msleeping === 1), true);
+    assert.equal(fogClouds.every(mon =>
+        mon.mx >= room.lx && mon.mx <= room.hx
+        && mon.my >= room.ly && mon.my <= room.hy), true);
+    assert.equal(region?.type, 'gas_cloud');
+    assert.equal(region.damage, 0);
+    assert.equal(region.visible, true);
+    assert.equal(region.ttl, undefined);
+    assert.equal(region.coords.length, 24);
+    for (let x = room.lx; x <= room.hx; x++)
+        for (let y = room.ly; y <= room.hy; y++) {
+            assert.equal(region.coords.some(coord => coord.x === x && coord.y === y), true);
+            assert.equal(g.level.at(x, y).typ, ROOM);
+        }
+    assert.equal(g.level.objects.length, 0);
+    assert.equal(g.level.traps.length, 0);
+});
+
 test('themed Ice room converts room terrain and gates C melt timers', async () => {
     const { g: stableGame, room: stableRoom } = installThemeroomGame({
         dlevel: 3, moves: 200, seed: 1, width: 3, height: 2,

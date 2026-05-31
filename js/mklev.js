@@ -12,7 +12,7 @@ import { docrt, flush_screen, newsym, pline } from './display.js';
 import { cansee } from './vision.js';
 import { vfsDeleteFile, vfsReadFile } from './storage.js';
 import { restoreBonesLevel } from './save.js';
-import { createGasCloud } from './region.js';
+import { createGasCloud, createGasCloudSelection } from './region.js';
 import { rn2, rn2_on_display_rng, rnd, rn1, d, rne, rnz } from './rng.js';
 import {
     CLR_BLACK, CLR_BLUE, CLR_BRIGHT_BLUE, CLR_BRIGHT_CYAN, CLR_BRIGHT_GREEN,
@@ -19981,6 +19981,24 @@ function themeroom_massacre(croom) {
     }
 }
 
+async function themeroom_cloud_room(croom) {
+    const fog = splevSelection.room(croom);
+    const pos = { x: 0, y: 0 };
+    for (let i = 0, count = Math.trunc(fog.numpoints() / 4); i < count; i++) {
+        if (!somexyspace(croom, pos)) continue;
+        const relocateOnce = game._makemon_relocate_occupied_once;
+        game._makemon_relocate_occupied_once = true;
+        let mon = null;
+        try {
+            mon = await makemon(monsterByRndName('fog cloud'), pos.x, pos.y, 0);
+        } finally {
+            game._makemon_relocate_occupied_once = relocateOnce;
+        }
+        if (mon) mon.msleeping = 1;
+    }
+    createGasCloudSelection(fog.iterate(), 0);
+}
+
 async function themeroom_boulder_room(croom) {
     const locs = splevSelection.room(croom).percentage(30);
     for (const [x, y] of locs.iterate()) {
@@ -20108,6 +20126,7 @@ export const __mklevTestHooks = {
 async function apply_themeroom_fill(fill, croom, rows = null, startX = 0, startY = 0) {
     if (fill?.name) croom.themeFillName = fill.name;
     if (fill?.name === 'Ice room') themeroom_ice_room(croom);
+    else if (fill?.name === 'Cloud room') await themeroom_cloud_room(croom);
     else if (fill?.name === 'Boulder room') await themeroom_boulder_room(croom);
     else if (fill?.name === 'Spider nest') await themeroom_spider_nest(croom);
     else if (fill?.name === 'Trap room') await themeroom_trap_room(croom);
