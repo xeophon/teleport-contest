@@ -39,6 +39,8 @@ const ENORMOUS_MEATBALL = 11013;
 const MEAT_STICK = 11014;
 const TOUCHSTONE = 473;
 const DART = 353;
+const KNIFE = 10026;
+const STILETTO = 10109;
 const TALLOW_CANDLE = 370;
 const MIRROR = 10006;
 const WAN_MAKE_INVISIBLE = 10091;
@@ -488,6 +490,24 @@ function dagger(id, letter = 'd') {
         line: `${letter} - a dagger`,
         dknown: true,
         known: true,
+    };
+}
+
+function upwardWeapon(id, letter, kind, line, extra = {}) {
+    return {
+        id,
+        cls: 'weapon',
+        glyph: ')',
+        kind,
+        actualKind: kind,
+        quan: 1,
+        ox: 5,
+        oy: 5,
+        letter,
+        line,
+        dknown: true,
+        known: true,
+        ...extra,
     };
 }
 
@@ -34907,6 +34927,159 @@ test('upward hero-thrown athame uses dagger-family small-target damage', async (
     assert.equal(landed.kind, 'athame');
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
         'rn2(5)', 'rn2(100)', 'rnd(4)', 'rn2(100)',
+    ]);
+});
+
+test('upward hero-thrown knife uses knife small-target damage', async () => {
+    installNonShopFloorState();
+    initRng(23);
+    Object.assign(game.u, { uhp: 30, uhpmax: 30 });
+    const blade = upwardWeapon(876914, 'k', 'knife', 'k - a knife', {
+        otyp: KNIFE,
+        plural: 'knives',
+        owt: 5,
+    });
+    game.inventory = [blade];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('k');
+    await rhack('<');
+
+    const message = game._pending_message || '';
+    assert.equal(game._command_mode, null);
+    assert.match(message, /A knife almost hits the ceiling, then falls back on top of your head\./);
+    assert.match(message, /A knife hits the floor\./);
+    assert.doesNotMatch(message, /cmdassist|In what direction|It doesn't hurt|shatters|Splat/);
+    assert.equal(game.u.uhp, 27);
+    assert.equal(game.inventory.includes(blade), false);
+    assert.equal(game.level.objects.length, 1);
+    const landed = game.level.objects[0];
+    assert.equal(landed.actualKind, 'knife');
+    assert.equal(landed.otyp, KNIFE);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rn2(5)', 'rn2(100)', 'rnd(3)', 'rn2(100)',
+    ]);
+});
+
+test('upward hero-thrown stiletto uses knife-family small-target damage', async () => {
+    installNonShopFloorState();
+    initRng(23);
+    Object.assign(game.u, { uhp: 30, uhpmax: 30 });
+    const blade = upwardWeapon(876915, 's', 'stiletto', 's - a stiletto', {
+        otyp: STILETTO,
+        plural: 'stilettos',
+        owt: 5,
+    });
+    game.inventory = [blade];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('s');
+    await rhack('<');
+
+    const message = game._pending_message || '';
+    assert.equal(game._command_mode, null);
+    assert.match(message, /A stiletto almost hits the ceiling, then falls back on top of your head\./);
+    assert.match(message, /A stiletto hits the floor\./);
+    assert.doesNotMatch(message, /cmdassist|In what direction|It doesn't hurt|shatters|Splat/);
+    assert.equal(game.u.uhp, 27);
+    assert.equal(game.inventory.includes(blade), false);
+    assert.equal(game.level.objects.length, 1);
+    const landed = game.level.objects[0];
+    assert.equal(landed.actualKind, 'stiletto');
+    assert.equal(landed.otyp, STILETTO);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rn2(5)', 'rn2(100)', 'rnd(3)', 'rn2(100)',
+    ]);
+});
+
+test('upward hero-thrown scalpel uses knife-family small-target damage', async () => {
+    installNonShopFloorState();
+    initRng(23);
+    Object.assign(game.u, { uhp: 30, uhpmax: 30 });
+    const blade = upwardWeapon(876916, 'c', 'scalpel', 'c - a scalpel', {
+        owt: 5,
+    });
+    game.inventory = [blade];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('c');
+    await rhack('<');
+
+    const message = game._pending_message || '';
+    assert.equal(game._command_mode, null);
+    assert.match(message, /A scalpel almost hits the ceiling, then falls back on top of your head\./);
+    assert.match(message, /A scalpel hits the floor\./);
+    assert.doesNotMatch(message, /cmdassist|In what direction|It doesn't hurt|shatters|Splat/);
+    assert.equal(game.u.uhp, 27);
+    assert.equal(game.inventory.includes(blade), false);
+    assert.equal(game.level.objects.length, 1);
+    const landed = game.level.objects[0];
+    assert.equal(landed.actualKind, 'scalpel');
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rn2(5)', 'rn2(100)', 'rnd(3)', 'rn2(100)',
+    ]);
+});
+
+test('upward hero-thrown worm tooth uses knife-family small-target damage', async () => {
+    installNonShopFloorState();
+    initRng(23);
+    Object.assign(game.u, { uhp: 30, uhpmax: 30 });
+    const blade = upwardWeapon(876917, 'w', 'worm tooth', 'w - a worm tooth', {
+        material: 'bone',
+        owt: 20,
+    });
+    game.inventory = [blade];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('w');
+    await rhack('<');
+
+    const message = game._pending_message || '';
+    assert.equal(game._command_mode, null);
+    assert.match(message, /A worm tooth almost hits the ceiling, then falls back on top of your head\./);
+    assert.match(message, /A worm tooth hits the floor\./);
+    assert.doesNotMatch(message, /cmdassist|In what direction|It doesn't hurt|shatters|Splat/);
+    assert.equal(game.u.uhp, 28);
+    assert.equal(game.inventory.includes(blade), false);
+    assert.equal(game.level.objects.length, 1);
+    const landed = game.level.objects[0];
+    assert.equal(landed.actualKind, 'worm tooth');
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rn2(5)', 'rn2(100)', 'rnd(2)', 'rn2(100)',
+    ]);
+});
+
+test('upward hero-thrown crysknife uses crysknife small-target damage', async () => {
+    installNonShopFloorState();
+    initRng(19);
+    Object.assign(game.u, { uhp: 30, uhpmax: 30 });
+    const blade = upwardWeapon(876918, 'y', 'crysknife', 'y - a crysknife', {
+        material: 'bone',
+        owt: 20,
+    });
+    game.inventory = [blade];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('y');
+    await rhack('<');
+
+    const message = game._pending_message || '';
+    assert.equal(game._command_mode, null);
+    assert.match(message, /A crysknife almost hits the ceiling, then falls back on top of your head\./);
+    assert.match(message, /A crysknife hits the floor\./);
+    assert.doesNotMatch(message, /cmdassist|In what direction|It doesn't hurt|shatters|Splat/);
+    assert.equal(game.u.uhp, 24);
+    assert.equal(game.inventory.includes(blade), false);
+    assert.equal(game.level.objects.length, 1);
+    const landed = game.level.objects[0];
+    assert.equal(landed.actualKind, 'crysknife');
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rn2(5)', 'rn2(100)', 'rnd(10)', 'rn2(100)',
     ]);
 });
 

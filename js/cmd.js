@@ -1480,6 +1480,7 @@ const CANDELABRUM_OF_INVOCATION = 10076;
 const ORCISH_DAGGER = 10020;
 const DAGGER = 10023;
 const KNIFE = 10026;
+const STILETTO = 10109;
 const SHORT_SWORD = 10031;
 const ELVEN_SHORT_SWORD = 10186;
 const ORCISH_SHORT_SWORD = 10187;
@@ -18680,29 +18681,36 @@ function heroThrownOrdinaryCorpseUpwardMessages(corpse) {
     return heroThrownOrdinaryCorpseSelfHitMessages(corpse, 'almost hits', ceilingName);
 }
 
-const HERO_TOSS_UP_DAGGER_SMALL_DAMAGE = new Map([
+const HERO_TOSS_UP_WEAPON_SMALL_DAMAGE = new Map([
     ['dagger', 4],
     ['elven dagger', 5],
     ['orcish dagger', 3],
     ['silver dagger', 4],
     ['athame', 4],
+    ['scalpel', 3],
+    ['knife', 3],
+    ['stiletto', 3],
+    ['worm tooth', 2],
+    ['crysknife', 10],
 ]);
 
-function tossUpDaggerObjectKey(obj) {
+function tossUpWeaponObjectKey(obj) {
     if (obj?.otyp === DAGGER) return 'dagger';
     if (obj?.otyp === ORCISH_DAGGER) return 'orcish dagger';
+    if (obj?.otyp === KNIFE) return 'knife';
+    if (obj?.otyp === STILETTO) return 'stiletto';
     return objectKindKey(obj);
 }
 
-function isSupportedTossUpDaggerObject(obj) {
+function isSupportedTossUpWeaponObject(obj) {
     if (!obj) return false;
-    if (!HERO_TOSS_UP_DAGGER_SMALL_DAMAGE.has(tossUpDaggerObjectKey(obj))) return false;
+    if (!HERO_TOSS_UP_WEAPON_SMALL_DAMAGE.has(tossUpWeaponObjectKey(obj))) return false;
     return !obj.artifact && !obj.oartifact;
 }
 
 function heroThrownGenericWeaponDamage(obj) {
-    const die = HERO_TOSS_UP_DAGGER_SMALL_DAMAGE.get(tossUpDaggerObjectKey(obj));
-    if (!die || !isSupportedTossUpDaggerObject(obj)) return null;
+    const die = HERO_TOSS_UP_WEAPON_SMALL_DAMAGE.get(tossUpWeaponObjectKey(obj));
+    if (!die || !isSupportedTossUpWeaponObject(obj)) return null;
     let damage = rnd(die);
     damage += Math.trunc(Number(obj.spe || 0));
     if (damage < 0) damage = 0;
@@ -18718,7 +18726,7 @@ function isTinOpenerTossObject(obj) {
 }
 
 function isHeroThrownGenericDamagingUpwardObject(obj) {
-    return isTinOpenerTossObject(obj) || isSupportedTossUpDaggerObject(obj);
+    return isTinOpenerTossObject(obj) || isSupportedTossUpWeaponObject(obj);
 }
 
 function heroThrownGenericObjectFallingDamage(obj, helmet = null) {
