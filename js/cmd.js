@@ -33723,6 +33723,7 @@ function tipHatMonsterHumanoid(mon) {
     const name = String(data.name || mon?.name || '').toLowerCase();
     return !!(data.humanoid || data.human || mlet === 'humanoid' || mlet === 'human' || mlet === '@'
         || data.name === 'human' || /^(gremlin|leprechaun|skeleton|death|pestilence|famine)$/.test(name)
+        || tipHatMonsterIsVampireInOwnForm(name)
         || /\bzombie$/.test(name));
 }
 
@@ -34136,6 +34137,10 @@ function tipHatMonsterIsHumanWereForm(mon, monName, mlet) {
         || mlet === '@' || mlet === 'human' || mlet === 'humanoid');
 }
 
+function tipHatMonsterIsVampireInOwnForm(monName) {
+    return /^vampire(?: (?:lord|lady|leader|mage))?$/.test(monName) || monName === 'vlad the impaler';
+}
+
 function tipHatMonsterSound(mon) {
     const data = mon?.data || {};
     const explicit = mon?.msound ?? mon?.sound ?? data.msound ?? data.sound;
@@ -34155,6 +34160,7 @@ function tipHatMonsterSound(mon) {
     if (name === 'ki-rin') return 'spell';
     if (name === 'imp') return 'cuss';
     if (tipHatMonsterIsHumanWereForm(mon, name, mlet)) return 'were';
+    if (tipHatMonsterIsVampireInOwnForm(name)) return 'vampire';
     if (TIPHAT_BOAST_MONSTER_NAMES.has(name)) return 'boast';
     if (/^(pony|horse|warhorse|white unicorn|gray unicorn|black unicorn)$/.test(name)
         || mlet === 'quadruped' || mlet === 'unicorn')
@@ -34188,6 +34194,23 @@ function tipHatIsNight() {
         ? (/^\d{10}/.test(datetime) ? Number(datetime.slice(8, 10)) : NaN)
         : Number(hourValue);
     return Number.isFinite(hour) && (hour < 6 || hour > 21);
+}
+
+function tipHatIsMidnight() {
+    const hourValue = game.flags?.hour ?? game.hour ?? game.context?.hour;
+    const datetime = String(game._datetime || '');
+    const hour = hourValue == null
+        ? (/^\d{10}/.test(datetime) ? Number(datetime.slice(8, 10)) : NaN)
+        : Number(hourValue);
+    return hour === 0;
+}
+
+function tipHatHeroVampireKindred() {
+    return /^(?:vampire|vampire lord|vampire leader|vampire lady)$/.test(polyselfFormName());
+}
+
+function tipHatHeroNightChild() {
+    return /^(?:wolf|winter wolf|winter wolf cub)$/.test(polyselfFormName());
 }
 
 function tipHatMonsterHungryTime(mon) {
@@ -34387,6 +34410,31 @@ function tipHatMonsterNoise(mon, { visible = tipHatMonsterVisible(mon) } = {}) {
         const howlMessage = `${name} throws back ${tipHatMonsterPossessive(mon)} head and lets out a blood curdling ${cry}!`;
         const wakeMessages = tipHatWakeNearby(mon, 11 * 11);
         return { handled: true, message: [howlMessage, ...wakeMessages].filter(Boolean).join('  ') };
+    }
+    case 'vampire': {
+        const isNight = tipHatIsNight();
+        const kindred = tipHatHeroVampireKindred();
+        const nightchild = tipHatHeroNightChild();
+        if (tame) {
+            if (kindred) {
+                const ending = isNight ? '!' : '.  Why do we not rest?';
+                return { handled: true, message: `"Good ${isNight ? 'evening' : 'day'} to you Master${ending}"` };
+            }
+            const prefix = nightchild ? 'Child of the night, ' : '';
+            if (tipHatIsMidnight())
+                return { handled: true, message: `"${prefix}I can stand this craving no longer!"` };
+            if (isNight)
+                return { handled: true, message: `"${prefix}I beg you, help me satisfy this growing craving!"` };
+            return { handled: true, message: `"${prefix}I find myself growing a little weary."` };
+        }
+        if (peaceful) {
+            if (kindred && isNight)
+                return { handled: true, message: `"Good feeding ${game.flags?.female ? 'sister' : 'brother'}!"` };
+            if (nightchild && isNight)
+                return { handled: true, message: '"How nice to hear you, child of the night!"' };
+            return { handled: true, message: '"I only drink... potions."' };
+        }
+        return { handled: false, message: '' };
     }
     case 'rider':
         if (monName === 'death') return { handled: false, message: '' };

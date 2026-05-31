@@ -4621,6 +4621,110 @@ test('worn helmet tip keeps visible Famine on humanoid response before rider spe
     assert.equal(famine.mstrategy, 0);
 });
 
+test('worn helmet tip makes peaceful invisible explicit vampire mention potions without RNG', async () => {
+    const result = await tipInvisibleExplicitSound({
+        name: 'vampire',
+        sound: 'MS_VAMPIRE',
+        peaceful: true,
+        rngLog: true,
+        data: { mlevel: 10, mlet: 'vampire', undead: true, humanoid: true },
+    });
+
+    assert.equal(result.message,
+        'You briefly doff your helm.  "I only drink... potions."');
+    assert.doesNotMatch(result.message,
+        /The vampire|Nothing happens|doesn't respond|vant to suck|vill come after|Good feeding|child of the night/);
+    assert.equal(result.target.mstrategy, 0);
+    assert.equal(result.targetLoc.map_invisible, true);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
+});
+
+test('worn helmet tip infers peaceful invisible vampire lord speech without RNG', async () => {
+    const result = await tipInvisibleExplicitSound({
+        name: 'vampire lord',
+        peaceful: true,
+        rngLog: true,
+        data: { mlevel: 12, mlet: 'vampire', undead: true, humanoid: true },
+    });
+
+    assert.equal(result.message,
+        'You briefly doff your helm.  "I only drink... potions."');
+    assert.doesNotMatch(result.message,
+        /The vampire lord|Nothing happens|doesn't respond|vant to suck|vill come after|Good feeding|child of the night/);
+    assert.equal(result.target.mstrategy, 0);
+    assert.equal(result.targetLoc.map_invisible, true);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
+});
+
+test('worn helmet tip makes tame invisible vampire use day night and midnight craving speech', async () => {
+    const daytime = await tipInvisibleExplicitSound({
+        name: 'vampire',
+        sound: 'MS_VAMPIRE',
+        peaceful: true,
+        tame: 10,
+        rngLog: true,
+        hour: 12,
+        data: { mlevel: 10, mlet: 'vampire', undead: true, humanoid: true },
+    });
+    assert.equal(daytime.message,
+        'You briefly doff your helm.  "I find myself growing a little weary."');
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
+
+    const night = await tipInvisibleExplicitSound({
+        name: 'vampire',
+        sound: 'MS_VAMPIRE',
+        peaceful: true,
+        tame: 10,
+        rngLog: true,
+        hour: 23,
+        data: { mlevel: 10, mlet: 'vampire', undead: true, humanoid: true },
+    });
+    assert.equal(night.message,
+        'You briefly doff your helm.  "I beg you, help me satisfy this growing craving!"');
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
+
+    const midnight = await tipInvisibleExplicitSound({
+        name: 'vampire',
+        sound: 'MS_VAMPIRE',
+        peaceful: true,
+        tame: 10,
+        rngLog: true,
+        hour: 0,
+        data: { mlevel: 10, mlet: 'vampire', undead: true, humanoid: true },
+    });
+    assert.equal(midnight.message,
+        'You briefly doff your helm.  "I can stand this craving no longer!"');
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
+});
+
+test('worn helmet tip keeps visible vampire on humanoid response before vampire speech', async () => {
+    installStableNonShopFloorState();
+    const helmet = wornArmor(3063561, 'orcish helm', 'h');
+    const vampire = ordinaryThrowTarget('vampire', 6, 5, {
+        msleeping: 0,
+        mcanmove: true,
+        mcansee: true,
+        mpeaceful: false,
+        mstrategy: 'waitforu',
+        data: { name: 'vampire', mlevel: 10, mlet: 'vampire', undead: true },
+    });
+    game.inventory = [helmet];
+    game.level.monsters = [vampire];
+    markSquareVisible(6, 5);
+
+    await enterTipCommand();
+    await rhack('h');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.match(game._pending_message,
+        /^You briefly doff your helm\.  The vampire (?:curses|gestures rudely|gestures offensively)(?: and (?:gestures rudely|gestures offensively))? at you\.\.\.$/);
+    assert.doesNotMatch(game._pending_message,
+        /I only drink|I find myself|growing craving|Who do you think you are, War|Nothing happens|doesn't respond/);
+    assert.equal(vampire.mstrategy, 0);
+});
+
 test('worn helmet tip infers invisible human werecreature whisper off full moon', async () => {
     const result = await tipInvisibleExplicitSound({
         name: 'werewolf',
