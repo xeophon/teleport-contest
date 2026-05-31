@@ -6206,9 +6206,10 @@ export async function processMonsterTurns() {
                             if (mon.missile === missile) mon.missile = null;
                         }
                         const missileSpe = missile.spe || 0;
-                        const sharedArrowLanding = !missile.blessed && !missile.cursed && !missile.greased
-                            && (missileSpe === 0 || missileSpe === 1 || missileSpe === 2)
+                        const cleanLauncherArrow = !missile.cursed && !missile.greased
                             && !(missile.oeroded || 0) && !(missile.oeroded2 || 0);
+                        const sharedArrowLanding = cleanLauncherArrow
+                            && (missileSpe === 0 || (!missile.blessed && (missileSpe === 1 || missileSpe === 2)));
                         addToplineMessage(`${monsterDisplayName(mon, true)} shoots an arrow!`);
                         game._message_more = 1;
                         game._process_time_with_more = 0;

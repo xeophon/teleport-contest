@@ -32790,6 +32790,67 @@ test('production monster launcher arrow miss lands without ohit mulch', async ()
     assert.equal(rng.filter(entry => entry.startsWith('rn2(3)=')).length, 0);
 });
 
+test('production monster blessed launcher arrow hit lands surviving arrow with blessed mulch roll', async () => {
+    const { arrow, thrower, rng } = await runMonsterLauncherArrowLanding({
+        seed: 1,
+        arrowOverrides: { blessed: true },
+    });
+
+    assert.equal(game._pending_message, 'You are hit by an arrow.');
+    assert.equal(game.u.uhp, 18);
+    assert.equal(thrower.minvent.some(obj => obj.id === arrow.id), false);
+    assert.equal(thrower.missile, null);
+
+    const landed = game.level.objects.find(obj => obj.id === arrow.id);
+    assert.ok(landed);
+    assert.equal(landed.ox, 5);
+    assert.equal(landed.oy, 5);
+    assert.equal(landed.quan, 1);
+    assert.equal(landed.kind, 'arrow');
+    assert.equal(landed.blessed, true);
+    assert.equal(landed.transientProjectile, false);
+
+    assert.deepEqual(rng.filter(entry => entry.startsWith('rn2(3)=')), ['rn2(3)=2', 'rn2(3)=0']);
+    assert.equal(rng.some(entry => entry.startsWith('rn2(100)=')), false);
+});
+
+test('production monster blessed launcher arrow hit can mulch after blessed survival fails', async () => {
+    const { arrow, thrower, rng } = await runMonsterLauncherArrowLanding({
+        seed: 4,
+        arrowOverrides: { blessed: true },
+    });
+
+    assert.equal(game._pending_message, 'You are hit by an arrow.');
+    assert.equal(game.u.uhp, 18);
+    assert.equal(thrower.minvent.some(obj => obj.id === arrow.id), false);
+    assert.equal(thrower.missile, null);
+    assert.equal(game.level.objects.some(obj => obj.id === arrow.id), false);
+    assert.equal(game.level.objects.some(obj => obj.transientProjectile), false);
+
+    assert.deepEqual(rng.filter(entry => entry.startsWith('rn2(3)=')), ['rn2(3)=2', 'rn2(3)=2']);
+    assert.ok(rng.some(entry => entry.startsWith('rn2(100)=')));
+});
+
+test('production monster blessed launcher arrow miss lands without ohit mulch', async () => {
+    const { arrow, rng } = await runMonsterLauncherArrowLanding({
+        seed: 2,
+        arrowOverrides: { blessed: true },
+    });
+
+    assert.equal(game._pending_message, 'An arrow misses you.');
+    assert.equal(game.u.uhp, 20);
+    const landed = game.level.objects.find(obj => obj.id === arrow.id);
+    assert.ok(landed);
+    assert.equal(landed.ox, 5);
+    assert.equal(landed.oy, 5);
+    assert.equal(landed.blessed, true);
+    assert.equal(landed.transientProjectile, false);
+
+    assert.ok(rng.includes('rnd(20)=20'));
+    assert.equal(rng.filter(entry => entry.startsWith('rn2(3)=')).length, 0);
+    assert.equal(rng.filter(entry => entry.startsWith('rn2(100)=')).length, 0);
+});
+
 test('production monster plus-one launcher arrow hit uses shared drop-throw mulch', async () => {
     const { arrow, thrower, rng } = await runMonsterLauncherArrowLanding({ seed: 8, arrowSpe: 1 });
 
