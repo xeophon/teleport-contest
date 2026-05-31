@@ -4659,6 +4659,26 @@ test('worn helmet tip infers same-gender invisible nymph seduction without RNG',
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
 });
 
+test('worn helmet tip makes nonresident invisible shopkeeper ask about untended shops without RNG', async () => {
+    const result = await tipInvisibleExplicitSound({
+        name: 'shopkeeper',
+        sound: 'MS_SELL',
+        peaceful: true,
+        rngLog: true,
+        data: { mlevel: 12, mlet: '@', humanoid: true, shopkeeper: true },
+        extra: { isshk: false, bill: [], billct: 0, minvent: [], shknam: '' },
+    });
+
+    assert.equal(result.message,
+        "You briefly doff your helm.  It asks whether you've seen any untended shops recently.");
+    assert.doesNotMatch(result.message,
+        /15 minutes|zorkmids|talks about shoplifters|business is|bill comes to|doesn't respond|Nothing happens|waves|gestures/);
+    assert.equal(result.target.isshk, false);
+    assert.equal(result.target.mstrategy, 0);
+    assert.equal(result.targetLoc.map_invisible, true);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
+});
+
 test('worn helmet tip keeps visible peaceful seducing nymph on humanoid wave before seduce sound', async () => {
     installStableNonShopFloorState();
     game.flags.female = true;

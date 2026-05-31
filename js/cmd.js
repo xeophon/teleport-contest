@@ -34151,6 +34151,18 @@ function tipHatPeacefulCussNoise(mon) {
     };
 }
 
+function tipHatMonsterIsShopkeeperType(mon, monName = '') {
+    const data = mon?.data || {};
+    const name = String(monName || data.name || mon?.name || '').toLowerCase();
+    return !!(data.shopkeeper || mon?.shopkeeper || name === 'shopkeeper');
+}
+
+function tipHatShopkeeperSellNoise(mon, name) {
+    if (!mon?.isshk && tipHatMonsterIsShopkeeperType(mon))
+        return { handled: true, message: `${name} asks whether you've seen any untended shops recently.` };
+    return { handled: false, message: '' };
+}
+
 function tipHatMonsterIsHumanWereForm(mon, monName, mlet) {
     const data = mon?.data || {};
     if (!/^(?:were(?:rat|jackal|wolf))$/.test(monName)) return false;
@@ -34169,6 +34181,7 @@ function tipHatMonsterSound(mon) {
     if (explicit != null) return String(explicit).toLowerCase().replace(/^ms_/, '');
     const name = String(data.name || mon?.name || '').toLowerCase();
     const mlet = String(data.mlet || mon?.mlet || '').toLowerCase();
+    if (mon?.isshk || tipHatMonsterIsShopkeeperType(mon, name)) return 'sell';
     if (/^(gremlin|leprechaun)$/.test(name)) return 'laugh';
     if (name === 'skeleton') return 'bones';
     if (/^(pestilence|famine)$/.test(name)) return 'rider';
@@ -34300,9 +34313,11 @@ function tipHatMonsterNoise(mon, { visible = tipHatMonsterVisible(mon) } = {}) {
     else if (heroIsHallucinating() && tipHatMonsterAppearsAsGecko(mon)) sound = 'sell';
     switch (sound) {
     case 'sell':
-        return heroIsHallucinating()
-            ? { handled: true, message: `"15 minutes could save you 15 ${shopCurrency(15)}."` }
-            : { handled: false, message: '' };
+        if (heroIsHallucinating()) {
+            if (mon?.isshk) return { handled: false, message: '' };
+            return { handled: true, message: `"15 minutes could save you 15 ${shopCurrency(15)}."` };
+        }
+        return tipHatShopkeeperSellNoise(mon, name);
     case 'bark': {
         if (game.flags?.moonphase === 4 && tipHatIsNight())
             return { handled: true, message: `${name} howls.` };
