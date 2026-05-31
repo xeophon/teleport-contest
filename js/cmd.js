@@ -752,6 +752,17 @@ taught you."`,
                 '"So what species do *you* think we evolved from?"',
                 `"So you're %ls prize pupil!  I don't know what he sees in you."`,
             ],
+            hasamulet: `"Congratulations, %p.  I wondered if anyone could prevail against
+the Wizard and the minions of Moloch.  Now, you must embark on one
+final adventure.
+
+"Take the Amulet, and find your way onto the Astral Plane.
+There you must find the altar of %d and sacrifice the
+Amulet on that altar to fulfill your destiny.
+
+"Remember, your path now should always be upwards."`,
+            posthanks: `"Welcome back, %p.  Have you progressed with your quest to
+regain the Amulet of Yendor for %d?"`,
             assignquest: `"Grave times have befallen the college, for %na has
 stolen %o.  Without it, the board of directors of
 the university will soon have no choice but to revoke our research grants.
@@ -852,6 +863,45 @@ defeat %ni."`,
                 '"The horde is mighty in numbers, but they have little courage."',
                 '"%lC is a strange one, but he has helped defend us."',
             ],
+            hasamulet: `"This is wondrous, %p.  I feared that you could not possibly
+succeed in your quest, but here you are in possession of the Amulet
+of Yendor!
+
+"I have studied the texts of the magi constantly since you left.  In
+the Book of Skelos, I found this:
+
+    %d will cause a child to be sent into the world.  This child is to
+    be made strong by trial of battle and magic, for %d has willed it so.
+    It is said that the child of %d will recover the Amulet of Yendor
+    that was stolen from the Creator at the beginning of time.
+
+"As you now possess the amulet, %p, I suspect that the Book
+speaks of you.
+
+    The child of %d will take the Amulet, and travel to the Astral
+    Plane, where the Great Temple of %d is to be found.  The Amulet
+    will be sacrificed to %d, there on %dJ altar.  Then the child will
+    stand by %d as champion of all %cP for eternity.
+
+"This is all I know, %p.  I hope it will help you."`,
+            posthanks: `"You are indeed ready now, %p.  I shall tell you a tale of
+great suffering among your people:
+
+"Shortly after you left on your vision quest, the caves were invaded by
+the creatures sent against us by %n.
+
+"She, herself, could not attack us due to her great size, but her minions
+have harassed us ever since.  In the first attacks, many died, and the
+minions of %n managed to steal %o.
+They took it to %i and there, none of our
+%g warriors have been able to go.
+
+"You must find %i, and within it wrest
+%o from %n.  She guards it as
+jealously as she guards all treasures she attains.  But with it,
+we can make our caves safe once more.
+
+"Please, %p, recover %o for us, and return it here."`,
             assignquest: `"The world is in great need of your assistance, %p.
 
 "About six months ago, I learned that a mysterious sorcerer, known
@@ -931,6 +981,29 @@ pieces of rusted metal and broken weapons show above the surface.`,
                 '"Verily, %l could have no better champion, %p."',
                 '"Many brave %cP died when %n attacked."',
             ],
+            hasamulet: `"Thou hast succeeded, We see, %p!  Now thou art commanded to take
+the Amulet to be sacrificed to %d in the Plane of the Astral.
+
+"Merlin hath counseled Us that thou must travel always upwards through
+the Planes of the Elements, to achieve this goal.
+
+"Go with %d, %p."`,
+            posthanks: `"Yes, %p.  You are truly ready now.  Attend to me and I shall
+tell you of what has transpired:
+
+"During one of the Great Meditations a short time ago, %n and
+a legion of elementals invaded %H.  Many %gP
+were killed, including the one bearing %o.
+
+Now, there are barely enough %gP left to keep the elementals
+at bay.
+
+"We need you to find %i, then, from there,
+travel to %ns lair.  If you can manage to defeat %n and
+return %o here, we can then drive off the legions
+of elementals that slay our students.
+
+"Go with %d as your guide, %p."`,
         },
     },
     Priest: {
@@ -1019,6 +1092,31 @@ when you have attained the post of %R."`,
                 '"Alas, it seems as if even %d has deserted us."',
                 '"May %d be with you, %s."',
             ],
+            hasamulet: `"You have prevailed, %p!  %d is surely with you.  Now,
+you must take the amulet, and sacrifice it on %ds altar on
+the Astral Plane.  I suspect that I shall never see you again in this
+life, but I hope to at %ds feet."`,
+            posthanks: `"You are indeed ready, %p.  I shall tell you what has transpired,
+and why we so desperately need your help:
+
+"A short time ago, the mountain centaurs to the east invaded
+and enslaved the plains centaurs in this area.  The local
+leader is now only a figurehead, and serves %n.
+
+"During our last gathering of worship here, we were beset by hordes of
+hostile centaurs, as you witnessed.  In the first onslaught a group,
+headed by %n %niself, managed to breach the grove and steal
+%o.
+
+"Since then, we have been besieged.  We do not know how much longer
+we will be able to maintain our magical barriers.
+
+"If we are to survive, you, %p, must infiltrate
+%i.  There, you will find a pathway down, to the
+underground cavern of %n.  He has always coveted
+%o, and will surely keep it.
+
+"Recover %o for us, %p!  Only then will %d be safe."`,
             assignquest: `"Yes, %p.  You are truly ready now.  Attend to me and I shall
 tell you of what has transpired:
 
@@ -1121,6 +1219,17 @@ renown as %Ra."`,
                 '"The spells of %n were just too powerful for us to withstand."',
                 '"I, too, will venture into the world, because %n is but one of many evils to be vanquished."',
             ],
+            hasamulet: `"Congratulations, %p.  I always knew that if anyone could succeed
+in defeating the Wizard of Yendor and his minions, it would be you.
+
+"Go now, and take the Amulet to the Astral Plane.  Once there, present
+the Amulet on the altar of %d.  Along the way you shall pass through
+the four Elemental Planes.  These planes are like nothing you have ever
+experienced before, so be prepared!
+
+"For this you were born, %s!  I am very proud of you."`,
+            posthanks: `"Come near, my %S, and share your adventures with me.
+So, have you succeeded in your quest for the Amulet of Yendor?"`,
             assignquest: `"Yes, %p, you truly are ready for this dire task.  Listen,
 carefully, for what I tell you now will be of vital importance.
 
@@ -3492,7 +3601,7 @@ function questPagerText(msgid, { initCore = true } = {}) {
         ['%ls', possessive(leader)], ['%lt', stripThe(leader)], ['%lC', cap(leader)], ['%l', leader],
         ['%S', child], ['%s', sibling],
         ['%i', info.intermed], ['%gP', cap(`${info.guardian}s`)], ['%g', info.guardian],
-        ['%H', info.homebase], ['%ds', possessive(deity)], ['%d', deity], ['%a', alignName], ['%p', player],
+        ['%H', info.homebase], ['%ds', possessive(deity)], ['%dJ', 'His'], ['%d', deity], ['%a', alignName], ['%p', player],
     ];
     let text = raw.trimEnd();
     for (const [pattern, replacement] of replacements)
@@ -3748,6 +3857,11 @@ export function maybeQueueQuestLeaderTalk(mon, { automatic = true } = {}) {
             return true;
         }
         return false;
+    }
+    if (!automatic && game.quest_status.got_thanks) {
+        const msgid = heroHasAmuletOfYendor() ? 'hasamulet' : 'posthanks';
+        if (!showQuestPager(msgid, 'questLeaderFollowupMore')) return false;
+        return true;
     }
     if (!automatic && game.quest_status.got_quest && !game.quest_status.got_thanks) {
         const message = questPagerText('encourage', { initCore: false });
@@ -44431,6 +44545,18 @@ export async function rhack(_cmd) {
             game._pending_message = '';
             game._message_more = 0;
             await continueQuestLeaderTalkAfterIntro();
+        }
+        return;
+    }
+
+    if (game._command_mode === 'questLeaderFollowupMore') {
+        if (ch === ' ' || ch === '\x1b' || ch === '\r' || ch === '\n') {
+            game._overlay_lines = null;
+            game._overlay_hide_status = 0;
+            game._pending_message = '';
+            game._message_more = 0;
+            game._command_mode = null;
+            chatConsumeTurn();
         }
         return;
     }

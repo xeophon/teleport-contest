@@ -6419,6 +6419,80 @@ test('direct quest leader chat is not suppressed by prior automatic talk marker'
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(10)']);
 });
 
+test('direct quest leader chat after thanks without Amulet uses posthanks', async () => {
+    const result = await beginQuestLeaderChat({
+        role: 'Wizard',
+        leader: 'Neferet the Green',
+        align: 'lawful',
+        currentAlign: A_LAWFUL,
+        record: 20,
+        questStart: true,
+        rngLog: true,
+        setup: () => {
+            game.quest_status = {
+                ...(game.quest_status || {}),
+                met_leader: true,
+                met_leader_once: true,
+                got_quest: true,
+                got_thanks: true,
+            };
+        },
+    });
+
+    assert.equal(game._command_mode, 'questLeaderFollowupMore');
+    assert.match(result.introText, /Come near, my son/);
+    assert.match(result.introText, /quest for the Amulet of Yendor/);
+    assert.doesNotMatch(result.introText, /Well, Hero|Come closer/);
+    assert.equal(result.target.mstrategy, 0);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), QUEST_PAGER_LOAD_RNG);
+
+    enableRngLog({ reset: true });
+    await rhack(' ');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.quest_status.got_thanks, true);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
+});
+
+test('direct quest leader chat after thanks with Amulet uses hasamulet', async () => {
+    const result = await beginQuestLeaderChat({
+        role: 'Wizard',
+        leader: 'Neferet the Green',
+        align: 'lawful',
+        currentAlign: A_LAWFUL,
+        record: 20,
+        questStart: true,
+        rngLog: true,
+        setup: () => {
+            game.u.uhave = { ...(game.u.uhave || {}), amulet: 1 };
+            game.quest_status = {
+                ...(game.quest_status || {}),
+                met_leader: true,
+                met_leader_once: true,
+                got_quest: true,
+                got_thanks: true,
+            };
+        },
+    });
+
+    assert.equal(game._command_mode, 'questLeaderFollowupMore');
+    assert.match(result.introText, /take the Amulet to the Astral Plane/);
+    assert.match(result.introText, /altar of Ptah/);
+    assert.doesNotMatch(result.introText, /Well, Hero|Come closer/);
+    assert.equal(result.target.mstrategy, 0);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), QUEST_PAGER_LOAD_RNG);
+
+    enableRngLog({ reset: true });
+    await rhack(' ');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.quest_status.got_thanks, true);
+    assert.equal(game.u.uhave.amulet, 1);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
+});
+
 test('converted quest leader rejection uses banished pager without wisdom exercise', async () => {
     const result = await beginQuestLeaderChat({
         role: 'Wizard',
