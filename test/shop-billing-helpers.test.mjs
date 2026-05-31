@@ -55,6 +55,7 @@ const KEY_BACKSPACE = 8;
 const KEY_DELETE = 127;
 const WATER_WALKING_BOOTS = 10132;
 const LEVITATION_BOOTS = 10137;
+const QUEST_PAGER_LOAD_RNG = ['rn2(3)', 'rn2(2)'];
 
 function installShopState() {
     const g = resetGame();
@@ -4622,6 +4623,51 @@ async function chatAdjacentMonster({
     return { target, targetLoc, message: game._pending_message };
 }
 
+async function beginQuestLeaderChat({
+    role = 'Wizard', leader = 'Neferet the Green', align = 'neutral',
+    currentAlign = A_LAWFUL, currentBaseAlign = null, record = 20, level = 14,
+    questStart = true, rngLog = false, setup = null,
+} = {}) {
+    installStableNonShopFloorState();
+    const alignValue = value => value === 'lawful' ? A_LAWFUL
+        : value === 'chaotic' ? A_CHAOTIC
+        : value === 'neutral' ? 0
+        : value;
+    const originalAlign = alignValue(align);
+    const baseAlign = currentBaseAlign == null ? originalAlign : alignValue(currentBaseAlign);
+    game._startup_role = role;
+    game._startup_align = align;
+    game.urole = { ...(game.urole || {}), name: { m: role, f: role } };
+    game.u.ulevel = level;
+    game.u.ualign = { ...(game.u.ualign || {}), type: currentAlign, record };
+    game.u.ualignbase = [baseAlign, originalAlign];
+    game.u.uz = questStart ? { dnum: 1, dlevel: 1 } : { dnum: 0, dlevel: 10 };
+    game.dungeons = [
+        { name: 'The Dungeons of Doom', num_dunlevs: 20, depth_start: 1 },
+        { name: 'The Quest', num_dunlevs: 5, depth_start: 11 },
+    ];
+    game.branches = [{ end1: { dnum: 0, dlevel: 10 }, end2: { dnum: 1, dlevel: 1 } }];
+    game.specialLevels = [{ name: 'x-strt', dnum: 1, dlevel: 1 }];
+    const targetLoc = game.level.at(6, 5);
+    const target = ordinaryThrowTarget(leader, 6, 5, {
+        msleeping: 0,
+        mcanmove: true,
+        mcansee: true,
+        mpeaceful: true,
+        mstrategy: 'waitforu',
+        data: { name: leader, msound: 'MS_LEADER', mlet: '@', humanoid: true, unique: true },
+    });
+    game.level.monsters = [target];
+    if (setup) setup({ target, targetLoc });
+    markSquareVisible(6, 5);
+    if (rngLog) enableRngLog({ reset: true });
+
+    await enterChatCommand();
+    await rhack('l');
+
+    return { target, targetLoc, introText: (game._overlay_lines || []).map(row => row[2]).join('\n') };
+}
+
 async function chatDirectionKey(ch, { setup = null } = {}) {
     installStableNonShopFloorState();
     if (setup) await setup();
@@ -6371,6 +6417,138 @@ test('direct quest leader chat is not suppressed by prior automatic talk marker'
     assert.equal(game.context.move, 1);
     assert.equal(result.target.mstrategy, 0);
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(10)']);
+});
+
+test('converted quest leader rejection uses banished pager without wisdom exercise', async () => {
+    const result = await beginQuestLeaderChat({
+        role: 'Wizard',
+        leader: 'Neferet the Green',
+        align: 'lawful',
+        currentAlign: A_CHAOTIC,
+        currentBaseAlign: A_CHAOTIC,
+        record: 20,
+        questStart: true,
+        rngLog: true,
+    });
+
+    assert.equal(game._command_mode, 'questLeaderIntroMore');
+    assert.match(result.introText, /Come closer, Hero/);
+    assert.equal(game.quest_status.not_ready || 0, 0);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), QUEST_PAGER_LOAD_RNG);
+
+    enableRngLog({ reset: true });
+    await rhack(' ');
+
+    const banishedText = (game._overlay_lines || []).map(row => row[2]).join('\n');
+    assert.equal(game._command_mode, 'questLeaderRejectMore');
+    assert.match(banishedText, /You have betrayed all those who hold allegiance to Ptah/);
+    assert.match(banishedText, /You shall never set foot at the Lonely Tower again/);
+    assert.equal(game.quest_status.pissed_off, true);
+    assert.equal(game.quest_status.got_quest || false, false);
+    assert.equal(game._quest_reject_exercise_wis || 0, 0);
+    assert.equal(result.target.mpeaceful, 0);
+    assert.equal(result.target.hostile, true);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), QUEST_PAGER_LOAD_RNG);
+});
+
+test('temporary opposite alignment quest leader rejection uses badalign, not banished', async () => {
+    const result = await beginQuestLeaderChat({
+        role: 'Wizard',
+        leader: 'Neferet the Green',
+        align: 'lawful',
+        currentAlign: A_CHAOTIC,
+        currentBaseAlign: A_LAWFUL,
+        record: 20,
+        questStart: true,
+        rngLog: true,
+    });
+
+    assert.equal(game._command_mode, 'questLeaderIntroMore');
+    assert.match(result.introText, /Come closer, Hero/);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), QUEST_PAGER_LOAD_RNG);
+
+    enableRngLog({ reset: true });
+    await rhack(' ');
+
+    const rejectText = (game._overlay_lines || []).map(row => row[2]).join('\n');
+    assert.equal(game._command_mode, 'questLeaderRejectMore');
+    assert.match(rejectText, /You amaze me, Hero/);
+    assert.doesNotMatch(rejectText, /banished|betrayed all those who hold allegiance/);
+    assert.equal(game.quest_status.pissed_off || false, false);
+    assert.equal(game.quest_status.not_ready, 1);
+    assert.equal(game._quest_reject_exercise_wis, 1);
+    assert.equal(result.target.mpeaceful, true);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), QUEST_PAGER_LOAD_RNG);
+});
+
+test('off-start quest leader chat stops after intro without assignment checks', async () => {
+    const result = await beginQuestLeaderChat({
+        role: 'Wizard',
+        leader: 'Neferet the Green',
+        align: 'lawful',
+        currentAlign: A_LAWFUL,
+        record: 20,
+        questStart: false,
+        rngLog: true,
+        setup: () => {
+            game.quest_status = { ...(game.quest_status || {}), not_ready: 2 };
+        },
+    });
+
+    assert.equal(game._command_mode, 'questLeaderIntroMore');
+    assert.match(result.introText, /Come closer, Hero/);
+    assert.equal(game.quest_status.not_ready, 0);
+    assert.equal(result.target.mstrategy, 0);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), QUEST_PAGER_LOAD_RNG);
+
+    enableRngLog({ reset: true });
+    await rhack(' ');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.quest_status.got_quest || false, false);
+    assert.equal(game.quest_status.pissed_off || false, false);
+    assert.equal(game._quest_reject_exercise_wis || 0, 0);
+    assert.equal(result.target.mpeaceful, true);
+    assert.equal(game.quest_status.not_ready, 0);
+    assert.equal(game.context.move, 1);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
+});
+
+test('repeat off-start quest leader chat keeps not-ready marker after leader_next', async () => {
+    const result = await beginQuestLeaderChat({
+        role: 'Wizard',
+        leader: 'Neferet the Green',
+        align: 'lawful',
+        currentAlign: A_LAWFUL,
+        record: 20,
+        questStart: false,
+        rngLog: true,
+        setup: () => {
+            game.quest_status = {
+                ...(game.quest_status || {}),
+                met_leader: true,
+                met_leader_once: true,
+                not_ready: 2,
+            };
+        },
+    });
+
+    assert.equal(game._command_mode, 'questLeaderIntroMore');
+    assert.match(result.introText, /Well, Hero, you have returned/);
+    assert.equal(game.quest_status.not_ready, 2);
+    assert.equal(result.target.mstrategy, 0);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), QUEST_PAGER_LOAD_RNG);
+
+    enableRngLog({ reset: true });
+    await rhack(' ');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.quest_status.got_quest || false, false);
+    assert.equal(game.quest_status.pissed_off || false, false);
+    assert.equal(game._quest_reject_exercise_wis || 0, 0);
+    assert.equal(game.quest_status.not_ready, 2);
+    assert.equal(game.context.move, 1);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
 });
 
 test('chat with peaceful non-tame briber and no gold spends turn and angers demon', async () => {

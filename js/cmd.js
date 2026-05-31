@@ -648,6 +648,16 @@ export async function finishSwallowExpel(mon) {
 const MIN_QUEST_LEVEL = 14;
 const MIN_QUEST_ALIGN = 20;
 const QUEST_COMMON_TEXTS = {
+    banished: `You have betrayed all those who hold allegiance to %d, as you once did.
+My allegiance to %d holds fast and I cannot condone or accept what you
+have done.
+
+Leave this place.  You shall never set foot at %H again.
+That which you seek is now lost forever, for without the Bell of Opening,
+you will never be able to enter the place where he who has the Amulet
+resides.
+
+Go now!  You are banished from this place.`,
     quest_portal: `You receive a faint telepathic message from %l:
 Your help is urgently needed at %H!
 Look for a ...ic transporter.
@@ -3490,23 +3500,23 @@ function questPagerText(msgid, { initCore = true } = {}) {
     return text;
 }
 
-function questPagerRows(msgid) {
-    const text = questPagerText(msgid);
+function questPagerRows(msgid, options = {}) {
+    const text = questPagerText(msgid, options);
     if (!text) return null;
     const rows = text.split('\n').slice(0, 23).map((line, row) => [row, 0, line]);
     rows.push([23, 0, '--More--']);
     return rows;
 }
 
-function queueQuestPager(msgid, mode = 'questIntroMore') {
-    const rows = questPagerRows(msgid);
+function queueQuestPager(msgid, mode = 'questIntroMore', options = {}) {
+    const rows = questPagerRows(msgid, options);
     if (!rows) return false;
     game._queued_overlay_after_more = { lines: rows, clearRows: 24, hideStatus: true, mode };
     return true;
 }
 
-function showQuestPager(msgid, mode = 'questIntroMore') {
-    const rows = questPagerRows(msgid);
+function showQuestPager(msgid, mode = 'questIntroMore', options = {}) {
+    const rows = questPagerRows(msgid, options);
     if (!rows) return false;
     setOverlay(rows, 24, true);
     game._pending_message = 'text-window';
@@ -3673,15 +3683,33 @@ function queueQuestPortalCall(targetLevel, fromLevel) {
 
 async function continueQuestLeaderTalkAfterIntro() {
     game.quest_status ??= {};
+    const leader = game._quest_leader_talk_mon || null;
+    game._quest_leader_talk_mon = null;
+    if (questLevelKind() !== 'start') {
+        game._command_mode = null;
+        chatConsumeTurn();
+        return;
+    }
     if ((game.u?.ulevel || 1) < MIN_QUEST_LEVEL) {
         game._quest_reject_exercise_wis = 1;
         showQuestPager('badlevel', 'questLeaderRejectMore');
         return;
     }
     const record = game.u?.ualign?.record ?? 0;
-    const alignType = game.u?.ualign?.type ?? 0;
-    const originalType = game._startup_align === 'lawful' ? 1 : game._startup_align === 'chaotic' ? -1 : 0;
-    const pure = record >= MIN_QUEST_ALIGN && alignType === originalType;
+    const alignType = alignmentTypeFromValue(game.u?.ualign?.type) ?? startupAlignmentType();
+    const originalType = startupAlignmentType();
+    const currentBaseType = currentAlignmentBaseType();
+    if (currentBaseType !== originalType) {
+        game.quest_status.pissed_off = true;
+        if (leader) {
+            leader.mpeaceful = 0;
+            leader.angry = true;
+            leader.hostile = true;
+        }
+        showQuestPager('banished', 'questLeaderRejectMore');
+        return;
+    }
+    const pure = record >= MIN_QUEST_ALIGN && alignType === originalType && currentBaseType === originalType;
     if (!pure && game.flags?.debug && record < MIN_QUEST_ALIGN) {
         await setMessage(`You are currently ${record} and require ${MIN_QUEST_ALIGN}.`, true);
         game._command_mode = 'questLeaderStatusMore';
@@ -3718,10 +3746,13 @@ export function maybeQueueQuestLeaderTalk(mon, { automatic = true } = {}) {
         chatConsumeTurn();
         return true;
     }
+    const firstLeaderTalk = !game.quest_status.met_leader_once;
     if (automatic) mon.questTalked = true;
     game.quest_status.met_leader = true;
+    if (firstLeaderTalk) game.quest_status.not_ready = 0;
+    game._quest_leader_talk_mon = mon;
     const pager = game._pending_message && game._message_more ? queueQuestPager : showQuestPager;
-    if (!pager(game.quest_status.met_leader_once ? 'leader_next' : 'leader_first', 'questLeaderIntroMore'))
+    if (!pager(firstLeaderTalk ? 'leader_first' : 'leader_next', 'questLeaderIntroMore'))
         return false;
     game.quest_status.met_leader_once = true;
     return true;
