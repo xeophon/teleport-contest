@@ -34175,6 +34175,10 @@ function tipHatResidentShopkeeperSellNoise(mon) {
         return { handled: true, message: `${name} ${canSpeak ? 'complains' : 'indicates'} that business is bad.` };
     if (shkmoney > 4000)
         return { handled: true, message: `${name} ${canSpeak ? 'says' : 'indicates'} that business is good.` };
+    if (!shopkeeperIsIzchak(mon)) {
+        if (!canSpeak) return { handled: true, message: '' };
+        return { handled: true, message: `${name} talks about the problem of shoplifters.` };
+    }
     return { handled: false, message: '' };
 }
 
