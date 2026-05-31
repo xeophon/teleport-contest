@@ -4140,6 +4140,88 @@ test('worn helmet tip makes adjacent invisible naga mumble and maps it', async (
     assert.doesNotMatch(game._pending_message, /The black naga|hisses|doesn't respond|Nothing happens|waves/);
 });
 
+test('worn helmet tip makes visible ki-rin mutter a cantrip', async () => {
+    installNonShopFloorState();
+    const helmet = wornArmor(3063553, 'orcish helm', 'h');
+    const kirin = ordinaryThrowTarget('ki-rin', 6, 5, {
+        msleeping: 0,
+        mcanmove: true,
+        mcansee: true,
+        mpeaceful: true,
+        mstrategy: 'waitforu',
+        data: { name: 'ki-rin', mlevel: 16, mlet: 'angel' },
+    });
+    game.inventory = [helmet];
+    game.level.monsters = [kirin];
+    markSquareVisible(6, 5);
+
+    await enterTipCommand();
+    await rhack('h');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(kirin.mstrategy, 0);
+    assert.match(game._pending_message, /You briefly doff your helm\./);
+    assert.match(game._pending_message, /The ki-rin seems to mutter a cantrip\./);
+    assert.doesNotMatch(game._pending_message, /neighs|whickers|doesn't respond|Nothing happens|waves/);
+});
+
+test('worn helmet tip makes peaceful imp cuss about doom', async () => {
+    installNonShopFloorState();
+    const helmet = wornArmor(3063554, 'orcish helm', 'h');
+    const imp = ordinaryThrowTarget('imp', 6, 5, {
+        msleeping: 0,
+        mcanmove: true,
+        mcansee: true,
+        mpeaceful: true,
+        mstrategy: 'waitforu',
+        data: { name: 'imp', mlevel: 3, mlet: 'imp' },
+    });
+    game.inventory = [helmet];
+    game.level.monsters = [imp];
+    markSquareVisible(6, 5);
+
+    await enterTipCommand();
+    await rhack('h');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(imp.mstrategy, 0);
+    assert.match(game._pending_message, /You briefly doff your helm\./);
+    assert.match(game._pending_message, /"We're all doomed\."/);
+    assert.doesNotMatch(game._pending_message, /The imp|doesn't respond|Nothing happens|waves/);
+});
+
+test('worn helmet tip makes peaceful lawful minion cuss about redemption', async () => {
+    installNonShopFloorState();
+    const helmet = wornArmor(3063555, 'orcish helm', 'h');
+    const imp = ordinaryThrowTarget('imp', 6, 5, {
+        lminion: true,
+        msleeping: 0,
+        mcanmove: true,
+        mcansee: true,
+        mpeaceful: true,
+        mstrategy: 'waitforu',
+        data: { name: 'imp', mlevel: 3, mlet: 'imp' },
+    });
+    game.inventory = [helmet];
+    game.level.monsters = [imp];
+    markSquareVisible(6, 5);
+
+    await enterTipCommand();
+    await rhack('h');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(imp.mstrategy, 0);
+    assert.match(game._pending_message, /You briefly doff your helm\./);
+    assert.match(game._pending_message, /"It's not too late\."/);
+    assert.doesNotMatch(game._pending_message, /The imp|We're all doomed|doesn't respond|Nothing happens|waves/);
+});
+
 test('unknown cursed worn helmet tip learns curse and spends action', async () => {
     installCommandShopState();
     const helmet = wornArmor(306352, 'orcish helm', 'h', 0, {

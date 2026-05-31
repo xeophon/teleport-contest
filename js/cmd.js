@@ -33779,6 +33779,8 @@ function tipHatMonsterSound(mon) {
     if (/^(raven|tengu)$/.test(name)) return 'sqawk';
     if (/^(leocrotta|aleax|doppelganger)$/.test(name)) return 'imitate';
     if (/\bnaga\b/.test(name)) return 'mumble';
+    if (name === 'ki-rin') return 'spell';
+    if (name === 'imp') return 'cuss';
     if (/^(pony|horse|warhorse|white unicorn|gray unicorn|black unicorn)$/.test(name)
         || mlet === 'quadruped' || mlet === 'unicorn')
         return 'neigh';
@@ -33960,6 +33962,15 @@ function tipHatMonsterNoise(mon, { visible = tipHatMonsterVisible(mon) } = {}) {
         return { handled: true, message: `${name} imitates you.` };
     case 'mumble':
         return { handled: true, message: `${name} mumbles incomprehensibly.` };
+    case 'spell':
+        return { handled: true, message: `${name} seems to mutter a cantrip.` };
+    case 'cuss':
+        if (peaceful) {
+            const lminion = !!(mon.lminion || mon.is_lminion || mon.isLminion
+                || mon.data?.lminion || mon.data?.is_lminion || mon.data?.isLminion);
+            return { handled: true, message: lminion ? `"It's not too late."` : `"We're all doomed."` };
+        }
+        return { handled: false, message: '' };
     default:
         return { handled: false, message: '' };
     }
