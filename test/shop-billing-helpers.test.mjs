@@ -32225,6 +32225,219 @@ test('hero-thrown ordinary egg hits visible monster through egg hmon path', asyn
     ]);
 });
 
+test('hero-thrown cream pie direct hit blinds monster through hmon path', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.u.acurr.a[A_DEX] = 25;
+    const pie = creamPie(876071, 'p');
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, { mcansee: true });
+    game.inventory = [pie];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('p');
+    await rhack('l');
+
+    assert.match(game._pending_message, /The cream pie splashes over the goblin's face!/);
+    assert.doesNotMatch(game._pending_message, /misses|top of your head|Splash|Splat/);
+    assert.equal(goblin.msleeping, 0);
+    assert.equal(goblin.mpeaceful, 0);
+    assert.equal(goblin.mcansee, false);
+    assert.equal(goblin.mblinded >= 21 && goblin.mblinded <= 45, true);
+    assert.equal(game.inventory.includes(pie), false);
+    assert.equal(game.level.objects.length, 0);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rnd(20)', 'rnd(25)', 'rn2(25)',
+    ]);
+});
+
+test('hero-thrown cream pie direct hit splats for blind hero but blinds monster', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, { blind: true });
+    game.u.acurr.a[A_DEX] = 25;
+    const pie = creamPie(876072, 'p');
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, { mcansee: true });
+    game.inventory = [pie];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('p');
+    await rhack('l');
+
+    assert.match(game._pending_message, /^Splat!$/);
+    assert.doesNotMatch(game._pending_message, /splashes over|misses|top of your head/);
+    assert.equal(goblin.msleeping, 0);
+    assert.equal(goblin.mpeaceful, 0);
+    assert.equal(goblin.mcansee, false);
+    assert.equal(goblin.mblinded >= 21 && goblin.mblinded <= 45, true);
+    assert.equal(game.inventory.includes(pie), false);
+    assert.equal(game.level.objects.length, 0);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rnd(20)', 'rnd(25)', 'rn2(25)',
+    ]);
+});
+
+test('hero-thrown cream pie direct hit splats on eyeless monster', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.u.acurr.a[A_DEX] = 25;
+    const pie = creamPie(876073, 'p');
+    const jelly = ordinaryThrowTarget('jelly', 7, 5, {
+        mcansee: true,
+        mblinded: 0,
+        data: { name: 'jelly', mlevel: 1, noeyes: true },
+    });
+    game.inventory = [pie];
+    game.level.monsters = [jelly];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('p');
+    await rhack('l');
+
+    assert.match(game._pending_message, /^Splat!$/);
+    assert.doesNotMatch(game._pending_message, /splashes over|misses|top of your head/);
+    assert.equal(jelly.msleeping, 0);
+    assert.equal(jelly.mpeaceful, 0);
+    assert.equal(jelly.mcansee, true);
+    assert.equal(jelly.mblinded, 0);
+    assert.equal(game.inventory.includes(pie), false);
+    assert.equal(game.level.objects.length, 0);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rnd(20)', 'rnd(25)',
+    ]);
+});
+
+test('hero-thrown cream pie direct hit extends temporary monster blindness', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.u.acurr.a[A_DEX] = 25;
+    const pie = creamPie(876075, 'p');
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, {
+        mcansee: false,
+        mblinded: 120,
+    });
+    game.inventory = [pie];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('p');
+    await rhack('l');
+
+    assert.match(game._pending_message, /The cream pie splashes over the goblin's face!/);
+    assert.doesNotMatch(game._pending_message, /further|Splat|misses|top of your head/);
+    assert.equal(goblin.msleeping, 0);
+    assert.equal(goblin.mpeaceful, 0);
+    assert.equal(goblin.mcansee, false);
+    assert.equal(goblin.mblinded, 127);
+    assert.equal(game.inventory.includes(pie), false);
+    assert.equal(game.level.objects.length, 0);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rnd(20)', 'rnd(25)', 'rn2(25)',
+    ]);
+});
+
+test('hero-thrown cream pie direct hit splats on permanently blind monster', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.u.acurr.a[A_DEX] = 25;
+    const pie = creamPie(876076, 'p');
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, {
+        mcansee: false,
+        mblinded: 0,
+    });
+    game.inventory = [pie];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('p');
+    await rhack('l');
+
+    assert.match(game._pending_message, /^Splat!$/);
+    assert.doesNotMatch(game._pending_message, /splashes over|misses|top of your head/);
+    assert.equal(goblin.msleeping, 0);
+    assert.equal(goblin.mpeaceful, 0);
+    assert.equal(goblin.mcansee, false);
+    assert.equal(goblin.mblinded, 0);
+    assert.equal(game.inventory.includes(pie), false);
+    assert.equal(game.level.objects.length, 0);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rnd(20)', 'rnd(25)',
+    ]);
+});
+
+test('hero-thrown cream pie direct hit preserves tame peacefulness', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.u.acurr.a[A_DEX] = 25;
+    const pie = creamPie(876077, 'p');
+    const dog = ordinaryThrowTarget('little dog', 7, 5, {
+        mcansee: true,
+        mpeaceful: 1,
+        mtame: 5,
+        pet: true,
+        msleeping: 1,
+        mstrategy: 'waitforu',
+    });
+    game.inventory = [pie];
+    game.level.monsters = [dog];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('p');
+    await rhack('l');
+
+    assert.match(game._pending_message, /The cream pie splashes over the little dog's face!/);
+    assert.equal(dog.msleeping, 0);
+    assert.equal(dog.mstrategy, 0);
+    assert.equal(dog.mpeaceful, 1);
+    assert.equal(dog.mtame, 5);
+    assert.equal(dog.pet, true);
+    assert.equal(dog.mcansee, false);
+    assert.equal(game.inventory.includes(pie), false);
+    assert.equal(game.level.objects.length, 0);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rnd(20)', 'rnd(25)', 'rn2(25)',
+    ]);
+});
+
+test('hero-thrown unpaid cream pie stack direct hit bills the splattered unit', async () => {
+    const { shkp } = installCommandShopState();
+    initRng(2);
+    game.u.acurr.a[A_DEX] = 25;
+    const pies = creamPie(876074, 'p', 2);
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, { mcansee: true });
+    game.inventory = [pies];
+    game.level.monsters = [goblin];
+    shop.addObjectToShopBill(shkp, pies, 20);
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('p');
+    await rhack('l');
+
+    assert.match(game._pending_message, /The cream pie splashes over the goblin's face!/);
+    assert.equal(pies.quan, 1);
+    assert.equal(game.inventory.includes(pies), true);
+    assert.equal(game.level.objects.length, 0);
+    const liveEntry = shop.shopBillEntryForObject(shkp, pies);
+    assert.ok(liveEntry);
+    assert.equal(liveEntry.useup, false);
+    assert.equal(liveEntry.bquan, 1);
+    assert.equal(shop.shopBillEntryTotal(liveEntry), 10);
+    assert.equal(pies.unpaidPrice, 10);
+    assert.equal(shkp.debit, 10);
+    assert.equal(shkp.billct, 1);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(-3), [
+        'rnd(20)', 'rnd(25)', 'rn2(25)',
+    ]);
+});
+
 test('hero-thrown blinding venom direct hit blinds monster through hmon path', async () => {
     installNonShopFloorState();
     initRng(2);

@@ -16865,6 +16865,12 @@ function monsterCanBeBlindedByBlindingVenom(mon) {
         && !monsterWearsVisoredHelmetForBlinding(mon);
 }
 
+function monsterCanBeBlindedByCreamPie(mon) {
+    return monsterHasEyesForPotionBlindness(mon)
+        && !monsterIsPermanentlyBlind(mon)
+        && !heroRavenCannotBlindMonster(mon);
+}
+
 function blindMonsterFromPotion(mon) {
     if (!monsterHasEyesForPotionBlindness(mon) || monsterIsPermanentlyBlind(mon)) return false;
     const baseDuration = 64 + rn2(32);
@@ -17883,9 +17889,47 @@ function heroThrownVenomTargetName(mon) {
     return fireScrollMonsterName(mon).replace(/^The /, 'the ');
 }
 
+function heroThrownCreamPieTargetName(mon) {
+    return heroThrownVenomTargetName(mon);
+}
+
+function possessiveMonsterName(name) {
+    return `${name}${String(name).endsWith('s') ? "'" : "'s"}`;
+}
+
+function heroThrownCreamPieHitMonsterMessage(pie, mon) {
+    const pieName = floorObjectTheSubject({ ...pie, quan: 1 });
+    const targetName = heroThrownCreamPieTargetName(mon);
+    const dataName = String(mon?.data?.name || mon?.name || '').toLowerCase();
+    const faceTarget = monsterHasEyesForPotionBlindness(mon) && dataName !== 'floating eye'
+        ? `${possessiveMonsterName(targetName)} face`
+        : targetName;
+    return `${pieName} splashes over ${faceTarget}!`;
+}
+
 function setHeroObjectHitMonsterAngry(mon) {
     clearMonsterPotionWaitStrategy(mon);
     if (mon.mpeaceful && !(mon.mtame || mon.pet)) mon.mpeaceful = 0;
+}
+
+function heroThrownCreamPieHitMonster(pie, mon) {
+    const messages = [];
+    mon.msleeping = 0;
+    if (monsterCanBeBlindedByCreamPie(mon)) {
+        if (game.u?.blind) {
+            messages.push('Splat!');
+        } else {
+            messages.push(heroThrownCreamPieHitMonsterMessage(pie, mon));
+        }
+        const blindTime = 21 + rn2(25);
+        mon.mcansee = false;
+        mon.mblinded = Math.min(127, (mon.mblinded || 0) + blindTime);
+    } else {
+        messages.push('Splat!');
+    }
+    setHeroObjectHitMonsterAngry(mon);
+    markThrownBrokenObjectDebt(pie);
+    return messages;
 }
 
 function heroThrownBlindingVenomHitMonster(venom, mon) {
@@ -60042,21 +60086,20 @@ export async function rhack(_cmd) {
 	            const thrownName = pickupObjectName({ ...item, quan: 1 });
 	            impactMessage = `The ${thrownName} misses the ${targetMon.data?.name || 'creature'}.`;
 	            if (!rn2(3)) targetMon.msleeping = 0;
-	        } else if (targetMon && (item.otyp === CREAM_PIE || lowerName === 'cream pie')) {
+	        } else if (targetMon && isCreamPieObject(item)) {
 	            rnd(20);
 	            const dex = game.u?.acurr?.a?.[A_DEX] ?? 10;
 	            if (dex > rnd(25)) {
-	                const blindTime = 21 + rn2(25);
-	                targetMon.msleeping = 0;
-	                targetMon.mcansee = false;
-	                targetMon.mblinded = Math.min(127, (targetMon.mblinded || 0) + blindTime);
-	                targetMon.mpeaceful = 0;
-	                removeInventoryItem(item);
-	                const targetName = targetMon.data?.name || 'creature';
-	                await setMessage(`The cream pie splashes over the ${targetName}'s face!`);
+	                if ((item.quan || 1) > 1) splitCarriedObjectShopBill(item, thrownObject, 1);
+	                const messages = heroThrownCreamPieHitMonster(thrownObject, targetMon);
+	                removeInventoryItem(item, 1);
+	                newsym(targetMon.mx, targetMon.my);
+	                await setMessage(messages.join('  '));
 	                game._command_mode = null;
 	                game._throw_item_letter = null;
-	                game.context.move = 1;
+	                game._resume_time_after_more = 0;
+	                game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
+	                game.context.move = 0;
 	                return;
 	            }
 	            impactMessage = `The cream pie misses the ${targetMon.data?.name || 'creature'}.`;
