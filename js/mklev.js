@@ -483,6 +483,14 @@ const WEAPON_ROLL_KINDS = [
     [1002, 'crossbow', 50],
 ];
 
+const SPECIFIC_POLEARM_INFO = new Map([
+    [PARTISAN, { kind: 'vulgar polearm', actualKind: 'partisan', owt: 80 }],
+    [RANSEUR, { kind: 'hilted polearm', actualKind: 'ranseur', owt: 50 }],
+    [SPETUM, { kind: 'forked polearm', actualKind: 'spetum', owt: 50 }],
+    [GLAIVE, { kind: 'single-edged polearm', actualKind: 'glaive', owt: 75 }],
+    [LUCERN_HAMMER, { kind: 'pronged polearm', actualKind: 'lucern hammer', owt: 150 }],
+]);
+
 const SPECIFIC_WEAPONS = new Set([
     DAGGER, BOW, CROSSBOW, KNIFE, SLING, ORCISH_DAGGER, SCIMITAR,
     RUNESWORD, WAR_HAMMER, ELVEN_BROADSWORD, ELVEN_DAGGER,
@@ -4099,6 +4107,14 @@ export function mksobj(otyp, init, artif) {
         });
         if (otyp === SLIME_MOLD) applySlimeMoldFruitFields(otmp, otmp.spe || undefined);
     }
+    const specificPolearm = SPECIFIC_POLEARM_INFO.get(otyp);
+    if (specificPolearm) {
+        Object.assign(otmp, {
+            cls: 'weapon',
+            glyph: ')',
+            known: false,
+        }, specificPolearm);
+    }
     if (otyp === CORPSE) {
         if (!otmp.corpsenm) {
             const ptr = rndmonnum();
@@ -4596,7 +4612,7 @@ export function object_display(otmp) {
         || otyp === ORCISH_SHORT_SWORD || otyp === DWARVISH_SHORT_SWORD
         || otyp === SCIMITAR || otyp === BROADSWORD || otyp === LONG_SWORD
         || otyp === TWO_HANDED_SWORD || otyp === ELVEN_BROADSWORD || otyp === ELVEN_DAGGER
-        || otyp === LUCERN_HAMMER || otyp === AKLYS || otyp === SILVER_MACE
+        || SPECIFIC_POLEARM_INFO.has(otyp) || otyp === AKLYS || otyp === SILVER_MACE
         || otyp === ATHAME || otyp === QUARTERSTAFF
         || otyp === MORNING_STAR || otyp === KATANA || otyp === TSURUGI)
         return { glyph: ')', color: displayColor ?? CLR_CYAN };
@@ -6207,7 +6223,6 @@ function mongets(otyp, erodes = true) {
     else if (otyp === TRIDENT) Object.assign(otmp, { cls: 'weapon', kind: 'trident' });
     else if (otyp === STILETTO) Object.assign(otmp, { cls: 'weapon', kind: 'stiletto' });
     else if (otyp === BULLWHIP) Object.assign(otmp, { cls: 'weapon', kind: 'bullwhip' });
-    else if (otyp === LUCERN_HAMMER) Object.assign(otmp, { cls: 'weapon', kind: 'lucern hammer' });
     else if (otyp === AKLYS) Object.assign(otmp, { cls: 'weapon', kind: 'aklys' });
     else if (otyp === SILVER_MACE) Object.assign(otmp, { cls: 'weapon', kind: 'silver mace' });
     else if (otyp === ARROW) Object.assign(otmp, { cls: 'weapon', kind: 'arrow', plural: 'arrows' });

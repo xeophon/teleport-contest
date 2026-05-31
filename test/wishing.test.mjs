@@ -12,7 +12,7 @@ import {
     S_LRING, THRONE, TREE, TREE_LOOTED, TREE_SWARM, T_LOOTED, WATER,
 } from '../js/const.js';
 import { enableRngLog, getRngLog, initRng } from '../js/rng.js';
-import { mksobj } from '../js/mklev.js';
+import { mksobj, object_display } from '../js/mklev.js';
 import { currentFruitId, setCurrentFruitName } from '../js/fruit.js';
 
 const BELL = 358;
@@ -923,6 +923,34 @@ test('mksobj initializes slime mold with current fruit id', () => {
     assert.equal(item.spe, fid);
     assert.equal(item.nutrition, 250);
     assert.equal(item.owt, 5);
+});
+
+test('mksobj initializes exact local-ID polearms with C appearance metadata', () => {
+    const cases = [
+        [PARTISAN, 'vulgar polearm', 'partisan', 80, 10],
+        [RANSEUR, 'hilted polearm', 'ranseur', 50, 6],
+        [SPETUM, 'forked polearm', 'spetum', 50, 5],
+        [GLAIVE, 'single-edged polearm', 'glaive', 75, 6],
+        [LUCERN_HAMMER, 'pronged polearm', 'lucern hammer', 150, 7],
+    ];
+
+    for (const [otyp, kind, actualKind, weight, cost] of cases) {
+        installWishState(1);
+        const item = mksobj(otyp, true, false);
+        const display = object_display({ otyp });
+
+        assert.equal(item.otyp, otyp, actualKind);
+        assert.equal(item.cls, 'weapon', actualKind);
+        assert.equal(item.glyph, ')', actualKind);
+        assert.equal(display.glyph, ')', actualKind);
+        assert.equal(display.color, 6, actualKind);
+        assert.equal(item.kind, kind, actualKind);
+        assert.equal(item.actualKind, actualKind, actualKind);
+        assert.equal(item.known, false, actualKind);
+        assert.equal(item.quan, 1, actualKind);
+        assert.equal(item.owt, weight, actualKind);
+        assert.equal(shop.shopBaseCost(item), cost, actualKind);
+    }
 });
 
 test('mksobj initializes exact charged instruments with C charge ranges', () => {
