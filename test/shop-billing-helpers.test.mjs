@@ -4225,7 +4225,8 @@ test('worn helmet tip makes peaceful lawful minion cuss about redemption', async
 async function tipInvisibleExplicitSound({ name, sound, peaceful = false, tame = 0,
     gold = 0, seed = null, rngLog = false, role = '', inventory = [], data = {}, extra = {},
     moves = null, traps = null, endgame = false, race = '', hallucinating = false,
-    polyself = null, bystanders = [] } = {}) {
+    polyself = null, bystanders = [], moonphase = null, datetime = null, night = null,
+    hour = null } = {}) {
     installStableNonShopFloorState();
     if (seed != null) initRng(seed);
     if (rngLog) enableRngLog({ reset: true });
@@ -4246,6 +4247,10 @@ async function tipInvisibleExplicitSound({ name, sound, peaceful = false, tame =
         game.u.hallucinating = true;
         game.u._statusSuffix = ' Hallu';
     }
+    if (moonphase != null) game.flags.moonphase = moonphase;
+    if (datetime != null) game._datetime = datetime;
+    if (night != null) game.flags.night = night;
+    if (hour != null) game.flags.hour = hour;
     if (polyself) {
         game.u._polyself_form = typeof polyself === 'string' ? { name: polyself } : polyself;
     }
@@ -4447,6 +4452,78 @@ test('worn helmet tip makes hostile invisible lawful minion use angel cuss', asy
         /Nothing happens|doesn't respond|We're all doomed|It's not too late|casts aspersions|Come here often|Eat slime and die|grid bug|waves/);
     assert.doesNotMatch(game._pending_message, /%[Dp]/);
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(14)']);
+});
+
+test('worn helmet tip infers invisible human werecreature whisper off full moon', async () => {
+    const result = await tipInvisibleExplicitSound({
+        name: 'werewolf',
+        peaceful: false,
+        rngLog: true,
+        moonphase: 1,
+        night: true,
+        data: { mlevel: 5, mlet: '@', humanoid: true, were: true, wereHuman: true },
+    });
+
+    assert.match(result.message,
+        /It whispers inaudibly\.  All you can make out is "moon"\./);
+    assert.doesNotMatch(result.message,
+        /throws back|blood curdling|howl|shriek|The werewolf|doesn't respond|Nothing happens|waves/);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
+});
+
+test('worn helmet tip keeps invisible werebeast on bark sound', async () => {
+    const result = await tipInvisibleExplicitSound({
+        name: 'werewolf',
+        peaceful: false,
+        rngLog: true,
+        moonphase: 4,
+        night: true,
+        data: { mlevel: 5, mlet: 'd', humanoid: false, were: true, wereBeast: true },
+    });
+
+    assert.match(result.message, /It howls\./);
+    assert.doesNotMatch(result.message,
+        /moon|throws back|blood curdling|The werewolf|doesn't respond|Nothing happens|waves/);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
+});
+
+test('worn helmet tip makes full-moon invisible werecreature use C night fork', async () => {
+    const sleeper = ordinaryThrowTarget('dog', 7, 5, {
+        msleeping: 1,
+        mstrategy: 'waitforu',
+        data: { name: 'dog', mlevel: 4, mlet: 'dog' },
+    });
+
+    const result = await tipInvisibleExplicitSound({
+        name: 'werewolf',
+        sound: 'MS_WERE',
+        peaceful: false,
+        rngLog: true,
+        moonphase: 4,
+        night: true,
+        data: { mlevel: 5, mlet: '@', humanoid: true, were: true, wereHuman: true },
+        bystanders: [sleeper],
+    });
+
+    const log = getRngLog();
+    assert.deepEqual(log.map(entry => entry.replace(/=.*/, '')), ['rn2(13)']);
+    assert.match(log[0], /^rn2\(13\)=(?:[0-9]|1[0-2])$/);
+    assert.doesNotMatch(result.message, /The werewolf|doesn't respond|Nothing happens|waves/);
+
+    const roll = Number(log[0].match(/=(\d+)$/)[1]);
+    if (roll === 0) {
+        assert.match(result.message,
+            /It whispers inaudibly\.  All you can make out is "moon"\./);
+        assert.doesNotMatch(result.message, /throws back|blood curdling|howl|shriek/);
+        assert.equal(sleeper.msleeping, 1);
+        assert.equal(sleeper.mstrategy, 'waitforu');
+    } else {
+        assert.match(result.message,
+            /It throws back its head and lets out a blood curdling howl!/);
+        assert.doesNotMatch(result.message, /whispers inaudibly/);
+        assert.equal(sleeper.msleeping, 0);
+        assert.equal(sleeper.mstrategy, 0);
+    }
 });
 
 test('worn helmet tip makes invisible explicit orc sound grunt', async () => {

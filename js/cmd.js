@@ -34127,6 +34127,14 @@ function tipHatHostileCussNoise(mon, name, monName) {
     return { handled: true, message: [message, ...wakeMessages].filter(Boolean).join('  ') };
 }
 
+function tipHatMonsterIsHumanWereForm(mon, monName, mlet) {
+    const data = mon?.data || {};
+    if (!/^(?:were(?:rat|jackal|wolf))$/.test(monName)) return false;
+    if (mon?.wereBeast || data.wereBeast) return false;
+    return !!(mon?.wereHuman || data.wereHuman || data.humanoid || data.human
+        || mlet === '@' || mlet === 'human' || mlet === 'humanoid');
+}
+
 function tipHatMonsterSound(mon) {
     const data = mon?.data || {};
     const explicit = mon?.msound ?? mon?.sound ?? data.msound ?? data.sound;
@@ -34143,11 +34151,12 @@ function tipHatMonsterSound(mon) {
     if (/\bnaga\b/.test(name)) return 'mumble';
     if (name === 'ki-rin') return 'spell';
     if (name === 'imp') return 'cuss';
+    if (tipHatMonsterIsHumanWereForm(mon, name, mlet)) return 'were';
     if (TIPHAT_BOAST_MONSTER_NAMES.has(name)) return 'boast';
     if (/^(pony|horse|warhorse|white unicorn|gray unicorn|black unicorn)$/.test(name)
         || mlet === 'quadruped' || mlet === 'unicorn')
         return 'neigh';
-    if (/^(jackal|fox|coyote|little dog|dog|large dog|dingo|wolf|winter wolf cub|winter wolf|warg)$/.test(name)
+    if (/^(jackal|fox|coyote|little dog|dog|large dog|dingo|wolf|werejackal|werewolf|winter wolf cub|winter wolf|warg)$/.test(name)
         || mlet === 'dog')
         return 'bark';
     if (/^(kitten|housecat|large cat|jaguar|lynx|panther)$/.test(name)
@@ -34361,6 +34370,17 @@ function tipHatMonsterNoise(mon, { visible = tipHatMonsterVisible(mon) } = {}) {
         return { handled: true, message: `${name} mumbles incomprehensibly.` };
     case 'spell':
         return { handled: true, message: `${name} seems to mutter a cantrip.` };
+    case 'were': {
+        const fullMoon = game.flags?.moonphase === 4;
+        const isNight = tipHatIsNight();
+        const bloodcurdling = fullMoon && (isNight ? rn2(13) !== 0 : !rn2(13));
+        if (!bloodcurdling)
+            return { handled: true, message: `${name} whispers inaudibly.  All you can make out is "moon".` };
+        const cry = monName === 'wererat' ? 'shriek' : 'howl';
+        const howlMessage = `${name} throws back ${tipHatMonsterPossessive(mon)} head and lets out a blood curdling ${cry}!`;
+        const wakeMessages = tipHatWakeNearby(mon, 11 * 11);
+        return { handled: true, message: [howlMessage, ...wakeMessages].filter(Boolean).join('  ') };
+    }
     case 'cuss':
         if (peaceful) {
             return { handled: true, message: tipHatMonsterIsLawfulMinion(mon) ? `"It's not too late."` : `"We're all doomed."` };
