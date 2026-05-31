@@ -704,6 +704,20 @@ back only when you have purified yourself."`,
 quest.  A mere %r could not possibly face the rigors demanded and
 survive.  Go forth, and come here again when your adventures have further
 taught you."`,
+            guardtalk_after: [
+                `"Did you see Lash LaRue in 'Song of Old Wyoming' the other night?"`,
+                '"Hey man, got any potions of hallucination for sale?"',
+                '"I guess you are guaranteed to make full professor now."',
+                '"So, what was worse, %n or your entrance exams?"',
+                '"%oC is impressive, but nothing like the bones I dug up!"',
+            ],
+            guardtalk_before: [
+                `"Did you see Lash LaRue in 'Song of Old Wyoming' the other night?"`,
+                '"Hey man, got any potions of hallucination for sale?"',
+                '"Did you see the artifact %l brought back from the last dig?"',
+                '"So what species do *you* think we evolved from?"',
+                `"So you're %ls prize pupil!  I don't know what he sees in you."`,
+            ],
             assignquest: `"Grave times have befallen the college, for %na has
 stolen %o.  Without it, the board of directors of
 the university will soon have no choice but to revoke our research grants.
@@ -766,6 +780,20 @@ Go forth, and return when you feel ready."`,
             badlevel: `"%p, I fear that you are as yet too inexperienced to face
 %n.  Only %Ra with the help of %d could ever hope to
 defeat %ni."`,
+            guardtalk_after: [
+                `"The battles here have been good -- our enemies' blood soaks the soil!"`,
+                '"Remember that glory is crushing your enemies beneath your feet!"',
+                '"Times will be good again, now that the horde is vanquished."',
+                '"You have brought our clan much honor in defeating %n."',
+                '"You will be a worthy successor to %l."',
+            ],
+            guardtalk_before: [
+                `"The battles here have been good -- our enemies' blood soaks the soil!"`,
+                '"Remember that glory is crushing your enemies beneath your feet!"',
+                '"There has been little treasure to loot, since the horde arrived."',
+                '"The horde is mighty in numbers, but they have little courage."',
+                '"%lC is a strange one, but he has helped defend us."',
+            ],
             assignquest: `"The world is in great need of your assistance, %p.
 
 "About six months ago, I learned that a mysterious sorcerer, known
@@ -807,6 +835,20 @@ side of a hill.  From within, you smell the foul stench of carrion.
 
 The pools on either side of the entrance are fouled with blood, and
 pieces of rusted metal and broken weapons show above the surface.`,
+            guardtalk_after: [
+                '"Hail, %p!  Verily, thou lookest well."',
+                '"So, %p, didst thou find %n in the fens near %i?"',
+                '"Worthy %p, hast thou proven thy right purpose on the body of %n?"',
+                '"Verily, %l could have no better champion, %p."',
+                '"Hast thou indeed recovered %o?"',
+            ],
+            guardtalk_before: [
+                '"Hail, %p!  Verily, thou lookest well."',
+                '"There is word, %p, that %n hath been sighted in the fens near %i."',
+                '"Thou art our only hope now, %p."',
+                '"Verily, %l could have no better champion, %p."',
+                '"Many brave %cP died when %n attacked."',
+            ],
         },
     },
     Priest: {
@@ -857,6 +899,20 @@ you have purified yourself."`,
             badlevel: `"Alas, %p, it is not yet to be.  A mere %r could never
 withstand the might of %n.  Go forth, again into the world, and return
 when you have attained the post of %R."`,
+            guardtalk_after: [
+                '"Greetings, %r.  It is good to see you again."',
+                '"Ah, %p!  Our deepest gratitude for all of your help."',
+                '"Welcome back, %s!  With %o, no undead can stand against us."',
+                '"Praise be to %d, for delivering us from %n."',
+                '"May %d be with you, %s."',
+            ],
+            guardtalk_before: [
+                '"Greetings, honored %r.  It is good to see you."',
+                '"Ah, %p!  Surely you can help us in our hour of need."',
+                '"Greetings, %s.  %lC has great need of your help."',
+                '"Alas, it seems as if even %d has deserted us."',
+                '"May %d be with you, %s."',
+            ],
             assignquest: `"Yes, %p.  You are truly ready now.  Attend to me and I shall
 tell you of what has transpired:
 
@@ -921,6 +977,20 @@ truly ready for this quest.  May %d guide you in this task."`,
 spellcaster.  As %ra, you would surely be overcome in the challenge
 ahead.  Go, now, expand your horizons, and return when you have attained
 renown as %Ra."`,
+            guardtalk_after: [
+                `"I have some eye of newt to trade, do you have a spare blind-worm's sting?"`,
+                '"The magic portal now seems like it will remain stable for quite some time."',
+                '"Have you noticed how much stronger %l is since %o was recovered?"',
+                `"Thank %d!  We weren't positive you would defeat %n."`,
+                '"I, too, will venture into the world, because %n was but one of many evils to be vanquished."',
+            ],
+            guardtalk_before: [
+                '"Would you happen to have some eye of newt in that overstuffed pack, %s?"',
+                '"Ah, the spell to create the magic portal worked.  Outstanding!"',
+                '"Hurry!  %lC may not survive that casting of the portal spell!"',
+                '"The spells of %n were just too powerful for us to withstand."',
+                '"I, too, will venture into the world, because %n is but one of many evils to be vanquished."',
+            ],
             assignquest: `"Yes, %p, you truly are ready for this dire task.  Listen,
 carefully, for what I tell you now will be of vital importance.
 
@@ -3249,13 +3319,14 @@ function questDownBlocked() {
     return questLevelKind() === 'start' && !okToQuest();
 }
 
-function questPagerText(msgid) {
+function questPagerText(msgid, { initCore = true } = {}) {
     const roleName = game.urole?.name?.m || game._startup_role || '';
     const info = QUEST_ROLE_DATA[roleName];
-    const raw = info?.texts?.[msgid] || QUEST_COMMON_TEXTS[msgid]
+    let raw = info?.texts?.[msgid] || QUEST_COMMON_TEXTS[msgid]
         || (msgid === 'goal_alt' ? info?.texts?.goal_next : '');
+    if (Array.isArray(raw)) raw = raw.length ? raw[rn2(raw.length)] : '';
     if (!raw) return '';
-    l_nhcore_init();
+    if (initCore) l_nhcore_init();
     const rankIndex = level => level <= 2 ? 0 : level <= 30 ? Math.trunc((level + 2) / 4) : 8;
     const rank = info.ranks[Math.min(rankIndex(game.u?.ulevel || 1), info.ranks.length - 1)];
     const minRank = info.ranks[Math.min(rankIndex(MIN_QUEST_LEVEL), info.ranks.length - 1)];
@@ -3268,8 +3339,10 @@ function questPagerText(msgid) {
     const child = game.flags?.female ? 'daughter' : 'son';
     const cap = text => `${text.charAt(0).toUpperCase()}${text.slice(1)}`;
     const article = text => /^(?:the|a|an)\b/i.test(text) ? text : `${/^[aeiou]/i.test(text) ? 'an' : 'a'} ${text}`;
+    const possessive = text => String(text || '').endsWith('s') ? `${text}'` : `${text}'s`;
     const roleClass = roleName || 'Adventurer';
     const malePronouns = { h: 'he', H: 'He', i: 'him', I: 'Him', j: 'his', J: 'His' };
+    const leader = info.leaderText || info.leader;
     const replacements = [
         ['%nh', malePronouns.h], ['%nH', malePronouns.H], ['%ni', malePronouns.i],
         ['%nI', malePronouns.I], ['%nj', malePronouns.j], ['%nJ', malePronouns.J],
@@ -3282,11 +3355,11 @@ function questPagerText(msgid) {
         ['%R', minRank], ['%r', rank], ['%ns', `${info.nemesis}'s`],
         ['%nC', cap(info.nemesis)], ['%na', article(info.nemesis)],
         ['%n', info.nemesis], ['%O', `the ${info.artifactShort}`],
-        ['%oC', cap(info.artifact)], ['%o', info.artifact],
-        ['%lC', cap(info.leaderText || info.leader)], ['%l', info.leaderText || info.leader],
+        ['%os', possessive(info.artifact)], ['%oC', cap(info.artifact)], ['%o', info.artifact],
+        ['%ls', possessive(leader)], ['%lC', cap(leader)], ['%l', leader],
         ['%S', child], ['%s', sibling],
         ['%i', info.intermed], ['%gP', cap(`${info.guardian}s`)], ['%g', info.guardian],
-        ['%H', info.homebase], ['%d', deity], ['%a', alignName], ['%p', player],
+        ['%H', info.homebase], ['%ds', possessive(deity)], ['%d', deity], ['%a', alignName], ['%p', player],
     ];
     let text = raw.trimEnd();
     for (const [pattern, replacement] of replacements)
@@ -35223,6 +35296,26 @@ function tipHatAggravateMonsters() {
     }
 }
 
+function tipHatQuestRoleInfo() {
+    const roleName = game.urole?.name?.m || game._startup_role || '';
+    return QUEST_ROLE_DATA[roleName] || null;
+}
+
+function tipHatMonsterIsRoleQuestGuardian(mon, monName) {
+    const info = tipHatQuestRoleInfo();
+    if (!info?.guardian) return false;
+    const guardian = String(info.guardian).toLowerCase();
+    const data = mon?.data || {};
+    return monName === guardian
+        || String(mon?.questGuardian || mon?.guardianName || data.questGuardian || data.guardianName || '').toLowerCase() === guardian;
+}
+
+function tipHatQuestGuardianNoise() {
+    const after = game.u?.uhave?.questart && game.quest_status?.killed_nemesis;
+    const message = questPagerText(after ? 'guardtalk_after' : 'guardtalk_before', { initCore: false });
+    return message ? { handled: true, message } : { handled: false, message: '' };
+}
+
 function tipHatMonsterNoise(mon, { visible = tipHatMonsterVisible(mon), nameOverride = null } = {}) {
     const silent = tipHatMonsterSilent(mon);
     if (!mon || heroIsDeaf() || (silent && !mon?.isshk)) return { handled: false, message: '' };
@@ -35235,6 +35328,7 @@ function tipHatMonsterNoise(mon, { visible = tipHatMonsterVisible(mon), nameOver
     const hungryTime = tipHatMonsterHungryTime(mon);
     if (sound === 'orc' && (tipHatMonsterSharesHeroRace(mon, monName) || heroIsHallucinating())) sound = 'humanoid';
     else if (sound === 'moo' && !tame) sound = 'bellow';
+    else if (sound === 'guardian' && !tipHatMonsterIsRoleQuestGuardian(mon, monName)) sound = 'humanoid';
     else if (heroIsHallucinating() && tipHatMonsterAppearsAsGecko(mon)) sound = 'sell';
     switch (sound) {
     case 'sell':
@@ -35429,6 +35523,8 @@ function tipHatMonsterNoise(mon, { visible = tipHatMonsterVisible(mon), nameOver
     case 'rider':
         if (monName === 'death') return tipHatDeathRiderNoise(name);
         return { handled: true, message: '"Who do you think you are, War?"' };
+    case 'guardian':
+        return tipHatQuestGuardianNoise();
     case 'bribe':
         if (peaceful && !tame) return tipHatDemonBribeNoise(mon, name, visible);
         if (peaceful) return tipHatPeacefulCussNoise(mon);

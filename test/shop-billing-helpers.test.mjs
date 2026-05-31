@@ -6127,6 +6127,102 @@ test('worn helmet tip makes invisible Death use source-backed quote passages', a
     assert.equal(rngCalls.at(-1), 'rn2(30)');
 });
 
+const ARCHEOLOGIST_GUARDTALK_BEFORE = [
+    `"Did you see Lash LaRue in 'Song of Old Wyoming' the other night?"`,
+    '"Hey man, got any potions of hallucination for sale?"',
+    '"Did you see the artifact Lord Carnarvon brought back from the last dig?"',
+    '"So what species do *you* think we evolved from?"',
+    `"So you're Lord Carnarvon's prize pupil!  I don't know what he sees in you."`,
+];
+
+const PRIEST_GUARDTALK_BEFORE = [
+    '"Greetings, honored Aspirant.  It is good to see you."',
+    '"Ah, Hero!  Surely you can help us in our hour of need."',
+    '"Greetings, brother.  The Arch Priest has great need of your help."',
+    '"Alas, it seems as if even Shan Lai Ching has deserted us."',
+    '"May Shan Lai Ching be with you, brother."',
+];
+
+const WIZARD_GUARDTALK_AFTER = [
+    `"I have some eye of newt to trade, do you have a spare blind-worm's sting?"`,
+    '"The magic portal now seems like it will remain stable for quite some time."',
+    '"Have you noticed how much stronger Neferet the Green is since the Eye of the Aethiopica was recovered?"',
+    `"Thank Thoth!  We weren't positive you would defeat the Dark One."`,
+    '"I, too, will venture into the world, because the Dark One was but one of many evils to be vanquished."',
+];
+
+test('chat with visible role quest guardian uses guardtalk_before pager text', async () => {
+    const result = await chatAdjacentMonster({
+        name: 'student',
+        peaceful: true,
+        rngLog: true,
+        data: { msound: 'MS_GUARDIAN', mlet: '@', humanoid: true, guardian: true },
+        setup: () => {
+            game._startup_role = 'Archeologist';
+            game.urole = { ...(game.urole || {}), name: { m: 'Archeologist', f: 'Archeologist' } };
+        },
+    });
+
+    assert.ok(ARCHEOLOGIST_GUARDTALK_BEFORE.includes(result.message), result.message);
+    assert.equal(game.context.move, 1);
+    assert.equal(result.target.mstrategy, 0);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(5)']);
+});
+
+test('worn helmet tip with invisible role quest guardian uses guardtalk_before pager text', async () => {
+    const result = await tipInvisibleExplicitSound({
+        name: 'acolyte',
+        sound: 'MS_GUARDIAN',
+        peaceful: true,
+        role: 'Priest',
+        rngLog: true,
+        data: { guardian: true },
+    });
+    const guardMessage = result.message.replace(/^You briefly doff your helm\.  /, '');
+
+    assert.ok(PRIEST_GUARDTALK_BEFORE.includes(guardMessage), result.message);
+    assert.equal(result.targetLoc.map_invisible, true);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(5)']);
+});
+
+test('chat with quest guardian after nemesis uses guardtalk_after pager text', async () => {
+    const result = await chatAdjacentMonster({
+        name: 'apprentice',
+        peaceful: true,
+        rngLog: true,
+        data: { msound: 'MS_GUARDIAN', mlet: '@', humanoid: true, guardian: true },
+        setup: () => {
+            game._startup_role = 'Wizard';
+            game.urole = { ...(game.urole || {}), name: { m: 'Wizard', f: 'Wizard' } };
+            game.u.uhave = { ...(game.u.uhave || {}), questart: 1 };
+            game.quest_status = { ...(game.quest_status || {}), killed_nemesis: true };
+        },
+    });
+
+    assert.ok(WIZARD_GUARDTALK_AFTER.includes(result.message), result.message);
+    assert.equal(game.context.move, 1);
+    assert.equal(result.target.mstrategy, 0);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(5)']);
+});
+
+test('chat with another role guardian falls back to humanoid speech', async () => {
+    const result = await chatAdjacentMonster({
+        name: 'student',
+        peaceful: true,
+        rngLog: true,
+        data: { msound: 'MS_GUARDIAN', mlet: '@', humanoid: true, guardian: true },
+        setup: () => {
+            game._startup_role = 'Wizard';
+            game.urole = { ...(game.urole || {}), name: { m: 'Wizard', f: 'Wizard' } };
+        },
+    });
+
+    assert.equal(result.message, 'The student discusses dungeon exploration.');
+    assert.equal(game.context.move, 1);
+    assert.equal(result.target.mstrategy, 0);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
+});
+
 test('chat with peaceful non-tame briber and no gold spends turn and angers demon', async () => {
     const result = await chatAdjacentMonster({
         name: 'Asmodeus',
