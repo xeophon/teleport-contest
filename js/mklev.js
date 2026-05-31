@@ -17646,6 +17646,38 @@ function emptyTerrainSelection() {
     return { lx: 0, ly: 0, hx: COLNO - 1, hy: ROWNO - 1, has: () => false };
 }
 
+function terrainSelectionBounds(selection) {
+    const rawBounds = typeof selection.bounds === 'function' ? selection.bounds() : selection.bounds;
+    const bounds = rawBounds ?? selection;
+    const source = Array.isArray(bounds)
+        ? { lx: bounds[0], ly: bounds[1], hx: bounds[2], hy: bounds[3] }
+        : bounds;
+    const lx = Number(source.lx ?? source.x1 ?? 0);
+    const ly = Number(source.ly ?? source.y1 ?? 0);
+    const hx = Number(source.hx ?? source.x2 ?? COLNO - 1);
+    const hy = Number(source.hy ?? source.y2 ?? ROWNO - 1);
+    if ([lx, ly, hx, hy].some(value => !Number.isFinite(value))) {
+        throw new TypeError('replace_terrain selection bounds must be numeric');
+    }
+    const x1 = Math.trunc(lx), y1 = Math.trunc(ly);
+    const x2 = Math.trunc(hx), y2 = Math.trunc(hy);
+    return {
+        lx: Math.min(x1, x2),
+        ly: Math.min(y1, y2),
+        hx: Math.max(x1, x2),
+        hy: Math.max(y1, y2),
+    };
+}
+
+function terrainSelectionHasPoint(selection, x, y) {
+    if (typeof selection.get === 'function') {
+        return !!selection.get(x, y);
+    }
+    if (typeof selection.has !== 'function') return false;
+    if (selection.has.length >= 2 && selection.has(x, y)) return true;
+    return !!(selection.has(`${x},${y}`) || selection.has(`${x}:${y}`) || selection.has([x, y]));
+}
+
 function terrainSelectionFromSpec(selection) {
     if (!selection) return null;
     if (typeof selection === 'function') {
@@ -17668,16 +17700,20 @@ function terrainSelectionFromSpec(selection) {
             ? { lx, ly, hx, hy, has: (x, y) => points.has(`${x},${y}`) }
             : emptyTerrainSelection();
     }
-    if (typeof selection.has === 'function') {
+    if (typeof selection.get === 'function' || typeof selection.has === 'function') {
+        const bounds = terrainSelectionBounds(selection);
         return {
-            lx: selection.lx ?? 0,
-            ly: selection.ly ?? 0,
-            hx: selection.hx ?? COLNO - 1,
-            hy: selection.hy ?? ROWNO - 1,
-            has: (x, y) => selection.has(`${x},${y}`) || selection.has([x, y]),
+            ...bounds,
+            has: (x, y) => terrainSelectionHasPoint(selection, x, y),
         };
     }
-    return null;
+    if (typeof selection.iterate === 'function') {
+        const points = [];
+        const iterated = selection.iterate((x, y) => points.push([x, y]));
+        if (iterated && Symbol.iterator in Object(iterated)) points.push(...iterated);
+        return terrainSelectionFromSpec(points);
+    }
+    throw new TypeError('replace_terrain selection must be iterable or expose get/has');
 }
 
 function regionBoundsFromSpec(spec) {

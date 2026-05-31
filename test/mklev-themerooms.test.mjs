@@ -207,9 +207,49 @@ test('replace terrain accepts C mapchars and simple selection masks', () => {
     assert.equal(g.level.at(12, 10).lit, true);
 });
 
+test('replace terrain accepts C-style selection object predicates and bounds', () => {
+    const g = installMkmapGame();
+    g.level.at(10, 10).typ = ROOM;
+    g.level.at(11, 10).typ = ROOM;
+    g.level.at(12, 10).typ = ROOM;
+    g.level.at(13, 10).typ = ROOM;
+    const getQueries = [];
+
+    const changedByGet = mklevHooks.replaceDesTerrain({
+        selection: {
+            bounds: () => ({ lx: 10, ly: 10, hx: 12, hy: 10 }),
+            get(x, y) {
+                getQueries.push(`${x},${y}`);
+                return x === 11 && y === 10;
+            },
+        },
+        fromterrain: '.',
+        toterrain: '#',
+        chance: 100,
+    });
+    const changedByHas = mklevHooks.replaceDesTerrain({
+        selection: {
+            lx: 12, ly: 10, hx: 13, hy: 10,
+            has: (x, y) => x === 12 && y === 10,
+        },
+        fromterrain: '.',
+        toterrain: '#',
+        chance: 100,
+    });
+
+    assert.equal(changedByGet, 1);
+    assert.deepEqual(getQueries, ['10,10', '11,10', '12,10']);
+    assert.equal(changedByHas, 1);
+    assert.equal(g.level.at(10, 10).typ, ROOM);
+    assert.equal(g.level.at(11, 10).typ, CORR);
+    assert.equal(g.level.at(12, 10).typ, CORR);
+    assert.equal(g.level.at(13, 10).typ, ROOM);
+});
+
 test('replace terrain keeps explicit empty selections empty', () => {
     const g = installMkmapGame();
     g.level.at(10, 10).typ = ROOM;
+    g.level.at(11, 10).typ = ROOM;
 
     const changed = mklevHooks.replaceDesTerrain({
         selection: [],
@@ -217,8 +257,60 @@ test('replace terrain keeps explicit empty selections empty', () => {
         toterrain: '#',
         chance: 100,
     });
+    const cSelectionChanged = mklevHooks.replaceDesTerrain({
+        selection: {
+            bounds: () => [10, 10, 11, 10],
+            get: () => false,
+        },
+        fromterrain: '.',
+        toterrain: '#',
+        chance: 100,
+    });
 
     assert.equal(changed, 0);
+    assert.equal(cSelectionChanged, 0);
+    assert.equal(g.level.at(10, 10).typ, ROOM);
+    assert.equal(g.level.at(11, 10).typ, ROOM);
+});
+
+test('replace terrain accepts iterator selections and keeps C column-zero skip', () => {
+    const g = installMkmapGame();
+    g.level.at(0, 10).typ = ROOM;
+    g.level.at(1, 10).typ = ROOM;
+    g.level.at(2, 10).typ = ROOM;
+
+    const changed = mklevHooks.replaceDesTerrain({
+        selection: {
+            iterate(callback) {
+                callback(0, 10);
+                callback(1, 10);
+                callback(2, 10);
+            },
+        },
+        fromterrain: '.',
+        toterrain: '#',
+        chance: 100,
+    });
+
+    assert.equal(changed, 2);
+    assert.equal(g.level.at(0, 10).typ, ROOM);
+    assert.equal(g.level.at(1, 10).typ, CORR);
+    assert.equal(g.level.at(2, 10).typ, CORR);
+});
+
+test('replace terrain rejects unrecognized explicit selections', () => {
+    const g = installMkmapGame();
+    g.level.at(10, 10).typ = ROOM;
+
+    assert.throws(
+        () => mklevHooks.replaceDesTerrain({
+            selection: {},
+            fromterrain: '.',
+            toterrain: '#',
+            chance: 100,
+        }),
+        /replace_terrain selection/,
+    );
     assert.equal(g.level.at(10, 10).typ, ROOM);
 });
 

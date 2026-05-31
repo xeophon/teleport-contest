@@ -476,6 +476,10 @@ Current validation snapshot:
   through to whole-map replacement. New no-replay canaries also lock Minetown-3
   as a room/corridor special level and keep deferred monster-turn fumble timeout
   rerolls behind visible `--More--` dismissal.
+- Object-shaped `replace_terrain` selections now accept C-style bounds and
+  predicate methods (`bounds()`/`get(x,y)` or `has(x,y)`) plus iterator masks,
+  and invalid explicit selection objects fail instead of silently becoming
+  whole-map replacements.
 - The Brown Mold/post-heal route cleanup removed the last public-trace state
   machines named `_brown_mold*`, `_post_heal*`, and `POST_HEAL*` from runtime
   JS. Level teleporting, Quest-goal arrival, fountain quaffing, punishment
