@@ -43,7 +43,7 @@ Added focused coverage in `test/shop-billing-helpers.test.mjs`:
 
 - `node --check js/cmd.js`
 - `node --check test/shop-billing-helpers.test.mjs`
-- `node --test --test-name-pattern "chat on single shop-floor object|chat shop-floor quote uses C default cost|chat on multiple shop-floor objects|chat shop-floor quote names|blind and deaf heroes|strangled hero blocks chat before shop-floor quote|angry or helpless shopkeeper|silent polyform chat|chat up without a steed" test/shop-billing-helpers.test.mjs`
+- `node --test --test-name-pattern "chat on single shop-floor object|chat shop-floor quote uses C default cost|chat shop-floor quote applies C shopkeeper surcharge|chat shop-floor quote uses C visible-shirt surcharge gates|chat on no-charge shop-floor object|chat on coins-only shop floor|chat on multiple shop-floor objects|chat shop-floor quote names|blind and deaf heroes|strangled hero blocks chat before shop-floor quote|angry or helpless shopkeeper|silent polyform chat|chat up without a steed" test/shop-billing-helpers.test.mjs`
 - `node --test test/shop-billing-helpers.test.mjs`
 - `node --test test/*.mjs`
 - `npm run score`
