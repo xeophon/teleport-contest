@@ -3112,6 +3112,115 @@ test('nonhallucinating worn helmet tip scans past floor statue', async () => {
     assert.doesNotMatch(game._pending_message, /creature is ignoring|Nothing happens/);
 });
 
+test('hallucinating worn helmet tip treats remembered statue glyph as ignoring creature', async () => {
+    installStableNonShopFloorState();
+    game.u.hallucinating = false;
+    const helmet = wornArmor(30635180, 'orcish helm', 'h');
+    const statue = statueTrapStatue(30635183, 6, 5, 'goblin');
+    const soldier = ordinaryThrowTarget('soldier', 7, 5, {
+        msleeping: 0,
+        mcanmove: true,
+        mcansee: true,
+        mstrategy: 'waitforu',
+        data: { name: 'soldier', mlevel: 1, humanoid: true },
+    });
+    game.inventory = [helmet];
+    game.level.objects = [statue];
+    game.level.monsters = [soldier];
+    markSquareVisible(6, 5);
+    markSquareVisible(7, 5);
+    newsym(6, 5);
+    assert.equal(game.level.at(6, 5).remembered_glyph?.statueGlyph, true);
+    assert.equal(game.level.at(6, 5).displayed_statue_glyph, true);
+    game.level.objects = [];
+    game.u.hallucinating = true;
+
+    await enterTipCommand();
+    await rhack('h');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.level.objects.length, 0);
+    assert.equal(soldier.mstrategy, 'waitforu');
+    assert.match(game._pending_message, /You briefly doff your helm\./);
+    assert.match(game._pending_message, /That creature is ignoring you!/);
+    assert.doesNotMatch(game._pending_message, /soldier|unseen creature|Nothing happens/);
+});
+
+test('nonhallucinating worn helmet tip scans past remembered statue glyph', async () => {
+    installStableNonShopFloorState();
+    game.u.hallucinating = false;
+    const helmet = wornArmor(30635181, 'orcish helm', 'h');
+    const statue = statueTrapStatue(30635184, 6, 5, 'goblin');
+    const soldier = ordinaryThrowTarget('soldier', 7, 5, {
+        msleeping: 0,
+        mcanmove: true,
+        mcansee: true,
+        mstrategy: 'waitforu',
+        data: { name: 'soldier', mlevel: 1, humanoid: true },
+    });
+    game.inventory = [helmet];
+    game.level.objects = [statue];
+    game.level.monsters = [soldier];
+    markSquareVisible(6, 5);
+    markSquareVisible(7, 5);
+    newsym(6, 5);
+    assert.equal(game.level.at(6, 5).remembered_glyph?.statueGlyph, true);
+    assert.equal(game.level.at(6, 5).displayed_statue_glyph, true);
+    game.level.objects = [];
+
+    await enterTipCommand();
+    await rhack('h');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.level.objects.length, 0);
+    assert.equal(soldier.mstrategy, 0);
+    assert.match(game._pending_message, /You briefly doff your helm\./);
+    assert.match(game._pending_message, /The soldier waves\./);
+    assert.doesNotMatch(game._pending_message, /creature is ignoring|Nothing happens/);
+});
+
+test('hallucinating worn helmet tip treats visible statue mimic glyph as ignoring creature', async () => {
+    installNonShopFloorState();
+    game.u.hallucinating = true;
+    const helmet = wornArmor(30635182, 'orcish helm', 'h');
+    const mimic = ordinaryThrowTarget('large mimic', 6, 5, {
+        m_ap_type: M_AP_OBJECT,
+        appearObj: STATUE,
+        appearGlyph: 'o',
+        mstrategy: 'waitforu',
+        data: { name: 'large mimic', mlevel: 8, mlet: 'mimic' },
+    });
+    const soldier = ordinaryThrowTarget('soldier', 7, 5, {
+        msleeping: 0,
+        mcanmove: true,
+        mcansee: true,
+        mstrategy: 'waitforu',
+        data: { name: 'soldier', mlevel: 1, humanoid: true },
+    });
+    game.inventory = [helmet];
+    game.level.monsters = [mimic, soldier];
+    markSquareVisible(6, 5);
+    markSquareVisible(7, 5);
+
+    await enterTipCommand();
+    await rhack('h');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(mimic.mstrategy, 'waitforu');
+    assert.equal(mimic.m_ap_type, M_AP_OBJECT);
+    assert.equal(mimic.appearObj, STATUE);
+    assert.equal(soldier.mstrategy, 'waitforu');
+    assert.match(game._pending_message, /You briefly doff your helm\./);
+    assert.match(game._pending_message, /That creature is ignoring you!/);
+    assert.doesNotMatch(game._pending_message, /large mimic|soldier|unseen creature|Nothing happens/);
+});
+
 test('worn helmet tip down at mounted pony uses steed noise', async () => {
     installNonShopFloorState();
     const helmet = wornArmor(3063518, 'orcish helm', 'h');

@@ -694,7 +694,7 @@ function objectGlyph(obj) {
         if (obj.otyp === STATUE) {
             const monIndex = rn2_on_display_rng(DISPLAY_MONSTER_GLYPHS.length);
             rn2_on_display_rng(2);
-            return { ch: DISPLAY_MONSTER_GLYPHS[monIndex] || '?', color: DISPLAY_MONSTER_COLORS[monIndex] ?? CLR_WHITE, dec: false };
+            return { ch: DISPLAY_MONSTER_GLYPHS[monIndex] || '?', color: DISPLAY_MONSTER_COLORS[monIndex] ?? CLR_WHITE, dec: false, statueGlyph: true };
         }
         const objectIndex = rn2_on_display_rng(DISPLAY_OBJECT_GLYPHS.length);
         if (objectIndex + FIRST_DISPLAY_OBJECT === C_RANDOM_CORPSE) {
@@ -718,6 +718,7 @@ function objectGlyph(obj) {
             ch: data.glyph || data.mlet?.[0] || obj.glyph || '`',
             color: obj.color ?? data.color ?? MONSTER_COLORS[data.name] ?? CLR_WHITE,
             dec: false,
+            statueGlyph: true,
         };
     }
     const revealPotionColor = obj.dknown;
@@ -758,8 +759,8 @@ export function seeNearbyObjects() {
             if (monsterAt(x, y)) continue;
             const glyph = objectGlyph(obj);
             const loc = game.level?.at(x, y);
-            if (loc) loc.remembered_glyph = { ch: glyph.ch, color: glyph.color, dec: glyph.dec };
-            show_glyph_cell(x, y, glyph.ch, glyph.color, glyph.dec);
+            if (loc) loc.remembered_glyph = { ch: glyph.ch, color: glyph.color, dec: glyph.dec, statueGlyph: !!glyph.statueGlyph };
+            show_glyph_cell(x, y, glyph.ch, glyph.color, glyph.dec, 0, glyph);
         }
 }
 
@@ -772,6 +773,8 @@ export function show_glyph_cell(x, y, ch, color = NO_COLOR, decgfx = false, attr
     loc.disp_attr = attr | 0;
     if (meta?.hallucinatedMonsterIndex != null) loc.hallucinated_monster_index = meta.hallucinatedMonsterIndex;
     else delete loc.hallucinated_monster_index;
+    if (meta?.statueGlyph) loc.displayed_statue_glyph = true;
+    else delete loc.displayed_statue_glyph;
 }
 
 export function newsym(x, y) {
@@ -863,7 +866,7 @@ export function newsym(x, y) {
             }
             const glyph = objectGlyph(obj);
             visibleObjectGlyph = glyph;
-            loc.remembered_glyph = { ch: glyph.ch, color: glyph.color, dec: glyph.dec };
+            loc.remembered_glyph = { ch: glyph.ch, color: glyph.color, dec: glyph.dec, statueGlyph: !!glyph.statueGlyph };
         } else {
             loc.remembered_glyph = null;
         }
@@ -898,7 +901,7 @@ export function newsym(x, y) {
         const pileAttr = game._hilite_pile
             && (game.level?.objects || []).filter(item => !item.hidden && !item.transientProjectile && item.ox === x && item.oy === y).length > 1
             ? 1 : 0;
-        show_glyph_cell(x, y, glyph.ch, glyph.color, glyph.dec, pileAttr);
+        show_glyph_cell(x, y, glyph.ch, glyph.color, glyph.dec, pileAttr, glyph);
         return;
     }
 
@@ -929,7 +932,7 @@ export function newsym(x, y) {
     if (!visible && loc.remembered_glyph) {
         const glyph = loc.remembered_glyph;
         const color = glyph.ch === '+' && loc.typ === DOOR ? CLR_BROWN : glyph.color ?? NO_COLOR;
-        show_glyph_cell(x, y, glyph.ch, color, glyph.dec);
+        show_glyph_cell(x, y, glyph.ch, color, glyph.dec, 0, glyph);
         return;
     }
 
@@ -1003,7 +1006,7 @@ function redrawRememberedMap() {
             if (loc.remembered_glyph) {
                 const glyph = loc.remembered_glyph;
                 const color = glyph.ch === '+' && loc.typ === DOOR ? CLR_BROWN : glyph.color ?? NO_COLOR;
-                show_glyph_cell(x, y, glyph.ch, color, glyph.dec);
+                show_glyph_cell(x, y, glyph.ch, color, glyph.dec, 0, glyph);
                 continue;
             }
             const trap = trapAt(x, y);
@@ -1100,7 +1103,7 @@ export function refreshHallucinatedMap(forward = false) {
         const visible = !!(game.viz_array?.[obj.oy]?.[obj.ox] & IN_SIGHT);
         if (!visible || monsterAt(obj.ox, obj.oy)) continue;
         const glyph = objectGlyph(obj);
-        show_glyph_cell(obj.ox, obj.oy, glyph.ch, glyph.color, glyph.dec);
+        show_glyph_cell(obj.ox, obj.oy, glyph.ch, glyph.color, glyph.dec, 0, glyph);
     }
 
     for (const trap of game.level?.traps || []) {

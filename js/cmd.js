@@ -33771,6 +33771,21 @@ function tipHatApparentObjectOrFurniture(mon) {
         || mon.appearObj != null || !!mon.appearGlyph);
 }
 
+function tipHatMonsterAppearsAsStatueGlyph(mon) {
+    if (!mon) return false;
+    const kind = String(mon.appearKind ?? mon.appearanceKind ?? mon.mappearanceKind ?? '').toLowerCase();
+    return mon.appearObj === STATUE || mon.mappearance === STATUE
+        || mon.appearStatueGlyph === true || mon.statueGlyph === true
+        || kind === 'statue' || kind.endsWith(' statue');
+}
+
+function tipHatLocationHasStatueGlyph(loc) {
+    return !!(loc?.displayed_statue_glyph
+        || loc?.remembered_glyph?.statueGlyph
+        || loc?.statueGlyph
+        || loc?.glyph_is_statue);
+}
+
 function tipHatMonsterVisible(mon) {
     return tipHatMonsterCanBeSeen(mon) && !tipHatApparentObjectOrFurniture(mon);
 }
@@ -34719,11 +34734,15 @@ function tipHatDirectedResponse(dir) {
         statue = false;
         if (!isok(x, y) || (range > 1 && !couldsee(x, y))) break;
         let monHere = (game.level?.monsters || []).find(mon => mon.mx === x && mon.my === y && !mon.dead);
-        const apparent = tipHatMonsterCanBeSeen(monHere) && tipHatApparentObjectOrFurniture(monHere);
+        const rawVisibleMonster = tipHatMonsterCanBeSeen(monHere);
+        const apparentStatue = rawVisibleMonster && tipHatMonsterAppearsAsStatueGlyph(monHere);
+        const apparent = rawVisibleMonster && tipHatApparentObjectOrFurniture(monHere);
         if (apparent) monHere = null;
         const loc = game.level?.at?.(x, y);
         unseen = !!loc?.map_invisible;
-        statue = !!floorStatueAt(x, y);
+        statue = tipHatLocationHasStatueGlyph(loc)
+            || apparentStatue
+            || (!rawVisibleMonster && !unseen && !!floorStatueAt(x, y));
         const visibleTarget = tipHatMonsterVisible(monHere);
         const adjacentResponder = range === 1 && monHere && tipHatMonsterResponsive(monHere)
             && !tipHatMonsterSilent(monHere);
