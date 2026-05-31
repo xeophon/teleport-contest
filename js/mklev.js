@@ -19976,6 +19976,8 @@ const MASSACRE_CORPSES = [
     'archeologist',
 ];
 
+const WATER_VAULT_UNDEAD = ['giant zombie', 'ettin zombie', 'vampire lord'];
+
 function themeroomMassacreCorpse(name) {
     return RANDOM_MONSTER_BY_NAME.get(name) || { name, neuter: false };
 }
@@ -20230,6 +20232,7 @@ export const __mklevTestHooks = {
     make_minetn3_level,
     splevMinesLevelInit,
     themeroomBuriedZombieSpecies,
+    waterVaultUndeadSpecies: () => [...WATER_VAULT_UNDEAD],
     themeroom_buried_zombies,
     apply_themeroom_fill,
     run_themeroom_postprocess,
@@ -20736,7 +20739,7 @@ async function create_themeroom_map(rows, name) {
                     mksobj_at(CHEST, startX + x, startY + y, true, false);
                 }
 
-                const undead = ['giant zombie', 'ettin zombie', 'vampire leader'];
+                const undead = [...WATER_VAULT_UNDEAD];
                 for (let n = undead.length; n > 1; n--) {
                     const j = rn2(n);
                     [undead[n - 1], undead[j]] = [undead[j], undead[n - 1]];

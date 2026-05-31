@@ -24,6 +24,8 @@ select the sealed vault floor.
   matching exclusion zones.
 - Registered the water vault's inner 2x2 floor as an `LR_TELE` exclusion and
   marked the region as `THEMEROOM`.
+- Kept the vault's shuffled nasty-undead list on the Lua species names,
+  including `vampire lord`.
 
 ## Tests
 

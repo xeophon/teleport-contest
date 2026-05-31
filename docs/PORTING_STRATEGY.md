@@ -535,6 +535,8 @@ Current validation snapshot:
   state odds.
 - `Water-surrounded vault` now marks its 2x2 vault as themed and records the
   Lua `LR_TELE` exclusion so level-arrival placement skips the sealed room.
+- Its nasty-undead list now uses the Lua `vampire lord` entry instead of the
+  generic vampire-leader fallback.
 - The Brown Mold/post-heal route cleanup removed the last public-trace state
   machines named `_brown_mold*`, `_post_heal*`, and `POST_HEAL*` from runtime
   JS. Level teleporting, Quest-goal arrival, fountain quaffing, punishment

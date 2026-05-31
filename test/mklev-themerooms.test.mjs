@@ -820,6 +820,11 @@ test('themed Water-surrounded vault records teleport exclusion for level arrival
         hx: room.hx,
         hy: room.hy,
     }]);
+    assert.deepEqual(mklevHooks.waterVaultUndeadSpecies(), ['giant zombie', 'ettin zombie', 'vampire lord']);
+    assert.equal(g.level.monsters.length, 1);
+    assert.equal(mklevHooks.waterVaultUndeadSpecies().includes(g.level.monsters[0].data?.name), true);
+    assert.equal(g.level.monsters[0].mx, room.lx);
+    assert.equal(g.level.monsters[0].my, room.ly);
 });
 
 test('level-region exclusions follow C teleport direction matching', () => {
