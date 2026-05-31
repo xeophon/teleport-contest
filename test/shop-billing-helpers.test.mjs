@@ -4679,12 +4679,13 @@ async function chatAdjacentShopkeeper({
 
 async function chatAdjacentMonster({
     name = 'dog', visible = true, peaceful = true, seed = null, rngLog = false,
-    data = {}, extra = {}, setup = null, expectedCommandMode = null,
+    data = {}, extra = {}, setup = null, expectedCommandMode = null, hallucinating = false,
 } = {}) {
     installStableNonShopFloorState();
     if (seed != null) initRng(seed);
     if (rngLog) enableRngLog({ reset: true });
     game.u.seeInvisible = false;
+    if (hallucinating) game.u.hallucinating = true;
     const targetLoc = game.level.at(6, 5);
     const target = ordinaryThrowTarget(name, 6, 5, {
         minvis: visible ? 0 : 1,
@@ -5622,6 +5623,37 @@ test('chat with visible same-race generated-sound gnome uses gnome humanoid spee
     assert.equal(result.target.mstrategy, 0);
     assert.equal(game.context.move, 1);
     assert.doesNotMatch(result.message, /grunts|The gnome|discusses dungeon exploration|Nothing happens|waves/);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
+});
+
+test('chat with visible generated-sound Yeenoghu grunts as MS_ORC', async () => {
+    const result = await chatAdjacentMonster({
+        name: 'Yeenoghu',
+        peaceful: false,
+        rngLog: true,
+        data: { name: 'Yeenoghu', mlevel: 56, mlet: '&', demon: true, unique: true },
+    });
+
+    assert.equal(result.message, 'Yeenoghu grunts.');
+    assert.equal(result.target.mstrategy, 0);
+    assert.equal(game.context.move, 1);
+    assert.doesNotMatch(result.message, /The Yeenoghu|threatens|We're all doomed|Hell shall|Nothing happens|waves/);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
+});
+
+test('hallucinating chat with visible generated-sound Orcus maps MS_ORC to humanoid threat', async () => {
+    const result = await chatAdjacentMonster({
+        name: 'Orcus',
+        peaceful: false,
+        hallucinating: true,
+        rngLog: true,
+        data: { name: 'Orcus', mlevel: 66, mlet: '&', demon: true, unique: true },
+    });
+
+    assert.match(result.message, /threatens you\.$/);
+    assert.equal(result.target.mstrategy, 0);
+    assert.equal(game.context.move, 1);
+    assert.doesNotMatch(result.message, /The Orcus|grunts|We're all doomed|Hell shall|Nothing happens|waves/);
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
 });
 

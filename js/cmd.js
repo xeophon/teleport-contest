@@ -25236,10 +25236,15 @@ function heroInsideGasCloud() {
         && reg.coords?.some(coord => coord.x === ux && coord.y === uy));
 }
 
+const PROPER_NAME_MS_ORC_MONSTER_NAMES = new Set(['yeenoghu', 'orcus']);
+
 function fireScrollMonsterName(mon) {
     if (mon?.givenName) return mon.givenName;
     if (mon?.isshk && mon.shknam) return mon.shknam;
-    return `The ${mon?.data?.name || mon?.name || 'monster'}`;
+    const baseName = mon?.data?.name || mon?.name || 'monster';
+    const properName = mon?.properName || mon?.pname || mon?.data?.properName || mon?.data?.pname
+        || PROPER_NAME_MS_ORC_MONSTER_NAMES.has(String(baseName).toLowerCase());
+    return properName ? String(baseName) : `The ${baseName}`;
 }
 
 function monsterPossessiveName(mon) {
@@ -36457,6 +36462,7 @@ const TIPHAT_MUMBLE_MONSTER_NAMES = new Set([
 ]);
 
 function tipHatMonsterHasOrcSound(mon, name) {
+    if (PROPER_NAME_MS_ORC_MONSTER_NAMES.has(name)) return true;
     const families = tipHatRaceFamiliesFrom(name, mon || {});
     return families.has('orc') || families.has('gnome') || families.has('kobold');
 }
