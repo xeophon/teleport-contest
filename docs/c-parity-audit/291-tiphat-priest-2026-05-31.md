@@ -37,7 +37,7 @@ The tests use a small temple fixture layered onto the existing invisible `#tip` 
 ## Remaining Gaps
 
 - Full priest donation prompts, offer handling, cheapskate increments, clairvoyance/protection rewards, and alignment repair remain broader work.
-- `#chat` still has its separate local implementation instead of sharing this `domonnoise()`-style speaker path.
+- Broader non-priest `#chat` still has its separate local implementation instead of a shared `domonnoise()`-style speaker path.
 - Helpless priest wake-up is C `#chat`/direct `domonnoise()` behavior; directed `#tip` filters helpless targets before speech.
 - Ambient temple intoning and entry messages remain separate from this directed `#tip` slice.
 

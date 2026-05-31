@@ -801,6 +801,12 @@ async function enterTipCommand() {
     await rhack('\n');
 }
 
+async function enterChatCommand() {
+    await rhack('#');
+    for (const ch of 'chat') await rhack(ch);
+    await rhack('\n');
+}
+
 async function enterSitCommand() {
     await rhack('#');
     for (const ch of 'sit') await rhack(ch);
@@ -4498,6 +4504,43 @@ function installTipPriestTemple(target, { shrineAlign = A_LAWFUL, heroAlign = A_
     };
 }
 
+async function chatAdjacentPriest({
+    visible = true, peaceful = true, seed = null, rngLog = false, data = {}, extra = {},
+    setup = null, gold = 0,
+} = {}) {
+    installStableNonShopFloorState();
+    if (seed != null) initRng(seed);
+    if (rngLog) enableRngLog({ reset: true });
+    game.u.seeInvisible = false;
+    const targetLoc = game.level.at(6, 5);
+    const priest = ordinaryThrowTarget('aligned cleric', 6, 5, {
+        minvis: visible ? 0 : 1,
+        perminvis: visible ? 0 : 1,
+        msleeping: 0,
+        mcanmove: true,
+        mcansee: true,
+        mpeaceful: peaceful,
+        mstrategy: 'waitforu',
+        data: { name: 'aligned cleric', mlevel: 12, mlet: '@', humanoid: true, priest: true, msound: 'MS_PRIEST', ...data },
+        ...extra,
+    });
+    game.level.monsters = [priest];
+    game.inventory = [];
+    if (gold) {
+        game.inventory.push(goldPieces(3063591, gold));
+        game._goldCount = gold;
+    }
+    if (setup) setup({ target: priest, targetLoc });
+    markSquareVisible(6, 5);
+
+    await enterChatCommand();
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(priest.mstrategy, 0);
+    return { priest, targetLoc, message: game._pending_message };
+}
+
 test('worn helmet tip makes peaceful invisible Kop give arrest address', async () => {
     await tipInvisibleExplicitSound({
         name: 'Keystone Kop',
@@ -4748,6 +4791,85 @@ test('worn helmet tip makes invisible priest outside own temple use C cranky tab
     assert.equal(game.u.uconduct.gnostic, 1);
     assert.doesNotMatch(result.message,
         /contribution|poverty|not interested|Nothing happens|doesn't respond|waves/);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(3)']);
+});
+
+test('chat with visible coaligned temple priest uses priest speech before empty-space fallback', async () => {
+    const result = await chatAdjacentPriest({
+        rngLog: true,
+        extra: { ispriest: true, minvent: [] },
+        setup: ({ target }) => installTipPriestTemple(target),
+    });
+
+    assert.equal(result.message, 'The aligned cleric preaches the virtues of poverty.');
+    assert.equal(result.priest.mpeaceful, true);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.u.uconduct.gnostic, 1);
+    assert.doesNotMatch(result.message, /waves|Nothing happens|talking to a wall|cajoles|barks|contribution/);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
+});
+
+test('deaf chat with visible priest reports inaudible response without priest speech', async () => {
+    const result = await chatAdjacentPriest({
+        rngLog: true,
+        extra: { ispriest: true, minvent: [] },
+        setup: ({ target }) => {
+            installTipPriestTemple(target);
+            game.u._deafTimeout = 10;
+        },
+    });
+
+    assert.equal(result.message, 'Any response from the aligned cleric falls on deaf ears.');
+    assert.equal(result.priest.mpeaceful, true);
+    assert.equal(game.context?.move || 0, 0);
+    assert.equal(game.u.uconduct?.gnostic || 0, 0);
+    assert.doesNotMatch(result.message, /preaches|contribution|not interested|breaks out|talking to a wall/);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
+});
+
+test('chat with invisible cross-aligned temple priest maps it and reports disinterest', async () => {
+    const result = await chatAdjacentPriest({
+        visible: false,
+        rngLog: true,
+        extra: { ispriest: true, minvent: [] },
+        setup: ({ target }) => installTipPriestTemple(target, { heroAlign: A_CHAOTIC }),
+    });
+
+    assert.equal(result.message, 'It is not interested.');
+    assert.equal(result.targetLoc.map_invisible, true);
+    assert.equal(result.priest.mpeaceful, true);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.u.uconduct.gnostic, 1);
+    assert.doesNotMatch(result.message, /Nothing happens|talking to a wall|preaches|contribution|waves/);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
+});
+
+test('chat with helpless priest wakes it before C cranky speech', async () => {
+    const result = await chatAdjacentPriest({
+        seed: 1,
+        rngLog: true,
+        extra: {
+            ispriest: true,
+            male: true,
+            msleeping: 1,
+            mfrozen: 6,
+            mcanmove: true,
+            shrine: { room: ROOMOFFSET, align: A_LAWFUL, x: 6, y: 6 },
+        },
+    });
+    const payload = result.message.replace(/^The aligned cleric breaks out of his reverie!  /, '');
+
+    assert.ok([
+        "\"Thou wouldst have words, eh?  I'll give thee a word or two!\"",
+        '"Talk?  Here is what I have to say!"',
+        '"Pilgrim, I would speak no longer with thee."',
+    ].includes(payload), payload);
+    assert.equal(result.priest.msleeping, 0);
+    assert.equal(result.priest.mfrozen, 0);
+    assert.equal(result.priest.mcanmove, true);
+    assert.equal(result.priest.mpeaceful, 0);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.u.uconduct.gnostic, 1);
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(3)']);
 });
 

@@ -33829,6 +33829,15 @@ function tipHatMonsterFemale(mon) {
     return false;
 }
 
+function chatHeroHumanoidForDeafResponse() {
+    const form = polyselfForm();
+    if (!form) return true;
+    if (form.humanoid != null) return !!form.humanoid;
+    const mlet = String(form.mlet || '').toLowerCase();
+    const name = String(form.name || '').toLowerCase();
+    return !!(form.human || mlet === '@' || mlet === 'human' || mlet === 'humanoid' || name === 'human');
+}
+
 function heroHasConflict() {
     const u = game.u || {};
     if (u.conflict || u.HConflict || u.EConflict || u._intrinsicConflict || u._extrinsicConflict)
@@ -56800,6 +56809,30 @@ export async function rhack(_cmd) {
             await setMessage(message);
             game._command_mode = null;
             game._process_command_time_now = 1;
+            game.context.move = 1;
+            return;
+        }
+        if (target && tipHatMonsterSound(target) === 'priest') {
+            if (Number.isInteger(target.mstrategy)) target.mstrategy &= ~STRAT_WAITMASK;
+            else if (target.mstrategy === 'waitforu') target.mstrategy = 0;
+            const visible = tipHatMonsterVisible(target);
+            if (heroIsDeaf()) {
+                const from = visible ? ` from ${fireScrollMonsterName(target).replace(/^The /, 'the ')}` : '';
+                const response = chatHeroHumanoidForDeafResponse() ? 'falls on deaf ears' : 'is inaudible';
+                await setMessage(`Any response${from} ${response}.`);
+                game._command_mode = null;
+                return;
+            }
+            const noise = tipHatMonsterNoise(target, { visible });
+            if (!visible) {
+                const unseenLoc = game.level?.at?.(target.mx, target.my);
+                if (unseenLoc) unseenLoc.map_invisible = true;
+                newsym(target.mx, target.my);
+            }
+            await setMessage(noise.message, noise.message.includes('  '));
+            game._command_mode = null;
+            game._process_command_time_now = 1;
+            game.context ??= {};
             game.context.move = 1;
             return;
         }
