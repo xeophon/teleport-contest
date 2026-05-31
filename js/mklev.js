@@ -20215,6 +20215,7 @@ export const __mklevTestHooks = {
     create_themeroom_fake_delphi,
     create_themeroom_room_in_room,
     create_themeroom_huge_room_inside,
+    create_themeroom_mausoleum,
 };
 
 async function apply_themeroom_fill(fill, croom, rows = null, startX = 0, startY = 0) {
@@ -20375,6 +20376,42 @@ function create_themeroom_random_door(croom) {
     }
 }
 
+function create_themeroom_secret_door(croom) {
+    const width = croom.hx - croom.lx + 1;
+    const height = croom.hy - croom.ly + 1;
+    for (let trycnt = 0; trycnt < 100; trycnt++) {
+        let x = 0, y = 0;
+        switch (rn2(4)) {
+        case 0:
+            y = croom.ly - 1;
+            x = croom.lx + rn2(width);
+            if (!isok(x, y - 1) || IS_OBSTRUCTED(game.level.at(x, y - 1)?.typ)) continue;
+            break;
+        case 1:
+            y = croom.hy + 1;
+            x = croom.lx + rn2(width);
+            if (!isok(x, y + 1) || IS_OBSTRUCTED(game.level.at(x, y + 1)?.typ)) continue;
+            break;
+        case 2:
+            x = croom.lx - 1;
+            y = croom.ly + rn2(height);
+            if (!isok(x - 1, y) || IS_OBSTRUCTED(game.level.at(x - 1, y)?.typ)) continue;
+            break;
+        case 3:
+            x = croom.hx + 1;
+            y = croom.ly + rn2(height);
+            if (!isok(x + 1, y) || IS_OBSTRUCTED(game.level.at(x + 1, y)?.typ)) continue;
+            break;
+        }
+        if (!okdoor(x, y)) continue;
+        const loc = game.level.at(x, y);
+        loc.typ = SDOOR;
+        loc.doormask = D_CLOSED;
+        return loc;
+    }
+    return null;
+}
+
 function setThemeroomTerrain(x, y, typ) {
     const loc = game.level?.at(x, y);
     if (!loc) return null;
@@ -20430,6 +20467,41 @@ function create_themeroom_huge_room_inside() {
     return room;
 }
 
+async function create_themeroom_mausoleum() {
+    const width = 5 + rn2(3) * 2;
+    const height = 5 + rn2(3) * 2;
+    const room = create_themeroom_room({ w: width, h: height, rtype: THEMEROOM });
+    if (!room) return null;
+
+    const inner = create_themeroom_subroom(room, {
+        x: Math.trunc((width - 1) / 2),
+        y: Math.trunc((height - 1) / 2),
+        w: 1,
+        h: 1,
+        rtype: THEMEROOM,
+        filled: false,
+        joined: false,
+    });
+    if (!inner) return room;
+
+    if (rn2(100) < 50) {
+        const mons = ['M', 'V', 'L', 'Z'];
+        shuffleThemeroomList(mons);
+        const ptr = mkclassAligned(mons[0]);
+        const mon = ptr ? await makemon(ptr, inner.lx, inner.ly, 0) : null;
+        if (mon) mon.waiting = true;
+    } else {
+        const corpse = mksobj_at(CORPSE, inner.lx, inner.ly, true, false);
+        if (corpse) {
+            corpse.corpsenm = mkclassAligned('@') || monsterByRndName('soldier') || { name: 'human', mlet: '@', glyph: '@' };
+            startCorpseTimeout(corpse);
+            Object.assign(corpse, object_display(corpse));
+        }
+    }
+    if (rn2(100) < 20) create_themeroom_secret_door(inner);
+    return room;
+}
+
 // C ref: themerms.lua themerooms_generate()
 // Reservoir sampling picks one eligible themed-room generator by frequency.
 async function themerooms_generate(difficulty) {
@@ -20448,6 +20520,7 @@ async function themerooms_generate(difficulty) {
     if (pick.name === 'Fake Delphi') return !!create_themeroom_fake_delphi();
     if (pick.name === 'Room in a room') return !!create_themeroom_room_in_room();
     if (pick.name === 'Huge room with another room inside') return !!create_themeroom_huge_room_inside();
+    if (pick.name === 'Mausoleum') return !!(await create_themeroom_mausoleum());
     if (pick.name === 'Nesting rooms') {
         const room = create_themeroom_room({
             w: 9 + rn2(4), h: 9 + rn2(4), filled: true,

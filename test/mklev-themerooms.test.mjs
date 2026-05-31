@@ -9,8 +9,8 @@ import { init_rect } from '../js/rect.js';
 import {
     COLNO, ROWNO, STONE, ROOM, CORR, ROOMOFFSET, TREE, ICE, ICED_POOL, ICED_MOAT,
     VWALL, HWALL, POOL, LAVAPOOL, WATER, FOUNTAIN, ALTAR, AM_SHRINE, OROOM, TEMPLE,
-    SDOOR, AIR, CLOUD, FILL_NORMAL, DOOR, D_NODOOR, D_ISOPEN, D_CLOSED, D_LOCKED,
-    D_TRAPPED,
+    THEMEROOM, SDOOR, AIR, CLOUD, FILL_NORMAL, DOOR, D_NODOOR, D_ISOPEN, D_CLOSED,
+    D_LOCKED, D_TRAPPED,
     MAXNROFROOMS,
     A_CHAOTIC, A_LAWFUL, A_NEUTRAL, Align2amask,
     SHOPBASE, CANDLESHOP, MATCH_WALL, SET_LIT_RANDOM, SET_LIT_NOCHANGE,
@@ -110,6 +110,19 @@ function doorCellsAround(g, room) {
                 || y === room.ly - 1 || y === room.hy + 1;
             const loc = g.level.at(x, y);
             if (onBorder && loc?.typ === DOOR) doors.push({ x, y, mask: loc.doormask });
+        }
+    }
+    return doors;
+}
+
+function secretDoorsAround(g, room) {
+    const doors = [];
+    for (let x = room.lx - 1; x <= room.hx + 1; x++) {
+        for (let y = room.ly - 1; y <= room.hy + 1; y++) {
+            const onBorder = x === room.lx - 1 || x === room.hx + 1
+                || y === room.ly - 1 || y === room.hy + 1;
+            const loc = g.level.at(x, y);
+            if (onBorder && loc?.typ === SDOOR) doors.push({ x, y, mask: loc.doormask });
         }
     }
     return doors;
@@ -700,6 +713,48 @@ test('themed room-in-room generators create C-shaped subrooms and doors', () => 
     const hugeDoors = doorCellsAround(hugeGame, hugeInner);
     assert.equal(hugeDoors.length >= 1 && hugeDoors.length <= 2, true);
     assert.equal(hugeDoors.every(door => doorMasks.has(door.mask)), true);
+});
+
+test('themed Mausoleum creates centered tomb subroom contents', async () => {
+    const undeadClasses = new Set(['M', 'V', 'L', 'Z']);
+
+    const monsterGame = installThemeroomGenerationGame({ seed: 2, dlevel: 8 });
+    const monsterRoom = await mklevHooks.create_themeroom_mausoleum();
+    assert.ok(monsterRoom);
+    assert.equal(monsterRoom.rtype, THEMEROOM);
+    assert.equal(monsterRoom.needfill, 0);
+    assert.equal(monsterRoom.nsubrooms, 1);
+    const monsterTomb = monsterRoom.sbrooms[0];
+    assert.equal(monsterTomb.rtype, THEMEROOM);
+    assert.equal(monsterTomb.needfill, 0);
+    assert.equal(monsterTomb.needjoining, false);
+    assert.equal(monsterTomb.hx - monsterTomb.lx + 1, 1);
+    assert.equal(monsterTomb.hy - monsterTomb.ly + 1, 1);
+    assert.equal(monsterTomb.lx, monsterRoom.lx + Math.trunc((monsterRoom.hx - monsterRoom.lx) / 2));
+    assert.equal(monsterTomb.ly, monsterRoom.ly + Math.trunc((monsterRoom.hy - monsterRoom.ly) / 2));
+    assert.equal(monsterGame.level.monsters.length, 1);
+    assert.equal(monsterGame.level.monsters[0].waiting, true);
+    assert.equal(undeadClasses.has(monsterGame.level.monsters[0].data?.glyph), true);
+    assert.equal(monsterGame.level.monsters[0].mx, monsterTomb.lx);
+    assert.equal(monsterGame.level.monsters[0].my, monsterTomb.ly);
+
+    const corpseGame = installThemeroomGenerationGame({ seed: 1, dlevel: 8 });
+    const corpseRoom = await mklevHooks.create_themeroom_mausoleum();
+    const corpseTomb = corpseRoom.sbrooms[0];
+    assert.equal(corpseGame.level.monsters.length, 0);
+    assert.equal(corpseGame.level.objects.length, 1);
+    const [corpse] = corpseGame.level.objects;
+    assert.equal(corpse.otyp, CORPSE);
+    assert.equal(corpse.ox, corpseTomb.lx);
+    assert.equal(corpse.oy, corpseTomb.ly);
+    assert.equal(corpse.corpsenm?.glyph, '@');
+
+    const secretGame = installThemeroomGenerationGame({ seed: 5, dlevel: 8 });
+    const secretRoom = await mklevHooks.create_themeroom_mausoleum();
+    const secretTomb = secretRoom.sbrooms[0];
+    const secretDoors = secretDoorsAround(secretGame, secretTomb);
+    assert.equal(secretDoors.length, 1);
+    assert.equal(secretDoors[0].mask, D_CLOSED);
 });
 
 test('themed buried zombie corpses use buriedobjlist with explicit zombify timers', () => {
