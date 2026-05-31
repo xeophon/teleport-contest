@@ -5,7 +5,7 @@ import { GameMap } from '../js/game.js';
 import { resetGame } from '../js/gstate.js';
 import { __mklevTestHooks as mklevHooks } from '../js/mklev.js';
 import { processCorpseTimers } from '../js/cmd.js';
-import { ROOM, ROOMOFFSET } from '../js/const.js';
+import { COLNO, ROWNO, STONE, ROOM, ROOMOFFSET, TREE, ICE, ICED_POOL, ICED_MOAT } from '../js/const.js';
 import { initRng } from '../js/rng.js';
 
 const CORPSE = 471;
@@ -51,6 +51,38 @@ function installThemeroomGame({
     return { g, room };
 }
 
+function installMkmapGame({ seed = 1, dlevel = 1 } = {}) {
+    const g = resetGame();
+    initRng(seed);
+    g.moves = 0;
+    g.flags = {};
+    g.inventory = [];
+    g.in_mklev = true;
+    g.u = {
+        ux: 70,
+        uy: 18,
+        ulevel: 1,
+        uz: { dnum: 0, dlevel },
+        uhave: {},
+    };
+    g.level = new GameMap();
+    return g;
+}
+
+function terrainSignature(g) {
+    const parts = [];
+    for (let y = 0; y < ROWNO; y++)
+        for (let x = 1; x < COLNO; x++)
+            parts.push(g.level.at(x, y)?.typ ?? -1);
+    return parts.join(',');
+}
+
+function minesInitSignature(seed, options = {}) {
+    const g = installMkmapGame({ seed });
+    mklevHooks.splevMinesLevelInit(ROOM, STONE, options);
+    return terrainSignature(g);
+}
+
 test('themed buried zombie species follow C difficulty gates', () => {
     installThemeroomGame({ dlevel: 1 });
     assert.deepEqual(mklevHooks.themeroomBuriedZombieSpecies(), ['kobold', 'gnome', 'orc', 'dwarf']);
@@ -64,6 +96,54 @@ test('themed buried zombie species follow C difficulty gates', () => {
     assert.deepEqual(mklevHooks.themeroomBuriedZombieSpecies(), [
         'kobold', 'gnome', 'orc', 'dwarf', 'elf', 'human', 'ettin', 'giant',
     ]);
+});
+
+test('mines level_init smoothed option gates only the C pass-three smoothing', () => {
+    const options = { lit: 0, joined: false, walled: false };
+    assert.equal(
+        minesInitSignature(12, options),
+        minesInitSignature(12, { ...options, smoothed: false }),
+    );
+
+    let foundSmoothedDifference = false;
+    for (let seed = 1; seed <= 20 && !foundSmoothedDifference; seed++) {
+        foundSmoothedDifference = minesInitSignature(seed, { ...options, smoothed: false })
+            !== minesInitSignature(seed, { ...options, smoothed: true });
+    }
+    assert.equal(foundSmoothedDifference, true);
+});
+
+test('mines level_init defaults leave rooms unjoined and explicit joined lit rooms become cavernous', () => {
+    const unjoined = installMkmapGame({ seed: 5 });
+    mklevHooks.splevMinesLevelInit(ROOM, STONE, { lit: 0 });
+    assert.equal(unjoined.level.nroom, 0);
+    assert.equal(!!unjoined.level.flags.is_cavernous_lev, false);
+
+    const joined = installMkmapGame({ seed: 5 });
+    joined.level.flags.is_maze_lev = true;
+    mklevHooks.splevMinesLevelInit(ROOM, STONE, {
+        lit: 1, smoothed: true, joined: true, walled: true,
+    });
+
+    assert.equal(joined.level.flags.is_maze_lev, false);
+    assert.equal(joined.level.flags.is_cavernous_lev, true);
+});
+
+test('mkmap finish matches C tree lighting and ice pool metadata', () => {
+    const moatIce = installMkmapGame();
+    moatIce.level.at(10, 10).typ = TREE;
+    moatIce.level.at(11, 10).typ = ICE;
+    moatIce.level.rooms = [{ rlit: 0 }];
+    moatIce.level.nroom = 1;
+    mklevHooks.mkmap_finish(ROOM, TREE, true, false, false, false);
+    assert.equal(moatIce.level.at(10, 10).lit, true);
+    assert.equal(moatIce.level.at(11, 10).icedpool, ICED_MOAT);
+    assert.equal(moatIce.level.rooms[0].rlit, 1);
+
+    const poolIce = installMkmapGame();
+    poolIce.level.at(11, 10).typ = ICE;
+    mklevHooks.mkmap_finish(ROOM, ICE, false, false, false, true);
+    assert.equal(poolIce.level.at(11, 10).icedpool, ICED_POOL);
 });
 
 test('themed buried zombie corpses use buriedobjlist with explicit zombify timers', () => {

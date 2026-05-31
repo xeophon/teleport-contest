@@ -39,6 +39,7 @@ import {
     ACCESSIBLE, IN_SIGHT,
     SPACE_POS, ZAP_POS, isok, W_NORTH, W_SOUTH, W_EAST, W_WEST, W_NONDIGGABLE, W_NONPASSWALL, FILL_NORMAL,
     ICE, MOAT, POOL, WATER, LAVAPOOL, LAVAWALL, DBWALL, DRAWBRIDGE_UP, TREE, CLOUD,
+    ICED_POOL, ICED_MOAT,
     A_NONE, A_LAWFUL, A_NEUTRAL, A_CHAOTIC, AM_SHRINE, AM_SANCTUM, Align2amask, Amask2align,
     FOODSHOP, RINGSHOP, WANDSHOP, TOOLSHOP, BOOKSHOP, FODDERSHOP, CANDLESHOP,
     NO_MINVENT, MM_NOGRP, MM_ANGRY, MM_NONAME, MM_NOCOUNTBIRTH, MM_NOMSG, MM_ADJACENTOK, MM_NOTAIL, MM_NOWAIT,
@@ -8727,7 +8728,9 @@ async function make_bar_fill_level(spec) {
 
     rn2(2); // Bar-fil*.lua initial solidfill level_init has random lit.
     g.level.flags.is_maze_lev = true;
-    splevMinesLevelInit(ROOM, spec.bg, { lit: 0, walled: spec.walled, joined: true });
+    splevMinesLevelInit(ROOM, spec.bg, {
+        lit: 0, smoothed: true, walled: spec.walled, joined: true,
+    });
 
     barFillStair(true);
     barFillStair(false);
@@ -15409,7 +15412,7 @@ async function make_minetn1_level() {
     g.level.flags.is_maze_lev = true;
     g.level.flags.rndmongen = true;
     g.level.flags.has_town = true;
-    splevMinesLevelInit(ROOM, STONE);
+    splevMinesLevelInit(ROOM, STONE, { smoothed: true, joined: true, walled: true });
 
     for (let y = 0; y < MINETN1_ROWS.length; y++) {
         const row = MINETN1_ROWS[y];
@@ -15786,7 +15789,7 @@ async function make_minetn6_level() {
     g.level.flags.has_town = true;
     g.level.flags.has_shop = true;
     g.level.flags.has_temple = true;
-    splevMinesLevelInit(ROOM, HWALL, { lit: 1 });
+    splevMinesLevelInit(ROOM, HWALL, { lit: 1, smoothed: true, joined: true, walled: true });
 
     for (let y = 0; y < MINETN6_ROWS.length; y++) {
         const row = MINETN6_ROWS[y];
@@ -17782,10 +17785,16 @@ function mkmap_pass_three(bgTyp, fgTyp) {
 }
 
 function mkmap_smooth(bgTyp, fgTyp) {
+    mkmap_run_passes(bgTyp, fgTyp, true);
+}
+
+function mkmap_run_passes(bgTyp, fgTyp, smoothed) {
     mkmap_pass_one(bgTyp, fgTyp);
     mkmap_pass_two(bgTyp, fgTyp);
-    mkmap_pass_three(bgTyp, fgTyp);
-    mkmap_pass_three(bgTyp, fgTyp);
+    if (smoothed) {
+        mkmap_pass_three(bgTyp, fgTyp);
+        mkmap_pass_three(bgTyp, fgTyp);
+    }
 }
 
 function mkmap_flood_region(x, y, roomno, fgTyp) {
@@ -17913,7 +17922,7 @@ function wallify_map(x1, y1, x2, y2) {
     }
 }
 
-function mkmap_finish(fgTyp, bgTyp, lit, walled, joined) {
+function mkmap_finish(fgTyp, bgTyp, lit, walled, joined, icedpools = false) {
     if (walled) {
         wallify_map(1, 0, COLNO - 1, ROWNO - 1);
     }
@@ -17924,13 +17933,20 @@ function mkmap_finish(fgTyp, bgTyp, lit, walled, joined) {
                 if (!loc) continue;
                 if ((!IS_OBSTRUCTED(fgTyp) && loc.typ === fgTyp)
                     || (!IS_OBSTRUCTED(bgTyp) && loc.typ === bgTyp)
+                    || (bgTyp === TREE && loc.typ === bgTyp)
                     || (walled && IS_WALL(loc.typ))) loc.lit = true;
             }
+        const nroom = game.level?.nroom ?? 0;
+        for (let i = 0; i < nroom; i++) {
+            const room = game.level.rooms?.[i];
+            if (room) room.rlit = 1;
+        }
     }
     for (let x = 1; x < COLNO; x++)
         for (let y = 0; y < ROWNO; y++) {
             const loc = game.level.at(x, y);
             if (loc?.typ === LAVAPOOL) loc.lit = true;
+            else if (loc?.typ === ICE) loc.icedpool = icedpools ? ICED_POOL : ICED_MOAT;
         }
     if (walled && joined) {
         game.level.flags.is_maze_lev = false;
@@ -17939,15 +17955,17 @@ function mkmap_finish(fgTyp, bgTyp, lit, walled, joined) {
 }
 
 function splevMinesLevelInit(fgTyp, bgTyp, options = {}) {
-    const joined = options.joined ?? true;
-    const walled = options.walled ?? true;
+    const joined = options.joined ?? false;
+    const walled = options.walled ?? false;
+    const smoothed = options.smoothed ?? false;
     const lit = options.lit == null ? rn2(2) : options.lit;
+    const icedpools = options.icedpools ?? false;
 
     mkmap_init(bgTyp, fgTyp);
-    mkmap_smooth(bgTyp, fgTyp);
+    mkmap_run_passes(bgTyp, fgTyp, smoothed);
     if (joined)
         mkmap_join(bgTyp, fgTyp);
-    mkmap_finish(fgTyp, bgTyp, lit, walled, joined);
+    mkmap_finish(fgTyp, bgTyp, lit, walled, joined, icedpools);
 }
 
 function minefill_ok_location(x, y) {
@@ -19394,6 +19412,10 @@ function themeroom_buried_zombies(croom) {
 }
 
 export const __mklevTestHooks = {
+    mkmap_init,
+    mkmap_run_passes,
+    mkmap_finish,
+    splevMinesLevelInit,
     themeroomBuriedZombieSpecies,
     themeroom_buried_zombies,
 };

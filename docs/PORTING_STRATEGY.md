@@ -455,9 +455,15 @@ Current validation snapshot:
   light monsters roll damage, learn the trap, and can leave the mine armed
   instead of always detonating it. Minefill trap placement now rejects existing
   traps, and `minetn` no longer burns an extra pre-loader `rn2(2)` beyond the
-  Lua `align` shuffle. Seed0014 now reaches screen 668; the remaining blocker is
-  the missing C-shaped `dat/minetn-3.lua` room, corridor, shop, and monster
-  generation before stair-fall damage.
+  Lua `align` shuffle. Seed0014 now reaches screen 668; the remaining
+  level-generation blocker is not an absent Minetown-3 builder anymore, but the
+  hand-coded builder and shared special-level helpers still need C-shaped parity
+  around room/corridor/shop/monster generation before stair-fall damage.
+- Mines-style `des.level_init({ style = "mines" })` now follows C's option
+  defaults and `mkmap()` pass order: pass one/two always run, the two pass-three
+  smoothing iterations run only when `smoothed=true`, default `joined`/`walled`
+  are false, lit joined rooms set `rlit`, tree backgrounds light correctly, and
+  generated ice records pool-vs-moat metadata.
 - The Brown Mold/post-heal route cleanup removed the last public-trace state
   machines named `_brown_mold*`, `_post_heal*`, and `POST_HEAL*` from runtime
   JS. Level teleporting, Quest-goal arrival, fountain quaffing, punishment
