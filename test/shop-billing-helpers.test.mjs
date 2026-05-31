@@ -7724,6 +7724,123 @@ test('automatic monster turn briber whispers at false image and relocates demon 
     assert.ok(calls.includes('rn2(21)'));
 });
 
+test('automatic monster turn true briber greets demon polyself after prince reveal', async () => {
+    installStableNonShopFloorState();
+    initRng(2);
+    enableRngLog({ reset: true });
+    game.u._polyself_form = { name: 'water demon', mlet: '&', demon: true };
+    markHeroNeighborhoodVisible();
+    const briber = ordinaryThrowTarget('Asmodeus', 6, 5, {
+        movement: NORMAL_SPEED,
+        msleeping: 0,
+        mcanmove: true,
+        mcansee: true,
+        mpeaceful: true,
+        mtame: 0,
+        minvis: 1,
+        perminvis: 1,
+        mux: game.u.ux,
+        muy: game.u.uy,
+        mhp: 80,
+        mhpmax: 80,
+        m_lev: 53,
+        data: {
+            name: 'Asmodeus',
+            msound: 'MS_BRIBE',
+            mlevel: 53,
+            mlet: '&',
+            demon: true,
+            demonPrince: true,
+            unique: true,
+            maligntyp: -20,
+            noattacks: true,
+        },
+    });
+    game.level.monsters = [briber];
+
+    queueEscapeForMonsterTurn();
+    await processMonsterTurns();
+
+    assert.match(game._pending_message,
+        /^The Asmodeus appears before you\.  The Asmodeus says, "Good hunting, Brother\."\s+The Asmodeus vanishes!/);
+    assert.equal(briber.mpeaceful, true);
+    assert.equal(briber.hostile, undefined);
+    assert.equal(briber.minvis, 0);
+    assert.equal(briber.perminvis, 0);
+    assert.equal(briber.invisible, 0);
+    assert.notDeepEqual([briber.mx, briber.my], [6, 5]);
+    assert.equal(game._command_mode || null, null);
+    assert.equal(briber._last_demon_bribe_demand, undefined);
+    assert.doesNotMatch(game._pending_message, /gets angry|demands|safe passage|How much/);
+    const calls = getRngLog().map(entry => entry.replace(/=.*/, ''));
+    assert.ok(!calls.includes('rnd(80)'));
+    assert.ok(calls.includes('rnd(79)'));
+    assert.ok(calls.includes('rn2(21)'));
+});
+
+test('automatic monster turn true briber stops after restricted demon-polyself greeting', async () => {
+    installStableNonShopFloorState();
+    initRng(2);
+    enableRngLog({ reset: true });
+    game.level.flags.noteleport = true;
+    game.u._polyself_form = { name: 'water demon', mlet: '&', demon: true };
+    game.u.uhp = 20;
+    game.u.uac = 10;
+    game._force_lock_occupation = { usedtime: 3, chance: 6, picktyp: true };
+    game._force_lock_continue_time = 1;
+    game._run_steps_remaining = 4;
+    game._search_pending_count = 4;
+    markHeroNeighborhoodVisible();
+    const briber = ordinaryThrowTarget('water demon', 6, 5, {
+        movement: NORMAL_SPEED,
+        msleeping: 0,
+        mcanmove: true,
+        mcansee: true,
+        mpeaceful: true,
+        mtame: 0,
+        minvis: 0,
+        perminvis: 0,
+        mux: game.u.ux,
+        muy: game.u.uy,
+        mhp: 80,
+        mhpmax: 80,
+        m_lev: 8,
+        data: {
+            name: 'water demon',
+            msound: 'MS_BRIBE',
+            mlevel: 8,
+            mlet: '&',
+            demon: true,
+            maligntyp: -7,
+            attack: { dice: 1, sides: 1, verb: 'hits' },
+        },
+    });
+    game.level.monsters = [briber];
+
+    queueEscapeForMonsterTurn();
+    await processMonsterTurns();
+
+    assert.equal(game._pending_message,
+        'The water demon says, "Good hunting, Brother."  A mysterious force prevents the water demon from teleporting!');
+    assert.deepEqual([briber.mx, briber.my], [6, 5]);
+    assert.equal(briber.mpeaceful, true);
+    assert.equal(briber.hostile, undefined);
+    assert.equal(briber._last_demon_bribe_demand, undefined);
+    assert.equal(game._force_lock_occupation, null);
+    assert.equal(game._force_lock_continue_time, 0);
+    assert.equal(game._run_steps_remaining, 0);
+    assert.equal(game._search_pending_count, 0);
+    assert.equal(game.u.uhp, 20);
+    assert.equal(game._command_mode || null, null);
+    assert.doesNotMatch(game._pending_message, /hits|gets angry|demands|safe passage|How much/);
+    const calls = getRngLog().map(entry => entry.replace(/=.*/, ''));
+    assert.ok(!calls.includes('rnd(80)'));
+    assert.ok(!calls.includes('rnd(20)'));
+    assert.ok(!calls.includes('d(1,1)'));
+    assert.ok(!calls.includes('rnd(79)'));
+    assert.ok(!calls.includes('rn2(21)'));
+});
+
 test('automatic monster turn true briber with Excalibur angers before demand and keeps acting', async () => {
     installStableNonShopFloorState();
     initRng(2);

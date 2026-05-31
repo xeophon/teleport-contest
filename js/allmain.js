@@ -9,7 +9,7 @@ import { vision_recalc, vision_reset, init_vision_globals, cansee, couldsee, vie
 import { init_objects } from './o_init.js';
 import { init_dungeons_rng } from './dungeon.js';
 import { rn2, rn2_on_display_rng, rnd, rn1, rnl, rne, rnz, d } from './rng.js';
-import { COLNO, ROWNO, A_CHA, A_CON, A_DEX, A_INT, A_MAX, A_STR, A_WIS, ALTAR, GRAVE, ICE, IS_OBSTRUCTED, IS_STWALL, IS_TREE, IS_ROOM, IS_WALL, TREE, ROOM, DOOR, CORR, SDOOR, SCORR, IRONBARS, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, D_TRAPPED, W_NONDIGGABLE, W_NONPASSWALL, APPORT, CADAVER, ACCFOOD, DOGFOOD, MANFOOD, POISON, UNDEF, TABU, NO_MM_FLAGS, NO_MINVENT, MM_NOMSG, IN_SIGHT, ALL_TRAPS, ARROW_TRAP, ROCKTRAP, PIT, SPIKED_PIT, SQKY_BOARD, BEAR_TRAP, LANDMINE, ROLLING_BOULDER_TRAP, SLP_GAS_TRAP, RUST_TRAP, FIRE_TRAP, HOLE, TRAPDOOR, TELEP_TRAP, WEB, STATUE_TRAP, MAGIC_TRAP, ANTI_MAGIC, MAGIC_PORTAL, VIBRATING_SQUARE, ALLOW_M, ALLOW_TM, ALLOW_TRAPS, ALLOW_U, ALLOW_ALL, NOTONL, OPENDOOR, UNLOCKDOOR, BUSTDOOR, ALLOW_ROCK, ALLOW_WALL, ALLOW_DIG, ALLOW_SANCT, ALLOW_SSM, ALLOW_BARS, NOGARLIC, Is_airlevel, Is_oracle_level, ACCESSIBLE, IS_POOL, IS_LAVA, WATER, LAVAWALL, BOLT_LIM, MON_POLE_DIST, NO_WEAPON_WANTED, NEED_WEAPON, NEED_AXE, NEED_PICK_AXE, NEED_PICK_OR_AXE, VAULT, VAULT_GUARD_TIME, M_SEEN_MAGR, M_AP_FURNITURE, M_AP_OBJECT, M_AP_TYPE, MOD_ENCUMBER, HVY_ENCUMBER, EXT_ENCUMBER, OVERLOADED, ROOMOFFSET, SHOPBASE } from './const.js';
+import { COLNO, ROWNO, A_CHA, A_CON, A_DEX, A_INT, A_MAX, A_STR, A_WIS, ALTAR, GRAVE, ICE, IS_OBSTRUCTED, IS_STWALL, IS_TREE, IS_ROOM, IS_WALL, TREE, ROOM, DOOR, CORR, SDOOR, SCORR, IRONBARS, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, D_TRAPPED, W_NONDIGGABLE, W_NONPASSWALL, APPORT, CADAVER, ACCFOOD, DOGFOOD, MANFOOD, POISON, UNDEF, TABU, NO_MM_FLAGS, NO_MINVENT, MM_NOMSG, IN_SIGHT, ALL_TRAPS, ARROW_TRAP, ROCKTRAP, PIT, SPIKED_PIT, SQKY_BOARD, BEAR_TRAP, LANDMINE, ROLLING_BOULDER_TRAP, SLP_GAS_TRAP, RUST_TRAP, FIRE_TRAP, HOLE, TRAPDOOR, TELEP_TRAP, WEB, STATUE_TRAP, MAGIC_TRAP, ANTI_MAGIC, MAGIC_PORTAL, VIBRATING_SQUARE, ALLOW_M, ALLOW_TM, ALLOW_TRAPS, ALLOW_U, ALLOW_ALL, NOTONL, OPENDOOR, UNLOCKDOOR, BUSTDOOR, ALLOW_ROCK, ALLOW_WALL, ALLOW_DIG, ALLOW_SANCT, ALLOW_SSM, ALLOW_BARS, NOGARLIC, Is_airlevel, Is_oracle_level, ACCESSIBLE, IS_POOL, IS_LAVA, WATER, LAVAWALL, BOLT_LIM, MON_POLE_DIST, NO_WEAPON_WANTED, NEED_WEAPON, NEED_AXE, NEED_PICK_AXE, NEED_PICK_OR_AXE, VAULT, VAULT_GUARD_TIME, M_SEEN_MAGR, M_AP_FURNITURE, M_AP_OBJECT, M_AP_TYPE, MOD_ENCUMBER, HVY_ENCUMBER, EXT_ENCUMBER, OVERLOADED, ROOMOFFSET, SHOPBASE, STRAT_APPEARMSG } from './const.js';
 import { CLR_BROWN, CLR_CYAN, CLR_MAGENTA, CLR_RED, CLR_WHITE, CLR_YELLOW, NO_COLOR } from './terminal.js';
 import { advanceVaultGuard, prepareVaultGuardEscort, restVaultFakecorr } from './vault.js';
 import { DISPLAY_MONSTER_GLYPHS, DISPLAY_MONSTER_HALLU_NAMES } from './monster_data.js';
@@ -4340,6 +4340,15 @@ export async function processMonsterTurns() {
                 }
                 if (!resumingPetInventory && !resumedAfterPreturn)
                     maybeDemonicBlackmailTrueTargetArtifact(mon);
+                if (!resumingPetInventory && !resumedAfterPreturn
+                    && maybeDemonicBlackmailTrueTargetDemonPolyself(mon)) {
+                    if (game._message_more && !game._process_time_with_more) {
+                        game._monster_resume_index = monIndex + 1;
+                        game._monster_resume_somebody_can_move = somebodyCanMove;
+                        return false;
+                    }
+                    continue;
+                }
                 if (!resumingPetInventory && !resumedAfterPreturn)
                     maybeDemonicBlackmailTrueTargetNoGold(mon);
                 if (resumedAfterPreturn) resumeAfterPreturn = false;
@@ -7591,7 +7600,11 @@ function monsterDemonBribeRelocationSuffix(x, y, oldX, oldY) {
 }
 
 function monsterDemonBribeObjectName(mon) {
-    return monsterDisplayName(mon).replace(/^The /, '');
+    const name = monsterDisplayName(mon);
+    if (mon?.givenName || mon?.isshk || mon?.data?.unique
+        || mon?.demonLord || mon?.demonPrince || mon?.data?.demonLord || mon?.data?.demonPrince)
+        return name.replace(/^The /, '');
+    return name.replace(/^The /, 'the ');
 }
 
 function relocateDemonicBlackmailBriber(mon) {
@@ -7656,6 +7669,59 @@ function demonicBlackmailTrueTargetNearby(mon) {
     return true;
 }
 
+function demonicBlackmailPrinceReveal(mon) {
+    const data = mon?.data || {};
+    const isPrince = !!(mon?.demonPrince || mon?.isDemonPrince || data.demonPrince || data.isDemonPrince);
+    if (!isPrince || !mon?.minvis) return '';
+    const wasUnseen = !monsterVisibleToHero(mon);
+    mon.minvis = 0;
+    mon.perminvis = 0;
+    mon.invisible = 0;
+    if (Number.isInteger(mon.mstrategy)) mon.mstrategy &= ~STRAT_APPEARMSG;
+    newsym(mon.mx, mon.my);
+    if (wasUnseen && monsterVisibleToHero(mon)) return `${monsterDisplayName(mon)} appears before you.`;
+    return '';
+}
+
+function interruptDemonicBlackmailOccupation() {
+    if (game._eating_turns_remaining > 0) {
+        clearActiveEatingOccupation(game);
+        game._pending_rotten_food_eating_message = 0;
+    }
+    game._run_steps_remaining = 0;
+    game._running_continuation = 0;
+    game._initial_run_command = 0;
+    game._run_steps_after_more = 0;
+    game._travel_keys = [];
+    game._travel_dynamic_target = null;
+    game._search_pending_count = 0;
+    game._counted_repeat_interruptible = 0;
+    game._armor_wear_occupation = null;
+    game._armor_takeoff_after_more = null;
+    game._armor_finish_after_more = 0;
+    game._force_lock_occupation = null;
+    game._force_lock_continue_time = 0;
+    game._force_lock_finish_after_more = null;
+    game._pending_force_lock_start_message = 0;
+    game._pick_lock_occupation = null;
+    game._pick_lock_continue_time = 0;
+    game._pick_dig_occupation = null;
+    game._queued_pick_dig_apply_letter = null;
+    game._apply_pick_dig_letter = null;
+    game._tin_opening_occupation = null;
+    game._tin_finish_after_turn = null;
+    game._tin_opened_pending = null;
+    game._spellbook_study_occupation = null;
+    game._spellbook_finish_after_topline_more = null;
+    game._prayer_occupation = 0;
+    game._prayer_pending_done = 0;
+    game._pending_prayer_finish_message = 0;
+    game._prayer_process_time_now = 0;
+    game._prayer_split_finish_message = 0;
+    game._prayer_split_waiting_for_time = 0;
+    game._prayer_split_remaining_time = 0;
+}
+
 function maybeDemonicBlackmailTrueTargetArtifact(mon) {
     if (!demonicBlackmailTrueTargetNearby(mon)) return false;
     const result = monsterTurnDemonBribeArtifact(mon);
@@ -7663,8 +7729,26 @@ function maybeDemonicBlackmailTrueTargetArtifact(mon) {
     return !!result?.handled;
 }
 
+function maybeDemonicBlackmailTrueTargetDemonPolyself(mon) {
+    if (!demonicBlackmailTrueTargetNearby(mon) || !heroIsDemonPolyself()) return false;
+    interruptDemonicBlackmailOccupation();
+    const messages = [];
+    const revealMessage = demonicBlackmailPrinceReveal(mon);
+    if (revealMessage) messages.push(revealMessage);
+    if (heroIsDeafForMonsterNoise()) {
+        if (monsterVisibleToHero(mon)) messages.push(`${monsterDisplayName(mon)} says something.`);
+    } else {
+        messages.push(`${monsterDisplayName(mon)} says, "Good hunting, ${game.flags?.female ? 'Sister' : 'Brother'}."`);
+    }
+    const relocateMessage = relocateDemonicBlackmailBriber(mon);
+    if (relocateMessage) messages.push(relocateMessage);
+    if (messages.length) addToplineMessage(messages.join('  '));
+    return true;
+}
+
 function maybeDemonicBlackmailTrueTargetNoGold(mon) {
     if (!demonicBlackmailTrueTargetNearby(mon)) return false;
+    interruptDemonicBlackmailOccupation();
     const result = monsterTurnDemonBribeNoGold(mon);
     if (result?.message) addToplineMessage(result.message);
     return !!result?.handled;
