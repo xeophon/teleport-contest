@@ -17707,6 +17707,20 @@ class SplevSelection {
         return sel;
     }
 
+    static room(croom) {
+        const sel = new SplevSelection();
+        if (!croom || !game.level) return sel;
+        const roomIndex = Number(croom.roomnoidx ?? 0);
+        const roomno = ROOMOFFSET + (Number.isFinite(roomIndex) ? Math.trunc(roomIndex) : 0);
+        for (let y = croom.ly; y <= croom.hy; y++) {
+            for (let x = croom.lx; x <= croom.hx; x++) {
+                const loc = isok(x, y) ? game.level.at(x, y) : null;
+                if (loc && !loc.edge && loc.roomno === roomno) sel.set(x, y, true);
+            }
+        }
+        return sel;
+    }
+
     clone() {
         return new SplevSelection([...this._points]);
     }
@@ -17749,8 +17763,8 @@ class SplevSelection {
     iterate(callback) {
         const rect = this.bounds();
         const points = [];
-        for (let y = rect.ly; y <= rect.hy; y++) {
-            for (let x = Math.max(1, rect.lx); x <= rect.hx; x++) {
+        for (let x = rect.lx; x <= rect.hx; x++) {
+            for (let y = rect.ly; y <= rect.hy; y++) {
                 if (!this.get(x, y)) continue;
                 points.push([x, y]);
                 if (callback) callback(x, y);
@@ -17800,6 +17814,48 @@ class SplevSelection {
         return ret;
     }
 
+    filterMapchar(mapchar, lit = SET_LIT_NOCHANGE) {
+        const typ = splevMapCharToTyp(mapchar);
+        const ret = new SplevSelection();
+        const rect = this.bounds();
+        for (let x = rect.lx; x <= rect.hx; x++) {
+            for (let y = rect.ly; y <= rect.hy; y++) {
+                if (!this.get(x, y)) continue;
+                const loc = game.level?.at(x, y);
+                if (!loc || !mapTerrainTypesMatch(typ, loc.typ)) continue;
+                if (lit === SET_LIT_NOCHANGE) ret.set(x, y, true);
+                else if (lit === SET_LIT_RANDOM) ret.set(x, y, !!rn2(2));
+                else if (loc.lit === !!lit) ret.set(x, y, true);
+            }
+        }
+        return ret;
+    }
+
+    filter_mapchar(mapchar, lit = SET_LIT_NOCHANGE) {
+        return this.filterMapchar(mapchar, lit);
+    }
+
+    rndcoord(remove = false) {
+        const rect = this.bounds();
+        let count = 0;
+        for (let x = rect.lx; x <= rect.hx; x++)
+            for (let y = rect.ly; y <= rect.hy; y++)
+                if (this.get(x, y)) count++;
+        if (!count) return { x: -1, y: -1 };
+        let choice = rn2(count);
+        for (let x = rect.lx; x <= rect.hx; x++) {
+            for (let y = rect.ly; y <= rect.hy; y++) {
+                if (!this.get(x, y)) continue;
+                if (!choice) {
+                    if (remove) this.set(x, y, false);
+                    return { x, y };
+                }
+                choice--;
+            }
+        }
+        return { x: -1, y: -1 };
+    }
+
     or(other) {
         const ret = this.clone();
         for (const item of terrainSelectionToPoints(other)) ret.set(item.x, item.y, true);
@@ -17842,6 +17898,7 @@ const splevSelection = {
     fromPoints: points => new SplevSelection(points),
     area: (x1, y1, x2, y2) => SplevSelection.area(x1, y1, x2, y2),
     match: mapfragment => SplevSelection.match(mapfragment),
+    room: croom => SplevSelection.room(croom),
 };
 
 function terrainSelectionBounds(selection) {
@@ -19840,9 +19897,13 @@ function themeroomBuriedZombieSpecies() {
 }
 
 function shuffleThemeroomSpecies(zombifiable) {
-    for (let n = zombifiable.length; n > 1; n--) {
+    shuffleThemeroomList(zombifiable);
+}
+
+function shuffleThemeroomList(list) {
+    for (let n = list.length; n > 1; n--) {
         const j = rn2(n);
-        [zombifiable[n - 1], zombifiable[j]] = [zombifiable[j], zombifiable[n - 1]];
+        [list[n - 1], list[j]] = [list[j], list[n - 1]];
     }
 }
 
@@ -19870,6 +19931,43 @@ function themeroom_buried_zombies(croom) {
     }
 }
 
+async function themeroom_boulder_room(croom) {
+    const locs = splevSelection.room(croom).percentage(30);
+    for (const [x, y] of locs.iterate()) {
+        if (rn2(100) < 50) mksobj_at(BOULDER, x, y, true, false);
+        else await maketrap(x, y, ROLLING_BOULDER_TRAP);
+    }
+}
+
+async function themeroom_trap_room(croom) {
+    const traps = [
+        ARROW_TRAP, DART_TRAP, ROCKTRAP, BEAR_TRAP,
+        LANDMINE, SLP_GAS_TRAP, RUST_TRAP, ANTI_MAGIC,
+    ];
+    shuffleThemeroomList(traps);
+    const locs = splevSelection.room(croom).percentage(30);
+    for (const [x, y] of locs.iterate()) await maketrap(x, y, traps[0]);
+}
+
+async function themeroom_statuary(croom) {
+    const pos = { x: 0, y: 0 };
+    for (let i = 0, count = d(5, 5); i < count; i++) {
+        if (somexyspace(croom, pos)) mksobj_at(STATUE, pos.x, pos.y, true, false);
+    }
+    for (let i = 0, count = rnd(3); i < count; i++) {
+        if (somexyspace(croom, pos)) await maketrap(pos.x, pos.y, STATUE_TRAP);
+    }
+}
+
+function themeroom_light_source(croom) {
+    const pos = { x: 0, y: 0 };
+    if (!somexyspace(croom, pos)) return null;
+    const lamp = mksobj_at(OIL_LAMP, pos.x, pos.y, true, false);
+    lamp.lamplit = true;
+    lamp.lit = true;
+    return lamp;
+}
+
 export const __mklevTestHooks = {
     mkmap_init,
     mkmap_run_passes,
@@ -19881,11 +19979,16 @@ export const __mklevTestHooks = {
     splevMinesLevelInit,
     themeroomBuriedZombieSpecies,
     themeroom_buried_zombies,
+    apply_themeroom_fill,
 };
 
 async function apply_themeroom_fill(fill, croom, rows = null, startX = 0, startY = 0) {
     if (fill?.name) croom.themeFillName = fill.name;
-    if (fill?.name === 'Buried zombies') themeroom_buried_zombies(croom);
+    if (fill?.name === 'Boulder room') await themeroom_boulder_room(croom);
+    else if (fill?.name === 'Trap room') await themeroom_trap_room(croom);
+    else if (fill?.name === 'Buried zombies') themeroom_buried_zombies(croom);
+    else if (fill?.name === 'Statuary') await themeroom_statuary(croom);
+    else if (fill?.name === 'Light source') themeroom_light_source(croom);
     else if (fill?.name === 'Ghost of an Adventurer' && rows) themeroom_ghost_adventurer_rng(rows, startX, startY);
     else if (fill?.name === 'Teleportation hub') {
         const locs = [];

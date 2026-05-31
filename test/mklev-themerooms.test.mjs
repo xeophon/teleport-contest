@@ -8,11 +8,16 @@ import { processCorpseTimers } from '../js/cmd.js';
 import {
     COLNO, ROWNO, STONE, ROOM, CORR, ROOMOFFSET, TREE, ICE, ICED_POOL, ICED_MOAT,
     VWALL, HWALL, POOL, LAVAPOOL, WATER, FOUNTAIN, ALTAR, AM_SHRINE, OROOM, TEMPLE,
-    SHOPBASE, CANDLESHOP, MATCH_WALL, SET_LIT_RANDOM,
+    SHOPBASE, CANDLESHOP, MATCH_WALL, SET_LIT_RANDOM, SET_LIT_NOCHANGE,
+    ARROW_TRAP, DART_TRAP, ROCKTRAP, BEAR_TRAP, LANDMINE, ROLLING_BOULDER_TRAP,
+    SLP_GAS_TRAP, RUST_TRAP, STATUE_TRAP, ANTI_MAGIC,
 } from '../js/const.js';
 import { enableRngLog, getRngLog, initRng } from '../js/rng.js';
 
+const OIL_LAMP = 227;
+const BOULDER = 465;
 const CORPSE = 471;
+const STATUE = 472;
 
 function installThemeroomGame({
     dlevel = 1,
@@ -376,6 +381,37 @@ test('special-level selection match percentage and union follow C mask contracts
     assert.equal(g.level.at(12, 10).typ, CORR);
 });
 
+test('special-level room selection filters mapchars and random coordinates like C', () => {
+    const { g, room } = installThemeroomGame({ seed: 7, width: 3, height: 2 });
+    g.level.at(room.lx, room.ly).edge = true;
+    g.level.at(room.hx, room.hy).roomno = ROOMOFFSET + 1;
+    g.level.at(room.lx + 1, room.ly).lit = true;
+    g.level.at(room.lx + 2, room.ly).typ = CORR;
+
+    const sel = mklevHooks.splevSelection.room(room);
+    const litFloors = sel.filterMapchar('.', 1);
+    const allFloors = sel.filter_mapchar('.', SET_LIT_NOCHANGE);
+
+    assert.equal(sel.numpoints(), 4);
+    assert.equal(sel.has(room.lx, room.ly), false);
+    assert.equal(sel.has(room.hx, room.hy), false);
+    assert.deepEqual(litFloors.iterate(), [[room.lx + 1, room.ly]]);
+    assert.equal(allFloors.numpoints(), 3);
+
+    const points = mklevHooks.splevSelection.fromPoints([
+        [2, 2],
+        [2, 3],
+        [3, 2],
+    ]);
+    enableRngLog({ reset: true });
+    const picked = points.rndcoord(true);
+
+    assert.match(getRngLog()[0], /^rn2\(3\)=/);
+    assert.equal(points.numpoints(), 2);
+    assert.equal(points.has(picked.x, picked.y), false);
+    assert.deepEqual(mklevHooks.splevSelection.new().rndcoord(true), { x: -1, y: -1 });
+});
+
 test('replace terrain rejects unrecognized explicit selections', () => {
     const g = installMkmapGame();
     g.level.at(10, 10).typ = ROOM;
@@ -568,6 +604,59 @@ test('themed buried zombie corpses use buriedobjlist with explicit zombify timer
         assert.ok(corpse.oy >= room.ly && corpse.oy <= room.hy);
         assert.equal(allowed.has(corpse.corpsenm?.name), true);
     }
+});
+
+test('themed Boulder and Trap rooms use C room selections', async () => {
+    const { g: boulderGame, room: boulderRoom } = installThemeroomGame({
+        dlevel: 7, moves: 200, seed: 33, width: 12, height: 8,
+    });
+    await mklevHooks.apply_themeroom_fill({ name: 'Boulder room' }, boulderRoom);
+
+    const rollingTraps = boulderGame.level.traps.filter(trap => trap.ttyp === ROLLING_BOULDER_TRAP);
+    const boulders = boulderGame.level.objects.filter(obj => obj.otyp === BOULDER);
+    assert.equal(boulderRoom.themeFillName, 'Boulder room');
+    assert.ok(rollingTraps.length + boulders.length > 0);
+    assert.equal(rollingTraps.every(trap =>
+        trap.tx >= boulderRoom.lx && trap.tx <= boulderRoom.hx
+        && trap.ty >= boulderRoom.ly && trap.ty <= boulderRoom.hy), true);
+
+    const { g: trapGame, room: trapRoom } = installThemeroomGame({
+        dlevel: 7, moves: 200, seed: 34, width: 12, height: 8,
+    });
+    await mklevHooks.apply_themeroom_fill({ name: 'Trap room' }, trapRoom);
+
+    const allowedTraps = new Set([
+        ARROW_TRAP, DART_TRAP, ROCKTRAP, BEAR_TRAP,
+        LANDMINE, SLP_GAS_TRAP, RUST_TRAP, ANTI_MAGIC,
+    ]);
+    assert.ok(trapGame.level.traps.length > 0);
+    assert.equal(allowedTraps.has(trapGame.level.traps[0].ttyp), true);
+    assert.equal(trapGame.level.traps.every(trap => trap.ttyp === trapGame.level.traps[0].ttyp), true);
+    assert.equal(trapGame.level.traps.every(trap =>
+        trap.tx >= trapRoom.lx && trap.tx <= trapRoom.hx
+        && trap.ty >= trapRoom.ly && trap.ty <= trapRoom.hy), true);
+});
+
+test('themed Statuary and Light source fills create C-shaped contents', async () => {
+    const { g: statuaryGame, room: statuaryRoom } = installThemeroomGame({
+        dlevel: 7, moves: 200, seed: 35, width: 10, height: 8,
+    });
+    await mklevHooks.apply_themeroom_fill({ name: 'Statuary' }, statuaryRoom);
+
+    assert.equal(statuaryRoom.themeFillName, 'Statuary');
+    assert.ok(statuaryGame.level.objects.filter(obj => obj.otyp === STATUE).length >= 5);
+    assert.ok(statuaryGame.level.traps.filter(trap => trap.ttyp === STATUE_TRAP).length >= 1);
+
+    const { g: lightGame, room: lightRoom } = installThemeroomGame({
+        dlevel: 7, moves: 200, seed: 36, width: 4, height: 4,
+    });
+    await mklevHooks.apply_themeroom_fill({ name: 'Light source' }, lightRoom);
+
+    const lamps = lightGame.level.objects.filter(obj => obj.otyp === OIL_LAMP);
+    assert.equal(lightRoom.themeFillName, 'Light source');
+    assert.equal(lamps.length, 1);
+    assert.equal(lamps[0].lamplit, true);
+    assert.equal(lamps[0].lit, true);
 });
 
 test('themed buried zombie timers raise zombies from the buried list', async () => {
