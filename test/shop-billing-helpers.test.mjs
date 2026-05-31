@@ -5194,6 +5194,108 @@ test('hallucinating chat with resident shopkeeper can use GEICO speech', async (
     assert.deepEqual(getRngLog(), ['rn2(2)=1', 'rn2(21)=14']);
 });
 
+test('hallucinating billed resident shopkeeper chat uses randomized Shknam and currency', async () => {
+    const result = await chatAdjacentShopkeeper({
+        hallucinating: true,
+        seed: 4,
+        rngLog: true,
+        extra: {
+            bill: [{ bo_id: 'chat-hallu-bill', price: 1, bquan: 1, totalPrice: 1 }],
+            billct: 1,
+            debit: 0,
+            credit: 77,
+            robbed: 250,
+            surcharge: 1,
+            minvent: [goldPieces(3063600, 100)],
+        },
+    });
+
+    assert.equal(result.message,
+        'Niknar says that your bill comes to 1 woolong.');
+    assert.equal(result.target.billct, 1);
+    assert.equal(result.target.credit, 77);
+    assert.equal(result.target.robbed, 250);
+    assert.equal(result.target.surcharge, 1);
+    assert.equal(result.target.mstrategy, 0);
+    assert.equal(game.context.move, 1);
+    assert.doesNotMatch(result.message,
+        /15 minutes|Asidonhopo|reminds you|credit|recent robbery|watching you carefully|business is|shoplifters|Nothing happens|talking to a wall/);
+    assert.deepEqual(getRngLog(), ['rn2(2)=0', 'rn2(11)=8', 'rn2(40)=33', 'rn2(21)=19']);
+});
+
+test('hallucinating debit resident shopkeeper chat randomizes Shknam pronoun and currency', async () => {
+    const result = await chatAdjacentShopkeeper({
+        hallucinating: true,
+        seed: 10,
+        rngLog: true,
+        extra: {
+            debit: 123,
+            minvent: [goldPieces(3063601, 100)],
+        },
+    });
+
+    assert.equal(result.message,
+        'Karangkobar reminds you that you owe him 123 simoleons.');
+    assert.equal(result.target.debit, 123);
+    assert.equal(result.target.mstrategy, 0);
+    assert.equal(game.context.move, 1);
+    assert.doesNotMatch(result.message,
+        /15 minutes|Asidonhopo|bill comes to|credit|recent robbery|watching you carefully|business is|shoplifters|Nothing happens|talking to a wall/);
+    assert.deepEqual(getRngLog(), ['rn2(2)=0', 'rn2(11)=5', 'rn2(32)=18', 'rn2(4)=0', 'rn2(21)=14']);
+});
+
+test('hallucinating prior-customer shopkeeper chat does not roll Shknam', async () => {
+    const result = await chatAdjacentShopkeeper({
+        hallucinating: true,
+        seed: 4,
+        rngLog: true,
+        extra: {
+            following: 1,
+            customer: 'PreviousCustomer',
+            bill: [{ bo_id: 'chat-hallu-follow-bill', price: 1, bquan: 1, totalPrice: 1 }],
+            billct: 1,
+            debit: 25,
+            credit: 77,
+            robbed: 250,
+            surcharge: 1,
+            minvent: [goldPieces(3063602, 100)],
+        },
+    });
+
+    assert.equal(result.message,
+        '"Hello Hero!  I was looking for PreviousCustomer."');
+    assert.equal(result.target.following, 0);
+    assert.equal(result.target.billct, 1);
+    assert.equal(result.target.debit, 25);
+    assert.equal(result.target.mstrategy, 0);
+    assert.equal(game.context.move, 1);
+    assert.doesNotMatch(result.message,
+        /Niknar|Asidonhopo says|bill comes to|reminds you|credit|recent robbery|watching you carefully|business is|shoplifters|Nothing happens|talking to a wall/);
+    assert.deepEqual(getRngLog(), ['rn2(2)=0']);
+});
+
+test('hallucinating ordinary resident shopkeeper chat randomizes Shknam', async () => {
+    const result = await chatAdjacentShopkeeper({
+        hallucinating: true,
+        seed: 4,
+        rngLog: true,
+        town: true,
+        extra: {
+            shknam: 'Izchak',
+            minvent: [goldPieces(3063603, 100)],
+        },
+    });
+
+    assert.equal(result.message,
+        'Niknar talks about the problem of shoplifters.');
+    assert.equal(result.target.shknam, 'Izchak');
+    assert.equal(result.target.mstrategy, 0);
+    assert.equal(game.context.move, 1);
+    assert.doesNotMatch(result.message,
+        /15 minutes|Izchak|Asidonhopo|Valley of the Dead|business is|bill comes to|Nothing happens|talking to a wall/);
+    assert.deepEqual(getRngLog(), ['rn2(2)=0', 'rn2(11)=8', 'rn2(40)=33']);
+});
+
 test('chat with visible dog uses monster noise before empty-space fallback', async () => {
     const result = await chatAdjacentMonster({
         rngLog: true,
