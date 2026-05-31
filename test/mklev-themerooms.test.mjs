@@ -10,7 +10,7 @@ import {
     VWALL, HWALL, POOL, LAVAPOOL, WATER, FOUNTAIN, ALTAR, AM_SHRINE, OROOM, TEMPLE,
     SHOPBASE, CANDLESHOP, MATCH_WALL, SET_LIT_RANDOM, SET_LIT_NOCHANGE,
     ARROW_TRAP, DART_TRAP, ROCKTRAP, BEAR_TRAP, LANDMINE, ROLLING_BOULDER_TRAP,
-    SLP_GAS_TRAP, RUST_TRAP, STATUE_TRAP, ANTI_MAGIC,
+    SLP_GAS_TRAP, RUST_TRAP, WEB, STATUE_TRAP, ANTI_MAGIC,
 } from '../js/const.js';
 import { enableRngLog, getRngLog, initRng } from '../js/rng.js';
 
@@ -635,6 +635,30 @@ test('themed Boulder and Trap rooms use C room selections', async () => {
     assert.equal(trapGame.level.traps.every(trap =>
         trap.tx >= trapRoom.lx && trap.tx <= trapRoom.hx
         && trap.ty >= trapRoom.ly && trap.ty <= trapRoom.hy), true);
+});
+
+test('themed Spider nest gates web spiders by C difficulty', async () => {
+    const { g: lowGame, room: lowRoom } = installThemeroomGame({
+        dlevel: 6, moves: 200, seed: 37, width: 12, height: 8,
+    });
+    await mklevHooks.apply_themeroom_fill({ name: 'Spider nest' }, lowRoom);
+
+    assert.equal(lowRoom.themeFillName, 'Spider nest');
+    assert.ok(lowGame.level.traps.length > 0);
+    assert.equal(lowGame.level.traps.every(trap => trap.ttyp === WEB), true);
+    assert.equal(lowGame.level.monsters.filter(mon => mon.data?.name === 'giant spider').length, 0);
+
+    const { g: highGame, room: highRoom } = installThemeroomGame({
+        dlevel: 10, moves: 200, seed: 38, width: 12, height: 8,
+    });
+    await mklevHooks.apply_themeroom_fill({ name: 'Spider nest' }, highRoom);
+
+    const spiders = highGame.level.monsters.filter(mon => mon.data?.name === 'giant spider');
+    assert.ok(highGame.level.traps.length > 0);
+    assert.equal(highGame.level.traps.every(trap => trap.ttyp === WEB), true);
+    assert.ok(spiders.length > 0);
+    assert.equal(spiders.every(mon =>
+        highGame.level.traps.some(trap => trap.tx === mon.mx && trap.ty === mon.my)), true);
 });
 
 test('themed Statuary and Light source fills create C-shaped contents', async () => {

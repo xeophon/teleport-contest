@@ -19939,6 +19939,17 @@ async function themeroom_boulder_room(croom) {
     }
 }
 
+async function themeroom_spider_nest(croom) {
+    const spooders = level_difficulty() > 8;
+    const locs = splevSelection.room(croom).percentage(30);
+    for (const [x, y] of locs.iterate()) {
+        const spiderOnWeb = spooders && rn2(100) < 80;
+        const trap = await maketrap(x, y, WEB);
+        if (trap?.ttyp === WEB && spiderOnWeb)
+            await makemon(monsterByRndName('giant spider'), x, y, 0);
+    }
+}
+
 async function themeroom_trap_room(croom) {
     const traps = [
         ARROW_TRAP, DART_TRAP, ROCKTRAP, BEAR_TRAP,
@@ -19985,6 +19996,7 @@ export const __mklevTestHooks = {
 async function apply_themeroom_fill(fill, croom, rows = null, startX = 0, startY = 0) {
     if (fill?.name) croom.themeFillName = fill.name;
     if (fill?.name === 'Boulder room') await themeroom_boulder_room(croom);
+    else if (fill?.name === 'Spider nest') await themeroom_spider_nest(croom);
     else if (fill?.name === 'Trap room') await themeroom_trap_room(croom);
     else if (fill?.name === 'Buried zombies') themeroom_buried_zombies(croom);
     else if (fill?.name === 'Statuary') await themeroom_statuary(croom);
