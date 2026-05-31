@@ -4330,6 +4330,14 @@ export async function processMonsterTurns() {
                         }
                     }
                 }
+                if (!resumingPetInventory && !resumedAfterPreturn && maybeDemonicBlackmailFalseImage(mon)) {
+                    if (game._message_more && !game._process_time_with_more) {
+                        game._monster_resume_index = monIndex + 1;
+                        game._monster_resume_somebody_can_move = somebodyCanMove;
+                        return false;
+                    }
+                    continue;
+                }
                 if (resumedAfterPreturn) resumeAfterPreturn = false;
                 if (!resumingPetInventory && !resumedAfterPreturn && maybeKillerBeeEatRoyalJelly(mon)) {
                     if (game._message_more && !game._process_time_with_more) {
@@ -7540,6 +7548,87 @@ function monsterVisibleToHero(mon) {
     return !game.u?.blind && !mon.minvis && !mon.mundetected
         && !!(game.viz_array?.[mon.my]?.[mon.mx] & IN_SIGHT)
         && couldSeeCoord(mon.mx, mon.my);
+}
+
+function monsterSoundKey(mon) {
+    const data = mon?.data || {};
+    const explicit = mon?.msound ?? mon?.sound ?? data.msound ?? data.sound;
+    return explicit == null ? '' : String(explicit).toLowerCase().replace(/^ms_/, '');
+}
+
+function heroIsDemonPolyself() {
+    const form = game.u?._polyself_form || game.u?.youmonst?.data || null;
+    if (!form) return false;
+    const name = String(form.name || form.race || '').toLowerCase();
+    const mlet = String(form.mlet || form.glyph || '').toLowerCase();
+    return !!(form.demon || form.isDemon || mlet === '&' || mlet === 'demon'
+        || /\b(?:demon|juiblex|yeenoghu|orcus|geryon|dispater|baalzebub|asmodeus|demogorgon)\b/.test(name));
+}
+
+function monsterDemonBribeRelocationSuffix(x, y, oldX, oldY) {
+    const heroX = game.u?.ux ?? 0;
+    const heroY = game.u?.uy ?? 0;
+    const du = (x - heroX) * (x - heroX) + (y - heroY) * (y - heroY);
+    if (du <= 2) return ' next to you';
+    if (du <= BOLT_LIM * BOLT_LIM) return ' close by';
+    const oldDu = (oldX - heroX) * (oldX - heroX) + (oldY - heroY) * (oldY - heroY);
+    if (oldDu === du) return '';
+    return du < oldDu ? ' closer to you' : ' farther away';
+}
+
+function monsterDemonBribeObjectName(mon) {
+    return monsterDisplayName(mon).replace(/^The /, '');
+}
+
+function relocateDemonicBlackmailBriber(mon) {
+    const name = monsterDisplayName(mon);
+    const wasVisible = monsterVisibleToHero(mon);
+    if (noteleportLevelForMonster(mon))
+        return wasVisible ? `A mysterious force prevents ${monsterDemonBribeObjectName(mon)} from teleporting!` : '';
+
+    const oldX = mon.mx;
+    const oldY = mon.my;
+    if (!rlocNoMsg(mon)) return '';
+    clearMonsterTrack(mon);
+    newsym(oldX, oldY);
+    newsym(mon.mx, mon.my);
+
+    const nowVisible = monsterVisibleToHero(mon);
+    if (wasVisible && nowVisible)
+        return `${name} vanishes and reappears${monsterDemonBribeRelocationSuffix(mon.mx, mon.my, oldX, oldY)}.`;
+    if (wasVisible) return `${name} vanishes!`;
+    if (nowVisible) return `${name} appears${monsterDemonBribeRelocationSuffix(mon.mx, mon.my, oldX, oldY)}!`;
+    return '';
+}
+
+function maybeDemonicBlackmailFalseImage(mon) {
+    if (!mon || monsterSoundKey(mon) !== 'bribe' || !mon.mpeaceful || mon.mtame || game.u?.uswallow)
+        return false;
+    if (mon.mux === game.u?.ux && mon.muy === game.u?.uy) return false;
+    const dx = mon.mx - (mon.mux ?? game.u?.ux ?? mon.mx);
+    const dy = mon.my - (mon.muy ?? game.u?.uy ?? mon.my);
+    const gridBugDiagonal = mon.data?.name === 'grid bug' && dx && dy;
+    if (dx * dx + dy * dy >= 3 || gridBugDiagonal) return false;
+
+    const messages = [`${cansee(mon.mux, mon.muy) ? monsterDisplayName(mon) : 'It'} whispers at thin air.`];
+    if (heroIsDemonPolyself()) {
+        const relocateMessage = relocateDemonicBlackmailBriber(mon);
+        if (relocateMessage) messages.push(relocateMessage);
+    } else {
+        mon.minvis = 0;
+        mon.perminvis = 0;
+        mon.invisible = 0;
+        mon.mpeaceful = 0;
+        mon.peaceful = false;
+        mon.mtame = 0;
+        mon.tame = 0;
+        mon.hostile = true;
+        set_malign(mon);
+        newsym(mon.mx, mon.my);
+        messages.push(`${monsterDisplayName(mon)} gets angry!`);
+    }
+    for (const message of messages) addToplineMessage(message);
+    return true;
 }
 
 function seaMonsterCanHideUnderWater(mon) {

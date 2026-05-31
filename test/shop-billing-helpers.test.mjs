@@ -7537,6 +7537,105 @@ test('chat with peaceful non-tame briber in demon polyself gives kindred greetin
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rnd(79)', 'rn2(21)']);
 });
 
+test('automatic monster turn briber whispers at false image and angers ordinary hero', async () => {
+    installStableNonShopFloorState();
+    initRng(2);
+    enableRngLog({ reset: true });
+    game._has_displacement = true;
+    markHeroNeighborhoodVisible();
+    const briber = ordinaryThrowTarget('Asmodeus', 6, 5, {
+        movement: NORMAL_SPEED,
+        msleeping: 0,
+        mcanmove: true,
+        mcansee: true,
+        mpeaceful: true,
+        mtame: 0,
+        minvis: 1,
+        perminvis: 1,
+        mux: 6,
+        muy: 6,
+        mhp: 80,
+        mhpmax: 80,
+        m_lev: 53,
+        data: {
+            name: 'Asmodeus',
+            msound: 'MS_BRIBE',
+            mlevel: 53,
+            mlet: '&',
+            demon: true,
+            demonPrince: true,
+            unique: true,
+            maligntyp: -20,
+        },
+    });
+    game.level.monsters = [briber];
+
+    queueEscapeForMonsterTurn();
+    await processMonsterTurns();
+
+    assert.equal(game._pending_message,
+        'The Asmodeus whispers at thin air.  The Asmodeus gets angry!');
+    assert.equal(briber.mpeaceful, 0);
+    assert.equal(briber.mtame, 0);
+    assert.equal(briber.hostile, true);
+    assert.equal(briber.minvis, 0);
+    assert.equal(briber.perminvis, 0);
+    assert.equal(game._command_mode || null, null);
+    assert.equal(briber._last_demon_bribe_demand, undefined);
+    assert.doesNotMatch(game._pending_message, /demands|safe passage|How much/);
+    assert.ok(!getRngLog().map(entry => entry.replace(/=.*/, '')).includes('rnd(80)'));
+});
+
+test('automatic monster turn briber whispers at false image and relocates demon polyself', async () => {
+    installStableNonShopFloorState();
+    initRng(2);
+    enableRngLog({ reset: true });
+    game._has_displacement = true;
+    game.u._polyself_form = { name: 'water demon', mlet: '&', demon: true };
+    markHeroNeighborhoodVisible();
+    const briber = ordinaryThrowTarget('Asmodeus', 6, 5, {
+        movement: NORMAL_SPEED,
+        msleeping: 0,
+        mcanmove: true,
+        mcansee: true,
+        mpeaceful: true,
+        mtame: 0,
+        minvis: 0,
+        perminvis: 0,
+        mux: 6,
+        muy: 6,
+        mhp: 80,
+        mhpmax: 80,
+        m_lev: 53,
+        data: {
+            name: 'Asmodeus',
+            msound: 'MS_BRIBE',
+            mlevel: 53,
+            mlet: '&',
+            demon: true,
+            demonPrince: true,
+            unique: true,
+            maligntyp: -20,
+        },
+    });
+    game.level.monsters = [briber];
+
+    queueEscapeForMonsterTurn();
+    await processMonsterTurns();
+
+    assert.match(game._pending_message,
+        /^The Asmodeus whispers at thin air\.  The Asmodeus vanishes!$/);
+    assert.equal(briber.mpeaceful, true);
+    assert.equal(briber.hostile, undefined);
+    assert.notDeepEqual([briber.mx, briber.my], [6, 5]);
+    assert.equal(game._command_mode || null, null);
+    assert.equal(briber._last_demon_bribe_demand, undefined);
+    assert.doesNotMatch(game._pending_message, /gets angry|demands|safe passage|How much/);
+    const calls = getRngLog().map(entry => entry.replace(/=.*/, ''));
+    assert.ok(calls.includes('rnd(79)'));
+    assert.ok(calls.includes('rn2(21)'));
+});
+
 test('invisible demon prince briber appears before demanding safe passage', async () => {
     const result = await chatAdjacentMonster({
         name: 'Asmodeus',
