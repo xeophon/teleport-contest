@@ -5427,6 +5427,108 @@ test('worn helmet tip makes ordinary invisible resident shopkeeper talk about sh
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
 });
 
+test('hallucinating worn helmet tip at town Izchak can use ordinary shk_chat', async () => {
+    const result = await tipInvisibleExplicitSound({
+        name: 'shopkeeper',
+        sound: 'MS_SELL',
+        peaceful: true,
+        hallucinating: true,
+        seed: 4,
+        rngLog: true,
+        town: true,
+        data: { mlevel: 12, mlet: '@', humanoid: true, shopkeeper: true },
+        extra: {
+            isshk: true,
+            shknam: 'Izchak',
+            bill: [],
+            billct: 0,
+            debit: 0,
+            credit: 0,
+            robbed: 0,
+            surcharge: 0,
+            following: 0,
+            minvent: [goldPieces(3063583, 100)],
+        },
+    });
+
+    assert.equal(result.message,
+        'You briefly doff your helm.  Izchak talks about the problem of shoplifters.');
+    assert.doesNotMatch(result.message,
+        /15 minutes|untended shops|business is|bill comes to|Valley of the Dead|doesn't respond|Nothing happens|waves|gestures/);
+    assert.equal(result.target.isshk, true);
+    assert.equal(result.target.mstrategy, 0);
+    assert.equal(result.targetLoc.map_invisible, true);
+    assert.equal(shop.shopkeeperCash(result.target), 100);
+    assert.deepEqual(getRngLog(), ['rn2(2)=0']);
+});
+
+test('hallucinating worn helmet tip at resident shopkeeper can use GEICO speech', async () => {
+    const result = await tipInvisibleExplicitSound({
+        name: 'shopkeeper',
+        sound: 'MS_SELL',
+        peaceful: true,
+        hallucinating: true,
+        seed: 1,
+        rngLog: true,
+        data: { mlevel: 12, mlet: '@', humanoid: true, shopkeeper: true },
+        extra: {
+            isshk: true,
+            shknam: 'Asidonhopo',
+            bill: [],
+            billct: 0,
+            debit: 0,
+            credit: 0,
+            robbed: 0,
+            surcharge: 0,
+            following: 0,
+            minvent: [goldPieces(3063584, 100)],
+        },
+    });
+
+    assert.equal(result.message,
+        'You briefly doff your helm.  "15 minutes could save you 15 zorkmids."');
+    assert.doesNotMatch(result.message,
+        /shoplifters|untended shops|business is|bill comes to|doesn't respond|Nothing happens|waves|gestures/);
+    assert.equal(result.target.isshk, true);
+    assert.equal(result.target.mstrategy, 0);
+    assert.equal(result.targetLoc.map_invisible, true);
+    assert.equal(shop.shopkeeperCash(result.target), 100);
+    assert.deepEqual(getRngLog(), ['rn2(2)=1']);
+});
+
+test('hallucinating worn helmet tip at debit resident shopkeeper randomizes no-it pronoun', async () => {
+    const result = await tipInvisibleExplicitSound({
+        name: 'shopkeeper',
+        sound: 'MS_SELL',
+        peaceful: true,
+        hallucinating: true,
+        seed: 10,
+        rngLog: true,
+        data: { mlevel: 12, mlet: '@', humanoid: true, shopkeeper: true },
+        extra: {
+            isshk: true,
+            shknam: 'Asidonhopo',
+            bill: [],
+            billct: 0,
+            debit: 123,
+            credit: 0,
+            robbed: 0,
+            surcharge: 0,
+            following: 0,
+            minvent: [goldPieces(3063585, 100)],
+        },
+    });
+
+    assert.equal(result.message,
+        'You briefly doff your helm.  Asidonhopo reminds you that you owe them 123 zorkmids.');
+    assert.doesNotMatch(result.message,
+        /15 minutes|credit|recent robbery|watching you carefully|business is|talks about shoplifters|doesn't respond|Nothing happens|waves|gestures/);
+    assert.equal(result.target.isshk, true);
+    assert.equal(result.target.mstrategy, 0);
+    assert.equal(result.targetLoc.map_invisible, true);
+    assert.deepEqual(getRngLog(), ['rn2(2)=0', 'rn2(4)=3']);
+});
+
 test('worn helmet tip keeps visible peaceful seducing nymph on humanoid wave before seduce sound', async () => {
     installStableNonShopFloorState();
     game.flags.female = true;

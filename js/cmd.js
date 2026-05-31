@@ -34127,6 +34127,26 @@ const TIPHAT_IZCHAK_SELL_MESSAGES = [
     name => `${name} comments about the Valley of the Dead as being a gateway.`,
 ];
 
+const TIPHAT_HALLUCINATED_MONSTER_PRONOUNS = [
+    { subject: 'he', object: 'him' },
+    { subject: 'she', object: 'her' },
+    { subject: 'it', object: 'it' },
+    { subject: 'they', object: 'them' },
+];
+
+function tipHatHallucinatedMonsterPronoun(key) {
+    const pronouns = TIPHAT_HALLUCINATED_MONSTER_PRONOUNS[rn2(TIPHAT_HALLUCINATED_MONSTER_PRONOUNS.length)];
+    return pronouns[key];
+}
+
+function tipHatShopkeeperSellSubjectPronoun(mon) {
+    return heroIsHallucinating() ? tipHatHallucinatedMonsterPronoun('subject') : shopkeeperSubjectPronoun(mon);
+}
+
+function tipHatShopkeeperSellObjectivePronoun(mon) {
+    return heroIsHallucinating() ? tipHatHallucinatedMonsterPronoun('object') : shopkeeperObjectivePronoun(mon);
+}
+
 function tipHatLawfulDeityName() {
     const roleName = game.urole?.name?.m || game._startup_role || 'Archeologist';
     const pantheonRole = roleName === 'Priest' ? game._pantheon_role || roleName : roleName;
@@ -34209,7 +34229,7 @@ function tipHatResidentShopkeeperSellNoise(mon) {
     const canSpeak = shopkeeperCanSpeakToHero(mon);
     if (tipHatShopkeeperIsAngry(mon)) {
         const customerType = shopkeeperRobbedAmount(mon) > 0 ? 'non-paying' : 'rude';
-        return { handled: true, message: `${name} ${canSpeak ? 'mentions' : 'indicates'} how much ${shopkeeperSubjectPronoun(mon)} dislikes ${customerType} customers.` };
+        return { handled: true, message: `${name} ${canSpeak ? 'mentions' : 'indicates'} how much ${tipHatShopkeeperSellSubjectPronoun(mon)} dislikes ${customerType} customers.` };
     }
     if (mon?.following) {
         const player = String(game.plname || 'Hero');
@@ -34228,7 +34248,7 @@ function tipHatResidentShopkeeperSellNoise(mon) {
         return { handled: true, message: `${name} ${canSpeak ? 'says' : 'indicates'} that your bill comes to ${total} ${shopCurrency(total)}.` };
     }
     if (debit > 0)
-        return { handled: true, message: `${name} ${canSpeak ? 'reminds you' : 'indicates'} that you owe ${shopkeeperObjectivePronoun(mon)} ${debit} ${shopCurrency(debit)}.` };
+        return { handled: true, message: `${name} ${canSpeak ? 'reminds you' : 'indicates'} that you owe ${tipHatShopkeeperSellObjectivePronoun(mon)} ${debit} ${shopCurrency(debit)}.` };
     const credit = Math.trunc(Number(mon?.credit || 0));
     if (credit > 0)
         return { handled: true, message: `${name} encourages you to use your ${credit} ${shopCurrency(credit)} of credit.` };
@@ -34236,12 +34256,12 @@ function tipHatResidentShopkeeperSellNoise(mon) {
     if (Math.trunc(Number(mon?.robbed || 0)) > 0)
         return { handled: true, message: `${name} ${canSpeak ? 'complains' : 'indicates concern'} about a recent robbery.` };
     if (Math.trunc(Number(mon?.surcharge || 0)) > 0)
-        return { handled: true, message: `${name} ${canSpeak ? 'warns you' : 'indicates'} that ${shopkeeperSubjectPronoun(mon)} is watching you carefully.` };
+        return { handled: true, message: `${name} ${canSpeak ? 'warns you' : 'indicates'} that ${tipHatShopkeeperSellSubjectPronoun(mon)} is watching you carefully.` };
     if (shkmoney < 50)
         return { handled: true, message: `${name} ${canSpeak ? 'complains' : 'indicates'} that business is bad.` };
     if (shkmoney > 4000)
         return { handled: true, message: `${name} ${canSpeak ? 'says' : 'indicates'} that business is good.` };
-    if (shopkeeperIsIzchak(mon) && shopkeeperInTown(mon)) {
+    if (!heroIsHallucinating() && shopkeeperIsIzchak(mon) && shopkeeperInTown(mon)) {
         if (!canSpeak) return { handled: true, message: '' };
         const message = TIPHAT_IZCHAK_SELL_MESSAGES[rn2(TIPHAT_IZCHAK_SELL_MESSAGES.length)](name);
         return { handled: true, message };
@@ -34409,7 +34429,7 @@ function tipHatMonsterNoise(mon, { visible = tipHatMonsterVisible(mon) } = {}) {
     switch (sound) {
     case 'sell':
         if (heroIsHallucinating()) {
-            if (mon?.isshk) return { handled: false, message: '' };
+            if (mon?.isshk && !rn2(2)) return tipHatShopkeeperSellNoise(mon, name);
             return { handled: true, message: `"15 minutes could save you 15 ${shopCurrency(15)}."` };
         }
         return tipHatShopkeeperSellNoise(mon, name);
