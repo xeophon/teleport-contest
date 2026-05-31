@@ -3,7 +3,7 @@
 
 import { game } from './gstate.js';
 import { mklev, l_nhcore_init, u_on_upstairs, makemon, mkcorpstat, mksobj, wipe_engr_at, dropMonsterInventory, wandIndexForRoll, scrollIndexForRoll, potionIndexForRoll, RANDOM_MONSTER_BY_NAME, STONE_RESISTANT_MONSTERS, adjustedMonsterLevel, monsterByRndName, monster_hp, rndmonnum, syncDungeonContext, next_ident, set_malign, enextoMonsterSpot, getbogusmon, pickNasty, chameleonAnimalForm, doppelgangerHumanoidForm, noteleportLevelForMonster, rlocNoMsg, rlocToCoreNoMsg, somexyspace, fumaroles, createMonsterCorpseOrGlob, monsterCorpseDropSucceeds, monsterLeavesCorpseLikeDrop, movebubbles, add_to_minv } from './mklev.js';
-import { rhack, pickupObjectName, inventoryItemName, inventoryLetterRank, recordVanquished, finishForceLock, loseExperienceLevel, finishLevelTeleport, finishPickDigDownwardHole, finishPickDigDownwardPit, maybeQueueQuestLeaderTalk, monsterGrowUp, processForceLockOccupationTick, forceLockOccupationShouldGiveUp, processSpellbookStudyOccupation, processTinOpeningOccupation, finishTinOpeningOccupation, refreshSwallowOverlay, finishSwallowExpel, travelPathKeys, updateGauntletsOfPowerStrength, consumeLifeSavingAmulet, activateStatueTrap, breakStatueObject, burnFloorObjectsByFire, burnRayFloorObjectsByFire, erodeArmorByFireTrap, dryWetTowelFromFire, igniteMonsterFireInventoryItems, monsterFireInventoryDamage, dropMonsterObject, earthFloorEffects, landMonsterThrownObject, stoneMonster, processCorpseTimers, processGlobShrinkTimers, addDelayedFoodBiteNutrition, repairShopDamageForShopkeeper, heroHasAntimagic, heroHasSlowDigestion, applyHeroOrdinaryHunger } from './cmd.js';
+import { rhack, pickupObjectName, inventoryItemName, inventoryLetterRank, recordVanquished, finishForceLock, loseExperienceLevel, finishLevelTeleport, finishPickDigDownwardHole, finishPickDigDownwardPit, maybeQueueQuestTalk, monsterGrowUp, processForceLockOccupationTick, forceLockOccupationShouldGiveUp, processSpellbookStudyOccupation, processTinOpeningOccupation, finishTinOpeningOccupation, refreshSwallowOverlay, finishSwallowExpel, travelPathKeys, updateGauntletsOfPowerStrength, consumeLifeSavingAmulet, activateStatueTrap, breakStatueObject, burnFloorObjectsByFire, burnRayFloorObjectsByFire, erodeArmorByFireTrap, dryWetTowelFromFire, igniteMonsterFireInventoryItems, monsterFireInventoryDamage, dropMonsterObject, earthFloorEffects, landMonsterThrownObject, stoneMonster, processCorpseTimers, processGlobShrinkTimers, addDelayedFoodBiteNutrition, repairShopDamageForShopkeeper, heroHasAntimagic, heroHasSlowDigestion, applyHeroOrdinaryHunger } from './cmd.js';
 import { docrt, cls, bot, flush_screen, pline, newsym, refreshHallucinatedMap, show_glyph_cell } from './display.js';
 import { vision_recalc, vision_reset, init_vision_globals, cansee, couldsee, view_from } from './vision.js';
 import { init_objects } from './o_init.js';
@@ -3925,6 +3925,7 @@ export async function processMonsterTurns() {
                         if (monsterMinliquid(mon)) continue;
 			                }
 	                if (mon.mcanmove === false) continue;
+	                const questBattleAtTurnStart = !mon.msleeping && monsterNextToHero(mon);
 	                const wasWaiting = !!mon.waiting;
 	                if (mon.waiting) {
 	                    const seesHero = mon.mcansee !== false
@@ -3932,9 +3933,9 @@ export async function processMonsterTurns() {
 	                        && clearPath(mon.mx, mon.my, game.u?.ux || 0, game.u?.uy || 0);
 	                    if (seesHero || (mon.mhp || 0) < (mon.mhpmax || 0)) mon.waiting = false;
 	                }
-	                if (wasWaiting && maybeQueueQuestLeaderTalk(mon)) return false;
+	                if (wasWaiting && maybeQueueQuestTalk(mon, { inBattle: questBattleAtTurnStart })) return false;
 	                if (mon.waiting) {
-	                    if (maybeQueueQuestLeaderTalk(mon)) return false;
+	                    if (maybeQueueQuestTalk(mon, { inBattle: questBattleAtTurnStart })) return false;
 	                    continue;
 	                }
                 if (NON_MIMIC_HIDER_NAMES.has(mon.data?.name)) {
@@ -5846,7 +5847,7 @@ export async function processMonsterTurns() {
 	                        if (game._message_more && !game._process_time_with_more) return false;
 	                    }
                     maybeSpinMonsterWeb(mon);
-                    if (maybeQueueQuestLeaderTalk(mon)) return false;
+                    if (maybeQueueQuestTalk(mon, { inBattle: questBattleAtTurnStart })) return false;
                     const throwTargetX = mon.mux ?? game.u?.ux ?? mon.mx;
                     const throwTargetY = mon.muy ?? game.u?.uy ?? mon.my;
                     const throwDx = Math.sign(throwTargetX - mon.mx);

@@ -720,6 +720,18 @@ back only when you have purified yourself."`,
 quest.  A mere %r could not possibly face the rigors demanded and
 survive.  Go forth, and come here again when your adventures have further
 taught you."`,
+            nemesis_first: `"So, %p, you think that you can succeed in recovering
+%o, when your teacher, %l, has already failed.
+
+"Come, try your best!  I shall destroy you, and gnaw on your bones."`,
+            nemesis_next: `"Again you try to best me, eh %p?  Well, you shall fail again.
+
+"You shall never recover %o.
+
+"I shall bear your soul to the Plane of Origins for my master's pleasure."`,
+            nemesis_other: '"You persist yet %p!  Good.  Now, you shall die!"',
+            nemesis_wantsit: `"I shall have %o from you, %p, then feast
+upon your entrails!"`,
             discourage: [
                 '"Try your best, %p.  You cannot defeat me."',
                 '"I shall rend the flesh from your body whilst you still breathe!"',
@@ -852,6 +864,14 @@ Go forth, and return when you feel ready."`,
             badlevel: `"%p, I fear that you are as yet too inexperienced to face
 %n.  Only %Ra with the help of %d could ever hope to
 defeat %ni."`,
+            nemesis_first: `"So.  This is what that second rate sorcerer %l sends to do %lj bidding.
+I have slain many before you.  You shall give me little sport.
+
+"Prepare to die, %c."`,
+            nemesis_next: '"I have wasted too much time on you already.  Now, you shall die."',
+            nemesis_other: '"You return yet again, %c!  Are you prepared for death now?"',
+            nemesis_wantsit: `"I shall have %o back, you pitiful excuse for %ca.
+And your life as well."`,
             discourage: [
                 '"My pets will dine on your carcass tonight!"',
                 '"You are a sorry excuse for %ra."',
@@ -994,6 +1014,15 @@ side of a hill.  From within, you smell the foul stench of carrion.
 
 The pools on either side of the entrance are fouled with blood, and
 pieces of rusted metal and broken weapons show above the surface.`,
+            nemesis_first: `"Ah, so %l has sent another %g to retrieve
+%o.
+
+"No, I see you are no %g.  Perhaps I shall have some fun today
+after all.  Prepare to die, %r!  You shall never regain
+%o."`,
+            nemesis_next: '"So, %r.  Again you challenge me."',
+            nemesis_other: '"Die now, %r.  %d has no power here to aid you."',
+            nemesis_wantsit: '"You shall die, %r, and I will have %o back."',
             discourage: [
                 '"A mere %r can never withstand me!"',
                 '"I shall kill thee now, and feast!"',
@@ -1124,6 +1153,14 @@ you have purified yourself."`,
             badlevel: `"Alas, %p, it is not yet to be.  A mere %r could never
 withstand the might of %n.  Go forth, again into the world, and return
 when you have attained the post of %R."`,
+            nemesis_first: "\"Ah!  You must be %ls ... er, `hero'.  A pleasure to meet you.\"",
+            nemesis_next: '"We meet again.  Please reconsider your actions."',
+            nemesis_other: `"Surely, %p, you have learned that you cannot trust any bargains
+that %l has made.  I can show you how to continue on
+your quest without having to run into him again."`,
+            nemesis_wantsit: `"Please, think for a moment about what you are doing.  Do you truly
+believe that %d would want %l to have
+%o?"`,
             discourage: [
                 '"Submit to my will, %c, and I shall spare you."',
                 '"Your puny powers are no match for me, %c."',
@@ -1267,6 +1304,20 @@ truly ready for this quest.  May %d guide you in this task."`,
 spellcaster.  As %ra, you would surely be overcome in the challenge
 ahead.  Go, now, expand your horizons, and return when you have attained
 renown as %Ra."`,
+            nemesis_first: `"Ah, I recognize you, %p.  So, %l has sent you to steal
+%o from me, hmmm?  Well, %lh is a fool to send such
+a mental weakling against me.
+
+"Your destruction, however, should make for good sport.  In the end, you
+shall beg me to kill you!"`,
+            nemesis_next: `"How nice of you to return, %p!  I enjoyed our last meeting.  Are you
+still hungry for more pain?
+
+"Come!  Your soul, like %o, shall soon be mine to command."`,
+            nemesis_other: `"I'm sure that your perseverance shall be the subject of innumerable
+ballads, but you shall not be around to hear them, I fear!"`,
+            nemesis_wantsit: `"Thief!  %oC belongs to me, now.  I shall feed
+your living flesh to my minions."`,
             discourage: [
                 '"Your puny powers are no match for me, fool!"',
                 '"When you are defeated, your torment will last for a thousand years."',
@@ -4104,6 +4155,123 @@ export function maybeQueueQuestLeaderTalk(mon, { automatic = true } = {}) {
     }
     game.quest_status.met_leader_once = true;
     return true;
+}
+
+function questMonsterSoundKey(mon) {
+    const data = mon?.data || {};
+    const explicit = mon?.msound ?? mon?.sound ?? data.msound ?? data.sound;
+    if (explicit != null) return String(explicit).toLowerCase().replace(/^ms_/, '');
+    if (mon?.nemesis || data.nemesis) return 'nemesis';
+    return '';
+}
+
+function questMonsterNameKey(mon) {
+    return String(mon?.data?.name || mon?.name || '').toLowerCase();
+}
+
+function questMonsterAdjacent(mon) {
+    if (!mon) return false;
+    const dx = Math.abs((mon.mx || 0) - (game.u?.ux || 0));
+    const dy = Math.abs((mon.my || 0) - (game.u?.uy || 0));
+    return Math.max(dx, dy) <= 1 && !(questMonsterNameKey(mon) === 'grid bug' && dx && dy);
+}
+
+function questMonsterHelpless(mon) {
+    return !mon || !!mon.msleeping || mon.mcanmove === false;
+}
+
+function questMonsterHasWaitMask(mon) {
+    if (Number.isInteger(mon?.mstrategy)) return !!(mon.mstrategy & STRAT_WAITMASK);
+    return mon?.mstrategy === 'waitforu' || !!mon?.waiting;
+}
+
+function questMonsterVisibleToHero(mon) {
+    if (!mon || game.u?.blind || mon.minvis || mon.mundetected) return false;
+    if (mon.mx <= 0 || mon.my < 0 || mon.mx >= COLNO || mon.my >= ROWNO) return false;
+    return !!(game.viz_array?.[mon.my]?.[mon.mx] & IN_SIGHT) && couldsee(mon.mx, mon.my);
+}
+
+function showAutomaticQuestPager(msgid) {
+    game._quest_leader_talk_automatic = 1;
+    if (!showQuestPager(msgid, 'questLeaderFollowupMore')) {
+        game._quest_leader_talk_automatic = 0;
+        return false;
+    }
+    return true;
+}
+
+function maybeQueueQuestNemesisTalk(mon, { automatic = true, inBattle = null } = {}) {
+    if (!automatic || questMonsterSoundKey(mon) !== 'nemesis'
+        || questMonsterHelpless(mon) || !questMonsterAdjacent(mon))
+        return false;
+    game.quest_status ??= {};
+    const battle = inBattle == null
+        ? (typeof game.quest_status.in_battle === 'boolean'
+            ? game.quest_status.in_battle
+            : (!questMonsterHelpless(mon) && questMonsterAdjacent(mon)))
+        : !!inBattle;
+    game.quest_status.in_battle = battle;
+    if (battle) {
+        if (rn2(5)) return false;
+        return showAutomaticQuestPager('discourage');
+    }
+
+    const madeGoal = Math.max(0, Math.trunc(Number(game.quest_status.made_goal || 0)));
+    let msgid = '';
+    if (game.u?.uhave?.questart) msgid = 'nemesis_wantsit';
+    else if (madeGoal === 1 || !game.quest_status.met_nemesis) msgid = 'nemesis_first';
+    else if (madeGoal < 4) msgid = 'nemesis_next';
+    else if (madeGoal < 7) msgid = 'nemesis_other';
+    else {
+        if (rn2(5)) return false;
+        msgid = 'discourage';
+    }
+    if (!showAutomaticQuestPager(msgid)) return false;
+    if (madeGoal < 7) game.quest_status.made_goal = madeGoal + 1;
+    game.quest_status.met_nemesis = true;
+    return true;
+}
+
+function angerQuestPrisonerGuards(prisoner) {
+    for (const mon of game.level?.monsters || []) {
+        if (!mon || mon === prisoner) continue;
+        const name = questMonsterNameKey(mon);
+        if (name !== 'watchman' && name !== 'watch captain') continue;
+        mon.mpeaceful = 0;
+        mon.hostile = true;
+        mon.angry = true;
+    }
+}
+
+function maybeQueueQuestPrisonerTalk(mon, { automatic = true } = {}) {
+    if (!automatic || questMonsterSoundKey(mon) !== 'djinni'
+        || questMonsterNameKey(mon) !== 'prisoner' || questMonsterHelpless(mon)
+        || !questMonsterHasWaitMask(mon))
+        return false;
+    const message = questMonsterVisibleToHero(mon)
+        ? `${fireScrollMonsterName(mon)} speaks:  "I'm finally free!"`
+        : `"I'm finally free!"`;
+    chatClearTargetWaitStrategy(mon);
+    mon.waiting = false;
+    mon.mpeaceful = 1;
+    game.u ??= {};
+    game.u.ualign ??= {};
+    game.u.ualign.record = (game.u.ualign.record || 0) + 3;
+    angerQuestPrisonerGuards(mon);
+    game._overlay_lines = null;
+    game._overlay_hide_status = 0;
+    game._pending_message = message;
+    game._message_more = 0;
+    game._keep_pending_message = 1;
+    game._command_mode = null;
+    return true;
+}
+
+export function maybeQueueQuestTalk(mon, { automatic = true, inBattle = null } = {}) {
+    if (maybeQueueQuestLeaderTalk(mon, { automatic })) return true;
+    if (!automatic) return false;
+    if (maybeQueueQuestNemesisTalk(mon, { automatic, inBattle })) return true;
+    return maybeQueueQuestPrisonerTalk(mon, { automatic });
 }
 
 function hasPlacedKnoxBranch() {

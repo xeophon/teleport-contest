@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { interruptEatingOccupation, moveloop_core, processEatingOccupationTick, processForceLockOccupation, processMonsterTurns } from '../js/allmain.js';
-import { activateStatueTrap, burnFloorObjectsByFire, earthFloorEffects, finishForceLock, landMonsterThrownObject, maybeQueueQuestLeaderTalk, processCorpseTimers, processForceLockOccupationTick, processGlobShrinkTimers, processSpellbookStudyOccupation, rhack, __shopBillingTestHooks as shop } from '../js/cmd.js';
+import { activateStatueTrap, burnFloorObjectsByFire, earthFloorEffects, finishForceLock, landMonsterThrownObject, maybeQueueQuestLeaderTalk, maybeQueueQuestTalk, processCorpseTimers, processForceLockOccupationTick, processGlobShrinkTimers, processSpellbookStudyOccupation, rhack, __shopBillingTestHooks as shop } from '../js/cmd.js';
 import { newsym, refreshHallucinatedMap } from '../js/display.js';
 import { game, resetGame } from '../js/gstate.js';
 import { pushKey, resetInputState } from '../js/input.js';
@@ -4754,6 +4754,51 @@ function installAutomaticQuestLeader({
     return { target, targetLoc };
 }
 
+function installAutomaticQuestSpeaker({
+    role = 'Wizard', name = 'the Dark One', sound = 'MS_NEMESIS', align = 'lawful',
+    currentAlign = A_LAWFUL, currentBaseAlign = null, record = 20, level = 14,
+    waiting = false, mstrategy = 0, peaceful = false, rngLog = false, data = {},
+    extra = {}, setup = null,
+} = {}) {
+    installStableNonShopFloorState();
+    const alignValue = value => value === 'lawful' ? A_LAWFUL
+        : value === 'chaotic' ? A_CHAOTIC
+        : value === 'neutral' ? 0
+        : value;
+    const originalAlign = alignValue(align);
+    const baseAlign = currentBaseAlign == null ? originalAlign : alignValue(currentBaseAlign);
+    game._startup_role = role;
+    game._startup_align = align;
+    game.urole = { ...(game.urole || {}), name: { m: role, f: role } };
+    game.u.ulevel = level;
+    game.u.ualign = { ...(game.u.ualign || {}), type: currentAlign, record };
+    game.u.ualignbase = [baseAlign, originalAlign];
+    game.u.uz = { dnum: 1, dlevel: 5 };
+    game.dungeons = [
+        { name: 'The Dungeons of Doom', num_dunlevs: 20, depth_start: 1 },
+        { name: 'The Quest', num_dunlevs: 5, depth_start: 11 },
+    ];
+    game.branches = [{ end1: { dnum: 0, dlevel: 10 }, end2: { dnum: 1, dlevel: 1 } }];
+    game.specialLevels = [{ name: 'x-goal', dnum: 1, dlevel: 5 }];
+    const targetLoc = game.level.at(6, 5);
+    const target = ordinaryThrowTarget(name, 6, 5, {
+        msleeping: 0,
+        mcanmove: true,
+        mcansee: true,
+        mpeaceful: peaceful,
+        waiting,
+        mstrategy,
+        movement: NORMAL_SPEED,
+        data: { name, msound: sound, mlet: '&', demon: true, nemesis: sound === 'MS_NEMESIS', ...data },
+        ...extra,
+    });
+    game.level.monsters = [target];
+    if (setup) setup({ target, targetLoc });
+    markSquareVisible(6, 5);
+    if (rngLog) enableRngLog({ reset: true });
+    return { target, targetLoc };
+}
+
 function questOverlayText() {
     return (game._overlay_lines || []).map(row => row[2]).join('\n');
 }
@@ -6936,6 +6981,133 @@ test('automatic quest leader artifact return completes without charging another 
     assert.equal(game.context?.move || 0, 0);
     assert.equal(game._pending_time_passed || 0, 0);
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
+});
+
+test('automatic quest nemesis first speech uses nemesis_first and advances made_goal', async () => {
+    const { target } = installAutomaticQuestSpeaker({
+        rngLog: true,
+        setup: () => {
+            game.quest_status = { made_goal: 1, in_battle: false };
+        },
+    });
+
+    const handled = maybeQueueQuestTalk(target);
+
+    assert.equal(handled, true);
+    assert.equal(game._command_mode, 'questLeaderFollowupMore');
+    assert.match(questOverlayText(), /Ah, I recognize you, Hero/);
+    assert.match(questOverlayText(), /mental weakling/);
+    assert.equal(game.quest_status.met_nemesis, true);
+    assert.equal(game.quest_status.made_goal, 2);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), QUEST_PAGER_LOAD_RNG);
+
+    enableRngLog({ reset: true });
+    await rhack(' ');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context?.move || 0, 0);
+    assert.equal(game._pending_time_passed || 0, 0);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
+});
+
+test('automatic quest nemesis wants carried quest artifact', () => {
+    const { target } = installAutomaticQuestSpeaker({
+        rngLog: true,
+        setup: () => {
+            game.u.uhave = { ...(game.u.uhave || {}), questart: 1 };
+            game.quest_status = { made_goal: 4, in_battle: false, met_nemesis: true };
+        },
+    });
+
+    const handled = maybeQueueQuestTalk(target);
+
+    assert.equal(handled, true);
+    assert.equal(game._command_mode, 'questLeaderFollowupMore');
+    assert.match(questOverlayText(), /belongs to me/);
+    assert.match(questOverlayText(), /living flesh/);
+    assert.equal(game.quest_status.met_nemesis, true);
+    assert.equal(game.quest_status.made_goal, 5);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), QUEST_PAGER_LOAD_RNG);
+});
+
+test('automatic quest nemesis battle malediction does not mark met_nemesis', () => {
+    const { target } = installAutomaticQuestSpeaker({
+        rngLog: true,
+        setup: () => {
+            game.quest_status = { made_goal: 5, in_battle: true, met_nemesis: false };
+        },
+    });
+
+    const handled = maybeQueueQuestTalk(target);
+    const rngCalls = getRngLog().map(entry => entry.replace(/=.*/, ''));
+
+    assert.equal(game.quest_status.met_nemesis, false);
+    assert.equal(game.quest_status.made_goal, 5);
+    assert.equal(rngCalls[0], 'rn2(5)');
+    if (handled) {
+        assert.equal(game._command_mode, 'questLeaderFollowupMore');
+        const malediction = questOverlayText().replace(/\n--More--$/, '');
+        assert.ok(WIZARD_NEMESIS_DISCOURAGE.includes(malediction), questOverlayText());
+    } else {
+        assert.equal(game._command_mode || null, null);
+        assert.equal(game._overlay_lines || null, null);
+    }
+});
+
+test('automatic prisoner speech frees prisoner and angers watch', () => {
+    let watchman;
+    const { target } = installAutomaticQuestSpeaker({
+        name: 'prisoner',
+        sound: 'MS_DJINNI',
+        waiting: true,
+        mstrategy: STRAT_WAITFORU,
+        data: { mlet: '@', humanoid: true, demon: false, nemesis: false },
+        setup: () => {
+            game.u.ualign.record = 4;
+            watchman = ordinaryThrowTarget('watchman', 7, 5, {
+                msleeping: 0,
+                mcanmove: true,
+                mpeaceful: true,
+                data: { name: 'watchman', mlevel: 6, mlet: '@', humanoid: true },
+            });
+            game.level.monsters.push(watchman);
+        },
+    });
+
+    const handled = maybeQueueQuestTalk(target);
+
+    assert.equal(handled, true);
+    assert.equal(game._pending_message, 'The prisoner speaks:  "I\'m finally free!"');
+    assert.equal(game._command_mode, null);
+    assert.equal(target.mpeaceful, 1);
+    assert.equal(target.waiting, false);
+    assert.equal(target.mstrategy, 0);
+    assert.equal(game.u.ualign.record, 7);
+    assert.equal(watchman.mpeaceful, 0);
+    assert.equal(watchman.hostile, true);
+    assert.equal(watchman.angry, true);
+    assert.equal(game.context?.move || 0, 0);
+});
+
+test('automatic prisoner speech from monster turn does not spend another hero turn', async () => {
+    const { target } = installAutomaticQuestSpeaker({
+        name: 'prisoner',
+        sound: 'MS_DJINNI',
+        waiting: true,
+        mstrategy: STRAT_WAITFORU,
+        data: { mlet: '@', humanoid: true, demon: false, nemesis: false },
+    });
+
+    queueEscapeForMonsterTurn();
+    const moved = await processMonsterTurns();
+
+    assert.equal(moved, false);
+    assert.equal(game._pending_message, 'The prisoner speaks:  "I\'m finally free!"');
+    assert.equal(target.mpeaceful, 1);
+    assert.equal(target.waiting, false);
+    assert.equal(target.mstrategy, 0);
+    assert.equal(game.context?.move || 0, 0);
+    assert.equal(game._pending_time_passed || 0, 0);
 });
 
 test('converted quest leader rejection uses banished pager without wisdom exercise', async () => {
