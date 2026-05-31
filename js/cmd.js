@@ -18712,6 +18712,18 @@ const HERO_TOSS_UP_WEAPON_SMALL_DAMAGE = new Map([
     ['long sword', 8],
     ['two-handed sword', 12],
     ['katana', 10],
+    ['partisan', 6],
+    ['ranseur', { die: 4, bonusDie: 4 }],
+    ['spetum', { die: 6, add: 1 }],
+    ['glaive', 6],
+    ['halberd', 10],
+    ['bardiche', { die: 4, bonusDie: 4 }],
+    ['voulge', { die: 4, bonusDie: 4 }],
+    ['fauchard', 6],
+    ['guisarme', { die: 4, bonusDie: 4 }],
+    ['bill-guisarme', { die: 4, bonusDie: 4 }],
+    ['lucern hammer', { die: 4, bonusDie: 4 }],
+    ['bec de corbin', 8],
     ['mace', { die: 6, add: 1 }],
     ['silver mace', { die: 6, add: 1 }],
     ['morning star', { die: 4, bonusDie: 4 }],
@@ -18741,6 +18753,7 @@ function tossUpWeaponObjectKey(obj) {
     if (obj?.otyp === LONG_SWORD) return 'long sword';
     if (obj?.otyp === TWO_HANDED_SWORD) return 'two-handed sword';
     if (obj?.otyp === KATANA) return 'katana';
+    if (obj?.otyp === GLAIVE) return 'glaive';
     if (obj?.otyp === FLAIL) return 'flail';
     if (obj?.otyp === BULLWHIP) return 'bullwhip';
     return objectKindKey(obj);

@@ -41,6 +41,7 @@ const TOUCHSTONE = 473;
 const DART = 353;
 const KNIFE = 10026;
 const STILETTO = 10109;
+const GLAIVE = 10057;
 const TALLOW_CANDLE = 370;
 const MIRROR = 10006;
 const WAN_MAKE_INVISIBLE = 10091;
@@ -35306,6 +35307,178 @@ test('upward hero-thrown enchanted rubber hose uses small-target die after harml
     assert.equal(landed.oy, game.u.uy);
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
         'rn2(5)', 'rn2(100)', 'rnd(4)', 'rn2(100)',
+    ]);
+});
+
+test('upward hero-thrown glaive uses polearm base small-target die', async () => {
+    installNonShopFloorState();
+    initRng(23);
+    Object.assign(game.u, { uhp: 30, uhpmax: 30 });
+    const blade = upwardWeapon(876926, 'g', 'single-edged polearm', 'g - a single-edged polearm', {
+        actualKind: 'glaive',
+        known: false,
+        otyp: GLAIVE,
+        owt: 75,
+    });
+    game.inventory = [blade];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('g');
+    await rhack('<');
+
+    const message = game._pending_message || '';
+    assert.equal(game._command_mode, null);
+    assert.match(message, /A glaive almost hits the ceiling, then falls back on top of your head\./);
+    assert.match(message, /A glaive hits the floor\./);
+    assert.doesNotMatch(message, /cmdassist|In what direction|It doesn't hurt|shatters|Splat/);
+    assert.equal(game.u.uhp, 24);
+    assert.equal(game.inventory.includes(blade), false);
+    assert.equal(game.level.objects.length, 1);
+    const landed = game.level.objects[0];
+    assert.equal(landed.kind, 'single-edged polearm');
+    assert.equal(landed.actualKind, 'glaive');
+    assert.equal(landed.otyp, GLAIVE);
+    assert.equal(landed.ox, game.u.ux);
+    assert.equal(landed.oy, game.u.uy);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rn2(5)', 'rn2(100)', 'rnd(6)', 'rn2(100)',
+    ]);
+});
+
+test('upward hero-thrown spetum adds flat small-target polearm bonus', async () => {
+    installNonShopFloorState();
+    initRng(23);
+    Object.assign(game.u, { uhp: 30, uhpmax: 30 });
+    const blade = upwardWeapon(876927, 'p', 'forked polearm', 'p - a forked polearm', {
+        actualKind: 'spetum',
+        known: false,
+        owt: 50,
+    });
+    game.inventory = [blade];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('p');
+    await rhack('<');
+
+    const message = game._pending_message || '';
+    assert.equal(game._command_mode, null);
+    assert.match(message, /A spetum almost hits the ceiling, then falls back on top of your head\./);
+    assert.match(message, /A spetum hits the floor\./);
+    assert.doesNotMatch(message, /cmdassist|In what direction|It doesn't hurt|shatters|Splat/);
+    assert.equal(game.u.uhp, 23);
+    assert.equal(game.inventory.includes(blade), false);
+    assert.equal(game.level.objects.length, 1);
+    const landed = game.level.objects[0];
+    assert.equal(landed.kind, 'forked polearm');
+    assert.equal(landed.actualKind, 'spetum');
+    assert.equal(landed.ox, game.u.ux);
+    assert.equal(landed.oy, game.u.uy);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rn2(5)', 'rn2(100)', 'rnd(6)', 'rn2(100)',
+    ]);
+});
+
+test('upward hero-thrown ranseur adds rnd4 small-target polearm bonus', async () => {
+    installNonShopFloorState();
+    initRng(23);
+    Object.assign(game.u, { uhp: 30, uhpmax: 30 });
+    const blade = upwardWeapon(876928, 'r', 'hilted polearm', 'r - a hilted polearm', {
+        actualKind: 'ranseur',
+        known: false,
+        owt: 50,
+    });
+    game.inventory = [blade];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('r');
+    await rhack('<');
+
+    const message = game._pending_message || '';
+    assert.equal(game._command_mode, null);
+    assert.match(message, /A ranseur almost hits the ceiling, then falls back on top of your head\./);
+    assert.match(message, /A ranseur hits the floor\./);
+    assert.doesNotMatch(message, /cmdassist|In what direction|It doesn't hurt|shatters|Splat/);
+    assert.equal(game.u.uhp, 22);
+    assert.equal(game.inventory.includes(blade), false);
+    assert.equal(game.level.objects.length, 1);
+    const landed = game.level.objects[0];
+    assert.equal(landed.kind, 'hilted polearm');
+    assert.equal(landed.actualKind, 'ranseur');
+    assert.equal(landed.ox, game.u.ux);
+    assert.equal(landed.oy, game.u.uy);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rn2(5)', 'rn2(100)', 'rnd(4)', 'rnd(4)', 'rn2(100)',
+    ]);
+});
+
+test('upward hero-thrown bill-guisarme keys hyphenated polearm actualKind', async () => {
+    installNonShopFloorState();
+    initRng(23);
+    Object.assign(game.u, { uhp: 30, uhpmax: 30 });
+    const blade = upwardWeapon(876929, 'b', 'hooked polearm', 'b - a hooked polearm', {
+        actualKind: 'bill-guisarme',
+        known: false,
+        owt: 120,
+    });
+    game.inventory = [blade];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('b');
+    await rhack('<');
+
+    const message = game._pending_message || '';
+    assert.equal(game._command_mode, null);
+    assert.match(message, /A bill-guisarme almost hits the ceiling, then falls back on top of your head\./);
+    assert.match(message, /A bill-guisarme hits the floor\./);
+    assert.doesNotMatch(message, /cmdassist|In what direction|It doesn't hurt|shatters|Splat/);
+    assert.equal(game.u.uhp, 22);
+    assert.equal(game.inventory.includes(blade), false);
+    assert.equal(game.level.objects.length, 1);
+    const landed = game.level.objects[0];
+    assert.equal(landed.kind, 'hooked polearm');
+    assert.equal(landed.actualKind, 'bill-guisarme');
+    assert.equal(landed.ox, game.u.ux);
+    assert.equal(landed.oy, game.u.uy);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rn2(5)', 'rn2(100)', 'rnd(4)', 'rnd(4)', 'rn2(100)',
+    ]);
+});
+
+test('upward hero-thrown bec de corbin uses polearm base d8 damage', async () => {
+    installNonShopFloorState();
+    initRng(19);
+    Object.assign(game.u, { uhp: 30, uhpmax: 30 });
+    const blade = upwardWeapon(876930, 'c', 'beaked polearm', 'c - a beaked polearm', {
+        actualKind: 'bec de corbin',
+        known: false,
+        owt: 100,
+    });
+    game.inventory = [blade];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('c');
+    await rhack('<');
+
+    const message = game._pending_message || '';
+    assert.equal(game._command_mode, null);
+    assert.match(message, /A bec de corbin almost hits the ceiling, then falls back on top of your head\./);
+    assert.match(message, /A bec de corbin hits the floor\./);
+    assert.doesNotMatch(message, /cmdassist|In what direction|It doesn't hurt|shatters|Splat/);
+    assert.equal(game.u.uhp, 22);
+    assert.equal(game.inventory.includes(blade), false);
+    assert.equal(game.level.objects.length, 1);
+    const landed = game.level.objects[0];
+    assert.equal(landed.kind, 'beaked polearm');
+    assert.equal(landed.actualKind, 'bec de corbin');
+    assert.equal(landed.ox, game.u.ux);
+    assert.equal(landed.oy, game.u.uy);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rn2(5)', 'rn2(100)', 'rnd(8)', 'rn2(100)',
     ]);
 });
 
