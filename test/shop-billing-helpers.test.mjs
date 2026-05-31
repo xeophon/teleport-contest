@@ -6127,6 +6127,37 @@ test('chat with visible nymph uses C seduce wording', async () => {
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(3)']);
 });
 
+test('chat with visible nurse wearing only a shirt asks for shirt removal', async () => {
+    const result = await chatAdjacentMonster({
+        name: 'nurse',
+        rngLog: true,
+        data: { name: 'nurse', mlevel: 11, mlet: '@', humanoid: true, msound: 'MS_NURSE' },
+        setup: () => {
+            game.inventory = [wornArmor(62120, 'T-shirt', 't')];
+        },
+    });
+
+    assert.equal(result.message, '"Take off your shirt, please."');
+    assert.equal(result.target.mstrategy, 0);
+    assert.equal(game.context.move, 1);
+    assert.doesNotMatch(result.message, /The nurse|Please undress|Relax|waves|Nothing happens/);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
+});
+
+test('chat with visible unmasked nurse gives relaxed examination speech', async () => {
+    const result = await chatAdjacentMonster({
+        name: 'nurse',
+        rngLog: true,
+        data: { name: 'nurse', mlevel: 11, mlet: '@', humanoid: true, msound: 'MS_NURSE' },
+    });
+
+    assert.equal(result.message, '"Relax, this won\'t hurt a bit."');
+    assert.equal(result.target.mstrategy, 0);
+    assert.equal(game.context.move, 1);
+    assert.doesNotMatch(result.message, /The nurse|Take off your shirt|Please undress|waves|Nothing happens/);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
+});
+
 test('chat with invisible peaceful snake maps it without response or time', async () => {
     const result = await chatAdjacentMonster({
         name: 'snake',
