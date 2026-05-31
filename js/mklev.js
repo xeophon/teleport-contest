@@ -20274,7 +20274,7 @@ async function apply_themeroom_fill(fill, croom, rows = null, startX = 0, startY
 }
 
 function themeroomDigEngravingText(target, pos) {
-    const tx = target.x - pos.x;
+    const tx = target.x - pos.x - 1;
     const ty = target.y - pos.y;
     if (tx === 0 && ty === 0) return 'Dig here';
     let dig = 'Dig';

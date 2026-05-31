@@ -1050,7 +1050,7 @@ test('themed Buried treasure creates a buried loot chest and dig engraving', asy
     const [engraving] = g.level.engravings;
     assert.equal(engraving.type, BURN);
     assert.equal(g.level.at(engraving.x, engraving.y).typ, ROOM);
-    const tx = chest.ox - engraving.x;
+    const tx = chest.ox - engraving.x - 1;
     const ty = chest.oy - engraving.y;
     let expected = 'Dig';
     if (tx === 0 && ty === 0) expected += ' here';

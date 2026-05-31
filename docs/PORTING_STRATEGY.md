@@ -516,7 +516,8 @@ Current validation snapshot:
   a fuller `des.monster({ class = "m", appear_as = ... })` audit.
 - `Buried treasure` themed fills now create the buried chest, replace random
   box contents with the scripted `d(3,4)` random loot, and queue the burned
-  post-generation dig engraving that points back to the treasure.
+  post-generation dig engraving that points back to the treasure with Lua's
+  one-cell x offset.
 - `Garden` themed fills now create sleeping wood nymphs and 30% fountains from
   the room selection count, then use post-generation grown-room replacement to
   turn walls into trees and secret doors into arboreal air.
