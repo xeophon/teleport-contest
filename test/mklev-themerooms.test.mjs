@@ -26,6 +26,21 @@ const BOULDER = 465;
 const CORPSE = 471;
 const STATUE = 472;
 
+const WATER_VAULT_ROWS = [
+    '}}}}}}',
+    '}----}',
+    '}|..|}',
+    '}|..|}',
+    '}----}',
+    '}}}}}}',
+];
+const WATER_VAULT_ESCAPE_KINDS = new Set([
+    'scroll of teleportation',
+    'ring of teleportation',
+    'wand of teleportation',
+    'wand of digging',
+]);
+
 const MASSACRE_CORPSE_NAMES = new Set([
     'apprentice', 'warrior', 'ninja', 'thug',
     'hunter', 'acolyte', 'abbot', 'page',
@@ -796,16 +811,8 @@ test('themed Twin businesses creates paired weapon and armor shops', () => {
 
 test('themed Water-surrounded vault records teleport exclusion for level arrivals', async () => {
     const g = installThemeroomGenerationGame({ seed: 31, dlevel: 8 });
-    const rows = [
-        '}}}}}}',
-        '}----}',
-        '}|..|}',
-        '}|..|}',
-        '}----}',
-        '}}}}}}',
-    ];
 
-    assert.equal(await mklevHooks.create_themeroom_map(rows, 'Water-surrounded vault'), true);
+    assert.equal(await mklevHooks.create_themeroom_map(WATER_VAULT_ROWS, 'Water-surrounded vault'), true);
     assert.equal(g.level.nroom, 1);
     const room = g.level.rooms[0];
     assert.equal(room.rtype, THEMEROOM);
@@ -825,6 +832,29 @@ test('themed Water-surrounded vault records teleport exclusion for level arrival
     assert.equal(mklevHooks.waterVaultUndeadSpecies().includes(g.level.monsters[0].data?.name), true);
     assert.equal(g.level.monsters[0].mx, room.lx);
     assert.equal(g.level.monsters[0].my, room.ly);
+
+    const chests = g.level.objects.filter(obj => obj.otyp === CHEST);
+    assert.deepEqual(
+        chests.map(chest => [chest.ox, chest.oy]).sort(([ax, ay], [bx, by]) => ax - bx || ay - by),
+        [
+            [room.lx, room.ly],
+            [room.hx, room.ly],
+            [room.lx, room.hy],
+            [room.hx, room.hy],
+        ].sort(([ax, ay], [bx, by]) => ax - bx || ay - by),
+    );
+    const escapeChest = chests.find(chest => chest.contents?.some(item => WATER_VAULT_ESCAPE_KINDS.has(item.actualKind)));
+    assert.ok(escapeChest);
+    const escapeItem = escapeChest.contents.find(item => WATER_VAULT_ESCAPE_KINDS.has(item.actualKind));
+    assert.equal(escapeItem.contained, true);
+    assert.equal(escapeItem.container, escapeChest);
+});
+
+test('themed Water-surrounded vault unlock rule uses object material', () => {
+    assert.equal(mklevHooks.waterVaultEscapeUnlocksChest({ material: 'glass' }), true);
+    assert.equal(mklevHooks.waterVaultEscapeUnlocksChest({ oc_material: 'glass' }), true);
+    assert.equal(mklevHooks.waterVaultEscapeUnlocksChest({ material: 'iron', appearance: 'glass' }), false);
+    assert.equal(mklevHooks.waterVaultEscapeUnlocksChest({ actualKind: 'wand of digging', appearance: 'glass' }), false);
 });
 
 test('level-region exclusions follow C teleport direction matching', () => {
@@ -946,12 +976,24 @@ test('themed Teleportation hub postprocess creates seen destination traps', asyn
     for (const trap of traps) {
         assert.equal(trap.tseen, true);
         assert.equal(trap.tx >= room.lx && trap.tx <= room.hx, true);
+        assert.equal(trap.tx > room.lx, true);
         assert.equal(trap.ty >= room.ly && trap.ty <= room.hy, true);
         assert.equal(g.level.at(trap.tx, trap.ty).typ, ROOM);
         assert.equal(g.level.at(trap.teledest.x, trap.teledest.y).typ, ROOM);
         assert.notEqual(trap.teledest.x, trap.tx);
         assert.notEqual(trap.teledest.y, trap.ty);
     }
+});
+
+test('themed Teleportation hub skips the room-local left column', async () => {
+    const { g, room } = installThemeroomGame({
+        dlevel: 7, moves: 200, seed: 44, width: 1, height: 6,
+    });
+    await mklevHooks.apply_themeroom_fill({ name: 'Teleportation hub' }, room);
+
+    assert.equal(room.themeFillName, 'Teleportation hub');
+    assert.equal(g._themeroom_postprocess?.length ?? 0, 0);
+    assert.deepEqual(g.level.traps, []);
 });
 
 test('themed Storeroom creates only chests and chest mimics', async () => {

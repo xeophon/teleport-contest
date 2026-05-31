@@ -19978,6 +19978,10 @@ const MASSACRE_CORPSES = [
 
 const WATER_VAULT_UNDEAD = ['giant zombie', 'ettin zombie', 'vampire lord'];
 
+function waterVaultEscapeUnlocksChest(item) {
+    return String(item?.material || item?.oc_material || '').toLowerCase() === 'glass';
+}
+
 function themeroomMassacreCorpse(name) {
     return RANDOM_MONSTER_BY_NAME.get(name) || { name, neuter: false };
 }
@@ -20149,9 +20153,10 @@ function themeroom_temple_of_the_gods(croom) {
 
 function themeroom_teleportation_hub(croom) {
     const locs = splevSelection.room(croom).filter_mapchar('.');
+    const leftX = Number(croom?.lx ?? 0);
     for (let i = 0, count = 2 + rn2(3); i < count; i++) {
         const pos = locs.rndcoord(true);
-        if (pos.x > 0) {
+        if (pos.x > leftX) {
             game._themeroom_postprocess ??= [];
             game._themeroom_postprocess.push({ type: 'teleportTrap', x: pos.x, y: pos.y });
         }
@@ -20233,6 +20238,7 @@ export const __mklevTestHooks = {
     splevMinesLevelInit,
     themeroomBuriedZombieSpecies,
     waterVaultUndeadSpecies: () => [...WATER_VAULT_UNDEAD],
+    waterVaultEscapeUnlocksChest,
     themeroom_buried_zombies,
     apply_themeroom_fill,
     run_themeroom_postprocess,
@@ -20730,8 +20736,7 @@ async function create_themeroom_map(rows, name) {
                 const firstChestSpot = chestSpots[0];
                 const firstChest = mksobj_at(CHEST, startX + firstChestSpot[0], startY + firstChestSpot[1], true, false);
                 if (firstChest) {
-                    const wandAppearance = game._object_descriptions?.wands?.[escape.wandIndex]?.description;
-                    if (wandAppearance === 'glass' || wandAppearance === 'crystal') firstChest.olocked = false;
+                    if (waterVaultEscapeUnlocksChest(item)) firstChest.olocked = false;
                     add_to_container(firstChest, item);
                 }
                 for (let i = 1; i < chestSpots.length; i++) {

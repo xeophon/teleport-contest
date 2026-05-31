@@ -507,7 +507,9 @@ Current validation snapshot:
   RNG or TTL rolls.
 - `Teleportation hub` themed fills now use the shared selection helpers and have
   coverage for delayed seen teleport traps plus C's x/y-different destination
-  selection rule.
+  selection rule. They also preserve Lua's room-local `pos.x > 0` guard, so
+  the room's leftmost column is skipped even when its absolute map x coordinate
+  is positive.
 - `Storeroom` themed fills now use `selection.room():percentage(30)` to drive
   the chest/chest-mimic count, with structural coverage for chest mimic
   appearances. Its existing mimic setup RNG compatibility burn remains pending
@@ -537,6 +539,8 @@ Current validation snapshot:
   Lua `LR_TELE` exclusion so level-arrival placement skips the sealed room.
 - Its nasty-undead list now uses the Lua `vampire lord` entry instead of the
   generic vampire-leader fallback.
+- The escape-item chest unlock condition follows Lua's object-material check
+  instead of shuffled wand appearances.
 - The Brown Mold/post-heal route cleanup removed the last public-trace state
   machines named `_brown_mold*`, `_post_heal*`, and `POST_HEAL*` from runtime
   JS. Level teleporting, Quest-goal arrival, fountain quaffing, punishment
