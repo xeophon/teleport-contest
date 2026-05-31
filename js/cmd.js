@@ -18692,6 +18692,37 @@ const HERO_TOSS_UP_WEAPON_SMALL_DAMAGE = new Map([
     ['stiletto', 3],
     ['worm tooth', 2],
     ['crysknife', 10],
+    ['spear', 6],
+    ['elven spear', 7],
+    ['orcish spear', 5],
+    ['dwarvish spear', 8],
+    ['silver spear', 6],
+    ['javelin', 6],
+    ['trident', { die: 6, add: 1 }],
+    ['axe', 6],
+    ['battle-axe', { die: 8, bonusDie: 4 }],
+    ['short sword', 6],
+    ['elven short sword', 8],
+    ['orcish short sword', 5],
+    ['dwarvish short sword', 7],
+    ['scimitar', 8],
+    ['silver saber', 8],
+    ['broadsword', { die: 4, bonusDie: 4 }],
+    ['elven broadsword', { die: 6, bonusDie: 4 }],
+    ['long sword', 8],
+    ['two-handed sword', 12],
+    ['katana', 10],
+    ['mace', { die: 6, add: 1 }],
+    ['silver mace', { die: 6, add: 1 }],
+    ['morning star', { die: 4, bonusDie: 4 }],
+    ['war hammer', { die: 4, add: 1 }],
+    ['club', 6],
+    ['rubber hose', 4],
+    ['quarterstaff', 6],
+    ['aklys', 6],
+    ['flail', { die: 6, add: 1 }],
+    ['lance', 6],
+    ['bullwhip', 2],
 ]);
 
 function tossUpWeaponObjectKey(obj) {
@@ -18699,19 +18730,44 @@ function tossUpWeaponObjectKey(obj) {
     if (obj?.otyp === ORCISH_DAGGER) return 'orcish dagger';
     if (obj?.otyp === KNIFE) return 'knife';
     if (obj?.otyp === STILETTO) return 'stiletto';
+    if (obj?.otyp === SHORT_SWORD) return 'short sword';
+    if (obj?.otyp === ELVEN_SHORT_SWORD) return 'elven short sword';
+    if (obj?.otyp === ORCISH_SHORT_SWORD) return 'orcish short sword';
+    if (obj?.otyp === DWARVISH_SHORT_SWORD) return 'dwarvish short sword';
+    if (obj?.otyp === SCIMITAR) return 'scimitar';
+    if (obj?.otyp === SILVER_SABER) return 'silver saber';
+    if (obj?.otyp === BROADSWORD) return 'broadsword';
+    if (obj?.otyp === ELVEN_BROADSWORD) return 'elven broadsword';
+    if (obj?.otyp === LONG_SWORD) return 'long sword';
+    if (obj?.otyp === TWO_HANDED_SWORD) return 'two-handed sword';
+    if (obj?.otyp === KATANA) return 'katana';
+    if (obj?.otyp === FLAIL) return 'flail';
+    if (obj?.otyp === BULLWHIP) return 'bullwhip';
     return objectKindKey(obj);
+}
+
+function tossUpWeaponDamageDie(spec) {
+    return typeof spec === 'number' ? spec : spec?.die;
 }
 
 function isSupportedTossUpWeaponObject(obj) {
     if (!obj) return false;
-    if (!HERO_TOSS_UP_WEAPON_SMALL_DAMAGE.has(tossUpWeaponObjectKey(obj))) return false;
+    const key = tossUpWeaponObjectKey(obj);
+    if (!HERO_TOSS_UP_WEAPON_SMALL_DAMAGE.has(key)) return false;
+    const spe = Math.trunc(Number(obj.spe ?? 0)) || 0;
+    if (key === 'rubber hose' && spe < 1) return false;
     return !obj.artifact && !obj.oartifact;
 }
 
 function heroThrownGenericWeaponDamage(obj) {
-    const die = HERO_TOSS_UP_WEAPON_SMALL_DAMAGE.get(tossUpWeaponObjectKey(obj));
+    const spec = HERO_TOSS_UP_WEAPON_SMALL_DAMAGE.get(tossUpWeaponObjectKey(obj));
+    const die = tossUpWeaponDamageDie(spec);
     if (!die || !isSupportedTossUpWeaponObject(obj)) return null;
     let damage = rnd(die);
+    if (typeof spec === 'object') {
+        damage += Math.trunc(Number(spec.add || 0));
+        if (spec.bonusDie) damage += rnd(spec.bonusDie);
+    }
     damage += Math.trunc(Number(obj.spe || 0));
     if (damage < 0) damage = 0;
     if (damage > 0) {

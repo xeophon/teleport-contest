@@ -35083,6 +35083,232 @@ test('upward hero-thrown crysknife uses crysknife small-target damage', async ()
     ]);
 });
 
+test('upward hero-thrown long sword uses base small-target die', async () => {
+    installNonShopFloorState();
+    initRng(19);
+    Object.assign(game.u, { uhp: 30, uhpmax: 30 });
+    const blade = upwardWeapon(876919, 'l', 'long sword', 'l - a long sword', {
+        owt: 40,
+    });
+    game.inventory = [blade];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('l');
+    await rhack('<');
+
+    const message = game._pending_message || '';
+    assert.equal(game._command_mode, null);
+    assert.match(message, /A long sword almost hits the ceiling, then falls back on top of your head\./);
+    assert.match(message, /A long sword hits the floor\./);
+    assert.doesNotMatch(message, /cmdassist|In what direction|It doesn't hurt|shatters|Splat/);
+    assert.equal(game.u.uhp, 22);
+    assert.equal(game.inventory.includes(blade), false);
+    assert.equal(game.level.objects.length, 1);
+    const landed = game.level.objects[0];
+    assert.equal(landed.actualKind, 'long sword');
+    assert.equal(landed.ox, game.u.ux);
+    assert.equal(landed.oy, game.u.uy);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rn2(5)', 'rn2(100)', 'rnd(8)', 'rn2(100)',
+    ]);
+});
+
+test('upward hero-thrown mace adds flat small-target switch bonus', async () => {
+    installNonShopFloorState();
+    initRng(23);
+    Object.assign(game.u, { uhp: 30, uhpmax: 30 });
+    const blade = upwardWeapon(876920, 'm', 'mace', 'm - a mace', {
+        owt: 30,
+    });
+    game.inventory = [blade];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('m');
+    await rhack('<');
+
+    const message = game._pending_message || '';
+    assert.equal(game._command_mode, null);
+    assert.match(message, /A mace almost hits the ceiling, then falls back on top of your head\./);
+    assert.match(message, /A mace hits the floor\./);
+    assert.doesNotMatch(message, /cmdassist|In what direction|It doesn't hurt|shatters|Splat/);
+    assert.equal(game.u.uhp, 23);
+    assert.equal(game.inventory.includes(blade), false);
+    assert.equal(game.level.objects.length, 1);
+    const landed = game.level.objects[0];
+    assert.equal(landed.actualKind, 'mace');
+    assert.equal(landed.ox, game.u.ux);
+    assert.equal(landed.oy, game.u.uy);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rn2(5)', 'rn2(100)', 'rnd(6)', 'rn2(100)',
+    ]);
+});
+
+test('upward hero-thrown broadsword adds rnd4 small-target switch bonus', async () => {
+    installNonShopFloorState();
+    initRng(23);
+    Object.assign(game.u, { uhp: 30, uhpmax: 30 });
+    const blade = upwardWeapon(876921, 'b', 'broadsword', 'b - a broadsword', {
+        owt: 70,
+    });
+    game.inventory = [blade];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('b');
+    await rhack('<');
+
+    const message = game._pending_message || '';
+    assert.equal(game._command_mode, null);
+    assert.match(message, /A broadsword almost hits the ceiling, then falls back on top of your head\./);
+    assert.match(message, /A broadsword hits the floor\./);
+    assert.doesNotMatch(message, /cmdassist|In what direction|It doesn't hurt|shatters|Splat/);
+    assert.equal(game.u.uhp, 22);
+    assert.equal(game.inventory.includes(blade), false);
+    assert.equal(game.level.objects.length, 1);
+    const landed = game.level.objects[0];
+    assert.equal(landed.actualKind, 'broadsword');
+    assert.equal(landed.ox, game.u.ux);
+    assert.equal(landed.oy, game.u.uy);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rn2(5)', 'rn2(100)', 'rnd(4)', 'rnd(4)', 'rn2(100)',
+    ]);
+});
+
+test('upward hero-thrown elven broadsword keys exact variant and adds rnd4 bonus', async () => {
+    installNonShopFloorState();
+    initRng(23);
+    Object.assign(game.u, { uhp: 30, uhpmax: 30 });
+    const blade = upwardWeapon(876922, 'e', 'runed broadsword', 'e - a runed broadsword', {
+        actualKind: 'elven broadsword',
+        known: false,
+        owt: 70,
+    });
+    game.inventory = [blade];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('e');
+    await rhack('<');
+
+    const message = game._pending_message || '';
+    assert.equal(game._command_mode, null);
+    assert.match(message, /An elven broadsword almost hits the ceiling, then falls back on top of your head\./);
+    assert.match(message, /An elven broadsword hits the floor\./);
+    assert.doesNotMatch(message, /cmdassist|In what direction|It doesn't hurt|shatters|Splat/);
+    assert.equal(game.u.uhp, 20);
+    assert.equal(game.inventory.includes(blade), false);
+    assert.equal(game.level.objects.length, 1);
+    const landed = game.level.objects[0];
+    assert.equal(landed.kind, 'runed broadsword');
+    assert.equal(landed.actualKind, 'elven broadsword');
+    assert.equal(landed.ox, game.u.ux);
+    assert.equal(landed.oy, game.u.uy);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rn2(5)', 'rn2(100)', 'rnd(6)', 'rnd(4)', 'rn2(100)',
+    ]);
+});
+
+test('upward hero-thrown silver mace keys exact variant and avoids silver bonus for hero', async () => {
+    installNonShopFloorState();
+    initRng(23);
+    Object.assign(game.u, { uhp: 30, uhpmax: 30 });
+    const blade = upwardWeapon(876923, 's', 'silver mace', 's - a silver mace', {
+        material: 'silver',
+        owt: 36,
+    });
+    game.inventory = [blade];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('s');
+    await rhack('<');
+
+    const message = game._pending_message || '';
+    assert.equal(game._command_mode, null);
+    assert.match(message, /A silver mace almost hits the ceiling, then falls back on top of your head\./);
+    assert.match(message, /A silver mace hits the floor\./);
+    assert.doesNotMatch(message, /silver sears|cmdassist|In what direction|It doesn't hurt|shatters|Splat/);
+    assert.equal(game.u.uhp, 23);
+    assert.equal(game.inventory.includes(blade), false);
+    assert.equal(game.level.objects.length, 1);
+    const landed = game.level.objects[0];
+    assert.equal(landed.actualKind, 'silver mace');
+    assert.equal(landed.material, 'silver');
+    assert.equal(landed.ox, game.u.ux);
+    assert.equal(landed.oy, game.u.uy);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rn2(5)', 'rn2(100)', 'rnd(6)', 'rn2(100)',
+    ]);
+});
+
+test('upward hero-thrown unenchanted rubber hose stays harmless', async () => {
+    installNonShopFloorState();
+    initRng(23);
+    Object.assign(game.u, { uhp: 30, uhpmax: 30 });
+    const hose = upwardWeapon(876924, 'r', 'rubber hose', 'r - a rubber hose', {
+        owt: 20,
+        spe: 0,
+    });
+    game.inventory = [hose];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('r');
+    await rhack('<');
+
+    const message = game._pending_message || '';
+    assert.equal(game._command_mode, null);
+    assert.match(message, /A rubber hose almost hits the ceiling, then falls back on top of your head\./);
+    assert.match(message, /It doesn't hurt\./);
+    assert.doesNotMatch(message, /cmdassist|In what direction|shatters|Splat/);
+    assert.equal(game.u.uhp, 30);
+    assert.equal(game.inventory.includes(hose), false);
+    assert.equal(game.level.objects.length, 1);
+    const landed = game.level.objects[0];
+    assert.equal(landed.actualKind, 'rubber hose');
+    assert.equal(landed.spe, 0);
+    assert.equal(landed.ox, game.u.ux);
+    assert.equal(landed.oy, game.u.uy);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rn2(5)', 'rn2(100)', 'rn2(100)',
+    ]);
+});
+
+test('upward hero-thrown enchanted rubber hose uses small-target die after harmless check', async () => {
+    installNonShopFloorState();
+    initRng(23);
+    Object.assign(game.u, { uhp: 30, uhpmax: 30 });
+    const hose = upwardWeapon(876925, 'r', 'rubber hose', 'r - a +1 rubber hose', {
+        owt: 20,
+        spe: 1,
+    });
+    game.inventory = [hose];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('r');
+    await rhack('<');
+
+    const message = game._pending_message || '';
+    assert.equal(game._command_mode, null);
+    assert.match(message, /A rubber hose almost hits the ceiling, then falls back on top of your head\./);
+    assert.match(message, /A rubber hose hits the floor\./);
+    assert.doesNotMatch(message, /cmdassist|In what direction|It doesn't hurt|shatters|Splat/);
+    assert.equal(game.u.uhp, 25);
+    assert.equal(game.inventory.includes(hose), false);
+    assert.equal(game.level.objects.length, 1);
+    const landed = game.level.objects[0];
+    assert.equal(landed.actualKind, 'rubber hose');
+    assert.equal(landed.spe, 1);
+    assert.equal(landed.ox, game.u.ux);
+    assert.equal(landed.oy, game.u.uy);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rn2(5)', 'rn2(100)', 'rnd(4)', 'rn2(100)',
+    ]);
+});
+
 test('upward hero-thrown plain dagger hard helmet caps falling damage', async () => {
     installNonShopFloorState();
     initRng(2);
