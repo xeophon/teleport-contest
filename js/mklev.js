@@ -19561,7 +19561,7 @@ const THEMEROOM_META = [
     { name: 'Room with both normal contents and themed fill', frequency: 2 },
     { name: 'Pillars', frequency: 1 },
     { name: 'Mausoleum', frequency: 1 },
-    { name: 'Random dungeon feature', frequency: 1 },
+    { name: 'Random dungeon feature in the middle of an odd-sized room', frequency: 1 },
     { name: 'L-shaped', frequency: 1 },
     { name: 'L-shaped, rot 1', frequency: 1 },
     { name: 'L-shaped, rot 2', frequency: 1 },
@@ -20211,6 +20211,7 @@ export const __mklevTestHooks = {
     apply_themeroom_fill,
     run_themeroom_postprocess,
     setThemeroomAlign,
+    create_themeroom_random_dungeon_feature,
 };
 
 async function apply_themeroom_fill(fill, croom, rows = null, startX = 0, startY = 0) {
@@ -20368,6 +20369,32 @@ function create_themeroom_random_door(croom) {
     }
 }
 
+function setThemeroomTerrain(x, y, typ) {
+    const loc = game.level?.at(x, y);
+    if (!loc) return null;
+    loc.typ = typ;
+    if (typ === LAVAPOOL) loc.lit = true;
+    if (typ === ICE) {
+        loc.flags = 0;
+        loc.icedpool = 0;
+    }
+    return loc;
+}
+
+function create_themeroom_random_dungeon_feature() {
+    const width = 3 + rn2(3) * 2;
+    const height = 3 + rn2(3) * 2;
+    const room = create_themeroom_room({ w: width, h: height, filled: true });
+    if (!room) return null;
+
+    const feature = [CLOUD, LAVAPOOL, ICE, POOL, TREE];
+    shuffleThemeroomList(feature);
+    const x = room.lx + Math.trunc((width - 1) / 2);
+    const y = room.ly + Math.trunc((height - 1) / 2);
+    setThemeroomTerrain(x, y, feature[0]);
+    return room;
+}
+
 // C ref: themerms.lua themerooms_generate()
 // Reservoir sampling picks one eligible themed-room generator by frequency.
 async function themerooms_generate(difficulty) {
@@ -20430,6 +20457,9 @@ async function themerooms_generate(difficulty) {
                     if (terr[0] === LAVAPOOL) loc.lit = true;
                 }
         return true;
+    }
+    if (pick.name === 'Random dungeon feature in the middle of an odd-sized room') {
+        return !!create_themeroom_random_dungeon_feature();
     }
     if (pick.name === 'Default room with themed fill' || pick.name === 'Unlit room with themed fill'
         || pick.name === 'Room with both normal contents and themed fill') {

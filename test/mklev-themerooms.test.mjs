@@ -5,10 +5,12 @@ import { GameMap } from '../js/game.js';
 import { resetGame } from '../js/gstate.js';
 import { __mklevTestHooks as mklevHooks } from '../js/mklev.js';
 import { processCorpseTimers } from '../js/cmd.js';
+import { init_rect } from '../js/rect.js';
 import {
     COLNO, ROWNO, STONE, ROOM, CORR, ROOMOFFSET, TREE, ICE, ICED_POOL, ICED_MOAT,
     VWALL, HWALL, POOL, LAVAPOOL, WATER, FOUNTAIN, ALTAR, AM_SHRINE, OROOM, TEMPLE,
-    SDOOR, AIR,
+    SDOOR, AIR, CLOUD, FILL_NORMAL,
+    MAXNROFROOMS,
     A_CHAOTIC, A_LAWFUL, A_NEUTRAL, Align2amask,
     SHOPBASE, CANDLESHOP, MATCH_WALL, SET_LIT_RANDOM, SET_LIT_NOCHANGE,
     ARROW_TRAP, DART_TRAP, ROCKTRAP, BEAR_TRAP, LANDMINE, ROLLING_BOULDER_TRAP,
@@ -597,6 +599,38 @@ test('Minetown-3 remains a room special level with fixed town structure', async 
         }
     assert.equal(fountains, 2);
     assert.equal(shrines, 1);
+});
+
+test('themed random dungeon feature creates odd room with centered terrain', () => {
+    const g = installMkmapGame({ seed: 47, dlevel: 8 });
+    g.smeq = new Array(MAXNROFROOMS + 1).fill(0);
+    init_rect();
+    const room = mklevHooks.create_themeroom_random_dungeon_feature();
+
+    assert.ok(room);
+    const width = room.hx - room.lx + 1;
+    const height = room.hy - room.ly + 1;
+    assert.equal(width % 2, 1);
+    assert.equal(height % 2, 1);
+    assert.equal(width >= 3 && width <= 7, true);
+    assert.equal(height >= 3 && height <= 7, true);
+    assert.equal(room.needfill, FILL_NORMAL);
+
+    const centerX = room.lx + Math.trunc((width - 1) / 2);
+    const centerY = room.ly + Math.trunc((height - 1) / 2);
+    const features = [];
+    for (let x = room.lx; x <= room.hx; x++) {
+        for (let y = room.ly; y <= room.hy; y++) {
+            const typ = g.level.at(x, y).typ;
+            if (typ !== ROOM) features.push({ x, y, typ });
+        }
+    }
+
+    assert.equal(features.length, 1);
+    assert.deepEqual({ x: features[0].x, y: features[0].y }, { x: centerX, y: centerY });
+    assert.equal(new Set([CLOUD, LAVAPOOL, ICE, POOL, TREE]).has(features[0].typ), true);
+    if (features[0].typ === LAVAPOOL) assert.equal(g.level.at(centerX, centerY).lit, true);
+    if (features[0].typ === ICE) assert.equal(g.level.at(centerX, centerY).icedpool, 0);
 });
 
 test('themed buried zombie corpses use buriedobjlist with explicit zombify timers', () => {

@@ -521,6 +521,9 @@ Current validation snapshot:
 - `Ghost of an Adventurer` themed fills now work for ordinary themed rooms as
   well as map-backed rooms, and the optional not-blessed loot is placed on the
   selected ghost square instead of leaking to `(0,0)`.
+- The `Random dungeon feature in the middle of an odd-sized room` themed-room
+  generator now matches the Lua name, creates an odd ordinary filled room, and
+  places one shuffled cloud/lava/ice/pool/tree feature at its center.
 - The Brown Mold/post-heal route cleanup removed the last public-trace state
   machines named `_brown_mold*`, `_post_heal*`, and `POST_HEAL*` from runtime
   JS. Level teleporting, Quest-goal arrival, fountain quaffing, punishment
