@@ -9,7 +9,8 @@ import { init_rect } from '../js/rect.js';
 import {
     COLNO, ROWNO, STONE, ROOM, CORR, ROOMOFFSET, TREE, ICE, ICED_POOL, ICED_MOAT,
     VWALL, HWALL, POOL, LAVAPOOL, WATER, FOUNTAIN, ALTAR, AM_SHRINE, OROOM, TEMPLE,
-    SDOOR, AIR, CLOUD, FILL_NORMAL,
+    SDOOR, AIR, CLOUD, FILL_NORMAL, DOOR, D_NODOOR, D_ISOPEN, D_CLOSED, D_LOCKED,
+    D_TRAPPED,
     MAXNROFROOMS,
     A_CHAOTIC, A_LAWFUL, A_NEUTRAL, Align2amask,
     SHOPBASE, CANDLESHOP, MATCH_WALL, SET_LIT_RANDOM, SET_LIT_NOCHANGE,
@@ -92,6 +93,26 @@ function installMkmapGame({ seed = 1, dlevel = 1 } = {}) {
     };
     g.level = new GameMap();
     return g;
+}
+
+function installThemeroomGenerationGame({ seed = 1, dlevel = 8 } = {}) {
+    const g = installMkmapGame({ seed, dlevel });
+    g.smeq = new Array(MAXNROFROOMS + 1).fill(0);
+    init_rect();
+    return g;
+}
+
+function doorCellsAround(g, room) {
+    const doors = [];
+    for (let x = room.lx - 1; x <= room.hx + 1; x++) {
+        for (let y = room.ly - 1; y <= room.hy + 1; y++) {
+            const onBorder = x === room.lx - 1 || x === room.hx + 1
+                || y === room.ly - 1 || y === room.hy + 1;
+            const loc = g.level.at(x, y);
+            if (onBorder && loc?.typ === DOOR) doors.push({ x, y, mask: loc.doormask });
+        }
+    }
+    return doors;
 }
 
 function terrainSignature(g) {
@@ -602,9 +623,7 @@ test('Minetown-3 remains a room special level with fixed town structure', async 
 });
 
 test('themed random dungeon feature creates odd room with centered terrain', () => {
-    const g = installMkmapGame({ seed: 47, dlevel: 8 });
-    g.smeq = new Array(MAXNROFROOMS + 1).fill(0);
-    init_rect();
+    const g = installThemeroomGenerationGame({ seed: 47, dlevel: 8 });
     const room = mklevHooks.create_themeroom_random_dungeon_feature();
 
     assert.ok(room);
@@ -631,6 +650,56 @@ test('themed random dungeon feature creates odd room with centered terrain', () 
     assert.equal(new Set([CLOUD, LAVAPOOL, ICE, POOL, TREE]).has(features[0].typ), true);
     if (features[0].typ === LAVAPOOL) assert.equal(g.level.at(centerX, centerY).lit, true);
     if (features[0].typ === ICE) assert.equal(g.level.at(centerX, centerY).icedpool, 0);
+});
+
+test('themed room-in-room generators create C-shaped subrooms and doors', () => {
+    const doorMasks = new Set([
+        D_NODOOR, D_ISOPEN, D_CLOSED, D_LOCKED,
+        D_CLOSED | D_TRAPPED, D_LOCKED | D_TRAPPED,
+    ]);
+
+    const fakeGame = installThemeroomGenerationGame({ seed: 48, dlevel: 8 });
+    const fakeOuter = mklevHooks.create_themeroom_fake_delphi();
+    assert.ok(fakeOuter);
+    assert.equal(fakeOuter.hx - fakeOuter.lx + 1, 11);
+    assert.equal(fakeOuter.hy - fakeOuter.ly + 1, 9);
+    assert.equal(fakeOuter.needfill, FILL_NORMAL);
+    assert.equal(fakeOuter.nsubrooms, 1);
+    const fakeInner = fakeOuter.sbrooms[0];
+    assert.equal(fakeInner.lx, fakeOuter.lx + 4);
+    assert.equal(fakeInner.ly, fakeOuter.ly + 3);
+    assert.equal(fakeInner.hx - fakeInner.lx + 1, 3);
+    assert.equal(fakeInner.hy - fakeInner.ly + 1, 3);
+    assert.equal(fakeInner.needfill, FILL_NORMAL);
+    assert.equal(doorCellsAround(fakeGame, fakeInner).some(door => doorMasks.has(door.mask)), true);
+
+    const roomGame = installThemeroomGenerationGame({ seed: 1, dlevel: 8 });
+    const outer = mklevHooks.create_themeroom_room_in_room();
+    assert.ok(outer);
+    assert.equal(outer.needfill, FILL_NORMAL);
+    assert.equal(outer.nsubrooms, 1);
+    const inner = outer.sbrooms[0];
+    assert.equal(inner.needfill, 0);
+    assert.equal(inner.lx >= outer.lx && inner.hx <= outer.hx, true);
+    assert.equal(inner.ly >= outer.ly && inner.hy <= outer.hy, true);
+    assert.equal(doorCellsAround(roomGame, inner).some(door => doorMasks.has(door.mask)), true);
+
+    let hugeOuter = null;
+    let hugeGame = null;
+    for (let seed = 1; seed < 80 && !hugeOuter?.nsubrooms; seed++) {
+        hugeGame = installThemeroomGenerationGame({ seed, dlevel: 8 });
+        hugeOuter = mklevHooks.create_themeroom_huge_room_inside();
+    }
+    assert.ok(hugeOuter);
+    assert.equal(hugeOuter.hx - hugeOuter.lx + 1 >= 11, true);
+    assert.equal(hugeOuter.hy - hugeOuter.ly + 1 >= 8, true);
+    assert.equal(hugeOuter.needfill, FILL_NORMAL);
+    assert.equal(hugeOuter.nsubrooms, 1);
+    const hugeInner = hugeOuter.sbrooms[0];
+    assert.equal(hugeInner.needfill, FILL_NORMAL);
+    const hugeDoors = doorCellsAround(hugeGame, hugeInner);
+    assert.equal(hugeDoors.length >= 1 && hugeDoors.length <= 2, true);
+    assert.equal(hugeDoors.every(door => doorMasks.has(door.mask)), true);
 });
 
 test('themed buried zombie corpses use buriedobjlist with explicit zombify timers', () => {

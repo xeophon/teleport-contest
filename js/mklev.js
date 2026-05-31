@@ -20212,6 +20212,9 @@ export const __mklevTestHooks = {
     run_themeroom_postprocess,
     setThemeroomAlign,
     create_themeroom_random_dungeon_feature,
+    create_themeroom_fake_delphi,
+    create_themeroom_room_in_room,
+    create_themeroom_huge_room_inside,
 };
 
 async function apply_themeroom_fill(fill, croom, rows = null, startX = 0, startY = 0) {
@@ -20314,13 +20317,16 @@ function create_themeroom_room({
     return aroom;
 }
 
-function create_themeroom_subroom(parent, { w = -1, h = -1 } = {}) {
+function create_themeroom_subroom(parent, {
+    x = -1, y = -1, w = -1, h = -1, rtype = OROOM, filled = true, joined = true,
+} = {}) {
     if (!(rn2(100) < 100)) return null;
-    const croom = splevCreateSubroom(parent, { x: -1, y: -1, w, h, lit: -1 }, OROOM);
+    const croom = splevCreateSubroom(parent, { x, y, w, h, lit: -1 }, rtype);
     if (!croom) return null;
     topologize(croom);
-    croom.needfill = FILL_NORMAL;
-    croom.needjoining = true;
+    croom.needfill = filled ? FILL_NORMAL : 0;
+    croom.needjoining = joined;
+    parent.irregular = true;
     return croom;
 }
 
@@ -20395,6 +20401,35 @@ function create_themeroom_random_dungeon_feature() {
     return room;
 }
 
+function create_themeroom_fake_delphi() {
+    const room = create_themeroom_room({ w: 11, h: 9, filled: true });
+    if (!room) return null;
+    const inner = create_themeroom_subroom(room, { x: 4, y: 3, w: 3, h: 3, filled: true });
+    if (inner) create_themeroom_random_door(inner);
+    return room;
+}
+
+function create_themeroom_room_in_room() {
+    const room = create_themeroom_room({ filled: true });
+    if (!room) return null;
+    const inner = create_themeroom_subroom(room, { filled: false });
+    if (inner) create_themeroom_random_door(inner);
+    return room;
+}
+
+function create_themeroom_huge_room_inside() {
+    const room = create_themeroom_room({ w: rn2(10) + 11, h: rn2(5) + 8, filled: true });
+    if (!room) return null;
+    if (rn2(100) < 90) {
+        const inner = create_themeroom_subroom(room, { filled: true });
+        if (inner) {
+            create_themeroom_random_door(inner);
+            if (rn2(100) < 50) create_themeroom_random_door(inner);
+        }
+    }
+    return room;
+}
+
 // C ref: themerms.lua themerooms_generate()
 // Reservoir sampling picks one eligible themed-room generator by frequency.
 async function themerooms_generate(difficulty) {
@@ -20410,9 +20445,9 @@ async function themerooms_generate(difficulty) {
     }
     if (!pick) return false;
     if (THEMEROOM_MAPS[pick.name]) return create_themeroom_map(THEMEROOM_MAPS[pick.name], pick.name);
-    if (pick.name === 'Fake Delphi') {
-        return !!create_themeroom_room({ w: 11, h: 9, filled: true });
-    }
+    if (pick.name === 'Fake Delphi') return !!create_themeroom_fake_delphi();
+    if (pick.name === 'Room in a room') return !!create_themeroom_room_in_room();
+    if (pick.name === 'Huge room with another room inside') return !!create_themeroom_huge_room_inside();
     if (pick.name === 'Nesting rooms') {
         const room = create_themeroom_room({
             w: 9 + rn2(4), h: 9 + rn2(4), filled: true,
