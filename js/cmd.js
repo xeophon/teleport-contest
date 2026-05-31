@@ -33801,6 +33801,12 @@ function tipHatMonsterAdjacent(mon) {
         Math.abs((mon.my || 0) - (game.u?.uy || 0))) <= 1;
 }
 
+function tipHatMonsterIsMplayer(mon) {
+    const data = mon?.data || {};
+    return !!(mon?.mplayer || mon?.is_mplayer || mon?.isMplayer
+        || data.mplayer || data.is_mplayer || data.isMplayer);
+}
+
 const TIPHAT_BOAST_MONSTER_NAMES = new Set([
     'giant', 'stone giant', 'hill giant', 'fire giant', 'frost giant', 'storm giant',
 ]);
@@ -33994,6 +34000,13 @@ function tipHatMonsterNoise(mon, { visible = tipHatMonsterVisible(mon) } = {}) {
         return monName === 'prisoner'
             ? { handled: true, message: `"Get me out of here."` }
             : { handled: true, message: `"This will teach you not to disturb me!"` };
+    case 'humanoid':
+        if (!peaceful) {
+            if (tipHatMonsterIsMplayer(mon) && In_endgame(game.u?.uz))
+                return { handled: false, message: '' };
+            return { handled: true, message: `${name} threatens you.` };
+        }
+        return { handled: false, message: '' };
     case 'boast':
         if (peaceful) return { handled: false, message: '' };
         switch (rn2(4)) {

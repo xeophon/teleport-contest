@@ -4392,6 +4392,34 @@ test('worn helmet tip makes invisible explicit orc sound grunt', async () => {
     assert.doesNotMatch(game._pending_message, /The goblin|doesn't respond|Nothing happens|waves/);
 });
 
+test('worn helmet tip makes hostile invisible humanoid threaten without RNG', async () => {
+    await tipInvisibleExplicitSound({
+        name: 'soldier',
+        sound: 'MS_HUMANOID',
+        peaceful: false,
+        rngLog: true,
+        data: { mlevel: 6, mlet: '@', humanoid: true },
+    });
+
+    assert.match(game._pending_message, /It threatens you\./);
+    assert.doesNotMatch(game._pending_message, /The soldier|Resistance is useless|doesn't respond|Nothing happens|waves/);
+    assert.deepEqual(getRngLog(), []);
+});
+
+test('worn helmet tip keeps non-endgame mplayers on hostile humanoid threat', async () => {
+    await tipInvisibleExplicitSound({
+        name: 'wizard',
+        sound: 'MS_HUMANOID',
+        peaceful: false,
+        rngLog: true,
+        data: { mlevel: 10, mlet: '@', humanoid: true, mplayer: true },
+    });
+
+    assert.match(game._pending_message, /It threatens you\./);
+    assert.doesNotMatch(game._pending_message, /Talk\? --|The wizard|doesn't respond|Nothing happens|waves/);
+    assert.deepEqual(getRngLog(), []);
+});
+
 test('worn helmet tip makes hostile invisible boasting giant mention gems', async () => {
     await tipInvisibleExplicitSound({
         name: 'fire giant',
