@@ -33862,6 +33862,29 @@ function tipHatHeroHasTopLevelGold() {
         || item?.cls === 'coin' || item?.otyp === GOLD_PIECE || item?.glyph === '$');
 }
 
+function tipHatGoldStack(items = []) {
+    return items.find(item => item?.letter === '$'
+        || item?.cls === 'coin' || item?.otyp === GOLD_PIECE || item?.glyph === '$') || null;
+}
+
+function tipHatGoldCount(items = []) {
+    const stack = tipHatGoldStack(items);
+    return Math.max(0, Math.trunc(Number(stack?.quan || 0)));
+}
+
+function tipHatHeroGoldCount() {
+    return Math.max(0, Math.trunc(Number(game._goldCount || 0))) || tipHatGoldCount(game.inventory || []);
+}
+
+function tipHatAddHeroGold(amount) {
+    const gold = Math.max(0, Math.trunc(Number(amount || 0)));
+    if (!gold) return;
+    game._goldCount = Math.max(0, Math.trunc(Number(game._goldCount || 0))) + gold;
+    const stack = tipHatGoldStack(game.inventory || []);
+    if (stack) stack.quan = (stack.quan || 0) + gold;
+    else game.inventory = [...(game.inventory || []), { letter: '$', cls: 'coin', otyp: GOLD_PIECE, glyph: '$', quan: gold }];
+}
+
 function tipHatHeroIsHealer() {
     return game._startup_role === 'Healer'
         || game.urole?.name?.m === 'Healer' || game.urole?.name?.f === 'Healer';
@@ -34269,6 +34292,13 @@ function tipHatMonsterIsShopkeeperType(mon, monName = '') {
     return !!(data.shopkeeper || mon?.shopkeeper || name === 'shopkeeper');
 }
 
+function tipHatMonsterIsPriestType(mon, monName = '') {
+    const data = mon?.data || {};
+    const name = String(monName || data.name || mon?.name || '').toLowerCase();
+    return !!(mon?.ispriest || mon?.priest || data.priest
+        || /^(?:aligned cleric|high cleric|high priest|high priestess)$/.test(name));
+}
+
 function tipHatShopkeeperIsAngry(mon) {
     return !!(mon?.hostile || mon?.mpeaceful === 0 || mon?.mpeaceful === false || mon?.angry);
 }
@@ -34327,6 +34357,115 @@ function tipHatShopkeeperSellNoise(mon, name) {
     return { handled: false, message: '' };
 }
 
+const TIPHAT_PRIEST_CRANKY_MESSAGES = [
+    "Thou wouldst have words, eh?  I'll give thee a word or two!",
+    'Talk?  Here is what I have to say!',
+    'Pilgrim, I would speak no longer with thee.',
+];
+
+function tipHatPriestAlign(mon) {
+    const data = mon?.data || {};
+    const value = mon?.shrine?.align ?? mon?.min_align ?? mon?.align ?? mon?.alignment
+        ?? data.min_align ?? data.align ?? data.alignment ?? data.maligntyp;
+    const align = Number(value);
+    return Number.isFinite(align) ? align : A_NEUTRAL;
+}
+
+function tipHatPriestCoaligned(mon) {
+    return Number(game.u?.ualign?.type ?? A_NEUTRAL) === tipHatPriestAlign(mon);
+}
+
+function tipHatPriestHasShrine(priest) {
+    const shrine = priest?.shrine;
+    const loc = shrine ? game.level?.at?.(shrine.x, shrine.y) : null;
+    if (!priest?.ispriest || !shrine || loc?.typ !== ALTAR) return false;
+    const mask = loc.flags ?? loc.altarmask ?? 0;
+    if (!(mask & AM_SHRINE)) return false;
+    return shrine.align === Amask2align(mask & ~AM_SHRINE);
+}
+
+function tipHatPriestInTempleRoom(priest) {
+    const shrine = priest?.shrine;
+    if (!priest?.ispriest || !shrine) return false;
+    return game.level?.at?.(priest.mx, priest.my)?.roomno === shrine.room;
+}
+
+function tipHatPriestInHisTemple(priest) {
+    return tipHatPriestInTempleRoom(priest) && tipHatPriestHasShrine(priest);
+}
+
+function tipHatTransferPriestAleMoney(priest) {
+    const goldStack = tipHatGoldStack(priest?.minvent || []);
+    const pmoney = Math.max(0, Math.trunc(Number(goldStack?.quan || 0)));
+    if (!pmoney) return 0;
+    const amount = pmoney > 1 ? 2 : 1;
+    goldStack.quan = Math.max(0, pmoney - amount);
+    if (!goldStack.quan)
+        priest.minvent = (priest.minvent || []).filter(item => item !== goldStack);
+    tipHatAddHeroGold(amount);
+    return pmoney;
+}
+
+function tipHatRejectAtheismByPriestConsult() {
+    game.u ??= {};
+    game.u.uconduct ??= {};
+    game.u.uconduct.gnostic = Math.max(0, Math.trunc(Number(game.u.uconduct.gnostic || 0))) + 1;
+}
+
+function tipHatPriestNoise(priest, name) {
+    tipHatRejectAtheismByPriestConsult();
+    const coaligned = tipHatPriestCoaligned(priest);
+    const strayed = Number(game.u?.ualign?.record ?? 0) < 0;
+    if (priest.mflee || (!priest.ispriest && coaligned && strayed)) {
+        priest.mpeaceful = 0;
+        return { handled: true, message: `${name} doesn't want anything to do with you!` };
+    }
+
+    const helpless = tipHatMonsterHelpless(priest);
+    if (!tipHatPriestInHisTemple(priest) || !priest.mpeaceful || helpless) {
+        const messages = [];
+        if (helpless) {
+            messages.push(`${name} breaks out of ${tipHatMonsterPossessive(priest)} reverie!`);
+            priest.mfrozen = 0;
+            priest.msleeping = 0;
+            priest.mcanmove = true;
+        }
+        priest.mpeaceful = 0;
+        messages.push(`"${TIPHAT_PRIEST_CRANKY_MESSAGES[rn2(3)]}"`);
+        return { handled: true, message: messages.join('  ') };
+    }
+
+    if (priest.mpeaceful && tipHatPriestInTempleRoom(priest) && !tipHatPriestHasShrine(priest)) {
+        priest.mpeaceful = 0;
+        return {
+            handled: true,
+            message: '"Begone!  Thou desecratest this holy place with thy presence."',
+        };
+    }
+
+    if (!tipHatHeroGoldCount()) {
+        if (coaligned && !strayed) {
+            const pmoney = tipHatTransferPriestAleMoney(priest);
+            if (pmoney > 0) {
+                const bits = heroIsHallucinating()
+                    ? shopCurrency(pmoney)
+                    : pmoney === 1 ? 'bit' : 'bits';
+                return { handled: true, message: `${name} gives you ${pmoney === 1 ? 'one ' : 'two '}${bits} for an ale.` };
+            }
+            return { handled: true, message: `${name} preaches the virtues of poverty.` };
+        }
+        return { handled: true, message: `${name} is not interested.` };
+    }
+
+    const cheapskate = Math.max(0, Math.trunc(Number(priest.cheapskate_count ?? priest.cheapskateCount ?? 0)));
+    const peak = Math.max(1, Math.trunc(Number(game.u?.ulevelpeak || game.u?.ulevel || 1)));
+    const suggested = peak * rn1(101, 150 + cheapskate * 40);
+    const quan = Math.max(1, Math.trunc(tipHatHeroGoldCount() / (suggested * 3)));
+    priest._last_priest_suggested = suggested;
+    priest._last_priest_offer_prompt = `How much will you offer (suggested: ${suggested * quan} or ${suggested * quan * 2})?`;
+    return { handled: true, message: `${name} asks you for a contribution for the temple.` };
+}
+
 function tipHatMonsterIsHumanWereForm(mon, monName, mlet) {
     const data = mon?.data || {};
     if (!/^(?:were(?:rat|jackal|wolf))$/.test(monName)) return false;
@@ -34351,6 +34490,7 @@ function tipHatMonsterSound(mon) {
     const explicit = mon?.msound ?? mon?.sound ?? data.msound ?? data.sound;
     if (explicit != null) return String(explicit).toLowerCase().replace(/^ms_/, '');
     if (tipHatMonsterIsShopkeeperType(mon, name)) return 'sell';
+    if (tipHatMonsterIsPriestType(mon, name)) return 'priest';
     if (/^(gremlin|leprechaun)$/.test(name)) return 'laugh';
     if (name === 'skeleton') return 'bones';
     if (/^(death|pestilence|famine)$/.test(name)) return 'rider';
@@ -34751,6 +34891,8 @@ function tipHatMonsterNoise(mon, { visible = tipHatMonsterVisible(mon) } = {}) {
         if (!tipHatHeroHasTopLevelGold())
             return { handled: false, message: 'You have no gold.', mapInvisible: !visible };
         return { handled: false, message: '', mapInvisible: !visible };
+    case 'priest':
+        return tipHatPriestNoise(mon, name);
     case 'seduce': {
         if (!tipHatMonsterIsNymph(mon, monName)) return { handled: false, message: '' };
         if (!!game.flags?.female !== tipHatMonsterFemale(mon)) {

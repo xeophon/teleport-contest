@@ -8,7 +8,7 @@ import { game, resetGame } from '../js/gstate.js';
 import { pushKey, resetInputState } from '../js/input.js';
 import { createMonsterCorpseOrGlob, mkcorpstat } from '../js/mklev.js';
 import { enableRngLog, getRngLog, initRng } from '../js/rng.js';
-import { A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_STR, A_WIS, BILLSZ, CANDLESHOP, CLOUD, CORPSTAT_HISTORIC, COULD_SEE, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, D_CLOSED, D_NODOOR, FOUNTAIN, HOLE, ICE, ICED_POOL, IN_SIGHT, LADDER, LAVAPOOL, MIGR_LADDER_UP, MIGR_SSTAIRS, MIGR_STAIRS_UP, MOAT, M_AP_FURNITURE, M_AP_OBJECT, NORMAL_SPEED, PIT, POOL, REPAIR_DELAY, ROOM, ROOMOFFSET, SDOOR, SHOPBASE, SHOP_DOOR_COST, SQKY_BOARD, STAIRS, STATUE_TRAP, STONE, STRAT_APPEARMSG, STRAT_WAITFORU, TRAPDOOR, TT_WEB, WEB, W_SADDLE } from '../js/const.js';
+import { A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_STR, A_WIS, ALTAR, AM_SHRINE, Align2amask, BILLSZ, CANDLESHOP, CLOUD, CORPSTAT_HISTORIC, COULD_SEE, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, D_CLOSED, D_NODOOR, FOUNTAIN, HOLE, ICE, ICED_POOL, IN_SIGHT, LADDER, LAVAPOOL, MIGR_LADDER_UP, MIGR_SSTAIRS, MIGR_STAIRS_UP, MOAT, M_AP_FURNITURE, M_AP_OBJECT, NORMAL_SPEED, PIT, POOL, REPAIR_DELAY, ROOM, ROOMOFFSET, SDOOR, SHOPBASE, SHOP_DOOR_COST, SQKY_BOARD, STAIRS, STATUE_TRAP, STONE, STRAT_APPEARMSG, STRAT_WAITFORU, TEMPLE, TRAPDOOR, TT_WEB, WEB, W_SADDLE } from '../js/const.js';
 import { currentFruitId, setCurrentFruitName } from '../js/fruit.js';
 import { CLR_BRIGHT_MAGENTA, CLR_BROWN, CLR_WHITE } from '../js/terminal.js';
 import { TRIBUTE_DEATH_QUOTES } from '../js/tribute.js';
@@ -4400,7 +4400,7 @@ async function tipInvisibleExplicitSound({ name, sound, peaceful = false, tame =
     gold = 0, seed = null, rngLog = false, role = '', inventory = [], data = {}, extra = {},
     moves = null, traps = null, endgame = false, race = '', hallucinating = false,
     polyself = null, bystanders = [], moonphase = null, datetime = null, night = null,
-    hour = null, heroFemale = null, town = false, allowFallback = false } = {}) {
+    hour = null, heroFemale = null, town = false, allowFallback = false, setup = null } = {}) {
     installStableNonShopFloorState();
     if (town) game.level.flags.has_town = true;
     if (seed != null) initRng(seed);
@@ -4459,6 +4459,7 @@ async function tipInvisibleExplicitSound({ name, sound, peaceful = false, tame =
     }
     game.level.monsters = [target, ...bystanders];
     if (traps) game.level.traps = traps;
+    if (setup) setup({ target, targetLoc, helmet });
     markSquareVisible(6, 5);
 
     await enterTipCommand();
@@ -4475,6 +4476,26 @@ async function tipInvisibleExplicitSound({ name, sound, peaceful = false, tame =
         : /doesn't respond|Nothing happens|waves|tips .* in response|gestures|unseen creature/;
     assert.doesNotMatch(game._pending_message, unexpected);
     return { target, targetLoc, message: game._pending_message };
+}
+
+function installTipPriestTemple(target, { shrineAlign = A_LAWFUL, heroAlign = A_LAWFUL, record = 0 } = {}) {
+    game.u.ualign = { ...(game.u.ualign || {}), type: heroAlign, record };
+    game.level.rooms = [{ rtype: TEMPLE, roomnoidx: 0 }];
+    const priestLoc = game.level.at(target.mx, target.my);
+    priestLoc.roomno = ROOMOFFSET;
+    priestLoc.typ = ROOM;
+    const altarLoc = game.level.at(target.mx, target.my + 1);
+    altarLoc.roomno = ROOMOFFSET;
+    altarLoc.typ = ALTAR;
+    altarLoc.flags = Align2amask(shrineAlign) | AM_SHRINE;
+    altarLoc.altarmask = altarLoc.flags;
+    target.ispriest = 1;
+    target.shrine = {
+        room: ROOMOFFSET,
+        align: shrineAlign,
+        x: target.mx,
+        y: target.my + 1,
+    };
 }
 
 test('worn helmet tip makes peaceful invisible Kop give arrest address', async () => {
@@ -4625,6 +4646,109 @@ test('worn helmet tip makes peaceful invisible Oracle with no gold report it bef
     assert.equal(result.target.mstrategy, 0);
     assert.equal(result.targetLoc.map_invisible, true);
     assert.deepEqual(getRngLog(), []);
+});
+
+test('worn helmet tip makes fleeing invisible priest reject attention without RNG', async () => {
+    const result = await tipInvisibleExplicitSound({
+        name: 'aligned cleric',
+        sound: 'MS_PRIEST',
+        peaceful: true,
+        rngLog: true,
+        data: { mlevel: 12, mlet: '@', humanoid: true, priest: true },
+        extra: { ispriest: true, mflee: true },
+    });
+
+    assert.equal(result.message,
+        "You briefly doff your helm.  It doesn't want anything to do with you!");
+    assert.equal(result.target.mpeaceful, 0);
+    assert.equal(game.u.uconduct.gnostic, 1);
+    assert.doesNotMatch(result.message,
+        /contribution|poverty|not interested|Thou wouldst|Talk\?|Pilgrim, I would|Nothing happens|doesn't respond|waves/);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
+});
+
+test('worn helmet tip infers coaligned invisible temple priest poverty sermon without RNG', async () => {
+    const result = await tipInvisibleExplicitSound({
+        name: 'aligned cleric',
+        peaceful: true,
+        rngLog: true,
+        data: { mlevel: 12, mlet: '@', humanoid: true, priest: true },
+        extra: { ispriest: true, minvent: [] },
+        setup: ({ target }) => installTipPriestTemple(target),
+    });
+
+    assert.equal(result.message,
+        'You briefly doff your helm.  It preaches the virtues of poverty.');
+    assert.equal(result.target.mpeaceful, true);
+    assert.equal(game.u.uconduct.gnostic, 1);
+    assert.doesNotMatch(result.message,
+        /contribution|not interested|Thou wouldst|Talk\?|Pilgrim, I would|Nothing happens|doesn't respond|waves/);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
+});
+
+test('worn helmet tip makes coaligned invisible temple priest give ale money without RNG', async () => {
+    const result = await tipInvisibleExplicitSound({
+        name: 'aligned cleric',
+        peaceful: true,
+        rngLog: true,
+        data: { mlevel: 12, mlet: '@', humanoid: true, priest: true },
+        extra: { ispriest: true, minvent: [goldPieces(3063590, 2)] },
+        setup: ({ target }) => installTipPriestTemple(target),
+    });
+
+    assert.equal(result.message,
+        'You briefly doff your helm.  It gives you two bits for an ale.');
+    assert.equal(game._goldCount, 2);
+    assert.equal(result.target.minvent.length, 0);
+    assert.equal(result.target.mpeaceful, true);
+    assert.equal(game.u.uconduct.gnostic, 1);
+    assert.doesNotMatch(result.message,
+        /contribution|poverty|not interested|Thou wouldst|Talk\?|Pilgrim, I would|Nothing happens|doesn't respond|waves/);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
+});
+
+test('worn helmet tip makes cross-aligned invisible temple priest uninterested without RNG', async () => {
+    const result = await tipInvisibleExplicitSound({
+        name: 'aligned cleric',
+        sound: 'MS_PRIEST',
+        peaceful: true,
+        rngLog: true,
+        data: { mlevel: 12, mlet: '@', humanoid: true, priest: true },
+        extra: { ispriest: true, minvent: [] },
+        setup: ({ target }) => installTipPriestTemple(target, { heroAlign: A_CHAOTIC }),
+    });
+
+    assert.equal(result.message,
+        'You briefly doff your helm.  It is not interested.');
+    assert.equal(result.target.mpeaceful, true);
+    assert.equal(game.u.uconduct.gnostic, 1);
+    assert.doesNotMatch(result.message,
+        /contribution|poverty|Thou wouldst|Talk\?|Pilgrim, I would|Nothing happens|doesn't respond|waves/);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
+});
+
+test('worn helmet tip makes invisible priest outside own temple use C cranky table', async () => {
+    const result = await tipInvisibleExplicitSound({
+        name: 'aligned cleric',
+        sound: 'MS_PRIEST',
+        peaceful: true,
+        seed: 1,
+        rngLog: true,
+        data: { mlevel: 12, mlet: '@', humanoid: true, priest: true },
+        extra: { ispriest: true, shrine: { room: ROOMOFFSET, align: A_LAWFUL, x: 6, y: 6 } },
+    });
+    const payload = result.message.replace(/^You briefly doff your helm\.  /, '');
+
+    assert.ok([
+        "\"Thou wouldst have words, eh?  I'll give thee a word or two!\"",
+        '"Talk?  Here is what I have to say!"',
+        '"Pilgrim, I would speak no longer with thee."',
+    ].includes(payload), payload);
+    assert.equal(result.target.mpeaceful, 0);
+    assert.equal(game.u.uconduct.gnostic, 1);
+    assert.doesNotMatch(result.message,
+        /contribution|poverty|not interested|Nothing happens|doesn't respond|waves/);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(3)']);
 });
 
 test('worn helmet tip makes hostile invisible imp cuss and wake nearby sleepers', async () => {
