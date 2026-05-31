@@ -6,10 +6,10 @@ import { resetGame } from '../js/gstate.js';
 import { __mklevTestHooks as mklevHooks } from '../js/mklev.js';
 import { processCorpseTimers } from '../js/cmd.js';
 import {
-    COLNO, ROWNO, STONE, ROOM, ROOMOFFSET, TREE, ICE, ICED_POOL, ICED_MOAT,
-    VWALL, HWALL, LAVAPOOL, MATCH_WALL,
+    COLNO, ROWNO, STONE, ROOM, CORR, ROOMOFFSET, TREE, ICE, ICED_POOL, ICED_MOAT,
+    VWALL, HWALL, POOL, LAVAPOOL, WATER, MATCH_WALL, SET_LIT_RANDOM,
 } from '../js/const.js';
-import { initRng } from '../js/rng.js';
+import { enableRngLog, getRngLog, initRng } from '../js/rng.js';
 
 const CORPSE = 471;
 
@@ -182,6 +182,106 @@ test('replace terrain preserves old width-height signature and C lava lighting',
     assert.equal(g.level.at(5, 4).typ, STONE);
     assert.equal(g.level.at(3, 4).lit, true);
     assert.equal(g.level.at(4, 4).lit, true);
+});
+
+test('replace terrain accepts C mapchars and simple selection masks', () => {
+    const g = installMkmapGame();
+    g.level.at(10, 10).typ = VWALL;
+    g.level.at(11, 10).typ = HWALL;
+    g.level.at(12, 10).typ = VWALL;
+
+    const changed = mklevHooks.replaceDesTerrain({
+        selection: new Set(['10,10', '12,10']),
+        fromterrain: '|',
+        toterrain: '.',
+        chance: 100,
+        lit: 1,
+    });
+
+    assert.equal(changed, 2);
+    assert.equal(g.level.at(10, 10).typ, ROOM);
+    assert.equal(g.level.at(11, 10).typ, HWALL);
+    assert.equal(g.level.at(12, 10).typ, ROOM);
+    assert.equal(g.level.at(10, 10).lit, true);
+    assert.equal(g.level.at(12, 10).lit, true);
+});
+
+test('replace terrain mapfragments support transparent and wall wildcard cells', () => {
+    const g = installMkmapGame();
+    g.level.at(19, 10).typ = VWALL;
+    g.level.at(20, 10).typ = ROOM;
+    g.level.at(21, 10).typ = HWALL;
+    g.level.at(29, 10).typ = POOL;
+    g.level.at(30, 10).typ = ROOM;
+    g.level.at(31, 10).typ = STONE;
+
+    const wallChanged = mklevHooks.replaceDesTerrain({
+        region: [20, 10, 20, 10],
+        mapfragment: 'w.w',
+        toterrain: 'L',
+    });
+    const transparentChanged = mklevHooks.replaceDesTerrain({
+        region: [30, 10, 30, 10],
+        mapfragment: 'x.x',
+        toterrain: 'W',
+    });
+
+    assert.equal(wallChanged, 1);
+    assert.equal(g.level.at(20, 10).typ, LAVAPOOL);
+    assert.equal(g.level.at(20, 10).lit, true);
+    assert.equal(transparentChanged, 1);
+    assert.equal(g.level.at(30, 10).typ, WATER);
+});
+
+test('replace terrain mapfragment validation follows C center and size gates', () => {
+    installMkmapGame();
+    assert.throws(
+        () => mklevHooks.replaceDesTerrain({ region: [10, 10, 10, 10], mapfragment: '..', toterrain: '.' }),
+        /mapfragment needs to have odd height and width/,
+    );
+    assert.throws(
+        () => mklevHooks.replaceDesTerrain({ region: [10, 10, 10, 10], mapfragment: 'x', toterrain: '.' }),
+        /mapfragment center must be valid terrain/,
+    );
+});
+
+test('replace terrain consumes chance RNG only after selected terrain matches', () => {
+    const g = installMkmapGame({ seed: 9 });
+    enableRngLog({ reset: true });
+    g.level.at(10, 10).typ = ROOM;
+    g.level.at(11, 10).typ = STONE;
+    g.level.at(12, 10).typ = ROOM;
+
+    const changed = mklevHooks.replaceDesTerrain({
+        region: [10, 10, 12, 10],
+        fromterrain: '.',
+        toterrain: '#',
+        chance: 0,
+    });
+
+    assert.equal(changed, 0);
+    assert.equal(g.level.at(10, 10).typ, ROOM);
+    assert.equal(g.level.at(12, 10).typ, ROOM);
+    assert.equal(getRngLog().filter(entry => entry.startsWith('rn2(100)=')).length, 2);
+});
+
+test('replace terrain random lit consumes lit RNG only for changed non-lava cells', () => {
+    const g = installMkmapGame({ seed: 13 });
+    enableRngLog({ reset: true });
+    g.level.at(10, 10).typ = ROOM;
+    g.level.at(11, 10).typ = STONE;
+
+    const changed = mklevHooks.replaceDesTerrain({
+        region: [10, 10, 11, 10],
+        fromterrain: '.',
+        toterrain: '#',
+        lit: SET_LIT_RANDOM,
+    });
+
+    assert.equal(changed, 1);
+    assert.equal(g.level.at(10, 10).typ, CORR);
+    assert.equal(getRngLog().filter(entry => entry.startsWith('rn2(100)=')).length, 1);
+    assert.equal(getRngLog().filter(entry => entry.startsWith('rn2(2)=')).length, 1);
 });
 
 test('themed buried zombie corpses use buriedobjlist with explicit zombify timers', () => {

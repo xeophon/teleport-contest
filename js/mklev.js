@@ -27,7 +27,7 @@ import { TRIBUTE_NOVEL_TITLES } from './tribute.js';
 import { clearBuriedOrganicRotTimer, clearCorpseTimeout, freezeObjectInIcebox, objectIceEffect, restoreBuriedBallIfNeeded, startCorpseTimeout } from './ice.js';
 import { applySlimeMoldFruitFields } from './fruit.js';
 import {
-    COLNO, ROWNO, MAX_TYPE, STONE, ROOM, CORR, DOOR, STAIRS, LADDER, AIR,
+    COLNO, ROWNO, MAX_TYPE, INVALID_TYPE, STONE, ROOM, CORR, DOOR, STAIRS, LADDER, AIR,
     HWALL, VWALL, TLCORNER, TRCORNER, BLCORNER, BRCORNER,
     CROSSWALL, TUWALL, TDWALL, TLWALL, TRWALL,
     D_NODOOR, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_TRAPPED,
@@ -2755,6 +2755,32 @@ const SPECIAL_TERRAIN = {
     T: TREE,
     C: CLOUD,
     B: CROSSWALL,
+};
+const SPLEV_MAPCHAR_TERRAIN = {
+    ' ': STONE,
+    '#': CORR,
+    '.': ROOM,
+    '-': HWALL,
+    '|': VWALL,
+    '+': DOOR,
+    A: AIR,
+    C: CLOUD,
+    S: SDOOR,
+    H: SCORR,
+    '{': FOUNTAIN,
+    '\\': THRONE,
+    K: SINK,
+    '}': MOAT,
+    P: POOL,
+    L: LAVAPOOL,
+    Z: LAVAWALL,
+    I: ICE,
+    W: WATER,
+    T: TREE,
+    F: IRONBARS,
+    x: MAX_TYPE,
+    B: CROSSWALL,
+    w: MATCH_WALL,
 };
 
 const ARC_XSTART = 3;
@@ -17535,6 +17561,7 @@ export function enextoMonsterSpot(x, y, ptr = {}) {
 function setSpecialTerrainLit(x, y, typ, lit = SET_LIT_NOCHANGE) {
     const loc = game.level.at(x, y);
     if (!loc || typ < STONE || typ >= MAX_TYPE) return false;
+    if ((loc.typ === LADDER || loc.typ === STAIRS) && !game.iflags?.debug_overwrite_stairs) return false;
     loc.typ = typ;
     if (lit !== SET_LIT_NOCHANGE) {
         if (IS_LAVA(typ)) loc.lit = true;
@@ -17546,32 +17573,180 @@ function setSpecialTerrainLit(x, y, typ, lit = SET_LIT_NOCHANGE) {
     return true;
 }
 
-function replace_special_terrain(xstart, ystart, width, height, fromTyp, toTyp, chance = 100, lit = SET_LIT_NOCHANGE) {
-    let x1 = xstart;
-    let y1 = ystart;
-    let x2 = xstart + width - 1;
-    let y2 = ystart + height - 1;
-    if (typeof xstart === 'object' && xstart) {
-        const spec = xstart;
-        x1 = spec.x1;
-        y1 = spec.y1;
-        x2 = spec.x2;
-        y2 = spec.y2;
-        fromTyp = spec.fromTyp;
-        toTyp = spec.toTyp;
-        chance = spec.chance ?? 100;
-        lit = spec.lit ?? SET_LIT_NOCHANGE;
+function splevMapCharToTyp(mapchar, { required = true } = {}) {
+    if (typeof mapchar === 'number') return mapchar;
+    if (typeof mapchar === 'string' && mapchar.length === 1
+        && Object.prototype.hasOwnProperty.call(SPLEV_MAPCHAR_TERRAIN, mapchar)) {
+        return SPLEV_MAPCHAR_TERRAIN[mapchar];
     }
+    if (required) throw new Error('Erroneous map char');
+    return INVALID_TYPE;
+}
+
+function mapFragmentFromString(mapfragment) {
+    if (typeof mapfragment !== 'string') throw new Error('mapfragment error');
+    const data = mapfragment.replace(/[0-9]/g, '');
+    const lines = data.length ? data.split('\n') : [];
+    if (lines.length && lines[lines.length - 1] === '') lines.pop();
+    const width = lines.reduce((max, line) => Math.max(max, line.length), 0);
+    const height = lines.length;
+    const fragment = { lines, width, height };
+    if (!(width % 2) || !(height % 2)) {
+        throw new Error('mapfragment needs to have odd height and width');
+    }
+    const center = mapFragmentGet(fragment, Math.trunc(width / 2), Math.trunc(height / 2));
+    if (center === MAX_TYPE || center === INVALID_TYPE) {
+        throw new Error('mapfragment center must be valid terrain');
+    }
+    return fragment;
+}
+
+function mapFragmentGet(fragment, x, y) {
+    const ch = fragment.lines[y]?.[x];
+    return splevMapCharToTyp(ch, { required: false });
+}
+
+function mapTerrainTypesMatch(patternTyp, levelTyp) {
+    if (patternTyp === MATCH_WALL && !IS_STWALL(levelTyp)) return false;
+    if (patternTyp < MAX_TYPE && patternTyp !== levelTyp) return false;
+    return true;
+}
+
+function mapFragmentMatches(fragment, x, y) {
+    const xmid = Math.trunc(fragment.width / 2);
+    const ymid = Math.trunc(fragment.height / 2);
+    for (let rx = -xmid; rx <= xmid; rx++) {
+        for (let ry = -ymid; ry <= ymid; ry++) {
+            const patternTyp = mapFragmentGet(fragment, rx + xmid, ry + ymid);
+            const levelTyp = game.level.at(x + rx, y + ry)?.typ ?? STONE;
+            if (!mapTerrainTypesMatch(patternTyp, levelTyp)) return false;
+        }
+    }
+    return true;
+}
+
+function parseSelectionPoint(item) {
+    if (typeof item === 'string') {
+        const parts = item.split(/[,:]/).map(part => Number(part));
+        if (parts.length >= 2 && Number.isFinite(parts[0]) && Number.isFinite(parts[1])) {
+            return { x: Math.trunc(parts[0]), y: Math.trunc(parts[1]) };
+        }
+    } else if (Array.isArray(item) && item.length >= 2) {
+        const x = Number(item[0]), y = Number(item[1]);
+        if (Number.isFinite(x) && Number.isFinite(y)) return { x: Math.trunc(x), y: Math.trunc(y) };
+    } else if (item && typeof item === 'object') {
+        const x = Number(item.x ?? item.lx);
+        const y = Number(item.y ?? item.ly);
+        if (Number.isFinite(x) && Number.isFinite(y)) return { x: Math.trunc(x), y: Math.trunc(y) };
+    }
+    return null;
+}
+
+function terrainSelectionFromSpec(selection) {
+    if (!selection) return null;
+    if (typeof selection === 'function') {
+        return { lx: 0, ly: 0, hx: COLNO - 1, hy: ROWNO - 1, has: selection };
+    }
+    const items = selection instanceof Set ? [...selection] : Array.isArray(selection) ? selection : selection.points;
+    if (items && Symbol.iterator in Object(items)) {
+        const points = new Set();
+        let lx = COLNO, ly = ROWNO, hx = 0, hy = 0;
+        for (const item of items) {
+            const point = parseSelectionPoint(item);
+            if (!point) continue;
+            points.add(`${point.x},${point.y}`);
+            lx = Math.min(lx, point.x);
+            ly = Math.min(ly, point.y);
+            hx = Math.max(hx, point.x);
+            hy = Math.max(hy, point.y);
+        }
+        if (points.size) return { lx, ly, hx, hy, has: (x, y) => points.has(`${x},${y}`) };
+    }
+    if (typeof selection.has === 'function') {
+        return {
+            lx: selection.lx ?? 0,
+            ly: selection.ly ?? 0,
+            hx: selection.hx ?? COLNO - 1,
+            hy: selection.hy ?? ROWNO - 1,
+            has: (x, y) => selection.has(`${x},${y}`) || selection.has([x, y]),
+        };
+    }
+    return null;
+}
+
+function regionBoundsFromSpec(spec) {
+    let region = null;
+    if ([spec.x1, spec.y1, spec.x2, spec.y2].some(value => value != null)) {
+        region = { x1: spec.x1, y1: spec.y1, x2: spec.x2, y2: spec.y2 };
+    } else if (spec.region) {
+        region = Array.isArray(spec.region)
+            ? { x1: spec.region[0], y1: spec.region[1], x2: spec.region[2], y2: spec.region[3] }
+            : {
+                x1: spec.region.x1 ?? spec.region.lx,
+                y1: spec.region.y1 ?? spec.region.ly,
+                x2: spec.region.x2 ?? spec.region.hx,
+                y2: spec.region.y2 ?? spec.region.hy,
+            };
+    }
+    if (!region || [region.x1, region.y1, region.x2, region.y2].some(value => value == null)) return null;
+    const originX = spec.originX ?? 0;
+    const originY = spec.originY ?? 0;
+    const x1 = Math.trunc(Number(region.x1) + originX);
+    const y1 = Math.trunc(Number(region.y1) + originY);
+    const x2 = Math.trunc(Number(region.x2) + originX);
+    const y2 = Math.trunc(Number(region.y2) + originY);
+    return {
+        lx: Math.min(x1, x2),
+        ly: Math.min(y1, y2),
+        hx: Math.max(x1, x2),
+        hy: Math.max(y1, y2),
+        has: () => true,
+    };
+}
+
+function replaceDesTerrain(spec) {
+    const toTyp = spec.toTyp ?? (spec.toterrain != null ? splevMapCharToTyp(spec.toterrain) : null);
     if (toTyp == null || toTyp >= MAX_TYPE) return 0;
+
+    const hasFrom = spec.fromTyp != null || spec.fromterrain != null;
+    const fromTyp = hasFrom
+        ? spec.fromTyp ?? splevMapCharToTyp(spec.fromterrain)
+        : null;
+    const fragment = hasFrom ? null : mapFragmentFromString(spec.mapfragment);
+    const chance = spec.chance ?? 100;
+    const lit = spec.lit ?? SET_LIT_NOCHANGE;
+    const bounds = regionBoundsFromSpec(spec) || terrainSelectionFromSpec(spec.selection) || {
+        lx: 0, ly: 0, hx: COLNO - 1, hy: ROWNO - 1, has: () => true,
+    };
+
     let changed = 0;
-    for (let x = Math.max(1, x1); x <= x2; x++) {
-        for (let y = Math.max(0, y1); y <= y2; y++) {
+    for (let x = Math.max(1, bounds.lx); x <= Math.min(COLNO - 1, bounds.hx); x++) {
+        for (let y = Math.max(0, bounds.ly); y <= Math.min(ROWNO - 1, bounds.hy); y++) {
+            if (!bounds.has(x, y)) continue;
             const loc = game.level.at(x, y);
-            const matches = loc && (fromTyp === MATCH_WALL ? IS_STWALL(loc.typ) : loc.typ === fromTyp);
+            const matches = fragment
+                ? mapFragmentMatches(fragment, x, y)
+                : loc && (fromTyp === MATCH_WALL ? IS_STWALL(loc.typ) : loc.typ === fromTyp);
             if (matches && rn2(100) < chance && setSpecialTerrainLit(x, y, toTyp, lit)) changed++;
         }
     }
     return changed;
+}
+
+function replace_special_terrain(xstart, ystart, width, height, fromTyp, toTyp, chance = 100, lit = SET_LIT_NOCHANGE) {
+    if (typeof xstart === 'object' && xstart) {
+        return replaceDesTerrain(xstart);
+    }
+    return replaceDesTerrain({
+        x1: xstart,
+        y1: ystart,
+        x2: xstart + width - 1,
+        y2: ystart + height - 1,
+        fromTyp,
+        toTyp,
+        chance,
+        lit,
+    });
 }
 
 function sokobanDryLocation(rows, avoidBoulders = true) {
@@ -19449,6 +19624,7 @@ export const __mklevTestHooks = {
     mkmap_run_passes,
     mkmap_finish,
     replace_special_terrain,
+    replaceDesTerrain,
     splevMinesLevelInit,
     themeroomBuriedZombieSpecies,
     themeroom_buried_zombies,

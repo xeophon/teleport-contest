@@ -468,6 +468,10 @@ Current validation snapshot:
   regions, `MATCH_WALL`, optional lit state, random lit state, lava auto-lighting,
   and matching-cell-only chance rolls while preserving the existing hand-coded
   special-level width/height call sites.
+- The terrain replacement descriptor helper now parses C special-level
+  mapchars, accepts `fromterrain`/`toterrain`, simple selection masks, and
+  centered `mapfragment` matching with `x` transparency, `w` wall matching,
+  live-map scans, and C-shaped mapfragment validation.
 - The Brown Mold/post-heal route cleanup removed the last public-trace state
   machines named `_brown_mold*`, `_post_heal*`, and `POST_HEAL*` from runtime
   JS. Level teleporting, Quest-goal arrival, fountain quaffing, punishment
