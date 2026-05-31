@@ -5,7 +5,10 @@ import { GameMap } from '../js/game.js';
 import { resetGame } from '../js/gstate.js';
 import { __mklevTestHooks as mklevHooks } from '../js/mklev.js';
 import { processCorpseTimers } from '../js/cmd.js';
-import { COLNO, ROWNO, STONE, ROOM, ROOMOFFSET, TREE, ICE, ICED_POOL, ICED_MOAT } from '../js/const.js';
+import {
+    COLNO, ROWNO, STONE, ROOM, ROOMOFFSET, TREE, ICE, ICED_POOL, ICED_MOAT,
+    VWALL, HWALL, LAVAPOOL, MATCH_WALL,
+} from '../js/const.js';
 import { initRng } from '../js/rng.js';
 
 const CORPSE = 471;
@@ -144,6 +147,41 @@ test('mkmap finish matches C tree lighting and ice pool metadata', () => {
     poolIce.level.at(11, 10).typ = ICE;
     mklevHooks.mkmap_finish(ROOM, ICE, false, false, false, true);
     assert.equal(poolIce.level.at(11, 10).icedpool, ICED_POOL);
+});
+
+test('replace terrain supports C region bounds wall matching and lit updates', () => {
+    const g = installMkmapGame();
+    g.level.at(10, 10).typ = VWALL;
+    g.level.at(11, 10).typ = HWALL;
+    g.level.at(12, 10).typ = ROOM;
+
+    const changed = mklevHooks.replace_special_terrain({
+        x1: 10, y1: 10, x2: 12, y2: 10,
+        fromTyp: MATCH_WALL, toTyp: ROOM, chance: 100, lit: 1,
+    });
+
+    assert.equal(changed, 2);
+    assert.equal(g.level.at(10, 10).typ, ROOM);
+    assert.equal(g.level.at(11, 10).typ, ROOM);
+    assert.equal(g.level.at(12, 10).typ, ROOM);
+    assert.equal(g.level.at(10, 10).lit, true);
+    assert.equal(g.level.at(11, 10).lit, true);
+});
+
+test('replace terrain preserves old width-height signature and C lava lighting', () => {
+    const g = installMkmapGame();
+    g.level.at(3, 4).typ = STONE;
+    g.level.at(4, 4).typ = STONE;
+    g.level.at(5, 4).typ = STONE;
+
+    const changed = mklevHooks.replace_special_terrain(3, 4, 2, 1, STONE, LAVAPOOL, 100, 0);
+
+    assert.equal(changed, 2);
+    assert.equal(g.level.at(3, 4).typ, LAVAPOOL);
+    assert.equal(g.level.at(4, 4).typ, LAVAPOOL);
+    assert.equal(g.level.at(5, 4).typ, STONE);
+    assert.equal(g.level.at(3, 4).lit, true);
+    assert.equal(g.level.at(4, 4).lit, true);
 });
 
 test('themed buried zombie corpses use buriedobjlist with explicit zombify timers', () => {

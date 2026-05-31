@@ -27,7 +27,7 @@ import { TRIBUTE_NOVEL_TITLES } from './tribute.js';
 import { clearBuriedOrganicRotTimer, clearCorpseTimeout, freezeObjectInIcebox, objectIceEffect, restoreBuriedBallIfNeeded, startCorpseTimeout } from './ice.js';
 import { applySlimeMoldFruitFields } from './fruit.js';
 import {
-    COLNO, ROWNO, STONE, ROOM, CORR, DOOR, STAIRS, LADDER, AIR,
+    COLNO, ROWNO, MAX_TYPE, STONE, ROOM, CORR, DOOR, STAIRS, LADDER, AIR,
     HWALL, VWALL, TLCORNER, TRCORNER, BLCORNER, BRCORNER,
     CROSSWALL, TUWALL, TDWALL, TLWALL, TRWALL,
     D_NODOOR, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_TRAPPED,
@@ -35,11 +35,11 @@ import {
     COCKNEST, ANTHOLE, VAULT, TEMPLE, THEMEROOM, ROOMOFFSET, MAXNROFROOMS, SHARED, SHARED_PLUS, SHOPBASE,
     SDOOR, SCORR, IRONBARS, FOUNTAIN, SINK, THRONE, ALTAR, GRAVE,
     DIR_N, DIR_S, DIR_E, DIR_W, DIR_180,
-    IS_WALL, IS_STWALL, IS_DOOR, IS_ROOM, IS_OBSTRUCTED, IS_FURNITURE, IS_POOL,
+    IS_WALL, IS_STWALL, IS_DOOR, IS_ROOM, IS_OBSTRUCTED, IS_FURNITURE, IS_POOL, IS_LAVA,
     ACCESSIBLE, IN_SIGHT,
     SPACE_POS, ZAP_POS, isok, W_NORTH, W_SOUTH, W_EAST, W_WEST, W_NONDIGGABLE, W_NONPASSWALL, FILL_NORMAL,
     ICE, MOAT, POOL, WATER, LAVAPOOL, LAVAWALL, DBWALL, DRAWBRIDGE_UP, TREE, CLOUD,
-    ICED_POOL, ICED_MOAT,
+    ICED_POOL, ICED_MOAT, MATCH_WALL, SET_LIT_RANDOM, SET_LIT_NOCHANGE,
     A_NONE, A_LAWFUL, A_NEUTRAL, A_CHAOTIC, AM_SHRINE, AM_SANCTUM, Align2amask, Amask2align,
     FOODSHOP, RINGSHOP, WANDSHOP, TOOLSHOP, BOOKSHOP, FODDERSHOP, CANDLESHOP,
     NO_MINVENT, MM_NOGRP, MM_ANGRY, MM_NONAME, MM_NOCOUNTBIRTH, MM_NOMSG, MM_ADJACENTOK, MM_NOTAIL, MM_NOWAIT,
@@ -17532,13 +17532,46 @@ export function enextoMonsterSpot(x, y, ptr = {}) {
     return all.slice(near.length).find(candidate => makemon_goodpos(ptr, candidate.x, candidate.y)) || null;
 }
 
-function replace_special_terrain(xstart, ystart, width, height, fromTyp, toTyp, chance = 100) {
-    for (let x = Math.max(1, xstart); x < xstart + width; x++) {
-        for (let y = ystart; y < ystart + height; y++) {
+function setSpecialTerrainLit(x, y, typ, lit = SET_LIT_NOCHANGE) {
+    const loc = game.level.at(x, y);
+    if (!loc || typ < STONE || typ >= MAX_TYPE) return false;
+    loc.typ = typ;
+    if (lit !== SET_LIT_NOCHANGE) {
+        if (IS_LAVA(typ)) loc.lit = true;
+        else if (lit === SET_LIT_RANDOM) loc.lit = !!rn2(2);
+        else loc.lit = !!lit;
+    } else if (IS_LAVA(typ)) {
+        loc.lit = true;
+    }
+    return true;
+}
+
+function replace_special_terrain(xstart, ystart, width, height, fromTyp, toTyp, chance = 100, lit = SET_LIT_NOCHANGE) {
+    let x1 = xstart;
+    let y1 = ystart;
+    let x2 = xstart + width - 1;
+    let y2 = ystart + height - 1;
+    if (typeof xstart === 'object' && xstart) {
+        const spec = xstart;
+        x1 = spec.x1;
+        y1 = spec.y1;
+        x2 = spec.x2;
+        y2 = spec.y2;
+        fromTyp = spec.fromTyp;
+        toTyp = spec.toTyp;
+        chance = spec.chance ?? 100;
+        lit = spec.lit ?? SET_LIT_NOCHANGE;
+    }
+    if (toTyp == null || toTyp >= MAX_TYPE) return 0;
+    let changed = 0;
+    for (let x = Math.max(1, x1); x <= x2; x++) {
+        for (let y = Math.max(0, y1); y <= y2; y++) {
             const loc = game.level.at(x, y);
-            if (loc?.typ === fromTyp && rn2(100) < chance) loc.typ = toTyp;
+            const matches = loc && (fromTyp === MATCH_WALL ? IS_STWALL(loc.typ) : loc.typ === fromTyp);
+            if (matches && rn2(100) < chance && setSpecialTerrainLit(x, y, toTyp, lit)) changed++;
         }
     }
+    return changed;
 }
 
 function sokobanDryLocation(rows, avoidBoulders = true) {
@@ -19415,6 +19448,7 @@ export const __mklevTestHooks = {
     mkmap_init,
     mkmap_run_passes,
     mkmap_finish,
+    replace_special_terrain,
     splevMinesLevelInit,
     themeroomBuriedZombieSpecies,
     themeroom_buried_zombies,
