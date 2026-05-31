@@ -25237,13 +25237,17 @@ function heroInsideGasCloud() {
 }
 
 const PROPER_NAME_MS_ORC_MONSTER_NAMES = new Set(['yeenoghu', 'orcus']);
+const GENERATED_PROPER_NAME_MONSTER_NAMES = new Set([
+    ...PROPER_NAME_MS_ORC_MONSTER_NAMES, 'juiblex', 'demogorgon',
+]);
 
 function fireScrollMonsterName(mon) {
     if (mon?.givenName) return mon.givenName;
     if (mon?.isshk && mon.shknam) return mon.shknam;
     const baseName = mon?.data?.name || mon?.name || 'monster';
+    const baseNameLower = String(baseName).toLowerCase();
     const properName = mon?.properName || mon?.pname || mon?.data?.properName || mon?.data?.pname
-        || PROPER_NAME_MS_ORC_MONSTER_NAMES.has(String(baseName).toLowerCase());
+        || GENERATED_PROPER_NAME_MONSTER_NAMES.has(baseNameLower);
     return properName ? String(baseName) : `The ${baseName}`;
 }
 
@@ -35792,6 +35796,29 @@ const TIPHAT_BOAST_MONSTER_NAMES = new Set([
     'giant', 'stone giant', 'hill giant', 'fire giant', 'frost giant', 'storm giant',
 ]);
 
+const TIPHAT_GENERATED_SOUND_BY_MONSTER_NAME = new Map([
+    ['killer bee', 'buzz'], ['queen bee', 'buzz'], ['grid bug', 'buzz'], ['xan', 'buzz'],
+    ['jaguar', 'growl'], ['lynx', 'growl'], ['panther', 'growl'], ['tiger', 'growl'],
+    ['displacer beast', 'growl'], ['bugbear', 'growl'], ['monkey', 'growl'], ['ape', 'growl'],
+    ['yeti', 'growl'], ['carnivorous ape', 'growl'], ['sasquatch', 'growl'],
+    ['disenchanter', 'growl'], ['pit fiend', 'growl'], ['demogorgon', 'growl'],
+    ['gargoyle', 'grunt'], ['winged gargoyle', 'grunt'], ['ettin', 'grunt'],
+    ['ogre', 'grunt'], ['ogre lord', 'grunt'], ['ogre lady', 'grunt'], ['ogre leader', 'grunt'],
+    ['ogre king', 'grunt'], ['ogre queen', 'grunt'], ['ogre tyrant', 'grunt'],
+    ['troll', 'grunt'], ['ice troll', 'grunt'], ['rock troll', 'grunt'],
+    ['water troll', 'grunt'], ['olog-hai', 'grunt'],
+    ['xorn', 'roar'], ['owlbear', 'roar'],
+    ['wumpus', 'burble'], ['jabberwock', 'burble'],
+    ['titanothere', 'bellow'], ['baluchitherium', 'bellow'], ['crocodile', 'bellow'],
+    ['baby crocodile', 'chirp'], ['shade', 'wail'], ['juiblex', 'gurgle'],
+]);
+
+function tipHatGeneratedMonsterSound(name) {
+    if (/^(?:baby )?(?:gray|gold|silver|red|white|orange|black|blue|green|yellow) dragon$/.test(name))
+        return 'roar';
+    return TIPHAT_GENERATED_SOUND_BY_MONSTER_NAME.get(name) || '';
+}
+
 const TIPHAT_CUSS_RANDOM_INSULTS = [
     'antic', 'blackguard', 'caitiff', 'chucklehead', 'coistrel', 'craven',
     'cretin', 'cur', 'dastard', 'demon fodder', 'dimwit', 'dolt', 'fool',
@@ -36483,6 +36510,10 @@ function tipHatMonsterSound(mon) {
     if (tipHatMonsterIsPriestType(mon, name)) return 'priest';
     if (tipHatMonsterHasOrcSound(mon, name)) return 'orc';
     if (/^(gremlin|leprechaun)$/.test(name)) return 'laugh';
+    {
+        const generatedSound = tipHatGeneratedMonsterSound(name);
+        if (generatedSound) return generatedSound;
+    }
     if (name === 'skeleton') return 'bones';
     if (/^(death|pestilence|famine)$/.test(name)) return 'rider';
     if (/\bzombie$/.test(name) || (mlet === 'zombie' && name !== 'ghoul')) return 'groan';

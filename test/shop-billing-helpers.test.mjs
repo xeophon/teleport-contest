@@ -5714,6 +5714,34 @@ test('chat with same-race generated-sound magic MS_ORC monsters uses spellcraft'
     }
 });
 
+test('chat with visible generated nonverbal sound monsters uses C msound rows', async () => {
+    const cases = [
+        ['gargoyle', { mlevel: 6, mlet: 'g', humanoid: true }, 'The gargoyle grunts.'],
+        ['jaguar', { mlevel: 4, mlet: 'feline' }, 'The jaguar growls!'],
+        ['owlbear', { mlevel: 5, mlet: 'Y', humanoid: true }, 'The owlbear roars!'],
+        ['killer bee', { mlevel: 1, mlet: 'a', nohands: true }, 'The killer bee buzzes angrily.'],
+        ['crocodile', { mlevel: 6, mlet: 'lizard', nohands: true }, 'The crocodile bellows!'],
+        ['baby crocodile', { mlevel: 3, mlet: 'lizard', nohands: true }, 'The baby crocodile chirps.'],
+        ['wumpus', { mlevel: 8, mlet: 'quadruped', nohands: true }, 'The wumpus burbles.'],
+        ['Juiblex', { mlevel: 50, mlet: '&', demon: true, unique: true }, 'Juiblex gurgles.'],
+    ];
+
+    for (const [name, data, expected] of cases) {
+        const result = await chatAdjacentMonster({
+            name,
+            peaceful: false,
+            rngLog: true,
+            data: { name, ...data },
+        });
+
+        assert.equal(result.message, expected);
+        assert.equal(result.target.mstrategy, 0);
+        assert.equal(game.context.move, 1);
+        assert.doesNotMatch(result.message, /doesn't respond|Nothing happens|waves|threatens|mews|neighs/);
+        assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
+    }
+});
+
 test('chat with invisible tame eating pet maps it without consuming time', async () => {
     const result = await chatAdjacentMonster({
         visible: false,
