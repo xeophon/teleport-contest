@@ -5828,6 +5828,88 @@ test('chat with visible generated special sound monsters uses C msound rows', as
     }
 });
 
+test('chat with visible generated humanoid sound monsters uses C msound rows', async () => {
+    const cases = [
+        {
+            name: 'quantum mechanic',
+            peaceful: false,
+            data: { mlevel: 7, mlet: 'Q' },
+            expected: 'The quantum mechanic threatens you.',
+            reject: /discusses|doesn't respond|waves|Nothing happens/,
+        },
+        {
+            name: 'hobbit',
+            data: { mlevel: 1, mlet: 'h' },
+            expected: 'The hobbit asks you about the One Ring.',
+            reject: /doesn't respond|discusses dungeon exploration|waves|Nothing happens/,
+        },
+        {
+            name: 'dwarf leader',
+            data: { mlevel: 4, mlet: 'h', dwarf: true },
+            expected: 'The dwarf leader talks about mining.',
+            reject: /doesn't respond|discusses dungeon exploration|waves|Nothing happens/,
+        },
+        {
+            name: 'forest centaur',
+            data: { mlevel: 5, mlet: 'C' },
+            expected: 'The forest centaur discusses hunting.',
+            reject: /neighs|doesn't respond|discusses dungeon exploration|waves|Nothing happens/,
+        },
+        {
+            name: 'Green-elf',
+            data: { mlevel: 5, mlet: '@' },
+            expected: 'The Green-elf curses orcs.',
+            reject: /doesn't respond|discusses dungeon exploration|waves|Nothing happens/,
+        },
+        {
+            name: 'genetic engineer',
+            data: { mlevel: 12, mlet: 'Q' },
+            expected: 'The genetic engineer discusses dungeon exploration.',
+            reject: /doesn't respond|threatens|waves|Nothing happens/,
+        },
+        {
+            name: 'genetic engineer',
+            seed: 4,
+            extra: { mconf: 1 },
+            data: { mlevel: 12, mlet: 'Q' },
+            expected: '"What?"',
+            rng: ['rn2(3)=2', 'rn2(2)=1'],
+            reject: /Huh|Eh|doesn't respond|discusses dungeon exploration|waves|Nothing happens/,
+        },
+        {
+            name: 'dwarf king',
+            data: { mlevel: 6, mlet: 'h', dwarf: true },
+            expected: 'The dwarf king talks about mining.',
+            reject: /doesn't respond|discusses dungeon exploration|waves|Nothing happens/,
+        },
+        {
+            name: 'Elvenking',
+            data: { mlevel: 9, mlet: '@' },
+            expected: 'The Elvenking curses orcs.',
+            reject: /doesn't respond|discusses dungeon exploration|waves|Nothing happens/,
+        },
+    ];
+
+    for (const {
+        name, peaceful = true, seed = null, extra = {}, data, expected, rng = [], reject,
+    } of cases) {
+        const result = await chatAdjacentMonster({
+            name,
+            peaceful,
+            seed,
+            rngLog: true,
+            extra,
+            data: { name, ...data },
+        });
+
+        assert.equal(result.message, expected);
+        assert.equal(result.target.mstrategy, 0);
+        assert.equal(game.context.move, 1);
+        assert.doesNotMatch(result.message, reject);
+        assert.deepEqual(getRngLog(), rng);
+    }
+});
+
 test('chat with invisible tame eating pet maps it without consuming time', async () => {
     const result = await chatAdjacentMonster({
         visible: false,

@@ -35820,6 +35820,15 @@ const TIPHAT_GENERATED_SOUND_BY_MONSTER_NAME = new Map([
     ['water demon', 'djinni'], ['prisoner', 'djinni'], ['djinni', 'djinni'],
     ['titan', 'spell'], ['barrow wight', 'spell'], ['nazgul', 'spell'],
     ['nalfeshnee', 'spell'],
+    ['hobbit', 'humanoid'], ['dwarf', 'humanoid'],
+    ['dwarf lord', 'humanoid'], ['dwarf lady', 'humanoid'], ['dwarf leader', 'humanoid'],
+    ['dwarf king', 'humanoid'], ['dwarf queen', 'humanoid'], ['dwarf ruler', 'humanoid'],
+    ['plains centaur', 'humanoid'], ['forest centaur', 'humanoid'],
+    ['mountain centaur', 'humanoid'],
+    ['quantum mechanic', 'humanoid'], ['genetic engineer', 'humanoid'],
+    ['woodland-elf', 'humanoid'], ['green-elf', 'humanoid'], ['grey-elf', 'humanoid'],
+    ['elf-lord', 'humanoid'], ['elf-lady', 'humanoid'], ['elf-noble', 'humanoid'],
+    ['elvenking', 'humanoid'], ['elvenqueen', 'humanoid'], ['elven monarch', 'humanoid'],
 ]);
 
 function tipHatGeneratedMonsterSound(name) {
