@@ -24904,6 +24904,22 @@ function shopkeeperDisplayName(shkp) {
     return shkp?.shknam || shkp?.shopkeeperName || 'the shopkeeper';
 }
 
+function shopkeeperHello(shkp) {
+    const role = game.urole?.name?.m || game._startup_role || '';
+    if (role === 'Knight') return 'Salutations';
+    if (role === 'Samurai') {
+        const data = shkp?.data || shkp?.mdata || {};
+        const name = String(data.name || shkp?.name || '').toLowerCase();
+        return (data.shopkeeper || shkp?.shopkeeper || name === 'shopkeeper'
+            || (shkp?.isshk && !name))
+            ? 'Irasshaimase'
+            : 'Konnichi wa';
+    }
+    if (role === 'Tourist') return 'Aloha';
+    if (role === 'Valkyrie') return 'Velkommen';
+    return 'Hello';
+}
+
 const SHOP_BILL_LIMIT = 200;
 
 function shopBillEntryCount(shkp) {
@@ -34165,7 +34181,6 @@ function tipHatMonsterIsShopkeeperType(mon, monName = '') {
 function tipHatShopkeeperHasEarlierSellState(mon) {
     if (!mon) return false;
     if (mon.hostile || mon.mpeaceful === 0 || mon.mpeaceful === false || mon.angry) return true;
-    if (mon.following) return true;
     return false;
 }
 
@@ -34173,6 +34188,17 @@ function tipHatResidentShopkeeperSellNoise(mon) {
     if (tipHatShopkeeperHasEarlierSellState(mon)) return { handled: false, message: '' };
     const name = shopkeeperDisplayName(mon);
     const canSpeak = shopkeeperCanSpeakToHero(mon);
+    if (mon?.following) {
+        const player = String(game.plname || 'Hero');
+        const customer = String(mon?.customer || '');
+        if (customer !== player) {
+            mon.following = 0;
+            if (!canSpeak) return { handled: true, message: '' };
+            return { handled: true, message: `"${shopkeeperHello(mon)} ${player}!  I was looking for ${customer}."` };
+        }
+        if (!canSpeak) return { handled: true, message: `${name} taps you on the arm.` };
+        return { handled: true, message: `"${shopkeeperHello(mon)} ${player}!  Didn't you forget to pay?"` };
+    }
     const debit = Math.trunc(Number(mon?.debit || 0));
     if (shopBillEntryCount(mon) > 0) {
         const total = shopBillTotal(mon) + debit;
@@ -42641,16 +42667,7 @@ async function moveHero(dx, dy) {
         const shkp = shopRoom.resident || (game.level?.monsters || [])
             .find(mon => mon.isshk && mon.shoproom === newRoomno);
         if (shkp?.isshk && shkp.mpeaceful && !shkp.following) {
-            const role = game.urole?.name?.m || game._startup_role || '';
-            const hello = role === 'Knight'
-                ? 'Salutations'
-                : role === 'Samurai'
-                    ? 'Irasshaimase'
-                    : role === 'Tourist'
-                        ? 'Aloha'
-                        : role === 'Valkyrie'
-                            ? 'Velkommen'
-                            : 'Hello';
+            const hello = shopkeeperHello(shkp);
             const shopIndex = (shkp.shoptype || shopRoom.rtype) - SHOPBASE;
             const shopName = SHOP_TYPES[shopIndex]?.name || 'shop';
             const shopkeeperName = shkp.shknam || shkp.shopkeeperName || shkp.givenName || 'shopkeeper';

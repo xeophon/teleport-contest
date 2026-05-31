@@ -4679,6 +4679,160 @@ test('worn helmet tip makes nonresident invisible shopkeeper ask about untended 
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
 });
 
+test('worn helmet tip makes following resident shopkeeper demand payment before bill and later chatter without RNG', async () => {
+    const result = await tipInvisibleExplicitSound({
+        name: 'shopkeeper',
+        sound: 'MS_SELL',
+        peaceful: true,
+        rngLog: true,
+        role: 'Samurai',
+        data: { mlevel: 12, mlet: '@', humanoid: true, shopkeeper: true },
+        extra: {
+            isshk: true,
+            shknam: 'Asidonhopo',
+            following: 1,
+            customer: 'Hero',
+            bill: [{ bo_id: 'follow-bill', price: 20, bquan: 2, totalPrice: 40 }],
+            billct: 1,
+            debit: 7,
+            credit: 77,
+            robbed: 250,
+            surcharge: 1,
+            minvent: [goldPieces(3063572, 49)],
+        },
+    });
+
+    assert.equal(result.message,
+        'You briefly doff your helm.  "Irasshaimase Hero!  Didn\'t you forget to pay?"');
+    assert.doesNotMatch(result.message,
+        /bill comes to|owe him|credit|recent robbery|watching you carefully|business is bad|talks about shoplifters|doesn't respond|Nothing happens|waves|gestures/);
+    assert.equal(result.target.isshk, true);
+    assert.equal(result.target.following, 1);
+    assert.equal(result.target.billct, 1);
+    assert.equal(result.target.debit, 7);
+    assert.equal(result.target.credit, 77);
+    assert.equal(result.target.robbed, 250);
+    assert.equal(result.target.surcharge, 1);
+    assert.equal(result.target.mstrategy, 0);
+    assert.equal(result.targetLoc.map_invisible, true);
+    assert.equal(shop.shopkeeperCash(result.target), 49);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
+});
+
+test('worn helmet tip makes following resident shopkeeper look for prior customer before bill and later chatter without RNG', async () => {
+    const result = await tipInvisibleExplicitSound({
+        name: 'shopkeeper',
+        sound: 'MS_SELL',
+        peaceful: true,
+        rngLog: true,
+        data: { mlevel: 12, mlet: '@', humanoid: true, shopkeeper: true },
+        extra: {
+            isshk: true,
+            shknam: 'Asidonhopo',
+            following: 1,
+            customer: 'PreviousCustomer',
+            bill: [{ bo_id: 'prior-customer-bill', price: 20, bquan: 2, totalPrice: 40 }],
+            billct: 1,
+            debit: 7,
+            credit: 77,
+            robbed: 250,
+            surcharge: 1,
+            minvent: [goldPieces(3063573, 4001)],
+        },
+    });
+
+    assert.equal(result.message,
+        'You briefly doff your helm.  "Hello Hero!  I was looking for PreviousCustomer."');
+    assert.doesNotMatch(result.message,
+        /bill comes to|owe him|credit|recent robbery|watching you carefully|business is good|talks about shoplifters|doesn't respond|Nothing happens|waves|gestures/);
+    assert.equal(result.target.isshk, true);
+    assert.equal(result.target.following, 0);
+    assert.equal(result.target.billct, 1);
+    assert.equal(result.target.debit, 7);
+    assert.equal(result.target.credit, 77);
+    assert.equal(result.target.robbed, 250);
+    assert.equal(result.target.surcharge, 1);
+    assert.equal(result.target.mstrategy, 0);
+    assert.equal(result.targetLoc.map_invisible, true);
+    assert.equal(shop.shopkeeperCash(result.target), 4001);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
+});
+
+test('worn helmet tip makes mute following resident shopkeeper tap before bill and later chatter without RNG', async () => {
+    const result = await tipInvisibleExplicitSound({
+        name: 'shopkeeper',
+        sound: 'MS_SELL',
+        peaceful: true,
+        rngLog: true,
+        data: { mlevel: 12, mlet: '@', humanoid: true, shopkeeper: true },
+        extra: {
+            isshk: true,
+            shknam: 'Izchak',
+            mute: true,
+            following: 1,
+            customer: 'Hero',
+            bill: [{ bo_id: 'mute-follow-bill', price: 1, bquan: 1, totalPrice: 1 }],
+            billct: 1,
+            debit: 7,
+            credit: 77,
+            robbed: 250,
+            surcharge: 1,
+            minvent: [goldPieces(3063574, 49)],
+        },
+    });
+
+    assert.equal(result.message,
+        'You briefly doff your helm.  Izchak taps you on the arm.');
+    assert.doesNotMatch(result.message,
+        /says|reminds you|bill comes to|owe him|credit|recent robbery|watching you carefully|business is bad|talks about shoplifters|doesn't respond|Nothing happens|waves|gestures/);
+    assert.equal(result.target.isshk, true);
+    assert.equal(result.target.following, 1);
+    assert.equal(result.target.billct, 1);
+    assert.equal(result.target.debit, 7);
+    assert.equal(result.target.credit, 77);
+    assert.equal(result.target.mute, true);
+    assert.equal(result.target.mstrategy, 0);
+    assert.equal(result.targetLoc.map_invisible, true);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
+});
+
+test('worn helmet tip makes mute following resident shopkeeper silently stop following prior customer without RNG', async () => {
+    const result = await tipInvisibleExplicitSound({
+        name: 'shopkeeper',
+        sound: 'MS_SELL',
+        peaceful: true,
+        rngLog: true,
+        data: { mlevel: 12, mlet: '@', humanoid: true, shopkeeper: true },
+        extra: {
+            isshk: true,
+            shknam: 'Izchak',
+            mute: true,
+            following: 1,
+            customer: 'PreviousCustomer',
+            bill: [{ bo_id: 'mute-prior-customer-bill', price: 1, bquan: 1, totalPrice: 1 }],
+            billct: 1,
+            debit: 7,
+            credit: 77,
+            robbed: 250,
+            surcharge: 1,
+            minvent: [goldPieces(3063575, 4001)],
+        },
+    });
+
+    assert.equal(result.message, 'You briefly doff your helm.');
+    assert.doesNotMatch(result.message,
+        /says|indicates|taps you|bill comes to|owe him|credit|recent robbery|watching you carefully|business is good|talks about shoplifters|doesn't respond|Nothing happens|waves|gestures/);
+    assert.equal(result.target.isshk, true);
+    assert.equal(result.target.following, 0);
+    assert.equal(result.target.billct, 1);
+    assert.equal(result.target.debit, 7);
+    assert.equal(result.target.credit, 77);
+    assert.equal(result.target.mute, true);
+    assert.equal(result.target.mstrategy, 0);
+    assert.equal(result.targetLoc.map_invisible, true);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
+});
+
 test('worn helmet tip makes billed invisible resident shopkeeper state total before debit and later chatter without RNG', async () => {
     const result = await tipInvisibleExplicitSound({
         name: 'shopkeeper',
