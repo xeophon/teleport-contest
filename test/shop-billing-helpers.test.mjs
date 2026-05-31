@@ -32322,6 +32322,7 @@ test('hero-thrown cream pie direct hit extends temporary monster blindness', asy
     });
     game.inventory = [pie];
     game.level.monsters = [goblin];
+    markSquareVisible(7, 5);
     enableRngLog({ reset: true });
 
     await rhack('t');
@@ -32435,6 +32436,36 @@ test('hero-thrown unpaid cream pie stack direct hit bills the splattered unit', 
     assert.equal(shkp.billct, 1);
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(-3), [
         'rnd(20)', 'rnd(25)', 'rn2(25)',
+    ]);
+});
+
+test('hero-thrown cream pie miss can wake and anger target through tmiss', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    game.u.acurr.a[A_DEX] = 1;
+    const pie = creamPie(876078, 'p');
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, {
+        msleeping: 1,
+        mpeaceful: 1,
+        meating: 4,
+        mstrategy: STRAT_WAITFORU,
+    });
+    game.inventory = [pie];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('p');
+    await rhack('l');
+
+    assert.match(game._pending_message, /The cream pie misses the goblin\./);
+    assert.doesNotMatch(game._pending_message, /splashes over|Splat|top of your head/);
+    assert.equal(goblin.msleeping, 0);
+    assert.equal(goblin.meating, 0);
+    assert.equal(goblin.mstrategy, 0);
+    assert.equal(goblin.mpeaceful, 0);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 3), [
+        'rnd(20)', 'rnd(25)', 'rn2(3)',
     ]);
 });
 
@@ -32981,6 +33012,108 @@ test('wielded potion stack bash consumes one and keeps the stack wielded', async
     assert.equal(potion.quan, 1);
     assert.equal(potion.wielded, true);
     assert.equal(potion.line, 'p - a potion of confusion (wielded)');
+    assert.equal(game.u.uconduct?.weaphit || 0, 0);
+});
+
+test('wielded egg bash routes through egg hmon path', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.u.acurr.a[A_STR] = 10;
+    game.u.acurr.a[A_DEX] = 25;
+    const eggItem = { ...egg(876080, 'e'), otyp: EGG, wielded: true };
+    eggItem.line = 'e - an egg (wielded)';
+    const goblin = ordinaryThrowTarget('goblin', 6, 5, { mhp: 10, mhpmax: 10, mpeaceful: false });
+    game.inventory = [eggItem];
+    game.level.monsters = [goblin];
+    markSquareVisible(6, 5);
+
+    await rhack('l');
+
+    assert.match(game._pending_message, /You hit the goblin with an egg\./);
+    assert.match(game._pending_message, /Splat!/);
+    assert.doesNotMatch(game._pending_message, /crashes|evaporates|weapon in|You hit the goblin!/);
+    assert.equal(goblin.mhp, 9);
+    assert.equal(goblin.msleeping, 0);
+    assert.equal(goblin.mpeaceful, false);
+    assert.equal(game.inventory.includes(eggItem), false);
+    assert.equal(game.level.objects.length, 0);
+    assert.equal(game.u.uconduct?.weaphit || 0, 0);
+    assert.equal(game._chronicle_first_weapon_hit || 0, 0);
+});
+
+test('wielded egg stack bash consumes the whole stack as used-up eggs', async () => {
+    const { shkp } = installCommandShopState();
+    Object.assign(shkp, { mx: 20, my: 20, shk: { x: 20, y: 20 } });
+    initRng(2);
+    game.u.acurr.a[A_STR] = 10;
+    game.u.acurr.a[A_DEX] = 25;
+    const eggs = { ...egg(876081, 'e', 2), otyp: EGG, wielded: true };
+    eggs.line = 'e - 2 eggs (wielded)';
+    const goblin = ordinaryThrowTarget('goblin', 6, 5, { mhp: 10, mhpmax: 10, mpeaceful: false });
+    game.inventory = [eggs];
+    game.level.monsters = [shkp, goblin];
+    shop.addObjectToShopBill(shkp, eggs, 18);
+    markSquareVisible(6, 5);
+
+    await rhack('l');
+
+    assert.match(game._pending_message, /You hit the goblin with some eggs\./);
+    assert.match(game._pending_message, /Splat!/);
+    assert.equal(goblin.mhp, 9);
+    assert.equal(game.inventory.includes(eggs), false);
+    const usedEntry = shop.shopBillEntryForObject(shkp, eggs);
+    assert.ok(usedEntry);
+    assert.equal(usedEntry.useup, true);
+    assert.equal(usedEntry.bquan, 2);
+    assert.equal(shop.shopBillEntryTotal(usedEntry), 18);
+    assert.equal((game._usedUpShopBills || []).some(bill => String(bill.bo_id) === String(usedEntry.bo_id)), true);
+    assert.equal(eggs.unpaid, false);
+    assert.equal(shkp.debit || 0, 0);
+    assert.equal(game.u.uconduct?.weaphit || 0, 0);
+});
+
+test('wielded live egg bash against cockatrice transforms in inventory', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.u.acurr.a[A_STR] = 10;
+    game.u.acurr.a[A_DEX] = 25;
+    const eggItem = {
+        ...egg(876082, 'e'),
+        otyp: EGG,
+        wielded: true,
+        corpsenm: { name: 'newt' },
+        eggHatchTurn: (game.moves || 1) + 50,
+        _egg_hatch_seq: 3,
+        _egg_hatch_consumed: true,
+        age: game.moves || 1,
+    };
+    eggItem.line = 'e - an egg (wielded)';
+    const cockatrice = ordinaryThrowTarget('cockatrice', 6, 5, {
+        data: { name: 'cockatrice', mlevel: 5, touchPetrifies: true },
+        mhp: 5,
+        mhpmax: 5,
+        mpeaceful: false,
+    });
+    game.inventory = [eggItem];
+    game.level.monsters = [cockatrice];
+    markSquareVisible(6, 5);
+
+    await rhack('l');
+
+    assert.match(game._pending_message, /You hit the cockatrice with an egg\./);
+    assert.match(game._pending_message, /The egg isn't alive any more\.\.\./);
+    assert.doesNotMatch(game._pending_message, /Splat!|misses|top of your head/);
+    assert.equal(game.inventory[0], eggItem);
+    assert.equal(game.level.objects.length, 0);
+    assert.equal(eggItem.otyp, ROCK);
+    assert.equal(eggItem.kind, 'rock');
+    assert.equal(eggItem.wielded, true);
+    assert.equal(eggItem.line, 'e - a rock (wielded)');
+    assert.equal(eggItem.eggHatchTurn, undefined);
+    assert.equal(eggItem._egg_hatch_seq, undefined);
+    assert.equal(eggItem._egg_hatch_consumed, undefined);
+    assert.equal(eggItem.corpsenm, undefined);
+    assert.equal(cockatrice.mhp, 4);
     assert.equal(game.u.uconduct?.weaphit || 0, 0);
 });
 

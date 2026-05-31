@@ -16762,11 +16762,11 @@ function supportsHeroThrownPotionHit(potion, mon = null) {
         || isSaddlePotionHit(potion, mon, kind);
 }
 
-function wieldedPotionBashObject(potion) {
-    if (!potion || !isPotionObject(potion)) return null;
+function wieldedConsumedBashObject(obj) {
+    if (!obj) return null;
     const bashObject = {
-        ...potion,
-        id: (potion.quan || 1) > 1 ? next_ident() : potion.id,
+        ...obj,
+        id: (obj.quan || 1) > 1 ? next_ident() : obj.id,
         quan: 1,
         letter: undefined,
         line: undefined,
@@ -16775,15 +16775,24 @@ function wieldedPotionBashObject(potion) {
         worn: false,
         quivered: false,
     };
-    if ((potion.quan || 1) > 1) splitCarriedObjectShopBill(potion, bashObject, 1);
+    if ((obj.quan || 1) > 1) splitCarriedObjectShopBill(obj, bashObject, 1);
     return bashObject;
 }
 
-function refreshSurvivingWieldedPotionStack(potion) {
-    if (!potion || !(game.inventory || []).includes(potion) || !potion.wielded) return;
-    const baseName = normalInventoryLine({ ...potion, line: '', wielded: false, alternate: false })
+function wieldedPotionBashObject(potion) {
+    if (!potion || !isPotionObject(potion)) return null;
+    return wieldedConsumedBashObject(potion);
+}
+
+function refreshSurvivingWieldedConsumedStack(obj) {
+    if (!obj || !(game.inventory || []).includes(obj) || !obj.wielded) return;
+    const baseName = normalInventoryLine({ ...obj, line: '', wielded: false, alternate: false })
         .replace(/^[a-zA-Z$] - /, '');
-    potion.line = `${potion.letter || '?'} - ${baseName} (wielded)`;
+    obj.line = `${obj.letter || '?'} - ${baseName} (wielded)`;
+}
+
+function refreshSurvivingWieldedPotionStack(potion) {
+    refreshSurvivingWieldedConsumedStack(potion);
 }
 
 function thrownPotionEffectKind(potion) {
@@ -17912,6 +17921,17 @@ function setHeroObjectHitMonsterAngry(mon) {
     if (mon.mpeaceful && !(mon.mtame || mon.pet)) mon.mpeaceful = 0;
 }
 
+function wakeMonsterFromHeroThrownMiss(mon) {
+    const messages = [];
+    if (rn2(3)) return messages;
+    if (mon.msleeping && monsterCanBeSeenForPotionEffect(mon))
+        messages.push(`${potionHitMonsterName(mon)} wakes up!`);
+    mon.msleeping = 0;
+    mon.meating = 0;
+    setHeroObjectHitMonsterAngry(mon);
+    return messages;
+}
+
 function heroThrownCreamPieHitMonster(pie, mon) {
     const messages = [];
     mon.msleeping = 0;
@@ -18792,6 +18812,27 @@ function placeThrownEggPetrifiedRock(egg, mon) {
     newsym(mon.mx, mon.my);
 }
 
+function transformMeleeEggStackToRocks(egg) {
+    killEggHatchTimer(egg);
+    Object.assign(egg, {
+        otyp: ROCK,
+        cls: 'gem',
+        glyph: '*',
+        kind: 'rock',
+        actualKind: 'rock',
+        singular: 'rock',
+        plural: 'rocks',
+        spe: 0,
+        known: false,
+        dknown: false,
+        bknown: false,
+        color: CLR_GRAY,
+    });
+    delete egg.corpsenm;
+    delete egg.eggKnown;
+    Object.assign(egg, object_display(egg));
+}
+
 function applyThrownEggNominalDamage(mon, messages) {
     if (!mon || mon.dead) return;
     mon.msleeping = 0;
@@ -18880,6 +18921,33 @@ function heroThrownEggHitMonster(egg, mon) {
     if (isTouchPetrifyingEgg(egg)) return heroThrownPetrifyingEggHitMonster(egg, mon);
     if (isPyroliskEgg(egg)) return heroThrownPyroliskEggHitMonster(egg, mon);
     return heroThrownOrdinaryEggHitMonster(egg, mon);
+}
+
+function heroMeleeEggHitMonster(egg, mon) {
+    applyThrownEggLuckPenalty(egg);
+    if (isTouchPetrifyingEgg(egg)) return {
+        messages: heroThrownPetrifyingEggHitMonster(egg, mon),
+        consumed: true,
+    };
+    if (isPyroliskEgg(egg)) return {
+        messages: heroThrownPyroliskEggHitMonster(egg, mon),
+        consumed: true,
+    };
+    const messages = [];
+    const targetName = thrownEggTargetName(mon);
+    const count = Math.max(1, Math.trunc(Number(egg?.quan || 1)));
+    const plural = count === 1 ? '' : 's';
+    messages.push(`You hit the ${targetName} with ${thrownEggHitArticle(egg)} egg${plural}.`);
+    if (monsterTouchPetrifies(mon) && !isStaleEggItem(egg)) {
+        messages.push(`The egg${plural} ${count === 1 ? "isn't" : "aren't"} alive any more...`);
+        transformMeleeEggStackToRocks(egg);
+        applyThrownEggNominalDamage(mon, messages);
+        return { messages, consumed: false };
+    }
+    messages.push('Splat!');
+    markObjectShopBillUsedUp(egg);
+    applyThrownEggNominalDamage(mon, messages);
+    return { messages, consumed: true };
 }
 
 function heroThrownOrdinaryEggHitMonster(egg, mon) {
@@ -43792,6 +43860,16 @@ async function moveHero(dx, dy) {
                 }
                 continue;
             }
+            if (attackWeapon && isEggItem(attackWeapon)) {
+                const eggHit = heroMeleeEggHitMonster(attackWeapon, mon);
+                const eggMessages = eggHit.messages || [];
+                if (eggHit.consumed) removeInventoryItem(attackWeapon, attackWeapon.quan || 1);
+                else refreshSurvivingWieldedConsumedStack(attackWeapon);
+                killed = !!(mon.dead || (mon.mhp || 0) <= 0);
+                messages.push(...eggMessages);
+                if (killed) break;
+                continue;
+            }
             if (attackWeapon && !game._chronicle_first_weapon_hit) {
                 game._chronicle_entries ??= [];
                 game._chronicle_entries.push({ turn: game.moves || 1, text: `hit with a wielded weapon (${weaponName || 'weapon'}) for the first time` });
@@ -60063,93 +60141,99 @@ export async function rhack(_cmd) {
             glyph: item.cls === 'food' ? '%' : item.glyph || (item.cls === 'gem' ? '*' : ')'),
             color: item.cls === 'food' ? CLR_ORANGE : item.color || (item.cls === 'gem' ? CLR_GRAY : CLR_CYAN),
         };
-	        const combatObject = item.cls === 'weapon' || item.cls === 'gem' || item.glyph === ')' || item.otyp === GEM_CLASS;
-	        let impactMessage = '';
-	        if (targetMon && (isBlindingVenomObject(item) || isAcidVenomObject(item))) {
-	            rnd(20);
-	            const dex = game.u?.acurr?.a?.[A_DEX] ?? 10;
-	            if (dex > rnd(25)) {
-	                if ((item.quan || 1) > 1) splitCarriedObjectShopBill(item, thrownObject, 1);
-	                const messages = isAcidVenomObject(item)
-	                    ? heroThrownAcidVenomHitMonster(thrownObject, targetMon)
-	                    : heroThrownBlindingVenomHitMonster(thrownObject, targetMon);
-	                removeInventoryItem(item, 1);
-	                newsym(targetMon.mx, targetMon.my);
-	                await setMessage(messages.join('  '));
-	                game._command_mode = null;
-	                game._throw_item_letter = null;
-	                game._resume_time_after_more = 0;
-	                game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
-	                game.context.move = 0;
-	                return;
-	            }
-	            const thrownName = pickupObjectName({ ...item, quan: 1 });
-	            impactMessage = `The ${thrownName} misses the ${targetMon.data?.name || 'creature'}.`;
-	            if (!rn2(3)) targetMon.msleeping = 0;
-	        } else if (targetMon && isCreamPieObject(item)) {
-	            rnd(20);
-	            const dex = game.u?.acurr?.a?.[A_DEX] ?? 10;
-	            if (dex > rnd(25)) {
-	                if ((item.quan || 1) > 1) splitCarriedObjectShopBill(item, thrownObject, 1);
-	                const messages = heroThrownCreamPieHitMonster(thrownObject, targetMon);
-	                removeInventoryItem(item, 1);
-	                newsym(targetMon.mx, targetMon.my);
-	                await setMessage(messages.join('  '));
-	                game._command_mode = null;
-	                game._throw_item_letter = null;
-	                game._resume_time_after_more = 0;
-	                game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
-	                game.context.move = 0;
-	                return;
-	            }
-	            impactMessage = `The cream pie misses the ${targetMon.data?.name || 'creature'}.`;
-	        } else if (targetMon && isEggItem(item)) {
-	            rnd(20);
-	            const dex = game.u?.acurr?.a?.[A_DEX] ?? 10;
-	            if (dex > rnd(25)) {
-	                if ((item.quan || 1) > 1) splitCarriedObjectShopBill(item, thrownObject, 1);
-	                const messages = heroThrownEggHitMonster(thrownObject, targetMon);
-	                removeInventoryItem(item, 1);
-	                newsym(targetMon.mx, targetMon.my);
-	                await setMessage(messages.join('  '), !!messages.more);
-	                game._command_mode = null;
-	                game._throw_item_letter = null;
-	                game._resume_time_after_more = 0;
-	                game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
-	                game.context.move = 0;
-	                return;
-	            }
-	            const thrownName = pickupObjectName({ ...item, quan: 1 });
-	            impactMessage = `The ${thrownName} misses the ${targetMon.data?.name || 'creature'}.`;
-	            if (!rn2(3)) targetMon.msleeping = 0;
-	        } else if (targetMon && supportsHeroThrownPotionHit(item, targetMon)) {
-	            rnd(20);
-	            const dex = game.u?.acurr?.a?.[A_DEX] ?? 10;
-	            if (dex > rnd(25)) {
-	                if ((item.quan || 1) > 1) splitCarriedObjectShopBill(item, thrownObject, 1);
-	                const messages = heroThrownPotionHitMonster(thrownObject, targetMon);
-	                removeInventoryItem(item, 1);
-	                newsym(targetMon.mx, targetMon.my);
-	                const keepPotionCallPrompt = game._command_mode === 'callPotionAfterMore';
-	                await setMessage(messages.join('  '), keepPotionCallPrompt);
-	                if (!keepPotionCallPrompt) game._command_mode = null;
-	                game._throw_item_letter = null;
-	                game._resume_time_after_more = 0;
-	                game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
-	                game.context.move = 0;
-	                return;
-	            }
-	            const thrownName = pickupObjectName({ ...item, quan: 1 });
-	            impactMessage = `The ${thrownName} misses the ${targetMon.data?.name || 'creature'}.`;
-	            if (!rn2(3)) targetMon.msleeping = 0;
-	        } else if (targetMon && !combatObject) {
-	            rnd(20);
-	            const thrownName = pickupObjectName({ ...item, quan: 1 });
-	            const targetName = targetMon.data?.name || 'creature';
-	            impactMessage = `The ${thrownName} misses the ${targetName}.`;
-	            if (!rn2(3)) targetMon.msleeping = 0;
-	        }
-	        const projectileBreakRoll = projectileLandingIsSoft(ox, oy) ? null : rn2(100); // C breaktest: obj_resists() on hard landing.
+        const combatObject = item.cls === 'weapon' || item.cls === 'gem' || item.glyph === ')' || item.otyp === GEM_CLASS;
+        let impactMessage = '';
+        if (targetMon && (isBlindingVenomObject(item) || isAcidVenomObject(item))) {
+            rnd(20);
+            const dex = game.u?.acurr?.a?.[A_DEX] ?? 10;
+            if (dex > rnd(25)) {
+                if ((item.quan || 1) > 1) splitCarriedObjectShopBill(item, thrownObject, 1);
+                const messages = isAcidVenomObject(item)
+                    ? heroThrownAcidVenomHitMonster(thrownObject, targetMon)
+                    : heroThrownBlindingVenomHitMonster(thrownObject, targetMon);
+                removeInventoryItem(item, 1);
+                newsym(targetMon.mx, targetMon.my);
+                await setMessage(messages.join('  '));
+                game._command_mode = null;
+                game._throw_item_letter = null;
+                game._resume_time_after_more = 0;
+                game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
+                game.context.move = 0;
+                return;
+            }
+            const thrownName = pickupObjectName({ ...item, quan: 1 });
+            const messages = [`The ${thrownName} misses the ${targetMon.data?.name || 'creature'}.`];
+            messages.push(...wakeMonsterFromHeroThrownMiss(targetMon));
+            impactMessage = messages.join('  ');
+        } else if (targetMon && isCreamPieObject(item)) {
+            rnd(20);
+            const dex = game.u?.acurr?.a?.[A_DEX] ?? 10;
+            if (dex > rnd(25)) {
+                if ((item.quan || 1) > 1) splitCarriedObjectShopBill(item, thrownObject, 1);
+                const messages = heroThrownCreamPieHitMonster(thrownObject, targetMon);
+                removeInventoryItem(item, 1);
+                newsym(targetMon.mx, targetMon.my);
+                await setMessage(messages.join('  '));
+                game._command_mode = null;
+                game._throw_item_letter = null;
+                game._resume_time_after_more = 0;
+                game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
+                game.context.move = 0;
+                return;
+            }
+            const messages = [`The cream pie misses the ${targetMon.data?.name || 'creature'}.`];
+            messages.push(...wakeMonsterFromHeroThrownMiss(targetMon));
+            impactMessage = messages.join('  ');
+        } else if (targetMon && isEggItem(item)) {
+            rnd(20);
+            const dex = game.u?.acurr?.a?.[A_DEX] ?? 10;
+            if (dex > rnd(25)) {
+                if ((item.quan || 1) > 1) splitCarriedObjectShopBill(item, thrownObject, 1);
+                const messages = heroThrownEggHitMonster(thrownObject, targetMon);
+                removeInventoryItem(item, 1);
+                newsym(targetMon.mx, targetMon.my);
+                await setMessage(messages.join('  '), !!messages.more);
+                game._command_mode = null;
+                game._throw_item_letter = null;
+                game._resume_time_after_more = 0;
+                game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
+                game.context.move = 0;
+                return;
+            }
+            const thrownName = pickupObjectName({ ...item, quan: 1 });
+            const messages = [`The ${thrownName} misses the ${targetMon.data?.name || 'creature'}.`];
+            messages.push(...wakeMonsterFromHeroThrownMiss(targetMon));
+            impactMessage = messages.join('  ');
+        } else if (targetMon && supportsHeroThrownPotionHit(item, targetMon)) {
+            rnd(20);
+            const dex = game.u?.acurr?.a?.[A_DEX] ?? 10;
+            if (dex > rnd(25)) {
+                if ((item.quan || 1) > 1) splitCarriedObjectShopBill(item, thrownObject, 1);
+                const messages = heroThrownPotionHitMonster(thrownObject, targetMon);
+                removeInventoryItem(item, 1);
+                newsym(targetMon.mx, targetMon.my);
+                const keepPotionCallPrompt = game._command_mode === 'callPotionAfterMore';
+                await setMessage(messages.join('  '), keepPotionCallPrompt);
+                if (!keepPotionCallPrompt) game._command_mode = null;
+                game._throw_item_letter = null;
+                game._resume_time_after_more = 0;
+                game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
+                game.context.move = 0;
+                return;
+            }
+            const thrownName = pickupObjectName({ ...item, quan: 1 });
+            const messages = [`The ${thrownName} misses the ${targetMon.data?.name || 'creature'}.`];
+            messages.push(...wakeMonsterFromHeroThrownMiss(targetMon));
+            impactMessage = messages.join('  ');
+        } else if (targetMon && !combatObject) {
+            rnd(20);
+            const thrownName = pickupObjectName({ ...item, quan: 1 });
+            const targetName = targetMon.data?.name || 'creature';
+            const messages = [`The ${thrownName} misses the ${targetName}.`];
+            messages.push(...wakeMonsterFromHeroThrownMiss(targetMon));
+            impactMessage = messages.join('  ');
+        }
+        const projectileBreakRoll = projectileLandingIsSoft(ox, oy) ? null : rn2(100); // C breaktest: obj_resists() on hard landing.
         curseLoadstoneLeavingInventory(thrownObject);
         if ((item.quan || 1) > 1) splitCarriedObjectShopBill(item, thrownObject, 1);
         stopCarriedFigurineTimerOnLeave(thrownObject);
