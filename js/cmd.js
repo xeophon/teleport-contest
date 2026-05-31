@@ -4543,6 +4543,48 @@ function impactDropDeliveryLandingIsSoft(x, y) {
     return !!(loc && IS_SOFT(loc.typ));
 }
 
+function impactDropScatterBlocked(loc) {
+    if (!loc) return true;
+    const closedDoor = loc.typ === DOOR && (loc.doormask & (D_CLOSED | D_LOCKED));
+    return !ZAP_POS(loc.typ) || closedDoor;
+}
+
+function impactDropScatterExactDeliveryObject(obj, sx, sy) {
+    if (!obj || !game.level) return;
+    const blastforce = rnd(2);
+    const dir = rn2(N_DIRS);
+    const dx = xdir[dir] || 0;
+    const dy = ydir[dir] || 0;
+    const scatterForce = Math.max(1, blastforce - Math.trunc(floorEffectsObjectWeight(obj) / 40));
+    let range = rnd(scatterForce);
+    let x = sx;
+    let y = sy;
+
+    while (range-- > 0) {
+        const nx = x + dx;
+        const ny = y + dy;
+        if (!isok(nx, ny)) break;
+        const loc = game.level.at(nx, ny);
+        if (impactDropScatterBlocked(loc)) break;
+        x = nx;
+        y = ny;
+        if (loc.typ === SINK) break;
+    }
+
+    obj.ox = x;
+    obj.oy = y;
+    obj.hidden = false;
+    obj.transientProjectile = false;
+
+    if (earthFloorEffects(obj, x, y, [], 'land')) {
+        game.level.objects = (game.level.objects || []).filter(item => item !== obj);
+    } else {
+        stackDroppedFloorObject(obj);
+    }
+    newsym(x, y);
+    if (x !== sx || y !== sy) newsym(sx, sy);
+}
+
 function deliverQueuedImpactDroppedObjects(targetLevel) {
     const key = impactDropLevelKey(targetLevel);
     const queued = game._impact_drop_migrations?.get?.(key) || [];
@@ -4564,10 +4606,11 @@ function deliverQueuedImpactDroppedObjects(targetLevel) {
         if (exactSpot) {
             game.level.objects.push(obj);
             stackDroppedFloorObject(obj);
+            impactDropScatterExactDeliveryObject(obj, spot.x, spot.y);
         } else {
             game.level.objects.push(obj);
+            newsym(spot.x, spot.y);
         }
-        newsym(spot.x, spot.y);
     }
 }
 

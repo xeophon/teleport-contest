@@ -376,6 +376,31 @@ function queuedImpactDropsFor(level = { dnum: 0, dlevel: 2 }) {
     return game._impact_drop_migrations?.get(`${level.dnum}:${level.dlevel}`) || [];
 }
 
+function installReciprocalGateLanding({
+    x = 12,
+    y = 6,
+    isladder = false,
+    currentLevel = { dnum: 0, dlevel: 2 },
+    fromLevel = { dnum: 0, dlevel: 1 },
+} = {}) {
+    game.u.uz = { ...currentLevel };
+    game.level.objects = [];
+    game.stairs = {
+        sx: x,
+        sy: y,
+        up: true,
+        isladder,
+        tolev: { ...fromLevel },
+        next: null,
+    };
+    game.level.at = (xx, yy) => ({
+        roomno: 0,
+        typ: xx === x && yy === y ? (isladder ? LADDER : STAIRS) : ROOM,
+        ladder: xx === x && yy === y && isladder ? 1 : 0,
+    });
+    return game.stairs;
+}
+
 function markHeroSquareVisible() {
     game.viz_array = [];
     game.viz_array[game.u.uy] = [];
@@ -23105,7 +23130,7 @@ test('command carried drop down stairs uses stair gate before same-square hole',
     assert.doesNotMatch(game._pending_message, /through the hole/);
 });
 
-test('command carried drop down ladder skips stay roll and delivers on reciprocal ladder', async () => {
+test('command carried drop down ladder skips stay roll and scatters from reciprocal ladder', async () => {
     installNonShopFloorState();
     installRemoteDownStairGate({ x: 5, y: 5, isladder: true });
     initRng(4);
@@ -23124,31 +23149,23 @@ test('command carried drop down ladder skips stay roll and delivers on reciproca
     assert.match(game._pending_message, /A dagger falls down the ladder\./);
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(100)']);
 
-    game.u.uz = { dnum: 0, dlevel: 2 };
-    game.level.objects = [];
-    game.stairs = {
-        sx: 12,
-        sy: 6,
-        up: true,
-        isladder: true,
-        tolev: { dnum: 0, dlevel: 1 },
-        next: null,
-    };
-    game.level.at = (x, y) => ({
-        roomno: 0,
-        typ: x === 12 && y === 6 ? LADDER : ROOM,
-        ladder: x === 12 && y === 6 ? 1 : 0,
-    });
+    installReciprocalGateLanding({ isladder: true });
+    enableRngLog({ reset: true });
 
     shop.deliverQueuedImpactDroppedObjectsForTest({ dnum: 0, dlevel: 2 });
 
     assert.equal(game.level.objects.includes(dropped), true);
-    assert.equal(dropped.ox, 12);
-    assert.equal(dropped.oy, 6);
+    assert.notDeepEqual([dropped.ox, dropped.oy], [12, 6]);
+    assert.equal(Math.max(Math.abs(dropped.ox - 12), Math.abs(dropped.oy - 6)) <= 2, true);
     assert.equal(dropped._impactDropMigration, undefined);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 3), [
+        'rn2(100)',
+        'rnd(2)',
+        'rn2(8)',
+    ]);
 });
 
-test('command carried drop down ladder stacks on reciprocal ladder arrival', async () => {
+test('command carried drop down ladder stacks before reciprocal ladder scatter', async () => {
     installNonShopFloorState();
     installRemoteDownStairGate({ x: 5, y: 5, isladder: true });
     initRng(4);
@@ -23163,27 +23180,15 @@ test('command carried drop down ladder stacks on reciprocal ladder arrival', asy
     const queuedRation = queued[0];
 
     const floorRation = { ...foodRation(512020), letter: undefined, line: undefined, quan: 2, ox: 12, oy: 6 };
-    game.u.uz = { dnum: 0, dlevel: 2 };
+    installReciprocalGateLanding({ isladder: true });
     game.level.objects = [floorRation];
-    game.stairs = {
-        sx: 12,
-        sy: 6,
-        up: true,
-        isladder: true,
-        tolev: { dnum: 0, dlevel: 1 },
-        next: null,
-    };
-    game.level.at = (x, y) => ({
-        roomno: 0,
-        typ: x === 12 && y === 6 ? LADDER : ROOM,
-        ladder: x === 12 && y === 6 ? 1 : 0,
-    });
 
     shop.deliverQueuedImpactDroppedObjectsForTest({ dnum: 0, dlevel: 2 });
 
     assert.equal(game.level.objects.length, 1);
     assert.equal(game.level.objects[0], queuedRation);
     assert.equal(queuedRation.quan, 3);
+    assert.notDeepEqual([queuedRation.ox, queuedRation.oy], [12, 6]);
     assert.equal(floorRation.quan, 0);
     assert.equal(game.level.objects.includes(floorRation), false);
     assert.equal(queuedRation._impactDropMigration, undefined);
@@ -30486,7 +30491,7 @@ test('projectile down stairs uses stair gate before trap and queues reciprocal m
     assert.doesNotMatch(landing.messages.join(' '), /through the hole/);
 });
 
-test('projectile down ladder always falls and delivers on reciprocal ladder', () => {
+test('projectile down ladder always falls and scatters from reciprocal ladder', () => {
     installNonShopFloorState();
     installRemoteDownStairGate({ isladder: true });
     initRng(4);
@@ -30501,28 +30506,18 @@ test('projectile down ladder always falls and delivers on reciprocal ladder', ()
     assert.match(landing.messages.join(' '), /A dagger falls down the ladder\./);
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(100)']);
 
-    game.u.uz = { dnum: 0, dlevel: 2 };
-    game.level.objects = [];
-    game.stairs = {
-        sx: 12,
-        sy: 6,
-        up: true,
-        isladder: true,
-        tolev: { dnum: 0, dlevel: 1 },
-        next: null,
-    };
-    game.level.at = (x, y) => ({
-        roomno: 0,
-        typ: x === 12 && y === 6 ? LADDER : ROOM,
-        ladder: x === 12 && y === 6 ? 1 : 0,
-    });
+    installReciprocalGateLanding({ isladder: true });
+    enableRngLog({ reset: true });
 
     shop.deliverQueuedImpactDroppedObjectsForTest({ dnum: 0, dlevel: 2 });
 
     assert.equal(game.level.objects.includes(thrown), true);
-    assert.equal(thrown.ox, 12);
-    assert.equal(thrown.oy, 6);
+    assert.notDeepEqual([thrown.ox, thrown.oy], [12, 6]);
+    assert.equal(Math.max(Math.abs(thrown.ox - 12), Math.abs(thrown.oy - 6)) <= 2, true);
     assert.equal(thrown._impactDropMigration, undefined);
+    const calls = getRngLog().map(entry => entry.replace(/=.*/, ''));
+    assert.deepEqual(calls.slice(0, 3), ['rn2(100)', 'rnd(2)', 'rn2(8)']);
+    assert.match(calls[3], /^rnd\([12]\)$/);
 });
 
 test('queued exact down-gate delivery silently breaks fragile impacted pile', () => {
@@ -30538,28 +30533,16 @@ test('queued exact down-gate delivery silently breaks fragile impacted pile', ()
     assert.equal(landing.shipObject.handled, true);
     assert.deepEqual(queued.map(obj => obj.id), [thrown.id, pile.id]);
 
-    game.u.uz = { dnum: 0, dlevel: 2 };
-    game.level.objects = [];
-    game.stairs = {
-        sx: 12,
-        sy: 6,
-        up: true,
-        isladder: false,
-        tolev: { dnum: 0, dlevel: 1 },
-        next: null,
-    };
-    game.level.at = (x, y) => ({
-        roomno: 0,
-        typ: x === 12 && y === 6 ? STAIRS : ROOM,
-    });
+    installReciprocalGateLanding();
+    enableRngLog({ reset: true });
 
     shop.deliverQueuedImpactDroppedObjectsForTest({ dnum: 0, dlevel: 2 });
 
     assert.equal(game.level.objects.includes(thrown), true);
-    assert.equal(thrown.ox, 12);
-    assert.equal(thrown.oy, 6);
+    assert.notDeepEqual([thrown.ox, thrown.oy], [12, 6]);
     assert.equal(game.level.objects.includes(pile), false);
     assert.equal(pile._impactDropMigration, undefined);
+    assert.equal(getRngLog().map(entry => entry.replace(/=.*/, '')).includes('rnd(2)'), true);
 });
 
 test('queued random delivery silently breaks fragile object after landing roll', () => {
@@ -30598,6 +30581,38 @@ test('branch stairs queue special-stair migration metadata', () => {
     assert.equal(queuedImpactDropsFor({ dnum: 1, dlevel: 1 }).includes(thrown), true);
     assert.equal(thrown._impactDropMigration?.where, MIGR_SSTAIRS);
     assert.match(landing.messages.join(' '), /A dagger falls down the stairs\./);
+});
+
+test('branch stairs exact delivery scatters from reciprocal special stair', () => {
+    installNonShopFloorState();
+    installRemoteDownStairGate({ targetLevel: { dnum: 1, dlevel: 1 } });
+    initRng(1);
+    const thrown = { ...dagger(874332), letter: undefined, line: undefined, ox: 7, oy: 5 };
+
+    const landing = shop.landProjectileObjectWithShopHandling(thrown, 7, 5, { breakRoll: 0, silent: true });
+    assert.equal(landing.shipObject.handled, true);
+    assert.equal(landing.shipObject.where, MIGR_SSTAIRS);
+    assert.equal(queuedImpactDropsFor({ dnum: 1, dlevel: 1 }).includes(thrown), true);
+
+    installReciprocalGateLanding({
+        x: 14,
+        y: 8,
+        currentLevel: { dnum: 1, dlevel: 1 },
+        fromLevel: { dnum: 0, dlevel: 1 },
+    });
+    enableRngLog({ reset: true });
+
+    shop.deliverQueuedImpactDroppedObjectsForTest({ dnum: 1, dlevel: 1 });
+
+    assert.equal(game.level.objects.includes(thrown), true);
+    assert.notDeepEqual([thrown.ox, thrown.oy], [14, 8]);
+    assert.equal(Math.max(Math.abs(thrown.ox - 14), Math.abs(thrown.oy - 8)) <= 2, true);
+    assert.equal(thrown._impactDropMigration, undefined);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 3), [
+        'rn2(100)',
+        'rnd(2)',
+        'rn2(8)',
+    ]);
 });
 
 test('monster-thrown dagger falling through remote seen hole ships before floor effects', () => {
