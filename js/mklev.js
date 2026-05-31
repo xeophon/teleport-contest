@@ -43,6 +43,7 @@ import {
     ICED_POOL, ICED_MOAT, MATCH_WALL, SET_LIT_RANDOM, SET_LIT_NOCHANGE,
     A_NONE, A_LAWFUL, A_NEUTRAL, A_CHAOTIC, AM_SHRINE, AM_SANCTUM, Align2amask, Amask2align,
     FOODSHOP, RINGSHOP, WANDSHOP, TOOLSHOP, BOOKSHOP, FODDERSHOP, CANDLESHOP,
+    ARMORSHOP, WEAPONSHOP,
     NO_MINVENT, MM_NOGRP, MM_ANGRY, MM_NONAME, MM_NOCOUNTBIRTH, MM_NOMSG, MM_ADJACENTOK, MM_NOTAIL, MM_NOWAIT,
     CORPSTAT_FEMALE, CORPSTAT_MALE, CORPSTAT_NEUTER, CORPSTAT_HISTORIC,
     LR_DOWNSTAIR, LR_UPSTAIR, LR_PORTAL, LR_TELE, LR_UPTELE, LR_DOWNTELE, LR_BRANCH,
@@ -20216,6 +20217,7 @@ export const __mklevTestHooks = {
     create_themeroom_room_in_room,
     create_themeroom_huge_room_inside,
     create_themeroom_mausoleum,
+    create_themeroom_twin_businesses,
 };
 
 async function apply_themeroom_fill(fill, croom, rows = null, startX = 0, startY = 0) {
@@ -20412,6 +20414,25 @@ function create_themeroom_secret_door(croom) {
     return null;
 }
 
+function themeroomShopDoorState() {
+    if (rn2(100) < 1) return 'locked';
+    if (rn2(100) < 50) return 'closed';
+    return 'open';
+}
+
+function themeroomWallMask(wall) {
+    if (wall === 'north') return W_NORTH;
+    if (wall === 'south') return W_SOUTH;
+    if (wall === 'east') return W_EAST;
+    if (wall === 'west') return W_WEST;
+    return W_ANY;
+}
+
+function create_themeroom_shop_door(croom, state, wall) {
+    splevDoor(croom, state, themeroomWallMask(wall));
+    splevAddDoorsToRoom(croom);
+}
+
 function setThemeroomTerrain(x, y, typ) {
     const loc = game.level?.at(x, y);
     if (!loc) return null;
@@ -20502,6 +20523,43 @@ async function create_themeroom_mausoleum() {
     return room;
 }
 
+function create_themeroom_twin_businesses() {
+    const room = create_themeroom_room({ w: 9, h: 5, rtype: THEMEROOM });
+    if (!room) return null;
+
+    const southeast = () => (rn2(100) < 50 ? 'south' : 'east');
+    const northeast = () => (rn2(100) < 50 ? 'north' : 'east');
+    const northwest = () => (rn2(100) < 50 ? 'north' : 'west');
+    const southwest = () => (rn2(100) < 50 ? 'south' : 'west');
+    const placements = [
+        { lx: 1, ly: 1, rx: 4, ry: 1, lwall: 'south', rwall: southeast() },
+        { lx: 1, ly: 2, rx: 4, ry: 2, lwall: 'north', rwall: northeast() },
+        { lx: 1, ly: 1, rx: 5, ry: 1, lwall: southeast(), rwall: southwest() },
+        { lx: 1, ly: 1, rx: 5, ry: 2, lwall: southeast(), rwall: northwest() },
+        { lx: 1, ly: 2, rx: 5, ry: 1, lwall: northeast(), rwall: southwest() },
+        { lx: 1, ly: 2, rx: 5, ry: 2, lwall: northeast(), rwall: northwest() },
+        { lx: 2, ly: 1, rx: 5, ry: 1, lwall: southwest(), rwall: 'south' },
+        { lx: 2, ly: 2, rx: 5, ry: 2, lwall: northwest(), rwall: 'north' },
+    ];
+
+    let ltype = WEAPONSHOP;
+    let rtype = ARMORSHOP;
+    if (rn2(100) < 50) [ltype, rtype] = [rtype, ltype];
+
+    const p = placements[rnd(placements.length) - 1];
+    const left = create_themeroom_subroom(room, {
+        x: p.lx, y: p.ly, w: 3, h: 3, rtype: ltype, filled: true, joined: false,
+    });
+    if (left) create_themeroom_shop_door(left, themeroomShopDoorState(), p.lwall);
+
+    const right = create_themeroom_subroom(room, {
+        x: p.rx, y: p.ry, w: 3, h: 3, rtype, filled: true, joined: false,
+    });
+    if (right) create_themeroom_shop_door(right, themeroomShopDoorState(), p.rwall);
+
+    return room;
+}
+
 // C ref: themerms.lua themerooms_generate()
 // Reservoir sampling picks one eligible themed-room generator by frequency.
 async function themerooms_generate(difficulty) {
@@ -20521,6 +20579,7 @@ async function themerooms_generate(difficulty) {
     if (pick.name === 'Room in a room') return !!create_themeroom_room_in_room();
     if (pick.name === 'Huge room with another room inside') return !!create_themeroom_huge_room_inside();
     if (pick.name === 'Mausoleum') return !!(await create_themeroom_mausoleum());
+    if (pick.name === 'Twin businesses') return !!create_themeroom_twin_businesses();
     if (pick.name === 'Nesting rooms') {
         const room = create_themeroom_room({
             w: 9 + rn2(4), h: 9 + rn2(4), filled: true,

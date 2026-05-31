@@ -13,7 +13,7 @@ import {
     D_LOCKED, D_TRAPPED,
     MAXNROFROOMS,
     A_CHAOTIC, A_LAWFUL, A_NEUTRAL, Align2amask,
-    SHOPBASE, CANDLESHOP, MATCH_WALL, SET_LIT_RANDOM, SET_LIT_NOCHANGE,
+    SHOPBASE, CANDLESHOP, ARMORSHOP, WEAPONSHOP, MATCH_WALL, SET_LIT_RANDOM, SET_LIT_NOCHANGE,
     ARROW_TRAP, DART_TRAP, ROCKTRAP, BEAR_TRAP, LANDMINE, ROLLING_BOULDER_TRAP,
     SLP_GAS_TRAP, RUST_TRAP, TELEP_TRAP, WEB, STATUE_TRAP, ANTI_MAGIC, BURN,
 } from '../js/const.js';
@@ -755,6 +755,42 @@ test('themed Mausoleum creates centered tomb subroom contents', async () => {
     const secretDoors = secretDoorsAround(secretGame, secretTomb);
     assert.equal(secretDoors.length, 1);
     assert.equal(secretDoors[0].mask, D_CLOSED);
+});
+
+test('themed Twin businesses creates paired weapon and armor shops', () => {
+    const doorMasks = new Set([D_ISOPEN, D_CLOSED, D_LOCKED]);
+
+    for (let seed = 1; seed <= 24; seed++) {
+        const g = installThemeroomGenerationGame({ seed, dlevel: 8 });
+        const outer = mklevHooks.create_themeroom_twin_businesses();
+
+        assert.ok(outer);
+        assert.equal(outer.rtype, THEMEROOM);
+        assert.equal(outer.hx - outer.lx + 1, 9);
+        assert.equal(outer.hy - outer.ly + 1, 5);
+        assert.equal(outer.needfill, 0);
+        assert.equal(outer.nsubrooms, 2);
+
+        const shops = outer.sbrooms;
+        assert.deepEqual([...shops].map(room => room.rtype).sort((a, b) => a - b), [ARMORSHOP, WEAPONSHOP]);
+        for (const shop of shops) {
+            assert.equal(shop.hx - shop.lx + 1, 3);
+            assert.equal(shop.hy - shop.ly + 1, 3);
+            assert.equal(shop.needfill, FILL_NORMAL);
+            assert.equal(shop.needjoining, false);
+            assert.equal(shop.lx >= outer.lx && shop.hx <= outer.hx, true);
+            assert.equal(shop.ly >= outer.ly && shop.hy <= outer.hy, true);
+            assert.equal(shop.doorct, 1);
+            const door = g.level.doors[shop.fdoor];
+            assert.ok(door);
+            const loc = g.level.at(door.x, door.y);
+            assert.equal(loc?.typ, DOOR);
+            assert.equal(doorMasks.has(loc?.doormask), true);
+        }
+
+        const [a, b] = shops;
+        assert.equal(a.hx < b.lx || b.hx < a.lx || a.hy < b.ly || b.hy < a.ly, true);
+    }
 });
 
 test('themed buried zombie corpses use buriedobjlist with explicit zombify timers', () => {
