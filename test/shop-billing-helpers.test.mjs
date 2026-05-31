@@ -4633,7 +4633,7 @@ async function chatAdjacentShopkeeper({
 
 async function chatAdjacentMonster({
     name = 'dog', visible = true, peaceful = true, seed = null, rngLog = false,
-    data = {}, extra = {}, setup = null,
+    data = {}, extra = {}, setup = null, expectedCommandMode = null,
 } = {}) {
     installStableNonShopFloorState();
     if (seed != null) initRng(seed);
@@ -4658,8 +4658,13 @@ async function chatAdjacentMonster({
     await enterChatCommand();
     await rhack('l');
 
-    assert.equal(game._command_mode, null);
+    assert.equal(game._command_mode, expectedCommandMode);
     return { target, targetLoc, message: game._pending_message };
+}
+
+async function submitDemonBribeOffer(text) {
+    for (const ch of String(text)) await rhack(ch);
+    await rhack('\n');
 }
 
 async function beginQuestLeaderChat({
@@ -6991,6 +6996,25 @@ test('worn helmet tip makes invisible peaceful non-tame briber with no gold turn
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rnd(80)']);
 });
 
+test('worn helmet tip reports positive briber demand without entering offer mode', async () => {
+    const result = await tipInvisibleExplicitSound({
+        name: 'Asmodeus',
+        sound: 'MS_BRIBE',
+        peaceful: true,
+        gold: 500,
+        rngLog: true,
+        data: { mlevel: 53, mlet: '&', demon: true, unique: true, maligntyp: -20 },
+    });
+
+    assert.match(result.message, /^You briefly doff your helm\.  It demands \d+ zorkmids for safe passage\.$/);
+    assert.doesNotMatch(result.message, /How much will you offer\?/);
+    assert.equal(result.target.mpeaceful, true);
+    assert.equal(result.target._last_demon_bribe_prompt, undefined);
+    assert.equal(result.target._last_demon_bribe_demand,
+        Number(result.message.match(/demands (\d+) /)[1]));
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rnd(80)']);
+});
+
 test('chat with peaceful non-tame briber wielding Excalibur angers demon before demand RNG', async () => {
     const excalibur = { ...wieldedWeapon(3063560, 'long sword', 'w'), artifact: 'Excalibur' };
     const result = await chatAdjacentMonster({
@@ -7036,6 +7060,7 @@ test('chat with peaceful non-tame briber and gold records C demand prompt', asyn
         name: 'Asmodeus',
         peaceful: true,
         rngLog: true,
+        expectedCommandMode: 'demonBribeOffer',
         data: { msound: 'MS_BRIBE', mlevel: 53, mlet: '&', demon: true, unique: true, maligntyp: -20 },
         setup: () => {
             game.inventory = [goldPieces(3063561, 500)];
@@ -7043,13 +7068,146 @@ test('chat with peaceful non-tame briber and gold records C demand prompt', asyn
         },
     });
 
-    assert.match(result.message, /^The Asmodeus demands \d+ zorkmids for safe passage\.$/);
-    assert.equal(game.context.move, 1);
+    assert.match(result.message, /^The Asmodeus demands \d+ zorkmids for safe passage\.  How much will you offer\?$/);
+    assert.equal(game.context.move || 0, 0);
     assert.equal(result.target.mpeaceful, true);
     assert.equal(result.target._last_demon_bribe_prompt, 'How much will you offer?');
     assert.equal(result.target._last_demon_bribe_demand,
         Number(result.message.match(/demands (\d+) /)[1]));
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rnd(80)']);
+});
+
+test('demon bribe full offer transfers gold and removes demon without extra RNG', async () => {
+    const result = await chatAdjacentMonster({
+        name: 'Asmodeus',
+        peaceful: true,
+        rngLog: true,
+        expectedCommandMode: 'demonBribeOffer',
+        data: { msound: 'MS_BRIBE', mlevel: 53, mlet: '&', demon: true, unique: true, maligntyp: -20 },
+        setup: () => {
+            game.inventory = [goldPieces(3063562, 500)];
+            game._goldCount = 500;
+        },
+    });
+    const demand = result.target._last_demon_bribe_demand;
+
+    enableRngLog({ reset: true });
+    await submitDemonBribeOffer(String(demand));
+
+    assert.equal(game._command_mode, null);
+    assert.match(game._pending_message, new RegExp(`You give Asmodeus ${demand} zorkmids?\\.`));
+    assert.match(game._pending_message, /The Asmodeus vanishes, laughing about cowardly mortals\./);
+    assert.equal(game.context.move, 1);
+    assert.equal(game._goldCount, 500 - demand);
+    assert.equal(game.level.monsters.includes(result.target), false);
+    assert.equal(result.target.dead, true);
+    assert.equal(result.target._last_demon_bribe_offer, demand);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
+});
+
+test('demon bribe refusal keeps gold and angers demon without charisma RNG', async () => {
+    const result = await chatAdjacentMonster({
+        name: 'Asmodeus',
+        peaceful: true,
+        rngLog: true,
+        expectedCommandMode: 'demonBribeOffer',
+        data: { msound: 'MS_BRIBE', mlevel: 53, mlet: '&', demon: true, unique: true, maligntyp: -20 },
+        setup: () => {
+            game.inventory = [goldPieces(3063563, 500)];
+            game._goldCount = 500;
+        },
+    });
+
+    enableRngLog({ reset: true });
+    await submitDemonBribeOffer('abc');
+
+    assert.equal(game._pending_message, 'You refuse.  The Asmodeus gets angry...');
+    assert.equal(game.context.move, 1);
+    assert.equal(game._goldCount, 500);
+    assert.equal(game.level.monsters.includes(result.target), true);
+    assert.equal(result.target.mpeaceful, 0);
+    assert.equal(result.target.hostile, true);
+    assert.equal(result.target._last_demon_bribe_offer, 0);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
+});
+
+test('negative demon bribe offer fumbles and angers demon without gold transfer', async () => {
+    const result = await chatAdjacentMonster({
+        name: 'Asmodeus',
+        peaceful: true,
+        rngLog: true,
+        expectedCommandMode: 'demonBribeOffer',
+        data: { msound: 'MS_BRIBE', mlevel: 53, mlet: '&', demon: true, unique: true, maligntyp: -20 },
+        setup: () => {
+            game.inventory = [goldPieces(3063564, 500)];
+            game._goldCount = 500;
+        },
+    });
+
+    enableRngLog({ reset: true });
+    await submitDemonBribeOffer('-1');
+
+    assert.equal(game._pending_message, 'You try to shortchange Asmodeus, but fumble.  The Asmodeus gets angry...');
+    assert.equal(game.context.move, 1);
+    assert.equal(game._goldCount, 500);
+    assert.equal(result.target.minvent?.length || 0, 0);
+    assert.equal(result.target.mpeaceful, 0);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
+});
+
+test('partial demon bribe failure transfers gold before angering demon', async () => {
+    const result = await chatAdjacentMonster({
+        name: 'Asmodeus',
+        peaceful: true,
+        rngLog: true,
+        expectedCommandMode: 'demonBribeOffer',
+        data: { msound: 'MS_BRIBE', mlevel: 53, mlet: '&', demon: true, unique: true, maligntyp: -20 },
+        setup: () => {
+            game.inventory = [goldPieces(3063565, 5000)];
+            game._goldCount = 5000;
+            game.u.acurr ??= { a: [] };
+            game.u.acurr.a[A_CHA] = 3;
+        },
+    });
+
+    enableRngLog({ reset: true });
+    await submitDemonBribeOffer('1');
+
+    assert.equal(game._pending_message, 'You give Asmodeus 1 zorkmid.  The Asmodeus gets angry...');
+    assert.equal(game.context.move, 1);
+    assert.equal(game._goldCount, 4999);
+    assert.equal(result.target.minvent?.[0]?.quan, 1);
+    assert.equal(result.target.mpeaceful, 0);
+    assert.equal(game.level.monsters.includes(result.target), true);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rnd(15)']);
+});
+
+test('partial demon bribe success transfers gold before scowling vanish', async () => {
+    const result = await chatAdjacentMonster({
+        name: 'Asmodeus',
+        peaceful: true,
+        rngLog: true,
+        expectedCommandMode: 'demonBribeOffer',
+        data: { msound: 'MS_BRIBE', mlevel: 53, mlet: '&', demon: true, unique: true, maligntyp: -20 },
+        setup: () => {
+            game.inventory = [goldPieces(3063566, 500)];
+            game._goldCount = 500;
+            game.u.acurr ??= { a: [] };
+            game.u.acurr.a[A_CHA] = 25;
+        },
+    });
+    const offer = result.target._last_demon_bribe_demand - 1;
+
+    enableRngLog({ reset: true });
+    await submitDemonBribeOffer(String(offer));
+
+    assert.match(game._pending_message, new RegExp(`You give Asmodeus ${offer} zorkmids?\\.`));
+    assert.match(game._pending_message, /The Asmodeus scowls at you menacingly, then vanishes\./);
+    assert.equal(game.context.move, 1);
+    assert.equal(game._goldCount, 500 - offer);
+    assert.equal(game.level.monsters.includes(result.target), false);
+    assert.equal(result.target.dead, true);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rnd(125)']);
 });
 
 test('worn helmet tip makes tame invisible briber fall through to doomed cuss without RNG', async () => {

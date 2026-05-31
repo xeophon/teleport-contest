@@ -34740,14 +34740,24 @@ async function finishChatMonsterTarget(mon, sound) {
         return;
     }
 
-    const noise = tipHatMonsterNoise(mon, { visible });
+    const noise = tipHatMonsterNoise(mon, { visible, offerCommandMode: true });
     if (!visible && (noise.handled || noise.message || noise.mapInvisible))
         chatMapUnseenMonster(mon);
 
     if (noise.handled) {
         await setMessage(noise.message, noise.message.includes('  '));
-        game._command_mode = null;
-        chatConsumeTurn();
+        if (noise.commandMode) {
+            game._command_mode = noise.commandMode;
+            if (noise.demonBribe) {
+                game._demon_bribe_mon = noise.demonBribe.mon;
+                game._demon_bribe_demand = noise.demonBribe.demand;
+                game._demon_bribe_prompt = noise.demonBribe.mon?._last_demon_bribe_prompt || 'How much will you offer?';
+                game._demon_bribe_text = '';
+            }
+        } else {
+            game._command_mode = null;
+            chatConsumeTurn();
+        }
         return;
     }
     if (noise.message) {
@@ -35272,7 +35282,83 @@ function tipHatDemonBribeDemand(mon, cash) {
     return demand;
 }
 
-function tipHatDemonBribeNoise(mon, name, visible) {
+function demonBribeOfferValue(text) {
+    const match = String(text || '').match(/^\s*([+-]?\d+)/);
+    return match ? Math.trunc(Number(match[1])) : 0;
+}
+
+function demonBribeObjectName(mon) {
+    return fireScrollMonsterName(mon).replace(/^The /, '');
+}
+
+function demonBribeGiveGold(mon, amount) {
+    const paid = removeGoldFromHero(amount);
+    if (paid > 0)
+        add_to_minv(mon, { cls: 'coin', otyp: GOLD_PIECE, glyph: '$', quan: paid });
+    return paid;
+}
+
+function demonBribeVanish(mon) {
+    removeMonsterFromLevel(mon);
+    mon.dead = true;
+    mon.minvent = [];
+}
+
+function clearDemonBribeOfferState() {
+    game._demon_bribe_mon = null;
+    game._demon_bribe_demand = 0;
+    game._demon_bribe_prompt = '';
+    game._demon_bribe_text = '';
+}
+
+async function finishDemonBribeOffer() {
+    const mon = game._demon_bribe_mon;
+    const demand = Math.max(0, Math.trunc(Number(game._demon_bribe_demand || mon?._last_demon_bribe_demand || 0)));
+    let offer = demonBribeOfferValue(game._demon_bribe_text);
+    clearDemonBribeOfferState();
+    game._command_mode = null;
+    if (!mon || !demand) {
+        await setMessage('');
+        chatConsumeTurn();
+        return;
+    }
+
+    const objectName = demonBribeObjectName(mon);
+    const sentenceName = fireScrollMonsterName(mon);
+    const messages = [];
+    if (offer < 0) {
+        messages.push(`You try to shortchange ${objectName}, but fumble.`);
+        offer = 0;
+    } else if (offer === 0) {
+        messages.push('You refuse.');
+    } else {
+        const available = tipHatHeroGoldCount();
+        if (offer >= available) {
+            messages.push(`You give ${objectName} all your gold.`);
+            offer = available;
+        } else {
+            messages.push(`You give ${objectName} ${offer} ${shopCurrency(offer)}.`);
+        }
+        offer = demonBribeGiveGold(mon, offer);
+    }
+    mon._last_demon_bribe_offer = offer;
+
+    if (offer >= demand) {
+        messages.push(`${sentenceName} vanishes, laughing about cowardly mortals.`);
+        demonBribeVanish(mon);
+    } else if (offer > 0 && rnd(5 * (game.u?.acurr?.a?.[A_CHA] ?? 10)) > demand - offer) {
+        messages.push(`${sentenceName} scowls at you menacingly, then vanishes.`);
+        demonBribeVanish(mon);
+    } else {
+        messages.push(`${sentenceName} gets angry...`);
+        tipHatDemonBribeSetHostile(mon);
+    }
+
+    await setMessage(messages.join('  '), messages.length > 1);
+    chatConsumeTurn();
+}
+
+function tipHatDemonBribeNoise(mon, name, visible, offerCommandMode = false) {
     if (tipHatHeroWieldsDemonBribeArtifact()) {
         tipHatDemonBribeSetHostile(mon);
         return {
@@ -35296,10 +35382,14 @@ function tipHatDemonBribeNoise(mon, name, visible) {
         return { handled: true, message: '' };
     }
 
-    mon._last_demon_bribe_prompt = 'How much will you offer?';
+    if (offerCommandMode) mon._last_demon_bribe_prompt = 'How much will you offer?';
     return {
         handled: true,
-        message: `${name} demands ${demand} ${shopCurrency(demand)} for safe passage.`,
+        ...(offerCommandMode ? {
+            commandMode: 'demonBribeOffer',
+            demonBribe: { mon, demand },
+        } : {}),
+        message: `${name} demands ${demand} ${shopCurrency(demand)} for safe passage.${offerCommandMode ? '  How much will you offer?' : ''}`,
     };
 }
 
@@ -35790,7 +35880,7 @@ function tipHatQuestNemesisNoise() {
     return message ? { handled: true, message } : { handled: false, message: '' };
 }
 
-function tipHatMonsterNoise(mon, { visible = tipHatMonsterVisible(mon), nameOverride = null } = {}) {
+function tipHatMonsterNoise(mon, { visible = tipHatMonsterVisible(mon), nameOverride = null, offerCommandMode = false } = {}) {
     const silent = tipHatMonsterSilent(mon);
     if (!mon || heroIsDeaf() || (silent && !mon?.isshk)) return { handled: false, message: '' };
     const name = nameOverride ?? (visible ? fireScrollMonsterName(mon) : 'It');
@@ -36002,7 +36092,7 @@ function tipHatMonsterNoise(mon, { visible = tipHatMonsterVisible(mon), nameOver
     case 'nemesis':
         return tipHatQuestNemesisNoise();
     case 'bribe':
-        if (peaceful && !tame) return tipHatDemonBribeNoise(mon, name, visible);
+        if (peaceful && !tame) return tipHatDemonBribeNoise(mon, name, visible, offerCommandMode);
         if (peaceful) return tipHatPeacefulCussNoise(mon);
         return tipHatHostileCussNoise(mon, name, monName);
     case 'cuss':
@@ -44485,6 +44575,20 @@ export async function rhack(_cmd) {
         if (key === 8 || key === 127) game._wish_text = (game._wish_text || '').slice(0, -1);
         else if (key >= 32) game._wish_text = `${game._wish_text || ''}${ch}`;
         await setMessage(`For what do you wish?${game._wish_text ? ` ${game._wish_text}` : ''}`);
+        return;
+    }
+
+    if (game._command_mode === 'demonBribeOffer') {
+        const keyCode = typeof key === 'number' ? key : ch.charCodeAt(0);
+        if (ch === '\r' || ch === '\n' || ch === '\x1b' || keyCode === 27) {
+            if (ch === '\x1b' || keyCode === 27) game._demon_bribe_text = '';
+            await finishDemonBribeOffer();
+            return;
+        }
+        if (keyCode === 8 || keyCode === 127) game._demon_bribe_text = (game._demon_bribe_text || '').slice(0, -1);
+        else if (keyCode >= 32) game._demon_bribe_text = `${game._demon_bribe_text || ''}${ch}`;
+        const prompt = game._demon_bribe_prompt || 'How much will you offer?';
+        await setMessage(`${prompt}${game._demon_bribe_text ? ` ${game._demon_bribe_text}` : ''}`);
         return;
     }
 
