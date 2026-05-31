@@ -4622,6 +4622,34 @@ async function chatAdjacentMonster({
     return { target, targetLoc, message: game._pending_message };
 }
 
+async function chatDirectionKey(ch, { setup = null } = {}) {
+    installStableNonShopFloorState();
+    if (setup) setup();
+
+    await enterChatCommand();
+    await rhack(ch);
+
+    assert.equal(game._command_mode, null);
+    return game._pending_message;
+}
+
+function installMountedChatPony(extra = {}) {
+    const pony = ordinaryThrowTarget('pony', 5, 5, {
+        msleeping: 0,
+        mcanmove: true,
+        mcansee: true,
+        mtame: 0,
+        pet: true,
+        saddled: true,
+        data: { name: 'pony', mlevel: 3, mlet: 'quadruped', msound: 'MS_NEIGH' },
+        ...extra,
+    });
+    game.u.usteed = pony;
+    game.level.monsters = [pony];
+    markSquareVisible(5, 5);
+    return pony;
+}
+
 test('worn helmet tip makes peaceful invisible Kop give arrest address', async () => {
     await tipInvisibleExplicitSound({
         name: 'Keystone Kop',
@@ -5198,6 +5226,55 @@ test('chat with visible saddled tame eating pet uses C saddle wording', async ()
     assert.equal(game.context?.move || 0, 0);
     assert.doesNotMatch(result.message, /The pony is eating noisily|whickers|neighs|Nothing happens/);
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
+});
+
+test('chat up without a steed uses C vertical no-hear response without time', async () => {
+    const message = await chatDirectionKey('<');
+
+    assert.equal(message, "They won't hear you up there.");
+    assert.equal(game.context?.move || 0, 0);
+    assert.doesNotMatch(message, /talking to a wall|Talking to yourself|no one up/);
+});
+
+test('chat down without a steed uses C vertical no-hear response without time', async () => {
+    const message = await chatDirectionKey('>');
+
+    assert.equal(message, "They won't hear you down there.");
+    assert.equal(game.context?.move || 0, 0);
+    assert.doesNotMatch(message, /talking to a wall|Talking to yourself|no one down/);
+});
+
+test('chat down at mounted pony uses steed domonnoise and consumes time', async () => {
+    const pony = await chatDirectionKey('>', {
+        setup: () => installMountedChatPony(),
+    });
+
+    assert.equal(pony, 'The saddled pony neighs.');
+    assert.equal(game.context.move, 1);
+    assert.equal(game.u.usteed.data.name, 'pony');
+    assert.doesNotMatch(pony, /They won't hear you down there|talking to a wall|is eating noisily/);
+});
+
+test('chat down at helpless mounted pony still consumes time before domonnoise', async () => {
+    const message = await chatDirectionKey('>', {
+        setup: () => installMountedChatPony({ msleeping: 1, mfrozen: 6, mcanmove: false }),
+    });
+
+    assert.equal(message, 'The saddled pony seems not to notice you.');
+    assert.equal(game.context.move, 1);
+    assert.doesNotMatch(message, /They won't hear you down there|neighs|talking to a wall/);
+});
+
+test('deaf chat down at mounted pony is silent and does not consume time', async () => {
+    const message = await chatDirectionKey('>', {
+        setup: () => {
+            installMountedChatPony();
+            game.u._deafTimeout = 10;
+        },
+    });
+
+    assert.equal(message, '');
+    assert.equal(game.context?.move || 0, 0);
 });
 
 test('chat with visible nymph uses C seduce wording', async () => {
