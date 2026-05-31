@@ -34003,6 +34003,130 @@ const TIPHAT_BOAST_MONSTER_NAMES = new Set([
     'giant', 'stone giant', 'hill giant', 'fire giant', 'frost giant', 'storm giant',
 ]);
 
+const TIPHAT_CUSS_RANDOM_INSULTS = [
+    'antic', 'blackguard', 'caitiff', 'chucklehead', 'coistrel', 'craven',
+    'cretin', 'cur', 'dastard', 'demon fodder', 'dimwit', 'dolt', 'fool',
+    'footpad', 'imbecile', 'knave', 'maledict', 'miscreant', 'niddering',
+    'poltroon', 'rattlepate', 'reprobate', 'scapegrace', 'varlet',
+    'villein', 'wittol', 'worm', 'wretch',
+];
+
+const TIPHAT_CUSS_RANDOM_MALEDICTIONS = [
+    'Hell shall soon claim thy remains,', 'I chortle at thee, thou pathetic',
+    'Prepare to die, thou', 'Resistance is useless,',
+    'Surrender or die, thou', 'There shall be no mercy, thou',
+    'Thou shalt repent of thy cunning,', 'Thou art as a flea to me,',
+    'Thou art doomed,', 'Thy fate is sealed,',
+    'Verily, thou shalt be one dead',
+];
+
+const TIPHAT_ANGEL_CUSS_MESSAGES = [
+    '"Repent, and thou shalt be saved!"',
+    '"Thou shalt pay for thine insolence!"',
+    '"Very soon, my child, thou shalt meet thy maker."',
+    '"The great %D has sent me to make you pay for your sins!"',
+    '"The wrath of %D is now upon you!"',
+    '"Thy life belongs to %D now!"',
+    '"Dost thou wish to receive thy final blessing?"',
+    '"Thou art but a godless void."',
+    '"Thou art not worthy to seek the Amulet."',
+    '"No one expects the Spanish Inquisition!"',
+    '"Judgment hath been passed upon thee, %p."',
+    '"Thy reckoning is at hand, %p."',
+    '"Thou shalt be brought before %D for thy crimes!"',
+    '"With %D as my witness, I shall strike thee down."',
+];
+
+const TIPHAT_DEMON_CUSS_MESSAGES = [
+    '"I first mistook thee for a statue, when I regarded thy head of stone."',
+    '"Come here often?"',
+    '"Doth pain excite thee?  Wouldst thou prefer the whip?"',
+    '"Thinkest thou it shall tickle as I rip out thy lungs?"',
+    '"Eat slime and die!"',
+    '"Go ahead, fetch thy mama!  I shall wait."',
+    '"Go play leapfrog with a herd of unicorns!"',
+    '"Hast thou been drinking, or art thou always so clumsy?"',
+    '"This time I shall let thee off with a spanking, but let it not happen again."',
+    '"I\'ve met smarter (and prettier) acid blobs."',
+    '"Look!  Thy bootlace is undone!"',
+    '"Mercy!  Dost thou wish me to die of laughter?"',
+    '"Run away!  Live to flee another day!"',
+    '"Thou hadst best fight better than thou canst dress!"',
+    '"Twixt thy cousin and thee, Medusa is the prettier."',
+    '"Methinks thou wert unnaturally stirred by yon corpse back there, eh, varlet?"',
+    '"Up thy nose with a rubber hose!"',
+    '"Verily, thy corpse could not smell worse!"',
+    '"Wait!  I shall polymorph into a grid bug to give thee a fighting chance!"',
+    '"Why search for the Amulet?  Thou wouldst but lose it, cretin."',
+    '"Thou ought to be a comedian, thy skills are so laughable!"',
+    '"Thy gaze is so vacant, I thought thee a floating eye!"',
+    '"Thy head is unfit for a mind flayer to munch upon!"',
+    '"Only thy reflection could love thee!"',
+    '"Hast thou considered masking thine odour?"',
+    '"Hold! Thy face is a most exquisite torture!"',
+    '"I should fart in thy direction, but it might improve thy smell!"',
+];
+
+function tipHatLawfulDeityName() {
+    const roleName = game.urole?.name?.m || game._startup_role || 'Archeologist';
+    const pantheonRole = roleName === 'Priest' ? game._pantheon_role || roleName : roleName;
+    return (GODS_BY_ROLE[pantheonRole] || GODS_BY_ROLE.Archeologist)[0] || 'Marduk';
+}
+
+function tipHatCommonPagerLine(messages) {
+    const line = messages[rn2(messages.length)] || '';
+    return line
+        .split('%D').join(tipHatLawfulDeityName())
+        .split('%p').join(game.plname || 'Hero');
+}
+
+function tipHatMonsterIsLawfulMinion(mon) {
+    const data = mon?.data || {};
+    const renegade = !!(mon?.renegade || mon?.mextra?.emin?.renegade || mon?.emin?.renegade
+        || data.renegade || data.mextra?.emin?.renegade || data.emin?.renegade);
+    if (mon?.lminion || mon?.is_lminion || mon?.isLminion
+        || data.lminion || data.is_lminion || data.isLminion)
+        return !renegade;
+    const minion = tipHatMonsterIsMinion(mon);
+    const align = Number(mon?.min_align ?? mon?.align ?? mon?.alignment
+        ?? data.min_align ?? data.align ?? data.alignment ?? data.maligntyp ?? 0);
+    return minion && align > A_NEUTRAL && !renegade;
+}
+
+function tipHatMonsterIsWizardCuss(mon, monName) {
+    const data = mon?.data || {};
+    return !!(mon?.iswiz || mon?.isWizard || data.iswiz || data.isWizard
+        || monName === 'wizard of yendor');
+}
+
+function tipHatHostileCussNoise(mon, name, monName) {
+    const monHp = Number(mon?.mhp ?? mon?.hp ?? mon?.data?.mhp ?? NaN);
+    let message = '';
+    if (tipHatMonsterIsWizardCuss(mon, monName)) {
+        if (!rn2(5)) {
+            message = `${name} laughs fiendishly.`;
+        } else if (game.u?.uhave?.amulet && !rn2(TIPHAT_CUSS_RANDOM_INSULTS.length)) {
+            message = `"Relinquish the amulet, ${TIPHAT_CUSS_RANDOM_INSULTS[rn2(TIPHAT_CUSS_RANDOM_INSULTS.length)]}!"`;
+        } else if ((game.u?.uhp || 0) < 5 && !rn2(2)) {
+            message = rn2(2)
+                ? `"Even now thy life force ebbs, ${TIPHAT_CUSS_RANDOM_INSULTS[rn2(TIPHAT_CUSS_RANDOM_INSULTS.length)]}!"`
+                : `"Savor thy breath, ${TIPHAT_CUSS_RANDOM_INSULTS[rn2(TIPHAT_CUSS_RANDOM_INSULTS.length)]}, it be thy last!"`;
+        } else if (Number.isFinite(monHp) && monHp < 5 && !rn2(2)) {
+            message = rn2(2) ? '"I shall return."' : '"I\'ll be back."';
+        } else {
+            message = `"${TIPHAT_CUSS_RANDOM_MALEDICTIONS[rn2(TIPHAT_CUSS_RANDOM_MALEDICTIONS.length)]} ${TIPHAT_CUSS_RANDOM_INSULTS[rn2(TIPHAT_CUSS_RANDOM_INSULTS.length)]}!"`;
+        }
+    } else if (tipHatMonsterIsLawfulMinion(mon)) {
+        message = tipHatCommonPagerLine(TIPHAT_ANGEL_CUSS_MESSAGES);
+    } else if (!rn2(tipHatMonsterIsMinion(mon) ? 100 : 5)) {
+        message = `${name} casts aspersions on your ancestry.`;
+    } else {
+        message = tipHatCommonPagerLine(TIPHAT_DEMON_CUSS_MESSAGES);
+    }
+    const wakeMessages = tipHatWakeNearby(mon, 5 * 5);
+    return { handled: true, message: [message, ...wakeMessages].filter(Boolean).join('  ') };
+}
+
 function tipHatMonsterSound(mon) {
     const data = mon?.data || {};
     const explicit = mon?.msound ?? mon?.sound ?? data.msound ?? data.sound;
@@ -34239,11 +34363,9 @@ function tipHatMonsterNoise(mon, { visible = tipHatMonsterVisible(mon) } = {}) {
         return { handled: true, message: `${name} seems to mutter a cantrip.` };
     case 'cuss':
         if (peaceful) {
-            const lminion = !!(mon.lminion || mon.is_lminion || mon.isLminion
-                || mon.data?.lminion || mon.data?.is_lminion || mon.data?.isLminion);
-            return { handled: true, message: lminion ? `"It's not too late."` : `"We're all doomed."` };
+            return { handled: true, message: tipHatMonsterIsLawfulMinion(mon) ? `"It's not too late."` : `"We're all doomed."` };
         }
-        return { handled: false, message: '' };
+        return tipHatHostileCussNoise(mon, name, monName);
     case 'arrest': {
         if (peaceful)
             return { handled: true, message: `"Just the facts, ${game.flags?.female ? "Ma'am" : 'Sir'}."` };

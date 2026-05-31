@@ -4224,7 +4224,8 @@ test('worn helmet tip makes peaceful lawful minion cuss about redemption', async
 
 async function tipInvisibleExplicitSound({ name, sound, peaceful = false, tame = 0,
     gold = 0, seed = null, rngLog = false, role = '', inventory = [], data = {}, extra = {},
-    moves = null, traps = null, endgame = false, race = '', hallucinating = false, polyself = null } = {}) {
+    moves = null, traps = null, endgame = false, race = '', hallucinating = false,
+    polyself = null, bystanders = [] } = {}) {
     installStableNonShopFloorState();
     if (seed != null) initRng(seed);
     if (rngLog) enableRngLog({ reset: true });
@@ -4272,7 +4273,7 @@ async function tipInvisibleExplicitSound({ name, sound, peaceful = false, tame =
         game.inventory.push(goldPieces(3063557, gold));
         game._goldCount = gold;
     }
-    game.level.monsters = [target];
+    game.level.monsters = [target, ...bystanders];
     if (traps) game.level.traps = traps;
     markSquareVisible(6, 5);
 
@@ -4400,6 +4401,52 @@ test('worn helmet tip maps invisible djinni speech variants', async () => {
     });
     assert.match(game._pending_message, /"Get me out of here\."/);
     assert.doesNotMatch(game._pending_message, /The prisoner|disturb me|waves/);
+});
+
+test('worn helmet tip makes hostile invisible imp cuss and wake nearby sleepers', async () => {
+    const sleeper = ordinaryThrowTarget('dog', 7, 5, {
+        msleeping: 1,
+        mcanmove: true,
+        mcansee: true,
+        mpeaceful: true,
+        mstrategy: 'waitforu',
+        data: { name: 'dog', mlevel: 4, mlet: 'dog' },
+    });
+
+    await tipInvisibleExplicitSound({
+        name: 'imp',
+        sound: 'MS_CUSS',
+        peaceful: false,
+        rngLog: true,
+        data: { mlevel: 3, mlet: 'imp' },
+        bystanders: [sleeper],
+    });
+
+    assert.match(game._pending_message, /(?:It casts aspersions on your ancestry\.|"[^"]+")/);
+    assert.doesNotMatch(game._pending_message,
+        /Nothing happens|doesn't respond|ignoring you|waves|We're all doomed|It's not too late/);
+    const calls = getRngLog().map(entry => entry.replace(/=.*/, ''));
+    assert.equal(calls[0], 'rn2(5)');
+    assert.ok(calls.length === 1 || (calls.length === 2 && calls[1] === 'rn2(27)'));
+    assert.equal(sleeper.msleeping, 0);
+    assert.equal(sleeper.mstrategy, 0);
+});
+
+test('worn helmet tip makes hostile invisible lawful minion use angel cuss', async () => {
+    await tipInvisibleExplicitSound({
+        name: 'Angel',
+        sound: 'MS_CUSS',
+        peaceful: false,
+        rngLog: true,
+        extra: { lminion: true },
+        data: { mlevel: 14, mlet: 'A', humanoid: true, isminion: true, maligntyp: 12 },
+    });
+
+    assert.match(game._pending_message, /"[^"]+"/);
+    assert.doesNotMatch(game._pending_message,
+        /Nothing happens|doesn't respond|We're all doomed|It's not too late|casts aspersions|Come here often|Eat slime and die|grid bug|waves/);
+    assert.doesNotMatch(game._pending_message, /%[Dp]/);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(14)']);
 });
 
 test('worn helmet tip makes invisible explicit orc sound grunt', async () => {
