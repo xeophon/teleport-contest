@@ -23,6 +23,7 @@ import { init_rect, rnd_rect, get_rect, split_rects } from './rect.js';
 import { depth as depth_of_level } from './hacklib.js';
 import { RNDMONST_COMMON_MONSTERS } from './monster_data.js';
 import { datFileText } from './dat_files.js';
+import { TRIBUTE_NOVEL_TITLES } from './tribute.js';
 import { clearBuriedOrganicRotTimer, clearCorpseTimeout, freezeObjectInIcebox, objectIceEffect, restoreBuriedBallIfNeeded, startCorpseTimeout } from './ice.js';
 import { applySlimeMoldFruitFields } from './fruit.js';
 import {
@@ -4787,8 +4788,16 @@ export function mkobj(oclass, artif) {
         }
         const otmp = mksobj(SPBOOK_no_NOVEL, true, artif);
         if (spellbook[1] === 'novel') {
-            rn2(41);
-            Object.assign(otmp, { kind: 'novel', cls: 'spellbook', glyph: '+', color: CLR_BRIGHT_BLUE });
+            const novelidx = rn2(TRIBUTE_NOVEL_TITLES.length);
+            Object.assign(otmp, {
+                kind: 'novel',
+                actualKind: 'novel',
+                cls: 'spellbook',
+                glyph: '+',
+                color: CLR_BRIGHT_BLUE,
+                novelidx,
+                novelTitle: TRIBUTE_NOVEL_TITLES[novelidx],
+            });
         } else {
             const blank = spellbook[1] === 'blank paper';
             Object.assign(otmp, {

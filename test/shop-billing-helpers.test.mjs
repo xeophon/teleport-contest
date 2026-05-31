@@ -11,6 +11,7 @@ import { enableRngLog, getRngLog, initRng } from '../js/rng.js';
 import { A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_STR, A_WIS, BILLSZ, CANDLESHOP, CLOUD, CORPSTAT_HISTORIC, COULD_SEE, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, D_CLOSED, D_NODOOR, FOUNTAIN, HOLE, ICE, ICED_POOL, IN_SIGHT, LADDER, LAVAPOOL, MIGR_LADDER_UP, MIGR_SSTAIRS, MIGR_STAIRS_UP, MOAT, M_AP_FURNITURE, M_AP_OBJECT, NORMAL_SPEED, PIT, POOL, REPAIR_DELAY, ROOM, ROOMOFFSET, SDOOR, SHOPBASE, SHOP_DOOR_COST, SQKY_BOARD, STAIRS, STATUE_TRAP, STONE, STRAT_APPEARMSG, STRAT_WAITFORU, TRAPDOOR, TT_WEB, WEB, W_SADDLE } from '../js/const.js';
 import { currentFruitId, setCurrentFruitName } from '../js/fruit.js';
 import { CLR_BRIGHT_MAGENTA, CLR_BROWN, CLR_WHITE } from '../js/terminal.js';
+import { TRIBUTE_DEATH_QUOTES } from '../js/tribute.js';
 import { vision_reset } from '../js/vision.js';
 
 const BRASS_LANTERN = 226;
@@ -4793,6 +4794,75 @@ test('worn helmet tip makes invisible explicit non-Death Rider ask about War wit
     assert.equal(result.target.mstrategy, 0);
     assert.equal(result.targetLoc.map_invisible, true);
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
+});
+
+test('worn helmet tip infers invisible Death Rider fallback as uppercase unquoted speech', async () => {
+    const result = await tipInvisibleExplicitSound({
+        name: 'Death',
+        peaceful: false,
+        seed: 1,
+        rngLog: true,
+        data: { mlevel: 30, mlet: 'demon', humanoid: true, unique: true },
+    });
+
+    assert.equal(result.message,
+        'You briefly doff your helm.  WHO DO YOU THINK YOU ARE, WAR?');
+    assert.doesNotMatch(result.message,
+        /"Who do you think you are, War\\?"|The Death|Nothing happens|doesn't respond|Sandman|copy of|misquoted/);
+    assert.equal(result.targetLoc.map_invisible, true);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(3)', 'rn2(10)']);
+});
+
+test('worn helmet tip makes invisible Death read Sandman on the C no-quote branch', async () => {
+    const result = await tipInvisibleExplicitSound({
+        name: 'Death',
+        peaceful: false,
+        seed: 31,
+        rngLog: true,
+        data: { mlevel: 30, mlet: 'demon', humanoid: true, unique: true },
+    });
+
+    assert.equal(result.message,
+        'You briefly doff your helm.  It is busy reading a copy of Sandman #8.');
+    assert.doesNotMatch(result.message,
+        /WHO DO YOU THINK YOU ARE|The Death|Nothing happens|doesn't respond|misquoted/);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(3)', 'rn2(10)']);
+});
+
+test('worn helmet tip makes invisible Death notice a carried novel before RNG speech gates', async () => {
+    const result = await tipInvisibleExplicitSound({
+        name: 'Death',
+        peaceful: false,
+        rngLog: true,
+        inventory: [{ letter: 'n', cls: 'spellbook', kind: 'novel', actualKind: 'novel', novelidx: 3 }],
+        data: { mlevel: 30, mlet: 'demon', humanoid: true, unique: true },
+    });
+
+    assert.equal(result.message,
+        'You briefly doff your helm.  AH, SO YOU HAVE A COPY OF /MORT/.  I MAY HAVE BEEN MISQUOTED THERE.');
+    assert.equal(game.context.tribute.Deathnotice, 1);
+    assert.doesNotMatch(result.message,
+        /WHO DO YOU THINK YOU ARE|Sandman|The Death|Nothing happens|doesn't respond/);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(41)']);
+});
+
+test('worn helmet tip makes invisible Death use source-backed quote passages', async () => {
+    const result = await tipInvisibleExplicitSound({
+        name: 'Death',
+        peaceful: false,
+        seed: 2,
+        rngLog: true,
+        data: { mlevel: 30, mlet: 'demon', humanoid: true, unique: true },
+    });
+    const payload = result.message.replace(/^You briefly doff your helm\.  /, '');
+    const rngCalls = getRngLog().map(entry => entry.replace(/=.*/, ''));
+
+    assert.ok(TRIBUTE_DEATH_QUOTES.includes(payload), payload);
+    assert.equal(payload, payload.toUpperCase());
+    assert.doesNotMatch(payload, /^"|Who do you think you are|Sandman|Nothing happens/);
+    assert.equal(rngCalls[0], 'rn2(3)');
+    assert.ok(rngCalls.includes('rn2(31)'));
+    assert.equal(rngCalls.at(-1), 'rn2(30)');
 });
 
 test('worn helmet tip makes tame invisible briber fall through to doomed cuss without RNG', async () => {

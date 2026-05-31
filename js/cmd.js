@@ -16,6 +16,7 @@ import { DISPLAY_MONSTER_COLORS, DISPLAY_MONSTER_GLYPHS, DISPLAY_MONSTER_HALLU_N
 import { prepareVaultGuardEscort } from './vault.js';
 import { clearMonsterTrack, updateMonsterTrack } from './montrack.js';
 import { datFileLines as bundledDatFileLines } from './dat_files.js';
+import { TRIBUTE_DEATH_QUOTES, TRIBUTE_NOVEL_TITLES } from './tribute.js';
 import { advanceFireBreathRay, applyFireRayFountainTerrain, applyFireRayIceTerrain, applyFireRayWaterTerrain, burnFireRayWebTrap, finishHeroTargetedBreath, fireBreathDamageHero, fireBreathDamageMonster, fireBreathZapHits } from './fire_breath.js';
 import { dryupFountainAt, dryupFountainResultAt } from './fountain.js';
 import {
@@ -34352,7 +34353,7 @@ function tipHatMonsterSound(mon) {
     if (tipHatMonsterIsShopkeeperType(mon, name)) return 'sell';
     if (/^(gremlin|leprechaun)$/.test(name)) return 'laugh';
     if (name === 'skeleton') return 'bones';
-    if (/^(pestilence|famine)$/.test(name)) return 'rider';
+    if (/^(death|pestilence|famine)$/.test(name)) return 'rider';
     if (/\bzombie$/.test(name) || (mlet === 'zombie' && name !== 'ghoul')) return 'groan';
     if (name === 'shrieker') return 'shriek';
     if (/^(mumak|mastodon)$/.test(name)) return 'trumpet';
@@ -34475,6 +34476,118 @@ function tipHatWakeNearby(mon, distance) {
     }
     disturbBuriedZombieCorpseTimersAt(mon?.mx || 0, mon?.my || 0);
     return messages;
+}
+
+const TIPHAT_DEATH_QUOTE_OID = 1;
+const TIPHAT_MAX_TRIBUTE_PASSAGES = 30;
+
+function tipHatTributeContext() {
+    game.context ??= {};
+    game.context.tribute ??= {};
+    return game.context.tribute;
+}
+
+function tipHatNovelTrackingContext() {
+    game.context ??= {};
+    game.context.novel ??= {};
+    return game.context.novel;
+}
+
+function tipHatNovelTitleIndex(value) {
+    if (value == null) return -1;
+    const raw = String(value).trim().replace(/^the\s+/i, 'The ');
+    const lower = raw.toLowerCase();
+    const aliases = new Map([
+        ['the color of magic', 'The Colour of Magic'],
+        ['sorcery', 'Sourcery'],
+        ['masquerade', 'Maskerade'],
+        ['the amazing maurice', 'The Amazing Maurice and His Educated Rodents'],
+        ['thud', 'Thud!'],
+    ]);
+    const canonical = aliases.get(lower) || raw;
+    const wanted = canonical.toLowerCase();
+    return TRIBUTE_NOVEL_TITLES.findIndex(title =>
+        title.toLowerCase() === wanted
+        || title.toLowerCase().replace(/^the\s+/i, '') === wanted
+        || title.toLowerCase() === `the ${wanted}`);
+}
+
+function tipHatNovelTitle(item) {
+    const roll = rn2(TRIBUTE_NOVEL_TITLES.length);
+    let index = Number.isInteger(item?.novelidx) ? item.novelidx
+        : Number.isInteger(item?.novelIndex) ? item.novelIndex
+            : tipHatNovelTitleIndex(item?.novelTitle ?? item?.title ?? item?.oname);
+    if (index < 0 || index >= TRIBUTE_NOVEL_TITLES.length) {
+        index = roll;
+        if (item) item.novelidx = index;
+    }
+    return TRIBUTE_NOVEL_TITLES[index] || '';
+}
+
+function tipHatHeroCarriedNovel() {
+    return (game.inventory || []).find(item => {
+        const kind = String(item?.actualKind || item?.kind || item?.name || '').toLowerCase();
+        return item?.novel || (item?.cls === 'spellbook' && kind === 'novel');
+    }) || null;
+}
+
+function tipHatChooseTributePassage(passageCount, oid) {
+    if (passageCount < 1) return 0;
+    const tracking = tipHatNovelTrackingContext();
+    if (tracking.id !== oid || !tracking.count) {
+        tracking.id = oid;
+        const passages = [];
+        if (passageCount <= TIPHAT_MAX_TRIBUTE_PASSAGES) {
+            for (let idx = 0; idx < passageCount; idx++) passages.push(idx + 1);
+        } else {
+            let range = passageCount;
+            let limit = TIPHAT_MAX_TRIBUTE_PASSAGES;
+            for (let idx = 0; idx < passageCount; idx++, range--) {
+                if (range > 0 && rn2(range) < limit) {
+                    passages.push(idx + 1);
+                    limit--;
+                }
+            }
+        }
+        tracking.count = passages.length;
+        tracking.pasg = passages;
+    }
+    const idx = rn2(tracking.count);
+    const passage = tracking.pasg[idx];
+    tracking.count--;
+    tracking.pasg[idx] = tracking.pasg[tracking.count];
+    return passage;
+}
+
+function tipHatDeathQuote() {
+    const passage = tipHatChooseTributePassage(TRIBUTE_DEATH_QUOTES.length, TIPHAT_DEATH_QUOTE_OID);
+    return TRIBUTE_DEATH_QUOTES[passage - 1] || '';
+}
+
+function tipHatDeathSpeech(message) {
+    return String(message || '').toUpperCase();
+}
+
+function tipHatDeathRiderNoise(name) {
+    const tribute = tipHatTributeContext();
+    const book = !tribute.Deathnotice ? tipHatHeroCarriedNovel() : null;
+    if (book) {
+        const title = tipHatNovelTitle(book);
+        tribute.Deathnotice = 1;
+        if (title) {
+            let message = `Ah, so you have a copy of /${title}/.`;
+            if (title !== 'Snuff' && title !== 'The Wee Free Men')
+                message += '  I may have been misquoted there.';
+            return { handled: true, message: tipHatDeathSpeech(message) };
+        }
+    }
+    if (rn2(3)) {
+        const quote = tipHatDeathQuote();
+        if (quote) return { handled: true, message: tipHatDeathSpeech(quote) };
+    }
+    if (!rn2(10))
+        return { handled: true, message: `${name} is busy reading a copy of Sandman #8.` };
+    return { handled: true, message: tipHatDeathSpeech('Who do you think you are, War?') };
 }
 
 function tipHatAggravateMonsters() {
@@ -34694,7 +34807,7 @@ function tipHatMonsterNoise(mon, { visible = tipHatMonsterVisible(mon) } = {}) {
         return { handled: true, message: `"I vill come after ${prey} without regret!"` };
     }
     case 'rider':
-        if (monName === 'death') return { handled: false, message: '' };
+        if (monName === 'death') return tipHatDeathRiderNoise(name);
         return { handled: true, message: '"Who do you think you are, War?"' };
     case 'bribe':
         if (peaceful && !tame) return { handled: false, message: '' };
