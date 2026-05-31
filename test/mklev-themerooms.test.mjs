@@ -20,6 +20,17 @@ const BOULDER = 465;
 const CORPSE = 471;
 const STATUE = 472;
 
+const MASSACRE_CORPSE_NAMES = new Set([
+    'apprentice', 'warrior', 'ninja', 'thug',
+    'hunter', 'acolyte', 'abbot', 'page',
+    'attendant', 'neanderthal', 'chieftain',
+    'student', 'wizard', 'valkyrie', 'tourist',
+    'samurai', 'rogue', 'ranger', 'priestess',
+    'priest', 'monk', 'knight', 'healer',
+    'cavewoman', 'caveman', 'barbarian',
+    'archeologist',
+]);
+
 function installThemeroomGame({
     dlevel = 1,
     moves = 100,
@@ -605,6 +616,30 @@ test('themed buried zombie corpses use buriedobjlist with explicit zombify timer
         assert.ok(corpse.oy >= room.ly && corpse.oy <= room.hy);
         assert.equal(allowed.has(corpse.corpsenm?.name), true);
     }
+});
+
+test('themed Massacre creates explicit role corpse piles without side effects', async () => {
+    const { g, room } = installThemeroomGame({
+        dlevel: 7, moves: 200, seed: 40, width: 7, height: 6,
+    });
+    await mklevHooks.apply_themeroom_fill({ name: 'Massacre' }, room);
+
+    const corpses = g.level.objects.filter(obj => obj.otyp === CORPSE);
+    assert.equal(room.themeFillName, 'Massacre');
+    assert.ok(corpses.length >= 5 && corpses.length <= 25);
+    assert.equal(g.level.objects.length, corpses.length);
+    assert.equal(g.level.monsters.length, 0);
+    assert.equal(g.level.traps.length, 0);
+    for (const corpse of corpses) {
+        assert.equal(MASSACRE_CORPSE_NAMES.has(corpse.corpsenm?.name), true);
+        assert.equal(corpse.spe, 0);
+        assert.equal(corpse.rotAwayTurn > g.moves, true);
+        assert.equal(corpse.ox >= room.lx && corpse.ox <= room.hx, true);
+        assert.equal(corpse.oy >= room.ly && corpse.oy <= room.hy, true);
+    }
+    for (let x = room.lx; x <= room.hx; x++)
+        for (let y = room.ly; y <= room.hy; y++)
+            assert.equal(g.level.at(x, y).typ, ROOM);
 });
 
 test('themed Ice room converts room terrain and gates C melt timers', async () => {

@@ -21,9 +21,9 @@ Priority order for real porting work:
 Current validation snapshot:
 
 - Runtime replay remnants are absent from `js/` and `tools/`.
-- `bash frozen/score.sh` currently reports 35/44 public sessions
-  passing. The remaining failures are expected to be fixed through real C
-  subsystem ports, not by restoring public-session route shims.
+- `bash frozen/score.sh` currently reports 44/44 public sessions
+  passing. Future regressions should be fixed through real C subsystem ports,
+  not by restoring public-session route shims.
 - Syntax checks pass for `js/jsmain.js`, `js/cmd.js`, `js/display.js`,
   `js/rng.js`, `js/allmain.js`, `js/mklev.js`, and `js/save.js`.
   `git diff --check` and `git diff --cached --check` are clean.
@@ -499,6 +499,9 @@ Current validation snapshot:
 - `Ice room` themed fills now convert the room selection to ice and use the Lua
   `percent(25)` melt-timer branch with one `rn2(1000)` timeout roll per room
   point.
+- `Massacre` themed fills now create `d(5,5)` explicit role/guardian corpses,
+  preserve the Lua species list and 10% reroll behavior, and leave the room's
+  terrain/trap/monster state untouched.
 - The Brown Mold/post-heal route cleanup removed the last public-trace state
   machines named `_brown_mold*`, `_post_heal*`, and `POST_HEAL*` from runtime
   JS. Level teleporting, Quest-goal arrival, fountain quaffing, punishment

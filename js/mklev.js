@@ -19928,6 +19928,21 @@ function shuffleThemeroomList(list) {
     }
 }
 
+const MASSACRE_CORPSES = [
+    'apprentice', 'warrior', 'ninja', 'thug',
+    'hunter', 'acolyte', 'abbot', 'page',
+    'attendant', 'neanderthal', 'chieftain',
+    'student', 'wizard', 'valkyrie', 'tourist',
+    'samurai', 'rogue', 'ranger', 'priestess',
+    'priest', 'monk', 'knight', 'healer',
+    'cavewoman', 'caveman', 'barbarian',
+    'archeologist',
+];
+
+function themeroomMassacreCorpse(name) {
+    return RANDOM_MONSTER_BY_NAME.get(name) || { name, neuter: false };
+}
+
 function themeroom_buried_zombies(croom) {
     const zombifiable = themeroomBuriedZombieSpecies();
     const count = Math.trunc(((croom.hx - croom.lx + 1) * (croom.hy - croom.ly + 1)) / 2);
@@ -19949,6 +19964,20 @@ function themeroom_buried_zombies(croom) {
         Object.assign(corpse, object_display(corpse), { ox: x, oy: y });
         game.level.buriedobjlist ??= [];
         game.level.buriedobjlist.push(corpse);
+    }
+}
+
+function themeroom_massacre(croom) {
+    const pos = { x: 0, y: 0 };
+    let idx = rn2(MASSACRE_CORPSES.length);
+    for (let i = 0, count = d(5, 5); i < count; i++) {
+        if (rn2(100) < 10) idx = rn2(MASSACRE_CORPSES.length);
+        if (!somexyspace(croom, pos)) continue;
+        const corpse = mksobj_at(CORPSE, pos.x, pos.y, true, false);
+        corpse.corpsenm = themeroomMassacreCorpse(MASSACRE_CORPSES[idx]);
+        corpse.spe = 0;
+        startCorpseTimeout(corpse);
+        Object.assign(corpse, object_display(corpse));
     }
 }
 
@@ -20083,6 +20112,7 @@ async function apply_themeroom_fill(fill, croom, rows = null, startX = 0, startY
     else if (fill?.name === 'Spider nest') await themeroom_spider_nest(croom);
     else if (fill?.name === 'Trap room') await themeroom_trap_room(croom);
     else if (fill?.name === 'Buried zombies') themeroom_buried_zombies(croom);
+    else if (fill?.name === 'Massacre') themeroom_massacre(croom);
     else if (fill?.name === 'Statuary') await themeroom_statuary(croom);
     else if (fill?.name === 'Light source') themeroom_light_source(croom);
     else if (fill?.name === 'Temple of the gods') themeroom_temple_of_the_gods(croom);
