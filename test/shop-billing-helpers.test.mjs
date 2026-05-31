@@ -4226,10 +4226,14 @@ async function tipInvisibleExplicitSound({ name, sound, peaceful = false, tame =
     gold = 0, seed = null, rngLog = false, role = '', inventory = [], data = {}, extra = {},
     moves = null, traps = null, endgame = false, race = '', hallucinating = false,
     polyself = null, bystanders = [], moonphase = null, datetime = null, night = null,
-    hour = null } = {}) {
+    hour = null, heroFemale = null } = {}) {
     installStableNonShopFloorState();
     if (seed != null) initRng(seed);
     if (rngLog) enableRngLog({ reset: true });
+    if (heroFemale != null) {
+        game.flags.female = !!heroFemale;
+        game.u.female = !!heroFemale;
+    }
     if (moves != null) {
         game.moves = moves;
         game.context ??= {};
@@ -4614,6 +4618,84 @@ test('worn helmet tip makes tame invisible lawful briber fall through to lminion
     assert.equal(result.target.mstrategy, 0);
     assert.equal(result.targetLoc.map_invisible, true);
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
+});
+
+test('worn helmet tip makes same-gender invisible nymph cajole without RNG', async () => {
+    const result = await tipInvisibleExplicitSound({
+        name: 'water nymph',
+        sound: 'MS_SEDUCE',
+        peaceful: false,
+        rngLog: true,
+        heroFemale: true,
+        extra: { female: true },
+        data: { mlevel: 3, mlet: 'n', nymph: true, female: true, humanoid: true },
+    });
+
+    assert.equal(result.message,
+        'You briefly doff your helm.  It cajoles you.');
+    assert.doesNotMatch(result.message,
+        /The water nymph|Hello, sailor|comes on to you|doesn't respond|Nothing happens|waves|gestures|unseen creature/);
+    assert.equal(result.target.mstrategy, 0);
+    assert.equal(result.targetLoc.map_invisible, true);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
+});
+
+test('worn helmet tip infers same-gender invisible nymph seduction without RNG', async () => {
+    const result = await tipInvisibleExplicitSound({
+        name: 'wood nymph',
+        peaceful: false,
+        rngLog: true,
+        heroFemale: true,
+        extra: { female: true },
+        data: { mlevel: 3, mlet: 'n', nymph: true, female: true, humanoid: true },
+    });
+
+    assert.equal(result.message,
+        'You briefly doff your helm.  It cajoles you.');
+    assert.doesNotMatch(result.message,
+        /The wood nymph|Hello, sailor|comes on to you|doesn't respond|Nothing happens|waves|gestures|unseen creature/);
+    assert.equal(result.target.mstrategy, 0);
+    assert.equal(result.targetLoc.map_invisible, true);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
+});
+
+test('worn helmet tip keeps visible peaceful seducing nymph on humanoid wave before seduce sound', async () => {
+    installStableNonShopFloorState();
+    game.flags.female = true;
+    game.u.female = true;
+    const helmet = wornArmor(3063562, 'orcish helm', 'h');
+    const nymph = ordinaryThrowTarget('water nymph', 6, 5, {
+        female: true,
+        msleeping: 0,
+        mcanmove: true,
+        mcansee: true,
+        mpeaceful: true,
+        mstrategy: 'waitforu',
+        data: {
+            name: 'water nymph',
+            mlevel: 3,
+            mlet: 'n',
+            nymph: true,
+            female: true,
+            humanoid: true,
+            msound: 'MS_SEDUCE',
+        },
+    });
+    game.inventory = [helmet];
+    game.level.monsters = [nymph];
+    markSquareVisible(6, 5);
+
+    await enterTipCommand();
+    await rhack('h');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(nymph.mstrategy, 0);
+    assert.equal(game._pending_message,
+        'You briefly doff your helm.  The water nymph waves.');
+    assert.doesNotMatch(game._pending_message,
+        /cajoles|Hello, sailor|comes on to you|doesn't respond|Nothing happens|gestures/);
 });
 
 test('worn helmet tip infers invisible Famine rider speech without RNG', async () => {

@@ -33717,12 +33717,20 @@ function tipHatMonsterResponsive(mon) {
     return true;
 }
 
+function tipHatMonsterIsNymph(mon, monName = '', mlet = '') {
+    const data = mon?.data || {};
+    const name = String(monName || data.name || mon?.name || '').toLowerCase();
+    const letter = String(mlet || data.mlet || mon?.mlet || '').toLowerCase();
+    return !!(mon?.nymph || data.nymph || letter === 'n' || letter === 'nymph' || /\bnymph\b/.test(name));
+}
+
 function tipHatMonsterHumanoid(mon) {
     const data = mon?.data || {};
     const mlet = data.mlet || mon?.mlet || '';
     const name = String(data.name || mon?.name || '').toLowerCase();
     return !!(data.humanoid || data.human || mlet === 'humanoid' || mlet === 'human' || mlet === '@'
         || data.name === 'human' || /^(gremlin|leprechaun|skeleton|death|pestilence|famine)$/.test(name)
+        || tipHatMonsterIsNymph(mon, name, mlet)
         || tipHatMonsterIsVampireInOwnForm(name)
         || /\bzombie$/.test(name));
 }
@@ -33732,6 +33740,13 @@ function tipHatMonsterPossessive(mon) {
     if (mon?.female || data.female) return 'her';
     if (mon?.male || data.male) return 'his';
     return 'its';
+}
+
+function tipHatMonsterFemale(mon) {
+    const data = mon?.data || {};
+    if (mon?.female != null) return !!mon.female;
+    if (data.female != null) return !!data.female;
+    return false;
 }
 
 function heroHasConflict() {
@@ -34166,6 +34181,7 @@ function tipHatMonsterSound(mon) {
     if (/\bnaga\b/.test(name)) return 'mumble';
     if (name === 'ki-rin') return 'spell';
     if (name === 'imp') return 'cuss';
+    if (tipHatMonsterIsNymph(mon, name, mlet)) return 'seduce';
     if (tipHatMonsterIsHumanWereForm(mon, name, mlet)) return 'were';
     if (tipHatMonsterIsVampireInOwnForm(name)) return 'vampire';
     if (TIPHAT_BOAST_MONSTER_NAMES.has(name)) return 'boast';
@@ -34407,6 +34423,15 @@ function tipHatMonsterNoise(mon, { visible = tipHatMonsterVisible(mon) } = {}) {
         return { handled: true, message: `${name} mumbles incomprehensibly.` };
     case 'spell':
         return { handled: true, message: `${name} seems to mutter a cantrip.` };
+    case 'seduce': {
+        if (!tipHatMonsterIsNymph(mon, monName)) return { handled: false, message: '' };
+        if (!!game.flags?.female !== tipHatMonsterFemale(mon)) {
+            const swval = rn2(3);
+            if (swval === 2) return { handled: true, message: '"Hello, sailor."' };
+            if (swval === 1) return { handled: true, message: `${name} comes on to you.` };
+        }
+        return { handled: true, message: `${name} cajoles you.` };
+    }
     case 'were': {
         const fullMoon = game.flags?.moonphase === 4;
         const isNight = tipHatIsNight();
