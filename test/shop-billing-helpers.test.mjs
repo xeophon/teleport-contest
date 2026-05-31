@@ -7724,6 +7724,114 @@ test('automatic monster turn briber whispers at false image and relocates demon 
     assert.ok(calls.includes('rn2(21)'));
 });
 
+test('automatic monster turn true briber with Excalibur angers before demand and keeps acting', async () => {
+    installStableNonShopFloorState();
+    initRng(2);
+    enableRngLog({ reset: true });
+    const excalibur = { ...wieldedWeapon(3063560, 'long sword', 'w'), artifact: 'Excalibur' };
+    game.inventory = [excalibur, goldPieces(3063565, 500)];
+    game._goldCount = 500;
+    game.u.uhp = 20;
+    game.u.uac = 10;
+    markHeroNeighborhoodVisible();
+    const briber = ordinaryThrowTarget('Asmodeus', 6, 5, {
+        movement: NORMAL_SPEED,
+        msleeping: 0,
+        mcanmove: true,
+        mcansee: true,
+        mpeaceful: true,
+        mtame: 0,
+        minvis: 0,
+        perminvis: 0,
+        mux: game.u.ux,
+        muy: game.u.uy,
+        mhp: 80,
+        mhpmax: 80,
+        m_lev: 53,
+        data: {
+            name: 'Asmodeus',
+            msound: 'MS_BRIBE',
+            mlevel: 53,
+            mlet: '&',
+            demon: true,
+            demonPrince: true,
+            unique: true,
+            maligntyp: -20,
+            attack: { dice: 1, sides: 1, verb: 'hits' },
+        },
+    });
+    game.level.monsters = [briber];
+
+    queueEscapeForMonsterTurn();
+    await processMonsterTurns();
+
+    assert.match(game._pending_message || '', /The Asmodeus looks very angry\./);
+    assert.match(game._pending_message || '', /The Asmodeus hits!/);
+    assert.equal(briber.mpeaceful, 0);
+    assert.equal(briber.mtame, 0);
+    assert.equal(briber.hostile, true);
+    assert.equal(briber._last_demon_bribe_demand, undefined);
+    assert.equal(game.u.uhp, 19);
+    assert.equal(game._command_mode || null, null);
+    assert.doesNotMatch(game._pending_message || '', /demands|safe passage|How much/);
+    const calls = getRngLog().map(entry => entry.replace(/=.*/, ''));
+    assert.ok(!calls.includes('rnd(80)'));
+    assert.ok(calls.includes('rnd(20)'));
+    assert.ok(calls.includes('d(1,1)'));
+});
+
+test('automatic monster turn invisible prince with Excalibur reports tension before reveal or demand', async () => {
+    installStableNonShopFloorState();
+    initRng(2);
+    enableRngLog({ reset: true });
+    const excalibur = { ...wieldedWeapon(3063560, 'long sword', 'w'), artifact: 'Excalibur' };
+    game.inventory = [excalibur, goldPieces(3063565, 500)];
+    game._goldCount = 500;
+    markHeroNeighborhoodVisible();
+    const briber = ordinaryThrowTarget('Asmodeus', 6, 5, {
+        movement: NORMAL_SPEED,
+        msleeping: 0,
+        mcanmove: true,
+        mcansee: true,
+        mpeaceful: true,
+        mtame: 0,
+        minvis: 1,
+        perminvis: 1,
+        mux: game.u.ux,
+        muy: game.u.uy,
+        mhp: 80,
+        mhpmax: 80,
+        m_lev: 53,
+        data: {
+            name: 'Asmodeus',
+            msound: 'MS_BRIBE',
+            mlevel: 53,
+            mlet: '&',
+            demon: true,
+            demonPrince: true,
+            unique: true,
+            maligntyp: -20,
+            noattacks: true,
+        },
+    });
+    game.level.monsters = [briber];
+
+    queueEscapeForMonsterTurn();
+    await processMonsterTurns();
+
+    assert.equal(game._pending_message, 'You feel tension building.');
+    assert.equal(briber.mpeaceful, 0);
+    assert.equal(briber.mtame, 0);
+    assert.equal(briber.hostile, true);
+    assert.equal(briber.minvis, 1);
+    assert.equal(briber.perminvis, 1);
+    assert.equal(briber.invisible, undefined);
+    assert.equal(briber._last_demon_bribe_demand, undefined);
+    assert.equal(game._command_mode || null, null);
+    const calls = getRngLog().map(entry => entry.replace(/=.*/, ''));
+    assert.ok(!calls.includes('rnd(80)'));
+});
+
 test('automatic monster turn true briber with no gold turns hostile silently', async () => {
     installStableNonShopFloorState();
     initRng(2);

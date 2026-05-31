@@ -3,7 +3,7 @@
 
 import { game } from './gstate.js';
 import { mklev, l_nhcore_init, u_on_upstairs, makemon, mkcorpstat, mksobj, wipe_engr_at, dropMonsterInventory, wandIndexForRoll, scrollIndexForRoll, potionIndexForRoll, RANDOM_MONSTER_BY_NAME, STONE_RESISTANT_MONSTERS, adjustedMonsterLevel, monsterByRndName, monster_hp, rndmonnum, syncDungeonContext, next_ident, set_malign, enextoMonsterSpot, getbogusmon, pickNasty, chameleonAnimalForm, doppelgangerHumanoidForm, noteleportLevelForMonster, rlocNoMsg, rlocToCoreNoMsg, somexyspace, fumaroles, createMonsterCorpseOrGlob, monsterCorpseDropSucceeds, monsterLeavesCorpseLikeDrop, movebubbles, add_to_minv } from './mklev.js';
-import { rhack, pickupObjectName, inventoryItemName, inventoryLetterRank, recordVanquished, finishForceLock, loseExperienceLevel, finishLevelTeleport, finishPickDigDownwardHole, finishPickDigDownwardPit, maybeQueueQuestTalk, monsterGrowUp, monsterHostileCussNoise, monsterTurnDemonBribeNoGold, processForceLockOccupationTick, forceLockOccupationShouldGiveUp, processSpellbookStudyOccupation, processTinOpeningOccupation, finishTinOpeningOccupation, refreshSwallowOverlay, finishSwallowExpel, travelPathKeys, updateGauntletsOfPowerStrength, consumeLifeSavingAmulet, activateStatueTrap, breakStatueObject, burnFloorObjectsByFire, burnRayFloorObjectsByFire, erodeArmorByFireTrap, dryWetTowelFromFire, igniteMonsterFireInventoryItems, monsterFireInventoryDamage, dropMonsterObject, earthFloorEffects, landMonsterThrownObject, stoneMonster, processCorpseTimers, processGlobShrinkTimers, addDelayedFoodBiteNutrition, repairShopDamageForShopkeeper, heroHasAntimagic, heroHasSlowDigestion, applyHeroOrdinaryHunger } from './cmd.js';
+import { rhack, pickupObjectName, inventoryItemName, inventoryLetterRank, recordVanquished, finishForceLock, loseExperienceLevel, finishLevelTeleport, finishPickDigDownwardHole, finishPickDigDownwardPit, maybeQueueQuestTalk, monsterGrowUp, monsterHostileCussNoise, monsterTurnDemonBribeArtifact, monsterTurnDemonBribeNoGold, processForceLockOccupationTick, forceLockOccupationShouldGiveUp, processSpellbookStudyOccupation, processTinOpeningOccupation, finishTinOpeningOccupation, refreshSwallowOverlay, finishSwallowExpel, travelPathKeys, updateGauntletsOfPowerStrength, consumeLifeSavingAmulet, activateStatueTrap, breakStatueObject, burnFloorObjectsByFire, burnRayFloorObjectsByFire, erodeArmorByFireTrap, dryWetTowelFromFire, igniteMonsterFireInventoryItems, monsterFireInventoryDamage, dropMonsterObject, earthFloorEffects, landMonsterThrownObject, stoneMonster, processCorpseTimers, processGlobShrinkTimers, addDelayedFoodBiteNutrition, repairShopDamageForShopkeeper, heroHasAntimagic, heroHasSlowDigestion, applyHeroOrdinaryHunger } from './cmd.js';
 import { docrt, cls, bot, flush_screen, pline, newsym, refreshHallucinatedMap, show_glyph_cell } from './display.js';
 import { vision_recalc, vision_reset, init_vision_globals, cansee, couldsee, view_from } from './vision.js';
 import { init_objects } from './o_init.js';
@@ -4339,6 +4339,8 @@ export async function processMonsterTurns() {
                     continue;
                 }
                 if (!resumingPetInventory && !resumedAfterPreturn)
+                    maybeDemonicBlackmailTrueTargetArtifact(mon);
+                if (!resumingPetInventory && !resumedAfterPreturn)
                     maybeDemonicBlackmailTrueTargetNoGold(mon);
                 if (resumedAfterPreturn) resumeAfterPreturn = false;
                 if (!resumingPetInventory && !resumedAfterPreturn && maybeKillerBeeEatRoyalJelly(mon)) {
@@ -7643,7 +7645,7 @@ function maybeDemonicBlackmailFalseImage(mon) {
     return true;
 }
 
-function maybeDemonicBlackmailTrueTargetNoGold(mon) {
+function demonicBlackmailTrueTargetNearby(mon) {
     if (!mon || monsterSoundKey(mon) !== 'bribe' || !mon.mpeaceful || mon.mtame || game.u?.uswallow)
         return false;
     if (mon.mux !== game.u?.ux || mon.muy !== game.u?.uy) return false;
@@ -7651,6 +7653,18 @@ function maybeDemonicBlackmailTrueTargetNoGold(mon) {
     const dy = mon.my - (mon.muy ?? game.u?.uy ?? mon.my);
     const gridBugDiagonal = mon.data?.name === 'grid bug' && dx && dy;
     if (dx * dx + dy * dy >= 3 || gridBugDiagonal) return false;
+    return true;
+}
+
+function maybeDemonicBlackmailTrueTargetArtifact(mon) {
+    if (!demonicBlackmailTrueTargetNearby(mon)) return false;
+    const result = monsterTurnDemonBribeArtifact(mon);
+    if (result?.message) addToplineMessage(result.message);
+    return !!result?.handled;
+}
+
+function maybeDemonicBlackmailTrueTargetNoGold(mon) {
+    if (!demonicBlackmailTrueTargetNearby(mon)) return false;
     const result = monsterTurnDemonBribeNoGold(mon);
     if (result?.message) addToplineMessage(result.message);
     return !!result?.handled;

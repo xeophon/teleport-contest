@@ -36019,6 +36019,15 @@ export function monsterTurnDemonBribeNoGold(mon) {
     return { handled: true, message: revealMessage };
 }
 
+export function monsterTurnDemonBribeArtifact(mon) {
+    if (!mon || !tipHatHeroWieldsDemonBribeArtifact()) return false;
+    const message = tipHatMonsterVisible(mon)
+        ? `${fireScrollMonsterName(mon)} looks very angry.`
+        : 'You feel tension building.';
+    tipHatDemonBribeSetHostile(mon);
+    return { handled: true, message };
+}
+
 function tipHatDemonBribeIsPrince(mon) {
     const data = mon?.data || {};
     return !!(mon?.demonPrince || mon?.isDemonPrince || data.demonPrince || data.isDemonPrince);
