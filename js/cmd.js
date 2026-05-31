@@ -26325,9 +26325,36 @@ function donateGoldToShopkeeper(shkp, gold) {
     return { shkp, donated: gold, coveredDebt, credit, debitBefore: debit, creditBefore: previousCredit };
 }
 
+const HALLUCINATED_SHOP_CURRENCIES = [
+    'Altarian Dollar',
+    'Ankh-Morpork Dollar',
+    'auric',
+    'buckazoid',
+    'cirbozoid',
+    'credit chit',
+    'cubit',
+    'Flanian Pobble Bead',
+    'fretzer',
+    'imperial credit',
+    'Hong Kong Luna Dollar',
+    'kongbuck',
+    'nanite',
+    'quatloo',
+    'simoleon',
+    'solari',
+    'spacebuck',
+    'sporebuck',
+    'Triganic Pu',
+    'woolong',
+    'zorkmid',
+];
+
 function shopCurrency(amount) {
     const gold = Math.max(0, Math.trunc(Number(amount || 0)));
-    return `zorkmid${gold === 1 ? '' : 's'}`;
+    const currency = heroIsHallucinating()
+        ? HALLUCINATED_SHOP_CURRENCIES[rn2(HALLUCINATED_SHOP_CURRENCIES.length)]
+        : 'zorkmid';
+    return `${currency}${gold === 1 ? '' : 's'}`;
 }
 
 function shopGoldDonationMessages(donation, { selling = true } = {}) {

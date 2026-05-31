@@ -3933,6 +3933,8 @@ test('worn helmet tip adjacent invisible zombie silent groan roll still consumes
 
 test('hallucinating worn helmet tip at actual gecko uses sell speech', async () => {
     installNonShopFloorState();
+    initRng(783);
+    enableRngLog({ reset: true });
     game.u.hallucinating = true;
     const helmet = wornArmor(3063546, 'orcish helm', 'h');
     const gecko = ordinaryThrowTarget('gecko', 6, 5, {
@@ -3955,13 +3957,15 @@ test('hallucinating worn helmet tip at actual gecko uses sell speech', async () 
     assert.equal(game.context.move, 1);
     assert.equal(gecko.mstrategy, 0);
     assert.match(game._pending_message, /You briefly doff your helm\./);
-    assert.match(game._pending_message, /"15 minutes could save you 15 zorkmids\."/);
+    assert.match(game._pending_message, /"15 minutes could save you 15 cubits\."/);
     assert.doesNotMatch(game._pending_message, /squeaks|doesn't respond|Nothing happens|waves/);
+    assert.deepEqual(getRngLog(), ['rn2(21)=6']);
 });
 
 test('hallucinating worn helmet tip routes displayed gecko through sell speech', async () => {
     installStableNonShopFloorState();
     initRng(783);
+    enableRngLog({ reset: true });
     game.u.hallucinating = true;
     game.u._statusSuffix = ' Hallu';
     const helmet = wornArmor(3063547, 'orcish helm', 'h');
@@ -3989,8 +3993,9 @@ test('hallucinating worn helmet tip routes displayed gecko through sell speech',
     assert.equal(game.context.move, 1);
     assert.equal(pony.mstrategy, 0);
     assert.match(game._pending_message, /You briefly doff your helm\./);
-    assert.match(game._pending_message, /"15 minutes could save you 15 zorkmids\."/);
+    assert.match(game._pending_message, /"15 minutes could save you 15 cubits\."/);
     assert.doesNotMatch(game._pending_message, /neighs|whickers|doesn't respond|Nothing happens|waves/);
+    assert.deepEqual(getRngLog(), ['rn2(21)=6']);
 });
 
 test('nonhallucinating worn helmet tip at gecko squeaks normally', async () => {
@@ -5486,14 +5491,47 @@ test('hallucinating worn helmet tip at resident shopkeeper can use GEICO speech'
     });
 
     assert.equal(result.message,
-        'You briefly doff your helm.  "15 minutes could save you 15 zorkmids."');
+        'You briefly doff your helm.  "15 minutes could save you 15 simoleons."');
     assert.doesNotMatch(result.message,
         /shoplifters|untended shops|business is|bill comes to|doesn't respond|Nothing happens|waves|gestures/);
     assert.equal(result.target.isshk, true);
     assert.equal(result.target.mstrategy, 0);
     assert.equal(result.targetLoc.map_invisible, true);
     assert.equal(shop.shopkeeperCash(result.target), 100);
-    assert.deepEqual(getRngLog(), ['rn2(2)=1']);
+    assert.deepEqual(getRngLog(), ['rn2(2)=1', 'rn2(21)=14']);
+});
+
+test('hallucinating worn helmet tip at billed resident shopkeeper uses singular hallucinated currency', async () => {
+    const result = await tipInvisibleExplicitSound({
+        name: 'shopkeeper',
+        sound: 'MS_SELL',
+        peaceful: true,
+        hallucinating: true,
+        seed: 4,
+        rngLog: true,
+        data: { mlevel: 12, mlet: '@', humanoid: true, shopkeeper: true },
+        extra: {
+            isshk: true,
+            shknam: 'Asidonhopo',
+            bill: [{ bo_id: 'hallu-bill', price: 1, bquan: 1, totalPrice: 1 }],
+            billct: 1,
+            debit: 0,
+            credit: 77,
+            robbed: 250,
+            surcharge: 1,
+            following: 0,
+            minvent: [goldPieces(3063586, 100)],
+        },
+    });
+
+    assert.equal(result.message,
+        'You briefly doff your helm.  Asidonhopo says that your bill comes to 1 quatloo.');
+    assert.doesNotMatch(result.message,
+        /15 minutes|reminds you|credit|recent robbery|watching you carefully|business is|talks about shoplifters|doesn't respond|Nothing happens|waves|gestures/);
+    assert.equal(result.target.isshk, true);
+    assert.equal(result.target.mstrategy, 0);
+    assert.equal(result.targetLoc.map_invisible, true);
+    assert.deepEqual(getRngLog(), ['rn2(2)=0', 'rn2(21)=13']);
 });
 
 test('hallucinating worn helmet tip at debit resident shopkeeper randomizes no-it pronoun', async () => {
@@ -5520,13 +5558,13 @@ test('hallucinating worn helmet tip at debit resident shopkeeper randomizes no-i
     });
 
     assert.equal(result.message,
-        'You briefly doff your helm.  Asidonhopo reminds you that you owe them 123 zorkmids.');
+        'You briefly doff your helm.  Asidonhopo reminds you that you owe them 123 Flanian Pobble Beads.');
     assert.doesNotMatch(result.message,
         /15 minutes|credit|recent robbery|watching you carefully|business is|talks about shoplifters|doesn't respond|Nothing happens|waves|gestures/);
     assert.equal(result.target.isshk, true);
     assert.equal(result.target.mstrategy, 0);
     assert.equal(result.targetLoc.map_invisible, true);
-    assert.deepEqual(getRngLog(), ['rn2(2)=0', 'rn2(4)=3']);
+    assert.deepEqual(getRngLog(), ['rn2(2)=0', 'rn2(4)=3', 'rn2(21)=7']);
 });
 
 test('worn helmet tip keeps visible peaceful seducing nymph on humanoid wave before seduce sound', async () => {
