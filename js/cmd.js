@@ -705,6 +705,10 @@ You realize the feeling must be the presence of %o.`,
             leader_first: `"Finally you have returned, %p.  You were always
 my most promising student.  Allow me to see if you are ready for the
 most difficult task of your career."`,
+            leader_last: `"%p, you have failed us.  All of my careful training has been in
+vain.  Begone!  Your tenure at this college has been revoked!
+
+"You are a disgrace to the profession!"`,
             leader_next: `Again, %p, you stand before me.
 Let me see if you have gained experience in the interim.`,
             badalign: `"%pC!  I've heard that you've been using sloppy techniques.  Your
@@ -834,6 +838,12 @@ make you turn and run.  This is surely the lair of %n.`,
 need of your help.  There is a great quest you must undertake.
 
 "But first, I must see if you are ready to take on such a challenge."`,
+            leader_last: `"Pah!  You have betrayed the gods, %p.  You will never attain
+the glory which you aspire to.  Your failure to follow the true path has
+closed this future to you.
+
+"I will protect these people as best I can, but soon %n will overcome
+me and destroy all who once called you %s.  Now begone!"`,
             leader_next: '"%p, you are back.  Are you ready now for the challenge?"',
             badalign: `"%pC!  You have wandered from the path of the %a!
 If you attempt to overcome %n in this state, he will surely
@@ -975,6 +985,10 @@ then will the world be safe."`,
         artifactShort: 'Magic Mirror of Merlin',
         ranks: ['Gallant', 'Esquire', 'Bachelor', 'Sergeant', 'Knight', 'Banneret', 'Chevalier', 'Seignieur', 'Paladin'],
         texts: {
+            leader_last: `"Thou disgracest this noble court with thine impure presence.  We have been
+lenient with thee, but no more.  Thy name shall be spoken no more.  We
+hereby strip thee of thy title, thy lands, and thy standing as %ca.
+Begone from Our sight!"`,
             goal_first: `As you exit the swamps, you see before you a huge, gaping hole in the
 side of a hill.  From within, you smell the foul stench of carrion.
 
@@ -1096,6 +1110,10 @@ Ahead, there is a small clearing amidst the bubbling pits of lava...`,
 A great blow has befallen our order; perhaps you can help us.
 First, however, I must determine if you are prepared for this
 great challenge."`,
+            leader_last: `"You are a heretic, %p!  How can you, %ra, deviate so from the
+teachings of %d?  Begone from this temple.  You are no longer
+%sa to this order.  We will pray to %d for other assistance,
+as you have failed us utterly."`,
             leader_next: '"Again, my %S, you stand before me.  Are you ready now to help us?"',
             badalign: `"This is terrible, %p.  You have deviated from the true path!
 You know that %d requires the most strident devotion of this
@@ -1236,6 +1254,8 @@ Yes, I see that you have come a long way since you went out into the
 world, leaving the safe confines of this tower.  However, I must first
 determine if you have all of the skills required to take on the task
 I require of you."`,
+            leader_last: `"You fool, %p!  Why did I waste all of those years teaching you
+the esoteric arts?  Get out of here!  I shall find another."`,
             leader_next: '"Well, %p, you have returned.  Perhaps you are now ready..."',
             badalign: `"You amaze me, %p!  How many times did I tell you that the way of a mage
 is an exacting one.  One must use the world with care, lest one leave it
@@ -3715,6 +3735,12 @@ function showQuestPager(msgid, mode = 'questIntroMore', options = {}) {
     return true;
 }
 
+function finishQuestLeaderTalkTurn() {
+    const automatic = !!game._quest_leader_talk_automatic;
+    game._quest_leader_talk_automatic = 0;
+    if (!automatic) chatConsumeTurn();
+}
+
 function questArtifactNameKey(name) {
     return String(name || '')
         .trim()
@@ -3955,7 +3981,7 @@ async function continueQuestLeaderTalkAfterIntro() {
     game._quest_leader_talk_mon = null;
     if (questLevelKind() !== 'start') {
         game._command_mode = null;
-        chatConsumeTurn();
+        finishQuestLeaderTalkTurn();
         return;
     }
     if ((game.u?.ulevel || 1) < MIN_QUEST_LEVEL) {
@@ -3969,7 +3995,7 @@ async function continueQuestLeaderTalkAfterIntro() {
     const currentBaseType = currentAlignmentBaseType();
     if (currentBaseType !== originalType) {
         game.quest_status.pissed_off = true;
-        if (leader) {
+        if (!game._quest_leader_talk_automatic && leader) {
             leader.mpeaceful = 0;
             leader.angry = true;
             leader.hostile = true;
@@ -3998,10 +4024,23 @@ export function maybeQueueQuestLeaderTalk(mon, { automatic = true } = {}) {
     const roleName = game.urole?.name?.m || game._startup_role || '';
     const info = QUEST_ROLE_DATA[roleName];
     const adjacent = Math.max(Math.abs(mon.mx - (game.u?.ux || 0)), Math.abs(mon.my - (game.u?.uy || 0))) <= 1;
-    if (!info || mon.data?.name !== info.leader || !adjacent || mon.msleeping || (automatic && mon.questTalked)) return false;
+    if (!info || mon.data?.name !== info.leader || !adjacent || mon.msleeping) return false;
     if (automatic && roleName === 'Priest' && currentSpecialLevelName() === 'x-strt') return false;
     game.quest_status ??= {};
     if (!automatic) chatClearTargetWaitStrategy(mon);
+    if (automatic && !mon.mpeaceful) {
+        chatClearTargetWaitStrategy(mon);
+        const firstOffense = !game.quest_status.pissed_off;
+        game.quest_status.pissed_off = true;
+        if (!firstOffense) return false;
+        game._quest_leader_talk_automatic = 1;
+        if (!showQuestPager('leader_last', 'questLeaderFollowupMore')) {
+            game._quest_leader_talk_automatic = 0;
+            return false;
+        }
+        return true;
+    }
+    if (automatic && questLevelKind() !== 'start') return false;
     if (game.quest_status.pissed_off) {
         if (!automatic) {
             mon.mpeaceful = 0;
@@ -4019,21 +4058,29 @@ export function maybeQueueQuestLeaderTalk(mon, { automatic = true } = {}) {
     }
     if (game.u?.uhave?.questart && !game.quest_status.met_nemesis)
         game.quest_status.cheater = true;
-    if (!automatic && game.quest_status.got_thanks) {
+    if (game.quest_status.got_thanks) {
         const hasAmulet = heroHasAmuletOfYendor();
         const msgid = hasAmulet ? 'hasamulet' : 'posthanks';
-        if (!showQuestPager(msgid, 'questLeaderFollowupMore')) return false;
+        game._quest_leader_talk_automatic = automatic ? 1 : 0;
+        if (!showQuestPager(msgid, 'questLeaderFollowupMore')) {
+            game._quest_leader_talk_automatic = 0;
+            return false;
+        }
         if (hasAmulet) {
             game.quest_status.got_thanks = true;
             identifyRealAmuletOfYendorForQuest();
         }
         return true;
     }
-    if (!automatic && game.u?.uhave?.questart) {
-        if (!finishQuestLeaderArtifactReturn(info)) return false;
+    if (game.u?.uhave?.questart) {
+        game._quest_leader_talk_automatic = automatic ? 1 : 0;
+        if (!finishQuestLeaderArtifactReturn(info)) {
+            game._quest_leader_talk_automatic = 0;
+            return false;
+        }
         return true;
     }
-    if (!automatic && game.quest_status.got_quest && !game.quest_status.got_thanks) {
+    if (game.quest_status.got_quest && !game.quest_status.got_thanks) {
         const message = questPagerText('encourage', { initCore: false });
         if (!message) return false;
         game._overlay_lines = null;
@@ -4042,17 +4089,19 @@ export function maybeQueueQuestLeaderTalk(mon, { automatic = true } = {}) {
         game._message_more = 0;
         game._keep_pending_message = 1;
         game._command_mode = null;
-        chatConsumeTurn();
+        if (!automatic) chatConsumeTurn();
         return true;
     }
     const firstLeaderTalk = !game.quest_status.met_leader_once;
-    if (automatic) mon.questTalked = true;
     game.quest_status.met_leader = true;
     if (firstLeaderTalk) game.quest_status.not_ready = 0;
     game._quest_leader_talk_mon = mon;
+    game._quest_leader_talk_automatic = automatic ? 1 : 0;
     const pager = game._pending_message && game._message_more ? queueQuestPager : showQuestPager;
-    if (!pager(firstLeaderTalk ? 'leader_first' : 'leader_next', 'questLeaderIntroMore'))
+    if (!pager(firstLeaderTalk ? 'leader_first' : 'leader_next', 'questLeaderIntroMore')) {
+        game._quest_leader_talk_automatic = 0;
         return false;
+    }
     game.quest_status.met_leader_once = true;
     return true;
 }
@@ -44803,10 +44852,14 @@ export async function rhack(_cmd) {
             } else if (game._quest_assignquest_time_after_more) {
                 game._quest_assignquest_time_after_more = 0;
                 exerciseAttribute(A_WIS, true);
-                game._resume_time_after_more = 0;
-                game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
-                game.context.move = 0;
-                game._process_command_time_now = 1;
+                if (game._quest_leader_talk_automatic) {
+                    game._quest_leader_talk_automatic = 0;
+                } else {
+                    game._resume_time_after_more = 0;
+                    game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
+                    game.context.move = 0;
+                    game._process_command_time_now = 1;
+                }
             }
         }
         return;
@@ -44841,7 +44894,7 @@ export async function rhack(_cmd) {
                 return;
             }
             game._command_mode = null;
-            chatConsumeTurn();
+            finishQuestLeaderTalkTurn();
         }
         return;
     }
@@ -44930,6 +44983,7 @@ export async function rhack(_cmd) {
                 game._quest_reject_exercise_wis = 0;
                 exerciseAttribute(A_WIS, true);
             }
+            game._quest_leader_talk_automatic = 0;
             await finishLevelTeleport(branchLevel(game.u?.uz?.dnum ?? -1) || { dnum: 0, dlevel: 14 }, { portalArrival: true });
             game._pending_message = '';
             game._message_more = 0;

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { interruptEatingOccupation, moveloop_core, processEatingOccupationTick, processForceLockOccupation, processMonsterTurns } from '../js/allmain.js';
-import { activateStatueTrap, burnFloorObjectsByFire, earthFloorEffects, finishForceLock, landMonsterThrownObject, processCorpseTimers, processForceLockOccupationTick, processGlobShrinkTimers, processSpellbookStudyOccupation, rhack, __shopBillingTestHooks as shop } from '../js/cmd.js';
+import { activateStatueTrap, burnFloorObjectsByFire, earthFloorEffects, finishForceLock, landMonsterThrownObject, maybeQueueQuestLeaderTalk, processCorpseTimers, processForceLockOccupationTick, processGlobShrinkTimers, processSpellbookStudyOccupation, rhack, __shopBillingTestHooks as shop } from '../js/cmd.js';
 import { newsym, refreshHallucinatedMap } from '../js/display.js';
 import { game, resetGame } from '../js/gstate.js';
 import { pushKey, resetInputState } from '../js/input.js';
@@ -4712,6 +4712,52 @@ async function beginQuestLeaderChat({
     return { target, targetLoc, introText: (game._overlay_lines || []).map(row => row[2]).join('\n') };
 }
 
+function installAutomaticQuestLeader({
+    role = 'Wizard', leader = 'Neferet the Green', align = 'lawful',
+    currentAlign = A_LAWFUL, currentBaseAlign = null, record = 20, level = 14,
+    questStart = true, waiting = false, rngLog = false, setup = null,
+} = {}) {
+    installStableNonShopFloorState();
+    const alignValue = value => value === 'lawful' ? A_LAWFUL
+        : value === 'chaotic' ? A_CHAOTIC
+        : value === 'neutral' ? 0
+        : value;
+    const originalAlign = alignValue(align);
+    const baseAlign = currentBaseAlign == null ? originalAlign : alignValue(currentBaseAlign);
+    game._startup_role = role;
+    game._startup_align = align;
+    game.urole = { ...(game.urole || {}), name: { m: role, f: role } };
+    game.u.ulevel = level;
+    game.u.ualign = { ...(game.u.ualign || {}), type: currentAlign, record };
+    game.u.ualignbase = [baseAlign, originalAlign];
+    game.u.uz = questStart ? { dnum: 1, dlevel: 1 } : { dnum: 0, dlevel: 10 };
+    game.dungeons = [
+        { name: 'The Dungeons of Doom', num_dunlevs: 20, depth_start: 1 },
+        { name: 'The Quest', num_dunlevs: 5, depth_start: 11 },
+    ];
+    game.branches = [{ end1: { dnum: 0, dlevel: 10 }, end2: { dnum: 1, dlevel: 1 } }];
+    game.specialLevels = [{ name: 'x-strt', dnum: 1, dlevel: 1 }];
+    const targetLoc = game.level.at(6, 5);
+    const target = ordinaryThrowTarget(leader, 6, 5, {
+        msleeping: 0,
+        mcanmove: true,
+        mcansee: true,
+        mpeaceful: true,
+        waiting,
+        movement: NORMAL_SPEED,
+        data: { name: leader, msound: 'MS_LEADER', mlet: '@', humanoid: true, unique: true },
+    });
+    game.level.monsters = [target];
+    if (setup) setup({ target, targetLoc });
+    markSquareVisible(6, 5);
+    if (rngLog) enableRngLog({ reset: true });
+    return { target, targetLoc };
+}
+
+function questOverlayText() {
+    return (game._overlay_lines || []).map(row => row[2]).join('\n');
+}
+
 async function chatDirectionKey(ch, { setup = null } = {}) {
     installStableNonShopFloorState();
     if (setup) await setup();
@@ -6712,6 +6758,184 @@ test('direct quest leader chat after thanks ignores carried artifact without Amu
 
     assert.equal(game._command_mode, null);
     assert.equal(game.context.move, 1);
+});
+
+test('automatic quest leader talk from monster turn queues leader_first on quest start', async () => {
+    const { target } = installAutomaticQuestLeader({ rngLog: true, waiting: true });
+
+    queueEscapeForMonsterTurn();
+    const moved = await processMonsterTurns();
+
+    assert.equal(moved, false);
+    assert.equal(game._command_mode, 'questLeaderIntroMore');
+    assert.match(questOverlayText(), /Come closer, Hero/);
+    assert.equal(game.quest_status.met_leader, true);
+    assert.equal(game.quest_status.met_leader_once, true);
+    assert.equal(game.quest_status.not_ready, 0);
+    assert.equal(target.waiting, false);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), QUEST_PAGER_LOAD_RNG);
+});
+
+test('automatic quest leader speech is suppressed away from quest start', async () => {
+    const { target } = installAutomaticQuestLeader({ questStart: false, rngLog: true });
+
+    const handled = maybeQueueQuestLeaderTalk(target);
+
+    assert.equal(handled, false);
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game._overlay_lines || null, null);
+    assert.equal(game.quest_status?.met_leader || false, false);
+    assert.equal(game.quest_status?.met_leader_once || false, false);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
+});
+
+test('automatic hostile quest leader speech uses leader_last once', async () => {
+    const { target } = installAutomaticQuestLeader({
+        rngLog: true,
+        setup: ({ target: leader }) => {
+            leader.mpeaceful = 0;
+            leader.hostile = true;
+            leader.mstrategy = 'waitforu';
+        },
+    });
+
+    const handled = maybeQueueQuestLeaderTalk(target);
+
+    assert.equal(handled, true);
+    assert.equal(game._command_mode, 'questLeaderFollowupMore');
+    assert.match(questOverlayText(), /Why did I waste all of those years teaching you/);
+    assert.equal(game.quest_status.pissed_off, true);
+    assert.equal(target.mstrategy, 0);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), QUEST_PAGER_LOAD_RNG);
+
+    enableRngLog({ reset: true });
+    await rhack(' ');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context?.move || 0, 0);
+    assert.equal(game._pending_time_passed || 0, 0);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
+
+    const replayed = maybeQueueQuestLeaderTalk(target);
+    assert.equal(replayed, false);
+    assert.equal(game._overlay_lines || null, null);
+});
+
+test('automatic quest leader rejection resumes deferred turn tail after expulsion', async () => {
+    const { target } = installAutomaticQuestLeader({
+        record: 10,
+        setup: () => {
+            game.flags.debug = false;
+        },
+    });
+
+    assert.equal(maybeQueueQuestLeaderTalk(target), true);
+    assert.equal(game._command_mode, 'questLeaderIntroMore');
+
+    await rhack(' ');
+
+    assert.equal(game._command_mode, 'questLeaderRejectMore');
+    assert.match(questOverlayText(), /way of a mage/);
+
+    await rhack(' ');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game._pending_time_passed, 1);
+    assert.equal(game.context.move, 0);
+    assert.equal(game._process_deferred_context_now, 1);
+});
+
+test('automatic quest leader speech uses encourage despite prior automatic marker', async () => {
+    const { target } = installAutomaticQuestLeader({
+        rngLog: true,
+        setup: ({ target: leader }) => {
+            leader.questTalked = true;
+            game.quest_status = {
+                ...(game.quest_status || {}),
+                got_quest: true,
+                met_leader: true,
+                met_leader_once: true,
+            };
+        },
+    });
+
+    const handled = maybeQueueQuestLeaderTalk(target);
+
+    assert.equal(handled, true);
+    assert.ok(WIZARD_LEADER_ENCOURAGE.includes(game._pending_message), game._pending_message);
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context?.move || 0, 0);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(10)']);
+});
+
+test('automatic quest leader speech after thanks uses posthanks without charging another turn', async () => {
+    const { target } = installAutomaticQuestLeader({
+        rngLog: true,
+        setup: () => {
+            game.quest_status = {
+                ...(game.quest_status || {}),
+                met_leader: true,
+                met_leader_once: true,
+                got_quest: true,
+                got_thanks: true,
+            };
+        },
+    });
+
+    const handled = maybeQueueQuestLeaderTalk(target);
+
+    assert.equal(handled, true);
+    assert.equal(game._command_mode, 'questLeaderFollowupMore');
+    assert.match(questOverlayText(), /Come near, my son/);
+    assert.match(questOverlayText(), /quest for the Amulet of Yendor/);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), QUEST_PAGER_LOAD_RNG);
+
+    enableRngLog({ reset: true });
+    await rhack(' ');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context?.move || 0, 0);
+    assert.equal(game._pending_time_passed || 0, 0);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
+});
+
+test('automatic quest leader artifact return completes without charging another turn', async () => {
+    const artifact = wizardQuestArtifact(3063706, 'e');
+    const bell = bellOfOpening(3063707, 'b');
+    const { target } = installAutomaticQuestLeader({
+        rngLog: true,
+        setup: () => {
+            game.inventory = [artifact, bell];
+            game.u.uhave = { ...(game.u.uhave || {}), questart: 1 };
+            game.quest_status = {
+                ...(game.quest_status || {}),
+                met_leader: true,
+                met_leader_once: true,
+                met_nemesis: true,
+                got_quest: true,
+            };
+        },
+    });
+
+    const handled = maybeQueueQuestLeaderTalk(target);
+
+    assert.equal(handled, true);
+    assert.equal(game._command_mode, 'questLeaderFollowupMore');
+    assert.match(questOverlayText(), /Neferet the Green notices the Eye of the Aethiopica in your possession/);
+    assert.equal(game.quest_status.got_thanks, true);
+    assert.equal(game.quest_status.qcompleted, true);
+    assert.equal(game.u.uevent.qcompleted, 1);
+    assert.equal(game.inventory.includes(artifact), true);
+    assert.equal(artifact.known, true);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), QUEST_PAGER_LOAD_RNG);
+
+    enableRngLog({ reset: true });
+    await rhack(' ');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context?.move || 0, 0);
+    assert.equal(game._pending_time_passed || 0, 0);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
 });
 
 test('converted quest leader rejection uses banished pager without wisdom exercise', async () => {
