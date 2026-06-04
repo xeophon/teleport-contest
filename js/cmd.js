@@ -35816,6 +35816,8 @@ const TIPHAT_GENERATED_SOUND_BY_MONSTER_NAME = new Map([
     ['couatl', 'hiss'], ['garter snake', 'hiss'], ['snake', 'hiss'],
     ['water moccasin', 'hiss'], ['python', 'hiss'], ['pit viper', 'hiss'],
     ['cobra', 'hiss'],
+    ['hell hound pup', 'bark'], ['hell hound', 'bark'],
+    ['bat', 'sqeek'], ['giant bat', 'sqeek'], ['vampire bat', 'sqeek'],
     ['jaguar', 'growl'], ['lynx', 'growl'], ['panther', 'growl'], ['tiger', 'growl'],
     ['displacer beast', 'growl'], ['bugbear', 'growl'], ['monkey', 'growl'], ['ape', 'growl'],
     ['yeti', 'growl'], ['carnivorous ape', 'growl'], ['sasquatch', 'growl'],

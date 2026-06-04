@@ -5824,6 +5824,61 @@ test('chat with visible generated hiss sound monsters uses C msound rows', async
     assert.deepEqual(getRngLog(), []);
 });
 
+test('chat with visible generated bark and sqeek sound monsters uses C msound rows', async () => {
+    const cases = [
+        {
+            name: 'hell hound pup',
+            data: { mlevel: 7, mlet: 'd' },
+            expected: 'The hell hound pup barks.',
+            peaceful: true,
+            reject: /growls|squeaks|doesn't respond|Nothing happens|waves/,
+        },
+        {
+            name: 'hell hound',
+            data: { mlevel: 12, mlet: 'd' },
+            expected: 'The hell hound growls.',
+            peaceful: false,
+            reject: /barks|squeaks|doesn't respond|Nothing happens|waves/,
+        },
+        {
+            name: 'bat',
+            data: { mlevel: 0, mlet: 'B' },
+            expected: 'The bat squeaks.',
+            peaceful: true,
+            reject: /barks|growls|doesn't respond|Nothing happens|waves/,
+        },
+        {
+            name: 'giant bat',
+            data: { mlevel: 2, mlet: 'B' },
+            expected: 'The giant bat squeaks.',
+            peaceful: false,
+            reject: /barks|growls|doesn't respond|Nothing happens|waves/,
+        },
+        {
+            name: 'vampire bat',
+            data: { mlevel: 5, mlet: 'B' },
+            expected: 'The vampire bat squeaks.',
+            peaceful: false,
+            reject: /barks|growls|doesn't respond|Nothing happens|waves/,
+        },
+    ];
+
+    for (const { name, data, expected, peaceful, reject } of cases) {
+        const result = await chatAdjacentMonster({
+            name,
+            peaceful,
+            rngLog: true,
+            data: { name, ...data },
+        });
+
+        assert.equal(result.message, expected);
+        assert.equal(result.target.mstrategy, 0);
+        assert.equal(game.context.move, 1);
+        assert.doesNotMatch(result.message, reject);
+        assert.deepEqual(getRngLog(), []);
+    }
+});
+
 test('chat with visible generated special sound monsters uses C msound rows', async () => {
     const cases = [
         {
