@@ -138,6 +138,19 @@ function monsterInventoryHas(mon, actualKind) {
     return (mon.minvent || []).some(obj => obj.actualKind === actualKind || obj.kind === actualKind);
 }
 
+function monsterInventoryItem(mon, actualKind) {
+    return (mon.minvent || []).find(obj => obj.actualKind === actualKind || obj.kind === actualKind);
+}
+
+function assertNaturalKopCreamPieStack(mon) {
+    const pie = mon.missile;
+    assert.ok(pie);
+    assert.equal(mon.minvent.includes(pie), true);
+    assert.equal(pie.cls, 'food');
+    assert.equal(pie.kind, 'cream pie');
+    assert.ok(pie.quan >= 3 && pie.quan <= 4);
+}
+
 function assertNoPlainElfPlaceholderGear(mon) {
     const plainKinds = new Set((mon.minvent || []).map(obj => obj.kind));
     assert.equal(plainKinds.has('orcish helm'), false);
@@ -266,6 +279,53 @@ test('themed buried zombie species follow C difficulty gates', () => {
     assert.deepEqual(mklevHooks.themeroomBuriedZombieSpecies(), [
         'kobold', 'gnome', 'orc', 'dwarf', 'elf', 'human', 'ettin', 'giant',
     ]);
+});
+
+test('Keystone Kop monster rows are armed no-random-generation wanderers', () => {
+    const expected = [
+        ['Keystone Kop', 1, 3, 9, false],
+        ['Kop Sergeant', 2, 4, 10, true],
+        ['Kop Lieutenant', 3, 5, 11, true],
+        ['Kop Kaptain', 4, 6, 12, true],
+    ];
+    for (const [name, mlevel, difficulty, maligntyp, strong] of expected) {
+        const mdat = monsterByRndName(name);
+        assert.ok(mdat, `missing monster data for ${name}`);
+        assert.equal(mdat.mlet, 'Kop');
+        assert.equal(mdat.glyph, 'K');
+        assert.equal(mdat.mlevel, mlevel);
+        assert.equal(mdat.difficulty, difficulty);
+        assert.equal(mdat.maligntyp, maligntyp);
+        assert.equal(mdat.armed, true);
+        assert.equal(mdat.wanderer, true);
+        assert.equal(mdat.alwaysHostile, true);
+        assert.equal(!!mdat.strong, strong);
+    }
+});
+
+test('natural Kops generate cream pies and club or rubber hose branches', async () => {
+    for (const name of ['Keystone Kop', 'Kop Sergeant', 'Kop Lieutenant', 'Kop Kaptain']) {
+        const mon = await generatedMonsterMatching(name,
+            candidate => candidate?.missile?.kind === 'cream pie' && candidate.missile.quan >= 3 && candidate.missile.quan <= 4,
+            'a cream pie stack');
+        assertNaturalKopCreamPieStack(mon);
+    }
+
+    const clubMon = await generatedMonsterMatching('Keystone Kop',
+        mon => monsterInventoryHas(mon, 'club'),
+        'a club branch');
+    const club = monsterInventoryItem(clubMon, 'club');
+    assert.ok(club);
+    assert.equal(club.cls, 'weapon');
+    assert.equal(club.material, 'wood');
+
+    const hoseMon = await generatedMonsterMatching('Keystone Kop',
+        mon => monsterInventoryHas(mon, 'rubber hose'),
+        'a rubber hose branch');
+    const hose = monsterInventoryItem(hoseMon, 'rubber hose');
+    assert.ok(hose);
+    assert.equal(hose.cls, 'weapon');
+    assert.equal(hose.material, 'plastic');
 });
 
 test('natural Uruk-style orcs generate hard-poisoned orcish arrow stacks', async () => {

@@ -110,6 +110,7 @@ const MORNING_STAR = 10124;
 const KATANA = 10125;
 const TSURUGI = 10126;
 const CLUB = 10054;
+const RUBBER_HOSE = 10179;
 const RANSEUR = 10055;
 const PARTISAN = 10056;
 const GLAIVE = 10057;
@@ -516,7 +517,7 @@ const SPECIFIC_WEAPONS = new Set([
     ATHAME, QUARTERSTAFF,
     SPEAR, ELVEN_SPEAR, DWARVISH_SPEAR, TRIDENT, STILETTO, SHORT_SWORD, ELVEN_SHORT_SWORD,
     ORCISH_SHORT_SWORD, DWARVISH_SHORT_SWORD, BROADSWORD, LONG_SWORD, POLEARM,
-    BATTLE_AXE, CLUB, RANSEUR, PARTISAN, GLAIVE, SPETUM, HALBERD, BARDICHE,
+    BATTLE_AXE, CLUB, RUBBER_HOSE, RANSEUR, PARTISAN, GLAIVE, SPETUM, HALBERD, BARDICHE,
     VOULGE, FAUCHARD, GUISARME, BILL_GUISARME, TWO_HANDED_SWORD,
     LUCERN_HAMMER, BEC_DE_CORBIN, AKLYS, FLAIL, MACE, SILVER_MACE, SILVER_SABER, BULLWHIP,
     MORNING_STAR, KATANA, TSURUGI,
@@ -561,6 +562,7 @@ const S_FUNGUS = 'fungus';
 const S_LIZARD = 'lizard';
 const S_DOG = 'dog';
 const S_KOBOLD = 'kobold';
+const S_KOP = 'Kop';
 const S_ORC = 'orc';
 const S_RODENT = 'rodent';
 const S_XAN = 'xan';
@@ -1023,7 +1025,14 @@ const MIDGAME_COMMON_MONSTER_LEVELS = [
     3, 3, 4, 5, 4, 4, 4, 5, 6, 3, 3, 6, 5, 0, 1, 3, 6,
 ];
 
-const MONSTER_VISUALS = new Map([...LEVEL_ONE_COMMON_MONSTERS, ...SOKOBAN_ZOO_MONSTERS].map(mon => [
+const KOP_MONSTERS = [
+    { name: 'Keystone Kop', mlet: S_KOP, glyph: 'K', mlevel: 1, mmove: 6, mac: 10, difficulty: 3, maligntyp: 9, genoFreq: 0, color: CLR_BLUE, male: true, armed: true, alwaysHostile: true, wanderer: true, humanoid: true, largeGroup: true, randomInventory: true, attack: { dice: 1, sides: 4, verb: 'hits', aatyp: 'weap', adtyp: 'phys' } },
+    { name: 'Kop Sergeant', mlet: S_KOP, glyph: 'K', mlevel: 2, mmove: 8, mac: 10, difficulty: 4, maligntyp: 10, genoFreq: 0, color: CLR_BLUE, male: true, strong: true, armed: true, alwaysHostile: true, wanderer: true, humanoid: true, smallGroup: true, randomInventory: true, attack: { dice: 1, sides: 6, verb: 'hits', aatyp: 'weap', adtyp: 'phys' } },
+    { name: 'Kop Lieutenant', mlet: S_KOP, glyph: 'K', mlevel: 3, mmove: 10, mac: 10, difficulty: 5, maligntyp: 11, genoFreq: 0, color: CLR_CYAN, male: true, strong: true, armed: true, alwaysHostile: true, wanderer: true, humanoid: true, randomInventory: true, attack: { dice: 1, sides: 8, verb: 'hits', aatyp: 'weap', adtyp: 'phys' } },
+    { name: 'Kop Kaptain', mlet: S_KOP, glyph: 'K', mlevel: 4, mmove: 12, mac: 10, difficulty: 6, maligntyp: 12, genoFreq: 0, color: CLR_MAGENTA, male: true, strong: true, armed: true, alwaysHostile: true, wanderer: true, humanoid: true, randomInventory: true, attack: { dice: 2, sides: 6, verb: 'hits', aatyp: 'weap', adtyp: 'phys' } },
+];
+
+const MONSTER_VISUALS = new Map([...LEVEL_ONE_COMMON_MONSTERS, ...SOKOBAN_ZOO_MONSTERS, ...KOP_MONSTERS].map(mon => [
     mon.name,
     { mlet: mon.mlet, glyph: mon.glyph, color: mon.color },
 ]));
@@ -1049,7 +1058,7 @@ const BIG_MONSTER_NAMES = new Set([
 ]);
 
 export const RANDOM_MONSTER_BY_NAME = new Map(
-    [...LEVEL_ONE_COMMON_MONSTERS, ...SOKOBAN_ZOO_MONSTERS].map(mon => [mon.name, mon]),
+    [...LEVEL_ONE_COMMON_MONSTERS, ...SOKOBAN_ZOO_MONSTERS, ...KOP_MONSTERS].map(mon => [mon.name, mon]),
 );
 for (const mon of RANDOM_MONSTER_BY_NAME.values()) {
     const row = RNDMONST_ROW_BY_NAME.get(mon.name);
@@ -1083,7 +1092,7 @@ const RNDMONST_MLET_BY_GLYPH = new Map([
     ['d', S_DOG], ['k', S_KOBOLD], ['o', S_ORC], ['r', S_RODENT],
     ['s', S_SPIDER], ['S', S_SNAKE], ['n', S_NYMPH], ['h', S_HUMANOID],
     ['M', S_MUMMY], ['m', S_MIMIC], ['C', S_CENTAUR], ['F', S_FUNGUS],
-    [':', S_LIZARD], ['Z', S_ZOMBIE],
+    [':', S_LIZARD], ['Z', S_ZOMBIE], ['K', S_KOP],
 ]);
 const RNDMONST_WEAPON_ATTACKS = new Map([
     ['kobold', [1, 4]], ['large kobold', [1, 6]], ['kobold leader', [2, 4]],
@@ -1695,6 +1704,7 @@ const SPECIFIC_FOOD_INFO = new Map([
     [CLOVE_OF_GARLIC, ['clove of garlic', 'cloves of garlic', CLR_WHITE]],
     [SLIME_MOLD, ['slime mold', 'slime molds', CLR_BROWN]],
     [LUMP_OF_ROYAL_JELLY, ['lump of royal jelly', 'lumps of royal jelly', CLR_YELLOW]],
+    [CREAM_PIE, ['cream pie', 'cream pies', CLR_WHITE]],
     [FORTUNE_COOKIE, ['fortune cookie', 'fortune cookies', CLR_YELLOW]],
     [PANCAKE, ['pancake', 'pancakes', CLR_YELLOW]],
     [MEATBALL, ['meatball', 'meatballs', CLR_BROWN]],
@@ -4635,7 +4645,8 @@ export function object_display(otmp) {
         || otyp === ORCISH_SHORT_SWORD || otyp === DWARVISH_SHORT_SWORD
         || otyp === SCIMITAR || otyp === BROADSWORD || otyp === LONG_SWORD
         || otyp === TWO_HANDED_SWORD || otyp === ELVEN_BROADSWORD || otyp === ELVEN_DAGGER
-        || SPECIFIC_POLEARM_INFO.has(otyp) || otyp === AKLYS || otyp === SILVER_MACE
+        || SPECIFIC_POLEARM_INFO.has(otyp) || otyp === CLUB || otyp === RUBBER_HOSE
+        || otyp === AKLYS || otyp === SILVER_MACE
         || otyp === ATHAME || otyp === QUARTERSTAFF
         || otyp === MORNING_STAR || otyp === KATANA || otyp === TSURUGI)
         return { glyph: ')', color: displayColor ?? CLR_CYAN };
@@ -5680,7 +5691,7 @@ function monsterFromRndMeta(row) {
         likesLava: name === 'fire elemental' || name === 'salamander',
     };
     const armedHuman = glyph === '@' && name !== 'nurse';
-    ptr.armed = name !== 'minotaur' && name !== 'gnomish wizard' && !ptr.nohands && ((mlet === S_ORC && name !== 'orc shaman') || (mlet === S_KOBOLD && name !== 'kobold shaman') || glyph === 'A' || glyph === 'G' || glyph === 'h'
+    ptr.armed = name !== 'minotaur' && name !== 'gnomish wizard' && !ptr.nohands && ((mlet === S_ORC && name !== 'orc shaman') || (mlet === S_KOBOLD && name !== 'kobold shaman') || mlet === S_KOP || glyph === 'A' || glyph === 'G' || glyph === 'h'
         || armedHuman || glyph === 'O' || glyph === 'H' || glyph === 'C' || name === 'djinni'
         || glyph === 'T' || (glyph === '&' && DEMON_WEAPON_MONSTERS.has(name)));
     if (glyph === '&') {
@@ -6282,6 +6293,8 @@ function mongets(otyp, erodes = true) {
     else if (otyp === BULLWHIP) Object.assign(otmp, { cls: 'weapon', kind: 'bullwhip' });
     else if (otyp === AKLYS) Object.assign(otmp, { cls: 'weapon', kind: 'aklys' });
     else if (otyp === SILVER_MACE) Object.assign(otmp, { cls: 'weapon', kind: 'silver mace' });
+    else if (otyp === CLUB) Object.assign(otmp, { cls: 'weapon', kind: 'club', material: 'wood' });
+    else if (otyp === RUBBER_HOSE) Object.assign(otmp, { cls: 'weapon', kind: 'rubber hose', material: 'plastic' });
     else if (otyp === ELVEN_ARROW) Object.assign(otmp, {
         cls: 'weapon',
         kind: 'runed arrow',
@@ -6876,6 +6889,9 @@ function m_initweap(ptr) {
             if (rn2(3) || game.level?.flags?.earth_level) mongets(PICK_AXE);
             if (!rn2(50)) mongets(CRYSTAL_BALL);
         }
+    } else if (ptr.mlet === S_KOP) {
+        if (!rn2(4)) m_initthrow(CREAM_PIE, 2);
+        if (!rn2(3)) mongets(rn2(2) ? CLUB : RUBBER_HOSE);
     } else if (ptr.mlet === S_ORC) {
         if (rn2(2)) mongets(ORCISH_HELM);
         if (ptr.name === 'Mordor orc') {
