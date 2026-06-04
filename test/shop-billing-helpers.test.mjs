@@ -33892,6 +33892,87 @@ test('production monster plus-two launcher arrow miss lands without ohit mulch',
     assert.equal(rng.filter(entry => entry.startsWith('rn2(3)=')).length, 0);
 });
 
+test('production monster eroded launcher arrow hit uses erosion damage and mulch chance', async () => {
+    const { arrow, thrower, rng } = await runMonsterLauncherArrowLanding({
+        seed: 8,
+        arrowOverrides: { oeroded: 1 },
+    });
+
+    assert.equal(game._pending_message, 'You are hit by an arrow.');
+    assert.equal(game.u.uhp, 16);
+    assert.equal(thrower.minvent.some(obj => obj.id === arrow.id), false);
+    assert.equal(thrower.missile, null);
+
+    const landed = game.level.objects.find(obj => obj.id === arrow.id);
+    assert.ok(landed);
+    assert.equal(landed.ox, 5);
+    assert.equal(landed.oy, 5);
+    assert.equal(landed.kind, 'arrow');
+    assert.equal(landed.oeroded, 1);
+    assert.equal(landed.transientProjectile, false);
+
+    assert.deepEqual(rng.slice(-3), ['rnd(20)=12', 'rn2(2)=0', 'rn2(4)=0']);
+    assert.equal(rng.some(entry => entry.startsWith('rn2(100)=')), false);
+});
+
+test('production monster eroded launcher arrow hit can mulch before landing', async () => {
+    const { arrow, thrower, rng } = await runMonsterLauncherArrowLanding({
+        seed: 3,
+        arrowOverrides: { oeroded: 1 },
+    });
+
+    assert.equal(game._pending_message, 'You are hit by an arrow!');
+    assert.equal(game.u.uhp, 15);
+    assert.equal(thrower.minvent.some(obj => obj.id === arrow.id), false);
+    assert.equal(thrower.missile, null);
+    assert.equal(game.level.objects.some(obj => obj.id === arrow.id), false);
+    assert.equal(game.level.objects.some(obj => obj.transientProjectile), false);
+
+    assert.deepEqual(rng.slice(-4), ['rnd(20)=6', 'rn2(2)=0', 'rn2(4)=3', 'rn2(100)=9']);
+});
+
+test('production monster eroded launcher arrow miss lands without ohit mulch', async () => {
+    const { arrow, rng } = await runMonsterLauncherArrowLanding({
+        seed: 2,
+        arrowOverrides: { oeroded: 1 },
+    });
+
+    assert.equal(game._pending_message, 'An arrow misses you.');
+    assert.equal(game.u.uhp, 20);
+    const landed = game.level.objects.find(obj => obj.id === arrow.id);
+    assert.ok(landed);
+    assert.equal(landed.ox, 5);
+    assert.equal(landed.oy, 5);
+    assert.equal(landed.oeroded, 1);
+    assert.equal(landed.transientProjectile, false);
+
+    assert.ok(rng.includes('rnd(20)=20'));
+    assert.equal(rng.filter(entry => entry.startsWith('rn2(4)=')).length, 0);
+    assert.equal(rng.filter(entry => entry.startsWith('rn2(100)=')).length, 0);
+    assert.equal(rng.filter(entry => entry.startsWith('rn2(3)=')).length, 0);
+});
+
+test('production monster eroded plus-one launcher arrow uses C erosion minus enchantment chance', async () => {
+    const { arrow, rng } = await runMonsterLauncherArrowLanding({
+        seed: 8,
+        arrowSpe: 1,
+        arrowOverrides: { oeroded: 1 },
+    });
+
+    assert.equal(game._pending_message, 'You are hit by an arrow!');
+    assert.equal(game.u.uhp, 15);
+    const landed = game.level.objects.find(obj => obj.id === arrow.id);
+    assert.ok(landed);
+    assert.equal(landed.ox, 5);
+    assert.equal(landed.oy, 5);
+    assert.equal(landed.spe, 1);
+    assert.equal(landed.oeroded, 1);
+    assert.equal(landed.transientProjectile, false);
+
+    assert.deepEqual(rng.slice(-3), ['rnd(20)=12', 'rn2(2)=0', 'rn2(3)=0']);
+    assert.equal(rng.some(entry => entry.startsWith('rn2(100)=')), false);
+});
+
 test('production monster crude dagger catch does not queue drop-throw landing', async () => {
     const { daggerItem, thrower, rng } = await runMonsterCrudeDaggerCatch();
 

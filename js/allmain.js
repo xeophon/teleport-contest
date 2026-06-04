@@ -6206,8 +6206,13 @@ export async function processMonsterTurns() {
                             if (mon.missile === missile) mon.missile = null;
                         }
                         const missileSpe = missile.spe || 0;
-                        const sharedArrowLanding = !(missile.oeroded || 0) && !(missile.oeroded2 || 0)
-                            && (missileSpe === 0 || (!missile.blessed && (missileSpe === 1 || missileSpe === 2)));
+                        const missileErosion = Math.max(0, Math.trunc(Number(thrownMissile.oeroded || 0)),
+                            Math.trunc(Number(thrownMissile.oeroded2 || 0)));
+                        const coveredArrowState = missileSpe === 0
+                            || (!thrownMissile.blessed && (missileSpe === 1 || missileSpe === 2));
+                        const coveredErosionState = !missileErosion
+                            || (!thrownMissile.blessed && !thrownMissile.cursed && !thrownMissile.greased);
+                        const sharedArrowLanding = coveredArrowState && coveredErosionState;
                         addToplineMessage(`${monsterDisplayName(mon, true)} shoots an arrow!`);
                         game._message_more = 1;
                         game._process_time_with_more = 0;
@@ -6267,7 +6272,7 @@ export async function processMonsterTurns() {
                         if (caught) {
                             game._topline_after_more = 'You catch the arrow!';
                         } else {
-                            const damage = Math.max(1, rnd(6) + missileSpe);
+                            const damage = Math.max(1, rnd(6) + missileSpe - missileErosion);
                             const hitv = Math.max(-4, 3 - throwRange) + 8 + missileSpe;
                             const missed = (game.u?.uac ?? 10) + hitv <= rnd(20);
                             game._topline_after_more = missed ? 'An arrow misses you.'
