@@ -33835,6 +33835,105 @@ test('production monster cursed launcher arrow no-misfire still uses drop-throw 
     assert.equal(rng.some(entry => entry.startsWith('rn2(100)=')), false);
 });
 
+test('production monster cursed eroded launcher arrow no-misfire uses erosion mulch', async () => {
+    const { arrow, thrower, rng } = await runMonsterLauncherArrowLanding({
+        seed: 18,
+        arrowOverrides: { cursed: true, oeroded: 1 },
+    });
+
+    assert.equal(game._pending_message, 'You are hit by an arrow!');
+    assert.equal(game.u.uhp, 15);
+    assert.equal(thrower.minvent.some(obj => obj.id === arrow.id), false);
+    assert.equal(thrower.missile, null);
+
+    const landed = game.level.objects.find(obj => obj.id === arrow.id);
+    assert.ok(landed);
+    assert.equal(landed.ox, 5);
+    assert.equal(landed.oy, 5);
+    assert.equal(landed.cursed, true);
+    assert.equal(landed.oeroded, 1);
+    assert.equal(landed.transientProjectile, false);
+
+    assert.ok(rng.includes('rn2(7)=4'));
+    assert.deepEqual(rng.slice(-3), ['rnd(20)=2', 'rn2(2)=1', 'rn2(4)=0']);
+    assert.equal(rng.some(entry => entry.startsWith('rn2(3)=')), false);
+    assert.equal(rng.some(entry => entry.startsWith('rn2(100)=')), false);
+});
+
+test('production monster greased eroded launcher arrow no-misfire uses drop-throw landing', async () => {
+    const { arrow, thrower, rng } = await runMonsterLauncherArrowLanding({
+        seed: 18,
+        arrowOverrides: { greased: true, oeroded: 1 },
+    });
+
+    assert.equal(game._pending_message, 'You are hit by an arrow!');
+    assert.equal(game.u.uhp, 15);
+    assert.equal(thrower.minvent.some(obj => obj.id === arrow.id), false);
+    assert.equal(thrower.missile, null);
+
+    const landed = game.level.objects.find(obj => obj.id === arrow.id);
+    assert.ok(landed);
+    assert.equal(landed.ox, 5);
+    assert.equal(landed.oy, 5);
+    assert.equal(landed.greased, true);
+    assert.equal(landed.oeroded, 1);
+    assert.equal(landed.transientProjectile, false);
+
+    assert.ok(rng.includes('rn2(7)=4'));
+    assert.deepEqual(rng.slice(-3), ['rnd(20)=2', 'rn2(2)=1', 'rn2(4)=0']);
+    assert.equal(rng.some(entry => entry.startsWith('rn2(3)=')), false);
+    assert.equal(rng.some(entry => entry.startsWith('rn2(100)=')), false);
+});
+
+test('production monster blessed greased eroded launcher arrow no-misfire keeps blessed roll', async () => {
+    const { arrow, thrower, rng } = await runMonsterLauncherArrowLanding({
+        seed: 18,
+        arrowOverrides: { blessed: true, greased: true, oeroded: 1 },
+    });
+
+    assert.equal(game._pending_message, 'You are hit by an arrow!');
+    assert.equal(game.u.uhp, 15);
+    assert.equal(thrower.minvent.some(obj => obj.id === arrow.id), false);
+    assert.equal(thrower.missile, null);
+
+    const landed = game.level.objects.find(obj => obj.id === arrow.id);
+    assert.ok(landed);
+    assert.equal(landed.ox, 5);
+    assert.equal(landed.oy, 5);
+    assert.equal(landed.blessed, true);
+    assert.equal(landed.greased, true);
+    assert.equal(landed.oeroded, 1);
+    assert.equal(landed.transientProjectile, false);
+
+    assert.ok(rng.includes('rn2(7)=4'));
+    assert.deepEqual(rng.slice(-4), ['rnd(20)=2', 'rn2(2)=1', 'rn2(4)=0', 'rn2(3)=1']);
+    assert.equal(rng.some(entry => entry.startsWith('rn2(100)=')), false);
+});
+
+test('production monster cursed launcher arrow same-vector misfire continues normal flight', async () => {
+    const { arrow, thrower, rng } = await runMonsterLauncherArrowLanding({
+        seed: 10,
+        arrowQuan: 2,
+        arrowOverrides: { cursed: true },
+    });
+
+    const residual = thrower.minvent.find(obj => obj.id === arrow.id);
+    assert.ok(residual);
+    assert.equal(residual.quan, 1);
+    assert.equal(thrower.missile, residual);
+    assert.deepEqual(rng.slice(0, 7), [
+        'rn2(5)=4',
+        'rn2(5)=4',
+        'rnd(1)=1',
+        'rnd(2)=1',
+        'rn2(7)=0',
+        'rn2(3)=0',
+        'rn2(3)=1',
+    ]);
+    assert.ok(rng.some(entry => entry.startsWith('rnd(6)=')));
+    assert.ok(rng.some(entry => entry.startsWith('rnd(20)=')));
+});
+
 test('production monster plus-one launcher arrow hit uses shared drop-throw mulch', async () => {
     const { arrow, thrower, rng } = await runMonsterLauncherArrowLanding({ seed: 8, arrowSpe: 1 });
 
