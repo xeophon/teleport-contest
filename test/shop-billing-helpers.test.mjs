@@ -21957,6 +21957,32 @@ test('metallivorous metal ring eating can grant C accessory intrinsics', async (
     assert.equal(game._discoveries.some(entry => entry.section === 'Rings' && entry.name === 'ring of fire resistance' && entry.known), false);
 });
 
+test('metallivorous worn metal ring clears hand state before eaten effect succeeds', async () => {
+    installCommandShopState();
+    installMetallivorousForm();
+    initRng(1);
+    const ring = metalRing(32200, 'fire resistance', 17, 'r', {
+        worn: 'left',
+        owornmask: 1,
+        line: 'r - an iron ring (on left hand)',
+    });
+    game.inventory = [ring];
+    game.u.fireResistance = false;
+
+    await rhack('e');
+    await rhack('r');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.inventory.includes(ring), false);
+    assert.equal(ring.worn, undefined);
+    assert.equal(ring.owornmask, undefined);
+    assert.equal(ring.line, 'r - an iron ring');
+    assert.equal(game.u.fireResistance, true);
+    assert.equal(ring.known, true);
+    assert.equal(ring.dknown, true);
+    assert.match(game._pending_message, /Magic spreads through your body as you digest the ring\./);
+});
+
 test('metallivorous metal ring eating identifies by taste even when effect chance fails', async () => {
     installCommandShopState();
     installMetallivorousForm();
@@ -21978,6 +22004,35 @@ test('metallivorous metal ring eating identifies by taste even when effect chanc
     assert.equal(game._discoveries.some(entry => entry.section === 'Rings' && entry.name === 'ring of teleportation' && entry.known), false);
 });
 
+test('metallivorous worn metal ring clears hand state when eaten effect fails', async () => {
+    installCommandShopState();
+    installMetallivorousForm();
+    initRng(2);
+    const ring = metalRing(32201, 'teleportation', 22, 'r', {
+        worn: 'right',
+        wornMask: 2,
+        _wornMask: 2,
+        line: 'r - a silver ring (on right hand)',
+    });
+    game.inventory = [ring];
+    game.u.teleportation = false;
+
+    await rhack('e');
+    await rhack('r');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.inventory.includes(ring), false);
+    assert.equal(ring.worn, undefined);
+    assert.equal(ring.wornMask, undefined);
+    assert.equal(ring._wornMask, undefined);
+    assert.equal(ring.line, 'r - a silver ring');
+    assert.equal(game.u.teleportation, false);
+    assert.equal(ring.known, true);
+    assert.equal(ring.dknown, true);
+    assert.match(game._pending_message, /This silver ring is delicious!/);
+    assert.doesNotMatch(game._pending_message, /Magic spreads through your body/);
+});
+
 test('metallivorous slow digestion ring is indigestible but causes rotten metal effect', async () => {
     installCommandShopState();
     installMetallivorousForm();
@@ -21995,6 +22050,31 @@ test('metallivorous slow digestion ring is indigestible but causes rotten metal 
     assert.match(game._pending_message, /This ring is indigestible!/);
     assert.match(game._pending_message, /Blecch!  Awful metal!/);
     assert.doesNotMatch(game._pending_message, /Magic spreads through your body/);
+});
+
+test('metallivorous worn slow digestion ring stays worn after indigestible effect', async () => {
+    installCommandShopState();
+    installMetallivorousForm();
+    initRng(2);
+    const ring = metalRing(32202, 'slow digestion', 21, 'r', {
+        worn: 'left',
+        owornmask: 1,
+        line: 'r - a ring of slow digestion (on left hand)',
+    });
+    game.inventory = [ring];
+
+    await rhack('e');
+    await rhack('r');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.inventory.includes(ring), true);
+    assert.equal(ring.worn, 'left');
+    assert.equal(ring.owornmask, 1);
+    assert.equal(ring.line, 'r - a ring of slow digestion (on left hand)');
+    assert.equal(game.u.uhunger, 900);
+    assert.equal(game.context.move, 1);
+    assert.match(game._pending_message, /This ring is indigestible!/);
+    assert.match(game._pending_message, /Blecch!  Awful metal!/);
 });
 
 test('metallivorous slow digestion ring rotten metal can confuse without eating it', async () => {

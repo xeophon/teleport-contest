@@ -22585,6 +22585,16 @@ function markEatenAccessoryTasted(item) {
     recordObservedObjectDiscovery(item);
 }
 
+function clearEatenWornRingState(item) {
+    if (!wornRingItem(item)) return;
+    delete item.worn;
+    delete item.owornmask;
+    delete item.wornMask;
+    delete item._wornMask;
+    if (typeof item.line === 'string')
+        item.line = item.line.replace(/ \(on (?:left|right) hand\)/, '');
+}
+
 function applyEatenMetalAccessoryEffects(item, messages) {
     if (objectIsRingLike(item)) {
         const name = eatenRingName(item);
@@ -22665,6 +22675,7 @@ async function eatHeroNonFoodMetal(item, { floorObject = false } = {}) {
     }
 
     addHeroNutrition(heroMetalNonFoodNutrition(item));
+    if (!floorObject && objectIsRingLike(item)) clearEatenWornRingState(item);
     applyEatenMetalAccessoryEffects(item, messages);
     if (floorObject) removeEatenFloorMetalObject(item);
     else removeInventoryItem(item, item.quan || 1);
