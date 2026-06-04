@@ -6297,11 +6297,15 @@ export async function processMonsterTurns() {
                                 return false;
                             }
                         }
-                        const firstFlightLoc = game.level?.at(mon.mx + throwDx, mon.my + throwDy);
-                        const firstFlightBlocked = !firstFlightLoc
-                            || IS_OBSTRUCTED(firstFlightLoc.typ)
-                            || (firstFlightLoc.typ === DOOR && (firstFlightLoc.doormask & (D_CLOSED | D_LOCKED)));
-                        if (firstFlightBlocked) {
+                        const ordinaryAimedBlockAhead = (x, y) => {
+                            const nx = x + throwDx;
+                            const ny = y + throwDy;
+                            const loc = game.level?.at(nx, ny);
+                            return nx < 1 || nx > COLNO - 1 || ny < 0 || ny > ROWNO - 1
+                                || !loc || IS_OBSTRUCTED(loc.typ)
+                                || (loc.typ === DOOR && (loc.doormask & (D_CLOSED | D_LOCKED)));
+                        };
+                        if (ordinaryAimedBlockAhead(mon.mx, mon.my)) {
                             landAimedArrow(mon.mx, mon.my);
                             game._search_pending_count = 0;
                             game._run_steps_remaining = 0;
@@ -6310,23 +6314,39 @@ export async function processMonsterTurns() {
                             game._monster_resume_somebody_can_move = somebodyCanMove;
                             return false;
                         }
-                        let aimedSinkStop = null;
+                        let aimedTerrainStop = null;
                         for (let step = 1; step < throwRange; step++) {
                             const sx = mon.mx + throwDx * step;
                             const sy = mon.my + throwDy * step;
-                            if (game.level?.at(sx, sy)?.typ === SINK) {
-                                aimedSinkStop = { x: sx, y: sy, steps: step };
+                            const remainingRange = throwRange - step;
+                            const forcehit = !rn2(5);
+                            const hitIronBars = remainingRange && forcehit
+                                && game.level?.at(sx + throwDx, sy + throwDy)?.typ === IRONBARS;
+                            if (hitIronBars) {
+                                rn2(100); // C breaktest() calls obj_resists(); ordinary arrows still survive.
+                                if (!(game.u?._statusSuffix || '').includes('Deaf') && !(game.u?._deafTimeout || 0))
+                                    addToplineMessage('Clonk!');
+                                aimedTerrainStop = { x: sx, y: sy };
+                                break;
+                            }
+                            const stoppedOnSink = remainingRange
+                                && game.level?.at(sx, sy)?.typ === SINK;
+                            if (stoppedOnSink) {
+                                if (!game.u?.blind && cansee(sx, sy)) {
+                                    const sinkVerb = (game.u?._statusSuffix || '').includes('Hallu')
+                                        ? 'plops' : 'drops';
+                                    addToplineMessage(`The arrow ${sinkVerb} onto the sink.`);
+                                }
+                                aimedTerrainStop = { x: sx, y: sy };
+                                break;
+                            }
+                            if (remainingRange && ordinaryAimedBlockAhead(sx, sy)) {
+                                aimedTerrainStop = { x: sx, y: sy };
                                 break;
                             }
                         }
-                        if (aimedSinkStop) {
-                            for (let step = 1; step <= aimedSinkStop.steps; step++) rn2(5);
-                            if (!game.u?.blind && cansee(aimedSinkStop.x, aimedSinkStop.y)) {
-                                const sinkVerb = (game.u?._statusSuffix || '').includes('Hallu')
-                                    ? 'plops' : 'drops';
-                                addToplineMessage(`The arrow ${sinkVerb} onto the sink.`);
-                            }
-                            landAimedArrow(aimedSinkStop.x, aimedSinkStop.y);
+                        if (aimedTerrainStop) {
+                            landAimedArrow(aimedTerrainStop.x, aimedTerrainStop.y);
                             game._search_pending_count = 0;
                             game._run_steps_remaining = 0;
                             game._travel_keys = [];
@@ -6347,7 +6367,6 @@ export async function processMonsterTurns() {
                         });
                         game._clear_transient_projectiles_after_more = 1;
                         newsym(flightX, flightY);
-                        for (let step = 1; step < throwRange; step++) rn2(5);
                         const catchChance = 100 - (game.u?.acurr?.a?.[A_DEX] ?? 10)
                             - (game._startup_role === 'Monk' || game._startup_role === 'Rogue' ? 20 : 0);
                         const caught = !game.u?.blind && !game.u?.confusion && !game.u?.stunned

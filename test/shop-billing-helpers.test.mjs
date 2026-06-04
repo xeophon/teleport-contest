@@ -33701,6 +33701,92 @@ test('production monster launcher arrow aimed shot drops onto visible sink befor
     assert.equal(rng.some(entry => entry.startsWith('rnd(6)=') || entry.startsWith('rnd(20)=') || entry.startsWith('rn2(3)=') || entry.startsWith('rn2(100)=')), false);
 });
 
+test('production monster launcher arrow aimed shot can pass through iron bars before hero', async () => {
+    const { arrow, rng, preNhgetchMessages } = await runMonsterLauncherArrowLanding({
+        seed: 4,
+        levelCells: [[7, 5, { typ: IRONBARS }]],
+    });
+
+    assert.equal(game._pending_message, 'An arrow misses you.');
+    assert.equal(game.u.uhp, 20);
+    assert.equal(preNhgetchMessages.some(message => /Clonk!/.test(message)), false);
+
+    const landed = game.level.objects.find(obj => obj.id === arrow.id);
+    assert.ok(landed);
+    assert.equal(landed.ox, 5);
+    assert.equal(landed.oy, 5);
+    assert.equal(landed.transientProjectile, false);
+
+    assertNoSingletonLauncherMultishotRng(rng);
+    assert.ok(rng.includes('rnd(20)=18'));
+    assertLauncherMissEndOfRangeRng(rng, 'rnd(20)=18');
+    assert.equal(rng.some(entry => entry.startsWith('rn2(100)=') || entry.startsWith('rn2(3)=')), false);
+});
+
+test('production monster launcher arrow aimed shot can clonk iron bars before hero', async () => {
+    const { arrow, thrower, rng, preNhgetchMessages } = await runMonsterLauncherArrowLanding({
+        seed: 16,
+        heroBlind: false,
+        levelCells: [[7, 5, { typ: IRONBARS }]],
+    });
+
+    assert.equal(game.u.uhp, 20);
+    assert.equal(thrower.minvent.some(obj => obj.id === arrow.id), false);
+    assert.equal(thrower.missile, null);
+    assert.equal(preNhgetchMessages.some(message => /shoots an arrow!/.test(message)), true);
+    assert.equal(preNhgetchMessages.some(message => /Clonk!/.test(message)), true);
+
+    await rhack('\x1b');
+    resetInputState();
+
+    const landed = game.level.objects.find(obj => obj.id === arrow.id);
+    assert.ok(landed);
+    assert.equal(landed.ox, 8);
+    assert.equal(landed.oy, 5);
+    assert.equal(landed.transientProjectile, false);
+
+    assertNoSingletonLauncherMultishotRng(rng);
+    assert.deepEqual(rng, [
+        'rn2(5)=3',
+        'rn2(5)=3',
+        'rn2(5)=0',
+        'rn2(100)=89',
+    ]);
+    assert.equal(rng.some(entry => entry.startsWith('rnd(6)=') || entry.startsWith('rnd(20)=') || entry.startsWith('rn2(3)=')), false);
+});
+
+test('production monster launcher arrow aimed iron bars are silent when deaf', async () => {
+    const { arrow, thrower, rng, preNhgetchMessages } = await runMonsterLauncherArrowLanding({
+        seed: 16,
+        heroBlind: false,
+        heroDeaf: true,
+        levelCells: [[7, 5, { typ: IRONBARS }]],
+    });
+
+    assert.equal(game.u.uhp, 20);
+    assert.equal(thrower.minvent.some(obj => obj.id === arrow.id), false);
+    assert.equal(thrower.missile, null);
+    assert.equal(preNhgetchMessages.some(message => /Clonk!/.test(message)), false);
+
+    await rhack('\x1b');
+    resetInputState();
+
+    const landed = game.level.objects.find(obj => obj.id === arrow.id);
+    assert.ok(landed);
+    assert.equal(landed.ox, 8);
+    assert.equal(landed.oy, 5);
+    assert.equal(landed.transientProjectile, false);
+
+    assertNoSingletonLauncherMultishotRng(rng);
+    assert.deepEqual(rng, [
+        'rn2(5)=3',
+        'rn2(5)=3',
+        'rn2(5)=0',
+        'rn2(100)=89',
+    ]);
+    assert.equal(rng.some(entry => entry.startsWith('rnd(6)=') || entry.startsWith('rnd(20)=') || entry.startsWith('rn2(3)=')), false);
+});
+
 test('production monster blessed launcher arrow hit lands surviving arrow with blessed mulch roll', async () => {
     const { arrow, thrower, rng } = await runMonsterLauncherArrowLanding({
         seed: 9,
