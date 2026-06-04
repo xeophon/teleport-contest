@@ -664,6 +664,20 @@ function monsterDwarvishSpear(id, extra = {}) {
     };
 }
 
+function monsterSpearVariant(id, kind, extra = {}) {
+    return {
+        ...monsterSpear(id, {
+            otyp: undefined,
+            kind,
+            actualKind: kind,
+            singular: kind,
+            plural: `${kind}s`,
+            material: 'iron',
+            ...extra,
+        }),
+    };
+}
+
 function wieldedWeapon(id, kind, letter = 'w', spe = 0) {
     return {
         id,
@@ -36169,6 +36183,95 @@ test('production monster dwarvish spear aimed shot can clonk iron bars before he
         preNhgetchMessages.join('\n'));
 });
 
+test('production monster silver spear aimed shot can clink iron bars before hero', async () => {
+    const silverSpear = monsterSpearVariant(874396, 'silver spear', {
+        material: 'silver',
+        plural: 'silver spears',
+    });
+    const { spearItem, thrower, rng, rawRng, preNhgetchMessages } = await runMonsterSpearIronBars({
+        seed: 1,
+        uac: 100,
+        heroBlind: false,
+        projectile: silverSpear,
+        levelCells: [[7, 5, { typ: IRONBARS }]],
+    });
+
+    assert.equal(game.u.uhp, 20);
+    assert.equal(game._damage_after_topline_more || 0, 0, rawRng.join(', '));
+    assert.equal(thrower.minvent.some(obj => obj.id === spearItem.id), false);
+
+    const landed = game.level.objects.find(obj => obj.id === spearItem.id);
+    assert.ok(landed, rng.join(', '));
+    assert.equal(landed.ox, 8, rawRng.join(', '));
+    assert.equal(landed.oy, 5, rawRng.join(', '));
+    assert.equal(landed.kind, 'silver spear');
+
+    assert.ok(rng.some(entry => entry === 'rn2(100)'));
+    assert.equal(rng.some(entry => entry === 'rnd(6)'
+        || entry === 'rnd(20)'
+        || entry === 'rn2(3)'), false);
+    assert.equal(preNhgetchMessages.some(message => /throws a silver spear!/.test(message)), true,
+        preNhgetchMessages.join('\n'));
+    assert.equal(preNhgetchMessages.some(message => /Clink!/.test(message)), true,
+        preNhgetchMessages.join('\n'));
+    assert.equal(preNhgetchMessages.some(message => /Clonk!/.test(message)), false,
+        preNhgetchMessages.join('\n'));
+});
+
+test('production monster runed spear hit uses elven spear damage from appearance', async () => {
+    const runedSpear = monsterSpear(874397, {
+        otyp: undefined,
+        kind: undefined,
+        actualKind: undefined,
+        singular: undefined,
+        plural: 'runed spears',
+        appearance: 'runed spear',
+        material: 'wood',
+    });
+    const { spearItem, thrower, rng, rawRng, preNhgetchMessages } = await runMonsterSpearIronBars({
+        seed: 1,
+        uac: 100,
+        projectile: runedSpear,
+    });
+
+    assert.equal(preNhgetchMessages.some(message => /You are hit by a runed spear[.!]/.test(message)), true,
+        preNhgetchMessages.join('\n'));
+    assert.equal(thrower.minvent.some(obj => obj.id === spearItem.id), false);
+
+    assert.ok(rawRng.some(entry => entry.startsWith('rnd(7)=')), rawRng.join(', '));
+    assert.ok(rawRng.some(entry => entry.startsWith('rnd(20)=')), rawRng.join(', '));
+    assert.equal(rawRng.some(entry => entry.startsWith('rnd(8)=')
+        || entry.startsWith('rnd(6)=')
+        || entry.startsWith('rnd(5)=')), false);
+});
+
+test('production monster crude spear hit uses orcish spear damage from appearance', async () => {
+    const crudeSpear = monsterSpear(874398, {
+        otyp: undefined,
+        kind: undefined,
+        actualKind: undefined,
+        singular: undefined,
+        plural: 'crude spears',
+        appearance: 'crude spear',
+        material: 'iron',
+    });
+    const { spearItem, thrower, rng, rawRng, preNhgetchMessages } = await runMonsterSpearIronBars({
+        seed: 1,
+        uac: 100,
+        projectile: crudeSpear,
+    });
+
+    assert.equal(preNhgetchMessages.some(message => /You are hit by a crude spear[.!]/.test(message)), true,
+        preNhgetchMessages.join('\n'));
+    assert.equal(thrower.minvent.some(obj => obj.id === spearItem.id), false);
+
+    assert.ok(rawRng.some(entry => entry.startsWith('rnd(5)=')), rawRng.join(', '));
+    assert.ok(rawRng.some(entry => entry.startsWith('rnd(20)=')), rawRng.join(', '));
+    assert.equal(rawRng.some(entry => entry.startsWith('rnd(8)=')
+        || entry.startsWith('rnd(7)=')
+        || entry.startsWith('rnd(6)=')), false);
+});
+
 test('production monster spear aimed iron bars are silent when deaf', async () => {
     const { spearItem, thrower, rng, rawRng, preNhgetchMessages } = await runMonsterSpearIronBars({
         seed: 1,
@@ -36241,6 +36344,96 @@ test('production monster dwarvish spear selection precedes ordinary spear', asyn
     assert.equal(game.level.objects.some(obj => obj.id === spearItem.id), false);
 
     assert.ok(rng.some(entry => entry === 'rn2(100)'));
+    assert.equal(preNhgetchMessages.some(message => /Clonk!/.test(message)), true);
+});
+
+test('production monster silver and elven spear selection follows C ranged order', async () => {
+    const spearItem = monsterSpear(874399);
+    const silverSpear = monsterSpearVariant(874400, 'silver spear', {
+        material: 'silver',
+        plural: 'silver spears',
+    });
+    const runedSpear = monsterSpear(874401, {
+        otyp: undefined,
+        kind: undefined,
+        actualKind: undefined,
+        singular: undefined,
+        plural: 'runed spears',
+        appearance: 'runed spear',
+        material: 'wood',
+    });
+    const { thrower, rng, rawRng, preNhgetchMessages } = await runMonsterSpearIronBars({
+        seed: 1,
+        uac: 100,
+        heroBlind: false,
+        levelCells: [[7, 5, { typ: IRONBARS }]],
+        projectile: silverSpear,
+        inventory: [spearItem, runedSpear, silverSpear],
+    });
+
+    assert.equal(thrower.minvent.some(obj => obj.id === silverSpear.id), false);
+    assert.equal(thrower.minvent.some(obj => obj.id === runedSpear.id), true);
+    assert.equal(thrower.minvent.some(obj => obj.id === spearItem.id), true);
+
+    const landed = game.level.objects.find(obj => obj.id === silverSpear.id);
+    assert.ok(landed, rng.join(', '));
+    assert.equal(landed.ox, 8, rawRng.join(', '));
+    assert.equal(landed.kind, 'silver spear');
+    assert.equal(game.level.objects.some(obj => obj.id === runedSpear.id), false);
+    assert.equal(game.level.objects.some(obj => obj.id === spearItem.id), false);
+
+    assert.ok(rng.some(entry => entry === 'rn2(100)'));
+    assert.equal(preNhgetchMessages.some(message => /throws a silver spear!/.test(message)), true,
+        preNhgetchMessages.join('\n'));
+    assert.equal(preNhgetchMessages.some(message => /Clink!/.test(message)), true,
+        preNhgetchMessages.join('\n'));
+});
+
+test('production monster orcish spear selection precedes throwing spear and shuriken', async () => {
+    const crudeSpear = monsterSpear(874402, {
+        otyp: undefined,
+        kind: undefined,
+        actualKind: undefined,
+        singular: undefined,
+        plural: 'crude spears',
+        appearance: 'crude spear',
+        material: 'iron',
+    });
+    const throwingSpear = monsterSpear(874403, {
+        otyp: undefined,
+        kind: undefined,
+        actualKind: undefined,
+        singular: undefined,
+        plural: 'throwing spears',
+        appearance: 'throwing spear',
+        material: 'iron',
+    });
+    const shurikenItem = monsterShuriken(874404);
+    const { thrower, rng, rawRng, preNhgetchMessages } = await runMonsterSpearIronBars({
+        seed: 1,
+        uac: 100,
+        heroBlind: false,
+        levelCells: [[7, 5, { typ: IRONBARS }]],
+        projectile: crudeSpear,
+        inventory: [shurikenItem, throwingSpear, crudeSpear],
+        activeMissile: shurikenItem,
+    });
+
+    assert.equal(thrower.minvent.some(obj => obj.id === crudeSpear.id), false);
+    assert.equal(thrower.minvent.some(obj => obj.id === throwingSpear.id), true);
+    assert.equal(thrower.minvent.some(obj => obj.id === shurikenItem.id), true);
+
+    const landed = game.level.objects.find(obj => obj.id === crudeSpear.id);
+    assert.ok(landed, rng.join(', '));
+    assert.equal(landed.ox, 8, rawRng.join(', '));
+    assert.equal(game.level.objects.some(obj => obj.id === throwingSpear.id), false);
+    assert.equal(game.level.objects.some(obj => obj.id === shurikenItem.id), false);
+
+    assert.ok(rng.some(entry => entry === 'rn2(100)'));
+    assert.equal(preNhgetchMessages.some(message => /throws a crude spear!/.test(message)), true,
+        preNhgetchMessages.join('\n'));
+    assert.equal(preNhgetchMessages.some(message => /throws a throwing spear!/.test(message)), false);
+    assert.equal(preNhgetchMessages.some(message => /throws a shuriken!/.test(message)), false);
     assert.equal(preNhgetchMessages.some(message => /Clonk!/.test(message)), true);
 });
 

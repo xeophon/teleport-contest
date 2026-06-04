@@ -8479,7 +8479,7 @@ function monsterUsesPostMoveHide(mon) {
 }
 
 function monsterThrownSpearKind(item) {
-    return String(item?.actualKind || item?.kind || 'spear');
+    return String(item?.actualKind || item?.kind || item?.singular || item?.appearance || 'spear');
 }
 
 function monsterThrownShurikenKind(item) {
@@ -8492,7 +8492,7 @@ function monsterThrownShurikenKind(item) {
 }
 
 function monsterThrownSpearNames(item) {
-    return [item?.actualKind, item?.kind, item?.singular]
+    return [item?.actualKind, item?.kind, item?.singular, item?.appearance]
         .map(name => String(name || '').toLowerCase())
         .filter(Boolean);
 }
