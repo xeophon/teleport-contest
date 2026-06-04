@@ -37938,6 +37938,80 @@ test('production monster shuriken hit uses shuriken damage and can mulch', async
         || entry.startsWith('rnd(4)=')), false);
 });
 
+test('production monster shuriken hits and rusts intervening rust monster object before stacking', async () => {
+    const cleanStack = { ...monsterShuriken(874500), ox: 8, oy: 5, letter: undefined, line: undefined };
+    const rustMonster = passiveObjectTarget('rust monster', 'rust', 8, 5, {
+        ac: 15,
+        mac: 15,
+        mhp: 20,
+        mhpmax: 20,
+    });
+    const { shurikenItem, thrower, rng, rawRng, preNhgetchMessages } = await runMonsterShurikenIronBars({
+        seed: 2,
+        uac: 100,
+        levelCells: [[7, 5, { typ: IRONBARS }]],
+        extraMonsters: [rustMonster],
+        initialObjects: [cleanStack],
+    });
+
+    assert.equal(game.u.uhp, 20);
+    assert.equal(rustMonster.mhp < 20, true, rawRng.join(', '));
+    assert.equal(rustMonster.msleeping, 0);
+    assert.equal(thrower.missile, null);
+    assert.equal(thrower.minvent.some(obj => obj.id === shurikenItem.id), false);
+
+    const landed = game.level.objects.find(obj => obj.id === shurikenItem.id);
+    assert.ok(landed, rawRng.join(', '));
+    assert.equal(landed.ox, 8);
+    assert.equal(landed.oy, 5);
+    assert.equal(landed.oeroded, 1);
+    assert.equal(cleanStack.oeroded || 0, 0);
+    assert.equal(cleanStack.quan, 1);
+    assert.equal(game.level.objects.length, 2);
+
+    assert.deepEqual(rng.slice(0, 5), ['rn2(5)', 'rn2(5)', 'rnd(20)', 'rnd(8)', 'rn2(3)'], rawRng.join(', '));
+    assert.equal(rawRng[4], 'rn2(3)=0', rawRng.join(', '));
+    assert.equal(rng.some(entry => entry === 'rn2(100)'), false, rawRng.join(', '));
+    assert.equal(preNhgetchMessages.some(message => /Clonk!/.test(message)), false);
+    assert.equal(preNhgetchMessages.some(message => /shuriken hits the rust monster|It is hit/.test(message)), true,
+        preNhgetchMessages.join('\n'));
+});
+
+test('production monster shuriken hit on intervening rust monster can mulch before passive rust or stacking', async () => {
+    const cleanStack = { ...monsterShuriken(874501), ox: 8, oy: 5, letter: undefined, line: undefined };
+    const rustMonster = passiveObjectTarget('rust monster', 'rust', 8, 5, {
+        ac: 15,
+        mac: 15,
+        mhp: 20,
+        mhpmax: 20,
+    });
+    const { shurikenItem, thrower, rng, rawRng, preNhgetchMessages } = await runMonsterShurikenIronBars({
+        seed: 1,
+        uac: 100,
+        levelCells: [[7, 5, { typ: IRONBARS }]],
+        extraMonsters: [rustMonster],
+        initialObjects: [cleanStack],
+    });
+
+    assert.equal(game.u.uhp, 20);
+    assert.equal(rustMonster.mhp < 20, true, rawRng.join(', '));
+    assert.equal(rustMonster.msleeping, 0);
+    assert.equal(thrower.missile, null);
+    assert.equal(thrower.minvent.some(obj => obj.id === shurikenItem.id), false);
+
+    assert.equal(game.level.objects.some(obj => obj.id === shurikenItem.id), false);
+    assert.equal(cleanStack.oeroded || 0, 0);
+    assert.equal(cleanStack.quan, 1);
+    assert.equal(game.level.objects.length, 1);
+
+    assert.deepEqual(rng.slice(0, 6), ['rn2(5)', 'rn2(5)', 'rnd(20)', 'rnd(8)', 'rn2(3)', 'rn2(100)'],
+        rawRng.join(', '));
+    assert.notEqual(rawRng[4], 'rn2(3)=0', rawRng.join(', '));
+    assert.equal(preNhgetchMessages.some(message => /Clonk!/.test(message)), false);
+    assert.equal(preNhgetchMessages.some(message => /shuriken hits the rust monster|It is hit/.test(message)), true,
+        preNhgetchMessages.join('\n'));
+});
+
 test('production monster shuriken aimed shot can pass through iron bars before hero', async () => {
     const { shurikenItem, thrower, rng, rawRng, preNhgetchMessages } = await runMonsterShurikenIronBars({
         seed: 1,

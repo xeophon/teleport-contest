@@ -32805,7 +32805,7 @@ function wishedDamageProfile(item) {
     const nonflammableArmor = armor && FIRE_NONFLAMMABLE_ARMOR_KINDS.has(kind);
     const copperLike = /\b(?:copper|bronze)\b/.test(kind);
     const ironLike = !flammableArmor && !excludedMetal && !glassArmor && !copperLike && !dragonHide && (ballOrChain || kind.includes('iron')
-        || /\b(?:plate mail|splint mail|banded mail|ring mail|chain mail|scale mail|large shield|roundshield|gauntlets|helm|helmet|dented pot|shoes|sword|saber|dagger|knife|axe|mace|hammer|flail|morning star|pick-axe|mattock|spear|trident|lance|polearm|dart)\b/.test(kind));
+        || /\b(?:plate mail|splint mail|banded mail|ring mail|chain mail|scale mail|large shield|roundshield|gauntlets|helm|helmet|dented pot|shoes|sword|saber|dagger|knife|axe|mace|hammer|flail|morning star|pick-axe|mattock|spear|trident|lance|polearm|dart|shuriken|throwing star)\b/.test(kind));
     const flammableLike = flammableArmor || (!nonflammableArmor && !glassArmor && !ironLike && !copperLike && !excludedMetal
         && /\b(?:leather|cloth|cloak|robe|shirt|boots|gloves|wooden|small shield|bow|crossbow|arrow|club|quarterstaff|aklys|bullwhip|sling)\b/.test(kind));
     const rustprone = ironLike;
