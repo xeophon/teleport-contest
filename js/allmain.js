@@ -5889,8 +5889,10 @@ export async function processMonsterTurns() {
                     const throwRange = Math.max(Math.abs(mon.mx - throwTargetX), Math.abs(mon.my - throwTargetY));
                     const straightThrow = mon.mx === throwTargetX || mon.my === throwTargetY
                         || Math.abs(mon.mx - throwTargetX) === Math.abs(mon.my - throwTargetY);
-                    const plainDaggerIndex = mon.minvent?.findIndex(item =>
-                        item.otyp === DAGGER || item.kind === 'dagger') ?? -1;
+                    const silverDaggerIndex = mon.minvent?.findIndex(item =>
+                        item.kind === 'silver dagger' || item.actualKind === 'silver dagger') ?? -1;
+                    const plainDaggerIndex = silverDaggerIndex >= 0 ? silverDaggerIndex
+                        : (mon.minvent?.findIndex(item => item.otyp === DAGGER || item.kind === 'dagger') ?? -1);
                     const canThrowPlainDagger = !mon._opened_door_this_move && !mon.mpeaceful && plainDaggerIndex >= 0
                         && throwRange > 1 && throwRange < BOLT_LIM && straightThrow
                         && clearPath(mon.mx, mon.my, throwTargetX, throwTargetY);
@@ -6464,6 +6466,11 @@ export async function processMonsterTurns() {
                         if (targetAc < 0 && !consumedMattackuAc) rnd(-targetAc);
 
                         const missile = mon.minvent[plainDaggerIndex];
+                        const daggerKind = String(missile.actualKind || missile.kind || 'dagger');
+                        const daggerArticle = /^[aeiou]/i.test(daggerKind) ? 'an' : 'a';
+                        const daggerArticleCap = daggerArticle[0].toUpperCase() + daggerArticle.slice(1);
+                        const daggerMaterial = String(missile.material || missile.oc_material || '').toLowerCase();
+                        const daggerBarsSound = daggerKind === 'silver dagger' || daggerMaterial === 'silver' ? 'Clink!' : 'Clonk!';
                         if ((missile.quan || 1) > 1) missile.quan--;
                         else {
                             mon.minvent.splice(plainDaggerIndex, 1);
@@ -6473,7 +6480,7 @@ export async function processMonsterTurns() {
                             && !!(game.viz_array?.[mon.my]?.[mon.mx] & IN_SIGHT)
                             && !mon.minvis;
                         if (throwerVisible) {
-                            addToplineMessage(`${monsterDisplayName(mon)} throws a dagger!`);
+                            addToplineMessage(`${monsterDisplayName(mon)} throws ${daggerArticle} ${daggerKind}!`);
                             game._message_more = 1;
                             game._process_time_with_more = 0;
                         }
@@ -6482,7 +6489,7 @@ export async function processMonsterTurns() {
                         if (game.level?.at(mon.mx + throwDx, mon.my + throwDy)?.typ === IRONBARS) {
                             rn2(100); // C breaktest() calls obj_resists(); ordinary daggers still survive.
                             if (!(game.u?._statusSuffix || '').includes('Deaf') && !(game.u?._deafTimeout || 0))
-                                addToplineMessage('Clonk!');
+                                addToplineMessage(daggerBarsSound);
                             daggerTerrainStop = { x: mon.mx, y: mon.my };
                         } else {
                             for (let step = 1; step < throwRange; step++) {
@@ -6493,7 +6500,7 @@ export async function processMonsterTurns() {
                                 if (remainingRange && game.level?.at(sx + throwDx, sy + throwDy)?.typ === IRONBARS) {
                                     rn2(100); // C consumes forcehit first; P_DAGGER then hits bars by class.
                                     if (!(game.u?._statusSuffix || '').includes('Deaf') && !(game.u?._deafTimeout || 0))
-                                        addToplineMessage('Clonk!');
+                                        addToplineMessage(daggerBarsSound);
                                     daggerTerrainStop = { x: sx, y: sy };
                                     break;
                                 }
@@ -6513,7 +6520,7 @@ export async function processMonsterTurns() {
                             const caught = !game.u?.blind && !game.u?.confusion && !game.u?.stunned
                                 && !game.u?.fumbling && rn2(Math.max(1, catchChance)) === 0;
                             if (caught) {
-                                const catchMessage = 'You catch the dagger!';
+                                const catchMessage = `You catch the ${daggerKind}!`;
                                 if (throwerVisible) game._topline_after_more = catchMessage;
                                 else addToplineMessage(catchMessage);
                             } else {
@@ -6521,7 +6528,9 @@ export async function processMonsterTurns() {
                                 const hitv = Math.max(-4, 3 - throwRange) + 8 + (missile.spe || 0);
                                 const attackRoll = rnd(20);
                                 const missed = (game.u?.uac ?? 10) + hitv <= attackRoll;
-                                const resultMessage = missed ? 'A dagger misses you.' : 'You are hit by a dagger.';
+                                const resultMessage = missed
+                                    ? `${daggerArticleCap} ${daggerKind} misses you.`
+                                    : `You are hit by ${daggerArticle} ${daggerKind}.`;
                                 if (throwerVisible) game._topline_after_more = resultMessage;
                                 else addToplineMessage(resultMessage);
                                 if (!missed) {

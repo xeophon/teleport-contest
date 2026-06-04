@@ -570,6 +570,20 @@ function monsterOrcishDagger(id) {
     };
 }
 
+function monsterSilverDagger(id) {
+    return {
+        id,
+        cls: 'weapon',
+        glyph: ')',
+        kind: 'silver dagger',
+        actualKind: 'silver dagger',
+        plural: 'silver daggers',
+        material: 'silver',
+        quan: 1,
+        spe: 0,
+    };
+}
+
 function monsterKnife(id) {
     return {
         id,
@@ -33726,6 +33740,8 @@ async function runMonsterPlainDaggerIronBars({
     uac = 100,
     levelCells = [],
     throwerX = 10,
+    projectile = null,
+    inventory = null,
 } = {}) {
     installNonShopFloorState();
     resetInputState();
@@ -33759,7 +33775,8 @@ async function runMonsterPlainDaggerIronBars({
     }
     for (let x = 5; x <= throwerX; x++) markSquareVisible(x, 5);
     for (const [x, y] of levelCells) markSquareVisible(x, y);
-    const daggerItem = { ...dagger(874356), letter: undefined, line: undefined, spe: 0 };
+    const daggerItem = projectile || { ...dagger(874356), letter: undefined, line: undefined, spe: 0 };
+    const throwerInventory = inventory || [daggerItem];
     const thrower = {
         mx: throwerX,
         my: 5,
@@ -33768,7 +33785,7 @@ async function runMonsterPlainDaggerIronBars({
         mpeaceful: false,
         mhp: 5,
         mhpmax: 5,
-        minvent: [daggerItem],
+        minvent: throwerInventory,
         missile: daggerItem,
         mcansee: true,
     };
@@ -35667,6 +35684,87 @@ test('production monster plain dagger aimed iron bars are silent when deaf', asy
     assert.ok(rng.some(entry => entry === 'rn2(100)'));
     assert.equal(rng.some(entry => entry === 'rnd(20)'
         || entry === 'rn2(3)'), false);
+    assert.equal(preNhgetchMessages.some(message => /Clonk!/.test(message)), false);
+});
+
+test('production monster silver dagger aimed shot clinks iron bars before hero', async () => {
+    const silverDaggerItem = monsterSilverDagger(874360);
+    const { daggerItem, thrower, rng, rawRng, preNhgetchMessages } = await runMonsterPlainDaggerIronBars({
+        levelCells: [[7, 5, { typ: IRONBARS }]],
+        projectile: silverDaggerItem,
+    });
+
+    assert.equal(daggerItem, silverDaggerItem);
+    assert.equal(game.u.uhp, 20);
+    assert.equal(game._damage_after_topline_more || 0, 0, rawRng.join(', '));
+    assert.equal(thrower.missile, null);
+    assert.equal(thrower.minvent.some(obj => obj.id === daggerItem.id), false);
+
+    const landed = game.level.objects.find(obj => obj.id === daggerItem.id);
+    assert.ok(landed, rng.join(', '));
+    assert.equal(landed.ox, 8, rawRng.join(', '));
+    assert.equal(landed.oy, 5, rawRng.join(', '));
+    assert.equal(landed.kind, 'silver dagger');
+    assert.equal(landed.actualKind, 'silver dagger');
+    assert.equal(landed.material, 'silver');
+    assert.notEqual(landed.transientProjectile, true);
+
+    assert.ok(rng.some(entry => entry === 'rn2(100)'));
+    assert.equal(rng.some(entry => entry === 'rnd(4)'
+        || entry === 'rnd(20)'
+        || entry === 'rn2(3)'), false);
+    assert.equal(preNhgetchMessages.some(message => /Clink!/.test(message)), true);
+    assert.equal(preNhgetchMessages.some(message => /Clonk!/.test(message)), false);
+});
+
+test('production monster silver dagger aimed iron bars are silent when deaf', async () => {
+    const silverDaggerItem = monsterSilverDagger(874361);
+    const { daggerItem, thrower, rng, rawRng, preNhgetchMessages } = await runMonsterPlainDaggerIronBars({
+        heroDeaf: true,
+        levelCells: [[7, 5, { typ: IRONBARS }]],
+        projectile: silverDaggerItem,
+    });
+
+    assert.equal(game.u.uhp, 20);
+    assert.equal(game._damage_after_topline_more || 0, 0, rawRng.join(', '));
+    assert.equal(thrower.missile, null);
+    assert.equal(thrower.minvent.some(obj => obj.id === daggerItem.id), false);
+
+    const landed = game.level.objects.find(obj => obj.id === daggerItem.id);
+    assert.ok(landed, rng.join(', '));
+    assert.equal(landed.ox, 8, rawRng.join(', '));
+    assert.equal(landed.oy, 5, rawRng.join(', '));
+    assert.equal(landed.kind, 'silver dagger');
+
+    assert.ok(rng.some(entry => entry === 'rn2(100)'));
+    assert.equal(rng.some(entry => entry === 'rnd(4)'
+        || entry === 'rnd(20)'
+        || entry === 'rn2(3)'), false);
+    assert.equal(preNhgetchMessages.some(message => /Clink!/.test(message)), false);
+    assert.equal(preNhgetchMessages.some(message => /Clonk!/.test(message)), false);
+});
+
+test('production monster silver dagger selection precedes plain dagger for iron bars', async () => {
+    const plainDaggerItem = { ...dagger(874362), letter: undefined, line: undefined, spe: 0 };
+    const silverDaggerItem = monsterSilverDagger(874363);
+    const { daggerItem, thrower, rng, rawRng, preNhgetchMessages } = await runMonsterPlainDaggerIronBars({
+        levelCells: [[7, 5, { typ: IRONBARS }]],
+        projectile: silverDaggerItem,
+        inventory: [plainDaggerItem, silverDaggerItem],
+    });
+
+    assert.equal(daggerItem, silverDaggerItem);
+    assert.equal(thrower.minvent.some(obj => obj.id === silverDaggerItem.id), false);
+    assert.equal(thrower.minvent.some(obj => obj.id === plainDaggerItem.id), true);
+
+    const landed = game.level.objects.find(obj => obj.id === silverDaggerItem.id);
+    assert.ok(landed, rng.join(', '));
+    assert.equal(landed.ox, 8, rawRng.join(', '));
+    assert.equal(landed.oy, 5, rawRng.join(', '));
+    assert.equal(landed.kind, 'silver dagger');
+
+    assert.ok(rng.some(entry => entry === 'rn2(100)'));
+    assert.equal(preNhgetchMessages.some(message => /Clink!/.test(message)), true);
     assert.equal(preNhgetchMessages.some(message => /Clonk!/.test(message)), false);
 });
 
