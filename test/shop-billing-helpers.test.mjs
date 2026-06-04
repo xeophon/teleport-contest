@@ -33427,6 +33427,8 @@ async function runMonsterSlingRockLanding({
     initialInventory = null,
     fullInventory = false,
     heroPolyself = null,
+    extraMonsters = [],
+    initialObjects = [],
 } = {}) {
     installNonShopFloorState();
     resetInputState();
@@ -33460,6 +33462,7 @@ async function runMonsterSlingRockLanding({
     }
     for (let x = 5; x <= throwerX; x++) markSquareVisible(x, 5);
     for (const [x, y] of levelCells) markSquareVisible(x, y);
+    game.level.objects = [...initialObjects];
     const sling = monsterSling(874347);
     const rock = projectile || monsterThrownRock(874346);
     const minvent = inventory || [sling, rock];
@@ -33475,7 +33478,7 @@ async function runMonsterSlingRockLanding({
         missile: activeMissile === undefined ? rock : activeMissile,
         mcansee: true,
     };
-    game.level.monsters = [thrower];
+    game.level.monsters = [thrower, ...extraMonsters];
     game._pending_time_passed = 1;
 
     const preNhgetchMessages = [];
@@ -34390,6 +34393,135 @@ test('production monster sling rock aimed iron bars are silent when deaf', async
     assert.equal(rng.some(entry => entry === 'rnd(20)'
         || entry === 'rn2(3)'), false);
     assert.equal(preNhgetchMessages.some(message => /Clonk!/.test(message)), false);
+});
+
+test('production monster sling rock hits intervening monster before iron bars and stacks surviving rock', async () => {
+    const cleanStack = { ...monsterThrownRock(874504), ox: 8, oy: 5, letter: undefined, line: undefined };
+    const blocker = ordinaryThrowTarget('goblin', 8, 5, {
+        ac: 15,
+        mac: 15,
+        mhp: 20,
+        mhpmax: 20,
+        data: { name: 'goblin', mlevel: 1, mac: 15 },
+    });
+    const incomingRock = monsterThrownRock(874505);
+    const { ammo, thrower, rng, rawRng, preNhgetchMessages } = await runMonsterSlingRockLanding({
+        seed: 3,
+        uac: 100,
+        projectile: incomingRock,
+        levelCells: [[7, 5, { typ: IRONBARS }]],
+        extraMonsters: [blocker],
+        initialObjects: [cleanStack],
+    });
+
+    assert.equal(game.u.uhp, 20);
+    assert.equal(game._damage_after_topline_more || 0, 0, rawRng.join(', '));
+    assert.equal(blocker.mhp < 20, true, rawRng.join(', '));
+    assert.equal(blocker.msleeping, 0);
+    assert.equal(thrower.minvent.some(obj => obj.id === ammo.id), false);
+
+    assert.equal(game.level.objects.some(obj => obj.id === ammo.id), false, rawRng.join(', '));
+    assert.equal(cleanStack.quan, 2, rawRng.join(', '));
+    assert.equal(cleanStack.ox, 8);
+    assert.equal(cleanStack.oy, 5);
+    assert.equal(game.level.objects.length, 1);
+
+    assert.deepEqual(rng.slice(0, 6), ['rn2(5)', 'rn2(5)', 'rnd(1)', 'rnd(20)', 'rnd(3)', 'rn2(3)'],
+        rawRng.join(', '));
+    assert.equal(rawRng[5], 'rn2(3)=0', rawRng.join(', '));
+    assert.equal(rng.some(entry => entry === 'rn2(100)'), false, rawRng.join(', '));
+    assert.equal(preNhgetchMessages.some(message => /Clonk!/.test(message)), false);
+    assert.equal(preNhgetchMessages.some(message => /rock hits the goblin|It is hit/.test(message)), true,
+        preNhgetchMessages.join('\n'));
+});
+
+test('production monster sling rock hit on intervening monster can mulch before stacking', async () => {
+    const cleanStack = { ...monsterThrownRock(874506), ox: 8, oy: 5, letter: undefined, line: undefined };
+    const blocker = ordinaryThrowTarget('goblin', 8, 5, {
+        ac: 15,
+        mac: 15,
+        mhp: 20,
+        mhpmax: 20,
+        data: { name: 'goblin', mlevel: 1, mac: 15 },
+    });
+    const incomingRock = monsterThrownRock(874507);
+    const { ammo, thrower, rng, rawRng, preNhgetchMessages } = await runMonsterSlingRockLanding({
+        seed: 1,
+        uac: 100,
+        projectile: incomingRock,
+        levelCells: [[7, 5, { typ: IRONBARS }]],
+        extraMonsters: [blocker],
+        initialObjects: [cleanStack],
+    });
+
+    assert.equal(game.u.uhp, 20);
+    assert.equal(game._damage_after_topline_more || 0, 0, rawRng.join(', '));
+    assert.equal(blocker.mhp < 20, true, rawRng.join(', '));
+    assert.equal(blocker.msleeping, 0);
+    assert.equal(thrower.minvent.some(obj => obj.id === ammo.id), false);
+
+    assert.equal(game.level.objects.some(obj => obj.id === ammo.id), false);
+    assert.equal(cleanStack.quan, 1);
+    assert.equal(game.level.objects.length, 1);
+
+    assert.deepEqual(rng.slice(0, 7), ['rn2(5)', 'rn2(5)', 'rnd(1)', 'rnd(20)', 'rnd(3)', 'rn2(3)', 'rn2(100)'],
+        rawRng.join(', '));
+    assert.notEqual(rawRng[5], 'rn2(3)=0', rawRng.join(', '));
+    assert.equal(preNhgetchMessages.some(message => /Clonk!/.test(message)), false);
+    assert.equal(preNhgetchMessages.some(message => /rock hits the goblin|It is hit/.test(message)), true,
+        preNhgetchMessages.join('\n'));
+});
+
+test('production monster sling loadstone intervening acid passive runs before stacking', async () => {
+    const cleanStack = {
+        ...monsterThrownGem(874508, 'loadstone', {
+            otyp: LOADSTONE,
+            cursed: false,
+            gemDescription: 'gray stone',
+        }),
+        ox: 8,
+        oy: 5,
+        letter: undefined,
+        line: undefined,
+    };
+    const acidBlob = passiveObjectTarget('acid blob', 'acid', 8, 5, {
+        ac: 15,
+        mac: 15,
+        mhp: 20,
+        mhpmax: 20,
+    });
+    const loadstone = monsterThrownGem(874509, 'loadstone', {
+        otyp: LOADSTONE,
+        cursed: false,
+        gemDescription: 'gray stone',
+    });
+    const { ammo, thrower, rng, rawRng, preNhgetchMessages } = await runMonsterSlingRockLanding({
+        seed: 1,
+        uac: 100,
+        projectile: loadstone,
+        levelCells: [[7, 5, { typ: IRONBARS }]],
+        extraMonsters: [acidBlob],
+        initialObjects: [cleanStack],
+    });
+
+    assert.equal(game.u.uhp, 20);
+    assert.equal(game._damage_after_topline_more || 0, 0, rawRng.join(', '));
+    assert.equal(acidBlob.mhp < 20, true, rawRng.join(', '));
+    assert.equal(acidBlob.msleeping, 0);
+    assert.equal(thrower.minvent.some(obj => obj.id === ammo.id), false);
+
+    assert.equal(game.level.objects.some(obj => obj.id === ammo.id), false, rawRng.join(', '));
+    assert.equal(cleanStack.quan, 2, rawRng.join(', '));
+    assert.equal(cleanStack.oeroded2 || 0, 0);
+    assert.equal(game.level.objects.length, 1);
+
+    assert.deepEqual(rng.slice(0, 6), ['rn2(5)', 'rn2(5)', 'rnd(1)', 'rnd(20)', 'rnd(3)', 'rn2(6)'],
+        rawRng.join(', '));
+    assert.equal(rng.some(entry => entry === 'rn2(3)'
+        || entry === 'rn2(100)'), false, rawRng.join(', '));
+    assert.equal(preNhgetchMessages.some(message => /Clonk!/.test(message)), false);
+    assert.equal(preNhgetchMessages.some(message => /loadstone hits the acid blob|It is hit/.test(message)), true,
+        preNhgetchMessages.join('\n'));
 });
 
 test('production monster sling ruby aimed shot can pass through iron bars before hero', async () => {
