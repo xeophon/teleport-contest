@@ -68,6 +68,7 @@ const TOOL_CLASS = 12;
 const ROCK_CLASS = 13;
 const GEM_CLASS = 14;
 const RUBY = 10070;
+const ORCISH_ARROW = 351;
 const ARROW = 349;
 const APE_ATTACKS = [
     { dice: 1, sides: 3, verb: 'hits' },
@@ -76,6 +77,7 @@ const APE_ATTACKS = [
 ];
 const CROSSBOW_BOLT = 10068;
 const DAGGER = 10023;
+const ORCISH_BOW = 10217;
 const BOW = 10024;
 const CROSSBOW = 10069;
 const PICK_AXE = 10025;
@@ -506,7 +508,7 @@ const SPECIFIC_POLEARM_INFO = new Map([
 ]);
 
 const SPECIFIC_WEAPONS = new Set([
-    DAGGER, BOW, CROSSBOW, KNIFE, SLING, ORCISH_DAGGER, SCIMITAR,
+    DAGGER, ORCISH_BOW, BOW, CROSSBOW, KNIFE, SLING, ORCISH_DAGGER, SCIMITAR,
     RUNESWORD, WAR_HAMMER, ELVEN_BROADSWORD, ELVEN_DAGGER,
     ATHAME, QUARTERSTAFF,
     SPEAR, DWARVISH_SPEAR, TRIDENT, STILETTO, SHORT_SWORD, ELVEN_SHORT_SWORD,
@@ -4222,7 +4224,7 @@ function mksobj_init(otmp, otyp, artif) {
         mkbox_cnts(otmp);
     } else if (otyp === ICE_BOX || otyp === SACK || otyp === OILSKIN_SACK || otyp === BAG_OF_HOLDING) {
         mkbox_cnts(otmp);
-    } else if (otyp === ARROW || otyp === DART || otyp === CROSSBOW_BOLT) {
+    } else if (otyp === ORCISH_ARROW || otyp === ARROW || otyp === DART || otyp === CROSSBOW_BOLT) {
         otmp.quan = rn1(6, 6);
         if (!rn2(11)) {
             otmp.spe = rne(3);
@@ -4618,6 +4620,7 @@ export function object_display(otmp) {
     const displayColor = otmp?._display_color;
     if (otyp === GOLD_PIECE) return { glyph: '$', color: CLR_YELLOW };
     if (otyp === WEAPON_CLASS) return { glyph: ')', color: displayColor ?? CLR_CYAN };
+    if (otyp === ORCISH_ARROW || otyp === ORCISH_BOW) return { glyph: ')', color: displayColor ?? CLR_BLACK };
     if (otyp === ARROW || otyp === BOW) return { glyph: ')', color: displayColor ?? CLR_BROWN };
     if (otyp === CROSSBOW_BOLT || otyp === DAGGER || otyp === CROSSBOW
         || otyp === PICK_AXE || otyp === DART || otyp === KNIFE
@@ -6233,6 +6236,7 @@ function mongets(otyp, erodes = true) {
     else if (otyp === DWARVISH_SPEAR) Object.assign(otmp, { cls: 'weapon', kind: 'dwarvish spear' });
     else if (otyp === DWARVISH_SHORT_SWORD) Object.assign(otmp, { cls: 'weapon', kind: 'dwarvish short sword' });
     else if (otyp === DWARVISH_MATTOCK) Object.assign(otmp, { cls: 'weapon', kind: 'dwarvish mattock' });
+    else if (otyp === ORCISH_BOW) Object.assign(otmp, { cls: 'weapon', kind: 'orcish bow', appearance: 'crude bow' });
     else if (otyp === BOW) Object.assign(otmp, { cls: 'weapon', kind: 'bow' });
     else if (otyp === CROSSBOW) Object.assign(otmp, { cls: 'weapon', kind: 'crossbow' });
     else if (otyp === SLING) Object.assign(otmp, { cls: 'weapon', kind: 'sling' });
@@ -6241,6 +6245,15 @@ function mongets(otyp, erodes = true) {
     else if (otyp === BULLWHIP) Object.assign(otmp, { cls: 'weapon', kind: 'bullwhip' });
     else if (otyp === AKLYS) Object.assign(otmp, { cls: 'weapon', kind: 'aklys' });
     else if (otyp === SILVER_MACE) Object.assign(otmp, { cls: 'weapon', kind: 'silver mace' });
+    else if (otyp === ORCISH_ARROW) Object.assign(otmp, {
+        cls: 'weapon',
+        kind: 'crude arrow',
+        actualKind: 'orcish arrow',
+        singular: 'crude arrow',
+        plural: 'crude arrows',
+        appearance: 'crude arrow',
+        material: 'iron',
+    });
     else if (otyp === ARROW) Object.assign(otmp, { cls: 'weapon', kind: 'arrow', plural: 'arrows' });
     else if (otyp === CROSSBOW_BOLT) Object.assign(otmp, { cls: 'weapon', kind: 'crossbow bolt', plural: 'crossbow bolts' });
     else if (otyp === DART) Object.assign(otmp, { cls: 'weapon', kind: 'dart', plural: 'darts' });
@@ -6407,8 +6420,16 @@ function rnd_offensive_item(ptr) {
 function m_initthrow(otyp, oquan) {
     const otmp = mongets(otyp);
     const quan = rn2(oquan) + 3;
-    if (otmp) otmp.quan = quan;
+    if (otmp) {
+        otmp.quan = quan;
+        if (otyp === ORCISH_ARROW) otmp.opoisoned = true;
+    }
     game._last_mon_throw = otmp || { otyp, quan };
+}
+
+function m_initorcish_launcher() {
+    mongets(ORCISH_BOW);
+    m_initthrow(ORCISH_ARROW, 12);
 }
 
 function m_initmercinv(ptr) {
@@ -6817,8 +6838,7 @@ function m_initweap(ptr) {
             if (!rn2(3)) mongets(ORCISH_DAGGER);
             if (!rn2(3)) mongets(ORCISH_HELM);
             if (!rn2(3)) {
-                mongets(BOW);
-                m_initthrow(ARROW, 12);
+                m_initorcish_launcher();
             }
             if (!rn2(3)) mongets(ORCISH_HELM);
         } else if (ptr.name === 'orc-captain') {
@@ -6832,8 +6852,7 @@ function m_initweap(ptr) {
                 if (!rn2(3)) mongets(ORCISH_DAGGER);
                 if (!rn2(3)) mongets(ORCISH_HELM);
                 if (!rn2(3)) {
-                    mongets(BOW);
-                    m_initthrow(ARROW, 12);
+                    m_initorcish_launcher();
                 }
                 if (!rn2(3)) mongets(ORCISH_HELM);
             }

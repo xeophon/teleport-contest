@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 import { GameMap } from '../js/game.js';
 import { resetGame } from '../js/gstate.js';
-import { __mklevTestHooks as mklevHooks, place_lregion } from '../js/mklev.js';
+import { __mklevTestHooks as mklevHooks, makemon, monsterByRndName, place_lregion } from '../js/mklev.js';
 import { processCorpseTimers } from '../js/cmd.js';
 import { init_rect } from '../js/rect.js';
 import {
@@ -11,6 +11,7 @@ import {
     VWALL, HWALL, POOL, LAVAPOOL, WATER, FOUNTAIN, ALTAR, AM_SHRINE, OROOM, TEMPLE,
     THEMEROOM, SDOOR, AIR, CLOUD, FILL_NORMAL, DOOR, D_NODOOR, D_ISOPEN, D_CLOSED,
     D_LOCKED, D_TRAPPED,
+    MM_NOGRP,
     MAXNROFROOMS,
     A_CHAOTIC, A_LAWFUL, A_NEUTRAL, Align2amask,
     SHOPBASE, CANDLESHOP, ARMORSHOP, WEAPONSHOP, MATCH_WALL, SET_LIT_RANDOM, SET_LIT_NOCHANGE,
@@ -118,6 +119,37 @@ function installThemeroomGenerationGame({ seed = 1, dlevel = 8 } = {}) {
     return g;
 }
 
+async function generatedMonsterWithMissile(name) {
+    const mdat = monsterByRndName(name);
+    assert.ok(mdat, `missing monster data for ${name}`);
+    for (let seed = 1; seed <= 200; seed++) {
+        installMkmapGame({ seed });
+        const mon = await makemon(mdat, 5, 5, MM_NOGRP);
+        if (mon?.missile) return mon;
+    }
+    assert.fail(`${name} did not generate a launcher missile in searched seeds`);
+}
+
+function assertHardPoisonedOrcishLauncher(mon) {
+    const ammo = mon.missile;
+    assert.ok(ammo);
+    assert.equal(mon.minvent.includes(ammo), true);
+    assert.equal(ammo.kind, 'crude arrow');
+    assert.equal(ammo.actualKind, 'orcish arrow');
+    assert.equal(ammo.singular, 'crude arrow');
+    assert.equal(ammo.plural, 'crude arrows');
+    assert.equal(ammo.appearance, 'crude arrow');
+    assert.equal(ammo.material, 'iron');
+    assert.equal(ammo.opoisoned, true);
+    assert.ok(ammo.quan >= 3 && ammo.quan <= 14);
+
+    const launcher = mon.minvent.find(obj => obj.kind === 'orcish bow');
+    assert.ok(launcher);
+    assert.equal(launcher.appearance, 'crude bow');
+    assert.equal(mon.minvent.some(obj => obj.kind === 'bow'), false);
+    assert.equal(mon.minvent.some(obj => obj.kind === 'arrow'), false);
+}
+
 function doorCellsAround(g, room) {
     const doors = [];
     for (let x = room.lx - 1; x <= room.hx + 1; x++) {
@@ -171,6 +203,13 @@ test('themed buried zombie species follow C difficulty gates', () => {
     assert.deepEqual(mklevHooks.themeroomBuriedZombieSpecies(), [
         'kobold', 'gnome', 'orc', 'dwarf', 'elf', 'human', 'ettin', 'giant',
     ]);
+});
+
+test('natural Uruk-style orcs generate hard-poisoned orcish arrow stacks', async () => {
+    for (const name of ['Uruk-hai', 'orc-captain']) {
+        const mon = await generatedMonsterWithMissile(name);
+        assertHardPoisonedOrcishLauncher(mon);
+    }
 });
 
 test('mines level_init smoothed option gates only the C pass-three smoothing', () => {
