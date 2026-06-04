@@ -6206,13 +6206,46 @@ export async function processMonsterTurns() {
                             if (mon.missile === missile) mon.missile = null;
                         }
                         const missileSpe = missile.spe || 0;
-                        const cleanLauncherArrow = !missile.cursed && !missile.greased
-                            && !(missile.oeroded || 0) && !(missile.oeroded2 || 0);
-                        const sharedArrowLanding = cleanLauncherArrow
+                        const sharedArrowLanding = !(missile.oeroded || 0) && !(missile.oeroded2 || 0)
                             && (missileSpe === 0 || (!missile.blessed && (missileSpe === 1 || missileSpe === 2)));
                         addToplineMessage(`${monsterDisplayName(mon, true)} shoots an arrow!`);
                         game._message_more = 1;
                         game._process_time_with_more = 0;
+                        if ((thrownMissile.cursed || thrownMissile.greased) && !rn2(7)) {
+                            addToplineMessage(`${monsterDisplayName(mon, true)} misfires!`);
+                            const misfireDx = rn2(3) - 1;
+                            const misfireDy = rn2(3) - 1;
+                            const landMisfiredArrow = (x, y) => {
+                                const floorMessages = [];
+                                landMonsterThrownObject(thrownMissile, x, y, {
+                                    glyph: thrownMissile.glyph || ')',
+                                    color: thrownMissile.color ?? CLR_CYAN,
+                                    messages: floorMessages,
+                                    ohit: false,
+                                });
+                                addMonsterThrownFloorMessages(floorMessages);
+                            };
+                            if (!misfireDx && !misfireDy) {
+                                landMisfiredArrow(mon.mx, mon.my);
+                                game._search_pending_count = 0;
+                                game._run_steps_remaining = 0;
+                                game._travel_keys = [];
+                                game._monster_resume_index = monIndex + 1;
+                                game._monster_resume_somebody_can_move = somebodyCanMove;
+                                return false;
+                            }
+                            if (misfireDx !== throwDx || misfireDy !== throwDy) {
+                                for (let step = 0; step < throwRange; step++) rn2(5);
+                                landMisfiredArrow(mon.mx + misfireDx * throwRange,
+                                    mon.my + misfireDy * throwRange);
+                                game._search_pending_count = 0;
+                                game._run_steps_remaining = 0;
+                                game._travel_keys = [];
+                                game._monster_resume_index = monIndex + 1;
+                                game._monster_resume_somebody_can_move = somebodyCanMove;
+                                return false;
+                            }
+                        }
                         const flightX = (game.u?.ux || 0) - throwDx;
                         const flightY = (game.u?.uy || 0) - throwDy;
                         game.level.objects.push({
