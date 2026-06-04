@@ -35840,6 +35840,8 @@ const TIPHAT_GENERATED_SOUND_BY_MONSTER_NAME = new Map([
     ['water demon', 'djinni'], ['prisoner', 'djinni'], ['djinni', 'djinni'],
     ['titan', 'spell'], ['barrow wight', 'spell'], ['nazgul', 'spell'],
     ['nalfeshnee', 'spell'],
+    ['angel', 'cuss'], ['archon', 'cuss'],
+    ['marilith', 'cuss'], ['sandestin', 'cuss'],
     ['hobbit', 'humanoid'], ['dwarf', 'humanoid'],
     ['dwarf lord', 'humanoid'], ['dwarf lady', 'humanoid'], ['dwarf leader', 'humanoid'],
     ['dwarf king', 'humanoid'], ['dwarf queen', 'humanoid'], ['dwarf ruler', 'humanoid'],

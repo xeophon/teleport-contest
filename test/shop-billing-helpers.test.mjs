@@ -5879,6 +5879,49 @@ test('chat with visible generated bark and sqeek sound monsters uses C msound ro
     }
 });
 
+test('chat with visible generated cuss sound monsters uses C msound rows', async () => {
+    const cases = [
+        {
+            name: 'Angel',
+            data: { mlevel: 14, mlet: 'A', isminion: true, maligntyp: 12 },
+            expected: '"It\'s not too late."',
+            reject: /We're all doomed|doesn't respond|Nothing happens|waves|threatens/,
+        },
+        {
+            name: 'Archon',
+            data: { mlevel: 19, mlet: 'A', isminion: true, maligntyp: 15 },
+            expected: '"It\'s not too late."',
+            reject: /We're all doomed|doesn't respond|Nothing happens|waves|threatens/,
+        },
+        {
+            name: 'marilith',
+            data: { mlevel: 7, mlet: '&', demon: true, female: true },
+            expected: '"We\'re all doomed."',
+            reject: /It's not too late|doesn't respond|Nothing happens|waves|threatens/,
+        },
+        {
+            name: 'sandestin',
+            data: { mlevel: 13, mlet: '&', strong: true },
+            expected: '"We\'re all doomed."',
+            reject: /It's not too late|doesn't respond|Nothing happens|waves|threatens/,
+        },
+    ];
+
+    for (const { name, data, expected, reject } of cases) {
+        const result = await chatAdjacentMonster({
+            name,
+            rngLog: true,
+            data: { name, ...data },
+        });
+
+        assert.equal(result.message, expected);
+        assert.equal(result.target.mstrategy, 0);
+        assert.equal(game.context.move, 1);
+        assert.doesNotMatch(result.message, reject);
+        assert.deepEqual(getRngLog(), []);
+    }
+});
+
 test('chat with visible generated special sound monsters uses C msound rows', async () => {
     const cases = [
         {
