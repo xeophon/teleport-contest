@@ -6579,6 +6579,38 @@ export async function processMonsterTurns() {
                             });
                             addMonsterThrownFloorMessages(floorMessages);
                         };
+                        const finishLauncherArrowInterveningHit = (target) => {
+                            const projectileDamageSides = monsterLauncherProjectileDamageSides(thrownMissile);
+                            const projectileDamageBonus = monsterLauncherProjectileDamageBonus(thrownMissile);
+                            const damage = Math.max(1, rnd(projectileDamageSides) + projectileDamageBonus
+                                + missileSpe - missileErosion);
+                            target.msleeping = 0;
+                            target.mhp = Math.max(0, (target.mhp || 1) - damage);
+                            const targetVisible = !game.u?.blind
+                                && !!(game.viz_array?.[target.my]?.[target.mx] & IN_SIGHT)
+                                && couldSeeCoord(target.mx, target.my);
+                            const targetName = target.data?.name || 'monster';
+                            const hitMessage = targetVisible
+                                ? `The ${projectileKind} hits the ${targetName}${damage > 4 ? '!' : '.'}`
+                                : `It is hit${damage > 4 ? '!' : '.'}`;
+                            game._topline_after_more = hitMessage;
+                            if (sharedArrowLanding) {
+                                game._arrow_drop_throw_after_topline_more = {
+                                    missile: thrownMissile,
+                                    x: target.mx,
+                                    y: target.my,
+                                    ohit: true,
+                                };
+                            } else {
+                                game._arrow_mulch_after_topline_more = 1;
+                            }
+                            game._search_pending_count = 0;
+                            game._run_steps_remaining = 0;
+                            game._travel_keys = [];
+                            game._monster_resume_index = monIndex + 1;
+                            game._monster_resume_somebody_can_move = somebodyCanMove;
+                            return false;
+                        };
                         if ((thrownMissile.cursed || thrownMissile.greased) && !rn2(7)) {
                             addToplineMessage(`${monsterDisplayName(mon, true)} misfires!`);
                             const misfireDx = rn2(3) - 1;
@@ -6618,6 +6650,22 @@ export async function processMonsterTurns() {
                                         landingX += misfireDx;
                                         landingY += misfireDy;
                                         const remainingRange = throwRange - step - 1;
+                                        const targetMon = monsterAtFlightSquare(landingX, landingY, mon);
+                                        if (targetMon) {
+                                            const hitValue = monsterThrownObjectAccidentalHitValue(targetMon, thrownMissile);
+                                            const hitRoll = rnd(20);
+                                            if (hitValue >= hitRoll)
+                                                return finishLauncherArrowInterveningHit(targetMon);
+                                            if (!remainingRange) {
+                                                landMisfiredArrow(landingX, landingY);
+                                                game._search_pending_count = 0;
+                                                game._run_steps_remaining = 0;
+                                                game._travel_keys = [];
+                                                game._monster_resume_index = monIndex + 1;
+                                                game._monster_resume_somebody_can_move = somebodyCanMove;
+                                                return false;
+                                            }
+                                        }
                                         const forcehit = !rn2(5);
                                         const hitIronBars = remainingRange && forcehit
                                             && game.level?.at(landingX + misfireDx, landingY + misfireDy)?.typ === IRONBARS;
@@ -6705,36 +6753,7 @@ export async function processMonsterTurns() {
                             }
                         }
                         if (interveningArrowTarget) {
-                            const projectileDamageSides = monsterLauncherProjectileDamageSides(thrownMissile);
-                            const projectileDamageBonus = monsterLauncherProjectileDamageBonus(thrownMissile);
-                            const damage = Math.max(1, rnd(projectileDamageSides) + projectileDamageBonus
-                                + missileSpe - missileErosion);
-                            interveningArrowTarget.msleeping = 0;
-                            interveningArrowTarget.mhp = Math.max(0, (interveningArrowTarget.mhp || 1) - damage);
-                            const targetVisible = !game.u?.blind
-                                && !!(game.viz_array?.[interveningArrowTarget.my]?.[interveningArrowTarget.mx] & IN_SIGHT)
-                                && couldSeeCoord(interveningArrowTarget.mx, interveningArrowTarget.my);
-                            const targetName = interveningArrowTarget.data?.name || 'monster';
-                            const hitMessage = targetVisible
-                                ? `The ${projectileKind} hits the ${targetName}${damage > 4 ? '!' : '.'}`
-                                : `It is hit${damage > 4 ? '!' : '.'}`;
-                            game._topline_after_more = hitMessage;
-                            if (sharedArrowLanding) {
-                                game._arrow_drop_throw_after_topline_more = {
-                                    missile: thrownMissile,
-                                    x: interveningArrowTarget.mx,
-                                    y: interveningArrowTarget.my,
-                                    ohit: true,
-                                };
-                            } else {
-                                game._arrow_mulch_after_topline_more = 1;
-                            }
-                            game._search_pending_count = 0;
-                            game._run_steps_remaining = 0;
-                            game._travel_keys = [];
-                            game._monster_resume_index = monIndex + 1;
-                            game._monster_resume_somebody_can_move = somebodyCanMove;
-                            return false;
+                            return finishLauncherArrowInterveningHit(interveningArrowTarget);
                         } else if (aimedTerrainStop) {
                             landAimedArrow(aimedTerrainStop.x, aimedTerrainStop.y);
                             game._search_pending_count = 0;

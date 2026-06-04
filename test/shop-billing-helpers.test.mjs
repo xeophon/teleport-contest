@@ -36963,6 +36963,53 @@ test('production monster greased launcher arrow redirected misfire stops before 
     assert.equal(rng.some(entry => entry.startsWith('rn2(100)=')), false);
 });
 
+test('production monster greased launcher arrow redirected misfire can hit intervening monster', async () => {
+    const blocker = ordinaryThrowTarget('goblin', 11, 5, {
+        ac: 30,
+        mac: 30,
+        mhp: 20,
+        mhpmax: 20,
+        msleeping: 1,
+        data: { name: 'goblin', mlevel: 1, mac: 30 },
+    });
+    const { arrow, thrower, rng, preNhgetchMessages } = await runMonsterLauncherArrowLanding({
+        seed: 46,
+        arrowOverrides: { greased: true },
+        heroBlind: false,
+        extraMonsters: [blocker],
+    });
+
+    assert.match(game._pending_message, /^It is hit[.!]$/);
+    assert.equal(game.u.uhp, 20);
+    assert.equal(game._damage_after_topline_more || 0, 0, rng.join(', '));
+    assert.equal(blocker.msleeping, 0);
+    const damageRoll = Number(rng.find(entry => entry.startsWith('rnd(6)=')).split('=')[1]);
+    assert.equal(blocker.mhp, 20 - damageRoll);
+    assert.equal(thrower.minvent.some(obj => obj.id === arrow.id), false);
+    assert.equal(thrower.missile, null);
+    assert.equal(preNhgetchMessages.some(message => /misfires!/.test(message)), true);
+
+    await rhack('\x1b');
+    resetInputState();
+
+    assert.equal(game.level.objects.some(obj => obj.id === arrow.id), false);
+    assert.equal(game.level.objects.some(obj => obj.transientProjectile), false);
+
+    assertNoSingletonLauncherMultishotRng(rng);
+    assert.deepEqual(rng, [
+        'rn2(5)=3',
+        'rn2(5)=2',
+        'rn2(7)=0',
+        'rn2(3)=2',
+        'rn2(3)=1',
+        'rn2(5)=2',
+        'rnd(20)=10',
+        'rnd(6)=1',
+        'rn2(3)=2',
+        'rn2(100)=9',
+    ]);
+});
+
 test('production monster greased launcher arrow redirected misfire stops before closed door', async () => {
     const { arrow, thrower, rng } = await runMonsterLauncherArrowLanding({
         seed: 46,
