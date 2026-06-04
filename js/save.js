@@ -60,7 +60,7 @@ function countObjects(objects = []) {
 function countRestoreIdentities(level) {
     let count = countObjects(level?.objects || []) + countObjects(level?.buriedobjlist || []);
     for (const obj of level?.objects || [])
-        if (obj.transientProjectile || obj._deathCleanupThrownObject) count++;
+        if (obj.transientProjectile) count++;
     for (const mon of level?.monsters || []) {
         count++;
         count += countObjects(mon.minvent || []);

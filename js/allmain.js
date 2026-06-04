@@ -6209,12 +6209,12 @@ export async function processMonsterTurns() {
                         const missileSpe = missile.spe || 0;
                         const missileErosion = Math.max(0, Math.trunc(Number(thrownMissile.oeroded || 0)),
                             Math.trunc(Number(thrownMissile.oeroded2 || 0)));
-                        const coveredSingletonBlessedArrow = missileQuan <= 1 && thrownMissile.blessed
+                        const coveredBlessedEnchantedArrow = thrownMissile.blessed
                             && (missileSpe === 1 || missileSpe === 2);
-                        const coveredArrowState = missileSpe === 0 || coveredSingletonBlessedArrow
+                        const coveredArrowState = missileSpe === 0 || coveredBlessedEnchantedArrow
                             || (!thrownMissile.blessed && (missileSpe === 1 || missileSpe === 2));
                         const coveredErodedArrowState = !thrownMissile.blessed
-                            || missileSpe === 0 || coveredSingletonBlessedArrow;
+                            || missileSpe === 0 || coveredBlessedEnchantedArrow;
                         const coveredErosionState = !missileErosion || coveredErodedArrowState;
                         const sharedArrowLanding = coveredArrowState && coveredErosionState;
                         addToplineMessage(`${monsterDisplayName(mon, true)} shoots an arrow!`);
