@@ -40,6 +40,7 @@ const ENORMOUS_MEATBALL = 11013;
 const MEAT_STICK = 11014;
 const TOUCHSTONE = 473;
 const DART = 353;
+const CREAM_PIE = 10081;
 const KNIFE = 10026;
 const SPEAR = 10030;
 const DWARVISH_SPEAR = 10102;
@@ -852,6 +853,7 @@ function meatRingFood(id, letter = 'm', extra = {}) {
 function creamPie(id, letter = 'p', quan = 1) {
     return {
         id,
+        otyp: CREAM_PIE,
         cls: 'food',
         glyph: '%',
         kind: 'cream pie',
@@ -33553,6 +33555,96 @@ async function runMonsterDartHitLanding({
     return { dart, thrower, rng: getRngLog(), preNhgetchMessages };
 }
 
+async function runMonsterKopCreamPieLanding({
+    seed = 8,
+    heroBlind = false,
+    heroBlindfolded = false,
+    heroDeaf = false,
+    heroNoEyes = false,
+    heroCreamed = 0,
+    heroBlindTimeout = heroBlind ? 10 : 0,
+    uac = 20,
+    levelCells = [],
+    throwerX = 8,
+    monsterName = 'Keystone Kop',
+    monsterData = {},
+    pieQuan = 1,
+    verbose = true,
+} = {}) {
+    installNonShopFloorState();
+    resetInputState();
+    pushKey('\x1b');
+    initRng(seed);
+    enableRngLog({ reset: true });
+    const status = [
+        heroBlind ? 'Blind' : '',
+        heroDeaf ? 'Deaf' : '',
+    ].filter(Boolean);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        ux0: 5,
+        uy0: 5,
+        blind: heroBlind,
+        blindfolded: heroBlindfolded,
+        Blindfolded: heroBlindfolded,
+        _polyself_form: heroNoEyes ? { noeyes: true } : null,
+        ucreamed: heroCreamed,
+        _blindTimeout: heroBlindTimeout,
+        _statusSuffix: status.length ? ` ${status.join(' ')}` : '',
+        _deafTimeout: heroDeaf ? 5 : 0,
+        confusion: false,
+        stunned: false,
+        fumbling: false,
+        uhp: 20,
+        uhpmax: 20,
+        uac,
+        umovement: NORMAL_SPEED,
+        acurr: { a: [10, 10, 10, 10, 10, 10] },
+    });
+    game.flags.verbose = verbose;
+    game.moves = 1;
+    game.context = {};
+    if (levelCells.length) {
+        const cells = new Map();
+        for (const [x, y, loc] of levelCells)
+            cells.set(`${x},${y}`, { roomno: 0, ...loc });
+        game.level.at = (x, y) => cells.get(`${x},${y}`) || { roomno: 0, typ: ROOM };
+    }
+    for (let x = 5; x <= throwerX; x++) markSquareVisible(x, 5);
+    for (const [x, y] of levelCells) markSquareVisible(x, y);
+    const pie = { ...creamPie(874390, 'p', pieQuan), letter: undefined, line: undefined };
+    const thrower = {
+        mx: throwerX,
+        my: 5,
+        movement: NORMAL_SPEED,
+        data: { name: monsterName, mlet: 'Kop', mmove: NORMAL_SPEED, armed: true, mlevel: 1, ...monsterData },
+        mpeaceful: false,
+        mhp: 5,
+        mhpmax: 5,
+        minvent: [pie],
+        missile: pie,
+        mcansee: true,
+    };
+    game.level.monsters = [thrower];
+    game._pending_time_passed = 1;
+    const preNhgetchMessages = [];
+    const priorPreNhgetchHook = game._preNhgetchHook;
+    game._preNhgetchHook = async () => {
+        const message = [game._pending_message, game._topline_after_more]
+            .filter(Boolean).join('  ');
+        if (message) preNhgetchMessages.push(message);
+        if (priorPreNhgetchHook) await priorPreNhgetchHook();
+    };
+    try {
+        await moveloop_core();
+    } finally {
+        game._preNhgetchHook = priorPreNhgetchHook;
+    }
+    resetInputState();
+    return { pie, thrower, rng: getRngLog(), preNhgetchMessages };
+}
+
 async function runMonsterLauncherArrowLanding({
     seed = 8,
     uac = 10,
@@ -34405,6 +34497,85 @@ test('production kobold shaman does not use kobold dart path', async () => {
     assert.equal(thrower.missile, dart);
     assert.equal(thrower.minvent.includes(dart), true);
     assert.equal(game.level.objects.some(obj => obj.kind === 'dart'), false);
+});
+
+test('production hostile Kop throws cream pie and creams hero on hit', async () => {
+    const { pie, thrower, rng, preNhgetchMessages } = await runMonsterKopCreamPieLanding({
+        seed: 8,
+        uac: 20,
+    });
+
+    assert.equal(game.u.uhp, 20);
+    assert.ok((game.u.ucreamed || 0) > 0);
+    assert.ok((game.u._blindTimeout || 0) > 0);
+    assert.equal(game.u.blind, true);
+    assert.match(game.u._statusSuffix || '', /Blind/);
+    assert.equal(thrower.missile, null);
+    assert.equal(thrower.minvent.some(obj => obj.id === pie.id), false);
+    assert.equal(game.level.objects.some(obj => obj.kind === 'cream pie'), false);
+
+    assert.ok(rng.some(entry => entry.startsWith('rnd(20)=')), rng.join(', '));
+    assert.ok(rng.some(entry => entry.startsWith('rnd(25)=')), rng.join(', '));
+    assert.equal(preNhgetchMessages.some(message => /throws a cream pie!/.test(message)), true,
+        preNhgetchMessages.join('\n'));
+    assert.equal(preNhgetchMessages.some(message => /You are hit by a cream pie\./.test(message)), true,
+        preNhgetchMessages.join('\n'));
+    assert.equal(preNhgetchMessages.some(message => /Yecch!  You've been creamed\./.test(message)), true,
+        preNhgetchMessages.join('\n'));
+});
+
+test('production Kop cream pie stack splits one thrown pie', async () => {
+    const { pie, thrower, rng } = await runMonsterKopCreamPieLanding({
+        seed: 8,
+        heroBlind: true,
+        pieQuan: 3,
+        uac: 20,
+    });
+
+    assert.equal(game.u.uhp, 20);
+    assert.equal(pie.quan, 2);
+    assert.equal(thrower.missile, pie);
+    assert.equal(thrower.minvent.includes(pie), true);
+    assert.equal(game.level.objects.some(obj => obj.kind === 'cream pie'), false);
+    assert.ok(rng.some(entry => entry.startsWith('rnd(20)=')), rng.join(', '));
+    assert.ok(rng.some(entry => entry.startsWith('rnd(25)=')), rng.join(', '));
+});
+
+test('production Kop cream pie blindfold blocks hero creaming', async () => {
+    const { pie, thrower, rng } = await runMonsterKopCreamPieLanding({
+        seed: 8,
+        heroBlind: true,
+        heroBlindfolded: true,
+        heroCreamed: 7,
+        heroBlindTimeout: 0,
+        uac: 20,
+    });
+
+    assert.equal(game.u.ucreamed, 7);
+    assert.equal(game.u._blindTimeout || 0, 0);
+    assert.equal(thrower.missile, null);
+    assert.equal(thrower.minvent.some(obj => obj.id === pie.id), false);
+    assert.equal(game.level.objects.some(obj => obj.kind === 'cream pie'), false);
+    assert.ok(rng.some(entry => entry.startsWith('rnd(20)=')), rng.join(', '));
+    assert.equal(rng.some(entry => entry.startsWith('rnd(25)=')), false, rng.join(', '));
+});
+
+test('production Kop cream pie miss breaks without blinding hero', async () => {
+    const { pie, thrower, rng } = await runMonsterKopCreamPieLanding({
+        seed: 8,
+        heroBlind: true,
+        heroBlindTimeout: 0,
+        uac: -20,
+    });
+
+    assert.equal(game.u.uhp, 20);
+    assert.equal(game.u.ucreamed || 0, 0);
+    assert.equal(game.u._blindTimeout || 0, 0);
+    assert.equal(thrower.missile, null);
+    assert.equal(thrower.minvent.some(obj => obj.id === pie.id), false);
+    assert.equal(game.level.objects.some(obj => obj.kind === 'cream pie'), false);
+    assert.ok(rng.some(entry => entry.startsWith('rnd(20)=')), rng.join(', '));
+    assert.equal(rng.some(entry => entry.startsWith('rnd(25)=')), false, rng.join(', '));
 });
 
 test('production kobold dart aimed shot can pass through iron bars before hero', async () => {

@@ -1660,6 +1660,7 @@ const STATUE = 472;
 const POISONOUS_CORPSES = new Set(['kobold', 'large kobold', 'kobold leader', 'kobold shaman']);
 const CORPSE_EATER_MONSTERS = new Set(['purple worm', 'baby purple worm', 'ghoul', 'piranha']);
 const DART = 353;
+const CREAM_PIE = 10081;
 const ORCISH_DAGGER = 10020;
 const DAGGER = 10023;
 const KNIFE = 10026;
@@ -6215,6 +6216,11 @@ export async function processMonsterTurns() {
                         && !(mon.data?.name === 'grid bug' && throwTargetX !== mon.mx && throwTargetY !== mon.my);
                     const canThrowDart = monsterIsKoboldDartThrower(mon) && mon.missile?.otyp === DART && mon.missile.quan > 0
                         && throwRange > 1 && throwRange <= 4 && straightThrow;
+                    const canThrowCreamPie = !mon._opened_door_this_move && !mon.mpeaceful
+                        && monsterIsKopCreamPieThrower(mon) && isMonsterThrownCreamPie(mon.missile)
+                        && (mon.missile?.quan || 0) > 0
+                        && throwRange > 1 && throwRange < BOLT_LIM && straightThrow
+                        && clearPath(mon.mx, mon.my, throwTargetX, throwTargetY);
                     let offensivePotionIndex = -1;
                     for (let i = 0; i < (mon.minvent || []).length; i++) {
                         const item = mon.minvent[i];
@@ -6254,7 +6260,7 @@ export async function processMonsterTurns() {
                         && (mon.data?.mercenary || mon.mw || !game._armor_wear_occupation);
                     const canUseWeaponAttack = !game.level?.flags?.rogue_level
                         && (canThrowSpear || canThrowShuriken || canThrowPlainDagger || canThrowOrcishDagger
-                            || canThrowKnife || canThrowDart);
+                            || canThrowKnife || canThrowDart || canThrowCreamPie);
                     const canSelectRangedWeapon = canUseWeaponAttack;
                     const canCheckOffensiveItems = !mon.data?.mindless && !mon.data?.nohands && !mon.mpeaceful;
                     let offensiveItemsLinedUp = false;
@@ -6304,7 +6310,7 @@ export async function processMonsterTurns() {
                     }
                         continue;
                     }
-                    if (canReadyLauncher && !((canThrowSpear || canThrowShuriken) && rangedWeaponLinedUp)) {
+                    if (canReadyLauncher && !((canThrowSpear || canThrowShuriken || canThrowCreamPie) && rangedWeaponLinedUp)) {
                         mon.mw = launcher;
                         if (!game.u?.blind && couldSeeCoord(mon.mx, mon.my) && !mon.minvis && !mon.mundetected) {
                             const article = /^[aeiou]/i.test(launcherKind) ? 'an' : 'a';
@@ -6313,7 +6319,7 @@ export async function processMonsterTurns() {
                         }
                         continue;
                     }
-                    if (canShootLauncher && !((canThrowSpear || canThrowShuriken) && rangedWeaponLinedUp)
+                    if (canShootLauncher && !((canThrowSpear || canThrowShuriken || canThrowCreamPie) && rangedWeaponLinedUp)
                         && !(canThrowOffensivePotion && offensiveItemsLinedUp)
                         && monsterLinedUp(mon, throwTargetX, throwTargetY)) {
                         const missile = mon.minvent[launcherAmmoIndex];
@@ -6570,6 +6576,102 @@ export async function processMonsterTurns() {
                         game._monster_resume_index = monIndex + 1;
                         game._monster_resume_somebody_can_move = somebodyCanMove;
                         return false;
+                    }
+                    if (canThrowCreamPie && rangedWeaponLinedUp) {
+                        const targetAc = game.u?.uac ?? 10;
+                        if (targetAc < 0 && !consumedMattackuAc) rnd(-targetAc);
+
+                        const missile = mon.missile;
+                        const missileQuan = missile.quan || 1;
+                        const thrownId = next_ident();
+                        let thrownMissile = missile;
+                        if (missileQuan > 1) {
+                            missile.quan--;
+                            thrownMissile = { ...missile, id: thrownId, quan: 1 };
+                        } else {
+                            const missileIndex = (mon.minvent || []).indexOf(missile);
+                            if (missileIndex >= 0) mon.minvent.splice(missileIndex, 1);
+                            if (mon.missile === missile) mon.missile = null;
+                        }
+
+                        const throwerVisible = !game.u?.blind
+                            && !!(game.viz_array?.[mon.my]?.[mon.mx] & IN_SIGHT)
+                            && !mon.minvis;
+                        if (throwerVisible) {
+                            addToplineMessage(`${monsterDisplayName(mon, true)} throws a cream pie!`);
+                            game._message_more = 1;
+                            game._process_time_with_more = 0;
+                        }
+
+                        let creamPieTerrainStop = null;
+                        for (let step = 1; step < throwRange; step++) {
+                            const sx = mon.mx + throwDx * step;
+                            const sy = mon.my + throwDy * step;
+                            const remainingRange = throwRange - step;
+                            const forcehit = !rn2(5);
+                            if (remainingRange && forcehit
+                                && game.level?.at(sx + throwDx, sy + throwDy)?.typ === IRONBARS) {
+                                creamPieTerrainStop = { x: sx, y: sy };
+                                break;
+                            }
+                        }
+
+                        if (creamPieTerrainStop) {
+                            const floorMessages = [];
+                            landMonsterThrownObject(thrownMissile, creamPieTerrainStop.x, creamPieTerrainStop.y, {
+                                glyph: '%',
+                                color: CLR_WHITE,
+                                messages: floorMessages,
+                            });
+                            addMonsterThrownFloorMessages(floorMessages, throwerVisible);
+                        } else {
+                            const attackRoll = rnd(20);
+                            const missed = targetAc + 8 <= attackRoll;
+                            let resultMessage = game.u?.blind || game.flags?.verbose === false
+                                ? 'You are hit.'
+                                : 'You are hit by a cream pie.';
+                            if (missed) {
+                                resultMessage = game.u?.blind || game.flags?.verbose === false
+                                    ? 'It misses.'
+                                    : targetAc + 8 <= attackRoll - 2
+                                        ? 'A cream pie misses you.'
+                                        : 'You are almost hit by a cream pie.';
+                            }
+
+                            if (!missed) {
+                                const wasBlind = !!game.u?.blind;
+                                const blindinc = applyMonsterCreamPieBlindness();
+                                if (blindinc) {
+                                    resultMessage = `${resultMessage}  ${wasBlind
+                                        ? "There's something sticky all over your face."
+                                        : "Yecch!  You've been creamed."}`;
+                                }
+                                exerciseAttribute(A_STR, false);
+                            }
+
+                            if (throwerVisible) game._topline_after_more = resultMessage;
+                            else addToplineMessage(resultMessage);
+
+                            const floorMessages = [];
+                            landMonsterThrownObject(thrownMissile, game.u?.ux || 0, game.u?.uy || 0, {
+                                glyph: '%',
+                                color: CLR_WHITE,
+                                messages: floorMessages,
+                                ohit: !missed,
+                            });
+                            addMonsterThrownFloorMessages(floorMessages, throwerVisible);
+                        }
+
+                        game._search_pending_count = 0;
+                        game._run_steps_remaining = 0;
+                        game._travel_keys = [];
+                        if ((game._pending_time_passed || 0) > 2) game._pending_time_passed = 2;
+                        if (game._message_more && !game._process_time_with_more) {
+                            game._monster_resume_index = monIndex + 1;
+                            game._monster_resume_somebody_can_move = somebodyCanMove;
+                            return false;
+                        }
+                        continue;
                     }
                     if (canThrowSpear && rangedWeaponLinedUp) {
                         const targetAc = game.u?.uac ?? 10;
@@ -8579,6 +8681,42 @@ function monsterIsKoboldDartThrower(mon) {
         || name === 'kobold leader'
         || name === 'kobold lord'
         || name === 'kobold lady';
+}
+
+function monsterIsKopCreamPieThrower(mon) {
+    const data = mon?.data || {};
+    if (data.armed !== true) return false;
+    const name = String(data.name || '').toLowerCase();
+    return data.mlet === 'Kop'
+        || name === 'keystone kop'
+        || name === 'kop sergeant'
+        || name === 'kop lieutenant'
+        || name === 'kop kaptain';
+}
+
+function isMonsterThrownCreamPie(item) {
+    if (!item) return false;
+    if (item.otyp === CREAM_PIE) return true;
+    return [item.actualKind, item.kind, item.singular, item.appearance]
+        .map(name => String(name || '').toLowerCase())
+        .some(name => name === 'cream pie');
+}
+
+function heroCanBeCreamedByMonsterPie() {
+    if (!game.u) return false;
+    if (game.u.blindfolded || game.u.Blindfolded) return false;
+    return !(game.u?._polyself_form?.noeyes || game.u?.noeyes);
+}
+
+function applyMonsterCreamPieBlindness() {
+    if (!heroCanBeCreamedByMonsterPie()) return 0;
+    const blindinc = rnd(25);
+    game.u.ucreamed = (game.u.ucreamed || 0) + blindinc;
+    game.u._blindTimeout = (game.u._blindTimeout || 0) + blindinc;
+    game.u.blind = true;
+    addHeroStatusSuffix('Blind');
+    for (const other of game.level?.monsters || []) newsym(other.mx, other.my);
+    return blindinc;
 }
 
 function monsterThrownSpearNames(item) {
