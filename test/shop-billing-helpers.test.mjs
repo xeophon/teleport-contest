@@ -34421,6 +34421,112 @@ test('production monster launcher arrow hit lands surviving arrow with ohit mulc
     assert.equal(rng.some(entry => entry.startsWith('rn2(100)=')), false);
 });
 
+test('production monster ya launcher arrow hit uses YA d7 damage', async () => {
+    const { arrow, thrower, rng } = await runMonsterLauncherArrowLanding({
+        seed: 7,
+        launcherKind: 'yumi',
+        arrowOverrides: {
+            kind: 'ya',
+            actualKind: 'ya',
+            plural: 'ya',
+            material: 'metal',
+        },
+    });
+
+    assert.match(game._pending_message, /You are hit by a ya[.!]/);
+    assert.equal(thrower.minvent.some(obj => obj.id === arrow.id), false);
+
+    const landed = game.level.objects.find(obj => obj.id === arrow.id);
+    assert.ok(landed);
+    assert.equal(landed.kind, 'ya');
+    assert.equal(landed.transientProjectile, false);
+
+    assertNoSingletonLauncherMultishotRng(rng);
+    assert.ok(rng.some(entry => entry.startsWith('rnd(7)=')), rng.join(', '));
+    assert.ok(rng.includes('rnd(20)=1'), rng.join(', '));
+    assert.equal(rng.some(entry => entry.startsWith('rnd(6)=')
+        || entry.startsWith('rnd(5)=')
+        || entry.startsWith('rnd(4)=')), false);
+});
+
+test('production monster runed launcher arrow hit uses elven arrow damage from appearance', async () => {
+    const { arrow, thrower, rng } = await runMonsterLauncherArrowLanding({
+        seed: 7,
+        launcherKind: 'elven bow',
+        arrowOverrides: {
+            kind: undefined,
+            actualKind: undefined,
+            singular: undefined,
+            appearance: 'runed arrow',
+            plural: 'runed arrows',
+            material: 'wood',
+        },
+    });
+
+    assert.match(game._pending_message, /You are hit by a runed arrow[.!]/);
+    assert.equal(thrower.minvent.some(obj => obj.id === arrow.id), false);
+
+    assertNoSingletonLauncherMultishotRng(rng);
+    assert.ok(rng.some(entry => entry.startsWith('rnd(7)=')), rng.join(', '));
+    assert.ok(rng.includes('rnd(20)=1'), rng.join(', '));
+    assert.equal(rng.some(entry => entry.startsWith('rnd(6)=')
+        || entry.startsWith('rnd(5)=')
+        || entry.startsWith('rnd(4)=')), false);
+});
+
+test('production monster crude launcher arrow hit uses orcish arrow damage from appearance', async () => {
+    const { arrow, thrower, rng } = await runMonsterLauncherArrowLanding({
+        seed: 7,
+        launcherKind: 'orcish bow',
+        arrowOverrides: {
+            kind: undefined,
+            actualKind: undefined,
+            singular: undefined,
+            appearance: 'crude arrow',
+            plural: 'crude arrows',
+            material: 'iron',
+        },
+    });
+
+    assert.match(game._pending_message, /You are hit by a crude arrow[.!]/);
+    assert.equal(thrower.minvent.some(obj => obj.id === arrow.id), false);
+
+    assertNoSingletonLauncherMultishotRng(rng);
+    assert.ok(rng.some(entry => entry.startsWith('rnd(5)=')), rng.join(', '));
+    assert.ok(rng.includes('rnd(20)=1'), rng.join(', '));
+    assert.equal(rng.some(entry => entry.startsWith('rnd(7)=')
+        || entry.startsWith('rnd(6)=')
+        || entry.startsWith('rnd(4)=')), false);
+});
+
+test('production monster silver launcher arrow direct hit keeps silver arrow d6 damage', async () => {
+    const { arrow, thrower, rng } = await runMonsterLauncherArrowLanding({
+        seed: 7,
+        arrowOverrides: {
+            kind: 'silver arrow',
+            actualKind: 'silver arrow',
+            plural: 'silver arrows',
+            material: 'silver',
+        },
+    });
+
+    assert.match(game._pending_message, /You are hit by a silver arrow[.!]/);
+    assert.equal(thrower.minvent.some(obj => obj.id === arrow.id), false);
+
+    const landed = game.level.objects.find(obj => obj.id === arrow.id);
+    assert.ok(landed);
+    assert.equal(landed.kind, 'silver arrow');
+    assert.equal(landed.material, 'silver');
+    assert.equal(landed.transientProjectile, false);
+
+    assertNoSingletonLauncherMultishotRng(rng);
+    assert.ok(rng.some(entry => entry.startsWith('rnd(6)=')), rng.join(', '));
+    assert.ok(rng.includes('rnd(20)=1'), rng.join(', '));
+    assert.equal(rng.some(entry => entry.startsWith('rnd(7)=')
+        || entry.startsWith('rnd(5)=')
+        || entry.startsWith('rnd(4)=')), false);
+});
+
 test('production monster lethal launcher arrow death cleanup preserves thrown arrow without drop-throw', async () => {
     const { arrow, thrower, rng } = await runMonsterLauncherArrowLanding({ seed: 7, heroHp: 6 });
 

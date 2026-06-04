@@ -6228,7 +6228,7 @@ export async function processMonsterTurns() {
                         .find(item => /^(?:bow|elven bow|orcish bow|yumi|crossbow)$/.test(String(item.kind || item.actualKind || '')));
                     const launcherKind = String(launcher?.kind || launcher?.actualKind || '');
                     const launcherAmmo = launcher && (mon.minvent || []).find(item => {
-                        const kind = String(item.kind || item.actualKind || '');
+                        const kind = monsterLauncherProjectileKind(item).toLowerCase();
                         if (launcherKind === 'crossbow') return kind.includes('bolt');
                         return kind.includes('arrow') || kind === 'ya';
                     });
@@ -6238,7 +6238,7 @@ export async function processMonsterTurns() {
                     const activeLauncherKind = String(mon.mw?.kind || mon.mw?.actualKind || '');
 	                    const activeLauncher = /^(?:bow|elven bow|orcish bow|yumi|crossbow)$/.test(activeLauncherKind);
 	                    const launcherAmmoIndex = activeLauncher ? (mon.minvent || []).findIndex(item => {
-	                        const kind = String(item.kind || item.actualKind || '');
+	                        const kind = monsterLauncherProjectileKind(item).toLowerCase();
 	                        if (activeLauncherKind === 'crossbow') return kind.includes('bolt');
 	                        return kind.includes('arrow') || kind === 'ya';
 	                    }) : -1;
@@ -6338,8 +6338,7 @@ export async function processMonsterTurns() {
                             || missileSpe === 0 || coveredBlessedEnchantedArrow;
                         const coveredErosionState = !missileErosion || coveredErodedArrowState;
                         const sharedArrowLanding = coveredArrowState && coveredErosionState;
-                        const projectileKind = String(thrownMissile.singular || thrownMissile.actualKind
-                            || thrownMissile.kind || 'arrow');
+                        const projectileKind = monsterLauncherProjectileKind(thrownMissile);
                         const projectileArticle = /^[aeiou]/i.test(projectileKind) ? 'an' : 'a';
                         const projectileArticleCap = projectileArticle[0].toUpperCase() + projectileArticle.slice(1);
                         addToplineMessage(`${monsterDisplayName(mon, true)} shoots ${projectileArticle} ${projectileKind}!`);
@@ -6506,8 +6505,8 @@ export async function processMonsterTurns() {
                         if (caught) {
                             game._topline_after_more = `You catch the ${projectileKind}!`;
                         } else {
-                            const projectileDamageSides = projectileKind === 'crossbow bolt' ? 4 : 6;
-                            const projectileDamageBonus = projectileKind === 'crossbow bolt' ? 1 : 0;
+                            const projectileDamageSides = monsterLauncherProjectileDamageSides(thrownMissile);
+                            const projectileDamageBonus = monsterLauncherProjectileDamageBonus(thrownMissile);
                             const damage = Math.max(1, rnd(projectileDamageSides) + projectileDamageBonus
                                 + missileSpe - missileErosion);
                             const hitv = Math.max(-4, 3 - throwRange) + 8 + missileSpe;
@@ -8489,6 +8488,29 @@ function monsterThrownShurikenKind(item) {
     if (names.includes('shuriken')) return 'shuriken';
     if (names.includes('throwing star')) return 'shuriken';
     return '';
+}
+
+function monsterLauncherProjectileKind(item) {
+    return String(item?.singular || item?.actualKind || item?.kind || item?.appearance || 'arrow');
+}
+
+function monsterLauncherProjectileNames(item) {
+    return [item?.singular, item?.actualKind, item?.kind, item?.appearance]
+        .map(name => String(name || '').toLowerCase())
+        .filter(Boolean);
+}
+
+function monsterLauncherProjectileDamageSides(item) {
+    const names = monsterLauncherProjectileNames(item);
+    if (names.some(name => name === 'crossbow bolt')) return 4;
+    if (names.some(name => name === 'ya' || name === 'bamboo arrow'
+        || name === 'elven arrow' || name === 'runed arrow')) return 7;
+    if (names.some(name => name === 'orcish arrow' || name === 'crude arrow')) return 5;
+    return 6;
+}
+
+function monsterLauncherProjectileDamageBonus(item) {
+    return monsterLauncherProjectileNames(item).some(name => name === 'crossbow bolt') ? 1 : 0;
 }
 
 function monsterThrownSpearNames(item) {
