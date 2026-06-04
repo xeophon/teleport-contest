@@ -6148,6 +6148,64 @@ test('chat with visible generated silent rock mole suppresses rodent fallback', 
     assert.deepEqual(getRngLog(), []);
 });
 
+test('chat with visible generated race-family mummies stay silent before orc fallback', async () => {
+    const cases = [
+        ['kobold mummy', { kobold: true }],
+        ['gnome mummy', { gnome: true }],
+        ['orc mummy', { orc: true }],
+    ];
+    for (const [name, flags] of cases) {
+        const result = await chatAdjacentMonster({
+            name,
+            rngLog: true,
+            data: { name, mlevel: 5, mlet: 'M', ...flags },
+        });
+
+        assert.equal(result.message, '');
+        assert.equal(result.target.mstrategy, 0);
+        assert.equal(game.context?.move || 0, 0);
+        assert.doesNotMatch(result.message, /grunts|groans|doesn't respond|Nothing happens|waves/);
+        assert.deepEqual(getRngLog(), []);
+    }
+});
+
+test('chat with visible generated race-family zombies groan before orc fallback', async () => {
+    const cases = [
+        ['kobold zombie', { kobold: true }],
+        ['gnome zombie', { gnome: true }],
+        ['orc zombie', { orc: true }],
+    ];
+    for (const [name, flags] of cases) {
+        const result = await chatAdjacentMonster({
+            name,
+            seed: 1,
+            rngLog: true,
+            data: { name, mlevel: 2, mlet: 'Z', ...flags },
+        });
+
+        assert.equal(result.message, `The ${name} groans.`);
+        assert.equal(result.target.mstrategy, 0);
+        assert.equal(game.context.move, 1);
+        assert.doesNotMatch(result.message, /grunts|threatens|doesn't respond|Nothing happens|waves/);
+        assert.deepEqual(getRngLog(), ['rn2(3)=0']);
+    }
+});
+
+test('chat with visible generated race-family zombie silent groan roll still consumes turn', async () => {
+    const result = await chatAdjacentMonster({
+        name: 'orc zombie',
+        seed: 4,
+        rngLog: true,
+        data: { name: 'orc zombie', mlevel: 2, mlet: 'Z', orc: true },
+    });
+
+    assert.equal(result.message, '');
+    assert.equal(result.target.mstrategy, 0);
+    assert.equal(game.context.move, 1);
+    assert.doesNotMatch(result.message, /grunts|groans|doesn't respond|Nothing happens|waves/);
+    assert.deepEqual(getRngLog(), ['rn2(3)=2']);
+});
+
 test('chat with invisible tame eating pet maps it without consuming time', async () => {
     const result = await chatAdjacentMonster({
         visible: false,

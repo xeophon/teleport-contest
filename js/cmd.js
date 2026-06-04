@@ -36580,8 +36580,6 @@ function tipHatMonsterSound(mon) {
     if (mon?.nemesis || data.nemesis) return 'nemesis';
     if (tipHatMonsterIsShopkeeperType(mon, name)) return 'sell';
     if (tipHatMonsterIsPriestType(mon, name)) return 'priest';
-    if (tipHatMonsterHasOrcSound(mon, name)) return 'orc';
-    if (/^(gremlin|leprechaun)$/.test(name)) return 'laugh';
     {
         const generatedSound = tipHatGeneratedMonsterSound(name);
         if (generatedSound) return generatedSound;
@@ -36590,6 +36588,8 @@ function tipHatMonsterSound(mon) {
     if (/^(death|pestilence|famine)$/.test(name)) return 'rider';
     if (tipHatMonsterIsWizardCuss(mon, name)) return 'cuss';
     if (/\bzombie$/.test(name) || (mlet === 'zombie' && name !== 'ghoul')) return 'groan';
+    if (tipHatMonsterHasOrcSound(mon, name)) return 'orc';
+    if (/^(gremlin|leprechaun)$/.test(name)) return 'laugh';
     if (name === 'shrieker') return 'shriek';
     if (/^(mumak|mastodon)$/.test(name)) return 'trumpet';
     if (/^(rothe|minotaur)$/.test(name)) return 'moo';
