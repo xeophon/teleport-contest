@@ -17135,16 +17135,21 @@ function reviveVampshifterFromPotionKill(mon, messages) {
     return true;
 }
 
-function killMonsterFromPotionHit(mon, messages) {
+function killMonsterFromPotionHit(mon, messages, { heroFault = true } = {}) {
     if (!mon || mon.dead) return;
-    if (reviveVampshifterFromPotionKill(mon, messages)) return;
+    if (heroFault && reviveVampshifterFromPotionKill(mon, messages)) return;
     mon.dead = true;
+    mon.mhp = 0;
     const data = mon.data || {};
     const targetName = mon.givenName || `the ${data.name || mon.name || 'monster'}`;
     const nonliving = data.nonliving || data.mlet === 'Z' || data.glyph === 'Z'
         || String(data.name || '').includes('zombie') || String(data.name || '').endsWith(' golem');
-    messages.push(`You ${nonliving ? 'destroy' : 'kill'} ${targetName}!`);
-    recordVanquished(mon);
+    if (heroFault) {
+        messages.push(`You ${nonliving ? 'destroy' : 'kill'} ${targetName}!`);
+    } else if (monsterCanBeSeenForPotionEffect(mon)) {
+        messages.push(`${sentenceCase(targetName)} is ${nonliving ? 'destroyed' : 'killed'}!`);
+    }
+    recordVanquished(mon, heroFault);
     dropMonsterInventory(mon, messages);
 
     const corpseData = data.corpse
@@ -17280,8 +17285,8 @@ function sicknessPotionHitMonster(mon, messages) {
     return true;
 }
 
-function acidPotionHitMonster(potion, mon, messages) {
-    if (monsterResistsAcid(mon) || monsterResistsEffect(mon, 6)) return true;
+function acidPotionHitMonster(potion, mon, messages, { yourFault = true } = {}) {
+    if (monsterResistsAcid(mon) || monsterResistsEffect(mon, 6)) return !!yourFault;
 
     const silent = monsterIsSilentForPotionHit(mon);
     messages.push(`${potionHitMonsterName(mon)} ${silent ? 'writhes' : 'shrieks'} in pain!`);
@@ -17290,8 +17295,8 @@ function acidPotionHitMonster(potion, mon, messages) {
     const dice = potion?.cursed ? 2 : 1;
     const sides = potion?.blessed ? 4 : 8;
     mon.mhp = (mon.mhp || 1) - d(dice, sides);
-    if ((mon.mhp || 0) <= 0) killMonsterFromPotionHit(mon, messages);
-    return true;
+    if ((mon.mhp || 0) <= 0) killMonsterFromPotionHit(mon, messages, { heroFault: !!yourFault });
+    return !!yourFault;
 }
 
 function monsterHasMagicResistanceForPolymorph(mon) {
@@ -17906,7 +17911,7 @@ export function heroThrownPotionHitMonster(potion, mon, { yourFault = true } = {
     } else if (kind === 'sickness') {
         angerMon = sicknessPotionHitMonster(mon, messages);
     } else if (kind === 'acid') {
-        angerMon = acidPotionHitMonster(potion, mon, messages);
+        angerMon = acidPotionHitMonster(potion, mon, messages, { yourFault });
     } else if (kind === 'polymorph') {
         angerMon = polymorphPotionHitMonster(mon, messages);
     } else if (kind === 'healing' || kind === 'extra healing' || kind === 'full healing'

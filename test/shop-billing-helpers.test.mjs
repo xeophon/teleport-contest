@@ -34860,6 +34860,47 @@ test('production monster potion hits intervening monster before hero catch', asy
     assert.equal(rngNames.includes('rn2(1)'), false, rng.join(', '));
 });
 
+test('production monster acid potion kills intervening monster without hero attribution', async () => {
+    const acid = acidPotion(878113, 'a', 2);
+    acid.dknown = true;
+    const blocker = ordinaryThrowTarget('goblin', 7, 5, {
+        ac: 15,
+        mhp: 1,
+        mhpmax: 1,
+        data: { name: 'goblin', mlevel: 1, mac: 10 },
+    });
+    const { potion, thrower, rng, preNhgetchMessages } = await runMonsterOffensivePotionCatch({
+        seed: 1,
+        potion: acid,
+        throwerX: 9,
+        heroDex: 100,
+        heroOverrides: { uhp: 40, uhpmax: 40 },
+        extraMonsters: [blocker],
+    });
+    const messages = preNhgetchMessages.join('\n');
+
+    assert.match(messages, /hurls a potion!/);
+    assert.match(messages, /potion of acid evaporates\./);
+    assert.match(messages, /The goblin shrieks in pain!/);
+    assert.match(messages, /The goblin is killed!/);
+    assert.doesNotMatch(messages, /You kill the goblin|You destroy/);
+    assert.doesNotMatch(messages, /crashes on your head|You catch/);
+    assert.equal(game.u.uhp, 40);
+    assert.equal(game.level.monsters.includes(blocker), false);
+    assert.equal(game._vanquished_counts?.goblin, 1);
+    assert.equal(game.level.objects.some(obj => obj.id === potion.id || obj.transientProjectile), false);
+
+    const residual = thrower.minvent.find(obj => obj.id === potion.id);
+    assert.ok(residual);
+    assert.equal(residual.quan, 1);
+    assert.equal(thrower.missile, residual);
+    const rngNames = rng.map(entry => entry.replace(/=.*/, ''));
+    assert.ok(rngNames.includes('rnd(20)'), rng.join(', '));
+    assert.ok(rngNames.includes('rn2(105)'), rng.join(', '));
+    assert.ok(rngNames.includes('d(1,8)'), rng.join(', '));
+    assert.equal(rngNames.includes('rn2(1)'), false, rng.join(', '));
+});
+
 test('production monster acid potion failed catch burns after crash', async () => {
     const acid = acidPotion(878104, 'a', 2);
     acid.dknown = true;

@@ -7159,8 +7159,9 @@ export async function processMonsterTurns() {
                                 const hitValue = monsterThrownPotionAccidentalHitValue(targetMon);
                                 const hitRoll = rnd(20);
                                 if (hitValue >= hitRoll) {
+                                    const targetIndex = (game.level?.monsters || []).indexOf(targetMon);
                                     const messages = monsterThrownPotionHitMonster(thrownPotion, targetMon);
-                                    potionInterception = { target: targetMon, messages };
+                                    potionInterception = { target: targetMon, targetIndex, messages };
                                     break;
                                 }
                             }
@@ -7178,7 +7179,10 @@ export async function processMonsterTurns() {
                             game._travel_keys = [];
                             if ((game._pending_time_passed || 0) > 2) game._pending_time_passed = 2;
                             if (game._message_more && !game._process_time_with_more) {
-                                game._monster_resume_index = monIndex + 1;
+                                const targetRemovedBeforeThrower = potionInterception.targetIndex >= 0
+                                    && potionInterception.targetIndex < monIndex
+                                    && !(game.level?.monsters || []).includes(potionInterception.target);
+                                game._monster_resume_index = targetRemovedBeforeThrower ? monIndex : monIndex + 1;
                                 game._monster_resume_somebody_can_move = somebodyCanMove;
                                 return false;
                             }
