@@ -3431,6 +3431,48 @@ test('worn helmet tip makes adjacent invisible dog bark and remembers invisible'
     assert.doesNotMatch(game._pending_message, /unseen creature is ignoring|The dog barks|doesn't respond|waves/);
 });
 
+test('worn helmet tip scans past adjacent invisible generated silent monster', async () => {
+    installStableNonShopFloorState();
+    game.u.seeInvisible = false;
+    const silentLoc = game.level.at(6, 5);
+    const helmet = wornArmor(30635212, 'orcish helm', 'h');
+    const rockMole = ordinaryThrowTarget('rock mole', 6, 5, {
+        minvis: 1,
+        perminvis: 1,
+        msleeping: 0,
+        mcanmove: true,
+        mcansee: true,
+        mpeaceful: false,
+        mstrategy: 'waitforu',
+        data: { name: 'rock mole', mlevel: 3, mlet: 'rodent' },
+    });
+    const dog = ordinaryThrowTarget('dog', 7, 5, {
+        msleeping: 0,
+        mcanmove: true,
+        mcansee: true,
+        mpeaceful: true,
+        mstrategy: 'waitforu',
+        data: { name: 'dog', mlevel: 4, mlet: 'dog', msound: 'bark' },
+    });
+    game.inventory = [helmet];
+    game.level.monsters = [rockMole, dog];
+    markSquareVisible(6, 5);
+    markSquareVisible(7, 5);
+
+    await enterTipCommand();
+    await rhack('h');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(rockMole.mstrategy, 'waitforu');
+    assert.equal(dog.mstrategy, 0);
+    assert.equal(silentLoc.map_invisible || false, false);
+    assert.match(game._pending_message, /You briefly doff your helm\./);
+    assert.match(game._pending_message, /The dog doesn't respond\./);
+    assert.doesNotMatch(game._pending_message, /rock mole|squeaks|It barks|Nothing happens|unseen creature/);
+});
+
 test('remembered invisible marker masks adjacent invisible dog response', async () => {
     installStableNonShopFloorState();
     game.u.seeInvisible = false;
@@ -5908,6 +5950,32 @@ test('chat with visible generated humanoid sound monsters uses C msound rows', a
         assert.doesNotMatch(result.message, reject);
         assert.deepEqual(getRngLog(), rng);
     }
+});
+
+test('chat with visible generated silent rock mole suppresses rodent fallback', async () => {
+    const silent = await chatAdjacentMonster({
+        name: 'rock mole',
+        rngLog: true,
+        data: { name: 'rock mole', mlevel: 3, mlet: 'rodent' },
+    });
+
+    assert.equal(silent.message, '');
+    assert.equal(silent.target.mstrategy, 0);
+    assert.equal(game.context?.move || 0, 0);
+    assert.doesNotMatch(silent.message, /squeaks|doesn't respond|Nothing happens|waves/);
+    assert.deepEqual(getRngLog(), []);
+
+    const noisy = await chatAdjacentMonster({
+        name: 'giant rat',
+        rngLog: true,
+        data: { name: 'giant rat', mlevel: 1, mlet: 'rodent' },
+    });
+
+    assert.equal(noisy.message, 'The giant rat squeaks.');
+    assert.equal(noisy.target.mstrategy, 0);
+    assert.equal(game.context.move, 1);
+    assert.doesNotMatch(noisy.message, /doesn't respond|Nothing happens|waves/);
+    assert.deepEqual(getRngLog(), []);
 });
 
 test('chat with invisible tame eating pet maps it without consuming time', async () => {

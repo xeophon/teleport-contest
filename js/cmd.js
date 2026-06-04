@@ -17011,8 +17011,13 @@ function monsterResistsSicknessPotion(mon) {
 
 function monsterIsSilentForPotionHit(mon) {
     const data = mon?.data || {};
-    const msound = String(data.msound || data.sound || mon?.msound || '').toLowerCase();
-    return !!(mon?.silent || data.silent || msound === 'silent' || msound === 'ms_silent');
+    const explicit = data.msound ?? data.sound ?? mon?.msound ?? mon?.sound;
+    const msound = String(explicit ?? '').toLowerCase();
+    if (mon?.silent || data.silent || explicit === 0 || msound === 'silent' || msound === 'ms_silent')
+        return true;
+    if (explicit != null) return false;
+    const name = String(data.name || mon?.name || '').toLowerCase();
+    return tipHatGeneratedMonsterSound(name) === 'silent';
 }
 
 function monsterResistsAcid(mon) {
@@ -35198,12 +35203,15 @@ function chatHeroPolyform() {
 
 function chatHeroIsSilent() {
     const form = chatHeroPolyform();
-    const sound = form?.msound ?? form?.sound;
-    const soundName = String(sound ?? '').toLowerCase();
+    const explicit = form?.msound ?? form?.sound;
+    const soundName = String(explicit ?? '').toLowerCase();
     const name = String(form?.name || '').toLowerCase();
-    return !!(form?.silent || form?.msilent || sound === 0
+    if (form?.silent || form?.msilent || explicit === 0
         || soundName === 'silent' || soundName === 'ms_silent'
-        || CHAT_SILENT_POLYFORM_NAMES.has(name));
+        || CHAT_SILENT_POLYFORM_NAMES.has(name))
+        return true;
+    if (explicit != null) return false;
+    return tipHatGeneratedMonsterSound(name) === 'silent';
 }
 
 function chatHeroPolyformArticleName() {
@@ -35521,8 +35529,13 @@ function tipHatMonsterHelpless(mon) {
 
 function tipHatMonsterSilent(mon) {
     const data = mon?.data || {};
-    const msound = String(mon?.msound ?? mon?.sound ?? data.msound ?? data.sound ?? '').toLowerCase();
-    return !!(mon?.silent || data.silent || msound === 'silent' || msound === 'ms_silent');
+    const explicit = mon?.msound ?? mon?.sound ?? data.msound ?? data.sound;
+    const msound = String(explicit ?? '').toLowerCase();
+    if (mon?.silent || data.silent || explicit === 0 || msound === 'silent' || msound === 'ms_silent')
+        return true;
+    if (explicit != null) return false;
+    const name = String(data.name || mon?.name || '').toLowerCase();
+    return tipHatGeneratedMonsterSound(name) === 'silent';
 }
 
 function tipHatHeroHasTopLevelGold() {
@@ -35831,7 +35844,39 @@ const TIPHAT_GENERATED_SOUND_BY_MONSTER_NAME = new Map([
     ['elvenking', 'humanoid'], ['elvenqueen', 'humanoid'], ['elven monarch', 'humanoid'],
 ]);
 
+const TIPHAT_GENERATED_SILENT_MONSTER_NAMES = new Set([
+    'giant ant', 'soldier ant', 'fire ant', 'giant beetle',
+    'acid blob', 'quivering blob', 'gelatinous cube',
+    'gas spore', 'floating eye', 'freezing sphere', 'flaming sphere',
+    'shocking sphere',
+    'manes', 'homunculus', 'lemure', 'quasit',
+    'blue jelly', 'spotted jelly', 'ochre jelly',
+    'small mimic', 'large mimic', 'giant mimic',
+    'rock piercer', 'iron piercer', 'glass piercer',
+    'rock mole', 'cave spider', 'centipede', 'giant spider', 'scorpion',
+    'lurker above', 'trapper',
+    'fog cloud', 'dust vortex', 'ice vortex', 'energy vortex',
+    'steam vortex', 'fire vortex',
+    'baby long worm', 'baby purple worm', 'long worm', 'purple worm',
+    'yellow light', 'black light', 'zruty',
+    'stalker', 'air elemental', 'fire elemental', 'earth elemental',
+    'water elemental',
+    'lichen', 'brown mold', 'yellow mold', 'green mold', 'red mold',
+    'violet fungus',
+    'kobold mummy', 'gnome mummy', 'orc mummy', 'dwarf mummy', 'elf mummy',
+    'human mummy', 'ettin mummy', 'giant mummy',
+    'gray ooze', 'brown pudding', 'green slime', 'black pudding',
+    'rust monster', 'umber hulk', 'wraith', 'ghoul',
+    'straw golem', 'paper golem', 'rope golem', 'gold golem',
+    'leather golem', 'wood golem', 'flesh golem', 'clay golem',
+    'stone golem', 'glass golem', 'iron golem',
+    'horned devil', 'erinys', 'barbed devil',
+    'vrock', 'hezrou', 'bone devil', 'ice devil', 'balrog',
+    'newt', 'iguana', 'lizard', 'chameleon',
+]);
+
 function tipHatGeneratedMonsterSound(name) {
+    if (TIPHAT_GENERATED_SILENT_MONSTER_NAMES.has(name)) return 'silent';
     if (/^(?:baby )?(?:gray|gold|silver|red|white|orange|black|blue|green|yellow) dragon$/.test(name))
         return 'roar';
     return TIPHAT_GENERATED_SOUND_BY_MONSTER_NAME.get(name) || '';
