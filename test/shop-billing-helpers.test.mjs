@@ -33340,7 +33340,13 @@ async function runMonsterSlingRockLanding({ uac }) {
     return { rock, thrower, rng: getRngLog().map(entry => entry.replace(/=.*/, '')) };
 }
 
-async function runMonsterDartHitLanding({ seed = 8 } = {}) {
+async function runMonsterDartHitLanding({
+    seed = 8,
+    heroBlind = true,
+    heroDeaf = false,
+    levelCells = [],
+    throwerX = 8,
+} = {}) {
     installNonShopFloorState();
     resetInputState();
     pushKey('\x1b');
@@ -33351,7 +33357,9 @@ async function runMonsterDartHitLanding({ seed = 8 } = {}) {
         uy: 5,
         ux0: 5,
         uy0: 5,
-        blind: true,
+        blind: heroBlind,
+        _statusSuffix: heroDeaf ? ' Deaf' : '',
+        _deafTimeout: heroDeaf ? 5 : 0,
         uhp: 20,
         uhpmax: 20,
         uac: 10,
@@ -33360,10 +33368,17 @@ async function runMonsterDartHitLanding({ seed = 8 } = {}) {
     });
     game.moves = 1;
     game.context = {};
-    for (let x = 5; x <= 8; x++) markSquareVisible(x, 5);
+    if (levelCells.length) {
+        const cells = new Map();
+        for (const [x, y, loc] of levelCells)
+            cells.set(`${x},${y}`, { roomno: 0, ...loc });
+        game.level.at = (x, y) => cells.get(`${x},${y}`) || { roomno: 0, typ: ROOM };
+    }
+    for (let x = 5; x <= throwerX; x++) markSquareVisible(x, 5);
+    for (const [x, y] of levelCells) markSquareVisible(x, y);
     const dart = { ...dartStack(874356, 'd', 1), letter: undefined, line: undefined, spe: 0 };
     const thrower = {
-        mx: 8,
+        mx: throwerX,
         my: 5,
         movement: NORMAL_SPEED,
         data: { name: 'kobold', mlet: 'k', mmove: NORMAL_SPEED, armed: true, mlevel: 0 },
@@ -33376,10 +33391,21 @@ async function runMonsterDartHitLanding({ seed = 8 } = {}) {
     };
     game.level.monsters = [thrower];
     game._pending_time_passed = 1;
-
-    await moveloop_core();
+    const preNhgetchMessages = [];
+    const priorPreNhgetchHook = game._preNhgetchHook;
+    game._preNhgetchHook = async () => {
+        const message = [game._pending_message, game._topline_after_more]
+            .filter(Boolean).join('  ');
+        if (message) preNhgetchMessages.push(message);
+        if (priorPreNhgetchHook) await priorPreNhgetchHook();
+    };
+    try {
+        await moveloop_core();
+    } finally {
+        game._preNhgetchHook = priorPreNhgetchHook;
+    }
     resetInputState();
-    return { dart, thrower, rng: getRngLog() };
+    return { dart, thrower, rng: getRngLog(), preNhgetchMessages };
 }
 
 async function runMonsterLauncherArrowLanding({
@@ -33579,6 +33605,76 @@ test('production kobold dart hit lands surviving dart with ohit mulch', async ()
 
     assert.ok(rng.includes('rnd(20)=12'));
     assert.ok(rng.includes('rn2(3)=0'));
+});
+
+test('production kobold dart aimed shot can pass through iron bars before hero', async () => {
+    const { dart, rng, preNhgetchMessages } = await runMonsterDartHitLanding({
+        seed: 8,
+        throwerX: 9,
+        levelCells: [[6, 5, { typ: IRONBARS }]],
+    });
+
+    const landed = game.level.objects.find(obj => obj.id === dart.id);
+    assert.ok(landed);
+    assert.equal(landed.ox, 5);
+    assert.equal(landed.oy, 5);
+    assert.equal(landed.kind, 'dart');
+
+    assert.ok(rng.some(entry => entry.startsWith('rn2(90)=')));
+    assert.ok(rng.some(entry => entry.startsWith('rnd(20)=')));
+    assert.equal(preNhgetchMessages.some(message => /Clonk!/.test(message)), false);
+});
+
+test('production kobold dart aimed shot can clonk iron bars before hero', async () => {
+    const { dart, thrower, rng, preNhgetchMessages } = await runMonsterDartHitLanding({
+        seed: 7,
+        throwerX: 9,
+        heroBlind: false,
+        levelCells: [[6, 5, { typ: IRONBARS }]],
+    });
+
+    assert.equal(game.u.uhp, 20, rng.join(', '));
+    assert.equal(thrower.missile, null);
+    assert.equal(thrower.minvent.some(obj => obj.id === dart.id), false);
+
+    const landed = game.level.objects.find(obj => obj.id === dart.id);
+    assert.ok(landed, rng.join(', '));
+    assert.equal(landed.ox, 7);
+    assert.equal(landed.oy, 5);
+    assert.equal(landed.kind, 'dart');
+    assert.notEqual(landed.transientProjectile, true);
+
+    assert.ok(rng.some(entry => entry.startsWith('rn2(100)=')));
+    assert.equal(rng.some(entry => entry.startsWith('rn2(90)=')
+        || entry.startsWith('rnd(3)=')
+        || entry.startsWith('rnd(20)=')
+        || entry.startsWith('rn2(3)=')), false);
+    assert.equal(preNhgetchMessages.some(message => /Clonk!/.test(message)), true);
+});
+
+test('production kobold dart aimed iron bars are silent when deaf', async () => {
+    const { dart, thrower, rng, preNhgetchMessages } = await runMonsterDartHitLanding({
+        seed: 7,
+        throwerX: 9,
+        heroBlind: false,
+        heroDeaf: true,
+        levelCells: [[6, 5, { typ: IRONBARS }]],
+    });
+
+    assert.equal(game.u.uhp, 20, rng.join(', '));
+    assert.equal(thrower.missile, null);
+    assert.equal(thrower.minvent.some(obj => obj.id === dart.id), false);
+
+    const landed = game.level.objects.find(obj => obj.id === dart.id);
+    assert.ok(landed, rng.join(', '));
+    assert.equal(landed.ox, 7);
+    assert.equal(landed.oy, 5);
+    assert.equal(landed.kind, 'dart');
+
+    assert.ok(rng.some(entry => entry.startsWith('rn2(100)=')));
+    assert.equal(rng.some(entry => entry.startsWith('rnd(20)=')
+        || entry.startsWith('rn2(3)=')), false);
+    assert.equal(preNhgetchMessages.some(message => /Clonk!/.test(message)), false);
 });
 
 test('production monster launcher arrow hit lands surviving arrow with ohit mulch', async () => {

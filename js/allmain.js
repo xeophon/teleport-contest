@@ -6678,32 +6678,56 @@ export async function processMonsterTurns() {
                                 if (missileIndex >= 0) mon.minvent.splice(missileIndex, 1);
                                 if (mon.missile === missile) mon.missile = null;
                             }
-                            for (let step = 1; step < throwRange; step++) rn2(5);
-                            rn2(90);
-                            const dartDamage = rnd(3);
-                            const hitRoll = rnd(20);
-                            if (hitRoll < 20) {
-                                game.u.uhp = Math.max(0, (game.u?.uhp || 0) - dartDamage);
-                                addToplineMessage('You are hit by a dart.');
-                                exerciseAttribute(A_STR, false);
+                            let dartTerrainStop = null;
+                            for (let step = 1; step < throwRange; step++) {
+                                const sx = mon.mx + throwDx * step;
+                                const sy = mon.my + throwDy * step;
+                                const remainingRange = throwRange - step;
+                                const forcehit = !rn2(5);
+                                if (remainingRange && forcehit
+                                    && game.level?.at(sx + throwDx, sy + throwDy)?.typ === IRONBARS) {
+                                    rn2(100); // C breaktest() calls obj_resists(); ordinary darts still survive.
+                                    if (!(game.u?._statusSuffix || '').includes('Deaf') && !(game.u?._deafTimeout || 0))
+                                        addToplineMessage('Clonk!');
+                                    dartTerrainStop = { x: sx, y: sy };
+                                    break;
+                                }
+                            }
+                            if (dartTerrainStop) {
                                 const floorMessages = [];
-                                landMonsterThrownObject(missile, game.u?.ux || 0, game.u?.uy || 0, {
+                                landMonsterThrownObject(missile, dartTerrainStop.x, dartTerrainStop.y, {
                                     glyph: ')',
                                     color: CLR_CYAN,
                                     messages: floorMessages,
-                                    ohit: true,
                                 });
                                 addMonsterThrownFloorMessages(floorMessages);
                             } else {
-                                addToplineMessage('A dart misses you.');
-                                rn2(5);
-                                const floorMessages = [];
-                                landMonsterThrownObject(missile, game.u?.ux || 0, game.u?.uy || 0, {
-                                    glyph: ')',
-                                    color: CLR_CYAN,
-                                    messages: floorMessages,
-                                });
-                                addMonsterThrownFloorMessages(floorMessages);
+                                rn2(90);
+                                const dartDamage = rnd(3);
+                                const hitRoll = rnd(20);
+                                if (hitRoll < 20) {
+                                    game.u.uhp = Math.max(0, (game.u?.uhp || 0) - dartDamage);
+                                    addToplineMessage('You are hit by a dart.');
+                                    exerciseAttribute(A_STR, false);
+                                    const floorMessages = [];
+                                    landMonsterThrownObject(missile, game.u?.ux || 0, game.u?.uy || 0, {
+                                        glyph: ')',
+                                        color: CLR_CYAN,
+                                        messages: floorMessages,
+                                        ohit: true,
+                                    });
+                                    addMonsterThrownFloorMessages(floorMessages);
+                                } else {
+                                    addToplineMessage('A dart misses you.');
+                                    rn2(5);
+                                    const floorMessages = [];
+                                    landMonsterThrownObject(missile, game.u?.ux || 0, game.u?.uy || 0, {
+                                        glyph: ')',
+                                        color: CLR_CYAN,
+                                        messages: floorMessages,
+                                    });
+                                    addMonsterThrownFloorMessages(floorMessages);
+                                }
                             }
                             game._search_pending_count = 0;
                             game._run_steps_remaining = 0;
