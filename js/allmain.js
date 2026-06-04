@@ -6664,10 +6664,20 @@ export async function processMonsterTurns() {
                             return false;
                         }
                         let aimedTerrainStop = null;
+                        let interveningArrowTarget = null;
                         for (let step = 1; step < throwRange; step++) {
                             const sx = mon.mx + throwDx * step;
                             const sy = mon.my + throwDy * step;
                             const remainingRange = throwRange - step;
+                            const targetMon = monsterAtFlightSquare(sx, sy, mon);
+                            if (targetMon) {
+                                const hitValue = monsterThrownObjectAccidentalHitValue(targetMon, thrownMissile);
+                                const hitRoll = rnd(20);
+                                if (hitValue >= hitRoll) {
+                                    interveningArrowTarget = targetMon;
+                                    break;
+                                }
+                            }
                             const forcehit = !rn2(5);
                             const hitIronBars = remainingRange && forcehit
                                 && game.level?.at(sx + throwDx, sy + throwDy)?.typ === IRONBARS;
@@ -6694,7 +6704,38 @@ export async function processMonsterTurns() {
                                 break;
                             }
                         }
-                        if (aimedTerrainStop) {
+                        if (interveningArrowTarget) {
+                            const projectileDamageSides = monsterLauncherProjectileDamageSides(thrownMissile);
+                            const projectileDamageBonus = monsterLauncherProjectileDamageBonus(thrownMissile);
+                            const damage = Math.max(1, rnd(projectileDamageSides) + projectileDamageBonus
+                                + missileSpe - missileErosion);
+                            interveningArrowTarget.msleeping = 0;
+                            interveningArrowTarget.mhp = Math.max(0, (interveningArrowTarget.mhp || 1) - damage);
+                            const targetVisible = !game.u?.blind
+                                && !!(game.viz_array?.[interveningArrowTarget.my]?.[interveningArrowTarget.mx] & IN_SIGHT)
+                                && couldSeeCoord(interveningArrowTarget.mx, interveningArrowTarget.my);
+                            const targetName = interveningArrowTarget.data?.name || 'monster';
+                            const hitMessage = targetVisible
+                                ? `The ${projectileKind} hits the ${targetName}${damage > 4 ? '!' : '.'}`
+                                : `It is hit${damage > 4 ? '!' : '.'}`;
+                            game._topline_after_more = hitMessage;
+                            if (sharedArrowLanding) {
+                                game._arrow_drop_throw_after_topline_more = {
+                                    missile: thrownMissile,
+                                    x: interveningArrowTarget.mx,
+                                    y: interveningArrowTarget.my,
+                                    ohit: true,
+                                };
+                            } else {
+                                game._arrow_mulch_after_topline_more = 1;
+                            }
+                            game._search_pending_count = 0;
+                            game._run_steps_remaining = 0;
+                            game._travel_keys = [];
+                            game._monster_resume_index = monIndex + 1;
+                            game._monster_resume_somebody_can_move = somebodyCanMove;
+                            return false;
+                        } else if (aimedTerrainStop) {
                             landAimedArrow(aimedTerrainStop.x, aimedTerrainStop.y);
                             game._search_pending_count = 0;
                             game._run_steps_remaining = 0;

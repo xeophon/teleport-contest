@@ -33768,6 +33768,7 @@ async function runMonsterLauncherArrowLanding({
     heroHp = 20,
     heroPoisonResistance = false,
     levelCells = [],
+    extraMonsters = [],
 } = {}) {
     installNonShopFloorState();
     resetInputState();
@@ -33837,7 +33838,7 @@ async function runMonsterLauncherArrowLanding({
         missile: arrow,
         mcansee: true,
     };
-    game.level.monsters = [thrower];
+    game.level.monsters = [thrower, ...extraMonsters];
     game._pending_time_passed = 1;
     const preNhgetchMessages = [];
     const priorPreNhgetchHook = game._preNhgetchHook;
@@ -35772,6 +35773,42 @@ test('production monster launcher arrow hit lands surviving arrow with ohit mulc
     assert.ok(rng.includes('rnd(20)=1'));
     assert.ok(rng.includes('rn2(3)=0'));
     assert.equal(rng.some(entry => entry.startsWith('rn2(100)=')), false);
+});
+
+test('production monster launcher arrow can hit intervening monster before hero', async () => {
+    const blocker = ordinaryThrowTarget('goblin', 8, 5, {
+        ac: 13,
+        mac: 13,
+        mhp: 20,
+        mhpmax: 20,
+        msleeping: 1,
+        data: { name: 'goblin', mlevel: 1, mac: 13 },
+    });
+    const { arrow, thrower, rng, preNhgetchMessages } = await runMonsterLauncherArrowLanding({
+        seed: 2,
+        uac: 100,
+        levelCells: [[7, 5, { typ: IRONBARS }]],
+        extraMonsters: [blocker],
+    });
+
+    assert.match(game._pending_message, /^It is hit[.!]$/);
+    assert.equal(game.u.uhp, 20);
+    assert.equal(game._damage_after_topline_more || 0, 0, rng.join(', '));
+    assert.equal(blocker.mhp, 16, rng.join(', '));
+    assert.equal(blocker.msleeping, 0);
+    assert.equal(thrower.minvent.some(obj => obj.id === arrow.id), false);
+    assert.equal(thrower.missile, null);
+
+    const landed = game.level.objects.find(obj => obj.id === arrow.id);
+    assert.ok(landed, rng.join(', '));
+    assert.equal(landed.ox, 8);
+    assert.equal(landed.oy, 5);
+    assert.equal(landed.transientProjectile, false);
+
+    assertNoSingletonLauncherMultishotRng(rng);
+    assert.deepEqual(rng, ['rn2(5)=3', 'rn2(5)=2', 'rnd(20)=9', 'rnd(6)=4', 'rn2(3)=0']);
+    assert.equal(rng.some(entry => entry.startsWith('rn2(100)=')), false, rng.join(', '));
+    assert.equal(preNhgetchMessages.some(message => /Clonk!/.test(message)), false);
 });
 
 test('production monster launcher arrow catch retains split arrow in inventory', async () => {
