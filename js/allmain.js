@@ -6197,8 +6197,9 @@ export async function processMonsterTurns() {
                         && monsterLinedUp(mon, throwTargetX, throwTargetY)) {
                         const missile = mon.minvent[launcherAmmoIndex];
                         if ((missile.quan || 1) > 1) rnd(1);
+                        const missileQuan = missile.quan || 1;
                         let thrownMissile = missile;
-                        if ((missile.quan || 1) > 1) {
+                        if (missileQuan > 1) {
                             missile.quan--;
                             thrownMissile = { ...missile, id: next_ident(), quan: 1 };
                         } else {
@@ -6208,9 +6209,12 @@ export async function processMonsterTurns() {
                         const missileSpe = missile.spe || 0;
                         const missileErosion = Math.max(0, Math.trunc(Number(thrownMissile.oeroded || 0)),
                             Math.trunc(Number(thrownMissile.oeroded2 || 0)));
-                        const coveredArrowState = missileSpe === 0
+                        const coveredSingletonBlessedArrow = missileQuan <= 1 && thrownMissile.blessed
+                            && (missileSpe === 1 || missileSpe === 2);
+                        const coveredArrowState = missileSpe === 0 || coveredSingletonBlessedArrow
                             || (!thrownMissile.blessed && (missileSpe === 1 || missileSpe === 2));
-                        const coveredErodedArrowState = !thrownMissile.blessed || missileSpe === 0;
+                        const coveredErodedArrowState = !thrownMissile.blessed
+                            || missileSpe === 0 || coveredSingletonBlessedArrow;
                         const coveredErosionState = !missileErosion || coveredErodedArrowState;
                         const sharedArrowLanding = coveredArrowState && coveredErosionState;
                         addToplineMessage(`${monsterDisplayName(mon, true)} shoots an arrow!`);
