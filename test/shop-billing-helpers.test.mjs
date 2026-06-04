@@ -40,6 +40,7 @@ const MEAT_STICK = 11014;
 const TOUCHSTONE = 473;
 const DART = 353;
 const KNIFE = 10026;
+const SPEAR = 10030;
 const STILETTO = 10109;
 const GLAIVE = 10057;
 const TALLOW_CANDLE = 370;
@@ -595,6 +596,22 @@ function monsterKnife(id) {
         plural: 'knives',
         quan: 1,
         spe: 0,
+    };
+}
+
+function monsterSpear(id, extra = {}) {
+    return {
+        id,
+        otyp: SPEAR,
+        cls: 'weapon',
+        glyph: ')',
+        kind: 'spear',
+        actualKind: 'spear',
+        plural: 'spears',
+        quan: 1,
+        spe: 0,
+        material: 'iron',
+        ...extra,
     };
 }
 
@@ -33885,6 +33902,86 @@ async function runMonsterKnifeIronBars({
     return { knifeItem, thrower, rng: rawRng.map(entry => entry.replace(/=.*/, '')), rawRng, preNhgetchMessages };
 }
 
+async function runMonsterSpearIronBars({
+    seed = 1,
+    heroBlind = true,
+    heroDeaf = false,
+    uac = -100,
+    levelCells = [],
+    throwerX = 10,
+    projectile = null,
+    inventory = null,
+    activeWeapon = null,
+    activeMissile = null,
+} = {}) {
+    installNonShopFloorState();
+    resetInputState();
+    pushKey('\x1b');
+    initRng(seed);
+    enableRngLog({ reset: true });
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        ux0: 5,
+        uy0: 5,
+        blind: heroBlind,
+        confusion: false,
+        stunned: false,
+        fumbling: false,
+        _statusSuffix: heroDeaf ? ' Deaf' : '',
+        _deafTimeout: heroDeaf ? 5 : 0,
+        uhp: 20,
+        uhpmax: 20,
+        uac,
+        umovement: NORMAL_SPEED,
+        acurr: { a: [10, 10, 10, 100, 10, 10] },
+    });
+    game.moves = 1;
+    game.context = {};
+    if (levelCells.length) {
+        const cells = new Map();
+        for (const [x, y, loc] of levelCells)
+            cells.set(`${x},${y}`, { roomno: 0, ...loc });
+        game.level.at = (x, y) => cells.get(`${x},${y}`) || { roomno: 0, typ: ROOM };
+    }
+    for (let x = 5; x <= throwerX; x++) markSquareVisible(x, 5);
+    for (const [x, y] of levelCells) markSquareVisible(x, y);
+    const spearItem = projectile || monsterSpear(874364);
+    const throwerInventory = inventory || [spearItem];
+    const thrower = {
+        mx: throwerX,
+        my: 5,
+        movement: NORMAL_SPEED,
+        data: { name: 'gnome', mlet: 'G', mmove: NORMAL_SPEED, armed: true, mlevel: 1 },
+        mpeaceful: false,
+        mhp: 5,
+        mhpmax: 5,
+        minvent: throwerInventory,
+        missile: activeMissile || spearItem,
+        mw: activeWeapon || null,
+        mcansee: true,
+    };
+    game.level.monsters = [thrower];
+    game._pending_time_passed = 1;
+
+    const preNhgetchMessages = [];
+    const priorPreNhgetchHook = game._preNhgetchHook;
+    game._preNhgetchHook = async () => {
+        const message = [game._pending_message, game._topline_after_more]
+            .filter(Boolean).join('  ');
+        if (message) preNhgetchMessages.push(message);
+        if (priorPreNhgetchHook) await priorPreNhgetchHook();
+    };
+    try {
+        await moveloop_core();
+    } finally {
+        game._preNhgetchHook = priorPreNhgetchHook;
+    }
+    resetInputState();
+    const rawRng = getRngLog();
+    return { spearItem, thrower, rng: rawRng.map(entry => entry.replace(/=.*/, '')), rawRng, preNhgetchMessages };
+}
+
 test('production monster sling rock hit threads ohit into drop-throw mulch check', async () => {
     const { rock, thrower, rng } = await runMonsterSlingRockLanding({ uac: 100 });
 
@@ -35706,6 +35803,168 @@ test('production monster crude dagger hits pet before iron bars', async () => {
     assert.equal(rng.some(entry => entry === 'rn2(100)'
         || entry === 'rn2(3)'), false);
     assert.equal(preNhgetchMessages.some(message => /Clonk!/.test(message)), false);
+});
+
+test('production monster spear aimed shot can pass through iron bars before hero', async () => {
+    const { spearItem, thrower, rng, rawRng, preNhgetchMessages } = await runMonsterSpearIronBars({
+        seed: 1,
+        levelCells: [[7, 5, { typ: IRONBARS }]],
+    });
+
+    assert.equal(thrower.missile, null);
+    assert.equal(thrower.minvent.some(obj => obj.id === spearItem.id), false);
+
+    const landed = game.level.objects.find(obj => obj.id === spearItem.id);
+    assert.ok(landed, rng.join(', '));
+    assert.equal(landed.ox, 5, rawRng.join(', '));
+    assert.equal(landed.oy, 5, rawRng.join(', '));
+    assert.equal(landed.kind, 'spear');
+    assert.notEqual(landed.transientProjectile, true);
+
+    assert.ok(rng.some(entry => entry === 'rnd(20)'));
+    assert.equal(rng.some(entry => entry === 'rn2(100)'), false);
+    assert.equal(preNhgetchMessages.some(message => /Clonk!/.test(message)), false);
+});
+
+test('production monster spear hit uses spear damage and text', async () => {
+    const { spearItem, thrower, rng, rawRng, preNhgetchMessages } = await runMonsterSpearIronBars({
+        seed: 1,
+        uac: 100,
+    });
+
+    assert.equal(preNhgetchMessages.some(message => /You are hit by a spear\./.test(message)), true);
+    assert.equal(game._damage_after_topline_more, 2, rawRng.join(', '));
+    assert.equal(thrower.missile, null);
+    assert.equal(thrower.minvent.some(obj => obj.id === spearItem.id), false);
+
+    const landed = game.level.objects.find(obj => obj.id === spearItem.id);
+    assert.ok(landed, rng.join(', '));
+    assert.equal(landed.ox, 5, rawRng.join(', '));
+    assert.equal(landed.oy, 5, rawRng.join(', '));
+    assert.equal(landed.kind, 'spear');
+    assert.notEqual(landed.transientProjectile, true);
+
+    assert.ok(rawRng.some(entry => entry.startsWith('rnd(6)=')), rawRng.join(', '));
+    assert.ok(rawRng.some(entry => entry.startsWith('rnd(20)=')), rawRng.join(', '));
+    assert.equal(rawRng.some(entry => entry.startsWith('rnd(3)=')
+        || entry.startsWith('rnd(4)=')
+        || entry.startsWith('rn2(100)=')), false);
+});
+
+test('production monster spear aimed shot can clonk iron bars before hero', async () => {
+    const { spearItem, thrower, rng, rawRng, preNhgetchMessages } = await runMonsterSpearIronBars({
+        seed: 1,
+        uac: 100,
+        levelCells: [[7, 5, { typ: IRONBARS }]],
+    });
+
+    assert.equal(game.u.uhp, 20);
+    assert.equal(game._damage_after_topline_more || 0, 0, rawRng.join(', '));
+    assert.equal(thrower.missile, null);
+    assert.equal(thrower.minvent.some(obj => obj.id === spearItem.id), false);
+
+    const landed = game.level.objects.find(obj => obj.id === spearItem.id);
+    assert.ok(landed, rng.join(', '));
+    assert.equal(landed.ox, 8, rawRng.join(', '));
+    assert.equal(landed.oy, 5, rawRng.join(', '));
+    assert.equal(landed.kind, 'spear');
+    assert.notEqual(landed.transientProjectile, true);
+
+    assert.ok(rng.some(entry => entry === 'rn2(100)'));
+    assert.equal(rng.some(entry => entry === 'rnd(6)'
+        || entry === 'rnd(20)'
+        || entry === 'rn2(3)'), false);
+    assert.equal(preNhgetchMessages.some(message => /Clonk!/.test(message)), true);
+});
+
+test('production monster spear aimed iron bars are silent when deaf', async () => {
+    const { spearItem, thrower, rng, rawRng, preNhgetchMessages } = await runMonsterSpearIronBars({
+        seed: 1,
+        uac: 100,
+        heroDeaf: true,
+        levelCells: [[7, 5, { typ: IRONBARS }]],
+    });
+
+    assert.equal(game.u.uhp, 20);
+    assert.equal(game._damage_after_topline_more || 0, 0, rawRng.join(', '));
+    assert.equal(thrower.missile, null);
+    assert.equal(thrower.minvent.some(obj => obj.id === spearItem.id), false);
+
+    const landed = game.level.objects.find(obj => obj.id === spearItem.id);
+    assert.ok(landed, rng.join(', '));
+    assert.equal(landed.ox, 8, rawRng.join(', '));
+    assert.equal(landed.oy, 5, rawRng.join(', '));
+    assert.equal(landed.kind, 'spear');
+
+    assert.ok(rng.some(entry => entry === 'rn2(100)'));
+    assert.equal(rng.some(entry => entry === 'rnd(6)'
+        || entry === 'rnd(20)'
+        || entry === 'rn2(3)'), false);
+    assert.equal(preNhgetchMessages.some(message => /Clonk!/.test(message)), false);
+});
+
+test('production monster spear selection precedes dagger for iron bars', async () => {
+    const daggerItem = { ...dagger(874365), letter: undefined, line: undefined, spe: 0 };
+    const spearItem = monsterSpear(874366);
+    const { thrower, rng, rawRng, preNhgetchMessages } = await runMonsterSpearIronBars({
+        seed: 1,
+        uac: 100,
+        levelCells: [[7, 5, { typ: IRONBARS }]],
+        projectile: spearItem,
+        inventory: [daggerItem, spearItem],
+    });
+
+    assert.equal(thrower.minvent.some(obj => obj.id === spearItem.id), false);
+    assert.equal(thrower.minvent.some(obj => obj.id === daggerItem.id), true);
+
+    const landed = game.level.objects.find(obj => obj.id === spearItem.id);
+    assert.ok(landed, rng.join(', '));
+    assert.equal(landed.ox, 8, rawRng.join(', '));
+    assert.equal(landed.oy, 5, rawRng.join(', '));
+    assert.equal(landed.kind, 'spear');
+
+    assert.ok(rng.some(entry => entry === 'rn2(100)'));
+    assert.equal(preNhgetchMessages.some(message => /Clonk!/.test(message)), true);
+});
+
+test('production monster spear selection precedes active crossbow bolts', async () => {
+    const crossbow = { id: 874367, cls: 'weapon', kind: 'crossbow', actualKind: 'crossbow', glyph: ')' };
+    const bolt = {
+        id: 874368,
+        cls: 'weapon',
+        glyph: ')',
+        kind: 'crossbow bolt',
+        actualKind: 'crossbow bolt',
+        plural: 'crossbow bolts',
+        material: 'iron',
+        quan: 1,
+        spe: 0,
+    };
+    const spearItem = monsterSpear(874369);
+    const { thrower, rng, rawRng, preNhgetchMessages } = await runMonsterSpearIronBars({
+        seed: 1,
+        uac: 100,
+        levelCells: [[7, 5, { typ: IRONBARS }]],
+        projectile: spearItem,
+        inventory: [crossbow, bolt, spearItem],
+        activeWeapon: crossbow,
+        activeMissile: bolt,
+    });
+
+    assert.equal(thrower.mw, crossbow);
+    assert.equal(thrower.missile, bolt);
+    assert.equal(thrower.minvent.some(obj => obj.id === bolt.id), true);
+    assert.equal(thrower.minvent.some(obj => obj.id === spearItem.id), false);
+    assert.equal(game.level.objects.some(obj => obj.id === bolt.id), false);
+
+    const landed = game.level.objects.find(obj => obj.id === spearItem.id);
+    assert.ok(landed, rng.join(', '));
+    assert.equal(landed.ox, 8, rawRng.join(', '));
+    assert.equal(landed.oy, 5, rawRng.join(', '));
+    assert.equal(landed.kind, 'spear');
+
+    assert.ok(rng.some(entry => entry === 'rn2(100)'));
+    assert.equal(preNhgetchMessages.some(message => /crossbow bolt/.test(message)), false);
 });
 
 test('production monster knife aimed shot can pass through iron bars before hero', async () => {
