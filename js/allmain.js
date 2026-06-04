@@ -5897,6 +5897,10 @@ export async function processMonsterTurns() {
                     const orcishDaggerIndex = mon.minvent?.findIndex(item => item.otyp === ORCISH_DAGGER || item.kind === 'orcish dagger') ?? -1;
                     const canThrowOrcishDagger = !mon._opened_door_this_move && orcishDaggerIndex >= 0 && throwRange > 1 && throwRange < 8
                         && straightThrow && couldSeeCoord(mon.mx, mon.my);
+                    const knifeIndex = mon.minvent?.findIndex(item => item.otyp === KNIFE || item.kind === 'knife') ?? -1;
+                    const canThrowKnife = !mon._opened_door_this_move && !mon.mpeaceful && knifeIndex >= 0
+                        && throwRange > 1 && throwRange < BOLT_LIM && straightThrow
+                        && clearPath(mon.mx, mon.my, throwTargetX, throwTargetY);
                     const breathAttack = movedByMonster && !mon.mpeaceful && !mon._opened_door_this_move
                         && straightThrow && throwRange > 1 && throwRange < BOLT_LIM
                         && (mon.mx - throwTargetX) ** 2 + (mon.my - throwTargetY) ** 2 <= BOLT_LIM * BOLT_LIM
@@ -6158,7 +6162,7 @@ export async function processMonsterTurns() {
                     const canUseMovedWeaponAttack = movedByMonster && !nearThrowTarget && mon.data?.armed
                         && (mon.data?.mercenary || mon.mw || !game._armor_wear_occupation);
 		                    const canUseWeaponAttack = !game.level?.flags?.rogue_level
-                        && (canThrowPlainDagger || canThrowOrcishDagger || canThrowDart);
+                        && (canThrowPlainDagger || canThrowOrcishDagger || canThrowKnife || canThrowDart);
                     const canSelectRangedWeapon = canUseWeaponAttack;
 		                    const canCheckOffensiveItems = !mon.data?.mindless && !mon.data?.nohands && !mon.mpeaceful;
 		                    let offensiveItemsLinedUp = false;
@@ -6748,6 +6752,91 @@ export async function processMonsterTurns() {
                             game._travel_keys = [];
                             if ((game._pending_time_passed || 0) > 2) game._pending_time_passed = 2;
                         }
+                    }
+                    if (canThrowKnife && rangedWeaponLinedUp) {
+                        const targetAc = game.u?.uac ?? 10;
+                        if (targetAc < 0 && !consumedMattackuAc) rnd(-targetAc);
+
+                        const missile = mon.minvent[knifeIndex];
+                        if ((missile.quan || 1) > 1) missile.quan--;
+                        else {
+                            mon.minvent.splice(knifeIndex, 1);
+                            if (mon.missile === missile) mon.missile = null;
+                        }
+                        const throwerVisible = !game.u?.blind
+                            && !!(game.viz_array?.[mon.my]?.[mon.mx] & IN_SIGHT)
+                            && !mon.minvis;
+                        if (throwerVisible) {
+                            addToplineMessage(`${monsterDisplayName(mon)} throws a knife!`);
+                            game._message_more = 1;
+                            game._process_time_with_more = 0;
+                        }
+
+                        let knifeTerrainStop = null;
+                        for (let step = 1; step < throwRange; step++) {
+                            const sx = mon.mx + throwDx * step;
+                            const sy = mon.my + throwDy * step;
+                            const remainingRange = throwRange - step;
+                            const forcehit = !rn2(5);
+                            if (remainingRange && forcehit
+                                && game.level?.at(sx + throwDx, sy + throwDy)?.typ === IRONBARS) {
+                                rn2(100); // C forcehit is the only way P_KNIFE hits bars.
+                                if (!(game.u?._statusSuffix || '').includes('Deaf') && !(game.u?._deafTimeout || 0))
+                                    addToplineMessage('Clonk!');
+                                knifeTerrainStop = { x: sx, y: sy };
+                                break;
+                            }
+                        }
+                        if (knifeTerrainStop) {
+                            const floorMessages = [];
+                            landMonsterThrownObject(missile, knifeTerrainStop.x, knifeTerrainStop.y, {
+                                glyph: ')',
+                                color: CLR_CYAN,
+                                messages: floorMessages,
+                            });
+                            addMonsterThrownFloorMessages(floorMessages, throwerVisible);
+                        } else {
+                            const catchChance = 100 - (game.u?.acurr?.a?.[A_DEX] ?? 10)
+                                - (game._startup_role === 'Monk' || game._startup_role === 'Rogue' ? 20 : 0);
+                            const caught = !game.u?.blind && !game.u?.confusion && !game.u?.stunned
+                                && !game.u?.fumbling && rn2(Math.max(1, catchChance)) === 0;
+                            if (caught) {
+                                const catchMessage = 'You catch the knife!';
+                                if (throwerVisible) game._topline_after_more = catchMessage;
+                                else addToplineMessage(catchMessage);
+                            } else {
+                                const damage = rnd(3);
+                                const hitv = Math.max(-4, 3 - throwRange) + 8 + (missile.spe || 0);
+                                const attackRoll = rnd(20);
+                                const missed = (game.u?.uac ?? 10) + hitv <= attackRoll;
+                                const resultMessage = missed ? 'A knife misses you.' : 'You are hit by a knife.';
+                                if (throwerVisible) game._topline_after_more = resultMessage;
+                                else addToplineMessage(resultMessage);
+                                if (!missed) {
+                                    game._damage_after_topline_more = (game._damage_after_topline_more || 0) + damage;
+                                    game._exercise_after_topline_more = (game._exercise_after_topline_more || 0) + 1;
+                                }
+                                rn2(5);
+                                const floorMessages = [];
+                                landMonsterThrownObject(missile, game.u?.ux || 0, game.u?.uy || 0, {
+                                    glyph: ')',
+                                    color: CLR_CYAN,
+                                    messages: floorMessages,
+                                    ohit: !missed,
+                                });
+                                addMonsterThrownFloorMessages(floorMessages, throwerVisible);
+                            }
+                        }
+                        game._search_pending_count = 0;
+                        game._run_steps_remaining = 0;
+                        game._travel_keys = [];
+                        if ((game._pending_time_passed || 0) > 2) game._pending_time_passed = 2;
+                        if (game._message_more && !game._process_time_with_more) {
+                            game._monster_resume_index = monIndex + 1;
+                            game._monster_resume_somebody_can_move = somebodyCanMove;
+                            return false;
+                        }
+                        continue;
                     }
 	                    if (canThrowDart && rangedWeaponLinedUp) {
                         let clearShot = true;

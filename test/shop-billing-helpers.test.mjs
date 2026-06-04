@@ -570,6 +570,20 @@ function monsterOrcishDagger(id) {
     };
 }
 
+function monsterKnife(id) {
+    return {
+        id,
+        otyp: KNIFE,
+        cls: 'weapon',
+        glyph: ')',
+        kind: 'knife',
+        actualKind: 'knife',
+        plural: 'knives',
+        quan: 1,
+        spe: 0,
+    };
+}
+
 function wieldedWeapon(id, kind, letter = 'w', spe = 0) {
     return {
         id,
@@ -33779,6 +33793,80 @@ async function runMonsterPlainDaggerIronBars({
     return { daggerItem, thrower, rng: rawRng.map(entry => entry.replace(/=.*/, '')), rawRng, preNhgetchMessages };
 }
 
+async function runMonsterKnifeIronBars({
+    seed = 1,
+    heroBlind = true,
+    heroDeaf = false,
+    uac = -100,
+    levelCells = [],
+    throwerX = 10,
+} = {}) {
+    installNonShopFloorState();
+    resetInputState();
+    pushKey('\x1b');
+    initRng(seed);
+    enableRngLog({ reset: true });
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        ux0: 5,
+        uy0: 5,
+        blind: heroBlind,
+        confusion: false,
+        stunned: false,
+        fumbling: false,
+        _statusSuffix: heroDeaf ? ' Deaf' : '',
+        _deafTimeout: heroDeaf ? 5 : 0,
+        uhp: 20,
+        uhpmax: 20,
+        uac,
+        umovement: NORMAL_SPEED,
+        acurr: { a: [10, 10, 10, 100, 10, 10] },
+    });
+    game.moves = 1;
+    game.context = {};
+    if (levelCells.length) {
+        const cells = new Map();
+        for (const [x, y, loc] of levelCells)
+            cells.set(`${x},${y}`, { roomno: 0, ...loc });
+        game.level.at = (x, y) => cells.get(`${x},${y}`) || { roomno: 0, typ: ROOM };
+    }
+    for (let x = 5; x <= throwerX; x++) markSquareVisible(x, 5);
+    for (const [x, y] of levelCells) markSquareVisible(x, y);
+    const knifeItem = monsterKnife(874359);
+    const thrower = {
+        mx: throwerX,
+        my: 5,
+        movement: NORMAL_SPEED,
+        data: { name: 'gnome', mlet: 'G', mmove: NORMAL_SPEED, armed: true, mlevel: 1 },
+        mpeaceful: false,
+        mhp: 5,
+        mhpmax: 5,
+        minvent: [knifeItem],
+        missile: knifeItem,
+        mcansee: true,
+    };
+    game.level.monsters = [thrower];
+    game._pending_time_passed = 1;
+
+    const preNhgetchMessages = [];
+    const priorPreNhgetchHook = game._preNhgetchHook;
+    game._preNhgetchHook = async () => {
+        const message = [game._pending_message, game._topline_after_more]
+            .filter(Boolean).join('  ');
+        if (message) preNhgetchMessages.push(message);
+        if (priorPreNhgetchHook) await priorPreNhgetchHook();
+    };
+    try {
+        await moveloop_core();
+    } finally {
+        game._preNhgetchHook = priorPreNhgetchHook;
+    }
+    resetInputState();
+    const rawRng = getRngLog();
+    return { knifeItem, thrower, rng: rawRng.map(entry => entry.replace(/=.*/, '')), rawRng, preNhgetchMessages };
+}
+
 test('production monster sling rock hit threads ohit into drop-throw mulch check', async () => {
     const { rock, thrower, rng } = await runMonsterSlingRockLanding({ uac: 100 });
 
@@ -35458,6 +35546,79 @@ test('production monster crude dagger hits pet before iron bars', async () => {
     assert.ok(rng.some(entry => entry === 'rnd(20)'));
     assert.ok(rng.some(entry => entry === 'rnd(3)'));
     assert.equal(rng.some(entry => entry === 'rn2(100)'
+        || entry === 'rn2(3)'), false);
+    assert.equal(preNhgetchMessages.some(message => /Clonk!/.test(message)), false);
+});
+
+test('production monster knife aimed shot can pass through iron bars before hero', async () => {
+    const { knifeItem, thrower, rng, rawRng, preNhgetchMessages } = await runMonsterKnifeIronBars({
+        seed: 1,
+        levelCells: [[7, 5, { typ: IRONBARS }]],
+    });
+
+    assert.equal(thrower.missile, null);
+    assert.equal(thrower.minvent.some(obj => obj.id === knifeItem.id), false);
+
+    const landed = game.level.objects.find(obj => obj.id === knifeItem.id);
+    assert.ok(landed, rng.join(', '));
+    assert.equal(landed.ox, 5, rawRng.join(', '));
+    assert.equal(landed.oy, 5, rawRng.join(', '));
+    assert.equal(landed.kind, 'knife');
+    assert.notEqual(landed.transientProjectile, true);
+
+    assert.ok(rng.some(entry => entry === 'rnd(20)'));
+    assert.equal(rng.some(entry => entry === 'rn2(100)'), false);
+    assert.equal(preNhgetchMessages.some(message => /Clonk!/.test(message)), false);
+});
+
+test('production monster knife aimed shot can clonk iron bars before hero', async () => {
+    const { knifeItem, thrower, rng, rawRng, preNhgetchMessages } = await runMonsterKnifeIronBars({
+        seed: 1,
+        uac: 100,
+        levelCells: [[7, 5, { typ: IRONBARS }]],
+    });
+
+    assert.equal(game.u.uhp, 20);
+    assert.equal(game._damage_after_topline_more || 0, 0, rawRng.join(', '));
+    assert.equal(thrower.missile, null);
+    assert.equal(thrower.minvent.some(obj => obj.id === knifeItem.id), false);
+
+    const landed = game.level.objects.find(obj => obj.id === knifeItem.id);
+    assert.ok(landed, rng.join(', '));
+    assert.equal(landed.ox, 8, rawRng.join(', '));
+    assert.equal(landed.oy, 5, rawRng.join(', '));
+    assert.equal(landed.kind, 'knife');
+    assert.notEqual(landed.transientProjectile, true);
+
+    assert.ok(rng.some(entry => entry === 'rn2(100)'));
+    assert.equal(rng.some(entry => entry === 'rnd(3)'
+        || entry === 'rnd(20)'
+        || entry === 'rn2(3)'), false);
+    assert.equal(preNhgetchMessages.some(message => /Clonk!/.test(message)), true);
+});
+
+test('production monster knife aimed iron bars are silent when deaf', async () => {
+    const { knifeItem, thrower, rng, rawRng, preNhgetchMessages } = await runMonsterKnifeIronBars({
+        seed: 1,
+        uac: 100,
+        heroDeaf: true,
+        levelCells: [[7, 5, { typ: IRONBARS }]],
+    });
+
+    assert.equal(game.u.uhp, 20);
+    assert.equal(game._damage_after_topline_more || 0, 0, rawRng.join(', '));
+    assert.equal(thrower.missile, null);
+    assert.equal(thrower.minvent.some(obj => obj.id === knifeItem.id), false);
+
+    const landed = game.level.objects.find(obj => obj.id === knifeItem.id);
+    assert.ok(landed, rng.join(', '));
+    assert.equal(landed.ox, 8, rawRng.join(', '));
+    assert.equal(landed.oy, 5, rawRng.join(', '));
+    assert.equal(landed.kind, 'knife');
+
+    assert.ok(rng.some(entry => entry === 'rn2(100)'));
+    assert.equal(rng.some(entry => entry === 'rnd(20)'
+        || entry === 'rnd(3)'
         || entry === 'rn2(3)'), false);
     assert.equal(preNhgetchMessages.some(message => /Clonk!/.test(message)), false);
 });
