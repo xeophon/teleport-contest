@@ -33413,12 +33413,15 @@ async function runMonsterSlingRockLanding({
     seed = 1,
     heroBlind = true,
     heroDeaf = false,
+    heroDex = 10,
     levelCells = [],
     throwerX = 10,
     projectile = null,
     inventory = null,
     activeMissile = undefined,
     monsterData = {},
+    initialInventory = null,
+    fullInventory = false,
 } = {}) {
     installNonShopFloorState();
     resetInputState();
@@ -33437,8 +33440,10 @@ async function runMonsterSlingRockLanding({
         uhpmax: 20,
         uac,
         umovement: NORMAL_SPEED,
-        acurr: { a: [10, 10, 10, 10, 10, 10] },
+        acurr: { a: [10, 10, 10, heroDex, 10, 10] },
     });
+    if (fullInventory) fillInventoryLetters(877000);
+    else if (initialInventory) game.inventory = initialInventory;
     game.moves = 1;
     game.context = {};
     if (levelCells.length) {
@@ -34448,6 +34453,99 @@ test('production monster sling flint uses flint damage against hero', async () =
     assert.equal(thrower.minvent.some(obj => obj.id === flint.id), false);
     assert.ok(rng.some(entry => entry === 'rnd(6)'), rng.join(', '));
     assert.equal(rng.some(entry => entry === 'rnd(3)'), false);
+});
+
+test('production monster sling rock catch retains split rock in inventory', async () => {
+    const rockStack = monsterThrownRock(874410, { quan: 2 });
+    const { rock, thrower, rng, preNhgetchMessages } = await runMonsterSlingRockLanding({
+        seed: 1,
+        uac: 100,
+        heroBlind: false,
+        heroDex: 100,
+        projectile: rockStack,
+    });
+
+    assert.equal(preNhgetchMessages.some(message => /You catch the rock!/.test(message)), true,
+        preNhgetchMessages.join('\n'));
+    assertCaughtSplitThrownObject(rock, thrower, 'rock');
+    assert.ok(rng.includes('rn2(1)'), rng.join(', '));
+    assert.equal(rng.some(entry => entry === 'rnd(3)'
+        || entry === 'rnd(20)'
+        || entry === 'rn2(3)'), false, rng.join(', '));
+});
+
+test('production monster sling ruby catch retains split gem in inventory', async () => {
+    const rubyStack = monsterThrownGem(874411, 'ruby', { gemTough: true, quan: 2 });
+    const { ammo, thrower, rng, preNhgetchMessages } = await runMonsterSlingRockLanding({
+        seed: 1,
+        uac: 100,
+        heroBlind: false,
+        heroDex: 100,
+        projectile: rubyStack,
+    });
+
+    assert.equal(preNhgetchMessages.some(message => /You catch the ruby!/.test(message)), true,
+        preNhgetchMessages.join('\n'));
+    assertCaughtSplitThrownObject(ammo, thrower, 'ruby');
+    assert.ok(rng.includes('rn2(1)'), rng.join(', '));
+    assert.equal(rng.some(entry => entry === 'rnd(3)'
+        || entry === 'rnd(20)'
+        || entry === 'rn2(3)'), false, rng.join(', '));
+});
+
+test('production monster sling loadstone catch retains split gray stone in inventory', async () => {
+    const loadstoneStack = monsterThrownGem(874412, 'loadstone', {
+        otyp: LOADSTONE,
+        cursed: false,
+        gemDescription: 'gray stone',
+        quan: 2,
+    });
+    const { ammo, thrower, rng, preNhgetchMessages } = await runMonsterSlingRockLanding({
+        seed: 1,
+        uac: 100,
+        heroBlind: false,
+        heroDex: 100,
+        projectile: loadstoneStack,
+    });
+
+    assert.equal(preNhgetchMessages.some(message => /You catch the loadstone!/.test(message)), true,
+        preNhgetchMessages.join('\n'));
+    assertCaughtSplitThrownObject(ammo, thrower, 'loadstone');
+    assert.ok(rng.includes('rn2(1)'), rng.join(', '));
+    assert.equal(rng.some(entry => entry === 'rnd(3)'
+        || entry === 'rnd(20)'
+        || entry === 'rn2(3)'), false, rng.join(', '));
+});
+
+test('production monster sling catch drops split rock when inventory letters are full', async () => {
+    const rockStack = monsterThrownRock(874413, { quan: 2 });
+    const { rock, thrower, rng, preNhgetchMessages } = await runMonsterSlingRockLanding({
+        seed: 1,
+        uac: 100,
+        heroBlind: false,
+        heroDex: 100,
+        projectile: rockStack,
+        fullInventory: true,
+    });
+
+    assert.equal(game.inventory.length, INVENTORY_LETTERS.length);
+    const residual = thrower.minvent.find(obj => obj.id === rock.id);
+    assert.ok(residual);
+    assert.equal(residual.quan, 1);
+    assert.equal(thrower.missile, residual);
+    assert.equal(game.level.objects.some(obj => obj.id === rock.id), false);
+
+    const dropped = game.level.objects.find(obj => obj.kind === 'rock' && obj.ox === 5 && obj.oy === 5);
+    assert.ok(dropped);
+    assert.notEqual(dropped.id, rock.id);
+    assert.equal(dropped.quan, 1);
+    assert.equal(dropped.transientProjectile, false);
+    assert.ok(rng.includes('rn2(1)'), rng.join(', '));
+    assert.equal(rng.some(entry => entry === 'rnd(3)'
+        || entry === 'rnd(20)'
+        || entry === 'rn2(3)'), false, rng.join(', '));
+    assert.equal(preNhgetchMessages.some(message => /You catch, but drop, the rock\./.test(message)), true,
+        preNhgetchMessages.join('\n'));
 });
 
 test('production kobold dart hit lands surviving dart with ohit mulch', async () => {

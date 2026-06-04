@@ -6055,14 +6055,8 @@ export async function processMonsterTurns() {
                             const deferPrayerProjectile = !throwerVisible
                                 && (game._pending_prayer_finish_message || game._prayer_occupation);
                             rnd(1);
-                            if ((missile.quan || 1) > 1) {
-                                missile.quan--;
-                                if (mon.missile === missile) mon.missile.quan = missile.quan;
-                                next_ident();
-                            } else {
-                                mon.minvent.splice(postMoveSlingAmmoIndex, 1);
-                                if (mon.missile === missile) mon.missile = null;
-                            }
+                            const thrownMissile = splitMonsterThrownInventoryObject(mon, postMoveSlingAmmoIndex);
+                            if (!thrownMissile) continue;
                             if (throwerVisible) {
                                 addToplineMessage(`${monsterDisplayName(mon, true)} shoots ${missileArticle} ${missileName}!`);
                                 game._message_more = 1;
@@ -6085,19 +6079,24 @@ export async function processMonsterTurns() {
                             }
                             if (slingTerrainStop) {
                                 const floorMessages = [];
-                                landMonsterThrownObject(missile, slingTerrainStop.x, slingTerrainStop.y, {
-                                    glyph: missile.glyph || '*',
-                                    color: missile.color ?? NO_COLOR,
+                                landMonsterThrownObject(thrownMissile, slingTerrainStop.x, slingTerrainStop.y, {
+                                    glyph: thrownMissile.glyph || '*',
+                                    color: thrownMissile.color ?? NO_COLOR,
                                     messages: floorMessages,
                                 });
                                 addMonsterThrownFloorMessages(floorMessages, throwerVisible && !deferPrayerProjectile);
                             } else {
                                 const catchChance = 100 - (game.u?.acurr?.a?.[A_DEX] ?? 10)
                                     - (game._startup_role === 'Monk' || game._startup_role === 'Rogue' ? 20 : 0);
-                                const caught = !game.u?.blind && !game.u?.confusion && !game.u?.stunned
-                                    && !game.u?.fumbling && rn2(Math.max(1, catchChance)) === 0;
+                                const caught = heroCanAttemptThrownObjectCatch(thrownMissile)
+                                    && rn2(Math.max(1, catchChance)) === 0;
                                 if (caught) {
-                                    const catchMessage = `You catch the ${missileName}!`;
+                                    const catchResult = holdCaughtThrownObject(thrownMissile, {
+                                        catchName: missileName,
+                                        glyph: thrownMissile.glyph || '*',
+                                        color: thrownMissile.color ?? NO_COLOR,
+                                    });
+                                    const catchMessage = catchResult.message;
                                     if (deferPrayerProjectile) {
                                         game._pending_message = `${catchMessage}  You finish your prayer.  You feel that ${game._prayer_god || 'your god'} is displeased.`;
                                         game._keep_pending_message = 1;
@@ -6107,8 +6106,8 @@ export async function processMonsterTurns() {
                                     } else if (throwerVisible) game._topline_after_more = catchMessage;
                                     else addToplineMessage(catchMessage);
                                 } else {
-                                    const damage = rnd(monsterSlingAmmoDamageSides(missile));
-                                    const hitv = Math.max(-4, 3 - throwRange) + 8 + (missile.spe || 0);
+                                    const damage = rnd(monsterSlingAmmoDamageSides(thrownMissile));
+                                    const hitv = Math.max(-4, 3 - throwRange) + 8 + (thrownMissile.spe || 0);
                                     const attackRoll = rnd(20);
                                     const missed = (game.u?.uac ?? 10) + hitv <= attackRoll;
                                     let resultMessage = missed ? 'It misses.' : `You are hit by ${missileArticle} ${missileName}.`;
@@ -6131,9 +6130,9 @@ export async function processMonsterTurns() {
                                     }
                                     if (missed) rn2(5);
                                     const floorMessages = [];
-                                    landMonsterThrownObject(missile, game.u?.ux || 0, game.u?.uy || 0, {
-                                        glyph: missile.glyph || '*',
-                                        color: missile.color ?? NO_COLOR,
+                                    landMonsterThrownObject(thrownMissile, game.u?.ux || 0, game.u?.uy || 0, {
+                                        glyph: thrownMissile.glyph || '*',
+                                        color: thrownMissile.color ?? NO_COLOR,
                                         messages: floorMessages,
                                         ohit: !missed,
                                     });
