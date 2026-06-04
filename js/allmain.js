@@ -6339,7 +6339,9 @@ export async function processMonsterTurns() {
                         const coveredErosionState = !missileErosion || coveredErodedArrowState;
                         const sharedArrowLanding = coveredArrowState && coveredErosionState;
                         const projectileKind = monsterLauncherProjectileKind(thrownMissile);
+                        const projectileKillerName = monsterLauncherProjectileKillerName(thrownMissile);
                         const projectileArticle = /^[aeiou]/i.test(projectileKind) ? 'an' : 'a';
+                        const projectileKillerArticle = /^[aeiou]/i.test(projectileKillerName) ? 'an' : 'a';
                         const projectileArticleCap = projectileArticle[0].toUpperCase() + projectileArticle.slice(1);
                         addToplineMessage(`${monsterDisplayName(mon, true)} shoots ${projectileArticle} ${projectileKind}!`);
                         game._message_more = 1;
@@ -6527,11 +6529,18 @@ export async function processMonsterTurns() {
                                         currentMove: true,
                                         deathCleanupThrownObject: thrownMissile,
                                         deathCleanupGlyph: thrownMissile.glyph || ')',
+                                        deathCause: `killed by ${projectileArticle} ${projectileKind}`,
                                     };
                                     game._death_cause = `killed by ${projectileArticle} ${projectileKind}`;
                                 } else {
                                     game._damage_after_topline_more = (game._damage_after_topline_more || 0) + damage;
                                     game._exercise_after_topline_more = (game._exercise_after_topline_more || 0) + 1;
+                                    if (thrownMissile.opoisoned && monsterLauncherProjectileIsPoisonable(thrownMissile)) {
+                                        game._poisoned_projectile_after_topline_more = {
+                                            reason: projectileKind,
+                                            killer: `${projectileKillerArticle} ${projectileKillerName}`,
+                                        };
+                                    }
                                     if (sharedArrowLanding) {
                                         game._arrow_drop_throw_after_topline_more = {
                                             missile: thrownMissile,
@@ -8497,7 +8506,15 @@ function monsterThrownShurikenKind(item) {
 }
 
 function monsterLauncherProjectileKind(item) {
-    return String(item?.singular || item?.actualKind || item?.kind || item?.appearance || 'arrow');
+    const name = String(item?.singular || item?.actualKind || item?.kind || item?.appearance || 'arrow');
+    if (item?.opoisoned && monsterLauncherProjectileIsPoisonable(item) && !/^poisoned\b/i.test(name))
+        return `poisoned ${name}`;
+    return name;
+}
+
+function monsterLauncherProjectileKillerName(item) {
+    return String(item?.singular || item?.actualKind || item?.kind || item?.appearance || 'arrow')
+        .replace(/^poisoned\s+/i, '');
 }
 
 function monsterLauncherProjectileNames(item) {
@@ -8523,6 +8540,13 @@ function monsterLauncherProjectileIsBowAmmo(item) {
     const names = monsterLauncherProjectileNames(item);
     return !names.some(name => name === 'crossbow bolt')
         && names.some(name => name === 'ya' || name === 'bamboo arrow' || name.includes('arrow'));
+}
+
+function monsterLauncherProjectileIsPoisonable(item) {
+    const names = monsterLauncherProjectileNames(item);
+    return names.some(name => name === 'ya' || name === 'bamboo arrow'
+        || name.includes('arrow') || name === 'crossbow bolt'
+        || name === 'shuriken' || name === 'throwing star');
 }
 
 function monsterLauncherProjectileIsElvenArrow(item) {

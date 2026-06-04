@@ -33562,6 +33562,7 @@ async function runMonsterLauncherArrowLanding({
     heroBlind = true,
     heroDeaf = false,
     heroHp = 20,
+    heroPoisonResistance = false,
     levelCells = [],
 } = {}) {
     installNonShopFloorState();
@@ -33583,6 +33584,7 @@ async function runMonsterLauncherArrowLanding({
         _deafTimeout: heroDeaf ? 5 : 0,
         _confusionTimeout: 0,
         _stunTimeout: 0,
+        poisonResistance: heroPoisonResistance,
         uhp: heroHp,
         uhpmax: heroHp,
         uac,
@@ -34506,6 +34508,113 @@ test('production monster crude launcher arrow hit uses orcish arrow damage from 
     assert.equal(rng.some(entry => entry.startsWith('rnd(7)=')
         || entry.startsWith('rnd(6)=')
         || entry.startsWith('rnd(4)=')), false);
+});
+
+test('production monster poisoned crude launcher arrow hit respects poison resistance', async () => {
+    const { arrow, thrower, rng, preNhgetchMessages } = await runMonsterLauncherArrowLanding({
+        seed: 7,
+        launcherKind: 'orcish bow',
+        heroPoisonResistance: true,
+        arrowOverrides: {
+            kind: undefined,
+            actualKind: undefined,
+            singular: undefined,
+            appearance: 'crude arrow',
+            plural: 'crude arrows',
+            material: 'iron',
+            opoisoned: true,
+        },
+    });
+
+    const damageRoll = Number(rng.find(entry => entry.startsWith('rnd(5)=')).split('=')[1]);
+    assert.match(game._pending_message, /You are hit by a poisoned crude arrow[.!]/);
+    const visibleMessages = [
+        game._pending_message,
+        ...preNhgetchMessages,
+        ...(game._queued_messages_after_more || []).map(entry => entry.text),
+    ].join('  ');
+    assert.match(visibleMessages,
+        /The poison doesn't seem to affect you\./);
+    assert.equal(game.u.uhp, 20 - damageRoll);
+    assert.equal(thrower.minvent.some(obj => obj.id === arrow.id), false);
+
+    const landed = game.level.objects.find(obj => obj.id === arrow.id);
+    assert.ok(landed);
+    assert.equal(landed.kind ?? landed.appearance, 'crude arrow');
+    assert.equal(landed.opoisoned, true);
+
+    assertNoSingletonLauncherMultishotRng(rng);
+    assert.equal(rng.some(entry => entry.startsWith('rn2(30)=')
+        || entry.startsWith('d(4,6)=')
+        || entry.startsWith('rnd(6)=')), false, rng.join(', '));
+});
+
+test('production monster poisoned crude launcher arrow hit applies thrown-weapon poison after damage', async () => {
+    const { arrow, thrower, rng } = await runMonsterLauncherArrowLanding({
+        seed: 7,
+        launcherKind: 'orcish bow',
+        heroHp: 40,
+        arrowOverrides: {
+            kind: undefined,
+            actualKind: undefined,
+            singular: undefined,
+            appearance: 'crude arrow',
+            plural: 'crude arrows',
+            material: 'iron',
+            opoisoned: true,
+        },
+    });
+
+    const damageRollIndex = rng.findIndex(entry => entry.startsWith('rnd(5)='));
+    const hitRollIndex = rng.indexOf('rnd(20)=1');
+    const poisonRollIndex = rng.findIndex(entry => entry.startsWith('rn2(30)='));
+    assert.notEqual(damageRollIndex, -1, rng.join(', '));
+    assert.notEqual(hitRollIndex, -1, rng.join(', '));
+    assert.notEqual(poisonRollIndex, -1, rng.join(', '));
+    assert.ok(damageRollIndex < hitRollIndex && hitRollIndex < poisonRollIndex, rng.join(', '));
+
+    const damageRoll = Number(rng[damageRollIndex].split('=')[1]);
+    const poisonRoll = Number(rng[poisonRollIndex].split('=')[1]);
+    let expectedHp = 40 - damageRoll;
+    const finalMessage = game._pending_message || '';
+
+    if (poisonRoll === 0) {
+        const severeIndex = rng.findIndex((entry, index) =>
+            index > poisonRollIndex && entry.startsWith('d(4,6)='));
+        assert.notEqual(severeIndex, -1, rng.join(', '));
+        const severeLoss = 6 + Number(rng[severeIndex].split('=')[1]);
+        expectedHp -= severeLoss;
+        assert.equal(game.u.acurr.a[A_CON], 9);
+        assert.equal(game.u.acurr.a[A_STR], 7);
+        assert.match(finalMessage, /You feel very sick!.*You feel weaker!/);
+    } else if (poisonRoll > 5) {
+        const poisonDamageIndex = rng.findIndex((entry, index) =>
+            index > poisonRollIndex && entry.startsWith('rnd(6)='));
+        assert.notEqual(poisonDamageIndex, -1, rng.join(', '));
+        expectedHp -= Number(rng[poisonDamageIndex].split('=')[1]);
+        assert.equal(game.u.acurr.a[A_CON], 10);
+        assert.equal(game.u.acurr.a[A_STR], 10);
+        assert.doesNotMatch(finalMessage, /You feel weaker/);
+    } else {
+        assert.equal(rng.some((entry, index) =>
+            index > poisonRollIndex && (entry.startsWith('rnd(6)=') || entry.startsWith('d(4,6)='))), false);
+        assert.equal(game.u.acurr.a[A_CON], 10);
+        assert.equal(game.u.acurr.a[A_STR], 9);
+        assert.match(finalMessage, /You feel weaker!/);
+    }
+
+    assert.match(finalMessage, /You are hit by a poisoned crude arrow[.!]/);
+    assert.equal(game.u.uhp, expectedHp, rng.join(', '));
+    assert.equal(thrower.minvent.some(obj => obj.id === arrow.id), false);
+
+    const exerciseIndex = rng.findIndex((entry, index) =>
+        index > poisonRollIndex && entry.startsWith('rn2(2)='));
+    assert.notEqual(exerciseIndex, -1, rng.join(', '));
+    assert.ok(poisonRollIndex < exerciseIndex, rng.join(', '));
+
+    const landed = game.level.objects.find(obj => obj.id === arrow.id);
+    assert.ok(landed);
+    assert.equal(landed.opoisoned, true);
 });
 
 test('production monster silver launcher arrow direct hit keeps silver arrow d6 damage', async () => {
