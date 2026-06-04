@@ -16560,7 +16560,8 @@ function waterVaporLycanthropyEffect(potion, messages) {
 }
 
 function potionBreathe(potion, messages) {
-    if (!heroCanReceivePotionVapor()) return;
+    const result = {};
+    if (!heroCanReceivePotionVapor()) return result;
     const name = potionEffectNameFromAppearance(potion, alchemyPotionName(potion));
     let knownEffect = false;
     let blockedByWetTowel = false;
@@ -16632,6 +16633,7 @@ function potionBreathe(potion, messages) {
             if (!heroHasFreeAction() && !heroHasSleepResistance()) {
                 messages.push('You feel rather tired.');
                 const duration = rnd(5);
+                result.sleepDuration = duration;
                 game._helpless_time = Math.max(game._helpless_time || 0, duration);
                 game._sleeping_time = Math.max(game._sleeping_time || 0, duration + 1);
                 game._wake_message = 'You can move again.';
@@ -16671,6 +16673,7 @@ function potionBreathe(potion, messages) {
         }
     }
     learnPotionVaporEffect(potion, name, knownEffect);
+    return result;
 }
 
 function heroIsNextToPotionVapor(x, y) {
@@ -47597,16 +47600,16 @@ export async function rhack(_cmd) {
                 if (kind === 'acid') {
                     heroAcidPotionSelfHitMessages(potion, messages);
                     potionBreathe(potion, messages);
-                } else if (kind === 'confusion' || kind === 'paralysis' || kind === 'blindness') {
-                    potionBreathe(potion, messages);
-                } else if (potion.potionIndex === 17) {
-                    const sleepTime = rnd(5);
-                    rn2(2);
-                    rn2(19);
-                    game._helpless_time = Math.max(game._helpless_time || 0, sleepTime);
-                    game._wake_message = 'You can move again.';
-                    game._pending_time_passed = Math.max(game._pending_time_passed || 0, sleepTime);
-                    messages.push('You feel rather tired.');
+                } else if (kind === 'confusion' || kind === 'paralysis'
+                    || kind === 'blindness' || kind === 'sleeping') {
+                    const sleepingBefore = game._sleeping_time || 0;
+                    const result = potionBreathe(potion, messages) || {};
+                    if (result.sleepDuration) {
+                        game._sleeping_time = sleepingBefore;
+                        game._pending_time_passed = Math.max(game._pending_time_passed || 0, result.sleepDuration);
+                        // The deferred sleeping self-hit turn still has C exercise RNG before monster movement.
+                        rn2(19);
+                    }
                 }
                 game._pending_message = messages.join('  ');
                 game._message_more = 1;

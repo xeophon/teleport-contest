@@ -24,6 +24,7 @@ const BELL = 358;
 const POT_ACID = 238;
 const POT_CONFUSION = 239;
 const POT_BLINDNESS = 242;
+const POT_SLEEPING = 243;
 const POT_PARALYSIS = 244;
 const POT_POLYMORPH = 248;
 const POT_OBJECT_DETECTION = 249;
@@ -34924,6 +34925,57 @@ test('production monster blindness potion failed catch applies vapor after crash
     assert.equal(residual.quan, 1);
     assert.equal(game.level.objects.some(obj => obj.id === potion.id), false);
     assert.deepEqual(rng.map(entry => entry.replace(/=.*/, '')).slice(-2), ['rnd(2)', 'rnd(5)']);
+});
+
+test('production monster sleeping potion failed catch applies vapor after crash', async () => {
+    const sleeping = sleepingPotion(878109, 's', 2, { otyp: POT_SLEEPING, dknown: true });
+    const { potion, thrower, rng, preNhgetchMessages } = await runMonsterOffensivePotionCatch({
+        seed: 1,
+        potion: sleeping,
+        heroOverrides: { uhp: 40, uhpmax: 40, fumbling: true },
+    });
+
+    assert.equal(preNhgetchMessages.some(message => /crashes on your head/.test(message)), true,
+        preNhgetchMessages.join('\n'));
+    assert.equal(preNhgetchMessages.some(message => /You catch/.test(message)), false,
+        preNhgetchMessages.join('\n'));
+    assert.match(game._pending_message, /potion evaporates\./);
+    assert.match(game._pending_message, /You feel rather tired\./);
+    assert.doesNotMatch(game._pending_message, /peculiar odor/);
+    assert.ok((game._helpless_time || 0) > 0);
+    assert.equal(game._sleeping_time || 0, 0);
+    assert.equal(game._wake_message, 'You can move again.');
+    assert.equal(game.u.uhp < 40 && game.u.uhp >= 38, true);
+    const residual = thrower.minvent.find(obj => obj.id === potion.id);
+    assert.ok(residual);
+    assert.equal(residual.quan, 1);
+    assert.equal(game.level.objects.some(obj => obj.id === potion.id), false);
+    const rngNames = rng.map(entry => entry.replace(/=.*/, ''));
+    assert.deepEqual(rngNames.slice(-4), ['rnd(2)', 'rnd(5)', 'rn2(2)', 'rn2(19)']);
+});
+
+test('production monster sleeping potion failed catch respects hero sleep defenses', async () => {
+    for (const [name, overrides] of [
+        ['free action', { freeAction: true }],
+        ['sleep resistance', { sleepResistance: true }],
+    ]) {
+        const sleeping = sleepingPotion(878110, 's', 2, { otyp: POT_SLEEPING, dknown: true });
+        const { rng, preNhgetchMessages } = await runMonsterOffensivePotionCatch({
+            seed: 1,
+            potion: sleeping,
+            heroOverrides: { uhp: 40, uhpmax: 40, fumbling: true, ...overrides },
+        });
+
+        assert.equal(preNhgetchMessages.some(message => /crashes on your head/.test(message)), true, name);
+        assert.match(game._pending_message, /potion evaporates\./, name);
+        assert.match(game._pending_message, /You yawn\./, name);
+        assert.doesNotMatch(game._pending_message, /You feel rather tired|peculiar odor/, name);
+        assert.equal(game._helpless_time || 0, 0, name);
+        assert.equal(game._sleeping_time || 0, 0, name);
+        const rngNames = rng.map(entry => entry.replace(/=.*/, ''));
+        assert.equal(rngNames.includes('rnd(5)'), false, `${name}: ${rng.join(', ')}`);
+        assert.equal(rngNames.includes('rn2(2)'), false, `${name}: ${rng.join(', ')}`);
+    }
 });
 
 test('production kobold dart hit lands surviving dart with ohit mulch', async () => {
