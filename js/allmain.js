@@ -6865,11 +6865,21 @@ export async function processMonsterTurns() {
                             game._process_time_with_more = 0;
                         }
 
+                        let interveningTarget = null;
                         let spearTerrainStop = null;
                         for (let step = 1; step < throwRange; step++) {
                             const sx = mon.mx + throwDx * step;
                             const sy = mon.my + throwDy * step;
                             const remainingRange = throwRange - step;
+                            const targetMon = monsterAtFlightSquare(sx, sy, mon);
+                            if (targetMon) {
+                                const hitValue = monsterThrownObjectAccidentalHitValue(targetMon);
+                                const hitRoll = rnd(20);
+                                if (hitValue >= hitRoll) {
+                                    interveningTarget = targetMon;
+                                    break;
+                                }
+                            }
                             const forcehit = !rn2(5);
                             if (remainingRange && forcehit
                                 && game.level?.at(sx + throwDx, sy + throwDy)?.typ === IRONBARS) {
@@ -6886,6 +6896,24 @@ export async function processMonsterTurns() {
                                 glyph: ')',
                                 color: thrownMissile.color ?? CLR_CYAN,
                                 messages: floorMessages,
+                            });
+                            addMonsterThrownFloorMessages(floorMessages, throwerVisible);
+                        } else if (interveningTarget) {
+                            const damage = Math.max(1, rnd(monsterThrownSpearDamageSides(thrownMissile))
+                                + missileSpe - missileErosion);
+                            interveningTarget.msleeping = 0;
+                            interveningTarget.mhp = Math.max(0, (interveningTarget.mhp || 1) - damage);
+                            const hitMessage = throwerVisible
+                                ? `The ${spearKind} hits the ${interveningTarget.data?.name || 'monster'}${damage > 4 ? '!' : '.'}`
+                                : `It is hit${damage > 4 ? '!' : '.'}`;
+                            if (throwerVisible) game._topline_after_more = hitMessage;
+                            else addToplineMessage(hitMessage);
+                            const floorMessages = [];
+                            landMonsterThrownObject(thrownMissile, interveningTarget.mx, interveningTarget.my, {
+                                glyph: ')',
+                                color: thrownMissile.color ?? CLR_CYAN,
+                                messages: floorMessages,
+                                ohit: true,
                             });
                             addMonsterThrownFloorMessages(floorMessages, throwerVisible);
                         } else {
