@@ -6282,12 +6282,14 @@ export async function processMonsterTurns() {
                             game._topline_after_more = missed ? 'An arrow misses you.'
                                 : `You are hit by an arrow${damage > 4 ? '!' : '.'}`;
                             if (!missed) {
-	                                if (damage >= (game.u?.uhp || 0)) {
-	                                    game._lethal_arrow_after_topline_more = {
-	                                        damage,
-	                                        holdStatusHp: (game.u?.uhp || 0) - damage === -1,
-	                                        currentMove: true,
-	                                    };
+                                if (damage >= (game.u?.uhp || 0)) {
+                                    game._lethal_arrow_after_topline_more = {
+                                        damage,
+                                        holdStatusHp: (game.u?.uhp || 0) - damage === -1,
+                                        currentMove: true,
+                                        deathCleanupThrownObject: thrownMissile,
+                                        deathCleanupGlyph: thrownMissile.glyph || ')',
+                                    };
                                 } else {
                                     game._damage_after_topline_more = (game._damage_after_topline_more || 0) + damage;
                                     game._exercise_after_topline_more = (game._exercise_after_topline_more || 0) + 1;

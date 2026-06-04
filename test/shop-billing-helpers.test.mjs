@@ -33389,6 +33389,7 @@ async function runMonsterLauncherArrowLanding({
     arrowQuan = 1,
     arrowOverrides = {},
     heroBlind = true,
+    heroHp = 20,
 } = {}) {
     installNonShopFloorState();
     resetInputState();
@@ -33404,8 +33405,8 @@ async function runMonsterLauncherArrowLanding({
         confusion: false,
         stunned: false,
         fumbling: false,
-        uhp: 20,
-        uhpmax: 20,
+        uhp: heroHp,
+        uhpmax: heroHp,
         uac,
         umovement: NORMAL_SPEED,
         acurr: { a: [10, 10, 10, 10, 10, 10] },
@@ -33563,6 +33564,41 @@ test('production monster launcher arrow hit lands surviving arrow with ohit mulc
     assert.ok(rng.includes('rnd(20)=1'));
     assert.ok(rng.includes('rn2(3)=0'));
     assert.equal(rng.some(entry => entry.startsWith('rn2(100)=')), false);
+});
+
+test('production monster lethal launcher arrow death cleanup preserves thrown arrow without drop-throw', async () => {
+    const { arrow, thrower, rng } = await runMonsterLauncherArrowLanding({ seed: 7, heroHp: 6 });
+
+    assert.equal(game._pending_message, 'You are hit by an arrow!');
+    assert.equal(game.u.uhp, 6);
+    assert.equal(game._death_cause, 'killed by an arrow');
+    assert.ok(game._deferred_lethal_attack_after_more);
+    assert.equal(game._arrow_drop_throw_after_topline_more ?? null, null);
+    assert.equal(thrower.minvent.some(obj => obj.id === arrow.id), false);
+    assert.equal(thrower.missile, null);
+    assert.equal(game.level.objects.some(obj => obj.id === arrow.id && !obj.transientProjectile), false);
+    assert.equal(game.level.objects.filter(obj => obj.id === arrow.id && obj.transientProjectile).length, 1);
+
+    assertNoSingletonLauncherMultishotRng(rng);
+    assert.ok(rng.includes('rnd(20)=1'));
+    assert.equal(rng.some(entry => entry.startsWith('rn2(3)=') || entry.startsWith('rn2(100)=')), false);
+
+    await rhack('\x1b');
+    resetInputState();
+
+    assert.equal(game._command_mode, 'deathDieMore');
+    assert.equal(game._pending_message, 'You die...');
+    assert.equal(game.u.uhp, 0);
+    const landed = game.level.objects.find(obj => obj.id === arrow.id);
+    assert.ok(landed);
+    assert.equal(landed.ox, 5);
+    assert.equal(landed.oy, 5);
+    assert.equal(landed.quan, 1);
+    assert.equal(landed.kind, 'arrow');
+    assert.equal(landed.transientProjectile, false);
+    assert.equal(landed._deathCleanupThrownObject, true);
+    assert.equal(game.level.objects.some(obj => obj.transientProjectile), false);
+    assert.equal(getRngLog().some(entry => entry.startsWith('rn2(3)=') || entry.startsWith('rn2(100)=')), false);
 });
 
 test('production monster launcher arrow hit can mulch before landing', async () => {
