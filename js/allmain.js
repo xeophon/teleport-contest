@@ -6611,7 +6611,10 @@ export async function processMonsterTurns() {
 
                             const missile = mon.minvent[orcishDaggerIndex];
                             if ((missile.quan || 1) > 1) missile.quan--;
-                            else mon.minvent.splice(orcishDaggerIndex, 1);
+                            else {
+                                mon.minvent.splice(orcishDaggerIndex, 1);
+                                if (mon.missile === missile) mon.missile = null;
+                            }
                             recordDiscovery('Weapons', 'crude dagger', null, false);
                             const throwerVisible = !game.u?.blind
                                 && !!(game.viz_array?.[mon.my]?.[mon.mx] & IN_SIGHT)
@@ -6622,16 +6625,33 @@ export async function processMonsterTurns() {
                                 game._process_time_with_more = 0;
                             }
                             let hitPet = null;
-                            for (let step = 1; step < throwRange; step++) {
-                                const x = mon.mx + throwDx * step;
-                                const y = mon.my + throwDy * step;
-                                hitPet = (game.level?.monsters || []).find(other => other.pet && other.mx === x && other.my === y);
-                                if (hitPet) break;
+                            let crudeDaggerTerrainStop = null;
+                            if (game.level?.at(mon.mx + throwDx, mon.my + throwDy)?.typ === IRONBARS) {
+                                rn2(100); // C breaktest() calls obj_resists(); ordinary orcish daggers survive.
+                                if (!(game.u?._statusSuffix || '').includes('Deaf') && !(game.u?._deafTimeout || 0))
+                                    addToplineMessage('Clonk!');
+                                crudeDaggerTerrainStop = { x: mon.mx, y: mon.my };
+                            } else {
+                                for (let step = 1; step < throwRange; step++) {
+                                    const x = mon.mx + throwDx * step;
+                                    const y = mon.my + throwDy * step;
+                                    hitPet = (game.level?.monsters || []).find(other => other.pet && other.mx === x && other.my === y);
+                                    if (hitPet) break;
+                                    const remainingRange = throwRange - step;
+                                    rn2(5);
+                                    if (remainingRange && game.level?.at(x + throwDx, y + throwDy)?.typ === IRONBARS) {
+                                        rn2(100); // C consumes forcehit first; P_DAGGER then hits bars by class.
+                                        if (!(game.u?._statusSuffix || '').includes('Deaf') && !(game.u?._deafTimeout || 0))
+                                            addToplineMessage('Clonk!');
+                                        crudeDaggerTerrainStop = { x, y };
+                                        break;
+                                    }
+                                }
                             }
-                            const hitRange = hitPet ? Math.max(Math.abs(hitPet.mx - mon.mx), Math.abs(hitPet.my - mon.my)) : throwRange;
-                            for (let step = 1; step < hitRange; step++) rn2(5);
-                            const flightX = hitPet ? hitPet.mx - throwDx : (game.u?.ux || 0) - throwDx;
-                            const flightY = hitPet ? hitPet.my - throwDy : (game.u?.uy || 0) - throwDy;
+                            const flightX = crudeDaggerTerrainStop ? crudeDaggerTerrainStop.x
+                                : hitPet ? hitPet.mx - throwDx : (game.u?.ux || 0) - throwDx;
+                            const flightY = crudeDaggerTerrainStop ? crudeDaggerTerrainStop.y
+                                : hitPet ? hitPet.my - throwDy : (game.u?.uy || 0) - throwDy;
                             if (throwerVisible) {
                                 game.level.objects.push({
                                     ...missile,
@@ -6645,7 +6665,9 @@ export async function processMonsterTurns() {
                             }
                             let crudeDaggerOhit = !!hitPet;
                             let crudeDaggerCaught = false;
-                            if (hitPet) {
+                            if (crudeDaggerTerrainStop) {
+                                crudeDaggerOhit = false;
+                            } else if (hitPet) {
                                 rnd(20);
                                 const damage = rnd(3);
                                 hitPet.mhp = Math.max(0, (hitPet.mhp || 1) - damage);
@@ -6682,8 +6704,10 @@ export async function processMonsterTurns() {
                                     game._monster_throw_after_more = {
                                         missile,
                                         hitPet,
-                                        x: hitPet ? hitPet.mx : game.u?.ux || 0,
-                                        y: hitPet ? hitPet.my : game.u?.uy || 0,
+                                        x: crudeDaggerTerrainStop ? crudeDaggerTerrainStop.x
+                                            : hitPet ? hitPet.mx : game.u?.ux || 0,
+                                        y: crudeDaggerTerrainStop ? crudeDaggerTerrainStop.y
+                                            : hitPet ? hitPet.my : game.u?.uy || 0,
                                         glyph: ')',
                                         color: hitPet ? NO_COLOR : CLR_CYAN,
                                         ohit: crudeDaggerOhit,
@@ -6691,6 +6715,14 @@ export async function processMonsterTurns() {
                                     game._clear_transient_projectiles_after_more = 1;
                                     newsym(flightX, flightY);
                                 }
+                            } else if (crudeDaggerTerrainStop) {
+                                const floorMessages = [];
+                                landMonsterThrownObject(missile, crudeDaggerTerrainStop.x, crudeDaggerTerrainStop.y, {
+                                    glyph: ')',
+                                    color: CLR_CYAN,
+                                    messages: floorMessages,
+                                });
+                                addMonsterThrownFloorMessages(floorMessages);
                             } else if (hitPet) {
                                 const floorMessages = [];
                                 landMonsterThrownObject(missile, hitPet.mx, hitPet.my, {

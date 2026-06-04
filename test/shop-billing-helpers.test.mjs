@@ -33604,6 +33604,107 @@ async function runMonsterCrudeDaggerCatch() {
     return { daggerItem, thrower, rng: getRngLog().map(entry => entry.replace(/=.*/, '')) };
 }
 
+async function runMonsterCrudeDaggerIronBars({
+    seed = 1,
+    heroBlind = true,
+    heroDeaf = false,
+    uac = 100,
+    levelCells = [],
+    throwerX = 10,
+    extraMonsters = [],
+} = {}) {
+    installNonShopFloorState();
+    resetInputState();
+    pushKey('\x1b');
+    initRng(seed);
+    enableRngLog({ reset: true });
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        ux0: 5,
+        uy0: 5,
+        blind: heroBlind,
+        confusion: false,
+        stunned: false,
+        fumbling: false,
+        _statusSuffix: heroDeaf ? ' Deaf' : '',
+        _deafTimeout: heroDeaf ? 5 : 0,
+        uhp: 20,
+        uhpmax: 20,
+        uac,
+        umovement: NORMAL_SPEED,
+        acurr: { a: [10, 10, 10, 100, 10, 10] },
+    });
+    game.moves = 1;
+    game.context = {};
+    if (levelCells.length) {
+        const cells = new Map();
+        for (const [x, y, loc] of levelCells)
+            cells.set(`${x},${y}`, { roomno: 0, ...loc });
+        game.level.at = (x, y) => cells.get(`${x},${y}`) || { roomno: 0, typ: ROOM };
+    }
+    for (let x = 5; x <= throwerX; x++) markSquareVisible(x, 5);
+    for (const [x, y] of levelCells) markSquareVisible(x, y);
+    const daggerItem = monsterOrcishDagger(874357);
+    const thrower = {
+        mx: throwerX,
+        my: 5,
+        movement: NORMAL_SPEED,
+        data: { name: 'goblin', mlet: 'o', mmove: NORMAL_SPEED, armed: true, mlevel: 0 },
+        mpeaceful: false,
+        mhp: 5,
+        mhpmax: 5,
+        minvent: [daggerItem],
+        missile: daggerItem,
+        mcansee: true,
+    };
+    game.level.monsters = [thrower, ...extraMonsters];
+    game._pending_time_passed = 1;
+
+    const preNhgetchMessages = [];
+    const priorPreNhgetchHook = game._preNhgetchHook;
+    game._preNhgetchHook = async () => {
+        const message = [game._pending_message, game._topline_after_more]
+            .filter(Boolean).join('  ');
+        if (message) preNhgetchMessages.push(message);
+        if (priorPreNhgetchHook) await priorPreNhgetchHook();
+    };
+    try {
+        await moveloop_core();
+    } finally {
+        game._preNhgetchHook = priorPreNhgetchHook;
+    }
+    resetInputState();
+    const rawRng = getRngLog();
+    return { daggerItem, thrower, rng: rawRng.map(entry => entry.replace(/=.*/, '')), rawRng, preNhgetchMessages };
+}
+
+function crudeDaggerLinePet(x, y = 5, overrides = {}) {
+    return {
+        mx: x,
+        my: y,
+        movement: 0,
+        mcanmove: false,
+        data: {
+            name: 'little dog',
+            mlet: 'dog',
+            mmove: 0,
+            mac: 6,
+            mlevel: 2,
+            nohands: true,
+            attack: { dice: 1, sides: 6, verb: 'bites' },
+        },
+        pet: true,
+        mtame: 10,
+        mpeaceful: true,
+        mhp: 12,
+        mhpmax: 12,
+        mcansee: true,
+        minvent: [],
+        ...overrides,
+    };
+}
+
 async function runMonsterPlainDaggerIronBars({
     seed = 1,
     heroBlind = true,
@@ -35261,6 +35362,104 @@ test('production monster crude dagger catch does not queue drop-throw landing', 
     assert.equal(thrower.minvent.some(obj => obj.id === daggerItem.id), false);
     assert.equal(game.level.objects.some(obj => obj.id === daggerItem.id), false);
     assert.equal(rng.filter(entry => entry === 'rn2(3)').length, 0);
+});
+
+test('production monster crude dagger aimed shot clonks iron bars before hero', async () => {
+    const { daggerItem, thrower, rng, rawRng, preNhgetchMessages } = await runMonsterCrudeDaggerIronBars({
+        levelCells: [[7, 5, { typ: IRONBARS }]],
+    });
+
+    assert.equal(game.u.uhp, 20);
+    assert.equal(game._damage_after_topline_more || 0, 0, rawRng.join(', '));
+    assert.equal(thrower.missile, null);
+    assert.equal(thrower.minvent.some(obj => obj.id === daggerItem.id), false);
+
+    const landed = game.level.objects.find(obj => obj.id === daggerItem.id);
+    assert.ok(landed, rng.join(', '));
+    assert.equal(landed.ox, 8, rawRng.join(', '));
+    assert.equal(landed.oy, 5, rawRng.join(', '));
+    assert.equal(landed.kind, 'orcish dagger');
+    assert.notEqual(landed.transientProjectile, true);
+
+    assert.ok(rng.some(entry => entry === 'rn2(100)'));
+    assert.equal(rng.some(entry => entry === 'rnd(3)'
+        || entry === 'rnd(20)'
+        || entry === 'rn2(3)'), false);
+    assert.equal(preNhgetchMessages.some(message => /Clonk!/.test(message)), true);
+});
+
+test('production monster crude dagger aimed iron bars are silent when deaf', async () => {
+    const { daggerItem, thrower, rng, rawRng, preNhgetchMessages } = await runMonsterCrudeDaggerIronBars({
+        heroDeaf: true,
+        levelCells: [[7, 5, { typ: IRONBARS }]],
+    });
+
+    assert.equal(game.u.uhp, 20);
+    assert.equal(game._damage_after_topline_more || 0, 0, rawRng.join(', '));
+    assert.equal(thrower.missile, null);
+    assert.equal(thrower.minvent.some(obj => obj.id === daggerItem.id), false);
+
+    const landed = game.level.objects.find(obj => obj.id === daggerItem.id);
+    assert.ok(landed, rng.join(', '));
+    assert.equal(landed.ox, 8, rawRng.join(', '));
+    assert.equal(landed.oy, 5, rawRng.join(', '));
+    assert.equal(landed.kind, 'orcish dagger');
+
+    assert.ok(rng.some(entry => entry === 'rn2(100)'));
+    assert.equal(rng.some(entry => entry === 'rnd(20)'
+        || entry === 'rnd(3)'
+        || entry === 'rn2(3)'), false);
+    assert.equal(preNhgetchMessages.some(message => /Clonk!/.test(message)), false);
+});
+
+test('production monster crude dagger iron bars stop before pet', async () => {
+    const pet = crudeDaggerLinePet(6);
+    const { daggerItem, thrower, rng, rawRng, preNhgetchMessages } = await runMonsterCrudeDaggerIronBars({
+        levelCells: [[7, 5, { typ: IRONBARS }]],
+        extraMonsters: [pet],
+    });
+
+    assert.equal(game.u.uhp, 20);
+    assert.equal(pet.mhp, 12);
+    assert.equal(thrower.missile, null);
+    assert.equal(thrower.minvent.some(obj => obj.id === daggerItem.id), false);
+
+    const landed = game.level.objects.find(obj => obj.id === daggerItem.id);
+    assert.ok(landed, rng.join(', '));
+    assert.equal(landed.ox, 8, rawRng.join(', '));
+    assert.equal(landed.oy, 5, rawRng.join(', '));
+    assert.equal(landed.kind, 'orcish dagger');
+
+    assert.ok(rng.some(entry => entry === 'rn2(100)'));
+    assert.equal(rng.some(entry => entry === 'rnd(3)'
+        || entry === 'rnd(20)'
+        || entry === 'rn2(3)'), false);
+    assert.equal(preNhgetchMessages.some(message => /Clonk!/.test(message)), true);
+});
+
+test('production monster crude dagger hits pet before iron bars', async () => {
+    const pet = crudeDaggerLinePet(8);
+    const { daggerItem, thrower, rng, rawRng, preNhgetchMessages } = await runMonsterCrudeDaggerIronBars({
+        levelCells: [[7, 5, { typ: IRONBARS }]],
+        extraMonsters: [pet],
+    });
+
+    assert.equal(game.u.uhp, 20);
+    assert.equal(pet.mhp < 12, true, rawRng.join(', '));
+    assert.equal(thrower.missile, null);
+    assert.equal(thrower.minvent.some(obj => obj.id === daggerItem.id), false);
+
+    const landed = game.level.objects.find(obj => obj.id === daggerItem.id);
+    assert.ok(landed, rng.join(', '));
+    assert.equal(landed.ox, 8, rawRng.join(', '));
+    assert.equal(landed.oy, 5, rawRng.join(', '));
+    assert.equal(landed.kind, 'orcish dagger');
+
+    assert.ok(rng.some(entry => entry === 'rnd(20)'));
+    assert.ok(rng.some(entry => entry === 'rnd(3)'));
+    assert.equal(rng.some(entry => entry === 'rn2(100)'
+        || entry === 'rn2(3)'), false);
+    assert.equal(preNhgetchMessages.some(message => /Clonk!/.test(message)), false);
 });
 
 test('production monster plain dagger aimed shot clonks iron bars before hero', async () => {
