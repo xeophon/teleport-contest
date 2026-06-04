@@ -36559,6 +36559,11 @@ test('production monster crude dagger catch does not queue drop-throw landing', 
 
     assert.equal(thrower.minvent.some(obj => obj.id === daggerItem.id), false);
     assert.equal(game.level.objects.some(obj => obj.id === daggerItem.id), false);
+    const caught = game.inventory.find(obj => obj.kind === 'orcish dagger');
+    assert.ok(caught);
+    assert.equal(caught.quan, 1);
+    assert.equal(caught.letter, 'a');
+    assert.match(caught.line, /dagger/);
     assert.equal(rng.filter(entry => entry === 'rn2(3)').length, 0);
 });
 

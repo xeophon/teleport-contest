@@ -7119,11 +7119,16 @@ export async function processMonsterTurns() {
                             } else {
                                 const catchChance = 100 - (game.u?.acurr?.a?.[A_DEX] ?? 10)
                                     - (game._startup_role === 'Monk' || game._startup_role === 'Rogue' ? 20 : 0);
-                                const caught = !game.u?.blind && !game.u?.confusion && !game.u?.stunned
-                                    && !game.u?.fumbling && rn2(Math.max(1, catchChance)) === 0;
+                                const caught = heroCanAttemptThrownObjectCatch(missile)
+                                    && rn2(Math.max(1, catchChance)) === 0;
                                 if (caught) {
                                     crudeDaggerCaught = true;
-                                    const catchMessage = 'You catch the crude dagger!';
+                                    const catchResult = holdCaughtThrownObject(missile, {
+                                        catchName: 'crude dagger',
+                                        glyph: ')',
+                                        color: NO_COLOR,
+                                    });
+                                    const catchMessage = catchResult.message;
                                     if (throwerVisible) game._topline_after_more = catchMessage;
                                     else addToplineMessage(catchMessage);
                                 } else {
