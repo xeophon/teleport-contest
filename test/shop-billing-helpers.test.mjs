@@ -8,7 +8,7 @@ import { game, resetGame } from '../js/gstate.js';
 import { pushKey, resetInputState } from '../js/input.js';
 import { createMonsterCorpseOrGlob, mkcorpstat } from '../js/mklev.js';
 import { enableDisplayRngLog, enableRngLog, getRngLog, initRng } from '../js/rng.js';
-import { A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_STR, A_WIS, ALTAR, AM_SHRINE, Align2amask, BILLSZ, CANDLESHOP, CLOUD, CORPSTAT_HISTORIC, COULD_SEE, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, D_CLOSED, D_NODOOR, FOUNTAIN, HOLE, ICE, ICED_POOL, IN_SIGHT, LADDER, LAVAPOOL, MIGR_LADDER_UP, MIGR_SSTAIRS, MIGR_STAIRS_UP, MOAT, M_AP_FURNITURE, M_AP_OBJECT, NORMAL_SPEED, PIT, POOL, REPAIR_DELAY, ROOM, ROOMOFFSET, SDOOR, SHOPBASE, SHOP_DOOR_COST, SINK, SQKY_BOARD, STAIRS, STATUE_TRAP, STONE, STRAT_APPEARMSG, STRAT_WAITFORU, STRAT_WAITMASK, TEMPLE, TRAPDOOR, TT_LAVA, TT_WEB, WEB, W_SADDLE } from '../js/const.js';
+import { A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_STR, A_WIS, ALTAR, AM_SHRINE, Align2amask, BILLSZ, CANDLESHOP, CLOUD, CORPSTAT_HISTORIC, COULD_SEE, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, D_CLOSED, D_NODOOR, FOUNTAIN, HOLE, ICE, ICED_POOL, IN_SIGHT, IRONBARS, LADDER, LAVAPOOL, MIGR_LADDER_UP, MIGR_SSTAIRS, MIGR_STAIRS_UP, MOAT, M_AP_FURNITURE, M_AP_OBJECT, NORMAL_SPEED, PIT, POOL, REPAIR_DELAY, ROOM, ROOMOFFSET, SDOOR, SHOPBASE, SHOP_DOOR_COST, SINK, SQKY_BOARD, STAIRS, STATUE_TRAP, STONE, STRAT_APPEARMSG, STRAT_WAITFORU, STRAT_WAITMASK, TEMPLE, TRAPDOOR, TT_LAVA, TT_WEB, WEB, W_SADDLE } from '../js/const.js';
 import { currentFruitId, setCurrentFruitName } from '../js/fruit.js';
 import { CLR_BRIGHT_MAGENTA, CLR_BROWN, CLR_WHITE } from '../js/terminal.js';
 import { TRIBUTE_DEATH_QUOTES } from '../js/tribute.js';
@@ -33389,6 +33389,7 @@ async function runMonsterLauncherArrowLanding({
     arrowQuan = 1,
     arrowOverrides = {},
     heroBlind = true,
+    heroDeaf = false,
     heroHp = 20,
     levelCells = [],
 } = {}) {
@@ -33403,9 +33404,14 @@ async function runMonsterLauncherArrowLanding({
         ux0: 5,
         uy0: 5,
         blind: heroBlind,
+        hallucinating: false,
         confusion: false,
         stunned: false,
         fumbling: false,
+        _statusSuffix: heroDeaf ? ' Deaf' : '',
+        _deafTimeout: heroDeaf ? 5 : 0,
+        _confusionTimeout: 0,
+        _stunTimeout: 0,
         uhp: heroHp,
         uhpmax: heroHp,
         uac,
@@ -33449,10 +33455,21 @@ async function runMonsterLauncherArrowLanding({
     };
     game.level.monsters = [thrower];
     game._pending_time_passed = 1;
-
-    await moveloop_core();
+    const preNhgetchMessages = [];
+    const priorPreNhgetchHook = game._preNhgetchHook;
+    game._preNhgetchHook = async () => {
+        const message = [game._pending_message, game._topline_after_more]
+            .filter(Boolean).join('  ');
+        if (message) preNhgetchMessages.push(message);
+        if (priorPreNhgetchHook) await priorPreNhgetchHook();
+    };
+    try {
+        await moveloop_core();
+    } finally {
+        game._preNhgetchHook = priorPreNhgetchHook;
+    }
     resetInputState();
-    return { arrow, thrower, rng: getRngLog() };
+    return { arrow, thrower, rng: getRngLog(), preNhgetchMessages };
 }
 
 function assertNoSingletonLauncherMultishotRng(rng) {
@@ -34208,6 +34225,117 @@ test('production monster greased launcher arrow redirected misfire drops onto vi
     assertNoSingletonLauncherMultishotRng(rng);
     assert.equal(rng.some(entry => entry.startsWith('rnd(6)=') || entry.startsWith('rnd(20)=')), false);
     assert.equal(rng.some(entry => entry.startsWith('rn2(100)=')), false);
+});
+
+test('production monster greased launcher arrow redirected misfire can pass through iron bars', async () => {
+    const { arrow, thrower, rng } = await runMonsterLauncherArrowLanding({
+        seed: 46,
+        arrowOverrides: { greased: true },
+        heroBlind: false,
+        levelCells: [[11, 5, { typ: IRONBARS }]],
+    });
+
+    assert.equal(game.u.uhp, 20);
+    assert.equal(thrower.minvent.some(obj => obj.id === arrow.id), false);
+    assert.equal(thrower.missile, null);
+
+    await rhack('\x1b');
+    resetInputState();
+
+    const landed = game.level.objects.find(obj => obj.id === arrow.id);
+    assert.ok(landed);
+    const range = Math.max(Math.abs(thrower.mx - game.u.ux), Math.abs(thrower.my - game.u.uy));
+    assert.equal(landed.ox, thrower.mx + range);
+    assert.equal(landed.oy, thrower.my);
+    assert.equal(landed.greased, true);
+    assert.equal(landed.transientProjectile, false);
+
+    assert.deepEqual(rng, [
+        'rn2(5)=3',
+        'rn2(5)=2',
+        'rn2(7)=0',
+        'rn2(3)=2',
+        'rn2(3)=1',
+        'rn2(5)=2',
+        'rn2(5)=4',
+        'rn2(5)=2',
+        'rn2(5)=1',
+    ]);
+    assertNoSingletonLauncherMultishotRng(rng);
+    assert.equal(rng.some(entry => entry.startsWith('rn2(100)=')), false);
+});
+
+test('production monster greased launcher arrow redirected misfire can clonk iron bars', async () => {
+    const { arrow, thrower, rng, preNhgetchMessages } = await runMonsterLauncherArrowLanding({
+        seed: 1165,
+        arrowOverrides: { greased: true },
+        heroBlind: false,
+        levelCells: [[11, 5, { typ: IRONBARS }]],
+    });
+
+    assert.equal(game.u.uhp, 20);
+    assert.equal(thrower.minvent.some(obj => obj.id === arrow.id), false);
+    assert.equal(thrower.missile, null);
+    assert.equal(preNhgetchMessages.some(message => /Clonk!/.test(message)), true);
+
+    await rhack('\x1b');
+    resetInputState();
+
+    const landed = game.level.objects.find(obj => obj.id === arrow.id);
+    assert.ok(landed);
+    assert.equal(landed.ox, thrower.mx + 1);
+    assert.equal(landed.oy, thrower.my);
+    assert.equal(landed.greased, true);
+    assert.equal(landed.transientProjectile, false);
+
+    assert.deepEqual(rng, [
+        'rn2(5)=4',
+        'rn2(5)=3',
+        'rn2(7)=0',
+        'rn2(3)=2',
+        'rn2(3)=1',
+        'rn2(5)=0',
+        'rn2(100)=2',
+    ]);
+    assertNoSingletonLauncherMultishotRng(rng);
+    assert.equal(rng.some(entry => entry.startsWith('rnd(6)=') || entry.startsWith('rnd(20)=')), false);
+});
+
+test('production monster greased launcher arrow redirected misfire iron bars are silent when deaf', async () => {
+    const { arrow, thrower, rng, preNhgetchMessages } = await runMonsterLauncherArrowLanding({
+        seed: 1165,
+        arrowOverrides: { greased: true },
+        heroBlind: false,
+        heroDeaf: true,
+        levelCells: [[11, 5, { typ: IRONBARS }]],
+    });
+
+    assert.equal(game.u.uhp, 20);
+    assert.equal(thrower.minvent.some(obj => obj.id === arrow.id), false);
+    assert.equal(thrower.missile, null);
+    assert.equal(preNhgetchMessages.some(message => /Clonk!/.test(message)), false);
+
+    await rhack('\x1b');
+    resetInputState();
+
+    const landed = game.level.objects.find(obj => obj.id === arrow.id);
+    assert.ok(landed);
+    assert.equal(landed.ox, thrower.mx + 1);
+    assert.equal(landed.oy, thrower.my);
+    assert.equal(landed.greased, true);
+    assert.equal(landed.transientProjectile, false);
+
+    assert.deepEqual(rng, [
+        'rn2(5)=4',
+        'rn2(5)=3',
+        'rn2(7)=0',
+        'rn2(3)=2',
+        'rn2(3)=1',
+        'rn2(5)=0',
+        'rn2(100)=2',
+    ]);
+    assertNoSingletonLauncherMultishotRng(rng);
+    assert.equal(rng.some(entry => entry.startsWith('rnd(6)=') || entry.startsWith('rnd(20)=')), false);
 });
 
 test('production monster greased launcher arrow redirected misfire lands away from hero', async () => {

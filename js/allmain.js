@@ -6259,7 +6259,14 @@ export async function processMonsterTurns() {
                                         landingX += misfireDx;
                                         landingY += misfireDy;
                                         const remainingRange = throwRange - step - 1;
-                                        rn2(5);
+                                        const forcehit = !rn2(5);
+                                        const hitIronBars = remainingRange && forcehit
+                                            && game.level?.at(landingX + misfireDx, landingY + misfireDy)?.typ === IRONBARS;
+                                        if (hitIronBars) {
+                                            rn2(100); // C breaktest() calls obj_resists(); ordinary arrows still survive.
+                                            if (!(game.u?._statusSuffix || '').includes('Deaf') && !(game.u?._deafTimeout || 0))
+                                                addToplineMessage('Clonk!');
+                                        }
                                         const stoppedOnSink = remainingRange
                                             && game.level?.at(landingX, landingY)?.typ === SINK;
                                         if (stoppedOnSink && !game.u?.blind && cansee(landingX, landingY)) {
@@ -6267,7 +6274,7 @@ export async function processMonsterTurns() {
                                                 ? 'plops' : 'drops';
                                             addToplineMessage(`The arrow ${sinkVerb} onto the sink.`);
                                         }
-                                        if (!remainingRange || stoppedOnSink
+                                        if (!remainingRange || hitIronBars || stoppedOnSink
                                             || ordinaryBlockAhead(landingX, landingY)) break;
                                     }
                                 }
