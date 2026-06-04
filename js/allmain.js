@@ -5973,52 +5973,76 @@ export async function processMonsterTurns() {
 					                                game._message_more = 1;
 					                                game._process_time_with_more = 0;
 					                            }
-					                            for (let step = 1; step < throwRange; step++) rn2(5);
-					                            const catchChance = 100 - (game.u?.acurr?.a?.[A_DEX] ?? 10)
-					                                - (game._startup_role === 'Monk' || game._startup_role === 'Rogue' ? 20 : 0);
-					                            const caught = !game.u?.blind && !game.u?.confusion && !game.u?.stunned
-					                                && !game.u?.fumbling && rn2(Math.max(1, catchChance)) === 0;
-					                            if (caught) {
-					                                const catchMessage = 'You catch the rock!';
-					                                if (deferPrayerProjectile) {
-					                                    game._pending_message = `${catchMessage}  You finish your prayer.  You feel that ${game._prayer_god || 'your god'} is displeased.`;
-					                                    game._keep_pending_message = 1;
-					                                    game._prayer_message_complete_once = 1;
-					                                    game._skip_pending_time_decrement = 1;
-					                                    game._prayer_nearby_trouble = 0;
-					                                } else if (throwerVisible) game._topline_after_more = catchMessage;
-					                                else addToplineMessage(catchMessage);
-					                            } else {
-					                                const damage = rnd(3);
-					                                const hitv = Math.max(-4, 3 - throwRange) + 8 + (missile.spe || 0);
-					                                const attackRoll = rnd(20);
-					                                const missed = (game.u?.uac ?? 10) + hitv <= attackRoll;
-					                                let resultMessage = missed ? 'It misses.' : 'You are hit by a rock.';
-					                                if (missed && !game.u?.blind && game.flags?.verbose !== false) {
-					                                    resultMessage = (game.u?.uac ?? 10) + hitv <= attackRoll - 2
-					                                        ? 'A rock misses you.' : 'You are almost hit by a rock.';
+					                            let rockTerrainStop = null;
+					                            for (let step = 1; step < throwRange; step++) {
+					                                const sx = mon.mx + throwDx * step;
+					                                const sy = mon.my + throwDy * step;
+					                                const remainingRange = throwRange - step;
+					                                const forcehit = !rn2(5);
+					                                if (remainingRange && forcehit
+					                                    && game.level?.at(sx + throwDx, sy + throwDy)?.typ === IRONBARS) {
+					                                    rn2(100); // C breaktest() calls obj_resists(); ordinary rocks still survive.
+					                                    if (!(game.u?._statusSuffix || '').includes('Deaf') && !(game.u?._deafTimeout || 0))
+					                                        addToplineMessage('Clonk!');
+					                                    rockTerrainStop = { x: sx, y: sy };
+					                                    break;
 					                                }
-					                                if (deferPrayerProjectile) {
-					                                    game._pending_message = `${resultMessage}  You finish your prayer.  You feel that ${game._prayer_god || 'your god'} is displeased.`;
-					                                    game._keep_pending_message = 1;
-					                                    game._prayer_message_complete_once = 1;
-					                                    game._skip_pending_time_decrement = 1;
-					                                    game._prayer_nearby_trouble = 0;
-					                                } else if (throwerVisible) game._topline_after_more = resultMessage;
-					                                else addToplineMessage(resultMessage);
-					                                if (!missed) {
-					                                    game._damage_after_topline_more = (game._damage_after_topline_more || 0) + damage;
-					                                    game._exercise_after_topline_more = (game._exercise_after_topline_more || 0) + 1;
-					                                }
-					                                rn2(5);
+					                            }
+					                            if (rockTerrainStop) {
 					                                const floorMessages = [];
-					                                landMonsterThrownObject(missile, game.u?.ux || 0, game.u?.uy || 0, {
+					                                landMonsterThrownObject(missile, rockTerrainStop.x, rockTerrainStop.y, {
 					                                    glyph: missile.glyph || '*',
 					                                    color: missile.color ?? NO_COLOR,
 					                                    messages: floorMessages,
-					                                    ohit: !missed,
 					                                });
 					                                addMonsterThrownFloorMessages(floorMessages, throwerVisible && !deferPrayerProjectile);
+					                            } else {
+					                                const catchChance = 100 - (game.u?.acurr?.a?.[A_DEX] ?? 10)
+					                                    - (game._startup_role === 'Monk' || game._startup_role === 'Rogue' ? 20 : 0);
+					                                const caught = !game.u?.blind && !game.u?.confusion && !game.u?.stunned
+					                                    && !game.u?.fumbling && rn2(Math.max(1, catchChance)) === 0;
+					                                if (caught) {
+					                                    const catchMessage = 'You catch the rock!';
+					                                    if (deferPrayerProjectile) {
+					                                        game._pending_message = `${catchMessage}  You finish your prayer.  You feel that ${game._prayer_god || 'your god'} is displeased.`;
+					                                        game._keep_pending_message = 1;
+					                                        game._prayer_message_complete_once = 1;
+					                                        game._skip_pending_time_decrement = 1;
+					                                        game._prayer_nearby_trouble = 0;
+					                                    } else if (throwerVisible) game._topline_after_more = catchMessage;
+					                                    else addToplineMessage(catchMessage);
+					                                } else {
+					                                    const damage = rnd(3);
+					                                    const hitv = Math.max(-4, 3 - throwRange) + 8 + (missile.spe || 0);
+					                                    const attackRoll = rnd(20);
+					                                    const missed = (game.u?.uac ?? 10) + hitv <= attackRoll;
+					                                    let resultMessage = missed ? 'It misses.' : 'You are hit by a rock.';
+					                                    if (missed && !game.u?.blind && game.flags?.verbose !== false) {
+					                                        resultMessage = (game.u?.uac ?? 10) + hitv <= attackRoll - 2
+					                                            ? 'A rock misses you.' : 'You are almost hit by a rock.';
+					                                    }
+					                                    if (deferPrayerProjectile) {
+					                                        game._pending_message = `${resultMessage}  You finish your prayer.  You feel that ${game._prayer_god || 'your god'} is displeased.`;
+					                                        game._keep_pending_message = 1;
+					                                        game._prayer_message_complete_once = 1;
+					                                        game._skip_pending_time_decrement = 1;
+					                                        game._prayer_nearby_trouble = 0;
+					                                    } else if (throwerVisible) game._topline_after_more = resultMessage;
+					                                    else addToplineMessage(resultMessage);
+					                                    if (!missed) {
+					                                        game._damage_after_topline_more = (game._damage_after_topline_more || 0) + damage;
+					                                        game._exercise_after_topline_more = (game._exercise_after_topline_more || 0) + 1;
+					                                    }
+					                                    rn2(5);
+					                                    const floorMessages = [];
+					                                    landMonsterThrownObject(missile, game.u?.ux || 0, game.u?.uy || 0, {
+					                                        glyph: missile.glyph || '*',
+					                                        color: missile.color ?? NO_COLOR,
+					                                        messages: floorMessages,
+					                                        ohit: !missed,
+					                                    });
+					                                    addMonsterThrownFloorMessages(floorMessages, throwerVisible && !deferPrayerProjectile);
+					                                }
 					                            }
 					                            game._search_pending_count = 0;
 					                            game._run_steps_remaining = 0;
