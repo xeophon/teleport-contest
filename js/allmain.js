@@ -6217,9 +6217,19 @@ export async function processMonsterTurns() {
                             || missileSpe === 0 || coveredBlessedEnchantedArrow;
                         const coveredErosionState = !missileErosion || coveredErodedArrowState;
                         const sharedArrowLanding = coveredArrowState && coveredErosionState;
-                        addToplineMessage(`${monsterDisplayName(mon, true)} shoots an arrow!`);
+                        const projectileKind = String(thrownMissile.singular || thrownMissile.actualKind
+                            || thrownMissile.kind || 'arrow');
+                        const projectileArticle = /^[aeiou]/i.test(projectileKind) ? 'an' : 'a';
+                        addToplineMessage(`${monsterDisplayName(mon, true)} shoots ${projectileArticle} ${projectileKind}!`);
                         game._message_more = 1;
                         game._process_time_with_more = 0;
+                        const ironBarsImpactSound = () => {
+                            const material = String(thrownMissile.material || thrownMissile.oc_material || '')
+                                .toLowerCase().replace(/^hi_/, '');
+                            return thrownMissile.cls === 'coin' || thrownMissile.otyp === GOLD_PIECE
+                                || thrownMissile.glyph === '$' || material === 'gold' || material === 'silver'
+                                ? 'Clink!' : 'Clonk!';
+                        };
                         const landAimedArrow = (x, y) => {
                             const floorMessages = [];
                             landMonsterThrownObject(thrownMissile, x, y, {
@@ -6275,7 +6285,7 @@ export async function processMonsterTurns() {
                                         if (hitIronBars) {
                                             rn2(100); // C breaktest() calls obj_resists(); ordinary arrows still survive.
                                             if (!(game.u?._statusSuffix || '').includes('Deaf') && !(game.u?._deafTimeout || 0))
-                                                addToplineMessage('Clonk!');
+                                                addToplineMessage(ironBarsImpactSound());
                                         }
                                         const stoppedOnSink = remainingRange
                                             && game.level?.at(landingX, landingY)?.typ === SINK;
@@ -6325,7 +6335,7 @@ export async function processMonsterTurns() {
                             if (hitIronBars) {
                                 rn2(100); // C breaktest() calls obj_resists(); ordinary arrows still survive.
                                 if (!(game.u?._statusSuffix || '').includes('Deaf') && !(game.u?._deafTimeout || 0))
-                                    addToplineMessage('Clonk!');
+                                    addToplineMessage(ironBarsImpactSound());
                                 aimedTerrainStop = { x: sx, y: sy };
                                 break;
                             }
