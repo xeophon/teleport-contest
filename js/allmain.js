@@ -6557,7 +6557,7 @@ export async function processMonsterTurns() {
                         if (targetAc < 0 && !consumedMattackuAc) rnd(-targetAc);
 
                         const missile = mon.minvent[spearIndex];
-                        const spearKind = String(missile.actualKind || missile.kind || 'spear');
+                        const spearKind = monsterThrownSpearKind(missile);
                         const spearArticle = /^[aeiou]/i.test(spearKind) ? 'an' : 'a';
                         const spearArticleCap = spearArticle[0].toUpperCase() + spearArticle.slice(1);
                         const spearMaterial = String(missile.material || missile.oc_material || '')
@@ -8373,6 +8373,10 @@ function hideSeaMonsterUnderWater(mon) {
 
 function monsterUsesPostMoveHide(mon) {
     return !!(mon.data?.hidesUnder || mon.data?.mlet === ';');
+}
+
+function monsterThrownSpearKind(item) {
+    return String(item?.actualKind || item?.kind || 'spear');
 }
 
 function monsterThrownSpearNames(item) {

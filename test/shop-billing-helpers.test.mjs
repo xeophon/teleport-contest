@@ -42,6 +42,7 @@ const TOUCHSTONE = 473;
 const DART = 353;
 const KNIFE = 10026;
 const SPEAR = 10030;
+const DWARVISH_SPEAR = 10102;
 const STILETTO = 10109;
 const GLAIVE = 10057;
 const TALLOW_CANDLE = 370;
@@ -630,6 +631,19 @@ function monsterSpear(id, extra = {}) {
         quan: 1,
         spe: 0,
         material: 'iron',
+        ...extra,
+    };
+}
+
+function monsterDwarvishSpear(id, extra = {}) {
+    return {
+        ...monsterSpear(id, {
+            otyp: DWARVISH_SPEAR,
+            kind: 'dwarvish spear',
+            actualKind: 'dwarvish spear',
+            plural: 'dwarvish spears',
+            material: 'iron',
+        }),
         ...extra,
     };
 }
@@ -36038,6 +36052,33 @@ test('production monster spear hit uses spear damage and text', async () => {
         || entry.startsWith('rn2(100)=')), false);
 });
 
+test('production monster dwarvish spear hit uses stout spear damage and text', async () => {
+    const dwarvishSpear = monsterDwarvishSpear(874383);
+    const { spearItem, thrower, rng, rawRng, preNhgetchMessages } = await runMonsterSpearIronBars({
+        seed: 1,
+        uac: 100,
+        projectile: dwarvishSpear,
+    });
+
+    assert.equal(preNhgetchMessages.some(message => /You are hit by a dwarvish spear[.!]/.test(message)), true,
+        preNhgetchMessages.join('\n'));
+    assert.equal(thrower.missile, null);
+    assert.equal(thrower.minvent.some(obj => obj.id === spearItem.id), false);
+
+    const landed = game.level.objects.find(obj => obj.id === spearItem.id);
+    assert.ok(landed, rng.join(', '));
+    assert.equal(landed.ox, 5, rawRng.join(', '));
+    assert.equal(landed.oy, 5, rawRng.join(', '));
+    assert.equal(landed.kind, 'dwarvish spear');
+    assert.notEqual(landed.transientProjectile, true);
+
+    assert.ok(rawRng.some(entry => entry.startsWith('rnd(8)=')), rawRng.join(', '));
+    assert.ok(rawRng.some(entry => entry.startsWith('rnd(20)=')), rawRng.join(', '));
+    assert.equal(rawRng.some(entry => entry.startsWith('rnd(6)=')
+        || entry.startsWith('rnd(3)=')
+        || entry.startsWith('rn2(100)=')), false);
+});
+
 test('production monster spear aimed shot can clonk iron bars before hero', async () => {
     const { spearItem, thrower, rng, rawRng, preNhgetchMessages } = await runMonsterSpearIronBars({
         seed: 1,
@@ -36062,6 +36103,38 @@ test('production monster spear aimed shot can clonk iron bars before hero', asyn
         || entry === 'rnd(20)'
         || entry === 'rn2(3)'), false);
     assert.equal(preNhgetchMessages.some(message => /Clonk!/.test(message)), true);
+});
+
+test('production monster dwarvish spear aimed shot can clonk iron bars before hero', async () => {
+    const dwarvishSpear = monsterDwarvishSpear(874384);
+    const { spearItem, thrower, rng, rawRng, preNhgetchMessages } = await runMonsterSpearIronBars({
+        seed: 1,
+        uac: 100,
+        heroBlind: false,
+        projectile: dwarvishSpear,
+        levelCells: [[7, 5, { typ: IRONBARS }]],
+    });
+
+    assert.equal(game.u.uhp, 20);
+    assert.equal(game._damage_after_topline_more || 0, 0, rawRng.join(', '));
+    assert.equal(thrower.missile, null);
+    assert.equal(thrower.minvent.some(obj => obj.id === spearItem.id), false);
+
+    const landed = game.level.objects.find(obj => obj.id === spearItem.id);
+    assert.ok(landed, rng.join(', '));
+    assert.equal(landed.ox, 8, rawRng.join(', '));
+    assert.equal(landed.oy, 5, rawRng.join(', '));
+    assert.equal(landed.kind, 'dwarvish spear');
+    assert.notEqual(landed.transientProjectile, true);
+
+    assert.ok(rng.some(entry => entry === 'rn2(100)'));
+    assert.equal(rng.some(entry => entry === 'rnd(8)'
+        || entry === 'rnd(20)'
+        || entry === 'rn2(3)'), false);
+    assert.equal(preNhgetchMessages.some(message => /throws a dwarvish spear!/.test(message)), true,
+        preNhgetchMessages.join('\n'));
+    assert.equal(preNhgetchMessages.some(message => /Clonk!/.test(message)), true,
+        preNhgetchMessages.join('\n'));
 });
 
 test('production monster spear aimed iron bars are silent when deaf', async () => {
@@ -36109,6 +36182,31 @@ test('production monster spear selection precedes dagger for iron bars', async (
     assert.equal(landed.ox, 8, rawRng.join(', '));
     assert.equal(landed.oy, 5, rawRng.join(', '));
     assert.equal(landed.kind, 'spear');
+
+    assert.ok(rng.some(entry => entry === 'rn2(100)'));
+    assert.equal(preNhgetchMessages.some(message => /Clonk!/.test(message)), true);
+});
+
+test('production monster dwarvish spear selection precedes ordinary spear', async () => {
+    const spearItem = monsterSpear(874385);
+    const dwarvishSpear = monsterDwarvishSpear(874386);
+    const { thrower, rng, rawRng, preNhgetchMessages } = await runMonsterSpearIronBars({
+        seed: 1,
+        uac: 100,
+        levelCells: [[7, 5, { typ: IRONBARS }]],
+        projectile: dwarvishSpear,
+        inventory: [spearItem, dwarvishSpear],
+    });
+
+    assert.equal(thrower.minvent.some(obj => obj.id === dwarvishSpear.id), false);
+    assert.equal(thrower.minvent.some(obj => obj.id === spearItem.id), true);
+
+    const landed = game.level.objects.find(obj => obj.id === dwarvishSpear.id);
+    assert.ok(landed, rng.join(', '));
+    assert.equal(landed.ox, 8, rawRng.join(', '));
+    assert.equal(landed.oy, 5, rawRng.join(', '));
+    assert.equal(landed.kind, 'dwarvish spear');
+    assert.equal(game.level.objects.some(obj => obj.id === spearItem.id), false);
 
     assert.ok(rng.some(entry => entry === 'rn2(100)'));
     assert.equal(preNhgetchMessages.some(message => /Clonk!/.test(message)), true);
