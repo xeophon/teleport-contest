@@ -26,6 +26,7 @@ const POT_CONFUSION = 239;
 const POT_BLINDNESS = 242;
 const POT_SLEEPING = 243;
 const POT_PARALYSIS = 244;
+const POT_SPEED = 245;
 const POT_POLYMORPH = 248;
 const POT_OBJECT_DETECTION = 249;
 const INVENTORY_LETTERS = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
@@ -34978,6 +34979,29 @@ test('production monster sleeping potion failed catch respects hero sleep defens
     }
 });
 
+test('deferred monster potion self-hit uses generic speed vapor tail', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, { fast: false, veryfast: false });
+    const speed = speedPotion(878111, 's', 1, { otyp: POT_SPEED, dknown: true });
+    delete speed.letter;
+    delete speed.line;
+    game._potion_breathe_after_more = { ...speed, quan: 1 };
+    game._pending_message = 'The bottle crashes on your head and breaks into shards.';
+    game._message_more = 1;
+    game._keep_pending_message = 1;
+    enableRngLog({ reset: true });
+
+    await rhack(' ');
+
+    assert.match(game._pending_message, /potion evaporates\./);
+    assert.match(game._pending_message, /Your knees seem more flexible now\./);
+    assert.equal(game.u.veryfast, true);
+    assert.ok((game.u._veryfastTimeout || 0) > 0);
+    assert.doesNotMatch(game._pending_message, /peculiar odor|crashes on your head/);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rnd(5)', 'rn2(19)']);
+});
+
 test('production kobold dart hit lands surviving dart with ohit mulch', async () => {
     const { dart, thrower, rng } = await runMonsterDartHitLanding({ seed: 8 });
 
@@ -40037,6 +40061,33 @@ test('upward hero-thrown paralysis potion selected from r self-hits', async () =
     assert.equal(game.level.objects.length, 0);
     assert.ok((game._helpless_time || 0) > 0);
     assert.equal(game._wake_message, 'You can move again.');
+});
+
+test('upward hero-thrown sleeping potion self-hit uses nomul sleep without Unaware state', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, { uhp: 40, uhpmax: 40 });
+    const potion = sleepingPotion(876621, 's', 1, { dknown: true });
+    game.inventory = [potion];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('s');
+    await rhack('<');
+
+    assert.equal(game._command_mode, null);
+    assert.match(game._pending_message, /crashes on your head and breaks into shards\./);
+    assert.match(game._pending_message, /The potion of sleeping evaporates\./);
+    assert.match(game._pending_message, /You feel rather tired\./);
+    assert.doesNotMatch(game._pending_message, /peculiar odor|You wake up/);
+    assert.equal(game.inventory.includes(potion), false);
+    assert.equal(game.level.objects.length, 0);
+    assert.ok((game._helpless_time || 0) > 0);
+    assert.equal(game._sleeping_time || 0, 0);
+    assert.equal(game._wake_message, 'You can move again.');
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rn2(5)', 'rn2(7)', 'rnd(2)', 'rnd(5)', 'rn2(2)',
+    ]);
 });
 
 test('upward hero-thrown acid potion self-hits and burns the hero', async () => {
@@ -45395,7 +45446,7 @@ test('adjacent hero-thrown sleeping potion applies monster sleep before direct v
     assert.equal(goblin.mcanmove, false);
     assert.ok(goblin.mfrozen >= 1 && goblin.mfrozen <= 12);
     assert.ok((game._helpless_time || 0) > 0);
-    assert.ok((game._sleeping_time || 0) > 0);
+    assert.equal(game._sleeping_time || 0, 0);
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
         'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(5)', 'rnd(12)', 'rn2(105)', 'rn2(13)', 'rnd(5)', 'rn2(2)',
     ]);

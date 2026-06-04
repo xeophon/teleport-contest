@@ -16635,7 +16635,6 @@ function potionBreathe(potion, messages) {
                 const duration = rnd(5);
                 result.sleepDuration = duration;
                 game._helpless_time = Math.max(game._helpless_time || 0, duration);
-                game._sleeping_time = Math.max(game._sleeping_time || 0, duration + 1);
                 game._wake_message = 'You can move again.';
                 exerciseAttribute(A_DEX, false);
             } else {
@@ -47594,22 +47593,21 @@ export async function rhack(_cmd) {
                 game.level.objects = (game.level?.objects || []).filter(obj => !obj.transientProjectile);
                 for (const obj of projectiles) newsym(obj.ox, obj.oy);
 
-                const appearance = game._object_descriptions?.potions?.[potion.potionIndex]?.description || 'clear';
-                const messages = [`The ${appearance} potion evaporates.`];
                 const kind = thrownPotionEffectKind(potion);
-                if (kind === 'acid') {
-                    heroAcidPotionSelfHitMessages(potion, messages);
-                    potionBreathe(potion, messages);
-                } else if (kind === 'confusion' || kind === 'paralysis'
-                    || kind === 'blindness' || kind === 'sleeping') {
-                    const sleepingBefore = game._sleeping_time || 0;
-                    const result = potionBreathe(potion, messages) || {};
-                    if (result.sleepDuration) {
-                        game._sleeping_time = sleepingBefore;
-                        game._pending_time_passed = Math.max(game._pending_time_passed || 0, result.sleepDuration);
-                        // The deferred sleeping self-hit turn still has C exercise RNG before monster movement.
-                        rn2(19);
-                    }
+                const messages = [];
+                if (!isPotionOfOil(potion)) {
+                    const appearance = game._object_descriptions?.potions?.[potion.potionIndex]?.description || 'clear';
+                    messages.push(`The ${appearance} potion evaporates.`);
+                }
+                if (kind === 'acid') heroAcidPotionSelfHitMessages(potion, messages);
+                if (kind === 'polymorph') heroPolymorphPotionSelfHitMessages(messages);
+                if (isLitOilPotionHit(potion, kind))
+                    explodeBurningOilPotion(potion, game.u?.ux ?? 0, game.u?.uy ?? 0, messages);
+                const result = potionBreathe(potion, messages) || {};
+                if (result.sleepDuration) {
+                    game._pending_time_passed = Math.max(game._pending_time_passed || 0, result.sleepDuration);
+                    // The deferred sleeping self-hit turn still has C exercise RNG before monster movement.
+                    rn2(19);
                 }
                 game._pending_message = messages.join('  ');
                 game._message_more = 1;
