@@ -33457,6 +33457,12 @@ function assertStackLauncherMultishotRng(rng) {
     assert.ok(splitIndex > multishotIndex);
 }
 
+function assertLauncherMissEndOfRangeRng(rng, attackRoll) {
+    const hitRollIndex = rng.indexOf(attackRoll);
+    assert.notEqual(hitRollIndex, -1);
+    assert.match(rng[hitRollIndex + 1] || '', /^rn2\(5\)=/);
+}
+
 async function runMonsterCrudeDaggerCatch() {
     installNonShopFloorState();
     resetInputState();
@@ -33587,6 +33593,7 @@ test('production monster launcher arrow miss lands without ohit mulch', async ()
 
     assertNoSingletonLauncherMultishotRng(rng);
     assert.ok(rng.includes('rnd(20)=18'));
+    assertLauncherMissEndOfRangeRng(rng, 'rnd(20)=18');
     assert.equal(rng.filter(entry => entry.startsWith('rn2(3)=')).length, 0);
 });
 
@@ -33650,6 +33657,7 @@ test('production monster blessed launcher arrow miss lands without ohit mulch', 
 
     assertNoSingletonLauncherMultishotRng(rng);
     assert.ok(rng.includes('rnd(20)=18'));
+    assertLauncherMissEndOfRangeRng(rng, 'rnd(20)=18');
     assert.equal(rng.filter(entry => entry.startsWith('rn2(3)=')).length, 0);
     assert.equal(rng.filter(entry => entry.startsWith('rn2(100)=')).length, 0);
 });

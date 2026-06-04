@@ -6302,13 +6302,16 @@ export async function processMonsterTurns() {
                                         game._arrow_mulch_after_topline_more = 1;
                                     }
                                 }
-                            } else if (sharedArrowLanding) {
-                                game._arrow_drop_throw_after_topline_more = {
-                                    missile: thrownMissile,
-                                    x: game.u?.ux || 0,
-                                    y: game.u?.uy || 0,
-                                    ohit: false,
-                                };
+                            } else {
+                                rn2(5);
+                                if (sharedArrowLanding) {
+                                    game._arrow_drop_throw_after_topline_more = {
+                                        missile: thrownMissile,
+                                        x: game.u?.ux || 0,
+                                        y: game.u?.uy || 0,
+                                        ohit: false,
+                                    };
+                                }
                             }
                         }
                         game._search_pending_count = 0;
