@@ -1651,6 +1651,9 @@ const AMULET_CLASS = 15;
 const BOULDER = 465;
 const GOLD_PIECE = 466;
 const ROCK = 467;
+const FLINT = 10166;
+const LUCKSTONE = 10127;
+const LOADSTONE = 10165;
 const KELP_FROND = 172;
 const CORPSE = 471;
 const STATUE = 472;
@@ -2629,6 +2632,46 @@ function removeHeroStatusSuffix(status) {
 
 function articleFor(name) {
     return /^[aeiou]/i.test(String(name || '')) ? 'an' : 'a';
+}
+
+function monsterSlingAmmoName(item) {
+    if (item?.otyp === FLINT) return 'flint stone';
+    if (item?.otyp === ROCK) return 'rock';
+    if (item?.otyp === LOADSTONE) return 'loadstone';
+    if (item?.otyp === LUCKSTONE) return 'luckstone';
+    const name = String(item?.actualKind || item?.kind || item?.gemDescription || '').trim();
+    if (name.toLowerCase() === 'flint') return 'flint stone';
+    return name || 'rock';
+}
+
+function monsterSlingAmmoRank(item, mon) {
+    if (!item) return -1;
+    const name = monsterSlingAmmoName(item).toLowerCase();
+    if (item?.otyp === FLINT || name === 'flint' || name === 'flint stone') return 0;
+    if (item?.otyp === ROCK || name === 'rock') return 1;
+    if (item?.otyp === LOADSTONE || name === 'loadstone') return item?.cursed ? -1 : 2;
+    if (item?.otyp === LUCKSTONE || name === 'luckstone') return 3;
+    if (!mon?.data?.likesGems && monsterPickupClass(item) === GEM_CLASS) return 4;
+    return -1;
+}
+
+function selectMonsterSlingAmmoIndex(mon) {
+    let bestIndex = -1;
+    let bestRank = Infinity;
+    const inventory = mon?.minvent || [];
+    for (let i = 0; i < inventory.length; i++) {
+        const rank = monsterSlingAmmoRank(inventory[i], mon);
+        if (rank >= 0 && rank < bestRank) {
+            bestRank = rank;
+            bestIndex = i;
+        }
+    }
+    return bestIndex;
+}
+
+function monsterSlingAmmoDamageSides(item) {
+    const name = monsterSlingAmmoName(item).toLowerCase();
+    return item?.otyp === FLINT || name === 'flint' || name === 'flint stone' ? 6 : 3;
 }
 
 function armHeroDeathMore(message = 'You die...') {
@@ -5993,113 +6036,116 @@ export async function processMonsterTurns() {
                         }
                         const postMoveSling = !mon.mpeaceful && (mon.minvent || []).find(item =>
                             item.kind === 'sling' || item.actualKind === 'sling');
-                        const postMoveRockIndex = postMoveSling ? (mon.minvent || []).findIndex(item =>
-                            item.otyp === ROCK || item.kind === 'rock' || item.cls === 'gem') : -1;
-					                        if (movedByMonster && !game._prayer_force_pleased_heal
-					                            && postMoveRockIndex >= 0 && throwRange >= 4 && throwRange < BOLT_LIM
-					                            && straightThrow && monsterLinedUp(mon, throwTargetX, throwTargetY)) {
-					                            const missile = mon.minvent[postMoveRockIndex];
-					                            const throwerVisible = !game.u?.blind && !mon.minvis && !mon.mundetected
-					                                && (game.viz_array?.[mon.my]?.[mon.mx] & IN_SIGHT)
-					                                && couldSeeCoord(mon.mx, mon.my);
-					                            const deferPrayerProjectile = !throwerVisible
-					                                && (game._pending_prayer_finish_message || game._prayer_occupation);
-					                            rnd(1);
-					                            if ((missile.quan || 1) > 1) {
-					                                missile.quan--;
-					                                if (mon.missile === missile) mon.missile.quan = missile.quan;
-					                                next_ident();
-					                            } else {
-					                                mon.minvent.splice(postMoveRockIndex, 1);
-					                                if (mon.missile === missile) mon.missile = null;
-					                            }
-					                            if (throwerVisible) {
-					                                addToplineMessage(`${monsterDisplayName(mon, true)} shoots a rock!`);
-					                                game._message_more = 1;
-					                                game._process_time_with_more = 0;
-					                            }
-					                            let rockTerrainStop = null;
-					                            for (let step = 1; step < throwRange; step++) {
-					                                const sx = mon.mx + throwDx * step;
-					                                const sy = mon.my + throwDy * step;
-					                                const remainingRange = throwRange - step;
-					                                const forcehit = !rn2(5);
-					                                if (remainingRange && forcehit
-					                                    && game.level?.at(sx + throwDx, sy + throwDy)?.typ === IRONBARS) {
-					                                    rn2(100); // C breaktest() calls obj_resists(); ordinary rocks still survive.
-					                                    if (!(game.u?._statusSuffix || '').includes('Deaf') && !(game.u?._deafTimeout || 0))
-					                                        addToplineMessage('Clonk!');
-					                                    rockTerrainStop = { x: sx, y: sy };
-					                                    break;
-					                                }
-					                            }
-					                            if (rockTerrainStop) {
-					                                const floorMessages = [];
-					                                landMonsterThrownObject(missile, rockTerrainStop.x, rockTerrainStop.y, {
-					                                    glyph: missile.glyph || '*',
-					                                    color: missile.color ?? NO_COLOR,
-					                                    messages: floorMessages,
-					                                });
-					                                addMonsterThrownFloorMessages(floorMessages, throwerVisible && !deferPrayerProjectile);
-					                            } else {
-					                                const catchChance = 100 - (game.u?.acurr?.a?.[A_DEX] ?? 10)
-					                                    - (game._startup_role === 'Monk' || game._startup_role === 'Rogue' ? 20 : 0);
-					                                const caught = !game.u?.blind && !game.u?.confusion && !game.u?.stunned
-					                                    && !game.u?.fumbling && rn2(Math.max(1, catchChance)) === 0;
-					                                if (caught) {
-					                                    const catchMessage = 'You catch the rock!';
-					                                    if (deferPrayerProjectile) {
-					                                        game._pending_message = `${catchMessage}  You finish your prayer.  You feel that ${game._prayer_god || 'your god'} is displeased.`;
-					                                        game._keep_pending_message = 1;
-					                                        game._prayer_message_complete_once = 1;
-					                                        game._skip_pending_time_decrement = 1;
-					                                        game._prayer_nearby_trouble = 0;
-					                                    } else if (throwerVisible) game._topline_after_more = catchMessage;
-					                                    else addToplineMessage(catchMessage);
-					                                } else {
-					                                    const damage = rnd(3);
-					                                    const hitv = Math.max(-4, 3 - throwRange) + 8 + (missile.spe || 0);
-					                                    const attackRoll = rnd(20);
-					                                    const missed = (game.u?.uac ?? 10) + hitv <= attackRoll;
-					                                    let resultMessage = missed ? 'It misses.' : 'You are hit by a rock.';
-					                                    if (missed && !game.u?.blind && game.flags?.verbose !== false) {
-					                                        resultMessage = (game.u?.uac ?? 10) + hitv <= attackRoll - 2
-					                                            ? 'A rock misses you.' : 'You are almost hit by a rock.';
-					                                    }
-					                                    if (deferPrayerProjectile) {
-					                                        game._pending_message = `${resultMessage}  You finish your prayer.  You feel that ${game._prayer_god || 'your god'} is displeased.`;
-					                                        game._keep_pending_message = 1;
-					                                        game._prayer_message_complete_once = 1;
-					                                        game._skip_pending_time_decrement = 1;
-					                                        game._prayer_nearby_trouble = 0;
-					                                    } else if (throwerVisible) game._topline_after_more = resultMessage;
-					                                    else addToplineMessage(resultMessage);
-					                                    if (!missed) {
-					                                        game._damage_after_topline_more = (game._damage_after_topline_more || 0) + damage;
-					                                        game._exercise_after_topline_more = (game._exercise_after_topline_more || 0) + 1;
-					                                    }
-					                                    rn2(5);
-					                                    const floorMessages = [];
-					                                    landMonsterThrownObject(missile, game.u?.ux || 0, game.u?.uy || 0, {
-					                                        glyph: missile.glyph || '*',
-					                                        color: missile.color ?? NO_COLOR,
-					                                        messages: floorMessages,
-					                                        ohit: !missed,
-					                                    });
-					                                    addMonsterThrownFloorMessages(floorMessages, throwerVisible && !deferPrayerProjectile);
-					                                }
-					                            }
-					                            game._search_pending_count = 0;
-					                            game._run_steps_remaining = 0;
-					                            game._travel_keys = [];
-					                            if ((game._pending_time_passed || 0) > 2) game._pending_time_passed = 2;
-					                            if (game._message_more && !game._process_time_with_more) {
-					                                game._monster_resume_index = monIndex + 1;
-					                                game._monster_resume_somebody_can_move = somebodyCanMove;
-					                                return false;
-					                            }
-					                            continue;
-					                        }
+                        const postMoveSlingAmmoIndex = postMoveSling ? selectMonsterSlingAmmoIndex(mon) : -1;
+                        if (movedByMonster && !game._prayer_force_pleased_heal
+                            && postMoveSlingAmmoIndex >= 0 && throwRange >= 4 && throwRange < BOLT_LIM
+                            && straightThrow && monsterLinedUp(mon, throwTargetX, throwTargetY)) {
+                            const missile = mon.minvent[postMoveSlingAmmoIndex];
+                            const missileName = monsterSlingAmmoName(missile);
+                            const missileArticle = articleFor(missileName);
+                            const missileArticleCap = `${missileArticle[0].toUpperCase()}${missileArticle.slice(1)}`;
+                            const throwerVisible = !game.u?.blind && !mon.minvis && !mon.mundetected
+                                && (game.viz_array?.[mon.my]?.[mon.mx] & IN_SIGHT)
+                                && couldSeeCoord(mon.mx, mon.my);
+                            const deferPrayerProjectile = !throwerVisible
+                                && (game._pending_prayer_finish_message || game._prayer_occupation);
+                            rnd(1);
+                            if ((missile.quan || 1) > 1) {
+                                missile.quan--;
+                                if (mon.missile === missile) mon.missile.quan = missile.quan;
+                                next_ident();
+                            } else {
+                                mon.minvent.splice(postMoveSlingAmmoIndex, 1);
+                                if (mon.missile === missile) mon.missile = null;
+                            }
+                            if (throwerVisible) {
+                                addToplineMessage(`${monsterDisplayName(mon, true)} shoots ${missileArticle} ${missileName}!`);
+                                game._message_more = 1;
+                                game._process_time_with_more = 0;
+                            }
+                            let slingTerrainStop = null;
+                            for (let step = 1; step < throwRange; step++) {
+                                const sx = mon.mx + throwDx * step;
+                                const sy = mon.my + throwDy * step;
+                                const remainingRange = throwRange - step;
+                                const forcehit = !rn2(5);
+                                if (remainingRange && forcehit
+                                    && game.level?.at(sx + throwDx, sy + throwDy)?.typ === IRONBARS) {
+                                    rn2(100); // C breaktest() calls obj_resists(); sling gems and stones survive here.
+                                    if (!(game.u?._statusSuffix || '').includes('Deaf') && !(game.u?._deafTimeout || 0))
+                                        addToplineMessage('Clonk!');
+                                    slingTerrainStop = { x: sx, y: sy };
+                                    break;
+                                }
+                            }
+                            if (slingTerrainStop) {
+                                const floorMessages = [];
+                                landMonsterThrownObject(missile, slingTerrainStop.x, slingTerrainStop.y, {
+                                    glyph: missile.glyph || '*',
+                                    color: missile.color ?? NO_COLOR,
+                                    messages: floorMessages,
+                                });
+                                addMonsterThrownFloorMessages(floorMessages, throwerVisible && !deferPrayerProjectile);
+                            } else {
+                                const catchChance = 100 - (game.u?.acurr?.a?.[A_DEX] ?? 10)
+                                    - (game._startup_role === 'Monk' || game._startup_role === 'Rogue' ? 20 : 0);
+                                const caught = !game.u?.blind && !game.u?.confusion && !game.u?.stunned
+                                    && !game.u?.fumbling && rn2(Math.max(1, catchChance)) === 0;
+                                if (caught) {
+                                    const catchMessage = `You catch the ${missileName}!`;
+                                    if (deferPrayerProjectile) {
+                                        game._pending_message = `${catchMessage}  You finish your prayer.  You feel that ${game._prayer_god || 'your god'} is displeased.`;
+                                        game._keep_pending_message = 1;
+                                        game._prayer_message_complete_once = 1;
+                                        game._skip_pending_time_decrement = 1;
+                                        game._prayer_nearby_trouble = 0;
+                                    } else if (throwerVisible) game._topline_after_more = catchMessage;
+                                    else addToplineMessage(catchMessage);
+                                } else {
+                                    const damage = rnd(monsterSlingAmmoDamageSides(missile));
+                                    const hitv = Math.max(-4, 3 - throwRange) + 8 + (missile.spe || 0);
+                                    const attackRoll = rnd(20);
+                                    const missed = (game.u?.uac ?? 10) + hitv <= attackRoll;
+                                    let resultMessage = missed ? 'It misses.' : `You are hit by ${missileArticle} ${missileName}.`;
+                                    if (missed && !game.u?.blind && game.flags?.verbose !== false) {
+                                        resultMessage = (game.u?.uac ?? 10) + hitv <= attackRoll - 2
+                                            ? `${missileArticleCap} ${missileName} misses you.`
+                                            : `You are almost hit by ${missileArticle} ${missileName}.`;
+                                    }
+                                    if (deferPrayerProjectile) {
+                                        game._pending_message = `${resultMessage}  You finish your prayer.  You feel that ${game._prayer_god || 'your god'} is displeased.`;
+                                        game._keep_pending_message = 1;
+                                        game._prayer_message_complete_once = 1;
+                                        game._skip_pending_time_decrement = 1;
+                                        game._prayer_nearby_trouble = 0;
+                                    } else if (throwerVisible) game._topline_after_more = resultMessage;
+                                    else addToplineMessage(resultMessage);
+                                    if (!missed) {
+                                        game._damage_after_topline_more = (game._damage_after_topline_more || 0) + damage;
+                                        game._exercise_after_topline_more = (game._exercise_after_topline_more || 0) + 1;
+                                    }
+                                    if (missed) rn2(5);
+                                    const floorMessages = [];
+                                    landMonsterThrownObject(missile, game.u?.ux || 0, game.u?.uy || 0, {
+                                        glyph: missile.glyph || '*',
+                                        color: missile.color ?? NO_COLOR,
+                                        messages: floorMessages,
+                                        ohit: !missed,
+                                    });
+                                    addMonsterThrownFloorMessages(floorMessages, throwerVisible && !deferPrayerProjectile);
+                                }
+                            }
+                            game._search_pending_count = 0;
+                            game._run_steps_remaining = 0;
+                            game._travel_keys = [];
+                            if ((game._pending_time_passed || 0) > 2) game._pending_time_passed = 2;
+                            if (game._message_more && !game._process_time_with_more) {
+                                game._monster_resume_index = monIndex + 1;
+                                game._monster_resume_somebody_can_move = somebodyCanMove;
+                                return false;
+                            }
+                            continue;
+                        }
 							                        const postMoveHideCheck = mon.data?.mlet === ';' ? movedByMonster : attemptedMonsterMove;
 							                        if (postMoveHideCheck && monsterUsesPostMoveHide(mon) && !hiderStayedUnder
                                                         && !(mon.data?.mlet === ';' && mon.mundetected)) {

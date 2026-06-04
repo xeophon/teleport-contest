@@ -28,6 +28,7 @@ const POT_OBJECT_DETECTION = 249;
 const INVENTORY_LETTERS = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
 const SCR_SCARE_MONSTER = 279;
 const LOADSTONE = 10165;
+const FLINT = 10166;
 const BOULDER = 465;
 const HORN_OF_PLENTY = 957;
 const BAG_OF_TRICKS = 10158;
@@ -544,6 +545,24 @@ function monsterThrownRock(id, extra = {}) {
         plural: 'rocks',
         quan: 1,
         spe: 0,
+        ...extra,
+    };
+}
+
+function monsterThrownGem(id, kind = 'ruby', extra = {}) {
+    const article = /^[aeiou]/i.test(kind) ? 'an' : 'a';
+    const plural = kind.endsWith('y') ? `${kind.slice(0, -1)}ies` : `${kind}s`;
+    return {
+        id,
+        cls: 'gem',
+        glyph: '*',
+        kind,
+        actualKind: kind,
+        gemDescription: kind,
+        plural,
+        quan: 1,
+        spe: 0,
+        line: `${article} ${kind}`,
         ...extra,
     };
 }
@@ -33349,6 +33368,10 @@ async function runMonsterSlingRockLanding({
     heroDeaf = false,
     levelCells = [],
     throwerX = 10,
+    projectile = null,
+    inventory = null,
+    activeMissile = undefined,
+    monsterData = {},
 } = {}) {
     installNonShopFloorState();
     resetInputState();
@@ -33379,18 +33402,19 @@ async function runMonsterSlingRockLanding({
     }
     for (let x = 5; x <= throwerX; x++) markSquareVisible(x, 5);
     for (const [x, y] of levelCells) markSquareVisible(x, y);
-    const rock = monsterThrownRock(874346);
     const sling = monsterSling(874347);
+    const rock = projectile || monsterThrownRock(874346);
+    const minvent = inventory || [sling, rock];
     const thrower = {
         mx: throwerX,
         my: 5,
         movement: NORMAL_SPEED,
-        data: { name: 'goblin', mlet: 'o', mmove: NORMAL_SPEED, armed: true, mlevel: 0 },
+        data: { name: 'goblin', mlet: 'o', mmove: NORMAL_SPEED, armed: true, mlevel: 0, ...monsterData },
         mpeaceful: false,
         mhp: 5,
         mhpmax: 5,
-        minvent: [sling, rock],
-        missile: rock,
+        minvent,
+        missile: activeMissile === undefined ? rock : activeMissile,
         mcansee: true,
     };
     game.level.monsters = [thrower];
@@ -33411,7 +33435,7 @@ async function runMonsterSlingRockLanding({
     }
     resetInputState();
     const rawRng = getRngLog();
-    return { rock, thrower, rng: rawRng.map(entry => entry.replace(/=.*/, '')), rawRng, preNhgetchMessages };
+    return { rock, ammo: rock, sling, thrower, rng: rawRng.map(entry => entry.replace(/=.*/, '')), rawRng, preNhgetchMessages };
 }
 
 async function runMonsterDartHitLanding({
@@ -34062,6 +34086,169 @@ test('production monster sling rock aimed iron bars are silent when deaf', async
     assert.equal(rng.some(entry => entry === 'rnd(20)'
         || entry === 'rn2(3)'), false);
     assert.equal(preNhgetchMessages.some(message => /Clonk!/.test(message)), false);
+});
+
+test('production monster sling ruby aimed shot can pass through iron bars before hero', async () => {
+    const ruby = monsterThrownGem(874370, 'ruby', { gemTough: true });
+    const { ammo, rng, rawRng, preNhgetchMessages } = await runMonsterSlingRockLanding({
+        seed: 1,
+        uac: -100,
+        projectile: ruby,
+        levelCells: [[7, 5, { typ: IRONBARS }]],
+    });
+
+    const landed = game.level.objects.find(obj => obj.id === ammo.id);
+    assert.ok(landed, rng.join(', '));
+    assert.equal(landed.ox, 5, rawRng.join(', '));
+    assert.equal(landed.oy, 5, rawRng.join(', '));
+    assert.equal(landed.kind, 'ruby');
+
+    assert.ok(rng.some(entry => entry === 'rnd(20)'));
+    assert.equal(rng.some(entry => entry === 'rn2(100)'), false);
+    assert.equal(preNhgetchMessages.some(message => /Clonk!/.test(message)), false);
+});
+
+test('production monster sling ruby aimed shot can clonk iron bars before hero', async () => {
+    const ruby = monsterThrownGem(874371, 'ruby', { gemTough: true });
+    const { ammo, thrower, rng, rawRng, preNhgetchMessages } = await runMonsterSlingRockLanding({
+        seed: 9,
+        uac: 100,
+        heroBlind: false,
+        projectile: ruby,
+        levelCells: [[7, 5, { typ: IRONBARS }]],
+    });
+
+    assert.equal(game.u.uhp, 20);
+    assert.equal(game._damage_after_topline_more || 0, 0, rawRng.join(', '));
+    assert.equal(thrower.missile, null);
+    assert.equal(thrower.minvent.some(obj => obj.id === ammo.id), false);
+
+    const landed = game.level.objects.find(obj => obj.id === ammo.id);
+    assert.ok(landed, rng.join(', '));
+    assert.equal(landed.ox, 8, rawRng.join(', '));
+    assert.equal(landed.oy, 5, rawRng.join(', '));
+    assert.equal(landed.kind, 'ruby');
+    assert.notEqual(landed.transientProjectile, true);
+
+    assert.ok(rng.some(entry => entry === 'rn2(100)'));
+    assert.equal(rng.some(entry => entry === 'rnd(3)'
+        || entry === 'rnd(20)'
+        || entry === 'rn2(3)'), false);
+    assert.equal(preNhgetchMessages.some(message => /shoots a ruby!/.test(message)), true,
+        preNhgetchMessages.join('\n'));
+    assert.equal(preNhgetchMessages.some(message => /Clonk!/.test(message)), true,
+        preNhgetchMessages.join('\n'));
+});
+
+test('production monster sling rock selection precedes arbitrary gems', async () => {
+    const ruby = monsterThrownGem(874372, 'ruby', { gemTough: true });
+    const rock = monsterThrownRock(874373);
+    const sling = monsterSling(874374);
+    const { thrower, rng, rawRng } = await runMonsterSlingRockLanding({
+        seed: 9,
+        uac: 100,
+        projectile: ruby,
+        inventory: [sling, ruby, rock],
+        activeMissile: rock,
+        levelCells: [[7, 5, { typ: IRONBARS }]],
+    });
+
+    assert.equal(thrower.missile, null);
+    assert.equal(thrower.minvent.some(obj => obj.id === rock.id), false);
+    assert.equal(thrower.minvent.some(obj => obj.id === ruby.id), true);
+
+    const landed = game.level.objects.find(obj => obj.id === rock.id);
+    assert.ok(landed, rng.join(', '));
+    assert.equal(landed.ox, 8, rawRng.join(', '));
+    assert.equal(landed.kind, 'rock');
+    assert.equal(game.level.objects.some(obj => obj.id === ruby.id), false);
+});
+
+test('production monster sling uncursed loadstone selection precedes arbitrary gems', async () => {
+    const ruby = monsterThrownGem(874375, 'ruby', { gemTough: true });
+    const loadstone = monsterThrownGem(874376, 'loadstone', {
+        otyp: LOADSTONE,
+        cursed: false,
+        gemDescription: 'gray stone',
+    });
+    const sling = monsterSling(874377);
+    const { thrower, rng, rawRng } = await runMonsterSlingRockLanding({
+        seed: 9,
+        uac: 100,
+        projectile: ruby,
+        inventory: [sling, ruby, loadstone],
+        activeMissile: loadstone,
+        levelCells: [[7, 5, { typ: IRONBARS }]],
+    });
+
+    assert.equal(thrower.missile, null);
+    assert.equal(thrower.minvent.some(obj => obj.id === loadstone.id), false);
+    assert.equal(thrower.minvent.some(obj => obj.id === ruby.id), true);
+
+    const landed = game.level.objects.find(obj => obj.id === loadstone.id);
+    assert.ok(landed, rng.join(', '));
+    assert.equal(landed.ox, 8, rawRng.join(', '));
+    assert.equal(landed.kind, 'loadstone');
+    assert.equal(game.level.objects.some(obj => obj.id === ruby.id), false);
+});
+
+test('production monster sling skips cursed loadstone for arbitrary gem fallback', async () => {
+    const cursedLoadstone = monsterThrownGem(874378, 'loadstone', {
+        otyp: LOADSTONE,
+        cursed: true,
+        gemDescription: 'gray stone',
+    });
+    const ruby = monsterThrownGem(874379, 'ruby', { gemTough: true });
+    const sling = monsterSling(874380);
+    const { thrower, rng, rawRng } = await runMonsterSlingRockLanding({
+        seed: 9,
+        uac: 100,
+        projectile: ruby,
+        inventory: [sling, cursedLoadstone, ruby],
+        activeMissile: ruby,
+        levelCells: [[7, 5, { typ: IRONBARS }]],
+    });
+
+    assert.equal(thrower.missile, null);
+    assert.equal(thrower.minvent.some(obj => obj.id === cursedLoadstone.id), true);
+    assert.equal(thrower.minvent.some(obj => obj.id === ruby.id), false);
+
+    const landed = game.level.objects.find(obj => obj.id === ruby.id);
+    assert.ok(landed, rng.join(', '));
+    assert.equal(landed.ox, 8, rawRng.join(', '));
+    assert.equal(landed.kind, 'ruby');
+});
+
+test('production monsters that like gems do not use arbitrary sling gem fallback', async () => {
+    const ruby = monsterThrownGem(874381, 'ruby', { gemTough: true });
+    const { thrower, rng } = await runMonsterSlingRockLanding({
+        seed: 9,
+        uac: 100,
+        projectile: ruby,
+        monsterData: { likesGems: true },
+        levelCells: [[7, 5, { typ: IRONBARS }]],
+    });
+
+    assert.equal(thrower.minvent.some(obj => obj.id === ruby.id), true);
+    assert.equal(game.level.objects.some(obj => obj.id === ruby.id), false);
+    assert.equal(rng.some(entry => entry === 'rnd(1)'), false);
+});
+
+test('production monster sling flint uses flint damage against hero', async () => {
+    const flint = monsterThrownGem(874382, 'flint', {
+        otyp: FLINT,
+        actualKind: 'flint',
+        gemDescription: 'gray stone',
+    });
+    const { thrower, rng } = await runMonsterSlingRockLanding({
+        seed: 1,
+        uac: 100,
+        projectile: flint,
+    });
+
+    assert.equal(thrower.minvent.some(obj => obj.id === flint.id), false);
+    assert.ok(rng.some(entry => entry === 'rnd(6)'), rng.join(', '));
+    assert.equal(rng.some(entry => entry === 'rnd(3)'), false);
 });
 
 test('production kobold dart hit lands surviving dart with ohit mulch', async () => {
