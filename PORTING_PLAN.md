@@ -74,7 +74,7 @@ Detailed source-backed history is kept in `docs/c-parity-audit/`. This section i
   - `docs/c-parity-audit/255-tiphat-imitate-2026-05-31.md`
   - `docs/c-parity-audit/256-tiphat-mumble-2026-05-31.md`
   - `docs/c-parity-audit/257-tiphat-spell-cuss-2026-05-31.md`
-- Latest compact/source note: `docs/c-parity-audit/419-production-sling-ammo-catch-retention-2026-06-04.md`.
+- Latest compact/source note: `docs/c-parity-audit/420-production-potion-catch-retention-2026-06-04.md`.
 - Latest verified public score: `44/44`.
 
 ## Current Priorities

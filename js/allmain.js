@@ -6996,39 +6996,53 @@ export async function processMonsterTurns() {
                         }
                         continue;
                     }
-	                    if (canThrowOffensivePotion && offensiveItemsLinedUp) {
-                        const potion = mon.minvent[offensivePotionIndex];
-                        if ((potion.quan || 1) > 1) potion.quan--;
-                        else mon.minvent.splice(offensivePotionIndex, 1);
+                    if (canThrowOffensivePotion && offensiveItemsLinedUp) {
+                        const thrownPotion = splitMonsterThrownInventoryObject(mon, offensivePotionIndex);
+                        if (!thrownPotion) continue;
 
                         const throwerVisible = !game.u?.blind && (game.viz_array?.[mon.my]?.[mon.mx] & IN_SIGHT) && !mon.minvis;
                         if (throwerVisible) addToplineMessage(`${monsterDisplayName(mon)} hurls a potion!`);
                         for (let step = 1; step < throwRange; step++) rn2(5);
                         const projectileX = (game.u?.ux || 0) - throwDx;
                         const projectileY = (game.u?.uy || 0) - throwDy;
+                        let transientPotionProjectile = null;
                         if (!game.u?.blind && (game.viz_array?.[projectileY]?.[projectileX] & IN_SIGHT)) {
-                            game.level.objects.push({
+                            transientPotionProjectile = {
                                 ox: projectileX,
                                 oy: projectileY,
                                 quan: 1,
                                 glyph: '!',
                                 color: NO_COLOR,
                                 transientProjectile: true,
-                            });
+                            };
+                            game.level.objects.push(transientPotionProjectile);
+                            game._clear_transient_projectiles_after_more = 1;
                             newsym(projectileX, projectileY);
                         }
 
                         const catchChance = 100 - (game.u?.acurr?.a?.[A_DEX] ?? 10)
                             - (game._startup_role === 'Monk' || game._startup_role === 'Rogue' ? 20 : 0);
-                        const caught = !game.u?.blind && !game.u?.confusion && !game.u?.stunned
-                            && !game.u?.fumbling && rn2(Math.max(1, catchChance)) === 0;
+                        const caught = heroCanAttemptThrownObjectCatch(thrownPotion)
+                            && rn2(Math.max(1, catchChance)) === 0;
                         if (caught) {
-                            addToplineMessage('You catch the potion!');
+                            const catchResult = holdCaughtThrownObject(thrownPotion, {
+                                catchName: 'potion',
+                                glyph: '!',
+                                color: thrownPotion.color ?? NO_COLOR,
+                            });
+                            if (transientPotionProjectile) {
+                                game.level.objects = (game.level?.objects || [])
+                                    .filter(obj => obj !== transientPotionProjectile);
+                                newsym(projectileX, projectileY);
+                                if (!(game.level.objects || []).some(obj => obj.transientProjectile))
+                                    game._clear_transient_projectiles_after_more = 0;
+                            }
+                            addToplineMessage(catchResult.message);
                         } else {
                             const bottle = POTION_BOTTLE_NAMES[rn2(POTION_BOTTLE_NAMES.length)];
                             const damage = rnd(2);
                             game.u.uhp = Math.max(0, (game.u?.uhp || 0) - damage);
-                            game._potion_breathe_after_more = { otyp: potion.otyp, potionIndex: potion.potionIndex };
+                            game._potion_breathe_after_more = { ...thrownPotion, quan: 1 };
                             game._pending_message = `The ${bottle} crashes on your head and breaks into shards.`;
                             game._message_more = 1;
                             game._process_time_with_more = 0;

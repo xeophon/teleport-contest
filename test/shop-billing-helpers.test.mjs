@@ -33662,6 +33662,82 @@ async function runMonsterKopCreamPieLanding({
     return { pie, thrower, rng: getRngLog(), preNhgetchMessages };
 }
 
+async function runMonsterOffensivePotionCatch({
+    seed = 1,
+    heroBlind = false,
+    heroDex = 100,
+    potionQuan = 1,
+    potion = null,
+    initialInventory = null,
+    fullInventory = false,
+    activeMissile = undefined,
+    throwerX = 8,
+} = {}) {
+    installNonShopFloorState();
+    resetInputState();
+    pushKey('\x1b');
+    initRng(seed);
+    enableRngLog({ reset: true });
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        ux0: 5,
+        uy0: 5,
+        blind: heroBlind,
+        confusion: false,
+        stunned: false,
+        fumbling: false,
+        uhp: 20,
+        uhpmax: 20,
+        uac: 10,
+        umovement: NORMAL_SPEED,
+        acurr: { a: [10, 10, 10, heroDex, 10, 10] },
+    });
+    if (fullInventory) fillInventoryLetters(878000);
+    else if (initialInventory) game.inventory = initialInventory;
+    game.moves = 1;
+    game.context = {};
+    for (let x = 5; x <= throwerX; x++) markSquareVisible(x, 5);
+    const potionItem = potion || paralysisPotion(878100, 'p', potionQuan, {
+        otyp: POT_PARALYSIS,
+        dknown: true,
+    });
+    delete potionItem.letter;
+    delete potionItem.line;
+    delete potionItem.ox;
+    delete potionItem.oy;
+    const thrower = {
+        mx: throwerX,
+        my: 5,
+        movement: NORMAL_SPEED,
+        data: { name: 'gnome', mlet: 'G', mmove: NORMAL_SPEED, armed: true, mlevel: 1 },
+        mpeaceful: false,
+        mhp: 5,
+        mhpmax: 5,
+        minvent: [potionItem],
+        missile: activeMissile === undefined ? potionItem : activeMissile,
+        mcansee: true,
+    };
+    game.level.monsters = [thrower];
+    game._pending_time_passed = 1;
+
+    const preNhgetchMessages = [];
+    const priorPreNhgetchHook = game._preNhgetchHook;
+    game._preNhgetchHook = async () => {
+        const message = [game._pending_message, game._topline_after_more]
+            .filter(Boolean).join('  ');
+        if (message) preNhgetchMessages.push(message);
+        if (priorPreNhgetchHook) await priorPreNhgetchHook();
+    };
+    try {
+        await moveloop_core();
+    } finally {
+        game._preNhgetchHook = priorPreNhgetchHook;
+    }
+    resetInputState();
+    return { potion: potionItem, thrower, rng: getRngLog(), preNhgetchMessages };
+}
+
 async function runMonsterLauncherArrowLanding({
     seed = 8,
     uac = 10,
@@ -34545,6 +34621,95 @@ test('production monster sling catch drops split rock when inventory letters are
         || entry === 'rnd(20)'
         || entry === 'rn2(3)'), false, rng.join(', '));
     assert.equal(preNhgetchMessages.some(message => /You catch, but drop, the rock\./.test(message)), true,
+        preNhgetchMessages.join('\n'));
+});
+
+test('production monster potion catch retains split potion in inventory', async () => {
+    const { potion, thrower, rng, preNhgetchMessages } = await runMonsterOffensivePotionCatch({
+        seed: 1,
+        potionQuan: 2,
+    });
+
+    assert.equal(preNhgetchMessages.some(message => /hurls a potion!/.test(message)), true,
+        preNhgetchMessages.join('\n'));
+    assert.equal(preNhgetchMessages.some(message => /You catch the potion!/.test(message)), true,
+        preNhgetchMessages.join('\n'));
+
+    const residual = thrower.minvent.find(obj => obj.id === potion.id);
+    assert.ok(residual);
+    assert.equal(residual.quan, 1);
+    assert.equal(thrower.missile, residual);
+    assert.equal(game.level.objects.some(obj => obj.id === potion.id), false);
+
+    const caught = game.inventory.find(obj => obj.kind === 'paralysis'
+        && obj.actualKind === 'potion of paralysis');
+    assert.ok(caught);
+    assert.notEqual(caught.id, potion.id);
+    assert.equal(caught.quan, 1);
+    assert.equal(caught.letter, 'a');
+    assert.equal(caught.line, 'a - a potion of paralysis');
+    assert.equal(caught.glyph, '!');
+    assert.equal(caught.transientProjectile, false);
+    assert.equal(game.level.objects.some(obj => obj.transientProjectile), false);
+    assert.equal(game.u.uhp, 20);
+
+    assert.ok(rng.some(entry => entry.startsWith('rn2(1)=')), rng.join(', '));
+    assert.equal(rng.some(entry => entry.startsWith('rn2(7)=')), false, rng.join(', '));
+});
+
+test('production monster potion catch drops split potion when inventory letters are full', async () => {
+    const { potion, thrower, rng, preNhgetchMessages } = await runMonsterOffensivePotionCatch({
+        seed: 1,
+        potionQuan: 2,
+        fullInventory: true,
+    });
+
+    assert.equal(game.inventory.length, INVENTORY_LETTERS.length);
+    const residual = thrower.minvent.find(obj => obj.id === potion.id);
+    assert.ok(residual);
+    assert.equal(residual.quan, 1);
+    assert.equal(thrower.missile, residual);
+    assert.equal(game.level.objects.some(obj => obj.id === potion.id), false);
+
+    const dropped = game.level.objects.find(obj => obj.kind === 'paralysis'
+        && obj.actualKind === 'potion of paralysis' && obj.ox === 5 && obj.oy === 5);
+    assert.ok(dropped);
+    assert.notEqual(dropped.id, potion.id);
+    assert.equal(dropped.quan, 1);
+    assert.equal(dropped.glyph, '!');
+    assert.equal(dropped.potionIndex, 4);
+    assert.equal(dropped.transientProjectile, false);
+    assert.equal(game.level.objects.some(obj => obj.transientProjectile), false);
+    assert.equal(game.u.uhp, 20);
+
+    assert.ok(rng.some(entry => entry.startsWith('rn2(1)=')), rng.join(', '));
+    assert.equal(rng.some(entry => entry.startsWith('rn2(7)=')), false, rng.join(', '));
+    assert.equal(preNhgetchMessages.some(message => /You catch, but drop, the potion\./.test(message)), true,
+        preNhgetchMessages.join('\n'));
+});
+
+test('production monster potion singleton catch clears monster missile', async () => {
+    const { potion, thrower, rng, preNhgetchMessages } = await runMonsterOffensivePotionCatch({
+        seed: 1,
+        potionQuan: 1,
+    });
+
+    assert.equal(thrower.minvent.some(obj => obj.id === potion.id), false);
+    assert.equal(thrower.missile, null);
+    assert.equal(game.level.objects.some(obj => obj.id === potion.id), false);
+    const caught = game.inventory.find(obj => obj.id === potion.id);
+    assert.ok(caught);
+    assert.equal(caught.kind, 'paralysis');
+    assert.equal(caught.actualKind, 'potion of paralysis');
+    assert.equal(caught.glyph, '!');
+    assert.equal(caught.quan, 1);
+    assert.equal(game.level.objects.some(obj => obj.transientProjectile), false);
+    assert.equal(game.u.uhp, 20);
+
+    assert.ok(rng.some(entry => entry.startsWith('rn2(1)=')), rng.join(', '));
+    assert.equal(rng.some(entry => entry.startsWith('rn2(7)=')
+        || entry.startsWith('rnd(2)=')), false, rng.join(', '));
+    assert.equal(preNhgetchMessages.some(message => /You catch the potion!/.test(message)), true,
         preNhgetchMessages.join('\n'));
 });
 
