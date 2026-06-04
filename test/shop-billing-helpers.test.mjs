@@ -5922,6 +5922,38 @@ test('chat with visible generated cuss sound monsters uses C msound rows', async
     }
 });
 
+test('chat with invisible Wizard of Yendor uses special C cuss row', async () => {
+    const result = await chatAdjacentMonster({
+        name: 'Wizard of Yendor',
+        visible: false,
+        peaceful: false,
+        seed: 1,
+        rngLog: true,
+        data: {
+            name: 'Wizard of Yendor',
+            mlevel: 30,
+            mlet: '@',
+            glyph: '@',
+            male: true,
+            strong: true,
+            nasty: true,
+            covetous: true,
+        },
+        extra: {
+            iswiz: true,
+            mhp: 30,
+            mhpmax: 30,
+        },
+    });
+
+    assert.equal(result.message, 'It laughs fiendishly.');
+    assert.equal(result.target.mstrategy, 0);
+    assert.equal(game.context.move, 1);
+    assert.doesNotMatch(result.message,
+        /curses|gestures|threatens|doesn't respond|Nothing happens|waves/);
+    assert.deepEqual(getRngLog(), ['rn2(5)=0']);
+});
+
 test('chat with visible generated special sound monsters uses C msound rows', async () => {
     const cases = [
         {

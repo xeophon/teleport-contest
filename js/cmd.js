@@ -36588,6 +36588,7 @@ function tipHatMonsterSound(mon) {
     }
     if (name === 'skeleton') return 'bones';
     if (/^(death|pestilence|famine)$/.test(name)) return 'rider';
+    if (tipHatMonsterIsWizardCuss(mon, name)) return 'cuss';
     if (/\bzombie$/.test(name) || (mlet === 'zombie' && name !== 'ghoul')) return 'groan';
     if (name === 'shrieker') return 'shriek';
     if (/^(mumak|mastodon)$/.test(name)) return 'trumpet';
