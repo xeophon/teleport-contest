@@ -33505,6 +33505,8 @@ async function runMonsterDartHitLanding({
     monsterName = 'kobold',
     monsterData = {},
     dartQuan = 1,
+    extraMonsters = [],
+    initialObjects = [],
 } = {}) {
     installNonShopFloorState();
     resetInputState();
@@ -33535,6 +33537,7 @@ async function runMonsterDartHitLanding({
     }
     for (let x = 5; x <= throwerX; x++) markSquareVisible(x, 5);
     for (const [x, y] of levelCells) markSquareVisible(x, y);
+    game.level.objects = [...initialObjects];
     const dart = { ...dartStack(874356, 'd', dartQuan), letter: undefined, line: undefined, spe: 0 };
     const thrower = {
         mx: throwerX,
@@ -33548,7 +33551,7 @@ async function runMonsterDartHitLanding({
         missile: dart,
         mcansee: true,
     };
-    game.level.monsters = [thrower];
+    game.level.monsters = [thrower, ...extraMonsters];
     game._pending_time_passed = 1;
     const preNhgetchMessages = [];
     const priorPreNhgetchHook = game._preNhgetchHook;
@@ -33564,7 +33567,8 @@ async function runMonsterDartHitLanding({
         game._preNhgetchHook = priorPreNhgetchHook;
     }
     resetInputState();
-    return { dart, thrower, rng: getRngLog(), preNhgetchMessages };
+    const rawRng = getRngLog();
+    return { dart, thrower, rng: rawRng, rawRng, preNhgetchMessages };
 }
 
 async function runMonsterKopCreamPieLanding({
@@ -35168,6 +35172,82 @@ test('production kobold dart stack splits one thrown dart', async () => {
     assert.ok(landed);
     assert.equal(landed.quan, 1);
     assert.ok(rng.includes('rnd(20)=12'));
+});
+
+test('production kobold dart hits and rusts intervening rust monster object before stacking', async () => {
+    const cleanStack = { ...dartStack(874502, 'd', 1), ox: 7, oy: 5, letter: undefined, line: undefined };
+    const rustMonster = passiveObjectTarget('rust monster', 'rust', 7, 5, {
+        ac: 15,
+        mac: 15,
+        mhp: 20,
+        mhpmax: 20,
+    });
+    const { dart, thrower, rng, rawRng, preNhgetchMessages } = await runMonsterDartHitLanding({
+        seed: 2,
+        throwerX: 9,
+        levelCells: [[6, 5, { typ: IRONBARS }]],
+        extraMonsters: [rustMonster],
+        initialObjects: [cleanStack],
+    });
+
+    assert.equal(game.u.uhp, 20);
+    assert.equal(rustMonster.mhp < 20, true, rawRng.join(', '));
+    assert.equal(rustMonster.msleeping, 0);
+    assert.equal(thrower.missile, null);
+    assert.equal(thrower.minvent.some(obj => obj.id === dart.id), false);
+
+    const landed = game.level.objects.find(obj => obj.id === dart.id);
+    assert.ok(landed, rawRng.join(', '));
+    assert.equal(landed.ox, 7);
+    assert.equal(landed.oy, 5);
+    assert.equal(landed.oeroded, 1);
+    assert.equal(cleanStack.oeroded || 0, 0);
+    assert.equal(cleanStack.quan, 1);
+    assert.equal(game.level.objects.length, 2);
+
+    assert.deepEqual(rng.slice(0, 7).map(entry => entry.replace(/=.*/, '')),
+        ['rn2(5)', 'rn2(5)', 'rnd(1)', 'rnd(2)', 'rnd(20)', 'rnd(3)', 'rn2(3)'],
+        rawRng.join(', '));
+    assert.equal(rawRng[6], 'rn2(3)=0', rawRng.join(', '));
+    assert.equal(preNhgetchMessages.some(message => /Clonk!/.test(message)), false);
+    assert.equal(preNhgetchMessages.some(message => /dart hits the rust monster|It is hit/.test(message)), true,
+        preNhgetchMessages.join('\n'));
+});
+
+test('production kobold dart hit on intervening rust monster can mulch before passive rust or stacking', async () => {
+    const cleanStack = { ...dartStack(874503, 'd', 1), ox: 7, oy: 5, letter: undefined, line: undefined };
+    const rustMonster = passiveObjectTarget('rust monster', 'rust', 7, 5, {
+        ac: 15,
+        mac: 15,
+        mhp: 20,
+        mhpmax: 20,
+    });
+    const { dart, thrower, rng, rawRng, preNhgetchMessages } = await runMonsterDartHitLanding({
+        seed: 1,
+        throwerX: 9,
+        levelCells: [[6, 5, { typ: IRONBARS }]],
+        extraMonsters: [rustMonster],
+        initialObjects: [cleanStack],
+    });
+
+    assert.equal(game.u.uhp, 20);
+    assert.equal(rustMonster.mhp < 20, true, rawRng.join(', '));
+    assert.equal(rustMonster.msleeping, 0);
+    assert.equal(thrower.missile, null);
+    assert.equal(thrower.minvent.some(obj => obj.id === dart.id), false);
+
+    assert.equal(game.level.objects.some(obj => obj.id === dart.id), false);
+    assert.equal(cleanStack.oeroded || 0, 0);
+    assert.equal(cleanStack.quan, 1);
+    assert.equal(game.level.objects.length, 1);
+
+    assert.deepEqual(rng.slice(0, 8).map(entry => entry.replace(/=.*/, '')),
+        ['rn2(5)', 'rn2(5)', 'rnd(1)', 'rnd(2)', 'rnd(20)', 'rnd(3)', 'rn2(3)', 'rn2(100)'],
+        rawRng.join(', '));
+    assert.notEqual(rawRng[6], 'rn2(3)=0', rawRng.join(', '));
+    assert.equal(preNhgetchMessages.some(message => /Clonk!/.test(message)), false);
+    assert.equal(preNhgetchMessages.some(message => /dart hits the rust monster|It is hit/.test(message)), true,
+        preNhgetchMessages.join('\n'));
 });
 
 test('production kobold shaman does not use kobold dart path', async () => {

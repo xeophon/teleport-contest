@@ -7616,6 +7616,9 @@ export async function processMonsterTurns() {
                         }
                         if (clearShot) {
                             const missile = mon.missile;
+                            const missileSpe = Math.trunc(Number(missile.spe || 0));
+                            const missileErosion = Math.max(0, Math.trunc(Number(missile.oeroded || 0)),
+                                Math.trunc(Number(missile.oeroded2 || 0)));
                             rnd(1);
                             const thrownId = next_ident();
                             let thrownMissile = missile;
@@ -7628,11 +7631,21 @@ export async function processMonsterTurns() {
                                 if (missileIndex >= 0) mon.minvent.splice(missileIndex, 1);
                                 if (mon.missile === missile) mon.missile = null;
                             }
+                            let interveningTarget = null;
                             let dartTerrainStop = null;
                             for (let step = 1; step < throwRange; step++) {
                                 const sx = mon.mx + throwDx * step;
                                 const sy = mon.my + throwDy * step;
                                 const remainingRange = throwRange - step;
+                                const targetMon = monsterAtFlightSquare(sx, sy, mon);
+                                if (targetMon) {
+                                    const hitValue = monsterThrownObjectAccidentalHitValue(targetMon);
+                                    const hitRoll = rnd(20);
+                                    if (hitValue >= hitRoll) {
+                                        interveningTarget = targetMon;
+                                        break;
+                                    }
+                                }
                                 const forcehit = !rn2(5);
                                 if (remainingRange && forcehit
                                     && game.level?.at(sx + throwDx, sy + throwDy)?.typ === IRONBARS) {
@@ -7651,9 +7664,26 @@ export async function processMonsterTurns() {
                                     messages: floorMessages,
                                 });
                                 addMonsterThrownFloorMessages(floorMessages);
+                            } else if (interveningTarget) {
+                                const dartDamage = Math.max(1, rnd(3) + missileSpe - missileErosion);
+                                interveningTarget.msleeping = 0;
+                                interveningTarget.mhp = Math.max(0, (interveningTarget.mhp || 1) - dartDamage);
+                                const targetVisible = !game.u?.blind
+                                    && !!(game.viz_array?.[interveningTarget.my]?.[interveningTarget.mx] & IN_SIGHT);
+                                addToplineMessage(targetVisible
+                                    ? `The dart hits the ${interveningTarget.data?.name || 'monster'}.`
+                                    : 'It is hit.');
+                                const floorMessages = [];
+                                landMonsterThrownObject(thrownMissile, interveningTarget.mx, interveningTarget.my, {
+                                    glyph: ')',
+                                    color: CLR_CYAN,
+                                    messages: floorMessages,
+                                    ohit: true,
+                                });
+                                addMonsterThrownFloorMessages(floorMessages);
                             } else {
                                 rn2(90);
-                                const dartDamage = rnd(3);
+                                const dartDamage = Math.max(1, rnd(3) + missileSpe - missileErosion);
                                 const hitRoll = rnd(20);
                                 if (hitRoll < 20) {
                                     game.u.uhp = Math.max(0, (game.u?.uhp || 0) - dartDamage);
