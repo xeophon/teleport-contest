@@ -7467,6 +7467,9 @@ export async function processMonsterTurns() {
                         if (targetAc < 0 && !consumedMattackuAc) rnd(-targetAc);
 
                         const missile = mon.minvent[knifeIndex];
+                        const missileSpe = Math.trunc(Number(missile.spe || 0));
+                        const missileErosion = Math.max(0, Math.trunc(Number(missile.oeroded || 0)),
+                            Math.trunc(Number(missile.oeroded2 || 0)));
                         const thrownMissile = splitMonsterThrownInventoryObject(mon, knifeIndex);
                         if (!thrownMissile) continue;
                         const throwerVisible = !game.u?.blind
@@ -7478,11 +7481,21 @@ export async function processMonsterTurns() {
                             game._process_time_with_more = 0;
                         }
 
+                        let interveningTarget = null;
                         let knifeTerrainStop = null;
                         for (let step = 1; step < throwRange; step++) {
                             const sx = mon.mx + throwDx * step;
                             const sy = mon.my + throwDy * step;
                             const remainingRange = throwRange - step;
+                            const targetMon = monsterAtFlightSquare(sx, sy, mon);
+                            if (targetMon) {
+                                const hitValue = monsterThrownObjectAccidentalHitValue(targetMon);
+                                const hitRoll = rnd(20);
+                                if (hitValue >= hitRoll) {
+                                    interveningTarget = targetMon;
+                                    break;
+                                }
+                            }
                             const forcehit = !rn2(5);
                             if (remainingRange && forcehit
                                 && game.level?.at(sx + throwDx, sy + throwDy)?.typ === IRONBARS) {
@@ -7501,6 +7514,23 @@ export async function processMonsterTurns() {
                                 messages: floorMessages,
                             });
                             addMonsterThrownFloorMessages(floorMessages, throwerVisible);
+                        } else if (interveningTarget) {
+                            const damage = Math.max(1, rnd(3) + missileSpe - missileErosion);
+                            interveningTarget.msleeping = 0;
+                            interveningTarget.mhp = Math.max(0, (interveningTarget.mhp || 1) - damage);
+                            const hitMessage = throwerVisible
+                                ? `The knife hits the ${interveningTarget.data?.name || 'monster'}${damage > 4 ? '!' : '.'}`
+                                : `It is hit${damage > 4 ? '!' : '.'}`;
+                            if (throwerVisible) game._topline_after_more = hitMessage;
+                            else addToplineMessage(hitMessage);
+                            const floorMessages = [];
+                            landMonsterThrownObject(thrownMissile, interveningTarget.mx, interveningTarget.my, {
+                                glyph: ')',
+                                color: CLR_CYAN,
+                                messages: floorMessages,
+                                ohit: true,
+                            });
+                            addMonsterThrownFloorMessages(floorMessages, throwerVisible);
                         } else {
                             const catchChance = 100 - (game.u?.acurr?.a?.[A_DEX] ?? 10)
                                 - (game._startup_role === 'Monk' || game._startup_role === 'Rogue' ? 20 : 0);
@@ -7516,7 +7546,7 @@ export async function processMonsterTurns() {
                                 if (throwerVisible) game._topline_after_more = catchMessage;
                                 else addToplineMessage(catchMessage);
                             } else {
-                                const damage = rnd(3);
+                                const damage = Math.max(1, rnd(3) + missileSpe - missileErosion);
                                 const hitv = Math.max(-4, 3 - throwRange) + 8 + (missile.spe || 0);
                                 const attackRoll = rnd(20);
                                 const missed = (game.u?.uac ?? 10) + hitv <= attackRoll;

@@ -34135,6 +34135,8 @@ async function runMonsterKnifeIronBars({
     projectile = null,
     inventory = null,
     activeMissile = null,
+    extraMonsters = [],
+    initialObjects = [],
 } = {}) {
     installNonShopFloorState();
     resetInputState();
@@ -34168,6 +34170,7 @@ async function runMonsterKnifeIronBars({
     }
     for (let x = 5; x <= throwerX; x++) markSquareVisible(x, 5);
     for (const [x, y] of levelCells) markSquareVisible(x, y);
+    game.level.objects = [...initialObjects];
     const knifeItem = projectile || monsterKnife(874359);
     const throwerInventory = inventory || [knifeItem];
     const thrower = {
@@ -34182,7 +34185,7 @@ async function runMonsterKnifeIronBars({
         missile: activeMissile || knifeItem,
         mcansee: true,
     };
-    game.level.monsters = [thrower];
+    game.level.monsters = [thrower, ...extraMonsters];
     game._pending_time_passed = 1;
 
     const preNhgetchMessages = [];
@@ -38149,6 +38152,45 @@ test('production monster spear selection precedes active crossbow bolts', async 
 
     assert.ok(rng.some(entry => entry === 'rn2(100)'));
     assert.equal(preNhgetchMessages.some(message => /crossbow bolt/.test(message)), false);
+});
+
+test('production monster knife hits and rusts intervening rust monster object before stacking', async () => {
+    const cleanStack = { ...monsterKnife(874412), ox: 8, oy: 5, letter: undefined, line: undefined };
+    const rustMonster = passiveObjectTarget('rust monster', 'rust', 8, 5, {
+        ac: 15,
+        mac: 15,
+        mhp: 20,
+        mhpmax: 20,
+    });
+    const { knifeItem, thrower, rng, rawRng, preNhgetchMessages } = await runMonsterKnifeIronBars({
+        levelCells: [[7, 5, { typ: IRONBARS }]],
+        extraMonsters: [rustMonster],
+        initialObjects: [cleanStack],
+    });
+
+    assert.equal(game.u.uhp, 20);
+    assert.equal(rustMonster.mhp < 20, true, rawRng.join(', '));
+    assert.equal(rustMonster.msleeping, 0);
+    assert.equal(thrower.missile, null);
+    assert.equal(thrower.minvent.some(obj => obj.id === knifeItem.id), false);
+
+    const landed = game.level.objects.find(obj => obj.id === knifeItem.id);
+    assert.ok(landed, rawRng.join(', '));
+    assert.equal(landed.ox, 8);
+    assert.equal(landed.oy, 5);
+    assert.equal(landed.oeroded, 1);
+    assert.equal(cleanStack.oeroded || 0, 0);
+    assert.equal(cleanStack.quan, 1);
+    assert.equal(game.level.objects.length, 2);
+
+    assert.ok(rng.some(entry => entry === 'rn2(5)'), rawRng.join(', '));
+    assert.ok(rng.some(entry => entry === 'rnd(20)'), rawRng.join(', '));
+    assert.ok(rng.some(entry => entry === 'rnd(3)'), rawRng.join(', '));
+    assert.equal(rng.some(entry => entry === 'rn2(100)'
+        || entry === 'rn2(3)'), false, rawRng.join(', '));
+    assert.equal(preNhgetchMessages.some(message => /Clonk!/.test(message)), false);
+    assert.equal(preNhgetchMessages.some(message => /knife hits the rust monster|It is hit/.test(message)), true,
+        preNhgetchMessages.join('\n'));
 });
 
 test('production monster knife aimed shot can pass through iron bars before hero', async () => {
