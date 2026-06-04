@@ -6250,6 +6250,7 @@ export async function processMonsterTurns() {
                         const projectileKind = String(thrownMissile.singular || thrownMissile.actualKind
                             || thrownMissile.kind || 'arrow');
                         const projectileArticle = /^[aeiou]/i.test(projectileKind) ? 'an' : 'a';
+                        const projectileArticleCap = projectileArticle[0].toUpperCase() + projectileArticle.slice(1);
                         addToplineMessage(`${monsterDisplayName(mon, true)} shoots ${projectileArticle} ${projectileKind}!`);
                         game._message_more = 1;
                         game._process_time_with_more = 0;
@@ -6322,7 +6323,7 @@ export async function processMonsterTurns() {
                                         if (stoppedOnSink && !game.u?.blind && cansee(landingX, landingY)) {
                                             const sinkVerb = (game.u?._statusSuffix || '').includes('Hallu')
                                                 ? 'plops' : 'drops';
-                                            addToplineMessage(`The arrow ${sinkVerb} onto the sink.`);
+                                            addToplineMessage(`The ${projectileKind} ${sinkVerb} onto the sink.`);
                                         }
                                         if (!remainingRange || hitIronBars || stoppedOnSink
                                             || ordinaryBlockAhead(landingX, landingY)) break;
@@ -6375,7 +6376,7 @@ export async function processMonsterTurns() {
                                 if (!game.u?.blind && cansee(sx, sy)) {
                                     const sinkVerb = (game.u?._statusSuffix || '').includes('Hallu')
                                         ? 'plops' : 'drops';
-                                    addToplineMessage(`The arrow ${sinkVerb} onto the sink.`);
+                                    addToplineMessage(`The ${projectileKind} ${sinkVerb} onto the sink.`);
                                 }
                                 aimedTerrainStop = { x: sx, y: sy };
                                 break;
@@ -6412,13 +6413,16 @@ export async function processMonsterTurns() {
                         const caught = !game.u?.blind && !game.u?.confusion && !game.u?.stunned
                             && !game.u?.fumbling && rn2(Math.max(1, catchChance)) === 0;
                         if (caught) {
-                            game._topline_after_more = 'You catch the arrow!';
+                            game._topline_after_more = `You catch the ${projectileKind}!`;
                         } else {
-                            const damage = Math.max(1, rnd(6) + missileSpe - missileErosion);
+                            const projectileDamageSides = projectileKind === 'crossbow bolt' ? 4 : 6;
+                            const projectileDamageBonus = projectileKind === 'crossbow bolt' ? 1 : 0;
+                            const damage = Math.max(1, rnd(projectileDamageSides) + projectileDamageBonus
+                                + missileSpe - missileErosion);
                             const hitv = Math.max(-4, 3 - throwRange) + 8 + missileSpe;
                             const missed = (game.u?.uac ?? 10) + hitv <= rnd(20);
-                            game._topline_after_more = missed ? 'An arrow misses you.'
-                                : `You are hit by an arrow${damage > 4 ? '!' : '.'}`;
+                            game._topline_after_more = missed ? `${projectileArticleCap} ${projectileKind} misses you.`
+                                : `You are hit by ${projectileArticle} ${projectileKind}${damage > 4 ? '!' : '.'}`;
                             if (!missed) {
                                 if (damage >= (game.u?.uhp || 0)) {
                                     game._lethal_arrow_after_topline_more = {
@@ -6428,6 +6432,7 @@ export async function processMonsterTurns() {
                                         deathCleanupThrownObject: thrownMissile,
                                         deathCleanupGlyph: thrownMissile.glyph || ')',
                                     };
+                                    game._death_cause = `killed by ${projectileArticle} ${projectileKind}`;
                                 } else {
                                     game._damage_after_topline_more = (game._damage_after_topline_more || 0) + damage;
                                     game._exercise_after_topline_more = (game._exercise_after_topline_more || 0) + 1;

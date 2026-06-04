@@ -33468,6 +33468,7 @@ async function runMonsterDartHitLanding({
 async function runMonsterLauncherArrowLanding({
     seed = 8,
     uac = 10,
+    launcherKind = 'bow',
     arrowSpe = 0,
     arrowQuan = 1,
     arrowOverrides = {},
@@ -33511,7 +33512,7 @@ async function runMonsterLauncherArrowLanding({
     }
     for (let x = 5; x <= 10; x++) markSquareVisible(x, 5);
     for (const [x, y] of levelCells) markSquareVisible(x, y);
-    const bow = { id: 874357, cls: 'weapon', kind: 'bow', actualKind: 'bow', glyph: ')' };
+    const bow = { id: 874357, cls: 'weapon', kind: launcherKind, actualKind: launcherKind, glyph: ')' };
     const arrow = {
         id: 874358,
         cls: 'weapon',
@@ -34299,6 +34300,146 @@ test('production monster launcher arrow aimed iron bars are silent when deaf', a
         'rn2(100)=89',
     ]);
     assert.equal(rng.some(entry => entry.startsWith('rnd(6)=') || entry.startsWith('rnd(20)=') || entry.startsWith('rn2(3)=')), false);
+});
+
+test('production monster crossbow bolt aimed shot can pass through iron bars before hero', async () => {
+    const { arrow, rng, preNhgetchMessages } = await runMonsterLauncherArrowLanding({
+        seed: 4,
+        launcherKind: 'crossbow',
+        arrowOverrides: {
+            kind: 'crossbow bolt',
+            actualKind: 'crossbow bolt',
+            plural: 'crossbow bolts',
+            material: 'iron',
+        },
+        levelCells: [[7, 5, { typ: IRONBARS }]],
+    });
+
+    assert.equal(game._pending_message, 'A crossbow bolt misses you.');
+    assert.equal(game.u.uhp, 20);
+    assert.equal(preNhgetchMessages.some(message => /Clonk!/.test(message)), false);
+
+    const landed = game.level.objects.find(obj => obj.id === arrow.id);
+    assert.ok(landed);
+    assert.equal(landed.ox, 5);
+    assert.equal(landed.oy, 5);
+    assert.equal(landed.kind, 'crossbow bolt');
+    assert.equal(landed.transientProjectile, false);
+
+    assertNoSingletonLauncherMultishotRng(rng);
+    assert.ok(rng.includes('rnd(20)=18'));
+    assertLauncherMissEndOfRangeRng(rng, 'rnd(20)=18');
+    assert.equal(rng.some(entry => entry.startsWith('rn2(100)=') || entry.startsWith('rn2(3)=')), false);
+});
+
+test('production monster crossbow bolt hit uses crossbow bolt damage and text', async () => {
+    const { arrow, thrower, rng } = await runMonsterLauncherArrowLanding({
+        seed: 7,
+        launcherKind: 'crossbow',
+        arrowOverrides: {
+            kind: 'crossbow bolt',
+            actualKind: 'crossbow bolt',
+            plural: 'crossbow bolts',
+            material: 'iron',
+        },
+    });
+
+    assert.equal(game._pending_message, 'You are hit by a crossbow bolt!');
+    assert.equal(game.u.uhp, 15);
+    assert.equal(thrower.minvent.some(obj => obj.id === arrow.id), false);
+    assert.equal(thrower.missile, null);
+
+    const landed = game.level.objects.find(obj => obj.id === arrow.id);
+    assert.ok(landed);
+    assert.equal(landed.ox, 5);
+    assert.equal(landed.oy, 5);
+    assert.equal(landed.kind, 'crossbow bolt');
+    assert.equal(landed.transientProjectile, false);
+
+    assertNoSingletonLauncherMultishotRng(rng);
+    assert.ok(rng.includes('rnd(4)=4'), rng.join(', '));
+    assert.ok(rng.includes('rnd(20)=1'), rng.join(', '));
+    assert.equal(rng.some(entry => entry.startsWith('rnd(6)=') || entry.startsWith('rn2(100)=')), false);
+});
+
+test('production monster crossbow bolt aimed shot can clonk iron bars before hero', async () => {
+    const { arrow, thrower, rng, preNhgetchMessages } = await runMonsterLauncherArrowLanding({
+        seed: 16,
+        launcherKind: 'crossbow',
+        arrowOverrides: {
+            kind: 'crossbow bolt',
+            actualKind: 'crossbow bolt',
+            plural: 'crossbow bolts',
+            material: 'iron',
+        },
+        heroBlind: false,
+        levelCells: [[7, 5, { typ: IRONBARS }]],
+    });
+
+    assert.equal(game.u.uhp, 20);
+    assert.equal(thrower.minvent.some(obj => obj.id === arrow.id), false);
+    assert.equal(thrower.missile, null);
+    assert.equal(preNhgetchMessages.some(message => /shoots a crossbow bolt!/.test(message)), true);
+    assert.equal(preNhgetchMessages.some(message => /Clonk!/.test(message)), true);
+
+    await rhack('\x1b');
+    resetInputState();
+
+    const landed = game.level.objects.find(obj => obj.id === arrow.id);
+    assert.ok(landed);
+    assert.equal(landed.ox, 8);
+    assert.equal(landed.oy, 5);
+    assert.equal(landed.kind, 'crossbow bolt');
+    assert.equal(landed.transientProjectile, false);
+
+    assertNoSingletonLauncherMultishotRng(rng);
+    assert.deepEqual(rng, [
+        'rn2(5)=3',
+        'rn2(5)=3',
+        'rn2(5)=0',
+        'rn2(100)=89',
+    ]);
+    assert.equal(rng.some(entry => entry.startsWith('rnd(4)=') || entry.startsWith('rnd(20)=') || entry.startsWith('rn2(3)=')), false);
+});
+
+test('production monster crossbow bolt aimed iron bars are silent when deaf', async () => {
+    const { arrow, thrower, rng, preNhgetchMessages } = await runMonsterLauncherArrowLanding({
+        seed: 16,
+        launcherKind: 'crossbow',
+        arrowOverrides: {
+            kind: 'crossbow bolt',
+            actualKind: 'crossbow bolt',
+            plural: 'crossbow bolts',
+            material: 'iron',
+        },
+        heroBlind: false,
+        heroDeaf: true,
+        levelCells: [[7, 5, { typ: IRONBARS }]],
+    });
+
+    assert.equal(game.u.uhp, 20);
+    assert.equal(thrower.minvent.some(obj => obj.id === arrow.id), false);
+    assert.equal(thrower.missile, null);
+    assert.equal(preNhgetchMessages.some(message => /Clonk!/.test(message)), false);
+
+    await rhack('\x1b');
+    resetInputState();
+
+    const landed = game.level.objects.find(obj => obj.id === arrow.id);
+    assert.ok(landed);
+    assert.equal(landed.ox, 8);
+    assert.equal(landed.oy, 5);
+    assert.equal(landed.kind, 'crossbow bolt');
+    assert.equal(landed.transientProjectile, false);
+
+    assertNoSingletonLauncherMultishotRng(rng);
+    assert.deepEqual(rng, [
+        'rn2(5)=3',
+        'rn2(5)=3',
+        'rn2(5)=0',
+        'rn2(100)=89',
+    ]);
+    assert.equal(rng.some(entry => entry.startsWith('rnd(4)=') || entry.startsWith('rnd(20)=') || entry.startsWith('rn2(3)=')), false);
 });
 
 test('production monster blessed launcher arrow hit lands surviving arrow with blessed mulch roll', async () => {
