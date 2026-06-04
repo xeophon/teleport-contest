@@ -126,6 +126,13 @@ const RANSEUR = 10055;
 const PARTISAN = 10056;
 const GLAIVE = 10057;
 const SPETUM = 10058;
+const HALBERD = 10172;
+const BARDICHE = 10173;
+const VOULGE = 10174;
+const FAUCHARD = 10175;
+const GUISARME = 10176;
+const BILL_GUISARME = 10177;
+const BEC_DE_CORBIN = 10178;
 const LUCERN_HAMMER = 10071;
 const MAGIC_FLUTE = 946;
 const TOOLED_HORN = 10162;
@@ -736,7 +743,14 @@ test('wished polearms use C appearance metadata', async () => {
         ['ranseur', RANSEUR, 'hilted polearm', 'ranseur', 50, 6],
         ['spetum', SPETUM, 'forked polearm', 'spetum', 50, 5],
         ['glaive', GLAIVE, 'single-edged polearm', 'glaive', 75, 6],
+        ['halberd', HALBERD, 'angled poleaxe', 'halberd', 150, 10],
+        ['bardiche', BARDICHE, 'long poleaxe', 'bardiche', 120, 7],
+        ['voulge', VOULGE, 'pole cleaver', 'voulge', 125, 5],
+        ['fauchard', FAUCHARD, 'pole sickle', 'fauchard', 60, 5],
+        ['guisarme', GUISARME, 'pruning hook', 'guisarme', 80, 5],
+        ['bill-guisarme', BILL_GUISARME, 'hooked polearm', 'bill-guisarme', 120, 7],
         ['lucern hammer', LUCERN_HAMMER, 'pronged polearm', 'lucern hammer', 150, 7],
+        ['bec de corbin', BEC_DE_CORBIN, 'beaked polearm', 'bec de corbin', 100, 8],
     ];
 
     for (const [wish, otyp, kind, actualKind, weight, cost] of cases) {
@@ -767,7 +781,14 @@ test('wished polearm appearances resolve to concrete C polearms', async () => {
         ['hilted polearm', RANSEUR, 'ranseur'],
         ['forked polearm', SPETUM, 'spetum'],
         ['single edged polearm', GLAIVE, 'glaive'],
+        ['angled poleaxe', HALBERD, 'halberd'],
+        ['long poleaxe', BARDICHE, 'bardiche'],
+        ['pole cleaver', VOULGE, 'voulge'],
+        ['pole sickle', FAUCHARD, 'fauchard'],
+        ['pruning hook', GUISARME, 'guisarme'],
+        ['hooked polearm', BILL_GUISARME, 'bill-guisarme'],
         ['pronged polearm', LUCERN_HAMMER, 'lucern hammer'],
+        ['beaked polearm', BEC_DE_CORBIN, 'bec de corbin'],
     ];
 
     for (const [wish, otyp, actualKind] of cases) {
@@ -931,7 +952,14 @@ test('mksobj initializes exact local-ID polearms with C appearance metadata', ()
         [RANSEUR, 'hilted polearm', 'ranseur', 50, 6],
         [SPETUM, 'forked polearm', 'spetum', 50, 5],
         [GLAIVE, 'single-edged polearm', 'glaive', 75, 6],
+        [HALBERD, 'angled poleaxe', 'halberd', 150, 10],
+        [BARDICHE, 'long poleaxe', 'bardiche', 120, 7],
+        [VOULGE, 'pole cleaver', 'voulge', 125, 5],
+        [FAUCHARD, 'pole sickle', 'fauchard', 60, 5],
+        [GUISARME, 'pruning hook', 'guisarme', 80, 5],
+        [BILL_GUISARME, 'hooked polearm', 'bill-guisarme', 120, 7],
         [LUCERN_HAMMER, 'pronged polearm', 'lucern hammer', 150, 7],
+        [BEC_DE_CORBIN, 'beaked polearm', 'bec de corbin', 100, 8],
     ];
 
     for (const [otyp, kind, actualKind, weight, cost] of cases) {
@@ -2039,6 +2067,43 @@ test('generic wished sword range uses C rnd_class candidates', async () => {
     }
 
     assert.ok(seen.size > 1, 'sword should not collapse to one concrete object');
+});
+
+test('generic wished polearm range uses C uniform P_POLEARMS candidates', async () => {
+    const allowed = new Set([
+        PARTISAN, RANSEUR, SPETUM, GLAIVE, HALBERD, BARDICHE,
+        VOULGE, FAUCHARD, GUISARME, BILL_GUISARME, LUCERN_HAMMER,
+        BEC_DE_CORBIN,
+    ]);
+    const weights = new Map([
+        [PARTISAN, 80], [RANSEUR, 50], [SPETUM, 50], [GLAIVE, 75],
+        [HALBERD, 150], [BARDICHE, 120], [VOULGE, 125], [FAUCHARD, 60],
+        [GUISARME, 80], [BILL_GUISARME, 120], [LUCERN_HAMMER, 150],
+        [BEC_DE_CORBIN, 100],
+    ]);
+    const seen = new Set();
+
+    for (let seed = 1; seed <= 60; seed++) {
+        installWishState(seed, { debug: false });
+        enableRngLog({ reset: true });
+        beginWishDirectly();
+        await submitWish('polearm');
+
+        const item = game.inventory[0];
+        assert.equal(game._command_mode, null);
+        assert.match(getRngLog()[0], /^rn2\(12\)=/);
+        assert.ok(allowed.has(item.otyp), `polearm produced ${item.otyp}`);
+        assert.notEqual(item.otyp, WEAPON_CLASS);
+        assert.equal(item.cls, 'weapon');
+        assert.equal(item.glyph, ')');
+        assert.notEqual(item.kind, 'polearm');
+        assert.notEqual(item.actualKind, 'polearm');
+        assert.equal(item.known, false);
+        assert.equal(item.owt, weights.get(item.otyp));
+        seen.add(item.otyp);
+    }
+
+    assert.ok(seen.size > 1, 'polearm should not collapse to one concrete object');
 });
 
 test('wished camera tinning kit and grease use C charged-tool metadata rows', async () => {

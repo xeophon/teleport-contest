@@ -1496,6 +1496,13 @@ const RANSEUR = 10055;
 const PARTISAN = 10056;
 const GLAIVE = 10057;
 const SPETUM = 10058;
+const HALBERD = 10172;
+const BARDICHE = 10173;
+const VOULGE = 10174;
+const FAUCHARD = 10175;
+const GUISARME = 10176;
+const BILL_GUISARME = 10177;
+const BEC_DE_CORBIN = 10178;
 const FLAIL = 10060;
 const LUCERN_HAMMER = 10071;
 const DWARVISH_MATTOCK = 10104;
@@ -1977,7 +1984,14 @@ const WISH_BASE_OBJECTS = new Map([
     ['ranseur', { otyp: RANSEUR, cls: 'weapon', glyph: ')', kind: 'hilted polearm', actualKind: 'ranseur', known: false, owt: 50 }],
     ['spetum', { otyp: SPETUM, cls: 'weapon', glyph: ')', kind: 'forked polearm', actualKind: 'spetum', known: false, owt: 50 }],
     ['glaive', { otyp: GLAIVE, cls: 'weapon', glyph: ')', kind: 'single-edged polearm', actualKind: 'glaive', known: false, owt: 75 }],
+    ['halberd', { otyp: HALBERD, cls: 'weapon', glyph: ')', kind: 'angled poleaxe', actualKind: 'halberd', known: false, owt: 150 }],
+    ['bardiche', { otyp: BARDICHE, cls: 'weapon', glyph: ')', kind: 'long poleaxe', actualKind: 'bardiche', known: false, owt: 120 }],
+    ['voulge', { otyp: VOULGE, cls: 'weapon', glyph: ')', kind: 'pole cleaver', actualKind: 'voulge', known: false, owt: 125 }],
+    ['fauchard', { otyp: FAUCHARD, cls: 'weapon', glyph: ')', kind: 'pole sickle', actualKind: 'fauchard', known: false, owt: 60 }],
+    ['guisarme', { otyp: GUISARME, cls: 'weapon', glyph: ')', kind: 'pruning hook', actualKind: 'guisarme', known: false, owt: 80 }],
+    ['bill-guisarme', { otyp: BILL_GUISARME, cls: 'weapon', glyph: ')', kind: 'hooked polearm', actualKind: 'bill-guisarme', known: false, owt: 120 }],
     ['lucern hammer', { otyp: LUCERN_HAMMER, cls: 'weapon', glyph: ')', kind: 'pronged polearm', actualKind: 'lucern hammer', known: false, owt: 150 }],
+    ['bec de corbin', { otyp: BEC_DE_CORBIN, cls: 'weapon', glyph: ')', kind: 'beaked polearm', actualKind: 'bec de corbin', known: false, owt: 100 }],
     ['bullwhip', { otyp: BULLWHIP, cls: 'weapon', glyph: ')', kind: 'bullwhip', actualKind: 'bullwhip' }],
     ['silver saber', { otyp: SILVER_SABER, cls: 'weapon', glyph: ')', kind: 'silver saber', actualKind: 'silver saber' }],
     ['dwarvish mattock', { otyp: DWARVISH_MATTOCK, cls: 'weapon', glyph: ')', kind: 'dwarvish mattock', actualKind: 'dwarvish mattock' }],
@@ -2125,7 +2139,9 @@ const WISH_BASE_NAMEDESC_BOUNDS = new Map([
     ['scimitar', 16], ['broadsword', 9], ['elven broadsword', 5],
     ['long sword', 51], ['two-handed sword', 23], ['katana', 5],
     ['flail', 41], ['partisan', 6], ['ranseur', 6], ['spetum', 6], ['glaive', 9],
-    ['lucern hammer', 6],
+    ['halberd', 9], ['bardiche', 5], ['voulge', 5], ['fauchard', 7],
+    ['guisarme', 7], ['bill-guisarme', 5], ['lucern hammer', 6],
+    ['bec de corbin', 5],
     ['bullwhip', 3], ['silver saber', 7], ['dwarvish mattock', 14],
     ['pick-axe', 21], ['pick axe', 21], ['pickaxe', 21], ['pickax', 21], ['pick-ax', 21],
     ['cream pie', 26], ['lump of royal jelly', 1], ['lumps of royal jelly', 1], ['eucalyptus leaf', 4], ['kelp frond', 1], ['kelp fronds', 1],
@@ -2379,6 +2395,20 @@ const WISH_OBJECT_RANGES = new Map([
         ['long sword', 50],
         ['two-handed sword', 22],
         ['katana', 4],
+    ]],
+    ['polearm', [
+        ['partisan', 0],
+        ['ranseur', 0],
+        ['spetum', 0],
+        ['glaive', 0],
+        ['halberd', 0],
+        ['bardiche', 0],
+        ['voulge', 0],
+        ['fauchard', 0],
+        ['guisarme', 0],
+        ['bill-guisarme', 0],
+        ['lucern hammer', 0],
+        ['bec de corbin', 0],
     ]],
 ]);
 const WISH_OBJECT_RANGE_CLASSES = new Map([
@@ -32822,9 +32852,18 @@ const WISH_NAME_ALIASES = new Map([
     ['vulgar polearm', 'partisan'],
     ['hilted polearm', 'ranseur'],
     ['forked polearm', 'spetum'],
+    ['polearms', 'polearm'],
     ['single-edged polearm', 'glaive'],
     ['single edged polearm', 'glaive'],
+    ['angled poleaxe', 'halberd'],
+    ['long poleaxe', 'bardiche'],
+    ['pole cleaver', 'voulge'],
+    ['pole sickle', 'fauchard'],
+    ['pruning hook', 'guisarme'],
+    ['hooked polearm', 'bill-guisarme'],
+    ['bill guisarme', 'bill-guisarme'],
     ['pronged polearm', 'lucern hammer'],
+    ['beaked polearm', 'bec de corbin'],
     ['bags of tricks', 'bag of tricks'],
     ['wolfsbane', 'sprig of wolfsbane'],
     ['garlic', 'clove of garlic'],
