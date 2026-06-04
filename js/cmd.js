@@ -36599,6 +36599,7 @@ function tipHatMonsterSound(mon) {
     if (name === 'ki-rin') return 'spell';
     if (name === 'oracle') return 'oracle';
     if (name === 'imp') return 'cuss';
+    if (name === 'amorous demon') return 'seduce';
     if (tipHatMonsterIsNymph(mon, name, mlet)) return 'seduce';
     if (tipHatMonsterIsHumanWereForm(mon, name, mlet)) return 'were';
     if (tipHatMonsterIsVampireInOwnForm(name)) return 'vampire';
@@ -37023,8 +37024,10 @@ function tipHatMonsterNoise(mon, { visible = tipHatMonsterVisible(mon), nameOver
     case 'priest':
         return tipHatPriestNoise(mon, name);
     case 'seduce': {
-        if (!tipHatMonsterIsNymph(mon, monName)) return { handled: false, message: '' };
-        if (!!game.flags?.female !== tipHatMonsterFemale(mon)) {
+        const sameGender = !!game.flags?.female === tipHatMonsterFemale(mon);
+        if (!tipHatMonsterIsNymph(mon, monName) && !sameGender)
+            return { handled: false, message: '' };
+        if (!sameGender) {
             const swval = rn2(3);
             if (swval === 2) return { handled: true, message: '"Hello, sailor."' };
             if (swval === 1) return { handled: true, message: `${name} comes on to you.` };

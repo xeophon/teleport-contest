@@ -6682,6 +6682,33 @@ test('chat with visible nymph uses C seduce wording', async () => {
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(3)']);
 });
 
+test('chat with same-gender amorous demon uses C seduce fallback', async () => {
+    const result = await chatAdjacentMonster({
+        name: 'amorous demon',
+        rngLog: true,
+        data: {
+            name: 'amorous demon',
+            mlevel: 6,
+            mlet: '&',
+            demon: true,
+            female: true,
+            humanoid: true,
+        },
+        extra: { female: true },
+        setup: () => {
+            game.flags.female = true;
+            game.u.female = true;
+        },
+    });
+
+    assert.equal(result.message, 'The amorous demon cajoles you.');
+    assert.equal(result.target.mstrategy, 0);
+    assert.equal(game.context.move, 1);
+    assert.doesNotMatch(result.message,
+        /Hello, sailor|comes on to you|Nothing happens|talking to a wall|undresses/);
+    assert.deepEqual(getRngLog(), []);
+});
+
 test('chat with visible nurse wearing only a shirt asks for shirt removal', async () => {
     const result = await chatAdjacentMonster({
         name: 'nurse',
