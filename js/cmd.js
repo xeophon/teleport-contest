@@ -35811,6 +35811,11 @@ const TIPHAT_BOAST_MONSTER_NAMES = new Set([
 
 const TIPHAT_GENERATED_SOUND_BY_MONSTER_NAME = new Map([
     ['killer bee', 'buzz'], ['queen bee', 'buzz'], ['grid bug', 'buzz'], ['xan', 'buzz'],
+    ['chickatrice', 'hiss'], ['cockatrice', 'hiss'], ['pyrolisk', 'hiss'],
+    ['mind flayer', 'hiss'], ['master mind flayer', 'hiss'],
+    ['couatl', 'hiss'], ['garter snake', 'hiss'], ['snake', 'hiss'],
+    ['water moccasin', 'hiss'], ['python', 'hiss'], ['pit viper', 'hiss'],
+    ['cobra', 'hiss'],
     ['jaguar', 'growl'], ['lynx', 'growl'], ['panther', 'growl'], ['tiger', 'growl'],
     ['displacer beast', 'growl'], ['bugbear', 'growl'], ['monkey', 'growl'], ['ape', 'growl'],
     ['yeti', 'growl'], ['carnivorous ape', 'growl'], ['sasquatch', 'growl'],

@@ -5784,6 +5784,46 @@ test('chat with visible generated nonverbal sound monsters uses C msound rows', 
     }
 });
 
+test('chat with visible generated hiss sound monsters uses C msound rows', async () => {
+    const hostileCases = [
+        ['chickatrice', { mlevel: 4, mlet: 'c' }],
+        ['pyrolisk', { mlevel: 6, mlet: 'c' }],
+        ['mind flayer', { mlevel: 9, mlet: 'h', humanoid: true }],
+        ['master mind flayer', { mlevel: 13, mlet: 'h', humanoid: true }],
+        ['couatl', { mlevel: 8, mlet: 'A', minion: true }],
+        ['python', { mlevel: 6, mlet: 'S' }],
+        ['water moccasin', { mlevel: 4, mlet: 'S' }],
+    ];
+
+    for (const [name, data] of hostileCases) {
+        const result = await chatAdjacentMonster({
+            name,
+            peaceful: false,
+            rngLog: true,
+            data: { name, ...data },
+        });
+
+        assert.equal(result.message, `The ${name} hisses!`);
+        assert.equal(result.target.mstrategy, 0);
+        assert.equal(game.context.move, 1);
+        assert.doesNotMatch(result.message, /threatens|squeaks|doesn't respond|Nothing happens|waves/);
+        assert.deepEqual(getRngLog(), []);
+    }
+
+    const peaceful = await chatAdjacentMonster({
+        name: 'cockatrice',
+        peaceful: true,
+        rngLog: true,
+        data: { name: 'cockatrice', mlevel: 5, mlet: 'c' },
+    });
+
+    assert.equal(peaceful.message, '');
+    assert.equal(peaceful.target.mstrategy, 0);
+    assert.equal(game.context?.move || 0, 0);
+    assert.doesNotMatch(peaceful.message, /hisses|doesn't respond|Nothing happens|waves/);
+    assert.deepEqual(getRngLog(), []);
+});
+
 test('chat with visible generated special sound monsters uses C msound rows', async () => {
     const cases = [
         {
