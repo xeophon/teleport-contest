@@ -33488,6 +33488,9 @@ async function runMonsterDartHitLanding({
     heroDeaf = false,
     levelCells = [],
     throwerX = 8,
+    monsterName = 'kobold',
+    monsterData = {},
+    dartQuan = 1,
 } = {}) {
     installNonShopFloorState();
     resetInputState();
@@ -33518,12 +33521,12 @@ async function runMonsterDartHitLanding({
     }
     for (let x = 5; x <= throwerX; x++) markSquareVisible(x, 5);
     for (const [x, y] of levelCells) markSquareVisible(x, y);
-    const dart = { ...dartStack(874356, 'd', 1), letter: undefined, line: undefined, spe: 0 };
+    const dart = { ...dartStack(874356, 'd', dartQuan), letter: undefined, line: undefined, spe: 0 };
     const thrower = {
         mx: throwerX,
         my: 5,
         movement: NORMAL_SPEED,
-        data: { name: 'kobold', mlet: 'k', mmove: NORMAL_SPEED, armed: true, mlevel: 0 },
+        data: { name: monsterName, mlet: 'k', mmove: NORMAL_SPEED, armed: true, mlevel: 0, ...monsterData },
         mpeaceful: false,
         mhp: 5,
         mhpmax: 5,
@@ -34338,6 +34341,70 @@ test('production kobold dart hit lands surviving dart with ohit mulch', async ()
 
     assert.ok(rng.includes('rnd(20)=12'));
     assert.ok(rng.includes('rn2(3)=0'));
+});
+
+test('production large kobold dart hit uses kobold-family ranged path', async () => {
+    const { dart, thrower, rng } = await runMonsterDartHitLanding({
+        seed: 8,
+        monsterName: 'large kobold',
+    });
+
+    assert.equal(game.u.uhp, 18);
+    assert.equal(thrower.missile, null);
+    assert.equal(thrower.minvent.some(obj => obj.id === dart.id), false);
+
+    const landed = game.level.objects.find(obj => obj.id === dart.id);
+    assert.ok(landed);
+    assert.equal(landed.kind, 'dart');
+    assert.ok(rng.includes('rnd(20)=12'));
+});
+
+test('production kobold leader dart hit uses kobold-family ranged path', async () => {
+    const { dart, thrower, rng } = await runMonsterDartHitLanding({
+        seed: 8,
+        monsterName: 'kobold leader',
+    });
+
+    assert.equal(game.u.uhp, 18);
+    assert.equal(thrower.missile, null);
+    assert.equal(thrower.minvent.some(obj => obj.id === dart.id), false);
+
+    const landed = game.level.objects.find(obj => obj.id === dart.id);
+    assert.ok(landed);
+    assert.equal(landed.kind, 'dart');
+    assert.ok(rng.includes('rnd(20)=12'));
+});
+
+test('production kobold dart stack splits one thrown dart', async () => {
+    const { dart, thrower, rng } = await runMonsterDartHitLanding({
+        seed: 8,
+        dartQuan: 3,
+    });
+
+    assert.equal(game.u.uhp, 18);
+    assert.equal(dart.quan, 2);
+    assert.equal(thrower.missile, dart);
+    assert.equal(thrower.minvent.includes(dart), true);
+
+    const landed = game.level.objects.find(obj => obj.kind === 'dart' && obj.id !== dart.id);
+    assert.ok(landed);
+    assert.equal(landed.quan, 1);
+    assert.ok(rng.includes('rnd(20)=12'));
+});
+
+test('production kobold shaman does not use kobold dart path', async () => {
+    const { dart, thrower } = await runMonsterDartHitLanding({
+        seed: 8,
+        monsterName: 'kobold shaman',
+        monsterData: { mlet: 'kobold', armed: false },
+        dartQuan: 3,
+    });
+
+    assert.equal(game.u.uhp, 20);
+    assert.equal(dart.quan, 3);
+    assert.equal(thrower.missile, dart);
+    assert.equal(thrower.minvent.includes(dart), true);
+    assert.equal(game.level.objects.some(obj => obj.kind === 'dart'), false);
 });
 
 test('production kobold dart aimed shot can pass through iron bars before hero', async () => {

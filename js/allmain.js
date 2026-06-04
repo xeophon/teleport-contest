@@ -6213,8 +6213,8 @@ export async function processMonsterTurns() {
                     const throwDist2 = (mon.mx - throwTargetX) ** 2 + (mon.my - throwTargetY) ** 2;
                     const nearThrowTarget = throwDist2 < 3
                         && !(mon.data?.name === 'grid bug' && throwTargetX !== mon.mx && throwTargetY !== mon.my);
-	                    const canThrowDart = mon.data?.name === 'kobold' && mon.missile?.otyp === DART && mon.missile.quan > 0
-	                        && throwRange > 1 && throwRange <= 4 && straightThrow;
+                    const canThrowDart = monsterIsKoboldDartThrower(mon) && mon.missile?.otyp === DART && mon.missile.quan > 0
+                        && throwRange > 1 && throwRange <= 4 && straightThrow;
                     let offensivePotionIndex = -1;
                     for (let i = 0; i < (mon.minvent || []).length; i++) {
                         const item = mon.minvent[i];
@@ -7158,7 +7158,7 @@ export async function processMonsterTurns() {
                         }
                         continue;
                     }
-	                    if (canThrowDart && rangedWeaponLinedUp) {
+                    if (canThrowDart && rangedWeaponLinedUp) {
                         let clearShot = true;
                         for (let step = 1; step < throwRange; step++) {
                             if (IS_OBSTRUCTED(game.level?.at(mon.mx + throwDx * step, mon.my + throwDy * step)?.typ ?? 0)) {
@@ -7169,8 +7169,12 @@ export async function processMonsterTurns() {
                         if (clearShot) {
                             const missile = mon.missile;
                             rnd(1);
-                            next_ident();
-                            if ((missile.quan || 1) > 1) missile.quan--;
+                            const thrownId = next_ident();
+                            let thrownMissile = missile;
+                            if ((missile.quan || 1) > 1) {
+                                missile.quan--;
+                                thrownMissile = { ...missile, id: thrownId, quan: 1 };
+                            }
                             else {
                                 const missileIndex = (mon.minvent || []).indexOf(missile);
                                 if (missileIndex >= 0) mon.minvent.splice(missileIndex, 1);
@@ -7193,7 +7197,7 @@ export async function processMonsterTurns() {
                             }
                             if (dartTerrainStop) {
                                 const floorMessages = [];
-                                landMonsterThrownObject(missile, dartTerrainStop.x, dartTerrainStop.y, {
+                                landMonsterThrownObject(thrownMissile, dartTerrainStop.x, dartTerrainStop.y, {
                                     glyph: ')',
                                     color: CLR_CYAN,
                                     messages: floorMessages,
@@ -7208,7 +7212,7 @@ export async function processMonsterTurns() {
                                     addToplineMessage('You are hit by a dart.');
                                     exerciseAttribute(A_STR, false);
                                     const floorMessages = [];
-                                    landMonsterThrownObject(missile, game.u?.ux || 0, game.u?.uy || 0, {
+                                    landMonsterThrownObject(thrownMissile, game.u?.ux || 0, game.u?.uy || 0, {
                                         glyph: ')',
                                         color: CLR_CYAN,
                                         messages: floorMessages,
@@ -7219,7 +7223,7 @@ export async function processMonsterTurns() {
                                     addToplineMessage('A dart misses you.');
                                     rn2(5);
                                     const floorMessages = [];
-                                    landMonsterThrownObject(missile, game.u?.ux || 0, game.u?.uy || 0, {
+                                    landMonsterThrownObject(thrownMissile, game.u?.ux || 0, game.u?.uy || 0, {
                                         glyph: ')',
                                         color: CLR_CYAN,
                                         messages: floorMessages,
@@ -8563,6 +8567,18 @@ function monsterLauncherWeaponIsElvenBow(item) {
 function monsterIsElf(mon) {
     const name = String(mon?.data?.name || '').toLowerCase();
     return !!mon?.data?.elf || name === 'elf' || name.includes('elf');
+}
+
+function monsterIsKoboldDartThrower(mon) {
+    const data = mon?.data || {};
+    if (data.armed !== true) return false;
+    const name = String(data.name || '').toLowerCase();
+    return data.mlet === 'kobold'
+        || name === 'kobold'
+        || name === 'large kobold'
+        || name === 'kobold leader'
+        || name === 'kobold lord'
+        || name === 'kobold lady';
 }
 
 function monsterThrownSpearNames(item) {

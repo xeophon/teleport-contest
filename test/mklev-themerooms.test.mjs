@@ -204,6 +204,15 @@ function assertNaturalCentaurLauncher(mon, launcherKind, ammoKind) {
     assert.ok(launcher);
 }
 
+function assertNaturalKoboldDarts(mon) {
+    const ammo = mon.missile;
+    assert.ok(ammo);
+    assert.equal(mon.minvent.includes(ammo), true);
+    assert.equal(ammo.kind, 'dart');
+    assert.equal(ammo.plural, 'darts');
+    assert.ok(ammo.quan >= 3 && ammo.quan <= 14);
+}
+
 function doorCellsAround(g, room) {
     const doors = [];
     for (let x = room.lx - 1; x <= room.hx + 1; x++) {
@@ -300,6 +309,19 @@ test('natural centaurs split forest bow ammo from crossbow bolts', async () => {
         assert.equal(monsterInventoryHas(mon, 'bow'), false);
         assert.equal(monsterInventoryHas(mon, 'arrow'), false);
     }
+});
+
+test('natural weapon-using kobolds generate dart stacks', async () => {
+    for (const name of ['kobold', 'large kobold', 'kobold leader']) {
+        const mon = await generatedMonsterWithMissile(name);
+        assertNaturalKoboldDarts(mon);
+    }
+
+    const shaman = await generatedMonsterMatching('kobold shaman',
+        mon => !mon?.missile,
+        'no natural dart missile');
+    assert.equal(shaman.missile ?? null, null);
+    assert.equal(monsterInventoryHas(shaman, 'dart'), false);
 });
 
 test('mines level_init smoothed option gates only the C pass-three smoothing', () => {
