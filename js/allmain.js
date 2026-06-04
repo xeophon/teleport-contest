@@ -7065,6 +7065,7 @@ export async function processMonsterTurns() {
                             game._process_time_with_more = 0;
                         }
 
+                        let interveningTarget = null;
                         let daggerTerrainStop = null;
                         if (game.level?.at(mon.mx + throwDx, mon.my + throwDy)?.typ === IRONBARS) {
                             rn2(100); // C breaktest() calls obj_resists(); ordinary daggers still survive.
@@ -7076,6 +7077,15 @@ export async function processMonsterTurns() {
                                 const sx = mon.mx + throwDx * step;
                                 const sy = mon.my + throwDy * step;
                                 const remainingRange = throwRange - step;
+                                const targetMon = monsterAtFlightSquare(sx, sy, mon);
+                                if (targetMon) {
+                                    const hitValue = monsterThrownObjectAccidentalHitValue(targetMon);
+                                    const hitRoll = rnd(20);
+                                    if (hitValue >= hitRoll) {
+                                        interveningTarget = targetMon;
+                                        break;
+                                    }
+                                }
                                 rn2(5);
                                 if (remainingRange && game.level?.at(sx + throwDx, sy + throwDy)?.typ === IRONBARS) {
                                     rn2(100); // C consumes forcehit first; P_DAGGER then hits bars by class.
@@ -7092,6 +7102,23 @@ export async function processMonsterTurns() {
                                 glyph: ')',
                                 color: CLR_CYAN,
                                 messages: floorMessages,
+                            });
+                            addMonsterThrownFloorMessages(floorMessages, throwerVisible);
+                        } else if (interveningTarget) {
+                            const damage = rnd(4);
+                            interveningTarget.msleeping = 0;
+                            interveningTarget.mhp = Math.max(0, (interveningTarget.mhp || 1) - damage);
+                            const hitMessage = throwerVisible
+                                ? `The ${daggerKind} hits the ${interveningTarget.data?.name || 'monster'}.`
+                                : 'It is hit.';
+                            if (throwerVisible) game._topline_after_more = hitMessage;
+                            else addToplineMessage(hitMessage);
+                            const floorMessages = [];
+                            landMonsterThrownObject(thrownMissile, interveningTarget.mx, interveningTarget.my, {
+                                glyph: ')',
+                                color: CLR_CYAN,
+                                messages: floorMessages,
+                                ohit: true,
                             });
                             addMonsterThrownFloorMessages(floorMessages, throwerVisible);
                         } else {
