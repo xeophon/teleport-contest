@@ -47592,17 +47592,21 @@ export async function rhack(_cmd) {
                 for (const obj of projectiles) newsym(obj.ox, obj.oy);
 
                 const appearance = game._object_descriptions?.potions?.[potion.potionIndex]?.description || 'clear';
-                let message = `The ${appearance} potion evaporates.`;
-                if (potion.potionIndex === 17) {
+                const messages = [`The ${appearance} potion evaporates.`];
+                const kind = thrownPotionEffectKind(potion);
+                if (kind === 'acid') {
+                    heroAcidPotionSelfHitMessages(potion, messages);
+                    potionBreathe(potion, messages);
+                } else if (potion.potionIndex === 17) {
                     const sleepTime = rnd(5);
                     rn2(2);
                     rn2(19);
                     game._helpless_time = Math.max(game._helpless_time || 0, sleepTime);
                     game._wake_message = 'You can move again.';
                     game._pending_time_passed = Math.max(game._pending_time_passed || 0, sleepTime);
-                    message = `${message}  You feel rather tired.`;
+                    messages.push('You feel rather tired.');
                 }
-                game._pending_message = message;
+                game._pending_message = messages.join('  ');
                 game._message_more = 1;
                 game._process_time_with_more = game._pending_time_passed ? 1 : 0;
                 game._keep_pending_message = 1;

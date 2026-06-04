@@ -33668,6 +33668,7 @@ async function runMonsterOffensivePotionCatch({
     seed = 1,
     heroBlind = false,
     heroDex = 100,
+    heroOverrides = {},
     potionQuan = 1,
     potion = null,
     initialInventory = null,
@@ -33694,6 +33695,7 @@ async function runMonsterOffensivePotionCatch({
         uac: 10,
         umovement: NORMAL_SPEED,
         acurr: { a: [10, 10, 10, heroDex, 10, 10] },
+        ...heroOverrides,
     });
     if (fullInventory) fillInventoryLetters(878000);
     else if (initialInventory) game.inventory = initialInventory;
@@ -34803,6 +34805,50 @@ test('production monster potion singleton catch clears monster missile', async (
         || entry.startsWith('rnd(2)=')), false, rng.join(', '));
     assert.equal(preNhgetchMessages.some(message => /You catch the potion!/.test(message)), true,
         preNhgetchMessages.join('\n'));
+});
+
+test('production monster acid potion failed catch burns after crash', async () => {
+    const acid = acidPotion(878104, 'a', 2);
+    acid.dknown = true;
+    const { potion, thrower, rng, preNhgetchMessages } = await runMonsterOffensivePotionCatch({
+        seed: 1,
+        potion: acid,
+        heroOverrides: { uhp: 40, uhpmax: 40, fumbling: true },
+    });
+    const hpAfterHit = game.u.uhp;
+
+    assert.equal(preNhgetchMessages.some(message => /crashes on your head/.test(message)), true,
+        preNhgetchMessages.join('\n'));
+    assert.match(game._pending_message, /potion evaporates\./);
+    assert.match(game._pending_message, /This burns!/);
+    assert.equal(game.level.objects.some(obj => obj.kind === 'acid'), false);
+    const residual = thrower.minvent.find(obj => obj.id === potion.id);
+    assert.ok(residual);
+    assert.equal(residual.quan, 1);
+    assert.equal(hpAfterHit <= 38, true);
+    assert.equal(game.u.uhp < 40, true);
+    assert.equal(40 - game.u.uhp <= 10, true);
+    assert.deepEqual(rng.map(entry => entry.replace(/=.*/, '')).slice(-3), [
+        'rnd(2)', 'd(1,8)', 'rn2(2)',
+    ]);
+});
+
+test('production monster acid potion failed catch respects acid resistance', async () => {
+    const acid = acidPotion(878105, 'a', 2);
+    acid.dknown = true;
+    await runMonsterOffensivePotionCatch({
+        seed: 1,
+        potion: acid,
+        heroOverrides: { uhp: 40, uhpmax: 40, acidResistance: true, fumbling: true },
+    });
+    const hpAfterHit = game.u.uhp;
+
+    assert.match(game._pending_message, /potion evaporates\./);
+    assert.doesNotMatch(game._pending_message, /This burns/);
+    assert.equal(hpAfterHit < 40 && hpAfterHit >= 38, true);
+    const rngNames = getRngLog().map(entry => entry.replace(/=.*/, ''));
+    assert.equal(rngNames.includes('d(1,8)'), false, rngNames.join(', '));
+    assert.equal(rngNames.at(-1), 'rn2(2)');
 });
 
 test('production kobold dart hit lands surviving dart with ohit mulch', async () => {
