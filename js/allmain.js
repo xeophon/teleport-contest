@@ -6210,8 +6210,9 @@ export async function processMonsterTurns() {
                             Math.trunc(Number(thrownMissile.oeroded2 || 0)));
                         const coveredArrowState = missileSpe === 0
                             || (!thrownMissile.blessed && (missileSpe === 1 || missileSpe === 2));
-                        const coveredErosionState = !missileErosion
-                            || (!thrownMissile.blessed && !thrownMissile.cursed && !thrownMissile.greased);
+                        const coveredErodedArrowState = !thrownMissile.cursed && !thrownMissile.greased
+                            && (!thrownMissile.blessed || missileSpe === 0);
+                        const coveredErosionState = !missileErosion || coveredErodedArrowState;
                         const sharedArrowLanding = coveredArrowState && coveredErosionState;
                         addToplineMessage(`${monsterDisplayName(mon, true)} shoots an arrow!`);
                         game._message_more = 1;
