@@ -6946,8 +6946,13 @@ function m_initweap(ptr) {
         if (!rn2(4)) m_initthrow(DART, 12);
     } else if (ptr.mlet === S_CENTAUR || ptr.mlet === 'C') {
         if (rn2(2)) {
-            mongets(BOW);
-            m_initthrow(ARROW, 12);
+            if (ptr.name === 'forest centaur') {
+                mongets(BOW);
+                m_initthrow(ARROW, 12);
+            } else {
+                mongets(CROSSBOW);
+                m_initthrow(CROSSBOW_BOLT, 12);
+            }
         }
     } else if (ptr.mlet === 'G') {
         const bias = ptr.name?.includes('ruler') ? 2 : ptr.name?.includes('leader') ? 1 : 0;

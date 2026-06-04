@@ -193,6 +193,17 @@ function assertRunedWeapon(mon, actualKind, kind) {
     assertNoPlainElfPlaceholderGear(mon);
 }
 
+function assertNaturalCentaurLauncher(mon, launcherKind, ammoKind) {
+    const ammo = mon.missile;
+    assert.ok(ammo);
+    assert.equal(mon.minvent.includes(ammo), true);
+    assert.equal(ammo.kind, ammoKind);
+    assert.ok(ammo.quan >= 3 && ammo.quan <= 14);
+
+    const launcher = mon.minvent.find(obj => obj.kind === launcherKind);
+    assert.ok(launcher);
+}
+
 function doorCellsAround(g, room) {
     const doors = [];
     for (let x = room.lx - 1; x <= room.hx + 1; x++) {
@@ -275,6 +286,20 @@ test('natural elves use C elven broadsword and spear branches', async () => {
         'an elven spear branch');
     assertRunedWeapon(spearMon, 'elven spear', 'runed spear');
     assert.equal(monsterInventoryHas(spearMon, 'elven shield'), true);
+});
+
+test('natural centaurs split forest bow ammo from crossbow bolts', async () => {
+    const forest = await generatedMonsterWithMissile('forest centaur');
+    assertNaturalCentaurLauncher(forest, 'bow', 'arrow');
+    assert.equal(monsterInventoryHas(forest, 'crossbow'), false);
+    assert.equal(monsterInventoryHas(forest, 'crossbow bolt'), false);
+
+    for (const name of ['plains centaur', 'mountain centaur']) {
+        const mon = await generatedMonsterWithMissile(name);
+        assertNaturalCentaurLauncher(mon, 'crossbow', 'crossbow bolt');
+        assert.equal(monsterInventoryHas(mon, 'bow'), false);
+        assert.equal(monsterInventoryHas(mon, 'arrow'), false);
+    }
 });
 
 test('mines level_init smoothed option gates only the C pass-three smoothing', () => {
