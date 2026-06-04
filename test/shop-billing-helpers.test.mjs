@@ -22162,6 +22162,71 @@ test('metallivorous metal amulet of change eating uses the C makeknown branch', 
     assert.equal(game._discoveries.some(entry => entry.section === 'Amulets' && entry.name === 'amulet of change' && entry.known), true);
 });
 
+test('metallivorous eaten strangulation amulet recovers for breathless heroes', async () => {
+    installCommandShopState();
+    installMetallivorousForm();
+    initRng(1);
+    enableRngLog({ reset: true });
+    game.u.breathless = true;
+    const amulet = metalAmulet(32203, 'amulet of strangulation', 3, 'a', { appearance: 'oval' });
+    game.inventory = [amulet];
+
+    await rhack('e');
+    await rhack('a');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.inventory.includes(amulet), false);
+    assert.equal(game.u.uhp, 10);
+    assert.equal(game.u.uhunger, 920);
+    assert.equal(amulet.known, true);
+    assert.equal(amulet.dknown, true);
+    assert.match(game._pending_message, /This oval amulet is delicious!/);
+    assert.match(game._pending_message, /You choke, but recover your composure\./);
+    assert.doesNotMatch(game._pending_message, /You die/);
+    assert.deepEqual(getRngLog(), ['rn2(5)=0', 'rn2(2)=0']);
+});
+
+test('metallivorous eaten strangulation amulet uses C random recovery roll', async () => {
+    installCommandShopState();
+    installMetallivorousForm();
+    initRng(1);
+    enableRngLog({ reset: true });
+    const amulet = metalAmulet(32204, 'amulet of strangulation', 3, 'a', { appearance: 'oval' });
+    game.inventory = [amulet];
+
+    await rhack('e');
+    await rhack('a');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.inventory.includes(amulet), false);
+    assert.equal(game.u.uhp, 10);
+    assert.equal(game.u.uhunger, 920);
+    assert.match(game._pending_message, /You choke, but recover your composure\./);
+    assert.deepEqual(getRngLog(), ['rn2(5)=0', 'rn2(2)=0', 'rn2(20)=0']);
+});
+
+test('metallivorous eaten strangulation amulet can fatally choke over metal', async () => {
+    installCommandShopState();
+    installMetallivorousForm();
+    initRng(7);
+    enableRngLog({ reset: true });
+    const amulet = metalAmulet(32205, 'amulet of strangulation', 3, 'a', { appearance: 'oval' });
+    game.inventory = [amulet];
+
+    await rhack('e');
+    await rhack('a');
+
+    assert.equal(game._command_mode, 'deathDieMore');
+    assert.equal(game.inventory.includes(amulet), false);
+    assert.equal(game.u.uhp, 0);
+    assert.equal(game.u.uhunger, 920);
+    assert.equal(game.u.strangled || false, false);
+    assert.equal(game._death_cause, 'choked on an oval amulet');
+    assert.match(game._pending_message, /This oval amulet is delicious!/);
+    assert.match(game._pending_message, /You choke over your metal\.  You die\.\.\./);
+    assert.deepEqual(getRngLog(), ['rn2(5)=0', 'rn2(2)=0', 'rn2(20)=5', 'rn2(1)=0']);
+});
+
 test('first bite of unpaid carried food stack splits live and used-up bill rows', () => {
     const { shkp } = installShopState();
     const stack = foodRation(3101, 'a');

@@ -22543,6 +22543,42 @@ function applyEatenRingEffect(item, messages) {
     }
 }
 
+function eatenAmuletStrangulationChoke(item, messages) {
+    exerciseAttribute(A_CON, false);
+    if (heroIsBreathlessForChoke() || heroHasHungerPropertyForChoke()
+        || (!heroIsStrangledForChoke() && !rn2(20))) {
+        messages.push('You choke, but recover your composure.');
+        return true;
+    }
+
+    messages.push(`You choke over your ${metallivoreFoodWord(item)}.`);
+    game._death_cause = `choked on ${articleFor(pickupObjectName({ ...item, quan: 1 }))}`;
+    if (consumeLifeSavingAmulet()) {
+        if (game.u) {
+            game.u.uhp = 0;
+            game.u.uhunger = 900;
+            refreshHeroEatingHungerStatus();
+        }
+        messages.push('You die...');
+        messages.push(`But wait...  Your medallion ${game.u?.blind ? 'feels warm' : 'begins to glow'}!`);
+        game._eaten_accessory_command_mode = 'lifeSavingMore';
+        game._eaten_accessory_more = 1;
+        game._eaten_accessory_move = 0;
+        return true;
+    }
+
+    if (game.u) game.u.uhp = 0;
+    game._pending_time_passed = 0;
+    game._process_command_time_now = 0;
+    game._run_steps_remaining = 0;
+    prepareDeathBones();
+    messages.push('You die...');
+    game._eaten_accessory_command_mode = 'deathDieMore';
+    game._eaten_accessory_more = 1;
+    game._eaten_accessory_move = 0;
+    return true;
+}
+
 const EATEN_AMULET_PROPERTY_FIELDS = new Map([
     ['amulet of esp', 'telepathy'],
     ['amulet versus poison', 'poisonResistance'],
@@ -22586,14 +22622,7 @@ function applyEatenAmuletEffect(item, messages) {
         }
         return true;
     case 'amulet of strangulation':
-        if (game.u) {
-            game.u.uhp = 0;
-            game.u.strangled = true;
-            game._death_cause = 'killed by strangulation';
-            messages.push('You choke over your food.');
-            messages.push('You die...');
-        }
-        return true;
+        return eatenAmuletStrangulationChoke(item, messages);
     case 'amulet of life saving':
     case 'amulet of flying':
     case 'amulet of reflection':
@@ -22707,12 +22736,18 @@ async function eatHeroNonFoodMetal(item, { floorObject = false } = {}) {
     addHeroNutrition(heroMetalNonFoodNutrition(item));
     if (!floorObject && objectIsRingLike(item)) clearEatenWornRingState(item);
     applyEatenMetalAccessoryEffects(item, messages);
+    const accessoryCommandMode = game._eaten_accessory_command_mode || null;
+    const accessoryMore = !!game._eaten_accessory_more;
+    const accessoryMove = game._eaten_accessory_move;
+    delete game._eaten_accessory_command_mode;
+    delete game._eaten_accessory_more;
+    delete game._eaten_accessory_move;
     if (floorObject) removeEatenFloorMetalObject(item);
     else removeInventoryItem(item, item.quan || 1);
     game._pet_food_scan_inventory = game.inventory || [];
-    await setMessage(messages.join('  ') || `This ${name} is delicious!`, messages.length > 1);
-    game._command_mode = null;
-    game.context.move = 1;
+    await setMessage(messages.join('  ') || `This ${name} is delicious!`, messages.length > 1 || accessoryMore);
+    game._command_mode = accessoryCommandMode;
+    game.context.move = accessoryMove ?? 1;
     return true;
 }
 
