@@ -3,7 +3,7 @@
 
 import { game } from './gstate.js';
 import { mklev, l_nhcore_init, u_on_upstairs, makemon, mkcorpstat, mksobj, wipe_engr_at, dropMonsterInventory, wandIndexForRoll, scrollIndexForRoll, potionIndexForRoll, RANDOM_MONSTER_BY_NAME, STONE_RESISTANT_MONSTERS, adjustedMonsterLevel, monsterByRndName, monster_hp, rndmonnum, syncDungeonContext, next_ident, set_malign, enextoMonsterSpot, getbogusmon, pickNasty, chameleonAnimalForm, doppelgangerHumanoidForm, noteleportLevelForMonster, rlocNoMsg, rlocToCoreNoMsg, somexyspace, fumaroles, createMonsterCorpseOrGlob, monsterCorpseDropSucceeds, monsterLeavesCorpseLikeDrop, movebubbles, add_to_minv } from './mklev.js';
-import { rhack, pickupObjectName, inventoryItemName, inventoryLetterRank, recordVanquished, finishForceLock, loseExperienceLevel, finishLevelTeleport, finishPickDigDownwardHole, finishPickDigDownwardPit, maybeQueueQuestTalk, monsterGrowUp, monsterHostileCussNoise, monsterTurnDemonBribeArtifact, monsterTurnDemonBribeDemand, monsterTurnDemonBribeNoGold, processForceLockOccupationTick, forceLockOccupationShouldGiveUp, processSpellbookStudyOccupation, processTinOpeningOccupation, finishTinOpeningOccupation, refreshSwallowOverlay, finishSwallowExpel, travelPathKeys, updateGauntletsOfPowerStrength, consumeLifeSavingAmulet, activateStatueTrap, breakStatueObject, burnFloorObjectsByFire, burnRayFloorObjectsByFire, erodeArmorByFireTrap, dryWetTowelFromFire, igniteMonsterFireInventoryItems, monsterFireInventoryDamage, dropMonsterObject, earthFloorEffects, landMonsterThrownObject, heroCanAttemptThrownObjectCatch, holdCaughtThrownObject, stoneMonster, processCorpseTimers, processGlobShrinkTimers, addDelayedFoodBiteNutrition, repairShopDamageForShopkeeper, heroHasAntimagic, heroHasSlowDigestion, applyHeroOrdinaryHunger } from './cmd.js';
+import { rhack, pickupObjectName, inventoryItemName, inventoryLetterRank, recordVanquished, finishForceLock, loseExperienceLevel, finishLevelTeleport, finishPickDigDownwardHole, finishPickDigDownwardPit, maybeQueueQuestTalk, monsterGrowUp, monsterHostileCussNoise, monsterTurnDemonBribeArtifact, monsterTurnDemonBribeDemand, monsterTurnDemonBribeNoGold, processForceLockOccupationTick, forceLockOccupationShouldGiveUp, processSpellbookStudyOccupation, processTinOpeningOccupation, finishTinOpeningOccupation, refreshSwallowOverlay, finishSwallowExpel, travelPathKeys, updateGauntletsOfPowerStrength, consumeLifeSavingAmulet, activateStatueTrap, breakStatueObject, burnFloorObjectsByFire, burnRayFloorObjectsByFire, erodeArmorByFireTrap, dryWetTowelFromFire, igniteMonsterFireInventoryItems, monsterFireInventoryDamage, dropMonsterObject, earthFloorEffects, landMonsterThrownObject, heroCanAttemptThrownObjectCatch, holdCaughtThrownObject, monsterThrownPotionHitMonster, stoneMonster, processCorpseTimers, processGlobShrinkTimers, addDelayedFoodBiteNutrition, repairShopDamageForShopkeeper, heroHasAntimagic, heroHasSlowDigestion, applyHeroOrdinaryHunger } from './cmd.js';
 import { docrt, cls, bot, flush_screen, pline, newsym, refreshHallucinatedMap, show_glyph_cell } from './display.js';
 import { vision_recalc, vision_reset, init_vision_globals, cansee, couldsee, view_from } from './vision.js';
 import { init_objects } from './o_init.js';
@@ -7150,7 +7150,40 @@ export async function processMonsterTurns() {
 
                         const throwerVisible = !game.u?.blind && (game.viz_array?.[mon.my]?.[mon.mx] & IN_SIGHT) && !mon.minvis;
                         if (throwerVisible) addToplineMessage(`${monsterDisplayName(mon)} hurls a potion!`);
-                        for (let step = 1; step < throwRange; step++) rn2(5);
+                        let potionInterception = null;
+                        for (let step = 1; step < throwRange; step++) {
+                            const sx = mon.mx + throwDx * step;
+                            const sy = mon.my + throwDy * step;
+                            const targetMon = monsterAtFlightSquare(sx, sy, mon);
+                            if (targetMon) {
+                                const hitValue = monsterThrownPotionAccidentalHitValue(targetMon);
+                                const hitRoll = rnd(20);
+                                if (hitValue >= hitRoll) {
+                                    const messages = monsterThrownPotionHitMonster(thrownPotion, targetMon);
+                                    potionInterception = { target: targetMon, messages };
+                                    break;
+                                }
+                            }
+                            rn2(5);
+                        }
+                        if (potionInterception) {
+                            for (const message of potionInterception.messages)
+                                addToplineMessage(message);
+                            if (potionInterception.messages.length) {
+                                game._message_more = 1;
+                                game._process_time_with_more = 0;
+                            }
+                            game._search_pending_count = 0;
+                            game._run_steps_remaining = 0;
+                            game._travel_keys = [];
+                            if ((game._pending_time_passed || 0) > 2) game._pending_time_passed = 2;
+                            if (game._message_more && !game._process_time_with_more) {
+                                game._monster_resume_index = monIndex + 1;
+                                game._monster_resume_somebody_can_move = somebodyCanMove;
+                                return false;
+                            }
+                            continue;
+                        }
                         const projectileX = (game.u?.ux || 0) - throwDx;
                         const projectileY = (game.u?.uy || 0) - throwDy;
                         let transientPotionProjectile = null;
@@ -9051,6 +9084,19 @@ function linedupBlockingTerrain(x, y) {
     return !loc || IS_OBSTRUCTED(loc.typ)
         || (loc.typ === DOOR && (loc.doormask & (D_LOCKED | D_CLOSED)))
         || loc.typ === WATER || loc.typ === LAVAWALL;
+}
+
+function monsterAtFlightSquare(x, y, thrower = null) {
+    return (game.level?.monsters || []).find(candidate =>
+        candidate && candidate !== thrower && !candidate.dead
+        && (candidate.mhp == null || candidate.mhp > 0)
+        && candidate.mx === x && candidate.my === y) || null;
+}
+
+function monsterThrownPotionAccidentalHitValue(target) {
+    const data = target?.data || {};
+    const armorClass = target?.ac ?? target?.mac ?? data.ac ?? data.mac ?? 10;
+    return 5 + armorClass;
 }
 
 function monsterLinedUp(mon, targetX, targetY) {

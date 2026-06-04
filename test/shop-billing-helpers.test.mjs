@@ -33679,6 +33679,7 @@ async function runMonsterOffensivePotionCatch({
     fullInventory = false,
     activeMissile = undefined,
     throwerX = 8,
+    extraMonsters = [],
 } = {}) {
     installNonShopFloorState();
     resetInputState();
@@ -33726,7 +33727,7 @@ async function runMonsterOffensivePotionCatch({
         missile: activeMissile === undefined ? potionItem : activeMissile,
         mcansee: true,
     };
-    game.level.monsters = [thrower];
+    game.level.monsters = [thrower, ...extraMonsters];
     game._pending_time_passed = 1;
 
     const preNhgetchMessages = [];
@@ -34809,6 +34810,54 @@ test('production monster potion singleton catch clears monster missile', async (
         || entry.startsWith('rnd(2)=')), false, rng.join(', '));
     assert.equal(preNhgetchMessages.some(message => /You catch the potion!/.test(message)), true,
         preNhgetchMessages.join('\n'));
+});
+
+test('production monster potion hits intervening monster before hero catch', async () => {
+    const paralysis = paralysisPotion(878112, 'p', 2, { otyp: POT_PARALYSIS, dknown: false });
+    const blocker = {
+        mx: 7,
+        my: 5,
+        ac: 15,
+        movement: 0,
+        data: { name: 'orc', mlet: 'o', mmove: 0, armed: true, mlevel: 1, mac: 10 },
+        mpeaceful: true,
+        mhp: 6,
+        mhpmax: 6,
+        minvent: [],
+        mcanmove: true,
+        mcansee: true,
+        msleeping: 1,
+    };
+    const { potion, thrower, rng, preNhgetchMessages } = await runMonsterOffensivePotionCatch({
+        seed: 1,
+        potion: paralysis,
+        throwerX: 9,
+        heroDex: 100,
+        heroOverrides: { uhp: 40, uhpmax: 40 },
+        extraMonsters: [blocker],
+    });
+    const messages = preNhgetchMessages.join('\n');
+
+    assert.match(messages, /hurls a potion!/);
+    assert.match(messages, /crashes on the orc's head and breaks into shards\./);
+    assert.match(messages, /potion(?: of paralysis)? evaporates\./);
+    assert.doesNotMatch(messages, /crashes on your head|You catch/);
+    assert.equal(game.u.uhp, 40);
+    assert.equal(blocker.mcanmove, false);
+    assert.ok(blocker.mfrozen >= 1 && blocker.mfrozen <= 25);
+    assert.equal(blocker.msleeping, 0);
+    assert.equal(blocker.mpeaceful, true);
+    assert.equal(game._potion_breathe_after_more ?? null, null);
+    assert.equal(game.level.objects.some(obj => obj.id === potion.id || obj.transientProjectile), false);
+
+    const residual = thrower.minvent.find(obj => obj.id === potion.id);
+    assert.ok(residual);
+    assert.equal(residual.quan, 1);
+    assert.equal(thrower.missile, residual);
+    const rngNames = rng.map(entry => entry.replace(/=.*/, ''));
+    assert.ok(rngNames.includes('rnd(20)'), rng.join(', '));
+    assert.ok(rngNames.includes('rnd(25)'), rng.join(', '));
+    assert.equal(rngNames.includes('rn2(1)'), false, rng.join(', '));
 });
 
 test('production monster acid potion failed catch burns after crash', async () => {

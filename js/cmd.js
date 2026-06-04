@@ -17863,7 +17863,7 @@ function potionHitSaddle(potion, mon, messages, kind = thrownPotionEffectKind(po
     return false;
 }
 
-function heroThrownPotionHitMonster(potion, mon) {
+export function heroThrownPotionHitMonster(potion, mon, { yourFault = true } = {}) {
     const messages = [];
     const bottle = chestShatterBottleName();
     const kind = thrownPotionEffectKind(potion);
@@ -17872,7 +17872,7 @@ function heroThrownPotionHitMonster(potion, mon) {
     const targetSquareVisible = potionHitTargetSquareVisible(mon);
     const saddleVisible = targetSquareVisible && monsterCanBeSpottedForPotionHit(mon);
     const waterBranchOptions = { ignoreSaddle: saddlePotion };
-    let angerMon = true;
+    let angerMon = !!yourFault;
     if (targetSquareVisible) {
         messages.push(`The ${bottle} crashes on ${hitSaddle ? saddlePotionHitTargetName(mon) : thrownPotionHitTargetName(mon)} and breaks into shards.`);
     } else {
@@ -17951,6 +17951,10 @@ function heroThrownPotionHitMonster(potion, mon) {
     const shopDebt = convertUnpaidObjectToShopDebt(potion, { silent: true, broken: true });
     if (!shopDebt.charged) potion.no_charge = true;
     return messages;
+}
+
+export function monsterThrownPotionHitMonster(potion, mon) {
+    return heroThrownPotionHitMonster(potion, mon, { yourFault: false });
 }
 
 function heroThrownVenomTargetName(mon) {
