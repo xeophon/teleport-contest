@@ -606,7 +606,7 @@ function monsterSilverDagger(id) {
     };
 }
 
-function monsterKnife(id) {
+function monsterKnife(id, extra = {}) {
     return {
         id,
         otyp: KNIFE,
@@ -617,6 +617,7 @@ function monsterKnife(id) {
         plural: 'knives',
         quan: 1,
         spe: 0,
+        ...extra,
     };
 }
 
@@ -33781,13 +33782,27 @@ function assertSplitLauncherArrowStack(arrow, thrower, landed, expectedResidualQ
     assert.equal(landed.transientProjectile, false);
 }
 
+function assertCaughtSplitThrownObject(source, thrower, kind, linePattern = kind) {
+    const residual = thrower.minvent.find(obj => obj.id === source.id);
+    assert.ok(residual);
+    assert.equal(residual.quan, 1);
+    assert.equal(thrower.missile, residual);
+    assert.equal(game.level.objects.some(obj => obj.id === source.id), false);
+    const caught = game.inventory.find(obj => obj.kind === kind || obj.actualKind === kind);
+    assert.ok(caught);
+    assert.notEqual(caught.id, source.id);
+    assert.equal(caught.quan, 1);
+    assert.equal(caught.letter, 'a');
+    assert.match(caught.line, new RegExp(linePattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+}
+
 function assertLauncherMissEndOfRangeRng(rng, attackRoll) {
     const hitRollIndex = rng.indexOf(attackRoll);
     assert.notEqual(hitRollIndex, -1);
     assert.match(rng[hitRollIndex + 1] || '', /^rn2\(5\)=/);
 }
 
-async function runMonsterCrudeDaggerCatch() {
+async function runMonsterCrudeDaggerCatch({ daggerQuan = 1 } = {}) {
     installNonShopFloorState();
     resetInputState();
     pushKey('\x1b');
@@ -33811,7 +33826,7 @@ async function runMonsterCrudeDaggerCatch() {
     game.moves = 1;
     game.context = {};
     for (let x = 5; x <= 10; x++) markSquareVisible(x, 5);
-    const daggerItem = monsterOrcishDagger(874348);
+    const daggerItem = { ...monsterOrcishDagger(874348), quan: daggerQuan };
     const thrower = {
         mx: 10,
         my: 5,
@@ -33940,6 +33955,7 @@ async function runMonsterPlainDaggerIronBars({
     seed = 1,
     heroBlind = true,
     heroDeaf = false,
+    heroDex = 100,
     uac = 100,
     levelCells = [],
     throwerX = 10,
@@ -33966,7 +33982,7 @@ async function runMonsterPlainDaggerIronBars({
         uhpmax: 20,
         uac,
         umovement: NORMAL_SPEED,
-        acurr: { a: [10, 10, 10, 100, 10, 10] },
+        acurr: { a: [10, 10, 10, heroDex, 10, 10] },
     });
     game.moves = 1;
     game.context = {};
@@ -34017,9 +34033,13 @@ async function runMonsterKnifeIronBars({
     seed = 1,
     heroBlind = true,
     heroDeaf = false,
+    heroDex = 100,
     uac = -100,
     levelCells = [],
     throwerX = 10,
+    projectile = null,
+    inventory = null,
+    activeMissile = null,
 } = {}) {
     installNonShopFloorState();
     resetInputState();
@@ -34041,7 +34061,7 @@ async function runMonsterKnifeIronBars({
         uhpmax: 20,
         uac,
         umovement: NORMAL_SPEED,
-        acurr: { a: [10, 10, 10, 100, 10, 10] },
+        acurr: { a: [10, 10, 10, heroDex, 10, 10] },
     });
     game.moves = 1;
     game.context = {};
@@ -34053,7 +34073,8 @@ async function runMonsterKnifeIronBars({
     }
     for (let x = 5; x <= throwerX; x++) markSquareVisible(x, 5);
     for (const [x, y] of levelCells) markSquareVisible(x, y);
-    const knifeItem = monsterKnife(874359);
+    const knifeItem = projectile || monsterKnife(874359);
+    const throwerInventory = inventory || [knifeItem];
     const thrower = {
         mx: throwerX,
         my: 5,
@@ -34062,8 +34083,8 @@ async function runMonsterKnifeIronBars({
         mpeaceful: false,
         mhp: 5,
         mhpmax: 5,
-        minvent: [knifeItem],
-        missile: knifeItem,
+        minvent: throwerInventory,
+        missile: activeMissile || knifeItem,
         mcansee: true,
     };
     game.level.monsters = [thrower];
@@ -34091,6 +34112,7 @@ async function runMonsterSpearIronBars({
     seed = 1,
     heroBlind = true,
     heroDeaf = false,
+    heroDex = 100,
     uac = -100,
     levelCells = [],
     throwerX = 10,
@@ -34119,7 +34141,7 @@ async function runMonsterSpearIronBars({
         uhpmax: 20,
         uac,
         umovement: NORMAL_SPEED,
-        acurr: { a: [10, 10, 10, 100, 10, 10] },
+        acurr: { a: [10, 10, 10, heroDex, 10, 10] },
     });
     game.moves = 1;
     game.context = {};
@@ -36581,16 +36603,106 @@ test('production monster eroded plus-one launcher arrow uses C erosion minus enc
 });
 
 test('production monster crude dagger catch does not queue drop-throw landing', async () => {
-    const { daggerItem, thrower, rng } = await runMonsterCrudeDaggerCatch();
+    const { daggerItem, thrower, rng } = await runMonsterCrudeDaggerCatch({ daggerQuan: 2 });
 
-    assert.equal(thrower.minvent.some(obj => obj.id === daggerItem.id), false);
-    assert.equal(game.level.objects.some(obj => obj.id === daggerItem.id), false);
-    const caught = game.inventory.find(obj => obj.kind === 'orcish dagger');
+    assertCaughtSplitThrownObject(daggerItem, thrower, 'orcish dagger', 'crude dagger');
+    assert.equal(rng.filter(entry => entry === 'rn2(3)').length, 0);
+});
+
+test('production monster spear catch retains split spear in inventory', async () => {
+    const spearStack = monsterSpear(874405, { quan: 2 });
+    const { spearItem, thrower, rng, preNhgetchMessages } = await runMonsterSpearIronBars({
+        seed: 1,
+        heroBlind: false,
+        uac: 100,
+        projectile: spearStack,
+    });
+
+    assert.equal(preNhgetchMessages.some(message => /You catch the spear!/.test(message)), true,
+        preNhgetchMessages.join('\n'));
+    assertCaughtSplitThrownObject(spearItem, thrower, 'spear');
+    assert.ok(rng.includes('rn2(1)'), rng.join(', '));
+    assert.equal(rng.some(entry => entry === 'rnd(6)'
+        || entry === 'rnd(20)'
+        || entry === 'rn2(3)'), false, rng.join(', '));
+});
+
+test('production monster wielded spear catch unwields extracted singleton', async () => {
+    const spearItem = monsterSpear(874409);
+    const { thrower, rng, preNhgetchMessages } = await runMonsterSpearIronBars({
+        seed: 1,
+        heroBlind: false,
+        uac: 100,
+        projectile: spearItem,
+        activeWeapon: spearItem,
+        activeMissile: spearItem,
+    });
+
+    assert.equal(preNhgetchMessages.some(message => /You catch the spear!/.test(message)), true,
+        preNhgetchMessages.join('\n'));
+    assert.equal(thrower.mw, null);
+    assert.equal(thrower.missile, null);
+    assert.equal(thrower.minvent.some(obj => obj.id === spearItem.id), false);
+    assert.equal(game.level.objects.some(obj => obj.id === spearItem.id), false);
+    const caught = game.inventory.find(obj => obj.kind === 'spear');
     assert.ok(caught);
+    assert.equal(caught.id, spearItem.id);
     assert.equal(caught.quan, 1);
     assert.equal(caught.letter, 'a');
-    assert.match(caught.line, /dagger/);
-    assert.equal(rng.filter(entry => entry === 'rn2(3)').length, 0);
+    assert.ok(rng.includes('rn2(1)'), rng.join(', '));
+});
+
+test('production monster shuriken catch retains split shuriken in inventory', async () => {
+    const shurikenStack = monsterShuriken(874406, { quan: 2 });
+    const { shurikenItem, thrower, rng, preNhgetchMessages } = await runMonsterShurikenIronBars({
+        seed: 1,
+        heroBlind: false,
+        uac: 100,
+        projectile: shurikenStack,
+    });
+
+    assert.equal(preNhgetchMessages.some(message => /You catch the shuriken!/.test(message)), true,
+        preNhgetchMessages.join('\n'));
+    assertCaughtSplitThrownObject(shurikenItem, thrower, 'shuriken');
+    assert.ok(rng.includes('rn2(1)'), rng.join(', '));
+    assert.equal(rng.some(entry => entry === 'rnd(8)'
+        || entry === 'rnd(20)'
+        || entry === 'rn2(3)'), false, rng.join(', '));
+});
+
+test('production monster plain dagger catch retains split dagger in inventory', async () => {
+    const daggerStack = { ...dagger(874407), letter: undefined, line: undefined, spe: 0, quan: 2 };
+    const { daggerItem, thrower, rng, preNhgetchMessages } = await runMonsterPlainDaggerIronBars({
+        seed: 1,
+        heroBlind: false,
+        projectile: daggerStack,
+    });
+
+    assert.equal(preNhgetchMessages.some(message => /You catch the dagger!/.test(message)), true,
+        preNhgetchMessages.join('\n'));
+    assertCaughtSplitThrownObject(daggerItem, thrower, 'dagger');
+    assert.ok(rng.includes('rn2(1)'), rng.join(', '));
+    assert.equal(rng.some(entry => entry === 'rnd(4)'
+        || entry === 'rnd(20)'
+        || entry === 'rn2(3)'), false, rng.join(', '));
+});
+
+test('production monster knife catch retains split knife in inventory', async () => {
+    const knifeStack = monsterKnife(874408, { quan: 2 });
+    const { knifeItem, thrower, rng, preNhgetchMessages } = await runMonsterKnifeIronBars({
+        seed: 1,
+        heroBlind: false,
+        uac: 100,
+        projectile: knifeStack,
+    });
+
+    assert.equal(preNhgetchMessages.some(message => /You catch the knife!/.test(message)), true,
+        preNhgetchMessages.join('\n'));
+    assertCaughtSplitThrownObject(knifeItem, thrower, 'knife');
+    assert.ok(rng.includes('rn2(1)'), rng.join(', '));
+    assert.equal(rng.some(entry => entry === 'rnd(3)'
+        || entry === 'rnd(20)'
+        || entry === 'rn2(3)'), false, rng.join(', '));
 });
 
 test('production monster crude dagger aimed shot clonks iron bars before hero', async () => {
