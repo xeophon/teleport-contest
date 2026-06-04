@@ -47597,6 +47597,8 @@ export async function rhack(_cmd) {
                 if (kind === 'acid') {
                     heroAcidPotionSelfHitMessages(potion, messages);
                     potionBreathe(potion, messages);
+                } else if (kind === 'confusion' || kind === 'paralysis' || kind === 'blindness') {
+                    potionBreathe(potion, messages);
                 } else if (potion.potionIndex === 17) {
                     const sleepTime = rnd(5);
                     rn2(2);

@@ -22,6 +22,8 @@ const CRYSTAL_BALL = 10088;
 const CANDELABRUM_OF_INVOCATION = 10076;
 const BELL = 358;
 const POT_ACID = 238;
+const POT_CONFUSION = 239;
+const POT_BLINDNESS = 242;
 const POT_PARALYSIS = 244;
 const POT_POLYMORPH = 248;
 const POT_OBJECT_DETECTION = 249;
@@ -34849,6 +34851,79 @@ test('production monster acid potion failed catch respects acid resistance', asy
     const rngNames = getRngLog().map(entry => entry.replace(/=.*/, ''));
     assert.equal(rngNames.includes('d(1,8)'), false, rngNames.join(', '));
     assert.equal(rngNames.at(-1), 'rn2(2)');
+});
+
+test('production monster confusion potion failed catch applies vapor after crash', async () => {
+    const confusion = confusionPotion(878106, 'c', 2, { otyp: POT_CONFUSION, dknown: true });
+    const { potion, thrower, rng, preNhgetchMessages } = await runMonsterOffensivePotionCatch({
+        seed: 1,
+        potion: confusion,
+        heroOverrides: { uhp: 40, uhpmax: 40, fumbling: true },
+    });
+
+    assert.equal(preNhgetchMessages.some(message => /crashes on your head/.test(message)), true,
+        preNhgetchMessages.join('\n'));
+    assert.equal(preNhgetchMessages.some(message => /You catch/.test(message)), false,
+        preNhgetchMessages.join('\n'));
+    assert.match(game._pending_message, /potion evaporates\./);
+    assert.match(game._pending_message, /You feel somewhat dizzy\./);
+    assert.doesNotMatch(game._pending_message, /peculiar odor/);
+    assert.ok((game.u._confusionTimeout || 0) > 0);
+    assert.match(game.u._statusSuffix || '', /Conf/);
+    assert.equal(game.u.uhp < 40 && game.u.uhp >= 38, true);
+    const residual = thrower.minvent.find(obj => obj.id === potion.id);
+    assert.ok(residual);
+    assert.equal(residual.quan, 1);
+    assert.equal(game.level.objects.some(obj => obj.transientProjectile), false);
+    assert.equal(game.level.objects.some(obj => obj.id === potion.id), false);
+    assert.deepEqual(rng.map(entry => entry.replace(/=.*/, '')).slice(-2), ['rnd(2)', 'rnd(5)']);
+});
+
+test('production monster paralysis potion failed catch applies vapor after crash', async () => {
+    const paralysis = paralysisPotion(878107, 'p', 2, { otyp: POT_PARALYSIS, dknown: true });
+    const { potion, thrower, rng, preNhgetchMessages } = await runMonsterOffensivePotionCatch({
+        seed: 1,
+        potion: paralysis,
+        heroOverrides: { uhp: 40, uhpmax: 40, fumbling: true },
+    });
+
+    assert.equal(preNhgetchMessages.some(message => /crashes on your head/.test(message)), true,
+        preNhgetchMessages.join('\n'));
+    assert.match(game._pending_message, /potion evaporates\./);
+    assert.match(game._pending_message, /Something seems to be holding you\./);
+    assert.doesNotMatch(game._pending_message, /peculiar odor/);
+    assert.ok((game._helpless_time || 0) > 0);
+    assert.equal(game._wake_message, 'You can move again.');
+    assert.equal(game.u.uhp < 40 && game.u.uhp >= 38, true);
+    const residual = thrower.minvent.find(obj => obj.id === potion.id);
+    assert.ok(residual);
+    assert.equal(residual.quan, 1);
+    assert.equal(game.level.objects.some(obj => obj.id === potion.id), false);
+    assert.equal(rng.map(entry => entry.replace(/=.*/, '')).includes('rnd(5)'), true,
+        rng.join(', '));
+});
+
+test('production monster blindness potion failed catch applies vapor after crash', async () => {
+    const blindness = blindnessPotion(878108, 'b', 2, { otyp: POT_BLINDNESS, dknown: true });
+    const { potion, thrower, rng, preNhgetchMessages } = await runMonsterOffensivePotionCatch({
+        seed: 1,
+        potion: blindness,
+        heroOverrides: { uhp: 40, uhpmax: 40, fumbling: true },
+    });
+
+    assert.equal(preNhgetchMessages.some(message => /crashes on your head/.test(message)), true,
+        preNhgetchMessages.join('\n'));
+    assert.match(game._pending_message, /potion evaporates\./);
+    assert.match(game._pending_message, /It suddenly gets dark\./);
+    assert.doesNotMatch(game._pending_message, /peculiar odor/);
+    assert.equal(game.u.blind, true);
+    assert.ok((game.u._blindTimeout || 0) > 0);
+    assert.equal(game.u.uhp < 40 && game.u.uhp >= 38, true);
+    const residual = thrower.minvent.find(obj => obj.id === potion.id);
+    assert.ok(residual);
+    assert.equal(residual.quan, 1);
+    assert.equal(game.level.objects.some(obj => obj.id === potion.id), false);
+    assert.deepEqual(rng.map(entry => entry.replace(/=.*/, '')).slice(-2), ['rnd(2)', 'rnd(5)']);
 });
 
 test('production kobold dart hit lands surviving dart with ohit mulch', async () => {
