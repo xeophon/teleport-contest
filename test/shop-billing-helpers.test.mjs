@@ -33554,9 +33554,11 @@ async function runMonsterLauncherArrowLanding({
     seed = 8,
     uac = 10,
     launcherKind = 'bow',
+    launcherOverrides = {},
     arrowSpe = 0,
     arrowQuan = 1,
     arrowOverrides = {},
+    monsterData = {},
     heroBlind = true,
     heroDeaf = false,
     heroHp = 20,
@@ -33597,7 +33599,14 @@ async function runMonsterLauncherArrowLanding({
     }
     for (let x = 5; x <= 10; x++) markSquareVisible(x, 5);
     for (const [x, y] of levelCells) markSquareVisible(x, y);
-    const bow = { id: 874357, cls: 'weapon', kind: launcherKind, actualKind: launcherKind, glyph: ')' };
+    const bow = {
+        id: 874357,
+        cls: 'weapon',
+        kind: launcherKind,
+        actualKind: launcherKind,
+        glyph: ')',
+        ...launcherOverrides,
+    };
     const arrow = {
         id: 874358,
         cls: 'weapon',
@@ -33613,7 +33622,7 @@ async function runMonsterLauncherArrowLanding({
         mx: 10,
         my: 5,
         movement: NORMAL_SPEED,
-        data: { name: 'gnome', mlet: 'G', mmove: NORMAL_SPEED, armed: true, mlevel: 1 },
+        data: { name: 'gnome', mlet: 'G', mmove: NORMAL_SPEED, armed: true, mlevel: 1, ...monsterData },
         mpeaceful: false,
         mhp: 5,
         mhpmax: 5,
@@ -34523,6 +34532,70 @@ test('production monster silver launcher arrow direct hit keeps silver arrow d6 
     assert.ok(rng.some(entry => entry.startsWith('rnd(6)=')), rng.join(', '));
     assert.ok(rng.includes('rnd(20)=1'), rng.join(', '));
     assert.equal(rng.some(entry => entry.startsWith('rnd(7)=')
+        || entry.startsWith('rnd(5)=')
+        || entry.startsWith('rnd(4)=')), false);
+});
+
+test('production elf launcher arrow hit uses bow-ammo accuracy bonus', async () => {
+    const { arrow, thrower, rng } = await runMonsterLauncherArrowLanding({
+        seed: 4,
+        uac: 12,
+        monsterData: { name: 'Woodland-elf', elf: true },
+    });
+
+    assert.match(game._pending_message, /You are hit by an arrow[.!]/);
+    assert.equal(game.u.uhp < 20, true);
+    assert.equal(thrower.minvent.some(obj => obj.id === arrow.id), false);
+
+    assertNoSingletonLauncherMultishotRng(rng);
+    assert.ok(rng.includes('rnd(20)=18'), rng.join(', '));
+});
+
+test('production elf with elven bow gets second launcher accuracy bonus', async () => {
+    const { arrow, thrower, rng } = await runMonsterLauncherArrowLanding({
+        seed: 4,
+        uac: 11,
+        launcherKind: 'elven bow',
+        monsterData: { name: 'Woodland-elf', elf: true },
+    });
+
+    assert.match(game._pending_message, /You are hit by an arrow[.!]/);
+    assert.equal(game.u.uhp < 20, true);
+    assert.equal(thrower.minvent.some(obj => obj.id === arrow.id), false);
+
+    assertNoSingletonLauncherMultishotRng(rng);
+    assert.ok(rng.includes('rnd(20)=18'), rng.join(', '));
+});
+
+test('production elf launcher runed arrow gets elven arrow damage bonus', async () => {
+    const { arrow, thrower, rng } = await runMonsterLauncherArrowLanding({
+        seed: 7,
+        launcherKind: 'elven bow',
+        monsterData: { name: 'Woodland-elf', elf: true },
+        arrowOverrides: {
+            kind: undefined,
+            actualKind: undefined,
+            singular: undefined,
+            appearance: 'runed arrow',
+            plural: 'runed arrows',
+            material: 'wood',
+        },
+    });
+
+    assert.match(game._pending_message, /You are hit by a runed arrow[.!]/);
+    assert.equal(thrower.minvent.some(obj => obj.id === arrow.id), false);
+
+    const damageRollIndex = rng.findIndex(entry => entry.startsWith('rnd(7)='));
+    const hitRollIndex = rng.indexOf('rnd(20)=1');
+    assert.notEqual(damageRollIndex, -1);
+    assert.notEqual(hitRollIndex, -1);
+    assert.ok(damageRollIndex < hitRollIndex);
+    const damageRoll = Number(rng[damageRollIndex].split('=')[1]);
+    assert.ok(damageRoll >= 1 && damageRoll <= 7, rng.join(', '));
+    assert.equal(game.u.uhp, 20 - damageRoll - 1);
+
+    assertNoSingletonLauncherMultishotRng(rng);
+    assert.equal(rng.some(entry => entry.startsWith('rnd(6)=')
         || entry.startsWith('rnd(5)=')
         || entry.startsWith('rnd(4)=')), false);
 });

@@ -6507,9 +6507,15 @@ export async function processMonsterTurns() {
                         } else {
                             const projectileDamageSides = monsterLauncherProjectileDamageSides(thrownMissile);
                             const projectileDamageBonus = monsterLauncherProjectileDamageBonus(thrownMissile);
-                            const damage = Math.max(1, rnd(projectileDamageSides) + projectileDamageBonus
-                                + missileSpe - missileErosion);
-                            const hitv = Math.max(-4, 3 - throwRange) + 8 + missileSpe;
+                            let damage = rnd(projectileDamageSides) + projectileDamageBonus
+                                + missileSpe - missileErosion;
+                            let hitv = Math.max(-4, 3 - throwRange) + 8 + missileSpe;
+                            if (monsterIsElf(mon) && monsterLauncherProjectileIsBowAmmo(thrownMissile)) {
+                                hitv++;
+                                if (monsterLauncherWeaponIsElvenBow(mon.mw)) hitv++;
+                                if (monsterLauncherProjectileIsElvenArrow(thrownMissile)) damage++;
+                            }
+                            damage = Math.max(1, damage);
                             const missed = (game.u?.uac ?? 10) + hitv <= rnd(20);
                             game._topline_after_more = missed ? `${projectileArticleCap} ${projectileKind} misses you.`
                                 : `You are hit by ${projectileArticle} ${projectileKind}${damage > 4 ? '!' : '.'}`;
@@ -8511,6 +8517,28 @@ function monsterLauncherProjectileDamageSides(item) {
 
 function monsterLauncherProjectileDamageBonus(item) {
     return monsterLauncherProjectileNames(item).some(name => name === 'crossbow bolt') ? 1 : 0;
+}
+
+function monsterLauncherProjectileIsBowAmmo(item) {
+    const names = monsterLauncherProjectileNames(item);
+    return !names.some(name => name === 'crossbow bolt')
+        && names.some(name => name === 'ya' || name === 'bamboo arrow' || name.includes('arrow'));
+}
+
+function monsterLauncherProjectileIsElvenArrow(item) {
+    return monsterLauncherProjectileNames(item)
+        .some(name => name === 'elven arrow' || name === 'runed arrow');
+}
+
+function monsterLauncherWeaponIsElvenBow(item) {
+    return [item?.singular, item?.actualKind, item?.kind, item?.appearance]
+        .map(name => String(name || '').toLowerCase())
+        .some(name => name === 'elven bow' || name === 'runed bow');
+}
+
+function monsterIsElf(mon) {
+    const name = String(mon?.data?.name || '').toLowerCase();
+    return !!mon?.data?.elf || name === 'elf' || name.includes('elf');
 }
 
 function monsterThrownSpearNames(item) {
