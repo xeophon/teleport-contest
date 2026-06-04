@@ -6244,9 +6244,26 @@ export async function processMonsterTurns() {
                                 return false;
                             }
                             if (misfireDx !== throwDx || misfireDy !== throwDy) {
-                                for (let step = 0; step < throwRange; step++) rn2(5);
-                                landMisfiredArrow(mon.mx + misfireDx * throwRange,
-                                    mon.my + misfireDy * throwRange);
+                                const ordinaryBlockAhead = (x, y) => {
+                                    const nx = x + misfireDx;
+                                    const ny = y + misfireDy;
+                                    const loc = game.level?.at(nx, ny);
+                                    return nx < 1 || nx > COLNO - 1 || ny < 0 || ny > ROWNO - 1
+                                        || !loc || IS_OBSTRUCTED(loc.typ)
+                                        || (loc.typ === DOOR && (loc.doormask & (D_CLOSED | D_LOCKED)));
+                                };
+                                let landingX = mon.mx;
+                                let landingY = mon.my;
+                                if (!ordinaryBlockAhead(landingX, landingY)) {
+                                    for (let step = 0; step < throwRange; step++) {
+                                        landingX += misfireDx;
+                                        landingY += misfireDy;
+                                        const remainingRange = throwRange - step - 1;
+                                        rn2(5);
+                                        if (!remainingRange || ordinaryBlockAhead(landingX, landingY)) break;
+                                    }
+                                }
+                                landMisfiredArrow(landingX, landingY);
                                 game._search_pending_count = 0;
                                 game._run_steps_remaining = 0;
                                 game._travel_keys = [];

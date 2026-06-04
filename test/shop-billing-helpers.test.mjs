@@ -33390,6 +33390,7 @@ async function runMonsterLauncherArrowLanding({
     arrowOverrides = {},
     heroBlind = true,
     heroHp = 20,
+    levelCells = [],
 } = {}) {
     installNonShopFloorState();
     resetInputState();
@@ -33413,6 +33414,12 @@ async function runMonsterLauncherArrowLanding({
     });
     game.moves = 1;
     game.context = {};
+    if (levelCells.length) {
+        const cells = new Map();
+        for (const [x, y, loc] of levelCells)
+            cells.set(`${x},${y}`, { roomno: 0, ...loc });
+        game.level.at = (x, y) => cells.get(`${x},${y}`) || { roomno: 0, typ: ROOM };
+    }
     for (let x = 5; x <= 10; x++) markSquareVisible(x, 5);
     const bow = { id: 874357, cls: 'weapon', kind: 'bow', actualKind: 'bow', glyph: ')' };
     const arrow = {
@@ -34088,6 +34095,77 @@ test('production monster cursed launcher arrow zero-vector misfire drops at shoo
         'rn2(7)=0',
         'rn2(3)=1',
         'rn2(3)=1',
+    ]);
+    assertNoSingletonLauncherMultishotRng(rng);
+    assert.equal(rng.some(entry => entry.startsWith('rnd(6)=') || entry.startsWith('rnd(20)=')), false);
+    assert.equal(rng.some(entry => entry.startsWith('rn2(100)=')), false);
+});
+
+test('production monster greased launcher arrow redirected misfire stops before wall', async () => {
+    const { arrow, thrower, rng } = await runMonsterLauncherArrowLanding({
+        seed: 46,
+        arrowOverrides: { greased: true },
+        heroBlind: false,
+        levelCells: [[11, 5, { typ: STONE }]],
+    });
+
+    assert.equal(game.u.uhp, 20);
+    assert.equal(thrower.minvent.some(obj => obj.id === arrow.id), false);
+    assert.equal(thrower.missile, null);
+
+    await rhack('\x1b');
+    resetInputState();
+
+    const landed = game.level.objects.find(obj => obj.id === arrow.id);
+    assert.ok(landed);
+    assert.equal(landed.ox, thrower.mx + 1);
+    assert.equal(landed.oy, thrower.my);
+    assert.equal(landed.greased, true);
+    assert.equal(landed.transientProjectile, false);
+
+    assert.deepEqual(rng, [
+        'rn2(5)=3',
+        'rn2(5)=2',
+        'rn2(7)=0',
+        'rn2(3)=2',
+        'rn2(3)=1',
+        'rn2(5)=2',
+    ]);
+    assertNoSingletonLauncherMultishotRng(rng);
+    assert.equal(rng.some(entry => entry.startsWith('rnd(6)=') || entry.startsWith('rnd(20)=')), false);
+    assert.equal(rng.some(entry => entry.startsWith('rn2(100)=')), false);
+});
+
+test('production monster greased launcher arrow redirected misfire stops before closed door', async () => {
+    const { arrow, thrower, rng } = await runMonsterLauncherArrowLanding({
+        seed: 46,
+        arrowOverrides: { greased: true },
+        heroBlind: false,
+        levelCells: [[12, 5, { typ: DOOR, doormask: D_CLOSED }]],
+    });
+
+    assert.equal(game.u.uhp, 20);
+    assert.equal(thrower.minvent.some(obj => obj.id === arrow.id), false);
+    assert.equal(thrower.missile, null);
+
+    await rhack('\x1b');
+    resetInputState();
+
+    const landed = game.level.objects.find(obj => obj.id === arrow.id);
+    assert.ok(landed);
+    assert.equal(landed.ox, thrower.mx + 2);
+    assert.equal(landed.oy, thrower.my);
+    assert.equal(landed.greased, true);
+    assert.equal(landed.transientProjectile, false);
+
+    assert.deepEqual(rng, [
+        'rn2(5)=3',
+        'rn2(5)=2',
+        'rn2(7)=0',
+        'rn2(3)=2',
+        'rn2(3)=1',
+        'rn2(5)=2',
+        'rn2(5)=4',
     ]);
     assertNoSingletonLauncherMultishotRng(rng);
     assert.equal(rng.some(entry => entry.startsWith('rnd(6)=') || entry.startsWith('rnd(20)=')), false);
