@@ -6232,7 +6232,7 @@ export async function processMonsterTurns() {
                                 const remainingRange = throwRange - step;
                                 const targetMon = monsterAtFlightSquare(sx, sy, mon);
                                 if (targetMon) {
-                                    const hitValue = monsterThrownObjectAccidentalHitValue(targetMon);
+                                    const hitValue = monsterThrownObjectAccidentalHitValue(targetMon, thrownMissile);
                                     const hitRoll = rnd(20);
                                     if (hitValue >= hitRoll) {
                                         interveningTarget = targetMon;
@@ -6936,7 +6936,7 @@ export async function processMonsterTurns() {
                             const remainingRange = throwRange - step;
                             const targetMon = monsterAtFlightSquare(sx, sy, mon);
                             if (targetMon) {
-                                const hitValue = monsterThrownObjectAccidentalHitValue(targetMon);
+                                const hitValue = monsterThrownObjectAccidentalHitValue(targetMon, thrownMissile);
                                 const hitRoll = rnd(20);
                                 if (hitValue >= hitRoll) {
                                     interveningTarget = targetMon;
@@ -7065,7 +7065,7 @@ export async function processMonsterTurns() {
                             const remainingRange = throwRange - step;
                             const targetMon = monsterAtFlightSquare(sx, sy, mon);
                             if (targetMon) {
-                                const hitValue = monsterThrownObjectAccidentalHitValue(targetMon);
+                                const hitValue = monsterThrownObjectAccidentalHitValue(targetMon, thrownMissile);
                                 const hitRoll = rnd(20);
                                 if (hitValue >= hitRoll) {
                                     interveningTarget = targetMon;
@@ -7197,7 +7197,7 @@ export async function processMonsterTurns() {
                                 const remainingRange = throwRange - step;
                                 const targetMon = monsterAtFlightSquare(sx, sy, mon);
                                 if (targetMon) {
-                                    const hitValue = monsterThrownObjectAccidentalHitValue(targetMon);
+                                    const hitValue = monsterThrownObjectAccidentalHitValue(targetMon, thrownMissile);
                                     const hitRoll = rnd(20);
                                     if (hitValue >= hitRoll) {
                                         interveningTarget = targetMon;
@@ -7301,7 +7301,7 @@ export async function processMonsterTurns() {
                             const sy = mon.my + throwDy * step;
                             const targetMon = monsterAtFlightSquare(sx, sy, mon);
                             if (targetMon) {
-                                const hitValue = monsterThrownPotionAccidentalHitValue(targetMon);
+                                const hitValue = monsterThrownPotionAccidentalHitValue(targetMon, thrownPotion);
                                 const hitRoll = rnd(20);
                                 if (hitValue >= hitRoll) {
                                     const targetIndex = (game.level?.monsters || []).indexOf(targetMon);
@@ -7428,7 +7428,7 @@ export async function processMonsterTurns() {
                                     const y = mon.my + throwDy * step;
                                     const targetMon = monsterAtFlightSquare(x, y, mon);
                                     if (targetMon) {
-                                        const hitValue = monsterThrownObjectAccidentalHitValue(targetMon);
+                                        const hitValue = monsterThrownObjectAccidentalHitValue(targetMon, thrownMissile);
                                         const hitRoll = rnd(20);
                                         if (hitValue >= hitRoll) {
                                             interveningTarget = targetMon;
@@ -7579,7 +7579,7 @@ export async function processMonsterTurns() {
                             const remainingRange = throwRange - step;
                             const targetMon = monsterAtFlightSquare(sx, sy, mon);
                             if (targetMon) {
-                                const hitValue = monsterThrownObjectAccidentalHitValue(targetMon);
+                                const hitValue = monsterThrownObjectAccidentalHitValue(targetMon, thrownMissile);
                                 const hitRoll = rnd(20);
                                 if (hitValue >= hitRoll) {
                                     interveningTarget = targetMon;
@@ -7702,7 +7702,7 @@ export async function processMonsterTurns() {
                                 const remainingRange = throwRange - step;
                                 const targetMon = monsterAtFlightSquare(sx, sy, mon);
                                 if (targetMon) {
-                                    const hitValue = monsterThrownObjectAccidentalHitValue(targetMon);
+                                    const hitValue = monsterThrownObjectAccidentalHitValue(targetMon, thrownMissile);
                                     const hitRoll = rnd(20);
                                     if (hitValue >= hitRoll) {
                                         interveningTarget = targetMon;
@@ -9309,14 +9309,109 @@ function monsterAtFlightSquare(x, y, thrower = null) {
         && candidate.mx === x && candidate.my === y) || null;
 }
 
-function monsterThrownPotionAccidentalHitValue(target) {
-    return monsterThrownObjectAccidentalHitValue(target);
+const MONSTER_OBJECT_HIT_SIZE_VALUES = new Map([
+    ['tiny', 0],
+    ['small', 1],
+    ['medium', 2],
+    ['human', 2],
+    ['large', 3],
+    ['huge', 4],
+    ['gigantic', 7],
+]);
+
+function monsterThrownPotionAccidentalHitValue(target, potion = null) {
+    return monsterThrownObjectAccidentalHitValue(target, potion);
 }
 
-function monsterThrownObjectAccidentalHitValue(target) {
+function monsterObjectHitSizeValue(target) {
+    const data = target?.data || {};
+    const value = target?.msize ?? target?.size ?? data.msize ?? data.size;
+    if (Number.isFinite(Number(value))) return Math.trunc(Number(value));
+    const key = normalizedGemName(value);
+    if (MONSTER_OBJECT_HIT_SIZE_VALUES.has(key)) return MONSTER_OBJECT_HIT_SIZE_VALUES.get(key);
+    if (target?.verysmall || data.verysmall) return 0;
+    if (target?.small || data.small) return 1;
+    if (target?.large || data.large) return 3;
+    if (target?.huge || data.huge) return 4;
+    if (target?.gigantic || data.gigantic) return 7;
+    return 2;
+}
+
+function monsterHatesBlessedWeapon(target) {
+    const data = target?.data || {};
+    const mlet = String(target?.mlet || data.mlet || data.glyph || '').toLowerCase();
+    const name = normalizedGemName(target?.name || data.name);
+    return !!(target?.undead || data.undead || target?.demon || data.demon
+        || mlet === 'zombie' || mlet === 'mummy' || mlet === 'ghost'
+        || mlet === 'vampire' || mlet === 'demon' || mlet === '&'
+        || name.includes('zombie') || name.includes('mummy') || name.includes('vampire')
+        || name.includes('lich') || name.includes('ghost') || name.includes('shade')
+        || name.includes('demon') || name.includes('devil') || name === 'manes');
+}
+
+function monsterThrownObjectNameForHitValue(item) {
+    return normalizedGemName(item?.actualKind || item?.kind || item?.singular || item?.appearance || item?.name);
+}
+
+function monsterThrownObjectIsWeaponForHitValue(item) {
+    if (!item) return false;
+    return item.cls === 'weapon' || item.glyph === ')' || item.otyp === DART
+        || item.otyp === DAGGER || item.otyp === ORCISH_DAGGER || item.otyp === KNIFE
+        || monsterThrownObjectIsSpearForHitValue(item) || !!monsterThrownShurikenKind(item);
+}
+
+function monsterThrownObjectUsesHitval(item) {
+    return monsterThrownObjectIsWeaponForHitValue(item) || item?.cls === 'gem' || item?.glyph === '*';
+}
+
+function monsterThrownObjectBaseHitBonus(item) {
+    if (!item) return 0;
+    if (!monsterThrownObjectUsesHitval(item)) return 0;
+    if (Number.isFinite(Number(item.hitbon))) return Math.trunc(Number(item.hitbon));
+    if (Number.isFinite(Number(item.oc_hitbon))) return Math.trunc(Number(item.oc_hitbon));
+    const name = monsterThrownObjectNameForHitValue(item);
+    if (item.otyp === DAGGER || item.otyp === ORCISH_DAGGER
+        || /\b(?:dagger|athame)\b/.test(name)) return 2;
+    if (monsterThrownShurikenKind(item) || name === 'shuriken' || name === 'throwing star') return 2;
+    if (name === 'ya' || name === 'bamboo arrow') return 1;
+    return 0;
+}
+
+function monsterThrownObjectIsSpearForHitValue(item) {
+    const name = monsterThrownObjectNameForHitValue(item);
+    return item?.otyp === SPEAR || /\b(?:spear|javelin)\b/.test(name);
+}
+
+function monsterTargetIsKebabable(target) {
+    const data = target?.data || {};
+    const mlet = String(target?.mlet || data.mlet || data.glyph || '').toLowerCase();
+    const name = normalizedGemName(target?.name || data.name);
+    return mlet === 'xorn' || mlet === 'dragon' || mlet === 'jabberwock'
+        || mlet === 'naga' || mlet === 'giant'
+        || name.includes('xorn') || name.includes('dragon') || name.includes('jabberwock')
+        || name.includes('naga') || name.includes('giant');
+}
+
+function monsterThrownObjectHitValueAdjustment(target, item) {
+    const data = target?.data || {};
+    let adjustment = monsterObjectHitSizeValue(target) - 2;
+    if (target?.msleeping) adjustment += 2;
+    if (target?.mcanmove === false || target?.mcanmove === 0
+        || data.mmove === 0 || data.mmove === false) adjustment += 4;
+    if (monsterThrownObjectIsWeaponForHitValue(item))
+        adjustment += Math.trunc(Number(item?.spe || 0));
+    adjustment += monsterThrownObjectBaseHitBonus(item);
+    if (monsterThrownObjectIsWeaponForHitValue(item) && item?.blessed
+        && monsterHatesBlessedWeapon(target)) adjustment += 2;
+    if (monsterThrownObjectIsSpearForHitValue(item) && monsterTargetIsKebabable(target))
+        adjustment += 2;
+    return adjustment;
+}
+
+function monsterThrownObjectAccidentalHitValue(target, item = null) {
     const data = target?.data || {};
     const armorClass = target?.ac ?? target?.mac ?? data.ac ?? data.mac ?? 10;
-    return 5 + armorClass;
+    return 5 + armorClass + monsterThrownObjectHitValueAdjustment(target, item);
 }
 
 function monsterLinedUp(mon, targetX, targetY) {
