@@ -6196,7 +6196,7 @@ export async function processMonsterTurns() {
                     if (canShootLauncher && !(canThrowOffensivePotion && offensiveItemsLinedUp)
                         && monsterLinedUp(mon, throwTargetX, throwTargetY)) {
                         const missile = mon.minvent[launcherAmmoIndex];
-                        rnd(1);
+                        if ((missile.quan || 1) > 1) rnd(1);
                         let thrownMissile = missile;
                         if ((missile.quan || 1) > 1) {
                             missile.quan--;
