@@ -7270,7 +7270,7 @@ export async function processMonsterTurns() {
                                 game._message_more = 1;
                                 game._process_time_with_more = 0;
                             }
-                            let hitPet = null;
+                            let interveningTarget = null;
                             let crudeDaggerTerrainStop = null;
                             if (game.level?.at(mon.mx + throwDx, mon.my + throwDy)?.typ === IRONBARS) {
                                 rn2(100); // C breaktest() calls obj_resists(); ordinary orcish daggers survive.
@@ -7281,8 +7281,15 @@ export async function processMonsterTurns() {
                                 for (let step = 1; step < throwRange; step++) {
                                     const x = mon.mx + throwDx * step;
                                     const y = mon.my + throwDy * step;
-                                    hitPet = (game.level?.monsters || []).find(other => other.pet && other.mx === x && other.my === y);
-                                    if (hitPet) break;
+                                    const targetMon = monsterAtFlightSquare(x, y, mon);
+                                    if (targetMon) {
+                                        const hitValue = monsterThrownObjectAccidentalHitValue(targetMon);
+                                        const hitRoll = rnd(20);
+                                        if (hitValue >= hitRoll) {
+                                            interveningTarget = targetMon;
+                                            break;
+                                        }
+                                    }
                                     const remainingRange = throwRange - step;
                                     rn2(5);
                                     if (remainingRange && game.level?.at(x + throwDx, y + throwDy)?.typ === IRONBARS) {
@@ -7295,9 +7302,9 @@ export async function processMonsterTurns() {
                                 }
                             }
                             const flightX = crudeDaggerTerrainStop ? crudeDaggerTerrainStop.x
-                                : hitPet ? hitPet.mx - throwDx : (game.u?.ux || 0) - throwDx;
+                                : interveningTarget ? interveningTarget.mx - throwDx : (game.u?.ux || 0) - throwDx;
                             const flightY = crudeDaggerTerrainStop ? crudeDaggerTerrainStop.y
-                                : hitPet ? hitPet.my - throwDy : (game.u?.uy || 0) - throwDy;
+                                : interveningTarget ? interveningTarget.my - throwDy : (game.u?.uy || 0) - throwDy;
                             if (throwerVisible) {
                                 game.level.objects.push({
                                     ...thrownMissile,
@@ -7309,16 +7316,16 @@ export async function processMonsterTurns() {
                                     transientProjectile: true,
                                 });
                             }
-                            let crudeDaggerOhit = !!hitPet;
+                            let crudeDaggerOhit = !!interveningTarget;
                             let crudeDaggerCaught = false;
                             if (crudeDaggerTerrainStop) {
                                 crudeDaggerOhit = false;
-                            } else if (hitPet) {
-                                rnd(20);
+                            } else if (interveningTarget) {
                                 const damage = rnd(3);
-                                hitPet.mhp = Math.max(0, (hitPet.mhp || 1) - damage);
+                                interveningTarget.msleeping = 0;
+                                interveningTarget.mhp = Math.max(0, (interveningTarget.mhp || 1) - damage);
                                 const hitMessage = throwerVisible
-                                    ? `The crude dagger hits the ${hitPet.data?.name || 'pet'}.`
+                                    ? `The crude dagger hits the ${interveningTarget.data?.name || 'monster'}.`
                                     : 'It is hit.';
                                 if (throwerVisible) game._topline_after_more = hitMessage;
                                 else addToplineMessage(hitMessage);
@@ -7354,13 +7361,13 @@ export async function processMonsterTurns() {
                                 } else {
                                     game._monster_throw_after_more = {
                                         missile: thrownMissile,
-                                        hitPet,
+                                        hitPet: interveningTarget,
                                         x: crudeDaggerTerrainStop ? crudeDaggerTerrainStop.x
-                                            : hitPet ? hitPet.mx : game.u?.ux || 0,
+                                            : interveningTarget ? interveningTarget.mx : game.u?.ux || 0,
                                         y: crudeDaggerTerrainStop ? crudeDaggerTerrainStop.y
-                                            : hitPet ? hitPet.my : game.u?.uy || 0,
+                                            : interveningTarget ? interveningTarget.my : game.u?.uy || 0,
                                         glyph: ')',
-                                        color: hitPet ? NO_COLOR : CLR_CYAN,
+                                        color: interveningTarget ? NO_COLOR : CLR_CYAN,
                                         ohit: crudeDaggerOhit,
                                     };
                                     game._clear_transient_projectiles_after_more = 1;
@@ -7374,9 +7381,9 @@ export async function processMonsterTurns() {
                                     messages: floorMessages,
                                 });
                                 addMonsterThrownFloorMessages(floorMessages);
-                            } else if (hitPet) {
+                            } else if (interveningTarget) {
                                 const floorMessages = [];
-                                landMonsterThrownObject(thrownMissile, hitPet.mx, hitPet.my, {
+                                landMonsterThrownObject(thrownMissile, interveningTarget.mx, interveningTarget.my, {
                                     glyph: ')',
                                     color: NO_COLOR,
                                     messages: floorMessages,
@@ -9098,6 +9105,10 @@ function monsterAtFlightSquare(x, y, thrower = null) {
 }
 
 function monsterThrownPotionAccidentalHitValue(target) {
+    return monsterThrownObjectAccidentalHitValue(target);
+}
+
+function monsterThrownObjectAccidentalHitValue(target) {
     const data = target?.data || {};
     const armorClass = target?.ac ?? target?.mac ?? data.ac ?? data.mac ?? 10;
     return 5 + armorClass;
