@@ -1654,6 +1654,22 @@ const ROCK = 467;
 const FLINT = 10166;
 const LUCKSTONE = 10127;
 const LOADSTONE = 10165;
+const TOUCHSTONE = 473;
+const UNICORN_REAL_GEM_NAMES = new Set([
+    'dilithium crystal', 'diamond', 'ruby', 'jacinth', 'jacinth stone',
+    'sapphire', 'black opal', 'emerald', 'turquoise', 'turquoise stone',
+    'citrine', 'citrine stone', 'aquamarine', 'aquamarine stone',
+    'amber', 'amber stone', 'topaz', 'topaz stone', 'jet', 'jet stone',
+    'opal', 'chrysoberyl', 'chrysoberyl stone', 'garnet', 'garnet stone',
+    'amethyst', 'amethyst stone', 'jasper', 'jasper stone', 'fluorite',
+    'fluorite stone', 'obsidian', 'obsidian stone', 'agate', 'agate stone',
+    'jade', 'jade stone',
+]);
+const UNICORN_GRAY_STONE_NAMES = new Set([
+    'rock', 'rocks', 'gray stone', 'grey stone', 'luckstone', 'loadstone',
+    'touchstone', 'flint', 'flint stone',
+]);
+const UNICORN_EXCLUDED_GEM_OTYPS = new Set([ROCK, FLINT, LUCKSTONE, LOADSTONE, TOUCHSTONE]);
 const KELP_FROND = 172;
 const CORPSE = 471;
 const STATUE = 472;
@@ -2673,6 +2689,123 @@ function selectMonsterSlingAmmoIndex(mon) {
 function monsterSlingAmmoDamageSides(item) {
     const name = monsterSlingAmmoName(item).toLowerCase();
     return item?.otyp === FLINT || name === 'flint' || name === 'flint stone' ? 6 : 3;
+}
+
+function normalizedGemName(value) {
+    return String(value || '').toLowerCase().trim().replace(/\s+/g, ' ');
+}
+
+function heroPolyselfIsUnicorn() {
+    const form = game.u?._polyself_form || game.u?.youmonst?.data || {};
+    const name = normalizedGemName(form.name || form.mname || form.displayName);
+    const mlet = normalizedGemName(form.mlet || form.glyph || form.symbol);
+    const likesGems = !!(form.likesGems || form.likes_gems || /unicorn/.test(name));
+    return likesGems && (mlet === 'unicorn' || mlet === 'u' || /unicorn/.test(name));
+}
+
+function unicornThrownGemNames(item) {
+    return [
+        item?.actualKind,
+        item?.kind,
+        item?.gemDescription,
+        item?.displayName,
+        item?.objectKindKey,
+    ].map(normalizedGemName).filter(Boolean);
+}
+
+function unicornThrownGemKind(item) {
+    if (!item || monsterPickupClass(item) !== GEM_CLASS) return '';
+    if (UNICORN_EXCLUDED_GEM_OTYPS.has(item.otyp) || item.isRock) return '';
+    const names = unicornThrownGemNames(item);
+    if (names.some(name => UNICORN_GRAY_STONE_NAMES.has(name))) return '';
+    if (names.some(name => /\bworthless piece of\b.*\bglass\b/.test(name) || name === 'glass')
+        || normalizedGemName(item.material || item.oc_material) === 'glass')
+        return 'glass';
+    if (names.some(name => UNICORN_REAL_GEM_NAMES.has(name))) return 'real';
+    const roll = Number(item.gemRoll);
+    if (Number.isFinite(roll) && roll > 0) {
+        if (roll <= 171) return 'real';
+        if (roll <= 862) return 'glass';
+    }
+    return '';
+}
+
+function unicornThrownGemName(item, gemKind) {
+    const names = [
+        item?.actualKind,
+        item?.kind,
+        item?.displayName,
+    ].map(value => String(value || '').trim()).filter(Boolean);
+    if (gemKind === 'glass') {
+        const glassName = names.find(name =>
+            /\bworthless piece of\b.*\bglass\b/.test(name.toLowerCase()));
+        if (glassName) return glassName;
+        const description = String(item?.gemDescription || '').trim();
+        const color = description.match(/^(.+) gem$/i)?.[1] || description;
+        if (color && !/\bworthless piece of\b/i.test(color)) return `worthless piece of ${color} glass`;
+    }
+    return names[0] || monsterSlingAmmoName(item);
+}
+
+function recordUnicornGlassGemDiscovery(item, gemName) {
+    item.known = true;
+    item.dknown = true;
+    const appearance = String(item.gemDescription || '').replace(/ gem$/i, '').trim();
+    recordDiscovery('Gems/Stones', gemName, appearance && appearance !== gemName ? appearance : null, true);
+}
+
+function queueMonsterProjectileHeroMessages(messages, throwerVisible, deferPrayerProjectile) {
+    const shownMessages = (messages || []).filter(Boolean);
+    if (!shownMessages.length) return;
+    if (deferPrayerProjectile) {
+        const text = shownMessages.join('  ');
+        game._pending_message = `${text}  You finish your prayer.  You feel that ${game._prayer_god || 'your god'} is displeased.`;
+        game._keep_pending_message = 1;
+        game._prayer_message_complete_once = 1;
+        game._skip_pending_time_decrement = 1;
+        game._prayer_nearby_trouble = 0;
+        return;
+    }
+    if (throwerVisible) {
+        game._topline_after_more = shownMessages[0];
+        for (const msg of shownMessages.slice(1)) appendAfterMoreMessage(msg);
+        return;
+    }
+    for (const msg of shownMessages) addToplineMessage(msg);
+}
+
+function handleUnicornThrownGemCatch(thrownMissile, mon, { throwerVisible = false, deferPrayerProjectile = false } = {}) {
+    if (!heroPolyselfIsUnicorn()) return false;
+    const gemKind = unicornThrownGemKind(thrownMissile);
+    if (!gemKind) return false;
+    const gemName = unicornThrownGemName(thrownMissile, gemKind);
+    const source = monsterPossessiveName(mon);
+    const messages = [];
+    if (gemKind === 'glass') {
+        recordUnicornGlassGemDiscovery(thrownMissile, gemName);
+        const floorMessages = [];
+        landMonsterThrownObject(thrownMissile, game.u?.ux || 0, game.u?.uy || 0, {
+            glyph: thrownMissile.glyph || '*',
+            color: thrownMissile.color ?? NO_COLOR,
+            messages: floorMessages,
+        });
+        messages.push(`You catch the ${gemName}.`);
+        messages.push(`You are not interested in ${source} junk.`);
+        queueMonsterProjectileHeroMessages(messages, throwerVisible, deferPrayerProjectile);
+        addMonsterThrownFloorMessages(floorMessages, throwerVisible && !deferPrayerProjectile);
+        return true;
+    }
+
+    const catchResult = holdCaughtThrownObject(thrownMissile, {
+        catchName: gemName,
+        glyph: thrownMissile.glyph || '*',
+        color: thrownMissile.color ?? NO_COLOR,
+    });
+    messages.push(`You accept ${source} gift in the spirit in which it was intended.`);
+    if (catchResult.dropped) messages.push(`You catch, but drop, ${gemName}.`);
+    else messages.push(`You catch: ${articleFor(gemName)} ${gemName}.`);
+    queueMonsterProjectileHeroMessages(messages, throwerVisible, deferPrayerProjectile);
+    return true;
 }
 
 function armHeroDeathMore(message = 'You die...') {
@@ -6086,6 +6219,21 @@ export async function processMonsterTurns() {
                                 });
                                 addMonsterThrownFloorMessages(floorMessages, throwerVisible && !deferPrayerProjectile);
                             } else {
+                                if (handleUnicornThrownGemCatch(thrownMissile, mon, {
+                                    throwerVisible,
+                                    deferPrayerProjectile,
+                                })) {
+                                    game._search_pending_count = 0;
+                                    game._run_steps_remaining = 0;
+                                    game._travel_keys = [];
+                                    if ((game._pending_time_passed || 0) > 2) game._pending_time_passed = 2;
+                                    if (game._message_more && !game._process_time_with_more) {
+                                        game._monster_resume_index = monIndex + 1;
+                                        game._monster_resume_somebody_can_move = somebodyCanMove;
+                                        return false;
+                                    }
+                                    continue;
+                                }
                                 const catchChance = 100 - (game.u?.acurr?.a?.[A_DEX] ?? 10)
                                     - (game._startup_role === 'Monk' || game._startup_role === 'Rogue' ? 20 : 0);
                                 const caught = heroCanAttemptThrownObjectCatch(thrownMissile)

@@ -33422,6 +33422,7 @@ async function runMonsterSlingRockLanding({
     monsterData = {},
     initialInventory = null,
     fullInventory = false,
+    heroPolyself = null,
 } = {}) {
     installNonShopFloorState();
     resetInputState();
@@ -33441,6 +33442,7 @@ async function runMonsterSlingRockLanding({
         uac,
         umovement: NORMAL_SPEED,
         acurr: { a: [10, 10, 10, heroDex, 10, 10] },
+        _polyself_form: heroPolyself,
     });
     if (fullInventory) fillInventoryLetters(877000);
     else if (initialInventory) game.inventory = initialInventory;
@@ -34569,6 +34571,74 @@ test('production monster sling ruby catch retains split gem in inventory', async
         || entry === 'rn2(3)'), false, rng.join(', '));
 });
 
+test('production unicorn polyself accepts slung real gem before generic catch', async () => {
+    const rubyStack = monsterThrownGem(874414, 'ruby', { gemTough: true, quan: 2 });
+    const { ammo, thrower, rng, preNhgetchMessages } = await runMonsterSlingRockLanding({
+        seed: 1,
+        uac: 100,
+        heroBlind: false,
+        heroDex: 10,
+        projectile: rubyStack,
+        heroPolyself: { name: 'white unicorn', mlet: 'unicorn', likesGems: true, nohands: true },
+    });
+    const visibleMessages = [
+        game._pending_message,
+        game._topline_after_more,
+        ...preNhgetchMessages,
+        ...(game._queued_messages_after_more || []).map(entry => entry.text),
+    ].filter(Boolean).join('  ');
+
+    assert.match(visibleMessages, /You accept the goblin's gift in the spirit in which it was intended\./);
+    assert.doesNotMatch(visibleMessages, /You catch the ruby!/);
+    assertCaughtSplitThrownObject(ammo, thrower, 'ruby');
+    assert.equal(rng.some(entry => entry === 'rn2(90)'
+        || entry === 'rnd(3)'
+        || entry === 'rnd(20)'
+        || entry === 'rn2(3)'), false, rng.join(', '));
+});
+
+test('production unicorn polyself catches and drops slung glass gem before generic catch', async () => {
+    const glassStack = monsterThrownGem(874415, 'worthless piece of red glass', {
+        actualKind: 'worthless piece of red glass',
+        gemDescription: 'red gem',
+        material: 'glass',
+        quan: 2,
+    });
+    const { ammo, thrower, rng, preNhgetchMessages } = await runMonsterSlingRockLanding({
+        seed: 1,
+        uac: 100,
+        heroBlind: false,
+        heroDex: 10,
+        projectile: glassStack,
+        heroPolyself: { name: 'white unicorn', mlet: 'unicorn', likesGems: true, nohands: true },
+    });
+    const visibleMessages = [
+        game._pending_message,
+        game._topline_after_more,
+        ...preNhgetchMessages,
+        ...(game._queued_messages_after_more || []).map(entry => entry.text),
+    ].filter(Boolean).join('  ');
+
+    assert.match(visibleMessages, /You catch the worthless piece of red glass\./);
+    assert.match(visibleMessages, /You are not interested in the goblin's junk\./);
+    assert.doesNotMatch(visibleMessages, /You catch the worthless piece of red glass!/);
+    const residual = thrower.minvent.find(obj => obj.id === ammo.id);
+    assert.ok(residual);
+    assert.equal(residual.quan, 1);
+    assert.equal(thrower.missile, residual);
+    assert.equal(game.inventory.some(obj => obj.actualKind === 'worthless piece of red glass'), false);
+    const dropped = game.level.objects.find(obj =>
+        obj.actualKind === 'worthless piece of red glass' && obj.ox === 5 && obj.oy === 5);
+    assert.ok(dropped);
+    assert.notEqual(dropped.id, ammo.id);
+    assert.equal(dropped.quan, 1);
+    assert.equal(dropped.transientProjectile, false);
+    assert.equal(rng.some(entry => entry === 'rn2(90)'
+        || entry === 'rnd(3)'
+        || entry === 'rnd(20)'
+        || entry === 'rn2(3)'), false, rng.join(', '));
+});
+
 test('production monster sling loadstone catch retains split gray stone in inventory', async () => {
     const loadstoneStack = monsterThrownGem(874412, 'loadstone', {
         otyp: LOADSTONE,
@@ -34591,6 +34661,28 @@ test('production monster sling loadstone catch retains split gray stone in inven
     assert.equal(rng.some(entry => entry === 'rnd(3)'
         || entry === 'rnd(20)'
         || entry === 'rn2(3)'), false, rng.join(', '));
+});
+
+test('production unicorn polyself slung loadstone still uses generic catch', async () => {
+    const loadstoneStack = monsterThrownGem(874416, 'loadstone', {
+        otyp: LOADSTONE,
+        cursed: false,
+        gemDescription: 'gray stone',
+        quan: 2,
+    });
+    const { ammo, thrower, rng, preNhgetchMessages } = await runMonsterSlingRockLanding({
+        seed: 1,
+        uac: 100,
+        heroBlind: false,
+        heroDex: 100,
+        projectile: loadstoneStack,
+        heroPolyself: { name: 'white unicorn', mlet: 'unicorn', likesGems: true, nohands: false },
+    });
+
+    assert.equal(preNhgetchMessages.some(message => /You catch the loadstone!/.test(message)), true,
+        preNhgetchMessages.join('\n'));
+    assertCaughtSplitThrownObject(ammo, thrower, 'loadstone');
+    assert.ok(rng.includes('rn2(1)'), rng.join(', '));
 });
 
 test('production monster sling catch drops split rock when inventory letters are full', async () => {
