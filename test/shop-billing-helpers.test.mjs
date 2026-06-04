@@ -33561,14 +33561,21 @@ async function runMonsterKopCreamPieLanding({
     heroBlindfolded = false,
     heroDeaf = false,
     heroNoEyes = false,
+    heroNoHands = false,
+    heroConfused = false,
+    heroStunned = false,
+    heroFumbling = false,
     heroCreamed = 0,
     heroBlindTimeout = heroBlind ? 10 : 0,
+    heroDex = 10,
     uac = 20,
     levelCells = [],
     throwerX = 8,
     monsterName = 'Keystone Kop',
     monsterData = {},
     pieQuan = 1,
+    initialInventory = null,
+    fullInventory = false,
     verbose = true,
 } = {}) {
     installNonShopFloorState();
@@ -33588,20 +33595,24 @@ async function runMonsterKopCreamPieLanding({
         blind: heroBlind,
         blindfolded: heroBlindfolded,
         Blindfolded: heroBlindfolded,
-        _polyself_form: heroNoEyes ? { noeyes: true } : null,
+        _polyself_form: heroNoEyes || heroNoHands
+            ? { noeyes: heroNoEyes || undefined, nohands: heroNoHands || undefined }
+            : null,
         ucreamed: heroCreamed,
         _blindTimeout: heroBlindTimeout,
         _statusSuffix: status.length ? ` ${status.join(' ')}` : '',
         _deafTimeout: heroDeaf ? 5 : 0,
-        confusion: false,
-        stunned: false,
-        fumbling: false,
+        confusion: heroConfused,
+        stunned: heroStunned,
+        fumbling: heroFumbling,
         uhp: 20,
         uhpmax: 20,
         uac,
         umovement: NORMAL_SPEED,
-        acurr: { a: [10, 10, 10, 10, 10, 10] },
+        acurr: { a: [10, 10, 10, heroDex, 10, 10] },
     });
+    if (fullInventory) fillInventoryLetters(876000);
+    else if (initialInventory) game.inventory = initialInventory;
     game.flags.verbose = verbose;
     game.moves = 1;
     game.context = {};
@@ -34502,6 +34513,7 @@ test('production kobold shaman does not use kobold dart path', async () => {
 test('production hostile Kop throws cream pie and creams hero on hit', async () => {
     const { pie, thrower, rng, preNhgetchMessages } = await runMonsterKopCreamPieLanding({
         seed: 8,
+        heroConfused: true,
         uac: 20,
     });
 
@@ -34521,6 +34533,76 @@ test('production hostile Kop throws cream pie and creams hero on hit', async () 
     assert.equal(preNhgetchMessages.some(message => /You are hit by a cream pie\./.test(message)), true,
         preNhgetchMessages.join('\n'));
     assert.equal(preNhgetchMessages.some(message => /Yecch!  You've been creamed\./.test(message)), true,
+        preNhgetchMessages.join('\n'));
+});
+
+test('production Kop cream pie catch adds the thrown pie to inventory', async () => {
+    const { pie, thrower, rng, preNhgetchMessages } = await runMonsterKopCreamPieLanding({
+        seed: 8,
+        heroDex: 99,
+        uac: 20,
+    });
+
+    assert.equal(game.u.uhp, 20);
+    assert.equal(game.u.ucreamed || 0, 0);
+    assert.equal(game.u.blind, false);
+    assert.equal(thrower.missile, null);
+    assert.equal(thrower.minvent.some(obj => obj.id === pie.id), false);
+    assert.equal(game.level.objects.some(obj => obj.kind === 'cream pie'), false);
+
+    const caught = game.inventory.find(obj => obj.kind === 'cream pie');
+    assert.ok(caught);
+    assert.equal(caught.quan, 1);
+    assert.equal(caught.line, 'a - a cream pie');
+    assert.ok(rng.some(entry => entry.startsWith('rn2(1)=')), rng.join(', '));
+    assert.equal(rng.some(entry => entry.startsWith('rnd(20)=')), false, rng.join(', '));
+    assert.equal(rng.some(entry => entry.startsWith('rnd(25)=')), false, rng.join(', '));
+    assert.equal(preNhgetchMessages.some(message => /You catch the cream pie!/.test(message)), true,
+        preNhgetchMessages.join('\n'));
+});
+
+test('production Kop cream pie catch merges with carried cream pies', async () => {
+    const carriedPie = creamPie(876100, 'a', 2);
+    const { pie, thrower, rng } = await runMonsterKopCreamPieLanding({
+        seed: 8,
+        heroDex: 99,
+        pieQuan: 3,
+        initialInventory: [carriedPie],
+        uac: 20,
+    });
+
+    assert.equal(pie.quan, 2);
+    assert.equal(thrower.missile, pie);
+    assert.equal(thrower.minvent.includes(pie), true);
+    assert.equal(game.level.objects.some(obj => obj.kind === 'cream pie'), false);
+    assert.equal(game.inventory.length, 1);
+    assert.equal(carriedPie.quan, 3);
+    assert.equal(carriedPie.line, 'a - 3 cream pies');
+    assert.ok(rng.some(entry => entry.startsWith('rn2(1)=')), rng.join(', '));
+    assert.equal(rng.some(entry => entry.startsWith('rnd(20)=')), false, rng.join(', '));
+});
+
+test('production Kop cream pie catch drops the pie when inventory letters are full', async () => {
+    const { pie, thrower, rng, preNhgetchMessages } = await runMonsterKopCreamPieLanding({
+        seed: 8,
+        heroDex: 99,
+        fullInventory: true,
+        uac: 20,
+    });
+
+    assert.equal(game.inventory.length, INVENTORY_LETTERS.length);
+    assert.equal(game.u.ucreamed || 0, 0);
+    assert.equal(game.u.blind, false);
+    assert.equal(thrower.missile, null);
+    assert.equal(thrower.minvent.some(obj => obj.id === pie.id), false);
+
+    const dropped = game.level.objects.find(obj => obj.kind === 'cream pie' && obj.ox === 5 && obj.oy === 5);
+    assert.ok(dropped);
+    assert.equal(dropped.quan, 1);
+    assert.equal(dropped.transientProjectile, false);
+    assert.ok(rng.some(entry => entry.startsWith('rn2(1)=')), rng.join(', '));
+    assert.equal(rng.some(entry => entry.startsWith('rnd(20)=')), false, rng.join(', '));
+    assert.equal(preNhgetchMessages.some(message => /You catch, but drop, the cream pie\./.test(message)), true,
         preNhgetchMessages.join('\n'));
 });
 

@@ -3,7 +3,7 @@
 
 import { game } from './gstate.js';
 import { mklev, l_nhcore_init, u_on_upstairs, makemon, mkcorpstat, mksobj, wipe_engr_at, dropMonsterInventory, wandIndexForRoll, scrollIndexForRoll, potionIndexForRoll, RANDOM_MONSTER_BY_NAME, STONE_RESISTANT_MONSTERS, adjustedMonsterLevel, monsterByRndName, monster_hp, rndmonnum, syncDungeonContext, next_ident, set_malign, enextoMonsterSpot, getbogusmon, pickNasty, chameleonAnimalForm, doppelgangerHumanoidForm, noteleportLevelForMonster, rlocNoMsg, rlocToCoreNoMsg, somexyspace, fumaroles, createMonsterCorpseOrGlob, monsterCorpseDropSucceeds, monsterLeavesCorpseLikeDrop, movebubbles, add_to_minv } from './mklev.js';
-import { rhack, pickupObjectName, inventoryItemName, inventoryLetterRank, recordVanquished, finishForceLock, loseExperienceLevel, finishLevelTeleport, finishPickDigDownwardHole, finishPickDigDownwardPit, maybeQueueQuestTalk, monsterGrowUp, monsterHostileCussNoise, monsterTurnDemonBribeArtifact, monsterTurnDemonBribeDemand, monsterTurnDemonBribeNoGold, processForceLockOccupationTick, forceLockOccupationShouldGiveUp, processSpellbookStudyOccupation, processTinOpeningOccupation, finishTinOpeningOccupation, refreshSwallowOverlay, finishSwallowExpel, travelPathKeys, updateGauntletsOfPowerStrength, consumeLifeSavingAmulet, activateStatueTrap, breakStatueObject, burnFloorObjectsByFire, burnRayFloorObjectsByFire, erodeArmorByFireTrap, dryWetTowelFromFire, igniteMonsterFireInventoryItems, monsterFireInventoryDamage, dropMonsterObject, earthFloorEffects, landMonsterThrownObject, stoneMonster, processCorpseTimers, processGlobShrinkTimers, addDelayedFoodBiteNutrition, repairShopDamageForShopkeeper, heroHasAntimagic, heroHasSlowDigestion, applyHeroOrdinaryHunger } from './cmd.js';
+import { rhack, pickupObjectName, inventoryItemName, inventoryLetterRank, recordVanquished, finishForceLock, loseExperienceLevel, finishLevelTeleport, finishPickDigDownwardHole, finishPickDigDownwardPit, maybeQueueQuestTalk, monsterGrowUp, monsterHostileCussNoise, monsterTurnDemonBribeArtifact, monsterTurnDemonBribeDemand, monsterTurnDemonBribeNoGold, processForceLockOccupationTick, forceLockOccupationShouldGiveUp, processSpellbookStudyOccupation, processTinOpeningOccupation, finishTinOpeningOccupation, refreshSwallowOverlay, finishSwallowExpel, travelPathKeys, updateGauntletsOfPowerStrength, consumeLifeSavingAmulet, activateStatueTrap, breakStatueObject, burnFloorObjectsByFire, burnRayFloorObjectsByFire, erodeArmorByFireTrap, dryWetTowelFromFire, igniteMonsterFireInventoryItems, monsterFireInventoryDamage, dropMonsterObject, earthFloorEffects, landMonsterThrownObject, heroCanAttemptThrownObjectCatch, holdCaughtThrownObject, stoneMonster, processCorpseTimers, processGlobShrinkTimers, addDelayedFoodBiteNutrition, repairShopDamageForShopkeeper, heroHasAntimagic, heroHasSlowDigestion, applyHeroOrdinaryHunger } from './cmd.js';
 import { docrt, cls, bot, flush_screen, pline, newsym, refreshHallucinatedMap, show_glyph_cell } from './display.js';
 import { vision_recalc, vision_reset, init_vision_globals, cansee, couldsee, view_from } from './vision.js';
 import { init_objects } from './o_init.js';
@@ -6625,41 +6625,55 @@ export async function processMonsterTurns() {
                             });
                             addMonsterThrownFloorMessages(floorMessages, throwerVisible);
                         } else {
-                            const attackRoll = rnd(20);
-                            const missed = targetAc + 8 <= attackRoll;
-                            let resultMessage = game.u?.blind || game.flags?.verbose === false
-                                ? 'You are hit.'
-                                : 'You are hit by a cream pie.';
-                            if (missed) {
-                                resultMessage = game.u?.blind || game.flags?.verbose === false
-                                    ? 'It misses.'
-                                    : targetAc + 8 <= attackRoll - 2
-                                        ? 'A cream pie misses you.'
-                                        : 'You are almost hit by a cream pie.';
-                            }
-
-                            if (!missed) {
-                                const wasBlind = !!game.u?.blind;
-                                const blindinc = applyMonsterCreamPieBlindness();
-                                if (blindinc) {
-                                    resultMessage = `${resultMessage}  ${wasBlind
-                                        ? "There's something sticky all over your face."
-                                        : "Yecch!  You've been creamed."}`;
+                            const catchChance = 100 - (game.u?.acurr?.a?.[A_DEX] ?? 10)
+                                - (game._startup_role === 'Monk' || game._startup_role === 'Rogue' ? 20 : 0);
+                            const caught = heroCanAttemptThrownObjectCatch(thrownMissile)
+                                && rn2(Math.max(1, catchChance)) === 0;
+                            if (caught) {
+                                const catchResult = holdCaughtThrownObject(thrownMissile, {
+                                    catchName: 'cream pie',
+                                    glyph: '%',
+                                    color: CLR_WHITE,
+                                });
+                                if (throwerVisible) game._topline_after_more = catchResult.message;
+                                else addToplineMessage(catchResult.message);
+                            } else {
+                                const attackRoll = rnd(20);
+                                const missed = targetAc + 8 <= attackRoll;
+                                let resultMessage = game.u?.blind || game.flags?.verbose === false
+                                    ? 'You are hit.'
+                                    : 'You are hit by a cream pie.';
+                                if (missed) {
+                                    resultMessage = game.u?.blind || game.flags?.verbose === false
+                                        ? 'It misses.'
+                                        : targetAc + 8 <= attackRoll - 2
+                                            ? 'A cream pie misses you.'
+                                            : 'You are almost hit by a cream pie.';
                                 }
-                                exerciseAttribute(A_STR, false);
+
+                                if (!missed) {
+                                    const wasBlind = !!game.u?.blind;
+                                    const blindinc = applyMonsterCreamPieBlindness();
+                                    if (blindinc) {
+                                        resultMessage = `${resultMessage}  ${wasBlind
+                                            ? "There's something sticky all over your face."
+                                            : "Yecch!  You've been creamed."}`;
+                                    }
+                                    exerciseAttribute(A_STR, false);
+                                }
+
+                                if (throwerVisible) game._topline_after_more = resultMessage;
+                                else addToplineMessage(resultMessage);
+
+                                const floorMessages = [];
+                                landMonsterThrownObject(thrownMissile, game.u?.ux || 0, game.u?.uy || 0, {
+                                    glyph: '%',
+                                    color: CLR_WHITE,
+                                    messages: floorMessages,
+                                    ohit: !missed,
+                                });
+                                addMonsterThrownFloorMessages(floorMessages, throwerVisible);
                             }
-
-                            if (throwerVisible) game._topline_after_more = resultMessage;
-                            else addToplineMessage(resultMessage);
-
-                            const floorMessages = [];
-                            landMonsterThrownObject(thrownMissile, game.u?.ux || 0, game.u?.uy || 0, {
-                                glyph: '%',
-                                color: CLR_WHITE,
-                                messages: floorMessages,
-                                ohit: !missed,
-                            });
-                            addMonsterThrownFloorMessages(floorMessages, throwerVisible);
                         }
 
                         game._search_pending_count = 0;
