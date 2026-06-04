@@ -6508,10 +6508,15 @@ export async function processMonsterTurns() {
                         newsym(flightX, flightY);
                         const catchChance = 100 - (game.u?.acurr?.a?.[A_DEX] ?? 10)
                             - (game._startup_role === 'Monk' || game._startup_role === 'Rogue' ? 20 : 0);
-                        const caught = !game.u?.blind && !game.u?.confusion && !game.u?.stunned
-                            && !game.u?.fumbling && rn2(Math.max(1, catchChance)) === 0;
+                        const caught = heroCanAttemptThrownObjectCatch(thrownMissile)
+                            && rn2(Math.max(1, catchChance)) === 0;
                         if (caught) {
-                            game._topline_after_more = `You catch the ${projectileKind}!`;
+                            const catchResult = holdCaughtThrownObject(thrownMissile, {
+                                catchName: projectileKind,
+                                glyph: thrownMissile.glyph || ')',
+                                color: thrownMissile.color ?? CLR_CYAN,
+                            });
+                            game._topline_after_more = catchResult.message;
                         } else {
                             const projectileDamageSides = monsterLauncherProjectileDamageSides(thrownMissile);
                             const projectileDamageBonus = monsterLauncherProjectileDamageBonus(thrownMissile);

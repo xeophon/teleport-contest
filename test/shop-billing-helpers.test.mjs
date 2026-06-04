@@ -34752,6 +34752,32 @@ test('production monster launcher arrow hit lands surviving arrow with ohit mulc
     assert.equal(rng.some(entry => entry.startsWith('rn2(100)=')), false);
 });
 
+test('production monster launcher arrow catch retains split arrow in inventory', async () => {
+    const { arrow, thrower, rng } = await runMonsterLauncherArrowLanding({
+        seed: 12,
+        heroBlind: false,
+        arrowQuan: 2,
+    });
+
+    assert.equal(game._pending_message, 'You catch the arrow!', rng.join(', '));
+    const residual = thrower.minvent.find(obj => obj.id === arrow.id);
+    assert.ok(residual);
+    assert.equal(residual.quan, 1);
+    assert.equal(thrower.missile, residual);
+    assert.equal(game.level.objects.some(obj => obj.id === arrow.id), false);
+    const caught = game.inventory.find(obj => obj.kind === 'arrow');
+    assert.ok(caught);
+    assert.notEqual(caught.id, arrow.id);
+    assert.equal(caught.quan, 1);
+    assert.equal(caught.letter, 'a');
+    assert.match(caught.line, /arrow/);
+    assert.equal(game.level.objects.some(obj => obj.transientProjectile), false);
+    assertStackLauncherMultishotRng(rng);
+    assert.ok(rng.includes('rn2(90)=0'), rng.join(', '));
+    assert.equal(rng.some(entry => entry.startsWith('rnd(20)=')
+        || entry.startsWith('rn2(3)=')), false, rng.join(', '));
+});
+
 test('production monster ya launcher arrow hit uses YA d7 damage', async () => {
     const { arrow, thrower, rng } = await runMonsterLauncherArrowLanding({
         seed: 7,

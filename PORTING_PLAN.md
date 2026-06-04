@@ -74,7 +74,7 @@ Detailed source-backed history is kept in `docs/c-parity-audit/`. This section i
   - `docs/c-parity-audit/255-tiphat-imitate-2026-05-31.md`
   - `docs/c-parity-audit/256-tiphat-mumble-2026-05-31.md`
   - `docs/c-parity-audit/257-tiphat-spell-cuss-2026-05-31.md`
-- Latest compact/source note: `docs/c-parity-audit/416-production-crude-dagger-catch-retention-2026-06-04.md`.
+- Latest compact/source note: `docs/c-parity-audit/417-production-launcher-arrow-catch-retention-2026-06-04.md`.
 - Latest verified public score: `44/44`.
 
 ## Current Priorities
@@ -96,7 +96,7 @@ Detailed source-backed history is kept in `docs/c-parity-audit/`. This section i
    - Generic C `readobjnam` object ranges for `bag`, `lamp`, `candle`, `horn`, `sword`, `shoes`, `shirt`, `boots`, `gloves`/`gauntlets`, `cloak`, `shield`, `hat`, and `helm` are covered; positive `called` range-tail namedesc lookups, unresolved range-base `called` random-class fallback, and scroll/spellbook `labeled`/`labelled` namedesc plus unknown-label class fallback are covered for the current modeled paths. Venom plural aliases, wizard-only `spe=1` policy, and dragon armor RNG paths are covered in parser-local paths. Continue replacing parser-local wish and merge tables with registry-backed finalization, artifact provenance, save/bones fruit-id handling, and dragon armor metadata consolidation.
 
 4. Monster placement, scheduler, and combat cores.
-   - Source notes: `docs/c-parity-audit/04-monsters-combat-pets.md` and latest compact note `docs/c-parity-audit/416-production-crude-dagger-catch-retention-2026-06-04.md`.
+   - Source notes: `docs/c-parity-audit/04-monsters-combat-pets.md` and latest compact note `docs/c-parity-audit/417-production-launcher-arrow-catch-retention-2026-06-04.md`.
    - Build shared `goodpos`, `enexto`, monster lifecycle, turn phases, `hmon`, `mattackm`, passive, and projectile/object-hit paths.
    - Compact candidates: direct monster-object hit follow-ups, remaining monster-thrown `passive_obj()` follow-ups, remaining monster-thrown/launcher-arrow `hits_bars()` object-class follow-ups beyond the covered dart, shuriken, sling rocks/gems/stones, plain daggers, crude/orcish daggers, silver daggers, ordinary knives, ordinary crossbow bolts, ordinary/dwarvish/silver/elven/orcish spears, and javelins, full monster diet flag generation, and broader `polymon()`/stoning interactions.
 
