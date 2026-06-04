@@ -68,6 +68,7 @@ const TOOL_CLASS = 12;
 const ROCK_CLASS = 13;
 const GEM_CLASS = 14;
 const RUBY = 10070;
+const ELVEN_ARROW = 350;
 const ORCISH_ARROW = 351;
 const ARROW = 349;
 const APE_ATTACKS = [
@@ -77,6 +78,7 @@ const APE_ATTACKS = [
 ];
 const CROSSBOW_BOLT = 10068;
 const DAGGER = 10023;
+const ELVEN_BOW = 10218;
 const ORCISH_BOW = 10217;
 const BOW = 10024;
 const CROSSBOW = 10069;
@@ -86,6 +88,7 @@ const DART = 353;
 const KNIFE = 10026;
 const SLING = 10027;
 const SPEAR = 10030;
+const ELVEN_SPEAR = 10190;
 const DWARVISH_SPEAR = 10102;
 const TRIDENT = 10066;
 const STILETTO = 10109;
@@ -508,10 +511,10 @@ const SPECIFIC_POLEARM_INFO = new Map([
 ]);
 
 const SPECIFIC_WEAPONS = new Set([
-    DAGGER, ORCISH_BOW, BOW, CROSSBOW, KNIFE, SLING, ORCISH_DAGGER, SCIMITAR,
+    DAGGER, ELVEN_BOW, ORCISH_BOW, BOW, CROSSBOW, KNIFE, SLING, ORCISH_DAGGER, SCIMITAR,
     RUNESWORD, WAR_HAMMER, ELVEN_BROADSWORD, ELVEN_DAGGER,
     ATHAME, QUARTERSTAFF,
-    SPEAR, DWARVISH_SPEAR, TRIDENT, STILETTO, SHORT_SWORD, ELVEN_SHORT_SWORD,
+    SPEAR, ELVEN_SPEAR, DWARVISH_SPEAR, TRIDENT, STILETTO, SHORT_SWORD, ELVEN_SHORT_SWORD,
     ORCISH_SHORT_SWORD, DWARVISH_SHORT_SWORD, BROADSWORD, LONG_SWORD, POLEARM,
     BATTLE_AXE, CLUB, RANSEUR, PARTISAN, GLAIVE, SPETUM, HALBERD, BARDICHE,
     VOULGE, FAUCHARD, GUISARME, BILL_GUISARME, TWO_HANDED_SWORD,
@@ -4224,7 +4227,7 @@ function mksobj_init(otmp, otyp, artif) {
         mkbox_cnts(otmp);
     } else if (otyp === ICE_BOX || otyp === SACK || otyp === OILSKIN_SACK || otyp === BAG_OF_HOLDING) {
         mkbox_cnts(otmp);
-    } else if (otyp === ORCISH_ARROW || otyp === ARROW || otyp === DART || otyp === CROSSBOW_BOLT) {
+    } else if (otyp === ELVEN_ARROW || otyp === ORCISH_ARROW || otyp === ARROW || otyp === DART || otyp === CROSSBOW_BOLT) {
         otmp.quan = rn1(6, 6);
         if (!rn2(11)) {
             otmp.spe = rne(3);
@@ -4621,10 +4624,11 @@ export function object_display(otmp) {
     if (otyp === GOLD_PIECE) return { glyph: '$', color: CLR_YELLOW };
     if (otyp === WEAPON_CLASS) return { glyph: ')', color: displayColor ?? CLR_CYAN };
     if (otyp === ORCISH_ARROW || otyp === ORCISH_BOW) return { glyph: ')', color: displayColor ?? CLR_BLACK };
+    if (otyp === ELVEN_ARROW || otyp === ELVEN_BOW) return { glyph: ')', color: displayColor ?? CLR_BROWN };
     if (otyp === ARROW || otyp === BOW) return { glyph: ')', color: displayColor ?? CLR_BROWN };
     if (otyp === CROSSBOW_BOLT || otyp === DAGGER || otyp === CROSSBOW
         || otyp === PICK_AXE || otyp === DART || otyp === KNIFE
-        || otyp === SPEAR || otyp === DWARVISH_SPEAR
+        || otyp === SPEAR || otyp === ELVEN_SPEAR || otyp === DWARVISH_SPEAR
         || otyp === SLING || otyp === TRIDENT || otyp === BULLWHIP
         || otyp === RUNESWORD || otyp === WAR_HAMMER
         || otyp === SHORT_SWORD || otyp === ELVEN_SHORT_SWORD
@@ -6206,6 +6210,8 @@ function mongets(otyp, erodes = true) {
     else if (otyp === ELVEN_LEATHER_HELM) Object.assign(otmp, { cls: 'armor', kind: 'elven leather helm', appearance: 'leather hat' });
     else if (otyp === ELVEN_MITHRIL_COAT) Object.assign(otmp, { cls: 'armor', kind: 'elven mithril-coat' });
     else if (otyp === ELVEN_CLOAK) Object.assign(otmp, { cls: 'armor', kind: 'elven cloak', appearance: 'faded pall' });
+    else if (otyp === ELVEN_SHIELD) Object.assign(otmp, { cls: 'armor', kind: 'elven shield', actualKind: 'elven shield', appearance: 'blue and green shield' });
+    else if (otyp === ELVEN_BOOTS) Object.assign(otmp, { cls: 'armor', kind: 'elven boots', actualKind: 'elven boots', appearance: 'mud boots' });
     else if (otyp === DWARVISH_CLOAK) Object.assign(otmp, { cls: 'armor', kind: 'dwarvish cloak', appearance: 'hooded cloak' });
     else if (otyp === IRON_SHOES) Object.assign(otmp, { cls: 'armor', kind: 'iron shoes', appearance: 'hard shoes' });
     else if (otyp === DWARVISH_ROUNDSHIELD) Object.assign(otmp, { cls: 'armor', kind: 'dwarvish roundshield', appearance: 'large round shield' });
@@ -6233,9 +6239,40 @@ function mongets(otyp, erodes = true) {
     else if (otyp === SPEAR) Object.assign(otmp, { cls: 'weapon', kind: 'spear' });
     else if (otyp === SHORT_SWORD) Object.assign(otmp, { cls: 'weapon', kind: 'short sword' });
     else if (otyp === LONG_SWORD) Object.assign(otmp, { cls: 'weapon', kind: 'long sword' });
+    else if (otyp === ELVEN_SPEAR) Object.assign(otmp, {
+        cls: 'weapon',
+        kind: 'runed spear',
+        actualKind: 'elven spear',
+        singular: 'runed spear',
+        plural: 'runed spears',
+        appearance: 'runed spear',
+        material: 'wood',
+    });
     else if (otyp === DWARVISH_SPEAR) Object.assign(otmp, { cls: 'weapon', kind: 'dwarvish spear' });
+    else if (otyp === ELVEN_DAGGER) Object.assign(otmp, {
+        cls: 'weapon',
+        kind: 'runed dagger',
+        actualKind: 'elven dagger',
+        appearance: 'runed dagger',
+        material: 'wood',
+    });
+    else if (otyp === ELVEN_SHORT_SWORD) Object.assign(otmp, {
+        cls: 'weapon',
+        kind: 'runed short sword',
+        actualKind: 'elven short sword',
+        appearance: 'runed short sword',
+        material: 'wood',
+    });
+    else if (otyp === ELVEN_BROADSWORD) Object.assign(otmp, {
+        cls: 'weapon',
+        kind: 'runed broadsword',
+        actualKind: 'elven broadsword',
+        appearance: 'runed broadsword',
+        material: 'wood',
+    });
     else if (otyp === DWARVISH_SHORT_SWORD) Object.assign(otmp, { cls: 'weapon', kind: 'dwarvish short sword' });
     else if (otyp === DWARVISH_MATTOCK) Object.assign(otmp, { cls: 'weapon', kind: 'dwarvish mattock' });
+    else if (otyp === ELVEN_BOW) Object.assign(otmp, { cls: 'weapon', kind: 'elven bow', appearance: 'runed bow', material: 'wood' });
     else if (otyp === ORCISH_BOW) Object.assign(otmp, { cls: 'weapon', kind: 'orcish bow', appearance: 'crude bow' });
     else if (otyp === BOW) Object.assign(otmp, { cls: 'weapon', kind: 'bow' });
     else if (otyp === CROSSBOW) Object.assign(otmp, { cls: 'weapon', kind: 'crossbow' });
@@ -6245,6 +6282,15 @@ function mongets(otyp, erodes = true) {
     else if (otyp === BULLWHIP) Object.assign(otmp, { cls: 'weapon', kind: 'bullwhip' });
     else if (otyp === AKLYS) Object.assign(otmp, { cls: 'weapon', kind: 'aklys' });
     else if (otyp === SILVER_MACE) Object.assign(otmp, { cls: 'weapon', kind: 'silver mace' });
+    else if (otyp === ELVEN_ARROW) Object.assign(otmp, {
+        cls: 'weapon',
+        kind: 'runed arrow',
+        actualKind: 'elven arrow',
+        singular: 'runed arrow',
+        plural: 'runed arrows',
+        appearance: 'runed arrow',
+        material: 'wood',
+    });
     else if (otyp === ORCISH_ARROW) Object.assign(otmp, {
         cls: 'weapon',
         kind: 'crude arrow',
@@ -6430,6 +6476,11 @@ function m_initthrow(otyp, oquan) {
 function m_initorcish_launcher() {
     mongets(ORCISH_BOW);
     m_initthrow(ORCISH_ARROW, 12);
+}
+
+function m_initelven_launcher() {
+    mongets(ELVEN_BOW);
+    m_initthrow(ELVEN_ARROW, 12);
 }
 
 function m_initmercinv(ptr) {
@@ -6800,25 +6851,24 @@ function m_initweap(ptr) {
         if (rn2(3)) mongets(rn2(3) ? LOW_BOOTS : HIGH_BOOTS);
         if (rn2(3)) mongets(POT_HEALING);
     } else if (ptr.elf) {
-        if (rn2(2)) mongets(ORCISH_HELM, !rn2(2));
-        if (rn2(2)) mongets(ORCISH_HELM);
-        else if (!rn2(4)) mongets(ORCISH_HELM);
-        if (rn2(2)) mongets(DAGGER);
+        if (rn2(2)) mongets(rn2(2) ? ELVEN_MITHRIL_COAT : ELVEN_CLOAK);
+        if (rn2(2)) mongets(ELVEN_LEATHER_HELM);
+        else if (!rn2(4)) mongets(ELVEN_BOOTS);
+        if (rn2(2)) mongets(ELVEN_DAGGER);
         switch (rn2(3)) {
         case 0:
-            if (!rn2(4)) mongets(ORCISH_HELM);
-            if (rn2(3)) mongets(DAGGER);
-            mongets(BOW);
-            m_initthrow(ARROW, 12);
+            if (!rn2(4)) mongets(ELVEN_SHIELD);
+            if (rn2(3)) mongets(ELVEN_SHORT_SWORD);
+            m_initelven_launcher();
             break;
         case 1:
-            mongets(DAGGER);
-            if (rn2(2)) mongets(ORCISH_HELM);
+            mongets(ELVEN_BROADSWORD);
+            if (rn2(2)) mongets(ELVEN_SHIELD);
             break;
         case 2:
             if (rn2(2)) {
-                mongets(DAGGER);
-                mongets(ORCISH_HELM);
+                mongets(ELVEN_SPEAR);
+                mongets(ELVEN_SHIELD);
             }
             break;
         }

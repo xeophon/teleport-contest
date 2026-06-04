@@ -119,15 +119,31 @@ function installThemeroomGenerationGame({ seed = 1, dlevel = 8 } = {}) {
     return g;
 }
 
-async function generatedMonsterWithMissile(name) {
+async function generatedMonsterMatching(name, predicate, label) {
     const mdat = monsterByRndName(name);
     assert.ok(mdat, `missing monster data for ${name}`);
-    for (let seed = 1; seed <= 200; seed++) {
+    for (let seed = 1; seed <= 600; seed++) {
         installMkmapGame({ seed });
         const mon = await makemon(mdat, 5, 5, MM_NOGRP);
-        if (mon?.missile) return mon;
+        if (predicate(mon)) return mon;
     }
-    assert.fail(`${name} did not generate a launcher missile in searched seeds`);
+    assert.fail(`${name} did not generate ${label} in searched seeds`);
+}
+
+async function generatedMonsterWithMissile(name) {
+    return generatedMonsterMatching(name, mon => mon?.missile, 'a launcher missile');
+}
+
+function monsterInventoryHas(mon, actualKind) {
+    return (mon.minvent || []).some(obj => obj.actualKind === actualKind || obj.kind === actualKind);
+}
+
+function assertNoPlainElfPlaceholderGear(mon) {
+    const plainKinds = new Set((mon.minvent || []).map(obj => obj.kind));
+    assert.equal(plainKinds.has('orcish helm'), false);
+    assert.equal(plainKinds.has('dagger'), false);
+    assert.equal(plainKinds.has('bow'), false);
+    assert.equal(plainKinds.has('arrow'), false);
 }
 
 function assertHardPoisonedOrcishLauncher(mon) {
@@ -148,6 +164,33 @@ function assertHardPoisonedOrcishLauncher(mon) {
     assert.equal(launcher.appearance, 'crude bow');
     assert.equal(mon.minvent.some(obj => obj.kind === 'bow'), false);
     assert.equal(mon.minvent.some(obj => obj.kind === 'arrow'), false);
+}
+
+function assertNaturalElvenLauncher(mon) {
+    const ammo = mon.missile;
+    assert.ok(ammo);
+    assert.equal(mon.minvent.includes(ammo), true);
+    assert.equal(ammo.kind, 'runed arrow');
+    assert.equal(ammo.actualKind, 'elven arrow');
+    assert.equal(ammo.singular, 'runed arrow');
+    assert.equal(ammo.plural, 'runed arrows');
+    assert.equal(ammo.appearance, 'runed arrow');
+    assert.equal(ammo.material, 'wood');
+    assert.notEqual(ammo.opoisoned, true);
+    assert.ok(ammo.quan >= 3 && ammo.quan <= 14);
+
+    const launcher = mon.minvent.find(obj => obj.kind === 'elven bow');
+    assert.ok(launcher);
+    assert.equal(launcher.appearance, 'runed bow');
+    assertNoPlainElfPlaceholderGear(mon);
+}
+
+function assertRunedWeapon(mon, actualKind, kind) {
+    const weapon = (mon.minvent || []).find(obj => obj.actualKind === actualKind);
+    assert.ok(weapon);
+    assert.equal(weapon.kind, kind);
+    assert.equal(weapon.appearance, kind);
+    assertNoPlainElfPlaceholderGear(mon);
 }
 
 function doorCellsAround(g, room) {
@@ -210,6 +253,28 @@ test('natural Uruk-style orcs generate hard-poisoned orcish arrow stacks', async
         const mon = await generatedMonsterWithMissile(name);
         assertHardPoisonedOrcishLauncher(mon);
     }
+});
+
+test('natural elves generate runed launcher ammo instead of plain arrows', async () => {
+    for (const name of ['Woodland-elf', 'Green-elf', 'Grey-elf']) {
+        const mon = await generatedMonsterMatching(name,
+            candidate => candidate?.missile && candidate.missile.opoisoned !== true,
+            'a non-hard-poisoned elven launcher missile');
+        assertNaturalElvenLauncher(mon);
+    }
+});
+
+test('natural elves use C elven broadsword and spear branches', async () => {
+    const broadswordMon = await generatedMonsterMatching('Woodland-elf',
+        mon => monsterInventoryHas(mon, 'elven broadsword'),
+        'an elven broadsword branch');
+    assertRunedWeapon(broadswordMon, 'elven broadsword', 'runed broadsword');
+
+    const spearMon = await generatedMonsterMatching('Woodland-elf',
+        mon => monsterInventoryHas(mon, 'elven spear'),
+        'an elven spear branch');
+    assertRunedWeapon(spearMon, 'elven spear', 'runed spear');
+    assert.equal(monsterInventoryHas(spearMon, 'elven shield'), true);
 });
 
 test('mines level_init smoothed option gates only the C pass-three smoothing', () => {
