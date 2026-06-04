@@ -34524,6 +34524,103 @@ test('production monster sling loadstone intervening acid passive runs before st
         preNhgetchMessages.join('\n'));
 });
 
+test('production monster sling harmless rock-passer hit still runs passive before stacking', async () => {
+    const cleanStack = {
+        ...monsterThrownGem(874510, 'loadstone', {
+            otyp: LOADSTONE,
+            cursed: false,
+            gemDescription: 'gray stone',
+        }),
+        ox: 8,
+        oy: 5,
+        letter: undefined,
+        line: undefined,
+    };
+    const elemental = passiveObjectTarget('earth elemental', 'acid', 8, 5, {
+        ac: 15,
+        mac: 15,
+        mhp: 20,
+        mhpmax: 20,
+        msleeping: 1,
+        passWalls: true,
+        neuter: true,
+        data: { name: 'earth elemental', mlevel: 8, mac: 15, passWalls: true, neuter: true },
+    });
+    const loadstone = monsterThrownGem(874511, 'loadstone', {
+        otyp: LOADSTONE,
+        cursed: false,
+        gemDescription: 'gray stone',
+    });
+    const { ammo, thrower, rng, rawRng, preNhgetchMessages } = await runMonsterSlingRockLanding({
+        seed: 1,
+        uac: 100,
+        projectile: loadstone,
+        levelCells: [[7, 5, { typ: IRONBARS }]],
+        extraMonsters: [elemental],
+        initialObjects: [cleanStack],
+    });
+
+    assert.equal(game.u.uhp, 20);
+    assert.equal(game._damage_after_topline_more || 0, 0, rawRng.join(', '));
+    assert.equal(elemental.mhp, 20, rawRng.join(', '));
+    assert.equal(elemental.msleeping, 0);
+    assert.equal(thrower.minvent.some(obj => obj.id === ammo.id), false);
+
+    assert.equal(game.level.objects.some(obj => obj.id === ammo.id), false, rawRng.join(', '));
+    assert.equal(cleanStack.quan, 2, rawRng.join(', '));
+    assert.equal(cleanStack.oeroded2 || 0, 0);
+    assert.equal(cleanStack.ox, 8);
+    assert.equal(cleanStack.oy, 5);
+    assert.equal(game.level.objects.length, 1);
+
+    assert.deepEqual(rng.slice(0, 6), ['rn2(5)', 'rn2(5)', 'rnd(1)', 'rnd(20)', 'rnd(3)', 'rn2(6)'],
+        rawRng.join(', '));
+    assert.equal(rng.some(entry => entry === 'rn2(3)'
+        || entry === 'rn2(100)'), false, rawRng.join(', '));
+    assert.equal(preNhgetchMessages.some(message => /Clonk!/.test(message)), false);
+    assert.equal(preNhgetchMessages.some(message =>
+        /loadstone hits the earth elemental but passes harmlessly through it|It is hit/.test(message)), true,
+        preNhgetchMessages.join('\n'));
+});
+
+test('production monster sling glass gem still harms intervening rock-passing monster', async () => {
+    const elemental = ordinaryThrowTarget('earth elemental', 8, 5, {
+        ac: 15,
+        mac: 15,
+        mhp: 20,
+        mhpmax: 20,
+        passWalls: true,
+        neuter: true,
+        data: { name: 'earth elemental', mlevel: 8, mac: 15, passWalls: true, neuter: true },
+    });
+    const glass = monsterThrownGem(874512, 'worthless piece of red glass', {
+        actualKind: 'worthless piece of red glass',
+        gemDescription: 'red gem',
+        material: 'glass',
+    });
+    const { ammo, thrower, rng, rawRng, preNhgetchMessages } = await runMonsterSlingRockLanding({
+        seed: 1,
+        uac: 100,
+        projectile: glass,
+        levelCells: [[7, 5, { typ: IRONBARS }]],
+        extraMonsters: [elemental],
+    });
+
+    assert.equal(game.u.uhp, 20);
+    assert.equal(game._damage_after_topline_more || 0, 0, rawRng.join(', '));
+    assert.equal(elemental.mhp < 20, true, rawRng.join(', '));
+    assert.equal(elemental.msleeping, 0);
+    assert.equal(thrower.minvent.some(obj => obj.id === ammo.id), false);
+
+    assert.deepEqual(rng.slice(0, 5), ['rn2(5)', 'rn2(5)', 'rnd(1)', 'rnd(20)', 'rnd(3)'],
+        rawRng.join(', '));
+    assert.equal(preNhgetchMessages.some(message => /Clonk!/.test(message)), false);
+    assert.equal(preNhgetchMessages.some(message => /passes harmlessly/.test(message)), false,
+        preNhgetchMessages.join('\n'));
+    assert.equal(preNhgetchMessages.some(message => /worthless piece of red glass hits the earth elemental|It is hit/.test(message)), true,
+        preNhgetchMessages.join('\n'));
+});
+
 test('production monster sling ruby aimed shot can pass through iron bars before hero', async () => {
     const ruby = monsterThrownGem(874370, 'ruby', { gemTough: true });
     const { ammo, rng, rawRng, preNhgetchMessages } = await runMonsterSlingRockLanding({

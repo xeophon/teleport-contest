@@ -2691,6 +2691,35 @@ function monsterSlingAmmoDamageSides(item) {
     return item?.otyp === FLINT || name === 'flint' || name === 'flint stone' ? 6 : 3;
 }
 
+function monsterSlingAmmoStoneMissile(item) {
+    if (!item || String(item.cls || '').toLowerCase() === 'ring') return false;
+    const material = normalizedGemName(item.material || item.oc_material);
+    if (material === 'gemstone' || material === 'mineral') return true;
+    if (item.otyp === ROCK || item.otyp === FLINT || item.otyp === LUCKSTONE
+        || item.otyp === LOADSTONE || item.otyp === TOUCHSTONE || item.isRock)
+        return true;
+    const name = monsterSlingAmmoName(item).toLowerCase();
+    if (name === 'rock' || name === 'flint' || name === 'flint stone') return true;
+    if (UNICORN_GRAY_STONE_NAMES.has(name) || UNICORN_REAL_GEM_NAMES.has(name)) return true;
+    return monsterPickupClass(item) === GEM_CLASS && unicornThrownGemKind(item) === 'real';
+}
+
+function monsterPassesRocks(target) {
+    const data = target?.data || {};
+    const name = normalizedGemName(target?.name || data.name || data.mname);
+    const intendedRockPasser = name === 'xorn' || name === 'earth elemental'
+        || target?.passesRocks || data.passesRocks;
+    return !!intendedRockPasser
+        && !!(target?.passWalls || target?.passesWalls || target?.passes_walls || target?.wallwalk
+            || data.passWalls || data.passesWalls || data.passes_walls || data.wallwalk
+            || name === 'xorn' || name === 'earth elemental')
+        && !(target?.unsolid || target?.noncorporeal || data.unsolid || data.noncorporeal);
+}
+
+function monsterSlingAmmoHarmlessStoneHit(item, target) {
+    return monsterSlingAmmoStoneMissile(item) && monsterPassesRocks(target);
+}
+
 function normalizedGemName(value) {
     return String(value || '').toLowerCase().trim().replace(/\s+/g, ' ');
 }
@@ -6229,14 +6258,18 @@ export async function processMonsterTurns() {
                                 });
                                 addMonsterThrownFloorMessages(floorMessages, throwerVisible && !deferPrayerProjectile);
                             } else if (interveningTarget) {
+                                const harmlessStoneHit = monsterSlingAmmoHarmlessStoneHit(thrownMissile, interveningTarget);
                                 const damage = Math.max(1, rnd(monsterSlingAmmoDamageSides(thrownMissile)));
                                 interveningTarget.msleeping = 0;
-                                interveningTarget.mhp = Math.max(0, (interveningTarget.mhp || 1) - damage);
+                                if (!harmlessStoneHit)
+                                    interveningTarget.mhp = Math.max(0, (interveningTarget.mhp || 1) - damage);
                                 const targetVisible = !game.u?.blind
                                     && !!(game.viz_array?.[interveningTarget.my]?.[interveningTarget.mx] & IN_SIGHT)
                                     && couldSeeCoord(interveningTarget.mx, interveningTarget.my);
                                 const hitMessage = targetVisible
-                                    ? `The ${missileName} hits the ${interveningTarget.data?.name || 'monster'}${damage > 4 ? '!' : '.'}`
+                                    ? (harmlessStoneHit
+                                        ? `The ${missileName} hits the ${interveningTarget.data?.name || 'monster'} but passes harmlessly through it.`
+                                        : `The ${missileName} hits the ${interveningTarget.data?.name || 'monster'}${damage > 4 ? '!' : '.'}`)
                                     : `It is hit${damage > 4 ? '!' : '.'}`;
                                 if (throwerVisible) game._topline_after_more = hitMessage;
                                 else addToplineMessage(hitMessage);
