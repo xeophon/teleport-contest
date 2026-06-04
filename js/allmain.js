@@ -5985,6 +5985,10 @@ export async function processMonsterTurns() {
                     const canThrowSpear = !mon._opened_door_this_move && !mon.mpeaceful && spearIndex >= 0
                         && throwRange > 1 && throwRange < BOLT_LIM && straightThrow
                         && clearPath(mon.mx, mon.my, throwTargetX, throwTargetY);
+                    const shurikenIndex = mon.minvent?.findIndex(item => monsterThrownShurikenKind(item)) ?? -1;
+                    const canThrowShuriken = !mon._opened_door_this_move && !mon.mpeaceful && shurikenIndex >= 0
+                        && throwRange > 1 && throwRange < BOLT_LIM && straightThrow
+                        && clearPath(mon.mx, mon.my, throwTargetX, throwTargetY);
                     const breathAttack = movedByMonster && !mon.mpeaceful && !mon._opened_door_this_move
                         && straightThrow && throwRange > 1 && throwRange < BOLT_LIM
                         && (mon.mx - throwTargetX) ** 2 + (mon.my - throwTargetY) ** 2 <= BOLT_LIM * BOLT_LIM
@@ -6249,7 +6253,8 @@ export async function processMonsterTurns() {
                     const canUseMovedWeaponAttack = movedByMonster && !nearThrowTarget && mon.data?.armed
                         && (mon.data?.mercenary || mon.mw || !game._armor_wear_occupation);
                     const canUseWeaponAttack = !game.level?.flags?.rogue_level
-                        && (canThrowSpear || canThrowPlainDagger || canThrowOrcishDagger || canThrowKnife || canThrowDart);
+                        && (canThrowSpear || canThrowShuriken || canThrowPlainDagger || canThrowOrcishDagger
+                            || canThrowKnife || canThrowDart);
                     const canSelectRangedWeapon = canUseWeaponAttack;
                     const canCheckOffensiveItems = !mon.data?.mindless && !mon.data?.nohands && !mon.mpeaceful;
                     let offensiveItemsLinedUp = false;
@@ -6299,7 +6304,7 @@ export async function processMonsterTurns() {
                     }
                         continue;
                     }
-                    if (canReadyLauncher && !(canThrowSpear && rangedWeaponLinedUp)) {
+                    if (canReadyLauncher && !((canThrowSpear || canThrowShuriken) && rangedWeaponLinedUp)) {
                         mon.mw = launcher;
                         if (!game.u?.blind && couldSeeCoord(mon.mx, mon.my) && !mon.minvis && !mon.mundetected) {
                             const article = /^[aeiou]/i.test(launcherKind) ? 'an' : 'a';
@@ -6308,7 +6313,7 @@ export async function processMonsterTurns() {
                         }
                         continue;
                     }
-                    if (canShootLauncher && !(canThrowSpear && rangedWeaponLinedUp)
+                    if (canShootLauncher && !((canThrowSpear || canThrowShuriken) && rangedWeaponLinedUp)
                         && !(canThrowOffensivePotion && offensiveItemsLinedUp)
                         && monsterLinedUp(mon, throwTargetX, throwTargetY)) {
                         const missile = mon.minvent[launcherAmmoIndex];
@@ -6626,6 +6631,104 @@ export async function processMonsterTurns() {
                                         : (game.u?.uac ?? 10) + hitv <= attackRoll - 2
                                             ? `${spearArticleCap} ${spearKind} misses you.`
                                             : `You are almost hit by ${spearArticle} ${spearKind}.`;
+                                }
+                                if (throwerVisible) game._topline_after_more = resultMessage;
+                                else addToplineMessage(resultMessage);
+                                if (!missed) {
+                                    game._damage_after_topline_more = (game._damage_after_topline_more || 0) + damage;
+                                    game._exercise_after_topline_more = (game._exercise_after_topline_more || 0) + 1;
+                                }
+                                rn2(5);
+                                const floorMessages = [];
+                                landMonsterThrownObject(missile, game.u?.ux || 0, game.u?.uy || 0, {
+                                    glyph: ')',
+                                    color: missile.color ?? CLR_CYAN,
+                                    messages: floorMessages,
+                                    ohit: !missed,
+                                });
+                                addMonsterThrownFloorMessages(floorMessages, throwerVisible);
+                            }
+                        }
+                        game._search_pending_count = 0;
+                        game._run_steps_remaining = 0;
+                        game._travel_keys = [];
+                        if ((game._pending_time_passed || 0) > 2) game._pending_time_passed = 2;
+                        if (game._message_more && !game._process_time_with_more) {
+                            game._monster_resume_index = monIndex + 1;
+                            game._monster_resume_somebody_can_move = somebodyCanMove;
+                            return false;
+                        }
+                        continue;
+                    }
+                    if (canThrowShuriken && rangedWeaponLinedUp) {
+                        const targetAc = game.u?.uac ?? 10;
+                        if (targetAc < 0 && !consumedMattackuAc) rnd(-targetAc);
+
+                        const missile = mon.minvent[shurikenIndex];
+                        const shurikenKind = monsterThrownShurikenKind(missile) || 'shuriken';
+                        const shurikenArticle = /^[aeiou]/i.test(shurikenKind) ? 'an' : 'a';
+                        const shurikenArticleCap = shurikenArticle[0].toUpperCase() + shurikenArticle.slice(1);
+                        const missileSpe = Math.trunc(Number(missile.spe || 0));
+                        const missileErosion = Math.max(0, Math.trunc(Number(missile.oeroded || 0)),
+                            Math.trunc(Number(missile.oeroded2 || 0)));
+                        if ((missile.quan || 1) > 1) missile.quan--;
+                        else {
+                            mon.minvent.splice(shurikenIndex, 1);
+                            if (mon.missile === missile) mon.missile = null;
+                        }
+                        const throwerVisible = !game.u?.blind
+                            && !!(game.viz_array?.[mon.my]?.[mon.mx] & IN_SIGHT)
+                            && !mon.minvis;
+                        if (throwerVisible) {
+                            addToplineMessage(`${monsterDisplayName(mon)} throws ${shurikenArticle} ${shurikenKind}!`);
+                            game._message_more = 1;
+                            game._process_time_with_more = 0;
+                        }
+
+                        let shurikenTerrainStop = null;
+                        for (let step = 1; step < throwRange; step++) {
+                            const sx = mon.mx + throwDx * step;
+                            const sy = mon.my + throwDy * step;
+                            const remainingRange = throwRange - step;
+                            const forcehit = !rn2(5);
+                            if (remainingRange && forcehit
+                                && game.level?.at(sx + throwDx, sy + throwDy)?.typ === IRONBARS) {
+                                rn2(100); // C breaktest() calls obj_resists(); ordinary shuriken survive here.
+                                if (!(game.u?._statusSuffix || '').includes('Deaf') && !(game.u?._deafTimeout || 0))
+                                    addToplineMessage('Clonk!');
+                                shurikenTerrainStop = { x: sx, y: sy };
+                                break;
+                            }
+                        }
+                        if (shurikenTerrainStop) {
+                            const floorMessages = [];
+                            landMonsterThrownObject(missile, shurikenTerrainStop.x, shurikenTerrainStop.y, {
+                                glyph: ')',
+                                color: missile.color ?? CLR_CYAN,
+                                messages: floorMessages,
+                            });
+                            addMonsterThrownFloorMessages(floorMessages, throwerVisible);
+                        } else {
+                            const catchChance = 100 - (game.u?.acurr?.a?.[A_DEX] ?? 10)
+                                - (game._startup_role === 'Monk' || game._startup_role === 'Rogue' ? 20 : 0);
+                            const caught = !game.u?.blind && !game.u?.confusion && !game.u?.stunned
+                                && !game.u?.fumbling && rn2(Math.max(1, catchChance)) === 0;
+                            if (caught) {
+                                const catchMessage = `You catch the ${shurikenKind}!`;
+                                if (throwerVisible) game._topline_after_more = catchMessage;
+                                else addToplineMessage(catchMessage);
+                            } else {
+                                const damage = Math.max(1, rnd(8) + missileSpe - missileErosion);
+                                const hitv = Math.max(-4, 3 - throwRange) + 8 + missileSpe;
+                                const attackRoll = rnd(20);
+                                const missed = (game.u?.uac ?? 10) + hitv <= attackRoll;
+                                let resultMessage = `You are hit by ${shurikenArticle} ${shurikenKind}${damage > 4 ? '!' : '.'}`;
+                                if (missed) {
+                                    resultMessage = game.u?.blind || game.flags?.verbose === false
+                                        ? 'It misses.'
+                                        : (game.u?.uac ?? 10) + hitv <= attackRoll - 2
+                                            ? `${shurikenArticleCap} ${shurikenKind} misses you.`
+                                            : `You are almost hit by ${shurikenArticle} ${shurikenKind}.`;
                                 }
                                 if (throwerVisible) game._topline_after_more = resultMessage;
                                 else addToplineMessage(resultMessage);
@@ -8377,6 +8480,15 @@ function monsterUsesPostMoveHide(mon) {
 
 function monsterThrownSpearKind(item) {
     return String(item?.actualKind || item?.kind || 'spear');
+}
+
+function monsterThrownShurikenKind(item) {
+    const names = [item?.actualKind, item?.kind, item?.singular, item?.appearance]
+        .map(name => String(name || '').toLowerCase())
+        .filter(Boolean);
+    if (names.includes('shuriken')) return 'shuriken';
+    if (names.includes('throwing star')) return 'shuriken';
+    return '';
 }
 
 function monsterThrownSpearNames(item) {

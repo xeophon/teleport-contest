@@ -619,6 +619,22 @@ function monsterKnife(id) {
     };
 }
 
+function monsterShuriken(id, extra = {}) {
+    return {
+        id,
+        cls: 'weapon',
+        glyph: ')',
+        kind: 'shuriken',
+        actualKind: 'shuriken',
+        singular: 'shuriken',
+        plural: 'shuriken',
+        quan: 1,
+        spe: 0,
+        material: 'iron',
+        ...extra,
+    };
+}
+
 function monsterSpear(id, extra = {}) {
     return {
         id,
@@ -34020,6 +34036,22 @@ async function runMonsterSpearIronBars({
     return { spearItem, thrower, rng: rawRng.map(entry => entry.replace(/=.*/, '')), rawRng, preNhgetchMessages };
 }
 
+async function runMonsterShurikenIronBars({
+    projectile = null,
+    inventory = null,
+    activeMissile = null,
+    ...options
+} = {}) {
+    const shurikenItem = projectile || monsterShuriken(874387);
+    const result = await runMonsterSpearIronBars({
+        ...options,
+        projectile: shurikenItem,
+        inventory: inventory || [shurikenItem],
+        activeMissile: activeMissile || shurikenItem,
+    });
+    return { ...result, shurikenItem };
+}
+
 test('production monster sling rock hit threads ohit into drop-throw mulch check', async () => {
     const { rock, thrower, rng } = await runMonsterSlingRockLanding({ uac: 100 });
 
@@ -36209,6 +36241,203 @@ test('production monster dwarvish spear selection precedes ordinary spear', asyn
     assert.equal(game.level.objects.some(obj => obj.id === spearItem.id), false);
 
     assert.ok(rng.some(entry => entry === 'rn2(100)'));
+    assert.equal(preNhgetchMessages.some(message => /Clonk!/.test(message)), true);
+});
+
+test('production monster shuriken hit uses shuriken damage and can mulch', async () => {
+    const { shurikenItem, thrower, rng, rawRng, preNhgetchMessages } = await runMonsterShurikenIronBars({
+        seed: 1,
+        uac: 100,
+    });
+
+    assert.equal(preNhgetchMessages.some(message => /You are hit by a shuriken[.!]/.test(message)), true,
+        preNhgetchMessages.join('\n'));
+    assert.equal(thrower.missile, null);
+    assert.equal(thrower.minvent.some(obj => obj.id === shurikenItem.id), false);
+
+    assert.equal(game.level.objects.some(obj => obj.id === shurikenItem.id), false);
+
+    assert.ok(rawRng.some(entry => entry.startsWith('rnd(8)=')), rawRng.join(', '));
+    assert.ok(rawRng.some(entry => entry.startsWith('rnd(20)=')), rawRng.join(', '));
+    assert.ok(rawRng.some(entry => entry.startsWith('rn2(3)=')), rawRng.join(', '));
+    assert.ok(rawRng.some(entry => entry.startsWith('rn2(100)=')), rawRng.join(', '));
+    assert.equal(rawRng.some(entry => entry.startsWith('rnd(6)=')
+        || entry.startsWith('rnd(4)=')), false);
+});
+
+test('production monster shuriken aimed shot can pass through iron bars before hero', async () => {
+    const { shurikenItem, thrower, rng, rawRng, preNhgetchMessages } = await runMonsterShurikenIronBars({
+        seed: 1,
+        levelCells: [[7, 5, { typ: IRONBARS }]],
+    });
+
+    assert.equal(thrower.missile, null);
+    assert.equal(thrower.minvent.some(obj => obj.id === shurikenItem.id), false);
+
+    const landed = game.level.objects.find(obj => obj.id === shurikenItem.id);
+    assert.ok(landed, rng.join(', '));
+    assert.equal(landed.ox, 5, rawRng.join(', '));
+    assert.equal(landed.oy, 5, rawRng.join(', '));
+    assert.equal(landed.kind, 'shuriken');
+    assert.notEqual(landed.transientProjectile, true);
+
+    assert.ok(rng.some(entry => entry === 'rnd(20)'));
+    assert.equal(rng.some(entry => entry === 'rn2(100)'), false);
+    assert.equal(preNhgetchMessages.some(message => /Clonk!/.test(message)), false);
+});
+
+test('production monster shuriken aimed shot can clonk iron bars before hero', async () => {
+    const { shurikenItem, thrower, rng, rawRng, preNhgetchMessages } = await runMonsterShurikenIronBars({
+        seed: 1,
+        uac: 100,
+        heroBlind: false,
+        levelCells: [[7, 5, { typ: IRONBARS }]],
+    });
+
+    assert.equal(game.u.uhp, 20);
+    assert.equal(game._damage_after_topline_more || 0, 0, rawRng.join(', '));
+    assert.equal(thrower.missile, null);
+    assert.equal(thrower.minvent.some(obj => obj.id === shurikenItem.id), false);
+
+    const landed = game.level.objects.find(obj => obj.id === shurikenItem.id);
+    assert.ok(landed, rng.join(', '));
+    assert.equal(landed.ox, 8, rawRng.join(', '));
+    assert.equal(landed.oy, 5, rawRng.join(', '));
+    assert.equal(landed.kind, 'shuriken');
+    assert.notEqual(landed.transientProjectile, true);
+
+    assert.ok(rng.some(entry => entry === 'rn2(100)'));
+    assert.equal(rng.some(entry => entry === 'rnd(8)'
+        || entry === 'rnd(20)'
+        || entry === 'rn2(3)'), false);
+    assert.equal(preNhgetchMessages.some(message => /throws a shuriken!/.test(message)), true,
+        preNhgetchMessages.join('\n'));
+    assert.equal(preNhgetchMessages.some(message => /Clonk!/.test(message)), true,
+        preNhgetchMessages.join('\n'));
+});
+
+test('production monster shuriken aimed iron bars are silent when deaf', async () => {
+    const { shurikenItem, thrower, rng, rawRng, preNhgetchMessages } = await runMonsterShurikenIronBars({
+        seed: 1,
+        uac: 100,
+        heroDeaf: true,
+        levelCells: [[7, 5, { typ: IRONBARS }]],
+    });
+
+    assert.equal(game.u.uhp, 20);
+    assert.equal(game._damage_after_topline_more || 0, 0, rawRng.join(', '));
+    assert.equal(thrower.missile, null);
+    assert.equal(thrower.minvent.some(obj => obj.id === shurikenItem.id), false);
+
+    const landed = game.level.objects.find(obj => obj.id === shurikenItem.id);
+    assert.ok(landed, rng.join(', '));
+    assert.equal(landed.ox, 8, rawRng.join(', '));
+    assert.equal(landed.oy, 5, rawRng.join(', '));
+    assert.equal(landed.kind, 'shuriken');
+
+    assert.ok(rng.some(entry => entry === 'rn2(100)'));
+    assert.equal(rng.some(entry => entry === 'rnd(8)'
+        || entry === 'rnd(20)'
+        || entry === 'rn2(3)'), false);
+    assert.equal(preNhgetchMessages.some(message => /Clonk!/.test(message)), false);
+});
+
+test('production monster spear selection precedes shuriken', async () => {
+    const spearItem = monsterSpear(874388);
+    const shurikenItem = monsterShuriken(874389);
+    const { thrower, rng, rawRng, preNhgetchMessages } = await runMonsterSpearIronBars({
+        seed: 1,
+        uac: 100,
+        levelCells: [[7, 5, { typ: IRONBARS }]],
+        projectile: spearItem,
+        inventory: [shurikenItem, spearItem],
+        activeMissile: shurikenItem,
+    });
+
+    assert.equal(thrower.minvent.some(obj => obj.id === spearItem.id), false);
+    assert.equal(thrower.minvent.some(obj => obj.id === shurikenItem.id), true);
+
+    const landed = game.level.objects.find(obj => obj.id === spearItem.id);
+    assert.ok(landed, rng.join(', '));
+    assert.equal(landed.ox, 8, rawRng.join(', '));
+    assert.equal(landed.kind, 'spear');
+    assert.equal(game.level.objects.some(obj => obj.id === shurikenItem.id), false);
+
+    assert.ok(rng.some(entry => entry === 'rn2(100)'));
+    assert.equal(preNhgetchMessages.some(message => /throws a shuriken!/.test(message)), false);
+    assert.equal(preNhgetchMessages.some(message => /Clonk!/.test(message)), true);
+});
+
+test('production monster shuriken selection precedes dagger and knife', async () => {
+    const daggerItem = { ...dagger(874390), letter: undefined, line: undefined, spe: 0 };
+    const knifeItem = monsterKnife(874391);
+    const shurikenItem = monsterShuriken(874392);
+    const { thrower, rng, rawRng, preNhgetchMessages } = await runMonsterShurikenIronBars({
+        seed: 1,
+        uac: 100,
+        heroBlind: false,
+        levelCells: [[7, 5, { typ: IRONBARS }]],
+        projectile: shurikenItem,
+        inventory: [daggerItem, knifeItem, shurikenItem],
+    });
+
+    assert.equal(thrower.minvent.some(obj => obj.id === shurikenItem.id), false);
+    assert.equal(thrower.minvent.some(obj => obj.id === daggerItem.id), true);
+    assert.equal(thrower.minvent.some(obj => obj.id === knifeItem.id), true);
+
+    const landed = game.level.objects.find(obj => obj.id === shurikenItem.id);
+    assert.ok(landed, rng.join(', '));
+    assert.equal(landed.ox, 8, rawRng.join(', '));
+    assert.equal(landed.kind, 'shuriken');
+    assert.equal(game.level.objects.some(obj => obj.id === daggerItem.id), false);
+    assert.equal(game.level.objects.some(obj => obj.id === knifeItem.id), false);
+
+    assert.ok(rng.some(entry => entry === 'rn2(100)'));
+    assert.equal(preNhgetchMessages.some(message => /throws a shuriken!/.test(message)), true,
+        preNhgetchMessages.join('\n'));
+    assert.equal(preNhgetchMessages.some(message => /Clonk!/.test(message)), true);
+});
+
+test('production monster shuriken selection precedes active crossbow bolts', async () => {
+    const crossbow = { id: 874393, cls: 'weapon', kind: 'crossbow', actualKind: 'crossbow', glyph: ')' };
+    const bolt = {
+        id: 874394,
+        cls: 'weapon',
+        glyph: ')',
+        kind: 'crossbow bolt',
+        actualKind: 'crossbow bolt',
+        plural: 'crossbow bolts',
+        material: 'iron',
+        quan: 1,
+        spe: 0,
+    };
+    const shurikenItem = monsterShuriken(874395);
+    const { thrower, rng, rawRng, preNhgetchMessages } = await runMonsterShurikenIronBars({
+        seed: 1,
+        uac: 100,
+        heroBlind: false,
+        levelCells: [[7, 5, { typ: IRONBARS }]],
+        projectile: shurikenItem,
+        inventory: [crossbow, bolt, shurikenItem],
+        activeWeapon: crossbow,
+        activeMissile: bolt,
+    });
+
+    assert.equal(thrower.mw, crossbow);
+    assert.equal(thrower.missile, bolt);
+    assert.equal(thrower.minvent.some(obj => obj.id === bolt.id), true);
+    assert.equal(thrower.minvent.some(obj => obj.id === shurikenItem.id), false);
+    assert.equal(game.level.objects.some(obj => obj.id === bolt.id), false);
+
+    const landed = game.level.objects.find(obj => obj.id === shurikenItem.id);
+    assert.ok(landed, rng.join(', '));
+    assert.equal(landed.ox, 8, rawRng.join(', '));
+    assert.equal(landed.kind, 'shuriken');
+
+    assert.ok(rng.some(entry => entry === 'rn2(100)'));
+    assert.equal(preNhgetchMessages.some(message => /throws a shuriken!/.test(message)), true,
+        preNhgetchMessages.join('\n'));
+    assert.equal(preNhgetchMessages.some(message => /crossbow bolt/.test(message)), false);
     assert.equal(preNhgetchMessages.some(message => /Clonk!/.test(message)), true);
 });
 
