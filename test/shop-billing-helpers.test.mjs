@@ -17893,6 +17893,87 @@ test('pet dart trap killed grounded monster is removed immediately', async () =>
     assert.equal(goblin.mhp, 0);
 });
 
+test('pet dart trap hit uses dart damage roll', async () => {
+    installStableNonShopFloorState();
+    initRng(1);
+    enableRngLog({ reset: true });
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 50,
+        uhpmax: 50,
+        uac: 10,
+    });
+    game.inventory = [];
+    const trap = { ttyp: DART_TRAP, tx: 6, ty: 5, tseen: false, once: false };
+    game.level.traps = [trap];
+    const goblin = dartTrapGoblin(31380, {
+        mhp: 5,
+        mhpmax: 5,
+        mpeaceful: true,
+        mtame: 5,
+        pet: true,
+        mextra: { edog: { apport: 3, hungrytime: 0, whistletime: 0, ogoal: { x: 0, y: 0 } } },
+    });
+    game.level.monsters = [goblin];
+
+    queueEscapeForMonsterTurn();
+    markHeroNeighborhoodVisible();
+    markSquareVisible(goblin.mx, goblin.my);
+    await processMonsterTurns();
+    const messages = [game._pending_message, ...(await drainQueuedMessagesAfterMore())].join(' ');
+
+    const dartDamage = rngValuesForCall(getRngLog(), 'rnd(3)');
+    assert.equal(dartDamage.length, 1);
+    assert.match(messages, /The goblin is hit by a dart!/);
+    assert.doesNotMatch(messages, /The goblin is killed!/);
+    assert.equal(goblin.mhp, 5 - dartDamage[0]);
+    assert.equal(game.level.monsters.includes(goblin), true);
+    assert.equal(trap.tseen, true);
+    assert.equal(trap.once, true);
+});
+
+test('pet known spent dart trap can vanish without firing', async () => {
+    installStableNonShopFloorState();
+    enableRngLog({ reset: true });
+    installCoreRngValues([0, 0]);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 50,
+        uhpmax: 50,
+        uac: 10,
+    });
+    game.inventory = [];
+    const trap = { ttyp: DART_TRAP, tx: 6, ty: 5, tseen: true, once: true };
+    game.level.traps = [trap];
+    const goblin = dartTrapGoblin(31381, {
+        mhp: 5,
+        mhpmax: 5,
+        mpeaceful: true,
+        mtame: 5,
+        pet: true,
+        mextra: { edog: { apport: 3, hungrytime: 0, whistletime: 0, ogoal: { x: 0, y: 0 } } },
+    });
+    game.level.monsters = [goblin];
+
+    queueEscapeForMonsterTurn();
+    markHeroNeighborhoodVisible();
+    markSquareVisible(goblin.mx, goblin.my);
+    await processMonsterTurns();
+    const messages = [game._pending_message, ...(await drainQueuedMessagesAfterMore())].join(' ');
+
+    assert.equal(rngValuesForCall(getRngLog(), 'rn2(40)').length, 1);
+    assert.equal(rngValuesForCall(getRngLog(), 'rn2(15)').length, 1);
+    assert.doesNotMatch(messages, /hit by a dart|almost hit by a dart|is killed/);
+    assert.equal(game.level.traps.includes(trap), false);
+    assert.equal(goblin.mx, 6);
+    assert.equal(goblin.my, 5);
+    assert.equal(goblin.mhp, 5);
+    assert.equal(game.level.monsters.includes(goblin), true);
+    assert.equal(game.level.objects.some(obj => obj.ox === 6 && obj.oy === 5), false);
+});
+
 test('pet melee killed gas spore explodes outside hero melee', async () => {
     installStableNonShopFloorState();
     initRng(1);

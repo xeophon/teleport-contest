@@ -13033,6 +13033,11 @@ function movePet(mon, resumeAfterInventory = false, conflictActive = false) {
         }
     }
     if (trap?.ttyp === DART_TRAP && !monsterTrapHarmless(mon, trap)) {
+        if (trap.once && trap.tseen && !rn2(15)) {
+            game.level.traps = (game.level?.traps || []).filter(item => item !== trap);
+            newsym(mon.mx, mon.my);
+            return;
+        }
         trap.once = true;
         trap.tseen = true;
         const dart = mksobj(DART, true, false);
@@ -13040,7 +13045,7 @@ function movePet(mon, resumeAfterInventory = false, conflictActive = false) {
         dart.opoisoned = !rn2(6);
         const hit = (mon.data?.mac ?? 6) + 7 <= rnd(20);
         if (hit) {
-            mon.mhp = Math.max(0, (mon.mhp || 1) - 1);
+            mon.mhp = Math.max(0, (mon.mhp || 1) - Math.max(1, rnd(3)));
             addToplineMessage(`The ${mon.data?.name || 'creature'} is hit by a dart!`);
             if (mon.mhp < 1) {
                 addToplineMessage(`The ${mon.data?.name || 'creature'} is killed!`);
