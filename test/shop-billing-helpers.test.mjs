@@ -147,6 +147,20 @@ function acknowledgeMoreForOccupation() {
     acknowledgePendingMessage();
 }
 
+function installCoreRngValues(values) {
+    const raw = [...values, ...Array(100).fill(0)].map(value => BigInt(value));
+    game.coreCtx = {
+        n: raw.length,
+        r: raw.slice().reverse(),
+        m: [],
+        a: 0n,
+        b: 0n,
+        c: 0n,
+    };
+    game.rng ??= {};
+    game.rng.core = game.coreCtx;
+}
+
 async function drainQueuedMessagesAfterMore(limit = 20) {
     const messages = [];
     for (let i = 0; i < limit && (game._queued_message_after_more
@@ -13434,6 +13448,35 @@ function gasSporeMeleePet(id = 31382, extra = {}) {
     });
 }
 
+function gasSporeMeleePony(id = 31402, extra = {}) {
+    return ordinaryThrowTarget('pony', 7, 5, {
+        m_id: id,
+        mhp: 30,
+        mhpmax: 30,
+        m_lev: 4,
+        movement: NORMAL_SPEED,
+        msleeping: 0,
+        mcanmove: true,
+        mcansee: true,
+        mpeaceful: true,
+        mtame: 10,
+        pet: true,
+        saddled: true,
+        data: {
+            name: 'pony',
+            mlet: 'quadruped',
+            mmove: NORMAL_SPEED,
+            mac: 6,
+            mlevel: 3,
+            cwt: 1300,
+            attack: { dice: 1, sides: 6, verb: 'kicks' },
+        },
+        mextra: { edog: { apport: 3, hungrytime: 0, whistletime: 0, ogoal: { x: 0, y: 0 } } },
+        minvent: [],
+        ...extra,
+    });
+}
+
 function adjacentHostileFlamingSphere(id = 31006) {
     return adjacentHostileExplodingSphere('flaming sphere', id);
 }
@@ -17737,6 +17780,109 @@ test('queued pet melee killed gas spore explodes after more', async () => {
     assert.match(messages, /The dog is caught in the gas spore's explosion!/);
     assert.match(messages, /You are caught in the gas spore's explosion!/);
     assert.equal(game._queued_dead_monsters?.length || 0, 0);
+    assert.equal(game.level.monsters.includes(spore), false);
+    assert.equal(game.level.objects.some(obj => obj.ox === 6 && obj.oy === 5), false);
+    assert.equal(victim.mhp, 30 - d4x6[1]);
+    assert.equal(game.u.uhp, 50 - d4x6[1]);
+});
+
+test('hidden pony second-hit killed gas spore explodes immediately', async () => {
+    installStableNonShopFloorState();
+    enableRngLog({ reset: true });
+    installCoreRngValues([
+        0, 1, 13, 2, 0, 0, 1, 3,
+        3, 3, 4, 4,
+        1, 1, 1, 2,
+        0, 3,
+    ]);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 50,
+        uhpmax: 50,
+        uac: 10,
+    });
+    game.inventory = [];
+    const victim = adjacentGasSporeBlastVictim('goblin', 31401, 6, 6);
+    const spore = adjacentHostileGasSpore(31400);
+    spore.data = { ...spore.data, mac: -2 };
+    const pony = gasSporeMeleePony(31402);
+    game.level.monsters = [victim, spore, pony];
+    game.nhDisplay = { cols: 200 };
+
+    queueEscapeForMonsterTurn();
+    markSquareVisible(game.u.ux, game.u.uy);
+    markSquareVisible(victim.mx, victim.my);
+    markSquareVisible(pony.mx, pony.my);
+    await processMonsterTurns();
+    const messages = [game._pending_message, ...(await drainQueuedMessagesAfterMore())].join(' ');
+
+    const d1x2 = rngValuesForCall(getRngLog(), 'd(1,2)');
+    const d4x6 = rngValuesForCall(getRngLog(), 'd(4,6)');
+    assert.equal(d1x2.length, 1);
+    assert.equal(d4x6.length, 2);
+    assert.match(messages, /You hear some noises\./);
+    assert.match(messages, /Boom!/);
+    assert.match(messages, /The goblin is caught in the gas spore's explosion!/);
+    assert.match(messages, /The pony is caught in the gas spore's explosion!/);
+    assert.match(messages, /You are caught in the gas spore's explosion!/);
+    assert.equal(game.level.monsters.includes(spore), false);
+    assert.equal(game.level.objects.some(obj => obj.ox === 6 && obj.oy === 5), false);
+    assert.equal(victim.mhp, 30 - d4x6[1]);
+    assert.equal(game.u.uhp, 50 - d4x6[1]);
+});
+
+test('command-mode pony second-hit killed gas spore explodes after more', async () => {
+    installStableNonShopFloorState();
+    enableRngLog({ reset: true });
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 50,
+        uhpmax: 50,
+        uac: 10,
+    });
+    game.inventory = [];
+    const victim = adjacentGasSporeBlastVictim('goblin', 31411, 6, 6);
+    const spore = adjacentHostileGasSpore(31410);
+    const pony = gasSporeMeleePony(31412);
+    game.level.monsters = [victim, spore, pony];
+    game.nhDisplay = { cols: 200 };
+
+    markHeroNeighborhoodVisible();
+    markSquareVisible(pony.mx, pony.my);
+    game._pending_message = 'The saddled pony misses the gas spore.';
+    game._message_more = 1;
+    game._command_mode = 'ponySecondAttackMore';
+    game._pony_second_attack = {
+        mon: pony,
+        target: spore,
+        targetName: 'gas spore',
+        targetAc: 100,
+        petLevel: 1,
+    };
+    assert.equal(game._command_mode, 'ponySecondAttackMore');
+    assert.equal(game._pending_message, 'The saddled pony misses the gas spore.');
+    assert.equal(rngValuesForCall(getRngLog(), 'd(4,6)').length, 0);
+
+    await rhack(' ');
+    assert.equal(game._command_mode, 'ponyDamageMore');
+    assert.equal(game._pending_message, 'The saddled pony bites the gas spore.');
+    assert.equal(rngValuesForCall(getRngLog(), 'd(4,6)').length, 0);
+
+    await rhack(' ');
+    const messages = [game._pending_message, ...(await drainQueuedMessagesAfterMore())].join(' ');
+
+    const d1x2 = rngValuesForCall(getRngLog(), 'd(1,2)');
+    const d4x6 = rngValuesForCall(getRngLog(), 'd(4,6)');
+    assert.equal(d1x2.length, 1);
+    assert.equal(d4x6.length, 2);
+    assert.match(messages, /The gas spore is destroyed!/);
+    assert.match(messages, /Boom!/);
+    assert.match(messages, /The goblin is caught in the gas spore's explosion!/);
+    assert.match(messages, /The pony is caught in the gas spore's explosion!/);
+    assert.match(messages, /You are caught in the gas spore's explosion!/);
+    assert.equal(game._command_mode, null);
     assert.equal(game.level.monsters.includes(spore), false);
     assert.equal(game.level.objects.some(obj => obj.ox === 6 && obj.oy === 5), false);
     assert.equal(victim.mhp, 30 - d4x6[1]);

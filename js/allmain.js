@@ -12030,6 +12030,7 @@ function moveMonsterTowardHero(mon, conflictActive = false, monIndex = null, som
 function finishPetKilledMonster(killer, target, {
     skipLichenPostMoveRoll = false,
     markPetKillNoRepeat = false,
+    forcePetKillNoRepeat = false,
 } = {}) {
     const targetName = target.data?.name || 'creature';
     const data = target.data || {};
@@ -12046,7 +12047,8 @@ function finishPetKilledMonster(killer, target, {
     recordVanquished(target, false);
     game.level.monsters = (game.level?.monsters || []).filter(other => other !== target);
     newsym(target.mx, target.my);
-    if (markPetKillNoRepeat && targetName !== 'lichen') game._pet_kill_no_repeat = 1;
+    if (forcePetKillNoRepeat || (markPetKillNoRepeat && targetName !== 'lichen'))
+        game._pet_kill_no_repeat = 1;
     return explosion;
 }
 
@@ -12582,18 +12584,8 @@ function movePet(mon, resumeAfterInventory = false, conflictActive = false) {
                             rn2(3);
                             rn2(6);
                             if (pos.target.mhp < 1) {
-                                const dropCorpse = monsterCorpseDropSucceeds(pos.target, pos.target.data);
-                                const corpseData = corpseDataForMonster(pos.target.data);
-                                dropMonsterInventory(pos.target);
-                                if (dropCorpse && monsterLeavesCorpseLikeDrop(corpseData))
-                                    createMonsterCorpseOrGlob(pos.target, corpseData);
-                                monsterGrowUp(mon, pos.target);
-                                rn2(5);
-                                recordVanquished(pos.target, false);
-                                game.level.monsters = (game.level?.monsters || []).filter(other => other !== pos.target);
-                                newsym(pos.target.mx, pos.target.my);
+                                finishPetKilledMonster(mon, pos.target, { forcePetKillNoRepeat: true });
                                 mon.movement = 0;
-                                game._pet_kill_no_repeat = 1;
                             } else {
                                 rn2(3);
                                 const returnAttackRoll = rn2(4);
@@ -12618,7 +12610,7 @@ function movePet(mon, resumeAfterInventory = false, conflictActive = false) {
                         }
                     } else {
                         game._message_more = 1;
-                        game._pony_second_attack = { target: pos.target, targetName, targetAc, petLevel };
+                        game._pony_second_attack = { mon, target: pos.target, targetName, targetAc, petLevel };
                         game._command_mode = 'ponySecondAttackMore';
                     }
                 }

@@ -51129,21 +51129,35 @@ export async function rhack(_cmd) {
 
     if (game._command_mode === 'ponyDamageMore') {
         if (ch === ' ' || ch === '\x1b' || ch === '\r' || ch === '\n') {
-            const target = game._pony_second_attack?.target;
-            const targetName = game._pony_second_attack?.targetName || 'creature';
+            const second = game._pony_second_attack || {};
+            const target = second.target;
+            const targetName = second.targetName || 'creature';
+            const killer = second.mon;
             d(1, 2);
             rn2(3);
             rn2(6);
             rn2(3);
-            rnd((target?.data?.mlevel ?? 0) + 1);
-            rn2(5);
+            const messages = [`The ${targetName} is destroyed!`];
             if (target) {
-                recordVanquished(target, false);
+                const data = target.data || {};
+                const explosion = queueGasSporeDeathExplosion(target, { messages });
+                if (explosion) {
+                    recordVanquished(target, false);
+                    dropMonsterInventory(target);
+                    if (!monsterGrowUp(killer, target)) rnd((data.mlevel ?? 0) + 1);
+                } else {
+                    rnd((data.mlevel ?? 0) + 1);
+                    recordVanquished(target, false);
+                }
+                rn2(5);
                 game.level.monsters = (game.level?.monsters || []).filter(mon => mon !== target);
                 newsym(target.mx, target.my);
+            } else {
+                rnd(1);
+                rn2(5);
             }
             game._pony_second_attack = null;
-            await setMessage(`The ${targetName} is destroyed!`);
+            await setMessage(messages.join('  '), !!game._queued_messages_after_more?.length);
             game._command_mode = null;
             return;
         }
