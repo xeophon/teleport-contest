@@ -17203,6 +17203,73 @@ test('self-zapped wand of fire inventory vapor rehumanize old form death uses li
     assert.equal(game.u.uhp, game.u.uhpmax);
 });
 
+test('directional wand of fire bounced ray hits hero and vapor lifesaves old-form death', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, {
+        uhp: 30,
+        uhpmax: 30,
+        uen: 3,
+        uenmax: 5,
+        uac: 10,
+        ulevel: 2,
+        ulycn: 'werewolf',
+        lycanthrope: true,
+        _polyself_base: { uhp: 0, uhpmax: 18, uen: 3, uenmax: 5, uac: 7, ulevel: 2 },
+        _polyself_form: { name: 'werewolf', mlet: 'd', glyph: 'd', wereBeast: true },
+    });
+    game.level.at = (x, y) => ({ roomno: 0, typ: x === 6 && y === 5 ? STONE : ROOM });
+    markSquareVisible(5, 5);
+
+    const wand = fireWand(30998, 'w');
+    const armor = wornArmor(30999, 'leather armor', 'b');
+    const amulet = {
+        id: 31000,
+        letter: 'a',
+        cls: 'amulet',
+        glyph: '"',
+        kind: 'amulet of life saving',
+        actualKind: 'amulet of life saving',
+        quan: 1,
+        worn: true,
+        line: 'a - an amulet of life saving (being worn)',
+    };
+    const potion = waterPotion(31001, 'p', { blessed: true, bknown: true });
+    game.inventory = [wand, armor, amulet, potion];
+
+    await rhack('z');
+    await rhack('w');
+    await rhack('l');
+
+    const messages = [game._pending_message, ...(await drainQueuedMessagesAfterMore())].join(' ');
+
+    assert.equal(game._command_mode, 'lifeSavingMore');
+    assert.equal(game._queued_messages_after_more?.length || 0, 0);
+    assert.match(messages, /The bolt of fire bounces!  The bolt of fire hits you!/);
+    assert.match(messages, /Your potion of holy water boils and explodes!/);
+    assert.match(messages, /You return to human form!/);
+    assert.match(messages, /Your old form was not healthy enough to survive\./);
+    assert.match(messages, /You die\.\.\.  But wait\.\.\.  Your medallion begins to glow!/);
+    assert.equal(game.inventory.includes(wand), true);
+    assert.equal(game.inventory.includes(armor), true);
+    assert.equal(game.inventory.includes(amulet), false);
+    assert.equal(game.inventory.includes(potion), false);
+    assert.equal(wand.known, true);
+    assert.equal(wand.kind, 'fire');
+    assert.equal(game.u.ulycn, 'werewolf');
+    assert.equal(game.u.lycanthrope, true);
+    assert.equal(game.u._polyself_form, null);
+    assert.equal(game.u._polyself_base, null);
+    assert.equal(game.u.uhp, 0);
+    assert.doesNotMatch(messages, /You feel purified|peculiar odor|eyes water|Unknown command/);
+
+    await rhack(' ');
+
+    assert.equal(game._pending_message, 'You feel much better!');
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game.u.uhp, game.u.uhpmax);
+});
+
 test('successful no-hands polyself drops worn gloves and wielded weapon but keeps rings', async () => {
     installNonShopFloorState();
     initRng(1);

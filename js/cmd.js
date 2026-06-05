@@ -52774,26 +52774,52 @@ export async function rhack(_cmd) {
                                     dy = -dy;
                                 } else {
                                     const origDamage = d(6, 6);
-                                    const fireInventory = fireDamageInventory(origDamage, false, true, { updateArmorInventory: false });
+                                    const fireInventory = fireDamageInventory(origDamage, false, true, {
+                                        updateArmorInventory: false,
+                                        allowLifeSaving: true,
+                                    });
                                     if (game.u?.fireResistance) messages.push("You don't feel hot!");
-                                    const baseDamage = game.u?.fireResistance ? 0 : origDamage;
-                                    const damage = fireInventory.damage + baseDamage;
-                                    const lethal = damage >= (game.u?.uhp || 0);
+                                    const fireInventoryFatal = !!(fireInventory.lifeSaving || fireInventory.fatal);
+                                    const baseDamage = fireInventoryFatal || game.u?.fireResistance ? 0 : origDamage;
+                                    const damage = fireInventoryFatal ? 0 : fireInventory.damage + baseDamage;
+                                    const lethal = !fireInventoryFatal && damage >= (game.u?.uhp || 0);
                                     if (fireInventory.events?.length) {
                                         const entries = fireInventory.events.map(event => {
-                                            const entry = { text: event.text, damageAfter: event.damage || 0 };
-                                            if (event.insertAfter?.length)
+                                            const entry = {
+                                                text: event.text,
+                                                damageAfter: fireInventoryFatal ? 0 : event.damage || 0,
+                                            };
+                                            if (event.more || event.insertAfter?.length) entry.more = true;
+                                            if (event.insertAfter?.length) {
                                                 entry.insertAfter = event.insertAfter.map(next => ({ ...next }));
+                                                if (event.lifeSaving || event.fatal) {
+                                                    const final = entry.insertAfter[entry.insertAfter.length - 1];
+                                                    final.lifeSaving = !!event.lifeSaving;
+                                                    final.fatal = !!event.fatal;
+                                                    final.more = true;
+                                                }
+                                            } else if (event.lifeSaving || event.fatal) {
+                                                entry.lifeSaving = !!event.lifeSaving;
+                                                entry.fatal = !!event.fatal;
+                                                entry.more = true;
+                                            }
                                             return entry;
                                         });
-                                        const assignedDamage = entries.reduce((sum, entry) => sum
-                                            + (entry.damageAfter || 0)
-                                            + (entry.insertAfter || []).reduce((inner, next) => inner + (next.damageAfter || 0), 0), 0);
-                                        const remainingDamage = Math.max(0, damage - assignedDamage);
-                                        if (remainingDamage) {
-                                            const breatheEntry = entries.flatMap(entry => entry.insertAfter || [])[0];
-                                            if (lethal && breatheEntry) breatheEntry.damageAfter = (breatheEntry.damageAfter || 0) + remainingDamage;
-                                            else entries[entries.length - 1].damageAfter = (entries[entries.length - 1].damageAfter || 0) + remainingDamage;
+                                        if (!fireInventoryFatal) {
+                                            const assignedDamage = entries.reduce((sum, entry) => sum
+                                                + (entry.damageAfter || 0)
+                                                + (entry.insertAfter || []).reduce((inner, next) => inner + (next.damageAfter || 0), 0), 0);
+                                            const remainingDamage = Math.max(0, damage - assignedDamage);
+                                            if (remainingDamage) {
+                                                const breatheEntry = entries.flatMap(entry => entry.insertAfter || [])[0];
+                                                if (lethal && breatheEntry) breatheEntry.damageAfter = (breatheEntry.damageAfter || 0) + remainingDamage;
+                                                else entries[entries.length - 1].damageAfter = (entries[entries.length - 1].damageAfter || 0) + remainingDamage;
+                                            }
+                                            if (lethal) {
+                                                const damageEntry = [...entries].reverse().find(entry => (entry.damageAfter || 0) > 0)
+                                                    || entries[entries.length - 1];
+                                                if (damageEntry) damageEntry.more = true;
+                                            }
                                         }
                                         followups.push(...entries);
                                     } else if (damage && (messages.length > 1 || fireInventory.messages.length || lethal))
