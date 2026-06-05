@@ -18429,6 +18429,191 @@ test('hero dart trap blind hit uses generic thitu feedback', async () => {
     assert.equal(game.level.objects.length, 0);
 });
 
+test('mounted hero poisoned dart trap can divert a missed dart to the steed', async () => {
+    installStableNonShopFloorState();
+    vision_reset();
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 20,
+        uhpmax: 20,
+        uac: 10,
+        ulevel: 1,
+    });
+    const pony = ordinaryThrowTarget('pony', 5, 5, {
+        mhp: 10,
+        mhpmax: 10,
+        m_lev: 3,
+        msleeping: 0,
+        mtame: 5,
+        pet: true,
+        saddled: true,
+        data: { name: 'pony', mlevel: 3, mlet: 'quadruped', mac: 6 },
+    });
+    game.u.usteed = pony;
+    game.level.monsters = [pony];
+    game.moves = 1;
+    game.inventory = [];
+    const trap = { ttyp: DART_TRAP, tx: 6, ty: 5, tseen: false, once: false };
+    game.level.traps = [trap];
+    enableRngLog({ reset: true });
+    installCoreRngValues([0, 0, 1, 1, 1, 1, 0, 1, 0, 1]);
+
+    await rhack('l');
+
+    assert.deepEqual(getRngLog().map(rngCallName), [
+        'rnd(2)', 'rn2(6)', 'rn2(11)', 'rn2(10)', 'rn2(10)', 'rn2(100)',
+        'rn2(6)', 'rnd(3)', 'rn2(2)', 'rnd(20)',
+    ]);
+    assert.equal(game._pending_message, 'A little dart shoots out at you!  The saddled pony is almost hit by a poisoned dart!');
+    assert.equal(game.u.uhp, 20);
+    assert.equal(pony.mhp, 10);
+    assert.equal(game.u.usteed, pony);
+    assert.equal(pony.mx, 6);
+    assert.equal(pony.my, 5);
+    assert.equal(game.level.objects.length, 1);
+    assert.equal(game.level.objects[0].kind, 'dart');
+    assert.equal(game.level.objects[0].opoisoned, true);
+    assert.equal(game.level.objects[0].ox, 6);
+    assert.equal(game.level.objects[0].oy, 5);
+    assert.equal(rngValuesForCall(getRngLog(), 'rn2(30)').length, 0);
+});
+
+test('mounted hero poisoned dart trap can hit steed without poisoning hero', async () => {
+    installStableNonShopFloorState();
+    vision_reset();
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 20,
+        uhpmax: 20,
+        uac: 10,
+        ulevel: 1,
+        acurr: { a: [10, 10, 10, 10, 10, 10] },
+    });
+    const pony = ordinaryThrowTarget('pony', 5, 5, {
+        mhp: 10,
+        mhpmax: 10,
+        m_lev: 3,
+        msleeping: 0,
+        mtame: 5,
+        pet: true,
+        saddled: true,
+        data: { name: 'pony', mlevel: 3, mlet: 'quadruped', mac: 6 },
+    });
+    game.u.usteed = pony;
+    game.level.monsters = [pony];
+    game.moves = 1;
+    game.inventory = [];
+    const trap = { ttyp: DART_TRAP, tx: 6, ty: 5, tseen: false, once: false };
+    game.level.traps = [trap];
+    enableRngLog({ reset: true });
+    installCoreRngValues([0, 0, 1, 1, 1, 1, 0, 1, 0, 19, 1]);
+
+    await rhack('l');
+
+    assert.deepEqual(getRngLog().map(rngCallName), [
+        'rnd(2)', 'rn2(6)', 'rn2(11)', 'rn2(10)', 'rn2(10)', 'rn2(100)',
+        'rn2(6)', 'rnd(3)', 'rn2(2)', 'rnd(20)', 'rnd(3)',
+    ]);
+    assert.equal(game._pending_message, 'A little dart shoots out at you!  The saddled pony is hit by a poisoned dart!');
+    assert.doesNotMatch(game._pending_message, /The dart was poisoned|You are hit|You feel very sick/);
+    assert.equal(game.u.uhp, 20);
+    assert.equal(game.u.acurr.a[A_CON], 10);
+    assert.equal(pony.mhp, 8);
+    assert.equal(game.u.usteed, pony);
+    assert.equal(game.level.objects.length, 0);
+    assert.equal(rngValuesForCall(getRngLog(), 'rn2(30)').length, 0);
+});
+
+test('mounted hero dart trap gate fallthrough still hits hero', async () => {
+    installStableNonShopFloorState();
+    vision_reset();
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 20,
+        uhpmax: 20,
+        uac: 10,
+        ulevel: 1,
+    });
+    const pony = ordinaryThrowTarget('pony', 5, 5, {
+        mhp: 10,
+        mhpmax: 10,
+        m_lev: 3,
+        msleeping: 0,
+        mtame: 5,
+        pet: true,
+        saddled: true,
+        data: { name: 'pony', mlevel: 3, mlet: 'quadruped', mac: 6 },
+    });
+    game.u.usteed = pony;
+    game.level.monsters = [pony];
+    game.moves = 1;
+    game.inventory = [];
+    const trap = { ttyp: DART_TRAP, tx: 6, ty: 5, tseen: false, once: false };
+    game.level.traps = [trap];
+    enableRngLog({ reset: true });
+    installCoreRngValues([0, 0, 1, 1, 1, 1, 1, 1, 1, 0]);
+
+    await rhack('l');
+
+    assert.deepEqual(getRngLog().map(rngCallName), [
+        'rnd(2)', 'rn2(6)', 'rn2(11)', 'rn2(10)', 'rn2(10)', 'rn2(100)',
+        'rn2(6)', 'rnd(3)', 'rn2(2)', 'rnd(20)', 'rn2(2)',
+    ]);
+    assert.equal(game._pending_message, 'A little dart shoots out at you!  You are hit by a little dart.');
+    assert.equal(game.u.uhp, 18);
+    assert.equal(pony.mhp, 10);
+    assert.equal(game.u.usteed, pony);
+    assert.equal(game.level.objects.length, 0);
+});
+
+test('mounted hero dart trap killing steed dismounts without hero death mode', async () => {
+    installStableNonShopFloorState();
+    vision_reset();
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 20,
+        uhpmax: 20,
+        uac: 10,
+        ulevel: 1,
+    });
+    const pony = ordinaryThrowTarget('pony', 5, 5, {
+        mhp: 1,
+        mhpmax: 1,
+        m_lev: 3,
+        msleeping: 0,
+        mtame: 5,
+        pet: true,
+        saddled: true,
+        data: { name: 'pony', mlevel: 3, mlet: 'quadruped', mac: 6, noCorpse: true },
+    });
+    game.u.usteed = pony;
+    game.level.monsters = [pony];
+    game.moves = 1;
+    game.inventory = [];
+    const trap = { ttyp: DART_TRAP, tx: 6, ty: 5, tseen: false, once: false };
+    game.level.traps = [trap];
+    enableRngLog({ reset: true });
+    installCoreRngValues([0, 0, 1, 1, 1, 1, 1, 1, 0, 19, 1]);
+
+    await rhack('l');
+
+    assert.deepEqual(getRngLog().map(rngCallName), [
+        'rnd(2)', 'rn2(6)', 'rn2(11)', 'rn2(10)', 'rn2(10)', 'rn2(100)',
+        'rn2(6)', 'rnd(3)', 'rn2(2)', 'rnd(20)', 'rnd(3)',
+    ]);
+    assert.equal(game._pending_message, 'A little dart shoots out at you!  The saddled pony is hit by a dart!  The saddled pony is killed!');
+    assert.equal(game.u.uhp, 20);
+    assert.equal(game.u.usteed, null);
+    assert.equal(game.level.monsters.includes(pony), false);
+    assert.equal(pony.dead, true);
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game.level.objects.length, 0);
+});
+
 test('hero poisoned dart trap hit uses C poison branch after damage', async () => {
     installStableNonShopFloorState();
     vision_reset();

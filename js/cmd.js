@@ -43638,6 +43638,16 @@ function heroTrapDartDamage(dart) {
     return maybeHalfPhysicalDamage(damage);
 }
 
+function trapDartDamageAgainstMonster(dart, mon) {
+    const data = mon?.data || {};
+    const die = mon?.big || mon?.bigmonst || data.big || data.bigmonst ? 2 : 3;
+    let damage = rnd(die) + Math.trunc(Number(dart?.spe || 0));
+    if (damage < 0) damage = 0;
+    if (dart?.blessed && monsterHatesBlessingsForWaterHit(mon)) damage += rnd(4);
+    if (damage > 0) damage = Math.max(1, damage - objectGreatestErosion(dart));
+    return Math.max(1, damage);
+}
+
 function placeHeroTrapDart(dart) {
     if (!dart) return null;
     dart.ox = game.u?.ux || 0;
@@ -43646,6 +43656,57 @@ function placeHeroTrapDart(dart) {
     game.level.objects.push(dart);
     newsym(dart.ox, dart.oy);
     return dart;
+}
+
+function placeSteedTrapDart(dart, steed) {
+    if (!dart || !steed) return null;
+    Object.assign(dart, {
+        ox: steed.mx ?? game.u?.ux ?? 0,
+        oy: steed.my ?? game.u?.uy ?? 0,
+        kind: 'dart',
+        actualKind: 'dart',
+        glyph: ')',
+        color: CLR_CYAN,
+        petFetchable: true,
+    });
+    const stacked = placeStackableFloorObject(dart);
+    newsym(dart.ox, dart.oy);
+    return stacked;
+}
+
+function steedTrapDartName(steed) {
+    const name = fireScrollMonsterName(steed);
+    if (steed?.saddled && !steed?.givenName && !(steed?.isshk && steed?.shknam))
+        return name.replace(/^The /, 'The saddled ');
+    return name;
+}
+
+function steedTrapDartObjectName(dart) {
+    return articleFor(pickupObjectName(dart));
+}
+
+function trapKilledMonsterCorpseData(mon) {
+    const data = mon?.data || {};
+    return data.corpse
+        || (data.name?.endsWith(' zombie') ? monsterByRndName(data.name.replace(/ zombie$/, '')) : null)
+        || data;
+}
+
+function finishTrapKilledSteed(steed, messages) {
+    if (!steed) return;
+    const data = steed.data || {};
+    const corpseData = trapKilledMonsterCorpseData(steed);
+    const dropCorpse = monsterLeavesCorpseLikeDrop(corpseData)
+        && monsterCorpseDropSucceeds(steed, data);
+    dropMonsterInventory(steed, messages);
+    if (dropCorpse) createMonsterCorpseOrGlob(steed, corpseData, steed.mx, steed.my, { messages });
+    recordVanquished(steed, false);
+    game.level.monsters = (game.level?.monsters || []).filter(mon => mon !== steed);
+    if (game.u?.usteed === steed) game.u.usteed = null;
+    steed.dead = true;
+    steed.mhp = 0;
+    steed.movement = 0;
+    newsym(steed.mx, steed.my);
 }
 
 function heroDartTrapFatalResult(messages, deathCause) {
@@ -43709,6 +43770,31 @@ function heroDartTrapThituMessage({ hit, damage, threshold, roll }) {
         : `You are hit by a little dart${damage > 4 ? '!' : '.'}`;
 }
 
+function mountedHeroDartTrapSteedResult(dart, messages) {
+    const steed = game.u?.usteed;
+    if (!steed || !dart) return null;
+    steed.mx = game.u?.ux ?? steed.mx;
+    steed.my = game.u?.uy ?? steed.my;
+    const visible = !heroIsBlind() && cansee(steed.mx, steed.my);
+    const armorClass = steed.ac ?? steed.mac ?? steed.data?.ac ?? steed.data?.mac ?? 10;
+    const hit = armorClass + 7 + Math.trunc(Number(dart.spe || 0)) <= rnd(20);
+    const dartName = steedTrapDartObjectName(dart);
+    if (!hit) {
+        if (visible) messages.push(`${steedTrapDartName(steed)} is almost hit by ${dartName}!`);
+        placeSteedTrapDart(dart, steed);
+        return { message: messages.join('  ') };
+    }
+
+    if (visible) messages.push(`${steedTrapDartName(steed)} is hit by ${dartName}!`);
+    const damage = trapDartDamageAgainstMonster(dart, steed);
+    steed.mhp = (steed.mhp || 1) - damage;
+    if ((steed.mhp || 0) <= 0) {
+        if (visible) messages.push(`${steedTrapDartName(steed)} is killed!`);
+        finishTrapKilledSteed(steed, messages);
+    }
+    return { message: messages.join('  ') };
+}
+
 function heroDartTrapResult(trap, prefix = '', alreadySeen = !!trap?.tseen) {
     if (trap?.once && alreadySeen && !rn2(15)) {
         deleteTrap(trap);
@@ -43722,8 +43808,10 @@ function heroDartTrapResult(trap, prefix = '', alreadySeen = !!trap?.tseen) {
     dart.opoisoned = !rn2(6);
     const damage = heroTrapDartDamage(dart);
     const threshold = (game.u?.uac || 0) + 7;
-    const roll = rnd(20);
     const messages = [trapProjectileMessageParts(prefix, 'A little dart shoots out at you!')];
+    if (game.u?.usteed && !rn2(2))
+        return mountedHeroDartTrapSteedResult(dart, messages);
+    const roll = rnd(20);
     if (threshold <= roll) {
         placeHeroTrapDart(dart);
         messages.push(heroDartTrapThituMessage({
