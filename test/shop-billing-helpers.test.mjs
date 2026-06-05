@@ -13173,6 +13173,63 @@ test('blessed water vapor reverts matching were-beast form without curing lycant
     assert.doesNotMatch(result.messages.join(' '), /You feel purified|peculiar odor|eyes water/);
 });
 
+test('blessed water vapor rehumanize old form death from destroyed inventory potion preserves lifesaving metadata', () => {
+    installShopState();
+    initRng(1);
+    Object.assign(game.u, {
+        uhp: 5,
+        uhpmax: 8,
+        uen: 3,
+        uenmax: 4,
+        uac: 6,
+        ulevel: 2,
+        ulycn: 'werewolf',
+        lycanthrope: true,
+        _polyself_base: { uhp: 0, uhpmax: 15, uen: 7, uenmax: 9, uac: 4, ulevel: 3 },
+        _polyself_form: { name: 'werewolf', mlet: 'd', glyph: 'd', wereBeast: true, nohands: true },
+    });
+    game.level.at = () => ({ roomno: ROOMOFFSET, typ: ROOM });
+    const amulet = {
+        id: 30991,
+        letter: 'a',
+        cls: 'amulet',
+        glyph: '"',
+        kind: 'amulet of life saving',
+        actualKind: 'amulet of life saving',
+        quan: 1,
+        worn: true,
+        line: 'a - an amulet of life saving (being worn)',
+    };
+    const potion = waterPotion(30992, 'w', { blessed: true, bknown: true });
+    game.inventory = [amulet, potion];
+
+    const result = shop.fireDamageInventoryForTest(20, true, false, {
+        preburnedArmor: { bodyHit: true, message: '' },
+        allowLifeSaving: true,
+    });
+
+    const message = result.messages.join(' ');
+    assert.equal(game.inventory.includes(potion), false);
+    assert.equal(game.inventory.includes(amulet), false);
+    assert.equal(result.messages[0], 'Your potion of holy water boils and explodes!');
+    assert.match(message, /You return to human form!/);
+    assert.match(message, /Your old form was not healthy enough to survive\./);
+    assert.match(message, /You die\.\.\.  But wait\.\.\.  Your medallion begins to glow!/);
+    assert.equal(result.lifeSaving, true);
+    assert.equal(result.fatal, false);
+    assert.equal(result.more, true);
+    assert.equal(result.events[0].lifeSaving, true);
+    assert.equal(result.events[0].fatal || false, false);
+    assert.equal(result.events[0].more, true);
+    assert.match(result.events[0].insertAfter.map(entry => entry.text).join(' '), /medallion begins to glow/);
+    assert.equal(game.u.ulycn, 'werewolf');
+    assert.equal(game.u.lycanthrope, true);
+    assert.equal(game.u._polyself_form, null);
+    assert.equal(game.u._polyself_base, null);
+    assert.equal(game.u.uhp, 0);
+    assert.doesNotMatch(message, /You feel purified|peculiar odor|eyes water/);
+});
+
 test('unpaid spellbook study usage charges four fifths of current shop price', () => {
     const { shkp } = installShopState();
     const book = healingSpellbook(3093, 'b');

@@ -11045,9 +11045,22 @@ export function applyLiquidFlowFloorObjectDamage(x, y, typ) {
     return { messages, changed, destroyed };
 }
 
+function fireInventoryDamageResult(messages, events, damage = 0, deathCause = '') {
+    return {
+        messages,
+        events,
+        damage,
+        deathCause,
+        lifeSaving: !!messages.lifeSaving,
+        fatal: !!messages.fatal,
+        more: !!messages.more,
+    };
+}
+
 function fireDamageInventory(origDamage, forceDestroyItems = false, rollIgniteItems = false, {
     updateArmorInventory = true,
     preburnedArmor = null,
+    allowLifeSaving = false,
 } = {}) {
     const messages = [];
     const events = [];
@@ -11061,7 +11074,7 @@ function fireDamageInventory(origDamage, forceDestroyItems = false, rollIgniteIt
         destroyItems = true;
         igniteItems = true;
     } else if (rollIgniteItems) {
-        if (!armor.bodyHit) return { messages, events, damage: 0, deathCause: '' };
+        if (!armor.bodyHit) return fireInventoryDamageResult(messages, events, 0, '');
         destroyItems = !rn2(3);
         if (destroyItems) rollIgniteAfterDestroy = true;
         else igniteItems = !rn2(3);
@@ -11069,14 +11082,14 @@ function fireDamageInventory(origDamage, forceDestroyItems = false, rollIgniteIt
         destroyItems = true;
         igniteItems = true;
     } else {
-        return { messages, events, damage: 0, deathCause: '' };
+        return fireInventoryDamageResult(messages, events, 0, '');
     }
 
     let damage = 0;
     let deathCause = '';
     if (!destroyItems) {
         if (igniteItems) igniteFireInventoryItems(messages, events, armor, joinState);
-        return { messages, events, damage, deathCause };
+        return fireInventoryDamageResult(messages, events, damage, deathCause);
     }
 
     let limit = Math.trunc(origDamage / 5);
@@ -11084,7 +11097,7 @@ function fireDamageInventory(origDamage, forceDestroyItems = false, rollIgniteIt
     if (limit < 1) {
         if (rollIgniteAfterDestroy) igniteItems = !rn2(3);
         if (igniteItems) igniteFireInventoryItems(messages, events, armor, joinState);
-        return { messages, events, damage, deathCause };
+        return fireInventoryDamageResult(messages, events, damage, deathCause);
     }
     limit = Math.min(20, limit);
 
@@ -11127,7 +11140,19 @@ function fireDamageInventory(origDamage, forceDestroyItems = false, rollIgniteIt
         const message = `${subject} ${fireInventoryDestroyVerb(cls, item, plural)}!`;
         if (cls === 'potion' || cls === 'slime') {
             if (cls === 'potion') {
-                potionBreathe(item, vaporMessages);
+                potionBreathe(item, vaporMessages, { allowLifeSaving });
+                if (vaporMessages.lifeSaving) {
+                    messages.lifeSaving = true;
+                    event.lifeSaving = true;
+                }
+                if (vaporMessages.fatal) {
+                    messages.fatal = true;
+                    event.fatal = true;
+                }
+                if (vaporMessages.more) {
+                    messages.more = true;
+                    event.more = true;
+                }
                 if (vaporMessages.length) {
                     const insertAfter = vaporMessages.map(text => ({ text, more: true }));
                     event.insertAfter = insertAfter;
@@ -11151,7 +11176,7 @@ function fireDamageInventory(origDamage, forceDestroyItems = false, rollIgniteIt
     }
     if (rollIgniteAfterDestroy) igniteItems = !rn2(3);
     if (igniteItems) igniteFireInventoryItems(messages, events, armor, joinState);
-    return { messages, events, damage, deathCause };
+    return fireInventoryDamageResult(messages, events, damage, deathCause);
 }
 
 function forceWeaponName(item) {
