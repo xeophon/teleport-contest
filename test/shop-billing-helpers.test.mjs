@@ -45829,6 +45829,36 @@ test('upward hero-thrown tin opener self-hits, damages, and lands', async () => 
     ]);
 });
 
+test('upward hero-thrown pick-axe self-hits with weapon-tool damage and lands', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, { uhp: 30, uhpmax: 30 });
+    const pick = ordinaryTool(876898, 'pick-axe', 'p');
+    game.inventory = [pick];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('p');
+    await rhack('<');
+
+    const message = game._pending_message || '';
+    assert.equal(game._command_mode, null);
+    assert.match(message, /A pick-axe almost hits the ceiling, then falls back on top of your head\./);
+    assert.match(message, /A pick-axe hits the floor\./);
+    assert.doesNotMatch(message, /cmdassist|In what direction|It doesn't hurt|shatters|Splat/);
+    assert.equal(game.u.uhp < 30, true);
+    assert.equal(game.u.uhp >= 24, true);
+    assert.equal(game.inventory.includes(pick), false);
+    assert.equal(game.level.objects.length, 1);
+    const landed = game.level.objects[0];
+    assert.equal(landed.kind, 'pick-axe');
+    assert.equal(landed.ox, game.u.ux);
+    assert.equal(landed.oy, game.u.uy);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rn2(5)', 'rn2(100)', 'rnd(6)', 'rn2(100)',
+    ]);
+});
+
 test('upward hero-thrown plain dagger self-hits, damages, and lands', async () => {
     installNonShopFloorState();
     initRng(1);

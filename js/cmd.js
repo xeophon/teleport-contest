@@ -19352,6 +19352,7 @@ const HERO_TOSS_UP_WEAPON_SMALL_DAMAGE = new Map([
     ['trident', { die: 6, add: 1 }],
     ['axe', 6],
     ['battle-axe', { die: 8, bonusDie: 4 }],
+    ['pick-axe', 6],
     ['short sword', 6],
     ['elven short sword', 8],
     ['orcish short sword', 5],
@@ -19393,6 +19394,7 @@ function tossUpWeaponObjectKey(obj) {
     if (obj?.otyp === ORCISH_DAGGER) return 'orcish dagger';
     if (obj?.otyp === KNIFE) return 'knife';
     if (obj?.otyp === STILETTO) return 'stiletto';
+    if (obj?.otyp === PICK_AXE) return 'pick-axe';
     if (obj?.otyp === SHORT_SWORD) return 'short sword';
     if (obj?.otyp === ELVEN_SHORT_SWORD) return 'elven short sword';
     if (obj?.otyp === ORCISH_SHORT_SWORD) return 'orcish short sword';
@@ -19446,6 +19448,7 @@ function isTinOpenerTossObject(obj) {
 }
 
 function isHeroThrownGenericDamagingUpwardObject(obj) {
+    if (!obj || isHeroThrownHarmlessUpwardObject(obj)) return false;
     return isTinOpenerTossObject(obj) || isSupportedTossUpWeaponObject(obj);
 }
 
