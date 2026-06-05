@@ -2095,6 +2095,22 @@ function fireWand(id, letter = 'w') {
     };
 }
 
+function lightningWand(id, letter = 'w') {
+    return {
+        id,
+        cls: 'wand',
+        glyph: '/',
+        kind: 'lightning',
+        actualKind: 'wand of lightning',
+        wand: 'lightning',
+        wandIndex: 24,
+        quan: 1,
+        spe: 1,
+        letter,
+        line: `${letter} - a wand of lightning`,
+    };
+}
+
 function lamp(id, kind = 'oil lamp', letter = 'l', spe = 1) {
     const otyp = kind === 'brass lantern' ? BRASS_LANTERN : kind === 'magic lamp' ? MAGIC_LAMP : OIL_LAMP;
     return {
@@ -13323,11 +13339,14 @@ function installWerewolfOldFormFireVaporLifeSavingInventory(amuletId, potionId) 
 }
 
 function adjacentHostileExplodingSphere(name = 'flaming sphere', id = 31006) {
-    const expectedElement = name === 'freezing sphere' ? 'cold' : 'fire';
+    const expectedElement = name === 'freezing sphere' ? 'cold'
+        : name === 'shocking sphere' ? 'elec'
+            : 'fire';
     const data = monsterByRndName(name);
     assert.equal(data.attack?.aatyp, 'expl');
     assert.equal(data.attack?.adtyp, expectedElement);
     if (name === 'freezing sphere') assert.equal(data.resistsCold, true);
+    if (name === 'shocking sphere') assert.equal(data.resistsElec, true);
     const sphere = ordinaryThrowTarget(name, 6, 5, {
         m_id: id,
         mhp: 20,
@@ -13352,6 +13371,10 @@ function adjacentHostileFlamingSphere(id = 31006) {
 
 function adjacentHostileFreezingSphere(id = 31106) {
     return adjacentHostileExplodingSphere('freezing sphere', id);
+}
+
+function adjacentHostileShockingSphere(id = 31206) {
+    return adjacentHostileExplodingSphere('shocking sphere', id);
 }
 
 test('fire scroll tower explosion inventory vapor uses lifesaving for old-form death', async () => {
@@ -17668,6 +17691,147 @@ test('cold-resistant hero still suffers freezing sphere potion shatter damage', 
     assert.equal(game.level.monsters.includes(sphere), false);
     assert.equal(sphere.dead, true);
     assert.equal(game.u.uhp, 50 - itemDamage);
+});
+
+test('hostile shocking sphere adjacent attack explodes without to-hit roll', async () => {
+    installStableNonShopFloorState();
+    initRng(1);
+    enableRngLog({ reset: true });
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 50,
+        uhpmax: 50,
+        uac: 10,
+        shockResistance: false,
+    });
+    game.inventory = [];
+    const { sphere } = adjacentHostileShockingSphere(31206);
+    game.level.monsters = [sphere];
+
+    queueEscapeForMonsterTurn();
+    markHeroNeighborhoodVisible();
+    await processMonsterTurns();
+
+    const log = getRngLog();
+    const d4x6 = rngValuesForCall(log, 'd(4,6)');
+    assert.equal(d4x6.length, 2);
+    assert.equal(log.some(entry => rngCallName(entry) === 'rnd(20)'), false);
+    assert.match(game._pending_message, /The shocking sphere explodes!/);
+    assert.match(game._pending_message, /You are caught in the shocking sphere's explosion!/);
+    assert.equal(game.level.monsters.includes(sphere), false);
+    assert.equal(sphere.dead, true);
+    assert.equal(game.u.uhp, 50 - d4x6[1]);
+});
+
+test('shock-resistant hero still suffers shocking sphere electric item destruction', async () => {
+    installStableNonShopFloorState();
+    initRng(1);
+    enableRngLog({ reset: true });
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 50,
+        uhpmax: 50,
+        uac: 10,
+        shockResistance: true,
+    });
+    const wand = fireWand(31207, 'w');
+    const immuneWand = lightningWand(31209, 'l');
+    game.inventory = [wand, immuneWand];
+    const { sphere } = adjacentHostileShockingSphere(31208);
+    game.level.monsters = [sphere];
+
+    queueEscapeForMonsterTurn();
+    markHeroNeighborhoodVisible();
+    await processMonsterTurns();
+
+    const log = getRngLog();
+    assert.equal(rngValuesForCall(log, 'd(4,6)').length, 2);
+    assert.equal(rngValuesForCall(log, 'rnd(10)').length, 1);
+    assert.equal(log.some(entry => rngCallName(entry) === 'rnd(20)'), false);
+    assert.match(game._pending_message, /The shocking sphere explodes!/);
+    assert.match(game._pending_message, /You are caught in the shocking sphere's explosion!/);
+    assert.match(game._pending_message, /Your wand of fire breaks apart and explodes!/);
+    assert.match(game._pending_message, /You aren't hurt!/);
+    assert.doesNotMatch(game._pending_message, /air around you crackles|seem unhurt/);
+    assert.equal(game.inventory.includes(wand), false);
+    assert.equal(game.inventory.includes(immuneWand), true);
+    assert.equal(game.level.monsters.includes(sphere), false);
+    assert.equal(sphere.dead, true);
+    assert.equal(game.u.uhp, 50);
+});
+
+test('worn shock-resistance ring blocks shocking sphere blast damage', async () => {
+    installStableNonShopFloorState();
+    initRng(1);
+    enableRngLog({ reset: true });
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 50,
+        uhpmax: 50,
+        uac: 10,
+        shockResistance: false,
+    });
+    const ring = metalRing(31210, 'shock resistance', 19, 'r', {
+        worn: 'left',
+        known: true,
+        dknown: true,
+        line: 'r - a ring of shock resistance (on left hand)',
+    });
+    game.inventory = [ring];
+    const { sphere } = adjacentHostileShockingSphere(31211);
+    game.level.monsters = [sphere];
+
+    queueEscapeForMonsterTurn();
+    markHeroNeighborhoodVisible();
+    await processMonsterTurns();
+
+    const log = getRngLog();
+    assert.equal(rngValuesForCall(log, 'd(4,6)').length, 2);
+    assert.equal(log.some(entry => rngCallName(entry) === 'rnd(20)'), false);
+    assert.match(game._pending_message, /The shocking sphere explodes!/);
+    assert.match(game._pending_message, /You are caught in the shocking sphere's explosion!/);
+    assert.equal(game.inventory.includes(ring), true);
+    assert.equal(game.level.monsters.includes(sphere), false);
+    assert.equal(sphere.dead, true);
+    assert.equal(game.u.uhp, 50);
+});
+
+test('shocking sphere electric destruction can recharge chargeable rings', async () => {
+    installStableNonShopFloorState();
+    initRng(2);
+    enableRngLog({ reset: true });
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 50,
+        uhpmax: 50,
+        uac: 10,
+        shockResistance: false,
+    });
+    const ring = chargeableRing(31212, 'r', 0);
+    game.inventory = [ring];
+    const { sphere } = adjacentHostileShockingSphere(31213);
+    game.level.monsters = [sphere];
+
+    queueEscapeForMonsterTurn();
+    markHeroNeighborhoodVisible();
+    await processMonsterTurns();
+
+    const log = getRngLog();
+    const d4x6 = rngValuesForCall(log, 'd(4,6)');
+    assert.equal(d4x6.length, 2);
+    assert.equal(log.some(entry => rngCallName(entry) === 'rnd(20)'), false);
+    assert.match(game._pending_message, /The shocking sphere explodes!/);
+    assert.match(game._pending_message, /Your ring of protection spins clockwise for a moment/);
+    assert.doesNotMatch(game._pending_message, /turns to dust and vanishes/);
+    assert.equal(game.inventory.includes(ring), true);
+    assert.equal(ring.spe > 0, true);
+    assert.equal(game.level.monsters.includes(sphere), false);
+    assert.equal(sphere.dead, true);
+    assert.equal(game.u.uhp, 50 - d4x6[1]);
 });
 
 test('successful no-hands polyself drops worn gloves and wielded weapon but keeps rings', async () => {

@@ -10353,6 +10353,103 @@ function coldDamageInventory(origDamage) {
     return { messages, damage, deathCause };
 }
 
+function electricInventoryDisplayName(item) {
+    return pickupObjectName({ ...item, line: '', quan: 1 });
+}
+
+function electricDestroyableInventoryClass(item) {
+    const cls = itemClassKey(item);
+    if (cls === 'ring' || item?.glyph === '=' || item?.otyp === RING_CLASS) return 'ring';
+    if (cls === 'wand' || item?.glyph === '/' || item?.otyp === WAND_CLASS) return 'wand';
+    return '';
+}
+
+function electricWornRingProtectedByGloves(item) {
+    if (!wornRingItem(item)) return false;
+    const gloves = wornGlovesItem();
+    if (!gloves) return false;
+    return !METALLIC_MATERIALS.has(objectMaterialForMetallivore(gloves));
+}
+
+function electricInventoryItemImmune(item, cls) {
+    const kind = objectKindKey(item);
+    if (item?.artifact || item?.oartifact) return true;
+    if (item?.in_use && (item?.quan || 1) === 1) return true;
+    if (cls === 'ring')
+        return kind === 'ring of shock resistance' || item?.ringRoll === 19
+            || electricWornRingProtectedByGloves(item);
+    if (cls === 'wand') {
+        const wand = wandTypeName(item);
+        return wand === 'lightning' || item?.wandIndex === 24;
+    }
+    return false;
+}
+
+function electricInventoryProtectionChance() {
+    return (game.inventory || []).some(item => activeInventoryResistanceKind(item) === 'shock') ? 99 : 0;
+}
+
+function electricInventoryItemProtected() {
+    const chance = electricInventoryProtectionChance();
+    return chance ? rn2(100) < chance : false;
+}
+
+function electricDestroyInventorySelection(items, origDamage) {
+    let limit = Math.trunc(origDamage / 5);
+    if (origDamage % 5 > rn2(5)) limit++;
+    if (limit < 1) return [];
+    limit = Math.min(20, limit);
+
+    const selected = [];
+    let eligible = 0;
+    for (const item of [...(items || [])]) {
+        const cls = electricDestroyableInventoryClass(item);
+        if (!cls || electricInventoryItemImmune(item, cls)) continue;
+        const i = eligible < limit ? eligible : rn2(eligible);
+        eligible++;
+        if (i < limit) selected[i] = item;
+    }
+    return selected.filter(Boolean);
+}
+
+function electricDamageInventory(origDamage) {
+    const messages = [];
+    let damage = 0;
+    let deathCause = '';
+    let resistedDamage = false;
+    for (const item of electricDestroyInventorySelection(game.inventory || [], origDamage)) {
+        if (electricInventoryItemProtected()) continue;
+        const cls = electricDestroyableInventoryClass(item);
+        if (cls === 'ring' && isChargeableRing(item) && rn2(3)) {
+            messages.push(...rechargeRing(item, 0).messages);
+            continue;
+        }
+        const itemDamage = cls === 'wand' ? rnd(10) : 0;
+        const quan = Math.max(0, (item.quan || 1) - (item.in_use ? 1 : 0));
+        let destroyed = 0;
+        for (let i = 0; i < quan; i++)
+            if (!rn2(3)) destroyed++;
+        if (!destroyed) continue;
+
+        const name = electricInventoryDisplayName(item);
+        if (cls === 'ring') {
+            messages.push(`Your ${name} turns to dust and vanishes!`);
+            removeInventoryItem(item, destroyed);
+            continue;
+        }
+
+        messages.push(`Your ${name} breaks apart and explodes!`);
+        removeInventoryItem(item, destroyed);
+        if (heroHasShockResistance()) resistedDamage = true;
+        else {
+            damage += itemDamage;
+            deathCause = 'killed by an exploding wand';
+        }
+    }
+    if (resistedDamage) messages.push("You aren't hurt!");
+    return { messages, damage, deathCause };
+}
+
 function fireItemCanCatchLight(item) {
     if (!item || item.lamplit || item.burning || item.in_use) return false;
     const kind = objectKindKey(item);
@@ -24334,6 +24431,11 @@ export function heroHasColdResistance() {
     return (game.inventory || []).some(item => activeInventoryResistanceKind(item) === 'cold');
 }
 
+export function heroHasShockResistance() {
+    if (game.u?.shockResistance) return true;
+    return (game.inventory || []).some(item => activeInventoryResistanceKind(item) === 'shock');
+}
+
 export function heroHasSlowDigestion() {
     if (game.u?.slowDigestion) return true;
     return !!activeSlowDigestionSource();
@@ -25810,6 +25912,10 @@ function activeInventoryResistanceKind(item) {
     if (item.acidResistance || kind === 'alchemy smock'
         || kind === 'yellow dragon scale mail' || kind === 'yellow dragon scales')
         return 'acid';
+    if (item.shockResistance || kind === 'ring of shock resistance'
+        || kind === 'shield of shock resistance'
+        || dragonArmorKindHasProperty(kind, 'shock'))
+        return 'shock';
     return '';
 }
 
@@ -26536,6 +26642,27 @@ export function applyHeroColdExplosionInventoryDamage(messages, origDamage, deat
         messages.push('You die...');
     }
     return { coldInventory, damage };
+}
+
+export function applyHeroElectricExplosionInventoryDamage(messages, origDamage, deathCause, { fatalMessage = '' } = {}) {
+    if (game.u?.uinvulnerable) messages.push('You are unharmed!');
+    const electricInventory = electricDamageInventory(origDamage);
+    messages.push(...electricInventory.messages);
+    const deathAlreadyReported = !!game._death_cause && (game.u?.uhp || 0) <= 0;
+    const baseDamage = heroHasShockResistance() || game.u?.uinvulnerable ? 0 : origDamage;
+    const damage = baseDamage + electricInventory.damage;
+    const hpBefore = game.u?.uhp || 0;
+    if (damage && game.u) game.u.uhp = Math.max(0, hpBefore - damage);
+    if ((game.u?.uhp || 0) <= 0) {
+        game._death_cause = game._death_cause || (electricInventory.damage >= hpBefore && electricInventory.deathCause
+            ? electricInventory.deathCause
+            : deathCause);
+        if (!deathAlreadyReported) {
+            if (fatalMessage) messages.push(fatalMessage);
+            messages.push('You die...');
+        }
+    }
+    return { electricInventory, damage };
 }
 
 function resolveFireScrollExplosion(cx, cy, dam, messages = []) {

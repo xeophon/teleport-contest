@@ -44,7 +44,6 @@ No replay maps, private seeds, player names, move-count branches, or seed-specif
 
 ## Follow-Ups
 
-- Add shocking sphere `AT_EXPL`/`AD_ELEC` after reusable electric explosion inventory damage exists.
 - Gas spore `AT_BOOM`/`AD_PHYS` is death-triggered rather than adjacent-attack-triggered and should remain a separate lifecycle slice.
 - Full 3x3 `explode()` effects for floor objects and nearby monsters remain broader work. This slice covers live exploder removal and hero caught/damage/inventory-shatter behavior.
 - Cold explosion deaths currently share the existing cold fatal command-mode path and do not yet route through full C `done()`/life-saving continuation for direct blast plus shattered-potion deaths.
