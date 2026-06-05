@@ -25669,6 +25669,28 @@ test('command kick ordinary floor object through seen remote hole', async () => 
     assert.match(game._pending_message, /A dagger falls through the hole\./);
 });
 
+test('command kicked fragile crystal ball breaks before remote projectile flight', async () => {
+    installNonShopFloorState();
+    installSeenRemoteShaft(HOLE, 7, 5);
+    markSquareVisible(6, 5);
+    initRng(1);
+    const ball = { ...crystalBall(512060), letter: undefined, line: undefined, ox: 6, oy: 5 };
+    game.level.objects = [ball];
+    enableRngLog({ reset: true });
+
+    await rhack('\x04');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.level.objects.includes(ball), false);
+    assert.equal(queuedImpactDropsFor({ dnum: 0, dlevel: 2 }).some(obj => obj.id === ball.id), false);
+    assert.match(game._pending_message, /You kick a crystal ball\./);
+    assert.match(game._pending_message, /A crystal ball shatters into a thousand pieces!/);
+    assert.doesNotMatch(game._pending_message, /falls through the hole|Thump|hits|misses/);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(100)']);
+});
+
 test('command kick ordinary floor object down stairs records reciprocal metadata', async () => {
     installNonShopFloorState();
     installRemoteDownStairGate({ x: 7, y: 5 });

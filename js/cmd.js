@@ -27586,8 +27586,15 @@ function kickFloorObjectSupported(obj, x, y) {
     if (Math.max(1, Math.trunc(Number(obj.quan || 1))) !== 1) return false;
     if (isTipContainerObject(obj) || globContents(obj).length) return false;
     if (shopkeeperForCostlySpot(x, y) || shopObjectOrContentsUnpaid(obj)) return false;
-    if (impactDropBreakKind(obj)) return false;
+    if (impactDropBreakKind(obj) && !kickedFragilePreflightBreakKind(obj)) return false;
     return true;
+}
+
+function kickedFragilePreflightBreakKind(obj) {
+    if (!obj) return '';
+    const kind = objectKindKey(obj);
+    if (obj.otyp === CRYSTAL_BALL || kind === 'crystal ball') return impactDropBreakKind(obj);
+    return '';
 }
 
 function kickFloorObjectRange(obj, x, y, dir) {
@@ -27632,6 +27639,16 @@ function placeKickedFloorObject(obj, x, y, messages, options = {}) {
     return stacked;
 }
 
+function breakKickedFragileFloorObject(obj, x, y, messages) {
+    if (!kickedFragilePreflightBreakKind(obj)) return false;
+    const breakKind = projectileTopLevelBreakKind(obj);
+    if (!breakKind) return false;
+    projectileTopLevelBreakMessage(obj, breakKind, messages);
+    removeFloorObject(obj);
+    newsym(x, y);
+    return true;
+}
+
 function kickFloorObjectToward(dir, x, y) {
     const obj = kickFloorObjectAt(x, y);
     if (!kickFloorObjectSupported(obj, x, y)) return { handled: false };
@@ -27647,13 +27664,17 @@ function kickFloorObjectToward(dir, x, y) {
             || heroThrownGemClassObject(obj)
             || heroProjectileSupportedWeaponObject(obj));
     const gate = remoteProjectileDownGateAt(obj, landX, landY);
-    if (!gate && !canHandleMonsterImpact) return { handled: false };
+    const fragileBreakKind = kickedFragilePreflightBreakKind(obj);
+    if (!gate && !canHandleMonsterImpact && !fragileBreakKind) return { handled: false };
 
     const messages = [`You kick ${floorObjectArticleName(obj)}.`];
+    if (fragileBreakKind && breakKickedFragileFloorObject(obj, x, y, messages))
+        return { handled: true, messages, moved: false, broke: true };
     if (kickFloorObjectRange(obj, x, y, dir) < 2) {
         messages.push('Thump!');
         return { handled: true, messages, moved: false };
     }
+    if (!gate && !canHandleMonsterImpact) return { handled: true, messages, moved: false };
 
     let monsterImpact = { handled: false };
     if (canHandleMonsterImpact) {
