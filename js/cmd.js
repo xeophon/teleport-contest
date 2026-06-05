@@ -16582,7 +16582,7 @@ function waterVaporLycanthropyEffect(potion, messages) {
     const beastName = heroLycanthropeBeastName();
     if (!beastName || heroHasUnchanging()) return false;
     if (potion?.blessed && polyselfFormName() === beastName && !hostileMonsterNearHeroForWereChange()) {
-        const message = rehumanizeAfterRoyalJelly();
+        const message = rehumanizeAfterPolyselfDeath();
         if (message) messages.push(message);
         return !!message;
     }
@@ -19246,6 +19246,12 @@ function maybeHalfPhysicalDamage(damage) {
     return heroHasHalfPhysicalDamage() ? Math.trunc((damage + 1) / 2) : damage;
 }
 
+function heroTossUpActiveHp() {
+    if (!game.u) return 0;
+    if (game.u._polyself_form && game.u.mh != null && game.u.mhmax != null) return game.u.mh || 0;
+    return game.u.uhp || 0;
+}
+
 function heroThrownCorpseFallingDamage(corpse, helmet = null) {
     const weightDamage = Math.max(1, Math.ceil(heroThrownCorpseWeight(corpse) / WT_TO_DMG));
     let damage = weightDamage <= 1 ? 1 : rnd(weightDamage);
@@ -19258,6 +19264,25 @@ function heroThrownCorpseFallingDamage(corpse, helmet = null) {
 
 function applyHeroThrownCorpseFallingDamage(damage, messages) {
     if (!game.u || damage <= 0) return;
+    if (game.u._polyself_form) {
+        if (game.u.mh != null && game.u.mhmax != null) {
+            game.u.mh = Math.max(0, (game.u.mh || 0) - damage);
+            if ((game.u.mh || 0) > 0) return;
+        } else {
+            game.u.uhp = Math.max(0, (game.u.uhp || 0) - damage);
+            if ((game.u.uhp || 0) > 0) return;
+        }
+        if (heroHasUnchanging()) {
+            game._death_cause = 'killed while stuck in creature form';
+            messages.push('You die...');
+            messages.fatal = true;
+            messages.more = true;
+            return;
+        }
+        const message = rehumanizeAfterPolyselfDeath();
+        if (message) messages.push(message);
+        return;
+    }
     game.u.uhp = Math.max(0, (game.u.uhp || 0) - damage);
     if ((game.u.uhp || 0) <= 0) {
         game._death_cause = 'killed by a falling object';
@@ -19279,7 +19304,7 @@ function heroThrownTouchPetrifyingCorpseSelfHitMessages(corpse, action, ceilingN
         if (rescue) messages.push(rescue);
         else return finishHeroPetrifiedByTossUpObject(messages, corpse);
     }
-    if (helmet && hardEarthHelmet(helmet) && damage < (game.u?.uhp || 0))
+    if (helmet && hardEarthHelmet(helmet) && damage < heroTossUpActiveHp())
         messages.push('Fortunately, you are wearing a hard helmet.');
 
     const landing = landProjectileObjectWithShopHandling(corpse, game.u?.ux || corpse.ox || 0, game.u?.uy || corpse.oy || 0, {});
@@ -19309,7 +19334,7 @@ function heroThrownOrdinaryCorpseSelfHitMessages(corpse, action, ceilingName = h
 
     const helmet = wornTossUpHelmet();
     const damage = heroThrownCorpseFallingDamage(corpse, helmet);
-    if (helmet && hardEarthHelmet(helmet) && damage < (game.u?.uhp || 0))
+    if (helmet && hardEarthHelmet(helmet) && damage < heroTossUpActiveHp())
         messages.push('Fortunately, you are wearing a hard helmet.');
 
     const landing = landProjectileObjectWithShopHandling(corpse, game.u?.ux || corpse.ox || 0, game.u?.uy || corpse.oy || 0, {});
@@ -19595,7 +19620,7 @@ function heroThrownGenericObjectLessDamage(obj, helmet) {
 
 function pushHeroThrownHelmetMessage(messages, obj, helmet, damage) {
     if (!helmet) return;
-    if (heroThrownGenericObjectLessDamage(obj, helmet) && damage < (game.u?.uhp || 0))
+    if (heroThrownGenericObjectLessDamage(obj, helmet) && damage < heroTossUpActiveHp())
         messages.push('Fortunately, you are wearing a hard helmet.');
     else
         messages.push(`Your ${simpleTossUpHelmetName(helmet)} does not protect you.`);
@@ -42357,7 +42382,7 @@ function healWoundedLegsFromRoyalJelly() {
     game.u._woundedLegSide = '';
 }
 
-function rehumanizeAfterRoyalJelly() {
+function rehumanizeAfterPolyselfDeath() {
     if (!game.u) return '';
     const base = game.u._polyself_base || {};
     const hpmax = Math.max(1, base.uhpmax ?? game.u.uhpmax ?? 1);
@@ -42376,6 +42401,8 @@ function rehumanizeAfterRoyalJelly() {
     game.u._monsterMove = null;
     game.u._polyself_form = null;
     game.u._polyself_base = null;
+    game.u.mh = null;
+    game.u.mhmax = null;
     game.u.umovement = NORMAL_SPEED;
     game.u._statusSuffix = '';
     game.u._strDisplay = null;
@@ -42401,7 +42428,7 @@ function royalJellyPostEffects(item) {
             game.u.uhp = game.u.uhpmax || 1;
         } else if ((game.u.uhp || 0) <= 0) {
             if (game.u._polyself_form) {
-                const message = rehumanizeAfterRoyalJelly();
+                const message = rehumanizeAfterPolyselfDeath();
                 if (message) messages.push(message);
                 return { messages, died: false };
             }

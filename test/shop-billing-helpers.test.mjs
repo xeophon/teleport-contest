@@ -45843,6 +45843,59 @@ test('upward hero-thrown tin opener self-hits, damages, and lands', async () => 
     ]);
 });
 
+test('upward hero-thrown tin opener fatal polyself self-hit rehumanizes after landing', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, {
+        uhp: 1,
+        uhpmax: 4,
+        _polyself_form: { name: 'newt', mlet: ':', mlevel: 0, mmove: 6, mac: 8 },
+        _polyself_base: {
+            uhp: 12,
+            uhpmax: 18,
+            uen: 3,
+            uenmax: 5,
+            uac: 7,
+            ulevel: 2,
+            rank: { m: 'Wizard', f: 'Wizard' },
+        },
+    });
+    game.urole = { ...(game.urole || {}), rank: { m: 'Newt', f: 'Newt' } };
+    const opener = ordinaryTool(876921, 'tin opener', 't');
+    game.inventory = [opener];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('t');
+    await rhack('<');
+
+    const message = game._pending_message || '';
+    assert.equal(game._command_mode, null);
+    assert.match(message, /A tin opener almost hits the ceiling, then falls back on top of your head\./);
+    assert.match(message, /A tin opener hits the floor\./);
+    assert.match(message, /You return to human form!/);
+    assert.equal(message.indexOf('A tin opener hits the floor.') < message.indexOf('You return to human form!'), true);
+    assert.doesNotMatch(message, /cmdassist|In what direction|You die|killed by a falling object/);
+    assert.equal(game._death_cause || null, null);
+    assert.equal(game.u._polyself_form, null);
+    assert.equal(game.u._polyself_base, null);
+    assert.equal(game.u.uhp, 12);
+    assert.equal(game.u.uhpmax, 18);
+    assert.equal(game.u.uen, 3);
+    assert.equal(game.u.uenmax, 5);
+    assert.equal(game.u.uac, 7);
+    assert.equal(game.urole.rank.m, 'Wizard');
+    assert.equal(game.inventory.includes(opener), false);
+    assert.equal(game.level.objects.length, 1);
+    const landed = game.level.objects[0];
+    assert.equal(landed.kind, 'tin opener');
+    assert.equal(landed.ox, game.u.ux);
+    assert.equal(landed.oy, game.u.uy);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rn2(5)', 'rn2(100)', 'rn2(100)',
+    ]);
+});
+
 test('upward hero-thrown pick-axe self-hits with weapon-tool damage and lands', async () => {
     installNonShopFloorState();
     initRng(1);
@@ -46278,6 +46331,69 @@ test('upward hero-thrown heavy container hard helmet can still be fatal at one H
     assert.doesNotMatch(message, /cmdassist|In what direction|It doesn't hurt|shatters|Splat|Fortunately/);
     assert.equal(game.u.uhp, Math.max(0, hpBefore - damage));
     assert.equal(game._death_cause, 'killed by a falling object');
+    assert.equal(game.inventory.includes(helmet), true);
+    assert.equal(game.inventory.includes(bag), false);
+    assert.equal(game.level.objects.length, 1);
+    const landed = game.level.objects[0];
+    assert.equal(landed.actualKind, 'sack');
+    assert.equal(landed.ox, game.u.ux);
+    assert.equal(landed.oy, game.u.uy);
+    const contents = [...new Set([...(landed.contents || []), ...(landed.cobj || [])])];
+    assert.equal(contents.length, 1);
+    assert.equal(contents[0].id, stone.id);
+    assert.deepEqual(log.map(rngCallName).slice(0, 4), [
+        'rn2(5)', 'rn2(100)', 'rnd(6)', 'rn2(100)',
+    ]);
+});
+
+test('upward hero-thrown heavy container kills unchanging polyself as stuck in creature form', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, {
+        uhp: 12,
+        uhpmax: 12,
+        mh: 1,
+        mhmax: 1,
+        uinwater: 1,
+        underwater: true,
+        uunderwater: true,
+        unchanging: true,
+        _polyself_form: { name: 'gnome', mlet: 'G', glyph: 'G', mlevel: 1, mmove: 6, mac: 10, humanoid: true },
+        _polyself_base: {
+            uhp: 12,
+            uhpmax: 12,
+            uen: 7,
+            uenmax: 9,
+            uac: 4,
+            ulevel: 3,
+        },
+    });
+    const bag = sack(876922, 'b');
+    const stone = putObjectInContainer(bag, floorLoadstone(876923, { cursed: false, blessed: false }));
+    const helmet = wornArmor(876924, 'orcish helm', 'h', 0);
+    game.inventory = [bag, helmet];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('b');
+    await rhack('<');
+
+    const message = game._pending_message || '';
+    const log = getRngLog();
+    assert.equal(game._command_mode, 'deathDieMore');
+    assert.match(message, /A bag almost hits the water's surface, then falls back on top of your head\./);
+    assert.match(message, /Your helm does not protect you\./);
+    assert.match(message, /A bag hits the floor\./);
+    assert.match(message, /You die\.\.\./);
+    assert.equal(message.indexOf('Your helm does not protect you.') < message.indexOf('A bag hits the floor.'), true);
+    assert.equal(message.indexOf('A bag hits the floor.') < message.indexOf('You die...'), true);
+    assert.doesNotMatch(message, /cmdassist|In what direction|It doesn't hurt|shatters|Splat|Fortunately|return to human form|falling object/);
+    assert.equal(game._death_cause, 'killed while stuck in creature form');
+    assert.equal(game.u.uhp, 12);
+    assert.equal(game.u.mh, 0);
+    assert.equal(game.u.mhmax, 1);
+    assert.equal(game.u._polyself_form?.name, 'gnome');
+    assert.ok(game.u._polyself_base);
     assert.equal(game.inventory.includes(helmet), true);
     assert.equal(game.inventory.includes(bag), false);
     assert.equal(game.level.objects.length, 1);
