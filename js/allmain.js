@@ -6584,6 +6584,9 @@ export async function processMonsterTurns() {
                             const projectileDamageBonus = monsterLauncherProjectileDamageBonus(thrownMissile);
                             let damage = Math.max(1, rnd(projectileDamageSides) + projectileDamageBonus
                                 + missileSpe - missileErosion);
+                            const silverSearsTarget = monsterLauncherProjectileIsSilver(thrownMissile)
+                                && monsterHatesSilverWeapon(target);
+                            if (silverSearsTarget) damage += rnd(20);
                             target.msleeping = 0;
                             const targetVisible = !game.u?.blind
                                 && !!(game.viz_array?.[target.my]?.[target.mx] & IN_SIGHT)
@@ -6604,6 +6607,15 @@ export async function processMonsterTurns() {
                                 } else {
                                     if (targetVisible) appendAfterMoreMessage('The poison was deadly...');
                                     damage = target.mhp || 1;
+                                }
+                            }
+                            if (silverSearsTarget) {
+                                const flesh = monsterSilverSearsFlesh(target);
+                                if (targetVisible) {
+                                    const silverTargetName = monsterDisplayName(target).replace(/^The\b/, 'the');
+                                    appendAfterMoreMessage(`The silver sears ${silverTargetName}${flesh ? "'s flesh" : ''}!`);
+                                } else {
+                                    appendAfterMoreMessage(flesh ? 'Its flesh is seared!' : 'It is seared!');
                                 }
                             }
                             target.mhp = Math.max(0, (target.mhp || 1) - damage);
@@ -9420,6 +9432,41 @@ function monsterHatesBlessedWeapon(target) {
         || name.includes('zombie') || name.includes('mummy') || name.includes('vampire')
         || name.includes('lich') || name.includes('ghost') || name.includes('shade')
         || name.includes('demon') || name.includes('devil') || name === 'manes');
+}
+
+function monsterHatesSilverWeapon(target) {
+    const data = target?.data || {};
+    const rawMlet = String(target?.mlet || data.mlet || data.glyph || '');
+    const mlet = rawMlet.toLowerCase();
+    const name = normalizedGemName(target?.name || data.name);
+    return !!(target?.vampshifter || data.vampshifter
+        || target?.were || target?.isWere || target?.wereHuman || target?.wereBeast
+        || data.were || data.isWere || data.wereHuman || data.wereBeast
+        || target?.demon || data.demon
+        || /^were/.test(name)
+        || rawMlet === 'V' || mlet === 'vampire'
+        || rawMlet === '&' || mlet === 'demon'
+        || name.includes('vampire') || name === 'vlad the impaler'
+        || name.includes('demon') || name.includes('devil') || name === 'manes'
+        || name === 'shade'
+        || ((mlet === 'i' || mlet === 'imp') && name !== 'tengu'));
+}
+
+function monsterSilverSearsFlesh(target) {
+    const data = target?.data || {};
+    const name = normalizedGemName(target?.name || data.name);
+    return !(target?.noncorporeal || data.noncorporeal
+        || target?.amorphous || data.amorphous
+        || target?.unsolid || data.unsolid
+        || name === 'ghost' || name === 'shade' || name === 'fog cloud');
+}
+
+function monsterLauncherProjectileIsSilver(item) {
+    const material = String(item?.material || item?.oc_material || '')
+        .toLowerCase().replace(/^hi_/, '');
+    if (material === 'silver') return true;
+    return monsterLauncherProjectileNames(item)
+        .some(name => name === 'silver arrow' || name === 'silver arrows');
 }
 
 function monsterThrownObjectNameForHitValue(item) {

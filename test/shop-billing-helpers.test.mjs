@@ -35811,6 +35811,125 @@ test('production monster launcher arrow can hit intervening monster before hero'
     assert.equal(preNhgetchMessages.some(message => /Clonk!/.test(message)), false);
 });
 
+test('production monster silver launcher arrow intervening hit sears silver hater', async () => {
+    const blocker = ordinaryThrowTarget('vampire', 8, 5, {
+        ac: 30,
+        mac: 30,
+        mhp: 30,
+        mhpmax: 30,
+        msleeping: 1,
+        data: { name: 'vampire', mlevel: 10, mlet: 'V', mac: 30 },
+    });
+    const { arrow, thrower, rng, preNhgetchMessages } = await runMonsterLauncherArrowLanding({
+        seed: 2,
+        uac: 100,
+        heroBlind: false,
+        arrowOverrides: {
+            kind: 'silver arrow',
+            actualKind: 'silver arrow',
+            plural: 'silver arrows',
+            material: 'silver',
+        },
+        levelCells: [[7, 5, { typ: IRONBARS }]],
+        extraMonsters: [blocker],
+    });
+
+    assert.match(game._pending_message, /^The silver arrow hits the vampire!/);
+    const messages = [
+        game._pending_message,
+        ...preNhgetchMessages,
+        ...(game._queued_messages_after_more || []).map(entry => entry.text),
+    ].join('  ');
+    assert.match(messages, /The silver sears the vampire's flesh!/);
+    assert.equal(game.u.uhp, 20);
+    assert.equal(game._damage_after_topline_more || 0, 0, rng.join(', '));
+    assert.equal(blocker.msleeping, 0);
+    assert.equal(thrower.minvent.some(obj => obj.id === arrow.id), false);
+    assert.equal(thrower.missile, null);
+    assert.equal(preNhgetchMessages.some(message => /shoots a silver arrow!/.test(message)), true);
+    assert.equal(preNhgetchMessages.some(message => /Clonk!|Clink!/.test(message)), false);
+
+    const hitRollIndex = rng.findIndex(entry => entry.startsWith('rnd(20)='));
+    const damageRollIndex = rng.findIndex(entry => entry.startsWith('rnd(6)='));
+    const silverDamageIndex = rng.findIndex((entry, index) =>
+        index > damageRollIndex && entry.startsWith('rnd(20)='));
+    assert.notEqual(hitRollIndex, -1, rng.join(', '));
+    assert.notEqual(damageRollIndex, -1, rng.join(', '));
+    assert.notEqual(silverDamageIndex, -1, rng.join(', '));
+    assert.ok(hitRollIndex < damageRollIndex && damageRollIndex < silverDamageIndex, rng.join(', '));
+    const baseDamage = Number(rng[damageRollIndex].split('=')[1]);
+    const silverDamage = Number(rng[silverDamageIndex].split('=')[1]);
+    assert.equal(blocker.mhp, 30 - baseDamage - silverDamage, rng.join(', '));
+
+    assert.equal(game.level.objects.some(obj => obj.id === arrow.id), false, rng.join(', '));
+    assert.equal(game.level.objects.some(obj => obj.transientProjectile), false);
+
+    assertNoSingletonLauncherMultishotRng(rng);
+    assert.deepEqual(rng, [
+        'rn2(5)=3',
+        'rn2(5)=2',
+        'rnd(20)=9',
+        'rnd(6)=4',
+        'rnd(20)=4',
+        'rn2(3)=1',
+        'rn2(100)=28',
+    ]);
+    assert.equal(rng.some(entry => entry.startsWith('rn2(30)=')), false, rng.join(', '));
+});
+
+test('production monster silver launcher arrow intervening hit excludes tengu from imp silver searing', async () => {
+    const blocker = ordinaryThrowTarget('tengu', 8, 5, {
+        ac: 13,
+        mac: 13,
+        mhp: 20,
+        mhpmax: 20,
+        msleeping: 1,
+        data: { name: 'tengu', mlevel: 6, mlet: 'i', mac: 13 },
+    });
+    const { arrow, thrower, rng, preNhgetchMessages } = await runMonsterLauncherArrowLanding({
+        seed: 2,
+        uac: 100,
+        heroBlind: false,
+        arrowOverrides: {
+            kind: 'silver arrow',
+            actualKind: 'silver arrow',
+            plural: 'silver arrows',
+            material: 'silver',
+        },
+        levelCells: [[7, 5, { typ: IRONBARS }]],
+        extraMonsters: [blocker],
+    });
+
+    assert.match(game._pending_message, /^The silver arrow hits the tengu[.!]$/);
+    const messages = [
+        game._pending_message,
+        ...preNhgetchMessages,
+        ...(game._queued_messages_after_more || []).map(entry => entry.text),
+    ].join('  ');
+    assert.equal(/silver sears/.test(messages), false, messages);
+    assert.equal(game.u.uhp, 20);
+    assert.equal(game._damage_after_topline_more || 0, 0, rng.join(', '));
+    assert.equal(blocker.mhp, 16, rng.join(', '));
+    assert.equal(blocker.msleeping, 0);
+    assert.equal(thrower.minvent.some(obj => obj.id === arrow.id), false);
+    assert.equal(thrower.missile, null);
+    assert.equal(preNhgetchMessages.some(message => /shoots a silver arrow!/.test(message)), true);
+    assert.equal(preNhgetchMessages.some(message => /Clonk!|Clink!/.test(message)), false);
+
+    const landed = game.level.objects.find(obj => obj.id === arrow.id);
+    assert.ok(landed, rng.join(', '));
+    assert.equal(landed.ox, 8);
+    assert.equal(landed.oy, 5);
+    assert.equal(landed.kind, 'silver arrow');
+    assert.equal(landed.actualKind, 'silver arrow');
+    assert.equal(landed.material, 'silver');
+    assert.equal(landed.transientProjectile, false);
+
+    assertNoSingletonLauncherMultishotRng(rng);
+    assert.deepEqual(rng, ['rn2(5)=3', 'rn2(5)=2', 'rnd(20)=9', 'rnd(6)=4', 'rn2(3)=0']);
+    assert.equal(rng.some(entry => entry.startsWith('rn2(100)=')), false, rng.join(', '));
+});
+
 test('production monster poisoned launcher arrow intervening hit applies monster poison damage', async () => {
     const blocker = ordinaryThrowTarget('goblin', 8, 5, {
         ac: 13,
