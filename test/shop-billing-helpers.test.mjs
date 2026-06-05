@@ -25966,6 +25966,187 @@ test('command kicked glass gem miss against rock-passer stays a miss', async () 
     ]);
 });
 
+test('command kicked known ruby to coaligned unicorn is accepted before hit roll', async () => {
+    installNonShopFloorState();
+    game.level.flags.noteleport = true;
+    initRng(1);
+    game.u.ualign = { type: A_LAWFUL, record: 0 };
+    game.u.uluck = 0;
+    game.u.acurr.a[A_STR] = 25;
+    const ruby = floorGem(512024, 'ruby', {
+        ox: 6,
+        oy: 5,
+        known: true,
+        actualKind: 'ruby',
+        gemDescription: 'ruby',
+    });
+    const unicorn = unicornThrowTarget('white unicorn');
+    game.level.objects = [ruby];
+    game.level.monsters = [unicorn];
+    enableRngLog({ reset: true });
+
+    await rhack('\x04');
+    await rhack('l');
+
+    assert.match(game._pending_message, /You kick a ruby\./);
+    assert.match(game._pending_message, /The white unicorn catches the ruby\./);
+    assert.match(game._pending_message, /The white unicorn gratefully accepts your gift\./);
+    assert.doesNotMatch(game._pending_message, /hits|misses|junk|shatters/);
+    assert.equal(unicorn.mhp, 24);
+    assert.equal(unicorn.mpeaceful, 1);
+    assert.equal(unicorn.mavenge, 0);
+    assert.equal(game.u.uluck, 5);
+    assert.equal(game.level.objects.some(obj => obj.id === ruby.id), false);
+    assert.equal(unicorn.minvent?.some(obj => obj.id === ruby.id), true);
+    assert.deepEqual(getRngLog(), []);
+});
+
+test('command kicked known glass gem to unicorn is rejected as junk and lands', async () => {
+    installNonShopFloorState();
+    game.level.flags.noteleport = true;
+    initRng(1);
+    game.u.ualign = { type: A_LAWFUL, record: 0 };
+    game.u.uluck = 2;
+    game.u.acurr.a[A_STR] = 25;
+    const glass = floorGlassGem(512025, {
+        ox: 6,
+        oy: 5,
+    });
+    const unicorn = unicornThrowTarget('white unicorn');
+    game.level.objects = [glass];
+    game.level.monsters = [unicorn];
+    enableRngLog({ reset: true });
+
+    await rhack('\x04');
+    await rhack('l');
+
+    assert.match(game._pending_message, /You kick a red gem\./);
+    assert.match(game._pending_message, /The white unicorn catches the red gem\./);
+    assert.match(game._pending_message, /The white unicorn is not interested in your junk\./);
+    assert.doesNotMatch(game._pending_message, /hits|misses|accepts|shatters/);
+    assert.equal(unicorn.mhp, 24);
+    assert.equal(unicorn.mpeaceful, 1);
+    assert.equal(unicorn.mavenge, 0);
+    assert.equal(game.u.uluck, 2);
+    assert.equal((unicorn.minvent || []).some(obj => obj.id === glass.id), false);
+    assert.equal(game.level.objects.includes(glass), true);
+    assert.equal(glass.ox, 7);
+    assert.equal(glass.oy, 5);
+    assert.deepEqual(getRngLog(), []);
+});
+
+test('command kicked unknown glass gem to unicorn is accepted without luck', async () => {
+    installNonShopFloorState();
+    game.level.flags.noteleport = true;
+    initRng(1);
+    game.u.ualign = { type: A_LAWFUL, record: 0 };
+    game.u.uluck = 2;
+    game.u.acurr.a[A_STR] = 25;
+    const glass = floorGlassGem(512026, {
+        ox: 6,
+        oy: 5,
+        known: false,
+        kind: 'red gem',
+        actualKind: 'worthless piece of red glass',
+        gemDescription: 'red gem',
+    });
+    const unicorn = unicornThrowTarget('white unicorn');
+    game.level.objects = [glass];
+    game.level.monsters = [unicorn];
+    enableRngLog({ reset: true });
+
+    await rhack('\x04');
+    await rhack('l');
+
+    assert.match(game._pending_message, /You kick a red gem\./);
+    assert.match(game._pending_message, /The white unicorn catches the red gem\./);
+    assert.match(game._pending_message, /The white unicorn graciously accepts your gift\./);
+    assert.doesNotMatch(game._pending_message, /hits|misses|junk|shatters/);
+    assert.equal(unicorn.mhp, 24);
+    assert.equal(unicorn.mpeaceful, 1);
+    assert.equal(unicorn.mavenge, 0);
+    assert.equal(game.u.uluck, 2);
+    assert.equal(game.level.objects.some(obj => obj.id === glass.id), false);
+    assert.equal(unicorn.minvent?.some(obj => obj.id === glass.id), true);
+    assert.deepEqual(getRngLog(), []);
+});
+
+test('command kicked ruby to tame unicorn is caught and dropped without gift effects', async () => {
+    installNonShopFloorState();
+    game.level.flags.noteleport = true;
+    initRng(1);
+    game.u.ualign = { type: A_LAWFUL, record: 0 };
+    game.u.uluck = 0;
+    game.u.acurr.a[A_STR] = 25;
+    const ruby = floorGem(512027, 'ruby', {
+        ox: 6,
+        oy: 5,
+        known: true,
+        actualKind: 'ruby',
+        gemDescription: 'ruby',
+    });
+    const unicorn = unicornThrowTarget('white unicorn', 7, 5, {
+        mtame: 1,
+        mpeaceful: 1,
+    });
+    game.level.objects = [ruby];
+    game.level.monsters = [unicorn];
+    enableRngLog({ reset: true });
+
+    await rhack('\x04');
+    await rhack('l');
+
+    assert.match(game._pending_message, /You kick a ruby\./);
+    assert.match(game._pending_message, /The white unicorn catches and drops the ruby\./);
+    assert.doesNotMatch(game._pending_message, /accepts|hits|misses|shatters/);
+    assert.equal(unicorn.mhp, 24);
+    assert.equal(unicorn.mpeaceful, 1);
+    assert.equal(game.u.uluck, 0);
+    assert.equal((unicorn.minvent || []).some(obj => obj.id === ruby.id), false);
+    assert.equal(game.level.objects.includes(ruby), true);
+    assert.equal(ruby.ox, 7);
+    assert.equal(ruby.oy, 5);
+    assert.deepEqual(getRngLog(), []);
+});
+
+test('command kicked ruby to sleeping unicorn misses without waking it', async () => {
+    installNonShopFloorState();
+    game.level.flags.noteleport = true;
+    initRng(1);
+    game.u.ualign = { type: A_LAWFUL, record: 0 };
+    game.u.uluck = 0;
+    game.u.acurr.a[A_STR] = 25;
+    const ruby = floorGem(512028, 'ruby', {
+        ox: 6,
+        oy: 5,
+        known: true,
+        actualKind: 'ruby',
+        gemDescription: 'ruby',
+    });
+    const unicorn = unicornThrowTarget('white unicorn', 7, 5, {
+        msleeping: 1,
+    });
+    game.level.objects = [ruby];
+    game.level.monsters = [unicorn];
+    enableRngLog({ reset: true });
+
+    await rhack('\x04');
+    await rhack('l');
+
+    assert.match(game._pending_message, /You kick a ruby\./);
+    assert.match(game._pending_message, /The ruby misses the white unicorn\./);
+    assert.doesNotMatch(game._pending_message, /catches|accepts|hits|junk|shatters/);
+    assert.equal(unicorn.mhp, 24);
+    assert.equal(unicorn.msleeping, 1);
+    assert.equal(unicorn.mpeaceful, 0);
+    assert.equal(unicorn.mavenge, 1);
+    assert.equal(game.u.uluck, 0);
+    assert.equal(game.level.objects.includes(ruby), true);
+    assert.equal(ruby.ox, 7);
+    assert.equal(ruby.oy, 5);
+    assert.deepEqual(getRngLog(), []);
+});
+
 test('command carried gold drop down stairs ships before same-square hole or donation', async () => {
     const { shkp } = installCommandShopState();
     installRemoteDownStairGate({ x: 5, y: 5, trap: { ttyp: HOLE } });

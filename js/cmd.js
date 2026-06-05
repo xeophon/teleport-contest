@@ -27409,7 +27409,8 @@ function kickFloorObjectToward(dir, x, y) {
         mon && !mon.dead && mon.mx === landX && mon.my === landY
         && (mon.mhp == null || mon.mhp > 0));
     const canHandleMonsterImpact = targetMon
-        && (heroThrownStoneMissileHarmlessRockPasser(obj, targetMon)
+        && ((heroThrownMonsterIsUnicorn(targetMon) && heroThrownUnicornGemKind(obj))
+            || heroThrownStoneMissileHarmlessRockPasser(obj, targetMon)
             || (heroThrownTargetPassesRocks(targetMon) && heroThrownGlassGemObject(obj)));
     const gate = remoteProjectileDownGateAt(obj, landX, landY);
     if (!gate && !canHandleMonsterImpact) return { handled: false };
@@ -27422,14 +27423,15 @@ function kickFloorObjectToward(dir, x, y) {
 
     let monsterImpact = { handled: false };
     if (canHandleMonsterImpact) {
-        monsterImpact = heroKickedStoneMissileRockPasserImpact(obj, targetMon);
+        monsterImpact = heroThrownUnicornGemImpact(obj, targetMon);
+        if (!monsterImpact.handled) monsterImpact = heroKickedStoneMissileRockPasserImpact(obj, targetMon);
         if (!monsterImpact.handled) monsterImpact = heroKickedGlassGemImpact(obj, targetMon);
     }
     if (monsterImpact.handled) {
         removeFloorObject(obj);
         newsym(x, y);
         messages.push(...(monsterImpact.messages || []));
-        if (!monsterImpact.mulched) placeKickedFloorObject(obj, landX, landY, messages);
+        if (!monsterImpact.mulched && !monsterImpact.consumed) placeKickedFloorObject(obj, landX, landY, messages);
         return { handled: true, messages, moved: true, target: targetMon, hit: !!monsterImpact.hit };
     }
     if (!gate) return { handled: false };

@@ -48,5 +48,5 @@ Implemented direct hero-thrown gem handling for ordinary monster hits and unicor
 
 ## Remaining
 
-- Full relocation message/RNG canaries, cross-aligned random Luck, named/called real-gem Luck, helpless-thaw edge cases, and direct kicked gem-to-unicorn parity remain separate work.
+- Full relocation message/RNG canaries, cross-aligned random Luck, named/called real-gem Luck, and helpless-thaw edge cases remain separate work. Direct kicked gem-to-unicorn parity is covered in audit 460.
 - This does not complete full `thitmonst()`/`hmon()` for every direct object class. Broader thrown weapon damage, passive-object side effects, monster pickup/catch handling, shop billing inside `gem_accept()`, and exact full `omon_adj()` target-size/sleep modifiers remain open.

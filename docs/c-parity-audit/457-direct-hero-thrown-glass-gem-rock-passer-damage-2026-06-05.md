@@ -43,4 +43,4 @@ Implemented the narrow direct hero-thrown worthless glass gem hit path against r
 
 - This is not a full direct `thitmonst()`/`hmon()` conversion for ordinary thrown weapons, rocks, gray stones, or passive-object side effects. Direct generic gem damage and unicorn acceptance are covered separately in audit 459.
 - Lethal glass-gem cleanup is still limited by the current local direct-throw path and remains separate from this nonlethal damage canary.
-- Kicked glass gem rock-passer damage is covered separately in audit 458. Generic kicked object damage, full glass gem identification/naming, direct kicked gem-to-unicorn acceptance, and broader projectile lifecycle behavior remain separate work.
+- Kicked glass gem rock-passer damage is covered separately in audit 458, and kicked gem-to-unicorn acceptance is covered separately in audit 460. Generic kicked object damage, full glass gem identification/naming, and broader projectile lifecycle behavior remain separate work.
