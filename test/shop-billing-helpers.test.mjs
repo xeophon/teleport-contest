@@ -47144,6 +47144,38 @@ test('upward hero-thrown crystal plate mail self-hit cracks and lands', async ()
     ]);
 });
 
+test('upward hero-thrown crystal plate mail resisted crack uses hard helmet falling damage', async () => {
+    installNonShopFloorState();
+    initRng(20);
+    Object.assign(game.u, { uhp: 30, uhpmax: 30 });
+    const armor = carriedGlassArmor(87693, 'a');
+    const helmet = wornArmor(87694, 'orcish helm', 'h', 0);
+    game.inventory = [armor, helmet];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('a');
+    await rhack('<');
+
+    assert.equal(game._command_mode, null);
+    assert.match(game._pending_message, /A crystal plate mail almost hits the ceiling, then falls back on top of your head\./);
+    assert.match(game._pending_message, /Fortunately, you are wearing a hard helmet\./);
+    assert.match(game._pending_message, /A crystal plate mail hits the floor\./);
+    assert.doesNotMatch(game._pending_message, /The mail cracks|The mail shatters|It doesn't hurt|cmdassist|In what direction/);
+    assert.equal(game.u.uhp, 29);
+    assert.equal(game.inventory.includes(armor), false);
+    assert.equal(game.inventory.includes(helmet), true);
+    assert.equal(game.level.objects.length, 1);
+    const landed = game.level.objects[0];
+    assert.equal(landed.kind, 'crystal plate mail');
+    assert.equal(landed.oeroded || 0, 0);
+    assert.equal(landed.ox, game.u.ux);
+    assert.equal(landed.oy, game.u.uy);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rn2(5)', 'rn2(100)', 'rnd(5)', 'rn2(100)',
+    ]);
+});
+
 test('upward hero-thrown fully cracked crystal plate mail shatters on ceiling', async () => {
     installNonShopFloorState();
     initRng(5);

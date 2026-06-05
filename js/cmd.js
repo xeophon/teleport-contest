@@ -18748,17 +18748,15 @@ function crackableArmorThrowWeight(obj) {
     return CRACKABLE_ARMOR_THROW_WEIGHTS.get(armorKind(obj)) || 50;
 }
 
-function damageHeroFromFallingCrackableArmor(obj, messages) {
-    const weightDamage = Math.max(1, Math.ceil(crackableArmorThrowWeight(obj) / 100));
-    const damage = Math.min(6, weightDamage <= 1 ? 1 : rnd(weightDamage));
-    if (!game.u || damage <= 0) return;
-    game.u.uhp = Math.max(0, (game.u.uhp || 0) - damage);
-    if ((game.u.uhp || 0) <= 0) {
-        game._death_cause = 'killed by a falling object';
-        messages.push('You die...');
-        messages.fatal = true;
-        messages.more = true;
-    }
+function heroThrownCrackableArmorFallingDamage(obj, messages) {
+    const helmet = wornTossUpHelmet();
+    const damage = heroThrownGenericObjectFallingDamage(obj, helmet);
+    const heroHp = game.u?.uhp || 0;
+    if (helmet && hardEarthHelmet(helmet) && damage < heroHp)
+        messages.push('Fortunately, you are wearing a hard helmet.');
+    else if (helmet && !hardEarthHelmet(helmet))
+        messages.push(`Your ${simpleTossUpHelmetName(helmet)} does not protect you.`);
+    return damage;
 }
 
 function landCrackableArmorObjectWithShopHandling(obj, messages, { verboseFloor = false } = {}) {
@@ -18779,8 +18777,9 @@ function heroThrownCrackableArmorSelfHitMessages(obj, action, ceilingName = hero
     const messages = [`${floorObjectSubject({ ...obj, quan: 1 })} ${action} the ${ceilingName}, then falls back on top of your head.`];
     const impact = crackableArmorImpact(obj, messages);
     if (impact.destroyed) return messages;
-    if (!impact.broke) damageHeroFromFallingCrackableArmor(obj, messages);
+    const fallingDamage = impact.broke ? 0 : heroThrownCrackableArmorFallingDamage(obj, messages);
     landCrackableArmorObjectWithShopHandling(obj, messages, { verboseFloor: !impact.broke });
+    applyHeroThrownCorpseFallingDamage(fallingDamage, messages);
     return messages;
 }
 
