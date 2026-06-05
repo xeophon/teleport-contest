@@ -26500,6 +26500,7 @@ function appendFireExplosionMessages(messages, result) {
 }
 
 export function applyHeroFireExplosionInventoryDamage(messages, origDamage, deathCause, { fatalMessage = '' } = {}) {
+    if (game.u?.uinvulnerable) messages.push('You are unharmed!');
     const fireInventory = fireDamageInventory(origDamage, true, false, { allowLifeSaving: true });
     messages.push(...fireInventory.messages);
     if (fireInventory.lifeSaving || fireInventory.fatal) {
@@ -26509,7 +26510,6 @@ export function applyHeroFireExplosionInventoryDamage(messages, origDamage, deat
         return { fireInventory, damage: 0 };
     }
 
-    if (game.u?.uinvulnerable) messages.push('You are unharmed!');
     const damage = (game.u?.fireResistance || game.u?.uinvulnerable ? 0 : origDamage) + fireInventory.damage;
     if (damage && game.u) game.u.uhp = Math.max(0, (game.u.uhp || 0) - damage);
     if ((game.u?.uhp || 0) <= 0) {
@@ -26518,6 +26518,24 @@ export function applyHeroFireExplosionInventoryDamage(messages, origDamage, deat
         messages.push('You die...');
     }
     return { fireInventory, damage };
+}
+
+export function applyHeroColdExplosionInventoryDamage(messages, origDamage, deathCause, { fatalMessage = '' } = {}) {
+    if (game.u?.uinvulnerable) messages.push('You are unharmed!');
+    const coldInventory = coldDamageInventory(origDamage);
+    messages.push(...coldInventory.messages);
+    const baseDamage = heroHasColdResistance() || game.u?.uinvulnerable ? 0 : origDamage;
+    const damage = baseDamage + coldInventory.damage;
+    const hpBefore = game.u?.uhp || 0;
+    if (damage && game.u) game.u.uhp = Math.max(0, hpBefore - damage);
+    if ((game.u?.uhp || 0) <= 0) {
+        game._death_cause = coldInventory.damage >= hpBefore && coldInventory.deathCause
+            ? coldInventory.deathCause
+            : deathCause;
+        if (fatalMessage) messages.push(fatalMessage);
+        messages.push('You die...');
+    }
+    return { coldInventory, damage };
 }
 
 function resolveFireScrollExplosion(cx, cy, dam, messages = []) {

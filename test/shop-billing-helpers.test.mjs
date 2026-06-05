@@ -13322,11 +13322,13 @@ function installWerewolfOldFormFireVaporLifeSavingInventory(amuletId, potionId) 
     return { amulet, potion };
 }
 
-function adjacentHostileFlamingSphere(id = 31006) {
-    const data = monsterByRndName('flaming sphere');
+function adjacentHostileExplodingSphere(name = 'flaming sphere', id = 31006) {
+    const expectedElement = name === 'freezing sphere' ? 'cold' : 'fire';
+    const data = monsterByRndName(name);
     assert.equal(data.attack?.aatyp, 'expl');
-    assert.equal(data.attack?.adtyp, 'fire');
-    const sphere = ordinaryThrowTarget('flaming sphere', 6, 5, {
+    assert.equal(data.attack?.adtyp, expectedElement);
+    if (name === 'freezing sphere') assert.equal(data.resistsCold, true);
+    const sphere = ordinaryThrowTarget(name, 6, 5, {
         m_id: id,
         mhp: 20,
         mhpmax: 20,
@@ -13342,6 +13344,14 @@ function adjacentHostileFlamingSphere(id = 31006) {
         data,
     });
     return { data, sphere };
+}
+
+function adjacentHostileFlamingSphere(id = 31006) {
+    return adjacentHostileExplodingSphere('flaming sphere', id);
+}
+
+function adjacentHostileFreezingSphere(id = 31106) {
+    return adjacentHostileExplodingSphere('freezing sphere', id);
 }
 
 test('fire scroll tower explosion inventory vapor uses lifesaving for old-form death', async () => {
@@ -17592,6 +17602,72 @@ test('monster flaming sphere explosion inventory vapor uses lifesaving for old-f
     assert.equal(game._pending_message, 'You feel much better!');
     assert.equal(game._command_mode || null, null);
     assert.equal(game.u.uhp, game.u.uhpmax);
+});
+
+test('hostile freezing sphere adjacent attack explodes without to-hit roll', async () => {
+    installStableNonShopFloorState();
+    initRng(1);
+    enableRngLog({ reset: true });
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 50,
+        uhpmax: 50,
+        uac: 10,
+        coldResistance: false,
+    });
+    game.inventory = [];
+    const { sphere } = adjacentHostileFreezingSphere(31106);
+    game.level.monsters = [sphere];
+
+    queueEscapeForMonsterTurn();
+    markHeroNeighborhoodVisible();
+    await processMonsterTurns();
+
+    const log = getRngLog();
+    const d4x6 = rngValuesForCall(log, 'd(4,6)');
+    assert.equal(d4x6.length, 2);
+    assert.equal(log.some(entry => rngCallName(entry) === 'rnd(20)'), false);
+    assert.match(game._pending_message, /The freezing sphere explodes!/);
+    assert.match(game._pending_message, /You are caught in the freezing sphere's explosion!/);
+    assert.equal(game.level.monsters.includes(sphere), false);
+    assert.equal(sphere.dead, true);
+    assert.equal(game.u.uhp, 50 - d4x6[1]);
+});
+
+test('cold-resistant hero still suffers freezing sphere potion shatter damage', async () => {
+    installStableNonShopFloorState();
+    initRng(1);
+    enableRngLog({ reset: true });
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 50,
+        uhpmax: 50,
+        uac: 10,
+        coldResistance: true,
+    });
+    const potion = healingPotion(31107, 'h');
+    game.inventory = [potion];
+    const { sphere } = adjacentHostileFreezingSphere(31108);
+    game.level.monsters = [sphere];
+
+    queueEscapeForMonsterTurn();
+    markHeroNeighborhoodVisible();
+    await processMonsterTurns();
+
+    const log = getRngLog();
+    const itemDamage = rngValuesForCall(log, 'rnd(4)')[0];
+    assert.equal(rngValuesForCall(log, 'd(4,6)').length, 2);
+    assert.equal(log.some(entry => rngCallName(entry) === 'rnd(20)'), false);
+    assert.match(game._pending_message, /The freezing sphere explodes!/);
+    assert.match(game._pending_message, /You are caught in the freezing sphere's explosion!/);
+    assert.match(game._pending_message, /Your potion of healing freezes and shatters!/);
+    assert.doesNotMatch(game._pending_message, /You don't feel cold|You imitate a popsicle/);
+    assert.equal(game.inventory.includes(potion), false);
+    assert.equal(game.level.monsters.includes(sphere), false);
+    assert.equal(sphere.dead, true);
+    assert.equal(game.u.uhp, 50 - itemDamage);
 });
 
 test('successful no-hands polyself drops worn gloves and wielded weapon but keeps rings', async () => {

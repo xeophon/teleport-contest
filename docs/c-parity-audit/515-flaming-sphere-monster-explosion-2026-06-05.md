@@ -48,7 +48,6 @@ No replay maps, private seeds, player names, move-count branches, or seed-specif
 
 ## Follow-Ups
 
-- Generalize the same monster-turn branch to freezing sphere `AT_EXPL`/`AD_COLD`; cold inventory destruction helpers already exist.
 - Add shocking sphere `AT_EXPL`/`AD_ELEC` after reusable electric explosion inventory damage exists.
 - Gas spore `AT_BOOM`/`AD_PHYS` is death-triggered rather than adjacent-attack-triggered and should remain a separate lifecycle slice.
 - Full 3x3 `explode()` effects for floor objects and nearby monsters remain broader work. This slice covers the live exploder removal and hero caught/damage/life-saving path.

@@ -5688,6 +5688,7 @@ function monsterFromRndMeta(row) {
         waiting: name === 'Vlad the Impaler',
         alwaysPeaceful: flags.includes('P'),
         resistsFire: FIRE_RESISTANT_MONSTERS.has(name),
+        resistsCold: COLD_RESISTANT_MONSTERS.has(name),
         likesLava: name === 'fire elemental' || name === 'salamander',
     };
     const armedHuman = glyph === '@' && name !== 'nurse';
@@ -5754,8 +5755,8 @@ function monsterFromRndMeta(row) {
         ];
     }
     if (name.endsWith(' elemental')) ptr.mac = 2;
-    if (name === 'flaming sphere')
-        ptr.attack = { dice: 4, sides: 6, verb: 'explodes', aatyp: 'expl', adtyp: 'fire' };
+    if (name === 'freezing sphere' || name === 'flaming sphere')
+        ptr.attack = { dice: 4, sides: 6, verb: 'explodes', aatyp: 'expl', adtyp: name === 'freezing sphere' ? 'cold' : 'fire' };
     if (name === 'ice vortex') ptr.attack = { dice: 1, sides: 6, verb: 'engulfs you', aatyp: 'engl', adtyp: 'cold' };
     if (name === 'earth elemental') ptr.attack = { dice: 4, sides: 6, verb: 'hits' };
     if (name === 'chickatrice') ptr.attack = { dice: 1, sides: 2, verb: 'bites', aatyp: 'bite', adtyp: 'phys' };
