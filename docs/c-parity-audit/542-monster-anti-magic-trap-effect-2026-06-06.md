@@ -48,4 +48,4 @@ The tests use direct helper fixtures and explicit RNG queues. They do not depend
 
 ## Remaining nearby gaps
 
-The optional C damage adders for monster-wielded Magicbane and carried magic-defending artifacts are still not modeled in the anti-magic monster branch.
+The optional C damage adders for monster-wielded Magicbane and carried magic-defending artifacts are covered in `543-monster-anti-magic-artifact-damage-2026-06-06.md`.

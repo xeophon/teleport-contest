@@ -743,6 +743,17 @@ function wieldedWeapon(id, kind, letter = 'w', spe = 0) {
     };
 }
 
+function monsterMagicbane(id, letter = 'w', extra = {}) {
+    return {
+        ...wieldedWeapon(id, 'athame', letter, 0),
+        artifact: 'Magicbane',
+        kind: 'athame named Magicbane',
+        actualKind: 'athame',
+        line: `${letter} - an athame named Magicbane (weapon in right hand)`,
+        ...extra,
+    };
+}
+
 function wornArmor(id, kind = 'leather armor', letter = 'a', spe = 0, extra = {}) {
     return {
         id,
@@ -986,6 +997,23 @@ function wizardQuestArtifact(id, letter = 'e', extra = {}) {
         cknown: false,
         lknown: false,
         line: `${letter} - an amulet of ESP named the Eye of the Aethiopica`,
+        ...extra,
+    };
+}
+
+function carriedMagicDefendingArtifact(id, letter = 'o', extra = {}) {
+    return {
+        id,
+        cls: 'tool',
+        glyph: '(',
+        kind: 'crystal ball',
+        actualKind: 'crystal ball',
+        artifact: 'The Orb of Detection',
+        quan: 1,
+        letter,
+        known: true,
+        dknown: true,
+        line: `${letter} - a crystal ball named the Orb of Detection`,
         ...extra,
     };
 }
@@ -18059,6 +18087,20 @@ test('magic resistant monster anti-magic pathing candidate is harmless like C', 
     assert.equal(!!(trapCandidate.info & ALLOW_TRAPS), false);
 });
 
+test('carried magic-defending artifact anti-magic pathing candidate is harmless like C', () => {
+    const artifact = carriedMagicDefendingArtifact(31414);
+    const { goblin } = installKnownTrapPathingState(ANTI_MAGIC, {
+        minvent: [artifact],
+    });
+
+    const flags = allmain.monsterAllowFlagsForTest(goblin, false, false);
+    const candidates = allmain.mfndposForTest(goblin, flags);
+    const trapCandidate = candidates.find(candidate => candidate.x === 6 && candidate.y === 5);
+
+    assert.ok(trapCandidate);
+    assert.equal(!!(trapCandidate.info & ALLOW_TRAPS), false);
+});
+
 test('ordinary non-magical monster anti-magic trap only teaches the trap', () => {
     const { trap, goblin } = installMonsterAntiMagicTrapState();
     enableRngLog({ reset: true });
@@ -18126,6 +18168,55 @@ test('magic resistant monster anti-magic trap takes implosion damage', () => {
     assert.equal(game.level.monsters.includes(goblin), true);
 });
 
+test('monster wielding Magicbane takes extra anti-magic implosion damage', () => {
+    const magicbane = monsterMagicbane(31415);
+    const { trap, goblin } = installMonsterAntiMagicTrapState({
+        minvent: [magicbane],
+        mw: magicbane,
+    });
+    enableRngLog({ reset: true });
+    installCoreRngValues([1, 2]);
+
+    assert.equal(allmain.monsterAntiMagicTrapEffectForTest(goblin, trap), true);
+
+    assert.deepEqual(getRngLog().map(rngCallName), ['rnd(4)', 'rnd(4)']);
+    assert.equal(goblin.mhp, 5);
+});
+
+test('monster carrying magic-defending artifact takes extra anti-magic implosion damage', () => {
+    const artifact = carriedMagicDefendingArtifact(31416);
+    const { trap, goblin } = installMonsterAntiMagicTrapState({
+        minvent: [artifact],
+    });
+    enableRngLog({ reset: true });
+    installCoreRngValues([0, 3]);
+
+    assert.equal(allmain.monsterAntiMagicTrapEffectForTest(goblin, trap), true);
+
+    assert.deepEqual(getRngLog().map(rngCallName), ['rnd(4)', 'rnd(4)']);
+    assert.equal(goblin.mhp, 5);
+});
+
+test('multiple carried magic-defending artifacts add only one anti-magic damage roll', () => {
+    const orb = carriedMagicDefendingArtifact(31417);
+    const mirror = carriedMagicDefendingArtifact(31418, 'm', {
+        artifact: 'The Magic Mirror of Merlin',
+        kind: 'mirror',
+        actualKind: 'mirror',
+        line: 'm - a mirror named the Magic Mirror of Merlin',
+    });
+    const { trap, goblin } = installMonsterAntiMagicTrapState({
+        minvent: [orb, mirror],
+    });
+    enableRngLog({ reset: true });
+    installCoreRngValues([1, 1, 3]);
+
+    assert.equal(allmain.monsterAntiMagicTrapEffectForTest(goblin, trap), true);
+
+    assert.deepEqual(getRngLog().map(rngCallName), ['rnd(4)', 'rnd(4)']);
+    assert.equal(goblin.mhp, 6);
+});
+
 test('pass-wall magic resistant monster anti-magic trap damage is quartered', () => {
     const { trap, goblin } = installMonsterAntiMagicTrapState({
         data: { name: 'xorn', mlet: 'X', resistsMagic: true, passWalls: true },
@@ -18138,6 +18229,51 @@ test('pass-wall magic resistant monster anti-magic trap damage is quartered', ()
 
     assert.deepEqual(getRngLog().map(rngCallName), ['rnd(4)']);
     assert.equal(goblin.mhp, 9);
+});
+
+test('Magicbane and carried magic-defending artifact stack before pass-wall quartering', () => {
+    const magicbane = monsterMagicbane(31419);
+    const artifact = carriedMagicDefendingArtifact(31420);
+    const { trap, goblin } = installMonsterAntiMagicTrapState({
+        data: { name: 'xorn', mlet: 'X', passWalls: true },
+        minvent: [magicbane, artifact],
+        mw: magicbane,
+    });
+    enableRngLog({ reset: true });
+    installCoreRngValues([3, 3, 3]);
+
+    assert.equal(allmain.monsterAntiMagicTrapEffectForTest(goblin, trap), true);
+
+    assert.deepEqual(getRngLog().map(rngCallName), ['rnd(4)', 'rnd(4)', 'rnd(4)']);
+    assert.equal(goblin.mhp, 7);
+});
+
+test('unwielded Magicbane does not confer monster anti-magic resistance', () => {
+    const magicbane = monsterMagicbane(31421, 'w', { wielded: false });
+    const { trap, goblin } = installMonsterAntiMagicTrapState({
+        minvent: [magicbane],
+    });
+    enableRngLog({ reset: true });
+    installCoreRngValues([3, 3]);
+
+    assert.equal(allmain.monsterAntiMagicTrapEffectForTest(goblin, trap), true);
+
+    assert.deepEqual(getRngLog().map(rngCallName), []);
+    assert.equal(goblin.mhp, 10);
+});
+
+test('carried DFNS magic artifact does not confer monster anti-magic resistance', () => {
+    const artifact = wizardQuestArtifact(31422);
+    const { trap, goblin } = installMonsterAntiMagicTrapState({
+        minvent: [artifact],
+    });
+    enableRngLog({ reset: true });
+    installCoreRngValues([3, 3]);
+
+    assert.equal(allmain.monsterAntiMagicTrapEffectForTest(goblin, trap), true);
+
+    assert.deepEqual(getRngLog().map(rngCallName), []);
+    assert.equal(goblin.mhp, 10);
 });
 
 test('visible lethal anti-magic implosion removes monster with C cause message', async () => {

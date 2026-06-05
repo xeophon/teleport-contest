@@ -10503,11 +10503,44 @@ function monsterWornIronFootwearForAntiMagic(mon) {
     }) || null;
 }
 
+const MONSTER_WIELDED_ANTIMAGIC_DEFENSE_ARTIFACTS = new Set([
+    'magicbane',
+    'sceptre of might',
+    'eyes of the overworld',
+    'eye of the aethiopica',
+]);
+
+const MONSTER_CARRIED_ANTIMAGIC_DEFENSE_ARTIFACTS = new Set([
+    'orb of detection',
+    'magic mirror of merlin',
+    'platinum yendorian express card',
+]);
+
+function monsterArtifactKey(item) {
+    const artifact = item?.artifact || item?.oartifact;
+    return artifact ? String(artifact).trim().toLowerCase().replace(/^the\s+/, '') : '';
+}
+
+function monsterWieldsArtifactNamed(mon, artifactKey) {
+    return monsterArtifactKey(mon?.mw) === artifactKey;
+}
+
+function monsterWieldsAntiMagicDefendingArtifact(mon) {
+    return MONSTER_WIELDED_ANTIMAGIC_DEFENSE_ARTIFACTS.has(monsterArtifactKey(mon?.mw));
+}
+
+function monsterCarriesAntiMagicDefendingArtifact(mon) {
+    return (mon?.minvent || []).some(item =>
+        MONSTER_CARRIED_ANTIMAGIC_DEFENSE_ARTIFACTS.has(monsterArtifactKey(item)));
+}
+
 function monsterResistsAntiMagicTrap(mon) {
     const data = mon?.data || {};
     return !!(mon?.magicResistance || mon?.resistsMagic || mon?.resists_magm
         || data.magicResistance || data.resistsMagic || data.resists_magm
-        || data.defendsMagic || data.defends_magm);
+        || data.defendsMagic || data.defends_magm
+        || monsterWieldsAntiMagicDefendingArtifact(mon)
+        || monsterCarriesAntiMagicDefendingArtifact(mon));
 }
 
 function monsterHasAntiMagicDrainAttack(mon) {
@@ -10553,6 +10586,8 @@ function monsterAntiMagicTrapEffect(mon, trap) {
     }
 
     let damage = rnd(4);
+    if (monsterWieldsArtifactNamed(mon, 'magicbane')) damage += rnd(4);
+    if (monsterCarriesAntiMagicDefendingArtifact(mon)) damage += rnd(4);
     if (monsterPassesWallsForAntiMagic(mon)) damage = Math.trunc((damage + 3) / 4);
     if (inSight) trap.tseen = true;
     mon.mhp = (mon.mhp || 1) - damage;
