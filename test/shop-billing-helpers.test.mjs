@@ -33600,6 +33600,7 @@ async function runMonsterKopCreamPieLanding({
     initialInventory = null,
     fullInventory = false,
     verbose = true,
+    extraMonsters = [],
 } = {}) {
     installNonShopFloorState();
     resetInputState();
@@ -33660,7 +33661,7 @@ async function runMonsterKopCreamPieLanding({
         missile: pie,
         mcansee: true,
     };
-    game.level.monsters = [thrower];
+    game.level.monsters = [thrower, ...extraMonsters];
     game._pending_time_passed = 1;
     const preNhgetchMessages = [];
     const priorPreNhgetchHook = game._preNhgetchHook;
@@ -35820,6 +35821,46 @@ test('production hostile Kop throws cream pie and creams hero on hit', async () 
         preNhgetchMessages.join('\n'));
     assert.equal(preNhgetchMessages.some(message => /Yecch!  You've been creamed\./.test(message)), true,
         preNhgetchMessages.join('\n'));
+});
+
+test('production Kop cream pie hits intervening monster and blinds before hero', async () => {
+    const blocker = ordinaryThrowTarget('goblin', 7, 5, {
+        ac: 15,
+        mac: 10,
+        mhp: 5,
+        mhpmax: 5,
+        mcansee: true,
+        mblinded: 0,
+        data: { name: 'goblin', mlevel: 1, mac: 10 },
+    });
+    const { pie, thrower, rng, preNhgetchMessages } = await runMonsterKopCreamPieLanding({
+        seed: 8,
+        heroDex: 99,
+        throwerX: 9,
+        uac: 20,
+        extraMonsters: [blocker],
+    });
+    const messages = preNhgetchMessages.join('\n');
+    const rngNames = rng.map(entry => entry.replace(/=.*/, ''));
+
+    assert.equal(game.u.uhp, 20);
+    assert.equal(game.u.ucreamed || 0, 0);
+    assert.equal(game.u.blind, false);
+    assert.equal(blocker.msleeping, 0);
+    assert.equal(blocker.mcansee, false);
+    assert.ok(blocker.mblinded >= 21 && blocker.mblinded <= 45, rng.join(', '));
+    assert.equal(thrower.missile, null);
+    assert.equal(thrower.minvent.some(obj => obj.id === pie.id), false);
+    assert.equal(game.level.objects.some(obj => obj.kind === 'cream pie'), false);
+
+    assert.match(messages, /throws a cream pie!/);
+    assert.match(messages, /The cream pie hits the goblin\./);
+    assert.match(messages, /The goblin is blinded by the pie\./);
+    assert.doesNotMatch(messages, /You catch|You are hit by a cream pie|creamed/);
+    assert.ok(rngNames.includes('rn2(5)'), rng.join(', '));
+    assert.ok(rngNames.includes('rnd(20)'), rng.join(', '));
+    assert.ok(rngNames.includes('rnd(25)'), rng.join(', '));
+    assert.equal(rngNames.includes('rn2(1)'), false, rng.join(', '));
 });
 
 test('production Kop cream pie catch adds the thrown pie to inventory', async () => {

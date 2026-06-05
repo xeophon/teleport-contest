@@ -6908,10 +6908,20 @@ export async function processMonsterTurns() {
                         }
 
                         let creamPieTerrainStop = null;
+                        let interveningTarget = null;
                         for (let step = 1; step < throwRange; step++) {
                             const sx = mon.mx + throwDx * step;
                             const sy = mon.my + throwDy * step;
                             const remainingRange = throwRange - step;
+                            const targetMon = monsterAtFlightSquare(sx, sy, mon);
+                            if (targetMon) {
+                                const hitValue = monsterThrownObjectAccidentalHitValue(targetMon, thrownMissile);
+                                const hitRoll = rnd(20);
+                                if (hitValue >= hitRoll) {
+                                    interveningTarget = targetMon;
+                                    break;
+                                }
+                            }
                             const forcehit = !rn2(5);
                             if (remainingRange && forcehit
                                 && game.level?.at(sx + throwDx, sy + throwDy)?.typ === IRONBARS) {
@@ -6928,6 +6938,34 @@ export async function processMonsterTurns() {
                                 messages: floorMessages,
                             });
                             addMonsterThrownFloorMessages(floorMessages, throwerVisible);
+                        } else if (interveningTarget) {
+                            revealProjectileHitMimicAppearance(interveningTarget);
+                            interveningTarget.msleeping = 0;
+                            const targetVisible = !game.u?.blind && cansee(interveningTarget.mx, interveningTarget.my);
+                            const hitMessage = targetVisible
+                                ? `The cream pie hits the ${interveningTarget.data?.name || 'monster'}.`
+                                : 'It is hit.';
+                            if (throwerVisible) game._topline_after_more = hitMessage;
+                            else addToplineMessage(hitMessage);
+                            const blindTarget = monsterCanBeBlindedByMonsterThrownCreamPie(interveningTarget);
+                            const showBlindMessage = blindTarget && targetVisible
+                                && interveningTarget.mcansee !== false;
+                            if (blindTarget) {
+                                if (showBlindMessage) {
+                                    const message = `${monsterDisplayName(interveningTarget)} is blinded by the pie.`;
+                                    if (throwerVisible) appendAfterMoreMessage(message);
+                                    else addToplineMessage(message);
+                                }
+                                applyMonsterThrownCreamPieBlindness(interveningTarget);
+                            }
+                            const floorMessages = [];
+                            landMonsterThrownObject(thrownMissile, interveningTarget.mx, interveningTarget.my, {
+                                glyph: '%',
+                                color: CLR_WHITE,
+                                messages: floorMessages,
+                                ohit: true,
+                            });
+                            addMonsterThrownFloorMessages(floorMessages, throwerVisible || targetVisible);
                         } else {
                             const catchChance = 100 - (game.u?.acurr?.a?.[A_DEX] ?? 10)
                                 - (game._startup_role === 'Monk' || game._startup_role === 'Rogue' ? 20 : 0);
@@ -9319,6 +9357,20 @@ function applyMonsterCreamPieBlindness() {
     addHeroStatusSuffix('Blind');
     for (const other of game.level?.monsters || []) newsym(other.mx, other.my);
     return blindinc;
+}
+
+function monsterCanBeBlindedByMonsterThrownCreamPie(mon) {
+    const data = mon?.data || {};
+    if (mon?.noeyes || mon?.noEyes || data.noeyes || data.noEyes) return false;
+    return !(mon?.mcansee === false && !(mon.mblinded || 0));
+}
+
+function applyMonsterThrownCreamPieBlindness(mon) {
+    if (!monsterCanBeBlindedByMonsterThrownCreamPie(mon)) return 0;
+    const blindTime = rnd(25) + 20;
+    mon.mcansee = false;
+    mon.mblinded = Math.min(127, (mon.mblinded || 0) + blindTime);
+    return blindTime;
 }
 
 function monsterThrownSpearNames(item) {
