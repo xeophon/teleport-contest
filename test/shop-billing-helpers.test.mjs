@@ -13406,6 +13406,34 @@ function adjacentGasSporeBlastVictim(name = 'goblin', id = 31320, x = 7, y = 5, 
     });
 }
 
+function gasSporeMeleePet(id = 31382, extra = {}) {
+    return ordinaryThrowTarget('dog', 7, 5, {
+        m_id: id,
+        mhp: 30,
+        mhpmax: 30,
+        m_lev: 4,
+        movement: NORMAL_SPEED,
+        msleeping: 0,
+        mcanmove: true,
+        mcansee: true,
+        mpeaceful: true,
+        mtame: 10,
+        pet: true,
+        data: {
+            name: 'dog',
+            mlet: 'dog',
+            mmove: NORMAL_SPEED,
+            mac: 6,
+            mlevel: 4,
+            cwt: 400,
+            attack: { dice: 1, sides: 6, verb: 'bites' },
+        },
+        mextra: { edog: { apport: 3, hungrytime: 0, whistletime: 0, ogoal: { x: 0, y: 0 } } },
+        minvent: [],
+        ...extra,
+    });
+}
+
 function adjacentHostileFlamingSphere(id = 31006) {
     return adjacentHostileExplodingSphere('flaming sphere', id);
 }
@@ -17631,6 +17659,84 @@ test('gas cloud killed gas spore explodes outside monster melee', async () => {
     assert.match(messages, /Boom!/);
     assert.match(messages, /The goblin is caught in the gas spore's explosion!/);
     assert.match(messages, /You are caught in the gas spore's explosion!/);
+    assert.equal(game.level.monsters.includes(spore), false);
+    assert.equal(game.level.objects.some(obj => obj.ox === 6 && obj.oy === 5), false);
+    assert.equal(victim.mhp, 30 - d4x6[1]);
+    assert.equal(game.u.uhp, 50 - d4x6[1]);
+});
+
+test('pet melee killed gas spore explodes outside hero melee', async () => {
+    installStableNonShopFloorState();
+    initRng(1);
+    enableRngLog({ reset: true });
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 50,
+        uhpmax: 50,
+        uac: 10,
+    });
+    game.inventory = [];
+    const victim = adjacentGasSporeBlastVictim('goblin', 31381, 6, 6);
+    const spore = adjacentHostileGasSpore(31380);
+    spore.data = { ...spore.data, mac: 100 };
+    const pet = gasSporeMeleePet(31382);
+    game.level.monsters = [victim, spore, pet];
+
+    queueEscapeForMonsterTurn();
+    markHeroNeighborhoodVisible();
+    markSquareVisible(pet.mx, pet.my);
+    await processMonsterTurns();
+    const messages = [game._pending_message, ...(await drainQueuedMessagesAfterMore())].join(' ');
+
+    const d4x6 = rngValuesForCall(getRngLog(), 'd(4,6)');
+    assert.equal(d4x6.length, 2);
+    assert.match(messages, /The gas spore is killed!/);
+    assert.match(messages, /Boom!/);
+    assert.match(messages, /The goblin is caught in the gas spore's explosion!/);
+    assert.match(messages, /The dog is caught in the gas spore's explosion!/);
+    assert.match(messages, /You are caught in the gas spore's explosion!/);
+    assert.equal(game.level.monsters.includes(spore), false);
+    assert.equal(game.level.objects.some(obj => obj.ox === 6 && obj.oy === 5), false);
+    assert.equal(victim.mhp, 30 - d4x6[1]);
+    assert.equal(game.u.uhp, 50 - d4x6[1]);
+});
+
+test('queued pet melee killed gas spore explodes after more', async () => {
+    installStableNonShopFloorState();
+    initRng(1);
+    enableRngLog({ reset: true });
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 50,
+        uhpmax: 50,
+        uac: 10,
+    });
+    game.nhDisplay = { cols: 60 };
+    game.inventory = [];
+    const victim = adjacentGasSporeBlastVictim('goblin', 31391, 6, 6);
+    const spore = adjacentHostileGasSpore(31390);
+    spore.data = { ...spore.data, mac: 100 };
+    const pet = gasSporeMeleePet(31392);
+    game.level.monsters = [victim, spore, pet];
+
+    queueEscapeForMonsterTurn();
+    markHeroNeighborhoodVisible();
+    markSquareVisible(pet.mx, pet.my);
+    await processMonsterTurns();
+    assert.equal(rngValuesForCall(getRngLog(), 'd(4,6)').length, 0);
+    assert.equal(game._queued_dead_monsters?.includes(spore), true);
+    const messages = [game._pending_message, ...(await drainQueuedMessagesAfterMore())].join(' ');
+
+    const d4x6 = rngValuesForCall(getRngLog(), 'd(4,6)');
+    assert.equal(d4x6.length, 2);
+    assert.match(messages, /The gas spore is killed!/);
+    assert.match(messages, /Boom!/);
+    assert.match(messages, /The goblin is caught in the gas spore's explosion!/);
+    assert.match(messages, /The dog is caught in the gas spore's explosion!/);
+    assert.match(messages, /You are caught in the gas spore's explosion!/);
+    assert.equal(game._queued_dead_monsters?.length || 0, 0);
     assert.equal(game.level.monsters.includes(spore), false);
     assert.equal(game.level.objects.some(obj => obj.ox === 6 && obj.oy === 5), false);
     assert.equal(victim.mhp, 30 - d4x6[1]);

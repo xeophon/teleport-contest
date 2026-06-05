@@ -50182,7 +50182,23 @@ export async function rhack(_cmd) {
                     for (const mon of game._queued_dead_monsters) {
                         const data = mon.data || {};
                         const corpseData = data.corpse || data;
-                        const dropCorpse = monsterCorpseDropSucceeds(mon, data);
+                        const queuedBeforeExplosion = game._queued_messages_after_more?.length || 0;
+                        const explosionMessages = [];
+                        const explosion = queueGasSporeDeathExplosion(mon, { messages: explosionMessages });
+                        const queuedAfterExplosion = game._queued_messages_after_more || [];
+                        if (explosionMessages.length) {
+                            const boomMessages = explosionMessages.map((text, index) => ({
+                                text,
+                                more: index < explosionMessages.length - 1
+                                    || queuedAfterExplosion.length > queuedBeforeExplosion,
+                            }));
+                            game._queued_messages_after_more = [
+                                ...queuedAfterExplosion.slice(0, queuedBeforeExplosion),
+                                ...boomMessages,
+                                ...queuedAfterExplosion.slice(queuedBeforeExplosion),
+                            ];
+                        }
+                        const dropCorpse = !explosion && monsterCorpseDropSucceeds(mon, data);
                         recordVanquished(mon, false);
                         dropMonsterInventory(mon);
                         if (dropCorpse && monsterLeavesCorpseLikeDrop(corpseData))

@@ -4031,18 +4031,9 @@ export async function processMonsterTurns() {
                 if (target.mhp < 1) {
                     const targetName = target.data?.name || 'creature';
                     addToplineMessage(`The ${targetName} is killed!`);
-                    const dropCorpse = monsterCorpseDropSucceeds(target, target.data);
-                    const corpseData = corpseDataForMonster(target.data);
-                    dropMonsterInventory(target);
-                    if (dropCorpse && monsterLeavesCorpseLikeDrop(corpseData))
-                        createMonsterCorpseOrGlob(target, corpseData);
-                    monsterGrowUp(mon, target);
-                    rn2(5);
-	                    recordVanquished(target, false);
-	                    game.level.monsters = (game.level?.monsters || []).filter(other => other !== target);
-	                    newsym(target.mx, target.my);
-	                    const targetIndex = mons.indexOf(target);
-	                    if (targetIndex >= 0) startIndex = Math.max(startIndex, targetIndex + 1);
+                    finishPetKilledMonster(mon, target);
+                    const targetIndex = mons.indexOf(target);
+                    if (targetIndex >= 0) startIndex = Math.max(startIndex, targetIndex + 1);
                 } else {
                     rn2(3);
                     const returnAttackRoll = rn2(4);
@@ -12036,6 +12027,29 @@ function moveMonsterTowardHero(mon, conflictActive = false, monIndex = null, som
     return true;
 }
 
+function finishPetKilledMonster(killer, target, {
+    skipLichenPostMoveRoll = false,
+    markPetKillNoRepeat = false,
+} = {}) {
+    const targetName = target.data?.name || 'creature';
+    const data = target.data || {};
+    const corpseData = corpseDataForMonster(data);
+    const explosion = queueGasSporeDeathExplosion(target);
+    const dropCorpse = !explosion && monsterCorpseDropSucceeds(target, data);
+    dropMonsterInventory(target);
+    if (explosion) addToplineMessage(explosion.message);
+    else if (dropCorpse && monsterLeavesCorpseLikeDrop(corpseData))
+        createMonsterCorpseOrGlob(target, corpseData);
+    monsterGrowUp(killer, target);
+    rn2(5);
+    if (skipLichenPostMoveRoll && targetName === 'lichen') game._pet_skip_post_move_roll = 1;
+    recordVanquished(target, false);
+    game.level.monsters = (game.level?.monsters || []).filter(other => other !== target);
+    newsym(target.mx, target.my);
+    if (markPetKillNoRepeat && targetName !== 'lichen') game._pet_kill_no_repeat = 1;
+    return explosion;
+}
+
 function movePet(mon, resumeAfterInventory = false, conflictActive = false) {
     game._pet_map_redraw_pending = 1;
     const realUx = game.u?.ux ?? mon.mx;
@@ -12652,20 +12666,10 @@ function movePet(mon, resumeAfterInventory = false, conflictActive = false) {
 	                        game._message_more = 0;
 	                    }
 	                }
-                const dropCorpse = monsterCorpseDropSucceeds(pos.target, pos.target.data);
-                const corpseData = corpseDataForMonster(pos.target.data);
-                dropMonsterInventory(pos.target);
-                if (dropCorpse && monsterLeavesCorpseLikeDrop(corpseData))
-                    createMonsterCorpseOrGlob(pos.target, corpseData);
-                monsterGrowUp(mon, pos.target);
-                rn2(5);
-                if (targetName === 'lichen') game._pet_skip_post_move_roll = 1;
-                recordVanquished(pos.target, false);
-                game.level.monsters = (game.level?.monsters || []).filter(other => other !== pos.target);
-                newsym(pos.target.mx, pos.target.my);
-                if (targetName !== 'lichen') {
-                    game._pet_kill_no_repeat = 1;
-                }
+                finishPetKilledMonster(mon, pos.target, {
+                    skipLichenPostMoveRoll: true,
+                    markPetKillNoRepeat: true,
+                });
                 return;
             }
 
