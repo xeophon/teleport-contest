@@ -26020,6 +26020,68 @@ test('command kicked glass-material object shatters before remote projectile fli
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(100)']);
 });
 
+test('command kicked crystal plate mail crack erosion continues to low-range thump', async () => {
+    installNonShopFloorState();
+    markSquareVisible(6, 5);
+    Object.assign(game.u, { uhp: 50, uhpmax: 50 });
+    game.u.acurr.a[A_STR] = 2;
+    game.u.acurr.a[A_DEX] = 10;
+    game.u.acurr.a[A_CON] = 10;
+    initRng(11);
+    const armor = {
+        ...carriedGlassArmor(512079, 'a'),
+        ox: 6,
+        oy: 5,
+        letter: undefined,
+        line: undefined,
+    };
+    game.level.objects = [armor];
+    enableRngLog({ reset: true });
+
+    await rhack('\x04');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.level.objects.includes(armor), true);
+    assert.equal(armor.oeroded, 1);
+    assert.equal(armor.ox, 6);
+    assert.equal(armor.oy, 5);
+    assert.match(game._pending_message, /You kick a crystal plate mail\./);
+    assert.match(game._pending_message, /The mail cracks!/);
+    assert.match(game._pending_message, /Thump!/);
+    assert.doesNotMatch(game._pending_message, /thousand pieces|falls through the hole|hits|misses|muffled|Ouch/);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(100)', 'rn2(3)']);
+});
+
+test('command kicked fully cracked crystal plate mail shatters before remote projectile flight', async () => {
+    installNonShopFloorState();
+    installSeenRemoteShaft(HOLE, 7, 5);
+    markSquareVisible(6, 5);
+    initRng(11);
+    const armor = {
+        ...carriedGlassArmor(512080, 'a', { oeroded: 3 }),
+        ox: 6,
+        oy: 5,
+        letter: undefined,
+        line: undefined,
+    };
+    game.level.objects = [armor];
+    enableRngLog({ reset: true });
+
+    await rhack('\x04');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.level.objects.includes(armor), false);
+    assert.equal(queuedImpactDropsFor({ dnum: 0, dlevel: 2 }).some(obj => obj.id === armor.id), false);
+    assert.match(game._pending_message, /You kick a crystal plate mail\./);
+    assert.match(game._pending_message, /The mail shatters!/);
+    assert.doesNotMatch(game._pending_message, /thousand pieces|falls through the hole|Thump|hits|misses|muffled/);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(100)']);
+});
+
 test('command kicked fragile stack resistance splits one item before ladder flight', async () => {
     installNonShopFloorState();
     installRemoteDownStairGate({ x: 7, y: 5, isladder: true });

@@ -27674,6 +27674,7 @@ function kickedFragilePreflightBreakKind(obj) {
     if (isPotionObject(obj)) return impactDropBreakKind(obj);
     if (isExpensiveCameraObject(obj)) return impactDropBreakKind(obj);
     if (isEggItem(obj)) return impactDropBreakKind(obj);
+    if (isHeroThrownCrackableArmorObject(obj)) return 'crackableArmor';
     if (breaktestGlassMaterialObject(obj)) return impactDropBreakKind(obj);
     return '';
 }
@@ -27760,7 +27761,15 @@ function splitKickedFloorObjectForFlight(obj) {
 }
 
 async function breakKickedFragileFloorObject(obj, x, y, messages) {
-    if (!kickedFragilePreflightBreakKind(obj)) return false;
+    const preflightBreakKind = kickedFragilePreflightBreakKind(obj);
+    if (!preflightBreakKind) return false;
+    if (preflightBreakKind === 'crackableArmor') {
+        const impact = crackableArmorImpact(obj, messages);
+        if (!impact.destroyed) return false;
+        removeFloorObject(obj);
+        newsym(x, y);
+        return true;
+    }
     const breakKind = projectileTopLevelBreakKind(obj);
     if (!breakKind) return false;
     projectileTopLevelBreakMessage(obj, breakKind, messages);

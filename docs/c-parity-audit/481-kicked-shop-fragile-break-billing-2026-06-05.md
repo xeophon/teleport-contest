@@ -39,5 +39,5 @@ Implemented shop-owned kicked fragile floor-object billing for the existing kick
 ## Remaining
 
 - Low-range resisted fragile `Thump!`/`kick_ouch` return-roll coverage is covered in audit 482.
-- Glass armor kicked preflight remains separate because C crack-erodes it before destruction.
+- Glass armor kicked preflight crack erosion is covered in audit 483.
 - Generic local venom placeholders remain excluded unless resolved to concrete acid/blinding venom.

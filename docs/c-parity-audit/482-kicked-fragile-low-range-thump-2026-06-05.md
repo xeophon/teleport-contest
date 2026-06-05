@@ -40,5 +40,5 @@ Implemented the low-range continuation for kicked fragile floor objects that sur
 
 ## Remaining
 
-- Glass armor kicked preflight remains separate because C crack-erodes it before destruction.
+- Glass armor kicked preflight crack erosion is covered in audit 483.
 - Generic local venom placeholders remain excluded unless resolved to concrete acid/blinding venom.
