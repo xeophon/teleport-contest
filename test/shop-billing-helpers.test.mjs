@@ -25754,6 +25754,56 @@ test('command kicked lenses break before remote projectile flight', async () => 
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(100)']);
 });
 
+test('command kicked glass wand breaks before remote projectile flight', async () => {
+    installNonShopFloorState();
+    installSeenRemoteShaft(HOLE, 7, 5);
+    markSquareVisible(6, 5);
+    initRng(1);
+    const wand = {
+        ...unknownAppearanceWand(512063, 'glass', undefined),
+        ox: 6,
+        oy: 5,
+        letter: undefined,
+        line: undefined,
+    };
+    game.level.objects = [wand];
+    enableRngLog({ reset: true });
+
+    await rhack('\x04');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.level.objects.includes(wand), false);
+    assert.equal(queuedImpactDropsFor({ dnum: 0, dlevel: 2 }).some(obj => obj.id === wand.id), false);
+    assert.match(game._pending_message, /You kick a glass wand\./);
+    assert.match(game._pending_message, /A glass wand shatters into a thousand pieces!/);
+    assert.doesNotMatch(game._pending_message, /falls through the hole|Thump|hits|misses/);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(100)']);
+});
+
+test('command kicked cream pie breaks before remote projectile flight', async () => {
+    installNonShopFloorState();
+    installSeenRemoteShaft(HOLE, 7, 5);
+    markSquareVisible(6, 5);
+    initRng(1);
+    const pie = { ...creamPie(512064, undefined), ox: 6, oy: 5, letter: undefined, line: undefined };
+    game.level.objects = [pie];
+    enableRngLog({ reset: true });
+
+    await rhack('\x04');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.level.objects.includes(pie), false);
+    assert.equal(queuedImpactDropsFor({ dnum: 0, dlevel: 2 }).some(obj => obj.id === pie.id), false);
+    assert.match(game._pending_message, /You kick a cream pie\./);
+    assert.match(game._pending_message, /What a mess!/);
+    assert.doesNotMatch(game._pending_message, /falls through the hole|Thump|hits|misses|blind/);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(100)']);
+});
+
 test('command kick ordinary floor object down stairs records reciprocal metadata', async () => {
     installNonShopFloorState();
     installRemoteDownStairGate({ x: 7, y: 5 });

@@ -27596,6 +27596,8 @@ function kickedFragilePreflightBreakKind(obj) {
     if (isMirrorObject(obj)) return impactDropBreakKind(obj);
     if (obj.otyp === CRYSTAL_BALL || kind === 'crystal ball') return impactDropBreakKind(obj);
     if (kind === 'lenses') return impactDropBreakKind(obj);
+    if (isGlassMaterialWandObject(obj)) return impactDropBreakKind(obj);
+    if (isCreamPieObject(obj)) return impactDropBreakKind(obj);
     return '';
 }
 
