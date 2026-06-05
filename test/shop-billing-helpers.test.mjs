@@ -25866,7 +25866,7 @@ test('command kicked glass gem harms rock-passing monster and survives landing',
     assert.match(game._pending_message, /You kick a red gem\./);
     assert.match(game._pending_message, /The red gem hits the earth elemental\./);
     assert.doesNotMatch(game._pending_message, /does no harm|passes harmlessly|misses|shatters/);
-    assert.equal(elemental.mhp, 19);
+    assert.equal(elemental.mhp, 16);
     assert.equal(elemental.msleeping, 0);
     assert.equal(elemental.meating, 0);
     assert.equal(elemental.mstrategy, 0);
@@ -25914,7 +25914,7 @@ test('command kicked glass gem hit can mulch before landing', async () => {
     assert.match(game._pending_message, /You kick a red gem\./);
     assert.match(game._pending_message, /The red gem hits the earth elemental\./);
     assert.doesNotMatch(game._pending_message, /does no harm|passes harmlessly|misses|shatters/);
-    assert.equal(elemental.mhp, 19);
+    assert.equal(elemental.mhp, 16);
     assert.equal(game.level.objects.includes(glass), false);
     assert.equal(game.level.objects.some(obj => obj.id === glass.id), false);
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 4), [
@@ -25998,7 +25998,7 @@ test('command kicked ruby harms ordinary monster and survives landing', async ()
     assert.match(game._pending_message, /You kick a ruby\./);
     assert.match(game._pending_message, /The ruby hits the goblin\./);
     assert.doesNotMatch(game._pending_message, /gift|catches|misses|does no harm|shatters/);
-    assert.equal(goblin.mhp, 19);
+    assert.equal(goblin.mhp, 16);
     assert.equal(goblin.msleeping, 0);
     assert.equal(goblin.meating, 0);
     assert.equal(goblin.mstrategy, 0);
@@ -26084,7 +26084,7 @@ test('command kicked flint harms ordinary monster', async () => {
     assert.match(game._pending_message, /You kick a flint\./);
     assert.match(game._pending_message, /The flint hits the goblin\./);
     assert.doesNotMatch(game._pending_message, /misses|does no harm|passes harmlessly|shatters/);
-    assert.equal(goblin.mhp, 19);
+    assert.equal(goblin.mhp, 16);
     assert.equal(goblin.msleeping, 0);
     assert.equal(goblin.meating, 0);
     assert.equal(goblin.mstrategy, 0);
@@ -26094,6 +26094,80 @@ test('command kicked flint harms ordinary monster', async () => {
     assert.equal(flint.oy, 5);
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 4), [
         'rnd(20)', 'rnd(2)', 'rn2(3)', 'rn2(2)',
+    ]);
+});
+
+test('command kicked glass gem adds damage increase bonus', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, { ulevel: 20, uluck: 10, uhitinc: 10, udaminc: 2 });
+    game.u.acurr.a[A_STR] = 10;
+    game.u.acurr.a[A_DEX] = 25;
+    const glass = floorGlassGem(512032, {
+        ox: 6,
+        oy: 5,
+    });
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, {
+        mhp: 20,
+        mhpmax: 20,
+        msleeping: 1,
+        mpeaceful: 1,
+        meating: 4,
+        mstrategy: STRAT_WAITFORU,
+    });
+    game.level.objects = [glass];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('\x04');
+    await rhack('l');
+
+    assert.match(game._pending_message, /You kick a red gem\./);
+    assert.match(game._pending_message, /The red gem hits the goblin\./);
+    assert.doesNotMatch(game._pending_message, /misses|does no harm|passes harmlessly|shatters/);
+    assert.equal(goblin.mhp, 17);
+    assert.equal(goblin.msleeping, 0);
+    assert.equal(goblin.meating, 0);
+    assert.equal(goblin.mstrategy, 0);
+    assert.equal(goblin.mpeaceful, 0);
+    assert.equal(game.level.objects.includes(glass), true);
+    assert.equal(glass.ox, 7);
+    assert.equal(glass.oy, 5);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 3), [
+        'rnd(20)', 'rnd(2)', 'rn2(3)',
+    ]);
+});
+
+test('command kicked glass gem negative damage bonus still deals one damage', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, { ulevel: 20, uluck: 10, uhitinc: 10, udaminc: -3 });
+    game.u.acurr.a[A_STR] = 10;
+    game.u.acurr.a[A_DEX] = 25;
+    const glass = floorGlassGem(512033, {
+        ox: 6,
+        oy: 5,
+    });
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, {
+        mhp: 20,
+        mhpmax: 20,
+    });
+    game.level.objects = [glass];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('\x04');
+    await rhack('l');
+
+    assert.match(game._pending_message, /You kick a red gem\./);
+    assert.match(game._pending_message, /The red gem hits the goblin\./);
+    assert.doesNotMatch(game._pending_message, /misses|does no harm|passes harmlessly|shatters/);
+    assert.equal(goblin.mhp, 19);
+    assert.equal(game.level.objects.includes(glass), true);
+    assert.equal(glass.ox, 7);
+    assert.equal(glass.oy, 5);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 3), [
+        'rnd(20)', 'rnd(2)', 'rn2(3)',
     ]);
 });
 

@@ -42,6 +42,6 @@ Implemented first-square kicked floor `GEM_CLASS` impacts against ordinary non-u
 
 ## Remaining
 
-- Full `hmon()` damage-bonus recomputation for kicked ammo, including strength and `u.udaminc`, remains separate; existing kicked glass canaries currently cover only the modeled `rnd(2)` base damage path.
+- Full downstream `hmon()` recomputation beyond audit 462's strength and `u.udaminc` bonuses remains separate.
 - Broader kicked-object `thitmonst()` conversion is still incomplete for ordinary kicked weapons/weptools and downstream passive-object effects.
 - Exact full `omon_adj()` target-size/sleep modifiers and passive object effects after surviving kicked gem hits remain separate work.
