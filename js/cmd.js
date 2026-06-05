@@ -19790,9 +19790,13 @@ async function releaseBrokenCameraDemon(obj, messages, x = null, y = null) {
     return mon;
 }
 
-async function applyHeroThrownFragileBreakSideEffects(obj, messages, x = null, y = null) {
+async function applyHeroCausedFragileBreakSideEffects(obj, messages, x = null, y = null) {
     if (isMirrorObject(obj)) changeHeroLuck(-2);
     await releaseBrokenCameraDemon(obj, messages, x, y);
+}
+
+async function applyHeroThrownFragileBreakSideEffects(obj, messages, x = null, y = null) {
+    await applyHeroCausedFragileBreakSideEffects(obj, messages, x, y);
 }
 
 function heroThrownIronBarsBreakableClassHitObject(obj) {
@@ -27619,6 +27623,7 @@ function kickedFragilePreflightBreakKind(obj) {
     if (isGlassMaterialWandObject(obj)) return impactDropBreakKind(obj);
     if (isCreamPieObject(obj)) return impactDropBreakKind(obj);
     if (isPotionObject(obj) && thrownPotionEffectKind(obj) !== 'oil') return impactDropBreakKind(obj);
+    if (isExpensiveCameraObject(obj)) return impactDropBreakKind(obj);
     return '';
 }
 
@@ -27664,19 +27669,19 @@ function placeKickedFloorObject(obj, x, y, messages, options = {}) {
     return stacked;
 }
 
-function breakKickedFragileFloorObject(obj, x, y, messages) {
+async function breakKickedFragileFloorObject(obj, x, y, messages) {
     if (!kickedFragilePreflightBreakKind(obj)) return false;
     const breakKind = projectileTopLevelBreakKind(obj);
     if (!breakKind) return false;
     projectileTopLevelBreakMessage(obj, breakKind, messages);
     brokenPotionBreathe(obj, x, y, messages);
-    if (isMirrorObject(obj)) changeHeroLuck(-2);
+    await applyHeroCausedFragileBreakSideEffects(obj, messages, x, y);
     removeFloorObject(obj);
     newsym(x, y);
     return true;
 }
 
-function kickFloorObjectToward(dir, x, y) {
+async function kickFloorObjectToward(dir, x, y) {
     const obj = kickFloorObjectAt(x, y);
     if (!kickFloorObjectSupported(obj, x, y)) return { handled: false };
 
@@ -27695,7 +27700,7 @@ function kickFloorObjectToward(dir, x, y) {
     if (!gate && !canHandleMonsterImpact && !fragileBreakKind) return { handled: false };
 
     const messages = [`You kick ${floorObjectArticleName(obj)}.`];
-    if (fragileBreakKind && breakKickedFragileFloorObject(obj, x, y, messages))
+    if (fragileBreakKind && await breakKickedFragileFloorObject(obj, x, y, messages))
         return { handled: true, messages, moved: false, broke: true };
     if (kickFloorObjectRange(obj, x, y, dir) < 2) {
         messages.push('Thump!');
@@ -59819,7 +59824,7 @@ export async function rhack(_cmd) {
             game.context.move = 1;
             return;
         }
-        const kickedObject = kickFloorObjectToward(dir, x, y);
+        const kickedObject = await kickFloorObjectToward(dir, x, y);
         if (kickedObject.handled) {
             await setMessage(kickedObject.messages.join('  '), kickedObject.messages.length > 1);
             game._command_mode = null;

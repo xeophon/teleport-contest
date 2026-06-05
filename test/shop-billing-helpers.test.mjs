@@ -25832,6 +25832,35 @@ test('command kicked confusion potion breaks and breathes before remote projecti
     ]);
 });
 
+test('command kicked expensive camera breaks before remote projectile flight and releases demon', async () => {
+    installNonShopFloorState();
+    installSeenRemoteShaft(HOLE, 7, 5);
+    markSquareVisible(6, 5);
+    initRng(3);
+    const camera = { ...expensiveCamera(512066, undefined), ox: 6, oy: 5, letter: undefined, line: undefined };
+    game.level.objects = [camera];
+    enableRngLog({ reset: true });
+
+    await rhack('\x04');
+    await rhack('l');
+
+    const released = game.level.monsters.find(mon => mon.data?.name === 'homunculus');
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.level.objects.includes(camera), false);
+    assert.equal(queuedImpactDropsFor({ dnum: 0, dlevel: 2 }).some(obj => obj.id === camera.id), false);
+    assert.match(game._pending_message, /You kick an expensive camera\./);
+    assert.match(game._pending_message, /An expensive camera shatters into a thousand pieces!/);
+    assert.match(game._pending_message, /The picture-painting demon is released!/);
+    assert.doesNotMatch(game._pending_message, /falls through the hole|Thump|hits|misses|muffled/);
+    assert.ok(released);
+    assert.deepEqual([released.mx, released.my], [6, 5]);
+    assert.equal(released.mpeaceful, 1);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 3), [
+        'rn2(100)', 'rn2(3)', 'rn2(3)',
+    ]);
+});
+
 test('command kick ordinary floor object down stairs records reciprocal metadata', async () => {
     installNonShopFloorState();
     installRemoteDownStairGate({ x: 7, y: 5 });
