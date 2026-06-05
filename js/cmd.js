@@ -19774,10 +19774,12 @@ function supportsHeroThrownFragileObjectUpwardHit(obj) {
     return impactDropBreakKind(obj) === 'pieces';
 }
 
-async function releaseBrokenCameraDemon(obj, messages) {
+async function releaseBrokenCameraDemon(obj, messages, x = null, y = null) {
     if (!isExpensiveCameraObject(obj) || rn2(3)) return null;
     const data = monsterByRndName(rn2(3) ? 'homunculus' : 'imp') || { name: 'imp', mlet: 'i', glyph: 'i', mlevel: 3, hpLevel: 4 };
-    const mon = await makemon(data, game.u?.ux || obj.ox || 0, game.u?.uy || obj.oy || 0, MM_NOMSG);
+    const releaseX = x ?? game.u?.ux ?? obj.ox ?? 0;
+    const releaseY = y ?? game.u?.uy ?? obj.oy ?? 0;
+    const mon = await makemon(data, releaseX, releaseY, MM_NOMSG);
     if (!mon) return null;
     if (!game.u?.blind && cansee(mon.mx, mon.my)) {
         const released = heroIsHallucinating() ? sentenceCase(articleFor(getbogusmon())) : 'The picture-painting demon';
@@ -19788,9 +19790,27 @@ async function releaseBrokenCameraDemon(obj, messages) {
     return mon;
 }
 
-async function applyHeroThrownFragileBreakSideEffects(obj, messages) {
+async function applyHeroThrownFragileBreakSideEffects(obj, messages, x = null, y = null) {
     if (isMirrorObject(obj)) changeHeroLuck(-2);
-    await releaseBrokenCameraDemon(obj, messages);
+    await releaseBrokenCameraDemon(obj, messages, x, y);
+}
+
+function heroThrownIronBarsBreakableClassHitObject(obj) {
+    if (!obj) return false;
+    const kind = objectKindKey(obj);
+    if (isMirrorObject(obj) || obj.otyp === CRYSTAL_BALL || kind === 'crystal ball') return true;
+    if (isExpensiveCameraObject(obj)) return true;
+    return isGlassMaterialWandObject(obj);
+}
+
+async function heroThrownIronBarsBreakImpact(obj, impact) {
+    if (!impact?.pointBlank) rn2(5); // C bhit() evaluates the force-hit roll before hits_bars().
+    const breakKind = projectileTopLevelBreakKind(obj);
+    if (!breakKind) return { broke: false, messages: ['Clonk!'] };
+    const messages = [];
+    projectileTopLevelBreakMessage(obj, breakKind, messages);
+    await applyHeroThrownFragileBreakSideEffects(obj, messages, impact.x, impact.y);
+    return { broke: true, messages };
 }
 
 async function heroThrownFragileObjectSelfHitMessages(obj, action, ceilingName = heroThrowCeilingName()) {
@@ -61523,10 +61543,15 @@ export async function rhack(_cmd) {
 		        let ox = ux;
 		        let oy = uy;
 		        let targetMon = null;
+        let ironBarsImpact = null;
         for (let step = 0; step < 8; step++) {
             const nx = ox + dir.dx;
             const ny = oy + dir.dy;
             const loc = game.level?.at(nx, ny);
+            if (loc?.typ === IRONBARS) {
+                ironBarsImpact = { x: ox, y: oy, barsX: nx, barsY: ny, pointBlank: step === 0 };
+                break;
+            }
 	            if (!loc || IS_OBSTRUCTED(loc.typ)) break;
 	            ox = nx;
 	            oy = ny;
@@ -61586,6 +61611,25 @@ export async function rhack(_cmd) {
         let impactConsumedThrownObject = false;
         let impactObjectHit = false;
         let impactPassiveTarget = null;
+        if (ironBarsImpact && heroThrownIronBarsBreakableClassHitObject(thrownObject)) {
+            const barsImpact = await heroThrownIronBarsBreakImpact(thrownObject, ironBarsImpact);
+            if (barsImpact.broke) {
+                if ((item.quan || 1) > 1) splitCarriedObjectShopBill(item, thrownObject, 1);
+                markThrownBrokenObjectDebt(thrownObject);
+                stopCarriedFigurineTimerOnLeave(thrownObject);
+                removeInventoryItem(item, 1);
+                newsym(ironBarsImpact.x, ironBarsImpact.y);
+                await setMessage(barsImpact.messages.join('  '));
+                game._command_mode = null;
+                game._throw_item_letter = null;
+                clearThrowCountState();
+                game._resume_time_after_more = 0;
+                game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
+                game.context.move = 0;
+                return;
+            }
+            impactMessage = barsImpact.messages.join('  ');
+        }
         if (targetMon && (isBlindingVenomObject(item) || isAcidVenomObject(item))) {
             rnd(20);
             const dex = game.u?.acurr?.a?.[A_DEX] ?? 10;

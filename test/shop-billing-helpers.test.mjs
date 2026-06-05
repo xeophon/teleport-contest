@@ -43007,6 +43007,70 @@ test('hero-thrown pyrolisk egg direct hit explodes at monster square', async () 
     ]);
 });
 
+function installHeroThrowIronBarsState() {
+    installNonShopFloorState();
+    const baseAt = game.level.at;
+    game.level.at = (x, y) => (x === 7 && y === 5 ? { typ: IRONBARS, roomno: ROOMOFFSET } : baseAt(x, y));
+    markSquareVisible(6, 5);
+    markSquareVisible(7, 5);
+}
+
+test('hero-thrown crystal ball shatters against iron bars before landing', async () => {
+    installHeroThrowIronBarsState();
+    initRng(1);
+    const ball = crystalBall(876088, 'c');
+    game.inventory = [ball];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('c');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.match(game._pending_message, /A crystal ball shatters into a thousand pieces!/);
+    assert.doesNotMatch(game._pending_message, /Clonk|hits the floor|falls through|misses|top of your head/);
+    assert.equal(game.inventory.includes(ball), false);
+    assert.equal(game.level.objects.length, 0);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rn2(5)', 'rn2(100)',
+    ]);
+});
+
+test('hero-thrown mirror shatters against iron bars and gives bad luck', async () => {
+    installHeroThrowIronBarsState();
+    initRng(1);
+    Object.assign(game.u, { uluck: 0 });
+    const mirror = {
+        id: 876089,
+        otyp: MIRROR,
+        cls: 'tool',
+        glyph: '(',
+        kind: 'looking glass',
+        actualKind: 'mirror',
+        quan: 1,
+        ox: 5,
+        oy: 5,
+        letter: 'm',
+        line: 'm - a looking glass',
+    };
+    game.inventory = [mirror];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('m');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.match(game._pending_message, /A looking glass shatters into a thousand pieces!/);
+    assert.doesNotMatch(game._pending_message, /Clonk|hits the floor|falls through|misses|top of your head/);
+    assert.equal(game.inventory.includes(mirror), false);
+    assert.equal(game.level.objects.length, 0);
+    assert.equal(game.u.uluck, -2);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rn2(5)', 'rn2(100)',
+    ]);
+});
+
 test('hero-thrown loadstone hits rock-passing monster harmlessly', async () => {
     installNonShopFloorState();
     initRng(2);
