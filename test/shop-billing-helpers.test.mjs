@@ -8,7 +8,7 @@ import { game, resetGame } from '../js/gstate.js';
 import { pushKey, resetInputState } from '../js/input.js';
 import { createMonsterCorpseOrGlob, mkcorpstat, mkobj, mksobj, monsterByRndName } from '../js/mklev.js';
 import { enableDisplayRngLog, enableRngLog, getRngLog, initRng } from '../js/rng.js';
-import { A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_STR, A_WIS, ALTAR, AM_SHRINE, Align2amask, ARROW_TRAP, BILLSZ, CANDLESHOP, CLOUD, CORPSTAT_HISTORIC, COULD_SEE, DART_TRAP, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, D_CLOSED, D_NODOOR, FIRE_TRAP, FOUNTAIN, HOLE, ICE, ICED_POOL, IN_SIGHT, IRONBARS, LADDER, LAVAPOOL, MIGR_LADDER_UP, MIGR_SSTAIRS, MIGR_STAIRS_UP, MOAT, M_AP_FURNITURE, M_AP_OBJECT, NORMAL_SPEED, P_BASIC, P_DAGGER, P_EXPERT, P_KNIFE, P_SKILLED, P_UNSKILLED, PIT, POOL, REPAIR_DELAY, ROOM, ROOMOFFSET, SDOOR, SHOPBASE, SHOP_DOOR_COST, SINK, SLP_GAS_TRAP, SQKY_BOARD, STAIRS, STATUE_TRAP, STONE, STRAT_APPEARMSG, STRAT_WAITFORU, STRAT_WAITMASK, TEMPLE, TRAPDOOR, TT_LAVA, TT_WEB, WEB, W_SADDLE } from '../js/const.js';
+import { A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_STR, A_WIS, ALTAR, AM_SHRINE, Align2amask, ARROW_TRAP, BEAR_TRAP, BILLSZ, CANDLESHOP, CLOUD, CORPSTAT_HISTORIC, COULD_SEE, DART_TRAP, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, D_CLOSED, D_NODOOR, FIRE_TRAP, FOUNTAIN, HOLE, ICE, ICED_POOL, IN_SIGHT, IRONBARS, LADDER, LAVAPOOL, MIGR_LADDER_UP, MIGR_SSTAIRS, MIGR_STAIRS_UP, MOAT, M_AP_FURNITURE, M_AP_OBJECT, NORMAL_SPEED, P_BASIC, P_DAGGER, P_EXPERT, P_KNIFE, P_SKILLED, P_UNSKILLED, PIT, POOL, REPAIR_DELAY, ROOM, ROOMOFFSET, SDOOR, SHOPBASE, SHOP_DOOR_COST, SINK, SLP_GAS_TRAP, SQKY_BOARD, STAIRS, STATUE_TRAP, STONE, STRAT_APPEARMSG, STRAT_WAITFORU, STRAT_WAITMASK, TEMPLE, TRAPDOOR, TT_LAVA, TT_WEB, WEB, W_SADDLE } from '../js/const.js';
 import { currentFruitId, setCurrentFruitName } from '../js/fruit.js';
 import { CLR_BRIGHT_MAGENTA, CLR_BROWN, CLR_WHITE } from '../js/terminal.js';
 import { TRIBUTE_DEATH_QUOTES } from '../js/tribute.js';
@@ -18432,6 +18432,286 @@ test('flying hero crosses hidden sleep gas trap without gas effects', async () =
     assert.equal(game._helpless_time || 0, 0);
     assert.equal(game._sleeping_time || 0, 0);
     assert.equal(trap.tseen, false);
+});
+
+function mountBearTrapPony(hp = 10, extra = {}) {
+    const { data: dataExtra = {}, ...monsterExtra } = extra;
+    const pony = ordinaryThrowTarget('pony', 5, 5, {
+        mhp: hp,
+        mhpmax: hp,
+        m_lev: 3,
+        msleeping: 0,
+        mtame: 5,
+        pet: true,
+        saddled: true,
+        data: { name: 'pony', mlevel: 3, mlet: 'quadruped', mac: 6, ...dataExtra },
+        ...monsterExtra,
+    });
+    game.u.usteed = pony;
+    game.level.monsters = [pony];
+    return pony;
+}
+
+test('hero bear trap movement wounds and traps hero', async () => {
+    installStableNonShopFloorState();
+    vision_reset();
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 20,
+        uhpmax: 20,
+    });
+    game.inventory = [];
+    const trap = { ttyp: BEAR_TRAP, tx: 6, ty: 5, tseen: false };
+    game.level.traps = [trap];
+    enableRngLog({ reset: true });
+    installCoreRngValues([0, 1, 2, 1, 3, 0]);
+
+    await rhack('l');
+
+    assert.deepEqual(getRngLog().map(rngCallName), [
+        'd(2,4)', 'rn2(4)', 'rn2(2)', 'rn2(10)', 'rn2(2)',
+    ]);
+    assert.equal(game._pending_message, 'A bear trap closes on your foot!');
+    assert.equal(game.u.uhp, 17);
+    assert.equal(game.u.ux, 6);
+    assert.equal(game.u.uy, 5);
+    assert.equal(game.u.utrap, 6);
+    assert.equal(game.u.utraptype, 'beartrap');
+    assert.equal(game.u._woundedLegSide, 'right');
+    assert.equal(game.u._woundedLegTurns, 13);
+    assert.equal(game.u.acurr.a[A_DEX], 9);
+    assert.equal(game.u._woundedDexPenalty, 1);
+    assert.equal(trap.tseen, true);
+});
+
+test('mounted hero bear trap damages steed without hurting hero', async () => {
+    installStableNonShopFloorState();
+    vision_reset();
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 20,
+        uhpmax: 20,
+    });
+    const pony = mountBearTrapPony(10);
+    game.inventory = [];
+    const trap = { ttyp: BEAR_TRAP, tx: 6, ty: 5, tseen: false };
+    game.level.traps = [trap];
+    enableRngLog({ reset: true });
+    installCoreRngValues([0, 1, 2, 0]);
+
+    await rhack('l');
+
+    assert.deepEqual(getRngLog().map(rngCallName), ['d(2,4)', 'rn2(4)', 'rn2(2)']);
+    assert.equal(game._pending_message, "A bear trap closes on the saddled pony's foot!");
+    assert.equal(game.u.uhp, 20);
+    assert.equal(pony.mhp, 7);
+    assert.equal(pony.mx, 6);
+    assert.equal(pony.my, 5);
+    assert.equal(game.u.usteed, pony);
+    assert.equal(game.u.utrap, 6);
+    assert.equal(game.u.utraptype, 'beartrap');
+    assert.equal(game.u._woundedLegTurns || 0, 0);
+    assert.equal(game.u.acurr.a[A_DEX], 10);
+    assert.equal(game.u._woundedDexPenalty || 0, 0);
+    assert.equal(trap.tseen, true);
+});
+
+test('mounted hero bear trap killing steed clears trap state', async () => {
+    installStableNonShopFloorState();
+    vision_reset();
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 20,
+        uhpmax: 20,
+    });
+    const pony = mountBearTrapPony(3, { data: { noCorpse: true } });
+    game.inventory = [];
+    const trap = { ttyp: BEAR_TRAP, tx: 6, ty: 5, tseen: false };
+    game.level.traps = [trap];
+    enableRngLog({ reset: true });
+    installCoreRngValues([0, 1, 2, 0]);
+
+    await rhack('l');
+
+    assert.deepEqual(getRngLog().map(rngCallName), ['d(2,4)', 'rn2(4)', 'rn2(2)']);
+    assert.equal(game._pending_message, "A bear trap closes on the saddled pony's foot!  The saddled pony is killed!");
+    assert.equal(game.u.uhp, 20);
+    assert.equal(game.u.usteed, null);
+    assert.equal(game.u.utrap, 0);
+    assert.equal(game.u.utraptype, null);
+    assert.equal(game.level.monsters.includes(pony), false);
+    assert.equal(pony.dead, true);
+    assert.equal(game.level.objects.length, 0);
+    assert.equal(trap.tseen, true);
+});
+
+test('known bear trap can be escaped before damage', async () => {
+    installStableNonShopFloorState();
+    vision_reset();
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 20,
+        uhpmax: 20,
+    });
+    game.inventory = [];
+    const trap = { ttyp: BEAR_TRAP, tx: 6, ty: 5, tseen: true };
+    game.level.traps = [trap];
+    enableRngLog({ reset: true });
+    installCoreRngValues([0]);
+
+    await rhack('l');
+
+    assert.deepEqual(getRngLog().map(rngCallName), ['rn2(5)']);
+    assert.equal(game._pending_message, 'You escape a bear trap.');
+    assert.equal(game.u.uhp, 20);
+    assert.equal(game.u.utrap || 0, 0);
+    assert.equal(game.u.utraptype || null, null);
+    assert.equal(game.u.ux, 6);
+    assert.equal(game.u.uy, 5);
+    assert.equal(trap.tseen, true);
+});
+
+test('flying hero crosses hidden bear trap without triggering', async () => {
+    installStableNonShopFloorState();
+    vision_reset();
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 20,
+        uhpmax: 20,
+        flying: true,
+    });
+    game.inventory = [];
+    const trap = { ttyp: BEAR_TRAP, tx: 6, ty: 5, tseen: false };
+    game.level.traps = [trap];
+    enableRngLog({ reset: true });
+
+    await rhack('l');
+
+    assert.deepEqual(getRngLog().map(rngCallName), []);
+    assert.equal(game._pending_message || '', '');
+    assert.equal(game.u.uhp, 20);
+    assert.equal(game.u.ux, 6);
+    assert.equal(game.u.uy, 5);
+    assert.equal(game.u.utrap || 0, 0);
+    assert.equal(trap.tseen, false);
+});
+
+test('dismount object list consumes pending bear trap', async () => {
+    installStableNonShopFloorState();
+    vision_reset();
+    Object.assign(game.u, {
+        ux: 6,
+        uy: 5,
+        uhp: 20,
+        uhpmax: 20,
+    });
+    const pony = mountBearTrapPony(10);
+    game.inventory = [];
+    const trap = { ttyp: BEAR_TRAP, tx: 6, ty: 5, tseen: false };
+    game.level.traps = [trap];
+    game._command_mode = 'dismountObjectList';
+    game._overlay_lines = [[0, 0, 'test overlay']];
+    game._pending_bear_trap = trap;
+    game._pending_time_passed = 0;
+    game.context = {};
+    enableRngLog({ reset: true });
+    installCoreRngValues([0, 1, 2, 0]);
+
+    await rhack(' ');
+
+    assert.deepEqual(getRngLog().map(rngCallName), ['d(2,4)', 'rn2(4)', 'rn2(2)']);
+    assert.equal(game._pending_bear_trap || null, null);
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game._process_command_time_now, 1);
+    assert.equal(game._pending_message, "A bear trap closes on the saddled pony's foot!");
+    assert.equal(pony.mhp, 7);
+    assert.equal(game.u.usteed, pony);
+    assert.equal(game.u.utrap, 6);
+    assert.equal(game.u.utraptype, 'beartrap');
+});
+
+test('object list bear trap delays damage until more is dismissed', async () => {
+    installStableNonShopFloorState();
+    vision_reset();
+    Object.assign(game.u, {
+        ux: 6,
+        uy: 5,
+        uhp: 20,
+        uhpmax: 20,
+    });
+    game.inventory = [{ kind: 'heavy test item', quan: 1, owt: 600 }];
+    game.level.monsters = [];
+    const trap = { ttyp: BEAR_TRAP, tx: 6, ty: 5, tseen: false };
+    game.level.traps = [trap];
+    game._command_mode = 'objectListMore';
+    game._overlay_lines = [
+        [0, 0, 'a'], [1, 0, 'b'], [2, 0, 'c'], [3, 0, 'd'], [4, 0, 'e'],
+    ];
+    game._pending_bear_trap = trap;
+    game.context = {};
+    enableRngLog({ reset: true });
+    installCoreRngValues([0, 1, 2, 1, 3, 0]);
+
+    await rhack(' ');
+
+    assert.deepEqual(getRngLog().map(rngCallName), [
+        'd(2,4)', 'rn2(4)', 'rn2(2)', 'rn2(10)',
+    ]);
+    assert.equal(game._pending_message, 'A bear trap closes on your foot!');
+    assert.equal(game._message_more, 1);
+    assert.equal(game.u.uhp, 20);
+    assert.equal(game.u.acurr.a[A_DEX], 9);
+    assert.equal(game.u._woundedDexPenalty, 1);
+    assert.equal(game.u._woundedLegSide, 'right');
+    assert.equal(game.u._woundedLegTurns, 13);
+    assert.match(game.u._statusSuffix || '', /Burdened/);
+    assert.equal(game._queued_message_after_more, 'Your movements are slowed slightly because of your load.');
+    assert.equal(game._bear_trap_damage_after_more, 3);
+    assert.equal(game._bear_trap_exercise_after_more, 1);
+
+    await rhack(' ');
+
+    assert.equal(getRngLog().map(rngCallName)[4], 'rn2(2)');
+    assert.equal(game._pending_message, 'Your movements are slowed slightly because of your load.');
+    assert.equal(game.u.uhp, 17);
+    assert.equal(game._bear_trap_damage_after_more, null);
+    assert.equal(game._bear_trap_exercise_after_more, 0);
+});
+
+test('sitting on seen bear trap does not use seen-trap escape roll', async () => {
+    installStableNonShopFloorState();
+    vision_reset();
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 20,
+        uhpmax: 20,
+    });
+    game.inventory = [];
+    const trap = { ttyp: BEAR_TRAP, tx: 5, ty: 5, tseen: true };
+    game.level.traps = [trap];
+    enableRngLog({ reset: true });
+    installCoreRngValues([0, 1, 2, 1, 3, 0]);
+
+    await enterSitCommand();
+
+    assert.deepEqual(getRngLog().map(rngCallName), [
+        'd(2,4)', 'rn2(4)', 'rn2(2)', 'rn2(10)', 'rn2(2)',
+    ]);
+    assert.equal(game._pending_message, 'You sit down.  A bear trap closes on your foot!');
+    assert.equal(game.u.uhp, 17);
+    assert.equal(game.u.utrap, 6);
+    assert.equal(game.u.utraptype, 'beartrap');
+    assert.equal(game.u._woundedLegSide, 'right');
+    assert.equal(game.u._woundedLegTurns, 13);
+    assert.equal(game.u.acurr.a[A_DEX], 9);
+    assert.equal(game.u._woundedDexPenalty, 1);
 });
 
 test('hero arrow trap miss creates and drops a generated arrow', async () => {

@@ -44514,6 +44514,109 @@ function sitPolyTrapMessage(trap, prefix) {
     return messages.join('  ');
 }
 
+function bearTrapSubject(trap) {
+    return trap?.madeby_u ? 'Your' : 'A';
+}
+
+function steedBearTrapName(steed) {
+    return steedTrapProjectileName(steed).replace(/^The\b/, 'the');
+}
+
+function possessiveName(name) {
+    return String(name || 'it').endsWith('s') ? `${name}'` : `${name}'s`;
+}
+
+function applyHeroBearTrapLegWound(side, duration) {
+    if (!game.u) return;
+    if (game.u.acurr?.a && !game.u._woundedDexPenalty) {
+        game.u.acurr.a[A_DEX] = Math.max(3, (game.u.acurr.a[A_DEX] ?? 9) - 1);
+        game.u._woundedDexPenalty = 1;
+    }
+    game.u._woundedLegTurns = Math.max(game.u._woundedLegTurns || 0, duration);
+    game.u._woundedLegSide = side;
+}
+
+function maybeQueueBearTrapLoadMessage() {
+    const capacity = heroCarryCapacity() - 100;
+    if (heroCarriedWeight() <= capacity || (game.u?._statusSuffix || '').includes('Burdened')) return;
+    game.u._statusSuffix = `${game.u._statusSuffix || ''} Burdened`;
+    game._queued_message_after_more = 'Your movements are slowed slightly because of your load.';
+    game._queued_message_process_time_after_more = 1;
+}
+
+function bearTrapExerciseDex(deferAfterMore) {
+    if (deferAfterMore) game._bear_trap_exercise_after_more = 1;
+    else exerciseAttribute(A_DEX, false);
+}
+
+function heroBearTrapResult(trap, prefix = '', { deferAfterMore = false } = {}) {
+    const damage = d(2, 4);
+    if (trap) trap.tseen = true;
+    const messages = [prefix];
+    const form = polyselfForm() || {};
+    const subject = bearTrapSubject(trap);
+
+    if (form.amorphous || form.whirly || form.unsolid || form.noncorporeal) {
+        messages.push(`${subject} bear trap closes harmlessly through you.`);
+        bearTrapExerciseDex(deferAfterMore);
+        return { message: trapMessage(...messages) };
+    }
+    if (!game.u?.usteed && (form.msize === 'tiny' || form.msize === 'small'
+        || form.size === 'tiny' || form.size === 'small')) {
+        messages.push(`${subject} bear trap closes harmlessly over you.`);
+        bearTrapExerciseDex(deferAfterMore);
+        return { message: trapMessage(...messages) };
+    }
+
+    if (game.u) {
+        game.u.utrap = rn1(4, 4);
+        game.u.utraptype = 'beartrap';
+    }
+
+    if (game.u?.usteed) {
+        const steed = game.u.usteed;
+        steed.mx = game.u?.ux ?? steed.mx;
+        steed.my = game.u?.uy ?? steed.my;
+        const steedName = steedBearTrapName(steed);
+        messages.push(`${subject} bear trap closes on ${possessiveName(steedName)} foot!`);
+        steed.mhp = (steed.mhp || 1) - damage;
+        if ((steed.mhp || 0) <= 0) {
+            messages.push(`${steedTrapProjectileName(steed)} is killed!`);
+            finishTrapKilledSteed(steed, messages);
+            if (game.u) {
+                game.u.utrap = 0;
+                game.u.utraptype = null;
+            }
+        }
+    } else {
+        messages.push(`${subject} bear trap closes on your foot!`);
+        const woundedSide = rn2(2) ? 'right' : 'left';
+        const woundDuration = rn1(10, 10);
+        applyHeroBearTrapLegWound(woundedSide, woundDuration);
+        if (deferAfterMore) maybeQueueBearTrapLoadMessage();
+        if (game.u) {
+            if (deferAfterMore) game._bear_trap_damage_after_more = maybeHalfPhysicalDamage(damage);
+            else game.u.uhp = Math.max(0, (game.u.uhp || 1) - maybeHalfPhysicalDamage(damage));
+        }
+        if (!deferAfterMore && (game.u?.uhp || 0) <= 0) {
+            const fatalResult = heroDartTrapFatalResult(messages, 'killed by a bear trap');
+            exerciseAttribute(A_DEX, false);
+            return { message: trapMessage(...messages), ...fatalResult };
+        }
+    }
+    bearTrapExerciseDex(deferAfterMore);
+    return { message: trapMessage(...messages) };
+}
+
+function movementBearTrapResult(trap, options = {}) {
+    const alreadySeen = !!trap?.tseen;
+    if (game.u?.levitating || game.u?.flying)
+        return { message: alreadySeen ? movementOverFloorTrapMessage(trap) : '', more: false };
+    if (alreadySeen && sitTrapEscapeAllowed(trap) && !rn2(5))
+        return { message: movementTrapEscapeMessage(trap), more: false };
+    return heroBearTrapResult(trap, '', options);
+}
+
 function sitLandmineMessage(trap, prefix) {
     const damage = rnd(16);
     const mineName = sitTrapArticleName(trap);
@@ -44557,7 +44660,7 @@ async function sitTriggerTrap(trap) {
     const alreadySeen = trap.ttyp === HOLE || !!trap.tseen;
     const sokobanInescapable = In_sokoban(game.u?.uz)
         && [PIT, SPIKED_PIT, HOLE, TRAPDOOR].includes(trap.ttyp);
-    if (alreadySeen && !sokobanInescapable && sitTrapEscapeAllowed(trap) && !rn2(5)) {
+    if (alreadySeen && trap.ttyp !== BEAR_TRAP && !sokobanInescapable && sitTrapEscapeAllowed(trap) && !rn2(5)) {
         await finishSitMessage(`${prefix}  You escape ${sitTrapArticleName(trap)}.`);
         return true;
     }
@@ -44578,14 +44681,7 @@ async function sitTriggerTrap(trap) {
         return true;
     }
     if (trap.ttyp === BEAR_TRAP) {
-        trap.tseen = true;
-        const damage = d(2, 4);
-        if (game.u) {
-            game.u.uhp = Math.max(0, (game.u.uhp || 1) - damage);
-            game.u.utrap = rn1(4, 4);
-            game.u.utraptype = 'beartrap';
-        }
-        await finishSitMessage(`${prefix}  A bear trap closes on your foot!`);
+        await finishHeroDartTrapResult(heroBearTrapResult(trap, prefix), { sit: true });
         return true;
     }
     if (trap.ttyp === LANDMINE) {
@@ -47299,6 +47395,7 @@ async function moveHero(dx, dy) {
         game._dismount_object_list_spot = { x: newx, y: newy };
         if (trapHere?.ttyp === MAGIC_TRAP) game._pending_magic_trap = trapHere;
         if (trapHere?.ttyp === SLP_GAS_TRAP) game._pending_sleep_gas_trap = trapHere;
+        if (trapHere?.ttyp === BEAR_TRAP) game._pending_bear_trap = trapHere;
         return;
     }
     if (trapHere?.ttyp === SLP_GAS_TRAP && objectsHere.length > 1) game._pending_sleep_gas_trap = trapHere;
@@ -47422,6 +47519,7 @@ async function moveHero(dx, dy) {
         game.context.move = 0;
         if (trapHere?.ttyp === MAGIC_TRAP) game._pending_magic_trap = trapHere;
         if (trapHere?.ttyp === SLP_GAS_TRAP) game._pending_sleep_gas_trap = trapHere;
+        if (trapHere?.ttyp === BEAR_TRAP) game._pending_bear_trap = trapHere;
         return;
     }
     if (objectsHere.length > 1 && skipObjectList) {
@@ -47441,6 +47539,13 @@ async function moveHero(dx, dy) {
         const result = movementSleepGasTrapResult(trapHere);
         result.message = [pileMessage, result.message].filter(Boolean).join('  ');
         if (result.message) await setMessage(result.message, !!result.more || !!(pileMessage && result.message));
+        return;
+    }
+    if (trapHere?.ttyp === BEAR_TRAP) {
+        const result = movementBearTrapResult(trapHere);
+        result.message = [pileMessage, result.message].filter(Boolean).join('  ');
+        if (result.message)
+            await finishHeroDartTrapResult(result, { more: !!(pileMessage && result.message) });
         return;
     }
     if (trapHere?.ttyp === ARROW_TRAP) {
@@ -47799,47 +47904,10 @@ export async function rhack(_cmd) {
                 return;
             }
             if (game._pending_bear_trap) {
-                game._pending_bear_trap.tseen = true;
+                const result = movementBearTrapResult(game._pending_bear_trap, { deferAfterMore: objectListRows > 4 });
                 game._pending_bear_trap = null;
-                const damage = d(2, 4);
-                game.u.utrap = rn2(4) + 4;
-                game.u.utraptype = 'beartrap';
-                const woundedSide = rn2(2);
-                const woundDuration = 10 + rn2(10);
-                if (game.u?.acurr?.a && !game.u._woundedDexPenalty) {
-                    game.u.acurr.a[3] = Math.max(3, (game.u.acurr.a[3] || 9) - 1);
-                    game.u._woundedDexPenalty = 1;
-                }
-                game.u._woundedLegTurns = Math.max(game.u._woundedLegTurns || 0, woundDuration);
-                game.u._woundedLegSide = woundedSide ? 'right' : 'left';
-                let carriedWeight = Math.trunc(((game._goldCount || 0) + 50) / 100);
-                for (const invItem of game.inventory || []) {
-                    if (isGoldObject(invItem)) continue;
-                    const kind = String(invItem.kind || invItem.actualKind || invItem.spellName || invItem.spell?.name || '').toLowerCase();
-                    const cls = invItem.cls || (invItem.otyp === RING_CLASS ? 'ring'
-                        : invItem.otyp === SCROLL_CLASS ? 'scroll'
-                            : invItem.otyp === POTION_CLASS ? 'potion'
-                                : invItem.otyp === WAND_CLASS ? 'wand'
-                                    : invItem.otyp === GEM_CLASS ? 'gem' : '');
-                    carriedWeight += (OBJECT_WEIGHTS[kind] ?? CLASS_WEIGHTS[cls] ?? invItem.owt ?? 0) * (invItem.quan || 1);
-                }
-                const stats = game.u?.acurr?.a || [];
-                let capacity = Math.min(1000, 25 * ((stats[0] ?? 10) + (stats[4] ?? 10)) + 50);
-                capacity -= 100;
-                if (carriedWeight > capacity && !(game.u?._statusSuffix || '').includes('Burdened')) {
-                    game.u._statusSuffix = `${game.u._statusSuffix || ''} Burdened`;
-                    game._queued_message_after_more = 'Your movements are slowed slightly because of your load.';
-                    game._queued_message_process_time_after_more = 1;
-                }
-                if (objectListRows > 4) {
-                    game._bear_trap_damage_after_more = damage;
-                    game._bear_trap_exercise_after_more = 1;
-                    await setMessage('A bear trap closes on your foot!', true);
-                } else {
-                    game.u.uhp = Math.max(1, (game.u?.uhp || 1) - damage);
-                    rn2(2);
-                    await setMessage('A bear trap closes on your foot!');
-                }
+                if (result.message)
+                    await finishHeroDartTrapResult(result, { more: objectListRows > 4 || !!result.more });
             }
         }
         return;
@@ -47867,6 +47935,14 @@ export async function rhack(_cmd) {
                 if (!game._pending_time_passed) game.context.move = 1;
                 game._process_command_time_now = 1;
                 if (result.message) await setMessage(result.message, !!result.more);
+                return;
+            }
+            if (game._pending_bear_trap) {
+                const result = movementBearTrapResult(game._pending_bear_trap);
+                game._pending_bear_trap = null;
+                if (!game._pending_time_passed) game.context.move = 1;
+                game._process_command_time_now = 1;
+                if (result.message) await finishHeroDartTrapResult(result);
                 return;
             }
             if (game._pending_time_passed > 0) {
