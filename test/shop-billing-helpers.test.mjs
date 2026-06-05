@@ -34068,6 +34068,7 @@ async function runMonsterPlainDaggerIronBars({
     inventory = null,
     extraMonsters = [],
     initialObjects = [],
+    monsterOrder = null,
 } = {}) {
     installNonShopFloorState();
     resetInputState();
@@ -34116,7 +34117,9 @@ async function runMonsterPlainDaggerIronBars({
         missile: daggerItem,
         mcansee: true,
     };
-    game.level.monsters = [thrower, ...extraMonsters];
+    game.level.monsters = typeof monsterOrder === 'function'
+        ? monsterOrder(thrower, extraMonsters)
+        : [thrower, ...extraMonsters];
     game._pending_time_passed = 1;
 
     const preNhgetchMessages = [];
@@ -39849,6 +39852,44 @@ test('production monster plain dagger lethal intervening hit cleans monster befo
     assert.equal(landed.transientProjectile, false);
     assert.equal(game.level.objects.some(obj => obj.transientProjectile), false);
     assert.equal(rawRng.some(entry => entry.startsWith('rn2(100)=')), false, rawRng.join(', '));
+});
+
+test('production monster thrown intervening kill resumes following snapshot monster', async () => {
+    const blocker = ordinaryThrowTarget('goblin', 8, 5, {
+        ac: 30,
+        mac: 30,
+        mhp: 1,
+        mhpmax: 1,
+        msleeping: 1,
+        data: { name: 'goblin', mlevel: 1, mlet: 'o', mac: 30 },
+    });
+    let tail;
+    const daggerItem = { ...dagger(874413), letter: undefined, line: undefined, spe: 0 };
+    const { rawRng, preNhgetchMessages } = await runMonsterPlainDaggerIronBars({
+        seed: 1,
+        heroBlind: false,
+        uac: 100,
+        projectile: daggerItem,
+        levelCells: [[7, 5, { typ: IRONBARS }], [5, 6, { typ: ROOM }]],
+        monsterOrder: thrower => {
+            tail = automaticGoblinAttacker();
+            return [tail, thrower, blocker];
+        },
+    });
+    const messages = collectMonsterThrowMessages(preNhgetchMessages);
+
+    assert.match(messages, /dagger hits the goblin\./);
+    assert.match(messages, /goblin is killed!/i);
+    assert.equal(game.level.monsters.includes(blocker), false);
+    assert.equal(game.level.monsters.includes(tail), true);
+    assert.equal(game.u.uhp, 20, rawRng.join(', '));
+
+    if (game._message_more) await rhack(' ');
+    await processMonsterTurns();
+
+    assert.equal(game.u.uhp, 19, rawRng.join(', '));
+    assert.equal(game._monster_resume_index || 0, 0);
+    assert.equal(game._monster_resume_removed_indices?.length || 0, 0);
 });
 
 function collectMonsterThrowMessages(preNhgetchMessages = []) {

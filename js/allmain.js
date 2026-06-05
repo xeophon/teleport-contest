@@ -2542,6 +2542,26 @@ function addMonsterThrownFloorMessages(messages, afterMore = false) {
     }
 }
 
+function noteMonsterResumeRemoval(mon, snapshot = null) {
+    if (!mon) return;
+    const reverseIndex = Array.isArray(snapshot)
+        ? snapshot.indexOf(mon)
+        : [...(game.level?.monsters || [])].reverse().indexOf(mon);
+    if (reverseIndex < 0) return;
+    game._monster_resume_removed_indices ??= [];
+    game._monster_resume_removed_indices.push(reverseIndex);
+}
+
+function adjustedMonsterResumeIndexForRecordedRemovals(resumeIndex) {
+    const removed = game._monster_resume_removed_indices || [];
+    game._monster_resume_removed_indices = [];
+    let adjusted = resumeIndex || 0;
+    for (const index of [...removed].sort((a, b) => a - b)) {
+        if (index >= 0 && index < adjusted) adjusted--;
+    }
+    return adjusted;
+}
+
 function maybeBlockInvulnerableAttack(mon) {
     if (!game.u?.uinvulnerable) return false;
     if (game._prayer_ignore_invulnerable_attack_messages) return true;
@@ -3941,7 +3961,7 @@ export async function processMonsterTurns() {
     const conflictActive = (game.inventory || []).some(item => item.cls === 'ring' && item.worn
         && ((item.ringRoll || item.roll) === 14 || item.actualKind === 'ring of conflict'));
     let somebodyCanMove = game._monster_resume_somebody_can_move || false;
-    let startIndex = game._monster_resume_index || 0;
+    let startIndex = adjustedMonsterResumeIndexForRecordedRemovals(game._monster_resume_index || 0);
     const pickupResumeStartIndex = startIndex;
     let resumingSameMonster = !!game._monster_resume_same_index;
     let resumeAfterPreturn = !!game._monster_resume_after_preturn;
@@ -7477,10 +7497,9 @@ export async function processMonsterTurns() {
                                 const hitValue = monsterThrownPotionAccidentalHitValue(targetMon, thrownPotion);
                                 const hitRoll = rnd(20);
                                 if (hitValue >= hitRoll) {
-                                    const targetIndex = (game.level?.monsters || []).indexOf(targetMon);
                                     revealProjectileHitMimicAppearance(targetMon);
                                     const messages = monsterThrownPotionHitMonster(thrownPotion, targetMon);
-                                    potionInterception = { target: targetMon, targetIndex, messages };
+                                    potionInterception = { target: targetMon, messages };
                                     break;
                                 }
                             }
@@ -7497,11 +7516,10 @@ export async function processMonsterTurns() {
                             game._run_steps_remaining = 0;
                             game._travel_keys = [];
                             if ((game._pending_time_passed || 0) > 2) game._pending_time_passed = 2;
+                            if (!(game.level?.monsters || []).includes(potionInterception.target))
+                                noteMonsterResumeRemoval(potionInterception.target, mons);
                             if (game._message_more && !game._process_time_with_more) {
-                                const targetRemovedBeforeThrower = potionInterception.targetIndex >= 0
-                                    && potionInterception.targetIndex < monIndex
-                                    && !(game.level?.monsters || []).includes(potionInterception.target);
-                                game._monster_resume_index = targetRemovedBeforeThrower ? monIndex : monIndex + 1;
+                                game._monster_resume_index = monIndex + 1;
                                 game._monster_resume_somebody_can_move = somebodyCanMove;
                                 return false;
                             }
@@ -9641,6 +9659,7 @@ function monsterProjectileDeathIsDestroyed(target, visible) {
 
 function killMonsterFromThrownInterveningHit(target, visible, { afterMore = false } = {}) {
     if (!target || target.dead) return;
+    noteMonsterResumeRemoval(target);
     target.dead = true;
     target.mhp = 0;
     target.movement = 0;
