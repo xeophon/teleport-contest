@@ -35811,6 +35811,102 @@ test('production monster launcher arrow can hit intervening monster before hero'
     assert.equal(preNhgetchMessages.some(message => /Clonk!/.test(message)), false);
 });
 
+test('production monster poisoned launcher arrow intervening hit applies monster poison damage', async () => {
+    const blocker = ordinaryThrowTarget('goblin', 8, 5, {
+        ac: 13,
+        mac: 13,
+        mhp: 30,
+        mhpmax: 30,
+        msleeping: 1,
+        data: { name: 'goblin', mlevel: 1, mac: 13 },
+    });
+    const { arrow, thrower, rng } = await runMonsterLauncherArrowLanding({
+        seed: 2,
+        uac: 100,
+        arrowOverrides: { opoisoned: true },
+        levelCells: [[7, 5, { typ: IRONBARS }]],
+        extraMonsters: [blocker],
+    });
+
+    assert.match(game._pending_message, /^It is hit[.!]$/);
+    assert.equal(game.u.uhp, 20);
+    assert.equal(game._damage_after_topline_more || 0, 0, rng.join(', '));
+    assert.equal(blocker.msleeping, 0);
+    assert.equal(thrower.minvent.some(obj => obj.id === arrow.id), false);
+    assert.equal(thrower.missile, null);
+
+    const hitRollIndex = rng.findIndex(entry => entry.startsWith('rnd(20)='));
+    const damageRollIndex = rng.findIndex(entry => entry.startsWith('rnd(6)='));
+    const poisonRollIndex = rng.findIndex(entry => entry.startsWith('rn2(30)='));
+    const poisonDamageIndex = rng.findIndex((entry, index) =>
+        index > poisonRollIndex && entry.startsWith('rnd(6)='));
+    assert.notEqual(hitRollIndex, -1, rng.join(', '));
+    assert.notEqual(damageRollIndex, -1, rng.join(', '));
+    assert.notEqual(poisonRollIndex, -1, rng.join(', '));
+    assert.notEqual(poisonDamageIndex, -1, rng.join(', '));
+    assert.ok(hitRollIndex < damageRollIndex && damageRollIndex < poisonRollIndex
+        && poisonRollIndex < poisonDamageIndex, rng.join(', '));
+    const baseDamage = Number(rng[damageRollIndex].split('=')[1]);
+    const poisonDamage = Number(rng[poisonDamageIndex].split('=')[1]);
+    assert.equal(blocker.mhp, 30 - baseDamage - poisonDamage, rng.join(', '));
+
+    const landed = game.level.objects.find(obj => obj.id === arrow.id);
+    assert.ok(landed, rng.join(', '));
+    assert.equal(landed.ox, 8);
+    assert.equal(landed.oy, 5);
+    assert.equal(landed.opoisoned, true);
+    assert.equal(landed.transientProjectile, false);
+
+    assertNoSingletonLauncherMultishotRng(rng);
+    assert.equal(rng.some(entry => entry.startsWith('rn2(100)=')), false, rng.join(', '));
+});
+
+test('production monster poisoned launcher arrow intervening hit respects monster poison resistance', async () => {
+    const blocker = ordinaryThrowTarget('goblin', 8, 5, {
+        ac: 13,
+        mac: 13,
+        mhp: 20,
+        mhpmax: 20,
+        msleeping: 1,
+        poisonResistance: true,
+        data: { name: 'goblin', mlevel: 1, mac: 13, poisonResistance: true },
+    });
+    const { arrow, thrower, rng, preNhgetchMessages } = await runMonsterLauncherArrowLanding({
+        seed: 2,
+        uac: 100,
+        heroBlind: false,
+        arrowOverrides: { opoisoned: true },
+        levelCells: [[7, 5, { typ: IRONBARS }]],
+        extraMonsters: [blocker],
+    });
+
+    assert.match(game._pending_message, /^The poisoned arrow hits the goblin[.!]/);
+    const messages = [
+        game._pending_message,
+        ...preNhgetchMessages,
+        ...(game._queued_messages_after_more || []).map(entry => entry.text),
+    ].join('  ');
+    assert.match(messages, /The poison doesn't seem to affect the goblin\./);
+    assert.equal(game.u.uhp, 20);
+    assert.equal(game._damage_after_topline_more || 0, 0, rng.join(', '));
+    assert.equal(blocker.mhp, 16, rng.join(', '));
+    assert.equal(blocker.msleeping, 0);
+    assert.equal(thrower.minvent.some(obj => obj.id === arrow.id), false);
+    assert.equal(thrower.missile, null);
+
+    const landed = game.level.objects.find(obj => obj.id === arrow.id);
+    assert.ok(landed, rng.join(', '));
+    assert.equal(landed.ox, 8);
+    assert.equal(landed.oy, 5);
+    assert.equal(landed.opoisoned, true);
+    assert.equal(landed.transientProjectile, false);
+
+    assertNoSingletonLauncherMultishotRng(rng);
+    assert.deepEqual(rng, ['rn2(5)=3', 'rn2(5)=2', 'rnd(20)=9', 'rnd(6)=4', 'rn2(3)=0']);
+    assert.equal(rng.some(entry => entry.startsWith('rn2(30)=') || entry.startsWith('rn2(100)=')), false,
+        rng.join(', '));
+});
+
 test('production monster launcher arrow catch retains split arrow in inventory', async () => {
     const { arrow, thrower, rng } = await runMonsterLauncherArrowLanding({
         seed: 12,

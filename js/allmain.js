@@ -6582,10 +6582,9 @@ export async function processMonsterTurns() {
                         const finishLauncherArrowInterveningHit = (target) => {
                             const projectileDamageSides = monsterLauncherProjectileDamageSides(thrownMissile);
                             const projectileDamageBonus = monsterLauncherProjectileDamageBonus(thrownMissile);
-                            const damage = Math.max(1, rnd(projectileDamageSides) + projectileDamageBonus
+                            let damage = Math.max(1, rnd(projectileDamageSides) + projectileDamageBonus
                                 + missileSpe - missileErosion);
                             target.msleeping = 0;
-                            target.mhp = Math.max(0, (target.mhp || 1) - damage);
                             const targetVisible = !game.u?.blind
                                 && !!(game.viz_array?.[target.my]?.[target.mx] & IN_SIGHT)
                                 && couldSeeCoord(target.mx, target.my);
@@ -6594,6 +6593,20 @@ export async function processMonsterTurns() {
                                 ? `The ${projectileKind} hits the ${targetName}${damage > 4 ? '!' : '.'}`
                                 : `It is hit${damage > 4 ? '!' : '.'}`;
                             game._topline_after_more = hitMessage;
+                            if (thrownMissile.opoisoned && monsterLauncherProjectileIsPoisonable(thrownMissile)) {
+                                if (monsterPoisonResistant(target)) {
+                                    if (targetVisible) {
+                                        const poisonTargetName = monsterDisplayName(target).replace(/^The\b/, 'the');
+                                        appendAfterMoreMessage(`The poison doesn't seem to affect ${poisonTargetName}.`);
+                                    }
+                                } else if (rn2(30)) {
+                                    damage += rnd(6);
+                                } else {
+                                    if (targetVisible) appendAfterMoreMessage('The poison was deadly...');
+                                    damage = target.mhp || 1;
+                                }
+                            }
+                            target.mhp = Math.max(0, (target.mhp || 1) - damage);
                             if (sharedArrowLanding) {
                                 game._arrow_drop_throw_after_topline_more = {
                                     missile: thrownMissile,
