@@ -27652,10 +27652,12 @@ function kickFloorObjectSupported(obj, x, y) {
     if (!obj || obj === game.u?.uball || obj === game.u?.uchain) return false;
     if (isBoulderObject(obj) || shopBillableGold(obj)) return false;
     const quantity = Math.max(1, Math.trunc(Number(obj.quan || 1)));
-    if (quantity !== 1 && !kickedFragilePreflightBreakKind(obj)) return false;
+    const fragileBreakKind = kickedFragilePreflightBreakKind(obj);
+    if (quantity !== 1 && !fragileBreakKind) return false;
     if (isTipContainerObject(obj) || globContents(obj).length) return false;
-    if (shopkeeperForCostlySpot(x, y) || shopObjectOrContentsUnpaid(obj)) return false;
-    if (impactDropBreakKind(obj) && !kickedFragilePreflightBreakKind(obj)) return false;
+    if ((shopkeeperForCostlySpot(x, y) || shopObjectOrContentsUnpaid(obj)) && !fragileBreakKind)
+        return false;
+    if (impactDropBreakKind(obj) && !fragileBreakKind) return false;
     return true;
 }
 
@@ -27740,10 +27742,45 @@ async function breakKickedFragileFloorObject(obj, x, y, messages) {
     if (isLitOilPotionHit(obj)) explodeBurningOilPotion(obj, x, y, messages);
     else brokenPotionBreathe(obj, x, y, messages);
     await applyHeroCausedFragileBreakSideEffects(obj, messages, x, y);
+    chargeHeroBrokenShopFloorObject(obj, x, y, messages);
     removeFloorObject(obj);
     newsym(x, y);
     applyHeroBrokenEggPostRemovalSideEffects(obj, messages, x, y);
     return true;
+}
+
+function chargeHeroBrokenShopFloorObject(obj, x, y, messages) {
+    if (!obj || shopBillableGold(obj)) return { charged: false, value: 0, shkp: null };
+    if (shopObjectOrContentsUnpaid(obj)) {
+        const charged = convertUnpaidObjectToShopDebt(obj, { silent: false, broken: true });
+        if (charged.message) messages.push(charged.message);
+        return charged;
+    }
+    if (obj.no_charge) return { charged: false, value: 0, shkp: null };
+    const shkp = shopkeeperForCostlySpot(x, y);
+    if (!shopkeeperInHisShop(shkp)) return { charged: false, value: 0, shkp: null };
+    const value = lostShopMerchandiseValueForObject({ ox: x, oy: y }, obj, shkp);
+    if (!(value > 0)) return { charged: false, value: 0, shkp };
+
+    const beforeCredit = Math.max(0, Math.trunc(Number(shkp.credit || 0)));
+    const peaceful = shopkeeperPeacefulForDebt(shkp);
+    const remaining = chargeShopkeeperForLostMerchandise(shkp, value, { peaceful });
+    if (peaceful) {
+        const usedCredit = beforeCredit > Math.max(0, Math.trunc(Number(shkp.credit || 0)));
+        if (usedCredit && shkp.credit > 0) {
+            messages.push(`You have ${shkp.credit} ${shopCurrency(shkp.credit)} credit remaining.`);
+        } else if (usedCredit && !remaining) {
+            messages.push('You have no credit remaining.');
+        } else if (remaining > 0) {
+            const still = usedCredit ? 'still ' : '';
+            messages.push(`You ${still}owe ${shopkeeperDisplayName(shkp)} ${remaining} ${shopCurrency(remaining)} for ${shopDebtObjectPronoun(obj)}!`);
+        }
+    } else if (!game.u?.blind && cansee(shkp.mx, shkp.my)) {
+        messages.push(`${shopkeeperDisplayName(shkp)} booms: "${game.plname || 'Hero'}, you are a thief!"`);
+    } else if (!heroIsDeaf()) {
+        messages.push('You hear a scream, "Thief!"');
+    }
+    return { charged: true, value, shkp };
 }
 
 async function kickFloorObjectToward(dir, x, y) {

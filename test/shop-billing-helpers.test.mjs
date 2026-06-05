@@ -25899,6 +25899,42 @@ test('command kicked lit oil potion shatters and explodes before remote projecti
     ]);
 });
 
+test('command kicked shop-floor cream pie break charges before remote projectile flight', async () => {
+    const { shkp } = installCommandShopState();
+    Object.assign(shkp, { mx: 4, my: 5, shk: { x: 4, y: 5 } });
+    installSeenRemoteShaft(HOLE, 7, 5);
+    markSquareVisible(6, 5);
+    initRng(1);
+    const pie = {
+        ...creamPie(512077, undefined),
+        ox: 6,
+        oy: 5,
+        letter: undefined,
+        line: undefined,
+    };
+    game.level.objects = [pie];
+    const expectedPrice = shop.shopItemPrice(pie, 6, 5);
+    assert.equal(expectedPrice > 0, true);
+    enableRngLog({ reset: true });
+
+    await rhack('\x04');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.level.objects.includes(pie), false);
+    assert.equal(queuedImpactDropsFor({ dnum: 0, dlevel: 2 }).some(obj => obj.id === pie.id), false);
+    assert.match(game._pending_message, /You kick a cream pie\./);
+    assert.match(game._pending_message, /What a mess!/);
+    assert.match(game._pending_message, new RegExp(`You owe Izchak ${expectedPrice} zorkmids? for it!`));
+    assert.doesNotMatch(game._pending_message, /falls through the hole|Thump|hits|misses|muffled|goods lost|objects destroyed|blind/);
+    assert.equal(shkp.debit, expectedPrice);
+    assert.equal(shkp.robbed || 0, 0);
+    assert.equal(shkp.billct, 0);
+    assert.equal((game._usedUpShopBills || []).length, 0);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(100)']);
+});
+
 test('command kicked melon splats before remote projectile flight', async () => {
     installNonShopFloorState();
     installSeenRemoteShaft(HOLE, 7, 5);

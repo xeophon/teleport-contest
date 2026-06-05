@@ -44,7 +44,6 @@ Implemented the next kicked fragile-object `breaktest()` candidate slice without
 
 ## Remaining
 
-- Shop-owned kicked fragile break billing remains separate.
 - Low-range resisted fragile `Thump!` return-roll coverage remains open.
 - Glass armor kicked preflight remains separate because C crack-erodes it before destruction.
 - Generic local venom placeholders remain excluded unless resolved to concrete acid/blinding venom.
