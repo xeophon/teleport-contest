@@ -48,7 +48,7 @@ This is a source-backed production broadening only. It does not add replay, seed
 
 ## Remaining Gaps
 
-- This slice covers only the production sling branch's stone-missile harmless-hit case. Generic `ohitmon()` extraction for launcher ammo, thrown rocks outside the sling branch, and direct hero-thrown stone missiles remain separate work.
+- This slice covers only the production sling branch's stone-missile harmless-hit case. Direct hero-thrown stone missile rock-passer harmless hits are covered later in audit 455; generic `ohitmon()` extraction for launcher ammo and thrown rocks outside these covered branches remains separate work.
 - Real-gem hard-mulch survival on harmless intervening hits is not separately covered; this slice uses loadstones for passive-ordering and glass as the non-stone canary.
 - The existing accidental-hit threshold still omits `omon_adj()` and aimed-target launcher/artifact bonuses.
 - Mimic reveal, poison, acid venom, egg, cream-pie, blinding, lethal cleanup, and broader monster death/drop handling remain outside this slice.

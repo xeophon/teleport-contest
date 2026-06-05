@@ -18000,6 +18000,34 @@ function wakeMonsterFromHeroThrownMiss(mon) {
     return messages;
 }
 
+function wakeMonsterFromHeroThrownHit(mon) {
+    mon.msleeping = 0;
+    mon.meating = 0;
+    setHeroObjectHitMonsterAngry(mon);
+}
+
+function heroThrownStoneMissileObject(obj) {
+    if (!obj || itemClassKey(obj) === 'ring' || obj.glyph === '=' || obj.otyp === RING_CLASS) return false;
+    const material = stoneToFleshObjectMaterial(obj);
+    return material === 'gemstone' || material === 'mineral';
+}
+
+function heroThrownTargetPassesRocks(mon) {
+    const data = mon?.data || {};
+    const name = String(mon?.name || data.name || data.mname || '').toLowerCase().trim().replace(/\s+/g, ' ');
+    const intendedRockPasser = name === 'xorn' || name === 'earth elemental'
+        || mon?.passesRocks || data.passesRocks;
+    const passesWalls = name === 'xorn' || name === 'earth elemental'
+        || mon?.passWalls || mon?.passesWalls || mon?.passes_walls || mon?.wallwalk
+        || data.passWalls || data.passesWalls || data.passes_walls || data.wallwalk;
+    return !!intendedRockPasser && !!passesWalls
+        && !(mon?.unsolid || mon?.noncorporeal || data.unsolid || data.noncorporeal);
+}
+
+function heroThrownStoneMissileHarmlessRockPasser(obj, mon) {
+    return heroThrownStoneMissileObject(obj) && heroThrownTargetPassesRocks(mon);
+}
+
 function heroThrownCreamPieHitMonster(pie, mon) {
     const messages = [];
     mon.msleeping = 0;
@@ -61054,6 +61082,19 @@ export async function rhack(_cmd) {
             const messages = [`The ${thrownName} misses the ${targetMon.data?.name || 'creature'}.`];
             messages.push(...wakeMonsterFromHeroThrownMiss(targetMon));
             impactMessage = messages.join('  ');
+        } else if (targetMon && heroThrownStoneMissileHarmlessRockPasser(item, targetMon)) {
+            rnd(20);
+            const dex = game.u?.acurr?.a?.[A_DEX] ?? 10;
+            const thrownName = floorObjectTheSubject(thrownObject);
+            const targetName = heroThrownVenomTargetName(targetMon);
+            if (dex > rnd(25)) {
+                wakeMonsterFromHeroThrownHit(targetMon);
+                impactMessage = `${thrownName} hits ${targetName} but does no harm.`;
+            } else {
+                const messages = [`The ${pickupObjectName({ ...item, quan: 1 })} misses the ${targetMon.data?.name || 'creature'}.`];
+                messages.push(...wakeMonsterFromHeroThrownMiss(targetMon));
+                impactMessage = messages.join('  ');
+            }
         } else if (targetMon && !combatObject) {
             rnd(20);
             const thrownName = pickupObjectName({ ...item, quan: 1 });

@@ -41877,6 +41877,105 @@ test('hero-thrown pyrolisk egg direct hit explodes at monster square', async () 
     ]);
 });
 
+test('hero-thrown loadstone hits rock-passing monster harmlessly', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.u.acurr.a[A_DEX] = 25;
+    const loadstone = carriedLoadstone(876086, 'l', {
+        cursed: false,
+        material: 'mineral',
+    });
+    const elemental = ordinaryThrowTarget('earth elemental', 7, 5, {
+        mhp: 20,
+        mhpmax: 20,
+        msleeping: 1,
+        mpeaceful: 1,
+        meating: 4,
+        mstrategy: STRAT_WAITFORU,
+        passWalls: true,
+        passesRocks: true,
+        neuter: true,
+        data: {
+            name: 'earth elemental',
+            mlevel: 8,
+            passWalls: true,
+            passesRocks: true,
+            neuter: true,
+        },
+    });
+    game.inventory = [loadstone];
+    game.level.monsters = [elemental];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('l');
+    await rhack('l');
+
+    assert.match(game._pending_message, /The loadstone hits the earth elemental but does no harm\./);
+    assert.doesNotMatch(game._pending_message, /misses|passes harmlessly/);
+    assert.equal(elemental.mhp, 20);
+    assert.equal(elemental.msleeping, 0);
+    assert.equal(elemental.meating, 0);
+    assert.equal(elemental.mstrategy, 0);
+    assert.equal(elemental.mpeaceful, 0);
+    assert.equal(game.inventory.includes(loadstone), false);
+    const landed = game.level.objects.find(obj => obj.id === loadstone.id);
+    assert.ok(landed);
+    assert.equal(landed.ox, 7);
+    assert.equal(landed.oy, 5);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 3), [
+        'rnd(20)', 'rnd(25)', 'rn2(100)',
+    ]);
+});
+
+test('hero-thrown stone missile miss against rock-passer stays a miss', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    game.u.acurr.a[A_DEX] = 1;
+    const loadstone = carriedLoadstone(876087, 'l', {
+        cursed: false,
+        material: 'mineral',
+    });
+    const elemental = ordinaryThrowTarget('earth elemental', 7, 5, {
+        mhp: 20,
+        mhpmax: 20,
+        msleeping: 1,
+        mpeaceful: 1,
+        meating: 4,
+        mstrategy: STRAT_WAITFORU,
+        passWalls: true,
+        passesRocks: true,
+        neuter: true,
+        data: {
+            name: 'earth elemental',
+            mlevel: 8,
+            passWalls: true,
+            passesRocks: true,
+            neuter: true,
+        },
+    });
+    game.inventory = [loadstone];
+    game.level.monsters = [elemental];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('l');
+    await rhack('l');
+
+    assert.match(game._pending_message, /The loadstone misses the earth elemental\./);
+    assert.doesNotMatch(game._pending_message, /does no harm|passes harmlessly/);
+    assert.equal(elemental.mhp, 20);
+    assert.equal(elemental.msleeping, 0);
+    assert.equal(elemental.meating, 0);
+    assert.equal(elemental.mstrategy, 0);
+    assert.equal(elemental.mpeaceful, 0);
+    assert.equal(game.inventory.includes(loadstone), false);
+    assert.equal(game.level.objects.some(obj => obj.id === loadstone.id && obj.ox === 7 && obj.oy === 5), true);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 4), [
+        'rnd(20)', 'rnd(25)', 'rn2(3)', 'rn2(100)',
+    ]);
+});
+
 test('wielded confusion potion bash routes through potionhit', async () => {
     installNonShopFloorState();
     initRng(2);
