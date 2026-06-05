@@ -17938,6 +17938,31 @@ function installKnownTrapPathingState(ttyp, extra = {}) {
     return { trap, goblin };
 }
 
+function installMonsterAntiMagicTrapState(extra = {}) {
+    installStableNonShopFloorState();
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 50,
+        uhpmax: 50,
+        uac: 10,
+    });
+    game.inventory = [];
+    const trap = { ttyp: ANTI_MAGIC, tx: 6, ty: 5, tseen: false, once: false };
+    game.level.traps = [trap];
+    const { data: dataExtra = {}, ...monsterExtra } = extra;
+    const goblin = dartTrapGoblin(31412, {
+        mx: 6,
+        my: 5,
+        mhp: 10,
+        mhpmax: 10,
+        data: { name: 'goblin', mlet: 'o', mac: 10, ...dataExtra },
+        ...monsterExtra,
+    });
+    game.level.monsters = [goblin];
+    return { trap, goblin };
+}
+
 test('unknown ordinary monster trap pathing candidates stay hazardous', () => {
     for (const [name, ttyp] of KNOWN_TRAP_PRELUDE_CASES) {
         const { goblin } = installKnownTrapPathingState(ttyp);
@@ -18018,6 +18043,139 @@ test('in-air monster sleep gas trap handling skips known-trap roll before effect
     assert.doesNotMatch(messages, /falls asleep/);
     assert.equal(goblin.mcanmove, true);
     assert.equal(goblin.mfrozen, 0);
+    assert.equal(trap.tseen, false);
+});
+
+test('magic resistant monster anti-magic pathing candidate is harmless like C', () => {
+    const { goblin } = installKnownTrapPathingState(ANTI_MAGIC, {
+        data: { name: 'goblin', mlet: 'o', mac: 10, resistsMagic: true },
+    });
+
+    const flags = allmain.monsterAllowFlagsForTest(goblin, false, false);
+    const candidates = allmain.mfndposForTest(goblin, flags);
+    const trapCandidate = candidates.find(candidate => candidate.x === 6 && candidate.y === 5);
+
+    assert.ok(trapCandidate);
+    assert.equal(!!(trapCandidate.info & ALLOW_TRAPS), false);
+});
+
+test('ordinary non-magical monster anti-magic trap only teaches the trap', () => {
+    const { trap, goblin } = installMonsterAntiMagicTrapState();
+    enableRngLog({ reset: true });
+    installCoreRngValues([0, 0]);
+
+    assert.equal(allmain.monsterAntiMagicTrapEffectForTest(goblin, trap), true);
+
+    assert.deepEqual(getRngLog().map(rngCallName), []);
+    assert.equal(goblin.mhp, 10);
+    assert.equal(goblin.mspec_used || 0, 0);
+    assert.equal(trap.tseen, false);
+    assert.equal(!!(goblin.mtrapseen & (1 << (ANTI_MAGIC - 1))), true);
+});
+
+test('monster anti-magic trap drains magical attack cooldown and reveals visibly', async () => {
+    const { trap, goblin } = installMonsterAntiMagicTrapState({
+        data: { name: 'gnomish wizard', mlet: 'G', spellcaster: true },
+        mspec_used: 3,
+    });
+    markHeroNeighborhoodVisible();
+    markSquareVisible(goblin.mx, goblin.my);
+    enableRngLog({ reset: true });
+    installCoreRngValues([0, 0]);
+
+    assert.equal(allmain.monsterAntiMagicTrapEffectForTest(goblin, trap), true);
+    const messages = [game._pending_message, ...(await drainQueuedMessagesAfterMore())].join(' ');
+
+    assert.match(messages, /The gnomish wizard seems lethargic\./);
+    assert.deepEqual(getRngLog().map(rngCallName), ['d(2,6)']);
+    assert.equal(goblin.mspec_used, 5);
+    assert.equal(goblin.mhp, 10);
+    assert.equal(trap.tseen, true);
+    assert.equal(!!(goblin.mtrapseen & (1 << (ANTI_MAGIC - 1))), true);
+});
+
+test('canceled magical monster anti-magic trap learns but does not drain', () => {
+    const { trap, goblin } = installMonsterAntiMagicTrapState({
+        data: { name: 'gnomish wizard', mlet: 'G', spellcaster: true },
+        mcan: 1,
+        mspec_used: 3,
+    });
+    enableRngLog({ reset: true });
+    installCoreRngValues([0, 0]);
+
+    assert.equal(allmain.monsterAntiMagicTrapEffectForTest(goblin, trap), true);
+
+    assert.deepEqual(getRngLog().map(rngCallName), []);
+    assert.equal(goblin.mspec_used, 3);
+    assert.equal(goblin.mhp, 10);
+    assert.equal(!!(goblin.mtrapseen & (1 << (ANTI_MAGIC - 1))), true);
+});
+
+test('magic resistant monster anti-magic trap takes implosion damage', () => {
+    const { trap, goblin } = installMonsterAntiMagicTrapState({
+        data: { resistsMagic: true },
+        magicResistance: true,
+    });
+    enableRngLog({ reset: true });
+    installCoreRngValues([2]);
+
+    assert.equal(allmain.monsterAntiMagicTrapEffectForTest(goblin, trap), true);
+
+    assert.deepEqual(getRngLog().map(rngCallName), ['rnd(4)']);
+    assert.equal(goblin.mhp, 7);
+    assert.equal(game.level.monsters.includes(goblin), true);
+});
+
+test('pass-wall magic resistant monster anti-magic trap damage is quartered', () => {
+    const { trap, goblin } = installMonsterAntiMagicTrapState({
+        data: { name: 'xorn', mlet: 'X', resistsMagic: true, passWalls: true },
+        magicResistance: true,
+    });
+    enableRngLog({ reset: true });
+    installCoreRngValues([3]);
+
+    assert.equal(allmain.monsterAntiMagicTrapEffectForTest(goblin, trap), true);
+
+    assert.deepEqual(getRngLog().map(rngCallName), ['rnd(4)']);
+    assert.equal(goblin.mhp, 9);
+});
+
+test('visible lethal anti-magic implosion removes monster with C cause message', async () => {
+    const { trap, goblin } = installMonsterAntiMagicTrapState({
+        mhp: 1,
+        mhpmax: 1,
+        data: { resistsMagic: true },
+        magicResistance: true,
+    });
+    markHeroNeighborhoodVisible();
+    markSquareVisible(goblin.mx, goblin.my);
+    enableRngLog({ reset: true });
+    installCoreRngValues([0]);
+
+    assert.equal(allmain.monsterAntiMagicTrapEffectForTest(goblin, trap), true);
+    const messages = [game._pending_message, ...(await drainQueuedMessagesAfterMore())].join(' ');
+
+    assert.match(messages, /The goblin is killed by the compression from an anti-magic field!/);
+    assert.equal(game.level.monsters.includes(goblin), false);
+    assert.equal(trap.tseen, true);
+});
+
+test('positive enchanted iron footwear absorbs monster anti-magic trap silently', () => {
+    const shoes = wornArmor(31413, 'iron shoes', 'b', 1, { worn: false, owornmask: W_ARMF });
+    const { trap, goblin } = installMonsterAntiMagicTrapState({
+        minvent: [shoes],
+        data: { name: 'gnomish wizard', mlet: 'G', spellcaster: true },
+        mspec_used: 3,
+    });
+    enableRngLog({ reset: true });
+    installCoreRngValues([0, 0]);
+
+    assert.equal(allmain.monsterAntiMagicTrapEffectForTest(goblin, trap), true);
+
+    assert.deepEqual(getRngLog().map(rngCallName), []);
+    assert.equal(shoes.spe, 0);
+    assert.equal(goblin.mspec_used, 3);
+    assert.equal(goblin.mhp, 10);
     assert.equal(trap.tseen, false);
 });
 

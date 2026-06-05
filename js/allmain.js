@@ -10491,8 +10491,81 @@ function monsterTrapHarmless(mon, trap) {
     if (ttyp === BEAR_TRAP) return data.verysmall || data.small || data.amorphous || data.unsolid;
     if (ttyp === RUST_TRAP) return data.name !== 'iron golem';
     if (ttyp === WEB) return monsterWebPassesThrough(data);
-    if (ttyp === ANTI_MAGIC) return data.resistsMagic || data.defendsMagic;
+    if (ttyp === ANTI_MAGIC) return monsterResistsAntiMagicTrap(mon);
     return ttyp === STATUE_TRAP || ttyp === MAGIC_TRAP || ttyp === VIBRATING_SQUARE;
+}
+
+function monsterWornIronFootwearForAntiMagic(mon) {
+    return (mon?.minvent || []).find(item => {
+        if (!item || item.cls !== 'armor' || !(item.worn || item.owornmask)) return false;
+        const kind = String(item.actualKind || item.kind || '').toLowerCase();
+        return kind === 'iron shoes' || kind === 'kicking boots';
+    }) || null;
+}
+
+function monsterResistsAntiMagicTrap(mon) {
+    const data = mon?.data || {};
+    return !!(mon?.magicResistance || mon?.resistsMagic || mon?.resists_magm
+        || data.magicResistance || data.resistsMagic || data.resists_magm
+        || data.defendsMagic || data.defends_magm);
+}
+
+function monsterHasAntiMagicDrainAttack(mon) {
+    const data = mon?.data || {};
+    const attacks = Array.isArray(data.attacks)
+        ? data.attacks
+        : data.attack ? [data.attack] : [];
+    return attacks.some(attack => ['magc', 'brea', 'breath'].includes(normalizedAttackCode(attack?.aatyp)))
+        || monsterCastsWizardSpells(data) || data.spellcaster || data.magic || data.priest
+        || data.magicalBreath || data.rbreath || !!MONSTER_BREATH_ATTACKS.get(data.name);
+}
+
+function monsterPassesWallsForAntiMagic(mon) {
+    const data = mon?.data || {};
+    const name = data.name || '';
+    return !!(mon?.passWalls || mon?.passesWalls || mon?.passes_walls || mon?.wallwalk
+        || data.passWalls || data.passesWalls || data.passes_walls || data.wallwalk
+        || data.noncorporeal || data.whirly || name === 'xorn' || name === 'earth elemental');
+}
+
+function monsterAntiMagicTrapEffect(mon, trap) {
+    if (trap?.ttyp !== ANTI_MAGIC) return false;
+    if (monsterAvoidsKnownTrapBeforeEffect(mon, trap)) return true;
+
+    monsterTriggerTrap(mon, trap);
+    const footwear = monsterWornIronFootwearForAntiMagic(mon);
+    if ((footwear?.spe || 0) > 0) {
+        footwear.spe -= 1;
+        return true;
+    }
+
+    const inSight = monsterVisibleToHero(mon) || mon === game.u?.usteed;
+    const seeIt = couldSeeCoord(mon.mx, mon.my);
+    if (!monsterResistsAntiMagicTrap(mon)) {
+        if (!mon.mcan && monsterHasAntiMagicDrainAttack(mon)) {
+            mon.mspec_used = (mon.mspec_used || 0) + d(2, 6);
+            if (inSight) {
+                trap.tseen = true;
+                addToplineMessage(`${monsterDisplayName(mon)} seems lethargic.`);
+            }
+        }
+        return true;
+    }
+
+    let damage = rnd(4);
+    if (monsterPassesWallsForAntiMagic(mon)) damage = Math.trunc((damage + 3) / 4);
+    if (inSight) trap.tseen = true;
+    mon.mhp = (mon.mhp || 1) - damage;
+    if (mon.mhp < 1) {
+        if (inSight) {
+            const destroyed = mon.data?.nonliving || mon.data?.mindless;
+            addToplineMessage(`${monsterDisplayName(mon)} is ${destroyed ? 'destroyed' : 'killed'} by the compression from an anti-magic field!`);
+        }
+        finishTrapKilledMonster(mon);
+    } else if (seeIt) {
+        newsym(trap.tx, trap.ty);
+    }
+    return true;
 }
 
 function monsterSleepGasTrapEffect(mon, trap) {
@@ -11842,8 +11915,7 @@ function moveMonsterTowardHero(mon, conflictActive = false, monIndex = null, som
         monsterTriggerTrap(mon, trap);
         rn2(21);
     }
-    if (trap?.ttyp === ANTI_MAGIC && monsterAvoidsKnownTrapBeforeEffect(mon, trap)) return done();
-    if (trap?.ttyp === ANTI_MAGIC) monsterTriggerTrap(mon, trap);
+    if (monsterAntiMagicTrapEffect(mon, trap)) return done();
     if (monsterSleepGasTrapEffect(mon, trap)) return true;
     if (trap?.ttyp === FIRE_TRAP && !monsterTrapHarmless(mon, trap)) {
         if (monsterAvoidsKnownTrapBeforeEffect(mon, trap)) return done();
@@ -14462,5 +14534,6 @@ export const __allmainTestHooks = {
     mfndposForTest: mfndpos,
     monsterAllowFlagsForTest: monsterAllowFlags,
     monsterAvoidsKnownTrapBeforeEffectForTest: monsterAvoidsKnownTrapBeforeEffect,
+    monsterAntiMagicTrapEffectForTest: monsterAntiMagicTrapEffect,
     monsterSleepGasTrapEffectForTest: monsterSleepGasTrapEffect,
 };
