@@ -27643,7 +27643,7 @@ function projectileImpactContentBreakKind(obj) {
     return '';
 }
 
-function projectileTopLevelBreakKind(obj, options = {}) {
+export function projectileTopLevelBreakKind(obj, options = {}) {
     const roll = Number.isInteger(options.breakRoll) ? options.breakRoll : rn2(100);
     const kind = impactDropBreakKind(obj);
     if (!kind) return '';
@@ -27654,7 +27654,7 @@ function projectileTopLevelBreakKind(obj, options = {}) {
     return kind;
 }
 
-function projectileTopLevelBreakMessage(obj, breakKind, messages) {
+export function projectileTopLevelBreakMessage(obj, breakKind, messages) {
     if (!breakKind) return;
     if (breakKind === 'splat') {
         messages.push('Splat!');
@@ -32606,11 +32606,12 @@ export function landMonsterThrownObject(missile, x, y, {
     quan = 1,
     ohit = false,
     passiveTarget = null,
+    contactBreaks = null,
 } = {}) {
     if (!missile || !game.level) return { consumed: false, object: null, messages: [] };
     game.level.objects ??= [];
     const floorMessages = Array.isArray(messages) ? messages : [];
-    const breaksOnContact = isCreamPieObject(missile) || isVenomObject(missile) || (!!ohit && isEggItem(missile));
+    const breaksOnContact = contactBreaks ?? (isCreamPieObject(missile) || isVenomObject(missile) || (!!ohit && isEggItem(missile)));
     const mulched = !breaksOnContact && !!ohit && shouldMulchMonsterThrownMissile(missile);
     const dropThrow = {
         broken: breaksOnContact || mulched,

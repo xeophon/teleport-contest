@@ -34799,6 +34799,21 @@ test('monster-thrown cream pie breaks before remote shaft shipping or floor effe
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
 });
 
+test('monster-thrown resisted cream pie bars hit can land instead of contact-breaking', () => {
+    installNonShopFloorState();
+    initRng(1);
+    enableRngLog({ reset: true });
+    const pie = { ...creamPie(874331), letter: undefined, line: undefined };
+
+    const landing = landMonsterThrownObject(pie, 7, 5, { messages: [], contactBreaks: false });
+
+    assert.equal(landing.consumed, false);
+    assert.ok(landing.object);
+    assert.equal(landing.dropThrow.broken, false);
+    assert.equal(game.level.objects.some(obj => obj.id === pie.id && obj.ox === 7 && obj.oy === 5), true);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
+});
+
 test('monster-thrown venom breaks before ordinary floor placement', () => {
     installNonShopFloorState();
     initRng(1);
@@ -37752,6 +37767,33 @@ test('production Kop cream pie miss breaks without blinding hero', async () => {
     assert.equal(game.level.objects.some(obj => obj.kind === 'cream pie'), false);
     assert.ok(rng.some(entry => entry.startsWith('rnd(20)=')), rng.join(', '));
     assert.equal(rng.some(entry => entry.startsWith('rnd(25)=')), false, rng.join(', '));
+});
+
+test('production Kop cream pie forced iron bars hit breaks before hero', async () => {
+    const { pie, thrower, rng, preNhgetchMessages } = await runMonsterKopCreamPieLanding({
+        seed: 7,
+        throwerX: 9,
+        levelCells: [[6, 5, { typ: IRONBARS }]],
+        uac: 20,
+    });
+    const calls = rng.map(rngCallName);
+    const messages = preNhgetchMessages.join('\n');
+
+    assert.equal(game.u.uhp, 20, rng.join(', '));
+    assert.equal(game.u.ucreamed || 0, 0);
+    assert.equal(game.u._blindTimeout || 0, 0);
+    assert.equal(thrower.missile, null);
+    assert.equal(thrower.minvent.some(obj => obj.id === pie.id), false);
+    assert.equal(game.level.objects.some(obj => obj.kind === 'cream pie'), false);
+
+    assert.match(messages, /throws a cream pie!/);
+    assert.match(messages, /What a mess!/);
+    assert.doesNotMatch(messages, /You catch|You are hit by a cream pie|creamed/);
+    assert.doesNotMatch(messages, /Clonk|Clink|Flapp/);
+    assert.ok(calls.includes('rn2(100)'), rng.join(', '));
+    assert.equal(calls.includes('rn2(1)'), false, rng.join(', '));
+    assert.equal(calls.includes('rnd(20)'), false, rng.join(', '));
+    assert.equal(calls.includes('rnd(25)'), false, rng.join(', '));
 });
 
 test('production kobold dart aimed shot can pass through iron bars before hero', async () => {
