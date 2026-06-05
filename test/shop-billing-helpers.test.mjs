@@ -20435,6 +20435,46 @@ test('known blindness vapor from alchemy explosion discovers the potion', async 
     assert.equal(game._discoveries?.some(entry => entry.section === 'Potions' && entry.name === 'potion of blindness'), true);
 });
 
+test('alchemy explosion holy water vapor uses lifesaving for old-form death', async () => {
+    installCommandShopState();
+    initRng(5);
+    const { amulet, potion: target } = installWerewolfOldFormFireVaporLifeSavingInventory(30989, 30990);
+    const source = boozePotion(30991, 'b');
+    game.inventory = [amulet, target, source];
+
+    await rhack('#');
+    for (const ch of 'dip') await rhack(ch);
+    await rhack('\n');
+    await rhack('w');
+    await rhack('n');
+    await rhack('b');
+
+    const message = game._pending_message;
+    assert.equal(game._command_mode, 'lifeSavingMore');
+    assert.equal(game.context.move, 0);
+    assert.match(message, /potion of water mixes with potion of booze/);
+    assert.match(message, /BOOM!  They explode!/);
+    assert.match(message, /You return to human form!/);
+    assert.match(message, /Your old form was not healthy enough to survive\./);
+    assert.match(message, /You die\.\.\.  But wait\.\.\.  Your medallion begins to glow!/);
+    assert.equal(game.inventory.includes(amulet), false);
+    assert.equal(game.inventory.includes(target), false);
+    assert.equal(game.inventory.includes(source), false);
+    assert.equal(game.u.ulycn, 'werewolf');
+    assert.equal(game.u.lycanthrope, true);
+    assert.equal(game.u._polyself_form, null);
+    assert.equal(game.u._polyself_base, null);
+    assert.equal(game.u.uhp, 0);
+    assert.doesNotMatch(message, /You feel purified|peculiar odor|eyes water/);
+    assert.notEqual(game._command_mode, 'deathDieMore');
+
+    await rhack(' ');
+
+    assert.equal(game._pending_message, 'You feel much better!');
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game.u.uhp, game.u.uhpmax);
+});
+
 test('dipping poisoned darts into healing-family potions removes the coating', async () => {
     const cases = [
         ['healing', healingPotion],

@@ -39,7 +39,7 @@ No replay maps, private seeds, player names, move-count branches, or seed-specif
 - Pyrolisk fiery gaze is source-backed in C but not yet modeled as a distinct live JS monster gaze path.
 - Natural monster `AT_EXPL/AD_FIRE` fiery explosions, such as a future flaming-sphere path, need a separate production monster-turn slice.
 - Monster fire pillar inventory-vapor ordering remains separate from explosion ordering.
-- C can continue after life saving and apply later explosion HP damage; JS still uses delayed `lifeSavingMore` continuation and leaves full post-life-saving tail damage as a broader follow-up shared with audits 510-512.
+- C can continue after life saving and apply later explosion HP damage; JS still uses delayed `lifeSavingMore` continuation and leaves full post-life-saving tail damage as a broader follow-up shared with audits 510-512 and 514.
 
 ## Verification
 

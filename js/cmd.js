@@ -20194,8 +20194,12 @@ function dipPotionAlchemyExplosion(target, amount, messages) {
     if (!explodes) return false;
     messages.push(`${heroIsDeaf() ? '' : 'BOOM!  '}They explode!`);
     exerciseAttribute(A_STR, false);
-    potionBreathe(target, messages);
+    potionBreathe(target, messages, { allowLifeSaving: true });
     useUpInventoryItem(target, target.quan || 1);
+    if (messages.lifeSaving || messages.fatal) {
+        messages.more = true;
+        return true;
+    }
     if (game.u) {
         game.u.uhp = Math.max(0, (game.u.uhp || 0) - damage);
         if ((game.u.uhp || 0) <= 0) {
@@ -58794,14 +58798,16 @@ export async function rhack(_cmd) {
         }
         const source = game._dip_source_item || (game.inventory || []).find(invItem => invItem.letter === game._dip_source_object);
         const target = (game.inventory || []).find(invItem => invItem.letter === ch);
+        let messages = null;
         if (source && target && dipTargetsForSource(source).includes(target)) {
-            const messages = dipObjectIntoPotion(target, source);
-            await setMessage(dipMessagesTopline(messages), messages.length > 1);
+            messages = dipObjectIntoPotion(target, source);
+            await setMessage(dipMessagesTopline(messages), messages.length > 1 || !!messages.more);
             game.context.move = 1;
         }
         game._dip_source_object = '';
         game._dip_source_item = null;
         game._command_mode = null;
+        if (messages && applyLifeSavingOrFatalCommandMode(messages)) return;
         return;
     }
 
@@ -58839,14 +58845,16 @@ export async function rhack(_cmd) {
         }
         const target = game._dip_item || (game.inventory || []).find(invItem => invItem.letter === game._dip_object);
         const potion = (game.inventory || []).find(invItem => invItem.letter === ch);
+        let messages = null;
         if (target && potion && dipPotionSources(target).includes(potion)) {
-            const messages = dipObjectIntoPotion(target, potion);
-            await setMessage(dipMessagesTopline(messages), messages.length > 1);
+            messages = dipObjectIntoPotion(target, potion);
+            await setMessage(dipMessagesTopline(messages), messages.length > 1 || !!messages.more);
             game.context.move = 1;
         }
         game._dip_object = '';
         game._dip_item = null;
         game._command_mode = null;
+        if (messages && applyLifeSavingOrFatalCommandMode(messages)) return;
         return;
     }
 
