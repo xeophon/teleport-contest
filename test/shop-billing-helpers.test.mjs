@@ -8,7 +8,7 @@ import { game, resetGame } from '../js/gstate.js';
 import { pushKey, resetInputState } from '../js/input.js';
 import { createMonsterCorpseOrGlob, mkcorpstat, mkobj, mksobj, monsterByRndName } from '../js/mklev.js';
 import { enableDisplayRngLog, enableRngLog, getRngLog, initRng } from '../js/rng.js';
-import { A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_STR, A_WIS, ALTAR, AM_SHRINE, Align2amask, ARROW_TRAP, BEAR_TRAP, BILLSZ, CANDLESHOP, CLOUD, CORPSTAT_HISTORIC, COULD_SEE, DART_TRAP, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, D_CLOSED, D_NODOOR, FIRE_TRAP, FOUNTAIN, HOLE, ICE, ICED_POOL, IN_SIGHT, IRONBARS, LADDER, LANDMINE, LAVAPOOL, MIGR_LADDER_UP, MIGR_SSTAIRS, MIGR_STAIRS_UP, MOAT, M_AP_FURNITURE, M_AP_OBJECT, NORMAL_SPEED, P_BASIC, P_DAGGER, P_EXPERT, P_KNIFE, P_SKILLED, P_UNSKILLED, PIT, POOL, REPAIR_DELAY, ROOM, ROOMOFFSET, SDOOR, SHOPBASE, SHOP_DOOR_COST, SINK, SLP_GAS_TRAP, SPIKED_PIT, SQKY_BOARD, STAIRS, STATUE_TRAP, STONE, STRAT_APPEARMSG, STRAT_WAITFORU, STRAT_WAITMASK, TEMPLE, TRAPDOOR, TT_LAVA, TT_WEB, WEB, W_SADDLE } from '../js/const.js';
+import { A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_STR, A_WIS, ALTAR, AM_SHRINE, Align2amask, ARROW_TRAP, BEAR_TRAP, BILLSZ, CANDLESHOP, CLOUD, CORPSTAT_HISTORIC, COULD_SEE, DART_TRAP, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, D_CLOSED, D_NODOOR, FIRE_TRAP, FOUNTAIN, HOLE, ICE, ICED_POOL, IN_SIGHT, IRONBARS, LADDER, LANDMINE, LAVAPOOL, MIGR_LADDER_UP, MIGR_SSTAIRS, MIGR_STAIRS_UP, MOAT, M_AP_FURNITURE, M_AP_OBJECT, NORMAL_SPEED, P_BASIC, P_DAGGER, P_EXPERT, P_KNIFE, P_SKILLED, P_UNSKILLED, PIT, POLY_TRAP, POOL, REPAIR_DELAY, ROOM, ROOMOFFSET, SDOOR, SHOPBASE, SHOP_DOOR_COST, SINK, SLP_GAS_TRAP, SPIKED_PIT, SQKY_BOARD, STAIRS, STATUE_TRAP, STONE, STRAT_APPEARMSG, STRAT_WAITFORU, STRAT_WAITMASK, TEMPLE, TRAPDOOR, TT_LAVA, TT_WEB, WEB, W_SADDLE } from '../js/const.js';
 import { currentFruitId, setCurrentFruitName } from '../js/fruit.js';
 import { CLR_BRIGHT_MAGENTA, CLR_BROWN, CLR_WHITE } from '../js/terminal.js';
 import { TRIBUTE_DEATH_QUOTES } from '../js/tribute.js';
@@ -18728,6 +18728,184 @@ test('dismount object list consumes pending pit trap', async () => {
     assert.equal(game.u.usteed, pony);
     assert.equal(game.u.utrap, 3);
     assert.equal(game.u.utraptype, 'pit');
+});
+
+test('hero polymorph trap movement blocked by antimagic leaves trap', async () => {
+    installStableNonSokobanTrapState();
+    vision_reset();
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 20,
+        uhpmax: 20,
+        magicResistance: true,
+    });
+    game.inventory = [];
+    const trap = { ttyp: POLY_TRAP, tx: 6, ty: 5, tseen: false };
+    game.level.traps = [trap];
+    enableRngLog({ reset: true });
+
+    await rhack('l');
+
+    assert.deepEqual(getRngLog().map(rngCallName), []);
+    assert.equal(game._pending_message, 'You step onto a polymorph trap!  You feel momentarily different.');
+    assert.equal(game.u.ux, 6);
+    assert.equal(game.u.uy, 5);
+    assert.equal(game.u.uhp, 20);
+    assert.equal(game.u._polyself_form || null, null);
+    assert.equal(game.level.traps.includes(trap), true);
+    assert.equal(trap.tseen, true);
+});
+
+test('iron footwear polymorph trap warps boots and removes trap', async () => {
+    installStableNonSokobanTrapState();
+    vision_reset();
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 20,
+        uhpmax: 20,
+    });
+    const boots = wornArmor(185435, 'iron shoes', 'b');
+    game.inventory = [boots];
+    const trap = { ttyp: POLY_TRAP, tx: 6, ty: 5, tseen: false };
+    game.level.traps = [trap];
+    enableRngLog({ reset: true });
+
+    await rhack('l');
+
+    assert.deepEqual(getRngLog().map(rngCallName), []);
+    assert.equal(game._pending_message, 'You step onto a polymorph trap!  Your iron shoes warp strangely.');
+    assert.equal(game.level.traps.includes(trap), false);
+    assert.equal(boots.kind, 'kicking boots');
+    assert.equal(boots.actualKind, 'kicking boots');
+    assert.match(boots.line, /kicking boots/);
+    assert.equal(boots.worn, true);
+    assert.equal(game.u._polyself_form || null, null);
+});
+
+test('flying hero still triggers hidden polymorph trap', async () => {
+    installStableNonSokobanTrapState();
+    vision_reset();
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 20,
+        uhpmax: 20,
+        flying: true,
+        magicResistance: true,
+    });
+    game.inventory = [];
+    const trap = { ttyp: POLY_TRAP, tx: 6, ty: 5, tseen: false };
+    game.level.traps = [trap];
+    enableRngLog({ reset: true });
+
+    await rhack('l');
+
+    assert.deepEqual(getRngLog().map(rngCallName), []);
+    assert.equal(game._pending_message, 'You fly onto a polymorph trap!  You feel momentarily different.');
+    assert.equal(game.u.ux, 6);
+    assert.equal(game.u.uy, 5);
+    assert.equal(game.u.uhp, 20);
+    assert.equal(game.level.traps.includes(trap), true);
+    assert.equal(trap.tseen, true);
+});
+
+test('mounted hero polymorph trap checks steed before hero system shock', async () => {
+    installStableNonSokobanTrapState();
+    vision_reset();
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 20,
+        uhpmax: 20,
+    });
+    game.u.acurr.a[A_CON] = 0;
+    const pony = mountBearTrapPony(10, { mr: 100, data: { mlet: 'u' } });
+    game.inventory = [];
+    const trap = { ttyp: POLY_TRAP, tx: 6, ty: 5, tseen: false };
+    game.level.traps = [trap];
+    enableRngLog({ reset: true });
+    installCoreRngValues([0, 1, 4, 0]);
+
+    await rhack('l');
+
+    assert.deepEqual(getRngLog().map(rngCallName), [
+        'rn2(109)', 'rn2(20)', 'rnd(30)', 'rn2(2)',
+    ]);
+    assert.equal(game._pending_message, 'You lead the pony onto a polymorph trap!  You feel a change coming over you.  You shudder for a moment.');
+    assert.equal(game.level.traps.includes(trap), false);
+    assert.equal(game.u.uhp, 15);
+    assert.equal(pony.data.name, 'pony');
+    assert.equal(pony.mhp, 10);
+    assert.equal(pony.mx, 6);
+    assert.equal(pony.my, 5);
+    assert.equal(game.u.usteed, pony);
+    assert.equal(game.u._polyself_form || null, null);
+    assert.equal(trap.tseen, true);
+});
+
+test('dismount object list consumes pending polymorph trap', async () => {
+    installStableNonSokobanTrapState();
+    vision_reset();
+    Object.assign(game.u, {
+        ux: 6,
+        uy: 5,
+        uhp: 20,
+        uhpmax: 20,
+        magicResistance: true,
+    });
+    game.inventory = [];
+    const trap = { ttyp: POLY_TRAP, tx: 6, ty: 5, tseen: false };
+    game.level.traps = [trap];
+    game._command_mode = 'dismountObjectList';
+    game._overlay_lines = [[0, 0, 'test overlay']];
+    game._pending_poly_trap = trap;
+    game._pending_time_passed = 0;
+    game.context = {};
+    enableRngLog({ reset: true });
+
+    await rhack(' ');
+
+    assert.deepEqual(getRngLog().map(rngCallName), []);
+    assert.equal(game._pending_poly_trap || null, null);
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game._process_command_time_now, 1);
+    assert.equal(game._pending_message, 'You step onto a polymorph trap!  You feel momentarily different.');
+    assert.equal(game.level.traps.includes(trap), true);
+    assert.equal(trap.tseen, true);
+});
+
+test('object list polymorph trap waits until more is dismissed', async () => {
+    installStableNonSokobanTrapState();
+    vision_reset();
+    Object.assign(game.u, {
+        ux: 6,
+        uy: 5,
+        uhp: 20,
+        uhpmax: 20,
+        magicResistance: true,
+    });
+    game.inventory = [];
+    const trap = { ttyp: POLY_TRAP, tx: 6, ty: 5, tseen: false };
+    game.level.traps = [trap];
+    game._command_mode = 'objectListMore';
+    game._overlay_lines = [
+        [0, 0, 'a'], [1, 0, 'b'], [2, 0, 'c'], [3, 0, 'd'], [4, 0, 'e'],
+    ];
+    game._pending_poly_trap = trap;
+    game.context = {};
+    enableRngLog({ reset: true });
+
+    await rhack(' ');
+
+    assert.deepEqual(getRngLog().map(rngCallName), []);
+    assert.equal(game._pending_poly_trap || null, null);
+    assert.equal(game._pending_message, 'You step onto a polymorph trap!  You feel momentarily different.');
+    assert.equal(game._message_more, 1);
+    assert.equal(game.level.traps.includes(trap), true);
+    assert.equal(trap.tseen, true);
 });
 
 test('hero land mine movement explodes into pit and wounds hero', async () => {

@@ -44503,19 +44503,155 @@ function sitAntiMagicTrapMessage(trap, prefix) {
     return messages.join('  ');
 }
 
-function sitPolyTrapMessage(trap, prefix) {
-    trap.tseen = true;
-    const messages = [`${prefix}  You trigger a polymorph trap!`];
+function wornIronFootwearItem() {
+    return wornArmorItemsBySlotOrder(['boots'])
+        .find(item => item?.otyp === IRON_SHOES || item?.otyp === KICKING_BOOTS
+            || objectKindKey(item) === 'iron shoes' || objectKindKey(item) === 'kicking boots') || null;
+}
+
+function polyTrapSteedName(steed) {
+    return steedTrapProjectileName(steed)
+        .replace(/^The saddled /, 'the ')
+        .replace(/^The /, 'the ');
+}
+
+function polyTrapDismountName(steed) {
+    return fireScrollMonsterName(steed).replace(/^The /, 'the ');
+}
+
+function polyTrapIronFootwearMessage(item) {
+    const kind = objectKindKey(item) || 'iron shoes';
+    return `Your ${kind} warp strangely.`;
+}
+
+function polyTrapWarpIronFootwear(item) {
+    if (!item) return;
+    const toKicking = item.otyp === IRON_SHOES || objectKindKey(item) === 'iron shoes';
+    const targetName = toKicking ? 'kicking boots' : 'iron shoes';
+    const metadata = WISH_BASE_OBJECTS.get(targetName) || wishObjectMetadataForName(targetName) || {};
+    const letter = item.letter;
+    const worn = item.worn;
+    const spe = item.spe ?? 0;
+    Object.assign(item, metadata, {
+        letter,
+        worn,
+        spe,
+        known: item.known,
+        dknown: item.dknown,
+    });
+    refreshInventoryObjectLine(item);
+}
+
+function applyMonsterPolymorphTarget(mon, target, messages, visible = monsterCanBeSeenForPotionEffect(mon)) {
+    if (!mon || !target) return false;
+    const oldVisible = visible;
+    const oldName = potionHitMonsterName(mon);
+    const oldHp = Math.max(1, mon.mhp || 1);
+    const oldMax = Math.max(1, mon.mhpmax || oldHp);
+    const nextData = { ...target };
+    const nextLevel = adjustedMonsterLevel(nextData);
+    const nextMax = Math.max(1, monster_hp(nextData, nextLevel));
+    if (nextData.male) mon.female = false;
+    else if (nextData.female) mon.female = true;
+    else if (!nextData.neuter && !rn2(10)) mon.female = !mon.female;
+    Object.assign(mon, {
+        data: { ...nextData, hpLevel: nextLevel },
+        name: nextData.name,
+        mlet: nextData.mlet,
+        glyph: nextData.glyph,
+        color: nextData.color,
+        m_lev: nextLevel,
+        mlevel: nextLevel,
+        mhpmax: nextMax,
+        mhp: Math.max(1, Math.min(nextMax, Math.trunc((oldHp * nextMax) / oldMax))),
+        meverseen: 0,
+    });
+    set_malign(mon);
+    if (oldVisible && monsterCanBeSeenForPotionEffect(mon) && !heroIsHallucinating())
+        messages.push(`${oldName} turns into ${indefiniteArticle(nextData.name)} ${nextData.name}!`);
+    dropInvalidSaddleAfterPolymorph(mon, messages, oldVisible);
+    newsym(mon.mx, mon.my);
+    return true;
+}
+
+function polymorphTrapHitMonster(mon, messages) {
+    if (!mon || monsterHasMagicResistanceForPolymorph(mon)) return false;
+    if (monsterResistsEffect(mon, 12)) return false;
+    const target = randomMonsterPolymorphTarget(mon);
+    if (!target) return false;
+    return applyMonsterPolymorphTarget(mon, target, messages);
+}
+
+function mountedHeroPolyTrapSteedResult(messages) {
+    const steed = game.u?.usteed;
+    if (!steed) return false;
+    steed.mx = game.u?.ux ?? steed.mx;
+    steed.my = game.u?.uy ?? steed.my;
+    const changed = polymorphTrapHitMonster(steed, messages);
+    if (game.u?.usteed === steed && (!steed.saddled || !monsterCanWearSaddleData(steed.data))) {
+        messages.push(`You can no longer ride ${polyTrapDismountName(steed)}.`);
+        game.u.usteed = null;
+        if (!game.level.monsters.includes(steed)) game.level.monsters.push(steed);
+    }
+    return changed;
+}
+
+function heroPolyTrapSelfResult(messages) {
+    messages.push('You feel a change coming over you.');
+    const shock = polymorphSystemShock();
+    if (shock) {
+        messages.push(shock.message);
+        if ((game.u?.uhp || 0) <= 0)
+            return heroDartTrapFatalResult(messages, 'system shock');
+        return { more: !!shock.more };
+    }
+    const formName = randomPolyselfMonsterName();
+    const result = rn2(5) ? becomeMonster(formName) : becomeMonster('human');
+    if (result?.message) messages.push(result.message);
+    newsym(game.u?.ux || 0, game.u?.uy || 0);
+    return { more: !!result?.more };
+}
+
+function polyTrapTriggerMessage({ viaSitting = false } = {}) {
+    const steed = game.u?.usteed;
+    if (viaSitting) return 'You trigger a polymorph trap!';
+    if (steed) return `You lead ${polyTrapSteedName(steed)} onto a polymorph trap!`;
+    return `You ${movementTrapLocomotion()} onto a polymorph trap!`;
+}
+
+function heroPolyTrapResult(trap, prefix = '', { viaSitting = false } = {}) {
+    if (trap) trap.tseen = true;
+    const messages = [prefix, polyTrapTriggerMessage({ viaSitting })];
+    const ironFootwear = wornIronFootwearItem();
+    if (ironFootwear) {
+        deleteTrap(trap);
+        messages.push(polyTrapIronFootwearMessage(ironFootwear));
+        polyTrapWarpIronFootwear(ironFootwear);
+        return { message: trapMessage(...messages) };
+    }
     if (heroHasAntimagic() || heroHasUnchanging()) {
         messages.push('You feel momentarily different.');
-        return messages.join('  ');
+        return { message: trapMessage(...messages) };
     }
+
+    mountedHeroPolyTrapSteedResult(messages);
     deleteTrap(trap);
-    const form = rndmonnum();
-    const result = becomeMonster(form?.name || 'newt');
-    messages.push(result?.message || 'You feel a change coming over you.');
-    if (result?.more) game._topline_after_more = result.more === true ? game._topline_after_more : result.more;
-    return messages.join('  ');
+    newsym(game.u?.ux || trap?.tx || 0, game.u?.uy || trap?.ty || 0);
+    const result = heroPolyTrapSelfResult(messages);
+    if (result.more && game._topline_after_more)
+        return { message: trapMessage(...messages), more: true };
+    return { message: trapMessage(...messages), ...result };
+}
+
+function movementPolyTrapResult(trap) {
+    const alreadySeen = !!trap?.tseen;
+    if (alreadySeen && sitTrapEscapeAllowed(trap) && !rn2(5))
+        return { message: movementTrapEscapeMessage(trap), more: false };
+    return heroPolyTrapResult(trap, '');
+}
+
+function sitPolyTrapResult(trap, prefix) {
+    return heroPolyTrapResult(trap, prefix, { viaSitting: true });
 }
 
 function bearTrapSubject(trap) {
@@ -44622,8 +44758,7 @@ function movementBearTrapResult(trap, options = {}) {
 }
 
 function heroWearingIronShoes() {
-    return wornArmorItemsBySlotOrder(['boots'])
-        .some(item => item?.otyp === IRON_SHOES || objectKindKey(item) === 'iron shoes');
+    return !!wornIronFootwearItem();
 }
 
 function landmineArticleName(trap) {
@@ -44999,7 +45134,8 @@ async function sitTriggerTrap(trap) {
         return true;
     }
     if (trap.ttyp === POLY_TRAP) {
-        await finishSitMessage(sitPolyTrapMessage(trap, prefix), { more: !!game._topline_after_more });
+        const result = sitPolyTrapResult(trap, prefix);
+        await finishHeroDartTrapResult(result, { sit: true });
         return true;
     }
     if (trap.ttyp === VIBRATING_SQUARE) {
@@ -47641,6 +47777,7 @@ async function moveHero(dx, dy) {
         if (trapHere?.ttyp === SLP_GAS_TRAP) game._pending_sleep_gas_trap = trapHere;
         if (trapHere?.ttyp === LANDMINE) game._pending_landmine_trap = trapHere;
         if (trapHere?.ttyp === PIT || trapHere?.ttyp === SPIKED_PIT) game._pending_pit_trap = trapHere;
+        if (trapHere?.ttyp === POLY_TRAP) game._pending_poly_trap = trapHere;
         if (trapHere?.ttyp === BEAR_TRAP) game._pending_bear_trap = trapHere;
         return;
     }
@@ -47649,6 +47786,7 @@ async function moveHero(dx, dy) {
     if (trapHere?.ttyp === DART_TRAP && objectsHere.length > 1) game._pending_dart_trap = trapHere;
     if (trapHere?.ttyp === LANDMINE && objectsHere.length > 1) game._pending_landmine_trap = trapHere;
     if ((trapHere?.ttyp === PIT || trapHere?.ttyp === SPIKED_PIT) && objectsHere.length > 1) game._pending_pit_trap = trapHere;
+    if (trapHere?.ttyp === POLY_TRAP && objectsHere.length > 1) game._pending_poly_trap = trapHere;
     if (trapHere?.ttyp === BEAR_TRAP && objectsHere.length > 1) game._pending_bear_trap = trapHere;
     const goldHere = objectsHere.find(obj => obj.otyp === GOLD_PIECE || obj.glyph === '$');
     if (game._autopickup && goldHere) {
@@ -47769,6 +47907,7 @@ async function moveHero(dx, dy) {
         if (trapHere?.ttyp === SLP_GAS_TRAP) game._pending_sleep_gas_trap = trapHere;
         if (trapHere?.ttyp === LANDMINE) game._pending_landmine_trap = trapHere;
         if (trapHere?.ttyp === PIT || trapHere?.ttyp === SPIKED_PIT) game._pending_pit_trap = trapHere;
+        if (trapHere?.ttyp === POLY_TRAP) game._pending_poly_trap = trapHere;
         if (trapHere?.ttyp === BEAR_TRAP) game._pending_bear_trap = trapHere;
         return;
     }
@@ -47807,6 +47946,13 @@ async function moveHero(dx, dy) {
     }
     if (trapHere?.ttyp === PIT || trapHere?.ttyp === SPIKED_PIT) {
         const result = movementPitResult(trapHere);
+        result.message = [pileMessage, result.message].filter(Boolean).join('  ');
+        if (trapResultHasEffect(result))
+            await finishHeroDartTrapResult(result, { more: !!(pileMessage && result.message) });
+        return;
+    }
+    if (trapHere?.ttyp === POLY_TRAP) {
+        const result = movementPolyTrapResult(trapHere);
         result.message = [pileMessage, result.message].filter(Boolean).join('  ');
         if (trapResultHasEffect(result))
             await finishHeroDartTrapResult(result, { more: !!(pileMessage && result.message) });
@@ -48181,6 +48327,13 @@ export async function rhack(_cmd) {
                     await finishHeroDartTrapResult(result, { more: objectListRows > 4 || !!result.more });
                 return;
             }
+            if (game._pending_poly_trap) {
+                const result = movementPolyTrapResult(game._pending_poly_trap);
+                game._pending_poly_trap = null;
+                if (trapResultHasEffect(result))
+                    await finishHeroDartTrapResult(result, { more: objectListRows > 4 || !!result.more });
+                return;
+            }
             if (game._pending_bear_trap) {
                 const result = movementBearTrapResult(game._pending_bear_trap, { deferAfterMore: objectListRows > 4 });
                 game._pending_bear_trap = null;
@@ -48226,6 +48379,14 @@ export async function rhack(_cmd) {
             if (game._pending_pit_trap) {
                 const result = movementPitResult(game._pending_pit_trap);
                 game._pending_pit_trap = null;
+                if (!game._pending_time_passed) game.context.move = 1;
+                game._process_command_time_now = 1;
+                if (trapResultHasEffect(result)) await finishHeroDartTrapResult(result);
+                return;
+            }
+            if (game._pending_poly_trap) {
+                const result = movementPolyTrapResult(game._pending_poly_trap);
+                game._pending_poly_trap = null;
                 if (!game._pending_time_passed) game.context.move = 1;
                 game._process_command_time_now = 1;
                 if (trapResultHasEffect(result)) await finishHeroDartTrapResult(result);
