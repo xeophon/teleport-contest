@@ -9454,11 +9454,13 @@ function monsterHatesSilverWeapon(target) {
 
 function monsterSilverSearsFlesh(target) {
     const data = target?.data || {};
+    const rawMlet = String(target?.mlet || data.mlet || data.glyph || '');
+    const mlet = rawMlet.toLowerCase();
     const name = normalizedGemName(target?.name || data.name);
     return !(target?.noncorporeal || data.noncorporeal
         || target?.amorphous || data.amorphous
-        || target?.unsolid || data.unsolid
-        || name === 'ghost' || name === 'shade' || name === 'fog cloud');
+        || rawMlet === ' ' || mlet === 'ghost'
+        || name === 'shade');
 }
 
 function monsterLauncherProjectileIsSilver(item) {
