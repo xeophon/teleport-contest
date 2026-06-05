@@ -25899,6 +25899,81 @@ test('command kicked lit oil potion shatters and explodes before remote projecti
     ]);
 });
 
+test('command kicked fragile stack resistance splits one item before ladder flight', async () => {
+    installNonShopFloorState();
+    installRemoteDownStairGate({ x: 7, y: 5, isladder: true });
+    markSquareVisible(6, 5);
+    initRng(167);
+    const stack = {
+        ...confusionPotion(512071, undefined, 3, { dknown: true }),
+        ox: 6,
+        oy: 5,
+        letter: undefined,
+        line: undefined,
+    };
+    game.level.objects = [stack];
+    enableRngLog({ reset: true });
+
+    await rhack('\x04');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.level.objects.includes(stack), true);
+    assert.equal(stack.quan, 2);
+    assert.equal(stack.ox, 6);
+    assert.equal(stack.oy, 5);
+    assert.equal(queuedImpactDropsFor({ dnum: 0, dlevel: 2 }).some(obj => obj.id === stack.id), false);
+    assert.match(game._pending_message, /You kick 3 potions of confusion\./);
+    assert.match(game._pending_message, /A potion of confusion falls down the ladder\./);
+    assert.match(game._pending_message, /You hear a muffled crash\./);
+    assert.doesNotMatch(game._pending_message, /shatters|peculiar odor|dizzy|Thump|hits|misses/);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rn2(100)', 'rnd(2)', 'rn2(100)',
+    ]);
+});
+
+test('command kicked oartifact fragile object uses artifact resistance before ladder flight', async () => {
+    installNonShopFloorState();
+    installRemoteDownStairGate({ x: 7, y: 5, isladder: true });
+    markSquareVisible(6, 5);
+    Object.assign(game.u, { uluck: 0 });
+    initRng(1);
+    const mirror = {
+        id: 512072,
+        otyp: MIRROR,
+        cls: 'tool',
+        glyph: '(',
+        kind: 'looking glass',
+        actualKind: 'mirror',
+        quan: 1,
+        ox: 6,
+        oy: 5,
+        oartifact: 'The Polished Mirror',
+        letter: undefined,
+        line: undefined,
+    };
+    game.level.objects = [mirror];
+    enableRngLog({ reset: true });
+
+    await rhack('\x04');
+    await rhack('l');
+
+    const queued = queuedImpactDropsFor({ dnum: 0, dlevel: 2 });
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.level.objects.includes(mirror), false);
+    assert.equal(queued.includes(mirror), true);
+    assert.equal(mirror._impactDropMigration?.where, MIGR_LADDER_UP);
+    assert.match(game._pending_message, /You kick a looking glass\./);
+    assert.match(game._pending_message, /A looking glass falls down the ladder\./);
+    assert.doesNotMatch(game._pending_message, /shatters|bad luck|muffled|Thump|hits|misses/);
+    assert.equal(game.u.uluck, 0);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rn2(100)', 'rn2(100)',
+    ]);
+});
+
 test('command kicked expensive camera breaks before remote projectile flight and releases demon', async () => {
     installNonShopFloorState();
     installSeenRemoteShaft(HOLE, 7, 5);

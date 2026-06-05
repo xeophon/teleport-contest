@@ -4764,8 +4764,12 @@ function impactDropObjectBreaks(obj) {
     if (!obj) return '';
     const ordinaryResistChance = 1;
     const artifactResistChance = 99;
-    if (rn2(100) < (obj?.artifact ? artifactResistChance : ordinaryResistChance)) return '';
+    if (rn2(100) < (objectHasArtifactIdentity(obj) ? artifactResistChance : ordinaryResistChance)) return '';
     return impactDropBreakKind(obj);
+}
+
+function objectHasArtifactIdentity(obj) {
+    return !!(obj?.artifact || obj?.oartifact);
 }
 
 function shipObjectMuffledBreakResult(breakKind) {
@@ -27389,7 +27393,7 @@ function projectileImpactGlassCandidate(obj) {
 
 function projectileImpactContentBreakKind(obj) {
     if (projectileImpactGlassCandidate(obj)) {
-        if (obj.artifact || rn2(100) < 33) return '';
+        if (objectHasArtifactIdentity(obj) || rn2(100) < 33) return '';
         return 'shatter';
     }
     if (isEggItem(obj) && !rn2(3)) return 'cracking';
@@ -27400,7 +27404,7 @@ function projectileTopLevelBreakKind(obj, options = {}) {
     const roll = Number.isInteger(options.breakRoll) ? options.breakRoll : rn2(100);
     const kind = impactDropBreakKind(obj);
     if (!kind) return '';
-    const resistChance = obj?.artifact ? 99 : 1;
+    const resistChance = objectHasArtifactIdentity(obj) ? 99 : 1;
     return roll < resistChance ? '' : kind;
 }
 
@@ -27685,6 +27689,20 @@ function placeKickedFloorObject(obj, x, y, messages, options = {}) {
     return stacked;
 }
 
+function splitKickedFloorObjectForFlight(obj) {
+    const quantity = Math.max(1, Math.trunc(Number(obj?.quan || 1)));
+    if (!obj || quantity <= 1) return obj;
+    const kicked = {
+        ...obj,
+        id: next_ident(),
+        o_id: undefined,
+        _shopBillObjectId: undefined,
+        quan: 1,
+    };
+    obj.quan = quantity - 1;
+    return kicked;
+}
+
 async function breakKickedFragileFloorObject(obj, x, y, messages) {
     if (!kickedFragilePreflightBreakKind(obj)) return false;
     const breakKind = projectileTopLevelBreakKind(obj);
@@ -27700,7 +27718,7 @@ async function breakKickedFragileFloorObject(obj, x, y, messages) {
 }
 
 async function kickFloorObjectToward(dir, x, y) {
-    const obj = kickFloorObjectAt(x, y);
+    let obj = kickFloorObjectAt(x, y);
     if (!kickFloorObjectSupported(obj, x, y)) return { handled: false };
 
     const landX = x + dir.dx;
@@ -27726,6 +27744,7 @@ async function kickFloorObjectToward(dir, x, y) {
     }
     if (!gate && !canHandleMonsterImpact) return { handled: true, messages, moved: false };
 
+    obj = splitKickedFloorObjectForFlight(obj);
     let monsterImpact = { handled: false };
     if (canHandleMonsterImpact) {
         monsterImpact = heroThrownUnicornGemImpact(obj, targetMon);
