@@ -13290,6 +13290,98 @@ test('fire trap command inventory fire that destroys blessed water uses lifesavi
     assert.equal(game.u.uhp, game.u.uhpmax);
 });
 
+function installWerewolfOldFormFireVaporLifeSavingInventory(amuletId, potionId) {
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 30,
+        uhpmax: 30,
+        uen: 3,
+        uenmax: 5,
+        uac: 6,
+        ulevel: 2,
+        ulycn: 'werewolf',
+        lycanthrope: true,
+        _polyself_base: { uhp: 0, uhpmax: 18, uen: 3, uenmax: 5, uac: 7, ulevel: 2 },
+        _polyself_form: { name: 'werewolf', mlet: 'd', glyph: 'd', wereBeast: true, nohands: true },
+    });
+    game.level.at = () => ({ roomno: ROOMOFFSET, typ: ROOM });
+    const amulet = {
+        id: amuletId,
+        letter: 'a',
+        cls: 'amulet',
+        glyph: '"',
+        kind: 'amulet of life saving',
+        actualKind: 'amulet of life saving',
+        quan: 1,
+        worn: true,
+        line: 'a - an amulet of life saving (being worn)',
+    };
+    const potion = waterPotion(potionId, 'w', { blessed: true, bknown: true });
+    game.inventory = [amulet, potion];
+    return { amulet, potion };
+}
+
+test('fire scroll tower explosion inventory vapor uses lifesaving for old-form death', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    const { amulet, potion } = installWerewolfOldFormFireVaporLifeSavingInventory(30995, 30996);
+
+    const result = shop.resolveFireScrollExplosionForTest(game.u.ux, game.u.uy, 20, []);
+    shop.applyHeroFireTrapFatalResultForTest(result);
+
+    const message = result.messages.join(' ');
+    assert.equal(result.lifeSaving, true);
+    assert.equal(result.fatal, false);
+    assert.equal(result.more, true);
+    assert.equal(game._command_mode, 'lifeSavingMore');
+    assert.match(message, /The scroll erupts in a tower of flame!/);
+    assert.match(message, /Your potion of holy water boils and explodes!/);
+    assert.match(message, /You return to human form!/);
+    assert.match(message, /Your old form was not healthy enough to survive\./);
+    assert.match(message, /You die\.\.\.  But wait\.\.\.  Your medallion begins to glow!/);
+    assert.equal(game.inventory.includes(amulet), false);
+    assert.equal(game.inventory.includes(potion), false);
+    assert.equal(game.u._polyself_form, null);
+    assert.equal(game.u._polyself_base, null);
+    assert.equal(game.u.uhp, 0);
+    assert.doesNotMatch(message, /You feel purified|peculiar odor|eyes water/);
+
+    await rhack(' ');
+
+    assert.equal(game._pending_message, 'You feel much better!');
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game.u.uhp, game.u.uhpmax);
+});
+
+test('pyrolisk egg fireball inventory vapor uses lifesaving for old-form death', () => {
+    installNonShopFloorState();
+    initRng(2);
+    const { amulet, potion } = installWerewolfOldFormFireVaporLifeSavingInventory(30997, 30998);
+
+    const result = shop.resolvePyroliskEggExplosionForTest(game.u.ux, game.u.uy, 20);
+    shop.applyHeroFireTrapFatalResultForTest(result);
+
+    const message = result.messages.join(' ');
+    assert.equal(result.lifeSaving, true);
+    assert.equal(result.fatal, false);
+    assert.equal(result.more, true);
+    assert.equal(game._command_mode, 'lifeSavingMore');
+    assert.match(message, /You are caught in the fireball!/);
+    assert.match(message, /Your potion of holy water boils and explodes!/);
+    assert.match(message, /You return to human form!/);
+    assert.match(message, /Your old form was not healthy enough to survive\./);
+    assert.match(message, /You die\.\.\.  But wait\.\.\.  Your medallion begins to glow!/);
+    assert.equal(game.inventory.includes(amulet), false);
+    assert.equal(game.inventory.includes(potion), false);
+    assert.equal(game.u.ulycn, 'werewolf');
+    assert.equal(game.u.lycanthrope, true);
+    assert.equal(game.u._polyself_form, null);
+    assert.equal(game.u._polyself_base, null);
+    assert.equal(game.u.uhp, 0);
+    assert.doesNotMatch(message, /You feel purified|peculiar odor|eyes water/);
+});
+
 test('unpaid spellbook study usage charges four fifths of current shop price', () => {
     const { shkp } = installShopState();
     const book = healingSpellbook(3093, 'b');

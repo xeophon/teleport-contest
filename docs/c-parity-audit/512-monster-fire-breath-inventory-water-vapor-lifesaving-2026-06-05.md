@@ -46,7 +46,7 @@ No replay maps, private seeds, player names, move-count branches, or seed-specif
 
 - Monster ranged fire spell rays also reach `zhitu()` and should reuse this metadata shape when their JS path is audited.
 - Fiery gaze, monster fire pillar, and monster fiery explosion sources have different C ordering and still need separate vapor metadata slices.
-- Explosion callers such as burning oil, scroll tower-of-flame, and pyrolisk fireball still flatten inventory-fire vapor metadata.
+- Implemented explosion callers such as burning oil, scroll tower-of-flame, and pyrolisk fireball are covered in audit 513; pyrolisk fiery gaze, monster fire pillar, and natural monster fiery explosion sources still need separate source-backed JS paths/slices.
 - Fatal unsaved vapor in the helper still consumes the destroyed potion in JS because `fireDamageInventory()` does not currently model C's non-returning `done()` interruption inside `potionbreathe()`.
 - C continues monster breath `zhitu()` after life saving and can apply ordinary ray HP damage afterward. JS still uses delayed `lifeSavingMore` continuation and intentionally leaves full post-life-saving tail damage as a broader follow-up shared with audits 510 and 511.
 

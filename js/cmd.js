@@ -17611,15 +17611,9 @@ function damageHeroFromBurningOilExplosion(damage, messages) {
     const uy = game.u?.uy ?? -99;
     messages.push('You are caught in the burning oil!');
     burnAwayHeroSlime(messages);
-    const fireInventory = fireDamageInventory(damage, true);
-    messages.push(...fireInventory.messages);
-    const totalDamage = (game.u?.fireResistance ? 0 : damage) + (fireInventory.damage || 0);
-    if (totalDamage && game.u) game.u.uhp = Math.max(0, (game.u.uhp || 0) - totalDamage);
-    if ((game.u?.uhp || 0) <= 0) {
-        game._death_cause = fireInventory.deathCause || 'caught yourself in your own burning oil';
-        messages.push('It is fatal.');
-        messages.push('You die...');
-    }
+    applyHeroFireExplosionInventoryDamage(messages, damage, 'caught yourself in your own burning oil', {
+        fatalMessage: 'It is fatal.',
+    });
     exerciseAttribute(A_STR, false);
     newsym(ux, uy);
 }
@@ -19806,10 +19800,9 @@ function breakHeroThrownPyroliskEgg(egg, messages, { selfHit = false } = {}) {
     projectileTopLevelBreakMessage(egg, 'splat', messages);
     markThrownBrokenObjectDebt(egg);
     const explosion = resolvePyroliskEggExplosion(game.u?.ux || egg.ox || 0, game.u?.uy || egg.oy || 0, d(3, 6));
-    messages.push(...explosion.messages);
+    appendFireExplosionMessages(messages, explosion);
     if (selfHit && (game.u?.uhp || 0) > 0)
         messages.push("You've got it all over your face!");
-    messages.more = explosion.more;
     return messages;
 }
 
@@ -20015,8 +20008,7 @@ function heroThrownPyroliskEggHitMonster(egg, mon) {
     messages.push(`You hit ${thrownEggTargetTheName(mon)} with ${thrownEggHitArticle(egg)} egg${plural}.`);
     markObjectShopBillUsedUp(egg);
     const explosion = resolvePyroliskEggExplosion(mon.mx, mon.my, d(3, 6));
-    messages.push(...explosion.messages);
-    messages.more = explosion.more;
+    appendFireExplosionMessages(messages, explosion);
     return messages;
 }
 
@@ -20115,8 +20107,7 @@ async function applyHeroThrownFragileBreakSideEffects(obj, messages, x = null, y
 function applyHeroBrokenEggPostRemovalSideEffects(obj, messages, x, y) {
     if (!isPyroliskEgg(obj)) return;
     const explosion = resolvePyroliskEggExplosion(x, y, d(3, 6));
-    messages.push(...explosion.messages);
-    if (explosion.more) messages.more = true;
+    appendFireExplosionMessages(messages, explosion);
 }
 
 function heroThrownIronBarsBreakableClassHitObject(obj) {
@@ -26493,6 +26484,37 @@ export function igniteMonsterFireInventoryItems(mon, messages = [], visible = fa
     return messages;
 }
 
+function markFireExplosionResultMetadata(messages, result) {
+    if (result?.lifeSaving) messages.lifeSaving = true;
+    if (result?.fatal) messages.fatal = true;
+    if (result?.more || result?.lifeSaving || result?.fatal) messages.more = true;
+}
+
+function appendFireExplosionMessages(messages, result) {
+    messages.push(...(result?.messages || []));
+    markFireExplosionResultMetadata(messages, result);
+}
+
+function applyHeroFireExplosionInventoryDamage(messages, origDamage, deathCause, { fatalMessage = '' } = {}) {
+    const fireInventory = fireDamageInventory(origDamage, true, false, { allowLifeSaving: true });
+    messages.push(...fireInventory.messages);
+    if (fireInventory.lifeSaving || fireInventory.fatal) {
+        messages.lifeSaving = !!fireInventory.lifeSaving;
+        messages.fatal = !!fireInventory.fatal;
+        messages.more = true;
+        return { fireInventory, damage: 0 };
+    }
+
+    const damage = (game.u?.fireResistance ? 0 : origDamage) + fireInventory.damage;
+    if (damage && game.u) game.u.uhp = Math.max(0, (game.u.uhp || 0) - damage);
+    if ((game.u?.uhp || 0) <= 0) {
+        game._death_cause = fireInventory.deathCause || deathCause;
+        if (fatalMessage) messages.push(fatalMessage);
+        messages.push('You die...');
+    }
+    return { fireInventory, damage };
+}
+
 function resolveFireScrollExplosion(cx, cy, dam, messages = []) {
     const ux = game.u?.ux ?? -99;
     const uy = game.u?.uy ?? -99;
@@ -26532,18 +26554,16 @@ function resolveFireScrollExplosion(cx, cy, dam, messages = []) {
     }
 
     if (Math.abs(ux - cx) <= 1 && Math.abs(uy - cy) <= 1) {
-        const fireInventory = fireDamageInventory(dam, true);
-        messages.push(...fireInventory.messages);
-        const damage = (game.u?.fireResistance ? 0 : dam) + fireInventory.damage;
-        if (damage && game.u) game.u.uhp = Math.max(0, (game.u.uhp || 0) - damage);
-        if ((game.u?.uhp || 0) <= 0) {
-            game._death_cause = fireInventory.deathCause || 'killed by a tower of flame';
-            messages.push('You die...');
-        }
+        applyHeroFireExplosionInventoryDamage(messages, dam, 'killed by a tower of flame');
         exerciseAttribute(A_STR, false);
     }
 
-    return { messages, more: messages.length > 1 || (game.u?.uhp || 1) <= 0 };
+    return {
+        messages,
+        more: messages.length > 1 || (game.u?.uhp || 1) <= 0 || !!messages.more,
+        lifeSaving: !!messages.lifeSaving,
+        fatal: !!messages.fatal,
+    };
 }
 
 function resolvePyroliskEggExplosion(cx, cy, dam) {
@@ -26581,19 +26601,18 @@ function resolvePyroliskEggExplosion(cx, cy, dam) {
 
     if (Math.abs(ux - cx) <= 1 && Math.abs(uy - cy) <= 1) {
         messages.push('You are caught in the fireball!');
-        const fireInventory = fireDamageInventory(dam, true);
-        messages.push(...fireInventory.messages);
-        const damage = (game.u?.fireResistance ? 0 : dam) + fireInventory.damage;
-        if (damage && game.u) game.u.uhp = Math.max(0, (game.u.uhp || 0) - damage);
-        if ((game.u?.uhp || 0) <= 0) {
-            game._death_cause = fireInventory.deathCause || 'killed by a fireball';
-            messages.push('It is fatal.');
-            messages.push('You die...');
-        }
+        applyHeroFireExplosionInventoryDamage(messages, dam, 'killed by a fireball', {
+            fatalMessage: 'It is fatal.',
+        });
         exerciseAttribute(A_STR, false);
     }
 
-    return { messages, more: messages.length > 1 || (game.u?.uhp || 1) <= 0 };
+    return {
+        messages,
+        more: messages.length > 1 || (game.u?.uhp || 1) <= 0 || !!messages.more,
+        lifeSaving: !!messages.lifeSaving,
+        fatal: !!messages.fatal,
+    };
 }
 
 function earthScrollHasEffect() {
@@ -30407,6 +30426,8 @@ export const __shopBillingTestHooks = {
     fireDamageInventoryForTest: fireDamageInventory,
     heroFireTrapResultForTest: heroFireTrapResult,
     applyHeroFireTrapFatalResultForTest: applyHeroFireTrapFatalResult,
+    resolveFireScrollExplosionForTest: resolveFireScrollExplosion,
+    resolvePyroliskEggExplosionForTest: resolvePyroliskEggExplosion,
     checkUnpaidUsageForTest: checkUnpaidUsage,
     costlyTinForTest: costlyTinAlteration,
     tipContainerContents,
@@ -44296,6 +44317,7 @@ async function eatPyroliskEgg(item, floorObject = false) {
     await setMessage(result.messages.join('  '), result.more);
     game._command_mode = null;
     game.context.move = 1;
+    if (applyLifeSavingOrFatalCommandMode(result)) return;
 }
 
 async function eatStaleEgg(item, floorObject = false) {
@@ -45811,6 +45833,10 @@ async function moveHero(dx, dy) {
                 else refreshSurvivingWieldedConsumedStack(attackWeapon);
                 killed = !!(mon.dead || (mon.mhp || 0) <= 0);
                 messages.push(...eggMessages);
+                if (eggMessages.lifeSaving) messages.lifeSaving = true;
+                if (eggMessages.fatal) messages.fatal = true;
+                if (eggMessages.more) messages.more = true;
+                if (eggMessages.lifeSaving || eggMessages.fatal) break;
                 if (killed) break;
                 continue;
             }
@@ -53286,6 +53312,7 @@ export async function rhack(_cmd) {
         await setMessage(result.messages.join('  '), result.more);
         game._command_mode = null;
         game.context.move = 1;
+        if (applyLifeSavingOrFatalCommandMode(result)) return;
         return;
     }
 
@@ -53937,6 +53964,7 @@ export async function rhack(_cmd) {
             await setMessage(result.messages.join('  '), result.more);
             game._command_mode = null;
             game.context.move = 1;
+            if (applyLifeSavingOrFatalCommandMode(result)) return;
             return;
         }
         if (isScroll && (scrollName === 'earth' || item.scrollIndex === 17)) {
@@ -62028,11 +62056,12 @@ export async function rhack(_cmd) {
             const messages = heroThrownPyroliskEggUpwardMessages(thrownObject);
             newsym(game.u?.ux || 0, game.u?.uy || 0);
             await setMessage(messages.join('  '), !!messages.more);
-            game._command_mode = null;
             game._throw_item_letter = null;
             game._resume_time_after_more = 0;
-            game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
             game.context.move = 0;
+            if (applyLifeSavingOrFatalCommandMode(messages)) return;
+            game._command_mode = null;
+            game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
             return;
         }
         if (ch === '<' && isHeroThrownCrackableArmorObject(item)) {
@@ -62343,11 +62372,12 @@ export async function rhack(_cmd) {
                 removeInventoryItem(item, 1);
                 newsym(targetMon.mx, targetMon.my);
                 await setMessage(messages.join('  '), !!messages.more);
-                game._command_mode = null;
                 game._throw_item_letter = null;
                 game._resume_time_after_more = 0;
-                game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
                 game.context.move = 0;
+                if (applyLifeSavingOrFatalCommandMode(messages)) return;
+                game._command_mode = null;
+                game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
                 return;
             }
             const thrownName = pickupObjectName({ ...item, quan: 1 });
