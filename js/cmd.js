@@ -21315,8 +21315,9 @@ function eucalyptusPostEffect(touched) {
     return messages.length ? { message: messages.join('  ') } : {};
 }
 
-function royalJellyFatalPostEffect(messages) {
-    if (consumeLifeSavingAmulet()) {
+function royalJellyFatalPostEffect(messages, result = {}) {
+    const clearStoningOnLifeSaving = !!result.clearStoningOnLifeSaving;
+    if (consumeLifeSavingAmulet({ clearStoning: clearStoningOnLifeSaving })) {
         if (game.u) game.u.uhp = 0;
         game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
         game._command_mode = 'lifeSavingMore';
@@ -21337,8 +21338,10 @@ function royalJellyFatalPostEffect(messages) {
     game._run_steps_remaining = 0;
     game._command_mode = 'deathDieMore';
     prepareDeathBones();
+    const suppressDieMessage = result.suppressDieMessage
+        || String(game._death_cause || '').startsWith('petrified by ');
     return {
-        message: [...messages, 'You die...'].join('  '),
+        message: suppressDieMessage ? messages.join('  ') : [...messages, 'You die...'].join('  '),
         more: true,
         fatal: true,
         commandMode: 'deathDieMore',
@@ -21348,7 +21351,7 @@ function royalJellyFatalPostEffect(messages) {
 
 function royalJellyDelayedPostEffect(touched) {
     const result = royalJellyPostEffects(touched);
-    if (result.died) return royalJellyFatalPostEffect(result.messages || []);
+    if (result.died) return royalJellyFatalPostEffect(result.messages || [], result);
     return result.messages?.length ? { message: result.messages.join('  ') } : {};
 }
 
@@ -42428,10 +42431,32 @@ function healWoundedLegsFromRoyalJelly() {
     game.u._woundedLegSide = '';
 }
 
+function postRehumanizePetrifyingSelfTouchMessage(lostStoneResistance) {
+    if (!lostStoneResistance || !game.u || game.u.stoneResistance || wornGlovesItem()) return null;
+    const corpse = (game.inventory || []).find(item =>
+        isPetrifyingCorpseObject(item)
+        && (itemIsWielded(item) || item.alternate || item.line?.includes('alternate weapon')));
+    if (!corpse) return null;
+    const name = corpseMonsterName(corpse) || 'cockatrice';
+    game.u.uhp = 0;
+    game._death_cause = `petrified by ${petrifyingCorpseArticleName(corpse)}`;
+    game._death_bones_body = 'statue';
+    return {
+        messages: [
+            `No longer petrify-resistant, you touch the ${name} corpse.`,
+            'You turn to stone...',
+        ],
+        died: true,
+        suppressDieMessage: true,
+        clearStoningOnLifeSaving: true,
+    };
+}
+
 function rehumanizeAfterPolyselfDeath() {
     const result = { messages: [], died: false };
     if (!game.u) return result;
     const base = game.u._polyself_base || {};
+    const lostStoneResistance = heroPolyselfResistsStoning() && !game.u.stoneResistance;
     const hpmax = Math.max(1, base.uhpmax ?? game.u.uhpmax ?? 1);
     game.u.uhpmax = hpmax;
     game.u.uhp = Math.min(base.uhp ?? hpmax, hpmax);
@@ -42460,6 +42485,15 @@ function rehumanizeAfterPolyselfDeath() {
         game._death_cause = `killed by reverting to unhealthy ${raceAdj} form`;
         result.died = true;
     }
+    if (!result.died) {
+        const selfTouch = postRehumanizePetrifyingSelfTouchMessage(lostStoneResistance);
+        if (selfTouch) {
+            result.messages.push(...selfTouch.messages);
+            result.died = true;
+            result.suppressDieMessage = selfTouch.suppressDieMessage;
+            result.clearStoningOnLifeSaving = selfTouch.clearStoningOnLifeSaving;
+        }
+    }
     return result;
 }
 
@@ -42484,7 +42518,8 @@ function royalJellyPostEffects(item) {
             if (game.u._polyself_form) {
                 const result = rehumanizeAfterPolyselfDeath();
                 messages.push(...result.messages);
-                return { messages, died: result.died, suppressDieMessage: result.died };
+                return { messages, died: result.died, suppressDieMessage: result.suppressDieMessage ?? result.died,
+                    clearStoningOnLifeSaving: result.clearStoningOnLifeSaving };
             }
             game._death_cause = 'poisoned by a rotten lump of royal jelly';
             return { messages, died: true };
@@ -42503,7 +42538,7 @@ async function finishRoyalJellyEating(item, floorObject, baseMessage, { more = f
     const result = royalJellyPostEffects(item);
     const message = [baseMessage, ...result.messages].filter(Boolean).join('  ');
     if (result.died) {
-        if (consumeLifeSavingAmulet()) {
+        if (consumeLifeSavingAmulet({ clearStoning: !!result.clearStoningOnLifeSaving })) {
             if (game.u) game.u.uhp = 0;
             game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
             game._command_mode = 'lifeSavingMore';
@@ -42517,7 +42552,9 @@ async function finishRoyalJellyEating(item, floorObject, baseMessage, { more = f
         game._run_steps_remaining = 0;
         game._command_mode = 'deathDieMore';
         prepareDeathBones();
-        await setMessage(result.suppressDieMessage ? message : `${message}  You die...`, true);
+        const suppressDieMessage = result.suppressDieMessage
+            || String(game._death_cause || '').startsWith('petrified by ');
+        await setMessage(suppressDieMessage ? message : `${message}  You die...`, true);
         return;
     }
     await setMessage(message, more);

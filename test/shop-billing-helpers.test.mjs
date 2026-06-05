@@ -23709,6 +23709,44 @@ test('cursed royal jelly rehumanizes a fatally damaged polyself', async () => {
     assert.equal(game.u.acurr.a[0], 9);
 });
 
+test('cursed royal jelly rehumanize selftouches wielded cockatrice corpse', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    installStoneGolemPolyself();
+    game.u.uhp = 1;
+    const body = corpse(31971, 'c', 'cockatrice');
+    body.wielded = true;
+    body.line = 'c - a cockatrice corpse (weapon in hand)';
+    const jelly = simpleFood(31972, 'lump of royal jelly', 'j', { cursed: true });
+    game.inventory = [body, jelly];
+
+    await rhack('e');
+    await rhack('j');
+
+    const message = game._pending_message || '';
+    assert.match(message, /Blecch!  Rotten food!/);
+    assert.match(message, /You feel weak!/);
+    assert.match(message, /You return to human form!/);
+    assert.match(message, /No longer petrify-resistant, you touch the cockatrice corpse\./);
+    assert.match(message, /You turn to stone\.\.\./);
+    assert.doesNotMatch(message, /You die\.\.\./);
+    assert.equal(message.indexOf('No longer petrify-resistant') > message.indexOf('You return to human form!'), true);
+    assert.equal(message.indexOf('You turn to stone...') > message.indexOf('No longer petrify-resistant'), true);
+    assert.equal(game._command_mode, 'deathDieMore');
+    assert.equal(game._message_more, 1);
+    assert.equal(game.inventory.includes(jelly), true);
+    assert.equal(game.inventory.includes(body), true);
+    assert.equal(body.wielded, true);
+    assert.equal(game.u._polyself_form, null);
+    assert.equal(game.u._polyself_base, null);
+    assert.equal(game.u.uhp, 0);
+    assert.equal(game.u.uhunger, 1000);
+    assert.equal(game.u.acurr.a[0], 9);
+    assert.equal(game._death_cause, 'petrified by a cockatrice corpse');
+    assert.equal(game._death_bones_body, 'statue');
+    assert.equal(game.context.move || 0, 0);
+});
+
 test('killer bee eating royal jelly becomes a queen bee after the C delay-one bite', async () => {
     installNonShopFloorState();
     const jelly = simpleFood(31967, 'lump of royal jelly', 'j');
