@@ -41,5 +41,5 @@ Implemented the narrow kicked worthless-glass-gem hit path against rock-passing 
 
 ## Remaining
 
-- This is not a broad kicked-object `thitmonst()` conversion. Generic kicked weapon/gem/object damage, full kicked glass-gem behavior outside rock-passers, passive-object side effects, unicorn gem catch/acceptance, monster pickup/catch handling, and full kicked-object flight through multiple squares remain separate work.
+- This is not a broad kicked-object `thitmonst()` conversion. Generic kicked weapon/gem/object damage, full kicked glass-gem behavior outside rock-passers, passive-object side effects, direct kicked gem-to-unicorn acceptance, monster pickup/catch handling, and full kicked-object flight through multiple squares remain separate work. Direct hero-thrown gem-to-unicorn acceptance is covered separately in audit 459.
 - Direct hero-thrown glass gem rock-passer damage is covered in audit 457.

@@ -18028,6 +18028,155 @@ function heroThrownStoneMissileHarmlessRockPasser(obj, mon) {
     return heroThrownStoneMissileObject(obj) && heroThrownTargetPassesRocks(mon);
 }
 
+function heroThrownGemClassObject(obj) {
+    return !!obj && (itemClassKey(obj) === 'gem' || obj.glyph === '*' || obj.otyp === GEM_CLASS)
+        && itemClassKey(obj) !== 'ring' && obj.glyph !== '=';
+}
+
+function heroThrownGemNameValue(value) {
+    return String(value || '').toLowerCase().trim().replace(/^an? /, '').replace(/\s+/g, ' ');
+}
+
+function heroThrownGemNameValues(obj) {
+    return [
+        obj?.actualKind,
+        obj?.kind,
+        obj?.gemDescription,
+        obj?.displayName,
+    ].map(heroThrownGemNameValue).filter(Boolean);
+}
+
+function heroThrownGemIdentityName(obj) {
+    const material = stoneToFleshObjectMaterial(obj);
+    if (material === 'glass') {
+        const glassName = heroThrownGemNameValues(obj)
+            .find(name => /\bworthless piece of\b.*\bglass\b/.test(name));
+        if (glassName) return glassName;
+        const description = heroThrownGemNameValue(obj?.gemDescription);
+        const color = description.match(/^(.+) gem$/)?.[1] || description;
+        if (color) return `worthless piece of ${color} glass`;
+    }
+    return heroThrownGemNameValues(obj)
+        .find(name => STONE_TO_FLESH_GEMSTONE_NAMES.has(name) || STONE_TO_FLESH_MINERAL_GEM_NAMES.has(name))
+        || heroThrownGemNameValue(obj?.actualKind || obj?.kind || obj?.gemDescription);
+}
+
+function heroThrownGemTypeKnown(obj) {
+    if (obj?.dknown === false) return false;
+    const identity = heroThrownGemIdentityName(obj);
+    return obj?.known === true || gemStoneDiscoveryKnown(identity);
+}
+
+function heroThrownGemHasUserName(obj) {
+    return !!(obj?.oname || obj?.o_name || obj?.userName || obj?.calledName || obj?.uname);
+}
+
+function heroThrownMonsterIsUnicorn(mon) {
+    const data = mon?.data || {};
+    const name = heroThrownGemNameValue(mon?.name || data.name || data.mname);
+    const mlet = heroThrownGemNameValue(mon?.mlet || data.mlet || mon?.glyph || data.glyph || data.symbol);
+    const likesGems = !!(mon?.likesGems || mon?.likes_gems || data.likesGems || data.likes_gems || /unicorn/.test(name));
+    return likesGems && (mlet === 'u' || mlet === 'unicorn' || /unicorn/.test(name));
+}
+
+function heroThrownUnicornGemKind(obj) {
+    if (!heroThrownGemClassObject(obj)) return '';
+    const material = stoneToFleshObjectMaterial(obj);
+    if (material === 'mineral') return '';
+    if (material === 'glass') return 'glass';
+    if (material === 'gemstone') return 'real';
+    const names = heroThrownGemNameValues(obj);
+    if (names.some(name => STONE_TO_FLESH_MINERAL_GEM_NAMES.has(name))) return '';
+    if (names.some(name => /\bworthless piece of\b.*\bglass\b/.test(name) || name === 'glass'))
+        return 'glass';
+    if (names.some(name => STONE_TO_FLESH_GEMSTONE_NAMES.has(name))) return 'real';
+    return '';
+}
+
+function heroThrownMonsterHelplessForUnicornGem(mon) {
+    return !!(mon?.helpless || mon?.msleeping || mon?.mfrozen
+        || mon?.mcanmove === false || mon?.mcanmove === 0);
+}
+
+function applyHeroThrownUnicornGemPreCatchAdjustment(mon) {
+    const data = mon?.data || {};
+    const immobile = mon?.mcanmove === false || mon?.mcanmove === 0
+        || data.mmove === false || data.mmove === 0;
+    if (immobile && data.mmove !== false && data.mmove !== 0 && !rn2(10)) {
+        mon.mcanmove = true;
+        mon.mfrozen = 0;
+    }
+}
+
+function heroThrownUnicornGemLuckMessageAndDelta(obj, mon, gemKind) {
+    const monSign = Math.sign(Number(mon?.data?.maligntyp ?? mon?.maligntyp ?? 0));
+    const heroSign = Math.sign(Number(game.u?.ualign?.type ?? A_NEUTRAL));
+    const buddy = monSign === heroSign;
+    const known = heroThrownGemTypeKnown(obj);
+    const named = heroThrownGemHasUserName(obj);
+    if (gemKind === 'real') {
+        if (known) return buddy
+            ? { word: 'gratefully', delta: 5 }
+            : { word: 'hesitatingly', delta: rn2(7) - 3 };
+        if (named) return buddy
+            ? { word: 'gratefully', delta: 2 }
+            : { word: 'hesitatingly', delta: rn2(3) - 1 };
+        return buddy
+            ? { word: 'gratefully', delta: 1 }
+            : { word: 'hesitatingly', delta: rn2(3) - 1 };
+    }
+    if (known || named) return { junk: true };
+    return { word: 'graciously', delta: 0 };
+}
+
+function relocateHeroThrownUnicornGemRecipient(mon) {
+    if (!noteleportLevelForMonster(mon)) rlocNoMsg(mon);
+}
+
+function heroThrownUnicornGemImpact(obj, mon) {
+    if (!heroThrownMonsterIsUnicorn(mon)) return { handled: false, messages: [] };
+    const gemKind = heroThrownUnicornGemKind(obj);
+    if (!gemKind) return { handled: false, messages: [] };
+    applyHeroThrownUnicornGemPreCatchAdjustment(mon);
+    const monName = fireScrollMonsterName(mon);
+    const objectName = floorObjectTheName({ ...obj, quan: 1 });
+    if (heroThrownMonsterHelplessForUnicornGem(mon)) {
+        return {
+            handled: true,
+            consumed: false,
+            messages: [`The ${pickupObjectName({ ...obj, quan: 1 })} misses ${heroThrownVenomTargetName(mon)}.`],
+        };
+    }
+    if (mon?.mtame || mon?.pet || mon?.tame) {
+        return {
+            handled: true,
+            consumed: false,
+            messages: [`${monName} catches and drops ${objectName}.`],
+        };
+    }
+
+    const messages = [`${monName} catches ${objectName}.`];
+    mon.mpeaceful = 1;
+    mon.mavenge = 0;
+    const accept = heroThrownUnicornGemLuckMessageAndDelta(obj, mon, gemKind);
+    if (accept.junk) {
+        if (!game.u?.blind) messages.push(`${monName} is not interested in your junk.`);
+        relocateHeroThrownUnicornGemRecipient(mon);
+        return { handled: true, consumed: false, messages };
+    }
+
+    changeHeroLuck(accept.delta);
+    if (!game.u?.blind) messages.push(`${monName} ${accept.word} accepts your gift.`);
+    const accepted = { ...obj, quan: 1, hidden: false, buried: false, transientProjectile: false };
+    delete accepted.letter;
+    delete accepted.line;
+    delete accepted.ox;
+    delete accepted.oy;
+    add_to_minv(mon, accepted);
+    relocateHeroThrownUnicornGemRecipient(mon);
+    return { handled: true, consumed: true, messages };
+}
+
 function heroProjectileMonsterArmorClass(mon) {
     const data = mon?.data || {};
     const ac = mon?.mac ?? mon?.ac ?? data.mac ?? data.ac;
@@ -18132,19 +18281,18 @@ function heroKickedGlassGemImpact(obj, mon) {
 }
 
 function heroThrownGlassGemObject(obj) {
-    return !!obj && (itemClassKey(obj) === 'gem' || obj.glyph === '*' || obj.otyp === GEM_CLASS)
-        && stoneToFleshObjectMaterial(obj) === 'glass';
+    return heroThrownGemClassObject(obj) && stoneToFleshObjectMaterial(obj) === 'glass';
 }
 
-function heroThrownGlassGemHitValue(mon) {
+function heroThrownGemHitValue(mon) {
     return heroProjectileBaseHitValue(mon) - 4;
 }
 
-function heroThrownGlassGemImpact(obj, mon) {
-    if (!heroThrownGlassGemObject(obj)) return { handled: false, messages: [] };
+function heroThrownGemImpact(obj, mon) {
+    if (!heroThrownGemClassObject(obj)) return { handled: false, messages: [] };
     const dieroll = rnd(20);
     const targetName = heroThrownVenomTargetName(mon);
-    if (heroThrownGlassGemHitValue(mon) >= dieroll) {
+    if (heroThrownGemHitValue(mon) >= dieroll) {
         const damage = rnd(2);
         mon.mhp = (mon.mhp || 1) - damage;
         if ((mon.mhp || 0) <= 0) mon.dead = true;
@@ -18162,6 +18310,11 @@ function heroThrownGlassGemImpact(obj, mon) {
     const messages = [`The ${pickupObjectName({ ...obj, quan: 1 })} misses the ${mon?.data?.name || 'creature'}.`];
     messages.push(...wakeMonsterFromHeroThrownMiss(mon));
     return { handled: true, hit: false, messages };
+}
+
+function heroThrownGlassGemImpact(obj, mon) {
+    if (!heroThrownGlassGemObject(obj)) return { handled: false, messages: [] };
+    return heroThrownGemImpact(obj, mon);
 }
 
 function heroThrownCreamPieHitMonster(pie, mon) {
@@ -61239,6 +61392,10 @@ export async function rhack(_cmd) {
             const messages = [`The ${thrownName} misses the ${targetMon.data?.name || 'creature'}.`];
             messages.push(...wakeMonsterFromHeroThrownMiss(targetMon));
             impactMessage = messages.join('  ');
+        } else if (targetMon && heroThrownMonsterIsUnicorn(targetMon) && heroThrownUnicornGemKind(item)) {
+            const unicornImpact = heroThrownUnicornGemImpact(thrownObject, targetMon);
+            impactMessage = (unicornImpact.messages || []).join('  ');
+            impactConsumedThrownObject = !!unicornImpact.consumed;
         } else if (targetMon && heroThrownStoneMissileHarmlessRockPasser(item, targetMon)) {
             rnd(20);
             const dex = game.u?.acurr?.a?.[A_DEX] ?? 10;
@@ -61252,10 +61409,10 @@ export async function rhack(_cmd) {
                 messages.push(...wakeMonsterFromHeroThrownMiss(targetMon));
                 impactMessage = messages.join('  ');
             }
-        } else if (targetMon && heroThrownGlassGemObject(item)) {
-            const glassImpact = heroThrownGlassGemImpact(thrownObject, targetMon);
-            impactMessage = (glassImpact.messages || []).join('  ');
-            impactConsumedThrownObject = !!glassImpact.mulched;
+        } else if (targetMon && heroThrownGemClassObject(item)) {
+            const gemImpact = heroThrownGemImpact(thrownObject, targetMon);
+            impactMessage = (gemImpact.messages || []).join('  ');
+            impactConsumedThrownObject = !!gemImpact.mulched;
         } else if (targetMon && !combatObject) {
             rnd(20);
             const thrownName = pickupObjectName({ ...item, quan: 1 });

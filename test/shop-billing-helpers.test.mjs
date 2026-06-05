@@ -1694,6 +1694,25 @@ function carriedGlassGem(id, letter = 'g', props = {}) {
     return gem;
 }
 
+function unicornThrowTarget(name = 'white unicorn', x = 7, y = 5, extra = {}) {
+    return ordinaryThrowTarget(name, x, y, {
+        mhp: 24,
+        mhpmax: 24,
+        msleeping: 0,
+        mpeaceful: 0,
+        mavenge: 1,
+        data: {
+            name,
+            mlet: 'u',
+            likesGems: true,
+            mlevel: 4,
+            mmove: 24,
+            maligntyp: name.startsWith('black') ? -7 : name.startsWith('gray') ? 0 : 7,
+        },
+        ...extra,
+    });
+}
+
 function installThrowsRocksForm() {
     game.u._polyself_form = {
         name: 'stone giant',
@@ -42406,6 +42425,198 @@ test('hero-thrown glass gem miss against rock-passer stays a miss', async () => 
     assert.equal(game.level.objects.some(obj => obj.id === glass.id && obj.ox === 7 && obj.oy === 5), true);
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 3), [
         'rnd(20)', 'rn2(3)', 'rn2(100)',
+    ]);
+});
+
+test('hero-thrown ruby harms ordinary monster and survives landing', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, { ulevel: 20, uluck: 10, uhitinc: 10 });
+    game.u.acurr.a[A_DEX] = 25;
+    const ruby = carriedRuby(876091, 'r', {
+        known: true,
+        kind: 'ruby',
+        actualKind: 'ruby',
+        gemDescription: 'ruby',
+        gemTough: true,
+        line: 'r - a ruby',
+    });
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, {
+        mhp: 20,
+        mhpmax: 20,
+        msleeping: 1,
+        mpeaceful: 1,
+        meating: 4,
+        mstrategy: STRAT_WAITFORU,
+    });
+    game.inventory = [ruby];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('r');
+    await rhack('l');
+
+    assert.match(game._pending_message, /The ruby hits the goblin\./);
+    assert.doesNotMatch(game._pending_message, /gift|catches|misses|shatters/);
+    assert.equal(goblin.mhp, 19);
+    assert.equal(goblin.msleeping, 0);
+    assert.equal(goblin.meating, 0);
+    assert.equal(goblin.mstrategy, 0);
+    assert.equal(goblin.mpeaceful, 0);
+    assert.equal(game.inventory.includes(ruby), false);
+    const landed = game.level.objects.find(obj => obj.id === ruby.id);
+    assert.ok(landed);
+    assert.equal(landed.ox, 7);
+    assert.equal(landed.oy, 5);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 5), [
+        'rnd(20)', 'rnd(2)', 'rn2(3)', 'rn2(2)', 'rn2(100)',
+    ]);
+});
+
+test('hero-thrown known ruby to coaligned unicorn is accepted before hit roll', async () => {
+    installNonShopFloorState();
+    game.level.flags.noteleport = true;
+    initRng(1);
+    game.u.ualign = { type: A_LAWFUL, record: 0 };
+    game.u.uluck = 0;
+    const ruby = carriedRuby(876092, 'r', {
+        known: true,
+        kind: 'ruby',
+        actualKind: 'ruby',
+        gemDescription: 'ruby',
+        gemTough: true,
+        line: 'r - a ruby',
+    });
+    const unicorn = unicornThrowTarget('white unicorn');
+    game.inventory = [ruby];
+    game.level.monsters = [unicorn];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('r');
+    await rhack('l');
+
+    assert.match(game._pending_message, /The white unicorn catches the ruby\./);
+    assert.match(game._pending_message, /The white unicorn gratefully accepts your gift\./);
+    assert.doesNotMatch(game._pending_message, /hits|misses|shatters|junk/);
+    assert.equal(unicorn.mhp, 24);
+    assert.equal(unicorn.mpeaceful, 1);
+    assert.equal(unicorn.mavenge, 0);
+    assert.equal(game.u.uluck, 5);
+    assert.equal(game.inventory.includes(ruby), false);
+    assert.equal(game.level.objects.some(obj => obj.id === ruby.id), false);
+    assert.equal(unicorn.minvent?.some(obj => obj.id === ruby.id), true);
+    assert.deepEqual(getRngLog(), []);
+});
+
+test('hero-thrown known glass gem to unicorn is rejected as junk and lands', async () => {
+    installNonShopFloorState();
+    game.level.flags.noteleport = true;
+    initRng(1);
+    game.u.ualign = { type: A_LAWFUL, record: 0 };
+    game.u.uluck = 2;
+    const glass = carriedGlassGem(876093, 'g');
+    const unicorn = unicornThrowTarget('white unicorn');
+    game.inventory = [glass];
+    game.level.monsters = [unicorn];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('g');
+    await rhack('l');
+
+    assert.match(game._pending_message, /The white unicorn catches the red gem\./);
+    assert.match(game._pending_message, /The white unicorn is not interested in your junk\./);
+    assert.doesNotMatch(game._pending_message, /hits|misses|accepts|shatters/);
+    assert.equal(unicorn.mhp, 24);
+    assert.equal(unicorn.mpeaceful, 1);
+    assert.equal(unicorn.mavenge, 0);
+    assert.equal(game.u.uluck, 2);
+    assert.equal((unicorn.minvent || []).some(obj => obj.id === glass.id), false);
+    assert.equal(game.inventory.includes(glass), false);
+    const landed = game.level.objects.find(obj => obj.id === glass.id);
+    assert.ok(landed);
+    assert.equal(landed.ox, 7);
+    assert.equal(landed.oy, 5);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 1), [
+        'rn2(100)',
+    ]);
+});
+
+test('hero-thrown unknown glass gem to unicorn is accepted without luck', async () => {
+    installNonShopFloorState();
+    game.level.flags.noteleport = true;
+    initRng(1);
+    game.u.ualign = { type: A_LAWFUL, record: 0 };
+    game.u.uluck = 2;
+    const glass = carriedGlassGem(876094, 'g', {
+        known: false,
+        kind: 'red gem',
+        actualKind: 'worthless piece of red glass',
+        line: 'g - a red gem',
+    });
+    const unicorn = unicornThrowTarget('white unicorn');
+    game.inventory = [glass];
+    game.level.monsters = [unicorn];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('g');
+    await rhack('l');
+
+    assert.match(game._pending_message, /The white unicorn catches the red gem\./);
+    assert.match(game._pending_message, /The white unicorn graciously accepts your gift\./);
+    assert.doesNotMatch(game._pending_message, /hits|misses|junk|shatters/);
+    assert.equal(unicorn.mhp, 24);
+    assert.equal(unicorn.mpeaceful, 1);
+    assert.equal(unicorn.mavenge, 0);
+    assert.equal(game.u.uluck, 2);
+    assert.equal(game.inventory.includes(glass), false);
+    assert.equal(game.level.objects.some(obj => obj.id === glass.id), false);
+    assert.equal(unicorn.minvent?.some(obj => obj.id === glass.id), true);
+    assert.deepEqual(getRngLog(), []);
+});
+
+test('hero-thrown ruby to tame unicorn is caught and dropped without gift effects', async () => {
+    installNonShopFloorState();
+    game.level.flags.noteleport = true;
+    initRng(1);
+    game.u.ualign = { type: A_LAWFUL, record: 0 };
+    game.u.uluck = 0;
+    const ruby = carriedRuby(876095, 'r', {
+        known: true,
+        kind: 'ruby',
+        actualKind: 'ruby',
+        gemDescription: 'ruby',
+        gemTough: true,
+        line: 'r - a ruby',
+    });
+    const unicorn = unicornThrowTarget('white unicorn', 7, 5, {
+        mtame: 1,
+        mpeaceful: 1,
+    });
+    game.inventory = [ruby];
+    game.level.monsters = [unicorn];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('r');
+    await rhack('l');
+
+    assert.match(game._pending_message, /The white unicorn catches and drops the ruby\./);
+    assert.doesNotMatch(game._pending_message, /accepts|hits|misses|shatters/);
+    assert.equal(unicorn.mhp, 24);
+    assert.equal(unicorn.mpeaceful, 1);
+    assert.equal(game.u.uluck, 0);
+    assert.equal((unicorn.minvent || []).some(obj => obj.id === ruby.id), false);
+    assert.equal(game.inventory.includes(ruby), false);
+    const landed = game.level.objects.find(obj => obj.id === ruby.id);
+    assert.ok(landed);
+    assert.equal(landed.ox, 7);
+    assert.equal(landed.oy, 5);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 1), [
+        'rn2(100)',
     ]);
 });
 
