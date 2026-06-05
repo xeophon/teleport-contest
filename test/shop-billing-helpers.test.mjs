@@ -45946,12 +45946,185 @@ test('upward hero-thrown nonempty sack uses generic weight damage and lands with
     assert.equal(landed.kind, 'sack');
     assert.equal(landed.ox, game.u.ux);
     assert.equal(landed.oy, game.u.uy);
-    const contents = landed.contents || landed.cobj || [];
+    const contents = [...new Set([...(landed.contents || []), ...(landed.cobj || [])])];
     assert.equal(contents.length, 1);
     assert.equal(contents[0].kind, 'food ration');
     assert.equal(contents[0].id, ration.id);
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
         'rn2(5)', 'rn2(100)', 'rn2(100)',
+    ]);
+});
+
+test('upward hero-thrown kind-only oilskin sack uses full contents weight damage', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, { uhp: 30, uhpmax: 30 });
+    const bag = {
+        ...sack(876903, 'b'),
+        kind: 'oilskin sack',
+        actualKind: 'oilskin sack',
+        line: 'b - an oilskin sack',
+    };
+    delete bag.otyp;
+    const stone = putObjectInContainer(bag, floorLoadstone(876904, { cursed: false, blessed: false }));
+    game.inventory = [bag];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('b');
+    await rhack('<');
+
+    const message = game._pending_message || '';
+    assert.equal(game._command_mode, null);
+    assert.match(message, /almost hits the ceiling, then falls back on top of your head\./);
+    assert.match(message, /hits the floor\./);
+    assert.doesNotMatch(message, /cmdassist|In what direction|It doesn't hurt|shatters|Splat/);
+    assert.equal(game.u.uhp, 29);
+    assert.equal(game.inventory.includes(bag), false);
+    assert.equal(game.level.objects.length, 1);
+    const landed = game.level.objects[0];
+    assert.equal(landed.actualKind, 'oilskin sack');
+    assert.equal(landed.ox, game.u.ux);
+    assert.equal(landed.oy, game.u.uy);
+    const contents = [...new Set([...(landed.contents || []), ...(landed.cobj || [])])];
+    assert.equal(contents.length, 1);
+    assert.equal(contents[0].id, stone.id);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rn2(5)', 'rn2(100)', 'rnd(6)', 'rn2(100)',
+    ]);
+});
+
+test('upward hero-thrown kind-only bag of holding halves contents weight when uncursed', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, { uhp: 30, uhpmax: 30 });
+    const bag = bagOfHolding(876905, 'b');
+    delete bag.otyp;
+    const stone = putObjectInContainer(bag, floorLoadstone(876906, { cursed: false, blessed: false }));
+    game.inventory = [bag];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('b');
+    await rhack('<');
+
+    const message = game._pending_message || '';
+    assert.equal(game._command_mode, null);
+    assert.match(message, /almost hits the ceiling, then falls back on top of your head\./);
+    assert.match(message, /hits the floor\./);
+    assert.doesNotMatch(message, /cmdassist|In what direction|It doesn't hurt|shatters|Splat/);
+    assert.equal(game.u.uhp, 29);
+    assert.equal(game.inventory.includes(bag), false);
+    assert.equal(game.level.objects.length, 1);
+    const landed = game.level.objects[0];
+    assert.equal(landed.actualKind, 'bag of holding');
+    assert.equal(landed.ox, game.u.ux);
+    assert.equal(landed.oy, game.u.uy);
+    const contents = [...new Set([...(landed.contents || []), ...(landed.cobj || [])])];
+    assert.equal(contents.length, 1);
+    assert.equal(contents[0].id, stone.id);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rn2(5)', 'rn2(100)', 'rnd(3)', 'rn2(100)',
+    ]);
+});
+
+test('upward hero-thrown bag of holding counts cobj contents when contents list is empty', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, { uhp: 30, uhpmax: 30 });
+    const bag = { ...bagOfHolding(876911, 'b'), contents: [] };
+    const stone = floorLoadstone(876912, { cursed: false, blessed: false });
+    delete stone.ox;
+    delete stone.oy;
+    stone.contained = true;
+    stone.container = bag;
+    bag.cobj = [stone];
+    game.inventory = [bag];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('b');
+    await rhack('<');
+
+    const message = game._pending_message || '';
+    assert.equal(game._command_mode, null);
+    assert.match(message, /almost hits the ceiling, then falls back on top of your head\./);
+    assert.match(message, /hits the floor\./);
+    assert.doesNotMatch(message, /cmdassist|In what direction|It doesn't hurt|shatters|Splat/);
+    assert.equal(game.u.uhp, 29);
+    assert.equal(game.inventory.includes(bag), false);
+    assert.equal(game.level.objects.length, 1);
+    const landed = game.level.objects[0];
+    assert.equal(landed.actualKind, 'bag of holding');
+    const contents = [...new Set([...(landed.contents || []), ...(landed.cobj || [])])];
+    assert.equal(contents.length, 1);
+    assert.equal(contents[0].id, stone.id);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rn2(5)', 'rn2(100)', 'rnd(3)', 'rn2(100)',
+    ]);
+});
+
+test('upward hero-thrown blessed bag of holding quarters contents weight', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, { uhp: 30, uhpmax: 30 });
+    const bag = { ...bagOfHolding(876907, 'b'), blessed: true, cursed: false };
+    const stone = putObjectInContainer(bag, floorLoadstone(876908, { cursed: false, blessed: false }));
+    game.inventory = [bag];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('b');
+    await rhack('<');
+
+    const message = game._pending_message || '';
+    assert.equal(game._command_mode, null);
+    assert.match(message, /almost hits the ceiling, then falls back on top of your head\./);
+    assert.match(message, /hits the floor\./);
+    assert.doesNotMatch(message, /cmdassist|In what direction|It doesn't hurt|shatters|Splat/);
+    assert.equal(game.u.uhp, 29);
+    assert.equal(game.inventory.includes(bag), false);
+    assert.equal(game.level.objects.length, 1);
+    const landed = game.level.objects[0];
+    assert.equal(landed.actualKind, 'bag of holding');
+    assert.equal(landed.blessed, true);
+    const contents = [...new Set([...(landed.contents || []), ...(landed.cobj || [])])];
+    assert.equal(contents.length, 1);
+    assert.equal(contents[0].id, stone.id);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rn2(5)', 'rn2(100)', 'rnd(2)', 'rn2(100)',
+    ]);
+});
+
+test('upward hero-thrown cursed bag of holding doubles contents weight before cap', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, { uhp: 30, uhpmax: 30 });
+    const bag = { ...bagOfHolding(876909, 'b'), cursed: true, blessed: false };
+    const stone = putObjectInContainer(bag, floorLoadstone(876910, { cursed: false, blessed: false }));
+    game.inventory = [bag];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('b');
+    await rhack('<');
+
+    const message = game._pending_message || '';
+    assert.equal(game._command_mode, null);
+    assert.match(message, /almost hits the ceiling, then falls back on top of your head\./);
+    assert.match(message, /hits the floor\./);
+    assert.doesNotMatch(message, /cmdassist|In what direction|It doesn't hurt|shatters|Splat/);
+    assert.equal(game.u.uhp, 27);
+    assert.equal(game.inventory.includes(bag), false);
+    assert.equal(game.level.objects.length, 1);
+    const landed = game.level.objects[0];
+    assert.equal(landed.actualKind, 'bag of holding');
+    assert.equal(landed.cursed, true);
+    const contents = [...new Set([...(landed.contents || []), ...(landed.cobj || [])])];
+    assert.equal(contents.length, 1);
+    assert.equal(contents[0].id, stone.id);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rn2(5)', 'rn2(100)', 'rnd(11)', 'rn2(100)',
     ]);
 });
 

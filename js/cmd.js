@@ -6455,6 +6455,8 @@ const OBJECT_WEIGHTS = {
     'magic marker': 2,
     'oil lamp': 20,
     'bag of tricks': 15,
+    'bag of holding': 15,
+    'oilskin sack': 15,
     'pick-axe': 100,
     'sack': 15,
     'silver bell': 10,
@@ -30644,6 +30646,21 @@ function startGlobShrinkTimeout(obj, when = 0) {
 }
 
 function globContents(obj) {
+    const contents = Array.isArray(obj?.contents) ? obj.contents : [];
+    const cobj = Array.isArray(obj?.cobj) ? obj.cobj : [];
+    if (contents.length && cobj.length) {
+        const seen = new Set();
+        const merged = [];
+        for (const item of [...contents, ...cobj]) {
+            const key = item?.id != null ? `id:${item.id}` : item;
+            if (seen.has(key)) continue;
+            seen.add(key);
+            merged.push(item);
+        }
+        return merged;
+    }
+    if (contents.length) return contents;
+    if (cobj.length) return cobj;
     if (Array.isArray(obj?.contents)) return obj.contents;
     if (Array.isArray(obj?.cobj)) return obj.cobj;
     return [];
@@ -31061,19 +31078,26 @@ function objectWeightClass(obj) {
 }
 
 function containerBaseWeight(obj) {
-    if (obj?.otyp === LARGE_BOX) return 350;
-    if (obj?.otyp === CHEST) return 600;
-    if (obj?.otyp === ICE_BOX) return 900;
+    const kind = objectWeightKind(obj);
+    if (obj?.otyp === LARGE_BOX || kind === 'large box') return 350;
+    if (obj?.otyp === CHEST || kind === 'chest') return 600;
+    if (obj?.otyp === ICE_BOX || kind === 'ice box') return 900;
     if (obj?.otyp === SACK || obj?.otyp === OILSKIN_SACK
-        || obj?.otyp === BAG_OF_HOLDING || obj?.otyp === BAG_OF_TRICKS)
+        || obj?.otyp === BAG_OF_HOLDING || obj?.otyp === BAG_OF_TRICKS
+        || kind === 'sack' || kind === 'oilskin sack'
+        || kind === 'bag of holding' || kind === 'bag of tricks')
         return 15;
     return null;
 }
 
 function isGlobWeightContainerObject(obj) {
+    const kind = objectWeightKind(obj);
     return obj?.otyp === LARGE_BOX || obj?.otyp === CHEST || obj?.otyp === ICE_BOX
         || obj?.otyp === SACK || obj?.otyp === OILSKIN_SACK
-        || obj?.otyp === BAG_OF_HOLDING || obj?.otyp === BAG_OF_TRICKS;
+        || obj?.otyp === BAG_OF_HOLDING || obj?.otyp === BAG_OF_TRICKS
+        || kind === 'large box' || kind === 'chest' || kind === 'ice box'
+        || kind === 'sack' || kind === 'oilskin sack'
+        || kind === 'bag of holding' || kind === 'bag of tricks';
 }
 
 const WISHED_OBJECT_WEIGHT_OVERRIDES = new Map([
@@ -31092,7 +31116,7 @@ function globObjectWeight(obj) {
     const contents = globContents(obj);
     if (contents.length || isGlobWeightContainerObject(obj)) {
         let contentsWeight = contents.reduce((sum, item) => sum + globObjectWeight(item), 0);
-        if (obj?.otyp === BAG_OF_HOLDING) {
+        if (isBagOfHoldingObject(obj)) {
             contentsWeight = obj.cursed ? contentsWeight * 2
                 : obj.blessed ? Math.trunc((contentsWeight + 3) / 4)
                     : Math.trunc((contentsWeight + 1) / 2);
