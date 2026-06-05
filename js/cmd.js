@@ -18107,6 +18107,30 @@ function heroKickedStoneMissileRockPasserImpact(obj, mon) {
     return { handled: true, hit: false, messages };
 }
 
+function heroKickedGlassGemImpact(obj, mon) {
+    if (!heroThrownGlassGemObject(obj)) return { handled: false, messages: [] };
+    const dieroll = rnd(20);
+    const targetName = heroThrownVenomTargetName(mon);
+    if (heroKickedProjectileHitValue(obj, mon) >= dieroll) {
+        const damage = rnd(2);
+        mon.mhp = (mon.mhp || 1) - damage;
+        if ((mon.mhp || 0) <= 0) mon.dead = true;
+        wakeMonsterFromHeroThrownHit(mon);
+        const mulched = shouldMulchHeroProjectileMissile(obj);
+        if (mulched) rn2(100);
+        return {
+            handled: true,
+            hit: true,
+            damage,
+            mulched,
+            messages: [`${floorObjectTheSubject({ ...obj, quan: 1 })} hits ${targetName}.`],
+        };
+    }
+    const messages = [`The ${pickupObjectName({ ...obj, quan: 1 })} misses the ${mon?.data?.name || 'creature'}.`];
+    messages.push(...wakeMonsterFromHeroThrownMiss(mon));
+    return { handled: true, hit: false, messages };
+}
+
 function heroThrownGlassGemObject(obj) {
     return !!obj && (itemClassKey(obj) === 'gem' || obj.glyph === '*' || obj.otyp === GEM_CLASS)
         && stoneToFleshObjectMaterial(obj) === 'glass';
@@ -27231,7 +27255,9 @@ function kickFloorObjectToward(dir, x, y) {
     const targetMon = (game.level?.monsters || []).find(mon =>
         mon && !mon.dead && mon.mx === landX && mon.my === landY
         && (mon.mhp == null || mon.mhp > 0));
-    const canHandleMonsterImpact = targetMon && heroThrownStoneMissileHarmlessRockPasser(obj, targetMon);
+    const canHandleMonsterImpact = targetMon
+        && (heroThrownStoneMissileHarmlessRockPasser(obj, targetMon)
+            || (heroThrownTargetPassesRocks(targetMon) && heroThrownGlassGemObject(obj)));
     const gate = remoteProjectileDownGateAt(obj, landX, landY);
     if (!gate && !canHandleMonsterImpact) return { handled: false };
 
@@ -27241,7 +27267,11 @@ function kickFloorObjectToward(dir, x, y) {
         return { handled: true, messages, moved: false };
     }
 
-    const monsterImpact = canHandleMonsterImpact ? heroKickedStoneMissileRockPasserImpact(obj, targetMon) : { handled: false };
+    let monsterImpact = { handled: false };
+    if (canHandleMonsterImpact) {
+        monsterImpact = heroKickedStoneMissileRockPasserImpact(obj, targetMon);
+        if (!monsterImpact.handled) monsterImpact = heroKickedGlassGemImpact(obj, targetMon);
+    }
     if (monsterImpact.handled) {
         removeFloorObject(obj);
         newsym(x, y);

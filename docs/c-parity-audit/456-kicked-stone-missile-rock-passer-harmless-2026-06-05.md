@@ -39,5 +39,5 @@ Implemented the narrow kicked-object `stone_missile() && passes_rocks()` branch.
 
 ## Remaining
 
-- This is not a broad kicked-object `thitmonst()` conversion. Generic kicked object damage, kicked glass gem damage, passive-object side effects, monster pickup/catch handling, and full kicked-object flight through multiple squares remain separate work.
+- This is not a broad kicked-object `thitmonst()` conversion. Generic kicked object damage, passive-object side effects, monster pickup/catch handling, and full kicked-object flight through multiple squares remain separate work. Kicked glass gem rock-passer damage is covered separately in audit 458.
 - Direct hero-thrown stone missile rock-passer harmless hits are covered in audit 455; generic direct thrown weapon/gem/rock damage remains separate.
