@@ -18489,6 +18489,74 @@ test('pet known spent dart trap can vanish without firing', async () => {
     assert.equal(game.level.objects.some(obj => obj.ox === 6 && obj.oy === 5), false);
 });
 
+function installMonsterSleepGasTrapState(extra = {}) {
+    installStableNonShopFloorState();
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 50,
+        uhpmax: 50,
+        uac: 10,
+    });
+    game.inventory = [];
+    const trap = { ttyp: SLP_GAS_TRAP, tx: 6, ty: 5, tseen: false };
+    game.level.traps = [trap];
+    const goblin = dartTrapGoblin(31409, {
+        mx: 6,
+        my: 5,
+        mhp: 10,
+        mhpmax: 10,
+        mcanmove: true,
+        msleeping: 0,
+        mfrozen: 0,
+        ...extra,
+    });
+    game.level.monsters = [goblin];
+    return { trap, goblin };
+}
+
+test('known sleep gas trap can be avoided by monster before gas effects', async () => {
+    const { trap, goblin } = installMonsterSleepGasTrapState({
+        mtrapseen: 1 << (SLP_GAS_TRAP - 1),
+    });
+    enableRngLog({ reset: true });
+    installCoreRngValues([1]);
+
+    markHeroNeighborhoodVisible();
+    markSquareVisible(goblin.mx, goblin.my);
+    assert.equal(allmain.monsterSleepGasTrapEffectForTest(goblin, trap), true);
+    const messages = [game._pending_message, ...(await drainQueuedMessagesAfterMore())].join(' ');
+
+    assert.deepEqual(getRngLog().map(rngCallName), ['rn2(4)']);
+    assert.doesNotMatch(messages, /falls asleep/);
+    assert.equal(goblin.mx, 6);
+    assert.equal(goblin.my, 5);
+    assert.equal(goblin.mcanmove, true);
+    assert.equal(goblin.mfrozen, 0);
+    assert.equal(trap.tseen, false);
+});
+
+test('known sleep gas trap failed monster avoidance still applies gas', async () => {
+    const { trap, goblin } = installMonsterSleepGasTrapState({
+        mtrapseen: 1 << (SLP_GAS_TRAP - 1),
+    });
+    enableRngLog({ reset: true });
+    installCoreRngValues([0, 4]);
+
+    markHeroNeighborhoodVisible();
+    markSquareVisible(goblin.mx, goblin.my);
+    assert.equal(allmain.monsterSleepGasTrapEffectForTest(goblin, trap), true);
+    const messages = [game._pending_message, ...(await drainQueuedMessagesAfterMore())].join(' ');
+
+    assert.deepEqual(getRngLog().map(rngCallName), ['rn2(4)', 'rnd(25)']);
+    assert.match(messages, /The goblin suddenly falls asleep!/);
+    assert.equal(goblin.mx, 6);
+    assert.equal(goblin.my, 5);
+    assert.equal(goblin.mcanmove, false);
+    assert.equal(goblin.mfrozen, 5);
+    assert.equal(trap.tseen, true);
+});
+
 test('mounted hero sleep gas trap sleeps hero then steed', async () => {
     installStableNonShopFloorState();
     vision_reset();

@@ -10452,6 +10452,13 @@ function monsterPolymorphTrapEffect(mon, trap) {
     return true;
 }
 
+function monsterAvoidsKnownTrapEffect(mon, trap) {
+    if (!trap?.ttyp) return false;
+    const alreadySeen = monsterKnowsTrap(mon, trap.ttyp)
+        || (trap.ttyp === HOLE && !mon.data?.mindless);
+    return alreadySeen && rn2(4);
+}
+
 function monsterTrapHarmless(mon, trap) {
     const ttyp = trap?.ttyp;
     const data = mon.data || {};
@@ -10463,6 +10470,24 @@ function monsterTrapHarmless(mon, trap) {
     if (ttyp === WEB) return monsterWebPassesThrough(data);
     if (ttyp === ANTI_MAGIC) return data.resistsMagic || data.defendsMagic;
     return ttyp === STATUE_TRAP || ttyp === MAGIC_TRAP || ttyp === VIBRATING_SQUARE;
+}
+
+function monsterSleepGasTrapEffect(mon, trap) {
+    if (trap?.ttyp !== SLP_GAS_TRAP) return false;
+    if (monsterAvoidsKnownTrapEffect(mon, trap)) return true;
+    if (monsterTrapHarmless(mon, trap)) return true;
+    monsterTriggerTrap(mon, trap);
+    if (mon.mcanmove !== false && !mon.msleeping
+        && !mon.data?.resistsSleep && !mon.data?.breathless) {
+        const duration = rnd(25);
+        mon.mcanmove = false;
+        mon.mfrozen = Math.min((mon.mfrozen || 0) + duration, 127);
+        if (couldSeeCoord(mon.mx, mon.my)) {
+            trap.tseen = true;
+            addToplineMessage(`${monsterDisplayName(mon)} suddenly falls asleep!`);
+        }
+    }
+    return true;
 }
 
 function trapDartDamage(dart, mon) {
@@ -11794,18 +11819,7 @@ function moveMonsterTowardHero(mon, conflictActive = false, monIndex = null, som
         rn2(21);
     }
     if (trap?.ttyp === ANTI_MAGIC) monsterTriggerTrap(mon, trap);
-    if (trap?.ttyp === SLP_GAS_TRAP && monsterTrapHarmless(mon, trap)) return done();
-    if (trap?.ttyp === SLP_GAS_TRAP) monsterTriggerTrap(mon, trap);
-    if (trap?.ttyp === SLP_GAS_TRAP && mon.mcanmove !== false && !mon.msleeping
-        && !mon.data?.resistsSleep && !mon.data?.breathless) {
-        const duration = rnd(25);
-        mon.mcanmove = false;
-        mon.mfrozen = Math.min((mon.mfrozen || 0) + duration, 127);
-        if (couldSeeCoord(mon.mx, mon.my)) {
-            trap.tseen = true;
-            addToplineMessage(`${monsterDisplayName(mon)} suddenly falls asleep!`);
-        }
-    }
+    if (monsterSleepGasTrapEffect(mon, trap)) return true;
     if (trap?.ttyp === FIRE_TRAP && !monsterTrapHarmless(mon, trap)) {
         if (monsterKnowsTrap(mon, trap.ttyp) && rn2(4)) return done();
         if (monsterFireTrapEffect(mon, trap)) return done();
@@ -14417,4 +14431,5 @@ export async function moveloop(_resuming) {
 export const __allmainTestHooks = {
     mfndposForTest: mfndpos,
     monsterAllowFlagsForTest: monsterAllowFlags,
+    monsterSleepGasTrapEffectForTest: monsterSleepGasTrapEffect,
 };
