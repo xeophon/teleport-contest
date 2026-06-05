@@ -19286,7 +19286,12 @@ function applyHeroThrownCorpseFallingDamage(damage, messages) {
         const result = rehumanizeAfterPolyselfDeath();
         messages.push(...result.messages);
         if (result.died) {
-            messages.fatal = true;
+            if (consumeLifeSavingAmulet({ clearStoning: !!result.clearStoningOnLifeSaving })) {
+                messages.push('You die...  But wait...  Your medallion begins to glow!');
+                messages.lifeSaving = true;
+            } else {
+                messages.fatal = true;
+            }
             messages.more = true;
         }
         return;
@@ -61798,6 +61803,11 @@ export async function rhack(_cmd) {
             game._throw_item_letter = null;
             game._resume_time_after_more = 0;
             game.context.move = 0;
+            if (messages.lifeSaving) {
+                game._command_mode = 'lifeSavingMore';
+                game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
+                return;
+            }
             if (messages.fatal) {
                 game._command_mode = 'deathDieMore';
                 game._pending_time_passed = 0;
@@ -61860,12 +61870,25 @@ export async function rhack(_cmd) {
             const messages = heroThrownCrackableArmorUpwardMessages(thrownObject);
             removeInventoryItem(item, 1);
             newsym(game.u?.ux || 0, game.u?.uy || 0);
-            await setMessage(messages.join('  '));
-            game._command_mode = null;
+            await setMessage(messages.join('  '), !!messages.more);
             game._throw_item_letter = null;
             game._resume_time_after_more = 0;
-            game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
             game.context.move = 0;
+            if (messages.lifeSaving) {
+                game._command_mode = 'lifeSavingMore';
+                game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
+                return;
+            }
+            if (messages.fatal) {
+                game._command_mode = 'deathDieMore';
+                game._pending_time_passed = 0;
+                game._process_command_time_now = 0;
+                game._run_steps_remaining = 0;
+                prepareDeathBones();
+                return;
+            }
+            game._command_mode = null;
+            game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
             return;
         }
         if (ch === '<' && supportsHeroThrownFragileObjectUpwardHit(item)) {
@@ -61922,6 +61945,11 @@ export async function rhack(_cmd) {
             game._throw_item_letter = null;
             game._resume_time_after_more = 0;
             game.context.move = 0;
+            if (messages.lifeSaving) {
+                game._command_mode = 'lifeSavingMore';
+                game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
+                return;
+            }
             if (messages.fatal) {
                 game._command_mode = 'deathDieMore';
                 game._pending_time_passed = 0;

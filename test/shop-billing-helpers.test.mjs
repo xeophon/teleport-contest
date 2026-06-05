@@ -46475,6 +46475,54 @@ test('upward hero-thrown tin opener fatal polyself self-hit rehumanizes after la
     ]);
 });
 
+test('upward hero-thrown tin opener rehumanizes then selftouches wielded cockatrice corpse', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    installStoneGolemPolyself();
+    game.u.uhp = 1;
+    const body = corpse(876922, 'c', 'cockatrice');
+    body.wielded = true;
+    body.line = 'c - a cockatrice corpse (weapon in hand)';
+    const opener = ordinaryTool(876923, 'tin opener', 't');
+    game.inventory = [body, opener];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('t');
+    await rhack('<');
+
+    const message = game._pending_message || '';
+    assert.equal(game._command_mode, 'deathDieMore');
+    assert.match(message, /A tin opener almost hits the ceiling, then falls back on top of your head\./);
+    assert.match(message, /A tin opener hits the floor\./);
+    assert.match(message, /You return to human form!/);
+    assert.match(message, /No longer petrify-resistant, you touch the cockatrice corpse\./);
+    assert.match(message, /You turn to stone\.\.\./);
+    assert.equal(message.indexOf('A tin opener hits the floor.') < message.indexOf('You return to human form!'), true);
+    assert.equal(message.indexOf('You return to human form!') < message.indexOf('No longer petrify-resistant'), true);
+    assert.equal(message.indexOf('No longer petrify-resistant') < message.indexOf('You turn to stone...'), true);
+    assert.doesNotMatch(message, /cmdassist|In what direction|Your old form was not healthy enough|You die|killed by a falling object|It doesn't hurt|shatters|Splat/);
+    assert.equal(game._message_more, 1);
+    assert.equal(game.context.move, 0);
+    assert.equal(game._pending_time_passed, 0);
+    assert.equal(game._death_cause, 'petrified by a cockatrice corpse');
+    assert.equal(game._death_bones_body, 'statue');
+    assert.equal(game.u._polyself_form, null);
+    assert.equal(game.u._polyself_base, null);
+    assert.equal(game.u.uhp, 0);
+    assert.equal(game.inventory.includes(body), true);
+    assert.equal(body.wielded, true);
+    assert.equal(game.inventory.includes(opener), false);
+    assert.equal(game.level.objects.length, 1);
+    const landed = game.level.objects[0];
+    assert.equal(landed.kind, 'tin opener');
+    assert.equal(landed.ox, game.u.ux);
+    assert.equal(landed.oy, game.u.uy);
+    assert.deepEqual(getRngLog().map(rngCallName).slice(0, 3), [
+        'rn2(5)', 'rn2(100)', 'rn2(100)',
+    ]);
+});
+
 test('upward hero-thrown tin opener polyself old form too weak to survive', async () => {
     installNonShopFloorState();
     initRng(1);
@@ -48801,6 +48849,47 @@ test('upward hero-thrown crystal plate mail resisted crack uses hard helmet fall
     assert.equal(landed.ox, game.u.ux);
     assert.equal(landed.oy, game.u.uy);
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rn2(5)', 'rn2(100)', 'rnd(5)', 'rn2(100)',
+    ]);
+});
+
+test('upward hero-thrown crystal plate mail fatal polyself old form death uses more', async () => {
+    installNonShopFloorState();
+    initRng(20);
+    installStoneGolemPolyself();
+    game.u.uhp = 1;
+    game.u._polyself_base.uhp = 0;
+    const armor = carriedGlassArmor(988760, 'a');
+    game.inventory = [armor];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('a');
+    await rhack('<');
+
+    const message = game._pending_message || '';
+    assert.equal(game._command_mode, 'deathDieMore');
+    assert.match(message, /A crystal plate mail almost hits the ceiling, then falls back on top of your head\./);
+    assert.match(message, /A crystal plate mail hits the floor\./);
+    assert.match(message, /You return to human form!/);
+    assert.match(message, /Your old form was not healthy enough to survive\./);
+    assert.equal(message.indexOf('A crystal plate mail hits the floor.') < message.indexOf('You return to human form!'), true);
+    assert.equal(message.indexOf('You return to human form!') < message.indexOf('Your old form was not healthy enough to survive.'), true);
+    assert.doesNotMatch(message, /You die|killed by a falling object|cmdassist|In what direction|The mail cracks|The mail shatters|It doesn't hurt/);
+    assert.equal(game._message_more, 1);
+    assert.equal(game.context.move, 0);
+    assert.equal(game._pending_time_passed, 0);
+    assert.equal(game._death_cause, 'killed by reverting to unhealthy human form');
+    assert.equal(game.u._polyself_form, null);
+    assert.equal(game.u._polyself_base, null);
+    assert.equal(game.u.uhp, 0);
+    assert.equal(game.inventory.includes(armor), false);
+    assert.equal(game.level.objects.length, 1);
+    const landed = game.level.objects[0];
+    assert.equal(landed.kind, 'crystal plate mail');
+    assert.equal(landed.ox, game.u.ux);
+    assert.equal(landed.oy, game.u.uy);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 4), [
         'rn2(5)', 'rn2(100)', 'rnd(5)', 'rn2(100)',
     ]);
 });
