@@ -46142,6 +46142,157 @@ test('upward hero-thrown cursed bag of holding doubles contents weight before ca
     ]);
 });
 
+test('upward hero-thrown heavy sack bills broken contents before fatal falling-object damage', async () => {
+    const { shkp } = installCommandShopState();
+    initRng(1);
+    Object.assign(game.u, {
+        uhp: 1,
+        uhpmax: 1,
+        uinwater: 1,
+        underwater: true,
+        uunderwater: true,
+    });
+    const bag = sack(876913, 'b');
+    const stone = putObjectInContainer(bag, floorLoadstone(876914, { cursed: false, blessed: false }));
+    const potion = putObjectInContainer(bag, oilPotion(876918));
+    shop.addObjectToShopBill(shkp, potion, 20);
+    game.inventory = [bag];
+    const hpBefore = game.u.uhp;
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('b');
+    await rhack('<');
+
+    const message = game._pending_message || '';
+    const log = getRngLog();
+    const damage = rngValuesForCall(log, 'rnd(6)')[0];
+    assert.equal(game._command_mode, 'deathDieMore');
+    assert.match(message, /A bag almost hits the shop's ceiling, then falls back on top of your head\./);
+    assert.match(message, /A bag hits the floor\./);
+    assert.match(message, /You hear a muffled shatter\./);
+    assert.match(message, /You owe Izchak 20 zorkmids? for objects destroyed\./);
+    assert.match(message, /You die\.\.\./);
+    assert.equal(message.indexOf('A bag hits the floor.') < message.indexOf('You die...'), true);
+    assert.equal(message.indexOf('muffled shatter') < message.indexOf('You die...'), true);
+    assert.equal(message.indexOf('You owe Izchak 20') < message.indexOf('You die...'), true);
+    assert.doesNotMatch(message, /cmdassist|In what direction|It doesn't hurt|Splat|Fortunately|does not protect/);
+    assert.equal(game.u.uhp, Math.max(0, hpBefore - damage));
+    assert.equal(game._death_cause, 'killed by a falling object');
+    assert.equal(shkp.debit, 20);
+    assert.equal(shkp.billct, 0);
+    assert.equal(shop.shopBillEntryForObject(shkp, potion), null);
+    assert.equal(game.inventory.includes(bag), false);
+    assert.equal(game.level.objects.length, 1);
+    const landed = game.level.objects[0];
+    assert.equal(landed.actualKind, 'sack');
+    assert.equal(landed.ox, game.u.ux);
+    assert.equal(landed.oy, game.u.uy);
+    const contents = [...new Set([...(landed.contents || []), ...(landed.cobj || [])])];
+    assert.equal(contents.length, 1);
+    assert.equal(contents[0].id, stone.id);
+    assert.equal(contents.some(obj => obj.id === potion.id), false);
+    assert.deepEqual(log.map(rngCallName).slice(0, 4), [
+        'rn2(5)', 'rn2(100)', 'rnd(6)', 'rn2(100)',
+    ]);
+});
+
+test('upward hero-thrown cursed bag of holding fatal self-hit rolls adjusted contents weight before cap', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, {
+        uhp: 1,
+        uhpmax: 1,
+        uinwater: 1,
+        underwater: true,
+        uunderwater: true,
+    });
+    const bag = { ...bagOfHolding(876915, 'b'), cursed: true, blessed: false };
+    const stone = putObjectInContainer(bag, floorLoadstone(876916, { cursed: false, blessed: false }));
+    game.inventory = [bag];
+    const hpBefore = game.u.uhp;
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('b');
+    await rhack('<');
+
+    const message = game._pending_message || '';
+    const log = getRngLog();
+    const damage = Math.min(rngValuesForCall(log, 'rnd(11)')[0], 6);
+    assert.equal(game._command_mode, 'deathDieMore');
+    assert.match(message, /A bag almost hits the water's surface, then falls back on top of your head\./);
+    assert.match(message, /A bag hits the floor\./);
+    assert.match(message, /You die\.\.\./);
+    assert.equal(message.indexOf('A bag hits the floor.') < message.indexOf('You die...'), true);
+    assert.doesNotMatch(message, /cmdassist|In what direction|It doesn't hurt|shatters|Splat|Fortunately|does not protect/);
+    assert.equal(game.u.uhp, Math.max(0, hpBefore - damage));
+    assert.equal(game._death_cause, 'killed by a falling object');
+    assert.equal(game.inventory.includes(bag), false);
+    assert.equal(game.level.objects.length, 1);
+    const landed = game.level.objects[0];
+    assert.equal(landed.actualKind, 'bag of holding');
+    assert.equal(landed.cursed, true);
+    assert.equal(landed.ox, game.u.ux);
+    assert.equal(landed.oy, game.u.uy);
+    const contents = [...new Set([...(landed.contents || []), ...(landed.cobj || [])])];
+    assert.equal(contents.length, 1);
+    assert.equal(contents[0].id, stone.id);
+    assert.deepEqual(log.map(rngCallName).slice(0, 4), [
+        'rn2(5)', 'rn2(100)', 'rnd(11)', 'rn2(100)',
+    ]);
+});
+
+test('upward hero-thrown heavy container hard helmet can still be fatal at one HP', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, {
+        uhp: 1,
+        uhpmax: 1,
+        uinwater: 1,
+        underwater: true,
+        uunderwater: true,
+    });
+    const bag = sack(876917, 'b');
+    const stone = putObjectInContainer(bag, floorLoadstone(876919, { cursed: false, blessed: false }));
+    const helmet = wornArmor(876920, 'orcish helm', 'h', 0);
+    game.inventory = [bag, helmet];
+    const hpBefore = game.u.uhp;
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('b');
+    await rhack('<');
+
+    const message = game._pending_message || '';
+    const log = getRngLog();
+    const rawDamage = Math.min(rngValuesForCall(log, 'rnd(6)')[0], 6);
+    const damage = rawDamage > 1 ? 1 : rawDamage;
+    assert.equal(game._command_mode, 'deathDieMore');
+    assert.match(message, /A bag almost hits the water's surface, then falls back on top of your head\./);
+    assert.match(message, /Your helm does not protect you\./);
+    assert.match(message, /A bag hits the floor\./);
+    assert.match(message, /You die\.\.\./);
+    assert.equal(message.indexOf('Your helm does not protect you.') < message.indexOf('A bag hits the floor.'), true);
+    assert.equal(message.indexOf('A bag hits the floor.') < message.indexOf('You die...'), true);
+    assert.doesNotMatch(message, /cmdassist|In what direction|It doesn't hurt|shatters|Splat|Fortunately/);
+    assert.equal(game.u.uhp, Math.max(0, hpBefore - damage));
+    assert.equal(game._death_cause, 'killed by a falling object');
+    assert.equal(game.inventory.includes(helmet), true);
+    assert.equal(game.inventory.includes(bag), false);
+    assert.equal(game.level.objects.length, 1);
+    const landed = game.level.objects[0];
+    assert.equal(landed.actualKind, 'sack');
+    assert.equal(landed.ox, game.u.ux);
+    assert.equal(landed.oy, game.u.uy);
+    const contents = [...new Set([...(landed.contents || []), ...(landed.cobj || [])])];
+    assert.equal(contents.length, 1);
+    assert.equal(contents[0].id, stone.id);
+    assert.deepEqual(log.map(rngCallName).slice(0, 4), [
+        'rn2(5)', 'rn2(100)', 'rnd(6)', 'rn2(100)',
+    ]);
+});
+
 test('upward hero-thrown plain dagger self-hits, damages, and lands', async () => {
     installNonShopFloorState();
     initRng(1);
