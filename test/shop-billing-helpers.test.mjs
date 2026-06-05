@@ -34473,6 +34473,131 @@ test('production monster sling rock hit on intervening monster can mulch before 
         preNhgetchMessages.join('\n'));
 });
 
+test('production monster sling rock reveals object mimic on intervening hit', async () => {
+    const mimic = ordinaryThrowTarget('large mimic', 8, 5, {
+        ac: 15,
+        mac: 15,
+        mhp: 20,
+        mhpmax: 20,
+        m_ap_type: M_AP_OBJECT,
+        appearObj: 215,
+        appearGlyph: '(',
+        appearColor: 7,
+        data: { name: 'large mimic', mlevel: 8, mlet: 'mimic', mac: 15 },
+    });
+    const incomingRock = monsterThrownRock(874515);
+    const { ammo, thrower, rawRng, preNhgetchMessages } = await runMonsterSlingRockLanding({
+        seed: 3,
+        uac: 100,
+        heroBlind: false,
+        projectile: incomingRock,
+        levelCells: [[7, 5, { typ: IRONBARS }]],
+        extraMonsters: [mimic],
+    });
+    const messages = preNhgetchMessages.join('\n');
+
+    assert.match(messages, /rock hits the large mimic[.!]/);
+    assert.doesNotMatch(messages, /really/);
+    assert.equal(game.u.uhp, 20);
+    assert.equal(game._damage_after_topline_more || 0, 0, rawRng.join(', '));
+    assert.equal(mimic.mhp < 20, true, rawRng.join(', '));
+    assert.equal(mimic.msleeping, 0);
+    assert.equal(mimic.m_ap_type || 0, 0);
+    assert.equal(mimic.appearObj ?? null, null);
+    assert.equal(mimic.appearGlyph ?? null, null);
+    assert.equal(mimic.appearColor ?? null, null);
+    assert.equal(thrower.minvent.some(obj => obj.id === ammo.id), false);
+
+    const landed = game.level.objects.find(obj => obj.id === ammo.id);
+    assert.ok(landed, rawRng.join(', '));
+    assert.equal(landed.ox, 8);
+    assert.equal(landed.oy, 5);
+    assert.equal(landed.transientProjectile, false);
+    assert.equal(preNhgetchMessages.some(message => /Clonk!/.test(message)), false);
+});
+
+test('production monster sling loadstone reveals furniture mimic on intervening hit', async () => {
+    const mimic = ordinaryThrowTarget('large mimic', 8, 5, {
+        ac: 15,
+        mac: 15,
+        mhp: 20,
+        mhpmax: 20,
+        m_ap_type: M_AP_FURNITURE,
+        appearGlyph: '{',
+        appearColor: 7,
+        data: { name: 'large mimic', mlevel: 8, mlet: 'mimic', mac: 15 },
+    });
+    const loadstone = monsterThrownGem(874516, 'loadstone', {
+        otyp: LOADSTONE,
+        cursed: false,
+        gemDescription: 'gray stone',
+    });
+    const { ammo, thrower, rawRng, preNhgetchMessages } = await runMonsterSlingRockLanding({
+        seed: 3,
+        uac: 100,
+        heroBlind: false,
+        projectile: loadstone,
+        levelCells: [[7, 5, { typ: IRONBARS }]],
+        extraMonsters: [mimic],
+    });
+    const messages = preNhgetchMessages.join('\n');
+
+    assert.match(messages, /loadstone hits the large mimic[.!]/);
+    assert.doesNotMatch(messages, /really/);
+    assert.equal(game.u.uhp, 20);
+    assert.equal(game._damage_after_topline_more || 0, 0, rawRng.join(', '));
+    assert.equal(mimic.mhp < 20, true, rawRng.join(', '));
+    assert.equal(mimic.msleeping, 0);
+    assert.equal(mimic.m_ap_type || 0, 0);
+    assert.equal(mimic.appearObj ?? null, null);
+    assert.equal(mimic.appearGlyph ?? null, null);
+    assert.equal(mimic.appearColor ?? null, null);
+    assert.equal(thrower.minvent.some(obj => obj.id === ammo.id), false);
+
+    const landed = game.level.objects.find(obj => obj.id === ammo.id);
+    assert.ok(landed, rawRng.join(', '));
+    assert.equal(landed.ox, 8);
+    assert.equal(landed.oy, 5);
+    assert.equal(landed.transientProjectile, false);
+    assert.equal(preNhgetchMessages.some(message => /Clonk!/.test(message)), false);
+});
+
+test('production monster sling rock leaves ordinary hidden intervening target concealed', async () => {
+    const trapper = ordinaryThrowTarget('trapper', 8, 5, {
+        ac: 15,
+        mac: 15,
+        mhp: 20,
+        mhpmax: 20,
+        mundetected: true,
+        data: { name: 'trapper', mlevel: 12, mac: 15 },
+    });
+    const incomingRock = monsterThrownRock(874519);
+    const { ammo, thrower, rawRng, preNhgetchMessages } = await runMonsterSlingRockLanding({
+        seed: 3,
+        uac: 100,
+        projectile: incomingRock,
+        levelCells: [[7, 5, { typ: IRONBARS }]],
+        extraMonsters: [trapper],
+    });
+    const messages = preNhgetchMessages.join('\n');
+
+    assert.match(messages, /It is hit[.!]/);
+    assert.doesNotMatch(messages, /trapper/);
+    assert.equal(game.u.uhp, 20);
+    assert.equal(game._damage_after_topline_more || 0, 0, rawRng.join(', '));
+    assert.equal(trapper.mhp < 20, true, rawRng.join(', '));
+    assert.equal(trapper.msleeping, 0);
+    assert.equal(trapper.mundetected, true);
+    assert.equal(thrower.minvent.some(obj => obj.id === ammo.id), false);
+
+    const landed = game.level.objects.find(obj => obj.id === ammo.id);
+    assert.ok(landed, rawRng.join(', '));
+    assert.equal(landed.ox, 8);
+    assert.equal(landed.oy, 5);
+    assert.equal(landed.transientProjectile, false);
+    assert.equal(preNhgetchMessages.some(message => /Clonk!/.test(message)), false);
+});
+
 test('production monster sling sleeping target omon_adj can turn intervening miss into hit', async () => {
     const blocker = ordinaryThrowTarget('goblin', 8, 5, {
         ac: 13,

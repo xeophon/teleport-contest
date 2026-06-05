@@ -6260,6 +6260,7 @@ export async function processMonsterTurns() {
                             } else if (interveningTarget) {
                                 const harmlessStoneHit = monsterSlingAmmoHarmlessStoneHit(thrownMissile, interveningTarget);
                                 const damage = Math.max(1, rnd(monsterSlingAmmoDamageSides(thrownMissile)));
+                                revealProjectileHitMimicAppearance(interveningTarget);
                                 interveningTarget.msleeping = 0;
                                 if (!harmlessStoneHit)
                                     interveningTarget.mhp = Math.max(0, (interveningTarget.mhp || 1) - damage);
