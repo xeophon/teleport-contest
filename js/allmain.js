@@ -10449,10 +10449,18 @@ function monsterTrapHarmless(mon, trap) {
     return ttyp === STATUE_TRAP || ttyp === MAGIC_TRAP || ttyp === VIBRATING_SQUARE;
 }
 
-function trapDartDamage(mon) {
+function trapDartDamage(dart, mon) {
     const data = mon?.data || {};
     const die = mon?.big || mon?.bigmonst || data.big || data.bigmonst ? 2 : 3;
-    return Math.max(1, rnd(die));
+    let damage = rnd(die) + Math.trunc(Number(dart?.spe || 0));
+    if (damage < 0) damage = 0;
+    damage += monsterThrownObjectBlessedHitDamage(mon, dart);
+    if (damage > 0) {
+        const erosion = Math.max(0, Math.trunc(Number(dart?.oeroded || 0)),
+            Math.trunc(Number(dart?.oeroded2 || 0)), Math.trunc(Number(dart?.erosion || 0)));
+        damage = Math.max(1, damage - erosion);
+    }
+    return Math.max(1, damage);
 }
 
 function monsterPossessiveName(mon) {
@@ -11856,9 +11864,9 @@ function moveMonsterTowardHero(mon, conflictActive = false, monIndex = null, som
         dart.opoisoned = !rn2(6);
         const inSight = !game.u?.blind && couldSeeCoord(mon.mx, mon.my) && !mon.minvis && !mon.mundetected;
         if (inSight) trap.tseen = true;
-        const hit = (mon.data?.mac ?? 10) + 7 <= rnd(20);
+        const hit = (mon.data?.mac ?? 10) + 7 + Math.trunc(Number(dart.spe || 0)) <= rnd(20);
         if (hit) {
-            mon.mhp = (mon.mhp || 1) - trapDartDamage(mon);
+            mon.mhp = (mon.mhp || 1) - trapDartDamage(dart, mon);
             if (inSight) addToplineMessage(`${monsterDisplayName(mon, true)} is hit by a dart!`);
             if (mon.mhp < 1) {
                 if (inSight) addToplineMessage(`${monsterDisplayName(mon)} is killed!`);
@@ -13049,9 +13057,9 @@ function movePet(mon, resumeAfterInventory = false, conflictActive = false) {
         const dart = mksobj(DART, true, false);
         dart.quan = 1;
         dart.opoisoned = !rn2(6);
-        const hit = (mon.data?.mac ?? 6) + 7 <= rnd(20);
+        const hit = (mon.data?.mac ?? 6) + 7 + Math.trunc(Number(dart.spe || 0)) <= rnd(20);
         if (hit) {
-            mon.mhp = Math.max(0, (mon.mhp || 1) - trapDartDamage(mon));
+            mon.mhp = Math.max(0, (mon.mhp || 1) - trapDartDamage(dart, mon));
             addToplineMessage(`The ${mon.data?.name || 'creature'} is hit by a dart!`);
             if (mon.mhp < 1) {
                 addToplineMessage(`The ${mon.data?.name || 'creature'} is killed!`);

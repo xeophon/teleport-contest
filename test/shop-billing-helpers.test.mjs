@@ -6,7 +6,7 @@ import { activateStatueTrap, burnFloorObjectsByFire, earthFloorEffects, finishFo
 import { newsym, refreshHallucinatedMap } from '../js/display.js';
 import { game, resetGame } from '../js/gstate.js';
 import { pushKey, resetInputState } from '../js/input.js';
-import { createMonsterCorpseOrGlob, mkcorpstat, monsterByRndName } from '../js/mklev.js';
+import { createMonsterCorpseOrGlob, mkcorpstat, mksobj, monsterByRndName } from '../js/mklev.js';
 import { enableDisplayRngLog, enableRngLog, getRngLog, initRng } from '../js/rng.js';
 import { A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_STR, A_WIS, ALTAR, AM_SHRINE, Align2amask, BILLSZ, CANDLESHOP, CLOUD, CORPSTAT_HISTORIC, COULD_SEE, DART_TRAP, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, D_CLOSED, D_NODOOR, FIRE_TRAP, FOUNTAIN, HOLE, ICE, ICED_POOL, IN_SIGHT, IRONBARS, LADDER, LAVAPOOL, MIGR_LADDER_UP, MIGR_SSTAIRS, MIGR_STAIRS_UP, MOAT, M_AP_FURNITURE, M_AP_OBJECT, NORMAL_SPEED, P_BASIC, P_DAGGER, P_EXPERT, P_KNIFE, P_SKILLED, P_UNSKILLED, PIT, POOL, REPAIR_DELAY, ROOM, ROOMOFFSET, SDOOR, SHOPBASE, SHOP_DOOR_COST, SINK, SQKY_BOARD, STAIRS, STATUE_TRAP, STONE, STRAT_APPEARMSG, STRAT_WAITFORU, STRAT_WAITMASK, TEMPLE, TRAPDOOR, TT_LAVA, TT_WEB, WEB, W_SADDLE } from '../js/const.js';
 import { currentFruitId, setCurrentFruitName } from '../js/fruit.js';
@@ -17943,6 +17943,123 @@ test('pet dart trap hit uses dart damage roll', async () => {
     assert.equal(game.level.monsters.includes(goblin), true);
     assert.equal(trap.tseen, true);
     assert.equal(trap.once, true);
+});
+
+test('generated trap dart keeps positive enchantment and blessing state', () => {
+    installStableNonShopFloorState();
+    game.moves = 1;
+    game.in_mklev = false;
+    Object.assign(game.u, { ulevel: 1 });
+    enableRngLog({ reset: true });
+    installCoreRngValues([0, 0, 0, 0, 1, 1, 1]);
+
+    const dart = mksobj(DART, true, false);
+    const calls = getRngLog().map(rngCallName);
+
+    assert.deepEqual(calls.slice(0, 8), [
+        'rnd(2)', 'rn2(6)', 'rn2(11)', 'rn2(3)',
+        'rn2(3)', 'rne(3)', 'rn2(2)', 'rn2(100)',
+    ]);
+    assert.equal(dart.spe, 2);
+    assert.equal(dart.blessed, true);
+    assert.equal(dart.cursed, false);
+    assert.equal(dart.opoisoned, false);
+});
+
+test('generated trap dart reaches erosion RNG path after first move', () => {
+    installStableNonShopFloorState();
+    game.moves = 2;
+    game.in_mklev = false;
+    enableRngLog({ reset: true });
+    installCoreRngValues([0, 0, 1, 1, 1, 1, 1, 1, 1, 1]);
+
+    const dart = mksobj(DART, true, false);
+
+    assert.equal(dart.spe, 0);
+    assert.equal(rngValuesForCall(getRngLog(), 'rn2(1000)').length, 1);
+});
+
+test('dart trap damage uses generated blessed dart enchantment', async () => {
+    installStableNonShopFloorState();
+    enableRngLog({ reset: true });
+    installCoreRngValues([
+        0, 0, 0, 0, 0, 1, 1, 1,
+        1, 1, 1, 2,
+    ]);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 50,
+        uhpmax: 50,
+        uac: 10,
+        ulevel: 1,
+    });
+    game.inventory = [];
+    game.moves = 1;
+    const trap = { ttyp: DART_TRAP, tx: 6, ty: 5, tseen: false, once: false };
+    game.level.traps = [trap];
+    const manes = dartTrapMonster('manes', 31384, {
+        mhp: 10,
+        mhpmax: 10,
+    });
+    game.level.monsters = [manes];
+
+    queueEscapeForMonsterTurn();
+    markHeroNeighborhoodVisible();
+    markSquareVisible(manes.mx, manes.my);
+    await processMonsterTurns();
+    const messages = [game._pending_message, ...(await drainQueuedMessagesAfterMore())].join(' ');
+    const log = getRngLog();
+    const baseDamage = dartTrapDamageRollAfterHit(log, 'rnd(3)');
+    const enchantment = rngValuesForCall(log, 'rne(3)')[0];
+    const blessedBonus = rngValuesForCall(log, 'rnd(4)')[0];
+
+    assert.equal(enchantment, 2);
+    assert.equal(blessedBonus, 3);
+    assert.match(messages, /The manes is hit by a dart!/);
+    assert.doesNotMatch(messages, /The manes is killed!/);
+    assert.equal(manes.mhp, 10 - baseDamage - enchantment - blessedBonus);
+});
+
+test('cursed trap dart enchantment affects monster hit chance and damage floor', async () => {
+    installStableNonShopFloorState();
+    enableRngLog({ reset: true });
+    installCoreRngValues([
+        0, 0, 0, 1, 0, 0,
+        1, 1, 1, 19, 0,
+    ]);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 50,
+        uhpmax: 50,
+        uac: 10,
+        ulevel: 1,
+    });
+    game.inventory = [];
+    game.moves = 1;
+    const trap = { ttyp: DART_TRAP, tx: 6, ty: 5, tseen: false, once: false };
+    game.level.traps = [trap];
+    const goblin = dartTrapGoblin(31385, {
+        mhp: 5,
+        mhpmax: 5,
+        data: { mac: 14 },
+    });
+    game.level.monsters = [goblin];
+
+    queueEscapeForMonsterTurn();
+    markHeroNeighborhoodVisible();
+    markSquareVisible(goblin.mx, goblin.my);
+    await processMonsterTurns();
+    const messages = [game._pending_message, ...(await drainQueuedMessagesAfterMore())].join(' ');
+    const log = getRngLog();
+    const baseDamage = dartTrapDamageRollAfterHit(log, 'rnd(3)');
+
+    assert.equal(rngValuesForCall(log, 'rne(3)')[0], 2);
+    assert.equal(rngValuesForCall(log, 'rnd(20)')[0], 20);
+    assert.equal(baseDamage, 1);
+    assert.match(messages, /The goblin is hit by a dart!/);
+    assert.equal(goblin.mhp, 4);
 });
 
 test('dart trap hit uses large monster dart damage roll', async () => {
