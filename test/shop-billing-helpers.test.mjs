@@ -25899,6 +25899,91 @@ test('command kicked lit oil potion shatters and explodes before remote projecti
     ]);
 });
 
+test('command kicked melon splats before remote projectile flight', async () => {
+    installNonShopFloorState();
+    installSeenRemoteShaft(HOLE, 7, 5);
+    markSquareVisible(6, 5);
+    initRng(1);
+    const melon = {
+        ...simpleFood(512073, 'melon', undefined),
+        ox: 6,
+        oy: 5,
+        letter: undefined,
+        line: undefined,
+    };
+    game.level.objects = [melon];
+    enableRngLog({ reset: true });
+
+    await rhack('\x04');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.level.objects.includes(melon), false);
+    assert.equal(queuedImpactDropsFor({ dnum: 0, dlevel: 2 }).some(obj => obj.id === melon.id), false);
+    assert.match(game._pending_message, /You kick a melon\./);
+    assert.match(game._pending_message, /Splat!/);
+    assert.doesNotMatch(game._pending_message, /falls through the hole|Thump|hits|misses|muffled/);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(100)']);
+});
+
+test('command kicked blinding venom splashes before remote projectile flight', async () => {
+    installNonShopFloorState();
+    installSeenRemoteShaft(HOLE, 7, 5);
+    markSquareVisible(6, 5);
+    initRng(1);
+    const venom = {
+        ...blindingVenom(512074, undefined),
+        ox: 6,
+        oy: 5,
+        letter: undefined,
+        line: undefined,
+    };
+    game.level.objects = [venom];
+    enableRngLog({ reset: true });
+
+    await rhack('\x04');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.level.objects.includes(venom), false);
+    assert.equal(queuedImpactDropsFor({ dnum: 0, dlevel: 2 }).some(obj => obj.id === venom.id), false);
+    assert.match(game._pending_message, /You kick a splash of blinding venom\./);
+    assert.match(game._pending_message, /Splash!/);
+    assert.doesNotMatch(game._pending_message, /falls through the hole|Thump|hits|misses|muffled|blinds you|face/);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(100)']);
+});
+
+test('command kicked glass-material object shatters before remote projectile flight', async () => {
+    installNonShopFloorState();
+    installSeenRemoteShaft(HOLE, 7, 5);
+    markSquareVisible(6, 5);
+    initRng(1);
+    const glassTool = {
+        ...chargedTool(512075, 'glass figurine', undefined, 0),
+        ox: 6,
+        oy: 5,
+        material: 'glass',
+        letter: undefined,
+        line: undefined,
+    };
+    game.level.objects = [glassTool];
+    enableRngLog({ reset: true });
+
+    await rhack('\x04');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.level.objects.includes(glassTool), false);
+    assert.equal(queuedImpactDropsFor({ dnum: 0, dlevel: 2 }).some(obj => obj.id === glassTool.id), false);
+    assert.match(game._pending_message, /You kick a glass figurine\./);
+    assert.match(game._pending_message, /A glass figurine shatters into a thousand pieces!/);
+    assert.doesNotMatch(game._pending_message, /falls through the hole|Thump|hits|misses|muffled/);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(100)']);
+});
+
 test('command kicked fragile stack resistance splits one item before ladder flight', async () => {
     installNonShopFloorState();
     installRemoteDownStairGate({ x: 7, y: 5, isladder: true });
@@ -25969,6 +26054,48 @@ test('command kicked oartifact fragile object uses artifact resistance before la
     assert.match(game._pending_message, /A looking glass falls down the ladder\./);
     assert.doesNotMatch(game._pending_message, /shatters|bad luck|muffled|Thump|hits|misses/);
     assert.equal(game.u.uluck, 0);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rn2(100)', 'rn2(100)',
+    ]);
+});
+
+test('command kicked oartifact glass-material object cannot break on artifact roll 99', async () => {
+    installNonShopFloorState();
+    installRemoteDownStairGate({ x: 7, y: 5, isladder: true });
+    markSquareVisible(6, 5);
+    Object.assign(game.u, { uluck: 0 });
+    initRng(284);
+    const mirror = {
+        id: 512076,
+        otyp: MIRROR,
+        cls: 'tool',
+        glyph: '(',
+        kind: 'looking glass',
+        actualKind: 'mirror',
+        quan: 1,
+        ox: 6,
+        oy: 5,
+        oartifact: 'The Polished Mirror',
+        letter: undefined,
+        line: undefined,
+    };
+    game.level.objects = [mirror];
+    enableRngLog({ reset: true });
+
+    await rhack('\x04');
+    await rhack('l');
+
+    const queued = queuedImpactDropsFor({ dnum: 0, dlevel: 2 });
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.level.objects.includes(mirror), false);
+    assert.equal(queued.includes(mirror), true);
+    assert.equal(mirror._impactDropMigration?.where, MIGR_LADDER_UP);
+    assert.match(game._pending_message, /You kick a looking glass\./);
+    assert.match(game._pending_message, /A looking glass falls down the ladder\./);
+    assert.doesNotMatch(game._pending_message, /shatters|bad luck|muffled|Thump|hits|misses/);
+    assert.equal(game.u.uluck, 0);
+    assert.equal(getRngLog()[0], 'rn2(100)=99');
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
         'rn2(100)', 'rn2(100)',
     ]);

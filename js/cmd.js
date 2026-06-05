@@ -4747,7 +4747,7 @@ function impactDropBreakKind(obj) {
     const cls = impactDropObjectClass(obj);
     const name = String(obj?.actualKind || obj?.kind || pickupObjectName(obj)).toLowerCase();
     if (cls === 'potion') return 'shatter';
-    if (isVenomObject(obj)) return 'splash';
+    if (isBreaktestVenomObject(obj)) return 'splash';
     if (obj?.otyp === EGG || name === 'egg') return 'splat';
     if (name.includes('melon')) return 'splat';
     if (name.includes('cream pie')) return 'mess';
@@ -4756,6 +4756,7 @@ function impactDropBreakKind(obj) {
         || name.includes('mirror') || name.includes('looking glass')
         || name.includes('crystal ball') || name.includes('lenses'))
         return 'pieces';
+    if (breaktestGlassMaterialObject(obj)) return 'pieces';
     if (cls !== 'gem' && /\bglass\b|\bcrystal\b/.test(name)) return 'shatter';
     return '';
 }
@@ -4764,12 +4765,34 @@ function impactDropObjectBreaks(obj) {
     if (!obj) return '';
     const ordinaryResistChance = 1;
     const artifactResistChance = 99;
-    if (rn2(100) < (objectHasArtifactIdentity(obj) ? artifactResistChance : ordinaryResistChance)) return '';
+    const hasArtifact = objectHasArtifactIdentity(obj);
+    if (rn2(100) < (hasArtifact ? artifactResistChance : ordinaryResistChance)) return '';
+    if (hasArtifact && !breaktestExplicitSwitchObject(obj)) return '';
     return impactDropBreakKind(obj);
 }
 
 function objectHasArtifactIdentity(obj) {
     return !!(obj?.artifact || obj?.oartifact);
+}
+
+function breaktestExplicitSwitchObject(obj) {
+    return isExpensiveCameraObject(obj) || isPotionObject(obj) || isEggItem(obj)
+        || isCreamPieObject(obj) || isMelonObject(obj) || isBreaktestVenomObject(obj);
+}
+
+function breaktestGlassMaterialObject(obj) {
+    if (!obj) return false;
+    const cls = impactDropObjectClass(obj);
+    if (cls === 'gem' || cls === 'armor' || obj.glyph === '[' || obj.otyp === ARMOR_CLASS)
+        return false;
+    const material = String(obj.material || obj.oc_material || '').toLowerCase().replace(/^hi_/, '');
+    return material === 'glass';
+}
+
+function isBreaktestVenomObject(obj) {
+    const kind = objectKindKey(obj);
+    return obj?.otyp === BLINDING_VENOM || obj?.otyp === ACID_VENOM
+        || kind === 'splash of blinding venom' || kind === 'splash of acid venom';
 }
 
 function shipObjectMuffledBreakResult(breakKind) {
@@ -27404,8 +27427,11 @@ function projectileTopLevelBreakKind(obj, options = {}) {
     const roll = Number.isInteger(options.breakRoll) ? options.breakRoll : rn2(100);
     const kind = impactDropBreakKind(obj);
     if (!kind) return '';
-    const resistChance = objectHasArtifactIdentity(obj) ? 99 : 1;
-    return roll < resistChance ? '' : kind;
+    const hasArtifact = objectHasArtifactIdentity(obj);
+    const resistChance = hasArtifact ? 99 : 1;
+    if (roll < resistChance) return '';
+    if (hasArtifact && !breaktestExplicitSwitchObject(obj)) return '';
+    return kind;
 }
 
 function projectileTopLevelBreakMessage(obj, breakKind, messages) {
@@ -27641,9 +27667,12 @@ function kickedFragilePreflightBreakKind(obj) {
     if (kind === 'lenses') return impactDropBreakKind(obj);
     if (isGlassMaterialWandObject(obj)) return impactDropBreakKind(obj);
     if (isCreamPieObject(obj)) return impactDropBreakKind(obj);
+    if (isMelonObject(obj)) return impactDropBreakKind(obj);
+    if (isBreaktestVenomObject(obj)) return impactDropBreakKind(obj);
     if (isPotionObject(obj)) return impactDropBreakKind(obj);
     if (isExpensiveCameraObject(obj)) return impactDropBreakKind(obj);
     if (isEggItem(obj)) return impactDropBreakKind(obj);
+    if (breaktestGlassMaterialObject(obj)) return impactDropBreakKind(obj);
     return '';
 }
 
