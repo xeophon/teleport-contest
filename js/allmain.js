@@ -6345,7 +6345,8 @@ export async function processMonsterTurns() {
                                     else addToplineMessage(catchMessage);
                                 } else {
                                     const damage = rnd(monsterSlingAmmoDamageSides(thrownMissile));
-                                    const hitv = Math.max(-4, 3 - throwRange) + 8 + (thrownMissile.spe || 0);
+                                    const hitv = Math.max(-4, 3 - throwRange) + 8 + (thrownMissile.spe || 0)
+                                        + heroPolyselfMonsterThrownHitBonus();
                                     const attackRoll = rnd(20);
                                     const missed = (game.u?.uac ?? 10) + hitv <= attackRoll;
                                     let resultMessage = missed ? 'It misses.' : `You are hit by ${missileArticle} ${missileName}.`;
@@ -6862,7 +6863,8 @@ export async function processMonsterTurns() {
                             const projectileDamageBonus = monsterLauncherProjectileDamageBonus(thrownMissile);
                             let damage = rnd(projectileDamageSides) + projectileDamageBonus
                                 + missileSpe - missileErosion;
-                            let hitv = Math.max(-4, 3 - throwRange) + 8 + missileSpe;
+                            let hitv = Math.max(-4, 3 - throwRange) + 8 + missileSpe
+                                + heroPolyselfMonsterThrownHitBonus();
                             if (monsterIsElf(mon) && monsterLauncherProjectileIsBowAmmo(thrownMissile)) {
                                 hitv++;
                                 if (monsterLauncherWeaponIsElvenBow(mon.mw)) hitv++;
@@ -7176,7 +7178,8 @@ export async function processMonsterTurns() {
                             } else {
                                 const damage = Math.max(1, rnd(monsterThrownSpearDamageSides(thrownMissile))
                                     + missileSpe - missileErosion);
-                                const hitv = Math.max(-4, 3 - throwRange) + 8 + missileSpe;
+                                const hitv = Math.max(-4, 3 - throwRange) + 8 + missileSpe
+                                    + heroPolyselfMonsterThrownHitBonus();
                                 const attackRoll = rnd(20);
                                 const missed = (game.u?.uac ?? 10) + hitv <= attackRoll;
                                 let resultMessage = `You are hit by ${spearArticle} ${spearKind}${damage > 4 ? '!' : '.'}`;
@@ -7319,7 +7322,8 @@ export async function processMonsterTurns() {
                                 else addToplineMessage(catchMessage);
                             } else {
                                 const damage = Math.max(1, rnd(8) + missileSpe - missileErosion);
-                                const hitv = Math.max(-4, 3 - throwRange) + 8 + missileSpe;
+                                const hitv = Math.max(-4, 3 - throwRange) + 8 + missileSpe
+                                    + heroPolyselfMonsterThrownHitBonus();
                                 const attackRoll = rnd(20);
                                 const missed = (game.u?.uac ?? 10) + hitv <= attackRoll;
                                 let resultMessage = `You are hit by ${shurikenArticle} ${shurikenKind}${damage > 4 ? '!' : '.'}`;
@@ -7463,7 +7467,8 @@ export async function processMonsterTurns() {
                                 else addToplineMessage(catchMessage);
                             } else {
                                 const damage = rnd(4);
-                                const hitv = Math.max(-4, 3 - throwRange) + 8 + (missile.spe || 0);
+                                const hitv = Math.max(-4, 3 - throwRange) + 8 + (missile.spe || 0)
+                                    + heroPolyselfMonsterThrownHitBonus();
                                 const attackRoll = rnd(20);
                                 const missed = (game.u?.uac ?? 10) + hitv <= attackRoll;
                                 const resultMessage = missed
@@ -7869,7 +7874,8 @@ export async function processMonsterTurns() {
                                 else addToplineMessage(catchMessage);
                             } else {
                                 const damage = Math.max(1, rnd(3) + missileSpe - missileErosion);
-                                const hitv = Math.max(-4, 3 - throwRange) + 8 + (missile.spe || 0);
+                                const hitv = Math.max(-4, 3 - throwRange) + 8 + (missile.spe || 0)
+                                    + heroPolyselfMonsterThrownHitBonus();
                                 const attackRoll = rnd(20);
                                 const missed = (game.u?.uac ?? 10) + hitv <= attackRoll;
                                 const resultMessage = missed ? 'A knife misses you.' : 'You are hit by a knife.';
@@ -9664,6 +9670,14 @@ function monsterObjectHitSizeValue(target) {
     if (target?.huge || data.huge) return 4;
     if (target?.gigantic || data.gigantic) return 7;
     return 2;
+}
+
+function heroPolyselfMonsterThrownHitBonus() {
+    const form = game.u?._polyself_form || game.u?.youmonst?.data || null;
+    if (!form) return 0;
+    const big = monsterObjectHitSizeValue({ data: form }) >= 3
+        || form.big || form.bigmonst || form.large || form.giant;
+    return big ? 1 : 0;
 }
 
 function monsterHatesBlessedWeapon(target) {

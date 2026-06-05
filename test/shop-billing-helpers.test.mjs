@@ -34152,6 +34152,7 @@ async function runMonsterPlainDaggerIronBars({
     inventory = null,
     extraMonsters = [],
     initialObjects = [],
+    heroPolyself = null,
     monsterOrder = null,
 } = {}) {
     installNonShopFloorState();
@@ -34175,6 +34176,7 @@ async function runMonsterPlainDaggerIronBars({
         uac,
         umovement: NORMAL_SPEED,
         acurr: { a: [10, 10, 10, heroDex, 10, 10] },
+        _polyself_form: heroPolyself,
     });
     game.moves = 1;
     game.context = {};
@@ -39854,6 +39856,45 @@ test('production monster plain dagger hits and rusts intervening rust monster ob
     assert.equal(preNhgetchMessages.some(message => /Clonk!|Clink!/.test(message)), false);
     assert.equal(preNhgetchMessages.some(message => /dagger hits the rust monster|It is hit/.test(message)), true,
         preNhgetchMessages.join('\n'));
+});
+
+test('production monster plain dagger big polyself hit corrodes landing object before stacking', async () => {
+    const cleanStack = { ...dagger(8744101), ox: 5, oy: 5, letter: undefined, line: undefined, spe: 0 };
+    const daggerItem = { ...dagger(8744102), letter: undefined, line: undefined, spe: 0 };
+    const { thrower, rng, rawRng, preNhgetchMessages } = await runMonsterPlainDaggerIronBars({
+        seed: 1,
+        uac: 10,
+        projectile: daggerItem,
+        initialObjects: [cleanStack],
+        heroPolyself: { name: 'black pudding', big: true },
+    });
+    const messages = collectMonsterThrowMessages(preNhgetchMessages);
+
+    assert.equal(rawRng.some(entry => entry === 'rnd(20)=16'), true, rawRng.join(', '));
+    assert.match(messages, /You are hit by a dagger\./);
+    assert.doesNotMatch(messages, /dagger hits the black pudding|It is hit|Clonk!|Clink!/);
+    assert.equal(game.u.uhp, 20);
+    assert.equal((game._damage_after_topline_more || 0) > 0, true, rawRng.join(', '));
+    assert.equal(thrower.missile, null);
+    assert.equal(thrower.minvent.some(obj => obj.id === daggerItem.id), false);
+
+    const landed = game.level.objects.find(obj => obj.id === daggerItem.id);
+    assert.ok(landed, rawRng.join(', '));
+    assert.equal(landed.ox, 5);
+    assert.equal(landed.oy, 5);
+    assert.equal(landed.oeroded2, 1);
+    assert.equal(cleanStack.oeroded2 || 0, 0);
+    assert.equal(cleanStack.quan, 1);
+    assert.equal(game.level.objects.length, 2);
+    const damageRollIndex = rng.findIndex(entry => entry === 'rnd(4)');
+    const hitRollIndex = rng.findIndex((entry, index) => index > damageRollIndex && entry === 'rnd(20)');
+    const landingRollIndex = rng.findIndex((entry, index) => index > hitRollIndex && entry === 'rn2(5)');
+    assert.notEqual(damageRollIndex, -1, rawRng.join(', '));
+    assert.notEqual(hitRollIndex, -1, rawRng.join(', '));
+    assert.notEqual(landingRollIndex, -1, rawRng.join(', '));
+    assert.ok(damageRollIndex < hitRollIndex && hitRollIndex < landingRollIndex, rawRng.join(', '));
+    assert.equal(rng.some(entry => entry === 'rn2(100)' || entry === 'rn2(3)'), false,
+        rawRng.join(', '));
 });
 
 test('production monster plain dagger hit bonus can turn intervening miss into hit', async () => {
