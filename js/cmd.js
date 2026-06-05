@@ -44075,15 +44075,66 @@ function sitSqueakyBoardMessage(trap, prefix) {
     return `${prefix}  A board beneath you squeaks ${sitTrapNote(trap)} loudly.`;
 }
 
-function sitSleepGasMessage(trap, prefix) {
-    trap.tseen = true;
-    if (game.u?.sleepResistance || polyselfForm()?.breathless) {
-        return `${prefix}  You are enveloped in a cloud of gas!`;
-    }
+function monsterBreathlessForTrapSleep(mon) {
+    const data = mon?.data || {};
+    return !!(mon?.breathless || data.breathless || data.Breathless);
+}
+
+function monsterHelplessForTrapSleep(mon) {
+    return !!(mon?.helpless || mon?.msleeping || mon?.mfrozen
+        || mon?.mcanmove === false || mon?.mcanmove === 0);
+}
+
+function sleepMonsterFromTrapGas(mon, duration) {
+    if (!mon || monsterResistsSleepEffect(mon) || monsterBreathlessForTrapSleep(mon)
+        || monsterHelplessForTrapSleep(mon))
+        return false;
+    mon.mcanmove = false;
+    mon.mfrozen = Math.min(127, (mon.mfrozen || 0) + duration);
+    mon.meating = 0;
+    return true;
+}
+
+function mountedHeroSleepGasTrapSteedMessages() {
+    const steed = game.u?.usteed;
+    if (!steed) return [];
+    steed.mx = game.u?.ux ?? steed.mx;
+    steed.my = game.u?.uy ?? steed.my;
+    if (monsterResistsSleepEffect(steed) || monsterBreathlessForTrapSleep(steed)
+        || monsterHelplessForTrapSleep(steed))
+        return [];
     const duration = rnd(25);
-    game._helpless_time = Math.max(game._helpless_time || 0, duration);
-    game._sleeping_time = Math.max(game._sleeping_time || 0, duration + 1);
-    return `${prefix}  A cloud of gas puts you to sleep!`;
+    if (!sleepMonsterFromTrapGas(steed, duration)) return [];
+    return [`${steedTrapProjectileName(steed)} suddenly falls asleep!`];
+}
+
+function heroSleepGasTrapResult(trap, prefix = '') {
+    trap.tseen = true;
+    const messages = [prefix];
+    if (game.u?.sleepResistance || game.u?.Sleep_resistance
+        || game.u?.breathless || game.u?.Breathless || polyselfForm()?.breathless) {
+        messages.push('You are enveloped in a cloud of gas!');
+    } else {
+        const duration = rnd(25);
+        game._helpless_time = Math.max(game._helpless_time || 0, duration);
+        game._sleeping_time = Math.max(game._sleeping_time || 0, duration + 1);
+        messages.push('A cloud of gas puts you to sleep!');
+    }
+    messages.push(...mountedHeroSleepGasTrapSteedMessages());
+    return { message: trapMessage(...messages) };
+}
+
+function movementSleepGasTrapResult(trap) {
+    const alreadySeen = !!trap?.tseen;
+    if (game.u?.levitating || game.u?.flying)
+        return { message: alreadySeen ? movementOverFloorTrapMessage(trap) : '', more: false };
+    if (alreadySeen && sitTrapEscapeAllowed(trap) && !rn2(5))
+        return { message: movementTrapEscapeMessage(trap), more: false };
+    return heroSleepGasTrapResult(trap, '');
+}
+
+function sitSleepGasMessage(trap, prefix) {
+    return heroSleepGasTrapResult(trap, prefix).message;
 }
 
 function rustTrapWornArmor(slot) {
@@ -47070,6 +47121,11 @@ async function moveHero(dx, dy) {
         await setMessage(materializeMessage, true);
         return;
     }
+    if (steppedTrap?.ttyp === SLP_GAS_TRAP) {
+        const result = movementSleepGasTrapResult(steppedTrap);
+        if (result.message) await setMessage(result.message, !!result.more);
+        return;
+    }
     if (steppedTrap?.ttyp === RUST_TRAP) {
         steppedTrap.tseen = true;
         rn2(5);
@@ -47242,8 +47298,10 @@ async function moveHero(dx, dy) {
     if (runningStep && objectsHere.length > 1) {
         game._dismount_object_list_spot = { x: newx, y: newy };
         if (trapHere?.ttyp === MAGIC_TRAP) game._pending_magic_trap = trapHere;
+        if (trapHere?.ttyp === SLP_GAS_TRAP) game._pending_sleep_gas_trap = trapHere;
         return;
     }
+    if (trapHere?.ttyp === SLP_GAS_TRAP && objectsHere.length > 1) game._pending_sleep_gas_trap = trapHere;
     if (trapHere?.ttyp === ARROW_TRAP && objectsHere.length > 1) game._pending_arrow_trap = trapHere;
     if (trapHere?.ttyp === DART_TRAP && objectsHere.length > 1) game._pending_dart_trap = trapHere;
     if (trapHere?.ttyp === BEAR_TRAP && objectsHere.length > 1) game._pending_bear_trap = trapHere;
@@ -47363,6 +47421,7 @@ async function moveHero(dx, dy) {
         game._deferred_context_move = game.context.move || 1;
         game.context.move = 0;
         if (trapHere?.ttyp === MAGIC_TRAP) game._pending_magic_trap = trapHere;
+        if (trapHere?.ttyp === SLP_GAS_TRAP) game._pending_sleep_gas_trap = trapHere;
         return;
     }
     if (objectsHere.length > 1 && skipObjectList) {
@@ -47376,6 +47435,12 @@ async function moveHero(dx, dy) {
         if (result.afterMore) game._topline_after_more = result.afterMore;
         const message = [pileMessage, result.message].filter(Boolean).join('  ');
         if (message) await setMessage(message, !!result.afterMore || !!result.more || !!(pileMessage && result.message));
+        return;
+    }
+    if (trapHere?.ttyp === SLP_GAS_TRAP) {
+        const result = movementSleepGasTrapResult(trapHere);
+        result.message = [pileMessage, result.message].filter(Boolean).join('  ');
+        if (result.message) await setMessage(result.message, !!result.more || !!(pileMessage && result.message));
         return;
     }
     if (trapHere?.ttyp === ARROW_TRAP) {
@@ -47713,6 +47778,12 @@ export async function rhack(_cmd) {
                 if (result.message) await setMessage(result.message, !!result.afterMore || !!result.more);
                 return;
             }
+            if (game._pending_sleep_gas_trap) {
+                const result = movementSleepGasTrapResult(game._pending_sleep_gas_trap);
+                game._pending_sleep_gas_trap = null;
+                if (result.message) await setMessage(result.message, !!result.more);
+                return;
+            }
             if (game._pending_arrow_trap) {
                 const trap = game._pending_arrow_trap;
                 const alreadySeen = !!trap.tseen;
@@ -47788,6 +47859,14 @@ export async function rhack(_cmd) {
                 game._process_command_time_now = 1;
                 if (result.afterMore) game._topline_after_more = result.afterMore;
                 if (result.message) await setMessage(result.message, !!result.afterMore || !!result.more);
+                return;
+            }
+            if (game._pending_sleep_gas_trap) {
+                const result = movementSleepGasTrapResult(game._pending_sleep_gas_trap);
+                game._pending_sleep_gas_trap = null;
+                if (!game._pending_time_passed) game.context.move = 1;
+                game._process_command_time_now = 1;
+                if (result.message) await setMessage(result.message, !!result.more);
                 return;
             }
             if (game._pending_time_passed > 0) {

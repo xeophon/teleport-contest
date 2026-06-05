@@ -8,7 +8,7 @@ import { game, resetGame } from '../js/gstate.js';
 import { pushKey, resetInputState } from '../js/input.js';
 import { createMonsterCorpseOrGlob, mkcorpstat, mkobj, mksobj, monsterByRndName } from '../js/mklev.js';
 import { enableDisplayRngLog, enableRngLog, getRngLog, initRng } from '../js/rng.js';
-import { A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_STR, A_WIS, ALTAR, AM_SHRINE, Align2amask, ARROW_TRAP, BILLSZ, CANDLESHOP, CLOUD, CORPSTAT_HISTORIC, COULD_SEE, DART_TRAP, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, D_CLOSED, D_NODOOR, FIRE_TRAP, FOUNTAIN, HOLE, ICE, ICED_POOL, IN_SIGHT, IRONBARS, LADDER, LAVAPOOL, MIGR_LADDER_UP, MIGR_SSTAIRS, MIGR_STAIRS_UP, MOAT, M_AP_FURNITURE, M_AP_OBJECT, NORMAL_SPEED, P_BASIC, P_DAGGER, P_EXPERT, P_KNIFE, P_SKILLED, P_UNSKILLED, PIT, POOL, REPAIR_DELAY, ROOM, ROOMOFFSET, SDOOR, SHOPBASE, SHOP_DOOR_COST, SINK, SQKY_BOARD, STAIRS, STATUE_TRAP, STONE, STRAT_APPEARMSG, STRAT_WAITFORU, STRAT_WAITMASK, TEMPLE, TRAPDOOR, TT_LAVA, TT_WEB, WEB, W_SADDLE } from '../js/const.js';
+import { A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_STR, A_WIS, ALTAR, AM_SHRINE, Align2amask, ARROW_TRAP, BILLSZ, CANDLESHOP, CLOUD, CORPSTAT_HISTORIC, COULD_SEE, DART_TRAP, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, D_CLOSED, D_NODOOR, FIRE_TRAP, FOUNTAIN, HOLE, ICE, ICED_POOL, IN_SIGHT, IRONBARS, LADDER, LAVAPOOL, MIGR_LADDER_UP, MIGR_SSTAIRS, MIGR_STAIRS_UP, MOAT, M_AP_FURNITURE, M_AP_OBJECT, NORMAL_SPEED, P_BASIC, P_DAGGER, P_EXPERT, P_KNIFE, P_SKILLED, P_UNSKILLED, PIT, POOL, REPAIR_DELAY, ROOM, ROOMOFFSET, SDOOR, SHOPBASE, SHOP_DOOR_COST, SINK, SLP_GAS_TRAP, SQKY_BOARD, STAIRS, STATUE_TRAP, STONE, STRAT_APPEARMSG, STRAT_WAITFORU, STRAT_WAITMASK, TEMPLE, TRAPDOOR, TT_LAVA, TT_WEB, WEB, W_SADDLE } from '../js/const.js';
 import { currentFruitId, setCurrentFruitName } from '../js/fruit.js';
 import { CLR_BRIGHT_MAGENTA, CLR_BROWN, CLR_WHITE } from '../js/terminal.js';
 import { TRIBUTE_DEATH_QUOTES } from '../js/tribute.js';
@@ -18258,6 +18258,180 @@ test('pet known spent dart trap can vanish without firing', async () => {
     assert.equal(goblin.mhp, 5);
     assert.equal(game.level.monsters.includes(goblin), true);
     assert.equal(game.level.objects.some(obj => obj.ox === 6 && obj.oy === 5), false);
+});
+
+test('mounted hero sleep gas trap sleeps hero then steed', async () => {
+    installStableNonShopFloorState();
+    vision_reset();
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 20,
+        uhpmax: 20,
+        ulevel: 1,
+    });
+    const pony = ordinaryThrowTarget('pony', 5, 5, {
+        mhp: 10,
+        mhpmax: 10,
+        m_lev: 3,
+        msleeping: 0,
+        mcanmove: true,
+        mfrozen: 0,
+        mtame: 5,
+        pet: true,
+        saddled: true,
+        data: { name: 'pony', mlevel: 3, mlet: 'quadruped', mac: 6 },
+    });
+    game.u.usteed = pony;
+    game.level.monsters = [pony];
+    game.moves = 1;
+    game.inventory = [];
+    const trap = { ttyp: SLP_GAS_TRAP, tx: 6, ty: 5, tseen: false };
+    game.level.traps = [trap];
+    enableRngLog({ reset: true });
+    installCoreRngValues([4, 6]);
+
+    await rhack('l');
+
+    assert.deepEqual(getRngLog().map(rngCallName), ['rnd(25)', 'rnd(25)']);
+    assert.equal(game._pending_message, 'A cloud of gas puts you to sleep!  The saddled pony suddenly falls asleep!');
+    assert.equal(game._helpless_time, 5);
+    assert.equal(game._sleeping_time, 6);
+    assert.equal(pony.mcanmove, false);
+    assert.equal(pony.mfrozen, 7);
+    assert.equal(pony.mx, 6);
+    assert.equal(pony.my, 5);
+    assert.equal(game.u.usteed, pony);
+    assert.equal(trap.tseen, true);
+});
+
+test('mounted hero sleep gas trap still sleeps steed when hero resists', async () => {
+    installStableNonShopFloorState();
+    vision_reset();
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 20,
+        uhpmax: 20,
+        sleepResistance: true,
+    });
+    const pony = ordinaryThrowTarget('pony', 5, 5, {
+        mhp: 10,
+        mhpmax: 10,
+        msleeping: 0,
+        mcanmove: true,
+        mfrozen: 0,
+        mtame: 5,
+        pet: true,
+        saddled: true,
+        data: { name: 'pony', mlevel: 3, mlet: 'quadruped', mac: 6 },
+    });
+    game.u.usteed = pony;
+    game.level.monsters = [pony];
+    game.inventory = [];
+    const trap = { ttyp: SLP_GAS_TRAP, tx: 6, ty: 5, tseen: false };
+    game.level.traps = [trap];
+    enableRngLog({ reset: true });
+    installCoreRngValues([6]);
+
+    await rhack('l');
+
+    assert.deepEqual(getRngLog().map(rngCallName), ['rnd(25)']);
+    assert.equal(game._pending_message, 'You are enveloped in a cloud of gas!  The saddled pony suddenly falls asleep!');
+    assert.equal(game._helpless_time || 0, 0);
+    assert.equal(game._sleeping_time || 0, 0);
+    assert.equal(pony.mcanmove, false);
+    assert.equal(pony.mfrozen, 7);
+    assert.equal(trap.tseen, true);
+});
+
+test('mounted hero sleep gas trap does not reroll for helpless steed', async () => {
+    installStableNonShopFloorState();
+    vision_reset();
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 20,
+        uhpmax: 20,
+    });
+    const pony = ordinaryThrowTarget('pony', 5, 5, {
+        mhp: 10,
+        mhpmax: 10,
+        msleeping: 0,
+        mcanmove: false,
+        mfrozen: 4,
+        mtame: 5,
+        pet: true,
+        saddled: true,
+        data: { name: 'pony', mlevel: 3, mlet: 'quadruped', mac: 6 },
+    });
+    game.u.usteed = pony;
+    game.level.monsters = [pony];
+    game.inventory = [];
+    const trap = { ttyp: SLP_GAS_TRAP, tx: 6, ty: 5, tseen: false };
+    game.level.traps = [trap];
+    enableRngLog({ reset: true });
+    installCoreRngValues([4]);
+
+    await rhack('l');
+
+    assert.deepEqual(getRngLog().map(rngCallName), ['rnd(25)']);
+    assert.equal(game._pending_message, 'A cloud of gas puts you to sleep!');
+    assert.equal(game._helpless_time, 5);
+    assert.equal(game._sleeping_time, 6);
+    assert.equal(pony.mcanmove, false);
+    assert.equal(pony.mfrozen, 4);
+    assert.equal(trap.tseen, true);
+});
+
+test('known sleep gas trap can be escaped before gas effects', async () => {
+    installStableNonShopFloorState();
+    vision_reset();
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 20,
+        uhpmax: 20,
+    });
+    game.inventory = [];
+    const trap = { ttyp: SLP_GAS_TRAP, tx: 6, ty: 5, tseen: true };
+    game.level.traps = [trap];
+    enableRngLog({ reset: true });
+    installCoreRngValues([0]);
+
+    await rhack('l');
+
+    assert.deepEqual(getRngLog().map(rngCallName), ['rn2(5)']);
+    assert.equal(game._pending_message, 'You escape a sleeping gas trap.');
+    assert.equal(game._helpless_time || 0, 0);
+    assert.equal(game._sleeping_time || 0, 0);
+    assert.equal(trap.tseen, true);
+});
+
+test('flying hero crosses hidden sleep gas trap without gas effects', async () => {
+    installStableNonShopFloorState();
+    vision_reset();
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 20,
+        uhpmax: 20,
+        flying: true,
+    });
+    game.inventory = [];
+    const trap = { ttyp: SLP_GAS_TRAP, tx: 6, ty: 5, tseen: false };
+    game.level.traps = [trap];
+    enableRngLog({ reset: true });
+
+    await rhack('l');
+
+    assert.deepEqual(getRngLog().map(rngCallName), []);
+    assert.equal(game._pending_message || '', '');
+    assert.equal(game.u.ux, 6);
+    assert.equal(game.u.uy, 5);
+    assert.equal(game._helpless_time || 0, 0);
+    assert.equal(game._sleeping_time || 0, 0);
+    assert.equal(trap.tseen, false);
 });
 
 test('hero arrow trap miss creates and drops a generated arrow', async () => {
