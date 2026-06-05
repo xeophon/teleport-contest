@@ -36070,6 +36070,61 @@ test('production monster launcher arrow can hit intervening monster before hero'
     assert.equal(preNhgetchMessages.some(message => /Clonk!/.test(message)), false);
 });
 
+test('production monster blessed launcher arrow intervening hit damages blessing-hating monster', async () => {
+    const blocker = ordinaryThrowTarget('human zombie', 8, 5, {
+        ac: 30,
+        mac: 30,
+        mhp: 30,
+        mhpmax: 30,
+        msleeping: 1,
+        data: { name: 'human zombie', mlevel: 4, mlet: 'Z', mac: 30 },
+    });
+    const { arrow, thrower, rng, preNhgetchMessages } = await runMonsterLauncherArrowLanding({
+        seed: 2,
+        uac: 100,
+        heroBlind: false,
+        arrowOverrides: { blessed: true },
+        levelCells: [[7, 5, { typ: IRONBARS }]],
+        extraMonsters: [blocker],
+    });
+
+    const messages = [
+        game._pending_message,
+        ...preNhgetchMessages,
+        ...(game._queued_messages_after_more || []).map(entry => entry.text),
+    ].filter(Boolean).join('  ');
+    assert.match(messages, /The arrow hits the human zombie[.!]/);
+    assert.doesNotMatch(messages, /silver sears|Clonk!|Clink!/);
+    assert.equal(game.u.uhp, 20);
+    assert.equal(game._damage_after_topline_more || 0, 0, rng.join(', '));
+    assert.equal(blocker.msleeping, 0);
+    assert.equal(thrower.minvent.some(obj => obj.id === arrow.id), false);
+    assert.equal(thrower.missile, null);
+
+    const hitRollIndex = rng.findIndex(entry => entry.startsWith('rnd(20)='));
+    const baseDamageIndex = rng.findIndex(entry => entry.startsWith('rnd(6)='));
+    const blessedDamageIndex = rng.findIndex((entry, index) =>
+        index > baseDamageIndex && entry.startsWith('rnd(4)='));
+    assert.notEqual(hitRollIndex, -1, rng.join(', '));
+    assert.notEqual(baseDamageIndex, -1, rng.join(', '));
+    assert.notEqual(blessedDamageIndex, -1, rng.join(', '));
+    assert.ok(hitRollIndex < baseDamageIndex && baseDamageIndex < blessedDamageIndex, rng.join(', '));
+    const baseDamage = Number(rng[baseDamageIndex].split('=')[1]);
+    const blessedDamage = Number(rng[blessedDamageIndex].split('=')[1]);
+    assert.equal(blocker.mhp, 30 - baseDamage - blessedDamage, rng.join(', '));
+
+    const landed = game.level.objects.find(obj => obj.id === arrow.id);
+    assert.ok(landed, rng.join(', '));
+    assert.equal(landed.ox, 8);
+    assert.equal(landed.oy, 5);
+    assert.equal(landed.blessed, true);
+    assert.equal(landed.transientProjectile, false);
+
+    assertNoSingletonLauncherMultishotRng(rng);
+    assert.equal(rng.some(entry => entry.startsWith('rn2(30)=') || entry.startsWith('rn2(100)=')),
+        false, rng.join(', '));
+});
+
 test('production monster launcher arrow reveals object mimic on intervening hit', async () => {
     const mimic = ordinaryThrowTarget('large mimic', 8, 5, {
         ac: 13,
@@ -39918,6 +39973,79 @@ test('production monster thrown silver weapons sear silver-hating intervening mo
         assert.equal(landed.ox, 8, row.name);
         assert.equal(landed.oy, 5, row.name);
         assert.equal(landed.material, 'silver', row.name);
+        assert.equal(landed.transientProjectile, false, row.name);
+    }
+});
+
+const blessedThrownNonPotionInterveningCases = [
+    {
+        name: 'blessed spear',
+        projectile: () => monsterSpear(874522, { blessed: true }),
+        run: options => runMonsterSpearIronBars({ seed: 1, ...options }),
+        missile: result => result.spearItem,
+        baseRoll: 'rnd(6)=',
+        hitPattern: /spear hits the human zombie[.!]/,
+    },
+    {
+        name: 'blessed dagger',
+        projectile: () => ({
+            ...dagger(874523),
+            letter: undefined,
+            line: undefined,
+            spe: 0,
+            blessed: true,
+        }),
+        run: options => runMonsterPlainDaggerIronBars({ seed: 1, ...options }),
+        missile: result => result.daggerItem,
+        baseRoll: 'rnd(4)=',
+        hitPattern: /dagger hits the human zombie[.!]/,
+    },
+];
+
+test('production monster thrown blessed weapons damage blessing-hating intervening monsters', async () => {
+    for (const row of blessedThrownNonPotionInterveningCases) {
+        const zombie = ordinaryThrowTarget('human zombie', 8, 5, {
+            ac: 30,
+            mac: 30,
+            mhp: 30,
+            mhpmax: 30,
+            msleeping: 1,
+            data: { name: 'human zombie', mlevel: 4, mlet: 'Z', mac: 30 },
+        });
+        const projectile = row.projectile();
+        const result = await row.run({
+            heroBlind: false,
+            uac: 100,
+            projectile,
+            levelCells: [[7, 5, { typ: IRONBARS }]],
+            extraMonsters: [zombie],
+        });
+        const missile = row.missile(result);
+        const rawRng = result.rawRng || result.rng || [];
+        const messages = collectMonsterThrowMessages(result.preNhgetchMessages);
+
+        assert.match(messages, row.hitPattern, row.name);
+        assert.doesNotMatch(messages, /silver sears/, row.name);
+        assert.equal(preventedByIronBars(messages), false, row.name);
+        assert.equal(game.u.uhp, 20, row.name);
+        assert.equal(game._damage_after_topline_more || 0, 0, `${row.name}: ${rawRng.join(', ')}`);
+        assert.equal(zombie.msleeping, 0, row.name);
+        assert.equal(result.thrower.minvent.some(obj => obj.id === missile.id), false, row.name);
+
+        const baseDamageIndex = rawRng.findIndex(entry => entry.startsWith(row.baseRoll));
+        const blessedDamageIndex = rawRng.findIndex((entry, index) =>
+            index > baseDamageIndex && entry.startsWith('rnd(4)='));
+        assert.notEqual(baseDamageIndex, -1, `${row.name}: ${rawRng.join(', ')}`);
+        assert.notEqual(blessedDamageIndex, -1, `${row.name}: ${rawRng.join(', ')}`);
+        const baseDamage = Number(rawRng[baseDamageIndex].split('=')[1]);
+        const blessedDamage = Number(rawRng[blessedDamageIndex].split('=')[1]);
+        assert.equal(zombie.mhp, 30 - baseDamage - blessedDamage, `${row.name}: ${rawRng.join(', ')}`);
+
+        const landed = game.level.objects.find(obj => obj.id === missile.id);
+        assert.ok(landed, `${row.name}: ${rawRng.join(', ')}`);
+        assert.equal(landed.ox, 8, row.name);
+        assert.equal(landed.oy, 5, row.name);
+        assert.equal(landed.blessed, true, row.name);
         assert.equal(landed.transientProjectile, false, row.name);
     }
 });

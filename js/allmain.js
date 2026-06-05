@@ -6585,6 +6585,7 @@ export async function processMonsterTurns() {
                             const projectileDamageBonus = monsterLauncherProjectileDamageBonus(thrownMissile);
                             let damage = Math.max(1, rnd(projectileDamageSides) + projectileDamageBonus
                                 + missileSpe - missileErosion);
+                            damage += monsterThrownObjectBlessedHitDamage(target, thrownMissile);
                             const silverSearsTarget = monsterLauncherProjectileIsSilver(thrownMissile)
                                 && monsterHatesSilverWeapon(target);
                             if (silverSearsTarget) damage += rnd(20);
@@ -7052,6 +7053,7 @@ export async function processMonsterTurns() {
                         } else if (interveningTarget) {
                             let damage = Math.max(1, rnd(monsterThrownSpearDamageSides(thrownMissile))
                                 + missileSpe - missileErosion);
+                            damage += monsterThrownObjectBlessedHitDamage(interveningTarget, thrownMissile);
                             const silverHit = monsterThrownObjectSilverHitEffect(interveningTarget,
                                 thrownMissile, throwerVisible);
                             if (silverHit) damage += silverHit.damage;
@@ -7185,6 +7187,7 @@ export async function processMonsterTurns() {
                             addMonsterThrownFloorMessages(floorMessages, throwerVisible);
                         } else if (interveningTarget) {
                             let damage = Math.max(1, rnd(8) + missileSpe - missileErosion);
+                            damage += monsterThrownObjectBlessedHitDamage(interveningTarget, thrownMissile);
                             const silverHit = monsterThrownObjectSilverHitEffect(interveningTarget,
                                 thrownMissile, throwerVisible);
                             if (silverHit) damage += silverHit.damage;
@@ -7322,6 +7325,7 @@ export async function processMonsterTurns() {
                             addMonsterThrownFloorMessages(floorMessages, throwerVisible);
                         } else if (interveningTarget) {
                             let damage = rnd(4);
+                            damage += monsterThrownObjectBlessedHitDamage(interveningTarget, thrownMissile);
                             const silverHit = monsterThrownObjectSilverHitEffect(interveningTarget,
                                 thrownMissile, throwerVisible);
                             if (silverHit) damage += silverHit.damage;
@@ -7571,6 +7575,7 @@ export async function processMonsterTurns() {
                                 crudeDaggerOhit = false;
                             } else if (interveningTarget) {
                                 let damage = rnd(3);
+                                damage += monsterThrownObjectBlessedHitDamage(interveningTarget, thrownMissile);
                                 const silverHit = monsterThrownObjectSilverHitEffect(interveningTarget,
                                     thrownMissile, throwerVisible);
                                 if (silverHit) damage += silverHit.damage;
@@ -7715,6 +7720,7 @@ export async function processMonsterTurns() {
                             addMonsterThrownFloorMessages(floorMessages, throwerVisible);
                         } else if (interveningTarget) {
                             let damage = Math.max(1, rnd(3) + missileSpe - missileErosion);
+                            damage += monsterThrownObjectBlessedHitDamage(interveningTarget, thrownMissile);
                             const silverHit = monsterThrownObjectSilverHitEffect(interveningTarget,
                                 thrownMissile, throwerVisible);
                             if (silverHit) damage += silverHit.damage;
@@ -7845,6 +7851,7 @@ export async function processMonsterTurns() {
                                 let dartDamage = Math.max(1, rnd(3) + missileSpe - missileErosion);
                                 const targetVisible = !game.u?.blind
                                     && !!(game.viz_array?.[interveningTarget.my]?.[interveningTarget.mx] & IN_SIGHT);
+                                dartDamage += monsterThrownObjectBlessedHitDamage(interveningTarget, thrownMissile);
                                 const silverHit = monsterThrownObjectSilverHitEffect(interveningTarget,
                                     thrownMissile, targetVisible);
                                 if (silverHit) dartDamage += silverHit.damage;
@@ -9555,6 +9562,18 @@ function monsterThrownObjectIsSilver(item) {
     if (material === 'silver') return true;
     return monsterLauncherProjectileNames(item)
         .some(name => /\bsilver\b/.test(name));
+}
+
+function monsterThrownObjectUsesBlessedDmgvalBonus(item) {
+    return monsterThrownObjectIsWeaponForHitValue(item)
+        || item?.cls === 'gem' || item?.glyph === '*'
+        || item?.cls === 'ball' || item?.cls === 'chain';
+}
+
+function monsterThrownObjectBlessedHitDamage(target, item) {
+    if (!item?.blessed || !monsterHatesBlessedWeapon(target)) return 0;
+    if (!monsterThrownObjectUsesBlessedDmgvalBonus(item)) return 0;
+    return rnd(4);
 }
 
 function monsterThrownObjectSilverHitEffect(target, item, visible) {
