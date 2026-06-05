@@ -8,7 +8,7 @@ import { game, resetGame } from '../js/gstate.js';
 import { pushKey, resetInputState } from '../js/input.js';
 import { createMonsterCorpseOrGlob, mkcorpstat, mkobj, mksobj, monsterByRndName } from '../js/mklev.js';
 import { enableDisplayRngLog, enableRngLog, getRngLog, initRng } from '../js/rng.js';
-import { A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_STR, A_WIS, ALLOW_TRAPS, ALTAR, AM_SHRINE, Align2amask, ARROW_TRAP, BEAR_TRAP, BILLSZ, CANDLESHOP, CLOUD, CORPSTAT_HISTORIC, COULD_SEE, DART_TRAP, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, D_CLOSED, D_NODOOR, FIRE_TRAP, FOUNTAIN, HOLE, ICE, ICED_POOL, IN_SIGHT, IRONBARS, LADDER, LANDMINE, LAVAPOOL, MIGR_LADDER_UP, MIGR_SSTAIRS, MIGR_STAIRS_UP, MOAT, M_AP_FURNITURE, M_AP_OBJECT, NORMAL_SPEED, P_BASIC, P_DAGGER, P_EXPERT, P_KNIFE, P_SKILLED, P_UNSKILLED, PIT, POLY_TRAP, POOL, REPAIR_DELAY, ROOM, ROOMOFFSET, SDOOR, SHOPBASE, SHOP_DOOR_COST, SINK, SLP_GAS_TRAP, SPIKED_PIT, SQKY_BOARD, STAIRS, STATUE_TRAP, STONE, STRAT_APPEARMSG, STRAT_WAITFORU, STRAT_WAITMASK, TEMPLE, TRAPDOOR, TT_LAVA, TT_WEB, WEB, W_ARMF, W_SADDLE } from '../js/const.js';
+import { A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_STR, A_WIS, ALLOW_TRAPS, ALTAR, AM_SHRINE, Align2amask, ANTI_MAGIC, ARROW_TRAP, BEAR_TRAP, BILLSZ, CANDLESHOP, CLOUD, CORPSTAT_HISTORIC, COULD_SEE, DART_TRAP, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, D_CLOSED, D_NODOOR, FIRE_TRAP, FOUNTAIN, HOLE, ICE, ICED_POOL, IN_SIGHT, IRONBARS, LADDER, LANDMINE, LAVAPOOL, MAGIC_PORTAL, MIGR_LADDER_UP, MIGR_SSTAIRS, MIGR_STAIRS_UP, MOAT, M_AP_FURNITURE, M_AP_OBJECT, NORMAL_SPEED, P_BASIC, P_DAGGER, P_EXPERT, P_KNIFE, P_SKILLED, P_UNSKILLED, PIT, POLY_TRAP, POOL, REPAIR_DELAY, ROCKTRAP, ROLLING_BOULDER_TRAP, ROOM, ROOMOFFSET, SDOOR, SHOPBASE, SHOP_DOOR_COST, SINK, SLP_GAS_TRAP, SPIKED_PIT, SQKY_BOARD, STAIRS, STATUE_TRAP, STONE, STRAT_APPEARMSG, STRAT_WAITFORU, STRAT_WAITMASK, TEMPLE, TRAPDOOR, TT_LAVA, TT_WEB, WEB, W_ARMF, W_SADDLE } from '../js/const.js';
 import { currentFruitId, setCurrentFruitName } from '../js/fruit.js';
 import { CLR_BRIGHT_MAGENTA, CLR_BROWN, CLR_WHITE } from '../js/terminal.js';
 import { TRIBUTE_DEATH_QUOTES } from '../js/tribute.js';
@@ -17871,6 +17871,154 @@ test('magic resistant monster marks unknown polymorph trap pathing candidate as 
 
     assert.ok(trapCandidate);
     assert.equal(!!(trapCandidate.info & ALLOW_TRAPS), true);
+});
+
+const KNOWN_TRAP_PRELUDE_CASES = [
+    ['dart trap', DART_TRAP],
+    ['falling rock trap', ROCKTRAP],
+    ['land mine', LANDMINE],
+    ['rolling boulder trap', ROLLING_BOULDER_TRAP],
+    ['web', WEB],
+    ['magic portal', MAGIC_PORTAL],
+    ['squeaky board', SQKY_BOARD],
+    ['anti-magic trap', ANTI_MAGIC],
+];
+
+const IN_AIR_FLOOR_TRIGGER_PRELUDE_CASES = [
+    ['dart trap', DART_TRAP],
+    ['falling rock trap', ROCKTRAP],
+    ['land mine', LANDMINE],
+    ['rolling boulder trap', ROLLING_BOULDER_TRAP],
+    ['squeaky board', SQKY_BOARD],
+    ['sleeping gas trap', SLP_GAS_TRAP],
+];
+
+function installKnownTrapPreludeState(ttyp, extra = {}) {
+    installStableNonShopFloorState();
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 50,
+        uhpmax: 50,
+        uac: 10,
+    });
+    game.inventory = [];
+    const trap = { ttyp, tx: 6, ty: 5, tseen: false, once: false };
+    game.level.traps = [trap];
+    const goblin = dartTrapGoblin(31410, {
+        mx: 6,
+        my: 5,
+        mhp: 10,
+        mhpmax: 10,
+        mtrapseen: 1 << (ttyp - 1),
+        ...extra,
+    });
+    game.level.monsters = [goblin];
+    return { trap, goblin };
+}
+
+function installKnownTrapPathingState(ttyp, extra = {}) {
+    installStableNonShopFloorState();
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 50,
+        uhpmax: 50,
+        uac: 10,
+    });
+    game.inventory = [];
+    const trap = { ttyp, tx: 6, ty: 5, tseen: false, once: false };
+    game.level.traps = [trap];
+    const goblin = dartTrapGoblin(31411, {
+        mhp: 10,
+        mhpmax: 10,
+        ...extra,
+    });
+    game.level.monsters = [goblin];
+    return { trap, goblin };
+}
+
+test('unknown ordinary monster trap pathing candidates stay hazardous', () => {
+    for (const [name, ttyp] of KNOWN_TRAP_PRELUDE_CASES) {
+        const { goblin } = installKnownTrapPathingState(ttyp);
+
+        const flags = allmain.monsterAllowFlagsForTest(goblin, false, false);
+        const candidates = allmain.mfndposForTest(goblin, flags);
+        const trapCandidate = candidates.find(candidate => candidate.x === 6 && candidate.y === 5);
+
+        assert.ok(trapCandidate, `${name} candidate`);
+        assert.equal(!!(trapCandidate.info & ALLOW_TRAPS), true, `${name} hazardous flag`);
+    }
+});
+
+test('known ordinary monster trap pathing candidates are skipped', () => {
+    for (const [name, ttyp] of KNOWN_TRAP_PRELUDE_CASES) {
+        const { goblin } = installKnownTrapPathingState(ttyp, {
+            mtrapseen: 1 << (ttyp - 1),
+        });
+
+        const flags = allmain.monsterAllowFlagsForTest(goblin, false, false);
+        const candidates = allmain.mfndposForTest(goblin, flags);
+
+        assert.equal(candidates.some(candidate => candidate.x === 6 && candidate.y === 5), false, name);
+    }
+});
+
+test('known ordinary monster trap prelude can skip effects before learning', () => {
+    for (const [name, ttyp] of KNOWN_TRAP_PRELUDE_CASES) {
+        const { trap, goblin } = installKnownTrapPreludeState(ttyp);
+        enableRngLog({ reset: true });
+        installCoreRngValues([1]);
+
+        assert.equal(allmain.monsterAvoidsKnownTrapBeforeEffectForTest(goblin, trap), true, name);
+        assert.deepEqual(getRngLog().map(rngCallName), ['rn2(4)'], name);
+        assert.equal(trap.tseen, false, name);
+        assert.equal(goblin.mtrapseen, 1 << (ttyp - 1), name);
+    }
+});
+
+test('known ordinary monster trap prelude falls through on failed avoidance', () => {
+    for (const [name, ttyp] of KNOWN_TRAP_PRELUDE_CASES) {
+        const { trap, goblin } = installKnownTrapPreludeState(ttyp);
+        enableRngLog({ reset: true });
+        installCoreRngValues([0]);
+
+        assert.equal(allmain.monsterAvoidsKnownTrapBeforeEffectForTest(goblin, trap), false, name);
+        assert.deepEqual(getRngLog().map(rngCallName), ['rn2(4)'], name);
+        assert.equal(trap.tseen, false, name);
+    }
+});
+
+test('in-air monsters skip non-pit floor-trigger prelude even in sokoban', () => {
+    for (const [name, ttyp] of IN_AIR_FLOOR_TRIGGER_PRELUDE_CASES) {
+        const { trap, goblin } = installKnownTrapPreludeState(ttyp, {
+            data: { inAir: true },
+        });
+        game.level.flags.sokoban_rules = true;
+        enableRngLog({ reset: true });
+        installCoreRngValues([1]);
+
+        assert.equal(allmain.monsterAvoidsKnownTrapBeforeEffectForTest(goblin, trap), false, name);
+        assert.deepEqual(getRngLog().map(rngCallName), [], name);
+    }
+});
+
+test('in-air monster sleep gas trap handling skips known-trap roll before effects', async () => {
+    const { trap, goblin } = installMonsterSleepGasTrapState({
+        mtrapseen: 1 << (SLP_GAS_TRAP - 1),
+        data: { inAir: true },
+    });
+    enableRngLog({ reset: true });
+    installCoreRngValues([1]);
+
+    assert.equal(allmain.monsterSleepGasTrapEffectForTest(goblin, trap), true);
+    const messages = [game._pending_message, ...(await drainQueuedMessagesAfterMore())].join(' ');
+
+    assert.deepEqual(getRngLog().map(rngCallName), []);
+    assert.doesNotMatch(messages, /falls asleep/);
+    assert.equal(goblin.mcanmove, true);
+    assert.equal(goblin.mfrozen, 0);
+    assert.equal(trap.tseen, false);
 });
 
 test('visible monster polymorph trap polymorphs monster and leaves trap', async () => {

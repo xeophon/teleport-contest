@@ -10456,15 +10456,38 @@ function monsterAvoidsKnownTrapEffect(mon, trap) {
     if (!trap?.ttyp) return false;
     const alreadySeen = monsterKnowsTrap(mon, trap.ttyp)
         || (trap.ttyp === HOLE && !mon.data?.mindless);
-    return alreadySeen && rn2(4);
+    return !!(alreadySeen && rn2(4));
+}
+
+function monsterFloorTriggerTrapType(ttyp) {
+    return [ARROW_TRAP, DART_TRAP, ROCKTRAP, SQKY_BOARD, BEAR_TRAP, LANDMINE,
+        ROLLING_BOULDER_TRAP, SLP_GAS_TRAP, RUST_TRAP, FIRE_TRAP, PIT, SPIKED_PIT,
+        HOLE, TRAPDOOR].includes(ttyp);
+}
+
+function monsterSokobanPitHoleBypassesPrelude(trap) {
+    return game.level?.flags?.sokoban_rules && !trap?.madeby_u
+        && [PIT, SPIKED_PIT, HOLE, TRAPDOOR].includes(trap?.ttyp);
+}
+
+function monsterInAirAvoidsFloorTrigger(mon, trap) {
+    return monsterFloorTriggerTrapType(trap?.ttyp) && mon.data?.inAir
+        && !monsterSokobanPitHoleBypassesPrelude(trap);
+}
+
+function monsterAvoidsKnownTrapBeforeEffect(mon, trap) {
+    if (!trap?.ttyp) return false;
+    if (mon === game.u?.usteed) return false;
+    if (trap.ttyp === TELEP_TRAP && monsterTeleportTrapDestination(trap)) return false;
+    if (monsterSokobanPitHoleBypassesPrelude(trap)) return false;
+    if (monsterInAirAvoidsFloorTrigger(mon, trap)) return false;
+    return monsterAvoidsKnownTrapEffect(mon, trap);
 }
 
 function monsterTrapHarmless(mon, trap) {
     const ttyp = trap?.ttyp;
     const data = mon.data || {};
-    const floorTrigger = [ARROW_TRAP, DART_TRAP, ROCKTRAP, SQKY_BOARD, BEAR_TRAP, LANDMINE, ROLLING_BOULDER_TRAP,
-        SLP_GAS_TRAP, RUST_TRAP, FIRE_TRAP, PIT, SPIKED_PIT, HOLE, TRAPDOOR].includes(ttyp);
-    if (!game.level?.flags?.sokoban_rules && floorTrigger && data.inAir) return true;
+    if (monsterInAirAvoidsFloorTrigger(mon, trap)) return true;
     if (ttyp === BEAR_TRAP) return data.verysmall || data.small || data.amorphous || data.unsolid;
     if (ttyp === RUST_TRAP) return data.name !== 'iron golem';
     if (ttyp === WEB) return monsterWebPassesThrough(data);
@@ -10474,8 +10497,8 @@ function monsterTrapHarmless(mon, trap) {
 
 function monsterSleepGasTrapEffect(mon, trap) {
     if (trap?.ttyp !== SLP_GAS_TRAP) return false;
-    if (monsterAvoidsKnownTrapEffect(mon, trap)) return true;
     if (monsterTrapHarmless(mon, trap)) return true;
+    if (monsterAvoidsKnownTrapBeforeEffect(mon, trap)) return true;
     monsterTriggerTrap(mon, trap);
     if (mon.mcanmove !== false && !mon.msleeping
         && !mon.data?.resistsSleep && !mon.data?.breathless) {
@@ -11801,6 +11824,7 @@ function moveMonsterTowardHero(mon, conflictActive = false, monIndex = null, som
     if (monsterTeleportTrapEffect(mon, trap)) return done();
     if (monsterPolymorphTrapEffect(mon, trap)) return done();
     if (trap?.ttyp === MAGIC_PORTAL) {
+        if (monsterAvoidsKnownTrapBeforeEffect(mon, trap)) return done();
         monsterTriggerTrap(mon, trap);
         if (couldSeeCoord(mon.mx, mon.my) && !game.u?.blind && !mon.minvis && !mon.mundetected) {
             trap.tseen = true;
@@ -11818,13 +11842,15 @@ function moveMonsterTowardHero(mon, conflictActive = false, monIndex = null, som
         monsterTriggerTrap(mon, trap);
         rn2(21);
     }
+    if (trap?.ttyp === ANTI_MAGIC && monsterAvoidsKnownTrapBeforeEffect(mon, trap)) return done();
     if (trap?.ttyp === ANTI_MAGIC) monsterTriggerTrap(mon, trap);
     if (monsterSleepGasTrapEffect(mon, trap)) return true;
     if (trap?.ttyp === FIRE_TRAP && !monsterTrapHarmless(mon, trap)) {
-        if (monsterKnowsTrap(mon, trap.ttyp) && rn2(4)) return done();
+        if (monsterAvoidsKnownTrapBeforeEffect(mon, trap)) return done();
         if (monsterFireTrapEffect(mon, trap)) return done();
     }
     if (trap?.ttyp === ROCKTRAP && !monsterTrapHarmless(mon, trap)) {
+        if (monsterAvoidsKnownTrapBeforeEffect(mon, trap)) return done();
         if (trap.once && trap.tseen && !rn2(15)) {
             game.level.traps = (game.level?.traps || []).filter(item => item !== trap);
             newsym(mon.mx, mon.my);
@@ -11855,7 +11881,7 @@ function moveMonsterTowardHero(mon, conflictActive = false, monIndex = null, som
         return done();
     }
     if ((trap?.ttyp === PIT || trap?.ttyp === SPIKED_PIT) && !cavernTunnelRoom && !monsterTrapHarmless(mon, trap)) {
-        if (monsterKnowsTrap(mon, trap.ttyp) && rn2(4)) return done();
+        if (monsterAvoidsKnownTrapBeforeEffect(mon, trap)) return done();
         monsterTriggerTrap(mon, trap);
         const inSight = couldSeeCoord(mon.mx, mon.my);
         if (inSight) {
@@ -11873,8 +11899,7 @@ function moveMonsterTowardHero(mon, conflictActive = false, monIndex = null, som
         mon._move_consumed_turn = 1;
     }
     if ((trap?.ttyp === HOLE || trap?.ttyp === TRAPDOOR) && !monsterTrapHarmless(mon, trap) && !mon.data?.big) {
-        const alreadySeen = monsterKnowsTrap(mon, trap.ttyp) || (trap.ttyp === HOLE && !mon.data?.mindless);
-        if (alreadySeen && rn2(4)) return done();
+        if (monsterAvoidsKnownTrapBeforeEffect(mon, trap)) return done();
         monsterTriggerTrap(mon, trap);
         if (couldSeeCoord(mon.mx, mon.my)) trap.tseen = true;
         game.level.monsters = (game.level?.monsters || []).filter(other => other !== mon);
@@ -11883,6 +11908,7 @@ function moveMonsterTowardHero(mon, conflictActive = false, monIndex = null, som
         return done();
     }
     if (trap?.ttyp === DART_TRAP && !monsterTrapHarmless(mon, trap)) {
+        if (monsterAvoidsKnownTrapBeforeEffect(mon, trap)) return done();
         if (trap.once && trap.tseen && !rn2(15)) {
             game.level.traps = (game.level?.traps || []).filter(item => item !== trap);
             newsym(mon.mx, mon.my);
@@ -11919,6 +11945,7 @@ function moveMonsterTowardHero(mon, conflictActive = false, monIndex = null, som
         return done();
     }
     if (trap?.ttyp === LANDMINE && !monsterTrapHarmless(mon, trap)) {
+        if (monsterAvoidsKnownTrapBeforeEffect(mon, trap)) return done();
         monsterTriggerTrap(mon, trap);
         const damage = rnd(16);
         const bodyWeight = mon.data?.cwt ?? MONSTER_BODY_WEIGHTS.get(mon.data?.name) ?? 1450;
@@ -11931,6 +11958,7 @@ function moveMonsterTowardHero(mon, conflictActive = false, monIndex = null, som
     }
     if (trap?.ttyp === SQKY_BOARD) {
         if (monsterTrapHarmless(mon, trap)) return done();
+        if (monsterAvoidsKnownTrapBeforeEffect(mon, trap)) return done();
         monsterTriggerTrap(mon, trap);
         const note = SQUEAKY_NOTES[trap.tnote] || 'a note';
         addToplineMessage(couldSeeCoord(mon.mx, mon.my)
@@ -11944,6 +11972,7 @@ function moveMonsterTowardHero(mon, conflictActive = false, monIndex = null, som
         }
     }
     if (trap?.ttyp === ROLLING_BOULDER_TRAP && !mon.data?.inAir && !mon.data?.flyer && !mon.data?.floater) {
+        if (monsterAvoidsKnownTrapBeforeEffect(mon, trap)) return done();
         monsterTriggerTrap(mon, trap);
         const inSight = couldSeeCoord(mon.mx, mon.my) && !game.u?.blind && !mon.minvis && !mon.mundetected;
         newsym(mon.mx, mon.my);
@@ -12032,6 +12061,7 @@ function moveMonsterTowardHero(mon, conflictActive = false, monIndex = null, som
             if (inSight) trap.tseen = true;
         }
     }
+	    if (trap?.ttyp === WEB && monsterAvoidsKnownTrapBeforeEffect(mon, trap)) return done();
 	    if (monsterWebSpecialEffect(mon, trap)) {
 	        mon._move_consumed_turn = 1;
 	    } else if (trap?.ttyp === WEB && !mon.mtrapped) {
@@ -14431,5 +14461,6 @@ export async function moveloop(_resuming) {
 export const __allmainTestHooks = {
     mfndposForTest: mfndpos,
     monsterAllowFlagsForTest: monsterAllowFlags,
+    monsterAvoidsKnownTrapBeforeEffectForTest: monsterAvoidsKnownTrapBeforeEffect,
     monsterSleepGasTrapEffectForTest: monsterSleepGasTrapEffect,
 };
