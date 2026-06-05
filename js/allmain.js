@@ -6619,6 +6619,7 @@ export async function processMonsterTurns() {
                                 }
                             }
                             target.mhp = Math.max(0, (target.mhp || 1) - damage);
+                            if (target.mhp < 1) killMonsterFromLauncherInterveningHit(target, targetVisible);
                             if (sharedArrowLanding) {
                                 game._arrow_drop_throw_after_topline_more = {
                                     missile: thrownMissile,
@@ -9461,6 +9462,42 @@ function monsterSilverSearsFlesh(target) {
         || target?.amorphous || data.amorphous
         || rawMlet === ' ' || mlet === 'ghost'
         || name === 'shade');
+}
+
+function monsterProjectileDeathIsDestroyed(target, visible) {
+    const data = target?.data || {};
+    const rawMlet = String(target?.mlet || data.mlet || data.glyph || '');
+    const mlet = rawMlet.toLowerCase();
+    const name = normalizedGemName(target?.name || data.name);
+    return !visible || !!(target?.vampshifter || data.vampshifter
+        || target?.nonliving || data.nonliving
+        || mlet === 'w' || mlet === 'm' || mlet === 'z'
+        || mlet === 'zombie' || mlet === 'mummy' || rawMlet === "'"
+        || name.includes('zombie') || name.includes('mummy') || name.endsWith(' golem')
+        || name === 'manes' || name.includes('vortex'));
+}
+
+function killMonsterFromLauncherInterveningHit(target, visible) {
+    if (!target || target.dead) return;
+    target.dead = true;
+    target.mhp = 0;
+    target.movement = 0;
+    const destroyed = monsterProjectileDeathIsDestroyed(target, visible);
+    const subject = visible ? monsterDisplayName(target) : 'It';
+    appendAfterMoreMessage(`${subject} is ${destroyed ? 'destroyed' : 'killed'}!`);
+
+    const data = target.data || {};
+    recordVanquished(target, false);
+    dropMonsterInventory(target);
+    const corpseData = corpseDataForMonster(data);
+    const loc = game.level?.at?.(target.mx, target.my);
+    const canDropCorpse = loc && (ACCESSIBLE(loc.typ) || IS_POOL(loc.typ))
+        && !target.mcloned
+        && monsterLeavesCorpseLikeDrop(corpseData)
+        && monsterCorpseDropSucceeds(target, data);
+    if (canDropCorpse) createMonsterCorpseOrGlob(target, corpseData);
+    game.level.monsters = (game.level?.monsters || []).filter(other => other !== target);
+    newsym(target.mx, target.my);
 }
 
 function monsterLauncherProjectileIsSilver(item) {

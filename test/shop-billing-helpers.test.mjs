@@ -35811,6 +35811,80 @@ test('production monster launcher arrow can hit intervening monster before hero'
     assert.equal(preNhgetchMessages.some(message => /Clonk!/.test(message)), false);
 });
 
+test('production monster launcher arrow kills visible intervening monster without hero attribution', async () => {
+    const blocker = ordinaryThrowTarget('goblin', 8, 5, {
+        ac: 13,
+        mac: 13,
+        mhp: 1,
+        mhpmax: 1,
+        msleeping: 1,
+        data: { name: 'goblin', mlevel: 1, mac: 13 },
+    });
+    const { arrow, thrower, rng, preNhgetchMessages } = await runMonsterLauncherArrowLanding({
+        seed: 2,
+        uac: 100,
+        heroBlind: false,
+        levelCells: [[7, 5, { typ: IRONBARS }]],
+        extraMonsters: [blocker],
+    });
+
+    const messages = [
+        game._pending_message,
+        ...preNhgetchMessages,
+        ...(game._queued_messages_after_more || []).map(entry => entry.text),
+    ].filter(Boolean).join('  ');
+    assert.match(messages, /The arrow hits the goblin[.!]/);
+    assert.match(messages, /The goblin is killed!/);
+    assert.doesNotMatch(messages, /You kill the goblin|You destroy/);
+    assert.equal(game.u.uhp, 20);
+    assert.equal(game._damage_after_topline_more || 0, 0, rng.join(', '));
+    assert.equal(blocker.dead, true);
+    assert.equal(blocker.mhp, 0);
+    assert.equal(game.level.monsters.includes(blocker), false);
+    assert.equal(game._vanquished_counts?.goblin, 1);
+    assert.equal(thrower.minvent.some(obj => obj.id === arrow.id), false);
+    assert.equal(thrower.missile, null);
+    assert.equal(game.level.objects.some(obj => obj.transientProjectile), false);
+    assertNoSingletonLauncherMultishotRng(rng);
+});
+
+test('production monster launcher arrow destroys visible nonliving intervening monster without hero attribution', async () => {
+    const blocker = ordinaryThrowTarget('iron golem', 8, 5, {
+        ac: 13,
+        mac: 13,
+        mhp: 1,
+        mhpmax: 1,
+        msleeping: 1,
+        data: { name: 'iron golem', mlevel: 18, mac: 13, nonliving: true },
+    });
+    const { arrow, thrower, rng, preNhgetchMessages } = await runMonsterLauncherArrowLanding({
+        seed: 2,
+        uac: 100,
+        heroBlind: false,
+        levelCells: [[7, 5, { typ: IRONBARS }]],
+        extraMonsters: [blocker],
+    });
+
+    const messages = [
+        game._pending_message,
+        ...preNhgetchMessages,
+        ...(game._queued_messages_after_more || []).map(entry => entry.text),
+    ].filter(Boolean).join('  ');
+    assert.match(messages, /The arrow hits the iron golem[.!]/);
+    assert.match(messages, /The iron golem is destroyed!/);
+    assert.doesNotMatch(messages, /You kill|You destroy/);
+    assert.equal(game.u.uhp, 20);
+    assert.equal(game._damage_after_topline_more || 0, 0, rng.join(', '));
+    assert.equal(blocker.dead, true);
+    assert.equal(blocker.mhp, 0);
+    assert.equal(game.level.monsters.includes(blocker), false);
+    assert.equal(game._vanquished_counts?.['iron golem'], 1);
+    assert.equal(thrower.minvent.some(obj => obj.id === arrow.id), false);
+    assert.equal(thrower.missile, null);
+    assert.equal(game.level.objects.some(obj => obj.transientProjectile), false);
+    assertNoSingletonLauncherMultishotRng(rng);
+});
+
 test('production monster silver launcher arrow intervening hit sears silver hater', async () => {
     const blocker = ordinaryThrowTarget('vampire', 8, 5, {
         ac: 30,
