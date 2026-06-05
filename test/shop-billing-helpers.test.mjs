@@ -46124,6 +46124,36 @@ test('upward hero-thrown pick-axe self-hits with weapon-tool damage and lands', 
     ]);
 });
 
+test('upward hero-thrown grappling hook self-hits with weapon-tool damage and lands', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, { uhp: 30, uhpmax: 30 });
+    const hook = ordinaryTool(876897, 'grappling hook', 'g');
+    game.inventory = [hook];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('g');
+    await rhack('<');
+
+    const message = game._pending_message || '';
+    assert.equal(game._command_mode, null);
+    assert.match(message, /A grappling hook almost hits the ceiling, then falls back on top of your head\./);
+    assert.match(message, /A grappling hook hits the floor\./);
+    assert.doesNotMatch(message, /cmdassist|In what direction|It doesn't hurt|shatters|Splat/);
+    assert.equal(game.u.uhp < 30, true);
+    assert.equal(game.u.uhp >= 28, true);
+    assert.equal(game.inventory.includes(hook), false);
+    assert.equal(game.level.objects.length, 1);
+    const landed = game.level.objects[0];
+    assert.equal(landed.kind, 'grappling hook');
+    assert.equal(landed.ox, game.u.ux);
+    assert.equal(landed.oy, game.u.uy);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rn2(5)', 'rn2(100)', 'rnd(2)', 'rn2(100)',
+    ]);
+});
+
 test('upward hero-thrown charged bag of tricks uses generic weight damage and lands', async () => {
     installNonShopFloorState();
     initRng(1);

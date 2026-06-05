@@ -19385,6 +19385,7 @@ const HERO_TOSS_UP_WEAPON_SMALL_DAMAGE = new Map([
     ['axe', 6],
     ['battle-axe', { die: 8, bonusDie: 4 }],
     ['pick-axe', 6],
+    ['grappling hook', 2],
     ['short sword', 6],
     ['elven short sword', 8],
     ['orcish short sword', 5],
@@ -19442,6 +19443,7 @@ const HERO_TOSS_UP_WEAPON_LARGE_DAMAGE = new Map([
     ['axe', 4],
     ['battle-axe', { die: 6, bonusDice: [2, 4] }],
     ['pick-axe', 3],
+    ['grappling hook', 6],
     ['short sword', 8],
     ['elven short sword', 8],
     ['orcish short sword', 8],
@@ -19484,6 +19486,7 @@ function tossUpWeaponObjectKey(obj) {
     if (obj?.otyp === KNIFE) return 'knife';
     if (obj?.otyp === STILETTO) return 'stiletto';
     if (obj?.otyp === PICK_AXE) return 'pick-axe';
+    if (obj?.otyp === GRAPPLING_HOOK) return 'grappling hook';
     if (obj?.otyp === SHORT_SWORD) return 'short sword';
     if (obj?.otyp === ELVEN_SHORT_SWORD) return 'elven short sword';
     if (obj?.otyp === ORCISH_SHORT_SWORD) return 'orcish short sword';
