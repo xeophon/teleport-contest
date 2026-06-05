@@ -49893,6 +49893,7 @@ export async function rhack(_cmd) {
             }
             if (game._queued_messages_after_more?.length) {
                 const next = game._queued_messages_after_more.shift();
+                let nextText = next.text;
                 if (next.deferredMeleeWake) {
                     const action = next.deferredMeleeWake;
                     if (action.weaponHit) {
@@ -49922,13 +49923,28 @@ export async function rhack(_cmd) {
                 }
                 if (next.gasSporeHeroExplosion && game.u) {
                     rn2(5);
-                    game.u.uhp = Math.max(0, (game.u.uhp || 0) - next.gasSporeHeroExplosion.damage);
+                    if (game.u.uinvulnerable) {
+                        nextText = `${nextText}  You are unharmed!`;
+                    } else {
+                        const damage = maybeHalfPhysicalDamage(next.gasSporeHeroExplosion.damage);
+                        game.u.uhp = Math.max(0, (game.u.uhp || 0) - damage);
+                        if ((game.u.uhp || 0) <= 0) {
+                            game._death_cause = "killed by a gas spore's explosion";
+                            if (consumeLifeSavingAmulet()) {
+                                nextText = `${nextText}  It is fatal.  You die...  But wait...  Your medallion ${game.u?.blind ? 'feels warm' : 'begins to glow'}!`;
+                                next.lifeSaving = true;
+                            } else {
+                                nextText = `${nextText}  It is fatal.  You die...`;
+                                next.fatal = true;
+                            }
+                            next.more = true;
+                        }
+                    }
                     exerciseAttribute(A_STR, false);
                 }
                 if (next.clearBeam) game._transient_beam_cells = null;
                 game._pending_message = '';
                 game._message_more = 0;
-                let nextText = next.text;
                 if (next.wakeNearby) {
                     const wakeMessages = [];
                     for (const sleeper of game.level?.monsters || []) {

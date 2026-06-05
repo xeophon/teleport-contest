@@ -13365,6 +13365,45 @@ function adjacentHostileExplodingSphere(name = 'flaming sphere', id = 31006) {
     return { data, sphere };
 }
 
+function adjacentHostileGasSpore(id = 31306, extra = {}) {
+    const data = monsterByRndName('gas spore');
+    assert.equal(data.noCorpse, true);
+    return ordinaryThrowTarget('gas spore', 6, 5, {
+        m_id: id,
+        mhp: 1,
+        mhpmax: 1,
+        m_lev: data.mlevel ?? 1,
+        movement: NORMAL_SPEED,
+        msleeping: 0,
+        mcanmove: true,
+        mcansee: true,
+        mpeaceful: false,
+        mtame: 0,
+        mux: game.u.ux,
+        muy: game.u.uy,
+        data,
+        ...extra,
+    });
+}
+
+function adjacentGasSporeBlastVictim(name = 'goblin', id = 31320, x = 7, y = 5, extra = {}) {
+    const data = monsterByRndName(name) || { name, mlevel: 1, mr: 0 };
+    return ordinaryThrowTarget(name, x, y, {
+        m_id: id,
+        mhp: 30,
+        mhpmax: 30,
+        m_lev: data.mlevel ?? 1,
+        movement: 0,
+        msleeping: 0,
+        mcanmove: false,
+        mcansee: true,
+        mpeaceful: true,
+        mtame: 0,
+        data: { ...data, mr: data.mr || 0 },
+        ...extra,
+    });
+}
+
 function adjacentHostileFlamingSphere(id = 31006) {
     return adjacentHostileExplodingSphere('flaming sphere', id);
 }
@@ -17495,6 +17534,136 @@ test('monster fire breath hero-hit inventory vapor rehumanize old form death use
     assert.equal(game._pending_message, 'You feel much better!');
     assert.equal(game._command_mode || null, null);
     assert.equal(game.u.uhp, game.u.uhpmax);
+});
+
+test('gas spore death explosion uses shared half-physical blast and leaves no corpse', async () => {
+    installStableNonShopFloorState();
+    initRng(1);
+    enableRngLog({ reset: true });
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 50,
+        uhpmax: 50,
+        uac: 10,
+        uhitinc: 50,
+        halfPhysicalDamage: true,
+    });
+    game.inventory = [wieldedWeapon(31307, 'dagger', 'w', 20)];
+    const spore = adjacentHostileGasSpore(31306);
+    const victim = adjacentGasSporeBlastVictim('goblin', 31320);
+    game.level.monsters = [spore, victim];
+
+    markHeroNeighborhoodVisible();
+    await rhack('l');
+    const messages = [game._pending_message, ...(await drainQueuedMessagesAfterMore())].join(' ');
+
+    const d4x6 = rngValuesForCall(getRngLog(), 'd(4,6)');
+    assert.equal(d4x6.length, 2);
+    assert.match(messages, /You kill the gas spore!/);
+    assert.match(messages, /Boom!/);
+    assert.match(messages, /The goblin is caught in the gas spore's explosion!/);
+    assert.match(messages, /You are caught in the gas spore's explosion!/);
+    assert.equal(game.level.monsters.includes(spore), false);
+    assert.equal(game.level.objects.some(obj => obj.ox === 6 && obj.oy === 5), false);
+    assert.equal(victim.mhp, 30 - d4x6[1]);
+    assert.equal(game.u.uhp, 50 - Math.trunc((d4x6[1] + 1) / 2));
+});
+
+test('fatal gas spore death blast arms death more', async () => {
+    installStableNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 1,
+        uhpmax: 10,
+        uac: 10,
+        uhitinc: 50,
+    });
+    game.inventory = [wieldedWeapon(31331, 'dagger', 'w', 20)];
+    const spore = adjacentHostileGasSpore(31330);
+    game.level.monsters = [spore];
+
+    markHeroNeighborhoodVisible();
+    await rhack('l');
+    const messages = [game._pending_message, ...(await drainQueuedMessagesAfterMore())].join(' ');
+
+    assert.match(messages, /Boom!/);
+    assert.match(messages, /You are caught in the gas spore's explosion!  It is fatal\.  You die\.\.\./);
+    assert.equal(game._command_mode, 'deathDieMore');
+    assert.equal(game._queued_messages_after_more?.length || 0, 0);
+    assert.equal(game._death_cause, "killed by a gas spore's explosion");
+    assert.equal(game.u.uhp, 0);
+});
+
+test('life saving rescues fatal gas spore death blast', async () => {
+    installStableNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 1,
+        uhpmax: 10,
+        uac: 10,
+        uhitinc: 50,
+    });
+    const weapon = wieldedWeapon(31341, 'dagger', 'w', 20);
+    const amulet = {
+        id: 31342,
+        letter: 'a',
+        cls: 'amulet',
+        glyph: '"',
+        kind: 'amulet of life saving',
+        actualKind: 'amulet of life saving',
+        quan: 1,
+        worn: true,
+        line: 'a - an amulet of life saving (being worn)',
+    };
+    game.inventory = [weapon, amulet];
+    const spore = adjacentHostileGasSpore(31340);
+    game.level.monsters = [spore];
+
+    markHeroNeighborhoodVisible();
+    await rhack('l');
+    const messages = [game._pending_message, ...(await drainQueuedMessagesAfterMore())].join(' ');
+
+    assert.match(messages, /You are caught in the gas spore's explosion!  It is fatal\.  You die\.\.\.  But wait\.\.\.  Your medallion begins to glow!/);
+    assert.equal(game._command_mode, 'lifeSavingMore');
+    assert.equal(game.inventory.includes(weapon), true);
+    assert.equal(game.inventory.includes(amulet), false);
+    assert.equal(game.u.uhp, 0);
+
+    await rhack(' ');
+
+    assert.equal(game._pending_message, 'You feel much better!');
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game.u.uhp, game.u.uhpmax);
+});
+
+test('invulnerable hero is unharmed by gas spore death blast', async () => {
+    installStableNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 50,
+        uhpmax: 50,
+        uac: 10,
+        uhitinc: 50,
+        uinvulnerable: true,
+    });
+    game.inventory = [wieldedWeapon(31351, 'dagger', 'w', 20)];
+    const spore = adjacentHostileGasSpore(31350);
+    game.level.monsters = [spore];
+
+    markHeroNeighborhoodVisible();
+    await rhack('l');
+    const messages = [game._pending_message, ...(await drainQueuedMessagesAfterMore())].join(' ');
+
+    assert.match(messages, /You are caught in the gas spore's explosion!  You are unharmed!/);
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game.u.uhp, 50);
 });
 
 test('hostile flaming sphere adjacent attack explodes without to-hit roll', async () => {
