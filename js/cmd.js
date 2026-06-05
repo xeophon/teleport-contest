@@ -19342,10 +19342,13 @@ function heroThrownOrdinaryCorpseSelfHitMessages(corpse, action, ceilingName = h
 
     const helmet = wornTossUpHelmet();
     const damage = heroThrownCorpseFallingDamage(corpse, helmet);
-    if (helmet && hardEarthHelmet(helmet) && damage < heroTossUpActiveHp())
-        messages.push('Fortunately, you are wearing a hard helmet.');
+    pushHeroThrownHelmetMessage(messages, corpse, helmet, damage);
 
-    const landing = landProjectileObjectWithShopHandling(corpse, game.u?.ux || corpse.ox || 0, game.u?.uy || corpse.oy || 0, {});
+    const x = game.u?.ux || corpse.ox || 0;
+    const y = game.u?.uy || corpse.oy || 0;
+    const floorMessage = heroThrownGenericObjectFloorMessage(corpse, x, y);
+    if (floorMessage) messages.push(floorMessage);
+    const landing = landProjectileObjectWithShopHandling(corpse, x, y, {});
     messages.push(...landing.messages);
     applyHeroThrownCorpseFallingDamage(damage, messages);
     return messages;
