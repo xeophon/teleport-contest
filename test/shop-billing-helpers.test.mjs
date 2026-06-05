@@ -13,6 +13,7 @@ import { currentFruitId, setCurrentFruitName } from '../js/fruit.js';
 import { CLR_BRIGHT_MAGENTA, CLR_BROWN, CLR_WHITE } from '../js/terminal.js';
 import { TRIBUTE_DEATH_QUOTES } from '../js/tribute.js';
 import { vision_reset } from '../js/vision.js';
+import { fireBreathDamageMonster } from '../js/fire_breath.js';
 
 const BRASS_LANTERN = 226;
 const OIL_LAMP = 227;
@@ -17568,6 +17569,38 @@ test('gas spore death explosion uses shared half-physical blast and leaves no co
     assert.equal(game.level.objects.some(obj => obj.ox === 6 && obj.oy === 5), false);
     assert.equal(victim.mhp, 30 - d4x6[1]);
     assert.equal(game.u.uhp, 50 - Math.trunc((d4x6[1] + 1) / 2));
+});
+
+test('fire breath killed gas spore explodes outside hero melee', async () => {
+    installStableNonShopFloorState();
+    initRng(1);
+    enableRngLog({ reset: true });
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 50,
+        uhpmax: 50,
+        uac: 10,
+    });
+    game.inventory = [];
+    const spore = adjacentHostileGasSpore(31360);
+    const victim = adjacentGasSporeBlastVictim('goblin', 31361);
+    game.level.monsters = [spore, victim];
+
+    markHeroNeighborhoodVisible();
+    const hit = fireBreathDamageMonster(spore, 1);
+    const messages = [hit.messages.join('  '), ...(await drainQueuedMessagesAfterMore())].join(' ');
+
+    const d4x6 = rngValuesForCall(getRngLog(), 'd(4,6)');
+    assert.equal(hit.killed, true);
+    assert.equal(d4x6.length, 2);
+    assert.match(messages, /Boom!/);
+    assert.match(messages, /The goblin is caught in the gas spore's explosion!/);
+    assert.match(messages, /You are caught in the gas spore's explosion!/);
+    assert.equal(game.level.monsters.includes(spore), false);
+    assert.equal(game.level.objects.some(obj => obj.ox === 6 && obj.oy === 5), false);
+    assert.equal(victim.mhp, 30 - d4x6[1]);
+    assert.equal(game.u.uhp, 50 - d4x6[1]);
 });
 
 test('fatal gas spore death blast arms death more', async () => {

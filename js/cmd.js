@@ -28,6 +28,7 @@ import {
 import { createGasCloud } from './region.js';
 import { figurineLocationCheck, isFigurineObject, makeFigurineFamiliar, maybeAttachCarriedFigurineTimeout, stopFigurineTransformTimeout, syncCarriedFigurineTransformTimer } from './figurine.js';
 import { applyMonsterLiquidEffectsAt } from './monster_liquid.js';
+import { queueGasSporeDeathExplosion } from './monster_death.js';
 import { applySlimeMoldFruitFields, currentFruitId, currentFruitJuiceName, currentFruitName, fruitWishMatch, setCurrentFruitName, slimeMoldNameForObject } from './fruit.js';
 import { eggHasHatchTimer, eggSpeciesGenocidedForHatching, killDeadSpeciesEggHatchTimers, killEggHatchTimer } from './egg_timers.js';
 import { METALLIC_MATERIALS, metallivoreObjectAlwaysResists, objectIsAmuletLike, objectIsRingLike, objectIsSlowDigestionRing, objectMaterialForMetallivore } from './metallivore.js';
@@ -46188,44 +46189,8 @@ async function moveHero(dx, dy) {
             }
         }
         if (gasSporeExplosion) {
-            d(4, 6);
-            const explosionDamage = d(4, 6);
-            messages.push('Boom!');
+            queueGasSporeDeathExplosion(mon, { messages });
             await setMessage(messages.join('  '), true);
-            game._preserve_gas_spore_residue = 1;
-            const explosionTarget = (game.level?.monsters || []).find(other => other !== mon
-                && Math.abs(other.mx - mon.mx) <= 1 && Math.abs(other.my - mon.my) <= 1);
-            if (explosionTarget) {
-                game._gas_spore_residue_mon = explosionTarget;
-                game._gas_spore_residue_initial_x = explosionTarget.mx;
-                game._gas_spore_residue_initial_y = explosionTarget.my;
-                game._gas_spore_residue_x = explosionTarget.mx;
-                game._gas_spore_residue_y = explosionTarget.my;
-                game._gas_spore_residue_visible_x = explosionTarget.mx;
-                game._gas_spore_residue_visible_y = explosionTarget.my;
-                game._gas_spore_residue_frames = 0;
-                const targetLevel = Math.max(1, Math.min(50, explosionTarget.m_lev ?? explosionTarget.data?.mlevel ?? 1));
-                const resistBound = Math.max(1, 100 + (game.u?.ulevel || 1) - targetLevel);
-                game._queued_messages_after_more ??= [];
-                game._queued_messages_after_more.push({
-                    text: `The ${explosionTarget.data?.name || 'monster'} is caught in the gas spore's explosion!`,
-                    more: true,
-                    gasSporeMonsterExplosion: {
-                        target: explosionTarget,
-                        damage: explosionDamage,
-                        resistBound,
-                    },
-                });
-            }
-            if (Math.abs(game.u.ux - mon.mx) <= 1 && Math.abs(game.u.uy - mon.my) <= 1) {
-                game._queued_messages_after_more ??= [];
-                game._queued_messages_after_more.push({
-                    text: "You are caught in the gas spore's explosion!",
-                    gasSporeHeroExplosion: { damage: explosionDamage },
-                    processTime: true,
-                });
-            }
-            game._process_time_with_more = 0;
         } else {
             const dropCorpse = monsterCorpseDropSucceeds(mon, data);
             if (dropCorpse && monsterLeavesCorpseLikeDrop(corpseData))

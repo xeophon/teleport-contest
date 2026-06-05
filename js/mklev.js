@@ -5766,6 +5766,8 @@ function monsterFromRndMeta(row) {
         ];
     }
     if (name.endsWith(' elemental')) ptr.mac = 2;
+    if (name === 'gas spore')
+        ptr.attack = { dice: 4, sides: 6, verb: 'explodes', aatyp: 'boom', adtyp: 'phys' };
     if (name === 'freezing sphere' || name === 'flaming sphere' || name === 'shocking sphere')
         ptr.attack = {
             dice: 4,
