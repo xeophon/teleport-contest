@@ -6274,12 +6274,18 @@ export async function processMonsterTurns() {
                                     : `It is hit${damage > 4 ? '!' : '.'}`;
                                 if (throwerVisible) game._topline_after_more = hitMessage;
                                 else addToplineMessage(hitMessage);
+                                if (!harmlessStoneHit && interveningTarget.mhp < 1) {
+                                    killMonsterFromThrownInterveningHit(interveningTarget, targetVisible, {
+                                        afterMore: throwerVisible,
+                                    });
+                                }
                                 const floorMessages = [];
                                 landMonsterThrownObject(thrownMissile, interveningTarget.mx, interveningTarget.my, {
                                     glyph: thrownMissile.glyph || '*',
                                     color: thrownMissile.color ?? NO_COLOR,
                                     messages: floorMessages,
                                     ohit: true,
+                                    passiveTarget: interveningTarget,
                                 });
                                 addMonsterThrownFloorMessages(floorMessages, targetVisible || (throwerVisible && !deferPrayerProjectile));
                             } else {
@@ -7104,12 +7110,18 @@ export async function processMonsterTurns() {
                             if (throwerVisible) game._topline_after_more = hitMessage;
                             else addToplineMessage(hitMessage);
                             emitMonsterThrownObjectSilverHitEffect(silverHit, throwerVisible);
+                            if (interveningTarget.mhp < 1) {
+                                killMonsterFromThrownInterveningHit(interveningTarget, throwerVisible, {
+                                    afterMore: throwerVisible,
+                                });
+                            }
                             const floorMessages = [];
                             landMonsterThrownObject(thrownMissile, interveningTarget.mx, interveningTarget.my, {
                                 glyph: ')',
                                 color: thrownMissile.color ?? CLR_CYAN,
                                 messages: floorMessages,
                                 ohit: true,
+                                passiveTarget: interveningTarget,
                             });
                             addMonsterThrownFloorMessages(floorMessages, throwerVisible);
                         } else {
@@ -7242,12 +7254,18 @@ export async function processMonsterTurns() {
                             emitMonsterThrownObjectPoisonHitEffect(poisonHit, throwerVisible);
                             emitMonsterThrownObjectSilverHitEffect(silverHit, throwerVisible);
                             interveningTarget.mhp = Math.max(0, (interveningTarget.mhp || 1) - damage);
+                            if (interveningTarget.mhp < 1) {
+                                killMonsterFromThrownInterveningHit(interveningTarget, throwerVisible, {
+                                    afterMore: throwerVisible,
+                                });
+                            }
                             const floorMessages = [];
                             landMonsterThrownObject(thrownMissile, interveningTarget.mx, interveningTarget.my, {
                                 glyph: ')',
                                 color: thrownMissile.color ?? CLR_CYAN,
                                 messages: floorMessages,
                                 ohit: true,
+                                passiveTarget: interveningTarget,
                             });
                             addMonsterThrownFloorMessages(floorMessages, throwerVisible);
                         } else {
@@ -7380,12 +7398,18 @@ export async function processMonsterTurns() {
                             if (throwerVisible) game._topline_after_more = hitMessage;
                             else addToplineMessage(hitMessage);
                             emitMonsterThrownObjectSilverHitEffect(silverHit, throwerVisible);
+                            if (interveningTarget.mhp < 1) {
+                                killMonsterFromThrownInterveningHit(interveningTarget, throwerVisible, {
+                                    afterMore: throwerVisible,
+                                });
+                            }
                             const floorMessages = [];
                             landMonsterThrownObject(thrownMissile, interveningTarget.mx, interveningTarget.my, {
                                 glyph: ')',
                                 color: CLR_CYAN,
                                 messages: floorMessages,
                                 ohit: true,
+                                passiveTarget: interveningTarget,
                             });
                             addMonsterThrownFloorMessages(floorMessages, throwerVisible);
                         } else {
@@ -7630,6 +7654,11 @@ export async function processMonsterTurns() {
                                 if (throwerVisible) game._topline_after_more = hitMessage;
                                 else addToplineMessage(hitMessage);
                                 emitMonsterThrownObjectSilverHitEffect(silverHit, throwerVisible);
+                                if (interveningTarget.mhp < 1) {
+                                    killMonsterFromThrownInterveningHit(interveningTarget, throwerVisible, {
+                                        afterMore: throwerVisible,
+                                    });
+                                }
                             } else {
                                 const catchChance = 100 - (game.u?.acurr?.a?.[A_DEX] ?? 10)
                                     - (game._startup_role === 'Monk' || game._startup_role === 'Rogue' ? 20 : 0);
@@ -7663,6 +7692,7 @@ export async function processMonsterTurns() {
                                     game._monster_throw_after_more = {
                                         missile: thrownMissile,
                                         hitPet: interveningTarget,
+                                        passiveTarget: interveningTarget,
                                         x: crudeDaggerTerrainStop ? crudeDaggerTerrainStop.x
                                             : interveningTarget ? interveningTarget.mx : game.u?.ux || 0,
                                         y: crudeDaggerTerrainStop ? crudeDaggerTerrainStop.y
@@ -7689,6 +7719,7 @@ export async function processMonsterTurns() {
                                     color: NO_COLOR,
                                     messages: floorMessages,
                                     ohit: true,
+                                    passiveTarget: interveningTarget,
                                 });
                                 addMonsterThrownFloorMessages(floorMessages);
                             } else if (!crudeDaggerCaught) {
@@ -7775,12 +7806,18 @@ export async function processMonsterTurns() {
                             if (throwerVisible) game._topline_after_more = hitMessage;
                             else addToplineMessage(hitMessage);
                             emitMonsterThrownObjectSilverHitEffect(silverHit, throwerVisible);
+                            if (interveningTarget.mhp < 1) {
+                                killMonsterFromThrownInterveningHit(interveningTarget, throwerVisible, {
+                                    afterMore: throwerVisible,
+                                });
+                            }
                             const floorMessages = [];
                             landMonsterThrownObject(thrownMissile, interveningTarget.mx, interveningTarget.my, {
                                 glyph: ')',
                                 color: CLR_CYAN,
                                 messages: floorMessages,
                                 ohit: true,
+                                passiveTarget: interveningTarget,
                             });
                             addMonsterThrownFloorMessages(floorMessages, throwerVisible);
                         } else {
@@ -7908,12 +7945,16 @@ export async function processMonsterTurns() {
                                 emitMonsterThrownObjectPoisonHitEffect(poisonHit);
                                 emitMonsterThrownObjectSilverHitEffect(silverHit);
                                 interveningTarget.mhp = Math.max(0, (interveningTarget.mhp || 1) - dartDamage);
+                                if (interveningTarget.mhp < 1) {
+                                    killMonsterFromThrownInterveningHit(interveningTarget, targetVisible);
+                                }
                                 const floorMessages = [];
                                 landMonsterThrownObject(thrownMissile, interveningTarget.mx, interveningTarget.my, {
                                     glyph: ')',
                                     color: CLR_CYAN,
                                     messages: floorMessages,
                                     ohit: true,
+                                    passiveTarget: interveningTarget,
                                 });
                                 addMonsterThrownFloorMessages(floorMessages);
                             } else {
@@ -9598,14 +9639,16 @@ function monsterProjectileDeathIsDestroyed(target, visible) {
         || name === 'manes' || name.includes('vortex'));
 }
 
-function killMonsterFromLauncherInterveningHit(target, visible) {
+function killMonsterFromThrownInterveningHit(target, visible, { afterMore = false } = {}) {
     if (!target || target.dead) return;
     target.dead = true;
     target.mhp = 0;
     target.movement = 0;
     const destroyed = monsterProjectileDeathIsDestroyed(target, visible);
     const subject = visible ? monsterDisplayName(target) : 'It';
-    appendAfterMoreMessage(`${subject} is ${destroyed ? 'destroyed' : 'killed'}!`);
+    const message = `${subject} is ${destroyed ? 'destroyed' : 'killed'}!`;
+    if (afterMore) appendAfterMoreMessage(message);
+    else addToplineMessage(message);
 
     const data = target.data || {};
     recordVanquished(target, false);
@@ -9619,6 +9662,10 @@ function killMonsterFromLauncherInterveningHit(target, visible) {
     if (canDropCorpse) createMonsterCorpseOrGlob(target, corpseData);
     game.level.monsters = (game.level?.monsters || []).filter(other => other !== target);
     newsym(target.mx, target.my);
+}
+
+function killMonsterFromLauncherInterveningHit(target, visible) {
+    killMonsterFromThrownInterveningHit(target, visible, { afterMore: true });
 }
 
 function monsterLauncherProjectileIsSilver(item) {

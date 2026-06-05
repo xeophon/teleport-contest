@@ -39807,6 +39807,50 @@ test('production monster plain dagger hit bonus can turn intervening miss into h
         preNhgetchMessages.join('\n'));
 });
 
+test('production monster plain dagger lethal intervening hit cleans monster before landing', async () => {
+    const blocker = ordinaryThrowTarget('goblin', 8, 5, {
+        ac: 30,
+        mac: 30,
+        mhp: 1,
+        mhpmax: 1,
+        msleeping: 1,
+        data: { name: 'goblin', mlevel: 1, mlet: 'o', mac: 30 },
+    });
+    const daggerItem = { ...dagger(874412), letter: undefined, line: undefined, spe: 0 };
+    const { thrower, rawRng, preNhgetchMessages } = await runMonsterPlainDaggerIronBars({
+        seed: 1,
+        heroBlind: false,
+        uac: 100,
+        projectile: daggerItem,
+        levelCells: [[7, 5, { typ: IRONBARS }]],
+        extraMonsters: [blocker],
+    });
+    const messages = collectMonsterThrowMessages(preNhgetchMessages);
+
+    assert.match(messages, /dagger hits the goblin\./);
+    assert.match(messages, /goblin is killed!/i);
+    assert.doesNotMatch(messages, /You (?:kill|destroy)/);
+    assert.doesNotMatch(messages, /Clonk!|Clink!/);
+    assert.equal(game.u.uhp, 20);
+    assert.equal(game._damage_after_topline_more || 0, 0, rawRng.join(', '));
+    assert.equal(blocker.dead, true);
+    assert.equal(blocker.mhp, 0);
+    assert.equal(blocker.msleeping, 0);
+    assert.equal(game.level.monsters.includes(blocker), false);
+    assert.equal(game._vanquished_counts?.goblin, 1);
+    assert.equal(thrower.minvent.some(obj => obj.id === daggerItem.id), false);
+    assert.equal(thrower.missile, null);
+
+    const landed = game.level.objects.find(obj => obj.id === daggerItem.id);
+    assert.ok(landed, rawRng.join(', '));
+    assert.equal(landed.ox, 8);
+    assert.equal(landed.oy, 5);
+    assert.equal(landed.kind, 'dagger');
+    assert.equal(landed.transientProjectile, false);
+    assert.equal(game.level.objects.some(obj => obj.transientProjectile), false);
+    assert.equal(rawRng.some(entry => entry.startsWith('rn2(100)=')), false, rawRng.join(', '));
+});
+
 function collectMonsterThrowMessages(preNhgetchMessages = []) {
     return [
         game._pending_message,
