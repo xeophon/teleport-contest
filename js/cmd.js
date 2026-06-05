@@ -45706,11 +45706,15 @@ async function moveHero(dx, dy) {
             }
             if (attackWeapon && isPotionObject(attackWeapon)) {
                 const bashPotion = wieldedPotionBashObject(attackWeapon);
-                const potionMessages = bashPotion ? heroThrownPotionHitMonster(bashPotion, mon) : [];
+                const potionMessages = bashPotion
+                    ? heroThrownPotionHitMonster(bashPotion, mon, { allowLifeSaving: true })
+                    : [];
+                const potionLifeSaving = !!potionMessages.lifeSaving;
+                const potionFatal = !!potionMessages.fatal;
                 removeInventoryItem(attackWeapon, 1);
                 refreshSurvivingWieldedPotionStack(attackWeapon);
                 killed = !!(mon.dead || (mon.mhp || 0) <= 0);
-                if (!killed) {
+                if (!potionFatal && !killed) {
                     const potionBashDamage = (mon.data?.name === 'shade') ? 0
                         : Math.max(1, 1 + strengthDamageBonus + (game.u?.udaminc || 0));
                     if (potionBashDamage > 0) {
@@ -45719,6 +45723,10 @@ async function moveHero(dx, dy) {
                     }
                 }
                 messages.push(...potionMessages);
+                if (potionLifeSaving) messages.lifeSaving = true;
+                if (potionFatal) messages.fatal = true;
+                if (potionMessages.more) messages.more = true;
+                if (potionLifeSaving || potionFatal) break;
                 if (killed) break;
                 if (attackIndex === 0 && !deferSleepingTwoWeapon) {
                     const fleeRoll = rn2(25);
@@ -45828,6 +45836,24 @@ async function moveHero(dx, dy) {
             }
             if (!directPassiveObjectApplied)
                 applyDirectMeleePassiveObject(mon, attackWeapon, messages);
+        }
+
+        if (messages.lifeSaving || messages.fatal) {
+            const potionCallPrompt = game._command_mode === 'callPotionAfterMore';
+            await setMessage(messages.join('  '), potionCallPrompt || !!messages.more);
+            game._run_stop_now = 1;
+            game._run_steps_remaining = 0;
+            game.context.move = 0;
+            if (messages.lifeSaving) {
+                game._command_mode = 'lifeSavingMore';
+                game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
+                return;
+            }
+            game._command_mode = 'deathDieMore';
+            game._pending_time_passed = 0;
+            game._process_command_time_now = 0;
+            prepareDeathBones();
+            return;
         }
 
         if (!killed) {
