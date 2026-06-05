@@ -18712,8 +18712,8 @@ function crackableArmorSimpleName(obj) {
     }
 }
 
-function crackableArmorBreaktest(obj) {
-    const roll = rn2(100);
+function crackableArmorBreaktest(obj, breakRoll = null) {
+    const roll = Number.isInteger(breakRoll) ? breakRoll : rn2(100);
     return !(obj?.artifact || obj?.oartifact) && roll >= 90;
 }
 
@@ -18737,8 +18737,8 @@ function erodeCrackableArmorImpact(obj, messages) {
     return { broke: true, destroyed: true };
 }
 
-function crackableArmorImpact(obj, messages) {
-    if (!crackableArmorBreaktest(obj)) return { broke: false, destroyed: false };
+function crackableArmorImpact(obj, messages, options = {}) {
+    if (!crackableArmorBreaktest(obj, options.breakRoll)) return { broke: false, destroyed: false };
     return erodeCrackableArmorImpact(obj, messages);
 }
 
@@ -18759,18 +18759,22 @@ function heroThrownCrackableArmorFallingDamage(obj, messages) {
     return damage;
 }
 
-function landCrackableArmorObjectWithShopHandling(obj, messages, { verboseFloor = false } = {}) {
-    const x = game.u?.ux || obj.ox || 0;
-    const y = game.u?.uy || obj.oy || 0;
+function landCrackableArmorObjectWithShopHandling(obj, messages, { verboseFloor = false, x = null, y = null, breakRoll = null } = {}) {
+    x = Number.isInteger(x) ? x : (game.u?.ux || obj.ox || 0);
+    y = Number.isInteger(y) ? y : (game.u?.uy || obj.oy || 0);
     if (verboseFloor && !projectileLandingIsSoft(x, y))
         messages.push(`${floorObjectSubject({ ...obj, quan: 1 })} hits the floor.`);
     if (!projectileLandingIsSoft(x, y)) {
-        const impact = crackableArmorImpact(obj, messages);
+        const impact = crackableArmorImpact(obj, messages, { breakRoll });
         if (impact.destroyed) return null;
     }
     const landing = landProjectileObjectWithShopHandling(obj, x, y, { skipTopBreak: true });
     messages.push(...landing.messages);
     return landing.object;
+}
+
+function landHeroThrownCrackableArmorAt(obj, x, y, messages, { breakRoll = null } = {}) {
+    return landCrackableArmorObjectWithShopHandling(obj, messages, { x, y, breakRoll });
 }
 
 function heroThrownCrackableArmorSelfHitMessages(obj, action, ceilingName = heroThrowCeilingName()) {
@@ -61919,11 +61923,17 @@ export async function rhack(_cmd) {
         curseLoadstoneLeavingInventory(thrownObject);
         if ((item.quan || 1) > 1) splitCarriedObjectShopBill(item, thrownObject, 1);
         stopCarriedFigurineTimerOnLeave(thrownObject);
-        const landing = landProjectileObjectWithShopHandling(thrownObject, ox, oy, {
-            breakRoll: projectileBreakRoll,
-            ohit: impactObjectHit,
-            passiveTarget: impactPassiveTarget,
-        });
+        const landing = isHeroThrownCrackableArmorObject(thrownObject) && !impactObjectHit
+            ? (() => {
+                const messages = [];
+                const object = landHeroThrownCrackableArmorAt(thrownObject, ox, oy, messages, { breakRoll: projectileBreakRoll });
+                return { object, messages };
+            })()
+            : landProjectileObjectWithShopHandling(thrownObject, ox, oy, {
+                breakRoll: projectileBreakRoll,
+                ohit: impactObjectHit,
+                passiveTarget: impactPassiveTarget,
+            });
         const landingMessage = landing.messages.join('  ');
         newsym(ox, oy);
         const wasBurdened = (game.u?._statusSuffix || '').includes('Burdened');

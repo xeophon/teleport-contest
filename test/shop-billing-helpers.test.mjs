@@ -47114,6 +47114,95 @@ test('upward hero-thrown unpaid glass-material wand bills the broken object', as
     assert.equal(shkp.billct, 0);
 });
 
+test('direct hero-thrown crystal plate mail miss lands intact after resisted hard landing', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    const armor = carriedGlassArmor(87695, 'a');
+    const goblin = ordinaryThrowTarget('goblin', 7, 5);
+    game.inventory = [armor];
+    game.level.monsters = [goblin];
+    markSquareVisible(goblin.mx, goblin.my);
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('a');
+    await rhack('l');
+
+    assert.match(game._pending_message, /The crystal plate mail misses the goblin\./);
+    assert.doesNotMatch(game._pending_message, /cracks|shatters|thousand pieces|hits the goblin/);
+    assert.equal(game.inventory.includes(armor), false);
+    assert.equal(game.level.objects.length, 1);
+    const landed = game.level.objects[0];
+    assert.equal(landed.kind, 'crystal plate mail');
+    assert.equal(landed.oeroded || 0, 0);
+    assert.equal(landed.ox, goblin.mx);
+    assert.equal(landed.oy, goblin.my);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rnd(20)', 'rn2(3)', 'rn2(100)',
+    ]);
+});
+
+test('direct hero-thrown crystal plate mail miss cracks on hard landing', async () => {
+    installNonShopFloorState();
+    initRng(19);
+    const armor = carriedGlassArmor(87696, 'a');
+    const goblin = ordinaryThrowTarget('goblin', 7, 5);
+    game.inventory = [armor];
+    game.level.monsters = [goblin];
+    markSquareVisible(goblin.mx, goblin.my);
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('a');
+    await rhack('l');
+
+    assert.match(game._pending_message, /The crystal plate mail misses the goblin\./);
+    assert.equal(game._queued_message_after_more, 'The mail cracks!');
+
+    await rhack(' ');
+
+    assert.match(game._pending_message, /The mail cracks!/);
+    assert.doesNotMatch(game._pending_message, /thousand pieces|shatters/);
+    assert.equal(game.inventory.includes(armor), false);
+    assert.equal(game.level.objects.length, 1);
+    const landed = game.level.objects[0];
+    assert.equal(landed.kind, 'crystal plate mail');
+    assert.equal(landed.oeroded, 1);
+    assert.equal(landed.ox, goblin.mx);
+    assert.equal(landed.oy, goblin.my);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rnd(20)', 'rn2(3)', 'rn2(100)',
+    ]);
+});
+
+test('direct hero-thrown fully cracked crystal plate mail miss shatters on hard landing', async () => {
+    installNonShopFloorState();
+    initRng(19);
+    const armor = carriedGlassArmor(87697, 'a', { oeroded: 3 });
+    const goblin = ordinaryThrowTarget('goblin', 7, 5);
+    game.inventory = [armor];
+    game.level.monsters = [goblin];
+    markSquareVisible(goblin.mx, goblin.my);
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('a');
+    await rhack('l');
+
+    assert.match(game._pending_message, /The crystal plate mail misses the goblin\./);
+    assert.equal(game._queued_message_after_more, 'The mail shatters!');
+
+    await rhack(' ');
+
+    assert.match(game._pending_message, /The mail shatters!/);
+    assert.doesNotMatch(game._pending_message, /thousand pieces|cracks/);
+    assert.equal(game.inventory.includes(armor), false);
+    assert.equal(game.level.objects.length, 0);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rnd(20)', 'rn2(3)', 'rn2(100)',
+    ]);
+});
+
 test('upward hero-thrown crystal plate mail self-hit cracks and lands', async () => {
     installNonShopFloorState();
     initRng(11);
