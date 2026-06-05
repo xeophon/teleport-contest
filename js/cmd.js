@@ -18256,8 +18256,8 @@ function heroKickedStoneMissileRockPasserImpact(obj, mon) {
     return { handled: true, hit: false, messages };
 }
 
-function heroKickedGlassGemImpact(obj, mon) {
-    if (!heroThrownGlassGemObject(obj)) return { handled: false, messages: [] };
+function heroKickedGemImpact(obj, mon) {
+    if (!heroThrownGemClassObject(obj)) return { handled: false, messages: [] };
     const dieroll = rnd(20);
     const targetName = heroThrownVenomTargetName(mon);
     if (heroKickedProjectileHitValue(obj, mon) >= dieroll) {
@@ -27411,7 +27411,7 @@ function kickFloorObjectToward(dir, x, y) {
     const canHandleMonsterImpact = targetMon
         && ((heroThrownMonsterIsUnicorn(targetMon) && heroThrownUnicornGemKind(obj))
             || heroThrownStoneMissileHarmlessRockPasser(obj, targetMon)
-            || (heroThrownTargetPassesRocks(targetMon) && heroThrownGlassGemObject(obj)));
+            || heroThrownGemClassObject(obj));
     const gate = remoteProjectileDownGateAt(obj, landX, landY);
     if (!gate && !canHandleMonsterImpact) return { handled: false };
 
@@ -27425,7 +27425,7 @@ function kickFloorObjectToward(dir, x, y) {
     if (canHandleMonsterImpact) {
         monsterImpact = heroThrownUnicornGemImpact(obj, targetMon);
         if (!monsterImpact.handled) monsterImpact = heroKickedStoneMissileRockPasserImpact(obj, targetMon);
-        if (!monsterImpact.handled) monsterImpact = heroKickedGlassGemImpact(obj, targetMon);
+        if (!monsterImpact.handled) monsterImpact = heroKickedGemImpact(obj, targetMon);
     }
     if (monsterImpact.handled) {
         removeFloorObject(obj);

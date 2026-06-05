@@ -45,5 +45,5 @@ Implemented kicked floor-gem handling for the unicorn catch/acceptance branch. N
 
 ## Remaining
 
-- Broad kicked-object `thitmonst()` conversion is still incomplete for ordinary kicked weapons/gems outside rock-passers and unicorns.
+- Broad kicked-object `thitmonst()` conversion is still incomplete for ordinary kicked weapons/weptools, full kicked-ammo damage bonuses, and passive-object fallout beyond the later generic gem branch.
 - Full unicorn relocation message/RNG canaries, cross-aligned and named/called real-gem Luck, shop billing inside `gem_accept()`, monster pickup/catch merging details, and exact full `omon_adj()` target-size/sleep modifiers remain separate work.

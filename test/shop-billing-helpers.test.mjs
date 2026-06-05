@@ -25966,6 +25966,137 @@ test('command kicked glass gem miss against rock-passer stays a miss', async () 
     ]);
 });
 
+test('command kicked ruby harms ordinary monster and survives landing', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, { ulevel: 20, uluck: 10, uhitinc: 10 });
+    game.u.acurr.a[A_STR] = 25;
+    game.u.acurr.a[A_DEX] = 25;
+    const ruby = floorGem(512029, 'ruby', {
+        ox: 6,
+        oy: 5,
+        known: true,
+        actualKind: 'ruby',
+        gemDescription: 'ruby',
+        gemTough: true,
+    });
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, {
+        mhp: 20,
+        mhpmax: 20,
+        msleeping: 1,
+        mpeaceful: 1,
+        meating: 4,
+        mstrategy: STRAT_WAITFORU,
+    });
+    game.level.objects = [ruby];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('\x04');
+    await rhack('l');
+
+    assert.match(game._pending_message, /You kick a ruby\./);
+    assert.match(game._pending_message, /The ruby hits the goblin\./);
+    assert.doesNotMatch(game._pending_message, /gift|catches|misses|does no harm|shatters/);
+    assert.equal(goblin.mhp, 19);
+    assert.equal(goblin.msleeping, 0);
+    assert.equal(goblin.meating, 0);
+    assert.equal(goblin.mstrategy, 0);
+    assert.equal(goblin.mpeaceful, 0);
+    assert.equal(game.level.objects.includes(ruby), true);
+    assert.equal(ruby.ox, 7);
+    assert.equal(ruby.oy, 5);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 4), [
+        'rnd(20)', 'rnd(2)', 'rn2(3)', 'rn2(2)',
+    ]);
+});
+
+test('command kicked ruby miss against ordinary monster lands', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, { ulevel: 1, uluck: -10, uhitinc: -30 });
+    game.u.acurr.a[A_STR] = 25;
+    game.u.acurr.a[A_DEX] = 1;
+    const ruby = floorGem(512030, 'ruby', {
+        ox: 6,
+        oy: 5,
+        known: true,
+        actualKind: 'ruby',
+        gemDescription: 'ruby',
+        gemTough: true,
+    });
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, {
+        mhp: 20,
+        mhpmax: 20,
+        data: {
+            name: 'goblin',
+            mlevel: 1,
+            mac: -20,
+        },
+    });
+    game.level.objects = [ruby];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('\x04');
+    await rhack('l');
+
+    assert.match(game._pending_message, /You kick a ruby\./);
+    assert.match(game._pending_message, /The ruby misses the goblin\./);
+    assert.doesNotMatch(game._pending_message, /gift|catches|hits|does no harm|shatters/);
+    assert.equal(goblin.mhp, 20);
+    assert.equal(game.level.objects.includes(ruby), true);
+    assert.equal(ruby.ox, 7);
+    assert.equal(ruby.oy, 5);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 2), [
+        'rnd(20)', 'rn2(3)',
+    ]);
+});
+
+test('command kicked flint harms ordinary monster', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, { ulevel: 20, uluck: 10, uhitinc: 10 });
+    game.u.acurr.a[A_STR] = 25;
+    game.u.acurr.a[A_DEX] = 25;
+    const flint = floorGem(512031, 'flint', {
+        otyp: FLINT,
+        gemDescription: 'gray stone',
+        material: 'mineral',
+        ox: 6,
+        oy: 5,
+    });
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, {
+        mhp: 20,
+        mhpmax: 20,
+        msleeping: 1,
+        mpeaceful: 1,
+        meating: 4,
+        mstrategy: STRAT_WAITFORU,
+    });
+    game.level.objects = [flint];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('\x04');
+    await rhack('l');
+
+    assert.match(game._pending_message, /You kick a flint\./);
+    assert.match(game._pending_message, /The flint hits the goblin\./);
+    assert.doesNotMatch(game._pending_message, /misses|does no harm|passes harmlessly|shatters/);
+    assert.equal(goblin.mhp, 19);
+    assert.equal(goblin.msleeping, 0);
+    assert.equal(goblin.meating, 0);
+    assert.equal(goblin.mstrategy, 0);
+    assert.equal(goblin.mpeaceful, 0);
+    assert.equal(game.level.objects.includes(flint), true);
+    assert.equal(flint.ox, 7);
+    assert.equal(flint.oy, 5);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 4), [
+        'rnd(20)', 'rnd(2)', 'rn2(3)', 'rn2(2)',
+    ]);
+});
+
 test('command kicked known ruby to coaligned unicorn is accepted before hit roll', async () => {
     installNonShopFloorState();
     game.level.flags.noteleport = true;
