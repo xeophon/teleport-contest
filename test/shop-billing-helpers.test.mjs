@@ -25640,6 +25640,157 @@ test('command kick ordinary floor object down stairs records reciprocal metadata
     assert.match(game._pending_message, /A dagger falls down the stairs\./);
 });
 
+test('command kicked stone missile hits rock-passing monster harmlessly', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, { ulevel: 20, uluck: 10, uhitinc: 10 });
+    game.u.acurr.a[A_STR] = 25;
+    game.u.acurr.a[A_DEX] = 25;
+    const flint = floorGem(512018, 'flint', {
+        otyp: FLINT,
+        gemDescription: 'gray stone',
+        material: 'mineral',
+        ox: 6,
+        oy: 5,
+    });
+    const elemental = ordinaryThrowTarget('earth elemental', 7, 5, {
+        mhp: 20,
+        mhpmax: 20,
+        msleeping: 1,
+        mpeaceful: 1,
+        meating: 4,
+        mstrategy: STRAT_WAITFORU,
+        passWalls: true,
+        passesRocks: true,
+        neuter: true,
+        data: {
+            name: 'earth elemental',
+            mlevel: 8,
+            mac: 10,
+            passWalls: true,
+            passesRocks: true,
+            neuter: true,
+        },
+    });
+    game.level.objects = [flint];
+    game.level.monsters = [elemental];
+    enableRngLog({ reset: true });
+
+    await rhack('\x04');
+    await rhack('l');
+
+    assert.match(game._pending_message, /You kick a flint\./);
+    assert.match(game._pending_message, /The flint hits the earth elemental but does no harm\./);
+    assert.doesNotMatch(game._pending_message, /misses|passes harmlessly/);
+    assert.equal(elemental.mhp, 20);
+    assert.equal(elemental.msleeping, 0);
+    assert.equal(elemental.meating, 0);
+    assert.equal(elemental.mstrategy, 0);
+    assert.equal(elemental.mpeaceful, 0);
+    assert.equal(game.level.objects.includes(flint), true);
+    assert.equal(flint.ox, 7);
+    assert.equal(flint.oy, 5);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 3), [
+        'rnd(20)', 'rn2(3)', 'rn2(2)',
+    ]);
+});
+
+test('command kicked stone missile harmless hit can mulch before landing', async () => {
+    installNonShopFloorState();
+    initRng(4);
+    Object.assign(game.u, { ulevel: 20, uluck: 10, uhitinc: 10 });
+    game.u.acurr.a[A_STR] = 25;
+    game.u.acurr.a[A_DEX] = 25;
+    const rock = floorGem(512020, 'rock', {
+        otyp: ROCK,
+        gemDescription: 'rock',
+        material: 'mineral',
+        ox: 6,
+        oy: 5,
+    });
+    const elemental = ordinaryThrowTarget('earth elemental', 7, 5, {
+        mhp: 20,
+        mhpmax: 20,
+        passWalls: true,
+        passesRocks: true,
+        neuter: true,
+        data: {
+            name: 'earth elemental',
+            mlevel: 8,
+            mac: 10,
+            passWalls: true,
+            passesRocks: true,
+            neuter: true,
+        },
+    });
+    game.level.objects = [rock];
+    game.level.monsters = [elemental];
+    enableRngLog({ reset: true });
+
+    await rhack('\x04');
+    await rhack('l');
+
+    assert.match(game._pending_message, /You kick a rock\./);
+    assert.match(game._pending_message, /The rock hits the earth elemental but does no harm\./);
+    assert.equal(elemental.mhp, 20);
+    assert.equal(game.level.objects.includes(rock), false);
+    assert.equal(game.level.objects.length, 0);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 3), [
+        'rnd(20)', 'rn2(3)', 'rn2(100)',
+    ]);
+});
+
+test('command kicked stone missile miss against rock-passer stays a miss', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, { ulevel: 1, uluck: -10, uhitinc: -20 });
+    game.u.acurr.a[A_STR] = 25;
+    game.u.acurr.a[A_DEX] = 1;
+    const flint = floorGem(512019, 'flint', {
+        otyp: FLINT,
+        gemDescription: 'gray stone',
+        material: 'mineral',
+        ox: 6,
+        oy: 5,
+    });
+    const elemental = ordinaryThrowTarget('earth elemental', 7, 5, {
+        mhp: 20,
+        mhpmax: 20,
+        msleeping: 1,
+        mpeaceful: 1,
+        meating: 4,
+        mstrategy: STRAT_WAITFORU,
+        passWalls: true,
+        passesRocks: true,
+        neuter: true,
+        data: {
+            name: 'earth elemental',
+            mlevel: 8,
+            mac: -20,
+            passWalls: true,
+            passesRocks: true,
+            neuter: true,
+        },
+    });
+    game.level.objects = [flint];
+    game.level.monsters = [elemental];
+    enableRngLog({ reset: true });
+
+    await rhack('\x04');
+    await rhack('l');
+
+    assert.match(game._pending_message, /You kick a flint\./);
+    assert.match(game._pending_message, /The flint misses the earth elemental\./);
+    assert.doesNotMatch(game._pending_message, /does no harm|passes harmlessly/);
+    assert.equal(elemental.mhp, 20);
+    assert.equal(game.level.objects.includes(flint), true);
+    assert.equal(flint.ox, 7);
+    assert.equal(flint.oy, 5);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 2), [
+        'rnd(20)', 'rn2(3)',
+    ]);
+});
+
 test('command carried gold drop down stairs ships before same-square hole or donation', async () => {
     const { shkp } = installCommandShopState();
     installRemoteDownStairGate({ x: 5, y: 5, trap: { ttyp: HOLE } });

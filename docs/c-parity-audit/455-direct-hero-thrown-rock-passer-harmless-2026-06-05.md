@@ -36,4 +36,4 @@ Implemented the narrow direct hero-thrown `stone_missile() && passes_rocks()` br
 ## Remaining
 
 - This is not a full direct `thitmonst()`/`hmon()` conversion for ordinary thrown weapons, gems, and rocks. Generic direct object-hit damage, monster pickup/handling semantics, glass gem damage, boulder kicking, and broader passive-object delivery remain separate work.
-- Kicked stone missiles use the same C branch but are outside this direct hero-throw slice.
+- Kicked stone missiles use the same C branch but are outside this direct hero-throw slice; they are covered separately in audit 456.

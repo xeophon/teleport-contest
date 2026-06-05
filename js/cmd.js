@@ -18028,6 +18028,85 @@ function heroThrownStoneMissileHarmlessRockPasser(obj, mon) {
     return heroThrownStoneMissileObject(obj) && heroThrownTargetPassesRocks(mon);
 }
 
+function heroProjectileMonsterArmorClass(mon) {
+    const data = mon?.data || {};
+    const ac = mon?.mac ?? mon?.ac ?? data.mac ?? data.ac;
+    const numeric = Number(ac);
+    return Number.isFinite(numeric) ? Math.trunc(numeric) : 10;
+}
+
+function heroProjectileHitLevel() {
+    const polyLevel = game.u?._polyself_form?.mlevel
+        ?? game.u?.youmonst?.mlevel
+        ?? game.u?.youmonst?.data?.mlevel;
+    const level = polyLevel ?? game.u?.ulevel ?? 1;
+    return Math.max(1, Math.trunc(Number(level) || 1));
+}
+
+function heroProjectileDexHitBonus() {
+    const dex = game.u?.acurr?.a?.[A_DEX] ?? 10;
+    if (dex < 4) return -3;
+    if (dex < 6) return -2;
+    if (dex < 8) return -1;
+    if (dex >= 14) return dex - 14;
+    return 0;
+}
+
+function heroProjectileBaseHitValue(mon) {
+    const ux = game.u?.ux || 0;
+    const uy = game.u?.uy || 0;
+    const disttmp = Math.max(-4, 3 - distmin(ux, uy, mon?.mx ?? ux, mon?.my ?? uy));
+    return -1
+        + Math.trunc(Number(game.u?.uluck || 0))
+        + Math.trunc(Number(game.u?.moreluck || 0))
+        + heroProjectileMonsterArmorClass(mon)
+        + Math.trunc(Number(game.u?.uhitinc || 0))
+        + heroProjectileHitLevel()
+        + heroProjectileDexHitBonus()
+        + disttmp;
+}
+
+function heroKickedProjectileIsAmmo(obj) {
+    if (!obj) return false;
+    if (itemClassKey(obj) === 'gem' || obj.glyph === '*' || obj.otyp === GEM_CLASS) return true;
+    const kind = objectKindKey(obj);
+    return obj.otyp === ROCK || obj.otyp === FLINT
+        || /\b(?:arrow|arrows|bolt|bolts|dart|darts|shuriken|throwing stars?|rock|rocks|flint)\b/.test(kind);
+}
+
+function heroKickedProjectileHitValue(obj, mon) {
+    return heroProjectileBaseHitValue(mon) - (heroKickedProjectileIsAmmo(obj) ? 5 : 3);
+}
+
+function shouldMulchHeroProjectileMissile(obj) {
+    if (!monsterThrownMulchCandidate(obj)) return false;
+    const erosion = Math.max(0, Math.trunc(Number(obj.oeroded || 0)), Math.trunc(Number(obj.oeroded2 || 0)));
+    const chance = 3 + erosion - Math.trunc(Number(obj.spe || 0));
+    let broken = chance > 1 ? !!rn2(chance) : !rn2(4);
+    if (obj.blessed && !rnl(4)) broken = false;
+    if (monsterThrownHardGemMulchCandidate(obj) && !rn2(2)) broken = false;
+    return broken;
+}
+
+function heroKickedStoneMissileRockPasserImpact(obj, mon) {
+    if (!heroThrownStoneMissileHarmlessRockPasser(obj, mon)) return { handled: false, messages: [] };
+    const dieroll = rnd(20);
+    if (heroKickedProjectileHitValue(obj, mon) >= dieroll) {
+        wakeMonsterFromHeroThrownHit(mon);
+        const mulched = shouldMulchHeroProjectileMissile(obj);
+        if (mulched) rn2(100);
+        return {
+            handled: true,
+            hit: true,
+            mulched,
+            messages: [`${floorObjectTheSubject({ ...obj, quan: 1 })} hits ${heroThrownVenomTargetName(mon)} but does no harm.`],
+        };
+    }
+    const messages = [`The ${pickupObjectName({ ...obj, quan: 1 })} misses the ${mon?.data?.name || 'creature'}.`];
+    messages.push(...wakeMonsterFromHeroThrownMiss(mon));
+    return { handled: true, hit: false, messages };
+}
+
 function heroThrownCreamPieHitMonster(pie, mon) {
     const messages = [];
     mon.msleeping = 0;
@@ -27116,14 +27195,28 @@ function kickFloorObjectToward(dir, x, y) {
 
     const landX = x + dir.dx;
     const landY = y + dir.dy;
+    const targetMon = (game.level?.monsters || []).find(mon =>
+        mon && !mon.dead && mon.mx === landX && mon.my === landY
+        && (mon.mhp == null || mon.mhp > 0));
+    const canHandleMonsterImpact = targetMon && heroThrownStoneMissileHarmlessRockPasser(obj, targetMon);
     const gate = remoteProjectileDownGateAt(obj, landX, landY);
-    if (!gate) return { handled: false };
+    if (!gate && !canHandleMonsterImpact) return { handled: false };
 
     const messages = [`You kick ${floorObjectArticleName(obj)}.`];
     if (kickFloorObjectRange(obj, x, y, dir) < 2) {
         messages.push('Thump!');
         return { handled: true, messages, moved: false };
     }
+
+    const monsterImpact = canHandleMonsterImpact ? heroKickedStoneMissileRockPasserImpact(obj, targetMon) : { handled: false };
+    if (monsterImpact.handled) {
+        removeFloorObject(obj);
+        newsym(x, y);
+        messages.push(...(monsterImpact.messages || []));
+        if (!monsterImpact.mulched) placeKickedFloorObject(obj, landX, landY, messages);
+        return { handled: true, messages, moved: true, target: targetMon, hit: !!monsterImpact.hit };
+    }
+    if (!gate) return { handled: false };
 
     removeFloorObject(obj);
     newsym(x, y);
