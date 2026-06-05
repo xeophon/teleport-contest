@@ -3,13 +3,13 @@
 
 import { game } from './gstate.js';
 import { mklev, l_nhcore_init, u_on_upstairs, makemon, mkcorpstat, mksobj, wipe_engr_at, dropMonsterInventory, wandIndexForRoll, scrollIndexForRoll, potionIndexForRoll, RANDOM_MONSTER_BY_NAME, STONE_RESISTANT_MONSTERS, adjustedMonsterLevel, monsterByRndName, monster_hp, rndmonnum, syncDungeonContext, next_ident, set_malign, enextoMonsterSpot, getbogusmon, pickNasty, chameleonAnimalForm, doppelgangerHumanoidForm, noteleportLevelForMonster, rlocNoMsg, rlocToCoreNoMsg, somexyspace, fumaroles, createMonsterCorpseOrGlob, monsterCorpseDropSucceeds, monsterLeavesCorpseLikeDrop, movebubbles, add_to_minv } from './mklev.js';
-import { rhack, pickupObjectName, inventoryItemName, inventoryLetterRank, recordVanquished, finishForceLock, loseExperienceLevel, finishLevelTeleport, finishPickDigDownwardHole, finishPickDigDownwardPit, maybeQueueQuestTalk, monsterGrowUp, monsterHostileCussNoise, monsterTurnDemonBribeArtifact, monsterTurnDemonBribeDemand, monsterTurnDemonBribeNoGold, processForceLockOccupationTick, forceLockOccupationShouldGiveUp, processSpellbookStudyOccupation, processTinOpeningOccupation, finishTinOpeningOccupation, refreshSwallowOverlay, finishSwallowExpel, travelPathKeys, updateGauntletsOfPowerStrength, consumeLifeSavingAmulet, activateStatueTrap, breakStatueObject, burnFloorObjectsByFire, burnRayFloorObjectsByFire, erodeArmorByFireTrap, dryWetTowelFromFire, igniteMonsterFireInventoryItems, monsterFireInventoryDamage, dropMonsterObject, earthFloorEffects, projectileTopLevelBreakKind, projectileTopLevelBreakMessage, landMonsterThrownObject, heroCanAttemptThrownObjectCatch, holdCaughtThrownObject, monsterThrownPotionHitMonster, stoneMonster, processCorpseTimers, processGlobShrinkTimers, addDelayedFoodBiteNutrition, repairShopDamageForShopkeeper, heroHasAntimagic, heroHasSlowDigestion, applyHeroOrdinaryHunger, applyHeroFireExplosionInventoryDamage, applyHeroColdExplosionInventoryDamage, applyHeroElectricExplosionInventoryDamage, applyLifeSavingOrFatalCommandMode } from './cmd.js';
+import { rhack, pickupObjectName, inventoryItemName, inventoryLetterRank, recordVanquished, finishForceLock, loseExperienceLevel, finishLevelTeleport, finishPickDigDownwardHole, finishPickDigDownwardPit, maybeQueueQuestTalk, monsterGrowUp, monsterHostileCussNoise, monsterTurnDemonBribeArtifact, monsterTurnDemonBribeDemand, monsterTurnDemonBribeNoGold, processForceLockOccupationTick, forceLockOccupationShouldGiveUp, processSpellbookStudyOccupation, processTinOpeningOccupation, finishTinOpeningOccupation, refreshSwallowOverlay, finishSwallowExpel, travelPathKeys, updateGauntletsOfPowerStrength, consumeLifeSavingAmulet, activateStatueTrap, breakStatueObject, burnFloorObjectsByFire, burnRayFloorObjectsByFire, erodeArmorByFireTrap, dryWetTowelFromFire, igniteMonsterFireInventoryItems, monsterFireInventoryDamage, dropMonsterObject, earthFloorEffects, projectileTopLevelBreakKind, projectileTopLevelBreakMessage, landMonsterThrownObject, heroCanAttemptThrownObjectCatch, holdCaughtThrownObject, monsterThrownPotionHitMonster, monsterPolyTrapEffect, stoneMonster, processCorpseTimers, processGlobShrinkTimers, addDelayedFoodBiteNutrition, repairShopDamageForShopkeeper, heroHasAntimagic, heroHasSlowDigestion, applyHeroOrdinaryHunger, applyHeroFireExplosionInventoryDamage, applyHeroColdExplosionInventoryDamage, applyHeroElectricExplosionInventoryDamage, applyLifeSavingOrFatalCommandMode } from './cmd.js';
 import { docrt, cls, bot, flush_screen, pline, newsym, refreshHallucinatedMap, show_glyph_cell } from './display.js';
 import { vision_recalc, vision_reset, init_vision_globals, cansee, couldsee, view_from } from './vision.js';
 import { init_objects } from './o_init.js';
 import { init_dungeons_rng } from './dungeon.js';
 import { rn2, rn2_on_display_rng, rnd, rn1, rnl, rne, rnz, d } from './rng.js';
-import { COLNO, ROWNO, A_CHA, A_CON, A_DEX, A_INT, A_MAX, A_STR, A_WIS, ALTAR, GRAVE, ICE, IS_OBSTRUCTED, IS_STWALL, IS_TREE, IS_ROOM, IS_WALL, TREE, ROOM, DOOR, CORR, SDOOR, SCORR, IRONBARS, SINK, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, D_TRAPPED, W_NONDIGGABLE, W_NONPASSWALL, APPORT, CADAVER, ACCFOOD, DOGFOOD, MANFOOD, POISON, UNDEF, TABU, NO_MM_FLAGS, NO_MINVENT, MM_NOMSG, IN_SIGHT, ALL_TRAPS, ARROW_TRAP, ROCKTRAP, PIT, SPIKED_PIT, SQKY_BOARD, BEAR_TRAP, LANDMINE, ROLLING_BOULDER_TRAP, SLP_GAS_TRAP, RUST_TRAP, FIRE_TRAP, HOLE, TRAPDOOR, TELEP_TRAP, WEB, STATUE_TRAP, MAGIC_TRAP, ANTI_MAGIC, MAGIC_PORTAL, VIBRATING_SQUARE, ALLOW_M, ALLOW_TM, ALLOW_TRAPS, ALLOW_U, ALLOW_ALL, NOTONL, OPENDOOR, UNLOCKDOOR, BUSTDOOR, ALLOW_ROCK, ALLOW_WALL, ALLOW_DIG, ALLOW_SANCT, ALLOW_SSM, ALLOW_BARS, NOGARLIC, Is_airlevel, Is_oracle_level, ACCESSIBLE, IS_POOL, IS_LAVA, WATER, LAVAWALL, BOLT_LIM, MON_POLE_DIST, NO_WEAPON_WANTED, NEED_WEAPON, NEED_AXE, NEED_PICK_AXE, NEED_PICK_OR_AXE, VAULT, VAULT_GUARD_TIME, M_SEEN_MAGR, M_AP_FURNITURE, M_AP_OBJECT, M_AP_MONSTER, M_AP_TYPE, MOD_ENCUMBER, HVY_ENCUMBER, EXT_ENCUMBER, OVERLOADED, ROOMOFFSET, SHOPBASE, STRAT_APPEARMSG } from './const.js';
+import { COLNO, ROWNO, A_CHA, A_CON, A_DEX, A_INT, A_MAX, A_STR, A_WIS, ALTAR, GRAVE, ICE, IS_OBSTRUCTED, IS_STWALL, IS_TREE, IS_ROOM, IS_WALL, TREE, ROOM, DOOR, CORR, SDOOR, SCORR, IRONBARS, SINK, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, D_TRAPPED, W_NONDIGGABLE, W_NONPASSWALL, APPORT, CADAVER, ACCFOOD, DOGFOOD, MANFOOD, POISON, UNDEF, TABU, NO_MM_FLAGS, NO_MINVENT, MM_NOMSG, IN_SIGHT, ALL_TRAPS, ARROW_TRAP, ROCKTRAP, PIT, SPIKED_PIT, SQKY_BOARD, BEAR_TRAP, LANDMINE, ROLLING_BOULDER_TRAP, SLP_GAS_TRAP, RUST_TRAP, FIRE_TRAP, HOLE, TRAPDOOR, TELEP_TRAP, WEB, STATUE_TRAP, MAGIC_TRAP, ANTI_MAGIC, MAGIC_PORTAL, POLY_TRAP, VIBRATING_SQUARE, ALLOW_M, ALLOW_TM, ALLOW_TRAPS, ALLOW_U, ALLOW_ALL, NOTONL, OPENDOOR, UNLOCKDOOR, BUSTDOOR, ALLOW_ROCK, ALLOW_WALL, ALLOW_DIG, ALLOW_SANCT, ALLOW_SSM, ALLOW_BARS, NOGARLIC, Is_airlevel, Is_oracle_level, ACCESSIBLE, IS_POOL, IS_LAVA, WATER, LAVAWALL, BOLT_LIM, MON_POLE_DIST, NO_WEAPON_WANTED, NEED_WEAPON, NEED_AXE, NEED_PICK_AXE, NEED_PICK_OR_AXE, VAULT, VAULT_GUARD_TIME, M_SEEN_MAGR, M_AP_FURNITURE, M_AP_OBJECT, M_AP_MONSTER, M_AP_TYPE, MOD_ENCUMBER, HVY_ENCUMBER, EXT_ENCUMBER, OVERLOADED, ROOMOFFSET, SHOPBASE, STRAT_APPEARMSG } from './const.js';
 import { CLR_BROWN, CLR_CYAN, CLR_MAGENTA, CLR_RED, CLR_WHITE, CLR_YELLOW, NO_COLOR } from './terminal.js';
 import { advanceVaultGuard, prepareVaultGuardEscort, restVaultFakecorr } from './vault.js';
 import { DISPLAY_MONSTER_GLYPHS, DISPLAY_MONSTER_HALLU_NAMES } from './monster_data.js';
@@ -10436,6 +10436,22 @@ function monsterTeleportTrapEffect(mon, trap) {
     return true;
 }
 
+function monsterPolymorphTrapEffect(mon, trap) {
+    if (trap?.ttyp !== POLY_TRAP) return false;
+    if (monsterKnowsTrap(mon, trap.ttyp) && rn2(4)) return true;
+
+    const visible = monsterVisibleToHero(mon) || mon === game.u?.usteed;
+    monsterTriggerTrap(mon, trap);
+    const messages = [];
+    const result = monsterPolyTrapEffect(mon, messages, { visible });
+    if (result.magicResisted && cansee(mon.mx, mon.my)) {
+        addToplineMessage(`${monsterDisplayName(mon)} resists!`);
+    }
+    if (result.attempted && visible) trap.tseen = true;
+    for (const message of messages) addToplineMessage(message);
+    return true;
+}
+
 function monsterTrapHarmless(mon, trap) {
     const ttyp = trap?.ttyp;
     const data = mon.data || {};
@@ -11758,6 +11774,7 @@ function moveMonsterTowardHero(mon, conflictActive = false, monIndex = null, som
         && game.level?.flags?.is_cavernous_lev && game.level?.at(mon.mx, mon.my)?.typ === ROOM
         && game.level?.at(mon.mx, mon.my)?.seenv === 64;
     if (monsterTeleportTrapEffect(mon, trap)) return done();
+    if (monsterPolymorphTrapEffect(mon, trap)) return done();
     if (trap?.ttyp === MAGIC_PORTAL) {
         monsterTriggerTrap(mon, trap);
         if (couldSeeCoord(mon.mx, mon.my) && !game.u?.blind && !mon.minvis && !mon.mundetected) {
@@ -13015,6 +13032,7 @@ function movePet(mon, resumeAfterInventory = false, conflictActive = false) {
 	    }
 	    const trap = game.level?.traps?.find(t => t.tx === mon.mx && t.ty === mon.my);
 	    if (monsterTeleportTrapEffect(mon, trap)) return;
+	    if (monsterPolymorphTrapEffect(mon, trap)) return;
 	    if (monsterWebSpecialEffect(mon, trap)) return;
 	    if (trap?.ttyp === MAGIC_TRAP && monsterKnowsTrap(mon, trap.ttyp) && rn2(4)) return;
 	    if (trap?.ttyp === MAGIC_TRAP) {

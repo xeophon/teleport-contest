@@ -8,7 +8,7 @@ import { game, resetGame } from '../js/gstate.js';
 import { pushKey, resetInputState } from '../js/input.js';
 import { createMonsterCorpseOrGlob, mkcorpstat, mkobj, mksobj, monsterByRndName } from '../js/mklev.js';
 import { enableDisplayRngLog, enableRngLog, getRngLog, initRng } from '../js/rng.js';
-import { A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_STR, A_WIS, ALTAR, AM_SHRINE, Align2amask, ARROW_TRAP, BEAR_TRAP, BILLSZ, CANDLESHOP, CLOUD, CORPSTAT_HISTORIC, COULD_SEE, DART_TRAP, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, D_CLOSED, D_NODOOR, FIRE_TRAP, FOUNTAIN, HOLE, ICE, ICED_POOL, IN_SIGHT, IRONBARS, LADDER, LANDMINE, LAVAPOOL, MIGR_LADDER_UP, MIGR_SSTAIRS, MIGR_STAIRS_UP, MOAT, M_AP_FURNITURE, M_AP_OBJECT, NORMAL_SPEED, P_BASIC, P_DAGGER, P_EXPERT, P_KNIFE, P_SKILLED, P_UNSKILLED, PIT, POLY_TRAP, POOL, REPAIR_DELAY, ROOM, ROOMOFFSET, SDOOR, SHOPBASE, SHOP_DOOR_COST, SINK, SLP_GAS_TRAP, SPIKED_PIT, SQKY_BOARD, STAIRS, STATUE_TRAP, STONE, STRAT_APPEARMSG, STRAT_WAITFORU, STRAT_WAITMASK, TEMPLE, TRAPDOOR, TT_LAVA, TT_WEB, WEB, W_SADDLE } from '../js/const.js';
+import { A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_STR, A_WIS, ALTAR, AM_SHRINE, Align2amask, ARROW_TRAP, BEAR_TRAP, BILLSZ, CANDLESHOP, CLOUD, CORPSTAT_HISTORIC, COULD_SEE, DART_TRAP, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, D_CLOSED, D_NODOOR, FIRE_TRAP, FOUNTAIN, HOLE, ICE, ICED_POOL, IN_SIGHT, IRONBARS, LADDER, LANDMINE, LAVAPOOL, MIGR_LADDER_UP, MIGR_SSTAIRS, MIGR_STAIRS_UP, MOAT, M_AP_FURNITURE, M_AP_OBJECT, NORMAL_SPEED, P_BASIC, P_DAGGER, P_EXPERT, P_KNIFE, P_SKILLED, P_UNSKILLED, PIT, POLY_TRAP, POOL, REPAIR_DELAY, ROOM, ROOMOFFSET, SDOOR, SHOPBASE, SHOP_DOOR_COST, SINK, SLP_GAS_TRAP, SPIKED_PIT, SQKY_BOARD, STAIRS, STATUE_TRAP, STONE, STRAT_APPEARMSG, STRAT_WAITFORU, STRAT_WAITMASK, TEMPLE, TRAPDOOR, TT_LAVA, TT_WEB, WEB, W_ARMF, W_SADDLE } from '../js/const.js';
 import { currentFruitId, setCurrentFruitName } from '../js/fruit.js';
 import { CLR_BRIGHT_MAGENTA, CLR_BROWN, CLR_WHITE } from '../js/terminal.js';
 import { TRIBUTE_DEATH_QUOTES } from '../js/tribute.js';
@@ -17827,6 +17827,191 @@ test('dart trap does not hit in-air gas spore', async () => {
     assert.equal(game.level.objects.some(obj => obj.ox === 6 && obj.oy === 5), false);
     assert.equal(victim.mhp, 30);
     assert.equal(game.u.uhp, 50);
+});
+
+test('visible monster polymorph trap polymorphs monster and leaves trap', async () => {
+    installStableNonShopFloorState();
+    initRng(2);
+    enableRngLog({ reset: true });
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 50,
+        uhpmax: 50,
+        uac: 10,
+        ulevel: 1,
+    });
+    game.inventory = [];
+    game.moves = 1;
+    const trap = { ttyp: POLY_TRAP, tx: 6, ty: 5, tseen: false };
+    game.level.traps = [trap];
+    const goblin = dartTrapGoblin(31386, { mhp: 10, mhpmax: 10 });
+    game.level.monsters = [goblin];
+
+    queueEscapeForMonsterTurn();
+    markHeroNeighborhoodVisible();
+    markSquareVisible(goblin.mx, goblin.my);
+    await processMonsterTurns();
+    const messages = [game._pending_message, ...(await drainQueuedMessagesAfterMore())].join(' ');
+
+    assert.match(messages, /The goblin turns into an? .*!/);
+    assert.notEqual(goblin.data.name, 'goblin');
+    assert.equal(game.level.monsters.includes(goblin), true);
+    assert.equal(game.level.traps.includes(trap), true);
+    assert.equal(trap.tseen, true);
+    assert.equal(goblin.mx, 6);
+    assert.equal(goblin.my, 5);
+    assert.equal(!!(goblin.mtrapseen & (1 << (POLY_TRAP - 1))), true);
+    assert.equal(rngValuesForCall(getRngLog(), 'rn2(111)').length, 1);
+});
+
+test('magic resistant monster polymorph trap is visible and leaves trap', async () => {
+    installStableNonShopFloorState();
+    initRng(1);
+    enableRngLog({ reset: true });
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 50,
+        uhpmax: 50,
+        uac: 10,
+    });
+    game.inventory = [];
+    const trap = { ttyp: POLY_TRAP, tx: 6, ty: 5, tseen: false };
+    game.level.traps = [trap];
+    const goblin = dartTrapGoblin(31387, {
+        mhp: 10,
+        mhpmax: 10,
+        magicResistance: true,
+        data: { resistsMagic: true },
+    });
+    game.level.monsters = [goblin];
+
+    queueEscapeForMonsterTurn();
+    markHeroNeighborhoodVisible();
+    markSquareVisible(goblin.mx, goblin.my);
+    await processMonsterTurns();
+    const messages = [game._pending_message, ...(await drainQueuedMessagesAfterMore())].join(' ');
+
+    assert.match(messages, /The goblin resists!/);
+    assert.equal(goblin.data.name, 'goblin');
+    assert.equal(game.level.monsters.includes(goblin), true);
+    assert.equal(game.level.traps.includes(trap), true);
+    assert.equal(trap.tseen, false);
+    assert.equal(goblin.mx, 6);
+    assert.equal(goblin.my, 5);
+    assert.equal(!!(goblin.mtrapseen & (1 << (POLY_TRAP - 1))), true);
+    assert.equal(rngValuesForCall(getRngLog(), 'rn2(111)').length, 0);
+});
+
+test('in-air monster still triggers polymorph trap', async () => {
+    installStableNonShopFloorState();
+    initRng(1);
+    enableRngLog({ reset: true });
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 50,
+        uhpmax: 50,
+        uac: 10,
+    });
+    game.inventory = [];
+    const trap = { ttyp: POLY_TRAP, tx: 6, ty: 5, tseen: false };
+    game.level.traps = [trap];
+    const goblin = dartTrapGoblin(31388, {
+        magicResistance: true,
+        data: { inAir: true, resistsMagic: true },
+    });
+    game.level.monsters = [goblin];
+
+    queueEscapeForMonsterTurn();
+    markHeroNeighborhoodVisible();
+    markSquareVisible(goblin.mx, goblin.my);
+    await processMonsterTurns();
+    const messages = [game._pending_message, ...(await drainQueuedMessagesAfterMore())].join(' ');
+
+    assert.match(messages, /The goblin resists!/);
+    assert.equal(goblin.data.name, 'goblin');
+    assert.equal(game.level.traps.includes(trap), true);
+    assert.equal(goblin.mx, 6);
+    assert.equal(goblin.my, 5);
+    assert.equal(!!(goblin.mtrapseen & (1 << (POLY_TRAP - 1))), true);
+});
+
+test('monster iron shoes warp on polymorph trap and stay worn', async () => {
+    installStableNonShopFloorState();
+    initRng(1);
+    enableRngLog({ reset: true });
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 50,
+        uhpmax: 50,
+        uac: 10,
+    });
+    game.inventory = [];
+    const trap = { ttyp: POLY_TRAP, tx: 6, ty: 5, tseen: false };
+    game.level.traps = [trap];
+    const shoes = wornArmor(31389, 'iron shoes', 'b', 0, { worn: false, owornmask: W_ARMF });
+    const goblin = dartTrapGoblin(31390, { minvent: [shoes] });
+    game.level.monsters = [goblin];
+
+    queueEscapeForMonsterTurn();
+    markHeroNeighborhoodVisible();
+    markSquareVisible(goblin.mx, goblin.my);
+    await processMonsterTurns();
+    const messages = [game._pending_message, ...(await drainQueuedMessagesAfterMore())].join(' ');
+
+    assert.doesNotMatch(messages, /turns into|resists/);
+    assert.equal(goblin.data.name, 'goblin');
+    assert.equal(shoes.kind, 'kicking boots');
+    assert.equal(shoes.actualKind, 'kicking boots');
+    assert.match(shoes.line, /kicking boots/);
+    assert.equal(shoes.worn, true);
+    assert.equal(shoes.owornmask, W_ARMF);
+    assert.equal(!!(goblin.misc_worn_check & W_ARMF), true);
+    assert.equal(game.level.traps.includes(trap), true);
+    assert.equal(trap.tseen, false);
+    assert.equal(rngValuesForCall(getRngLog(), 'rn2(111)').length, 0);
+});
+
+test('pet polymorph trap uses pet movement trap path', async () => {
+    installStableNonShopFloorState();
+    initRng(1);
+    enableRngLog({ reset: true });
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 50,
+        uhpmax: 50,
+        uac: 10,
+    });
+    game.inventory = [];
+    const trap = { ttyp: POLY_TRAP, tx: 6, ty: 5, tseen: false };
+    game.level.traps = [trap];
+    const goblin = dartTrapGoblin(31391, {
+        magicResistance: true,
+        mpeaceful: true,
+        mtame: 5,
+        pet: true,
+        mextra: { edog: { apport: 3, hungrytime: 0, whistletime: 0, ogoal: { x: 0, y: 0 } } },
+        data: { resistsMagic: true },
+    });
+    game.level.monsters = [goblin];
+
+    queueEscapeForMonsterTurn();
+    markHeroNeighborhoodVisible();
+    markSquareVisible(goblin.mx, goblin.my);
+    await processMonsterTurns();
+    const messages = [game._pending_message, ...(await drainQueuedMessagesAfterMore())].join(' ');
+
+    assert.match(messages, /The goblin resists!/);
+    assert.equal(goblin.data.name, 'goblin');
+    assert.equal(game.level.traps.includes(trap), true);
+    assert.equal(trap.tseen, false);
+    assert.equal(goblin.mx, 6);
+    assert.equal(goblin.my, 5);
+    assert.equal(!!(goblin.mtrapseen & (1 << (POLY_TRAP - 1))), true);
 });
 
 test('dart trap killed grounded monster drops inventory before removal', async () => {
