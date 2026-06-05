@@ -35811,6 +35811,93 @@ test('production monster launcher arrow can hit intervening monster before hero'
     assert.equal(preNhgetchMessages.some(message => /Clonk!/.test(message)), false);
 });
 
+test('production monster launcher arrow reveals object mimic on intervening hit', async () => {
+    const mimic = ordinaryThrowTarget('large mimic', 8, 5, {
+        ac: 13,
+        mac: 13,
+        mhp: 20,
+        mhpmax: 20,
+        msleeping: 1,
+        m_ap_type: M_AP_OBJECT,
+        appearObj: 215,
+        appearGlyph: '(',
+        appearColor: 7,
+        data: { name: 'large mimic', mlevel: 8, mlet: 'mimic', mac: 13 },
+    });
+    const { arrow, thrower, rng, preNhgetchMessages } = await runMonsterLauncherArrowLanding({
+        seed: 2,
+        uac: 100,
+        heroBlind: false,
+        levelCells: [[7, 5, { typ: IRONBARS }]],
+        extraMonsters: [mimic],
+    });
+
+    const messages = [
+        game._pending_message,
+        ...preNhgetchMessages,
+        ...(game._queued_messages_after_more || []).map(entry => entry.text),
+    ].filter(Boolean).join('  ');
+    assert.match(messages, /The arrow hits the large mimic[.!]/);
+    assert.doesNotMatch(messages, /really/);
+    assert.equal(game.u.uhp, 20);
+    assert.equal(game._damage_after_topline_more || 0, 0, rng.join(', '));
+    assert.equal(mimic.mhp, 16, rng.join(', '));
+    assert.equal(mimic.msleeping, 0);
+    assert.equal(mimic.m_ap_type || 0, 0);
+    assert.equal(mimic.appearObj ?? null, null);
+    assert.equal(mimic.appearGlyph ?? null, null);
+    assert.equal(mimic.appearColor ?? null, null);
+    assert.equal(thrower.minvent.some(obj => obj.id === arrow.id), false);
+    assert.equal(thrower.missile, null);
+
+    const landed = game.level.objects.find(obj => obj.id === arrow.id);
+    assert.ok(landed, rng.join(', '));
+    assert.equal(landed.ox, 8);
+    assert.equal(landed.oy, 5);
+    assert.equal(landed.transientProjectile, false);
+
+    assertNoSingletonLauncherMultishotRng(rng);
+    assert.deepEqual(rng, ['rn2(5)=3', 'rn2(5)=2', 'rnd(20)=9', 'rnd(6)=4', 'rn2(3)=0']);
+    assert.equal(preNhgetchMessages.some(message => /Clonk!/.test(message)), false);
+});
+
+test('production monster launcher arrow leaves ordinary hidden intervening target concealed', async () => {
+    const trapper = ordinaryThrowTarget('trapper', 8, 5, {
+        ac: 13,
+        mac: 13,
+        mhp: 20,
+        mhpmax: 20,
+        msleeping: 1,
+        mundetected: true,
+        data: { name: 'trapper', mlevel: 12, mac: 13 },
+    });
+    const { arrow, thrower, rng, preNhgetchMessages } = await runMonsterLauncherArrowLanding({
+        seed: 2,
+        uac: 100,
+        levelCells: [[7, 5, { typ: IRONBARS }]],
+        extraMonsters: [trapper],
+    });
+
+    assert.match(game._pending_message, /^It is hit[.!]$/);
+    assert.equal(game.u.uhp, 20);
+    assert.equal(game._damage_after_topline_more || 0, 0, rng.join(', '));
+    assert.equal(trapper.mhp, 16, rng.join(', '));
+    assert.equal(trapper.msleeping, 0);
+    assert.equal(trapper.mundetected, true);
+    assert.equal(thrower.minvent.some(obj => obj.id === arrow.id), false);
+    assert.equal(thrower.missile, null);
+
+    const landed = game.level.objects.find(obj => obj.id === arrow.id);
+    assert.ok(landed, rng.join(', '));
+    assert.equal(landed.ox, 8);
+    assert.equal(landed.oy, 5);
+    assert.equal(landed.transientProjectile, false);
+
+    assertNoSingletonLauncherMultishotRng(rng);
+    assert.deepEqual(rng, ['rn2(5)=3', 'rn2(5)=2', 'rnd(20)=9', 'rnd(6)=4', 'rn2(3)=0']);
+    assert.equal(preNhgetchMessages.some(message => /Clonk!/.test(message)), false);
+});
+
 test('production monster launcher arrow kills visible intervening monster without hero attribution', async () => {
     const blocker = ordinaryThrowTarget('goblin', 8, 5, {
         ac: 13,
