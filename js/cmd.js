@@ -17931,7 +17931,7 @@ function potionHitSaddle(potion, mon, messages, kind = thrownPotionEffectKind(po
     return false;
 }
 
-export function heroThrownPotionHitMonster(potion, mon, { yourFault = true } = {}) {
+export function heroThrownPotionHitMonster(potion, mon, { yourFault = true, allowLifeSaving = false } = {}) {
     const messages = [];
     const bottle = chestShatterBottleName();
     const kind = thrownPotionEffectKind(potion);
@@ -18011,7 +18011,7 @@ export function heroThrownPotionHitMonster(potion, mon, { yourFault = true } = {
     const dex = game.u?.acurr?.a?.[A_DEX] ?? 10;
     if ((distance === 0 || (distance < 3 && !rn2(Math.max(1, Math.trunc((1 + dex) / 2)))))
         && heroCanReceivePotionVapor()) {
-        potionBreathe(potion, messages);
+        potionBreathe(potion, messages, { allowLifeSaving });
     } else if (potion.dknown && !game.u?.blind && cansee(mon.mx, mon.my)) {
         queuePotionTryCall(potion, kind);
     }
@@ -62210,16 +62210,29 @@ export async function rhack(_cmd) {
             const dex = game.u?.acurr?.a?.[A_DEX] ?? 10;
             if (dex > rnd(25)) {
                 if ((item.quan || 1) > 1) splitCarriedObjectShopBill(item, thrownObject, 1);
-                const messages = heroThrownPotionHitMonster(thrownObject, targetMon);
+                const messages = heroThrownPotionHitMonster(thrownObject, targetMon, { allowLifeSaving: true });
                 removeInventoryItem(item, 1);
                 newsym(targetMon.mx, targetMon.my);
                 const keepPotionCallPrompt = game._command_mode === 'callPotionAfterMore';
-                await setMessage(messages.join('  '), keepPotionCallPrompt);
-                if (!keepPotionCallPrompt) game._command_mode = null;
+                await setMessage(messages.join('  '), keepPotionCallPrompt || !!messages.more);
                 game._throw_item_letter = null;
                 game._resume_time_after_more = 0;
-                game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
                 game.context.move = 0;
+                if (messages.lifeSaving) {
+                    game._command_mode = 'lifeSavingMore';
+                    game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
+                    return;
+                }
+                if (messages.fatal) {
+                    game._command_mode = 'deathDieMore';
+                    game._pending_time_passed = 0;
+                    game._process_command_time_now = 0;
+                    game._run_steps_remaining = 0;
+                    prepareDeathBones();
+                    return;
+                }
+                if (!keepPotionCallPrompt) game._command_mode = null;
+                game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
                 return;
             }
             const thrownName = pickupObjectName({ ...item, quan: 1 });

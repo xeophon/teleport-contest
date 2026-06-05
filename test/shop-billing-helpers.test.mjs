@@ -50972,6 +50972,143 @@ test('hero-thrown blessed water potion splits an unsaddled gremlin without anger
     assert.equal(game.level.objects.length, 0);
 });
 
+test('adjacent hero-thrown blessed water potion vapor rehumanizes lycanthrope after monster hit', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    game.u.acurr.a[A_DEX] = 25;
+    Object.assign(game.u, {
+        uhp: 3,
+        uhpmax: 8,
+        ulycn: 'werewolf',
+        lycanthrope: true,
+        _polyself_form: { name: 'werewolf', mlet: 'd', glyph: 'd', wereBeast: true },
+        _polyself_base: {
+            uhp: 12,
+            uhpmax: 18,
+            uen: 3,
+            uenmax: 5,
+            uac: 7,
+            ulevel: 2,
+            rank: { m: 'Wizard', f: 'Wizard' },
+        },
+    });
+    game.urole = { ...(game.urole || {}), rank: { m: 'Werewolf', f: 'Werewolf' } };
+    const potion = waterPotion(88191, 'w', { blessed: true, bknown: true });
+    potion.dknown = true;
+    const gremlin = ordinaryThrowTarget('gremlin', 6, 5, { mhp: 8, mhpmax: 10 });
+    game.inventory = [potion];
+    game.level.monsters = [gremlin];
+    markSquareVisible(gremlin.mx, gremlin.my);
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('w');
+    await rhack('l');
+
+    const message = game._pending_message || '';
+    const clone = game.level.monsters.find(mon => mon !== gremlin && mon.data?.name === 'gremlin');
+    assert.equal(game._command_mode, null);
+    assert.match(message, /crashes on the gremlin's head and breaks into shards\./);
+    assert.match(message, /The potion of holy water evaporates\./);
+    assert.match(message, /The gremlin multiplies!/);
+    assert.match(message, /You return to human form!/);
+    assert.equal(message.indexOf('The gremlin multiplies!') < message.indexOf('You return to human form!'), true);
+    assert.doesNotMatch(message, /Your old form was not healthy enough|You feel purified|peculiar odor|You die/);
+    assert.ok(clone);
+    assert.equal(game.level.monsters.includes(gremlin), true);
+    assert.equal(gremlin.mpeaceful, true);
+    assert.equal(game.u.ulycn, 'werewolf');
+    assert.equal(game.u.lycanthrope, true);
+    assert.equal(game.u._polyself_form, null);
+    assert.equal(game.u._polyself_base, null);
+    assert.equal(game.u.uhp, 12);
+    assert.equal(game.u.uhpmax, 18);
+    assert.equal(game.u.uen, 3);
+    assert.equal(game.u.uenmax, 5);
+    assert.equal(game.u.uac, 7);
+    assert.equal(game.urole.rank.m, 'Wizard');
+    assert.equal(game.inventory.includes(potion), false);
+    assert.equal(game.level.objects.length, 0);
+    const calls = getRngLog().map(rngCallName);
+    assert.equal(calls.includes('rn2(13)'), true, calls.join(', '));
+});
+
+test('adjacent hero-thrown blessed water potion vapor rehumanize old form death uses lifesaving', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    game.u.acurr.a[A_DEX] = 25;
+    Object.assign(game.u, {
+        uhp: 3,
+        uhpmax: 8,
+        ulycn: 'werewolf',
+        lycanthrope: true,
+        _polyself_form: { name: 'werewolf', mlet: 'd', glyph: 'd', wereBeast: true },
+        _polyself_base: {
+            uhp: 0,
+            uhpmax: 18,
+            uen: 3,
+            uenmax: 5,
+            uac: 7,
+            ulevel: 2,
+            rank: { m: 'Wizard', f: 'Wizard' },
+        },
+    });
+    game.urole = { ...(game.urole || {}), rank: { m: 'Werewolf', f: 'Werewolf' } };
+    const amulet = {
+        id: 88192,
+        letter: 'a',
+        cls: 'amulet',
+        glyph: '"',
+        kind: 'amulet of life saving',
+        actualKind: 'amulet of life saving',
+        quan: 1,
+        worn: true,
+        line: 'a - an amulet of life saving (being worn)',
+    };
+    const potion = waterPotion(88193, 'w', { blessed: true, bknown: true });
+    potion.dknown = true;
+    const gremlin = ordinaryThrowTarget('gremlin', 6, 5, { mhp: 8, mhpmax: 10 });
+    game.inventory = [amulet, potion];
+    game.level.monsters = [gremlin];
+    markSquareVisible(gremlin.mx, gremlin.my);
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('w');
+    await rhack('l');
+
+    const message = game._pending_message || '';
+    const clone = game.level.monsters.find(mon => mon !== gremlin && mon.data?.name === 'gremlin');
+    assert.equal(game._command_mode, 'lifeSavingMore');
+    assert.match(message, /The potion of holy water evaporates\./);
+    assert.match(message, /The gremlin multiplies!/);
+    assert.match(message, /You return to human form!/);
+    assert.match(message, /Your old form was not healthy enough to survive\./);
+    assert.match(message, /You die\.\.\.  But wait\.\.\.  Your medallion begins to glow!/);
+    assert.equal(message.indexOf('The gremlin multiplies!') < message.indexOf('You return to human form!'), true);
+    assert.doesNotMatch(message, /You feel purified|peculiar odor/);
+    assert.ok(clone);
+    assert.equal(game.level.monsters.includes(gremlin), true);
+    assert.equal(gremlin.mpeaceful, true);
+    assert.equal(game.inventory.includes(amulet), false);
+    assert.equal(game.inventory.includes(potion), false);
+    assert.equal(game.u.ulycn, 'werewolf');
+    assert.equal(game.u.lycanthrope, true);
+    assert.equal(game.u._polyself_form, null);
+    assert.equal(game.u._polyself_base, null);
+    assert.equal(game.u.uhp, 0);
+
+    await rhack(' ');
+
+    assert.equal(game._pending_message, 'You feel much better!');
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game._message_more || 0, 0);
+    assert.equal(game.u.uhp, game.u.uhpmax);
+    const calls = getRngLog().map(rngCallName);
+    assert.equal(calls.includes('rn2(13)'), true, calls.join(', '));
+    assert.equal(calls.includes('rn2(19)'), true, calls.join(', '));
+});
+
 test('hero-thrown cursed water potion rusts an unsaddled iron golem', async () => {
     installNonShopFloorState();
     initRng(2);
