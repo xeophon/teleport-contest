@@ -1677,6 +1677,19 @@ function carriedRuby(id, letter = 'r', props = {}) {
     };
 }
 
+function carriedGlassGem(id, letter = 'g', props = {}) {
+    const gem = floorGem(id, 'worthless piece of red glass', {
+        gemDescription: 'red gem',
+        material: 'glass',
+        ...props,
+    });
+    delete gem.ox;
+    delete gem.oy;
+    gem.letter = letter;
+    gem.line = `${letter} - a worthless piece of red glass`;
+    return gem;
+}
+
 function installThrowsRocksForm() {
     game.u._polyself_form = {
         name: 'stone giant',
@@ -42124,6 +42137,132 @@ test('hero-thrown stone missile miss against rock-passer stays a miss', async ()
     assert.equal(game.level.objects.some(obj => obj.id === loadstone.id && obj.ox === 7 && obj.oy === 5), true);
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 4), [
         'rnd(20)', 'rnd(25)', 'rn2(3)', 'rn2(100)',
+    ]);
+});
+
+test('hero-thrown glass gem harms rock-passing monster and survives landing', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, { ulevel: 20, uluck: 10, uhitinc: 10 });
+    game.u.acurr.a[A_DEX] = 25;
+    const glass = carriedGlassGem(876088, 'g');
+    const elemental = ordinaryThrowTarget('earth elemental', 7, 5, {
+        mhp: 20,
+        mhpmax: 20,
+        msleeping: 1,
+        mpeaceful: 1,
+        meating: 4,
+        mstrategy: STRAT_WAITFORU,
+        passWalls: true,
+        passesRocks: true,
+        neuter: true,
+        data: {
+            name: 'earth elemental',
+            mlevel: 8,
+            passWalls: true,
+            passesRocks: true,
+            neuter: true,
+        },
+    });
+    game.inventory = [glass];
+    game.level.monsters = [elemental];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('g');
+    await rhack('l');
+
+    assert.match(game._pending_message, /The red gem hits the earth elemental\./);
+    assert.doesNotMatch(game._pending_message, /does no harm|passes harmlessly|misses|shatters/);
+    assert.equal(elemental.mhp, 19);
+    assert.equal(elemental.msleeping, 0);
+    assert.equal(elemental.meating, 0);
+    assert.equal(elemental.mstrategy, 0);
+    assert.equal(elemental.mpeaceful, 0);
+    assert.equal(game.inventory.includes(glass), false);
+    const landed = game.level.objects.find(obj => obj.id === glass.id);
+    assert.ok(landed);
+    assert.equal(landed.ox, 7);
+    assert.equal(landed.oy, 5);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 4), [
+        'rnd(20)', 'rnd(2)', 'rn2(3)', 'rn2(100)',
+    ]);
+});
+
+test('hero-thrown glass gem hit can mulch before landing', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, { ulevel: 20, uluck: 10, uhitinc: 10 });
+    game.u.acurr.a[A_DEX] = 25;
+    const glass = carriedGlassGem(876089, 'g');
+    const elemental = ordinaryThrowTarget('earth elemental', 7, 5, {
+        mhp: 20,
+        mhpmax: 20,
+        passWalls: true,
+        passesRocks: true,
+        neuter: true,
+        data: {
+            name: 'earth elemental',
+            mlevel: 8,
+            passWalls: true,
+            passesRocks: true,
+            neuter: true,
+        },
+    });
+    game.inventory = [glass];
+    game.level.monsters = [elemental];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('g');
+    await rhack('l');
+
+    assert.match(game._pending_message, /The red gem hits the earth elemental\./);
+    assert.doesNotMatch(game._pending_message, /does no harm|passes harmlessly|misses|shatters/);
+    assert.equal(elemental.mhp, 19);
+    assert.equal(game.inventory.includes(glass), false);
+    assert.equal(game.level.objects.some(obj => obj.id === glass.id), false);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 4), [
+        'rnd(20)', 'rnd(2)', 'rn2(3)', 'rn2(100)',
+    ]);
+});
+
+test('hero-thrown glass gem miss against rock-passer stays a miss', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, { ulevel: 1, uluck: -10, uhitinc: -30 });
+    game.u.acurr.a[A_DEX] = 1;
+    const glass = carriedGlassGem(876090, 'g');
+    const elemental = ordinaryThrowTarget('earth elemental', 7, 5, {
+        mhp: 20,
+        mhpmax: 20,
+        passWalls: true,
+        passesRocks: true,
+        neuter: true,
+        data: {
+            name: 'earth elemental',
+            mlevel: 8,
+            mac: -20,
+            passWalls: true,
+            passesRocks: true,
+            neuter: true,
+        },
+    });
+    game.inventory = [glass];
+    game.level.monsters = [elemental];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('g');
+    await rhack('l');
+
+    assert.match(game._pending_message, /The red gem misses the earth elemental\./);
+    assert.doesNotMatch(game._pending_message, /does no harm|passes harmlessly|hits/);
+    assert.equal(elemental.mhp, 20);
+    assert.equal(game.inventory.includes(glass), false);
+    assert.equal(game.level.objects.some(obj => obj.id === glass.id && obj.ox === 7 && obj.oy === 5), true);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 3), [
+        'rnd(20)', 'rn2(3)', 'rn2(100)',
     ]);
 });
 

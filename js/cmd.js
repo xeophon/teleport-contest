@@ -18107,6 +18107,39 @@ function heroKickedStoneMissileRockPasserImpact(obj, mon) {
     return { handled: true, hit: false, messages };
 }
 
+function heroThrownGlassGemObject(obj) {
+    return !!obj && (itemClassKey(obj) === 'gem' || obj.glyph === '*' || obj.otyp === GEM_CLASS)
+        && stoneToFleshObjectMaterial(obj) === 'glass';
+}
+
+function heroThrownGlassGemHitValue(mon) {
+    return heroProjectileBaseHitValue(mon) - 4;
+}
+
+function heroThrownGlassGemImpact(obj, mon) {
+    if (!heroThrownGlassGemObject(obj)) return { handled: false, messages: [] };
+    const dieroll = rnd(20);
+    const targetName = heroThrownVenomTargetName(mon);
+    if (heroThrownGlassGemHitValue(mon) >= dieroll) {
+        const damage = rnd(2);
+        mon.mhp = (mon.mhp || 1) - damage;
+        if ((mon.mhp || 0) <= 0) mon.dead = true;
+        wakeMonsterFromHeroThrownHit(mon);
+        const mulched = shouldMulchHeroProjectileMissile(obj);
+        if (mulched) rn2(100);
+        return {
+            handled: true,
+            hit: true,
+            damage,
+            mulched,
+            messages: [`${floorObjectTheSubject({ ...obj, quan: 1 })} hits ${targetName}.`],
+        };
+    }
+    const messages = [`The ${pickupObjectName({ ...obj, quan: 1 })} misses the ${mon?.data?.name || 'creature'}.`];
+    messages.push(...wakeMonsterFromHeroThrownMiss(mon));
+    return { handled: true, hit: false, messages };
+}
+
 function heroThrownCreamPieHitMonster(pie, mon) {
     const messages = [];
     mon.msleeping = 0;
@@ -61093,6 +61126,7 @@ export async function rhack(_cmd) {
         };
         const combatObject = item.cls === 'weapon' || item.cls === 'gem' || item.glyph === ')' || item.otyp === GEM_CLASS;
         let impactMessage = '';
+        let impactConsumedThrownObject = false;
         if (targetMon && (isBlindingVenomObject(item) || isAcidVenomObject(item))) {
             rnd(20);
             const dex = game.u?.acurr?.a?.[A_DEX] ?? 10;
@@ -61188,6 +61222,10 @@ export async function rhack(_cmd) {
                 messages.push(...wakeMonsterFromHeroThrownMiss(targetMon));
                 impactMessage = messages.join('  ');
             }
+        } else if (targetMon && heroThrownGlassGemObject(item)) {
+            const glassImpact = heroThrownGlassGemImpact(thrownObject, targetMon);
+            impactMessage = (glassImpact.messages || []).join('  ');
+            impactConsumedThrownObject = !!glassImpact.mulched;
         } else if (targetMon && !combatObject) {
             rnd(20);
             const thrownName = pickupObjectName({ ...item, quan: 1 });
@@ -61195,6 +61233,19 @@ export async function rhack(_cmd) {
             const messages = [`The ${thrownName} misses the ${targetName}.`];
             messages.push(...wakeMonsterFromHeroThrownMiss(targetMon));
             impactMessage = messages.join('  ');
+        }
+        if (impactConsumedThrownObject) {
+            if ((item.quan || 1) > 1) splitCarriedObjectShopBill(item, thrownObject, 1);
+            stopCarriedFigurineTimerOnLeave(thrownObject);
+            removeInventoryItem(item, 1);
+            newsym(targetMon.mx, targetMon.my);
+            await setMessage(impactMessage);
+            game._command_mode = null;
+            game._throw_item_letter = null;
+            game._resume_time_after_more = 0;
+            game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
+            game.context.move = 0;
+            return;
         }
         const projectileBreakRoll = projectileLandingIsSoft(ox, oy) ? null : rn2(100); // C breaktest: obj_resists() on hard landing.
         curseLoadstoneLeavingInventory(thrownObject);
