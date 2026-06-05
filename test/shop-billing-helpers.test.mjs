@@ -39707,6 +39707,151 @@ test('production monster plain dagger hit bonus can turn intervening miss into h
         preNhgetchMessages.join('\n'));
 });
 
+function collectMonsterThrowMessages(preNhgetchMessages = []) {
+    return [
+        game._pending_message,
+        game._topline_after_more,
+        ...preNhgetchMessages,
+        ...(game._queued_messages_after_more || []).map(entry => entry.text),
+    ].filter(Boolean).join('\n');
+}
+
+function preventedByIronBars(messages) {
+    return /Clonk!|Clink!/.test(messages);
+}
+
+const thrownNonPotionInterveningCases = [
+    {
+        name: 'spear',
+        targetX: 8,
+        targetY: 5,
+        levelCells: [[7, 5, { typ: IRONBARS }]],
+        run: options => runMonsterSpearIronBars({ seed: 1, ...options }),
+        missile: result => result.spearItem,
+        hitPattern: /spear hits the large mimic[.!]/,
+    },
+    {
+        name: 'shuriken',
+        targetX: 8,
+        targetY: 5,
+        levelCells: [[7, 5, { typ: IRONBARS }]],
+        run: options => runMonsterShurikenIronBars({ seed: 1, ...options }),
+        missile: result => result.shurikenItem,
+        hitPattern: /shuriken hits the large mimic[.!]/,
+    },
+    {
+        name: 'plain dagger',
+        targetX: 8,
+        targetY: 5,
+        levelCells: [[7, 5, { typ: IRONBARS }]],
+        run: options => runMonsterPlainDaggerIronBars({ seed: 1, ...options }),
+        missile: result => result.daggerItem,
+        hitPattern: /dagger hits the large mimic[.!]/,
+    },
+    {
+        name: 'orcish dagger',
+        targetX: 8,
+        targetY: 5,
+        levelCells: [[7, 5, { typ: IRONBARS }]],
+        run: options => runMonsterCrudeDaggerIronBars({ seed: 1, ...options }),
+        missile: result => result.daggerItem,
+        hitPattern: /crude dagger hits the large mimic[.!]/,
+    },
+    {
+        name: 'knife',
+        targetX: 8,
+        targetY: 5,
+        levelCells: [[7, 5, { typ: IRONBARS }]],
+        run: options => runMonsterKnifeIronBars({ seed: 1, ...options }),
+        missile: result => result.knifeItem,
+        hitPattern: /knife hits the large mimic[.!]/,
+    },
+    {
+        name: 'dart',
+        targetX: 7,
+        targetY: 5,
+        levelCells: [[6, 5, { typ: IRONBARS }]],
+        run: options => runMonsterDartHitLanding({ seed: 2, throwerX: 9, ...options }),
+        missile: result => result.dart,
+        hitPattern: /dart hits the large mimic[.!]/,
+    },
+];
+
+test('production monster thrown non-potion weapons reveal object mimic on intervening hit', async () => {
+    for (const row of thrownNonPotionInterveningCases) {
+        const mimic = ordinaryThrowTarget('large mimic', row.targetX, row.targetY, {
+            ac: 15,
+            mac: 15,
+            mhp: 20,
+            mhpmax: 20,
+            m_ap_type: M_AP_OBJECT,
+            appearObj: 215,
+            appearGlyph: '(',
+            appearColor: 7,
+            data: { name: 'large mimic', mlevel: 8, mlet: 'mimic', mac: 15 },
+        });
+        const result = await row.run({
+            heroBlind: false,
+            levelCells: row.levelCells,
+            extraMonsters: [mimic],
+        });
+        const missile = row.missile(result);
+        const messages = collectMonsterThrowMessages(result.preNhgetchMessages);
+        const rawRng = result.rawRng || result.rng || [];
+
+        assert.match(messages, row.hitPattern, row.name);
+        assert.doesNotMatch(messages, /really/, row.name);
+        assert.equal(game.u.uhp, 20, row.name);
+        assert.equal(game._damage_after_topline_more || 0, 0, `${row.name}: ${rawRng.join(', ')}`);
+        assert.equal(mimic.mhp < 20, true, `${row.name}: ${rawRng.join(', ')}`);
+        assert.equal(mimic.msleeping, 0, row.name);
+        assert.equal(mimic.m_ap_type || 0, 0, row.name);
+        assert.equal(mimic.appearObj ?? null, null, row.name);
+        assert.equal(mimic.appearGlyph ?? null, null, row.name);
+        assert.equal(mimic.appearColor ?? null, null, row.name);
+        assert.equal(result.thrower.minvent.some(obj => obj.id === missile.id), false, row.name);
+
+        const landed = game.level.objects.find(obj => obj.id === missile.id);
+        if (landed) {
+            assert.equal(landed.ox, row.targetX, row.name);
+            assert.equal(landed.oy, row.targetY, row.name);
+            assert.equal(landed.transientProjectile, false, row.name);
+        }
+        assert.equal(preventedByIronBars(messages), false, row.name);
+    }
+});
+
+test('production monster thrown non-potion weapons leave ordinary hidden intervening target concealed', async () => {
+    for (const row of thrownNonPotionInterveningCases) {
+        const trapper = ordinaryThrowTarget('trapper', row.targetX, row.targetY, {
+            ac: 15,
+            mac: 15,
+            mhp: 20,
+            mhpmax: 20,
+            mundetected: true,
+            data: { name: 'trapper', mlevel: 12, mac: 15 },
+        });
+        const result = await row.run({
+            heroBlind: true,
+            levelCells: row.levelCells,
+            extraMonsters: [trapper],
+        });
+        const missile = row.missile(result);
+        const messages = collectMonsterThrowMessages(result.preNhgetchMessages);
+        const rawRng = result.rawRng || result.rng || [];
+
+        assert.match(messages, /It is hit[.!]/, row.name);
+        assert.doesNotMatch(messages, /trapper/, row.name);
+        assert.equal(game.u.uhp, 20, row.name);
+        assert.equal(game._damage_after_topline_more || 0, 0, `${row.name}: ${rawRng.join(', ')}`);
+        assert.equal(trapper.mhp < 20, true, `${row.name}: ${rawRng.join(', ')}`);
+        assert.equal(trapper.msleeping, 0, row.name);
+        assert.equal(trapper.mundetected, true, row.name);
+        assert.equal(result.thrower.minvent.some(obj => obj.id === missile.id), false, row.name);
+        assert.equal(preventedByIronBars(messages), false, row.name);
+    }
+});
+
 test('production monster silver dagger aimed shot clinks iron bars before hero', async () => {
     const silverDaggerItem = monsterSilverDagger(874360);
     const { daggerItem, thrower, rng, rawRng, preNhgetchMessages } = await runMonsterPlainDaggerIronBars({

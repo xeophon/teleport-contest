@@ -7052,6 +7052,7 @@ export async function processMonsterTurns() {
                         } else if (interveningTarget) {
                             const damage = Math.max(1, rnd(monsterThrownSpearDamageSides(thrownMissile))
                                 + missileSpe - missileErosion);
+                            revealProjectileHitMimicAppearance(interveningTarget);
                             interveningTarget.msleeping = 0;
                             interveningTarget.mhp = Math.max(0, (interveningTarget.mhp || 1) - damage);
                             const hitMessage = throwerVisible
@@ -7180,6 +7181,7 @@ export async function processMonsterTurns() {
                             addMonsterThrownFloorMessages(floorMessages, throwerVisible);
                         } else if (interveningTarget) {
                             const damage = Math.max(1, rnd(8) + missileSpe - missileErosion);
+                            revealProjectileHitMimicAppearance(interveningTarget);
                             interveningTarget.msleeping = 0;
                             interveningTarget.mhp = Math.max(0, (interveningTarget.mhp || 1) - damage);
                             const hitMessage = throwerVisible
@@ -7312,6 +7314,7 @@ export async function processMonsterTurns() {
                             addMonsterThrownFloorMessages(floorMessages, throwerVisible);
                         } else if (interveningTarget) {
                             const damage = rnd(4);
+                            revealProjectileHitMimicAppearance(interveningTarget);
                             interveningTarget.msleeping = 0;
                             interveningTarget.mhp = Math.max(0, (interveningTarget.mhp || 1) - damage);
                             const hitMessage = throwerVisible
@@ -7556,6 +7559,7 @@ export async function processMonsterTurns() {
                                 crudeDaggerOhit = false;
                             } else if (interveningTarget) {
                                 const damage = rnd(3);
+                                revealProjectileHitMimicAppearance(interveningTarget);
                                 interveningTarget.msleeping = 0;
                                 interveningTarget.mhp = Math.max(0, (interveningTarget.mhp || 1) - damage);
                                 const hitMessage = throwerVisible
@@ -7695,6 +7699,7 @@ export async function processMonsterTurns() {
                             addMonsterThrownFloorMessages(floorMessages, throwerVisible);
                         } else if (interveningTarget) {
                             const damage = Math.max(1, rnd(3) + missileSpe - missileErosion);
+                            revealProjectileHitMimicAppearance(interveningTarget);
                             interveningTarget.msleeping = 0;
                             interveningTarget.mhp = Math.max(0, (interveningTarget.mhp || 1) - damage);
                             const hitMessage = throwerVisible
@@ -7818,6 +7823,7 @@ export async function processMonsterTurns() {
                                 addMonsterThrownFloorMessages(floorMessages);
                             } else if (interveningTarget) {
                                 const dartDamage = Math.max(1, rnd(3) + missileSpe - missileErosion);
+                                revealProjectileHitMimicAppearance(interveningTarget);
                                 interveningTarget.msleeping = 0;
                                 interveningTarget.mhp = Math.max(0, (interveningTarget.mhp || 1) - dartDamage);
                                 const targetVisible = !game.u?.blind
