@@ -49771,9 +49771,27 @@ export async function rhack(_cmd) {
                     const hit = fireBreathDamageHero(breath.dice, origDamage =>
                         fireDamageInventory(origDamage, false, true, {
                             preburnedArmor: { bodyHit: true, message: '' },
+                            allowLifeSaving: true,
                         }));
-                    const messages = [nextText, ...hit.messages].filter(Boolean);
-                    if (hit.lethal) {
+                    const vaporFatal = !!(hit.lifeSaving || hit.fatal);
+                    const messages = [nextText, ...(vaporFatal ? [] : hit.messages)].filter(Boolean);
+                    if (vaporFatal) {
+                        const followups = hit.messages.map((text, index) => ({
+                            text,
+                            more: index < hit.messages.length - 1,
+                        }));
+                        if (followups.length) {
+                            const final = followups[followups.length - 1];
+                            final.lifeSaving = !!hit.lifeSaving;
+                            final.fatal = !!hit.fatal;
+                            final.more = true;
+                            next.insertAfter = [
+                                ...followups,
+                                ...(next.insertAfter || []),
+                            ];
+                            next.more = true;
+                        }
+                    } else if (hit.lethal) {
                         next.insertAfter = [
                             { text: 'You die...', more: true },
                             ...(next.insertAfter || []),

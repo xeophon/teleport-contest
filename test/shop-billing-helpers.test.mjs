@@ -17270,6 +17270,86 @@ test('directional wand of fire bounced ray hits hero and vapor lifesaves old-for
     assert.equal(game.u.uhp, game.u.uhpmax);
 });
 
+test('monster fire breath hero-hit inventory vapor rehumanize old form death uses lifesaving', async () => {
+    installStableNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, {
+        uhp: 30,
+        uhpmax: 30,
+        uen: 3,
+        uenmax: 5,
+        uac: 10,
+        ulevel: 2,
+        ulycn: 'werewolf',
+        lycanthrope: true,
+        _polyself_base: { uhp: 0, uhpmax: 18, uen: 3, uenmax: 5, uac: 7, ulevel: 2 },
+        _polyself_form: { name: 'werewolf', mlet: 'd', glyph: 'd', wereBeast: true },
+    });
+    const redDragon = ordinaryThrowTarget('red dragon', 9, 5, {
+        m_id: 31002,
+        mhp: 80,
+        mhpmax: 80,
+        movement: NORMAL_SPEED,
+        msleeping: 0,
+        mcanmove: true,
+        mcansee: true,
+        mpeaceful: false,
+        mtame: 0,
+        mux: game.u.ux,
+        muy: game.u.uy,
+        data: { name: 'red dragon', mlevel: 15, mmove: NORMAL_SPEED, ac: -4 },
+    });
+    game.level.monsters = [redDragon];
+
+    const armor = wornArmor(31003, 'leather armor', 'b');
+    const amulet = {
+        id: 31004,
+        letter: 'a',
+        cls: 'amulet',
+        glyph: '"',
+        kind: 'amulet of life saving',
+        actualKind: 'amulet of life saving',
+        quan: 1,
+        worn: true,
+        line: 'a - an amulet of life saving (being worn)',
+    };
+    const potion = waterPotion(31005, 'p', { blessed: true, bknown: true });
+    game.inventory = [armor, amulet, potion];
+
+    queueEscapeForMonsterTurn();
+    for (let x = 5; x <= 9; x++) markSquareVisible(x, 5);
+    await processMonsterTurns();
+
+    const messages = [game._pending_message, ...(await drainQueuedMessagesAfterMore())].join(' ');
+
+    assert.equal(game._command_mode, 'lifeSavingMore');
+    assert.equal(game._queued_messages_after_more?.length || 0, 0);
+    assert.match(messages, /The red dragon breathes fire!/);
+    assert.match(messages, /The blast of fire hits you!/);
+    assert.match(messages, /Your leather armor smoulders!/);
+    assert.match(messages, /Your potion of holy water boils and explodes!/);
+    assert.match(messages, /You return to human form!/);
+    assert.match(messages, /Your old form was not healthy enough to survive\./);
+    assert.match(messages, /You die\.\.\.  But wait\.\.\.  Your medallion begins to glow!/);
+    assert.equal(game.inventory.includes(armor), true);
+    assert.equal(game.inventory.includes(amulet), false);
+    assert.equal(game.inventory.includes(potion), false);
+    assert.equal(game.level.monsters.includes(redDragon), true);
+    assert.equal(redDragon._breath_used_this_turn, 1);
+    assert.equal(game.u.ulycn, 'werewolf');
+    assert.equal(game.u.lycanthrope, true);
+    assert.equal(game.u._polyself_form, null);
+    assert.equal(game.u._polyself_base, null);
+    assert.equal(game.u.uhp, 0);
+    assert.doesNotMatch(messages, /You feel purified|peculiar odor|eyes water|Unknown command/);
+
+    await rhack(' ');
+
+    assert.equal(game._pending_message, 'You feel much better!');
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game.u.uhp, game.u.uhpmax);
+});
+
 test('successful no-hands polyself drops worn gloves and wielded weapon but keeps rings', async () => {
     installNonShopFloorState();
     initRng(1);

@@ -36,7 +36,7 @@ No replay maps, private seeds, player names, move-count branches, or seed-specif
 
 ## Follow-Ups
 
-- Monster fire-breath hero-hit inventory fire still needs separate queued-event metadata propagation.
+- Monster fire-breath hero-hit inventory fire is covered in audit 512.
 - Explosion callers such as burning oil, scroll tower-of-flame, and pyrolisk fireball still flatten inventory-fire vapor metadata.
 - Fatal unsaved vapor in the helper still consumes the destroyed potion in JS because `fireDamageInventory()` does not currently model C's non-returning `done()` interruption inside `potionbreathe()`.
 - C continues `zhitu()` after life saving and can apply ordinary ray HP damage afterward. JS still uses delayed `lifeSavingMore` continuation and intentionally leaves full post-life-saving tail damage as a broader follow-up shared with audit 510.
