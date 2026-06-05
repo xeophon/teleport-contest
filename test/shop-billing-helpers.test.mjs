@@ -520,6 +520,20 @@ function upwardWeapon(id, letter, kind, line, extra = {}) {
     };
 }
 
+function rngCallName(entry) {
+    return entry.replace(/=.*/, '');
+}
+
+function rngCallValue(entry) {
+    const match = /=(-?\d+)$/.exec(entry);
+    assert.ok(match, `missing RNG value in ${entry}`);
+    return Number(match[1]);
+}
+
+function rngValuesForCall(log, call) {
+    return log.filter(entry => rngCallName(entry) === call).map(rngCallValue);
+}
+
 function dartStack(id, letter = 'd', quan = 3, extra = {}) {
     return {
         id,
@@ -46671,6 +46685,42 @@ test('upward hero-thrown long sword uses base small-target die', async () => {
     ]);
 });
 
+test('upward hero-thrown long sword uses large-target damage for large polyself', async () => {
+    installNonShopFloorState();
+    initRng(19);
+    Object.assign(game.u, {
+        uhp: 40,
+        uhpmax: 40,
+        _polyself_form: { name: 'large mimic', mlet: 'm', glyph: 'm', msize: 'large', size: 'large' },
+    });
+    const blade = upwardWeapon(8769191, 'l', 'long sword', 'l - a long sword', {
+        owt: 40,
+    });
+    game.inventory = [blade];
+    const hpBefore = game.u.uhp;
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('l');
+    await rhack('<');
+
+    const message = game._pending_message || '';
+    assert.equal(game._command_mode, null);
+    assert.match(message, /A long sword almost hits the ceiling, then falls back on top of your head\./);
+    assert.match(message, /A long sword hits the floor\./);
+    assert.doesNotMatch(message, /cmdassist|In what direction|It doesn't hurt|shatters|Splat/);
+    assert.equal(game.inventory.includes(blade), false);
+    assert.equal(game.level.objects.length, 1);
+    assert.equal(game.level.objects[0].actualKind, 'long sword');
+    const rngLog = getRngLog();
+    assert.equal(hpBefore - game.u.uhp, rngValuesForCall(rngLog, 'rnd(12)')[0]);
+    const calls = rngLog.map(rngCallName);
+    assert.equal(calls.includes('rnd(8)'), false);
+    assert.deepEqual(calls, [
+        'rn2(5)', 'rn2(100)', 'rnd(12)', 'rn2(100)',
+    ]);
+});
+
 test('upward hero-thrown mace adds flat small-target switch bonus', async () => {
     installNonShopFloorState();
     initRng(23);
@@ -46730,6 +46780,116 @@ test('upward hero-thrown broadsword adds rnd4 small-target switch bonus', async 
     assert.equal(landed.oy, game.u.uy);
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
         'rn2(5)', 'rn2(100)', 'rnd(4)', 'rnd(4)', 'rn2(100)',
+    ]);
+});
+
+test('upward hero-thrown broadsword large polyself uses large flat bonus', async () => {
+    installNonShopFloorState();
+    initRng(23);
+    Object.assign(game.u, {
+        uhp: 40,
+        uhpmax: 40,
+        _polyself_form: { name: 'large mimic', mlet: 'm', glyph: 'm', msize: 'large', size: 'large' },
+    });
+    const blade = upwardWeapon(8769211, 'b', 'broadsword', 'b - a broadsword', {
+        owt: 70,
+    });
+    game.inventory = [blade];
+    const hpBefore = game.u.uhp;
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('b');
+    await rhack('<');
+
+    const message = game._pending_message || '';
+    assert.equal(game._command_mode, null);
+    assert.match(message, /A broadsword almost hits the ceiling, then falls back on top of your head\./);
+    assert.match(message, /A broadsword hits the floor\./);
+    assert.doesNotMatch(message, /cmdassist|In what direction|It doesn't hurt|shatters|Splat/);
+    assert.equal(game.inventory.includes(blade), false);
+    assert.equal(game.level.objects.length, 1);
+    assert.equal(game.level.objects[0].actualKind, 'broadsword');
+    const rngLog = getRngLog();
+    assert.equal(hpBefore - game.u.uhp, rngValuesForCall(rngLog, 'rnd(6)')[0] + 1);
+    const calls = rngLog.map(rngCallName);
+    assert.equal(calls.includes('rnd(4)'), false);
+    assert.deepEqual(calls, [
+        'rn2(5)', 'rn2(100)', 'rnd(6)', 'rn2(100)',
+    ]);
+});
+
+test('upward hero-thrown flail large polyself uses large-target bonus die', async () => {
+    installNonShopFloorState();
+    initRng(23);
+    Object.assign(game.u, {
+        uhp: 40,
+        uhpmax: 40,
+        _polyself_form: { name: 'large mimic', mlet: 'm', glyph: 'm', msize: 'large', size: 'large' },
+    });
+    const blade = upwardWeapon(8769212, 'f', 'flail', 'f - a flail', {
+        owt: 15,
+    });
+    game.inventory = [blade];
+    const hpBefore = game.u.uhp;
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('f');
+    await rhack('<');
+
+    const message = game._pending_message || '';
+    assert.equal(game._command_mode, null);
+    assert.match(message, /A flail almost hits the ceiling, then falls back on top of your head\./);
+    assert.match(message, /A flail hits the floor\./);
+    assert.doesNotMatch(message, /cmdassist|In what direction|It doesn't hurt|shatters|Splat/);
+    assert.equal(game.inventory.includes(blade), false);
+    assert.equal(game.level.objects.length, 1);
+    assert.equal(game.level.objects[0].actualKind, 'flail');
+    const rngLog = getRngLog();
+    const rnd4 = rngValuesForCall(rngLog, 'rnd(4)');
+    assert.equal(hpBefore - game.u.uhp, rnd4[0] + rnd4[1]);
+    const calls = rngLog.map(rngCallName);
+    assert.equal(calls.includes('rnd(6)'), false);
+    assert.deepEqual(calls, [
+        'rn2(5)', 'rn2(100)', 'rnd(4)', 'rnd(4)', 'rn2(100)',
+    ]);
+});
+
+test('upward hero-thrown two-handed sword large polyself uses 2d6 large bonus', async () => {
+    installNonShopFloorState();
+    initRng(23);
+    Object.assign(game.u, {
+        uhp: 60,
+        uhpmax: 60,
+        _polyself_form: { name: 'large mimic', mlet: 'm', glyph: 'm', msize: 'large', size: 'large' },
+    });
+    const blade = upwardWeapon(8769213, 'h', 'two-handed sword', 'h - a two-handed sword', {
+        owt: 150,
+    });
+    game.inventory = [blade];
+    const hpBefore = game.u.uhp;
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('h');
+    await rhack('<');
+
+    const message = game._pending_message || '';
+    assert.equal(game._command_mode, null);
+    assert.match(message, /A two-handed sword almost hits the ceiling, then falls back on top of your head\./);
+    assert.match(message, /A two-handed sword hits the floor\./);
+    assert.doesNotMatch(message, /cmdassist|In what direction|It doesn't hurt|shatters|Splat/);
+    assert.equal(game.inventory.includes(blade), false);
+    assert.equal(game.level.objects.length, 1);
+    assert.equal(game.level.objects[0].actualKind, 'two-handed sword');
+    const rngLog = getRngLog();
+    assert.equal(hpBefore - game.u.uhp,
+        rngValuesForCall(rngLog, 'rnd(6)')[0] + rngValuesForCall(rngLog, 'd(2,6)')[0]);
+    const calls = rngLog.map(rngCallName);
+    assert.equal(calls.includes('rnd(12)'), false);
+    assert.deepEqual(calls, [
+        'rn2(5)', 'rn2(100)', 'rnd(6)', 'd(2,6)', 'rn2(100)',
     ]);
 });
 

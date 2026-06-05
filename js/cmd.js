@@ -19388,6 +19388,63 @@ const HERO_TOSS_UP_WEAPON_SMALL_DAMAGE = new Map([
     ['bullwhip', 2],
 ]);
 
+const HERO_TOSS_UP_WEAPON_LARGE_DAMAGE = new Map([
+    ['dagger', 3],
+    ['elven dagger', 3],
+    ['orcish dagger', 3],
+    ['silver dagger', 3],
+    ['athame', 3],
+    ['scalpel', 3],
+    ['knife', 2],
+    ['stiletto', 2],
+    ['worm tooth', 2],
+    ['crysknife', 10],
+    ['spear', 8],
+    ['elven spear', 8],
+    ['orcish spear', 8],
+    ['dwarvish spear', 8],
+    ['silver spear', 8],
+    ['javelin', 6],
+    ['trident', { die: 4, bonusDice: [2, 4] }],
+    ['axe', 4],
+    ['battle-axe', { die: 6, bonusDice: [2, 4] }],
+    ['pick-axe', 3],
+    ['short sword', 8],
+    ['elven short sword', 8],
+    ['orcish short sword', 8],
+    ['dwarvish short sword', 8],
+    ['scimitar', 8],
+    ['silver saber', 8],
+    ['broadsword', { die: 6, add: 1 }],
+    ['elven broadsword', { die: 6, add: 1 }],
+    ['long sword', 12],
+    ['two-handed sword', { die: 6, bonusDice: [2, 6] }],
+    ['katana', 12],
+    ['partisan', { die: 6, add: 1 }],
+    ['ranseur', { die: 4, bonusDie: 4 }],
+    ['spetum', { die: 6, bonusDie: 6 }],
+    ['glaive', 10],
+    ['halberd', { die: 6, bonusDie: 6 }],
+    ['bardiche', { die: 4, bonusDice: [2, 4] }],
+    ['voulge', { die: 4, bonusDie: 4 }],
+    ['fauchard', 8],
+    ['guisarme', 8],
+    ['bill-guisarme', 10],
+    ['lucern hammer', 6],
+    ['bec de corbin', 6],
+    ['mace', 6],
+    ['silver mace', 6],
+    ['morning star', { die: 6, add: 1 }],
+    ['war hammer', 4],
+    ['club', 3],
+    ['rubber hose', 3],
+    ['quarterstaff', 6],
+    ['aklys', 3],
+    ['flail', { die: 4, bonusDie: 4 }],
+    ['lance', 8],
+    ['bullwhip', 1],
+]);
+
 function tossUpWeaponObjectKey(obj) {
     if (obj?.otyp === DAGGER) return 'dagger';
     if (obj?.otyp === ORCISH_DAGGER) return 'orcish dagger';
@@ -19415,6 +19472,24 @@ function tossUpWeaponDamageDie(spec) {
     return typeof spec === 'number' ? spec : spec?.die;
 }
 
+function tossUpWeaponDamageSpecForTarget(obj) {
+    const key = tossUpWeaponObjectKey(obj);
+    return heroTossUpTargetIsBig() ? HERO_TOSS_UP_WEAPON_LARGE_DAMAGE.get(key)
+        : HERO_TOSS_UP_WEAPON_SMALL_DAMAGE.get(key);
+}
+
+function rollTossUpWeaponDamageSpec(spec) {
+    const die = tossUpWeaponDamageDie(spec);
+    if (!die) return 0;
+    let damage = rnd(die);
+    if (typeof spec !== 'object') return damage;
+    damage += Math.trunc(Number(spec.add || 0));
+    if (spec.bonusDie) damage += rnd(spec.bonusDie);
+    if (Array.isArray(spec.bonusDice) && spec.bonusDice.length === 2)
+        damage += d(spec.bonusDice[0], spec.bonusDice[1]);
+    return damage;
+}
+
 function isSupportedTossUpWeaponObject(obj) {
     if (!obj) return false;
     const key = tossUpWeaponObjectKey(obj);
@@ -19425,14 +19500,9 @@ function isSupportedTossUpWeaponObject(obj) {
 }
 
 function heroThrownGenericWeaponDamage(obj) {
-    const spec = HERO_TOSS_UP_WEAPON_SMALL_DAMAGE.get(tossUpWeaponObjectKey(obj));
-    const die = tossUpWeaponDamageDie(spec);
-    if (!die || !isSupportedTossUpWeaponObject(obj)) return null;
-    let damage = rnd(die);
-    if (typeof spec === 'object') {
-        damage += Math.trunc(Number(spec.add || 0));
-        if (spec.bonusDie) damage += rnd(spec.bonusDie);
-    }
+    const spec = tossUpWeaponDamageSpecForTarget(obj);
+    if (!tossUpWeaponDamageDie(spec) || !isSupportedTossUpWeaponObject(obj)) return null;
+    let damage = rollTossUpWeaponDamageSpec(spec);
     damage += Math.trunc(Number(obj.spe || 0));
     if (damage < 0) damage = 0;
     if (heroTossUpTargetIsShade() && !heroTossUpObjectIsSilver(obj)) damage = 0;
@@ -19505,6 +19575,17 @@ function heroTossUpTargetHatesSilver() {
 
 function heroTossUpTargetIsShade() {
     return heroTossUpTargetName() === 'shade';
+}
+
+function heroTossUpTargetIsBig() {
+    const form = heroTossUpTargetForm();
+    if (!form || !Object.keys(form).length) return false;
+    if (form.big || form.bigmonst) return true;
+    return heroProjectileMonsterSizeValue({
+        data: form,
+        msize: form.msize,
+        size: form.size,
+    }) >= 3;
 }
 
 function heroThrownGenericObjectLessDamage(obj, helmet) {
