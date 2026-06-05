@@ -30405,6 +30405,8 @@ export const __shopBillingTestHooks = {
     subFromShopBill,
     subOneFromShopBill,
     fireDamageInventoryForTest: fireDamageInventory,
+    heroFireTrapResultForTest: heroFireTrapResult,
+    applyHeroFireTrapFatalResultForTest: applyHeroFireTrapFatalResult,
     checkUnpaidUsageForTest: checkUnpaidUsage,
     costlyTinForTest: costlyTinAlteration,
     tipContainerContents,
@@ -43744,7 +43746,7 @@ function sitRustTrapMessage(trap, prefix) {
     return messages.join('  ');
 }
 
-function heroFireTrapMessage(trap, prefix = '') {
+function heroFireTrapResult(trap, prefix = '', { allowLifeSaving = false } = {}) {
     trap.tseen = true;
     const origDamage = d(2, 4);
     const messages = [prefix ? `${prefix}  A tower of flame erupts from the floor!` : 'A tower of flame erupts from the floor!'];
@@ -43760,7 +43762,7 @@ function heroFireTrapMessage(trap, prefix = '') {
             game.u.uhp = Math.min(game.u.uhp || 1, game.u.uhpmax);
         }
     }
-    const inventoryFire = fireDamageInventory(origDamage);
+    const inventoryFire = fireDamageInventory(origDamage, false, false, { allowLifeSaving });
     messages.push(...inventoryFire.messages);
     const floorFire = burnFloorObjectsByFire(game.u?.ux || 0, game.u?.uy || 0, {
         giveFeedback: !game.u?.blind,
@@ -43768,10 +43770,43 @@ function heroFireTrapMessage(trap, prefix = '') {
     });
     messages.push(...floorFire.messages);
     if (floorFire.count && game.u?.blind) messages.push('You smell paper burning.');
-    damage += inventoryFire.damage;
-    if (game.u) game.u.uhp = Math.max(0, (game.u.uhp || 1) - damage);
-    if ((game.u?.uhp || 0) <= 0) game._death_cause = inventoryFire.deathCause || 'killed by a tower of flame';
-    return messages.join('  ');
+    if (!inventoryFire.lifeSaving && !inventoryFire.fatal) {
+        damage += inventoryFire.damage;
+        if (game.u) game.u.uhp = Math.max(0, (game.u.uhp || 1) - damage);
+        if ((game.u?.uhp || 0) <= 0) game._death_cause = inventoryFire.deathCause || 'killed by a tower of flame';
+    }
+    return {
+        message: messages.join('  '),
+        more: true,
+        lifeSaving: !!inventoryFire.lifeSaving,
+        fatal: !!inventoryFire.fatal,
+    };
+}
+
+function heroFireTrapMessage(trap, prefix = '') {
+    return heroFireTrapResult(trap, prefix).message;
+}
+
+function applyHeroFireTrapFatalResult(result) {
+    game.context ??= {};
+    if (result.lifeSaving) {
+        game._command_mode = 'lifeSavingMore';
+        game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
+        game.context.move = 0;
+        game._run_stop_now = 1;
+        game._run_steps_remaining = 0;
+        return true;
+    }
+    if (result.fatal) {
+        game._command_mode = 'deathDieMore';
+        game._pending_time_passed = 0;
+        game.context.move = 0;
+        game._process_command_time_now = 0;
+        game._run_steps_remaining = 0;
+        prepareDeathBones();
+        return true;
+    }
+    return false;
 }
 
 function sitFireTrapMessage(trap, prefix) {
@@ -46510,7 +46545,9 @@ async function moveHero(dx, dy) {
         return;
     }
     if (steppedTrap?.ttyp === FIRE_TRAP) {
-        await setMessage(heroFireTrapMessage(steppedTrap), true);
+        const result = heroFireTrapResult(steppedTrap, '', { allowLifeSaving: true });
+        await setMessage(result.message, result.more);
+        applyHeroFireTrapFatalResult(result);
         return;
     }
     if (steppedTrap?.ttyp === ROLLING_BOULDER_TRAP) {

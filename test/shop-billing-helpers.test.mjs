@@ -8,7 +8,7 @@ import { game, resetGame } from '../js/gstate.js';
 import { pushKey, resetInputState } from '../js/input.js';
 import { createMonsterCorpseOrGlob, mkcorpstat } from '../js/mklev.js';
 import { enableDisplayRngLog, enableRngLog, getRngLog, initRng } from '../js/rng.js';
-import { A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_STR, A_WIS, ALTAR, AM_SHRINE, Align2amask, BILLSZ, CANDLESHOP, CLOUD, CORPSTAT_HISTORIC, COULD_SEE, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, D_CLOSED, D_NODOOR, FOUNTAIN, HOLE, ICE, ICED_POOL, IN_SIGHT, IRONBARS, LADDER, LAVAPOOL, MIGR_LADDER_UP, MIGR_SSTAIRS, MIGR_STAIRS_UP, MOAT, M_AP_FURNITURE, M_AP_OBJECT, NORMAL_SPEED, P_BASIC, P_DAGGER, P_EXPERT, P_KNIFE, P_SKILLED, P_UNSKILLED, PIT, POOL, REPAIR_DELAY, ROOM, ROOMOFFSET, SDOOR, SHOPBASE, SHOP_DOOR_COST, SINK, SQKY_BOARD, STAIRS, STATUE_TRAP, STONE, STRAT_APPEARMSG, STRAT_WAITFORU, STRAT_WAITMASK, TEMPLE, TRAPDOOR, TT_LAVA, TT_WEB, WEB, W_SADDLE } from '../js/const.js';
+import { A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_STR, A_WIS, ALTAR, AM_SHRINE, Align2amask, BILLSZ, CANDLESHOP, CLOUD, CORPSTAT_HISTORIC, COULD_SEE, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, D_CLOSED, D_NODOOR, FIRE_TRAP, FOUNTAIN, HOLE, ICE, ICED_POOL, IN_SIGHT, IRONBARS, LADDER, LAVAPOOL, MIGR_LADDER_UP, MIGR_SSTAIRS, MIGR_STAIRS_UP, MOAT, M_AP_FURNITURE, M_AP_OBJECT, NORMAL_SPEED, P_BASIC, P_DAGGER, P_EXPERT, P_KNIFE, P_SKILLED, P_UNSKILLED, PIT, POOL, REPAIR_DELAY, ROOM, ROOMOFFSET, SDOOR, SHOPBASE, SHOP_DOOR_COST, SINK, SQKY_BOARD, STAIRS, STATUE_TRAP, STONE, STRAT_APPEARMSG, STRAT_WAITFORU, STRAT_WAITMASK, TEMPLE, TRAPDOOR, TT_LAVA, TT_WEB, WEB, W_SADDLE } from '../js/const.js';
 import { currentFruitId, setCurrentFruitName } from '../js/fruit.js';
 import { CLR_BRIGHT_MAGENTA, CLR_BROWN, CLR_WHITE } from '../js/terminal.js';
 import { TRIBUTE_DEATH_QUOTES } from '../js/tribute.js';
@@ -13228,6 +13228,66 @@ test('blessed water vapor rehumanize old form death from destroyed inventory pot
     assert.equal(game.u._polyself_base, null);
     assert.equal(game.u.uhp, 0);
     assert.doesNotMatch(message, /You feel purified|peculiar odor|eyes water/);
+});
+
+test('fire trap command inventory fire that destroys blessed water uses lifesaving for old-form death', async () => {
+    installNonShopFloorState();
+    initRng(7);
+    Object.assign(game.u, {
+        uhp: 30,
+        uhpmax: 30,
+        uen: 3,
+        uenmax: 5,
+        uac: 6,
+        ulevel: 2,
+        ulycn: 'werewolf',
+        lycanthrope: true,
+        _polyself_base: { uhp: 0, uhpmax: 18, uen: 3, uenmax: 5, uac: 7, ulevel: 2 },
+        _polyself_form: { name: 'werewolf', mlet: 'd', glyph: 'd', wereBeast: true, nohands: true },
+    });
+    const trap = { ttyp: FIRE_TRAP, tx: 6, ty: 5, tseen: true };
+    game.level.traps = [trap];
+    const amulet = {
+        id: 30993,
+        letter: 'a',
+        cls: 'amulet',
+        glyph: '"',
+        kind: 'amulet of life saving',
+        actualKind: 'amulet of life saving',
+        quan: 1,
+        worn: true,
+        line: 'a - an amulet of life saving (being worn)',
+    };
+    const potion = waterPotion(30994, 'w', { blessed: true, bknown: true });
+    game.inventory = [amulet, potion];
+
+    const result = shop.heroFireTrapResultForTest(trap, '', { allowLifeSaving: true });
+    shop.applyHeroFireTrapFatalResultForTest(result);
+
+    const message = result.message || '';
+    assert.equal(result.lifeSaving, true);
+    assert.equal(result.fatal, false);
+    assert.equal(result.more, true);
+    assert.equal(game._command_mode, 'lifeSavingMore');
+    assert.match(message, /A tower of flame erupts from the floor!/);
+    assert.match(message, /Your potion of holy water boils and explodes!/);
+    assert.match(message, /You return to human form!/);
+    assert.match(message, /Your old form was not healthy enough to survive\./);
+    assert.match(message, /You die\.\.\.  But wait\.\.\.  Your medallion begins to glow!/);
+    assert.equal(game.inventory.includes(amulet), false);
+    assert.equal(game.inventory.includes(potion), false);
+    assert.equal(game.u.ulycn, 'werewolf');
+    assert.equal(game.u.lycanthrope, true);
+    assert.equal(game.u._polyself_form, null);
+    assert.equal(game.u._polyself_base, null);
+    assert.equal(game.u.uhp, 0);
+    assert.doesNotMatch(message, /You feel purified|peculiar odor|eyes water/);
+
+    await rhack(' ');
+
+    assert.equal(game._pending_message, 'You feel much better!');
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game.u.uhp, game.u.uhpmax);
 });
 
 test('unpaid spellbook study usage charges four fifths of current shop price', () => {
