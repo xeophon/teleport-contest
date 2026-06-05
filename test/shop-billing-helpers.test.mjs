@@ -42991,6 +42991,88 @@ test('hero-thrown ruby harms ordinary monster and survives landing', async () =>
     ]);
 });
 
+test('hero-thrown dagger harms ordinary monster and survives landing', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, { ulevel: 20, uluck: 10, uhitinc: 10 });
+    game.u.acurr.a[A_DEX] = 25;
+    const blade = dagger(876097, 'd');
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, {
+        mhp: 20,
+        mhpmax: 20,
+        msleeping: 1,
+        mpeaceful: 1,
+        meating: 4,
+        mstrategy: STRAT_WAITFORU,
+    });
+    game.inventory = [blade];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('d');
+    await rhack('l');
+
+    assert.match(game._pending_message, /The dagger hits the goblin\./);
+    assert.doesNotMatch(game._pending_message, /gift|catches|misses|shatters|Splat/);
+    assert.equal(goblin.mhp, 17);
+    assert.equal(goblin.msleeping, 0);
+    assert.equal(goblin.meating, 0);
+    assert.equal(goblin.mstrategy, 0);
+    assert.equal(goblin.mpeaceful, 0);
+    assert.equal(game.inventory.includes(blade), false);
+    const landed = game.level.objects.find(obj => obj.id === blade.id);
+    assert.ok(landed);
+    assert.equal(landed.ox, 7);
+    assert.equal(landed.oy, 5);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 4), [
+        'rnd(20)', 'rnd(4)', 'rn2(19)', 'rn2(100)',
+    ]);
+});
+
+test('hero-thrown knife harms ordinary monster and survives landing', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, { ulevel: 20, uluck: 10, uhitinc: 10 });
+    game.u.acurr.a[A_DEX] = 25;
+    const blade = upwardWeapon(876098, 'k', 'knife', 'k - a knife', {
+        otyp: KNIFE,
+        plural: 'knives',
+    });
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, {
+        mhp: 20,
+        mhpmax: 20,
+        msleeping: 1,
+        mpeaceful: 1,
+        meating: 4,
+        mstrategy: STRAT_WAITFORU,
+    });
+    game.inventory = [blade];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('k');
+    await rhack('l');
+
+    assert.match(game._pending_message, /The knife hits the goblin\./);
+    assert.doesNotMatch(game._pending_message, /gift|catches|misses|shatters|Splat/);
+    assert.equal(goblin.mhp, 19);
+    assert.equal(goblin.msleeping, 0);
+    assert.equal(goblin.meating, 0);
+    assert.equal(goblin.mstrategy, 0);
+    assert.equal(goblin.mpeaceful, 0);
+    assert.equal(game.inventory.includes(blade), false);
+    const landed = game.level.objects.find(obj => obj.id === blade.id);
+    assert.ok(landed);
+    assert.equal(landed.ox, 7);
+    assert.equal(landed.oy, 5);
+    assert.equal(landed.otyp, KNIFE);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 4), [
+        'rnd(20)', 'rnd(3)', 'rn2(19)', 'rn2(100)',
+    ]);
+});
+
 test('hero-thrown glass gem hit runs acid passive before landing', async () => {
     installNonShopFloorState();
     initRng(2);

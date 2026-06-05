@@ -18232,6 +18232,11 @@ const HERO_PROJECTILE_MONSTER_SIZE_VALUES = new Map([
     ['gigantic', 7],
 ]);
 
+const HERO_THROWN_WEAPON_MONSTER_DATA = new Map([
+    ['dagger', { smallDie: 4, largeDie: 3, hitbon: 2 }],
+    ['knife', { smallDie: 3, largeDie: 2, hitbon: 0 }],
+]);
+
 function heroProjectileMonsterSizeValue(mon) {
     const data = mon?.data || {};
     const value = mon?.msize ?? mon?.size ?? data.msize ?? data.size;
@@ -18260,6 +18265,7 @@ function heroProjectileObjectHitval(obj) {
         bonus += Math.trunc(Number(obj?.spe || 0));
     const explicit = obj?.hitbon ?? obj?.oc_hitbon;
     if (Number.isFinite(Number(explicit))) bonus += Math.trunc(Number(explicit));
+    else bonus += Math.trunc(Number(HERO_THROWN_WEAPON_MONSTER_DATA.get(tossUpWeaponObjectKey(obj))?.hitbon || 0));
     return bonus;
 }
 
@@ -18372,6 +18378,62 @@ function heroThrownGlassGemObject(obj) {
 
 function heroThrownGemHitValue(obj, mon) {
     return heroProjectileBaseHitValue(obj, mon) - 4;
+}
+
+function heroThrownSupportedWeaponObject(obj) {
+    if (!obj || obj.artifact || obj.oartifact) return false;
+    return HERO_THROWN_WEAPON_MONSTER_DATA.has(tossUpWeaponObjectKey(obj));
+}
+
+function heroThrownWeaponHitValue(obj, mon) {
+    return heroProjectileBaseHitValue(obj, mon) + 2;
+}
+
+function heroThrownWeaponDamage(obj, mon) {
+    const data = HERO_THROWN_WEAPON_MONSTER_DATA.get(tossUpWeaponObjectKey(obj));
+    if (!data || !heroThrownSupportedWeaponObject(obj)) return 0;
+    const die = heroProjectileMonsterSizeValue(mon) >= 3 ? data.largeDie : data.smallDie;
+    let damage = die ? rnd(die) : 0;
+    damage += Math.trunc(Number(obj.spe || 0));
+    if (damage < 0) damage = 0;
+    if (damage > 0) {
+        damage -= Math.max(0, Math.trunc(Number(obj.oeroded || 0)), Math.trunc(Number(obj.oeroded2 || 0)));
+        if (damage < 1) damage = 1;
+    }
+    damage += heroDamageIncreaseBonus() + heroStrengthDamageBonus();
+    if (damage < 1) damage = 1;
+    return damage;
+}
+
+function heroProjectileHitPunctuation(damage) {
+    if (damage < 0) return '?';
+    return damage <= 4 ? '.' : '!';
+}
+
+function heroThrownWeaponImpact(obj, mon) {
+    if (!heroThrownSupportedWeaponObject(obj)) return { handled: false, messages: [] };
+    const hitValue = heroThrownWeaponHitValue(obj, mon);
+    const dieroll = rnd(20);
+    const targetName = heroThrownVenomTargetName(mon);
+    if (hitValue >= dieroll) {
+        const damage = heroThrownWeaponDamage(obj, mon);
+        mon.mhp = (mon.mhp || 1) - damage;
+        if ((mon.mhp || 0) <= 0) mon.dead = true;
+        wakeMonsterFromHeroThrownHit(mon);
+        exerciseHeroProjectileHitDexterity();
+        const mulched = shouldMulchHeroProjectileMissile(obj);
+        if (mulched) rn2(100);
+        return {
+            handled: true,
+            hit: true,
+            damage,
+            mulched,
+            messages: [`${floorObjectTheSubject({ ...obj, quan: 1 })} hits ${targetName}${heroProjectileHitPunctuation(damage)}`],
+        };
+    }
+    const messages = [`The ${pickupObjectName({ ...obj, quan: 1 })} misses the ${mon?.data?.name || 'creature'}.`];
+    messages.push(...wakeMonsterFromHeroThrownMiss(mon));
+    return { handled: true, hit: false, messages };
 }
 
 function heroThrownGemImpact(obj, mon) {
@@ -61523,6 +61585,12 @@ export async function rhack(_cmd) {
             impactConsumedThrownObject = !!gemImpact.mulched;
             impactObjectHit = !!gemImpact.hit;
             impactPassiveTarget = gemImpact.hit ? targetMon : null;
+        } else if (targetMon && heroThrownSupportedWeaponObject(item)) {
+            const weaponImpact = heroThrownWeaponImpact(thrownObject, targetMon);
+            impactMessage = (weaponImpact.messages || []).join('  ');
+            impactConsumedThrownObject = !!weaponImpact.mulched;
+            impactObjectHit = !!weaponImpact.hit;
+            impactPassiveTarget = weaponImpact.hit ? targetMon : null;
         } else if (targetMon && !combatObject) {
             rnd(20);
             const thrownName = pickupObjectName({ ...item, quan: 1 });
