@@ -27473,12 +27473,14 @@ function kickFloorObjectRange(obj, x, y, dir) {
     return range;
 }
 
-function placeKickedFloorObject(obj, x, y, messages) {
+function placeKickedFloorObject(obj, x, y, messages, options = {}) {
     obj.ox = x;
     obj.oy = y;
     obj.hidden = false;
     obj.buried = false;
     obj.transientProjectile = false;
+    if (options.ohit)
+        applyMonsterThrownPassiveObject(obj, options.passiveTarget, true, messages);
     if (earthFloorEffects(obj, x, y, messages, 'fall', { usedUpShopBillOnDestroy: true }))
         return null;
     const placed = placeUnstackedFloorObject(obj);
@@ -27519,7 +27521,8 @@ function kickFloorObjectToward(dir, x, y) {
         removeFloorObject(obj);
         newsym(x, y);
         messages.push(...(monsterImpact.messages || []));
-        if (!monsterImpact.mulched && !monsterImpact.consumed) placeKickedFloorObject(obj, landX, landY, messages);
+        if (!monsterImpact.mulched && !monsterImpact.consumed)
+            placeKickedFloorObject(obj, landX, landY, messages, { ohit: !!monsterImpact.hit, passiveTarget: targetMon });
         return { handled: true, messages, moved: true, target: targetMon, hit: !!monsterImpact.hit };
     }
     if (!gate) return { handled: false };
@@ -27637,6 +27640,9 @@ function maybeShipRemoteProjectileObject(obj, x, y, messages, options = {}) {
 function landProjectileObjectWithShopHandling(obj, x, y, options = {}) {
     const messages = [];
     prepareProjectileFloorObject(obj, x, y);
+    const passiveObj = options.ohit
+        ? applyMonsterThrownPassiveObject(obj, options.passiveTarget, true, messages)
+        : { handled: false, damaged: false };
     const hardLanding = !projectileLandingIsSoft(x, y);
     if (hardLanding && !options.skipTopBreak) {
         const breakKind = projectileTopLevelBreakKind(obj, options);
@@ -27651,6 +27657,7 @@ function landProjectileObjectWithShopHandling(obj, x, y, options = {}) {
                 impact: { loss: 0, broke: false, messages },
                 topBreak: { broke: true, breakKind, value: shopLanding.value || 0 },
                 shipObject: projectileShipObjectResult(),
+                passiveObj,
                 shopLanding: { ...shopLanding, handled: shopLanding.charged, returned: false },
                 shopSale: { handled: false, shkp: null, message: '', messages: [] },
                 messages,
@@ -27667,6 +27674,7 @@ function landProjectileObjectWithShopHandling(obj, x, y, options = {}) {
                 topBreak: { broke: false, breakKind: '', value: 0 },
                 floorEffects: { consumed: false },
                 shipObject,
+                passiveObj,
                 shopLanding: { handled: false, shkp: null, message: '', messages: [], returned: false, charged: false },
                 shopSale: { handled: false, shkp: null, message: '', messages: [] },
                 messages,
@@ -27680,6 +27688,7 @@ function landProjectileObjectWithShopHandling(obj, x, y, options = {}) {
             topBreak: { broke: false, breakKind: '', value: 0 },
             floorEffects: { consumed: true },
             shipObject,
+            passiveObj,
             shopLanding: { handled: false, shkp: null, message: '', messages: [], returned: false, charged: false },
             shopSale: { handled: false, shkp: null, message: '', messages: [] },
             messages,
@@ -27695,6 +27704,7 @@ function landProjectileObjectWithShopHandling(obj, x, y, options = {}) {
             topBreak: { broke: false, breakKind: '', value: 0 },
             floorEffects: { consumed: false },
             shipObject,
+            passiveObj,
             shopLanding: { handled: false, shkp: null, message: '', messages: [], returned: false, charged: false },
             shopSale: { handled: false, shkp: null, message: '', messages: [] },
             messages,
@@ -27710,7 +27720,7 @@ function landProjectileObjectWithShopHandling(obj, x, y, options = {}) {
         : autoSellProjectileLandingObject(placed, x, y, options);
     if (shopSale.message) messages.push(shopSale.message);
     const stacked = stackPlacedProjectileObject(placed);
-    return { object: stacked, impact, topBreak: { broke: false, breakKind: '', value: 0 }, floorEffects: { consumed: false }, shipObject, shopLanding, shopSale, messages };
+    return { object: stacked, impact, topBreak: { broke: false, breakKind: '', value: 0 }, floorEffects: { consumed: false }, shipObject, passiveObj, shopLanding, shopSale, messages };
 }
 
 function markNoChargeRecursively(obj) {
@@ -31958,12 +31968,13 @@ function erodeMonsterThrownPassiveObject(obj, type, messages) {
             : type === 'fire'
                 ? { field: 'oeroded', word: 'burnt', action: 'smoulder' }
                 : null;
-    if (!erosion || !profile.erosionMatters || (erosion.field === 'oeroded' ? profile.primaryWord : profile.secondaryWord) !== erosion.word)
-        return { handled: !!erosion, damaged: false };
+    if (!erosion) return { handled: false, damaged: false };
     if ((type === 'rust' || type === 'corr' || type === 'acid') && obj.greased) {
         if (!rn2(2)) obj.greased = false;
-        return { handled: true, damaged: false };
+        return { handled: true, damaged: false, greased: true };
     }
+    if (!profile.erosionMatters || (erosion.field === 'oeroded' ? profile.primaryWord : profile.secondaryWord) !== erosion.word)
+        return { handled: !!erosion, damaged: false };
     if (obj.oerodeproof || obj.rustproof) {
         obj.rknown = true;
         return { handled: true, damaged: false };
@@ -31989,12 +32000,14 @@ function applyMonsterThrownPassiveObject(landing, target, ohit, messages) {
         const drain = drainItem(landing, { byYou: true, messages });
         return { handled: true, damaged: drain.drained, type, ...drain };
     }
-    if (type === 'fire' && (target.mcan || String(target.data?.name || target.name || '').toLowerCase() === 'steam vortex'))
-        return { handled: true, damaged: false, type };
     if ((type === 'rust' || type === 'corr') && target.mcan)
         return { handled: true, damaged: false, type };
-    if ((type === 'fire' || type === 'acid') && rn2(6))
+    if (type === 'fire') {
+        if (rn2(6) || target.mcan || String(target.data?.name || target.name || '').toLowerCase() === 'steam vortex')
+            return { handled: true, damaged: false, type };
+    } else if (type === 'acid' && rn2(6)) {
         return { handled: true, damaged: false, type };
+    }
     return { ...erodeMonsterThrownPassiveObject(landing, type, messages), type };
 }
 
@@ -61400,6 +61413,8 @@ export async function rhack(_cmd) {
         const combatObject = item.cls === 'weapon' || item.cls === 'gem' || item.glyph === ')' || item.otyp === GEM_CLASS;
         let impactMessage = '';
         let impactConsumedThrownObject = false;
+        let impactObjectHit = false;
+        let impactPassiveTarget = null;
         if (targetMon && (isBlindingVenomObject(item) || isAcidVenomObject(item))) {
             rnd(20);
             const dex = game.u?.acurr?.a?.[A_DEX] ?? 10;
@@ -61495,6 +61510,8 @@ export async function rhack(_cmd) {
                 wakeMonsterFromHeroThrownHit(targetMon);
                 exerciseHeroProjectileHitDexterity();
                 impactMessage = `${thrownName} hits ${targetName} but does no harm.`;
+                impactObjectHit = true;
+                impactPassiveTarget = targetMon;
             } else {
                 const messages = [`The ${pickupObjectName({ ...item, quan: 1 })} misses the ${targetMon.data?.name || 'creature'}.`];
                 messages.push(...wakeMonsterFromHeroThrownMiss(targetMon));
@@ -61504,6 +61521,8 @@ export async function rhack(_cmd) {
             const gemImpact = heroThrownGemImpact(thrownObject, targetMon);
             impactMessage = (gemImpact.messages || []).join('  ');
             impactConsumedThrownObject = !!gemImpact.mulched;
+            impactObjectHit = !!gemImpact.hit;
+            impactPassiveTarget = gemImpact.hit ? targetMon : null;
         } else if (targetMon && !combatObject) {
             rnd(20);
             const thrownName = pickupObjectName({ ...item, quan: 1 });
@@ -61525,11 +61544,17 @@ export async function rhack(_cmd) {
             game.context.move = 0;
             return;
         }
-        const projectileBreakRoll = projectileLandingIsSoft(ox, oy) ? null : rn2(100); // C breaktest: obj_resists() on hard landing.
+        const projectileBreakRoll = !impactObjectHit && !projectileLandingIsSoft(ox, oy)
+            ? rn2(100) // C breaktest: obj_resists() on hard landing.
+            : null;
         curseLoadstoneLeavingInventory(thrownObject);
         if ((item.quan || 1) > 1) splitCarriedObjectShopBill(item, thrownObject, 1);
         stopCarriedFigurineTimerOnLeave(thrownObject);
-        const landing = landProjectileObjectWithShopHandling(thrownObject, ox, oy, { breakRoll: projectileBreakRoll });
+        const landing = landProjectileObjectWithShopHandling(thrownObject, ox, oy, {
+            breakRoll: projectileBreakRoll,
+            ohit: impactObjectHit,
+            passiveTarget: impactPassiveTarget,
+        });
         const landingMessage = landing.messages.join('  ');
         newsym(ox, oy);
         const wasBurdened = (game.u?._statusSuffix || '').includes('Burdened');

@@ -26144,6 +26144,43 @@ test('command kicked ruby immobile omon adjustment rolls thaw before hit', async
     ]);
 });
 
+test('command kicked greased glass gem hit can lose grease to corrosion passive', async () => {
+    installNonShopFloorState();
+    initRng(42);
+    Object.assign(game.u, { ulevel: 20, uluck: 10, uhitinc: 10, udaminc: 0 });
+    game.u.acurr.a[A_STR] = 10;
+    game.u.acurr.a[A_DEX] = 25;
+    const glass = floorGlassGem(512203, {
+        ox: 6,
+        oy: 5,
+        greased: true,
+    });
+    const pudding = passiveObjectTarget('black pudding', 'corr', 7, 5, {
+        mhp: 20,
+        mhpmax: 20,
+        msleeping: 0,
+    });
+    game.level.objects = [glass];
+    game.level.monsters = [pudding];
+    enableRngLog({ reset: true });
+
+    await rhack('\x04');
+    await rhack('l');
+
+    assert.match(game._pending_message, /You kick a red gem\./);
+    assert.match(game._pending_message, /The red gem hits the black pudding\./);
+    assert.doesNotMatch(game._pending_message, /corrodes|misses|shatters/);
+    assert.equal(pudding.mhp, 19);
+    assert.equal(game.level.objects.includes(glass), true);
+    assert.equal(glass.ox, 7);
+    assert.equal(glass.oy, 5);
+    assert.equal(glass.greased, false);
+    assert.equal(glass.oeroded2 || 0, 0);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 6), [
+        'rnd(3)', 'rnd(20)', 'rnd(2)', 'rn2(19)', 'rn2(3)', 'rn2(2)',
+    ]);
+});
+
 test('command kicked flint harms ordinary monster', async () => {
     installNonShopFloorState();
     initRng(2);
@@ -42951,6 +42988,40 @@ test('hero-thrown ruby harms ordinary monster and survives landing', async () =>
     assert.equal(landed.oy, 5);
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 6), [
         'rnd(20)', 'rnd(2)', 'rn2(19)', 'rn2(3)', 'rn2(2)', 'rn2(100)',
+    ]);
+});
+
+test('hero-thrown glass gem hit runs acid passive before landing', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, { ulevel: 20, uluck: 10, uhitinc: 10 });
+    game.u.acurr.a[A_DEX] = 25;
+    const glass = carriedGlassGem(876096, 'g');
+    const acidBlob = passiveObjectTarget('acid blob', 'acid', 7, 5, {
+        mhp: 20,
+        mhpmax: 20,
+        msleeping: 0,
+    });
+    game.inventory = [glass];
+    game.level.monsters = [acidBlob];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('g');
+    await rhack('l');
+
+    assert.match(game._pending_message, /The red gem hits the acid blob\./);
+    assert.doesNotMatch(game._pending_message, /corrodes|smoulders|misses|shatters/);
+    assert.equal(acidBlob.mhp, 19);
+    assert.equal(game.inventory.includes(glass), false);
+    const landed = game.level.objects.find(obj => obj.id === glass.id);
+    assert.ok(landed);
+    assert.equal(landed.ox, 7);
+    assert.equal(landed.oy, 5);
+    assert.equal(landed.oeroded2 || 0, 0);
+    const labels = getRngLog().map(entry => entry.replace(/=.*/, ''));
+    assert.deepEqual(labels.slice(0, 6), [
+        'rnd(20)', 'rnd(2)', 'rn2(19)', 'rn2(3)', 'rn2(6)', 'rn2(100)',
     ]);
 });
 
