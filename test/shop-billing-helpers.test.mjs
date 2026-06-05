@@ -1,14 +1,14 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { advanceRegions, interruptEatingOccupation, moveloop_core, processEatingOccupationTick, processForceLockOccupation, processMonsterTurns } from '../js/allmain.js';
+import { advanceRegions, interruptEatingOccupation, moveloop_core, processEatingOccupationTick, processForceLockOccupation, processMonsterTurns, __allmainTestHooks as allmain } from '../js/allmain.js';
 import { activateStatueTrap, burnFloorObjectsByFire, earthFloorEffects, finishForceLock, landMonsterThrownObject, maybeQueueQuestLeaderTalk, maybeQueueQuestTalk, processCorpseTimers, processForceLockOccupationTick, processGlobShrinkTimers, processSpellbookStudyOccupation, rhack, __shopBillingTestHooks as shop } from '../js/cmd.js';
 import { newsym, refreshHallucinatedMap } from '../js/display.js';
 import { game, resetGame } from '../js/gstate.js';
 import { pushKey, resetInputState } from '../js/input.js';
 import { createMonsterCorpseOrGlob, mkcorpstat, mkobj, mksobj, monsterByRndName } from '../js/mklev.js';
 import { enableDisplayRngLog, enableRngLog, getRngLog, initRng } from '../js/rng.js';
-import { A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_STR, A_WIS, ALTAR, AM_SHRINE, Align2amask, ARROW_TRAP, BEAR_TRAP, BILLSZ, CANDLESHOP, CLOUD, CORPSTAT_HISTORIC, COULD_SEE, DART_TRAP, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, D_CLOSED, D_NODOOR, FIRE_TRAP, FOUNTAIN, HOLE, ICE, ICED_POOL, IN_SIGHT, IRONBARS, LADDER, LANDMINE, LAVAPOOL, MIGR_LADDER_UP, MIGR_SSTAIRS, MIGR_STAIRS_UP, MOAT, M_AP_FURNITURE, M_AP_OBJECT, NORMAL_SPEED, P_BASIC, P_DAGGER, P_EXPERT, P_KNIFE, P_SKILLED, P_UNSKILLED, PIT, POLY_TRAP, POOL, REPAIR_DELAY, ROOM, ROOMOFFSET, SDOOR, SHOPBASE, SHOP_DOOR_COST, SINK, SLP_GAS_TRAP, SPIKED_PIT, SQKY_BOARD, STAIRS, STATUE_TRAP, STONE, STRAT_APPEARMSG, STRAT_WAITFORU, STRAT_WAITMASK, TEMPLE, TRAPDOOR, TT_LAVA, TT_WEB, WEB, W_ARMF, W_SADDLE } from '../js/const.js';
+import { A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_STR, A_WIS, ALLOW_TRAPS, ALTAR, AM_SHRINE, Align2amask, ARROW_TRAP, BEAR_TRAP, BILLSZ, CANDLESHOP, CLOUD, CORPSTAT_HISTORIC, COULD_SEE, DART_TRAP, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, D_CLOSED, D_NODOOR, FIRE_TRAP, FOUNTAIN, HOLE, ICE, ICED_POOL, IN_SIGHT, IRONBARS, LADDER, LANDMINE, LAVAPOOL, MIGR_LADDER_UP, MIGR_SSTAIRS, MIGR_STAIRS_UP, MOAT, M_AP_FURNITURE, M_AP_OBJECT, NORMAL_SPEED, P_BASIC, P_DAGGER, P_EXPERT, P_KNIFE, P_SKILLED, P_UNSKILLED, PIT, POLY_TRAP, POOL, REPAIR_DELAY, ROOM, ROOMOFFSET, SDOOR, SHOPBASE, SHOP_DOOR_COST, SINK, SLP_GAS_TRAP, SPIKED_PIT, SQKY_BOARD, STAIRS, STATUE_TRAP, STONE, STRAT_APPEARMSG, STRAT_WAITFORU, STRAT_WAITMASK, TEMPLE, TRAPDOOR, TT_LAVA, TT_WEB, WEB, W_ARMF, W_SADDLE } from '../js/const.js';
 import { currentFruitId, setCurrentFruitName } from '../js/fruit.js';
 import { CLR_BRIGHT_MAGENTA, CLR_BROWN, CLR_WHITE } from '../js/terminal.js';
 import { TRIBUTE_DEATH_QUOTES } from '../js/tribute.js';
@@ -17827,6 +17827,50 @@ test('dart trap does not hit in-air gas spore', async () => {
     assert.equal(game.level.objects.some(obj => obj.ox === 6 && obj.oy === 5), false);
     assert.equal(victim.mhp, 30);
     assert.equal(game.u.uhp, 50);
+});
+
+function installPolymorphTrapPathingMonster(extra = {}) {
+    installStableNonShopFloorState();
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 50,
+        uhpmax: 50,
+        uac: 10,
+    });
+    game.inventory = [];
+    const trap = { ttyp: POLY_TRAP, tx: 6, ty: 5, tseen: false };
+    game.level.traps = [trap];
+    const goblin = dartTrapGoblin(31408, {
+        mhp: 10,
+        mhpmax: 10,
+        magicResistance: true,
+        data: { resistsMagic: true },
+        ...extra,
+    });
+    game.level.monsters = [goblin];
+    return { trap, goblin };
+}
+
+test('magic resistant monster avoids known polymorph trap pathing candidate', () => {
+    const { goblin } = installPolymorphTrapPathingMonster();
+    goblin.mtrapseen = 1 << (POLY_TRAP - 1);
+
+    const flags = allmain.monsterAllowFlagsForTest(goblin, false, false);
+    const candidates = allmain.mfndposForTest(goblin, flags);
+
+    assert.equal(candidates.some(candidate => candidate.x === 6 && candidate.y === 5), false);
+});
+
+test('magic resistant monster marks unknown polymorph trap pathing candidate as hazardous', () => {
+    const { goblin } = installPolymorphTrapPathingMonster();
+
+    const flags = allmain.monsterAllowFlagsForTest(goblin, false, false);
+    const candidates = allmain.mfndposForTest(goblin, flags);
+    const trapCandidate = candidates.find(candidate => candidate.x === 6 && candidate.y === 5);
+
+    assert.ok(trapCandidate);
+    assert.equal(!!(trapCandidate.info & ALLOW_TRAPS), true);
 });
 
 test('visible monster polymorph trap polymorphs monster and leaves trap', async () => {

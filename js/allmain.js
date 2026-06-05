@@ -14413,3 +14413,8 @@ export async function moveloop(_resuming) {
         if (game.program_state?.gameover) break;
     }
 }
+
+export const __allmainTestHooks = {
+    mfndposForTest: mfndpos,
+    monsterAllowFlagsForTest: monsterAllowFlags,
+};
