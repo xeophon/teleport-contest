@@ -7392,6 +7392,7 @@ export async function processMonsterTurns() {
                                 const hitRoll = rnd(20);
                                 if (hitValue >= hitRoll) {
                                     const targetIndex = (game.level?.monsters || []).indexOf(targetMon);
+                                    revealProjectileHitMimicAppearance(targetMon);
                                     const messages = monsterThrownPotionHitMonster(thrownPotion, targetMon);
                                     potionInterception = { target: targetMon, targetIndex, messages };
                                     break;

@@ -35143,6 +35143,140 @@ test('production monster potion hits intervening monster before hero catch', asy
     assert.equal(rngNames.includes('rn2(1)'), false, rng.join(', '));
 });
 
+test('production monster potion reveals object mimic on intervening hit', async () => {
+    const paralysis = paralysisPotion(878114, 'p', 2, { otyp: POT_PARALYSIS, dknown: false });
+    const mimic = ordinaryThrowTarget('large mimic', 7, 5, {
+        ac: 15,
+        mac: 10,
+        mhp: 6,
+        mhpmax: 6,
+        m_ap_type: M_AP_OBJECT,
+        appearObj: 215,
+        appearGlyph: '(',
+        appearColor: 7,
+        data: { name: 'large mimic', mlevel: 8, mlet: 'mimic', mac: 10 },
+    });
+    const { potion, thrower, rng, preNhgetchMessages } = await runMonsterOffensivePotionCatch({
+        seed: 1,
+        potion: paralysis,
+        throwerX: 9,
+        heroDex: 100,
+        heroOverrides: { uhp: 40, uhpmax: 40 },
+        extraMonsters: [mimic],
+    });
+    const messages = preNhgetchMessages.join('\n');
+
+    assert.match(messages, /hurls a potion!/);
+    assert.match(messages, /crashes on the large mimic's head and breaks into shards\./);
+    assert.match(messages, /potion(?: of paralysis)? evaporates\./);
+    assert.doesNotMatch(messages, /crashes on your head|You catch/);
+    assert.equal(game.u.uhp, 40);
+    assert.equal(mimic.mcanmove, false);
+    assert.ok(mimic.mfrozen >= 1 && mimic.mfrozen <= 25);
+    assert.equal(mimic.msleeping, 0);
+    assert.equal(mimic.m_ap_type || 0, 0);
+    assert.equal(mimic.appearObj ?? null, null);
+    assert.equal(mimic.appearGlyph ?? null, null);
+    assert.equal(mimic.appearColor ?? null, null);
+    assert.equal(game.level.objects.some(obj => obj.id === potion.id || obj.transientProjectile), false);
+
+    const residual = thrower.minvent.find(obj => obj.id === potion.id);
+    assert.ok(residual);
+    assert.equal(residual.quan, 1);
+    assert.equal(thrower.missile, residual);
+    const rngNames = rng.map(entry => entry.replace(/=.*/, ''));
+    assert.ok(rngNames.includes('rnd(20)'), rng.join(', '));
+    assert.ok(rngNames.includes('rnd(25)'), rng.join(', '));
+    assert.equal(rngNames.includes('rn2(1)'), false, rng.join(', '));
+});
+
+test('production monster potion reveals furniture mimic on intervening hit', async () => {
+    const paralysis = paralysisPotion(878116, 'p', 2, { otyp: POT_PARALYSIS, dknown: false });
+    const mimic = ordinaryThrowTarget('large mimic', 7, 5, {
+        ac: 15,
+        mac: 10,
+        mhp: 6,
+        mhpmax: 6,
+        m_ap_type: M_AP_FURNITURE,
+        appearGlyph: '{',
+        appearColor: 7,
+        data: { name: 'large mimic', mlevel: 8, mlet: 'mimic', mac: 10 },
+    });
+    const { potion, thrower, rng, preNhgetchMessages } = await runMonsterOffensivePotionCatch({
+        seed: 1,
+        potion: paralysis,
+        throwerX: 9,
+        heroDex: 100,
+        heroOverrides: { uhp: 40, uhpmax: 40 },
+        extraMonsters: [mimic],
+    });
+    const messages = preNhgetchMessages.join('\n');
+
+    assert.match(messages, /hurls a potion!/);
+    assert.match(messages, /crashes on the large mimic's head and breaks into shards\./);
+    assert.match(messages, /potion(?: of paralysis)? evaporates\./);
+    assert.doesNotMatch(messages, /crashes on your head|You catch|really/);
+    assert.equal(game.u.uhp, 40);
+    assert.equal(mimic.mcanmove, false);
+    assert.ok(mimic.mfrozen >= 1 && mimic.mfrozen <= 25);
+    assert.equal(mimic.msleeping, 0);
+    assert.equal(mimic.m_ap_type || 0, 0);
+    assert.equal(mimic.appearObj ?? null, null);
+    assert.equal(mimic.appearGlyph ?? null, null);
+    assert.equal(mimic.appearColor ?? null, null);
+    assert.equal(game.level.objects.some(obj => obj.id === potion.id || obj.transientProjectile), false);
+
+    const residual = thrower.minvent.find(obj => obj.id === potion.id);
+    assert.ok(residual);
+    assert.equal(residual.quan, 1);
+    assert.equal(thrower.missile, residual);
+    const rngNames = rng.map(entry => entry.replace(/=.*/, ''));
+    assert.ok(rngNames.includes('rnd(20)'), rng.join(', '));
+    assert.ok(rngNames.includes('rnd(25)'), rng.join(', '));
+    assert.equal(rngNames.includes('rn2(1)'), false, rng.join(', '));
+});
+
+test('production monster potion leaves ordinary hidden intervening target concealed', async () => {
+    const paralysis = paralysisPotion(878115, 'p', 2, { otyp: POT_PARALYSIS, dknown: false });
+    const trapper = ordinaryThrowTarget('trapper', 7, 5, {
+        ac: 15,
+        mac: 10,
+        mhp: 6,
+        mhpmax: 6,
+        mundetected: true,
+        data: { name: 'trapper', mlevel: 12, mac: 10 },
+    });
+    const { potion, thrower, rng, preNhgetchMessages } = await runMonsterOffensivePotionCatch({
+        seed: 1,
+        potion: paralysis,
+        throwerX: 9,
+        heroDex: 100,
+        heroOverrides: { uhp: 40, uhpmax: 40 },
+        extraMonsters: [trapper],
+    });
+    const messages = preNhgetchMessages.join('\n');
+
+    assert.match(messages, /hurls a potion!/);
+    assert.match(messages, /crashes on .+ and breaks into shards\./);
+    assert.match(messages, /potion(?: of paralysis)? evaporates\./);
+    assert.doesNotMatch(messages, /crashes on your head|You catch/);
+    assert.equal(game.u.uhp, 40);
+    assert.equal(trapper.mcanmove, false);
+    assert.ok(trapper.mfrozen >= 1 && trapper.mfrozen <= 25);
+    assert.equal(trapper.msleeping, 0);
+    assert.equal(trapper.mundetected, true);
+    assert.equal(game.level.objects.some(obj => obj.id === potion.id || obj.transientProjectile), false);
+
+    const residual = thrower.minvent.find(obj => obj.id === potion.id);
+    assert.ok(residual);
+    assert.equal(residual.quan, 1);
+    assert.equal(thrower.missile, residual);
+    const rngNames = rng.map(entry => entry.replace(/=.*/, ''));
+    assert.ok(rngNames.includes('rnd(20)'), rng.join(', '));
+    assert.ok(rngNames.includes('rnd(25)'), rng.join(', '));
+    assert.equal(rngNames.includes('rn2(1)'), false, rng.join(', '));
+});
+
 test('production monster acid potion kills intervening monster without hero attribution', async () => {
     const acid = acidPotion(878113, 'a', 2);
     acid.dknown = true;
