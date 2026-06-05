@@ -38279,6 +38279,85 @@ test('production monster launcher arrow kills visible intervening monster withou
     assertNoSingletonLauncherMultishotRng(rng);
 });
 
+test('production monster launcher arrow revives shifted vampire intervening kill', async () => {
+    const carried = { id: 874535, cls: 'food', kind: 'food ration', quan: 1 };
+    const blocker = ordinaryThrowTarget('vampire bat', 8, 5, {
+        ac: 13,
+        mac: 13,
+        mhp: 1,
+        mhpmax: 1,
+        m_lev: 5,
+        mlevel: 5,
+        msleeping: 1,
+        vampshifter: true,
+        vampBase: 'vampire',
+        cham: 'vampire',
+        minvent: [carried],
+        data: {
+            name: 'vampire bat',
+            mlevel: 5,
+            mlet: 'B',
+            glyph: 'B',
+            mac: 13,
+            vampshifter: true,
+            vampBase: 'vampire',
+            cham: 'vampire',
+        },
+    });
+    const { arrow, thrower, rng, preNhgetchMessages } = await runMonsterLauncherArrowLanding({
+        seed: 1,
+        uac: 100,
+        heroBlind: false,
+        levelCells: [[7, 5, { typ: IRONBARS }]],
+        extraMonsters: [blocker],
+    });
+
+    const messages = [
+        game._pending_message,
+        ...preNhgetchMessages,
+        ...(game._queued_messages_after_more || []).map(entry => entry.text),
+    ].filter(Boolean).join('  ');
+    assert.match(messages, /The gnome shoots an arrow!/);
+    assert.match(messages, /The arrow hits the vampire bat[.!]/);
+    assert.match(messages, /The vampire bat is destroyed!/);
+    assert.match(messages, /The seemingly dead vampire bat suddenly transforms and rises as a vampire!/);
+    assert.doesNotMatch(messages, /You kill|You destroy|vampire bat corpse|Clonk!|Clink!|You are hit/);
+    assert.equal(game.u.uhp, 20);
+    assert.equal(game._damage_after_topline_more || 0, 0, rng.join(', '));
+    assert.equal(blocker.dead, false);
+    assert.equal(blocker.data.name, 'vampire');
+    assert.equal(blocker.name, 'vampire');
+    assert.equal(blocker.mlet, 'V');
+    assert.equal(blocker.glyph, 'V');
+    assert.equal(blocker.mcanmove, true);
+    assert.equal(blocker.mfrozen, 0);
+    assert.equal(blocker.vampshifter, false);
+    assert.equal(blocker.vampBase, undefined);
+    assert.equal(blocker.chamName, undefined);
+    assert.equal(blocker.cham, undefined);
+    assert.equal(blocker.msleeping, 0);
+    assert.equal(blocker.mhp, blocker.mhpmax);
+    assert.equal(blocker.mhp >= 10, true);
+    assert.equal(game.level.monsters.includes(blocker), true);
+    assert.equal(blocker.minvent.some(obj => obj.id === carried.id), true);
+    assert.equal(game.level.objects.some(obj => obj.id === carried.id), false);
+    assert.equal(game._vanquished_counts?.['vampire bat'] || 0, 0);
+    assert.equal(game._vanquished_counts?.vampire || 0, 0);
+    assert.equal(game._vanquished_total || 0, 0);
+    assert.deepEqual(game._monster_resume_removed_indices || [], []);
+    assert.equal(thrower.minvent.some(obj => obj.id === arrow.id), false);
+    assert.equal(thrower.missile, null);
+
+    const landedArrow = game.level.objects.find(obj => obj.id === arrow.id);
+    assert.ok(landedArrow, rng.join(', '));
+    assert.equal(landedArrow.ox, 8);
+    assert.equal(landedArrow.oy, 5);
+    assert.equal(landedArrow.transientProjectile, false);
+    assert.equal(game.level.objects.some(obj => obj.kind === 'vampire bat corpse'), false);
+    assert.equal(game.level.objects.some(obj => obj.transientProjectile), false);
+    assertNoSingletonLauncherMultishotRng(rng);
+});
+
 test('production monster launcher arrow destroys visible nonliving intervening monster without hero attribution', async () => {
     const blocker = ordinaryThrowTarget('iron golem', 8, 5, {
         ac: 13,
@@ -41873,6 +41952,81 @@ test('production monster plain dagger lethal intervening hit cleans monster befo
     assert.equal(landed.transientProjectile, false);
     assert.equal(game.level.objects.some(obj => obj.transientProjectile), false);
     assert.equal(rawRng.some(entry => entry.startsWith('rn2(100)=')), false, rawRng.join(', '));
+});
+
+test('production monster plain dagger revives shifted vampire intervening kill before cleanup', async () => {
+    const carried = { id: 874536, cls: 'food', kind: 'food ration', quan: 1 };
+    const blocker = ordinaryThrowTarget('vampire bat', 8, 5, {
+        ac: 30,
+        mac: 30,
+        mhp: 1,
+        mhpmax: 1,
+        m_lev: 5,
+        mlevel: 5,
+        msleeping: 1,
+        vampshifter: true,
+        vampBase: 'vampire',
+        cham: 'vampire',
+        minvent: [carried],
+        data: {
+            name: 'vampire bat',
+            mlevel: 5,
+            mlet: 'B',
+            glyph: 'B',
+            mac: 30,
+            vampshifter: true,
+            vampBase: 'vampire',
+            cham: 'vampire',
+        },
+    });
+    const daggerItem = { ...dagger(874414), letter: undefined, line: undefined, spe: 0 };
+    const { thrower, rawRng, preNhgetchMessages } = await runMonsterPlainDaggerIronBars({
+        seed: 1,
+        heroBlind: false,
+        uac: 100,
+        projectile: daggerItem,
+        levelCells: [[7, 5, { typ: IRONBARS }]],
+        extraMonsters: [blocker],
+    });
+    const messages = collectMonsterThrowMessages(preNhgetchMessages);
+
+    assert.match(messages, /dagger hits the vampire bat\./);
+    assert.match(messages, /vampire bat is destroyed!/i);
+    assert.match(messages, /The seemingly dead vampire bat suddenly transforms and rises as a vampire!/);
+    assert.doesNotMatch(messages, /You (?:kill|destroy)|vampire bat corpse|food ration falls/);
+    assert.equal(game.u.uhp, 20);
+    assert.equal(game._damage_after_topline_more || 0, 0, rawRng.join(', '));
+    assert.equal(blocker.dead, false);
+    assert.equal(blocker.data.name, 'vampire');
+    assert.equal(blocker.name, 'vampire');
+    assert.equal(blocker.mlet, 'V');
+    assert.equal(blocker.glyph, 'V');
+    assert.equal(blocker.mcanmove, true);
+    assert.equal(blocker.mfrozen, 0);
+    assert.equal(blocker.vampshifter, false);
+    assert.equal(blocker.vampBase, undefined);
+    assert.equal(blocker.chamName, undefined);
+    assert.equal(blocker.cham, undefined);
+    assert.equal(blocker.msleeping, 0);
+    assert.equal(blocker.mhp, blocker.mhpmax);
+    assert.equal(blocker.mhpmax >= 10, true);
+    assert.equal(game.level.monsters.includes(blocker), true);
+    assert.equal(blocker.minvent.some(obj => obj.id === carried.id), true);
+    assert.equal(game.level.objects.some(obj => obj.id === carried.id), false);
+    assert.equal(game._vanquished_counts?.['vampire bat'] || 0, 0);
+    assert.equal(game._vanquished_counts?.vampire || 0, 0);
+    assert.equal(game._vanquished_total || 0, 0);
+    assert.deepEqual(game._monster_resume_removed_indices || [], []);
+    assert.equal(thrower.minvent.some(obj => obj.id === daggerItem.id), false);
+    assert.equal(thrower.missile, null);
+
+    const landed = game.level.objects.find(obj => obj.id === daggerItem.id);
+    assert.ok(landed, rawRng.join(', '));
+    assert.equal(landed.ox, 8);
+    assert.equal(landed.oy, 5);
+    assert.equal(landed.kind, 'dagger');
+    assert.equal(landed.transientProjectile, false);
+    assert.equal(game.level.objects.some(obj => obj.kind === 'vampire bat corpse'), false);
 });
 
 test('production monster thrown intervening kill resumes following snapshot monster', async () => {

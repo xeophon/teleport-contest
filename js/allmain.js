@@ -9863,9 +9863,70 @@ function monsterProjectileDeathIsDestroyed(target, visible) {
         || name === 'manes' || name.includes('vortex'));
 }
 
+function vampshifterProjectileRevivalBaseName(target) {
+    const data = target?.data || {};
+    const rawBase = target?.vampBase || data.vampBase || target?.chamName || data.chamName
+        || target?.cham || data.cham || '';
+    const base = String(rawBase || '').toLowerCase();
+    if (base.includes('vlad')) return 'Vlad the Impaler';
+    if (base === 'vampire lord' || base === 'vampire leader' || base === 'vampire lady')
+        return base === 'vampire lady' ? 'vampire leader' : base;
+    if (base === 'vampire') return 'vampire';
+    if ((target?.vampshifter || data.vampshifter)
+        && String(data.name || target?.name || '').toLowerCase() !== 'vampire')
+        return 'vampire';
+    return '';
+}
+
+function reviveVampshifterFromProjectileKill(target, visible, afterMore = false) {
+    const baseName = vampshifterProjectileRevivalBaseName(target);
+    if (!baseName) return false;
+    const currentName = String(target?.data?.name || target?.name || '').toLowerCase();
+    if (currentName === String(baseName).toLowerCase()) return false;
+    if ((game._genocided_monsters || []).includes(baseName)) return false;
+
+    const oldData = target.data || {};
+    const oldDisplayName = monsterDisplayName(target);
+    const specialDeath = oldData.noncorporeal || oldData.amorphous
+        || oldData.name === 'fog cloud' || oldData.mlet === 'ghost';
+    const baseData = monsterByRndName(baseName) || RANDOM_MONSTER_BY_NAME.get(baseName);
+    if (!baseData) return false;
+
+    const level = adjustedMonsterLevel(baseData);
+    const maxHp = Math.max(10, monster_hp(baseData, level));
+    target.dead = false;
+    target.data = { ...baseData, hpLevel: level };
+    target.name = baseData.name;
+    target.mlet = baseData.mlet;
+    target.glyph = baseData.glyph;
+    target.color = baseData.color;
+    target.m_lev = level;
+    target.mlevel = level;
+    target.mhpmax = maxHp;
+    target.mhp = maxHp;
+    target.movement = 0;
+    target.mcanmove = true;
+    target.mfrozen = 0;
+    target.msleeping = 0;
+    target.vampshifter = false;
+    delete target.vampBase;
+    delete target.chamName;
+    delete target.cham;
+
+    if (visible) {
+        const before = specialDeath ? oldDisplayName : oldDisplayName.replace(/^The /, 'The seemingly dead ');
+        const action = specialDeath ? 'suddenly reconstitutes' : 'suddenly transforms';
+        const message = `${before} ${action} and rises as ${articleFor(baseData.name)} ${baseData.name}!`;
+        if (afterMore) appendAfterMoreMessage(message);
+        else addToplineMessage(message);
+    }
+    set_malign(target);
+    newsym(target.mx, target.my);
+    return true;
+}
+
 function killMonsterFromThrownInterveningHit(target, visible, { afterMore = false } = {}) {
     if (!target || target.dead) return;
-    noteMonsterResumeRemoval(target);
     target.dead = true;
     target.mhp = 0;
     target.movement = 0;
@@ -9874,8 +9935,10 @@ function killMonsterFromThrownInterveningHit(target, visible, { afterMore = fals
     const message = `${subject} is ${destroyed ? 'destroyed' : 'killed'}!`;
     if (afterMore) appendAfterMoreMessage(message);
     else addToplineMessage(message);
+    if (reviveVampshifterFromProjectileKill(target, visible, afterMore)) return;
 
     const data = target.data || {};
+    noteMonsterResumeRemoval(target);
     recordVanquished(target, false);
     dropMonsterInventory(target);
     const corpseData = corpseDataForMonster(data);
