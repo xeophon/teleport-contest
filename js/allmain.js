@@ -2740,6 +2740,11 @@ function monsterSlingAmmoHarmlessStoneHit(item, target) {
     return monsterSlingAmmoStoneMissile(item) && monsterPassesRocks(target);
 }
 
+function monsterThrownBoulderIndex(mon) {
+    return (mon?.minvent || []).findIndex(item =>
+        item?.otyp === BOULDER || normalizedGemName(item?.actualKind || item?.kind) === 'boulder');
+}
+
 function normalizedGemName(value) {
     return String(value || '').toLowerCase().trim().replace(/\s+/g, ' ');
 }
@@ -6153,6 +6158,9 @@ export async function processMonsterTurns() {
                     const canThrowKnife = !mon._opened_door_this_move && !mon.mpeaceful && knifeIndex >= 0
                         && throwRange > 1 && throwRange < BOLT_LIM && straightThrow
                         && clearPath(mon.mx, mon.my, throwTargetX, throwTargetY);
+                    const boulderIndex = monsterThrownBoulderIndex(mon);
+                    const canThrowBoulder = !mon._opened_door_this_move && !mon.mpeaceful && mon.data?.throwsRocks
+                        && boulderIndex >= 0 && throwRange > 1 && throwRange < BOLT_LIM && straightThrow;
                     const spearIndex = (() => {
                         let bestIndex = -1;
                         let bestRank = Infinity;
@@ -6496,11 +6504,13 @@ export async function processMonsterTurns() {
                         && throwRange > 1 && throwRange < BOLT_LIM && straightThrow;
                     const canUseMovedWeaponAttack = movedByMonster && !nearThrowTarget && mon.data?.armed
                         && (mon.data?.mercenary || mon.mw || !game._armor_wear_occupation);
-                    const canUseWeaponAttack = !game.level?.flags?.rogue_level
+                    const canUseThrownWeaponAttack = !game.level?.flags?.rogue_level
                         && (canThrowSpear || canThrowShuriken || canThrowPlainDagger || canThrowOrcishDagger
                             || canThrowKnife || canThrowDart || canThrowCreamPie);
-                    const canSelectRangedWeapon = canUseWeaponAttack;
+                    const canUseWeaponAttack = canUseThrownWeaponAttack || canThrowBoulder;
+                    const canSelectRangedWeapon = canUseThrownWeaponAttack;
                     const canCheckOffensiveItems = !mon.data?.mindless && !mon.data?.nohands && !mon.mpeaceful;
+                    let boulderLinedUp = false;
                     let offensiveItemsLinedUp = false;
                     let rangedWeaponLinedUp = false;
                     let consumedMattackuAc = false;
@@ -6518,6 +6528,8 @@ export async function processMonsterTurns() {
                             offensiveItemsLinedUp = monsterLinedUp(mon, throwTargetX, throwTargetY);
                         if (canSelectRangedWeapon)
                             rangedWeaponLinedUp = monsterLinedUp(mon, throwTargetX, throwTargetY);
+                        if (canThrowBoulder)
+                            boulderLinedUp = monsterLinedUp(mon, throwTargetX, throwTargetY);
                     }
                     if (canSpitVenom && monsterLinedUp(mon, throwTargetX, throwTargetY)) {
                         next_ident();
@@ -6551,6 +6563,118 @@ export async function processMonsterTurns() {
                                     resultMessage = `${resultMessage}  ${wasBlind ? 'Your eyes sting.' : 'The venom blinds you.'}`;
                             }
                             if (resultMessage) addToplineMessage(resultMessage);
+                        }
+                        game._search_pending_count = 0;
+                        game._run_steps_remaining = 0;
+                        game._travel_keys = [];
+                        if ((game._pending_time_passed || 0) > 2) game._pending_time_passed = 2;
+                        if (game._message_more && !game._process_time_with_more) {
+                            game._monster_resume_index = monIndex + 1;
+                            game._monster_resume_somebody_can_move = somebodyCanMove;
+                            return false;
+                        }
+                        continue;
+                    }
+                    if (canThrowBoulder && boulderLinedUp) {
+                        const thrownBoulder = splitMonsterThrownInventoryObject(mon, boulderIndex);
+                        if (!thrownBoulder) continue;
+                        if (mon.missile?.id === thrownBoulder.id) mon.missile = null;
+                        if (mon.mw?.id === thrownBoulder.id) mon.mw = null;
+                        const throwerVisible = !game.u?.blind
+                            && !!(game.viz_array?.[mon.my]?.[mon.mx] & IN_SIGHT)
+                            && !mon.minvis && !mon.mundetected;
+                        if (throwerVisible) {
+                            addToplineMessage(`${monsterDisplayName(mon)} throws a boulder!`);
+                            game._message_more = 1;
+                            game._process_time_with_more = 0;
+                        }
+
+                        let interveningTarget = null;
+                        let boulderTerrainStop = null;
+                        if (game.level?.at(mon.mx + throwDx, mon.my + throwDy)?.typ === IRONBARS) {
+                            rn2(100); // C hit_bars() reaches breaktest()/obj_resists(); boulders survive.
+                            if (!heroIsDeafForMonsterNoise()) addToplineMessage('Whang!');
+                            boulderTerrainStop = { x: mon.mx, y: mon.my };
+                        } else {
+                            for (let step = 1; step < throwRange; step++) {
+                                const sx = mon.mx + throwDx * step;
+                                const sy = mon.my + throwDy * step;
+                                const remainingRange = throwRange - step;
+                                const targetMon = monsterAtFlightSquare(sx, sy, mon);
+                                if (targetMon) {
+                                    const hitValue = monsterThrownObjectAccidentalHitValue(targetMon, thrownBoulder);
+                                    const hitRoll = rnd(20);
+                                    if (hitValue >= hitRoll) {
+                                        interveningTarget = targetMon;
+                                        break;
+                                    }
+                                }
+                                rn2(5); // C m_throw() consumes forcehit before in-flight terrain checks.
+                                if (remainingRange && game.level?.at(sx + throwDx, sy + throwDy)?.typ === IRONBARS) {
+                                    rn2(100); // C hit_bars() reaches breaktest()/obj_resists(); boulders survive.
+                                    if (!heroIsDeafForMonsterNoise()) addToplineMessage('Whang!');
+                                    boulderTerrainStop = { x: sx, y: sy };
+                                    break;
+                                }
+                            }
+                        }
+                        if (boulderTerrainStop) {
+                            const floorMessages = [];
+                            landMonsterThrownObject(thrownBoulder, boulderTerrainStop.x, boulderTerrainStop.y, {
+                                glyph: '`',
+                                color: NO_COLOR,
+                                messages: floorMessages,
+                                ohit: false,
+                            });
+                            addMonsterThrownFloorMessages(floorMessages, throwerVisible);
+                        } else if (interveningTarget) {
+                            const damage = rnd(20);
+                            revealProjectileHitMimicAppearance(interveningTarget);
+                            interveningTarget.msleeping = 0;
+                            interveningTarget.mhp = Math.max(0, (interveningTarget.mhp || 1) - damage);
+                            const targetVisible = !game.u?.blind
+                                && !!(game.viz_array?.[interveningTarget.my]?.[interveningTarget.mx] & IN_SIGHT)
+                                && couldSeeCoord(interveningTarget.mx, interveningTarget.my);
+                            const hitMessage = targetVisible
+                                ? `The boulder hits the ${interveningTarget.data?.name || 'monster'}${damage > 4 ? '!' : '.'}`
+                                : `It is hit${damage > 4 ? '!' : '.'}`;
+                            if (throwerVisible) game._topline_after_more = hitMessage;
+                            else addToplineMessage(hitMessage);
+                            if (interveningTarget.mhp < 1) {
+                                killMonsterFromThrownInterveningHit(interveningTarget, targetVisible, {
+                                    afterMore: throwerVisible,
+                                });
+                            }
+                            const floorMessages = [];
+                            landMonsterThrownObject(thrownBoulder, interveningTarget.mx, interveningTarget.my, {
+                                glyph: '`',
+                                color: NO_COLOR,
+                                messages: floorMessages,
+                                ohit: true,
+                                passiveTarget: interveningTarget,
+                            });
+                            addMonsterThrownFloorMessages(floorMessages, targetVisible || throwerVisible);
+                        } else {
+                            const damage = rnd(20);
+                            const hitv = Math.max(-4, 3 - throwRange) + 14 + heroPolyselfMonsterThrownHitBonus();
+                            const attackRoll = rnd(20);
+                            const missed = (game.u?.uac ?? 10) + hitv <= attackRoll;
+                            const resultMessage = missed ? 'A boulder misses you.' : 'You are hit by a boulder!';
+                            if (throwerVisible) game._topline_after_more = resultMessage;
+                            else addToplineMessage(resultMessage);
+                            if (!missed) {
+                                game._damage_after_topline_more = (game._damage_after_topline_more || 0) + damage;
+                                game._exercise_after_topline_more = (game._exercise_after_topline_more || 0) + 1;
+                            }
+                            rn2(5);
+                            const floorMessages = [];
+                            landMonsterThrownObject(thrownBoulder, game.u?.ux || 0, game.u?.uy || 0, {
+                                glyph: '`',
+                                color: NO_COLOR,
+                                messages: floorMessages,
+                                ohit: !missed,
+                            });
+                            addMonsterThrownFloorMessages(floorMessages, throwerVisible);
                         }
                         game._search_pending_count = 0;
                         game._run_steps_remaining = 0;
