@@ -43648,22 +43648,32 @@ function placeHeroTrapDart(dart) {
     return dart;
 }
 
-function applyHeroTrapDartPoison(dart, messages) {
-    if (!dart?.opoisoned) return false;
+function heroDartTrapFatalResult(messages, deathCause) {
+    game._death_cause = deathCause;
+    if (consumeLifeSavingAmulet()) {
+        if (game.u) game.u.uhp = 0;
+        messages.push(`You die...  But wait...  Your medallion ${game.u?.blind ? 'feels warm' : 'begins to glow'}!`);
+        return { lifeSaving: true, fatal: false, more: true };
+    }
+    if (game.u) game.u.uhp = 0;
+    messages.push('You die...');
+    return { lifeSaving: false, fatal: true, more: true };
+}
+
+function applyHeroTrapDartPoison(dart, messages, { fatal = 10 } = {}) {
+    if (!dart?.opoisoned) return {};
     messages.push('The dart was poisoned!');
     if (heroHasPoisonResistance()) {
         messages.push("The poison doesn't seem to affect you.");
-        return false;
+        return {};
     }
 
-    const roll = rn2(30);
-    let dead = false;
+    const roll = fatal ? rn2(fatal + 20) : 1;
     if (roll === 0) {
         const loss = 6 + d(4, 6);
         if ((game.u?.uhp || 0) <= loss) {
-            if (game.u) game.u.uhp = -1;
             messages.push('The poison was deadly...');
-            dead = true;
+            return heroDartTrapFatalResult(messages, 'poisoned by a little dart');
         } else {
             if (game.u) {
                 game.u.uhpmax = Math.max(3, (game.u.uhpmax || game.u.uhp || 1) - Math.trunc(loss / 2));
@@ -43671,24 +43681,25 @@ function applyHeroTrapDartPoison(dart, messages) {
                 if (game.u.acurr?.a) game.u.acurr.a[A_CON] = Math.max(3, (game.u.acurr.a[A_CON] ?? 10) - 3);
             }
             messages.push('You feel very sick!');
-            dead = (game.u?.uhp || 0) < 1;
+            if ((game.u?.uhp || 0) < 1)
+                return heroDartTrapFatalResult(messages, 'poisoned by a little dart');
         }
     } else if (roll > 5) {
         const loss = rnd(6);
         if (game.u) game.u.uhp = Math.max(0, (game.u.uhp || 0) - loss);
-        dead = (game.u?.uhp || 0) < 1;
+        if ((game.u?.uhp || 0) < 1)
+            return heroDartTrapFatalResult(messages, 'poisoned by a little dart');
     } else {
         if (game.u?.acurr?.a) game.u.acurr.a[A_CON] = Math.max(3, (game.u.acurr.a[A_CON] ?? 10) - 1);
         messages.push('You feel very sick!');
     }
-    if (dead) game._death_cause = 'poisoned by a little dart';
-    return dead;
+    return {};
 }
 
-function heroDartTrapMessage(trap, prefix = '', alreadySeen = !!trap?.tseen) {
+function heroDartTrapResult(trap, prefix = '', alreadySeen = !!trap?.tseen) {
     if (trap?.once && alreadySeen && !rn2(15)) {
         deleteTrap(trap);
-        return trapProjectileMessageParts(prefix, 'You hear a soft click.');
+        return { message: trapProjectileMessageParts(prefix, 'You hear a soft click.') };
     }
     if (trap) {
         trap.once = true;
@@ -43705,17 +43716,39 @@ function heroDartTrapMessage(trap, prefix = '', alreadySeen = !!trap?.tseen) {
         messages.push(threshold <= roll - 2
             ? 'A little dart misses you.'
             : 'You are almost hit by a little dart.');
-        return messages.join('  ');
+        return { message: messages.join('  ') };
     }
 
+    let physicalLifeSaving = false;
+    let physicalFatal = false;
     if (game.u) {
         game.u.uhp = Math.max(0, (game.u.uhp || 1) - damage);
-        if ((game.u.uhp || 0) <= 0) game._death_cause = 'killed by a little dart';
+        physicalFatal = (game.u.uhp || 0) <= 0;
     }
-    exerciseAttribute(A_STR, false);
     messages.push('You are hit by a little dart.');
-    applyHeroTrapDartPoison(dart, messages);
-    return messages.join('  ');
+    if (physicalFatal) {
+        const fatalResult = heroDartTrapFatalResult(messages, 'killed by a little dart');
+        physicalLifeSaving = !!fatalResult.lifeSaving;
+        physicalFatal = !!fatalResult.fatal;
+    }
+    if (physicalFatal)
+        return { message: messages.join('  '), fatal: true, more: true };
+    exerciseAttribute(A_STR, false);
+    const poisonResult = applyHeroTrapDartPoison(dart, messages, {
+        fatal: physicalLifeSaving ? 0 : 10,
+    });
+    return {
+        message: messages.join('  '),
+        lifeSaving: physicalLifeSaving || !!poisonResult.lifeSaving,
+        fatal: !!poisonResult.fatal,
+        more: physicalLifeSaving || !!poisonResult.lifeSaving || !!poisonResult.fatal,
+    };
+}
+
+async function finishHeroDartTrapResult(result, { sit = false, more = false } = {}) {
+    if (sit) await finishSitMessage(result.message, { more: more || !!result.more });
+    else await setMessage(result.message, more || !!result.more);
+    applyLifeSavingOrFatalCommandMode(result);
 }
 
 function sitProjectileTrapMessage(trap, prefix, alreadySeen, spec) {
@@ -44237,7 +44270,7 @@ async function sitTriggerTrap(trap) {
         return true;
     }
     if (trap.ttyp === DART_TRAP) {
-        await finishSitMessage(heroDartTrapMessage(trap, prefix, alreadySeen));
+        await finishHeroDartTrapResult(heroDartTrapResult(trap, prefix, alreadySeen), { sit: true });
         return true;
     }
     if (trap.ttyp === ROCKTRAP) {
@@ -47100,9 +47133,10 @@ async function moveHero(dx, dy) {
         return;
     }
     if (trapHere?.ttyp === DART_TRAP) {
-        const message = [pileMessage, heroDartTrapMessage(trapHere, '', !!trapHere.tseen)]
-            .filter(Boolean).join('  ');
-        if (message) await setMessage(message, !!(pileMessage && message));
+        const result = heroDartTrapResult(trapHere, '', !!trapHere.tseen);
+        result.message = [pileMessage, result.message].filter(Boolean).join('  ');
+        if (result.message)
+            await finishHeroDartTrapResult(result, { more: !!(pileMessage && result.message) });
         return;
     }
     if (pileMessage) {
@@ -47430,7 +47464,7 @@ export async function rhack(_cmd) {
                 const trap = game._pending_dart_trap;
                 const alreadySeen = !!trap.tseen;
                 game._pending_dart_trap = null;
-                await setMessage(heroDartTrapMessage(trap, '', alreadySeen));
+                await finishHeroDartTrapResult(heroDartTrapResult(trap, '', alreadySeen));
                 return;
             }
             if (game._pending_bear_trap) {

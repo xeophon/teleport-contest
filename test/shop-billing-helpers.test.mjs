@@ -18398,6 +18398,173 @@ test('hero known spent dart trap can vanish before generating a dart', async () 
     assert.equal(game.u.acurr.a[A_CON], 10);
 });
 
+test('hero dart trap fatal physical hit arms death more before poison', async () => {
+    installStableNonShopFloorState();
+    vision_reset();
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 2,
+        uhpmax: 20,
+        uac: 10,
+        ulevel: 1,
+    });
+    game.moves = 1;
+    game.inventory = [];
+    const trap = { ttyp: DART_TRAP, tx: 6, ty: 5, tseen: false, once: false };
+    game.level.traps = [trap];
+    enableRngLog({ reset: true });
+    installCoreRngValues([0, 0, 1, 1, 1, 1, 1, 1, 0]);
+
+    await rhack('l');
+
+    assert.deepEqual(getRngLog().map(rngCallName), [
+        'rnd(2)', 'rn2(6)', 'rn2(11)', 'rn2(10)', 'rn2(10)', 'rn2(100)',
+        'rn2(6)', 'rnd(3)', 'rnd(20)', 'rn2(1)',
+    ]);
+    assert.match(game._pending_message, /You are hit by a little dart\.  You die\.\.\./);
+    assert.equal(game._command_mode, 'deathDieMore');
+    assert.equal(game._death_cause, 'killed by a little dart');
+    assert.equal(game.u.uhp, 0);
+    assert.equal(rngValuesForCall(getRngLog(), 'rn2(2)').length, 0);
+    assert.equal(rngValuesForCall(getRngLog(), 'rn2(30)').length, 0);
+    assert.equal(game.level.objects.length, 0);
+});
+
+test('hero dart trap physical lifesaving limits poisoned dart to attribute loss', async () => {
+    installStableNonShopFloorState();
+    vision_reset();
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 2,
+        uhpmax: 20,
+        uac: 10,
+        ulevel: 1,
+        acurr: { a: [10, 10, 10, 10, 10, 10] },
+    });
+    game.moves = 1;
+    const amulet = {
+        id: 31393,
+        letter: 'a',
+        cls: 'amulet',
+        glyph: '"',
+        kind: 'amulet of life saving',
+        actualKind: 'amulet of life saving',
+        quan: 1,
+        worn: true,
+        line: 'a - an amulet of life saving (being worn)',
+    };
+    game.inventory = [amulet];
+    const trap = { ttyp: DART_TRAP, tx: 6, ty: 5, tseen: false, once: false };
+    game.level.traps = [trap];
+    enableRngLog({ reset: true });
+    installCoreRngValues([0, 0, 1, 1, 1, 1, 0, 1, 0, 0, 1]);
+
+    await rhack('l');
+
+    assert.deepEqual(getRngLog().map(rngCallName), [
+        'rnd(2)', 'rn2(6)', 'rn2(11)', 'rn2(10)', 'rn2(10)', 'rn2(100)',
+        'rn2(6)', 'rnd(3)', 'rnd(20)', 'rn2(19)', 'rn2(2)',
+    ]);
+    assert.match(game._pending_message, /You are hit by a little dart\.  You die\.\.\.  But wait\.\.\.  Your medallion begins to glow!/);
+    assert.match(game._pending_message, /The dart was poisoned!  You feel very sick!/);
+    assert.equal(game._command_mode, 'lifeSavingMore');
+    assert.equal(game.inventory.includes(amulet), false);
+    assert.equal(game.u.uhp, 0);
+    assert.equal(game.u.acurr.a[A_CON], 9);
+    assert.equal(rngValuesForCall(getRngLog(), 'rn2(30)').length, 0);
+
+    await rhack(' ');
+
+    assert.equal(game._pending_message, 'You feel much better!');
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game.u.uhp, game.u.uhpmax);
+    assert.equal(game.u.acurr.a[A_CON], 8);
+});
+
+test('hero poisoned dart trap deadly poison arms death more', async () => {
+    installStableNonShopFloorState();
+    vision_reset();
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 10,
+        uhpmax: 20,
+        uac: 10,
+        ulevel: 1,
+        acurr: { a: [10, 10, 10, 10, 10, 10] },
+    });
+    game.moves = 1;
+    game.inventory = [];
+    const trap = { ttyp: DART_TRAP, tx: 6, ty: 5, tseen: false, once: false };
+    game.level.traps = [trap];
+    enableRngLog({ reset: true });
+    installCoreRngValues([0, 0, 1, 1, 1, 1, 0, 1, 0, 1, 0, 0]);
+
+    await rhack('l');
+
+    assert.deepEqual(getRngLog().map(rngCallName), [
+        'rnd(2)', 'rn2(6)', 'rn2(11)', 'rn2(10)', 'rn2(10)', 'rn2(100)',
+        'rn2(6)', 'rnd(3)', 'rnd(20)', 'rn2(2)', 'rn2(30)', 'd(4,6)', 'rn2(1)',
+    ]);
+    assert.match(game._pending_message, /The dart was poisoned!  The poison was deadly\.\.\.  You die\.\.\./);
+    assert.equal(game._command_mode, 'deathDieMore');
+    assert.equal(game._death_cause, 'poisoned by a little dart');
+    assert.equal(game.u.uhp, 0);
+    assert.equal(game.level.objects.length, 0);
+});
+
+test('hero poisoned dart trap deadly poison uses life saving', async () => {
+    installStableNonShopFloorState();
+    vision_reset();
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 10,
+        uhpmax: 20,
+        uac: 10,
+        ulevel: 1,
+        acurr: { a: [10, 10, 10, 10, 10, 10] },
+    });
+    game.moves = 1;
+    const amulet = {
+        id: 31394,
+        letter: 'a',
+        cls: 'amulet',
+        glyph: '"',
+        kind: 'amulet of life saving',
+        actualKind: 'amulet of life saving',
+        quan: 1,
+        worn: true,
+        line: 'a - an amulet of life saving (being worn)',
+    };
+    game.inventory = [amulet];
+    const trap = { ttyp: DART_TRAP, tx: 6, ty: 5, tseen: false, once: false };
+    game.level.traps = [trap];
+    enableRngLog({ reset: true });
+    installCoreRngValues([0, 0, 1, 1, 1, 1, 0, 1, 0, 1, 0, 0, 0]);
+
+    await rhack('l');
+
+    assert.deepEqual(getRngLog().map(rngCallName), [
+        'rnd(2)', 'rn2(6)', 'rn2(11)', 'rn2(10)', 'rn2(10)', 'rn2(100)',
+        'rn2(6)', 'rnd(3)', 'rnd(20)', 'rn2(2)', 'rn2(30)', 'd(4,6)', 'rn2(19)',
+    ]);
+    assert.match(game._pending_message, /The dart was poisoned!  The poison was deadly\.\.\.  You die\.\.\.  But wait\.\.\.  Your medallion begins to glow!/);
+    assert.equal(game._command_mode, 'lifeSavingMore');
+    assert.equal(game._death_cause, 'poisoned by a little dart');
+    assert.equal(game.inventory.includes(amulet), false);
+    assert.equal(game.u.uhp, 0);
+
+    await rhack(' ');
+
+    assert.equal(game._pending_message, 'You feel much better!');
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game.u.uhp, game.u.uhpmax);
+    assert.equal(game.u.acurr.a[A_CON], 9);
+});
+
 test('pet melee killed gas spore explodes outside hero melee', async () => {
     installStableNonShopFloorState();
     initRng(1);
