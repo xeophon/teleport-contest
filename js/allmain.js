@@ -6224,7 +6224,7 @@ export async function processMonsterTurns() {
                         }
                         if (!movedByMonster && !moveEndedTurn && !mon.mpeaceful && !mon.mflee
                             && !noStandardAttack && postMoveDist2 <= BOLT_LIM * BOLT_LIM
-                            && !postMoveNearby && (game.u?.uhp || 0) > 0) {
+                            && !postMoveNearby && !canThrowBoulder && (game.u?.uhp || 0) > 0) {
                             const targetAc = game.u?.uac ?? 10;
                             if (targetAc < 0) rnd(-targetAc);
                             continue;

@@ -36159,6 +36159,7 @@ async function runMonsterBoulderIronBars({
             throwsRocks: true,
             strong: true,
             giant: true,
+            attack: { dice: 2, sides: 10, verb: 'hits' },
         },
         mpeaceful: false,
         mhp: 30,
@@ -36268,6 +36269,42 @@ test('production monster boulder aimed iron bars are silent when deaf', async ()
     assert.match(messages, /throws a boulder!/);
     assert.doesNotMatch(messages, /Whang!|Clonk!|Clink!|Flapp!|You are hit by a boulder|boulder misses you|You catch/);
     assert.equal(rng.filter(entry => entry === 'rn2(100)').length, 1);
+    assert.equal(rng.some(entry => entry === 'rnd(20)' || entry === 'rn2(3)'), false, rawRng.join(', '));
+});
+
+test('production monster boulder point-blank iron bars whang without force roll', async () => {
+    const { boulder, thrower, rng, rawRng, preNhgetchMessages } = await runMonsterBoulderIronBars({
+        seed: 1,
+        throwerX: 8,
+        levelCells: [
+            [7, 5, { typ: IRONBARS }],
+            [7, 4, { typ: STONE }],
+            [7, 6, { typ: STONE }],
+            [8, 4, { typ: STONE }],
+            [8, 6, { typ: STONE }],
+            [9, 4, { typ: STONE }],
+            [9, 5, { typ: STONE }],
+            [9, 6, { typ: STONE }],
+        ],
+    });
+
+    assert.equal(game.u.uhp, 20);
+    assert.equal(game._damage_after_topline_more || 0, 0, rawRng.join(', '));
+    assert.equal(thrower.missile, null);
+    assert.equal(thrower.minvent.some(obj => obj.id === boulder.id), false);
+
+    const landed = game.level.objects.find(obj => obj.id === boulder.id);
+    assert.ok(landed, rng.join(', '));
+    assert.equal(landed.ox, 8, rawRng.join(', '));
+    assert.equal(landed.oy, 5, rawRng.join(', '));
+    assert.equal(landed.kind, 'boulder');
+
+    const messages = preNhgetchMessages.join('\n');
+    assert.match(messages, /throws a boulder!/);
+    assert.match(messages, /Whang!/);
+    assert.doesNotMatch(messages, /Clonk!|Clink!|Flapp!|You are hit by a boulder|boulder misses you|You catch/);
+    assert.equal(rng.filter(entry => entry === 'rn2(100)').length, 1);
+    assert.equal(rng.filter(entry => entry === 'rn2(5)').length, 2, rawRng.join(', '));
     assert.equal(rng.some(entry => entry === 'rnd(20)' || entry === 'rn2(3)'), false, rawRng.join(', '));
 });
 
