@@ -10551,13 +10551,19 @@ function objectArticleName(name) {
 function floorObjectSubject(obj) {
     const quan = Math.max(1, obj?.quan || 1);
     const name = pickupObjectName({ ...obj, line: '', quan });
-    return quan > 1 ? name : sentenceCase(objectArticleName(name));
+    return quan > 1 ? quantityObjectName(obj, name, quan) : sentenceCase(objectArticleName(name));
 }
 
 function floorObjectArticleName(obj) {
     const quan = Math.max(1, obj?.quan || 1);
     const name = pickupObjectName({ ...obj, line: '', quan });
-    return quan > 1 ? name : objectArticleName(name);
+    return quan > 1 ? quantityObjectName(obj, name, quan) : objectArticleName(name);
+}
+
+function quantityObjectName(obj, name = pickupObjectName(obj), quan = Math.max(1, obj?.quan || 1)) {
+    const text = String(name || '').trim();
+    if (/^\d+\b/.test(text)) return text;
+    return `${quan} ${text || (obj?.plural || 'objects')}`;
 }
 
 function floorObjectBaseName(obj) {
@@ -19792,11 +19798,19 @@ async function releaseBrokenCameraDemon(obj, messages, x = null, y = null) {
 
 async function applyHeroCausedFragileBreakSideEffects(obj, messages, x = null, y = null) {
     if (isMirrorObject(obj)) changeHeroLuck(-2);
+    if (isEggItem(obj)) applyThrownEggLuckPenalty(obj);
     await releaseBrokenCameraDemon(obj, messages, x, y);
 }
 
 async function applyHeroThrownFragileBreakSideEffects(obj, messages, x = null, y = null) {
     await applyHeroCausedFragileBreakSideEffects(obj, messages, x, y);
+}
+
+function applyHeroBrokenEggPostRemovalSideEffects(obj, messages, x, y) {
+    if (!isPyroliskEgg(obj)) return;
+    const explosion = resolvePyroliskEggExplosion(x, y, d(3, 6));
+    messages.push(...explosion.messages);
+    if (explosion.more) messages.more = true;
 }
 
 function heroThrownIronBarsBreakableClassHitObject(obj) {
@@ -27607,7 +27621,8 @@ function kickFloorObjectAt(x, y) {
 function kickFloorObjectSupported(obj, x, y) {
     if (!obj || obj === game.u?.uball || obj === game.u?.uchain) return false;
     if (isBoulderObject(obj) || shopBillableGold(obj)) return false;
-    if (Math.max(1, Math.trunc(Number(obj.quan || 1))) !== 1) return false;
+    const quantity = Math.max(1, Math.trunc(Number(obj.quan || 1)));
+    if (quantity !== 1 && !kickedFragilePreflightBreakKind(obj)) return false;
     if (isTipContainerObject(obj) || globContents(obj).length) return false;
     if (shopkeeperForCostlySpot(x, y) || shopObjectOrContentsUnpaid(obj)) return false;
     if (impactDropBreakKind(obj) && !kickedFragilePreflightBreakKind(obj)) return false;
@@ -27624,6 +27639,7 @@ function kickedFragilePreflightBreakKind(obj) {
     if (isCreamPieObject(obj)) return impactDropBreakKind(obj);
     if (isPotionObject(obj) && thrownPotionEffectKind(obj) !== 'oil') return impactDropBreakKind(obj);
     if (isExpensiveCameraObject(obj)) return impactDropBreakKind(obj);
+    if (isEggItem(obj)) return impactDropBreakKind(obj);
     return '';
 }
 
@@ -27678,6 +27694,7 @@ async function breakKickedFragileFloorObject(obj, x, y, messages) {
     await applyHeroCausedFragileBreakSideEffects(obj, messages, x, y);
     removeFloorObject(obj);
     newsym(x, y);
+    applyHeroBrokenEggPostRemovalSideEffects(obj, messages, x, y);
     return true;
 }
 

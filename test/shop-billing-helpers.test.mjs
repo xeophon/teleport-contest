@@ -25861,6 +25861,75 @@ test('command kicked expensive camera breaks before remote projectile flight and
     ]);
 });
 
+test('command kicked fertile egg stack splats before remote projectile flight and penalizes luck', async () => {
+    installNonShopFloorState();
+    installSeenRemoteShaft(HOLE, 7, 5);
+    markSquareVisible(6, 5);
+    Object.assign(game.u, { uluck: 4 });
+    initRng(1);
+    const eggItem = {
+        ...egg(512067, undefined, 3),
+        otyp: EGG,
+        ox: 6,
+        oy: 5,
+        spe: 1,
+        corpsenm: { name: 'newt' },
+        letter: undefined,
+        line: undefined,
+    };
+    game.level.objects = [eggItem];
+    enableRngLog({ reset: true });
+
+    await rhack('\x04');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.level.objects.includes(eggItem), false);
+    assert.equal(queuedImpactDropsFor({ dnum: 0, dlevel: 2 }).some(obj => obj.id === eggItem.id), false);
+    assert.match(game._pending_message, /You kick 3 eggs\./);
+    assert.match(game._pending_message, /Splat!/);
+    assert.doesNotMatch(game._pending_message, /falls through the hole|Thump|hits|misses|muffled|top of your head/);
+    assert.equal(game.u.uluck, 1);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(100)']);
+});
+
+test('command kicked pyrolisk egg splats and explodes at original square before remote flight', async () => {
+    installNonShopFloorState();
+    installSeenRemoteShaft(HOLE, 7, 5);
+    markSquareVisible(6, 5);
+    Object.assign(game.u, { uhp: 50, uhpmax: 50 });
+    initRng(1);
+    const eggItem = {
+        ...egg(512068, undefined),
+        otyp: EGG,
+        ox: 6,
+        oy: 5,
+        corpsenm: { name: 'pyrolisk' },
+        letter: undefined,
+        line: undefined,
+    };
+    game.level.objects = [eggItem];
+    enableRngLog({ reset: true });
+
+    await rhack('\x04');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.level.objects.includes(eggItem), false);
+    assert.equal(queuedImpactDropsFor({ dnum: 0, dlevel: 2 }).some(obj => obj.id === eggItem.id), false);
+    assert.match(game._pending_message, /You kick an egg\./);
+    assert.match(game._pending_message, /Splat!/);
+    assert.match(game._pending_message, /Boom!/);
+    assert.match(game._pending_message, /You are caught in the fireball!/);
+    assert.doesNotMatch(game._pending_message, /falls through the hole|Thump|hits|misses|muffled|top of your head/);
+    assert.equal(game.u.uhp < 50, true);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 2), [
+        'rn2(100)', 'd(3,6)',
+    ]);
+});
+
 test('command kick ordinary floor object down stairs records reciprocal metadata', async () => {
     installNonShopFloorState();
     installRemoteDownStairGate({ x: 7, y: 5 });
