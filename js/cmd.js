@@ -19559,10 +19559,14 @@ function isHeroThrownGenericWeightContainerObject(obj) {
         || kind === 'sack' || kind === 'oilskin sack' || kind === 'bag of holding';
 }
 
+function isHeroThrownGenericStoneMissileUpwardObject(obj) {
+    return heroThrownStoneMissileObject(obj) && !(isLoadstoneObject(obj) && obj.cursed);
+}
+
 function isHeroThrownGenericDamagingUpwardObject(obj) {
     if (!obj || isHeroThrownHarmlessUpwardObject(obj)) return false;
     return isTinOpenerTossObject(obj) || isHeroThrownGenericWeightContainerObject(obj)
-        || isSupportedTossUpWeaponObject(obj);
+        || isSupportedTossUpWeaponObject(obj) || isHeroThrownGenericStoneMissileUpwardObject(obj);
 }
 
 function heroTossUpTargetForm() {
@@ -19610,6 +19614,25 @@ function heroTossUpTargetIsShade() {
     return heroTossUpTargetName() === 'shade';
 }
 
+function heroTossUpTargetPassesRocks() {
+    const form = heroTossUpTargetForm();
+    return heroThrownTargetPassesRocks({
+        name: form?.name,
+        data: form,
+        passesRocks: form?.passesRocks,
+        passWalls: form?.passWalls,
+        passesWalls: form?.passesWalls,
+        passes_walls: form?.passes_walls,
+        wallwalk: form?.wallwalk,
+        unsolid: form?.unsolid,
+        noncorporeal: form?.noncorporeal,
+    });
+}
+
+function heroTossUpStoneMissileHarmlessRockPasser(obj) {
+    return heroThrownStoneMissileObject(obj) && heroTossUpTargetPassesRocks();
+}
+
 function heroTossUpTargetIsBig() {
     const form = heroTossUpTargetForm();
     if (!form || !Object.keys(form).length) return false;
@@ -19634,9 +19657,9 @@ function pushHeroThrownHelmetMessage(messages, obj, helmet, damage) {
         messages.push(`Your ${simpleTossUpHelmetName(helmet)} does not protect you.`);
 }
 
-function heroThrownGenericObjectFallingDamage(obj, helmet = null) {
+function heroThrownGenericObjectFallingDamage(obj, helmet = null, { harmless = false } = {}) {
     let damage = heroThrownGenericWeaponDamage(obj) ?? 0;
-    if (objectHasArtifactIdentity(obj)) rn1(18, 2); // C artifact_hit() gets a fake 2..19 die roll.
+    if (objectHasArtifactIdentity(obj) && !harmless) rn1(18, 2); // C artifact_hit() gets a fake 2..19 die roll.
     if (!damage) {
         const weightDamage = Math.max(1, Math.ceil(globObjectWeight({ ...obj, quan: 1 }) / WT_TO_DMG));
         damage = weightDamage <= 1 ? 1 : rnd(weightDamage);
@@ -19666,10 +19689,16 @@ function heroThrownGenericObjectSelfHitMessages(obj, action, ceilingName = heroT
     }
 
     const helmet = wornTossUpHelmet();
-    const damage = heroThrownGenericObjectFallingDamage(obj, helmet);
-    pushHeroThrownHelmetMessage(messages, obj, helmet, damage);
+    const harmlessRockPasser = heroTossUpStoneMissileHarmlessRockPasser(obj);
+    const damage = heroThrownGenericObjectFallingDamage(obj, helmet, { harmless: harmlessRockPasser });
+    if (helmet && harmlessRockPasser)
+        messages.push(`Unfortunately, you are wearing ${objectArticleName(simpleTossUpHelmetName(helmet))}.`);
+    else
+        pushHeroThrownHelmetMessage(messages, obj, helmet, damage);
     if (heroTossUpObjectIsSilver(obj) && heroTossUpTargetHatesSilver())
         messages.push('The silver sears you!');
+    if (harmlessRockPasser && !helmet)
+        messages.push(`${floorObjectTheSubject({ ...obj, quan: 1 })} hits you but doesn't hurt.`);
 
     const x = game.u?.ux || obj.ox || 0;
     const y = game.u?.uy || obj.oy || 0;
@@ -19677,7 +19706,8 @@ function heroThrownGenericObjectSelfHitMessages(obj, action, ceilingName = heroT
     if (floorMessage) messages.push(floorMessage);
     const landing = landProjectileObjectWithShopHandling(obj, x, y, {});
     messages.push(...landing.messages);
-    applyHeroThrownCorpseFallingDamage(damage, messages);
+    if (!(harmlessRockPasser && !helmet))
+        applyHeroThrownCorpseFallingDamage(damage, messages);
     return messages;
 }
 

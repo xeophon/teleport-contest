@@ -45722,6 +45722,100 @@ test('upward hero-thrown ordinary corpse self-hits, damages, and lands', async (
     ]);
 });
 
+test('upward hero-thrown loadstone passes harmlessly through rock-passing polyself', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, {
+        uhp: 30,
+        uhpmax: 30,
+        mh: 10,
+        mhmax: 10,
+        _polyself_form: {
+            name: 'xorn',
+            mlet: 'X',
+            glyph: 'X',
+            passWalls: true,
+            passesRocks: true,
+        },
+    });
+    const stone = carriedLoadstone(876926, 'l', {
+        cursed: false,
+        material: 'mineral',
+    });
+    game.inventory = [stone];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('l');
+    await rhack('<');
+
+    const message = game._pending_message || '';
+    assert.equal(game._command_mode, null);
+    assert.match(message, /A loadstone almost hits the ceiling, then falls back on top of your head\./);
+    assert.match(message, /The loadstone hits you but doesn't hurt\./);
+    assert.match(message, /A loadstone hits the floor\./);
+    assert.doesNotMatch(message, /cmdassist|In what direction|It doesn't hurt\.|Fortunately|Unfortunately|does not protect|You die/);
+    assert.equal(game.u.mh, 10);
+    assert.equal(game.u.uhp, 30);
+    assert.equal(game.inventory.includes(stone), false);
+    assert.equal(game.level.objects.length, 1);
+    const landed = game.level.objects[0];
+    assert.equal(landed.kind, 'loadstone');
+    assert.equal(landed.ox, game.u.ux);
+    assert.equal(landed.oy, game.u.uy);
+    assert.deepEqual(getRngLog().map(rngCallName), [
+        'rn2(5)', 'rn2(100)', 'rnd(5)', 'rn2(100)',
+    ]);
+});
+
+test('upward hero-thrown loadstone helmet negates rock-passer harmlessness', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, {
+        uhp: 30,
+        uhpmax: 30,
+        mh: 10,
+        mhmax: 10,
+        _polyself_form: {
+            name: 'xorn',
+            mlet: 'X',
+            glyph: 'X',
+            passWalls: true,
+            passesRocks: true,
+        },
+    });
+    const stone = carriedLoadstone(876927, 'l', {
+        cursed: false,
+        material: 'mineral',
+    });
+    const helmet = wornArmor(876928, 'orcish helm', 'h', 0);
+    game.inventory = [stone, helmet];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('l');
+    await rhack('<');
+
+    const message = game._pending_message || '';
+    assert.equal(game._command_mode, null);
+    assert.match(message, /A loadstone almost hits the ceiling, then falls back on top of your head\./);
+    assert.match(message, /Unfortunately, you are wearing a helm\./);
+    assert.match(message, /A loadstone hits the floor\./);
+    assert.doesNotMatch(message, /cmdassist|In what direction|The loadstone hits you but doesn't hurt|It doesn't hurt|Fortunately|does not protect|You die/);
+    assert.equal(game.u.mh, 9);
+    assert.equal(game.u.uhp, 30);
+    assert.equal(game.inventory.includes(stone), false);
+    assert.equal(game.inventory.includes(helmet), true);
+    assert.equal(game.level.objects.length, 1);
+    const landed = game.level.objects[0];
+    assert.equal(landed.kind, 'loadstone');
+    assert.equal(landed.ox, game.u.ux);
+    assert.equal(landed.oy, game.u.uy);
+    assert.deepEqual(getRngLog().map(rngCallName), [
+        'rn2(5)', 'rn2(100)', 'rnd(5)', 'rn2(100)',
+    ]);
+});
+
 test('upward hero-thrown heavy ordinary corpse hard helmet caps falling damage', async () => {
     installNonShopFloorState();
     initRng(2);
