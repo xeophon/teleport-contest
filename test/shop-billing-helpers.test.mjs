@@ -18260,6 +18260,144 @@ test('pet known spent dart trap can vanish without firing', async () => {
     assert.equal(game.level.objects.some(obj => obj.ox === 6 && obj.oy === 5), false);
 });
 
+test('hero dart trap miss ignores generated dart enchantment and drops trap poison state', async () => {
+    installStableNonShopFloorState();
+    vision_reset();
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 20,
+        uhpmax: 20,
+        uac: 13,
+        ulevel: 1,
+    });
+    game.moves = 1;
+    game.inventory = [];
+    const trap = { ttyp: DART_TRAP, tx: 6, ty: 5, tseen: false, once: false };
+    game.level.traps = [trap];
+    enableRngLog({ reset: true });
+    installCoreRngValues([0, 0, 0, 0, 1, 1, 0, 1, 2, 19]);
+
+    await rhack('l');
+
+    const log = getRngLog();
+    assert.deepEqual(log.map(rngCallName), [
+        'rnd(2)', 'rn2(6)', 'rn2(11)', 'rn2(3)', 'rn2(3)', 'rne(3)',
+        'rn2(2)', 'rn2(100)', 'rn2(6)', 'rnd(3)', 'rnd(20)',
+    ]);
+    assert.match(game._pending_message, /almost hit by a little dart/);
+    assert.equal(game.u.uhp, 20);
+    assert.equal(trap.tseen, true);
+    assert.equal(trap.once, true);
+    assert.equal(game.level.objects.length, 1);
+    assert.equal(game.level.objects[0].kind, 'dart');
+    assert.equal(game.level.objects[0].quan, 1);
+    assert.equal(game.level.objects[0].spe, 2);
+    assert.equal(game.level.objects[0].blessed, true);
+    assert.equal(game.level.objects[0].opoisoned, false);
+    assert.equal(game.level.objects[0].ox, 6);
+    assert.equal(game.level.objects[0].oy, 5);
+});
+
+test('hero dart trap damage uses generated dart enchantment and erosion', async () => {
+    installStableNonShopFloorState();
+    vision_reset();
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 30,
+        uhpmax: 30,
+        uac: 10,
+        ulevel: 1,
+    });
+    game.moves = 2;
+    game.inventory = [];
+    const trap = { ttyp: DART_TRAP, tx: 6, ty: 5, tseen: false, once: false };
+    game.level.traps = [trap];
+    enableRngLog({ reset: true });
+    installCoreRngValues([0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 1, 1, 321, 1, 2, 0, 1]);
+
+    await rhack('l');
+
+    const log = getRngLog();
+    assert.deepEqual(log.map(rngCallName), [
+        'rnd(2)', 'rn2(6)', 'rn2(11)', 'rn2(3)', 'rn2(3)', 'rne(3)',
+        'rn2(2)', 'rn2(100)', 'rn2(100)', 'rn2(80)', 'rn2(9)', 'rn2(9)',
+        'rn2(80)', 'rn2(1000)', 'rn2(6)', 'rnd(3)', 'rnd(20)', 'rn2(2)',
+    ]);
+    assert.match(game._pending_message, /A little dart shoots out at you!  You are hit by a little dart\./);
+    assert.equal(game.u.uhp, 27);
+    assert.equal(game.level.objects.length, 0);
+    assert.equal(trap.tseen, true);
+    assert.equal(trap.once, true);
+});
+
+test('hero poisoned dart trap hit uses C poison branch after damage', async () => {
+    installStableNonShopFloorState();
+    vision_reset();
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 30,
+        uhpmax: 30,
+        uac: 10,
+        ulevel: 1,
+        acurr: { a: [10, 10, 10, 10, 10, 10] },
+    });
+    game.moves = 1;
+    game.inventory = [];
+    const trap = { ttyp: DART_TRAP, tx: 6, ty: 5, tseen: false, once: false };
+    game.level.traps = [trap];
+    enableRngLog({ reset: true });
+    installCoreRngValues([0, 0, 1, 1, 1, 1, 0, 1, 0, 1, 1]);
+
+    await rhack('l');
+
+    assert.deepEqual(getRngLog().map(rngCallName), [
+        'rnd(2)', 'rn2(6)', 'rn2(11)', 'rn2(10)', 'rn2(10)', 'rn2(100)',
+        'rn2(6)', 'rnd(3)', 'rnd(20)', 'rn2(2)', 'rn2(30)',
+    ]);
+    assert.match(game._pending_message, /You are hit by a little dart\./);
+    assert.match(game._pending_message, /The dart was poisoned!/);
+    assert.match(game._pending_message, /You feel very sick!/);
+    assert.equal(game.u.uhp, 28);
+    assert.equal(game.u.acurr.a[A_CON], 9);
+    assert.equal(rngValuesForCall(getRngLog(), 'rnd(6)').length, 0);
+    assert.equal(rngValuesForCall(getRngLog(), 'd(4,6)').length, 0);
+    assert.equal(trap.tseen, true);
+    assert.equal(trap.once, true);
+});
+
+test('hero known spent dart trap can vanish before generating a dart', async () => {
+    installStableNonShopFloorState();
+    vision_reset();
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 30,
+        uhpmax: 30,
+        uac: 10,
+        ulevel: 1,
+        acurr: { a: [10, 10, 10, 10, 10, 10] },
+    });
+    game.moves = 2;
+    game.inventory = [];
+    const trap = { ttyp: DART_TRAP, tx: 6, ty: 5, tseen: true, once: true };
+    game.level.traps = [trap];
+    enableRngLog({ reset: true });
+    installCoreRngValues([0]);
+
+    await rhack('l');
+
+    assert.deepEqual(getRngLog().map(rngCallName), ['rn2(15)']);
+    assert.match(game._pending_message, /soft click/);
+    assert.doesNotMatch(game._pending_message, /shoots|hit|miss/);
+    assert.equal(game.level.traps.includes(trap), false);
+    assert.equal(game.level.objects.length, 0);
+    assert.equal(game.u.uhp, 30);
+    assert.equal(game.u.acurr.a[A_CON], 10);
+});
+
 test('pet melee killed gas spore explodes outside hero melee', async () => {
     installStableNonShopFloorState();
     initRng(1);
