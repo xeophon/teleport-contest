@@ -46270,6 +46270,36 @@ test('upward hero-thrown blessed dagger keeps ordinary toss-up flow', async () =
     ]);
 });
 
+test('upward hero-thrown blessed dagger gets undead-polyself damage bonus', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, {
+        uhp: 30,
+        uhpmax: 30,
+        _polyself_form: { name: 'vampire', mlet: 'V', undead: true },
+    });
+    const blade = { ...dagger(8769101, 'd'), blessed: true, bknown: true, line: 'd - a blessed +0 dagger' };
+    game.inventory = [blade];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('d');
+    await rhack('<');
+
+    const message = game._pending_message || '';
+    assert.equal(game._command_mode, null);
+    assert.match(message, /A dagger almost hits the ceiling, then falls back on top of your head\./);
+    assert.match(message, /A dagger hits the floor\./);
+    assert.doesNotMatch(message, /silver sears|cmdassist|In what direction|It doesn't hurt|shatters|Splat/);
+    assert.equal(game.u.uhp, 25);
+    assert.equal(game.inventory.includes(blade), false);
+    assert.equal(game.level.objects.length, 1);
+    assert.equal(game.level.objects[0].kind, 'dagger');
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rn2(5)', 'rn2(100)', 'rnd(4)', 'rnd(4)', 'rn2(100)',
+    ]);
+});
+
 test('upward hero-thrown elven dagger uses elven small-target damage', async () => {
     installNonShopFloorState();
     initRng(1);
@@ -46377,6 +46407,47 @@ test('upward hero-thrown silver dagger uses ordinary damage without silver-hate 
     assert.equal(landed.material, 'silver');
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
         'rn2(5)', 'rn2(100)', 'rnd(4)', 'rn2(100)',
+    ]);
+});
+
+test('upward hero-thrown silver dagger sears silver-hating polyself', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, {
+        uhp: 30,
+        uhpmax: 30,
+        _polyself_form: { name: 'vampire', mlet: 'V', undead: true },
+    });
+    const blade = {
+        ...dagger(8769121, 'd'),
+        kind: 'silver dagger',
+        actualKind: 'silver dagger',
+        plural: 'silver daggers',
+        material: 'silver',
+        owt: 12,
+        line: 'd - a silver dagger',
+    };
+    game.inventory = [blade];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('d');
+    await rhack('<');
+
+    const message = game._pending_message || '';
+    assert.equal(game._command_mode, null);
+    assert.match(message, /A silver dagger almost hits the ceiling, then falls back on top of your head\./);
+    assert.match(message, /The silver sears you!/);
+    assert.match(message, /A silver dagger hits the floor\./);
+    assert.doesNotMatch(message, /cmdassist|In what direction|It doesn't hurt|shatters|Splat/);
+    assert.equal(game.u.uhp, 9);
+    assert.equal(game.inventory.includes(blade), false);
+    assert.equal(game.level.objects.length, 1);
+    const landed = game.level.objects[0];
+    assert.equal(landed.actualKind, 'silver dagger');
+    assert.equal(landed.material, 'silver');
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rn2(5)', 'rn2(100)', 'rnd(4)', 'rnd(20)', 'rn2(100)',
     ]);
 });
 
@@ -46993,6 +47064,44 @@ test('upward hero-thrown plain dagger hard helmet caps falling damage', async ()
     assert.equal(game.level.objects[0].kind, 'dagger');
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
         'rn2(5)', 'rn2(100)', 'rn2(100)', 'rnd(4)', 'rn2(100)',
+    ]);
+});
+
+test('upward hero-thrown dagger on cloud skips hard floor message', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, {
+        uhp: 30,
+        uhpmax: 30,
+        uz: { dnum: 8, dlevel: 1 },
+    });
+    game.astral_level = { dnum: 8, dlevel: 5 };
+    game.air_level = { dnum: 8, dlevel: 1 };
+    game.earth_level = { dnum: 8, dlevel: 3 };
+    game.water_level = { dnum: 8, dlevel: 2 };
+    game.fire_level = { dnum: 8, dlevel: 4 };
+    game.level.at = () => ({ roomno: 0, typ: CLOUD });
+    const blade = dagger(8768971, 'd');
+    game.inventory = [blade];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('d');
+    await rhack('<');
+
+    const message = game._pending_message || '';
+    assert.equal(game._command_mode, null);
+    assert.match(message, /A dagger flies up into the sky, then falls back on top of your head\./);
+    assert.doesNotMatch(message, /hits the floor|hits the ceiling|almost hits|It doesn't hurt|shatters|Splat/);
+    assert.equal(game.u.uhp, 29);
+    assert.equal(game.inventory.includes(blade), false);
+    assert.equal(game.level.objects.length, 1);
+    const landed = game.level.objects[0];
+    assert.equal(landed.kind, 'dagger');
+    assert.equal(landed.ox, game.u.ux);
+    assert.equal(landed.oy, game.u.uy);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rn2(5)', 'rn2(100)', 'rnd(4)',
     ]);
 });
 

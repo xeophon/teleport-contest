@@ -18754,11 +18754,7 @@ function crackableArmorThrowWeight(obj) {
 function heroThrownCrackableArmorFallingDamage(obj, messages) {
     const helmet = wornTossUpHelmet();
     const damage = heroThrownGenericObjectFallingDamage(obj, helmet);
-    const heroHp = game.u?.uhp || 0;
-    if (helmet && hardEarthHelmet(helmet) && damage < heroHp)
-        messages.push('Fortunately, you are wearing a hard helmet.');
-    else if (helmet && !hardEarthHelmet(helmet))
-        messages.push(`Your ${simpleTossUpHelmetName(helmet)} does not protect you.`);
+    pushHeroThrownHelmetMessage(messages, obj, helmet, damage);
     return damage;
 }
 
@@ -19439,6 +19435,9 @@ function heroThrownGenericWeaponDamage(obj) {
     }
     damage += Math.trunc(Number(obj.spe || 0));
     if (damage < 0) damage = 0;
+    if (heroTossUpTargetIsShade() && !heroTossUpObjectIsSilver(obj)) damage = 0;
+    if (obj?.blessed && heroTossUpTargetHatesBlessings()) damage += rnd(4);
+    if (heroTossUpObjectIsSilver(obj) && heroTossUpTargetHatesSilver()) damage += rnd(20);
     if (damage > 0) {
         damage -= Math.max(0, Math.trunc(Number(obj.oeroded || 0)), Math.trunc(Number(obj.oeroded2 || 0)));
         if (damage < 1) damage = 1;
@@ -19463,14 +19462,75 @@ function isHeroThrownGenericDamagingUpwardObject(obj) {
         || isSupportedTossUpWeaponObject(obj);
 }
 
+function heroTossUpTargetForm() {
+    return polyselfForm() || game.u?.youmonst?.data || game.u?.data || {};
+}
+
+function heroTossUpTargetName() {
+    return String(heroTossUpTargetForm().name || '').toLowerCase();
+}
+
+function heroTossUpObjectIsSilver(obj) {
+    return objectMaterialForMetallivore(obj) === 'silver';
+}
+
+function heroTossUpTargetHatesBlessings() {
+    const form = heroTossUpTargetForm();
+    const rawMlet = String(form.mlet || form.glyph || '');
+    const mlet = rawMlet.toLowerCase();
+    const name = heroTossUpTargetName();
+    const undead = form.undead || form.vampshifter
+        || rawMlet === 'L' || rawMlet === 'M' || rawMlet === 'V' || rawMlet === 'W'
+        || rawMlet === 'Z' || rawMlet === "'" || mlet === 'ghost'
+        || /\b(?:ghost|shade|lich|mummy|zombie|vampire|wraith|nazgul|skeleton|ghoul)\b/.test(name);
+    const demon = form.demon || rawMlet === '&' || mlet === 'demon'
+        || /\b(?:demon|devil|manes)\b/.test(name);
+    return !!(undead || demon);
+}
+
+function heroTossUpTargetHatesSilver() {
+    const form = heroTossUpTargetForm();
+    const rawMlet = String(form.mlet || form.glyph || '');
+    const mlet = rawMlet.toLowerCase();
+    const name = heroTossUpTargetName();
+    const lycanthrope = game.u?.ulycn != null && game.u.ulycn !== -1 && game.u.ulycn !== false;
+    return !!(lycanthrope || game.u?.lycanthrope
+        || form.vampshifter || form.were || form.isWere || form.wereHuman || form.wereBeast
+        || /^were/.test(name)
+        || rawMlet === 'V' || mlet === 'vampire' || /\bvampire\b/.test(name) || name === 'vlad the impaler'
+        || form.demon || rawMlet === '&' || mlet === 'demon' || /\b(?:demon|devil|manes)\b/.test(name)
+        || name === 'shade'
+        || ((rawMlet === 'i' || mlet === 'imp') && name !== 'tengu'));
+}
+
+function heroTossUpTargetIsShade() {
+    return heroTossUpTargetName() === 'shade';
+}
+
+function heroThrownGenericObjectLessDamage(obj, helmet) {
+    return !!(helmet && hardEarthHelmet(helmet)
+        && (!heroTossUpObjectIsSilver(obj) || !heroTossUpTargetHatesSilver()));
+}
+
+function pushHeroThrownHelmetMessage(messages, obj, helmet, damage) {
+    if (!helmet) return;
+    if (heroThrownGenericObjectLessDamage(obj, helmet) && damage < (game.u?.uhp || 0))
+        messages.push('Fortunately, you are wearing a hard helmet.');
+    else
+        messages.push(`Your ${simpleTossUpHelmetName(helmet)} does not protect you.`);
+}
+
 function heroThrownGenericObjectFallingDamage(obj, helmet = null) {
     let damage = heroThrownGenericWeaponDamage(obj) ?? 0;
     if (!damage) {
         const weightDamage = Math.max(1, Math.ceil(globObjectWeight({ ...obj, quan: 1 }) / WT_TO_DMG));
         damage = weightDamage <= 1 ? 1 : rnd(weightDamage);
         if (damage > 6) damage = 6;
+        if (heroTossUpTargetIsShade() && !heroTossUpObjectIsSilver(obj)) damage = 0;
+        if (obj?.blessed && heroTossUpTargetHatesBlessings()) damage += rnd(4);
+        if (heroTossUpObjectIsSilver(obj) && heroTossUpTargetHatesSilver()) damage += rnd(20);
     }
-    if (helmet && hardEarthHelmet(helmet) && damage > 1) damage = 1;
+    if (heroThrownGenericObjectLessDamage(obj, helmet) && damage > 1) damage = 1;
     if (damage > 0) damage += Math.trunc(Number(game.u?.udaminc || 0));
     if (damage < 0) damage = 0;
     return maybeHalfPhysicalDamage(damage);
@@ -19492,11 +19552,9 @@ function heroThrownGenericObjectSelfHitMessages(obj, action, ceilingName = heroT
 
     const helmet = wornTossUpHelmet();
     const damage = heroThrownGenericObjectFallingDamage(obj, helmet);
-    const heroHp = game.u?.uhp || 0;
-    if (helmet && hardEarthHelmet(helmet) && damage < heroHp)
-        messages.push('Fortunately, you are wearing a hard helmet.');
-    else if (helmet && !hardEarthHelmet(helmet))
-        messages.push(`Your ${simpleTossUpHelmetName(helmet)} does not protect you.`);
+    pushHeroThrownHelmetMessage(messages, obj, helmet, damage);
+    if (heroTossUpObjectIsSilver(obj) && heroTossUpTargetHatesSilver())
+        messages.push('The silver sears you!');
 
     const x = game.u?.ux || obj.ox || 0;
     const y = game.u?.uy || obj.oy || 0;
@@ -27418,7 +27476,7 @@ function isProjectileImpactContainer(obj) {
 function projectileLandingIsSoft(x, y) {
     const loc = game.level?.at?.(x, y);
     if (!loc) return false;
-    return IS_POOL(loc.typ) || loc.typ === WATER || loc.typ === MOAT;
+    return IS_SOFT(loc.typ) || IS_POOL(loc.typ) || loc.typ === WATER || loc.typ === MOAT;
 }
 
 function projectileImpactGlassCandidate(obj) {
