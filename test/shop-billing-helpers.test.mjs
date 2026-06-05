@@ -25832,6 +25832,73 @@ test('command kicked confusion potion breaks and breathes before remote projecti
     ]);
 });
 
+test('command kicked unlit oil potion shatters and breathes before remote projectile flight', async () => {
+    installNonShopFloorState();
+    installSeenRemoteShaft(HOLE, 7, 5);
+    markSquareVisible(6, 5);
+    initRng(1);
+    const potion = {
+        ...oilPotion(512069, undefined),
+        ox: 6,
+        oy: 5,
+        dknown: true,
+        letter: undefined,
+        line: undefined,
+    };
+    game.level.objects = [potion];
+    enableRngLog({ reset: true });
+
+    await rhack('\x04');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.level.objects.includes(potion), false);
+    assert.equal(queuedImpactDropsFor({ dnum: 0, dlevel: 2 }).some(obj => obj.id === potion.id), false);
+    assert.match(game._pending_message, /You kick a potion of oil\./);
+    assert.match(game._pending_message, /A potion of oil shatters!/);
+    assert.match(game._pending_message, /You smell a peculiar odor\.\.\./);
+    assert.doesNotMatch(game._pending_message, /Boom|burning oil|falls through the hole|Thump|hits|misses|muffled/);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(100)']);
+});
+
+test('command kicked lit oil potion shatters and explodes before remote projectile flight', async () => {
+    installNonShopFloorState();
+    installSeenRemoteShaft(HOLE, 7, 5);
+    markSquareVisible(6, 5);
+    Object.assign(game.u, { uhp: 50, uhpmax: 50 });
+    initRng(1);
+    const potion = {
+        ...oilPotion(512070, undefined),
+        ox: 6,
+        oy: 5,
+        dknown: true,
+        lamplit: true,
+        burning: true,
+        letter: undefined,
+        line: undefined,
+    };
+    game.level.objects = [potion];
+    enableRngLog({ reset: true });
+
+    await rhack('\x04');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.level.objects.includes(potion), false);
+    assert.equal(queuedImpactDropsFor({ dnum: 0, dlevel: 2 }).some(obj => obj.id === potion.id), false);
+    assert.match(game._pending_message, /You kick a potion of oil(?: \(lit\))?\./);
+    assert.match(game._pending_message, /A potion of oil(?: \(lit\))? shatters!/);
+    assert.match(game._pending_message, /Boom!/);
+    assert.match(game._pending_message, /You are caught in the burning oil!/);
+    assert.doesNotMatch(game._pending_message, /peculiar odor|falls through the hole|Thump|hits|misses|muffled/);
+    assert.equal(game.u.uhp < 50, true);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 2), [
+        'rn2(100)', 'd(4,4)',
+    ]);
+});
+
 test('command kicked expensive camera breaks before remote projectile flight and releases demon', async () => {
     installNonShopFloorState();
     installSeenRemoteShaft(HOLE, 7, 5);

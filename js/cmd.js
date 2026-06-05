@@ -27637,7 +27637,7 @@ function kickedFragilePreflightBreakKind(obj) {
     if (kind === 'lenses') return impactDropBreakKind(obj);
     if (isGlassMaterialWandObject(obj)) return impactDropBreakKind(obj);
     if (isCreamPieObject(obj)) return impactDropBreakKind(obj);
-    if (isPotionObject(obj) && thrownPotionEffectKind(obj) !== 'oil') return impactDropBreakKind(obj);
+    if (isPotionObject(obj)) return impactDropBreakKind(obj);
     if (isExpensiveCameraObject(obj)) return impactDropBreakKind(obj);
     if (isEggItem(obj)) return impactDropBreakKind(obj);
     return '';
@@ -27690,7 +27690,8 @@ async function breakKickedFragileFloorObject(obj, x, y, messages) {
     const breakKind = projectileTopLevelBreakKind(obj);
     if (!breakKind) return false;
     projectileTopLevelBreakMessage(obj, breakKind, messages);
-    brokenPotionBreathe(obj, x, y, messages);
+    if (isLitOilPotionHit(obj)) explodeBurningOilPotion(obj, x, y, messages);
+    else brokenPotionBreathe(obj, x, y, messages);
     await applyHeroCausedFragileBreakSideEffects(obj, messages, x, y);
     removeFloorObject(obj);
     newsym(x, y);
