@@ -6530,21 +6530,36 @@ export async function processMonsterTurns() {
                             }
                             for (let step = 1; step < throwRange; step++) rn2(5);
                             const attackRoll = rnd(20);
-                            if (attackRoll === 20) {
-                                if (visibleSpitter) addToplineMessage('It misses.');
+                            const targetAc = game.u?.uac ?? 10;
+                            const missed = targetAc + 8 <= attackRoll;
+                            let resultMessage = game.u?.blind || game.flags?.verbose === false
+                                ? 'You are hit.'
+                                : 'You are hit by a splash of venom.';
+                            if (missed) {
+                                resultMessage = game.u?.blind || game.flags?.verbose === false
+                                    ? 'It misses.'
+                                    : targetAc + 8 <= attackRoll - 2
+                                        ? 'A splash of venom misses you.'
+                                        : 'You are almost hit by a splash of venom.';
                                 rn2(5);
                                 rn2(100);
+                            } else {
+                                const wasBlind = !!game.u?.blind;
+                                const blindinc = applyMonsterBlindingVenomBlindness();
+                                if (blindinc)
+                                    resultMessage = `${resultMessage}  ${wasBlind ? 'Your eyes sting.' : 'The venom blinds you.'}`;
                             }
+                            if (resultMessage) addToplineMessage(resultMessage);
                         }
                         game._search_pending_count = 0;
                         game._run_steps_remaining = 0;
                         game._travel_keys = [];
                         if ((game._pending_time_passed || 0) > 2) game._pending_time_passed = 2;
                         if (game._message_more && !game._process_time_with_more) {
-                        game._monster_resume_index = monIndex + 1;
-                        game._monster_resume_somebody_can_move = somebodyCanMove;
-                        return false;
-                    }
+                            game._monster_resume_index = monIndex + 1;
+                            game._monster_resume_somebody_can_move = somebodyCanMove;
+                            return false;
+                        }
                         continue;
                     }
                     if (canReadyLauncher && !((canThrowSpear || canThrowShuriken || canThrowCreamPie) && rangedWeaponLinedUp)) {
@@ -9409,6 +9424,54 @@ function heroCanBeCreamedByMonsterPie() {
 
 function applyMonsterCreamPieBlindness() {
     if (!heroCanBeCreamedByMonsterPie()) return 0;
+    const blindinc = rnd(25);
+    game.u.ucreamed = (game.u.ucreamed || 0) + blindinc;
+    game.u._blindTimeout = (game.u._blindTimeout || 0) + blindinc;
+    game.u.blind = true;
+    addHeroStatusSuffix('Blind');
+    for (const other of game.level?.monsters || []) newsym(other.mx, other.my);
+    return blindinc;
+}
+
+function wornMonsterVenomItemNames(item) {
+    if (!(item?.worn || item?.owornmask || item?.line?.includes('being worn'))) return [];
+    return [
+        item.actualKind,
+        item.kind,
+        item.appearance,
+        item.singular,
+        item.displayName,
+        item.objectKindKey,
+    ].map(name => String(name || '').toLowerCase().trim()).filter(Boolean);
+}
+
+function heroWearsMonsterVenomEyeCovering() {
+    if (game.u?.blindfolded || game.u?.Blindfolded) return true;
+    return (game.inventory || []).some(item => wornMonsterVenomItemNames(item)
+        .some(name => name === 'blindfold' || name === 'towel' || name === 'lenses'
+            || name === 'pair of lenses' || name === 'a pair of lenses'));
+}
+
+function heroWearsMonsterVenomVisoredHelmet() {
+    return (game.inventory || []).some(item => {
+        const names = wornMonsterVenomItemNames(item);
+        if (!names.length) return false;
+        const isArmor = item.cls === 'armor' || item.glyph === '[' || names.some(name => /\b(?:helm|helmet)\b/.test(name));
+        if (!isArmor) return false;
+        return names.some(name => name === 'helm of telepathy' || name === 'visored helmet');
+    });
+}
+
+function heroCanBeBlindedByMonsterVenom() {
+    if (!game.u) return false;
+    if (game.u?._polyself_form?.noeyes || game.u?.noeyes) return false;
+    if (heroWearsMonsterVenomEyeCovering()) return false;
+    if ((game.u.ucreamed || 0) > 0) return false;
+    return !heroWearsMonsterVenomVisoredHelmet();
+}
+
+function applyMonsterBlindingVenomBlindness() {
+    if (!heroCanBeBlindedByMonsterVenom()) return 0;
     const blindinc = rnd(25);
     game.u.ucreamed = (game.u.ucreamed || 0) + blindinc;
     game.u._blindTimeout = (game.u._blindTimeout || 0) + blindinc;

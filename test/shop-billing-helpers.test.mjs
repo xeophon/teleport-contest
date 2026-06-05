@@ -7043,6 +7043,90 @@ test('automatic hostile MS_CUSS monster cusses and wakes nearby sleepers', async
         ['rn2(5)', 'rn2(5)', 'rn2(5)']);
 });
 
+async function runMonsterCobraSpit({ seed = 7, uac = 10, inventory = [], extraHero = {} } = {}) {
+    installStableNonShopFloorState();
+    initRng(seed);
+    enableRngLog({ reset: true });
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 20,
+        uhpmax: 20,
+        uac,
+        blind: false,
+        ucreamed: 0,
+        _blindTimeout: 0,
+        _statusSuffix: '',
+        acurr: { a: [10, 10, 10, 10, 10, 10] },
+        ...extraHero,
+    });
+    game.nhDisplay = { cols: 160 };
+    game.inventory = inventory;
+    const cobra = ordinaryThrowTarget('cobra', 9, 5, {
+        movement: NORMAL_SPEED,
+        msleeping: 0,
+        mcanmove: true,
+        mcansee: true,
+        mpeaceful: false,
+        mtame: 0,
+        mux: game.u.ux,
+        muy: game.u.uy,
+        data: { name: 'cobra', mlet: 'S', mlevel: 6, mmove: NORMAL_SPEED },
+    });
+    game.level.monsters = [cobra];
+
+    queueEscapeForMonsterTurn();
+    for (let x = 5; x <= 9; x++) markSquareVisible(x, 5);
+    await processMonsterTurns();
+
+    return {
+        cobra,
+        message: [game._pending_message || '', game._topline_after_more || ''].filter(Boolean).join('  '),
+        rng: getRngLog(),
+    };
+}
+
+test('automatic hostile cobra spit hit blinds the hero with blinding venom', async () => {
+    const result = await runMonsterCobraSpit({ seed: 7 });
+
+    assert.match(result.message, /The cobra spits venom!/);
+    assert.match(result.message, /You are hit by a splash of venom\./);
+    assert.match(result.message, /The venom blinds you\./);
+    assert.equal(game.u.uhp, 20);
+    assert.equal(game.u.blind, true);
+    assert.ok(game.u.ucreamed > 0);
+    assert.ok(game.u._blindTimeout > 0);
+    assert.deepEqual(result.rng.map(entry => entry.replace(/=.*/, '')),
+        ['rn2(5)', 'rn2(5)', 'rnd(2)', 'rn2(5)', 'rn2(5)', 'rn2(5)', 'rnd(20)', 'rnd(25)']);
+});
+
+test('automatic hostile cobra spit uses thitu miss threshold before blinding', async () => {
+    const result = await runMonsterCobraSpit({ seed: 82 });
+
+    assert.match(result.message, /The cobra spits venom!/);
+    assert.match(result.message, /You are almost hit by a splash of venom\./);
+    assert.doesNotMatch(result.message, /The venom blinds you/);
+    assert.equal(game.u.blind, false);
+    assert.equal(game.u.ucreamed, 0);
+    assert.equal(game.u._blindTimeout, 0);
+    assert.deepEqual(result.rng.map(entry => entry.replace(/=.*/, '')),
+        ['rn2(5)', 'rn2(5)', 'rnd(2)', 'rn2(5)', 'rn2(5)', 'rn2(5)', 'rnd(20)', 'rn2(5)', 'rn2(100)']);
+});
+
+test('automatic hostile cobra spit hit respects worn lenses eye protection', async () => {
+    const lenses = wornTool(32118, 'lenses', 'l');
+    const result = await runMonsterCobraSpit({ seed: 7, inventory: [lenses] });
+
+    assert.match(result.message, /The cobra spits venom!/);
+    assert.match(result.message, /You are hit by a splash of venom\./);
+    assert.doesNotMatch(result.message, /The venom blinds you|Your eyes sting/);
+    assert.equal(game.u.blind, false);
+    assert.equal(game.u.ucreamed, 0);
+    assert.equal(game.u._blindTimeout, 0);
+    assert.deepEqual(result.rng.map(entry => entry.replace(/=.*/, '')),
+        ['rn2(5)', 'rn2(5)', 'rnd(2)', 'rn2(5)', 'rn2(5)', 'rn2(5)', 'rnd(20)']);
+});
+
 async function runInvisibleAutomaticCussScenario(msound = 'MS_CUSS') {
     installStableNonShopFloorState();
     initRng(47);
