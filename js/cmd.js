@@ -16592,16 +16592,25 @@ function hostileMonsterNearHeroForWereChange() {
     });
 }
 
-function waterVaporLycanthropyEffect(potion, messages) {
+function appendRehumanizeDeathResultMessages(messages, result, { allowLifeSaving = false } = {}) {
+    messages.push(...(result.messages || []));
+    if (!result.died) return;
+    if (allowLifeSaving && consumeLifeSavingAmulet({ clearStoning: !!result.clearStoningOnLifeSaving })) {
+        if (game.u) game.u.uhp = 0;
+        messages.push('You die...  But wait...  Your medallion begins to glow!');
+        messages.lifeSaving = true;
+    } else {
+        messages.fatal = true;
+    }
+    messages.more = true;
+}
+
+function waterVaporLycanthropyEffect(potion, messages, options = {}) {
     const beastName = heroLycanthropeBeastName();
     if (!beastName || heroHasUnchanging()) return false;
     if (potion?.blessed && polyselfFormName() === beastName && !hostileMonsterNearHeroForWereChange()) {
         const result = rehumanizeAfterPolyselfDeath();
-        messages.push(...result.messages);
-        if (result.died) {
-            messages.fatal = true;
-            messages.more = true;
-        }
+        appendRehumanizeDeathResultMessages(messages, result, options);
         return !!result.messages.length;
     }
     if (potion?.cursed && !game.u?._polyself_form && !hostileMonsterNearHeroForWereChange()
@@ -16613,7 +16622,7 @@ function waterVaporLycanthropyEffect(potion, messages) {
     return false;
 }
 
-function potionBreathe(potion, messages) {
+function potionBreathe(potion, messages, options = {}) {
     const result = {};
     if (!heroCanReceivePotionVapor()) return result;
     const name = potionEffectNameFromAppearance(potion, alchemyPotionName(potion));
@@ -16715,7 +16724,7 @@ function potionBreathe(potion, messages) {
             break;
         case 'water':
             if (!splitGremlinPolyselfFromWaterVapor(messages))
-                waterVaporLycanthropyEffect(potion, messages);
+                waterVaporLycanthropyEffect(potion, messages, options);
             break;
         case 'acid':
         case 'polymorph':
@@ -16735,13 +16744,13 @@ function heroIsNextToPotionVapor(x, y) {
     return Math.max(Math.abs((x ?? ux) - ux), Math.abs((y ?? uy) - uy)) <= 1;
 }
 
-function brokenPotionBreathe(potion, x, y, messages) {
+function brokenPotionBreathe(potion, x, y, messages, options = {}) {
     if (!isPotionObject(potion) || !heroIsNextToPotionVapor(x, y) || !heroCanReceivePotionVapor()) return;
     if (!isWaterPotion(potion) && !heroHasWetWornTowel()) {
         if (heroBreathesPotionVapor()) messages.push('You smell a peculiar odor...');
         else if (heroHasPotionVaporEyes()) messages.push('Your eyes water.');
     }
-    potionBreathe(potion, messages);
+    potionBreathe(potion, messages, options);
 }
 
 function thrownPotionHitTargetName(mon) {
@@ -18910,7 +18919,7 @@ function heroPolymorphPotionSelfHitMessages(messages) {
     newsym(game.u?.ux || 0, game.u?.uy || 0);
 }
 
-function heroThrownPotionSelfHitMessages(potion, action, ceilingName = heroThrowCeilingName()) {
+function heroThrownPotionSelfHitMessages(potion, action, ceilingName = heroThrowCeilingName(), options = {}) {
     const messages = [];
     const kind = thrownPotionEffectKind(potion);
     messages.push(`${floorObjectSubject({ ...potion, quan: 1 })} ${action} the ${ceilingName}, then falls back on top of your head.`);
@@ -18931,35 +18940,35 @@ function heroThrownPotionSelfHitMessages(potion, action, ceilingName = heroThrow
     if (kind === 'polymorph') heroPolymorphPotionSelfHitMessages(messages);
     if (isLitOilPotionHit(potion, kind))
         explodeBurningOilPotion(potion, game.u?.ux ?? potion.ox ?? 0, game.u?.uy ?? potion.oy ?? 0, messages);
-    potionBreathe(potion, messages);
+    potionBreathe(potion, messages, options);
     const shopDebt = convertUnpaidObjectToShopDebt(potion, { silent: true, broken: true });
     if (!shopDebt.charged) potion.no_charge = true;
     return messages;
 }
 
-function heroThrownPotionCeilingBreakMessages(potion, breakKind, ceilingName = heroThrowCeilingName()) {
+function heroThrownPotionCeilingBreakMessages(potion, breakKind, ceilingName = heroThrowCeilingName(), options = {}) {
     const messages = [`${floorObjectSubject({ ...potion, quan: 1 })} hits the ${ceilingName}.`];
     projectileTopLevelBreakMessage(potion, breakKind, messages);
     if (isLitOilPotionHit(potion))
         explodeBurningOilPotion(potion, game.u?.ux ?? potion.ox ?? 0, game.u?.uy ?? potion.oy ?? 0, messages);
     else if (isPotionObject(potion))
-        brokenPotionBreathe(potion, game.u?.ux ?? potion.ox ?? 0, game.u?.uy ?? potion.oy ?? 0, messages);
+        brokenPotionBreathe(potion, game.u?.ux ?? potion.ox ?? 0, game.u?.uy ?? potion.oy ?? 0, messages, options);
     markThrownBrokenObjectDebt(potion);
     return messages;
 }
 
-function heroThrownPotionUpwardMessages(potion) {
+function heroThrownPotionUpwardMessages(potion, options = {}) {
     const ceilingName = heroThrowCeilingName();
     const hasCeiling = heroHasThrowCeiling();
     const hitsRoof = !!(rn2(5) && !heroIsUnderwaterForThrow());
     if (!hasCeiling)
-        return heroThrownPotionSelfHitMessages(potion, 'flies up into', ceilingName);
+        return heroThrownPotionSelfHitMessages(potion, 'flies up into', ceilingName, options);
     if (hitsRoof) {
         const breakKind = projectileTopLevelBreakKind(potion);
-        if (breakKind) return heroThrownPotionCeilingBreakMessages(potion, breakKind, ceilingName);
-        return heroThrownPotionSelfHitMessages(potion, 'hits', ceilingName);
+        if (breakKind) return heroThrownPotionCeilingBreakMessages(potion, breakKind, ceilingName, options);
+        return heroThrownPotionSelfHitMessages(potion, 'hits', ceilingName, options);
     }
-    return heroThrownPotionSelfHitMessages(potion, 'almost hits', ceilingName);
+    return heroThrownPotionSelfHitMessages(potion, 'almost hits', ceilingName, options);
 }
 
 function heroThrownCreamPieSelfHitMessages(pie, action, ceilingName = heroThrowCeilingName()) {
@@ -61561,16 +61570,29 @@ export async function rhack(_cmd) {
             if ((item.quan || 1) > 1) splitCarriedObjectShopBill(item, thrownObject, 1);
             const removeBeforeImpact = isLitOilPotionHit(thrownObject);
             if (removeBeforeImpact) removeInventoryItem(item, 1);
-            const messages = heroThrownPotionUpwardMessages(thrownObject);
+            const messages = heroThrownPotionUpwardMessages(thrownObject, { allowLifeSaving: true });
             if (!removeBeforeImpact) removeInventoryItem(item, 1);
             newsym(game.u?.ux || 0, game.u?.uy || 0);
             const keepPotionCallPrompt = game._command_mode === 'callPotionAfterMore';
             await setMessage(messages.join('  '), keepPotionCallPrompt || !!messages.more);
-            if (!keepPotionCallPrompt) game._command_mode = null;
             game._throw_item_letter = null;
             game._resume_time_after_more = 0;
-            game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
             game.context.move = 0;
+            if (messages.lifeSaving) {
+                game._command_mode = 'lifeSavingMore';
+                game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
+                return;
+            }
+            if (messages.fatal) {
+                game._command_mode = 'deathDieMore';
+                game._pending_time_passed = 0;
+                game._process_command_time_now = 0;
+                game._run_steps_remaining = 0;
+                prepareDeathBones();
+                return;
+            }
+            if (!keepPotionCallPrompt) game._command_mode = null;
+            game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
             return;
         }
         if (ch === '<' && isCreamPieObject(item)) {

@@ -45202,6 +45202,135 @@ test('upward hero-thrown confusion potion self-hits through potionhit', async ()
     ]);
 });
 
+test('upward hero-thrown blessed water vapor lycanthropy rehumanize old form death', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, {
+        uhp: 3,
+        uhpmax: 8,
+        ulycn: 'werewolf',
+        lycanthrope: true,
+        _polyself_form: { name: 'werewolf', mlet: 'd', glyph: 'd', wereBeast: true },
+        _polyself_base: {
+            uhp: 0,
+            uhpmax: 18,
+            uen: 3,
+            uenmax: 5,
+            uac: 7,
+            ulevel: 2,
+            rank: { m: 'Wizard', f: 'Wizard' },
+        },
+    });
+    game.urole = { ...(game.urole || {}), rank: { m: 'Werewolf', f: 'Werewolf' } };
+    const potion = waterPotion(876926, 'w', { blessed: true, bknown: true });
+    potion.dknown = true;
+    game.inventory = [potion];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('w');
+    await rhack('<');
+
+    const message = game._pending_message || '';
+    assert.equal(game._command_mode, 'deathDieMore');
+    assert.match(message, /almost hits the ceiling, then falls back on top of your head\./);
+    assert.match(message, /crashes on your head and breaks into shards\./);
+    assert.match(message, /The potion of holy water evaporates\./);
+    assert.match(message, /You return to human form!/);
+    assert.match(message, /Your old form was not healthy enough to survive\./);
+    assert.equal(message.indexOf('The potion of holy water evaporates.') < message.indexOf('You return to human form!'), true);
+    assert.equal(message.indexOf('You return to human form!') < message.indexOf('Your old form was not healthy enough to survive.'), true);
+    assert.doesNotMatch(message, /You feel purified|peculiar odor|You die/);
+    assert.equal(game._message_more, 1);
+    assert.equal(game.context.move, 0);
+    assert.equal(game._pending_time_passed, 0);
+    assert.equal(game._death_cause, 'killed by reverting to unhealthy human form');
+    assert.equal(game.u.ulycn, 'werewolf');
+    assert.equal(game.u.lycanthrope, true);
+    assert.equal(game.u._polyself_form, null);
+    assert.equal(game.u._polyself_base, null);
+    assert.equal(game.u.uhp, 0);
+    assert.equal(game.u.uhpmax, 18);
+    assert.equal(game.u.uen, 3);
+    assert.equal(game.u.uenmax, 5);
+    assert.equal(game.u.uac, 7);
+    assert.equal(game.urole.rank.m, 'Wizard');
+    assert.equal(game.inventory.includes(potion), false);
+    assert.equal(game.level.objects.length, 0);
+    assert.deepEqual(getRngLog().map(rngCallName).slice(0, 3), [
+        'rn2(5)', 'rn2(7)', 'rnd(2)',
+    ]);
+});
+
+test('upward hero-thrown blessed water vapor lycanthropy rehumanize old form death uses lifesaving', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, {
+        uhp: 3,
+        uhpmax: 8,
+        ulycn: 'werewolf',
+        lycanthrope: true,
+        _polyself_form: { name: 'werewolf', mlet: 'd', glyph: 'd', wereBeast: true },
+        _polyself_base: {
+            uhp: 0,
+            uhpmax: 18,
+            uen: 3,
+            uenmax: 5,
+            uac: 7,
+            ulevel: 2,
+            rank: { m: 'Wizard', f: 'Wizard' },
+        },
+    });
+    game.urole = { ...(game.urole || {}), rank: { m: 'Werewolf', f: 'Werewolf' } };
+    const amulet = {
+        id: 876927,
+        letter: 'a',
+        cls: 'amulet',
+        glyph: '"',
+        kind: 'amulet of life saving',
+        actualKind: 'amulet of life saving',
+        quan: 1,
+        worn: true,
+        line: 'a - an amulet of life saving (being worn)',
+    };
+    const potion = waterPotion(876928, 'w', { blessed: true, bknown: true });
+    potion.dknown = true;
+    game.inventory = [amulet, potion];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('w');
+    await rhack('<');
+
+    const message = game._pending_message || '';
+    assert.equal(game._command_mode, 'lifeSavingMore');
+    assert.match(message, /The potion of holy water evaporates\./);
+    assert.match(message, /You return to human form!/);
+    assert.match(message, /Your old form was not healthy enough to survive\./);
+    assert.match(message, /You die\.\.\.  But wait\.\.\.  Your medallion begins to glow!/);
+    assert.doesNotMatch(message, /You feel purified|peculiar odor/);
+    assert.equal(game._message_more, 1);
+    assert.equal(game.inventory.includes(amulet), false);
+    assert.equal(game.inventory.includes(potion), false);
+    assert.equal(game.u.ulycn, 'werewolf');
+    assert.equal(game.u.lycanthrope, true);
+    assert.equal(game.u._polyself_form, null);
+    assert.equal(game.u._polyself_base, null);
+    assert.equal(game.u.uhp, 0);
+    assert.equal(game._death_cause, 'killed by reverting to unhealthy human form');
+
+    await rhack(' ');
+
+    assert.equal(game._pending_message, 'You feel much better!');
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game._message_more || 0, 0);
+    assert.equal(game.u.uhp, game.u.uhpmax);
+    assert.equal(game._death_cause, 'killed by reverting to unhealthy human form');
+    assert.deepEqual(getRngLog().map(rngCallName).slice(0, 4), [
+        'rn2(5)', 'rn2(7)', 'rnd(2)', 'rn2(19)',
+    ]);
+});
+
 test('upward hero-thrown hallucination potion selected from c self-hits', async () => {
     installNonShopFloorState();
     initRng(1);
