@@ -8,7 +8,7 @@ import { game, resetGame } from '../js/gstate.js';
 import { pushKey, resetInputState } from '../js/input.js';
 import { createMonsterCorpseOrGlob, mkcorpstat, monsterByRndName } from '../js/mklev.js';
 import { enableDisplayRngLog, enableRngLog, getRngLog, initRng } from '../js/rng.js';
-import { A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_STR, A_WIS, ALTAR, AM_SHRINE, Align2amask, BILLSZ, CANDLESHOP, CLOUD, CORPSTAT_HISTORIC, COULD_SEE, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, D_CLOSED, D_NODOOR, FIRE_TRAP, FOUNTAIN, HOLE, ICE, ICED_POOL, IN_SIGHT, IRONBARS, LADDER, LAVAPOOL, MIGR_LADDER_UP, MIGR_SSTAIRS, MIGR_STAIRS_UP, MOAT, M_AP_FURNITURE, M_AP_OBJECT, NORMAL_SPEED, P_BASIC, P_DAGGER, P_EXPERT, P_KNIFE, P_SKILLED, P_UNSKILLED, PIT, POOL, REPAIR_DELAY, ROOM, ROOMOFFSET, SDOOR, SHOPBASE, SHOP_DOOR_COST, SINK, SQKY_BOARD, STAIRS, STATUE_TRAP, STONE, STRAT_APPEARMSG, STRAT_WAITFORU, STRAT_WAITMASK, TEMPLE, TRAPDOOR, TT_LAVA, TT_WEB, WEB, W_SADDLE } from '../js/const.js';
+import { A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_STR, A_WIS, ALTAR, AM_SHRINE, Align2amask, BILLSZ, CANDLESHOP, CLOUD, CORPSTAT_HISTORIC, COULD_SEE, DART_TRAP, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, D_CLOSED, D_NODOOR, FIRE_TRAP, FOUNTAIN, HOLE, ICE, ICED_POOL, IN_SIGHT, IRONBARS, LADDER, LAVAPOOL, MIGR_LADDER_UP, MIGR_SSTAIRS, MIGR_STAIRS_UP, MOAT, M_AP_FURNITURE, M_AP_OBJECT, NORMAL_SPEED, P_BASIC, P_DAGGER, P_EXPERT, P_KNIFE, P_SKILLED, P_UNSKILLED, PIT, POOL, REPAIR_DELAY, ROOM, ROOMOFFSET, SDOOR, SHOPBASE, SHOP_DOOR_COST, SINK, SQKY_BOARD, STAIRS, STATUE_TRAP, STONE, STRAT_APPEARMSG, STRAT_WAITFORU, STRAT_WAITMASK, TEMPLE, TRAPDOOR, TT_LAVA, TT_WEB, WEB, W_SADDLE } from '../js/const.js';
 import { currentFruitId, setCurrentFruitName } from '../js/fruit.js';
 import { CLR_BRIGHT_MAGENTA, CLR_BROWN, CLR_WHITE } from '../js/terminal.js';
 import { TRIBUTE_DEATH_QUOTES } from '../js/tribute.js';
@@ -13420,6 +13420,27 @@ function adjacentGasSporeBlastVictim(name = 'goblin', id = 31320, x = 7, y = 5, 
     });
 }
 
+function dartTrapGoblin(id = 31375, extra = {}) {
+    const data = monsterByRndName('goblin') || { name: 'goblin', mlevel: 1, mr: 0 };
+    const { data: dataExtra = {}, ...rest } = extra;
+    return ordinaryThrowTarget('goblin', 7, 5, {
+        m_id: id,
+        mhp: 1,
+        mhpmax: 1,
+        m_lev: data.mlevel ?? 1,
+        movement: NORMAL_SPEED,
+        msleeping: 0,
+        mcanmove: true,
+        mcansee: true,
+        mpeaceful: false,
+        mtame: 0,
+        mux: game.u.ux,
+        muy: game.u.uy,
+        data: { ...data, mac: -7, ...dataExtra },
+        ...rest,
+    });
+}
+
 function gasSporeMeleePet(id = 31382, extra = {}) {
     return ordinaryThrowTarget('dog', 7, 5, {
         m_id: id,
@@ -17750,6 +17771,126 @@ test('sokoban pit trap killed gas spore explodes outside monster melee', async (
     assert.equal(game.level.objects.some(obj => obj.ox === 6 && obj.oy === 5), false);
     assert.equal(victim.mhp, 30 - d4x6[1]);
     assert.equal(game.u.uhp, 50 - d4x6[1]);
+});
+
+test('dart trap does not hit in-air gas spore', async () => {
+    installStableNonShopFloorState();
+    initRng(1);
+    enableRngLog({ reset: true });
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 50,
+        uhpmax: 50,
+        uac: 10,
+    });
+    game.inventory = [];
+    const trap = { ttyp: DART_TRAP, tx: 6, ty: 5, tseen: false, once: false };
+    game.level.traps = [trap];
+    const victim = adjacentGasSporeBlastVictim('goblin', 31376, 5, 6);
+    const spore = adjacentHostileGasSpore(31374, {
+        mx: 7,
+        my: 5,
+    });
+    spore.data = { ...spore.data, mac: -7 };
+    game.level.monsters = [victim, spore];
+
+    queueEscapeForMonsterTurn();
+    markHeroNeighborhoodVisible();
+    markSquareVisible(spore.mx, spore.my);
+    await processMonsterTurns();
+    const messages = [game._pending_message, ...(await drainQueuedMessagesAfterMore())].join(' ');
+
+    const d4x6 = rngValuesForCall(getRngLog(), 'd(4,6)');
+    assert.equal(d4x6.length, 0);
+    assert.doesNotMatch(messages, /hit by a dart|Boom!|caught in the gas spore's explosion/);
+    assert.equal(trap.tseen, false);
+    assert.equal(trap.once, false);
+    assert.equal(spore.mx, 6);
+    assert.equal(spore.my, 5);
+    assert.equal(spore.mhp, 1);
+    assert.equal(game.level.monsters.includes(spore), true);
+    assert.equal(game.level.objects.some(obj => obj.ox === 6 && obj.oy === 5), false);
+    assert.equal(victim.mhp, 30);
+    assert.equal(game.u.uhp, 50);
+});
+
+test('dart trap killed grounded monster drops inventory before removal', async () => {
+    installStableNonShopFloorState();
+    initRng(1);
+    enableRngLog({ reset: true });
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 50,
+        uhpmax: 50,
+        uac: 10,
+    });
+    game.inventory = [];
+    const trap = { ttyp: DART_TRAP, tx: 6, ty: 5, tseen: false, once: false };
+    game.level.traps = [trap];
+    const carried = { id: 31377, otyp: DART, cls: 'weapon', kind: 'dart', glyph: ')', quan: 1 };
+    const goblin = dartTrapGoblin(31378, { minvent: [carried] });
+    game.level.monsters = [goblin];
+
+    queueEscapeForMonsterTurn();
+    markHeroNeighborhoodVisible();
+    markSquareVisible(goblin.mx, goblin.my);
+    await processMonsterTurns();
+    const messages = [game._pending_message, ...(await drainQueuedMessagesAfterMore())].join(' ');
+
+    const d4x6 = rngValuesForCall(getRngLog(), 'd(4,6)');
+    assert.equal(d4x6.length, 0);
+    assert.match(messages, /The goblin is hit by a dart!/);
+    assert.match(messages, /The goblin is killed!/);
+    assert.equal(trap.tseen, true);
+    assert.equal(trap.once, true);
+    assert.equal(goblin.mx, 6);
+    assert.equal(goblin.my, 5);
+    assert.equal(game.level.monsters.includes(goblin), false);
+    assert.equal(game.level.objects.includes(carried), true);
+    assert.equal(carried.ox, 6);
+    assert.equal(carried.oy, 5);
+});
+
+test('pet dart trap killed grounded monster is removed immediately', async () => {
+    installStableNonShopFloorState();
+    initRng(1);
+    enableRngLog({ reset: true });
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 50,
+        uhpmax: 50,
+        uac: 10,
+    });
+    game.inventory = [];
+    const trap = { ttyp: DART_TRAP, tx: 6, ty: 5, tseen: false, once: false };
+    game.level.traps = [trap];
+    const goblin = dartTrapGoblin(31379, {
+        mpeaceful: true,
+        mtame: 5,
+        pet: true,
+        mextra: { edog: { apport: 3, hungrytime: 0, whistletime: 0, ogoal: { x: 0, y: 0 } } },
+    });
+    game.level.monsters = [goblin];
+
+    queueEscapeForMonsterTurn();
+    markHeroNeighborhoodVisible();
+    markSquareVisible(goblin.mx, goblin.my);
+    await processMonsterTurns();
+    const messages = [game._pending_message, ...(await drainQueuedMessagesAfterMore())].join(' ');
+
+    const d4x6 = rngValuesForCall(getRngLog(), 'd(4,6)');
+    assert.equal(d4x6.length, 0);
+    assert.match(messages, /The goblin is hit by a dart!/);
+    assert.match(messages, /The goblin is killed!/);
+    assert.equal(trap.tseen, true);
+    assert.equal(trap.once, true);
+    assert.equal(goblin.mx, 6);
+    assert.equal(goblin.my, 5);
+    assert.equal(game.level.monsters.includes(goblin), false);
+    assert.equal(goblin.mhp, 0);
 });
 
 test('pet melee killed gas spore explodes outside hero melee', async () => {

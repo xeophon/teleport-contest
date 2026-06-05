@@ -11855,10 +11855,8 @@ function moveMonsterTowardHero(mon, conflictActive = false, monIndex = null, som
             mon.mhp = (mon.mhp || 1) - Math.max(1, rnd(3));
             if (inSight) addToplineMessage(`${monsterDisplayName(mon, true)} is hit by a dart!`);
             if (mon.mhp < 1) {
-                recordVanquished(mon, false);
-                game.level.monsters = (game.level?.monsters || []).filter(other => other !== mon);
-                mon.movement = 0;
-                newsym(mon.mx, mon.my);
+                if (inSight) addToplineMessage(`${monsterDisplayName(mon)} is killed!`);
+                finishTrapKilledMonster(mon);
             }
         } else {
             Object.assign(dart, {
@@ -13034,8 +13032,8 @@ function movePet(mon, resumeAfterInventory = false, conflictActive = false) {
             return;
         }
     }
-	    if (trap?.ttyp === DART_TRAP) {
-	        trap.once = true;
+    if (trap?.ttyp === DART_TRAP && !monsterTrapHarmless(mon, trap)) {
+        trap.once = true;
         trap.tseen = true;
         const dart = mksobj(DART, true, false);
         dart.quan = 1;
@@ -13044,6 +13042,11 @@ function movePet(mon, resumeAfterInventory = false, conflictActive = false) {
         if (hit) {
             mon.mhp = Math.max(0, (mon.mhp || 1) - 1);
             addToplineMessage(`The ${mon.data?.name || 'creature'} is hit by a dart!`);
+            if (mon.mhp < 1) {
+                addToplineMessage(`The ${mon.data?.name || 'creature'} is killed!`);
+                finishTrapKilledMonster(mon, { skipPetPostMoveRoll: true });
+                return;
+            }
         } else {
             Object.assign(dart, {
                 kind: 'dart',
@@ -13060,9 +13063,9 @@ function movePet(mon, resumeAfterInventory = false, conflictActive = false) {
         if (game._message_more) {
             game._pet_delayed_post_move_roll = 1;
             game._pet_skip_post_move_roll = 1;
-	        }
-	    }
-		}
+        }
+    }
+}
 
 // C ref: allmain.c newgame()
 export async function newgame() {
