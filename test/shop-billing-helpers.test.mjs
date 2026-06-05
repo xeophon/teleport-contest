@@ -45896,6 +45896,68 @@ test('upward hero-thrown tin opener fatal polyself self-hit rehumanizes after la
     ]);
 });
 
+test('upward hero-thrown tin opener polyself old form too weak to survive', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, {
+        uhp: 0,
+        uhpmax: 18,
+        mh: 1,
+        mhmax: 4,
+        _polyself_form: { name: 'newt', mlet: ':', glyph: ':', mlevel: 0, mmove: 6, mac: 8 },
+        _polyself_base: {
+            uhp: 0,
+            uhpmax: 18,
+            uen: 3,
+            uenmax: 5,
+            uac: 7,
+            ulevel: 2,
+            rank: { m: 'Wizard', f: 'Wizard' },
+        },
+    });
+    game.urole = { ...(game.urole || {}), rank: { m: 'Newt', f: 'Newt' } };
+    const opener = ordinaryTool(876925, 'tin opener', 't');
+    game.inventory = [opener];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('t');
+    await rhack('<');
+
+    const message = game._pending_message || '';
+    assert.equal(game._command_mode, 'deathDieMore');
+    assert.match(message, /A tin opener almost hits the ceiling, then falls back on top of your head\./);
+    assert.match(message, /A tin opener hits the floor\./);
+    assert.match(message, /You return to human form!/);
+    assert.match(message, /Your old form was not healthy enough to survive\./);
+    assert.equal(message.indexOf('A tin opener hits the floor.') < message.indexOf('You return to human form!'), true);
+    assert.equal(message.indexOf('You return to human form!') < message.indexOf('Your old form was not healthy enough to survive.'), true);
+    assert.doesNotMatch(message, /cmdassist|In what direction|You die|killed by a falling object/);
+    assert.equal(game._message_more, 1);
+    assert.equal(game.context.move, 0);
+    assert.equal(game._pending_time_passed, 0);
+    assert.equal(game._death_cause, 'killed by reverting to unhealthy human form');
+    assert.equal(game.u._polyself_form, null);
+    assert.equal(game.u._polyself_base, null);
+    assert.equal(game.u.mh, null);
+    assert.equal(game.u.mhmax, null);
+    assert.equal(game.u.uhp, 0);
+    assert.equal(game.u.uhpmax, 18);
+    assert.equal(game.u.uen, 3);
+    assert.equal(game.u.uenmax, 5);
+    assert.equal(game.u.uac, 7);
+    assert.equal(game.urole.rank.m, 'Wizard');
+    assert.equal(game.inventory.includes(opener), false);
+    assert.equal(game.level.objects.length, 1);
+    const landed = game.level.objects[0];
+    assert.equal(landed.kind, 'tin opener');
+    assert.equal(landed.ox, game.u.ux);
+    assert.equal(landed.oy, game.u.uy);
+    assert.deepEqual(getRngLog().map(rngCallName).slice(0, 3), [
+        'rn2(5)', 'rn2(100)', 'rn2(100)',
+    ]);
+});
+
 test('upward hero-thrown pick-axe self-hits with weapon-tool damage and lands', async () => {
     installNonShopFloorState();
     initRng(1);

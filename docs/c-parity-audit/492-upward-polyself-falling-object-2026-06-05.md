@@ -42,5 +42,5 @@ No replay maps, private seeds, player names, move-count branches, or fixture-spe
 
 ## Remaining
 
-- The C branch where rehumanization exposes an old form with `u.uhp < 1` still needs a separate source-backed slice.
+- The C branch where rehumanization exposes an old form with `u.uhp < 1` is covered by audit 493.
 - Broader `rehumanize()` fallout such as equipment retouching, bare-handed petrification checks, and shifted-vampire form routing remains outside this narrow falling-object slice.

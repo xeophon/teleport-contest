@@ -16582,9 +16582,13 @@ function waterVaporLycanthropyEffect(potion, messages) {
     const beastName = heroLycanthropeBeastName();
     if (!beastName || heroHasUnchanging()) return false;
     if (potion?.blessed && polyselfFormName() === beastName && !hostileMonsterNearHeroForWereChange()) {
-        const message = rehumanizeAfterPolyselfDeath();
-        if (message) messages.push(message);
-        return !!message;
+        const result = rehumanizeAfterPolyselfDeath();
+        messages.push(...result.messages);
+        if (result.died) {
+            messages.fatal = true;
+            messages.more = true;
+        }
+        return !!result.messages.length;
     }
     if (potion?.cursed && !game.u?._polyself_form && !hostileMonsterNearHeroForWereChange()
         && !(game.u?.polymorphControl || game.u?.polycontrol || game.u?.Polymorph_control)) {
@@ -19279,8 +19283,12 @@ function applyHeroThrownCorpseFallingDamage(damage, messages) {
             messages.more = true;
             return;
         }
-        const message = rehumanizeAfterPolyselfDeath();
-        if (message) messages.push(message);
+        const result = rehumanizeAfterPolyselfDeath();
+        messages.push(...result.messages);
+        if (result.died) {
+            messages.fatal = true;
+            messages.more = true;
+        }
         return;
     }
     game.u.uhp = Math.max(0, (game.u.uhp || 0) - damage);
@@ -42383,11 +42391,12 @@ function healWoundedLegsFromRoyalJelly() {
 }
 
 function rehumanizeAfterPolyselfDeath() {
-    if (!game.u) return '';
+    const result = { messages: [], died: false };
+    if (!game.u) return result;
     const base = game.u._polyself_base || {};
     const hpmax = Math.max(1, base.uhpmax ?? game.u.uhpmax ?? 1);
     game.u.uhpmax = hpmax;
-    game.u.uhp = Math.max(1, Math.min(base.uhp ?? hpmax, hpmax));
+    game.u.uhp = Math.min(base.uhp ?? hpmax, hpmax);
     if (base.uenmax != null) game.u.uenmax = base.uenmax;
     if (base.uen != null) game.u.uen = Math.max(0, Math.min(base.uen, game.u.uenmax ?? base.uen));
     if (base.uac != null) game.u.uac = base.uac;
@@ -42406,7 +42415,14 @@ function rehumanizeAfterPolyselfDeath() {
     game.u.umovement = NORMAL_SPEED;
     game.u._statusSuffix = '';
     game.u._strDisplay = null;
-    return 'You return to human form!';
+    const raceAdj = game.urace?.adj || game.urace?.noun || game._startup_race || 'human';
+    result.messages.push(`You return to ${raceAdj} form!`);
+    if ((game.u.uhp || 0) < 1) {
+        result.messages.push('Your old form was not healthy enough to survive.');
+        game._death_cause = `killed by reverting to unhealthy ${raceAdj} form`;
+        result.died = true;
+    }
+    return result;
 }
 
 function royalJellyPostEffects(item) {
@@ -42428,9 +42444,9 @@ function royalJellyPostEffects(item) {
             game.u.uhp = game.u.uhpmax || 1;
         } else if ((game.u.uhp || 0) <= 0) {
             if (game.u._polyself_form) {
-                const message = rehumanizeAfterPolyselfDeath();
-                if (message) messages.push(message);
-                return { messages, died: false };
+                const result = rehumanizeAfterPolyselfDeath();
+                messages.push(...result.messages);
+                return { messages, died: result.died, suppressDieMessage: result.died };
             }
             game._death_cause = 'poisoned by a rotten lump of royal jelly';
             return { messages, died: true };
@@ -42463,7 +42479,7 @@ async function finishRoyalJellyEating(item, floorObject, baseMessage, { more = f
         game._run_steps_remaining = 0;
         game._command_mode = 'deathDieMore';
         prepareDeathBones();
-        await setMessage(`${message}  You die...`, true);
+        await setMessage(result.suppressDieMessage ? message : `${message}  You die...`, true);
         return;
     }
     await setMessage(message, more);
