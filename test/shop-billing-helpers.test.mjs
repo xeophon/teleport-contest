@@ -23747,6 +23747,63 @@ test('cursed royal jelly rehumanize selftouches wielded cockatrice corpse', asyn
     assert.equal(game.context.move || 0, 0);
 });
 
+test('stoning lifesaving after royal jelly selftouch unwields cockatrice corpse', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    installStoneGolemPolyself();
+    game.u.uhp = 1;
+    const amulet = {
+        id: 31973,
+        letter: 'a',
+        cls: 'amulet',
+        glyph: '"',
+        kind: 'amulet of life saving',
+        actualKind: 'amulet of life saving',
+        quan: 1,
+        worn: true,
+        line: 'a - an amulet of life saving (being worn)',
+    };
+    const body = corpse(31974, 'c', 'cockatrice');
+    body.wielded = true;
+    body.line = 'c - a cockatrice corpse (weapon in hand)';
+    const jelly = simpleFood(31975, 'lump of royal jelly', 'j', { cursed: true });
+    game.inventory = [amulet, body, jelly];
+
+    await rhack('e');
+    await rhack('j');
+
+    const message = game._pending_message || '';
+    assert.match(message, /Blecch!  Rotten food!/);
+    assert.match(message, /You feel weak!/);
+    assert.match(message, /You return to human form!/);
+    assert.match(message, /No longer petrify-resistant, you touch the cockatrice corpse\./);
+    assert.match(message, /You turn to stone\.\.\./);
+    assert.match(message, /You die\.\.\.  But wait\.\.\.  Your medallion begins to glow!/);
+    assert.equal(game._command_mode, 'lifeSavingMore');
+    assert.equal(game._message_more, 1);
+    assert.equal(game.inventory.includes(amulet), false);
+    assert.equal(game.inventory.includes(body), true);
+    assert.equal(body.wielded, true);
+    assert.equal(game.u.uhp, 0);
+    assert.equal(game._death_cause, 'petrified by a cockatrice corpse');
+
+    await rhack(' ');
+
+    assert.equal(game._pending_message, 'You feel much better!  The medallion crumbles to dust!');
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game._message_more || 0, 0);
+    assert.equal(game.inventory.includes(body), true);
+    assert.equal(body.wielded, false);
+    assert.equal(body.alternate || false, false);
+    assert.equal(body.line, 'c - a cockatrice corpse');
+    assert.equal(game.u.uhp, game.u.uhpmax);
+    assert.equal(game._death_cause || '', '');
+    assert.equal(game._death_bones_body || '', '');
+    assert.equal(game.u._stonedTimeout || 0, 0);
+    assert.equal(game.u._stonedKiller || '', '');
+    assert.doesNotMatch(game.u._statusSuffix || '', /Stone/);
+});
+
 test('killer bee eating royal jelly becomes a queen bee after the C delay-one bite', async () => {
     installNonShopFloorState();
     const jelly = simpleFood(31967, 'lump of royal jelly', 'j');

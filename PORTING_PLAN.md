@@ -76,7 +76,8 @@ Detailed source-backed history is kept in `docs/c-parity-audit/`. This section i
   - `docs/c-parity-audit/257-tiphat-spell-cuss-2026-05-31.md`
 - Royal-jelly rehumanize self-touch stoning is covered in audit 502.
 - Upward falling-damage rehumanize self-touch fatal-state propagation is covered in audit 503.
-- Latest compact/source note: `docs/c-parity-audit/503-upward-rehumanize-selftouch-fatal-state-2026-06-05.md`.
+- Stoning lifesaving self-touch corpse unwield cleanup is covered in audit 504.
+- Latest compact/source note: `docs/c-parity-audit/504-stoning-lifesaving-selftouch-unwield-2026-06-05.md`.
 - Latest verified public score: `44/44`.
 
 ## Current Priorities

@@ -10078,6 +10078,20 @@ export function consumeLifeSavingAmulet({ clearStoning = false } = {}) {
     return true;
 }
 
+function clearUnsafePetrifyingCorpseWieldAfterLifeSaving() {
+    if (game.u?.stoneResistance || wornGlovesItem()) return;
+    let clearedAlternate = false;
+    for (const item of game.inventory || []) {
+        if (!isPetrifyingCorpseObject(item)) continue;
+        if (!itemIsWielded(item) && !item.alternate && !item.line?.includes('alternate weapon')) continue;
+        if (item.alternate || item.line?.includes('alternate weapon')) clearedAlternate = true;
+        item.wielded = false;
+        item.alternate = false;
+        item.line = normalInventoryLine({ ...item, line: '', wielded: false, alternate: false });
+    }
+    if (clearedAlternate) game._twoweapon = false;
+}
+
 function stopCarriedFigurineTimerOnLeave(item) {
     if (isFigurineObject(item)) stopFigurineTransformTimeout(item);
 }
@@ -47245,6 +47259,7 @@ export async function rhack(_cmd) {
                 game._death_bones_body = '';
                 game._death_current_move = 0;
                 game._death_status_hp_before_zero = null;
+                clearUnsafePetrifyingCorpseWieldAfterLifeSaving();
             }
             if (game._life_saving_refresh_con && game.u?.acurr?.a)
                 game.u.acurr.a[4] = Math.max(3, game.u.acurr.a[4] - 1);
