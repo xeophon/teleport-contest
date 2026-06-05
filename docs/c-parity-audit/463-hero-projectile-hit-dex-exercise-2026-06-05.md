@@ -38,4 +38,4 @@ Implemented C-style Dexterity exercise after successful currently modeled hero s
 
 - Passive-object effects after surviving direct or kicked gem hits remain separate.
 - Full generic `thitmonst()` extraction for ordinary kicked weapons/weptools and broader direct hero-thrown weapons remains separate.
-- Exact full `omon_adj()` target-size/sleep modifiers remain separate work.
+- Hero stone/gem projectile `omon_adj()` target-state hit-value adjustments are covered in audit 464; broader weapon/weptool hit-value bonuses remain separate.

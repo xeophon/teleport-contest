@@ -18222,7 +18222,67 @@ function exerciseHeroProjectileHitDexterity() {
     exerciseAttribute(A_DEX, true);
 }
 
-function heroProjectileBaseHitValue(mon) {
+const HERO_PROJECTILE_MONSTER_SIZE_VALUES = new Map([
+    ['tiny', 0],
+    ['small', 1],
+    ['medium', 2],
+    ['human', 2],
+    ['large', 3],
+    ['huge', 4],
+    ['gigantic', 7],
+]);
+
+function heroProjectileMonsterSizeValue(mon) {
+    const data = mon?.data || {};
+    const value = mon?.msize ?? mon?.size ?? data.msize ?? data.size;
+    if (Number.isFinite(Number(value))) return Math.trunc(Number(value));
+    const key = heroThrownGemNameValue(value);
+    if (HERO_PROJECTILE_MONSTER_SIZE_VALUES.has(key))
+        return HERO_PROJECTILE_MONSTER_SIZE_VALUES.get(key);
+    if (mon?.verysmall || data.verysmall || mon?.tiny || data.tiny) return 0;
+    if (mon?.small || data.small) return 1;
+    if (mon?.large || data.large) return 3;
+    if (mon?.huge || data.huge) return 4;
+    if (mon?.gigantic || data.gigantic) return 7;
+    return 2;
+}
+
+function heroProjectileObjectUsesHitval(obj) {
+    return heroThrownGemClassObject(obj)
+        || itemClassKey(obj) === 'weapon' || obj?.glyph === ')' || obj?.otyp === WEAPON_CLASS
+        || isWeaponTool(obj);
+}
+
+function heroProjectileObjectHitval(obj) {
+    if (!heroProjectileObjectUsesHitval(obj)) return 0;
+    let bonus = 0;
+    if (itemClassKey(obj) === 'weapon' || obj?.glyph === ')' || obj?.otyp === WEAPON_CLASS || isWeaponTool(obj))
+        bonus += Math.trunc(Number(obj?.spe || 0));
+    const explicit = obj?.hitbon ?? obj?.oc_hitbon;
+    if (Number.isFinite(Number(explicit))) bonus += Math.trunc(Number(explicit));
+    return bonus;
+}
+
+function heroProjectileObjectHitAdjustment(obj, mon, { monNotices = true } = {}) {
+    const data = mon?.data || {};
+    let adjustment = heroProjectileMonsterSizeValue(mon) - 2;
+    if (mon?.msleeping) adjustment += 2;
+    const immobile = mon?.mcanmove === false || mon?.mcanmove === 0
+        || data.mmove === false || data.mmove === 0;
+    if (immobile) {
+        adjustment += 4;
+        if (monNotices && data.mmove !== false && data.mmove !== 0 && !rn2(10)) {
+            mon.mcanmove = true;
+            mon.mfrozen = 0;
+        }
+    }
+    if (obj?.otyp === HEAVY_IRON_BALL && obj !== game.u?.uball) adjustment += 2;
+    else if (obj?.otyp === BOULDER || objectKindKey(obj) === 'boulder') adjustment += 6;
+    else adjustment += heroProjectileObjectHitval(obj);
+    return adjustment;
+}
+
+function heroProjectileBaseHitValue(obj, mon) {
     const ux = game.u?.ux || 0;
     const uy = game.u?.uy || 0;
     const disttmp = Math.max(-4, 3 - distmin(ux, uy, mon?.mx ?? ux, mon?.my ?? uy));
@@ -18233,7 +18293,8 @@ function heroProjectileBaseHitValue(mon) {
         + Math.trunc(Number(game.u?.uhitinc || 0))
         + heroProjectileHitLevel()
         + heroProjectileDexHitBonus()
-        + disttmp;
+        + disttmp
+        + heroProjectileObjectHitAdjustment(obj, mon);
 }
 
 function heroKickedProjectileIsAmmo(obj) {
@@ -18245,7 +18306,7 @@ function heroKickedProjectileIsAmmo(obj) {
 }
 
 function heroKickedProjectileHitValue(obj, mon) {
-    return heroProjectileBaseHitValue(mon) - (heroKickedProjectileIsAmmo(obj) ? 5 : 3);
+    return heroProjectileBaseHitValue(obj, mon) - (heroKickedProjectileIsAmmo(obj) ? 5 : 3);
 }
 
 function shouldMulchHeroProjectileMissile(obj) {
@@ -18260,8 +18321,9 @@ function shouldMulchHeroProjectileMissile(obj) {
 
 function heroKickedStoneMissileRockPasserImpact(obj, mon) {
     if (!heroThrownStoneMissileHarmlessRockPasser(obj, mon)) return { handled: false, messages: [] };
+    const hitValue = heroKickedProjectileHitValue(obj, mon);
     const dieroll = rnd(20);
-    if (heroKickedProjectileHitValue(obj, mon) >= dieroll) {
+    if (hitValue >= dieroll) {
         wakeMonsterFromHeroThrownHit(mon);
         exerciseHeroProjectileHitDexterity();
         const mulched = shouldMulchHeroProjectileMissile(obj);
@@ -18280,9 +18342,10 @@ function heroKickedStoneMissileRockPasserImpact(obj, mon) {
 
 function heroKickedGemImpact(obj, mon) {
     if (!heroThrownGemClassObject(obj)) return { handled: false, messages: [] };
+    const hitValue = heroKickedProjectileHitValue(obj, mon);
     const dieroll = rnd(20);
     const targetName = heroThrownVenomTargetName(mon);
-    if (heroKickedProjectileHitValue(obj, mon) >= dieroll) {
+    if (hitValue >= dieroll) {
         const damage = Math.max(1, rnd(2) + heroStrengthDamageBonus() + heroDamageIncreaseBonus());
         mon.mhp = (mon.mhp || 1) - damage;
         if ((mon.mhp || 0) <= 0) mon.dead = true;
@@ -18307,15 +18370,16 @@ function heroThrownGlassGemObject(obj) {
     return heroThrownGemClassObject(obj) && stoneToFleshObjectMaterial(obj) === 'glass';
 }
 
-function heroThrownGemHitValue(mon) {
-    return heroProjectileBaseHitValue(mon) - 4;
+function heroThrownGemHitValue(obj, mon) {
+    return heroProjectileBaseHitValue(obj, mon) - 4;
 }
 
 function heroThrownGemImpact(obj, mon) {
     if (!heroThrownGemClassObject(obj)) return { handled: false, messages: [] };
+    const hitValue = heroThrownGemHitValue(obj, mon);
     const dieroll = rnd(20);
     const targetName = heroThrownVenomTargetName(mon);
-    if (heroThrownGemHitValue(mon) >= dieroll) {
+    if (hitValue >= dieroll) {
         const damage = rnd(2);
         mon.mhp = (mon.mhp || 1) - damage;
         if ((mon.mhp || 0) <= 0) mon.dead = true;
@@ -61423,11 +61487,11 @@ export async function rhack(_cmd) {
             impactMessage = (unicornImpact.messages || []).join('  ');
             impactConsumedThrownObject = !!unicornImpact.consumed;
         } else if (targetMon && heroThrownStoneMissileHarmlessRockPasser(item, targetMon)) {
-            rnd(20);
-            const dex = game.u?.acurr?.a?.[A_DEX] ?? 10;
+            const hitValue = heroThrownGemHitValue(thrownObject, targetMon);
+            const dieroll = rnd(20);
             const thrownName = floorObjectTheSubject(thrownObject);
             const targetName = heroThrownVenomTargetName(targetMon);
-            if (dex > rnd(25)) {
+            if (hitValue >= dieroll) {
                 wakeMonsterFromHeroThrownHit(targetMon);
                 exerciseHeroProjectileHitDexterity();
                 impactMessage = `${thrownName} hits ${targetName} but does no harm.`;

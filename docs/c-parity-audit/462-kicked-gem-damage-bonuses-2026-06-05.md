@@ -42,4 +42,4 @@ Implemented C-style damage bonus recomputation for kicked floor `GEM_CLASS` obje
 - Broader kicked-object `thitmonst()` conversion is still incomplete for ordinary kicked weapons/weptools.
 - Successful projectile-hit Dexterity exercise is covered in audit 463 for the currently modeled stone/gem hit paths.
 - Passive-object effects after surviving kicked gem hits remain separate.
-- Exact full `omon_adj()` target-size/sleep modifiers remain separate work.
+- Hero stone/gem projectile `omon_adj()` target-state hit-value adjustments are covered in audit 464; broader weapon/weptool hit-value bonuses remain separate.

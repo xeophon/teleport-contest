@@ -26053,6 +26053,97 @@ test('command kicked ruby miss against ordinary monster lands', async () => {
     ]);
 });
 
+test('command kicked ruby sleeping omon adjustment can turn miss into hit', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, { ulevel: 1, uluck: 0, uhitinc: 0, udaminc: 0 });
+    game.u.acurr.a[A_STR] = 10;
+    game.u.acurr.a[A_DEX] = 10;
+    const ruby = floorGem(512201, 'ruby', {
+        ox: 6,
+        oy: 5,
+        known: true,
+        actualKind: 'ruby',
+        gemDescription: 'ruby',
+        gemTough: true,
+    });
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, {
+        mhp: 20,
+        mhpmax: 20,
+        msleeping: 1,
+        data: {
+            name: 'goblin',
+            mlevel: 1,
+            mac: 9,
+        },
+    });
+    game.level.objects = [ruby];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('\x04');
+    await rhack('l');
+
+    assert.match(game._pending_message, /You kick a ruby\./);
+    assert.match(game._pending_message, /The ruby hits the goblin\./);
+    assert.doesNotMatch(game._pending_message, /misses|does no harm|shatters/);
+    assert.equal(goblin.mhp, 19);
+    assert.equal(goblin.msleeping, 0);
+    assert.equal(game.u._aexe[A_DEX], 1);
+    assert.equal(game.level.objects.some(obj => obj.id === ruby.id), false);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 6), [
+        'rnd(20)', 'rnd(2)', 'rn2(19)', 'rn2(3)', 'rn2(2)', 'rn2(100)',
+    ]);
+});
+
+test('command kicked ruby immobile omon adjustment rolls thaw before hit', async () => {
+    installNonShopFloorState();
+    initRng(21);
+    Object.assign(game.u, { ulevel: 20, uluck: 10, uhitinc: 10, udaminc: 0 });
+    game.u.acurr.a[A_STR] = 10;
+    game.u.acurr.a[A_DEX] = 25;
+    const ruby = floorGem(512202, 'ruby', {
+        ox: 6,
+        oy: 5,
+        known: true,
+        actualKind: 'ruby',
+        gemDescription: 'ruby',
+        gemTough: true,
+    });
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, {
+        mhp: 20,
+        mhpmax: 20,
+        msleeping: 0,
+        mcanmove: 0,
+        mfrozen: 3,
+        data: {
+            name: 'goblin',
+            mlevel: 1,
+            mac: 9,
+            mmove: 12,
+        },
+    });
+    game.level.objects = [ruby];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('\x04');
+    await rhack('l');
+
+    assert.match(game._pending_message, /You kick a ruby\./);
+    assert.match(game._pending_message, /The ruby hits the goblin\./);
+    assert.doesNotMatch(game._pending_message, /misses|does no harm|shatters/);
+    assert.equal(goblin.mhp, 18);
+    assert.equal(goblin.mcanmove, true);
+    assert.equal(goblin.mfrozen, 0);
+    assert.equal(game.level.objects.includes(ruby), true);
+    assert.equal(ruby.ox, 7);
+    assert.equal(ruby.oy, 5);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 6), [
+        'rn2(10)', 'rnd(20)', 'rnd(2)', 'rn2(19)', 'rn2(3)', 'rn2(2)',
+    ]);
+});
+
 test('command kicked flint harms ordinary monster', async () => {
     installNonShopFloorState();
     initRng(2);
@@ -42637,13 +42728,14 @@ test('hero-thrown loadstone hits rock-passing monster harmlessly', async () => {
     assert.equal(landed.ox, 7);
     assert.equal(landed.oy, 5);
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 4), [
-        'rnd(20)', 'rnd(25)', 'rn2(19)', 'rn2(100)',
+        'rnd(20)', 'rn2(19)', 'rn2(100)',
     ]);
 });
 
 test('hero-thrown stone missile miss against rock-passer stays a miss', async () => {
     installNonShopFloorState();
-    initRng(1);
+    initRng(2);
+    Object.assign(game.u, { ulevel: 1, uluck: -10, uhitinc: -20 });
     game.u.acurr.a[A_DEX] = 1;
     const loadstone = carriedLoadstone(876087, 'l', {
         cursed: false,
@@ -42662,6 +42754,7 @@ test('hero-thrown stone missile miss against rock-passer stays a miss', async ()
         data: {
             name: 'earth elemental',
             mlevel: 8,
+            mac: -20,
             passWalls: true,
             passesRocks: true,
             neuter: true,
@@ -42685,7 +42778,7 @@ test('hero-thrown stone missile miss against rock-passer stays a miss', async ()
     assert.equal(game.inventory.includes(loadstone), false);
     assert.equal(game.level.objects.some(obj => obj.id === loadstone.id && obj.ox === 7 && obj.oy === 5), true);
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 4), [
-        'rnd(20)', 'rnd(25)', 'rn2(3)', 'rn2(100)',
+        'rnd(20)', 'rn2(3)', 'rn2(100)',
     ]);
 });
 
