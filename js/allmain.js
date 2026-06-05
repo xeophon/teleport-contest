@@ -10449,6 +10449,12 @@ function monsterTrapHarmless(mon, trap) {
     return ttyp === STATUE_TRAP || ttyp === MAGIC_TRAP || ttyp === VIBRATING_SQUARE;
 }
 
+function trapDartDamage(mon) {
+    const data = mon?.data || {};
+    const die = mon?.big || mon?.bigmonst || data.big || data.bigmonst ? 2 : 3;
+    return Math.max(1, rnd(die));
+}
+
 function monsterPossessiveName(mon) {
     const name = monsterDisplayName(mon).replace(/^The /, 'the ');
     return name.endsWith('s') ? `${name}'` : `${name}'s`;
@@ -11852,7 +11858,7 @@ function moveMonsterTowardHero(mon, conflictActive = false, monIndex = null, som
         if (inSight) trap.tseen = true;
         const hit = (mon.data?.mac ?? 10) + 7 <= rnd(20);
         if (hit) {
-            mon.mhp = (mon.mhp || 1) - Math.max(1, rnd(3));
+            mon.mhp = (mon.mhp || 1) - trapDartDamage(mon);
             if (inSight) addToplineMessage(`${monsterDisplayName(mon, true)} is hit by a dart!`);
             if (mon.mhp < 1) {
                 if (inSight) addToplineMessage(`${monsterDisplayName(mon)} is killed!`);
@@ -13045,7 +13051,7 @@ function movePet(mon, resumeAfterInventory = false, conflictActive = false) {
         dart.opoisoned = !rn2(6);
         const hit = (mon.data?.mac ?? 6) + 7 <= rnd(20);
         if (hit) {
-            mon.mhp = Math.max(0, (mon.mhp || 1) - Math.max(1, rnd(3)));
+            mon.mhp = Math.max(0, (mon.mhp || 1) - trapDartDamage(mon));
             addToplineMessage(`The ${mon.data?.name || 'creature'} is hit by a dart!`);
             if (mon.mhp < 1) {
                 addToplineMessage(`The ${mon.data?.name || 'creature'} is killed!`);

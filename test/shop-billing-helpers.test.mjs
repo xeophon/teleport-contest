@@ -550,6 +550,15 @@ function rngValuesForCall(log, call) {
     return log.filter(entry => rngCallName(entry) === call).map(rngCallValue);
 }
 
+function dartTrapDamageRollAfterHit(log, expectedCall) {
+    const calls = log.map(rngCallName);
+    const hitRoll = calls.lastIndexOf('rnd(20)');
+    assert.notEqual(hitRoll, -1);
+    assert.equal(calls[hitRoll - 1], 'rn2(6)');
+    assert.equal(calls[hitRoll + 1], expectedCall);
+    return rngCallValue(log[hitRoll + 1]);
+}
+
 function dartStack(id, letter = 'd', quan = 3, extra = {}) {
     return {
         id,
@@ -13420,10 +13429,10 @@ function adjacentGasSporeBlastVictim(name = 'goblin', id = 31320, x = 7, y = 5, 
     });
 }
 
-function dartTrapGoblin(id = 31375, extra = {}) {
-    const data = monsterByRndName('goblin') || { name: 'goblin', mlevel: 1, mr: 0 };
+function dartTrapMonster(name = 'goblin', id = 31375, extra = {}) {
+    const data = monsterByRndName(name) || { name, mlevel: 1, mr: 0 };
     const { data: dataExtra = {}, ...rest } = extra;
-    return ordinaryThrowTarget('goblin', 7, 5, {
+    return ordinaryThrowTarget(name, 7, 5, {
         m_id: id,
         mhp: 1,
         mhpmax: 1,
@@ -13439,6 +13448,10 @@ function dartTrapGoblin(id = 31375, extra = {}) {
         data: { ...data, mac: -7, ...dataExtra },
         ...rest,
     });
+}
+
+function dartTrapGoblin(id = 31375, extra = {}) {
+    return dartTrapMonster('goblin', id, extra);
 }
 
 function gasSporeMeleePet(id = 31382, extra = {}) {
@@ -17923,12 +17936,91 @@ test('pet dart trap hit uses dart damage roll', async () => {
     await processMonsterTurns();
     const messages = [game._pending_message, ...(await drainQueuedMessagesAfterMore())].join(' ');
 
-    const dartDamage = rngValuesForCall(getRngLog(), 'rnd(3)');
-    assert.equal(dartDamage.length, 1);
+    const dartDamage = dartTrapDamageRollAfterHit(getRngLog(), 'rnd(3)');
     assert.match(messages, /The goblin is hit by a dart!/);
     assert.doesNotMatch(messages, /The goblin is killed!/);
-    assert.equal(goblin.mhp, 5 - dartDamage[0]);
+    assert.equal(goblin.mhp, 5 - dartDamage);
     assert.equal(game.level.monsters.includes(goblin), true);
+    assert.equal(trap.tseen, true);
+    assert.equal(trap.once, true);
+});
+
+test('dart trap hit uses large monster dart damage roll', async () => {
+    installStableNonShopFloorState();
+    initRng(1);
+    enableRngLog({ reset: true });
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 50,
+        uhpmax: 50,
+        uac: 10,
+    });
+    game.inventory = [];
+    const trap = { ttyp: DART_TRAP, tx: 6, ty: 5, tseen: false, once: false };
+    game.level.traps = [trap];
+    const bugbear = dartTrapMonster('bugbear', 31382, {
+        mhp: 5,
+        mhpmax: 5,
+    });
+    assert.equal(bugbear.data.big, true);
+    game.level.monsters = [bugbear];
+
+    queueEscapeForMonsterTurn();
+    markHeroNeighborhoodVisible();
+    markSquareVisible(bugbear.mx, bugbear.my);
+    await processMonsterTurns();
+    const messages = [game._pending_message, ...(await drainQueuedMessagesAfterMore())].join(' ');
+
+    const dartDamage = dartTrapDamageRollAfterHit(getRngLog(), 'rnd(2)');
+    assert.equal(rngValuesForCall(getRngLog(), 'rnd(3)').length, 0);
+    assert.match(messages, /The bugbear is hit by a dart!/);
+    assert.doesNotMatch(messages, /The bugbear is killed!/);
+    assert.ok(dartDamage >= 1 && dartDamage <= 2);
+    assert.equal(bugbear.mhp, 5 - dartDamage);
+    assert.equal(game.level.monsters.includes(bugbear), true);
+    assert.equal(trap.tseen, true);
+    assert.equal(trap.once, true);
+});
+
+test('pet dart trap hit uses large monster dart damage roll', async () => {
+    installStableNonShopFloorState();
+    initRng(1);
+    enableRngLog({ reset: true });
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 50,
+        uhpmax: 50,
+        uac: 10,
+    });
+    game.inventory = [];
+    const trap = { ttyp: DART_TRAP, tx: 6, ty: 5, tseen: false, once: false };
+    game.level.traps = [trap];
+    const bugbear = dartTrapMonster('bugbear', 31383, {
+        mhp: 5,
+        mhpmax: 5,
+        mpeaceful: true,
+        mtame: 5,
+        pet: true,
+        mextra: { edog: { apport: 3, hungrytime: 0, whistletime: 0, ogoal: { x: 0, y: 0 } } },
+    });
+    assert.equal(bugbear.data.big, true);
+    game.level.monsters = [bugbear];
+
+    queueEscapeForMonsterTurn();
+    markHeroNeighborhoodVisible();
+    markSquareVisible(bugbear.mx, bugbear.my);
+    await processMonsterTurns();
+    const messages = [game._pending_message, ...(await drainQueuedMessagesAfterMore())].join(' ');
+
+    const dartDamage = dartTrapDamageRollAfterHit(getRngLog(), 'rnd(2)');
+    assert.equal(rngValuesForCall(getRngLog(), 'rnd(3)').length, 0);
+    assert.match(messages, /The bugbear is hit by a dart!/);
+    assert.doesNotMatch(messages, /The bugbear is killed!/);
+    assert.ok(dartDamage >= 1 && dartDamage <= 2);
+    assert.equal(bugbear.mhp, 5 - dartDamage);
+    assert.equal(game.level.monsters.includes(bugbear), true);
     assert.equal(trap.tseen, true);
     assert.equal(trap.once, true);
 });
