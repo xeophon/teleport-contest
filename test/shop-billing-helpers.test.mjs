@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { interruptEatingOccupation, moveloop_core, processEatingOccupationTick, processForceLockOccupation, processMonsterTurns } from '../js/allmain.js';
+import { advanceRegions, interruptEatingOccupation, moveloop_core, processEatingOccupationTick, processForceLockOccupation, processMonsterTurns } from '../js/allmain.js';
 import { activateStatueTrap, burnFloorObjectsByFire, earthFloorEffects, finishForceLock, landMonsterThrownObject, maybeQueueQuestLeaderTalk, maybeQueueQuestTalk, processCorpseTimers, processForceLockOccupationTick, processGlobShrinkTimers, processSpellbookStudyOccupation, rhack, __shopBillingTestHooks as shop } from '../js/cmd.js';
 import { newsym, refreshHallucinatedMap } from '../js/display.js';
 import { game, resetGame } from '../js/gstate.js';
@@ -14,6 +14,7 @@ import { CLR_BRIGHT_MAGENTA, CLR_BROWN, CLR_WHITE } from '../js/terminal.js';
 import { TRIBUTE_DEATH_QUOTES } from '../js/tribute.js';
 import { vision_reset } from '../js/vision.js';
 import { fireBreathDamageMonster } from '../js/fire_breath.js';
+import { createGasCloudSelection } from '../js/region.js';
 
 const BRASS_LANTERN = 226;
 const OIL_LAMP = 227;
@@ -17594,6 +17595,39 @@ test('fire breath killed gas spore explodes outside hero melee', async () => {
     const d4x6 = rngValuesForCall(getRngLog(), 'd(4,6)');
     assert.equal(hit.killed, true);
     assert.equal(d4x6.length, 2);
+    assert.match(messages, /Boom!/);
+    assert.match(messages, /The goblin is caught in the gas spore's explosion!/);
+    assert.match(messages, /You are caught in the gas spore's explosion!/);
+    assert.equal(game.level.monsters.includes(spore), false);
+    assert.equal(game.level.objects.some(obj => obj.ox === 6 && obj.oy === 5), false);
+    assert.equal(victim.mhp, 30 - d4x6[1]);
+    assert.equal(game.u.uhp, 50 - d4x6[1]);
+});
+
+test('gas cloud killed gas spore explodes outside monster melee', async () => {
+    installStableNonShopFloorState();
+    initRng(1);
+    enableRngLog({ reset: true });
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 50,
+        uhpmax: 50,
+        uac: 10,
+    });
+    game.inventory = [];
+    const spore = adjacentHostileGasSpore(31370);
+    const victim = adjacentGasSporeBlastVictim('goblin', 31371);
+    game.level.monsters = [spore, victim];
+    createGasCloudSelection([{ x: spore.mx, y: spore.my }], 1);
+
+    markHeroNeighborhoodVisible();
+    advanceRegions(game);
+    const messages = [game._pending_message, ...(await drainQueuedMessagesAfterMore())].join(' ');
+
+    const d4x6 = rngValuesForCall(getRngLog(), 'd(4,6)');
+    assert.equal(d4x6.length, 2);
+    assert.match(messages, /The gas spore is killed!/);
     assert.match(messages, /Boom!/);
     assert.match(messages, /The goblin is caught in the gas spore's explosion!/);
     assert.match(messages, /You are caught in the gas spore's explosion!/);

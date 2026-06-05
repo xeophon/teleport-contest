@@ -15,6 +15,7 @@ import { advanceVaultGuard, prepareVaultGuardEscort, restVaultFakecorr } from '.
 import { DISPLAY_MONSTER_GLYPHS, DISPLAY_MONSTER_HALLU_NAMES } from './monster_data.js';
 import { clearMonsterTrack, updateMonsterTrack } from './montrack.js';
 import { createGasCloud } from './region.js';
+import { queueGasSporeDeathExplosion } from './monster_death.js';
 import { advanceFireBreathRay, finishHeroTargetedBreath, fireBreathDamageMonster, fireBreathZapHits } from './fire_breath.js';
 import { attachFigurineTransformTimeout, figurineLocationCheck, isFigurineObject, makeFigurineFamiliar, stopFigurineTransformTimeout } from './figurine.js';
 import { processBuriedOrganicRot, processMeltIceTimers, removedFromIcebox } from './ice.js';
@@ -13245,6 +13246,8 @@ function applyMonsterGasCloud(g, reg, mon) {
     if (couldSeeCoord(mon.mx, mon.my)) addToplineMessage(`${monsterDisplayName(mon)} is killed!`);
     recordVanquished(mon, !!reg.heroFault);
     dropMonsterInventory(mon);
+    const explosion = queueGasSporeDeathExplosion(mon);
+    if (explosion) addToplineMessage(explosion.message);
     g.level.monsters = (g.level?.monsters || []).filter(other => other !== mon);
     newsym(mon.mx, mon.my);
     return true;
