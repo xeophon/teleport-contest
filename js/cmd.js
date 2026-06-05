@@ -43149,6 +43149,10 @@ function trapMessage(...parts) {
     return parts.filter(Boolean).join('  ');
 }
 
+function trapResultHasEffect(result) {
+    return !!(result?.message || result?.fatal || result?.lifeSaving || result?.more);
+}
+
 function sitTrapEscapeAllowed(trap) {
     return ![ANTI_MAGIC, MAGIC_PORTAL, VIBRATING_SQUARE].includes(trap?.ttyp);
 }
@@ -44716,6 +44720,170 @@ function sitLandmineResult(trap, prefix) {
     return heroLandmineResult(trap, prefix, { forceTrap: true });
 }
 
+function pitOwnerArticle(trap) {
+    return trap?.madeby_u ? 'your' : 'a';
+}
+
+function steedPitName(steed, { poor = false, capital = false } = {}) {
+    let name = steedTrapProjectileName(steed)
+        .replace(/^The saddled /, '')
+        .replace(/^The /, '')
+        .replace(/^the /, '');
+    if (poor) name = `poor ${name}`;
+    return capital ? name.charAt(0).toUpperCase() + name.slice(1) : name;
+}
+
+function heroPitTrapState() {
+    if (!game.u) return;
+    game.u.utrap = rn1(6, 2);
+    game.u.utraptype = 'pit';
+}
+
+function heroPitDamageDie(relevantSpikes) {
+    if (relevantSpikes) return 10;
+    return 6;
+}
+
+function mountedHeroPitSteedResult(trap, messages) {
+    const steed = game.u?.usteed;
+    if (!steed) return false;
+    steed.mx = game.u?.ux ?? steed.mx;
+    steed.my = game.u?.uy ?? steed.my;
+    const damage = rnd(trap?.ttyp === PIT ? 6 : 10);
+    steed.mhp = (steed.mhp || 1) - damage;
+    if ((steed.mhp || 0) <= 0) {
+        messages.push(`${steedTrapProjectileName(steed)} is killed!`);
+        finishTrapKilledSteed(steed, messages);
+    }
+    return true;
+}
+
+function applyHeroPitDamage(damage, messages, deathCause) {
+    if (!game.u) return {};
+    game.u.uhp = Math.max(0, (game.u.uhp || 1) - maybeHalfPhysicalDamage(damage));
+    if ((game.u.uhp || 0) <= 0)
+        return heroDartTrapFatalResult(messages, deathCause);
+    return {};
+}
+
+function applyHeroPitPoison(messages, { fatal = 8 } = {}) {
+    messages.push('The spikes were poisoned!');
+    if (heroHasPoisonResistance()) {
+        messages.push("The poison doesn't seem to affect you.");
+        return {};
+    }
+
+    const roll = fatal ? rn2(fatal) : 1;
+    if (roll === 0) {
+        const loss = 6 + d(4, 6);
+        if ((game.u?.uhp || 0) <= loss) {
+            messages.push('The poison was deadly...');
+            return heroDartTrapFatalResult(messages, 'fall onto poison spikes');
+        }
+        if (game.u) {
+            game.u.uhpmax = Math.max(3, (game.u.uhpmax || game.u.uhp || 1) - Math.trunc(loss / 2));
+            game.u.uhp = Math.max(0, (game.u.uhp || 0) - loss);
+            if (game.u.acurr?.a) {
+                game.u.acurr.a[A_CON] = Math.max(3, (game.u.acurr.a[A_CON] ?? 10) - 1);
+                game.u.acurr.a[A_STR] = Math.max(3, (game.u.acurr.a[A_STR] ?? 10) - 3);
+            }
+        }
+        if ((game.u?.uhp || 0) <= 0)
+            return heroDartTrapFatalResult(messages, 'fall onto poison spikes');
+        return {};
+    }
+    if (roll > 5) {
+        const loss = rn1(10, 6);
+        if (game.u) game.u.uhp = Math.max(0, (game.u.uhp || 0) - loss);
+        if ((game.u?.uhp || 0) <= 0)
+            return heroDartTrapFatalResult(messages, 'fall onto poison spikes');
+        return {};
+    }
+    const strengthLoss = fatal ? d(2, 2) : 1;
+    if (game.u?.acurr?.a)
+        game.u.acurr.a[A_STR] = Math.max(3, (game.u.acurr.a[A_STR] ?? 10) - strengthLoss);
+    return {};
+}
+
+function heroPitClingerResult(trap, prefix, alreadyKnown) {
+    if (trap) trap.tseen = true;
+    const spike = trap?.ttyp === SPIKED_PIT ? 'spiked ' : '';
+    const messages = [prefix];
+    if (alreadyKnown) messages.push(`You see ${pitOwnerArticle(trap)} ${spike}pit below you.`);
+    else {
+        messages.push(`${trap?.madeby_u ? 'Your' : 'A'} pit ${trap?.ttyp === SPIKED_PIT ? 'full of spikes ' : ''}opens up under you!`);
+        messages.push("You don't fall in!");
+    }
+    return { message: trapMessage(...messages) };
+}
+
+function heroPitResult(trap, prefix = '', { viaSitting = false, plunged = false } = {}) {
+    const alreadyKnown = !!trap?.tseen;
+    const inSokoban = In_sokoban(game.u?.uz);
+    if (!inSokoban && (game.u?.levitating || (game.u?.flying && !plunged && !viaSitting)))
+        return { message: '', more: false };
+    if (trap) trap.tseen = true;
+    if (!inSokoban && polyselfForm()?.clinger && !plunged)
+        return heroPitClingerResult(trap, prefix, alreadyKnown);
+
+    let relevantSpikes = trap?.ttyp === SPIKED_PIT;
+    const messages = [prefix];
+    const steed = game.u?.usteed;
+    if (inSokoban) {
+        const pitName = trap?.ttyp === SPIKED_PIT ? 'spiked pit' : 'pit';
+        messages.push(`Air currents pull you down into ${pitOwnerArticle(trap)} ${pitName}!`);
+    } else {
+        if (steed) messages.push(`You lead ${steedPitName(steed, { poor: true })} into ${pitOwnerArticle(trap)} pit!`);
+        else messages.push('You fall into a pit!');
+    }
+    if (relevantSpikes && heroWearingIronShoes()) {
+        messages.push('Your iron shoes protect you from the sharp iron spikes.');
+        relevantSpikes = false;
+    } else if (relevantSpikes) {
+        messages.push(steed
+            ? `${steedPitName(steed, { poor: true, capital: true })} lands on a set of sharp iron spikes!`
+            : 'You land on a set of sharp iron spikes!');
+    }
+
+    heroPitTrapState();
+    if (mountedHeroPitSteedResult(trap, messages))
+        return { message: trapMessage(...messages) };
+
+    const damage = rnd(heroPitDamageDie(relevantSpikes));
+    const deathCause = relevantSpikes ? 'fell into a pit of iron spikes' : 'fell into a pit';
+    const damageResult = applyHeroPitDamage(damage, messages, deathCause);
+    if (damageResult.fatal) return { message: trapMessage(...messages), ...damageResult };
+
+    let poisonResult = {};
+    if (relevantSpikes) {
+        poisonResult = !rn2(6)
+            ? applyHeroPitPoison(messages, { fatal: damageResult.lifeSaving ? 0 : 8 })
+            : {};
+        if (poisonResult.fatal) return { message: trapMessage(...messages), ...poisonResult };
+    }
+    exerciseAttribute(A_STR, false);
+    exerciseAttribute(A_DEX, false);
+    return {
+        message: trapMessage(...messages),
+        lifeSaving: !!damageResult.lifeSaving || !!poisonResult.lifeSaving,
+        more: !!damageResult.more || !!poisonResult.more,
+    };
+}
+
+function movementPitResult(trap) {
+    const alreadySeen = !!trap?.tseen;
+    if (!In_sokoban(game.u?.uz) && (game.u?.levitating || game.u?.flying))
+        return { message: alreadySeen ? movementOverFloorTrapMessage(trap) : '', more: false };
+    if (alreadySeen && !In_sokoban(game.u?.uz)
+        && sitTrapEscapeAllowed(trap) && !rn2(5))
+        return { message: movementTrapEscapeMessage(trap), more: false };
+    return heroPitResult(trap, '');
+}
+
+function sitPitResult(trap, prefix) {
+    return heroPitResult(trap, prefix, { viaSitting: true });
+}
+
 function sitRollingBoulderMessage(trap, prefix) {
     trap.tseen = true;
     const start = trap.launch;
@@ -44787,13 +44955,7 @@ async function sitTriggerTrap(trap) {
         return true;
     }
     if (trap.ttyp === PIT || trap.ttyp === SPIKED_PIT) {
-        trap.tseen = true;
-        if (game.u) {
-            game.u.utrap = rn1(6, 2);
-            game.u.utraptype = 'pit';
-            game.u.uhp = Math.max(0, (game.u.uhp || 1) - rnd(trap.ttyp === SPIKED_PIT ? 10 : 6));
-        }
-        await finishSitMessage(`${prefix}  You fall into ${trap.ttyp === SPIKED_PIT ? 'a spiked pit' : 'a pit'}!`);
+        await finishHeroDartTrapResult(sitPitResult(trap, prefix), { sit: true });
         return true;
     }
     if (trap.ttyp === HOLE || trap.ttyp === TRAPDOOR) {
@@ -47478,6 +47640,7 @@ async function moveHero(dx, dy) {
         if (trapHere?.ttyp === MAGIC_TRAP) game._pending_magic_trap = trapHere;
         if (trapHere?.ttyp === SLP_GAS_TRAP) game._pending_sleep_gas_trap = trapHere;
         if (trapHere?.ttyp === LANDMINE) game._pending_landmine_trap = trapHere;
+        if (trapHere?.ttyp === PIT || trapHere?.ttyp === SPIKED_PIT) game._pending_pit_trap = trapHere;
         if (trapHere?.ttyp === BEAR_TRAP) game._pending_bear_trap = trapHere;
         return;
     }
@@ -47485,6 +47648,7 @@ async function moveHero(dx, dy) {
     if (trapHere?.ttyp === ARROW_TRAP && objectsHere.length > 1) game._pending_arrow_trap = trapHere;
     if (trapHere?.ttyp === DART_TRAP && objectsHere.length > 1) game._pending_dart_trap = trapHere;
     if (trapHere?.ttyp === LANDMINE && objectsHere.length > 1) game._pending_landmine_trap = trapHere;
+    if ((trapHere?.ttyp === PIT || trapHere?.ttyp === SPIKED_PIT) && objectsHere.length > 1) game._pending_pit_trap = trapHere;
     if (trapHere?.ttyp === BEAR_TRAP && objectsHere.length > 1) game._pending_bear_trap = trapHere;
     const goldHere = objectsHere.find(obj => obj.otyp === GOLD_PIECE || obj.glyph === '$');
     if (game._autopickup && goldHere) {
@@ -47604,6 +47768,7 @@ async function moveHero(dx, dy) {
         if (trapHere?.ttyp === MAGIC_TRAP) game._pending_magic_trap = trapHere;
         if (trapHere?.ttyp === SLP_GAS_TRAP) game._pending_sleep_gas_trap = trapHere;
         if (trapHere?.ttyp === LANDMINE) game._pending_landmine_trap = trapHere;
+        if (trapHere?.ttyp === PIT || trapHere?.ttyp === SPIKED_PIT) game._pending_pit_trap = trapHere;
         if (trapHere?.ttyp === BEAR_TRAP) game._pending_bear_trap = trapHere;
         return;
     }
@@ -47637,6 +47802,13 @@ async function moveHero(dx, dy) {
         const result = movementLandmineResult(trapHere);
         result.message = [pileMessage, result.message].filter(Boolean).join('  ');
         if (result.message)
+            await finishHeroDartTrapResult(result, { more: !!(pileMessage && result.message) });
+        return;
+    }
+    if (trapHere?.ttyp === PIT || trapHere?.ttyp === SPIKED_PIT) {
+        const result = movementPitResult(trapHere);
+        result.message = [pileMessage, result.message].filter(Boolean).join('  ');
+        if (trapResultHasEffect(result))
             await finishHeroDartTrapResult(result, { more: !!(pileMessage && result.message) });
         return;
     }
@@ -48002,6 +48174,13 @@ export async function rhack(_cmd) {
                     await finishHeroDartTrapResult(result, { more: objectListRows > 4 || !!result.more });
                 return;
             }
+            if (game._pending_pit_trap) {
+                const result = movementPitResult(game._pending_pit_trap);
+                game._pending_pit_trap = null;
+                if (trapResultHasEffect(result))
+                    await finishHeroDartTrapResult(result, { more: objectListRows > 4 || !!result.more });
+                return;
+            }
             if (game._pending_bear_trap) {
                 const result = movementBearTrapResult(game._pending_bear_trap, { deferAfterMore: objectListRows > 4 });
                 game._pending_bear_trap = null;
@@ -48042,6 +48221,14 @@ export async function rhack(_cmd) {
                 if (!game._pending_time_passed) game.context.move = 1;
                 game._process_command_time_now = 1;
                 if (result.message) await finishHeroDartTrapResult(result);
+                return;
+            }
+            if (game._pending_pit_trap) {
+                const result = movementPitResult(game._pending_pit_trap);
+                game._pending_pit_trap = null;
+                if (!game._pending_time_passed) game.context.move = 1;
+                game._process_command_time_now = 1;
+                if (trapResultHasEffect(result)) await finishHeroDartTrapResult(result);
                 return;
             }
             if (game._pending_bear_trap) {
