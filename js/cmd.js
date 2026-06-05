@@ -43696,6 +43696,19 @@ function applyHeroTrapDartPoison(dart, messages, { fatal = 10 } = {}) {
     return {};
 }
 
+function heroDartTrapThituMessage({ hit, damage, threshold, roll }) {
+    const terse = heroIsBlind() || game.flags?.verbose === false;
+    if (!hit) {
+        if (terse) return 'It misses.';
+        return threshold <= roll - 2
+            ? 'A little dart misses you.'
+            : 'You are almost hit by a little dart.';
+    }
+    return terse
+        ? `You are hit${damage > 4 ? '!' : '.'}`
+        : `You are hit by a little dart${damage > 4 ? '!' : '.'}`;
+}
+
 function heroDartTrapResult(trap, prefix = '', alreadySeen = !!trap?.tseen) {
     if (trap?.once && alreadySeen && !rn2(15)) {
         deleteTrap(trap);
@@ -43713,9 +43726,9 @@ function heroDartTrapResult(trap, prefix = '', alreadySeen = !!trap?.tseen) {
     const messages = [trapProjectileMessageParts(prefix, 'A little dart shoots out at you!')];
     if (threshold <= roll) {
         placeHeroTrapDart(dart);
-        messages.push(threshold <= roll - 2
-            ? 'A little dart misses you.'
-            : 'You are almost hit by a little dart.');
+        messages.push(heroDartTrapThituMessage({
+            hit: false, damage, threshold, roll,
+        }));
         return { message: messages.join('  ') };
     }
 
@@ -43725,7 +43738,9 @@ function heroDartTrapResult(trap, prefix = '', alreadySeen = !!trap?.tseen) {
         game.u.uhp = Math.max(0, (game.u.uhp || 1) - damage);
         physicalFatal = (game.u.uhp || 0) <= 0;
     }
-    messages.push('You are hit by a little dart.');
+    messages.push(heroDartTrapThituMessage({
+        hit: true, damage, threshold, roll,
+    }));
     if (physicalFatal) {
         const fatalResult = heroDartTrapFatalResult(messages, 'killed by a little dart');
         physicalLifeSaving = !!fatalResult.lifeSaving;

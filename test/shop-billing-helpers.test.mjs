@@ -18299,6 +18299,70 @@ test('hero dart trap miss ignores generated dart enchantment and drops trap pois
     assert.equal(game.level.objects[0].oy, 5);
 });
 
+test('hero dart trap verbose far miss names the little dart', async () => {
+    installStableNonShopFloorState();
+    vision_reset();
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 20,
+        uhpmax: 20,
+        uac: 10,
+        ulevel: 1,
+    });
+    game.moves = 1;
+    game.inventory = [];
+    const trap = { ttyp: DART_TRAP, tx: 6, ty: 5, tseen: false, once: false };
+    game.level.traps = [trap];
+    enableRngLog({ reset: true });
+    installCoreRngValues([0, 0, 0, 0, 1, 1, 0, 1, 2, 19]);
+
+    await rhack('l');
+
+    assert.deepEqual(getRngLog().map(rngCallName), [
+        'rnd(2)', 'rn2(6)', 'rn2(11)', 'rn2(3)', 'rn2(3)', 'rne(3)',
+        'rn2(2)', 'rn2(100)', 'rn2(6)', 'rnd(3)', 'rnd(20)',
+    ]);
+    assert.equal(game._pending_message, 'A little dart shoots out at you!  A little dart misses you.');
+    assert.equal(game._message_more || 0, 0);
+    assert.equal(game.u.uhp, 20);
+    assert.equal(game.level.objects.length, 1);
+    assert.equal(game.level.objects[0].kind, 'dart');
+});
+
+test('hero dart trap nonverbose far miss uses generic thitu feedback', async () => {
+    installStableNonShopFloorState();
+    vision_reset();
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 20,
+        uhpmax: 20,
+        uac: 10,
+        ulevel: 1,
+    });
+    game.moves = 1;
+    game.flags.verbose = false;
+    game.inventory = [];
+    const trap = { ttyp: DART_TRAP, tx: 6, ty: 5, tseen: false, once: false };
+    game.level.traps = [trap];
+    enableRngLog({ reset: true });
+    installCoreRngValues([0, 0, 0, 0, 1, 1, 0, 1, 2, 19]);
+
+    await rhack('l');
+
+    assert.deepEqual(getRngLog().map(rngCallName), [
+        'rnd(2)', 'rn2(6)', 'rn2(11)', 'rn2(3)', 'rn2(3)', 'rne(3)',
+        'rn2(2)', 'rn2(100)', 'rn2(6)', 'rnd(3)', 'rnd(20)',
+    ]);
+    assert.equal(game._pending_message, 'A little dart shoots out at you!  It misses.');
+    assert.doesNotMatch(game._pending_message, /little dart misses|almost hit/);
+    assert.equal(game._message_more || 0, 0);
+    assert.equal(game.u.uhp, 20);
+    assert.equal(game.level.objects.length, 1);
+    assert.equal(game.level.objects[0].kind, 'dart');
+});
+
 test('hero dart trap damage uses generated dart enchantment and erosion', async () => {
     installStableNonShopFloorState();
     vision_reset();
@@ -18330,6 +18394,39 @@ test('hero dart trap damage uses generated dart enchantment and erosion', async 
     assert.equal(game.level.objects.length, 0);
     assert.equal(trap.tseen, true);
     assert.equal(trap.once, true);
+});
+
+test('hero dart trap blind hit uses generic thitu feedback', async () => {
+    installStableNonShopFloorState();
+    vision_reset();
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 20,
+        uhpmax: 20,
+        uac: 10,
+        ulevel: 1,
+        blind: true,
+        _statusSuffix: ' Blind',
+    });
+    game.moves = 1;
+    game.inventory = [];
+    const trap = { ttyp: DART_TRAP, tx: 6, ty: 5, tseen: false, once: false };
+    game.level.traps = [trap];
+    enableRngLog({ reset: true });
+    installCoreRngValues([0, 0, 1, 1, 1, 1, 1, 1, 0, 0]);
+
+    await rhack('l');
+
+    assert.deepEqual(getRngLog().map(rngCallName), [
+        'rnd(2)', 'rn2(6)', 'rn2(11)', 'rn2(10)', 'rn2(10)', 'rn2(100)',
+        'rn2(6)', 'rnd(3)', 'rnd(20)', 'rn2(2)',
+    ]);
+    assert.equal(game._pending_message, 'A little dart shoots out at you!  You are hit.');
+    assert.doesNotMatch(game._pending_message, /hit by a little dart/);
+    assert.equal(game._message_more || 0, 0);
+    assert.equal(game.u.uhp, 18);
+    assert.equal(game.level.objects.length, 0);
 });
 
 test('hero poisoned dart trap hit uses C poison branch after damage', async () => {
