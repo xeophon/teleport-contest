@@ -19789,7 +19789,7 @@ async function releaseBrokenCameraDemon(obj, messages) {
 }
 
 async function applyHeroThrownFragileBreakSideEffects(obj, messages) {
-    if (isMirrorObject(obj) && game.u) game.u.uluck = (game.u.uluck || 0) - 2;
+    if (isMirrorObject(obj)) changeHeroLuck(-2);
     await releaseBrokenCameraDemon(obj, messages);
 }
 
@@ -27593,7 +27593,9 @@ function kickFloorObjectSupported(obj, x, y) {
 function kickedFragilePreflightBreakKind(obj) {
     if (!obj) return '';
     const kind = objectKindKey(obj);
+    if (isMirrorObject(obj)) return impactDropBreakKind(obj);
     if (obj.otyp === CRYSTAL_BALL || kind === 'crystal ball') return impactDropBreakKind(obj);
+    if (kind === 'lenses') return impactDropBreakKind(obj);
     return '';
 }
 
@@ -27644,6 +27646,7 @@ function breakKickedFragileFloorObject(obj, x, y, messages) {
     const breakKind = projectileTopLevelBreakKind(obj);
     if (!breakKind) return false;
     projectileTopLevelBreakMessage(obj, breakKind, messages);
+    if (isMirrorObject(obj)) changeHeroLuck(-2);
     removeFloorObject(obj);
     newsym(x, y);
     return true;

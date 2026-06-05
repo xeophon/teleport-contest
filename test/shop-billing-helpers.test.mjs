@@ -25691,6 +25691,69 @@ test('command kicked fragile crystal ball breaks before remote projectile flight
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(100)']);
 });
 
+test('command kicked mirror breaks before remote projectile flight with bad luck', async () => {
+    installNonShopFloorState();
+    installSeenRemoteShaft(HOLE, 7, 5);
+    markSquareVisible(6, 5);
+    initRng(1);
+    Object.assign(game.u, { uluck: 0 });
+    const mirror = {
+        id: 512061,
+        otyp: MIRROR,
+        cls: 'tool',
+        glyph: '(',
+        kind: 'looking glass',
+        actualKind: 'mirror',
+        quan: 1,
+        ox: 6,
+        oy: 5,
+    };
+    game.level.objects = [mirror];
+    enableRngLog({ reset: true });
+
+    await rhack('\x04');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.level.objects.includes(mirror), false);
+    assert.equal(queuedImpactDropsFor({ dnum: 0, dlevel: 2 }).some(obj => obj.id === mirror.id), false);
+    assert.match(game._pending_message, /You kick a looking glass\./);
+    assert.match(game._pending_message, /A looking glass shatters into a thousand pieces!/);
+    assert.doesNotMatch(game._pending_message, /falls through the hole|Thump|hits|misses/);
+    assert.equal(game.u.uluck, -2);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(100)']);
+});
+
+test('command kicked lenses break before remote projectile flight', async () => {
+    installNonShopFloorState();
+    installSeenRemoteShaft(HOLE, 7, 5);
+    markSquareVisible(6, 5);
+    initRng(1);
+    Object.assign(game.u, { uluck: 0 });
+    const lenses = {
+        ...chargedTool(512062, 'lenses', undefined, 0),
+        ox: 6,
+        oy: 5,
+        line: undefined,
+    };
+    game.level.objects = [lenses];
+    enableRngLog({ reset: true });
+
+    await rhack('\x04');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.level.objects.includes(lenses), false);
+    assert.equal(queuedImpactDropsFor({ dnum: 0, dlevel: 2 }).some(obj => obj.id === lenses.id), false);
+    assert.match(game._pending_message, /You kick a pair of lenses\./);
+    assert.match(game._pending_message, /A pair of lenses shatters into a thousand pieces!/);
+    assert.doesNotMatch(game._pending_message, /falls through the hole|Thump|hits|misses|bad luck/);
+    assert.equal(game.u.uluck, 0);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(100)']);
+});
+
 test('command kick ordinary floor object down stairs records reciprocal metadata', async () => {
     installNonShopFloorState();
     installRemoteDownStairGate({ x: 7, y: 5 });
