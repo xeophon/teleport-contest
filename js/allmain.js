@@ -7193,13 +7193,17 @@ export async function processMonsterTurns() {
                             if (silverHit) damage += silverHit.damage;
                             revealProjectileHitMimicAppearance(interveningTarget);
                             interveningTarget.msleeping = 0;
-                            interveningTarget.mhp = Math.max(0, (interveningTarget.mhp || 1) - damage);
                             const hitMessage = throwerVisible
                                 ? `The ${shurikenKind} hits the ${interveningTarget.data?.name || 'monster'}${damage > 4 ? '!' : '.'}`
                                 : `It is hit${damage > 4 ? '!' : '.'}`;
                             if (throwerVisible) game._topline_after_more = hitMessage;
                             else addToplineMessage(hitMessage);
+                            const poisonHit = monsterThrownObjectPoisonHitEffect(damage, interveningTarget,
+                                thrownMissile, throwerVisible);
+                            damage = poisonHit.damage;
+                            emitMonsterThrownObjectPoisonHitEffect(poisonHit, throwerVisible);
                             emitMonsterThrownObjectSilverHitEffect(silverHit, throwerVisible);
+                            interveningTarget.mhp = Math.max(0, (interveningTarget.mhp || 1) - damage);
                             const floorMessages = [];
                             landMonsterThrownObject(thrownMissile, interveningTarget.mx, interveningTarget.my, {
                                 glyph: ')',
@@ -7857,11 +7861,15 @@ export async function processMonsterTurns() {
                                 if (silverHit) dartDamage += silverHit.damage;
                                 revealProjectileHitMimicAppearance(interveningTarget);
                                 interveningTarget.msleeping = 0;
-                                interveningTarget.mhp = Math.max(0, (interveningTarget.mhp || 1) - dartDamage);
                                 addToplineMessage(targetVisible
                                     ? `The dart hits the ${interveningTarget.data?.name || 'monster'}.`
                                     : 'It is hit.');
+                                const poisonHit = monsterThrownObjectPoisonHitEffect(dartDamage, interveningTarget,
+                                    thrownMissile, targetVisible);
+                                dartDamage = poisonHit.damage;
+                                emitMonsterThrownObjectPoisonHitEffect(poisonHit);
                                 emitMonsterThrownObjectSilverHitEffect(silverHit);
+                                interveningTarget.mhp = Math.max(0, (interveningTarget.mhp || 1) - dartDamage);
                                 const floorMessages = [];
                                 landMonsterThrownObject(thrownMissile, interveningTarget.mx, interveningTarget.my, {
                                     glyph: ')',
@@ -9234,10 +9242,19 @@ function monsterLauncherProjectileIsBowAmmo(item) {
 }
 
 function monsterLauncherProjectileIsPoisonable(item) {
+    return monsterThrownObjectIsPoisonable(item);
+}
+
+function monsterThrownObjectIsPoisonable(item) {
+    if (!item) return false;
+    const artifact = String(item.artifact || item.oartifact || '').toLowerCase().replace(/^the /, '');
+    if (artifact === 'grimtooth' || item.permapoisoned) return true;
+    if (item.otyp === DART) return true;
     const names = monsterLauncherProjectileNames(item);
     return names.some(name => name === 'ya' || name === 'bamboo arrow'
         || name.includes('arrow') || name === 'crossbow bolt'
-        || name === 'shuriken' || name === 'throwing star');
+        || name === 'dart' || name === 'darts'
+        || name === 'shuriken' || name === 'throwing star' || name === 'throwing stars');
 }
 
 function monsterLauncherProjectileIsElvenArrow(item) {
@@ -9574,6 +9591,26 @@ function monsterThrownObjectBlessedHitDamage(target, item) {
     if (!item?.blessed || !monsterHatesBlessedWeapon(target)) return 0;
     if (!monsterThrownObjectUsesBlessedDmgvalBonus(item)) return 0;
     return rnd(4);
+}
+
+function monsterThrownObjectPoisonHitEffect(damage, target, item, visible) {
+    if (!item?.opoisoned || !monsterThrownObjectIsPoisonable(item)) return { damage, message: '' };
+    if (monsterPoisonResistant(target)) {
+        if (!visible) return { damage, message: '' };
+        const targetName = monsterDisplayName(target).replace(/^The\b/, 'the');
+        return { damage, message: `The poison doesn't seem to affect ${targetName}.` };
+    }
+    if (rn2(30)) return { damage: damage + rnd(6), message: '' };
+    return {
+        damage: target.mhp || 1,
+        message: visible ? 'The poison was deadly...' : '',
+    };
+}
+
+function emitMonsterThrownObjectPoisonHitEffect(effect, afterMore = false) {
+    if (!effect?.message) return;
+    if (afterMore) appendAfterMoreMessage(effect.message);
+    else addToplineMessage(effect.message);
 }
 
 function monsterThrownObjectSilverHitEffect(target, item, visible) {

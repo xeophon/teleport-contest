@@ -33508,6 +33508,9 @@ async function runMonsterDartHitLanding({
     monsterName = 'kobold',
     monsterData = {},
     dartQuan = 1,
+    projectile = null,
+    inventory = null,
+    activeMissile = undefined,
     extraMonsters = [],
     initialObjects = [],
 } = {}) {
@@ -33541,7 +33544,8 @@ async function runMonsterDartHitLanding({
     for (let x = 5; x <= throwerX; x++) markSquareVisible(x, 5);
     for (const [x, y] of levelCells) markSquareVisible(x, y);
     game.level.objects = [...initialObjects];
-    const dart = { ...dartStack(874356, 'd', dartQuan), letter: undefined, line: undefined, spe: 0 };
+    const dart = projectile || { ...dartStack(874356, 'd', dartQuan), letter: undefined, line: undefined, spe: 0 };
+    const throwerInventory = inventory || [dart];
     const thrower = {
         mx: throwerX,
         my: 5,
@@ -33550,8 +33554,8 @@ async function runMonsterDartHitLanding({
         mpeaceful: false,
         mhp: 5,
         mhpmax: 5,
-        minvent: [dart],
-        missile: dart,
+        minvent: throwerInventory,
+        missile: activeMissile === undefined ? dart : activeMissile,
         mcansee: true,
     };
     game.level.monsters = [thrower, ...extraMonsters];
@@ -40048,6 +40052,179 @@ test('production monster thrown blessed weapons damage blessing-hating interveni
         assert.equal(landed.blessed, true, row.name);
         assert.equal(landed.transientProjectile, false, row.name);
     }
+});
+
+const poisonedThrownNonPotionInterveningCases = [
+    {
+        name: 'poisoned shuriken',
+        projectile: () => monsterShuriken(874524, { opoisoned: true }),
+        run: options => runMonsterShurikenIronBars({ seed: 1, ...options }),
+        missile: result => result.shurikenItem,
+        targetX: 8,
+        levelCells: [[7, 5, { typ: IRONBARS }]],
+        baseRoll: 'rnd(8)=',
+        hitPattern: /shuriken hits the goblin[.!]/,
+    },
+    {
+        name: 'poisoned dart',
+        projectile: () => ({
+            ...dartStack(874525, 'd', 1, { opoisoned: true }),
+            letter: undefined,
+            line: undefined,
+            spe: 0,
+        }),
+        run: options => runMonsterDartHitLanding({ seed: 2, throwerX: 9, ...options }),
+        missile: result => result.dart,
+        targetX: 7,
+        levelCells: [[6, 5, { typ: IRONBARS }]],
+        baseRoll: 'rnd(3)=',
+        hitPattern: /dart hits the goblin\./,
+    },
+];
+
+test('production monster poisoned thrown missiles damage non-resistant intervening monsters', async () => {
+    for (const row of poisonedThrownNonPotionInterveningCases) {
+        const goblin = ordinaryThrowTarget('goblin', row.targetX, 5, {
+            ac: 30,
+            mac: 30,
+            mhp: 30,
+            mhpmax: 30,
+            msleeping: 1,
+            data: { name: 'goblin', mlevel: 1, mlet: 'o', mac: 30 },
+        });
+        const projectile = row.projectile();
+        const result = await row.run({
+            heroBlind: false,
+            uac: 100,
+            projectile,
+            levelCells: row.levelCells,
+            extraMonsters: [goblin],
+        });
+        const missile = row.missile(result);
+        const rawRng = result.rawRng || result.rng || [];
+        const messages = collectMonsterThrowMessages(result.preNhgetchMessages);
+
+        assert.match(messages, row.hitPattern, row.name);
+        assert.equal(preventedByIronBars(messages), false, row.name);
+        assert.equal(game.u.uhp, 20, row.name);
+        assert.equal(game._damage_after_topline_more || 0, 0, `${row.name}: ${rawRng.join(', ')}`);
+        assert.equal(goblin.msleeping, 0, row.name);
+        assert.equal(result.thrower.minvent.some(obj => obj.id === missile.id), false, row.name);
+
+        const baseDamageIndex = rawRng.findIndex(entry => entry.startsWith(row.baseRoll));
+        const poisonRollIndex = rawRng.findIndex((entry, index) =>
+            index > baseDamageIndex && entry.startsWith('rn2(30)='));
+        assert.notEqual(baseDamageIndex, -1, `${row.name}: ${rawRng.join(', ')}`);
+        assert.notEqual(poisonRollIndex, -1, `${row.name}: ${rawRng.join(', ')}`);
+        const baseDamage = Number(rawRng[baseDamageIndex].split('=')[1]);
+        const poisonRoll = Number(rawRng[poisonRollIndex].split('=')[1]);
+        let expectedDamage = goblin.mhpmax;
+        if (poisonRoll) {
+            const poisonDamageIndex = rawRng.findIndex((entry, index) =>
+                index > poisonRollIndex && entry.startsWith('rnd(6)='));
+            assert.notEqual(poisonDamageIndex, -1, `${row.name}: ${rawRng.join(', ')}`);
+            expectedDamage = baseDamage + Number(rawRng[poisonDamageIndex].split('=')[1]);
+        } else {
+            assert.match(messages, /The poison was deadly\.\.\./, row.name);
+        }
+        assert.equal(goblin.mhp, 30 - expectedDamage, `${row.name}: ${rawRng.join(', ')}`);
+
+        const landed = game.level.objects.find(obj => obj.id === missile.id);
+        if (landed) {
+            assert.equal(landed.ox, row.targetX, row.name);
+            assert.equal(landed.oy, 5, row.name);
+            assert.equal(landed.opoisoned, true, row.name);
+            assert.equal(landed.transientProjectile, false, row.name);
+        }
+    }
+});
+
+test('production monster poisoned dart intervening hit respects monster poison resistance', async () => {
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, {
+        ac: 30,
+        mac: 30,
+        mhp: 30,
+        mhpmax: 30,
+        poisonResistance: true,
+        data: { name: 'goblin', mlevel: 1, mlet: 'o', mac: 30, resistsPoison: true },
+    });
+    const projectile = {
+        ...dartStack(874526, 'd', 1, { opoisoned: true }),
+        letter: undefined,
+        line: undefined,
+        spe: 0,
+    };
+    const result = await runMonsterDartHitLanding({
+        seed: 2,
+        throwerX: 9,
+        heroBlind: false,
+        projectile,
+        levelCells: [[6, 5, { typ: IRONBARS }]],
+        extraMonsters: [goblin],
+    });
+    const rawRng = result.rawRng || result.rng || [];
+    const messages = collectMonsterThrowMessages(result.preNhgetchMessages);
+
+    assert.match(messages, /dart hits the goblin\./);
+    assert.match(messages, /The poison doesn't seem to affect the goblin\./);
+    assert.equal(preventedByIronBars(messages), false);
+    assert.equal(game.u.uhp, 20);
+    assert.equal(game._damage_after_topline_more || 0, 0, rawRng.join(', '));
+
+    const baseDamageIndex = rawRng.findIndex(entry => entry.startsWith('rnd(3)='));
+    const poisonRollIndex = rawRng.findIndex((entry, index) =>
+        index > baseDamageIndex && entry.startsWith('rn2(30)='));
+    assert.notEqual(baseDamageIndex, -1, rawRng.join(', '));
+    assert.equal(poisonRollIndex, -1, rawRng.join(', '));
+    const baseDamage = Number(rawRng[baseDamageIndex].split('=')[1]);
+    assert.equal(goblin.mhp, 30 - baseDamage, rawRng.join(', '));
+
+    const landed = game.level.objects.find(obj => obj.id === projectile.id);
+    assert.ok(landed, rawRng.join(', '));
+    assert.equal(landed.ox, 7);
+    assert.equal(landed.oy, 5);
+    assert.equal(landed.opoisoned, true);
+});
+
+test('production monster poisoned dagger intervening hit does not use thrown-missile poison', async () => {
+    const goblin = ordinaryThrowTarget('goblin', 8, 5, {
+        ac: 30,
+        mac: 30,
+        mhp: 30,
+        mhpmax: 30,
+        data: { name: 'goblin', mlevel: 1, mlet: 'o', mac: 30 },
+    });
+    const projectile = {
+        ...dagger(874527),
+        letter: undefined,
+        line: undefined,
+        spe: 0,
+        opoisoned: true,
+    };
+    const result = await runMonsterPlainDaggerIronBars({
+        seed: 1,
+        heroBlind: false,
+        uac: 100,
+        projectile,
+        levelCells: [[7, 5, { typ: IRONBARS }]],
+        extraMonsters: [goblin],
+    });
+    const rawRng = result.rawRng || result.rng || [];
+    const messages = collectMonsterThrowMessages(result.preNhgetchMessages);
+
+    assert.match(messages, /dagger hits the goblin\./);
+    assert.doesNotMatch(messages, /poison/);
+    assert.equal(rawRng.some(entry => entry.startsWith('rn2(30)=')), false, rawRng.join(', '));
+    const baseDamageIndex = rawRng.findIndex(entry => entry.startsWith('rnd(4)='));
+    assert.notEqual(baseDamageIndex, -1, rawRng.join(', '));
+    const baseDamage = Number(rawRng[baseDamageIndex].split('=')[1]);
+    assert.equal(goblin.mhp, 30 - baseDamage, rawRng.join(', '));
+
+    const landed = game.level.objects.find(obj => obj.id === projectile.id);
+    assert.ok(landed, rawRng.join(', '));
+    assert.equal(landed.ox, 8);
+    assert.equal(landed.oy, 5);
+    assert.equal(landed.opoisoned, true);
 });
 
 test('production monster silver dagger aimed shot clinks iron bars before hero', async () => {
