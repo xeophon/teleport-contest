@@ -8,7 +8,7 @@ import { game, resetGame } from '../js/gstate.js';
 import { pushKey, resetInputState } from '../js/input.js';
 import { createMonsterCorpseOrGlob, mkcorpstat, mkobj, mksobj, monsterByRndName } from '../js/mklev.js';
 import { enableDisplayRngLog, enableRngLog, getRngLog, initRng } from '../js/rng.js';
-import { A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_STR, A_WIS, ALTAR, AM_SHRINE, Align2amask, BILLSZ, CANDLESHOP, CLOUD, CORPSTAT_HISTORIC, COULD_SEE, DART_TRAP, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, D_CLOSED, D_NODOOR, FIRE_TRAP, FOUNTAIN, HOLE, ICE, ICED_POOL, IN_SIGHT, IRONBARS, LADDER, LAVAPOOL, MIGR_LADDER_UP, MIGR_SSTAIRS, MIGR_STAIRS_UP, MOAT, M_AP_FURNITURE, M_AP_OBJECT, NORMAL_SPEED, P_BASIC, P_DAGGER, P_EXPERT, P_KNIFE, P_SKILLED, P_UNSKILLED, PIT, POOL, REPAIR_DELAY, ROOM, ROOMOFFSET, SDOOR, SHOPBASE, SHOP_DOOR_COST, SINK, SQKY_BOARD, STAIRS, STATUE_TRAP, STONE, STRAT_APPEARMSG, STRAT_WAITFORU, STRAT_WAITMASK, TEMPLE, TRAPDOOR, TT_LAVA, TT_WEB, WEB, W_SADDLE } from '../js/const.js';
+import { A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_STR, A_WIS, ALTAR, AM_SHRINE, Align2amask, ARROW_TRAP, BILLSZ, CANDLESHOP, CLOUD, CORPSTAT_HISTORIC, COULD_SEE, DART_TRAP, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, D_CLOSED, D_NODOOR, FIRE_TRAP, FOUNTAIN, HOLE, ICE, ICED_POOL, IN_SIGHT, IRONBARS, LADDER, LAVAPOOL, MIGR_LADDER_UP, MIGR_SSTAIRS, MIGR_STAIRS_UP, MOAT, M_AP_FURNITURE, M_AP_OBJECT, NORMAL_SPEED, P_BASIC, P_DAGGER, P_EXPERT, P_KNIFE, P_SKILLED, P_UNSKILLED, PIT, POOL, REPAIR_DELAY, ROOM, ROOMOFFSET, SDOOR, SHOPBASE, SHOP_DOOR_COST, SINK, SQKY_BOARD, STAIRS, STATUE_TRAP, STONE, STRAT_APPEARMSG, STRAT_WAITFORU, STRAT_WAITMASK, TEMPLE, TRAPDOOR, TT_LAVA, TT_WEB, WEB, W_SADDLE } from '../js/const.js';
 import { currentFruitId, setCurrentFruitName } from '../js/fruit.js';
 import { CLR_BRIGHT_MAGENTA, CLR_BROWN, CLR_WHITE } from '../js/terminal.js';
 import { TRIBUTE_DEATH_QUOTES } from '../js/tribute.js';
@@ -18258,6 +18258,206 @@ test('pet known spent dart trap can vanish without firing', async () => {
     assert.equal(goblin.mhp, 5);
     assert.equal(game.level.monsters.includes(goblin), true);
     assert.equal(game.level.objects.some(obj => obj.ox === 6 && obj.oy === 5), false);
+});
+
+test('hero arrow trap miss creates and drops a generated arrow', async () => {
+    installStableNonShopFloorState();
+    vision_reset();
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 20,
+        uhpmax: 20,
+        uac: 10,
+        ulevel: 1,
+    });
+    game.moves = 1;
+    game.inventory = [];
+    const trap = { ttyp: ARROW_TRAP, tx: 6, ty: 5, tseen: false, once: false };
+    game.level.traps = [trap];
+    enableRngLog({ reset: true });
+    installCoreRngValues([0, 0, 1, 1, 1, 1, 0, 19]);
+
+    await rhack('l');
+
+    assert.deepEqual(getRngLog().map(rngCallName), [
+        'rnd(2)', 'rn2(6)', 'rn2(11)', 'rn2(10)', 'rn2(10)', 'rn2(100)',
+        'rnd(6)', 'rnd(20)',
+    ]);
+    assert.equal(game._pending_message, 'An arrow shoots out at you!  An arrow misses you.');
+    assert.equal(game.u.uhp, 20);
+    assert.equal(trap.tseen, true);
+    assert.equal(trap.once, true);
+    assert.equal(game.level.objects.length, 1);
+    assert.equal(game.level.objects[0].kind, 'arrow');
+    assert.equal(game.level.objects[0].quan, 1);
+    assert.equal(game.level.objects[0].opoisoned, false);
+    assert.equal(game.level.objects[0].ox, 6);
+    assert.equal(game.level.objects[0].oy, 5);
+});
+
+test('hero known spent arrow trap can vanish before generating an arrow', async () => {
+    installStableNonShopFloorState();
+    vision_reset();
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 30,
+        uhpmax: 30,
+        uac: 10,
+        ulevel: 1,
+    });
+    game.moves = 2;
+    game.inventory = [];
+    const trap = { ttyp: ARROW_TRAP, tx: 6, ty: 5, tseen: true, once: true };
+    game.level.traps = [trap];
+    enableRngLog({ reset: true });
+    installCoreRngValues([0]);
+
+    await rhack('l');
+
+    assert.deepEqual(getRngLog().map(rngCallName), ['rn2(15)']);
+    assert.equal(game._pending_message, 'You hear a loud click!');
+    assert.doesNotMatch(game._pending_message, /shoots|hit|miss/);
+    assert.equal(game.level.traps.includes(trap), false);
+    assert.equal(game.level.objects.length, 0);
+    assert.equal(game.u.uhp, 30);
+});
+
+test('mounted hero arrow trap can divert a missed arrow to the steed', async () => {
+    installStableNonShopFloorState();
+    vision_reset();
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 20,
+        uhpmax: 20,
+        uac: 10,
+        ulevel: 1,
+    });
+    const pony = ordinaryThrowTarget('pony', 5, 5, {
+        mhp: 10,
+        mhpmax: 10,
+        m_lev: 3,
+        msleeping: 0,
+        mtame: 5,
+        pet: true,
+        saddled: true,
+        data: { name: 'pony', mlevel: 3, mlet: 'quadruped', mac: 6 },
+    });
+    game.u.usteed = pony;
+    game.level.monsters = [pony];
+    game.moves = 1;
+    game.inventory = [];
+    const trap = { ttyp: ARROW_TRAP, tx: 6, ty: 5, tseen: false, once: false };
+    game.level.traps = [trap];
+    enableRngLog({ reset: true });
+    installCoreRngValues([0, 0, 1, 1, 1, 1, 1, 0, 1]);
+
+    await rhack('l');
+
+    assert.deepEqual(getRngLog().map(rngCallName), [
+        'rnd(2)', 'rn2(6)', 'rn2(11)', 'rn2(10)', 'rn2(10)', 'rn2(100)',
+        'rnd(6)', 'rn2(2)', 'rnd(20)',
+    ]);
+    assert.equal(game._pending_message, 'An arrow shoots out at you!  The saddled pony is almost hit by an arrow!');
+    assert.equal(game.u.uhp, 20);
+    assert.equal(pony.mhp, 10);
+    assert.equal(game.u.usteed, pony);
+    assert.equal(pony.mx, 6);
+    assert.equal(pony.my, 5);
+    assert.equal(game.level.objects.length, 1);
+    assert.equal(game.level.objects[0].kind, 'arrow');
+    assert.equal(game.level.objects[0].opoisoned, false);
+    assert.equal(game.level.objects[0].ox, 6);
+    assert.equal(game.level.objects[0].oy, 5);
+});
+
+test('mounted hero arrow trap can hit steed without hitting hero', async () => {
+    installStableNonShopFloorState();
+    vision_reset();
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 20,
+        uhpmax: 20,
+        uac: 10,
+        ulevel: 1,
+    });
+    const pony = ordinaryThrowTarget('pony', 5, 5, {
+        mhp: 10,
+        mhpmax: 10,
+        m_lev: 3,
+        msleeping: 0,
+        mtame: 5,
+        pet: true,
+        saddled: true,
+        data: { name: 'pony', mlevel: 3, mlet: 'quadruped', mac: 6 },
+    });
+    game.u.usteed = pony;
+    game.level.monsters = [pony];
+    game.moves = 1;
+    game.inventory = [];
+    const trap = { ttyp: ARROW_TRAP, tx: 6, ty: 5, tseen: false, once: false };
+    game.level.traps = [trap];
+    enableRngLog({ reset: true });
+    installCoreRngValues([0, 0, 1, 1, 1, 1, 1, 0, 19, 1]);
+
+    await rhack('l');
+
+    assert.deepEqual(getRngLog().map(rngCallName), [
+        'rnd(2)', 'rn2(6)', 'rn2(11)', 'rn2(10)', 'rn2(10)', 'rn2(100)',
+        'rnd(6)', 'rn2(2)', 'rnd(20)', 'rnd(6)',
+    ]);
+    assert.equal(game._pending_message, 'An arrow shoots out at you!  The saddled pony is hit by an arrow!');
+    assert.doesNotMatch(game._pending_message, /You are hit/);
+    assert.equal(game.u.uhp, 20);
+    assert.equal(pony.mhp, 8);
+    assert.equal(game.u.usteed, pony);
+    assert.equal(game.level.objects.length, 0);
+});
+
+test('mounted hero arrow trap gate fallthrough still hits hero', async () => {
+    installStableNonShopFloorState();
+    vision_reset();
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 20,
+        uhpmax: 20,
+        uac: 10,
+        ulevel: 1,
+    });
+    const pony = ordinaryThrowTarget('pony', 5, 5, {
+        mhp: 10,
+        mhpmax: 10,
+        m_lev: 3,
+        msleeping: 0,
+        mtame: 5,
+        pet: true,
+        saddled: true,
+        data: { name: 'pony', mlevel: 3, mlet: 'quadruped', mac: 6 },
+    });
+    game.u.usteed = pony;
+    game.level.monsters = [pony];
+    game.moves = 1;
+    game.inventory = [];
+    const trap = { ttyp: ARROW_TRAP, tx: 6, ty: 5, tseen: false, once: false };
+    game.level.traps = [trap];
+    enableRngLog({ reset: true });
+    installCoreRngValues([0, 0, 1, 1, 1, 1, 1, 1, 0, 0]);
+
+    await rhack('l');
+
+    assert.deepEqual(getRngLog().map(rngCallName), [
+        'rnd(2)', 'rn2(6)', 'rn2(11)', 'rn2(10)', 'rn2(10)', 'rn2(100)',
+        'rnd(6)', 'rn2(2)', 'rnd(20)', 'rn2(2)',
+    ]);
+    assert.equal(game._pending_message, 'An arrow shoots out at you!  You are hit by an arrow.');
+    assert.equal(game.u.uhp, 18);
+    assert.equal(pony.mhp, 10);
+    assert.equal(game.u.usteed, pony);
+    assert.equal(game.level.objects.length, 0);
 });
 
 test('hero dart trap miss ignores generated dart enchantment and drops trap poison state', async () => {

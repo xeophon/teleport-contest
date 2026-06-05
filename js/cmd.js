@@ -1475,6 +1475,7 @@ const OBJECT_CLASS_GLYPHS = {
     amulet: '"',
     spellbook: '+',
 };
+const ARROW = 349;
 const DART = 353;
 const BELL = 358;
 const CANDELABRUM_OF_INVOCATION = 10076;
@@ -43610,6 +43611,25 @@ function trapProjectileMessageParts(prefix, ...parts) {
     return [prefix, ...parts].filter(part => part != null && part !== '').join('  ');
 }
 
+function makeHeroTrapArrow(trap) {
+    const arrow = mksobj(ARROW, true, false);
+    Object.assign(arrow, {
+        quan: 1,
+        owt: 1,
+        opoisoned: false,
+        ox: trap?.tx ?? game.u?.ux ?? 0,
+        oy: trap?.ty ?? game.u?.uy ?? 0,
+        cls: 'weapon',
+        kind: 'arrow',
+        actualKind: 'arrow',
+        singular: 'arrow',
+        plural: 'arrows',
+        glyph: ')',
+        color: CLR_CYAN,
+    });
+    return arrow;
+}
+
 function makeHeroTrapDart(trap) {
     const dart = mksobj(DART, true, false);
     Object.assign(dart, {
@@ -43629,6 +43649,18 @@ function makeHeroTrapDart(trap) {
     return dart;
 }
 
+function trapArrowDamage(arrow) {
+    let damage = rnd(6) + Math.trunc(Number(arrow?.spe || 0));
+    if (damage < 0) damage = 0;
+    if (arrow?.blessed && heroTossUpTargetHatesBlessings()) damage += rnd(4);
+    if (damage > 0) damage = Math.max(1, damage - objectGreatestErosion(arrow));
+    return damage;
+}
+
+function heroTrapArrowDamage(arrow) {
+    return maybeHalfPhysicalDamage(Math.max(1, trapArrowDamage(arrow)));
+}
+
 function heroTrapDartDamage(dart) {
     const die = heroTossUpTargetIsBig() ? 2 : 3;
     let damage = rnd(die) + Math.trunc(Number(dart?.spe || 0));
@@ -43636,6 +43668,14 @@ function heroTrapDartDamage(dart) {
     if (dart?.blessed && heroTossUpTargetHatesBlessings()) damage += rnd(4);
     if (damage > 0) damage = Math.max(1, damage - objectGreatestErosion(dart));
     return maybeHalfPhysicalDamage(damage);
+}
+
+function trapArrowDamageAgainstMonster(arrow, mon) {
+    let damage = rnd(6) + Math.trunc(Number(arrow?.spe || 0));
+    if (damage < 0) damage = 0;
+    if (arrow?.blessed && monsterHatesBlessingsForWaterHit(mon)) damage += rnd(4);
+    if (damage > 0) damage = Math.max(1, damage - objectGreatestErosion(arrow));
+    return Math.max(1, damage);
 }
 
 function trapDartDamageAgainstMonster(dart, mon) {
@@ -43648,6 +43688,16 @@ function trapDartDamageAgainstMonster(dart, mon) {
     return Math.max(1, damage);
 }
 
+function placeHeroTrapArrow(arrow) {
+    if (!arrow) return null;
+    arrow.ox = game.u?.ux || 0;
+    arrow.oy = game.u?.uy || 0;
+    game.level.objects ??= [];
+    game.level.objects.push(arrow);
+    newsym(arrow.ox, arrow.oy);
+    return arrow;
+}
+
 function placeHeroTrapDart(dart) {
     if (!dart) return null;
     dart.ox = game.u?.ux || 0;
@@ -43658,31 +43708,54 @@ function placeHeroTrapDart(dart) {
     return dart;
 }
 
-function placeSteedTrapDart(dart, steed) {
-    if (!dart || !steed) return null;
-    Object.assign(dart, {
+function placeSteedTrapProjectile(projectile, steed, fields) {
+    if (!projectile || !steed) return null;
+    Object.assign(projectile, {
         ox: steed.mx ?? game.u?.ux ?? 0,
         oy: steed.my ?? game.u?.uy ?? 0,
-        kind: 'dart',
-        actualKind: 'dart',
         glyph: ')',
         color: CLR_CYAN,
         petFetchable: true,
+        ...fields,
     });
-    const stacked = placeStackableFloorObject(dart);
-    newsym(dart.ox, dart.oy);
+    const stacked = placeStackableFloorObject(projectile);
+    newsym(projectile.ox, projectile.oy);
     return stacked;
 }
 
-function steedTrapDartName(steed) {
+function placeSteedTrapDart(dart, steed) {
+    return placeSteedTrapProjectile(dart, steed, {
+        kind: 'dart',
+        actualKind: 'dart',
+    });
+}
+
+function placeSteedTrapArrow(arrow, steed) {
+    return placeSteedTrapProjectile(arrow, steed, {
+        kind: 'arrow',
+        actualKind: 'arrow',
+        singular: 'arrow',
+        plural: 'arrows',
+    });
+}
+
+function steedTrapProjectileName(steed) {
     const name = fireScrollMonsterName(steed);
     if (steed?.saddled && !steed?.givenName && !(steed?.isshk && steed?.shknam))
         return name.replace(/^The /, 'The saddled ');
     return name;
 }
 
+function steedTrapDartName(steed) {
+    return steedTrapProjectileName(steed);
+}
+
+function steedTrapProjectileObjectName(projectile) {
+    return articleFor(pickupObjectName(projectile));
+}
+
 function steedTrapDartObjectName(dart) {
-    return articleFor(pickupObjectName(dart));
+    return steedTrapProjectileObjectName(dart);
 }
 
 function trapKilledMonsterCorpseData(mon) {
@@ -43768,6 +43841,84 @@ function heroDartTrapThituMessage({ hit, damage, threshold, roll }) {
     return terse
         ? `You are hit${damage > 4 ? '!' : '.'}`
         : `You are hit by a little dart${damage > 4 ? '!' : '.'}`;
+}
+
+function heroArrowTrapThituMessage({ hit, damage, threshold, roll }) {
+    const terse = heroIsBlind() || game.flags?.verbose === false;
+    if (!hit) {
+        if (terse) return 'It misses.';
+        return threshold <= roll - 2
+            ? 'An arrow misses you.'
+            : 'You are almost hit by an arrow.';
+    }
+    return terse
+        ? `You are hit${damage > 4 ? '!' : '.'}`
+        : `You are hit by an arrow${damage > 4 ? '!' : '.'}`;
+}
+
+function mountedHeroArrowTrapSteedResult(arrow, messages) {
+    const steed = game.u?.usteed;
+    if (!steed || !arrow) return null;
+    steed.mx = game.u?.ux ?? steed.mx;
+    steed.my = game.u?.uy ?? steed.my;
+    const visible = !heroIsBlind() && cansee(steed.mx, steed.my);
+    const armorClass = steed.ac ?? steed.mac ?? steed.data?.ac ?? steed.data?.mac ?? 10;
+    const hit = armorClass + 8 + Math.trunc(Number(arrow.spe || 0)) <= rnd(20);
+    const arrowName = steedTrapProjectileObjectName(arrow);
+    if (!hit) {
+        if (visible) messages.push(`${steedTrapProjectileName(steed)} is almost hit by ${arrowName}!`);
+        placeSteedTrapArrow(arrow, steed);
+        return { message: messages.join('  ') };
+    }
+
+    if (visible) messages.push(`${steedTrapProjectileName(steed)} is hit by ${arrowName}!`);
+    const damage = trapArrowDamageAgainstMonster(arrow, steed);
+    steed.mhp = (steed.mhp || 1) - damage;
+    if ((steed.mhp || 0) <= 0) {
+        if (visible) messages.push(`${steedTrapProjectileName(steed)} is killed!`);
+        finishTrapKilledSteed(steed, messages);
+    }
+    return { message: messages.join('  ') };
+}
+
+function heroArrowTrapResult(trap, prefix = '', alreadySeen = !!trap?.tseen) {
+    if (trap?.once && alreadySeen && !rn2(15)) {
+        deleteTrap(trap);
+        return { message: trapProjectileMessageParts(prefix, 'You hear a loud click!') };
+    }
+    if (trap) {
+        trap.once = true;
+        trap.tseen = true;
+    }
+    const arrow = makeHeroTrapArrow(trap);
+    const damage = heroTrapArrowDamage(arrow);
+    const threshold = (game.u?.uac || 0) + 8;
+    const messages = [trapProjectileMessageParts(prefix, 'An arrow shoots out at you!')];
+    if (game.u?.usteed && !rn2(2))
+        return mountedHeroArrowTrapSteedResult(arrow, messages);
+    const roll = rnd(20);
+    if (threshold <= roll) {
+        placeHeroTrapArrow(arrow);
+        messages.push(heroArrowTrapThituMessage({
+            hit: false, damage, threshold, roll,
+        }));
+        return { message: messages.join('  ') };
+    }
+
+    let physicalFatal = false;
+    if (game.u) {
+        game.u.uhp = Math.max(0, (game.u.uhp || 1) - damage);
+        physicalFatal = (game.u.uhp || 0) <= 0;
+    }
+    messages.push(heroArrowTrapThituMessage({
+        hit: true, damage, threshold, roll,
+    }));
+    if (physicalFatal) {
+        const fatalResult = heroDartTrapFatalResult(messages, 'killed by an arrow');
+        return { message: messages.join('  '), ...fatalResult };
+    }
+    exerciseAttribute(A_STR, false);
+    return { message: messages.join('  ') };
 }
 
 function mountedHeroDartTrapSteedResult(dart, messages) {
@@ -44360,16 +44511,7 @@ async function sitTriggerTrap(trap) {
         return true;
     }
     if (trap.ttyp === ARROW_TRAP) {
-        await finishSitMessage(sitProjectileTrapMessage(trap, prefix, alreadySeen, {
-            name: 'arrow',
-            subject: 'An arrow',
-            article: 'an arrow',
-            shootsMessage: 'An arrow shoots out at you!',
-            emptyMessage: 'You hear a loud click!',
-            toHit: 8,
-            damage: () => rnd(6),
-            projectile: { cls: 'weapon', kind: 'arrow', singular: 'arrow', plural: 'arrows', glyph: ')' },
-        }));
+        await finishHeroDartTrapResult(heroArrowTrapResult(trap, prefix, alreadySeen), { sit: true });
         return true;
     }
     if (trap.ttyp === DART_TRAP) {
@@ -47102,6 +47244,7 @@ async function moveHero(dx, dy) {
         if (trapHere?.ttyp === MAGIC_TRAP) game._pending_magic_trap = trapHere;
         return;
     }
+    if (trapHere?.ttyp === ARROW_TRAP && objectsHere.length > 1) game._pending_arrow_trap = trapHere;
     if (trapHere?.ttyp === DART_TRAP && objectsHere.length > 1) game._pending_dart_trap = trapHere;
     if (trapHere?.ttyp === BEAR_TRAP && objectsHere.length > 1) game._pending_bear_trap = trapHere;
     const goldHere = objectsHere.find(obj => obj.otyp === GOLD_PIECE || obj.glyph === '$');
@@ -47233,6 +47376,13 @@ async function moveHero(dx, dy) {
         if (result.afterMore) game._topline_after_more = result.afterMore;
         const message = [pileMessage, result.message].filter(Boolean).join('  ');
         if (message) await setMessage(message, !!result.afterMore || !!result.more || !!(pileMessage && result.message));
+        return;
+    }
+    if (trapHere?.ttyp === ARROW_TRAP) {
+        const result = heroArrowTrapResult(trapHere, '', !!trapHere.tseen);
+        result.message = [pileMessage, result.message].filter(Boolean).join('  ');
+        if (result.message)
+            await finishHeroDartTrapResult(result, { more: !!(pileMessage && result.message) });
         return;
     }
     if (trapHere?.ttyp === DART_TRAP) {
@@ -47561,6 +47711,13 @@ export async function rhack(_cmd) {
                 game._pending_magic_trap = null;
                 if (result.afterMore) game._topline_after_more = result.afterMore;
                 if (result.message) await setMessage(result.message, !!result.afterMore || !!result.more);
+                return;
+            }
+            if (game._pending_arrow_trap) {
+                const trap = game._pending_arrow_trap;
+                const alreadySeen = !!trap.tseen;
+                game._pending_arrow_trap = null;
+                await finishHeroDartTrapResult(heroArrowTrapResult(trap, '', alreadySeen));
                 return;
             }
             if (game._pending_dart_trap) {
