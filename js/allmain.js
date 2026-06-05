@@ -7050,8 +7050,11 @@ export async function processMonsterTurns() {
                             });
                             addMonsterThrownFloorMessages(floorMessages, throwerVisible);
                         } else if (interveningTarget) {
-                            const damage = Math.max(1, rnd(monsterThrownSpearDamageSides(thrownMissile))
+                            let damage = Math.max(1, rnd(monsterThrownSpearDamageSides(thrownMissile))
                                 + missileSpe - missileErosion);
+                            const silverHit = monsterThrownObjectSilverHitEffect(interveningTarget,
+                                thrownMissile, throwerVisible);
+                            if (silverHit) damage += silverHit.damage;
                             revealProjectileHitMimicAppearance(interveningTarget);
                             interveningTarget.msleeping = 0;
                             interveningTarget.mhp = Math.max(0, (interveningTarget.mhp || 1) - damage);
@@ -7060,6 +7063,7 @@ export async function processMonsterTurns() {
                                 : `It is hit${damage > 4 ? '!' : '.'}`;
                             if (throwerVisible) game._topline_after_more = hitMessage;
                             else addToplineMessage(hitMessage);
+                            emitMonsterThrownObjectSilverHitEffect(silverHit, throwerVisible);
                             const floorMessages = [];
                             landMonsterThrownObject(thrownMissile, interveningTarget.mx, interveningTarget.my, {
                                 glyph: ')',
@@ -7180,7 +7184,10 @@ export async function processMonsterTurns() {
                             });
                             addMonsterThrownFloorMessages(floorMessages, throwerVisible);
                         } else if (interveningTarget) {
-                            const damage = Math.max(1, rnd(8) + missileSpe - missileErosion);
+                            let damage = Math.max(1, rnd(8) + missileSpe - missileErosion);
+                            const silverHit = monsterThrownObjectSilverHitEffect(interveningTarget,
+                                thrownMissile, throwerVisible);
+                            if (silverHit) damage += silverHit.damage;
                             revealProjectileHitMimicAppearance(interveningTarget);
                             interveningTarget.msleeping = 0;
                             interveningTarget.mhp = Math.max(0, (interveningTarget.mhp || 1) - damage);
@@ -7189,6 +7196,7 @@ export async function processMonsterTurns() {
                                 : `It is hit${damage > 4 ? '!' : '.'}`;
                             if (throwerVisible) game._topline_after_more = hitMessage;
                             else addToplineMessage(hitMessage);
+                            emitMonsterThrownObjectSilverHitEffect(silverHit, throwerVisible);
                             const floorMessages = [];
                             landMonsterThrownObject(thrownMissile, interveningTarget.mx, interveningTarget.my, {
                                 glyph: ')',
@@ -7313,7 +7321,10 @@ export async function processMonsterTurns() {
                             });
                             addMonsterThrownFloorMessages(floorMessages, throwerVisible);
                         } else if (interveningTarget) {
-                            const damage = rnd(4);
+                            let damage = rnd(4);
+                            const silverHit = monsterThrownObjectSilverHitEffect(interveningTarget,
+                                thrownMissile, throwerVisible);
+                            if (silverHit) damage += silverHit.damage;
                             revealProjectileHitMimicAppearance(interveningTarget);
                             interveningTarget.msleeping = 0;
                             interveningTarget.mhp = Math.max(0, (interveningTarget.mhp || 1) - damage);
@@ -7322,6 +7333,7 @@ export async function processMonsterTurns() {
                                 : 'It is hit.';
                             if (throwerVisible) game._topline_after_more = hitMessage;
                             else addToplineMessage(hitMessage);
+                            emitMonsterThrownObjectSilverHitEffect(silverHit, throwerVisible);
                             const floorMessages = [];
                             landMonsterThrownObject(thrownMissile, interveningTarget.mx, interveningTarget.my, {
                                 glyph: ')',
@@ -7558,7 +7570,10 @@ export async function processMonsterTurns() {
                             if (crudeDaggerTerrainStop) {
                                 crudeDaggerOhit = false;
                             } else if (interveningTarget) {
-                                const damage = rnd(3);
+                                let damage = rnd(3);
+                                const silverHit = monsterThrownObjectSilverHitEffect(interveningTarget,
+                                    thrownMissile, throwerVisible);
+                                if (silverHit) damage += silverHit.damage;
                                 revealProjectileHitMimicAppearance(interveningTarget);
                                 interveningTarget.msleeping = 0;
                                 interveningTarget.mhp = Math.max(0, (interveningTarget.mhp || 1) - damage);
@@ -7567,6 +7582,7 @@ export async function processMonsterTurns() {
                                     : 'It is hit.';
                                 if (throwerVisible) game._topline_after_more = hitMessage;
                                 else addToplineMessage(hitMessage);
+                                emitMonsterThrownObjectSilverHitEffect(silverHit, throwerVisible);
                             } else {
                                 const catchChance = 100 - (game.u?.acurr?.a?.[A_DEX] ?? 10)
                                     - (game._startup_role === 'Monk' || game._startup_role === 'Rogue' ? 20 : 0);
@@ -7698,7 +7714,10 @@ export async function processMonsterTurns() {
                             });
                             addMonsterThrownFloorMessages(floorMessages, throwerVisible);
                         } else if (interveningTarget) {
-                            const damage = Math.max(1, rnd(3) + missileSpe - missileErosion);
+                            let damage = Math.max(1, rnd(3) + missileSpe - missileErosion);
+                            const silverHit = monsterThrownObjectSilverHitEffect(interveningTarget,
+                                thrownMissile, throwerVisible);
+                            if (silverHit) damage += silverHit.damage;
                             revealProjectileHitMimicAppearance(interveningTarget);
                             interveningTarget.msleeping = 0;
                             interveningTarget.mhp = Math.max(0, (interveningTarget.mhp || 1) - damage);
@@ -7707,6 +7726,7 @@ export async function processMonsterTurns() {
                                 : `It is hit${damage > 4 ? '!' : '.'}`;
                             if (throwerVisible) game._topline_after_more = hitMessage;
                             else addToplineMessage(hitMessage);
+                            emitMonsterThrownObjectSilverHitEffect(silverHit, throwerVisible);
                             const floorMessages = [];
                             landMonsterThrownObject(thrownMissile, interveningTarget.mx, interveningTarget.my, {
                                 glyph: ')',
@@ -7822,15 +7842,19 @@ export async function processMonsterTurns() {
                                 });
                                 addMonsterThrownFloorMessages(floorMessages);
                             } else if (interveningTarget) {
-                                const dartDamage = Math.max(1, rnd(3) + missileSpe - missileErosion);
+                                let dartDamage = Math.max(1, rnd(3) + missileSpe - missileErosion);
+                                const targetVisible = !game.u?.blind
+                                    && !!(game.viz_array?.[interveningTarget.my]?.[interveningTarget.mx] & IN_SIGHT);
+                                const silverHit = monsterThrownObjectSilverHitEffect(interveningTarget,
+                                    thrownMissile, targetVisible);
+                                if (silverHit) dartDamage += silverHit.damage;
                                 revealProjectileHitMimicAppearance(interveningTarget);
                                 interveningTarget.msleeping = 0;
                                 interveningTarget.mhp = Math.max(0, (interveningTarget.mhp || 1) - dartDamage);
-                                const targetVisible = !game.u?.blind
-                                    && !!(game.viz_array?.[interveningTarget.my]?.[interveningTarget.mx] & IN_SIGHT);
                                 addToplineMessage(targetVisible
                                     ? `The dart hits the ${interveningTarget.data?.name || 'monster'}.`
                                     : 'It is hit.');
+                                emitMonsterThrownObjectSilverHitEffect(silverHit);
                                 const floorMessages = [];
                                 landMonsterThrownObject(thrownMissile, interveningTarget.mx, interveningTarget.my, {
                                     glyph: ')',
@@ -9522,11 +9546,37 @@ function killMonsterFromLauncherInterveningHit(target, visible) {
 }
 
 function monsterLauncherProjectileIsSilver(item) {
+    return monsterThrownObjectIsSilver(item);
+}
+
+function monsterThrownObjectIsSilver(item) {
     const material = String(item?.material || item?.oc_material || '')
         .toLowerCase().replace(/^hi_/, '');
     if (material === 'silver') return true;
     return monsterLauncherProjectileNames(item)
-        .some(name => name === 'silver arrow' || name === 'silver arrows');
+        .some(name => /\bsilver\b/.test(name));
+}
+
+function monsterThrownObjectSilverHitEffect(target, item, visible) {
+    if (!monsterThrownObjectIsSilver(item) || !monsterHatesSilverWeapon(target)) return null;
+    const flesh = monsterSilverSearsFlesh(target);
+    if (visible) {
+        const targetName = monsterDisplayName(target).replace(/^The\b/, 'the');
+        return {
+            damage: rnd(20),
+            message: `The silver sears ${targetName}${flesh ? "'s flesh" : ''}!`,
+        };
+    }
+    return {
+        damage: rnd(20),
+        message: flesh ? 'Its flesh is seared!' : 'It is seared!',
+    };
+}
+
+function emitMonsterThrownObjectSilverHitEffect(effect, afterMore = false) {
+    if (!effect) return;
+    if (afterMore) appendAfterMoreMessage(effect.message);
+    else addToplineMessage(effect.message);
 }
 
 function monsterThrownObjectNameForHitValue(item) {

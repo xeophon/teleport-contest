@@ -39852,6 +39852,76 @@ test('production monster thrown non-potion weapons leave ordinary hidden interve
     }
 });
 
+const silverThrownNonPotionInterveningCases = [
+    {
+        name: 'silver spear',
+        projectile: () => monsterSpearVariant(874520, 'silver spear', {
+            material: 'silver',
+            plural: 'silver spears',
+        }),
+        run: options => runMonsterSpearIronBars({ seed: 1, ...options }),
+        missile: result => result.spearItem,
+        baseRoll: 'rnd(6)=',
+        hitPattern: /silver spear hits the vampire!/,
+    },
+    {
+        name: 'silver dagger',
+        projectile: () => monsterSilverDagger(874521),
+        run: options => runMonsterPlainDaggerIronBars({ seed: 1, ...options }),
+        missile: result => result.daggerItem,
+        baseRoll: 'rnd(4)=',
+        hitPattern: /silver dagger hits the vampire\./,
+    },
+];
+
+test('production monster thrown silver weapons sear silver-hating intervening monsters', async () => {
+    for (const row of silverThrownNonPotionInterveningCases) {
+        const vampire = ordinaryThrowTarget('vampire', 8, 5, {
+            ac: 30,
+            mac: 30,
+            mhp: 30,
+            mhpmax: 30,
+            msleeping: 1,
+            data: { name: 'vampire', mlevel: 10, mlet: 'V', mac: 30 },
+        });
+        const projectile = row.projectile();
+        const result = await row.run({
+            heroBlind: false,
+            uac: 100,
+            projectile,
+            levelCells: [[7, 5, { typ: IRONBARS }]],
+            extraMonsters: [vampire],
+        });
+        const missile = row.missile(result);
+        const rawRng = result.rawRng || result.rng || [];
+        const messages = collectMonsterThrowMessages(result.preNhgetchMessages);
+
+        assert.match(messages, row.hitPattern, row.name);
+        assert.match(messages, /The silver sears the vampire's flesh!/, row.name);
+        assert.equal(preventedByIronBars(messages), false, row.name);
+        assert.equal(game.u.uhp, 20, row.name);
+        assert.equal(game._damage_after_topline_more || 0, 0, `${row.name}: ${rawRng.join(', ')}`);
+        assert.equal(vampire.msleeping, 0, row.name);
+        assert.equal(result.thrower.minvent.some(obj => obj.id === missile.id), false, row.name);
+
+        const baseDamageIndex = rawRng.findIndex(entry => entry.startsWith(row.baseRoll));
+        const silverDamageIndex = rawRng.findIndex((entry, index) =>
+            index > baseDamageIndex && entry.startsWith('rnd(20)='));
+        assert.notEqual(baseDamageIndex, -1, `${row.name}: ${rawRng.join(', ')}`);
+        assert.notEqual(silverDamageIndex, -1, `${row.name}: ${rawRng.join(', ')}`);
+        const baseDamage = Number(rawRng[baseDamageIndex].split('=')[1]);
+        const silverDamage = Number(rawRng[silverDamageIndex].split('=')[1]);
+        assert.equal(vampire.mhp, 30 - baseDamage - silverDamage, `${row.name}: ${rawRng.join(', ')}`);
+
+        const landed = game.level.objects.find(obj => obj.id === missile.id);
+        assert.ok(landed, `${row.name}: ${rawRng.join(', ')}`);
+        assert.equal(landed.ox, 8, row.name);
+        assert.equal(landed.oy, 5, row.name);
+        assert.equal(landed.material, 'silver', row.name);
+        assert.equal(landed.transientProjectile, false, row.name);
+    }
+});
+
 test('production monster silver dagger aimed shot clinks iron bars before hero', async () => {
     const silverDaggerItem = monsterSilverDagger(874360);
     const { daggerItem, thrower, rng, rawRng, preNhgetchMessages } = await runMonsterPlainDaggerIronBars({
