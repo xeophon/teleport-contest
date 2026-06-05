@@ -6454,6 +6454,7 @@ const OBJECT_WEIGHTS = {
     'magic lamp': 20,
     'magic marker': 2,
     'oil lamp': 20,
+    'bag of tricks': 15,
     'pick-axe': 100,
     'sack': 15,
     'silver bell': 10,
@@ -19447,9 +19448,17 @@ function isTinOpenerTossObject(obj) {
     return !!obj && (obj.otyp === TIN_OPENER || objectKindKey(obj) === 'tin opener');
 }
 
+function isHeroThrownGenericWeightContainerObject(obj) {
+    if (!obj) return false;
+    const kind = objectKindKey(obj);
+    return isBagOfTricksObject(obj) || BAG_OBJECT_TYPES.has(obj.otyp)
+        || kind === 'sack' || kind === 'oilskin sack' || kind === 'bag of holding';
+}
+
 function isHeroThrownGenericDamagingUpwardObject(obj) {
     if (!obj || isHeroThrownHarmlessUpwardObject(obj)) return false;
-    return isTinOpenerTossObject(obj) || isSupportedTossUpWeaponObject(obj);
+    return isTinOpenerTossObject(obj) || isHeroThrownGenericWeightContainerObject(obj)
+        || isSupportedTossUpWeaponObject(obj);
 }
 
 function heroThrownGenericObjectFallingDamage(obj, helmet = null) {
@@ -31037,6 +31046,7 @@ function objectWeightKind(obj) {
     if (!kind && obj?.otyp === SACK) return 'sack';
     if (!kind && obj?.otyp === OILSKIN_SACK) return 'oilskin sack';
     if (!kind && obj?.otyp === BAG_OF_HOLDING) return 'bag of holding';
+    if (!kind && obj?.otyp === BAG_OF_TRICKS) return 'bag of tricks';
     return kind;
 }
 
@@ -31054,13 +31064,16 @@ function containerBaseWeight(obj) {
     if (obj?.otyp === LARGE_BOX) return 350;
     if (obj?.otyp === CHEST) return 600;
     if (obj?.otyp === ICE_BOX) return 900;
-    if (obj?.otyp === SACK || obj?.otyp === OILSKIN_SACK || obj?.otyp === BAG_OF_HOLDING) return 15;
+    if (obj?.otyp === SACK || obj?.otyp === OILSKIN_SACK
+        || obj?.otyp === BAG_OF_HOLDING || obj?.otyp === BAG_OF_TRICKS)
+        return 15;
     return null;
 }
 
 function isGlobWeightContainerObject(obj) {
     return obj?.otyp === LARGE_BOX || obj?.otyp === CHEST || obj?.otyp === ICE_BOX
-        || obj?.otyp === SACK || obj?.otyp === OILSKIN_SACK || obj?.otyp === BAG_OF_HOLDING;
+        || obj?.otyp === SACK || obj?.otyp === OILSKIN_SACK
+        || obj?.otyp === BAG_OF_HOLDING || obj?.otyp === BAG_OF_TRICKS;
 }
 
 const WISHED_OBJECT_WEIGHT_OVERRIDES = new Map([

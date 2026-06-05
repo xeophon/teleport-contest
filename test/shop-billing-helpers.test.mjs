@@ -45859,6 +45859,102 @@ test('upward hero-thrown pick-axe self-hits with weapon-tool damage and lands', 
     ]);
 });
 
+test('upward hero-thrown charged bag of tricks uses generic weight damage and lands', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, { uhp: 30, uhpmax: 30 });
+    const bag = { ...chargedTool(876899, 'bag of tricks', 'b', 3), otyp: BAG_OF_TRICKS };
+    game.inventory = [bag];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('b');
+    await rhack('<');
+
+    const message = game._pending_message || '';
+    assert.equal(game._command_mode, null);
+    assert.match(message, /A bag of tricks almost hits the ceiling, then falls back on top of your head\./);
+    assert.match(message, /A bag of tricks hits the floor\./);
+    assert.doesNotMatch(message, /cmdassist|In what direction|It doesn't hurt|shatters|Splat/);
+    assert.equal(game.u.uhp, 29);
+    assert.equal(game.inventory.includes(bag), false);
+    assert.equal(game.level.objects.length, 1);
+    const landed = game.level.objects[0];
+    assert.equal(landed.kind, 'bag of tricks');
+    assert.equal(landed.otyp, BAG_OF_TRICKS);
+    assert.equal(landed.spe, 3);
+    assert.equal(landed.ox, game.u.ux);
+    assert.equal(landed.oy, game.u.uy);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rn2(5)', 'rn2(100)', 'rn2(100)',
+    ]);
+});
+
+test('upward hero-thrown uncharged bag of tricks stays harmless', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, { uhp: 30, uhpmax: 30 });
+    const bag = { ...chargedTool(876900, 'bag of tricks', 'b', 0), otyp: BAG_OF_TRICKS };
+    game.inventory = [bag];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('b');
+    await rhack('<');
+
+    const message = game._pending_message || '';
+    assert.equal(game._command_mode, null);
+    assert.match(message, /A bag of tricks almost hits the ceiling, then falls back on top of your head\./);
+    assert.match(message, /It doesn't hurt\./);
+    assert.doesNotMatch(message, /A bag of tricks hits the floor|cmdassist|In what direction|shatters|Splat/);
+    assert.equal(game.u.uhp, 30);
+    assert.equal(game.inventory.includes(bag), false);
+    assert.equal(game.level.objects.length, 1);
+    const landed = game.level.objects[0];
+    assert.equal(landed.kind, 'bag of tricks');
+    assert.equal(landed.otyp, BAG_OF_TRICKS);
+    assert.equal(landed.spe, 0);
+    assert.equal(landed.ox, game.u.ux);
+    assert.equal(landed.oy, game.u.uy);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rn2(5)', 'rn2(100)', 'rn2(100)',
+    ]);
+});
+
+test('upward hero-thrown nonempty sack uses generic weight damage and lands with contents', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, { uhp: 30, uhpmax: 30 });
+    const bag = sack(876901, 'b');
+    const ration = putObjectInContainer(bag, foodRation(876902));
+    game.inventory = [bag];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('b');
+    await rhack('<');
+
+    const message = game._pending_message || '';
+    assert.equal(game._command_mode, null);
+    assert.match(message, /A bag almost hits the ceiling, then falls back on top of your head\./);
+    assert.match(message, /A bag hits the floor\./);
+    assert.doesNotMatch(message, /cmdassist|In what direction|It doesn't hurt|shatters|Splat/);
+    assert.equal(game.u.uhp, 29);
+    assert.equal(game.inventory.includes(bag), false);
+    assert.equal(game.level.objects.length, 1);
+    const landed = game.level.objects[0];
+    assert.equal(landed.kind, 'sack');
+    assert.equal(landed.ox, game.u.ux);
+    assert.equal(landed.oy, game.u.uy);
+    const contents = landed.contents || landed.cobj || [];
+    assert.equal(contents.length, 1);
+    assert.equal(contents[0].kind, 'food ration');
+    assert.equal(contents[0].id, ration.id);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rn2(5)', 'rn2(100)', 'rn2(100)',
+    ]);
+});
+
 test('upward hero-thrown plain dagger self-hits, damages, and lands', async () => {
     installNonShopFloorState();
     initRng(1);
