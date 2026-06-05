@@ -27618,6 +27618,7 @@ function kickedFragilePreflightBreakKind(obj) {
     if (kind === 'lenses') return impactDropBreakKind(obj);
     if (isGlassMaterialWandObject(obj)) return impactDropBreakKind(obj);
     if (isCreamPieObject(obj)) return impactDropBreakKind(obj);
+    if (isPotionObject(obj) && thrownPotionEffectKind(obj) !== 'oil') return impactDropBreakKind(obj);
     return '';
 }
 
@@ -27668,6 +27669,7 @@ function breakKickedFragileFloorObject(obj, x, y, messages) {
     const breakKind = projectileTopLevelBreakKind(obj);
     if (!breakKind) return false;
     projectileTopLevelBreakMessage(obj, breakKind, messages);
+    brokenPotionBreathe(obj, x, y, messages);
     if (isMirrorObject(obj)) changeHeroLuck(-2);
     removeFloorObject(obj);
     newsym(x, y);

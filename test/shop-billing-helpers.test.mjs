@@ -25804,6 +25804,34 @@ test('command kicked cream pie breaks before remote projectile flight', async ()
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(100)']);
 });
 
+test('command kicked confusion potion breaks and breathes before remote projectile flight', async () => {
+    installNonShopFloorState();
+    installSeenRemoteShaft(HOLE, 7, 5);
+    markSquareVisible(6, 5);
+    initRng(1);
+    const potion = { ...confusionPotion(512065, undefined, 1, { dknown: true }), ox: 6, oy: 5, letter: undefined, line: undefined };
+    game.level.objects = [potion];
+    enableRngLog({ reset: true });
+
+    await rhack('\x04');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.level.objects.includes(potion), false);
+    assert.equal(queuedImpactDropsFor({ dnum: 0, dlevel: 2 }).some(obj => obj.id === potion.id), false);
+    assert.match(game._pending_message, /You kick a potion of confusion\./);
+    assert.match(game._pending_message, /A potion of confusion shatters!/);
+    assert.match(game._pending_message, /You smell a peculiar odor\.\.\./);
+    assert.match(game._pending_message, /You feel somewhat dizzy\./);
+    assert.doesNotMatch(game._pending_message, /falls through the hole|Thump|hits|misses|muffled/);
+    assert.ok(game.u._confusionTimeout > 0);
+    assert.match(game.u._statusSuffix || '', /Conf/);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rn2(100)', 'rnd(5)',
+    ]);
+});
+
 test('command kick ordinary floor object down stairs records reciprocal metadata', async () => {
     installNonShopFloorState();
     installRemoteDownStairGate({ x: 7, y: 5 });
