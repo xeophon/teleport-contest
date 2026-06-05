@@ -8,7 +8,7 @@ import { game, resetGame } from '../js/gstate.js';
 import { pushKey, resetInputState } from '../js/input.js';
 import { createMonsterCorpseOrGlob, mkcorpstat } from '../js/mklev.js';
 import { enableDisplayRngLog, enableRngLog, getRngLog, initRng } from '../js/rng.js';
-import { A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_STR, A_WIS, ALTAR, AM_SHRINE, Align2amask, BILLSZ, CANDLESHOP, CLOUD, CORPSTAT_HISTORIC, COULD_SEE, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, D_CLOSED, D_NODOOR, FOUNTAIN, HOLE, ICE, ICED_POOL, IN_SIGHT, IRONBARS, LADDER, LAVAPOOL, MIGR_LADDER_UP, MIGR_SSTAIRS, MIGR_STAIRS_UP, MOAT, M_AP_FURNITURE, M_AP_OBJECT, NORMAL_SPEED, PIT, POOL, REPAIR_DELAY, ROOM, ROOMOFFSET, SDOOR, SHOPBASE, SHOP_DOOR_COST, SINK, SQKY_BOARD, STAIRS, STATUE_TRAP, STONE, STRAT_APPEARMSG, STRAT_WAITFORU, STRAT_WAITMASK, TEMPLE, TRAPDOOR, TT_LAVA, TT_WEB, WEB, W_SADDLE } from '../js/const.js';
+import { A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_STR, A_WIS, ALTAR, AM_SHRINE, Align2amask, BILLSZ, CANDLESHOP, CLOUD, CORPSTAT_HISTORIC, COULD_SEE, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, D_CLOSED, D_NODOOR, FOUNTAIN, HOLE, ICE, ICED_POOL, IN_SIGHT, IRONBARS, LADDER, LAVAPOOL, MIGR_LADDER_UP, MIGR_SSTAIRS, MIGR_STAIRS_UP, MOAT, M_AP_FURNITURE, M_AP_OBJECT, NORMAL_SPEED, P_BASIC, P_DAGGER, P_EXPERT, P_KNIFE, P_SKILLED, P_UNSKILLED, PIT, POOL, REPAIR_DELAY, ROOM, ROOMOFFSET, SDOOR, SHOPBASE, SHOP_DOOR_COST, SINK, SQKY_BOARD, STAIRS, STATUE_TRAP, STONE, STRAT_APPEARMSG, STRAT_WAITFORU, STRAT_WAITMASK, TEMPLE, TRAPDOOR, TT_LAVA, TT_WEB, WEB, W_SADDLE } from '../js/const.js';
 import { currentFruitId, setCurrentFruitName } from '../js/fruit.js';
 import { CLR_BRIGHT_MAGENTA, CLR_BROWN, CLR_WHITE } from '../js/terminal.js';
 import { TRIBUTE_DEATH_QUOTES } from '../js/tribute.js';
@@ -1339,6 +1339,20 @@ function ordinaryThrowTarget(name = 'goblin', x = 7, y = 5, extra = {}) {
         data: { name, mlevel: 1 },
         ...extra,
     };
+}
+
+function setHeroWeaponSkill(skill, level) {
+    const skillName = skill === P_DAGGER ? 'dagger'
+        : skill === P_KNIFE ? 'knife'
+            : String(skill);
+    game._weapon_skill_levels ??= {};
+    game._weapon_skill_levels[skill] = level;
+    game._weapon_skill_levels[skillName] = level;
+    game.u.weapon_skill_levels ??= {};
+    game.u.weapon_skill_levels[skill] = level;
+    game.u.weapon_skill_levels[skillName] = level;
+    game.u.weapon_skills ??= [];
+    game.u.weapon_skills[skill] = { skill: level, max_skill: P_EXPERT, advance: 0 };
 }
 
 function purpleWormDigestAttacker(x = 6, y = 5, extra = {}) {
@@ -26312,6 +26326,59 @@ test('command kicked knife harms ordinary monster and survives landing', async (
     ]);
 });
 
+const KICKED_WEAPON_SKILL_DAMAGE_CASES = [
+    { label: 'dagger unskilled', kind: 'dagger', skill: P_DAGGER, level: P_UNSKILLED, expectedHp: 16, hit: /The dagger hits the goblin\./, rng: ['rnd(20)', 'rnd(4)', 'rn2(19)'] },
+    { label: 'dagger basic', kind: 'dagger', skill: P_DAGGER, level: P_BASIC, expectedHp: 14, hit: /The dagger hits the goblin!/, rng: ['rnd(20)', 'rnd(4)', 'rn2(19)'] },
+    { label: 'dagger skilled', kind: 'dagger', skill: P_DAGGER, level: P_SKILLED, expectedHp: 13, hit: /The dagger hits the goblin!/, rng: ['rnd(20)', 'rnd(4)', 'rn2(19)'] },
+    { label: 'dagger expert', kind: 'dagger', skill: P_DAGGER, level: P_EXPERT, expectedHp: 12, hit: /The dagger hits the goblin!/, rng: ['rnd(20)', 'rnd(4)', 'rn2(19)'] },
+    { label: 'knife unskilled', kind: 'knife', skill: P_KNIFE, level: P_UNSKILLED, expectedHp: 18, hit: /The knife hits the goblin\./, rng: ['rnd(20)', 'rnd(3)', 'rn2(19)'] },
+    { label: 'knife basic', kind: 'knife', skill: P_KNIFE, level: P_BASIC, expectedHp: 16, hit: /The knife hits the goblin\./, rng: ['rnd(20)', 'rnd(3)', 'rn2(19)'] },
+    { label: 'knife skilled', kind: 'knife', skill: P_KNIFE, level: P_SKILLED, expectedHp: 15, hit: /The knife hits the goblin!/, rng: ['rnd(20)', 'rnd(3)', 'rn2(19)'] },
+    { label: 'knife expert', kind: 'knife', skill: P_KNIFE, level: P_EXPERT, expectedHp: 14, hit: /The knife hits the goblin!/, rng: ['rnd(20)', 'rnd(3)', 'rn2(19)'] },
+];
+
+for (const [index, tc] of KICKED_WEAPON_SKILL_DAMAGE_CASES.entries()) {
+    test(`command kicked ${tc.label} damage honors explicit weapon skill`, async () => {
+        installNonShopFloorState();
+        initRng(2);
+        Object.assign(game.u, { ulevel: 20, uluck: 10, uhitinc: 10, udaminc: 0 });
+        game.u.acurr.a[A_STR] = 25;
+        game.u.acurr.a[A_DEX] = 25;
+        game.u.weapon_skills = [];
+        setHeroWeaponSkill(tc.skill, tc.level);
+        const blade = tc.kind === 'dagger'
+            ? { ...dagger(512036 + index), letter: undefined, line: undefined, ox: 6, oy: 5 }
+            : { ...monsterKnife(512046 + index), ox: 6, oy: 5 };
+        const goblin = ordinaryThrowTarget('goblin', 7, 5, {
+            mhp: 20,
+            mhpmax: 20,
+            msleeping: 1,
+            mpeaceful: 1,
+            meating: 4,
+            mstrategy: STRAT_WAITFORU,
+        });
+        game.level.objects = [blade];
+        game.level.monsters = [goblin];
+        enableRngLog({ reset: true });
+
+        await rhack('\x04');
+        await rhack('l');
+
+        assert.match(game._pending_message, new RegExp(`You kick a ${tc.kind}\\.`), tc.label);
+        assert.match(game._pending_message, tc.hit, tc.label);
+        assert.doesNotMatch(game._pending_message, /gift|catches|misses|does no harm|shatters/, tc.label);
+        assert.equal(goblin.mhp, tc.expectedHp, tc.label);
+        assert.equal(goblin.msleeping, 0, tc.label);
+        assert.equal(goblin.meating, 0, tc.label);
+        assert.equal(goblin.mstrategy, 0, tc.label);
+        assert.equal(goblin.mpeaceful, 0, tc.label);
+        assert.equal(game.level.objects.includes(blade), true, tc.label);
+        assert.equal(blade.ox, 7, tc.label);
+        assert.equal(blade.oy, 5, tc.label);
+        assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 3), tc.rng, tc.label);
+    });
+}
+
 test('command kicked glass gem adds damage increase bonus', async () => {
     installNonShopFloorState();
     initRng(2);
@@ -43159,6 +43226,61 @@ test('hero-thrown knife harms ordinary monster and survives landing', async () =
         'rnd(20)', 'rnd(3)', 'rn2(19)', 'rn2(100)',
     ]);
 });
+
+const THROWN_WEAPON_SKILL_DAMAGE_CASES = [
+    { label: 'dagger unskilled', kind: 'dagger', letter: 'd', skill: P_DAGGER, level: P_UNSKILLED, expectedHp: 19, hit: /The dagger hits the goblin\./, rng: ['rnd(20)', 'rnd(4)', 'rn2(19)', 'rn2(100)'] },
+    { label: 'dagger basic', kind: 'dagger', letter: 'd', skill: P_DAGGER, level: P_BASIC, expectedHp: 17, hit: /The dagger hits the goblin\./, rng: ['rnd(20)', 'rnd(4)', 'rn2(19)', 'rn2(100)'] },
+    { label: 'dagger skilled', kind: 'dagger', letter: 'd', skill: P_DAGGER, level: P_SKILLED, expectedHp: 16, hit: /The dagger hits the goblin\./, rng: ['rnd(20)', 'rnd(4)', 'rn2(19)', 'rn2(100)'] },
+    { label: 'dagger expert', kind: 'dagger', letter: 'd', skill: P_DAGGER, level: P_EXPERT, expectedHp: 15, hit: /The dagger hits the goblin!/, rng: ['rnd(20)', 'rnd(4)', 'rn2(19)', 'rn2(100)'] },
+    { label: 'knife unskilled', kind: 'knife', letter: 'k', skill: P_KNIFE, level: P_UNSKILLED, expectedHp: 19, hit: /The knife hits the goblin\./, rng: ['rnd(20)', 'rnd(3)', 'rn2(19)', 'rn2(100)'] },
+    { label: 'knife basic', kind: 'knife', letter: 'k', skill: P_KNIFE, level: P_BASIC, expectedHp: 19, hit: /The knife hits the goblin\./, rng: ['rnd(20)', 'rnd(3)', 'rn2(19)', 'rn2(100)'] },
+    { label: 'knife skilled', kind: 'knife', letter: 'k', skill: P_KNIFE, level: P_SKILLED, expectedHp: 18, hit: /The knife hits the goblin\./, rng: ['rnd(20)', 'rnd(3)', 'rn2(19)', 'rn2(100)'] },
+    { label: 'knife expert', kind: 'knife', letter: 'k', skill: P_KNIFE, level: P_EXPERT, expectedHp: 17, hit: /The knife hits the goblin\./, rng: ['rnd(20)', 'rnd(3)', 'rn2(19)', 'rn2(100)'] },
+];
+
+for (const [index, tc] of THROWN_WEAPON_SKILL_DAMAGE_CASES.entries()) {
+    test(`hero-thrown ${tc.label} damage honors explicit weapon skill`, async () => {
+        installNonShopFloorState();
+        initRng(2);
+        Object.assign(game.u, { ulevel: 20, uluck: 10, uhitinc: 10, udaminc: 0 });
+        game.u.acurr.a[A_STR] = 10;
+        game.u.acurr.a[A_DEX] = 25;
+        game.u.weapon_skills = [];
+        setHeroWeaponSkill(tc.skill, tc.level);
+        const blade = tc.kind === 'dagger'
+            ? dagger(876110 + index, 'd')
+            : upwardWeapon(876120 + index, 'k', 'knife', 'k - a knife', { otyp: KNIFE, plural: 'knives' });
+        const goblin = ordinaryThrowTarget('goblin', 7, 5, {
+            mhp: 20,
+            mhpmax: 20,
+            msleeping: 1,
+            mpeaceful: 1,
+            meating: 4,
+            mstrategy: STRAT_WAITFORU,
+        });
+        game.inventory = [blade];
+        game.level.monsters = [goblin];
+        enableRngLog({ reset: true });
+
+        await rhack('t');
+        await rhack(tc.letter);
+        await rhack('l');
+
+        assert.match(game._pending_message, tc.hit, tc.label);
+        assert.doesNotMatch(game._pending_message, /gift|catches|misses|shatters|Splat/, tc.label);
+        assert.equal(goblin.mhp, tc.expectedHp, tc.label);
+        assert.equal(goblin.msleeping, 0, tc.label);
+        assert.equal(goblin.meating, 0, tc.label);
+        assert.equal(goblin.mstrategy, 0, tc.label);
+        assert.equal(goblin.mpeaceful, 0, tc.label);
+        assert.equal(game.inventory.includes(blade), false, tc.label);
+        const landed = game.level.objects.find(obj => obj.id === blade.id);
+        assert.ok(landed, tc.label);
+        assert.equal(landed.ox, 7, tc.label);
+        assert.equal(landed.oy, 5, tc.label);
+        assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 4), tc.rng, tc.label);
+    });
+}
 
 test('hero-thrown glass gem hit runs acid passive before landing', async () => {
     installNonShopFloorState();
