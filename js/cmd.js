@@ -43788,6 +43788,10 @@ function heroFireTrapMessage(trap, prefix = '') {
 }
 
 function applyHeroFireTrapFatalResult(result) {
+    return applyLifeSavingOrFatalCommandMode(result);
+}
+
+function applyLifeSavingOrFatalCommandMode(result) {
     game.context ??= {};
     if (result.lifeSaving) {
         game._command_mode = 'lifeSavingMore';
@@ -49911,6 +49915,7 @@ export async function rhack(_cmd) {
                         ...next.insertAfter,
                         ...(game._queued_messages_after_more || []),
                     ];
+                if (applyLifeSavingOrFatalCommandMode(next)) return;
                 if (next.beginWishPrompt) {
                     game._wish_text = '';
                     game._wish_move_cost = 0;
@@ -52318,22 +52323,34 @@ export async function rhack(_cmd) {
         if (selfZap && fireWand) {
             const origDamage = d(12, 6);
             const resistsFire = !!game.u?.fireResistance;
-            const fireInventory = fireDamageInventory(origDamage, true);
-            if (fireInventory.damage && game.u)
-                game.u.uhp = Math.max(0, (game.u.uhp || 0) - fireInventory.damage);
-            if (!resistsFire && game.u && (game.u.uhp || 0) > 0)
-                game.u.uhp = Math.max(0, (game.u.uhp || 0) - origDamage);
-            const followups = [...fireInventory.messages];
-            if ((game.u?.uhp || 0) <= 0) {
+            const fireInventory = fireDamageInventory(origDamage, true, false, { allowLifeSaving: true });
+            if (!fireInventory.lifeSaving && !fireInventory.fatal) {
+                if (fireInventory.damage && game.u)
+                    game.u.uhp = Math.max(0, (game.u.uhp || 0) - fireInventory.damage);
+                if (!resistsFire && game.u && (game.u.uhp || 0) > 0)
+                    game.u.uhp = Math.max(0, (game.u.uhp || 0) - origDamage);
+            }
+            const followups = fireInventory.messages.map((text, index) => ({
+                text,
+                more: index < fireInventory.messages.length - 1,
+            }));
+            if (!fireInventory.lifeSaving && !fireInventory.fatal && (game.u?.uhp || 0) <= 0) {
                 game._death_cause = fireInventory.deathCause
                     || (hornElement
                         ? `using a magical horn on ${game.flags?.female ? 'herself' : 'himself'}`
                         : `zapped ${game.flags?.female ? 'herself' : 'himself'} with a wand of fire`);
-                followups.push('You die...');
+                if (followups.length) followups[followups.length - 1].more = true;
+                followups.push({ text: 'You die...', more: false });
+            }
+            if ((fireInventory.lifeSaving || fireInventory.fatal) && followups.length) {
+                const final = followups[followups.length - 1];
+                final.lifeSaving = !!fireInventory.lifeSaving;
+                final.fatal = !!fireInventory.fatal;
+                final.more = true;
             }
             if (followups.length)
                 game._queued_messages_after_more = [...(game._queued_messages_after_more || []),
-                    ...followups.map((text, index) => ({ text, more: index < followups.length - 1 }))];
+                    ...followups];
             identifyZapToolOrWand(item, 'fire');
             await setMessage([...preludeMessages, resistsFire ? 'You feel rather warm.' : "You've set yourself afire!"].join('  '), !!followups.length || preludeMessages.length > 0);
             game._command_mode = null;
