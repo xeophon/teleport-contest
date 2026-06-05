@@ -6,7 +6,7 @@ import { activateStatueTrap, burnFloorObjectsByFire, earthFloorEffects, finishFo
 import { newsym, refreshHallucinatedMap } from '../js/display.js';
 import { game, resetGame } from '../js/gstate.js';
 import { pushKey, resetInputState } from '../js/input.js';
-import { createMonsterCorpseOrGlob, mkcorpstat } from '../js/mklev.js';
+import { createMonsterCorpseOrGlob, mkcorpstat, monsterByRndName } from '../js/mklev.js';
 import { enableDisplayRngLog, enableRngLog, getRngLog, initRng } from '../js/rng.js';
 import { A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_STR, A_WIS, ALTAR, AM_SHRINE, Align2amask, BILLSZ, CANDLESHOP, CLOUD, CORPSTAT_HISTORIC, COULD_SEE, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, D_CLOSED, D_NODOOR, FIRE_TRAP, FOUNTAIN, HOLE, ICE, ICED_POOL, IN_SIGHT, IRONBARS, LADDER, LAVAPOOL, MIGR_LADDER_UP, MIGR_SSTAIRS, MIGR_STAIRS_UP, MOAT, M_AP_FURNITURE, M_AP_OBJECT, NORMAL_SPEED, P_BASIC, P_DAGGER, P_EXPERT, P_KNIFE, P_SKILLED, P_UNSKILLED, PIT, POOL, REPAIR_DELAY, ROOM, ROOMOFFSET, SDOOR, SHOPBASE, SHOP_DOOR_COST, SINK, SQKY_BOARD, STAIRS, STATUE_TRAP, STONE, STRAT_APPEARMSG, STRAT_WAITFORU, STRAT_WAITMASK, TEMPLE, TRAPDOOR, TT_LAVA, TT_WEB, WEB, W_SADDLE } from '../js/const.js';
 import { currentFruitId, setCurrentFruitName } from '../js/fruit.js';
@@ -13322,6 +13322,28 @@ function installWerewolfOldFormFireVaporLifeSavingInventory(amuletId, potionId) 
     return { amulet, potion };
 }
 
+function adjacentHostileFlamingSphere(id = 31006) {
+    const data = monsterByRndName('flaming sphere');
+    assert.equal(data.attack?.aatyp, 'expl');
+    assert.equal(data.attack?.adtyp, 'fire');
+    const sphere = ordinaryThrowTarget('flaming sphere', 6, 5, {
+        m_id: id,
+        mhp: 20,
+        mhpmax: 20,
+        m_lev: data.mlevel ?? 6,
+        movement: NORMAL_SPEED,
+        msleeping: 0,
+        mcanmove: true,
+        mcansee: true,
+        mpeaceful: false,
+        mtame: 0,
+        mux: game.u.ux,
+        muy: game.u.uy,
+        data,
+    });
+    return { data, sphere };
+}
+
 test('fire scroll tower explosion inventory vapor uses lifesaving for old-form death', async () => {
     installNonShopFloorState();
     initRng(2);
@@ -17428,6 +17450,136 @@ test('monster fire breath hero-hit inventory vapor rehumanize old form death use
     assert.equal(game.inventory.includes(potion), false);
     assert.equal(game.level.monsters.includes(redDragon), true);
     assert.equal(redDragon._breath_used_this_turn, 1);
+    assert.equal(game.u.ulycn, 'werewolf');
+    assert.equal(game.u.lycanthrope, true);
+    assert.equal(game.u._polyself_form, null);
+    assert.equal(game.u._polyself_base, null);
+    assert.equal(game.u.uhp, 0);
+    assert.doesNotMatch(messages, /You feel purified|peculiar odor|eyes water|Unknown command/);
+
+    await rhack(' ');
+
+    assert.equal(game._pending_message, 'You feel much better!');
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game.u.uhp, game.u.uhpmax);
+});
+
+test('hostile flaming sphere adjacent attack explodes without to-hit roll', async () => {
+    installStableNonShopFloorState();
+    initRng(1);
+    enableRngLog({ reset: true });
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 50,
+        uhpmax: 50,
+        uac: 10,
+        fireResistance: false,
+    });
+    game.inventory = [];
+    const { sphere } = adjacentHostileFlamingSphere(31006);
+    game.level.monsters = [sphere];
+
+    queueEscapeForMonsterTurn();
+    markHeroNeighborhoodVisible();
+    await processMonsterTurns();
+
+    const log = getRngLog();
+    const d4x6 = rngValuesForCall(log, 'd(4,6)');
+    assert.equal(d4x6.length, 2);
+    const expectedDamage = d4x6[1];
+    assert.equal(log.some(entry => rngCallName(entry) === 'rnd(20)'), false);
+    assert.match(game._pending_message, /The flaming sphere explodes!/);
+    assert.match(game._pending_message, /You are caught in the flaming sphere's explosion!/);
+    assert.equal(game.level.monsters.includes(sphere), false);
+    assert.equal(sphere.dead, true);
+    assert.equal(game.u.uhp, 50 - expectedDamage);
+});
+
+test('hostile flaming sphere false-target explosion still catches adjacent hero', async () => {
+    installStableNonShopFloorState();
+    initRng(7);
+    enableRngLog({ reset: true });
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 50,
+        uhpmax: 50,
+        uac: 10,
+        fireResistance: false,
+    });
+    game.inventory = [];
+    const { sphere } = adjacentHostileFlamingSphere(31007);
+    sphere.mux = 5;
+    sphere.muy = 6;
+    sphere.mcansee = false;
+    game.level.monsters = [sphere];
+
+    queueEscapeForMonsterTurn();
+    markHeroNeighborhoodVisible();
+    await processMonsterTurns();
+
+    const d4x6 = rngValuesForCall(getRngLog(), 'd(4,6)');
+    assert.equal(d4x6.length, 2);
+    assert.match(game._pending_message, /The flaming sphere explodes at a spot in thin air!/);
+    assert.match(game._pending_message, /You are caught in the flaming sphere's explosion!/);
+    assert.equal(game.level.monsters.includes(sphere), false);
+    assert.equal(sphere.dead, true);
+    assert.equal(game.u.uhp, 50 - d4x6[1]);
+});
+
+test('invulnerable hero does not prevent flaming sphere explosion', async () => {
+    installStableNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 50,
+        uhpmax: 50,
+        uac: 10,
+        fireResistance: false,
+        uinvulnerable: true,
+    });
+    game.inventory = [];
+    const { sphere } = adjacentHostileFlamingSphere(31008);
+    game.level.monsters = [sphere];
+
+    queueEscapeForMonsterTurn();
+    markHeroNeighborhoodVisible();
+    await processMonsterTurns();
+
+    assert.match(game._pending_message, /The flaming sphere explodes!/);
+    assert.match(game._pending_message, /You are caught in the flaming sphere's explosion!/);
+    assert.match(game._pending_message, /You are unharmed!/);
+    assert.doesNotMatch(game._pending_message, /pulls back|move nearby/);
+    assert.equal(game.level.monsters.includes(sphere), false);
+    assert.equal(sphere.dead, true);
+    assert.equal(game.u.uhp, 50);
+});
+
+test('monster flaming sphere explosion inventory vapor uses lifesaving for old-form death', async () => {
+    installStableNonShopFloorState();
+    initRng(8);
+    const { amulet, potion } = installWerewolfOldFormFireVaporLifeSavingInventory(31009, 31010);
+    const { sphere } = adjacentHostileFlamingSphere(31011);
+    game.level.monsters = [sphere];
+
+    queueEscapeForMonsterTurn();
+    markHeroNeighborhoodVisible();
+    await processMonsterTurns();
+
+    const messages = game._pending_message || '';
+    assert.equal(game._command_mode, 'lifeSavingMore');
+    assert.match(messages, /The flaming sphere explodes!/);
+    assert.match(messages, /You are caught in the flaming sphere's explosion!/);
+    assert.match(messages, /Your potion of holy water boils and explodes!/);
+    assert.match(messages, /You return to human form!/);
+    assert.match(messages, /Your old form was not healthy enough to survive\./);
+    assert.match(messages, /You die\.\.\.  But wait\.\.\.  Your medallion begins to glow!/);
+    assert.equal(game.inventory.includes(amulet), false);
+    assert.equal(game.inventory.includes(potion), false);
+    assert.equal(game.level.monsters.includes(sphere), false);
+    assert.equal(sphere.dead, true);
     assert.equal(game.u.ulycn, 'werewolf');
     assert.equal(game.u.lycanthrope, true);
     assert.equal(game.u._polyself_form, null);

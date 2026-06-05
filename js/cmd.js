@@ -26499,7 +26499,7 @@ function appendFireExplosionMessages(messages, result) {
     markFireExplosionResultMetadata(messages, result);
 }
 
-function applyHeroFireExplosionInventoryDamage(messages, origDamage, deathCause, { fatalMessage = '' } = {}) {
+export function applyHeroFireExplosionInventoryDamage(messages, origDamage, deathCause, { fatalMessage = '' } = {}) {
     const fireInventory = fireDamageInventory(origDamage, true, false, { allowLifeSaving: true });
     messages.push(...fireInventory.messages);
     if (fireInventory.lifeSaving || fireInventory.fatal) {
@@ -26509,7 +26509,8 @@ function applyHeroFireExplosionInventoryDamage(messages, origDamage, deathCause,
         return { fireInventory, damage: 0 };
     }
 
-    const damage = (game.u?.fireResistance ? 0 : origDamage) + fireInventory.damage;
+    if (game.u?.uinvulnerable) messages.push('You are unharmed!');
+    const damage = (game.u?.fireResistance || game.u?.uinvulnerable ? 0 : origDamage) + fireInventory.damage;
     if (damage && game.u) game.u.uhp = Math.max(0, (game.u.uhp || 0) - damage);
     if ((game.u?.uhp || 0) <= 0) {
         game._death_cause = fireInventory.deathCause || deathCause;
@@ -43816,7 +43817,7 @@ function applyHeroFireTrapFatalResult(result) {
     return applyLifeSavingOrFatalCommandMode(result);
 }
 
-function applyLifeSavingOrFatalCommandMode(result) {
+export function applyLifeSavingOrFatalCommandMode(result) {
     game.context ??= {};
     if (result.lifeSaving) {
         game._command_mode = 'lifeSavingMore';
