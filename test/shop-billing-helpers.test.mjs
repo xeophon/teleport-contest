@@ -26225,6 +26225,93 @@ test('command kicked flint harms ordinary monster', async () => {
     ]);
 });
 
+test('command kicked dagger harms ordinary monster and survives landing', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, { ulevel: 20, uluck: 10, uhitinc: 10 });
+    game.u.acurr.a[A_STR] = 25;
+    game.u.acurr.a[A_DEX] = 25;
+    const blade = {
+        ...dagger(512034),
+        letter: undefined,
+        line: undefined,
+        ox: 6,
+        oy: 5,
+    };
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, {
+        mhp: 20,
+        mhpmax: 20,
+        msleeping: 1,
+        mpeaceful: 1,
+        meating: 4,
+        mstrategy: STRAT_WAITFORU,
+    });
+    game.level.objects = [blade];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('\x04');
+    await rhack('l');
+
+    assert.match(game._pending_message, /You kick a dagger\./);
+    assert.match(game._pending_message, /The dagger hits the goblin!/);
+    assert.doesNotMatch(game._pending_message, /gift|catches|misses|does no harm|shatters/);
+    assert.equal(goblin.mhp, 14);
+    assert.equal(goblin.msleeping, 0);
+    assert.equal(goblin.meating, 0);
+    assert.equal(goblin.mstrategy, 0);
+    assert.equal(goblin.mpeaceful, 0);
+    assert.equal(game.level.objects.includes(blade), true);
+    assert.equal(blade.ox, 7);
+    assert.equal(blade.oy, 5);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 3), [
+        'rnd(20)', 'rnd(4)', 'rn2(19)',
+    ]);
+});
+
+test('command kicked knife harms ordinary monster and survives landing', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, { ulevel: 20, uluck: 10, uhitinc: 10 });
+    game.u.acurr.a[A_STR] = 25;
+    game.u.acurr.a[A_DEX] = 25;
+    const blade = {
+        ...monsterKnife(512035),
+        ox: 6,
+        oy: 5,
+    };
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, {
+        mhp: 20,
+        mhpmax: 20,
+        msleeping: 1,
+        mpeaceful: 1,
+        meating: 4,
+        mstrategy: STRAT_WAITFORU,
+    });
+    game.level.objects = [blade];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('\x04');
+    await rhack('l');
+
+    assert.match(game._pending_message, /You kick a knife\./);
+    assert.match(game._pending_message, /The knife hits the goblin\./);
+    assert.doesNotMatch(game._pending_message, /gift|catches|misses|does no harm|shatters/);
+    assert.equal(goblin.mhp, 16);
+    assert.equal(goblin.msleeping, 0);
+    assert.equal(goblin.meating, 0);
+    assert.equal(goblin.mstrategy, 0);
+    assert.equal(goblin.mpeaceful, 0);
+    assert.equal(game.level.objects.includes(blade), true);
+    assert.equal(blade.ox, 7);
+    assert.equal(blade.oy, 5);
+    assert.equal(blade.otyp, KNIFE);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 3), [
+        'rnd(20)', 'rnd(3)', 'rn2(19)',
+    ]);
+});
+
 test('command kicked glass gem adds damage increase bonus', async () => {
     installNonShopFloorState();
     initRng(2);

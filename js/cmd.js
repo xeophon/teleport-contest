@@ -18380,7 +18380,7 @@ function heroThrownGemHitValue(obj, mon) {
     return heroProjectileBaseHitValue(obj, mon) - 4;
 }
 
-function heroThrownSupportedWeaponObject(obj) {
+function heroProjectileSupportedWeaponObject(obj) {
     if (!obj || obj.artifact || obj.oartifact) return false;
     return HERO_THROWN_WEAPON_MONSTER_DATA.has(tossUpWeaponObjectKey(obj));
 }
@@ -18389,9 +18389,13 @@ function heroThrownWeaponHitValue(obj, mon) {
     return heroProjectileBaseHitValue(obj, mon) + 2;
 }
 
-function heroThrownWeaponDamage(obj, mon) {
+function heroKickedWeaponHitValue(obj, mon) {
+    return heroKickedProjectileHitValue(obj, mon);
+}
+
+function heroProjectileWeaponDamage(obj, mon) {
     const data = HERO_THROWN_WEAPON_MONSTER_DATA.get(tossUpWeaponObjectKey(obj));
-    if (!data || !heroThrownSupportedWeaponObject(obj)) return 0;
+    if (!data || !heroProjectileSupportedWeaponObject(obj)) return 0;
     const die = heroProjectileMonsterSizeValue(mon) >= 3 ? data.largeDie : data.smallDie;
     let damage = die ? rnd(die) : 0;
     damage += Math.trunc(Number(obj.spe || 0));
@@ -18410,13 +18414,12 @@ function heroProjectileHitPunctuation(damage) {
     return damage <= 4 ? '.' : '!';
 }
 
-function heroThrownWeaponImpact(obj, mon) {
-    if (!heroThrownSupportedWeaponObject(obj)) return { handled: false, messages: [] };
-    const hitValue = heroThrownWeaponHitValue(obj, mon);
+function heroProjectileWeaponImpact(obj, mon, hitValue) {
+    if (!heroProjectileSupportedWeaponObject(obj)) return { handled: false, messages: [] };
     const dieroll = rnd(20);
     const targetName = heroThrownVenomTargetName(mon);
     if (hitValue >= dieroll) {
-        const damage = heroThrownWeaponDamage(obj, mon);
+        const damage = heroProjectileWeaponDamage(obj, mon);
         mon.mhp = (mon.mhp || 1) - damage;
         if ((mon.mhp || 0) <= 0) mon.dead = true;
         wakeMonsterFromHeroThrownHit(mon);
@@ -18434,6 +18437,14 @@ function heroThrownWeaponImpact(obj, mon) {
     const messages = [`The ${pickupObjectName({ ...obj, quan: 1 })} misses the ${mon?.data?.name || 'creature'}.`];
     messages.push(...wakeMonsterFromHeroThrownMiss(mon));
     return { handled: true, hit: false, messages };
+}
+
+function heroThrownWeaponImpact(obj, mon) {
+    return heroProjectileWeaponImpact(obj, mon, heroThrownWeaponHitValue(obj, mon));
+}
+
+function heroKickedWeaponImpact(obj, mon) {
+    return heroProjectileWeaponImpact(obj, mon, heroKickedWeaponHitValue(obj, mon));
 }
 
 function heroThrownGemImpact(obj, mon) {
@@ -27563,7 +27574,8 @@ function kickFloorObjectToward(dir, x, y) {
     const canHandleMonsterImpact = targetMon
         && ((heroThrownMonsterIsUnicorn(targetMon) && heroThrownUnicornGemKind(obj))
             || heroThrownStoneMissileHarmlessRockPasser(obj, targetMon)
-            || heroThrownGemClassObject(obj));
+            || heroThrownGemClassObject(obj)
+            || heroProjectileSupportedWeaponObject(obj));
     const gate = remoteProjectileDownGateAt(obj, landX, landY);
     if (!gate && !canHandleMonsterImpact) return { handled: false };
 
@@ -27578,6 +27590,7 @@ function kickFloorObjectToward(dir, x, y) {
         monsterImpact = heroThrownUnicornGemImpact(obj, targetMon);
         if (!monsterImpact.handled) monsterImpact = heroKickedStoneMissileRockPasserImpact(obj, targetMon);
         if (!monsterImpact.handled) monsterImpact = heroKickedGemImpact(obj, targetMon);
+        if (!monsterImpact.handled) monsterImpact = heroKickedWeaponImpact(obj, targetMon);
     }
     if (monsterImpact.handled) {
         removeFloorObject(obj);
@@ -61585,7 +61598,7 @@ export async function rhack(_cmd) {
             impactConsumedThrownObject = !!gemImpact.mulched;
             impactObjectHit = !!gemImpact.hit;
             impactPassiveTarget = gemImpact.hit ? targetMon : null;
-        } else if (targetMon && heroThrownSupportedWeaponObject(item)) {
+        } else if (targetMon && heroProjectileSupportedWeaponObject(item)) {
             const weaponImpact = heroThrownWeaponImpact(thrownObject, targetMon);
             impactMessage = (weaponImpact.messages || []).join('  ');
             impactConsumedThrownObject = !!weaponImpact.mulched;
