@@ -26054,6 +26054,47 @@ test('command kicked fragile stack resistance splits one item before ladder flig
     ]);
 });
 
+test('command kicked fragile stack resistance thumps before split at low range', async () => {
+    installNonShopFloorState();
+    markSquareVisible(6, 5);
+    Object.assign(game.u, { uhp: 50, uhpmax: 50 });
+    game.u.acurr.a[A_STR] = 2;
+    game.u.acurr.a[A_DEX] = 10;
+    game.u.acurr.a[A_CON] = 10;
+    initRng(167);
+    const stack = {
+        ...confusionPotion(512078, undefined, 3, { dknown: true }),
+        ox: 6,
+        oy: 5,
+        letter: undefined,
+        line: undefined,
+    };
+    game.level.objects = [stack];
+    enableRngLog({ reset: true });
+
+    await rhack('\x04');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.level.objects.includes(stack), true);
+    assert.equal(stack.quan, 3);
+    assert.equal(stack.ox, 6);
+    assert.equal(stack.oy, 5);
+    assert.equal(queuedImpactDropsFor({ dnum: 0, dlevel: 2 }).some(obj => obj.id === stack.id), false);
+    assert.match(game._pending_message, /You kick 3 potions of confusion\./);
+    assert.match(game._pending_message, /Thump!/);
+    assert.match(game._pending_message, /Ouch!  That hurts!/);
+    assert.doesNotMatch(game._pending_message, /shatters|peculiar odor|dizzy|falls through the hole|hits|misses|muffled/);
+    assert.equal(game.u.uhp, 46);
+    assert.equal(game.u._woundedLegTurns, 7);
+    assert.equal(game.u._woundedLegSide, 'right');
+    assert.equal(game.u.acurr.a[A_DEX], 9);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rn2(100)', 'rn2(3)', 'rn2(2)', 'rn2(2)', 'rn2(3)', 'rnd(5)', 'rnd(5)',
+    ]);
+});
+
 test('command kicked oartifact fragile object uses artifact resistance before ladder flight', async () => {
     installNonShopFloorState();
     installRemoteDownStairGate({ x: 7, y: 5, isladder: true });

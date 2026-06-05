@@ -27683,8 +27683,7 @@ function kickFloorObjectRange(obj, x, y, dir) {
     const strength = Math.max(0, Math.trunc(Number(stats[A_STR] ?? 10)));
     const weight = globObjectWeight({ ...obj, quan: 1 });
     let range = Math.trunc(strength / 2) - Math.trunc(weight / 40);
-    const roleName = game.urole?.name?.m || game._startup_role || '';
-    if (roleName === 'Monk' || roleName === 'Samurai') range += rnd(3);
+    if (heroUsesMartialKickRangeBonus()) range += rnd(3);
 
     const loc = game.level?.at?.(x, y);
     if (loc && IS_POOL(loc.typ)) {
@@ -27702,6 +27701,32 @@ function kickFloorObjectRange(obj, x, y, dir) {
     const closedDoor = nextLoc?.typ === DOOR && (nextLoc.doormask & (D_CLOSED | D_LOCKED));
     if (!isok(nextX, nextY) || !nextLoc || !ZAP_POS(nextLoc.typ) || closedDoor) range = 1;
     return range;
+}
+
+function heroUsesMartialKickRangeBonus() {
+    const roleName = game.urole?.name?.m || game._startup_role || '';
+    return roleName === 'Monk' || roleName === 'Samurai';
+}
+
+function lowRangeKickedObjectAvoidsOuch() {
+    return !rn2(3) || heroUsesMartialKickRangeBonus();
+}
+
+function applyKickedObjectOuchDamage() {
+    const stats = game.u?.acurr?.a || [];
+    rn2(2);
+    rn2(2);
+    if (!rn2(3)) {
+        const woundDuration = 5 + rnd(5);
+        if (!game.u._woundedLegTurns && !game.u._woundedDexPenalty) {
+            game.u.acurr.a[A_DEX] = Math.max(3, (game.u.acurr.a[A_DEX] || 9) - 1);
+            game.u._woundedDexPenalty = 1;
+        }
+        game.u._woundedLegTurns = Math.max(game.u._woundedLegTurns || 0, woundDuration);
+        game.u._woundedLegSide = 'right';
+    }
+    const damage = rnd((stats[A_CON] ?? 10) > 15 ? 3 : 5);
+    game.u.uhp = Math.max(0, (game.u?.uhp || 0) - damage);
 }
 
 function placeKickedFloorObject(obj, x, y, messages, options = {}) {
@@ -27801,11 +27826,16 @@ async function kickFloorObjectToward(dir, x, y) {
     const fragileBreakKind = kickedFragilePreflightBreakKind(obj);
     if (!gate && !canHandleMonsterImpact && !fragileBreakKind) return { handled: false };
 
+    const range = kickFloorObjectRange(obj, x, y, dir);
     const messages = [`You kick ${floorObjectArticleName(obj)}.`];
     if (fragileBreakKind && await breakKickedFragileFloorObject(obj, x, y, messages))
         return { handled: true, messages, moved: false, broke: true };
-    if (kickFloorObjectRange(obj, x, y, dir) < 2) {
+    if (range < 2) {
         messages.push('Thump!');
+        if (!lowRangeKickedObjectAvoidsOuch()) {
+            applyKickedObjectOuchDamage();
+            messages.push('Ouch!  That hurts!');
+        }
         return { handled: true, messages, moved: false };
     }
     if (!gate && !canHandleMonsterImpact) return { handled: true, messages, moved: false };

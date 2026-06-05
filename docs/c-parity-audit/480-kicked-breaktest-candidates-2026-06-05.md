@@ -44,6 +44,6 @@ Implemented the next kicked fragile-object `breaktest()` candidate slice without
 
 ## Remaining
 
-- Low-range resisted fragile `Thump!` return-roll coverage remains open.
+- Low-range resisted fragile `Thump!`/`kick_ouch` return-roll coverage is covered in audit 482.
 - Glass armor kicked preflight remains separate because C crack-erodes it before destruction.
 - Generic local venom placeholders remain excluded unless resolved to concrete acid/blinding venom.

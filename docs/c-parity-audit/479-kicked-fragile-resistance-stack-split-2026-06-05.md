@@ -44,5 +44,5 @@ Implemented the kicked fragile-object resistance continuation for stack handling
 ## Remaining
 
 - Shop-owned kicked fragile break billing remains separate from this non-shop slice.
-- Low-range resisted fragile `Thump!` return-roll coverage remains open.
+- Low-range resisted fragile `Thump!`/`kick_ouch` return-roll coverage is covered in audit 482.
 - Broader unsupported kicked fragile classes such as melon, venom, and generic glass remain separate from the currently supported preflight candidates.
