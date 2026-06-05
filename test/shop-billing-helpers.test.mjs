@@ -6,7 +6,7 @@ import { activateStatueTrap, burnFloorObjectsByFire, earthFloorEffects, finishFo
 import { newsym, refreshHallucinatedMap } from '../js/display.js';
 import { game, resetGame } from '../js/gstate.js';
 import { pushKey, resetInputState } from '../js/input.js';
-import { createMonsterCorpseOrGlob, mkcorpstat, mksobj, monsterByRndName } from '../js/mklev.js';
+import { createMonsterCorpseOrGlob, mkcorpstat, mkobj, mksobj, monsterByRndName } from '../js/mklev.js';
 import { enableDisplayRngLog, enableRngLog, getRngLog, initRng } from '../js/rng.js';
 import { A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_STR, A_WIS, ALTAR, AM_SHRINE, Align2amask, BILLSZ, CANDLESHOP, CLOUD, CORPSTAT_HISTORIC, COULD_SEE, DART_TRAP, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, D_CLOSED, D_NODOOR, FIRE_TRAP, FOUNTAIN, HOLE, ICE, ICED_POOL, IN_SIGHT, IRONBARS, LADDER, LAVAPOOL, MIGR_LADDER_UP, MIGR_SSTAIRS, MIGR_STAIRS_UP, MOAT, M_AP_FURNITURE, M_AP_OBJECT, NORMAL_SPEED, P_BASIC, P_DAGGER, P_EXPERT, P_KNIFE, P_SKILLED, P_UNSKILLED, PIT, POOL, REPAIR_DELAY, ROOM, ROOMOFFSET, SDOOR, SHOPBASE, SHOP_DOOR_COST, SINK, SQKY_BOARD, STAIRS, STATUE_TRAP, STONE, STRAT_APPEARMSG, STRAT_WAITFORU, STRAT_WAITMASK, TEMPLE, TRAPDOOR, TT_LAVA, TT_WEB, WEB, W_SADDLE } from '../js/const.js';
 import { currentFruitId, setCurrentFruitName } from '../js/fruit.js';
@@ -64,6 +64,7 @@ const EGG = 10001;
 const EXPENSIVE_CAMERA = 10082;
 const BLINDING_VENOM = 10184;
 const ACID_VENOM = 10185;
+const WEAPON_CLASS = 1;
 const KEY_BACKSPACE = 8;
 const KEY_DELETE = 127;
 const WATER_WALKING_BOOTS = 10132;
@@ -17966,17 +17967,93 @@ test('generated trap dart keeps positive enchantment and blessing state', () => 
     assert.equal(dart.opoisoned, false);
 });
 
-test('generated trap dart reaches erosion RNG path after first move', () => {
+test('generated trap dart persists erosion counters after first move', () => {
     installStableNonShopFloorState();
     game.moves = 2;
     game.in_mklev = false;
     enableRngLog({ reset: true });
-    installCoreRngValues([0, 0, 1, 1, 1, 1, 1, 1, 1, 1]);
+    installCoreRngValues([0, 0, 1, 1, 1, 1, 1, 0, 0, 1, 0, 1, 321]);
 
     const dart = mksobj(DART, true, false);
 
+    assert.deepEqual(getRngLog().map(rngCallName), [
+        'rnd(2)', 'rn2(6)', 'rn2(11)', 'rn2(10)', 'rn2(10)', 'rn2(100)',
+        'rn2(100)', 'rn2(80)', 'rn2(9)', 'rn2(9)', 'rn2(80)', 'rn2(9)',
+        'rn2(1000)',
+    ]);
+    assert.equal(dart.quan, 6);
     assert.equal(dart.spe, 0);
-    assert.equal(rngValuesForCall(getRngLog(), 'rn2(1000)').length, 1);
+    assert.equal(dart.blessed, false);
+    assert.equal(dart.cursed, false);
+    assert.equal(dart.opoisoned, false);
+    assert.equal(dart.oerodeproof || false, false);
+    assert.equal(dart.oeroded, 2);
+    assert.equal(dart.oeroded2, 1);
+    assert.equal(dart.greased || false, false);
+});
+
+test('generated trap dart can be erodeproof and greased without damage rolls', () => {
+    installStableNonShopFloorState();
+    game.moves = 2;
+    game.in_mklev = false;
+    enableRngLog({ reset: true });
+    installCoreRngValues([0, 0, 1, 1, 1, 1, 0, 0]);
+
+    const dart = mksobj(DART, true, false);
+
+    assert.deepEqual(getRngLog().map(rngCallName), [
+        'rnd(2)', 'rn2(6)', 'rn2(11)', 'rn2(10)', 'rn2(10)', 'rn2(100)',
+        'rn2(100)', 'rn2(1000)',
+    ]);
+    assert.equal(dart.oerodeproof, true);
+    assert.equal(dart.oeroded || 0, 0);
+    assert.equal(dart.oeroded2 || 0, 0);
+    assert.equal(dart.greased, true);
+});
+
+test('generated weapon-class dart carries persisted non-erosion roll state', () => {
+    installStableNonShopFloorState();
+    game.moves = 2;
+    game.in_mklev = false;
+    enableRngLog({ reset: true });
+    installCoreRngValues([199, 0, 0, 1, 1, 1, 1, 1, 79, 79, 777]);
+
+    const obj = mkobj(WEAPON_CLASS, false);
+
+    assert.deepEqual(getRngLog().map(rngCallName), [
+        'rnd(1002)', 'rnd(2)', 'rn2(6)', 'rn2(11)', 'rn2(10)', 'rn2(10)',
+        'rn2(100)', 'rn2(100)', 'rn2(80)', 'rn2(80)', 'rn2(1000)',
+    ]);
+    assert.equal(obj.cls, 'weapon');
+    assert.equal(obj.kind, 'dart');
+    assert.equal(obj.actualKind, 'dart');
+    assert.equal(obj.owt, 1);
+    assert.equal(obj.quan, 6);
+    assert.equal(obj.opoisoned, false);
+    assert.equal(obj.oerodeproof || false, false);
+    assert.equal(obj.oeroded || 0, 0);
+    assert.equal(obj.oeroded2 || 0, 0);
+    assert.equal(obj.greased || false, false);
+});
+
+test('generated non-erodible weapon-class ammo skips erosion rolls', () => {
+    installStableNonShopFloorState();
+    game.moves = 2;
+    game.in_mklev = false;
+    enableRngLog({ reset: true });
+    installCoreRngValues([99, 0, 0, 1, 1, 1, 1]);
+
+    const obj = mkobj(WEAPON_CLASS, false);
+
+    assert.deepEqual(getRngLog().map(rngCallName), [
+        'rnd(1002)', 'rnd(2)', 'rn2(6)', 'rn2(11)', 'rn2(10)', 'rn2(10)',
+        'rn2(100)',
+    ]);
+    assert.equal(obj.actualKind, 'silver arrow');
+    assert.equal(obj.oerodeproof || false, false);
+    assert.equal(obj.oeroded || 0, 0);
+    assert.equal(obj.oeroded2 || 0, 0);
+    assert.equal(obj.greased || false, false);
 });
 
 test('dart trap damage uses generated blessed dart enchantment', async () => {
