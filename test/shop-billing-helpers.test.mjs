@@ -25678,7 +25678,7 @@ test('command kick ordinary floor object down stairs records reciprocal metadata
 
 test('command kicked stone missile hits rock-passing monster harmlessly', async () => {
     installNonShopFloorState();
-    initRng(2);
+    initRng(1);
     Object.assign(game.u, { ulevel: 20, uluck: 10, uhitinc: 10 });
     game.u.acurr.a[A_STR] = 25;
     game.u.acurr.a[A_DEX] = 25;
@@ -25726,8 +25726,8 @@ test('command kicked stone missile hits rock-passing monster harmlessly', async 
     assert.equal(game.level.objects.includes(flint), true);
     assert.equal(flint.ox, 7);
     assert.equal(flint.oy, 5);
-    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 3), [
-        'rnd(20)', 'rn2(3)', 'rn2(2)',
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 4), [
+        'rnd(20)', 'rn2(19)', 'rn2(3)', 'rn2(2)',
     ]);
 });
 
@@ -25771,8 +25771,8 @@ test('command kicked stone missile harmless hit can mulch before landing', async
     assert.equal(elemental.mhp, 20);
     assert.equal(game.level.objects.includes(rock), false);
     assert.equal(game.level.objects.length, 0);
-    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 3), [
-        'rnd(20)', 'rn2(3)', 'rn2(100)',
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 4), [
+        'rnd(20)', 'rn2(19)', 'rn2(3)', 'rn2(100)',
     ]);
 });
 
@@ -25829,7 +25829,7 @@ test('command kicked stone missile miss against rock-passer stays a miss', async
 
 test('command kicked glass gem harms rock-passing monster and survives landing', async () => {
     installNonShopFloorState();
-    initRng(1);
+    initRng(2);
     Object.assign(game.u, { ulevel: 20, uluck: 10, uhitinc: 10 });
     game.u.acurr.a[A_STR] = 25;
     game.u.acurr.a[A_DEX] = 25;
@@ -25874,14 +25874,14 @@ test('command kicked glass gem harms rock-passing monster and survives landing',
     assert.equal(game.level.objects.includes(glass), true);
     assert.equal(glass.ox, 7);
     assert.equal(glass.oy, 5);
-    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 3), [
-        'rnd(20)', 'rnd(2)', 'rn2(3)',
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 4), [
+        'rnd(20)', 'rnd(2)', 'rn2(19)', 'rn2(3)',
     ]);
 });
 
 test('command kicked glass gem hit can mulch before landing', async () => {
     installNonShopFloorState();
-    initRng(2);
+    initRng(1);
     Object.assign(game.u, { ulevel: 20, uluck: 10, uhitinc: 10 });
     game.u.acurr.a[A_STR] = 25;
     game.u.acurr.a[A_DEX] = 25;
@@ -25917,8 +25917,8 @@ test('command kicked glass gem hit can mulch before landing', async () => {
     assert.equal(elemental.mhp, 16);
     assert.equal(game.level.objects.includes(glass), false);
     assert.equal(game.level.objects.some(obj => obj.id === glass.id), false);
-    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 4), [
-        'rnd(20)', 'rnd(2)', 'rn2(3)', 'rn2(100)',
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 5), [
+        'rnd(20)', 'rnd(2)', 'rn2(19)', 'rn2(3)', 'rn2(100)',
     ]);
 });
 
@@ -25968,7 +25968,7 @@ test('command kicked glass gem miss against rock-passer stays a miss', async () 
 
 test('command kicked ruby harms ordinary monster and survives landing', async () => {
     installNonShopFloorState();
-    initRng(1);
+    initRng(2);
     Object.assign(game.u, { ulevel: 20, uluck: 10, uhitinc: 10 });
     game.u.acurr.a[A_STR] = 25;
     game.u.acurr.a[A_DEX] = 25;
@@ -26006,8 +26006,8 @@ test('command kicked ruby harms ordinary monster and survives landing', async ()
     assert.equal(game.level.objects.includes(ruby), true);
     assert.equal(ruby.ox, 7);
     assert.equal(ruby.oy, 5);
-    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 4), [
-        'rnd(20)', 'rnd(2)', 'rn2(3)', 'rn2(2)',
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 5), [
+        'rnd(20)', 'rnd(2)', 'rn2(19)', 'rn2(3)', 'rn2(2)',
     ]);
 });
 
@@ -26055,7 +26055,7 @@ test('command kicked ruby miss against ordinary monster lands', async () => {
 
 test('command kicked flint harms ordinary monster', async () => {
     installNonShopFloorState();
-    initRng(1);
+    initRng(2);
     Object.assign(game.u, { ulevel: 20, uluck: 10, uhitinc: 10 });
     game.u.acurr.a[A_STR] = 25;
     game.u.acurr.a[A_DEX] = 25;
@@ -26092,17 +26092,17 @@ test('command kicked flint harms ordinary monster', async () => {
     assert.equal(game.level.objects.includes(flint), true);
     assert.equal(flint.ox, 7);
     assert.equal(flint.oy, 5);
-    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 4), [
-        'rnd(20)', 'rnd(2)', 'rn2(3)', 'rn2(2)',
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 5), [
+        'rnd(20)', 'rnd(2)', 'rn2(19)', 'rn2(3)', 'rn2(2)',
     ]);
 });
 
 test('command kicked glass gem adds damage increase bonus', async () => {
     installNonShopFloorState();
-    initRng(1);
+    initRng(2);
     Object.assign(game.u, { ulevel: 20, uluck: 10, uhitinc: 10, udaminc: 2 });
     game.u.acurr.a[A_STR] = 10;
-    game.u.acurr.a[A_DEX] = 25;
+    game.u.acurr.a[A_DEX] = -1;
     const glass = floorGlassGem(512032, {
         ox: 6,
         oy: 5,
@@ -26130,17 +26130,18 @@ test('command kicked glass gem adds damage increase bonus', async () => {
     assert.equal(goblin.meating, 0);
     assert.equal(goblin.mstrategy, 0);
     assert.equal(goblin.mpeaceful, 0);
+    assert.equal(game.u._aexe[A_DEX], 1);
     assert.equal(game.level.objects.includes(glass), true);
     assert.equal(glass.ox, 7);
     assert.equal(glass.oy, 5);
-    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 3), [
-        'rnd(20)', 'rnd(2)', 'rn2(3)',
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 4), [
+        'rnd(20)', 'rnd(2)', 'rn2(19)', 'rn2(3)',
     ]);
 });
 
 test('command kicked glass gem negative damage bonus still deals one damage', async () => {
     installNonShopFloorState();
-    initRng(1);
+    initRng(2);
     Object.assign(game.u, { ulevel: 20, uluck: 10, uhitinc: 10, udaminc: -3 });
     game.u.acurr.a[A_STR] = 10;
     game.u.acurr.a[A_DEX] = 25;
@@ -26166,8 +26167,8 @@ test('command kicked glass gem negative damage bonus still deals one damage', as
     assert.equal(game.level.objects.includes(glass), true);
     assert.equal(glass.ox, 7);
     assert.equal(glass.oy, 5);
-    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 3), [
-        'rnd(20)', 'rnd(2)', 'rn2(3)',
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 4), [
+        'rnd(20)', 'rnd(2)', 'rn2(19)', 'rn2(3)',
     ]);
 });
 
@@ -42635,8 +42636,8 @@ test('hero-thrown loadstone hits rock-passing monster harmlessly', async () => {
     assert.ok(landed);
     assert.equal(landed.ox, 7);
     assert.equal(landed.oy, 5);
-    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 3), [
-        'rnd(20)', 'rnd(25)', 'rn2(100)',
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 4), [
+        'rnd(20)', 'rnd(25)', 'rn2(19)', 'rn2(100)',
     ]);
 });
 
@@ -42690,7 +42691,7 @@ test('hero-thrown stone missile miss against rock-passer stays a miss', async ()
 
 test('hero-thrown glass gem harms rock-passing monster and survives landing', async () => {
     installNonShopFloorState();
-    initRng(1);
+    initRng(2);
     Object.assign(game.u, { ulevel: 20, uluck: 10, uhitinc: 10 });
     game.u.acurr.a[A_DEX] = 25;
     const glass = carriedGlassGem(876088, 'g');
@@ -42732,14 +42733,14 @@ test('hero-thrown glass gem harms rock-passing monster and survives landing', as
     assert.ok(landed);
     assert.equal(landed.ox, 7);
     assert.equal(landed.oy, 5);
-    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 4), [
-        'rnd(20)', 'rnd(2)', 'rn2(3)', 'rn2(100)',
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 5), [
+        'rnd(20)', 'rnd(2)', 'rn2(19)', 'rn2(3)', 'rn2(100)',
     ]);
 });
 
 test('hero-thrown glass gem hit can mulch before landing', async () => {
     installNonShopFloorState();
-    initRng(2);
+    initRng(1);
     Object.assign(game.u, { ulevel: 20, uluck: 10, uhitinc: 10 });
     game.u.acurr.a[A_DEX] = 25;
     const glass = carriedGlassGem(876089, 'g');
@@ -42770,8 +42771,8 @@ test('hero-thrown glass gem hit can mulch before landing', async () => {
     assert.equal(elemental.mhp, 19);
     assert.equal(game.inventory.includes(glass), false);
     assert.equal(game.level.objects.some(obj => obj.id === glass.id), false);
-    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 4), [
-        'rnd(20)', 'rnd(2)', 'rn2(3)', 'rn2(100)',
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 5), [
+        'rnd(20)', 'rnd(2)', 'rn2(19)', 'rn2(3)', 'rn2(100)',
     ]);
 });
 
@@ -42816,7 +42817,7 @@ test('hero-thrown glass gem miss against rock-passer stays a miss', async () => 
 
 test('hero-thrown ruby harms ordinary monster and survives landing', async () => {
     installNonShopFloorState();
-    initRng(1);
+    initRng(2);
     Object.assign(game.u, { ulevel: 20, uluck: 10, uhitinc: 10 });
     game.u.acurr.a[A_DEX] = 25;
     const ruby = carriedRuby(876091, 'r', {
@@ -42855,8 +42856,8 @@ test('hero-thrown ruby harms ordinary monster and survives landing', async () =>
     assert.ok(landed);
     assert.equal(landed.ox, 7);
     assert.equal(landed.oy, 5);
-    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 5), [
-        'rnd(20)', 'rnd(2)', 'rn2(3)', 'rn2(2)', 'rn2(100)',
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 6), [
+        'rnd(20)', 'rnd(2)', 'rn2(19)', 'rn2(3)', 'rn2(2)', 'rn2(100)',
     ]);
 });
 

@@ -18218,6 +18218,10 @@ function heroDamageIncreaseBonus() {
     return Math.trunc(Number(game.u?.udaminc || 0));
 }
 
+function exerciseHeroProjectileHitDexterity() {
+    exerciseAttribute(A_DEX, true);
+}
+
 function heroProjectileBaseHitValue(mon) {
     const ux = game.u?.ux || 0;
     const uy = game.u?.uy || 0;
@@ -18259,6 +18263,7 @@ function heroKickedStoneMissileRockPasserImpact(obj, mon) {
     const dieroll = rnd(20);
     if (heroKickedProjectileHitValue(obj, mon) >= dieroll) {
         wakeMonsterFromHeroThrownHit(mon);
+        exerciseHeroProjectileHitDexterity();
         const mulched = shouldMulchHeroProjectileMissile(obj);
         if (mulched) rn2(100);
         return {
@@ -18282,6 +18287,7 @@ function heroKickedGemImpact(obj, mon) {
         mon.mhp = (mon.mhp || 1) - damage;
         if ((mon.mhp || 0) <= 0) mon.dead = true;
         wakeMonsterFromHeroThrownHit(mon);
+        exerciseHeroProjectileHitDexterity();
         const mulched = shouldMulchHeroProjectileMissile(obj);
         if (mulched) rn2(100);
         return {
@@ -18314,6 +18320,7 @@ function heroThrownGemImpact(obj, mon) {
         mon.mhp = (mon.mhp || 1) - damage;
         if ((mon.mhp || 0) <= 0) mon.dead = true;
         wakeMonsterFromHeroThrownHit(mon);
+        exerciseHeroProjectileHitDexterity();
         const mulched = shouldMulchHeroProjectileMissile(obj);
         if (mulched) rn2(100);
         return {
@@ -61422,6 +61429,7 @@ export async function rhack(_cmd) {
             const targetName = heroThrownVenomTargetName(targetMon);
             if (dex > rnd(25)) {
                 wakeMonsterFromHeroThrownHit(targetMon);
+                exerciseHeroProjectileHitDexterity();
                 impactMessage = `${thrownName} hits ${targetName} but does no harm.`;
             } else {
                 const messages = [`The ${pickupObjectName({ ...item, quan: 1 })} misses the ${targetMon.data?.name || 'creature'}.`];

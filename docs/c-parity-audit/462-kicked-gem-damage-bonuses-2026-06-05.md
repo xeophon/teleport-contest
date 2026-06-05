@@ -40,6 +40,6 @@ Implemented C-style damage bonus recomputation for kicked floor `GEM_CLASS` obje
 ## Remaining
 
 - Broader kicked-object `thitmonst()` conversion is still incomplete for ordinary kicked weapons/weptools.
-- C's successful projectile-hit Dexterity exercise can consume RNG before missile mulch; that remains separate from this damage-only slice.
+- Successful projectile-hit Dexterity exercise is covered in audit 463 for the currently modeled stone/gem hit paths.
 - Passive-object effects after surviving kicked gem hits remain separate.
 - Exact full `omon_adj()` target-size/sleep modifiers remain separate work.
