@@ -19529,7 +19529,7 @@ function isSupportedTossUpWeaponObject(obj) {
     if (!HERO_TOSS_UP_WEAPON_SMALL_DAMAGE.has(key)) return false;
     const spe = Math.trunc(Number(obj.spe ?? 0)) || 0;
     if (key === 'rubber hose' && spe < 1) return false;
-    return !obj.artifact && !obj.oartifact;
+    return true;
 }
 
 function heroThrownGenericWeaponDamage(obj) {
@@ -19636,6 +19636,7 @@ function pushHeroThrownHelmetMessage(messages, obj, helmet, damage) {
 
 function heroThrownGenericObjectFallingDamage(obj, helmet = null) {
     let damage = heroThrownGenericWeaponDamage(obj) ?? 0;
+    if (objectHasArtifactIdentity(obj)) rn1(18, 2); // C artifact_hit() gets a fake 2..19 die roll.
     if (!damage) {
         const weightDamage = Math.max(1, Math.ceil(globObjectWeight({ ...obj, quan: 1 }) / WT_TO_DMG));
         damage = weightDamage <= 1 ? 1 : rnd(weightDamage);

@@ -46501,6 +46501,40 @@ test('upward hero-thrown plain dagger self-hits, damages, and lands', async () =
     ]);
 });
 
+test('upward hero-thrown artifact dagger uses toss-up damage path', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, { uhp: 30, uhpmax: 30 });
+    const blade = {
+        ...dagger(8768961, 'd'),
+        oartifact: 'The Pin',
+    };
+    game.inventory = [blade];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('d');
+    await rhack('<');
+
+    const message = game._pending_message || '';
+    assert.equal(game._command_mode, null);
+    assert.match(message, /dagger almost hits the ceiling, then falls back on top of your head\./i);
+    assert.match(message, /dagger hits the floor\./i);
+    assert.doesNotMatch(message, /cmdassist|In what direction|It doesn't hurt|shatters|Splat/);
+    assert.equal(game.inventory.includes(blade), false);
+    assert.equal(game.level.objects.length, 1);
+    const landed = game.level.objects[0];
+    assert.equal(landed.kind, 'dagger');
+    assert.equal(landed.oartifact, 'The Pin');
+    assert.equal(landed.ox, game.u.ux);
+    assert.equal(landed.oy, game.u.uy);
+    const log = getRngLog();
+    assert.equal(30 - game.u.uhp, rngValuesForCall(log, 'rnd(4)')[0]);
+    assert.deepEqual(log.map(rngCallName), [
+        'rn2(5)', 'rn2(100)', 'rnd(4)', 'rn2(18)', 'rn2(100)',
+    ]);
+});
+
 test('upward hero-thrown enchanted dagger uses weapon damage and lands', async () => {
     installNonShopFloorState();
     initRng(1);
