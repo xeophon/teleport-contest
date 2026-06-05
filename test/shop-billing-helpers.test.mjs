@@ -17708,6 +17708,50 @@ test('gas cloud killed gas spore explodes outside monster melee', async () => {
     assert.equal(game.u.uhp, 50 - d4x6[1]);
 });
 
+test('sokoban pit trap killed gas spore explodes outside monster melee', async () => {
+    installStableNonShopFloorState();
+    initRng(1);
+    enableRngLog({ reset: true });
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 50,
+        uhpmax: 50,
+        uac: 10,
+    });
+    game.inventory = [];
+    game.level.flags.sokoban_rules = true;
+    const pit = { ttyp: PIT, tx: 6, ty: 5, tseen: false, madeby_u: false };
+    game.level.traps = [pit];
+    const victim = adjacentGasSporeBlastVictim('goblin', 31373, 6, 6);
+    const spore = adjacentHostileGasSpore(31372, {
+        mx: 7,
+        my: 5,
+    });
+    game.level.monsters = [victim, spore];
+
+    queueEscapeForMonsterTurn();
+    markHeroNeighborhoodVisible();
+    markSquareVisible(spore.mx, spore.my);
+    await processMonsterTurns();
+    const messages = [game._pending_message, ...(await drainQueuedMessagesAfterMore())].join(' ');
+
+    const d4x6 = rngValuesForCall(getRngLog(), 'd(4,6)');
+    assert.equal(d4x6.length, 2);
+    assert.match(messages, /The gas spore falls into a pit!/);
+    assert.match(messages, /The gas spore is killed!/);
+    assert.match(messages, /Boom!/);
+    assert.match(messages, /The goblin is caught in the gas spore's explosion!/);
+    assert.match(messages, /You are caught in the gas spore's explosion!/);
+    assert.equal(pit.tseen, true);
+    assert.equal(spore.mx, 6);
+    assert.equal(spore.my, 5);
+    assert.equal(game.level.monsters.includes(spore), false);
+    assert.equal(game.level.objects.some(obj => obj.ox === 6 && obj.oy === 5), false);
+    assert.equal(victim.mhp, 30 - d4x6[1]);
+    assert.equal(game.u.uhp, 50 - d4x6[1]);
+});
+
 test('pet melee killed gas spore explodes outside hero melee', async () => {
     installStableNonShopFloorState();
     initRng(1);
