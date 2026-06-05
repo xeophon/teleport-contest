@@ -44617,21 +44617,103 @@ function movementBearTrapResult(trap, options = {}) {
     return heroBearTrapResult(trap, '', options);
 }
 
-function sitLandmineMessage(trap, prefix) {
-    const damage = rnd(16);
-    const mineName = sitTrapArticleName(trap);
-    trap.tseen = true;
+function heroWearingIronShoes() {
+    return wornArmorItemsBySlotOrder(['boots'])
+        .some(item => item?.otyp === IRON_SHOES || objectKindKey(item) === 'iron shoes');
+}
+
+function landmineArticleName(trap) {
+    return trap?.madeby_u ? 'your land mine' : 'a land mine';
+}
+
+function convertLandmineToPit(trap) {
+    if (!trap) return;
     trap.ttyp = PIT;
     trap.madeby_u = false;
+    newsym(game.u?.ux || trap.tx || 0, game.u?.uy || trap.ty || 0);
+}
+
+function woundHeroLandmineLegs() {
+    if (!game.u) return;
+    const left = rn1(35, 41);
+    const right = rn1(35, 41);
+    game.u._woundedLegTurns = Math.max(game.u._woundedLegTurns || 0, left, right);
+    game.u._woundedLegSide = '';
+}
+
+function mountedHeroLandmineSteedResult(messages) {
+    const steed = game.u?.usteed;
+    if (!steed) return false;
+    steed.mx = game.u?.ux ?? steed.mx;
+    steed.my = game.u?.uy ?? steed.my;
+    const damage = rnd(16);
+    steed.mhp = (steed.mhp || 1) - damage;
+    if ((steed.mhp || 0) <= 0) {
+        messages.push(`${steedTrapProjectileName(steed)} is killed!`);
+        finishTrapKilledSteed(steed, messages);
+        return true;
+    }
+    return false;
+}
+
+function applyHeroLandmineDamage(damage, messages) {
+    let fatalResult = {};
     if (game.u) {
-        game.u.uhp = Math.max(0, (game.u.uhp || 1) - damage);
-        game.u._woundedLegTurns = Math.max(game.u._woundedLegTurns || 0, rn1(35, 41), rn1(35, 41));
+        game.u.uhp = Math.max(0, (game.u.uhp || 1) - maybeHalfPhysicalDamage(damage));
         game.u.utrap = rn1(6, 2);
         game.u.utraptype = 'pit';
+        if ((game.u.uhp || 0) <= 0)
+            fatalResult = heroDartTrapFatalResult(messages, 'killed by a land mine');
     }
+    return fatalResult;
+}
+
+function heroLandmineAirCurrentResult(trap, prefix, damage) {
+    const alreadySeen = !!trap?.tseen;
+    if (!alreadySeen && rn2(3)) return { message: '', more: false };
+    if (trap) trap.tseen = true;
+    const triggerName = trap?.madeby_u ? 'the trigger of your mine' : 'a trigger';
+    const messages = [
+        prefix,
+        `${alreadySeen ? 'There is' : 'You discover'} ${triggerName} in a pile of soil below you.`,
+    ];
+    if (alreadySeen && rn2(3)) return { message: trapMessage(...messages), more: false };
+    messages.push(`KAABLAMM!!!  The air currents set ${alreadySeen ? landmineArticleName(trap) : 'it'} off!`);
+    convertLandmineToPit(trap);
+    if (game.u) game.u.uhp = Math.max(0, (game.u.uhp || 1) - maybeHalfPhysicalDamage(damage));
+    if ((game.u?.uhp || 0) <= 0) {
+        const fatalResult = heroDartTrapFatalResult(messages, 'killed by a land mine');
+        return { message: trapMessage(...messages), ...fatalResult };
+    }
+    return { message: trapMessage(...messages) };
+}
+
+function heroLandmineResult(trap, prefix = '', { forceTrap = false } = {}) {
+    let damage = rnd(16);
+    if (heroWearingIronShoes()) damage = Math.trunc((damage + 3) / 4);
+    if ((game.u?.levitating || game.u?.flying) && !forceTrap)
+        return heroLandmineAirCurrentResult(trap, prefix, damage);
+    if (trap) trap.tseen = true;
+    const messages = [prefix, `KAABLAMM!!!  You triggered ${landmineArticleName(trap)}!`];
+    mountedHeroLandmineSteedResult(messages);
+    woundHeroLandmineLegs();
+    convertLandmineToPit(trap);
+    const fatalResult = applyHeroLandmineDamage(damage, messages);
     exerciseAttribute(A_DEX, false);
-    newsym(game.u?.ux || 0, game.u?.uy || 0);
-    return `${prefix}  KAABLAMM!!!  You triggered ${mineName}!  You fall into a pit!`;
+    if (!fatalResult.fatal && !fatalResult.lifeSaving) messages.push('You fall into a pit!');
+    return { message: trapMessage(...messages), ...fatalResult };
+}
+
+function movementLandmineResult(trap) {
+    const alreadySeen = !!trap?.tseen;
+    if (alreadySeen && !(game.u?.levitating || game.u?.flying)
+        && sitTrapEscapeAllowed(trap) && !rn2(5))
+        return { message: movementTrapEscapeMessage(trap), more: false };
+    return heroLandmineResult(trap, '');
+}
+
+function sitLandmineResult(trap, prefix) {
+    return heroLandmineResult(trap, prefix, { forceTrap: true });
 }
 
 function sitRollingBoulderMessage(trap, prefix) {
@@ -44685,7 +44767,7 @@ async function sitTriggerTrap(trap) {
         return true;
     }
     if (trap.ttyp === LANDMINE) {
-        await finishSitMessage(sitLandmineMessage(trap, prefix));
+        await finishHeroDartTrapResult(sitLandmineResult(trap, prefix), { sit: true });
         return true;
     }
     if (trap.ttyp === ROLLING_BOULDER_TRAP) {
@@ -47395,12 +47477,14 @@ async function moveHero(dx, dy) {
         game._dismount_object_list_spot = { x: newx, y: newy };
         if (trapHere?.ttyp === MAGIC_TRAP) game._pending_magic_trap = trapHere;
         if (trapHere?.ttyp === SLP_GAS_TRAP) game._pending_sleep_gas_trap = trapHere;
+        if (trapHere?.ttyp === LANDMINE) game._pending_landmine_trap = trapHere;
         if (trapHere?.ttyp === BEAR_TRAP) game._pending_bear_trap = trapHere;
         return;
     }
     if (trapHere?.ttyp === SLP_GAS_TRAP && objectsHere.length > 1) game._pending_sleep_gas_trap = trapHere;
     if (trapHere?.ttyp === ARROW_TRAP && objectsHere.length > 1) game._pending_arrow_trap = trapHere;
     if (trapHere?.ttyp === DART_TRAP && objectsHere.length > 1) game._pending_dart_trap = trapHere;
+    if (trapHere?.ttyp === LANDMINE && objectsHere.length > 1) game._pending_landmine_trap = trapHere;
     if (trapHere?.ttyp === BEAR_TRAP && objectsHere.length > 1) game._pending_bear_trap = trapHere;
     const goldHere = objectsHere.find(obj => obj.otyp === GOLD_PIECE || obj.glyph === '$');
     if (game._autopickup && goldHere) {
@@ -47519,6 +47603,7 @@ async function moveHero(dx, dy) {
         game.context.move = 0;
         if (trapHere?.ttyp === MAGIC_TRAP) game._pending_magic_trap = trapHere;
         if (trapHere?.ttyp === SLP_GAS_TRAP) game._pending_sleep_gas_trap = trapHere;
+        if (trapHere?.ttyp === LANDMINE) game._pending_landmine_trap = trapHere;
         if (trapHere?.ttyp === BEAR_TRAP) game._pending_bear_trap = trapHere;
         return;
     }
@@ -47543,6 +47628,13 @@ async function moveHero(dx, dy) {
     }
     if (trapHere?.ttyp === BEAR_TRAP) {
         const result = movementBearTrapResult(trapHere);
+        result.message = [pileMessage, result.message].filter(Boolean).join('  ');
+        if (result.message)
+            await finishHeroDartTrapResult(result, { more: !!(pileMessage && result.message) });
+        return;
+    }
+    if (trapHere?.ttyp === LANDMINE) {
+        const result = movementLandmineResult(trapHere);
         result.message = [pileMessage, result.message].filter(Boolean).join('  ');
         if (result.message)
             await finishHeroDartTrapResult(result, { more: !!(pileMessage && result.message) });
@@ -47903,6 +47995,13 @@ export async function rhack(_cmd) {
                 await finishHeroDartTrapResult(heroDartTrapResult(trap, '', alreadySeen));
                 return;
             }
+            if (game._pending_landmine_trap) {
+                const result = movementLandmineResult(game._pending_landmine_trap);
+                game._pending_landmine_trap = null;
+                if (result.message)
+                    await finishHeroDartTrapResult(result, { more: objectListRows > 4 || !!result.more });
+                return;
+            }
             if (game._pending_bear_trap) {
                 const result = movementBearTrapResult(game._pending_bear_trap, { deferAfterMore: objectListRows > 4 });
                 game._pending_bear_trap = null;
@@ -47935,6 +48034,14 @@ export async function rhack(_cmd) {
                 if (!game._pending_time_passed) game.context.move = 1;
                 game._process_command_time_now = 1;
                 if (result.message) await setMessage(result.message, !!result.more);
+                return;
+            }
+            if (game._pending_landmine_trap) {
+                const result = movementLandmineResult(game._pending_landmine_trap);
+                game._pending_landmine_trap = null;
+                if (!game._pending_time_passed) game.context.move = 1;
+                game._process_command_time_now = 1;
+                if (result.message) await finishHeroDartTrapResult(result);
                 return;
             }
             if (game._pending_bear_trap) {

@@ -8,7 +8,7 @@ import { game, resetGame } from '../js/gstate.js';
 import { pushKey, resetInputState } from '../js/input.js';
 import { createMonsterCorpseOrGlob, mkcorpstat, mkobj, mksobj, monsterByRndName } from '../js/mklev.js';
 import { enableDisplayRngLog, enableRngLog, getRngLog, initRng } from '../js/rng.js';
-import { A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_STR, A_WIS, ALTAR, AM_SHRINE, Align2amask, ARROW_TRAP, BEAR_TRAP, BILLSZ, CANDLESHOP, CLOUD, CORPSTAT_HISTORIC, COULD_SEE, DART_TRAP, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, D_CLOSED, D_NODOOR, FIRE_TRAP, FOUNTAIN, HOLE, ICE, ICED_POOL, IN_SIGHT, IRONBARS, LADDER, LAVAPOOL, MIGR_LADDER_UP, MIGR_SSTAIRS, MIGR_STAIRS_UP, MOAT, M_AP_FURNITURE, M_AP_OBJECT, NORMAL_SPEED, P_BASIC, P_DAGGER, P_EXPERT, P_KNIFE, P_SKILLED, P_UNSKILLED, PIT, POOL, REPAIR_DELAY, ROOM, ROOMOFFSET, SDOOR, SHOPBASE, SHOP_DOOR_COST, SINK, SLP_GAS_TRAP, SQKY_BOARD, STAIRS, STATUE_TRAP, STONE, STRAT_APPEARMSG, STRAT_WAITFORU, STRAT_WAITMASK, TEMPLE, TRAPDOOR, TT_LAVA, TT_WEB, WEB, W_SADDLE } from '../js/const.js';
+import { A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_STR, A_WIS, ALTAR, AM_SHRINE, Align2amask, ARROW_TRAP, BEAR_TRAP, BILLSZ, CANDLESHOP, CLOUD, CORPSTAT_HISTORIC, COULD_SEE, DART_TRAP, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, D_CLOSED, D_NODOOR, FIRE_TRAP, FOUNTAIN, HOLE, ICE, ICED_POOL, IN_SIGHT, IRONBARS, LADDER, LANDMINE, LAVAPOOL, MIGR_LADDER_UP, MIGR_SSTAIRS, MIGR_STAIRS_UP, MOAT, M_AP_FURNITURE, M_AP_OBJECT, NORMAL_SPEED, P_BASIC, P_DAGGER, P_EXPERT, P_KNIFE, P_SKILLED, P_UNSKILLED, PIT, POOL, REPAIR_DELAY, ROOM, ROOMOFFSET, SDOOR, SHOPBASE, SHOP_DOOR_COST, SINK, SLP_GAS_TRAP, SQKY_BOARD, STAIRS, STATUE_TRAP, STONE, STRAT_APPEARMSG, STRAT_WAITFORU, STRAT_WAITMASK, TEMPLE, TRAPDOOR, TT_LAVA, TT_WEB, WEB, W_SADDLE } from '../js/const.js';
 import { currentFruitId, setCurrentFruitName } from '../js/fruit.js';
 import { CLR_BRIGHT_MAGENTA, CLR_BROWN, CLR_WHITE } from '../js/terminal.js';
 import { TRIBUTE_DEATH_QUOTES } from '../js/tribute.js';
@@ -18451,6 +18451,173 @@ function mountBearTrapPony(hp = 10, extra = {}) {
     game.level.monsters = [pony];
     return pony;
 }
+
+test('hero land mine movement explodes into pit and wounds hero', async () => {
+    installStableNonShopFloorState();
+    vision_reset();
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 20,
+        uhpmax: 20,
+    });
+    game.inventory = [];
+    const trap = { ttyp: LANDMINE, tx: 6, ty: 5, tseen: false };
+    game.level.traps = [trap];
+    enableRngLog({ reset: true });
+    installCoreRngValues([4, 2, 3, 1, 0]);
+
+    await rhack('l');
+
+    assert.deepEqual(getRngLog().map(rngCallName), [
+        'rnd(16)', 'rn2(35)', 'rn2(35)', 'rn2(6)', 'rn2(2)',
+    ]);
+    assert.equal(game._pending_message, 'KAABLAMM!!!  You triggered a land mine!  You fall into a pit!');
+    assert.equal(game.u.uhp, 15);
+    assert.equal(game.u.ux, 6);
+    assert.equal(game.u.uy, 5);
+    assert.equal(game.u.utrap, 3);
+    assert.equal(game.u.utraptype, 'pit');
+    assert.equal(game.u._woundedLegSide, '');
+    assert.equal(game.u._woundedLegTurns, 44);
+    assert.equal(trap.tseen, true);
+    assert.equal(trap.ttyp, PIT);
+    assert.equal(trap.madeby_u, false);
+});
+
+test('mounted hero land mine damages steed and hero', async () => {
+    installStableNonShopFloorState();
+    vision_reset();
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 20,
+        uhpmax: 20,
+    });
+    const pony = mountBearTrapPony(10);
+    game.inventory = [];
+    const trap = { ttyp: LANDMINE, tx: 6, ty: 5, tseen: false };
+    game.level.traps = [trap];
+    enableRngLog({ reset: true });
+    installCoreRngValues([4, 2, 6, 7, 1, 0]);
+
+    await rhack('l');
+
+    assert.deepEqual(getRngLog().map(rngCallName), [
+        'rnd(16)', 'rnd(16)', 'rn2(35)', 'rn2(35)', 'rn2(6)', 'rn2(2)',
+    ]);
+    assert.equal(game._pending_message, 'KAABLAMM!!!  You triggered a land mine!  You fall into a pit!');
+    assert.equal(game.u.uhp, 15);
+    assert.equal(pony.mhp, 7);
+    assert.equal(pony.mx, 6);
+    assert.equal(pony.my, 5);
+    assert.equal(game.u.usteed, pony);
+    assert.equal(game.u.utrap, 3);
+    assert.equal(game.u.utraptype, 'pit');
+    assert.equal(game.u._woundedLegTurns, 48);
+    assert.equal(trap.tseen, true);
+    assert.equal(trap.ttyp, PIT);
+});
+
+test('mounted hero land mine killing steed dismounts and still hurts hero', async () => {
+    installStableNonShopFloorState();
+    vision_reset();
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 20,
+        uhpmax: 20,
+    });
+    const pony = mountBearTrapPony(3, { data: { noCorpse: true } });
+    game.inventory = [];
+    const trap = { ttyp: LANDMINE, tx: 6, ty: 5, tseen: false };
+    game.level.traps = [trap];
+    enableRngLog({ reset: true });
+    installCoreRngValues([4, 2, 6, 7, 1, 0]);
+
+    await rhack('l');
+
+    assert.deepEqual(getRngLog().map(rngCallName), [
+        'rnd(16)', 'rnd(16)', 'rn2(35)', 'rn2(35)', 'rn2(6)', 'rn2(2)',
+    ]);
+    assert.equal(game._pending_message, 'KAABLAMM!!!  You triggered a land mine!  The saddled pony is killed!  You fall into a pit!');
+    assert.equal(game.u.uhp, 15);
+    assert.equal(game.u.usteed, null);
+    assert.equal(game.u.utrap, 3);
+    assert.equal(game.u.utraptype, 'pit');
+    assert.equal(game.level.monsters.includes(pony), false);
+    assert.equal(pony.dead, true);
+    assert.equal(game.level.objects.length, 0);
+    assert.equal(trap.tseen, true);
+    assert.equal(trap.ttyp, PIT);
+});
+
+test('flying hero may cross hidden land mine without triggering', async () => {
+    installStableNonShopFloorState();
+    vision_reset();
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 20,
+        uhpmax: 20,
+        flying: true,
+    });
+    game.inventory = [];
+    const trap = { ttyp: LANDMINE, tx: 6, ty: 5, tseen: false };
+    game.level.traps = [trap];
+    enableRngLog({ reset: true });
+    installCoreRngValues([4, 1]);
+
+    await rhack('l');
+
+    assert.deepEqual(getRngLog().map(rngCallName), ['rnd(16)', 'rn2(3)']);
+    assert.equal(game._pending_message || '', '');
+    assert.equal(game.u.uhp, 20);
+    assert.equal(game.u.ux, 6);
+    assert.equal(game.u.uy, 5);
+    assert.equal(game.u.utrap || 0, 0);
+    assert.equal(trap.tseen, false);
+    assert.equal(trap.ttyp, LANDMINE);
+});
+
+test('dismount object list consumes pending land mine trap', async () => {
+    installStableNonShopFloorState();
+    vision_reset();
+    Object.assign(game.u, {
+        ux: 6,
+        uy: 5,
+        uhp: 20,
+        uhpmax: 20,
+    });
+    const pony = mountBearTrapPony(10);
+    game.inventory = [];
+    const trap = { ttyp: LANDMINE, tx: 6, ty: 5, tseen: false };
+    game.level.traps = [trap];
+    game._command_mode = 'dismountObjectList';
+    game._overlay_lines = [[0, 0, 'test overlay']];
+    game._pending_landmine_trap = trap;
+    game._pending_time_passed = 0;
+    game.context = {};
+    enableRngLog({ reset: true });
+    installCoreRngValues([4, 2, 6, 7, 1, 0]);
+
+    await rhack(' ');
+
+    assert.deepEqual(getRngLog().map(rngCallName), [
+        'rnd(16)', 'rnd(16)', 'rn2(35)', 'rn2(35)', 'rn2(6)', 'rn2(2)',
+    ]);
+    assert.equal(game._pending_landmine_trap || null, null);
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game._process_command_time_now, 1);
+    assert.equal(game._pending_message, 'KAABLAMM!!!  You triggered a land mine!  You fall into a pit!');
+    assert.equal(game.u.uhp, 15);
+    assert.equal(pony.mhp, 7);
+    assert.equal(game.u.usteed, pony);
+    assert.equal(game.u.utrap, 3);
+    assert.equal(game.u.utraptype, 'pit');
+    assert.equal(trap.ttyp, PIT);
+});
 
 test('hero bear trap movement wounds and traps hero', async () => {
     installStableNonShopFloorState();
