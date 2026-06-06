@@ -135,8 +135,9 @@ Detailed source-backed history is kept in `docs/c-parity-audit/`. This section i
 - Hero-triggered rolling-boulder telepathy spotting is covered in audit 619.
 - Hero-triggered rolling-boulder monster-hit impact-square `drop_throw()` down-gate/floor-effect ordering is covered in audit 620.
 - Hero-triggered rolling-boulder monster-hit transient `place_object()` no-charge cleanup is covered in audit 621.
+- Hero-triggered rolling-boulder warn-of-monster-type spotting is covered in audit 622.
 - Magic-marker write target `getobj()` suggested/downplayed selection is covered in audit 577.
-- Latest compact/source note: `docs/c-parity-audit/621-hero-rolling-boulder-impact-no-charge-cleanup-2026-06-06.md`.
+- Latest compact/source note: `docs/c-parity-audit/622-hero-rolling-boulder-warn-of-mon-spotting-2026-06-06.md`.
 - Latest verified public score: `44/44`.
 
 ## Current Priorities

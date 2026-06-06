@@ -60,6 +60,7 @@ const WAN_MAKE_INVISIBLE = 10091;
 const CORPSE = 471;
 const STATUE = 472;
 const FIGURINE = 795;
+const M2_ORC = 0x00000080;
 const LOCK_PICK = 10167;
 const ROCK = 467;
 const SKELETON_KEY = 220;
@@ -22317,6 +22318,128 @@ test('underwater hero rolling boulder monster detection ignores non-pool invisib
     assert.equal(game.level.monsters.includes(goblin), false);
     assert.equal(goblin.dead, true);
     assert.equal(game._vanquished_counts?.goblin, 1);
+    assert.equal(boulder.ox, 8);
+    assert.equal(boulder.oy, 3);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rnd(20)'), [5, 5]);
+});
+
+test('hero rolling boulder warn-of-monster-type mask names hidden lethal target', async () => {
+    const { boulder } = installHeroRollingBoulderTrapState({
+        trapX: 6,
+        trapY: 4,
+        heroX: 5,
+        heroY: 4,
+        start: { x: 4, y: 3 },
+        end: { x: 8, y: 3 },
+        boulderAt: 'start',
+    });
+    const goblin = dartTrapGoblin(3148211, {
+        mx: 6,
+        my: 3,
+        mhp: 5,
+        mhpmax: 5,
+        msleeping: 1,
+        mundetected: true,
+        data: { name: 'goblin', mlet: 'o', mac: -5, msize: 'large', orc: true },
+    });
+    game.u.HWarn_of_mon = 1;
+    game.context ??= {};
+    game.context.warntype = { obj: M2_ORC, polyd: 0 };
+    game.level.monsters.push(goblin);
+    enableRngLog({ reset: true });
+    installCoreRngValues([4, 4]);
+    markHeroNeighborhoodVisible();
+    for (let x = 4; x <= 8; x++) markSquareVisible(x, 3);
+
+    await rhack('l');
+
+    assert.equal(game._pending_message,
+        'Click!  You trigger a rolling boulder trap!  The boulder hits the goblin!  The goblin is killed!');
+    assert.equal(game.level.monsters.includes(goblin), false);
+    assert.equal(goblin.dead, true);
+    assert.equal(goblin.mundetected, true);
+    assert.equal(game._vanquished_counts?.goblin, 1);
+    assert.equal(boulder.ox, 8);
+    assert.equal(boulder.oy, 3);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rnd(20)'), [5, 5]);
+});
+
+test('hero rolling boulder warn-of-monster species names hidden lethal target', async () => {
+    const { boulder } = installHeroRollingBoulderTrapState({
+        trapX: 6,
+        trapY: 4,
+        heroX: 5,
+        heroY: 4,
+        start: { x: 4, y: 3 },
+        end: { x: 8, y: 3 },
+        boulderAt: 'start',
+    });
+    const trapper = dartTrapMonster('trapper', 3148212, {
+        mx: 6,
+        my: 3,
+        mhp: 5,
+        mhpmax: 5,
+        msleeping: 1,
+        mundetected: true,
+        data: { name: 'trapper', mac: -5, msize: 'large' },
+    });
+    game.u.EWarn_of_mon = 1;
+    game.context ??= {};
+    game.context.warntype = { obj: 0, polyd: 0, species: trapper.data };
+    game.level.monsters.push(trapper);
+    enableRngLog({ reset: true });
+    installCoreRngValues([4, 4]);
+    markHeroNeighborhoodVisible();
+    for (let x = 4; x <= 8; x++) markSquareVisible(x, 3);
+
+    await rhack('l');
+
+    assert.equal(game._pending_message,
+        'Click!  You trigger a rolling boulder trap!  The boulder hits the trapper!  The trapper is killed!');
+    assert.equal(game.level.monsters.includes(trapper), false);
+    assert.equal(trapper.dead, true);
+    assert.equal(trapper.mundetected, true);
+    assert.equal(game._vanquished_counts?.trapper, 1);
+    assert.equal(boulder.ox, 8);
+    assert.equal(boulder.oy, 3);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rnd(20)'), [5, 5]);
+});
+
+test('hero rolling boulder generic warning does not name hidden warned-type target', async () => {
+    const { boulder } = installHeroRollingBoulderTrapState({
+        trapX: 6,
+        trapY: 4,
+        heroX: 5,
+        heroY: 4,
+        start: { x: 4, y: 3 },
+        end: { x: 8, y: 3 },
+        boulderAt: 'start',
+    });
+    const goblin = dartTrapGoblin(3148213, {
+        mx: 6,
+        my: 3,
+        mhp: 20,
+        mhpmax: 20,
+        msleeping: 1,
+        mundetected: true,
+        data: { name: 'goblin', mlet: 'o', mac: -5, msize: 'large', orc: true },
+    });
+    game.u.warning = true;
+    game.context ??= {};
+    game.context.warntype = { obj: M2_ORC, polyd: 0 };
+    game.level.monsters.push(goblin);
+    enableRngLog({ reset: true });
+    installCoreRngValues([4, 4]);
+    markHeroNeighborhoodVisible();
+    for (let x = 4; x <= 8; x++) markSquareVisible(x, 3);
+
+    await rhack('l');
+
+    assert.equal(game._pending_message,
+        'Click!  You trigger a rolling boulder trap!  The boulder hits it!');
+    assert.equal(goblin.mhp, 15);
+    assert.equal(goblin.msleeping, 0);
+    assert.equal(goblin.mundetected, true);
     assert.equal(boulder.ox, 8);
     assert.equal(boulder.oy, 3);
     assert.deepEqual(rngValuesForCall(getRngLog(), 'rnd(20)'), [5, 5]);
