@@ -40,6 +40,7 @@ const HORN_OF_PLENTY = 957;
 const BAG_OF_TRICKS = 10158;
 const POT_WATER = 253;
 const SLIME_MOLD = 11009;
+const BEARTRAP = 10161;
 const MEAT_RING = 10164;
 const MEATBALL = 11012;
 const ENORMOUS_MEATBALL = 11013;
@@ -21193,6 +21194,12 @@ function installUntrapLevelCells(cells) {
     game.level.at = (x, y) => overrides.get(`${x},${y}`) || baseAt(x, y);
 }
 
+function setupUntrapDestinationBearTrap(options = {}) {
+    const trap = setupUntrapDestinationWeb([], options);
+    trap.ttyp = BEAR_TRAP;
+    return trap;
+}
+
 test('#untrap current-square web and box prompts before removing web', async () => {
     const web = setupUntrapDestinationWeb([], { webX: 5, webY: 5, rng: [0] });
     const box = shopFloorContainer(881000);
@@ -21259,6 +21266,30 @@ test('#untrap current-square web and box n skips web and reaches box prompt', as
 
     assert.equal(game._command_mode, null);
     assert.equal(game._pending_message, 'There are no other chests or boxes here.');
+    assert.equal(game.context.move || 0, 0);
+});
+
+test('#untrap current-square bear trap and box can skip trap for box prompt', async () => {
+    const trap = setupUntrapDestinationBearTrap({ webX: 5, webY: 5, rng: [0] });
+    const box = shopFloorContainer(881024);
+    game.level.objects = [box];
+
+    await enterUntrapDirection();
+    await rhack('.');
+
+    assert.equal(game._command_mode, 'untrapWebContainerConfirm');
+    assert.equal(game._pending_message, 'There is a container and a bear trap here.  Disarm the bear trap? [ynq] (q)');
+    assert.deepEqual(getRngLog(), []);
+    assert.equal(game.level.traps.includes(trap), true);
+    assert.equal(game.context.move || 0, 0);
+
+    await rhack('n');
+
+    assert.equal(game._command_mode, 'untrapBoxConfirm');
+    assert.equal(game._pending_message, 'There is a large box here.  Check it for traps? [ynq] (q)');
+    assert.deepEqual(getRngLog(), []);
+    assert.equal(game.level.traps.includes(trap), true);
+    assert.equal(game.level.objects.includes(box), true);
     assert.equal(game.context.move || 0, 0);
 });
 
@@ -23724,6 +23755,212 @@ test('#untrap adjacent web boulder does not block pass-wall heroes', async () =>
     assert.equal(game.context.move, 1);
 });
 
+test('#untrap disarms a seen bear trap into a floor beartrap', async () => {
+    const trap = setupUntrapDestinationBearTrap({ rng: [0] });
+
+    await enterUntrapDirection();
+    await rhack('l');
+
+    const beartrap = game.level.objects.find(obj => obj.otyp === BEARTRAP && obj.ox === 6 && obj.oy === 5);
+    assert.deepEqual(getRngLog(), ['rn2(3)=0', 'rnd(2)=1']);
+    assert.equal(game._command_mode, null);
+    assert.equal(game._pending_message, 'You disarm the bear trap.');
+    assert.equal(game.level.traps.includes(trap), false);
+    assert.ok(beartrap);
+    assert.equal(beartrap.kind, 'beartrap');
+    assert.equal(beartrap.quan || 1, 1);
+    assert.equal(beartrap.owt, 200);
+    assert.equal(beartrap.material, 'iron');
+    assert.equal(beartrap.nomerge, true);
+    assert.equal(game.u.ux, 5);
+    assert.equal(game.u.uy, 5);
+    assert.equal(game.u.umoved, false);
+    assert.equal(game.context.move, 1);
+});
+
+test('#untrap bear trap conversion does not merge with existing beartraps', async () => {
+    const trap = setupUntrapDestinationBearTrap({ rng: [0] });
+    const existing = {
+        id: 881011,
+        otyp: BEARTRAP,
+        cls: 'tool',
+        glyph: '(',
+        kind: 'beartrap',
+        actualKind: 'beartrap',
+        ox: 6,
+        oy: 5,
+        quan: 1,
+        owt: 200,
+        nomerge: true,
+    };
+    game.level.objects = [existing];
+
+    await enterUntrapDirection();
+    await rhack('l');
+
+    const beartraps = game.level.objects.filter(obj => obj.otyp === BEARTRAP && obj.ox === 6 && obj.oy === 5);
+    assert.deepEqual(getRngLog(), ['rn2(3)=0', 'rnd(2)=1']);
+    assert.equal(game._pending_message, 'You disarm the bear trap.');
+    assert.equal(game.level.traps.includes(trap), false);
+    assert.equal(beartraps.length, 2);
+    assert.deepEqual(beartraps.map(obj => obj.quan || 1), [1, 1]);
+    assert.equal(game.context.move, 1);
+});
+
+test('#untrap Ranger auto-disarms a seen bear trap without a final odds roll', async () => {
+    const trap = setupUntrapDestinationBearTrap({ role: 'Ranger', rng: [2] });
+
+    await enterUntrapDirection();
+    await rhack('l');
+
+    assert.deepEqual(getRngLog(), ['rnd(2)=1']);
+    assert.equal(game._pending_message, 'You disarm the bear trap.');
+    assert.equal(game.level.traps.includes(trap), false);
+    assert.equal(game.level.objects.some(obj => obj.otyp === BEARTRAP && obj.ox === 6 && obj.oy === 5), true);
+    assert.equal(game.context.move, 1);
+});
+
+test('#untrap user-made bear trap in shop auto-sells after conversion', async () => {
+    const trap = setupUntrapDestinationBearTrap({ madeby: true, rng: [0] });
+    const shkp = {
+        isshk: true,
+        shoproom: ROOMOFFSET,
+        shoptype: SHOPBASE,
+        shknam: 'Izchak',
+        mx: 1,
+        my: 1,
+        shk: { x: 1, y: 1 },
+        bill: [],
+        billct: 0,
+        minvent: [{ cls: 'coin', otyp: 466, glyph: '$', quan: 100 }],
+        m_id: 881012,
+    };
+    game.level.rooms = [{ rtype: SHOPBASE, resident: shkp }];
+    game.level.monsters = [shkp];
+    game.level.at = () => ({ roomno: ROOMOFFSET, typ: ROOM });
+
+    await enterUntrapDirection();
+    await rhack('l');
+
+    const beartrap = game.level.objects.find(obj => obj.otyp === BEARTRAP && obj.ox === 6 && obj.oy === 5);
+    assert.deepEqual(getRngLog(), ['rn2(2)=0', 'rnd(2)=1']);
+    assert.equal(game.level.traps.includes(trap), false);
+    assert.ok(beartrap);
+    assert.equal(game._command_mode, null);
+    assert.equal(game._shop_sale_pending || null, null);
+    assert.match(game._pending_message, /^You disarm your bear trap\.  You relinquish a beartrap and receive .* in compensation\.$/);
+    assert.equal(game.context.move, 1);
+});
+
+test('#untrap bear trap failure can leave the hero in place', async () => {
+    const trap = setupUntrapDestinationBearTrap({ rng: [1, 0] });
+
+    await enterUntrapDirection();
+    await rhack('l');
+
+    assert.deepEqual(getRngLog(), ['rn2(3)=1', 'rnl(5)=0']);
+    assert.equal(game._pending_message, 'That bear trap is difficult to disarm.');
+    assert.equal(game.level.traps.includes(trap), true);
+    assert.equal(game.level.objects.some(obj => obj.otyp === BEARTRAP), false);
+    assert.equal(game.u.ux, 5);
+    assert.equal(game.u.uy, 5);
+    assert.equal(game.u.umoved, false);
+    assert.equal(game.context.move, 1);
+});
+
+test('#untrap failed adjacent bear trap disarm respects blocked movement', async () => {
+    const trap = setupUntrapDestinationBearTrap({ rng: [1, 1] });
+    installUntrapLevelCells([[6, 5, { typ: STONE, lit: true }]]);
+
+    await enterUntrapDirection();
+    await rhack('l');
+
+    assert.deepEqual(getRngLog(), ['rn2(3)=1', 'rnl(5)=1']);
+    assert.equal(game._pending_message, "Whoops...  Fortunately, you don't move into it.");
+    assert.equal(game.level.traps.includes(trap), true);
+    assert.equal(game.u.ux, 5);
+    assert.equal(game.u.uy, 5);
+    assert.equal(game.u.umoved, false);
+    assert.equal(game.u.utrap || 0, 0);
+    assert.equal(game.context.move, 1);
+});
+
+test('#untrap failed adjacent bear trap disarm respects fixed ball and chain', async () => {
+    const trap = setupUntrapDestinationBearTrap({ rng: [1, 1] });
+    game.u.upunished = true;
+    game.u.uball = { id: 881025, cls: 'ball', glyph: '0', kind: 'heavy iron ball', ox: 4, oy: 5, fixed: true };
+    game.u.uchain = { id: 881026, cls: 'chain', glyph: '_', kind: 'iron chain', ox: 5, oy: 5, fixed: true };
+
+    await enterUntrapDirection();
+    await rhack('l');
+
+    assert.deepEqual(getRngLog(), ['rn2(3)=1', 'rnl(5)=1']);
+    assert.equal(game._pending_message, "Whoops...  Fortunately, you don't move into it.");
+    assert.equal(game.level.traps.includes(trap), true);
+    assert.equal(game.u.ux, 5);
+    assert.equal(game.u.uy, 5);
+    assert.equal(game.u.umoved, false);
+    assert.equal(game.u.utrap || 0, 0);
+    assert.equal(game.u.uball.ox, 4);
+    assert.equal(game.u.uchain.ox, 5);
+    assert.equal(game.context.move, 1);
+});
+
+test('#untrap fatal failed adjacent bear trap disarm preserves death more', async () => {
+    const trap = setupUntrapDestinationBearTrap({ rng: [1, 1, 0, 1, 0, 1, 0] });
+    game.u.uhp = 1;
+    game.u.uhpmax = 1;
+
+    await enterUntrapDirection();
+    await rhack('l');
+
+    assert.deepEqual(getRngLog().map(rngCallName), [
+        'rn2(3)', 'rnl(5)', 'd(2,4)', 'rn2(4)', 'rn2(2)', 'rn2(10)', 'rn2(2)', 'rn2(1)',
+    ]);
+    assert.match(game._pending_message, /Whoops\.\.\.  A bear trap closes on your foot!  You die\.\.\./);
+    assert.equal(game._command_mode, 'deathDieMore');
+    assert.equal(game._death_cause, 'killed by a bear trap');
+    assert.equal(game.level.traps.includes(trap), true);
+    assert.equal(game.u.ux, 6);
+    assert.equal(game.u.uy, 5);
+    assert.equal(game.context.move || 0, 0);
+});
+
+test('#untrap adjacent bear trap is blocked by a boulder for ordinary heroes', async () => {
+    const trap = setupUntrapDestinationBearTrap({ rng: [0] });
+    game.level.objects = [floorBoulder(881010, { ox: 6, oy: 5 })];
+
+    await enterUntrapDirection();
+    await rhack('l');
+
+    assert.deepEqual(getRngLog(), []);
+    assert.equal(game._pending_message, 'There is a boulder in your way.');
+    assert.equal(game.level.traps.includes(trap), true);
+    assert.equal(game.level.objects.some(obj => obj.otyp === BEARTRAP), false);
+    assert.equal(game.context.move || 0, 0);
+});
+
+test('#untrap extracts a trapped monster from a seen bear trap', async () => {
+    const trap = setupUntrapDestinationBearTrap({ rng: [0, 0, 0, 0] });
+    game.u.ualign = { type: A_LAWFUL, record: 0 };
+    const goblin = trappedWebGoblin({ mpeaceful: 0 });
+    game.level.monsters = [goblin];
+
+    await enterUntrapDirection();
+    await rhack('l');
+
+    assert.deepEqual(getRngLog(), ['rn2(3)=0', 'rnl(10)=0', 'rn2(3)=0', 'rnl(8)=0']);
+    assert.equal(game._pending_message, 'You extract the goblin from the bear trap.  The goblin is grateful.  You feel that you did the right thing.');
+    assert.equal(goblin.mtrapped, 0);
+    assert.equal(goblin.mpeaceful, 1);
+    assert.equal(game.u.ualign.record, 1);
+    assert.equal(game.level.traps.includes(trap), true);
+    assert.equal(game.level.objects.some(obj => obj.otyp === BEARTRAP), false);
+    assert.equal(game.u.ux, 5);
+    assert.equal(game.u.uy, 5);
+    assert.equal(game.context.move, 1);
+});
+
 test('#untrap removes a seen web without a blade', async () => {
     const web = setupUntrapDestinationWeb([], { rng: [0] });
 
@@ -23888,16 +24125,19 @@ test('#untrap web failure can move the hero into the web', async () => {
 });
 
 test('#untrap extracts a trapped monster from a seen web', async () => {
-    const web = setupUntrapDestinationWeb([], { rng: [0] });
-    const goblin = trappedWebGoblin();
+    const web = setupUntrapDestinationWeb([], { rng: [0, 0, 1] });
+    game.u.ualign = { type: A_CHAOTIC, record: 0 };
+    const goblin = trappedWebGoblin({ mpeaceful: 0 });
     game.level.monsters = [goblin];
 
     await enterUntrapDirection();
     await rhack('l');
 
-    assert.deepEqual(getRngLog(), ['rn2(7)=0']);
-    assert.equal(game._pending_message, 'You extract the goblin from the web.');
+    assert.deepEqual(getRngLog(), ['rn2(7)=0', 'rnl(10)=0', 'rn2(3)=1']);
+    assert.equal(game._pending_message, 'You extract the goblin from the web.  The goblin is grateful.');
     assert.equal(goblin.mtrapped, 0);
+    assert.equal(goblin.mpeaceful, 1);
+    assert.equal(game.u.ualign.record, 0);
     assert.equal(game.level.traps.includes(web), true);
     assert.equal(game.u.ux, 5);
     assert.equal(game.u.uy, 5);
