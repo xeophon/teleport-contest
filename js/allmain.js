@@ -11098,26 +11098,30 @@ function monsterDestroyItemsByFire(mon, damage) {
     return extraDamage;
 }
 
-function killMonsterInFireTrap(mon) {
+function killMonsterInFireTrap(mon, { skipPetPostMoveRoll = false } = {}) {
     recordVanquished(mon, false);
     dropMonsterInventory(mon);
     game.level.monsters = (game.level?.monsters || []).filter(other => other !== mon);
     mon.movement = 0;
+    if (skipPetPostMoveRoll && mon.pet) game._pet_skip_post_move_roll = 1;
     newsym(mon.mx, mon.my);
 }
 
-function monsterFireTrapEffect(mon, trap) {
+function monsterFireTrapEffect(mon, trap, { skipPetPostMoveRoll = false } = {}) {
     monsterTriggerTrap(mon, trap);
     const origDamage = d(2, 4);
     const visibleMonster = !game.u?.blind && couldSeeCoord(mon.mx, mon.my) && !mon.minvis && !mon.mundetected;
     const visibleTrap = !game.u?.blind && couldSeeCoord(trap.tx, trap.ty);
+    let trapKilled = false;
     if (visibleMonster) {
         addToplineMessage(`A tower of flame erupts from the floor under ${monsterDisplayName(mon).replace(/^The /, 'the ')}!`);
     } else if (visibleTrap) {
         addToplineMessage('You see a tower of flame erupt from the floor!');
     }
 
-    if (!mon.data?.resistsFire) {
+    if (mon.data?.resistsFire) {
+        if (visibleMonster) addToplineMessage(`${monsterDisplayName(mon)} is uninjured.`);
+    } else {
         let damage = origDamage;
         const name = mon.data?.name || '';
         if (name === 'paper golem') damage = Math.max(damage, mon.mhpmax || damage);
@@ -11127,22 +11131,23 @@ function monsterFireTrapEffect(mon, trap) {
 
         mon.mhp = (mon.mhp || 1) - damage;
         if ((mon.mhp || 0) <= 0) {
-            killMonsterInFireTrap(mon);
-            return true;
+            trapKilled = true;
+        } else {
+            const maxLoss = rn2(damage + 1);
+            mon.mhpmax = Math.max(1, (mon.mhpmax || mon.mhp || 1) - maxLoss);
+            mon.mhp = Math.min(mon.mhp || 1, mon.mhpmax);
         }
-        const maxLoss = rn2(damage + 1);
-        mon.mhpmax = Math.max(1, (mon.mhpmax || mon.mhp || 1) - maxLoss);
-        mon.mhp = Math.min(mon.mhp || 1, mon.mhpmax);
     }
 
     const armorFire = monsterBurnArmor(mon, visibleMonster);
     for (const message of armorFire.messages) addToplineMessage(message);
     if (armorFire.bodyHit || rn2(3)) {
         const extraDamage = monsterDestroyItemsByFire(mon, origDamage);
-        mon.mhp = (mon.mhp || 1) - extraDamage;
-        if ((mon.mhp || 0) <= 0) {
-            killMonsterInFireTrap(mon);
-            return true;
+        if (!trapKilled) {
+            mon.mhp = (mon.mhp || 1) - extraDamage;
+            if ((mon.mhp || 0) <= 0) {
+                trapKilled = true;
+            }
         }
     }
     const floorFire = burnFloorObjectsByFire(trap.tx, trap.ty, { giveFeedback: visibleTrap });
@@ -11152,7 +11157,8 @@ function monsterFireTrapEffect(mon, trap) {
     if (floorFire.count && !visibleTrap && (trap.tx - ux) ** 2 + (trap.ty - uy) ** 2 <= 9)
         addToplineMessage('You smell smoke.');
     if (visibleTrap) trap.tseen = true;
-    return false;
+    if (trapKilled) killMonsterInFireTrap(mon, { skipPetPostMoveRoll });
+    return trapKilled;
 }
 
 function monsterWebmakerData(data) {
@@ -13676,21 +13682,26 @@ function movePet(mon, resumeAfterInventory = false, conflictActive = false) {
                 game._message_more = 1;
             }
         }
-	    }
-		    const trap = game.level?.traps?.find(t => t.tx === mon.mx && t.ty === mon.my);
-		    if (monsterTeleportTrapEffect(mon, trap)) return;
-		    if (monsterPolymorphTrapEffect(mon, trap)) return;
-		    if (monsterWebTrapEffect(mon, trap).handled) return;
-		    if (trap?.ttyp === MAGIC_TRAP && monsterKnowsTrap(mon, trap.ttyp) && rn2(4)) return;
-	    if (trap?.ttyp === MAGIC_TRAP) {
-	        monsterLearnTrap(mon, trap.ttyp);
-	        rn2(21);
-	    }
+    }
+    const trap = game.level?.traps?.find(t => t.tx === mon.mx && t.ty === mon.my);
+    if (monsterTeleportTrapEffect(mon, trap)) return;
+    if (monsterPolymorphTrapEffect(mon, trap)) return;
+    if (monsterWebTrapEffect(mon, trap).handled) return;
+    if (trap?.ttyp === MAGIC_TRAP && monsterKnowsTrap(mon, trap.ttyp) && rn2(4)) return;
+    if (trap?.ttyp === MAGIC_TRAP) {
+        monsterLearnTrap(mon, trap.ttyp);
+        rn2(21);
+    }
     if (monsterAntiMagicTrapEffect(mon, trap, { skipPetPostMoveRoll: true })) return;
     if (monsterSleepGasTrapEffect(mon, trap)) return;
     if (monsterSqueakyBoardTrapEffect(mon, trap)) return;
-	    if (trap?.ttyp === BEAR_TRAP && !mon.mtrapped && !monsterTrapHarmless(mon, trap)) {
-	        if (monsterKnowsTrap(mon, BEAR_TRAP) && rn2(4)) return;
+    if (trap?.ttyp === FIRE_TRAP && !monsterTrapHarmless(mon, trap)) {
+        if (monsterAvoidsKnownTrapBeforeEffect(mon, trap)) return;
+        monsterFireTrapEffect(mon, trap, { skipPetPostMoveRoll: true });
+        return;
+    }
+    if (trap?.ttyp === BEAR_TRAP && !mon.mtrapped && !monsterTrapHarmless(mon, trap)) {
+        if (monsterKnowsTrap(mon, BEAR_TRAP) && rn2(4)) return;
         if (game._message_more && !game._process_time_with_more) {
             game._pet_bear_trap_after_more = { mon, trap };
             return;
@@ -15060,6 +15071,7 @@ export const __allmainTestHooks = {
     monsterAllowFlagsForTest: monsterAllowFlags,
     monsterAvoidsKnownTrapBeforeEffectForTest: monsterAvoidsKnownTrapBeforeEffect,
     monsterAntiMagicTrapEffectForTest: monsterAntiMagicTrapEffect,
+    monsterFireTrapEffectForTest: monsterFireTrapEffect,
     monsterPitTrapEffectForTest: monsterPitTrapEffect,
     monsterTrappedTrapTurnForTest: monsterTrappedTrapTurn,
     monsterSleepGasTrapEffectForTest: monsterSleepGasTrapEffect,

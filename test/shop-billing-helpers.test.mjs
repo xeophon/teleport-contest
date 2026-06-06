@@ -20589,6 +20589,120 @@ test('pet squeaky board trap squeaks and wakes nearby monster through pet moveme
     assert.equal(!!(pet.mtrapseen & (1 << (SQKY_BOARD - 1))), true);
 });
 
+test('pet fire trap damages pet through pet movement', async () => {
+    const { trap, pet } = installMovingPetPitTrapState(FIRE_TRAP, {
+        mhp: 20,
+        mhpmax: 20,
+    });
+    enableRngLog({ reset: true });
+    queueEscapeForMonsterTurn();
+    markHeroNeighborhoodVisible();
+    markSquareVisible(6, 5);
+    markSquareVisible(7, 5);
+
+    await processMonsterTurns();
+    const messages = [game._pending_message, ...(await drainQueuedMessagesAfterMore())].join(' ');
+    const fireDamage = rngValuesForCall(getRngLog(), 'd(2,4)');
+
+    assert.match(messages, /A tower of flame erupts from the floor under the goblin!/);
+    assert.equal(pet.mx, 6);
+    assert.equal(pet.my, 5);
+    assert.equal(fireDamage.length, 1);
+    assert.equal(game.level.monsters.includes(pet), true);
+    assert.equal(pet.mhp < 20, true);
+    assert.equal(pet.mhpmax <= 20, true);
+    assert.equal(trap.tseen, true);
+    assert.equal(!!(pet.mtrapseen & (1 << (FIRE_TRAP - 1))), true);
+});
+
+test('lethal pet fire trap removes pet through pet movement', async () => {
+    const { trap, pet } = installMovingPetPitTrapState(FIRE_TRAP, {
+        mhp: 1,
+        mhpmax: 1,
+    });
+    enableRngLog({ reset: true });
+    queueEscapeForMonsterTurn();
+    markHeroNeighborhoodVisible();
+    markSquareVisible(6, 5);
+    markSquareVisible(7, 5);
+
+    await processMonsterTurns();
+    const messages = [game._pending_message, ...(await drainQueuedMessagesAfterMore())].join(' ');
+
+    assert.match(messages, /A tower of flame erupts from the floor under the goblin!/);
+    assert.equal(game.level.monsters.includes(pet), false);
+    assert.equal(trap.tseen, true);
+    assert.equal(rngValuesForCall(getRngLog(), 'd(2,4)').length, 1);
+    assert.equal(!!(pet.mtrapseen & (1 << (FIRE_TRAP - 1))), true);
+});
+
+test('lethal pet fire trap helper marks pet post-move roll skipped', () => {
+    const { trap, pet } = installMovingPetPitTrapState(FIRE_TRAP, {
+        mhp: 1,
+        mhpmax: 1,
+    });
+    pet.mx = 6;
+    pet.my = 5;
+    enableRngLog({ reset: true });
+    markHeroNeighborhoodVisible();
+    markSquareVisible(6, 5);
+
+    assert.equal(allmain.monsterFireTrapEffectForTest(pet, trap, { skipPetPostMoveRoll: true }), true);
+
+    assert.equal(game.level.monsters.includes(pet), false);
+    assert.equal(game._pet_skip_post_move_roll, 1);
+    assert.equal(trap.tseen, true);
+    assert.equal(rngValuesForCall(getRngLog(), 'd(2,4)').length, 1);
+    assert.equal(!!(pet.mtrapseen & (1 << (FIRE_TRAP - 1))), true);
+});
+
+test('lethal pet fire trap burns carried armor before removing pet', () => {
+    const armor = wornArmor(31426, 'leather armor', 'a');
+    const { trap, pet } = installMovingPetPitTrapState(FIRE_TRAP, {
+        mhp: 1,
+        mhpmax: 1,
+        minvent: [armor],
+    });
+    pet.mx = 6;
+    pet.my = 5;
+    enableRngLog({ reset: true });
+    markHeroNeighborhoodVisible();
+    markSquareVisible(6, 5);
+
+    assert.equal(allmain.monsterFireTrapEffectForTest(pet, trap, { skipPetPostMoveRoll: true }), true);
+
+    assert.equal(armor.oeroded, 1);
+    assert.equal(game.level.monsters.includes(pet), false);
+    assert.equal(game.level.objects.includes(armor), true);
+    assert.equal(game._pet_skip_post_move_roll, 1);
+    assert.equal(trap.tseen, true);
+    assert.equal(!!(pet.mtrapseen & (1 << (FIRE_TRAP - 1))), true);
+});
+
+test('fire-resistant pet fire trap reports uninjured through pet movement', async () => {
+    const { trap, pet } = installMovingPetPitTrapState(FIRE_TRAP, {
+        data: { name: 'fire elemental', mlet: 'E', mac: 2, resistsFire: true },
+    });
+    game.nhDisplay = { cols: 200 };
+    enableRngLog({ reset: true });
+    queueEscapeForMonsterTurn();
+    markHeroNeighborhoodVisible();
+    markSquareVisible(6, 5);
+    markSquareVisible(7, 5);
+
+    await processMonsterTurns();
+    const messages = [game._pending_message, ...(await drainQueuedMessagesAfterMore())].join(' ');
+
+    assert.match(messages, /A tower of flame erupts from the floor under the fire elemental!/);
+    assert.match(messages, /The fire elemental is uninjured\./);
+    assert.equal(pet.mx, 6);
+    assert.equal(pet.my, 5);
+    assert.equal(pet.mhp, 10);
+    assert.equal(pet.mhpmax, 10);
+    assert.equal(trap.tseen, true);
+    assert.equal(!!(pet.mtrapseen & (1 << (FIRE_TRAP - 1))), true);
+});
+
 test('mounted hero sleep gas trap sleeps hero then steed', async () => {
     installStableNonShopFloorState();
     vision_reset();
