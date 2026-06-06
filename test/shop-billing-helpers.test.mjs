@@ -43383,6 +43383,7 @@ async function runMonsterKopCreamPieLanding({
 
 async function runMonsterOffensivePotionCatch({
     seed = 1,
+    coreRngValues = null,
     heroBlind = false,
     heroDex = 100,
     heroOverrides = {},
@@ -43392,12 +43393,14 @@ async function runMonsterOffensivePotionCatch({
     fullInventory = false,
     activeMissile = undefined,
     throwerX = 8,
+    levelCells = [],
     extraMonsters = [],
 } = {}) {
     installNonShopFloorState();
     resetInputState();
     pushKey('\x1b');
     initRng(seed);
+    if (coreRngValues) installCoreRngValues(coreRngValues);
     enableRngLog({ reset: true });
     Object.assign(game.u, {
         ux: 5,
@@ -43419,7 +43422,14 @@ async function runMonsterOffensivePotionCatch({
     else if (initialInventory) game.inventory = initialInventory;
     game.moves = 1;
     game.context = {};
+    if (levelCells.length) {
+        const cells = new Map();
+        for (const [x, y, loc] of levelCells)
+            cells.set(`${x},${y}`, { roomno: 0, ...loc });
+        game.level.at = (x, y) => cells.get(`${x},${y}`) || { roomno: 0, typ: ROOM };
+    }
     for (let x = 5; x <= throwerX; x++) markSquareVisible(x, 5);
+    for (const [x, y] of levelCells) markSquareVisible(x, y);
     const potionItem = potion || paralysisPotion(878100, 'p', potionQuan, {
         otyp: POT_PARALYSIS,
         dknown: true,
@@ -45328,6 +45338,65 @@ test('production monster acid potion kills intervening monster without hero attr
     assert.ok(rngNames.includes('rn2(105)'), rng.join(', '));
     assert.ok(rngNames.includes('d(1,8)'), rng.join(', '));
     assert.equal(rngNames.includes('rn2(1)'), false, rng.join(', '));
+});
+
+test('production monster acid potion forced iron bars hit shatters and dissolves before hero', async () => {
+    const acid = acidPotion(878120, 'a', 2);
+    acid.dknown = true;
+    const { potion, thrower, rng, preNhgetchMessages } = await runMonsterOffensivePotionCatch({
+        coreRngValues: [1, 0, 50, 50, 50],
+        potion: acid,
+        throwerX: 9,
+        levelCells: [[6, 5, { typ: IRONBARS, roomno: ROOMOFFSET }]],
+        heroOverrides: { uhp: 40, uhpmax: 40, fumbling: true },
+    });
+    const messages = [preNhgetchMessages.join('\n'), game._pending_message, game._topline_after_more]
+        .filter(Boolean).join('\n');
+    const calls = rng.map(rngCallName);
+
+    assert.match(messages, /hurls a potion!/);
+    assert.match(messages, /potion of acid shatters!/);
+    assert.match(messages, /The iron bars are dissolved!/);
+    assert.doesNotMatch(messages, /crashes on your head|You catch|This burns|evaporates/);
+    assert.equal(game.u.uhp, 40);
+    assert.equal(game.level.at(6, 5).typ, ROOM);
+    assert.equal(game.level.at(6, 5).doormask, D_NODOOR);
+    assert.equal(game.level.objects.some(obj => obj.id === potion.id || obj.transientProjectile), false);
+
+    const residual = thrower.minvent.find(obj => obj.id === potion.id);
+    assert.ok(residual);
+    assert.equal(residual.quan, 1);
+    assert.equal(thrower.missile, residual);
+    assert.ok(calls.includes('rn2(100)'), rng.join(', '));
+    assert.equal(calls.includes('rn2(1)'), false, rng.join(', '));
+    assert.equal(calls.includes('rn2(7)'), false, rng.join(', '));
+    assert.equal(calls.includes('d(1,8)'), false, rng.join(', '));
+});
+
+test('production monster acid potion non-forced iron bars throw can still hit hero', async () => {
+    const acid = acidPotion(878121, 'a', 2);
+    acid.dknown = true;
+    const { potion, thrower, rng, preNhgetchMessages } = await runMonsterOffensivePotionCatch({
+        coreRngValues: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 3, 1],
+        potion: acid,
+        throwerX: 9,
+        levelCells: [[6, 5, { typ: IRONBARS, roomno: ROOMOFFSET }]],
+        heroOverrides: { uhp: 40, uhpmax: 40, fumbling: true },
+    });
+    const messages = [preNhgetchMessages.join('\n'), game._pending_message, game._topline_after_more]
+        .filter(Boolean).join('\n');
+    const calls = rng.map(rngCallName);
+
+    assert.match(messages, /crashes on your head/);
+    assert.match(messages, /This burns!/);
+    assert.doesNotMatch(messages, /iron bars are dissolved|potion of acid shatters|You catch/);
+    assert.equal(game.level.at(6, 5).typ, IRONBARS);
+    assert.equal(game.u.uhp < 40, true);
+    assert.equal(thrower.minvent.find(obj => obj.id === potion.id).quan, 1);
+    assert.equal(calls.filter(call => call === 'rn2(5)').length >= 3, true, rng.join(', '));
+    assert.equal(calls.includes('rn2(100)'), false, rng.join(', '));
+    assert.ok(calls.includes('rnd(2)'), rng.join(', '));
+    assert.ok(calls.includes('d(1,8)'), rng.join(', '));
 });
 
 test('production monster acid potion failed catch burns after crash', async () => {

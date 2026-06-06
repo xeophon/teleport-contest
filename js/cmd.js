@@ -17580,7 +17580,7 @@ function heroIsNextToPotionVapor(x, y) {
     return Math.max(Math.abs((x ?? ux) - ux), Math.abs((y ?? uy) - uy)) <= 1;
 }
 
-function brokenPotionBreathe(potion, x, y, messages, options = {}) {
+export function brokenPotionBreathe(potion, x, y, messages, options = {}) {
     if (!isPotionObject(potion) || !heroIsNextToPotionVapor(x, y) || !heroCanReceivePotionVapor()) return;
     if (!isWaterPotion(potion) && !heroHasWetWornTowel()) {
         if (heroBreathesPotionVapor()) messages.push('You smell a peculiar odor...');
