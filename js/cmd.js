@@ -595,13 +595,14 @@ async function beginUntrapBoxPrompt(boxes, { trapSkipped = false } = {}) {
     return true;
 }
 
-function untrapBoxDetectionSucceeds(box, confused) {
+function untrapBoxDetectionSucceeds(box, confused, force = false) {
     if (box?.otrapped) {
+        if (force) return true;
         const denom = Math.max(1, MAXULEV + 1 - (game.u?.ulevel || 1));
         if (!confused && rn2(denom) < 10) return true;
     }
     if (box?.tknown) return true;
-    return confused && !rn2(3);
+    return !force && confused && !rn2(3);
 }
 
 function untrapBoxDisarmChance() {
@@ -629,9 +630,8 @@ function disarmUntrapBox(box, confused) {
     return `That ${untrapBoxObjectName(box)} was not trapped.`;
 }
 
-async function checkUntrapBox(box) {
-    const confused = heroIsConfused() || heroIsHallucinating();
-    if (untrapBoxDetectionSucceeds(box, confused)) {
+async function checkUntrapBox(box, { force = false, confused = heroIsConfused() || heroIsHallucinating() } = {}) {
+    if (untrapBoxDetectionSucceeds(box, confused, force)) {
         const knownTrap = box?.tknown && box?.dknown;
         if (box) {
             box.tknown = true;
@@ -62407,8 +62407,7 @@ export async function rhack(_cmd) {
             game._untrap_box_state = null;
             game._command_mode = null;
             if (box?.tknown && box?.dknown) {
-                await setMessage(disarmUntrapBox(box, heroIsConfused() || heroIsHallucinating()));
-                game.context.move = 1;
+                await checkUntrapBox(box, { force: true, confused: false });
             } else {
                 await checkUntrapBox(box);
             }

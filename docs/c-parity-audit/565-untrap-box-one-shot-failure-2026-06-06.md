@@ -21,9 +21,10 @@ The implementation uses deterministic command-level tests and does not use repla
 
 - `#untrap failed known-box disarm consumes the one-shot trap`
 
-This test drives the real extended command input, accepts the disarm prompt, forces the failed disarm roll, asserts the Dexterity exercise RNG call, and verifies the one-shot trap state after the failure message.
+This test drives the real extended command input, accepts the known-trap prompt and the subsequent `Disarm it?` prompt, forces the failed disarm roll, asserts the Wisdom and Dexterity exercise RNG calls, and verifies the one-shot trap state after the failure message.
 
 ## Remaining Work
 
 - Box/chest trap detection observation state is covered separately in `566-untrap-box-observation-2026-06-06.md`.
+- Box/chest known-trap forced prompt flow is covered separately in `568-untrap-box-known-force-flow-2026-06-06.md`.
 - Full `chest_trap()` effects are still partial: explosion/destruction, damage, paralysis, sleep gas, poison gas, and shop billing consequences are not covered by this slice.

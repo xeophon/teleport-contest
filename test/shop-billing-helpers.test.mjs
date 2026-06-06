@@ -21208,7 +21208,7 @@ test('#untrap known unobserved trapped box still reports trap after failed searc
 });
 
 test('#untrap failed known-box disarm consumes the one-shot trap', async () => {
-    setupUntrapDestinationWeb([], { rng: [74, 0] });
+    setupUntrapDestinationWeb([], { rng: [0, 74, 0] });
     game.level.traps = [];
     const box = shopFloorContainer(881005);
     Object.assign(box, { otrapped: true, tknown: true, dknown: true });
@@ -21222,11 +21222,55 @@ test('#untrap failed known-box disarm consumes the one-shot trap', async () => {
 
     await rhack('y');
 
+    assert.equal(game._command_mode, 'untrapBoxDisarmConfirm');
+    assert.deepEqual(getRngLog(), ['rn2(19)=0']);
+    assert.equal(game._pending_message, "There's a trap on the large box.  Disarm it? [ynq] (q)");
+    assert.equal(box.otrapped, true);
+    assert.equal(game.context.move || 0, 0);
+
+    await rhack('y');
+
     assert.equal(game._command_mode, null);
-    assert.deepEqual(getRngLog(), ['rnd(75)=75', 'rn2(19)=0']);
+    assert.deepEqual(getRngLog(), ['rn2(19)=0', 'rnd(75)=75', 'rn2(19)=0']);
     assert.equal(game._pending_message, 'You set it off!');
     assert.equal(box.otrapped, false);
     assert.equal(box.tknown, true);
+    assert.equal(game.context.move, 1);
+});
+
+test('#untrap known-box forced disarm decline consumes turn without triggering trap', async () => {
+    setupUntrapDestinationWeb([], { rng: [0] });
+    game.level.traps = [];
+    const box = shopFloorContainer(881012);
+    Object.assign(box, {
+        otrapped: true,
+        tknown: true,
+        dknown: true,
+        cknown: false,
+    });
+    game.level.objects = [box];
+
+    await enterUntrapDirection();
+    await rhack('.');
+
+    assert.equal(game._command_mode, 'untrapBoxConfirm');
+    assert.equal(game._pending_message, 'Disarm this large box? [ynq] (q)');
+
+    await rhack('y');
+
+    assert.equal(game._command_mode, 'untrapBoxDisarmConfirm');
+    assert.deepEqual(getRngLog(), ['rn2(19)=0']);
+    assert.equal(game._pending_message, "There's a trap on the large box.  Disarm it? [ynq] (q)");
+    assert.equal(box.otrapped, true);
+    assert.equal(box.tknown, true);
+    assert.equal(box.dknown, true);
+    assert.equal(box.cknown, false);
+    assert.equal(game.context.move || 0, 0);
+
+    await rhack('n');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(box.otrapped, true);
     assert.equal(game.context.move, 1);
 });
 
