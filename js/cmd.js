@@ -20023,6 +20023,68 @@ function heroThrownBoomerangFlightResult(obj, dir, ux, uy) {
     return { handled: true, x, y };
 }
 
+function heroHorizontalThrowAirRecoilActive() {
+    return !!(Is_airlevel(game.u?.uz) || game.u?.levitating || game.u?.levitation || game.u?.Levitation);
+}
+
+function heroHorizontalThrowAirSplitRange(obj) {
+    const stats = game.u?.acurr?.a || [];
+    const strength = Math.max(0, Math.trunc(Number(stats[A_STR] ?? 10)));
+    const urangeBase = Math.max(0, Math.trunc(strength / 2));
+    const weightDivisor = obj === game.u?.uball ? 100 : 40;
+    let range = urangeBase - Math.trunc(globObjectWeight({ ...obj, quan: 1 }) / weightDivisor);
+    if (range < 1) range = 1;
+
+    let recoilRange = urangeBase - range;
+    if (recoilRange < 1) recoilRange = 1;
+    range -= recoilRange;
+    if (range < 1) range = 1;
+
+    return { recoilRange, throwRange: range };
+}
+
+function heroHorizontalThrowRecoil(dir, range) {
+    if (!heroHorizontalThrowAirRecoilActive() || !dir || (!dir.dx && !dir.dy) || range < 1 || game.u?.ustuck)
+        return '';
+    if (game.u?.utrap) {
+        const trapName = game.u.utraptype === TT_WEB ? 'web'
+            : game.u.utraptype === TT_LAVA ? 'lava'
+                : game.u.utraptype === TT_INFLOOR ? 'floor'
+                    : game.u.utraptype === TT_BURIEDBALL ? 'buried ball'
+                        : 'trap';
+        return `You are anchored by the ${trapName}.`;
+    }
+
+    const recoilRange = Math.max(1, Math.trunc(Number(range || 1)));
+    const message = `You ${recoilRange > 1 ? 'hurtle' : 'float'} in the opposite direction.`;
+    const dx = Math.sign(-dir.dx);
+    const dy = Math.sign(-dir.dy);
+    for (let step = 0; step < recoilRange; step++) {
+        const oldx = game.u?.ux || 0;
+        const oldy = game.u?.uy || 0;
+        const nx = oldx + dx;
+        const ny = oldy + dy;
+        const loc = game.level?.at(nx, ny);
+        const closedDoor = loc?.typ === DOOR && (loc.doormask & (D_CLOSED | D_LOCKED));
+        const blockedByBoulder = (game.level?.objects || []).some(obj =>
+            !obj.transientProjectile && obj.ox === nx && obj.oy === ny && obj.otyp === BOULDER);
+        const blockedByMonster = (game.level?.monsters || []).some(mon =>
+            mon.mx === nx && mon.my === ny && !mon.dead && (mon.mhp == null || mon.mhp > 0));
+        if (!isok(nx, ny) || !loc || IS_OBSTRUCTED(loc.typ) || closedDoor || blockedByBoulder || blockedByMonster)
+            break;
+        game.u.ux0 = oldx;
+        game.u.uy0 = oldy;
+        game.u.ux = nx;
+        game.u.uy = ny;
+        game.u.umoved = true;
+        newsym(oldx, oldy);
+        newsym(nx, ny);
+        if (game.level?.at(nx, ny) === loc) vision_recalc(0);
+        else game.vision_full_recalc = 1;
+    }
+    return message;
+}
+
 function heroThrownBoomerangSelfHitResult(obj) {
     const messages = [];
     const baseDamage = heroThrownGenericWeaponDamage(obj);
@@ -66747,13 +66809,21 @@ export async function rhack(_cmd) {
         }
         const name = inventoryItemName(item);
         const lowerName = name.toLowerCase();
-        const ux = game.u?.ux || 0;
-        const uy = game.u?.uy || 0;
+        let ux = game.u?.ux || 0;
+        let uy = game.u?.uy || 0;
+        const boomerangUsesCurvedFlight = tossUpWeaponObjectKey(item) === 'boomerang'
+            && !heroIsUnderwaterForThrow();
+        let boomerangPreRecoilMessage = '';
+        if (boomerangUsesCurvedFlight && heroHorizontalThrowAirRecoilActive()) {
+            boomerangPreRecoilMessage = heroHorizontalThrowRecoil(dir, 1);
+            ux = game.u?.ux || ux;
+            uy = game.u?.uy || uy;
+        }
         const boomerangFlight = heroThrownBoomerangFlightResult(item, dir, ux, uy);
         if (boomerangFlight.caught) {
             exerciseHeroProjectileHitDexterity();
             newsym(ux, uy);
-            await setMessage('You skillfully catch the boomerang.');
+            await setMessage([boomerangPreRecoilMessage, 'You skillfully catch the boomerang.'].filter(Boolean).join('  '));
             game._command_mode = null;
             game._throw_item_letter = null;
             clearThrowCountState();
@@ -66770,13 +66840,22 @@ export async function rhack(_cmd) {
         let oy = uy;
         let targetMon = null;
         let ironBarsImpact = null;
-        const throwRange = heroIsUnderwaterForThrow() ? 1 : returningAklysThrow ? 4 : 8;
+        let throwRange = heroIsUnderwaterForThrow() ? 1 : returningAklysThrow ? 4 : 8;
+        let ordinaryAirRecoilRange = 0;
+        if (!boomerangFlight.handled && heroHorizontalThrowAirRecoilActive()) {
+            const airSplit = heroHorizontalThrowAirSplitRange(item);
+            ordinaryAirRecoilRange = airSplit.recoilRange;
+            throwRange = airSplit.throwRange;
+            if (isBoulderObject(item)) throwRange = 20;
+            else if (returningAklysThrow) throwRange = Math.min(throwRange, 4);
+            if (heroIsUnderwaterForThrow()) throwRange = 1;
+        }
         let flightImpactMessage = '';
         if (boomerangFlight.handled) {
             ox = boomerangFlight.x ?? ox;
             oy = boomerangFlight.y ?? oy;
             targetMon = boomerangFlight.targetMon || null;
-            flightImpactMessage = boomerangFlight.message || '';
+            flightImpactMessage = [boomerangPreRecoilMessage, boomerangFlight.message || ''].filter(Boolean).join('  ');
         } else {
             for (let step = 0; step < throwRange; step++) {
                 const nx = ox + dir.dx;
@@ -66843,6 +66922,9 @@ export async function rhack(_cmd) {
         };
         const combatObject = item.cls === 'weapon' || item.cls === 'gem' || item.glyph === ')' || item.otyp === GEM_CLASS;
         let impactMessage = flightImpactMessage;
+        const ordinaryAirRecoilMessage = !boomerangFlight.handled && ordinaryAirRecoilRange > 0
+            ? heroHorizontalThrowRecoil(dir, ordinaryAirRecoilRange)
+            : '';
         let impactConsumedThrownObject = false;
         let impactObjectHit = false;
         let impactPassiveTarget = null;
@@ -67005,6 +67087,11 @@ export async function rhack(_cmd) {
             messages.push(...wakeMonsterFromHeroThrownMiss(targetMon));
             impactMessage = messages.join('  ');
         }
+        if (boomerangPreRecoilMessage && boomerangFlight.handled
+            && !impactMessage.includes(boomerangPreRecoilMessage))
+            impactMessage = [boomerangPreRecoilMessage, impactMessage].filter(Boolean).join('  ');
+        if (ordinaryAirRecoilMessage)
+            impactMessage = [ordinaryAirRecoilMessage, impactMessage].filter(Boolean).join('  ');
         if (impactConsumedThrownObject) {
             if ((item.quan || 1) > 1) splitCarriedObjectShopBill(item, thrownObject, 1);
             stopCarriedFigurineTimerOnLeave(thrownObject);

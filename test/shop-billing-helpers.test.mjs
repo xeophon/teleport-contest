@@ -60522,6 +60522,61 @@ test('hero-thrown boomerang curves onto sink and falls there with Klonk', async 
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 1), ['rn2(100)']);
 });
 
+test('levitating hero-thrown boomerang recoils before curved flight hits target', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        levitating: true,
+        uhandedness: 'right',
+        ulevel: 20,
+        uluck: 10,
+        uhitinc: 10,
+        udaminc: 0,
+    });
+    game.u.acurr.a[A_STR] = 10;
+    game.u.acurr.a[A_DEX] = 25;
+    game.u.weapon_skills = [];
+    setHeroWeaponSkill(P_BOOMERANG, P_EXPERT);
+    const boomerang = monsterBoomerang(876166, {
+        letter: 'b',
+        line: 'b - a boomerang',
+        ox: 5,
+        oy: 5,
+    });
+    const goblin = ordinaryThrowTarget('goblin', 6, 5, {
+        mhp: 20,
+        mhpmax: 20,
+        msleeping: 1,
+    });
+    game.inventory = [boomerang];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('b');
+    await rhack('l');
+
+    const rngLog = getRngLog();
+    const damageRoll = rngValuesForCall(rngLog, 'rnd(9)')[0];
+    assert.match(game._pending_message, /You float in the opposite direction\./);
+    assert.match(game._pending_message, /The boomerang hits the goblin[.!]/);
+    assert.doesNotMatch(game._pending_message, /skillfully catch|returns|fails to return|misses|gift|catches|shatters|Splat/);
+    assert.equal(game.u.ux, 4);
+    assert.equal(game.u.uy, 5);
+    assert.equal(goblin.mhp, 20 - (damageRoll + 2));
+    assert.equal(goblin.msleeping, 0);
+    assert.equal(game.inventory.includes(boomerang), false);
+    const landed = game.level.objects.find(obj => obj.id === boomerang.id);
+    assert.ok(landed);
+    assert.equal(landed.ox, 6);
+    assert.equal(landed.oy, 5);
+    assert.deepEqual(rngLog.map(entry => entry.replace(/=.*/, '')).slice(0, 4), [
+        'rnd(20)', 'rnd(9)', 'rn2(19)', 'rn2(100)',
+    ]);
+});
+
 test('underwater hero-thrown boomerang uses ordinary range one and generic auto-return', async () => {
     installNonShopFloorState();
     initRng(2);
@@ -61445,6 +61500,47 @@ test('underwater hero-thrown ordinary weapon range is capped at one square', asy
     assert.equal(landed.ox, 6);
     assert.equal(landed.oy, 5);
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 1), ['rn2(100)']);
+});
+
+test('levitating hero-thrown ordinary weapon recoils after C split range flight', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        levitating: true,
+        ulevel: 20,
+        uluck: 10,
+        uhitinc: 10,
+    });
+    game.u.acurr.a[A_STR] = 10;
+    game.u.acurr.a[A_DEX] = 25;
+    const blade = dagger(876167, 'd');
+    const goblin = ordinaryThrowTarget('goblin', 10, 5, {
+        mhp: 20,
+        mhpmax: 20,
+        msleeping: 1,
+    });
+    game.inventory = [blade];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('d');
+    await rhack('l');
+
+    assert.match(game._pending_message, /You float in the opposite direction\./);
+    assert.doesNotMatch(game._pending_message, /hits the goblin|gift|catches|misses|shatters|Splat/);
+    assert.equal(game.u.ux, 4);
+    assert.equal(game.u.uy, 5);
+    assert.equal(goblin.mhp, 20);
+    assert.equal(goblin.msleeping, 1);
+    assert.equal(game.inventory.includes(blade), false);
+    const landed = game.level.objects.find(obj => obj.id === blade.id);
+    assert.ok(landed);
+    assert.equal(landed.ox, 9);
+    assert.equal(landed.oy, 5);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(100)']);
 });
 
 test('hero-thrown dagger harms ordinary monster and survives landing', async () => {
