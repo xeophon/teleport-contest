@@ -11556,7 +11556,9 @@ function rollingBoulderApplyPitHoleFloorEffectsAt(x, y, movingBoulder) {
     game._monster_moving = 1;
     let consumed = false;
     try {
-        consumed = earthFloorEffects(movingBoulder, x, y, messages, 'fall');
+        consumed = earthFloorEffects(movingBoulder, x, y, messages, 'fall', {
+            usedUpShopBillOnDestroy: true,
+        });
     } finally {
         if (previousMonsterMoving === undefined) delete game._monster_moving;
         else game._monster_moving = previousMonsterMoving;
@@ -11572,7 +11574,9 @@ function rollingBoulderApplyGenericFloorEffectsAt(x, y, movingBoulder) {
     game._monster_moving = 1;
     let consumed = false;
     try {
-        consumed = earthFloorEffects(movingBoulder, x, y, messages, 'fall');
+        consumed = earthFloorEffects(movingBoulder, x, y, messages, 'fall', {
+            usedUpShopBillOnDestroy: true,
+        });
     } finally {
         if (previousMonsterMoving === undefined) delete game._monster_moving;
         else game._monster_moving = previousMonsterMoving;

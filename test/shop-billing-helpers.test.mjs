@@ -22078,6 +22078,39 @@ test('rolling boulder fills path pit and buries floor object', () => {
     assert.equal(rngValuesForCall(getRngLog(), 'rnd(20)').length, 0);
 });
 
+test('rolling boulder filling billed path pit preserves used-up bill row', () => {
+    const { trap, goblin } = installMonsterPitTrapState(ROLLING_BOULDER_TRAP, {
+        mhp: 50,
+        mhpmax: 50,
+        data: { mac: -10 },
+    });
+    const shkp = makeShopkeeper(31440, 'Izchak', 2, 2);
+    game.level.monsters.push(shkp);
+    const pit = { ttyp: PIT, tx: 8, ty: 3, tseen: true, madeby_u: false };
+    game.level.traps.push(pit);
+    game.level.at(8, 3).lit = true;
+    const boulder = installRollingBoulderTrapLaunch(trap, {
+        start: { x: 4, y: 3 },
+        end: { x: 8, y: 3 },
+        boulderId: 31441,
+    });
+    shop.addObjectToShopBill(shkp, boulder, 5);
+    enableRngLog({ reset: true });
+    markHeroNeighborhoodVisible();
+    markSquareVisible(6, 5);
+    for (let x = 4; x <= 8; x++) markSquareVisible(x, 3);
+
+    assert.equal(allmain.monsterRollingBoulderTrapEffectForTest(goblin, trap), true);
+
+    assert.match(game._pending_message || '', /Click!  The goblin triggers something\./);
+    assert.equal(game._topline_after_more, 'The boulder fills a pit.');
+    assert.equal(game.level.traps.includes(pit), false);
+    assert.equal(game.level.objects.includes(boulder), false);
+    assert.equal(boulder.unpaid, false);
+    assertUsedUpBillForObject(shkp, boulder, 5);
+    assert.equal(rngValuesForCall(getRngLog(), 'rnd(20)').length, 0);
+});
+
 test('rolling boulder relocates on visible path teleport trap', () => {
     const { trap, goblin } = installMonsterPitTrapState(ROLLING_BOULDER_TRAP, {
         mhp: 50,
@@ -22387,6 +22420,47 @@ test('rolling boulder sinks in visible path lava before bars lookahead', () => {
     assert.equal(rngValuesForCall(getRngLog(), 'rnd(20)').length, 0);
     assert.doesNotMatch(messages, /Whang!/);
     assert.doesNotMatch(messages, /You are hit by molten lava/);
+});
+
+test('rolling boulder sinking billed path lava preserves used-up bill row', () => {
+    const { trap, goblin } = installMonsterPitTrapState(ROLLING_BOULDER_TRAP, {
+        mhp: 50,
+        mhpmax: 50,
+        data: { mac: -10 },
+    });
+    const shkp = makeShopkeeper(31442, 'Izchak', 2, 2);
+    game.level.monsters.push(shkp);
+    const lavaLoc = game.level.at(10, 3);
+    Object.assign(lavaLoc, { typ: LAVAPOOL, roomno: ROOMOFFSET, lit: true });
+    Object.assign(game.level.at(11, 3), { typ: IRONBARS, roomno: ROOMOFFSET, lit: true });
+    const boulder = installRollingBoulderTrapLaunch(trap, {
+        start: { x: 4, y: 3 },
+        end: { x: 11, y: 3 },
+        boulderId: 31443,
+    });
+    shop.addObjectToShopBill(shkp, boulder, 5);
+    enableRngLog({ reset: true });
+    installCoreRngValues([1]);
+    markHeroNeighborhoodVisible();
+    markSquareVisible(6, 5);
+    for (let x = 4; x <= 11; x++) markSquareVisible(x, 3);
+
+    assert.equal(allmain.monsterRollingBoulderTrapEffectForTest(goblin, trap), true);
+
+    const messages = [
+        game._topline_after_more,
+        ...(game._queued_messages_after_more || []).map(entry => entry.text),
+    ].filter(Boolean).join('  ');
+
+    assert.match(game._pending_message || '', /Click!  The goblin triggers something\./);
+    assert.match(messages, /There is a large splash as the boulder falls into the molten lava\./);
+    assert.match(messages, /It sinks without a trace!/);
+    assert.equal(game.level.objects.includes(boulder), false);
+    assert.equal(boulder.unpaid, false);
+    assertUsedUpBillForObject(shkp, boulder, 5);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rn2(10)'), [1]);
+    assert.equal(rngValuesForCall(getRngLog(), 'rn2(20)').length, 0);
+    assert.equal(rngValuesForCall(getRngLog(), 'rnd(20)').length, 0);
 });
 
 test('rolling boulder sets another boulder in motion', () => {
