@@ -46265,6 +46265,7 @@ function polyTrapTriggerMessage({ viaSitting = false } = {}) {
 
 function heroPolyTrapResult(trap, prefix = '', { viaSitting = false } = {}) {
     if (trap) trap.tseen = true;
+    if (trap) markSteedKnowsTrap(game.u?.usteed, trap);
     const messages = [prefix, polyTrapTriggerMessage({ viaSitting })];
     const ironFootwear = wornIronFootwearItem();
     if (ironFootwear) {

@@ -24764,6 +24764,7 @@ test('mounted hero polymorph trap checks steed before hero system shock', async 
     assert.equal(pony.mhp, 10);
     assert.equal(pony.mx, 6);
     assert.equal(pony.my, 5);
+    assert.equal(!!(pony.mtrapseen & (1 << (POLY_TRAP - 1))), true);
     assert.equal(game.u.usteed, pony);
     assert.equal(game.u._polyself_form || null, null);
     assert.equal(trap.tseen, true);
