@@ -9,7 +9,7 @@ import { pushKey, resetInputState } from '../js/input.js';
 import { createMonsterCorpseOrGlob, mkcorpstat, mkobj, mksobj, monsterByRndName } from '../js/mklev.js';
 import { enableDisplayRngLog, enableRngLog, getRngLog, initRng } from '../js/rng.js';
 import { encodeBonesLevel } from '../js/save.js';
-import { A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_MAX, A_STR, A_WIS, ALLOW_TRAPS, ALTAR, AM_SHRINE, Align2amask, ANTI_MAGIC, ARROW_TRAP, BEAR_TRAP, BILLSZ, CANDLESHOP, CLOUD, CORPSTAT_HISTORIC, COULD_SEE, DART_TRAP, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, D_TRAPPED, FIRE_TRAP, FOUNTAIN, HOLE, ICE, ICED_POOL, IN_SIGHT, IRONBARS, LADDER, LANDMINE, LAVAPOOL, LEVEL_TELEP, MAGIC_PORTAL, MIGR_LADDER_UP, MIGR_RANDOM, MIGR_SSTAIRS, MIGR_STAIRS_UP, MOAT, MON_MIGRATING, M_AP_FURNITURE, M_AP_MONSTER, M_AP_OBJECT, NORMAL_SPEED, P_AXE, P_BARE_HANDED_COMBAT, P_BASIC, P_CLUB, P_DAGGER, P_DART, P_EXPERT, P_HAMMER, P_KNIFE, P_PICK_AXE, P_RIDING, P_SABER, P_SHURIKEN, P_SKILLED, P_SPEAR, P_TWO_WEAPON_COMBAT, P_UNSKILLED, PIT, POLY_TRAP, POOL, REPAIR_DELAY, ROCKTRAP, ROLLING_BOULDER_TRAP, ROOM, ROOMOFFSET, SDOOR, SHARED_PLUS, SHOPBASE, SHOP_DOOR_COST, SINK, SLP_GAS_TRAP, SPIKED_PIT, SQKY_BOARD, STAIRS, STATUE_TRAP, STONE, STR19, STRAT_APPEARMSG, STRAT_WAITFORU, STRAT_WAITMASK, TELEP_TRAP, TEMPLE, TRAPDOOR, TREE, TT_BEARTRAP, TT_LAVA, TT_PIT, TT_WEB, WEB, W_ARMF, W_SADDLE } from '../js/const.js';
+import { A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_MAX, A_STR, A_WIS, ALLOW_TRAPS, ALTAR, AM_SHRINE, Align2amask, ANTI_MAGIC, ARROW_TRAP, BEAR_TRAP, BILLSZ, CANDLESHOP, CLOUD, CORPSTAT_HISTORIC, COULD_SEE, DART_TRAP, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, D_TRAPPED, FIRE_TRAP, FOUNTAIN, HOLE, ICE, ICED_POOL, IN_SIGHT, IRONBARS, LADDER, LANDMINE, LAVAPOOL, LEVEL_TELEP, MAGIC_PORTAL, MIGR_LADDER_UP, MIGR_RANDOM, MIGR_SSTAIRS, MIGR_STAIRS_UP, MOAT, MON_MIGRATING, M_AP_FURNITURE, M_AP_MONSTER, M_AP_OBJECT, NORMAL_SPEED, P_AXE, P_BARE_HANDED_COMBAT, P_BASIC, P_BOOMERANG, P_CLUB, P_DAGGER, P_DART, P_EXPERT, P_HAMMER, P_KNIFE, P_PICK_AXE, P_RIDING, P_SABER, P_SHURIKEN, P_SKILLED, P_SPEAR, P_TWO_WEAPON_COMBAT, P_UNSKILLED, PIT, POLY_TRAP, POOL, REPAIR_DELAY, ROCKTRAP, ROLLING_BOULDER_TRAP, ROOM, ROOMOFFSET, SDOOR, SHARED_PLUS, SHOPBASE, SHOP_DOOR_COST, SINK, SLP_GAS_TRAP, SPIKED_PIT, SQKY_BOARD, STAIRS, STATUE_TRAP, STONE, STR19, STRAT_APPEARMSG, STRAT_WAITFORU, STRAT_WAITMASK, TELEP_TRAP, TEMPLE, TRAPDOOR, TREE, TT_BEARTRAP, TT_LAVA, TT_PIT, TT_WEB, WEB, W_ARMF, W_SADDLE } from '../js/const.js';
 import { currentFruitId, setCurrentFruitName } from '../js/fruit.js';
 import { CLR_BRIGHT_MAGENTA, CLR_BROWN, CLR_WHITE } from '../js/terminal.js';
 import { TRIBUTE_DEATH_QUOTES } from '../js/tribute.js';
@@ -758,6 +758,21 @@ function monsterAklys(id, extra = {}) {
     };
 }
 
+function monsterBoomerang(id, extra = {}) {
+    return {
+        id,
+        cls: 'weapon',
+        glyph: ')',
+        kind: 'boomerang',
+        actualKind: 'boomerang',
+        plural: 'boomerangs',
+        quan: 1,
+        spe: 0,
+        material: 'wood',
+        ...extra,
+    };
+}
+
 function wieldedWeapon(id, kind, letter = 'w', spe = 0) {
     return {
         id,
@@ -1458,6 +1473,7 @@ function setHeroWeaponSkill(skill, level) {
         [P_SPEAR, 'spear'],
         [P_HAMMER, 'hammer'],
         [P_CLUB, 'club'],
+        [P_BOOMERANG, 'boomerang'],
     ]);
     const skillName = skillNames.get(skill) || String(skill);
     game._weapon_skill_levels ??= {};
@@ -60257,6 +60273,101 @@ test('hero-thrown shuriken harms ordinary monster and survives landing', async (
     ]);
 });
 
+test('hero-thrown boomerang harms ordinary monster with boomerang skill damage', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, { ulevel: 20, uluck: 10, uhitinc: 10, udaminc: 0 });
+    game.u.acurr.a[A_STR] = 10;
+    game.u.acurr.a[A_DEX] = 25;
+    game.u.weapon_skills = [];
+    setHeroWeaponSkill(P_BOOMERANG, P_EXPERT);
+    const boomerang = monsterBoomerang(876155, {
+        letter: 'b',
+        line: 'b - a boomerang',
+        ox: 5,
+        oy: 5,
+    });
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, {
+        mhp: 20,
+        mhpmax: 20,
+        msleeping: 1,
+        mpeaceful: 1,
+        meating: 4,
+        mstrategy: STRAT_WAITFORU,
+    });
+    game.inventory = [boomerang];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('b');
+    await rhack('l');
+
+    const rngLog = getRngLog();
+    const damageRoll = rngValuesForCall(rngLog, 'rnd(9)')[0];
+    assert.match(game._pending_message, /The boomerang hits the goblin[.!]/);
+    assert.doesNotMatch(game._pending_message, /skillfully catch|returns|fails to return|misses|gift|catches|shatters|Splat/);
+    assert.equal(goblin.mhp, 20 - (damageRoll + 2));
+    assert.equal(goblin.msleeping, 0);
+    assert.equal(goblin.meating, 0);
+    assert.equal(goblin.mstrategy, 0);
+    assert.equal(goblin.mpeaceful, 0);
+    assert.equal(game.inventory.includes(boomerang), false);
+    const landed = game.level.objects.find(obj => obj.id === boomerang.id);
+    assert.ok(landed);
+    assert.equal(landed.ox, 7);
+    assert.equal(landed.oy, 5);
+    assert.equal(landed.quan, 1);
+    assert.deepEqual(rngLog.map(entry => entry.replace(/=.*/, '')).slice(0, 4), [
+        'rnd(20)', 'rnd(9)', 'rn2(19)', 'rn2(100)',
+    ]);
+});
+
+test('hero-thrown boomerang uses C plus-four thrown hit bonus', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, { ulevel: 1, uluck: 0, uhitinc: 0, udaminc: 0 });
+    game.u.acurr.a[A_STR] = 10;
+    game.u.acurr.a[A_DEX] = 10;
+    game.u.weapon_skills = [];
+    setHeroWeaponSkill(P_BOOMERANG, P_EXPERT);
+    const boomerang = monsterBoomerang(876157, {
+        letter: 'b',
+        line: 'b - a boomerang',
+        ox: 5,
+        oy: 5,
+    });
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, {
+        mhp: 20,
+        mhpmax: 20,
+        msleeping: 0,
+        mpeaceful: 0,
+        data: { name: 'goblin', mlevel: 1, mac: 9 },
+    });
+    game.inventory = [boomerang];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('b');
+    await rhack('l');
+
+    const rngLog = getRngLog();
+    const damageRoll = rngValuesForCall(rngLog, 'rnd(9)')[0];
+    assert.equal(rngLog[0], 'rnd(20)=14');
+    assert.match(game._pending_message, /The boomerang hits the goblin[.!]/);
+    assert.doesNotMatch(game._pending_message, /misses|skillfully catch|returns|fails to return|gift|catches|shatters|Splat/);
+    assert.equal(goblin.mhp, 20 - (damageRoll + 2));
+    assert.equal(game.inventory.includes(boomerang), false);
+    const landed = game.level.objects.find(obj => obj.id === boomerang.id);
+    assert.ok(landed);
+    assert.equal(landed.ox, 7);
+    assert.equal(landed.oy, 5);
+    assert.deepEqual(rngLog.map(entry => entry.replace(/=.*/, '')).slice(0, 4), [
+        'rnd(20)', 'rnd(9)', 'rn2(19)', 'rn2(100)',
+    ]);
+});
+
 test('hero-thrown spear harms ordinary monster with spear skill damage', async () => {
     installNonShopFloorState();
     initRng(2);
@@ -60954,6 +61065,57 @@ test('hero-thrown non-wielded aklys uses large-target damage die', async () => {
     assert.equal(landed.quan, 1);
     assert.deepEqual(rngLog.map(entry => entry.replace(/=.*/, '')).slice(0, 4), [
         'rnd(20)', 'rnd(3)', 'rn2(19)', 'rn2(100)',
+    ]);
+});
+
+test('hero-thrown boomerang uses C 9-sided die against large targets', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, { ulevel: 20, uluck: 10, uhitinc: 10, udaminc: 0 });
+    game.u.acurr.a[A_STR] = 10;
+    game.u.acurr.a[A_DEX] = 25;
+    game.u.weapon_skills = [];
+    setHeroWeaponSkill(P_BOOMERANG, P_EXPERT);
+    const boomerang = monsterBoomerang(876156, {
+        letter: 'b',
+        line: 'b - a boomerang',
+        ox: 5,
+        oy: 5,
+    });
+    const ogre = ordinaryThrowTarget('ogre', 7, 5, {
+        mhp: 20,
+        mhpmax: 20,
+        msize: 3,
+        msleeping: 1,
+        mpeaceful: 1,
+        meating: 4,
+        mstrategy: STRAT_WAITFORU,
+    });
+    game.inventory = [boomerang];
+    game.level.monsters = [ogre];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('b');
+    await rhack('l');
+
+    const rngLog = getRngLog();
+    const damageRoll = rngValuesForCall(rngLog, 'rnd(9)')[0];
+    assert.match(game._pending_message, /The boomerang hits the ogre[.!]/);
+    assert.doesNotMatch(game._pending_message, /skillfully catch|returns|fails to return|misses|gift|catches|shatters|Splat/);
+    assert.equal(ogre.mhp, 20 - (damageRoll + 2));
+    assert.equal(ogre.msleeping, 0);
+    assert.equal(ogre.meating, 0);
+    assert.equal(ogre.mstrategy, 0);
+    assert.equal(ogre.mpeaceful, 0);
+    assert.equal(game.inventory.includes(boomerang), false);
+    const landed = game.level.objects.find(obj => obj.id === boomerang.id);
+    assert.ok(landed);
+    assert.equal(landed.ox, 7);
+    assert.equal(landed.oy, 5);
+    assert.equal(landed.quan, 1);
+    assert.deepEqual(rngLog.map(entry => entry.replace(/=.*/, '')).slice(0, 4), [
+        'rnd(20)', 'rnd(9)', 'rn2(19)', 'rn2(100)',
     ]);
 });
 
