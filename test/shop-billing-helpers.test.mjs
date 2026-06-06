@@ -21232,6 +21232,106 @@ test('sitting hero rolling boulder wall stop does not hit hero beyond obstacle',
     assert.equal(rngValuesForCall(getRngLog(), 'rnd(20)').length, 0);
 });
 
+test('hero rolling boulder sets another boulder stack in motion', async () => {
+    const { boulder: first } = installHeroRollingBoulderTrapState({
+        trapX: 6,
+        trapY: 4,
+        heroX: 5,
+        heroY: 4,
+        start: { x: 4, y: 3 },
+        end: { x: 8, y: 3 },
+        boulderAt: 'start',
+    });
+    const second = floorBoulder(31450, { ox: 6, oy: 3, quan: 2 });
+    game.level.objects.push(second);
+    enableRngLog({ reset: true });
+    markHeroNeighborhoodVisible();
+    for (let x = 4; x <= 8; x++) markSquareVisible(x, 3);
+
+    await rhack('l');
+
+    assert.equal(game._pending_message,
+        'Click!  You trigger a rolling boulder trap!  You hear a loud crash as one boulder sets another in motion!');
+    assert.equal(first.ox, 6);
+    assert.equal(first.oy, 3);
+    assert.equal(second.ox, 8);
+    assert.equal(second.oy, 3);
+    assert.equal(second.quan, 2);
+    assert.equal(game.level.objects.includes(first), true);
+    assert.equal(game.level.objects.includes(second), true);
+    assert.equal(game.level.objects.at(-1), second);
+    assert.equal(rngValuesForCall(getRngLog(), 'rnd(20)').length, 0);
+    assert.equal(rngValuesForCall(getRngLog(), 'rn2(20)').length, 0);
+});
+
+test('hero rolling boulder hits another boulder at final square', async () => {
+    const { boulder: first } = installHeroRollingBoulderTrapState({
+        trapX: 6,
+        trapY: 4,
+        heroX: 5,
+        heroY: 4,
+        start: { x: 4, y: 3 },
+        end: { x: 6, y: 3 },
+        boulderAt: 'start',
+    });
+    const second = floorBoulder(31451, { ox: 6, oy: 3 });
+    game.level.objects.push(second);
+    enableRngLog({ reset: true });
+    markHeroNeighborhoodVisible();
+    for (let x = 4; x <= 6; x++) markSquareVisible(x, 3);
+
+    await rhack('l');
+
+    assert.equal(game._pending_message,
+        'Click!  You trigger a rolling boulder trap!  You hear a loud crash as one boulder hits another!');
+    assert.equal(first.ox, 6);
+    assert.equal(first.oy, 3);
+    assert.equal(second.ox, 6);
+    assert.equal(second.oy, 3);
+    assert.equal(game.level.objects.includes(first), true);
+    assert.equal(game.level.objects.includes(second), true);
+    assert.equal(game.level.objects.at(-1), second);
+    assert.equal(rngValuesForCall(getRngLog(), 'rnd(20)').length, 0);
+    assert.equal(rngValuesForCall(getRngLog(), 'rn2(20)').length, 0);
+});
+
+test('hero rolling boulder chain before iron bars reports motion then bars impact', async () => {
+    const { boulder: first } = installHeroRollingBoulderTrapState({
+        trapX: 6,
+        trapY: 4,
+        heroX: 5,
+        heroY: 4,
+        start: { x: 4, y: 3 },
+        end: { x: 8, y: 3 },
+        boulderAt: 'start',
+    });
+    const second = floorBoulder(31452, { ox: 6, oy: 3 });
+    game.level.objects.push(second);
+    const baseAt = game.level.at;
+    game.level.at = (x, y) => (x === 7 && y === 3)
+        ? { roomno: 0, typ: IRONBARS, lit: true }
+        : baseAt(x, y);
+    enableRngLog({ reset: true });
+    installCoreRngValues([19, 42]);
+    markHeroNeighborhoodVisible();
+    for (let x = 4; x <= 8; x++) markSquareVisible(x, 3);
+
+    await rhack('l');
+
+    assert.equal(game._pending_message,
+        'Click!  You trigger a rolling boulder trap!  You hear a loud crash as one boulder sets another in motion!  Whang!');
+    assert.equal(first.ox, 6);
+    assert.equal(first.oy, 3);
+    assert.equal(second.ox, 6);
+    assert.equal(second.oy, 3);
+    assert.equal(game.level.objects.includes(first), true);
+    assert.equal(game.level.objects.includes(second), true);
+    assert.equal(game.level.objects.at(-1), second);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rn2(20)'), [19]);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rn2(100)'), [42]);
+    assert.equal(rngValuesForCall(getRngLog(), 'rnd(20)').length, 0);
+});
+
 test('sitting rolling boulder trap with no boulder reports no release', async () => {
     const { trap } = installHeroRollingBoulderTrapState({
         trapX: 5,

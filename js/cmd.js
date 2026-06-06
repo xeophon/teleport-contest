@@ -47057,12 +47057,37 @@ function heroRollingBoulderHitIronBars(messages) {
     if (!heroIsDeaf()) messages.push('Whang!');
 }
 
-function heroRollingBoulderPathResult(start, end) {
+function heroRollingBoulderChainIntoBoulderAt(x, y, dx, dy, remainingDistance, movingBoulder, messages) {
+    const chainedBoulder = (game.level?.objects || []).find(obj =>
+        obj !== movingBoulder && !obj.buried && !obj.transientProjectile
+        && obj.otyp === BOULDER && obj.ox === x && obj.oy === y);
+    if (!chainedBoulder) return movingBoulder;
+
+    const fx = x + dx;
+    const fy = y + dy;
+    const nextLoc = isok(fx, fy) ? game.level?.at?.(fx, fy) : null;
+    const suffix = (!isok(fx, fy) || remainingDistance <= 0 || IS_OBSTRUCTED(nextLoc?.typ ?? ROOM))
+        ? ' as one boulder hits another'
+        : ' as one boulder sets another in motion';
+    if (!heroIsDeaf()) {
+        const visible = !game.u?.blind && cansee(x, y);
+        messages.push(`You hear a loud crash${visible ? suffix : ''}!`);
+    }
+
+    game.level.objects = (game.level?.objects || []).filter(obj => obj !== chainedBoulder);
+    chainedBoulder.otrapped = movingBoulder?.otrapped || 0;
+    placeHeroRollingBoulderAtRest(movingBoulder, x, y);
+    newsym(x, y);
+    return chainedBoulder;
+}
+
+function heroRollingBoulderPathResult(start, end, movingBoulder) {
     const result = {
         finalX: end?.x,
         finalY: end?.y,
         crossedHero: false,
         messages: [],
+        boulder: movingBoulder,
     };
     if (!start || !end) return result;
     const dx = Math.sign(end.x - start.x);
@@ -47078,6 +47103,8 @@ function heroRollingBoulderPathResult(start, end) {
         x += dx;
         y += dy;
         if (x === game.u?.ux && y === game.u?.uy) result.crossedHero = true;
+        result.boulder = heroRollingBoulderChainIntoBoulderAt(x, y, dx, dy, dist - 1,
+            result.boulder, result.messages);
         heroRollingBoulderBreakClosedDoorAt(x, y, result.messages, dist - 1);
         const nextLoc = dist > 1 && isok(x + dx, y + dy) ? game.level?.at?.(x + dx, y + dy) : null;
         if (nextLoc?.typ === IRONBARS) {
@@ -47107,9 +47134,9 @@ function heroRollingBoulderTrapResult(trap, prefix = '') {
     if (boulder && end) {
         const launched = splitHeroRollingBoulderLaunchObject(boulder);
         if (wasKnown) launched.otrapped = 1;
-        const path = heroRollingBoulderPathResult(start, end);
+        const path = heroRollingBoulderPathResult(start, end, launched);
         motionMessages.push(...path.messages);
-        placeHeroRollingBoulderAtRest(launched, path.finalX, path.finalY);
+        placeHeroRollingBoulderAtRest(path.boulder, path.finalX, path.finalY);
         released = true;
         crossedHero = path.crossedHero;
         vision_reset();
