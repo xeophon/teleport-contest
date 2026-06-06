@@ -5969,6 +5969,10 @@ export async function processMonsterTurns() {
                                 rn2(5);
                                 continue;
                             }
+                            if (trapped.occupied) {
+                                if (mon.meating) mon.meating = Math.max(0, mon.meating - 1);
+                                continue;
+                            }
                         } else {
                             if (rn2(40)) {
                                 rn2(5);
@@ -10618,6 +10622,12 @@ function monsterEasyEscapePit(mon) {
     return mon?.data?.name === 'pit fiend' || monsterObjectHitSizeValue(mon) >= 4;
 }
 
+function trappedMonsterPullFreeTrapName(ttyp) {
+    if (ttyp === BEAR_TRAP) return 'bear trap';
+    if (ttyp === WEB) return 'web';
+    return '';
+}
+
 function boulderAtMonsterTrap(mon) {
     return (game.level?.objects || []).find(obj =>
         !obj.hidden && !obj.transientProjectile && obj.otyp === BOULDER
@@ -10653,14 +10663,15 @@ function monsterTrappedTrapTurn(mon) {
         mon.mtrapped = 0;
         return { handled: true, caught: false };
     }
-    if (![PIT, SPIKED_PIT].includes(trap.ttyp)) return { handled: false, caught: false };
+    if (![PIT, SPIKED_PIT, BEAR_TRAP, WEB].includes(trap.ttyp)) return { handled: false, caught: false };
 
     const inSight = monsterVisibleToHero(mon) || mon === game.u?.usteed;
     if (!trap.tseen && inSight) trap.tseen = true;
 
-    const easyEscape = monsterEasyEscapePit(mon);
+    const isPitTrap = [PIT, SPIKED_PIT].includes(trap.ttyp);
+    const easyEscape = isPitTrap && monsterEasyEscapePit(mon);
     if (!rn2(40) || easyEscape) {
-        const boulder = boulderAtMonsterTrap(mon);
+        const boulder = isPitTrap ? boulderAtMonsterTrap(mon) : null;
         if (boulder) {
             if (!rn2(2)) {
                 mon.mtrapped = 0;
@@ -10668,14 +10679,25 @@ function monsterTrappedTrapTurn(mon) {
                 fillMonsterPitWithBoulder(mon, boulder);
             }
         } else {
-            if (inSight)
-                addToplineMessage(`${monsterDisplayName(mon)} climbs ${easyEscape ? 'easily ' : ''}out of the pit.`);
+            if (inSight) {
+                if (isPitTrap) {
+                    addToplineMessage(`${monsterDisplayName(mon)} climbs ${easyEscape ? 'easily ' : ''}out of the pit.`);
+                } else {
+                    addToplineMessage(`${monsterDisplayName(mon)} pulls free of the ${trappedMonsterPullFreeTrapName(trap.ttyp)}.`);
+                }
+            }
             mon.mtrapped = 0;
         }
     } else if (monsterIsMetallivore(mon) && trap.ttyp === SPIKED_PIT) {
         if (inSight) addToplineMessage(`${monsterDisplayName(mon)} munches on some spikes!`);
         trap.ttyp = PIT;
         mon.meating = 5;
+    } else if (monsterIsMetallivore(mon) && trap.ttyp === BEAR_TRAP) {
+        if (inSight) addToplineMessage(`${monsterDisplayName(mon)} eats a bear trap!`);
+        game.level.traps = (game.level?.traps || []).filter(item => item !== trap);
+        mon.meating = 5;
+        mon.mtrapped = 0;
+        return { handled: true, caught: false, occupied: true };
     }
     return { handled: true, caught: !!mon.mtrapped };
 }
@@ -12363,6 +12385,10 @@ function movePet(mon, resumeAfterInventory = false, conflictActive = false) {
         const trapped = monsterTrappedTrapTurn(mon);
         if (trapped.handled) {
             if (trapped.caught) return;
+            if (trapped.occupied) {
+                if (mon.meating) mon.meating = Math.max(0, mon.meating - 1);
+                return;
+            }
         } else {
             const trap = game.level?.traps?.find(t => t.tx === mon.mx && t.ty === mon.my);
             if (trap?.ttyp === BEAR_TRAP) {

@@ -18924,6 +18924,158 @@ test('metallivorous trapped monster eats spiked pit spikes only after failed esc
     assert.equal(goblin.mhp, 10);
 });
 
+test('already-trapped monster bear trap and web escape failure stays caught', () => {
+    for (const [label, ttyp] of [['bear trap', BEAR_TRAP], ['web', WEB]]) {
+        const { trap, goblin } = installTrappedMonsterPitState(ttyp);
+        markHeroNeighborhoodVisible();
+        markSquareVisible(goblin.mx, goblin.my);
+        enableRngLog({ reset: true });
+        installCoreRngValues([1]);
+
+        const result = allmain.monsterTrappedTrapTurnForTest(goblin);
+
+        assert.deepEqual(result, { handled: true, caught: true }, label);
+        assert.deepEqual(getRngLog().map(rngCallName), ['rn2(40)'], label);
+        assert.equal(goblin.mtrapped, 1, label);
+        assert.equal(goblin.mhp, 10, label);
+        assert.equal(trap.tseen, true, label);
+    }
+});
+
+test('already-trapped monster pulls free of visible bear trap and web', async () => {
+    for (const [label, ttyp, pattern] of [
+        ['bear trap', BEAR_TRAP, /The goblin pulls free of the bear trap\./],
+        ['web', WEB, /The goblin pulls free of the web\./],
+    ]) {
+        const { trap, goblin } = installTrappedMonsterPitState(ttyp);
+        markHeroNeighborhoodVisible();
+        markSquareVisible(goblin.mx, goblin.my);
+        enableRngLog({ reset: true });
+        installCoreRngValues([0]);
+
+        const result = allmain.monsterTrappedTrapTurnForTest(goblin);
+        const messages = [game._pending_message, ...(await drainQueuedMessagesAfterMore())].join(' ');
+
+        assert.deepEqual(result, { handled: true, caught: false }, label);
+        assert.match(messages, pattern, label);
+        assert.deepEqual(getRngLog().map(rngCallName), ['rn2(40)'], label);
+        assert.equal(goblin.mtrapped || 0, 0, label);
+        assert.equal(goblin.mhp, 10, label);
+        assert.equal(trap.tseen, true, label);
+    }
+});
+
+test('already-trapped easy pit escape monster does not auto-escape bear trap or web', async () => {
+    for (const [label, ttyp] of [['bear trap', BEAR_TRAP], ['web', WEB]]) {
+        const { trap, goblin } = installTrappedMonsterPitState(ttyp, {
+            data: { name: 'pit fiend', mlet: '&', mac: 10 },
+        });
+        markHeroNeighborhoodVisible();
+        markSquareVisible(goblin.mx, goblin.my);
+        enableRngLog({ reset: true });
+        installCoreRngValues([1]);
+
+        const result = allmain.monsterTrappedTrapTurnForTest(goblin);
+        const messages = [game._pending_message, ...(await drainQueuedMessagesAfterMore())].join(' ');
+
+        assert.deepEqual(result, { handled: true, caught: true }, label);
+        assert.doesNotMatch(messages, /pulls free|climbs easily/, label);
+        assert.deepEqual(getRngLog().map(rngCallName), ['rn2(40)'], label);
+        assert.equal(goblin.mtrapped, 1, label);
+        assert.equal(trap.tseen, true, label);
+    }
+});
+
+test('already-trapped bear trap and web ignore same-square boulder escape branch', async () => {
+    for (const [label, ttyp, pattern] of [
+        ['bear trap', BEAR_TRAP, /The goblin pulls free of the bear trap\./],
+        ['web', WEB, /The goblin pulls free of the web\./],
+    ]) {
+        const { trap, goblin } = installTrappedMonsterPitState(ttyp);
+        const boulder = floorBoulder(31432, { ox: 6, oy: 5 });
+        game.level.objects = [boulder];
+        markHeroNeighborhoodVisible();
+        markSquareVisible(goblin.mx, goblin.my);
+        enableRngLog({ reset: true });
+        installCoreRngValues([0, 1]);
+
+        const result = allmain.monsterTrappedTrapTurnForTest(goblin);
+        const messages = [game._pending_message, ...(await drainQueuedMessagesAfterMore())].join(' ');
+
+        assert.deepEqual(result, { handled: true, caught: false }, label);
+        assert.match(messages, pattern, label);
+        assert.deepEqual(getRngLog().map(rngCallName), ['rn2(40)'], label);
+        assert.equal(game.level.objects.includes(boulder), true, label);
+        assert.equal(game.level.traps.includes(trap), true, label);
+        assert.equal(goblin.mtrapped || 0, 0, label);
+    }
+});
+
+test('metallivorous trapped monster eats bear trap only after failed escape', async () => {
+    const { trap, goblin } = installTrappedMonsterPitState(BEAR_TRAP, {
+        data: { name: 'rust monster', mlet: 'R', mac: 10, metallivorous: true },
+    });
+    markHeroNeighborhoodVisible();
+    markSquareVisible(goblin.mx, goblin.my);
+    enableRngLog({ reset: true });
+    installCoreRngValues([1]);
+
+    const result = allmain.monsterTrappedTrapTurnForTest(goblin);
+    const messages = [game._pending_message, ...(await drainQueuedMessagesAfterMore())].join(' ');
+
+    assert.deepEqual(result, { handled: true, caught: false, occupied: true });
+    assert.match(messages, /The rust monster eats a bear trap!/);
+    assert.deepEqual(getRngLog().map(rngCallName), ['rn2(40)']);
+    assert.equal(game.level.traps.includes(trap), false);
+    assert.equal(goblin.mtrapped || 0, 0);
+    assert.equal(goblin.meating, 5);
+    assert.equal(goblin.mhp, 10);
+});
+
+test('metallivorous trapped monster escape success leaves bear trap intact', async () => {
+    const { trap, goblin } = installTrappedMonsterPitState(BEAR_TRAP, {
+        data: { name: 'rust monster', mlet: 'R', mac: 10, metallivorous: true },
+    });
+    markHeroNeighborhoodVisible();
+    markSquareVisible(goblin.mx, goblin.my);
+    enableRngLog({ reset: true });
+    installCoreRngValues([0]);
+
+    const result = allmain.monsterTrappedTrapTurnForTest(goblin);
+    const messages = [game._pending_message, ...(await drainQueuedMessagesAfterMore())].join(' ');
+
+    assert.deepEqual(result, { handled: true, caught: false });
+    assert.match(messages, /The rust monster pulls free of the bear trap\./);
+    assert.deepEqual(getRngLog().map(rngCallName), ['rn2(40)']);
+    assert.equal(game.level.traps.includes(trap), true);
+    assert.equal(goblin.mtrapped || 0, 0);
+    assert.equal(goblin.meating || 0, 0);
+});
+
+test('monster turn bear-trap eating spends the turn before movement', async () => {
+    const { trap, goblin } = installTrappedMonsterPitState(BEAR_TRAP, {
+        mpeaceful: true,
+        data: { name: 'rust monster', mlet: 'R', mac: 10, metallivorous: true },
+    });
+    enableRngLog({ reset: true });
+    installCoreRngValues([1, 1, 1]);
+    queueEscapeForMonsterTurn();
+    markHeroNeighborhoodVisible();
+    markSquareVisible(goblin.mx, goblin.my);
+
+    await processMonsterTurns();
+    const messages = [game._pending_message, ...(await drainQueuedMessagesAfterMore())].join(' ');
+
+    assert.match(messages, /The rust monster eats a bear trap!/);
+    assert.equal(goblin.mx, 6);
+    assert.equal(goblin.my, 5);
+    assert.equal(goblin.mtrapped || 0, 0);
+    assert.equal(goblin.meating, 4);
+    assert.equal(game.level.traps.includes(trap), false);
+    assert.equal(rngValuesForCall(getRngLog(), 'rn2(40)')[0], 1);
+    assert.equal(rngValuesForCall(getRngLog(), 'd(2,4)').length, 0);
+});
+
 test('monster turn trapped pit failure spends turn without pit damage', async () => {
     const { trap, goblin } = installTrappedMonsterPitState(PIT, { mpeaceful: true });
     enableRngLog({ reset: true });
@@ -18966,6 +19118,26 @@ test('pet turn trapped pit failure stays caught without same-square re-trigger',
     assert.equal(rngValuesForCall(getRngLog(), 'rn2(40)')[0], 1);
     assert.equal(rngValuesForCall(getRngLog(), 'rn2(5)').length > 0, true);
     assert.equal(rngValuesForCall(getRngLog(), 'rnd(10)').length, 0);
+});
+
+test('pet turn trapped web failure stays caught without same-square re-trigger', async () => {
+    const { trap, pet } = installTrappedPetPitState(WEB);
+    enableRngLog({ reset: true });
+    installCoreRngValues([1, 1, 1]);
+    queueEscapeForMonsterTurn();
+    markHeroNeighborhoodVisible();
+    markSquareVisible(pet.mx, pet.my);
+
+    await processMonsterTurns();
+    const messages = [game._pending_message, ...(await drainQueuedMessagesAfterMore())].join(' ');
+
+    assert.doesNotMatch(messages, /is caught in .*spider web|pulls free/);
+    assert.equal(pet.mx, 6);
+    assert.equal(pet.my, 5);
+    assert.equal(pet.mtrapped, 1);
+    assert.equal(pet.mhp, 10);
+    assert.equal(trap.tseen, true);
+    assert.equal(rngValuesForCall(getRngLog(), 'rn2(40)')[0], 1);
 });
 
 test('dart trap killed grounded monster drops inventory before removal', async () => {

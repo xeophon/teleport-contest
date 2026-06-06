@@ -39,7 +39,7 @@ The tests use local monster, pet, trap, boulder, visibility, and RNG fixtures. T
 
 ## Remaining Work
 
-- Already-trapped non-pit trap behavior, especially bear traps and webs, remains outside this slice.
+- Already-trapped bear trap and web escape/eating behavior is covered by audit 547.
 - Full external boulder-combat damage and hero-credit behavior remains owned by the broader floor-effects/projectile paths.
 - `mselftouch()` from falling with a wielded cockatrice/chickatrice corpse remains unmodeled for first-entry pit handling.
 - Ceiling-clinger and long-worm segment handling for non-grounded pit avoidance remains deferred.
