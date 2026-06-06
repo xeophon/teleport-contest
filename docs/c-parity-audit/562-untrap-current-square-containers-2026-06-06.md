@@ -41,5 +41,6 @@ These tests drive the real extended command input, assert exact prompt text, RNG
 - Box/chest trap detection observation state is covered separately in `566-untrap-box-observation-2026-06-06.md`.
 - Box/chest known-trap detection fallback order is covered separately in `567-untrap-box-tknown-detection-fallback-2026-06-06.md`.
 - Box/chest known-trap direct disarm flow is covered separately in `568-untrap-box-known-direct-disarm-2026-06-06.md`.
+- Box/chest Master Key force propagation is covered separately in `569-untrap-box-master-key-force-2026-06-06.md`.
 - The adjacent-boulder `Passes_walls` exception is covered separately in `563-untrap-web-boulder-passwalls-2026-06-06.md`.
 - Reach-floor and tight-diagonal web-untrap gates are covered separately in `564-untrap-web-reach-diagonal-2026-06-06.md`.

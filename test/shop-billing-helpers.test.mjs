@@ -60,6 +60,7 @@ const STATUE = 472;
 const FIGURINE = 795;
 const LOCK_PICK = 10167;
 const ROCK = 467;
+const SKELETON_KEY = 220;
 const EGG = 10001;
 const EXPENSIVE_CAMERA = 10082;
 const BLINDING_VENOM = 10184;
@@ -21011,6 +21012,23 @@ function setupUntrapDestinationWeb(inventory = [], {
     return web;
 }
 
+function masterKeyOfThievery(id = 881014, letter = 'k', { blessed = true, cursed = false } = {}) {
+    return {
+        id,
+        letter,
+        line: `${letter} - The Master Key of Thievery`,
+        cls: 'tool',
+        glyph: '(',
+        otyp: SKELETON_KEY,
+        kind: 'skeleton key',
+        actualKind: 'skeleton key',
+        artifact: 'The Master Key of Thievery',
+        blessed,
+        cursed,
+        bknown: true,
+    };
+}
+
 async function enterUntrapDirection() {
     await rhack('#');
     for (const ch of 'untrap') await rhack(ch);
@@ -21263,6 +21281,108 @@ test('#untrap known-box disarm failure happens directly without second prompt', 
     assert.equal(game._pending_message, 'You set it off!');
     assert.equal(box.otrapped, false);
     assert.equal(box.tknown, true);
+    assert.equal(game.context.move, 1);
+});
+
+test('#untrap Master Key forces box trap discovery and disarm', async () => {
+    setupUntrapDestinationWeb([masterKeyOfThievery()], { rng: [0, 0] });
+    game.level.traps = [];
+    const box = shopFloorContainer(881014);
+    Object.assign(box, {
+        otrapped: true,
+        tknown: false,
+        dknown: false,
+        cknown: false,
+    });
+    game.level.objects = [box];
+
+    await enterUntrapDirection();
+    await rhack('.');
+
+    assert.equal(game._command_mode, 'untrapBoxConfirm');
+    assert.equal(game._pending_message, 'There is a large box here.  Check it for traps? [ynq] (q)');
+
+    await rhack('y');
+
+    assert.equal(game._command_mode, 'untrapBoxDisarmConfirm');
+    assert.deepEqual(getRngLog(), ['rn2(19)=0']);
+    assert.equal(game._pending_message, 'You find a trap on the large box!  Disarm it? [ynq] (q)');
+    assert.equal(box.otrapped, true);
+    assert.equal(box.tknown, true);
+    assert.equal(box.dknown, true);
+    assert.equal(game.context.move || 0, 0);
+
+    await rhack('y');
+
+    assert.equal(game._command_mode, null);
+    assert.deepEqual(getRngLog(), ['rn2(19)=0', 'rn2(19)=0']);
+    assert.equal(game._pending_message, 'You disarm it!');
+    assert.equal(box.otrapped, false);
+    assert.equal(box.tknown, true);
+    assert.equal(game.u.uexp, 8);
+    assert.equal(game.context.move, 1);
+});
+
+test('#untrap unblessed non-Rogue Master Key uses ordinary box search', async () => {
+    setupUntrapDestinationWeb([masterKeyOfThievery(881016, 'k', { blessed: false })], {
+        rng: [29],
+    });
+    game.level.traps = [];
+    const box = shopFloorContainer(881016);
+    Object.assign(box, {
+        otrapped: true,
+        tknown: false,
+        dknown: false,
+        cknown: false,
+    });
+    game.level.objects = [box];
+
+    await enterUntrapDirection();
+    await rhack('.');
+    await rhack('y');
+
+    assert.equal(game._command_mode, null);
+    assert.deepEqual(getRngLog(), ['rn2(30)=29']);
+    assert.equal(game._pending_message, 'You find no traps on the large box.');
+    assert.equal(box.otrapped, true);
+    assert.equal(box.tknown, false);
+    assert.equal(game.context.move, 1);
+});
+
+test('#untrap Master Key force survives skipped web prompt for known box', async () => {
+    const web = setupUntrapDestinationWeb([masterKeyOfThievery(881015, 'k', { blessed: false })], {
+        role: 'Rogue',
+        webX: 5,
+        webY: 5,
+        rng: [0],
+    });
+    const box = shopFloorContainer(881015);
+    Object.assign(box, {
+        otrapped: true,
+        tknown: true,
+        dknown: true,
+        cknown: false,
+    });
+    game.level.objects = [box];
+
+    await enterUntrapDirection();
+    await rhack('.');
+    await rhack('n');
+
+    assert.equal(game._command_mode, 'untrapBoxConfirm');
+    assert.equal(game._pending_message, 'Disarm this large box? [ynq] (q)');
+    assert.deepEqual(getRngLog(), []);
+    assert.equal(game.level.traps.includes(web), true);
+    assert.equal(game.context.move || 0, 0);
+
+    await rhack('y');
+
+    assert.equal(game._command_mode, null);
+    assert.deepEqual(getRngLog(), ['rn2(19)=0']);
+    assert.equal(game._pending_message, 'You disarm it!');
+    assert.equal(box.otrapped, false);
+    assert.equal(box.tknown, true);
+    assert.equal(game.u.uexp, 8);
     assert.equal(game.context.move, 1);
 });
 

@@ -586,10 +586,31 @@ function untrapBoxPrompt(box) {
     return `There is ${untrapBoxArticleName(box)} here.  Check it for traps? [ynq] (q)`;
 }
 
-async function beginUntrapBoxPrompt(boxes, { trapSkipped = false } = {}) {
+function heroHasMasterKeyOfThievery() {
+    const expected = questArtifactNameKey('The Master Key of Thievery');
+    const rogue = heroRoleName() === 'Rogue';
+    return (game.inventory || []).some(item => {
+        if (item?.otyp != null && item.otyp !== SKELETON_KEY) return false;
+        const isMasterKey = [
+            item?.artifact,
+            item?.oartifact,
+            item?.name,
+            item?.actualKind,
+            item?.kind,
+        ].some(name => questArtifactNameKey(name) === expected);
+        if (!isMasterKey) return false;
+        return rogue ? !item?.cursed : !!item?.blessed;
+    });
+}
+
+function untrapBoxForce() {
+    return heroHasMasterKeyOfThievery();
+}
+
+async function beginUntrapBoxPrompt(boxes, { trapSkipped = false, force = false } = {}) {
     const targets = boxes.filter(Boolean);
     if (!targets.length) return false;
-    game._untrap_box_state = { boxes: targets, index: 0, trapSkipped };
+    game._untrap_box_state = { boxes: targets, index: 0, trapSkipped, force };
     game._command_mode = 'untrapBoxConfirm';
     await setMessage(untrapBoxPrompt(targets[0]));
     return true;
@@ -62388,7 +62409,10 @@ export async function rhack(_cmd) {
         }
         if (ch === 'n') {
             game._untrap_web_container_state = null;
-            if (!await beginUntrapBoxPrompt(pending?.boxes || [], { trapSkipped: true }))
+            if (!await beginUntrapBoxPrompt(pending?.boxes || [], {
+                trapSkipped: true,
+                force: !!pending?.force,
+            }))
                 game._command_mode = null;
             return;
         }
@@ -62407,10 +62431,14 @@ export async function rhack(_cmd) {
             game._untrap_box_state = null;
             game._command_mode = null;
             if (box?.tknown && box?.dknown) {
-                await setMessage(disarmUntrapBox(box, heroIsConfused() || heroIsHallucinating()));
+                await setMessage(disarmUntrapBox(
+                    box,
+                    heroIsConfused() || heroIsHallucinating(),
+                    !!state?.force,
+                ));
                 game.context.move = 1;
             } else {
-                await checkUntrapBox(box);
+                await checkUntrapBox(box, { force: !!state?.force });
             }
             return;
         }
@@ -62465,8 +62493,9 @@ export async function rhack(_cmd) {
             const boxes = (!dir.dx && !dir.dy) ? untrapBoxObjectsAt(x, y) : [];
             if ((webTrap || boxes.length) && await blockUntrapFloorReach(webTrap, dir, boxes))
                 return;
+            const boxForce = untrapBoxForce();
             if (webTrap && boxes.length) {
-                game._untrap_web_container_state = { trap: webTrap, dir, boxes };
+                game._untrap_web_container_state = { trap: webTrap, dir, boxes, force: boxForce };
                 await setMessage(untrapWebContainerPrompt(webTrap, boxes.length));
                 game._command_mode = 'untrapWebContainerConfirm';
                 return;
@@ -62481,7 +62510,7 @@ export async function rhack(_cmd) {
                 game._command_mode = 'untrapSqueakyTool';
                 return;
             }
-            if (boxes.length && await beginUntrapBoxPrompt(boxes))
+            if (boxes.length && await beginUntrapBoxPrompt(boxes, { force: boxForce }))
                 return;
         }
         await setMessage('You know of no traps there.');
