@@ -21232,6 +21232,89 @@ test('sitting hero rolling boulder wall stop does not hit hero beyond obstacle',
     assert.equal(rngValuesForCall(getRngLog(), 'rnd(20)').length, 0);
 });
 
+test('hero rolling boulder rock thrower snatches before same-square stairs and land mine', async () => {
+    const { boulder } = installHeroRollingBoulderTrapState({
+        trapX: 6,
+        trapY: 4,
+        heroX: 5,
+        heroY: 4,
+        start: { x: 4, y: 3 },
+        end: { x: 8, y: 3 },
+        boulderAt: 'start',
+        boulderProps: { hidden: true, otrapped: 1, no_charge: true },
+    });
+    const shkp = makeShopkeeper(31468, 'Izchak', 2, 2);
+    const giant = dartTrapGoblin(31469, {
+        mx: 6,
+        my: 3,
+        mhp: 50,
+        mhpmax: 50,
+        data: { name: 'stone giant', mlet: 'H', mac: -10, throwsRocks: true },
+        minvent: [],
+    });
+    installRollingBoulderPathDownGate({ x: 6, y: 3 });
+    const mine = { ttyp: LANDMINE, tx: 6, ty: 3, tseen: true, madeby_u: false };
+    game.level.monsters.push(shkp, giant);
+    game.level.traps.push(mine);
+    shop.addObjectToShopBill(shkp, boulder, 5);
+    enableRngLog({ reset: true });
+    installCoreRngValues([1, 0, 3]);
+    markHeroNeighborhoodVisible();
+    for (let x = 4; x <= 8; x++) markSquareVisible(x, 3);
+
+    await rhack('l');
+
+    assert.equal(game._pending_message,
+        'Click!  You trigger a rolling boulder trap!  The stone giant snatches the boulder.');
+    assert.equal(giant.minvent?.includes(boulder), true);
+    assert.equal(boulder.ocarry, giant);
+    assert.equal(game.level.objects.includes(boulder), false);
+    assert.equal(game.level.traps.includes(mine), true);
+    assert.equal(game._impact_drop_migrations?.get('0:2'), undefined);
+    assert.equal(boulder.otrapped, 0);
+    assert.equal(boulder.hidden, false);
+    assert.equal(boulder.transientProjectile, false);
+    assert.equal(boulder.no_charge, false);
+    assert.equal(boulder.unpaid, false);
+    assert.equal(shkp.bill?.length || 0, 0);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rn2(3)'), [1]);
+    assert.equal(rngValuesForCall(getRngLog(), 'rn2(10)').length, 0);
+    assert.equal(rngValuesForCall(getRngLog(), 'rnd(20)').length, 0);
+});
+
+test('blind hero rolling boulder rock thrower snatch is silent', async () => {
+    const { trap, boulder } = installHeroRollingBoulderTrapState({
+        trapX: 6,
+        trapY: 4,
+        heroX: 5,
+        heroY: 4,
+        start: { x: 4, y: 3 },
+        end: { x: 8, y: 3 },
+        boulderAt: 'start',
+    });
+    const giant = dartTrapGoblin(31470, {
+        mx: 6,
+        my: 3,
+        mhp: 50,
+        mhpmax: 50,
+        data: { name: 'stone giant', mlet: 'H', mac: -10, throwsRocks: true },
+        minvent: [],
+    });
+    game.level.monsters.push(giant);
+    game.u.blind = true;
+    enableRngLog({ reset: true });
+    installCoreRngValues([1]);
+
+    await rhack('l');
+
+    assert.equal(game._pending_message, 'Click!  You trigger a rolling boulder trap!');
+    assert.equal(giant.minvent?.includes(boulder), true);
+    assert.equal(game.level.objects.includes(boulder), false);
+    assert.equal(trap.tseen, true);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rn2(3)'), [1]);
+    assert.equal(rngValuesForCall(getRngLog(), 'rnd(20)').length, 0);
+});
+
 test('hero rolling boulder down ladder migrates off level', async () => {
     const { boulder } = installHeroRollingBoulderTrapState({
         trapX: 6,

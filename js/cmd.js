@@ -47251,6 +47251,32 @@ function heroRollingBoulderTriggerLandmineAt(x, y, movingBoulder, messages) {
     return true;
 }
 
+function heroRollingBoulderPathMonsterAt(x, y) {
+    return (game.level?.monsters || []).find(mon =>
+        mon && !mon.dead && (mon.mhp == null || mon.mhp > 0)
+        && mon.mx === x && mon.my === y) || null;
+}
+
+function heroRollingBoulderRockThrowerSnatchAt(x, y, movingBoulder, messages) {
+    const mon = heroRollingBoulderPathMonsterAt(x, y);
+    if (!mon || !movingBoulder || movingBoulder.otyp !== BOULDER || !mon.data?.throwsRocks)
+        return { handled: false, consumed: false };
+    if (!rn2(3)) return { handled: false, consumed: false };
+
+    if (!game.u?.blind && cansee(x, y))
+        messages.push(`${fireScrollMonsterName(mon)} snatches the boulder.`);
+    movingBoulder.otrapped = 0;
+    movingBoulder.hidden = false;
+    movingBoulder.transientProjectile = false;
+    movingBoulder.no_charge = false;
+    const { shkp } = shopkeeperOwningBillEntry(movingBoulder);
+    if (shkp) subFromShopBill(movingBoulder, shkp);
+    game.level.objects = (game.level?.objects || []).filter(obj => obj !== movingBoulder);
+    add_to_minv(mon, movingBoulder);
+    newsym(x, y);
+    return { handled: true, consumed: true };
+}
+
 function heroRollingBoulderChainIntoBoulderAt(x, y, dx, dy, remainingDistance, movingBoulder, messages) {
     const chainedBoulder = (game.level?.objects || []).find(obj =>
         obj !== movingBoulder && !obj.buried && !obj.transientProjectile
@@ -47297,6 +47323,13 @@ function heroRollingBoulderPathResult(start, end, movingBoulder) {
         x += dx;
         y += dy;
         if (x === game.u?.ux && y === game.u?.uy) result.crossedHero = true;
+        const snatch = heroRollingBoulderRockThrowerSnatchAt(x, y, result.boulder, result.messages);
+        if (snatch.handled) {
+            result.finalX = x;
+            result.finalY = y;
+            if (snatch.consumed) result.boulder = null;
+            break;
+        }
         const downGate = heroRollingBoulderApplyDownGateAt(x, y, result.boulder, result.messages);
         if (downGate.handled) {
             if (downGate.consumed) {
