@@ -20541,7 +20541,10 @@ function heroThrownCorpseFallingDamage(corpse, helmet = null) {
     const weightDamage = Math.max(1, Math.ceil(heroThrownCorpseWeight(corpse) / WT_TO_DMG));
     let damage = weightDamage <= 1 ? 1 : rnd(weightDamage);
     if (damage > 6) damage = 6;
-    if (helmet && hardEarthHelmet(helmet) && damage > 1) damage = 1;
+    if (heroTossUpTargetIsShade() && !heroTossUpObjectIsSilver(corpse)) damage = 0;
+    if (corpse?.blessed && heroTossUpTargetHatesBlessings()) damage += rnd(4);
+    if (heroTossUpObjectIsSilver(corpse) && heroTossUpTargetHatesSilver()) damage += rnd(20);
+    if (heroThrownGenericObjectLessDamage(corpse, helmet) && damage > 1) damage = 1;
     if (damage > 0) damage += Math.trunc(Number(game.u?.udaminc || 0));
     if (damage < 0) damage = 0;
     return maybeHalfPhysicalDamage(damage);

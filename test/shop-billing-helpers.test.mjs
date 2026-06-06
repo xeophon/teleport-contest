@@ -56442,6 +56442,120 @@ test('upward hero-thrown ordinary corpse self-hits, damages, and lands', async (
     ]);
 });
 
+test('upward hero-thrown blessed ordinary corpse gets undead-polyself damage bonus', async () => {
+    installNonShopFloorState();
+    Object.assign(game.u, {
+        uhp: 30,
+        uhpmax: 30,
+        mh: 30,
+        mhmax: 30,
+        _polyself_form: { name: 'ghoul', mlet: 'Z', undead: true },
+    });
+    const body = { ...corpse(876927, 'n', 'newt'), blessed: true, line: 'n - a blessed newt corpse' };
+    game.inventory = [body];
+    enableRngLog({ reset: true });
+    installCoreRngValues([0, 0, 2, 0]);
+
+    await rhack('t');
+    await rhack('n');
+    await rhack('<');
+
+    const message = game._pending_message || '';
+    assert.equal(game._command_mode, null);
+    assert.match(message, /A newt corpse almost hits the ceiling, then falls back on top of your head\./);
+    assert.match(message, /A newt corpse hits the floor\./);
+    assert.doesNotMatch(message, /cmdassist|In what direction|Splat|turn to stone|Fortunately|You die/);
+    assert.equal(game.u.mh, 26);
+    assert.equal(game.u.uhp, 30);
+    assert.equal(game.u._polyself_form?.name, 'ghoul');
+    assert.equal(game.inventory.includes(body), false);
+    assert.equal(game.level.objects.length, 1);
+    const landed = game.level.objects[0];
+    assert.equal(landed.otyp, 'corpse');
+    assert.equal(landed.corpsenm?.name, 'newt');
+    assert.equal(landed.blessed, true);
+    assert.deepEqual(getRngLog().map(rngCallName), [
+        'rn2(5)', 'rn2(100)', 'rnd(4)', 'rn2(100)',
+    ]);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rnd(4)'), [3]);
+});
+
+test('upward hero-thrown ordinary corpse cannot hurt shade polyself without silver', async () => {
+    installNonShopFloorState();
+    Object.assign(game.u, {
+        uhp: 30,
+        uhpmax: 30,
+        mh: 30,
+        mhmax: 30,
+        _polyself_form: { name: 'shade', mlet: 'ghost', noncorporeal: true, undead: true },
+    });
+    const body = corpse(876928, 'n', 'newt');
+    game.inventory = [body];
+    enableRngLog({ reset: true });
+    installCoreRngValues([0, 0, 0]);
+
+    await rhack('t');
+    await rhack('n');
+    await rhack('<');
+
+    const message = game._pending_message || '';
+    assert.equal(game._command_mode, null);
+    assert.match(message, /A newt corpse almost hits the ceiling, then falls back on top of your head\./);
+    assert.match(message, /A newt corpse hits the floor\./);
+    assert.doesNotMatch(message, /cmdassist|In what direction|Splat|turn to stone|Fortunately|You die/);
+    assert.equal(game.u.mh, 30);
+    assert.equal(game.u.uhp, 30);
+    assert.equal(game.u._polyself_form?.name, 'shade');
+    assert.equal(game.inventory.includes(body), false);
+    assert.equal(game.level.objects.length, 1);
+    const landed = game.level.objects[0];
+    assert.equal(landed.otyp, 'corpse');
+    assert.equal(landed.corpsenm?.name, 'newt');
+    assert.deepEqual(getRngLog().map(rngCallName), [
+        'rn2(5)', 'rn2(100)', 'rn2(100)',
+    ]);
+});
+
+test('upward hero-thrown blessed ordinary corpse rolls undead bonus before helmet cap', async () => {
+    installNonShopFloorState();
+    Object.assign(game.u, {
+        uhp: 30,
+        uhpmax: 30,
+        mh: 30,
+        mhmax: 30,
+        _polyself_form: { name: 'ghoul', mlet: 'Z', undead: true },
+    });
+    const body = { ...corpse(876929, 'n', 'newt'), blessed: true, line: 'n - a blessed newt corpse' };
+    const helmet = wornArmor(876930, 'orcish helm', 'h', 0);
+    game.inventory = [body, helmet];
+    enableRngLog({ reset: true });
+    installCoreRngValues([0, 0, 2, 0]);
+
+    await rhack('t');
+    await rhack('n');
+    await rhack('<');
+
+    const message = game._pending_message || '';
+    assert.equal(game._command_mode, null);
+    assert.match(message, /A newt corpse almost hits the ceiling, then falls back on top of your head\./);
+    assert.match(message, /Fortunately, you are wearing a hard helmet\./);
+    assert.match(message, /A newt corpse hits the floor\./);
+    assert.doesNotMatch(message, /cmdassist|In what direction|Splat|turn to stone|does not protect|You die/);
+    assert.equal(game.u.mh, 29);
+    assert.equal(game.u.uhp, 30);
+    assert.equal(game.inventory.includes(body), false);
+    assert.equal(game.inventory.includes(helmet), true);
+    assert.equal(game.level.objects.length, 1);
+    const landed = game.level.objects[0];
+    assert.equal(landed.otyp, 'corpse');
+    assert.equal(landed.corpsenm?.name, 'newt');
+    assert.equal(landed.blessed, true);
+    assert.deepEqual(getRngLog().map(rngCallName), [
+        'rn2(5)', 'rn2(100)', 'rnd(4)', 'rn2(100)',
+    ]);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rnd(4)'), [3]);
+});
+
 test('upward hero-thrown loadstone passes harmlessly through rock-passing polyself', async () => {
     installNonShopFloorState();
     initRng(1);
