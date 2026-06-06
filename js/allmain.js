@@ -9547,6 +9547,10 @@ function heroIsDeafForMonsterNoise() {
     return (game.u?._statusSuffix || '').includes('Deaf') || (game.u?._deafTimeout || 0) > 0;
 }
 
+function heroIsHallucinatingForMonsterFeedback() {
+    return !!(game.u?.hallucinating || game.u?.hallu || (game.u?._statusSuffix || '').includes('Hallu'));
+}
+
 function maybeMonsterTurnHostileCuss(mon) {
     if (!mon || monsterSoundKey(mon) !== 'cuss' || mon.mpeaceful || mon.minvis) return false;
     const targetX = mon.mux ?? game.u?.ux ?? mon.mx;
@@ -11249,13 +11253,22 @@ function monsterLandmineTrapEffect(mon, trap, { skipPetPostMoveRoll = false } = 
     return true;
 }
 
+function rollingBoulderUnseenLaunchMessage(start) {
+    if (!start) return '';
+    if (!game.u?.blind && cansee(start.x, start.y)) return 'You see a boulder start to roll.';
+    if (heroIsDeafForMonsterNoise()) return '';
+    if (heroIsHallucinatingForMonsterFeedback()) return 'You hear someone bowling.';
+    const dx = (start.x || 0) - (game.u?.ux || 0);
+    const dy = (start.y || 0) - (game.u?.uy || 0);
+    return `You hear rumbling ${dx * dx + dy * dy <= 16 ? 'nearby' : 'in the distance'}.`;
+}
+
 function monsterRollingBoulderTrapEffect(mon, trap, { skipPetPostMoveRoll = false } = {}) {
     if (trap?.ttyp !== ROLLING_BOULDER_TRAP || monsterTrapHarmless(mon, trap)) return false;
     if (monsterAvoidsKnownTrapBeforeEffect(mon, trap)) return true;
 
     monsterTriggerTrap(mon, trap);
-    const inSight = (mon === game.u?.usteed)
-        || (couldSeeCoord(mon.mx, mon.my) && !game.u?.blind && !mon.minvis && !mon.mundetected);
+    const inSight = (mon === game.u?.usteed) || monsterVisibleToHero(mon);
     newsym(mon.mx, mon.my);
     if (inSight) {
         const sound = heroIsDeafForMonsterNoise() ? '' : 'Click!  ';
@@ -11275,6 +11288,10 @@ function monsterRollingBoulderTrapEffect(mon, trap, { skipPetPostMoveRoll = fals
     if (boulder && start && end) {
         game.level.objects = (game.level.objects || []).filter(obj => obj !== boulder);
         newsym(start.x, start.y);
+        if (!inSight) {
+            const unseenLaunch = rollingBoulderUnseenLaunchMessage(start);
+            if (unseenLaunch) addToplineMessage(unseenLaunch);
+        }
         vision_reset();
         vision_recalc(0);
         let x = start.x;

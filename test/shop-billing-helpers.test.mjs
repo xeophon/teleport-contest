@@ -20955,6 +20955,135 @@ test('deaf hero sees rolling boulder trigger without click prefix', () => {
     assert.equal(trap.tseen, false);
 });
 
+test('unseen rolling boulder launch visible at launch square reports rolling start', () => {
+    const { trap, goblin } = installMonsterPitTrapState(ROLLING_BOULDER_TRAP, {
+        mhp: 50,
+        mhpmax: 50,
+        data: { mac: -10 },
+    });
+    const boulder = installRollingBoulderTrapLaunch(trap);
+    enableRngLog({ reset: true });
+    installCoreRngValues([19]);
+    markSquareVisible(6, 3);
+
+    assert.equal(allmain.monsterRollingBoulderTrapEffectForTest(goblin, trap), true);
+
+    assert.equal(game._pending_message, 'You see a boulder start to roll.');
+    assert.equal(game._topline_after_more || '', '');
+    assert.equal(goblin.mhp, 50);
+    assert.equal(boulder.ox, 6);
+    assert.equal(boulder.oy, 7);
+    assert.equal(trap.tseen, false);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rnd(20)'), [20]);
+});
+
+test('remembered-only rolling boulder launch is heard instead of seen', () => {
+    const { trap, goblin } = installMonsterPitTrapState(ROLLING_BOULDER_TRAP, {
+        mhp: 50,
+        mhpmax: 50,
+        data: { mac: -10 },
+    });
+    const boulder = installRollingBoulderTrapLaunch(trap);
+    enableRngLog({ reset: true });
+    installCoreRngValues([19]);
+    game.viz_array = [];
+    game.viz_array[3] = [];
+    game.viz_array[3][6] = COULD_SEE;
+    game.viz_array[5] = [];
+    game.viz_array[5][6] = COULD_SEE;
+
+    assert.equal(allmain.monsterRollingBoulderTrapEffectForTest(goblin, trap), true);
+
+    assert.equal(game._pending_message, 'You hear rumbling nearby.');
+    assert.doesNotMatch(game._pending_message || '', /triggers|start to roll/);
+    assert.equal(goblin.mhp, 50);
+    assert.equal(boulder.ox, 6);
+    assert.equal(boulder.oy, 7);
+    assert.equal(trap.tseen, false);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rnd(20)'), [20]);
+});
+
+test('unseen rolling boulder launch heard nearby when launch square is unseen', () => {
+    const { trap, goblin } = installMonsterPitTrapState(ROLLING_BOULDER_TRAP, {
+        mhp: 50,
+        mhpmax: 50,
+        data: { mac: -10 },
+    });
+    const boulder = installRollingBoulderTrapLaunch(trap);
+    enableRngLog({ reset: true });
+    installCoreRngValues([19]);
+
+    assert.equal(allmain.monsterRollingBoulderTrapEffectForTest(goblin, trap), true);
+
+    assert.equal(game._pending_message, 'You hear rumbling nearby.');
+    assert.equal(goblin.mhp, 50);
+    assert.equal(boulder.ox, 6);
+    assert.equal(boulder.oy, 7);
+    assert.equal(trap.tseen, false);
+});
+
+test('unseen rolling boulder launch heard in distance from far launch square', () => {
+    const { trap, goblin } = installMonsterPitTrapState(ROLLING_BOULDER_TRAP, {
+        mhp: 50,
+        mhpmax: 50,
+        data: { mac: -10 },
+    });
+    game.u.ux = 1;
+    game.u.uy = 1;
+    const boulder = installRollingBoulderTrapLaunch(trap);
+    enableRngLog({ reset: true });
+    installCoreRngValues([19]);
+
+    assert.equal(allmain.monsterRollingBoulderTrapEffectForTest(goblin, trap), true);
+
+    assert.equal(game._pending_message, 'You hear rumbling in the distance.');
+    assert.equal(goblin.mhp, 50);
+    assert.equal(boulder.ox, 6);
+    assert.equal(boulder.oy, 7);
+    assert.equal(trap.tseen, false);
+});
+
+test('hallucinating hero hears unseen rolling boulder launch as bowling', () => {
+    const { trap, goblin } = installMonsterPitTrapState(ROLLING_BOULDER_TRAP, {
+        mhp: 50,
+        mhpmax: 50,
+        data: { mac: -10 },
+    });
+    game.u._statusSuffix = ' Hallu';
+    const boulder = installRollingBoulderTrapLaunch(trap);
+    enableRngLog({ reset: true });
+    installCoreRngValues([19]);
+
+    assert.equal(allmain.monsterRollingBoulderTrapEffectForTest(goblin, trap), true);
+
+    assert.equal(game._pending_message, 'You hear someone bowling.');
+    assert.equal(goblin.mhp, 50);
+    assert.equal(boulder.ox, 6);
+    assert.equal(boulder.oy, 7);
+    assert.equal(trap.tseen, false);
+});
+
+test('deaf hero gets no unseen rolling boulder launch sound', () => {
+    const { trap, goblin } = installMonsterPitTrapState(ROLLING_BOULDER_TRAP, {
+        mhp: 50,
+        mhpmax: 50,
+        data: { mac: -10 },
+    });
+    game.u._statusSuffix = ' Deaf';
+    const boulder = installRollingBoulderTrapLaunch(trap);
+    enableRngLog({ reset: true });
+    installCoreRngValues([19]);
+
+    assert.equal(allmain.monsterRollingBoulderTrapEffectForTest(goblin, trap), true);
+
+    assert.equal(game._pending_message || '', '');
+    assert.equal(goblin.mhp, 50);
+    assert.equal(boulder.ox, 6);
+    assert.equal(boulder.oy, 7);
+    assert.equal(trap.tseen, false);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rnd(20)'), [20]);
+});
+
 test('rolling boulder hit roll includes boulder hit adjustment', () => {
     const { trap, goblin } = installMonsterPitTrapState(ROLLING_BOULDER_TRAP, {
         mhp: 20,
