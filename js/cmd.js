@@ -23888,6 +23888,17 @@ function itemIsWielded(item) {
     return !!(item && (item.wielded || item.line?.includes('weapon in') || item.line?.includes('(wielded)')));
 }
 
+function itemIsPrimaryWielded(item) {
+    if (!item) return false;
+    const line = String(item.line || '');
+    return !!(item.wielded || /\b(?:weapon|wielded) in (?:right hand|hands)\b/.test(line)
+        || line.includes('(wielded)'));
+}
+
+function itemIsPrimaryWieldedAklys(item) {
+    return itemIsPrimaryWielded(item) && tossUpWeaponObjectKey(item) === 'aklys';
+}
+
 function isTwoHandedWieldItem(item) {
     const name = inventoryItemName(item).toLowerCase();
     return isPolearmItem(item) || /quarterstaff|two-handed sword|battle-axe|dwarvish mattock|mattock/.test(name);
@@ -66651,13 +66662,15 @@ export async function rhack(_cmd) {
         }
         const name = inventoryItemName(item);
         const lowerName = name.toLowerCase();
+        const returningAklysThrow = itemIsPrimaryWieldedAklys(item);
 	        const ux = game.u?.ux || 0;
 	        const uy = game.u?.uy || 0;
 		        let ox = ux;
 		        let oy = uy;
 		        let targetMon = null;
         let ironBarsImpact = null;
-        for (let step = 0; step < 8; step++) {
+        const throwRange = returningAklysThrow ? 4 : 8;
+        for (let step = 0; step < throwRange; step++) {
             const nx = ox + dir.dx;
             const ny = oy + dir.dy;
             const loc = game.level?.at(nx, ny);
@@ -66891,6 +66904,54 @@ export async function rhack(_cmd) {
             game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
             game.context.move = 0;
             return;
+        }
+        if (returningAklysThrow) {
+            const returnMessage = `${floorObjectTheSubject({ ...thrownObject, quan: 1 })} returns to your hand!`;
+            const failMessage = `${floorObjectTheSubject({ ...thrownObject, quan: 1 })} fails to return!`;
+            if (rn2(100)) {
+                if (!heroIsConfused() && !heroIsStunned() && !heroIsBlind()
+                    && !heroIsHallucinating() && !heroIsFumbling() && rn2(100)) {
+                    item.wielded = true;
+                    item.alternate = false;
+                    item.quivered = false;
+                    if (!/\b(?:weapon|wielded) in (?:right hand|hands)\b/.test(String(item.line || '')))
+                        item.line = normalInventoryLine({ ...item, line: '' });
+                    newsym(ox, oy);
+                    await setMessage([impactMessage, returnMessage].filter(Boolean).join('  '));
+                    game._command_mode = null;
+                    game._throw_item_letter = null;
+                    clearThrowCountState();
+                    game._resume_time_after_more = 0;
+                    game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
+                    game.context.move = 0;
+                    return;
+                }
+                const armHit = !!rn2(2);
+                const badCatchMessage = armHit
+                    ? `${floorObjectTheSubject({ ...thrownObject, quan: 1 })} flies back toward you, hitting your arm!`
+                    : `${floorObjectTheSubject({ ...thrownObject, quan: 1 })} returns back to you, landing at your feet.`;
+                if (armHit) {
+                    const damage = 1 + rnd(3);
+                    if (game.u) game.u.uhp = Math.max(0, (game.u.uhp || 0) - damage);
+                }
+                curseLoadstoneLeavingInventory(thrownObject);
+                if ((item.quan || 1) > 1) splitCarriedObjectShopBill(item, thrownObject, 1);
+                stopCarriedFigurineTimerOnLeave(thrownObject);
+                const landing = landProjectileObjectWithShopHandling(thrownObject, ux, uy, { skipTopBreak: true });
+                const landingMessage = landing.messages.join('  ');
+                newsym(ux, uy);
+                removeInventoryItem(item);
+                await setMessage([impactMessage, badCatchMessage, landingMessage].filter(Boolean).join('  '),
+                    !!landingMessage);
+                game._command_mode = null;
+                game._throw_item_letter = null;
+                clearThrowCountState();
+                game._resume_time_after_more = 0;
+                game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
+                game.context.move = 0;
+                return;
+            }
+            impactMessage = [impactMessage, failMessage].filter(Boolean).join('  ');
         }
         const projectileBreakRoll = !impactObjectHit && !projectileLandingIsSoft(ox, oy)
             ? rn2(100) // C breaktest: obj_resists() on hard landing.

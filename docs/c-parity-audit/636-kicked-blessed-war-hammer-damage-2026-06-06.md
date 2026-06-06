@@ -27,5 +27,5 @@ The canary drives the real kick command with deterministic unit RNG only. It ass
 
 ## Remaining candidates
 
-- Wielded/returning aklys remains separate because C routes it through `AutoReturn()` and tethered weapon state.
+- Wielded/returning aklys is covered separately in audit 637.
 - Direct thrown blessed war hammer can be added later if a landing-tail regression requires a direct/kicked contrast for this exact object.
