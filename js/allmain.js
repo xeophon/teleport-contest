@@ -11263,6 +11263,25 @@ function rollingBoulderUnseenLaunchMessage(start) {
     return `You hear rumbling ${dx * dx + dy * dy <= 16 ? 'nearby' : 'in the distance'}.`;
 }
 
+function rollingBoulderBreakClosedDoorAt(x, y, remainingDistance) {
+    const loc = game.level?.at(x, y);
+    const mask = loc?.doormask ?? loc?.flags ?? 0;
+    if (loc?.typ !== DOOR || !(mask & (D_LOCKED | D_CLOSED))) return false;
+    if (!game.u?.blind && cansee(x, y)) {
+        const message = 'The boulder crashes through a door.';
+        if (game._message_more && game._pending_message) appendAfterMoreMessage(message);
+        else addToplineMessage(message);
+    }
+    loc.doormask = D_BROKEN;
+    loc.flags = D_BROKEN;
+    if (remainingDistance > 0) {
+        vision_reset();
+        vision_recalc(0);
+    }
+    newsym(x, y);
+    return true;
+}
+
 function monsterRollingBoulderTrapEffect(mon, trap, { skipPetPostMoveRoll = false } = {}) {
     if (trap?.ttyp !== ROLLING_BOULDER_TRAP || monsterTrapHarmless(mon, trap)) return false;
     if (monsterAvoidsKnownTrapBeforeEffect(mon, trap)) return true;
@@ -11352,6 +11371,7 @@ function monsterRollingBoulderTrapEffect(mon, trap, { skipPetPostMoveRoll = fals
                     }
                 }
             }
+            rollingBoulderBreakClosedDoorAt(x, y, dist - 1);
             const nextLoc = dist > 1 ? game.level?.at(x + dx, y + dy) : null;
             if (nextLoc && (IS_STWALL(nextLoc.typ) || IS_TREE(nextLoc.typ))) {
                 finalX = x;

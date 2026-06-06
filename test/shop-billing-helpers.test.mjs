@@ -21084,6 +21084,60 @@ test('deaf hero gets no unseen rolling boulder launch sound', () => {
     assert.deepEqual(rngValuesForCall(getRngLog(), 'rnd(20)'), [20]);
 });
 
+test('rolling boulder crashes through visible locked door on path', () => {
+    const { trap, goblin } = installMonsterPitTrapState(ROLLING_BOULDER_TRAP, {
+        mhp: 50,
+        mhpmax: 50,
+        data: { mac: -10 },
+    });
+    const boulder = installRollingBoulderTrapLaunch(trap);
+    const baseAt = game.level.at;
+    const doorLoc = { roomno: 0, typ: DOOR, doormask: D_LOCKED, flags: D_LOCKED, lit: true };
+    game.level.at = (x, y) => (x === 6 && y === 4) ? doorLoc : baseAt(x, y);
+    enableRngLog({ reset: true });
+    installCoreRngValues([19]);
+    markHeroNeighborhoodVisible();
+
+    assert.equal(allmain.monsterRollingBoulderTrapEffectForTest(goblin, trap), true);
+
+    assert.match(game._pending_message || '', /Click!  The goblin triggers something\./);
+    assert.equal(game._topline_after_more, 'The boulder crashes through a door.');
+    assert.equal(doorLoc.doormask, D_BROKEN);
+    assert.equal(doorLoc.flags, D_BROKEN);
+    assert.equal(goblin.mhp, 50);
+    assert.equal(boulder.ox, 6);
+    assert.equal(boulder.oy, 7);
+    assert.equal(trap.tseen, true);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rnd(20)'), [20]);
+});
+
+test('blind hero hears rolling boulder break locked door silently on path', () => {
+    const { trap, goblin } = installMonsterPitTrapState(ROLLING_BOULDER_TRAP, {
+        mhp: 50,
+        mhpmax: 50,
+        data: { mac: -10 },
+    });
+    const boulder = installRollingBoulderTrapLaunch(trap);
+    const baseAt = game.level.at;
+    const doorLoc = { roomno: 0, typ: DOOR, doormask: D_LOCKED, flags: D_LOCKED, lit: true };
+    game.level.at = (x, y) => (x === 6 && y === 4) ? doorLoc : baseAt(x, y);
+    enableRngLog({ reset: true });
+    installCoreRngValues([19]);
+    game.u.blind = true;
+
+    assert.equal(allmain.monsterRollingBoulderTrapEffectForTest(goblin, trap), true);
+
+    assert.equal(game._pending_message, 'You hear rumbling nearby.');
+    assert.equal(game._topline_after_more || '', '');
+    assert.equal(doorLoc.doormask, D_BROKEN);
+    assert.equal(doorLoc.flags, D_BROKEN);
+    assert.equal(goblin.mhp, 50);
+    assert.equal(boulder.ox, 6);
+    assert.equal(boulder.oy, 7);
+    assert.equal(trap.tseen, false);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rnd(20)'), [20]);
+});
+
 test('rolling boulder hit roll includes boulder hit adjustment', () => {
     const { trap, goblin } = installMonsterPitTrapState(ROLLING_BOULDER_TRAP, {
         mhp: 20,
