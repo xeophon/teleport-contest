@@ -18128,6 +18128,7 @@ function installHeroRollingBoulderTrapState({
     end = { x: 6, y: 7 },
     tseen = false,
     boulderAt = null,
+    boulderProps = {},
     heroDeaf = false,
 } = {}) {
     installStableNonShopFloorState();
@@ -18158,6 +18159,7 @@ function installHeroRollingBoulderTrapState({
         ? floorBoulder(31429, {
             ox: boulderAt === 'end' ? end.x : start.x,
             oy: boulderAt === 'end' ? end.y : start.y,
+            ...boulderProps,
         })
         : null;
     if (boulder) game.level.objects.push(boulder);
@@ -21054,6 +21056,45 @@ test('hero rolling boulder trap can launch boulder from opposite side', async ()
     assert.equal(boulder.ox, 6);
     assert.equal(boulder.oy, 3);
     assert.deepEqual(rngValuesForCall(getRngLog(), 'rnd(20)'), [9, 20]);
+});
+
+test('hero rolling boulder final rest clears stale launch metadata and no-charge', async () => {
+    const { boulder } = installHeroRollingBoulderTrapState({
+        boulderAt: 'start',
+        boulderProps: { hidden: true, otrapped: 1, no_charge: true },
+    });
+    enableRngLog({ reset: true });
+    installCoreRngValues([8, 19]);
+
+    await rhack('l');
+
+    assert.equal(game._pending_message,
+        'Click!  You trigger a rolling boulder trap!  A boulder misses you.');
+    assert.equal(boulder.ox, 6);
+    assert.equal(boulder.oy, 7);
+    assert.equal(boulder.hidden, false);
+    assert.equal(boulder.transientProjectile, false);
+    assert.equal(boulder.otrapped, 0);
+    assert.equal(boulder.no_charge, false);
+    assert.equal(game.level.objects.at(-1), boulder);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rnd(20)'), [9, 20]);
+});
+
+test('hero rolling boulder release off hero path does not fake miss or spend hit RNG', async () => {
+    const { boulder } = installHeroRollingBoulderTrapState({
+        start: { x: 4, y: 3 },
+        end: { x: 8, y: 3 },
+        boulderAt: 'start',
+    });
+    enableRngLog({ reset: true });
+
+    await rhack('l');
+
+    assert.equal(game._pending_message, 'Click!  You trigger a rolling boulder trap!');
+    assert.equal(boulder.ox, 8);
+    assert.equal(boulder.oy, 3);
+    assert.equal(game.level.objects.at(-1), boulder);
+    assert.equal(rngValuesForCall(getRngLog(), 'rnd(20)').length, 0);
 });
 
 test('sitting rolling boulder trap with no boulder reports no release', async () => {

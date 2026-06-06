@@ -46991,31 +46991,75 @@ function findRollingBoulderLaunchObject(trap) {
     return { boulder, start, end };
 }
 
+function heroRollingBoulderNoChargeStillAppliesAt(x, y) {
+    const loc = game.level?.at?.(x, y);
+    const directRoom = (loc?.roomno ?? 0) >= ROOMOFFSET;
+    for (const roomno of shopRoomnosAt(x, y, SHOPBASE)) {
+        const shkp = shopkeeperForRoomno(roomno);
+        if (!shopkeeperInHisShop(shkp)) continue;
+        if (directRoom) return true;
+        if (loc?.edge || (x === shkp.shk?.x && y === shkp.shk?.y)) return true;
+    }
+    return false;
+}
+
+function placeHeroRollingBoulderAtRest(boulder, x, y) {
+    if (!boulder) return;
+    boulder.otrapped = 0;
+    boulder.hidden = false;
+    boulder.transientProjectile = false;
+    if (boulder.no_charge && !heroRollingBoulderNoChargeStillAppliesAt(x, y))
+        boulder.no_charge = false;
+    boulder.ox = x;
+    boulder.oy = y;
+    game.level.objects = (game.level?.objects || []).filter(obj => obj !== boulder);
+    game.level.objects.push(boulder);
+}
+
+function heroRollingBoulderPathCrossesHero(start, end) {
+    if (!start || !end) return false;
+    const dx = Math.sign(end.x - start.x);
+    const dy = Math.sign(end.y - start.y);
+    let x = start.x;
+    let y = start.y;
+    for (let dist = Math.max(Math.abs(end.x - start.x), Math.abs(end.y - start.y)); dist > 0; dist--) {
+        x += dx;
+        y += dy;
+        if (x === game.u?.ux && y === game.u?.uy) return true;
+    }
+    return false;
+}
+
 function heroRollingBoulderTrapResult(trap, prefix = '') {
     const wasKnown = !!trap?.tseen;
     trap.tseen = true;
     const sound = heroIsDeaf() ? '' : 'Click!  ';
     const { boulder, start, end } = findRollingBoulderLaunchObject(trap);
     let released = false;
+    let crossedHero = false;
     if (boulder && end) {
-        boulder.ox = end.x;
-        boulder.oy = end.y;
+        if (wasKnown) boulder.otrapped = 1;
+        placeHeroRollingBoulderAtRest(boulder, end.x, end.y);
         released = true;
+        crossedHero = heroRollingBoulderPathCrossesHero(start, end);
         vision_reset();
         vision_recalc(0);
         newsym(start.x, start.y);
         newsym(end.x, end.y);
     }
-    if (released) {
+    if (crossedHero) {
         rnd(20);
         rnd(20);
     }
-    const releaseMessage = released
+    const releaseMessage = released && crossedHero
         ? 'A boulder misses you.'
+        : released
+            ? ''
         : wasKnown ? 'No boulder was released.' : 'Fortunately for you, no boulder was released.';
+    const message = `${prefix ? `${prefix}  ` : ''}${sound}You trigger a rolling boulder trap!`;
     return {
         released,
-        message: `${prefix ? `${prefix}  ` : ''}${sound}You trigger a rolling boulder trap!  ${releaseMessage}`,
+        message: releaseMessage ? `${message}  ${releaseMessage}` : message,
     };
 }
 
