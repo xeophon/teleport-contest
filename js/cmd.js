@@ -46982,13 +46982,33 @@ function findRollingBoulderLaunchObject(trap) {
     let end = trap.launch2;
     const objects = game.level?.objects || [];
     let boulder = objects.find(obj =>
-        !obj.transientProjectile && obj.otyp === BOULDER && obj.ox === start?.x && obj.oy === start?.y);
+        !obj.buried && !obj.transientProjectile
+        && obj.otyp === BOULDER && obj.ox === start?.x && obj.oy === start?.y);
     if (!boulder && end) {
         boulder = objects.find(obj =>
-            !obj.transientProjectile && obj.otyp === BOULDER && obj.ox === end?.x && obj.oy === end?.y);
+            !obj.buried && !obj.transientProjectile
+            && obj.otyp === BOULDER && obj.ox === end?.x && obj.oy === end?.y);
         if (boulder) [start, end] = [end, start];
     }
     return { boulder, start, end };
+}
+
+function splitHeroRollingBoulderLaunchObject(boulder) {
+    const quantity = Math.max(1, Math.trunc(Number(boulder?.quan || 1)));
+    if (!boulder || quantity <= 1) return boulder;
+    const launched = { ...boulder, id: next_ident(), quan: 1 };
+    delete launched.o_id;
+    delete launched._shopBillObjectId;
+    delete launched.letter;
+    delete launched.line;
+    delete launched.timed;
+    delete launched.lamplit;
+    delete launched.burning;
+    delete launched.pickup_prev;
+    delete launched.lua_ref_cnt;
+    launched.owornmask = 0;
+    boulder.quan = quantity - 1;
+    return launched;
 }
 
 function heroRollingBoulderNoChargeStillAppliesAt(x, y) {
@@ -47038,8 +47058,9 @@ function heroRollingBoulderTrapResult(trap, prefix = '') {
     let released = false;
     let crossedHero = false;
     if (boulder && end) {
-        if (wasKnown) boulder.otrapped = 1;
-        placeHeroRollingBoulderAtRest(boulder, end.x, end.y);
+        const launched = splitHeroRollingBoulderLaunchObject(boulder);
+        if (wasKnown) launched.otrapped = 1;
+        placeHeroRollingBoulderAtRest(launched, end.x, end.y);
         released = true;
         crossedHero = heroRollingBoulderPathCrossesHero(start, end);
         vision_reset();

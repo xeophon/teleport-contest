@@ -21097,6 +21097,68 @@ test('hero rolling boulder release off hero path does not fake miss or spend hit
     assert.equal(rngValuesForCall(getRngLog(), 'rnd(20)').length, 0);
 });
 
+test('hero rolling boulder launch splits one boulder from stacked launch object', async () => {
+    const { boulder: stack } = installHeroRollingBoulderTrapState({
+        start: { x: 4, y: 3 },
+        end: { x: 8, y: 3 },
+        boulderAt: 'start',
+        boulderProps: {
+            quan: 2,
+            timed: 1,
+            lamplit: true,
+            burning: true,
+            pickup_prev: 31499,
+            lua_ref_cnt: 2,
+            owornmask: 7,
+        },
+    });
+    enableRngLog({ reset: true });
+
+    await rhack('l');
+
+    const launched = game.level.objects.find(obj =>
+        obj !== stack && obj.otyp === BOULDER && obj.ox === 8 && obj.oy === 3);
+    assert.equal(game._pending_message, 'Click!  You trigger a rolling boulder trap!');
+    assert.ok(launched);
+    assert.equal(stack.quan, 1);
+    assert.equal(stack.ox, 4);
+    assert.equal(stack.oy, 3);
+    assert.equal(launched.quan, 1);
+    assert.notEqual(launched.id, stack.id);
+    assert.equal(launched.owornmask || 0, 0);
+    assert.equal(launched.timed || 0, 0);
+    assert.equal(launched.lamplit || false, false);
+    assert.equal(launched.burning || false, false);
+    assert.equal(launched.pickup_prev || 0, 0);
+    assert.equal(launched.lua_ref_cnt || 0, 0);
+    assert.equal(game.level.objects.includes(stack), true);
+    assert.equal(game.level.objects.at(-1), launched);
+    assert.equal(rngValuesForCall(getRngLog(), 'rnd(20)').length, 0);
+});
+
+test('hero rolling boulder trap ignores buried launch boulder', async () => {
+    const { trap } = installHeroRollingBoulderTrapState({
+        start: { x: 4, y: 3 },
+        end: { x: 8, y: 3 },
+    });
+    const buried = floorBoulder(31449, { ox: 4, oy: 3, quan: 2, buried: true });
+    game.level.objects.push(buried);
+    enableRngLog({ reset: true });
+
+    await rhack('l');
+
+    assert.equal(game._pending_message,
+        'Click!  You trigger a rolling boulder trap!  Fortunately for you, no boulder was released.');
+    assert.equal(trap.tseen, true);
+    assert.equal(buried.quan, 2);
+    assert.equal(buried.ox, 4);
+    assert.equal(buried.oy, 3);
+    assert.equal(game.level.objects.includes(buried), true);
+    assert.equal(game.level.objects.some(obj =>
+        obj !== buried && obj.otyp === BOULDER && obj.ox === 8 && obj.oy === 3), false);
+    assert.equal(rngValuesForCall(getRngLog(), 'rnd(20)').length, 0);
+});
+
 test('sitting rolling boulder trap with no boulder reports no release', async () => {
     const { trap } = installHeroRollingBoulderTrapState({
         trapX: 5,
