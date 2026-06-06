@@ -7492,6 +7492,7 @@ const OBJECT_WEIGHTS = {
     'elven bow': 30,
     'elven dagger': 10,
     'elven spear': 30,
+    'heavy iron ball': WT_IRON_BALL_BASE,
     'knife': 5,
     'lance': 180,
     'long sword': 40,
@@ -20031,7 +20032,8 @@ function heroHorizontalThrowAirSplitRange(obj) {
     const stats = game.u?.acurr?.a || [];
     const strength = Math.max(0, Math.trunc(Number(stats[A_STR] ?? 10)));
     const urangeBase = Math.max(0, Math.trunc(strength / 2));
-    const weightDivisor = obj === game.u?.uball ? 100 : 40;
+    const heavyIronBall = obj?.otyp === HEAVY_IRON_BALL || objectKindKey(obj) === 'heavy iron ball';
+    const weightDivisor = heavyIronBall ? 100 : 40;
     let range = urangeBase - Math.trunc(globObjectWeight({ ...obj, quan: 1 }) / weightDivisor);
     if (range < 1) range = 1;
 

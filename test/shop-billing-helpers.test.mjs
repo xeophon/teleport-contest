@@ -61635,6 +61635,54 @@ test('levitating hero-thrown ordinary weapon recoils after C split range flight'
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(100)']);
 });
 
+test('levitating hero-thrown loose heavy iron ball uses C ball range divisor', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, {
+        ux: 12,
+        uy: 5,
+        levitating: true,
+    });
+    game.u.acurr.a[A_STR] = 18;
+    game.u.acurr.a[A_DEX] = 25;
+    const ball = {
+        id: 876172,
+        letter: 'b',
+        line: 'b - a heavy iron ball',
+        cls: 'ball',
+        glyph: '0',
+        kind: 'heavy iron ball',
+        actualKind: 'heavy iron ball',
+        quan: 1,
+        owt: 480,
+    };
+    const goblin = ordinaryThrowTarget('goblin', 15, 5, {
+        mhp: 20,
+        mhpmax: 20,
+        msleeping: 1,
+    });
+    game.inventory = [ball];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('b');
+    await rhack('l');
+
+    assert.match(game._pending_message, /You hurtle in the opposite direction\./);
+    assert.doesNotMatch(game._pending_message, /hits the goblin|misses|crashes|shatters|Splat/);
+    assert.equal(game.u.ux, 8);
+    assert.equal(game.u.uy, 5);
+    assert.equal(goblin.mhp, 20);
+    assert.equal(goblin.msleeping, 1);
+    assert.equal(game.inventory.includes(ball), false);
+    const landed = game.level.objects.find(obj => obj.id === ball.id);
+    assert.ok(landed);
+    assert.equal(landed.ox, 13);
+    assert.equal(landed.oy, 5);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(100)']);
+});
+
 test('hero-thrown dagger harms ordinary monster and survives landing', async () => {
     installNonShopFloorState();
     initRng(2);
