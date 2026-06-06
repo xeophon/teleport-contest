@@ -110,8 +110,9 @@ Detailed source-backed history is kept in `docs/c-parity-audit/`. This section i
 - Rolling-boulder path liquid floor effects are covered in audit 594.
 - Rolling-boulder seen hole/trapdoor impact-drop-before-plugging side effects are covered in audit 595.
 - Rolling-boulder hero collision repeat and occupation interruptions are covered in audit 596.
+- Hero-triggered rolling-boulder no-release, known wording, deaf click suppression, and opposite-endpoint launch lookup are covered in audit 597.
 - Magic-marker write target `getobj()` suggested/downplayed selection is covered in audit 577.
-- Latest compact/source note: `docs/c-parity-audit/596-rolling-boulder-hero-interruptions-2026-06-06.md`.
+- Latest compact/source note: `docs/c-parity-audit/597-hero-triggered-rolling-boulder-no-release-2026-06-06.md`.
 - Latest verified public score: `44/44`.
 
 ## Current Priorities
@@ -139,8 +140,8 @@ Detailed source-backed history is kept in `docs/c-parity-audit/`. This section i
    - Compact candidates: direct monster-object hit follow-ups, remaining monster-thrown `passive_obj()` follow-ups, remaining monster-thrown/launcher-arrow `hits_bars()` object-class follow-ups beyond the covered dart, shuriken, sling rocks/gems/stones, plain daggers, crude/orcish daggers, silver daggers, ordinary knives, ordinary crossbow bolts, ordinary/dwarvish/silver/elven/orcish spears, and javelins, full monster diet flag generation, and broader `polymon()`/stoning interactions.
 
 5. Level, trap, terrain, save, and display foundations.
-   - Source notes: `docs/c-parity-audit/03-levelgen-specials-quest.md`, `docs/c-parity-audit/06-save-restore-bones.md`, `docs/c-parity-audit/07-traps-liquids-terrain.md`, `docs/c-parity-audit/08-display-rng-observation.md`, and latest compact note `docs/c-parity-audit/596-rolling-boulder-hero-interruptions-2026-06-06.md`.
-   - Centralize special-level generation, saved-level/migration/timer state, trap/liquid/material-damage pipelines, glyph/discovery/redraw ordering, and RNG diagnostics. Remaining compact rolling-boulder candidates include launch-drop preservation, hero-triggered rolling-boulder rewriting, mounted-steed diversion, and final placement side effects.
+   - Source notes: `docs/c-parity-audit/03-levelgen-specials-quest.md`, `docs/c-parity-audit/06-save-restore-bones.md`, `docs/c-parity-audit/07-traps-liquids-terrain.md`, `docs/c-parity-audit/08-display-rng-observation.md`, and latest compact note `docs/c-parity-audit/597-hero-triggered-rolling-boulder-no-release-2026-06-06.md`.
+   - Centralize special-level generation, saved-level/migration/timer state, trap/liquid/material-damage pipelines, glyph/discovery/redraw ordering, and RNG diagnostics. Remaining compact rolling-boulder candidates include launch-drop preservation, hero-triggered rolling-boulder launched-object rewriting beyond the audit-597 no-release/opposite-endpoint basics, mounted-steed diversion, and final placement side effects.
    - Compact candidates: broader hero-on-liquid fallout and display/discovery ordering around object observation.
 
 6. Command, prompt, and menu contracts.

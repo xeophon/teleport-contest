@@ -46977,12 +46977,25 @@ function sitPitResult(trap, prefix) {
     return heroPitResult(trap, prefix, { viaSitting: true });
 }
 
-function sitRollingBoulderMessage(trap, prefix) {
-    trap.tseen = true;
-    const start = trap.launch;
-    const end = trap.launch2;
-    const boulder = (game.level?.objects || []).find(obj =>
+function findRollingBoulderLaunchObject(trap) {
+    let start = trap.launch;
+    let end = trap.launch2;
+    const objects = game.level?.objects || [];
+    let boulder = objects.find(obj =>
         !obj.transientProjectile && obj.otyp === BOULDER && obj.ox === start?.x && obj.oy === start?.y);
+    if (!boulder && end) {
+        boulder = objects.find(obj =>
+            !obj.transientProjectile && obj.otyp === BOULDER && obj.ox === end?.x && obj.oy === end?.y);
+        if (boulder) [start, end] = [end, start];
+    }
+    return { boulder, start, end };
+}
+
+function heroRollingBoulderTrapResult(trap, prefix = '') {
+    const wasKnown = !!trap?.tseen;
+    trap.tseen = true;
+    const sound = heroIsDeaf() ? '' : 'Click!  ';
+    const { boulder, start, end } = findRollingBoulderLaunchObject(trap);
     let released = false;
     if (boulder && end) {
         boulder.ox = end.x;
@@ -46993,7 +47006,21 @@ function sitRollingBoulderMessage(trap, prefix) {
         newsym(start.x, start.y);
         newsym(end.x, end.y);
     }
-    return `${prefix}  Click!  You trigger a rolling boulder trap!  ${released ? 'A boulder misses you.' : 'Fortunately for you, no boulder was released.'}`;
+    if (released) {
+        rnd(20);
+        rnd(20);
+    }
+    const releaseMessage = released
+        ? 'A boulder misses you.'
+        : wasKnown ? 'No boulder was released.' : 'Fortunately for you, no boulder was released.';
+    return {
+        released,
+        message: `${prefix ? `${prefix}  ` : ''}${sound}You trigger a rolling boulder trap!  ${releaseMessage}`,
+    };
+}
+
+function sitRollingBoulderMessage(trap, prefix) {
+    return heroRollingBoulderTrapResult(trap, prefix).message;
 }
 
 async function sitTriggerTrap(trap) {
@@ -49610,22 +49637,8 @@ async function moveHero(dx, dy) {
         return;
     }
     if (steppedTrap?.ttyp === ROLLING_BOULDER_TRAP) {
-        steppedTrap.tseen = true;
-        rnd(20);
-        rnd(20);
-        const start = steppedTrap.launch;
-        const end = steppedTrap.launch2;
-        const boulder = (game.level?.objects || []).find(obj =>
-            !obj.transientProjectile && obj.otyp === BOULDER && obj.ox === start?.x && obj.oy === start?.y);
-        if (boulder && end) {
-            boulder.ox = end.x;
-            boulder.oy = end.y;
-            vision_reset();
-            vision_recalc(0);
-            newsym(start.x, start.y);
-            newsym(end.x, end.y);
-        }
-        await setMessage('Click!  You trigger a rolling boulder trap!  A boulder misses you.');
+        const result = heroRollingBoulderTrapResult(steppedTrap);
+        await setMessage(result.message);
         return;
     }
     if (steppedTrap?.ttyp === STATUE_TRAP) {

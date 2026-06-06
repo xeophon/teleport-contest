@@ -18118,6 +18118,51 @@ function installRollingBoulderTrapLaunch(trap, {
     return boulder;
 }
 
+function installHeroRollingBoulderTrapState({
+    trapX = 6,
+    trapY = 5,
+    heroX = 5,
+    heroY = 5,
+    start = { x: 6, y: 3 },
+    end = { x: 6, y: 7 },
+    tseen = false,
+    boulderAt = null,
+    heroDeaf = false,
+} = {}) {
+    installStableNonShopFloorState();
+    Object.assign(game.u, {
+        ux: heroX,
+        uy: heroY,
+        uhp: 50,
+        uhpmax: 50,
+        uac: 10,
+        _statusSuffix: heroDeaf ? ' Deaf' : '',
+        _deafTimeout: heroDeaf ? 5 : 0,
+    });
+    game.inventory = [];
+    game.level.objects = [];
+    game.level.monsters = [];
+    vision_reset();
+    const trap = {
+        ttyp: ROLLING_BOULDER_TRAP,
+        tx: trapX,
+        ty: trapY,
+        tseen,
+        madeby_u: false,
+        launch: { ...start },
+        launch2: { ...end },
+    };
+    game.level.traps = [trap];
+    const boulder = boulderAt
+        ? floorBoulder(31429, {
+            ox: boulderAt === 'end' ? end.x : start.x,
+            oy: boulderAt === 'end' ? end.y : start.y,
+        })
+        : null;
+    if (boulder) game.level.objects.push(boulder);
+    return { trap, boulder };
+}
+
 function installRollingBoulderPathDownGate({
     x = 6,
     y = 3,
@@ -20958,6 +21003,73 @@ test('pet rolling boulder trap launches boulder through pet movement', async () 
     assert.equal(trap.tseen, true);
     assert.equal(rngValuesForCall(getRngLog(), 'rnd(20)').length >= 1, true);
     assert.equal(!!(pet.mtrapseen & (1 << (ROLLING_BOULDER_TRAP - 1))), true);
+});
+
+test('hero rolling boulder trap with no boulder reports no release', async () => {
+    const { trap } = installHeroRollingBoulderTrapState();
+    enableRngLog({ reset: true });
+
+    await rhack('l');
+
+    assert.equal(game._pending_message,
+        'Click!  You trigger a rolling boulder trap!  Fortunately for you, no boulder was released.');
+    assert.equal(trap.tseen, true);
+    assert.equal(game.level.objects.some(obj => obj.otyp === BOULDER), false);
+    assert.equal(rngValuesForCall(getRngLog(), 'rnd(20)').length, 0);
+});
+
+test('known hero rolling boulder trap with no boulder uses known wording', async () => {
+    const { trap } = installHeroRollingBoulderTrapState({ tseen: true });
+    enableRngLog({ reset: true });
+
+    await rhack('l');
+
+    assert.equal(game._pending_message,
+        'Click!  You trigger a rolling boulder trap!  No boulder was released.');
+    assert.equal(trap.tseen, true);
+    assert.equal(rngValuesForCall(getRngLog(), 'rnd(20)').length, 0);
+});
+
+test('deaf hero rolling boulder trap omits click prefix', async () => {
+    installHeroRollingBoulderTrapState({ heroDeaf: true });
+    enableRngLog({ reset: true });
+
+    await rhack('l');
+
+    assert.equal(game._pending_message,
+        'You trigger a rolling boulder trap!  Fortunately for you, no boulder was released.');
+    assert.equal(rngValuesForCall(getRngLog(), 'rnd(20)').length, 0);
+});
+
+test('hero rolling boulder trap can launch boulder from opposite side', async () => {
+    const { boulder } = installHeroRollingBoulderTrapState({ boulderAt: 'end' });
+    enableRngLog({ reset: true });
+    installCoreRngValues([8, 19]);
+
+    await rhack('l');
+
+    assert.equal(game._pending_message,
+        'Click!  You trigger a rolling boulder trap!  A boulder misses you.');
+    assert.equal(boulder.ox, 6);
+    assert.equal(boulder.oy, 3);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rnd(20)'), [9, 20]);
+});
+
+test('sitting rolling boulder trap with no boulder reports no release', async () => {
+    const { trap } = installHeroRollingBoulderTrapState({
+        trapX: 5,
+        trapY: 5,
+        start: { x: 5, y: 3 },
+        end: { x: 5, y: 7 },
+    });
+    enableRngLog({ reset: true });
+
+    await enterSitCommand();
+
+    assert.equal(game._pending_message,
+        'You sit down.  Click!  You trigger a rolling boulder trap!  Fortunately for you, no boulder was released.');
+    assert.equal(trap.tseen, true);
+    assert.equal(rngValuesForCall(getRngLog(), 'rnd(20)').length, 0);
 });
 
 test('visible monster rolling boulder trap with no boulder does not reveal trap', () => {
