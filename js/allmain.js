@@ -10907,7 +10907,7 @@ function monsterTrappedTrapTurn(mon) {
     return { handled: true, caught: !!mon.mtrapped };
 }
 
-function monsterAntiMagicTrapEffect(mon, trap) {
+function monsterAntiMagicTrapEffect(mon, trap, { skipPetPostMoveRoll = false } = {}) {
     if (trap?.ttyp !== ANTI_MAGIC) return false;
     if (monsterAvoidsKnownTrapBeforeEffect(mon, trap)) return true;
 
@@ -10942,7 +10942,7 @@ function monsterAntiMagicTrapEffect(mon, trap) {
             const destroyed = mon.data?.nonliving || mon.data?.mindless;
             addToplineMessage(`${monsterDisplayName(mon)} is ${destroyed ? 'destroyed' : 'killed'} by the compression from an anti-magic field!`);
         }
-        finishTrapKilledMonster(mon);
+        finishTrapKilledMonster(mon, { skipPetPostMoveRoll });
     } else if (seeIt) {
         newsym(trap.tx, trap.ty);
     }
@@ -13672,6 +13672,8 @@ function movePet(mon, resumeAfterInventory = false, conflictActive = false) {
 	        monsterLearnTrap(mon, trap.ttyp);
 	        rn2(21);
 	    }
+    if (monsterAntiMagicTrapEffect(mon, trap, { skipPetPostMoveRoll: true })) return;
+    if (monsterSleepGasTrapEffect(mon, trap)) return;
 	    if (trap?.ttyp === BEAR_TRAP && !mon.mtrapped && !monsterTrapHarmless(mon, trap)) {
 	        if (monsterKnowsTrap(mon, BEAR_TRAP) && rn2(4)) return;
         if (game._message_more && !game._process_time_with_more) {

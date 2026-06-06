@@ -18634,6 +18634,55 @@ test('positive enchanted iron footwear absorbs monster anti-magic trap silently'
     assert.equal(trap.tseen, false);
 });
 
+test('pet anti-magic trap drains magical attack cooldown through pet movement', async () => {
+    const { trap, pet } = installMovingPetPitTrapState(ANTI_MAGIC, {
+        data: { name: 'gnomish wizard', mlet: 'G', spellcaster: true, mac: 10 },
+        mspec_used: 3,
+    });
+    enableRngLog({ reset: true });
+    queueEscapeForMonsterTurn();
+    markHeroNeighborhoodVisible();
+    markSquareVisible(6, 5);
+    markSquareVisible(7, 5);
+
+    await processMonsterTurns();
+    const messages = [game._pending_message, ...(await drainQueuedMessagesAfterMore())].join(' ');
+    const drain = rngValuesForCall(getRngLog(), 'd(2,6)');
+
+    assert.match(messages, /The gnomish wizard seems lethargic\./);
+    assert.equal(pet.mx, 6);
+    assert.equal(pet.my, 5);
+    assert.equal(drain.length, 1);
+    assert.equal(pet.mspec_used, 3 + drain[0]);
+    assert.equal(pet.mhp, 10);
+    assert.equal(trap.tseen, true);
+    assert.equal(!!(pet.mtrapseen & (1 << (ANTI_MAGIC - 1))), true);
+});
+
+test('lethal pet anti-magic implosion removes pet through pet movement', async () => {
+    const { trap, pet } = installMovingPetPitTrapState(ANTI_MAGIC, {
+        mhp: 1,
+        mhpmax: 1,
+        magicResistance: true,
+        data: { name: 'goblin', mlet: 'o', mac: 10, resistsMagic: true },
+    });
+    enableRngLog({ reset: true });
+    installCoreRngValues([0]);
+    queueEscapeForMonsterTurn();
+    markHeroNeighborhoodVisible();
+    markSquareVisible(6, 5);
+    markSquareVisible(7, 5);
+
+    await processMonsterTurns();
+    const messages = [game._pending_message, ...(await drainQueuedMessagesAfterMore())].join(' ');
+
+    assert.match(messages, /The goblin is killed by the compression from an anti-magic field!/);
+    assert.equal(game.level.monsters.includes(pet), false);
+    assert.equal(trap.tseen, true);
+    assert.equal(rngValuesForCall(getRngLog(), 'rnd(4)').length, 1);
+    assert.equal(!!(pet.mtrapseen & (1 << (ANTI_MAGIC - 1))), true);
+});
+
 test('visible monster polymorph trap polymorphs monster and leaves trap', async () => {
     installStableNonShopFloorState();
     initRng(2);
@@ -20401,6 +20450,32 @@ test('known sleep gas trap failed monster avoidance still applies gas', async ()
     assert.equal(goblin.mcanmove, false);
     assert.equal(goblin.mfrozen, 5);
     assert.equal(trap.tseen, true);
+});
+
+test('pet sleep gas trap sleeps pet through pet movement', async () => {
+    const { trap, pet } = installMovingPetPitTrapState(SLP_GAS_TRAP, {
+        mcanmove: true,
+        msleeping: 0,
+        mfrozen: 0,
+    });
+    enableRngLog({ reset: true });
+    queueEscapeForMonsterTurn();
+    markHeroNeighborhoodVisible();
+    markSquareVisible(6, 5);
+    markSquareVisible(7, 5);
+
+    await processMonsterTurns();
+    const messages = [game._pending_message, ...(await drainQueuedMessagesAfterMore())].join(' ');
+    const sleepDuration = rngValuesForCall(getRngLog(), 'rnd(25)');
+
+    assert.match(messages, /The goblin suddenly falls asleep!/);
+    assert.equal(pet.mx, 6);
+    assert.equal(pet.my, 5);
+    assert.equal(sleepDuration.length, 1);
+    assert.equal(pet.mcanmove, false);
+    assert.equal(pet.mfrozen, sleepDuration[0]);
+    assert.equal(trap.tseen, true);
+    assert.equal(!!(pet.mtrapseen & (1 << (SLP_GAS_TRAP - 1))), true);
 });
 
 test('mounted hero sleep gas trap sleeps hero then steed', async () => {
