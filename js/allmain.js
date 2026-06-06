@@ -11161,6 +11161,48 @@ function monsterFireTrapEffect(mon, trap, { skipPetPostMoveRoll = false } = {}) 
     return trapKilled;
 }
 
+function placeFallingTrapRock(mon) {
+    const rock = mksobj(ROCK, true, false);
+    Object.assign(rock, { ox: mon.mx, oy: mon.my, quan: 1, glyph: '*', color: NO_COLOR });
+    const stack = game.level?.objects?.find(obj =>
+        obj.ox === mon.mx && obj.oy === mon.my && obj.otyp === ROCK && obj.kind === 'rock');
+    if (stack) stack.quan = (stack.quan || 1) + 1;
+    else game.level?.objects?.push(rock);
+}
+
+function monsterRockTrapEffect(mon, trap, { skipPetPostMoveRoll = false } = {}) {
+    if (trap?.ttyp !== ROCKTRAP || monsterTrapHarmless(mon, trap)) return false;
+    if (monsterAvoidsKnownTrapBeforeEffect(mon, trap)) return true;
+
+    monsterTriggerTrap(mon, trap);
+    const inSight = monsterVisibleToHero(mon) || mon === game.u?.usteed;
+    const seeIt = !game.u?.blind && cansee(mon.mx, mon.my);
+    if (trap.once && trap.tseen && !rn2(15)) {
+        if (inSight && seeIt) {
+            const name = monsterDisplayName(mon).replace(/^The /, 'the ');
+            addToplineMessage(`A trap door above ${name} opens, but nothing falls out!`);
+        }
+        game.level.traps = (game.level?.traps || []).filter(item => item !== trap);
+        newsym(mon.mx, mon.my);
+        return true;
+    }
+
+    trap.once = true;
+    if (inSight) trap.tseen = true;
+    placeFallingTrapRock(mon);
+    const damage = d(2, 6);
+    const harmless = monsterPassesRocks(mon);
+    if (seeIt) addToplineMessage(`${monsterDisplayName(mon)} is hit by a rock!`);
+    if (!harmless) {
+        mon.mhp = (mon.mhp || 1) - damage;
+        if (mon.mhp <= 0) {
+            if (seeIt) addToplineMessage(`${monsterDisplayName(mon)} is killed!`);
+            finishTrapKilledMonster(mon, { skipPetPostMoveRoll });
+        }
+    }
+    return true;
+}
+
 function monsterWebmakerData(data) {
     return data?.name === 'cave spider' || data?.name === 'giant spider';
 }
@@ -12512,37 +12554,7 @@ function moveMonsterTowardHero(mon, conflictActive = false, monIndex = null, som
         if (monsterAvoidsKnownTrapBeforeEffect(mon, trap)) return done();
         if (monsterFireTrapEffect(mon, trap)) return done();
     }
-    if (trap?.ttyp === ROCKTRAP && !monsterTrapHarmless(mon, trap)) {
-        if (monsterAvoidsKnownTrapBeforeEffect(mon, trap)) return done();
-        if (trap.once && trap.tseen && !rn2(15)) {
-            game.level.traps = (game.level?.traps || []).filter(item => item !== trap);
-            newsym(mon.mx, mon.my);
-            return done();
-        }
-        trap.once = true;
-        const rock = mksobj(ROCK, true, false);
-        Object.assign(rock, { ox: mon.mx, oy: mon.my, quan: 1, glyph: '*', color: NO_COLOR });
-        const stack = game.level?.objects?.find(obj =>
-            obj.ox === mon.mx && obj.oy === mon.my && obj.otyp === ROCK && obj.kind === 'rock');
-        if (stack) stack.quan = (stack.quan || 1) + 1;
-        else game.level.objects.push(rock);
-
-        const damage = d(2, 6);
-        mon.mhp = (mon.mhp || 1) - damage;
-        if (mon.mhp <= 0) {
-            const data = mon.data || {};
-            const corpseData = corpseDataForMonster(data);
-            const dropCorpse = monsterCorpseDropSucceeds(mon, data);
-            dropMonsterInventory(mon);
-            if (dropCorpse && monsterLeavesCorpseLikeDrop(corpseData))
-                createMonsterCorpseOrGlob(mon, corpseData);
-            recordVanquished(mon, false);
-            game.level.monsters = (game.level?.monsters || []).filter(other => other !== mon);
-            mon.movement = 0;
-            newsym(mon.mx, mon.my);
-        }
-        return done();
-    }
+    if (monsterRockTrapEffect(mon, trap)) return done();
     if (monsterPitTrapEffect(mon, trap, { cavernTunnelRoom })) return done();
     if (monsterHoleTrapEffect(mon, trap)) return done();
     if (trap?.ttyp === DART_TRAP && !monsterTrapHarmless(mon, trap)) {
@@ -13700,6 +13712,7 @@ function movePet(mon, resumeAfterInventory = false, conflictActive = false) {
         monsterFireTrapEffect(mon, trap, { skipPetPostMoveRoll: true });
         return;
     }
+    if (monsterRockTrapEffect(mon, trap, { skipPetPostMoveRoll: true })) return;
     if (trap?.ttyp === BEAR_TRAP && !mon.mtrapped && !monsterTrapHarmless(mon, trap)) {
         if (monsterKnowsTrap(mon, BEAR_TRAP) && rn2(4)) return;
         if (game._message_more && !game._process_time_with_more) {
@@ -15072,6 +15085,7 @@ export const __allmainTestHooks = {
     monsterAvoidsKnownTrapBeforeEffectForTest: monsterAvoidsKnownTrapBeforeEffect,
     monsterAntiMagicTrapEffectForTest: monsterAntiMagicTrapEffect,
     monsterFireTrapEffectForTest: monsterFireTrapEffect,
+    monsterRockTrapEffectForTest: monsterRockTrapEffect,
     monsterPitTrapEffectForTest: monsterPitTrapEffect,
     monsterTrappedTrapTurnForTest: monsterTrappedTrapTurn,
     monsterSleepGasTrapEffectForTest: monsterSleepGasTrapEffect,

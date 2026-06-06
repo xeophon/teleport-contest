@@ -37,5 +37,5 @@ The tests drive the normal pet movement loop or the shared helper with local fix
 
 ## Remaining Work
 
-- Pet post-move falling-rock, landmine, and rolling-boulder trap effects remain separate trap parity slices.
+- Pet post-move landmine and rolling-boulder trap effects remain separate trap parity slices.
 - Full pet leash slack/yelp and off-level migration handling remains broader `dog_move()` parity.

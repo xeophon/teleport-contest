@@ -20589,6 +20589,127 @@ test('pet squeaky board trap squeaks and wakes nearby monster through pet moveme
     assert.equal(!!(pet.mtrapseen & (1 << (SQKY_BOARD - 1))), true);
 });
 
+test('pet falling rock trap drops rock and damages pet through pet movement', async () => {
+    const { trap, pet } = installMovingPetPitTrapState(ROCKTRAP, {
+        mhp: 20,
+        mhpmax: 20,
+    });
+    enableRngLog({ reset: true });
+    queueEscapeForMonsterTurn();
+    markHeroNeighborhoodVisible();
+    markSquareVisible(6, 5);
+    markSquareVisible(7, 5);
+
+    await processMonsterTurns();
+    const messages = [game._pending_message, ...(await drainQueuedMessagesAfterMore())].join(' ');
+    const rockDamage = rngValuesForCall(getRngLog(), 'd(2,6)');
+
+    assert.match(messages, /The goblin is hit by a rock!/);
+    assert.equal(pet.mx, 6);
+    assert.equal(pet.my, 5);
+    assert.equal(rockDamage.length, 1);
+    assert.equal(game.level.monsters.includes(pet), true);
+    assert.equal(pet.mhp, 20 - rockDamage[0]);
+    assert.equal(trap.once, true);
+    assert.equal(trap.tseen, true);
+    assert.equal(game.level.objects.some(obj => obj.otyp === ROCK && obj.ox === 6 && obj.oy === 5), true);
+    assert.equal(!!(pet.mtrapseen & (1 << (ROCKTRAP - 1))), true);
+});
+
+test('rock-passing pet falling rock trap drops rock without damage', async () => {
+    const { trap, pet } = installMovingPetPitTrapState(ROCKTRAP, {
+        data: { name: 'xorn', mlet: 'X', mac: 2, passWalls: true },
+        mhp: 10,
+        mhpmax: 10,
+    });
+    enableRngLog({ reset: true });
+    queueEscapeForMonsterTurn();
+    markHeroNeighborhoodVisible();
+    markSquareVisible(6, 5);
+    markSquareVisible(7, 5);
+
+    await processMonsterTurns();
+    const messages = [game._pending_message, ...(await drainQueuedMessagesAfterMore())].join(' ');
+
+    assert.match(messages, /The xorn is hit by a rock!/);
+    assert.equal(pet.mx, 6);
+    assert.equal(pet.my, 5);
+    assert.equal(rngValuesForCall(getRngLog(), 'd(2,6)').length, 1);
+    assert.equal(pet.mhp, 10);
+    assert.equal(pet.mhpmax, 10);
+    assert.equal(trap.once, true);
+    assert.equal(trap.tseen, true);
+    assert.equal(game.level.objects.some(obj => obj.otyp === ROCK && obj.ox === 6 && obj.oy === 5), true);
+    assert.equal(!!(pet.mtrapseen & (1 << (ROCKTRAP - 1))), true);
+});
+
+test('remembered-only falling rock trap does not report monster hit', () => {
+    const { trap, goblin } = installMonsterPitTrapState(ROCKTRAP, {
+        mhp: 20,
+        mhpmax: 20,
+    });
+    enableRngLog({ reset: true });
+    game.viz_array = [];
+    game.viz_array[5] = [];
+    game.viz_array[5][6] = COULD_SEE;
+
+    assert.equal(allmain.monsterRockTrapEffectForTest(goblin, trap), true);
+
+    assert.doesNotMatch(game._pending_message || '', /hit by a rock/);
+    assert.equal(rngValuesForCall(getRngLog(), 'd(2,6)').length, 1);
+    assert.equal(goblin.mhp < 20, true);
+    assert.equal(trap.once, true);
+    assert.equal(trap.tseen, false);
+    assert.equal(game.level.objects.some(obj => obj.otyp === ROCK && obj.ox === 6 && obj.oy === 5), true);
+    assert.equal(!!(goblin.mtrapseen & (1 << (ROCKTRAP - 1))), true);
+});
+
+test('lethal pet falling rock trap removes pet through pet movement', async () => {
+    const { trap, pet } = installMovingPetPitTrapState(ROCKTRAP, {
+        mhp: 1,
+        mhpmax: 1,
+    });
+    enableRngLog({ reset: true });
+    queueEscapeForMonsterTurn();
+    markHeroNeighborhoodVisible();
+    markSquareVisible(6, 5);
+    markSquareVisible(7, 5);
+
+    await processMonsterTurns();
+    const messages = [game._pending_message, ...(await drainQueuedMessagesAfterMore())].join(' ');
+
+    assert.match(messages, /The goblin is hit by a rock!/);
+    assert.match(messages, /The goblin is killed!/);
+    assert.equal(game.level.monsters.includes(pet), false);
+    assert.equal(rngValuesForCall(getRngLog(), 'd(2,6)').length, 1);
+    assert.equal(trap.once, true);
+    assert.equal(trap.tseen, true);
+    assert.equal(game.level.objects.some(obj => obj.otyp === ROCK && obj.ox === 6 && obj.oy === 5), true);
+    assert.equal(!!(pet.mtrapseen & (1 << (ROCKTRAP - 1))), true);
+});
+
+test('lethal pet falling rock trap helper marks pet post-move roll skipped', () => {
+    const { trap, pet } = installMovingPetPitTrapState(ROCKTRAP, {
+        mhp: 1,
+        mhpmax: 1,
+    });
+    pet.mx = 6;
+    pet.my = 5;
+    enableRngLog({ reset: true });
+    markHeroNeighborhoodVisible();
+    markSquareVisible(6, 5);
+
+    assert.equal(allmain.monsterRockTrapEffectForTest(pet, trap, { skipPetPostMoveRoll: true }), true);
+
+    assert.equal(game.level.monsters.includes(pet), false);
+    assert.equal(game._pet_skip_post_move_roll, 1);
+    assert.equal(rngValuesForCall(getRngLog(), 'd(2,6)').length, 1);
+    assert.equal(trap.once, true);
+    assert.equal(trap.tseen, true);
+    assert.equal(game.level.objects.some(obj => obj.otyp === ROCK && obj.ox === 6 && obj.oy === 5), true);
+    assert.equal(!!(pet.mtrapseen & (1 << (ROCKTRAP - 1))), true);
+});
+
 test('pet fire trap damages pet through pet movement', async () => {
     const { trap, pet } = installMovingPetPitTrapState(FIRE_TRAP, {
         mhp: 20,
