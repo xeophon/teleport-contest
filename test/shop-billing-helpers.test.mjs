@@ -61683,6 +61683,93 @@ test('levitating hero-thrown loose heavy iron ball uses C ball range divisor', a
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(100)']);
 });
 
+test('levitating hero-thrown arrow with matching bow uses C ammo range increment', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        levitating: true,
+    });
+    game.u.acurr.a[A_STR] = 18;
+    const bow = {
+        id: 876173,
+        letter: 'a',
+        line: 'a - a bow (weapon in right hand)',
+        cls: 'weapon',
+        glyph: ')',
+        kind: 'bow',
+        actualKind: 'bow',
+        quan: 1,
+        wielded: true,
+    };
+    const arrow = {
+        id: 876174,
+        letter: 'b',
+        line: 'b - an arrow',
+        cls: 'weapon',
+        glyph: ')',
+        kind: 'arrow',
+        actualKind: 'arrow',
+        plural: 'arrows',
+        quan: 1,
+    };
+    game.inventory = [bow, arrow];
+    game.level.monsters = [];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('b');
+    await rhack('l');
+
+    assert.match(game._pending_message, /You float in the opposite direction\./);
+    assert.equal(game.u.ux, 4);
+    assert.equal(game.u.uy, 5);
+    assert.equal(game.inventory.includes(bow), true);
+    assert.equal(game.inventory.includes(arrow), false);
+    const landed = game.level.objects.find(obj => obj.id === arrow.id);
+    assert.ok(landed);
+    assert.equal(landed.ox, 14);
+    assert.equal(landed.oy, 5);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(100)']);
+});
+
+test('hero-thrown unmatched crossbow bolt uses C half range and warning', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+    });
+    game.u.acurr.a[A_STR] = 18;
+    const bolt = {
+        id: 876175,
+        letter: 'b',
+        line: 'b - a crossbow bolt',
+        cls: 'weapon',
+        glyph: ')',
+        kind: 'crossbow bolt',
+        actualKind: 'crossbow bolt',
+        plural: 'crossbow bolts',
+        quan: 1,
+    };
+    game.inventory = [bolt];
+    game.level.monsters = [];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('b');
+    await rhack('l');
+
+    assert.equal(game._pending_message, "You aren't wielding a crossbow, so you throw your bolt by hand.");
+    assert.equal(game.inventory.includes(bolt), false);
+    const landed = game.level.objects.find(obj => obj.id === bolt.id);
+    assert.ok(landed);
+    assert.equal(landed.ox, 9);
+    assert.equal(landed.oy, 5);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(100)']);
+});
+
 test('hero-thrown dagger harms ordinary monster and survives landing', async () => {
     installNonShopFloorState();
     initRng(2);

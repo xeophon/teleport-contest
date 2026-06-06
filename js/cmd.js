@@ -20028,13 +20028,73 @@ function heroHorizontalThrowAirRecoilActive() {
     return !!(Is_airlevel(game.u?.uz) || game.u?.levitating || game.u?.levitation || game.u?.Levitation);
 }
 
-function heroHorizontalThrowAirSplitRange(obj) {
+function heroThrowAmmoSkill(obj) {
+    const kind = objectKindKey(obj);
+    const name = inventoryItemName(obj).toLowerCase();
+    if (itemClassKey(obj) === 'gem' || obj?.glyph === '*' || obj?.otyp === GEM_CLASS)
+        return 'sling';
+    if (/\bcrossbow bolts?\b/.test(kind) || /\bcrossbow bolts?\b/.test(name))
+        return 'crossbow';
+    if (/\b(?:arrows?|elven arrows?|orcish arrows?|silver arrows?|ya)\b/.test(kind)
+        || /\b(?:arrows?|elven arrows?|orcish arrows?|silver arrows?|ya)\b/.test(name))
+        return 'bow';
+    return '';
+}
+
+function heroThrowLauncherSkill(obj) {
+    if (!obj) return '';
+    const kind = objectKindKey(obj);
+    const name = inventoryItemName(obj).toLowerCase();
+    if (kind === 'crossbow' || /\bcrossbow\b/.test(name)) return 'crossbow';
+    if (kind === 'sling' || /\bsling\b/.test(name)) return 'sling';
+    if (kind === 'yumi' || /\byumi\b/.test(name)) return 'bow';
+    if (/\bbow\b/.test(kind) || /\bbow\b/.test(name)) return 'bow';
+    return '';
+}
+
+function heroWieldedThrowLauncher() {
+    return (game.inventory || []).find(item =>
+        (item.wielded || item.line?.includes('weapon in')) && heroThrowLauncherSkill(item));
+}
+
+function heroThrowAmmoWeaponDescription(ammoSkill) {
+    if (ammoSkill === 'crossbow') return 'bolt';
+    if (ammoSkill === 'bow') return 'arrow';
+    return ammoSkill === 'sling' ? 'stone' : 'missile';
+}
+
+function heroHorizontalThrowAmmoRange(obj) {
+    const ammoSkill = heroThrowAmmoSkill(obj);
+    if (!ammoSkill) return null;
     const stats = game.u?.acurr?.a || [];
     const strength = Math.max(0, Math.trunc(Number(stats[A_STR] ?? 10)));
-    const urangeBase = Math.max(0, Math.trunc(strength / 2));
+    const launcherSkill = heroThrowLauncherSkill(heroWieldedThrowLauncher());
+    const matchedLauncher = launcherSkill === ammoSkill;
+    if (ammoSkill === 'sling' && !matchedLauncher) return null;
+    const crossbowing = matchedLauncher && launcherSkill === 'crossbow';
+    const urangeBase = Math.max(0, Math.trunc((crossbowing ? 18 : strength) / 2));
     const heavyIronBall = obj?.otyp === HEAVY_IRON_BALL || objectKindKey(obj) === 'heavy iron ball';
     const weightDivisor = heavyIronBall ? 100 : 40;
     let range = urangeBase - Math.trunc(globObjectWeight({ ...obj, quan: 1 }) / weightDivisor);
+    if (range < 1) range = 1;
+    let noLauncherMessage = '';
+    if (matchedLauncher) {
+        range = crossbowing ? BOLT_LIM : range + 1;
+    } else if (itemClassKey(obj) !== 'gem' && obj?.glyph !== '*' && obj?.otyp !== GEM_CLASS) {
+        range = Math.trunc(range / 2);
+        noLauncherMessage = `You aren't wielding ${articleFor(ammoSkill)}, so you throw your ${heroThrowAmmoWeaponDescription(ammoSkill)} by hand.`;
+    }
+    return { range, urangeBase, noLauncherMessage };
+}
+
+function heroHorizontalThrowAirSplitRange(obj) {
+    const ammoRange = heroHorizontalThrowAmmoRange(obj);
+    const stats = game.u?.acurr?.a || [];
+    const strength = Math.max(0, Math.trunc(Number(stats[A_STR] ?? 10)));
+    const urangeBase = ammoRange?.urangeBase ?? Math.max(0, Math.trunc(strength / 2));
+    const heavyIronBall = obj?.otyp === HEAVY_IRON_BALL || objectKindKey(obj) === 'heavy iron ball';
+    const weightDivisor = heavyIronBall ? 100 : 40;
+    let range = ammoRange?.range ?? urangeBase - Math.trunc(globObjectWeight({ ...obj, quan: 1 }) / weightDivisor);
     if (range < 1) range = 1;
 
     let recoilRange = urangeBase - range;
@@ -20042,7 +20102,7 @@ function heroHorizontalThrowAirSplitRange(obj) {
     range -= recoilRange;
     if (range < 1) range = 1;
 
-    return { recoilRange, throwRange: range };
+    return { recoilRange, throwRange: range, noLauncherMessage: ammoRange?.noLauncherMessage || '' };
 }
 
 function heroHorizontalThrowRecoil(dir, range) {
@@ -66848,12 +66908,15 @@ export async function rhack(_cmd) {
         let oy = uy;
         let targetMon = null;
         let ironBarsImpact = null;
-        let throwRange = heroIsUnderwaterForThrow() ? 1 : returningAklysThrow ? 4 : 8;
+        const ammoRange = heroHorizontalThrowAmmoRange(item);
+        let throwNoLauncherMessage = ammoRange?.noLauncherMessage || '';
+        let throwRange = heroIsUnderwaterForThrow() ? 1 : returningAklysThrow ? 4 : ammoRange?.range ?? 8;
         let ordinaryAirRecoilRange = 0;
         if (!boomerangFlight.handled && heroHorizontalThrowAirRecoilActive()) {
             const airSplit = heroHorizontalThrowAirSplitRange(item);
             ordinaryAirRecoilRange = airSplit.recoilRange;
             throwRange = airSplit.throwRange;
+            throwNoLauncherMessage = airSplit.noLauncherMessage || throwNoLauncherMessage;
             if (isBoulderObject(item)) throwRange = 20;
             else if (returningAklysThrow) throwRange = Math.min(throwRange, 4);
             if (heroIsUnderwaterForThrow()) throwRange = 1;
@@ -67206,12 +67269,10 @@ export async function rhack(_cmd) {
                 game._unburden_after_topline_more = 1;
             }
         }
-        const wieldedLauncher = (game.inventory || []).find(invItem =>
-            (invItem.wielded || invItem.line?.includes('weapon in')) && /bow|sling/.test(inventoryItemName(invItem).toLowerCase()));
-        const thrownByHand = /arrow/.test(lowerName) && !wieldedLauncher;
-        if (thrownByHand) {
-            if (landingMessage) game._queued_message_after_more = landingMessage;
-            await setMessage("You aren't wielding a bow, so you throw your arrow by hand.", !!landingMessage);
+        if (throwNoLauncherMessage) {
+            const followUpMessage = [impactMessage, landingMessage].filter(Boolean).join('  ');
+            if (followUpMessage) game._queued_message_after_more = followUpMessage;
+            await setMessage(throwNoLauncherMessage, !!followUpMessage);
         }
         else if (impactMessage) {
             if (landingMessage) game._queued_message_after_more = landingMessage;
