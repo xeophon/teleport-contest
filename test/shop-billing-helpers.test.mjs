@@ -60049,6 +60049,118 @@ test('hero-thrown javelin harms ordinary monster with spear skill damage', async
     ]);
 });
 
+test('hero-thrown spear variants use C small-target dice with spear skill damage', async () => {
+    const cases = [
+        { kind: 'elven spear', letter: 'e', line: 'e - an elven spear', material: 'wood', die: 7 },
+        { kind: 'orcish spear', letter: 'o', line: 'o - an orcish spear', material: 'iron', die: 5 },
+        { kind: 'dwarvish spear', letter: 'd', line: 'd - a dwarvish spear', material: 'iron', die: 8 },
+        { kind: 'silver spear', letter: 'v', line: 'v - a silver spear', material: 'silver', die: 6 },
+    ];
+
+    for (const tc of cases) {
+        installNonShopFloorState();
+        initRng(2);
+        Object.assign(game.u, { ulevel: 20, uluck: 10, uhitinc: 10, udaminc: 0 });
+        game.u.acurr.a[A_STR] = 10;
+        game.u.acurr.a[A_DEX] = 25;
+        game.u.weapon_skills = [];
+        setHeroWeaponSkill(P_SPEAR, P_EXPERT);
+        const spear = monsterSpearVariant(876141, tc.kind, {
+            letter: tc.letter,
+            line: tc.line,
+            material: tc.material,
+            ox: 5,
+            oy: 5,
+        });
+        const goblin = ordinaryThrowTarget('goblin', 7, 5, {
+            mhp: 20,
+            mhpmax: 20,
+            msleeping: 1,
+            mpeaceful: 1,
+            meating: 4,
+            mstrategy: STRAT_WAITFORU,
+        });
+        game.inventory = [spear];
+        game.level.monsters = [goblin];
+        enableRngLog({ reset: true });
+
+        await rhack('t');
+        await rhack(tc.letter);
+        await rhack('l');
+
+        assert.match(game._pending_message, new RegExp(`The ${tc.kind} hits the goblin[.!]`), tc.kind);
+        assert.doesNotMatch(game._pending_message, /misses|gift|catches|shatters|Splat/, tc.kind);
+        const rngLog = getRngLog();
+        const damageRoll = rngValuesForCall(rngLog, `rnd(${tc.die})`)[0];
+        assert.equal(goblin.mhp, 20 - (damageRoll + 2), tc.kind);
+        assert.equal(goblin.msleeping, 0, tc.kind);
+        assert.equal(goblin.meating, 0, tc.kind);
+        assert.equal(goblin.mstrategy, 0, tc.kind);
+        assert.equal(goblin.mpeaceful, 0, tc.kind);
+        assert.equal(game.inventory.includes(spear), false, tc.kind);
+        const landed = game.level.objects.find(obj => obj.id === spear.id);
+        assert.ok(landed, tc.kind);
+        assert.equal(landed.ox, 7, tc.kind);
+        assert.equal(landed.oy, 5, tc.kind);
+        assert.equal(landed.quan, 1, tc.kind);
+        assert.deepEqual(rngLog.map(entry => entry.replace(/=.*/, '')).slice(0, 4), [
+            'rnd(20)', `rnd(${tc.die})`, 'rn2(19)', 'rn2(100)',
+        ], tc.kind);
+    }
+});
+
+test('hero-thrown orcish spear uses large-target damage die', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, { ulevel: 20, uluck: 10, uhitinc: 10, udaminc: 0 });
+    game.u.acurr.a[A_STR] = 10;
+    game.u.acurr.a[A_DEX] = 25;
+    game.u.weapon_skills = [];
+    setHeroWeaponSkill(P_SPEAR, P_EXPERT);
+    const spear = monsterSpearVariant(876145, 'orcish spear', {
+        letter: 'o',
+        line: 'o - an orcish spear',
+        material: 'iron',
+        ox: 5,
+        oy: 5,
+    });
+    const ogre = ordinaryThrowTarget('ogre', 7, 5, {
+        mhp: 20,
+        mhpmax: 20,
+        msize: 3,
+        msleeping: 1,
+        mpeaceful: 1,
+        meating: 4,
+        mstrategy: STRAT_WAITFORU,
+    });
+    game.inventory = [spear];
+    game.level.monsters = [ogre];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('o');
+    await rhack('l');
+
+    assert.match(game._pending_message, /The orcish spear hits the ogre[.!]/);
+    assert.doesNotMatch(game._pending_message, /misses|gift|catches|shatters|Splat/);
+    const rngLog = getRngLog();
+    const damageRoll = rngValuesForCall(rngLog, 'rnd(8)')[0];
+    assert.equal(ogre.mhp, 20 - (damageRoll + 2));
+    assert.equal(ogre.msleeping, 0);
+    assert.equal(ogre.meating, 0);
+    assert.equal(ogre.mstrategy, 0);
+    assert.equal(ogre.mpeaceful, 0);
+    assert.equal(game.inventory.includes(spear), false);
+    const landed = game.level.objects.find(obj => obj.id === spear.id);
+    assert.ok(landed);
+    assert.equal(landed.ox, 7);
+    assert.equal(landed.oy, 5);
+    assert.equal(landed.quan, 1);
+    assert.deepEqual(rngLog.map(entry => entry.replace(/=.*/, '')).slice(0, 4), [
+        'rnd(20)', 'rnd(8)', 'rn2(19)', 'rn2(100)',
+    ]);
+});
+
 test('hero-thrown war hammer harms ordinary monster with hammer skill damage', async () => {
     installNonShopFloorState();
     initRng(2);

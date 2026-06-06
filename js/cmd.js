@@ -19803,6 +19803,10 @@ const HERO_THROWN_WEAPON_MONSTER_DATA = new Map([
     ['dart', { smallDie: 3, largeDie: 2, hitbon: 0, skill: P_DART, skillName: 'dart' }],
     ['shuriken', { smallDie: 8, largeDie: 6, hitbon: 2, skill: P_SHURIKEN, skillName: 'shuriken' }],
     ['spear', { smallDie: 6, largeDie: 8, hitbon: 0, skill: P_SPEAR, skillName: 'spear' }],
+    ['elven spear', { smallDie: 7, largeDie: 8, hitbon: 0, skill: P_SPEAR, skillName: 'spear' }],
+    ['orcish spear', { smallDie: 5, largeDie: 8, hitbon: 0, skill: P_SPEAR, skillName: 'spear' }],
+    ['dwarvish spear', { smallDie: 8, largeDie: 8, hitbon: 0, skill: P_SPEAR, skillName: 'spear' }],
+    ['silver spear', { smallDie: 6, largeDie: 8, hitbon: 0, skill: P_SPEAR, skillName: 'spear' }],
     ['javelin', { smallDie: 6, largeDie: 6, hitbon: 0, skill: P_SPEAR, skillName: 'spear' }],
     ['war hammer', { smallDie: 4, smallAdd: 1, largeDie: 4, hitbon: 0, skill: P_HAMMER, skillName: 'hammer' }],
 ]);
