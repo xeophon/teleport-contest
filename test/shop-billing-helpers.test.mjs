@@ -60207,6 +60207,103 @@ test('hero-thrown spear variants use C small-target dice with spear skill damage
     }
 });
 
+test('hero-thrown silver spear sears silver-hating monster', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, { ulevel: 20, uluck: 10, uhitinc: 10, udaminc: 0 });
+    game.u.acurr.a[A_STR] = 10;
+    game.u.acurr.a[A_DEX] = 25;
+    game.u.weapon_skills = [];
+    setHeroWeaponSkill(P_SPEAR, P_EXPERT);
+    const spear = monsterSpearVariant(876146, 'silver spear', {
+        letter: 'v',
+        line: 'v - a silver spear',
+        material: 'silver',
+        ox: 5,
+        oy: 5,
+    });
+    const vampire = ordinaryThrowTarget('vampire', 7, 5, {
+        mhp: 40,
+        mhpmax: 40,
+        data: { name: 'vampire', mlevel: 10, mlet: 'V', mac: 10 },
+    });
+    game.inventory = [spear];
+    game.level.monsters = [vampire];
+    markSquareVisible(7, 5);
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('v');
+    await rhack('l');
+
+    const rngLog = getRngLog();
+    const baseDamage = rngValuesForCall(rngLog, 'rnd(6)')[0];
+    const silverDamage = rngValuesForCall(rngLog, 'rnd(20)')[1];
+    assert.match(game._pending_message, /The silver spear hits the vampire!/);
+    assert.match(game._pending_message, /Your silver spear sears the vampire's flesh!/);
+    assert.doesNotMatch(game._pending_message, /misses|gift|catches|shatters|Splat|You kill/);
+    assert.equal(vampire.mhp, 40 - (baseDamage + silverDamage + 2));
+    assert.equal(vampire.msleeping, 0);
+    assert.equal(game.inventory.includes(spear), false);
+    const landed = game.level.objects.find(obj => obj.id === spear.id);
+    assert.ok(landed);
+    assert.equal(landed.ox, 7);
+    assert.equal(landed.oy, 5);
+    assert.equal(landed.material, 'silver');
+    assert.deepEqual(rngLog.map(entry => entry.replace(/=.*/, '')).slice(0, 5), [
+        'rnd(20)', 'rnd(6)', 'rnd(20)', 'rn2(19)', 'rn2(100)',
+    ]);
+    assert.equal(rngValuesForCall(rngLog, 'rnd(4)').length, 0);
+});
+
+test('hero-thrown blessed spear uses blessing-hater hit and damage bonuses', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, { ulevel: 1, uluck: 0, uhitinc: 0, udaminc: 0 });
+    game.u.acurr.a[A_STR] = 10;
+    game.u.acurr.a[A_DEX] = 10;
+    game.u.weapon_skills = [];
+    setHeroWeaponSkill(P_SPEAR, P_BASIC);
+    const spear = monsterSpear(876147, {
+        letter: 's',
+        line: 's - a blessed spear',
+        ox: 5,
+        oy: 5,
+        blessed: true,
+    });
+    const zombie = ordinaryThrowTarget('human zombie', 7, 5, {
+        mhp: 20,
+        mhpmax: 20,
+        data: { name: 'human zombie', mlevel: 4, mlet: 'Z', mac: 9 },
+    });
+    game.inventory = [spear];
+    game.level.monsters = [zombie];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('s');
+    await rhack('l');
+
+    const rngLog = getRngLog();
+    const hitRoll = rngValuesForCall(rngLog, 'rnd(20)')[0];
+    const baseDamage = rngValuesForCall(rngLog, 'rnd(6)')[0];
+    const blessedDamage = rngValuesForCall(rngLog, 'rnd(4)')[0];
+    assert.equal(hitRoll, 14);
+    assert.match(game._pending_message, /The spear hits the human zombie[.!]/);
+    assert.doesNotMatch(game._pending_message, /misses|silver sears|gift|catches|shatters|Splat/);
+    assert.equal(zombie.mhp, 20 - (baseDamage + blessedDamage));
+    assert.equal(zombie.msleeping, 0);
+    assert.equal(game.inventory.includes(spear), false);
+    const landed = game.level.objects.find(obj => obj.id === spear.id);
+    assert.ok(landed);
+    assert.equal(landed.ox, 7);
+    assert.equal(landed.oy, 5);
+    assert.equal(landed.blessed, true);
+    assert.deepEqual(rngLog.map(entry => entry.replace(/=.*/, '')).slice(0, 5), [
+        'rnd(20)', 'rnd(6)', 'rnd(4)', 'rn2(19)', 'rn2(100)',
+    ]);
+});
+
 test('hero-thrown orcish spear uses large-target damage die', async () => {
     installNonShopFloorState();
     initRng(2);

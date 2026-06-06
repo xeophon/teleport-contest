@@ -19858,7 +19858,13 @@ function heroProjectileObjectHitAdjustment(obj, mon, { monNotices = true } = {})
     }
     if (obj?.otyp === HEAVY_IRON_BALL && obj !== game.u?.uball) adjustment += 2;
     else if (obj?.otyp === BOULDER || objectKindKey(obj) === 'boulder') adjustment += 6;
-    else adjustment += heroProjectileObjectHitval(obj);
+    else {
+        adjustment += heroProjectileObjectHitval(obj);
+        if (heroProjectileObjectIsWeaponLike(obj) && obj?.blessed
+            && heroProjectileTargetHatesBlessings(mon)) {
+            adjustment += 2;
+        }
+    }
     return adjustment;
 }
 
@@ -19960,6 +19966,11 @@ function heroProjectileSupportedWeaponObject(obj) {
     return HERO_THROWN_WEAPON_MONSTER_DATA.has(tossUpWeaponObjectKey(obj));
 }
 
+function heroProjectileObjectIsWeaponLike(obj) {
+    return !!obj && (itemClassKey(obj) === 'weapon' || obj?.glyph === ')'
+        || obj?.otyp === WEAPON_CLASS || isWeaponTool(obj));
+}
+
 function heroThrownWeaponHitValue(obj, mon) {
     return heroProjectileBaseHitValue(obj, mon) + 2;
 }
@@ -20039,9 +20050,87 @@ function heroWeaponDamageSkillBonus(skill, skillName) {
     return 0;
 }
 
+function heroProjectileTargetHatesBlessings(mon) {
+    const data = mon?.data || {};
+    const rawMlet = String(mon?.mlet || data.mlet || data.glyph || '');
+    const mlet = rawMlet.toLowerCase();
+    const name = heroThrownGemNameValue(mon?.name || data.name);
+    return !!(mon?.undead || data.undead || mon?.vampshifter || data.vampshifter
+        || mon?.demon || data.demon
+        || rawMlet === 'L' || rawMlet === 'M' || rawMlet === 'V' || rawMlet === 'W'
+        || rawMlet === 'Z' || rawMlet === "'" || mlet === 'ghost'
+        || mlet === 'vampire' || mlet === 'demon' || rawMlet === '&'
+        || /\b(?:ghost|shade|lich|mummy|zombie|vampire|wraith|nazgul|skeleton|ghoul)\b/.test(name)
+        || /\b(?:demon|devil|manes)\b/.test(name));
+}
+
+function heroProjectileTargetHatesSilver(mon) {
+    const data = mon?.data || {};
+    const rawMlet = String(mon?.mlet || data.mlet || data.glyph || '');
+    const mlet = rawMlet.toLowerCase();
+    const name = heroThrownGemNameValue(mon?.name || data.name);
+    return !!(mon?.vampshifter || data.vampshifter
+        || mon?.were || mon?.isWere || mon?.wereHuman || mon?.wereBeast
+        || data.were || data.isWere || data.wereHuman || data.wereBeast
+        || mon?.demon || data.demon
+        || /^were/.test(name)
+        || rawMlet === 'V' || mlet === 'vampire'
+        || rawMlet === '&' || mlet === 'demon'
+        || name.includes('vampire') || name === 'vlad the impaler'
+        || name.includes('demon') || name.includes('devil') || name === 'manes'
+        || name === 'shade'
+        || ((rawMlet === 'i' || mlet === 'imp') && name !== 'tengu'));
+}
+
+function heroProjectileObjectIsSilver(obj) {
+    return objectMaterialForMetallivore(obj) === 'silver';
+}
+
+function heroProjectileSilverSearsFlesh(mon) {
+    const data = mon?.data || {};
+    const rawMlet = String(mon?.mlet || data.mlet || data.glyph || '');
+    const mlet = rawMlet.toLowerCase();
+    const name = heroThrownGemNameValue(mon?.name || data.name);
+    return !(mon?.noncorporeal || data.noncorporeal
+        || mon?.amorphous || data.amorphous
+        || rawMlet === ' ' || mlet === 'ghost'
+        || name === 'shade');
+}
+
+function heroProjectileSilverSearingObjectName(obj) {
+    let name = pickupObjectName({ ...obj, quan: 1 })
+        .replace(/^[a-zA-Z$?] - /, '')
+        .replace(/^(?:an?|the)\s+/i, '');
+    if (!/\bsilver\b/i.test(name)) name = `silver ${name}`;
+    return name;
+}
+
+function heroProjectileSilverSearingMessage(obj, mon) {
+    const flesh = heroProjectileSilverSearsFlesh(mon);
+    if (monsterCanBeSeenForPotionEffect(mon)) {
+        const objectName = heroProjectileSilverSearingObjectName(obj);
+        const verb = (obj?.quan || 1) > 1 ? 'sear' : 'sears';
+        const name = heroThrownVenomTargetName(mon);
+        return `Your ${objectName} ${verb} ${name}${flesh ? "'s flesh" : ''}!`;
+    }
+    return flesh ? 'Its flesh is seared!' : 'It is seared!';
+}
+
+function heroProjectileSpecialWeaponDamage(obj, mon) {
+    let damage = 0;
+    let silverMessage = '';
+    if (obj?.blessed && heroProjectileTargetHatesBlessings(mon)) damage += rnd(4);
+    if (heroProjectileObjectIsSilver(obj) && heroProjectileTargetHatesSilver(mon)) {
+        damage += rnd(20);
+        silverMessage = heroProjectileSilverSearingMessage(obj, mon);
+    }
+    return { damage, silverMessage };
+}
+
 function heroProjectileWeaponDamage(obj, mon) {
     const data = HERO_THROWN_WEAPON_MONSTER_DATA.get(tossUpWeaponObjectKey(obj));
-    if (!data || !heroProjectileSupportedWeaponObject(obj)) return 0;
+    if (!data || !heroProjectileSupportedWeaponObject(obj))
+        return { damage: 0, silverMessage: '' };
     const largeTarget = heroProjectileMonsterSizeValue(mon) >= 3;
     const die = largeTarget ? data.largeDie : data.smallDie;
     const add = largeTarget ? data.largeAdd : data.smallAdd;
@@ -20049,6 +20138,8 @@ function heroProjectileWeaponDamage(obj, mon) {
     damage += Math.trunc(Number(add || 0));
     damage += Math.trunc(Number(obj.spe || 0));
     if (damage < 0) damage = 0;
+    const special = heroProjectileSpecialWeaponDamage(obj, mon);
+    damage += special.damage;
     if (damage > 0) {
         damage -= Math.max(0, Math.trunc(Number(obj.oeroded || 0)), Math.trunc(Number(obj.oeroded2 || 0)));
         if (damage < 1) damage = 1;
@@ -20056,7 +20147,7 @@ function heroProjectileWeaponDamage(obj, mon) {
     damage += heroDamageIncreaseBonus() + heroStrengthDamageBonus();
     damage += heroWeaponDamageSkillBonus(data.skill, data.skillName);
     if (damage < 1) damage = 1;
-    return damage;
+    return { damage, silverMessage: special.silverMessage };
 }
 
 function heroProjectileHitPunctuation(damage) {
@@ -20141,9 +20232,10 @@ function heroProjectileWeaponImpact(obj, mon, hitValue) {
     const dieroll = rnd(20);
     const targetName = heroThrownVenomTargetName(mon);
     if (hitValue >= dieroll) {
-        const damage = heroProjectileWeaponDamage(obj, mon);
+        const { damage, silverMessage } = heroProjectileWeaponDamage(obj, mon);
         mon.mhp = (mon.mhp || 1) - damage;
         const messages = [`${floorObjectTheSubject({ ...obj, quan: 1 })} hits ${targetName}${heroProjectileHitPunctuation(damage)}`];
+        if (silverMessage) messages.push(silverMessage);
         if ((mon.mhp || 0) <= 0) killMonsterFromHeroProjectileHit(mon, messages, targetName);
         if (!mon.dead) wakeMonsterFromHeroThrownHit(mon);
         exerciseHeroProjectileHitDexterity();
