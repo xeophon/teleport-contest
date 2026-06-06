@@ -47285,13 +47285,40 @@ function heroRollingBoulderMonsterHitAdjustment(mon, movingBoulder) {
     return adjustment;
 }
 
-function heroRollingBoulderMonsterTargetName(mon) {
-    return fireScrollMonsterName(mon).replace(/^The /, 'the ');
-}
-
 function heroRollingBoulderDisguisedMimic(mon) {
     const appearance = M_AP_TYPE(mon);
     return !!mon && appearance && appearance !== M_AP_MONSTER;
+}
+
+function heroRollingBoulderMonsterCanBeSpotted(mon) {
+    return !!mon && !game.u?.blind && !mon.mundetected
+        && (!mon.minvis || game.u?.seeInvisible) && cansee(mon.mx, mon.my);
+}
+
+function heroRollingBoulderMonsterNameFromData(data) {
+    const baseName = String(data?.name || '').trim();
+    if (!baseName) return '';
+    const baseNameLower = baseName.toLowerCase();
+    const properName = data?.properName || data?.pname
+        || GENERATED_PROPER_NAME_MONSTER_NAMES.has(baseNameLower);
+    return properName ? baseName : `The ${baseName}`;
+}
+
+function heroRollingBoulderApparentMonsterName(mon) {
+    if (M_AP_TYPE(mon) !== M_AP_MONSTER) return '';
+    const data = mon?.appearData || mon?.mappearanceData || mon?.apparentData;
+    const explicitName = mon?.appearName || mon?.mappearanceName || mon?.apparentMonsterName;
+    return heroRollingBoulderMonsterNameFromData({ ...data, name: explicitName || data?.name });
+}
+
+function heroRollingBoulderMonsterTargetName(mon) {
+    if (game.flags?.verbose === false || !heroRollingBoulderMonsterCanBeSpotted(mon))
+        return 'it';
+    let name = (heroRollingBoulderApparentMonsterName(mon) || fireScrollMonsterName(mon))
+        .replace(/^The /, 'the ');
+    if (mon?.minvis && !/^(?:the )?invisible\b/i.test(name))
+        name = /^the /i.test(name) ? name.replace(/^the /i, 'the invisible ') : `invisible ${name}`;
+    return name;
 }
 
 function heroRollingBoulderRevealMimicAppearance(mon) {
