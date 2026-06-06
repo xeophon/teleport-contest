@@ -27722,14 +27722,24 @@ function shopkeeperForShopDoorAt(x, y) {
     return null;
 }
 
-function addShopTerrainDamage(x, y, cost) {
+function shopkeeperForShopDamageAt(x, y, loc) {
+    if (loc?.typ === DOOR) return shopkeeperForShopDoorAt(x, y);
+    for (const roomno of shopRoomnosAt(x, y, SHOPBASE)) {
+        const shkp = shopkeeperForRoomno(roomno);
+        if (liveShopkeeper(shkp)) return shkp;
+    }
+    return null;
+}
+
+export function addShopTerrainDamage(x, y, cost) {
     const loc = game.level?.at?.(x, y);
-    if (!loc || loc.typ !== DOOR) return false;
-    const shkp = shopkeeperForShopDoorAt(x, y);
+    if (!loc) return false;
+    const shkp = shopkeeperForShopDamageAt(x, y, loc);
     if (!shkp) return false;
 
     const damage = shopDamageList();
     const when = Math.max(0, Math.trunc(Number(game.moves || 0)));
+    const typ = loc.typ ?? ROOM;
     const entry = damage.find(dam => dam.x === x && dam.y === y);
     if (entry) {
         entry.cost = Math.max(0, Math.trunc(Number(entry.cost || 0))) + Math.max(0, Math.trunc(Number(cost || 0)));
@@ -27744,8 +27754,8 @@ function addShopTerrainDamage(x, y, cost) {
         y,
         cost: Math.max(0, Math.trunc(Number(cost || 0))),
         when,
-        typ: loc.typ,
-        flags: loc.doormask ?? D_CLOSED,
+        typ,
+        flags: loc.doormask ?? loc.flags ?? (typ === DOOR ? D_CLOSED : 0),
         shoproom: shkp.shoproom,
         shopkeeperId: shopkeeperIdentity(shkp),
     });
@@ -27817,6 +27827,14 @@ function repairableShopDamage(dam, shkp) {
             && mon.mx === dam.x && mon.my === dam.y && !monsterPassesWallsForRepair(mon));
         if (blocker) return false;
     }
+    const trap = (game.level?.traps || []).find(candidate => candidate.tx === dam.x && candidate.ty === dam.y);
+    if (trap) {
+        if (game.u?.ux === dam.x && game.u?.uy === dam.y) return false;
+        const trappedMonster = (game.level?.monsters || []).find(mon =>
+            !mon.dead && (mon.mhp == null || mon.mhp > 0)
+            && mon.mx === dam.x && mon.my === dam.y && mon.mtrapped);
+        if (trappedMonster) return false;
+    }
     return true;
 }
 
@@ -27834,6 +27852,14 @@ export function repairShopDamageForShopkeeper(shkp, messages = []) {
         messages.push(`${shopkeeperDisplayName(shkp)} whispers ${closeToHero ? 'an incantation' : 'something'}.`);
     } else if (!heroIsDeaf() && closeToHero) {
         messages.push('You hear someone muttering an incantation.');
+    }
+
+    const trap = (game.level?.traps || []).find(candidate => candidate.tx === dam.x && candidate.ty === dam.y);
+    if (trap) {
+        if (trap.tseen && !game.u?.blind && cansee(trap.tx, trap.ty)) {
+            messages.push(`The ${TRAP_NAMES[trap.ttyp] || 'trap'} vanishes.`);
+        }
+        deleteTrap(trap);
     }
 
     const wasAlreadyRepaired = dam.typ === loc.typ && (dam.typ !== DOOR || (loc.doormask & (D_CLOSED | D_LOCKED)));

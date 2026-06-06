@@ -47,5 +47,5 @@ These tests assert trap creation or rejection, exact RNG calls, cooldown state, 
 
 ## Remaining Work
 
-- C calls `add_damage(mx, my, 0L)` when a monster spins a web in a shop. The current JS shop damage API models repair-cost terrain damage, so this zero-cost shop repair marker is still open.
+- Monster-spun webs in shops now record the C `add_damage(mx, my, 0L)` zero-cost marker after successful trap creation, and the shared shop repair path can remove the marked web after the repair delay.
 - Broader monster post-move parity still needs continued audit for hide-under/eel concealment and shopkeeper post-move ordering around new monster-generated traps.

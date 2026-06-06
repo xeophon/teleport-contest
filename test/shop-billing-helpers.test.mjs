@@ -18112,8 +18112,9 @@ function installMonsterWebSpinState({
     supports = [],
     terrain = ROOM,
     extra = {},
+    shop = false,
 } = {}) {
-    installStableNonShopFloorState();
+    const state = shop ? installCommandShopState() : installStableNonShopFloorState();
     Object.assign(game.u, {
         ux: 5,
         uy: 5,
@@ -18130,6 +18131,14 @@ function installMonsterWebSpinState({
     game.level.upstair = null;
     game.level.dnstair = null;
     game.level.traps = traps.map(trap => ({ tseen: false, madeby_u: false, ...trap }));
+    if (shop) {
+        const cells = new Map();
+        game.level.at = (cx, cy) => {
+            const key = `${cx},${cy}`;
+            if (!cells.has(key)) cells.set(key, { roomno: ROOMOFFSET, typ: ROOM, lit: true });
+            return cells.get(key);
+        };
+    }
     game.level.at(x, y).typ = terrain;
     for (const [sx, sy, typ = STONE] of supports)
         game.level.at(sx, sy).typ = typ;
@@ -18142,8 +18151,8 @@ function installMonsterWebSpinState({
         data: { name, mlet: 's', mac: 10 },
         ...extra,
     });
-    game.level.monsters = [spider];
-    return { spider };
+    game.level.monsters = shop ? [state.shkp, spider] : [spider];
+    return { spider, shkp: state.shkp };
 }
 
 function assertMonsterHoleTrapMigrated(mon, trap, { targetLevel = { dnum: 0, dlevel: 2 } } = {}) {
@@ -18981,6 +18990,46 @@ test('unseen web spin creates unseen web silently', async () => {
     assert.equal(trap.tseen, false);
     assert.equal(spider.mspec_used, 4);
     assert.doesNotMatch(game._pending_message || '', /spins a web/);
+});
+
+test('monster-spun shop web records zero-cost repair marker and can be repaired', async () => {
+    const { spider, shkp } = installMonsterWebSpinState({ shop: true });
+    markSquareVisible(spider.mx, spider.my);
+    markSquareVisible(shkp.mx, shkp.my);
+    game.moves = 20;
+    enableRngLog({ reset: true });
+    installCoreRngValues([0, 0, 0, 0, 0]);
+
+    const trap = await allmain.maybeSpinMonsterWebForTest(spider);
+
+    assert.ok(trap);
+    assert.equal(trap.ttyp, WEB);
+    assert.equal(trap.tseen, true);
+    assert.equal(game.level.damagelist.length, 1);
+    assert.deepEqual(game.level.damagelist[0], {
+        x: spider.mx,
+        y: spider.my,
+        cost: 0,
+        when: 20,
+        typ: ROOM,
+        flags: 0,
+        shoproom: ROOMOFFSET,
+        shopkeeperId: shkp.m_id,
+    });
+
+    const earlyMessages = [];
+    game.moves = 20 + REPAIR_DELAY - 1;
+    assert.equal(shop.repairShopDamageForShopkeeper(shkp, earlyMessages), false);
+    assert.equal(game.level.traps.includes(trap), true);
+    assert.equal(game.level.damagelist.length, 1);
+
+    const messages = [];
+    game.moves = 20 + REPAIR_DELAY;
+    assert.equal(shop.repairShopDamageForShopkeeper(shkp, messages), true);
+    assert.equal(game.level.traps.includes(trap), false);
+    assert.deepEqual(game.level.damagelist, []);
+    assert.equal(messages.some(message => /Izchak whispers (?:an incantation|something)\./.test(message)), true);
+    assert.equal(messages.some(message => /The spider web vanishes\./.test(message)), true);
 });
 
 test('sokoban web spin requires monster clear path to upstairs', async () => {
