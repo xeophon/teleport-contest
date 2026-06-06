@@ -60357,6 +60357,91 @@ test('hero-thrown boomerang follows C return path and is skillfully caught', asy
     ]);
 });
 
+test('hero-thrown boomerang failed catch self-hits before landing', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 40,
+        uhpmax: 40,
+        uac: 10,
+        uhandedness: 'right',
+        fumbling: false,
+    });
+    game.u.acurr.a[A_DEX] = 0;
+    const boomerang = monsterBoomerang(876161, {
+        letter: 'b',
+        line: 'b - a boomerang',
+        ox: 5,
+        oy: 5,
+        spe: 10,
+    });
+    game.inventory = [boomerang];
+    game.level.monsters = [];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('b');
+    await rhack('l');
+
+    const rngLog = getRngLog();
+    const damage = rngValuesForCall(rngLog, 'rnd(9)')[0] + 10;
+    assert.match(game._pending_message, /You are hit by a boomerang!/);
+    assert.doesNotMatch(game._pending_message, /skillfully catch|returns|fails to return|misses|gift|catches|shatters|Splat/);
+    assert.equal(game.u.uhp, 40 - damage);
+    assert.equal(game.inventory.includes(boomerang), false);
+    const landed = game.level.objects.find(obj => obj.id === boomerang.id);
+    assert.ok(landed);
+    assert.equal(landed.ox, 5);
+    assert.equal(landed.oy, 5);
+    assert.deepEqual(rngLog.map(entry => entry.replace(/=.*/, '')).slice(0, 4), [
+        'rn2(20)', 'rnd(9)', 'rnd(20)', 'rn2(100)',
+    ]);
+});
+
+test('hero-thrown boomerang failed catch can miss after damage roll and still land', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 40,
+        uhpmax: 40,
+        uac: -30,
+        uhandedness: 'right',
+        fumbling: false,
+    });
+    game.u.acurr.a[A_DEX] = 0;
+    const boomerang = monsterBoomerang(876162, {
+        letter: 'b',
+        line: 'b - a boomerang',
+        ox: 5,
+        oy: 5,
+    });
+    game.inventory = [boomerang];
+    game.level.monsters = [];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('b');
+    await rhack('l');
+
+    const rngLog = getRngLog();
+    assert.match(game._pending_message, /A boomerang misses you\./);
+    assert.doesNotMatch(game._pending_message, /skillfully catch|returns|fails to return|You are hit|gift|catches|shatters|Splat/);
+    assert.equal(game.u.uhp, 40);
+    assert.equal(game.inventory.includes(boomerang), false);
+    const landed = game.level.objects.find(obj => obj.id === boomerang.id);
+    assert.ok(landed);
+    assert.equal(landed.ox, 5);
+    assert.equal(landed.oy, 5);
+    assert.equal(rngValuesForCall(rngLog, 'rnd(9)').length, 1);
+    assert.deepEqual(rngLog.map(entry => entry.replace(/=.*/, '')).slice(0, 4), [
+        'rn2(20)', 'rnd(9)', 'rnd(20)', 'rn2(100)',
+    ]);
+});
+
 test('hero-thrown boomerang curves into off-line monster before returning', async () => {
     installNonShopFloorState();
     initRng(2);

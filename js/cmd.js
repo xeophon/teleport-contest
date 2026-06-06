@@ -20023,6 +20023,42 @@ function heroThrownBoomerangFlightResult(obj, dir, ux, uy) {
     return { handled: true, x, y };
 }
 
+function heroThrownBoomerangSelfHitResult(obj) {
+    const messages = [];
+    const baseDamage = heroThrownGenericWeaponDamage(obj);
+    let damage = baseDamage == null
+        ? Math.max(0, rnd(9) + Math.trunc(Number(obj?.spe || 0)))
+        : baseDamage;
+    damage = maybeHalfPhysicalDamage(damage);
+    const objectName = 'a boomerang';
+    const threshold = (game.u?.uac ?? 10) + 10 + Math.trunc(Number(obj?.spe || 0));
+    const roll = rnd(20);
+    if (threshold <= roll) {
+        if (game.u?.blind || game.flags?.verbose === false) messages.push('It misses.');
+        else if (threshold <= roll - 2) messages.push('A boomerang misses you.');
+        else messages.push(`You are almost hit by ${objectName}.`);
+        return { hit: false, damage, messages, fatal: false, lifeSaving: false };
+    }
+
+    if (game.u?.blind || game.flags?.verbose === false)
+        messages.push(`You are hit${heroProjectileHitPunctuation(damage)}`);
+    else
+        messages.push(`You are hit by ${objectName}${heroProjectileHitPunctuation(damage)}`);
+    if (damage > 0 && game.u) {
+        game.u.uhp = Math.max(0, (game.u.uhp || 0) - damage);
+        if ((game.u.uhp || 0) <= 0) {
+            game._death_cause = 'killed by a boomerang';
+            if (consumeLifeSavingAmulet()) {
+                messages.push(`You die...  But wait...  Your medallion ${game.u?.blind ? 'feels warm' : 'begins to glow'}!`);
+                return { hit: true, damage, messages, fatal: false, lifeSaving: true };
+            }
+            messages.push('You die...');
+            return { hit: true, damage, messages, fatal: true, lifeSaving: false };
+        }
+    }
+    return { hit: true, damage, messages, fatal: false, lifeSaving: false };
+}
+
 function heroKickedWeaponHitValue(obj, mon) {
     return heroKickedProjectileHitValue(obj, mon);
 }
@@ -21182,6 +21218,7 @@ const HERO_TOSS_UP_WEAPON_SMALL_DAMAGE = new Map([
     ['rubber hose', 4],
     ['quarterstaff', 6],
     ['aklys', 6],
+    ['boomerang', 9],
     ['flail', { die: 6, add: 1 }],
     ['lance', 6],
     ['bullwhip', 2],
@@ -21240,6 +21277,7 @@ const HERO_TOSS_UP_WEAPON_LARGE_DAMAGE = new Map([
     ['rubber hose', 3],
     ['quarterstaff', 6],
     ['aklys', 3],
+    ['boomerang', 9],
     ['flail', { die: 4, bonusDie: 4 }],
     ['lance', 8],
     ['bullwhip', 1],
@@ -66805,6 +66843,7 @@ export async function rhack(_cmd) {
         let impactConsumedThrownObject = false;
         let impactObjectHit = false;
         let impactPassiveTarget = null;
+        let boomerangSelfHitResult = null;
         if (ironBarsImpact && heroThrownIronBarsBreakableClassHitObject(thrownObject)) {
             const barsImpact = await heroThrownIronBarsBreakImpact(thrownObject, ironBarsImpact);
             if (barsImpact.broke) {
@@ -66824,7 +66863,10 @@ export async function rhack(_cmd) {
             }
             impactMessage = barsImpact.messages.join('  ');
         }
-        if (targetMon && (isBlindingVenomObject(item) || isAcidVenomObject(item))) {
+        if (boomerangFlight.failedCatch) {
+            boomerangSelfHitResult = heroThrownBoomerangSelfHitResult(thrownObject);
+            impactMessage = [impactMessage, ...(boomerangSelfHitResult.messages || [])].filter(Boolean).join('  ');
+        } else if (targetMon && (isBlindingVenomObject(item) || isAcidVenomObject(item))) {
             rnd(20);
             const dex = game.u?.acurr?.a?.[A_DEX] ?? 10;
             if (dex > rnd(25)) {
@@ -67081,6 +67123,9 @@ export async function rhack(_cmd) {
         game._throw_item_letter = null;
         clearThrowCountState();
         game._resume_time_after_more = 0;
+        if (boomerangSelfHitResult?.lifeSaving || boomerangSelfHitResult?.fatal) {
+            if (applyLifeSavingOrFatalCommandMode(boomerangSelfHitResult)) return;
+        }
         game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
         game.context.move = 0;
         return;
