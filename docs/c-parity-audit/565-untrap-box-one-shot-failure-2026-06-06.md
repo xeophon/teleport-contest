@@ -25,4 +25,5 @@ This test drives the real extended command input, accepts the disarm prompt, for
 
 ## Remaining Work
 
+- Box/chest trap detection observation state is covered separately in `566-untrap-box-observation-2026-06-06.md`.
 - Full `chest_trap()` effects are still partial: explosion/destruction, damage, paralysis, sleep gas, poison gas, and shop billing consequences are not covered by this slice.

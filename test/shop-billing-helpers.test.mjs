@@ -21125,6 +21125,52 @@ test('#untrap current-square box only checks box for traps', async () => {
     assert.equal(game.context.move, 1);
 });
 
+test('#untrap discovered box trap observes box without contents knowledge', async () => {
+    setupUntrapDestinationWeb([], { rng: [0, 0] });
+    game.level.traps = [];
+    const box = shopFloorContainer(881010);
+    Object.assign(box, {
+        otrapped: true,
+        tknown: false,
+        dknown: false,
+        cknown: false,
+    });
+    game.level.objects = [box];
+
+    await enterUntrapDirection();
+    await rhack('.');
+
+    assert.equal(game._command_mode, 'untrapBoxConfirm');
+    assert.equal(game._pending_message, 'There is a large box here.  Check it for traps? [ynq] (q)');
+
+    await rhack('y');
+
+    assert.equal(game._command_mode, 'untrapBoxDisarmConfirm');
+    assert.deepEqual(getRngLog(), ['rn2(30)=0', 'rn2(19)=0']);
+    assert.equal(game._pending_message, 'You find a trap on the large box!  Disarm it? [ynq] (q)');
+    assert.equal(box.otrapped, true);
+    assert.equal(box.tknown, true);
+    assert.equal(box.dknown, true);
+    assert.equal(box.cknown, false);
+    assert.equal(game.context.move || 0, 0);
+
+    await rhack('n');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(box.otrapped, true);
+    assert.equal(game.context.move, 1);
+
+    game.context.move = 0;
+    enableRngLog({ reset: true });
+    await enterUntrapDirection();
+    await rhack('.');
+
+    assert.equal(game._command_mode, 'untrapBoxConfirm');
+    assert.deepEqual(getRngLog(), []);
+    assert.equal(game._pending_message, 'Disarm this large box? [ynq] (q)');
+    assert.equal(game.context.move || 0, 0);
+});
+
 test('#untrap failed known-box disarm consumes the one-shot trap', async () => {
     setupUntrapDestinationWeb([], { rng: [74, 0] });
     game.level.traps = [];

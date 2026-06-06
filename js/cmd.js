@@ -635,7 +635,10 @@ async function checkUntrapBox(box) {
         const knownTrap = box?.tknown && box?.dknown;
         if (box) {
             box.tknown = true;
-            box.cknown = true;
+            if (!heroIsHallucinating()) {
+                box.dknown = true;
+                recordObservedObjectDiscovery(box);
+            }
         }
         if (!confused) exerciseAttribute(A_WIS, true);
         await setMessage(knownTrap
