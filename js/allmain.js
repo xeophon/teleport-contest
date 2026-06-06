@@ -11313,6 +11313,54 @@ function rollingBoulderChainIntoBoulderAt(x, y, dx, dy, remainingDistance, movin
     return chainedBoulder;
 }
 
+function heroHasHalfPhysicalDamageForRollingBoulder() {
+    return !!(game.u?.halfPhysicalDamage
+        || game.u?.half_physical_damage
+        || game.u?.halfPhysical
+        || game.u?.halfPhysicalDamageTimeout
+        || game.u?.extrinsics?.halfPhysicalDamage
+        || game.u?.intrinsics?.halfPhysicalDamage);
+}
+
+function rollingBoulderHeroPassesRocks() {
+    const form = game.u?._polyself_form;
+    return monsterPassesRocks({
+        ...form,
+        data: form || game.u?.data || {},
+    });
+}
+
+function rollingBoulderHitHeroAt(x, y, movingBoulder) {
+    if ((game.u?.ux ?? 0) !== x || (game.u?.uy ?? 0) !== y) return false;
+
+    const rawDamage = rnd(20);
+    const damage = heroHasHalfPhysicalDamageForRollingBoulder() ? Math.trunc((rawDamage + 1) / 2) : rawDamage;
+    const hitValue = 9 + (movingBoulder?.spe || 0);
+    const attackRoll = rnd(20);
+    const hitThreshold = (game.u?.uac ?? 10) + hitValue;
+    const missed = hitThreshold <= attackRoll;
+    if (missed) {
+        if (game.u?.blind || game.flags?.verbose === false) {
+            addRollingBoulderMotionMessage('It misses.');
+        } else if (hitThreshold <= attackRoll - 2) {
+            addRollingBoulderMotionMessage('A boulder misses you.');
+        } else {
+            addRollingBoulderMotionMessage('You are almost hit by a boulder.');
+        }
+        return false;
+    }
+
+    addRollingBoulderMotionMessage(`You are hit${game.u?.blind || game.flags?.verbose === false ? '' : ' by a boulder'}${damage <= 4 ? '.' : '!'}`);
+    if (rollingBoulderHeroPassesRocks()) {
+        addRollingBoulderMotionMessage("It doesn't harm you.");
+        return true;
+    }
+    game._damage_after_topline_more = (game._damage_after_topline_more || 0) + damage;
+    game._exercise_after_topline_more = (game._exercise_after_topline_more || 0) + 1;
+    if (damage >= (game.u?.uhp || 0)) game._death_cause ||= 'killed by a boulder';
+    return true;
+}
+
 function monsterRollingBoulderTrapEffect(mon, trap, { skipPetPostMoveRoll = false } = {}) {
     if (trap?.ttyp !== ROLLING_BOULDER_TRAP || monsterTrapHarmless(mon, trap)) return false;
     if (monsterAvoidsKnownTrapBeforeEffect(mon, trap)) return true;
@@ -11403,6 +11451,8 @@ function monsterRollingBoulderTrapEffect(mon, trap, { skipPetPostMoveRoll = fals
                         newsym(x, y);
                     }
                 }
+            } else {
+                rollingBoulderHitHeroAt(x, y, boulder);
             }
             boulder = rollingBoulderChainIntoBoulderAt(x, y, dx, dy, dist - 1, boulder);
             rollingBoulderBreakClosedDoorAt(x, y, dist - 1);

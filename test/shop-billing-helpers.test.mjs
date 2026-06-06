@@ -21247,6 +21247,103 @@ test('deaf hero gets silent rolling boulder iron bars impact', () => {
     assert.equal(rngValuesForCall(getRngLog(), 'rnd(20)').length, 0);
 });
 
+test('rolling boulder hits half-physical hero on path and keeps rolling', () => {
+    const { trap, goblin } = installMonsterPitTrapState(ROLLING_BOULDER_TRAP, {
+        mhp: 50,
+        mhpmax: 50,
+        data: { mac: -10 },
+    });
+    game.u.ux = 6;
+    game.u.uy = 3;
+    game.u.halfPhysicalDamage = true;
+    const boulder = installRollingBoulderTrapLaunch(trap, {
+        start: { x: 4, y: 3 },
+        end: { x: 8, y: 3 },
+    });
+    enableRngLog({ reset: true });
+    installCoreRngValues([8, 0]);
+    markHeroNeighborhoodVisible();
+    markSquareVisible(6, 5);
+    for (let x = 4; x <= 8; x++) markSquareVisible(x, 3);
+
+    assert.equal(allmain.monsterRollingBoulderTrapEffectForTest(goblin, trap), true);
+
+    assert.match(game._pending_message || '', /Click!  The goblin triggers something\./);
+    assert.equal(game._topline_after_more, 'You are hit by a boulder!');
+    assert.equal(game.u.uhp, 50);
+    assert.equal(game._damage_after_topline_more, 5);
+    assert.equal(game._exercise_after_topline_more, 1);
+    assert.equal(goblin.mhp, 50);
+    assert.equal(boulder.ox, 8);
+    assert.equal(boulder.oy, 3);
+    assert.equal(trap.tseen, true);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rnd(20)'), [9, 1]);
+});
+
+test('rolling boulder miss against hero consumes damage before hit roll', () => {
+    const { trap, goblin } = installMonsterPitTrapState(ROLLING_BOULDER_TRAP, {
+        mhp: 50,
+        mhpmax: 50,
+        data: { mac: -10 },
+    });
+    game.u.ux = 6;
+    game.u.uy = 3;
+    game.u.uac = 9;
+    const boulder = installRollingBoulderTrapLaunch(trap, {
+        start: { x: 4, y: 3 },
+        end: { x: 8, y: 3 },
+    });
+    enableRngLog({ reset: true });
+    installCoreRngValues([11, 19]);
+    markHeroNeighborhoodVisible();
+    markSquareVisible(6, 5);
+    for (let x = 4; x <= 8; x++) markSquareVisible(x, 3);
+
+    assert.equal(allmain.monsterRollingBoulderTrapEffectForTest(goblin, trap), true);
+
+    assert.match(game._pending_message || '', /Click!  The goblin triggers something\./);
+    assert.equal(game._topline_after_more, 'A boulder misses you.');
+    assert.equal(game._damage_after_topline_more || 0, 0);
+    assert.equal(game._exercise_after_topline_more || 0, 0);
+    assert.equal(goblin.mhp, 50);
+    assert.equal(boulder.ox, 8);
+    assert.equal(boulder.oy, 3);
+    assert.equal(trap.tseen, true);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rnd(20)'), [12, 20]);
+});
+
+test('rolling boulder hit against rock-passing polyself is harmless', () => {
+    const { trap, goblin } = installMonsterPitTrapState(ROLLING_BOULDER_TRAP, {
+        mhp: 50,
+        mhpmax: 50,
+        data: { mac: -10 },
+    });
+    game.u.ux = 6;
+    game.u.uy = 3;
+    game.u._polyself_form = { name: 'xorn', mlet: 'X', passWalls: true, passesRocks: true };
+    const boulder = installRollingBoulderTrapLaunch(trap, {
+        start: { x: 4, y: 3 },
+        end: { x: 8, y: 3 },
+    });
+    enableRngLog({ reset: true });
+    installCoreRngValues([6, 0]);
+    markHeroNeighborhoodVisible();
+    markSquareVisible(6, 5);
+    for (let x = 4; x <= 8; x++) markSquareVisible(x, 3);
+
+    assert.equal(allmain.monsterRollingBoulderTrapEffectForTest(goblin, trap), true);
+
+    assert.match(game._pending_message || '', /Click!  The goblin triggers something\./);
+    assert.equal(game._topline_after_more, "You are hit by a boulder!  It doesn't harm you.");
+    assert.equal(game.u.uhp, 50);
+    assert.equal(game._damage_after_topline_more || 0, 0);
+    assert.equal(game._exercise_after_topline_more || 0, 0);
+    assert.equal(boulder.ox, 8);
+    assert.equal(boulder.oy, 3);
+    assert.equal(trap.tseen, true);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rnd(20)'), [7, 1]);
+});
+
 test('rolling boulder sets another boulder in motion', () => {
     const { trap, goblin } = installMonsterPitTrapState(ROLLING_BOULDER_TRAP, {
         mhp: 50,

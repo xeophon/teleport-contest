@@ -30,4 +30,4 @@ The tests use local trap, boulder, visibility/status, and RNG fixtures. They do 
 
 ## Remaining Work
 
-- Full `launch_obj()` parity remains broader trap/terrain work: hero collision along the rolling path, path trap effects, launch-drop preservation, and floor-effect integration.
+- Full `launch_obj()` parity remains broader trap/terrain work: path trap effects, launch-drop preservation, and floor-effect integration. Hero collision along the rolling path is covered in audit 589.
