@@ -5732,7 +5732,7 @@ function markImpactDropMigration(obj, route = {}) {
     };
 }
 
-function queueImpactDroppedObjects(targetLevel, objects, route = {}) {
+export function queueImpactDroppedObjects(targetLevel, objects, route = {}) {
     if (!targetLevel || !objects?.length) return;
     game._impact_drop_migrations ??= new Map();
     const key = impactDropLevelKey(targetLevel);
@@ -5862,7 +5862,7 @@ function impactDropPileQuantity(pile) {
     return pile.reduce((sum, obj) => sum + (obj.quan || 1), 0);
 }
 
-function impactDropFloorObjects(x, y, trap, options = {}) {
+export function impactDropFloorObjects(x, y, trap, options = {}) {
     const gateText = impactDropGateText(trap);
     if (!gateText || !game.level?.objects?.length) return emptyImpactDropResult();
     if (!options.withHero && !options.targetLevel) return emptyImpactDropResult();
@@ -29580,7 +29580,7 @@ function projectileShipObjectResult(overrides = {}) {
     };
 }
 
-function downGateAt(x, y) {
+export function downGateAt(x, y) {
     const fromLevel = currentMigrationSourceLevel();
     for (let stair = game.stairs; stair; stair = stair.next) {
         if (stair.sx !== x || stair.sy !== y || stair.up) continue;

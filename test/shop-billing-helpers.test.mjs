@@ -18118,6 +18118,39 @@ function installRollingBoulderTrapLaunch(trap, {
     return boulder;
 }
 
+function installRollingBoulderPathDownGate({
+    x = 6,
+    y = 3,
+    isladder = false,
+    targetLevel = { dnum: 0, dlevel: 2 },
+    trap = null,
+} = {}) {
+    game.u.uz = { dnum: 0, dlevel: 1 };
+    game.dungeons = [{ name: 'The Dungeons of Doom', num_dunlevs: 3, depth_start: 1 }];
+    if (trap) game.level.traps.push({ ...trap, tx: x, ty: y, tseen: true });
+    game.stairs = {
+        sx: x,
+        sy: y,
+        up: false,
+        isladder,
+        tolev: { ...targetLevel },
+        next: null,
+    };
+    const previousAt = game.level.at;
+    game.level.at = (xx, yy) => {
+        if (xx === x && yy === y) {
+            return {
+                roomno: ROOMOFFSET,
+                typ: isladder ? LADDER : STAIRS,
+                ladder: isladder ? 2 : 0,
+                lit: true,
+            };
+        }
+        return previousAt(xx, yy);
+    };
+    return game.stairs;
+}
+
 function installMovingMonsterHoleTrapState(ttyp = HOLE, extra = {}) {
     installStableNonShopFloorState();
     Object.assign(game.u, {
@@ -21596,6 +21629,97 @@ test('rolling boulder level teleporter migrates boulder off level', () => {
     assert.equal(boulder.owornmask, MIGR_RANDOM);
     assert.equal(trap.tseen, true);
     assert.deepEqual(rngValuesForCall(getRngLog(), 'rn2(5)'), [1]);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rn2(3)'), [0]);
+    assert.equal(rngValuesForCall(getRngLog(), 'rnd(20)').length, 0);
+});
+
+test('rolling boulder down ladder always migrates off level', () => {
+    const { trap, goblin } = installMonsterPitTrapState(ROLLING_BOULDER_TRAP, {
+        mhp: 50,
+        mhpmax: 50,
+        data: { mac: -10 },
+    });
+    installRollingBoulderPathDownGate({ x: 6, y: 3, isladder: true });
+    const boulder = installRollingBoulderTrapLaunch(trap, {
+        start: { x: 4, y: 3 },
+        end: { x: 8, y: 3 },
+    });
+    enableRngLog({ reset: true });
+    markHeroNeighborhoodVisible();
+    markSquareVisible(6, 5);
+    for (let x = 4; x <= 8; x++) markSquareVisible(x, 3);
+
+    assert.equal(allmain.monsterRollingBoulderTrapEffectForTest(goblin, trap), true);
+
+    assert.match(game._pending_message || '', /Click!  The goblin triggers something\./);
+    assert.equal(game._topline_after_more, 'A boulder falls down the ladder.');
+    assert.equal(game.level.objects.includes(boulder), false);
+    assert.deepEqual(game._impact_drop_migrations?.get('0:2'), [boulder]);
+    assert.equal(boulder.owornmask, MIGR_LADDER_UP);
+    assert.equal(boulder._impactDropMigration?.where, MIGR_LADDER_UP);
+    assert.equal(trap.tseen, true);
+    assert.equal(rngValuesForCall(getRngLog(), 'rn2(3)').length, 0);
+    assert.equal(rngValuesForCall(getRngLog(), 'rnd(20)').length, 0);
+});
+
+test('rolling boulder down stairs no-drop roll keeps rolling', () => {
+    const { trap, goblin } = installMonsterPitTrapState(ROLLING_BOULDER_TRAP, {
+        mhp: 50,
+        mhpmax: 50,
+        data: { mac: -10 },
+    });
+    installRollingBoulderPathDownGate({ x: 6, y: 3 });
+    const boulder = installRollingBoulderTrapLaunch(trap, {
+        start: { x: 4, y: 3 },
+        end: { x: 8, y: 3 },
+    });
+    enableRngLog({ reset: true });
+    installCoreRngValues([1]);
+    markHeroNeighborhoodVisible();
+    markSquareVisible(6, 5);
+    for (let x = 4; x <= 8; x++) markSquareVisible(x, 3);
+
+    assert.equal(allmain.monsterRollingBoulderTrapEffectForTest(goblin, trap), true);
+
+    assert.match(game._pending_message || '', /Click!  The goblin triggers something\./);
+    assert.equal(game._topline_after_more || '', '');
+    assert.equal(game.level.objects.includes(boulder), true);
+    assert.equal(boulder.ox, 8);
+    assert.equal(boulder.oy, 3);
+    assert.equal(game._impact_drop_migrations?.get('0:2'), undefined);
+    assert.equal(trap.tseen, true);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rn2(3)'), [1]);
+    assert.equal(rngValuesForCall(getRngLog(), 'rnd(20)').length, 0);
+});
+
+test('rolling boulder down stairs ships before same-square seen hole', () => {
+    const { trap, goblin } = installMonsterPitTrapState(ROLLING_BOULDER_TRAP, {
+        mhp: 50,
+        mhpmax: 50,
+        data: { mac: -10 },
+    });
+    installRollingBoulderPathDownGate({ x: 6, y: 3, trap: { ttyp: HOLE, madeby_u: false } });
+    const hole = game.level.traps.find(item => item.ttyp === HOLE && item.tx === 6 && item.ty === 3);
+    const boulder = installRollingBoulderTrapLaunch(trap, {
+        start: { x: 4, y: 3 },
+        end: { x: 8, y: 3 },
+    });
+    enableRngLog({ reset: true });
+    installCoreRngValues([0]);
+    markHeroNeighborhoodVisible();
+    markSquareVisible(6, 5);
+    for (let x = 4; x <= 8; x++) markSquareVisible(x, 3);
+
+    assert.equal(allmain.monsterRollingBoulderTrapEffectForTest(goblin, trap), true);
+
+    assert.match(game._pending_message || '', /Click!  The goblin triggers something\./);
+    assert.equal(game._topline_after_more, 'A boulder falls down the stairs.');
+    assert.equal(game.level.traps.includes(hole), true);
+    assert.equal(game.level.objects.includes(boulder), false);
+    assert.deepEqual(game._impact_drop_migrations?.get('0:2'), [boulder]);
+    assert.equal(boulder.owornmask, MIGR_STAIRS_UP);
+    assert.equal(boulder._impactDropMigration?.where, MIGR_STAIRS_UP);
+    assert.equal(trap.tseen, true);
     assert.deepEqual(rngValuesForCall(getRngLog(), 'rn2(3)'), [0]);
     assert.equal(rngValuesForCall(getRngLog(), 'rnd(20)').length, 0);
 });

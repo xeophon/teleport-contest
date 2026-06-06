@@ -32,4 +32,4 @@ The tests use local trap, boulder, visibility, migration, and RNG fixtures. They
 
 ## Remaining Work
 
-- Full `launch_obj()` parity remains broader trap/terrain work: launch-drop preservation, final-placement floor effects, hero-triggered rolling-boulder rewriting, occupation/multi interruption, and mounted-steed diversion.
+- Full `launch_obj()` parity remains broader trap/terrain work: launch-drop preservation, final-placement floor effects, hero-triggered rolling-boulder rewriting, occupation/multi interruption, and mounted-steed diversion. Rolling-boulder path down-gate shipping is covered in audit 593.
