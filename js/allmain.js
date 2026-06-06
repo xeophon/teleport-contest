@@ -3101,11 +3101,12 @@ function pauseEatingOccupationAfterChoke(g, remainingTurns) {
     g._eating_nomovemsg = '';
 }
 
-export function interruptEatingOccupation(g = game) {
+export function interruptEatingOccupation(g = game, options = {}) {
     if (!(g._eating_turns_remaining > 0)) return false;
     if (g._eating_turns_remaining <= 1)
         return processEatingOccupationTick(g);
 
+    const addMessage = options.addMessage || addToplineMessage;
     const eatenObject = g._eating_inventory_object || g._eating_floor_object;
     const biteNutrition = Math.trunc(g._eating_bite_nutrition || 0);
     if (eatenObject && biteNutrition > 0) {
@@ -3113,7 +3114,7 @@ export function interruptEatingOccupation(g = game) {
         g._eating_interrupted = 1;
         g._eating_turns_remaining = 0;
         g._pending_rotten_food_eating_message = 0;
-        addToplineMessage(`You stop eating ${eatingOccupationObjectName(eatenObject)}.`);
+        addMessage(`You stop eating ${eatingOccupationObjectName(eatenObject)}.`);
         return true;
     }
 
@@ -3122,7 +3123,7 @@ export function interruptEatingOccupation(g = game) {
     return true;
 }
 
-function interruptPositiveMultiForStoning() {
+function interruptPositiveMulti() {
     game._run_steps_remaining = 0;
     game._running_continuation = 0;
     game._initial_run_command = 0;
@@ -3133,18 +3134,21 @@ function interruptPositiveMultiForStoning() {
     game._counted_repeat_interruptible = 0;
 }
 
-function stopStoningOccupations() {
-    game._eating_turns_remaining = 0;
-    game._eating_finish_message = '';
-    game._eating_floor_object = null;
-    game._eating_floor_object_direct_useup = 0;
-    game._eating_floor_object_pending_useup = null;
-    game._eating_nutrition = 0;
-    game._eating_newt_buzz = 0;
-    clearEatingInventoryState(game);
-    clearInterruptedEatingState(game);
-    clearEatingFullnessState(game);
-    game._pending_rotten_food_eating_message = 0;
+function interruptPositiveMultiForStoning() {
+    interruptPositiveMulti();
+}
+
+function clearActiveDelayedOccupations(options = {}) {
+    const activeEating = game._eating_turns_remaining > 0;
+    if (activeEating || options.clearEatingAlways) {
+        if (activeEating && options.interruptEating) {
+            interruptEatingOccupation(game, { addMessage: options.addEatingMessage });
+        } else {
+            clearActiveEatingOccupation(game);
+            game._eating_floor_object_pending_useup = null;
+            game._pending_rotten_food_eating_message = 0;
+        }
+    }
     game._armor_wear_occupation = null;
     game._armor_takeoff_after_more = null;
     game._armor_finish_after_more = 0;
@@ -3166,12 +3170,21 @@ function stopStoningOccupations() {
     game._prayer_pending_done = 0;
     game._pending_prayer_finish_message = 0;
     game._prayer_process_time_now = 0;
-    game._prayer_debug_pleased = 0;
     game._prayer_split_finish_message = 0;
     game._prayer_split_waiting_for_time = 0;
     game._prayer_split_remaining_time = 0;
-    game._prayer_nearby_trouble = 0;
-    if (game.u) game.u.uinvulnerable = false;
+    if (options.clearPrayerDebug) game._prayer_debug_pleased = 0;
+    if (options.clearPrayerTrouble) game._prayer_nearby_trouble = 0;
+    if (options.clearInvulnerability && game.u) game.u.uinvulnerable = false;
+}
+
+function stopStoningOccupations() {
+    clearActiveDelayedOccupations({
+        clearEatingAlways: true,
+        clearPrayerDebug: true,
+        clearPrayerTrouble: true,
+        clearInvulnerability: true,
+    });
     interruptPositiveMultiForStoning();
 }
 
@@ -9450,42 +9463,8 @@ function demonicBlackmailPrinceReveal(mon) {
 }
 
 function interruptDemonicBlackmailOccupation() {
-    if (game._eating_turns_remaining > 0) {
-        clearActiveEatingOccupation(game);
-        game._pending_rotten_food_eating_message = 0;
-    }
-    game._run_steps_remaining = 0;
-    game._running_continuation = 0;
-    game._initial_run_command = 0;
-    game._run_steps_after_more = 0;
-    game._travel_keys = [];
-    game._travel_dynamic_target = null;
-    game._search_pending_count = 0;
-    game._counted_repeat_interruptible = 0;
-    game._armor_wear_occupation = null;
-    game._armor_takeoff_after_more = null;
-    game._armor_finish_after_more = 0;
-    game._force_lock_occupation = null;
-    game._force_lock_continue_time = 0;
-    game._force_lock_finish_after_more = null;
-    game._pending_force_lock_start_message = 0;
-    game._pick_lock_occupation = null;
-    game._pick_lock_continue_time = 0;
-    game._pick_dig_occupation = null;
-    game._queued_pick_dig_apply_letter = null;
-    game._apply_pick_dig_letter = null;
-    game._tin_opening_occupation = null;
-    game._tin_finish_after_turn = null;
-    game._tin_opened_pending = null;
-    game._spellbook_study_occupation = null;
-    game._spellbook_finish_after_topline_more = null;
-    game._prayer_occupation = 0;
-    game._prayer_pending_done = 0;
-    game._pending_prayer_finish_message = 0;
-    game._prayer_process_time_now = 0;
-    game._prayer_split_finish_message = 0;
-    game._prayer_split_waiting_for_time = 0;
-    game._prayer_split_remaining_time = 0;
+    interruptPositiveMulti();
+    clearActiveDelayedOccupations();
 }
 
 function maybeDemonicBlackmailTrueTargetArtifact(mon) {
@@ -11330,11 +11309,22 @@ function rollingBoulderHeroPassesRocks() {
     });
 }
 
+function rollingBoulderStopHeroOccupationOnHit() {
+    clearActiveDelayedOccupations({
+        interruptEating: true,
+        addEatingMessage: addRollingBoulderMotionMessage,
+        clearPrayerDebug: true,
+        clearPrayerTrouble: true,
+        clearInvulnerability: true,
+    });
+}
+
 function rollingBoulderHitHeroAt(x, y, movingBoulder) {
     if ((game.u?.ux ?? 0) !== x || (game.u?.uy ?? 0) !== y) return false;
 
     const rawDamage = rnd(20);
     const damage = heroHasHalfPhysicalDamageForRollingBoulder() ? Math.trunc((rawDamage + 1) / 2) : rawDamage;
+    interruptPositiveMulti();
     const hitValue = 9 + (movingBoulder?.spe || 0);
     const attackRoll = rnd(20);
     const hitThreshold = (game.u?.uac ?? 10) + hitValue;
@@ -11353,11 +11343,13 @@ function rollingBoulderHitHeroAt(x, y, movingBoulder) {
     addRollingBoulderMotionMessage(`You are hit${game.u?.blind || game.flags?.verbose === false ? '' : ' by a boulder'}${damage <= 4 ? '.' : '!'}`);
     if (rollingBoulderHeroPassesRocks()) {
         addRollingBoulderMotionMessage("It doesn't harm you.");
+        rollingBoulderStopHeroOccupationOnHit();
         return true;
     }
     game._damage_after_topline_more = (game._damage_after_topline_more || 0) + damage;
     game._exercise_after_topline_more = (game._exercise_after_topline_more || 0) + 1;
     if (damage >= (game.u?.uhp || 0)) game._death_cause ||= 'killed by a boulder';
+    rollingBoulderStopHeroOccupationOnHit();
     return true;
 }
 

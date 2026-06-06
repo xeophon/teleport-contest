@@ -21356,6 +21356,106 @@ test('rolling boulder miss against hero consumes damage before hit roll', () => 
     assert.deepEqual(rngValuesForCall(getRngLog(), 'rnd(20)'), [12, 20]);
 });
 
+test('rolling boulder miss cancels repeat state but keeps active occupation', () => {
+    const { trap, goblin } = installMonsterPitTrapState(ROLLING_BOULDER_TRAP, {
+        mhp: 50,
+        mhpmax: 50,
+        data: { mac: -10 },
+    });
+    game.u.ux = 6;
+    game.u.uy = 3;
+    game.u.uac = 9;
+    const forceOccupation = { usedtime: 3, chance: 6, picktyp: true };
+    game._force_lock_occupation = forceOccupation;
+    game._force_lock_continue_time = 1;
+    game._run_steps_remaining = 4;
+    game._running_continuation = 1;
+    game._initial_run_command = 1;
+    game._run_steps_after_more = 3;
+    game._travel_keys = ['l'];
+    game._travel_dynamic_target = { x: 8, y: 3 };
+    game._search_pending_count = 5;
+    game._counted_repeat_interruptible = 1;
+    game._helpless_time = 5;
+    game._multi_reason = 'frozen by a trap';
+    const boulder = installRollingBoulderTrapLaunch(trap, {
+        start: { x: 4, y: 3 },
+        end: { x: 8, y: 3 },
+    });
+    enableRngLog({ reset: true });
+    installCoreRngValues([11, 19]);
+    markHeroNeighborhoodVisible();
+    markSquareVisible(6, 5);
+    for (let x = 4; x <= 8; x++) markSquareVisible(x, 3);
+
+    assert.equal(allmain.monsterRollingBoulderTrapEffectForTest(goblin, trap), true);
+
+    assert.equal(game._topline_after_more, 'A boulder misses you.');
+    assert.equal(game._force_lock_occupation, forceOccupation);
+    assert.equal(game._force_lock_continue_time, 1);
+    assert.equal(game._run_steps_remaining, 0);
+    assert.equal(game._running_continuation, 0);
+    assert.equal(game._initial_run_command, 0);
+    assert.equal(game._run_steps_after_more, 0);
+    assert.deepEqual(game._travel_keys, []);
+    assert.equal(game._travel_dynamic_target, null);
+    assert.equal(game._search_pending_count, 0);
+    assert.equal(game._counted_repeat_interruptible, 0);
+    assert.equal(game._helpless_time, 5);
+    assert.equal(game._multi_reason, 'frozen by a trap');
+    assert.equal(boulder.ox, 8);
+    assert.equal(boulder.oy, 3);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rnd(20)'), [12, 20]);
+});
+
+test('rolling boulder hit interrupts eating occupation after hit message', () => {
+    const { trap, goblin } = installMonsterPitTrapState(ROLLING_BOULDER_TRAP, {
+        mhp: 50,
+        mhpmax: 50,
+        data: { mac: -10 },
+    });
+    game.u.ux = 6;
+    game.u.uy = 3;
+    const ration = { ...foodRation(595001, 'a'), oeaten: 480 };
+    game.inventory = [ration];
+    game._eating_turns_remaining = 4;
+    game._eating_inventory_object = ration;
+    game._eating_bite_nutrition = 80;
+    game._pending_rotten_food_eating_message = 1;
+    game._run_steps_remaining = 4;
+    game._search_pending_count = 5;
+    game._counted_repeat_interruptible = 1;
+    const boulder = installRollingBoulderTrapLaunch(trap, {
+        start: { x: 4, y: 3 },
+        end: { x: 8, y: 3 },
+    });
+    enableRngLog({ reset: true });
+    installCoreRngValues([8, 0]);
+    markHeroNeighborhoodVisible();
+    markSquareVisible(6, 5);
+    for (let x = 4; x <= 8; x++) markSquareVisible(x, 3);
+
+    assert.equal(allmain.monsterRollingBoulderTrapEffectForTest(goblin, trap), true);
+
+    const afterMoreMessages = [
+        game._topline_after_more,
+        ...(game._queued_messages_after_more || []).map(entry => entry.text),
+    ].filter(Boolean).join('  ');
+    assert.match(afterMoreMessages, /^You are hit by a boulder!/);
+    assert.match(afterMoreMessages, /You stop eating the food ration\./);
+    assert.equal(game._eating_turns_remaining || 0, 0);
+    assert.equal(game._eating_interrupted, 1);
+    assert.equal(game._eating_paused_turns_remaining, 4);
+    assert.equal(game._pending_rotten_food_eating_message, 0);
+    assert.equal(game._damage_after_topline_more, 9);
+    assert.equal(game._run_steps_remaining, 0);
+    assert.equal(game._search_pending_count, 0);
+    assert.equal(game._counted_repeat_interruptible, 0);
+    assert.equal(boulder.ox, 8);
+    assert.equal(boulder.oy, 3);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rnd(20)'), [9, 1]);
+});
+
 test('rolling boulder hit against rock-passing polyself is harmless', () => {
     const { trap, goblin } = installMonsterPitTrapState(ROLLING_BOULDER_TRAP, {
         mhp: 50,
@@ -21385,6 +21485,89 @@ test('rolling boulder hit against rock-passing polyself is harmless', () => {
     assert.equal(boulder.ox, 8);
     assert.equal(boulder.oy, 3);
     assert.equal(trap.tseen, true);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rnd(20)'), [7, 1]);
+});
+
+test('rolling boulder harmless rock-passing hit still clears active occupations', () => {
+    const { trap, goblin } = installMonsterPitTrapState(ROLLING_BOULDER_TRAP, {
+        mhp: 50,
+        mhpmax: 50,
+        data: { mac: -10 },
+    });
+    game.u.ux = 6;
+    game.u.uy = 3;
+    game.u._polyself_form = { name: 'xorn', mlet: 'X', passWalls: true, passesRocks: true };
+    game.u.uinvulnerable = true;
+    game._armor_wear_occupation = { turns: 2, itemLetter: 'a' };
+    game._armor_takeoff_after_more = { itemLetter: 'a' };
+    game._armor_finish_after_more = 1;
+    game._force_lock_occupation = { usedtime: 3, chance: 6, picktyp: true };
+    game._force_lock_continue_time = 1;
+    game._force_lock_finish_after_more = { usedtime: 3 };
+    game._pending_force_lock_start_message = 1;
+    game._pick_lock_occupation = { chest: { ox: 5, oy: 5 }, chance: 100, action: 'unlocking the box' };
+    game._pick_lock_continue_time = 1;
+    game._pick_dig_occupation = { itemLetter: 'a', x: 6, y: 3 };
+    game._queued_pick_dig_apply_letter = 'a';
+    game._apply_pick_dig_letter = 'a';
+    game._tin_opening_occupation = { usedtime: 2 };
+    game._tin_finish_after_turn = { usedtime: 2 };
+    game._tin_opened_pending = { id: 595002 };
+    game._spellbook_study_occupation = { turns: 2 };
+    game._spellbook_finish_after_topline_more = { turns: 2 };
+    game._prayer_occupation = 1;
+    game._prayer_pending_done = 1;
+    game._pending_prayer_finish_message = 1;
+    game._prayer_process_time_now = 1;
+    game._prayer_debug_pleased = 1;
+    game._prayer_split_finish_message = 'You finish your prayer.';
+    game._prayer_split_waiting_for_time = 1;
+    game._prayer_split_remaining_time = 2;
+    game._prayer_nearby_trouble = 1;
+    const boulder = installRollingBoulderTrapLaunch(trap, {
+        start: { x: 4, y: 3 },
+        end: { x: 8, y: 3 },
+    });
+    enableRngLog({ reset: true });
+    installCoreRngValues([6, 0]);
+    markHeroNeighborhoodVisible();
+    markSquareVisible(6, 5);
+    for (let x = 4; x <= 8; x++) markSquareVisible(x, 3);
+
+    assert.equal(allmain.monsterRollingBoulderTrapEffectForTest(goblin, trap), true);
+
+    assert.equal(game._topline_after_more, "You are hit by a boulder!  It doesn't harm you.");
+    assert.equal(game._damage_after_topline_more || 0, 0);
+    assert.equal(game._exercise_after_topline_more || 0, 0);
+    assert.equal(game.u.uinvulnerable, false);
+    assert.equal(game._armor_wear_occupation, null);
+    assert.equal(game._armor_takeoff_after_more, null);
+    assert.equal(game._armor_finish_after_more, 0);
+    assert.equal(game._force_lock_occupation, null);
+    assert.equal(game._force_lock_continue_time, 0);
+    assert.equal(game._force_lock_finish_after_more, null);
+    assert.equal(game._pending_force_lock_start_message, 0);
+    assert.equal(game._pick_lock_occupation, null);
+    assert.equal(game._pick_lock_continue_time, 0);
+    assert.equal(game._pick_dig_occupation, null);
+    assert.equal(game._queued_pick_dig_apply_letter, null);
+    assert.equal(game._apply_pick_dig_letter, null);
+    assert.equal(game._tin_opening_occupation, null);
+    assert.equal(game._tin_finish_after_turn, null);
+    assert.equal(game._tin_opened_pending, null);
+    assert.equal(game._spellbook_study_occupation, null);
+    assert.equal(game._spellbook_finish_after_topline_more, null);
+    assert.equal(game._prayer_occupation, 0);
+    assert.equal(game._prayer_pending_done, 0);
+    assert.equal(game._pending_prayer_finish_message, 0);
+    assert.equal(game._prayer_process_time_now, 0);
+    assert.equal(game._prayer_debug_pleased, 0);
+    assert.equal(game._prayer_split_finish_message, 0);
+    assert.equal(game._prayer_split_waiting_for_time, 0);
+    assert.equal(game._prayer_split_remaining_time, 0);
+    assert.equal(game._prayer_nearby_trouble, 0);
+    assert.equal(boulder.ox, 8);
+    assert.equal(boulder.oy, 3);
     assert.deepEqual(rngValuesForCall(getRngLog(), 'rnd(20)'), [7, 1]);
 });
 
