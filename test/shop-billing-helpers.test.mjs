@@ -20797,6 +20797,200 @@ test('force-fighting a seen destination web with Fire Brand burns and deletes it
     assert.equal(game.context.move, 1);
 });
 
+function setupUntrapDestinationWeb(inventory = [], {
+    madeby = false,
+    rng = [0],
+    strength = 10,
+    twoweapon = false,
+} = {}) {
+    installStableNonSokobanTrapState();
+    vision_reset();
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 20,
+        uhpmax: 20,
+        utrap: 0,
+        utraptype: null,
+        umoved: false,
+    });
+    game.u.acurr.a[A_STR] = strength;
+    game.inventory = inventory;
+    game._twoweapon = twoweapon;
+    const web = { ttyp: WEB, tx: 6, ty: 5, tseen: true, madeby_u: madeby };
+    game.level.traps = [web];
+    enableRngLog({ reset: true });
+    installCoreRngValues(rng);
+    return web;
+}
+
+async function enterUntrapDirection() {
+    await rhack('#');
+    for (const ch of 'untrap') await rhack(ch);
+    await rhack('\n');
+    assert.equal(game._command_mode, 'untrapDirection');
+    assert.match(game._pending_message, /In what direction\?/);
+}
+
+function trappedWebGoblin(extra = {}) {
+    return {
+        mx: 6,
+        my: 5,
+        mtrapped: 1,
+        data: { name: 'goblin', mlet: 'o', mac: 10 },
+        ...extra,
+    };
+}
+
+test('#untrap removes a seen web without a blade', async () => {
+    const web = setupUntrapDestinationWeb([], { rng: [0] });
+
+    await enterUntrapDirection();
+    await rhack('l');
+
+    assert.deepEqual(getRngLog(), ['rn2(7)=0']);
+    assert.equal(game._command_mode, null);
+    assert.equal(game._pending_message, 'You succeed in removing the web.');
+    assert.equal(game.level.traps.includes(web), false);
+    assert.equal(game.u.ux, 5);
+    assert.equal(game.u.uy, 5);
+    assert.equal(game.u.umoved, false);
+    assert.equal(game.u.utrap || 0, 0);
+    assert.equal(game.u.utraptype || null, null);
+    assert.equal(game.context.move, 1);
+});
+
+test('#untrap cuts a seen web with an ordinary blade', async () => {
+    const blade = wieldedWeapon(880930, 'dagger', 'd', 0);
+    const web = setupUntrapDestinationWeb([blade], { rng: [0] });
+
+    await enterUntrapDirection();
+    await rhack('l');
+
+    assert.deepEqual(getRngLog(), ['rn2(3)=0']);
+    assert.equal(game._pending_message, 'You cut through the web.');
+    assert.equal(game.level.traps.includes(web), false);
+    assert.equal(game.context.move, 1);
+});
+
+test('#untrap treats axes as non-blades for web odds', async () => {
+    const axe = wieldedWeapon(880931, 'axe', 'a', 0);
+    const web = setupUntrapDestinationWeb([axe], { rng: [0] });
+
+    await enterUntrapDirection();
+    await rhack('l');
+
+    assert.deepEqual(getRngLog(), ['rn2(7)=0']);
+    assert.equal(game._pending_message, 'You succeed in removing the web.');
+    assert.equal(game.level.traps.includes(web), false);
+    assert.equal(game.context.move, 1);
+});
+
+test('#untrap removes a seen web with Sting artifact odds and message', async () => {
+    const sting = wieldedWeapon(880932, 'elven dagger', 'w', 0);
+    sting.artifact = 'Sting';
+    const web = setupUntrapDestinationWeb([sting], { rng: [0] });
+
+    await enterUntrapDirection();
+    await rhack('l');
+
+    assert.deepEqual(getRngLog(), ['rn2(1)=0']);
+    assert.equal(game._pending_message, 'Sting cuts through the web!');
+    assert.equal(game.level.traps.includes(web), false);
+    assert.equal(game.context.move, 1);
+});
+
+test('#untrap removes a seen web with Fire Brand artifact odds and message', async () => {
+    const fireBrand = wieldedWeapon(880933, 'long sword', 'w', 0);
+    fireBrand.artifact = 'Fire Brand';
+    fireBrand.kind = 'long sword named Fire Brand';
+    const web = setupUntrapDestinationWeb([fireBrand], { rng: [0] });
+
+    await enterUntrapDirection();
+    await rhack('l');
+
+    assert.deepEqual(getRngLog(), ['rn2(1)=0']);
+    assert.equal(game._pending_message, 'Fire Brand burns through the web!');
+    assert.equal(game.level.traps.includes(web), false);
+    assert.equal(game.context.move, 1);
+});
+
+test('#untrap web failure can leave the hero in place', async () => {
+    const web = setupUntrapDestinationWeb([], { rng: [1, 0] });
+
+    await enterUntrapDirection();
+    await rhack('l');
+
+    assert.deepEqual(getRngLog(), ['rn2(7)=1', 'rnl(5)=0']);
+    assert.equal(game._pending_message, 'That spider web is difficult to remove.');
+    assert.equal(game.level.traps.includes(web), true);
+    assert.equal(game.u.ux, 5);
+    assert.equal(game.u.uy, 5);
+    assert.equal(game.u.umoved, false);
+    assert.equal(game.u.utrap || 0, 0);
+    assert.equal(game.u.utraptype || null, null);
+    assert.equal(game.context.move, 1);
+});
+
+test('#untrap web failure can move the hero into the web', async () => {
+    const web = setupUntrapDestinationWeb([], { rng: [1, 1], strength: 18 });
+
+    await enterUntrapDirection();
+    await rhack('l');
+
+    assert.deepEqual(getRngLog(), ['rn2(7)=1', 'rnl(5)=1']);
+    assert.equal(game._pending_message, 'Whoops...  You are caught by a spider web!');
+    assert.equal(game.level.traps.includes(web), true);
+    assert.equal(web.tseen, true);
+    assert.equal(game.u.ux, 6);
+    assert.equal(game.u.uy, 5);
+    assert.equal(game.u.umoved, true);
+    assert.equal(game.u.utrap, 1);
+    assert.equal(game.u.utraptype, 'web');
+    assert.equal(game.context.move, 1);
+});
+
+test('#untrap extracts a trapped monster from a seen web', async () => {
+    const web = setupUntrapDestinationWeb([], { rng: [0] });
+    const goblin = trappedWebGoblin();
+    game.level.monsters = [goblin];
+
+    await enterUntrapDirection();
+    await rhack('l');
+
+    assert.deepEqual(getRngLog(), ['rn2(7)=0']);
+    assert.equal(game._pending_message, 'You extract the goblin from the web.');
+    assert.equal(goblin.mtrapped, 0);
+    assert.equal(game.level.traps.includes(web), true);
+    assert.equal(game.u.ux, 5);
+    assert.equal(game.u.uy, 5);
+    assert.equal(game.u.utrap || 0, 0);
+    assert.equal(game.context.move, 1);
+});
+
+test('#untrap failed trapped-monster web can spread with NOWEBMSG behavior', async () => {
+    const web = setupUntrapDestinationWeb([], { rng: [1, 1, 0], strength: 18 });
+    const heroWeb = { ttyp: WEB, tx: 5, ty: 5, tseen: true, madeby_u: false };
+    game.level.traps.push(heroWeb);
+    const goblin = trappedWebGoblin();
+    game.level.monsters = [goblin];
+
+    await enterUntrapDirection();
+    await rhack('l');
+
+    assert.deepEqual(getRngLog(), ['rn2(7)=1', 'rnl(5)=1', 'rn2(3)=0']);
+    assert.equal(game._pending_message, "Whoops...  The web sticks to you.  You're caught too!  The goblin remains entangled.");
+    assert.doesNotMatch(game._pending_message, /You are caught by/);
+    assert.equal(goblin.mtrapped, 1);
+    assert.equal(game.level.traps.includes(web), true);
+    assert.equal(game.level.traps.includes(heroWeb), true);
+    assert.equal(game.u.ux, 5);
+    assert.equal(game.u.uy, 5);
+    assert.equal(game.u.utrap, 1);
+    assert.equal(game.u.utraptype, 'web');
+    assert.equal(game.context.move, 1);
+});
+
 function setupForceFightDestinationWeb(inventory, { tseen = true, twoweapon = false, strength = 10, rng = 9 } = {}) {
     installStableNonSokobanTrapState();
     vision_reset();

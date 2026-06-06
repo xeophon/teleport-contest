@@ -360,6 +360,191 @@ function squeakyBoardUntrapChance(trap) {
     return Math.max(1, chance);
 }
 
+const UNTRAP_WEB_BLADE_NAME_RE = /\b(?:athame|broadsword|crysknife|dagger|katana|knife|long sword|runesword|saber|sabre|scalpel|scimitar|short sword|stiletto|tsurugi|two-handed sword|wakizashi|worm tooth)\b/;
+
+function untrapWebWeaponIsBlade(item) {
+    if (!item) return false;
+    const weaponClass = item.cls === 'weapon' || item.oclass === 'weapon' || item.glyph === ')';
+    return weaponClass && UNTRAP_WEB_BLADE_NAME_RE.test(forceWeaponName(item).toLowerCase());
+}
+
+function untrapWebBladeWeapon() {
+    const primary = wieldedItem();
+    if (untrapWebWeaponIsBlade(primary)) return primary;
+    const secondary = forceFightSecondaryWeapon(primary);
+    return game._twoweapon && untrapWebWeaponIsBlade(secondary) ? secondary : null;
+}
+
+function untrapWebArtifactSpec(item) {
+    if (!item) return null;
+    const key = String(item.artifact || item.oartifact || artifactObjectName(item) || '')
+        .toLowerCase()
+        .replace(/^the\s+/, '');
+    if (key === 'sting' && item === wieldedItem()) return { name: 'Sting', verb: 'cuts' };
+    if (key === 'fire brand') return { name: 'Fire Brand', verb: 'burns' };
+    return null;
+}
+
+function untrapWebMonsterAt(trap) {
+    return (game.level?.monsters || []).find(mon =>
+        !mon.dead && mon.mx === trap?.tx && mon.my === trap?.ty) || null;
+}
+
+function untrapWebChance(trap) {
+    let chance = 3;
+    const weapon = untrapWebBladeWeapon();
+    if (weapon && !untrapWebMonsterAt(trap)) {
+        if (untrapWebArtifactSpec(weapon)) chance = 1;
+    } else if (!heroWebmakerForm()) {
+        chance = 7;
+    }
+    if (heroIsConfused() || heroIsHallucinating()) chance++;
+    if (game.u?.blind || game.u?.Blind) chance++;
+    if (heroIsStunned()) chance += 2;
+    if (heroIsFumbling()) chance *= 2;
+    if (trap?.madeby_u) chance--;
+    return Math.max(1, chance);
+}
+
+function untrapWebWhich(trap) {
+    return trap?.madeby_u ? 'your' : 'the';
+}
+
+function untrapWebSuccessMessage(trap, weapon) {
+    const which = untrapWebWhich(trap);
+    const artifact = untrapWebArtifactSpec(weapon);
+    if (artifact) return `${artifact.name} ${artifact.verb} through ${which} web!`;
+    if (weapon) return `You cut through ${which} web.`;
+    return `You succeed in removing ${which} web.`;
+}
+
+function untrapWebDifficultMessage(trap, underHero) {
+    const which = trap?.madeby_u ? 'Your' : underHero ? 'This' : 'That';
+    return `${which} spider web is difficult to remove.`;
+}
+
+function forceHeroIntoWebTrapMessage(trap) {
+    if (trap) trap.tseen = true;
+    const webName = webTrapName(trap);
+    const destroyVerb = heroWebDestructionVerb();
+    if (destroyVerb) {
+        deleteTrap(trap);
+        return `You ${destroyVerb} ${webName}!`;
+    }
+    if (heroFlowsThroughWeb()) return `You flow through ${webName}.`;
+    if (heroWebmakerForm())
+        return trap?.madeby_u ? 'You take a walk on your web.' : 'There is a spider web here.';
+    const messages = [`You are caught by ${webName}!`];
+    const tim = webTrapTimeFromStrength();
+    setHeroWebTrapTime(tim);
+    if (tim <= 0) {
+        deleteTrap(trap);
+        messages.push(`You tear through ${webTrapTearName(trap)}!`);
+    }
+    return trapMessage(...messages);
+}
+
+function applyHeroWebTrapNoMessage(trap) {
+    if (trap) trap.tseen = true;
+    if (heroWebDestructionVerb()) {
+        deleteTrap(trap);
+        return;
+    }
+    if (heroFlowsThroughWeb() || heroWebmakerForm()) return;
+    const tim = webTrapTimeFromStrength();
+    setHeroWebTrapTime(tim);
+    if (tim <= 0) deleteTrap(trap);
+}
+
+async function spreadWebToHeroFromUntrap() {
+    if (heroWebmakerForm() || rn2(3)) return '';
+    const x = game.u?.ux || 0;
+    const y = game.u?.uy || 0;
+    let heroTrap = (game.level?.traps || []).find(trap => trap.tx === x && trap.ty === y) || null;
+    if (heroTrap && heroTrap.ttyp !== WEB) return '';
+    if (!heroTrap) heroTrap = await maketrap(x, y, WEB);
+    if (!heroTrap) return '';
+    applyHeroWebTrapNoMessage(heroTrap);
+    return "The web sticks to you.  You're caught too!";
+}
+
+async function moveHeroIntoFailedUntrapWeb(trap, dir) {
+    if (dir.dx || dir.dy) {
+        const oldx = game.u?.ux || 0;
+        const oldy = game.u?.uy || 0;
+        if (game.u) {
+            game.u.ux0 = oldx;
+            game.u.uy0 = oldy;
+            game.u.ux = trap.tx;
+            game.u.uy = trap.ty;
+            game.u.umoved = true;
+            if (game.u.usteed) {
+                game.u.usteed.mx = trap.tx;
+                game.u.usteed.my = trap.ty;
+            }
+        }
+        newsym(oldx, oldy);
+        newsym(trap.tx, trap.ty);
+        vision_recalc(1);
+    }
+    return forceHeroIntoWebTrapMessage(trap);
+}
+
+async function handleUntrapWebTrap(trap, dir) {
+    const underHero = !dir.dx && !dir.dy;
+    const trapName = TRAP_NAMES[WEB] || 'spider web';
+    if ((game.u?.utrap || 0) > 0) {
+        await setMessage(`You cannot deal with the ${trapName} while trapped${underHero ? ' in it' : ''}!`);
+        game.context.move = 1;
+        return true;
+    }
+    const boulder = (game.level?.objects || []).find(obj =>
+        !obj.hidden && !obj.transientProjectile && obj.otyp === BOULDER
+        && obj.ox === trap.tx && obj.oy === trap.ty);
+    if (boulder && !underHero) {
+        await setMessage('There is a boulder in your way.');
+        return true;
+    }
+    const monster = untrapWebMonsterAt(trap);
+    if (monster && !monster.mtrapped) {
+        await setMessage(`${earthquakeMonsterName(monster)} is in the way.`);
+        return true;
+    }
+
+    const failed = rn2(untrapWebChance(trap));
+    if (failed) {
+        if (rnl(5)) {
+            const messages = ['Whoops...'];
+            if (monster) {
+                const spread = await spreadWebToHeroFromUntrap();
+                if (spread) messages.push(spread);
+                if (monster.mtrapped) messages.push(`${earthquakeMonsterName(monster)} remains entangled.`);
+            } else {
+                messages.push(await moveHeroIntoFailedUntrapWeb(trap, dir));
+            }
+            await setMessage(trapMessage(...messages), messages.length > 1);
+        } else {
+            await setMessage(untrapWebDifficultMessage(trap, underHero));
+        }
+        game.context.move = 1;
+        return true;
+    }
+
+    if (monster) {
+        monster.mtrapped = 0;
+        await setMessage(`You extract ${earthquakeMonsterName(monster, { capital: false })} from ${untrapWebWhich(trap)} web.`);
+        game.context.move = 1;
+        return true;
+    }
+
+    const weapon = untrapWebBladeWeapon();
+    const message = untrapWebSuccessMessage(trap, weapon);
+    deleteTrap(trap);
+    await setMessage(message);
+    game.context.move = 1;
+    return true;
+}
+
 function squeakyBoardUntrapPrompt() {
     const letters = inventoryLetters(isSqueakyBoardSuggestedUntrapTool);
     return letters
@@ -61951,6 +62136,10 @@ export async function rhack(_cmd) {
                 await setMessage('The perils lurking there are beyond your grasp.');
                 return;
             }
+            const webTrap = (game.level?.traps || []).find(candidate =>
+                candidate.tx === x && candidate.ty === y && candidate.tseen && candidate.ttyp === WEB);
+            if (webTrap && await handleUntrapWebTrap(webTrap, dir))
+                return;
             const trap = (game.level?.traps || []).find(candidate =>
                 candidate.tx === x && candidate.ty === y && candidate.tseen && candidate.ttyp === SQKY_BOARD);
             if (trap) {

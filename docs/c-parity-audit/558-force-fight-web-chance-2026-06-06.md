@@ -44,4 +44,5 @@ These tests drive normal `rhack('F')` plus direction input and assert the C-shap
 
 ## Remaining Work
 
-- Failed untrap/NOWEBMSG web-spread behavior remains separate `#untrap` parity.
+- `#untrap` web removal, failed untrap, trapped-monster extraction, and web-spread `NOWEBMSG` behavior are tracked in `559-untrap-web-2026-06-06.md`.
+- Monster web-spinning remains separate monster-movement parity.
