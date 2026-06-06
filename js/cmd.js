@@ -670,11 +670,21 @@ function disarmUntrapDoor(loc, x, y, confused, force = false) {
         exerciseAttribute(A_DEX, true);
         const difficulty = 75 + Math.trunc(level_difficulty() / 2);
         if (!force && (confused || heroIsFumbling() || rnd(difficulty) > untrapDoorDisarmChance())) {
+            const explosion = applyBoobyTrapExplosion({ item: 'door', bodypart: true });
+            if (explosion.fatal) {
+                return {
+                    ...explosion,
+                    message: trapMessage('You set it off!', explosion.message),
+                };
+            }
             loc.doormask = D_NODOOR;
             loc.flags = D_NODOOR;
             newsym(x, y);
             addShopTerrainDamage(x, y, 0);
-            return 'You set it off!';
+            return {
+                ...explosion,
+                message: trapMessage('You set it off!', explosion.message),
+            };
         }
         loc.doormask &= ~D_TRAPPED;
         loc.flags = loc.doormask;
@@ -24585,23 +24595,72 @@ function applyTinMonsterSideEffects(tin) {
     return '';
 }
 
-function tinTrapDamage() {
+function boobyTrapExplosionDamage() {
     const difficulty = Math.max(1, level_difficulty());
     const sides = 5 + (difficulty < 5 ? difficulty : 2 + Math.trunc(difficulty / 2));
     return rnd(sides);
 }
 
-async function explodeTinTrap(tin, floorObject = false) {
-    const damage = tinTrapDamage();
+function wakeNearbyMonstersFromHeroNoise() {
+    const ux = game.u?.ux || 0;
+    const uy = game.u?.uy || 0;
+    const distance = Math.max(0, Math.trunc(Number(game.u?.ulevel || 1)) * 20);
+    for (const mon of game.level?.monsters || []) {
+        if (!mon || mon.dead || (mon.mhp != null && mon.mhp <= 0)) continue;
+        const dx = (mon.mx || 0) - ux;
+        const dy = (mon.my || 0) - uy;
+        if (distance !== 0 && dx * dx + dy * dy >= distance) continue;
+        mon.msleeping = 0;
+        if (!(mon.unique || mon.data?.unique)) {
+            if (typeof mon.mstrategy === 'number') mon.mstrategy &= ~STRAT_WAITMASK;
+            else if (mon.mstrategy === 'waitforu') mon.mstrategy = 0;
+            mon.waiting = false;
+        }
+    }
+}
+
+function heroStunOnsetMessage(alreadyStunned) {
+    if (alreadyStunned) return '';
+    return game.u?.usteed ? 'You wobble in the saddle.' : 'You stagger...';
+}
+
+function applyBoobyTrapExplosion({ item = 'door', bodypart = false } = {}) {
+    const damage = boobyTrapExplosionDamage();
+    const messages = [`KABOOM!!  The ${item} was booby-trapped!`];
+    wakeNearbyMonstersFromHeroNoise();
     if (game.u) {
-        game.u.uhp = Math.max(0, (game.u.uhp || 1) - damage);
-        game.u._stunTimeout = (game.u._stunTimeout || 0) + damage;
-        addHeroStatusSuffix('Stun');
+        const hpDamage = maybeHalfPhysicalDamage(damage);
+        game.u.uhp = Math.max(0, (game.u.uhp ?? 1) - hpDamage);
+        if ((game.u.uhp || 0) <= 0) {
+            game._death_cause = 'killed by an explosion';
+            if (consumeLifeSavingAmulet()) {
+                messages.push(`It is fatal.  You die...  But wait...  Your medallion ${game.u?.blind ? 'feels warm' : 'begins to glow'}!`);
+                messages.lifeSaving = true;
+            } else {
+                messages.push('It is fatal.  You die...');
+                return { message: trapMessage(...messages), damage, fatal: true, more: true };
+            }
+        }
     }
     exerciseAttribute(A_STR, false);
+    if (bodypart) exerciseAttribute(A_CON, false);
+    const stunMessage = heroStunOnsetMessage(heroIsStunned());
+    addHeroStun(damage);
+    if (stunMessage) messages.push(stunMessage);
+    return {
+        message: trapMessage(...messages),
+        damage,
+        lifeSaving: !!messages.lifeSaving,
+        more: !!messages.lifeSaving,
+    };
+}
+
+async function explodeTinTrap(tin, floorObject = false) {
+    const result = applyBoobyTrapExplosion({ item: 'tin' });
     tin = costlyTinAlteration(tin, { floorObject, alterType: 'destroy' });
     consumeTinObject(tin, floorObject);
-    await setMessage('KABOOM!!  The tin was booby-trapped!', true);
+    await setMessage(result.message, true);
+    if (applyLifeSavingOrFatalCommandMode(result)) return;
     game._command_mode = null;
     game.context.move = 1;
 }
@@ -62540,13 +62599,16 @@ export async function rhack(_cmd) {
         if (ch === 'y') {
             game._untrap_door_state = null;
             game._command_mode = null;
-            await setMessage(disarmUntrapDoor(
+            const result = disarmUntrapDoor(
                 pending?.loc,
                 pending?.x,
                 pending?.y,
                 !!pending?.confused,
                 !!pending?.force,
-            ));
+            );
+            await setMessage(typeof result === 'string' ? result : result.message, !!result?.more);
+            if (result && typeof result === 'object' && applyLifeSavingOrFatalCommandMode(result))
+                return;
             game.context.move = 1;
             return;
         }

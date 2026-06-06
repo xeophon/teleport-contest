@@ -14,13 +14,16 @@ The implementation uses deterministic command-level tests and does not use repla
 - `nethack-c/upstream/src/trap.c:6063` through `:6069` finds trapped doors with forced detection or the ordinary `rn2(MAXULEV - u.ulevel + 11)` search roll and asks `Disarm it?`.
 - `nethack-c/upstream/src/trap.c:6070` through `:6088` disarms trapped doors, with DEX exercise before the non-forced failure roll, door removal on failure, and +8 XP on success.
 - `nethack-c/upstream/src/trap.c:6089` through `:6094` covers confused false positives and ordinary no-trap searches.
+- `nethack-c/upstream/src/trap.c:6694` through `:6707` implements the shared `b_trapped("door", FINGER)` payload: booby-trap message, `wake_nearby(FALSE)`, half-physical HP damage, bad STR/CON exercise, and stun for the raw damage roll.
 
 ## JS Change
 
 - `js/cmd.js` now checks adjacent `DOOR` terrain from `#untrap` after web/box/squeaky handling.
 - Door detection and disarm use the same carried Master Key force predicate as the box/chest path.
 - Forced trapped-door detection skips the ordinary search roll, and forced trapped-door disarm skips the failure roll.
-- Failed trapped-door disarm removes the door and records zero-cost shop-door damage through existing shop terrain damage tracking.
+- Failed trapped-door disarm now runs the C-shaped booby-trap payload before the post-explosion door removal: `KABOOM!!`, hero-centered wake-nearby radius, half-physical HP damage, fatal/life-saving result plumbing, bad STR/CON exercise, and stun onset/duration.
+- If the blast is fatal without life saving, JS leaves the door state intact instead of running the post-`b_trapped` removal bookkeeping, matching C's control flow.
+- Nonfatal failed trapped-door disarm removes the door and records zero-cost shop-door damage through existing shop terrain damage tracking.
 - `D_NODOOR`, `D_ISOPEN`, and `D_BROKEN` door states report the C messages without consuming time.
 
 ## Tests
@@ -28,6 +31,8 @@ The implementation uses deterministic command-level tests and does not use repla
 - `#untrap closed untrapped door consumes a normal search turn`
 - `#untrap confused door false positive reports not trapped`
 - `#untrap trapped door failed disarm removes the door`
+- `#untrap trapped door booby trap halves HP damage but not stun`
+- `#untrap fatal trapped door booby trap stops before door removal`
 - `#untrap failed trapped shop door records zero-cost repair damage`
 - `#untrap Master Key forces trapped door discovery and disarm`
 - `#untrap unblessed non-Rogue Master Key uses ordinary door search`
@@ -35,9 +40,8 @@ The implementation uses deterministic command-level tests and does not use repla
 - `#untrap open-door door state does not consume time`
 - `#untrap broken-door door state does not consume time`
 
-These tests drive the real extended command input, assert exact prompts/messages, RNG call order, confused false-positive cleanup, door mask mutations, zero-cost shop repair tracking, XP gain, Master Key force behavior, and turn consumption.
+These tests drive the real extended command input, assert exact prompts/messages, RNG call order, confused false-positive cleanup, door mask mutations, zero-cost shop repair tracking, booby-trap HP/stun/attribute side effects, wake-nearby radius behavior, fatal door-state control flow, XP gain, Master Key force behavior, and turn consumption.
 
 ## Remaining Work
 
 - The rare C continuation where the hero declines all current-square boxes/chests on a door square and then proceeds to door handling is not wired because the current JS box prompt state does not retain target coordinates for that continuation.
-- Full `b_trapped("door", FINGER)` payload effects are still partial; this slice covers the immediate door-removal state and message.

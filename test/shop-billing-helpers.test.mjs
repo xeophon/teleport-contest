@@ -8,7 +8,7 @@ import { game, resetGame } from '../js/gstate.js';
 import { pushKey, resetInputState } from '../js/input.js';
 import { createMonsterCorpseOrGlob, mkcorpstat, mkobj, mksobj, monsterByRndName } from '../js/mklev.js';
 import { enableDisplayRngLog, enableRngLog, getRngLog, initRng } from '../js/rng.js';
-import { A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_STR, A_WIS, ALLOW_TRAPS, ALTAR, AM_SHRINE, Align2amask, ANTI_MAGIC, ARROW_TRAP, BEAR_TRAP, BILLSZ, CANDLESHOP, CLOUD, CORPSTAT_HISTORIC, COULD_SEE, DART_TRAP, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, D_TRAPPED, FIRE_TRAP, FOUNTAIN, HOLE, ICE, ICED_POOL, IN_SIGHT, IRONBARS, LADDER, LANDMINE, LAVAPOOL, MAGIC_PORTAL, MIGR_LADDER_UP, MIGR_RANDOM, MIGR_SSTAIRS, MIGR_STAIRS_UP, MOAT, MON_MIGRATING, M_AP_FURNITURE, M_AP_OBJECT, NORMAL_SPEED, P_AXE, P_BARE_HANDED_COMBAT, P_BASIC, P_DAGGER, P_EXPERT, P_KNIFE, P_PICK_AXE, P_RIDING, P_SABER, P_SKILLED, P_TWO_WEAPON_COMBAT, P_UNSKILLED, PIT, POLY_TRAP, POOL, REPAIR_DELAY, ROCKTRAP, ROLLING_BOULDER_TRAP, ROOM, ROOMOFFSET, SDOOR, SHOPBASE, SHOP_DOOR_COST, SINK, SLP_GAS_TRAP, SPIKED_PIT, SQKY_BOARD, STAIRS, STATUE_TRAP, STONE, STRAT_APPEARMSG, STRAT_WAITFORU, STRAT_WAITMASK, TEMPLE, TRAPDOOR, TT_BEARTRAP, TT_LAVA, TT_PIT, TT_WEB, WEB, W_ARMF, W_SADDLE } from '../js/const.js';
+import { A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_MAX, A_STR, A_WIS, ALLOW_TRAPS, ALTAR, AM_SHRINE, Align2amask, ANTI_MAGIC, ARROW_TRAP, BEAR_TRAP, BILLSZ, CANDLESHOP, CLOUD, CORPSTAT_HISTORIC, COULD_SEE, DART_TRAP, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, D_TRAPPED, FIRE_TRAP, FOUNTAIN, HOLE, ICE, ICED_POOL, IN_SIGHT, IRONBARS, LADDER, LANDMINE, LAVAPOOL, MAGIC_PORTAL, MIGR_LADDER_UP, MIGR_RANDOM, MIGR_SSTAIRS, MIGR_STAIRS_UP, MOAT, MON_MIGRATING, M_AP_FURNITURE, M_AP_OBJECT, NORMAL_SPEED, P_AXE, P_BARE_HANDED_COMBAT, P_BASIC, P_DAGGER, P_EXPERT, P_KNIFE, P_PICK_AXE, P_RIDING, P_SABER, P_SKILLED, P_TWO_WEAPON_COMBAT, P_UNSKILLED, PIT, POLY_TRAP, POOL, REPAIR_DELAY, ROCKTRAP, ROLLING_BOULDER_TRAP, ROOM, ROOMOFFSET, SDOOR, SHOPBASE, SHOP_DOOR_COST, SINK, SLP_GAS_TRAP, SPIKED_PIT, SQKY_BOARD, STAIRS, STATUE_TRAP, STONE, STRAT_APPEARMSG, STRAT_WAITFORU, STRAT_WAITMASK, TEMPLE, TRAPDOOR, TT_BEARTRAP, TT_LAVA, TT_PIT, TT_WEB, WEB, W_ARMF, W_SADDLE } from '../js/const.js';
 import { currentFruitId, setCurrentFruitName } from '../js/fruit.js';
 import { CLR_BRIGHT_MAGENTA, CLR_BROWN, CLR_WHITE } from '../js/terminal.js';
 import { TRIBUTE_DEATH_QUOTES } from '../js/tribute.js';
@@ -20999,6 +20999,11 @@ function setupUntrapDestinationWeb(inventory = [], {
         utrap: 0,
         utraptype: null,
         umoved: false,
+        halfPhysicalDamage: false,
+        stunned: false,
+        _statusSuffix: '',
+        _stunTimeout: 0,
+        _aexe: Array(A_MAX).fill(0),
     });
     game._startup_role = role;
     game.urole = { ...(game.urole || {}), name: { m: role, f: role } };
@@ -21046,6 +21051,11 @@ function setupUntrapShopDoor({ rng = [0], doormask = D_LOCKED | D_TRAPPED } = {}
         utrap: 0,
         utraptype: null,
         umoved: false,
+        halfPhysicalDamage: false,
+        stunned: false,
+        _statusSuffix: '',
+        _stunTimeout: 0,
+        _aexe: Array(A_MAX).fill(0),
     });
     game._startup_role = 'Tourist';
     game.urole = { ...(game.urole || {}), name: { m: 'Tourist', f: 'Tourist' } };
@@ -21502,10 +21512,29 @@ test('#untrap confused door false positive reports not trapped', async () => {
 });
 
 test('#untrap trapped door failed disarm removes the door', async () => {
-    setupUntrapDestinationWeb([], { rng: [0, 0, 0, 74] });
+    setupUntrapDestinationWeb([], { rng: [0, 0, 0, 74, 5, 1, 1] });
     game.level.traps = [];
     const door = untrapDoorLoc(D_LOCKED | D_TRAPPED);
     installUntrapLevelCells([[6, 5, door]]);
+    const nearbySleeper = {
+        mx: 8,
+        my: 5,
+        mhp: 5,
+        msleeping: 1,
+        mstrategy: STRAT_WAITMASK,
+        waiting: true,
+        data: { name: 'goblin' },
+    };
+    const outsideWakeRadius = {
+        mx: 10,
+        my: 5,
+        mhp: 5,
+        msleeping: 1,
+        mstrategy: STRAT_WAITMASK,
+        waiting: true,
+        data: { name: 'newt' },
+    };
+    game.level.monsters = [nearbySleeper, outsideWakeRadius];
 
     await enterUntrapDirection();
     await rhack('l');
@@ -21519,11 +21548,91 @@ test('#untrap trapped door failed disarm removes the door', async () => {
     await rhack('y');
 
     assert.equal(game._command_mode, null);
-    assert.deepEqual(getRngLog(), ['rn2(40)=0', 'rn2(19)=0', 'rn2(19)=0', 'rnd(75)=75']);
-    assert.equal(game._pending_message, 'You set it off!');
+    assert.deepEqual(getRngLog(), [
+        'rn2(40)=0',
+        'rn2(19)=0',
+        'rn2(19)=0',
+        'rnd(75)=75',
+        'rnd(6)=6',
+        'rn2(2)=1',
+        'rn2(2)=1',
+    ]);
+    assert.equal(game._pending_message, 'You set it off!  KABOOM!!  The door was booby-trapped!  You stagger...');
     assert.equal(door.doormask, D_NODOOR);
     assert.equal(door.flags, D_NODOOR);
+    assert.equal(nearbySleeper.msleeping, 0);
+    assert.equal(nearbySleeper.mstrategy, 0);
+    assert.equal(nearbySleeper.waiting, false);
+    assert.equal(outsideWakeRadius.msleeping, 1);
+    assert.equal(outsideWakeRadius.mstrategy, STRAT_WAITMASK);
+    assert.equal(outsideWakeRadius.waiting, true);
+    assert.equal(game.u.uhp, 14);
+    assert.equal(game.u._stunTimeout, 6);
+    assert.equal(game.u.stunned, true);
+    assert.match(game.u._statusSuffix || '', /Stun/);
+    assert.equal(game.u._aexe[A_STR], -1);
+    assert.equal(game.u._aexe[A_CON], -1);
     assert.equal(game.context.move, 1);
+});
+
+test('#untrap trapped door booby trap halves HP damage but not stun', async () => {
+    setupUntrapDestinationWeb([], { rng: [0, 0, 0, 74, 5, 1, 1] });
+    game.u.halfPhysicalDamage = true;
+    game.level.traps = [];
+    const door = untrapDoorLoc(D_LOCKED | D_TRAPPED);
+    installUntrapLevelCells([[6, 5, door]]);
+
+    await enterUntrapDirection();
+    await rhack('l');
+    await rhack('y');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game._pending_message, 'You set it off!  KABOOM!!  The door was booby-trapped!  You stagger...');
+    assert.equal(door.doormask, D_NODOOR);
+    assert.equal(game.u.uhp, 17);
+    assert.equal(game.u._stunTimeout, 6);
+    assert.match(game.u._statusSuffix || '', /Stun/);
+    assert.deepEqual(getRngLog(), [
+        'rn2(40)=0',
+        'rn2(19)=0',
+        'rn2(19)=0',
+        'rnd(75)=75',
+        'rnd(6)=6',
+        'rn2(2)=1',
+        'rn2(2)=1',
+    ]);
+    assert.equal(game.context.move, 1);
+});
+
+test('#untrap fatal trapped door booby trap stops before door removal', async () => {
+    setupUntrapDestinationWeb([], { rng: [0, 0, 0, 74, 5] });
+    game.u.uhp = 6;
+    game.level.traps = [];
+    const door = untrapDoorLoc(D_LOCKED | D_TRAPPED);
+    installUntrapLevelCells([[6, 5, door]]);
+
+    await enterUntrapDirection();
+    await rhack('l');
+    await rhack('y');
+
+    assert.equal(game._command_mode, 'deathDieMore');
+    assert.equal(game._pending_message, 'You set it off!  KABOOM!!  The door was booby-trapped!  It is fatal.  You die...');
+    assert.equal(door.doormask, D_LOCKED | D_TRAPPED);
+    assert.equal(door.flags, D_LOCKED | D_TRAPPED);
+    assert.equal(game.u.uhp, 0);
+    assert.equal(game.u._stunTimeout, 0);
+    assert.equal(game.u._aexe[A_STR], 0);
+    assert.equal(game.u._aexe[A_CON], 0);
+    assert.equal(game._death_cause, 'killed by an explosion');
+    assert.deepEqual(getRngLog().slice(0, 5), [
+        'rn2(40)=0',
+        'rn2(19)=0',
+        'rn2(19)=0',
+        'rnd(75)=75',
+        'rnd(6)=6',
+    ]);
+    assert.equal(getRngLog().some(entry => entry.startsWith('rn2(2)=')), false);
+    assert.equal(game.context.move || 0, 0);
 });
 
 test('#untrap failed trapped shop door records zero-cost repair damage', async () => {
@@ -21534,7 +21643,7 @@ test('#untrap failed trapped shop door records zero-cost repair damage', async (
     await rhack('y');
 
     assert.equal(game._command_mode, null);
-    assert.equal(game._pending_message, 'You set it off!');
+    assert.equal(game._pending_message, 'You set it off!  KABOOM!!  The door was booby-trapped!  You stagger...');
     assert.equal(door.doormask, D_NODOOR);
     assert.equal(game.level.damagelist.length, 1);
     assert.deepEqual(game.level.damagelist[0], {
