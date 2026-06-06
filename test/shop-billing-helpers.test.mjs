@@ -42027,6 +42027,55 @@ test('command kicked ruby harms ordinary monster and survives landing', async ()
     ]);
 });
 
+test('command kicked ruby lethal target removes monster before landing', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, { ulevel: 20, uluck: 10, uhitinc: 10 });
+    game.u.acurr.a[A_STR] = 25;
+    game.u.acurr.a[A_DEX] = 25;
+    game.u.urexp = 0;
+    const ruby = floorGem(512229, 'ruby', {
+        ox: 6,
+        oy: 5,
+        known: true,
+        actualKind: 'ruby',
+        gemDescription: 'ruby',
+        gemTough: true,
+    });
+    const carried = { id: 512230, cls: 'food', kind: 'food ration', quan: 1 };
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, {
+        mhp: 4,
+        mhpmax: 4,
+        msleeping: 1,
+        mpeaceful: 1,
+        minvent: [carried],
+        data: { name: 'goblin', mlevel: 1, mlet: 'o' },
+    });
+    game.level.objects = [ruby];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('\x04');
+    await rhack('l');
+
+    assert.equal(game._pending_message,
+        'You kick a ruby.  The ruby hits the goblin.  You kill the goblin!');
+    assert.equal(game.level.monsters.includes(goblin), false);
+    assert.equal(goblin.dead, true);
+    assert.equal(game._vanquished_counts?.goblin, 1);
+    assert.equal(game.u.urexp > 0, true);
+    const dropped = game.level.objects.find(obj => obj.id === carried.id);
+    assert.ok(dropped);
+    assert.equal(dropped.ox, 7);
+    assert.equal(dropped.oy, 5);
+    assert.equal(game.level.objects.includes(ruby), true);
+    assert.equal(ruby.ox, 7);
+    assert.equal(ruby.oy, 5);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 6), [
+        'rnd(20)', 'rnd(2)', 'rn2(3)', 'rn2(19)', 'rn2(3)', 'rn2(2)',
+    ]);
+});
+
 test('command kicked ruby miss against ordinary monster lands', async () => {
     installNonShopFloorState();
     initRng(1);
@@ -59741,6 +59790,57 @@ test('hero-thrown ruby harms ordinary monster and survives landing', async () =>
     ]);
 });
 
+test('hero-thrown ruby lethal target removes monster before projectile lands', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, { ulevel: 20, uluck: 10, uhitinc: 10 });
+    game.u.acurr.a[A_DEX] = 25;
+    game.u.urexp = 0;
+    const ruby = carriedRuby(876130, 'r', {
+        known: true,
+        kind: 'ruby',
+        actualKind: 'ruby',
+        gemDescription: 'ruby',
+        gemTough: true,
+        line: 'r - a ruby',
+    });
+    const carried = { id: 876133, cls: 'food', kind: 'food ration', quan: 1 };
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, {
+        mhp: 1,
+        mhpmax: 1,
+        msleeping: 1,
+        mpeaceful: 1,
+        minvent: [carried],
+        data: { name: 'goblin', mlevel: 1, mlet: 'o' },
+    });
+    game.inventory = [ruby];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('r');
+    await rhack('l');
+
+    assert.match(game._pending_message, /The ruby hits the goblin\./);
+    assert.match(game._pending_message, /You kill the goblin!/);
+    assert.equal(game.level.monsters.includes(goblin), false);
+    assert.equal(goblin.dead, true);
+    assert.equal(game._vanquished_counts?.goblin, 1);
+    assert.equal(game.u.urexp > 0, true);
+    assert.equal(game.inventory.includes(ruby), false);
+    const dropped = game.level.objects.find(obj => obj.id === carried.id);
+    assert.ok(dropped);
+    assert.equal(dropped.ox, 7);
+    assert.equal(dropped.oy, 5);
+    const landed = game.level.objects.find(obj => obj.id === ruby.id);
+    assert.ok(landed);
+    assert.equal(landed.ox, 7);
+    assert.equal(landed.oy, 5);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 7), [
+        'rnd(20)', 'rnd(2)', 'rn2(3)', 'rn2(19)', 'rn2(3)', 'rn2(2)', 'rn2(100)',
+    ]);
+});
+
 test('hero-thrown dagger harms ordinary monster and survives landing', async () => {
     installNonShopFloorState();
     initRng(2);
@@ -59777,6 +59877,91 @@ test('hero-thrown dagger harms ordinary monster and survives landing', async () 
     assert.equal(landed.oy, 5);
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 4), [
         'rnd(20)', 'rnd(4)', 'rn2(19)', 'rn2(100)',
+    ]);
+});
+
+test('hero-thrown dagger lethal target removes monster before projectile lands', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, { ulevel: 20, uluck: 10, uhitinc: 10, udaminc: 0 });
+    game.u.acurr.a[A_STR] = 10;
+    game.u.acurr.a[A_DEX] = 25;
+    game.u.urexp = 0;
+    const blade = dagger(876129, 'd');
+    const carried = { id: 876134, cls: 'food', kind: 'food ration', quan: 1 };
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, {
+        mhp: 3,
+        mhpmax: 3,
+        msleeping: 1,
+        mpeaceful: 1,
+        minvent: [carried],
+        data: { name: 'goblin', mlevel: 1, mlet: 'o' },
+    });
+    game.inventory = [blade];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('d');
+    await rhack('l');
+
+    assert.equal(game._pending_message,
+        'The dagger hits the goblin.  You kill the goblin!');
+    assert.equal(game.level.monsters.includes(goblin), false);
+    assert.equal(goblin.dead, true);
+    assert.equal(game._vanquished_counts?.goblin, 1);
+    assert.equal(game.u.urexp > 0, true);
+    assert.equal(game.inventory.includes(blade), false);
+    const dropped = game.level.objects.find(obj => obj.id === carried.id);
+    assert.ok(dropped);
+    assert.equal(dropped.ox, 7);
+    assert.equal(dropped.oy, 5);
+    const landed = game.level.objects.find(obj => obj.id === blade.id);
+    assert.ok(landed);
+    assert.equal(landed.ox, 7);
+    assert.equal(landed.oy, 5);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 5), [
+        'rnd(20)', 'rnd(4)', 'rn2(3)', 'rn2(19)', 'rn2(100)',
+    ]);
+});
+
+test('hero-thrown dagger lethal target still applies passive object erosion before landing', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, { ulevel: 20, uluck: 10, uhitinc: 10, udaminc: 0 });
+    game.u.acurr.a[A_STR] = 10;
+    game.u.acurr.a[A_DEX] = 25;
+    const blade = dagger(876135, 'd');
+    const rustMonster = passiveObjectTarget('rust monster', 'rust', 7, 5, {
+        mhp: 3,
+        mhpmax: 3,
+        msleeping: 1,
+        mpeaceful: 1,
+        meating: 4,
+        mstrategy: STRAT_WAITFORU,
+    });
+    game.inventory = [blade];
+    game.level.monsters = [rustMonster];
+    enableRngLog({ reset: true });
+    markSquareVisible(7, 5);
+
+    await rhack('t');
+    await rhack('d');
+    await rhack('l');
+
+    assert.equal(game._pending_message,
+        'The dagger hits the rust monster.  You kill the rust monster!');
+    assert.equal(game._queued_message_after_more, 'The dagger rusts!');
+    assert.equal(game.level.monsters.includes(rustMonster), false);
+    assert.equal(rustMonster.dead, true);
+    assert.equal(game._vanquished_counts?.['rust monster'], 1);
+    const landed = game.level.objects.find(obj => obj.id === blade.id);
+    assert.ok(landed);
+    assert.equal(landed.ox, 7);
+    assert.equal(landed.oy, 5);
+    assert.equal(landed.oeroded, 1);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 5), [
+        'rnd(20)', 'rnd(4)', 'rn2(3)', 'rn2(19)', 'rn2(100)',
     ]);
 });
 

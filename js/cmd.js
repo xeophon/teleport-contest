@@ -19920,9 +19920,8 @@ function heroKickedGemImpact(obj, mon) {
         const damage = Math.max(1, rnd(2) + heroStrengthDamageBonus() + heroDamageIncreaseBonus());
         mon.mhp = (mon.mhp || 1) - damage;
         const messages = [`${floorObjectTheSubject({ ...obj, quan: 1 })} hits ${targetName}.`];
-        if ((mon.mhp || 0) <= 0 && !reviveVampshifterFromHeroProjectileKill(mon, messages, targetName))
-            mon.dead = true;
-        wakeMonsterFromHeroThrownHit(mon);
+        if ((mon.mhp || 0) <= 0) killMonsterFromHeroProjectileHit(mon, messages, targetName);
+        if (!mon.dead) wakeMonsterFromHeroThrownHit(mon);
         exerciseHeroProjectileHitDexterity();
         const mulched = shouldMulchHeroProjectileMissile(obj);
         if (mulched) rn2(100);
@@ -20100,6 +20099,31 @@ function reviveVampshifterFromHeroProjectileKill(mon, messages, targetName) {
     return true;
 }
 
+function killMonsterFromHeroProjectileHit(mon, messages, targetName) {
+    if (!mon || mon.dead) return;
+    if (reviveVampshifterFromHeroProjectileKill(mon, messages, targetName)) return;
+    mon.dead = true;
+    mon.mhp = 0;
+    const data = mon.data || {};
+    const nonliving = data.nonliving || data.mlet === 'Z' || data.glyph === 'Z'
+        || String(data.name || '').includes('zombie') || String(data.name || '').endsWith(' golem');
+    messages.push(`You ${nonliving ? 'destroy' : 'kill'} ${targetName || heroThrownVenomTargetName(mon)}!`);
+    recordVanquished(mon, true);
+    dropMonsterInventory(mon, messages);
+
+    const corpseData = data.corpse
+        || (data.name?.endsWith(' zombie') ? monsterByRndName(data.name.replace(/ zombie$/, '')) : null)
+        || data;
+    const loc = game.level?.at?.(mon.mx, mon.my);
+    if (loc && (ACCESSIBLE(loc.typ) || IS_POOL(loc.typ))
+        && !mon.mcloned && monsterCorpseDropSucceeds(mon, data)
+        && monsterLeavesCorpseLikeDrop(corpseData)) {
+        createMonsterCorpseOrGlob(mon, corpseData, mon.mx, mon.my, { messages });
+    }
+    game.level.monsters = (game.level?.monsters || []).filter(candidate => candidate !== mon);
+    newsym(mon.mx, mon.my);
+}
+
 function heroProjectileWeaponImpact(obj, mon, hitValue) {
     if (!heroProjectileSupportedWeaponObject(obj)) return { handled: false, messages: [] };
     const dieroll = rnd(20);
@@ -20108,9 +20132,8 @@ function heroProjectileWeaponImpact(obj, mon, hitValue) {
         const damage = heroProjectileWeaponDamage(obj, mon);
         mon.mhp = (mon.mhp || 1) - damage;
         const messages = [`${floorObjectTheSubject({ ...obj, quan: 1 })} hits ${targetName}${heroProjectileHitPunctuation(damage)}`];
-        if ((mon.mhp || 0) <= 0 && !reviveVampshifterFromHeroProjectileKill(mon, messages, targetName))
-            mon.dead = true;
-        wakeMonsterFromHeroThrownHit(mon);
+        if ((mon.mhp || 0) <= 0) killMonsterFromHeroProjectileHit(mon, messages, targetName);
+        if (!mon.dead) wakeMonsterFromHeroThrownHit(mon);
         exerciseHeroProjectileHitDexterity();
         const mulched = shouldMulchHeroProjectileMissile(obj);
         if (mulched) rn2(100);
@@ -20144,9 +20167,8 @@ function heroThrownGemImpact(obj, mon) {
         const damage = rnd(2);
         mon.mhp = (mon.mhp || 1) - damage;
         const messages = [`${floorObjectTheSubject({ ...obj, quan: 1 })} hits ${targetName}.`];
-        if ((mon.mhp || 0) <= 0 && !reviveVampshifterFromHeroProjectileKill(mon, messages, targetName))
-            mon.dead = true;
-        wakeMonsterFromHeroThrownHit(mon);
+        if ((mon.mhp || 0) <= 0) killMonsterFromHeroProjectileHit(mon, messages, targetName);
+        if (!mon.dead) wakeMonsterFromHeroThrownHit(mon);
         exerciseHeroProjectileHitDexterity();
         const mulched = shouldMulchHeroProjectileMissile(obj);
         if (mulched) rn2(100);
