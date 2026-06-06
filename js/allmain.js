@@ -10471,7 +10471,9 @@ function monsterSokobanPitHoleBypassesPrelude(trap) {
 }
 
 function monsterInAirAvoidsFloorTrigger(mon, trap) {
-    return monsterFloorTriggerTrapType(trap?.ttyp) && mon.data?.inAir
+    const data = mon?.data || {};
+    return monsterFloorTriggerTrapType(trap?.ttyp)
+        && (mon?.inAir || mon?.flyer || mon?.floater || data.inAir || data.flyer || data.floater)
         && !monsterSokobanPitHoleBypassesPrelude(trap);
 }
 
@@ -10559,6 +10561,48 @@ function monsterPassesWallsForAntiMagic(mon) {
     return !!(mon?.passWalls || mon?.passesWalls || mon?.passes_walls || mon?.wallwalk
         || data.passWalls || data.passesWalls || data.passes_walls || data.wallwalk
         || data.noncorporeal || data.whirly || name === 'xorn' || name === 'earth elemental');
+}
+
+function monsterPassesWallsForPitTrap(mon) {
+    const data = mon?.data || {};
+    const name = data.name || '';
+    return !!(mon?.passWalls || mon?.passesWalls || mon?.passes_walls || mon?.wallwalk
+        || data.passWalls || data.passesWalls || data.passes_walls || data.wallwalk
+        || name === 'xorn' || name === 'earth elemental');
+}
+
+function monsterGroundedForPitTrap(mon) {
+    const data = mon?.data || {};
+    return !(mon?.inAir || mon?.flyer || mon?.floater
+        || data.inAir || data.flyer || data.floater);
+}
+
+function monsterPitTrapEffect(mon, trap, { cavernTunnelRoom = false, skipPetPostMoveRoll = false } = {}) {
+    if (![PIT, SPIKED_PIT].includes(trap?.ttyp) || cavernTunnelRoom || monsterTrapHarmless(mon, trap))
+        return false;
+    if (monsterAvoidsKnownTrapBeforeEffect(mon, trap)) return true;
+
+    monsterTriggerTrap(mon, trap);
+    const inSight = monsterVisibleToHero(mon) || mon === game.u?.usteed;
+    const fallVerb = !monsterGroundedForPitTrap(mon) && monsterSokobanPitHoleBypassesPrelude(trap)
+        ? 'is dragged' : 'falls';
+    if (!monsterPassesWallsForPitTrap(mon)) mon.mtrapped = 1;
+    if (inSight) {
+        trap.tseen = true;
+        addToplineMessage(`${monsterDisplayName(mon)} ${fallVerb} into ${trap.madeby_u ? 'your' : 'a'} pit!`);
+        if (mon.data?.name === 'pit viper' || mon.data?.name === 'pit fiend')
+            addToplineMessage("How pitiful.  Isn't that the pits?");
+    }
+    const relevantSpikes = trap.ttyp === SPIKED_PIT && !monsterWornIronFootwearForAntiMagic(mon);
+    const damage = rnd(relevantSpikes ? 10 : 6);
+    mon.mhp = (mon.mhp || 1) - damage;
+    if (mon.mhp < 1) {
+        if (inSight) addToplineMessage(`${monsterDisplayName(mon)} is killed!`);
+        finishTrapKilledMonster(mon, { skipPetPostMoveRoll });
+        return true;
+    }
+    if (mon.mtrapped) mon._move_consumed_turn = 1;
+    return true;
 }
 
 function monsterAntiMagicTrapEffect(mon, trap) {
@@ -11987,24 +12031,7 @@ function moveMonsterTowardHero(mon, conflictActive = false, monIndex = null, som
         }
         return done();
     }
-    if ((trap?.ttyp === PIT || trap?.ttyp === SPIKED_PIT) && !cavernTunnelRoom && !monsterTrapHarmless(mon, trap)) {
-        if (monsterAvoidsKnownTrapBeforeEffect(mon, trap)) return done();
-        monsterTriggerTrap(mon, trap);
-        const inSight = couldSeeCoord(mon.mx, mon.my);
-        if (inSight) {
-            trap.tseen = true;
-            addToplineMessage(`${monsterDisplayName(mon)} falls into ${trap.madeby_u ? 'your' : 'a'} pit!`);
-        }
-        mon.mtrapped = 1;
-        const damage = rnd(trap.ttyp === SPIKED_PIT ? 10 : 6);
-        mon.mhp = (mon.mhp || 1) - damage;
-        if (mon.mhp < 1) {
-            if (inSight) addToplineMessage(`${monsterDisplayName(mon)} is killed!`);
-            finishTrapKilledMonster(mon);
-            return done();
-        }
-        mon._move_consumed_turn = 1;
-    }
+    if (monsterPitTrapEffect(mon, trap, { cavernTunnelRoom })) return done();
     if ((trap?.ttyp === HOLE || trap?.ttyp === TRAPDOOR) && !monsterTrapHarmless(mon, trap) && !mon.data?.big) {
         if (monsterAvoidsKnownTrapBeforeEffect(mon, trap)) return done();
         monsterTriggerTrap(mon, trap);
@@ -14570,5 +14597,6 @@ export const __allmainTestHooks = {
     monsterAllowFlagsForTest: monsterAllowFlags,
     monsterAvoidsKnownTrapBeforeEffectForTest: monsterAvoidsKnownTrapBeforeEffect,
     monsterAntiMagicTrapEffectForTest: monsterAntiMagicTrapEffect,
+    monsterPitTrapEffectForTest: monsterPitTrapEffect,
     monsterSleepGasTrapEffectForTest: monsterSleepGasTrapEffect,
 };

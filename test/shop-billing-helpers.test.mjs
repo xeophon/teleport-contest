@@ -17801,7 +17801,7 @@ test('sokoban pit trap killed gas spore explodes outside monster melee', async (
 
     const d4x6 = rngValuesForCall(getRngLog(), 'd(4,6)');
     assert.equal(d4x6.length, 2);
-    assert.match(messages, /The gas spore falls into a pit!/);
+    assert.match(messages, /The gas spore is dragged into a pit!/);
     assert.match(messages, /The gas spore is killed!/);
     assert.match(messages, /Boom!/);
     assert.match(messages, /The goblin is caught in the gas spore's explosion!/);
@@ -17991,6 +17991,31 @@ function installMonsterAntiMagicTrapState(extra = {}) {
     return { trap, goblin };
 }
 
+function installMonsterPitTrapState(ttyp = PIT, extra = {}) {
+    installStableNonShopFloorState();
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 50,
+        uhpmax: 50,
+        uac: 10,
+    });
+    game.inventory = [];
+    const trap = { ttyp, tx: 6, ty: 5, tseen: false, madeby_u: false };
+    game.level.traps = [trap];
+    const { data: dataExtra = {}, ...monsterExtra } = extra;
+    const goblin = dartTrapGoblin(31423, {
+        mx: 6,
+        my: 5,
+        mhp: 10,
+        mhpmax: 10,
+        data: { name: 'goblin', mlet: 'o', mac: 10, ...dataExtra },
+        ...monsterExtra,
+    });
+    game.level.monsters = [goblin];
+    return { trap, goblin };
+}
+
 test('unknown ordinary monster trap pathing candidates stay hazardous', () => {
     for (const [name, ttyp] of KNOWN_TRAP_PRELUDE_CASES) {
         const { goblin } = installKnownTrapPathingState(ttyp);
@@ -18071,6 +18096,73 @@ test('in-air monster sleep gas trap handling skips known-trap roll before effect
     assert.doesNotMatch(messages, /falls asleep/);
     assert.equal(goblin.mcanmove, true);
     assert.equal(goblin.mfrozen, 0);
+    assert.equal(trap.tseen, false);
+});
+
+test('monster iron shoes reduce spiked pit trap damage to ordinary pit damage', () => {
+    const shoes = wornArmor(31424, 'iron shoes', 'b', 0, { worn: false, owornmask: W_ARMF });
+    const { trap, goblin } = installMonsterPitTrapState(SPIKED_PIT, { minvent: [shoes] });
+    markHeroNeighborhoodVisible();
+    markSquareVisible(goblin.mx, goblin.my);
+    enableRngLog({ reset: true });
+    installCoreRngValues([4]);
+
+    assert.equal(allmain.monsterPitTrapEffectForTest(goblin, trap), true);
+
+    assert.deepEqual(getRngLog().map(rngCallName), ['rnd(6)']);
+    assert.equal(goblin.mhp, 5);
+    assert.equal(goblin.mtrapped, 1);
+    assert.equal(trap.tseen, true);
+});
+
+test('pass-wall monster takes spiked pit damage without becoming trapped', () => {
+    const { trap, goblin } = installMonsterPitTrapState(SPIKED_PIT, {
+        data: { name: 'xorn', mlet: 'X', passWalls: true },
+    });
+    enableRngLog({ reset: true });
+    installCoreRngValues([3]);
+
+    assert.equal(allmain.monsterPitTrapEffectForTest(goblin, trap), true);
+
+    assert.deepEqual(getRngLog().map(rngCallName), ['rnd(10)']);
+    assert.equal(goblin.mhp, 6);
+    assert.equal(goblin.mtrapped || 0, 0);
+    assert.equal(goblin._move_consumed_turn || 0, 0);
+});
+
+test('sokoban pit drags in-air monster into trap', async () => {
+    const { trap, goblin } = installMonsterPitTrapState(PIT, {
+        data: { name: 'gas spore', mlet: 'e', inAir: true },
+    });
+    game.level.flags.sokoban_rules = true;
+    markHeroNeighborhoodVisible();
+    markSquareVisible(goblin.mx, goblin.my);
+    enableRngLog({ reset: true });
+    installCoreRngValues([2]);
+
+    assert.equal(allmain.monsterPitTrapEffectForTest(goblin, trap), true);
+    const messages = [game._pending_message, ...(await drainQueuedMessagesAfterMore())].join(' ');
+
+    assert.match(messages, /The gas spore is dragged into a pit!/);
+    assert.deepEqual(getRngLog().map(rngCallName), ['rnd(6)']);
+    assert.equal(goblin.mhp, 7);
+    assert.equal(goblin.mtrapped, 1);
+    assert.equal(trap.tseen, true);
+});
+
+test('flying monster avoids ordinary pit trap without learning or damage', () => {
+    const { trap, goblin } = installMonsterPitTrapState(PIT, {
+        data: { name: 'raven', mlet: 'B', flyer: true },
+    });
+    enableRngLog({ reset: true });
+    installCoreRngValues([3]);
+
+    assert.equal(allmain.monsterPitTrapEffectForTest(goblin, trap), false);
+
+    assert.deepEqual(getRngLog().map(rngCallName), []);
+    assert.equal(goblin.mhp, 10);
+    assert.equal(goblin.mtrapped || 0, 0);
+    assert.equal(goblin.mtrapseen || 0, 0);
     assert.equal(trap.tseen, false);
 });
 

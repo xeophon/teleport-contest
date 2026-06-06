@@ -44,7 +44,7 @@ The tests use local trap, steed, armor, and RNG fixtures. They do not depend on 
 
 ## Remaining Work
 
-- Monster-side pit and spiked-pit behavior still needs a separate `mintrap()` parity slice.
+- Ordinary monster-side pit and spiked-pit entry is covered by audit 544; pet handling and already-trapped monster escape remain separate `mintrap()` parity slices.
 - Non-movement forced pit entry points beyond the shared `#sit` route, such as plunge/recursive/forced variants, still need a narrower C audit.
 - Already-trapped `#sit` behavior inside an existing spiked pit remains outside this slice.
 - Ball/chain, self-touch, and extra mounted death flavor hooks are still deferred.
