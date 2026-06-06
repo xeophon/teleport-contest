@@ -22453,6 +22453,151 @@ test('#loot trapped box fatal explosion enters death more and aborts looting', a
     assert.equal(game.context.move || 0, 0);
 });
 
+test('#tip trapped source lucky dud uses chest trap payload and keeps contents', async () => {
+    setupUntrapDestinationWeb([], { rng: [8, 0] });
+    game.level.traps = [];
+    const box = shopFloorContainer(881066);
+    Object.assign(box, {
+        otrapped: true,
+        tknown: true,
+        dknown: true,
+        cknown: false,
+    });
+    const ration = putObjectInContainer(box, foodRation(881067));
+    game.level.objects = [box];
+
+    await enterTipCommand();
+
+    assert.equal(game._command_mode, 'tipConfirm');
+    assert.equal(game._pending_message, 'There is a large box here, tip it? [ynq] (q)');
+
+    await rhack('y');
+
+    assert.equal(game._command_mode, null);
+    assert.deepEqual(getRngLog(), [
+        'rn2(13)=8',
+        'rn2(13)=0',
+    ]);
+    assert.equal(game._pending_message, 'You trigger a trap!  But luckily the gas cloud blows away!');
+    assert.equal(box.otrapped, false);
+    assert.equal(box.tknown, true);
+    assert.equal(box.lknown, true);
+    assert.equal(box.contents.includes(ration), true);
+    assert.equal(game.level.objects.includes(ration), false);
+    assert.equal(box.cknown, false);
+    assert.equal(game.context.move, 1);
+});
+
+test('#tip trapped target fires before transferring source contents', async () => {
+    setupUntrapDestinationWeb([], { rng: [8, 0] });
+    game.level.traps = [];
+    const source = sack(881068, 's');
+    const ration = putObjectInContainer(source, foodRation(881069));
+    const target = shopFloorContainer(881070);
+    Object.assign(target, {
+        letter: 'b',
+        line: 'b - a large box',
+        otrapped: true,
+        tknown: true,
+        dknown: true,
+        cknown: false,
+    });
+    delete target.ox;
+    delete target.oy;
+    game.inventory = [source, target];
+    game.level.objects = [];
+
+    await enterTipCommand();
+
+    assert.equal(game._command_mode, 'tipContainerObject');
+
+    await rhack('s');
+
+    assert.equal(game._command_mode, 'tipDestination');
+
+    await rhack('b');
+
+    assert.equal(game._command_mode, null);
+    assert.deepEqual(getRngLog(), [
+        'rn2(13)=8',
+        'rn2(13)=0',
+    ]);
+    assert.equal(game._pending_message, 'You trigger a trap!  But luckily the gas cloud blows away!');
+    assert.equal(source.contents.includes(ration), true);
+    assert.equal(target.contents.length, 0);
+    assert.equal(ration.container, source);
+    assert.equal(target.otrapped, false);
+    assert.equal(target.tknown, true);
+    assert.equal(target.lknown, true);
+    assert.equal(game.context.move, 1);
+});
+
+test('#tip locked trapped source reports locked and preserves trap', async () => {
+    setupUntrapDestinationWeb([], { rng: [8, 0] });
+    game.level.traps = [];
+    const box = shopFloorContainer(881071);
+    Object.assign(box, {
+        olocked: true,
+        otrapped: true,
+        tknown: true,
+        dknown: true,
+    });
+    game.level.objects = [box];
+
+    await enterTipCommand();
+    await rhack('y');
+
+    assert.equal(game._command_mode, null);
+    assert.deepEqual(getRngLog(), []);
+    assert.equal(game._pending_message, 'The large box is locked.');
+    assert.equal(box.otrapped, true);
+    assert.equal(box.tknown, true);
+    assert.equal(box.lknown, true);
+    assert.equal(game.level.objects.includes(box), true);
+    assert.equal(game.context.move, 1);
+});
+
+test('#tip trapped source fatal explosion enters death more and aborts tipping', async () => {
+    setupUntrapDestinationWeb([], { rng: [0, 0, 21, 0, 5, 5, 5, 5, 5, 5, 0] });
+    Object.assign(game.u, {
+        uhp: 10,
+        uhpmax: 20,
+        halfPhysicalDamage: false,
+        uinvulnerable: false,
+    });
+    game.level.traps = [];
+    const box = shopFloorContainer(881072);
+    Object.assign(box, {
+        otrapped: true,
+        tknown: true,
+        dknown: true,
+        cknown: false,
+    });
+    game.level.objects = [box];
+
+    await enterTipCommand();
+    await rhack('y');
+
+    assert.equal(game._command_mode, 'deathDieMore');
+    const fatalLog = getRngLog();
+    assert.deepEqual(fatalLog.slice(0, 5), [
+        'rn2(13)=0',
+        'rn2(20)=0',
+        'rn2(26)=21',
+        'rn2(100)=0',
+        'd(6,6)=36',
+    ]);
+    assert.equal(fatalLog.some(entry => rngCallName(entry) === 'rn2(19)'), false);
+    assert.equal(game._pending_message, 'You trigger a trap!  The large box explodes!  You die...');
+    assert.equal(game.level.objects.includes(box), false);
+    assert.equal(box.otrapped, false);
+    assert.equal(box.tknown, false);
+    assert.equal(game._tip_container_object || null, null);
+    assert.equal(game.u.uhp, 0);
+    assert.equal(game._death_cause, 'killed by an exploding large box');
+    assert.equal(game.context.move || 0, 0);
+});
+
 test('#untrap known-box poisoned needle payload drains constitution', async () => {
     setupUntrapDestinationWeb([], { rng: [74, 0, 0, 13, 1, 1, 1, 0] });
     game.u.poisonResistance = false;

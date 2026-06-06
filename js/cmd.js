@@ -40067,20 +40067,29 @@ function tipTargetPhrase(targetBox) {
     return `the ${name}`;
 }
 
-function tipContainerCheckMessage(container, { allowEmpty = false } = {}) {
-    if (!container) return "You don't have that object.";
-    container.lknown = true;
-    if (container.locked || container.olocked) return `The ${tipContainerSimpleName(container)} is locked.`;
-    if (container.otrapped) {
-        container.otrapped = false;
-        container.tknown = false;
-        return 'You trigger a trap!';
+function tipTrapMessages(result) {
+    const objectResult = result && typeof result === 'object';
+    const messages = [objectResult ? result.message : result].filter(Boolean);
+    if (objectResult) {
+        Object.defineProperty(messages, '_trapResult', {
+            value: result,
+            enumerable: false,
+        });
     }
+    return messages;
+}
+
+function tipContainerCheckMessages(container, { allowEmpty = false } = {}) {
+    if (!container) return ["You don't have that object."];
+    container.lknown = true;
+    if (container.locked || container.olocked) return [`The ${tipContainerSimpleName(container)} is locked.`];
+    if (container.otrapped)
+        return tipTrapMessages(applyChestTrapPayload(container, { disarm: false }));
     if (!allowEmpty && !liquidFlowContainerContents(container).length) {
         container.cknown = true;
-        return tipContainerEmptyMessage(container);
+        return [tipContainerEmptyMessage(container)];
     }
-    return '';
+    return null;
 }
 
 function tipChargeCount(item) {
@@ -40940,8 +40949,8 @@ async function tipHornOfPlenty(horn, targetBox = null) {
 
 async function tipSpecialSourceContents(source, targetBox = null) {
     if (targetBox) {
-        const targetError = tipContainerCheckMessage(targetBox, { allowEmpty: true });
-        if (targetError) return [targetError];
+        const targetError = tipContainerCheckMessages(targetBox, { allowEmpty: true });
+        if (targetError) return targetError;
     }
     const restoreFloorBill = beginFloorSpecialSourceUsageBill(source);
     try {
@@ -40993,14 +41002,24 @@ async function tipContainerContents(source, targetBox = null) {
     const special = isBagOfTricksObject(source) || isHornOfPlentyObject(source);
     if (targetBox && isBagOfTricksObject(targetBox))
         return applyBagOfTricksOnce(targetBox, { tipping: false });
-    const sourceError = tipContainerCheckMessage(source, { allowEmpty: special });
-    if (sourceError) return [sourceError];
+    const sourceError = tipContainerCheckMessages(source, { allowEmpty: special });
+    if (sourceError) return sourceError;
     if (special) return tipSpecialSourceContents(source, targetBox);
     if (targetBox) {
-        const targetError = tipContainerCheckMessage(targetBox, { allowEmpty: true });
-        if (targetError) return [targetError];
+        const targetError = tipContainerCheckMessages(targetBox, { allowEmpty: true });
+        if (targetError) return targetError;
     }
     return targetBox ? tipContainerIntoContainer(source, targetBox) : tipContainerToFloor(source);
+}
+
+async function finishTipContainerCommandMessages(messages) {
+    const trapResult = messages?._trapResult;
+    await setMessage((messages || []).join('  '), (messages || []).length > 1 || !!trapResult?.more);
+    if (trapResult && applyLifeSavingOrFatalCommandMode(trapResult)) return true;
+    game.context ??= {};
+    game.context.move = 1;
+    game._command_mode = null;
+    return false;
 }
 
 async function finishCarriedTipSelection(tipTarget) {
@@ -41015,9 +41034,7 @@ async function finishCarriedTipSelection(tipTarget) {
         if (beginTipDestinationSelection(tipTarget)) return;
         game._tip_container_object = null;
         const messages = await tipContainerContents(tipTarget);
-        await setMessage(messages.join('  '), messages.length > 1);
-        game.context.move = 1;
-        game._command_mode = null;
+        await finishTipContainerCommandMessages(messages);
         return;
     }
     game._tip_container_object = null;
@@ -61533,9 +61550,7 @@ export async function rhack(_cmd) {
         const finishTip = async targetBox => {
             const messages = await tipContainerContents(source, targetBox);
             clearTipState();
-            await setMessage(messages.join('  '), messages.length > 1);
-            game.context.move = 1;
-            game._command_mode = null;
+            await finishTipContainerCommandMessages(messages);
         };
         if (!source || !isTipSourceObject(source)) {
             clearTipState();
@@ -61568,9 +61583,7 @@ export async function rhack(_cmd) {
                 if (beginTipDestinationSelection(tipTarget)) return;
                 game._tip_container_object = null;
                 const messages = await tipContainerContents(tipTarget);
-                await setMessage(messages.join('  '), messages.length > 1);
-                game.context.move = 1;
-                game._command_mode = null;
+                await finishTipContainerCommandMessages(messages);
                 return;
             }
             if (isTipSpillageObject(tipTarget)) {
