@@ -18016,6 +18016,35 @@ function installMonsterPitTrapState(ttyp = PIT, extra = {}) {
     return { trap, goblin };
 }
 
+function installMovingPetPitTrapState(ttyp = PIT, extra = {}) {
+    installStableNonShopFloorState();
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 50,
+        uhpmax: 50,
+        uac: 10,
+    });
+    game.inventory = [];
+    const trap = { ttyp, tx: 6, ty: 5, tseen: false, madeby_u: false };
+    game.level.traps = [trap];
+    const { data: dataExtra = {}, ...monsterExtra } = extra;
+    const pet = dartTrapGoblin(31425, {
+        mx: 7,
+        my: 5,
+        mhp: 10,
+        mhpmax: 10,
+        mpeaceful: true,
+        mtame: 5,
+        pet: true,
+        mextra: { edog: { apport: 3, hungrytime: 0, whistletime: 0, ogoal: { x: 0, y: 0 } } },
+        data: { name: 'goblin', mlet: 'o', mac: 10, ...dataExtra },
+        ...monsterExtra,
+    });
+    game.level.monsters = [pet];
+    return { trap, pet };
+}
+
 test('unknown ordinary monster trap pathing candidates stay hazardous', () => {
     for (const [name, ttyp] of KNOWN_TRAP_PRELUDE_CASES) {
         const { goblin } = installKnownTrapPathingState(ttyp);
@@ -18590,6 +18619,171 @@ test('pet polymorph trap uses pet movement trap path', async () => {
     assert.equal(goblin.mx, 6);
     assert.equal(goblin.my, 5);
     assert.equal(!!(goblin.mtrapseen & (1 << (POLY_TRAP - 1))), true);
+});
+
+test('pet pit trap movement traps and damages pet visibly', async () => {
+    const { trap, pet } = installMovingPetPitTrapState(PIT);
+    enableRngLog({ reset: true });
+    queueEscapeForMonsterTurn();
+    markHeroNeighborhoodVisible();
+    markSquareVisible(6, 5);
+    markSquareVisible(7, 5);
+
+    await processMonsterTurns();
+    const messages = [game._pending_message, ...(await drainQueuedMessagesAfterMore())].join(' ');
+
+    assert.match(messages, /The goblin falls into a pit!/);
+    assert.equal(pet.mx, 6);
+    assert.equal(pet.my, 5);
+    assert.equal(pet.mtrapped, 1);
+    assert.equal(trap.tseen, true);
+    const pitDamage = rngValuesForCall(getRngLog(), 'rnd(6)');
+    assert.equal(pitDamage.length, 1);
+    assert.equal(rngValuesForCall(getRngLog(), 'rnd(10)').length, 0);
+    assert.equal(pet.mhp, 10 - pitDamage[0]);
+    assert.equal(!!(pet.mtrapseen & (1 << (PIT - 1))), true);
+});
+
+test('flying pet avoids ordinary pit trap without learning or damage', async () => {
+    const { trap, pet } = installMovingPetPitTrapState(PIT, {
+        data: { name: 'raven', mlet: 'B', flyer: true },
+    });
+    enableRngLog({ reset: true });
+    queueEscapeForMonsterTurn();
+    markHeroNeighborhoodVisible();
+    markSquareVisible(6, 5);
+    markSquareVisible(7, 5);
+
+    await processMonsterTurns();
+    const messages = [game._pending_message, ...(await drainQueuedMessagesAfterMore())].join(' ');
+
+    assert.doesNotMatch(messages, /pit/);
+    assert.equal(pet.mx, 6);
+    assert.equal(pet.my, 5);
+    assert.equal(pet.mhp, 10);
+    assert.equal(pet.mtrapped || 0, 0);
+    assert.equal(pet.mtrapseen || 0, 0);
+    assert.equal(trap.tseen, false);
+    assert.equal(rngValuesForCall(getRngLog(), 'rnd(6)').length, 0);
+    assert.equal(rngValuesForCall(getRngLog(), 'rnd(10)').length, 0);
+});
+
+test('sokoban pit drags flying pet into trap', async () => {
+    const { trap, pet } = installMovingPetPitTrapState(PIT, {
+        data: { name: 'raven', mlet: 'B', flyer: true },
+    });
+    game.level.flags.sokoban_rules = true;
+    enableRngLog({ reset: true });
+    queueEscapeForMonsterTurn();
+    markHeroNeighborhoodVisible();
+    markSquareVisible(6, 5);
+    markSquareVisible(7, 5);
+
+    await processMonsterTurns();
+    const messages = [game._pending_message, ...(await drainQueuedMessagesAfterMore())].join(' ');
+
+    assert.match(messages, /The raven is dragged into a pit!/);
+    assert.equal(pet.mx, 6);
+    assert.equal(pet.my, 5);
+    assert.equal(pet.mtrapped, 1);
+    assert.equal(trap.tseen, true);
+    const pitDamage = rngValuesForCall(getRngLog(), 'rnd(6)');
+    assert.equal(pitDamage.length, 1);
+    assert.equal(pet.mhp, 10 - pitDamage[0]);
+    assert.equal(!!(pet.mtrapseen & (1 << (PIT - 1))), true);
+});
+
+test('grounded pet spiked pit trap uses spike damage roll', async () => {
+    const { trap, pet } = installMovingPetPitTrapState(SPIKED_PIT);
+    enableRngLog({ reset: true });
+    queueEscapeForMonsterTurn();
+    markHeroNeighborhoodVisible();
+    markSquareVisible(6, 5);
+    markSquareVisible(7, 5);
+
+    await processMonsterTurns();
+    const messages = [game._pending_message, ...(await drainQueuedMessagesAfterMore())].join(' ');
+
+    assert.match(messages, /The goblin falls into a pit!/);
+    assert.doesNotMatch(messages, /spiked pit/);
+    assert.equal(pet.mx, 6);
+    assert.equal(pet.my, 5);
+    assert.equal(pet.mtrapped, 1);
+    assert.equal(trap.tseen, true);
+    const spikeDamage = rngValuesForCall(getRngLog(), 'rnd(10)');
+    assert.equal(spikeDamage.length, 1);
+    assert.equal(rngValuesForCall(getRngLog(), 'rnd(6)').length, 0);
+    assert.equal(pet.mhp, 10 - spikeDamage[0]);
+    assert.equal(!!(pet.mtrapseen & (1 << (SPIKED_PIT - 1))), true);
+});
+
+test('pass-wall pet takes spiked pit damage without becoming trapped', async () => {
+    const { trap, pet } = installMovingPetPitTrapState(SPIKED_PIT, {
+        data: { name: 'xorn', mlet: 'X', passWalls: true },
+    });
+    enableRngLog({ reset: true });
+    queueEscapeForMonsterTurn();
+    markHeroNeighborhoodVisible();
+    markSquareVisible(6, 5);
+    markSquareVisible(7, 5);
+
+    await processMonsterTurns();
+
+    assert.equal(pet.mx, 6);
+    assert.equal(pet.my, 5);
+    assert.equal(pet.mtrapped || 0, 0);
+    assert.equal(trap.tseen, true);
+    const spikeDamage = rngValuesForCall(getRngLog(), 'rnd(10)');
+    assert.equal(spikeDamage.length, 1);
+    assert.equal(pet.mhp, 10 - spikeDamage[0]);
+    assert.equal(!!(pet.mtrapseen & (1 << (SPIKED_PIT - 1))), true);
+});
+
+test('pet iron shoes reduce spiked pit trap damage to ordinary pit damage', async () => {
+    const shoes = wornArmor(31426, 'iron shoes', 'b', 0, { worn: false, owornmask: W_ARMF });
+    const { trap, pet } = installMovingPetPitTrapState(SPIKED_PIT, { minvent: [shoes] });
+    enableRngLog({ reset: true });
+    queueEscapeForMonsterTurn();
+    markHeroNeighborhoodVisible();
+    markSquareVisible(6, 5);
+    markSquareVisible(7, 5);
+
+    await processMonsterTurns();
+
+    assert.equal(pet.mx, 6);
+    assert.equal(pet.my, 5);
+    assert.equal(pet.mtrapped, 1);
+    assert.equal(trap.tseen, true);
+    const pitDamage = rngValuesForCall(getRngLog(), 'rnd(6)');
+    assert.equal(pitDamage.length, 1);
+    assert.equal(rngValuesForCall(getRngLog(), 'rnd(10)').length, 0);
+    assert.equal(pet.mhp, 10 - pitDamage[0]);
+    assert.equal(!!(pet.mtrapseen & (1 << (SPIKED_PIT - 1))), true);
+});
+
+test('pet pit trap death removes pet and clears trapped state', async () => {
+    const { trap, pet } = installMovingPetPitTrapState(PIT, {
+        mhp: 1,
+        mhpmax: 1,
+    });
+    enableRngLog({ reset: true });
+    queueEscapeForMonsterTurn();
+    markHeroNeighborhoodVisible();
+    markSquareVisible(6, 5);
+    markSquareVisible(7, 5);
+
+    await processMonsterTurns();
+    const messages = [game._pending_message, ...(await drainQueuedMessagesAfterMore())].join(' ');
+
+    assert.match(messages, /The goblin falls into a pit!/);
+    assert.match(messages, /The goblin is killed!/);
+    assert.equal(game.level.monsters.includes(pet), false);
+    assert.equal(pet.mtrapped || 0, 0);
+    assert.equal(trap.tseen, true);
+    assert.equal(rngValuesForCall(getRngLog(), 'rnd(6)').length, 1);
+    const calls = getRngLog().map(rngCallName);
+    assert.equal(calls.slice(calls.lastIndexOf('rnd(6)') + 1).includes('rn2(5)'), false);
+    assert.equal(!!(pet.mtrapseen & (1 << (PIT - 1))), true);
 });
 
 test('dart trap killed grounded monster drops inventory before removal', async () => {

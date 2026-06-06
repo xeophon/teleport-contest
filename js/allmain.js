@@ -10598,6 +10598,7 @@ function monsterPitTrapEffect(mon, trap, { cavernTunnelRoom = false, skipPetPost
     mon.mhp = (mon.mhp || 1) - damage;
     if (mon.mhp < 1) {
         if (inSight) addToplineMessage(`${monsterDisplayName(mon)} is killed!`);
+        mon.mtrapped = 0;
         finishTrapKilledMonster(mon, { skipPetPostMoveRoll });
         return true;
     }
@@ -13231,17 +13232,7 @@ function movePet(mon, resumeAfterInventory = false, conflictActive = false) {
         newsym(mon.mx, mon.my);
         addToplineMessage(`The ${mon.saddled ? 'saddled ' : ''}${mon.data?.name || 'creature'} is caught in a bear trap!`);
     }
-    if (trap?.ttyp === PIT || trap?.ttyp === SPIKED_PIT) {
-        trap.tseen = true;
-        addToplineMessage(`The ${mon.data?.name || 'creature'} falls into ${trap.madeby_u ? 'your' : 'a'} pit!`);
-        const damage = rnd(trap.ttyp === SPIKED_PIT ? 10 : 6);
-        mon.mhp = (mon.mhp || 1) - damage;
-        if (mon.mhp < 1) {
-            addToplineMessage(`The ${mon.data?.name || 'creature'} is killed!`);
-            finishTrapKilledMonster(mon, { skipPetPostMoveRoll: true });
-            return;
-        }
-    }
+    if (monsterPitTrapEffect(mon, trap, { skipPetPostMoveRoll: true })) return;
     if (trap?.ttyp === DART_TRAP && !monsterTrapHarmless(mon, trap)) {
         if (trap.once && trap.tseen && !rn2(15)) {
             game.level.traps = (game.level?.traps || []).filter(item => item !== trap);

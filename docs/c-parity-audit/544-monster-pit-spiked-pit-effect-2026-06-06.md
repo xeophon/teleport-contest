@@ -39,7 +39,7 @@ The direct tests use local monster, trap, armor, visibility, and RNG fixtures. T
 
 ## Remaining Work
 
-- Pet `PIT` and `SPIKED_PIT` handling still has its older inline path and needs a separate parity slice.
+- Pet `PIT` and `SPIKED_PIT` new-trigger movement is covered by audit 545.
 - Already-trapped monster pit escape, boulder fill, and metallivore spiked-pit eating remain outside this slice.
 - `mselftouch()` from falling with a wielded cockatrice/chickatrice corpse remains unmodeled.
 - Ceiling-clinger and long-worm segment handling for non-grounded pit avoidance remains deferred.
