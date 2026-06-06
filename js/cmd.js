@@ -47091,7 +47091,11 @@ function heroRollingBoulderApplyDownGateAt(x, y, movingBoulder, messages) {
     const transit = heroRollingBoulderTransitMessage(route, impactQuantity, noDrop);
     if (transit) messages.push(transit);
     if (noDrop) {
-        const impact = impactDropFloorObjects(x, y, route, { targetLevel: gate.targetLevel, route });
+        const impact = impactDropFloorObjects(x, y, route, {
+            targetLevel: gate.targetLevel,
+            missile: movingBoulder,
+            route,
+        });
         if (impact.message) messages.push(impact.message);
         return { handled: false, consumed: false };
     }
@@ -47390,6 +47394,36 @@ function applyHeroRollingBoulderHitPassiveObject(movingBoulder, mon, messages) {
     }
 }
 
+function heroRollingBoulderDropThrowAfterMonsterHitAt(x, y, movingBoulder, mon, messages) {
+    if (!movingBoulder || !mon || mon.dead || (mon.mhp != null && mon.mhp <= 0))
+        return { handled: false, consumed: false };
+    const oldX = movingBoulder.ox;
+    const oldY = movingBoulder.oy;
+    let keepMoving = true;
+    movingBoulder.ox = x;
+    movingBoulder.oy = y;
+    movingBoulder.hidden = false;
+    movingBoulder.transientProjectile = false;
+    try {
+        const downGate = heroRollingBoulderApplyDownGateAt(x, y, movingBoulder, messages);
+        if (downGate.consumed) {
+            keepMoving = false;
+            return { handled: true, consumed: true };
+        }
+        if (heroRollingBoulderFloorEffectsAt(x, y, movingBoulder, messages)) {
+            keepMoving = false;
+            return { handled: true, consumed: true };
+        }
+        applyHeroRollingBoulderHitPassiveObject(movingBoulder, mon, messages);
+        return { handled: true, consumed: false };
+    } finally {
+        if (keepMoving) {
+            movingBoulder.ox = oldX;
+            movingBoulder.oy = oldY;
+        }
+    }
+}
+
 function heroRollingBoulderHitMonsterAt(x, y, movingBoulder, messages) {
     const mon = heroRollingBoulderPathMonsterAt(x, y);
     if (!mon || !movingBoulder) return { handled: false, consumed: false };
@@ -47426,8 +47460,8 @@ function heroRollingBoulderHitMonsterAt(x, y, movingBoulder, messages) {
             heroRollingBoulderKillMonster(mon, messages, visible, movingBoulder);
     }
     if (!mon.dead) setHeroObjectHitMonsterAngry(mon);
-    applyHeroRollingBoulderHitPassiveObject(movingBoulder, mon, messages);
-    return { handled: true, consumed: false };
+    const dropThrow = heroRollingBoulderDropThrowAfterMonsterHitAt(x, y, movingBoulder, mon, messages);
+    return { handled: true, consumed: dropThrow.consumed };
 }
 
 function heroRollingBoulderChainIntoBoulderAt(x, y, dx, dy, remainingDistance, movingBoulder, messages) {

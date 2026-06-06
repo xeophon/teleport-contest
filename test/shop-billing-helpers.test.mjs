@@ -21645,6 +21645,169 @@ test('hero rolling boulder acid passive keeps original boulder moving without du
     ]);
 });
 
+test('hero rolling boulder monster hit ships down ladder before passive and land mine', async () => {
+    const { boulder } = installHeroRollingBoulderTrapState({
+        trapX: 6,
+        trapY: 4,
+        heroX: 5,
+        heroY: 4,
+        start: { x: 4, y: 3 },
+        end: { x: 8, y: 3 },
+        boulderAt: 'start',
+    });
+    const acidBlob = dartTrapGoblin(314734, {
+        mx: 6,
+        my: 3,
+        mhp: 20,
+        mhpmax: 20,
+        data: { name: 'acid blob', mlet: 'b', mac: -5 },
+    });
+    const mine = { ttyp: LANDMINE, tx: 6, ty: 3, tseen: false, madeby_u: false };
+    game.level.monsters.push(acidBlob);
+    game.level.traps.push(mine);
+    installRollingBoulderPathDownGate({ x: 6, y: 3, isladder: true });
+    enableRngLog({ reset: true });
+    installCoreRngValues([4, 4]);
+    markHeroNeighborhoodVisible();
+    for (let x = 4; x <= 8; x++) markSquareVisible(x, 3);
+
+    await rhack('l');
+
+    assert.equal(game._pending_message,
+        'Click!  You trigger a rolling boulder trap!  The boulder hits the acid blob!  A boulder falls down the ladder.');
+    assert.equal(acidBlob.mhp, 15);
+    assert.equal(game.level.traps.includes(mine), true);
+    assert.equal(game.level.objects.includes(boulder), false);
+    assert.deepEqual(game._impact_drop_migrations?.get('0:2'), [boulder]);
+    assert.equal(boulder.owornmask, MIGR_LADDER_UP);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rnd(20)'), [5, 5]);
+    assert.equal(rngValuesForCall(getRngLog(), 'rn2(6)').length, 0);
+    assert.equal(rngValuesForCall(getRngLog(), 'rn2(3)').length, 0);
+    assert.equal(rngValuesForCall(getRngLog(), 'rn2(10)').length, 0);
+});
+
+test('hero rolling boulder monster hit no-drop stairs rolls again in outer path', async () => {
+    const { boulder } = installHeroRollingBoulderTrapState({
+        trapX: 6,
+        trapY: 4,
+        heroX: 5,
+        heroY: 4,
+        start: { x: 4, y: 3 },
+        end: { x: 8, y: 3 },
+        boulderAt: 'start',
+    });
+    const goblin = dartTrapGoblin(314735, {
+        mx: 6,
+        my: 3,
+        mhp: 20,
+        mhpmax: 20,
+        data: { name: 'goblin', mlet: 'o', mac: -5 },
+    });
+    game.level.monsters.push(goblin);
+    installRollingBoulderPathDownGate({ x: 6, y: 3 });
+    enableRngLog({ reset: true });
+    installCoreRngValues([4, 4, 1, 0]);
+    markHeroNeighborhoodVisible();
+    for (let x = 4; x <= 8; x++) markSquareVisible(x, 3);
+
+    await rhack('l');
+
+    assert.equal(game._pending_message,
+        'Click!  You trigger a rolling boulder trap!  The boulder hits the goblin!  A boulder falls down the stairs.');
+    assert.equal(goblin.mhp, 15);
+    assert.equal(game.level.objects.includes(boulder), false);
+    assert.deepEqual(game._impact_drop_migrations?.get('0:2'), [boulder]);
+    assert.equal(boulder.owornmask, MIGR_STAIRS_UP);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rnd(20)'), [5, 5]);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rn2(3)'), [1, 0]);
+});
+
+test('hero rolling boulder monster hit impact-drops seen hole pile before plugging', async () => {
+    const { boulder } = installHeroRollingBoulderTrapState({
+        trapX: 6,
+        trapY: 4,
+        heroX: 5,
+        heroY: 4,
+        start: { x: 4, y: 3 },
+        end: { x: 8, y: 3 },
+        boulderAt: 'start',
+    });
+    const goblin = dartTrapGoblin(314736, {
+        mx: 6,
+        my: 3,
+        mhp: 20,
+        mhpmax: 20,
+        data: { name: 'goblin', mlet: 'o', mac: -5 },
+    });
+    const hole = installRollingBoulderPathSeenShaft(HOLE, 6, 3);
+    const blade = { ...dagger(314737), letter: undefined, line: undefined, ox: 6, oy: 3 };
+    game.level.monsters.push(goblin);
+    game.level.objects.push(blade);
+    game.level.buriedobjlist = [];
+    enableRngLog({ reset: true });
+    installCoreRngValues([4, 4, 1, 0]);
+    markHeroNeighborhoodVisible();
+    for (let x = 4; x <= 8; x++) markSquareVisible(x, 3);
+
+    await rhack('l');
+
+    assert.match(game._pending_message, /The boulder hits the goblin!/);
+    assert.match(game._pending_message, /From the impact, the other object falls\./);
+    assert.match(game._pending_message, /The boulder plugs a hole\./);
+    assert.equal(game.level.traps.includes(hole), false);
+    assert.equal(game.level.objects.includes(boulder), false);
+    assert.equal(game.level.objects.includes(blade), false);
+    assert.equal(queuedImpactDropsFor().includes(blade), true);
+    assert.equal(queuedImpactDropsFor().includes(boulder), false);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rnd(20)'), [5, 5]);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rn2(3)'), [1, 0]);
+});
+
+test('hero rolling boulder monster hit fills impact-square pool before downstream boulder', async () => {
+    const { boulder } = installHeroRollingBoulderTrapState({
+        trapX: 6,
+        trapY: 4,
+        heroX: 5,
+        heroY: 4,
+        start: { x: 4, y: 3 },
+        end: { x: 8, y: 3 },
+        boulderAt: 'start',
+    });
+    const goblin = dartTrapGoblin(314738, {
+        mx: 6,
+        my: 3,
+        mhp: 20,
+        mhpmax: 20,
+        data: { name: 'goblin', mlet: 'o', mac: -5 },
+    });
+    const poolLoc = game.level.at(6, 3);
+    Object.assign(poolLoc, { typ: POOL, roomno: ROOMOFFSET, lit: true, flags: 7 });
+    const downstream = floorBoulder(314739, { ox: 7, oy: 3 });
+    game.level.monsters.push(goblin);
+    game.level.objects.push(downstream);
+    game.level.buriedobjlist = [];
+    enableRngLog({ reset: true });
+    installCoreRngValues([4, 4, 9]);
+    markHeroNeighborhoodVisible();
+    for (let x = 4; x <= 8; x++) markSquareVisible(x, 3);
+
+    await rhack('l');
+
+    assert.equal(game._pending_message,
+        'Click!  You trigger a rolling boulder trap!  The boulder hits the goblin!  There is a large splash as the boulder fills the pool of water.');
+    assert.equal(poolLoc.typ, ROOM);
+    assert.equal(poolLoc.flags || 0, 0);
+    assert.equal(game.level.objects.includes(boulder), false);
+    assert.equal(game.level.objects.includes(downstream), true);
+    assert.equal(downstream.ox, 7);
+    assert.equal(downstream.oy, 3);
+    assert.equal(game.level.monsters.includes(goblin), false);
+    assert.equal(goblin.dead, true);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rnd(20)'), [5, 5]);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rn2(10)'), [9]);
+    assert.equal(rngValuesForCall(getRngLog(), 'rn2(20)').length, 0);
+});
+
 test('hero rolling boulder passes harmlessly through rock-passing monster after hit roll', async () => {
     const { boulder } = installHeroRollingBoulderTrapState({
         trapX: 6,
