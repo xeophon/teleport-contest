@@ -603,7 +603,7 @@ function heroHasMasterKeyOfThievery() {
     });
 }
 
-function untrapBoxForce() {
+function untrapForce() {
     return heroHasMasterKeyOfThievery();
 }
 
@@ -649,6 +649,67 @@ function disarmUntrapBox(box, confused, force = false) {
     }
     if (box) box.tknown = false;
     return `That ${untrapBoxObjectName(box)} was not trapped.`;
+}
+
+function untrapDoorDetectionSucceeds(loc, confused, force = false) {
+    if (loc?.doormask & D_TRAPPED) {
+        if (force) return true;
+        const denom = Math.max(1, MAXULEV - (game.u?.ulevel || 1) + 11);
+        if (!confused && rn2(denom) < 10) return true;
+    }
+    return !force && confused && !rn2(3);
+}
+
+function untrapDoorDisarmChance() {
+    const level = game.u?.ulevel || 1;
+    return 15 + (heroRoleName() === 'Rogue' ? level * 3 : level);
+}
+
+function disarmUntrapDoor(loc, x, y, confused, force = false) {
+    if (loc?.doormask & D_TRAPPED) {
+        exerciseAttribute(A_DEX, true);
+        const difficulty = 75 + Math.trunc(level_difficulty() / 2);
+        if (!force && (confused || heroIsFumbling() || rnd(difficulty) > untrapDoorDisarmChance())) {
+            loc.doormask = D_NODOOR;
+            loc.flags = D_NODOOR;
+            newsym(x, y);
+            addShopTerrainDamage(x, y, 0);
+            return 'You set it off!';
+        }
+        loc.doormask &= ~D_TRAPPED;
+        loc.flags = loc.doormask;
+        if (game.u) game.u.uexp = (game.u.uexp || 0) + 8;
+        return 'You disarm it!';
+    }
+    return 'This door was not trapped.';
+}
+
+async function checkUntrapDoor(loc, x, y, { force = false, confused = heroIsConfused() || heroIsHallucinating() } = {}) {
+    if (!loc || loc.typ !== DOOR) return false;
+    switch (loc.doormask) {
+        case D_NODOOR:
+            await setMessage(`You ${game.u?.blind ? 'feel' : 'see'} no door there.`);
+            return true;
+        case D_ISOPEN:
+            await setMessage('This door is safely open.');
+            return true;
+        case D_BROKEN:
+            await setMessage('This door is broken.');
+            return true;
+        default:
+            break;
+    }
+
+    if (untrapDoorDetectionSucceeds(loc, confused, force)) {
+        exerciseAttribute(A_WIS, true);
+        await setMessage('You find a trap on the door!  Disarm it? [ynq] (q)');
+        game._untrap_door_state = { loc, x, y, confused, force };
+        game._command_mode = 'untrapDoorDisarmConfirm';
+        return true;
+    }
+    await setMessage('You find no traps on the door.');
+    game.context.move = 1;
+    return true;
 }
 
 async function checkUntrapBox(box, { force = false, confused = heroIsConfused() || heroIsHallucinating() } = {}) {
@@ -62474,6 +62535,32 @@ export async function rhack(_cmd) {
         return;
     }
 
+    if (game._command_mode === 'untrapDoorDisarmConfirm') {
+        const pending = game._untrap_door_state;
+        if (ch === 'y') {
+            game._untrap_door_state = null;
+            game._command_mode = null;
+            await setMessage(disarmUntrapDoor(
+                pending?.loc,
+                pending?.x,
+                pending?.y,
+                !!pending?.confused,
+                !!pending?.force,
+            ));
+            game.context.move = 1;
+            return;
+        }
+        if (ch === 'n' || ch === 'q' || ch === '\x1b' || ch === ' ' || ch === '\r' || ch === '\n') {
+            game._untrap_door_state = null;
+            game._command_mode = null;
+            game._keep_pending_message = 1;
+            game.context.move = 1;
+            return;
+        }
+        game._keep_pending_message = 1;
+        return;
+    }
+
     if (game._command_mode === 'untrapDirection') {
         game._command_mode = null;
         if (ch === '\x1b') {
@@ -62493,9 +62580,9 @@ export async function rhack(_cmd) {
             const boxes = (!dir.dx && !dir.dy) ? untrapBoxObjectsAt(x, y) : [];
             if ((webTrap || boxes.length) && await blockUntrapFloorReach(webTrap, dir, boxes))
                 return;
-            const boxForce = untrapBoxForce();
+            const force = untrapForce();
             if (webTrap && boxes.length) {
-                game._untrap_web_container_state = { trap: webTrap, dir, boxes, force: boxForce };
+                game._untrap_web_container_state = { trap: webTrap, dir, boxes, force };
                 await setMessage(untrapWebContainerPrompt(webTrap, boxes.length));
                 game._command_mode = 'untrapWebContainerConfirm';
                 return;
@@ -62510,7 +62597,10 @@ export async function rhack(_cmd) {
                 game._command_mode = 'untrapSqueakyTool';
                 return;
             }
-            if (boxes.length && await beginUntrapBoxPrompt(boxes, { force: boxForce }))
+            if (boxes.length && await beginUntrapBoxPrompt(boxes, { force }))
+                return;
+            const loc = game.level?.at?.(x, y);
+            if (await checkUntrapDoor(loc, x, y, { force }))
                 return;
         }
         await setMessage('You know of no traps there.');

@@ -8,7 +8,7 @@ import { game, resetGame } from '../js/gstate.js';
 import { pushKey, resetInputState } from '../js/input.js';
 import { createMonsterCorpseOrGlob, mkcorpstat, mkobj, mksobj, monsterByRndName } from '../js/mklev.js';
 import { enableDisplayRngLog, enableRngLog, getRngLog, initRng } from '../js/rng.js';
-import { A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_STR, A_WIS, ALLOW_TRAPS, ALTAR, AM_SHRINE, Align2amask, ANTI_MAGIC, ARROW_TRAP, BEAR_TRAP, BILLSZ, CANDLESHOP, CLOUD, CORPSTAT_HISTORIC, COULD_SEE, DART_TRAP, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, D_CLOSED, D_NODOOR, FIRE_TRAP, FOUNTAIN, HOLE, ICE, ICED_POOL, IN_SIGHT, IRONBARS, LADDER, LANDMINE, LAVAPOOL, MAGIC_PORTAL, MIGR_LADDER_UP, MIGR_RANDOM, MIGR_SSTAIRS, MIGR_STAIRS_UP, MOAT, MON_MIGRATING, M_AP_FURNITURE, M_AP_OBJECT, NORMAL_SPEED, P_AXE, P_BARE_HANDED_COMBAT, P_BASIC, P_DAGGER, P_EXPERT, P_KNIFE, P_PICK_AXE, P_RIDING, P_SABER, P_SKILLED, P_TWO_WEAPON_COMBAT, P_UNSKILLED, PIT, POLY_TRAP, POOL, REPAIR_DELAY, ROCKTRAP, ROLLING_BOULDER_TRAP, ROOM, ROOMOFFSET, SDOOR, SHOPBASE, SHOP_DOOR_COST, SINK, SLP_GAS_TRAP, SPIKED_PIT, SQKY_BOARD, STAIRS, STATUE_TRAP, STONE, STRAT_APPEARMSG, STRAT_WAITFORU, STRAT_WAITMASK, TEMPLE, TRAPDOOR, TT_BEARTRAP, TT_LAVA, TT_PIT, TT_WEB, WEB, W_ARMF, W_SADDLE } from '../js/const.js';
+import { A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_STR, A_WIS, ALLOW_TRAPS, ALTAR, AM_SHRINE, Align2amask, ANTI_MAGIC, ARROW_TRAP, BEAR_TRAP, BILLSZ, CANDLESHOP, CLOUD, CORPSTAT_HISTORIC, COULD_SEE, DART_TRAP, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, D_TRAPPED, FIRE_TRAP, FOUNTAIN, HOLE, ICE, ICED_POOL, IN_SIGHT, IRONBARS, LADDER, LANDMINE, LAVAPOOL, MAGIC_PORTAL, MIGR_LADDER_UP, MIGR_RANDOM, MIGR_SSTAIRS, MIGR_STAIRS_UP, MOAT, MON_MIGRATING, M_AP_FURNITURE, M_AP_OBJECT, NORMAL_SPEED, P_AXE, P_BARE_HANDED_COMBAT, P_BASIC, P_DAGGER, P_EXPERT, P_KNIFE, P_PICK_AXE, P_RIDING, P_SABER, P_SKILLED, P_TWO_WEAPON_COMBAT, P_UNSKILLED, PIT, POLY_TRAP, POOL, REPAIR_DELAY, ROCKTRAP, ROLLING_BOULDER_TRAP, ROOM, ROOMOFFSET, SDOOR, SHOPBASE, SHOP_DOOR_COST, SINK, SLP_GAS_TRAP, SPIKED_PIT, SQKY_BOARD, STAIRS, STATUE_TRAP, STONE, STRAT_APPEARMSG, STRAT_WAITFORU, STRAT_WAITMASK, TEMPLE, TRAPDOOR, TT_BEARTRAP, TT_LAVA, TT_PIT, TT_WEB, WEB, W_ARMF, W_SADDLE } from '../js/const.js';
 import { currentFruitId, setCurrentFruitName } from '../js/fruit.js';
 import { CLR_BRIGHT_MAGENTA, CLR_BROWN, CLR_WHITE } from '../js/terminal.js';
 import { TRIBUTE_DEATH_QUOTES } from '../js/tribute.js';
@@ -21029,6 +21029,10 @@ function masterKeyOfThievery(id = 881014, letter = 'k', { blessed = true, cursed
     };
 }
 
+function untrapDoorLoc(doormask = D_CLOSED | D_TRAPPED) {
+    return { roomno: 0, typ: DOOR, doormask, flags: doormask, lit: true };
+}
+
 async function enterUntrapDirection() {
     await rhack('#');
     for (const ch of 'untrap') await rhack(ch);
@@ -21415,6 +21419,137 @@ test('#untrap known untrapped box clears stale trap knowledge directly', async (
     assert.equal(box.cknown, false);
     assert.equal(game.context.move, 1);
 });
+
+test('#untrap closed untrapped door consumes a normal search turn', async () => {
+    setupUntrapDestinationWeb([], { rng: [0] });
+    game.level.traps = [];
+    const door = untrapDoorLoc(D_CLOSED);
+    installUntrapLevelCells([[6, 5, door]]);
+
+    await enterUntrapDirection();
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.deepEqual(getRngLog(), []);
+    assert.equal(game._pending_message, 'You find no traps on the door.');
+    assert.equal(door.doormask, D_CLOSED);
+    assert.equal(game.context.move, 1);
+});
+
+test('#untrap confused door false positive reports not trapped', async () => {
+    setupUntrapDestinationWeb([], { rng: [0, 0] });
+    game.u._confusionTimeout = 10;
+    game.u._statusSuffix = ' Conf';
+    game.level.traps = [];
+    const door = untrapDoorLoc(D_CLOSED);
+    installUntrapLevelCells([[6, 5, door]]);
+
+    await enterUntrapDirection();
+    await rhack('l');
+
+    assert.equal(game._command_mode, 'untrapDoorDisarmConfirm');
+    assert.deepEqual(getRngLog(), ['rn2(3)=0', 'rn2(19)=0']);
+    assert.equal(game._pending_message, 'You find a trap on the door!  Disarm it? [ynq] (q)');
+    assert.equal(door.doormask, D_CLOSED);
+
+    await rhack('y');
+
+    assert.equal(game._command_mode, null);
+    assert.deepEqual(getRngLog(), ['rn2(3)=0', 'rn2(19)=0']);
+    assert.equal(game._pending_message, 'This door was not trapped.');
+    assert.equal(door.doormask, D_CLOSED);
+    assert.equal(game.u.uexp || 0, 0);
+    assert.equal(game.context.move, 1);
+});
+
+test('#untrap trapped door failed disarm removes the door', async () => {
+    setupUntrapDestinationWeb([], { rng: [0, 0, 0, 74] });
+    game.level.traps = [];
+    const door = untrapDoorLoc(D_LOCKED | D_TRAPPED);
+    installUntrapLevelCells([[6, 5, door]]);
+
+    await enterUntrapDirection();
+    await rhack('l');
+
+    assert.equal(game._command_mode, 'untrapDoorDisarmConfirm');
+    assert.deepEqual(getRngLog(), ['rn2(40)=0', 'rn2(19)=0']);
+    assert.equal(game._pending_message, 'You find a trap on the door!  Disarm it? [ynq] (q)');
+    assert.equal(door.doormask, D_LOCKED | D_TRAPPED);
+    assert.equal(game.context.move || 0, 0);
+
+    await rhack('y');
+
+    assert.equal(game._command_mode, null);
+    assert.deepEqual(getRngLog(), ['rn2(40)=0', 'rn2(19)=0', 'rn2(19)=0', 'rnd(75)=75']);
+    assert.equal(game._pending_message, 'You set it off!');
+    assert.equal(door.doormask, D_NODOOR);
+    assert.equal(door.flags, D_NODOOR);
+    assert.equal(game.context.move, 1);
+});
+
+test('#untrap Master Key forces trapped door discovery and disarm', async () => {
+    setupUntrapDestinationWeb([masterKeyOfThievery(881017)], { rng: [0, 0] });
+    game.level.traps = [];
+    const door = untrapDoorLoc(D_CLOSED | D_TRAPPED);
+    installUntrapLevelCells([[6, 5, door]]);
+
+    await enterUntrapDirection();
+    await rhack('l');
+
+    assert.equal(game._command_mode, 'untrapDoorDisarmConfirm');
+    assert.deepEqual(getRngLog(), ['rn2(19)=0']);
+    assert.equal(game._pending_message, 'You find a trap on the door!  Disarm it? [ynq] (q)');
+
+    await rhack('y');
+
+    assert.equal(game._command_mode, null);
+    assert.deepEqual(getRngLog(), ['rn2(19)=0', 'rn2(19)=0']);
+    assert.equal(game._pending_message, 'You disarm it!');
+    assert.equal(door.doormask, D_CLOSED);
+    assert.equal(door.flags, D_CLOSED);
+    assert.equal(game.u.uexp, 8);
+    assert.equal(game.context.move, 1);
+});
+
+test('#untrap unblessed non-Rogue Master Key uses ordinary door search', async () => {
+    setupUntrapDestinationWeb([masterKeyOfThievery(881018, 'k', { blessed: false })], {
+        rng: [39],
+    });
+    game.level.traps = [];
+    const door = untrapDoorLoc(D_CLOSED | D_TRAPPED);
+    installUntrapLevelCells([[6, 5, door]]);
+
+    await enterUntrapDirection();
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.deepEqual(getRngLog(), ['rn2(40)=39']);
+    assert.equal(game._pending_message, 'You find no traps on the door.');
+    assert.equal(door.doormask, D_CLOSED | D_TRAPPED);
+    assert.equal(game.context.move, 1);
+});
+
+for (const [label, doormask, message] of [
+    ['no-door', D_NODOOR, 'You see no door there.'],
+    ['open-door', D_ISOPEN, 'This door is safely open.'],
+    ['broken-door', D_BROKEN, 'This door is broken.'],
+]) {
+    test(`#untrap ${label} door state does not consume time`, async () => {
+        setupUntrapDestinationWeb([], { rng: [0] });
+        game.level.traps = [];
+        const door = untrapDoorLoc(doormask);
+        installUntrapLevelCells([[6, 5, door]]);
+
+        await enterUntrapDirection();
+        await rhack('l');
+
+        assert.equal(game._command_mode, null);
+        assert.deepEqual(getRngLog(), []);
+        assert.equal(game._pending_message, message);
+        assert.equal(door.doormask, doormask);
+        assert.equal(game.context.move || 0, 0);
+    });
+}
 
 test('#untrap current-square web ignores ice boxes for web container prompt', async () => {
     const web = setupUntrapDestinationWeb([], { webX: 5, webY: 5, rng: [0] });
