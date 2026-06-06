@@ -33,5 +33,5 @@ These tests drive the real extended command input, assert exact RNG call order, 
 ## Remaining Work
 
 - Exact reach-floor and tight diagonal web-untrap gates remain open.
-- Boulder handling still needs the C `Passes_walls` exception.
 - Current-square web plus box/chest target selection is covered separately in `562-untrap-current-square-containers-2026-06-06.md`.
+- The adjacent-boulder `Passes_walls` exception is covered separately in `563-untrap-web-boulder-passwalls-2026-06-06.md`.

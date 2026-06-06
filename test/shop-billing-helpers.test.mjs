@@ -21038,7 +21038,7 @@ test('#untrap current-square web and box prompts before removing web', async () 
     await rhack('.');
 
     assert.equal(game._command_mode, 'untrapWebContainerConfirm');
-    assert.equal(game._pending_message, 'There is a container and a spider web here.  Remove the spider web? [ynq] (q)');
+    assert.equal(game._pending_message, 'There is a container and a web here.  Remove the web? [ynq] (q)');
     assert.deepEqual(getRngLog(), []);
     assert.equal(game.level.traps.includes(web), true);
     assert.equal(game.level.objects.includes(box), true);
@@ -21125,6 +21125,35 @@ test('#untrap current-square web ignores ice boxes for web container prompt', as
 
     await enterUntrapDirection();
     await rhack('.');
+
+    assert.equal(game._command_mode, null);
+    assert.deepEqual(getRngLog(), ['rn2(7)=0']);
+    assert.equal(game._pending_message, 'You succeed in removing the web.');
+    assert.equal(game.level.traps.includes(web), false);
+    assert.equal(game.context.move, 1);
+});
+
+test('#untrap adjacent web is blocked by a boulder for ordinary heroes', async () => {
+    const web = setupUntrapDestinationWeb([], { rng: [0] });
+    game.level.objects = [floorBoulder(881006, { ox: 6, oy: 5 })];
+
+    await enterUntrapDirection();
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.deepEqual(getRngLog(), []);
+    assert.equal(game._pending_message, 'There is a boulder in your way.');
+    assert.equal(game.level.traps.includes(web), true);
+    assert.equal(game.context.move || 0, 0);
+});
+
+test('#untrap adjacent web boulder does not block pass-wall heroes', async () => {
+    const web = setupUntrapDestinationWeb([], { rng: [0] });
+    game.u._polyself_form = { name: 'xorn', passWalls: true };
+    game.level.objects = [floorBoulder(881007, { ox: 6, oy: 5 })];
+
+    await enterUntrapDirection();
+    await rhack('l');
 
     assert.equal(game._command_mode, null);
     assert.deepEqual(getRngLog(), ['rn2(7)=0']);
@@ -21268,7 +21297,7 @@ test('#untrap web failure can leave the hero in place', async () => {
     await rhack('l');
 
     assert.deepEqual(getRngLog(), ['rn2(7)=1', 'rnl(5)=0']);
-    assert.equal(game._pending_message, 'That spider web is difficult to remove.');
+    assert.equal(game._pending_message, 'That web is difficult to remove.');
     assert.equal(game.level.traps.includes(web), true);
     assert.equal(game.u.ux, 5);
     assert.equal(game.u.uy, 5);

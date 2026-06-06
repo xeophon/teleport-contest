@@ -261,6 +261,16 @@ function heroIsFumbling() {
             && String(item.kind || item.actualKind || '').toLowerCase() === 'fumble boots'));
 }
 
+function heroPassesWalls() {
+    const forms = [polyselfForm(), game.u?.youmonst?.data, game.u?.data].filter(Boolean);
+    const hasPassWallFlag = target => !!(target?.passWalls || target?.passesWalls
+        || target?.passes_walls || target?.wallwalk);
+    return !!(hasPassWallFlag(game.u) || forms.some(form => {
+        const name = String(form.name || '').toLowerCase().trim().replace(/\s+/g, ' ');
+        return hasPassWallFlag(form) || name === 'xorn' || name === 'earth elemental';
+    }));
+}
+
 function fingersOrGloves() {
     return wornGlovesItem() ? 'gloves' : 'fingers';
 }
@@ -427,7 +437,7 @@ function untrapWebSuccessMessage(trap, weapon) {
 
 function untrapWebDifficultMessage(trap, underHero) {
     const which = trap?.madeby_u ? 'Your' : underHero ? 'This' : 'That';
-    return `${which} spider web is difficult to remove.`;
+    return `${which} web is difficult to remove.`;
 }
 
 function untrapBoxObjectsAt(x, y) {
@@ -440,8 +450,7 @@ function untrapContainerCountPhrase(count) {
 }
 
 function untrapWebContainerPrompt(trap, count) {
-    const trapName = trap?.madeby_u ? 'your spider web' : 'a spider web';
-    return `There ${untrapContainerCountPhrase(count)} and ${trapName} here.  Remove ${trap?.madeby_u ? 'your' : 'the'} spider web? [ynq] (q)`;
+    return `There ${untrapContainerCountPhrase(count)} and a web here.  Remove the web? [ynq] (q)`;
 }
 
 function untrapBoxObjectName(box) {
@@ -609,7 +618,7 @@ async function moveHeroIntoFailedUntrapWeb(trap, dir) {
 
 async function handleUntrapWebTrap(trap, dir) {
     const underHero = !dir.dx && !dir.dy;
-    const trapName = TRAP_NAMES[WEB] || 'spider web';
+    const trapName = 'web';
     if ((game.u?.utrap || 0) > 0) {
         await setMessage(`You cannot deal with the ${trapName} while trapped${underHero ? ' in it' : ''}!`);
         game.context.move = 1;
@@ -618,7 +627,7 @@ async function handleUntrapWebTrap(trap, dir) {
     const boulder = (game.level?.objects || []).find(obj =>
         !obj.hidden && !obj.transientProjectile && obj.otyp === BOULDER
         && obj.ox === trap.tx && obj.oy === trap.ty);
-    if (boulder && !underHero) {
+    if (boulder && !underHero && !heroPassesWalls()) {
         await setMessage('There is a boulder in your way.');
         return true;
     }

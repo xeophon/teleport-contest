@@ -18,7 +18,7 @@ The implementation uses deterministic command-level tests and does not use repla
 ## JS Change
 
 - `js/cmd.js` now counts current-square box/chest objects for `#untrap .` using the existing large-box/chest predicate.
-- Seen current-square web plus box/chest now asks `There is/are container(s) and a spider web here.  Remove the spider web? [ynq] (q)`.
+- Seen current-square web plus box/chest now asks `There is/are container(s) and a web here.  Remove the web? [ynq] (q)`.
 - `y` reuses the existing web removal path; `q`, Escape, space, and Enter cancel without consuming a turn; `n` skips the web and prompts for a box/chest.
 - Current-square box-only `#untrap .` now prompts to check a box/chest for traps and consumes a turn only after accepting a check.
 - Ice boxes do not trigger the container/web prompt, matching C `Is_box()`.
@@ -39,4 +39,4 @@ These tests drive the real extended command input, assert exact prompt text, RNG
 
 - Box/chest trap side effects are still partial: the C `chest_trap()` effects are not fully modeled by this slice.
 - Reach-floor and tight diagonal web-untrap gates remain open.
-- Boulder handling still needs the C `Passes_walls` exception.
+- The adjacent-boulder `Passes_walls` exception is covered separately in `563-untrap-web-boulder-passwalls-2026-06-06.md`.
