@@ -35,5 +35,5 @@ The tests run through normal `rhack()` movement and assert no RNG use, no positi
 ## Remaining Work
 
 - Dismounting while holding a web, bear trap, or pit trap and transferring trapped state to the former steed is covered by `554-dismount-holding-trap-transfer-2026-06-06.md`.
-- Force-fighting a destination web with Sting deletes the web through a different C path and remains separate from this already-trapped movement slice.
+- Force-fighting a destination web with Sting deletes the web through a different C path and is covered by `555-force-fight-sting-web-2026-06-06.md`.
 - Failed untrap/NOWEBMSG web-spread behavior remains separate `#untrap` parity.

@@ -43249,6 +43249,15 @@ function heroWieldsSting() {
         String(name || '').toLowerCase().replace(/^the\s+/, '') === 'sting');
 }
 
+async function forceFightWebTrapWithSting(trap) {
+    if (!trap || trap.ttyp !== WEB || !trap.tseen || !heroWieldsSting()) return false;
+    rn2(20);
+    deleteTrap(trap);
+    await setMessage('Sting cuts through the web!');
+    game.context.move = 1;
+    return true;
+}
+
 async function sitWhileAlreadyTrapped(trap) {
     const trapped = sitTrapState();
     if (!trapped || !(game.u?.utrap > 0)) return false;
@@ -43282,8 +43291,11 @@ async function sitWhileAlreadyTrapped(trap) {
 }
 
 function deleteTrap(trap) {
-    game.level.traps = (game.level?.traps || []).filter(item => item !== trap);
-    newsym(game.u?.ux || 0, game.u?.uy || 0);
+    if (!game.level) return;
+    const x = Number.isInteger(trap?.tx) ? trap.tx : game.u?.ux || 0;
+    const y = Number.isInteger(trap?.ty) ? trap.ty : game.u?.uy || 0;
+    game.level.traps = (game.level.traps || []).filter(item => item !== trap);
+    newsym(x, y);
 }
 
 function sitTrapArticleName(trap) {
@@ -64974,6 +64986,9 @@ export async function rhack(_cmd) {
                 game._force_fight_target = null;
                 return;
             }
+            const webTrap = (game.level?.traps || []).find(trap =>
+                trap.tx === targetX && trap.ty === targetY && trap.ttyp === WEB);
+            if (await forceFightWebTrapWithSting(webTrap)) return;
             await setMessage(target && !IS_OBSTRUCTED(target.typ) ? 'You attack thin air.' : 'You harmlessly attack the wall.');
             if (!target || IS_OBSTRUCTED(target.typ)) game._fight_wall_message = 1;
             game.context.move = 1;

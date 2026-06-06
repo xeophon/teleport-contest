@@ -20728,6 +20728,99 @@ test('Sting cuts already web-trapped hero free without moving or deleting web', 
     assert.equal(game.context.move, 1);
 });
 
+test('force-fighting a seen destination web with Sting cuts and deletes it', async () => {
+    installStableNonSokobanTrapState();
+    vision_reset();
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 20,
+        uhpmax: 20,
+        utrap: 0,
+        utraptype: null,
+        umoved: false,
+    });
+    const sting = wieldedWeapon(880903, 'elven dagger', 'w', 0);
+    sting.artifact = 'Sting';
+    game.inventory = [sting];
+    const web = { ttyp: WEB, tx: 6, ty: 5, tseen: true, madeby_u: false };
+    game.level.traps = [web];
+    enableRngLog({ reset: true });
+    installCoreRngValues([7]);
+
+    await rhack('F');
+    await rhack('l');
+
+    assert.deepEqual(getRngLog().map(rngCallName), ['rn2(20)']);
+    assert.equal(game._pending_message, 'Sting cuts through the web!');
+    assert.equal(game.u.ux, 5);
+    assert.equal(game.u.uy, 5);
+    assert.equal(game.u.umoved, false);
+    assert.equal(game.u.utrap || 0, 0);
+    assert.equal(game.u.utraptype || null, null);
+    assert.equal(game.level.traps.includes(web), false);
+    assert.equal(game.context.move, 1);
+});
+
+test('force-fighting an unseen destination web with Sting does not cut it', async () => {
+    installStableNonSokobanTrapState();
+    vision_reset();
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 20,
+        uhpmax: 20,
+        utrap: 0,
+        utraptype: null,
+    });
+    const sting = wieldedWeapon(880904, 'elven dagger', 'w', 0);
+    sting.artifact = 'Sting';
+    game.inventory = [sting];
+    const web = { ttyp: WEB, tx: 6, ty: 5, tseen: false, madeby_u: false };
+    game.level.traps = [web];
+    enableRngLog({ reset: true });
+
+    await rhack('F');
+    await rhack('l');
+
+    assert.deepEqual(getRngLog().map(rngCallName), []);
+    assert.equal(game._pending_message, 'You attack thin air.');
+    assert.equal(game.u.ux, 5);
+    assert.equal(game.u.uy, 5);
+    assert.equal(web.tseen, false);
+    assert.equal(game.level.traps.includes(web), true);
+    assert.equal(game.context.move, 1);
+});
+
+test('ordinary movement into a seen web with Sting still uses web movement', async () => {
+    installStableNonSokobanTrapState();
+    vision_reset();
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 20,
+        uhpmax: 20,
+        utrap: 0,
+        utraptype: null,
+    });
+    const sting = wieldedWeapon(880905, 'elven dagger', 'w', 0);
+    sting.artifact = 'Sting';
+    game.inventory = [sting];
+    const web = { ttyp: WEB, tx: 6, ty: 5, tseen: true, madeby_u: false };
+    game.level.traps = [web];
+    enableRngLog({ reset: true });
+    installCoreRngValues([0]);
+
+    await rhack('l');
+
+    assert.deepEqual(getRngLog().map(rngCallName), ['rn2(5)']);
+    assert.equal(game._pending_message, 'You escape a web.');
+    assert.equal(game.u.ux, 6);
+    assert.equal(game.u.uy, 5);
+    assert.equal(game.level.traps.includes(web), true);
+    assert.equal(game.context.move, 1);
+});
+
 test('#ride dismount transfers mounted holding traps to former steed', async () => {
     for (const [label, ttyp, utraptype] of [
         ['web', WEB, TT_WEB],
