@@ -21033,6 +21033,45 @@ function untrapDoorLoc(doormask = D_CLOSED | D_TRAPPED) {
     return { roomno: 0, typ: DOOR, doormask, flags: doormask, lit: true };
 }
 
+function setupUntrapShopDoor({ rng = [0], doormask = D_LOCKED | D_TRAPPED } = {}) {
+    const { shkp } = installCommandShopState();
+    vision_reset();
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 20,
+        uhpmax: 20,
+        ulevel: 1,
+        uhave: { ...(game.u?.uhave || {}), questart: 0 },
+        utrap: 0,
+        utraptype: null,
+        umoved: false,
+    });
+    game._startup_role = 'Tourist';
+    game.urole = { ...(game.urole || {}), name: { m: 'Tourist', f: 'Tourist' } };
+    game.inventory = [];
+    game._twoweapon = false;
+    game.level.traps = [];
+    Object.assign(shkp, {
+        mx: 1,
+        my: 1,
+        shk: { x: 1, y: 1 },
+        shd: { x: 6, y: 5 },
+        shoproom: ROOMOFFSET,
+    });
+    const door = untrapDoorLoc(doormask);
+    door.roomno = ROOMOFFSET;
+    const cells = new Map([
+        ['1,1', { roomno: ROOMOFFSET, typ: ROOM, lit: true }],
+        ['5,5', { roomno: ROOMOFFSET, typ: ROOM, lit: true }],
+        ['6,5', door],
+    ]);
+    game.level.at = (x, y) => cells.get(`${x},${y}`) || { roomno: ROOMOFFSET, typ: ROOM, lit: true };
+    enableRngLog({ reset: true });
+    installCoreRngValues(rng);
+    return { shkp, door };
+}
+
 async function enterUntrapDirection() {
     await rhack('#');
     for (const ch of 'untrap') await rhack(ch);
@@ -21484,6 +21523,32 @@ test('#untrap trapped door failed disarm removes the door', async () => {
     assert.equal(game._pending_message, 'You set it off!');
     assert.equal(door.doormask, D_NODOOR);
     assert.equal(door.flags, D_NODOOR);
+    assert.equal(game.context.move, 1);
+});
+
+test('#untrap failed trapped shop door records zero-cost repair damage', async () => {
+    const { shkp, door } = setupUntrapShopDoor({ rng: [0, 0, 0, 74] });
+
+    await enterUntrapDirection();
+    await rhack('l');
+    await rhack('y');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game._pending_message, 'You set it off!');
+    assert.equal(door.doormask, D_NODOOR);
+    assert.equal(game.level.damagelist.length, 1);
+    assert.deepEqual(game.level.damagelist[0], {
+        x: 6,
+        y: 5,
+        cost: 0,
+        when: 0,
+        typ: DOOR,
+        flags: D_NODOOR,
+        shoproom: ROOMOFFSET,
+        shopkeeperId: shkp.m_id,
+    });
+    assert.equal(shkp.debit || 0, 0);
+    assert.equal(shkp.robbed || 0, 0);
     assert.equal(game.context.move, 1);
 });
 

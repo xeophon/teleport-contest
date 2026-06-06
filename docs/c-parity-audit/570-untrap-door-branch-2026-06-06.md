@@ -28,13 +28,14 @@ The implementation uses deterministic command-level tests and does not use repla
 - `#untrap closed untrapped door consumes a normal search turn`
 - `#untrap confused door false positive reports not trapped`
 - `#untrap trapped door failed disarm removes the door`
+- `#untrap failed trapped shop door records zero-cost repair damage`
 - `#untrap Master Key forces trapped door discovery and disarm`
 - `#untrap unblessed non-Rogue Master Key uses ordinary door search`
 - `#untrap no-door door state does not consume time`
 - `#untrap open-door door state does not consume time`
 - `#untrap broken-door door state does not consume time`
 
-These tests drive the real extended command input, assert exact prompts/messages, RNG call order, confused false-positive cleanup, door mask mutations, XP gain, Master Key force behavior, and turn consumption.
+These tests drive the real extended command input, assert exact prompts/messages, RNG call order, confused false-positive cleanup, door mask mutations, zero-cost shop repair tracking, XP gain, Master Key force behavior, and turn consumption.
 
 ## Remaining Work
 
