@@ -66763,11 +66763,14 @@ export async function rhack(_cmd) {
             return;
         }
         const returningAklysThrow = itemIsPrimaryWieldedAklys(item);
+        const returningBoomerangOrdinaryThrow = heroIsUnderwaterForThrow()
+            && tossUpWeaponObjectKey(item) === 'boomerang';
+        const returningObjectThrow = returningAklysThrow || returningBoomerangOrdinaryThrow;
         let ox = ux;
         let oy = uy;
         let targetMon = null;
         let ironBarsImpact = null;
-        const throwRange = returningAklysThrow ? 4 : 8;
+        const throwRange = heroIsUnderwaterForThrow() ? 1 : returningAklysThrow ? 4 : 8;
         let flightImpactMessage = '';
         if (boomerangFlight.handled) {
             ox = boomerangFlight.x ?? ox;
@@ -67015,7 +67018,7 @@ export async function rhack(_cmd) {
             game.context.move = 0;
             return;
         }
-        if (returningAklysThrow) {
+        if (returningObjectThrow) {
             const returnMessage = `${floorObjectTheSubject({ ...thrownObject, quan: 1 })} returns to your hand!`;
             const failMessage = `${floorObjectTheSubject({ ...thrownObject, quan: 1 })} fails to return!`;
             if (rn2(100)) {
