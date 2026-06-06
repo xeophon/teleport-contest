@@ -44,4 +44,5 @@ These tests drive the real extended command input, assert exact prompts/messages
 
 ## Remaining Work
 
-- The rare C continuation where the hero declines all current-square boxes/chests on a door square and then proceeds to door handling is not wired because the current JS box prompt state does not retain target coordinates for that continuation.
+- The current-square box/chest decline continuation is now covered: `#untrap .` retains the target square while prompting through boxes/chests, preserves `There are no other chests or boxes here.`, and then runs same-square door handling when the remembered target is a real `DOOR`.
+- Broader box/chest trap payload parity remains tracked by the focused box/chest audits.
