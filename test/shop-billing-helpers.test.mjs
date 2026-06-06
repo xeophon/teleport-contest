@@ -21196,6 +21196,96 @@ test('#untrap current-square box only checks box for traps', async () => {
     assert.equal(game.context.move, 1);
 });
 
+test('#untrap current-square declined box continues into closed door search', async () => {
+    setupUntrapDestinationWeb([], { rng: [0] });
+    game.level.traps = [];
+    const box = shopFloorContainer(881019);
+    const door = untrapDoorLoc(D_CLOSED);
+    game.level.objects = [box];
+    installUntrapLevelCells([[5, 5, door]]);
+
+    await enterUntrapDirection();
+    await rhack('.');
+    await rhack('n');
+
+    assert.equal(game._command_mode, null);
+    assert.deepEqual(getRngLog(), []);
+    assert.equal(game._pending_message, 'There are no other chests or boxes here.  You find no traps on the door.');
+    assert.equal(door.doormask, D_CLOSED);
+    assert.equal(game.context.move, 1);
+});
+
+test('#untrap current-square declined boxes continue into trapped door prompt', async () => {
+    setupUntrapDestinationWeb([], { rng: [0, 0] });
+    game.level.traps = [];
+    const firstBox = shopFloorContainer(881020);
+    const secondBox = shopFloorContainer(881021);
+    const door = untrapDoorLoc(D_LOCKED | D_TRAPPED);
+    game.level.objects = [firstBox, secondBox];
+    installUntrapLevelCells([[5, 5, door]]);
+
+    await enterUntrapDirection();
+    await rhack('.');
+    await rhack('n');
+
+    assert.equal(game._command_mode, 'untrapBoxConfirm');
+    assert.equal(game._pending_message, 'There is a large box here.  Check it for traps? [ynq] (q)');
+    assert.equal(game.context.move || 0, 0);
+
+    await rhack('n');
+
+    assert.equal(game._command_mode, 'untrapDoorDisarmConfirm');
+    assert.deepEqual(getRngLog(), ['rn2(40)=0', 'rn2(19)=0']);
+    assert.equal(game._pending_message, 'There are no other chests or boxes here.  You find a trap on the door!  Disarm it? [ynq] (q)');
+    assert.equal(door.doormask, D_LOCKED | D_TRAPPED);
+    assert.equal(game.context.move || 0, 0);
+
+    await rhack('n');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(door.doormask, D_LOCKED | D_TRAPPED);
+    assert.equal(game.context.move, 1);
+});
+
+test('#untrap current-square declined box continues into terminal door state', async () => {
+    setupUntrapDestinationWeb([], { rng: [0] });
+    game.level.traps = [];
+    const box = shopFloorContainer(881022);
+    const door = untrapDoorLoc(D_ISOPEN);
+    game.level.objects = [box];
+    installUntrapLevelCells([[5, 5, door]]);
+
+    await enterUntrapDirection();
+    await rhack('.');
+    await rhack('n');
+
+    assert.equal(game._command_mode, null);
+    assert.deepEqual(getRngLog(), []);
+    assert.equal(game._pending_message, 'There are no other chests or boxes here.  This door is safely open.');
+    assert.equal(door.doormask, D_ISOPEN);
+    assert.equal(game.context.move || 0, 0);
+});
+
+test('#untrap current-square skipped web and declined box continues into door search', async () => {
+    const web = setupUntrapDestinationWeb([], { webX: 5, webY: 5, rng: [0] });
+    const box = shopFloorContainer(881023);
+    const door = untrapDoorLoc(D_CLOSED);
+    game.level.objects = [box];
+    installUntrapLevelCells([[5, 5, door]]);
+
+    await enterUntrapDirection();
+    await rhack('.');
+    await rhack('n');
+    await rhack('n');
+
+    assert.equal(game._command_mode, null);
+    assert.deepEqual(getRngLog(), []);
+    assert.equal(game._pending_message, 'There are no other chests or boxes here.  You find no traps on the door.');
+    assert.equal(game.level.traps.includes(web), true);
+    assert.equal(door.doormask, D_CLOSED);
+    assert.equal(game.context.move, 1);
+});
+
 test('#untrap discovered box trap observes box without contents knowledge', async () => {
     setupUntrapDestinationWeb([], { rng: [0, 0] });
     game.level.traps = [];
