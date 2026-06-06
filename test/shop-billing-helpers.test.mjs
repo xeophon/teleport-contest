@@ -22521,6 +22521,45 @@ test('hero rolling boulder lethal hidden target says it is destroyed', async () 
     assert.deepEqual(rngValuesForCall(getRngLog(), 'rnd(20)'), [5, 5]);
 });
 
+test('known hero rolling boulder trap lethal target awards hero experience', async () => {
+    const { boulder } = installHeroRollingBoulderTrapState({
+        trapX: 6,
+        trapY: 4,
+        heroX: 5,
+        heroY: 4,
+        start: { x: 4, y: 3 },
+        end: { x: 8, y: 3 },
+        tseen: true,
+        boulderAt: 'start',
+    });
+    const goblin = dartTrapGoblin(314841, {
+        mx: 6,
+        my: 3,
+        mhp: 5,
+        mhpmax: 5,
+        msleeping: 1,
+        data: { name: 'goblin', mlet: 'o', mac: -5, msize: 'large' },
+    });
+    game.u.urexp = 0;
+    game.level.monsters.push(goblin);
+    enableRngLog({ reset: true });
+    installCoreRngValues([4, 4]);
+    markHeroNeighborhoodVisible();
+    for (let x = 4; x <= 8; x++) markSquareVisible(x, 3);
+
+    await rhack('l');
+
+    assert.equal(game._pending_message,
+        'Click!  You trigger a rolling boulder trap!  The boulder hits the goblin!  The goblin is killed!');
+    assert.equal(game.level.monsters.includes(goblin), false);
+    assert.equal(goblin.dead, true);
+    assert.equal(game._vanquished_counts?.goblin, 1);
+    assert.equal(game.u.urexp > 0, true);
+    assert.equal(boulder.ox, 8);
+    assert.equal(boulder.oy, 3);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rnd(20)'), [5, 5]);
+});
+
 test('hero rolling boulder destroys visible nonliving target on lethal hit', async () => {
     const { boulder } = installHeroRollingBoulderTrapState({
         trapX: 6,
@@ -59738,6 +59777,82 @@ test('hero-thrown dagger harms ordinary monster and survives landing', async () 
     assert.equal(landed.oy, 5);
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 4), [
         'rnd(20)', 'rnd(4)', 'rn2(19)', 'rn2(100)',
+    ]);
+});
+
+test('hero-thrown dagger revives shifted vampire lethal target before cleanup', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, { ulevel: 20, uluck: 10, uhitinc: 10, udaminc: 0 });
+    game.u.acurr.a[A_STR] = 10;
+    game.u.acurr.a[A_DEX] = 25;
+    const blade = dagger(876131, 'd');
+    const carried = { id: 876132, cls: 'food', kind: 'food ration', quan: 1 };
+    const bat = ordinaryThrowTarget('vampire bat', 7, 5, {
+        mhp: 3,
+        mhpmax: 8,
+        m_lev: 5,
+        mlevel: 5,
+        msleeping: 1,
+        mpeaceful: 1,
+        meating: 4,
+        mstrategy: STRAT_WAITFORU,
+        vampshifter: true,
+        vampBase: 'vampire',
+        cham: 'vampire',
+        minvent: [carried],
+        data: {
+            name: 'vampire bat',
+            mlevel: 5,
+            mlet: 'B',
+            glyph: 'B',
+            vampshifter: true,
+            vampBase: 'vampire',
+            cham: 'vampire',
+        },
+    });
+    game.inventory = [blade];
+    game.level.monsters = [bat];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('d');
+    markSquareVisible(bat.mx, bat.my);
+    await rhack('l');
+
+    assert.equal(game._pending_message,
+        'The dagger hits the vampire bat.  You kill the vampire bat!  The seemingly dead vampire bat suddenly transforms and rises as a vampire!');
+    assert.equal(game.level.monsters.includes(bat), true);
+    assert.equal(bat.dead, false);
+    assert.equal(bat.data.name, 'vampire');
+    assert.equal(bat.name, 'vampire');
+    assert.equal(bat.mlet, 'V');
+    assert.equal(bat.glyph, 'V');
+    assert.equal(bat.mcanmove, true);
+    assert.equal(bat.mfrozen, 0);
+    assert.equal(bat.vampshifter, false);
+    assert.equal(bat.vampBase, undefined);
+    assert.equal(bat.chamName, undefined);
+    assert.equal(bat.cham, undefined);
+    assert.equal(bat.msleeping, 0);
+    assert.equal(bat.meating, 0);
+    assert.equal(bat.mstrategy, 0);
+    assert.equal(bat.mpeaceful, 0);
+    assert.equal(bat.mhp, bat.mhpmax);
+    assert.equal(bat.mhp >= 10, true);
+    assert.equal(bat.minvent.some(obj => obj.id === carried.id), true);
+    assert.equal(game.level.objects.some(obj => obj.id === carried.id), false);
+    assert.equal(game._vanquished_counts?.['vampire bat'] || 0, 0);
+    assert.equal(game._vanquished_counts?.vampire || 0, 0);
+    assert.equal(game._vanquished_total || 0, 0);
+    assert.equal(game.level.objects.some(obj => obj.kind === 'vampire bat corpse'), false);
+    assert.equal(game.inventory.includes(blade), false);
+    const landed = game.level.objects.find(obj => obj.id === blade.id);
+    assert.ok(landed);
+    assert.equal(landed.ox, 7);
+    assert.equal(landed.oy, 5);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 5), [
+        'rnd(20)', 'rnd(4)', 'd(11,8)', 'rn2(19)', 'rn2(100)',
     ]);
 });
 
