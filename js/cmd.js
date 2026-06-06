@@ -986,7 +986,7 @@ function applyChestTrapNoxiousGasPayload(box, messages) {
     return result;
 }
 
-function applyChestTrapPayload(box, { disarm = true } = {}) {
+export function applyChestTrapPayload(box, { disarm = true } = {}) {
     const messages = [disarm ? 'You set it off!' : 'You trigger a trap!'];
     let result = {};
     if (box) {

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { advanceRegions, interruptEatingOccupation, moveloop_core, processEatingOccupationTick, processForceLockOccupation, processMonsterTurns, __allmainTestHooks as allmain } from '../js/allmain.js';
+import { advanceRegions, interruptEatingOccupation, moveloop_core, processEatingOccupationTick, processForceLockOccupation, processMonsterTurns, processPickLockOccupation, __allmainTestHooks as allmain } from '../js/allmain.js';
 import { activateStatueTrap, burnFloorObjectsByFire, earthFloorEffects, finishForceLock, landMonsterThrownObject, maybeQueueQuestLeaderTalk, maybeQueueQuestTalk, processCorpseTimers, processForceLockOccupationTick, processGlobShrinkTimers, processSpellbookStudyOccupation, rhack, __shopBillingTestHooks as shop } from '../js/cmd.js';
 import { newsym, refreshHallucinatedMap } from '../js/display.js';
 import { game, resetGame } from '../js/gstate.js';
@@ -22598,6 +22598,96 @@ test('#tip trapped source fatal explosion enters death more and aborts tipping',
     assert.equal(game.context.move || 0, 0);
 });
 
+test('lock-pick success on trapped box fires chest trap dud after unlocking', () => {
+    setupUntrapDestinationWeb([], { rng: [0, 8, 0, 0] });
+    game.level.traps = [];
+    const box = shopFloorContainer(881073);
+    Object.assign(box, {
+        locked: true,
+        olocked: true,
+        otrapped: true,
+        tknown: true,
+        dknown: true,
+        cknown: false,
+    });
+    game.level.objects = [box];
+    game._pick_lock_occupation = {
+        chest: box,
+        chance: 100,
+        action: 'unlocking the box',
+        usedtime: 0,
+    };
+
+    processPickLockOccupation();
+
+    assert.equal(game._pick_lock_occupation, null);
+    assert.deepEqual(getRngLog(), [
+        'rn2(100)=0',
+        'rn2(13)=8',
+        'rn2(13)=0',
+        'rn2(19)=0',
+    ]);
+    assert.equal(game._pending_message, 'You succeed in unlocking the box.  You trigger a trap!  But luckily the gas cloud blows away!');
+    assert.equal(box.locked, false);
+    assert.equal(box.olocked, false);
+    assert.equal(box.lknown, true);
+    assert.equal(box.otrapped, false);
+    assert.equal(box.tknown, true);
+    assert.equal(box.cknown, false);
+    assert.equal(game._pick_lock_continue_time, 1);
+});
+
+test('lock-pick success fatal chest explosion enters death more', () => {
+    setupUntrapDestinationWeb([], { rng: [0, 0, 0, 21, 0, 5, 5, 5, 5, 5, 5, 0] });
+    Object.assign(game.u, {
+        uhp: 10,
+        uhpmax: 20,
+        halfPhysicalDamage: false,
+        uinvulnerable: false,
+    });
+    game.level.traps = [];
+    const box = shopFloorContainer(881074);
+    Object.assign(box, {
+        locked: true,
+        olocked: true,
+        otrapped: true,
+        tknown: true,
+        dknown: true,
+        cknown: false,
+    });
+    game.level.objects = [box];
+    game._pick_lock_occupation = {
+        chest: box,
+        chance: 100,
+        action: 'unlocking the box',
+        usedtime: 0,
+    };
+
+    processPickLockOccupation();
+
+    assert.equal(game._command_mode, 'deathDieMore');
+    const fatalLog = getRngLog();
+    assert.deepEqual(fatalLog.slice(0, 6), [
+        'rn2(100)=0',
+        'rn2(13)=0',
+        'rn2(20)=0',
+        'rn2(26)=21',
+        'rn2(100)=0',
+        'd(6,6)=36',
+    ]);
+    assert.equal(fatalLog.some(entry => rngCallName(entry) === 'rn2(19)'), false);
+    assert.equal(game._pending_message, 'You succeed in unlocking the box.  You trigger a trap!  The large box explodes!  You die...');
+    assert.equal(game.level.objects.includes(box), false);
+    assert.equal(box.locked, false);
+    assert.equal(box.olocked, false);
+    assert.equal(box.lknown, true);
+    assert.equal(box.otrapped, false);
+    assert.equal(box.tknown, false);
+    assert.equal(game.u.uhp, 0);
+    assert.equal(game._death_cause, 'killed by an exploding large box');
+    assert.equal(game.context.move || 0, 0);
+});
+
 test('#untrap known-box poisoned needle payload drains constitution', async () => {
     setupUntrapDestinationWeb([], { rng: [74, 0, 0, 13, 1, 1, 1, 0] });
     game.u.poisonResistance = false;
@@ -38090,6 +38180,37 @@ test('successful blade force calls real Dexterity exercise', () => {
     assert.equal(game.u._aexe[A_DEX], 1);
     assert.equal(getRngLog()[0]?.replace(/=.*/, ''), 'rn2(19)');
     assert.deepEqual(getRngLog().filter(entry => entry.startsWith('rn2(3)=')), []);
+});
+
+test('successful blade force preserves trapped box payload for later', () => {
+    installCommandShopState();
+    initRng(1);
+    const box = shopFloorContainer(6164);
+    Object.assign(box, {
+        locked: true,
+        olocked: true,
+        otrapped: true,
+        tknown: true,
+        lknown: true,
+    });
+    game.level.objects = [box];
+    game.u.acurr.a[A_DEX] = -1;
+    enableRngLog({ reset: true });
+
+    const destroyed = finishForceLock({ chest: box, picktyp: true });
+
+    assert.equal(destroyed, false);
+    const rngCalls = getRngLog().map(entry => entry.replace(/=.*/, ''));
+    assert.equal(rngCalls[0], 'rn2(19)');
+    assert.equal(rngCalls.includes('rn2(13)'), false);
+    assert.equal(rngCalls.includes('rn2(20)'), false);
+    assert.equal(rngCalls.includes('rn2(26)'), false);
+    assert.equal(box.locked, false);
+    assert.equal(box.olocked, false);
+    assert.equal(box.obroken, true);
+    assert.equal(box.otrapped, true);
+    assert.equal(box.tknown, true);
+    assert.equal(game.u._aexe[A_DEX], 1);
 });
 
 test('dagger #force command uses blade prying and skips chest destruction roll', async () => {
