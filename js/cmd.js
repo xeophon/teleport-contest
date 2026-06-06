@@ -751,6 +751,7 @@ function applyChestTrapPoison(messages, {
     fatal,
     deathCause,
 }) {
+    const cloud = reason === 'gas cloud';
     if (!/poison/i.test(reason)) messages.push(`The ${reason} was poisoned!`);
     if (heroHasPoisonResistance()) {
         messages.push("The poison doesn't seem to affect you.");
@@ -776,7 +777,8 @@ function applyChestTrapPoison(messages, {
     }
 
     if (roll > 5) {
-        const loss = rn1(10, 6);
+        let loss = rn1(10, 6);
+        if (cloud && heroHasWetWornTowel()) loss = Math.trunc((loss + 1) / 2);
         if (game.u) game.u.uhp = Math.max(0, (game.u.uhp || 0) - loss);
         if ((game.u?.uhp || 0) <= 0)
             return heroDartTrapFatalResult(messages, deathCause);
@@ -795,6 +797,36 @@ function applyChestTrapNeedlePayload(messages) {
         fatal: 10,
         deathCause: 'killed by a poisoned needle',
     });
+    if (!result.fatal) exerciseAttribute(A_CON, false);
+    return result;
+}
+
+function heroOkWithChestTrapPoisonGas() {
+    const form = polyselfForm() || {};
+    const magicalBreathing = (game.inventory || []).some(item =>
+        isWornInventoryItem(item) && objectKindKey(item) === 'amulet of magical breathing');
+    return !!(game.u?.uinvulnerable || game.u?.underwater || game.u?.uunderwater
+        || magicalBreathing || form.breathless || form.nonliving);
+}
+
+function applyChestTrapNoxiousGasPayload(box, messages) {
+    messages.push(`A cloud of noxious gas billows from the ${chestTrapObjectName(box)}.`);
+    let result = {};
+    if (rn2(3)) {
+        result = applyChestTrapPoison(messages, {
+            reason: 'gas cloud',
+            attr: A_STR,
+            fatal: 15,
+            deathCause: 'killed by a cloud of poison gas',
+        });
+    } else {
+        const wasInside = heroInsideGasCloud();
+        const region = createGasCloud(box?.ox ?? game.u?.ux ?? 0, box?.oy ?? game.u?.uy ?? 0, 1, 8);
+        if (region) region.heroFault = true;
+        const enveloped = !wasInside && !heroOkWithChestTrapPoisonGas()
+            && region?.coords?.some(coord => coord.x === (game.u?.ux ?? -1) && coord.y === (game.u?.uy ?? -1));
+        if (enveloped) messages.push('You are enveloped in a cloud of noxious gas!');
+    }
     if (!result.fatal) exerciseAttribute(A_CON, false);
     return result;
 }
@@ -835,6 +867,8 @@ function applyChestTrapPayload(box, { disarm = true } = {}) {
         result = applyChestTrapElectricPayload(messages);
     } else if (payload >= 13 && payload <= 16) {
         result = applyChestTrapNeedlePayload(messages);
+    } else if (payload >= 17 && payload <= 20) {
+        result = applyChestTrapNoxiousGasPayload(box, messages);
     }
     if (box && !result.fatal) box.tknown = true;
     const message = trapMessage(...messages);

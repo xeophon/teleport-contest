@@ -22014,6 +22014,219 @@ test('#untrap known-box fatal poisoned needle enters death more', async () => {
     assert.equal(game.context.move || 0, 0);
 });
 
+test('#untrap known-box noxious gas payload can poison strength', async () => {
+    setupUntrapDestinationWeb([], { rng: [74, 0, 0, 17, 1, 1, 1, 0, 0] });
+    game.u.poisonResistance = false;
+    game.u.uinvulnerable = false;
+    game.level.traps = [];
+    const box = shopFloorContainer(881038);
+    Object.assign(box, {
+        otrapped: true,
+        tknown: true,
+        dknown: true,
+        cknown: false,
+    });
+    game.level.objects = [box];
+
+    await enterUntrapDirection();
+    await rhack('.');
+
+    assert.equal(game._command_mode, 'untrapBoxConfirm');
+    assert.equal(game._pending_message, 'Disarm this large box? [ynq] (q)');
+
+    await rhack('y');
+
+    assert.equal(game._command_mode, null);
+    assert.deepEqual(getRngLog(), [
+        'rnd(75)=75',
+        'rn2(13)=0',
+        'rn2(20)=0',
+        'rn2(26)=17',
+        'rn2(3)=1',
+        'rn2(15)=1',
+        'd(2,2)=3',
+        'rn2(2)=0',
+        'rn2(19)=0',
+    ]);
+    assert.equal(game._pending_message, 'You set it off!  A cloud of noxious gas billows from the large box.  The gas cloud was poisoned!  You feel weaker!');
+    assert.equal(box.otrapped, false);
+    assert.equal(box.tknown, true);
+    assert.equal(game.u.acurr.a[A_STR], 7);
+    assert.equal(game.context.move, 1);
+});
+
+test('#untrap known-box noxious gas respects poison resistance', async () => {
+    setupUntrapDestinationWeb([], { rng: [74, 0, 0, 17, 1, 0, 0] });
+    game.u.poisonResistance = true;
+    game.u.uinvulnerable = false;
+    game.level.traps = [];
+    const box = shopFloorContainer(881039);
+    Object.assign(box, {
+        otrapped: true,
+        tknown: true,
+        dknown: true,
+        cknown: false,
+    });
+    game.level.objects = [box];
+
+    await enterUntrapDirection();
+    await rhack('.');
+
+    assert.equal(game._command_mode, 'untrapBoxConfirm');
+    assert.equal(game._pending_message, 'Disarm this large box? [ynq] (q)');
+
+    await rhack('y');
+
+    assert.equal(game._command_mode, null);
+    assert.deepEqual(getRngLog(), [
+        'rnd(75)=75',
+        'rn2(13)=0',
+        'rn2(20)=0',
+        'rn2(26)=17',
+        'rn2(3)=1',
+        'rn2(2)=0',
+        'rn2(19)=0',
+    ]);
+    assert.equal(game._pending_message, "You set it off!  A cloud of noxious gas billows from the large box.  The gas cloud was poisoned!  The poison doesn't seem to affect you.");
+    assert.equal(box.otrapped, false);
+    assert.equal(box.tknown, true);
+    assert.equal(game.u.acurr.a[A_STR], 10);
+    assert.equal(game.u.uhp, 20);
+    assert.equal(game.context.move, 1);
+});
+
+test('#untrap known-box noxious gas HP damage is halved by wet worn towel', async () => {
+    const towel = wornTool(881041, 'towel', 't', { spe: 3, wetness: 3 });
+    setupUntrapDestinationWeb([towel], { rng: [74, 0, 0, 17, 1, 6, 9, 0, 0] });
+    game.u.poisonResistance = false;
+    game.u.uinvulnerable = false;
+    game.level.traps = [];
+    const box = shopFloorContainer(881041);
+    Object.assign(box, {
+        otrapped: true,
+        tknown: true,
+        dknown: true,
+        cknown: false,
+    });
+    game.level.objects = [box];
+
+    await enterUntrapDirection();
+    await rhack('.');
+
+    assert.equal(game._command_mode, 'untrapBoxConfirm');
+    assert.equal(game._pending_message, 'Disarm this large box? [ynq] (q)');
+
+    await rhack('y');
+
+    assert.equal(game._command_mode, null);
+    assert.deepEqual(getRngLog(), [
+        'rnd(75)=75',
+        'rn2(13)=0',
+        'rn2(20)=0',
+        'rn2(26)=17',
+        'rn2(3)=1',
+        'rn2(15)=6',
+        'rn2(10)=9',
+        'rn2(2)=0',
+        'rn2(19)=0',
+    ]);
+    assert.equal(game._pending_message, 'You set it off!  A cloud of noxious gas billows from the large box.  The gas cloud was poisoned!');
+    assert.equal(box.otrapped, false);
+    assert.equal(box.tknown, true);
+    assert.equal(game.u.uhp, 12);
+    assert.equal(game.u.acurr.a[A_STR], 10);
+    assert.equal(game.context.move, 1);
+});
+
+test('#untrap known-box noxious gas can create a gas cloud', async () => {
+    setupUntrapDestinationWeb([], { rng: [74, 0, 0, 17, 0, 2, 0, 0] });
+    game.u.poisonResistance = false;
+    game.u.uinvulnerable = false;
+    game.level.traps = [];
+    game.level.regions = [];
+    const box = shopFloorContainer(881040);
+    Object.assign(box, {
+        otrapped: true,
+        tknown: true,
+        dknown: true,
+        cknown: false,
+    });
+    game.level.objects = [box];
+
+    await enterUntrapDirection();
+    await rhack('.');
+
+    assert.equal(game._command_mode, 'untrapBoxConfirm');
+    assert.equal(game._pending_message, 'Disarm this large box? [ynq] (q)');
+
+    await rhack('y');
+
+    assert.equal(game._command_mode, null);
+    assert.deepEqual(getRngLog(), [
+        'rnd(75)=75',
+        'rn2(13)=0',
+        'rn2(20)=0',
+        'rn2(26)=17',
+        'rn2(3)=0',
+        'rn2(3)=2',
+        'rn2(2)=0',
+        'rn2(19)=0',
+    ]);
+    assert.equal(game._pending_message, 'You set it off!  A cloud of noxious gas billows from the large box.  You are enveloped in a cloud of noxious gas!');
+    assert.equal(box.otrapped, false);
+    assert.equal(box.tknown, true);
+    const [region] = game.level.regions || [];
+    assert.equal(region?.type, 'gas_cloud');
+    assert.equal(region.heroFault, true);
+    assert.equal(region.damage, 8);
+    assert.equal(region.ttl, 6);
+    assert.deepEqual(region.coords, [{ x: 5, y: 5 }]);
+    assert.equal(game.context.move, 1);
+});
+
+test('#untrap known-box fatal noxious gas poison enters death more', async () => {
+    setupUntrapDestinationWeb([], { rng: [74, 0, 0, 17, 1, 0, 5, 5, 5, 5, 0] });
+    game.u.poisonResistance = false;
+    game.u.uinvulnerable = false;
+    game.u.uhp = 10;
+    game.u.uhpmax = 20;
+    game.level.traps = [];
+    const box = shopFloorContainer(881042);
+    Object.assign(box, {
+        otrapped: true,
+        tknown: true,
+        dknown: true,
+        cknown: false,
+    });
+    game.level.objects = [box];
+
+    await enterUntrapDirection();
+    await rhack('.');
+
+    assert.equal(game._command_mode, 'untrapBoxConfirm');
+    assert.equal(game._pending_message, 'Disarm this large box? [ynq] (q)');
+
+    await rhack('y');
+
+    assert.equal(game._command_mode, 'deathDieMore');
+    assert.deepEqual(getRngLog(), [
+        'rnd(75)=75',
+        'rn2(13)=0',
+        'rn2(20)=0',
+        'rn2(26)=17',
+        'rn2(3)=1',
+        'rn2(15)=0',
+        'd(4,6)=24',
+        'rn2(1)=0',
+    ]);
+    assert.equal(game._pending_message, 'You set it off!  A cloud of noxious gas billows from the large box.  The gas cloud was poisoned!  The poison was deadly...  You die...');
+    assert.equal(box.otrapped, false);
+    assert.equal(box.tknown, false);
+    assert.equal(game.u.uhp, 0);
+    assert.equal(game._death_cause, 'killed by a cloud of poison gas');
+    assert.equal(game.context.move || 0, 0);
+});
+
 test('stun and hallucination timeouts expire during turn tail', async () => {
     installCommandShopState();
     installCoreRngValues([1]);
