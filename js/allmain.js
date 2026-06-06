@@ -11283,6 +11283,12 @@ function rollingBoulderBreakClosedDoorAt(x, y, remainingDistance) {
     return true;
 }
 
+function rollingBoulderHitIronBars() {
+    rn2(20);  // C passes !rn2(20) to hits_bars(); boulders hit bars either way.
+    rn2(100); // hit_bars() reaches breaktest()/obj_resists(); boulders survive.
+    if (!heroIsDeafForMonsterNoise()) addRollingBoulderMotionMessage('Whang!');
+}
+
 function monsterRollingBoulderTrapEffect(mon, trap, { skipPetPostMoveRoll = false } = {}) {
     if (trap?.ttyp !== ROLLING_BOULDER_TRAP || monsterTrapHarmless(mon, trap)) return false;
     if (monsterAvoidsKnownTrapBeforeEffect(mon, trap)) return true;
@@ -11376,6 +11382,12 @@ function monsterRollingBoulderTrapEffect(mon, trap, { skipPetPostMoveRoll = fals
             }
             rollingBoulderBreakClosedDoorAt(x, y, dist - 1);
             const nextLoc = dist > 1 ? game.level?.at(x + dx, y + dy) : null;
+            if (nextLoc?.typ === IRONBARS) {
+                finalX = x;
+                finalY = y;
+                rollingBoulderHitIronBars();
+                break;
+            }
             if (nextLoc && (IS_STWALL(nextLoc.typ) || IS_TREE(nextLoc.typ))) {
                 finalX = x;
                 finalY = y;
