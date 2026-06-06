@@ -36,4 +36,4 @@ The tests use local trap, boulder, monster, visibility, status, position, and RN
 
 ## Remaining Work
 
-- Full `launch_obj()` parity remains broader trap/terrain work: hero collision along the rolling path, path trap effects, iron-bar handling, boulder chaining, rock-thrower snatch feedback, launch-drop preservation, and floor-effect integration. Rolling-boulder door breakage is covered in audit 585.
+- Full `launch_obj()` parity remains broader trap/terrain work: hero collision along the rolling path, path trap effects, iron-bar handling, boulder chaining, launch-drop preservation, and floor-effect integration. Rolling-boulder door breakage is covered in audit 585, and rock-thrower snatch feedback is covered in audit 586.

@@ -11263,15 +11263,16 @@ function rollingBoulderUnseenLaunchMessage(start) {
     return `You hear rumbling ${dx * dx + dy * dy <= 16 ? 'nearby' : 'in the distance'}.`;
 }
 
+function addRollingBoulderMotionMessage(message) {
+    if (game._message_more && game._pending_message) appendAfterMoreMessage(message);
+    else addToplineMessage(message);
+}
+
 function rollingBoulderBreakClosedDoorAt(x, y, remainingDistance) {
     const loc = game.level?.at(x, y);
     const mask = loc?.doormask ?? loc?.flags ?? 0;
     if (loc?.typ !== DOOR || !(mask & (D_LOCKED | D_CLOSED))) return false;
-    if (!game.u?.blind && cansee(x, y)) {
-        const message = 'The boulder crashes through a door.';
-        if (game._message_more && game._pending_message) appendAfterMoreMessage(message);
-        else addToplineMessage(message);
-    }
+    if (!game.u?.blind && cansee(x, y)) addRollingBoulderMotionMessage('The boulder crashes through a door.');
     loc.doormask = D_BROKEN;
     loc.flags = D_BROKEN;
     if (remainingDistance > 0) {
@@ -11324,6 +11325,8 @@ function monsterRollingBoulderTrapEffect(mon, trap, { skipPetPostMoveRoll = fals
             y += dy;
             const hit = (game.level?.monsters || []).find(other => other.mx === x && other.my === y);
             if (hit?.data?.throwsRocks && rn2(3)) {
+                if (!game.u?.blind && cansee(x, y))
+                    addRollingBoulderMotionMessage(`${monsterDisplayName(hit)} snatches the boulder.`);
                 hit.minvent ??= [];
                 hit.minvent.push(boulder);
                 boulder = null;

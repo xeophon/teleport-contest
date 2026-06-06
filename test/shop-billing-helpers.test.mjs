@@ -21138,6 +21138,54 @@ test('blind hero hears rolling boulder break locked door silently on path', () =
     assert.deepEqual(rngValuesForCall(getRngLog(), 'rnd(20)'), [20]);
 });
 
+test('visible rock thrower snatches rolling boulder before hit roll', () => {
+    const { trap, goblin: giant } = installMonsterPitTrapState(ROLLING_BOULDER_TRAP, {
+        mhp: 50,
+        mhpmax: 50,
+        data: { name: 'stone giant', mlet: 'H', mac: -10, throwsRocks: true },
+    });
+    const boulder = installRollingBoulderTrapLaunch(trap);
+    enableRngLog({ reset: true });
+    installCoreRngValues([1]);
+    markHeroNeighborhoodVisible();
+    markSquareVisible(6, 3);
+    markSquareVisible(6, 5);
+
+    assert.equal(allmain.monsterRollingBoulderTrapEffectForTest(giant, trap), true);
+
+    assert.match(game._pending_message || '', /Click!  The stone giant triggers something\./);
+    assert.equal(game._topline_after_more, 'The stone giant snatches the boulder.');
+    assert.equal(giant.mhp, 50);
+    assert.equal(giant.minvent?.includes(boulder), true);
+    assert.equal(game.level.objects.includes(boulder), false);
+    assert.equal(trap.tseen, true);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rn2(3)'), [1]);
+    assert.equal(rngValuesForCall(getRngLog(), 'rnd(20)').length, 0);
+});
+
+test('blind hero gets no rock thrower snatch message from rolling boulder', () => {
+    const { trap, goblin: giant } = installMonsterPitTrapState(ROLLING_BOULDER_TRAP, {
+        mhp: 50,
+        mhpmax: 50,
+        data: { name: 'stone giant', mlet: 'H', mac: -10, throwsRocks: true },
+    });
+    const boulder = installRollingBoulderTrapLaunch(trap);
+    enableRngLog({ reset: true });
+    installCoreRngValues([1]);
+    game.u.blind = true;
+
+    assert.equal(allmain.monsterRollingBoulderTrapEffectForTest(giant, trap), true);
+
+    assert.equal(game._pending_message, 'You hear rumbling nearby.');
+    assert.equal(game._topline_after_more || '', '');
+    assert.equal(giant.mhp, 50);
+    assert.equal(giant.minvent?.includes(boulder), true);
+    assert.equal(game.level.objects.includes(boulder), false);
+    assert.equal(trap.tseen, false);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rn2(3)'), [1]);
+    assert.equal(rngValuesForCall(getRngLog(), 'rnd(20)').length, 0);
+});
+
 test('rolling boulder hit roll includes boulder hit adjustment', () => {
     const { trap, goblin } = installMonsterPitTrapState(ROLLING_BOULDER_TRAP, {
         mhp: 20,
