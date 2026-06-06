@@ -20978,6 +20978,9 @@ test('force-fighting a seen destination web with Fire Brand burns and deletes it
 function setupUntrapDestinationWeb(inventory = [], {
     madeby = false,
     rng = [0],
+    role = 'Tourist',
+    level = 1,
+    questart = false,
     strength = 10,
     twoweapon = false,
 } = {}) {
@@ -20988,10 +20991,14 @@ function setupUntrapDestinationWeb(inventory = [], {
         uy: 5,
         uhp: 20,
         uhpmax: 20,
+        ulevel: level,
+        uhave: { ...(game.u?.uhave || {}), questart: questart ? 1 : 0 },
         utrap: 0,
         utraptype: null,
         umoved: false,
     });
+    game._startup_role = role;
+    game.urole = { ...(game.urole || {}), name: { m: role, f: role } };
     game.u.acurr.a[A_STR] = strength;
     game.inventory = inventory;
     game._twoweapon = twoweapon;
@@ -21060,6 +21067,61 @@ test('#untrap treats axes as non-blades for web odds', async () => {
 
     assert.deepEqual(getRngLog(), ['rn2(7)=0']);
     assert.equal(game._pending_message, 'You succeed in removing the web.');
+    assert.equal(game.level.traps.includes(web), false);
+    assert.equal(game.context.move, 1);
+});
+
+test('#untrap Ranger web odds get C role bonus', async () => {
+    const web = setupUntrapDestinationWeb([], { role: 'Ranger', rng: [0] });
+
+    await enterUntrapDirection();
+    await rhack('l');
+
+    assert.deepEqual(getRngLog(), ['rn2(6)=0']);
+    assert.equal(game._pending_message, 'You succeed in removing the web.');
+    assert.equal(game.level.traps.includes(web), false);
+    assert.equal(game.context.move, 1);
+});
+
+test('#untrap Rogue web odds consume level check before final roll', async () => {
+    const web = setupUntrapDestinationWeb([], { role: 'Rogue', level: 20, rng: [0, 0] });
+
+    await enterUntrapDirection();
+    await rhack('l');
+
+    assert.deepEqual(getRngLog(), ['rn2(60)=0', 'rn2(6)=0']);
+    assert.equal(game._pending_message, 'You succeed in removing the web.');
+    assert.equal(game.level.traps.includes(web), false);
+    assert.equal(game.context.move, 1);
+});
+
+test('#untrap Rogue quest artifact further improves web odds', async () => {
+    const web = setupUntrapDestinationWeb([], {
+        role: 'Rogue',
+        level: 20,
+        questart: true,
+        rng: [0, 0],
+    });
+
+    await enterUntrapDirection();
+    await rhack('l');
+
+    assert.deepEqual(getRngLog(), ['rn2(60)=0', 'rn2(5)=0']);
+    assert.equal(game._pending_message, 'You succeed in removing the web.');
+    assert.equal(game.level.traps.includes(web), false);
+    assert.equal(game.context.move, 1);
+});
+
+test('#untrap Rogue artifact web odds still clamp after level check', async () => {
+    const sting = wieldedWeapon(880934, 'elven dagger', 'w', 0);
+    sting.artifact = 'Sting';
+    const web = setupUntrapDestinationWeb([sting], { role: 'Rogue', level: 20, rng: [0, 0] });
+
+    await enterUntrapDirection();
+    await rhack('l');
+
+    assert.deepEqual(getRngLog(), ['rn2(60)=0', 'rn2(1)=0']);
+    assert.equal(game._pending_message, 'Sting cuts through the web!');
     assert.equal(game.level.traps.includes(web), false);
     assert.equal(game.context.move, 1);
 });
