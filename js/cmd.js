@@ -944,8 +944,8 @@ function applyChestTrapPoison(messages, {
     return {};
 }
 
-function applyChestTrapNeedlePayload(messages) {
-    messages.push('You feel a needle prick your finger.');
+function applyChestTrapNeedlePayload(messages, bodyPart = 'finger') {
+    messages.push(`You feel a needle prick your ${bodyPart}.`);
     const result = applyChestTrapPoison(messages, {
         reason: 'needle',
         attr: A_CON,
@@ -986,7 +986,7 @@ function applyChestTrapNoxiousGasPayload(box, messages) {
     return result;
 }
 
-export function applyChestTrapPayload(box, { disarm = true } = {}) {
+export function applyChestTrapPayload(box, { disarm = true, needleBodyPart = 'finger' } = {}) {
     const messages = [disarm ? 'You set it off!' : 'You trigger a trap!'];
     let result = {};
     if (box) {
@@ -1023,7 +1023,7 @@ export function applyChestTrapPayload(box, { disarm = true } = {}) {
     } else if (payload >= 9 && payload <= 12) {
         result = applyChestTrapFirePayload(box, messages);
     } else if (payload >= 13 && payload <= 16) {
-        result = applyChestTrapNeedlePayload(messages);
+        result = applyChestTrapNeedlePayload(messages, needleBodyPart);
     } else if (payload >= 17 && payload <= 20) {
         result = applyChestTrapNoxiousGasPayload(box, messages);
     } else if (payload >= 21 && payload <= 25) {
@@ -29322,7 +29322,7 @@ function kickFloorObjectSupported(obj, x, y) {
     const quantity = Math.max(1, Math.trunc(Number(obj.quan || 1)));
     const fragileBreakKind = kickedFragilePreflightBreakKind(obj);
     if (quantity !== 1 && !fragileBreakKind) return false;
-    if (isTipContainerObject(obj) || globContents(obj).length) return false;
+    if ((!isBoxObject(obj) && isTipContainerObject(obj)) || globContents(obj).length) return false;
     if ((shopkeeperForCostlySpot(x, y) || shopObjectOrContentsUnpaid(obj)) && !fragileBreakKind)
         return false;
     if (impactDropBreakKind(obj) && !fragileBreakKind) return false;
@@ -29379,6 +29379,43 @@ function heroUsesMartialKickRangeBonus() {
 
 function lowRangeKickedObjectAvoidsOuch() {
     return !rn2(3) || heroUsesMartialKickRangeBonus();
+}
+
+function breakKickedBoxLock(box) {
+    box.locked = false;
+    box.olocked = false;
+    box.obroken = true;
+    box.lknown = true;
+    newsym(box.ox, box.oy);
+}
+
+function applyKickedBoxTrapPayload(box, messages) {
+    const result = applyChestTrapPayload(box, { disarm: false, needleBodyPart: 'leg' });
+    const objectResult = result && typeof result === 'object';
+    messages.push(objectResult ? result.message : result);
+    return objectResult ? result : null;
+}
+
+function applyKickedBoxImpact(box, range, messages) {
+    if (!isBoxObject(box)) return { handled: false };
+    const hadTrap = !!box.otrapped;
+    if (range < 2) messages.push('THUD!');
+
+    if (box.locked || box.olocked) {
+        if (!rn2(5) || (heroUsesMartialKickRangeBonus() && !rn2(2))) {
+            messages.push('You break open the lock!');
+            breakKickedBoxLock(box);
+            const trapResult = hadTrap ? applyKickedBoxTrapPayload(box, messages) : null;
+            return { handled: true, trapResult };
+        }
+    } else if (!rn2(3) || (heroUsesMartialKickRangeBonus() && !rn2(2))) {
+        messages.push('The lid slams open, then falls shut.');
+        box.lknown = true;
+        const trapResult = hadTrap ? applyKickedBoxTrapPayload(box, messages) : null;
+        return { handled: true, trapResult };
+    }
+
+    return { handled: range < 2 };
 }
 
 function applyKickedObjectOuchDamage() {
@@ -29501,10 +29538,18 @@ async function kickFloorObjectToward(dir, x, y) {
             || heroProjectileSupportedWeaponObject(obj));
     const gate = remoteProjectileDownGateAt(obj, landX, landY);
     const fragileBreakKind = kickedFragilePreflightBreakKind(obj);
-    if (!gate && !canHandleMonsterImpact && !fragileBreakKind) return { handled: false };
+    const localBoxImpact = isBoxObject(obj);
+    if (!localBoxImpact && !gate && !canHandleMonsterImpact && !fragileBreakKind) return { handled: false };
 
     const range = kickFloorObjectRange(obj, x, y, dir);
     const messages = [`You kick ${floorObjectArticleName(obj)}.`];
+    if (localBoxImpact) {
+        const boxImpact = applyKickedBoxImpact(obj, range, messages);
+        if (boxImpact.handled)
+            return { handled: true, messages, moved: false, trapResult: boxImpact.trapResult };
+        if (!gate && !canHandleMonsterImpact && !fragileBreakKind)
+            return { handled: true, messages, moved: false };
+    }
     if (fragileBreakKind && await breakKickedFragileFloorObject(obj, x, y, messages))
         return { handled: true, messages, moved: false, broke: true };
     if (range < 2) {
@@ -63429,8 +63474,11 @@ export async function rhack(_cmd) {
         }
         const kickedObject = await kickFloorObjectToward(dir, x, y);
         if (kickedObject.handled) {
-            await setMessage(kickedObject.messages.join('  '), kickedObject.messages.length > 1);
+            const trapResult = kickedObject.trapResult;
+            const trapObjectResult = trapResult && typeof trapResult === 'object';
+            await setMessage(kickedObject.messages.join('  '), kickedObject.messages.length > 1 || !!trapObjectResult);
             game._command_mode = null;
+            if (trapObjectResult && applyLifeSavingOrFatalCommandMode(trapResult)) return;
             game.context.move = 1;
             return;
         }

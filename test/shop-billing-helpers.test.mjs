@@ -35429,6 +35429,150 @@ test('command kick ordinary floor object through seen remote hole', async () => 
     assert.match(game._pending_message, /A dagger falls through the hole\./);
 });
 
+test('command kick locked trapped empty box breaks lock then fires trap', async () => {
+    installNonShopFloorState();
+    const box = shopFloorContainer(512090, 6, 5);
+    Object.assign(box, {
+        locked: true,
+        olocked: true,
+        otrapped: true,
+        tknown: true,
+        dknown: true,
+        cknown: false,
+    });
+    game.level.objects = [box];
+    enableRngLog({ reset: true });
+    installCoreRngValues([0, 8, 0]);
+
+    await rhack('\x04');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.deepEqual(getRngLog(), [
+        'rn2(5)=0',
+        'rn2(13)=8',
+        'rn2(13)=0',
+    ]);
+    assert.equal(game._pending_message, 'You kick a large box.  THUD!  You break open the lock!  You trigger a trap!  But luckily the gas cloud blows away!');
+    assert.equal(box.locked, false);
+    assert.equal(box.olocked, false);
+    assert.equal(box.obroken, true);
+    assert.equal(box.lknown, true);
+    assert.equal(box.otrapped, false);
+    assert.equal(box.tknown, true);
+});
+
+test('command kick locked trapped empty box failed break leaves trap intact', async () => {
+    installNonShopFloorState();
+    const box = shopFloorContainer(512093, 6, 5);
+    Object.assign(box, {
+        locked: true,
+        olocked: true,
+        otrapped: true,
+        tknown: true,
+        dknown: true,
+        cknown: false,
+    });
+    game.level.objects = [box];
+    enableRngLog({ reset: true });
+    installCoreRngValues([1]);
+
+    await rhack('\x04');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.deepEqual(getRngLog(), ['rn2(5)=1']);
+    assert.equal(game._pending_message, 'You kick a large box.  THUD!');
+    assert.equal(box.locked, true);
+    assert.equal(box.olocked, true);
+    assert.equal(box.obroken || false, false);
+    assert.equal(box.lknown || false, false);
+    assert.equal(box.otrapped, true);
+    assert.equal(box.tknown, true);
+});
+
+test('command kick unlocked trapped empty box lid-slam uses leg trap wording', async () => {
+    installNonShopFloorState();
+    const box = shopFloorContainer(512091, 6, 5);
+    Object.assign(box, {
+        locked: false,
+        olocked: false,
+        otrapped: true,
+        tknown: true,
+        dknown: true,
+        cknown: false,
+    });
+    game.level.objects = [box];
+    game.u.poisonResistance = true;
+    enableRngLog({ reset: true });
+    installCoreRngValues([0, 0, 0, 13, 0]);
+
+    await rhack('\x04');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rn2(3)',
+        'rn2(13)',
+        'rn2(20)',
+        'rn2(26)',
+        'rn2(2)',
+    ]);
+    assert.equal(game._pending_message, "You kick a large box.  THUD!  The lid slams open, then falls shut.  You trigger a trap!  You feel a needle prick your leg.  The needle was poisoned!  The poison doesn't seem to affect you.");
+    assert.equal(box.locked, false);
+    assert.equal(box.olocked, false);
+    assert.equal(box.obroken || false, false);
+    assert.equal(box.lknown, true);
+    assert.equal(box.otrapped, false);
+    assert.equal(box.tknown, true);
+});
+
+test('command kick locked trapped empty box fatal explosion enters death more', async () => {
+    installNonShopFloorState();
+    Object.assign(game.u, {
+        uhp: 10,
+        uhpmax: 20,
+        halfPhysicalDamage: false,
+        uinvulnerable: false,
+    });
+    const box = shopFloorContainer(512092, 6, 5);
+    Object.assign(box, {
+        locked: true,
+        olocked: true,
+        otrapped: true,
+        tknown: true,
+        dknown: true,
+        cknown: false,
+    });
+    game.level.objects = [box];
+    enableRngLog({ reset: true });
+    installCoreRngValues([0, 0, 0, 21, 0, 5, 5, 5, 5, 5, 5, 0]);
+
+    await rhack('\x04');
+    await rhack('l');
+
+    assert.equal(game._command_mode, 'deathDieMore');
+    const fatalLog = getRngLog();
+    assert.deepEqual(fatalLog.slice(0, 6), [
+        'rn2(5)=0',
+        'rn2(13)=0',
+        'rn2(20)=0',
+        'rn2(26)=21',
+        'rn2(100)=0',
+        'd(6,6)=36',
+    ]);
+    assert.equal(game._pending_message, 'You kick a large box.  THUD!  You break open the lock!  You trigger a trap!  The large box explodes!  You die...');
+    assert.equal(game.level.objects.includes(box), false);
+    assert.equal(box.otrapped, false);
+    assert.equal(box.tknown, false);
+    assert.equal(game.u.uhp, 0);
+    assert.equal(game._death_cause, 'killed by an exploding large box');
+    assert.equal(game.context.move || 0, 0);
+});
+
 test('command kicked fragile crystal ball breaks before remote projectile flight', async () => {
     installNonShopFloorState();
     installSeenRemoteShaft(HOLE, 7, 5);
