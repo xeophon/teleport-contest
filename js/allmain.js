@@ -11379,6 +11379,27 @@ function rollingBoulderTriggerLandmineAt(x, y) {
     return true;
 }
 
+function rollingBoulderPitHoleTrapAt(x, y) {
+    return (game.level?.traps || []).find(item =>
+        [PIT, SPIKED_PIT, HOLE, TRAPDOOR].includes(item.ttyp) && item.tx === x && item.ty === y) || null;
+}
+
+function rollingBoulderApplyPitHoleFloorEffectsAt(x, y, movingBoulder) {
+    if (!movingBoulder || !rollingBoulderPitHoleTrapAt(x, y)) return { handled: false, consumed: false };
+    const messages = [];
+    const previousMonsterMoving = game._monster_moving;
+    game._monster_moving = 1;
+    let consumed = false;
+    try {
+        consumed = earthFloorEffects(movingBoulder, x, y, messages, 'fall');
+    } finally {
+        if (previousMonsterMoving === undefined) delete game._monster_moving;
+        else game._monster_moving = previousMonsterMoving;
+    }
+    for (const message of messages) addRollingBoulderMotionMessage(message);
+    return { handled: true, consumed };
+}
+
 function monsterRollingBoulderTrapEffect(mon, trap, { skipPetPostMoveRoll = false } = {}) {
     if (trap?.ttyp !== ROLLING_BOULDER_TRAP || monsterTrapHarmless(mon, trap)) return false;
     if (monsterAvoidsKnownTrapBeforeEffect(mon, trap)) return true;
@@ -11474,6 +11495,15 @@ function monsterRollingBoulderTrapEffect(mon, trap, { skipPetPostMoveRoll = fals
             }
             if (rollingBoulderTriggerLandmineAt(x, y)) {
                 boulder = null;
+                break;
+            }
+            const pitHole = rollingBoulderApplyPitHoleFloorEffectsAt(x, y, boulder);
+            if (pitHole.handled) {
+                if (pitHole.consumed) boulder = null;
+                else {
+                    finalX = x;
+                    finalY = y;
+                }
                 break;
             }
             boulder = rollingBoulderChainIntoBoulderAt(x, y, dx, dy, dist - 1, boulder);

@@ -31,4 +31,4 @@ The tests use local trap, boulder, hero position/status/form, visibility, and RN
 
 ## Remaining Work
 
-- Full `launch_obj()` parity remains broader trap/terrain work: teleport/pit/hole path effects, launch-drop preservation, floor-effect integration, hero-triggered rolling-boulder rewriting, occupation/multi interruption, and mounted-steed diversion. Path landmines are covered in audit 590.
+- Full `launch_obj()` parity remains broader trap/terrain work: teleport path effects, launch-drop preservation, floor-effect integration, hero-triggered rolling-boulder rewriting, occupation/multi interruption, and mounted-steed diversion. Path landmines are covered in audit 590, and pit/hole path effects are covered in audit 591.

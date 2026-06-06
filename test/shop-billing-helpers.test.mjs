@@ -21405,6 +21405,95 @@ test('rolling boulder path land mine dud keeps rolling', () => {
     assert.deepEqual(rngValuesForCall(getRngLog(), 'rn2(10)'), [2]);
 });
 
+test('rolling boulder plugs seen path hole and is consumed', () => {
+    const { trap, goblin } = installMonsterPitTrapState(ROLLING_BOULDER_TRAP, {
+        mhp: 50,
+        mhpmax: 50,
+        data: { mac: -10 },
+    });
+    const hole = { ttyp: HOLE, tx: 6, ty: 3, tseen: true, madeby_u: false };
+    game.level.traps.push(hole);
+    game.level.at(6, 3).lit = true;
+    const boulder = installRollingBoulderTrapLaunch(trap, {
+        start: { x: 4, y: 3 },
+        end: { x: 8, y: 3 },
+    });
+    enableRngLog({ reset: true });
+    markHeroNeighborhoodVisible();
+    markSquareVisible(6, 5);
+    for (let x = 4; x <= 8; x++) markSquareVisible(x, 3);
+
+    assert.equal(allmain.monsterRollingBoulderTrapEffectForTest(goblin, trap), true);
+
+    assert.match(game._pending_message || '', /Click!  The goblin triggers something\./);
+    assert.equal(game._topline_after_more, 'The boulder plugs a hole.');
+    assert.equal(game.level.traps.includes(hole), false);
+    assert.equal(game.level.objects.includes(boulder), false);
+    assert.equal(trap.tseen, true);
+    assert.equal(rngValuesForCall(getRngLog(), 'rnd(20)').length, 0);
+});
+
+test('rolling boulder triggers and plugs unseen path trap door', () => {
+    const { trap, goblin } = installMonsterPitTrapState(ROLLING_BOULDER_TRAP, {
+        mhp: 50,
+        mhpmax: 50,
+        data: { mac: -10 },
+    });
+    const trapdoor = { ttyp: TRAPDOOR, tx: 6, ty: 3, tseen: false, madeby_u: false };
+    game.level.traps.push(trapdoor);
+    game.level.at(6, 3).lit = true;
+    const boulder = installRollingBoulderTrapLaunch(trap, {
+        start: { x: 4, y: 3 },
+        end: { x: 8, y: 3 },
+    });
+    enableRngLog({ reset: true });
+    markHeroNeighborhoodVisible();
+    markSquareVisible(6, 5);
+    for (let x = 4; x <= 8; x++) markSquareVisible(x, 3);
+
+    assert.equal(allmain.monsterRollingBoulderTrapEffectForTest(goblin, trap), true);
+
+    assert.match(game._pending_message || '', /Click!  The goblin triggers something\./);
+    assert.equal(game._topline_after_more, 'The boulder triggers and plugs a trap door.');
+    assert.equal(game.level.traps.includes(trapdoor), false);
+    assert.equal(game.level.objects.includes(boulder), false);
+    assert.equal(trap.tseen, true);
+    assert.equal(rngValuesForCall(getRngLog(), 'rnd(20)').length, 0);
+});
+
+test('rolling boulder fills path pit and buries floor object', () => {
+    const { trap, goblin } = installMonsterPitTrapState(ROLLING_BOULDER_TRAP, {
+        mhp: 50,
+        mhpmax: 50,
+        data: { mac: -10 },
+    });
+    const pit = { ttyp: PIT, tx: 8, ty: 3, tseen: true, madeby_u: false };
+    const blade = { ...dagger(31429), letter: undefined, line: undefined, ox: 8, oy: 3 };
+    game.level.traps.push(pit);
+    game.level.objects.push(blade);
+    game.level.buriedobjlist = [];
+    game.level.at(8, 3).lit = true;
+    const boulder = installRollingBoulderTrapLaunch(trap, {
+        start: { x: 4, y: 3 },
+        end: { x: 8, y: 3 },
+    });
+    enableRngLog({ reset: true });
+    markHeroNeighborhoodVisible();
+    markSquareVisible(6, 5);
+    for (let x = 4; x <= 8; x++) markSquareVisible(x, 3);
+
+    assert.equal(allmain.monsterRollingBoulderTrapEffectForTest(goblin, trap), true);
+
+    assert.match(game._pending_message || '', /Click!  The goblin triggers something\./);
+    assert.equal(game._topline_after_more, 'The boulder fills a pit.');
+    assert.equal(game.level.traps.includes(pit), false);
+    assert.equal(game.level.objects.includes(boulder), false);
+    assert.equal(game.level.objects.includes(blade), false);
+    assert.equal(game.level.buriedobjlist.includes(blade), true);
+    assert.equal(trap.tseen, true);
+    assert.equal(rngValuesForCall(getRngLog(), 'rnd(20)').length, 0);
+});
+
 test('rolling boulder sets another boulder in motion', () => {
     const { trap, goblin } = installMonsterPitTrapState(ROLLING_BOULDER_TRAP, {
         mhp: 50,
