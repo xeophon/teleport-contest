@@ -11091,6 +11091,29 @@ function monsterWebConfusedBearRoars(data) {
     return data?.name === 'owlbear' || data?.name === 'bugbear';
 }
 
+function petWhimperAtTrap(mon) {
+    if (heroIsDeafForMonsterNoise()) return;
+    const data = mon?.data || {};
+    const rawSound = mon?.msound ?? mon?.sound ?? data.msound ?? data.sound;
+    if (!rawSound || mon.mcanmove === false || (mon.mfrozen || 0) > 0) return;
+    const sound = String(rawSound).toLowerCase().replace(/^ms_/, '');
+    let verb = '';
+    if (sound === 'mew' || sound === 'growl') verb = 'whimpers';
+    else if (sound === 'bark') verb = 'whines';
+    else if (sound === 'sqeek' || sound === 'squeak') verb = 'squeals';
+    if (verb) addToplineMessage(`${monsterDisplayName(mon)} ${verb}.`);
+}
+
+function petAvoidsTrapCandidate(mon, trap) {
+    if (![DART_TRAP, BEAR_TRAP, PIT, SPIKED_PIT].includes(trap?.ttyp)
+        || monsterTrapHarmless(mon, trap)) return false;
+    if (mon.mleashed) {
+        petWhimperAtTrap(mon);
+        return false;
+    }
+    return !!(trap.tseen && rn2(40));
+}
+
 function maybeDeferMonsterWebCaughtMessage(mon, message, {
     deferCaughtMessage = false,
     monIndex = null,
@@ -13245,9 +13268,7 @@ function movePet(mon, resumeAfterInventory = false, conflictActive = false) {
                 && obj.oy === pos.y + Math.sign(realUy - pos.y))) continue;
 
         const trapAtPos = game.level?.traps?.find(t => t.tx === pos.x && t.ty === pos.y);
-        if ((trapAtPos?.ttyp === DART_TRAP || trapAtPos?.ttyp === BEAR_TRAP
-             || trapAtPos?.ttyp === PIT || trapAtPos?.ttyp === SPIKED_PIT)
-            && !monsterTrapHarmless(mon, trapAtPos) && trapAtPos.tseen && rn2(40)) continue;
+        if (petAvoidsTrapCandidate(mon, trapAtPos)) continue;
         const posObjects = (game.level?.objects || [])
             .filter(obj => !obj.transientProjectile && obj.ox === pos.x && obj.oy === pos.y && obj.otyp !== BOULDER);
         const hasCursedObject = posObjects.some(obj => obj.cursed);

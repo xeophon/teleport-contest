@@ -18751,6 +18751,76 @@ test('pet pit trap movement traps and damages pet visibly', async () => {
     assert.equal(!!(pet.mtrapseen & (1 << (PIT - 1))), true);
 });
 
+test('unleashed pet avoids seen harmful trap candidate with C dog-move roll', async () => {
+    const { trap, pet } = installMovingPetPitTrapState(PIT);
+    trap.tseen = true;
+    enableRngLog({ reset: true });
+    installCoreRngValues([0, ...Array(20).fill(1)]);
+    queueEscapeForMonsterTurn();
+    markHeroNeighborhoodVisible();
+    markSquareVisible(6, 5);
+    markSquareVisible(7, 5);
+
+    await processMonsterTurns();
+    const messages = [game._pending_message, ...(await drainQueuedMessagesAfterMore())].join(' ');
+
+    assert.doesNotMatch(messages, /falls into a pit|whines|whimpers|squeals/);
+    assert.notEqual(`${pet.mx},${pet.my}`, '6,5');
+    assert.equal(pet.mtrapped || 0, 0);
+    assert.equal(pet.mhp, 10);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rn2(40)'), [1]);
+});
+
+test('leashed pet whimpers but can step onto seen harmful trap candidate', async () => {
+    const { trap, pet } = installMovingPetPitTrapState(PIT, {
+        mleashed: 1,
+        data: { name: 'dog', mlet: 'd', msound: 'MS_BARK', mac: 10 },
+    });
+    trap.tseen = true;
+    enableRngLog({ reset: true });
+    installCoreRngValues([0]);
+    queueEscapeForMonsterTurn();
+    markHeroNeighborhoodVisible();
+    markSquareVisible(6, 5);
+    markSquareVisible(7, 5);
+
+    await processMonsterTurns();
+    const messages = [game._pending_message, ...(await drainQueuedMessagesAfterMore())].join(' ');
+
+    assert.match(messages, /The dog whines\./);
+    assert.match(messages, /The dog falls into a pit!/);
+    assert.equal(pet.mx, 6);
+    assert.equal(pet.my, 5);
+    assert.equal(pet.mtrapped, 1);
+    assert.equal(rngValuesForCall(getRngLog(), 'rn2(40)').length, 0);
+});
+
+test('deaf hero does not hear leashed pet trap-candidate whimper', async () => {
+    const { trap, pet } = installMovingPetPitTrapState(PIT, {
+        mleashed: 1,
+        data: { name: 'dog', mlet: 'd', msound: 'MS_BARK', mac: 10 },
+    });
+    trap.tseen = true;
+    game.u._deafTimeout = 10;
+    game.u._statusSuffix = ' Deaf';
+    enableRngLog({ reset: true });
+    installCoreRngValues([0]);
+    queueEscapeForMonsterTurn();
+    markHeroNeighborhoodVisible();
+    markSquareVisible(6, 5);
+    markSquareVisible(7, 5);
+
+    await processMonsterTurns();
+    const messages = [game._pending_message, ...(await drainQueuedMessagesAfterMore())].join(' ');
+
+    assert.doesNotMatch(messages, /whines|whimpers|squeals/);
+    assert.match(messages, /The dog falls into a pit!/);
+    assert.equal(pet.mx, 6);
+    assert.equal(pet.my, 5);
+    assert.equal(pet.mtrapped, 1);
+    assert.equal(rngValuesForCall(getRngLog(), 'rn2(40)').length, 0);
+});
+
 test('monster first-entry web catches ordinary and strong non-giant monsters visibly', async () => {
     for (const [label, data, pattern] of [
         ['ordinary goblin', { name: 'goblin', mlet: 'o', mac: 10 }, /The goblin is caught in a spider web\./],

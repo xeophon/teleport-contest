@@ -39,5 +39,5 @@ The tests use local monster, pet, trap, visibility, and turn-processing fixtures
 ## Remaining Work
 
 - Mounted hero/steed WEB duration remapping remains separate mounted-trap parity.
-- Pet trap avoidance around seen harmful traps and leashed whimper behavior remains broader `dog_move()` parity.
+- Pet seen harmful-trap pathing and leashed whimper behavior are covered by audit 551.
 - The port currently treats existing JS noncorporeal aliases as WEB flow-through candidates where they model C `unsolid()` monsters.
