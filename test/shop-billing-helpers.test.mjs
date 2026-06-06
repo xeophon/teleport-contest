@@ -2412,6 +2412,26 @@ function healingSpellbook(id, letter = 'b') {
     };
 }
 
+function blankSpellbook(id, letter = 'b') {
+    return {
+        id,
+        cls: 'spellbook',
+        glyph: '+',
+        kind: 'spellbook of blank paper',
+        actualKind: 'spellbook of blank paper',
+        spellName: 'blank paper',
+        spell: { name: 'blank paper', level: 0, skill: 'matter' },
+        quan: 1,
+        ox: 5,
+        oy: 5,
+        letter,
+        line: `${letter} - a spellbook of blank paper`,
+        known: true,
+        dknown: true,
+        bknown: true,
+    };
+}
+
 function floorHealingSpellbook(id, quan = 1) {
     const book = healingSpellbook(id);
     delete book.letter;
@@ -31138,6 +31158,140 @@ test('grease target selection rejects inaccessible worn equipment without spendi
     assert.equal(suit.greased, undefined);
     assert.equal(shkp.debit || 0, 0);
     assert.match(game._pending_message, /You need to take off your \+0 cloak of displacement to grease your \+0 ring mail\./);
+});
+
+test('magic marker write target preflight cancels when no paper is carried', async () => {
+    installCommandShopState();
+    const marker = chargedTool(311000, 'magic marker', 'm', 20);
+    const towel = ordinaryTool(311001, 'towel', 't');
+    game.inventory = [marker, towel];
+
+    await rhack('a');
+    await rhack('m');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game._apply_marker_letter, null);
+    assert.equal(game.context.move, 0);
+    assert.match(game._pending_message, /You don't have anything to write on\./);
+});
+
+test('magic marker write prompt suggests blank paper and downplays nonblank paper', async () => {
+    installCommandShopState();
+    const marker = chargedTool(311002, 'magic marker', 'm', 20);
+    const paper = blankScroll(311003, 's');
+    const nonblank = scrollOfCharging(311004, 'r');
+    game.inventory = [marker, paper, nonblank];
+
+    await rhack('a');
+    await rhack('m');
+
+    assert.equal(game._command_mode, 'markerWriteObject');
+    assert.match(game._pending_message, /What do you want to write on\? \[s or \?\*\]/);
+    assert.doesNotMatch(game._pending_message, /\[sr/);
+
+    await rhack('r');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.match(game._pending_message, /That scroll is not blank!/);
+});
+
+test('magic marker target menu distinguishes question and star inventory', async () => {
+    installCommandShopState();
+    const marker = chargedTool(311005, 'magic marker', 'm', 20);
+    const paper = blankScroll(311006, 's');
+    const nonblank = scrollOfCharging(311007, 'r');
+    const towel = ordinaryTool(311008, 'towel', 't');
+    game.inventory = [marker, paper, nonblank, towel];
+
+    await rhack('a');
+    await rhack('m');
+    await rhack('?');
+
+    assert.equal(game._command_mode, 'markerWriteInventoryOverlay');
+    let menuText = (game._overlay_lines || []).map(row => row[2]).join('\n');
+    assert.match(menuText, /s - a scroll of blank paper/);
+    assert.doesNotMatch(menuText, /r - a scroll of charging/);
+    assert.doesNotMatch(menuText, /t - a towel/);
+
+    await rhack(' ');
+    assert.equal(game._command_mode, 'markerWriteObject');
+    assert.match(game._pending_message, /What do you want to write on\? \[s or \?\*\]/);
+
+    await rhack('*');
+
+    assert.equal(game._command_mode, 'markerWriteInventoryOverlay');
+    menuText = (game._overlay_lines || []).map(row => row[2]).join('\n');
+    assert.match(menuText, /s - a scroll of blank paper/);
+    assert.match(menuText, /r - a scroll of charging/);
+    assert.match(menuText, /t - a towel/);
+
+    await rhack('t');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 0);
+    assert.match(game._pending_message, /That is a silly thing to write on\./);
+});
+
+test('magic marker invalid target retry restores suggested write prompt', async () => {
+    installCommandShopState();
+    const marker = chargedTool(311015, 'magic marker', 'm', 20);
+    const paper = blankScroll(311016, 's');
+    const nonblank = scrollOfCharging(311017, 'r');
+    game.inventory = [marker, paper, nonblank];
+
+    await rhack('a');
+    await rhack('m');
+    await rhack('z');
+
+    assert.equal(game._command_mode, 'markerWriteInvalidMore');
+    assert.match(game._pending_message, /You don't have that object\./);
+
+    await rhack(' ');
+
+    assert.equal(game._command_mode, 'markerWriteObject');
+    assert.match(game._pending_message, /What do you want to write on\? \[s or \?\*\]/);
+    assert.equal(game._topline_after_more || '', '');
+});
+
+test('magic marker question menu falls back to downplayed paper without blanks', async () => {
+    installCommandShopState();
+    const marker = chargedTool(311009, 'magic marker', 'm', 20);
+    const nonblank = scrollOfCharging(311010, 'r');
+    const towel = ordinaryTool(311011, 'towel', 't');
+    game.inventory = [marker, nonblank, towel];
+
+    await rhack('a');
+    await rhack('m');
+
+    assert.equal(game._command_mode, 'markerWriteObject');
+    assert.match(game._pending_message, /What do you want to write on\? \[\*\]/);
+
+    await rhack('?');
+
+    const menuText = (game._overlay_lines || []).map(row => row[2]).join('\n');
+    assert.match(menuText, /r - a scroll of charging/);
+    assert.doesNotMatch(menuText, /t - a towel/);
+});
+
+test('magic marker write target selection suggests blank spellbooks', async () => {
+    installCommandShopState();
+    const marker = chargedTool(311012, 'magic marker', 'm', 20);
+    const book = blankSpellbook(311013, 'b');
+    const nonblank = healingSpellbook(311014, 'h');
+    game.inventory = [marker, book, nonblank];
+
+    await rhack('a');
+    await rhack('m');
+
+    assert.equal(game._command_mode, 'markerWriteObject');
+    assert.match(game._pending_message, /What do you want to write on\? \[b or \?\*\]/);
+
+    await rhack('b');
+
+    assert.equal(game._command_mode, 'markerWriteText');
+    assert.equal(game._marker_write_paper_letter, 'b');
+    assert.match(game._pending_message, /What type of spellbook do you want to write\?/);
 });
 
 test('applying unpaid magic marker to write a known scroll bills usage before ink is spent', async () => {

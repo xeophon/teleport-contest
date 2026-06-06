@@ -25680,6 +25680,70 @@ function markerWritePrompt(item) {
     return `What type of ${markerPaperTypeWord(item)} do you want to write?`;
 }
 
+function markerWriteTargetSelectionKind(item) {
+    if (!item?.letter) return 'exclude';
+    const paperType = markerPaperType(item);
+    if (!paperType) return 'exclude';
+    if ((paperType === 'scroll' && isBlankScrollItem(item))
+        || (paperType === 'spellbook' && isBlankSpellbookItem(item)))
+        return 'suggest';
+    return 'downplay';
+}
+
+function markerWriteTargetItemsBySelectionKind(kind) {
+    return (game.inventory || []).filter(item => markerWriteTargetSelectionKind(item) === kind && item.letter);
+}
+
+function markerWriteTargetPromptMessage() {
+    const suggested = markerWriteTargetItemsBySelectionKind('suggest').map(item => item.letter).join('');
+    if (suggested) return `What do you want to write on? [${getobjPromptLetters(suggested)} or ?*]`;
+    if (markerWriteTargetItemsBySelectionKind('downplay').length) return 'What do you want to write on? [*]';
+    return '';
+}
+
+function markerWriteMenuItems(ch) {
+    if (ch === '*') return (game.inventory || []).filter(item => item.letter);
+    const suggested = markerWriteTargetItemsBySelectionKind('suggest');
+    return suggested.length ? suggested : markerWriteTargetItemsBySelectionKind('downplay');
+}
+
+function markerWriteOverlayMatch(item) {
+    if (game._marker_write_overlay_kind === '*') return !!item?.letter;
+    return markerWriteMenuItems('?').includes(item);
+}
+
+async function beginMarkerWriteObjectSelection(marker) {
+    const prompt = markerWriteTargetPromptMessage();
+    if (!prompt) {
+        game._apply_marker_letter = null;
+        game._marker_write_overlay_kind = '';
+        await setMessage("You don't have anything to write on.");
+        game._command_mode = null;
+        return true;
+    }
+    game._apply_marker_letter = marker?.letter || '';
+    await setMessage(prompt);
+    game._command_mode = 'markerWriteObject';
+    return true;
+}
+
+async function resumeMarkerWriteObjectSelection() {
+    const prompt = markerWriteTargetPromptMessage();
+    game._message_more = 0;
+    game._message_more_line = '';
+    game._topline_after_more = '';
+    if (!prompt) {
+        game._apply_marker_letter = null;
+        game._marker_write_overlay_kind = '';
+        await setMessage("You don't have anything to write on.");
+        game._command_mode = null;
+        return false;
+    }
+    await setMessage(prompt);
+    game._command_mode = 'markerWriteObject';
+    return true;
+}
+
 function normalizeMarkerWriteName(text) {
     let name = String(text || '').trim().replace(/\s+/g, ' ');
     name = normalizeWishedSpelling(name).toLowerCase();
@@ -59031,9 +59095,7 @@ export async function rhack(_cmd) {
             return;
         }
         if (name.includes('magic marker')) {
-            await setMessage('What do you want to write on? [*]');
-            game._apply_marker_letter = item.letter;
-            game._command_mode = 'markerWriteObject';
+            await beginMarkerWriteObjectSelection(item);
             return;
         }
         if (toolChargeKind(item) === 'drum of earthquake'
@@ -59470,10 +59532,7 @@ export async function rhack(_cmd) {
 
     if (game._command_mode === 'markerWriteInvalidMore') {
         if (ch === ' ' || ch === '\x1b' || ch === '\r' || ch === '\n') {
-            game._pending_message = 'What do you want to write on? [*]';
-            game._message_more = 0;
-            game._message_more_line = '';
-            game._command_mode = 'markerWriteObject';
+            await resumeMarkerWriteObjectSelection();
         }
         game._keep_pending_message = 1;
         return;
@@ -59505,10 +59564,40 @@ export async function rhack(_cmd) {
         return;
     }
 
+    if (game._command_mode === 'markerWriteInventoryOverlay') {
+        game._overlay_lines = null;
+        game._overlay_hide_status = 0;
+        if (ch === '?' || ch === '*') {
+            game._marker_write_overlay_kind = ch;
+            setOverlay(inventoryOverlayLines(0, false, markerWriteOverlayMatch), 24, true);
+            return;
+        }
+        if (ch === ' ' || ch === '\x1b' || ch === '\r' || ch === '\n') {
+            game._marker_write_overlay_kind = '';
+            await resumeMarkerWriteObjectSelection();
+            return;
+        }
+        const selectable = (game.inventory || []).some(invItem =>
+            invItem.letter === ch && markerWriteOverlayMatch(invItem));
+        if (!selectable) {
+            game._keep_pending_message = 1;
+            return;
+        }
+        game._marker_write_overlay_kind = '';
+        game._command_mode = 'markerWriteObject';
+    }
+
     if (game._command_mode === 'markerWriteObject') {
-        if (ch === '\x1b') {
+        if (ch === '?' || ch === '*') {
+            game._marker_write_overlay_kind = ch;
+            setOverlay(inventoryOverlayLines(0, false, markerWriteOverlayMatch), 24, true);
+            game._command_mode = 'markerWriteInventoryOverlay';
+            return;
+        }
+        if (ch === '\x1b' || ch === ' ' || ch === '\r' || ch === '\n') {
             await setMessage('Never mind.');
             game._apply_marker_letter = null;
+            game._marker_write_overlay_kind = '';
             game._command_mode = null;
             return;
         }
@@ -59523,18 +59612,21 @@ export async function rhack(_cmd) {
             await setMessage('That is a silly thing to write on.');
             game._command_mode = null;
             game._apply_marker_letter = null;
+            game._marker_write_overlay_kind = '';
             return;
         }
         if (game.u?.blind && !item.dknown) {
             await setMessage(`You don't know whether that ${markerPaperTypeWord(item)} is blank or not.`);
             game._command_mode = null;
             game._apply_marker_letter = null;
+            game._marker_write_overlay_kind = '';
             return;
         }
         if (game.u?.blind && paperType === 'spellbook') {
             await setMessage("Magic marker can't create braille text.");
             game._command_mode = null;
             game._apply_marker_letter = null;
+            game._marker_write_overlay_kind = '';
             return;
         }
         if ((paperType === 'scroll' && !isBlankScrollItem(item))
@@ -59542,11 +59634,13 @@ export async function rhack(_cmd) {
             await setMessage(`That ${markerPaperTypeWord(item)} is not blank!`);
             game._command_mode = null;
             game._apply_marker_letter = null;
+            game._marker_write_overlay_kind = '';
             game.context.move = 1;
             return;
         }
         game._marker_write_paper_letter = item.letter;
         game._marker_write_text = '';
+        game._marker_write_overlay_kind = '';
         await setMessage(markerWritePrompt(item));
         game._command_mode = 'markerWriteText';
         return;
