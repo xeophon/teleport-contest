@@ -59056,6 +59056,36 @@ test('hero-thrown ordinary egg hits visible monster through egg hmon path', asyn
     ]);
 });
 
+test('levitating hero-thrown ordinary egg direct hit prepends recoil message', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, { ux: 5, uy: 5, levitating: true });
+    game.u.acurr.a[A_STR] = 10;
+    game.u.acurr.a[A_DEX] = 25;
+    const eggItem = { ...egg(876169, 'e'), otyp: EGG };
+    const goblin = ordinaryThrowTarget('goblin', 7, 5);
+    game.inventory = [eggItem];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('e');
+    await rhack('l');
+
+    const message = game._pending_message;
+    assert.match(message, /^You float in the opposite direction\./);
+    assert.equal(message.indexOf('You float in the opposite direction.') < message.indexOf('You hit the goblin with an egg.'), true);
+    assert.match(message, /Splat!/);
+    assert.equal(game.u.ux, 4);
+    assert.equal(game.u.uy, 5);
+    assert.equal(goblin.mhp, 4);
+    assert.equal(game.inventory.includes(eggItem), false);
+    assert.equal(game.level.objects.length, 0);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rnd(20)', 'rnd(25)',
+    ]);
+});
+
 test('hero-thrown cream pie direct hit blinds monster through hmon path', async () => {
     installNonShopFloorState();
     initRng(2);
@@ -59300,6 +59330,37 @@ test('hero-thrown cream pie miss can wake and anger target through tmiss', async
     ]);
 });
 
+test('levitating hero-thrown cream pie direct hit prepends recoil message', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, { ux: 5, uy: 5, levitating: true });
+    game.u.acurr.a[A_STR] = 10;
+    game.u.acurr.a[A_DEX] = 25;
+    const pie = creamPie(876170, 'p');
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, { mcansee: true });
+    game.inventory = [pie];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('p');
+    await rhack('l');
+
+    const message = game._pending_message;
+    assert.match(message, /^You float in the opposite direction\./);
+    assert.equal(message.indexOf('You float in the opposite direction.') < message.indexOf("The cream pie splashes over the goblin's face!"), true);
+    assert.doesNotMatch(message, /misses|top of your head|Splash|Splat/);
+    assert.equal(game.u.ux, 4);
+    assert.equal(game.u.uy, 5);
+    assert.equal(goblin.mcansee, false);
+    assert.equal(goblin.mblinded >= 21 && goblin.mblinded <= 45, true);
+    assert.equal(game.inventory.includes(pie), false);
+    assert.equal(game.level.objects.length, 0);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rnd(20)', 'rnd(25)', 'rn2(25)',
+    ]);
+});
+
 test('hero-thrown blinding venom direct hit blinds monster through hmon path', async () => {
     installNonShopFloorState();
     initRng(2);
@@ -59318,6 +59379,37 @@ test('hero-thrown blinding venom direct hit blinds monster through hmon path', a
     assert.doesNotMatch(game._pending_message, /misses|crashes|evaporates|top of your head/);
     assert.equal(goblin.msleeping, 0);
     assert.equal(goblin.mpeaceful, 0);
+    assert.equal(goblin.mcansee, false);
+    assert.equal(goblin.mblinded >= 21 && goblin.mblinded <= 45, true);
+    assert.equal(game.inventory.includes(venom), false);
+    assert.equal(game.level.objects.length, 0);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rnd(20)', 'rnd(25)', 'rn2(25)',
+    ]);
+});
+
+test('levitating hero-thrown blinding venom direct hit prepends recoil message', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, { ux: 5, uy: 5, levitating: true });
+    game.u.acurr.a[A_STR] = 10;
+    game.u.acurr.a[A_DEX] = 25;
+    const venom = blindingVenom(876171, 'v');
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, { mcansee: true });
+    game.inventory = [venom];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('v');
+    await rhack('l');
+
+    const message = game._pending_message;
+    assert.match(message, /^You float in the opposite direction\./);
+    assert.equal(message.indexOf('You float in the opposite direction.') < message.indexOf('The venom blinds the goblin!'), true);
+    assert.doesNotMatch(message, /misses|crashes|evaporates|top of your head/);
+    assert.equal(game.u.ux, 4);
+    assert.equal(game.u.uy, 5);
     assert.equal(goblin.mcansee, false);
     assert.equal(goblin.mblinded >= 21 && goblin.mblinded <= 45, true);
     assert.equal(game.inventory.includes(venom), false);
@@ -66969,6 +67061,39 @@ test('hero-thrown hallucination potion uses common potionhit without monster eff
     assert.equal(goblin.mconf || false, false);
     assert.equal(goblin.msleeping, 0);
     assert.equal(goblin.mpeaceful, false);
+    assert.equal(goblin.mhp, 4);
+    assert.equal(game.inventory.includes(potion), false);
+    assert.equal(game.level.objects.length, 0);
+    assert.equal(game._discoveries?.some(entry => entry.section === 'Potions' && entry.name === 'potion of hallucination') ?? false, false);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(5)',
+    ]);
+});
+
+test('levitating hero-thrown hallucination potion direct hit prepends recoil message', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, { ux: 5, uy: 5, levitating: true });
+    game.u.acurr.a[A_STR] = 10;
+    game.u.acurr.a[A_DEX] = 25;
+    const potion = hallucinationPotion(8797, 'h', 1, { dknown: true });
+    const goblin = ordinaryThrowTarget('goblin', 7, 5);
+    game.inventory = [potion];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('h');
+    await rhack('l');
+
+    const message = game._pending_message;
+    assert.match(message, /^You float in the opposite direction\./);
+    assert.equal(message.indexOf('You float in the opposite direction.') < message.indexOf('crashes on the goblin'), true);
+    assert.match(message, /The potion of hallucination evaporates\./);
+    assert.doesNotMatch(message, /misses|shatters|peculiar odor|momentary vision/);
+    assert.equal(game.u.ux, 4);
+    assert.equal(game.u.uy, 5);
+    assert.equal(goblin.mconf || false, false);
     assert.equal(goblin.mhp, 4);
     assert.equal(game.inventory.includes(potion), false);
     assert.equal(game.level.objects.length, 0);

@@ -20085,6 +20085,12 @@ function heroHorizontalThrowRecoil(dir, range) {
     return message;
 }
 
+function prependHeroHorizontalThrowRecoilMessage(messages, recoilMessage) {
+    if (recoilMessage && Array.isArray(messages) && !messages.includes(recoilMessage))
+        messages.unshift(recoilMessage);
+    return messages;
+}
+
 function heroThrownBoomerangSelfHitResult(obj) {
     const messages = [];
     const baseDamage = heroThrownGenericWeaponDamage(obj);
@@ -66937,6 +66943,7 @@ export async function rhack(_cmd) {
                 stopCarriedFigurineTimerOnLeave(thrownObject);
                 removeInventoryItem(item, 1);
                 newsym(ironBarsImpact.x, ironBarsImpact.y);
+                prependHeroHorizontalThrowRecoilMessage(barsImpact.messages, ordinaryAirRecoilMessage);
                 await setMessage(barsImpact.messages.join('  '));
                 game._command_mode = null;
                 game._throw_item_letter = null;
@@ -66961,6 +66968,7 @@ export async function rhack(_cmd) {
                     : heroThrownBlindingVenomHitMonster(thrownObject, targetMon);
                 removeInventoryItem(item, 1);
                 newsym(targetMon.mx, targetMon.my);
+                prependHeroHorizontalThrowRecoilMessage(messages, ordinaryAirRecoilMessage);
                 await setMessage(messages.join('  '));
                 game._command_mode = null;
                 game._throw_item_letter = null;
@@ -66981,6 +66989,7 @@ export async function rhack(_cmd) {
                 const messages = heroThrownCreamPieHitMonster(thrownObject, targetMon);
                 removeInventoryItem(item, 1);
                 newsym(targetMon.mx, targetMon.my);
+                prependHeroHorizontalThrowRecoilMessage(messages, ordinaryAirRecoilMessage);
                 await setMessage(messages.join('  '));
                 game._command_mode = null;
                 game._throw_item_letter = null;
@@ -67000,6 +67009,7 @@ export async function rhack(_cmd) {
                 const messages = heroThrownEggHitMonster(thrownObject, targetMon);
                 removeInventoryItem(item, 1);
                 newsym(targetMon.mx, targetMon.my);
+                prependHeroHorizontalThrowRecoilMessage(messages, ordinaryAirRecoilMessage);
                 await setMessage(messages.join('  '), !!messages.more);
                 game._throw_item_letter = null;
                 game._resume_time_after_more = 0;
@@ -67022,6 +67032,7 @@ export async function rhack(_cmd) {
                 removeInventoryItem(item, 1);
                 newsym(targetMon.mx, targetMon.my);
                 const keepPotionCallPrompt = game._command_mode === 'callPotionAfterMore';
+                prependHeroHorizontalThrowRecoilMessage(messages, ordinaryAirRecoilMessage);
                 await setMessage(messages.join('  '), keepPotionCallPrompt || !!messages.more);
                 game._throw_item_letter = null;
                 game._resume_time_after_more = 0;
