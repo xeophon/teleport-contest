@@ -11279,6 +11279,14 @@ function placeRollingBoulderAtRest(boulder, x, y) {
     game.level.objects.push(boulder);
 }
 
+function setLaunchDropSpot(obj, x, y) {
+    if (!obj) {
+        delete game._launch_drop_spot;
+        return;
+    }
+    game._launch_drop_spot = { obj, x, y };
+}
+
 function rollingBoulderChainIntoBoulderAt(x, y, dx, dy, remainingDistance, movingBoulder) {
     const chainedBoulder = (game.level?.objects || []).find(obj =>
         obj !== movingBoulder && !obj.transientProjectile && obj.otyp === BOULDER && obj.ox === x && obj.oy === y);
@@ -11359,6 +11367,7 @@ function rollingBoulderHitHeroAt(x, y, movingBoulder) {
     game._damage_after_topline_more = (game._damage_after_topline_more || 0) + damage;
     game._exercise_after_topline_more = (game._exercise_after_topline_more || 0) + 1;
     if (damage >= (game.u?.uhp || 0)) game._death_cause ||= 'killed by a boulder';
+    if (game._death_cause === 'killed by a boulder') game._rolling_boulder_launch_killed_hero = 1;
     rollingBoulderStopHeroOccupationOnHit();
     return true;
 }
@@ -11597,6 +11606,7 @@ function monsterRollingBoulderTrapEffect(mon, trap, { skipPetPostMoveRoll = fals
     if (boulder && start && end) {
         game.level.objects = (game.level.objects || []).filter(obj => obj !== boulder);
         newsym(start.x, start.y);
+        setLaunchDropSpot(boulder, start.x, start.y);
         if (!inSight) {
             const unseenLaunch = rollingBoulderUnseenLaunchMessage(start);
             if (unseenLaunch) addToplineMessage(unseenLaunch);
@@ -11672,24 +11682,35 @@ function monsterRollingBoulderTrapEffect(mon, trap, { skipPetPostMoveRoll = fals
                 }
             } else {
                 rollingBoulderHitHeroAt(x, y, boulder);
+                if (game._rolling_boulder_launch_killed_hero) break;
             }
             const downGate = rollingBoulderApplyDownGateAt(x, y, boulder);
             if (downGate.handled) {
-                if (downGate.consumed) boulder = null;
+                if (downGate.consumed) {
+                    setLaunchDropSpot(null);
+                    boulder = null;
+                }
                 break;
             }
             if (rollingBoulderTriggerLandmineAt(x, y)) {
+                setLaunchDropSpot(null);
                 boulder = null;
                 break;
             }
             const teleport = rollingBoulderApplyTeleportTrapAt(x, y, boulder);
             if (teleport.handled) {
-                if (teleport.consumed) boulder = null;
+                if (teleport.consumed) {
+                    setLaunchDropSpot(null);
+                    boulder = null;
+                }
                 break;
             }
             const pitHole = rollingBoulderApplyPitHoleFloorEffectsAt(x, y, boulder);
             if (pitHole.handled) {
-                if (pitHole.consumed) boulder = null;
+                if (pitHole.consumed) {
+                    setLaunchDropSpot(null);
+                    boulder = null;
+                }
                 else {
                     finalX = x;
                     finalY = y;
@@ -11698,7 +11719,10 @@ function monsterRollingBoulderTrapEffect(mon, trap, { skipPetPostMoveRoll = fals
             }
             const floorEffects = rollingBoulderApplyGenericFloorEffectsAt(x, y, boulder);
             if (floorEffects.handled) {
-                if (floorEffects.consumed) boulder = null;
+                if (floorEffects.consumed) {
+                    setLaunchDropSpot(null);
+                    boulder = null;
+                }
                 break;
             }
             boulder = rollingBoulderChainIntoBoulderAt(x, y, dx, dy, dist - 1, boulder);
@@ -11717,7 +11741,12 @@ function monsterRollingBoulderTrapEffect(mon, trap, { skipPetPostMoveRoll = fals
                 break;
             }
         }
-        if (boulder) {
+        if (game._rolling_boulder_launch_killed_hero) {
+            delete game._rolling_boulder_launch_killed_hero;
+        } else {
+            setLaunchDropSpot(null);
+        }
+        if (boulder && !game._launch_drop_spot) {
             placeRollingBoulderAtRest(boulder, finalX, finalY);
             vision_reset();
             vision_recalc(0);

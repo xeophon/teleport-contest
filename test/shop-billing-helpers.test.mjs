@@ -8,6 +8,7 @@ import { game, resetGame } from '../js/gstate.js';
 import { pushKey, resetInputState } from '../js/input.js';
 import { createMonsterCorpseOrGlob, mkcorpstat, mkobj, mksobj, monsterByRndName } from '../js/mklev.js';
 import { enableDisplayRngLog, enableRngLog, getRngLog, initRng } from '../js/rng.js';
+import { encodeBonesLevel } from '../js/save.js';
 import { A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_MAX, A_STR, A_WIS, ALLOW_TRAPS, ALTAR, AM_SHRINE, Align2amask, ANTI_MAGIC, ARROW_TRAP, BEAR_TRAP, BILLSZ, CANDLESHOP, CLOUD, CORPSTAT_HISTORIC, COULD_SEE, DART_TRAP, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, D_TRAPPED, FIRE_TRAP, FOUNTAIN, HOLE, ICE, ICED_POOL, IN_SIGHT, IRONBARS, LADDER, LANDMINE, LAVAPOOL, LEVEL_TELEP, MAGIC_PORTAL, MIGR_LADDER_UP, MIGR_RANDOM, MIGR_SSTAIRS, MIGR_STAIRS_UP, MOAT, MON_MIGRATING, M_AP_FURNITURE, M_AP_OBJECT, NORMAL_SPEED, P_AXE, P_BARE_HANDED_COMBAT, P_BASIC, P_DAGGER, P_EXPERT, P_KNIFE, P_PICK_AXE, P_RIDING, P_SABER, P_SKILLED, P_TWO_WEAPON_COMBAT, P_UNSKILLED, PIT, POLY_TRAP, POOL, REPAIR_DELAY, ROCKTRAP, ROLLING_BOULDER_TRAP, ROOM, ROOMOFFSET, SDOOR, SHOPBASE, SHOP_DOOR_COST, SINK, SLP_GAS_TRAP, SPIKED_PIT, SQKY_BOARD, STAIRS, STATUE_TRAP, STONE, STRAT_APPEARMSG, STRAT_WAITFORU, STRAT_WAITMASK, TELEP_TRAP, TEMPLE, TRAPDOOR, TREE, TT_BEARTRAP, TT_LAVA, TT_PIT, TT_WEB, WEB, W_ARMF, W_SADDLE } from '../js/const.js';
 import { currentFruitId, setCurrentFruitName } from '../js/fruit.js';
 import { CLR_BRIGHT_MAGENTA, CLR_BROWN, CLR_WHITE } from '../js/terminal.js';
@@ -21490,6 +21491,55 @@ test('rolling boulder out-of-bounds guard stops at last valid square', () => {
     assert.equal(boulder.otrapped, 0);
     assert.equal(game.level.objects.at(-1), boulder);
     assert.equal(rngValuesForCall(getRngLog(), 'rnd(20)').length, 0);
+});
+
+test('lethal rolling boulder launch is forced back to start for bones', () => {
+    const { trap, goblin } = installMonsterPitTrapState(ROLLING_BOULDER_TRAP, {
+        mhp: 50,
+        mhpmax: 50,
+        data: { mac: -10 },
+    });
+    Object.assign(game.u, {
+        ux: 6,
+        uy: 3,
+        uhp: 5,
+        uhpmax: 5,
+        uz: { dnum: 0, dlevel: 1 },
+    });
+    game.plname = 'Elara';
+    game.stairs = null;
+    const boulder = installRollingBoulderTrapLaunch(trap, {
+        start: { x: 4, y: 3 },
+        end: { x: 8, y: 3 },
+    });
+    Object.assign(boulder, { hidden: true, otrapped: 1 });
+    enableRngLog({ reset: true });
+    installCoreRngValues([9, 0]);
+    markHeroNeighborhoodVisible();
+    markSquareVisible(6, 5);
+    for (let x = 4; x <= 8; x++) markSquareVisible(x, 3);
+
+    assert.equal(allmain.monsterRollingBoulderTrapEffectForTest(goblin, trap), true);
+
+    assert.match(game._pending_message || '', /Click!  The goblin triggers something\./);
+    assert.equal(game._topline_after_more, 'You are hit by a boulder!');
+    assert.equal(game._death_cause, 'killed by a boulder');
+    assert.equal(game.level.objects.includes(boulder), false);
+    assert.deepEqual(game._launch_drop_spot, { obj: boulder, x: 4, y: 3 });
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rnd(20)'), [10, 1]);
+
+    const bones = JSON.parse(encodeBonesLevel());
+    const bonesBoulder = bones.level.objects.find(obj => obj.id === boulder.id);
+
+    assert.equal(bonesBoulder.ox, 4);
+    assert.equal(bonesBoulder.oy, 3);
+    assert.equal(bonesBoulder.otrapped, 0);
+    assert.equal(bonesBoulder.hidden, false);
+    assert.equal(bonesBoulder.transientProjectile, false);
+    assert.equal(game.level.objects.includes(boulder), true);
+    assert.equal(boulder.ox, 4);
+    assert.equal(boulder.oy, 3);
+    assert.equal(game._launch_drop_spot, undefined);
 });
 
 test('rolling boulder hits half-physical hero on path and keeps rolling', () => {

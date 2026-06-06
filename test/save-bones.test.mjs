@@ -24,3 +24,27 @@ test('bones restore identity count treats death-cleanup thrown objects as ordina
 
     assert.equal(bones.restoreIdentityCount, 5);
 });
+
+test('bones encoding force-places object from active launch drop spot', () => {
+    resetGame();
+    game.plname = 'Elara';
+    game.u = { ux: 10, uy: 10, uz: { dnum: 0, dlevel: 1 } };
+    game.inventory = [];
+    game.stairs = null;
+    game.level = new GameMap();
+    const boulder = { id: 20, otyp: 465, kind: 'boulder', quan: 1, ox: 6, oy: 3, otrapped: 1 };
+    game.level.objects = [];
+    game.level.buriedobjlist = [];
+    game.level.monsters = [];
+    game._launch_drop_spot = { obj: boulder, x: 4, y: 3 };
+
+    const bones = JSON.parse(encodeBonesLevel());
+    const bonesBoulder = bones.level.objects.find(obj => obj.id === boulder.id);
+
+    assert.equal(bonesBoulder.ox, 4);
+    assert.equal(bonesBoulder.oy, 3);
+    assert.equal(bonesBoulder.otrapped, 0);
+    assert.equal(game.level.objects.includes(boulder), true);
+    assert.equal(game._launch_drop_spot, undefined);
+    assert.equal(bones.restoreIdentityCount, 1);
+});
