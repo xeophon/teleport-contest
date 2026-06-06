@@ -39,5 +39,5 @@ The tests drive the normal pet movement loop where movement RNG matters and use 
 
 ## Remaining Work
 
-- Full `launch_obj()` parity remains broader trap/terrain work: unseen audible launch feedback, rock-passer harmlessness, hero collision along the rolling path, path trap effects, door/bar handling, boulder chaining, launch-drop preservation, and floor-effect integration.
+- Full `launch_obj()` parity remains broader trap/terrain work: unseen audible launch feedback, hero collision along the rolling path, path trap effects, door/bar handling, boulder chaining, launch-drop preservation, and floor-effect integration. Rolling-boulder rock-passer harmless hits are covered in audit 583.
 - Full pet leash slack/yelp and off-level migration handling remains broader `dog_move()` parity.

@@ -20977,6 +20977,61 @@ test('rolling boulder hit roll includes boulder hit adjustment', () => {
     assert.equal(!!(goblin.mtrapseen & (1 << (ROLLING_BOULDER_TRAP - 1))), true);
 });
 
+test('rolling boulder passes harmlessly through rock-passing monster after hit roll', () => {
+    const { trap, goblin: xorn } = installMonsterPitTrapState(ROLLING_BOULDER_TRAP, {
+        mhp: 20,
+        mhpmax: 20,
+        msleeping: 1,
+        data: { name: 'xorn', mlet: 'X', mac: -5, passWalls: true, passesRocks: true },
+    });
+    const boulder = installRollingBoulderTrapLaunch(trap);
+    enableRngLog({ reset: true });
+    installCoreRngValues([1, 4]);
+    markHeroNeighborhoodVisible();
+    markSquareVisible(6, 3);
+    markSquareVisible(6, 5);
+    markSquareVisible(6, 7);
+
+    assert.equal(allmain.monsterRollingBoulderTrapEffectForTest(xorn, trap), true);
+
+    assert.match(game._pending_message || '', /Click!  The xorn triggers something\./);
+    assert.equal(game._topline_after_more, 'The boulder hits the xorn but passes harmlessly through it.');
+    assert.equal(xorn.mhp, 20);
+    assert.equal(xorn.msleeping, 0);
+    assert.equal(game.level.monsters.includes(xorn), true);
+    assert.equal(boulder.ox, 6);
+    assert.equal(boulder.oy, 7);
+    assert.equal(trap.tseen, true);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rnd(20)'), [2, 5]);
+    assert.equal(!!(xorn.mtrapseen & (1 << (ROLLING_BOULDER_TRAP - 1))), true);
+});
+
+test('rolling boulder miss against rock-passer stays a miss without damage roll', () => {
+    const { trap, goblin: xorn } = installMonsterPitTrapState(ROLLING_BOULDER_TRAP, {
+        mhp: 20,
+        mhpmax: 20,
+        data: { name: 'xorn', mlet: 'X', mac: -10, passWalls: true, passesRocks: true },
+    });
+    const boulder = installRollingBoulderTrapLaunch(trap);
+    enableRngLog({ reset: true });
+    installCoreRngValues([19]);
+    markHeroNeighborhoodVisible();
+    markSquareVisible(6, 3);
+    markSquareVisible(6, 5);
+    markSquareVisible(6, 7);
+
+    assert.equal(allmain.monsterRollingBoulderTrapEffectForTest(xorn, trap), true);
+
+    assert.match(game._pending_message || '', /Click!  The xorn triggers something\./);
+    assert.doesNotMatch(game._topline_after_more || '', /passes harmlessly|hits the xorn/);
+    assert.equal(xorn.mhp, 20);
+    assert.equal(game.level.monsters.includes(xorn), true);
+    assert.equal(boulder.ox, 6);
+    assert.equal(boulder.oy, 7);
+    assert.equal(trap.tseen, true);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rnd(20)'), [20]);
+});
+
 test('known rolling boulder trap can be avoided before launch', () => {
     const { trap, pet } = installMovingPetPitTrapState(ROLLING_BOULDER_TRAP, {
         mhp: 20,

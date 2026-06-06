@@ -40,4 +40,4 @@ The tests use local trap and steed fixtures with explicit RNG queues. They do no
 
 ## Remaining Work
 
-The remaining mounted floor-trap cases are `PIT`, `SPIKED_PIT`, and `POLY_TRAP`. `PIT` and `SPIKED_PIT` should be handled together because C uses one shared handler and their mounted steed damage shape is shared.
+Mounted `PIT` and `SPIKED_PIT` are covered in audit 536, and mounted `POLY_TRAP` is covered in audit 537 with the steed-learning follow-up in audit 573. Remaining land-mine work is limited to broader environmental `blow_up_landmine()` blast details outside this slice.

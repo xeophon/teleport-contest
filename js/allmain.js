@@ -11298,10 +11298,19 @@ function monsterRollingBoulderTrapEffect(mon, trap, { skipPetPostMoveRoll = fals
                 const hitRoll = rnd(20);
                 if (5 + targetAc + 6 >= hitRoll) {
                     const damage = rnd(20);
+                    const harmlessStoneHit = monsterPassesRocks(hit);
                     const hitName = monsterDisplayName(hit);
                     const lowerName = hitName.replace(/^The /, 'the ');
-                    hit.mhp = (hit.mhp || 1) - damage;
-                    if (hit.mhp < 1) {
+                    hit.msleeping = 0;
+                    if (harmlessStoneHit) {
+                        if (inSight) {
+                            game._topline_after_more = `The boulder hits ${lowerName} but passes harmlessly through it.`;
+                            newsym(x, y);
+                        }
+                    } else {
+                        hit.mhp = (hit.mhp || 1) - damage;
+                    }
+                    if (!harmlessStoneHit && hit.mhp < 1) {
                         if (inSight) game._topline_after_more = `The boulder hits ${lowerName}!  ${hitName} is killed!`;
                         if (inSight) {
                             game.level.objects.push({
@@ -11320,7 +11329,7 @@ function monsterRollingBoulderTrapEffect(mon, trap, { skipPetPostMoveRoll = fals
                         game.level.monsters = (game.level?.monsters || []).filter(other => other !== hit);
                         if (skipPetPostMoveRoll && hit.pet) game._pet_skip_post_move_roll = 1;
                         game._rolling_boulder_cleanup_after_more = { x, y, mon: hit };
-                    } else if (inSight) {
+                    } else if (!harmlessStoneHit && inSight) {
                         game._topline_after_more = `The boulder hits ${lowerName}!`;
                         newsym(x, y);
                     }
