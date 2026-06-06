@@ -18151,6 +18151,17 @@ function installRollingBoulderPathDownGate({
     return game.stairs;
 }
 
+function installRollingBoulderPathSeenShaft(ttyp = HOLE, x = 6, y = 3) {
+    game.u.uz = { dnum: 0, dlevel: 1 };
+    game.dungeons = [{ name: 'The Dungeons of Doom', num_dunlevs: 3, depth_start: 1 }];
+    game.level.flags = {};
+    game.stairs = null;
+    const trap = { ttyp, tx: x, ty: y, tseen: true, madeby_u: false };
+    game.level.traps.push(trap);
+    game.level.at(x, y).lit = true;
+    return trap;
+}
+
 function installMovingMonsterHoleTrapState(ttyp = HOLE, extra = {}) {
     installStableNonShopFloorState();
     Object.assign(game.u, {
@@ -21463,6 +21474,112 @@ test('rolling boulder plugs seen path hole and is consumed', () => {
     assert.equal(game.level.traps.includes(hole), false);
     assert.equal(game.level.objects.includes(boulder), false);
     assert.equal(trap.tseen, true);
+    assert.equal(rngValuesForCall(getRngLog(), 'rnd(20)').length, 0);
+});
+
+test('rolling boulder impact-drops seen path hole pile before plugging', () => {
+    const { trap, goblin } = installMonsterPitTrapState(ROLLING_BOULDER_TRAP, {
+        mhp: 50,
+        mhpmax: 50,
+        data: { mac: -10 },
+    });
+    const hole = installRollingBoulderPathSeenShaft(HOLE, 6, 3);
+    const blade = { ...dagger(31435), letter: undefined, line: undefined, ox: 6, oy: 3 };
+    game.level.objects.push(blade);
+    game.level.buriedobjlist = [];
+    const boulder = installRollingBoulderTrapLaunch(trap, {
+        start: { x: 4, y: 3 },
+        end: { x: 8, y: 3 },
+    });
+    enableRngLog({ reset: true });
+    installCoreRngValues([1, 0]);
+    markHeroNeighborhoodVisible();
+    markSquareVisible(6, 5);
+    for (let x = 4; x <= 8; x++) markSquareVisible(x, 3);
+
+    assert.equal(allmain.monsterRollingBoulderTrapEffectForTest(goblin, trap), true);
+
+    const messages = [
+        game._topline_after_more,
+        ...(game._queued_messages_after_more || []).map(entry => entry.text),
+    ].filter(Boolean).join('  ');
+
+    assert.match(game._pending_message || '', /Click!  The goblin triggers something\./);
+    assert.match(messages, /From the impact, the other object falls\./);
+    assert.match(messages, /The boulder plugs a hole\./);
+    assert.doesNotMatch(messages, /A boulder hits/);
+    assert.equal(game.level.traps.includes(hole), false);
+    assert.equal(game.level.objects.includes(boulder), false);
+    assert.equal(game.level.objects.includes(blade), false);
+    assert.equal(game.level.buriedobjlist.includes(blade), false);
+    assert.equal(queuedImpactDropsFor().includes(blade), true);
+    assert.equal(queuedImpactDropsFor().includes(boulder), false);
+    assert.equal(trap.tseen, true);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rn2(3)'), [1, 0]);
+    assert.equal(rngValuesForCall(getRngLog(), 'rnd(20)').length, 0);
+});
+
+test('rolling boulder seen path trap door consumes ship-object roll before plugging', () => {
+    const { trap, goblin } = installMonsterPitTrapState(ROLLING_BOULDER_TRAP, {
+        mhp: 50,
+        mhpmax: 50,
+        data: { mac: -10 },
+    });
+    const trapdoor = installRollingBoulderPathSeenShaft(TRAPDOOR, 6, 3);
+    const boulder = installRollingBoulderTrapLaunch(trap, {
+        start: { x: 4, y: 3 },
+        end: { x: 8, y: 3 },
+    });
+    enableRngLog({ reset: true });
+    installCoreRngValues([2]);
+    markHeroNeighborhoodVisible();
+    markSquareVisible(6, 5);
+    for (let x = 4; x <= 8; x++) markSquareVisible(x, 3);
+
+    assert.equal(allmain.monsterRollingBoulderTrapEffectForTest(goblin, trap), true);
+
+    assert.match(game._pending_message || '', /Click!  The goblin triggers something\./);
+    assert.equal(game._topline_after_more, 'The boulder plugs a trap door.');
+    assert.equal(game.level.traps.includes(trapdoor), false);
+    assert.equal(game.level.objects.includes(boulder), false);
+    assert.equal(queuedImpactDropsFor().includes(boulder), false);
+    assert.equal(trap.tseen, true);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rn2(3)'), [2]);
+    assert.equal(rngValuesForCall(getRngLog(), 'rnd(20)').length, 0);
+});
+
+test('rolling boulder unseen path trap door buries pile without shaft impact drop', () => {
+    const { trap, goblin } = installMonsterPitTrapState(ROLLING_BOULDER_TRAP, {
+        mhp: 50,
+        mhpmax: 50,
+        data: { mac: -10 },
+    });
+    const trapdoor = { ttyp: TRAPDOOR, tx: 6, ty: 3, tseen: false, madeby_u: false };
+    const blade = { ...dagger(31436), letter: undefined, line: undefined, ox: 6, oy: 3 };
+    game.level.traps.push(trapdoor);
+    game.level.objects.push(blade);
+    game.level.buriedobjlist = [];
+    game.level.at(6, 3).lit = true;
+    const boulder = installRollingBoulderTrapLaunch(trap, {
+        start: { x: 4, y: 3 },
+        end: { x: 8, y: 3 },
+    });
+    enableRngLog({ reset: true });
+    markHeroNeighborhoodVisible();
+    markSquareVisible(6, 5);
+    for (let x = 4; x <= 8; x++) markSquareVisible(x, 3);
+
+    assert.equal(allmain.monsterRollingBoulderTrapEffectForTest(goblin, trap), true);
+
+    assert.match(game._pending_message || '', /Click!  The goblin triggers something\./);
+    assert.equal(game._topline_after_more, 'The boulder triggers and plugs a trap door.');
+    assert.equal(game.level.traps.includes(trapdoor), false);
+    assert.equal(game.level.objects.includes(boulder), false);
+    assert.equal(game.level.objects.includes(blade), false);
+    assert.equal(game.level.buriedobjlist.includes(blade), true);
+    assert.equal(queuedImpactDropsFor().includes(blade), false);
+    assert.equal(trap.tseen, true);
+    assert.equal(rngValuesForCall(getRngLog(), 'rn2(3)').length, 0);
     assert.equal(rngValuesForCall(getRngLog(), 'rnd(20)').length, 0);
 });
 

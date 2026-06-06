@@ -11391,7 +11391,7 @@ function rollingBoulderDownGateAt(x, y, movingBoulder) {
     if (!movingBoulder) return null;
     const gate = downGateAt(x, y);
     if (!gate?.targetLevel) return null;
-    return gate.where === MIGR_RANDOM && gate.trap ? null : gate;
+    return gate;
 }
 
 function rollingBoulderTransitMessage(gate, impactQuantity, noDrop) {
@@ -11410,6 +11410,18 @@ function rollingBoulderApplyDownGateAt(x, y, movingBoulder) {
     const route = { ...gate, x, y };
     const impactQuantity = rollingBoulderImpactPileQuantityAt(x, y);
     const noDrop = gate.where !== MIGR_LADDER_UP && !!rn2(3);
+    if (gate.where === MIGR_RANDOM && gate.trap && movingBoulder?.otyp === BOULDER) {
+        if (impactQuantity > 0) {
+            const impact = impactDropFloorObjects(x, y, route, {
+                targetLevel: gate.targetLevel,
+                missile: movingBoulder,
+                missileImpact: true,
+                route,
+            });
+            if (impact.message) addRollingBoulderMotionMessage(impact.message);
+        }
+        return { handled: false, consumed: false };
+    }
     const transit = rollingBoulderTransitMessage(route, impactQuantity, noDrop);
     if (transit) addRollingBoulderMotionMessage(transit);
 

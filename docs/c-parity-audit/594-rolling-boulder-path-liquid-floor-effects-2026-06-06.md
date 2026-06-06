@@ -31,6 +31,6 @@ The tests use local stair, trap, terrain, visibility, object, and RNG fixtures. 
 
 ## Remaining Work
 
-- Seen hole/trapdoor boulder `ship_object()` impact-drop side effects before plugging remain separate from the stair/ladder down-gate path.
+- Seen hole/trapdoor boulder `ship_object()` impact-drop side effects before plugging are covered in audit 595.
 - Broader `launch_obj()` parity still includes launch-drop preservation, hero-triggered rolling-boulder rewriting, occupation/multi interruption, mounted-steed diversion, and final placement side effects.
 - Shared boulder liquid details outside this slice still need source-backed coverage, including adjacent-lava damage modifiers and non-visual wake/noise details.
