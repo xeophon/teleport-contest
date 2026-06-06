@@ -22070,6 +22070,258 @@ test('#untrap known-box fire payload on pool releases steam', async () => {
     assert.equal(game.context.move, 1);
 });
 
+test('#untrap known-box explosion destroys box and floor objects', async () => {
+    setupUntrapDestinationWeb([], { rng: [74, 0, 0, 21, 0, 0, 5, 5, 5, 5, 5, 5, 0, 0] });
+    Object.assign(game.u, {
+        uhp: 50,
+        uhpmax: 50,
+        ulevel: 1,
+        halfPhysicalDamage: false,
+        uinvulnerable: false,
+    });
+    game.level.traps = [];
+    const box = shopFloorContainer(881049);
+    Object.assign(box, {
+        otrapped: true,
+        tknown: true,
+        dknown: true,
+        cknown: false,
+    });
+    const potion = putObjectInContainer(box, confusionPotion(881050, undefined, 1));
+    const floorScroll = scrollOfCharging(881051, 's');
+    delete floorScroll.letter;
+    delete floorScroll.line;
+    game.level.objects = [box, floorScroll];
+    const nearbySleeper = { id: 881057, mx: 6, my: 5, msleeping: 1, mstrategy: 7, data: {} };
+    const farSleeper = { id: 881058, mx: 30, my: 30, msleeping: 1, mstrategy: 7, data: {} };
+    game.level.monsters = [nearbySleeper, farSleeper];
+
+    await enterUntrapDirection();
+    await rhack('.');
+
+    assert.equal(game._command_mode, 'untrapBoxConfirm');
+    assert.equal(game._pending_message, 'Disarm this large box? [ynq] (q)');
+
+    await rhack('y');
+
+    assert.equal(game._command_mode, null);
+    assert.deepEqual(getRngLog(), [
+        'rnd(75)=75',
+        'rn2(13)=0',
+        'rn2(20)=0',
+        'rn2(26)=21',
+        'rn2(100)=0',
+        'rn2(100)=0',
+        'd(6,6)=36',
+        'rn2(2)=0',
+        'rn2(19)=0',
+    ]);
+    assert.equal(game._pending_message, 'You set it off!  The large box explodes!');
+    assert.equal(game.level.objects.includes(box), false);
+    assert.equal(game.level.objects.includes(floorScroll), false);
+    assert.equal(game.level.objects.includes(potion), false);
+    assert.equal(box.otrapped, false);
+    assert.equal(box.tknown, false);
+    assert.equal((box.contents || []).length, 0);
+    assert.equal(nearbySleeper.msleeping, 0);
+    assert.equal(nearbySleeper.mstrategy, 0);
+    assert.equal(farSleeper.msleeping, 1);
+    assert.equal(farSleeper.mstrategy, 7);
+    assert.equal(game.u.uhp, 14);
+    assert.equal(game.context.move, 1);
+});
+
+test('#untrap known-box explosion uses half physical damage', async () => {
+    setupUntrapDestinationWeb([], { rng: [74, 0, 0, 21, 0, 5, 5, 5, 5, 5, 5, 0, 0] });
+    Object.assign(game.u, {
+        uhp: 50,
+        uhpmax: 50,
+        halfPhysicalDamage: true,
+        uinvulnerable: false,
+    });
+    game.level.traps = [];
+    const box = shopFloorContainer(881052);
+    Object.assign(box, {
+        otrapped: true,
+        tknown: true,
+        dknown: true,
+        cknown: false,
+    });
+    game.level.objects = [box];
+
+    await enterUntrapDirection();
+    await rhack('.');
+
+    assert.equal(game._command_mode, 'untrapBoxConfirm');
+    assert.equal(game._pending_message, 'Disarm this large box? [ynq] (q)');
+
+    await rhack('y');
+
+    assert.equal(game._command_mode, null);
+    assert.deepEqual(getRngLog(), [
+        'rnd(75)=75',
+        'rn2(13)=0',
+        'rn2(20)=0',
+        'rn2(26)=21',
+        'rn2(100)=0',
+        'd(6,6)=36',
+        'rn2(2)=0',
+        'rn2(19)=0',
+    ]);
+    assert.equal(game._pending_message, 'You set it off!  The large box explodes!');
+    assert.equal(game.level.objects.includes(box), false);
+    assert.equal(game.u.uhp, 32);
+    assert.equal(game.context.move, 1);
+});
+
+test('#untrap known-box fatal explosion enters death more', async () => {
+    setupUntrapDestinationWeb([], { rng: [74, 0, 0, 21, 0, 5, 5, 5, 5, 5, 5, 0] });
+    Object.assign(game.u, {
+        uhp: 10,
+        uhpmax: 20,
+        halfPhysicalDamage: false,
+        uinvulnerable: false,
+    });
+    game.level.traps = [];
+    const box = shopFloorContainer(881053);
+    Object.assign(box, {
+        otrapped: true,
+        tknown: true,
+        dknown: true,
+        cknown: false,
+    });
+    game.level.objects = [box];
+
+    await enterUntrapDirection();
+    await rhack('.');
+
+    assert.equal(game._command_mode, 'untrapBoxConfirm');
+    assert.equal(game._pending_message, 'Disarm this large box? [ynq] (q)');
+
+    await rhack('y');
+
+    assert.equal(game._command_mode, 'deathDieMore');
+    const fatalLog = getRngLog();
+    assert.deepEqual(fatalLog.slice(0, 6), [
+        'rnd(75)=75',
+        'rn2(13)=0',
+        'rn2(20)=0',
+        'rn2(26)=21',
+        'rn2(100)=0',
+        'd(6,6)=36',
+    ]);
+    assert.equal(fatalLog.some(entry => rngCallName(entry) === 'rn2(19)'), false);
+    assert.equal(game._pending_message, 'You set it off!  The large box explodes!  You die...');
+    assert.equal(game.level.objects.includes(box), false);
+    assert.equal(box.otrapped, false);
+    assert.equal(box.tknown, false);
+    assert.equal(game.u.uhp, 0);
+    assert.equal(game._death_cause, 'killed by an exploding large box');
+    assert.equal(game.context.move || 0, 0);
+});
+
+test('#untrap known-box explosion charges shop loss after surviving blast', async () => {
+    setupUntrapDestinationWeb([], { rng: [74, 0, 0, 21, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] });
+    const shkp = makeShopkeeper(881056, 'Izchak', 6, 5, { shoproom: ROOMOFFSET, shoptype: SHOPBASE });
+    game.level.rooms = [{ rtype: SHOPBASE, resident: shkp }];
+    game.level.monsters = [shkp];
+    game.level.at = () => ({ roomno: ROOMOFFSET, typ: ROOM });
+    Object.assign(game.u, {
+        uhp: 50,
+        uhpmax: 50,
+        halfPhysicalDamage: false,
+        uinvulnerable: false,
+    });
+    game.level.traps = [];
+    const box = shopFloorContainer(881054);
+    Object.assign(box, {
+        otrapped: true,
+        tknown: true,
+        dknown: true,
+        cknown: false,
+    });
+    const potion = putObjectInContainer(box, confusionPotion(881055, undefined, 1));
+    const floorScroll = scrollOfCharging(881056, 's');
+    delete floorScroll.letter;
+    delete floorScroll.line;
+    game.level.objects = [box, floorScroll];
+    const expectedLoss = 2 * shop.shopItemPrice({ ...box, contents: [], cobj: [] }, 5, 5)
+        + shop.shopItemPrice(potion, 5, 5)
+        + shop.shopItemPrice(floorScroll, 5, 5);
+
+    await enterUntrapDirection();
+    await rhack('.');
+
+    assert.equal(game._command_mode, 'untrapBoxConfirm');
+    assert.equal(game._pending_message, 'Disarm this large box? [ynq] (q)');
+
+    await rhack('y');
+
+    assert.equal(game._command_mode, null);
+    assert.deepEqual(getRngLog(), [
+        'rnd(75)=75',
+        'rn2(13)=0',
+        'rn2(20)=0',
+        'rn2(26)=21',
+        'rn2(100)=0',
+        'rn2(100)=0',
+        'd(6,6)=6',
+        'rn2(2)=0',
+        'rn2(19)=0',
+    ]);
+    assert.equal(game._pending_message, `You set it off!  The large box explodes!  You owe ${expectedLoss} zorkmids for objects destroyed.`);
+    assert.equal(shkp.debit, expectedLoss);
+    assert.equal(shkp.billct, 0);
+    assert.equal(game.level.objects.includes(box), false);
+    assert.equal(game.level.objects.includes(floorScroll), false);
+    assert.equal(game.u.uhp, 44);
+    assert.equal(game.context.move, 1);
+});
+
+test('#untrap known-box explosion leaves the Amulet intact on the floor', async () => {
+    setupUntrapDestinationWeb([], { rng: [74, 0, 0, 21, 0, 5, 5, 5, 5, 5, 5, 0, 0] });
+    Object.assign(game.u, {
+        uhp: 50,
+        uhpmax: 50,
+        halfPhysicalDamage: false,
+        uinvulnerable: false,
+    });
+    game.level.traps = [];
+    const box = shopFloorContainer(881059);
+    Object.assign(box, {
+        otrapped: true,
+        tknown: true,
+        dknown: true,
+        cknown: false,
+    });
+    const amulet = realAmuletOfYendor(881060, 'A');
+    Object.assign(amulet, { ox: 5, oy: 5 });
+    game.level.objects = [box, amulet];
+
+    await enterUntrapDirection();
+    await rhack('.');
+
+    assert.equal(game._command_mode, 'untrapBoxConfirm');
+
+    await rhack('y');
+
+    assert.equal(game._command_mode, null);
+    assert.deepEqual(getRngLog(), [
+        'rnd(75)=75',
+        'rn2(13)=0',
+        'rn2(20)=0',
+        'rn2(26)=21',
+        'rn2(100)=0',
+        'd(6,6)=36',
+        'rn2(2)=0',
+        'rn2(19)=0',
+    ]);
+    assert.equal(game.level.objects.includes(box), false);
+    assert.equal(game.level.objects.includes(amulet), true);
+    assert.equal(game.u.uhp, 14);
+    assert.equal(game.context.move, 1);
+});
+
 test('#untrap known-box poisoned needle payload drains constitution', async () => {
     setupUntrapDestinationWeb([], { rng: [74, 0, 0, 13, 1, 1, 1, 0] });
     game.u.poisonResistance = false;

@@ -791,6 +791,99 @@ function applyChestTrapFirePayload(box, messages) {
     return applyChestTrapFireDamage(messages, fireInventory.damage, fireInventory.deathCause || 'killed by a tower of flame');
 }
 
+function chestTrapExplosionObjectsAt(box) {
+    const x = box?.ox ?? game.u?.ux ?? 0;
+    const y = box?.oy ?? game.u?.uy ?? 0;
+    return (game.level?.objects || []).filter(obj => obj.ox === x && obj.oy === y);
+}
+
+function chestTrapExplosionAddShopCharges(charges, source, obj, shkp, options = {}) {
+    const itemCharges = lostShopMerchandiseChargesForObject(source, obj, shkp, new Set(), options);
+    for (const [owner, value] of itemCharges)
+        addLostShopMerchandiseCharge(charges, owner, value);
+}
+
+function chestTrapExplosionShopContext(box, floorObjects) {
+    const x = box?.ox ?? game.u?.ux ?? 0;
+    const y = box?.oy ?? game.u?.uy ?? 0;
+    const shkp = shopkeeperForCostlySpot(x, y);
+    if (!shopkeeperInHisShop(shkp)) return null;
+    const source = { ox: x, oy: y };
+    const charges = new Map();
+    chestTrapExplosionAddShopCharges(charges, source, box, shkp);
+    for (const obj of floorObjects) {
+        chestTrapExplosionAddShopCharges(charges, source, obj, shkp, obj === box ? { includeContents: false } : {});
+    }
+    return { shkp, charges };
+}
+
+function chestTrapExplosionShopMessage(context) {
+    if (!context?.charges?.size) return '';
+    const insider = heroInShopOwnedBy(context.shkp);
+    let charged = 0;
+    for (const [shkp, value] of context.charges)
+        charged += chargeShopkeeperForLostMerchandise(shkp, value, {
+            peaceful: insider && shopkeeperPeacefulForDebt(context.shkp),
+        });
+    if (!(charged > 0)) return '';
+    if (insider) return `You owe ${charged} ${shopCurrency(charged)} for objects destroyed.`;
+    if (shopkeeperPeacefulForDebt(context.shkp)) {
+        context.shkp.angry = true;
+        context.shkp.hostile = true;
+        context.shkp.mpeaceful = 0;
+        context.shkp.following = 1;
+    }
+    return `You caused ${charged} ${shopCurrency(charged)} worth of damage!`;
+}
+
+function chestTrapExplosionObjectResistsDeletion(obj) {
+    if (drainItemAlwaysResists(obj)) return true;
+    rn2(100);
+    return false;
+}
+
+function wakeNearbyMonstersFromChestTrapExplosion() {
+    const distance = Math.max(0, Math.trunc(Number(game.u?.ulevel || 1))) * 20;
+    for (const sleeper of game.level?.monsters || []) {
+        if (!sleeper || sleeper.dead || (sleeper.mhp != null && sleeper.mhp <= 0)) continue;
+        const dx = (sleeper.mx || 0) - (game.u?.ux || 0);
+        const dy = (sleeper.my || 0) - (game.u?.uy || 0);
+        if (distance !== 0 && dx * dx + dy * dy >= distance) continue;
+        sleeper.msleeping = 0;
+        if (!(sleeper.unique || sleeper.data?.unique || sleeper.data?.uniq))
+            sleeper.mstrategy = 0;
+    }
+}
+
+function deleteChestTrapExplosionObjects(box, floorObjects) {
+    const doomed = new Set();
+    clearLiquidFlowContainerContents(box);
+    for (const obj of floorObjects) {
+        if (chestTrapExplosionObjectResistsDeletion(obj)) continue;
+        doomed.add(obj);
+        clearLiquidFlowContainerContents(obj);
+    }
+    game.level.objects = (game.level?.objects || []).filter(obj => !doomed.has(obj));
+    for (const obj of doomed) newsym(obj.ox, obj.oy);
+    return doomed.has(box);
+}
+
+function applyChestTrapExplosionPayload(box, messages) {
+    messages.push(`The ${chestTrapObjectName(box)} explodes!`);
+    const floorObjects = chestTrapExplosionObjectsAt(box);
+    const shopContext = chestTrapExplosionShopContext(box, floorObjects);
+    const boxDestroyed = deleteChestTrapExplosionObjects(box, floorObjects);
+    wakeNearbyMonstersFromChestTrapExplosion();
+
+    const damage = maybeHalfPhysicalDamage(d(6, 6));
+    const damageResult = applyChestTrapFireDamage(messages, damage, `killed by an exploding ${chestTrapObjectName(box)}`);
+    if (damageResult.fatal) return { ...damageResult, boxDestroyed };
+    exerciseAttribute(A_STR, false);
+    const shopMessage = chestTrapExplosionShopMessage(shopContext);
+    if (shopMessage) messages.push(shopMessage);
+    return { ...damageResult, boxDestroyed };
+}
+
 function chestTrapPoisonTell(attr) {
     if (attr === A_STR) return (game.u?.acurr?.a?.[A_STR] === STR19(25))
         ? 'You feel innately weaker!'
@@ -933,8 +1026,10 @@ function applyChestTrapPayload(box, { disarm = true } = {}) {
         result = applyChestTrapNeedlePayload(messages);
     } else if (payload >= 17 && payload <= 20) {
         result = applyChestTrapNoxiousGasPayload(box, messages);
+    } else if (payload >= 21 && payload <= 25) {
+        result = applyChestTrapExplosionPayload(box, messages);
     }
-    if (box && !result.fatal) box.tknown = true;
+    if (box && !result.fatal && !result.boxDestroyed) box.tknown = true;
     const message = trapMessage(...messages);
     return result.fatal || result.lifeSaving || result.more
         ? { message, ...result }
@@ -30678,13 +30773,15 @@ function lostShopMerchandiseChargesForObject(source, obj, defaultShkp, seen = ne
             shopItemPrice(obj, source.ox ?? game.u?.ux, source.oy ?? game.u?.uy));
     }
 
-    for (const child of globContents(obj)) {
-        const childCharges = lostShopMerchandiseChargesForObject(source, child, defaultShkp, seen, {
-            ...options,
-            topLevel: false,
-        });
-        for (const [shkp, value] of childCharges)
-            addLostShopMerchandiseCharge(charges, shkp, value);
+    if (options.includeContents !== false) {
+        for (const child of globContents(obj)) {
+            const childCharges = lostShopMerchandiseChargesForObject(source, child, defaultShkp, seen, {
+                ...options,
+                topLevel: false,
+            });
+            for (const [shkp, value] of childCharges)
+                addLostShopMerchandiseCharge(charges, shkp, value);
+        }
     }
     return charges;
 }
