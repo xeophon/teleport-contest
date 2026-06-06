@@ -42512,6 +42512,50 @@ test('command kicked war hammer harms ordinary monster and survives landing', as
     assert.equal(rngLog.some(entry => entry.startsWith('rn2(3)=') || entry.startsWith('rnl(4)=')), false);
 });
 
+test('command kicked blessed war hammer uses small-add and blessed damage without hard-landing break roll', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, { ulevel: 20, uluck: 10, uhitinc: 10, udaminc: 0 });
+    game.u.acurr.a[A_STR] = 10;
+    game.u.acurr.a[A_DEX] = 25;
+    game.u.weapon_skills = [];
+    setHeroWeaponSkill(P_HAMMER, P_BASIC);
+    const hammer = monsterWarHammer(512060, {
+        letter: undefined,
+        line: undefined,
+        ox: 6,
+        oy: 5,
+        blessed: true,
+    });
+    const vampire = ordinaryThrowTarget('vampire', 7, 5, {
+        mhp: 40,
+        mhpmax: 40,
+        data: { name: 'vampire', mlevel: 10, mlet: 'V', mac: 10 },
+    });
+    game.level.objects = [hammer];
+    game.level.monsters = [vampire];
+    enableRngLog({ reset: true });
+
+    await rhack('\x04');
+    await rhack('l');
+
+    const rngLog = getRngLog();
+    const baseDamage = rngValuesForCall(rngLog, 'rnd(4)')[0];
+    const blessedDamage = rngValuesForCall(rngLog, 'rnd(4)')[1];
+    assert.match(game._pending_message, /You kick a war hammer\./);
+    assert.match(game._pending_message, /The war hammer hits the vampire[.!]/);
+    assert.doesNotMatch(game._pending_message, /misses|gift|catches|shatters|Splat|You kill/);
+    assert.deepEqual(rngLog, [
+        'rnd(20)=14', 'rnd(4)=3', 'rnd(4)=1', 'rn2(19)=0',
+    ]);
+    assert.equal(vampire.mhp, 40 - (baseDamage + 1 + blessedDamage));
+    assert.equal(vampire.msleeping, 0);
+    assert.equal(game.level.objects.includes(hammer), true);
+    assert.equal(hammer.ox, 7);
+    assert.equal(hammer.oy, 5);
+    assert.equal(hammer.blessed, true);
+});
+
 test('command kicked blessed silver spear uses target-form bonuses without hard-landing break roll', async () => {
     installNonShopFloorState();
     initRng(2);
