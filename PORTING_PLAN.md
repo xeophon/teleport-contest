@@ -107,8 +107,9 @@ Detailed source-backed history is kept in `docs/c-parity-audit/`. This section i
 - Rolling-boulder path pit/hole floor effects are covered in audit 591.
 - Rolling-boulder path teleport effects are covered in audit 592.
 - Rolling-boulder path down-gate shipping is covered in audit 593.
+- Rolling-boulder path liquid floor effects are covered in audit 594.
 - Magic-marker write target `getobj()` suggested/downplayed selection is covered in audit 577.
-- Latest compact/source note: `docs/c-parity-audit/593-rolling-boulder-path-down-gates-2026-06-06.md`.
+- Latest compact/source note: `docs/c-parity-audit/594-rolling-boulder-path-liquid-floor-effects-2026-06-06.md`.
 - Latest verified public score: `44/44`.
 
 ## Current Priorities
@@ -136,8 +137,8 @@ Detailed source-backed history is kept in `docs/c-parity-audit/`. This section i
    - Compact candidates: direct monster-object hit follow-ups, remaining monster-thrown `passive_obj()` follow-ups, remaining monster-thrown/launcher-arrow `hits_bars()` object-class follow-ups beyond the covered dart, shuriken, sling rocks/gems/stones, plain daggers, crude/orcish daggers, silver daggers, ordinary knives, ordinary crossbow bolts, ordinary/dwarvish/silver/elven/orcish spears, and javelins, full monster diet flag generation, and broader `polymon()`/stoning interactions.
 
 5. Level, trap, terrain, save, and display foundations.
-   - Source notes: `docs/c-parity-audit/03-levelgen-specials-quest.md`, `docs/c-parity-audit/06-save-restore-bones.md`, `docs/c-parity-audit/07-traps-liquids-terrain.md`, `docs/c-parity-audit/08-display-rng-observation.md`, and latest compact note `docs/c-parity-audit/593-rolling-boulder-path-down-gates-2026-06-06.md`.
-   - Centralize special-level generation, saved-level/migration/timer state, trap/liquid/material-damage pipelines, glyph/discovery/redraw ordering, and RNG diagnostics. The next compact rolling-boulder candidate is generic path `flooreffects()` for water/lava after path traps and before chaining/doors/bars.
+   - Source notes: `docs/c-parity-audit/03-levelgen-specials-quest.md`, `docs/c-parity-audit/06-save-restore-bones.md`, `docs/c-parity-audit/07-traps-liquids-terrain.md`, `docs/c-parity-audit/08-display-rng-observation.md`, and latest compact note `docs/c-parity-audit/594-rolling-boulder-path-liquid-floor-effects-2026-06-06.md`.
+   - Centralize special-level generation, saved-level/migration/timer state, trap/liquid/material-damage pipelines, glyph/discovery/redraw ordering, and RNG diagnostics. Remaining compact rolling-boulder candidates include seen hole/trapdoor impact-drop side effects, launch-drop preservation, hero-triggered rolling-boulder rewriting, occupation/multi interruption, mounted-steed diversion, and final placement side effects.
    - Compact candidates: broader hero-on-liquid fallout and display/discovery ordering around object observation.
 
 6. Command, prompt, and menu contracts.

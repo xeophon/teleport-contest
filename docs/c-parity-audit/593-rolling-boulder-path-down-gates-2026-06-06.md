@@ -17,7 +17,7 @@ This slice does not use replay maps, hidden tests, fixed seeds, player names, mo
 ## JS Change
 
 - `js/cmd.js` now exports the existing `downGateAt()`, `impactDropFloorObjects()`, and `queueImpactDroppedObjects()` helpers so rolling boulders can share the same down-gate metadata and migration queue as projectile/drop paths.
-- `js/allmain.js` now checks down gates after rolling-boulder landmines and before teleport, pit/hole, boulder-chain, door, bars, and wall handling.
+- `js/allmain.js` now checks down gates after rolling-boulder collision handling and before landmines, teleport, pit/hole, boulder-chain, door, bars, and wall handling.
 - Down ladders always migrate the boulder off-level and clear `otrapped`.
 - Down stairs and branch/special stairs use the C-shaped `rn2(3)` no-drop roll; no-drop results keep the boulder rolling, while drop results queue reciprocal migration metadata.
 - Same-square seen holes/trap doors remain on the existing boulder-plug path for this slice; the C boulder exception can still knock floor piles through the gate and remains separate from stair/ladder shipping.
@@ -32,6 +32,6 @@ The tests use local stair, visibility, boulder, migration, and RNG fixtures. The
 
 ## Remaining Work
 
-- Generic rolling-path `flooreffects(singleobj, x, y, "fall")` after the trap switch remains open and should cover water/lava before boulder chaining, doors, bars, and final placement.
+- Generic rolling-path `flooreffects(singleobj, x, y, "fall")` water/lava coverage is handled in audit 594.
 - Seen hole/trapdoor boulder `ship_object()` impact-drop side effects before plugging remain separate from the stair/ladder down-gate path.
 - Broader `launch_obj()` parity still includes launch-drop preservation, hero-triggered rolling-boulder rewriting, occupation/multi interruption, and mounted-steed diversion.

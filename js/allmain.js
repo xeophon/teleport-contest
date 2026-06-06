@@ -11542,6 +11542,22 @@ function rollingBoulderApplyPitHoleFloorEffectsAt(x, y, movingBoulder) {
     return { handled: true, consumed };
 }
 
+function rollingBoulderApplyGenericFloorEffectsAt(x, y, movingBoulder) {
+    if (!movingBoulder) return { handled: false, consumed: false };
+    const messages = [];
+    const previousMonsterMoving = game._monster_moving;
+    game._monster_moving = 1;
+    let consumed = false;
+    try {
+        consumed = earthFloorEffects(movingBoulder, x, y, messages, 'fall');
+    } finally {
+        if (previousMonsterMoving === undefined) delete game._monster_moving;
+        else game._monster_moving = previousMonsterMoving;
+    }
+    for (const message of messages) addRollingBoulderMotionMessage(message);
+    return { handled: consumed, consumed };
+}
+
 function monsterRollingBoulderTrapEffect(mon, trap, { skipPetPostMoveRoll = false } = {}) {
     if (trap?.ttyp !== ROLLING_BOULDER_TRAP || monsterTrapHarmless(mon, trap)) return false;
     if (monsterAvoidsKnownTrapBeforeEffect(mon, trap)) return true;
@@ -11635,13 +11651,13 @@ function monsterRollingBoulderTrapEffect(mon, trap, { skipPetPostMoveRoll = fals
             } else {
                 rollingBoulderHitHeroAt(x, y, boulder);
             }
-            if (rollingBoulderTriggerLandmineAt(x, y)) {
-                boulder = null;
-                break;
-            }
             const downGate = rollingBoulderApplyDownGateAt(x, y, boulder);
             if (downGate.handled) {
                 if (downGate.consumed) boulder = null;
+                break;
+            }
+            if (rollingBoulderTriggerLandmineAt(x, y)) {
+                boulder = null;
                 break;
             }
             const teleport = rollingBoulderApplyTeleportTrapAt(x, y, boulder);
@@ -11656,6 +11672,11 @@ function monsterRollingBoulderTrapEffect(mon, trap, { skipPetPostMoveRoll = fals
                     finalX = x;
                     finalY = y;
                 }
+                break;
+            }
+            const floorEffects = rollingBoulderApplyGenericFloorEffectsAt(x, y, boulder);
+            if (floorEffects.handled) {
+                if (floorEffects.consumed) boulder = null;
                 break;
             }
             boulder = rollingBoulderChainIntoBoulderAt(x, y, dx, dy, dist - 1, boulder);

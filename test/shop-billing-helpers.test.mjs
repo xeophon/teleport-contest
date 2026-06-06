@@ -21724,6 +21724,120 @@ test('rolling boulder down stairs ships before same-square seen hole', () => {
     assert.equal(rngValuesForCall(getRngLog(), 'rnd(20)').length, 0);
 });
 
+test('rolling boulder down stairs ships before same-square land mine', () => {
+    const { trap, goblin } = installMonsterPitTrapState(ROLLING_BOULDER_TRAP, {
+        mhp: 50,
+        mhpmax: 50,
+        data: { mac: -10 },
+    });
+    installRollingBoulderPathDownGate({ x: 6, y: 3 });
+    const mine = { ttyp: LANDMINE, tx: 6, ty: 3, tseen: true, madeby_u: false };
+    game.level.traps.push(mine);
+    const boulder = installRollingBoulderTrapLaunch(trap, {
+        start: { x: 4, y: 3 },
+        end: { x: 8, y: 3 },
+    });
+    enableRngLog({ reset: true });
+    installCoreRngValues([0]);
+    markHeroNeighborhoodVisible();
+    markSquareVisible(6, 5);
+    for (let x = 4; x <= 8; x++) markSquareVisible(x, 3);
+
+    assert.equal(allmain.monsterRollingBoulderTrapEffectForTest(goblin, trap), true);
+
+    assert.match(game._pending_message || '', /Click!  The goblin triggers something\./);
+    assert.equal(game._topline_after_more, 'A boulder falls down the stairs.');
+    assert.equal(game.level.traps.includes(mine), true);
+    assert.equal(game.level.objects.includes(boulder), false);
+    assert.deepEqual(game._impact_drop_migrations?.get('0:2'), [boulder]);
+    assert.equal(boulder.owornmask, MIGR_STAIRS_UP);
+    assert.equal(trap.tseen, true);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rn2(3)'), [0]);
+    assert.equal(rngValuesForCall(getRngLog(), 'rn2(10)').length, 0);
+    assert.equal(rngValuesForCall(getRngLog(), 'rnd(20)').length, 0);
+});
+
+test('rolling boulder fills visible path pool and stops before downstream boulder', () => {
+    const { trap, goblin } = installMonsterPitTrapState(ROLLING_BOULDER_TRAP, {
+        mhp: 50,
+        mhpmax: 50,
+        data: { mac: -10 },
+    });
+    const poolLoc = game.level.at(6, 3);
+    Object.assign(poolLoc, { typ: POOL, roomno: ROOMOFFSET, lit: true, flags: 7 });
+    const blade = { ...dagger(31433), letter: undefined, line: undefined, ox: 6, oy: 3 };
+    const downstream = floorBoulder(31434, { ox: 7, oy: 3 });
+    game.level.objects.push(blade, downstream);
+    game.level.buriedobjlist = [];
+    const boulder = installRollingBoulderTrapLaunch(trap, {
+        start: { x: 4, y: 3 },
+        end: { x: 8, y: 3 },
+    });
+    enableRngLog({ reset: true });
+    installCoreRngValues([9, 0]);
+    markHeroNeighborhoodVisible();
+    markSquareVisible(6, 5);
+    for (let x = 4; x <= 8; x++) markSquareVisible(x, 3);
+
+    assert.equal(allmain.monsterRollingBoulderTrapEffectForTest(goblin, trap), true);
+
+    assert.match(game._pending_message || '', /Click!  The goblin triggers something\./);
+    assert.equal(game._topline_after_more, 'There is a large splash as the boulder fills the pool of water.');
+    assert.equal(poolLoc.typ, ROOM);
+    assert.equal(poolLoc.flags || 0, 0);
+    assert.equal(game.level.objects.includes(boulder), false);
+    assert.equal(game.level.objects.includes(blade), false);
+    assert.equal(game.level.buriedobjlist.includes(blade), true);
+    assert.equal(game.level.objects.includes(downstream), true);
+    assert.equal(downstream.ox, 7);
+    assert.equal(downstream.oy, 3);
+    assert.equal(trap.tseen, true);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rn2(10)'), [9]);
+    assert.equal(rngValuesForCall(getRngLog(), 'rnd(20)').length, 0);
+    assert.equal(rngValuesForCall(getRngLog(), 'rn2(20)').length, 0);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rn2(100)'), [0]);
+});
+
+test('rolling boulder sinks in visible path lava before bars lookahead', () => {
+    const { trap, goblin } = installMonsterPitTrapState(ROLLING_BOULDER_TRAP, {
+        mhp: 50,
+        mhpmax: 50,
+        data: { mac: -10 },
+    });
+    const lavaLoc = game.level.at(10, 3);
+    Object.assign(lavaLoc, { typ: LAVAPOOL, roomno: ROOMOFFSET, lit: true });
+    Object.assign(game.level.at(11, 3), { typ: IRONBARS, roomno: ROOMOFFSET, lit: true });
+    const boulder = installRollingBoulderTrapLaunch(trap, {
+        start: { x: 4, y: 3 },
+        end: { x: 11, y: 3 },
+    });
+    enableRngLog({ reset: true });
+    installCoreRngValues([1]);
+    markHeroNeighborhoodVisible();
+    markSquareVisible(6, 5);
+    for (let x = 4; x <= 11; x++) markSquareVisible(x, 3);
+
+    assert.equal(allmain.monsterRollingBoulderTrapEffectForTest(goblin, trap), true);
+
+    const messages = [
+        game._topline_after_more,
+        ...(game._queued_messages_after_more || []).map(entry => entry.text),
+    ].filter(Boolean).join('  ');
+
+    assert.match(game._pending_message || '', /Click!  The goblin triggers something\./);
+    assert.match(messages, /There is a large splash as the boulder falls into the molten lava\./);
+    assert.match(messages, /It sinks without a trace!/);
+    assert.equal(lavaLoc.typ, LAVAPOOL);
+    assert.equal(game.level.objects.includes(boulder), false);
+    assert.equal(trap.tseen, true);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rn2(10)'), [1]);
+    assert.equal(rngValuesForCall(getRngLog(), 'rn2(20)').length, 0);
+    assert.equal(rngValuesForCall(getRngLog(), 'rn2(100)').length, 0);
+    assert.equal(rngValuesForCall(getRngLog(), 'rnd(20)').length, 0);
+    assert.doesNotMatch(messages, /Whang!/);
+    assert.doesNotMatch(messages, /You are hit by molten lava/);
+});
+
 test('rolling boulder sets another boulder in motion', () => {
     const { trap, goblin } = installMonsterPitTrapState(ROLLING_BOULDER_TRAP, {
         mhp: 50,
