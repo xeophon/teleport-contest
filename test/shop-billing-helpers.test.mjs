@@ -21808,6 +21808,54 @@ test('hero rolling boulder monster hit fills impact-square pool before downstrea
     assert.equal(rngValuesForCall(getRngLog(), 'rn2(20)').length, 0);
 });
 
+test('hero rolling boulder monster hit clears no-charge at non-shop impact before shop final rest', async () => {
+    const { boulder } = installHeroRollingBoulderTrapState({
+        trapX: 6,
+        trapY: 4,
+        heroX: 5,
+        heroY: 4,
+        start: { x: 4, y: 3 },
+        end: { x: 8, y: 3 },
+        boulderAt: 'start',
+        boulderProps: { no_charge: true },
+    });
+    const shkp = makeShopkeeper(314740, 'Izchak', 8, 2);
+    game.level.rooms = [{ rtype: SHOPBASE, resident: shkp }];
+    game.level.monsters.push(shkp);
+    const goblin = dartTrapGoblin(314741, {
+        mx: 6,
+        my: 3,
+        mhp: 20,
+        mhpmax: 20,
+        data: { name: 'goblin', mlet: 'o', mac: -5 },
+    });
+    game.level.monsters.push(goblin);
+    const baseAt = game.level.at;
+    game.level.at = (x, y) => {
+        if ((x === 8 && y === 2) || (x === 8 && y === 3))
+            return { roomno: ROOMOFFSET, typ: ROOM, lit: true };
+        return baseAt(x, y);
+    };
+    enableRngLog({ reset: true });
+    installCoreRngValues([4, 4]);
+    markHeroNeighborhoodVisible();
+    for (let x = 4; x <= 8; x++) markSquareVisible(x, 3);
+    markSquareVisible(8, 2);
+
+    await rhack('l');
+
+    assert.equal(game._pending_message,
+        'Click!  You trigger a rolling boulder trap!  The boulder hits the goblin!');
+    assert.equal(goblin.mhp, 15);
+    assert.equal(boulder.ox, 8);
+    assert.equal(boulder.oy, 3);
+    assert.equal(boulder.no_charge, false);
+    assert.equal(boulder.unpaid || false, false);
+    assert.equal(shkp.billct, 0);
+    assert.deepEqual(shkp.bill, []);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rnd(20)'), [5, 5]);
+});
+
 test('hero rolling boulder passes harmlessly through rock-passing monster after hit roll', async () => {
     const { boulder } = installHeroRollingBoulderTrapState({
         trapX: 6,

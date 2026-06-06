@@ -47023,13 +47023,17 @@ function heroRollingBoulderNoChargeStillAppliesAt(x, y) {
     return false;
 }
 
+function applyHeroRollingBoulderPlaceObjectCleanupAt(x, y, boulder) {
+    if (boulder?.no_charge && !heroRollingBoulderNoChargeStillAppliesAt(x, y))
+        boulder.no_charge = false;
+}
+
 function placeHeroRollingBoulderAtRest(boulder, x, y) {
     if (!boulder) return;
     boulder.otrapped = 0;
     boulder.hidden = false;
     boulder.transientProjectile = false;
-    if (boulder.no_charge && !heroRollingBoulderNoChargeStillAppliesAt(x, y))
-        boulder.no_charge = false;
+    applyHeroRollingBoulderPlaceObjectCleanupAt(x, y, boulder);
     boulder.ox = x;
     boulder.oy = y;
     game.level.objects = (game.level?.objects || []).filter(obj => obj !== boulder);
@@ -47414,6 +47418,7 @@ function heroRollingBoulderDropThrowAfterMonsterHitAt(x, y, movingBoulder, mon, 
             keepMoving = false;
             return { handled: true, consumed: true };
         }
+        applyHeroRollingBoulderPlaceObjectCleanupAt(x, y, movingBoulder);
         applyHeroRollingBoulderHitPassiveObject(movingBoulder, mon, messages);
         return { handled: true, consumed: false };
     } finally {
