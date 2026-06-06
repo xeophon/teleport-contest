@@ -11268,6 +11268,17 @@ function rollingBoulderHitIronBars() {
     if (!heroIsDeafForMonsterNoise()) addRollingBoulderMotionMessage('Whang!');
 }
 
+function placeRollingBoulderAtRest(boulder, x, y) {
+    if (!boulder) return;
+    boulder.otrapped = 0;
+    boulder.hidden = false;
+    boulder.transientProjectile = false;
+    boulder.ox = x;
+    boulder.oy = y;
+    game.level.objects = (game.level?.objects || []).filter(obj => obj !== boulder);
+    game.level.objects.push(boulder);
+}
+
 function rollingBoulderChainIntoBoulderAt(x, y, dx, dy, remainingDistance, movingBoulder) {
     const chainedBoulder = (game.level?.objects || []).find(obj =>
         obj !== movingBoulder && !obj.transientProjectile && obj.otyp === BOULDER && obj.ox === x && obj.oy === y);
@@ -11285,9 +11296,8 @@ function rollingBoulderChainIntoBoulderAt(x, y, dx, dy, remainingDistance, movin
     }
 
     game.level.objects = (game.level?.objects || []).filter(obj => obj !== chainedBoulder);
-    movingBoulder.ox = x;
-    movingBoulder.oy = y;
-    game.level.objects.push(movingBoulder);
+    chainedBoulder.otrapped = movingBoulder?.otrapped || 0;
+    placeRollingBoulderAtRest(movingBoulder, x, y);
     newsym(x, y);
     return chainedBoulder;
 }
@@ -11600,12 +11610,20 @@ function monsterRollingBoulderTrapEffect(mon, trap, { skipPetPostMoveRoll = fals
         let finalX = end.x;
         let finalY = end.y;
         for (let dist = Math.max(Math.abs(end.x - start.x), Math.abs(end.y - start.y)); dist > 0; dist--) {
+            if (!isok(x + dx, y + dy)) {
+                finalX = x;
+                finalY = y;
+                break;
+            }
             x += dx;
             y += dy;
             const hit = (game.level?.monsters || []).find(other => other.mx === x && other.my === y);
             if (hit?.data?.throwsRocks && rn2(3)) {
                 if (!game.u?.blind && cansee(x, y))
                     addRollingBoulderMotionMessage(`${monsterDisplayName(hit)} snatches the boulder.`);
+                boulder.otrapped = 0;
+                boulder.hidden = false;
+                boulder.transientProjectile = false;
                 hit.minvent ??= [];
                 hit.minvent.push(boulder);
                 boulder = null;
@@ -11695,13 +11713,12 @@ function monsterRollingBoulderTrapEffect(mon, trap, { skipPetPostMoveRoll = fals
             if (nextLoc && (IS_STWALL(nextLoc.typ) || IS_TREE(nextLoc.typ))) {
                 finalX = x;
                 finalY = y;
+                if (!heroIsDeafForMonsterNoise()) addRollingBoulderMotionMessage('Thump!');
                 break;
             }
         }
         if (boulder) {
-            boulder.ox = finalX;
-            boulder.oy = finalY;
-            game.level.objects.push(boulder);
+            placeRollingBoulderAtRest(boulder, finalX, finalY);
             vision_reset();
             vision_recalc(0);
             newsym(finalX, finalY);

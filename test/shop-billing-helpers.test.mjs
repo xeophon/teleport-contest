@@ -8,7 +8,7 @@ import { game, resetGame } from '../js/gstate.js';
 import { pushKey, resetInputState } from '../js/input.js';
 import { createMonsterCorpseOrGlob, mkcorpstat, mkobj, mksobj, monsterByRndName } from '../js/mklev.js';
 import { enableDisplayRngLog, enableRngLog, getRngLog, initRng } from '../js/rng.js';
-import { A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_MAX, A_STR, A_WIS, ALLOW_TRAPS, ALTAR, AM_SHRINE, Align2amask, ANTI_MAGIC, ARROW_TRAP, BEAR_TRAP, BILLSZ, CANDLESHOP, CLOUD, CORPSTAT_HISTORIC, COULD_SEE, DART_TRAP, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, D_TRAPPED, FIRE_TRAP, FOUNTAIN, HOLE, ICE, ICED_POOL, IN_SIGHT, IRONBARS, LADDER, LANDMINE, LAVAPOOL, LEVEL_TELEP, MAGIC_PORTAL, MIGR_LADDER_UP, MIGR_RANDOM, MIGR_SSTAIRS, MIGR_STAIRS_UP, MOAT, MON_MIGRATING, M_AP_FURNITURE, M_AP_OBJECT, NORMAL_SPEED, P_AXE, P_BARE_HANDED_COMBAT, P_BASIC, P_DAGGER, P_EXPERT, P_KNIFE, P_PICK_AXE, P_RIDING, P_SABER, P_SKILLED, P_TWO_WEAPON_COMBAT, P_UNSKILLED, PIT, POLY_TRAP, POOL, REPAIR_DELAY, ROCKTRAP, ROLLING_BOULDER_TRAP, ROOM, ROOMOFFSET, SDOOR, SHOPBASE, SHOP_DOOR_COST, SINK, SLP_GAS_TRAP, SPIKED_PIT, SQKY_BOARD, STAIRS, STATUE_TRAP, STONE, STRAT_APPEARMSG, STRAT_WAITFORU, STRAT_WAITMASK, TELEP_TRAP, TEMPLE, TRAPDOOR, TT_BEARTRAP, TT_LAVA, TT_PIT, TT_WEB, WEB, W_ARMF, W_SADDLE } from '../js/const.js';
+import { A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_MAX, A_STR, A_WIS, ALLOW_TRAPS, ALTAR, AM_SHRINE, Align2amask, ANTI_MAGIC, ARROW_TRAP, BEAR_TRAP, BILLSZ, CANDLESHOP, CLOUD, CORPSTAT_HISTORIC, COULD_SEE, DART_TRAP, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, D_TRAPPED, FIRE_TRAP, FOUNTAIN, HOLE, ICE, ICED_POOL, IN_SIGHT, IRONBARS, LADDER, LANDMINE, LAVAPOOL, LEVEL_TELEP, MAGIC_PORTAL, MIGR_LADDER_UP, MIGR_RANDOM, MIGR_SSTAIRS, MIGR_STAIRS_UP, MOAT, MON_MIGRATING, M_AP_FURNITURE, M_AP_OBJECT, NORMAL_SPEED, P_AXE, P_BARE_HANDED_COMBAT, P_BASIC, P_DAGGER, P_EXPERT, P_KNIFE, P_PICK_AXE, P_RIDING, P_SABER, P_SKILLED, P_TWO_WEAPON_COMBAT, P_UNSKILLED, PIT, POLY_TRAP, POOL, REPAIR_DELAY, ROCKTRAP, ROLLING_BOULDER_TRAP, ROOM, ROOMOFFSET, SDOOR, SHOPBASE, SHOP_DOOR_COST, SINK, SLP_GAS_TRAP, SPIKED_PIT, SQKY_BOARD, STAIRS, STATUE_TRAP, STONE, STRAT_APPEARMSG, STRAT_WAITFORU, STRAT_WAITMASK, TELEP_TRAP, TEMPLE, TRAPDOOR, TREE, TT_BEARTRAP, TT_LAVA, TT_PIT, TT_WEB, WEB, W_ARMF, W_SADDLE } from '../js/const.js';
 import { currentFruitId, setCurrentFruitName } from '../js/fruit.js';
 import { CLR_BRIGHT_MAGENTA, CLR_BROWN, CLR_WHITE } from '../js/terminal.js';
 import { TRIBUTE_DEATH_QUOTES } from '../js/tribute.js';
@@ -21400,6 +21400,95 @@ test('deaf hero gets silent rolling boulder iron bars impact', () => {
     assert.equal(trap.tseen, true);
     assert.deepEqual(rngValuesForCall(getRngLog(), 'rn2(20)'), [0]);
     assert.deepEqual(rngValuesForCall(getRngLog(), 'rn2(100)'), [13]);
+    assert.equal(rngValuesForCall(getRngLog(), 'rnd(20)').length, 0);
+});
+
+test('rolling boulder thumps before wall and rests on top of pile', () => {
+    const { trap, goblin } = installMonsterPitTrapState(ROLLING_BOULDER_TRAP, {
+        mhp: 50,
+        mhpmax: 50,
+        data: { mac: -10 },
+    });
+    const boulder = installRollingBoulderTrapLaunch(trap, {
+        start: { x: 4, y: 3 },
+        end: { x: 8, y: 3 },
+    });
+    const blade = { ...dagger(31435), letter: undefined, line: undefined, ox: 6, oy: 3 };
+    game.level.objects.push(blade);
+    const baseAt = game.level.at;
+    game.level.at = (x, y) => (x === 7 && y === 3) ? { roomno: 0, typ: STONE, lit: true } : baseAt(x, y);
+    enableRngLog({ reset: true });
+    markHeroNeighborhoodVisible();
+    for (let x = 4; x <= 8; x++) markSquareVisible(x, 3);
+
+    assert.equal(allmain.monsterRollingBoulderTrapEffectForTest(goblin, trap), true);
+
+    assert.match(game._pending_message || '', /Click!  The goblin triggers something\./);
+    assert.equal(game._topline_after_more, 'Thump!');
+    assert.equal(boulder.ox, 6);
+    assert.equal(boulder.oy, 3);
+    assert.equal(game.level.objects.includes(blade), true);
+    assert.equal(game.level.objects.at(-1), boulder);
+    assert.equal(rngValuesForCall(getRngLog(), 'rn2(20)').length, 0);
+    assert.equal(rngValuesForCall(getRngLog(), 'rnd(20)').length, 0);
+});
+
+test('deaf rolling boulder stops before tree and clears launch metadata', () => {
+    const { trap, goblin } = installMonsterPitTrapState(ROLLING_BOULDER_TRAP, {
+        mhp: 50,
+        mhpmax: 50,
+        data: { mac: -10 },
+    });
+    const boulder = installRollingBoulderTrapLaunch(trap, {
+        start: { x: 4, y: 3 },
+        end: { x: 8, y: 3 },
+    });
+    Object.assign(boulder, { hidden: true, otrapped: 1 });
+    const baseAt = game.level.at;
+    game.level.at = (x, y) => (x === 7 && y === 3) ? { roomno: 0, typ: TREE, lit: true } : baseAt(x, y);
+    enableRngLog({ reset: true });
+    game.u._statusSuffix = ' Deaf';
+    markHeroNeighborhoodVisible();
+    for (let x = 4; x <= 8; x++) markSquareVisible(x, 3);
+
+    assert.equal(allmain.monsterRollingBoulderTrapEffectForTest(goblin, trap), true);
+
+    assert.match(game._pending_message || '', /The goblin triggers something\./);
+    assert.doesNotMatch(game._pending_message || '', /Click!/);
+    assert.equal(game._topline_after_more || '', '');
+    assert.equal(boulder.ox, 6);
+    assert.equal(boulder.oy, 3);
+    assert.equal(boulder.hidden, false);
+    assert.equal(boulder.transientProjectile, false);
+    assert.equal(boulder.otrapped, 0);
+    assert.equal(game.level.objects.at(-1), boulder);
+});
+
+test('rolling boulder out-of-bounds guard stops at last valid square', () => {
+    const { trap, goblin } = installMonsterPitTrapState(ROLLING_BOULDER_TRAP, {
+        mhp: 50,
+        mhpmax: 50,
+        data: { mac: -10 },
+    });
+    const boulder = installRollingBoulderTrapLaunch(trap, {
+        start: { x: 2, y: 3 },
+        end: { x: 0, y: 3 },
+    });
+    Object.assign(boulder, { hidden: true, otrapped: 1 });
+    enableRngLog({ reset: true });
+    markHeroNeighborhoodVisible();
+    markSquareVisible(2, 3);
+    markSquareVisible(1, 3);
+
+    assert.equal(allmain.monsterRollingBoulderTrapEffectForTest(goblin, trap), true);
+
+    assert.match(game._pending_message || '', /Click!  The goblin triggers something\./);
+    assert.equal(boulder.ox, 1);
+    assert.equal(boulder.oy, 3);
+    assert.equal(boulder.hidden, false);
+    assert.equal(boulder.transientProjectile, false);
+    assert.equal(boulder.otrapped, 0);
+    assert.equal(game.level.objects.at(-1), boulder);
     assert.equal(rngValuesForCall(getRngLog(), 'rnd(20)').length, 0);
 });
 
