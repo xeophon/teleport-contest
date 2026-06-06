@@ -37,6 +37,6 @@ These tests drive the real extended command input, assert exact prompt text, RNG
 
 ## Remaining Work
 
-- Box/chest trap side effects are still partial: the C `chest_trap()` effects are not fully modeled by this slice.
+- Box/chest trap side effects are still partial: the failed-disarm one-shot trap state is covered in `565-untrap-box-one-shot-failure-2026-06-06.md`, but full C `chest_trap()` effects are not fully modeled.
 - The adjacent-boulder `Passes_walls` exception is covered separately in `563-untrap-web-boulder-passwalls-2026-06-06.md`.
 - Reach-floor and tight-diagonal web-untrap gates are covered separately in `564-untrap-web-reach-diagonal-2026-06-06.md`.

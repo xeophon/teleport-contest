@@ -21125,9 +21125,32 @@ test('#untrap current-square box only checks box for traps', async () => {
     assert.equal(game.context.move, 1);
 });
 
+test('#untrap failed known-box disarm consumes the one-shot trap', async () => {
+    setupUntrapDestinationWeb([], { rng: [74, 0] });
+    game.level.traps = [];
+    const box = shopFloorContainer(881005);
+    Object.assign(box, { otrapped: true, tknown: true, dknown: true });
+    game.level.objects = [box];
+
+    await enterUntrapDirection();
+    await rhack('.');
+
+    assert.equal(game._command_mode, 'untrapBoxConfirm');
+    assert.equal(game._pending_message, 'Disarm this large box? [ynq] (q)');
+
+    await rhack('y');
+
+    assert.equal(game._command_mode, null);
+    assert.deepEqual(getRngLog(), ['rnd(75)=75', 'rn2(19)=0']);
+    assert.equal(game._pending_message, 'You set it off!');
+    assert.equal(box.otrapped, false);
+    assert.equal(box.tknown, true);
+    assert.equal(game.context.move, 1);
+});
+
 test('#untrap current-square web ignores ice boxes for web container prompt', async () => {
     const web = setupUntrapDestinationWeb([], { webX: 5, webY: 5, rng: [0] });
-    game.level.objects = [shopFloorIceBox(881005)];
+    game.level.objects = [shopFloorIceBox(881006)];
 
     await enterUntrapDirection();
     await rhack('.');
@@ -21155,7 +21178,7 @@ test('#untrap adjacent web is unreachable while levitating', async () => {
 
 test('#untrap current-square web and box are unreachable while mounted unskilled', async () => {
     const web = setupUntrapDestinationWeb([], { webX: 5, webY: 5, rng: [0] });
-    const box = shopFloorContainer(881006);
+    const box = shopFloorContainer(881007);
     game.level.objects = [box];
     mountBearTrapPony();
     setHeroWeaponSkill(P_RIDING, P_UNSKILLED);
@@ -21243,7 +21266,7 @@ test('#untrap tight diagonal web remains reachable for light small heroes', asyn
 
 test('#untrap adjacent web is blocked by a boulder for ordinary heroes', async () => {
     const web = setupUntrapDestinationWeb([], { rng: [0] });
-    game.level.objects = [floorBoulder(881007, { ox: 6, oy: 5 })];
+    game.level.objects = [floorBoulder(881008, { ox: 6, oy: 5 })];
 
     await enterUntrapDirection();
     await rhack('l');
@@ -21258,7 +21281,7 @@ test('#untrap adjacent web is blocked by a boulder for ordinary heroes', async (
 test('#untrap adjacent web boulder does not block pass-wall heroes', async () => {
     const web = setupUntrapDestinationWeb([], { rng: [0] });
     game.u._polyself_form = { name: 'xorn', passWalls: true };
-    game.level.objects = [floorBoulder(881008, { ox: 6, oy: 5 })];
+    game.level.objects = [floorBoulder(881009, { ox: 6, oy: 5 })];
 
     await enterUntrapDirection();
     await rhack('l');

@@ -614,6 +614,8 @@ function disarmUntrapBox(box, confused) {
     if (box?.otrapped) {
         const difficulty = 75 + Math.trunc(level_difficulty() / 2);
         if (confused || heroIsFumbling() || rnd(difficulty) > untrapBoxDisarmChance()) {
+            box.otrapped = false;
+            box.tknown = true;
             exerciseAttribute(A_DEX, true);
             return 'You set it off!';
         }

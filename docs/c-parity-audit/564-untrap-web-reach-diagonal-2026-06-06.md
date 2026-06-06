@@ -33,4 +33,4 @@ These tests drive the real extended command input, assert exact no-RNG/no-turn b
 
 ## Remaining Work
 
-- Box/chest trap side effects are still partial and tracked in `562-untrap-current-square-containers-2026-06-06.md`.
+- Box/chest trap side effects are still partial and tracked in `562-untrap-current-square-containers-2026-06-06.md`; failed-disarm one-shot trap state is covered in `565-untrap-box-one-shot-failure-2026-06-06.md`.
