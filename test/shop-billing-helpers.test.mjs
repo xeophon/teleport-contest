@@ -38175,6 +38175,64 @@ test('blunt force wakes nearby sleepers without anger or paralysis cleanup', () 
     assert.equal(farSleeper.msleeping, 1);
 });
 
+test('blunt force wakes visible apparent mimics without revealing disguise', () => {
+    installCommandShopState();
+    game.u.blind = false;
+    game.u.ulevel = 1;
+    const weapon = wieldedWeapon(61530, 'mace', 'm');
+    const sleeper = sleepingMonster('orc', 6, 5);
+    const objectMimic = sleepingMonster('large mimic', 7, 5);
+    objectMimic.m_ap_type = M_AP_OBJECT;
+    objectMimic.appearObj = 215;
+    objectMimic.appearGlyph = '(';
+    objectMimic.appearColor = CLR_BROWN;
+    objectMimic.mstrategy = STRAT_WAITFORU;
+    objectMimic.waiting = true;
+    const furnitureMimic = sleepingMonster('large mimic', 6, 6);
+    furnitureMimic.m_ap_type = M_AP_FURNITURE;
+    furnitureMimic.appearGlyph = '{';
+    furnitureMimic.appearColor = CLR_WHITE;
+    furnitureMimic.mstrategy = STRAT_WAITFORU;
+    furnitureMimic.waiting = true;
+    game.inventory = [weapon];
+    game.level.monsters.push(sleeper, objectMimic, furnitureMimic);
+    markSquareVisible(6, 5);
+    markSquareVisible(7, 5);
+    markSquareVisible(6, 6);
+
+    const result = processForceLockOccupationTick({
+        chest: shopFloorContainer(61531),
+        weapon,
+        picktyp: false,
+        chance: 0,
+    });
+
+    assert.equal(result.stop, false);
+    assert.deepEqual(result.messages, [
+        'The orc wakes up.',
+        'The large mimic wakes up.',
+        'The large mimic wakes up.',
+    ]);
+    assert.equal(sleeper.msleeping, 0);
+    assert.equal(objectMimic.msleeping, 0);
+    assert.equal(objectMimic.m_ap_type, M_AP_OBJECT);
+    assert.equal(objectMimic.appearObj, 215);
+    assert.equal(objectMimic.appearGlyph, '(');
+    assert.equal(objectMimic.appearColor, CLR_BROWN);
+    assert.equal(objectMimic.mcanmove, false);
+    assert.equal(objectMimic.mfrozen, 3);
+    assert.equal(objectMimic.mstrategy, 0);
+    assert.equal(objectMimic.waiting, false);
+    assert.equal(furnitureMimic.msleeping, 0);
+    assert.equal(furnitureMimic.m_ap_type, M_AP_FURNITURE);
+    assert.equal(furnitureMimic.appearGlyph, '{');
+    assert.equal(furnitureMimic.appearColor, CLR_WHITE);
+    assert.equal(furnitureMimic.mcanmove, false);
+    assert.equal(furnitureMimic.mfrozen, 3);
+    assert.equal(furnitureMimic.mstrategy, 0);
+    assert.equal(furnitureMimic.waiting, false);
+});
+
 test('blunt force disturbs nearby buried zombie corpse timers', () => {
     installCommandShopState();
     game.moves = 100;
