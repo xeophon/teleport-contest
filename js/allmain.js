@@ -11289,6 +11289,30 @@ function rollingBoulderHitIronBars() {
     if (!heroIsDeafForMonsterNoise()) addRollingBoulderMotionMessage('Whang!');
 }
 
+function rollingBoulderChainIntoBoulderAt(x, y, dx, dy, remainingDistance, movingBoulder) {
+    const chainedBoulder = (game.level?.objects || []).find(obj =>
+        obj !== movingBoulder && !obj.transientProjectile && obj.otyp === BOULDER && obj.ox === x && obj.oy === y);
+    if (!chainedBoulder) return movingBoulder;
+
+    const fx = x + dx;
+    const fy = y + dy;
+    const nextLoc = isok(fx, fy) ? game.level?.at(fx, fy) : null;
+    const suffix = (!isok(fx, fy) || remainingDistance <= 0 || IS_OBSTRUCTED(nextLoc?.typ ?? ROOM))
+        ? ' as one boulder hits another'
+        : ' as one boulder sets another in motion';
+    if (!heroIsDeafForMonsterNoise()) {
+        const visible = !game.u?.blind && cansee(x, y);
+        addRollingBoulderMotionMessage(`You hear a loud crash${visible ? suffix : ''}!`);
+    }
+
+    game.level.objects = (game.level?.objects || []).filter(obj => obj !== chainedBoulder);
+    movingBoulder.ox = x;
+    movingBoulder.oy = y;
+    game.level.objects.push(movingBoulder);
+    newsym(x, y);
+    return chainedBoulder;
+}
+
 function monsterRollingBoulderTrapEffect(mon, trap, { skipPetPostMoveRoll = false } = {}) {
     if (trap?.ttyp !== ROLLING_BOULDER_TRAP || monsterTrapHarmless(mon, trap)) return false;
     if (monsterAvoidsKnownTrapBeforeEffect(mon, trap)) return true;
@@ -11380,6 +11404,7 @@ function monsterRollingBoulderTrapEffect(mon, trap, { skipPetPostMoveRoll = fals
                     }
                 }
             }
+            boulder = rollingBoulderChainIntoBoulderAt(x, y, dx, dy, dist - 1, boulder);
             rollingBoulderBreakClosedDoorAt(x, y, dist - 1);
             const nextLoc = dist > 1 ? game.level?.at(x + dx, y + dy) : null;
             if (nextLoc?.typ === IRONBARS) {

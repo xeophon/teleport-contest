@@ -29,4 +29,4 @@ The tests use local trap, boulder, iron-bars terrain, visibility/status, and RNG
 
 ## Remaining Work
 
-- Full `launch_obj()` parity remains broader trap/terrain work: hero collision along the rolling path, path trap effects, boulder chaining, launch-drop preservation, and floor-effect integration.
+- Full `launch_obj()` parity remains broader trap/terrain work: hero collision along the rolling path, path trap effects, launch-drop preservation, and floor-effect integration. Boulder chaining is covered in audit 588.

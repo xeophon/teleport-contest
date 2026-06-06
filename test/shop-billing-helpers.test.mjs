@@ -21247,6 +21247,141 @@ test('deaf hero gets silent rolling boulder iron bars impact', () => {
     assert.equal(rngValuesForCall(getRngLog(), 'rnd(20)').length, 0);
 });
 
+test('rolling boulder sets another boulder in motion', () => {
+    const { trap, goblin } = installMonsterPitTrapState(ROLLING_BOULDER_TRAP, {
+        mhp: 50,
+        mhpmax: 50,
+        data: { mac: -10 },
+    });
+    game.u.ux = 6;
+    game.u.uy = 4;
+    const first = installRollingBoulderTrapLaunch(trap, {
+        start: { x: 4, y: 3 },
+        end: { x: 8, y: 3 },
+    });
+    const second = floorBoulder(31429, { ox: 6, oy: 3 });
+    game.level.objects.push(second);
+    enableRngLog({ reset: true });
+    markHeroNeighborhoodVisible();
+    for (let x = 4; x <= 8; x++) markSquareVisible(x, 3);
+
+    assert.equal(allmain.monsterRollingBoulderTrapEffectForTest(goblin, trap), true);
+
+    assert.match(game._pending_message || '', /Click!  The goblin triggers something\./);
+    assert.equal(game._topline_after_more, 'You hear a loud crash as one boulder sets another in motion!');
+    assert.equal(first.ox, 6);
+    assert.equal(first.oy, 3);
+    assert.equal(second.ox, 8);
+    assert.equal(second.oy, 3);
+    assert.equal(game.level.objects.includes(first), true);
+    assert.equal(game.level.objects.includes(second), true);
+    assert.equal(trap.tseen, true);
+    assert.equal(rngValuesForCall(getRngLog(), 'rnd(20)').length, 0);
+    assert.equal(rngValuesForCall(getRngLog(), 'rn2(20)').length, 0);
+});
+
+test('rolling boulder hits another boulder at final square', () => {
+    const { trap, goblin } = installMonsterPitTrapState(ROLLING_BOULDER_TRAP, {
+        mhp: 50,
+        mhpmax: 50,
+        data: { mac: -10 },
+    });
+    game.u.ux = 6;
+    game.u.uy = 4;
+    const first = installRollingBoulderTrapLaunch(trap, {
+        start: { x: 4, y: 3 },
+        end: { x: 6, y: 3 },
+    });
+    const second = floorBoulder(31430, { ox: 6, oy: 3 });
+    game.level.objects.push(second);
+    enableRngLog({ reset: true });
+    markHeroNeighborhoodVisible();
+    for (let x = 4; x <= 6; x++) markSquareVisible(x, 3);
+
+    assert.equal(allmain.monsterRollingBoulderTrapEffectForTest(goblin, trap), true);
+
+    assert.match(game._pending_message || '', /Click!  The goblin triggers something\./);
+    assert.equal(game._topline_after_more, 'You hear a loud crash as one boulder hits another!');
+    assert.equal(first.ox, 6);
+    assert.equal(first.oy, 3);
+    assert.equal(second.ox, 6);
+    assert.equal(second.oy, 3);
+    assert.equal(game.level.objects.includes(first), true);
+    assert.equal(game.level.objects.includes(second), true);
+    assert.equal(trap.tseen, true);
+    assert.equal(rngValuesForCall(getRngLog(), 'rnd(20)').length, 0);
+    assert.equal(rngValuesForCall(getRngLog(), 'rn2(20)').length, 0);
+});
+
+test('rolling boulder chain before iron bars reports motion then bars impact', () => {
+    const { trap, goblin } = installMonsterPitTrapState(ROLLING_BOULDER_TRAP, {
+        mhp: 50,
+        mhpmax: 50,
+        data: { mac: -10 },
+    });
+    game.u.ux = 6;
+    game.u.uy = 4;
+    const first = installRollingBoulderTrapLaunch(trap, {
+        start: { x: 4, y: 3 },
+        end: { x: 8, y: 3 },
+    });
+    const second = floorBoulder(31432, { ox: 6, oy: 3 });
+    game.level.objects.push(second);
+    const baseAt = game.level.at;
+    game.level.at = (x, y) => (x === 7 && y === 3) ? { roomno: 0, typ: IRONBARS, lit: true } : baseAt(x, y);
+    enableRngLog({ reset: true });
+    installCoreRngValues([19, 42]);
+    markHeroNeighborhoodVisible();
+    for (let x = 4; x <= 8; x++) markSquareVisible(x, 3);
+
+    assert.equal(allmain.monsterRollingBoulderTrapEffectForTest(goblin, trap), true);
+
+    assert.match(game._pending_message || '', /Click!  The goblin triggers something\./);
+    assert.equal(game._topline_after_more, 'You hear a loud crash as one boulder sets another in motion!  Whang!');
+    assert.equal(first.ox, 6);
+    assert.equal(first.oy, 3);
+    assert.equal(second.ox, 6);
+    assert.equal(second.oy, 3);
+    assert.equal(game.level.objects.includes(first), true);
+    assert.equal(game.level.objects.includes(second), true);
+    assert.equal(trap.tseen, true);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rn2(20)'), [19]);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rn2(100)'), [42]);
+    assert.equal(rngValuesForCall(getRngLog(), 'rnd(20)').length, 0);
+});
+
+test('deaf hero gets no rolling boulder chain crash sound', () => {
+    const { trap, goblin } = installMonsterPitTrapState(ROLLING_BOULDER_TRAP, {
+        mhp: 50,
+        mhpmax: 50,
+        data: { mac: -10 },
+    });
+    game.u.ux = 6;
+    game.u.uy = 4;
+    const first = installRollingBoulderTrapLaunch(trap, {
+        start: { x: 4, y: 3 },
+        end: { x: 8, y: 3 },
+    });
+    const second = floorBoulder(31431, { ox: 6, oy: 3 });
+    game.level.objects.push(second);
+    enableRngLog({ reset: true });
+    game.u._statusSuffix = ' Deaf';
+    markHeroNeighborhoodVisible();
+    for (let x = 4; x <= 8; x++) markSquareVisible(x, 3);
+
+    assert.equal(allmain.monsterRollingBoulderTrapEffectForTest(goblin, trap), true);
+
+    assert.match(game._pending_message || '', /The goblin triggers something\./);
+    assert.doesNotMatch(game._pending_message || '', /Click!/);
+    assert.equal(game._topline_after_more || '', '');
+    assert.equal(first.ox, 6);
+    assert.equal(first.oy, 3);
+    assert.equal(second.ox, 8);
+    assert.equal(second.oy, 3);
+    assert.equal(trap.tseen, true);
+    assert.equal(rngValuesForCall(getRngLog(), 'rnd(20)').length, 0);
+});
+
 test('rolling boulder hit roll includes boulder hit adjustment', () => {
     const { trap, goblin } = installMonsterPitTrapState(ROLLING_BOULDER_TRAP, {
         mhp: 20,
