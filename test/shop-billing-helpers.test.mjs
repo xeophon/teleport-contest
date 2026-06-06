@@ -21852,6 +21852,224 @@ test('#untrap known-box fatal electric payload enters death more', async () => {
     assert.equal(game.context.move || 0, 0);
 });
 
+test('#untrap known-box fire payload burns hero without burning floor objects', async () => {
+    setupUntrapDestinationWeb([], { rng: [74, 0, 1, 9, 3, 3, 3, 3, 0, 1, 4, 0] });
+    game.u.fireResistance = false;
+    game.u.uinvulnerable = false;
+    game.level.traps = [];
+    const box = shopFloorContainer(881043);
+    Object.assign(box, {
+        otrapped: true,
+        tknown: true,
+        dknown: true,
+        cknown: false,
+    });
+    const floorScroll = scrollOfCharging(881044, 's');
+    delete floorScroll.letter;
+    delete floorScroll.line;
+    game.level.objects = [box, floorScroll];
+
+    await enterUntrapDirection();
+    await rhack('.');
+
+    assert.equal(game._command_mode, 'untrapBoxConfirm');
+    assert.equal(game._pending_message, 'Disarm this large box? [ynq] (q)');
+
+    await rhack('y');
+
+    assert.equal(game._command_mode, null);
+    assert.deepEqual(getRngLog(), [
+        'rnd(75)=75',
+        'rn2(13)=0',
+        'rn2(20)=1',
+        'rn2(13)=9',
+        'd(2,4)=8',
+        'd(2,4)=8',
+        'rn2(9)=0',
+        'rn2(5)=1',
+        'rn2(5)=4',
+        'rn2(19)=0',
+    ]);
+    assert.equal(game._pending_message, 'You set it off!  A tower of flame bursts from the large box!');
+    assert.equal(box.otrapped, false);
+    assert.equal(box.tknown, true);
+    assert.equal(game.level.objects.includes(floorScroll), true);
+    assert.equal(game.u.uhp, 12);
+    assert.equal(game.u.uhpmax, 20);
+    assert.equal(game.context.move, 1);
+});
+
+test('#untrap known-box fire payload respects fire resistance', async () => {
+    setupUntrapDestinationWeb([], { rng: [74, 0, 1, 9, 3, 3, 0, 1, 4, 0] });
+    game.u.fireResistance = true;
+    game.u.uinvulnerable = false;
+    game.level.traps = [];
+    const box = shopFloorContainer(881045);
+    Object.assign(box, {
+        otrapped: true,
+        tknown: true,
+        dknown: true,
+        cknown: false,
+    });
+    game.level.objects = [box];
+
+    await enterUntrapDirection();
+    await rhack('.');
+
+    assert.equal(game._command_mode, 'untrapBoxConfirm');
+    assert.equal(game._pending_message, 'Disarm this large box? [ynq] (q)');
+
+    await rhack('y');
+
+    assert.equal(game._command_mode, null);
+    assert.deepEqual(getRngLog(), [
+        'rnd(75)=75',
+        'rn2(13)=0',
+        'rn2(20)=1',
+        'rn2(13)=9',
+        'd(2,4)=8',
+        'rn2(2)=0',
+        'rn2(5)=1',
+        'rn2(5)=4',
+        'rn2(19)=0',
+    ]);
+    assert.equal(game._pending_message, 'You set it off!  A tower of flame bursts from the large box!  You are uninjured.');
+    assert.equal(box.otrapped, false);
+    assert.equal(box.tknown, true);
+    assert.equal(game.u.uhp, 20);
+    assert.equal(game.context.move, 1);
+});
+
+test('#untrap known-box fire payload can burn carried scrolls', async () => {
+    const scroll = scrollOfCharging(881046, 's');
+    setupUntrapDestinationWeb([scroll], { rng: [74, 0, 1, 9, 3, 3, 1, 1, 0, 1, 4, 0, 0] });
+    game.u.fireResistance = false;
+    game.u.uinvulnerable = false;
+    game.level.traps = [];
+    const box = shopFloorContainer(881046);
+    Object.assign(box, {
+        otrapped: true,
+        tknown: true,
+        dknown: true,
+        cknown: false,
+    });
+    game.level.objects = [box];
+
+    await enterUntrapDirection();
+    await rhack('.');
+
+    assert.equal(game._command_mode, 'untrapBoxConfirm');
+    assert.equal(game._pending_message, 'Disarm this large box? [ynq] (q)');
+
+    await rhack('y');
+
+    assert.equal(game._command_mode, null);
+    assert.deepEqual(getRngLog(), [
+        'rnd(75)=75',
+        'rn2(13)=0',
+        'rn2(20)=1',
+        'rn2(13)=9',
+        'd(2,4)=8',
+        'd(2,4)=4',
+        'rn2(5)=0',
+        'rn2(5)=1',
+        'rn2(5)=4',
+        'rn2(3)=0',
+        'rn2(19)=0',
+    ]);
+    assert.equal(game._pending_message, 'You set it off!  A tower of flame bursts from the large box!  Your scroll of charging catches fire and burns!');
+    assert.equal(box.otrapped, false);
+    assert.equal(box.tknown, true);
+    assert.equal(game.inventory.includes(scroll), false);
+    assert.equal(game.u.uhp, 15);
+    assert.equal(game.context.move, 1);
+});
+
+test('#untrap known-box fatal fire payload enters death more', async () => {
+    setupUntrapDestinationWeb([], { rng: [74, 0, 1, 9, 3, 3, 3, 3, 0] });
+    game.u.uhp = 5;
+    game.u.fireResistance = false;
+    game.u.uinvulnerable = false;
+    game.level.traps = [];
+    const box = shopFloorContainer(881047);
+    Object.assign(box, {
+        otrapped: true,
+        tknown: true,
+        dknown: true,
+        cknown: false,
+    });
+    game.level.objects = [box];
+
+    await enterUntrapDirection();
+    await rhack('.');
+
+    assert.equal(game._command_mode, 'untrapBoxConfirm');
+    assert.equal(game._pending_message, 'Disarm this large box? [ynq] (q)');
+
+    await rhack('y');
+
+    assert.equal(game._command_mode, 'deathDieMore');
+    const fatalLog = getRngLog();
+    assert.deepEqual(fatalLog.slice(0, 7), [
+        'rnd(75)=75',
+        'rn2(13)=0',
+        'rn2(20)=1',
+        'rn2(13)=9',
+        'd(2,4)=8',
+        'd(2,4)=8',
+        'rn2(9)=0',
+    ]);
+    assert.equal(fatalLog.some(entry => rngCallName(entry) === 'rn2(19)'), false);
+    assert.equal(game._pending_message, 'You set it off!  A tower of flame bursts from the large box!  You die...');
+    assert.equal(box.otrapped, false);
+    assert.equal(box.tknown, false);
+    assert.equal(game.u.uhp, 0);
+    assert.equal(game._death_cause, 'killed by a tower of flame');
+    assert.equal(game.context.move || 0, 0);
+});
+
+test('#untrap known-box fire payload on pool releases steam', async () => {
+    setupUntrapDestinationWeb([], { rng: [74, 0, 1, 9, 3, 3, 2, 0] });
+    game.u.fireResistance = false;
+    game.u.uinvulnerable = false;
+    game.level.traps = [];
+    const cells = new Map();
+    cells.set('5,5', { roomno: 0, typ: POOL });
+    game.level.at = (x, y) => cells.get(`${x},${y}`) || { roomno: 0, typ: ROOM };
+    const box = shopFloorContainer(881048);
+    Object.assign(box, {
+        otrapped: true,
+        tknown: true,
+        dknown: true,
+        cknown: false,
+    });
+    game.level.objects = [box];
+
+    await enterUntrapDirection();
+    await rhack('.');
+
+    assert.equal(game._command_mode, 'untrapBoxConfirm');
+    assert.equal(game._pending_message, 'Disarm this large box? [ynq] (q)');
+
+    await rhack('y');
+
+    assert.equal(game._command_mode, null);
+    assert.deepEqual(getRngLog(), [
+        'rnd(75)=75',
+        'rn2(13)=0',
+        'rn2(20)=1',
+        'rn2(13)=9',
+        'd(2,4)=8',
+        'rnd(3)=3',
+        'rn2(19)=0',
+    ]);
+    assert.equal(game._pending_message, 'You set it off!  A cascade of steamy bubbles erupts from the large box!');
+    assert.equal(box.otrapped, false);
+    assert.equal(box.tknown, true);
+    assert.equal(game.u.uhp, 17);
+    assert.equal(game.context.move, 1);
+});
+
 test('#untrap known-box poisoned needle payload drains constitution', async () => {
     setupUntrapDestinationWeb([], { rng: [74, 0, 0, 13, 1, 1, 1, 0] });
     game.u.poisonResistance = false;

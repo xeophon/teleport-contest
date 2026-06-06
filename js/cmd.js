@@ -729,6 +729,68 @@ function applyChestTrapElectricPayload(messages) {
     return { fatal: true, more: true };
 }
 
+function heroHasFireResistance() {
+    if (game.u?.fireResistance) return true;
+    return (game.inventory || []).some(item => activeInventoryResistanceKind(item) === 'fire');
+}
+
+function chestTrapBoxInPool(box) {
+    if (!box) return false;
+    const loc = game.level?.at?.(box.ox ?? game.u?.ux ?? 0, box.oy ?? game.u?.uy ?? 0);
+    return !!loc && (IS_POOL(loc.typ) || loc.typ === WATER || loc.typ === MOAT);
+}
+
+function applyChestTrapFireDamage(messages, damage, deathCause) {
+    if (!damage || game.u?.uinvulnerable) return {};
+    if (game.u) game.u.uhp = Math.max(0, (game.u.uhp || 0) - damage);
+    if ((game.u?.uhp || 0) > 0) return {};
+    return heroDartTrapFatalResult(messages, deathCause);
+}
+
+function applyChestTrapFirePayload(box, messages) {
+    const origDamage = d(2, 4);
+    if (chestTrapBoxInPool(box)) {
+        messages.push(`A cascade of steamy bubbles erupts from the ${chestTrapObjectName(box)}!`);
+        if (heroHasFireResistance()) {
+            messages.push('You are uninjured.');
+            return {};
+        }
+        return applyChestTrapFireDamage(messages, rnd(3), 'killed by boiling water');
+    }
+
+    messages.push(`A tower of flame bursts from the ${chestTrapObjectName(box)}!`);
+    let damage;
+    if (heroHasFireResistance()) {
+        damage = rn2(2);
+        if (!damage) messages.push('You are uninjured.');
+    } else {
+        damage = d(2, 4);
+        if (game.u) {
+            const hpMin = 1;
+            const oldMax = game.u.uhpmax || hpMin;
+            const loss = rn2(Math.min(oldMax, damage + 1));
+            game.u.uhpmax = Math.max(hpMin, oldMax - loss);
+            game.u.uhp = Math.min(game.u.uhp || hpMin, game.u.uhpmax);
+        }
+    }
+
+    const directResult = applyChestTrapFireDamage(messages, damage, 'killed by a tower of flame');
+    if (directResult.fatal || directResult.lifeSaving) return directResult;
+
+    const fireInventory = fireDamageInventory(origDamage, false, false, { allowLifeSaving: true });
+    messages.push(...fireInventory.messages);
+    if (fireInventory.lifeSaving || fireInventory.fatal) {
+        game._death_cause = fireInventory.deathCause || 'killed by a tower of flame';
+        return {
+            lifeSaving: !!fireInventory.lifeSaving,
+            fatal: !!fireInventory.fatal,
+            more: true,
+        };
+    }
+
+    return applyChestTrapFireDamage(messages, fireInventory.damage, fireInventory.deathCause || 'killed by a tower of flame');
+}
+
 function chestTrapPoisonTell(attr) {
     if (attr === A_STR) return (game.u?.acurr?.a?.[A_STR] === STR19(25))
         ? 'You feel innately weaker!'
@@ -865,6 +927,8 @@ function applyChestTrapPayload(box, { disarm = true } = {}) {
         }
     } else if (payload >= 6 && payload <= 8) {
         result = applyChestTrapElectricPayload(messages);
+    } else if (payload >= 9 && payload <= 12) {
+        result = applyChestTrapFirePayload(box, messages);
     } else if (payload >= 13 && payload <= 16) {
         result = applyChestTrapNeedlePayload(messages);
     } else if (payload >= 17 && payload <= 20) {
