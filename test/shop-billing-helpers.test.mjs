@@ -21500,6 +21500,259 @@ test('#untrap known-box disarm failure happens directly without second prompt', 
     assert.equal(game.context.move, 1);
 });
 
+test('#untrap known-box colored gas payload stuns and hallucinates', async () => {
+    setupUntrapDestinationWeb([], { rng: [74, 0, 1, 2, 11, 4, 2, 0] });
+    game.level.traps = [];
+    const box = shopFloorContainer(881026);
+    Object.assign(box, {
+        otrapped: true,
+        tknown: true,
+        dknown: true,
+        cknown: false,
+    });
+    game.level.objects = [box];
+
+    await enterUntrapDirection();
+    await rhack('.');
+
+    assert.equal(game._command_mode, 'untrapBoxConfirm');
+    assert.equal(game._pending_message, 'Disarm this large box? [ynq] (q)');
+
+    await rhack('y');
+
+    assert.equal(game._command_mode, null);
+    assert.deepEqual(getRngLog(), [
+        'rnd(75)=75',
+        'rn2(13)=0',
+        'rn2(20)=1',
+        'rn2(13)=2',
+        'rn2(16)=11',
+        'rn2(7)=4',
+        'rn2(5)=2',
+        'rn2(19)=0',
+    ]);
+    assert.equal(game._pending_message, 'You set it off!  A cloud of yellow gas billows from the large box.  You stagger and your vision blurs...');
+    assert.equal(box.otrapped, false);
+    assert.equal(box.tknown, true);
+    assert.equal(game.u.stunned, true);
+    assert.equal(game.u.hallucinating, true);
+    assert.equal(game.u._stunTimeout, 20);
+    assert.equal(game.u._halluTimeout, 18);
+    assert.match(game.u._statusSuffix, /\bStun\b/);
+    assert.match(game.u._statusSuffix, /\bHallu\b/);
+    assert.equal(game.context.move, 1);
+});
+
+test('#untrap known-box colored gas uses blind gas names', async () => {
+    setupUntrapDestinationWeb([], { rng: [74, 0, 1, 2, 3, 4, 2, 0] });
+    game.u.blind = true;
+    game.level.traps = [];
+    const box = shopFloorContainer(881027);
+    Object.assign(box, {
+        otrapped: true,
+        tknown: true,
+        dknown: true,
+        cknown: false,
+    });
+    game.level.objects = [box];
+
+    await enterUntrapDirection();
+    await rhack('.');
+
+    assert.equal(game._command_mode, 'untrapBoxConfirm');
+    assert.equal(game._pending_message, 'Disarm this large box? [ynq] (q)');
+
+    await rhack('y');
+
+    assert.equal(game._command_mode, null);
+    assert.deepEqual(getRngLog(), [
+        'rnd(75)=75',
+        'rn2(13)=0',
+        'rn2(20)=1',
+        'rn2(13)=2',
+        'rn2(6)=3',
+        'rn2(7)=4',
+        'rn2(5)=2',
+        'rn2(19)=0',
+    ]);
+    assert.equal(game._pending_message, 'You set it off!  A cloud of chilling gas billows from the large box.  You stagger and get dizzy...');
+    assert.equal(box.otrapped, false);
+    assert.equal(box.tknown, true);
+    assert.equal(game.u.stunned, true);
+    assert.equal(game.u._stunTimeout, 20);
+    assert.equal(game.u._halluTimeout, 18);
+    assert.match(game.u._statusSuffix, /\bStun\b/);
+    assert.match(game.u._statusSuffix, /\bHallu\b/);
+    assert.equal(game.context.move, 1);
+});
+
+test('#untrap known-box colored gas uses hallucinated color and groovy message', async () => {
+    setupUntrapDestinationWeb([], { rng: [0, 1, 2, 11, 4, 2, 0] });
+    game.u.hallucinating = true;
+    game.u._statusSuffix = ' Hallu';
+    game.level.traps = [];
+    const box = shopFloorContainer(881029);
+    Object.assign(box, {
+        otrapped: true,
+        tknown: true,
+        dknown: true,
+        cknown: false,
+    });
+    game.level.objects = [box];
+
+    await enterUntrapDirection();
+    await rhack('.');
+
+    assert.equal(game._command_mode, 'untrapBoxConfirm');
+    assert.equal(game._pending_message, 'Disarm this large box? [ynq] (q)');
+
+    enableDisplayRngLog(true);
+    try {
+        await rhack('y');
+    } finally {
+        enableDisplayRngLog(false);
+    }
+
+    assert.equal(game._command_mode, null);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rn2(13)',
+        'rn2(20)',
+        'rn2(13)',
+        'rn2(16)',
+        '~drn2(74)',
+        'rn2(7)',
+        'rn2(5)',
+        'rn2(19)',
+    ]);
+    assert.match(game._pending_message, /^You set it off!  A cloud of .+ gas billows from the large box\.  What a groovy feeling!$/);
+    assert.doesNotMatch(game._pending_message, /vision blurs|get dizzy/);
+    assert.equal(box.otrapped, false);
+    assert.equal(box.tknown, true);
+    assert.equal(game.u.stunned, true);
+    assert.equal(game.u.hallucinating, true);
+    assert.equal(game.u._stunTimeout, 20);
+    assert.equal(game.u._halluTimeout, 18);
+    assert.match(game.u._statusSuffix, /\bStun\b/);
+    assert.match(game.u._statusSuffix, /\bHallu\b/);
+    assert.equal(game.context.move, 1);
+});
+
+test('#untrap known-box colored gas respects hallucination resistance', async () => {
+    setupUntrapDestinationWeb([], { rng: [74, 0, 1, 2, 11, 4, 2, 0] });
+    game.u.hallucinationResistance = true;
+    game.level.traps = [];
+    const box = shopFloorContainer(881030);
+    Object.assign(box, {
+        otrapped: true,
+        tknown: true,
+        dknown: true,
+        cknown: false,
+    });
+    game.level.objects = [box];
+
+    await enterUntrapDirection();
+    await rhack('.');
+
+    assert.equal(game._command_mode, 'untrapBoxConfirm');
+    assert.equal(game._pending_message, 'Disarm this large box? [ynq] (q)');
+
+    await rhack('y');
+
+    assert.equal(game._command_mode, null);
+    assert.deepEqual(getRngLog(), [
+        'rnd(75)=75',
+        'rn2(13)=0',
+        'rn2(20)=1',
+        'rn2(13)=2',
+        'rn2(16)=11',
+        'rn2(7)=4',
+        'rn2(5)=2',
+        'rn2(19)=0',
+    ]);
+    assert.equal(game._pending_message, 'You set it off!  A cloud of yellow gas billows from the large box.  You stagger...');
+    assert.equal(box.otrapped, false);
+    assert.equal(box.tknown, true);
+    assert.equal(game.u.stunned, true);
+    assert.equal(game.u.hallucinating || false, false);
+    assert.equal(game.u._stunTimeout, 20);
+    assert.equal(game.u._halluTimeout, 18);
+    assert.match(game.u._statusSuffix, /\bStun\b/);
+    assert.doesNotMatch(game.u._statusSuffix || '', /\bHallu\b/);
+    assert.equal(game.context.move, 1);
+});
+
+test('#untrap known-box colored gas suppresses stagger when already stunned', async () => {
+    setupUntrapDestinationWeb([], { rng: [74, 0, 1, 2, 11, 4, 2, 0] });
+    Object.assign(game.u, {
+        stunned: true,
+        _stunTimeout: 7,
+        _statusSuffix: ' Stun',
+    });
+    game.level.traps = [];
+    const box = shopFloorContainer(881028);
+    Object.assign(box, {
+        otrapped: true,
+        tknown: true,
+        dknown: true,
+        cknown: false,
+    });
+    game.level.objects = [box];
+
+    await enterUntrapDirection();
+    await rhack('.');
+
+    assert.equal(game._command_mode, 'untrapBoxConfirm');
+    assert.equal(game._pending_message, 'Disarm this large box? [ynq] (q)');
+
+    await rhack('y');
+
+    assert.equal(game._command_mode, null);
+    assert.deepEqual(getRngLog(), [
+        'rnd(75)=75',
+        'rn2(13)=0',
+        'rn2(20)=1',
+        'rn2(13)=2',
+        'rn2(16)=11',
+        'rn2(7)=4',
+        'rn2(5)=2',
+        'rn2(19)=0',
+    ]);
+    assert.equal(game._pending_message, 'You set it off!  A cloud of yellow gas billows from the large box.');
+    assert.equal(box.otrapped, false);
+    assert.equal(box.tknown, true);
+    assert.equal(game.u.stunned, true);
+    assert.equal(game.u._stunTimeout, 27);
+    assert.equal(game.u._halluTimeout, 18);
+    assert.match(game.u._statusSuffix, /\bStun\b/);
+    assert.match(game.u._statusSuffix, /\bHallu\b/);
+    assert.equal(game.context.move, 1);
+});
+
+test('stun and hallucination timeouts expire during turn tail', async () => {
+    installCommandShopState();
+    installCoreRngValues([1]);
+    game.level.monsters = [];
+    Object.assign(game.u, {
+        umovement: 0,
+        stunned: true,
+        hallucinating: true,
+        _stunTimeout: 1,
+        _halluTimeout: 1,
+        _statusSuffix: ' Stun Hallu',
+    });
+    game._pending_message = '';
+
+    await processMonsterTurns();
+
+    assert.equal(game.u.stunned, false);
+    assert.equal(game.u.hallucinating, false);
+    assert.equal(game.u._stunTimeout, 0);
+    assert.equal(game.u._halluTimeout, 0);
+    assert.doesNotMatch(game.u._statusSuffix || '', /\bStun\b/);
+    assert.doesNotMatch(game.u._statusSuffix || '', /\bHallu\b/);
+    assert.equal(game._pending_message, 'You feel less wobbly now.  Everything looks SO boring now.');
+});
+
 test('#untrap known-box paralysis payload respects free action', async () => {
     setupUntrapDestinationWeb([], { rng: [74, 0, 1, 3, 0] });
     game.u.freeAction = true;

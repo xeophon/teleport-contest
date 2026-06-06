@@ -2691,6 +2691,33 @@ function removeHeroStatusSuffix(status) {
     game.u._statusSuffix = parts.length ? ` ${parts.join(' ')}` : '';
 }
 
+function clearHeroStunTimeout() {
+    if (!game.u) return;
+    game.u._stunTimeout = 0;
+    game.u.stunned = false;
+    removeHeroStatusSuffix('Stun');
+    addToplineMessage(`You feel ${game.u.hallucinating || game.u.hallu || (game.u._statusSuffix || '').includes('Hallu')
+        ? 'less wobbly'
+        : 'a bit steadier'} now.`);
+}
+
+function clearHeroHallucinationTimeout() {
+    if (!game.u) return;
+    const wasHallucinating = !!(game.u.hallucinating || game.u.hallu || (game.u._statusSuffix || '').includes('Hallu'));
+    game.u._halluTimeout = 0;
+    game.u.hallucinating = false;
+    game.u.hallu = false;
+    removeHeroStatusSuffix('Hallu');
+    if (wasHallucinating) {
+        if (!game.u.blind && !game._swallow_overlay_active) {
+            game._display_hallucinated_redraw = 1;
+            refreshHallucinatedMap();
+            game._display_hallucinated_redraw = 0;
+        }
+        addToplineMessage(`Everything ${game.u.blind ? 'feels' : 'looks'} SO boring now.`);
+    }
+}
+
 function articleFor(name) {
     return /^[aeiou]/i.test(String(name || '')) ? 'an' : 'a';
 }
@@ -8897,6 +8924,14 @@ async function finishMonsterTurnTail() {
                 ? 'You feel less trippy now.'
                 : 'You feel less confused now.');
         }
+    }
+    if ((game.u?._stunTimeout || 0) > 0) {
+        game.u._stunTimeout--;
+        if (!game.u._stunTimeout) clearHeroStunTimeout();
+    }
+    if ((game.u?._halluTimeout || 0) > 0) {
+        game.u._halluTimeout--;
+        if (!game.u._halluTimeout) clearHeroHallucinationTimeout();
     }
     if ((game.u?._stonedTimeout || 0) > 0) {
         addHeroStatusSuffix('Stone');

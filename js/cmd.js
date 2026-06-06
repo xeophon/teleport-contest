@@ -644,6 +644,62 @@ function chestTrapPayloadRoll(luck) {
     return rn2(20) ? (luck >= 13 ? 0 : rn2(13 - luck)) : rn2(26);
 }
 
+const CHEST_TRAP_OBJECT_COLORS = [
+    'black', 'red', 'green', 'brown', 'blue', 'magenta', 'cyan', 'gray',
+    'colorless', 'orange', 'bright green', 'yellow', 'bright blue',
+    'bright magenta', 'bright cyan', 'white',
+];
+const CHEST_TRAP_BLIND_GAS = ['humid', 'odorless', 'pungent', 'chilling', 'acrid', 'biting'];
+const CHEST_TRAP_HALLUCINATED_COLORS = [
+    'ultraviolet', 'infrared', 'bluish-orange', 'reddish-green', 'dark white',
+    'light black', 'sky blue-pink', 'pinkish-cyan', 'indigo-chartreuse',
+    'salty', 'sweet', 'sour', 'bitter', 'umami',
+    'striped', 'spiral', 'swirly', 'plaid', 'checkered', 'argyle', 'paisley',
+    'blotchy', 'guernsey-spotted', 'polka-dotted', 'square', 'round',
+    'triangular', 'cabernet', 'sangria', 'fuchsia', 'wisteria', 'lemon-lime',
+    'strawberry-banana', 'peppermint', 'romantic', 'incandescent',
+    'octarine', 'excitingly dull', 'mauve', 'electric',
+    'neon', 'fluorescent', 'phosphorescent', 'translucent', 'opaque',
+    'psychedelic', 'iridescent', 'rainbow-colored', 'polychromatic',
+    'colorless', 'colorless green',
+    'dancing', 'singing', 'loving', 'loudy', 'noisy', 'clattery', 'silent',
+    'apocyan', 'infra-pink', 'opalescent', 'violant', 'tuneless',
+    'viridian', 'aureolin', 'cinnabar', 'purpurin', 'gamboge', 'madder',
+    'bistre', 'ecru', 'fulvous', 'tekhelet', 'selective yellow',
+];
+
+function heroHasHallucinationResistance() {
+    if (game.u?.hallucinationResistance || game.u?.hallucination_resistance) return true;
+    if ((game.inventory || []).some(item => item.wielded && item.artifact === 'Grayswandir')) return true;
+    return (game.inventory || []).some(item =>
+        isActiveInventoryExtrinsicItem(item) && dragonArmorKindHasProperty(objectKindKey(item), 'hallucination'));
+}
+
+function heroHasActiveHallucination() {
+    return heroIsHallucinating() && !heroHasHallucinationResistance();
+}
+
+function chestTrapGasName() {
+    if (heroIsBlind()) return CHEST_TRAP_BLIND_GAS[rn2(CHEST_TRAP_BLIND_GAS.length)];
+    const colorIndex = rn2(CHEST_TRAP_OBJECT_COLORS.length);
+    if (heroHasActiveHallucination())
+        return CHEST_TRAP_HALLUCINATED_COLORS[rn2_on_display_rng(CHEST_TRAP_HALLUCINATED_COLORS.length)];
+    return CHEST_TRAP_OBJECT_COLORS[colorIndex];
+}
+
+function chestTrapGasStaggerMessage() {
+    if (heroIsStunned()) return '';
+    if (heroHasActiveHallucination()) return 'What a groovy feeling!';
+    const suffix = heroHasHallucinationResistance()
+        ? ''
+        : heroIsBlind() ? ' and get dizzy' : ' and your vision blurs';
+    return `You stagger${suffix}...`;
+}
+
+function chestTrapObjectName(box) {
+    return forceBoxSimpleName(box);
+}
+
 function applyChestTrapPayload(box, { disarm = true } = {}) {
     const messages = [disarm ? 'You set it off!' : 'You trigger a trap!'];
     if (box) {
@@ -658,7 +714,13 @@ function applyChestTrapPayload(box, { disarm = true } = {}) {
     }
 
     const payload = chestTrapPayloadRoll(luck);
-    if (payload >= 3 && payload <= 5) {
+    if (payload <= 2) {
+        messages.push(`A cloud of ${chestTrapGasName()} gas billows from the ${chestTrapObjectName(box)}.`);
+        const staggerMessage = chestTrapGasStaggerMessage();
+        if (staggerMessage) messages.push(staggerMessage);
+        addHeroStun(rn1(7, 16));
+        addHeroHallucination(rn1(5, 16));
+    } else if (payload >= 3 && payload <= 5) {
         if (heroHasFreeAction()) {
             messages.push('You momentarily stiffen.');
         } else {
@@ -12965,6 +13027,14 @@ function addHeroStun(turns) {
     game.u._stunTimeout = (game.u._stunTimeout || 0) + turns;
     game.u.stunned = true;
     addHeroStatusSuffix('Stun');
+}
+
+function addHeroHallucination(turns) {
+    if (!game.u || turns <= 0) return;
+    game.u._halluTimeout = (game.u._halluTimeout || 0) + turns;
+    if (heroHasHallucinationResistance()) return;
+    game.u.hallucinating = true;
+    addHeroStatusSuffix('Hallu');
 }
 
 function clearHeroConfusion() {
