@@ -29,5 +29,6 @@ The test uses normal `rhack('F')` plus direction input and asserts the C-shaped 
 
 ## Remaining Work
 
-- Non-Sting/Fire Brand blade, non-blade, and weaponless force-fight web attempts still need the C skill, strength, enchantment, weapon description, two-weapon, and messaging branches.
+- Non-artifact non-blade force-fight web failure is covered by `557-force-fight-nonblade-web-2026-06-06.md`.
+- Non-Sting/Fire Brand blade, offhand-blade, and weaponless force-fight web attempts still need the C skill, strength, enchantment, use-skill, and messaging branches.
 - Failed untrap/NOWEBMSG web-spread behavior remains separate `#untrap` parity.

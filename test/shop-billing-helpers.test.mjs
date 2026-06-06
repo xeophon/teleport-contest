@@ -20797,6 +20797,82 @@ test('force-fighting a seen destination web with Fire Brand burns and deletes it
     assert.equal(game.context.move, 1);
 });
 
+function setupForceFightDestinationWeb(inventory, { tseen = true, twoweapon = false } = {}) {
+    installStableNonSokobanTrapState();
+    vision_reset();
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 20,
+        uhpmax: 20,
+        utrap: 0,
+        utraptype: null,
+        umoved: false,
+    });
+    game.inventory = inventory;
+    game._twoweapon = twoweapon;
+    const web = { ttyp: WEB, tx: 6, ty: 5, tseen, madeby_u: false };
+    game.level.traps = [web];
+    enableRngLog({ reset: true });
+    installCoreRngValues([9]);
+    return web;
+}
+
+async function assertForceFightWebNoCut(web, expectedMessage) {
+    await rhack('F');
+    await rhack('l');
+
+    assert.deepEqual(getRngLog().map(rngCallName), ['rn2(20)']);
+    assert.equal(game._pending_message, expectedMessage);
+    assert.equal(game.u.ux, 5);
+    assert.equal(game.u.uy, 5);
+    assert.equal(game.u.umoved, false);
+    assert.equal(game.u.utrap || 0, 0);
+    assert.equal(game.u.utraptype || null, null);
+    assert.equal(game.level.traps.includes(web), true);
+    assert.equal(game.context.move, 1);
+}
+
+test('force-fighting a seen destination web with an axe cannot cut it', async () => {
+    const web = setupForceFightDestinationWeb([wieldedWeapon(880907, 'axe', 'a', 0)]);
+
+    await assertForceFightWebNoCut(web, "You can't cut a web with an axe!");
+});
+
+test('force-fighting a seen destination web with a battle-axe describes an axe', async () => {
+    const web = setupForceFightDestinationWeb([wieldedWeapon(880908, 'battle-axe', 'b', 0)]);
+
+    await assertForceFightWebNoCut(web, "You can't cut a web with an axe!");
+});
+
+test('force-fighting a seen destination web with a polearm cannot cut it', async () => {
+    const web = setupForceFightDestinationWeb([wieldedWeapon(880909, 'glaive', 'g', 0)]);
+
+    await assertForceFightWebNoCut(web, "You can't cut a web with a polearm!");
+});
+
+test('force-fighting a seen destination web with different non-blade weapons names both', async () => {
+    const axe = wieldedWeapon(880910, 'axe', 'a', 0);
+    const glaive = wieldedWeapon(880911, 'glaive', 'g', 0);
+    glaive.wielded = false;
+    glaive.alternate = true;
+    glaive.line = 'g - a +0 glaive (wielded in left hand)';
+    const web = setupForceFightDestinationWeb([axe, glaive], { twoweapon: true });
+
+    await assertForceFightWebNoCut(web, "You can't cut a web with an axe or a polearm!");
+});
+
+test('force-fighting a seen destination web with matching non-blade descriptions pluralizes primary', async () => {
+    const axe = wieldedWeapon(880912, 'axe', 'a', 0);
+    const battleAxe = wieldedWeapon(880913, 'battle-axe', 'b', 0);
+    battleAxe.wielded = false;
+    battleAxe.alternate = true;
+    battleAxe.line = 'b - a +0 battle-axe (wielded in left hand)';
+    const web = setupForceFightDestinationWeb([axe, battleAxe], { twoweapon: true });
+
+    await assertForceFightWebNoCut(web, "You can't cut a web with axes!");
+});
+
 test('force-fighting an unseen destination web with Sting does not cut it', async () => {
     installStableNonSokobanTrapState();
     vision_reset();

@@ -11287,6 +11287,8 @@ function forceWeaponName(item) {
 }
 
 const FORCE_BLADE_NAME_RE = /\b(?:athame|axe|battle-axe|crysknife|dagger|knife|katana|saber|sabre|scalpel|short sword|broadsword|long sword|two-handed sword|tsurugi|wakizashi)\b/;
+const FORCE_WEB_BLADE_NAME_RE = /\b(?:athame|crysknife|dagger|knife|katana|saber|sabre|scalpel|short sword|broadsword|long sword|two-handed sword|tsurugi|wakizashi)\b/;
+const FORCE_WEB_POLEARM_NAME_RE = /\b(?:polearms?|bardiche|bec de corbin|bill-guisarme|fauchard|glaive|guisarme|halberd|lucern hammer|partisan|ranseur|spetum|voulge)\b/;
 const FORCE_WEAPON_LDAM_BY_NAME = new Map([
     ['two-handed sword', 6], ['silver saber', 8], ['dwarvish spear', 8],
     ['elven short sword', 8], ['orcish short sword', 8], ['dwarvish short sword', 8],
@@ -11313,6 +11315,32 @@ function forceWeaponIsPick(item) {
 function forceWeaponIsBlade(item) {
     const name = forceWeaponName(item).toLowerCase();
     return !forceWeaponIsPick(item) && FORCE_BLADE_NAME_RE.test(name);
+}
+
+function forceWebWeaponIsBlade(item) {
+    const name = forceWeaponName(item).toLowerCase();
+    return !forceWeaponIsPick(item) && FORCE_WEB_BLADE_NAME_RE.test(name);
+}
+
+function forceWebWeaponDescr(item) {
+    const name = forceWeaponName(item).toLowerCase()
+        .replace(/\b(?:very|thoroughly|rusty|corroded|burnt|rotted|greased|fixed|fireproof|rustproof)\b/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+    if (/\bdwarvish mattock\b|\bmattock\b/.test(name)) return 'mattock';
+    if (/\bpick[- ]?axe\b/.test(name)) return 'pick-axe';
+    if (/\bbattle-axe\b|\baxe\b/.test(name)) return 'axe';
+    if (FORCE_WEB_POLEARM_NAME_RE.test(name)) return 'polearm';
+    if (/\blance\b/.test(name)) return 'lance';
+    if (/\b(?:silver )?mace\b/.test(name)) return 'mace';
+    if (/\bdagger\b/.test(name)) return 'dagger';
+    if (/\b(?:knife|crysknife|scalpel|stiletto|worm tooth)\b/.test(name)) return 'knife';
+    if (/\b(?:elven |orcish |dwarvish )?short sword\b/.test(name)) return 'short sword';
+    if (/\b(?:elven )?broadsword\b|\brunesword\b/.test(name)) return 'broadsword';
+    if (/\b(?:long sword|katana)\b/.test(name)) return 'long sword';
+    if (/\b(?:two-handed sword|tsurugi)\b/.test(name)) return 'two-handed sword';
+    if (/\b(?:scimitar|silver saber|saber|sabre)\b/.test(name)) return 'saber';
+    return name || 'weapon';
 }
 
 function forceLockChance(item) {
@@ -43260,15 +43288,64 @@ function guaranteedWebForceArtifact() {
     return null;
 }
 
-async function forceFightWebTrapWithArtifact(trap) {
+function forceFightSecondaryWeapon(primary) {
+    if (!game._twoweapon) return null;
+    return (game.inventory || []).find(item => item !== primary
+        && (item.alternate || /left hand|alternate weapon/.test(item.line || ''))) || null;
+}
+
+function forceWebPluralDescr(descr) {
+    if (descr === 'axe') return 'axes';
+    if (descr.endsWith('s')) return `${descr}es`;
+    return `${descr}s`;
+}
+
+function forceWebNoCutWeaponPhrase(primary, secondary) {
+    const primaryDescr = forceWebWeaponDescr(primary);
+    const secondaryDescr = secondary ? forceWebWeaponDescr(secondary) : '';
+    const oneWeapon = !secondaryDescr || primaryDescr === secondaryDescr;
+    if (['armor', 'food', 'venom'].includes(primaryDescr)) return primaryDescr;
+    if ((primary?.quan || 1) === 1 && !(game._twoweapon && oneWeapon)) {
+        const primaryPhrase = articleFor(primaryDescr);
+        if (!oneWeapon) {
+            const secondaryPhrase = (secondary?.quan || 1) === 1
+                ? articleFor(secondaryDescr)
+                : forceWebPluralDescr(secondaryDescr);
+            return `${primaryPhrase} or ${secondaryPhrase}`;
+        }
+        return primaryPhrase;
+    }
+    const primaryPhrase = forceWebPluralDescr(primaryDescr);
+    if (!oneWeapon) {
+        const secondaryPhrase = (secondary?.quan || 1) === 1
+            ? articleFor(secondaryDescr)
+            : forceWebPluralDescr(secondaryDescr);
+        return `${primaryPhrase} or ${secondaryPhrase}`;
+    }
+    return primaryPhrase;
+}
+
+async function forceFightWebTrap(trap) {
     if (!trap || trap.ttyp !== WEB || !trap.tseen) return false;
     const artifact = guaranteedWebForceArtifact();
-    if (!artifact) return false;
-    rn2(20);
-    deleteTrap(trap);
-    await setMessage(`${artifact.name} ${artifact.verb} through the web!`);
-    game.context.move = 1;
-    return true;
+    if (artifact) {
+        rn2(20);
+        deleteTrap(trap);
+        await setMessage(`${artifact.name} ${artifact.verb} through the web!`);
+        game.context.move = 1;
+        return true;
+    }
+    const primary = wieldedItem();
+    if (primary && !forceWebWeaponIsBlade(primary)) {
+        const secondary = forceFightSecondaryWeapon(primary);
+        if (!forceWebWeaponIsBlade(secondary)) {
+            rn2(20);
+            await setMessage(`You can't cut a web with ${forceWebNoCutWeaponPhrase(primary, secondary)}!`);
+            game.context.move = 1;
+            return true;
+        }
+    }
+    return false;
 }
 
 async function sitWhileAlreadyTrapped(trap) {
@@ -65001,7 +65078,7 @@ export async function rhack(_cmd) {
             }
             const webTrap = (game.level?.traps || []).find(trap =>
                 trap.tx === targetX && trap.ty === targetY && trap.ttyp === WEB);
-            if (await forceFightWebTrapWithArtifact(webTrap)) return;
+            if (await forceFightWebTrap(webTrap)) return;
             await setMessage(target && !IS_OBSTRUCTED(target.typ) ? 'You attack thin air.' : 'You harmlessly attack the wall.');
             if (!target || IS_OBSTRUCTED(target.typ)) game._fight_wall_message = 1;
             game.context.move = 1;
