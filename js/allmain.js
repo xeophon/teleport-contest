@@ -5962,13 +5962,21 @@ export async function processMonsterTurns() {
                     const tunnelWithoutPick = (mon.data?.dwarf || mon.data?.tunnel)
                         && !mon.minvent?.some(item => item.kind === 'pick-axe');
                     if (await maybeCastUndirectedMonsterSpell(mon)) continue;
-			                    if (mon.mtrapped) {
-		                        if (rn2(40)) {
-	                            rn2(5);
-	                            continue;
-		                        }
-		                        mon.mtrapped = 0;
-		                    }
+                    if (mon.mtrapped) {
+                        const trapped = monsterTrappedTrapTurn(mon);
+                        if (trapped.handled) {
+                            if (trapped.caught) {
+                                rn2(5);
+                                continue;
+                            }
+                        } else {
+                            if (rn2(40)) {
+                                rn2(5);
+                                continue;
+                            }
+                            mon.mtrapped = 0;
+                        }
+                    }
 	                    const blindAdjacentAttack = mon.mcansee === false && !mon.mpeaceful
 	                        && Math.max(Math.abs(mon.mx - (game.u?.ux || 0)), Math.abs(mon.my - (game.u?.uy || 0))) <= 1
 	                        && !(mon.data?.name === 'grid bug' && mon.mx !== (game.u?.ux || 0) && mon.my !== (game.u?.uy || 0));
@@ -10606,6 +10614,72 @@ function monsterPitTrapEffect(mon, trap, { cavernTunnelRoom = false, skipPetPost
     return true;
 }
 
+function monsterEasyEscapePit(mon) {
+    return mon?.data?.name === 'pit fiend' || monsterObjectHitSizeValue(mon) >= 4;
+}
+
+function boulderAtMonsterTrap(mon) {
+    return (game.level?.objects || []).find(obj =>
+        !obj.hidden && !obj.transientProjectile && obj.otyp === BOULDER
+        && obj.ox === mon?.mx && obj.oy === mon?.my) || null;
+}
+
+function fillMonsterPitWithBoulder(mon, boulder) {
+    if (!boulder || !game.level) return false;
+    game.level.objects = (game.level.objects || []).filter(obj => obj !== boulder);
+    const messages = [];
+    const previousMonsterMoving = game._monster_moving;
+    game._monster_moving = 1;
+    let consumed = false;
+    try {
+        consumed = earthFloorEffects(boulder, mon.mx, mon.my, messages, 'settle');
+    } finally {
+        if (previousMonsterMoving === undefined) delete game._monster_moving;
+        else game._monster_moving = previousMonsterMoving;
+    }
+    if (!consumed) {
+        boulder.ox = mon.mx;
+        boulder.oy = mon.my;
+        game.level.objects.push(boulder);
+    }
+    for (const message of messages) addToplineMessage(message);
+    return consumed;
+}
+
+function monsterTrappedTrapTurn(mon) {
+    if (!mon?.mtrapped) return { handled: false, caught: false };
+    const trap = game.level?.traps?.find(t => t.tx === mon.mx && t.ty === mon.my);
+    if (!trap) {
+        mon.mtrapped = 0;
+        return { handled: true, caught: false };
+    }
+    if (![PIT, SPIKED_PIT].includes(trap.ttyp)) return { handled: false, caught: false };
+
+    const inSight = monsterVisibleToHero(mon) || mon === game.u?.usteed;
+    if (!trap.tseen && inSight) trap.tseen = true;
+
+    const easyEscape = monsterEasyEscapePit(mon);
+    if (!rn2(40) || easyEscape) {
+        const boulder = boulderAtMonsterTrap(mon);
+        if (boulder) {
+            if (!rn2(2)) {
+                mon.mtrapped = 0;
+                if (inSight) addToplineMessage(`${monsterDisplayName(mon)} pulls free...`);
+                fillMonsterPitWithBoulder(mon, boulder);
+            }
+        } else {
+            if (inSight)
+                addToplineMessage(`${monsterDisplayName(mon)} climbs ${easyEscape ? 'easily ' : ''}out of the pit.`);
+            mon.mtrapped = 0;
+        }
+    } else if (monsterIsMetallivore(mon) && trap.ttyp === SPIKED_PIT) {
+        if (inSight) addToplineMessage(`${monsterDisplayName(mon)} munches on some spikes!`);
+        trap.ttyp = PIT;
+        mon.meating = 5;
+    }
+    return { handled: true, caught: !!mon.mtrapped };
+}
+
 function monsterAntiMagicTrapEffect(mon, trap) {
     if (trap?.ttyp !== ANTI_MAGIC) return false;
     if (monsterAvoidsKnownTrapBeforeEffect(mon, trap)) return true;
@@ -12286,15 +12360,20 @@ function movePet(mon, resumeAfterInventory = false, conflictActive = false) {
         rn2(4);
     }
     if (mon.mtrapped) {
-        const trap = game.level?.traps?.find(t => t.tx === mon.mx && t.ty === mon.my);
-        if (trap?.ttyp === BEAR_TRAP) {
-            if (rn2(40)) return;
-            mon.mtrapped = 0;
-            if (couldSeeCoord(mon.mx, mon.my)
-                && !addToplineMessage(`The ${mon.saddled ? 'saddled ' : ''}${mon.data?.name || 'creature'} pulls free of the bear trap.`)
-                && game._message_more && !game._process_time_with_more) return;
+        const trapped = monsterTrappedTrapTurn(mon);
+        if (trapped.handled) {
+            if (trapped.caught) return;
         } else {
-            mon.mtrapped = 0;
+            const trap = game.level?.traps?.find(t => t.tx === mon.mx && t.ty === mon.my);
+            if (trap?.ttyp === BEAR_TRAP) {
+                if (rn2(40)) return;
+                mon.mtrapped = 0;
+                if (couldSeeCoord(mon.mx, mon.my)
+                    && !addToplineMessage(`The ${mon.saddled ? 'saddled ' : ''}${mon.data?.name || 'creature'} pulls free of the bear trap.`)
+                    && game._message_more && !game._process_time_with_more) return;
+            } else {
+                mon.mtrapped = 0;
+            }
         }
     }
 
@@ -14589,5 +14668,6 @@ export const __allmainTestHooks = {
     monsterAvoidsKnownTrapBeforeEffectForTest: monsterAvoidsKnownTrapBeforeEffect,
     monsterAntiMagicTrapEffectForTest: monsterAntiMagicTrapEffect,
     monsterPitTrapEffectForTest: monsterPitTrapEffect,
+    monsterTrappedTrapTurnForTest: monsterTrappedTrapTurn,
     monsterSleepGasTrapEffectForTest: monsterSleepGasTrapEffect,
 };

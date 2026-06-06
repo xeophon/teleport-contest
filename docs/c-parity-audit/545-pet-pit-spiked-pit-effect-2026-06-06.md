@@ -38,6 +38,6 @@ The tests use local pet, trap, armor, visibility, and RNG fixtures. They do not 
 
 ## Remaining Work
 
-- Already-trapped pet pit escape, boulder fill, and metallivore spiked-pit eating remain part of the broader trapped-monster parity gap.
+- Already-trapped pet pit escape, boulder fill, and metallivore spiked-pit eating for `PIT`/`SPIKED_PIT` are covered by audit 546.
 - `mselftouch()` from falling with a wielded cockatrice/chickatrice corpse remains unmodeled for pets and ordinary monsters.
 - Ceiling-clinger and long-worm segment handling for non-grounded pit avoidance remains deferred.
