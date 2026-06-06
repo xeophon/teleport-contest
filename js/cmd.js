@@ -611,10 +611,10 @@ function untrapBoxDisarmChance() {
     return chance;
 }
 
-function disarmUntrapBox(box, confused) {
+function disarmUntrapBox(box, confused, force = false) {
     if (box?.otrapped) {
         const difficulty = 75 + Math.trunc(level_difficulty() / 2);
-        if (confused || heroIsFumbling() || rnd(difficulty) > untrapBoxDisarmChance()) {
+        if (!force && (confused || heroIsFumbling() || rnd(difficulty) > untrapBoxDisarmChance())) {
             box.otrapped = false;
             box.tknown = true;
             exerciseAttribute(A_DEX, true);
@@ -644,7 +644,7 @@ async function checkUntrapBox(box, { force = false, confused = heroIsConfused() 
         await setMessage(knownTrap
             ? `There's a trap on the ${untrapBoxObjectName(box)}.  Disarm it? [ynq] (q)`
             : `You find a trap on the ${untrapBoxObjectName(box)}!  Disarm it? [ynq] (q)`);
-        game._untrap_box_disarm_state = { box, confused };
+        game._untrap_box_disarm_state = { box, confused, force };
         game._command_mode = 'untrapBoxDisarmConfirm';
         return;
     }
@@ -62407,7 +62407,8 @@ export async function rhack(_cmd) {
             game._untrap_box_state = null;
             game._command_mode = null;
             if (box?.tknown && box?.dknown) {
-                await checkUntrapBox(box, { force: true, confused: false });
+                await setMessage(disarmUntrapBox(box, heroIsConfused() || heroIsHallucinating()));
+                game.context.move = 1;
             } else {
                 await checkUntrapBox(box);
             }
@@ -62430,7 +62431,7 @@ export async function rhack(_cmd) {
         if (ch === 'y') {
             game._untrap_box_disarm_state = null;
             game._command_mode = null;
-            await setMessage(disarmUntrapBox(pending?.box, !!pending?.confused));
+            await setMessage(disarmUntrapBox(pending?.box, !!pending?.confused, !!pending?.force));
             game.context.move = 1;
             return;
         }
