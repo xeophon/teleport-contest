@@ -21434,6 +21434,41 @@ test('rolling boulder thumps before wall and rests on top of pile', () => {
     assert.equal(rngValuesForCall(getRngLog(), 'rnd(20)').length, 0);
 });
 
+test('rolling boulder final rest clears stale no-charge outside shop without billing', () => {
+    const { trap, goblin } = installMonsterPitTrapState(ROLLING_BOULDER_TRAP, {
+        mhp: 50,
+        mhpmax: 50,
+        data: { mac: -10 },
+    });
+    const shkp = makeShopkeeper(31443, 'Izchak', 2, 2);
+    game.level.rooms = [{ rtype: SHOPBASE, resident: shkp }];
+    game.level.monsters.push(shkp);
+    const boulder = installRollingBoulderTrapLaunch(trap, {
+        start: { x: 4, y: 3 },
+        end: { x: 8, y: 3 },
+        boulderId: 31444,
+    });
+    boulder.no_charge = true;
+    const baseAt = game.level.at;
+    game.level.at = (x, y) => (x === 7 && y === 3) ? { roomno: 0, typ: STONE, lit: true } : baseAt(x, y);
+    enableRngLog({ reset: true });
+    markHeroNeighborhoodVisible();
+    for (let x = 4; x <= 8; x++) markSquareVisible(x, 3);
+
+    assert.equal(allmain.monsterRollingBoulderTrapEffectForTest(goblin, trap), true);
+
+    assert.match(game._pending_message || '', /Click!  The goblin triggers something\./);
+    assert.equal(game._topline_after_more, 'Thump!');
+    assert.equal(boulder.ox, 6);
+    assert.equal(boulder.oy, 3);
+    assert.equal(boulder.no_charge, false);
+    assert.equal(boulder.unpaid || false, false);
+    assert.equal(shkp.billct, 0);
+    assert.deepEqual(shkp.bill, []);
+    assert.equal(game.level.objects.at(-1), boulder);
+    assert.equal(rngValuesForCall(getRngLog(), 'rnd(20)').length, 0);
+});
+
 test('deaf rolling boulder stops before tree and clears launch metadata', () => {
     const { trap, goblin } = installMonsterPitTrapState(ROLLING_BOULDER_TRAP, {
         mhp: 50,

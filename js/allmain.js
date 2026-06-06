@@ -11268,11 +11268,31 @@ function rollingBoulderHitIronBars() {
     if (!heroIsDeafForMonsterNoise()) addRollingBoulderMotionMessage('Whang!');
 }
 
+function rollingBoulderTendedShopkeeperForRoom(roomno) {
+    const room = levelRoomByRoomno(roomno);
+    if (!room || room.rtype < SHOPBASE) return null;
+    const shkp = room.resident || (game.level?.monsters || [])
+        .find(mon => mon.isshk && mon.shoproom === roomno);
+    if (!shkp?.isshk || shkp.dead || (shkp.mhp != null && shkp.mhp <= 0)) return null;
+    const x = shkp.mx ?? shkp.shk?.x;
+    const y = shkp.my ?? shkp.shk?.y;
+    if (x == null || y == null) return null;
+    return (game.level?.at?.(x, y)?.roomno || 0) === shkp.shoproom ? shkp : null;
+}
+
+function rollingBoulderNoChargeStillAppliesAt(x, y) {
+    const roomno = game.level?.at?.(x, y)?.roomno || 0;
+    if (roomno < ROOMOFFSET) return false;
+    return !!rollingBoulderTendedShopkeeperForRoom(roomno);
+}
+
 function placeRollingBoulderAtRest(boulder, x, y) {
     if (!boulder) return;
     boulder.otrapped = 0;
     boulder.hidden = false;
     boulder.transientProjectile = false;
+    if (boulder.no_charge && !rollingBoulderNoChargeStillAppliesAt(x, y))
+        boulder.no_charge = false;
     boulder.ox = x;
     boulder.oy = y;
     game.level.objects = (game.level?.objects || []).filter(obj => obj !== boulder);
