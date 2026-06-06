@@ -42561,6 +42561,103 @@ test('command kicked blessed silver spear uses target-form bonuses without hard-
     assert.equal(spear.blessed, true);
 });
 
+test('command kicked aklys harms ordinary monster with club skill damage', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, { ulevel: 20, uluck: 10, uhitinc: 10, udaminc: 0 });
+    game.u.acurr.a[A_STR] = 10;
+    game.u.acurr.a[A_DEX] = 25;
+    game.u.weapon_skills = [];
+    setHeroWeaponSkill(P_CLUB, P_EXPERT);
+    const aklys = monsterAklys(512058, {
+        letter: undefined,
+        line: undefined,
+        ox: 6,
+        oy: 5,
+    });
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, {
+        mhp: 20,
+        mhpmax: 20,
+        msleeping: 1,
+        mpeaceful: 1,
+        meating: 4,
+        mstrategy: STRAT_WAITFORU,
+    });
+    game.level.objects = [aklys];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('\x04');
+    await rhack('l');
+
+    const rngLog = getRngLog();
+    const damageRoll = rngValuesForCall(rngLog, 'rnd(6)')[0];
+    assert.match(game._pending_message, /You kick an aklys\./);
+    assert.match(game._pending_message, /The aklys hits the goblin[.!]/);
+    assert.doesNotMatch(game._pending_message, /returns to your hand|tether|misses|gift|catches|shatters|Splat/);
+    assert.equal(goblin.mhp, 20 - (damageRoll + 2));
+    assert.equal(goblin.msleeping, 0);
+    assert.equal(goblin.meating, 0);
+    assert.equal(goblin.mstrategy, 0);
+    assert.equal(goblin.mpeaceful, 0);
+    assert.equal(game.level.objects.includes(aklys), true);
+    assert.equal(aklys.ox, 7);
+    assert.equal(aklys.oy, 5);
+    assert.equal(aklys.quan, 1);
+    assert.deepEqual(rngLog, [
+        'rnd(20)=14', 'rnd(6)=1', 'rn2(19)=4',
+    ]);
+});
+
+test('command kicked aklys uses large-target damage die without returning', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, { ulevel: 20, uluck: 10, uhitinc: 10, udaminc: 0 });
+    game.u.acurr.a[A_STR] = 10;
+    game.u.acurr.a[A_DEX] = 25;
+    game.u.weapon_skills = [];
+    setHeroWeaponSkill(P_CLUB, P_EXPERT);
+    const aklys = monsterAklys(512059, {
+        letter: undefined,
+        line: undefined,
+        ox: 6,
+        oy: 5,
+    });
+    const ogre = ordinaryThrowTarget('ogre', 7, 5, {
+        mhp: 20,
+        mhpmax: 20,
+        msize: 3,
+        msleeping: 1,
+        mpeaceful: 1,
+        meating: 4,
+        mstrategy: STRAT_WAITFORU,
+    });
+    game.level.objects = [aklys];
+    game.level.monsters = [ogre];
+    enableRngLog({ reset: true });
+
+    await rhack('\x04');
+    await rhack('l');
+
+    const rngLog = getRngLog();
+    const damageRoll = rngValuesForCall(rngLog, 'rnd(3)')[0];
+    assert.match(game._pending_message, /You kick an aklys\./);
+    assert.match(game._pending_message, /The aklys hits the ogre[.!]/);
+    assert.doesNotMatch(game._pending_message, /returns to your hand|tether|misses|gift|catches|shatters|Splat/);
+    assert.equal(ogre.mhp, 20 - (damageRoll + 2));
+    assert.equal(ogre.msleeping, 0);
+    assert.equal(ogre.meating, 0);
+    assert.equal(ogre.mstrategy, 0);
+    assert.equal(ogre.mpeaceful, 0);
+    assert.equal(game.level.objects.includes(aklys), true);
+    assert.equal(aklys.ox, 7);
+    assert.equal(aklys.oy, 5);
+    assert.equal(aklys.quan, 1);
+    assert.deepEqual(rngLog, [
+        'rnd(20)=14', 'rnd(3)=1', 'rn2(19)=4',
+    ]);
+});
+
 const KICKED_WEAPON_SKILL_DAMAGE_CASES = [
     { label: 'dagger unskilled', kind: 'dagger', skill: P_DAGGER, level: P_UNSKILLED, expectedHp: 16, hit: /The dagger hits the goblin\./, rng: ['rnd(20)', 'rnd(4)', 'rn2(19)'] },
     { label: 'dagger basic', kind: 'dagger', skill: P_DAGGER, level: P_BASIC, expectedHp: 14, hit: /The dagger hits the goblin!/, rng: ['rnd(20)', 'rnd(4)', 'rn2(19)'] },
