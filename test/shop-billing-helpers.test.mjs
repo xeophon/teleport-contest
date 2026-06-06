@@ -21462,6 +21462,133 @@ test('hero rolling boulder passes harmlessly through rock-passing monster after 
     assert.deepEqual(rngValuesForCall(getRngLog(), 'rnd(20)'), [2, 5]);
 });
 
+test('hero rolling boulder reveals object mimic on hit', async () => {
+    const { boulder } = installHeroRollingBoulderTrapState({
+        trapX: 6,
+        trapY: 4,
+        heroX: 5,
+        heroY: 4,
+        start: { x: 4, y: 3 },
+        end: { x: 8, y: 3 },
+        boulderAt: 'start',
+    });
+    const mimic = dartTrapGoblin(31475, {
+        mx: 6,
+        my: 3,
+        mhp: 20,
+        mhpmax: 20,
+        msleeping: 1,
+        m_ap_type: M_AP_OBJECT,
+        appearObj: 215,
+        appearGlyph: '(',
+        appearColor: 7,
+        data: { name: 'large mimic', mlet: 'mimic', mac: -5, msize: 'large' },
+    });
+    game.level.monsters.push(mimic);
+    enableRngLog({ reset: true });
+    installCoreRngValues([4, 4]);
+    markHeroNeighborhoodVisible();
+    for (let x = 4; x <= 8; x++) markSquareVisible(x, 3);
+
+    await rhack('l');
+
+    assert.equal(game._pending_message,
+        'Click!  You trigger a rolling boulder trap!  The boulder hits the large mimic!');
+    assert.equal(mimic.mhp, 15);
+    assert.equal(mimic.msleeping, 0);
+    assert.equal(mimic.m_ap_type || 0, 0);
+    assert.equal(mimic.appearObj, null);
+    assert.equal(mimic.appearGlyph, null);
+    assert.equal(mimic.appearColor, null);
+    assert.equal(boulder.ox, 8);
+    assert.equal(boulder.oy, 3);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rnd(20)'), [5, 5]);
+});
+
+test('hero rolling boulder reveals furniture mimic on hit', async () => {
+    const { boulder } = installHeroRollingBoulderTrapState({
+        trapX: 6,
+        trapY: 4,
+        heroX: 5,
+        heroY: 4,
+        start: { x: 4, y: 3 },
+        end: { x: 8, y: 3 },
+        boulderAt: 'start',
+    });
+    const mimic = dartTrapGoblin(31476, {
+        mx: 6,
+        my: 3,
+        mhp: 20,
+        mhpmax: 20,
+        msleeping: 1,
+        m_ap_type: M_AP_FURNITURE,
+        appearGlyph: '{',
+        appearColor: 11,
+        data: { name: 'large mimic', mlet: 'mimic', mac: -5, msize: 'large' },
+    });
+    game.level.monsters.push(mimic);
+    enableRngLog({ reset: true });
+    installCoreRngValues([4, 4]);
+    markHeroNeighborhoodVisible();
+    for (let x = 4; x <= 8; x++) markSquareVisible(x, 3);
+
+    await rhack('l');
+
+    assert.equal(game._pending_message,
+        'Click!  You trigger a rolling boulder trap!  The boulder hits the large mimic!');
+    assert.equal(mimic.mhp, 15);
+    assert.equal(mimic.msleeping, 0);
+    assert.equal(mimic.m_ap_type || 0, 0);
+    assert.equal(mimic.appearObj, null);
+    assert.equal(mimic.appearGlyph, null);
+    assert.equal(mimic.appearColor, null);
+    assert.equal(boulder.ox, 8);
+    assert.equal(boulder.oy, 3);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rnd(20)'), [5, 5]);
+});
+
+test('hero rolling boulder suppresses visible miss against object mimic', async () => {
+    const { boulder } = installHeroRollingBoulderTrapState({
+        trapX: 6,
+        trapY: 4,
+        heroX: 5,
+        heroY: 4,
+        start: { x: 4, y: 3 },
+        end: { x: 8, y: 3 },
+        boulderAt: 'start',
+    });
+    const mimic = dartTrapGoblin(31477, {
+        mx: 6,
+        my: 3,
+        mhp: 20,
+        mhpmax: 20,
+        msleeping: 1,
+        m_ap_type: M_AP_OBJECT,
+        appearObj: 215,
+        appearGlyph: '(',
+        appearColor: 7,
+        data: { name: 'large mimic', mlet: 'mimic', mac: -20, msize: 'large' },
+    });
+    game.level.monsters.push(mimic);
+    enableRngLog({ reset: true });
+    installCoreRngValues([19]);
+    markHeroNeighborhoodVisible();
+    for (let x = 4; x <= 8; x++) markSquareVisible(x, 3);
+
+    await rhack('l');
+
+    assert.equal(game._pending_message, 'Click!  You trigger a rolling boulder trap!');
+    assert.equal(mimic.mhp, 20);
+    assert.equal(mimic.msleeping, 1);
+    assert.equal(mimic.m_ap_type, M_AP_OBJECT);
+    assert.equal(mimic.appearObj, 215);
+    assert.equal(mimic.appearGlyph, '(');
+    assert.equal(mimic.appearColor, 7);
+    assert.equal(boulder.ox, 8);
+    assert.equal(boulder.oy, 3);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rnd(20)'), [20]);
+});
+
 test('hero rolling boulder down ladder migrates off level', async () => {
     const { boulder } = installHeroRollingBoulderTrapState({
         trapX: 6,
