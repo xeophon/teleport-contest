@@ -47295,6 +47295,12 @@ function heroRollingBoulderMonsterCanBeSpotted(mon) {
         && (!mon.minvis || game.u?.seeInvisible) && cansee(mon.mx, mon.my);
 }
 
+function observeHeroRollingBoulderProjectile(movingBoulder, visible) {
+    if (!movingBoulder || !visible || heroIsHallucinating()) return;
+    movingBoulder.dknown = true;
+    recordObservedObjectDiscovery(movingBoulder);
+}
+
 function heroRollingBoulderMonsterNameFromData(data) {
     const baseName = String(data?.name || '').trim();
     if (!baseName) return '';
@@ -47366,11 +47372,28 @@ function heroRollingBoulderKillMonster(mon, messages, visible, movingBoulder) {
     newsym(mon.mx, mon.my);
 }
 
+function applyHeroRollingBoulderHitPassiveObject(movingBoulder, mon, messages) {
+    if (!movingBoulder || !mon || mon.dead || (mon.mhp != null && mon.mhp <= 0)) {
+        return { handled: false, damaged: false };
+    }
+    const oldX = movingBoulder.ox;
+    const oldY = movingBoulder.oy;
+    movingBoulder.ox = mon.mx;
+    movingBoulder.oy = mon.my;
+    try {
+        return applyMonsterThrownPassiveObject(movingBoulder, mon, true, messages);
+    } finally {
+        movingBoulder.ox = oldX;
+        movingBoulder.oy = oldY;
+    }
+}
+
 function heroRollingBoulderHitMonsterAt(x, y, movingBoulder, messages) {
     const mon = heroRollingBoulderPathMonsterAt(x, y);
     if (!mon || !movingBoulder) return { handled: false, consumed: false };
 
     const visible = !game.u?.blind && cansee(x, y);
+    observeHeroRollingBoulderProjectile(movingBoulder, visible);
     const hitThreshold = 5 + (mon.data?.mac ?? 10)
         + heroRollingBoulderMonsterHitAdjustment(mon, movingBoulder);
     const hitRoll = rnd(20);
@@ -47401,6 +47424,7 @@ function heroRollingBoulderHitMonsterAt(x, y, movingBoulder, messages) {
             heroRollingBoulderKillMonster(mon, messages, visible, movingBoulder);
     }
     if (!mon.dead) setHeroObjectHitMonsterAngry(mon);
+    applyHeroRollingBoulderHitPassiveObject(movingBoulder, mon, messages);
     return { handled: true, consumed: false };
 }
 

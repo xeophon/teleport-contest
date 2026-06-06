@@ -21354,6 +21354,113 @@ test('hero rolling boulder failed rock thrower snatch falls through to hit roll'
     assert.deepEqual(rngValuesForCall(getRngLog(), 'rnd(20)'), [5, 5]);
 });
 
+test('visible hero rolling boulder monster miss observes distant boulder before hit result', async () => {
+    const { boulder } = installHeroRollingBoulderTrapState({
+        trapX: 6,
+        trapY: 4,
+        heroX: 5,
+        heroY: 4,
+        start: { x: 4, y: 3 },
+        end: { x: 8, y: 3 },
+        boulderAt: 'start',
+        boulderProps: { dknown: false },
+    });
+    const goblin = dartTrapGoblin(314711, {
+        mx: 6,
+        my: 3,
+        mhp: 50,
+        mhpmax: 50,
+        data: { name: 'goblin', mlet: 'o', mac: -20 },
+    });
+    game.level.monsters.push(goblin);
+    enableRngLog({ reset: true });
+    installCoreRngValues([19]);
+    markHeroNeighborhoodVisible();
+    for (let x = 4; x <= 8; x++) markSquareVisible(x, 3);
+
+    await rhack('l');
+
+    assert.equal(game._pending_message,
+        'Click!  You trigger a rolling boulder trap!  The boulder misses the goblin.');
+    assert.equal(boulder.dknown, true);
+    assert.equal(goblin.mhp, 50);
+    assert.equal(boulder.ox, 8);
+    assert.equal(boulder.oy, 3);
+    assert.equal((game._discoveries || []).some(entry =>
+        /boulder/i.test(`${entry.name} ${entry.text}`)), false);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rnd(20)'), [20]);
+});
+
+test('blind hero rolling boulder monster miss does not observe distant boulder', async () => {
+    const { boulder } = installHeroRollingBoulderTrapState({
+        trapX: 6,
+        trapY: 4,
+        heroX: 5,
+        heroY: 4,
+        start: { x: 4, y: 3 },
+        end: { x: 8, y: 3 },
+        boulderAt: 'start',
+        boulderProps: { dknown: false },
+    });
+    const goblin = dartTrapGoblin(314712, {
+        mx: 6,
+        my: 3,
+        mhp: 50,
+        mhpmax: 50,
+        data: { name: 'goblin', mlet: 'o', mac: -20 },
+    });
+    game.level.monsters.push(goblin);
+    game.u.blind = true;
+    enableRngLog({ reset: true });
+    installCoreRngValues([19]);
+    for (let x = 4; x <= 8; x++) markSquareVisible(x, 3);
+
+    await rhack('l');
+
+    assert.equal(game._pending_message, 'Click!  You trigger a rolling boulder trap!');
+    assert.equal(boulder.dknown, false);
+    assert.equal(goblin.mhp, 50);
+    assert.equal(boulder.ox, 8);
+    assert.equal(boulder.oy, 3);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rnd(20)'), [20]);
+});
+
+test('hallucinating hero rolling boulder monster miss does not observe distant boulder', async () => {
+    const { boulder } = installHeroRollingBoulderTrapState({
+        trapX: 6,
+        trapY: 4,
+        heroX: 5,
+        heroY: 4,
+        start: { x: 4, y: 3 },
+        end: { x: 8, y: 3 },
+        boulderAt: 'start',
+        boulderProps: { dknown: false },
+    });
+    const goblin = dartTrapGoblin(314713, {
+        mx: 6,
+        my: 3,
+        mhp: 50,
+        mhpmax: 50,
+        data: { name: 'goblin', mlet: 'o', mac: -20 },
+    });
+    game.level.monsters.push(goblin);
+    game.u._statusSuffix = ' Hallu';
+    enableRngLog({ reset: true });
+    installCoreRngValues([19]);
+    markHeroNeighborhoodVisible();
+    for (let x = 4; x <= 8; x++) markSquareVisible(x, 3);
+
+    await rhack('l');
+
+    assert.equal(game._pending_message,
+        'Click!  You trigger a rolling boulder trap!  The boulder misses the goblin.');
+    assert.equal(boulder.dknown, false);
+    assert.equal(goblin.mhp, 50);
+    assert.equal(boulder.ox, 8);
+    assert.equal(boulder.oy, 3);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rnd(20)'), [20]);
+});
+
 test('hero rolling boulder miss against monster keeps rolling into downstream stairs', async () => {
     const { boulder } = installHeroRollingBoulderTrapState({
         trapX: 6,
@@ -21424,6 +21531,118 @@ test('hero rolling boulder hits monster before same-square land mine', async () 
     assert.equal(game.level.objects.includes(boulder), false);
     assert.deepEqual(rngValuesForCall(getRngLog(), 'rnd(20)'), [5, 5]);
     assert.deepEqual(rngValuesForCall(getRngLog(), 'rn2(10)'), [3]);
+});
+
+test('hero rolling boulder hit runs acid passive before same-square land mine', async () => {
+    const { boulder } = installHeroRollingBoulderTrapState({
+        trapX: 6,
+        trapY: 4,
+        heroX: 5,
+        heroY: 4,
+        start: { x: 4, y: 3 },
+        end: { x: 8, y: 3 },
+        boulderAt: 'start',
+    });
+    const acidBlob = dartTrapGoblin(314731, {
+        mx: 6,
+        my: 3,
+        mhp: 20,
+        mhpmax: 20,
+        data: { name: 'acid blob', mlet: 'b', mac: -5 },
+    });
+    const mine = { ttyp: LANDMINE, tx: 6, ty: 3, tseen: false, madeby_u: false };
+    game.level.monsters.push(acidBlob);
+    game.level.traps.push(mine);
+    enableRngLog({ reset: true });
+    installCoreRngValues([4, 4, 5, 3]);
+    markHeroNeighborhoodVisible();
+    for (let x = 4; x <= 8; x++) markSquareVisible(x, 3);
+
+    await rhack('l');
+
+    assert.equal(game._pending_message,
+        'Click!  You trigger a rolling boulder trap!  The boulder hits the acid blob!  KAABLAMM!!!  The rolling boulder triggers a land mine.');
+    assert.equal(acidBlob.mhp, 15);
+    assert.equal(game.level.traps.includes(mine), false);
+    assert.equal(game.level.objects.includes(boulder), false);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rnd(20)', 'rnd(20)', 'rn2(6)', 'rn2(10)',
+    ]);
+});
+
+test('hero rolling boulder miss skips acid passive before same-square land mine', async () => {
+    const { boulder } = installHeroRollingBoulderTrapState({
+        trapX: 6,
+        trapY: 4,
+        heroX: 5,
+        heroY: 4,
+        start: { x: 4, y: 3 },
+        end: { x: 8, y: 3 },
+        boulderAt: 'start',
+    });
+    const acidBlob = dartTrapGoblin(314732, {
+        mx: 6,
+        my: 3,
+        mhp: 20,
+        mhpmax: 20,
+        data: { name: 'acid blob', mlet: 'b', mac: -20 },
+    });
+    const mine = { ttyp: LANDMINE, tx: 6, ty: 3, tseen: false, madeby_u: false };
+    game.level.monsters.push(acidBlob);
+    game.level.traps.push(mine);
+    enableRngLog({ reset: true });
+    installCoreRngValues([19, 3]);
+    markHeroNeighborhoodVisible();
+    for (let x = 4; x <= 8; x++) markSquareVisible(x, 3);
+
+    await rhack('l');
+
+    assert.equal(game._pending_message,
+        'Click!  You trigger a rolling boulder trap!  The boulder misses the acid blob.  KAABLAMM!!!  The rolling boulder triggers a land mine.');
+    assert.equal(acidBlob.mhp, 20);
+    assert.equal(game.level.traps.includes(mine), false);
+    assert.equal(game.level.objects.includes(boulder), false);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rnd(20)', 'rn2(10)',
+    ]);
+});
+
+test('hero rolling boulder acid passive keeps original boulder moving without duplicate', async () => {
+    const { boulder } = installHeroRollingBoulderTrapState({
+        trapX: 6,
+        trapY: 4,
+        heroX: 5,
+        heroY: 4,
+        start: { x: 4, y: 3 },
+        end: { x: 8, y: 3 },
+        boulderAt: 'start',
+    });
+    const acidBlob = dartTrapGoblin(314733, {
+        mx: 6,
+        my: 3,
+        mhp: 20,
+        mhpmax: 20,
+        data: { name: 'acid blob', mlet: 'b', mac: -5 },
+    });
+    game.level.monsters.push(acidBlob);
+    enableRngLog({ reset: true });
+    installCoreRngValues([4, 4, 5]);
+    markHeroNeighborhoodVisible();
+    for (let x = 4; x <= 8; x++) markSquareVisible(x, 3);
+
+    await rhack('l');
+
+    assert.equal(game._pending_message,
+        'Click!  You trigger a rolling boulder trap!  The boulder hits the acid blob!');
+    assert.equal(acidBlob.mhp, 15);
+    assert.equal(boulder.ox, 8);
+    assert.equal(boulder.oy, 3);
+    assert.equal(game.level.objects.filter(obj => obj.id === boulder.id).length, 1);
+    assert.equal(game.level.objects.some(obj =>
+        obj !== boulder && obj.otyp === BOULDER && obj.ox === 6 && obj.oy === 3), false);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rnd(20)', 'rnd(20)', 'rn2(6)',
+    ]);
 });
 
 test('hero rolling boulder passes harmlessly through rock-passing monster after hit roll', async () => {
