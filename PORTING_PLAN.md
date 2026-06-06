@@ -125,8 +125,9 @@ Detailed source-backed history is kept in `docs/c-parity-audit/`. This section i
 - Hero-triggered rolling-boulder path landmines are covered in audit 609.
 - Hero-triggered rolling-boulder down gates are covered in audit 610.
 - Hero-triggered rolling-boulder path teleport effects are covered in audit 611.
+- Hero-triggered rolling-boulder path pit/hole/liquid floor effects are covered in audit 612.
 - Magic-marker write target `getobj()` suggested/downplayed selection is covered in audit 577.
-- Latest compact/source note: `docs/c-parity-audit/611-hero-rolling-boulder-path-teleport-2026-06-06.md`.
+- Latest compact/source note: `docs/c-parity-audit/612-hero-rolling-boulder-floor-effects-2026-06-06.md`.
 - Latest verified public score: `44/44`.
 
 ## Current Priorities

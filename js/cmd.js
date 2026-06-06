@@ -47193,6 +47193,45 @@ function heroRollingBoulderApplyTeleportTrapAt(x, y, movingBoulder, messages) {
     return { handled: true, consumed: true };
 }
 
+function heroRollingBoulderPitHoleTrapAt(x, y) {
+    return (game.level?.traps || []).find(trap =>
+        [PIT, SPIKED_PIT, HOLE, TRAPDOOR].includes(trap.ttyp) && trap.tx === x && trap.ty === y) || null;
+}
+
+function heroRollingBoulderFloorEffectsAt(x, y, movingBoulder, messages) {
+    const floorMessages = [];
+    const previousMonsterMoving = game._monster_moving;
+    game._monster_moving = 1;
+    let consumed = false;
+    try {
+        consumed = earthFloorEffects(movingBoulder, x, y, floorMessages, 'fall', {
+            usedUpShopBillOnDestroy: true,
+        });
+    } finally {
+        if (previousMonsterMoving === undefined) delete game._monster_moving;
+        else game._monster_moving = previousMonsterMoving;
+    }
+    messages.push(...floorMessages);
+    if (consumed)
+        game.level.objects = (game.level?.objects || []).filter(obj => obj !== movingBoulder);
+    return consumed;
+}
+
+function heroRollingBoulderApplyPitHoleFloorEffectsAt(x, y, movingBoulder, messages) {
+    if (!movingBoulder || !heroRollingBoulderPitHoleTrapAt(x, y))
+        return { handled: false, consumed: false };
+    return {
+        handled: true,
+        consumed: heroRollingBoulderFloorEffectsAt(x, y, movingBoulder, messages),
+    };
+}
+
+function heroRollingBoulderApplyGenericFloorEffectsAt(x, y, movingBoulder, messages) {
+    if (!movingBoulder) return { handled: false, consumed: false };
+    const consumed = heroRollingBoulderFloorEffectsAt(x, y, movingBoulder, messages);
+    return { handled: consumed, consumed };
+}
+
 function deleteHeroRollingBoulderLandmineEngravingAt(x, y) {
     if (!game.level?.engravings) return;
     game.level.engravings = game.level.engravings.filter(engr => engr.x !== x || engr.y !== y);
@@ -47280,6 +47319,20 @@ function heroRollingBoulderPathResult(start, end, movingBoulder) {
                 result.finalY = y;
                 result.boulder = null;
             }
+            break;
+        }
+        const pitHole = heroRollingBoulderApplyPitHoleFloorEffectsAt(x, y, result.boulder, result.messages);
+        if (pitHole.handled) {
+            result.finalX = x;
+            result.finalY = y;
+            if (pitHole.consumed) result.boulder = null;
+            break;
+        }
+        const floorEffects = heroRollingBoulderApplyGenericFloorEffectsAt(x, y, result.boulder, result.messages);
+        if (floorEffects.handled) {
+            result.finalX = x;
+            result.finalY = y;
+            if (floorEffects.consumed) result.boulder = null;
             break;
         }
         result.boulder = heroRollingBoulderChainIntoBoulderAt(x, y, dx, dy, dist - 1,
