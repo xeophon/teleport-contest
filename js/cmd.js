@@ -47110,6 +47110,89 @@ function heroRollingBoulderApplyDownGateAt(x, y, movingBoulder, messages) {
     return { handled: true, consumed: true };
 }
 
+function heroRollingBoulderTeleportTrapAt(x, y) {
+    return (game.level?.traps || []).find(trap =>
+        [TELEP_TRAP, LEVEL_TELEP].includes(trap.ttyp) && trap.tx === x && trap.ty === y) || null;
+}
+
+function heroRollingBoulderSameLevel(level) {
+    const current = game.u?.uz || { dnum: 0, dlevel: 1 };
+    return !!level && level.dnum === current.dnum && level.dlevel === current.dlevel;
+}
+
+function heroRollingBoulderTeleportGoodpos(x, y, movingBoulder) {
+    if (!isok(x, y)) return false;
+    if ((game.u?.ux ?? 0) === x && (game.u?.uy ?? 0) === y) return false;
+    const loc = game.level?.at?.(x, y);
+    if (!loc || !ACCESSIBLE(loc.typ)) return false;
+    return !(game.level?.objects || []).some(obj =>
+        obj !== movingBoulder && !obj.transientProjectile && obj.otyp === BOULDER
+        && obj.ox === x && obj.oy === y);
+}
+
+function heroRollingBoulderTeleportLandingSpot(movingBoulder) {
+    let fallback = { x: movingBoulder?.ox || 0, y: movingBoulder?.oy || 0 };
+    for (let tryLimit = 4000; tryLimit > 0; tryLimit--) {
+        const x = rn1(COLNO - 3, 2);
+        const y = rn2(ROWNO);
+        fallback = { x, y };
+        if (heroRollingBoulderTeleportGoodpos(x, y, movingBoulder)) return fallback;
+    }
+    return fallback;
+}
+
+function heroRollingBoulderTeleportDisappearMessage(x, y) {
+    if (!game.u?.blind && cansee(x, y)) return 'Suddenly the rolling boulder disappears!';
+    return heroIsDeaf() ? '' : 'You hear a rumbling stop abruptly.';
+}
+
+function heroRollingBoulderTeleportWithinLevel(movingBoulder, messages) {
+    game.level.objects = (game.level?.objects || []).filter(obj => obj !== movingBoulder);
+    const spot = heroRollingBoulderTeleportLandingSpot(movingBoulder);
+    movingBoulder.ox = spot.x;
+    movingBoulder.oy = spot.y;
+    movingBoulder.hidden = false;
+    movingBoulder.transientProjectile = false;
+    const floorMessages = [];
+    const consumed = earthFloorEffects(movingBoulder, spot.x, spot.y, floorMessages, 'fall');
+    messages.push(...floorMessages);
+    if (!consumed) game.level.objects.push(movingBoulder);
+    newsym(spot.x, spot.y);
+}
+
+function heroRollingBoulderQueueLevelTeleport(movingBoulder, targetLevel) {
+    game.level.objects = (game.level?.objects || []).filter(obj => obj !== movingBoulder);
+    movingBoulder.otrapped = 0;
+    movingBoulder.hidden = false;
+    movingBoulder.transientProjectile = false;
+    movingBoulder.ox = targetLevel.dnum;
+    movingBoulder.oy = targetLevel.dlevel;
+    movingBoulder.owornmask = MIGR_RANDOM;
+    queueImpactDroppedObjects(targetLevel, [movingBoulder], { where: MIGR_RANDOM });
+}
+
+function heroRollingBoulderApplyTeleportTrapAt(x, y, movingBoulder, messages) {
+    const trap = heroRollingBoulderTeleportTrapAt(x, y);
+    if (!trap || !movingBoulder) return { handled: false, consumed: false };
+
+    let targetLevel = null;
+    if (trap.ttyp === LEVEL_TELEP) {
+        targetLevel = levelTeleportNumericTarget(randomTeleportDepth());
+        if (heroRollingBoulderSameLevel(targetLevel)) return { handled: false, consumed: false };
+    }
+
+    const disappear = heroRollingBoulderTeleportDisappearMessage(x, y);
+    if (disappear) messages.push(disappear);
+    movingBoulder.otrapped = 0;
+    if (trap.ttyp === TELEP_TRAP) heroRollingBoulderTeleportWithinLevel(movingBoulder, messages);
+    else heroRollingBoulderQueueLevelTeleport(movingBoulder, targetLevel);
+    if (!trap.tseen) {
+        trap.tseen = true;
+        newsym(x, y);
+    }
+    return { handled: true, consumed: true };
+}
+
 function deleteHeroRollingBoulderLandmineEngravingAt(x, y) {
     if (!game.level?.engravings) return;
     game.level.engravings = game.level.engravings.filter(engr => engr.x !== x || engr.y !== y);
@@ -47188,6 +47271,15 @@ function heroRollingBoulderPathResult(start, end, movingBoulder) {
             result.finalX = x;
             result.finalY = y;
             result.boulder = null;
+            break;
+        }
+        const teleport = heroRollingBoulderApplyTeleportTrapAt(x, y, result.boulder, result.messages);
+        if (teleport.handled) {
+            if (teleport.consumed) {
+                result.finalX = x;
+                result.finalY = y;
+                result.boulder = null;
+            }
             break;
         }
         result.boulder = heroRollingBoulderChainIntoBoulderAt(x, y, dx, dy, dist - 1,

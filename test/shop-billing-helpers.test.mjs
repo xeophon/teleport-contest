@@ -21408,6 +21408,141 @@ test('hero rolling boulder path land mine dud keeps rolling', async () => {
     assert.equal(rngValuesForCall(getRngLog(), 'rnd(20)').length, 0);
 });
 
+test('hero rolling boulder relocates on visible path teleport trap', async () => {
+    const { boulder } = installHeroRollingBoulderTrapState({
+        trapX: 6,
+        trapY: 4,
+        heroX: 5,
+        heroY: 4,
+        start: { x: 4, y: 3 },
+        end: { x: 8, y: 3 },
+        boulderAt: 'start',
+    });
+    const teleTrap = { ttyp: TELEP_TRAP, tx: 6, ty: 3, tseen: false, madeby_u: false };
+    game.level.traps.push(teleTrap);
+    game.level.at(6, 3).lit = true;
+    enableRngLog({ reset: true });
+    installCoreRngValues([8, 9]);
+    markHeroNeighborhoodVisible();
+    for (let x = 4; x <= 8; x++) markSquareVisible(x, 3);
+
+    await rhack('l');
+
+    assert.equal(game._pending_message,
+        'Click!  You trigger a rolling boulder trap!  Suddenly the rolling boulder disappears!');
+    assert.equal(game.level.traps.includes(teleTrap), true);
+    assert.equal(teleTrap.tseen, true);
+    assert.equal(game.level.objects.includes(boulder), true);
+    assert.equal(boulder.ox, 10);
+    assert.equal(boulder.oy, 9);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rn2(77)'), [8]);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rn2(21)'), [9]);
+    assert.equal(rngValuesForCall(getRngLog(), 'rnd(20)').length, 0);
+});
+
+test('deaf blind hero rolling boulder path teleport trap relocates silently', async () => {
+    const { boulder } = installHeroRollingBoulderTrapState({
+        trapX: 6,
+        trapY: 4,
+        heroX: 5,
+        heroY: 4,
+        start: { x: 4, y: 3 },
+        end: { x: 8, y: 3 },
+        boulderAt: 'start',
+        heroDeaf: true,
+    });
+    game.u.blind = true;
+    const teleTrap = { ttyp: TELEP_TRAP, tx: 6, ty: 3, tseen: false, madeby_u: false };
+    game.level.traps.push(teleTrap);
+    enableRngLog({ reset: true });
+    installCoreRngValues([8, 9]);
+    for (let x = 4; x <= 8; x++) markSquareVisible(x, 3);
+
+    await rhack('l');
+
+    assert.equal(game._pending_message, 'You trigger a rolling boulder trap!');
+    assert.equal(teleTrap.tseen, true);
+    assert.equal(game.level.objects.includes(boulder), true);
+    assert.equal(boulder.ox, 10);
+    assert.equal(boulder.oy, 9);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rn2(77)'), [8]);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rn2(21)'), [9]);
+    assert.equal(rngValuesForCall(getRngLog(), 'rnd(20)').length, 0);
+});
+
+test('hero rolling boulder level teleporter same-level roll keeps rolling', async () => {
+    const { boulder } = installHeroRollingBoulderTrapState({
+        trapX: 6,
+        trapY: 4,
+        heroX: 5,
+        heroY: 4,
+        start: { x: 4, y: 3 },
+        end: { x: 8, y: 3 },
+        boulderAt: 'start',
+    });
+    game.u.uz = { dnum: 0, dlevel: 1 };
+    game.dungeons = [{ name: 'The Dungeons of Doom', num_dunlevs: 3, depth_start: 1 }];
+    const levelTele = { ttyp: LEVEL_TELEP, tx: 6, ty: 3, tseen: false, madeby_u: false };
+    game.level.traps.push(levelTele);
+    enableRngLog({ reset: true });
+    installCoreRngValues([0]);
+    markHeroNeighborhoodVisible();
+    for (let x = 4; x <= 8; x++) markSquareVisible(x, 3);
+
+    await rhack('l');
+
+    assert.equal(game._pending_message, 'Click!  You trigger a rolling boulder trap!');
+    assert.equal(game.level.traps.includes(levelTele), true);
+    assert.equal(levelTele.tseen, false);
+    assert.equal(game.level.objects.includes(boulder), true);
+    assert.equal(boulder.ox, 8);
+    assert.equal(boulder.oy, 3);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rn2(5)'), [0]);
+    assert.equal(rngValuesForCall(getRngLog(), 'rnd(20)').length, 0);
+});
+
+test('hero rolling boulder level teleporter migrates before same-square boulder chain', async () => {
+    const { boulder } = installHeroRollingBoulderTrapState({
+        trapX: 6,
+        trapY: 4,
+        heroX: 5,
+        heroY: 4,
+        start: { x: 4, y: 3 },
+        end: { x: 8, y: 3 },
+        boulderAt: 'start',
+    });
+    game.u.uz = { dnum: 0, dlevel: 1 };
+    game.dungeons = [{ name: 'The Dungeons of Doom', num_dunlevs: 3, depth_start: 1 }];
+    const levelTele = { ttyp: LEVEL_TELEP, tx: 6, ty: 3, tseen: false, madeby_u: false };
+    const chained = floorBoulder(31453, { ox: 6, oy: 3 });
+    game.level.traps.push(levelTele);
+    game.level.objects.push(chained);
+    game.level.at(6, 3).lit = true;
+    enableRngLog({ reset: true });
+    installCoreRngValues([1, 0]);
+    markHeroNeighborhoodVisible();
+    for (let x = 4; x <= 8; x++) markSquareVisible(x, 3);
+
+    await rhack('l');
+
+    assert.equal(game._pending_message,
+        'Click!  You trigger a rolling boulder trap!  Suddenly the rolling boulder disappears!');
+    assert.equal(game.level.traps.includes(levelTele), true);
+    assert.equal(levelTele.tseen, true);
+    assert.equal(game.level.objects.includes(boulder), false);
+    assert.equal(game.level.objects.includes(chained), true);
+    assert.equal(chained.ox, 6);
+    assert.equal(chained.oy, 3);
+    assert.deepEqual(game._impact_drop_migrations?.get('0:2'), [boulder]);
+    assert.equal(boulder.ox, 0);
+    assert.equal(boulder.oy, 2);
+    assert.equal(boulder.owornmask, MIGR_RANDOM);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rn2(5)'), [1]);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rn2(3)'), [0]);
+    assert.equal(rngValuesForCall(getRngLog(), 'rnd(20)').length, 0);
+    assert.doesNotMatch(game._pending_message, /loud crash/);
+});
+
 test('hero rolling boulder sets another boulder stack in motion', async () => {
     const { boulder: first } = installHeroRollingBoulderTrapState({
         trapX: 6,
