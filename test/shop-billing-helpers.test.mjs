@@ -8,7 +8,7 @@ import { game, resetGame } from '../js/gstate.js';
 import { pushKey, resetInputState } from '../js/input.js';
 import { createMonsterCorpseOrGlob, mkcorpstat, mkobj, mksobj, monsterByRndName } from '../js/mklev.js';
 import { enableDisplayRngLog, enableRngLog, getRngLog, initRng } from '../js/rng.js';
-import { A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_STR, A_WIS, ALLOW_TRAPS, ALTAR, AM_SHRINE, Align2amask, ANTI_MAGIC, ARROW_TRAP, BEAR_TRAP, BILLSZ, CANDLESHOP, CLOUD, CORPSTAT_HISTORIC, COULD_SEE, DART_TRAP, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, D_CLOSED, D_NODOOR, FIRE_TRAP, FOUNTAIN, HOLE, ICE, ICED_POOL, IN_SIGHT, IRONBARS, LADDER, LANDMINE, LAVAPOOL, MAGIC_PORTAL, MIGR_LADDER_UP, MIGR_RANDOM, MIGR_SSTAIRS, MIGR_STAIRS_UP, MOAT, MON_MIGRATING, M_AP_FURNITURE, M_AP_OBJECT, NORMAL_SPEED, P_BASIC, P_DAGGER, P_EXPERT, P_KNIFE, P_SKILLED, P_UNSKILLED, PIT, POLY_TRAP, POOL, REPAIR_DELAY, ROCKTRAP, ROLLING_BOULDER_TRAP, ROOM, ROOMOFFSET, SDOOR, SHOPBASE, SHOP_DOOR_COST, SINK, SLP_GAS_TRAP, SPIKED_PIT, SQKY_BOARD, STAIRS, STATUE_TRAP, STONE, STRAT_APPEARMSG, STRAT_WAITFORU, STRAT_WAITMASK, TEMPLE, TRAPDOOR, TT_BEARTRAP, TT_LAVA, TT_PIT, TT_WEB, WEB, W_ARMF, W_SADDLE } from '../js/const.js';
+import { A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_STR, A_WIS, ALLOW_TRAPS, ALTAR, AM_SHRINE, Align2amask, ANTI_MAGIC, ARROW_TRAP, BEAR_TRAP, BILLSZ, CANDLESHOP, CLOUD, CORPSTAT_HISTORIC, COULD_SEE, DART_TRAP, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, D_CLOSED, D_NODOOR, FIRE_TRAP, FOUNTAIN, HOLE, ICE, ICED_POOL, IN_SIGHT, IRONBARS, LADDER, LANDMINE, LAVAPOOL, MAGIC_PORTAL, MIGR_LADDER_UP, MIGR_RANDOM, MIGR_SSTAIRS, MIGR_STAIRS_UP, MOAT, MON_MIGRATING, M_AP_FURNITURE, M_AP_OBJECT, NORMAL_SPEED, P_AXE, P_BARE_HANDED_COMBAT, P_BASIC, P_DAGGER, P_EXPERT, P_KNIFE, P_PICK_AXE, P_SABER, P_SKILLED, P_TWO_WEAPON_COMBAT, P_UNSKILLED, PIT, POLY_TRAP, POOL, REPAIR_DELAY, ROCKTRAP, ROLLING_BOULDER_TRAP, ROOM, ROOMOFFSET, SDOOR, SHOPBASE, SHOP_DOOR_COST, SINK, SLP_GAS_TRAP, SPIKED_PIT, SQKY_BOARD, STAIRS, STATUE_TRAP, STONE, STRAT_APPEARMSG, STRAT_WAITFORU, STRAT_WAITMASK, TEMPLE, TRAPDOOR, TT_BEARTRAP, TT_LAVA, TT_PIT, TT_WEB, WEB, W_ARMF, W_SADDLE } from '../js/const.js';
 import { currentFruitId, setCurrentFruitName } from '../js/fruit.js';
 import { CLR_BRIGHT_MAGENTA, CLR_BROWN, CLR_WHITE } from '../js/terminal.js';
 import { TRIBUTE_DEATH_QUOTES } from '../js/tribute.js';
@@ -20797,7 +20797,7 @@ test('force-fighting a seen destination web with Fire Brand burns and deletes it
     assert.equal(game.context.move, 1);
 });
 
-function setupForceFightDestinationWeb(inventory, { tseen = true, twoweapon = false } = {}) {
+function setupForceFightDestinationWeb(inventory, { tseen = true, twoweapon = false, strength = 10, rng = 9 } = {}) {
     installStableNonSokobanTrapState();
     vision_reset();
     Object.assign(game.u, {
@@ -20809,12 +20809,13 @@ function setupForceFightDestinationWeb(inventory, { tseen = true, twoweapon = fa
         utraptype: null,
         umoved: false,
     });
+    game.u.acurr.a[A_STR] = strength;
     game.inventory = inventory;
     game._twoweapon = twoweapon;
     const web = { ttyp: WEB, tx: 6, ty: 5, tseen, madeby_u: false };
     game.level.traps = [web];
     enableRngLog({ reset: true });
-    installCoreRngValues([9]);
+    installCoreRngValues([rng]);
     return web;
 }
 
@@ -20833,16 +20834,16 @@ async function assertForceFightWebNoCut(web, expectedMessage) {
     assert.equal(game.context.move, 1);
 }
 
-test('force-fighting a seen destination web with an axe cannot cut it', async () => {
-    const web = setupForceFightDestinationWeb([wieldedWeapon(880907, 'axe', 'a', 0)]);
+test('force-fighting a seen destination web with a mace cannot cut it', async () => {
+    const web = setupForceFightDestinationWeb([wieldedWeapon(880907, 'mace', 'm', 0)]);
 
-    await assertForceFightWebNoCut(web, "You can't cut a web with an axe!");
+    await assertForceFightWebNoCut(web, "You can't cut a web with a mace!");
 });
 
-test('force-fighting a seen destination web with a battle-axe describes an axe', async () => {
-    const web = setupForceFightDestinationWeb([wieldedWeapon(880908, 'battle-axe', 'b', 0)]);
+test('force-fighting a seen destination web with a lance cannot cut it', async () => {
+    const web = setupForceFightDestinationWeb([wieldedWeapon(880908, 'lance', 'l', 0)]);
 
-    await assertForceFightWebNoCut(web, "You can't cut a web with an axe!");
+    await assertForceFightWebNoCut(web, "You can't cut a web with a lance!");
 });
 
 test('force-fighting a seen destination web with a polearm cannot cut it', async () => {
@@ -20852,25 +20853,275 @@ test('force-fighting a seen destination web with a polearm cannot cut it', async
 });
 
 test('force-fighting a seen destination web with different non-blade weapons names both', async () => {
-    const axe = wieldedWeapon(880910, 'axe', 'a', 0);
+    const mace = wieldedWeapon(880910, 'mace', 'm', 0);
     const glaive = wieldedWeapon(880911, 'glaive', 'g', 0);
     glaive.wielded = false;
     glaive.alternate = true;
     glaive.line = 'g - a +0 glaive (wielded in left hand)';
-    const web = setupForceFightDestinationWeb([axe, glaive], { twoweapon: true });
+    const web = setupForceFightDestinationWeb([mace, glaive], { twoweapon: true });
 
-    await assertForceFightWebNoCut(web, "You can't cut a web with an axe or a polearm!");
+    await assertForceFightWebNoCut(web, "You can't cut a web with a mace or a polearm!");
 });
 
 test('force-fighting a seen destination web with matching non-blade descriptions pluralizes primary', async () => {
-    const axe = wieldedWeapon(880912, 'axe', 'a', 0);
-    const battleAxe = wieldedWeapon(880913, 'battle-axe', 'b', 0);
-    battleAxe.wielded = false;
-    battleAxe.alternate = true;
-    battleAxe.line = 'b - a +0 battle-axe (wielded in left hand)';
-    const web = setupForceFightDestinationWeb([axe, battleAxe], { twoweapon: true });
+    const mace = wieldedWeapon(880912, 'mace', 'm', 0);
+    const silverMace = wieldedWeapon(880913, 'silver mace', 's', 0);
+    silverMace.wielded = false;
+    silverMace.alternate = true;
+    silverMace.line = 's - a +0 silver mace (wielded in left hand)';
+    const web = setupForceFightDestinationWeb([mace, silverMace], { twoweapon: true });
 
-    await assertForceFightWebNoCut(web, "You can't cut a web with axes!");
+    await assertForceFightWebNoCut(web, "You can't cut a web with maces!");
+});
+
+test('force-fighting a seen destination web with a dagger can cut it', async () => {
+    const dagger = wieldedWeapon(880914, 'dagger', 'd', 0);
+    const web = setupForceFightDestinationWeb([dagger], { strength: 10, rng: 8 });
+    setHeroWeaponSkill(P_DAGGER, P_BASIC);
+
+    await rhack('F');
+    await rhack('l');
+
+    assert.deepEqual(getRngLog().map(rngCallName), ['rn2(20)']);
+    assert.equal(game._pending_message, 'You cut through the web.');
+    assert.equal(game.u.ux, 5);
+    assert.equal(game.u.uy, 5);
+    assert.equal(game.u.umoved, false);
+    assert.equal(game.u.utrap || 0, 0);
+    assert.equal(game.u.utraptype || null, null);
+    assert.equal(game.level.traps.includes(web), false);
+    assert.equal(game.u.weapon_skills[P_DAGGER].advance, 1);
+    assert.equal(game.context.move, 1);
+});
+
+test('force-fighting a seen destination web with a dagger can hack ineffectually', async () => {
+    const dagger = wieldedWeapon(880915, 'dagger', 'd', 0);
+    const web = setupForceFightDestinationWeb([dagger], { strength: 10, rng: 9 });
+    setHeroWeaponSkill(P_DAGGER, P_BASIC);
+
+    await rhack('F');
+    await rhack('l');
+
+    assert.deepEqual(getRngLog().map(rngCallName), ['rn2(20)']);
+    assert.equal(game._pending_message, 'You hack ineffectually at some of the strands.');
+    assert.equal(game.u.ux, 5);
+    assert.equal(game.u.uy, 5);
+    assert.equal(game.u.umoved, false);
+    assert.equal(game.u.utrap || 0, 0);
+    assert.equal(game.u.utraptype || null, null);
+    assert.equal(game.level.traps.includes(web), true);
+    assert.equal(game.u.weapon_skills[P_DAGGER].advance, 0);
+    assert.equal(game.context.move, 1);
+});
+
+test('force-fighting a seen destination web with an axe uses axe skill', async () => {
+    const axe = wieldedWeapon(880926, 'axe', 'a', 0);
+    const web = setupForceFightDestinationWeb([axe], { strength: 10, rng: 8 });
+    setHeroWeaponSkill(P_AXE, P_BASIC);
+
+    await rhack('F');
+    await rhack('l');
+
+    assert.deepEqual(getRngLog().map(rngCallName), ['rn2(20)']);
+    assert.equal(game._pending_message, 'You cut through the web.');
+    assert.equal(game.u.ux, 5);
+    assert.equal(game.u.uy, 5);
+    assert.equal(game.u.umoved, false);
+    assert.equal(game.u.utrap || 0, 0);
+    assert.equal(game.u.utraptype || null, null);
+    assert.equal(game.level.traps.includes(web), false);
+    assert.equal(game.u.weapon_skills[P_AXE].advance, 1);
+    assert.equal(game.context.move, 1);
+});
+
+test('force-fighting a seen destination web with a battle-axe uses axe skill', async () => {
+    const battleAxe = wieldedWeapon(880927, 'battle-axe', 'b', 0);
+    const web = setupForceFightDestinationWeb([battleAxe], { strength: 10, rng: 8 });
+    setHeroWeaponSkill(P_AXE, P_BASIC);
+
+    await rhack('F');
+    await rhack('l');
+
+    assert.deepEqual(getRngLog().map(rngCallName), ['rn2(20)']);
+    assert.equal(game._pending_message, 'You cut through the web.');
+    assert.equal(game.u.ux, 5);
+    assert.equal(game.u.uy, 5);
+    assert.equal(game.u.umoved, false);
+    assert.equal(game.u.utrap || 0, 0);
+    assert.equal(game.u.utraptype || null, null);
+    assert.equal(game.level.traps.includes(web), false);
+    assert.equal(game.u.weapon_skills[P_AXE].advance, 1);
+    assert.equal(game.context.move, 1);
+});
+
+test('force-fighting a seen destination web with a dwarvish mattock uses pick-axe skill', async () => {
+    const mattock = wieldedWeapon(880928, 'dwarvish mattock', 'm', 0);
+    const web = setupForceFightDestinationWeb([mattock], { strength: 10, rng: 9 });
+    setHeroWeaponSkill(P_PICK_AXE, P_SKILLED);
+
+    await rhack('F');
+    await rhack('l');
+
+    assert.deepEqual(getRngLog().map(rngCallName), ['rn2(20)']);
+    assert.equal(game._pending_message, 'You cut through the web.');
+    assert.equal(game.u.ux, 5);
+    assert.equal(game.u.uy, 5);
+    assert.equal(game.u.umoved, false);
+    assert.equal(game.u.utrap || 0, 0);
+    assert.equal(game.u.utraptype || null, null);
+    assert.equal(game.level.traps.includes(web), false);
+    assert.equal(game.u.weapon_skills[P_PICK_AXE].advance, 1);
+    assert.equal(game.context.move, 1);
+});
+
+test('force-fighting a seen destination web with an athame uses knife skill', async () => {
+    const athame = wieldedWeapon(880918, 'athame', 'a', 0);
+    const web = setupForceFightDestinationWeb([athame], { strength: 10, rng: 9 });
+    setHeroWeaponSkill(P_KNIFE, P_SKILLED);
+
+    await rhack('F');
+    await rhack('l');
+
+    assert.deepEqual(getRngLog().map(rngCallName), ['rn2(20)']);
+    assert.equal(game._pending_message, 'You cut through the web.');
+    assert.equal(game.u.ux, 5);
+    assert.equal(game.u.uy, 5);
+    assert.equal(game.u.umoved, false);
+    assert.equal(game.u.utrap || 0, 0);
+    assert.equal(game.u.utraptype || null, null);
+    assert.equal(game.level.traps.includes(web), false);
+    assert.equal(game.u.weapon_skills[P_KNIFE].advance, 1);
+    assert.equal(game.context.move, 1);
+});
+
+test('force-fighting a seen destination web with a scimitar uses saber skill', async () => {
+    const scimitar = wieldedWeapon(880923, 'scimitar', 's', 0);
+    const web = setupForceFightDestinationWeb([scimitar], { strength: 10, rng: 9 });
+    setHeroWeaponSkill(P_SABER, P_SKILLED);
+
+    await rhack('F');
+    await rhack('l');
+
+    assert.deepEqual(getRngLog().map(rngCallName), ['rn2(20)']);
+    assert.equal(game._pending_message, 'You cut through the web.');
+    assert.equal(game.u.ux, 5);
+    assert.equal(game.u.uy, 5);
+    assert.equal(game.u.umoved, false);
+    assert.equal(game.u.utrap || 0, 0);
+    assert.equal(game.u.utraptype || null, null);
+    assert.equal(game.level.traps.includes(web), false);
+    assert.equal(game.u.weapon_skills[P_SABER].advance, 1);
+    assert.equal(game.context.move, 1);
+});
+
+test('force-fighting a seen destination web with a nonblade primary and offhand blade uses two-weapon chance', async () => {
+    const mace = wieldedWeapon(880919, 'mace', 'm', 2);
+    const dagger = wieldedWeapon(880920, 'dagger', 'd', 0);
+    dagger.wielded = false;
+    dagger.alternate = true;
+    dagger.line = 'd - a +0 dagger (wielded in left hand)';
+    const web = setupForceFightDestinationWeb([mace, dagger], { twoweapon: true, strength: 10, rng: 10 });
+    setHeroWeaponSkill(P_TWO_WEAPON_COMBAT, P_BASIC);
+
+    await rhack('F');
+    await rhack('l');
+
+    assert.deepEqual(getRngLog().map(rngCallName), ['rn2(20)']);
+    assert.equal(game._pending_message, 'You cut through the web.');
+    assert.equal(game.u.ux, 5);
+    assert.equal(game.u.uy, 5);
+    assert.equal(game.u.umoved, false);
+    assert.equal(game.u.utrap || 0, 0);
+    assert.equal(game.u.utraptype || null, null);
+    assert.equal(game.level.traps.includes(web), false);
+    assert.equal(game.u.weapon_skills[P_TWO_WEAPON_COMBAT].advance, 1);
+    assert.equal(game.context.move, 1);
+});
+
+test('force-fighting a seen destination web with a nonblade primary and offhand blade can hack ineffectually', async () => {
+    const mace = wieldedWeapon(880921, 'mace', 'm', 2);
+    const dagger = wieldedWeapon(880922, 'dagger', 'd', 0);
+    dagger.wielded = false;
+    dagger.alternate = true;
+    dagger.line = 'd - a +0 dagger (wielded in left hand)';
+    const web = setupForceFightDestinationWeb([mace, dagger], { twoweapon: true, strength: 10, rng: 11 });
+    setHeroWeaponSkill(P_TWO_WEAPON_COMBAT, P_BASIC);
+
+    await rhack('F');
+    await rhack('l');
+
+    assert.deepEqual(getRngLog().map(rngCallName), ['rn2(20)']);
+    assert.equal(game._pending_message, 'You hack ineffectually at some of the strands.');
+    assert.equal(game.u.ux, 5);
+    assert.equal(game.u.uy, 5);
+    assert.equal(game.u.umoved, false);
+    assert.equal(game.u.utrap || 0, 0);
+    assert.equal(game.u.utraptype || null, null);
+    assert.equal(game.level.traps.includes(web), true);
+    assert.equal(game.u.weapon_skills[P_TWO_WEAPON_COMBAT].advance, 0);
+    assert.equal(game.context.move, 1);
+});
+
+test('force-fighting a seen destination web ignores offhand blade enchantment', async () => {
+    const mace = wieldedWeapon(880924, 'mace', 'm', 0);
+    const dagger = wieldedWeapon(880925, 'dagger', 'd', 20);
+    dagger.wielded = false;
+    dagger.alternate = true;
+    dagger.line = 'd - a +20 dagger (wielded in left hand)';
+    const web = setupForceFightDestinationWeb([mace, dagger], { twoweapon: true, strength: 10, rng: 9 });
+    setHeroWeaponSkill(P_TWO_WEAPON_COMBAT, P_BASIC);
+
+    await rhack('F');
+    await rhack('l');
+
+    assert.deepEqual(getRngLog().map(rngCallName), ['rn2(20)']);
+    assert.equal(game._pending_message, 'You hack ineffectually at some of the strands.');
+    assert.equal(game.u.ux, 5);
+    assert.equal(game.u.uy, 5);
+    assert.equal(game.u.umoved, false);
+    assert.equal(game.u.utrap || 0, 0);
+    assert.equal(game.u.utraptype || null, null);
+    assert.equal(game.level.traps.includes(web), true);
+    assert.equal(game.u.weapon_skills[P_TWO_WEAPON_COMBAT].advance, 0);
+    assert.equal(game.context.move, 1);
+});
+
+test('force-fighting a seen destination web barehanded can punch through it', async () => {
+    const web = setupForceFightDestinationWeb([], { strength: 10, rng: 8 });
+    setHeroWeaponSkill(P_BARE_HANDED_COMBAT, P_UNSKILLED);
+
+    await rhack('F');
+    await rhack('l');
+
+    assert.deepEqual(getRngLog().map(rngCallName), ['rn2(50)']);
+    assert.equal(game._pending_message, 'You punch through the web.');
+    assert.equal(game.u.ux, 5);
+    assert.equal(game.u.uy, 5);
+    assert.equal(game.u.umoved, false);
+    assert.equal(game.u.utrap || 0, 0);
+    assert.equal(game.u.utraptype || null, null);
+    assert.equal(game.level.traps.includes(web), false);
+    assert.equal(game.u.weapon_skills[P_BARE_HANDED_COMBAT].advance, 1);
+    assert.equal(game.context.move, 1);
+});
+
+test('force-fighting a seen destination web barehanded can thrash ineffectually', async () => {
+    const web = setupForceFightDestinationWeb([], { strength: 10, rng: 9 });
+    setHeroWeaponSkill(P_BARE_HANDED_COMBAT, P_UNSKILLED);
+
+    await rhack('F');
+    await rhack('l');
+
+    assert.deepEqual(getRngLog().map(rngCallName), ['rn2(50)']);
+    assert.equal(game._pending_message, 'You thrash ineffectually at some of the strands.');
+    assert.equal(game.u.ux, 5);
+    assert.equal(game.u.uy, 5);
+    assert.equal(game.u.umoved, false);
+    assert.equal(game.u.utrap || 0, 0);
+    assert.equal(game.u.utraptype || null, null);
+    assert.equal(game.level.traps.includes(web), true);
+    assert.equal(game.u.weapon_skills[P_BARE_HANDED_COMBAT].advance, 0);
+    assert.equal(game.context.move, 1);
 });
 
 test('force-fighting an unseen destination web with Sting does not cut it', async () => {

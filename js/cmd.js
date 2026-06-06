@@ -6,7 +6,7 @@ import { nhgetch } from './input.js';
 import { bot, cls, docrt, flush_screen, newsym, pline, recordObservedObjectDiscovery, refreshHallucinatedMap, seeMonsters, seeNearbyObjects, show_glyph_cell, strengthString } from './display.js';
 import { cansee, couldsee, vision_recalc, vision_reset } from './vision.js';
 import { RANDOM_MONSTER_BY_NAME, SHOP_TYPES, STALKER_MONSTERS, add_to_container, add_to_minv, adjustedMonsterLevel, artifactDefinitionForName, artifactObjectName, enextoMonsterSpot, make_tutorial1_level, makemon, makeArtifactWishObject, maketrap, mkcorpstat, mklev, mkobj, mkobj_at, mksobj, monsterByRndName, monster_hp, morgueMonster, nameObjectAsArtifact, next_ident, object_display, potionIndexForRoll, randomHallucinatedShopkeeperName, resurrectWizardOfYendor, rndmonnum, scrollIndexForRoll, set_mimic_sym_rng, syncDungeonContext, u_on_dnstairs, u_on_rndspot, u_on_upstairs, wipe_engr_at, dropMonsterInventory as dropMonsterInventoryRaw, l_nhcore_init, getrumor, getbogusmon, level_difficulty, set_malign, somexyspace, fumaroles, fix_wall_spines, createMonsterCorpseOrGlob, monsterCorpseDropSucceeds, monsterLeavesCorpseLikeDrop, movebubbles, noteleportLevelForMonster, rlocNoMsg } from './mklev.js';
-import { ACCESSIBLE, A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_MAX, A_NEUTRAL, A_NONE, A_STR, A_WIS, ALTAR, AM_SANCTUM, AM_SHRINE, Align2amask, Amask2align, BC_BALL, BC_CHAIN, BEAR_TRAP, BLCORNER, BOLT_LIM, BRCORNER, CANDLESHOP, CLOUD, COLNO, CORPSTAT_FEMALE, CORPSTAT_GENDER, CORPSTAT_HISTORIC, CORPSTAT_MALE, CORPSTAT_NEUTER, CORR, DB_DIR, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DB_NORTH, DB_SOUTH, DB_UNDER, DB_WEST, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, BURN, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, D_TRAPPED, DUST, ENGRAVE, ENGR_BLOOD, FOUNTAIN, F_LOOTED, GRAVE, HEADSTONE, HWALL, ICE, ICED_MOAT, ICED_POOL, IN_SIGHT, IRONBARS, IS_AIR, IS_FURNITURE, IS_LAVA, IS_OBSTRUCTED, IS_POOL, IS_ROOM, IS_SOFT, IS_TREE, IS_WALL, In_endgame, In_quest, In_sokoban, In_V_tower, Is_airlevel, Is_astralevel, Is_botlevel, Is_earthlevel, Is_firelevel, Is_rogue_level, Is_stronghold, Is_waterlevel, LADDER, LAVAPOOL, LAVAWALL, LUCKMAX, LUCKMIN, MAGIC_PORTAL, MARK, MAX_EGG_HATCH_TIME, MIGR_LADDER_UP, MIGR_RANDOM, MIGR_SSTAIRS, MIGR_STAIRS_UP, MM_ADJACENTOK, MM_EDOG, MM_NOCOUNTBIRTH, MM_NOMSG, MM_NOTAIL, MM_NOWAIT, MOAT, MORGUE, M_AP_FURNITURE, M_AP_OBJECT, M_AP_TYPE, N_DIRS, NO_MINVENT, NORMAL_SPEED, OVERLOADED, P_BASIC, P_DAGGER, P_EXPERT, P_KNIFE, P_SKILLED, P_UNSKILLED, PIT, POOL, REPAIR_DELAY, ROLLING_BOULDER_TRAP, ROOM, ROOMOFFSET, ROWNO, SCORR, SDOOR, SHARED, SHARED_PLUS, SHOPBASE, SHOP_DOOR_COST, SINK, SPIKED_PIT, STAIRS, STONE, STR18, STRAT_APPEARMSG, STRAT_WAITFORU, STRAT_WAITMASK, S_LDWASHER, S_LPUDDING, S_LRING, TDWALL, TEMPLE, THRONE, TLCORNER, TRCORNER, TREE, TREE_LOOTED, TREE_SWARM, TT_BEARTRAP, TT_BURIEDBALL, TT_INFLOOR, TT_LAVA, TT_PIT, TT_WEB, TUWALL, T_LOOTED, VAULT, VIBRATING_SQUARE, VWALL, WAND_BACKFIRE_CHANCE, WATER, WEB, WM_MASK, WT_IRON_BALL_BASE, WT_IRON_BALL_INCR, WT_TO_DMG, W_ARMF, W_NONDIGGABLE, W_SADDLE, ZAP_POS, isok, xdir, ydir } from './const.js';
+import { ACCESSIBLE, A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_MAX, A_NEUTRAL, A_NONE, A_STR, A_WIS, ALTAR, AM_SANCTUM, AM_SHRINE, Align2amask, Amask2align, BC_BALL, BC_CHAIN, BEAR_TRAP, BLCORNER, BOLT_LIM, BRCORNER, CANDLESHOP, CLOUD, COLNO, CORPSTAT_FEMALE, CORPSTAT_GENDER, CORPSTAT_HISTORIC, CORPSTAT_MALE, CORPSTAT_NEUTER, CORR, DB_DIR, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DB_NORTH, DB_SOUTH, DB_UNDER, DB_WEST, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, BURN, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, D_TRAPPED, DUST, ENGRAVE, ENGR_BLOOD, FOUNTAIN, F_LOOTED, GRAVE, HEADSTONE, HWALL, ICE, ICED_MOAT, ICED_POOL, IN_SIGHT, IRONBARS, IS_AIR, IS_FURNITURE, IS_LAVA, IS_OBSTRUCTED, IS_POOL, IS_ROOM, IS_SOFT, IS_TREE, IS_WALL, In_endgame, In_quest, In_sokoban, In_V_tower, Is_airlevel, Is_astralevel, Is_botlevel, Is_earthlevel, Is_firelevel, Is_rogue_level, Is_stronghold, Is_waterlevel, LADDER, LAVAPOOL, LAVAWALL, LUCKMAX, LUCKMIN, MAGIC_PORTAL, MARK, MAX_EGG_HATCH_TIME, MIGR_LADDER_UP, MIGR_RANDOM, MIGR_SSTAIRS, MIGR_STAIRS_UP, MM_ADJACENTOK, MM_EDOG, MM_NOCOUNTBIRTH, MM_NOMSG, MM_NOTAIL, MM_NOWAIT, MOAT, MORGUE, M_AP_FURNITURE, M_AP_OBJECT, M_AP_TYPE, N_DIRS, NO_MINVENT, NORMAL_SPEED, OVERLOADED, P_AXE, P_BARE_HANDED_COMBAT, P_BASIC, P_BROAD_SWORD, P_DAGGER, P_EXPERT, P_GRAND_MASTER, P_KNIFE, P_LONG_SWORD, P_MASTER, P_NONE, P_PICK_AXE, P_SABER, P_SHORT_SWORD, P_SKILLED, P_TWO_HANDED_SWORD, P_TWO_WEAPON_COMBAT, P_UNSKILLED, PIT, POOL, REPAIR_DELAY, ROLLING_BOULDER_TRAP, ROOM, ROOMOFFSET, ROWNO, SCORR, SDOOR, SHARED, SHARED_PLUS, SHOPBASE, SHOP_DOOR_COST, SINK, SPIKED_PIT, STAIRS, STONE, STR18, STR19, STRAT_APPEARMSG, STRAT_WAITFORU, STRAT_WAITMASK, S_LDWASHER, S_LPUDDING, S_LRING, TDWALL, TEMPLE, THRONE, TLCORNER, TRCORNER, TREE, TREE_LOOTED, TREE_SWARM, TT_BEARTRAP, TT_BURIEDBALL, TT_INFLOOR, TT_LAVA, TT_PIT, TT_WEB, TUWALL, T_LOOTED, VAULT, VIBRATING_SQUARE, VWALL, WAND_BACKFIRE_CHANCE, WATER, WEB, WM_MASK, WT_IRON_BALL_BASE, WT_IRON_BALL_INCR, WT_TO_DMG, W_ARMF, W_NONDIGGABLE, W_SADDLE, ZAP_POS, isok, xdir, ydir } from './const.js';
 import { d, rn1, rn2, rn2_on_display_rng, rnd, rnl, rnz } from './rng.js';
 import { CLR_BLACK, CLR_BLUE, CLR_BRIGHT_BLUE, CLR_BRIGHT_CYAN, CLR_BRIGHT_GREEN, CLR_BRIGHT_MAGENTA, CLR_BROWN, CLR_CYAN, CLR_GRAY, CLR_GREEN, CLR_MAGENTA, CLR_ORANGE, CLR_RED, CLR_YELLOW, CLR_WHITE, NO_COLOR } from './terminal.js';
 import { vfsDeleteFile, vfsReadFile, vfsWriteFile } from './storage.js';
@@ -11287,8 +11287,19 @@ function forceWeaponName(item) {
 }
 
 const FORCE_BLADE_NAME_RE = /\b(?:athame|axe|battle-axe|crysknife|dagger|knife|katana|saber|sabre|scalpel|short sword|broadsword|long sword|two-handed sword|tsurugi|wakizashi)\b/;
-const FORCE_WEB_BLADE_NAME_RE = /\b(?:athame|crysknife|dagger|knife|katana|saber|sabre|scalpel|short sword|broadsword|long sword|two-handed sword|tsurugi|wakizashi)\b/;
+const FORCE_WEB_BLADE_NAME_RE = /\b(?:athame|axe|battle-axe|crysknife|dagger|knife|katana|mattock|saber|sabre|scalpel|scimitar|short sword|broadsword|long sword|two-handed sword|tsurugi|wakizashi)\b/;
 const FORCE_WEB_POLEARM_NAME_RE = /\b(?:polearms?|bardiche|bec de corbin|bill-guisarme|fauchard|glaive|guisarme|halberd|lucern hammer|partisan|ranseur|spetum|voulge)\b/;
+const FORCE_WEB_WEAPON_SKILL_BY_DESCR = new Map([
+    ['dagger', { skill: P_DAGGER, name: 'dagger' }],
+    ['knife', { skill: P_KNIFE, name: 'knife' }],
+    ['axe', { skill: P_AXE, name: 'axe' }],
+    ['mattock', { skill: P_PICK_AXE, name: 'pick-axe' }],
+    ['short sword', { skill: P_SHORT_SWORD, name: 'short sword' }],
+    ['broadsword', { skill: P_BROAD_SWORD, name: 'broadsword' }],
+    ['long sword', { skill: P_LONG_SWORD, name: 'long sword' }],
+    ['two-handed sword', { skill: P_TWO_HANDED_SWORD, name: 'two-handed sword' }],
+    ['saber', { skill: P_SABER, name: 'saber' }],
+]);
 const FORCE_WEAPON_LDAM_BY_NAME = new Map([
     ['two-handed sword', 6], ['silver saber', 8], ['dwarvish spear', 8],
     ['elven short sword', 8], ['orcish short sword', 8], ['dwarvish short sword', 8],
@@ -11318,8 +11329,10 @@ function forceWeaponIsBlade(item) {
 }
 
 function forceWebWeaponIsBlade(item) {
+    if (!item) return false;
     const name = forceWeaponName(item).toLowerCase();
-    return !forceWeaponIsPick(item) && FORCE_WEB_BLADE_NAME_RE.test(name);
+    const weaponClass = item.cls === 'weapon' || item.oclass === 'weapon' || item.glyph === ')';
+    return weaponClass && FORCE_WEB_BLADE_NAME_RE.test(name);
 }
 
 function forceWebWeaponDescr(item) {
@@ -11334,13 +11347,19 @@ function forceWebWeaponDescr(item) {
     if (/\blance\b/.test(name)) return 'lance';
     if (/\b(?:silver )?mace\b/.test(name)) return 'mace';
     if (/\bdagger\b/.test(name)) return 'dagger';
-    if (/\b(?:knife|crysknife|scalpel|stiletto|worm tooth)\b/.test(name)) return 'knife';
+    if (/\b(?:athame|knife|crysknife|scalpel|stiletto|worm tooth)\b/.test(name)) return 'knife';
     if (/\b(?:elven |orcish |dwarvish )?short sword\b/.test(name)) return 'short sword';
     if (/\b(?:elven )?broadsword\b|\brunesword\b/.test(name)) return 'broadsword';
     if (/\b(?:long sword|katana)\b/.test(name)) return 'long sword';
     if (/\b(?:two-handed sword|tsurugi)\b/.test(name)) return 'two-handed sword';
     if (/\b(?:scimitar|silver saber|saber|sabre)\b/.test(name)) return 'saber';
     return name || 'weapon';
+}
+
+function forceWebSkillSpec(primary, secondary) {
+    if (primary && game._twoweapon && secondary) return { skill: P_TWO_WEAPON_COMBAT, name: 'two weapon combat' };
+    if (!primary) return { skill: P_BARE_HANDED_COMBAT, name: 'bare handed combat' };
+    return FORCE_WEB_WEAPON_SKILL_BY_DESCR.get(forceWebWeaponDescr(primary)) || { skill: P_NONE, name: 'none' };
 }
 
 function forceLockChance(item) {
@@ -18749,6 +18768,8 @@ function normalizeHeroWeaponSkillLevel(value) {
     if (key === 'basic') return P_BASIC;
     if (key === 'skilled') return P_SKILLED;
     if (key === 'expert') return P_EXPERT;
+    if (key === 'master') return P_MASTER;
+    if (key === 'grand master') return P_GRAND_MASTER;
     return null;
 }
 
@@ -43325,6 +43346,28 @@ function forceWebNoCutWeaponPhrase(primary, secondary) {
     return primaryPhrase;
 }
 
+function forceWebAcurrstr() {
+    const str = Math.trunc(Number(game.u?.acurr?.a?.[A_STR] ?? 10));
+    if (str <= STR18(0)) return Math.max(str, 3);
+    if (str <= STR19(21)) return 19 + Math.trunc(str / 50);
+    return Math.min(str, 125) - 100;
+}
+
+function forceWebSkillMinusTwo(skillSpec) {
+    const explicit = heroExplicitWeaponSkillLevel(skillSpec.skill, skillSpec.name);
+    return Math.max(explicit ?? P_UNSKILLED, P_UNSKILLED) - 2;
+}
+
+function practiceForceWebSkill(skillSpec) {
+    if (skillSpec.skill === P_NONE) return;
+    const explicit = heroExplicitWeaponSkillLevel(skillSpec.skill, skillSpec.name);
+    if (explicit === 0) return;
+    const current = game.u?.weapon_skills?.[skillSpec.skill];
+    if (!current || typeof current !== 'object') return;
+    if (normalizeHeroWeaponSkillLevel(current) === 0) return;
+    current.advance = Math.trunc(Number(current.advance || 0)) + 1;
+}
+
 async function forceFightWebTrap(trap) {
     if (!trap || trap.ttyp !== WEB || !trap.tseen) return false;
     const artifact = guaranteedWebForceArtifact();
@@ -43336,8 +43379,8 @@ async function forceFightWebTrap(trap) {
         return true;
     }
     const primary = wieldedItem();
+    const secondary = primary ? forceFightSecondaryWeapon(primary) : null;
     if (primary && !forceWebWeaponIsBlade(primary)) {
-        const secondary = forceFightSecondaryWeapon(primary);
         if (!forceWebWeaponIsBlade(secondary)) {
             rn2(20);
             await setMessage(`You can't cut a web with ${forceWebNoCutWeaponPhrase(primary, secondary)}!`);
@@ -43345,7 +43388,21 @@ async function forceFightWebTrap(trap) {
             return true;
         }
     }
-    return false;
+    const skillSpec = forceWebSkillSpec(primary, secondary);
+    const skillMinusTwo = forceWebSkillMinusTwo(skillSpec);
+    const roll = rn2(primary ? 20 : 45 - 5 * skillMinusTwo);
+    const threshold = forceWebAcurrstr() - 2
+        + (primary ? Math.trunc(Number(primary.spe || 0)) + skillMinusTwo : 0);
+    if (roll > threshold) {
+        await setMessage(`You ${primary ? 'hack' : 'thrash'} ineffectually at some of the strands.`);
+        game.context.move = 1;
+        return true;
+    }
+    practiceForceWebSkill(skillSpec);
+    deleteTrap(trap);
+    await setMessage(`You ${primary ? 'cut' : 'punch'} through the web.`);
+    game.context.move = 1;
+    return true;
 }
 
 async function sitWhileAlreadyTrapped(trap) {
