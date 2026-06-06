@@ -47311,14 +47311,36 @@ function heroRollingBoulderApparentMonsterName(mon) {
     return heroRollingBoulderMonsterNameFromData({ ...data, name: explicitName || data?.name });
 }
 
-function heroRollingBoulderMonsterTargetName(mon) {
-    if (game.flags?.verbose === false || !heroRollingBoulderMonsterCanBeSpotted(mon))
-        return 'it';
+function heroRollingBoulderMonsterObservedName(mon) {
+    if (!heroRollingBoulderMonsterCanBeSpotted(mon)) return '';
     let name = (heroRollingBoulderApparentMonsterName(mon) || fireScrollMonsterName(mon))
-        .replace(/^The /, 'the ');
+        .replace(/^The /, 'The ');
     if (mon?.minvis && !/^(?:the )?invisible\b/i.test(name))
-        name = /^the /i.test(name) ? name.replace(/^the /i, 'the invisible ') : `invisible ${name}`;
+        name = /^The /i.test(name) ? name.replace(/^The /i, 'The invisible ') : `invisible ${name}`;
     return name;
+}
+
+function heroRollingBoulderMonsterTargetName(mon) {
+    if (game.flags?.verbose === false) return 'it';
+    return heroRollingBoulderMonsterObservedName(mon).replace(/^The /, 'the ') || 'it';
+}
+
+function heroRollingBoulderMonsterDeathName(mon) {
+    return sentenceCase(heroRollingBoulderMonsterObservedName(mon)) || 'It';
+}
+
+function heroRollingBoulderMonsterDeathIsDestroyed(mon) {
+    const data = mon?.data || {};
+    const rawMlet = String(mon?.mlet || data.mlet || data.glyph || '');
+    const mlet = rawMlet.toLowerCase();
+    const name = String(data.name || mon?.name || '').toLowerCase();
+    return !heroRollingBoulderMonsterCanBeSpotted(mon)
+        || !!(mon?.vampshifter || data.vampshifter
+            || mon?.nonliving || data.nonliving
+            || mlet === 'w' || mlet === 'm' || mlet === 'z'
+            || mlet === 'zombie' || mlet === 'mummy' || rawMlet === "'"
+            || name.includes('zombie') || name.includes('mummy') || name.endsWith(' golem')
+            || name === 'manes' || name.includes('vortex'));
 }
 
 function heroRollingBoulderRevealMimicAppearance(mon) {
@@ -47332,7 +47354,10 @@ function heroRollingBoulderRevealMimicAppearance(mon) {
 }
 
 function heroRollingBoulderKillMonster(mon, messages, visible, movingBoulder) {
-    if (visible) messages.push(`${fireScrollMonsterName(mon)} is killed!`);
+    if (visible) {
+        const verb = heroRollingBoulderMonsterDeathIsDestroyed(mon) ? 'destroyed' : 'killed';
+        messages.push(`${heroRollingBoulderMonsterDeathName(mon)} is ${verb}!`);
+    }
     dropMonsterInventory(mon, messages);
     game.level.monsters = (game.level?.monsters || []).filter(other => other !== mon);
     mon.mhp = 0;

@@ -21689,6 +21689,119 @@ test('hero rolling boulder nonverbose hit visible target says it', async () => {
     assert.deepEqual(rngValuesForCall(getRngLog(), 'rnd(20)'), [5, 5]);
 });
 
+test('hero rolling boulder lethal hidden target says it is destroyed', async () => {
+    const { boulder } = installHeroRollingBoulderTrapState({
+        trapX: 6,
+        trapY: 4,
+        heroX: 5,
+        heroY: 4,
+        start: { x: 4, y: 3 },
+        end: { x: 8, y: 3 },
+        boulderAt: 'start',
+    });
+    const trapper = dartTrapMonster('trapper', 31484, {
+        mx: 6,
+        my: 3,
+        mhp: 5,
+        mhpmax: 5,
+        msleeping: 1,
+        mundetected: true,
+        data: { name: 'trapper', mac: -5, msize: 'large' },
+    });
+    game.u.urexp = 0;
+    game.level.monsters.push(trapper);
+    enableRngLog({ reset: true });
+    installCoreRngValues([4, 4]);
+    markHeroNeighborhoodVisible();
+    for (let x = 4; x <= 8; x++) markSquareVisible(x, 3);
+
+    await rhack('l');
+
+    assert.equal(game._pending_message,
+        'Click!  You trigger a rolling boulder trap!  The boulder hits it!  It is destroyed!');
+    assert.equal(game.level.monsters.includes(trapper), false);
+    assert.equal(trapper.dead, true);
+    assert.equal(trapper.mundetected, true);
+    assert.equal(game._vanquished_counts?.trapper, 1);
+    assert.equal(game.u.urexp, 0);
+    assert.equal(boulder.ox, 8);
+    assert.equal(boulder.oy, 3);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rnd(20)'), [5, 5]);
+});
+
+test('hero rolling boulder destroys visible nonliving target on lethal hit', async () => {
+    const { boulder } = installHeroRollingBoulderTrapState({
+        trapX: 6,
+        trapY: 4,
+        heroX: 5,
+        heroY: 4,
+        start: { x: 4, y: 3 },
+        end: { x: 8, y: 3 },
+        boulderAt: 'start',
+    });
+    const golem = dartTrapGoblin(31485, {
+        mx: 6,
+        my: 3,
+        mhp: 5,
+        mhpmax: 5,
+        msleeping: 1,
+        data: { name: 'iron golem', mlet: "'", mac: -5, msize: 'large', nonliving: true },
+    });
+    game.level.monsters.push(golem);
+    enableRngLog({ reset: true });
+    installCoreRngValues([4, 4]);
+    markHeroNeighborhoodVisible();
+    for (let x = 4; x <= 8; x++) markSquareVisible(x, 3);
+
+    await rhack('l');
+
+    assert.equal(game._pending_message,
+        'Click!  You trigger a rolling boulder trap!  The boulder hits the iron golem!  The iron golem is destroyed!');
+    assert.equal(game.level.monsters.includes(golem), false);
+    assert.equal(golem.dead, true);
+    assert.equal(game._vanquished_counts?.['iron golem'], 1);
+    assert.equal(boulder.ox, 8);
+    assert.equal(boulder.oy, 3);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rnd(20)'), [5, 5]);
+});
+
+test('hero rolling boulder nonverbose lethal visible target still names death', async () => {
+    const { boulder } = installHeroRollingBoulderTrapState({
+        trapX: 6,
+        trapY: 4,
+        heroX: 5,
+        heroY: 4,
+        start: { x: 4, y: 3 },
+        end: { x: 8, y: 3 },
+        boulderAt: 'start',
+    });
+    const goblin = dartTrapGoblin(31486, {
+        mx: 6,
+        my: 3,
+        mhp: 5,
+        mhpmax: 5,
+        msleeping: 1,
+        data: { name: 'goblin', mlet: 'o', mac: -5, msize: 'large' },
+    });
+    game.flags.verbose = false;
+    game.level.monsters.push(goblin);
+    enableRngLog({ reset: true });
+    installCoreRngValues([4, 4]);
+    markHeroNeighborhoodVisible();
+    for (let x = 4; x <= 8; x++) markSquareVisible(x, 3);
+
+    await rhack('l');
+
+    assert.equal(game._pending_message,
+        'Click!  You trigger a rolling boulder trap!  The boulder hits it!  The goblin is killed!');
+    assert.equal(game.level.monsters.includes(goblin), false);
+    assert.equal(goblin.dead, true);
+    assert.equal(game._vanquished_counts?.goblin, 1);
+    assert.equal(boulder.ox, 8);
+    assert.equal(boulder.oy, 3);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rnd(20)'), [5, 5]);
+});
+
 test('hero rolling boulder reveals object mimic on hit', async () => {
     const { boulder } = installHeroRollingBoulderTrapState({
         trapX: 6,
