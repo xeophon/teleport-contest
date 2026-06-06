@@ -21537,6 +21537,40 @@ test('#untrap known-box paralysis payload respects free action', async () => {
     assert.equal(game.context.move, 1);
 });
 
+test('#untrap known-box chest trap can be saved by luck', async () => {
+    setupUntrapDestinationWeb([], { rng: [74, 8, 0, 0] });
+    game.level.traps = [];
+    const box = shopFloorContainer(881025);
+    Object.assign(box, {
+        otrapped: true,
+        tknown: true,
+        dknown: true,
+        cknown: false,
+    });
+    game.level.objects = [box];
+
+    await enterUntrapDirection();
+    await rhack('.');
+
+    assert.equal(game._command_mode, 'untrapBoxConfirm');
+    assert.equal(game._pending_message, 'Disarm this large box? [ynq] (q)');
+
+    await rhack('y');
+
+    assert.equal(game._command_mode, null);
+    assert.deepEqual(getRngLog(), [
+        'rnd(75)=75',
+        'rn2(13)=8',
+        'rn2(13)=0',
+        'rn2(19)=0',
+    ]);
+    assert.equal(game._pending_message, 'You set it off!  But luckily the gas cloud blows away!');
+    assert.equal(box.otrapped, false);
+    assert.equal(box.tknown, true);
+    assert.equal(game._helpless_time || 0, 0);
+    assert.equal(game.context.move, 1);
+});
+
 test('#untrap Master Key forces box trap discovery and disarm', async () => {
     setupUntrapDestinationWeb([masterKeyOfThievery()], { rng: [0, 0] });
     game.level.traps = [];
