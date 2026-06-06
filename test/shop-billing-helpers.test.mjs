@@ -60323,6 +60323,120 @@ test('hero-thrown boomerang harms ordinary monster with boomerang skill damage',
     ]);
 });
 
+test('hero-thrown boomerang follows C return path and is skillfully caught', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhandedness: 'right',
+        fumbling: false,
+    });
+    game.u.acurr.a[A_DEX] = 25;
+    const boomerang = monsterBoomerang(876158, {
+        letter: 'b',
+        line: 'b - a boomerang',
+        ox: 5,
+        oy: 5,
+    });
+    game.inventory = [boomerang];
+    game.level.monsters = [];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('b');
+    await rhack('l');
+
+    assert.equal(game._pending_message, 'You skillfully catch the boomerang.');
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 0);
+    assert.equal(game.inventory.includes(boomerang), true);
+    assert.equal(game.level.objects.some(obj => obj.id === boomerang.id), false);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 2), [
+        'rn2(20)', 'rn2(19)',
+    ]);
+});
+
+test('hero-thrown boomerang curves into off-line monster before returning', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, { ux: 5, uy: 5, ulevel: 20, uluck: 10, uhitinc: 10, udaminc: 0, uhandedness: 'right' });
+    game.u.acurr.a[A_STR] = 10;
+    game.u.acurr.a[A_DEX] = 25;
+    game.u.weapon_skills = [];
+    setHeroWeaponSkill(P_BOOMERANG, P_EXPERT);
+    const boomerang = monsterBoomerang(876159, {
+        letter: 'b',
+        line: 'b - a boomerang',
+        ox: 5,
+        oy: 5,
+    });
+    const goblin = ordinaryThrowTarget('goblin', 8, 4, {
+        mhp: 20,
+        mhpmax: 20,
+        msleeping: 1,
+        mpeaceful: 1,
+        meating: 4,
+        mstrategy: STRAT_WAITFORU,
+    });
+    game.inventory = [boomerang];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('b');
+    await rhack('l');
+
+    const rngLog = getRngLog();
+    const damageRoll = rngValuesForCall(rngLog, 'rnd(9)')[0];
+    assert.match(game._pending_message, /The boomerang hits the goblin[.!]/);
+    assert.doesNotMatch(game._pending_message, /skillfully catch|returns|fails to return|misses|gift|catches|shatters|Splat/);
+    assert.equal(goblin.mhp, 20 - (damageRoll + 2));
+    assert.equal(goblin.msleeping, 0);
+    assert.equal(goblin.meating, 0);
+    assert.equal(goblin.mstrategy, 0);
+    assert.equal(goblin.mpeaceful, 0);
+    assert.equal(game.inventory.includes(boomerang), false);
+    const landed = game.level.objects.find(obj => obj.id === boomerang.id);
+    assert.ok(landed);
+    assert.equal(landed.ox, 8);
+    assert.equal(landed.oy, 4);
+    assert.deepEqual(rngLog.map(entry => entry.replace(/=.*/, '')).slice(0, 4), [
+        'rnd(20)', 'rnd(9)', 'rn2(19)', 'rn2(100)',
+    ]);
+});
+
+test('hero-thrown boomerang curves onto sink and falls there with Klonk', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, { ux: 5, uy: 5, uhandedness: 'right' });
+    game.u.acurr.a[A_DEX] = 25;
+    const boomerang = monsterBoomerang(876160, {
+        letter: 'b',
+        line: 'b - a boomerang',
+        ox: 5,
+        oy: 5,
+    });
+    const sinkLoc = { roomno: 0, typ: SINK };
+    game.level.at = (x, y) => (x === 8 && y === 4 ? sinkLoc : { roomno: 0, typ: ROOM });
+    game.inventory = [boomerang];
+    game.level.monsters = [];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('b');
+    await rhack('l');
+
+    assert.match(game._pending_message, /Klonk!/);
+    assert.doesNotMatch(game._pending_message, /skillfully catch|returns|fails to return|misses|hits the/);
+    assert.equal(game.inventory.includes(boomerang), false);
+    const landed = game.level.objects.find(obj => obj.id === boomerang.id);
+    assert.ok(landed);
+    assert.equal(landed.ox, 8);
+    assert.equal(landed.oy, 4);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 1), ['rn2(100)']);
+});
+
 test('hero-thrown boomerang uses C plus-four thrown hit bonus', async () => {
     installNonShopFloorState();
     initRng(2);

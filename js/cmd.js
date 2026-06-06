@@ -19977,6 +19977,52 @@ function heroThrownWeaponHitValue(obj, mon) {
     return heroProjectileBaseHitValue(obj, mon) + (tossUpWeaponObjectKey(obj) === 'boomerang' ? 4 : 2);
 }
 
+function heroThrowDirectionIndex(dir) {
+    for (let i = 0; i < N_DIRS; i++)
+        if (xdir[i] === dir?.dx && ydir[i] === dir?.dy) return i;
+    return -1;
+}
+
+function heroThrowDirectionClamp(dir) {
+    return ((dir % N_DIRS) + N_DIRS) % N_DIRS;
+}
+
+function heroThrownBoomerangPathBlocked(loc) {
+    const closedDoor = loc?.typ === DOOR && (loc.doormask & (D_CLOSED | D_LOCKED));
+    return !loc || !ZAP_POS(loc.typ) || closedDoor;
+}
+
+function heroThrownBoomerangFlightResult(obj, dir, ux, uy) {
+    if (tossUpWeaponObjectKey(obj) !== 'boomerang' || heroIsUnderwaterForThrow()) return { handled: false };
+    let dirIndex = heroThrowDirectionIndex(dir);
+    if (dirIndex < 0) return { handled: false };
+    let x = ux;
+    let y = uy;
+    const counterclockwise = String(game.u?.uhandedness || 'right').toLowerCase() !== 'left';
+    for (let ct = 0; ct < 10; ct++) {
+        dirIndex = heroThrowDirectionClamp(dirIndex);
+        const dx = xdir[dirIndex];
+        const dy = ydir[dirIndex];
+        x += dx;
+        y += dy;
+        if (!isok(x, y)) return { handled: true, x: x - dx, y: y - dy };
+        const targetMon = (game.level?.monsters || []).find(mon => mon.mx === x && mon.my === y) || null;
+        if (targetMon) return { handled: true, x, y, targetMon };
+        const loc = game.level?.at(x, y);
+        if (heroThrownBoomerangPathBlocked(loc)) return { handled: true, x: x - dx, y: y - dy };
+        if (x === ux && y === uy) {
+            const dex = game.u?.acurr?.a?.[A_DEX] ?? 10;
+            if (heroIsFumbling()) return { handled: true, x, y, failedCatch: true };
+            if (rn2(20) >= dex) return { handled: true, x, y, failedCatch: true };
+            return { handled: true, x, y, caught: true };
+        }
+        if (loc?.typ === SINK) return { handled: true, x, y, message: heroIsDeaf() ? '' : 'Klonk!' };
+        if (ct % 5 !== 0)
+            dirIndex = counterclockwise ? heroThrowDirectionClamp(dirIndex - 1) : heroThrowDirectionClamp(dirIndex + 1);
+    }
+    return { handled: true, x, y };
+}
+
 function heroKickedWeaponHitValue(obj, mon) {
     return heroKickedProjectileHitValue(obj, mon);
 }
@@ -66663,28 +66709,49 @@ export async function rhack(_cmd) {
         }
         const name = inventoryItemName(item);
         const lowerName = name.toLowerCase();
+        const ux = game.u?.ux || 0;
+        const uy = game.u?.uy || 0;
+        const boomerangFlight = heroThrownBoomerangFlightResult(item, dir, ux, uy);
+        if (boomerangFlight.caught) {
+            exerciseHeroProjectileHitDexterity();
+            newsym(ux, uy);
+            await setMessage('You skillfully catch the boomerang.');
+            game._command_mode = null;
+            game._throw_item_letter = null;
+            clearThrowCountState();
+            game._resume_time_after_more = 0;
+            game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
+            game.context.move = 0;
+            return;
+        }
         const returningAklysThrow = itemIsPrimaryWieldedAklys(item);
-	        const ux = game.u?.ux || 0;
-	        const uy = game.u?.uy || 0;
-		        let ox = ux;
-		        let oy = uy;
-		        let targetMon = null;
+        let ox = ux;
+        let oy = uy;
+        let targetMon = null;
         let ironBarsImpact = null;
         const throwRange = returningAklysThrow ? 4 : 8;
-        for (let step = 0; step < throwRange; step++) {
-            const nx = ox + dir.dx;
-            const ny = oy + dir.dy;
-            const loc = game.level?.at(nx, ny);
-            if (loc?.typ === IRONBARS) {
-                ironBarsImpact = { x: ox, y: oy, barsX: nx, barsY: ny, pointBlank: step === 0 };
-                break;
+        let flightImpactMessage = '';
+        if (boomerangFlight.handled) {
+            ox = boomerangFlight.x ?? ox;
+            oy = boomerangFlight.y ?? oy;
+            targetMon = boomerangFlight.targetMon || null;
+            flightImpactMessage = boomerangFlight.message || '';
+        } else {
+            for (let step = 0; step < throwRange; step++) {
+                const nx = ox + dir.dx;
+                const ny = oy + dir.dy;
+                const loc = game.level?.at(nx, ny);
+                if (loc?.typ === IRONBARS) {
+                    ironBarsImpact = { x: ox, y: oy, barsX: nx, barsY: ny, pointBlank: step === 0 };
+                    break;
+                }
+                if (!loc || IS_OBSTRUCTED(loc.typ)) break;
+                ox = nx;
+                oy = ny;
+                targetMon = (game.level?.monsters || []).find(mon => mon.mx === ox && mon.my === oy) || null;
+                if (targetMon) break;
             }
-	            if (!loc || IS_OBSTRUCTED(loc.typ)) break;
-	            ox = nx;
-	            oy = ny;
-	            targetMon = (game.level?.monsters || []).find(mon => mon.mx === ox && mon.my === oy) || null;
-	            if (targetMon) break;
-	        }
+        }
         if (shopBillableGold(item)) {
             const amount = Math.max(1, Math.trunc(Number(game._throw_count || game._goldCount || item.quan || 1)));
             const thrownGold = {
@@ -66734,7 +66801,7 @@ export async function rhack(_cmd) {
             color: item.cls === 'food' ? CLR_ORANGE : item.color || (item.cls === 'gem' ? CLR_GRAY : CLR_CYAN),
         };
         const combatObject = item.cls === 'weapon' || item.cls === 'gem' || item.glyph === ')' || item.otyp === GEM_CLASS;
-        let impactMessage = '';
+        let impactMessage = flightImpactMessage;
         let impactConsumedThrownObject = false;
         let impactObjectHit = false;
         let impactPassiveTarget = null;
