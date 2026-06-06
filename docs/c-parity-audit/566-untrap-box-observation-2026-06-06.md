@@ -26,4 +26,5 @@ This test drives the real extended command input, forces the detection roll, ass
 
 ## Remaining Work
 
+- Box/chest known-trap detection fallback order is covered separately in `567-untrap-box-tknown-detection-fallback-2026-06-06.md`.
 - Full `chest_trap()` payload effects are still partial and tracked from `565-untrap-box-one-shot-failure-2026-06-06.md`.

@@ -598,7 +598,7 @@ async function beginUntrapBoxPrompt(boxes, { trapSkipped = false } = {}) {
 function untrapBoxDetectionSucceeds(box, confused) {
     if (box?.otrapped) {
         const denom = Math.max(1, MAXULEV + 1 - (game.u?.ulevel || 1));
-        return !confused && rn2(denom) < 10;
+        if (!confused && rn2(denom) < 10) return true;
     }
     if (box?.tknown) return true;
     return confused && !rn2(3);
