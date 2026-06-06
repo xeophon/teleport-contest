@@ -31,7 +31,7 @@ import { applyMonsterLiquidEffectsAt } from './monster_liquid.js';
 import { queueGasSporeDeathExplosion } from './monster_death.js';
 import { applySlimeMoldFruitFields, currentFruitId, currentFruitJuiceName, currentFruitName, fruitWishMatch, setCurrentFruitName, slimeMoldNameForObject } from './fruit.js';
 import { eggHasHatchTimer, eggSpeciesGenocidedForHatching, killDeadSpeciesEggHatchTimers, killEggHatchTimer } from './egg_timers.js';
-import { METALLIC_MATERIALS, metallivoreObjectAlwaysResists, objectIsAmuletLike, objectIsRingLike, objectIsSlowDigestionRing, objectMaterialForMetallivore } from './metallivore.js';
+import { METALLIC_MATERIALS, metallivoreObjectAlwaysResists, monsterIsMetallivore, objectIsAmuletLike, objectIsRingLike, objectIsSlowDigestionRing, objectMaterialForMetallivore } from './metallivore.js';
 
 const DIR_DX = { h: -1, l: 1, j: 0, k: 0, y: -1, u: 1, b: -1, n: 1 };
 const DIR_DY = { h: 0, l: 0, j: 1, k: -1, y: -1, u: -1, b: 1, n: 1 };
@@ -12018,6 +12018,122 @@ function landingSpot() {
     return best;
 }
 
+function dismountHoldingTrapType(type) {
+    if (type === TT_BEARTRAP || type === 'beartrap') return 'beartrap';
+    if (type === TT_PIT || type === 'pit') return 'pit';
+    if (heroWebTrapType(type)) return 'web';
+    return '';
+}
+
+const DISMOUNT_MINTRAP_SIZE_VALUES = new Map([
+    ['tiny', 0],
+    ['small', 1],
+    ['medium', 2],
+    ['human', 2],
+    ['large', 3],
+    ['huge', 4],
+    ['gigantic', 7],
+]);
+
+function dismountMonsterSizeValue(mon) {
+    const data = mon?.data || {};
+    const value = mon?.msize ?? mon?.size ?? data.msize ?? data.size;
+    if (Number.isFinite(Number(value))) return Math.trunc(Number(value));
+    const key = String(value || '').toLowerCase().trim();
+    if (DISMOUNT_MINTRAP_SIZE_VALUES.has(key)) return DISMOUNT_MINTRAP_SIZE_VALUES.get(key);
+    if (mon?.verysmall || data.verysmall) return 0;
+    if (mon?.small || data.small) return 1;
+    if (mon?.large || data.large) return 3;
+    if (mon?.huge || data.huge) return 4;
+    if (mon?.gigantic || data.gigantic) return 7;
+    return 2;
+}
+
+function dismountMonsterEasyEscapePit(mon) {
+    return mon?.data?.name === 'pit fiend' || dismountMonsterSizeValue(mon) >= 4;
+}
+
+function dismountTrapAtSteed(steed) {
+    return (game.level?.traps || []).find(trap => trap.tx === steed?.mx && trap.ty === steed?.my) || null;
+}
+
+function dismountBoulderAtSteed(steed) {
+    return (game.level?.objects || []).find(obj =>
+        !obj.hidden && !obj.transientProjectile && obj.otyp === BOULDER
+        && obj.ox === steed?.mx && obj.oy === steed?.my) || null;
+}
+
+function dismountPullFreeTrapName(ttyp) {
+    if (ttyp === BEAR_TRAP) return 'bear trap';
+    if (ttyp === WEB) return 'web';
+    return '';
+}
+
+function finishDismountBoulderPitEscape(steed, boulder, messages) {
+    if (!boulder || !game.level) return;
+    game.level.objects = (game.level.objects || []).filter(obj => obj !== boulder);
+    const previousMonsterMoving = game._monster_moving;
+    game._monster_moving = 1;
+    let consumed = false;
+    try {
+        consumed = earthFloorEffects(boulder, steed.mx, steed.my, messages, 'settle');
+    } finally {
+        if (previousMonsterMoving === undefined) delete game._monster_moving;
+        else game._monster_moving = previousMonsterMoving;
+    }
+    if (!consumed) {
+        boulder.ox = steed.mx;
+        boulder.oy = steed.my;
+        game.level.objects.push(boulder);
+    }
+}
+
+function dismountFormerSteedMintrapMessages(steed) {
+    if (!steed?.mtrapped) return [];
+    const trap = dismountTrapAtSteed(steed);
+    if (!trap) {
+        steed.mtrapped = 0;
+        return [];
+    }
+    if (![PIT, SPIKED_PIT, BEAR_TRAP, WEB].includes(trap.ttyp)) return [];
+
+    const messages = [];
+    const inSight = !game.u?.blind && couldsee(steed.mx, steed.my);
+    if (!trap.tseen && inSight) trap.tseen = true;
+
+    const pitTrap = trap.ttyp === PIT || trap.ttyp === SPIKED_PIT;
+    const easyEscape = pitTrap && dismountMonsterEasyEscapePit(steed);
+    if (!rn2(40) || easyEscape) {
+        const boulder = pitTrap ? dismountBoulderAtSteed(steed) : null;
+        if (boulder) {
+            if (!rn2(2)) {
+                steed.mtrapped = 0;
+                if (inSight) messages.push(`${steedTrapProjectileName(steed)} pulls free...`);
+                finishDismountBoulderPitEscape(steed, boulder, messages);
+            }
+        } else {
+            if (inSight) {
+                if (pitTrap) {
+                    messages.push(`${steedTrapProjectileName(steed)} climbs ${easyEscape ? 'easily ' : ''}out of the pit.`);
+                } else {
+                    messages.push(`${steedTrapProjectileName(steed)} pulls free of the ${dismountPullFreeTrapName(trap.ttyp)}.`);
+                }
+            }
+            steed.mtrapped = 0;
+        }
+    } else if (monsterIsMetallivore(steed) && trap.ttyp === SPIKED_PIT) {
+        if (inSight) messages.push(`${steedTrapProjectileName(steed)} munches on some spikes!`);
+        trap.ttyp = PIT;
+        steed.meating = 5;
+    } else if (monsterIsMetallivore(steed) && trap.ttyp === BEAR_TRAP) {
+        if (inSight) messages.push(`${steedTrapProjectileName(steed)} eats a bear trap!`);
+        game.level.traps = (game.level?.traps || []).filter(item => item !== trap);
+        steed.meating = 5;
+        steed.mtrapped = 0;
+    }
+    return messages;
+}
+
 async function dismountSteed() {
     const steed = game.u?.usteed;
     const spot = landingSpot();
@@ -12030,14 +12146,22 @@ async function dismountSteed() {
 
     const steedX = game.u.ux;
     const steedY = game.u.uy;
+    const saveUtrap = game.u.utrap || 0;
+    const saveUtrapType = game.u.utraptype;
+    const holdingTrap = saveUtrap > 0 ? dismountHoldingTrapType(saveUtrapType) : '';
     game.u.usteed = null;
     steed.mx = steedX;
     steed.my = steedY;
+    if (holdingTrap) steed.mtrapped = 1;
     if (!game.level.monsters.includes(steed)) game.level.monsters.push(steed);
     game.u.ux0 = steedX;
     game.u.uy0 = steedY;
     game.u.ux = spot.x;
     game.u.uy = spot.y;
+    if (holdingTrap) {
+        game.u.utrap = 0;
+        game.u.utraptype = null;
+    }
     newsym(steedX, steedY);
     newsym(spot.x, spot.y);
     vision_recalc(0);
@@ -12048,7 +12172,9 @@ async function dismountSteed() {
         !obj.hidden && obj.ox === spot.x && obj.oy === spot.y
     );
     if (objectAtLanding) game._dismount_object_list_spot = { x: spot.x, y: spot.y };
-    await setMessage(`You've been through the dungeon on a ${steed.data?.name || 'steed'} with no name.`, hostileNearby || objectAtLanding);
+    const messages = [`You've been through the dungeon on a ${steed.data?.name || 'steed'} with no name.`];
+    if (holdingTrap) messages.push(...dismountFormerSteedMintrapMessages(steed));
+    await setMessage(messages.join('  '), hostileNearby || objectAtLanding);
     game._command_mode = null;
     game.context.move = 1;
 }

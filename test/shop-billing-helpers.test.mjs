@@ -8,7 +8,7 @@ import { game, resetGame } from '../js/gstate.js';
 import { pushKey, resetInputState } from '../js/input.js';
 import { createMonsterCorpseOrGlob, mkcorpstat, mkobj, mksobj, monsterByRndName } from '../js/mklev.js';
 import { enableDisplayRngLog, enableRngLog, getRngLog, initRng } from '../js/rng.js';
-import { A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_STR, A_WIS, ALLOW_TRAPS, ALTAR, AM_SHRINE, Align2amask, ANTI_MAGIC, ARROW_TRAP, BEAR_TRAP, BILLSZ, CANDLESHOP, CLOUD, CORPSTAT_HISTORIC, COULD_SEE, DART_TRAP, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, D_CLOSED, D_NODOOR, FIRE_TRAP, FOUNTAIN, HOLE, ICE, ICED_POOL, IN_SIGHT, IRONBARS, LADDER, LANDMINE, LAVAPOOL, MAGIC_PORTAL, MIGR_LADDER_UP, MIGR_RANDOM, MIGR_SSTAIRS, MIGR_STAIRS_UP, MOAT, MON_MIGRATING, M_AP_FURNITURE, M_AP_OBJECT, NORMAL_SPEED, P_BASIC, P_DAGGER, P_EXPERT, P_KNIFE, P_SKILLED, P_UNSKILLED, PIT, POLY_TRAP, POOL, REPAIR_DELAY, ROCKTRAP, ROLLING_BOULDER_TRAP, ROOM, ROOMOFFSET, SDOOR, SHOPBASE, SHOP_DOOR_COST, SINK, SLP_GAS_TRAP, SPIKED_PIT, SQKY_BOARD, STAIRS, STATUE_TRAP, STONE, STRAT_APPEARMSG, STRAT_WAITFORU, STRAT_WAITMASK, TEMPLE, TRAPDOOR, TT_LAVA, TT_WEB, WEB, W_ARMF, W_SADDLE } from '../js/const.js';
+import { A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_STR, A_WIS, ALLOW_TRAPS, ALTAR, AM_SHRINE, Align2amask, ANTI_MAGIC, ARROW_TRAP, BEAR_TRAP, BILLSZ, CANDLESHOP, CLOUD, CORPSTAT_HISTORIC, COULD_SEE, DART_TRAP, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, D_CLOSED, D_NODOOR, FIRE_TRAP, FOUNTAIN, HOLE, ICE, ICED_POOL, IN_SIGHT, IRONBARS, LADDER, LANDMINE, LAVAPOOL, MAGIC_PORTAL, MIGR_LADDER_UP, MIGR_RANDOM, MIGR_SSTAIRS, MIGR_STAIRS_UP, MOAT, MON_MIGRATING, M_AP_FURNITURE, M_AP_OBJECT, NORMAL_SPEED, P_BASIC, P_DAGGER, P_EXPERT, P_KNIFE, P_SKILLED, P_UNSKILLED, PIT, POLY_TRAP, POOL, REPAIR_DELAY, ROCKTRAP, ROLLING_BOULDER_TRAP, ROOM, ROOMOFFSET, SDOOR, SHOPBASE, SHOP_DOOR_COST, SINK, SLP_GAS_TRAP, SPIKED_PIT, SQKY_BOARD, STAIRS, STATUE_TRAP, STONE, STRAT_APPEARMSG, STRAT_WAITFORU, STRAT_WAITMASK, TEMPLE, TRAPDOOR, TT_BEARTRAP, TT_LAVA, TT_PIT, TT_WEB, WEB, W_ARMF, W_SADDLE } from '../js/const.js';
 import { currentFruitId, setCurrentFruitName } from '../js/fruit.js';
 import { CLR_BRIGHT_MAGENTA, CLR_BROWN, CLR_WHITE } from '../js/terminal.js';
 import { TRIBUTE_DEATH_QUOTES } from '../js/tribute.js';
@@ -1060,6 +1060,12 @@ async function enterChatCommand() {
 async function enterSitCommand() {
     await rhack('#');
     for (const ch of 'sit') await rhack(ch);
+    await rhack('\n');
+}
+
+async function enterRideCommand() {
+    await rhack('#');
+    for (const ch of 'ride') await rhack(ch);
     await rhack('\n');
 }
 
@@ -20718,6 +20724,82 @@ test('Sting cuts already web-trapped hero free without moving or deleting web', 
     assert.equal(game.u.uy, 5);
     assert.equal(game.u.utrap, 0);
     assert.equal(game.u.utraptype, null);
+    assert.equal(game.level.traps.includes(web), true);
+    assert.equal(game.context.move, 1);
+});
+
+test('#ride dismount transfers mounted holding traps to former steed', async () => {
+    for (const [label, ttyp, utraptype] of [
+        ['web', WEB, TT_WEB],
+        ['bear trap', BEAR_TRAP, TT_BEARTRAP],
+        ['pit', PIT, TT_PIT],
+        ['spiked pit', SPIKED_PIT, TT_PIT],
+    ]) {
+        installStableNonSokobanTrapState();
+        vision_reset();
+        Object.assign(game.u, {
+            ux: 5,
+            uy: 5,
+            uhp: 20,
+            uhpmax: 20,
+            utrap: 3,
+            utraptype,
+        });
+        const pony = mountBearTrapPony(10);
+        game.inventory = [];
+        const trap = { ttyp, tx: 5, ty: 5, tseen: false, madeby_u: false };
+        game.level.traps = [trap];
+        enableRngLog({ reset: true });
+        installCoreRngValues([1, 1, 1, 1]);
+
+        await enterRideCommand();
+
+        assert.deepEqual(getRngLog().map(rngCallName), ['rn2(3)', 'rn2(5)', 'rn2(7)', 'rn2(40)'], label);
+        assert.equal(game._pending_message, "You've been through the dungeon on a pony with no name.", label);
+        assert.equal(game.u.usteed, null, label);
+        assert.equal(game.u.utrap, 0, label);
+        assert.equal(game.u.utraptype, null, label);
+        assert.equal(game.u.ux, 4, label);
+        assert.equal(game.u.uy, 5, label);
+        assert.equal(pony.mx, 5, label);
+        assert.equal(pony.my, 5, label);
+        assert.equal(pony.mtrapped, 1, label);
+        assert.equal(trap.tseen, true, label);
+        assert.equal(game.context.move, 1, label);
+    }
+});
+
+test('#ride dismount can let former steed pull free of transferred web', async () => {
+    installStableNonSokobanTrapState();
+    vision_reset();
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 20,
+        uhpmax: 20,
+        utrap: 3,
+        utraptype: 'web',
+    });
+    const pony = mountBearTrapPony(10);
+    game.inventory = [];
+    const web = { ttyp: WEB, tx: 5, ty: 5, tseen: false, madeby_u: false };
+    game.level.traps = [web];
+    enableRngLog({ reset: true });
+    installCoreRngValues([1, 1, 1, 0]);
+
+    await enterRideCommand();
+
+    assert.deepEqual(getRngLog().map(rngCallName), ['rn2(3)', 'rn2(5)', 'rn2(7)', 'rn2(40)']);
+    assert.equal(game._pending_message, "You've been through the dungeon on a pony with no name.  The saddled pony pulls free of the web.");
+    assert.equal(game.u.usteed, null);
+    assert.equal(game.u.utrap, 0);
+    assert.equal(game.u.utraptype, null);
+    assert.equal(game.u.ux, 4);
+    assert.equal(game.u.uy, 5);
+    assert.equal(pony.mx, 5);
+    assert.equal(pony.my, 5);
+    assert.equal(pony.mtrapped || 0, 0);
+    assert.equal(web.tseen, true);
     assert.equal(game.level.traps.includes(web), true);
     assert.equal(game.context.move, 1);
 });

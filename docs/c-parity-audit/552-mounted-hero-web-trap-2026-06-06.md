@@ -38,5 +38,5 @@ The tests use local trap, hero, steed, object-list, and RNG fixtures through nor
 ## Remaining Work
 
 - Later movement while already web-trapped is covered by `553-hero-trapped-web-movement-2026-06-06.md`.
-- Dismounting while already `TT_WEB` and transferring trap state back to the former steed remains a separate steed/dismount parity slice.
+- Dismounting while holding a web, bear trap, or pit trap and transferring trapped state to the former steed is covered by `554-dismount-holding-trap-transfer-2026-06-06.md`.
 - Failed untrap/NOWEBMSG web-spread behavior remains separate `#untrap` parity.
