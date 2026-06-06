@@ -36,5 +36,5 @@ The tests use local monster, pet, trap, visibility, and RNG fixtures. They do no
 
 ## Remaining Work
 
-- First-entry monster and pet `HOLE` and `TRAPDOOR` effects remain broader trap parity work.
+- First-entry monster and pet `HOLE` and `TRAPDOOR` effects are covered separately in `549-monster-first-entry-hole-trapdoor-2026-06-06.md`.
 - Full same-turn `meating` timing for trap-created eating delays outside the covered bear-trap path remains broader monster-turn parity.

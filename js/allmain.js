@@ -9,7 +9,7 @@ import { vision_recalc, vision_reset, init_vision_globals, cansee, couldsee, vie
 import { init_objects } from './o_init.js';
 import { init_dungeons_rng } from './dungeon.js';
 import { rn2, rn2_on_display_rng, rnd, rn1, rnl, rne, rnz, d } from './rng.js';
-import { COLNO, ROWNO, A_CHA, A_CON, A_DEX, A_INT, A_MAX, A_STR, A_WIS, ALTAR, GRAVE, ICE, IS_OBSTRUCTED, IS_STWALL, IS_TREE, IS_ROOM, IS_WALL, TREE, ROOM, DOOR, CORR, SDOOR, SCORR, IRONBARS, SINK, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, D_TRAPPED, W_NONDIGGABLE, W_NONPASSWALL, APPORT, CADAVER, ACCFOOD, DOGFOOD, MANFOOD, POISON, UNDEF, TABU, NO_MM_FLAGS, NO_MINVENT, MM_NOMSG, IN_SIGHT, ALL_TRAPS, ARROW_TRAP, ROCKTRAP, PIT, SPIKED_PIT, SQKY_BOARD, BEAR_TRAP, LANDMINE, ROLLING_BOULDER_TRAP, SLP_GAS_TRAP, RUST_TRAP, FIRE_TRAP, HOLE, TRAPDOOR, TELEP_TRAP, WEB, STATUE_TRAP, MAGIC_TRAP, ANTI_MAGIC, MAGIC_PORTAL, POLY_TRAP, VIBRATING_SQUARE, ALLOW_M, ALLOW_TM, ALLOW_TRAPS, ALLOW_U, ALLOW_ALL, NOTONL, OPENDOOR, UNLOCKDOOR, BUSTDOOR, ALLOW_ROCK, ALLOW_WALL, ALLOW_DIG, ALLOW_SANCT, ALLOW_SSM, ALLOW_BARS, NOGARLIC, Is_airlevel, Is_oracle_level, ACCESSIBLE, IS_POOL, IS_LAVA, WATER, LAVAWALL, BOLT_LIM, MON_POLE_DIST, NO_WEAPON_WANTED, NEED_WEAPON, NEED_AXE, NEED_PICK_AXE, NEED_PICK_OR_AXE, VAULT, VAULT_GUARD_TIME, M_SEEN_MAGR, M_AP_FURNITURE, M_AP_OBJECT, M_AP_MONSTER, M_AP_TYPE, MOD_ENCUMBER, HVY_ENCUMBER, EXT_ENCUMBER, OVERLOADED, ROOMOFFSET, SHOPBASE, STRAT_APPEARMSG } from './const.js';
+import { COLNO, ROWNO, A_CHA, A_CON, A_DEX, A_INT, A_MAX, A_STR, A_WIS, ALTAR, GRAVE, ICE, IS_OBSTRUCTED, IS_STWALL, IS_TREE, IS_ROOM, IS_WALL, TREE, ROOM, DOOR, CORR, SDOOR, SCORR, IRONBARS, SINK, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, D_TRAPPED, W_NONDIGGABLE, W_NONPASSWALL, APPORT, CADAVER, ACCFOOD, DOGFOOD, MANFOOD, POISON, UNDEF, TABU, NO_MM_FLAGS, NO_MINVENT, MM_NOMSG, IN_SIGHT, ALL_TRAPS, ARROW_TRAP, ROCKTRAP, PIT, SPIKED_PIT, SQKY_BOARD, BEAR_TRAP, LANDMINE, ROLLING_BOULDER_TRAP, SLP_GAS_TRAP, RUST_TRAP, FIRE_TRAP, HOLE, TRAPDOOR, TELEP_TRAP, WEB, STATUE_TRAP, MAGIC_TRAP, ANTI_MAGIC, MAGIC_PORTAL, POLY_TRAP, VIBRATING_SQUARE, ALLOW_M, ALLOW_TM, ALLOW_TRAPS, ALLOW_U, ALLOW_ALL, NOTONL, OPENDOOR, UNLOCKDOOR, BUSTDOOR, ALLOW_ROCK, ALLOW_WALL, ALLOW_DIG, ALLOW_SANCT, ALLOW_SSM, ALLOW_BARS, NOGARLIC, Is_airlevel, Is_oracle_level, ACCESSIBLE, IS_POOL, IS_LAVA, WATER, LAVAWALL, BOLT_LIM, MON_POLE_DIST, NO_WEAPON_WANTED, NEED_WEAPON, NEED_AXE, NEED_PICK_AXE, NEED_PICK_OR_AXE, VAULT, VAULT_GUARD_TIME, M_SEEN_MAGR, M_AP_FURNITURE, M_AP_OBJECT, M_AP_MONSTER, M_AP_TYPE, MOD_ENCUMBER, HVY_ENCUMBER, EXT_ENCUMBER, OVERLOADED, ROOMOFFSET, SHOPBASE, STRAT_APPEARMSG, MIGR_RANDOM, MON_MIGRATING } from './const.js';
 import { CLR_BROWN, CLR_CYAN, CLR_MAGENTA, CLR_RED, CLR_WHITE, CLR_YELLOW, NO_COLOR } from './terminal.js';
 import { advanceVaultGuard, prepareVaultGuardEscort, restVaultFakecorr } from './vault.js';
 import { DISPLAY_MONSTER_GLYPHS, DISPLAY_MONSTER_HALLU_NAMES } from './monster_data.js';
@@ -10618,6 +10618,111 @@ function monsterPitTrapEffect(mon, trap, { cavernTunnelRoom = false, skipPetPost
     return true;
 }
 
+function monsterHoleTrapTargetLevel(trap) {
+    if (![HOLE, TRAPDOOR].includes(trap?.ttyp)) return null;
+    if (game.level?.flags?.hardfloor) return null;
+    const current = game.u?.uz || { dnum: 0, dlevel: 1 };
+    const currentLevel = {
+        dnum: current.dnum ?? 0,
+        dlevel: Math.max(1, current.dlevel ?? 1),
+    };
+    const rawTarget = trap.dst || { dnum: currentLevel.dnum, dlevel: currentLevel.dlevel + 1 };
+    const target = {
+        dnum: rawTarget.dnum ?? currentLevel.dnum,
+        dlevel: Math.max(1, rawTarget.dlevel ?? currentLevel.dlevel + 1),
+    };
+    const dungeon = game.dungeons?.[target.dnum];
+    const bottom = Number.isFinite(Number(dungeon?.num_dunlevs))
+        ? Math.max(1, Math.trunc(Number(dungeon.num_dunlevs)))
+        : null;
+    if (bottom != null && target.dlevel > bottom) return null;
+    if (target.dnum === currentLevel.dnum && target.dlevel === currentLevel.dlevel)
+        return null;
+    return target;
+}
+
+function monsterHoleTrapNonfallGate(mon) {
+    const data = mon?.data || {};
+    const inAir = mon?.inAir || mon?.flyer || mon?.floater
+        || data.inAir || data.flyer || data.floater;
+    const longWorm = Array.isArray(mon?.wormSegments) && mon.wormSegments.length > 5;
+    return inAir || longWorm || monsterObjectHitSizeValue(mon) >= 4;
+}
+
+function monsterMigrationDepth(level) {
+    const dungeon = game.dungeons?.[level?.dnum ?? 0];
+    return (dungeon?.depth_start ?? 1) + (level?.dlevel ?? 1) - 1;
+}
+
+function ensureMonsterTrack(mon) {
+    mon.mtrack = Array.from({ length: 4 }, (_, i) => {
+        const slot = mon.mtrack?.[i];
+        return { x: slot?.x || 0, y: slot?.y || 0 };
+    });
+    return mon.mtrack;
+}
+
+function migrateMonsterToLevelRandom(mon, targetLevel, sourceX, sourceY, { skipPetPostMoveRoll = false } = {}) {
+    if (!mon || !targetLevel) return false;
+    const current = game.u?.uz || { dnum: 0, dlevel: 1 };
+    const fromLevel = { dnum: current.dnum ?? 0, dlevel: current.dlevel ?? 1 };
+    game.level.monsters = (game.level?.monsters || []).filter(other => other !== mon);
+    game.migrating_mons ??= [];
+    if (!game.migrating_mons.includes(mon)) game.migrating_mons.push(mon);
+
+    const track = ensureMonsterTrack(mon);
+    track[2] = { x: fromLevel.dnum, y: fromLevel.dlevel };
+    track[1] = { x: sourceX, y: sourceY };
+    track[0] = {
+        x: MIGR_RANDOM,
+        y: monsterMigrationDepth(targetLevel) < monsterMigrationDepth(fromLevel) ? 1 : 0,
+    };
+    mon.mux = targetLevel.dnum;
+    mon.muy = targetLevel.dlevel;
+    mon.mx = 0;
+    mon.my = 0;
+    mon.mstate = (mon.mstate || 0) | MON_MIGRATING;
+    mon.mlstmv = game.moves || mon.mlstmv || 0;
+    mon.movement = 0;
+    if (Array.isArray(mon.wormSegments)) mon.wormno = mon.wormSegments.length;
+    if (skipPetPostMoveRoll && mon.pet) game._pet_skip_post_move_roll = 1;
+    newsym(sourceX, sourceY);
+    return true;
+}
+
+function monsterHoleTrapEffect(mon, trap, { skipPetPostMoveRoll = false } = {}) {
+    if (![HOLE, TRAPDOOR].includes(trap?.ttyp)) return false;
+    if (monsterTrapHarmless(mon, trap)) return false;
+    if (monsterAvoidsKnownTrapBeforeEffect(mon, trap)) return true;
+
+    monsterTriggerTrap(mon, trap);
+    const inSight = monsterVisibleToHero(mon) || mon === game.u?.usteed;
+    const visibleName = monsterDisplayName(mon).replace(/^The /, 'the ');
+    const targetLevel = monsterHoleTrapTargetLevel(trap);
+    if (!targetLevel) {
+        if (inSight && trap.tseen)
+            addToplineMessage(`${monsterDisplayName(mon)} avoids the ${trap.ttyp === HOLE ? 'hole' : 'trap'}.`);
+        return true;
+    }
+
+    const inescapable = monsterSokobanPitHoleBypassesPrelude(trap);
+    if (monsterHoleTrapNonfallGate(mon)) {
+        if (!inescapable) return true;
+        if (inSight) {
+            trap.tseen = true;
+            addToplineMessage(`${monsterDisplayName(mon)} seems to be yanked down!`);
+        }
+    }
+
+    if (inSight) {
+        trap.tseen = true;
+        addToplineMessage(`Suddenly, ${visibleName} ${trap.ttyp === HOLE
+            ? 'falls into a hole'
+            : 'falls through a trap door'}.`);
+    }
+    return migrateMonsterToLevelRandom(mon, targetLevel, mon.mx, mon.my, { skipPetPostMoveRoll });
+}
+
 function monsterEasyEscapePit(mon) {
     return mon?.data?.name === 'pit fiend' || monsterObjectHitSizeValue(mon) >= 4;
 }
@@ -12130,15 +12235,7 @@ function moveMonsterTowardHero(mon, conflictActive = false, monIndex = null, som
         return done();
     }
     if (monsterPitTrapEffect(mon, trap, { cavernTunnelRoom })) return done();
-    if ((trap?.ttyp === HOLE || trap?.ttyp === TRAPDOOR) && !monsterTrapHarmless(mon, trap) && !mon.data?.big) {
-        if (monsterAvoidsKnownTrapBeforeEffect(mon, trap)) return done();
-        monsterTriggerTrap(mon, trap);
-        if (couldSeeCoord(mon.mx, mon.my)) trap.tseen = true;
-        game.level.monsters = (game.level?.monsters || []).filter(other => other !== mon);
-        mon.movement = 0;
-        newsym(mon.mx, mon.my);
-        return done();
-    }
+    if (monsterHoleTrapEffect(mon, trap)) return done();
     if (trap?.ttyp === DART_TRAP && !monsterTrapHarmless(mon, trap)) {
         if (monsterAvoidsKnownTrapBeforeEffect(mon, trap)) return done();
         if (trap.once && trap.tseen && !rn2(15)) {
@@ -13339,6 +13436,7 @@ function movePet(mon, resumeAfterInventory = false, conflictActive = false) {
         addToplineMessage(`The ${mon.saddled ? 'saddled ' : ''}${mon.data?.name || 'creature'} is caught in a bear trap!`);
     }
     if (monsterPitTrapEffect(mon, trap, { skipPetPostMoveRoll: true })) return;
+    if (monsterHoleTrapEffect(mon, trap, { skipPetPostMoveRoll: true })) return;
     if (trap?.ttyp === DART_TRAP && !monsterTrapHarmless(mon, trap)) {
         if (trap.once && trap.tseen && !rn2(15)) {
             game.level.traps = (game.level?.traps || []).filter(item => item !== trap);

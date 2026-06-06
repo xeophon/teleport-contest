@@ -8,7 +8,7 @@ import { game, resetGame } from '../js/gstate.js';
 import { pushKey, resetInputState } from '../js/input.js';
 import { createMonsterCorpseOrGlob, mkcorpstat, mkobj, mksobj, monsterByRndName } from '../js/mklev.js';
 import { enableDisplayRngLog, enableRngLog, getRngLog, initRng } from '../js/rng.js';
-import { A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_STR, A_WIS, ALLOW_TRAPS, ALTAR, AM_SHRINE, Align2amask, ANTI_MAGIC, ARROW_TRAP, BEAR_TRAP, BILLSZ, CANDLESHOP, CLOUD, CORPSTAT_HISTORIC, COULD_SEE, DART_TRAP, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, D_CLOSED, D_NODOOR, FIRE_TRAP, FOUNTAIN, HOLE, ICE, ICED_POOL, IN_SIGHT, IRONBARS, LADDER, LANDMINE, LAVAPOOL, MAGIC_PORTAL, MIGR_LADDER_UP, MIGR_SSTAIRS, MIGR_STAIRS_UP, MOAT, M_AP_FURNITURE, M_AP_OBJECT, NORMAL_SPEED, P_BASIC, P_DAGGER, P_EXPERT, P_KNIFE, P_SKILLED, P_UNSKILLED, PIT, POLY_TRAP, POOL, REPAIR_DELAY, ROCKTRAP, ROLLING_BOULDER_TRAP, ROOM, ROOMOFFSET, SDOOR, SHOPBASE, SHOP_DOOR_COST, SINK, SLP_GAS_TRAP, SPIKED_PIT, SQKY_BOARD, STAIRS, STATUE_TRAP, STONE, STRAT_APPEARMSG, STRAT_WAITFORU, STRAT_WAITMASK, TEMPLE, TRAPDOOR, TT_LAVA, TT_WEB, WEB, W_ARMF, W_SADDLE } from '../js/const.js';
+import { A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_STR, A_WIS, ALLOW_TRAPS, ALTAR, AM_SHRINE, Align2amask, ANTI_MAGIC, ARROW_TRAP, BEAR_TRAP, BILLSZ, CANDLESHOP, CLOUD, CORPSTAT_HISTORIC, COULD_SEE, DART_TRAP, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, D_CLOSED, D_NODOOR, FIRE_TRAP, FOUNTAIN, HOLE, ICE, ICED_POOL, IN_SIGHT, IRONBARS, LADDER, LANDMINE, LAVAPOOL, MAGIC_PORTAL, MIGR_LADDER_UP, MIGR_RANDOM, MIGR_SSTAIRS, MIGR_STAIRS_UP, MOAT, MON_MIGRATING, M_AP_FURNITURE, M_AP_OBJECT, NORMAL_SPEED, P_BASIC, P_DAGGER, P_EXPERT, P_KNIFE, P_SKILLED, P_UNSKILLED, PIT, POLY_TRAP, POOL, REPAIR_DELAY, ROCKTRAP, ROLLING_BOULDER_TRAP, ROOM, ROOMOFFSET, SDOOR, SHOPBASE, SHOP_DOOR_COST, SINK, SLP_GAS_TRAP, SPIKED_PIT, SQKY_BOARD, STAIRS, STATUE_TRAP, STONE, STRAT_APPEARMSG, STRAT_WAITFORU, STRAT_WAITMASK, TEMPLE, TRAPDOOR, TT_LAVA, TT_WEB, WEB, W_ARMF, W_SADDLE } from '../js/const.js';
 import { currentFruitId, setCurrentFruitName } from '../js/fruit.js';
 import { CLR_BRIGHT_MAGENTA, CLR_BROWN, CLR_WHITE } from '../js/terminal.js';
 import { TRIBUTE_DEATH_QUOTES } from '../js/tribute.js';
@@ -18045,6 +18045,50 @@ function installMovingPetPitTrapState(ttyp = PIT, extra = {}) {
     return { trap, pet };
 }
 
+function installMovingMonsterHoleTrapState(ttyp = HOLE, extra = {}) {
+    installStableNonShopFloorState();
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 50,
+        uhpmax: 50,
+        uac: 10,
+        uz: { dnum: 0, dlevel: 1 },
+    });
+    game.dungeons = [{ num_dunlevs: 3 }];
+    game.inventory = [];
+    const trap = { ttyp, tx: 6, ty: 5, tseen: false, madeby_u: false };
+    game.level.traps = [trap];
+    const { data: dataExtra = {}, ...monsterExtra } = extra;
+    const goblin = dartTrapGoblin(31434, {
+        mx: 7,
+        my: 5,
+        mhp: 10,
+        mhpmax: 10,
+        data: { name: 'goblin', mlet: 'o', mac: 10, ...dataExtra },
+        ...monsterExtra,
+    });
+    game.level.monsters = [goblin];
+    return { trap, goblin };
+}
+
+function assertMonsterHoleTrapMigrated(mon, trap, { targetLevel = { dnum: 0, dlevel: 2 } } = {}) {
+    assert.equal(game.level.monsters.includes(mon), false);
+    assert.equal(game.migrating_mons?.includes(mon), true);
+    assert.equal(mon.mx, 0);
+    assert.equal(mon.my, 0);
+    assert.equal(mon.mux, targetLevel.dnum);
+    assert.equal(mon.muy, targetLevel.dlevel);
+    assert.equal(mon.movement, 0);
+    assert.equal(!!(mon.mstate & MON_MIGRATING), true);
+    assert.equal(mon.mtrack?.[0]?.x, MIGR_RANDOM);
+    assert.equal(mon.mtrack?.[0]?.y, 0);
+    assert.deepEqual(mon.mtrack?.[1], { x: trap.tx, y: trap.ty });
+    assert.deepEqual(mon.mtrack?.[2], { x: 0, y: 1 });
+    assert.equal(trap.tseen, true);
+    assert.equal(!!(mon.mtrapseen & (1 << (trap.ttyp - 1))), true);
+}
+
 function installTrappedMonsterPitState(ttyp = PIT, extra = {}) {
     const { trap, goblin } = installMonsterPitTrapState(ttyp, {
         mtrapped: 1,
@@ -18680,6 +18724,94 @@ test('pet pit trap movement traps and damages pet visibly', async () => {
     assert.equal(rngValuesForCall(getRngLog(), 'rnd(10)').length, 0);
     assert.equal(pet.mhp, 10 - pitDamage[0]);
     assert.equal(!!(pet.mtrapseen & (1 << (PIT - 1))), true);
+});
+
+test('monster first-entry hole and trapdoor migrate off level visibly', async () => {
+    for (const [label, ttyp, pattern] of [
+        ['hole', HOLE, /falls into a hole/],
+        ['trapdoor', TRAPDOOR, /falls through a trap door/],
+    ]) {
+        const { trap, goblin } = installMovingMonsterHoleTrapState(ttyp);
+        enableRngLog({ reset: true });
+        installCoreRngValues([0]);
+        queueEscapeForMonsterTurn();
+        markHeroNeighborhoodVisible();
+        markSquareVisible(6, 5);
+        markSquareVisible(7, 5);
+
+        await processMonsterTurns();
+        const messages = [game._pending_message, ...(await drainQueuedMessagesAfterMore())].join(' ');
+
+        assert.match(messages, pattern, label);
+        assertMonsterHoleTrapMigrated(goblin, trap);
+    }
+});
+
+test('pet first-entry hole and trapdoor migrate off level visibly', async () => {
+    for (const [label, ttyp, pattern] of [
+        ['hole', HOLE, /falls into a hole/],
+        ['trapdoor', TRAPDOOR, /falls through a trap door/],
+    ]) {
+        const { trap, pet } = installMovingPetPitTrapState(ttyp);
+        enableRngLog({ reset: true });
+        installCoreRngValues([0]);
+        queueEscapeForMonsterTurn();
+        markHeroNeighborhoodVisible();
+        markSquareVisible(6, 5);
+        markSquareVisible(7, 5);
+
+        await processMonsterTurns();
+        const messages = [game._pending_message, ...(await drainQueuedMessagesAfterMore())].join(' ');
+
+        assert.match(messages, pattern, label);
+        assertMonsterHoleTrapMigrated(pet, trap);
+    }
+});
+
+test('monster first-entry hole on bottom level learns trap without migrating', async () => {
+    const { trap, goblin } = installMovingMonsterHoleTrapState(HOLE);
+    game.u.uz = { dnum: 0, dlevel: 3 };
+    trap.dst = { dnum: 0, dlevel: 4 };
+    enableRngLog({ reset: true });
+    installCoreRngValues([0]);
+    queueEscapeForMonsterTurn();
+    markHeroNeighborhoodVisible();
+    markSquareVisible(6, 5);
+    markSquareVisible(7, 5);
+
+    await processMonsterTurns();
+    const messages = [game._pending_message, ...(await drainQueuedMessagesAfterMore())].join(' ');
+
+    assert.doesNotMatch(messages, /falls into a hole/);
+    assert.equal(game.level.monsters.includes(goblin), true);
+    assert.equal(game.migrating_mons?.includes(goblin) || false, false);
+    assert.equal(goblin.mx, 6);
+    assert.equal(goblin.my, 5);
+    assert.equal(trap.tseen, false);
+    assert.equal(!!(goblin.mtrapseen & (1 << (HOLE - 1))), true);
+});
+
+test('huge monster first-entry hole learns trap without falling through', async () => {
+    const { trap, goblin } = installMovingMonsterHoleTrapState(HOLE, {
+        data: { name: 'purple worm', mlet: 'w', msize: 'huge' },
+    });
+    enableRngLog({ reset: true });
+    installCoreRngValues([0]);
+    queueEscapeForMonsterTurn();
+    markHeroNeighborhoodVisible();
+    markSquareVisible(6, 5);
+    markSquareVisible(7, 5);
+
+    await processMonsterTurns();
+    const messages = [game._pending_message, ...(await drainQueuedMessagesAfterMore())].join(' ');
+
+    assert.doesNotMatch(messages, /falls into a hole|falls through a trap door/);
+    assert.equal(game.level.monsters.includes(goblin), true);
+    assert.equal(game.migrating_mons?.includes(goblin) || false, false);
+    assert.equal(goblin.mx, 6);
+    assert.equal(goblin.my, 5);
+    assert.equal(trap.tseen, false);
+    assert.equal(!!(goblin.mtrapseen & (1 << (HOLE - 1))), true);
 });
 
 test('flying pet avoids ordinary pit trap without learning or damage', async () => {
