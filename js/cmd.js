@@ -47253,7 +47253,7 @@ function heroRollingBoulderTriggerLandmineAt(x, y, movingBoulder, messages) {
 
 function heroRollingBoulderPathMonsterAt(x, y) {
     return (game.level?.monsters || []).find(mon =>
-        mon && !mon.dead && (mon.mhp == null || mon.mhp > 0)
+        mon && mon !== game.u?.usteed && !mon.dead && (mon.mhp == null || mon.mhp > 0)
         && mon.mx === x && mon.my === y) || null;
 }
 
@@ -47275,6 +47275,64 @@ function heroRollingBoulderRockThrowerSnatchAt(x, y, movingBoulder, messages) {
     add_to_minv(mon, movingBoulder);
     newsym(x, y);
     return { handled: true, consumed: true };
+}
+
+function heroRollingBoulderMonsterHitAdjustment(mon, movingBoulder) {
+    let adjustment = heroProjectileMonsterSizeValue(mon) - 2;
+    if (mon?.msleeping) adjustment += 2;
+    if (mon?.mcanmove === false || mon?.data?.mmove === 0) adjustment += 4;
+    if (movingBoulder?.otyp === BOULDER) adjustment += 6;
+    return adjustment;
+}
+
+function heroRollingBoulderMonsterTargetName(mon) {
+    return fireScrollMonsterName(mon).replace(/^The /, 'the ');
+}
+
+function heroRollingBoulderKillMonster(mon, messages, visible, movingBoulder) {
+    if (visible) messages.push(`${fireScrollMonsterName(mon)} is killed!`);
+    dropMonsterInventory(mon, messages);
+    game.level.monsters = (game.level?.monsters || []).filter(other => other !== mon);
+    mon.mhp = 0;
+    mon.dead = true;
+    recordVanquished(mon, !!movingBoulder?.otrapped);
+    newsym(mon.mx, mon.my);
+}
+
+function heroRollingBoulderHitMonsterAt(x, y, movingBoulder, messages) {
+    const mon = heroRollingBoulderPathMonsterAt(x, y);
+    if (!mon || !movingBoulder) return { handled: false, consumed: false };
+
+    const visible = !game.u?.blind && cansee(x, y);
+    const hitThreshold = 5 + (mon.data?.mac ?? 10)
+        + heroRollingBoulderMonsterHitAdjustment(mon, movingBoulder);
+    const hitRoll = rnd(20);
+    const targetName = heroRollingBoulderMonsterTargetName(mon);
+    if (hitThreshold < hitRoll) {
+        if (visible) {
+            const missTarget = game.flags?.verbose === false ? 'it' : targetName;
+            messages.push(`The boulder misses ${missTarget}.`);
+        }
+        return { handled: true, consumed: false };
+    }
+
+    const damage = rnd(20);
+    const harmless = heroThrownTargetPassesRocks(mon);
+    mon.msleeping = 0;
+    if (visible) {
+        if (harmless)
+            messages.push(`The boulder hits ${targetName} but passes harmlessly through it.`);
+        else
+            messages.push(`The boulder hits ${targetName}${damage <= 4 ? '.' : '!'}`);
+        newsym(x, y);
+    }
+    if (!harmless) {
+        mon.mhp = (mon.mhp || 1) - damage;
+        if ((mon.mhp || 0) <= 0)
+            heroRollingBoulderKillMonster(mon, messages, visible, movingBoulder);
+    }
+    if (!mon.dead) setHeroObjectHitMonsterAngry(mon);
+    return { handled: true, consumed: false };
 }
 
 function heroRollingBoulderChainIntoBoulderAt(x, y, dx, dy, remainingDistance, movingBoulder, messages) {
@@ -47328,6 +47386,13 @@ function heroRollingBoulderPathResult(start, end, movingBoulder) {
             result.finalX = x;
             result.finalY = y;
             if (snatch.consumed) result.boulder = null;
+            break;
+        }
+        const monsterHit = heroRollingBoulderHitMonsterAt(x, y, result.boulder, result.messages);
+        if (monsterHit.consumed) {
+            result.finalX = x;
+            result.finalY = y;
+            result.boulder = null;
             break;
         }
         const downGate = heroRollingBoulderApplyDownGateAt(x, y, result.boulder, result.messages);
