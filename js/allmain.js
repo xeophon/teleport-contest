@@ -10663,12 +10663,13 @@ function monsterTrappedTrapTurn(mon) {
         mon.mtrapped = 0;
         return { handled: true, caught: false };
     }
-    if (![PIT, SPIKED_PIT, BEAR_TRAP, WEB].includes(trap.ttyp)) return { handled: false, caught: false };
+    if (![PIT, SPIKED_PIT, BEAR_TRAP, HOLE, WEB].includes(trap.ttyp)) return { handled: false, caught: false };
 
     const inSight = monsterVisibleToHero(mon) || mon === game.u?.usteed;
     if (!trap.tseen && inSight) trap.tseen = true;
 
     const isPitTrap = [PIT, SPIKED_PIT].includes(trap.ttyp);
+    const isPullFreeTrap = [BEAR_TRAP, WEB].includes(trap.ttyp);
     const easyEscape = isPitTrap && monsterEasyEscapePit(mon);
     if (!rn2(40) || easyEscape) {
         const boulder = isPitTrap ? boulderAtMonsterTrap(mon) : null;
@@ -10682,7 +10683,7 @@ function monsterTrappedTrapTurn(mon) {
             if (inSight) {
                 if (isPitTrap) {
                     addToplineMessage(`${monsterDisplayName(mon)} climbs ${easyEscape ? 'easily ' : ''}out of the pit.`);
-                } else {
+                } else if (isPullFreeTrap) {
                     addToplineMessage(`${monsterDisplayName(mon)} pulls free of the ${trappedMonsterPullFreeTrapName(trap.ttyp)}.`);
                 }
             }

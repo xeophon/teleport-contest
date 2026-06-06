@@ -39,7 +39,7 @@ The tests use local monster, pet, trap, visibility, and RNG fixtures. They do no
 
 ## Remaining Work
 
-- Already-trapped `HOLE` behavior remains outside this slice.
+- Already-trapped `HOLE` behavior is covered by audit 548.
 - Full first-entry web tear-through behavior for giants, large monsters, and long worms remains broader web trap work.
 - Full same-turn `meating` timing for trap-created eating delays outside metallivorous bear-trap eating remains broader monster-turn parity.
 - Full external boulder-combat damage and hero-credit behavior remains owned by the broader floor-effects/projectile paths.
