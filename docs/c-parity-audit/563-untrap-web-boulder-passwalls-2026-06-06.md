@@ -26,5 +26,5 @@ These tests drive the real extended command input, assert exact RNG/no-RNG behav
 
 ## Remaining Work
 
-- Reach-floor and tight diagonal web-untrap gates remain open.
 - Box/chest trap side effects are still partial and tracked in `562-untrap-current-square-containers-2026-06-06.md`.
+- Reach-floor and tight-diagonal web-untrap gates are covered separately in `564-untrap-web-reach-diagonal-2026-06-06.md`.

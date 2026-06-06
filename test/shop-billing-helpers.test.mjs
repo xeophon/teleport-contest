@@ -8,7 +8,7 @@ import { game, resetGame } from '../js/gstate.js';
 import { pushKey, resetInputState } from '../js/input.js';
 import { createMonsterCorpseOrGlob, mkcorpstat, mkobj, mksobj, monsterByRndName } from '../js/mklev.js';
 import { enableDisplayRngLog, enableRngLog, getRngLog, initRng } from '../js/rng.js';
-import { A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_STR, A_WIS, ALLOW_TRAPS, ALTAR, AM_SHRINE, Align2amask, ANTI_MAGIC, ARROW_TRAP, BEAR_TRAP, BILLSZ, CANDLESHOP, CLOUD, CORPSTAT_HISTORIC, COULD_SEE, DART_TRAP, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, D_CLOSED, D_NODOOR, FIRE_TRAP, FOUNTAIN, HOLE, ICE, ICED_POOL, IN_SIGHT, IRONBARS, LADDER, LANDMINE, LAVAPOOL, MAGIC_PORTAL, MIGR_LADDER_UP, MIGR_RANDOM, MIGR_SSTAIRS, MIGR_STAIRS_UP, MOAT, MON_MIGRATING, M_AP_FURNITURE, M_AP_OBJECT, NORMAL_SPEED, P_AXE, P_BARE_HANDED_COMBAT, P_BASIC, P_DAGGER, P_EXPERT, P_KNIFE, P_PICK_AXE, P_SABER, P_SKILLED, P_TWO_WEAPON_COMBAT, P_UNSKILLED, PIT, POLY_TRAP, POOL, REPAIR_DELAY, ROCKTRAP, ROLLING_BOULDER_TRAP, ROOM, ROOMOFFSET, SDOOR, SHOPBASE, SHOP_DOOR_COST, SINK, SLP_GAS_TRAP, SPIKED_PIT, SQKY_BOARD, STAIRS, STATUE_TRAP, STONE, STRAT_APPEARMSG, STRAT_WAITFORU, STRAT_WAITMASK, TEMPLE, TRAPDOOR, TT_BEARTRAP, TT_LAVA, TT_PIT, TT_WEB, WEB, W_ARMF, W_SADDLE } from '../js/const.js';
+import { A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_STR, A_WIS, ALLOW_TRAPS, ALTAR, AM_SHRINE, Align2amask, ANTI_MAGIC, ARROW_TRAP, BEAR_TRAP, BILLSZ, CANDLESHOP, CLOUD, CORPSTAT_HISTORIC, COULD_SEE, DART_TRAP, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, D_CLOSED, D_NODOOR, FIRE_TRAP, FOUNTAIN, HOLE, ICE, ICED_POOL, IN_SIGHT, IRONBARS, LADDER, LANDMINE, LAVAPOOL, MAGIC_PORTAL, MIGR_LADDER_UP, MIGR_RANDOM, MIGR_SSTAIRS, MIGR_STAIRS_UP, MOAT, MON_MIGRATING, M_AP_FURNITURE, M_AP_OBJECT, NORMAL_SPEED, P_AXE, P_BARE_HANDED_COMBAT, P_BASIC, P_DAGGER, P_EXPERT, P_KNIFE, P_PICK_AXE, P_RIDING, P_SABER, P_SKILLED, P_TWO_WEAPON_COMBAT, P_UNSKILLED, PIT, POLY_TRAP, POOL, REPAIR_DELAY, ROCKTRAP, ROLLING_BOULDER_TRAP, ROOM, ROOMOFFSET, SDOOR, SHOPBASE, SHOP_DOOR_COST, SINK, SLP_GAS_TRAP, SPIKED_PIT, SQKY_BOARD, STAIRS, STATUE_TRAP, STONE, STRAT_APPEARMSG, STRAT_WAITFORU, STRAT_WAITMASK, TEMPLE, TRAPDOOR, TT_BEARTRAP, TT_LAVA, TT_PIT, TT_WEB, WEB, W_ARMF, W_SADDLE } from '../js/const.js';
 import { currentFruitId, setCurrentFruitName } from '../js/fruit.js';
 import { CLR_BRIGHT_MAGENTA, CLR_BROWN, CLR_WHITE } from '../js/terminal.js';
 import { TRIBUTE_DEATH_QUOTES } from '../js/tribute.js';
@@ -21029,6 +21029,12 @@ function trappedWebGoblin(extra = {}) {
     };
 }
 
+function installUntrapLevelCells(cells) {
+    const baseAt = game.level.at;
+    const overrides = new Map(cells.map(([x, y, loc]) => [`${x},${y}`, loc]));
+    game.level.at = (x, y) => overrides.get(`${x},${y}`) || baseAt(x, y);
+}
+
 test('#untrap current-square web and box prompts before removing web', async () => {
     const web = setupUntrapDestinationWeb([], { webX: 5, webY: 5, rng: [0] });
     const box = shopFloorContainer(881000);
@@ -21133,9 +21139,111 @@ test('#untrap current-square web ignores ice boxes for web container prompt', as
     assert.equal(game.context.move, 1);
 });
 
+test('#untrap adjacent web is unreachable while levitating', async () => {
+    const web = setupUntrapDestinationWeb([], { rng: [0] });
+    game.u.levitating = true;
+
+    await enterUntrapDirection();
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.deepEqual(getRngLog(), []);
+    assert.equal(game._pending_message, "There is a web there but you can't reach it.");
+    assert.equal(game.level.traps.includes(web), true);
+    assert.equal(game.context.move || 0, 0);
+});
+
+test('#untrap current-square web and box are unreachable while mounted unskilled', async () => {
+    const web = setupUntrapDestinationWeb([], { webX: 5, webY: 5, rng: [0] });
+    const box = shopFloorContainer(881006);
+    game.level.objects = [box];
+    mountBearTrapPony();
+    setHeroWeaponSkill(P_RIDING, P_UNSKILLED);
+
+    await enterUntrapDirection();
+    await rhack('.');
+
+    assert.equal(game._command_mode, null);
+    assert.deepEqual(getRngLog(), []);
+    assert.equal(game._pending_message, "There are a web and a container here but you can't reach them while mounted.");
+    assert.equal(game.level.traps.includes(web), true);
+    assert.equal(game.level.objects.includes(box), true);
+    assert.equal(game.context.move || 0, 0);
+});
+
+test('#untrap adjacent web remains reachable while flying', async () => {
+    const web = setupUntrapDestinationWeb([], { rng: [0] });
+    game.u.flying = true;
+
+    await enterUntrapDirection();
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.deepEqual(getRngLog(), ['rn2(7)=0']);
+    assert.equal(game._pending_message, 'You succeed in removing the web.');
+    assert.equal(game.level.traps.includes(web), false);
+    assert.equal(game.context.move, 1);
+});
+
+test('#untrap tight diagonal web is unreachable with a heavy inventory', async () => {
+    const web = setupUntrapDestinationWeb([{ kind: 'heavy test item', quan: 1, owt: 601 }], {
+        webX: 6,
+        webY: 4,
+        rng: [0],
+    });
+    installUntrapLevelCells([
+        [5, 4, { roomno: 0, typ: STONE }],
+        [6, 5, { roomno: 0, typ: STONE }],
+    ]);
+
+    await enterUntrapDirection();
+    await rhack('u');
+
+    assert.equal(game._command_mode, null);
+    assert.deepEqual(getRngLog(), []);
+    assert.equal(game._pending_message, 'You are unable to reach the web!');
+    assert.equal(game.level.traps.includes(web), true);
+    assert.equal(game.context.move || 0, 0);
+});
+
+test('#untrap tight diagonal web is unreachable for large heroes', async () => {
+    const web = setupUntrapDestinationWeb([], { webX: 6, webY: 4, rng: [0] });
+    game.u._polyself_form = { name: 'large mimic', msize: 'large', big: true };
+    installUntrapLevelCells([
+        [5, 4, { roomno: 0, typ: STONE }],
+        [6, 5, { roomno: 0, typ: STONE }],
+    ]);
+
+    await enterUntrapDirection();
+    await rhack('u');
+
+    assert.equal(game._command_mode, null);
+    assert.deepEqual(getRngLog(), []);
+    assert.equal(game._pending_message, 'You are unable to reach the web!');
+    assert.equal(game.level.traps.includes(web), true);
+    assert.equal(game.context.move || 0, 0);
+});
+
+test('#untrap tight diagonal web remains reachable for light small heroes', async () => {
+    const web = setupUntrapDestinationWeb([], { webX: 6, webY: 4, rng: [0] });
+    installUntrapLevelCells([
+        [5, 4, { roomno: 0, typ: STONE }],
+        [6, 5, { roomno: 0, typ: STONE }],
+    ]);
+
+    await enterUntrapDirection();
+    await rhack('u');
+
+    assert.equal(game._command_mode, null);
+    assert.deepEqual(getRngLog(), ['rn2(7)=0']);
+    assert.equal(game._pending_message, 'You succeed in removing the web.');
+    assert.equal(game.level.traps.includes(web), false);
+    assert.equal(game.context.move, 1);
+});
+
 test('#untrap adjacent web is blocked by a boulder for ordinary heroes', async () => {
     const web = setupUntrapDestinationWeb([], { rng: [0] });
-    game.level.objects = [floorBoulder(881006, { ox: 6, oy: 5 })];
+    game.level.objects = [floorBoulder(881007, { ox: 6, oy: 5 })];
 
     await enterUntrapDirection();
     await rhack('l');
@@ -21150,7 +21258,7 @@ test('#untrap adjacent web is blocked by a boulder for ordinary heroes', async (
 test('#untrap adjacent web boulder does not block pass-wall heroes', async () => {
     const web = setupUntrapDestinationWeb([], { rng: [0] });
     game.u._polyself_form = { name: 'xorn', passWalls: true };
-    game.level.objects = [floorBoulder(881007, { ox: 6, oy: 5 })];
+    game.level.objects = [floorBoulder(881008, { ox: 6, oy: 5 })];
 
     await enterUntrapDirection();
     await rhack('l');

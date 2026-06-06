@@ -6,7 +6,7 @@ import { nhgetch } from './input.js';
 import { bot, cls, docrt, flush_screen, newsym, pline, recordObservedObjectDiscovery, refreshHallucinatedMap, seeMonsters, seeNearbyObjects, show_glyph_cell, strengthString } from './display.js';
 import { cansee, couldsee, vision_recalc, vision_reset } from './vision.js';
 import { RANDOM_MONSTER_BY_NAME, SHOP_TYPES, STALKER_MONSTERS, add_to_container, add_to_minv, adjustedMonsterLevel, artifactDefinitionForName, artifactObjectName, enextoMonsterSpot, make_tutorial1_level, makemon, makeArtifactWishObject, maketrap, mkcorpstat, mklev, mkobj, mkobj_at, mksobj, monsterByRndName, monster_hp, morgueMonster, nameObjectAsArtifact, next_ident, object_display, potionIndexForRoll, randomHallucinatedShopkeeperName, resurrectWizardOfYendor, rndmonnum, scrollIndexForRoll, set_mimic_sym_rng, syncDungeonContext, u_on_dnstairs, u_on_rndspot, u_on_upstairs, wipe_engr_at, dropMonsterInventory as dropMonsterInventoryRaw, l_nhcore_init, getrumor, getbogusmon, level_difficulty, set_malign, somexyspace, fumaroles, fix_wall_spines, createMonsterCorpseOrGlob, monsterCorpseDropSucceeds, monsterLeavesCorpseLikeDrop, movebubbles, noteleportLevelForMonster, rlocNoMsg } from './mklev.js';
-import { ACCESSIBLE, A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_MAX, A_NEUTRAL, A_NONE, A_STR, A_WIS, ALTAR, AM_SANCTUM, AM_SHRINE, Align2amask, Amask2align, BC_BALL, BC_CHAIN, BEAR_TRAP, BLCORNER, BOLT_LIM, BRCORNER, CANDLESHOP, CLOUD, COLNO, CORPSTAT_FEMALE, CORPSTAT_GENDER, CORPSTAT_HISTORIC, CORPSTAT_MALE, CORPSTAT_NEUTER, CORR, DB_DIR, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DB_NORTH, DB_SOUTH, DB_UNDER, DB_WEST, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, BURN, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, D_TRAPPED, DUST, ENGRAVE, ENGR_BLOOD, FOUNTAIN, F_LOOTED, GRAVE, HEADSTONE, HWALL, ICE, ICED_MOAT, ICED_POOL, IN_SIGHT, IRONBARS, IS_AIR, IS_FURNITURE, IS_LAVA, IS_OBSTRUCTED, IS_POOL, IS_ROOM, IS_SOFT, IS_TREE, IS_WALL, In_endgame, In_quest, In_sokoban, In_V_tower, Is_airlevel, Is_astralevel, Is_botlevel, Is_earthlevel, Is_firelevel, Is_rogue_level, Is_stronghold, Is_waterlevel, LADDER, LAVAPOOL, LAVAWALL, LUCKMAX, LUCKMIN, MAGIC_PORTAL, MARK, MAXULEV, MAX_EGG_HATCH_TIME, MIGR_LADDER_UP, MIGR_RANDOM, MIGR_SSTAIRS, MIGR_STAIRS_UP, MM_ADJACENTOK, MM_EDOG, MM_NOCOUNTBIRTH, MM_NOMSG, MM_NOTAIL, MM_NOWAIT, MOAT, MORGUE, M_AP_FURNITURE, M_AP_OBJECT, M_AP_TYPE, N_DIRS, NO_MINVENT, NORMAL_SPEED, OVERLOADED, P_AXE, P_BARE_HANDED_COMBAT, P_BASIC, P_BROAD_SWORD, P_DAGGER, P_EXPERT, P_GRAND_MASTER, P_KNIFE, P_LONG_SWORD, P_MASTER, P_NONE, P_PICK_AXE, P_SABER, P_SHORT_SWORD, P_SKILLED, P_TWO_HANDED_SWORD, P_TWO_WEAPON_COMBAT, P_UNSKILLED, PIT, POOL, REPAIR_DELAY, ROLLING_BOULDER_TRAP, ROOM, ROOMOFFSET, ROWNO, SCORR, SDOOR, SHARED, SHARED_PLUS, SHOPBASE, SHOP_DOOR_COST, SINK, SPIKED_PIT, STAIRS, STONE, STR18, STR19, STRAT_APPEARMSG, STRAT_WAITFORU, STRAT_WAITMASK, S_LDWASHER, S_LPUDDING, S_LRING, TDWALL, TEMPLE, THRONE, TLCORNER, TRCORNER, TREE, TREE_LOOTED, TREE_SWARM, TT_BEARTRAP, TT_BURIEDBALL, TT_INFLOOR, TT_LAVA, TT_PIT, TT_WEB, TUWALL, T_LOOTED, VAULT, VIBRATING_SQUARE, VWALL, WAND_BACKFIRE_CHANCE, WATER, WEB, WM_MASK, WT_IRON_BALL_BASE, WT_IRON_BALL_INCR, WT_TO_DMG, W_ARMF, W_NONDIGGABLE, W_SADDLE, ZAP_POS, isok, xdir, ydir } from './const.js';
+import { ACCESSIBLE, A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_MAX, A_NEUTRAL, A_NONE, A_STR, A_WIS, ALTAR, AM_SANCTUM, AM_SHRINE, Align2amask, Amask2align, BC_BALL, BC_CHAIN, BEAR_TRAP, BLCORNER, BOLT_LIM, BRCORNER, CANDLESHOP, CLOUD, COLNO, CORPSTAT_FEMALE, CORPSTAT_GENDER, CORPSTAT_HISTORIC, CORPSTAT_MALE, CORPSTAT_NEUTER, CORR, DB_DIR, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DB_NORTH, DB_SOUTH, DB_UNDER, DB_WEST, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, BURN, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, D_TRAPPED, DUST, ENGRAVE, ENGR_BLOOD, FOUNTAIN, F_LOOTED, GRAVE, HEADSTONE, HWALL, ICE, ICED_MOAT, ICED_POOL, IN_SIGHT, IRONBARS, IS_AIR, IS_FURNITURE, IS_LAVA, IS_OBSTRUCTED, IS_POOL, IS_ROOM, IS_SOFT, IS_STWALL, IS_TREE, IS_WALL, In_endgame, In_quest, In_sokoban, In_V_tower, Is_airlevel, Is_astralevel, Is_botlevel, Is_earthlevel, Is_firelevel, Is_rogue_level, Is_stronghold, Is_waterlevel, LADDER, LAVAPOOL, LAVAWALL, LUCKMAX, LUCKMIN, MAGIC_PORTAL, MARK, MAXULEV, MAX_EGG_HATCH_TIME, MIGR_LADDER_UP, MIGR_RANDOM, MIGR_SSTAIRS, MIGR_STAIRS_UP, MM_ADJACENTOK, MM_EDOG, MM_NOCOUNTBIRTH, MM_NOMSG, MM_NOTAIL, MM_NOWAIT, MOAT, MORGUE, M_AP_FURNITURE, M_AP_OBJECT, M_AP_TYPE, N_DIRS, NO_MINVENT, NORMAL_SPEED, OVERLOADED, P_AXE, P_BARE_HANDED_COMBAT, P_BASIC, P_BROAD_SWORD, P_DAGGER, P_EXPERT, P_GRAND_MASTER, P_KNIFE, P_LONG_SWORD, P_MASTER, P_NONE, P_PICK_AXE, P_RIDING, P_SABER, P_SHORT_SWORD, P_SKILLED, P_TWO_HANDED_SWORD, P_TWO_WEAPON_COMBAT, P_UNSKILLED, PIT, POOL, REPAIR_DELAY, ROLLING_BOULDER_TRAP, ROOM, ROOMOFFSET, ROWNO, SCORR, SDOOR, SHARED, SHARED_PLUS, SHOPBASE, SHOP_DOOR_COST, SINK, SPIKED_PIT, STAIRS, STONE, STR18, STR19, STRAT_APPEARMSG, STRAT_WAITFORU, STRAT_WAITMASK, S_LDWASHER, S_LPUDDING, S_LRING, TDWALL, TEMPLE, THRONE, TLCORNER, TRCORNER, TREE, TREE_LOOTED, TREE_SWARM, TT_BEARTRAP, TT_BURIEDBALL, TT_INFLOOR, TT_LAVA, TT_PIT, TT_WEB, TUWALL, T_LOOTED, VAULT, VIBRATING_SQUARE, VWALL, WAND_BACKFIRE_CHANCE, WATER, WEB, WM_MASK, WT_IRON_BALL_BASE, WT_IRON_BALL_INCR, WT_TO_DMG, WT_TOOMUCH_DIAGONAL, W_ARMF, W_NONDIGGABLE, W_NONPASSWALL, W_SADDLE, ZAP_POS, isok, xdir, ydir } from './const.js';
 import { d, rn1, rn2, rn2_on_display_rng, rnd, rnl, rnz } from './rng.js';
 import { CLR_BLACK, CLR_BLUE, CLR_BRIGHT_BLUE, CLR_BRIGHT_CYAN, CLR_BRIGHT_GREEN, CLR_BRIGHT_MAGENTA, CLR_BROWN, CLR_CYAN, CLR_GRAY, CLR_GREEN, CLR_MAGENTA, CLR_ORANGE, CLR_RED, CLR_YELLOW, CLR_WHITE, NO_COLOR } from './terminal.js';
 import { vfsDeleteFile, vfsReadFile, vfsWriteFile } from './storage.js';
@@ -271,6 +271,57 @@ function heroPassesWalls() {
     }));
 }
 
+function heroFormData() {
+    return polyselfForm() || game.u?.youmonst?.data || game.u?.data || {};
+}
+
+function heroIsHuge() {
+    const form = heroFormData();
+    if (form.huge || form.msize === 'huge' || form.size === 'huge') return true;
+    return heroProjectileMonsterSizeValue({ data: form, msize: form.msize, size: form.size }) >= 4;
+}
+
+function heroIsBigMonster() {
+    const form = heroFormData();
+    if (form.big || form.bigmonst || form.large || form.giant) return true;
+    return heroProjectileMonsterSizeValue({ data: form, msize: form.msize, size: form.size }) >= 3;
+}
+
+const HERO_RIDING_ROLE_SKILLS = new Map([
+    ['Archaeologist', P_BASIC],
+    ['Archeologist', P_BASIC],
+    ['Barbarian', P_BASIC],
+    ['Knight', P_EXPERT],
+    ['Rogue', P_BASIC],
+    ['Ranger', P_BASIC],
+    ['Samurai', P_SKILLED],
+    ['Tourist', P_BASIC],
+    ['Valkyrie', P_SKILLED],
+    ['Wizard', P_BASIC],
+]);
+
+function heroRidingSkillLevel() {
+    return heroExplicitWeaponSkillLevel(P_RIDING, 'riding')
+        ?? HERO_RIDING_ROLE_SKILLS.get(heroRoleName())
+        ?? P_UNSKILLED;
+}
+
+function heroCanReachFloorForUntrap(checkPit = false) {
+    if (game.u?.uswallow) return false;
+    if ((game.u?.levitating || game.u?.levitation || game.u?.Levitation)
+        && !(Is_airlevel(game.u?.uz) || Is_waterlevel(game.u?.uz)))
+        return false;
+    if (game.u?.usteed && heroRidingSkillLevel() < P_BASIC) return false;
+    if (game.u?.uundetected && heroFormData().ceilingHider) return false;
+    if (game.u?.flying || game.u?.Flying || heroIsHuge()) return true;
+    if (checkPit) {
+        const trap = (game.level?.traps || []).find(candidate =>
+            candidate.tx === game.u?.ux && candidate.ty === game.u?.uy);
+        if (trap && (trap.ttyp === PIT || trap.ttyp === SPIKED_PIT)) return false;
+    }
+    return true;
+}
+
 function fingersOrGloves() {
     return wornGlovesItem() ? 'gloves' : 'fingers';
 }
@@ -451,6 +502,72 @@ function untrapContainerCountPhrase(count) {
 
 function untrapWebContainerPrompt(trap, count) {
     return `There ${untrapContainerCountPhrase(count)} and a web here.  Remove the web? [ynq] (q)`;
+}
+
+function untrapFloorReachMessage(trap, dir, boxes = []) {
+    const here = !dir.dx && !dir.dy;
+    const parts = [];
+    if (trap) parts.push(trap?.madeby_u ? 'your web' : 'a web');
+    if (boxes.length) parts.push(boxes.length === 1 ? 'a container' : 'containers');
+    const plural = (trap && boxes.length > 0) || boxes.length > 1;
+    return `There ${plural ? 'are' : 'is'} ${parts.join(' and ')} ${here ? 'here' : 'there'} but you can't reach ${plural ? 'them' : 'it'}${game.u?.usteed ? ' while mounted' : ''}.`;
+}
+
+async function blockUntrapFloorReach(trap, dir, boxes = []) {
+    if (heroCanReachFloorForUntrap(false)) return false;
+    await setMessage(untrapFloorReachMessage(trap, dir, boxes));
+    return true;
+}
+
+function untrapMayDig(loc) {
+    return !(IS_STWALL(loc?.typ) || IS_TREE(loc?.typ)) || !(loc?.wall_info & W_NONDIGGABLE);
+}
+
+function untrapMayPasswall(loc) {
+    return !IS_STWALL(loc?.typ) || !(loc?.wall_info & W_NONPASSWALL);
+}
+
+function untrapHeroBadRock(x, y) {
+    const boulder = (game.level?.objects || []).some(obj =>
+        !obj.hidden && !obj.transientProjectile && obj.otyp === BOULDER
+        && obj.ox === x && obj.oy === y);
+    if (In_sokoban(game.u?.uz) && boulder) return true;
+    const loc = game.level?.at?.(x, y);
+    if (!loc || !IS_OBSTRUCTED(loc.typ)) return false;
+    const form = heroFormData();
+    const tunnels = !!(form.tunnel || form.tunnels || form.dwarf);
+    const needPick = !!(form.needPick || form.need_pick);
+    return (!tunnels || needPick || !untrapMayDig(loc))
+        && !(heroPassesWalls() && untrapMayPasswall(loc));
+}
+
+function heroTooLargeForTightDiagonal() {
+    const form = heroFormData();
+    if (!heroIsBigMonster()) return false;
+    const name = String(form.name || '').toLowerCase();
+    return !(form.amorphous || form.whirly || form.unsolid || form.noncorporeal
+        || form.slithy || name === 'fog cloud');
+}
+
+function heroTightDiagonalCarriedWeight() {
+    const throwsRocks = !!(game.u?.throwsRocks || heroFormData().throwsRocks);
+    let weight = Math.max(0, Math.trunc(((game._goldCount || 0) + 50) / 100));
+    for (const item of game.inventory || []) {
+        if (isGoldObject(item)) continue;
+        if (throwsRocks && item?.otyp === BOULDER) continue;
+        weight += globObjectWeight(item);
+    }
+    return weight;
+}
+
+async function blockUntrapTightDiagonalReach(trap, dir) {
+    if (!dir.dx || !dir.dy) return false;
+    if (!(untrapHeroBadRock(game.u?.ux, trap.ty) && untrapHeroBadRock(trap.tx, game.u?.uy)))
+        return false;
+    if (heroTightDiagonalCarriedWeight() <= WT_TOOMUCH_DIAGONAL && !heroTooLargeForTightDiagonal())
+        return false;
+    await setMessage('You are unable to reach the web!');
+    return true;
 }
 
 function untrapBoxObjectName(box) {
@@ -634,6 +751,14 @@ async function handleUntrapWebTrap(trap, dir) {
     const monster = untrapWebMonsterAt(trap);
     if (monster && !monster.mtrapped) {
         await setMessage(`${earthquakeMonsterName(monster)} is in the way.`);
+        return true;
+    }
+    if (await blockUntrapTightDiagonalReach(trap, dir)) return true;
+    if (!heroCanReachFloorForUntrap(underHero)) {
+        if (game.u?.usteed && heroRidingSkillLevel() < P_BASIC)
+            await setMessage("You aren't skilled enough to reach from a steed.");
+        else
+            await setMessage(`You are unable to reach the ${trapName}!`);
         return true;
     }
 
@@ -62333,6 +62458,8 @@ export async function rhack(_cmd) {
             const webTrap = (game.level?.traps || []).find(candidate =>
                 candidate.tx === x && candidate.ty === y && candidate.tseen && candidate.ttyp === WEB);
             const boxes = (!dir.dx && !dir.dy) ? untrapBoxObjectsAt(x, y) : [];
+            if ((webTrap || boxes.length) && await blockUntrapFloorReach(webTrap, dir, boxes))
+                return;
             if (webTrap && boxes.length) {
                 game._untrap_web_container_state = { trap: webTrap, dir, boxes };
                 await setMessage(untrapWebContainerPrompt(webTrap, boxes.length));
