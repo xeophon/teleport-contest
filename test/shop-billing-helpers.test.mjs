@@ -21872,6 +21872,163 @@ test('hero rolling boulder hit invisible unspotted target says it', async () => 
     assert.deepEqual(rngValuesForCall(getRngLog(), 'rnd(20)'), [5, 5]);
 });
 
+test('hero rolling boulder telepathy names hidden target', async () => {
+    const { boulder } = installHeroRollingBoulderTrapState({
+        trapX: 6,
+        trapY: 4,
+        heroX: 5,
+        heroY: 4,
+        start: { x: 4, y: 3 },
+        end: { x: 8, y: 3 },
+        boulderAt: 'start',
+    });
+    const trapper = dartTrapMonster('trapper', 3148201, {
+        mx: 6,
+        my: 3,
+        mhp: 20,
+        mhpmax: 20,
+        msleeping: 1,
+        mundetected: true,
+        data: { name: 'trapper', mac: -5, msize: 'large' },
+    });
+    game.inventory = [wornArmor(3148202, 'helm of telepathy', 'h')];
+    game.level.monsters.push(trapper);
+    enableRngLog({ reset: true });
+    installCoreRngValues([4, 4]);
+    markHeroNeighborhoodVisible();
+    for (let x = 4; x <= 8; x++) markSquareVisible(x, 3);
+
+    await rhack('l');
+
+    assert.equal(game._pending_message,
+        'Click!  You trigger a rolling boulder trap!  The boulder hits the trapper!');
+    assert.equal(trapper.mhp, 15);
+    assert.equal(trapper.msleeping, 0);
+    assert.equal(trapper.mundetected, true);
+    assert.equal(boulder.ox, 8);
+    assert.equal(boulder.oy, 3);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rnd(20)'), [5, 5]);
+});
+
+test('hero rolling boulder telepathy names invisible lethal target', async () => {
+    const { boulder } = installHeroRollingBoulderTrapState({
+        trapX: 6,
+        trapY: 4,
+        heroX: 5,
+        heroY: 4,
+        start: { x: 4, y: 3 },
+        end: { x: 8, y: 3 },
+        boulderAt: 'start',
+    });
+    const goblin = dartTrapGoblin(3148203, {
+        mx: 6,
+        my: 3,
+        mhp: 5,
+        mhpmax: 5,
+        msleeping: 1,
+        minvis: 1,
+        perminvis: 1,
+        data: { name: 'goblin', mlet: 'o', mac: -5, msize: 'large' },
+    });
+    game.u.seeInvisible = false;
+    game.inventory = [wornArmor(3148204, 'helm of telepathy', 'h')];
+    game.level.monsters.push(goblin);
+    enableRngLog({ reset: true });
+    installCoreRngValues([4, 4]);
+    markHeroNeighborhoodVisible();
+    for (let x = 4; x <= 8; x++) markSquareVisible(x, 3);
+
+    await rhack('l');
+
+    assert.equal(game._pending_message,
+        'Click!  You trigger a rolling boulder trap!  The boulder hits the invisible goblin!  The invisible goblin is killed!');
+    assert.equal(game.level.monsters.includes(goblin), false);
+    assert.equal(goblin.dead, true);
+    assert.equal(game._vanquished_counts?.goblin, 1);
+    assert.equal(boulder.ox, 8);
+    assert.equal(boulder.oy, 3);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rnd(20)'), [5, 5]);
+});
+
+test('hero rolling boulder telepathy ignores mindless invisible target', async () => {
+    const { boulder } = installHeroRollingBoulderTrapState({
+        trapX: 6,
+        trapY: 4,
+        heroX: 5,
+        heroY: 4,
+        start: { x: 4, y: 3 },
+        end: { x: 8, y: 3 },
+        boulderAt: 'start',
+    });
+    const gridBug = dartTrapMonster('grid bug', 3148205, {
+        mx: 6,
+        my: 3,
+        mhp: 20,
+        mhpmax: 20,
+        msleeping: 1,
+        minvis: 1,
+        perminvis: 1,
+        data: { name: 'grid bug', mac: -5, msize: 'large', mindless: true },
+    });
+    game.u.seeInvisible = false;
+    game.inventory = [wornArmor(3148206, 'helm of telepathy', 'h')];
+    game.level.monsters.push(gridBug);
+    enableRngLog({ reset: true });
+    installCoreRngValues([4, 4]);
+    markHeroNeighborhoodVisible();
+    for (let x = 4; x <= 8; x++) markSquareVisible(x, 3);
+
+    await rhack('l');
+
+    assert.equal(game._pending_message,
+        'Click!  You trigger a rolling boulder trap!  The boulder hits it!');
+    assert.equal(gridBug.mhp, 15);
+    assert.equal(gridBug.msleeping, 0);
+    assert.equal(boulder.ox, 8);
+    assert.equal(boulder.oy, 3);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rnd(20)'), [5, 5]);
+});
+
+test('hero rolling boulder out-of-range unblind telepathy does not name invisible target', async () => {
+    const { boulder } = installHeroRollingBoulderTrapState({
+        trapX: 6,
+        trapY: 4,
+        heroX: 5,
+        heroY: 4,
+        start: { x: 4, y: 3 },
+        end: { x: 8, y: 3 },
+        boulderAt: 'start',
+    });
+    const goblin = dartTrapGoblin(3148207, {
+        mx: 6,
+        my: 3,
+        mhp: 20,
+        mhpmax: 20,
+        msleeping: 1,
+        minvis: 1,
+        perminvis: 1,
+        data: { name: 'goblin', mlet: 'o', mac: -5, msize: 'large' },
+    });
+    game.u.seeInvisible = false;
+    game.u.unblind_telepat_range = 0;
+    game.inventory = [wornArmor(3148208, 'helm of telepathy', 'h')];
+    game.level.monsters.push(goblin);
+    enableRngLog({ reset: true });
+    installCoreRngValues([4, 4]);
+    markHeroNeighborhoodVisible();
+    for (let x = 4; x <= 8; x++) markSquareVisible(x, 3);
+
+    await rhack('l');
+
+    assert.equal(game._pending_message,
+        'Click!  You trigger a rolling boulder trap!  The boulder hits it!');
+    assert.equal(goblin.mhp, 15);
+    assert.equal(goblin.msleeping, 0);
+    assert.equal(boulder.ox, 8);
+    assert.equal(boulder.oy, 3);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rnd(20)'), [5, 5]);
+});
+
 test('hero rolling boulder nonverbose hit visible target says it', async () => {
     const { boulder } = installHeroRollingBoulderTrapState({
         trapX: 6,
