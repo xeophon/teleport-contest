@@ -30,6 +30,6 @@ The tests exercise normal `rhack('F')` plus direction input, assert the `rn2(20)
 
 ## Remaining Work
 
-- Force-fighting a destination web with fire artifacts should use the same C helper but print `<artifact> burns through the web!`.
+- Force-fighting a destination web with Fire Brand is covered by `556-force-fight-fire-brand-web-2026-06-06.md`.
 - Non-Sting blade, non-blade, and weaponless force-fight web attempts still need the C skill, strength, enchantment, and messaging branches.
 - Failed untrap/NOWEBMSG web-spread behavior remains separate `#untrap` parity.

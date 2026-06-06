@@ -20762,6 +20762,41 @@ test('force-fighting a seen destination web with Sting cuts and deletes it', asy
     assert.equal(game.context.move, 1);
 });
 
+test('force-fighting a seen destination web with Fire Brand burns and deletes it', async () => {
+    installStableNonSokobanTrapState();
+    vision_reset();
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 20,
+        uhpmax: 20,
+        utrap: 0,
+        utraptype: null,
+        umoved: false,
+    });
+    const fireBrand = wieldedWeapon(880906, 'long sword', 'w', 0);
+    fireBrand.artifact = 'Fire Brand';
+    fireBrand.kind = 'long sword named Fire Brand';
+    game.inventory = [fireBrand];
+    const web = { ttyp: WEB, tx: 6, ty: 5, tseen: true, madeby_u: false };
+    game.level.traps = [web];
+    enableRngLog({ reset: true });
+    installCoreRngValues([11]);
+
+    await rhack('F');
+    await rhack('l');
+
+    assert.deepEqual(getRngLog().map(rngCallName), ['rn2(20)']);
+    assert.equal(game._pending_message, 'Fire Brand burns through the web!');
+    assert.equal(game.u.ux, 5);
+    assert.equal(game.u.uy, 5);
+    assert.equal(game.u.umoved, false);
+    assert.equal(game.u.utrap || 0, 0);
+    assert.equal(game.u.utraptype || null, null);
+    assert.equal(game.level.traps.includes(web), false);
+    assert.equal(game.context.move, 1);
+});
+
 test('force-fighting an unseen destination web with Sting does not cut it', async () => {
     installStableNonSokobanTrapState();
     vision_reset();

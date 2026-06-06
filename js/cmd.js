@@ -43249,11 +43249,24 @@ function heroWieldsSting() {
         String(name || '').toLowerCase().replace(/^the\s+/, '') === 'sting');
 }
 
-async function forceFightWebTrapWithSting(trap) {
-    if (!trap || trap.ttyp !== WEB || !trap.tseen || !heroWieldsSting()) return false;
+function guaranteedWebForceArtifact() {
+    const item = wieldedItem();
+    if (!item) return null;
+    for (const name of [item.artifact, item.oartifact]) {
+        const key = String(name || '').toLowerCase().replace(/^the\s+/, '');
+        if (key === 'sting') return { name: 'Sting', verb: 'cuts' };
+        if (key === 'fire brand') return { name: 'Fire Brand', verb: 'burns' };
+    }
+    return null;
+}
+
+async function forceFightWebTrapWithArtifact(trap) {
+    if (!trap || trap.ttyp !== WEB || !trap.tseen) return false;
+    const artifact = guaranteedWebForceArtifact();
+    if (!artifact) return false;
     rn2(20);
     deleteTrap(trap);
-    await setMessage('Sting cuts through the web!');
+    await setMessage(`${artifact.name} ${artifact.verb} through the web!`);
     game.context.move = 1;
     return true;
 }
@@ -64988,7 +65001,7 @@ export async function rhack(_cmd) {
             }
             const webTrap = (game.level?.traps || []).find(trap =>
                 trap.tx === targetX && trap.ty === targetY && trap.ttyp === WEB);
-            if (await forceFightWebTrapWithSting(webTrap)) return;
+            if (await forceFightWebTrapWithArtifact(webTrap)) return;
             await setMessage(target && !IS_OBSTRUCTED(target.typ) ? 'You attack thin air.' : 'You harmlessly attack the wall.');
             if (!target || IS_OBSTRUCTED(target.typ)) game._fight_wall_message = 1;
             game.context.move = 1;
