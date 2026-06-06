@@ -23,6 +23,8 @@
 - `hero-thrown primary-wielded aklys returns to hand after monster hit`
 - `hero-thrown primary-wielded aklys range caps before distant monster`
 - `hero-thrown primary-wielded aklys failed catch drops at hero without hard break roll`
+- `hero-thrown primary-wielded aklys failed return lands at monster square with hard break roll`
+- `hero-thrown primary-wielded aklys impaired return skips catch roll and lands at feet`
 
 The monster-hit canary drives the real `t` command with deterministic unit RNG only. It asserts C-order hit, damage, Dexterity exercise, return attempt, and catch rolls; unchanged monster wake/anger side effects; retained inventory/wielded state; no landed floor object; and no hard-floor `rn2(100)` after the clean return.
 
@@ -30,7 +32,11 @@ The range canary places a monster five squares away, outside the tethered aklys 
 
 The failed-catch canary drives a seeded catch failure after a successful monster hit. It asserts the arm-hit message, hero HP loss from `rnd(3) + 1`, dropped non-wielded object at the hero square, and the exact `rnd(20)`, `rnd(6)`, `rn2(19)`, `rn2(100)`, `rn2(100)`, `rn2(2)`, `rnd(3)` sequence with no hard-floor `rn2(100)`.
 
+The failed-return canary drives a first return roll of zero. It asserts `The aklys fails to return!`, monster-square landing, dropped non-wielded state, and the hard-floor `rn2(100)` after failed return.
+
+The impaired canary sets the hero fumbling before a successful return attempt. It asserts no catch `rn2(100)` is consumed, `rn2(2)=0` lands the aklys at the hero's feet without HP loss, and the object is no longer wielded.
+
 ## Remaining candidates
 
-- Dedicated failed-return and impaired bad-catch canaries can further pin the `rn2(100)=0` and impaired/no-catch-roll paths.
+- An impaired arm-hit canary can pin the no-catch-roll `rn2(2)=1` plus `rnd(3)` path if needed.
 - Swap-weapon/two-weapon edge cases remain worth pinning if the JS inventory model grows explicit left-hand weapon state.

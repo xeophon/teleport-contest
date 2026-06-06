@@ -60807,6 +60807,105 @@ test('hero-thrown primary-wielded aklys failed catch drops at hero without hard 
     ]);
 });
 
+test('hero-thrown primary-wielded aklys failed return lands at monster square with hard break roll', async () => {
+    installNonShopFloorState();
+    initRng(40);
+    Object.assign(game.u, { ulevel: 20, uluck: 10, uhitinc: 10, udaminc: 0 });
+    game.u.acurr.a[A_STR] = 10;
+    game.u.acurr.a[A_DEX] = 25;
+    game.u.weapon_skills = [];
+    setHeroWeaponSkill(P_CLUB, P_EXPERT);
+    const aklys = monsterAklys(876153, {
+        letter: 'a',
+        line: 'a - an aklys (weapon in right hand)',
+        wielded: true,
+        ox: 5,
+        oy: 5,
+    });
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, {
+        mhp: 20,
+        mhpmax: 20,
+        msleeping: 1,
+        mpeaceful: 1,
+        meating: 4,
+        mstrategy: STRAT_WAITFORU,
+    });
+    game.inventory = [aklys];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('a');
+    await rhack('l');
+
+    const rngLog = getRngLog();
+    const damageRoll = rngValuesForCall(rngLog, 'rnd(6)')[0];
+    assert.match(game._pending_message, /The aklys hits the goblin[.!]/);
+    assert.match(game._pending_message, /The aklys fails to return!/);
+    assert.doesNotMatch(game._pending_message, /returns to your hand|landing at your feet|hitting your arm|misses|gift|catches|shatters|Splat/);
+    assert.equal(goblin.mhp, 20 - (damageRoll + 2));
+    assert.equal(game.inventory.includes(aklys), false);
+    const landed = game.level.objects.find(obj => obj.id === aklys.id);
+    assert.ok(landed);
+    assert.equal(landed.ox, 7);
+    assert.equal(landed.oy, 5);
+    assert.equal(landed.wielded, false);
+    assert.deepEqual(rngLog, [
+        'rnd(20)=6', 'rnd(6)=6', 'rn2(19)=11', 'rn2(100)=0', 'rn2(100)=59',
+    ]);
+});
+
+test('hero-thrown primary-wielded aklys impaired return skips catch roll and lands at feet', async () => {
+    installNonShopFloorState();
+    initRng(4);
+    Object.assign(game.u, { ulevel: 20, uluck: 10, uhitinc: 10, udaminc: 0, uhp: 20, uhpmax: 20, fumbling: true });
+    game.u.acurr.a[A_STR] = 10;
+    game.u.acurr.a[A_DEX] = 25;
+    game.u.weapon_skills = [];
+    setHeroWeaponSkill(P_CLUB, P_EXPERT);
+    const aklys = monsterAklys(876154, {
+        letter: 'a',
+        line: 'a - an aklys (weapon in right hand)',
+        wielded: true,
+        ox: 5,
+        oy: 5,
+    });
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, {
+        mhp: 20,
+        mhpmax: 20,
+        msleeping: 1,
+        mpeaceful: 1,
+        meating: 4,
+        mstrategy: STRAT_WAITFORU,
+    });
+    game.inventory = [aklys];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('a');
+    await rhack('l');
+
+    const rngLog = getRngLog();
+    const damageRoll = rngValuesForCall(rngLog, 'rnd(6)')[0];
+    assert.match(game._pending_message, /The aklys hits the goblin[.!]/);
+    assert.match(game._pending_message, /The aklys returns back to you, landing at your feet\./);
+    assert.doesNotMatch(game._pending_message, /returns to your hand|fails to return|hitting your arm|misses|gift|catches|shatters|Splat/);
+    assert.equal(goblin.mhp, 20 - (damageRoll + 2));
+    assert.equal(game.u.uhp, 20);
+    assert.equal(game.inventory.includes(aklys), false);
+    const landed = game.level.objects.find(obj => obj.id === aklys.id);
+    assert.ok(landed);
+    assert.equal(landed.ox, 5);
+    assert.equal(landed.oy, 5);
+    assert.equal(landed.wielded, false);
+    assert.deepEqual(rngLog, [
+        'rnd(20)=19', 'rnd(6)=2', 'rn2(19)=16', 'rn2(100)=48', 'rn2(2)=0',
+    ]);
+    assert.deepEqual(rngValuesForCall(rngLog, 'rn2(100)'), [48]);
+    assert.equal(rngLog.some(entry => entry.startsWith('rnd(3)=')), false);
+});
+
 test('hero-thrown non-wielded aklys uses large-target damage die', async () => {
     installNonShopFloorState();
     initRng(2);
