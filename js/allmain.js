@@ -11372,6 +11372,11 @@ function rollingBoulderHitHeroAt(x, y, movingBoulder) {
     return true;
 }
 
+function rollingBoulderPathMonsterAt(x, y) {
+    return (game.level?.monsters || []).find(mon =>
+        mon !== game.u?.usteed && mon.mx === x && mon.my === y) || null;
+}
+
 function deleteRollingBoulderLandmineEngravingAt(x, y) {
     if (!game.level?.engravings) return;
     game.level.engravings = game.level.engravings.filter(engr => engr.x !== x || engr.y !== y);
@@ -11631,7 +11636,7 @@ function monsterRollingBoulderTrapEffect(mon, trap, { skipPetPostMoveRoll = fals
             }
             x += dx;
             y += dy;
-            const hit = (game.level?.monsters || []).find(other => other.mx === x && other.my === y);
+            const hit = rollingBoulderPathMonsterAt(x, y);
             if (hit?.data?.throwsRocks && rn2(3)) {
                 if (!game.u?.blind && cansee(x, y))
                     addRollingBoulderMotionMessage(`${monsterDisplayName(hit)} snatches the boulder.`);

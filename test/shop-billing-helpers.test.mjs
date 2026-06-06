@@ -21575,6 +21575,51 @@ test('rolling boulder hits half-physical hero on path and keeps rolling', () => 
     assert.deepEqual(rngValuesForCall(getRngLog(), 'rnd(20)'), [9, 1]);
 });
 
+test('mounted rolling boulder path hits hero instead of steed', () => {
+    const { trap, goblin } = installMonsterPitTrapState(ROLLING_BOULDER_TRAP, {
+        mhp: 50,
+        mhpmax: 50,
+        data: { mac: -10 },
+    });
+    game.u.ux = 6;
+    game.u.uy = 3;
+    const pony = ordinaryThrowTarget('pony', 6, 3, {
+        mhp: 10,
+        mhpmax: 10,
+        m_lev: 3,
+        msleeping: 0,
+        mtame: 5,
+        pet: true,
+        saddled: true,
+        data: { name: 'pony', mlevel: 3, mlet: 'quadruped', mac: 6 },
+    });
+    game.u.usteed = pony;
+    game.level.monsters.push(pony);
+    const boulder = installRollingBoulderTrapLaunch(trap, {
+        start: { x: 4, y: 3 },
+        end: { x: 8, y: 3 },
+    });
+    enableRngLog({ reset: true });
+    installCoreRngValues([8, 0]);
+    markHeroNeighborhoodVisible();
+    markSquareVisible(6, 5);
+    for (let x = 4; x <= 8; x++) markSquareVisible(x, 3);
+
+    assert.equal(allmain.monsterRollingBoulderTrapEffectForTest(goblin, trap), true);
+
+    assert.match(game._pending_message || '', /Click!  The goblin triggers something\./);
+    assert.equal(game._topline_after_more, 'You are hit by a boulder!');
+    assert.equal(game.u.uhp, 50);
+    assert.equal(game._damage_after_topline_more, 9);
+    assert.equal(pony.mhp, 10);
+    assert.equal(game.u.usteed, pony);
+    assert.equal(boulder.ox, 8);
+    assert.equal(boulder.oy, 3);
+    assert.equal(trap.tseen, true);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rnd(20)'), [9, 1]);
+    assert.equal(rngValuesForCall(getRngLog(), 'rn2(2)').length, 0);
+});
+
 test('rolling boulder miss against hero consumes damage before hit roll', () => {
     const { trap, goblin } = installMonsterPitTrapState(ROLLING_BOULDER_TRAP, {
         mhp: 50,
