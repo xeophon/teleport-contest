@@ -729,6 +729,76 @@ function applyChestTrapElectricPayload(messages) {
     return { fatal: true, more: true };
 }
 
+function chestTrapPoisonTell(attr) {
+    if (attr === A_STR) return (game.u?.acurr?.a?.[A_STR] === STR19(25))
+        ? 'You feel innately weaker!'
+        : 'You feel weaker!';
+    if (attr === A_CON) return (game.u?.acurr?.a?.[A_CON] === 25)
+        ? 'You feel sick inside!'
+        : 'You feel very sick!';
+    return '';
+}
+
+function applyChestTrapPoisonAttributeLoss(messages, attr, loss) {
+    if (!adjustHeroAttribute(attr, -loss)) return;
+    const message = chestTrapPoisonTell(attr);
+    if (message) messages.push(message);
+}
+
+function applyChestTrapPoison(messages, {
+    reason,
+    attr,
+    fatal,
+    deathCause,
+}) {
+    if (!/poison/i.test(reason)) messages.push(`The ${reason} was poisoned!`);
+    if (heroHasPoisonResistance()) {
+        messages.push("The poison doesn't seem to affect you.");
+        return {};
+    }
+
+    const roll = fatal ? rn2(fatal) : 1;
+    if (roll === 0 && attr !== A_CHA) {
+        const loss = 6 + d(4, 6);
+        if ((game.u?.uhp || 0) <= loss) {
+            messages.push('The poison was deadly...');
+            return heroDartTrapFatalResult(messages, deathCause);
+        }
+        if (game.u) {
+            game.u.uhpmax = Math.max(3, (game.u.uhpmax || game.u.uhp || 1) - Math.trunc(loss / 2));
+            game.u.uhp = Math.max(0, (game.u.uhp || 0) - loss);
+        }
+        applyChestTrapPoisonAttributeLoss(messages, A_CON, attr === A_CON ? 3 : 1);
+        if (attr !== A_CON) applyChestTrapPoisonAttributeLoss(messages, attr, 3);
+        if ((game.u?.uhp || 0) <= 0)
+            return heroDartTrapFatalResult(messages, deathCause);
+        return {};
+    }
+
+    if (roll > 5) {
+        const loss = rn1(10, 6);
+        if (game.u) game.u.uhp = Math.max(0, (game.u.uhp || 0) - loss);
+        if ((game.u?.uhp || 0) <= 0)
+            return heroDartTrapFatalResult(messages, deathCause);
+        return {};
+    }
+
+    applyChestTrapPoisonAttributeLoss(messages, attr, fatal ? d(2, 2) : 1);
+    return {};
+}
+
+function applyChestTrapNeedlePayload(messages) {
+    messages.push('You feel a needle prick your finger.');
+    const result = applyChestTrapPoison(messages, {
+        reason: 'needle',
+        attr: A_CON,
+        fatal: 10,
+        deathCause: 'killed by a poisoned needle',
+    });
+    if (!result.fatal) exerciseAttribute(A_CON, false);
+    return result;
+}
+
 function applyChestTrapPayload(box, { disarm = true } = {}) {
     const messages = [disarm ? 'You set it off!' : 'You trigger a trap!'];
     let result = {};
@@ -763,6 +833,8 @@ function applyChestTrapPayload(box, { disarm = true } = {}) {
         }
     } else if (payload >= 6 && payload <= 8) {
         result = applyChestTrapElectricPayload(messages);
+    } else if (payload >= 13 && payload <= 16) {
+        result = applyChestTrapNeedlePayload(messages);
     }
     if (box && !result.fatal) box.tknown = true;
     const message = trapMessage(...messages);

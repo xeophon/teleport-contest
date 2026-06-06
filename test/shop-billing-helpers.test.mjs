@@ -21852,6 +21852,168 @@ test('#untrap known-box fatal electric payload enters death more', async () => {
     assert.equal(game.context.move || 0, 0);
 });
 
+test('#untrap known-box poisoned needle payload drains constitution', async () => {
+    setupUntrapDestinationWeb([], { rng: [74, 0, 0, 13, 1, 1, 1, 0] });
+    game.u.poisonResistance = false;
+    game.u.uinvulnerable = false;
+    game.level.traps = [];
+    const box = shopFloorContainer(881034);
+    Object.assign(box, {
+        otrapped: true,
+        tknown: true,
+        dknown: true,
+        cknown: false,
+    });
+    game.level.objects = [box];
+
+    await enterUntrapDirection();
+    await rhack('.');
+
+    assert.equal(game._command_mode, 'untrapBoxConfirm');
+    assert.equal(game._pending_message, 'Disarm this large box? [ynq] (q)');
+
+    await rhack('y');
+
+    assert.equal(game._command_mode, null);
+    assert.deepEqual(getRngLog(), [
+        'rnd(75)=75',
+        'rn2(13)=0',
+        'rn2(20)=0',
+        'rn2(26)=13',
+        'rn2(10)=1',
+        'd(2,2)=4',
+        'rn2(2)=0',
+        'rn2(19)=0',
+    ]);
+    assert.equal(game._pending_message, 'You set it off!  You feel a needle prick your finger.  The needle was poisoned!  You feel very sick!');
+    assert.equal(box.otrapped, false);
+    assert.equal(box.tknown, true);
+    assert.equal(game.u.acurr.a[A_CON], 6);
+    assert.equal(game.context.move, 1);
+});
+
+test('#untrap known-box poisoned needle respects poison resistance', async () => {
+    setupUntrapDestinationWeb([], { rng: [74, 0, 0, 13, 0] });
+    game.u.poisonResistance = true;
+    game.u.uinvulnerable = false;
+    game.level.traps = [];
+    const box = shopFloorContainer(881035);
+    Object.assign(box, {
+        otrapped: true,
+        tknown: true,
+        dknown: true,
+        cknown: false,
+    });
+    game.level.objects = [box];
+
+    await enterUntrapDirection();
+    await rhack('.');
+
+    assert.equal(game._command_mode, 'untrapBoxConfirm');
+    assert.equal(game._pending_message, 'Disarm this large box? [ynq] (q)');
+
+    await rhack('y');
+
+    assert.equal(game._command_mode, null);
+    assert.deepEqual(getRngLog(), [
+        'rnd(75)=75',
+        'rn2(13)=0',
+        'rn2(20)=0',
+        'rn2(26)=13',
+        'rn2(2)=0',
+        'rn2(19)=0',
+    ]);
+    assert.equal(game._pending_message, "You set it off!  You feel a needle prick your finger.  The needle was poisoned!  The poison doesn't seem to affect you.");
+    assert.equal(box.otrapped, false);
+    assert.equal(box.tknown, true);
+    assert.equal(game.u.acurr.a[A_CON], 10);
+    assert.equal(game.u.uhp, 20);
+    assert.equal(game.context.move, 1);
+});
+
+test('#untrap known-box poisoned needle can deal HP damage', async () => {
+    setupUntrapDestinationWeb([], { rng: [74, 0, 0, 13, 6, 9, 0] });
+    game.u.poisonResistance = false;
+    game.u.uinvulnerable = false;
+    game.level.traps = [];
+    const box = shopFloorContainer(881036);
+    Object.assign(box, {
+        otrapped: true,
+        tknown: true,
+        dknown: true,
+        cknown: false,
+    });
+    game.level.objects = [box];
+
+    await enterUntrapDirection();
+    await rhack('.');
+
+    assert.equal(game._command_mode, 'untrapBoxConfirm');
+    assert.equal(game._pending_message, 'Disarm this large box? [ynq] (q)');
+
+    await rhack('y');
+
+    assert.equal(game._command_mode, null);
+    assert.deepEqual(getRngLog(), [
+        'rnd(75)=75',
+        'rn2(13)=0',
+        'rn2(20)=0',
+        'rn2(26)=13',
+        'rn2(10)=6',
+        'rn2(10)=9',
+        'rn2(2)=0',
+        'rn2(19)=0',
+    ]);
+    assert.equal(game._pending_message, 'You set it off!  You feel a needle prick your finger.  The needle was poisoned!');
+    assert.equal(box.otrapped, false);
+    assert.equal(box.tknown, true);
+    assert.equal(game.u.uhp, 5);
+    assert.equal(game.u.acurr.a[A_CON], 10);
+    assert.equal(game.context.move, 1);
+});
+
+test('#untrap known-box fatal poisoned needle enters death more', async () => {
+    setupUntrapDestinationWeb([], { rng: [74, 0, 0, 13, 0, 5, 5, 5, 5, 0] });
+    game.u.uhp = 10;
+    game.u.poisonResistance = false;
+    game.u.uinvulnerable = false;
+    game.level.traps = [];
+    const box = shopFloorContainer(881037);
+    Object.assign(box, {
+        otrapped: true,
+        tknown: true,
+        dknown: true,
+        cknown: false,
+    });
+    game.level.objects = [box];
+
+    await enterUntrapDirection();
+    await rhack('.');
+
+    assert.equal(game._command_mode, 'untrapBoxConfirm');
+    assert.equal(game._pending_message, 'Disarm this large box? [ynq] (q)');
+
+    await rhack('y');
+
+    assert.equal(game._command_mode, 'deathDieMore');
+    const fatalLog = getRngLog();
+    assert.deepEqual(fatalLog.slice(0, 6), [
+        'rnd(75)=75',
+        'rn2(13)=0',
+        'rn2(20)=0',
+        'rn2(26)=13',
+        'rn2(10)=0',
+        'd(4,6)=24',
+    ]);
+    assert.equal(fatalLog.some(entry => rngCallName(entry) === 'rn2(19)'), false);
+    assert.equal(game._pending_message, 'You set it off!  You feel a needle prick your finger.  The needle was poisoned!  The poison was deadly...  You die...');
+    assert.equal(box.otrapped, false);
+    assert.equal(box.tknown, false);
+    assert.equal(game.u.uhp, 0);
+    assert.equal(game._death_cause, 'killed by a poisoned needle');
+    assert.equal(game.context.move || 0, 0);
+});
+
 test('stun and hallucination timeouts expire during turn tail', async () => {
     installCommandShopState();
     installCoreRngValues([1]);
