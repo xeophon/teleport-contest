@@ -50182,11 +50182,15 @@ export async function rhack(_cmd) {
         if (ch === ' ' || ch === '\x1b' || ch === '\r' || ch === '\n') {
             const stoningLifeSaved = !!game._life_saving_clear_stoning;
             const levelTeleportEscape = !!game._life_saving_level_teleport_escape_message;
-            const lifeSavingMessage = stoningLifeSaved || levelTeleportEscape
-                ? 'You feel much better!  The medallion crumbles to dust!'
-                : 'You feel much better!';
+            const exploreLifeSaved = !!(game._pending_explore_lifesaving_message
+                || game._queued_explore_lifesaving_message);
+            const skipRemainingMoreMessages = ch === '\x1b';
+            const lifeSavingMessage = exploreLifeSaved || skipRemainingMoreMessages
+                ? 'You feel much better!'
+                : 'You feel much better!  The medallion crumbles to dust!';
             game._pending_message = lifeSavingMessage;
             game._pending_explore_lifesaving_message = 0;
+            game._queued_explore_lifesaving_message = 0;
             game._message_more = 0;
             game._keep_pending_message = 1;
             game._command_mode = null;

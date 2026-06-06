@@ -13307,6 +13307,38 @@ test('blessed water vapor rehumanize old form death from destroyed inventory pot
     assert.doesNotMatch(message, /You feel purified|peculiar odor|eyes water/);
 });
 
+test('wizard or explore lifesaving continuation omits amulet crumble wording', async () => {
+    installNonShopFloorState();
+    game.u.uhp = 0;
+    game.u.uhpmax = 99;
+    game._command_mode = 'lifeSavingMore';
+    game._message_more = 1;
+    game._pending_explore_lifesaving_message = 1;
+    game._queued_explore_lifesaving_message = 1;
+
+    await rhack(' ');
+
+    assert.equal(game._pending_message, 'You feel much better!');
+    assert.equal(game._pending_explore_lifesaving_message || 0, 0);
+    assert.equal(game._queued_explore_lifesaving_message || 0, 0);
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game.u.uhp, 99);
+});
+
+test('escape at amulet lifesaving continuation skips crumble wording', async () => {
+    installNonShopFloorState();
+    game.u.uhp = 0;
+    game.u.uhpmax = 99;
+    game._command_mode = 'lifeSavingMore';
+    game._message_more = 1;
+
+    await rhack('\x1b');
+
+    assert.equal(game._pending_message, 'You feel much better!');
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game.u.uhp, 99);
+});
+
 test('fire trap command inventory fire that destroys blessed water uses lifesaving for old-form death', async () => {
     installNonShopFloorState();
     initRng(7);
@@ -13362,7 +13394,7 @@ test('fire trap command inventory fire that destroys blessed water uses lifesavi
 
     await rhack(' ');
 
-    assert.equal(game._pending_message, 'You feel much better!');
+    assert.equal(game._pending_message, 'You feel much better!  The medallion crumbles to dust!');
     assert.equal(game._command_mode || null, null);
     assert.equal(game.u.uhp, game.u.uhpmax);
 });
@@ -13586,7 +13618,7 @@ test('fire scroll tower explosion inventory vapor uses lifesaving for old-form d
 
     await rhack(' ');
 
-    assert.equal(game._pending_message, 'You feel much better!');
+    assert.equal(game._pending_message, 'You feel much better!  The medallion crumbles to dust!');
     assert.equal(game._command_mode || null, null);
     assert.equal(game.u.uhp, game.u.uhpmax);
 });
@@ -17527,7 +17559,7 @@ test('self-zapped wand of fire inventory vapor rehumanize old form death uses li
 
     await rhack(' ');
 
-    assert.equal(game._pending_message, 'You feel much better!');
+    assert.equal(game._pending_message, 'You feel much better!  The medallion crumbles to dust!');
     assert.equal(game._command_mode || null, null);
     assert.equal(game.u.uhp, game.u.uhpmax);
 });
@@ -17594,7 +17626,7 @@ test('directional wand of fire bounced ray hits hero and vapor lifesaves old-for
 
     await rhack(' ');
 
-    assert.equal(game._pending_message, 'You feel much better!');
+    assert.equal(game._pending_message, 'You feel much better!  The medallion crumbles to dust!');
     assert.equal(game._command_mode || null, null);
     assert.equal(game.u.uhp, game.u.uhpmax);
 });
@@ -17674,7 +17706,7 @@ test('monster fire breath hero-hit inventory vapor rehumanize old form death use
 
     await rhack(' ');
 
-    assert.equal(game._pending_message, 'You feel much better!');
+    assert.equal(game._pending_message, 'You feel much better!  The medallion crumbles to dust!');
     assert.equal(game._command_mode || null, null);
     assert.equal(game.u.uhp, game.u.uhpmax);
 });
@@ -25928,7 +25960,7 @@ test('hero dart trap physical lifesaving limits poisoned dart to attribute loss'
 
     await rhack(' ');
 
-    assert.equal(game._pending_message, 'You feel much better!');
+    assert.equal(game._pending_message, 'You feel much better!  The medallion crumbles to dust!');
     assert.equal(game._command_mode || null, null);
     assert.equal(game.u.uhp, game.u.uhpmax);
     assert.equal(game.u.acurr.a[A_CON], 8);
@@ -26010,7 +26042,7 @@ test('hero poisoned dart trap deadly poison uses life saving', async () => {
 
     await rhack(' ');
 
-    assert.equal(game._pending_message, 'You feel much better!');
+    assert.equal(game._pending_message, 'You feel much better!  The medallion crumbles to dust!');
     assert.equal(game._command_mode || null, null);
     assert.equal(game.u.uhp, game.u.uhpmax);
     assert.equal(game.u.acurr.a[A_CON], 9);
@@ -26263,7 +26295,7 @@ test('life saving rescues fatal gas spore death blast', async () => {
 
     await rhack(' ');
 
-    assert.equal(game._pending_message, 'You feel much better!');
+    assert.equal(game._pending_message, 'You feel much better!  The medallion crumbles to dust!');
     assert.equal(game._command_mode || null, null);
     assert.equal(game.u.uhp, game.u.uhpmax);
 });
@@ -26418,7 +26450,7 @@ test('monster flaming sphere explosion inventory vapor uses lifesaving for old-f
 
     await rhack(' ');
 
-    assert.equal(game._pending_message, 'You feel much better!');
+    assert.equal(game._pending_message, 'You feel much better!  The medallion crumbles to dust!');
     assert.equal(game._command_mode || null, null);
     assert.equal(game.u.uhp, game.u.uhpmax);
 });
@@ -29658,7 +29690,7 @@ test('alchemy explosion holy water vapor uses lifesaving for old-form death', as
 
     await rhack(' ');
 
-    assert.equal(game._pending_message, 'You feel much better!');
+    assert.equal(game._pending_message, 'You feel much better!  The medallion crumbles to dust!');
     assert.equal(game._command_mode || null, null);
     assert.equal(game.u.uhp, game.u.uhpmax);
 });
@@ -32455,7 +32487,7 @@ test('satiated carried food ration choking life-saving resets hunger', async () 
 
     await rhack(' ');
 
-    assert.equal(game._pending_message, 'You feel much better!');
+    assert.equal(game._pending_message, 'You feel much better!  The medallion crumbles to dust!');
     assert.equal(game._command_mode || null, null);
     assert.equal(game.u.uhp, game.u.uhpmax);
     assert.equal(game.u.uhunger, 900);
@@ -54812,7 +54844,7 @@ test('wielded blessed water potion bash vapor rehumanize old form death uses lif
 
     await rhack(' ');
 
-    assert.equal(game._pending_message, 'You feel much better!');
+    assert.equal(game._pending_message, 'You feel much better!  The medallion crumbles to dust!');
     assert.equal(game._command_mode || null, null);
     assert.equal(game._message_more || 0, 0);
     assert.equal(game.u.uhp, game.u.uhpmax);
@@ -55411,7 +55443,7 @@ test('upward hero-thrown blessed water vapor lycanthropy rehumanize old form dea
 
     await rhack(' ');
 
-    assert.equal(game._pending_message, 'You feel much better!');
+    assert.equal(game._pending_message, 'You feel much better!  The medallion crumbles to dust!');
     assert.equal(game._command_mode || null, null);
     assert.equal(game._message_more || 0, 0);
     assert.equal(game.u.uhp, game.u.uhpmax);
@@ -61190,7 +61222,7 @@ test('adjacent hero-thrown blessed water potion vapor rehumanize old form death 
 
     await rhack(' ');
 
-    assert.equal(game._pending_message, 'You feel much better!');
+    assert.equal(game._pending_message, 'You feel much better!  The medallion crumbles to dust!');
     assert.equal(game._command_mode || null, null);
     assert.equal(game._message_more || 0, 0);
     assert.equal(game.u.uhp, game.u.uhpmax);

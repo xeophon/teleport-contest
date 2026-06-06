@@ -38,7 +38,7 @@ No replay maps, private seeds, player names, move-count branches, or seed-specif
 
 - Fire ray and other queued command-level inventory-fire paths still need follow-up patches where their message queues currently flatten array metadata or return string-only helper output. Fire trap movement is covered in audit 509.
 - Other direct or broken vapor delivery sites still need their own fatal/life-saving propagation before they can safely opt into amulet consumption.
-- The shared non-stoning `lifeSavingMore` continuation currently prints `You feel much better!`; C also prints `The medallion crumbles to dust!`. That broader life-saving wording remains a separate slice.
+- The shared amulet life-saving crumble continuation is covered in audit 572, including Escape-skip and wizard/explore non-amulet wording.
 
 ## Verification
 

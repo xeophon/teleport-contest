@@ -37,7 +37,7 @@ No replay maps, private seeds, player names, move-count branches, or seed-specif
 ## Follow-Ups
 
 - Other direct or broken vapor delivery sites still need their own fatal/life-saving propagation before they can safely opt into amulet consumption. Some helpers spread or copy message arrays, which would drop `messages.lifeSaving`/`messages.fatal`.
-- The shared non-stoning `lifeSavingMore` continuation currently prints `You feel much better!`; C also prints `The medallion crumbles to dust!`. That broader life-saving wording remains a separate slice.
+- The shared amulet life-saving crumble continuation is covered in audit 572, including Escape-skip and wizard/explore non-amulet wording.
 
 ## Verification
 

@@ -40,7 +40,7 @@ No replay maps, private seeds, player names, move-count branches, or session-spe
 ## Follow-Ups
 
 - Other vapor delivery sites that copy or flatten message arrays still need their own fatal/life-saving propagation before they can safely opt into amulet consumption.
-- Broader C life-saving wording remains incomplete: the shared non-stoning continuation currently prints `You feel much better!`, while C also prints `The medallion crumbles to dust!`.
+- The shared amulet life-saving crumble continuation is covered in audit 572, including Escape-skip and wizard/explore non-amulet wording.
 
 ## Verification
 

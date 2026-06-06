@@ -37,7 +37,7 @@ No replay maps, private seeds, player names, move-count branches, or seed-specif
 
 - Fire ray and queued fire-breath inventory-fire paths still need separate metadata propagation because they spread message arrays or use delayed event queues. Self-zap fire is covered in audit 510.
 - Fatal unsaved vapor in the helper still consumes the destroyed potion in JS because `fireDamageInventory()` does not currently model C's non-returning `done()` interruption inside `potionbreathe()`.
-- The shared non-stoning `lifeSavingMore` continuation currently prints `You feel much better!`; C also prints `The medallion crumbles to dust!`. That broader life-saving wording remains a separate slice.
+- The shared amulet life-saving crumble continuation is covered in audit 572, including Escape-skip and wizard/explore non-amulet wording.
 
 ## Verification
 
