@@ -22557,6 +22557,85 @@ test('hero rolling boulder destroys visible nonliving target on lethal hit', asy
     assert.deepEqual(rngValuesForCall(getRngLog(), 'rnd(20)'), [5, 5]);
 });
 
+test('hero rolling boulder revives shifted vampire lethal target before cleanup', async () => {
+    const { boulder } = installHeroRollingBoulderTrapState({
+        trapX: 6,
+        trapY: 4,
+        heroX: 5,
+        heroY: 4,
+        start: { x: 4, y: 3 },
+        end: { x: 8, y: 3 },
+        boulderAt: 'start',
+    });
+    const carried = { id: 3148214, cls: 'food', kind: 'food ration', quan: 1 };
+    const bat = dartTrapMonster('vampire bat', 3148215, {
+        mx: 6,
+        my: 3,
+        mhp: 5,
+        mhpmax: 8,
+        m_lev: 5,
+        mlevel: 5,
+        msleeping: 1,
+        vampshifter: true,
+        vampBase: 'vampire',
+        cham: 'vampire',
+        minvent: [carried],
+        data: {
+            name: 'vampire bat',
+            mlevel: 5,
+            mlet: 'B',
+            glyph: 'B',
+            mac: -5,
+            msize: 'large',
+            vampshifter: true,
+            vampBase: 'vampire',
+            cham: 'vampire',
+        },
+    });
+    const poolLoc = game.level.at(6, 3);
+    Object.assign(poolLoc, { typ: POOL, roomno: ROOMOFFSET, lit: true, flags: 7 });
+    const downstream = floorBoulder(3148216, { ox: 7, oy: 3 });
+    game.level.monsters.push(bat);
+    game.level.objects.push(downstream);
+    enableRngLog({ reset: true });
+    installCoreRngValues([4, 4, 0]);
+    markHeroNeighborhoodVisible();
+    for (let x = 4; x <= 8; x++) markSquareVisible(x, 3);
+
+    await rhack('l');
+
+    assert.equal(game._pending_message,
+        'Click!  You trigger a rolling boulder trap!  The boulder hits the vampire bat!  The vampire bat is destroyed!  The seemingly dead vampire bat suddenly transforms and rises as a vampire!  There is a large splash as the boulder falls into the pool of water.  It sinks without a trace!');
+    assert.equal(game.level.monsters.includes(bat), true);
+    assert.equal(bat.dead, false);
+    assert.equal(bat.data.name, 'vampire');
+    assert.equal(bat.name, 'vampire');
+    assert.equal(bat.mlet, 'V');
+    assert.equal(bat.glyph, 'V');
+    assert.equal(bat.mcanmove, true);
+    assert.equal(bat.mfrozen, 0);
+    assert.equal(bat.vampshifter, false);
+    assert.equal(bat.vampBase, undefined);
+    assert.equal(bat.chamName, undefined);
+    assert.equal(bat.cham, undefined);
+    assert.equal(bat.msleeping, 0);
+    assert.equal(bat.mhp, bat.mhpmax);
+    assert.equal(bat.mhp >= 10, true);
+    assert.equal(bat.minvent.some(obj => obj.id === carried.id), true);
+    assert.equal(game.level.objects.some(obj => obj.id === carried.id), false);
+    assert.equal(game._vanquished_counts?.['vampire bat'] || 0, 0);
+    assert.equal(game._vanquished_counts?.vampire || 0, 0);
+    assert.equal(game._vanquished_total || 0, 0);
+    assert.equal(game.level.objects.some(obj => obj.kind === 'vampire bat corpse'), false);
+    assert.equal(game.level.objects.includes(boulder), false);
+    assert.equal(poolLoc.typ, POOL);
+    assert.equal(game.level.objects.includes(downstream), true);
+    assert.equal(downstream.ox, 7);
+    assert.equal(downstream.oy, 3);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rnd(20)'), [5, 5]);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rn2(10)'), [0]);
+});
+
 test('hero rolling boulder nonverbose lethal visible target still names death', async () => {
     const { boulder } = installHeroRollingBoulderTrapState({
         trapX: 6,
