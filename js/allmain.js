@@ -10688,10 +10688,14 @@ function monsterGroundedForPitTrap(mon) {
         || data.inAir || data.flyer || data.floater);
 }
 
-function monsterPitTrapEffect(mon, trap, { cavernTunnelRoom = false, skipPetPostMoveRoll = false } = {}) {
+function monsterPitTrapEffect(mon, trap, {
+    cavernTunnelRoom = false,
+    skipPetPostMoveRoll = false,
+    forceTrap = false,
+} = {}) {
     if (![PIT, SPIKED_PIT].includes(trap?.ttyp) || cavernTunnelRoom || monsterTrapHarmless(mon, trap))
         return false;
-    if (monsterAvoidsKnownTrapBeforeEffect(mon, trap)) return true;
+    if (!forceTrap && monsterAvoidsKnownTrapBeforeEffect(mon, trap)) return true;
 
     monsterTriggerTrap(mon, trap);
     const inSight = monsterVisibleToHero(mon) || mon === game.u?.usteed;
@@ -11200,6 +11204,48 @@ function monsterRockTrapEffect(mon, trap, { skipPetPostMoveRoll = false } = {}) 
             finishTrapKilledMonster(mon, { skipPetPostMoveRoll });
         }
     }
+    return true;
+}
+
+function monsterLandmineArticle(trap) {
+    return trap?.madeby_u ? 'your' : 'a';
+}
+
+function convertMonsterLandmineToPit(trap) {
+    if (!trap) return;
+    trap.ttyp = PIT;
+    trap.madeby_u = false;
+    newsym(trap.tx, trap.ty);
+}
+
+function monsterLandmineTrapEffect(mon, trap, { skipPetPostMoveRoll = false } = {}) {
+    if (trap?.ttyp !== LANDMINE || monsterTrapHarmless(mon, trap)) return false;
+    if (monsterAvoidsKnownTrapBeforeEffect(mon, trap)) return true;
+
+    monsterTriggerTrap(mon, trap);
+    let damage = rnd(16);
+    if (monsterWornIronFootwearForAntiMagic(mon)) damage = Math.trunc((damage + 3) / 4);
+    const bodyWeight = mon.data?.cwt ?? MONSTER_BODY_WEIGHTS.get(mon.data?.name) ?? 1450;
+    if (rn2(bodyWeight + 1) < 400) return true;
+
+    const inSight = monsterVisibleToHero(mon) || mon === game.u?.usteed;
+    if (inSight) {
+        trap.tseen = true;
+        newsym(mon.mx, mon.my);
+        const sound = heroIsDeafForMonsterNoise() ? '' : 'KAABLAMM!!!  ';
+        addToplineMessage(`${sound}${monsterDisplayName(mon)} triggers ${monsterLandmineArticle(trap)} land mine!`);
+    } else if (!heroIsDeafForMonsterNoise()) {
+        addToplineMessage('Kaablamm!  You hear an explosion in the distance!');
+    }
+
+    convertMonsterLandmineToPit(trap);
+    mon.mhp = (mon.mhp || 1) - damage;
+    if (mon.mhp <= 0) {
+        if (inSight) addToplineMessage(`${monsterDisplayName(mon)} is killed!`);
+        finishTrapKilledMonster(mon, { skipPetPostMoveRoll });
+        return true;
+    }
+    monsterPitTrapEffect(mon, trap, { skipPetPostMoveRoll, forceTrap: true });
     return true;
 }
 
@@ -12594,18 +12640,7 @@ function moveMonsterTowardHero(mon, conflictActive = false, monIndex = null, som
         }
         return done();
     }
-    if (trap?.ttyp === LANDMINE && !monsterTrapHarmless(mon, trap)) {
-        if (monsterAvoidsKnownTrapBeforeEffect(mon, trap)) return done();
-        monsterTriggerTrap(mon, trap);
-        const damage = rnd(16);
-        const bodyWeight = mon.data?.cwt ?? MONSTER_BODY_WEIGHTS.get(mon.data?.name) ?? 1450;
-        if (rn2(bodyWeight + 1) < 400) return true;
-        trap.tseen = true;
-        mon.mhp = Math.max(1, (mon.mhp || 1) - damage);
-        game.level.traps = (game.level?.traps || []).filter(item => item !== trap);
-        newsym(mon.mx, mon.my);
-        return done();
-    }
+    if (monsterLandmineTrapEffect(mon, trap)) return done();
     if (monsterSqueakyBoardTrapEffect(mon, trap)) return done();
     if (trap?.ttyp === ROLLING_BOULDER_TRAP && !mon.data?.inAir && !mon.data?.flyer && !mon.data?.floater) {
         if (monsterAvoidsKnownTrapBeforeEffect(mon, trap)) return done();
@@ -13767,6 +13802,7 @@ function movePet(mon, resumeAfterInventory = false, conflictActive = false) {
             game._pet_skip_post_move_roll = 1;
         }
     }
+    if (monsterLandmineTrapEffect(mon, trap, { skipPetPostMoveRoll: true })) return;
 }
 
 // C ref: allmain.c newgame()
@@ -15086,6 +15122,7 @@ export const __allmainTestHooks = {
     monsterAntiMagicTrapEffectForTest: monsterAntiMagicTrapEffect,
     monsterFireTrapEffectForTest: monsterFireTrapEffect,
     monsterRockTrapEffectForTest: monsterRockTrapEffect,
+    monsterLandmineTrapEffectForTest: monsterLandmineTrapEffect,
     monsterPitTrapEffectForTest: monsterPitTrapEffect,
     monsterTrappedTrapTurnForTest: monsterTrappedTrapTurn,
     monsterSleepGasTrapEffectForTest: monsterSleepGasTrapEffect,

@@ -20710,6 +20710,170 @@ test('lethal pet falling rock trap helper marks pet post-move roll skipped', () 
     assert.equal(!!(pet.mtrapseen & (1 << (ROCKTRAP - 1))), true);
 });
 
+test('pet land mine helper detonates and drops pet into resulting pit', async () => {
+    const { trap, pet } = installMovingPetPitTrapState(LANDMINE, {
+        mhp: 30,
+        mhpmax: 30,
+        data: { cwt: 1450 },
+    });
+    pet.mx = 6;
+    pet.my = 5;
+    enableRngLog({ reset: true });
+    installCoreRngValues([4, 400, 2]);
+    markHeroNeighborhoodVisible();
+    markSquareVisible(6, 5);
+
+    assert.equal(allmain.monsterLandmineTrapEffectForTest(pet, trap, { skipPetPostMoveRoll: true }), true);
+    const messages = [game._pending_message, ...(await drainQueuedMessagesAfterMore())].join(' ');
+
+    assert.match(messages, /KAABLAMM!!!  The goblin triggers a land mine!/);
+    assert.equal(pet.mx, 6);
+    assert.equal(pet.my, 5);
+    assert.equal(pet.mhp, 22);
+    assert.equal(pet.mtrapped, 1);
+    assert.equal(trap.ttyp, PIT);
+    assert.equal(trap.madeby_u, false);
+    assert.equal(trap.tseen, true);
+    assert.deepEqual(getRngLog().map(rngCallName).filter(call =>
+        ['rnd(16)', 'rn2(1451)', 'rnd(6)'].includes(call)), ['rnd(16)', 'rn2(1451)', 'rnd(6)']);
+    assert.equal(!!(pet.mtrapseen & (1 << (LANDMINE - 1))), true);
+    assert.equal(!!(pet.mtrapseen & (1 << (PIT - 1))), true);
+});
+
+test('light pet land mine trigger roll learns but does not detonate', async () => {
+    const { trap, pet } = installMovingPetPitTrapState(LANDMINE, {
+        mhp: 20,
+        mhpmax: 20,
+        data: { cwt: 300 },
+    });
+    enableRngLog({ reset: true });
+    installCoreRngValues([4]);
+    queueEscapeForMonsterTurn();
+    markHeroNeighborhoodVisible();
+    markSquareVisible(6, 5);
+    markSquareVisible(7, 5);
+
+    await processMonsterTurns();
+    const messages = [game._pending_message, ...(await drainQueuedMessagesAfterMore())].join(' ');
+
+    assert.doesNotMatch(messages, /KAABLAMM|Kaablamm|falls into a pit/);
+    assert.equal(pet.mx, 6);
+    assert.equal(pet.my, 5);
+    assert.equal(pet.mhp, 20);
+    assert.equal(pet.mtrapped || 0, 0);
+    assert.equal(trap.ttyp, LANDMINE);
+    assert.equal(trap.tseen, false);
+    assert.deepEqual(getRngLog().map(rngCallName).filter(call =>
+        ['rnd(16)', 'rn2(301)', 'rnd(6)'].includes(call)), ['rnd(16)', 'rn2(301)']);
+    assert.equal(!!(pet.mtrapseen & (1 << (LANDMINE - 1))), true);
+});
+
+test('in-air pet land mine does not roll trigger effects', async () => {
+    const { trap, pet } = installMovingPetPitTrapState(LANDMINE, {
+        mhp: 20,
+        mhpmax: 20,
+        data: { cwt: 1450, inAir: true },
+    });
+    enableRngLog({ reset: true });
+    queueEscapeForMonsterTurn();
+    markHeroNeighborhoodVisible();
+    markSquareVisible(6, 5);
+    markSquareVisible(7, 5);
+
+    await processMonsterTurns();
+    const messages = [game._pending_message, ...(await drainQueuedMessagesAfterMore())].join(' ');
+
+    assert.doesNotMatch(messages, /KAABLAMM|Kaablamm|falls into a pit/);
+    assert.equal(pet.mx, 6);
+    assert.equal(pet.my, 5);
+    assert.equal(pet.mhp, 20);
+    assert.equal(pet.mtrapped || 0, 0);
+    assert.equal(trap.ttyp, LANDMINE);
+    assert.equal(trap.tseen, false);
+    assert.equal(rngValuesForCall(getRngLog(), 'rnd(16)').length, 0);
+    assert.equal(!!(pet.mtrapseen & (1 << (LANDMINE - 1))), false);
+});
+
+test('known pet land mine helper can be avoided before blast effects', () => {
+    const { trap, pet } = installMovingPetPitTrapState(LANDMINE, {
+        mhp: 20,
+        mhpmax: 20,
+        data: { cwt: 1450 },
+        mtrapseen: 1 << (LANDMINE - 1),
+    });
+    pet.mx = 6;
+    pet.my = 5;
+    enableRngLog({ reset: true });
+    installCoreRngValues([1]);
+    markHeroNeighborhoodVisible();
+    markSquareVisible(6, 5);
+
+    assert.equal(allmain.monsterLandmineTrapEffectForTest(pet, trap, { skipPetPostMoveRoll: true }), true);
+    const messages = game._pending_message || '';
+
+    assert.doesNotMatch(messages, /KAABLAMM|Kaablamm|falls into a pit/);
+    assert.equal(pet.mx, 6);
+    assert.equal(pet.my, 5);
+    assert.equal(pet.mhp, 20);
+    assert.equal(trap.ttyp, LANDMINE);
+    assert.deepEqual(getRngLog().map(rngCallName).filter(call =>
+        ['rn2(4)', 'rnd(16)', 'rn2(1451)'].includes(call)), ['rn2(4)']);
+    assert.equal(!!(pet.mtrapseen & (1 << (LANDMINE - 1))), true);
+});
+
+test('lethal pet land mine helper marks pet post-move roll skipped', () => {
+    const { trap, pet } = installMovingPetPitTrapState(LANDMINE, {
+        mhp: 1,
+        mhpmax: 1,
+        data: { cwt: 1450 },
+    });
+    pet.mx = 6;
+    pet.my = 5;
+    enableRngLog({ reset: true });
+    installCoreRngValues([4, 400]);
+    markHeroNeighborhoodVisible();
+    markSquareVisible(6, 5);
+
+    assert.equal(allmain.monsterLandmineTrapEffectForTest(pet, trap, { skipPetPostMoveRoll: true }), true);
+
+    assert.match(game._pending_message || '', /KAABLAMM!!!  The goblin triggers a land mine!/);
+    assert.match(game._pending_message || '', /The goblin is killed!/);
+    assert.equal(game.level.monsters.includes(pet), false);
+    assert.equal(game._pet_skip_post_move_roll, 1);
+    assert.equal(trap.ttyp, PIT);
+    assert.equal(trap.tseen, true);
+    assert.deepEqual(getRngLog().map(rngCallName).filter(call =>
+        ['rnd(16)', 'rn2(1451)', 'rnd(6)'].includes(call)), ['rnd(16)', 'rn2(1451)']);
+    assert.equal(!!(pet.mtrapseen & (1 << (LANDMINE - 1))), true);
+});
+
+test('pet iron shoes reduce land mine blast before pit damage', () => {
+    const shoes = wornArmor(31427, 'iron shoes', 'b', 0, { worn: false, owornmask: W_ARMF });
+    const { trap, pet } = installMovingPetPitTrapState(LANDMINE, {
+        mhp: 20,
+        mhpmax: 20,
+        minvent: [shoes],
+        data: { cwt: 1450 },
+    });
+    pet.mx = 6;
+    pet.my = 5;
+    enableRngLog({ reset: true });
+    installCoreRngValues([15, 400, 0]);
+    markHeroNeighborhoodVisible();
+    markSquareVisible(6, 5);
+
+    assert.equal(allmain.monsterLandmineTrapEffectForTest(pet, trap, { skipPetPostMoveRoll: true }), true);
+
+    assert.equal(pet.mhp, 15);
+    assert.equal(pet.mtrapped, 1);
+    assert.equal(trap.ttyp, PIT);
+    assert.equal(trap.tseen, true);
+    assert.deepEqual(getRngLog().map(rngCallName).filter(call =>
+        ['rnd(16)', 'rn2(1451)', 'rnd(6)'].includes(call)), ['rnd(16)', 'rn2(1451)', 'rnd(6)']);
+    assert.equal(!!(pet.mtrapseen & (1 << (LANDMINE - 1))), true);
+    assert.equal(!!(pet.mtrapseen & (1 << (PIT - 1))), true);
+});
+
 test('pet fire trap damages pet through pet movement', async () => {
     const { trap, pet } = installMovingPetPitTrapState(FIRE_TRAP, {
         mhp: 20,
