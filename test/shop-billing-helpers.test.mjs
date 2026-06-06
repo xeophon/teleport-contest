@@ -18105,6 +18105,19 @@ function installMovingPetPitTrapState(ttyp = PIT, extra = {}) {
     return { trap, pet };
 }
 
+function installRollingBoulderTrapLaunch(trap, {
+    start = { x: 6, y: 3 },
+    end = { x: 6, y: 7 },
+    boulderId = 31428,
+} = {}) {
+    trap.launch = { ...start };
+    trap.launch2 = { ...end };
+    const boulder = floorBoulder(boulderId, { ox: start.x, oy: start.y });
+    game.level.objects ??= [];
+    game.level.objects.push(boulder);
+    return boulder;
+}
+
 function installMovingMonsterHoleTrapState(ttyp = HOLE, extra = {}) {
     installStableNonShopFloorState();
     Object.assign(game.u, {
@@ -20872,6 +20885,167 @@ test('pet iron shoes reduce land mine blast before pit damage', () => {
         ['rnd(16)', 'rn2(1451)', 'rnd(6)'].includes(call)), ['rnd(16)', 'rn2(1451)', 'rnd(6)']);
     assert.equal(!!(pet.mtrapseen & (1 << (LANDMINE - 1))), true);
     assert.equal(!!(pet.mtrapseen & (1 << (PIT - 1))), true);
+});
+
+test('pet rolling boulder trap launches boulder through pet movement', async () => {
+    const { trap, pet } = installMovingPetPitTrapState(ROLLING_BOULDER_TRAP, {
+        mhp: 50,
+        mhpmax: 50,
+    });
+    const boulder = installRollingBoulderTrapLaunch(trap);
+    enableRngLog({ reset: true });
+    installCoreRngValues([10, 4]);
+    queueEscapeForMonsterTurn();
+    markHeroNeighborhoodVisible();
+    markSquareVisible(6, 3);
+    markSquareVisible(6, 5);
+    markSquareVisible(6, 7);
+    markSquareVisible(7, 5);
+
+    await processMonsterTurns();
+    const messages = [game._pending_message, ...(await drainQueuedMessagesAfterMore())].join(' ');
+
+    assert.match(messages, /Click!  The goblin triggers something\./);
+    assert.equal(pet.mx, 6);
+    assert.equal(pet.my, 5);
+    assert.equal(game.level.monsters.includes(pet), true);
+    assert.equal(boulder.ox, 6);
+    assert.equal(boulder.oy, 7);
+    assert.equal(trap.tseen, true);
+    assert.equal(rngValuesForCall(getRngLog(), 'rnd(20)').length >= 1, true);
+    assert.equal(!!(pet.mtrapseen & (1 << (ROLLING_BOULDER_TRAP - 1))), true);
+});
+
+test('visible monster rolling boulder trap with no boulder does not reveal trap', () => {
+    const { trap, goblin } = installMonsterPitTrapState(ROLLING_BOULDER_TRAP, {
+        mhp: 20,
+        mhpmax: 20,
+    });
+    trap.launch = { x: 6, y: 3 };
+    trap.launch2 = { x: 6, y: 7 };
+    enableRngLog({ reset: true });
+    markHeroNeighborhoodVisible();
+    markSquareVisible(6, 5);
+
+    assert.equal(allmain.monsterRollingBoulderTrapEffectForTest(goblin, trap), true);
+
+    assert.match(game._pending_message || '', /Click!  The goblin triggers something\./);
+    assert.equal(trap.tseen, false);
+    assert.equal(game.level.objects.some(obj => obj.otyp === BOULDER), false);
+    assert.equal(rngValuesForCall(getRngLog(), 'rnd(20)').length, 0);
+    assert.equal(!!(goblin.mtrapseen & (1 << (ROLLING_BOULDER_TRAP - 1))), true);
+});
+
+test('deaf hero sees rolling boulder trigger without click prefix', () => {
+    const { trap, goblin } = installMonsterPitTrapState(ROLLING_BOULDER_TRAP, {
+        mhp: 20,
+        mhpmax: 20,
+    });
+    trap.launch = { x: 6, y: 3 };
+    trap.launch2 = { x: 6, y: 7 };
+    game.u._statusSuffix = ' Deaf';
+    enableRngLog({ reset: true });
+    markHeroNeighborhoodVisible();
+    markSquareVisible(6, 5);
+
+    assert.equal(allmain.monsterRollingBoulderTrapEffectForTest(goblin, trap), true);
+
+    assert.match(game._pending_message || '', /The goblin triggers something\./);
+    assert.doesNotMatch(game._pending_message || '', /Click!/);
+    assert.equal(trap.tseen, false);
+});
+
+test('rolling boulder hit roll includes boulder hit adjustment', () => {
+    const { trap, goblin } = installMonsterPitTrapState(ROLLING_BOULDER_TRAP, {
+        mhp: 20,
+        mhpmax: 20,
+        data: { mac: -5 },
+    });
+    installRollingBoulderTrapLaunch(trap);
+    enableRngLog({ reset: true });
+    installCoreRngValues([5, 4]);
+    markHeroNeighborhoodVisible();
+    markSquareVisible(6, 3);
+    markSquareVisible(6, 5);
+    markSquareVisible(6, 7);
+
+    assert.equal(allmain.monsterRollingBoulderTrapEffectForTest(goblin, trap), true);
+
+    assert.equal(goblin.mhp, 15);
+    assert.equal(trap.tseen, true);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rnd(20)'), [6, 5]);
+    assert.equal(!!(goblin.mtrapseen & (1 << (ROLLING_BOULDER_TRAP - 1))), true);
+});
+
+test('known rolling boulder trap can be avoided before launch', () => {
+    const { trap, pet } = installMovingPetPitTrapState(ROLLING_BOULDER_TRAP, {
+        mhp: 20,
+        mhpmax: 20,
+        mtrapseen: 1 << (ROLLING_BOULDER_TRAP - 1),
+    });
+    pet.mx = 6;
+    pet.my = 5;
+    const boulder = installRollingBoulderTrapLaunch(trap);
+    enableRngLog({ reset: true });
+    installCoreRngValues([1]);
+    markHeroNeighborhoodVisible();
+    markSquareVisible(6, 5);
+
+    assert.equal(allmain.monsterRollingBoulderTrapEffectForTest(pet, trap, { skipPetPostMoveRoll: true }), true);
+
+    assert.equal(game._pending_message || '', '');
+    assert.equal(boulder.ox, 6);
+    assert.equal(boulder.oy, 3);
+    assert.equal(trap.tseen, false);
+    assert.deepEqual(getRngLog().map(rngCallName).filter(call =>
+        ['rn2(4)', 'rnd(20)'].includes(call)), ['rn2(4)']);
+    assert.equal(!!(pet.mtrapseen & (1 << (ROLLING_BOULDER_TRAP - 1))), true);
+});
+
+test('in-air pet rolling boulder trap does not launch', () => {
+    const { trap, pet } = installMovingPetPitTrapState(ROLLING_BOULDER_TRAP, {
+        mhp: 20,
+        mhpmax: 20,
+        data: { inAir: true },
+    });
+    pet.mx = 6;
+    pet.my = 5;
+    const boulder = installRollingBoulderTrapLaunch(trap);
+    enableRngLog({ reset: true });
+    markHeroNeighborhoodVisible();
+    markSquareVisible(6, 5);
+
+    assert.equal(allmain.monsterRollingBoulderTrapEffectForTest(pet, trap, { skipPetPostMoveRoll: true }), false);
+
+    assert.equal(boulder.ox, 6);
+    assert.equal(boulder.oy, 3);
+    assert.equal(trap.tseen, false);
+    assert.equal(rngValuesForCall(getRngLog(), 'rnd(20)').length, 0);
+    assert.equal(!!(pet.mtrapseen & (1 << (ROLLING_BOULDER_TRAP - 1))), false);
+});
+
+test('lethal pet rolling boulder trap helper marks pet post-move roll skipped', () => {
+    const { trap, pet } = installMovingPetPitTrapState(ROLLING_BOULDER_TRAP, {
+        mhp: 1,
+        mhpmax: 1,
+    });
+    pet.mx = 6;
+    pet.my = 5;
+    installRollingBoulderTrapLaunch(trap);
+    enableRngLog({ reset: true });
+    installCoreRngValues([1, 4]);
+    markHeroNeighborhoodVisible();
+    markSquareVisible(6, 5);
+
+    assert.equal(allmain.monsterRollingBoulderTrapEffectForTest(pet, trap, { skipPetPostMoveRoll: true }), true);
+
+    assert.match(game._pending_message || '', /Click!  The goblin triggers something\./);
+    assert.match(game._topline_after_more || '', /The boulder hits the goblin!  The goblin is killed!/);
+    assert.equal(game.level.monsters.includes(pet), false);
+    assert.equal(game._pet_skip_post_move_roll, 1);
+    assert.equal(trap.tseen, true);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rnd(20)'), [2, 5]);
+    assert.equal(!!(pet.mtrapseen & (1 << (ROLLING_BOULDER_TRAP - 1))), true);
 });
 
 test('pet fire trap damages pet through pet movement', async () => {

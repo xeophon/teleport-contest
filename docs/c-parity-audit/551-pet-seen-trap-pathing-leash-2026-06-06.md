@@ -32,4 +32,3 @@ The tests use local pet, trap, visibility, and RNG fixtures through the normal m
 
 - Hallucinated `whimper()` sound-table randomization remains part of broader monster sound parity.
 - Full leash distance pulling, breaking, teleport slack/yelp handling, and post-move leash recovery remain broader `dog_move()` and relocation parity.
-- Pet post-move trap effects for rolling boulder remain a separate trap parity slice.

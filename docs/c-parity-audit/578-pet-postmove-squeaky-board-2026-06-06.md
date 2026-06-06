@@ -34,5 +34,4 @@ The tests drive the normal pet movement loop with local fixtures and explicit st
 
 ## Remaining Work
 
-- Pet post-move rolling-boulder trap effects remain a separate trap parity slice.
 - Full pet leash slack/yelp and off-level migration handling remains broader `dog_move()` parity.

@@ -11249,6 +11249,103 @@ function monsterLandmineTrapEffect(mon, trap, { skipPetPostMoveRoll = false } = 
     return true;
 }
 
+function monsterRollingBoulderTrapEffect(mon, trap, { skipPetPostMoveRoll = false } = {}) {
+    if (trap?.ttyp !== ROLLING_BOULDER_TRAP || monsterTrapHarmless(mon, trap)) return false;
+    if (monsterAvoidsKnownTrapBeforeEffect(mon, trap)) return true;
+
+    monsterTriggerTrap(mon, trap);
+    const inSight = (mon === game.u?.usteed)
+        || (couldSeeCoord(mon.mx, mon.my) && !game.u?.blind && !mon.minvis && !mon.mundetected);
+    newsym(mon.mx, mon.my);
+    if (inSight) {
+        const sound = heroIsDeafForMonsterNoise() ? '' : 'Click!  ';
+        addToplineMessage(`${sound}${monsterDisplayName(mon)} triggers ${trap.tseen ? 'a rolling boulder trap' : 'something'}.`);
+        game._message_more = 1;
+        game._process_time_with_more = 0;
+    }
+    let start = trap.launch;
+    let end = trap.launch2;
+    let boulder = (game.level?.objects || []).find(obj =>
+        !obj.transientProjectile && obj.otyp === BOULDER && obj.ox === start?.x && obj.oy === start?.y);
+    if (!boulder && end) {
+        boulder = (game.level?.objects || []).find(obj =>
+            !obj.transientProjectile && obj.otyp === BOULDER && obj.ox === end.x && obj.oy === end.y);
+        if (boulder) [start, end] = [end, start];
+    }
+    if (boulder && start && end) {
+        game.level.objects = (game.level.objects || []).filter(obj => obj !== boulder);
+        newsym(start.x, start.y);
+        vision_reset();
+        vision_recalc(0);
+        let x = start.x;
+        let y = start.y;
+        const dx = Math.sign(end.x - start.x);
+        const dy = Math.sign(end.y - start.y);
+        let finalX = end.x;
+        let finalY = end.y;
+        for (let dist = Math.max(Math.abs(end.x - start.x), Math.abs(end.y - start.y)); dist > 0; dist--) {
+            x += dx;
+            y += dy;
+            const hit = (game.level?.monsters || []).find(other => other.mx === x && other.my === y);
+            if (hit?.data?.throwsRocks && rn2(3)) {
+                hit.minvent ??= [];
+                hit.minvent.push(boulder);
+                boulder = null;
+                break;
+            }
+            if (hit) {
+                const targetAc = hit.data?.mac ?? 10;
+                const hitRoll = rnd(20);
+                if (5 + targetAc + 6 >= hitRoll) {
+                    const damage = rnd(20);
+                    const hitName = monsterDisplayName(hit);
+                    const lowerName = hitName.replace(/^The /, 'the ');
+                    hit.mhp = (hit.mhp || 1) - damage;
+                    if (hit.mhp < 1) {
+                        if (inSight) game._topline_after_more = `The boulder hits ${lowerName}!  ${hitName} is killed!`;
+                        if (inSight) {
+                            game.level.objects.push({
+                                ...boulder,
+                                ox: x - dx,
+                                oy: y - dy,
+                                quan: 1,
+                                glyph: '`',
+                                color: NO_COLOR,
+                                transientProjectile: true,
+                            });
+                            game._clear_transient_projectiles_after_more = 1;
+                            newsym(x - dx, y - dy);
+                        }
+                        dropMonsterInventory(hit);
+                        game.level.monsters = (game.level?.monsters || []).filter(other => other !== hit);
+                        if (skipPetPostMoveRoll && hit.pet) game._pet_skip_post_move_roll = 1;
+                        game._rolling_boulder_cleanup_after_more = { x, y, mon: hit };
+                    } else if (inSight) {
+                        game._topline_after_more = `The boulder hits ${lowerName}!`;
+                        newsym(x, y);
+                    }
+                }
+            }
+            const nextLoc = dist > 1 ? game.level?.at(x + dx, y + dy) : null;
+            if (nextLoc && (IS_STWALL(nextLoc.typ) || IS_TREE(nextLoc.typ))) {
+                finalX = x;
+                finalY = y;
+                break;
+            }
+        }
+        if (boulder) {
+            boulder.ox = finalX;
+            boulder.oy = finalY;
+            game.level.objects.push(boulder);
+            vision_reset();
+            vision_recalc(0);
+            newsym(finalX, finalY);
+        }
+        if (inSight) trap.tseen = true;
+    }
+    return true;
+}
+
 function monsterWebmakerData(data) {
     return data?.name === 'cave spider' || data?.name === 'giant spider';
 }
@@ -12642,96 +12739,7 @@ function moveMonsterTowardHero(mon, conflictActive = false, monIndex = null, som
     }
     if (monsterLandmineTrapEffect(mon, trap)) return done();
     if (monsterSqueakyBoardTrapEffect(mon, trap)) return done();
-    if (trap?.ttyp === ROLLING_BOULDER_TRAP && !mon.data?.inAir && !mon.data?.flyer && !mon.data?.floater) {
-        if (monsterAvoidsKnownTrapBeforeEffect(mon, trap)) return done();
-        monsterTriggerTrap(mon, trap);
-        const inSight = couldSeeCoord(mon.mx, mon.my) && !game.u?.blind && !mon.minvis && !mon.mundetected;
-        newsym(mon.mx, mon.my);
-        if (inSight) {
-            addToplineMessage(`Click!  ${monsterDisplayName(mon)} triggers ${trap.tseen ? 'a rolling boulder trap' : 'something'}.`);
-            game._message_more = 1;
-            game._process_time_with_more = 0;
-        }
-        let start = trap.launch;
-        let end = trap.launch2;
-        let boulder = (game.level?.objects || []).find(obj =>
-            !obj.transientProjectile && obj.otyp === BOULDER && obj.ox === start?.x && obj.oy === start?.y);
-        if (!boulder && end) {
-            boulder = (game.level?.objects || []).find(obj =>
-                !obj.transientProjectile && obj.otyp === BOULDER && obj.ox === end.x && obj.oy === end.y);
-            if (boulder) [start, end] = [end, start];
-        }
-        if (boulder && start && end) {
-            game.level.objects = (game.level.objects || []).filter(obj => obj !== boulder);
-            newsym(start.x, start.y);
-            vision_reset();
-            vision_recalc(0);
-            let x = start.x;
-            let y = start.y;
-            const dx = Math.sign(end.x - start.x);
-            const dy = Math.sign(end.y - start.y);
-            let finalX = end.x;
-            let finalY = end.y;
-            for (let dist = Math.max(Math.abs(end.x - start.x), Math.abs(end.y - start.y)); dist > 0; dist--) {
-                x += dx;
-                y += dy;
-                const hit = (game.level?.monsters || []).find(other => other.mx === x && other.my === y);
-                if (hit?.data?.throwsRocks && rn2(3)) {
-                    hit.minvent ??= [];
-                    hit.minvent.push(boulder);
-                    boulder = null;
-                    break;
-                }
-                if (hit) {
-                    const targetAc = hit.data?.mac ?? 10;
-                    const hitRoll = rnd(20);
-                    if (5 + targetAc >= hitRoll) {
-                        const damage = rnd(20);
-                        const hitName = monsterDisplayName(hit);
-                        const lowerName = hitName.replace(/^The /, 'the ');
-                        hit.mhp = (hit.mhp || 1) - damage;
-                        if (hit.mhp < 1) {
-                            if (inSight) game._topline_after_more = `The boulder hits ${lowerName}!  ${hitName} is killed!`;
-                            if (inSight) {
-                                game.level.objects.push({
-                                    ...boulder,
-                                    ox: x - dx,
-                                    oy: y - dy,
-                                    quan: 1,
-                                    glyph: '`',
-                                    color: NO_COLOR,
-                                    transientProjectile: true,
-                                });
-                                game._clear_transient_projectiles_after_more = 1;
-                                newsym(x - dx, y - dy);
-                            }
-                            dropMonsterInventory(hit);
-                            game.level.monsters = (game.level?.monsters || []).filter(other => other !== hit);
-                            game._rolling_boulder_cleanup_after_more = { x, y, mon: hit };
-                        } else if (inSight) {
-                            game._topline_after_more = `The boulder hits ${lowerName}!`;
-                            newsym(x, y);
-                        }
-                    }
-                }
-                const nextLoc = dist > 1 ? game.level?.at(x + dx, y + dy) : null;
-                if (nextLoc && (IS_STWALL(nextLoc.typ) || IS_TREE(nextLoc.typ))) {
-                    finalX = x;
-                    finalY = y;
-                    break;
-                }
-            }
-            if (boulder) {
-                boulder.ox = finalX;
-                boulder.oy = finalY;
-                game.level.objects.push(boulder);
-                vision_reset();
-                vision_recalc(0);
-                newsym(finalX, finalY);
-            }
-            if (inSight) trap.tseen = true;
-        }
-    }
+    if (monsterRollingBoulderTrapEffect(mon, trap)) return done();
 	    const webTrap = monsterWebTrapEffect(mon, trap, {
 	        deferCaughtMessage: true,
 	        monIndex,
@@ -13803,6 +13811,7 @@ function movePet(mon, resumeAfterInventory = false, conflictActive = false) {
         }
     }
     if (monsterLandmineTrapEffect(mon, trap, { skipPetPostMoveRoll: true })) return;
+    if (monsterRollingBoulderTrapEffect(mon, trap, { skipPetPostMoveRoll: true })) return;
 }
 
 // C ref: allmain.c newgame()
@@ -15123,6 +15132,7 @@ export const __allmainTestHooks = {
     monsterFireTrapEffectForTest: monsterFireTrapEffect,
     monsterRockTrapEffectForTest: monsterRockTrapEffect,
     monsterLandmineTrapEffectForTest: monsterLandmineTrapEffect,
+    monsterRollingBoulderTrapEffectForTest: monsterRollingBoulderTrapEffect,
     monsterPitTrapEffectForTest: monsterPitTrapEffect,
     monsterTrappedTrapTurnForTest: monsterTrappedTrapTurn,
     monsterSleepGasTrapEffectForTest: monsterSleepGasTrapEffect,

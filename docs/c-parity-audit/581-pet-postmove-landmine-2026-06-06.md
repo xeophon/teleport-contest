@@ -37,6 +37,5 @@ The tests drive the normal pet movement loop where movement RNG matters and use 
 
 ## Remaining Work
 
-- Pet post-move rolling-boulder trap effects remain a separate trap parity slice.
 - Full `blow_up_landmine()` environmental side effects remain broader trap/terrain parity: scatter, wakeup, doors, drawbridges, engraving deletion, liquid fill, and boulder pit filling.
 - Full pet leash slack/yelp and off-level migration handling remains broader `dog_move()` parity.
