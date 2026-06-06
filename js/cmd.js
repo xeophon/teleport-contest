@@ -700,8 +700,38 @@ function chestTrapObjectName(box) {
     return forceBoxSimpleName(box);
 }
 
+function applyChestTrapElectricPayload(messages) {
+    const origDamage = d(4, 4);
+    let baseDamage = origDamage;
+    messages.push('You are jolted by a surge of electricity!');
+    if (heroHasShockResistance()) {
+        messages.push("You don't seem to be affected.");
+        baseDamage = 0;
+    }
+
+    const electricInventory = electricDamageInventory(origDamage);
+    messages.push(...electricInventory.messages);
+
+    const hpBefore = game.u?.uhp || 0;
+    const damage = (game.u?.uinvulnerable ? 0 : baseDamage) + electricInventory.damage;
+    if (damage && game.u) game.u.uhp = Math.max(0, hpBefore - damage);
+    if ((game.u?.uhp || 0) > 0) return {};
+
+    game._death_cause = electricInventory.damage >= hpBefore && electricInventory.deathCause
+        ? electricInventory.deathCause
+        : 'killed by an electric shock';
+    if (consumeLifeSavingAmulet()) {
+        if (game.u) game.u.uhp = 0;
+        messages.push(`You die...  But wait...  Your medallion ${game.u?.blind ? 'feels warm' : 'begins to glow'}!`);
+        return { lifeSaving: true, more: true };
+    }
+    messages.push('You die...');
+    return { fatal: true, more: true };
+}
+
 function applyChestTrapPayload(box, { disarm = true } = {}) {
     const messages = [disarm ? 'You set it off!' : 'You trigger a trap!'];
+    let result = {};
     if (box) {
         box.tknown = false;
         box.otrapped = false;
@@ -731,18 +761,24 @@ function applyChestTrapPayload(box, { disarm = true } = {}) {
             game._multi_reason = 'frozen by a trap';
             exerciseAttribute(A_DEX, false);
         }
+    } else if (payload >= 6 && payload <= 8) {
+        result = applyChestTrapElectricPayload(messages);
     }
-    if (box) box.tknown = true;
-    return trapMessage(...messages);
+    if (box && !result.fatal) box.tknown = true;
+    const message = trapMessage(...messages);
+    return result.fatal || result.lifeSaving || result.more
+        ? { message, ...result }
+        : message;
 }
 
 function disarmUntrapBox(box, confused, force = false) {
     if (box?.otrapped) {
         const difficulty = 75 + Math.trunc(level_difficulty() / 2);
         if (!force && (confused || heroIsFumbling() || rnd(difficulty) > untrapBoxDisarmChance())) {
-            const message = applyChestTrapPayload(box);
-            exerciseAttribute(A_DEX, true);
-            return message;
+            const result = applyChestTrapPayload(box);
+            if (!(result && typeof result === 'object' && result.fatal))
+                exerciseAttribute(A_DEX, true);
+            return result;
         }
         box.otrapped = false;
         box.tknown = true;
@@ -62704,11 +62740,14 @@ export async function rhack(_cmd) {
             game._untrap_box_state = null;
             game._command_mode = null;
             if (box?.tknown && box?.dknown) {
-                await setMessage(disarmUntrapBox(
+                const result = disarmUntrapBox(
                     box,
                     heroIsConfused() || heroIsHallucinating(),
                     !!state?.force,
-                ));
+                );
+                await setMessage(typeof result === 'string' ? result : result.message, !!result?.more);
+                if (result && typeof result === 'object' && applyLifeSavingOrFatalCommandMode(result))
+                    return;
                 game.context.move = 1;
             } else {
                 await checkUntrapBox(box, { force: !!state?.force });
@@ -62732,7 +62771,10 @@ export async function rhack(_cmd) {
         if (ch === 'y') {
             game._untrap_box_disarm_state = null;
             game._command_mode = null;
-            await setMessage(disarmUntrapBox(pending?.box, !!pending?.confused, !!pending?.force));
+            const result = disarmUntrapBox(pending?.box, !!pending?.confused, !!pending?.force);
+            await setMessage(typeof result === 'string' ? result : result.message, !!result?.more);
+            if (result && typeof result === 'object' && applyLifeSavingOrFatalCommandMode(result))
+                return;
             game.context.move = 1;
             return;
         }

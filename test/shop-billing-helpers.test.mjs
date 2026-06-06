@@ -21728,6 +21728,130 @@ test('#untrap known-box colored gas suppresses stagger when already stunned', as
     assert.equal(game.context.move, 1);
 });
 
+test('#untrap known-box electric payload jolts and damages hero', async () => {
+    setupUntrapDestinationWeb([], { rng: [74, 0, 1, 6, 3, 3, 3, 3, 0, 0] });
+    game.u.shockResistance = false;
+    game.u.uinvulnerable = false;
+    game.level.traps = [];
+    const box = shopFloorContainer(881031);
+    Object.assign(box, {
+        otrapped: true,
+        tknown: true,
+        dknown: true,
+        cknown: false,
+    });
+    game.level.objects = [box];
+
+    await enterUntrapDirection();
+    await rhack('.');
+
+    assert.equal(game._command_mode, 'untrapBoxConfirm');
+    assert.equal(game._pending_message, 'Disarm this large box? [ynq] (q)');
+
+    await rhack('y');
+
+    assert.equal(game._command_mode, null);
+    assert.deepEqual(getRngLog(), [
+        'rnd(75)=75',
+        'rn2(13)=0',
+        'rn2(20)=1',
+        'rn2(13)=6',
+        'd(4,4)=16',
+        'rn2(5)=0',
+        'rn2(19)=0',
+    ]);
+    assert.equal(game._pending_message, 'You set it off!  You are jolted by a surge of electricity!');
+    assert.equal(box.otrapped, false);
+    assert.equal(box.tknown, true);
+    assert.equal(game.u.uhp, 4);
+    assert.equal(game.context.move, 1);
+});
+
+test('#untrap known-box electric payload respects shock resistance but destroys inventory', async () => {
+    const wand = fireWand(881032, 'w');
+    setupUntrapDestinationWeb([wand], { rng: [74, 0, 1, 6, 3, 3, 3, 3, 0, 9, 0, 0] });
+    game.u.shockResistance = true;
+    game.u.uinvulnerable = false;
+    game.level.traps = [];
+    const box = shopFloorContainer(881032);
+    Object.assign(box, {
+        otrapped: true,
+        tknown: true,
+        dknown: true,
+        cknown: false,
+    });
+    game.level.objects = [box];
+
+    await enterUntrapDirection();
+    await rhack('.');
+
+    assert.equal(game._command_mode, 'untrapBoxConfirm');
+    assert.equal(game._pending_message, 'Disarm this large box? [ynq] (q)');
+
+    await rhack('y');
+
+    assert.equal(game._command_mode, null);
+    assert.deepEqual(getRngLog(), [
+        'rnd(75)=75',
+        'rn2(13)=0',
+        'rn2(20)=1',
+        'rn2(13)=6',
+        'd(4,4)=16',
+        'rn2(5)=0',
+        'rnd(10)=10',
+        'rn2(3)=0',
+        'rn2(19)=0',
+    ]);
+    assert.equal(game._pending_message, "You set it off!  You are jolted by a surge of electricity!  You don't seem to be affected.  Your wand of fire breaks apart and explodes!  You aren't hurt!");
+    assert.equal(box.otrapped, false);
+    assert.equal(box.tknown, true);
+    assert.equal(game.inventory.includes(wand), false);
+    assert.equal(game.u.uhp, 20);
+    assert.equal(game.context.move, 1);
+});
+
+test('#untrap known-box fatal electric payload enters death more', async () => {
+    setupUntrapDestinationWeb([], { rng: [74, 0, 1, 6, 3, 3, 3, 3, 0] });
+    game.u.uhp = 10;
+    game.u.shockResistance = false;
+    game.u.uinvulnerable = false;
+    game.level.traps = [];
+    const box = shopFloorContainer(881033);
+    Object.assign(box, {
+        otrapped: true,
+        tknown: true,
+        dknown: true,
+        cknown: false,
+    });
+    game.level.objects = [box];
+
+    await enterUntrapDirection();
+    await rhack('.');
+
+    assert.equal(game._command_mode, 'untrapBoxConfirm');
+    assert.equal(game._pending_message, 'Disarm this large box? [ynq] (q)');
+
+    await rhack('y');
+
+    assert.equal(game._command_mode, 'deathDieMore');
+    const fatalLog = getRngLog();
+    assert.deepEqual(fatalLog.slice(0, 6), [
+        'rnd(75)=75',
+        'rn2(13)=0',
+        'rn2(20)=1',
+        'rn2(13)=6',
+        'd(4,4)=16',
+        'rn2(5)=0',
+    ]);
+    assert.equal(fatalLog.some(entry => rngCallName(entry) === 'rn2(19)'), false);
+    assert.equal(game._pending_message, 'You set it off!  You are jolted by a surge of electricity!  You die...');
+    assert.equal(box.otrapped, false);
+    assert.equal(box.tknown, false);
+    assert.equal(game.u.uhp, 0);
+    assert.equal(game._death_cause, 'killed by an electric shock');
+    assert.equal(game.context.move || 0, 0);
+});
+
 test('stun and hallucination timeouts expire during turn tail', async () => {
     installCommandShopState();
     installCoreRngValues([1]);
