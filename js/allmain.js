@@ -11361,6 +11361,24 @@ function rollingBoulderHitHeroAt(x, y, movingBoulder) {
     return true;
 }
 
+function deleteRollingBoulderLandmineEngravingAt(x, y) {
+    if (!game.level?.engravings) return;
+    game.level.engravings = game.level.engravings.filter(engr => engr.x !== x || engr.y !== y);
+}
+
+function rollingBoulderTriggerLandmineAt(x, y) {
+    const trap = (game.level?.traps || []).find(item => item.ttyp === LANDMINE && item.tx === x && item.ty === y);
+    if (!trap) return false;
+    if (rn2(10) <= 2) return false;
+
+    const suffix = (!game.u?.blind && cansee(x, y)) ? '  The rolling boulder triggers a land mine.' : '';
+    addRollingBoulderMotionMessage(`KAABLAMM!!!${suffix}`);
+    game.level.traps = (game.level?.traps || []).filter(item => item !== trap);
+    deleteRollingBoulderLandmineEngravingAt(x, y);
+    if (!game.u?.blind && cansee(x, y)) newsym(x, y);
+    return true;
+}
+
 function monsterRollingBoulderTrapEffect(mon, trap, { skipPetPostMoveRoll = false } = {}) {
     if (trap?.ttyp !== ROLLING_BOULDER_TRAP || monsterTrapHarmless(mon, trap)) return false;
     if (monsterAvoidsKnownTrapBeforeEffect(mon, trap)) return true;
@@ -11453,6 +11471,10 @@ function monsterRollingBoulderTrapEffect(mon, trap, { skipPetPostMoveRoll = fals
                 }
             } else {
                 rollingBoulderHitHeroAt(x, y, boulder);
+            }
+            if (rollingBoulderTriggerLandmineAt(x, y)) {
+                boulder = null;
+                break;
             }
             boulder = rollingBoulderChainIntoBoulderAt(x, y, dx, dy, dist - 1, boulder);
             rollingBoulderBreakClosedDoorAt(x, y, dist - 1);

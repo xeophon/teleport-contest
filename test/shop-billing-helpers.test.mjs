@@ -21344,6 +21344,67 @@ test('rolling boulder hit against rock-passing polyself is harmless', () => {
     assert.deepEqual(rngValuesForCall(getRngLog(), 'rnd(20)'), [7, 1]);
 });
 
+test('rolling boulder detonates path land mine and is consumed', () => {
+    const { trap, goblin } = installMonsterPitTrapState(ROLLING_BOULDER_TRAP, {
+        mhp: 50,
+        mhpmax: 50,
+        data: { mac: -10 },
+    });
+    const mine = { ttyp: LANDMINE, tx: 6, ty: 3, tseen: false, madeby_u: false };
+    game.level.traps.push(mine);
+    game.level.engravings = [{ x: 6, y: 3, text: 'Elbereth', type: 1 }];
+    game.level.at(6, 3).lit = true;
+    const boulder = installRollingBoulderTrapLaunch(trap, {
+        start: { x: 4, y: 3 },
+        end: { x: 8, y: 3 },
+    });
+    enableRngLog({ reset: true });
+    installCoreRngValues([3]);
+    markHeroNeighborhoodVisible();
+    markSquareVisible(6, 5);
+    for (let x = 4; x <= 8; x++) markSquareVisible(x, 3);
+
+    assert.equal(allmain.monsterRollingBoulderTrapEffectForTest(goblin, trap), true);
+
+    assert.match(game._pending_message || '', /Click!  The goblin triggers something\./);
+    assert.equal(game._topline_after_more, 'KAABLAMM!!!  The rolling boulder triggers a land mine.');
+    assert.equal(game.level.traps.includes(mine), false);
+    assert.equal(game.level.objects.includes(boulder), false);
+    assert.equal(game.level.engravings.length, 0);
+    assert.equal(trap.tseen, true);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rn2(10)'), [3]);
+});
+
+test('rolling boulder path land mine dud keeps rolling', () => {
+    const { trap, goblin } = installMonsterPitTrapState(ROLLING_BOULDER_TRAP, {
+        mhp: 50,
+        mhpmax: 50,
+        data: { mac: -10 },
+    });
+    const mine = { ttyp: LANDMINE, tx: 6, ty: 3, tseen: false, madeby_u: false };
+    game.level.traps.push(mine);
+    const boulder = installRollingBoulderTrapLaunch(trap, {
+        start: { x: 4, y: 3 },
+        end: { x: 8, y: 3 },
+    });
+    enableRngLog({ reset: true });
+    installCoreRngValues([2]);
+    markHeroNeighborhoodVisible();
+    markSquareVisible(6, 5);
+    for (let x = 4; x <= 8; x++) markSquareVisible(x, 3);
+
+    assert.equal(allmain.monsterRollingBoulderTrapEffectForTest(goblin, trap), true);
+
+    assert.match(game._pending_message || '', /Click!  The goblin triggers something\./);
+    assert.equal(game._topline_after_more || '', '');
+    assert.equal(game.level.traps.includes(mine), true);
+    assert.equal(game.level.objects.includes(boulder), true);
+    assert.equal(boulder.ox, 8);
+    assert.equal(boulder.oy, 3);
+    assert.equal(trap.tseen, true);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rn2(10)'), [2]);
+});
+
 test('rolling boulder sets another boulder in motion', () => {
     const { trap, goblin } = installMonsterPitTrapState(ROLLING_BOULDER_TRAP, {
         mhp: 50,

@@ -31,4 +31,4 @@ The tests use local trap, boulder, monster, visibility, and RNG fixtures. They d
 
 ## Remaining Work
 
-- Full `launch_obj()` parity remains broader trap/terrain work: path trap effects, launch-drop preservation, and floor-effect integration. Unseen rolling-boulder launch feedback is covered in audit 584, door breakage is covered in audit 585, rock-thrower snatch feedback is covered in audit 586, iron-bars handling is covered in audit 587, boulder chaining is covered in audit 588, and hero collision along the rolling path is covered in audit 589.
+- Full `launch_obj()` parity remains broader trap/terrain work: teleport/pit/hole path effects, launch-drop preservation, and floor-effect integration. Unseen rolling-boulder launch feedback is covered in audit 584, door breakage is covered in audit 585, rock-thrower snatch feedback is covered in audit 586, iron-bars handling is covered in audit 587, boulder chaining is covered in audit 588, hero collision along the rolling path is covered in audit 589, and path landmines are covered in audit 590.
