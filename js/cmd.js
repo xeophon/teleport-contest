@@ -47057,6 +47057,25 @@ function heroRollingBoulderHitIronBars(messages) {
     if (!heroIsDeaf()) messages.push('Whang!');
 }
 
+function deleteHeroRollingBoulderLandmineEngravingAt(x, y) {
+    if (!game.level?.engravings) return;
+    game.level.engravings = game.level.engravings.filter(engr => engr.x !== x || engr.y !== y);
+}
+
+function heroRollingBoulderTriggerLandmineAt(x, y, movingBoulder, messages) {
+    const trap = (game.level?.traps || []).find(item => item.ttyp === LANDMINE && item.tx === x && item.ty === y);
+    if (!trap) return false;
+    if (rn2(10) <= 2) return false;
+
+    const suffix = (!game.u?.blind && cansee(x, y)) ? '  The rolling boulder triggers a land mine.' : '';
+    messages.push(`KAABLAMM!!!${suffix}`);
+    game.level.traps = (game.level?.traps || []).filter(item => item !== trap);
+    deleteHeroRollingBoulderLandmineEngravingAt(x, y);
+    game.level.objects = (game.level?.objects || []).filter(obj => obj !== movingBoulder);
+    if (!game.u?.blind && cansee(x, y)) newsym(x, y);
+    return true;
+}
+
 function heroRollingBoulderChainIntoBoulderAt(x, y, dx, dy, remainingDistance, movingBoulder, messages) {
     const chainedBoulder = (game.level?.objects || []).find(obj =>
         obj !== movingBoulder && !obj.buried && !obj.transientProjectile
@@ -47103,6 +47122,12 @@ function heroRollingBoulderPathResult(start, end, movingBoulder) {
         x += dx;
         y += dy;
         if (x === game.u?.ux && y === game.u?.uy) result.crossedHero = true;
+        if (heroRollingBoulderTriggerLandmineAt(x, y, result.boulder, result.messages)) {
+            result.finalX = x;
+            result.finalY = y;
+            result.boulder = null;
+            break;
+        }
         result.boulder = heroRollingBoulderChainIntoBoulderAt(x, y, dx, dy, dist - 1,
             result.boulder, result.messages);
         heroRollingBoulderBreakClosedDoorAt(x, y, result.messages, dist - 1);

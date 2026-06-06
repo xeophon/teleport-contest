@@ -21232,6 +21232,95 @@ test('sitting hero rolling boulder wall stop does not hit hero beyond obstacle',
     assert.equal(rngValuesForCall(getRngLog(), 'rnd(20)').length, 0);
 });
 
+test('hero rolling boulder detonates path land mine and is consumed', async () => {
+    const { boulder } = installHeroRollingBoulderTrapState({
+        trapX: 6,
+        trapY: 4,
+        heroX: 5,
+        heroY: 4,
+        start: { x: 4, y: 3 },
+        end: { x: 8, y: 3 },
+        boulderAt: 'start',
+    });
+    const mine = { ttyp: LANDMINE, tx: 6, ty: 3, tseen: false, madeby_u: false };
+    game.level.traps.push(mine);
+    game.level.engravings = [{ x: 6, y: 3, text: 'Elbereth', type: 1 }];
+    enableRngLog({ reset: true });
+    installCoreRngValues([3]);
+    markHeroNeighborhoodVisible();
+    for (let x = 4; x <= 8; x++) markSquareVisible(x, 3);
+
+    await rhack('l');
+
+    assert.equal(game._pending_message,
+        'Click!  You trigger a rolling boulder trap!  KAABLAMM!!!  The rolling boulder triggers a land mine.');
+    assert.equal(game.level.traps.includes(mine), false);
+    assert.equal(game.level.traps.some(trap => trap.ttyp === PIT && trap.tx === 6 && trap.ty === 3), false);
+    assert.equal(game.level.objects.includes(boulder), false);
+    assert.equal(game.level.engravings.length, 0);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rn2(10)'), [3]);
+    assert.equal(rngValuesForCall(getRngLog(), 'rnd(20)').length, 0);
+});
+
+test('deaf blind hero rolling boulder path land mine still reports kaablamm only', async () => {
+    const { boulder } = installHeroRollingBoulderTrapState({
+        trapX: 6,
+        trapY: 4,
+        heroX: 5,
+        heroY: 4,
+        start: { x: 4, y: 3 },
+        end: { x: 8, y: 3 },
+        boulderAt: 'start',
+        heroDeaf: true,
+    });
+    game.u.blind = true;
+    const mine = { ttyp: LANDMINE, tx: 6, ty: 3, tseen: false, madeby_u: false };
+    game.level.traps.push(mine);
+    game.level.engravings = [{ x: 6, y: 3, text: 'Elbereth', type: 1 }];
+    enableRngLog({ reset: true });
+    installCoreRngValues([3]);
+    for (let x = 4; x <= 8; x++) markSquareVisible(x, 3);
+
+    await rhack('l');
+
+    assert.equal(game._pending_message, 'You trigger a rolling boulder trap!  KAABLAMM!!!');
+    assert.equal(game.level.traps.includes(mine), false);
+    assert.equal(game.level.traps.some(trap => trap.ttyp === PIT && trap.tx === 6 && trap.ty === 3), false);
+    assert.equal(game.level.objects.includes(boulder), false);
+    assert.equal(game.level.engravings.length, 0);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rn2(10)'), [3]);
+    assert.equal(rngValuesForCall(getRngLog(), 'rnd(16)').length, 0);
+});
+
+test('hero rolling boulder path land mine dud keeps rolling', async () => {
+    const { boulder } = installHeroRollingBoulderTrapState({
+        trapX: 6,
+        trapY: 4,
+        heroX: 5,
+        heroY: 4,
+        start: { x: 4, y: 3 },
+        end: { x: 8, y: 3 },
+        boulderAt: 'start',
+    });
+    const mine = { ttyp: LANDMINE, tx: 6, ty: 3, tseen: false, madeby_u: false };
+    game.level.traps.push(mine);
+    enableRngLog({ reset: true });
+    installCoreRngValues([2]);
+    markHeroNeighborhoodVisible();
+    for (let x = 4; x <= 8; x++) markSquareVisible(x, 3);
+
+    await rhack('l');
+
+    assert.equal(game._pending_message, 'Click!  You trigger a rolling boulder trap!');
+    assert.equal(game.level.traps.includes(mine), true);
+    assert.equal(boulder.ox, 8);
+    assert.equal(boulder.oy, 3);
+    assert.equal(game.level.objects.includes(boulder), true);
+    assert.equal(game.level.objects.at(-1), boulder);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rn2(10)'), [2]);
+    assert.equal(rngValuesForCall(getRngLog(), 'rnd(20)').length, 0);
+});
+
 test('hero rolling boulder sets another boulder stack in motion', async () => {
     const { boulder: first } = installHeroRollingBoulderTrapState({
         trapX: 6,

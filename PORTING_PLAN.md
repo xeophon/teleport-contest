@@ -122,8 +122,9 @@ Detailed source-backed history is kept in `docs/c-parity-audit/`. This section i
 - Hero-triggered rolling-boulder stacked launch-object splitting is covered in audit 606.
 - Hero-triggered rolling-boulder door, iron-bars, wall/tree, and out-of-bounds path obstacles are covered in audit 607.
 - Hero-triggered rolling-boulder boulder chaining is covered in audit 608.
+- Hero-triggered rolling-boulder path landmines are covered in audit 609.
 - Magic-marker write target `getobj()` suggested/downplayed selection is covered in audit 577.
-- Latest compact/source note: `docs/c-parity-audit/608-hero-rolling-boulder-boulder-chaining-2026-06-06.md`.
+- Latest compact/source note: `docs/c-parity-audit/609-hero-rolling-boulder-path-landmine-2026-06-06.md`.
 - Latest verified public score: `44/44`.
 
 ## Current Priorities
@@ -151,8 +152,8 @@ Detailed source-backed history is kept in `docs/c-parity-audit/`. This section i
    - Compact candidates: direct monster-object hit follow-ups, remaining monster-thrown `passive_obj()` follow-ups, remaining monster-thrown/launcher-arrow `hits_bars()` object-class follow-ups beyond the covered dart, shuriken, sling rocks/gems/stones, plain daggers, crude/orcish daggers, silver daggers, ordinary knives, ordinary crossbow bolts, ordinary/dwarvish/silver/elven/orcish spears, and javelins, full monster diet flag generation, and broader `polymon()`/stoning interactions.
 
 5. Level, trap, terrain, save, and display foundations.
-   - Source notes: `docs/c-parity-audit/03-levelgen-specials-quest.md`, `docs/c-parity-audit/06-save-restore-bones.md`, `docs/c-parity-audit/07-traps-liquids-terrain.md`, `docs/c-parity-audit/08-display-rng-observation.md`, and latest compact note `docs/c-parity-audit/608-hero-rolling-boulder-boulder-chaining-2026-06-06.md`.
-   - Centralize special-level generation, saved-level/migration/timer state, trap/liquid/material-damage pipelines, glyph/discovery/redraw ordering, and RNG diagnostics. Remaining compact rolling-boulder candidates include hero-triggered rolling-boulder launched-object path reuse beyond the audit-597 no-release/opposite-endpoint basics, audit-604 final cleanup, audit-605 off-path no-hit handling, audit-606 stack splitting, audit-607 path obstacles, and audit-608 boulder chaining, plus matching-owner/timer-specific final `place_object()` side effects beyond audit-598 metadata/top-order, audit-602 non-shop `no_charge` cleanup, and audit-603 shared-boundary preservation.
+   - Source notes: `docs/c-parity-audit/03-levelgen-specials-quest.md`, `docs/c-parity-audit/06-save-restore-bones.md`, `docs/c-parity-audit/07-traps-liquids-terrain.md`, `docs/c-parity-audit/08-display-rng-observation.md`, and latest compact note `docs/c-parity-audit/609-hero-rolling-boulder-path-landmine-2026-06-06.md`.
+   - Centralize special-level generation, saved-level/migration/timer state, trap/liquid/material-damage pipelines, glyph/discovery/redraw ordering, and RNG diagnostics. Remaining compact rolling-boulder candidates include hero-triggered rolling-boulder launched-object path reuse beyond the audit-597 no-release/opposite-endpoint basics, audit-604 final cleanup, audit-605 off-path no-hit handling, audit-606 stack splitting, audit-607 path obstacles, audit-608 boulder chaining, and audit-609 path landmines, plus matching-owner/timer-specific final `place_object()` side effects beyond audit-598 metadata/top-order, audit-602 non-shop `no_charge` cleanup, and audit-603 shared-boundary preservation.
    - Compact candidates: broader hero-on-liquid fallout and display/discovery ordering around object observation.
 
 6. Command, prompt, and menu contracts.
