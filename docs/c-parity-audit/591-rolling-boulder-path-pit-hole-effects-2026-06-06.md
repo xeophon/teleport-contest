@@ -29,4 +29,4 @@ The tests use local trap, boulder, visibility, buried-object, and RNG fixtures. 
 
 ## Remaining Work
 
-- Full `launch_obj()` parity remains broader trap/terrain work: teleport and level-teleport path traps, launch-drop preservation, final-placement floor effects, hero-triggered rolling-boulder rewriting, occupation/multi interruption, and mounted-steed diversion.
+- Full `launch_obj()` parity remains broader trap/terrain work: launch-drop preservation, final-placement floor effects, hero-triggered rolling-boulder rewriting, occupation/multi interruption, and mounted-steed diversion. Teleport/level-teleport path effects are covered in audit 592.

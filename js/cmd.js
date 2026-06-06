@@ -3929,7 +3929,7 @@ function singleLevelBranch(level = game.u?.uz) {
     return !!dungeon && (dungeon.num_dunlevs || 1) <= 1;
 }
 
-function randomTeleportDepth() {
+export function randomTeleportDepth() {
     const current = game.u?.uz || { dnum: 0, dlevel: 1 };
     const dungeon = game.dungeons?.[current.dnum];
     const curDepth = depth_of_level(current);
@@ -4262,7 +4262,7 @@ function branchLevel(dnum) {
     return game.branches?.find(branch => branch.end2.dnum === dnum)?.end1;
 }
 
-function levelTeleportNumericTarget(depth) {
+export function levelTeleportNumericTarget(depth) {
     const current = game.u?.uz ?? { dnum: 0, dlevel: 1 };
     const currentDungeon = game.dungeons?.[current.dnum];
     if (depth <= 0) return { ...current };

@@ -105,8 +105,9 @@ Detailed source-backed history is kept in `docs/c-parity-audit/`. This section i
 - Rolling-boulder hero collision is covered in audit 589.
 - Rolling-boulder path landmines are covered in audit 590.
 - Rolling-boulder path pit/hole floor effects are covered in audit 591.
+- Rolling-boulder path teleport effects are covered in audit 592.
 - Magic-marker write target `getobj()` suggested/downplayed selection is covered in audit 577.
-- Latest compact/source note: `docs/c-parity-audit/591-rolling-boulder-path-pit-hole-effects-2026-06-06.md`.
+- Latest compact/source note: `docs/c-parity-audit/592-rolling-boulder-path-teleport-2026-06-06.md`.
 - Latest verified public score: `44/44`.
 
 ## Current Priorities
@@ -134,7 +135,7 @@ Detailed source-backed history is kept in `docs/c-parity-audit/`. This section i
    - Compact candidates: direct monster-object hit follow-ups, remaining monster-thrown `passive_obj()` follow-ups, remaining monster-thrown/launcher-arrow `hits_bars()` object-class follow-ups beyond the covered dart, shuriken, sling rocks/gems/stones, plain daggers, crude/orcish daggers, silver daggers, ordinary knives, ordinary crossbow bolts, ordinary/dwarvish/silver/elven/orcish spears, and javelins, full monster diet flag generation, and broader `polymon()`/stoning interactions.
 
 5. Level, trap, terrain, save, and display foundations.
-   - Source notes: `docs/c-parity-audit/03-levelgen-specials-quest.md`, `docs/c-parity-audit/06-save-restore-bones.md`, `docs/c-parity-audit/07-traps-liquids-terrain.md`, `docs/c-parity-audit/08-display-rng-observation.md`, and latest compact note `docs/c-parity-audit/591-rolling-boulder-path-pit-hole-effects-2026-06-06.md`.
+   - Source notes: `docs/c-parity-audit/03-levelgen-specials-quest.md`, `docs/c-parity-audit/06-save-restore-bones.md`, `docs/c-parity-audit/07-traps-liquids-terrain.md`, `docs/c-parity-audit/08-display-rng-observation.md`, and latest compact note `docs/c-parity-audit/592-rolling-boulder-path-teleport-2026-06-06.md`.
    - Centralize special-level generation, saved-level/migration/timer state, trap/liquid/material-damage pipelines, glyph/discovery/redraw ordering, and RNG diagnostics.
    - Compact candidates: broader hero-on-liquid fallout and display/discovery ordering around object observation.
 

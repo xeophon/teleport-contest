@@ -29,4 +29,4 @@ The tests use local trap, boulder, visibility, engraving, and RNG fixtures. They
 ## Remaining Work
 
 - Full landmine parity still needs the C `fracture_rock()`/`scatter()` object fallout, wake effects, drawbridge/liquid/pit conversion fallout, and shop/object side effects from the broader explosion/scatter pipeline.
-- Full `launch_obj()` parity remains broader trap/terrain work: teleport and level-teleport path traps, launch-drop preservation, final-placement floor effects, hero-triggered rolling-boulder rewriting, occupation/multi interruption, and mounted-steed diversion. Pit/spiked-pit/hole/trapdoor path effects are covered in audit 591.
+- Full `launch_obj()` parity remains broader trap/terrain work: launch-drop preservation, final-placement floor effects, hero-triggered rolling-boulder rewriting, occupation/multi interruption, and mounted-steed diversion. Pit/spiked-pit/hole/trapdoor path effects are covered in audit 591, and teleport/level-teleport path effects are covered in audit 592.
