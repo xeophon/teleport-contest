@@ -42398,6 +42398,104 @@ test('command kicked knife harms ordinary monster and survives landing', async (
     ]);
 });
 
+test('command kicked spear harms ordinary monster and survives landing', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, { ulevel: 20, uluck: 10, uhitinc: 10, udaminc: 0 });
+    game.u.acurr.a[A_STR] = 25;
+    game.u.acurr.a[A_DEX] = 25;
+    game.u.weapon_skills = [];
+    setHeroWeaponSkill(P_SPEAR, P_EXPERT);
+    const spear = monsterSpear(512055, {
+        letter: undefined,
+        line: undefined,
+        ox: 6,
+        oy: 5,
+    });
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, {
+        mhp: 20,
+        mhpmax: 20,
+        msleeping: 1,
+        mpeaceful: 1,
+        meating: 4,
+        mstrategy: STRAT_WAITFORU,
+    });
+    game.level.objects = [spear];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('\x04');
+    await rhack('l');
+
+    assert.match(game._pending_message, /You kick a spear\./);
+    assert.match(game._pending_message, /The spear hits the goblin[.!]/);
+    assert.doesNotMatch(game._pending_message, /gift|catches|misses|does no harm|shatters/);
+    const rngLog = getRngLog();
+    const damageRoll = rngValuesForCall(rngLog, 'rnd(6)')[0];
+    assert.equal(goblin.mhp, 20 - (damageRoll + 5));
+    assert.equal(goblin.msleeping, 0);
+    assert.equal(goblin.meating, 0);
+    assert.equal(goblin.mstrategy, 0);
+    assert.equal(goblin.mpeaceful, 0);
+    assert.equal(game.level.objects.includes(spear), true);
+    assert.equal(spear.ox, 7);
+    assert.equal(spear.oy, 5);
+    assert.equal(spear.quan, 1);
+    assert.deepEqual(rngLog.map(entry => entry.replace(/=.*/, '')).slice(0, 3), [
+        'rnd(20)', 'rnd(6)', 'rn2(19)',
+    ]);
+    assert.equal(rngLog.some(entry => entry.startsWith('rn2(3)=') || entry.startsWith('rnl(4)=')), false);
+});
+
+test('command kicked war hammer harms ordinary monster and survives landing', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, { ulevel: 20, uluck: 10, uhitinc: 10, udaminc: 0 });
+    game.u.acurr.a[A_STR] = 25;
+    game.u.acurr.a[A_DEX] = 25;
+    game.u.weapon_skills = [];
+    setHeroWeaponSkill(P_HAMMER, P_SKILLED);
+    const hammer = monsterWarHammer(512056, {
+        letter: undefined,
+        line: undefined,
+        ox: 6,
+        oy: 5,
+    });
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, {
+        mhp: 20,
+        mhpmax: 20,
+        msleeping: 1,
+        mpeaceful: 1,
+        meating: 4,
+        mstrategy: STRAT_WAITFORU,
+    });
+    game.level.objects = [hammer];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('\x04');
+    await rhack('l');
+
+    assert.match(game._pending_message, /You kick a war hammer\./);
+    assert.match(game._pending_message, /The war hammer hits the goblin[.!]/);
+    assert.doesNotMatch(game._pending_message, /gift|catches|misses|does no harm|shatters/);
+    const rngLog = getRngLog();
+    const damageRoll = rngValuesForCall(rngLog, 'rnd(4)')[0];
+    assert.equal(goblin.mhp, 20 - (damageRoll + 5));
+    assert.equal(goblin.msleeping, 0);
+    assert.equal(goblin.meating, 0);
+    assert.equal(goblin.mstrategy, 0);
+    assert.equal(goblin.mpeaceful, 0);
+    assert.equal(game.level.objects.includes(hammer), true);
+    assert.equal(hammer.ox, 7);
+    assert.equal(hammer.oy, 5);
+    assert.equal(hammer.quan, 1);
+    assert.deepEqual(rngLog.map(entry => entry.replace(/=.*/, '')).slice(0, 3), [
+        'rnd(20)', 'rnd(4)', 'rn2(19)',
+    ]);
+    assert.equal(rngLog.some(entry => entry.startsWith('rn2(3)=') || entry.startsWith('rnl(4)=')), false);
+});
+
 const KICKED_WEAPON_SKILL_DAMAGE_CASES = [
     { label: 'dagger unskilled', kind: 'dagger', skill: P_DAGGER, level: P_UNSKILLED, expectedHp: 16, hit: /The dagger hits the goblin\./, rng: ['rnd(20)', 'rnd(4)', 'rn2(19)'] },
     { label: 'dagger basic', kind: 'dagger', skill: P_DAGGER, level: P_BASIC, expectedHp: 14, hit: /The dagger hits the goblin!/, rng: ['rnd(20)', 'rnd(4)', 'rn2(19)'] },
