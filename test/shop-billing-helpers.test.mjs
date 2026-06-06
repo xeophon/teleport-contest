@@ -18103,6 +18103,48 @@ function installMovingMonsterWebTrapState(extra = {}) {
     return { trap, goblin };
 }
 
+function installMonsterWebSpinState({
+    name = 'giant spider',
+    x = 8,
+    y = 5,
+    traps = [],
+    supports = [],
+    terrain = ROOM,
+    extra = {},
+} = {}) {
+    installStableNonShopFloorState();
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 50,
+        uhpmax: 50,
+        uac: 10,
+        blind: false,
+        seeInvisible: false,
+    });
+    game.inventory = [];
+    game.viz_array = [];
+    game.stairs = null;
+    game.level.flags = {};
+    game.level.upstair = null;
+    game.level.dnstair = null;
+    game.level.traps = traps.map(trap => ({ tseen: false, madeby_u: false, ...trap }));
+    game.level.at(x, y).typ = terrain;
+    for (const [sx, sy, typ = STONE] of supports)
+        game.level.at(sx, sy).typ = typ;
+    const spider = dartTrapMonster(name, 31472, {
+        mx: x,
+        my: y,
+        mhp: 10,
+        mhpmax: 10,
+        mspec_used: 0,
+        data: { name, mlet: 's', mac: 10 },
+        ...extra,
+    });
+    game.level.monsters = [spider];
+    return { spider };
+}
+
 function assertMonsterHoleTrapMigrated(mon, trap, { targetLevel = { dnum: 0, dlevel: 2 } } = {}) {
     assert.equal(game.level.monsters.includes(mon), false);
     assert.equal(game.migrating_mons?.includes(mon), true);
@@ -18825,6 +18867,142 @@ test('deaf hero does not hear leashed pet trap-candidate whimper', async () => {
     assert.equal(pet.my, 5);
     assert.equal(pet.mtrapped, 1);
     assert.equal(rngValuesForCall(getRngLog(), 'rn2(40)').length, 0);
+});
+
+test('giant spider spins visible web at probability boundary', async () => {
+    const { spider } = installMonsterWebSpinState();
+    markSquareVisible(spider.mx, spider.my);
+    enableRngLog({ reset: true });
+    installCoreRngValues([14, 0, 0, 0, 0]);
+
+    const trap = await allmain.maybeSpinMonsterWebForTest(spider);
+
+    assert.ok(trap);
+    assert.equal(trap.ttyp, WEB);
+    assert.equal(trap.tx, spider.mx);
+    assert.equal(trap.ty, spider.my);
+    assert.equal(trap.tseen, true);
+    assert.equal(spider.mspec_used, 4);
+    assert.match(game._pending_message || '', /The giant spider spins a web\./);
+    assert.deepEqual(getRngLog().map(rngCallName), ['rn2(1000)', 'd(4,4)']);
+});
+
+test('giant spider failed web spin only consumes probability roll', async () => {
+    const { spider } = installMonsterWebSpinState();
+    markSquareVisible(spider.mx, spider.my);
+    enableRngLog({ reset: true });
+    installCoreRngValues([15, 0, 0, 0, 0]);
+
+    const trap = await allmain.maybeSpinMonsterWebForTest(spider);
+
+    assert.equal(trap, null);
+    assert.equal(game.level.traps.length, 0);
+    assert.equal(spider.mspec_used || 0, 0);
+    assert.doesNotMatch(game._pending_message || '', /spins a web/);
+    assert.deepEqual(getRngLog().map(rngCallName), ['rn2(1000)']);
+});
+
+test('web spinner does not roll with existing trap at its square', async () => {
+    const { spider } = installMonsterWebSpinState({
+        traps: [{ ttyp: PIT, tx: 8, ty: 5 }],
+    });
+    enableRngLog({ reset: true });
+    installCoreRngValues([0, 0, 0, 0, 0]);
+
+    const trap = await allmain.maybeSpinMonsterWebForTest(spider);
+
+    assert.equal(trap, null);
+    assert.equal(game.level.traps.length, 1);
+    assert.equal(spider.mspec_used || 0, 0);
+    assert.deepEqual(getRngLog().map(rngCallName), []);
+});
+
+test('existing webs reduce cave spider spin probability after support count', async () => {
+    const { spider } = installMonsterWebSpinState({
+        name: 'cave spider',
+        traps: [
+            { ttyp: WEB, tx: 2, ty: 2 },
+            { ttyp: WEB, tx: 3, ty: 2 },
+        ],
+        supports: [
+            [8, 4],
+            [9, 5],
+            [8, 6],
+            [7, 5],
+        ],
+    });
+    enableRngLog({ reset: true });
+    installCoreRngValues([19, 0, 0, 0, 0]);
+
+    const trap = await allmain.maybeSpinMonsterWebForTest(spider);
+
+    assert.equal(trap, null);
+    assert.equal(game.level.traps.filter(candidate => candidate.ttyp === WEB).length, 2);
+    assert.equal(spider.mspec_used || 0, 0);
+    assert.deepEqual(getRngLog().map(rngCallName), ['rn2(1000)']);
+});
+
+test('web spin does not set cooldown when maketrap rejects terrain', async () => {
+    const { spider } = installMonsterWebSpinState({ terrain: SINK });
+    enableRngLog({ reset: true });
+    installCoreRngValues([0, 0, 0, 0, 0]);
+
+    const trap = await allmain.maybeSpinMonsterWebForTest(spider);
+
+    assert.equal(trap, null);
+    assert.equal(game.level.traps.length, 0);
+    assert.equal(spider.mspec_used || 0, 0);
+    assert.deepEqual(getRngLog().map(rngCallName), ['rn2(1000)']);
+});
+
+test('visible square but unspotted spider spins something message', async () => {
+    const { spider } = installMonsterWebSpinState({ extra: { minvis: 1 } });
+    markSquareVisible(spider.mx, spider.my);
+    enableRngLog({ reset: true });
+    installCoreRngValues([0, 0, 0, 0, 0]);
+
+    const trap = await allmain.maybeSpinMonsterWebForTest(spider);
+
+    assert.ok(trap);
+    assert.equal(trap.tseen, true);
+    assert.equal(spider.mspec_used, 4);
+    assert.match(game._pending_message || '', /Something spins a web\./);
+});
+
+test('unseen web spin creates unseen web silently', async () => {
+    const { spider } = installMonsterWebSpinState();
+    enableRngLog({ reset: true });
+    installCoreRngValues([0, 0, 0, 0, 0]);
+
+    const trap = await allmain.maybeSpinMonsterWebForTest(spider);
+
+    assert.ok(trap);
+    assert.equal(trap.tseen, false);
+    assert.equal(spider.mspec_used, 4);
+    assert.doesNotMatch(game._pending_message || '', /spins a web/);
+});
+
+test('sokoban web spin requires monster clear path to upstairs', async () => {
+    const { spider } = installMonsterWebSpinState({
+        supports: [[9, 5]],
+    });
+    game.level.flags.sokoban_rules = true;
+    game.stairs = { sx: 10, sy: 5, up: true, isladder: false, next: null };
+    game.level.upstair = { x: 10, y: 5 };
+    game.level.at(10, 5).typ = STAIRS;
+    enableRngLog({ reset: true });
+    installCoreRngValues([0, 0, 0, 0, 0]);
+
+    assert.equal(await allmain.maybeSpinMonsterWebForTest(spider), null);
+    assert.deepEqual(getRngLog().map(rngCallName), []);
+
+    game.level.at(9, 5).typ = ROOM;
+    markSquareVisible(spider.mx, spider.my);
+    const trap = await allmain.maybeSpinMonsterWebForTest(spider);
+
+    assert.ok(trap);
+    assert.equal(trap.ttyp, WEB);
+    assert.deepEqual(getRngLog().map(rngCallName), ['rn2(1000)', 'd(4,4)']);
 });
 
 test('monster first-entry web catches ordinary and strong non-giant monsters visibly', async () => {
