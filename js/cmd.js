@@ -47298,8 +47298,39 @@ function heroRollingBoulderDisguisedMimic(mon) {
     return !!mon && appearance && appearance !== M_AP_MONSTER;
 }
 
+function heroHasMonsterDetection() {
+    return !!(game.u?.HDetect_monsters || game.u?.EDetect_monsters
+        || game.u?.Detect_monsters || game.u?.detect_monsters
+        || game.u?.detectMonsters || game._detect_monsters_display);
+}
+
+function heroIsUnderwater() {
+    return !!(game.u?.underwater || game.u?.uunderwater || game.u?.Underwater || game.Underwater);
+}
+
+function heroIsSwallowedBy(mon) {
+    const stuck = game.u?.ustuck;
+    if (stuck === mon) return true;
+    if (!stuck || !mon) return false;
+    return (stuck.m_id != null && stuck.m_id === mon.m_id)
+        || (stuck.id != null && stuck.id === mon.id);
+}
+
+function heroDetectsMonsterForRollingBoulder(mon) {
+    if (!mon || !heroHasMonsterDetection()) return false;
+    if (game.u?.uswallow && !heroIsSwallowedBy(mon)) return false;
+    if (heroIsUnderwater()) {
+        const dx = (mon.mx ?? 0) - (game.u?.ux ?? 0);
+        const dy = (mon.my ?? 0) - (game.u?.uy ?? 0);
+        const loc = game.level?.at?.(mon.mx, mon.my);
+        if (dx * dx + dy * dy > 2 || !IS_POOL(loc?.typ)) return false;
+    }
+    return true;
+}
+
 function heroRollingBoulderMonsterCanBeSpotted(mon) {
     if (!mon) return false;
+    if (heroDetectsMonsterForRollingBoulder(mon)) return true;
     if (sensesTelepathically(mon)) return true;
     return !game.u?.blind && !mon.mundetected
         && (!mon.minvis || game.u?.seeInvisible) && cansee(mon.mx, mon.my);

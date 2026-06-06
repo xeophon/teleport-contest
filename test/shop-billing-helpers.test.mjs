@@ -22240,6 +22240,88 @@ test('hero rolling boulder out-of-range unblind telepathy does not name invisibl
     assert.deepEqual(rngValuesForCall(getRngLog(), 'rnd(20)'), [5, 5]);
 });
 
+test('hero rolling boulder monster detection names invisible lethal target', async () => {
+    const { boulder } = installHeroRollingBoulderTrapState({
+        trapX: 6,
+        trapY: 4,
+        heroX: 5,
+        heroY: 4,
+        start: { x: 4, y: 3 },
+        end: { x: 8, y: 3 },
+        boulderAt: 'start',
+    });
+    const goblin = dartTrapGoblin(3148209, {
+        mx: 6,
+        my: 3,
+        mhp: 5,
+        mhpmax: 5,
+        msleeping: 1,
+        minvis: 1,
+        perminvis: 1,
+        data: { name: 'goblin', mlet: 'o', mac: -5, msize: 'large' },
+    });
+    game.u.seeInvisible = false;
+    game.u.HDetect_monsters = 100;
+    game.level.monsters.push(goblin);
+    enableRngLog({ reset: true });
+    installCoreRngValues([4, 4]);
+    markHeroNeighborhoodVisible();
+    for (let x = 4; x <= 8; x++) markSquareVisible(x, 3);
+
+    await rhack('l');
+
+    assert.equal(game._pending_message,
+        'Click!  You trigger a rolling boulder trap!  The boulder hits the invisible goblin!  The invisible goblin is killed!');
+    assert.equal(game.level.monsters.includes(goblin), false);
+    assert.equal(goblin.dead, true);
+    assert.equal(game._vanquished_counts?.goblin, 1);
+    assert.equal(boulder.ox, 8);
+    assert.equal(boulder.oy, 3);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rnd(20)'), [5, 5]);
+});
+
+test('underwater hero rolling boulder monster detection ignores non-pool invisible target', async () => {
+    const { boulder } = installHeroRollingBoulderTrapState({
+        trapX: 6,
+        trapY: 4,
+        heroX: 5,
+        heroY: 4,
+        start: { x: 4, y: 3 },
+        end: { x: 8, y: 3 },
+        boulderAt: 'start',
+    });
+    const goblin = dartTrapGoblin(3148210, {
+        mx: 6,
+        my: 3,
+        mhp: 5,
+        mhpmax: 5,
+        msleeping: 1,
+        minvis: 1,
+        perminvis: 1,
+        data: { name: 'goblin', mlet: 'o', mac: -5, msize: 'large' },
+    });
+    game.u.seeInvisible = false;
+    game.u.HDetect_monsters = 100;
+    game.u.underwater = true;
+    game.u.uunderwater = true;
+    game.level.monsters.push(goblin);
+    enableRngLog({ reset: true });
+    installCoreRngValues([4, 4]);
+    markHeroNeighborhoodVisible();
+    for (let x = 4; x <= 8; x++) markSquareVisible(x, 3);
+
+    await rhack('l');
+
+    assert.equal(game._pending_message,
+        'Click!  You trigger a rolling boulder trap!  The boulder hits it!  It is destroyed!');
+    assert.equal(game.level.monsters.includes(goblin), false);
+    assert.equal(goblin.dead, true);
+    assert.equal(game._vanquished_counts?.goblin, 1);
+    assert.equal(boulder.ox, 8);
+    assert.equal(boulder.oy, 3);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rnd(20)'), [5, 5]);
+});
+
 test('hero rolling boulder nonverbose hit visible target says it', async () => {
     const { boulder } = installHeroRollingBoulderTrapState({
         trapX: 6,
