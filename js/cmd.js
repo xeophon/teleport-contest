@@ -632,14 +632,55 @@ function untrapBoxDisarmChance() {
     return chance;
 }
 
+function chestTrapLuckMessage(roll) {
+    if (roll >= 11) return 'explosive charge is a dud';
+    if (roll >= 9) return 'electric charge is grounded';
+    if (roll >= 7) return 'flame fizzles out';
+    if (roll >= 4) return 'poisoned needle misses';
+    return 'gas cloud blows away';
+}
+
+function chestTrapPayloadRoll(luck) {
+    return rn2(20) ? (luck >= 13 ? 0 : rn2(13 - luck)) : rn2(26);
+}
+
+function applyChestTrapPayload(box, { disarm = true } = {}) {
+    const messages = [disarm ? 'You set it off!' : 'You trigger a trap!'];
+    if (box) {
+        box.tknown = false;
+        box.otrapped = false;
+    }
+    const luck = Math.trunc(Number(game.u?.uluck || 0) + Number(game.u?.moreluck || 0));
+    if (luck > -13 && rn2(13 + luck) > 7) {
+        messages.push(`But luckily the ${chestTrapLuckMessage(rn2(13))}!`);
+        if (box) box.tknown = true;
+        return trapMessage(...messages);
+    }
+
+    const payload = chestTrapPayloadRoll(luck);
+    if (payload >= 3 && payload <= 5) {
+        if (heroHasFreeAction()) {
+            messages.push('You momentarily stiffen.');
+        } else {
+            messages.push('Suddenly you are frozen in place!');
+            const duration = d(5, 6);
+            game._helpless_time = Math.max(game._helpless_time || 0, duration);
+            game._wake_message = 'You can move again.';
+            game._multi_reason = 'frozen by a trap';
+            exerciseAttribute(A_DEX, false);
+        }
+    }
+    if (box) box.tknown = true;
+    return trapMessage(...messages);
+}
+
 function disarmUntrapBox(box, confused, force = false) {
     if (box?.otrapped) {
         const difficulty = 75 + Math.trunc(level_difficulty() / 2);
         if (!force && (confused || heroIsFumbling() || rnd(difficulty) > untrapBoxDisarmChance())) {
-            box.otrapped = false;
-            box.tknown = true;
+            const message = applyChestTrapPayload(box);
             exerciseAttribute(A_DEX, true);
-            return 'You set it off!';
+            return message;
         }
         box.otrapped = false;
         box.tknown = true;

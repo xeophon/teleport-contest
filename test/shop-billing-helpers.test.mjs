@@ -21418,7 +21418,7 @@ test('#untrap known unobserved trapped box still reports trap after failed searc
 });
 
 test('#untrap discovered box disarm failure consumes the one-shot trap', async () => {
-    setupUntrapDestinationWeb([], { rng: [0, 0, 74, 0] });
+    setupUntrapDestinationWeb([], { rng: [0, 0, 74, 0, 1, 3, 0, 0, 0, 0, 0, 0, 0] });
     game.level.traps = [];
     const box = shopFloorContainer(881005);
     Object.assign(box, { otrapped: true, tknown: false, dknown: false });
@@ -21441,15 +21441,28 @@ test('#untrap discovered box disarm failure consumes the one-shot trap', async (
     await rhack('y');
 
     assert.equal(game._command_mode, null);
-    assert.deepEqual(getRngLog(), ['rn2(30)=0', 'rn2(19)=0', 'rnd(75)=75', 'rn2(19)=0']);
-    assert.equal(game._pending_message, 'You set it off!');
+    assert.deepEqual(getRngLog(), [
+        'rn2(30)=0',
+        'rn2(19)=0',
+        'rnd(75)=75',
+        'rn2(13)=0',
+        'rn2(20)=1',
+        'rn2(13)=3',
+        'd(5,6)=5',
+        'rn2(2)=0',
+        'rn2(19)=0',
+    ]);
+    assert.equal(game._pending_message, 'You set it off!  Suddenly you are frozen in place!');
     assert.equal(box.otrapped, false);
     assert.equal(box.tknown, true);
+    assert.equal(game._helpless_time, 5);
+    assert.equal(game._wake_message, 'You can move again.');
+    assert.equal(game._multi_reason, 'frozen by a trap');
     assert.equal(game.context.move, 1);
 });
 
 test('#untrap known-box disarm failure happens directly without second prompt', async () => {
-    setupUntrapDestinationWeb([], { rng: [74, 0] });
+    setupUntrapDestinationWeb([], { rng: [74, 0, 1, 3, 0, 0, 0, 0, 0, 0] });
     game.level.traps = [];
     const box = shopFloorContainer(881013);
     Object.assign(box, {
@@ -21469,10 +21482,58 @@ test('#untrap known-box disarm failure happens directly without second prompt', 
     await rhack('y');
 
     assert.equal(game._command_mode, null);
-    assert.deepEqual(getRngLog(), ['rnd(75)=75', 'rn2(19)=0']);
-    assert.equal(game._pending_message, 'You set it off!');
+    assert.deepEqual(getRngLog(), [
+        'rnd(75)=75',
+        'rn2(13)=0',
+        'rn2(20)=1',
+        'rn2(13)=3',
+        'd(5,6)=5',
+        'rn2(2)=0',
+        'rn2(19)=0',
+    ]);
+    assert.equal(game._pending_message, 'You set it off!  Suddenly you are frozen in place!');
     assert.equal(box.otrapped, false);
     assert.equal(box.tknown, true);
+    assert.equal(game._helpless_time, 5);
+    assert.equal(game._wake_message, 'You can move again.');
+    assert.equal(game._multi_reason, 'frozen by a trap');
+    assert.equal(game.context.move, 1);
+});
+
+test('#untrap known-box paralysis payload respects free action', async () => {
+    setupUntrapDestinationWeb([], { rng: [74, 0, 1, 3, 0] });
+    game.u.freeAction = true;
+    game.level.traps = [];
+    const box = shopFloorContainer(881024);
+    Object.assign(box, {
+        otrapped: true,
+        tknown: true,
+        dknown: true,
+        cknown: false,
+    });
+    game.level.objects = [box];
+
+    await enterUntrapDirection();
+    await rhack('.');
+
+    assert.equal(game._command_mode, 'untrapBoxConfirm');
+    assert.equal(game._pending_message, 'Disarm this large box? [ynq] (q)');
+
+    await rhack('y');
+
+    assert.equal(game._command_mode, null);
+    assert.deepEqual(getRngLog(), [
+        'rnd(75)=75',
+        'rn2(13)=0',
+        'rn2(20)=1',
+        'rn2(13)=3',
+        'rn2(19)=0',
+    ]);
+    assert.equal(game._pending_message, 'You set it off!  You momentarily stiffen.');
+    assert.equal(box.otrapped, false);
+    assert.equal(box.tknown, true);
+    assert.equal(game._helpless_time || 0, 0);
+    assert.equal(game._multi_reason || '', '');
     assert.equal(game.context.move, 1);
 });
 

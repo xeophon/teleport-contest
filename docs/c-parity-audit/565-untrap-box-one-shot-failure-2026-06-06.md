@@ -27,4 +27,5 @@ This test drives the real extended command input, finds the trap, accepts the su
 
 - Box/chest trap detection observation state is covered separately in `566-untrap-box-observation-2026-06-06.md`.
 - Box/chest known-trap direct disarm flow is covered separately in `568-untrap-box-known-direct-disarm-2026-06-06.md`.
-- Full `chest_trap()` effects are still partial: explosion/destruction, damage, paralysis, sleep gas, poison gas, and shop billing consequences are not covered by this slice.
+- The `chest_trap()` paralysis payload is now covered for failed `#untrap` box/chest disarm, including the C luck gate, payload selector, helpless duration, free-action bypass, and DEX exercise ordering.
+- Full `chest_trap()` effects are still partial: explosion/destruction, damage, sleep gas, poison gas, and shop billing consequences are not covered by this slice.
