@@ -20342,6 +20342,215 @@ function installStableSokobanTrapState() {
     return state;
 }
 
+test('hero web movement catches hero', async () => {
+    installStableNonSokobanTrapState();
+    vision_reset();
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 20,
+        uhpmax: 20,
+    });
+    game.u.acurr.a[A_STR] = 18;
+    game.inventory = [];
+    const trap = { ttyp: WEB, tx: 6, ty: 5, tseen: false, madeby_u: false };
+    game.level.traps = [trap];
+    enableRngLog({ reset: true });
+
+    await rhack('l');
+
+    assert.deepEqual(getRngLog().map(rngCallName), []);
+    assert.equal(game._pending_message, 'You stumble into a spider web!');
+    assert.equal(game.u.ux, 6);
+    assert.equal(game.u.uy, 5);
+    assert.equal(game.u.utrap, 1);
+    assert.equal(game.u.utraptype, 'web');
+    assert.equal(trap.tseen, true);
+});
+
+test('known web can be escaped before entanglement', async () => {
+    installStableNonSokobanTrapState();
+    vision_reset();
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 20,
+        uhpmax: 20,
+    });
+    game.inventory = [];
+    const trap = { ttyp: WEB, tx: 6, ty: 5, tseen: true, madeby_u: false };
+    game.level.traps = [trap];
+    enableRngLog({ reset: true });
+    installCoreRngValues([0]);
+
+    await rhack('l');
+
+    assert.deepEqual(getRngLog().map(rngCallName), ['rn2(5)']);
+    assert.equal(game._pending_message, 'You escape a web.');
+    assert.equal(game.u.ux, 6);
+    assert.equal(game.u.uy, 5);
+    assert.equal(game.u.utrap || 0, 0);
+    assert.equal(game.u.utraptype || null, null);
+    assert.equal(trap.tseen, true);
+});
+
+test('flying hero still triggers hidden web trap', async () => {
+    installStableNonSokobanTrapState();
+    vision_reset();
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 20,
+        uhpmax: 20,
+        flying: true,
+    });
+    game.u.acurr.a[A_STR] = 18;
+    game.inventory = [];
+    const trap = { ttyp: WEB, tx: 6, ty: 5, tseen: false, madeby_u: false };
+    game.level.traps = [trap];
+    enableRngLog({ reset: true });
+
+    await rhack('l');
+
+    assert.deepEqual(getRngLog().map(rngCallName), []);
+    assert.equal(game._pending_message, 'You fly into a spider web!');
+    assert.equal(game.u.ux, 6);
+    assert.equal(game.u.uy, 5);
+    assert.equal(game.u.utrap, 1);
+    assert.equal(game.u.utraptype, 'web');
+    assert.equal(trap.tseen, true);
+});
+
+test('mounted hero web movement remaps trapped steed into hero web state', async () => {
+    installStableNonSokobanTrapState();
+    vision_reset();
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 20,
+        uhpmax: 20,
+    });
+    game.u.acurr.a[A_STR] = 10;
+    const pony = mountBearTrapPony(10);
+    game.inventory = [];
+    const trap = { ttyp: WEB, tx: 6, ty: 5, tseen: false, madeby_u: false };
+    game.level.traps = [trap];
+    enableRngLog({ reset: true });
+    installCoreRngValues([1]);
+
+    await rhack('l');
+
+    assert.deepEqual(getRngLog().map(rngCallName), ['rn2(4)']);
+    assert.equal(game._pending_message, 'You lead poor pony into a spider web!  The saddled pony is caught in a spider web.');
+    assert.equal(game.u.uhp, 20);
+    assert.equal(pony.mhp, 10);
+    assert.equal(pony.mx, 6);
+    assert.equal(pony.my, 5);
+    assert.equal(pony.mtrapped || 0, 0);
+    assert.equal(!!(pony.mtrapseen & (1 << (WEB - 1))), true);
+    assert.equal(game.u.usteed, pony);
+    assert.equal(game.u.utrap, 3);
+    assert.equal(game.u.utraptype, 'web');
+    assert.equal(trap.tseen, true);
+});
+
+test('mounted strong steed web trap uses short nonzero web time', async () => {
+    installStableNonSokobanTrapState();
+    vision_reset();
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 20,
+        uhpmax: 20,
+    });
+    game.u.acurr.a[A_STR] = 10;
+    const pony = mountBearTrapPony(10, { data: { strong: true } });
+    game.inventory = [];
+    const trap = { ttyp: WEB, tx: 6, ty: 5, tseen: false, madeby_u: false };
+    game.level.traps = [trap];
+    enableRngLog({ reset: true });
+    installCoreRngValues([1]);
+
+    await rhack('l');
+
+    assert.deepEqual(getRngLog().map(rngCallName), ['rnd(2)']);
+    assert.equal(game._pending_message, 'You lead poor pony into a spider web!  The saddled pony is caught in a spider web.');
+    assert.equal(game.u.utrap, 2);
+    assert.equal(game.u.utraptype, 'web');
+    assert.equal(pony.mtrapped || 0, 0);
+    assert.equal(game.u.usteed, pony);
+    assert.equal(trap.tseen, true);
+});
+
+test('dismount object list consumes pending web trap', async () => {
+    installStableNonSokobanTrapState();
+    vision_reset();
+    Object.assign(game.u, {
+        ux: 6,
+        uy: 5,
+        uhp: 20,
+        uhpmax: 20,
+    });
+    game.u.acurr.a[A_STR] = 10;
+    const pony = mountBearTrapPony(10);
+    game.inventory = [];
+    const trap = { ttyp: WEB, tx: 6, ty: 5, tseen: false, madeby_u: false };
+    game.level.traps = [trap];
+    game._command_mode = 'dismountObjectList';
+    game._overlay_lines = [[0, 0, 'test overlay']];
+    game._pending_web_trap = trap;
+    game._pending_time_passed = 0;
+    game.context = {};
+    enableRngLog({ reset: true });
+    installCoreRngValues([1]);
+
+    await rhack(' ');
+
+    assert.deepEqual(getRngLog().map(rngCallName), ['rn2(4)']);
+    assert.equal(game._pending_web_trap || null, null);
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game._process_command_time_now, 1);
+    assert.equal(game._pending_message, 'You lead poor pony into a spider web!  The saddled pony is caught in a spider web.');
+    assert.equal(pony.mx, 6);
+    assert.equal(pony.my, 5);
+    assert.equal(game.u.usteed, pony);
+    assert.equal(game.u.utrap, 3);
+    assert.equal(game.u.utraptype, 'web');
+});
+
+test('object list web trap waits until more is dismissed', async () => {
+    installStableNonSokobanTrapState();
+    vision_reset();
+    Object.assign(game.u, {
+        ux: 6,
+        uy: 5,
+        uhp: 20,
+        uhpmax: 20,
+    });
+    game.u.acurr.a[A_STR] = 18;
+    game.inventory = [];
+    const trap = { ttyp: WEB, tx: 6, ty: 5, tseen: false, madeby_u: false };
+    game.level.traps = [trap];
+    game._command_mode = 'objectListMore';
+    game._overlay_lines = [
+        [0, 0, 'a'], [1, 0, 'b'], [2, 0, 'c'], [3, 0, 'd'], [4, 0, 'e'],
+    ];
+    game._pending_web_trap = trap;
+    game.context = {};
+    enableRngLog({ reset: true });
+
+    await rhack(' ');
+
+    assert.deepEqual(getRngLog().map(rngCallName), []);
+    assert.equal(game._pending_web_trap || null, null);
+    assert.equal(game._pending_message, 'You stumble into a spider web!');
+    assert.equal(game._message_more, 1);
+    assert.equal(game.u.utrap, 1);
+    assert.equal(game.u.utraptype, 'web');
+    assert.equal(trap.tseen, true);
+});
+
 test('hero pit movement traps and damages hero', async () => {
     installStableNonSokobanTrapState();
     vision_reset();

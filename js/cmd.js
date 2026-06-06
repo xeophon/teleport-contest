@@ -43251,8 +43251,8 @@ function scheduleSitLevelChange(targetLevel, options = {}) {
     return true;
 }
 
-function webTrapTimeFromStrength() {
-    const str = game.u?.acurr?.a?.[A_STR] ?? 10;
+function webTrapTimeFromStrength(strength = game.u?.acurr?.a?.[A_STR] ?? 10) {
+    const str = strength;
     if (str <= 3) return rn1(6, 6);
     if (str < 6) return rn1(6, 4);
     if (str < 9) return rn1(4, 4);
@@ -43284,6 +43284,159 @@ function sitWebTrapMessage(trap, prefix) {
         return `${prefix}  You tear through ${trap.madeby_u ? 'your web' : 'a web'}!`;
     }
     return `${prefix}  You are caught by ${sitTrapArticleName(trap)}!`;
+}
+
+function webTrapName(trap) {
+    return `${trap?.madeby_u ? 'your' : 'a'} spider web`;
+}
+
+function webTrapTearName(trap) {
+    return trap?.madeby_u ? 'your web' : 'a web';
+}
+
+function setHeroWebTrapTime(tim) {
+    if (!game.u) return;
+    game.u.utrap = Math.max(0, tim);
+    game.u.utraptype = tim > 0 ? 'web' : null;
+}
+
+function clearHeroWebTrapState() {
+    if (!game.u) return;
+    game.u.utrap = 0;
+    game.u.utraptype = null;
+}
+
+function movementWebLocomotion() {
+    if (game.u?.flying) return 'fly';
+    if (game.u?.levitating) return 'float';
+    return 'stumble';
+}
+
+function steedWebLeadName(steed) {
+    return steedPitName(steed, { poor: true });
+}
+
+function steedWebmakerData(data) {
+    const name = String(data?.name || '').toLowerCase();
+    return !!(data?.webmaker || WEBMAKER_FORM_NAMES.has(name));
+}
+
+function steedWebDestructionVerb(data) {
+    const name = String(data?.name || '').toLowerCase();
+    if (data?.flaming || WEB_FLAMING_FORM_NAMES.has(name)) return 'burns';
+    if (data?.acidic || WEB_ACIDIC_FORM_NAMES.has(name)) return 'dissolves';
+    return '';
+}
+
+function steedFlowsThroughWeb(data) {
+    const name = String(data?.name || '').toLowerCase();
+    return !!(data?.amorphous || data?.whirly || data?.unsolid || data?.noncorporeal
+        || WEB_WHIRLY_FORM_NAMES.has(name) || name === 'gelatinous cube');
+}
+
+const WEB_TEARING_STEED_NAMES = new Set([
+    'titanothere',
+    'baluchitherium',
+    'purple worm',
+    'jabberwock',
+    'iron golem',
+    'balrog',
+    'kraken',
+    'mastodon',
+    'orion',
+    'norn',
+    'cyclops',
+    'lord surtur',
+]);
+
+function steedIsAdultDragon(data) {
+    const name = String(data?.name || '').toLowerCase();
+    const rawMlet = String(data?.mlet || data?.glyph || '');
+    const mlet = rawMlet.toLowerCase();
+    return (rawMlet === 'D' || mlet === 'dragon')
+        && !name.startsWith('baby ') && name.endsWith('dragon');
+}
+
+function steedTearsThroughWeb(steed) {
+    const data = steed?.data || {};
+    const name = String(data.name || '').toLowerCase();
+    const rawMlet = String(data.mlet || data.glyph || '');
+    const mlet = rawMlet.toLowerCase();
+    const giantClass = data.giant || rawMlet === 'H' || mlet === 'giant'
+        || name.endsWith(' giant') || ['ettin', 'titan', 'minotaur'].includes(name);
+    const nastyDragon = (rawMlet === 'D' || mlet === 'dragon')
+        && (data.nasty || data.extraNasty || data.extra_nasty || steedIsAdultDragon(data));
+    const longWorm = Array.isArray(steed?.wormSegments) && steed.wormSegments.length > 5;
+    return !!(giantClass || nastyDragon || longWorm || WEB_TEARING_STEED_NAMES.has(name));
+}
+
+function markSteedKnowsTrap(steed, trap) {
+    if (!steed || !trap?.ttyp) return;
+    steed.mtrapseen = (steed.mtrapseen || 0) | (1 << (trap.ttyp - 1));
+}
+
+function mountedHeroWebTrapSteedResult(trap, messages) {
+    const steed = game.u?.usteed;
+    if (!steed) return false;
+    steed.mx = game.u?.ux ?? steed.mx;
+    steed.my = game.u?.uy ?? steed.my;
+    markSteedKnowsTrap(steed, trap);
+    const data = steed.data || {};
+    const webName = webTrapName(trap);
+    if (steedWebmakerData(data)) return false;
+    const destroyVerb = steedWebDestructionVerb(data);
+    if (destroyVerb) {
+        messages.push(`${steedTrapProjectileName(steed)} ${destroyVerb} ${webName}!`);
+        deleteTrap(trap);
+        return false;
+    }
+    if (steedFlowsThroughWeb(data)) {
+        messages.push(`${steedTrapProjectileName(steed)} flows through ${webName}.`);
+        return false;
+    }
+    if (steedTearsThroughWeb(steed)) {
+        messages.push(`${steedTrapProjectileName(steed)} tears through ${webName}!`);
+        deleteTrap(trap);
+        return false;
+    }
+    messages.push(`${steedTrapProjectileName(steed)} is caught in ${webName}.`);
+    steed.mtrapped = 0;
+    const strength = data.strong || steed.strong ? 17 : game.u?.acurr?.a?.[A_STR] ?? 10;
+    setHeroWebTrapTime(webTrapTimeFromStrength(strength));
+    return true;
+}
+
+function movementWebTrapResult(trap) {
+    const alreadySeen = !!trap?.tseen;
+    if (alreadySeen && sitTrapEscapeAllowed(trap) && !rn2(5))
+        return { message: movementTrapEscapeMessage(trap), more: false };
+    if (trap) trap.tseen = true;
+    const webName = webTrapName(trap);
+    const destroyVerb = heroWebDestructionVerb();
+    if (destroyVerb) {
+        deleteTrap(trap);
+        return { message: `You ${destroyVerb} ${webName}!` };
+    }
+    if (heroFlowsThroughWeb()) return { message: `You flow through ${webName}.` };
+    if (heroWebmakerForm())
+        return { message: trap?.madeby_u ? 'You take a walk on your web.' : 'There is a spider web here.' };
+
+    const messages = [game.u?.usteed
+        ? `You lead ${steedWebLeadName(game.u.usteed)} into ${webName}!`
+        : `You ${movementWebLocomotion()} into ${webName}!`];
+    setHeroWebTrapTime(1);
+    if (game.u?.usteed) {
+        const caught = mountedHeroWebTrapSteedResult(trap, messages);
+        if (!caught) clearHeroWebTrapState();
+        return { message: trapMessage(...messages) };
+    }
+    const tim = webTrapTimeFromStrength();
+    setHeroWebTrapTime(tim);
+    if (tim <= 0) {
+        deleteTrap(trap);
+        messages.push(`You tear through ${webTrapTearName(trap)}!`);
+    }
+    return { message: trapMessage(...messages) };
 }
 
 function sitFallTargetLevel(trap) {
@@ -43556,6 +43709,7 @@ function movementTrapAlreadySeen(trap) {
 }
 
 function movementTrapEscapeMessage(trap) {
+    if (trap?.ttyp === WEB) return `You escape ${trap.madeby_u ? 'your' : 'a'} web.`;
     return `You escape ${sitTrapArticleName(trap)}.`;
 }
 
@@ -47840,6 +47994,7 @@ async function moveHero(dx, dy) {
         if (trapHere?.ttyp === PIT || trapHere?.ttyp === SPIKED_PIT) game._pending_pit_trap = trapHere;
         if (trapHere?.ttyp === POLY_TRAP) game._pending_poly_trap = trapHere;
         if (trapHere?.ttyp === BEAR_TRAP) game._pending_bear_trap = trapHere;
+        if (trapHere?.ttyp === WEB) game._pending_web_trap = trapHere;
         return;
     }
     if (trapHere?.ttyp === SLP_GAS_TRAP && objectsHere.length > 1) game._pending_sleep_gas_trap = trapHere;
@@ -47849,6 +48004,7 @@ async function moveHero(dx, dy) {
     if ((trapHere?.ttyp === PIT || trapHere?.ttyp === SPIKED_PIT) && objectsHere.length > 1) game._pending_pit_trap = trapHere;
     if (trapHere?.ttyp === POLY_TRAP && objectsHere.length > 1) game._pending_poly_trap = trapHere;
     if (trapHere?.ttyp === BEAR_TRAP && objectsHere.length > 1) game._pending_bear_trap = trapHere;
+    if (trapHere?.ttyp === WEB && objectsHere.length > 1) game._pending_web_trap = trapHere;
     const goldHere = objectsHere.find(obj => obj.otyp === GOLD_PIECE || obj.glyph === '$');
     if (game._autopickup && goldHere) {
         const pickup = pickUpFloorGoldObject(goldHere);
@@ -47970,6 +48126,7 @@ async function moveHero(dx, dy) {
         if (trapHere?.ttyp === PIT || trapHere?.ttyp === SPIKED_PIT) game._pending_pit_trap = trapHere;
         if (trapHere?.ttyp === POLY_TRAP) game._pending_poly_trap = trapHere;
         if (trapHere?.ttyp === BEAR_TRAP) game._pending_bear_trap = trapHere;
+        if (trapHere?.ttyp === WEB) game._pending_web_trap = trapHere;
         return;
     }
     if (objectsHere.length > 1 && skipObjectList) {
@@ -47989,6 +48146,13 @@ async function moveHero(dx, dy) {
         const result = movementSleepGasTrapResult(trapHere);
         result.message = [pileMessage, result.message].filter(Boolean).join('  ');
         if (result.message) await setMessage(result.message, !!result.more || !!(pileMessage && result.message));
+        return;
+    }
+    if (trapHere?.ttyp === WEB) {
+        const result = movementWebTrapResult(trapHere);
+        result.message = [pileMessage, result.message].filter(Boolean).join('  ');
+        if (result.message)
+            await finishHeroDartTrapResult(result, { more: !!(pileMessage && result.message) });
         return;
     }
     if (trapHere?.ttyp === BEAR_TRAP) {
@@ -48360,6 +48524,13 @@ export async function rhack(_cmd) {
                 if (result.message) await setMessage(result.message, !!result.more);
                 return;
             }
+            if (game._pending_web_trap) {
+                const result = movementWebTrapResult(game._pending_web_trap);
+                game._pending_web_trap = null;
+                if (result.message)
+                    await finishHeroDartTrapResult(result, { more: objectListRows > 4 || !!result.more });
+                return;
+            }
             if (game._pending_arrow_trap) {
                 const trap = game._pending_arrow_trap;
                 const alreadySeen = !!trap.tseen;
@@ -48427,6 +48598,14 @@ export async function rhack(_cmd) {
                 if (!game._pending_time_passed) game.context.move = 1;
                 game._process_command_time_now = 1;
                 if (result.message) await setMessage(result.message, !!result.more);
+                return;
+            }
+            if (game._pending_web_trap) {
+                const result = movementWebTrapResult(game._pending_web_trap);
+                game._pending_web_trap = null;
+                if (!game._pending_time_passed) game.context.move = 1;
+                game._process_command_time_now = 1;
+                if (result.message) await finishHeroDartTrapResult(result);
                 return;
             }
             if (game._pending_landmine_trap) {
@@ -49927,6 +50106,8 @@ export async function rhack(_cmd) {
                 }
                 rows.push([objects.length + 1, 41, '--More--']);
                 setOverlay(rows, objects.length + 2);
+                const trap = (game.level?.traps || []).find(item => item.tx === x && item.ty === y);
+                if (trap?.ttyp === WEB) game._pending_web_trap = trap;
                 game._pending_message = 'dismount-object-list';
                 game._message_more = 1;
                 game._keep_pending_message = 1;
