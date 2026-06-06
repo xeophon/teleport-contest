@@ -47036,18 +47036,64 @@ function placeHeroRollingBoulderAtRest(boulder, x, y) {
     game.level.objects.push(boulder);
 }
 
-function heroRollingBoulderPathCrossesHero(start, end) {
-    if (!start || !end) return false;
+function heroRollingBoulderBreakClosedDoorAt(x, y, messages, remainingDistance) {
+    const loc = game.level?.at?.(x, y);
+    const mask = loc?.doormask ?? loc?.flags ?? 0;
+    if (loc?.typ !== DOOR || !(mask & (D_LOCKED | D_CLOSED))) return false;
+    if (!game.u?.blind && cansee(x, y)) messages.push('The boulder crashes through a door.');
+    loc.doormask = D_BROKEN;
+    loc.flags = D_BROKEN;
+    if (remainingDistance > 0) {
+        vision_reset();
+        vision_recalc(0);
+    }
+    newsym(x, y);
+    return true;
+}
+
+function heroRollingBoulderHitIronBars(messages) {
+    rn2(20);  // C passes !rn2(20) to hits_bars(); boulders hit bars either way.
+    rn2(100); // hit_bars() reaches breaktest()/obj_resists(); boulders survive.
+    if (!heroIsDeaf()) messages.push('Whang!');
+}
+
+function heroRollingBoulderPathResult(start, end) {
+    const result = {
+        finalX: end?.x,
+        finalY: end?.y,
+        crossedHero: false,
+        messages: [],
+    };
+    if (!start || !end) return result;
     const dx = Math.sign(end.x - start.x);
     const dy = Math.sign(end.y - start.y);
     let x = start.x;
     let y = start.y;
     for (let dist = Math.max(Math.abs(end.x - start.x), Math.abs(end.y - start.y)); dist > 0; dist--) {
+        if (!isok(x + dx, y + dy)) {
+            result.finalX = x;
+            result.finalY = y;
+            break;
+        }
         x += dx;
         y += dy;
-        if (x === game.u?.ux && y === game.u?.uy) return true;
+        if (x === game.u?.ux && y === game.u?.uy) result.crossedHero = true;
+        heroRollingBoulderBreakClosedDoorAt(x, y, result.messages, dist - 1);
+        const nextLoc = dist > 1 && isok(x + dx, y + dy) ? game.level?.at?.(x + dx, y + dy) : null;
+        if (nextLoc?.typ === IRONBARS) {
+            result.finalX = x;
+            result.finalY = y;
+            heroRollingBoulderHitIronBars(result.messages);
+            break;
+        }
+        if (nextLoc && (IS_STWALL(nextLoc.typ) || IS_TREE(nextLoc.typ))) {
+            result.finalX = x;
+            result.finalY = y;
+            if (!heroIsDeaf()) result.messages.push('Thump!');
+            break;
+        }
     }
-    return false;
+    return result;
 }
 
 function heroRollingBoulderTrapResult(trap, prefix = '') {
@@ -47057,16 +47103,19 @@ function heroRollingBoulderTrapResult(trap, prefix = '') {
     const { boulder, start, end } = findRollingBoulderLaunchObject(trap);
     let released = false;
     let crossedHero = false;
+    const motionMessages = [];
     if (boulder && end) {
         const launched = splitHeroRollingBoulderLaunchObject(boulder);
         if (wasKnown) launched.otrapped = 1;
-        placeHeroRollingBoulderAtRest(launched, end.x, end.y);
+        const path = heroRollingBoulderPathResult(start, end);
+        motionMessages.push(...path.messages);
+        placeHeroRollingBoulderAtRest(launched, path.finalX, path.finalY);
         released = true;
-        crossedHero = heroRollingBoulderPathCrossesHero(start, end);
+        crossedHero = path.crossedHero;
         vision_reset();
         vision_recalc(0);
         newsym(start.x, start.y);
-        newsym(end.x, end.y);
+        newsym(path.finalX, path.finalY);
     }
     if (crossedHero) {
         rnd(20);
@@ -47078,9 +47127,10 @@ function heroRollingBoulderTrapResult(trap, prefix = '') {
             ? ''
         : wasKnown ? 'No boulder was released.' : 'Fortunately for you, no boulder was released.';
     const message = `${prefix ? `${prefix}  ` : ''}${sound}You trigger a rolling boulder trap!`;
+    const suffix = [releaseMessage, ...motionMessages].filter(Boolean).join('  ');
     return {
         released,
-        message: releaseMessage ? `${message}  ${releaseMessage}` : message,
+        message: suffix ? `${message}  ${suffix}` : message,
     };
 }
 
