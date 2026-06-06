@@ -430,6 +430,116 @@ function untrapWebDifficultMessage(trap, underHero) {
     return `${which} spider web is difficult to remove.`;
 }
 
+function untrapBoxObjectsAt(x, y) {
+    return (game.level?.objects || []).filter(obj =>
+        isForceableBoxObject(obj) && obj.ox === x && obj.oy === y);
+}
+
+function untrapContainerCountPhrase(count) {
+    return count === 1 ? 'is a container' : 'are containers';
+}
+
+function untrapWebContainerPrompt(trap, count) {
+    const trapName = trap?.madeby_u ? 'your spider web' : 'a spider web';
+    return `There ${untrapContainerCountPhrase(count)} and ${trapName} here.  Remove ${trap?.madeby_u ? 'your' : 'the'} spider web? [ynq] (q)`;
+}
+
+function untrapBoxObjectName(box) {
+    const name = forceBoxSimpleName(box);
+    return box?.lknown && (box.locked || box.olocked) ? `locked ${name}` : name;
+}
+
+function untrapBoxArticleName(box) {
+    const name = untrapBoxObjectName(box);
+    return `${/^[aeiou]/i.test(name) ? 'an' : 'a'} ${name}`;
+}
+
+function untrapBoxPrompt(box) {
+    if (box?.tknown && box?.dknown)
+        return `Disarm this ${untrapBoxObjectName(box)}? [ynq] (q)`;
+    return `There is ${untrapBoxArticleName(box)} here.  Check it for traps? [ynq] (q)`;
+}
+
+async function beginUntrapBoxPrompt(boxes, { trapSkipped = false } = {}) {
+    const targets = boxes.filter(Boolean);
+    if (!targets.length) return false;
+    game._untrap_box_state = { boxes: targets, index: 0, trapSkipped };
+    game._command_mode = 'untrapBoxConfirm';
+    await setMessage(untrapBoxPrompt(targets[0]));
+    return true;
+}
+
+function untrapBoxDetectionSucceeds(box, confused) {
+    if (box?.otrapped) {
+        const denom = Math.max(1, MAXULEV + 1 - (game.u?.ulevel || 1));
+        return !confused && rn2(denom) < 10;
+    }
+    if (box?.tknown) return true;
+    return confused && !rn2(3);
+}
+
+function untrapBoxDisarmChance() {
+    let chance = (game.u?.acurr?.a?.[A_DEX] ?? 10) + (game.u?.ulevel || 1);
+    if (heroRoleName() === 'Rogue') chance *= 2;
+    return chance;
+}
+
+function disarmUntrapBox(box, confused) {
+    if (box?.otrapped) {
+        const difficulty = 75 + Math.trunc(level_difficulty() / 2);
+        if (confused || heroIsFumbling() || rnd(difficulty) > untrapBoxDisarmChance()) {
+            exerciseAttribute(A_DEX, true);
+            return 'You set it off!';
+        }
+        box.otrapped = false;
+        box.tknown = true;
+        exerciseAttribute(A_DEX, true);
+        if (game.u) game.u.uexp = (game.u.uexp || 0) + 8;
+        return 'You disarm it!';
+    }
+    if (box) box.tknown = false;
+    return `That ${untrapBoxObjectName(box)} was not trapped.`;
+}
+
+async function checkUntrapBox(box) {
+    const confused = heroIsConfused() || heroIsHallucinating();
+    if (untrapBoxDetectionSucceeds(box, confused)) {
+        const knownTrap = box?.tknown && box?.dknown;
+        if (box) {
+            box.tknown = true;
+            box.cknown = true;
+        }
+        if (!confused) exerciseAttribute(A_WIS, true);
+        await setMessage(knownTrap
+            ? `There's a trap on the ${untrapBoxObjectName(box)}.  Disarm it? [ynq] (q)`
+            : `You find a trap on the ${untrapBoxObjectName(box)}!  Disarm it? [ynq] (q)`);
+        game._untrap_box_disarm_state = { box, confused };
+        game._command_mode = 'untrapBoxDisarmConfirm';
+        return;
+    }
+    await setMessage(`You find no traps on the ${untrapBoxObjectName(box)}.`);
+    game.context.move = 1;
+}
+
+async function declineCurrentUntrapBox() {
+    const state = game._untrap_box_state;
+    if (!state) {
+        game._command_mode = null;
+        return;
+    }
+    state.index = (state.index || 0) + 1;
+    const next = state.boxes[state.index];
+    if (next) {
+        await setMessage(untrapBoxPrompt(next));
+        return;
+    }
+    game._untrap_box_state = null;
+    game._command_mode = null;
+    await setMessage(state.trapSkipped
+        ? 'There are no other chests or boxes here.'
+        : 'There are no other chests or boxes here.  You know of no traps there.', !state.trapSkipped);
+}
+
 function forceHeroIntoWebTrapMessage(trap) {
     if (trap) trap.tseen = true;
     const webName = webTrapName(trap);
@@ -62129,6 +62239,74 @@ export async function rhack(_cmd) {
         return;
     }
 
+    if (game._command_mode === 'untrapWebContainerConfirm') {
+        const pending = game._untrap_web_container_state;
+        if (ch === 'y') {
+            game._untrap_web_container_state = null;
+            game._command_mode = null;
+            await handleUntrapWebTrap(pending?.trap, pending?.dir || { dx: 0, dy: 0 });
+            return;
+        }
+        if (ch === 'n') {
+            game._untrap_web_container_state = null;
+            if (!await beginUntrapBoxPrompt(pending?.boxes || [], { trapSkipped: true }))
+                game._command_mode = null;
+            return;
+        }
+        if (ch === 'q' || ch === '\x1b' || ch === ' ' || ch === '\r' || ch === '\n') {
+            game._untrap_web_container_state = null;
+            game._command_mode = null;
+            game._keep_pending_message = 1;
+        }
+        return;
+    }
+
+    if (game._command_mode === 'untrapBoxConfirm') {
+        const state = game._untrap_box_state;
+        const box = state?.boxes?.[state.index || 0];
+        if (ch === 'y') {
+            game._untrap_box_state = null;
+            game._command_mode = null;
+            if (box?.tknown && box?.dknown) {
+                await setMessage(disarmUntrapBox(box, heroIsConfused() || heroIsHallucinating()));
+                game.context.move = 1;
+            } else {
+                await checkUntrapBox(box);
+            }
+            return;
+        }
+        if (ch === 'n') {
+            await declineCurrentUntrapBox();
+            return;
+        }
+        if (ch === 'q' || ch === '\x1b' || ch === ' ' || ch === '\r' || ch === '\n') {
+            game._untrap_box_state = null;
+            game._command_mode = null;
+            game._keep_pending_message = 1;
+        }
+        return;
+    }
+
+    if (game._command_mode === 'untrapBoxDisarmConfirm') {
+        const pending = game._untrap_box_disarm_state;
+        if (ch === 'y') {
+            game._untrap_box_disarm_state = null;
+            game._command_mode = null;
+            await setMessage(disarmUntrapBox(pending?.box, !!pending?.confused));
+            game.context.move = 1;
+            return;
+        }
+        if (ch === 'n' || ch === 'q' || ch === '\x1b' || ch === ' ' || ch === '\r' || ch === '\n') {
+            game._untrap_box_disarm_state = null;
+            game._command_mode = null;
+            game._keep_pending_message = 1;
+            game.context.move = 1;
+            return;
+        }
+        game._keep_pending_message = 1;
+        return;
+    }
+
     if (game._command_mode === 'untrapDirection') {
         game._command_mode = null;
         if (ch === '\x1b') {
@@ -62145,6 +62323,13 @@ export async function rhack(_cmd) {
             }
             const webTrap = (game.level?.traps || []).find(candidate =>
                 candidate.tx === x && candidate.ty === y && candidate.tseen && candidate.ttyp === WEB);
+            const boxes = (!dir.dx && !dir.dy) ? untrapBoxObjectsAt(x, y) : [];
+            if (webTrap && boxes.length) {
+                game._untrap_web_container_state = { trap: webTrap, dir, boxes };
+                await setMessage(untrapWebContainerPrompt(webTrap, boxes.length));
+                game._command_mode = 'untrapWebContainerConfirm';
+                return;
+            }
             if (webTrap && await handleUntrapWebTrap(webTrap, dir))
                 return;
             const trap = (game.level?.traps || []).find(candidate =>
@@ -62155,8 +62340,10 @@ export async function rhack(_cmd) {
                 game._command_mode = 'untrapSqueakyTool';
                 return;
             }
+            if (boxes.length && await beginUntrapBoxPrompt(boxes))
+                return;
         }
-        await setMessage('And just how do you expect to do that?');
+        await setMessage('You know of no traps there.');
         return;
     }
 

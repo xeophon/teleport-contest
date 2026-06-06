@@ -26,12 +26,12 @@ The implementation uses deterministic command-level tests and does not use repla
 - `#untrap Ranger web odds get C role bonus`
 - `#untrap Rogue web odds consume level check before final roll`
 - `#untrap Rogue quest artifact further improves web odds`
+- `#untrap Rogue artifact web odds still clamp after level check`
 
 These tests drive the real extended command input, assert exact RNG call order, final chance values, web removal, message text, and turn consumption.
 
 ## Remaining Work
 
-- Current-square web plus container prompt parity remains open, including `q` no-time cancellation and `n` trap-skip behavior.
-- Current-square container-only `#untrap` still does not route to C's box/chest untrap path.
 - Exact reach-floor and tight diagonal web-untrap gates remain open.
 - Boulder handling still needs the C `Passes_walls` exception.
+- Current-square web plus box/chest target selection is covered separately in `562-untrap-current-square-containers-2026-06-06.md`.

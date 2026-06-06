@@ -20983,6 +20983,8 @@ function setupUntrapDestinationWeb(inventory = [], {
     questart = false,
     strength = 10,
     twoweapon = false,
+    webX = 6,
+    webY = 5,
 } = {}) {
     installStableNonSokobanTrapState();
     vision_reset();
@@ -21002,7 +21004,7 @@ function setupUntrapDestinationWeb(inventory = [], {
     game.u.acurr.a[A_STR] = strength;
     game.inventory = inventory;
     game._twoweapon = twoweapon;
-    const web = { ttyp: WEB, tx: 6, ty: 5, tseen: true, madeby_u: madeby };
+    const web = { ttyp: WEB, tx: webX, ty: webY, tseen: true, madeby_u: madeby };
     game.level.traps = [web];
     enableRngLog({ reset: true });
     installCoreRngValues(rng);
@@ -21026,6 +21028,110 @@ function trappedWebGoblin(extra = {}) {
         ...extra,
     };
 }
+
+test('#untrap current-square web and box prompts before removing web', async () => {
+    const web = setupUntrapDestinationWeb([], { webX: 5, webY: 5, rng: [0] });
+    const box = shopFloorContainer(881000);
+    game.level.objects = [box];
+
+    await enterUntrapDirection();
+    await rhack('.');
+
+    assert.equal(game._command_mode, 'untrapWebContainerConfirm');
+    assert.equal(game._pending_message, 'There is a container and a spider web here.  Remove the spider web? [ynq] (q)');
+    assert.deepEqual(getRngLog(), []);
+    assert.equal(game.level.traps.includes(web), true);
+    assert.equal(game.level.objects.includes(box), true);
+    assert.equal(game.context.move || 0, 0);
+});
+
+test('#untrap current-square web and box q cancels without time', async () => {
+    const web = setupUntrapDestinationWeb([], { webX: 5, webY: 5, rng: [0] });
+    const box = shopFloorContainer(881001);
+    game.level.objects = [box];
+
+    await enterUntrapDirection();
+    await rhack('.');
+    await rhack('q');
+
+    assert.equal(game._command_mode, null);
+    assert.deepEqual(getRngLog(), []);
+    assert.equal(game.level.traps.includes(web), true);
+    assert.equal(game.level.objects.includes(box), true);
+    assert.equal(game.context.move || 0, 0);
+});
+
+test('#untrap current-square web and box y removes web this move', async () => {
+    const web = setupUntrapDestinationWeb([], { webX: 5, webY: 5, rng: [0] });
+    game.level.objects = [shopFloorContainer(881002)];
+
+    await enterUntrapDirection();
+    await rhack('.');
+    await rhack('y');
+
+    assert.equal(game._command_mode, null);
+    assert.deepEqual(getRngLog(), ['rn2(7)=0']);
+    assert.equal(game._pending_message, 'You succeed in removing the web.');
+    assert.equal(game.level.traps.includes(web), false);
+    assert.equal(game.context.move, 1);
+});
+
+test('#untrap current-square web and box n skips web and reaches box prompt', async () => {
+    const web = setupUntrapDestinationWeb([], { webX: 5, webY: 5, rng: [0] });
+    const box = shopFloorContainer(881003);
+    game.level.objects = [box];
+
+    await enterUntrapDirection();
+    await rhack('.');
+    await rhack('n');
+
+    assert.equal(game._command_mode, 'untrapBoxConfirm');
+    assert.equal(game._pending_message, 'There is a large box here.  Check it for traps? [ynq] (q)');
+    assert.deepEqual(getRngLog(), []);
+    assert.equal(game.level.traps.includes(web), true);
+    assert.equal(game.context.move || 0, 0);
+
+    await rhack('n');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game._pending_message, 'There are no other chests or boxes here.');
+    assert.equal(game.context.move || 0, 0);
+});
+
+test('#untrap current-square box only checks box for traps', async () => {
+    setupUntrapDestinationWeb([], { rng: [0] });
+    game.level.traps = [];
+    const box = shopFloorContainer(881004);
+    game.level.objects = [box];
+
+    await enterUntrapDirection();
+    await rhack('.');
+
+    assert.equal(game._command_mode, 'untrapBoxConfirm');
+    assert.equal(game._pending_message, 'There is a large box here.  Check it for traps? [ynq] (q)');
+    assert.equal(game.context.move || 0, 0);
+
+    await rhack('y');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game._pending_message, 'You find no traps on the large box.');
+    assert.deepEqual(getRngLog(), []);
+    assert.equal(game.context.move, 1);
+});
+
+test('#untrap current-square web ignores ice boxes for web container prompt', async () => {
+    const web = setupUntrapDestinationWeb([], { webX: 5, webY: 5, rng: [0] });
+    game.level.objects = [shopFloorIceBox(881005)];
+
+    await enterUntrapDirection();
+    await rhack('.');
+
+    assert.equal(game._command_mode, null);
+    assert.deepEqual(getRngLog(), ['rn2(7)=0']);
+    assert.equal(game._pending_message, 'You succeed in removing the web.');
+    assert.equal(game.level.traps.includes(web), false);
+    assert.equal(game.context.move, 1);
+});
 
 test('#untrap removes a seen web without a blade', async () => {
     const web = setupUntrapDestinationWeb([], { rng: [0] });
