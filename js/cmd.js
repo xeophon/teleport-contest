@@ -36721,6 +36721,31 @@ function clearContainerSequenceState() {
     game._container_sequence_messages = null;
 }
 
+function lootTrapContainerCandidate(container) {
+    return !!(container?.otrapped
+        && (container.kind === 'chest' || container.otyp === CHEST
+            || container.kind === 'large box' || container.otyp === LARGE_BOX));
+}
+
+async function triggerLootChestTrap(container) {
+    if (!lootTrapContainerCandidate(container)) return false;
+    container.lknown = true;
+    const result = applyChestTrapPayload(container, { disarm: false });
+    game._floor_container_object = null;
+    clearContainerTakeoutState();
+    clearContainerPutState();
+    clearContainerSequenceState();
+    game._overlay_lines = null;
+    game._overlay_hide_status = 0;
+    game._command_mode = null;
+    const objectResult = result && typeof result === 'object';
+    await setMessage(objectResult ? result.message : result, !!(objectResult && result.more));
+    if (objectResult && applyLifeSavingOrFatalCommandMode(result)) return true;
+    game.context ??= {};
+    game.context.move = 1;
+    return true;
+}
+
 function startIceBoxSequence(nextAction) {
     clearIceBoxSequenceState();
     if (nextAction === 'putin') game._icebox_sequence_after_takeout = 'putin';
@@ -60969,6 +60994,7 @@ export async function rhack(_cmd) {
 
     if (game._command_mode === 'lootMenu') {
         const container = game._floor_container_object;
+        if (await triggerLootChestTrap(container)) return;
         const largeBox = container?.kind === 'large box' || container?.otyp === LARGE_BOX;
         const abcLargeBox = !!(largeBox && game.flags?.lootabc);
         const takeoutKey = abcLargeBox ? 'a' : 'o';
@@ -62269,6 +62295,10 @@ export async function rhack(_cmd) {
                         .find(item => /lock pick|key|credit card/i.test(inventoryItemName(item)));
                     if (unlockTool) game._locked_container_unlock_after_more = { chest, tool: unlockTool };
                     await setMessage(`Hmmm, the ${name} turns out to be locked.`, !!unlockTool);
+                }
+                else if (chest?.otrapped) {
+                    await triggerLootChestTrap(chest);
+                    return;
                 }
                 else if (chest) {
                     game._floor_container_object = chest;
