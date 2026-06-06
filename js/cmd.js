@@ -12105,6 +12105,12 @@ async function rideDirection(ch) {
     await mountSteed(mon);
 }
 
+function preservesTrapmoveRepeatMessage(msg) {
+    return msg === 'You are caught in a bear trap.'
+        || msg === 'You are stuck to the web.'
+        || / is stuck to the web\.$/.test(msg);
+}
+
 async function setMessage(msg, more = false) {
     const text = String(msg || '');
     if (game._silent_drop_prompt_message) {
@@ -12163,7 +12169,7 @@ async function setMessage(msg, more = false) {
             refreshSwallowOverlay(more);
         }
     }
-    if (msg !== 'You are caught in a bear trap.') game._last_trapmove_message = '';
+    if (!preservesTrapmoveRepeatMessage(msg)) game._last_trapmove_message = '';
 }
 
 function addHeroStatusSuffix(status) {
@@ -43095,11 +43101,26 @@ function sitTrapState() {
     const type = game.u?.utraptype;
     if (type === TT_BEARTRAP || type === 'beartrap') return 'beartrap';
     if (type === TT_PIT || type === 'pit') return 'pit';
-    if (type === TT_WEB || type === 'web') return 'web';
+    if (heroWebTrapType(type)) return 'web';
     if (type === TT_LAVA || type === 'lava') return 'lava';
     if (type === TT_INFLOOR || type === 'infloor') return 'infloor';
     if (type === TT_BURIEDBALL || type === 'buriedball') return 'buriedball';
     return '';
+}
+
+function heroWebTrapType(type) {
+    return type === TT_WEB || type === 'web';
+}
+
+function heroIsWebTrapped() {
+    return heroWebTrapType(game.u?.utraptype) && (game.u?.utrap || 0) > 0;
+}
+
+function heroWieldsSting() {
+    const item = wieldedItem();
+    if (!item) return false;
+    return [item.artifact, item.oartifact, artifactObjectName(item)].some(name =>
+        String(name || '').toLowerCase().replace(/^the\s+/, '') === 'sting');
 }
 
 async function sitWhileAlreadyTrapped(trap) {
@@ -46624,6 +46645,43 @@ async function moveHero(dx, dy) {
             game.context.move = 1;
             return;
         }
+    }
+
+    if (!swallowedMove && heroIsWebTrapped()) {
+        let message = '';
+        if (heroWieldsSting()) {
+            game.u.utrap = 0;
+            game.u.utraptype = null;
+            message = 'Sting cuts through the web!';
+        } else {
+            game.u.utrap--;
+            if (game.u.utrap <= 0) {
+                game.u.utrap = 0;
+                game.u.utraptype = null;
+                message = game.u.usteed
+                    ? `${steedTrapProjectileName(game.u.usteed)} breaks out of the web.`
+                    : 'You disentangle yourself.';
+            } else if (game.flags?.verbose !== false) {
+                message = game.u.usteed
+                    ? `${steedTrapProjectileName(game.u.usteed)} is stuck to the web.`
+                    : 'You are stuck to the web.';
+            }
+        }
+        if (message) {
+            if (preservesTrapmoveRepeatMessage(message) && game._last_trapmove_message === message) {
+                game._pending_message = '';
+                game._keep_pending_message = 0;
+            } else {
+                game._last_trapmove_message = message;
+                await setMessage(message);
+            }
+        } else {
+            game._pending_message = '';
+            game._keep_pending_message = 0;
+            game._last_trapmove_message = '';
+        }
+        game.context.move = 1;
+        return;
     }
 
     if (!swallowedMove && game.level?.flags?.sokoban_rules && dx && dy) {

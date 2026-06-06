@@ -37,6 +37,6 @@ The tests use local trap, hero, steed, object-list, and RNG fixtures through nor
 
 ## Remaining Work
 
-- Later movement while already web-trapped still has separate trapped-motion parity work, including mounted messages like `<Steed> is stuck to the web.` and `breaks out of the web.`
+- Later movement while already web-trapped is covered by `553-hero-trapped-web-movement-2026-06-06.md`.
 - Dismounting while already `TT_WEB` and transferring trap state back to the former steed remains a separate steed/dismount parity slice.
 - Failed untrap/NOWEBMSG web-spread behavior remains separate `#untrap` parity.
