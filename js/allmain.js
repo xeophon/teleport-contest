@@ -10967,6 +10967,34 @@ function monsterSleepGasTrapEffect(mon, trap) {
     return true;
 }
 
+function monsterSqueakyBoardTrapEffect(mon, trap) {
+    if (trap?.ttyp !== SQKY_BOARD) return false;
+    if (monsterTrapHarmless(mon, trap)) return true;
+    if (monsterAvoidsKnownTrapBeforeEffect(mon, trap)) return true;
+
+    monsterTriggerTrap(mon, trap);
+    const note = SQUEAKY_NOTES[trap.tnote] || 'a note';
+    const inSight = monsterVisibleToHero(mon) || mon === game.u?.usteed;
+    if (inSight) {
+        if (!heroIsDeafForMonsterNoise()) {
+            const name = monsterDisplayName(mon).replace(/^The /, 'the ');
+            addToplineMessage(`A board beneath ${name} squeaks ${note} loudly.`);
+            trap.tseen = true;
+        } else if (!mon.data?.mindless) {
+            addToplineMessage(`${monsterDisplayName(mon)} stops momentarily and appears to cringe.`);
+        }
+    } else if (!heroIsDeafForMonsterNoise()) {
+        const range = couldSeeCoord(mon.mx, mon.my) ? BOLT_LIM + 1 : BOLT_LIM - 3;
+        const dist = (mon.mx - (game.u?.ux || 0)) ** 2 + (mon.my - (game.u?.uy || 0)) ** 2;
+        addToplineMessage(`You hear ${note} squeak ${dist <= range * range ? 'nearby' : 'in the distance'}.`);
+    }
+    for (const witness of game.level?.monsters || []) {
+        const dist = (witness.mx - mon.mx) ** 2 + (witness.my - mon.my) ** 2;
+        if (dist < 40) witness.msleeping = 0;
+    }
+    return true;
+}
+
 function trapDartDamage(dart, mon) {
     const data = mon?.data || {};
     const die = mon?.big || mon?.bigmonst || data.big || data.bigmonst ? 2 : 3;
@@ -12560,21 +12588,7 @@ function moveMonsterTowardHero(mon, conflictActive = false, monIndex = null, som
         newsym(mon.mx, mon.my);
         return done();
     }
-    if (trap?.ttyp === SQKY_BOARD) {
-        if (monsterTrapHarmless(mon, trap)) return done();
-        if (monsterAvoidsKnownTrapBeforeEffect(mon, trap)) return done();
-        monsterTriggerTrap(mon, trap);
-        const note = SQUEAKY_NOTES[trap.tnote] || 'a note';
-        addToplineMessage(couldSeeCoord(mon.mx, mon.my)
-            ? `A board beneath the ${mon.data?.name || 'creature'} squeaks ${note} loudly.`
-            : `You hear ${note} squeak in the distance.`);
-        for (const witness of game.level?.monsters || []) {
-            const dist = (witness.mx - mon.mx) ** 2 + (witness.my - mon.my) ** 2;
-            if (dist < 40) {
-                witness.msleeping = 0;
-            }
-        }
-    }
+    if (monsterSqueakyBoardTrapEffect(mon, trap)) return done();
     if (trap?.ttyp === ROLLING_BOULDER_TRAP && !mon.data?.inAir && !mon.data?.flyer && !mon.data?.floater) {
         if (monsterAvoidsKnownTrapBeforeEffect(mon, trap)) return done();
         monsterTriggerTrap(mon, trap);
@@ -13674,6 +13688,7 @@ function movePet(mon, resumeAfterInventory = false, conflictActive = false) {
 	    }
     if (monsterAntiMagicTrapEffect(mon, trap, { skipPetPostMoveRoll: true })) return;
     if (monsterSleepGasTrapEffect(mon, trap)) return;
+    if (monsterSqueakyBoardTrapEffect(mon, trap)) return;
 	    if (trap?.ttyp === BEAR_TRAP && !mon.mtrapped && !monsterTrapHarmless(mon, trap)) {
 	        if (monsterKnowsTrap(mon, BEAR_TRAP) && rn2(4)) return;
         if (game._message_more && !game._process_time_with_more) {
@@ -15048,5 +15063,6 @@ export const __allmainTestHooks = {
     monsterPitTrapEffectForTest: monsterPitTrapEffect,
     monsterTrappedTrapTurnForTest: monsterTrappedTrapTurn,
     monsterSleepGasTrapEffectForTest: monsterSleepGasTrapEffect,
+    monsterSqueakyBoardTrapEffectForTest: monsterSqueakyBoardTrapEffect,
     maybeSpinMonsterWebForTest: maybeSpinMonsterWeb,
 };

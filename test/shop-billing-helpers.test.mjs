@@ -20430,6 +20430,31 @@ function installMonsterSleepGasTrapState(extra = {}) {
     return { trap, goblin };
 }
 
+function installMonsterSqueakyBoardTrapState(extra = {}) {
+    installStableNonShopFloorState();
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 50,
+        uhpmax: 50,
+        uac: 10,
+    });
+    game.inventory = [];
+    const trap = { ttyp: SQKY_BOARD, tx: 6, ty: 5, tseen: false, tnote: 0 };
+    game.level.traps = [trap];
+    const { data: dataExtra = {}, ...monsterExtra } = extra;
+    const goblin = dartTrapGoblin(31441, {
+        mx: 6,
+        my: 5,
+        mhp: 10,
+        mhpmax: 10,
+        data: { name: 'goblin', mlet: 'o', mac: 10, ...dataExtra },
+        ...monsterExtra,
+    });
+    game.level.monsters = [goblin];
+    return { trap, goblin };
+}
+
 test('known sleep gas trap can be avoided by monster before gas effects', async () => {
     const { trap, goblin } = installMonsterSleepGasTrapState({
         mtrapseen: 1 << (SLP_GAS_TRAP - 1),
@@ -20496,6 +20521,72 @@ test('pet sleep gas trap sleeps pet through pet movement', async () => {
     assert.equal(pet.mfrozen, sleepDuration[0]);
     assert.equal(trap.tseen, true);
     assert.equal(!!(pet.mtrapseen & (1 << (SLP_GAS_TRAP - 1))), true);
+});
+
+test('known squeaky board trap can be avoided before squeak effects', async () => {
+    const { trap, goblin } = installMonsterSqueakyBoardTrapState({
+        mtrapseen: 1 << (SQKY_BOARD - 1),
+    });
+    enableRngLog({ reset: true });
+    installCoreRngValues([1]);
+    markHeroNeighborhoodVisible();
+    markSquareVisible(goblin.mx, goblin.my);
+
+    assert.equal(allmain.monsterSqueakyBoardTrapEffectForTest(goblin, trap), true);
+    const messages = [game._pending_message, ...(await drainQueuedMessagesAfterMore())].join(' ');
+
+    assert.deepEqual(getRngLog().map(rngCallName), ['rn2(4)']);
+    assert.doesNotMatch(messages, /squeaks|cringe/);
+    assert.equal(trap.tseen, false);
+    assert.equal(!!(goblin.mtrapseen & (1 << (SQKY_BOARD - 1))), true);
+});
+
+test('deaf visible monster on squeaky board cringes without revealing trap', async () => {
+    const { trap, goblin } = installMonsterSqueakyBoardTrapState();
+    game.u._deafTimeout = 10;
+    game.u._statusSuffix = ' Deaf';
+    enableRngLog({ reset: true });
+    markHeroNeighborhoodVisible();
+    markSquareVisible(goblin.mx, goblin.my);
+
+    assert.equal(allmain.monsterSqueakyBoardTrapEffectForTest(goblin, trap), true);
+    const messages = [game._pending_message, ...(await drainQueuedMessagesAfterMore())].join(' ');
+
+    assert.deepEqual(getRngLog().map(rngCallName), []);
+    assert.match(messages, /The goblin stops momentarily and appears to cringe\./);
+    assert.doesNotMatch(messages, /squeaks/);
+    assert.equal(trap.tseen, false);
+    assert.equal(!!(goblin.mtrapseen & (1 << (SQKY_BOARD - 1))), true);
+});
+
+test('pet squeaky board trap squeaks and wakes nearby monster through pet movement', async () => {
+    const { trap, pet } = installMovingPetPitTrapState(SQKY_BOARD);
+    trap.tnote = 0;
+    const sleeper = dartTrapGoblin(31442, {
+        mx: 10,
+        my: 5,
+        mhp: 10,
+        mhpmax: 10,
+        msleeping: 1,
+        mcanmove: false,
+        mfrozen: 4,
+    });
+    game.level.monsters.push(sleeper);
+    enableRngLog({ reset: true });
+    queueEscapeForMonsterTurn();
+    markHeroNeighborhoodVisible();
+    markSquareVisible(6, 5);
+    markSquareVisible(7, 5);
+
+    await processMonsterTurns();
+    const messages = [game._pending_message, ...(await drainQueuedMessagesAfterMore())].join(' ');
+
+    assert.match(messages, /A board beneath the goblin squeaks a C note loudly\./);
+    assert.equal(pet.mx, 6);
+    assert.equal(pet.my, 5);
+    assert.equal(sleeper.msleeping, 0);
+    assert.equal(trap.tseen, true);
+    assert.equal(!!(pet.mtrapseen & (1 << (SQKY_BOARD - 1))), true);
 });
 
 test('mounted hero sleep gas trap sleeps hero then steed', async () => {
