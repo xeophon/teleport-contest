@@ -18072,6 +18072,31 @@ function installMovingMonsterHoleTrapState(ttyp = HOLE, extra = {}) {
     return { trap, goblin };
 }
 
+function installMovingMonsterWebTrapState(extra = {}) {
+    installStableNonShopFloorState();
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 50,
+        uhpmax: 50,
+        uac: 10,
+    });
+    game.inventory = [];
+    const trap = { ttyp: WEB, tx: 6, ty: 5, tseen: false, madeby_u: false };
+    game.level.traps = [trap];
+    const { data: dataExtra = {}, ...monsterExtra } = extra;
+    const goblin = dartTrapGoblin(31436, {
+        mx: 7,
+        my: 5,
+        mhp: 10,
+        mhpmax: 10,
+        data: { name: 'goblin', mlet: 'o', mac: 10, ...dataExtra },
+        ...monsterExtra,
+    });
+    game.level.monsters = [goblin];
+    return { trap, goblin };
+}
+
 function assertMonsterHoleTrapMigrated(mon, trap, { targetLevel = { dnum: 0, dlevel: 2 } } = {}) {
     assert.equal(game.level.monsters.includes(mon), false);
     assert.equal(game.migrating_mons?.includes(mon), true);
@@ -18724,6 +18749,160 @@ test('pet pit trap movement traps and damages pet visibly', async () => {
     assert.equal(rngValuesForCall(getRngLog(), 'rnd(10)').length, 0);
     assert.equal(pet.mhp, 10 - pitDamage[0]);
     assert.equal(!!(pet.mtrapseen & (1 << (PIT - 1))), true);
+});
+
+test('monster first-entry web catches ordinary and strong non-giant monsters visibly', async () => {
+    for (const [label, data, pattern] of [
+        ['ordinary goblin', { name: 'goblin', mlet: 'o', mac: 10 }, /The goblin is caught in a spider web\./],
+        ['strong bugbear', { name: 'bugbear', mlet: 'h', mac: 10, strong: true }, /The bugbear is caught in a spider web\./],
+    ]) {
+        const { trap, goblin } = installMovingMonsterWebTrapState({ data });
+        enableRngLog({ reset: true });
+        queueEscapeForMonsterTurn();
+        markHeroNeighborhoodVisible();
+        markSquareVisible(6, 5);
+        markSquareVisible(7, 5);
+
+        await processMonsterTurns();
+        const messages = [game._pending_message, ...(await drainQueuedMessagesAfterMore())].join(' ');
+
+        assert.match(messages, pattern, label);
+        assert.equal(goblin.mx, 6, label);
+        assert.equal(goblin.my, 5, label);
+        assert.equal(goblin.mtrapped, 1, label);
+        assert.equal(goblin.mhp, 10, label);
+        assert.equal(trap.tseen, true, label);
+        assert.equal(game.level.traps.includes(trap), true, label);
+        assert.equal(!!(goblin.mtrapseen & (1 << (WEB - 1))), true, label);
+    }
+});
+
+test('unseen bugbear first-entry web roars and stays caught without revealing web', async () => {
+    const { trap, goblin } = installMovingMonsterWebTrapState({
+        data: { name: 'bugbear', mlet: 'h', mac: 10, strong: true },
+    });
+    enableRngLog({ reset: true });
+    queueEscapeForMonsterTurn();
+
+    await processMonsterTurns();
+    const messages = [game._pending_message, ...(await drainQueuedMessagesAfterMore())].join(' ');
+
+    assert.match(messages, /You hear the roaring of a confused bear!/);
+    assert.equal(goblin.mx, 6);
+    assert.equal(goblin.my, 5);
+    assert.equal(goblin.mtrapped, 1);
+    assert.equal(trap.tseen, false);
+    assert.equal(game.level.traps.includes(trap), true);
+    assert.equal(!!(goblin.mtrapseen & (1 << (WEB - 1))), true);
+});
+
+test('pet first-entry web catches pet visibly', async () => {
+    const { trap, pet } = installMovingPetPitTrapState(WEB);
+    enableRngLog({ reset: true });
+    queueEscapeForMonsterTurn();
+    markHeroNeighborhoodVisible();
+    markSquareVisible(6, 5);
+    markSquareVisible(7, 5);
+
+    await processMonsterTurns();
+    const messages = [game._pending_message, ...(await drainQueuedMessagesAfterMore())].join(' ');
+
+    assert.match(messages, /The goblin is caught in a spider web\./);
+    assert.equal(pet.mx, 6);
+    assert.equal(pet.my, 5);
+    assert.equal(pet.mtrapped, 1);
+    assert.equal(pet.mhp, 10);
+    assert.equal(trap.tseen, true);
+    assert.equal(game.level.traps.includes(trap), true);
+    assert.equal(!!(pet.mtrapseen & (1 << (WEB - 1))), true);
+});
+
+test('monster first-entry webmaker learns web without being trapped', async () => {
+    const { trap, goblin } = installMovingMonsterWebTrapState({
+        data: { name: 'giant spider', mlet: 's', mac: 10, webmaker: true },
+    });
+    enableRngLog({ reset: true });
+    queueEscapeForMonsterTurn();
+    markHeroNeighborhoodVisible();
+    markSquareVisible(6, 5);
+    markSquareVisible(7, 5);
+
+    await processMonsterTurns();
+    const messages = [game._pending_message, ...(await drainQueuedMessagesAfterMore())].join(' ');
+
+    assert.doesNotMatch(messages, /spider web|tears through|flows through|caught/);
+    assert.equal(goblin.mx, 6);
+    assert.equal(goblin.my, 5);
+    assert.equal(goblin.mtrapped || 0, 0);
+    assert.equal(trap.tseen, false);
+    assert.equal(game.level.traps.includes(trap), true);
+    assert.equal(!!(goblin.mtrapseen & (1 << (WEB - 1))), true);
+});
+
+test('monster first-entry web flow-through reveals web without trapping', async () => {
+    const { trap, goblin } = installMovingMonsterWebTrapState({
+        data: { name: 'fog cloud', mlet: 'v', mac: 10, unsolid: true },
+    });
+    enableRngLog({ reset: true });
+    queueEscapeForMonsterTurn();
+    markHeroNeighborhoodVisible();
+    markSquareVisible(6, 5);
+    markSquareVisible(7, 5);
+
+    await processMonsterTurns();
+    const messages = [game._pending_message, ...(await drainQueuedMessagesAfterMore())].join(' ');
+
+    assert.match(messages, /The fog cloud flows through a spider web\./);
+    assert.equal(goblin.mx, 6);
+    assert.equal(goblin.my, 5);
+    assert.equal(goblin.mtrapped || 0, 0);
+    assert.equal(trap.tseen, true);
+    assert.equal(game.level.traps.includes(trap), true);
+    assert.equal(!!(goblin.mtrapseen & (1 << (WEB - 1))), true);
+});
+
+test('monster first-entry web destruction removes web without trapping', async () => {
+    const { trap, goblin } = installMovingMonsterWebTrapState({
+        data: { name: 'fire elemental', mlet: 'E', mac: 10, flaming: true },
+    });
+    enableRngLog({ reset: true });
+    queueEscapeForMonsterTurn();
+    markHeroNeighborhoodVisible();
+    markSquareVisible(6, 5);
+    markSquareVisible(7, 5);
+
+    await processMonsterTurns();
+    const messages = [game._pending_message, ...(await drainQueuedMessagesAfterMore())].join(' ');
+
+    assert.match(messages, /The fire elemental burns a spider web!/);
+    assert.equal(goblin.mx, 6);
+    assert.equal(goblin.my, 5);
+    assert.equal(goblin.mtrapped || 0, 0);
+    assert.equal(trap.tseen, false);
+    assert.equal(game.level.traps.includes(trap), false);
+    assert.equal(!!(goblin.mtrapseen & (1 << (WEB - 1))), true);
+});
+
+test('monster first-entry web tear-through removes web without trapping', async () => {
+    const { trap, goblin } = installMovingMonsterWebTrapState({
+        data: { name: 'fire giant', mlet: 'H', mac: 10, giant: true },
+    });
+    enableRngLog({ reset: true });
+    queueEscapeForMonsterTurn();
+    markHeroNeighborhoodVisible();
+    markSquareVisible(6, 5);
+    markSquareVisible(7, 5);
+
+    await processMonsterTurns();
+    const messages = [game._pending_message, ...(await drainQueuedMessagesAfterMore())].join(' ');
+
+    assert.match(messages, /The fire giant tears through a spider web!/);
+    assert.equal(goblin.mx, 6);
+    assert.equal(goblin.my, 5);
+    assert.equal(goblin.mtrapped || 0, 0);
+    assert.equal(trap.tseen, false);
+    assert.equal(game.level.traps.includes(trap), false);
+    assert.equal(!!(goblin.mtrapseen & (1 << (WEB - 1))), true);
 });
 
 test('monster first-entry hole and trapdoor migrate off level visibly', async () => {
