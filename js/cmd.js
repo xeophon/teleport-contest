@@ -47057,6 +47057,59 @@ function heroRollingBoulderHitIronBars(messages) {
     if (!heroIsDeaf()) messages.push('Whang!');
 }
 
+function heroRollingBoulderTransitMessage(gate, impactQuantity, noDrop) {
+    if (!gate?.gateText || game.u?.blind || !cansee(gate.x ?? 0, gate.y ?? 0)) return '';
+    if (impactQuantity > 0) {
+        const other = impactQuantity === 1 ? 'another object' : 'other objects';
+        const suffix = noDrop ? '.' : ` and falls ${gate.gateText}.`;
+        return `A boulder hits ${other}${suffix}`;
+    }
+    return noDrop ? '' : `A boulder falls ${gate.gateText}.`;
+}
+
+function heroRollingBoulderApplyDownGateAt(x, y, movingBoulder, messages) {
+    if (!movingBoulder) return { handled: false, consumed: false };
+    const gate = downGateAt(x, y);
+    if (!gate?.targetLevel) return { handled: false, consumed: false };
+
+    const route = { ...gate, x, y };
+    const impactQuantity = impactDropPileQuantity(impactDropCandidatePile(x, y, { missile: movingBoulder }));
+    const noDrop = gate.where !== MIGR_LADDER_UP && !!rn2(3);
+    if (gate.where === MIGR_RANDOM && gate.trap && movingBoulder.otyp === BOULDER) {
+        if (impactQuantity > 0) {
+            const impact = impactDropFloorObjects(x, y, route, {
+                targetLevel: gate.targetLevel,
+                missile: movingBoulder,
+                missileImpact: true,
+                route,
+            });
+            if (impact.message) messages.push(impact.message);
+        }
+        return { handled: false, consumed: false };
+    }
+
+    const transit = heroRollingBoulderTransitMessage(route, impactQuantity, noDrop);
+    if (transit) messages.push(transit);
+    if (noDrop) {
+        const impact = impactDropFloorObjects(x, y, route, { targetLevel: gate.targetLevel, route });
+        if (impact.message) messages.push(impact.message);
+        return { handled: false, consumed: false };
+    }
+
+    movingBoulder.otrapped = 0;
+    movingBoulder.hidden = false;
+    movingBoulder.transientProjectile = false;
+    movingBoulder.ox = gate.targetLevel.dnum;
+    movingBoulder.oy = gate.targetLevel.dlevel;
+    movingBoulder.owornmask = gate.where;
+    game.level.objects = (game.level?.objects || []).filter(obj => obj !== movingBoulder);
+    queueImpactDroppedObjects(gate.targetLevel, [movingBoulder], route);
+    const impact = impactDropFloorObjects(x, y, route, { targetLevel: gate.targetLevel, route });
+    if (impact.message) messages.push(impact.message);
+    newsym(x, y);
+    return { handled: true, consumed: true };
+}
+
 function deleteHeroRollingBoulderLandmineEngravingAt(x, y) {
     if (!game.level?.engravings) return;
     game.level.engravings = game.level.engravings.filter(engr => engr.x !== x || engr.y !== y);
@@ -47122,6 +47175,15 @@ function heroRollingBoulderPathResult(start, end, movingBoulder) {
         x += dx;
         y += dy;
         if (x === game.u?.ux && y === game.u?.uy) result.crossedHero = true;
+        const downGate = heroRollingBoulderApplyDownGateAt(x, y, result.boulder, result.messages);
+        if (downGate.handled) {
+            if (downGate.consumed) {
+                result.finalX = x;
+                result.finalY = y;
+                result.boulder = null;
+            }
+            break;
+        }
         if (heroRollingBoulderTriggerLandmineAt(x, y, result.boulder, result.messages)) {
             result.finalX = x;
             result.finalY = y;

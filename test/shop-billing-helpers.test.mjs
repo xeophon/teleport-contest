@@ -21232,6 +21232,93 @@ test('sitting hero rolling boulder wall stop does not hit hero beyond obstacle',
     assert.equal(rngValuesForCall(getRngLog(), 'rnd(20)').length, 0);
 });
 
+test('hero rolling boulder down ladder migrates off level', async () => {
+    const { boulder } = installHeroRollingBoulderTrapState({
+        trapX: 6,
+        trapY: 4,
+        heroX: 5,
+        heroY: 4,
+        start: { x: 4, y: 3 },
+        end: { x: 8, y: 3 },
+        boulderAt: 'start',
+    });
+    installRollingBoulderPathDownGate({ x: 6, y: 3, isladder: true });
+    enableRngLog({ reset: true });
+    markHeroNeighborhoodVisible();
+    for (let x = 4; x <= 8; x++) markSquareVisible(x, 3);
+
+    await rhack('l');
+
+    assert.equal(game._pending_message,
+        'Click!  You trigger a rolling boulder trap!  A boulder falls down the ladder.');
+    assert.equal(game.level.objects.includes(boulder), false);
+    assert.deepEqual(game._impact_drop_migrations?.get('0:2'), [boulder]);
+    assert.equal(boulder.ox, 0);
+    assert.equal(boulder.oy, 2);
+    assert.equal(boulder.owornmask, MIGR_LADDER_UP);
+    assert.equal(boulder._impactDropMigration?.where, MIGR_LADDER_UP);
+    assert.equal(rngValuesForCall(getRngLog(), 'rn2(3)').length, 0);
+    assert.equal(rngValuesForCall(getRngLog(), 'rnd(20)').length, 0);
+});
+
+test('hero rolling boulder down stairs no-drop roll keeps rolling', async () => {
+    const { boulder } = installHeroRollingBoulderTrapState({
+        trapX: 6,
+        trapY: 4,
+        heroX: 5,
+        heroY: 4,
+        start: { x: 4, y: 3 },
+        end: { x: 8, y: 3 },
+        boulderAt: 'start',
+    });
+    installRollingBoulderPathDownGate({ x: 6, y: 3 });
+    enableRngLog({ reset: true });
+    installCoreRngValues([1]);
+    markHeroNeighborhoodVisible();
+    for (let x = 4; x <= 8; x++) markSquareVisible(x, 3);
+
+    await rhack('l');
+
+    assert.equal(game._pending_message, 'Click!  You trigger a rolling boulder trap!');
+    assert.equal(game.level.objects.includes(boulder), true);
+    assert.equal(boulder.ox, 8);
+    assert.equal(boulder.oy, 3);
+    assert.equal(game._impact_drop_migrations?.get('0:2'), undefined);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rn2(3)'), [1]);
+    assert.equal(rngValuesForCall(getRngLog(), 'rnd(20)').length, 0);
+});
+
+test('hero rolling boulder down stairs ships before same-square land mine', async () => {
+    const { boulder } = installHeroRollingBoulderTrapState({
+        trapX: 6,
+        trapY: 4,
+        heroX: 5,
+        heroY: 4,
+        start: { x: 4, y: 3 },
+        end: { x: 8, y: 3 },
+        boulderAt: 'start',
+    });
+    installRollingBoulderPathDownGate({ x: 6, y: 3 });
+    const mine = { ttyp: LANDMINE, tx: 6, ty: 3, tseen: true, madeby_u: false };
+    game.level.traps.push(mine);
+    enableRngLog({ reset: true });
+    installCoreRngValues([0]);
+    markHeroNeighborhoodVisible();
+    for (let x = 4; x <= 8; x++) markSquareVisible(x, 3);
+
+    await rhack('l');
+
+    assert.equal(game._pending_message,
+        'Click!  You trigger a rolling boulder trap!  A boulder falls down the stairs.');
+    assert.equal(game.level.traps.includes(mine), true);
+    assert.equal(game.level.objects.includes(boulder), false);
+    assert.deepEqual(game._impact_drop_migrations?.get('0:2'), [boulder]);
+    assert.equal(boulder.owornmask, MIGR_STAIRS_UP);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rn2(3)'), [0]);
+    assert.equal(rngValuesForCall(getRngLog(), 'rn2(10)').length, 0);
+    assert.equal(rngValuesForCall(getRngLog(), 'rnd(20)').length, 0);
+});
+
 test('hero rolling boulder detonates path land mine and is consumed', async () => {
     const { boulder } = installHeroRollingBoulderTrapState({
         trapX: 6,
