@@ -1571,6 +1571,9 @@ function setHeroWeaponSkill(skill, level) {
         [P_DART, 'dart'],
         [P_SHURIKEN, 'shuriken'],
         [P_SPEAR, 'spear'],
+        [P_BOW, 'bow'],
+        [P_CROSSBOW, 'crossbow'],
+        [P_SLING, 'sling'],
         [P_HAMMER, 'hammer'],
         [P_CLUB, 'club'],
         [P_BOOMERANG, 'boomerang'],
@@ -65852,7 +65855,7 @@ test('hero-thrown arrow with matching bow hits monster through C projectile path
 
 test('hero-thrown stacked arrows with matching bow hit monster as separate shots', async () => {
     installNonShopFloorState();
-    initRng(3);
+    initRng(5);
     Object.assign(game.u, {
         ux: 5,
         uy: 5,
@@ -65887,6 +65890,7 @@ test('hero-thrown stacked arrows with matching bow hit monster as separate shots
     const hitMessages = game._pending_message.match(/The arrow hits the goblin[.!]/g) || [];
     const damageRolls = rngValuesForCall(rngLog, 'rnd(6)');
     assert.equal(rngCallValue(rngLog[0]), 2);
+    assert.equal(rngCallName(rngLog[0]), 'rnd(3)');
     assert.match(game._pending_message, /You shoot 2 arrows\./);
     assert.equal(hitMessages.length, 2);
     assert.equal(damageRolls.length, 2);
@@ -65898,9 +65902,74 @@ test('hero-thrown stacked arrows with matching bow hit monster as separate shots
     assert.ok(landed);
     assert.equal(landed.quan, 2);
     assert.deepEqual(rngLog.map(rngCallName).slice(0, 12), [
-        'rnd(2)', 'rnd(2)',
+        'rnd(3)', 'rnd(2)',
         'rnd(20)', 'rnd(6)', 'rn2(19)', 'rn2(3)', 'rn2(100)',
         'rnd(20)', 'rnd(6)', 'rn2(19)', 'rn2(3)', 'rn2(100)',
+    ]);
+});
+
+test('hero-thrown gnome skilled crossbow bolts use racial multishot bonus', async () => {
+    installNonShopFloorState();
+    initRng(89);
+    game._startup_role = 'Archeologist';
+    game.urole = { ...(game.urole || {}), name: { m: 'Archeologist', f: 'Archeologist' } };
+    game._startup_race = 'gnome';
+    game.urace = { ...(game.urace || {}), noun: 'gnome', adj: 'gnomish' };
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        ulevel: 20,
+        uluck: 10,
+        uhitinc: 10,
+        udaminc: 0,
+    });
+    game.u.acurr.a[A_STR] = 18;
+    game.u.acurr.a[A_DEX] = 25;
+    game.u.weapon_skills = [];
+    setHeroWeaponSkill(P_CROSSBOW, P_SKILLED);
+    const launcher = crossbow(87617373, 'a', {
+        wielded: true,
+        line: 'a - a crossbow (weapon in right hand)',
+    });
+    const missile = crossbowBolt(87617473, 'b', {
+        quan: 3,
+        line: 'b - 3 crossbow bolts',
+    });
+    missile.line = 'b - 3 crossbow bolts';
+    const goblin = ordinaryThrowTarget('goblin', 6, 5, {
+        mhp: 100,
+        mhpmax: 100,
+        msleeping: 1,
+    });
+    game.inventory = [launcher, missile];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('b');
+    await rhack('l');
+
+    const rngLog = getRngLog();
+    const hitMessages = game._pending_message.match(/The crossbow bolt hits the goblin[.!]/g) || [];
+    const damageRolls = rngValuesForCall(rngLog, 'rnd(4)');
+    assert.equal(rngCallName(rngLog[0]), 'rnd(3)');
+    assert.equal(rngCallValue(rngLog[0]), 3);
+    assert.match(game._pending_message, /You shoot 3 crossbow bolts\./);
+    assert.equal(hitMessages.length, 3);
+    assert.equal(damageRolls.length, 3);
+    assert.equal(goblin.mhp, 100 - damageRolls.reduce((sum, roll) => sum + roll + 2, 0));
+    assert.equal(goblin.msleeping, 0);
+    assert.equal(game.inventory.includes(launcher), true);
+    assert.equal(game.inventory.includes(missile), false);
+    const landed = game.level.objects.find(obj => obj.kind === 'crossbow bolt' && obj.ox === 6 && obj.oy === 5);
+    assert.ok(landed);
+    assert.equal(landed.quan, 3);
+    assert.deepEqual(rngLog.map(rngCallName).slice(0, 18), [
+        'rnd(3)', 'rnd(2)',
+        'rnd(20)', 'rnd(4)', 'rn2(19)', 'rn2(3)', 'rn2(100)',
+        'rnd(2)',
+        'rnd(20)', 'rnd(4)', 'rn2(19)', 'rn2(3)', 'rn2(100)',
+        'rnd(20)', 'rnd(4)', 'rn2(19)', 'rn2(3)', 'rn2(100)',
     ]);
 });
 
@@ -66019,7 +66088,7 @@ test('f command arrow with matching bow uses C ammo range increment', async () =
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(100)']);
 });
 
-test('f command slung flint multishot interleaves split ids and break tests', async () => {
+test('f command basic slung flint fires one stone', async () => {
     installNonShopFloorState();
     initRng(2);
     Object.assign(game.u, {
@@ -66051,18 +66120,14 @@ test('f command slung flint multishot interleaves split ids and break tests', as
     await rhack('l');
 
     const rngLog = getRngLog();
-    const shotCount = rngCallValue(rngLog[0]);
-    const expectedCalls = ['rnd(2)'];
-    for (let shot = 0; shot < shotCount; shot++) {
-        if (3 - shot > 1) expectedCalls.push('rnd(2)');
-        expectedCalls.push('rn2(100)');
-    }
-    assert.match(game._pending_message, new RegExp(`You shoot ${shotCount} flint stones\\.`));
-    assert.deepEqual(rngLog.map(rngCallName), expectedCalls);
-    assert.equal(flint.quan, 3 - shotCount);
+    assert.equal(rngCallName(rngLog[0]), 'rnd(1)');
+    assert.equal(rngCallValue(rngLog[0]), 1);
+    assert.equal(game._pending_message, '');
+    assert.deepEqual(rngLog.map(rngCallName), ['rnd(1)', 'rnd(2)', 'rn2(100)']);
+    assert.equal(flint.quan, 2);
     const landed = game.level.objects.find(obj => obj.kind === 'flint stone');
     assert.ok(landed);
-    assert.equal(landed.quan, shotCount);
+    assert.equal(landed.quan, 1);
     assert.equal(landed.ox, 15);
     assert.equal(landed.oy, 5);
 });
@@ -66675,7 +66740,7 @@ test('f command arrow with matching bow hits monster through C projectile path',
     ]);
 });
 
-test('f command stacked arrows with matching bow hit monster as separate shots', async () => {
+test('f command basic stacked arrows with matching bow fires one shot', async () => {
     installNonShopFloorState();
     initRng(3);
     Object.assign(game.u, {
@@ -66715,23 +66780,97 @@ test('f command stacked arrows with matching bow hit monster as separate shots',
     const rngLog = getRngLog();
     const hitMessages = game._pending_message.match(/The arrow hits the goblin[.!]/g) || [];
     const damageRolls = rngValuesForCall(rngLog, 'rnd(6)');
-    assert.equal(rngCallValue(rngLog[0]), 2);
-    assert.match(game._pending_message, /You shoot 2 arrows\./);
-    assert.equal(hitMessages.length, 2);
-    assert.equal(damageRolls.length, 2);
-    assert.equal(goblin.mhp, 80 - damageRolls.reduce((sum, roll) => sum + roll, 0));
+    assert.equal(rngCallName(rngLog[0]), 'rnd(1)');
+    assert.doesNotMatch(game._pending_message, /You shoot/);
+    assert.equal(hitMessages.length, 1);
+    assert.equal(damageRolls.length, 1);
+    assert.equal(goblin.mhp, 80 - damageRolls[0]);
+    assert.equal(goblin.msleeping, 0);
+    assert.equal(goblin.meating, 0);
+    assert.equal(goblin.mstrategy, 0);
+    assert.equal(goblin.mpeaceful, 0);
+    assert.equal(game.inventory.includes(missile), true);
+    assert.equal(missile.quan, 1);
+    const landed = game.level.objects.find(obj => obj.kind === 'arrow' && obj.ox === 6 && obj.oy === 5);
+    assert.ok(landed);
+    assert.equal(landed.quan, 1);
+    assert.deepEqual(rngLog.map(rngCallName).slice(0, 7), [
+        'rnd(1)', 'rnd(2)',
+        'rnd(20)', 'rnd(6)', 'rn2(19)', 'rn2(3)', 'rn2(100)',
+    ]);
+});
+
+test('f command Samurai skilled ya with yumi uses role multishot bonus', async () => {
+    installNonShopFloorState();
+    initRng(89);
+    game._startup_role = 'Samurai';
+    game.urole = { ...(game.urole || {}), name: { m: 'Samurai', f: 'Samurai' } };
+    game._startup_race = 'human';
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        ulevel: 20,
+        uluck: 10,
+        uhitinc: 10,
+        udaminc: 0,
+    });
+    game.u.acurr.a[A_STR] = 118;
+    game.u.acurr.a[A_DEX] = 25;
+    game.u.weapon_skills = [];
+    setHeroWeaponSkill(P_BOW, P_SKILLED);
+    const launcher = bow(87617333, 'a', {
+        kind: 'yumi',
+        actualKind: 'yumi',
+        wielded: true,
+        line: 'a - a yumi (weapon in right hand)',
+    });
+    const missile = arrow(87617433, 'b', {
+        kind: 'ya',
+        actualKind: 'ya',
+        plural: 'ya',
+        quivered: true,
+        quan: 3,
+        line: 'b - 3 ya (in quiver)',
+    });
+    const goblin = ordinaryThrowTarget('goblin', 6, 5, {
+        mhp: 100,
+        mhpmax: 100,
+        msleeping: 1,
+        mpeaceful: 1,
+        meating: 4,
+        mstrategy: STRAT_WAITFORU,
+    });
+    game.inventory = [launcher, missile];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('f');
+    await rhack(' ');
+    await rhack('l');
+
+    const rngLog = getRngLog();
+    const hitMessages = game._pending_message.match(/The ya hits the goblin[.!]/g) || [];
+    const damageRolls = rngValuesForCall(rngLog, 'rnd(7)');
+    assert.equal(rngCallName(rngLog[0]), 'rnd(3)');
+    assert.equal(rngCallValue(rngLog[0]), 3);
+    assert.match(game._pending_message, /You shoot 3 ya\./);
+    assert.equal(hitMessages.length, 3);
+    assert.equal(damageRolls.length, 3);
+    assert.equal(goblin.mhp, 100 - damageRolls.reduce((sum, roll) => sum + roll + 1, 0));
     assert.equal(goblin.msleeping, 0);
     assert.equal(goblin.meating, 0);
     assert.equal(goblin.mstrategy, 0);
     assert.equal(goblin.mpeaceful, 0);
     assert.equal(game.inventory.includes(missile), false);
-    const landed = game.level.objects.find(obj => obj.kind === 'arrow' && obj.ox === 6 && obj.oy === 5);
+    const landed = game.level.objects.find(obj => obj.kind === 'ya' && obj.ox === 6 && obj.oy === 5);
     assert.ok(landed);
-    assert.equal(landed.quan, 2);
-    assert.deepEqual(rngLog.map(rngCallName).slice(0, 12), [
-        'rnd(2)', 'rnd(2)',
-        'rnd(20)', 'rnd(6)', 'rn2(19)', 'rn2(3)', 'rn2(100)',
-        'rnd(20)', 'rnd(6)', 'rn2(19)', 'rn2(3)', 'rn2(100)',
+    assert.equal(landed.quan, 3);
+    assert.deepEqual(rngLog.map(rngCallName).slice(0, 18), [
+        'rnd(3)', 'rnd(2)',
+        'rnd(20)', 'rnd(7)', 'rn2(19)', 'rn2(3)', 'rn2(100)',
+        'rnd(2)',
+        'rnd(20)', 'rnd(7)', 'rn2(19)', 'rn2(3)', 'rn2(100)',
+        'rnd(20)', 'rnd(7)', 'rn2(19)', 'rn2(3)', 'rn2(100)',
     ]);
 });
 

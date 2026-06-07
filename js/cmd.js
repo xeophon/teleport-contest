@@ -21062,6 +21062,73 @@ function heroThrownStackableWeaponMultishotClassBonus(obj, meta) {
     return 0;
 }
 
+function heroLauncherAmmoMultishotClassBonus(obj, launcher, meta) {
+    const role = heroRoleName();
+    const skill = meta?.skill;
+    const ammoKey = objectKindKey(obj);
+    const launcherKey = objectKindKey(launcher);
+    if ((role === 'Caveman' || role === 'Cavewoman') && skill === P_SLING) return 1;
+    if (role === 'Ranger' && skill !== P_DAGGER) return 1;
+    if ((role === 'Ninja' || role === 'Samurai') && ammoKey === 'ya' && launcherKey === 'yumi') return 1;
+    return 0;
+}
+
+function heroRaceName() {
+    return String(game._startup_race || game.urace?.noun || game.urace?.adj || 'human').toLowerCase();
+}
+
+function heroLauncherAmmoRaceMultishotBonus(obj, launcher, meta) {
+    const race = heroRaceName();
+    const ammoKey = objectKindKey(obj);
+    const launcherKey = objectKindKey(launcher);
+    if (race === 'elf' && ammoKey === 'elven arrow' && launcherKey === 'elven bow') return 1;
+    if (race === 'orc' && ammoKey === 'orcish arrow' && launcherKey === 'orcish bow') return 1;
+    if (race === 'gnome' && meta?.skill === P_CROSSBOW) return 1;
+    return 0;
+}
+
+function heroLauncherIsCurrentRoleQuestArtifact(launcher) {
+    const role = heroRoleName();
+    const expected = questArtifactNameKey(QUEST_ROLE_DATA[role]?.artifact);
+    if (!expected) return false;
+    return [
+        launcher?.artifact,
+        launcher?.oartifact,
+        artifactObjectName(launcher),
+        launcher?.actualKind,
+        launcher?.kind,
+        launcher?.name,
+    ].some(name => questArtifactNameKey(name) === expected);
+}
+
+function heroLauncherAmmoMultishotCount(obj, launcher) {
+    const quantity = Math.max(1, Math.trunc(Number(obj?.quan || 1)));
+    const meta = heroLauncherAmmoData(obj);
+    if (quantity <= 1 || !meta || !heroThrowAmmoAndLauncher(obj, launcher)
+        || heroIsConfused() || heroIsStunned()) return 1;
+    const role = heroRoleName();
+    const dex = Math.trunc(Number(game.u?.acurr?.a?.[A_DEX] ?? 10));
+    const weak = role === 'Wizard' || role === 'Cleric' || role === 'Priest'
+        || (role === 'Healer' && meta.skill !== P_KNIFE)
+        || (role === 'Tourist' && meta.skill !== P_DART)
+        || heroIsFumbling() || dex <= 6;
+    const skillLevel = heroExplicitWeaponSkillLevel(meta.skill, meta.skillName) ?? P_BASIC;
+    let multishot = 1;
+    if (skillLevel >= P_EXPERT) multishot++;
+    if (skillLevel >= P_SKILLED && !weak) multishot++;
+    multishot += heroLauncherAmmoMultishotClassBonus(obj, launcher, meta);
+    if (!weak) {
+        multishot += heroLauncherAmmoRaceMultishotBonus(obj, launcher, meta);
+        if (heroLauncherIsCurrentRoleQuestArtifact(launcher)) multishot++;
+    }
+    if (multishot > 1 && meta.skill === P_CROSSBOW) {
+        const strength = Math.trunc(Number(game.u?.acurr?.a?.[A_STR] ?? 10));
+        const threshold = heroRaceName() === 'gnome' ? 16 : 18;
+        if (strength < threshold) multishot = rnd(multishot);
+    }
+    return Math.min(quantity, rnd(Math.max(1, multishot)));
+}
+
 function heroThrownStackableWeaponMultishotCount(obj) {
     const quantity = Math.max(1, Math.trunc(Number(obj?.quan || 1)));
     const meta = heroThrownStackableWeaponMultishotMeta(obj);
@@ -67658,10 +67725,9 @@ export async function rhack(_cmd) {
         let oy = initialFlight.oy;
         let targetMon = initialFlight.targetMon;
         const oldQuan = item.quan || 1;
-        const firedFromLauncher = !!launcher;
-        const volleyLimit = firedFromLauncher && oldQuan > 1 ? 2 : 1;
+        const firedFromLauncher = !!(launcher && heroThrowAmmoAndLauncher(item, launcher));
         const shotCount = firedFromLauncher
-            ? (volleyLimit > 1 ? Math.min(oldQuan, rnd(volleyLimit)) : 1)
+            ? heroLauncherAmmoMultishotCount(item, launcher)
             : heroThrownStackableWeaponMultishotCount(item);
         let impactMessage = '';
         let landingMessage = '';
@@ -68705,9 +68771,8 @@ export async function rhack(_cmd) {
         const itemQuantity = item.quan || 1;
         const attachedBallThrow = heroThrownAttachedBallObject(item);
         const directLauncherAmmo = !!(heroLauncherAmmoData(item) && heroThrowAmmoAndLauncher(item, throwLauncher));
-        const directLauncherVolleyLimit = directLauncherAmmo && itemQuantity > 1 ? 2 : 1;
-        const directLauncherShotCount = directLauncherVolleyLimit > 1
-            ? Math.min(itemQuantity, rnd(directLauncherVolleyLimit))
+        const directLauncherShotCount = directLauncherAmmo
+            ? heroLauncherAmmoMultishotCount(item, throwLauncher)
             : 1;
         const directThrownStackableWeapon = !directLauncherAmmo && heroThrownStackableWeaponMultishotObject(item);
         const directThrownStackableWeaponShotCount = directThrownStackableWeapon
